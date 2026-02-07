@@ -1,0 +1,15 @@
+# 示例任务配置 - 续保业务类型匹配
+# 复制此文件并修改为实际路径使用
+
+# 源文件：包含完整续保业务类型的历史数据
+source_file: "/Users/xuechenglong/Downloads/车险签单报价数据 (2024.12.1-2026.1.14).xlsx"
+
+# 目标文件：新导出的需要补充续保业务类型的数据
+target_file: "/Users/xuechenglong/Downloads/车险签单报价数据20260127.xlsx"
+
+# 输出文件：处理后的结果文件
+output_file: "/Users/xuechenglong/Downloads/车险签单报价数据20260127_已匹配.xlsx"
+
+# 匹配配置
+key_column: "保单号"
+match_column: "续保业务类型"

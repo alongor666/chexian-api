@@ -1,0 +1,332 @@
+/**
+ * 自定义 Hooks 单元测试
+ */
+
+import { describe, it, expect, vi } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { useLoadingStates, useDataFetch, useMultipleDataFetch } from '../src/shared/hooks';
+
+describe('useLoadingStates', () => {
+  it('应该初始化所有 loading 状态为 false', () => {
+    const { result } = renderHook(() =>
+      useLoadingStates(['kpi', 'trend', 'table'] as const)
+    );
+
+    expect(result.current.loading.kpi).toBe(false);
+    expect(result.current.loading.trend).toBe(false);
+    expect(result.current.loading.table).toBe(false);
+  });
+
+  it('应该能够设置单个 loading 状态', () => {
+    const { result } = renderHook(() =>
+      useLoadingStates(['kpi', 'trend'] as const)
+    );
+
+    act(() => {
+      result.current.setLoading('kpi', true);
+    });
+
+    expect(result.current.loading.kpi).toBe(true);
+    expect(result.current.loading.trend).toBe(false);
+  });
+
+  it('应该能够批量设置多个 loading 状态', () => {
+    const { result } = renderHook(() =>
+      useLoadingStates(['kpi', 'trend', 'table'] as const)
+    );
+
+    act(() => {
+      result.current.setMultipleLoading({ kpi: true, trend: true });
+    });
+
+    expect(result.current.loading.kpi).toBe(true);
+    expect(result.current.loading.trend).toBe(true);
+    expect(result.current.loading.table).toBe(false);
+  });
+
+  it('应该能够重置所有 loading 状态', () => {
+    const { result } = renderHook(() =>
+      useLoadingStates(['kpi', 'trend'] as const)
+    );
+
+    act(() => {
+      result.current.setLoading('kpi', true);
+      result.current.setLoading('trend', true);
+    });
+
+    expect(result.current.loading.kpi).toBe(true);
+    expect(result.current.loading.trend).toBe(true);
+
+    act(() => {
+      result.current.resetAllLoading();
+    });
+
+    expect(result.current.loading.kpi).toBe(false);
+    expect(result.current.loading.trend).toBe(false);
+  });
+
+  it('isAnyLoading 应该正确反映是否有任何 loading', () => {
+    const { result } = renderHook(() =>
+      useLoadingStates(['kpi', 'trend'] as const)
+    );
+
+    expect(result.current.isAnyLoading).toBe(false);
+
+    act(() => {
+      result.current.setLoading('kpi', true);
+    });
+
+    expect(result.current.isAnyLoading).toBe(true);
+
+    act(() => {
+      result.current.setLoading('kpi', false);
+    });
+
+    expect(result.current.isAnyLoading).toBe(false);
+  });
+
+  it('isAllLoaded 应该正确反映是否所有都加载完成', () => {
+    const { result } = renderHook(() =>
+      useLoadingStates(['kpi', 'trend'] as const)
+    );
+
+    expect(result.current.isAllLoaded).toBe(true);
+
+    act(() => {
+      result.current.setLoading('kpi', true);
+    });
+
+    expect(result.current.isAllLoaded).toBe(false);
+
+    act(() => {
+      result.current.setLoading('kpi', false);
+    });
+
+    expect(result.current.isAllLoaded).toBe(true);
+  });
+});
+
+describe('useDataFetch', () => {
+  it('应该初始化为空状态', () => {
+    const mockFetchFn = vi.fn().mockResolvedValue({ data: 'test' });
+    const { result } = renderHook(() => useDataFetch(mockFetchFn));
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('应该成功获取数据', async () => {
+    const mockData = { id: 1, name: 'test' };
+    const mockFetchFn = vi.fn().mockResolvedValue(mockData);
+    const { result } = renderHook(() => useDataFetch(mockFetchFn));
+
+    await act(async () => {
+      await result.current.fetch();
+    });
+
+    expect(result.current.data).toEqual(mockData);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(mockFetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('应该处理错误', async () => {
+    const mockError = new Error('Fetch failed');
+    const mockFetchFn = vi.fn().mockRejectedValue(mockError);
+    const { result } = renderHook(() => useDataFetch(mockFetchFn));
+
+    await act(async () => {
+      await result.current.fetch();
+    });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBe('Fetch failed');
+  });
+
+  it('应该在加载期间设置 loading 状态', async () => {
+    let resolvePromise: (value: any) => void;
+    const promise = new Promise((resolve) => {
+      resolvePromise = resolve;
+    });
+    const mockFetchFn = vi.fn().mockReturnValue(promise);
+    const { result } = renderHook(() => useDataFetch(mockFetchFn));
+
+    act(() => {
+      result.current.fetch();
+    });
+
+    expect(result.current.loading).toBe(true);
+
+    await act(async () => {
+      resolvePromise!({ data: 'test' });
+      await promise;
+    });
+
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('应该能够重置状态', async () => {
+    const mockData = { id: 1 };
+    const mockFetchFn = vi.fn().mockResolvedValue(mockData);
+    const { result } = renderHook(() => useDataFetch(mockFetchFn));
+
+    await act(async () => {
+      await result.current.fetch();
+    });
+
+    expect(result.current.data).toEqual(mockData);
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('应该能够手动设置数据', () => {
+    const mockFetchFn = vi.fn();
+    const { result } = renderHook(() => useDataFetch(mockFetchFn));
+
+    const testData = { id: 1, name: 'manual' };
+    act(() => {
+      result.current.setData(testData);
+    });
+
+    expect(result.current.data).toEqual(testData);
+    expect(mockFetchFn).not.toHaveBeenCalled();
+  });
+
+  it('应该调用 onSuccess 回调', async () => {
+    const mockData = { id: 1 };
+    const mockFetchFn = vi.fn().mockResolvedValue(mockData);
+    const onSuccess = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDataFetch(mockFetchFn, { onSuccess })
+    );
+
+    await act(async () => {
+      await result.current.fetch();
+    });
+
+    expect(onSuccess).toHaveBeenCalledWith(mockData);
+  });
+
+  it('应该调用 onError 回调', async () => {
+    const mockError = new Error('Test error');
+    const mockFetchFn = vi.fn().mockRejectedValue(mockError);
+    const onError = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDataFetch(mockFetchFn, { onError })
+    );
+
+    await act(async () => {
+      await result.current.fetch();
+    });
+
+    expect(onError).toHaveBeenCalledWith(mockError);
+  });
+});
+
+describe('useMultipleDataFetch', () => {
+  it('应该初始化多个数据源', () => {
+    const fetchFns = {
+      kpi: vi.fn().mockResolvedValue({ kpi: 'data' }),
+      trend: vi.fn().mockResolvedValue({ trend: 'data' }),
+    };
+
+    const { result } = renderHook(() => useMultipleDataFetch(fetchFns));
+
+    expect(result.current.loading.kpi).toBe(false);
+    expect(result.current.loading.trend).toBe(false);
+    expect(result.current.errors.kpi).toBeNull();
+    expect(result.current.errors.trend).toBeNull();
+  });
+
+  it('应该能够获取单个数据源', async () => {
+    const mockKpiData = { value: 100 };
+    const fetchFns = {
+      kpi: vi.fn().mockResolvedValue(mockKpiData),
+      trend: vi.fn().mockResolvedValue({ trend: 'data' }),
+    };
+
+    const { result } = renderHook(() => useMultipleDataFetch(fetchFns));
+
+    await act(async () => {
+      await result.current.fetchOne('kpi');
+    });
+
+    expect(result.current.data.kpi).toEqual(mockKpiData);
+    expect(fetchFns.kpi).toHaveBeenCalledTimes(1);
+    expect(fetchFns.trend).not.toHaveBeenCalled();
+  });
+
+  it('应该能够获取所有数据源', async () => {
+    const mockKpiData = { value: 100 };
+    const mockTrendData = { trend: 'up' };
+    const fetchFns = {
+      kpi: vi.fn().mockResolvedValue(mockKpiData),
+      trend: vi.fn().mockResolvedValue(mockTrendData),
+    };
+
+    const { result } = renderHook(() => useMultipleDataFetch(fetchFns));
+
+    await act(async () => {
+      await result.current.fetchAll();
+    });
+
+    expect(result.current.data.kpi).toEqual(mockKpiData);
+    expect(result.current.data.trend).toEqual(mockTrendData);
+    expect(fetchFns.kpi).toHaveBeenCalledTimes(1);
+    expect(fetchFns.trend).toHaveBeenCalledTimes(1);
+  });
+
+  it('应该处理单个数据源的错误', async () => {
+    const mockError = new Error('KPI fetch failed');
+    const fetchFns = {
+      kpi: vi.fn().mockRejectedValue(mockError),
+      trend: vi.fn().mockResolvedValue({ trend: 'data' }),
+    };
+
+    const { result } = renderHook(() => useMultipleDataFetch(fetchFns));
+
+    await act(async () => {
+      await result.current.fetchOne('kpi');
+    });
+
+    expect(result.current.errors.kpi).toBe('KPI fetch failed');
+    expect(result.current.data.kpi).toBeUndefined();
+  });
+
+  it('应该能够重置所有状态', async () => {
+    const fetchFns = {
+      kpi: vi.fn().mockResolvedValue({ value: 100 }),
+      trend: vi.fn().mockResolvedValue({ trend: 'up' }),
+    };
+
+    const { result } = renderHook(() => useMultipleDataFetch(fetchFns));
+
+    await act(async () => {
+      await result.current.fetchAll();
+    });
+
+    expect(result.current.data.kpi).toBeDefined();
+    expect(result.current.data.trend).toBeDefined();
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.data.kpi).toBeUndefined();
+    expect(result.current.data.trend).toBeUndefined();
+    expect(result.current.loading.kpi).toBe(false);
+    expect(result.current.loading.trend).toBe(false);
+    expect(result.current.errors.kpi).toBeNull();
+    expect(result.current.errors.trend).toBeNull();
+  });
+});

@@ -1,0 +1,93 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`格式化统一性快照测试 > formatNumber 快照测试 > 应正确格式化小整数 > number-123 1`] = `"123"`;
+
+exports[`格式化统一性快照测试 > formatNumber 快照测试 > 应正确格式化带千分位的数值 > number-1234567 1`] = `"1,234,567"`;
+
+exports[`格式化统一性快照测试 > formatNumber 快照测试 > 应正确格式化零值 > number-0 1`] = `"0"`;
+
+exports[`格式化统一性快照测试 > formatPremium 快照测试 > 应正确处理千分位分隔 > premium-thousands 1`] = `"1,234.6"`;
+
+exports[`格式化统一性快照测试 > formatPremium 快照测试 > 应正确格式化万级数值 > premium-12345678 1`] = `"1,234.6"`;
+
+exports[`格式化统一性快照测试 > formatPremium 快照测试 > 应正确格式化大数值（亿元） > premium-1234567890 1`] = `"123,456.8"`;
+
+exports[`格式化统一性快照测试 > formatPremium 快照测试 > 应正确格式化小数值 > premium-1234 1`] = `"0.1"`;
+
+exports[`格式化统一性快照测试 > formatPremium 快照测试 > 应正确格式化零值 > premium-0 1`] = `"0.0"`;
+
+exports[`格式化统一性快照测试 > formatRate 快照测试 > 应正确格式化0% > rate-0 1`] = `"0.0%"`;
+
+exports[`格式化统一性快照测试 > formatRate 快照测试 > 应正确格式化大于100%的值 > rate-1.5 1`] = `"1.5%"`;
+
+exports[`格式化统一性快照测试 > formatRate 快照测试 > 应正确格式化小数百分比 > rate-0.123 1`] = `"12.3%"`;
+
+exports[`格式化统一性快照测试 > formatRate 快照测试 > 应正确格式整数百分比 > rate-1 1`] = `"100.0%"`;
+
+exports[`格式化统一性快照测试 > 格式化一致性测试 > 相同输入应产生相同输出（formatPremium） > premium-consistency 1`] = `"1,234.6"`;
+
+exports[`格式化统一性快照测试 > 格式化一致性测试 > 相同输入应产生相同输出（formatRate） > rate-consistency 1`] = `"36.4%"`;
+
+exports[`格式化统一性快照测试 > 边界值快照测试 > formatPremium 应处理负数 > premium-negative 1`] = `"-1,234.6"`;
+
+exports[`格式化统一性快照测试 > 边界值快照测试 > formatRate 应处理微小值 > rate-tiny 1`] = `"0.0%"`;
+
+exports[`格式化统一性快照测试 > 边界值快照测试 > formatRate 应处理极大值 > rate-large 1`] = `"1000.0%"`;
+
+exports[`格式化统一性快照测试 > 边界值快照测试 > 应处理 Infinity > number-infinity 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 > 边界值快照测试 > 应处理 Infinity > premium-infinity 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 > 边界值快照测试 > 应处理 Infinity > rate-infinity 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 > 边界值快照测试 > 应处理 NaN 值 > number-nan 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 > 边界值快照测试 > 应处理 NaN 值 > premium-nan 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 > 边界值快照测试 > 应处理 NaN 值 > rate-nan 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 formatNumber 快照测试 应正确格式化小整数: number-123 1`] = `"123"`;
+
+exports[`格式化统一性快照测试 formatNumber 快照测试 应正确格式化带千分位的数值: number-1234567 1`] = `"1,234,567"`;
+
+exports[`格式化统一性快照测试 formatNumber 快照测试 应正确格式化零值: number-0 1`] = `"0"`;
+
+exports[`格式化统一性快照测试 formatPremium 快照测试 应正确处理千分位分隔: premium-thousands 1`] = `"1,234.6"`;
+
+exports[`格式化统一性快照测试 formatPremium 快照测试 应正确格式化万级数值: premium-12345678 1`] = `"1,234.6"`;
+
+exports[`格式化统一性快照测试 formatPremium 快照测试 应正确格式化大数值（亿元）: premium-1234567890 1`] = `"123,456.8"`;
+
+exports[`格式化统一性快照测试 formatPremium 快照测试 应正确格式化小数值: premium-1234 1`] = `"0.1"`;
+
+exports[`格式化统一性快照测试 formatPremium 快照测试 应正确格式化零值: premium-0 1`] = `"0.0"`;
+
+exports[`格式化统一性快照测试 formatRate 快照测试 应正确格式化0%: rate-0 1`] = `"0.0%"`;
+
+exports[`格式化统一性快照测试 formatRate 快照测试 应正确格式化大于100%的值: rate-1.5 1`] = `"1.5%"`;
+
+exports[`格式化统一性快照测试 formatRate 快照测试 应正确格式化小数百分比: rate-0.123 1`] = `"12.3%"`;
+
+exports[`格式化统一性快照测试 formatRate 快照测试 应正确格式整数百分比: rate-1 1`] = `"100.0%"`;
+
+exports[`格式化统一性快照测试 格式化一致性测试 相同输入应产生相同输出（formatPremium）: premium-consistency 1`] = `"1,234.6"`;
+
+exports[`格式化统一性快照测试 格式化一致性测试 相同输入应产生相同输出（formatRate）: rate-consistency 1`] = `"36.4%"`;
+
+exports[`格式化统一性快照测试 边界值快照测试 formatPremium 应处理负数: premium-negative 1`] = `"-1,234.6"`;
+
+exports[`格式化统一性快照测试 边界值快照测试 formatRate 应处理微小值: rate-tiny 1`] = `"0.0%"`;
+
+exports[`格式化统一性快照测试 边界值快照测试 formatRate 应处理极大值: rate-large 1`] = `"1000.0%"`;
+
+exports[`格式化统一性快照测试 边界值快照测试 应处理 Infinity: number-infinity 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 边界值快照测试 应处理 Infinity: premium-infinity 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 边界值快照测试 应处理 Infinity: rate-infinity 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 边界值快照测试 应处理 NaN 值: number-nan 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 边界值快照测试 应处理 NaN 值: premium-nan 1`] = `"-"`;
+
+exports[`格式化统一性快照测试 边界值快照测试 应处理 NaN 值: rate-nan 1`] = `"-"`;

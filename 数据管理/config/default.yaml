@@ -1,0 +1,34 @@
+# 原始数据加工 - 默认配置文件
+# 用于 chexianYJFX 车险盈亏分析项目
+
+# 数据匹配配置
+matching:
+  # 匹配键列名
+  key_column: "保单号"
+  # 要匹配的列名
+  match_column: "续保业务类型"
+
+# 文件路径配置
+# 注意：使用时请修改为实际路径，或通过命令行参数覆盖
+paths:
+  # 源文件（包含续保业务类型的参考数据）
+  source_file: ""
+  # 目标文件（需要添加续保业务类型的新数据）
+  target_file: ""
+  # 输出文件路径
+  output_file: ""
+
+# 日志配置
+logging:
+  level: "INFO"
+  # 日志保留天数
+  retention_days: 30
+
+# 数据验证规则
+validation:
+  # 是否检查保单号格式
+  check_policy_format: true
+  # 保单号最小长度
+  policy_min_length: 10
+  # 是否允许空值匹配
+  allow_null_match: true

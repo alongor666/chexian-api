@@ -1,0 +1,590 @@
+{
+  "generatedAt": "2026-01-17T14:28:39.265Z",
+  "plansDir": ".claude/plans",
+  "dryRun": false,
+  "stats": {
+    "IN_PROGRESS": 23,
+    "DONE": 3,
+    "UNKNOWN": 6
+  },
+  "results": [
+    {
+      "title": "版本 2.0 规划路线图",
+      "path": ".claude/plans/【版本规划】2.0版本路线图.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 36,
+        "checked": 0,
+        "unchecked": 36
+      },
+      "backlogIds": [
+        "B109",
+        "B110",
+        "B111",
+        "B112",
+        "B113",
+        "B114",
+        "B115",
+        "B116",
+        "B117",
+        "B118",
+        "B119",
+        "B120",
+        "B121"
+      ],
+      "reasons": [
+        "存在未完成勾选项：36/36"
+      ]
+    },
+    {
+      "title": "整体优化计划",
+      "path": ".claude/plans/【版本规划】系统整体优化计划.md",
+      "status": "DONE",
+      "statusLine": null,
+      "checkbox": {
+        "total": 4,
+        "checked": 4,
+        "unchecked": 0
+      },
+      "backlogIds": [],
+      "reasons": [
+        "勾选清单已全部完成：4/4"
+      ]
+    },
+    {
+      "title": "筛选器优化与续保专项分析 - 实施计划",
+      "path": ".claude/plans/【功能实施】筛选器优化与续保专项分析计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 18,
+        "checked": 0,
+        "unchecked": 18
+      },
+      "backlogIds": [
+        "B030",
+        "B031",
+        "B032",
+        "B033",
+        "B034",
+        "B035",
+        "B036"
+      ],
+      "reasons": [
+        "存在未完成勾选项：18/18"
+      ]
+    },
+    {
+      "title": "商车自主定价系数监控板块开发计划",
+      "path": ".claude/plans/【功能实施】商车自主定价系数监控板块开发计划.md",
+      "status": "UNKNOWN",
+      "statusLine": null,
+      "checkbox": {
+        "total": 0,
+        "checked": 0,
+        "unchecked": 0
+      },
+      "backlogIds": [],
+      "reasons": [
+        "未发现状态信号（建议补充“当前状态：...”或勾选清单）"
+      ]
+    },
+    {
+      "title": "车险销售业绩分析系统 - 新增4个高价值分析维度",
+      "path": ".claude/plans/【功能实施】新增4个高价值分析维度计划.md",
+      "status": "UNKNOWN",
+      "statusLine": null,
+      "checkbox": {
+        "total": 0,
+        "checked": 0,
+        "unchecked": 0
+      },
+      "backlogIds": [],
+      "reasons": [
+        "未发现状态信号（建议补充“当前状态：...”或勾选清单）"
+      ]
+    },
+    {
+      "title": "营业货车专项分析功能实现计划",
+      "path": ".claude/plans/【功能实施】营业货车专项分析功能实现计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 6,
+        "checked": 0,
+        "unchecked": 6
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：6/6"
+      ]
+    },
+    {
+      "title": "增长率分析标签页集成计划",
+      "path": ".claude/plans/【功能实施】增长率分析标签页集成计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 4,
+        "checked": 0,
+        "unchecked": 4
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：4/4"
+      ]
+    },
+    {
+      "title": "SQL 查询功能实施计划（只读查询版）",
+      "path": ".claude/plans/【功能实施】SQL查询功能实施计划（只读版）.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 11,
+        "checked": 0,
+        "unchecked": 11
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：11/11"
+      ]
+    },
+    {
+      "title": "动态维度检测与智能字段映射实现计划",
+      "path": ".claude/plans/【规范治理】动态维度检测与智能字段映射实现计划.md",
+      "status": "DONE",
+      "statusLine": null,
+      "checkbox": {
+        "total": 12,
+        "checked": 12,
+        "unchecked": 0
+      },
+      "backlogIds": [],
+      "reasons": [
+        "勾选清单已全部完成：12/12"
+      ]
+    },
+    {
+      "title": "实施计划：集成冲突检测到 commit-push-pr 命令",
+      "path": ".claude/plans/【规范治理】集成冲突检测到Git工作流计划.md",
+      "status": "DONE",
+      "statusLine": null,
+      "checkbox": {
+        "total": 0,
+        "checked": 0,
+        "unchecked": 0
+      },
+      "backlogIds": [
+        "B100"
+      ],
+      "reasons": [
+        "引用任务均为终态：B100"
+      ]
+    },
+    {
+      "title": "AI协作治理规范实施计划",
+      "path": ".claude/plans/【规范治理】AI协作治理规范实施计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 11,
+        "checked": 0,
+        "unchecked": 11
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：11/11"
+      ]
+    },
+    {
+      "title": "DC-001 规范实施方案：数据分析三要素强制前置",
+      "path": ".claude/plans/【规范治理】DC-001规范强制前置实施方案.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 21,
+        "checked": 0,
+        "unchecked": 21
+      },
+      "backlogIds": [
+        "B051",
+        "B054"
+      ],
+      "reasons": [
+        "存在未完成勾选项：21/21"
+      ]
+    },
+    {
+      "title": "DC-001 数据分析三要素 - 实施计划（已修复元数据刷新问题）",
+      "path": ".claude/plans/【规范治理】DC-001数据分析三要素实施计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 27,
+        "checked": 0,
+        "unchecked": 27
+      },
+      "backlogIds": [
+        "B051",
+        "B054"
+      ],
+      "reasons": [
+        "存在未完成勾选项：27/27"
+      ]
+    },
+    {
+      "title": "Git历史与计划对照分析",
+      "path": ".claude/plans/【规范治理】Git历史与计划对照分析.md",
+      "status": "IN_PROGRESS",
+      "statusLine": "BACKLOG.md (52个任务)",
+      "checkbox": {
+        "total": 7,
+        "checked": 0,
+        "unchecked": 7
+      },
+      "backlogIds": [
+        "B020",
+        "B022",
+        "B023",
+        "B024",
+        "B025",
+        "B026",
+        "B029",
+        "B030",
+        "B031",
+        "B032",
+        "B033",
+        "B034",
+        "B035",
+        "B036",
+        "B038",
+        "B039",
+        "B040",
+        "B041",
+        "B042",
+        "B043",
+        "B044",
+        "B045",
+        "B046",
+        "B047",
+        "B048",
+        "B049",
+        "B050",
+        "B051",
+        "B052"
+      ],
+      "reasons": [
+        "存在未完成勾选项：7/7"
+      ]
+    },
+    {
+      "title": "为板块文档指标添加业务含义说明的实施计划",
+      "path": ".claude/plans/【文档知识】板块文档指标业务含义说明计划.md",
+      "status": "UNKNOWN",
+      "statusLine": "只有8个指标的计算公式",
+      "checkbox": {
+        "total": 0,
+        "checked": 0,
+        "unchecked": 0
+      },
+      "backlogIds": [],
+      "reasons": [
+        "未发现状态信号（建议补充“当前状态：...”或勾选清单）"
+      ]
+    },
+    {
+      "title": "执行计划: 总结对话并创建Git提交",
+      "path": ".claude/plans/【文档知识】对话总结与Git提交创建计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 5,
+        "checked": 0,
+        "unchecked": 5
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：5/5"
+      ]
+    },
+    {
+      "title": "知识提取与归档实施计划",
+      "path": ".claude/plans/【文档知识】知识提取与归档实施计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 20,
+        "checked": 0,
+        "unchecked": 20
+      },
+      "backlogIds": [
+        "B013",
+        "B014",
+        "B017",
+        "B022",
+        "B038",
+        "B041"
+      ],
+      "reasons": [
+        "存在未完成勾选项：20/20"
+      ]
+    },
+    {
+      "title": "续保率分析数据为空问题 - 诊断与修复计划（v2）",
+      "path": ".claude/plans/【问题修复】续保率分析数据为空问题修复计划（v2）.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 22,
+        "checked": 0,
+        "unchecked": 22
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：22/22"
+      ]
+    },
+    {
+      "title": "商车自主定价系数监控页面优化计划",
+      "path": ".claude/plans/【性能优化】商车自主定价系数监控页面优化计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 22,
+        "checked": 0,
+        "unchecked": 22
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：22/22"
+      ]
+    },
+    {
+      "title": "营业货车专项分析优化实施计划",
+      "path": ".claude/plans/【性能优化】营业货车专项分析性能优化计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 35,
+        "checked": 0,
+        "unchecked": 35
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：35/35"
+      ]
+    },
+    {
+      "title": "insuranalyzer 性能优化实施计划",
+      "path": ".claude/plans/【性能优化】insuranalyzer整体性能优化计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 34,
+        "checked": 0,
+        "unchecked": 34
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：34/34"
+      ]
+    },
+    {
+      "title": "KPI看板优化计划",
+      "path": ".claude/plans/【性能优化】KPI看板性能优化计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 23,
+        "checked": 0,
+        "unchecked": 23
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：23/23"
+      ]
+    },
+    {
+      "title": "保险数据分析平台 - UI设计深度分析报告",
+      "path": ".claude/plans/【UI重构】保险数据分析平台UI设计深度分析报告.md",
+      "status": "UNKNOWN",
+      "statusLine": null,
+      "checkbox": {
+        "total": 0,
+        "checked": 0,
+        "unchecked": 0
+      },
+      "backlogIds": [],
+      "reasons": [
+        "未发现状态信号（建议补充“当前状态：...”或勾选清单）"
+      ]
+    },
+    {
+      "title": "车险签单分析平台UI/UX重构实施计划",
+      "path": ".claude/plans/【UI重构】车险签单分析平台UI-UX重构计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 19,
+        "checked": 0,
+        "unchecked": 19
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：19/19"
+      ]
+    },
+    {
+      "title": "UI显示与SQL智能生成增强计划",
+      "path": ".claude/plans/【UI重构】UI显示与SQL智能生成增强计划.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 39,
+        "checked": 0,
+        "unchecked": 39
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：39/39"
+      ]
+    },
+    {
+      "title": "已赚保费计算实现计划",
+      "path": ".claude/plans/已赚保费计算实现计划.md",
+      "status": "UNKNOWN",
+      "statusLine": null,
+      "checkbox": {
+        "total": 0,
+        "checked": 0,
+        "unchecked": 0
+      },
+      "backlogIds": [],
+      "reasons": [
+        "未发现状态信号（建议补充“当前状态：...”或勾选清单）"
+      ]
+    },
+    {
+      "title": "BACKLOG 归档策略设计",
+      "path": ".claude/plans/backlog-archiving-strategy.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 12,
+        "checked": 0,
+        "unchecked": 12
+      },
+      "backlogIds": [
+        "B001",
+        "B002",
+        "B022",
+        "B023",
+        "B102",
+        "B103"
+      ],
+      "reasons": [
+        "存在未完成勾选项：12/12"
+      ]
+    },
+    {
+      "title": "成本分析模块实现计划",
+      "path": ".claude/plans/cost-analysis-plan.md",
+      "status": "UNKNOWN",
+      "statusLine": null,
+      "checkbox": {
+        "total": 0,
+        "checked": 0,
+        "unchecked": 0
+      },
+      "backlogIds": [],
+      "reasons": [
+        "未发现状态信号（建议补充“当前状态：...”或勾选清单）"
+      ]
+    },
+    {
+      "title": "前端全面优化实施计划",
+      "path": ".claude/plans/frontend-optimization-plan.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 9,
+        "checked": 0,
+        "unchecked": 9
+      },
+      "backlogIds": [
+        "B147",
+        "B148",
+        "B149",
+        "B150",
+        "B151",
+        "B152",
+        "B153",
+        "B154",
+        "B155"
+      ],
+      "reasons": [
+        "存在未完成勾选项：9/9"
+      ]
+    },
+    {
+      "title": "营销战报板块实现计划",
+      "path": ".claude/plans/marketing-report-implementation-plan.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 22,
+        "checked": 0,
+        "unchecked": 22
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：22/22"
+      ]
+    },
+    {
+      "title": "车险经营管理系统 - 页面布局与体验流程重构方案",
+      "path": ".claude/plans/sidebar-layout-refactor-plan.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 32,
+        "checked": 0,
+        "unchecked": 32
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：32/32"
+      ]
+    },
+    {
+      "title": "代码简化报告",
+      "path": ".claude/plans/simplify-report-20260115-214947.md",
+      "status": "IN_PROGRESS",
+      "statusLine": null,
+      "checkbox": {
+        "total": 4,
+        "checked": 0,
+        "unchecked": 4
+      },
+      "backlogIds": [],
+      "reasons": [
+        "存在未完成勾选项：4/4"
+      ]
+    }
+  ],
+  "appliedActions": [
+    {
+      "from": ".claude/plans/【版本规划】系统整体优化计划.md",
+      "to": ".claude/plans/_archive/2026-01/【版本规划】系统整体优化计划.md"
+    },
+    {
+      "from": ".claude/plans/【规范治理】动态维度检测与智能字段映射实现计划.md",
+      "to": ".claude/plans/_archive/2026-01/【规范治理】动态维度检测与智能字段映射实现计划.md"
+    },
+    {
+      "from": ".claude/plans/【规范治理】集成冲突检测到Git工作流计划.md",
+      "to": ".claude/plans/_archive/2026-01/【规范治理】集成冲突检测到Git工作流计划.md"
+    }
+  ]
+}

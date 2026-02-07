@@ -1,0 +1,180 @@
+$ vite --port "5173" --host "0.0.0.0"
+
+  VITE v5.4.21  ready in 119 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.110.53:5173/
+  ➜  Network: http://198.18.0.1:5173/
+2:23:12 PM [vite] Pre-transform error: Transform failed with 1 error:
+/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/src/shared/sql/kpi.ts:93:0: ERROR: Unexpected "}"
+2:23:12 PM [vite] Internal server error: Transform failed with 1 error:
+/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/src/shared/sql/kpi.ts:93:0: ERROR: Unexpected "}"
+  Plugin: vite:esbuild
+  File: /Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/src/shared/sql/kpi.ts:93:0
+  
+  Unexpected "}"
+  91 |    `;
+  92 |  };
+  93 |  };
+     |  ^
+  94 |  
+  
+      at failureErrorWithLog (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:1472:15)
+      at /Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:755:50
+      at responseCallbacks.<computed> (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:622:9)
+      at handleIncomingPacket (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:677:12)
+      at Socket.readFromStdout (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:600:7)
+      at Socket.emit (node:events:508:28)
+      at addChunk (node:internal/streams/readable:559:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
+      at Readable.push (node:internal/streams/readable:390:5)
+      at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+2:25:05 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+2:25:05 PM [vite] Pre-transform error: Transform failed with 1 error:
+/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/src/shared/sql/kpi.ts:93:0: ERROR: Unexpected "}"
+2:25:05 PM [vite] Internal server error: Transform failed with 1 error:
+/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/src/shared/sql/kpi.ts:93:0: ERROR: Unexpected "}"
+  Plugin: vite:esbuild
+  File: /Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/src/shared/sql/kpi.ts:93:0
+  
+  Unexpected "}"
+  91 |    `;
+  92 |  };
+  93 |  };
+     |  ^
+  94 |  
+  
+      at failureErrorWithLog (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:1472:15)
+      at /Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:755:50
+      at responseCallbacks.<computed> (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:622:9)
+      at handleIncomingPacket (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:677:12)
+      at Socket.readFromStdout (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:600:7)
+      at Socket.emit (node:events:508:28)
+      at addChunk (node:internal/streams/readable:559:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
+      at Readable.push (node:internal/streams/readable:390:5)
+      at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+2:54:27 PM [vite] Internal server error: Transform failed with 1 error:
+/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/src/shared/sql/kpi.ts:93:0: ERROR: Unexpected "}"
+  Plugin: vite:esbuild
+  File: /Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/src/shared/sql/kpi.ts:93:0
+  
+  Unexpected "}"
+  91 |    `;
+  92 |  };
+  93 |  };
+     |  ^
+  94 |  
+  
+      at failureErrorWithLog (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:1472:15)
+      at /Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:755:50
+      at responseCallbacks.<computed> (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:622:9)
+      at handleIncomingPacket (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:677:12)
+      at Socket.readFromStdout (/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/esbuild/lib/main.js:600:7)
+      at Socket.emit (node:events:508:28)
+      at addChunk (node:internal/streams/readable:559:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
+      at Readable.push (node:internal/streams/readable:390:5)
+      at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+2:54:42 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+Sourcemap for "/Users/xuechenglong/Downloads/01-公司开发项目/A00销售人员业绩看板/2025fupan/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js" points to missing source files
+3:09:39 PM [vite] page reload src/shared/sql/growth.ts
+3:15:30 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:15:47 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:16:20 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:16:37 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:16:45 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:16:51 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:18:02 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:19:43 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+3:19:55 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+3:20:12 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+3:20:30 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+3:21:10 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+3:21:25 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+3:21:35 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+3:24:20 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:24:34 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:24:43 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:25:00 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:25:39 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:35:23 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+3:52:30 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+3:55:21 PM [vite] page reload src/features/dashboard/Dashboard.tsx
+3:55:39 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+3:55:52 PM [vite] hmr update /src/widgets/charts/LineChart.tsx, /src/app/index.css
+3:57:00 PM [vite] hmr update /src/widgets/charts/LineChart.tsx, /src/app/index.css
+3:57:13 PM [vite] hmr update /src/widgets/charts/LineChart.tsx, /src/app/index.css
+3:57:39 PM [vite] hmr update /src/widgets/charts/LineChart.tsx, /src/app/index.css
+4:16:10 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+4:21:30 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+4:22:07 PM [vite] hmr update /src/widgets/charts/LineChart.tsx, /src/app/index.css
+4:32:12 PM [vite] hmr update /src/widgets/charts/LineChart.tsx, /src/app/index.css
+4:32:51 PM [vite] hmr update /src/widgets/charts/LineChart.tsx, /src/app/index.css
+4:34:18 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+4:35:14 PM [vite] page reload src/features/growth/hooks/useGrowthAnalysis.ts
+4:51:42 PM [vite] hmr update /src/app/App.tsx, /src/app/index.css
+4:55:24 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+6:12:30 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+6:12:59 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+6:14:14 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+8:45:21 AM [vite] page reload src/features/dashboard/Dashboard.tsx
+8:45:21 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+8:45:21 AM [vite] hmr update /src/features/filters/AdvancedFilterPanel.tsx, /src/app/index.css
+8:45:21 AM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+8:45:21 AM [vite] page reload src/widgets/charts/BarChart.tsx
+8:45:21 AM [vite] hmr update /src/widgets/charts/LineChart.tsx, /src/app/index.css
+8:45:21 AM [vite] hmr update /src/widgets/charts/RoseChart.tsx, /src/app/index.css
+8:54:25 AM [vite] hmr update /src/features/filters/AdvancedFilterPanel.tsx, /src/app/index.css
+8:56:45 AM [vite] hmr update /src/widgets/charts/RoseChart.tsx, /src/app/index.css
+9:12:38 AM [vite] hmr update /src/features/filters/AdvancedFilterPanel.tsx, /src/app/index.css
+9:13:51 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+9:14:03 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+10:16:52 AM [vite] hmr update /src/features/filters/AdvancedFilterPanel.tsx, /src/app/index.css
+10:23:06 AM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+10:23:25 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+10:23:36 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+10:23:49 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+10:24:10 AM [vite] hmr update /src/features/filters/AdvancedFilterPanel.tsx, /src/app/index.css
+10:26:04 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+10:26:17 AM [vite] hmr update /src/features/filters/AdvancedFilterPanel.tsx, /src/app/index.css
+10:26:26 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+10:26:43 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+10:30:47 AM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+10:31:47 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+11:14:24 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+11:14:31 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+11:14:50 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+11:15:11 AM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:03:18 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:09:39 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:09:54 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:10:11 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:10:19 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:10:28 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:10:34 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:16:37 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+12:16:47 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+12:17:04 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+12:17:13 PM [vite] hmr update /src/features/filters/AdvancedFilterPanel.tsx, /src/app/index.css
+12:20:26 PM [vite] hmr update /src/features/filters/AdvancedFilterPanel.tsx, /src/app/index.css
+12:21:24 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:21:32 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:21:37 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:21:44 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:21:59 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:22:14 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:22:21 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:22:26 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:24:52 PM [vite] hmr update /src/features/dashboard/PremiumDashboard.tsx, /src/app/index.css
+12:25:32 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+4:17:10 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+4:17:15 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+4:17:19 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+4:17:23 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+4:17:27 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+4:17:31 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+8:21:00 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+8:21:20 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+8:21:34 PM [vite] hmr update /src/app/index.css, /src/features/dashboard/PremiumDashboard.tsx
+8:22:12 PM [vite] hmr update /src/features/filters/AdvancedFilterPanel.tsx, /src/app/index.css

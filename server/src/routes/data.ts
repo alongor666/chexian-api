@@ -1,0 +1,625 @@
+/**
+ * 数据管理路由
+ * Data Management Routes
+ *
+ * POST /api/data/upload - Parquet 文件上传
+ * GET /api/data/metadata - 数据元信息
+ * DELETE /api/data/clear - 清除当前数据
+ * GET /api/data/files - 列出数据文件
+ * POST /api/data/load/:filename - 加载已有文件
+ *
+ * 安全修复 (2026-02-03):
+ * - 添加路径遍历防护 (sanitizeFilename + validatePathWithinDirectory)
+ * - 添加 Parquet 文件魔数验证 (isValidParquetFile)
+ * - 添加上传速率限制
+ * - 添加文件清理机制
+ */
+
+import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import { authMiddleware } from '../middleware/auth.js';
+import { asyncHandler, AppError } from '../middleware/error.js';
+import { duckdbService } from '../services/duckdb.js';
+import {
+  sanitizeFilename,
+  validatePathWithinDirectory,
+  isValidParquetFile,
+  safeLog,
+} from '../utils/security.js';
+import { getDataDir } from '../config/paths.js';
+
+const router = Router();
+
+// ============================================
+// 配置常量
+// ============================================
+
+const CONFIG = {
+  DATA_DIR: getDataDir(),
+  MAX_FILE_SIZE: 500 * 1024 * 1024, // 500MB
+  MAX_FILES_KEEP: 10, // 保留最近 10 个文件
+  RATE_LIMIT_WINDOW: 15 * 60 * 1000, // 15 分钟
+  RATE_LIMIT_MAX: 10, // 最多 10 次上传
+};
+
+// 确保数据目录存在
+if (!fs.existsSync(CONFIG.DATA_DIR)) {
+  fs.mkdirSync(CONFIG.DATA_DIR, { recursive: true });
+}
+
+// ============================================
+// 简易速率限制（生产环境建议使用 express-rate-limit）
+// ============================================
+
+const uploadRateLimit = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(userId: string): void {
+  const now = Date.now();
+  const record = uploadRateLimit.get(userId);
+
+  if (!record || now > record.resetTime) {
+    uploadRateLimit.set(userId, {
+      count: 1,
+      resetTime: now + CONFIG.RATE_LIMIT_WINDOW,
+    });
+    return;
+  }
+
+  if (record.count >= CONFIG.RATE_LIMIT_MAX) {
+    const waitMinutes = Math.ceil((record.resetTime - now) / 60000);
+    throw new AppError(429, `上传过于频繁，请 ${waitMinutes} 分钟后再试`);
+  }
+
+  record.count++;
+}
+
+// ============================================
+// Multer 配置：安全的文件上传
+// ============================================
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, CONFIG.DATA_DIR);
+  },
+  filename: (req, file, cb) => {
+    // 使用 UUID + 安全化的原文件名，避免冲突和注入
+    const uuid = crypto.randomUUID();
+    const ext = path.extname(file.originalname).toLowerCase();
+    const baseName = path.basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9_\-]/g, '_')
+      .substring(0, 50); // 限制长度
+    cb(null, `${uuid}_${baseName}${ext}`);
+  },
+});
+
+const fileFilter = (
+  req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  // 1. 检查扩展名
+  if (!file.originalname.toLowerCase().endsWith('.parquet')) {
+    return cb(new Error('只支持 .parquet 文件扩展名'));
+  }
+
+  // 2. 检查 MIME 类型（虽然可伪造，但多一层防护）
+  const allowedMimeTypes = [
+    'application/octet-stream',
+    'application/vnd.apache.parquet',
+    'binary/octet-stream',
+  ];
+
+  // Multer 可能无法正确识别 MIME，所以不强制检查
+  // 真正的验证在 isValidParquetFile() 中
+
+  cb(null, true);
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: CONFIG.MAX_FILE_SIZE,
+    files: 1, // 只允许单文件上传
+  },
+});
+
+// ============================================
+// 文件清理机制
+// ============================================
+
+async function cleanupOldFiles(): Promise<void> {
+  try {
+    const files = fs.readdirSync(CONFIG.DATA_DIR)
+      .filter((f) => f.endsWith('.parquet'))
+      .map((filename) => {
+        const filePath = path.join(CONFIG.DATA_DIR, filename);
+        const stats = fs.statSync(filePath);
+        return {
+          filename,
+          path: filePath,
+          mtime: stats.mtime,
+        };
+      })
+      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+    // 保留最近的 N 个文件，删除其余
+    const filesToDelete = files.slice(CONFIG.MAX_FILES_KEEP);
+
+    for (const file of filesToDelete) {
+      // 不删除当前正在使用的文件
+      if (currentDataFile?.filename === file.filename) {
+        continue;
+      }
+
+      fs.unlinkSync(file.path);
+      safeLog('info', 'Data', `Cleaned up old file: ${file.filename}`);
+    }
+  } catch (err) {
+    safeLog('error', 'Data', 'Cleanup error', { error: String(err) });
+  }
+}
+
+// ============================================
+// 当前数据文件状态
+// ============================================
+
+let currentDataFile: {
+  filename: string;
+  originalName: string;
+  uploadTime: Date;
+  rowCount: number;
+  fileSizeBytes: number;
+} | null = null;
+
+/**
+ * 设置当前数据文件状态（供 app.ts 启动时调用）
+ */
+export function setCurrentDataFile(info: {
+  filename: string;
+  rowCount: number;
+  fileSizeBytes: number;
+}) {
+  currentDataFile = {
+    filename: info.filename,
+    originalName: info.filename,
+    uploadTime: new Date(),
+    rowCount: info.rowCount,
+    fileSizeBytes: info.fileSizeBytes,
+  };
+}
+
+// ============================================
+// 路由
+// ============================================
+
+/**
+ * 应用认证中间件（数据管理需要登录）
+ */
+router.use(authMiddleware);
+
+/**
+ * POST /api/data/upload
+ * 上传 Parquet 文件（带安全验证）
+ *
+ * 安全措施：
+ * 1. 速率限制
+ * 2. 文件扩展名检查
+ * 3. Parquet 魔数验证
+ * 4. 路径安全验证
+ */
+router.post(
+  '/upload',
+  asyncHandler(async (req: Request, res: Response) => {
+    // 1. 速率限制检查
+    const userId = (req as any).user?.userId || 'anonymous';
+    checkRateLimit(userId);
+
+    // 继续到 multer 中间件
+    return new Promise<void>((resolve, reject) => {
+      upload.single('file')(req, res, async (err) => {
+        if (err) {
+          if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+              reject(new AppError(413, `文件过大，最大允许 ${CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB`));
+            } else {
+              reject(new AppError(400, `上传错误: ${err.message}`));
+            }
+          } else {
+            reject(new AppError(400, err.message));
+          }
+          return;
+        }
+
+        if (!req.file) {
+          reject(new AppError(400, '未提供文件'));
+          return;
+        }
+
+        const filePath = req.file.path;
+        const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+
+        safeLog('info', 'Data', `Uploading file: ${originalName}`);
+
+        try {
+          // 2. 验证 Parquet 文件格式（魔数检查）
+          const validation = await isValidParquetFile(filePath);
+          if (!validation.valid) {
+            // 删除无效文件
+            fs.unlinkSync(filePath);
+            reject(new AppError(400, validation.error || '不是有效的 Parquet 文件'));
+            return;
+          }
+
+          // 3. 加载到 DuckDB
+          await duckdbService.loadParquet(filePath, 'raw_parquet');
+
+          // 4. 创建 PolicyFact 视图
+          await duckdbService.createPolicyFactView('raw_parquet');
+
+          // 5. 获取数据统计
+          const countResult = await duckdbService.query<{ count: number }>(
+            'SELECT COUNT(*) as count FROM PolicyFact'
+          );
+          const rowCount = countResult[0]?.count || 0;
+
+          // 6. 更新当前数据文件信息
+          currentDataFile = {
+            filename: req.file.filename,
+            originalName,
+            uploadTime: new Date(),
+            rowCount,
+            fileSizeBytes: req.file.size,
+          };
+
+          safeLog('info', 'Data', `File loaded: ${rowCount} rows`);
+
+          // 7. 异步清理旧文件（不阻塞响应）
+          cleanupOldFiles().catch(() => {});
+
+          res.json({
+            success: true,
+            data: {
+              filename: currentDataFile.filename,
+              originalName: currentDataFile.originalName,
+              rowCount,
+              fileSizeMB: Math.round(req.file.size / 1024 / 1024 * 100) / 100,
+            },
+            message: `成功加载 ${rowCount.toLocaleString()} 条数据`,
+          });
+
+          resolve();
+        } catch (loadErr) {
+          // 清理上传的文件
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+
+          const errorMessage = loadErr instanceof Error ? loadErr.message : '数据加载失败';
+          reject(new AppError(400, errorMessage));
+        }
+      });
+    });
+  })
+);
+
+/**
+ * GET /api/data/metadata
+ * 获取当前加载数据的元信息
+ */
+router.get(
+  '/metadata',
+  asyncHandler(async (req: Request, res: Response) => {
+    try {
+      // 检查 PolicyFact 是否存在
+      let rowCount = 0;
+      try {
+        const countResult = await duckdbService.query<{ count: number }>(
+          'SELECT COUNT(*) as count FROM PolicyFact'
+        );
+        rowCount = countResult[0]?.count || 0;
+      } catch {
+        throw new AppError(404, '当前没有加载的数据');
+      }
+
+      // 获取表结构
+      const schema = await duckdbService.getTableSchema('PolicyFact');
+
+      // 获取数据范围（如果有日期字段）
+      let dateRange = null;
+      try {
+        const dateResult = await duckdbService.query<{ min_date: string; max_date: string }>(
+          `SELECT
+            MIN(policy_date)::VARCHAR as min_date,
+            MAX(policy_date)::VARCHAR as max_date
+          FROM PolicyFact
+          WHERE policy_date IS NOT NULL`
+        );
+        if (dateResult[0]?.min_date) {
+          dateRange = {
+            minDate: dateResult[0].min_date,
+            maxDate: dateResult[0].max_date,
+          };
+        }
+      } catch {
+        // 日期字段可能不存在，记录警告但继续
+        safeLog('warn', 'Data', 'Date range query failed, field may not exist');
+      }
+
+      // 获取机构列表
+      let organizations: string[] = [];
+      try {
+        const orgResult = await duckdbService.query<{ org_level_3: string }>(
+          `SELECT DISTINCT org_level_3
+          FROM PolicyFact
+          WHERE org_level_3 IS NOT NULL
+          ORDER BY org_level_3`
+        );
+        organizations = orgResult.map((r) => r.org_level_3);
+      } catch {
+        safeLog('warn', 'Data', 'Organization query failed, field may not exist');
+      }
+
+      // 汇总统计
+      let summaryStats = null;
+      try {
+        const statsResult = await duckdbService.query<{
+          total_premium: number;
+          avg_premium: number;
+          policy_count: number;
+        }>(
+          `SELECT
+            SUM(premium) as total_premium,
+            AVG(premium) as avg_premium,
+            COUNT(DISTINCT policy_no) as policy_count
+          FROM PolicyFact`
+        );
+        summaryStats = statsResult[0];
+      } catch {
+        safeLog('warn', 'Data', 'Summary stats query failed');
+      }
+
+      res.json({
+        success: true,
+        data: {
+          file: currentDataFile ? {
+            filename: currentDataFile.filename,
+            originalName: currentDataFile.originalName,
+            uploadTime: currentDataFile.uploadTime,
+            rowCount: currentDataFile.rowCount,
+            fileSizeMB: Math.round(currentDataFile.fileSizeBytes / 1024 / 1024 * 100) / 100,
+          } : {
+            filename: 'unknown',
+            originalName: '启动时加载的数据',
+            uploadTime: new Date(),
+            rowCount,
+            fileSizeMB: null,
+          },
+          schema: schema.map((col: any) => ({
+            name: col.column_name,
+            type: col.column_type,
+            nullable: col.null === 'YES',
+          })),
+          dateRange,
+          organizations,
+          summaryStats,
+        },
+      });
+    } catch (err) {
+      if (err instanceof AppError) {
+        throw err;
+      }
+      const errorMessage = err instanceof Error ? err.message : '获取元信息失败';
+      throw new AppError(500, errorMessage);
+    }
+  })
+);
+
+/**
+ * DELETE /api/data/clear
+ * 清除当前加载的数据
+ */
+router.delete(
+  '/clear',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!currentDataFile) {
+      throw new AppError(404, '当前没有加载的数据');
+    }
+
+    try {
+      // 删除 DuckDB 中的表和视图
+      await duckdbService.query('DROP VIEW IF EXISTS PolicyFact');
+      await duckdbService.query('DROP TABLE IF EXISTS raw_parquet');
+
+      // 删除文件（安全验证路径）
+      const filePath = path.join(CONFIG.DATA_DIR, currentDataFile.filename);
+      validatePathWithinDirectory(filePath, CONFIG.DATA_DIR);
+
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+
+      const deletedFile = currentDataFile.originalName;
+      currentDataFile = null;
+
+      safeLog('info', 'Data', `Cleared data: ${deletedFile}`);
+
+      res.json({
+        success: true,
+        message: `已清除数据: ${deletedFile}`,
+      });
+    } catch (err) {
+      if (err instanceof AppError) {
+        throw err;
+      }
+      const errorMessage = err instanceof Error ? err.message : '清除数据失败';
+      throw new AppError(500, errorMessage);
+    }
+  })
+);
+
+/**
+ * GET /api/data/files
+ * 列出数据目录中的所有 Parquet 文件
+ */
+router.get(
+  '/files',
+  asyncHandler(async (req: Request, res: Response) => {
+    const files = fs.readdirSync(CONFIG.DATA_DIR)
+      .filter((f) => f.endsWith('.parquet'))
+      .map((filename) => {
+        // 验证文件名安全性
+        try {
+          sanitizeFilename(filename);
+        } catch {
+          // 跳过不安全的文件名
+          return null;
+        }
+
+        const filePath = path.join(CONFIG.DATA_DIR, filename);
+        const stats = fs.statSync(filePath);
+        return {
+          filename,
+          sizeMB: Math.round(stats.size / 1024 / 1024 * 100) / 100,
+          modifiedTime: stats.mtime,
+          isCurrent: currentDataFile?.filename === filename,
+        };
+      })
+      .filter((f): f is NonNullable<typeof f> => f !== null)
+      .sort((a, b) => b.modifiedTime.getTime() - a.modifiedTime.getTime());
+
+    res.json({
+      success: true,
+      data: files,
+    });
+  })
+);
+
+/**
+ * POST /api/data/load/:filename
+ * 加载数据目录中已有的 Parquet 文件
+ *
+ * 安全修复：
+ * 1. 文件名验证（sanitizeFilename）
+ * 2. 路径验证（validatePathWithinDirectory）
+ * 3. Parquet 魔数验证（isValidParquetFile）
+ */
+router.post(
+  '/load/:filename',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { filename } = req.params;
+
+    // 1. 安全验证：文件名清理（防止路径遍历）
+    const safeFilename = sanitizeFilename(filename);
+
+    // 2. 构建并验证路径（防止符号链接绕过）
+    const filePath = path.join(CONFIG.DATA_DIR, safeFilename);
+    validatePathWithinDirectory(filePath, CONFIG.DATA_DIR);
+
+    // 3. 检查文件存在
+    if (!fs.existsSync(filePath)) {
+      throw new AppError(404, `文件不存在: ${safeFilename}`);
+    }
+
+    // 4. 检查扩展名
+    if (!safeFilename.endsWith('.parquet')) {
+      throw new AppError(400, '只支持 Parquet 文件');
+    }
+
+    // 5. 验证 Parquet 文件格式
+    const validation = await isValidParquetFile(filePath);
+    if (!validation.valid) {
+      throw new AppError(400, validation.error || '不是有效的 Parquet 文件');
+    }
+
+    safeLog('info', 'Data', `Loading file: ${safeFilename}`);
+
+    try {
+      // 6. 加载到 DuckDB
+      await duckdbService.loadParquet(filePath, 'raw_parquet');
+
+      // 7. 创建 PolicyFact 视图
+      await duckdbService.createPolicyFactView('raw_parquet');
+
+      // 8. 获取数据统计
+      const countResult = await duckdbService.query<{ count: number }>(
+        'SELECT COUNT(*) as count FROM PolicyFact'
+      );
+      const rowCount = countResult[0]?.count || 0;
+
+      // 9. 更新当前数据文件信息
+      const stats = fs.statSync(filePath);
+      currentDataFile = {
+        filename: safeFilename,
+        originalName: safeFilename,
+        uploadTime: new Date(),
+        rowCount,
+        fileSizeBytes: stats.size,
+      };
+
+      safeLog('info', 'Data', `File loaded: ${rowCount} rows`);
+
+      res.json({
+        success: true,
+        data: {
+          filename: safeFilename,
+          rowCount,
+          fileSizeMB: Math.round(stats.size / 1024 / 1024 * 100) / 100,
+        },
+        message: `成功加载 ${rowCount.toLocaleString()} 条数据`,
+      });
+    } catch (err) {
+      if (err instanceof AppError) {
+        throw err;
+      }
+      const errorMessage = err instanceof Error ? err.message : '数据加载失败';
+      throw new AppError(400, errorMessage);
+    }
+  })
+);
+
+/**
+ * GET /api/data/download/:filename
+ * 下载 Parquet 文件（用于前端 DuckDB-WASM 加载）
+ *
+ * 安全措施：
+ * 1. 文件名验证
+ * 2. 路径验证
+ * 3. Parquet 格式验证
+ */
+router.get(
+  '/download/:filename',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { filename } = req.params;
+
+    // 1. 安全验证：文件名清理
+    const safeFilename = sanitizeFilename(filename);
+
+    // 2. 构建并验证路径
+    const filePath = path.join(CONFIG.DATA_DIR, safeFilename);
+    validatePathWithinDirectory(filePath, CONFIG.DATA_DIR);
+
+    // 3. 检查文件存在
+    if (!fs.existsSync(filePath)) {
+      throw new AppError(404, '文件不存在');
+    }
+
+    // 4. 验证 Parquet 格式
+    const validation = await isValidParquetFile(filePath);
+    if (!validation.valid) {
+      throw new AppError(400, validation.error || '不是有效的 Parquet 文件');
+    }
+
+    // 5. 设置响应头并发送文件
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  })
+);
+
+export default router;

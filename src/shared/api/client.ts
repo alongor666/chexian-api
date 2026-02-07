@@ -1,0 +1,484 @@
+/**
+ * 后端 API 客户端
+ * Backend API Client
+ *
+ * 封装所有后端 API 调用，处理认证和错误
+ */
+
+/** API 基础地址（从环境变量获取，默认本地开发地址） */
+export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api';
+
+/**
+ * API 响应格式
+ */
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    message: string;
+    statusCode: number;
+  };
+  message?: string;
+}
+
+/**
+ * 认证信息
+ */
+interface AuthData {
+  token: string;
+  user: {
+    username: string;
+    displayName: string;
+    role: string;
+  };
+}
+
+/**
+ * KPI 数据
+ */
+export interface KpiData {
+  total_premium: number;
+  policy_count: number;
+  salesman_count: number;
+  org_count: number;
+  per_capita_premium: number;
+  renewal_rate: number;
+  new_car_rate: number;
+  nev_rate: number;
+  quality_business_rate: number;
+  commercial_insurance_rate: number;
+  commercial_rate: number;
+  telesales_rate: number;
+  transfer_rate: number;
+}
+
+/**
+ * KPI 详细数据（用于环形图展示）
+ */
+export interface KpiDetailData {
+  total_premium: number;
+  policy_count: number;
+  per_capita_premium: number;
+  transfer_count: number;
+  non_transfer_count: number;
+  telesales_count: number;
+  non_telesales_count: number;
+  renewal_count: number;
+  non_renewal_count: number;
+  commercial_premium: number;
+  non_commercial_premium: number;
+  nev_count: number;
+  non_nev_count: number;
+  new_car_count: number;
+  non_new_car_count: number;
+}
+
+/**
+ * 趋势数据（与后端 generatePremiumTrendQuery 返回字段对齐）
+ */
+export interface TrendData {
+  time_period: string;
+  premium: number;
+  org_level_3?: string;
+  next_month_ratio?: number;
+  count?: number;
+}
+
+/**
+ * 文件信息
+ */
+export interface FileInfo {
+  filename: string;
+  sizeMB: number;
+  modifiedTime: string;
+  isCurrent: boolean;
+}
+
+/**
+ * 加载结果
+ */
+export interface LoadResult {
+  filename: string;
+  rowCount: number;
+  fileSizeMB: number;
+}
+
+/**
+ * API 客户端类
+ */
+class ApiClient {
+  private token: string | null = null;
+  private tokenExpiry: number = 0;
+
+  /**
+   * 设置认证 Token
+   */
+  setToken(token: string): void {
+    this.token = token;
+    // 解析 JWT 获取过期时间
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      this.tokenExpiry = payload.exp * 1000; // 转换为毫秒
+    } catch {
+      this.tokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // 默认 24 小时
+    }
+    // 保存到 localStorage
+    localStorage.setItem('auth_token', token);
+  }
+
+  /**
+   * 获取 Token
+   */
+  getToken(): string | null {
+    if (!this.token) {
+      this.token = localStorage.getItem('auth_token');
+    }
+    // 检查是否过期
+    if (this.token && this.tokenExpiry && Date.now() > this.tokenExpiry) {
+      this.clearToken();
+      return null;
+    }
+    return this.token;
+  }
+
+  /**
+   * 清除 Token
+   */
+  clearToken(): void {
+    this.token = null;
+    this.tokenExpiry = 0;
+    localStorage.removeItem('auth_token');
+  }
+
+  /**
+   * 是否已认证
+   */
+  isAuthenticated(): boolean {
+    return !!this.getToken();
+  }
+
+  /**
+   * 通用请求方法
+   */
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${API_BASE}${endpoint}`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string>),
+    };
+
+    const token = this.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    const data: ApiResponse<T> = await response.json();
+
+    if (!data.success) {
+      const error = new Error(data.error?.message || '请求失败');
+      (error as any).statusCode = data.error?.statusCode || response.status;
+      throw error;
+    }
+
+    return data.data as T;
+  }
+
+  // ============================================
+  // 认证 API
+  // ============================================
+
+  /**
+   * 登录
+   */
+  async login(username: string, password: string): Promise<AuthData> {
+    const result = await this.request<AuthData>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+    this.setToken(result.token);
+    return result;
+  }
+
+  /**
+   * 登出
+   */
+  logout(): void {
+    this.clearToken();
+    // 触发登出事件，通知 DataContext 切换数据源
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('auth-logout'));
+    }
+  }
+
+  // ============================================
+  // 数据管理 API
+  // ============================================
+
+  /**
+   * 获取文件列表
+   */
+  async getFiles(): Promise<FileInfo[]> {
+    return this.request<FileInfo[]>('/data/files');
+  }
+
+  /**
+   * 加载数据文件
+   */
+  async loadFile(filename: string): Promise<LoadResult> {
+    return this.request<LoadResult>(`/data/load/${encodeURIComponent(filename)}`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * 上传文件
+   */
+  async uploadFile(file: File): Promise<LoadResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const url = `${API_BASE}/data/upload`;
+    const token = this.getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    const data: ApiResponse<LoadResult> = await response.json();
+    if (!data.success) {
+      throw new Error(data.error?.message || '上传失败');
+    }
+    return data.data as LoadResult;
+  }
+
+  /**
+   * 删除文件
+   */
+  async deleteFile(filename: string): Promise<void> {
+    await this.request(`/data/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ============================================
+  // 查询 API
+  // ============================================
+
+  /**
+   * 获取 KPI 数据
+   */
+  async getKpi(filters?: Record<string, any>): Promise<KpiData> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const query = params.toString();
+    return this.request<KpiData>(`/query/kpi${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取 KPI 详细数据（用于环形图展示）
+   */
+  async getKpiDetail(filters?: Record<string, any>): Promise<KpiDetailData> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const query = params.toString();
+    return this.request<KpiDetailData>(`/query/kpi-detail${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取趋势数据
+   */
+  async getTrend(
+    granularity: 'day' | 'week' | 'month' = 'day',
+    filters?: Record<string, any>
+  ): Promise<TrendData[]> {
+    const params = new URLSearchParams({ granularity });
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    return this.request<TrendData[]>(`/query/trend?${params.toString()}`);
+  }
+
+  /**
+   * 获取货车分析数据
+   */
+  async getTruckAnalysis(filters?: Record<string, any>): Promise<any> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const query = params.toString();
+    return this.request(`/query/truck${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取增长分析数据
+   */
+  async getGrowthAnalysis(
+    startDate: string,
+    endDate: string,
+    compareStartDate: string,
+    compareEndDate: string,
+    filters?: Record<string, any>
+  ): Promise<any> {
+    const params = new URLSearchParams({
+      startDate,
+      endDate,
+      compareStartDate,
+      compareEndDate,
+    });
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    return this.request(`/query/growth?${params.toString()}`);
+  }
+
+  /**
+   * 获取系数监控数据
+   */
+  async getCoefficientData(filters?: Record<string, any>): Promise<any> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const query = params.toString();
+    return this.request(`/query/coefficient${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取成本分析数据
+   */
+  async getCostAnalysis(filters?: Record<string, any>): Promise<any> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const query = params.toString();
+    return this.request(`/query/cost${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取续保分析数据
+   */
+  async getRenewalAnalysis(filters?: Record<string, any>): Promise<any> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const query = params.toString();
+    return this.request(`/query/renewal${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取业务员排名
+   */
+  async getSalesmanRanking(
+    limit: number = 20,
+    filters?: Record<string, any>
+  ): Promise<any[]> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    return this.request(`/query/salesman-ranking?${params.toString()}`);
+  }
+
+  /**
+   * 执行自定义 SQL（受限）
+   */
+  async executeCustomQuery(sql: string): Promise<any[]> {
+    return this.request('/query/custom', {
+      method: 'POST',
+      body: JSON.stringify({ sql }),
+    });
+  }
+
+  // ============================================
+  // 筛选器 API
+  // ============================================
+
+  /**
+   * 获取筛选器选项
+   */
+  async getFilterOptions(): Promise<{
+    orgs: string[];
+    salesmen: string[];
+    customerCategories: string[];
+    coverageCombinations: string[];
+  }> {
+    return this.request('/filters/options');
+  }
+
+  // ============================================
+  // AI API
+  // ============================================
+
+  /**
+   * AI 生成 SQL
+   */
+  async generateSql(query: string): Promise<{
+    sql: string;
+    explanation?: string;
+  }> {
+    return this.request('/ai/generate-sql', {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+  }
+}
+
+// 导出单例
+export const apiClient = new ApiClient();

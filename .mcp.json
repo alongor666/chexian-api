@@ -1,0 +1,96 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schema/mcp.json",
+  "version": "1.0.0",
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "description": "GitHub API integration - issues, PRs, repos",
+      "enabled": false,
+      "timeout": 30000,
+      "tools": [
+        "create_issue",
+        "create_pull_request",
+        "list_issues",
+        "search_repositories",
+        "get_file_contents",
+        "create_or_update_file"
+      ]
+    },
+
+    "puppeteer": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "description": "Browser automation for UI testing - test dashboard",
+      "enabled": true,
+      "timeout": 120000,
+      "tools": [
+        "navigate",
+        "screenshot",
+        "click",
+        "fill",
+        "evaluate"
+      ],
+      "config": {
+        "headless": true,
+        "slowMo": 0,
+        "defaultTimeout": 30000
+      }
+    },
+
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "description": "File system access with read/write permissions",
+      "enabled": true,
+      "timeout": 10000,
+      "tools": [
+        "read_file",
+        "write_file",
+        "list_directory",
+        "create_directory",
+        "move_file",
+        "search_files"
+      ]
+    }
+  },
+
+  "globalConfig": {
+    "maxConcurrentConnections": 5,
+    "retryAttempts": 3,
+    "retryDelay": 1000,
+    "loggingLevel": "INFO",
+    "cacheEnabled": true,
+    "cacheTTL": 300
+  },
+
+  "security": {
+    "validateSSL": true,
+    "allowUntrustedCertificates": false,
+    "encryptSecrets": true
+  },
+
+  "monitoring": {
+    "enabled": true,
+    "metrics": {
+      "requestCount": true,
+      "responseTime": true,
+      "errorRate": true
+    },
+    "alerts": {
+      "onError": true,
+      "onSlowResponse": true,
+      "threshold": 5000
+    }
+  },
+
+  "project": {
+    "name": "签单业绩分析看板",
+    "type": "data-dashboard",
+    "tech_stack": ["React", "TypeScript", "DuckDB-WASM", "Tailwind", "Bun"],
+    "description": "Insurance sales data analysis dashboard with DuckDB-WASM"
+  }
+}

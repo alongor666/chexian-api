@@ -1,0 +1,50 @@
+{
+  "lastUpdated": "2026-01-18T16:50:00Z",
+  "projectPath": "/Users/xuechenglong/Downloads/01-正开发Git项目/chexianYJFX",
+  "sessionDir": "~/.claude/projects/-Users-xuechenglong-Downloads-01----Git---chexianYJFX",
+  "processedSessions": [
+    {"sessionId": "bb6e240c-c873-4df7-b4d6-819fdf74c463", "date": "2026-01-18", "topic": "续保率计算审查"},
+    {"sessionId": "4b62e817-4269-4d06-90fb-ece7d277247d", "date": "2026-01-18", "topic": "创建session-summary命令"},
+    {"sessionId": "4cc57198-c00b-4cf1-95ef-b917f5bf53b6", "date": "2026-01-18", "topic": "类型检查修复"},
+    {"sessionId": "23d2fb90-fff5-47c0-a593-cfb6e2901f48", "date": "2026-01-18", "topic": "页面顶部显示修复"},
+    {"sessionId": "d7164119-797d-4cc4-a951-d43b5621f821", "date": "2026-01-18", "topic": "已赚保费数据诊断"},
+    {"sessionId": "841a5641-1920-4bad-a10e-93b6bc381a69", "date": "2026-01-17", "topic": "已赚保费表格优化"},
+    {"sessionId": "e29b9f97-2d0d-40d5-be1d-30d45e34d097", "date": "2026-01-17", "topic": "已赚保费标签页"},
+    {"sessionId": "56195802-6211-4b4f-9bc2-d2bc357fed88", "date": "2026-01-17", "topic": "创建开发分支"},
+    {"sessionId": "0caae166-5941-44d2-b051-7f86398f2794", "date": "2026-01-17", "topic": "前端优化计划审查"},
+    {"sessionId": "44181c36-c956-45dd-9de9-816b89c59ee8", "date": "2026-01-17", "topic": "已赚保费按月末计算"},
+    {"sessionId": "22519dd7-9d86-4144-a980-f0f2956793a2", "date": "2026-01-17", "topic": "系数监控性能优化"},
+    {"sessionId": "3fcc7ae8-c248-4685-ae06-3a889442d23c", "date": "2026-01-17", "topic": "默认数据改为当年"},
+    {"sessionId": "b0bd1aa1-eca6-42b8-ac42-53b540719115", "date": "2026-01-16", "topic": "前端设计优化"},
+    {"sessionId": "6a6d68a1-fd30-4ddd-8c86-24fa8523fea6", "date": "2026-01-16", "topic": "指标字典管理"},
+    {"sessionId": "8a83e9ba-002a-4e03-b769-e923be933f09", "date": "2026-01-15", "topic": "code-simplifier介绍"},
+    {"sessionId": "8cfef42a-8e61-4843-adab-2710c0077008", "date": "2026-01-15", "topic": "GitHub代码拉取"},
+    {"sessionId": "c66251d4-e75b-4913-87ac-8fc705d2cde0", "date": "2026-01-15", "topic": "监管阈值页面优化"},
+    {"sessionId": "7def9e06-e0aa-4160-9fb5-b7d71fe5428a", "date": "2026-01-15", "topic": "系数监控优化计划"},
+    {"sessionId": "9fb0a283-b36e-4e24-97ba-765c658d4e0a", "date": "2026-01-15", "topic": "is_renewable字段修复"},
+    {"sessionId": "eadf6cb6-b7f2-4007-a88a-c9d175a22132", "date": "2026-01-15", "topic": "GitHub代码拉取"},
+    {"sessionId": "8e00bdd6-6ed8-4d3b-8dd4-1a34d666ce75", "date": "2026-01-14", "topic": "类型检查修复"},
+    {"sessionId": "67c4556b-1718-4d05-96a1-3ebe58ca7b0d", "date": "2026-01-13", "topic": "BACKLOG启动开发"}
+  ],
+  "skippedSessions": [
+    {"sessionId": "63b16f19-0872-47c4-9f99-80f52bb2eb7f", "reason": "command-only"},
+    {"sessionId": "32376e96-c262-46bb-b389-7c55f11768a6", "reason": "command-only"},
+    {"sessionId": "3d7daf06-278f-4281-969b-4f910e50c37b", "reason": "command-only"},
+    {"sessionId": "3eba360f-c651-4d92-891d-e266ffe72f3b", "reason": "command-only"},
+    {"sessionId": "70f9ba09-5c80-4295-bd48-90b9680f26f8", "reason": "duplicate"},
+    {"sessionId": "deebc01e-892d-4dbe-a51b-2df5572a3405", "reason": "duplicate"},
+    {"sessionId": "cf3a89a1-13e3-4d4d-8fd1-bfbd6dc5dfaa", "reason": "duplicate"},
+    {"sessionId": "8ca19c4a-e2da-49fa-a73f-b8330231d762", "reason": "local-command"},
+    {"sessionId": "1eb28c2d-a756-4abe-aa37-7ff1d71ac3f0", "reason": "local-command"},
+    {"sessionId": "07d9f76b-e783-48e9-bb96-53c9353d650b", "reason": "local-command"},
+    {"sessionId": "c3b6e8cd-b149-442c-a0ec-d36f36d03ea9", "reason": "command-only"},
+    {"sessionId": "db7be22d-5b33-41ad-9207-a0d473518c67", "reason": "local-command"}
+  ],
+  "statistics": {
+    "totalSessions": 47,
+    "processedCount": 22,
+    "skippedCount": 12,
+    "pendingCount": 13,
+    "totalRecords": 28
+  }
+}

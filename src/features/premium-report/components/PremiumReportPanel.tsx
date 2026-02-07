@@ -1,0 +1,252 @@
+/**
+ * 保费报表主面板组件
+ *
+ * 包含：
+ * - 保费报表汇总
+ * - 机构保费报表
+ * - 业务员保费报表
+ */
+
+import React, { useEffect, useMemo } from 'react';
+import { PremiumSummaryCard } from './PremiumSummaryCard';
+import { SortableTable } from '../../marketing-report/components/SortableTable';
+import { usePremiumReport } from '../hooks/usePremiumReport';
+import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
+import type { TableColumn } from '../../marketing-report/types/marketingReport';
+import type { OrgPremiumReportRow, SalesmanPremiumReportRow } from '../types/premiumReport';
+import { formatPremiumWan, formatRate, formatCount } from '../../../shared/utils/formatters';
+
+/**
+ * 机构保费报表列定义
+ */
+const orgReportColumns: TableColumn<OrgPremiumReportRow>[] = [
+  { key: 'org_level_3', header: '机构名称', sortable: true, align: 'left' },
+  {
+    key: '车险保费',
+    header: '车险保费(万元)',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatPremiumWan(Number(value)),
+  },
+  {
+    key: '商业险保费',
+    header: '商业险(万元)',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatPremiumWan(Number(value)),
+  },
+  {
+    key: '交强险保费',
+    header: '交强险(万元)',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatPremiumWan(Number(value)),
+  },
+  {
+    key: '车险件数',
+    header: '车险件数',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatCount(Number(value)),
+  },
+  {
+    key: '商业险件数',
+    header: '商业险件数',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatCount(Number(value)),
+  },
+  {
+    key: '交强险件数',
+    header: '交强险件数',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatCount(Number(value)),
+  },
+  {
+    key: '人均保费',
+    header: '人均保费(万元)',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatPremiumWan(Number(value)),
+  },
+  {
+    key: '业务员数',
+    header: '业务员数',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatCount(Number(value)),
+  },
+  {
+    key: '同比增长率',
+    header: '同比增长(%)',
+    sortable: true,
+    align: 'right',
+    format: (value) => (value !== null ? formatRate(Number(value) / 100) : '-'),
+  },
+];
+
+/**
+ * 业务员保费报表列定义
+ */
+const salesmanReportColumns: TableColumn<SalesmanPremiumReportRow>[] = [
+  { key: 'salesman_name', header: '业务员姓名', sortable: true, align: 'left' },
+  { key: 'org_level_3', header: '所属机构', sortable: true, align: 'left' },
+  { key: 'team_name', header: '所属团队', sortable: true, align: 'left' },
+  {
+    key: '车险保费',
+    header: '车险保费(万元)',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatPremiumWan(Number(value)),
+  },
+  {
+    key: '商业险保费',
+    header: '商业险(万元)',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatPremiumWan(Number(value)),
+  },
+  {
+    key: '交强险保费',
+    header: '交强险(万元)',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatPremiumWan(Number(value)),
+  },
+  {
+    key: '车险件数',
+    header: '车险件数',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatCount(Number(value)),
+  },
+  {
+    key: '续保率',
+    header: '续保率(%)',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatRate(Number(value) / 100),
+  },
+  {
+    key: '非过户率',
+    header: '非过户率(%)',
+    sortable: true,
+    align: 'right',
+    format: (value) => formatRate(Number(value) / 100),
+  },
+];
+
+/**
+ * 保费报表主面板组件
+ */
+export const PremiumReportPanel: React.FC = () => {
+  const { filters } = useGlobalFilters();
+
+  const {
+    sortedOrgReport,
+    sortedSalesmanReport,
+    summary,
+    isLoading,
+    error,
+    loadData,
+    orgReportSort,
+    salesmanReportSort,
+    setOrgReportSort,
+    setSalesmanReportSort,
+  } = usePremiumReport();
+
+  // 从全局筛选器获取日期范围
+  const reportFilters = useMemo(() => {
+    const year = filters.analysis_year || 2026;
+    const dateField = filters.date_criteria === 'insurance_start_date'
+      ? 'insurance_start_date'
+      : 'policy_date';
+
+    return {
+      dateField: dateField as 'policy_date' | 'insurance_start_date',
+      year,
+      startDate: filters.policy_date_start || `${year}-01-01`,
+      endDate: filters.policy_date_end || `${year}-12-31`,
+      org_level_3: filters.org_level_3,
+    };
+  }, [filters]);
+
+  // 筛选条件变更时加载数据
+  useEffect(() => {
+    loadData(reportFilters);
+  }, [reportFilters, loadData]);
+
+  return (
+    <div className="space-y-6">
+      {/* 错误提示 */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          <p className="font-medium">加载失败</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* 保费报表汇总 */}
+      <PremiumSummaryCard
+        summary={summary}
+        dateRange={{
+          startDate: reportFilters.startDate,
+          endDate: reportFilters.endDate,
+        }}
+      />
+
+      {/* 表一：机构保费报表 */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-4 py-3 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+            <span className="mr-2">🏢</span>
+            机构保费报表
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">
+            各机构保费数据汇总（包含车险、商业险、交强险保费及件数统计）
+          </p>
+        </div>
+        <div className="p-4">
+          <SortableTable
+            data={sortedOrgReport}
+            columns={orgReportColumns}
+            sortState={orgReportSort}
+            onSortChange={setOrgReportSort}
+            rowKey={(row) => row.org_level_3}
+            loading={isLoading}
+          />
+        </div>
+        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
+          共 {sortedOrgReport.length} 个机构
+        </div>
+      </div>
+
+      {/* 表二：业务员保费报表 */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-4 py-3 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+            <span className="mr-2">👤</span>
+            业务员保费报表
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">
+            业务员保费明细（包含保费、件数、续保率、非过户率等指标）
+          </p>
+        </div>
+        <div className="p-4">
+          <SortableTable
+            data={sortedSalesmanReport}
+            columns={salesmanReportColumns}
+            sortState={salesmanReportSort}
+            onSortChange={setSalesmanReportSort}
+            rowKey={(row) => row.salesman_name}
+            loading={isLoading}
+          />
+        </div>
+        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
+          共 {sortedSalesmanReport.length} 名业务员
+        </div>
+      </div>
+    </div>
+  );
+};

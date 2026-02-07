@@ -1,0 +1,52 @@
+{
+  "2025": {
+    "year": 2025,
+    "file_path": "/Users/xuechenglong/Downloads/01-公司开发项目/chexianYJFX/数据管理/一线计划/2025年销售人员分产品保费计划达成情况.xlsx",
+    "shape": [
+      292,
+      17
+    ],
+    "columns": [
+      "机构",
+      "销售团队",
+      "业务员",
+      "入司时间",
+      "本年在岗时间",
+      "25年保费计划",
+      "Unnamed: 6",
+      "Unnamed: 7",
+      "Unnamed: 8",
+      "25年实际保费收入",
+      "Unnamed: 10",
+      "Unnamed: 11",
+      "Unnamed: 12",
+      "保费达成率",
+      "Unnamed: 14",
+      "Unnamed: 15",
+      "Unnamed: 16"
+    ],
+    "dtypes": {
+      "机构": "object",
+      "销售团队": "object",
+      "业务员": "object",
+      "入司时间": "datetime64[ns]",
+      "本年在岗时间": "float64",
+      "25年保费计划": "object",
+      "Unnamed: 6": "object",
+      "Unnamed: 7": "object",
+      "Unnamed: 8": "object",
+      "25年实际保费收入": "object",
+      "Unnamed: 10": "object",
+      "Unnamed: 11": "object",
+      "Unnamed: 12": "object",
+      "保费达成率": "object",
+      "Unnamed: 14": "object",
+      "Unnamed: 15": "object",
+      "Unnamed: 16": "object"
+    },
+    "sample_data": [
+      {
+        "机构": NaN,
+        "销售团队": NaN,
+        "业务员": NaN,
+        "入司时间": 

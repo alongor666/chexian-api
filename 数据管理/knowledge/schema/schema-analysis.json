@@ -1,0 +1,381 @@
+{
+  "file_path": "数据管理/保单明细/车险保单综合明细表.parquet",
+  "total_rows": 618502,
+  "total_columns": 30,
+  "fields": [
+    {
+      "field_name": "保单号",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "6103011030120250124367",
+        "6103011030120250125936",
+        "6103011030120250129325"
+      ]
+    },
+    {
+      "field_name": "续保单号",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 31105,
+      "null_count": 587397,
+      "null_percentage": 94.97,
+      "sample_values": []
+    },
+    {
+      "field_name": "业务员",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "110052052官久强",
+        "200052588李珊",
+        "200052588李珊"
+      ]
+    },
+    {
+      "field_name": "三级机构",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "天府",
+        "天府",
+        "天府"
+      ]
+    },
+    {
+      "field_name": "签单日期",
+      "field_type": "timestamp[ns]",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "2025-06-03 00:00:00",
+        "2025-06-04 00:00:00",
+        "2025-06-07 00:00:00"
+      ]
+    },
+    {
+      "field_name": "保险起期",
+      "field_type": "timestamp[ns]",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "2025-06-04 00:00:00",
+        "2025-06-19 00:00:00",
+        "2025-06-09 00:00:00"
+      ]
+    },
+    {
+      "field_name": "险类",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "交强险",
+        "交强险",
+        "交强险"
+      ]
+    },
+    {
+      "field_name": "险别组合",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "单交",
+        "单交",
+        "交三"
+      ]
+    },
+    {
+      "field_name": "保费",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "4226.42",
+        "896.23",
+        "1037.74"
+      ]
+    },
+    {
+      "field_name": "是否续保",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "是否可续",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "True",
+        "True",
+        "True"
+      ]
+    },
+    {
+      "field_name": "是否新车",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "是否新能源",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "是否过户车",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "是否电销",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "终端来源",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "0202APP",
+        "0106移动展业(App)",
+        "0106移动展业(App)"
+      ]
+    },
+    {
+      "field_name": "客户类别",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "营业货车",
+        "非营业个人客车",
+        "非营业个人客车"
+      ]
+    },
+    {
+      "field_name": "厂牌车型",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "陕汽SX4250XC42牵引汽车",
+        "帕纳美拉PANAMERA 3.6L轿跑车",
+        "酷威JCUV 2.7L越野车"
+      ]
+    },
+    {
+      "field_name": "吨位分段",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "10吨以上",
+        "1吨以下",
+        "1吨以下"
+      ]
+    },
+    {
+      "field_name": "新车购置价",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "330000.0",
+        "1153000.0",
+        "272000.0"
+      ]
+    },
+    {
+      "field_name": "批单号",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 10976,
+      "null_count": 607526,
+      "null_percentage": 98.23,
+      "sample_values": []
+    },
+    {
+      "field_name": "批改类型",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 10976,
+      "null_count": 607526,
+      "null_percentage": 98.23,
+      "sample_values": []
+    },
+    {
+      "field_name": "商车自主定价系数",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 147190,
+      "null_count": 471312,
+      "null_percentage": 76.2,
+      "sample_values": []
+    },
+    {
+      "field_name": "是否交商统保",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "单交",
+        "单交",
+        "套单"
+      ]
+    },
+    {
+      "field_name": "车架号",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "LZGJL4Z40MX079975",
+        "WP0AA2979CL017184",
+        "3D4PG6FD8AT262539"
+      ]
+    },
+    {
+      "field_name": "是否报价",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "赔案件数",
+      "field_type": "int64",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "1",
+        "0",
+        "1"
+      ]
+    },
+    {
+      "field_name": "已报告赔款",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "2000.0",
+        "0.0",
+        "700.0"
+      ]
+    },
+    {
+      "field_name": "费用金额",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "0.0",
+        "250.94",
+        "103.78"
+      ]
+    },
+    {
+      "field_name": "续保模式",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 618502,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "nan",
+        "nan",
+        "nan"
+      ]
+    }
+  ]
+}

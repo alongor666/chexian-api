@@ -1,0 +1,1946 @@
+{
+  "salesman_mapping": [
+    {
+      "business_no": "106014762",
+      "salesman_name": "刘刚",
+      "full_name": "106014762刘刚",
+      "team": "武侯业务二部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 5.0
+    },
+    {
+      "business_no": "110009223",
+      "salesman_name": "黄艳",
+      "full_name": "110009223黄艳",
+      "team": "龙泉业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 420.0
+    },
+    {
+      "business_no": "110015604",
+      "salesman_name": "曾世强",
+      "full_name": "110015604曾世强",
+      "team": "青羊业务四部",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 110.0
+    },
+    {
+      "business_no": "110018010",
+      "salesman_name": "胥霞",
+      "full_name": "110018010胥霞",
+      "team": "青羊业务四部",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 20.0
+    },
+    {
+      "business_no": "110021087",
+      "salesman_name": "杨秀红",
+      "full_name": "110021087杨秀红",
+      "team": "双流业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 378.0
+    },
+    {
+      "business_no": "110023646",
+      "salesman_name": "李志蓉",
+      "full_name": "110023646李志蓉",
+      "team": "双流业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 155.0
+    },
+    {
+      "business_no": "110024535",
+      "salesman_name": "彭伟",
+      "full_name": "110024535彭伟",
+      "team": "简阳业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 441.0
+    },
+    {
+      "business_no": "110028772",
+      "salesman_name": "游峰",
+      "full_name": "110028772游峰",
+      "team": "泸州业务二部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 210.0
+    },
+    {
+      "business_no": "110028823",
+      "salesman_name": "李兴",
+      "full_name": "110028823李兴",
+      "team": "青羊业务一部",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 40.0
+    },
+    {
+      "business_no": "110030383",
+      "salesman_name": "蒲小燕",
+      "full_name": "110030383蒲小燕",
+      "team": "高新业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 110.0
+    },
+    {
+      "business_no": "110030687",
+      "salesman_name": "黎蓓",
+      "full_name": "110030687黎蓓",
+      "team": "新津业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 65.0
+    },
+    {
+      "business_no": "110031349",
+      "salesman_name": "舒雪梅",
+      "full_name": "110031349舒雪梅",
+      "team": "春熙苑业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 190.0
+    },
+    {
+      "business_no": "110031390",
+      "salesman_name": "陈会",
+      "full_name": "110031390陈会",
+      "team": "青羊业务一部",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "110035279",
+      "salesman_name": "蒋朝伟",
+      "full_name": "110035279蒋朝伟",
+      "team": "天鑫花园业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 300.0
+    },
+    {
+      "business_no": "110035644",
+      "salesman_name": "唐斌",
+      "full_name": "110035644唐斌",
+      "team": "新津业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 43.0
+    },
+    {
+      "business_no": "110037882",
+      "salesman_name": "魏晓军",
+      "full_name": "110037882魏晓军",
+      "team": "成华业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 218.0
+    },
+    {
+      "business_no": "110040507",
+      "salesman_name": "杨剑",
+      "full_name": "110040507杨剑",
+      "team": "未分配",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "110051238",
+      "salesman_name": "潘小琼",
+      "full_name": "110051238潘小琼",
+      "team": "温江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 97.0
+    },
+    {
+      "business_no": "110051827",
+      "salesman_name": "李涛",
+      "full_name": "110051827李涛",
+      "team": "武侯业务二部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 5.0
+    },
+    {
+      "business_no": "110051866",
+      "salesman_name": "罗平",
+      "full_name": "110051866罗平",
+      "team": "崇州业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 152.0
+    },
+    {
+      "business_no": "110052052",
+      "salesman_name": "官久强",
+      "full_name": "110052052官久强",
+      "team": "青白江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 292.0
+    },
+    {
+      "business_no": "110052297",
+      "salesman_name": "刘刚",
+      "full_name": "110052297刘刚",
+      "team": "自贡业务一部",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 125.0
+    },
+    {
+      "business_no": "110052422",
+      "salesman_name": "赵波",
+      "full_name": "110052422赵波",
+      "team": "温江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 139.0
+    },
+    {
+      "business_no": "110052432",
+      "salesman_name": "李景",
+      "full_name": "110052432李景",
+      "team": "武侯业务五部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 350.0
+    },
+    {
+      "business_no": "110053136",
+      "salesman_name": "刘玉兵",
+      "full_name": "110053136刘玉兵",
+      "team": "春熙苑业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 388.0
+    },
+    {
+      "business_no": "110053952",
+      "salesman_name": "刘芮嘉",
+      "full_name": "110053952刘芮嘉",
+      "team": "自贡业务一部",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 155.0
+    },
+    {
+      "business_no": "110054171",
+      "salesman_name": "刘婷",
+      "full_name": "110054171刘婷",
+      "team": "武侯业务五部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "110055662",
+      "salesman_name": "陈秀英",
+      "full_name": "110055662陈秀英",
+      "team": "自贡业务一部",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 200.0
+    },
+    {
+      "business_no": "110056314",
+      "salesman_name": "张勇",
+      "full_name": "110056314张勇",
+      "team": "泸州业务一部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "110056772",
+      "salesman_name": "周仕钦",
+      "full_name": "110056772周仕钦",
+      "team": "都江堰业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 271.0
+    },
+    {
+      "business_no": "110058991",
+      "salesman_name": "杨神英",
+      "full_name": "110058991杨神英",
+      "team": "新都业务一部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "110060310",
+      "salesman_name": "高明",
+      "full_name": "110060310高明",
+      "team": "金堂业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 43.0
+    },
+    {
+      "business_no": "110061722",
+      "salesman_name": "何苗",
+      "full_name": "110061722何苗",
+      "team": "新繁业务团队",
+      "organization": "新都",
+      "car_insurance_plan_2026": 121.0
+    },
+    {
+      "business_no": "110062122",
+      "salesman_name": "廖忠燕",
+      "full_name": "110062122廖忠燕",
+      "team": "郫都业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "110062135",
+      "salesman_name": "高馨",
+      "full_name": "110062135高馨",
+      "team": "崇州业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 255.0
+    },
+    {
+      "business_no": "110062739",
+      "salesman_name": "李沙",
+      "full_name": "110062739李沙",
+      "team": "武侯业务二部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "110062855",
+      "salesman_name": "喻泽芬",
+      "full_name": "110062855喻泽芬",
+      "team": "东林半岛业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 180.0
+    },
+    {
+      "business_no": "110063065",
+      "salesman_name": "汪思岑",
+      "full_name": "110063065汪思岑",
+      "team": "都江堰业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 376.0
+    },
+    {
+      "business_no": "110063090",
+      "salesman_name": "张建丽",
+      "full_name": "110063090张建丽",
+      "team": "龙泉业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 140.0
+    },
+    {
+      "business_no": "110063349",
+      "salesman_name": "纪昌碧",
+      "full_name": "110063349纪昌碧",
+      "team": "未分配",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "110063396",
+      "salesman_name": "陈昱舟",
+      "full_name": "110063396陈昱舟",
+      "team": "大邑业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 96.0
+    },
+    {
+      "business_no": "110063843",
+      "salesman_name": "周建",
+      "full_name": "110063843周建",
+      "team": "崇州业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "110063905",
+      "salesman_name": "刘青松",
+      "full_name": "110063905刘青松",
+      "team": "彭州业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 195.0
+    },
+    {
+      "business_no": "110065537",
+      "salesman_name": "尹显玖",
+      "full_name": "110065537尹显玖",
+      "team": "德阳业务一部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "110067438",
+      "salesman_name": "彭高荣",
+      "full_name": "110067438彭高荣",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 85.0
+    },
+    {
+      "business_no": "110068839",
+      "salesman_name": "苏静",
+      "full_name": "110068839苏静",
+      "team": "彭州业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 282.0
+    },
+    {
+      "business_no": "110069270",
+      "salesman_name": "孙永胜",
+      "full_name": "110069270孙永胜",
+      "team": "乐山业务一部",
+      "organization": "乐山",
+      "car_insurance_plan_2026": 190.0
+    },
+    {
+      "business_no": "110069485",
+      "salesman_name": "韦丹",
+      "full_name": "110069485韦丹",
+      "team": "未分配",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 130.0
+    },
+    {
+      "business_no": "110070237",
+      "salesman_name": "孙红",
+      "full_name": "110070237孙红",
+      "team": "崇州业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "110070868",
+      "salesman_name": "何勇",
+      "full_name": "110070868何勇",
+      "team": "新繁业务团队",
+      "organization": "新都",
+      "car_insurance_plan_2026": 123.0
+    },
+    {
+      "business_no": "110070904",
+      "salesman_name": "宋春建",
+      "full_name": "110070904宋春建",
+      "team": "乐山业务一部",
+      "organization": "乐山",
+      "car_insurance_plan_2026": 136.0
+    },
+    {
+      "business_no": "110071299",
+      "salesman_name": "陈晓玲",
+      "full_name": "110071299陈晓玲",
+      "team": "郫都业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 17.0
+    },
+    {
+      "business_no": "110071309",
+      "salesman_name": "韦发阳",
+      "full_name": "110071309韦发阳",
+      "team": "都江堰业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 150.0
+    },
+    {
+      "business_no": "110071594",
+      "salesman_name": "熊平",
+      "full_name": "110071594熊平",
+      "team": "新都业务一部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 770.0
+    },
+    {
+      "business_no": "110072203",
+      "salesman_name": "叶道兰",
+      "full_name": "110072203叶道兰",
+      "team": "金堂业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 320.0
+    },
+    {
+      "business_no": "110072851",
+      "salesman_name": "曾志超",
+      "full_name": "110072851曾志超",
+      "team": "乐山业务一部",
+      "organization": "乐山",
+      "car_insurance_plan_2026": 108.0
+    },
+    {
+      "business_no": "110079053",
+      "salesman_name": "蒋静",
+      "full_name": "110079053蒋静",
+      "team": "简阳业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 341.0
+    },
+    {
+      "business_no": "110082531",
+      "salesman_name": "马强",
+      "full_name": "110082531马强",
+      "team": "武侯业务一部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 40.0
+    },
+    {
+      "business_no": "110084227",
+      "salesman_name": "冯双雪",
+      "full_name": "110084227冯双雪",
+      "team": "新繁业务团队",
+      "organization": "新都",
+      "car_insurance_plan_2026": 285.0
+    },
+    {
+      "business_no": "110102930",
+      "salesman_name": "杨香燕",
+      "full_name": "110102930杨香燕",
+      "team": "双流业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 370.0
+    },
+    {
+      "business_no": "110111926",
+      "salesman_name": "杨茜",
+      "full_name": "110111926杨茜",
+      "team": "郫都业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 140.0
+    },
+    {
+      "business_no": "110135635",
+      "salesman_name": "甘璐",
+      "full_name": "110135635甘璐",
+      "team": "新都业务一部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 260.0
+    },
+    {
+      "business_no": "110144532",
+      "salesman_name": "李育丽",
+      "full_name": "110144532李育丽",
+      "team": "简阳业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 200.0
+    },
+    {
+      "business_no": "110162448",
+      "salesman_name": "刘渊",
+      "full_name": "110162448刘渊",
+      "team": "彭州业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 117.0
+    },
+    {
+      "business_no": "110163942",
+      "salesman_name": "朱展利",
+      "full_name": "110163942朱展利",
+      "team": "达州业务一部",
+      "organization": "达州",
+      "car_insurance_plan_2026": 225.0
+    },
+    {
+      "business_no": "110171931",
+      "salesman_name": "支丹",
+      "full_name": "110171931支丹",
+      "team": "德阳业务三部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 20.0
+    },
+    {
+      "business_no": "110183334",
+      "salesman_name": "韩思伟",
+      "full_name": "110183334韩思伟",
+      "team": "未分配",
+      "organization": "资阳",
+      "car_insurance_plan_2026": 220.0
+    },
+    {
+      "business_no": "110188033",
+      "salesman_name": "郭景秀",
+      "full_name": "110188033郭景秀",
+      "team": "新都业务一部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 460.0
+    },
+    {
+      "business_no": "110192437",
+      "salesman_name": "李浪",
+      "full_name": "110192437李浪",
+      "team": "都江堰业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 181.0
+    },
+    {
+      "business_no": "110231242",
+      "salesman_name": "陈璐垚",
+      "full_name": "110231242陈璐垚",
+      "team": "非车险业务部",
+      "organization": "青羊"
+    },
+    {
+      "business_no": "110232532",
+      "salesman_name": "黄文韬",
+      "full_name": "110232532黄文韬",
+      "team": "简阳业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 100.0
+    },
+    {
+      "business_no": "110242740",
+      "salesman_name": "漆玉彬",
+      "full_name": "110242740漆玉彬",
+      "team": "春熙苑业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 180.0
+    },
+    {
+      "business_no": "110253745",
+      "salesman_name": "喻凤",
+      "full_name": "110253745喻凤",
+      "team": "龙泉业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 140.0
+    },
+    {
+      "business_no": "113030118",
+      "salesman_name": "刘欣",
+      "full_name": "113030118刘欣",
+      "team": "德阳业务三部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 220.0
+    },
+    {
+      "business_no": "200045242",
+      "salesman_name": "王伟",
+      "full_name": "200045242王伟",
+      "team": "高新业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 260.0
+    },
+    {
+      "business_no": "200045244",
+      "salesman_name": "李晓琴",
+      "full_name": "200045244李晓琴",
+      "team": "天鑫花园业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 630.0
+    },
+    {
+      "business_no": "200045265",
+      "salesman_name": "杨希",
+      "full_name": "200045265杨希",
+      "team": "成华业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 800.0
+    },
+    {
+      "business_no": "200045326",
+      "salesman_name": "林可",
+      "full_name": "200045326林可",
+      "team": "新繁业务团队",
+      "organization": "新都",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "200045439",
+      "salesman_name": "罗晓利",
+      "full_name": "200045439罗晓利",
+      "team": "自贡业务一部",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 95.0
+    },
+    {
+      "business_no": "200045593",
+      "salesman_name": "钟兴华",
+      "full_name": "200045593钟兴华",
+      "team": "泸州业务二部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 75.0
+    },
+    {
+      "business_no": "200045611",
+      "salesman_name": "张俊容",
+      "full_name": "200045611张俊容",
+      "team": "乐山业务一部",
+      "organization": "乐山",
+      "car_insurance_plan_2026": 15.0
+    },
+    {
+      "business_no": "200045620",
+      "salesman_name": "曲欣",
+      "full_name": "200045620曲欣",
+      "team": "成华业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 700.0
+    },
+    {
+      "business_no": "200046028",
+      "salesman_name": "周艳翎",
+      "full_name": "200046028周艳翎",
+      "team": "高新业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 400.0
+    },
+    {
+      "business_no": "200046035",
+      "salesman_name": "王停",
+      "full_name": "200046035王停",
+      "team": "武侯业务二部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "200046053",
+      "salesman_name": "廖荣秋",
+      "full_name": "200046053廖荣秋",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 105.0
+    },
+    {
+      "business_no": "200046092",
+      "salesman_name": "张丽",
+      "full_name": "200046092张丽",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 140.0
+    },
+    {
+      "business_no": "200046585",
+      "salesman_name": "刘洋新",
+      "full_name": "200046585刘洋新",
+      "team": "未分配",
+      "organization": "乐山",
+      "car_insurance_plan_2026": 290.0
+    },
+    {
+      "business_no": "200046605",
+      "salesman_name": "王承发",
+      "full_name": "200046605王承发",
+      "team": "未分配",
+      "organization": "资阳",
+      "car_insurance_plan_2026": 360.0
+    },
+    {
+      "business_no": "200047069",
+      "salesman_name": "杨敏",
+      "full_name": "200047069杨敏",
+      "team": "大邑业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 92.0
+    },
+    {
+      "business_no": "200047909",
+      "salesman_name": "聂晶",
+      "full_name": "200047909聂晶",
+      "team": "武侯业务一部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "200047931",
+      "salesman_name": "杨柳",
+      "full_name": "200047931杨柳",
+      "team": "都江堰业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "200048244",
+      "salesman_name": "许文翰",
+      "full_name": "200048244许文翰",
+      "team": "新都业务三部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "200048468",
+      "salesman_name": "肖照耀",
+      "full_name": "200048468肖照耀",
+      "team": "宜宾业务二部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "200048654",
+      "salesman_name": "向锋",
+      "full_name": "200048654向锋",
+      "team": "未分配",
+      "organization": "资阳",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "200048765",
+      "salesman_name": "周雪梅",
+      "full_name": "200048765周雪梅",
+      "team": "宜宾业务二部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 220.0
+    },
+    {
+      "business_no": "200048825",
+      "salesman_name": "胡晓玉琦",
+      "full_name": "200048825胡晓玉琦",
+      "team": "未分配",
+      "organization": "资阳",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "200048891",
+      "salesman_name": "周少平",
+      "full_name": "200048891周少平",
+      "team": "青白江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 331.0
+    },
+    {
+      "business_no": "200048910",
+      "salesman_name": "王鹤",
+      "full_name": "200048910王鹤",
+      "team": "德阳业务一部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 240.0
+    },
+    {
+      "business_no": "200049147",
+      "salesman_name": "向轩颉",
+      "full_name": "200049147向轩颉",
+      "team": "未分配",
+      "organization": "达州",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "200049349",
+      "salesman_name": "余培",
+      "full_name": "200049349余培",
+      "team": "双流业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 140.0
+    },
+    {
+      "business_no": "200049355",
+      "salesman_name": "谢黎黎",
+      "full_name": "200049355谢黎黎",
+      "team": "武侯业务一部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 260.0
+    },
+    {
+      "business_no": "200049522",
+      "salesman_name": "王伟",
+      "full_name": "200049522王伟",
+      "team": "泸州业务三部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 110.0
+    },
+    {
+      "business_no": "200049853",
+      "salesman_name": "刘国成",
+      "full_name": "200049853刘国成",
+      "team": "金堂业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 29.0
+    },
+    {
+      "business_no": "200050109",
+      "salesman_name": "熊建律",
+      "full_name": "200050109熊建律",
+      "team": "泸州业务三部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 350.0
+    },
+    {
+      "business_no": "200050786",
+      "salesman_name": "赵夕秋",
+      "full_name": "200050786赵夕秋",
+      "team": "高新业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 137.0
+    },
+    {
+      "business_no": "200050791",
+      "salesman_name": "王星入",
+      "full_name": "200050791王星入",
+      "team": "达州业务一部",
+      "organization": "达州",
+      "car_insurance_plan_2026": 100.0
+    },
+    {
+      "business_no": "200050970",
+      "salesman_name": "刘乔",
+      "full_name": "200050970刘乔",
+      "team": "未分配",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 1000.0
+    },
+    {
+      "business_no": "200051024",
+      "salesman_name": "向光琼",
+      "full_name": "200051024向光琼",
+      "team": "武侯业务一部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 245.0
+    },
+    {
+      "business_no": "200051155",
+      "salesman_name": "罗磊",
+      "full_name": "200051155罗磊",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 2150.0
+    },
+    {
+      "business_no": "200051265",
+      "salesman_name": "唐晓敏",
+      "full_name": "200051265唐晓敏",
+      "team": "彭州业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 116.0
+    },
+    {
+      "business_no": "200051532",
+      "salesman_name": "周强",
+      "full_name": "200051532周强",
+      "team": "宜宾业务二部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 110.0
+    },
+    {
+      "business_no": "200052299",
+      "salesman_name": "徐金杭",
+      "full_name": "200052299徐金杭",
+      "team": "宜宾业务二部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "200052349",
+      "salesman_name": "郑双",
+      "full_name": "200052349郑双",
+      "team": "泸州业务二部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 75.0
+    },
+    {
+      "business_no": "200052546",
+      "salesman_name": "曹霞",
+      "full_name": "200052546曹霞",
+      "team": "郫都业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "200052557",
+      "salesman_name": "肖波",
+      "full_name": "200052557肖波",
+      "team": "德阳业务三部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 350.0
+    },
+    {
+      "business_no": "200052588",
+      "salesman_name": "李珊",
+      "full_name": "200052588李珊",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "200052611",
+      "salesman_name": "殷开航",
+      "full_name": "200052611殷开航",
+      "team": "德阳业务一部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 80.0
+    },
+    {
+      "business_no": "200052837",
+      "salesman_name": "肖海霞",
+      "full_name": "200052837肖海霞",
+      "team": "宜宾业务二部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 60.0
+    },
+    {
+      "business_no": "200053032",
+      "salesman_name": "廖永莎",
+      "full_name": "200053032廖永莎",
+      "team": "绵竹业务团队",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 10.0
+    },
+    {
+      "business_no": "200053075",
+      "salesman_name": "王思东",
+      "full_name": "200053075王思东",
+      "team": "未分配",
+      "organization": "乐山",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "200053146",
+      "salesman_name": "付培",
+      "full_name": "200053146付培",
+      "team": "未分配",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 150.0
+    },
+    {
+      "business_no": "200053178",
+      "salesman_name": "侯恒莎",
+      "full_name": "200053178侯恒莎",
+      "team": "新都业务三部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 295.0
+    },
+    {
+      "business_no": "200053182",
+      "salesman_name": "陈晓梅",
+      "full_name": "200053182陈晓梅",
+      "team": "未分配",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 1220.0
+    },
+    {
+      "business_no": "200053325",
+      "salesman_name": "潘泳吉",
+      "full_name": "200053325潘泳吉",
+      "team": "新都业务三部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 350.0
+    },
+    {
+      "business_no": "200053364",
+      "salesman_name": "李颜",
+      "full_name": "200053364李颜",
+      "team": "未分配",
+      "organization": "乐山",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "200053369",
+      "salesman_name": "赵诗婕",
+      "full_name": "200053369赵诗婕",
+      "team": "温江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 189.0
+    },
+    {
+      "business_no": "200053407",
+      "salesman_name": "朱朝军",
+      "full_name": "200053407朱朝军",
+      "team": "龙泉业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 420.0
+    },
+    {
+      "business_no": "210000262",
+      "salesman_name": "王进",
+      "full_name": "210000262王进",
+      "team": "高新业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 40.0
+    },
+    {
+      "business_no": "210000264",
+      "salesman_name": "李杰",
+      "full_name": "210000264李杰",
+      "team": "新津业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 140.0
+    },
+    {
+      "business_no": "210000266",
+      "salesman_name": "林立飞",
+      "full_name": "210000266林立飞",
+      "team": "高新业务三部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 165.0
+    },
+    {
+      "business_no": "210000273",
+      "salesman_name": "李孝林",
+      "full_name": "210000273李孝林",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 122.0
+    },
+    {
+      "business_no": "210000274",
+      "salesman_name": "李能飞",
+      "full_name": "210000274李能飞",
+      "team": "青白江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 316.0
+    },
+    {
+      "business_no": "210000297",
+      "salesman_name": "伍仁伟",
+      "full_name": "210000297伍仁伟",
+      "team": "金堂业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 52.0
+    },
+    {
+      "business_no": "210000302",
+      "salesman_name": "孔德勇",
+      "full_name": "210000302孔德勇",
+      "team": "郫都业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 190.0
+    },
+    {
+      "business_no": "210000346",
+      "salesman_name": "尹浩懿",
+      "full_name": "210000346尹浩懿",
+      "team": "成华业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 81.0
+    },
+    {
+      "business_no": "210000351",
+      "salesman_name": "黄忠伟",
+      "full_name": "210000351黄忠伟",
+      "team": "邛崃业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 63.0
+    },
+    {
+      "business_no": "210000357",
+      "salesman_name": "曾启银",
+      "full_name": "210000357曾启银",
+      "team": "泸州业务一部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 100.0
+    },
+    {
+      "business_no": "210000359",
+      "salesman_name": "杨琼",
+      "full_name": "210000359杨琼",
+      "team": "绵竹业务团队",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "210000365",
+      "salesman_name": "李秋雨",
+      "full_name": "210000365李秋雨",
+      "team": "东林半岛业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 420.0
+    },
+    {
+      "business_no": "210000368",
+      "salesman_name": "张玉琳",
+      "full_name": "210000368张玉琳",
+      "team": "武侯业务二部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "210000376",
+      "salesman_name": "王文静",
+      "full_name": "210000376王文静",
+      "team": "未分配",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 245.0
+    },
+    {
+      "business_no": "210000386",
+      "salesman_name": "毛霞",
+      "full_name": "210000386毛霞",
+      "team": "非车险业务部",
+      "organization": "青羊"
+    },
+    {
+      "business_no": "210000407",
+      "salesman_name": "薛兰",
+      "full_name": "210000407薛兰",
+      "team": "新都业务一部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 170.0
+    },
+    {
+      "business_no": "210000428",
+      "salesman_name": "李刘兵",
+      "full_name": "210000428李刘兵",
+      "team": "泸州业务二部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 150.0
+    },
+    {
+      "business_no": "210000436",
+      "salesman_name": "涂霞",
+      "full_name": "210000436涂霞",
+      "team": "未分配",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 5.0
+    },
+    {
+      "business_no": "210000440",
+      "salesman_name": "卢阳",
+      "full_name": "210000440卢阳",
+      "team": "自贡业务一部",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 85.0
+    },
+    {
+      "business_no": "210000443",
+      "salesman_name": "朱治宇",
+      "full_name": "210000443朱治宇",
+      "team": "郫都业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "210000455",
+      "salesman_name": "李信飞",
+      "full_name": "210000455李信飞",
+      "team": "青白江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 271.0
+    },
+    {
+      "business_no": "210000461",
+      "salesman_name": "周鑫磊",
+      "full_name": "210000461周鑫磊",
+      "team": "未分配",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 1000.0
+    },
+    {
+      "business_no": "210000466",
+      "salesman_name": "叶芊",
+      "full_name": "210000466叶芊",
+      "team": "郫都业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "210011817",
+      "salesman_name": "赖红霞",
+      "full_name": "210011817赖红霞",
+      "team": "东林半岛业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 160.0
+    },
+    {
+      "business_no": "210011829",
+      "salesman_name": "安辉",
+      "full_name": "210011829安辉",
+      "team": "达州业务一部",
+      "organization": "达州",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "210011833",
+      "salesman_name": "周勇",
+      "full_name": "210011833周勇",
+      "team": "大邑业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 98.0
+    },
+    {
+      "business_no": "210011834",
+      "salesman_name": "刘琨",
+      "full_name": "210011834刘琨",
+      "team": "未分配",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 550.0
+    },
+    {
+      "business_no": "210011835",
+      "salesman_name": "李红梅",
+      "full_name": "210011835李红梅",
+      "team": "高新业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "210011847",
+      "salesman_name": "黄正波",
+      "full_name": "210011847黄正波",
+      "team": "德阳业务一部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "210011849",
+      "salesman_name": "严潇然",
+      "full_name": "210011849严潇然",
+      "team": "宜宾业务二部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 100.0
+    },
+    {
+      "business_no": "210011850",
+      "salesman_name": "吴琴",
+      "full_name": "210011850吴琴",
+      "team": "未分配",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 100.0
+    },
+    {
+      "business_no": "210011857",
+      "salesman_name": "陈静",
+      "full_name": "210011857陈静",
+      "team": "青羊业务一部",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 200.0
+    },
+    {
+      "business_no": "210011866",
+      "salesman_name": "张世丽",
+      "full_name": "210011866张世丽",
+      "team": "天府业务二部",
+      "organization": "天府",
+      "car_insurance_plan_2026": 182.0
+    },
+    {
+      "business_no": "210011869",
+      "salesman_name": "马霜",
+      "full_name": "210011869马霜",
+      "team": "武侯业务五部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 400.0
+    },
+    {
+      "business_no": "210011879",
+      "salesman_name": "钟廷",
+      "full_name": "210011879钟廷",
+      "team": "德阳业务三部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "210011882",
+      "salesman_name": "曾冬梅",
+      "full_name": "210011882曾冬梅",
+      "team": "成华业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 700.0
+    },
+    {
+      "business_no": "210011883",
+      "salesman_name": "熊红梅",
+      "full_name": "210011883熊红梅",
+      "team": "资阳业务四部",
+      "organization": "资阳",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "210011884",
+      "salesman_name": "李萍玉",
+      "full_name": "210011884李萍玉",
+      "team": "资阳业务四部",
+      "organization": "资阳",
+      "car_insurance_plan_2026": 80.0
+    },
+    {
+      "business_no": "210011886",
+      "salesman_name": "张湖川",
+      "full_name": "210011886张湖川",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 121.0
+    },
+    {
+      "business_no": "210011887",
+      "salesman_name": "杨占军",
+      "full_name": "210011887杨占军",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 152.0
+    },
+    {
+      "business_no": "210011890",
+      "salesman_name": "陶丽",
+      "full_name": "210011890陶丽",
+      "team": "未分配",
+      "organization": "乐山",
+      "car_insurance_plan_2026": 184.0
+    },
+    {
+      "business_no": "210011891",
+      "salesman_name": "尹茂宇",
+      "full_name": "210011891尹茂宇",
+      "team": "未分配",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 130.0
+    },
+    {
+      "business_no": "210011893",
+      "salesman_name": "尹万福",
+      "full_name": "210011893尹万福",
+      "team": "新繁业务团队",
+      "organization": "新都",
+      "car_insurance_plan_2026": 151.0
+    },
+    {
+      "business_no": "210011896",
+      "salesman_name": "乔军",
+      "full_name": "210011896乔军",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 205.0
+    },
+    {
+      "business_no": "210011911",
+      "salesman_name": "王诗杰",
+      "full_name": "210011911王诗杰",
+      "team": "非车险业务部",
+      "organization": "青羊"
+    },
+    {
+      "business_no": "210011912",
+      "salesman_name": "彭文莉",
+      "full_name": "210011912彭文莉",
+      "team": "天府业务二部",
+      "organization": "天府",
+      "car_insurance_plan_2026": 181.0
+    },
+    {
+      "business_no": "210011913",
+      "salesman_name": "曾玲",
+      "full_name": "210011913曾玲",
+      "team": "天府业务二部",
+      "organization": "天府",
+      "car_insurance_plan_2026": 151.0
+    },
+    {
+      "business_no": "210011914",
+      "salesman_name": "李智",
+      "full_name": "210011914李智",
+      "team": "泸州业务一部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 140.0
+    },
+    {
+      "business_no": "210011915",
+      "salesman_name": "但力君",
+      "full_name": "210011915但力君",
+      "team": "新都业务三部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 565.0
+    },
+    {
+      "business_no": "210011916",
+      "salesman_name": "付瑶",
+      "full_name": "210011916付瑶",
+      "team": "武侯业务二部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "210011917",
+      "salesman_name": "于绍强",
+      "full_name": "210011917于绍强",
+      "team": "成华业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 110.0
+    },
+    {
+      "business_no": "210011921",
+      "salesman_name": "向志辉",
+      "full_name": "210011921向志辉",
+      "team": "武侯业务五部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 80.0
+    },
+    {
+      "business_no": "210011923",
+      "salesman_name": "彭明宇",
+      "full_name": "210011923彭明宇",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 105.0
+    },
+    {
+      "business_no": "210011924",
+      "salesman_name": "高雷",
+      "full_name": "210011924高雷",
+      "team": "高新业务三部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 375.0
+    },
+    {
+      "business_no": "210011926",
+      "salesman_name": "何林",
+      "full_name": "210011926何林",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 121.0
+    },
+    {
+      "business_no": "210011927",
+      "salesman_name": "曾丽",
+      "full_name": "210011927曾丽",
+      "team": "未分配",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 80.0
+    },
+    {
+      "business_no": "210011928",
+      "salesman_name": "孙大玉",
+      "full_name": "210011928孙大玉",
+      "team": "达州业务三部",
+      "organization": "达州",
+      "car_insurance_plan_2026": 100.0
+    },
+    {
+      "business_no": "210011930",
+      "salesman_name": "骆跃强",
+      "full_name": "210011930骆跃强",
+      "team": "宜宾业务一部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 170.0
+    },
+    {
+      "business_no": "210011931",
+      "salesman_name": "何婉玲",
+      "full_name": "210011931何婉玲",
+      "team": "未分配",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 550.0
+    },
+    {
+      "business_no": "210011932",
+      "salesman_name": "齐雪",
+      "full_name": "210011932齐雪",
+      "team": "东林半岛业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 118.0
+    },
+    {
+      "business_no": "210011933",
+      "salesman_name": "葛强",
+      "full_name": "210011933葛强",
+      "team": "高新业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "210011936",
+      "salesman_name": "赵莎莎",
+      "full_name": "210011936赵莎莎",
+      "team": "达州业务三部",
+      "organization": "达州",
+      "car_insurance_plan_2026": 80.0
+    },
+    {
+      "business_no": "210011940",
+      "salesman_name": "冯成枭",
+      "full_name": "210011940冯成枭",
+      "team": "成华业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "210011941",
+      "salesman_name": "郭泳伶",
+      "full_name": "210011941郭泳伶",
+      "team": "温江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 185.0
+    },
+    {
+      "business_no": "210011944",
+      "salesman_name": "何秋艳",
+      "full_name": "210011944何秋艳",
+      "team": "双流业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 140.0
+    },
+    {
+      "business_no": "210011946",
+      "salesman_name": "李维祺",
+      "full_name": "210011946李维祺",
+      "team": "新都业务三部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 230.0
+    },
+    {
+      "business_no": "210011948",
+      "salesman_name": "丁果",
+      "full_name": "210011948丁果",
+      "team": "绵竹业务团队",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "210011955",
+      "salesman_name": "黎彬",
+      "full_name": "210011955黎彬",
+      "team": "未分配",
+      "organization": "资阳",
+      "car_insurance_plan_2026": 220.0
+    },
+    {
+      "business_no": "210011956",
+      "salesman_name": "吕冬梅",
+      "full_name": "210011956吕冬梅",
+      "team": "天府业务二部",
+      "organization": "天府",
+      "car_insurance_plan_2026": 151.0
+    },
+    {
+      "business_no": "210011957",
+      "salesman_name": "徐涛",
+      "full_name": "210011957徐涛",
+      "team": "天府业务二部",
+      "organization": "天府",
+      "car_insurance_plan_2026": 152.0
+    },
+    {
+      "business_no": "210011959",
+      "salesman_name": "姚晓军",
+      "full_name": "210011959姚晓军",
+      "team": "达州业务四部",
+      "organization": "达州",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "210011964",
+      "salesman_name": "谭中明",
+      "full_name": "210011964谭中明",
+      "team": "高新业务三部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 160.0
+    },
+    {
+      "business_no": "210011965",
+      "salesman_name": "胡芳",
+      "full_name": "210011965胡芳",
+      "team": "未分配",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 245.0
+    },
+    {
+      "business_no": "210011967",
+      "salesman_name": "孙小丽",
+      "full_name": "210011967孙小丽",
+      "team": "宜宾业务一部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 280.0
+    },
+    {
+      "business_no": "210011969",
+      "salesman_name": "谭文",
+      "full_name": "210011969谭文",
+      "team": "新都业务三部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 180.0
+    },
+    {
+      "business_no": "210011970",
+      "salesman_name": "苟俊",
+      "full_name": "210011970苟俊",
+      "team": "天府业务二部",
+      "organization": "天府",
+      "car_insurance_plan_2026": 151.0
+    },
+    {
+      "business_no": "210011973",
+      "salesman_name": "陈君才",
+      "full_name": "210011973陈君才",
+      "team": "天鑫花园业务团队",
+      "organization": "高新",
+      "car_insurance_plan_2026": 194.0
+    },
+    {
+      "business_no": "210011974",
+      "salesman_name": "叶文友",
+      "full_name": "210011974叶文友",
+      "team": "泸州业务一部",
+      "organization": "泸州",
+      "car_insurance_plan_2026": 80.0
+    },
+    {
+      "business_no": "210011976",
+      "salesman_name": "周洁",
+      "full_name": "210011976周洁",
+      "team": "德阳业务三部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 20.0
+    },
+    {
+      "business_no": "210011981",
+      "salesman_name": "何珊",
+      "full_name": "210011981何珊",
+      "team": "新都业务三部",
+      "organization": "新都",
+      "car_insurance_plan_2026": 180.0
+    },
+    {
+      "business_no": "210011982",
+      "salesman_name": "张濛兮",
+      "full_name": "210011982张濛兮",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 102.0
+    },
+    {
+      "business_no": "210011985",
+      "salesman_name": "何猛",
+      "full_name": "210011985何猛",
+      "team": "高新业务四部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "210011987",
+      "salesman_name": "刘吉曦",
+      "full_name": "210011987刘吉曦",
+      "team": "宜宾业务二部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "210011988",
+      "salesman_name": "李娜",
+      "full_name": "210011988李娜",
+      "team": "宜宾业务二部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 80.0
+    },
+    {
+      "business_no": "210011989",
+      "salesman_name": "黄成涛",
+      "full_name": "210011989黄成涛",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "210011990",
+      "salesman_name": "李厚辉",
+      "full_name": "210011990李厚辉",
+      "team": "宜宾业务二部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 70.0
+    },
+    {
+      "business_no": "210011991",
+      "salesman_name": "谢泽川",
+      "full_name": "210011991谢泽川",
+      "team": "宜宾业务一部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 380.0
+    },
+    {
+      "business_no": "210011993",
+      "salesman_name": "黄春杨",
+      "full_name": "210011993黄春杨",
+      "team": "宜宾业务一部",
+      "organization": "宜宾",
+      "car_insurance_plan_2026": 170.0
+    },
+    {
+      "business_no": "210011994",
+      "salesman_name": "蒋家艳",
+      "full_name": "210011994蒋家艳",
+      "team": "德阳业务三部",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 20.0
+    },
+    {
+      "business_no": "210011995",
+      "salesman_name": "李红英",
+      "full_name": "210011995李红英",
+      "team": "未分配",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 5.0
+    },
+    {
+      "business_no": "210012010",
+      "salesman_name": "罗振",
+      "full_name": "210012010罗振",
+      "team": "未分配",
+      "organization": "青羊",
+      "car_insurance_plan_2026": 720.0
+    },
+    {
+      "business_no": "210012024",
+      "salesman_name": "马俊",
+      "full_name": "210012024马俊",
+      "team": "高新业务四部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 80.0
+    },
+    {
+      "business_no": "210012027",
+      "salesman_name": "任俊",
+      "full_name": "210012027任俊",
+      "team": "资阳业务四部",
+      "organization": "资阳",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "210012030",
+      "salesman_name": "张蓉",
+      "full_name": "210012030张蓉",
+      "team": "新津业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 137.0
+    },
+    {
+      "business_no": "210012032",
+      "salesman_name": "何秋",
+      "full_name": "210012032何秋",
+      "team": "蒲江业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 102.0
+    },
+    {
+      "business_no": "210012033",
+      "salesman_name": "沈小林",
+      "full_name": "210012033沈小林",
+      "team": "高新业务二部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "210012034",
+      "salesman_name": "范攀",
+      "full_name": "210012034范攀",
+      "team": "武侯业务一部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 0.0
+    },
+    {
+      "business_no": "210012035",
+      "salesman_name": "张翡霏",
+      "full_name": "210012035张翡霏",
+      "team": "武侯业务一部",
+      "organization": "武侯",
+      "car_insurance_plan_2026": 260.0
+    },
+    {
+      "business_no": "210012036",
+      "salesman_name": "赵丹",
+      "full_name": "210012036赵丹",
+      "team": "高新业务四部",
+      "organization": "高新",
+      "car_insurance_plan_2026": 50.0
+    },
+    {
+      "business_no": "210012040",
+      "salesman_name": "钟旭",
+      "full_name": "210012040钟旭",
+      "team": "自贡业务四部",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 25.0
+    },
+    {
+      "business_no": "210012041",
+      "salesman_name": "徐艳",
+      "full_name": "210012041徐艳",
+      "team": "自贡业务四部",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 100.0
+    },
+    {
+      "business_no": "210012042",
+      "salesman_name": "唐婷",
+      "full_name": "210012042唐婷",
+      "team": "未分配",
+      "organization": "资阳",
+      "car_insurance_plan_2026": 180.0
+    },
+    {
+      "business_no": "210012043",
+      "salesman_name": "杨静",
+      "full_name": "210012043杨静",
+      "team": "自贡业务四部",
+      "organization": "自贡",
+      "car_insurance_plan_2026": 30.0
+    },
+    {
+      "business_no": "210012044",
+      "salesman_name": "周敏丽",
+      "full_name": "210012044周敏丽",
+      "team": "新津业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 64.0
+    },
+    {
+      "business_no": "210012046",
+      "salesman_name": "罗攀",
+      "full_name": "210012046罗攀",
+      "team": "邛崃业务团队",
+      "organization": "天府",
+      "car_insurance_plan_2026": 120.0
+    },
+    {
+      "business_no": "210012048",
+      "salesman_name": "饶黎",
+      "full_name": "210012048饶黎",
+      "team": "绵竹业务团队",
+      "organization": "德阳",
+      "car_insurance_plan_2026": 100.0
+    },
+    {
+      "business_no": NaN,
+      "salesman_name": "新引进",
+      "full_name": "新引进",
+      "team": "未分配",
+      "organization": "天府",
+      "car_insurance_plan_2026": 1717.0
+    }
+  ],
+  "statistics": {
+    "total_salesmen": 234,
+    "total_teams": 47,
+    "total_organizations": 12,
+    "organizations": [
+      "乐山",
+      "天府",
+      "宜宾",
+      "德阳",
+      "新都",
+      "武侯",
+      "泸州",
+      "自贡",
+      "资阳",
+      "达州",
+      "青羊",
+      "高新"
+    ],
+    "teams": [
+      "东林半岛业务团队",
+      "乐山业务一部",
+      "双流业务二部",
+      "大邑业务团队",
+      "天府业务二部",
+      "天鑫花园业务团队",
+      "宜宾业务一部",
+      "宜宾业务二部",
+      "崇州业务团队",
+      "彭州业务团队",
+      "德阳业务一部",
+      "德阳业务三部",
+      "成华业务团队",
+      "新津业务团队",
+      "新繁业务团队",
+      "新都业务一部",
+      "新都业务三部",
+      "春熙苑业务团队",
+      "未分配",
+      "武侯业务一部",
+      "武侯业务二部",
+      "武侯业务五部",
+      "泸州业务一部",
+      "泸州业务三部",
+      "泸州业务二部",
+      "温江业务团队",
+      "简阳业务团队",
+      "绵竹业务团队",
+      "自贡业务一部",
+      "自贡业务四部",
+      "蒲江业务团队",
+      "资阳业务四部",
+      "达州业务一部",
+      "达州业务三部",
+      "达州业务四部",
+      "邛崃业务团队",
+      "郫都业务团队",
+      "都江堰业务团队",
+      "金堂业务团队",
+      "青白江业务团队",
+      "青羊业务一部",
+      "青羊业务四部",
+      "非车险业务部",
+      "高新业务三部",
+      "高新业务二部",
+      "高新业务四部",
+      "龙泉业务团队"
+    ],
+    "sources": {
+      "2026_plan_count": 241,
+      "2025_actual_count": 232,
+      "unique_count": 234
+    }
+  }
+}

@@ -1,0 +1,151 @@
+/**
+ * 赔付率分析表格
+ * Claim Ratio Analysis Table
+ *
+ * 展示赔付率分析的详细数据：
+ * - 保单件数、保费合计、赔案件数、已报告赔款
+ * - 案均赔款、满期保费、满期天数
+ * - 满期赔付率、满期出险率
+ */
+
+import React, { useMemo } from 'react';
+import { VirtualTable, Column } from '../../../widgets/table/VirtualTable';
+import type { ClaimRatioData } from '../types/costTypes';
+import {
+  formatCount,
+  formatPremiumWan,
+  formatPercent,
+  formatDays,
+} from '../../../shared/utils/formatters';
+
+interface ClaimRatioTableProps {
+  data: ClaimRatioData[];
+  loading?: boolean;
+  dimensionLabel?: string;
+  onExportCSV?: () => void;
+  onExportExcel?: () => void;
+}
+
+/**
+ * 转换数据为显示格式
+ */
+interface DisplayClaimRatioData {
+  dim_key: string;
+  policy_count: string;
+  total_premium: string;
+  total_claim_cases: string;
+  total_reported_claims: string;
+  avg_claim_amount: string;
+  earned_premium: string;
+  avg_exposure_days: string;
+  earned_claim_ratio: string;
+  earned_loss_frequency: string;
+}
+
+/**
+ * 转换数据为显示格式
+ * 遵循全局格式化规范（见 CLAUDE.md §2.5）：
+ * - 件数：整数，千分位 → formatCount
+ * - 保费：万元为单位，整数 → formatPremiumWan
+ * - 比率：1位小数，带% → formatPercent
+ */
+function transformData(data: ClaimRatioData[]): DisplayClaimRatioData[] {
+  return data.map((row) => ({
+    dim_key: row.dim_key || '未知',
+    policy_count: formatCount(row.policy_count),
+    // 保费折算为万元，整数
+    total_premium: formatPremiumWan(row.total_premium ?? 0),
+    total_claim_cases: formatCount(row.total_claim_cases),
+    // 已报告赔款折算为万元，整数
+    total_reported_claims: formatPremiumWan(row.total_reported_claims ?? 0),
+    // 案均赔款取整
+    avg_claim_amount: formatCount(row.avg_claim_amount ?? 0),
+    // 满期保费折算为万元，整数
+    earned_premium: formatPremiumWan(row.earned_premium ?? 0),
+    avg_exposure_days: formatDays(row.avg_exposure_days),
+    earned_claim_ratio: formatPercent(row.earned_claim_ratio),
+    earned_loss_frequency: formatPercent(row.earned_loss_frequency),
+  }));
+}
+
+/**
+ * 赔付率分析表格组件
+ */
+export const ClaimRatioTable: React.FC<ClaimRatioTableProps> = ({
+  data,
+  loading = false,
+  dimensionLabel = '维度',
+  onExportCSV,
+  onExportExcel,
+}) => {
+  // 列配置
+  const columns: Column<DisplayClaimRatioData>[] = useMemo(
+    () => [
+      { key: 'dim_key', header: dimensionLabel, width: 150 },
+      { key: 'policy_count', header: '保单件数', width: 100, align: 'right' },
+      { key: 'total_premium', header: '保费(万)', width: 100, align: 'right' },
+      { key: 'total_claim_cases', header: '赔案件数', width: 90, align: 'right' },
+      { key: 'total_reported_claims', header: '已报告赔款(万)', width: 120, align: 'right' },
+      { key: 'avg_claim_amount', header: '案均赔款', width: 100, align: 'right' },
+      { key: 'earned_premium', header: '满期保费(万)', width: 110, align: 'right' },
+      { key: 'avg_exposure_days', header: '平均满期天数', width: 110, align: 'right' },
+      { key: 'earned_claim_ratio', header: '满期赔付率', width: 100, align: 'right' },
+      { key: 'earned_loss_frequency', header: '满期出险率', width: 100, align: 'right' },
+    ],
+    [dimensionLabel]
+  );
+
+  // 转换数据
+  const displayData = useMemo(() => transformData(data), [data]);
+
+  // 空状态
+  if (!loading && data.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+        暂无数据
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm">
+      <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+        <h3 className="text-base font-medium text-gray-800">赔付率分析明细</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">共 {data.length} 条记录</span>
+          {(onExportCSV || onExportExcel) && (
+            <div className="flex gap-2">
+              {onExportCSV && (
+                <button
+                  onClick={onExportCSV}
+                  className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                  disabled={data.length === 0}
+                >
+                  导出CSV
+                </button>
+              )}
+              {onExportExcel && (
+                <button
+                  onClick={onExportExcel}
+                  className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  disabled={data.length === 0}
+                >
+                  导出Excel
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      <VirtualTable<DisplayClaimRatioData>
+        columns={columns}
+        data={displayData}
+        loading={loading}
+        height={450}
+        rowHeight={40}
+      />
+    </div>
+  );
+};
+
+export default ClaimRatioTable;

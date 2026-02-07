@@ -1,0 +1,172 @@
+import React from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { useSidebar } from './SidebarLayout';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Home,
+  LayoutDashboard,
+  DollarSign,
+  Target,
+  Truck,
+  RefreshCw,
+  TrendingUp,
+  Calculator,
+  Scale,
+  Search,
+  FileCode,
+  ChevronLeft,
+  ChevronRight,
+  X,
+} from 'lucide-react';
+import { SidebarUserPanel } from './SidebarUserPanel';
+
+interface NavItem {
+  path: string;
+  icon: LucideIcon;
+  label: string;
+  shortLabel?: string;
+}
+
+const navItems: NavItem[] = [
+  { path: '/', icon: Home, label: '首页', shortLabel: '首页' },
+];
+
+const dataNavItems: NavItem[] = [
+  { path: '/dashboard', icon: LayoutDashboard, label: '仪表盘', shortLabel: '仪表' },
+  { path: '/premium-report', icon: DollarSign, label: '保费报表', shortLabel: '报表' },
+  { path: '/marketing-report', icon: Target, label: '营销战报', shortLabel: '战报' },
+  { path: '/truck', icon: Truck, label: '营业货车', shortLabel: '货车' },
+  { path: '/renewal', icon: RefreshCw, label: '续保分析', shortLabel: '续保' },
+  { path: '/growth', icon: TrendingUp, label: '增长分析', shortLabel: '增长' },
+  { path: '/cost', icon: Calculator, label: '成本分析', shortLabel: '成本' },
+  { path: '/comparison', icon: Scale, label: '数据对比', shortLabel: '对比' },
+  { path: '/coefficient', icon: Search, label: '系数监控', shortLabel: '系数' },
+  { path: '/sql-query', icon: FileCode, label: 'SQL查询', shortLabel: 'SQL' },
+];
+
+/**
+ * 侧边栏导航组件
+ *
+ * 功能：
+ * - 首页入口（数据导入）
+ * - 数据模块菜单列表
+ * - 当前激活状态高亮
+ * - 收起/展开切换
+ * - Lucide图标 + 文字标签
+ */
+export const SidebarNavigation: React.FC = () => {
+  const { collapsed, toggle, mobileOpen, setMobileOpen, isMobile } = useSidebar();
+  const location = useLocation();
+
+  const isActive = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/';
+    }
+    return location.pathname.startsWith(path);
+  };
+
+  // 移动端：总是展开显示；桌面端：根据 collapsed 状态
+  const showExpanded = isMobile || !collapsed;
+
+  const renderNavItem = (item: NavItem) => {
+    const IconComponent = item.icon;
+    return (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        className={`flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 group min-h-[44px] md:min-h-0 ${
+          isActive(item.path)
+            ? 'bg-primary text-white shadow-md'
+            : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+        }`}
+        title={!showExpanded ? item.label : undefined}
+      >
+        <IconComponent
+          size={20}
+          className="flex-shrink-0"
+          aria-hidden="true"
+        />
+        {showExpanded && (
+          <span className="ml-3 text-sm font-medium truncate">{item.label}</span>
+        )}
+      </NavLink>
+    );
+  };
+
+  // 计算侧边栏的显示状态和样式
+  const getSidebarClasses = () => {
+    const baseClasses = 'fixed left-0 top-14 bottom-0 bg-white border-r border-neutral-200 transition-all duration-300 z-40 flex flex-col';
+
+    if (isMobile) {
+      // 移动端：抽屉模式，总是宽展开
+      return `${baseClasses} w-60 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`;
+    }
+
+    // 桌面端：根据 collapsed 状态
+    return `${baseClasses} ${collapsed ? 'w-16' : 'w-60'}`;
+  };
+
+  return (
+    <aside
+      className={getSidebarClasses()}
+      role="navigation"
+      aria-label="主导航"
+    >
+      {/* 移动端：关闭按钮 */}
+      {isMobile && (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 md:hidden">
+          <span className="text-sm font-semibold text-neutral-700">导航菜单</span>
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="关闭导航菜单"
+          >
+            <X size={20} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {/* 导航菜单 */}
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        {/* 首页入口 */}
+        {navItems.map(renderNavItem)}
+
+        {/* 分隔线 */}
+        <div className="my-3 border-t border-neutral-200" role="separator" />
+
+        {/* 数据模块 */}
+        {showExpanded && (
+          <div className="px-3 py-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+            数据分析
+          </div>
+        )}
+        {dataNavItems.map(renderNavItem)}
+      </nav>
+
+      {/* 底部区域：用户面板 + 收起/展开按钮 */}
+      <div className="border-t border-neutral-200 p-3 space-y-2">
+        <SidebarUserPanel />
+
+        {/* 收起/展开按钮 - 仅桌面端显示 */}
+        {!isMobile && (
+          <button
+            onClick={toggle}
+            className="w-full flex items-center justify-center px-3 py-2 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
+            title={collapsed ? '展开侧边栏' : '收起侧边栏'}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
+          >
+            {collapsed ? (
+              <ChevronRight size={20} aria-hidden="true" />
+            ) : (
+              <>
+                <ChevronLeft size={20} aria-hidden="true" />
+                <span className="ml-2 text-sm">收起侧边栏</span>
+              </>
+            )}
+          </button>
+        )}
+      </div>
+    </aside>
+  );
+};
