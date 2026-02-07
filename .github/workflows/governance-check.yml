@@ -1,0 +1,33 @@
+name: Governance Check
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  governance-check:
+    name: Governance Consistency Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.1"
+
+      - name: Run governance check
+        run: |
+          bun run scripts/check-governance.mjs
+        shell: bash
+
+      - name: Upload result
+        if: always()
+        run: |
+          echo "✅ Governance check passed!" || echo "❌ Governance check failed!"
+        shell: bash
