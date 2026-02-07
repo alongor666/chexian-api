@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> **chexian-api** — 车险数据分析平台（API 版）。纯后端 API 模式，前端通过 REST API 访问后端 DuckDB，无 DuckDB-WASM / Local 模式。从 chexianYJFX 双模式项目拆分而来。
+
 **协作操作系统**：Claude Code 工作前必读协议。
 
 ---
@@ -47,7 +49,7 @@
 
 ### 技术栈声明（第一优先级）
 ⚠️ **所有开发任务开始前必读**：[开发文档/TECH_STACK.md](./开发文档/TECH_STACK.md)
-- 了解项目技术栈特性（DuckDB-WASM、React、Vite）
+- 了解项目技术栈特性（React、Vite、后端 DuckDB）
 - 查看架构强制入口（修改代码前必读文件列表）
 - 掌握验证协议（单元测试 → 浏览器实测 → 用户验收）
 
@@ -105,64 +107,48 @@
 
 ---
 
-## 1.5 双模式架构与启动协议（CRITICAL - 血泪教训）
+## 1.5 API 模式架构与启动协议（CRITICAL）
 
-> **教训来源**：2026-02-04 排查"仪表盘无数据"问题，耗时数小时才发现是多层状态不同步导致。
+> 本项目为纯 API 模式，从 chexianYJFX 双模式项目拆分而来。已移除所有 DuckDB-WASM / Local 模式代码。
 
 ### 架构核心概念
 
-本项目采用**双模式数据架构**：
+本项目采用**纯 API 模式数据架构**：
 
 | 模式 | 数据位置 | 触发条件 | 状态标识 |
 |------|----------|----------|----------|
-| **API 模式** | 后端 DuckDB (server/) | 用户已登录 | `isApiMode = true` |
-| **Local 模式** | 前端 DuckDB-WASM | 匿名用户或本地上传 | `isApiMode = false` |
+| **API 模式** | 后端 DuckDB (server/) | 用户已登录 | `dataSource = 'api'` |
 
-### ⚠️ 三层状态陷阱（必须理解）
-
-系统存在**三个独立的数据状态**，极易混淆：
+数据状态由 `DataContext` 统一管理：
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  状态层                        │  来源                │  含义              │
-├─────────────────────────────────────────────────────────────────────────┤
-│  DataContext.isDataLoaded      │  后端文件列表        │  后端有"当前"文件   │
-│  DataContext.isApiMode         │  认证状态            │  是否使用API模式    │
-│  duckdbClient.isDataLoaded()   │  前端DuckDB          │  前端已加载数据     │
-│  组件内 isInitialized          │  各组件本地状态      │  组件认为可查询     │
-└─────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  状态层                        │  来源         │  含义            │
+├──────────────────────────────────────────────────────────────────┤
+│  DataContext.isDataLoaded      │  后端文件列表  │  后端有可查询数据 │
+│  AuthContext.isAuthenticated   │  JWT Token    │  用户已登录       │
+└──────────────────────────────────────────────────────────────────┘
 ```
-
-**常见错误**：
-- ❌ 用 `isInitialized` 控制 API 模式数据加载（API 模式不需要本地初始化）
-- ❌ 用 `duckdbClient.isDataLoaded()` 判断 API 模式是否可用（API 数据在后端）
-- ❌ 假设 `isDataLoaded = true` 意味着前端 DuckDB 有数据（仅表示后端有文件）
 
 ### ✅ 正确的数据启用判断
 
 ```typescript
 // 在 Dashboard/PremiumDashboard 等组件中
-const { isApiMode, isDataLoaded } = useDataStatus();
+const { isDataLoaded } = useDataStatus();
 
-// ✅ 正确：API 模式 OR 本地已初始化
-const isDataEnabled = isApiMode || isLocalInitialized;
-
-// ❌ 错误：仅依赖本地初始化
-const isDataEnabled = isInitialized;  // API 模式下永远为 false！
+// ✅ 正确：直接使用 isDataLoaded
+const isDataEnabled = isDataLoaded;
 ```
 
 ### 标准启动流程
 
 ```
-用户登录 → DataContext 设置 isApiMode = true
-         → 首页显示后端文件列表（带"当前加载"标记）
+用户登录 → AuthContext 验证 → JWT Token
+         → DataContext 查询后端文件列表
+         → 设置 isDataLoaded = true
 
-用户点击"加载"按钮 → 文件下载到前端 DuckDB-WASM
-                    → 设置 isDataLoaded = true
-                    → 组件设置 isLocalInitialized = true
-
-仪表盘查询 → 优先使用本地 DuckDB（已下载的数据）
-           → 查询筛选条件范围内的数据
+仪表盘查询 → useApiQuery() → GET /api/query/kpi
+           → 后端 DuckDB 执行查询 → 返回 JSON → 前端渲染
 ```
 
 ### 排查清单（遇到"暂无数据"时必查）
@@ -170,20 +156,23 @@ const isDataEnabled = isInitialized;  // API 模式下永远为 false！
 | 检查项 | 命令/方法 | 预期值 |
 |--------|----------|--------|
 | 用户是否登录 | `localStorage.getItem('auth_token')` | 非空 |
-| API 模式是否启用 | Console: `isApiMode` | `true` |
-| 后端是否有当前文件 | 首页文件列表 | 有"当前加载"标记 |
-| 前端 DuckDB 是否加载 | `duckdbClient.isDataLoaded()` | `true`（点击"加载"后） |
-| 组件 enabled 条件 | 检查 `useDashboardData` 等 Hook | `enabled: isApiMode \|\| isInitialized` |
+| 后端是否启动 | 检查终端日志 | "Server is running on http://localhost:3000" |
+| 后端是否有数据文件 | 首页文件列表 | 有"当前加载"标记 |
+| API 请求是否成功 | 浏览器网络面板 | 200 OK，无 404/500 |
+| isDataLoaded 状态 | Console 检查 DataContext | `true` |
 
 ### 关键文件清单
 
 | 文件 | 职责 | 修改注意事项 |
 |------|------|-------------|
-| `src/shared/contexts/DataContext.tsx` | 数据源状态管理 | isApiMode/isDataLoaded 的唯一来源 |
-| `src/features/dashboard/PremiumDashboard.tsx` | 主仪表盘 | 必须同时支持 API 和 Local 模式 |
-| `src/features/dashboard/hooks/useDashboardData.ts` | 数据获取 Hook | 内含 refreshApi/refreshLocal 双路径 |
-| `src/features/dashboard/hooks/useKpiData.ts` | KPI 数据 Hook | 已支持双模式，检查 parseWhereClause |
-| `src/components/layout/DataGuard.tsx` | 路由守卫 | 仅检查 isDataLoaded |
+| `src/shared/contexts/DataContext.tsx` | 数据源状态管理 | isDataLoaded 的唯一来源，固定 dataSource='api' |
+| `src/shared/contexts/AuthContext.tsx` | 认证状态管理 | JWT Token、登录/登出逻辑 |
+| `src/shared/contexts/PermissionContext.tsx` | 权限管理 | 角色权限控制 |
+| `src/shared/api/client.ts` | API 客户端 | 所有后端请求的统一入口 |
+| `src/features/dashboard/hooks/useDashboardData.ts` | 数据获取 Hook | 仅 API 分支 |
+| `src/components/layout/DataGuard.tsx` | 路由守卫 | 检查 isDataLoaded |
+| `server/src/services/duckdb.ts` | 后端 DuckDB 服务 | 查询执行、数据加载 |
+| `server/src/routes/query.ts` | 后端查询路由 | API 端点定义 |
 
 ### 防御性编码规范
 
@@ -197,20 +186,15 @@ const year = timePeriod.includes('-') ? timePeriod.split('-')[0] : '2025';
 const year = row.time_period.includes('-') ? ...  // TypeError!
 ```
 
-2. **Hook 必须支持双模式**：
+2. **Hook 统一使用 API 数据源**：
 ```typescript
-// ✅ 正确：根据模式选择数据源
-const { isApiMode } = useDataStatus();
-const isDataEnabled = isApiMode || isLocalInitialized;
+// ✅ 正确：直接调用 API
+const { isDataLoaded } = useDataStatus();
 
 useEffect(() => {
-  if (!isDataEnabled) return;
-  if (isApiMode) {
-    fetchFromApi();
-  } else {
-    fetchFromLocalDuckDB();
-  }
-}, [isApiMode, isDataEnabled]);
+  if (!isDataLoaded) return;
+  fetchFromApi();
+}, [isDataLoaded]);
 ```
 
 ---
@@ -221,15 +205,13 @@ useEffect(() => {
 
 | 文件 | 原因 | 如需变更 |
 |------|------|----------|
-| `src/shared/normalize/mapping.ts` | 列名映射规则（指标口径） | ❌ 不得删除已有别名<br>✅ 只能追加新别名<br>📝 需在 BACKLOG.md 登记（状态=PROPOSED）并提供证据 |
-| `src/shared/sql/kpi.ts` | KPI 计算逻辑（业务规则） | ❌ 不得修改已有 SQL 模板<br>✅ 只能追加新模板<br>📝 需在 BACKLOG.md 登记并提供证据 |
-| `src/shared/duckdb/client.ts:78-95` | PolicyFact 视图定义（去重规则） | ❌ 涉及业务口径，需产品确认<br>📝 需在 BACKLOG.md 登记并提供产品确认证据 |
+| `server/src/services/duckdb.ts` | 后端 DuckDB 查询逻辑（KPI 计算、视图定义） | ❌ 不得修改已有查询逻辑<br>✅ 只能追加新查询<br>📝 需在 BACKLOG.md 登记并提供证据 |
+| `server/src/routes/query.ts` | 后端 API 路由定义 | ❌ 不得删除已有路由<br>✅ 只能追加新路由<br>📝 需在 BACKLOG.md 登记 |
 
 ### 架构协议（不可破坏）
-- **Arrow IPC 协议**：Worker 与主线程通信必须使用 Arrow IPC，禁止 JSON 序列化
-- **CORS 配置**：`vite.config.ts` 的 COOP/COEP 头不得删除（DuckDB-WASM 强制要求）
 - **Bun 包管理器**：禁止使用 npm/yarn/pnpm（项目统一使用 Bun）
 - **智谱 API 端点**：`https://open.bigmodel.cn/api/paas/v4` 是标准端点（支持免费模型 glm-4.7-flash），已从 Coding 套餐迁移
+- **API 认证**：所有 `/api/*` 路由必须经过 JWT 认证中间件，禁止绕过
 
 ---
 
@@ -251,7 +233,7 @@ useEffect(() => {
 |------|-----------|---------|
 | **UI组件** | `src/widgets/INDEX.md` | Table、Card、Badge、Button、Input、Select |
 | **样式系统** | `src/shared/styles/index.ts` | ⭐ tableStyles、textStyles、buttonStyles、colors |
-| **SQL生成器** | `src/shared/sql/INDEX.md` | kpi.ts、trend.ts、growth.ts、cost.ts |
+| **API客户端** | `src/shared/api/client.ts` | 所有后端 API 调用方法 |
 | **工具函数** | `src/shared/utils/` | formatters.ts、export.ts |
 | **类型定义** | `src/shared/types/` | 通用类型、业务类型 |
 
@@ -325,15 +307,15 @@ import { formatCount, formatAverage, formatPercent, formatPremiumWan } from '@/s
 
 ## 2.6 启动与架构验证协议（MUST - 防止架构认知偏差）
 
-> **教训来源**：2026-02-04 启动项目时只运行前端，未启动后端，导致数据无法加载。仪表盘组件使用前端 DuckDB 而非后端 API，是前后端分离改造未完成的遗留问题。
+> 本项目为纯 API 模式，前端所有数据均来自后端 API，必须同时启动前后端。
 
-### 启动前三问（每次启动必答）
+### 启动前检查（每次启动必答）
 
 | 问题 | 检查方式 | 预期答案 |
 |------|----------|---------|
-| **1. 有后端吗？** | 检查 `server/` 目录是否存在 | 若有 → 需要启动后端 |
-| **2. 数据从哪来？** | 检查仪表盘 Hooks 是否使用 `useApiQuery` | 使用 `duckdbClient` → 需要前端加载数据 |
-| **3. 计划完成了吗？** | 检查 `.claude/plans/` 下相关计划的完成状态 | 未完成 → 了解当前能力边界 |
+| **1. 后端是否就绪？** | 检查 `server/` 目录 | 存在 → 需要启动后端 |
+| **2. 数据文件是否存在？** | 检查后端 Parquet 数据目录 | 有 `.parquet` 文件 |
+| **3. 环境变量是否配置？** | 检查 `server/.env` | JWT_SECRET 等已配置 |
 
 ### 开发环境启动命令（CRITICAL）
 
@@ -348,66 +330,53 @@ bun run dev                   # 启动前端（端口 5173）
 
 ⚠️ **禁止只运行 `bun run dev`**：这只启动前端，后端 API 不可用会导致数据加载失败。
 
-### 数据流架构（双模式）
-
-当前系统存在 **两种数据模式**，理解其区别至关重要：
+### 数据流架构（API 模式）
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      API 模式（推荐）                            │
+│                      API 模式（唯一模式）                        │
 │  用户登录 → 后端验证 → JWT Token                                 │
 │       ↓                                                         │
 │  仪表盘组件 → useApiQuery() → GET /api/query/kpi                │
 │       ↓                                                         │
 │  后端 DuckDB 执行查询 → 返回 JSON → 前端渲染                     │
 └─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│                      本地模式（降级）                            │
-│  未登录 / 后端不可用                                             │
-│       ↓                                                         │
-│  首页上传 Parquet 文件 → 前端 DuckDB-WASM 加载                   │
-│       ↓                                                         │
-│  仪表盘组件 → duckdbClient.query() → 前端执行查询                │
-└─────────────────────────────────────────────────────────────────┘
 ```
 
 | 模式 | 触发条件 | 数据来源 | 仪表盘数据获取 |
 |------|----------|----------|---------------|
 | **API 模式** | 用户登录 + 后端可用 | 后端 DuckDB | `useApiQuery()` → `/api/query/*` |
-| **本地模式** | 未登录 / 后端不可用 | 前端 DuckDB-WASM | `duckdbClient.query()` |
 
-### 架构改造状态（实时更新）
+### 后端 API 端点清单
 
-前后端分离改造计划：`.claude/plans/前后端分离改造计划.md`
-
-| 阶段 | 状态 | 说明 |
-|------|------|------|
-| Phase 1-3: 后端 API | ✅ 完成 | `/api/query/*`, `/api/data/*`, `/api/ai/*` 可用 |
-| Phase 4: 部署 | ❌ 未完成 | 云服务器未配置 |
-| **前端 Hooks 改造** | ✅ 完成 | 仪表盘组件使用 `useApiQuery()`，支持双模式 |
+| 端点类别 | 路径前缀 | 说明 |
+|---------|----------|------|
+| 查询 API | `/api/query/*` | KPI、趋势、排名、自定义查询 |
+| 数据管理 | `/api/data/*` | 文件上传、列表、加载 |
+| AI 助手 | `/api/ai/*` | NL2SQL、智能分析 |
+| 认证 | `/api/auth/*` | 登录、注册、Token 刷新 |
 
 ### 违规判定与处理
 
 | 违规类型 | 判定标准 | 处理方式 |
 |---------|---------|---------|
-| **盲目启动** | 只运行 `bun run dev` 未检查后端 | ❌ 必须运行 `bun run dev:full` |
+| **盲目启动** | 只运行 `bun run dev` 未启动后端 | ❌ 必须运行 `bun run dev:full` |
 | **症状式调试** | 花 >15 分钟在 UI 点击上 | ❌ 停止，先读 §2.6 和 §5 理解数据流 |
-| **假设计划已完成** | 未检查计划状态就开始工作 | ❌ 先检查 `.claude/plans/` 完成度 |
+| **绕过认证** | API 路由缺少认证中间件 | ❌ 所有 `/api/*` 必须经过 JWT 验证 |
 
 ### 检查点清单（启动项目时必过）
 
 ```
-启动前 □ 检查 server/ 目录，确认是否有后端
-      □ 检查 .claude/plans/ 下相关计划的完成状态
-      □ 阅读 §5 数据处理链路，理解当前数据流
+启动前 □ 检查 server/ 目录存在
+      □ 检查 server/.env 配置完整
+      □ 阅读 §5 数据处理链路
 
 启动时 □ 运行 bun run dev:full（同时启动前后端）
       □ 检查后端日志：应显示 "Server is running on http://localhost:3000"
       □ 检查前端日志：应显示 "Local: http://localhost:5173/"
 
-验证时 □ 登录后应能直接看到仪表盘数据（后端 API 模式）
-      □ 若显示"请上传数据" → 检查后端是否启动、网络是否连通
+验证时 □ 登录后应能直接看到仪表盘数据
+      □ 浏览器网络面板确认 API 请求返回 200
       □ 浏览器控制台无 CORS 或 Failed to fetch 错误
 ```
 
@@ -446,7 +415,7 @@ bun run scripts/check-governance.mjs
 
 ## 4. 项目技术栈（快速参考）
 
-**核心技术**：React + TypeScript + Vite + DuckDB-WASM + ECharts
+**核心技术**：React + TypeScript + Vite + 后端 DuckDB + ECharts
 > 详细版本和依赖：见 [开发文档/TECH_STACK.md](./开发文档/TECH_STACK.md)
 
 **包管理器**：Bun（⚠️ 禁止使用 npm/yarn/pnpm）
@@ -454,9 +423,10 @@ bun run scripts/check-governance.mjs
 **关键命令**：
 ```bash
 bun install         # 安装依赖
-bun run dev         # 启动开发服务器
+bun run dev:full    # ✅ 一键启动前后端（推荐）
+bun run dev         # 仅启动前端（⚠️ 需同时启动后端）
 bun run build       # 类型检查 + 生产构建
-bun run test        # 运行单元测试（53套件/1009用例）⚠️ 注意：不是 bun test
+bun run test        # 运行单元测试 ⚠️ 注意：不是 bun test
 bun run governance  # 治理校验
 ```
 
@@ -464,16 +434,15 @@ bun run governance  # 治理校验
 
 ## 5. 数据处理链路（快速理解架构）
 
-### 双模式架构说明
+### 架构说明
 
-系统支持两种数据模式，由 `DataContext.dataSource` 状态控制：
+系统采用纯 API 模式，`DataContext.dataSource` 固定为 `'api'`：
 
 | 模式 | 数据源 | 适用场景 | 启动命令 |
 |------|--------|----------|----------|
 | **API 模式** | 后端 DuckDB (server/) | 登录用户、多用户协作、权限过滤 | `bun run dev:full` |
-| **Local 模式** | 前端 DuckDB-WASM | 匿名用户、本地数据分析、离线场景 | `bun run dev` |
 
-### API 模式数据链路（推荐）
+### API 模式数据链路
 
 ```
 用户登录 → DataContext.dataSource = 'api'
@@ -491,49 +460,6 @@ server/src/services/duckdb.ts                     # 后端 DuckDB 查询执行
 src/features/dashboard/hooks/useDashboardData.ts  # 前端 Hook（refreshApi 分支）
   ↓
 src/features/*                                    # 功能模块 UI 渲染
-```
-
-### Local 模式数据链路
-
-```
-用户上传 Parquet → DataContext.dataSource = 'local'
-  ↓
-src/shared/duckdb/client.ts:loadParquet()        # 加载文件到前端 DuckDB-WASM
-  ↓
-src/shared/normalize/validator.ts:validateSchema() # 列名校验（别名解析）
-  ↓
-src/shared/duckdb/client.ts:78-95                # 创建 PolicyFact 视图（MAX去重）
-  ↓
-src/shared/sql/*.ts                               # 生成 SQL（kpi/trend/truck/growth/cost）
-  ↓
-src/shared/duckdb/worker.ts:query()              # Worker 执行（返回 Arrow IPC）
-  ↓
-src/features/dashboard/hooks/useDashboardData.ts  # 前端 Hook（refreshLocal 分支）
-  ↓
-src/features/*                                    # 功能模块 UI 渲染
-    ├─ dashboard/PremiumDashboard.tsx            # 主仪表盘（KPI、趋势、分析）
-    ├─ dashboard/TruckAnalysisPanel.tsx          # 营业货车专项分析
-    ├─ sql-query/SqlQueryPage.tsx                # 交互式SQL查询
-    ├─ growth/GrowthAnalysisPanel.tsx            # 增长率对比分析
-    ├─ coefficient/CoefficientMonitorPanel.tsx   # 商车自主定价系数监控
-    ├─ cost/CostAnalysisPanel.tsx                # 成本分析（四子板块）
-    ├─ premium-report/PremiumReportPanel.tsx     # 保费报表
-    └─ marketing-report/MarketingReportPanel.tsx # 营销战报（假日营销）
-```
-
-### Hook 双模式适配（关键实现）
-
-```typescript
-// src/features/dashboard/hooks/useDashboardData.ts
-const { isApiMode, isDataLoaded } = useDataStatus();
-
-const refresh = useCallback(() => {
-  if (isApiMode && isDataLoaded) {
-    refreshApi();   // 调用 apiClient.getKpi() 等方法
-  } else {
-    refreshLocal(); // 调用 duckdbClient.query() 等方法
-  }
-}, [isApiMode, isDataLoaded, refreshApi, refreshLocal]);
 ```
 
 **功能模块清单**（13个模块）：
@@ -585,9 +511,9 @@ const refresh = useCallback(() => {
 
 ```
 第1层：单元测试（bun test）
-  ↓  验证 SQL 生成逻辑语法正确
+  ↓  验证逻辑正确
 第2层：浏览器实测（Chrome DevTools）
-  ↓  验证 DuckDB 实际执行结果
+  ↓  验证 API 请求与响应数据正确
 第3层：用户验收（人工确认）
   ↓  验证功能符合需求
 ```
@@ -599,7 +525,7 @@ const refresh = useCallback(() => {
 | 场景 | 必须执行 |
 |------|----------|
 | 修改 SQL 生成逻辑 | ✅ 单元测试通过 → ✅ **打开 Chrome Console 验证实际执行结果** |
-| SQL 报错 | ✅ 复制完整错误信息 → ✅ 查看 `client.ts:78-95` 字段类型定义 |
+| SQL 报错 | ✅ 复制完整错误信息 → ✅ 查看 `server/src/services/duckdb.ts` 字段类型定义 |
 | 日期时间处理 | ✅ 先 `CAST(field AS DATE)` → ✅ 查看 DuckDB 日期函数文档 |
 | 功能开发完成 | ✅ 截图 Console 输出 → ✅ 记录关键字段实际值 |
 
@@ -648,7 +574,7 @@ const refresh = useCallback(() => {
 **测试数据（真实数据）**：`数据管理/warehouse/fact/policy/` 目录下的最新 `.parquet` 文件
 - 当前最新：`数据管理/warehouse/fact/policy/车险保单综合明细表0127.parquet`
 - 格式：Parquet（必须）
-- 列名：需匹配 `src/shared/normalize/mapping.ts`
+- 列名：需匹配后端 DuckDB 表结构定义
 - 必需字段：`policy_no`, `premium`, `org_name`, `salesman_name`
 
 > ⚠️ **测试时必须使用真实数据**，不要使用 mock 数据或旧的示例文件。
@@ -791,7 +717,7 @@ claude --teleport
 |------|------|
 | **技术架构** | 系统由哪些层组成？数据怎么流动？各模块之间如何协作？ |
 | **代码结构** | 目录为什么长这样？关键文件在哪？某个功能的代码在哪里能找到？ |
-| **技术选择的理由** | 为什么用 DuckDB-WASM 而不是服务器端数据库？为什么用 Arrow IPC 而不是 JSON？ |
+| **技术选择的理由** | 为什么用后端 DuckDB + REST API 架构？为什么用 JWT 认证？ |
 | **血泪教训** | 遇到过哪些 bug？怎么找到根本原因的？哪些坑踩过一次绝不踩第二次？ |
 | **潜在陷阱** | 哪些地方容易出错？新手最可能被哪些设计决策绊倒？ |
 | **新技术沙龙** | 引入了哪些不常见的技术？为什么？怎么学上手？ |
@@ -817,6 +743,7 @@ claude --teleport
 ---
 
 **变更历史**：
+- 2026-02-07：从 chexianYJFX 拆分为 API 版，移除所有 Local/DuckDB-WASM 相关内容
 - 2026-02-04 PM：【血泪教训】新增§1.5双模式架构与启动协议，记录三层状态陷阱（DataContext.isDataLoaded vs duckdbClient.isDataLoaded() vs 组件isInitialized）、正确的数据启用判断模式、防御性编码规范、排查清单；修复PremiumDashboard.tsx/Dashboard.tsx的双模式支持、LineChart.tsx空值防护
 - 2026-02-04 AM：【架构修复】新增§2.6启动与架构验证协议，修复前端Hooks双模式支持（useDashboardData.ts支持API/Local模式自动切换），更新§5数据处理链路文档（添加双模式架构说明、API模式数据链路、Hook双模式适配关键实现），新增`dev:full`统一启动命令
 - 2026-01-20：新增§10 GitHub Actions集成章节（Boris Cherny工作流高级技巧），包含claude-code.yml workflow、@claude标记规范、&符号会话移交、--teleport云端切换、session-start hook配置
