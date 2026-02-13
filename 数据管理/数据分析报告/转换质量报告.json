@@ -1,9 +1,9 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-02-04T11:38:24.952712",
+  "timestamp": "2026-02-13T00:10:51.875751",
   "basic_stats": {
-    "rows": 662834,
-    "columns": 27,
+    "rows": 690074,
+    "columns": 31,
     "column_names": [
       "三级机构",
       "保单号",
@@ -31,19 +31,23 @@
       "案件数",
       "赔款合计",
       "总费用金额",
-      "续保业务类型"
+      "车险分等级",
+      "小货车评分",
+      "大货车评分",
+      "交叉销售标识",
+      "交叉销售保费-驾意"
     ]
   },
   "field_quality": {
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 648730
+      "unique_count": 675423
     },
     "业务员": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 331
+      "unique_count": 332
     },
     "三级机构": {
       "null_count": 0,
@@ -53,12 +57,12 @@
     "签单日期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 748
+      "unique_count": 760
     },
     "保险起期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 841
+      "unique_count": 849
     },
     "险类": {
       "null_count": 0,

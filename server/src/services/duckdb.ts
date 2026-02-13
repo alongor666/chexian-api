@@ -1,14 +1,16 @@
 /**
- * DuckDB 服务
- * DuckDB Service with Connection Pool
+ * DuckDB 服务 (@duckdb/node-api)
  *
- * 提供DuckDB连接管理和查询执行功能
+ * 从 legacy duckdb 包迁移到 @duckdb/node-api (Neo)：
+ * - NAPI 预编译二进制，不依赖 Node.js 版本（18/20/22/25+ 均可）
+ * - Promise 原生支持，无需回调包装
+ * - 已移除 queryArrow（死代码）和 apache-arrow 依赖
  */
 
-import duckdb from 'duckdb';
-import { databaseConfig, DUCKDB_INIT_OPTIONS } from '../config/database.js';
+import { DuckDBInstance } from '@duckdb/node-api';
+import type { DuckDBConnection } from '@duckdb/node-api';
+import { databaseConfig } from '../config/database.js';
 import { AppError } from '../middleware/error.js';
-import { tableFromIPC } from 'apache-arrow';
 import { generateColumnMappingSQL, getColumnMapping } from './column-normalizer.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
 
@@ -16,8 +18,7 @@ import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
  * DuckDB服务类（单例）
  */
 class DuckDBService {
-  private db: duckdb.Database | null = null;
-  private connections: duckdb.Connection[] = [];
+  private instance: DuckDBInstance | null = null;
   private isInitialized = false;
 
   /**
@@ -28,36 +29,24 @@ class DuckDBService {
       return;
     }
 
-    return new Promise((resolve, reject) => {
-      this.db = new duckdb.Database(databaseConfig.path, (err) => {
-        if (err) {
-          reject(new AppError(500, `Failed to initialize DuckDB: ${err.message}`));
-          return;
-        }
-
-        console.log('[DuckDB] Database initialized:', databaseConfig.path);
-        this.isInitialized = true;
-        resolve();
-      });
-    });
+    try {
+      this.instance = await DuckDBInstance.create(databaseConfig.path);
+      console.log('[DuckDB] Database initialized:', databaseConfig.path);
+      this.isInitialized = true;
+    } catch (err: any) {
+      throw new AppError(500, `Failed to initialize DuckDB: ${err.message}`);
+    }
   }
 
   /**
    * 获取数据库连接
    */
-  private async getConnection(): Promise<duckdb.Connection> {
-    if (!this.db) {
+  private async getConnection(): Promise<DuckDBConnection> {
+    if (!this.instance) {
       throw new AppError(500, 'DuckDB not initialized');
     }
 
-    return new Promise((resolve, reject) => {
-      const conn = this.db!.connect();
-      if (!conn) {
-        reject(new AppError(500, 'Failed to create connection'));
-        return;
-      }
-      resolve(conn);
-    });
+    return await this.instance.connect();
   }
 
   /**
@@ -66,22 +55,18 @@ class DuckDBService {
   async query<T = any>(sql: string): Promise<T[]> {
     const conn = await this.getConnection();
 
-    return new Promise((resolve, reject) => {
-      conn.all(sql, (err, result) => {
-        // 关闭连接
-        conn.close();
+    try {
+      const reader = await conn.runAndReadAll(sql);
+      const result = reader.getRowObjects();
 
-        if (err) {
-          console.error('[DuckDB] Query error:', err.message);
-          reject(new AppError(400, `Query failed: ${err.message}`));
-          return;
-        }
-
-        // 转换BigInt为Number（避免JSON序列化错误）
-        const sanitized = this.convertBigIntToNumber(result);
-        resolve(sanitized as T[]);
-      });
-    });
+      // 转换BigInt为Number（避免JSON序列化错误）
+      return this.convertBigIntToNumber(result) as T[];
+    } catch (err: any) {
+      console.error('[DuckDB] Query error:', err.message);
+      throw new AppError(400, `Query failed: ${err.message}`);
+    } finally {
+      conn.closeSync();
+    }
   }
 
   /**
@@ -109,31 +94,6 @@ class DuckDBService {
     }
 
     return data;
-  }
-
-  /**
-   * 执行SQL查询（返回Arrow IPC格式）
-   * 用于大数据量传输，性能更优
-   */
-  async queryArrow(sql: string): Promise<any> {
-    const conn = await this.getConnection();
-
-    return new Promise((resolve, reject) => {
-      conn.arrowIPCAll(sql, (err, result) => {
-        // 关闭连接
-        conn.close();
-
-        if (err) {
-          console.error('[DuckDB] Arrow query error:', err.message);
-          reject(new AppError(400, `Arrow query failed: ${err.message}`));
-          return;
-        }
-
-        // 将Arrow IPC Buffer转换为Table
-        const table = tableFromIPC(result);
-        resolve(table);
-      });
-    });
   }
 
   /**
@@ -217,9 +177,8 @@ class DuckDBService {
    * 关闭数据库连接
    */
   async close(): Promise<void> {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
+    if (this.instance) {
+      this.instance = null;
       this.isInitialized = false;
       console.log('[DuckDB] Database closed');
     }

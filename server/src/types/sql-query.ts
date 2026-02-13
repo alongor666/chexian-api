@@ -4,7 +4,7 @@
  * 用于交互式 SQL 查询功能的 TypeScript 类型
  */
 
-import type { Table } from 'apache-arrow';
+// Apache Arrow dependency removed — query results are now plain JSON objects
 
 /**
  * 查询模板分类
@@ -117,8 +117,8 @@ export type QueryStatus = 'idle' | 'running' | 'success' | 'error';
  * 查询结果数据结构
  */
 export interface QueryResult {
-  /** Arrow Table 数据 */
-  data: Table | null;
+  /** 查询结果数据（JSON 对象数组） */
+  data: Record<string, any>[] | null;
   /** 行数 */
   rowCount: number;
   /** 列数 */

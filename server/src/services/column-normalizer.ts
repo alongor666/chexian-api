@@ -19,6 +19,7 @@ const BOOLEAN_FIELDS = [
   'is_telemarketing',
   'is_commercial_insure',
   'is_quote',
+  'is_cross_sell',
 ];
 
 /**

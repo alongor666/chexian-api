@@ -307,4 +307,8 @@ export interface AdvancedFilterState {
   insurance_type?: boolean | null; // 险类（true=交强险，false=商业保险，null=全部）
   is_commercial_insure?: boolean | null; // 是否交商统保
   is_renewable?: boolean | null; // 是否可续
+
+  // 新增字段筛选
+  insurance_grade?: string[];            // 车险分等级（多选：A/B/C/D/E/F/G/X）
+  is_cross_sell?: boolean | null;        // 交叉销售标识（三态开关）
 }
