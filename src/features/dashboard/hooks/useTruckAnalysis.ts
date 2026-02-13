@@ -5,8 +5,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { useDataStatus } from '../../../shared/contexts/DataContext';
-import { buildWhereClauseFromFilters } from '../../../shared/utils/queryBuilder';
-import { parseWhereClause } from '../../../shared/utils/sql-parser';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { createLogger } from '../../../shared/utils/logger';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { RoseChartDatum } from '../types';
@@ -55,10 +54,10 @@ export function useTruckAnalysis({
   const [error, setError] = useState<string | null>(null);
 
   const fetchFromApi = useCallback(async () => {
-    const whereClause = buildWhereClauseFromFilters(filters);
     const params = {
-      ...parseWhereClause(whereClause),
-      perspective,
+      ...buildFilterParams(filters),
+      queryType: 'all' as const,
+      metric: perspective === 'count' ? 'count' : 'premium',
     };
 
     logger.debug('Fetching truck data from API', params);

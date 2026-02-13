@@ -3,13 +3,15 @@ import { formatPremiumWan } from '../../../shared/utils/formatters';
 import { createLogger } from '../../../shared/utils/logger';
 import { useLoadingStates } from '../../../shared/hooks';
 import { apiClient } from '../../../shared/api/client';
-import { parseWhereClause } from '../../../shared/utils/sql-parser';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
+import { buildWhereClauseFromFilters } from '../../../shared/utils/queryBuilder';
+import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { RoseChartDatum, SalesmanSummaryRow } from '../types';
 
 const logger = createLogger('usePremiumDashboardData');
 
 export interface UsePremiumDashboardDataOptions {
-  whereClause: string;
+  filters: AdvancedFilterState;
   enabled?: boolean;
 }
 
@@ -43,7 +45,7 @@ function buildDimensionShareSql(
 }
 
 export const usePremiumDashboardData = ({
-  whereClause,
+  filters,
   enabled = true,
 }: UsePremiumDashboardDataOptions): UsePremiumDashboardDataResult => {
   const [allBusinessTop10, setAllBusinessTop10] = useState<SalesmanSummaryRow[]>([]);
@@ -61,21 +63,19 @@ export const usePremiumDashboardData = ({
   ] as const);
 
   const refreshFromApi = useCallback(async (requestId: number) => {
-    const params = parseWhereClause(whereClause);
+    const params = buildFilterParams(filters);
 
-    // 表格数据：业务员排名
+    // 表格数据：业务员排名（传递完整筛选参数）
     setLoading('table', true);
     try {
       const [allBusiness, qualityBusiness] = await Promise.all([
         apiClient.getSalesmanRanking(10, {
           rankingType: 'all',
-          startDate: params.startDate,
-          endDate: params.endDate,
+          ...params,
         }),
         apiClient.getSalesmanRanking(10, {
           rankingType: 'quality',
-          startDate: params.startDate,
-          endDate: params.endDate,
+          ...params,
         }),
       ]);
 
@@ -100,7 +100,8 @@ export const usePremiumDashboardData = ({
       }
     }
 
-    // 玫瑰图数据：通过 custom SQL 查询
+    // 玫瑰图数据：通过 custom SQL 查询（使用 buildWhereClauseFromFilters 构建 WHERE）
+    const whereClause = buildWhereClauseFromFilters(filters);
     const roseQueries = [
       { key: 'customerCategory' as const, dim: 'customer_category', setter: setCustomerCategoryData },
       { key: 'coverageCombination' as const, dim: 'coverage_combination', setter: setCoverageCombinationData },
@@ -126,7 +127,7 @@ export const usePremiumDashboardData = ({
         }
       }
     }
-  }, [whereClause, setLoading]);
+  }, [filters, setLoading]);
 
   const refresh = useCallback(() => {
     if (!enabled) return;

@@ -350,15 +350,15 @@ class ApiClient {
   async getGrowthAnalysis(
     startDate: string,
     endDate: string,
-    compareStartDate: string,
-    compareEndDate: string,
+    baselineStart: string,
+    baselineEnd: string,
     filters?: Record<string, any>
   ): Promise<any> {
     const params = new URLSearchParams({
       startDate,
       endDate,
-      compareStartDate,
-      compareEndDate,
+      baselineStart,
+      baselineEnd,
     });
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
@@ -419,6 +419,22 @@ class ApiClient {
   }
 
   /**
+   * 获取车驾意推介率数据
+   */
+  async getCrossSellAnalysis(filters?: Record<string, any>): Promise<any> {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const query = params.toString();
+    return this.request(`/query/cross-sell${query ? `?${query}` : ''}`);
+  }
+
+  /**
    * 获取业务员排名
    */
   async getSalesmanRanking(
@@ -458,6 +474,9 @@ class ApiClient {
     salesmen: string[];
     customerCategories: string[];
     coverageCombinations: string[];
+    insuranceGrades: Array<{ value: string; count: number }>;
+    smallTruckScores: Array<{ value: string; count: number }>;
+    largeTruckScores: Array<{ value: string; count: number }>;
   }> {
     return this.request('/filters/options');
   }

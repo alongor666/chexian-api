@@ -30,6 +30,9 @@ interface AdvancedFilterPanelProps {
     customer_category?: Array<{ value: string; count: number }>;
     coverage_combination?: Array<{ value: string; count: number }>;
     renewal_mode?: Array<{ value: string; count: number }>;
+    insurance_grade?: Array<{ value: string; count: number }>;
+    small_truck_score?: Array<{ value: string; count: number }>;
+    large_truck_score?: Array<{ value: string; count: number }>;
     availableSalesmen?: string[];
   };
   /** 预设配置名称（优先级低于 visibleFields） */
@@ -522,6 +525,31 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                         </button>
                       );
                     })}
+                  </div>
+                </CollapsibleFilterSection>
+              )}
+
+              {showBasicOptions && (
+                <CollapsibleFilterSection id="grade-score-filters" title="等级评分">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <MultiSelectDropdown
+                      title="车险分等级"
+                      options={toMultiSelectOptions(options.insurance_grade || [])}
+                      selectedValues={filters.insurance_grade || []}
+                      onChange={(values) => handleMultiSelectChange('insurance_grade', values)}
+                    />
+                    <MultiSelectDropdown
+                      title="小货车评分"
+                      options={toMultiSelectOptions(options.small_truck_score || [])}
+                      selectedValues={filters.small_truck_score || []}
+                      onChange={(values) => handleMultiSelectChange('small_truck_score', values)}
+                    />
+                    <MultiSelectDropdown
+                      title="大货车评分"
+                      options={toMultiSelectOptions(options.large_truck_score || [])}
+                      selectedValues={filters.large_truck_score || []}
+                      onChange={(values) => handleMultiSelectChange('large_truck_score', values)}
+                    />
                   </div>
                 </CollapsibleFilterSection>
               )}

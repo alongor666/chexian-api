@@ -90,7 +90,37 @@ router.get(
       max_date: string;
     }>(dateRangeSql);
 
-    // 8. 返回筛选器选项（字段名与前端 apiClient.getFilterOptions() 类型对齐）
+    // 8. 查询车险分等级选项
+    const insuranceGradeSql = `
+      SELECT insurance_grade AS value, COUNT(*) AS count
+      FROM PolicyFact
+      WHERE ${permissionWhere} AND insurance_grade IS NOT NULL
+      GROUP BY insurance_grade
+      ORDER BY insurance_grade
+    `;
+    const insuranceGradeResult = await duckdbService.query<{ value: string; count: number }>(insuranceGradeSql);
+
+    // 9. 查询小货车评分选项
+    const smallTruckScoreSql = `
+      SELECT small_truck_score AS value, COUNT(*) AS count
+      FROM PolicyFact
+      WHERE ${permissionWhere} AND small_truck_score IS NOT NULL
+      GROUP BY small_truck_score
+      ORDER BY small_truck_score
+    `;
+    const smallTruckScoreResult = await duckdbService.query<{ value: string; count: number }>(smallTruckScoreSql);
+
+    // 10. 查询大货车评分选项
+    const largeTruckScoreSql = `
+      SELECT large_truck_score AS value, COUNT(*) AS count
+      FROM PolicyFact
+      WHERE ${permissionWhere} AND large_truck_score IS NOT NULL
+      GROUP BY large_truck_score
+      ORDER BY large_truck_score
+    `;
+    const largeTruckScoreResult = await duckdbService.query<{ value: string; count: number }>(largeTruckScoreSql);
+
+    // 11. 返回筛选器选项（字段名与前端 apiClient.getFilterOptions() 类型对齐）
     res.json({
       success: true,
       data: {
@@ -101,6 +131,9 @@ router.get(
         customerCategories: customerResult.map((r) => r.customer_category),
         coverageCombinations: insuranceResult.map((r) => r.coverage_combination),
         dateRange: dateRangeResult[0] || { min_date: null, max_date: null },
+        insuranceGrades: insuranceGradeResult.map((r) => ({ value: String(r.value), count: Number(r.count) })),
+        smallTruckScores: smallTruckScoreResult.map((r) => ({ value: String(r.value), count: Number(r.count) })),
+        largeTruckScores: largeTruckScoreResult.map((r) => ({ value: String(r.value), count: Number(r.count) })),
       },
     });
   })

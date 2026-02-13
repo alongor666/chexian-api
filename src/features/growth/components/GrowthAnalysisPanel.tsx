@@ -16,7 +16,7 @@ import { GrowthMonthTabs } from './GrowthMonthTabs';
 import { GrowthComparisonSection } from './GrowthComparisonSection';
 import { GrowthDetailSection } from './GrowthDetailSection';
 import { formatPercent1, getSafeDateStr } from '../utils/format';
-import { buildWhereClauseFromFilters } from '../../../shared/utils/queryBuilder';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
 
 interface GrowthAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -27,9 +27,9 @@ interface GrowthAnalysisPanelProps {
  *
  * 集成到现有Dashboard中，提供多维度增长率分析
  *
- * 重构说明（2026-01-29）：
- * - 使用 buildWhereClauseFromFilters 构建筛选条件
- * - 支持完整筛选器：客户类别、险别组合、续保模式、基本选项等
+ * 重构说明（2026-02-13）：
+ * - 使用 buildFilterParams 构建 API 查询参数（替代有损的 WHERE 字符串转换）
+ * - 支持完整筛选器：客户类别、险别组合、续保模式、评分字段、基本选项等
  * - 与仪表盘筛选器完全对齐
  */
 export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
@@ -57,15 +57,15 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
   const unitLabel = isPremiumPerspective ? '万' : '件';
 
   /**
-   * 构建附加筛选条件
+   * 构建附加筛选参数
    *
-   * 使用 buildWhereClauseFromFilters 生成完整的 WHERE 条件，
+   * 使用 buildFilterParams 生成后端 API 查询参数，
    * 但排除机构和业务员（因为它们在各函数中单独处理），
    * 以及日期范围（因为增长分析使用独立的日期逻辑）。
    */
-  const additionalWhereClause = useMemo(() => {
+  const additionalFilterParams = useMemo(() => {
     // 创建一个不包含机构/业务员/日期的筛选器副本
-    const filtersForWhere: AdvancedFilterState = {
+    const filtersForParams: AdvancedFilterState = {
       // 保留客户类别、险别组合、续保模式
       customer_category: filters.customer_category,
       coverage_combination: filters.coverage_combination,
@@ -78,13 +78,16 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
       is_telemarketing: filters.is_telemarketing,
       is_commercial_insure: filters.is_commercial_insure,
       is_renewable: filters.is_renewable,
-      // 保留险类筛选
-      insurance_type: filters.insurance_type,
+      is_cross_sell: filters.is_cross_sell,
+      // 保留新增评分字段
+      insurance_grade: filters.insurance_grade,
+      small_truck_score: filters.small_truck_score,
+      large_truck_score: filters.large_truck_score,
       // 不传入日期相关字段（增长分析有独立的日期逻辑）
       // 不传入机构/业务员（在各函数中单独处理）
     };
 
-    return buildWhereClauseFromFilters(filtersForWhere);
+    return buildFilterParams(filtersForParams);
   }, [
     filters.customer_category,
     filters.coverage_combination,
@@ -96,7 +99,10 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
     filters.is_telemarketing,
     filters.is_commercial_insure,
     filters.is_renewable,
-    filters.insurance_type,
+    filters.is_cross_sell,
+    filters.insurance_grade,
+    filters.small_truck_score,
+    filters.large_truck_score,
   ]);
 
   /**
@@ -140,27 +146,19 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
     if (!comparisonPeriods) return;
 
     const performComparison = async () => {
-      // 构建机构条件
-      const orgClause = filters.org_level_3?.length
-        ? `org_level_3 IN (${filters.org_level_3.map(o => `'${o}'`).join(',')})`
-        : '';
-
-      // 合并机构条件和附加筛选条件
-      const conditions: string[] = [];
-      if (orgClause) conditions.push(orgClause);
-      if (additionalWhereClause && additionalWhereClause !== '1=1') {
-        const cleanedClause = additionalWhereClause.replace(/^1=1\s+AND\s+/i, '');
-        if (cleanedClause && cleanedClause !== '1=1') {
-          conditions.push(cleanedClause);
-        }
+      // 构建筛选参数：合并机构筛选和附加筛选参数
+      const comparisonFilterParams: Record<string, string> = {
+        ...additionalFilterParams,
+      };
+      if (filters.org_level_3?.length) {
+        comparisonFilterParams.orgNames = filters.org_level_3.join(',');
       }
-      const whereClause = conditions.length > 0 ? conditions.join(' AND ') : '1=1';
 
       const result = await analyzeDualMetricComparison(
         comparisonPeriods.current,
         comparisonPeriods.previous,
         [comparisonGroupBy],
-        whereClause
+        comparisonFilterParams
       );
 
       if (result.success) {
@@ -169,7 +167,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
     };
 
     performComparison();
-  }, [analysisType, comparisonPeriods, comparisonGroupBy, filters.org_level_3, additionalWhereClause, analyzeDualMetricComparison]);
+  }, [analysisType, comparisonPeriods, comparisonGroupBy, filters.org_level_3, additionalFilterParams, analyzeDualMetricComparison]);
 
   // 初始化对比期间（首次切换到对比分析时）
   useEffect(() => {
@@ -200,18 +198,18 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
         await analyzeDailyGrowthDetail(start, end, {
           orgLevel3: filters.org_level_3,
           perspective,
-          additionalWhereClause,
+          additionalFilterParams,
         });
         return;
       }
 
       switch (analysisType) {
         case 'org':
-          await analyzeOrgPremiumGrowth(orgLevel3, growthType, timeView, perspective, additionalWhereClause);
+          await analyzeOrgPremiumGrowth(orgLevel3, growthType, timeView, perspective, additionalFilterParams);
           break;
         case 'salesman':
           if (salesmanName) {
-            await analyzeSalesmanGrowth(salesmanName, growthType, perspective, additionalWhereClause);
+            await analyzeSalesmanGrowth(salesmanName, growthType, perspective, additionalFilterParams);
           }
           break;
         case 'kpi':
@@ -220,7 +218,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
             '(COUNT(CASE WHEN is_renewal THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0)) AS renewal_rate',
             growthType,
             orgLevel3 ? ['salesman_name'] : ['org_level_3'],
-            additionalWhereClause
+            additionalFilterParams
           );
           break;
       }
@@ -236,7 +234,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
     filters.analysis_year,
     filters.org_level_3,
     perspective,
-    additionalWhereClause,
+    additionalFilterParams,
     analyzeOrgPremiumGrowth,
     analyzeSalesmanGrowth,
     analyzeKPIGrowth,

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { AdvancedFilterPanel } from '../filters/AdvancedFilterPanel';
-import { buildWhereClauseFromFilters } from '../../shared/utils/queryBuilder';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../shared/utils/export';
 import { PdfExportService } from '../../services/PdfExportService';
 import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
@@ -70,16 +69,6 @@ export const PremiumDashboard: React.FC = () => {
     loadDataMetadata,
   } = useFilterState();
 
-  // Build WHERE clause from filters
-  const buildWhereClause = useCallback(() => {
-    try {
-      return buildWhereClauseFromFilters(filters);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return '1=0';
-    }
-  }, [filters]);
-
   // KPI 数据获取
   const {
     kpiData: kpis,
@@ -88,7 +77,7 @@ export const PremiumDashboard: React.FC = () => {
     error: kpiError,
     refresh: refreshKpi,
   } = useKpiData({
-    whereClause: buildWhereClause(),
+    filters,
     enabled: true,
   });
 
@@ -100,7 +89,7 @@ export const PremiumDashboard: React.FC = () => {
     qualityBusinessLoading,
     error: trendError,
   } = useTrendData({
-    whereClause: buildWhereClause(),
+    filters,
     timeView,
     hasOrgFilter: (filters.org_level_3?.length ?? 0) > 0,
     enabled: isInitialized,
@@ -117,7 +106,7 @@ export const PremiumDashboard: React.FC = () => {
     loading,
     refresh: refreshData,
   } = usePremiumDashboardData({
-    whereClause: buildWhereClause(),
+    filters,
     enabled: isInitialized,
   });
 
