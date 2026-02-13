@@ -34,7 +34,7 @@ import { generateGrowthQuery, GrowthConfig, GrowthType, TimeView as GrowthTimeVi
 import { generateCoefficientByOrgQuery, generateFullCoefficientQuery } from '../sql/coefficient.js';
 import { generateClaimRatioQuery, generateExpenseRatioQuery, generateComprehensiveCostQuery, generateVariableCostQuery, CostDimension } from '../sql/cost.js';
 import { generateRenewalRateQuery, generateRenewalDetailTableQuery } from '../sql/renewal.js';
-import { generateCrossSellQuery, type CrossSellDimension } from '../sql/cross-sell.js';
+import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../sql/cross-sell.js';
 import type { AdvancedFilterState } from '../types/data.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../sql/salesman-ranking.js';
 import { validateSQL } from '../utils/sql-validator.js';
@@ -561,18 +561,24 @@ router.get(
 );
 
 /**
- * 车驾意推介率请求验证Schema（特有参数）
+ * 车驾意推介率请求验证Schema（层层下钻）
+ *
+ * drillPath: JSON 数组，如 [{"dimension":"org_level_3","value":"天府"}]
+ * groupBy: 当前分组维度（不传则仅返回汇总）
  */
+const CROSS_SELL_DIMENSIONS = [
+  'org_level_3', 'team', 'salesman', 'customer_category',
+  'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
+] as const;
+
 const crossSellExtraSchema = z.object({
-  dimension: z.enum([
-    'summary', 'org_level_3', 'team', 'salesman', 'customer_category',
-    'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
-  ]).default('summary'),
+  drillPath: z.string().optional().default('[]'),
+  groupBy: z.enum(CROSS_SELL_DIMENSIONS).optional(),
 });
 
 /**
  * GET /api/query/cross-sell
- * 车驾意推介率分析
+ * 车驾意推介率分析（层层下钻）
  */
 router.get(
   '/cross-sell',
@@ -581,7 +587,22 @@ router.get(
     if (!crossSellResult.success) {
       throw new AppError(400, crossSellResult.error.issues[0].message);
     }
-    const { dimension } = crossSellResult.data;
+
+    // 解析下钻路径
+    let drillPath: DrilldownStep[] = [];
+    try {
+      const parsed = JSON.parse(crossSellResult.data.drillPath);
+      if (Array.isArray(parsed)) {
+        drillPath = parsed.map((s: any) => ({
+          dimension: String(s.dimension) as CrossSellDimension,
+          value: String(s.value),
+        }));
+      }
+    } catch {
+      throw new AppError(400, 'Invalid drillPath JSON');
+    }
+
+    const groupBy = crossSellResult.data.groupBy as CrossSellDimension | undefined;
 
     const filterResult = commonFilterSchema.safeParse(req.query);
     if (!filterResult.success) {
@@ -593,11 +614,12 @@ router.get(
       req.permissionFilter || '1=1'
     );
 
-    // 始终查询汇总行 + 维度下钻行
+    // 始终查询汇总行（应用 drillPath 过滤的汇总）
+    // 如果有 groupBy，同时查询分组数据
     const [summaryResult, drilldownResult] = await Promise.all([
-      duckdbService.query(generateCrossSellQuery(finalWhereClause, 'summary')),
-      dimension !== 'summary'
-        ? duckdbService.query(generateCrossSellQuery(finalWhereClause, dimension as CrossSellDimension))
+      duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, null)),
+      groupBy
+        ? duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, groupBy))
         : Promise.resolve([]),
     ]);
 
@@ -606,7 +628,8 @@ router.get(
       data: {
         summary: summaryResult[0] || null,
         rows: drilldownResult,
-        dimension,
+        drillPath,
+        groupBy: groupBy || null,
       },
     });
   })

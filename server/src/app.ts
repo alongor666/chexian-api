@@ -120,6 +120,14 @@ async function startServer() {
       const rowCount = countResult[0]?.count || 0;
       console.log(`[Server] PolicyFact row count: ${rowCount}`);
 
+      // 加载团队映射表（业务员 → 团队归属）
+      const teamMappingPath = path.resolve(__dirname, '../../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
+      try {
+        await duckdbService.loadTeamMapping(teamMappingPath);
+      } catch (err) {
+        console.warn('[Server] Warning: Failed to load team mapping:', err);
+      }
+
       // 注册当前数据文件（使 /api/data/files 返回 isCurrent: true）
       if (dataFile) {
         setCurrentDataFile({

@@ -1,9 +1,15 @@
 /**
- * 车驾意推介率 SQL 生成器
- * Cross-Sell Recommendation Rate SQL Generator
+ * 车驾意推介率 SQL 生成器（层层下钻版）
+ * Cross-Sell Recommendation Rate SQL Generator (Hierarchical Drilldown)
  *
- * 第一层：四川分公司汇总（单行）
- * 下钻维度（可选）：三级机构、销售团队、业务员、客户类别、是否新车、是否过户、是否新能源、是否电销、是否续保
+ * 支持层层下钻：
+ * Level 0: 四川分公司汇总（单行）
+ * Level N: 用户选择维度 → 按该维度分组，同时应用之前所有层级的过滤条件
+ *
+ * 下钻路径示例：
+ *   [] + groupBy=null                           → 公司汇总
+ *   [] + groupBy=org_level_3                     → 按三级机构分组
+ *   [{dim: org_level_3, val: '天府'}] + groupBy=is_new_car → 筛选天府，按新车分组
  */
 
 import { logger } from '../utils/logger.js';
@@ -12,141 +18,190 @@ import { logger } from '../utils/logger.js';
  * 支持的下钻维度
  */
 export type CrossSellDimension =
-  | 'summary'          // 公司汇总（第一层，单行）
-  | 'org_level_3'      // 三级机构
-  | 'team'             // 销售团队（需 JOIN SalesmanPlanFact）
-  | 'salesman'         // 业务员
-  | 'customer_category'// 客户类别
-  | 'is_new_car'       // 是否新车
-  | 'is_transfer'      // 是否过户
-  | 'is_nev'           // 是否新能源
-  | 'is_telemarketing' // 是否电销
-  | 'is_renewal';      // 是否续保
+  | 'org_level_3'       // 三级机构
+  | 'team'              // 销售团队（JOIN SalesmanTeamMapping）
+  | 'salesman'          // 业务员
+  | 'customer_category' // 客户类别
+  | 'is_new_car'        // 是否新车
+  | 'is_transfer'       // 是否过户
+  | 'is_nev'            // 是否新能源
+  | 'is_telemarketing'  // 是否电销
+  | 'is_renewal';       // 是否续保
 
 /**
- * 维度 → SQL 字段映射
+ * 下钻路径中的一步
  */
-function getDimensionConfig(dimension: CrossSellDimension): {
-  groupByExpr: string;    // GROUP BY 表达式
-  selectExpr: string;     // SELECT 中的 AS group_name
-  needsTeamJoin: boolean; // 是否需要 JOIN SalesmanPlanFact
+export interface DrilldownStep {
+  dimension: CrossSellDimension;
+  value: string; // 显示值（如 '天府', '新车', '电销'）
+}
+
+/**
+ * 维度中文标签（用于前端展示）
+ */
+export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
+  org_level_3: '三级机构',
+  team: '销售团队',
+  salesman: '业务员',
+  customer_category: '客户类别',
+  is_new_car: '是否新车',
+  is_transfer: '是否过户',
+  is_nev: '是否新能源',
+  is_telemarketing: '是否电销',
+  is_renewal: '是否续保',
+};
+
+// ============================================================
+// 维度 → SQL 映射
+// ============================================================
+
+/** 布尔维度的中文显示值 → SQL 条件映射 */
+const BOOLEAN_DIM_MAP: Record<string, { field: string; trueLabel: string; falseLabel: string }> = {
+  is_new_car: { field: 'is_new_car', trueLabel: '新车', falseLabel: '旧车' },
+  is_transfer: { field: 'is_transfer', trueLabel: '过户车', falseLabel: '非过户车' },
+  is_nev: { field: 'is_nev', trueLabel: '新能源', falseLabel: '非新能源' },
+  is_telemarketing: { field: 'is_telemarketing', trueLabel: '电销', falseLabel: '非电销' },
+  is_renewal: { field: 'is_renewal', trueLabel: '续保', falseLabel: '新保' },
+};
+
+/**
+ * 将下钻路径中的一步转为 WHERE 条件
+ */
+function drillStepToWhere(step: DrilldownStep, colPrefix: string): string {
+  const esc = (s: string) => s.replace(/'/g, "''");
+
+  // 布尔维度：中文显示值 → boolean
+  const boolDef = BOOLEAN_DIM_MAP[step.dimension];
+  if (boolDef) {
+    const boolVal = step.value === boolDef.trueLabel ? 'true' : 'false';
+    return `${colPrefix}${boolDef.field} = ${boolVal}`;
+  }
+
+  // 字符串维度
+  switch (step.dimension) {
+    case 'org_level_3':
+      return `${colPrefix}org_level_3 = '${esc(step.value)}'`;
+    case 'team':
+      // team 过滤在 JOIN 后的 WHERE 中处理
+      return `tm.team_name = '${esc(step.value)}'`;
+    case 'salesman':
+      // salesman 的 group_name 是去掉工号的名字，所以用 LIKE 匹配
+      return `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') = '${esc(step.value)}'`;
+    case 'customer_category':
+      return `COALESCE(${colPrefix}customer_category, '未知') = '${esc(step.value)}'`;
+    default:
+      return '1=1';
+  }
+}
+
+/**
+ * 获取维度的 GROUP BY 和 SELECT 表达式
+ */
+function getGroupByConfig(dimension: CrossSellDimension, colPrefix: string): {
+  selectExpr: string;
+  groupByExpr: string;
 } {
+  const boolDef = BOOLEAN_DIM_MAP[dimension];
+  if (boolDef) {
+    return {
+      selectExpr: `CASE WHEN ${colPrefix}${boolDef.field} = true THEN '${boolDef.trueLabel}' ELSE '${boolDef.falseLabel}' END AS group_name`,
+      groupByExpr: `${colPrefix}${boolDef.field}`,
+    };
+  }
+
   switch (dimension) {
-    case 'summary':
-      return {
-        selectExpr: "'四川分公司' AS group_name",
-        groupByExpr: "'四川分公司'",
-        needsTeamJoin: false,
-      };
     case 'org_level_3':
       return {
-        selectExpr: 'org_level_3 AS group_name',
-        groupByExpr: 'org_level_3',
-        needsTeamJoin: false,
+        selectExpr: `${colPrefix}org_level_3 AS group_name`,
+        groupByExpr: `${colPrefix}org_level_3`,
       };
     case 'team':
       return {
-        selectExpr: "COALESCE(t.team_name, '未归属团队') AS group_name",
-        groupByExpr: "COALESCE(t.team_name, '未归属团队')",
-        needsTeamJoin: true,
+        selectExpr: "COALESCE(tm.team_name, '未归属团队') AS group_name",
+        groupByExpr: "COALESCE(tm.team_name, '未归属团队')",
       };
     case 'salesman':
       return {
-        selectExpr: "REGEXP_REPLACE(salesman_name, '^[0-9]+', '') AS group_name",
-        groupByExpr: 'salesman_name',
-        needsTeamJoin: false,
+        selectExpr: `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') AS group_name`,
+        groupByExpr: `${colPrefix}salesman_name`,
       };
     case 'customer_category':
       return {
-        selectExpr: "COALESCE(customer_category, '未知') AS group_name",
-        groupByExpr: "COALESCE(customer_category, '未知')",
-        needsTeamJoin: false,
-      };
-    case 'is_new_car':
-      return {
-        selectExpr: "CASE WHEN is_new_car = true THEN '新车' ELSE '旧车' END AS group_name",
-        groupByExpr: 'is_new_car',
-        needsTeamJoin: false,
-      };
-    case 'is_transfer':
-      return {
-        selectExpr: "CASE WHEN is_transfer = true THEN '过户车' ELSE '非过户车' END AS group_name",
-        groupByExpr: 'is_transfer',
-        needsTeamJoin: false,
-      };
-    case 'is_nev':
-      return {
-        selectExpr: "CASE WHEN is_nev = true THEN '新能源' ELSE '非新能源' END AS group_name",
-        groupByExpr: 'is_nev',
-        needsTeamJoin: false,
-      };
-    case 'is_telemarketing':
-      return {
-        selectExpr: "CASE WHEN is_telemarketing = true THEN '电销' ELSE '非电销' END AS group_name",
-        groupByExpr: 'is_telemarketing',
-        needsTeamJoin: false,
-      };
-    case 'is_renewal':
-      return {
-        selectExpr: "CASE WHEN is_renewal = true THEN '续保' ELSE '新保' END AS group_name",
-        groupByExpr: 'is_renewal',
-        needsTeamJoin: false,
+        selectExpr: `COALESCE(${colPrefix}customer_category, '未知') AS group_name`,
+        groupByExpr: `COALESCE(${colPrefix}customer_category, '未知')`,
       };
     default:
       return {
-        selectExpr: 'org_level_3 AS group_name',
-        groupByExpr: 'org_level_3',
-        needsTeamJoin: false,
+        selectExpr: `${colPrefix}org_level_3 AS group_name`,
+        groupByExpr: `${colPrefix}org_level_3`,
       };
   }
 }
 
 /**
+ * 判断是否需要 JOIN SalesmanTeamMapping
+ */
+function needsTeamJoin(drillPath: DrilldownStep[], groupBy: CrossSellDimension | null): boolean {
+  if (groupBy === 'team') return true;
+  return drillPath.some(s => s.dimension === 'team');
+}
+
+// ============================================================
+// 主查询生成
+// ============================================================
+
+/**
  * 生成车驾意推介率查询
  *
- * @param whereClause - 已构建的 WHERE 子句（含权限过滤）
- * @param dimension - 下钻维度
+ * @param baseWhereClause - 基础 WHERE 子句（来自筛选器 + 权限过滤）
+ * @param drillPath - 下钻路径（维度+值数组，每步添加一个 WHERE 过滤）
+ * @param groupBy - 当前分组维度（null 则仅返回汇总行）
  * @returns SQL 查询字符串
  */
 export function generateCrossSellQuery(
-  whereClause: string,
-  dimension: CrossSellDimension = 'summary'
+  baseWhereClause: string,
+  drillPath: DrilldownStep[] = [],
+  groupBy: CrossSellDimension | null = null
 ): string {
-  logger.debug('Generating cross-sell query', { whereClause, dimension });
+  logger.debug('Generating cross-sell query', { baseWhereClause, drillPath, groupBy });
 
-  const config = getDimensionConfig(dimension);
-  const tableAlias = config.needsTeamJoin ? 'p' : '';
-  const tableRef = config.needsTeamJoin ? 'PolicyFact p' : 'PolicyFact';
-  const colPrefix = config.needsTeamJoin ? 'p.' : '';
-
-  // 团队维度需要 LEFT JOIN SalesmanPlanFact 获取 team_name
-  const teamJoin = config.needsTeamJoin
-    ? `LEFT JOIN (
-        SELECT DISTINCT salesman_name, team_name
-        FROM SalesmanPlanFact
-        WHERE plan_year = YEAR(CURRENT_DATE)
-      ) t ON p.salesman_name = t.salesman_name`
+  const useJoin = needsTeamJoin(drillPath, groupBy);
+  const colPrefix = useJoin ? 'p.' : '';
+  const tableRef = useJoin ? 'PolicyFact p' : 'PolicyFact';
+  const teamJoin = useJoin
+    ? `LEFT JOIN SalesmanTeamMapping tm ON ${colPrefix}salesman_name = tm.full_name`
     : '';
+
+  // 构建 WHERE：基础条件 + 下钻路径的每一步过滤
+  const whereParts = [baseWhereClause];
+  for (const step of drillPath) {
+    whereParts.push(drillStepToWhere(step, colPrefix));
+  }
+  const fullWhere = whereParts.join('\n      AND ');
+
+  // 汇总查询（无 GROUP BY）
+  if (!groupBy) {
+    return generateSummaryOnly(tableRef, teamJoin, fullWhere, colPrefix);
+  }
+
+  // 分组查询
+  const config = getGroupByConfig(groupBy, colPrefix);
 
   const sql = `
     WITH cross_sell_base AS (
       SELECT
         ${config.selectExpr},
-        -- 总计
         COUNT(DISTINCT ${colPrefix}policy_no) AS total_auto_count,
         COUNT(DISTINCT CASE WHEN ${colPrefix}is_cross_sell = true THEN ${colPrefix}policy_no END) AS total_driver_count,
-        -- 单交
         COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}policy_no END) AS danjiao_auto_count,
         COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '单交' AND ${colPrefix}is_cross_sell = true THEN ${colPrefix}policy_no END) AS danjiao_driver_count,
-        -- 交三
         COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${colPrefix}policy_no END) AS jiaosan_auto_count,
         COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '交三' AND ${colPrefix}is_cross_sell = true THEN ${colPrefix}policy_no END) AS jiaosan_driver_count,
-        -- 主全
         COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '主全' THEN ${colPrefix}policy_no END) AS zhuquan_auto_count,
         COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '主全' AND ${colPrefix}is_cross_sell = true THEN ${colPrefix}policy_no END) AS zhuquan_driver_count
       FROM ${tableRef}
       ${teamJoin}
-      WHERE ${whereClause}
+      WHERE ${fullWhere}
       GROUP BY ${config.groupByExpr}
       HAVING COUNT(DISTINCT ${colPrefix}policy_no) > 0
     )
@@ -154,25 +209,21 @@ export function generateCrossSellQuery(
       group_name,
       total_auto_count,
       total_driver_count,
-      -- 单交
       danjiao_auto_count,
       danjiao_driver_count,
       CASE WHEN danjiao_auto_count = 0 THEN 0
         ELSE ROUND(danjiao_driver_count * 100.0 / danjiao_auto_count, 2)
       END AS danjiao_rate,
-      -- 交三
       jiaosan_auto_count,
       jiaosan_driver_count,
       CASE WHEN jiaosan_auto_count = 0 THEN 0
         ELSE ROUND(jiaosan_driver_count * 100.0 / jiaosan_auto_count, 2)
       END AS jiaosan_rate,
-      -- 主全
       zhuquan_auto_count,
       zhuquan_driver_count,
       CASE WHEN zhuquan_auto_count = 0 THEN 0
         ELSE ROUND(zhuquan_driver_count * 100.0 / zhuquan_auto_count, 2)
       END AS zhuquan_rate,
-      -- 总推介率
       CASE WHEN total_auto_count = 0 THEN 0
         ELSE ROUND(total_driver_count * 100.0 / total_auto_count, 2)
       END AS total_rate
@@ -180,6 +231,57 @@ export function generateCrossSellQuery(
     ORDER BY total_auto_count DESC
   `;
 
-  logger.debug('Generated cross-sell SQL', { sqlLength: sql.length });
+  logger.debug('Generated cross-sell drilldown SQL', { sqlLength: sql.length });
   return sql;
+}
+
+/**
+ * 生成汇总查询（仅一行，四川分公司汇总）
+ */
+function generateSummaryOnly(
+  tableRef: string,
+  teamJoin: string,
+  fullWhere: string,
+  colPrefix: string
+): string {
+  return `
+    WITH summary AS (
+      SELECT
+        '四川分公司' AS group_name,
+        COUNT(DISTINCT ${colPrefix}policy_no) AS total_auto_count,
+        COUNT(DISTINCT CASE WHEN ${colPrefix}is_cross_sell = true THEN ${colPrefix}policy_no END) AS total_driver_count,
+        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}policy_no END) AS danjiao_auto_count,
+        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '单交' AND ${colPrefix}is_cross_sell = true THEN ${colPrefix}policy_no END) AS danjiao_driver_count,
+        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${colPrefix}policy_no END) AS jiaosan_auto_count,
+        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '交三' AND ${colPrefix}is_cross_sell = true THEN ${colPrefix}policy_no END) AS jiaosan_driver_count,
+        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '主全' THEN ${colPrefix}policy_no END) AS zhuquan_auto_count,
+        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '主全' AND ${colPrefix}is_cross_sell = true THEN ${colPrefix}policy_no END) AS zhuquan_driver_count
+      FROM ${tableRef}
+      ${teamJoin}
+      WHERE ${fullWhere}
+    )
+    SELECT
+      group_name,
+      total_auto_count,
+      total_driver_count,
+      danjiao_auto_count,
+      danjiao_driver_count,
+      CASE WHEN danjiao_auto_count = 0 THEN 0
+        ELSE ROUND(danjiao_driver_count * 100.0 / danjiao_auto_count, 2)
+      END AS danjiao_rate,
+      jiaosan_auto_count,
+      jiaosan_driver_count,
+      CASE WHEN jiaosan_auto_count = 0 THEN 0
+        ELSE ROUND(jiaosan_driver_count * 100.0 / jiaosan_auto_count, 2)
+      END AS jiaosan_rate,
+      zhuquan_auto_count,
+      zhuquan_driver_count,
+      CASE WHEN zhuquan_auto_count = 0 THEN 0
+        ELSE ROUND(zhuquan_driver_count * 100.0 / zhuquan_auto_count, 2)
+      END AS zhuquan_rate,
+      CASE WHEN total_auto_count = 0 THEN 0
+        ELSE ROUND(total_driver_count * 100.0 / total_auto_count, 2)
+      END AS total_rate
+    FROM summary
+  `;
 }

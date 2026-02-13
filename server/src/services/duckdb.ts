@@ -191,6 +191,52 @@ class DuckDBService {
   }
 
   /**
+   * 加载团队映射 JSON 到 SalesmanTeamMapping 表
+   *
+   * 数据源：数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json
+   * 字段：business_no, salesman_name, full_name, team_name, organization, car_insurance_plan_2026
+   * JOIN 键：full_name = PolicyFact.salesman_name（含工号前缀）
+   */
+  async loadTeamMapping(jsonFilePath: string): Promise<void> {
+    const fs = (await import('fs')).default;
+
+    let data: any;
+    try {
+      data = JSON.parse(fs.readFileSync(jsonFilePath, 'utf-8'));
+    } catch (err: any) {
+      console.warn(`[DuckDB] Failed to read team mapping: ${err.message}`);
+      return;
+    }
+
+    const rows: any[] = data.salesman_mapping || [];
+    if (rows.length === 0) {
+      console.warn('[DuckDB] No team mapping data found');
+      return;
+    }
+
+    // 创建表
+    await this.query(`
+      CREATE OR REPLACE TABLE SalesmanTeamMapping (
+        business_no VARCHAR,
+        salesman_name VARCHAR,
+        full_name VARCHAR,
+        team_name VARCHAR,
+        organization VARCHAR,
+        car_insurance_plan_2026 DOUBLE
+      )
+    `);
+
+    // 批量 INSERT（单条 SQL，234 行足够安全）
+    const values = rows.map(r => {
+      const esc = (s: any) => String(s ?? '').replace(/'/g, "''");
+      return `('${esc(r.business_no)}', '${esc(r.salesman_name)}', '${esc(r.full_name)}', '${esc(r.team)}', '${esc(r.organization)}', ${Number(r.car_insurance_plan_2026) || 0})`;
+    }).join(',\n      ');
+
+    await this.query(`INSERT INTO SalesmanTeamMapping VALUES\n      ${values}`);
+    console.log(`[DuckDB] Team mapping loaded: ${rows.length} records, from ${jsonFilePath}`);
+  }
+
+  /**
    * 关闭数据库连接
    */
   async close(): Promise<void> {
