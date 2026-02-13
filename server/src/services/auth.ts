@@ -29,14 +29,12 @@ export interface UserCredential {
 const PRESET_USERS: Record<string, UserCredential> = {
   admin: {
     username: 'admin',
-    // 密码: admin123
     passwordHash: '$2b$10$.CXzhMzuka22ctqHFH/NKujm47a.po0mkwnEtvDKjNwlhk2.GPFFG',
     displayName: '系统管理员',
     role: 'branch_admin',
   },
   leshan: {
     username: 'leshan',
-    // 密码: leshan123
     passwordHash: '$2b$10$nVy5XUAxWGlzmhM3uNqxNuaYEE6oMp/za3ZaAtu1pZIpQ7498mINS',
     displayName: '乐山中支',
     role: 'org_user',
@@ -44,7 +42,6 @@ const PRESET_USERS: Record<string, UserCredential> = {
   },
   tianfu: {
     username: 'tianfu',
-    // 密码: tianfu123
     passwordHash: '$2b$10$OvjvsuVRf2uNOyny2Pemf.6qMIkMGoo/2RDYSYYg/YOgxtmFYeJNO',
     displayName: '天府新区',
     role: 'org_user',

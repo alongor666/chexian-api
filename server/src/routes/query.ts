@@ -395,7 +395,7 @@ router.get(
  */
 const coefficientQuerySchema = z.object({
   queryType: z.enum(['byOrg', 'full']).default('byOrg'),
-  dateField: z.string().default('policy_date'),
+  dateField: z.enum(['policy_date', 'insurance_start_date']).default('policy_date'),
   startDate: z.string(),
   endDate: z.string(),
 });

@@ -59,7 +59,7 @@
 - 禁止硬编码日期口径（签单日期/起保日期必须通过状态管理）
 - 所有报表/查询必须提供三要素选择器，缺一不可
 
-### 三大索引（5分钟快速定位）
+### 核心索引（5分钟快速定位）
 1. **文档索引**: [开发文档/00_index/DOC_INDEX.md](./开发文档/00_index/DOC_INDEX.md) - 业务规则、架构文档、指标口径
 2. **代码索引**: [开发文档/00_index/CODE_INDEX.md](./开发文档/00_index/CODE_INDEX.md) - 核心模块、关键文件、禁止修改区域
 3. **数据索引**: [开发文档/00_index/DATA_INDEX.md](./开发文档/00_index/DATA_INDEX.md) - ⭐ 字段定义、业务规则、分析场景
@@ -324,7 +324,7 @@ import { formatCount, formatAverage, formatPercent, formatPremiumWan } from '@/s
 bun run dev:full
 
 # 或分别启动：
-cd server && npm run dev &    # 启动后端（端口 3000）
+cd server && bun run dev &    # 启动后端（端口 3000）
 bun run dev                   # 启动前端（端口 5173）
 ```
 
@@ -351,10 +351,11 @@ bun run dev                   # 启动前端（端口 5173）
 
 | 端点类别 | 路径前缀 | 说明 |
 |---------|----------|------|
-| 查询 API | `/api/query/*` | KPI、趋势、排名、自定义查询 |
+| 查询 API | `/api/query/*` | KPI、趋势、排名、成本、系数、续保、自定义查询 |
 | 数据管理 | `/api/data/*` | 文件上传、列表、加载 |
 | AI 助手 | `/api/ai/*` | NL2SQL、智能分析 |
 | 认证 | `/api/auth/*` | 登录、注册、Token 刷新 |
+| 筛选器 | `/api/filters/*` | 筛选器选项（机构/业务员/险别等） |
 
 ### 违规判定与处理
 
@@ -451,9 +452,23 @@ src/shared/api/client.ts                          # API 客户端
   ├─ getKpi(filters)                              # /api/query/kpi
   ├─ getSalesmanRanking(limit, filters)           # /api/query/salesman-ranking
   ├─ getTrend(granularity, filters)               # /api/query/trend
-  └─ executeCustomQuery(sql)                      # /api/query/custom
+  ├─ executeCustomQuery(sql)                      # /api/query/custom
+  └─ ...                                          # /api/query/cost, /coefficient, /renewal 等
   ↓
-server/src/routes/query.ts                        # 后端 API 路由
+server/src/routes/                                # 后端 API 路由
+  ├─ query.ts                                     # 查询路由
+  ├─ data.ts                                      # 数据管理路由
+  ├─ auth.ts                                      # 认证路由
+  ├─ ai.ts                                        # AI/NL2SQL 路由
+  └─ filters.ts                                   # 筛选器选项路由
+  ↓
+server/src/sql/                                   # SQL 生成器（12个模块）
+  ├─ kpi.ts / kpi-detail.ts                       # KPI 查询
+  ├─ trend.ts / salesman-ranking.ts               # 趋势与排名
+  ├─ cost.ts / coefficient.ts / growth.ts         # 专项分析
+  ├─ renewal.ts / renewal-drilldown.ts            # 续保分析
+  ├─ truck.ts / premiumPlan.ts                    # 货车与保费计划
+  └─ perspective-adapter.ts                       # 视角适配
   ↓
 server/src/services/duckdb.ts                     # 后端 DuckDB 查询执行
   ↓
@@ -462,9 +477,10 @@ src/features/dashboard/hooks/useDashboardData.ts  # 前端 Hook（refreshApi 分
 src/features/*                                    # 功能模块 UI 渲染
 ```
 
-**功能模块清单**（13个模块）：
+**功能模块清单**（14个模块）：
 | 模块 | 路径 | 职责 |
 |------|------|------|
+| Auth | `auth/` | 用户认证（登录/注册） |
 | Home | `home/` | 首页数据导入（拖拽上传、最近文件） |
 | Dashboard | `dashboard/` | 仪表盘主视图（KPI、图表、表格、续保分析） |
 | Filters | `filters/` | 筛选面板（日期/机构/业务员/险别） |
@@ -474,10 +490,10 @@ src/features/*                                    # 功能模块 UI 渲染
 | Cost | `cost/` | 成本分析（赔付率/费用率/综合费用率/变动成本率） |
 | Premium Report | `premium-report/` | 保费报表（机构保费+业务员明细+汇总） |
 | Marketing Report | `marketing-report/` | 营销战报（假日营销分析：机构战报+业务员明细） |
-| Query Assistant | `query-assistant/` | 查询助理悬浮面板（NL2SQL+快捷模板） |
 | Report | `report/` | 报表模板功能（预设分析场景） |
 | Settings | `settings/` | 设置面板（主题/系统设置） |
 | File | `file/` | 文件菜单（数据导入/导出/报表模板） |
+| Pages | `pages/` | 独立页面组件 |
 
 **关键特性**：
 - **多视图支持**：业绩看板 + SQL查询 + 专项分析（营业货车/系数监控/成本分析）+ 报表（保费/营销）
@@ -535,7 +551,7 @@ src/features/*                                    # 功能模块 UI 渲染
 
 **自动化工具箱**：Slash Commands + Subagents，位于 `.claude/` 目录。
 
-**完整命令索引**: [.claude/commands/README.md](./.claude/commands/README.md)（23个命令，v2.1）
+**完整命令索引**: [.claude/commands/README.md](./.claude/commands/README.md)（30个命令，v2.3）
 
 ### 命令分类速查
 
@@ -544,7 +560,7 @@ src/features/*                                    # 功能模块 UI 渲染
 | **Git工作流** | `/sync-and-rebase` | 同步远程代码并Rebase |
 | | `/commit-push-pr` | 提交代码并创建PR |
 | **数据分析** | `/data-analysis` | 车险数据多维度深度分析 |
-| | `/data-tools` ⭐NEW | Python数据分析工具库（8个工具） |
+| | `/data-tools` | Python数据分析工具库（8个工具） |
 | | `/data-profile` | 数据概览与质量检查 |
 | | `/data-kpi` | 业绩分析与排名 |
 | | `/data-trends` | 时间趋势分析 |
@@ -553,26 +569,36 @@ src/features/*                                    # 功能模块 UI 渲染
 | | `/report-weekly` | 周报（自然周数据） |
 | | `/report-monthly` | 月报（同比环比） |
 | | `/report-custom` | 自定义报告 |
-| **开发工具** | `/security-review` | 全面安全审查（8项检查） |
+| **安全审查** | `/security-review` | 全面安全审查（8项检查） |
 | | `/security-sql` | SQL注入防护专项 |
 | | `/security-xss` | XSS防护专项 |
 | | `/security-cors` | CORS与文件上传安全 |
 | | `/security-all` | 全量安全审查 |
-| | `/performance-audit` ⭐NEW | 全栈性能审计 |
-| | `/ui-review` ⭐NEW | UI/UX设计审查 |
-| | `/test-coverage` ⭐NEW | 测试覆盖率分析 |
-| | `/cost-analysis` ⭐NEW | 成本分析深度审计 |
+| **开发工具** | `/performance-audit` | 全栈性能审计 |
+| | `/ui-review` | UI/UX设计审查 |
+| | `/test-coverage` | 测试覆盖率分析 |
+| | `/cost-analysis` | 成本分析深度审计 |
+| | `/tdd` | TDD开发工作流 |
 | | `/session-manager` | 管理对话历史 |
+| | `/session-summary` | 历史Session汇总 |
 | | `/extract-knowledge` | 提取隐性知识 |
+| | `/verify` | 验证命令 |
+| | `/checkpoint` | 检查点命令 |
+| | `/orchestrate` | 编排命令 |
+| | `/evolve` | 技能演进命令 |
 | **项目管理** | `/init-project` | 初始化Claude Code配置 |
 
-**Subagents**：`.claude/subagents/*.md`
-- `code-simplifier` / `data-validator` / `verify-app` / `session-manager`
+**Subagents**：`.claude/agents/*.md`（14个）
+- `architect` / `build-error-resolver` / `business-intelligence`
+- `code-simplifier` / `data-validator` / `duckdb-optimizer`
+- `e2e-runner` / `knowledge-miner` / `react-performance`
+- `security-reviewer` / `session-manager` / `tdd-guide`
+- `ui-ux-designer` / `verify-app`
 
 ### 数据准备
 
 **测试数据（真实数据）**：`数据管理/warehouse/fact/policy/` 目录下的最新 `.parquet` 文件
-- 当前最新：`数据管理/warehouse/fact/policy/车险保单综合明细表0127.parquet`
+- 当前最新：`数据管理/warehouse/fact/policy/车险保单综合明细表0212.parquet`
 - 格式：Parquet（必须）
 - 列名：需匹配后端 DuckDB 表结构定义
 - 必需字段：`policy_no`, `premium`, `org_name`, `salesman_name`
@@ -593,8 +619,6 @@ src/features/*                                    # 功能模块 UI 渲染
 | SQL 执行失败 | ✅ 查看 Chrome Console 完整错误 → ✅ 检查字段类型 → ✅ 查 DuckDB 文档 |
 | 不确定 DuckDB 语法 | ✅ 先查 [DuckDB 官方文档](https://duckdb.org/docs/) → ❌ 禁止猜测 |
 | **API 调用失败/数据不显示** | ✅ 检查浏览器网络面板（是否 404/500）<br>✅ 检查前端 apiClient 和后端路由是否对应<br>⚠️ **前端新增 API 方法必须检查后端路由是否存在**<br>📝 教训：2026-02-04 KPI 显示"--"，根因是 `/api/query/kpi-detail` 路由未创建 |
-
----
 
 ---
 
@@ -743,6 +767,7 @@ claude --teleport
 ---
 
 **变更历史**：
+- 2026-02-13：【文档同步】更新§5功能模块清单（13→14个，补充Auth/Pages模块）、§5数据链路补充SQL生成器层（14个模块）和完整路由清单（5个路由文件）、§7命令索引升级v2.3（23→30个命令）、§7 Subagents更新（4→14个）、更新最新数据文件路径（0212.parquet）、补充筛选器API端点
 - 2026-02-07：从 chexianYJFX 拆分为 API 版，移除所有 Local/DuckDB-WASM 相关内容
 - 2026-02-04 PM：【血泪教训】新增§1.5双模式架构与启动协议，记录三层状态陷阱（DataContext.isDataLoaded vs duckdbClient.isDataLoaded() vs 组件isInitialized）、正确的数据启用判断模式、防御性编码规范、排查清单；修复PremiumDashboard.tsx/Dashboard.tsx的双模式支持、LineChart.tsx空值防护
 - 2026-02-04 AM：【架构修复】新增§2.6启动与架构验证协议，修复前端Hooks双模式支持（useDashboardData.ts支持API/Local模式自动切换），更新§5数据处理链路文档（添加双模式架构说明、API模式数据链路、Hook双模式适配关键实现），新增`dev:full`统一启动命令
