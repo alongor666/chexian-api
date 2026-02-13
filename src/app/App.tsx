@@ -23,6 +23,9 @@ const TruckPage = lazy(() =>
 const RenewalPage = lazy(() =>
   import('../features/pages/RenewalPage').then((m) => ({ default: m.RenewalPage }))
 );
+const CrossSellPage = lazy(() =>
+  import('../features/pages/CrossSellPage').then((m) => ({ default: m.CrossSellPage }))
+);
 const GrowthPage = lazy(() =>
   import('../features/pages/GrowthPage').then((m) => ({ default: m.GrowthPage }))
 );
@@ -122,6 +125,14 @@ function App() {
                 element={
                   <DataGuard>
                     <LazyRoute><RenewalPage /></LazyRoute>
+                  </DataGuard>
+                }
+              />
+              <Route
+                path="cross-sell"
+                element={
+                  <DataGuard>
+                    <LazyRoute><CrossSellPage /></LazyRoute>
                   </DataGuard>
                 }
               />

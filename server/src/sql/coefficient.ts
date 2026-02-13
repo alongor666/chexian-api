@@ -214,12 +214,15 @@ export function generateFullCoefficientQuery(
     ),
     org_data AS (
       ${generateCoefficientByOrgQuery(dateField, dateRange, additionalWhere)}
+    ),
+    combined AS (
+      SELECT * FROM chengdu_data
+      UNION ALL
+      SELECT * FROM province_data
+      UNION ALL
+      SELECT * FROM org_data
     )
-    SELECT * FROM chengdu_data
-    UNION ALL
-    SELECT * FROM province_data
-    UNION ALL
-    SELECT * FROM org_data
+    SELECT * FROM combined
     ORDER BY
       CASE
         WHEN org_level_3 = '成都' THEN 1

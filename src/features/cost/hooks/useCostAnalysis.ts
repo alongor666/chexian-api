@@ -255,9 +255,9 @@ export function useCostAnalysis() {
    */
   const fetchClaimRatioData = useCallback(
     async (
-      _dimension: string,
+      dimension: string,
       cutoffDate: string,
-      _whereClause: string = '1=1'
+      filterParams?: Record<string, string>
     ) => {
       setClaimRatioState((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -265,8 +265,10 @@ export function useCostAnalysis() {
         logger.info('成本分析 API 查询执行（赔付率）');
 
         const response = await apiClient.getCostAnalysis({
-          type: 'claim',
+          analysisType: 'claimRatio',
+          dimension,
           cutoffDate,
+          ...filterParams,
         });
 
         const result = Array.isArray(response) ? response as ClaimRatioData[] : [];
@@ -306,8 +308,9 @@ export function useCostAnalysis() {
    */
   const fetchExpenseRatioData = useCallback(
     async (
-      _dimension: string,
-      _whereClause: string = '1=1'
+      dimension: string,
+      cutoffDate: string,
+      filterParams?: Record<string, string>
     ) => {
       setExpenseRatioState((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -315,7 +318,10 @@ export function useCostAnalysis() {
         logger.info('成本分析 API 查询执行（费用率）');
 
         const response = await apiClient.getCostAnalysis({
-          type: 'expense',
+          analysisType: 'expenseRatio',
+          dimension,
+          cutoffDate,
+          ...filterParams,
         });
 
         const result = Array.isArray(response) ? response as ExpenseRatioData[] : [];
@@ -361,9 +367,9 @@ export function useCostAnalysis() {
    */
   const fetchComprehensiveCostData = useCallback(
     async (
-      _dimension: string,
+      dimension: string,
       cutoffDate: string,
-      _whereClause: string = '1=1'
+      filterParams?: Record<string, string>
     ) => {
       setComprehensiveCostState((prev) => ({
         ...prev,
@@ -375,8 +381,10 @@ export function useCostAnalysis() {
         logger.info('成本分析 API 查询执行（综合成本）');
 
         const response = await apiClient.getCostAnalysis({
-          type: 'comprehensive',
+          analysisType: 'comprehensiveCost',
+          dimension,
           cutoffDate,
+          ...filterParams,
         });
 
         const result = Array.isArray(response) ? response as ComprehensiveCostData[] : [];
@@ -429,9 +437,9 @@ export function useCostAnalysis() {
    */
   const fetchVariableCostData = useCallback(
     async (
-      _dimension: string,
+      dimension: string,
       cutoffDate: string,
-      _whereClause: string = '1=1'
+      filterParams?: Record<string, string>
     ) => {
       setVariableCostState((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -439,8 +447,10 @@ export function useCostAnalysis() {
         logger.info('成本分析 API 查询执行（变动成本）');
 
         const response = await apiClient.getCostAnalysis({
-          type: 'variable',
+          analysisType: 'variableCost',
+          dimension,
           cutoffDate,
+          ...filterParams,
         });
 
         const result = Array.isArray(response) ? response as VariableCostData[] : [];
@@ -494,7 +504,7 @@ export function useCostAnalysis() {
   const fetchEarnedPremiumData = useCallback(
     async (
       cutoffDate: string,
-      _whereClause: string = '1=1',
+      filterParams?: Record<string, string>,
       _detailFilter?: { policyMonth?: string; orgLevel3?: string }
     ) => {
       setEarnedPremiumState((prev) => ({ ...prev, loading: true, error: null }));
@@ -505,6 +515,7 @@ export function useCostAnalysis() {
         const response = await apiClient.getCostAnalysis({
           type: 'earned',
           cutoffDate,
+          ...filterParams,
         });
 
         const detailData = Array.isArray(response) ? response as EarnedPremiumData[] : [];
@@ -537,7 +548,7 @@ export function useCostAnalysis() {
    * 查询新口径已赚保费数据（V3：4个年度表 + 汇总表）
    */
   const fetchNewEarnedPremiumData = useCallback(
-    async (_whereClause: string = '1=1') => {
+    async (filterParams?: Record<string, string>) => {
       setNewEarnedPremiumState((prev) => ({ ...prev, loading: true, error: null }));
 
       try {
@@ -545,6 +556,7 @@ export function useCostAnalysis() {
 
         const response = await apiClient.getCostAnalysis({
           type: 'earned-new',
+          ...filterParams,
         });
 
         const responseData = response as Record<string, unknown> || {};
@@ -603,7 +615,7 @@ export function useCostAnalysis() {
    * 查询综合费用率预测数据
    */
   const fetchExpenseRatioForecastData = useCallback(
-    async (_whereClause: string = '1=1', operatingCostRate: number = 9) => {
+    async (filterParams?: Record<string, string>, operatingCostRate: number = 9) => {
       setExpenseRatioForecastState((prev) => ({ ...prev, loading: true, error: null }));
 
       try {
@@ -612,6 +624,7 @@ export function useCostAnalysis() {
         const response = await apiClient.getCostAnalysis({
           type: 'expense-forecast',
           operatingCostRate: String(operatingCostRate),
+          ...filterParams,
         });
 
         const responseData = response as Record<string, unknown> || {};
@@ -690,21 +703,21 @@ export function useCostAnalysis() {
       subTab: CostSubTab,
       dimension: string,
       cutoffDate: string,
-      whereClause: string = '1=1'
+      filterParams?: Record<string, string>
     ) => {
       switch (subTab) {
         case 'claim':
-          return fetchClaimRatioData(dimension, cutoffDate, whereClause);
+          return fetchClaimRatioData(dimension, cutoffDate, filterParams);
         case 'expense':
-          return fetchExpenseRatioData(dimension, whereClause);
+          return fetchExpenseRatioData(dimension, cutoffDate, filterParams);
         case 'comprehensive':
-          return fetchComprehensiveCostData(dimension, cutoffDate, whereClause);
+          return fetchComprehensiveCostData(dimension, cutoffDate, filterParams);
         case 'variable':
-          return fetchVariableCostData(dimension, cutoffDate, whereClause);
+          return fetchVariableCostData(dimension, cutoffDate, filterParams);
         case 'earned':
-          return fetchEarnedPremiumData(cutoffDate, whereClause);
+          return fetchEarnedPremiumData(cutoffDate, filterParams);
         case 'earned-new':
-          return fetchNewEarnedPremiumData(whereClause);
+          return fetchNewEarnedPremiumData(filterParams);
         default:
           return [];
       }

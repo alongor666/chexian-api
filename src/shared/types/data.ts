@@ -112,6 +112,8 @@ export interface FilterOptions {
   terminal_source?: FilterOption[];
   vehicle_type?: FilterOption[];
   insurance_grade?: FilterOption[];
+  small_truck_score?: FilterOption[];
+  large_truck_score?: FilterOption[];
   [key: string]: FilterOption[] | undefined;
 }
 
@@ -311,5 +313,7 @@ export interface AdvancedFilterState {
 
   // 新增字段筛选
   insurance_grade?: string[];            // 车险分等级（多选：A/B/C/D/E/F/G/X）
+  small_truck_score?: string[];          // 小货车评分（多选：A/B/C/D/E/X）
+  large_truck_score?: string[];          // 大货车评分（多选：A/B/C/D/E/X）
   is_cross_sell?: boolean | null;        // 交叉销售标识（三态开关）
 }

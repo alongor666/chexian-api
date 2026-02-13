@@ -40,11 +40,17 @@ export function useCoefficientMonitor({
     try {
       logger.info('系数监控 API 查询执行');
 
+      // 将 cutoffDate/analysisYear 转换为后端期望的 startDate/endDate
+      const endDateStr = cutoffDate.toISOString().split('T')[0];
+      const startDateStr = `${analysisYear}-01-01`;
+
       const response = await apiClient.getCoefficientData({
+        queryType: 'batch',
         dateField,
-        cutoffDate: cutoffDate.toISOString().split('T')[0],
+        startDate: startDateStr,
+        endDate: endDateStr,
+        cutoffDate: endDateStr,
         analysisYear,
-        additionalWhere,
       });
 
       if (requestId !== requestIdRef.current) return;

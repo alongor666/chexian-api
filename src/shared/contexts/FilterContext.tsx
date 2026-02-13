@@ -120,6 +120,18 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
           value,
           count: 0,
         })),
+        insurance_grade: (apiOptions.insuranceGrades || []).map((item) => ({
+          value: item.value,
+          count: item.count,
+        })),
+        small_truck_score: (apiOptions.smallTruckScores || []).map((item) => ({
+          value: item.value,
+          count: item.count,
+        })),
+        large_truck_score: (apiOptions.largeTruckScores || []).map((item) => ({
+          value: item.value,
+          count: item.count,
+        })),
       };
 
       setFilterOptions(options);

@@ -13,6 +13,7 @@
  * GET /api/query/coefficient - 系数监控
  * GET /api/query/cost - 成本分析
  * GET /api/query/renewal - 续保分析
+ * GET /api/query/cross-sell - 车驾意推介率
  * GET /api/query/salesman-ranking - 业务员排名
  * POST /api/query/custom - 自定义SQL查询
  */
@@ -33,44 +34,15 @@ import { generateGrowthQuery, GrowthConfig, GrowthType, TimeView as GrowthTimeVi
 import { generateCoefficientByOrgQuery, generateFullCoefficientQuery } from '../sql/coefficient.js';
 import { generateClaimRatioQuery, generateExpenseRatioQuery, generateComprehensiveCostQuery, generateVariableCostQuery, CostDimension } from '../sql/cost.js';
 import { generateRenewalRateQuery, generateRenewalDetailTableQuery } from '../sql/renewal.js';
+import { generateCrossSellQuery, type CrossSellDimension } from '../sql/cross-sell.js';
 import type { AdvancedFilterState } from '../types/data.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../sql/salesman-ranking.js';
 import { validateSQL } from '../utils/sql-validator.js';
-import { buildDateCondition, buildStringCondition, escapeSqlString, isValidDateFormat } from '../utils/sql-sanitizer.js';
+import { isValidDateFormat } from '../utils/sql-sanitizer.js';
 import { injectPermissionFilter, isValidPermissionFilter } from '../utils/sql-permission-injector.js';
+import { commonFilterSchema, buildWhereFromFilterParams } from '../utils/filter-params.js';
 
 const router = Router();
-
-/**
- * 安全地构建日期范围WHERE条件
- * @param startDate - 开始日期
- * @param endDate - 结束日期
- * @param dateField - 日期字段名
- * @returns 条件数组
- */
-function buildSafeDateConditions(
-  startDate?: string,
-  endDate?: string,
-  dateField: string = 'policy_date'
-): string[] {
-  const conditions: string[] = ['1=1'];
-
-  if (startDate) {
-    if (!isValidDateFormat(startDate)) {
-      throw new AppError(400, `Invalid startDate format: ${startDate}. Expected YYYY-MM-DD`);
-    }
-    conditions.push(buildDateCondition(dateField, '>=', startDate));
-  }
-
-  if (endDate) {
-    if (!isValidDateFormat(endDate)) {
-      throw new AppError(400, `Invalid endDate format: ${endDate}. Expected YYYY-MM-DD`);
-    }
-    conditions.push(buildDateCondition(dateField, '<=', endDate));
-  }
-
-  return conditions;
-}
 
 /**
  * 应用认证和权限中间件到所有查询路由
@@ -78,54 +50,31 @@ function buildSafeDateConditions(
 router.use(authMiddleware);
 router.use(permissionMiddleware);
 
-/**
- * KPI查询请求验证Schema
- */
-const kpiQuerySchema = z.object({
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  orgLevel3: z.string().optional(),
-  salesmanName: z.string().optional(),
-});
+// ============================================================
+// Phase 1 API Endpoints
+// ============================================================
 
 /**
  * GET /api/query/kpi
  * 获取KPI数据（保费、件数、占比等）
+ * 支持完整高级筛选参数
  */
 router.get(
   '/kpi',
   asyncHandler(async (req: Request, res: Response) => {
-    // 1. 验证查询参数
-    const parseResult = kpiQuerySchema.safeParse(req.query);
+    const parseResult = commonFilterSchema.safeParse(req.query);
     if (!parseResult.success) {
       throw new AppError(400, parseResult.error.issues[0].message);
     }
 
-    const { startDate, endDate, orgLevel3, salesmanName } = parseResult.data;
-
-    // 2. 构建WHERE子句（用户筛选条件）- 使用安全函数防止SQL注入
-    const conditions = buildSafeDateConditions(startDate, endDate);
-
-    if (orgLevel3) {
-      conditions.push(buildStringCondition('org_level_3', orgLevel3));
-    }
-    if (salesmanName) {
-      conditions.push(buildStringCondition('salesman_name', salesmanName));
-    }
-
-    const userWhereClause = conditions.join(' AND ');
-
-    // 3. 合并权限过滤条件（行级安全）
-    const finalWhereClause = permissionService.combineWhereClause(
-      userWhereClause,
+    const finalWhereClause = buildWhereFromFilterParams(
+      parseResult.data,
       req.permissionFilter || '1=1'
     );
 
-    // 4. 生成SQL并执行查询
     const sql = generateKpiQuery(finalWhereClause);
     const result = await duckdbService.query(sql);
 
-    // 5. 返回结果
     res.json({
       success: true,
       data: result[0] || {},
@@ -140,37 +89,19 @@ router.get(
 router.get(
   '/kpi-detail',
   asyncHandler(async (req: Request, res: Response) => {
-    // 1. 验证查询参数（复用 kpiQuerySchema）
-    const parseResult = kpiQuerySchema.safeParse(req.query);
+    const parseResult = commonFilterSchema.safeParse(req.query);
     if (!parseResult.success) {
       throw new AppError(400, parseResult.error.issues[0].message);
     }
 
-    const { startDate, endDate, orgLevel3, salesmanName } = parseResult.data;
-
-    // 2. 构建WHERE子句 - 使用安全函数防止SQL注入
-    const conditions = buildSafeDateConditions(startDate, endDate);
-
-    if (orgLevel3) {
-      conditions.push(buildStringCondition('org_level_3', orgLevel3));
-    }
-    if (salesmanName) {
-      conditions.push(buildStringCondition('salesman_name', salesmanName));
-    }
-
-    const userWhereClause = conditions.join(' AND ');
-
-    // 3. 合并权限过滤条件（行级安全）
-    const finalWhereClause = permissionService.combineWhereClause(
-      userWhereClause,
+    const finalWhereClause = buildWhereFromFilterParams(
+      parseResult.data,
       req.permissionFilter || '1=1'
     );
 
-    // 4. 生成SQL并执行查询
     const sql = generateKpiDetailQuery(finalWhereClause, true);
     const result = await duckdbService.query(sql);
 
-    // 5. 返回结果
     res.json({
       success: true,
       data: result[0] || {},
@@ -187,16 +118,10 @@ const granularityMap: Record<string, string> = {
   daily: 'daily', weekly: 'weekly', monthly: 'monthly',
 };
 
-const trendQuerySchema = z.object({
+const trendExtraSchema = z.object({
   timeView: z.string().optional(),
   granularity: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-}).transform(data => ({
-  timeView: (granularityMap[data.timeView || data.granularity || 'daily'] || 'daily') as 'daily' | 'weekly' | 'monthly',
-  startDate: data.startDate,
-  endDate: data.endDate,
-}));
+});
 
 /**
  * GET /api/query/trend
@@ -205,34 +130,31 @@ const trendQuerySchema = z.object({
 router.get(
   '/trend',
   asyncHandler(async (req: Request, res: Response) => {
-    // 1. 验证查询参数
-    const parseResult = trendQuerySchema.safeParse(req.query);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
+    // 解析趋势特有参数
+    const trendResult = trendExtraSchema.safeParse(req.query);
+    const timeView = (granularityMap[
+      trendResult.data?.timeView || trendResult.data?.granularity || 'daily'
+    ] || 'daily') as 'daily' | 'weekly' | 'monthly';
+
+    // 解析通用筛选参数
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
     }
 
-    const { timeView, startDate, endDate } = parseResult.data;
-
-    // 2. 构建WHERE子句 - 使用安全函数防止SQL注入
-    const conditions = buildSafeDateConditions(startDate, endDate);
-    const userWhereClause = conditions.join(' AND ');
-
-    // 3. 合并权限过滤条件
-    const finalWhereClause = permissionService.combineWhereClause(
-      userWhereClause,
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
       req.permissionFilter || '1=1'
     );
 
-    // 4. 生成SQL并执行查询
     const sql = generatePremiumTrendQuery(
       timeView as TimeView,
       finalWhereClause,
-      'policy_date',
+      filterResult.data.dateField || 'policy_date',
       'premium'
     );
     const result = await duckdbService.query(sql);
 
-    // 5. 返回结果
     res.json({
       success: true,
       data: result,
@@ -274,13 +196,11 @@ router.get(
 // ============================================================
 
 /**
- * 营业货车分析请求验证Schema
+ * 营业货车分析请求验证Schema（特有参数）
  */
-const truckQuerySchema = z.object({
-  queryType: z.enum(['rose', 'orgByTonnage', 'tonnageByOrg']).default('rose'),
+const truckExtraSchema = z.object({
+  queryType: z.enum(['rose', 'orgByTonnage', 'tonnageByOrg', 'all']).default('rose'),
   metric: z.enum(['premium', 'count']).default('premium'),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
 });
 
 /**
@@ -290,20 +210,37 @@ const truckQuerySchema = z.object({
 router.get(
   '/truck',
   asyncHandler(async (req: Request, res: Response) => {
-    const parseResult = truckQuerySchema.safeParse(req.query);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
+    const truckResult = truckExtraSchema.safeParse(req.query);
+    if (!truckResult.success) {
+      throw new AppError(400, truckResult.error.issues[0].message);
+    }
+    const { queryType, metric } = truckResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
     }
 
-    const { queryType, metric, startDate, endDate } = parseResult.data;
-
-    // 构建WHERE子句 - 使用安全函数防止SQL注入
-    const conditions = buildSafeDateConditions(startDate, endDate);
-    const userWhereClause = conditions.join(' AND ');
-    const finalWhereClause = permissionService.combineWhereClause(
-      userWhereClause,
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
       req.permissionFilter || '1=1'
     );
+
+    // queryType=all: 一次性返回所有4个子查询结果（前端货车面板需要）
+    if (queryType === 'all') {
+      const [rosePremium, roseCount, tonnageByOrg, orgPremium] = await Promise.all([
+        duckdbService.query(generateTonnageRoseQuery('premium', finalWhereClause)),
+        duckdbService.query(generateTonnageRoseQuery('count', finalWhereClause)),
+        duckdbService.query(generateTonnageByOrgQuery(finalWhereClause)),
+        duckdbService.query(generateOrgByTonnageQuery(finalWhereClause)),
+      ]);
+
+      res.json({
+        success: true,
+        data: { rosePremium, roseCount, tonnageByOrg, orgPremium },
+      });
+      return;
+    }
 
     let sql: string;
     switch (queryType) {
@@ -332,11 +269,9 @@ router.get(
 /**
  * 增长率分析请求验证Schema
  */
-const growthQuerySchema = z.object({
+const growthExtraSchema = z.object({
   growthType: z.enum(['yoy', 'mom', 'ytd', 'custom']).default('yoy'),
   timeView: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('monthly'),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
   baselineStart: z.string().optional(),
   baselineEnd: z.string().optional(),
   referenceYear: z.coerce.number().optional(),
@@ -349,18 +284,19 @@ const growthQuerySchema = z.object({
 router.get(
   '/growth',
   asyncHandler(async (req: Request, res: Response) => {
-    const parseResult = growthQuerySchema.safeParse(req.query);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
+    const growthResult = growthExtraSchema.safeParse(req.query);
+    if (!growthResult.success) {
+      throw new AppError(400, growthResult.error.issues[0].message);
+    }
+    const { growthType, timeView, baselineStart, baselineEnd, referenceYear } = growthResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
     }
 
-    const { growthType, timeView, startDate, endDate, baselineStart, baselineEnd, referenceYear } = parseResult.data;
-
-    // 构建WHERE子句 - 使用安全函数防止SQL注入
-    const conditions = buildSafeDateConditions(startDate, endDate);
-    const userWhereClause = conditions.join(' AND ');
-    const finalWhereClause = permissionService.combineWhereClause(
-      userWhereClause,
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
       req.permissionFilter || '1=1'
     );
 
@@ -371,8 +307,8 @@ router.get(
       referenceYear: referenceYear || new Date().getFullYear(),
     };
 
+    const { startDate, endDate } = filterResult.data;
     if (growthType === 'custom' && baselineStart && baselineEnd && startDate && endDate) {
-      // 验证自定义期间的日期格式
       if (!isValidDateFormat(baselineStart) || !isValidDateFormat(baselineEnd)) {
         throw new AppError(400, 'Invalid baseline date format. Expected YYYY-MM-DD');
       }
@@ -394,15 +330,18 @@ router.get(
  * 系数监控请求验证Schema
  */
 const coefficientQuerySchema = z.object({
-  queryType: z.enum(['byOrg', 'full']).default('byOrg'),
+  queryType: z.enum(['byOrg', 'full', 'batch']).default('byOrg'),
   dateField: z.enum(['policy_date', 'insurance_start_date']).default('policy_date'),
   startDate: z.string(),
   endDate: z.string(),
+  cutoffDate: z.string().optional(),
+  analysisYear: z.coerce.number().optional(),
 });
 
 /**
  * GET /api/query/coefficient
  * 商车自主定价系数监控
+ * 注意：系数监控使用独立的日期处理逻辑，不使用通用筛选
  */
 router.get(
   '/coefficient',
@@ -412,10 +351,31 @@ router.get(
       throw new AppError(400, parseResult.error.issues[0].message);
     }
 
-    const { queryType, dateField, startDate, endDate } = parseResult.data;
+    const { queryType, dateField, startDate, endDate, cutoffDate, analysisYear } = parseResult.data;
 
     // 权限过滤条件
     const permissionFilter = req.permissionFilter || '1=1';
+
+    // queryType=batch: 返回结构化数据（成都/全省/各机构三层）
+    if (queryType === 'batch') {
+      const dateRange = {
+        start: new Date(startDate),
+        end: new Date(endDate),
+      };
+
+      const sql = generateFullCoefficientQuery(dateField, dateRange, permissionFilter);
+      const rawData = await duckdbService.query(sql);
+
+      const data = rawData.filter((r: Record<string, any>) => r.region_group !== 'chengdu' && r.region_group !== 'province');
+      const provinceTop = rawData.filter((r: Record<string, any>) => r.org_level_3 === '全省');
+      const chengduTop = rawData.filter((r: Record<string, any>) => r.org_level_3 === '成都');
+
+      res.json({
+        success: true,
+        data: { data, periodGroups: [], provinceTop, chengduTop },
+      });
+      return;
+    }
 
     const dateRange = {
       start: new Date(startDate),
@@ -439,14 +399,12 @@ router.get(
 );
 
 /**
- * 成本分析请求验证Schema
+ * 成本分析请求验证Schema（特有参数）
  */
-const costQuerySchema = z.object({
+const costExtraSchema = z.object({
   analysisType: z.enum(['claimRatio', 'expenseRatio', 'comprehensiveCost', 'variableCost']).default('claimRatio'),
   dimension: z.enum(['customer_category', 'org_level_3', 'coverage_combination', 'org_customer', 'org_coverage']).default('org_level_3'),
   cutoffDate: z.string(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
 });
 
 /**
@@ -456,23 +414,23 @@ const costQuerySchema = z.object({
 router.get(
   '/cost',
   asyncHandler(async (req: Request, res: Response) => {
-    const parseResult = costQuerySchema.safeParse(req.query);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
+    const costResult = costExtraSchema.safeParse(req.query);
+    if (!costResult.success) {
+      throw new AppError(400, costResult.error.issues[0].message);
     }
+    const { analysisType, dimension, cutoffDate } = costResult.data;
 
-    const { analysisType, dimension, cutoffDate, startDate, endDate } = parseResult.data;
-
-    // 验证 cutoffDate 格式
     if (!isValidDateFormat(cutoffDate)) {
       throw new AppError(400, `Invalid cutoffDate format: ${cutoffDate}. Expected YYYY-MM-DD`);
     }
 
-    // 构建WHERE子句 - 使用安全函数防止SQL注入
-    const conditions = buildSafeDateConditions(startDate, endDate);
-    const userWhereClause = conditions.join(' AND ');
-    const finalWhereClause = permissionService.combineWhereClause(
-      userWhereClause,
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
       req.permissionFilter || '1=1'
     );
 
@@ -510,13 +468,13 @@ router.get(
 );
 
 /**
- * 续保分析请求验证Schema
+ * 续保分析请求验证Schema（特有参数）
  */
-const renewalQuerySchema = z.object({
-  queryType: z.enum(['rate', 'detail']).default('rate'),
+const renewalExtraSchema = z.object({
+  queryType: z.enum(['rate', 'detail', 'full']).default('rate'),
   targetYear: z.coerce.number().default(new Date().getFullYear()),
   targetMonth: z.coerce.number().default(new Date().getMonth() + 1),
-  orgLevel3: z.string().optional(),
+  perspective: z.string().optional(),
 });
 
 /**
@@ -526,25 +484,64 @@ const renewalQuerySchema = z.object({
 router.get(
   '/renewal',
   asyncHandler(async (req: Request, res: Response) => {
-    const parseResult = renewalQuerySchema.safeParse(req.query);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
+    const renewalResult = renewalExtraSchema.safeParse(req.query);
+    if (!renewalResult.success) {
+      throw new AppError(400, renewalResult.error.issues[0].message);
+    }
+    const { queryType, targetYear, targetMonth } = renewalResult.data;
+
+    // 解析通用筛选参数
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
     }
 
-    const { queryType, targetYear, targetMonth, orgLevel3 } = parseResult.data;
-
-    // 构建筛选条件（AdvancedFilterState格式）
+    // 构建筛选条件（AdvancedFilterState格式，供续保SQL生成器使用）
     const filters: AdvancedFilterState = {};
-    if (orgLevel3) filters.org_level_3 = [orgLevel3];
+
+    // 从通用参数中提取机构筛选
+    const orgNames = filterResult.data.orgNames?.split(',').filter(Boolean);
+    if (orgNames && orgNames.length > 0) {
+      filters.org_level_3 = orgNames;
+    } else if (filterResult.data.orgLevel3) {
+      filters.org_level_3 = [filterResult.data.orgLevel3];
+    } else if (filterResult.data.orgName) {
+      filters.org_level_3 = [filterResult.data.orgName];
+    }
 
     // 权限过滤 - 添加到filters中
     const permissionFilter = req.permissionFilter || '1=1';
     if (permissionFilter !== '1=1') {
-      // 解析权限过滤条件并添加到filters
       const orgMatch = permissionFilter.match(/org_level_3\s*(?:LIKE|=)\s*'%?([^%']+)%?'/i);
       if (orgMatch && !filters.org_level_3) {
         filters.org_level_3 = [orgMatch[1]];
       }
+    }
+
+    // queryType=full: 返回结构化数据（明细 + 可用月份 + 最新日期）
+    if (queryType === 'full') {
+      const detailSql = generateRenewalDetailTableQuery(filters, targetYear, targetMonth, 'premium');
+      const detailData = await duckdbService.query(detailSql);
+
+      const availableMonthsSql = `
+        SELECT DISTINCT MONTH(DATE_ADD(CAST(insurance_start_date AS DATE), INTERVAL '1 year') - INTERVAL '1 day') AS month_num
+        FROM PolicyFact
+        WHERE YEAR(CAST(insurance_start_date AS DATE)) = ${targetYear - 1}
+          AND YEAR(DATE_ADD(CAST(insurance_start_date AS DATE), INTERVAL '1 year') - INTERVAL '1 day') = ${targetYear}
+        ORDER BY month_num
+      `;
+      const availableMonthsResult = await duckdbService.query(availableMonthsSql);
+      const availableMonths = availableMonthsResult.map((r: Record<string, any>) => Number(r.month_num));
+
+      const latestDateSql = `SELECT MAX(CAST(policy_date AS DATE)) AS latest_date FROM PolicyFact`;
+      const latestDateResult = await duckdbService.query(latestDateSql);
+      const latestPolicyDate = latestDateResult[0]?.latest_date ? String(latestDateResult[0].latest_date) : null;
+
+      res.json({
+        success: true,
+        data: { detailData, availableMonths, latestPolicyDate },
+      });
+      return;
     }
 
     let sql: string;
@@ -564,12 +561,62 @@ router.get(
 );
 
 /**
- * 业务员排名请求验证Schema
+ * 车驾意推介率请求验证Schema（特有参数）
  */
-const salesmanRankingSchema = z.object({
+const crossSellExtraSchema = z.object({
+  dimension: z.enum([
+    'summary', 'org_level_3', 'team', 'salesman', 'customer_category',
+    'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
+  ]).default('summary'),
+});
+
+/**
+ * GET /api/query/cross-sell
+ * 车驾意推介率分析
+ */
+router.get(
+  '/cross-sell',
+  asyncHandler(async (req: Request, res: Response) => {
+    const crossSellResult = crossSellExtraSchema.safeParse(req.query);
+    if (!crossSellResult.success) {
+      throw new AppError(400, crossSellResult.error.issues[0].message);
+    }
+    const { dimension } = crossSellResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    // 始终查询汇总行 + 维度下钻行
+    const [summaryResult, drilldownResult] = await Promise.all([
+      duckdbService.query(generateCrossSellQuery(finalWhereClause, 'summary')),
+      dimension !== 'summary'
+        ? duckdbService.query(generateCrossSellQuery(finalWhereClause, dimension as CrossSellDimension))
+        : Promise.resolve([]),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        summary: summaryResult[0] || null,
+        rows: drilldownResult,
+        dimension,
+      },
+    });
+  })
+);
+
+/**
+ * 业务员排名请求验证Schema（特有参数）
+ */
+const salesmanRankingExtraSchema = z.object({
   rankingType: z.enum(['all', 'quality']).default('all'),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
   limit: z.coerce.number().default(10),
 });
 
@@ -580,19 +627,19 @@ const salesmanRankingSchema = z.object({
 router.get(
   '/salesman-ranking',
   asyncHandler(async (req: Request, res: Response) => {
-    const parseResult = salesmanRankingSchema.safeParse(req.query);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
+    const rankingResult = salesmanRankingExtraSchema.safeParse(req.query);
+    if (!rankingResult.success) {
+      throw new AppError(400, rankingResult.error.issues[0].message);
+    }
+    const { rankingType, limit } = rankingResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
     }
 
-    const { rankingType, startDate, endDate, limit } = parseResult.data;
-
-    // 构建WHERE子句 - 使用安全函数防止SQL注入
-    const conditions = buildSafeDateConditions(startDate, endDate);
-
-    const userWhereClause = conditions.join(' AND ');
-    const finalWhereClause = permissionService.combineWhereClause(
-      userWhereClause,
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
       req.permissionFilter || '1=1'
     );
 
@@ -653,7 +700,6 @@ router.post(
     try {
       finalSql = injectPermissionFilter(userSql, permissionFilter);
     } catch (err) {
-      // 无法安全注入权限，拒绝执行
       const errorMessage = err instanceof Error ? err.message : '无法应用权限过滤';
       throw new AppError(400, errorMessage);
     }

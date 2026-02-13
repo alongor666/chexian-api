@@ -5,10 +5,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { useDataStatus } from '../../../shared/contexts/DataContext';
-import { buildWhereClauseFromFilters, resolveDateField } from '../../../shared/utils/queryBuilder';
-import { parseWhereClause } from '../../../shared/utils/sql-parser';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { createLogger } from '../../../shared/utils/logger';
-import type { AdvancedFilterState, DateCriteria } from '../../../shared/types/data';
+import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { ViewPerspective } from '../../../shared/types';
 
 const logger = createLogger('useRenewalAnalysis');
@@ -43,19 +42,6 @@ interface UseRenewalAnalysisReturn {
   hasCheckedAvailability: boolean;
   refresh: () => Promise<void>;
   checkAvailableMonths: () => Promise<void>;
-}
-
-/**
- * 构建续保率查询的WHERE子句（排除日期筛选）
- */
-function buildWhereClauseForRenewal(filters: AdvancedFilterState): string {
-  const dateField: DateCriteria = resolveDateField(filters);
-  const renewalFilters: AdvancedFilterState = {
-    ...filters,
-    policy_date_start: undefined,
-    policy_date_end: undefined,
-  };
-  return buildWhereClauseFromFilters(renewalFilters, dateField);
 }
 
 /**
@@ -94,12 +80,17 @@ export function useRenewalAnalysis({
   const [hasCheckedAvailability, setHasCheckedAvailability] = useState(false);
 
   const fetchFromApi = useCallback(async () => {
-    const whereClause = buildWhereClauseForRenewal(filters);
+    // 续保分析：排除日期范围（使用 targetYear/Month 替代），但保留机构等筛选
+    const renewalFilters: AdvancedFilterState = {
+      ...filters,
+      policy_date_start: undefined,
+      policy_date_end: undefined,
+    };
     const params = {
-      ...parseWhereClause(whereClause),
-      perspective,
+      ...buildFilterParams(renewalFilters),
+      queryType: 'full' as const,
       targetYear: effectiveYear,
-      selectedMonth,
+      targetMonth: selectedMonth,
     };
 
     logger.debug('Fetching renewal data from API', params);

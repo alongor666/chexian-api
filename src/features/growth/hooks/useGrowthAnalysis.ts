@@ -68,8 +68,8 @@ export interface GrowthAnalysisFilters {
   orgLevel3?: string[];
   /** 视角（保费/件数） */
   perspective?: ViewPerspective;
-  /** 附加 WHERE 条件（来自 buildWhereClauseFromFilters） */
-  additionalWhereClause?: string;
+  /** 附加筛选参数（来自 buildFilterParams，直接传递给后端 API） */
+  additionalFilterParams?: Record<string, string>;
 }
 
 type GrowthType = 'yoy' | 'mom' | 'ytd' | 'custom';
@@ -124,20 +124,20 @@ export function useGrowthAnalysis() {
   const fetchGrowthFromApi = useCallback(async (
     startDate: string,
     endDate: string,
-    compareStartDate: string,
-    compareEndDate: string,
+    baselineStart: string,
+    baselineEnd: string,
     filters?: Record<string, any>
   ) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
-      logger.info('增长分析 API 查询执行', { startDate, endDate, compareStartDate, compareEndDate });
+      logger.info('增长分析 API 查询执行', { startDate, endDate, baselineStart, baselineEnd });
 
       const response = await apiClient.getGrowthAnalysis(
         startDate,
         endDate,
-        compareStartDate,
-        compareEndDate,
+        baselineStart,
+        baselineEnd,
         filters
       );
 
@@ -187,10 +187,10 @@ export function useGrowthAnalysis() {
       const currentYear = now.getFullYear();
       const startDate = `${currentYear}-01-01`;
       const endDate = now.toISOString().split('T')[0];
-      const compareStartDate = `${currentYear - 1}-01-01`;
-      const compareEndDate = `${currentYear - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const baselineStart = `${currentYear - 1}-01-01`;
+      const baselineEnd = `${currentYear - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-      return await fetchGrowthFromApi(startDate, endDate, compareStartDate, compareEndDate);
+      return await fetchGrowthFromApi(startDate, endDate, baselineStart, baselineEnd, { growthType: 'yoy', timeView: 'monthly' });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误';
 
@@ -215,35 +215,35 @@ export function useGrowthAnalysis() {
   const analyzeOrgPremiumGrowth = useCallback(async (
     orgName?: string,
     growthType: GrowthType = 'yoy',
-    _timeView: 'monthly' | 'quarterly' = 'monthly',
+    timeView: 'monthly' | 'quarterly' = 'monthly',
     _perspective: ViewPerspective = 'premium',
-    _additionalWhereClause?: string
+    additionalFilterParams?: Record<string, string>
   ) => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const startDate = `${currentYear}-01-01`;
     const endDate = now.toISOString().split('T')[0];
 
-    let compareStartDate: string;
-    let compareEndDate: string;
+    let baselineStart: string;
+    let baselineEnd: string;
 
     if (growthType === 'yoy') {
-      compareStartDate = `${currentYear - 1}-01-01`;
-      compareEndDate = `${currentYear - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      baselineStart = `${currentYear - 1}-01-01`;
+      baselineEnd = `${currentYear - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     } else {
       const prevMonth = new Date(now);
       prevMonth.setMonth(prevMonth.getMonth() - 1);
-      compareStartDate = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-01`;
+      baselineStart = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-01`;
       const lastDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate();
-      compareEndDate = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      baselineEnd = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     }
 
-    const filters: Record<string, any> = {};
+    const filters: Record<string, any> = { growthType, timeView, ...additionalFilterParams };
     if (orgName) {
       filters.orgName = orgName;
     }
 
-    return await fetchGrowthFromApi(startDate, endDate, compareStartDate, compareEndDate, filters);
+    return await fetchGrowthFromApi(startDate, endDate, baselineStart, baselineEnd, filters);
   }, [fetchGrowthFromApi]);
 
   /**
@@ -253,29 +253,31 @@ export function useGrowthAnalysis() {
     salesmanName: string,
     growthType: GrowthType = 'yoy',
     _perspective: ViewPerspective = 'premium',
-    _additionalWhereClause?: string
+    additionalFilterParams?: Record<string, string>
   ) => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const startDate = `${currentYear}-01-01`;
     const endDate = now.toISOString().split('T')[0];
 
-    let compareStartDate: string;
-    let compareEndDate: string;
+    let baselineStart: string;
+    let baselineEnd: string;
 
     if (growthType === 'yoy') {
-      compareStartDate = `${currentYear - 1}-01-01`;
-      compareEndDate = `${currentYear - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      baselineStart = `${currentYear - 1}-01-01`;
+      baselineEnd = `${currentYear - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     } else {
       const prevMonth = new Date(now);
       prevMonth.setMonth(prevMonth.getMonth() - 1);
-      compareStartDate = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-01`;
+      baselineStart = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-01`;
       const lastDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate();
-      compareEndDate = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      baselineEnd = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     }
 
-    return await fetchGrowthFromApi(startDate, endDate, compareStartDate, compareEndDate, {
+    return await fetchGrowthFromApi(startDate, endDate, baselineStart, baselineEnd, {
       salesmanName,
+      growthType,
+      ...additionalFilterParams,
     });
   }, [fetchGrowthFromApi]);
 
@@ -286,19 +288,20 @@ export function useGrowthAnalysis() {
     kpiMetric: string,
     growthType: 'yoy' | 'mom' | 'ytd' = 'yoy',
     dimension?: string[],
-    _additionalWhereClause?: string
+    additionalFilterParams?: Record<string, string>
   ) => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const startDate = `${currentYear}-01-01`;
     const endDate = now.toISOString().split('T')[0];
-    const compareStartDate = `${currentYear - 1}-01-01`;
-    const compareEndDate = `${currentYear - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const baselineStart = `${currentYear - 1}-01-01`;
+    const baselineEnd = `${currentYear - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    return await fetchGrowthFromApi(startDate, endDate, compareStartDate, compareEndDate, {
+    return await fetchGrowthFromApi(startDate, endDate, baselineStart, baselineEnd, {
       metric: kpiMetric,
       growthType,
       dimension: dimension?.join(','),
+      ...additionalFilterParams,
     });
   }, [fetchGrowthFromApi]);
 
@@ -310,13 +313,14 @@ export function useGrowthAnalysis() {
     baselinePeriod: { startDate: string; endDate: string },
     _metric: string = 'SUM(premium)',
     _groupBy?: string[],
-    _additionalWhereClause?: string
+    additionalFilterParams?: Record<string, string>
   ) => {
     return await fetchGrowthFromApi(
       currentPeriod.startDate,
       currentPeriod.endDate,
       baselinePeriod.startDate,
       baselinePeriod.endDate,
+      additionalFilterParams,
     );
   }, [fetchGrowthFromApi]);
 
@@ -337,9 +341,11 @@ export function useGrowthAnalysis() {
     const prevStartDate = getPrevDate(currentStartDate);
     const prevEndDate = getPrevDate(currentEndDate);
 
-    const apiFilters: Record<string, any> = {};
+    const apiFilters: Record<string, any> = {
+      ...filters.additionalFilterParams,
+    };
     if (filters.orgLevel3 && filters.orgLevel3.length > 0) {
-      apiFilters.orgName = filters.orgLevel3.join(',');
+      apiFilters.orgNames = filters.orgLevel3.join(',');
     }
     if (filters.perspective) {
       apiFilters.perspective = filters.perspective;
@@ -361,7 +367,7 @@ export function useGrowthAnalysis() {
     currentPeriod: { startDate: string; endDate: string },
     previousPeriod: { startDate: string; endDate: string },
     groupBy: string[] = ['org_level_3'],
-    _whereClause?: string
+    additionalFilterParams?: Record<string, string>
   ): Promise<{ success: boolean; data: DualMetricComparisonData[]; error?: string }> => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
@@ -373,7 +379,7 @@ export function useGrowthAnalysis() {
         currentPeriod.endDate,
         previousPeriod.startDate,
         previousPeriod.endDate,
-        { type: 'dual-metric', groupBy: groupBy.join(',') }
+        { growthType: 'custom', type: 'dual-metric', groupBy: groupBy.join(','), ...additionalFilterParams }
       );
 
       const data: DualMetricComparisonData[] = Array.isArray(response) ? response.map((row: Record<string, unknown>) => ({

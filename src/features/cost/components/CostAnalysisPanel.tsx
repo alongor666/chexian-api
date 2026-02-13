@@ -18,7 +18,7 @@ import { NewEarnedPremiumTable } from './NewEarnedPremiumTable';
 import { ExpenseRatioForecastPanel } from './ExpenseRatioForecastPanel';
 import { useCostAnalysis } from '../hooks/useCostAnalysis';
 import { useExportHandlers } from '../hooks/useExportHandlers';
-import { buildWhereClauseFromFilters, resolveDateField } from '../../../shared/utils/queryBuilder';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
 import type { CostSubTab, EarnedPremiumDetailFilter, CostDimension } from '../types/costTypes';
 import { DIMENSION_LABELS } from '../types/costTypes';
 import type { AdvancedFilterState } from '../../../shared/types';
@@ -149,21 +149,20 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
     fetchExpenseRatioForecastData,
   } = useCostAnalysis();
 
-  // 构建 WHERE 子句
-  const whereClause = useMemo(() => buildWhereClauseFromFilters(filters), [filters]);
+  // 构建筛选参数（直接传递给后端 API）
+  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
 
   /**
-   * 已赚保费：忽略全局“日期范围筛选”，避免把滚动窗口错误截断到单月/单年
-   * @param filters - 全局筛选器（保留机构/业务员等条件，仅移除日期范围）
+   * 已赚保费：忽略全局"日期范围筛选"，避免把滚动窗口错误截断到单月/单年
+   * 保留机构/业务员等条件，仅移除日期范围
    */
-  const earnedWhereClause = useMemo(() => {
-    const dateField = resolveDateField(filters);
+  const earnedFilterParams = useMemo(() => {
     const earnedFilters: AdvancedFilterState = {
       ...filters,
       policy_date_start: undefined,
       policy_date_end: undefined,
     };
-    return buildWhereClauseFromFilters(earnedFilters, dateField);
+    return buildFilterParams(earnedFilters);
   }, [filters]);
 
   const monthEndOptions = useMemo(() => {
@@ -200,33 +199,33 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
   const loadData = useCallback(() => {
     switch (activeSubTab) {
       case 'claim':
-        fetchClaimRatioData(dimension, cutoffDate, whereClause);
+        fetchClaimRatioData(dimension, cutoffDate, filterParams);
         break;
       case 'expense':
-        fetchExpenseRatioData(dimension, whereClause);
+        fetchExpenseRatioData(dimension, cutoffDate, filterParams);
         break;
       case 'comprehensive':
-        fetchComprehensiveCostData(dimension, cutoffDate, whereClause);
+        fetchComprehensiveCostData(dimension, cutoffDate, filterParams);
         break;
       case 'variable':
-        fetchVariableCostData(dimension, cutoffDate, whereClause);
+        fetchVariableCostData(dimension, cutoffDate, filterParams);
         break;
       case 'earned':
-        fetchEarnedPremiumData(cutoffDate, earnedWhereClause, earnedPremiumDetailFilter);
+        fetchEarnedPremiumData(cutoffDate, earnedFilterParams, earnedPremiumDetailFilter);
         break;
       case 'earned-new':
-        fetchNewEarnedPremiumData(earnedWhereClause);
+        fetchNewEarnedPremiumData(earnedFilterParams);
         break;
       case 'expense-forecast':
-        fetchExpenseRatioForecastData(earnedWhereClause, operatingCostRate);
+        fetchExpenseRatioForecastData(earnedFilterParams, operatingCostRate);
         break;
     }
   }, [
     activeSubTab,
     dimension,
     cutoffDate,
-    whereClause,
-    earnedWhereClause,
+    filterParams,
+    earnedFilterParams,
     earnedPremiumDetailFilter,
     operatingCostRate,
     fetchClaimRatioData,
@@ -376,7 +375,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
             onOperatingCostRateChange={(rate) => {
               setOperatingCostRate(rate);
               // 运营成本率变更后重新加载数据
-              fetchExpenseRatioForecastData(earnedWhereClause, rate);
+              fetchExpenseRatioForecastData(earnedFilterParams, rate);
             }}
           />
         );

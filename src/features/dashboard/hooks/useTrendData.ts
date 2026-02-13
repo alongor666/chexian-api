@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createLogger } from '../../../shared/utils/logger';
 import { apiClient } from '../../../shared/api/client';
-import { parseWhereClause } from '../../../shared/utils/sql-parser';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
+import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { ViewPerspective } from '../../../shared/types/view-perspective';
 
 const logger = createLogger('useTrendData');
@@ -35,7 +36,7 @@ export interface QualityBusinessDataPoint {
  * useTrendData Hook 参数
  */
 export interface UseTrendDataOptions {
-  whereClause: string;
+  filters: AdvancedFilterState;
   timeView: TimeView;
   hasOrgFilter: boolean;
   enabled?: boolean;
@@ -74,7 +75,7 @@ function timeViewToGranularity(timeView: TimeView): 'day' | 'week' | 'month' {
  * 趋势数据获取 Hook（API-only 模式）
  */
 export const useTrendData = ({
-  whereClause,
+  filters,
   timeView,
   hasOrgFilter,
   enabled = true,
@@ -89,18 +90,18 @@ export const useTrendData = ({
 
   const fetchTrendFromApi = useCallback(async (requestId: number) => {
     try {
-      logger.info('趋势 API 查询执行', { timeView, whereClause: whereClause.substring(0, 100) });
-
-      const params = parseWhereClause(whereClause);
+      const params = buildFilterParams(filters);
       const granularity = timeViewToGranularity(timeView);
+      logger.info('趋势 API 查询执行', { timeView, granularity });
 
       const trendResponse = await apiClient.getTrend(granularity, params);
 
       if (requestId !== trendRequestIdRef.current) return;
 
+      const orgLabel = hasOrgFilter ? (filters.org_level_3?.[0] || '机构') : '四川';
       const transformedData: TrendDataPoint[] = trendResponse.map((item) => ({
         time_period: item.time_period,
-        org_level_3: item.org_level_3 || (hasOrgFilter ? (params.orgName || params.orgNames?.[0] || '机构') : '四川'),
+        org_level_3: item.org_level_3 || orgLabel,
         premium: item.premium,
         next_month_ratio: item.next_month_ratio ?? 0,
       }));
@@ -111,7 +112,7 @@ export const useTrendData = ({
       if (requestId !== trendRequestIdRef.current) return;
       throw err;
     }
-  }, [whereClause, timeView, hasOrgFilter]);
+  }, [filters, timeView, hasOrgFilter]);
 
   const fetchTrendData = useCallback(async () => {
     if (!enabled) return;

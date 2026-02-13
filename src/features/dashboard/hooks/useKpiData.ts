@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createLogger } from '../../../shared/utils/logger';
 import { apiClient } from '../../../shared/api/client';
-import { parseWhereClause } from '../../../shared/utils/sql-parser';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
+import type { AdvancedFilterState } from '../../../shared/types/data';
 
 const logger = createLogger('useKpiData');
 
@@ -45,7 +46,7 @@ export interface KpiData {
  * useKpiData Hook 参数
  */
 export interface UseKpiDataOptions {
-  whereClause: string;
+  filters: AdvancedFilterState;
   enabled?: boolean;
 }
 
@@ -64,7 +65,7 @@ export interface UseKpiDataResult {
  * KPI 数据获取 Hook（API-only 模式）
  */
 export const useKpiData = ({
-  whereClause,
+  filters,
   enabled = true,
 }: UseKpiDataOptions): UseKpiDataResult => {
   const [kpiData, setKpiData] = useState<KpiData>({});
@@ -75,10 +76,8 @@ export const useKpiData = ({
 
   const fetchFromApi = useCallback(async (requestId: number) => {
     try {
-      logger.info('KPI API 查询执行', { whereClause: whereClause.substring(0, 100) });
-
-      const params = parseWhereClause(whereClause);
-      logger.debug('解析后的参数', params);
+      const params = buildFilterParams(filters);
+      logger.info('KPI API 查询执行', params);
 
       const [kpiResponse, kpiDetailResponse] = await Promise.all([
         apiClient.getKpi(params),
@@ -122,7 +121,7 @@ export const useKpiData = ({
       if (requestId !== requestIdRef.current) return;
       throw err;
     }
-  }, [whereClause]);
+  }, [filters]);
 
   const fetchKpiData = useCallback(async () => {
     if (!enabled) {

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>驾意险推介率分析</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script type="module">
+        import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1/+esm';
+
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const loading = ref(true);
+                const initStatus = ref('正在初始化...');
+                const error = ref(null);
+                const db = ref(null);
+                const selectedDimension = ref('summary');
+                const summaryData = ref(null);
+                const tableData = ref([]);
+                const drillPath = ref([]);
+                const sortKey = ref('total_policy_count');
+                const sortOrder = ref('desc');
+
+                const availableDimensions = [
+                    { value: '三级机构', label: '三级机构', field: '三级机构' },
+                    { value: '终端来源', label: '销售团队', field: '终端来源' },
+                    { value: '业务员', label: '业务员', field: '业务员' },
+                    { value: '客户类别', label: '客户类别', field: '客户类别' },
+                    { value: '是否新车', label: '是否新车', field: "CASE WHEN 是否新车 = true THEN '是' ELSE '否' END" },
+                    { value: '是否过户', label: '是否过户', field: "CASE WHEN 是否过户车 = true THEN '是' ELSE '否' END" },
+                    { value: '是否新能源', label: '是否新能源', field: "CASE WHEN 是否新能源 = true THEN '是' ELSE '否' END" },
+                    { value: '是否电销', label: '是否电销', field: "CASE WHEN 是否电销 = true THEN '是' ELSE '否' END" },
+                    { value: '是否续保', label: '是否续保', field: "CASE WHEN 是否续保 = true THEN '是' ELSE '否' END" }
+                ];
+
+                const tableColumns = [
+                    { key: 'dimension_value', label: '维度', sortable: true, align: 'left' },
+                    { key: 'total_policy_count', label: '车险件数', sortable: true, align: 'right' },
+                    { key: 'total_driver_count', label: '驾意件数', sortable: true, align: 'right' },
+                    { key: 'total_rate', label: '综合推介率', sortable: true, align: 'right' },
+                    { key: 'danjiao_policy_count', label: '单交-车险', sortable: true, align: 'right' },
+                    { key: 'danjiao_driver_count', label: '单交-驾意', sortable: true, align: 'right' },
+                    { key: 'danjiao_rate', label: '单交推介率', sortable: true, align: 'right' },
+                    { key: 'jiaosan_policy_count', label: '交三-车险', sortable: true, align: 'right' },
+                    { key: 'jiaosan_driver_count', label: '交三-驾意', sortable: true, align: 'right' },
+                    { key: 'jiaosan_rate', label: '交三推介率', sortable: true, align: 'right' },
+                    { key: 'zhuquan_policy_count', label: '主全-车险', sortable: true, align: 'right' },
+                    { key: 'zhuquan_driver_count', label: '主全-驾意', sortable: true, align: 'right' },
+                    { key: 'zhuquan_rate', label: '主全推介率', sortable: true, align: 'right' }
+                ];
+
+                const sortedTableData = computed(() => {
+                    const data = [...tableData.value];
+                    data.sort((a, b) => {
+                        let aVal = a[sortKey.value];
+                        let bVal = b[sortKey.value];
+                        if (sortKey.value === 'total_rate') {
+                            aVal = a.total_policy_count > 0 ? a.total_driver_count / a.total_policy_count : 0;
+                            bVal = b.total_policy_count > 0 ? b.total_driver_count / b.total_policy_count : 0;
+                        } else if (sortKey.value === 'danjiao_rate') {
+                            aVal = a.danjiao_policy_count > 0 ? a.danjiao_driver_count / a.danjiao_policy_count : 0;
+                            bVal = b.danjiao_policy_count > 0 ? b.danjiao_driver_count / b.danjiao_policy_count : 0;
+                        } else if (sortKey.value === 'jiaosan_rate') {
+                            aVal = a.jiaosan_policy_count > 0 ? a.jiaosan_driver_count / a.jiaosan_policy_count : 0;
+                            bVal = b.jiaosan_policy_count > 0 ? b.jiaosan_driver_count / b.jiaosan_policy_count : 0;
+                        } else if (sortKey.value === 'zhuquan_rate') {
+                            aVal = a.zhuquan_policy_count > 0 ? a.zhuquan_driver_count / a.zhuquan_policy_count : 0;
+                            bVal = b.zhuquan_policy_count > 0 ? b.zhuquan_driver_count / b.zhuquan_policy_count : 0;
+                        }
+                        return sortOrder.value === 'asc' ? aVal - bVal : bVal - aVal;
+                    });
+                    return data;
+                });
+
+                const formatNumber = (num) => {
+                    if (num === undefined || num === null || isNaN(num)) return '0';
+                    return num.toLocaleString('zh-CN');
+                };
+
+                const formatPercent = (value) => {
+                    if (isNaN(value) || !isFinite(value)) return '0.00%';
+                    return (value * 100).toFixed(2) + '%';
+                };
+
+                const getRateClass = (rate) => {
+                    if (rate >= 0.3) return 'high';
+                    if (rate >= 0.15) return '';
+                    return 'low';
+                };
+
+                const sortBy = (key) => {
+                    if (sortKey.value === key) {
+                        sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortKey.value = key;
+                        sortOrder.value = 'desc';
+                    }
+                };
+
+                const buildWhereClause = () => {
+                    let conditions = ["签单日期 >= DATE '2025-12-01'"];
+                    if (drillPath.value.length > 0) {
+                        drillPath.value.forEach(item => {
+                            const dim = availableDimensions.find(d => d.value === item.dimension);
+                            if (dim) {
+                                if (['是否新车', '是否过户', '是否新能源', '是否电销', '是否续保'].includes(item.dimension)) {
+                                    conditions.push(`${dim.field} = ${item.value === '是' ? "true" : "false"}`);
+                                } else {
+                                    conditions.push(`${dim.field} = '${item.value}'`);
+                                }
+                            }
+                        });
+                    }
+                    return conditions.join(' AND ');
+                };
+
+                const initDB = async () => {
+                    try {
+                        initStatus.value = '正在加载 DuckDB...';
+                        
+                        const JSDELIVR_BUNDLES = {
+                            mvp: {
+                                mainWorker: new Worker('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1/dist/duckdb-browser-mvp.worker.js'),
+                                main: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1/dist/duckdb-browser-mvp.wasm'
+                            }
+                        };
+
+                        const bundle = JSDELIVR_BUNDLES.mvp;
+                        const logger = {
+                            debug: () => {}, info: () => {}, warn: console.warn, error: console.error
+                        };
+                        
+                        const dbInstance = new duckdb.AsyncDuckDB(logger, bundle.mainWorker);
+                        await dbInstance.instantiate(bundle.main);
+                        
+                        initStatus.value = '正在加载 Parquet 文件...';
+                        const conn = await dbInstance.connect();
+                        
+                        // 使用 httpfs 扩展
+                        await conn.query("INSTALL httpfs");
+                        await conn.query("LOAD httpfs");
+                        
+                        // 从服务器读取 Parquet
+                        await conn.query(`
+                            CREATE TABLE policy_data AS 
+                            SELECT * FROM parquet_scan('httpfs://localhost:5174/数据管理/warehouse/fact/policy/车险保单综合明细表0212.parquet')
+                        `);
+                        
+                        await conn.close();
+                        db.value = dbInstance;
+                        
+                    } catch (err) {
+                        console.error('Init error:', err);
+                        error.value = '初始化失败: ' + err.message;
+                        throw err;
+                    }
+                };
+
+                const loadData = async () => {
+                    if (!db.value) return;
+                    
+                    loading.value = true;
+                    try {
+                        const conn = await db.value.connect();
+                        
+                        initStatus.value = '正在查询...';
+                        const whereClause = buildWhereClause();
+                        const dimension = selectedDimension.value;
+
+                        if (dimension === 'summary') {
+                            const result = await conn.query(`
+                                SELECT 
+                                    COUNT(DISTINCT 保单号) as total_policy_count,
+                                    COUNT(DISTINCT CASE WHEN 交叉销售标识 = true THEN 保单号 END) as total_driver_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '单交' THEN 保单号 END) as danjiao_policy_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '单交' AND 交叉销售标识 = true THEN 保单号 END) as danjiao_driver_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '交三' THEN 保单号 END) as jiaosan_policy_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '交三' AND 交叉销售标识 = true THEN 保单号 END) as jiaosan_driver_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '主全' THEN 保单号 END) as zhuquan_policy_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '主全' AND 交叉销售标识 = true THEN 保单号 END) as zhuquan_driver_count
+                                FROM policy_data
+                                WHERE ${whereClause}
+                            `);
+                            
+                            const row = result.toArray()[0];
+                            summaryData.value = {
+                                total_policy_count: row.total_policy_count,
+                                total_driver_count: row.total_driver_count,
+                                danjiao_policy_count: row.danjiao_policy_count,
+                                danjiao_driver_count: row.danjiao_driver_count,
+                                jiaosan_policy_count: row.jiaosan_policy_count,
+                                jiaosan_driver_count: row.jiaosan_driver_count,
+                                zhuquan_policy_count: row.zhuquan_policy_count,
+                                zhuquan_driver_count: row.zhuquan_driver_count
+                            };
+                            tableData.value = [];
+                        } else {
+                            const dim = availableDimensions.find(d => d.value === dimension);
+                            const dimField = dim ? dim.field : dimension;
+                            
+                            const result = await conn.query(`
+                                SELECT 
+                                    ${dimField} as dimension_value,
+                                    COUNT(DISTINCT 保单号) as total_policy_count,
+                                    COUNT(DISTINCT CASE WHEN 交叉销售标识 = true THEN 保单号 END) as total_driver_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '单交' THEN 保单号 END) as danjiao_policy_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '单交' AND 交叉销售标识 = true THEN 保单号 END) as danjiao_driver_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '交三' THEN 保单号 END) as jiaosan_policy_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '交三' AND 交叉销售标识 = true THEN 保单号 END) as jiaosan_driver_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '主全' THEN 保单号 END) as zhuquan_policy_count,
+                                    COUNT(DISTINCT CASE WHEN 险别组合 = '主全' AND 交叉销售标识 = true THEN 保单号 END) as zhuquan_driver_count
+                                FROM policy_data
+                                WHERE ${whereClause}
+                                GROUP BY ${dimField}
+                                HAVING COUNT(DISTINCT 保单号) > 0
+                                ORDER BY total_policy_count DESC
+                            `);
+
+                            const rows = result.toArray();
+                            tableData.value = rows;
+                            
+                            const summary = {
+                                total_policy_count: 0, total_driver_count: 0,
+                                danjiao_policy_count: 0, danjiao_driver_count: 0,
+                                jiaosan_policy_count: 0, jiaosan_driver_count: 0,
+                                zhuquan_policy_count: 0, zhuquan_driver_count: 0
+                            };
+                            rows.forEach(r => {
+                                summary.total_policy_count += r.total_policy_count;
+                                summary.total_driver_count += r.total_driver_count;
+                                summary.danjiao_policy_count += r.danjiao_policy_count;
+                                summary.danjiao_driver_count += r.danjiao_driver_count;
+                                summary.jiaosan_policy_count += r.jiaosan_policy_count;
+                                summary.jiaosan_driver_count += r.jiaosan_driver_count;
+                                summary.zhuquan_policy_count += r.zhuquan_policy_count;
+                                summary.zhuquan_driver_count += r.zhuquan_driver_count;
+                            });
+                            summaryData.value = summary;
+                        }
+
+                        await conn.close();
+                    } catch (err) {
+                        console.error('Query error:', err);
+                        error.value = '查询失败: ' + err.message;
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const onDimensionChange = () => {
+                    drillPath.value = [];
+                    loadData();
+                };
+
+                const drillDown = (row) => {
+                    if (!selectedDimension.value || selectedDimension.value === 'summary') return;
+                    drillPath.value.push({
+                        name: row.dimension_value,
+                        value: row.dimension_value,
+                        dimension: selectedDimension.value
+                    });
+                    loadData();
+                };
+
+                const goToLevel = (level) => {
+                    if (level === -1) drillPath.value = [];
+                    else if (level < drillPath.value.length - 1) drillPath.value = drillPath.value.slice(0, level + 1);
+                    loadData();
+                };
+
+                const resetDrill = () => {
+                    selectedDimension.value = 'summary';
+                    drillPath.value = [];
+                    loadData();
+                };
+
+                onMounted(async () => {
+                    await initDB();
+                    await loadData();
+                });
+
+                return {
+                    loading, initStatus, error,
+                    selectedDimension, availableDimensions,
+                    summaryData, tableData, tableColumns, sortedTableData,
+                    drillPath, sortKey, sortOrder,
+                    formatNumber, formatPercent, getRateClass, sortBy,
+                    onDimensionChange, drillDown, goToLevel, resetDrill
+                };
+            }
+        }).mount('#app');
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; min-height: 100vh; padding: 20px; }
+        .container { max-width: 1600px; margin: 0 auto; }
+        .header { background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); color: white; padding: 24px 32px; border-radius: 12px; margin-bottom: 20px; }
+        .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+        .header p { font-size: 14px; opacity: 0.9; }
+        .filter-panel { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .filter-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .filter-label { font-size: 14px; color: #606266; white-space: nowrap; }
+        .filter-select { padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 6px; font-size: 14px; min-width: 180px; cursor: pointer; background: white; }
+        .filter-select:hover { border-color: #409eff; }
+        .filter-select.active { border-color: #409eff; background: #ecf5ff; }
+        .btn-reset { padding: 8px 16px; background: #f56c6c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .btn-reset:hover { background: #f78989; }
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .summary-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .summary-card .label { font-size: 12px; color: #909399; margin-bottom: 8px; }
+        .summary-card .value { font-size: 24px; font-weight: 600; color: #303133; }
+        .summary-card.highlight .value { color: #1890ff; }
+        .summary-card.rate .value { color: #52c41a; }
+        .data-table { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #ebeef5; font-size: 13px; }
+        th { background: #fafafa; font-weight: 600; color: #606266; position: sticky; top: 0; white-space: nowrap; }
+        th.clickable { cursor: pointer; }
+        th.clickable:hover { background: #f0f0f0; }
+        th.clickable .sort-icon { margin-left: 4px; opacity: 0.5; }
+        th.clickable.sorted .sort-icon { opacity: 1; color: #409eff; }
+        tr:hover td { background: #f5f7fa; }
+        tr.clickable { cursor: pointer; }
+        tr.clickable:hover td { background: #ecf5ff; }
+        .breadcrumb { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .breadcrumb-item { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background: #f0f0f0; border-radius: 4px; font-size: 13px; color: #606266; cursor: pointer; }
+        .breadcrumb-item:hover { background: #e0e0e0; }
+        .breadcrumb-item.current { background: #409eff; color: white; }
+        .breadcrumb-item .arrow { color: #999; }
+        .loading { display: flex; align-items: center; justify-content: center; padding: 60px; color: #909399; }
+        .loading-spinner { width: 32px; height: 32px; border: 3px solid #f0f0f0; border-top-color: #409eff; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 12px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .number { font-family: 'Monaco', 'Menlo', monospace; font-variant-numeric: tabular-nums; text-align: right; }
+        .percentage { color: #52c41a; font-weight: 500; text-align: right; }
+        .percentage.low { color: #faad14; }
+        .percentage.high { color: #52c41a; }
+        .scroll-container { max-height: 600px; overflow: auto; }
+        .error { background: #fff2f0; border: 1px solid #ffccc7; color: #ff4d4f; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <div class="header">
+            <h1>🚗 驾意险推介率分析</h1>
+            <p>四川分公司 - 交叉销售数据分析（签单日期 ≥ 2025-12-01）</p>
+        </div>
+
+        <div v-if="error" class="error">{{ error }}</div>
+
+        <div class="filter-panel">
+            <div class="filter-row">
+                <span class="filter-label">下钻维度：</span>
+                <select v-model="selectedDimension" @change="onDimensionChange" class="filter-select" :class="{active: selectedDimension && selectedDimension !== 'summary'}">
+                    <option value="summary">四川分公司汇总</option>
+                    <option v-for="dim in availableDimensions" :key="dim.value" :value="dim.value">{{ dim.label }}</option>
+                </select>
+                <button v-if="selectedDimension && selectedDimension !== 'summary'" @click="resetDrill" class="btn-reset">重置下钻</button>
+            </div>
+        </div>
+
+        <div v-if="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <span>{{ initStatus || '正在加载数据...' }}</span>
+        </div>
+
+        <template v-else-if="!loading && summaryData">
+            <div class="breadcrumb">
+                <span class="breadcrumb-item" :class="{current: drillPath.length === 0}" @click="goToLevel(-1)">
+                    <span>🏠</span> 四川分公司
+                </span>
+                <template v-for="(crumb, idx) in drillPath" :key="idx">
+                    <span class="arrow">›</span>
+                    <span class="breadcrumb-item" :class="{current: idx === drillPath.length - 1}" @click="goToLevel(idx)">{{ crumb.name }}</span>
+                </template>
+            </div>
+
+            <div class="summary-cards">
+                <div class="summary-card"><div class="label">车险件数</div><div class="value number">{{ formatNumber(summaryData.total_policy_count) }}</div></div>
+                <div class="summary-card highlight"><div class="label">驾意件数</div><div class="value number">{{ formatNumber(summaryData.total_driver_count) }}</div></div>
+                <div class="summary-card rate"><div class="label">综合推介率</div><div class="value number">{{ formatPercent(summaryData.total_policy_count > 0 ? summaryData.total_driver_count / summaryData.total_policy_count : 0) }}</div></div>
+                <div class="summary-card"><div class="label">单交-车险</div><div class="value number">{{ formatNumber(summaryData.danjiao_policy_count) }}</div></div>
+                <div class="summary-card highlight"><div class="label">单交-驾意</div><div class="value number">{{ formatNumber(summaryData.danjiao_driver_count) }}</div></div>
+                <div class="summary-card rate"><div class="label">单交推介率</div><div class="value number">{{ formatPercent(summaryData.danjiao_policy_count > 0 ? summaryData.danjiao_driver_count / summaryData.danjiao_policy_count : 0) }}</div></div>
+                <div class="summary-card"><div class="label">交三-车险</div><div class="value number">{{ formatNumber(summaryData.jiaosan_policy_count) }}</div></div>
+                <div class="summary-card highlight"><div class="label">交三-驾意</div><div class="value number">{{ formatNumber(summaryData.jiaosan_driver_count) }}</div></div>
+                <div class="summary-card rate"><div class="label">交三推介率</div><div class="value number">{{ formatPercent(summaryData.jiaosan_policy_count > 0 ? summaryData.jiaosan_driver_count / summaryData.jiaosan_policy_count : 0) }}</div></div>
+                <div class="summary-card"><div class="label">主全-车险</div><div class="value number">{{ formatNumber(summaryData.zhuquan_policy_count) }}</div></div>
+                <div class="summary-card highlight"><div class="label">主全-驾意</div><div class="value number">{{ formatNumber(summaryData.zhuquan_driver_count) }}</div></div>
+                <div class="summary-card rate"><div class="label">主全推介率</div><div class="value number">{{ formatPercent(summaryData.zhuquan_policy_count > 0 ? summaryData.zhuquan_driver_count / summaryData.zhuquan_policy_count : 0) }}</div></div>
+            </div>
+
+            <div class="data-table" v-if="tableData.length > 0">
+                <div class="scroll-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th v-for="col in tableColumns" :key="col.key" :class="{clickable: col.sortable, sorted: sortKey === col.key}" @click="col.sortable && sortBy(col.key)" :style="{textAlign: col.align || 'left'}">
+                                    {{ col.label }}
+                                    <span v-if="col.sortable" class="sort-icon">{{ sortKey === col.key ? (sortOrder === 'asc' ? '↑' : '↓') : '↕' }}</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(row, idx) in sortedTableData" :key="idx" class="clickable" @click="drillDown(row)">
+                                <td>{{ row.dimension_value }}</td>
+                                <td class="number">{{ formatNumber(row.total_policy_count) }}</td>
+                                <td class="number">{{ formatNumber(row.total_driver_count) }}</td>
+                                <td class="number percentage" :class="getRateClass(row.total_policy_count > 0 ? row.total_driver_count / row.total_policy_count : 0)">{{ formatPercent(row.total_policy_count > 0 ? row.total_driver_count / row.total_policy_count : 0) }}</td>
+                                <td class="number">{{ formatNumber(row.danjiao_policy_count) }}</td>
+                                <td class="number">{{ formatNumber(row.danjiao_driver_count) }}</td>
+                                <td class="number percentage" :class="getRateClass(row.danjiao_policy_count > 0 ? row.danjiao_driver_count / row.danjiao_policy_count : 0)">{{ formatPercent(row.danjiao_policy_count > 0 ? row.danjiao_driver_count / row.danjiao_policy_count : 0) }}</td>
+                                <td class="number">{{ formatNumber(row.jiaosan_policy_count) }}</td>
+                                <td class="number">{{ formatNumber(row.jiaosan_driver_count) }}</td>
+                                <td class="number percentage" :class="getRateClass(row.jiaosan_policy_count > 0 ? row.jiaosan_driver_count / row.jiaosan_policy_count : 0)">{{ formatPercent(row.jiaosan_policy_count > 0 ? row.jiaosan_driver_count / row.jiaosan_policy_count : 0) }}</td>
+                                <td class="number">{{ formatNumber(row.zhuquan_policy_count) }}</td>
+                                <td class="number">{{ formatNumber(row.zhuquan_driver_count) }}</td>
+                                <td class="number percentage" :class="getRateClass(row.zhuquan_policy_count > 0 ? row.zhuquan_driver_count / row.zhuquan_policy_count : 0)">{{ formatPercent(row.zhuquan_policy_count > 0 ? row.zhuquan_driver_count / row.zhuquan_policy_count : 0) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div v-else-if="selectedDimension === 'summary'" class="data-table">
+                <div style="padding: 60px; text-align: center; color: #909399;">
+                    <p>请选择下钻维度查看明细数据</p>
+                </div>
+            </div>
+        </template>
+    </div>
+</body>
+</html>
