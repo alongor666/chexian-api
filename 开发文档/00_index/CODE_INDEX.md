@@ -2,64 +2,206 @@
 
 **核心层目录地图**：快速定位关键代码入口与模块职责。
 
+> 本项目为纯 API 模式（从 chexianYJFX 拆分），所有数据通过后端 DuckDB + REST API 获取，无 DuckDB-WASM / Local 模式。
+
 ## 核心层目录
 
 | 层级 | 路径 | 职责 | 索引文件 |
 |------|------|------|----------|
-| 共享逻辑层 | `src/shared/` | DuckDB客户端、数据规范化、SQL模板 | [INDEX.md](../../src/shared/INDEX.md) |
-| 功能特性层 | `src/features/` | Dashboard、Filters 业务功能 | [INDEX.md](../../src/features/INDEX.md) |
+| 后端服务层 | `server/src/` | Express 服务、DuckDB 查询、SQL 生成、认证鉴权 | [server/src/sql/INDEX.md](../../server/src/sql/INDEX.md) |
+| 前端共享层 | `src/shared/` | API 客户端、上下文管理、通用工具、类型定义 | [INDEX.md](../../src/shared/INDEX.md) |
+| 功能特性层 | `src/features/` | Dashboard、Filters 等 13 个业务功能模块 | [INDEX.md](../../src/features/INDEX.md) |
 | UI 组件层 | `src/widgets/` | Charts、KPI、Table 通用组件 | [INDEX.md](../../src/widgets/INDEX.md) |
 | 自动化脚本 | `scripts/` | 治理校验、构建、CI/CD | [INDEX.md](../../scripts/INDEX.md) |
 
 ## 快速入口
 
-### 数据处理链路
+### 数据处理链路（API 模式）
 ```
-用户上传 Parquet
+用户登录 → AuthContext 验证 → JWT Token
   ↓
-src/shared/duckdb/client.ts:loadParquet()        # 加载文件
+src/shared/api/client.ts                          # 前端 API 客户端（统一入口）
+  ├─ getKpi(filters)                              # /api/query/kpi
+  ├─ getKpiDetail(filters)                        # /api/query/kpi-detail
+  ├─ getTrend(granularity, filters)               # /api/query/trend
+  ├─ getSalesmanRanking(limit, filters)           # /api/query/salesman-ranking
+  └─ executeCustomQuery(sql)                      # /api/query/custom
   ↓
-src/shared/normalize/validator.ts:validateSchema() # 列名校验
+server/src/routes/query.ts                        # 后端 API 路由（认证 + 参数校验）
   ↓
-src/shared/duckdb/client.ts:78-95                # 创建 PolicyFact 视图
+server/src/sql/*.ts                               # SQL 生成器（14 个模块）
   ↓
-src/shared/sql/kpi.ts:generateKpiSQL()           # 生成查询
+server/src/services/duckdb.ts                     # 后端 DuckDB 服务（查询执行）
   ↓
-src/shared/duckdb/worker.ts:query()              # Worker 执行
+src/features/dashboard/hooks/useDashboardData.ts  # 前端 Hook（数据获取）
   ↓
-src/features/dashboard/Dashboard.tsx              # UI 渲染
+src/features/*                                    # 功能模块 UI 渲染
 ```
+
+### 后端核心模块
+
+#### 路由层 (`server/src/routes/`)
+
+| 文件 | 职责 |
+|------|------|
+| `query.ts` | 查询路由（KPI/趋势/排名/货车/增长/系数/成本/续保/自定义SQL） |
+| `data.ts` | 数据管理路由（文件上传/列表/加载） |
+| `auth.ts` | 认证路由（登录/注册/Token 刷新） |
+| `filters.ts` | 筛选选项路由（机构/业务员/客户类别等） |
+| `ai.ts` | AI 助手路由（NL2SQL/智能分析） |
+
+#### SQL 生成器 (`server/src/sql/`)
+
+| 文件 | 职责 | 关键函数 |
+|------|------|----------|
+| `kpi.ts` | 基础 KPI 查询 | `generateKpiQuery()`, `generateTopNQuery()` |
+| `kpi-detail.ts` | KPI 详细数据（环形图） | `generateKpiDetailQuery()` |
+| `trend.ts` | 趋势分析（日/周/月/年） | `generatePremiumTrendQuery()` |
+| `salesman-ranking.ts` | 业务员排名 | `generateSalesmanAllBusinessRankingQuery()` |
+| `truck.ts` | 营业货车专项分析 | `generateTonnageRoseQuery()`, `generateOrgByTonnageQuery()` |
+| `growth.ts` | 增长率分析（同比/环比） | `generateGrowthQuery()` |
+| `coefficient.ts` | 商车自主定价系数监控 | `generateCoefficientByOrgQuery()`, `generateFullCoefficientQuery()` |
+| `cost.ts` | 成本分析（赔付率/费用率等） | `generateClaimRatioQuery()`, `generateExpenseRatioQuery()` |
+| `renewal.ts` | 续保率分析 | `generateRenewalRateQuery()`, `generateRenewalDetailTableQuery()` |
+| `renewal-drilldown.ts` | 续保下钻分析 | 六级下钻（分公司→机构→团队→业务员→客户→险别） |
+| `premiumPlan.ts` | 保费达成下钻分析 | 计划 vs 实际保费、达成率 |
+| `perspective-adapter.ts` | 视角SQL适配层 | SELECT/WHERE/GROUP BY 视角切换 |
+
+#### 服务层 (`server/src/services/`)
+
+| 文件 | 职责 |
+|------|------|
+| `duckdb.ts` | DuckDB 连接池、查询执行、数据加载（单例） |
+| `column-normalizer.ts` | 列名标准化（中文→英文标准列名） |
+| `auth.ts` | 认证服务（JWT 生成、密码验证） |
+| `permission.ts` | 权限服务（机构过滤、SQL WHERE 子句生成） |
+| `zhipu.ts` | 智谱 AI 服务（NL2SQL） |
+
+#### 列名映射与校验 (`server/src/normalize/`)
+
+| 文件 | 职责 |
+|------|------|
+| `mapping.ts` | 列名别名定义（36 个业务字段 → 多别名映射） |
+| `validator.ts` | 数据类型校验、数据质量检查 SQL 生成 |
+
+#### 中间件 (`server/src/middleware/`)
+
+| 文件 | 职责 |
+|------|------|
+| `auth.ts` | JWT 认证中间件 |
+| `error.ts` | 全局错误处理中间件 |
+| `permission.ts` | 角色权限中间件 |
+
+#### 工具函数 (`server/src/utils/`)
+
+| 文件 | 职责 |
+|------|------|
+| `sql-validator.ts` | SQL 安全校验（只读检查） |
+| `sql-sanitizer.ts` | SQL 参数转义 |
+| `sql-permission-injector.ts` | 权限过滤注入 |
+| `security.ts` | 安全工具（API Key 脱敏、日志安全） |
+| `queryBuilder.ts` | 查询构建工具 |
+| `coefficient-period.ts` | 系数监控周期工具 |
+| `logger.ts` | 日志工具 |
+
+### 前端核心模块
+
+#### API 客户端 (`src/shared/api/`)
+
+| 文件 | 职责 |
+|------|------|
+| `client.ts` | 统一 API 客户端（JWT 认证、错误处理、所有后端请求入口） |
+
+#### 上下文管理 (`src/shared/contexts/`)
+
+| 文件 | 职责 |
+|------|------|
+| `DataContext.tsx` | 数据源状态管理（`isDataLoaded` 唯一来源，固定 `dataSource='api'`） |
+| `AuthContext.tsx` | 认证状态管理（JWT Token、登录/登出） |
+| `FilterContext.tsx` | 筛选器状态管理 |
+| `PermissionContext.tsx` | 角色权限管理 |
+
+#### 通用 Hooks (`src/shared/hooks/`)
+
+| 文件 | 职责 |
+|------|------|
+| `useApiQuery.ts` | API 查询 Hook（封装请求/缓存/错误处理） |
+| `useDataFetch.ts` | 数据获取 Hook |
+| `useLoadingStates.ts` | 多状态加载管理 |
+| `usePagination.ts` | 分页 Hook |
+| `useFocusTrap.ts` | 焦点陷阱 Hook |
+
+#### 功能模块 (`src/features/`)
+
+| 模块 | 路径 | 职责 |
+|------|------|------|
+| Home | `home/` | 首页数据导入（拖拽上传、最近文件） |
+| Dashboard | `dashboard/` | 仪表盘主视图（KPI、图表、表格、续保分析） |
+| Filters | `filters/` | 筛选面板（日期/机构/业务员/险别） |
+| Growth | `growth/` | 增长率分析（同比/环比/年累计） |
+| SQL Query | `sql-query/` | 交互式SQL查询（只读+聚合，NL2SQL） |
+| Coefficient | `coefficient/` | 商车自主定价系数监控 |
+| Cost | `cost/` | 成本分析（赔付率/费用率/综合费用率/变动成本率） |
+| Premium Report | `premium-report/` | 保费报表（机构保费+业务员明细） |
+| Marketing Report | `marketing-report/` | 营销战报（假日营销分析） |
+| Auth | `auth/` | 登录/认证页面 |
+| Report | `report/` | 报表模板功能 |
+| Settings | `settings/` | 设置面板 |
+| File | `file/` | 文件菜单（数据导入/导出） |
+| Pages | `pages/` | 页面路由组件 |
 
 ### 关键类型定义
 
 | 类型/接口 | 路径 | 说明 |
 |-----------|------|------|
-| `ColumnMapping` | `src/shared/normalize/mapping.ts` | 列名映射类型（支持多别名） |
-| `WorkerMessage` | `src/shared/types/duckdb.ts` | Worker 通信协议 |
-| `ValidationResult` | `src/shared/normalize/validator.ts` | 数据校验结果 |
-| `KpiConfig` | `src/shared/sql/kpi.ts` | KPI 查询配置 |
+| `ColumnMapping` | `server/src/normalize/mapping.ts` | 列名映射类型（36 个字段，支持多别名） |
+| `DomainField` | `server/src/normalize/mapping.ts` | 业务字段枚举类型 |
+| `ValidationResult` | `server/src/normalize/mapping.ts` | 列名校验结果 |
+| `TypeValidationResult` | `server/src/normalize/validator.ts` | 数据类型校验结果 |
+| `KpiData` | `server/src/types/data.ts` | 后端 KPI 指标数据 |
+| `TrendDataPoint` | `server/src/types/data.ts` | 趋势数据点 |
+| `AdvancedFilterState` | `server/src/types/data.ts` | 高级筛选器状态 |
+| `KpiData` (前端) | `src/shared/api/client.ts` | 前端 KPI 数据接口 |
+| `KpiDetailData` | `src/shared/api/client.ts` | KPI 详细数据（环形图） |
+| `TrendData` | `src/shared/api/client.ts` | 趋势数据接口 |
+| `FileInfo` | `src/shared/api/client.ts` | 文件信息接口 |
+| `DataContextValue` | `src/shared/contexts/DataContext.tsx` | 数据上下文值类型 |
 
 ### 禁止直接修改的文件
 
 | 文件 | 原因 | 如需变更 |
 |------|------|----------|
-| `src/shared/normalize/mapping.ts` | 指标口径定义 | 只能追加新别名，不得删除；需 BACKLOG 证据 |
-| `src/shared/sql/kpi.ts` | SQL 业务规则 | 只能追加新模板，不得改已有逻辑；需 BACKLOG 证据 |
-| `src/shared/duckdb/client.ts:78-95` | PolicyFact 视图定义 | 涉及业务口径，需产品确认 + BACKLOG 登记 |
+| `server/src/services/duckdb.ts` | 后端 DuckDB 查询执行逻辑 | 不得修改已有逻辑；只能追加新功能；需 BACKLOG 登记 |
+| `server/src/routes/query.ts` | 后端 API 路由定义 | 不得删除已有路由；只能追加新路由；需 BACKLOG 登记 |
+| `server/src/normalize/mapping.ts` | 指标口径定义、列名别名映射 | 只能追加新别名，不得删除；需 BACKLOG 证据 |
+| `server/src/sql/kpi.ts` | KPI SQL 业务规则 | 只能追加新模板，不得改已有逻辑；需 BACKLOG 证据 |
+| `server/src/sql/kpi-detail.ts` | KPI 详细数据 SQL 逻辑 | 只能追加新模板，不得改已有逻辑；需 BACKLOG 证据 |
 
 ## 测试入口
 
 | 测试文件 | 覆盖范围 | 路径 |
 |----------|----------|------|
-| `mapping.test.ts` | 别名解析、列名映射 | `tests/mapping.test.ts` |
-| `validator.test.ts` | 类型验证、数据质量 | `tests/validator.test.ts` |
-| `kpi.test.ts` | SQL 生成、业务逻辑 | `tests/kpi.test.ts` |
+| `security.test.ts` | 后端安全工具函数 | `server/src/utils/__tests__/security.test.ts` |
+| `client.test.ts` | API 客户端 | `tests/api/client.test.ts` |
+| `data-source.test.ts` | 数据源逻辑 | `tests/api/data-source.test.ts` |
+| `sql-parser.test.ts` | SQL 解析 | `tests/api/sql-parser.test.ts` |
+| `sql-validator.test.ts` | SQL 校验（前端） | `src/shared/utils/__tests__/sql-validator.test.ts` |
+| `sqlValidator.test.ts` | SQL 校验（NL2SQL） | `src/features/sql-query/aiSql/__tests__/sqlValidator.test.ts` |
+| `sqlGenerator.test.ts` | SQL 生成器 | `src/features/sql-query/queryBuilder/__tests__/sqlGenerator.test.ts` |
+| `formatters.test.ts` | 格式化函数 | `tests/formatters.test.ts` |
+| `queryBuilder.test.ts` | 查询构建 | `tests/queryBuilder.test.ts` |
+| `security.test.ts` | 安全工具 | `tests/security.test.ts` |
+| `template-engine.test.ts` | 模板引擎 | `tests/template-engine.test.ts` |
+| `holidayUtils.test.ts` | 假日工具 | `tests/marketing-report/holidayUtils.test.ts` |
+| `ai-insights/*.test.ts` | AI 洞察 | `src/shared/ai-insights/__tests__/` |
+| `critical-path.test.ts` | 关键路径集成测试 | `tests/integration/critical-path.test.ts` |
 
-运行测试：`bun test`
+运行测试：`bun run test`（注意：不是 `bun test`）
 
 ## 链接到其他索引
 
 - **文档索引**: [DOC_INDEX.md](./DOC_INDEX.md) - 业务规则、架构文档
+- **数据索引**: [DATA_INDEX.md](./DATA_INDEX.md) - 字段定义、业务规则、分析场景
 - **进展索引**: [PROGRESS_INDEX.md](./PROGRESS_INDEX.md) - 任务状态、待办事项
 
 ---
@@ -68,3 +210,6 @@ src/features/dashboard/Dashboard.tsx              # UI 渲染
 - 新增核心层目录：必须创建 INDEX.md 并在此处登记。
 - 新增关键类型：必须在"关键类型定义"表格登记。
 - 修改禁止文件：必须先在 BACKLOG.md 登记需求并提供证据链。
+
+**变更记录**：
+- 2026-02-13：全面更新为 API-only 架构，移除所有 DuckDB-WASM/Local 模式引用，更新数据链路为前端 API Client → 后端路由 → SQL 生成器 → DuckDB 服务，补全后端模块清单（路由/SQL/服务/中间件/工具）、前端模块清单（API/上下文/Hooks/功能模块）、测试清单。

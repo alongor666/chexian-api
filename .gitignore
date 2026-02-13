@@ -58,7 +58,11 @@ coverage/
 2025年复盘/2025fupan/
 2025年复盘/dashboard-project/
 .obsidian/
+# 环境变量（含密钥，禁止提交）
+.env
 .env.local
+.env.production
+server/.env
 
 # 本地设置（不提交）
 .claude/settings.local.json
