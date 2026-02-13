@@ -422,6 +422,43 @@ def process_new_fields(df):
         for mode, count in mode_counts.items():
             print(f"         {mode}: {count:,} ({count/len(df)*100:.2f}%)")
 
+    # 7. 处理车险分等级（字符串等级：A-G/X，保留原值）
+    if '车险分等级' in df.columns:
+        print(f"\n   处理车险分等级:")
+        print(f"      原始值分布: {df['车险分等级'].value_counts(dropna=False).head(10).to_dict()}")
+        df['车险分等级'] = df['车险分等级'].where(df['车险分等级'].notna(), None)
+        grade_count = df['车险分等级'].notna().sum()
+        print(f"      ✅ 车险分等级: {grade_count:,} 条有值 ({grade_count/len(df)*100:.2f}%)")
+
+    # 8. 处理小货车评分（字符串等级：A-E/X）
+    if '小货车评分' in df.columns:
+        print(f"\n   处理小货车评分:")
+        df['小货车评分'] = df['小货车评分'].where(df['小货车评分'].notna(), None)
+        score_count = df['小货车评分'].notna().sum()
+        print(f"      ✅ 小货车评分: {score_count:,} 条有值 ({score_count/len(df)*100:.2f}%)")
+
+    # 9. 处理大货车评分（字符串等级：A-E/X）
+    if '大货车评分' in df.columns:
+        print(f"\n   处理大货车评分:")
+        df['大货车评分'] = df['大货车评分'].where(df['大货车评分'].notna(), None)
+        score_count = df['大货车评分'].notna().sum()
+        print(f"      ✅ 大货车评分: {score_count:,} 条有值 ({score_count/len(df)*100:.2f}%)")
+
+    # 10. 处理交叉销售标识（布尔值：是→True，否→False）
+    if '交叉销售标识' in df.columns:
+        print(f"\n   处理交叉销售标识:")
+        print(f"      原始值分布: {df['交叉销售标识'].value_counts().to_dict()}")
+        df['交叉销售标识'] = df['交叉销售标识'].astype(str).map({'是': True, '否': False}).fillna(False)
+        cross_sell_count = df['交叉销售标识'].sum()
+        print(f"      ✅ 交叉销售: {cross_sell_count:,} ({cross_sell_count/len(df)*100:.2f}%)")
+
+    # 11. 处理交叉销售保费-驾意（数值，重命名去连字符）
+    if '交叉销售保费-驾意' in df.columns:
+        print(f"\n   处理交叉销售保费-驾意:")
+        df['交叉销售保费_驾意'] = pd.to_numeric(df['交叉销售保费-驾意'], errors='coerce').fillna(0.0)
+        total = df['交叉销售保费_驾意'].sum()
+        print(f"      ✅ 交叉销售保费_驾意: 总计 {total:,.2f} 元")
+
     return df
 
 def process_dates(df):
@@ -541,7 +578,12 @@ def finalize_schema(df):
         '赔案件数',
         '已报告赔款',
         '费用金额',
-        '续保模式'
+        '续保模式',
+        '车险分等级',
+        '小货车评分',
+        '大货车评分',
+        '交叉销售标识',
+        '交叉销售保费_驾意'
     ]
 
     # 选择存在的字段

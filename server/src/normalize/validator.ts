@@ -45,6 +45,12 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   reported_claims: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'], // 数值类型
   fee_amount: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'], // 数值类型
   renewal_mode: ['VARCHAR', 'TEXT', 'STRING'],
+  // 5个新增字段预期类型
+  insurance_grade: ['VARCHAR', 'TEXT', 'STRING'],
+  small_truck_score: ['VARCHAR', 'TEXT', 'STRING'],
+  large_truck_score: ['VARCHAR', 'TEXT', 'STRING'],
+  is_cross_sell: ['BOOLEAN', 'BOOL', 'INTEGER', 'TINYINT', 'VARCHAR'],
+  cross_sell_premium_driver: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'],
 };
 
 /**

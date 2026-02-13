@@ -223,6 +223,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
     { key: 'is_renewal', label: '续保状态', onState: '续保', offState: '非续保' },
     { key: 'is_telemarketing', label: '销售渠道', onState: '电销', offState: '非电销' },
     { key: 'insurance_type', label: '险类', onState: '交强险', offState: '商业保险' },
+    { key: 'is_cross_sell', label: '交叉销售', onState: '交叉销售', offState: '非交叉销售' },
   ];
 
   // 衍生维度（快捷组合）

@@ -20,7 +20,7 @@
 
 > 本文档描述的是**原始 Parquet 数据**的完整字段。但 AI SQL 生成器查询的是 **PolicyFact 视图**，该视图**不包含所有字段**。
 
-**PolicyFact 视图可用字段** (26个)：
+**PolicyFact 视图可用字段** (31个)：
 ```
 policy_no, premium, policy_date, insurance_start_date,
 salesman_name, org_level_3, region_group, customer_category,
@@ -28,7 +28,9 @@ insurance_type, coverage_combination, is_renewal, is_new_car,
 is_transfer, is_nev, is_telemarketing, tonnage_segment,
 is_renewable, is_commercial_insure, terminal_source,
 commercial_pricing_factor, vehicle_frame_no, is_quote,
-claim_cases, reported_claims, fee_amount, renewal_mode
+claim_cases, reported_claims, fee_amount, renewal_mode,
+insurance_grade, small_truck_score, large_truck_score,
+is_cross_sell, cross_sell_premium_driver
 ```
 
 **❌ 以下字段在 PolicyFact 视图中不可用**：
@@ -54,6 +56,9 @@ claim_cases, reported_claims, fee_amount, renewal_mode
 | `renewal_policy_no` | STRING | 续保单号 | 同上，36.4%有值（空值=非续保） |
 | `endorsement_no` | STRING | 批单号 | 保单号-序号，如 `xxx-001`，1.8%有值 |
 | `vehicle_frame_no` | STRING | 车架号(VIN) | 17位，28万+唯一值 |
+| `insurance_grade` | STRING | 车险分等级 | A/B/C/D/E/F/G/X，46.9%有值 |
+| `small_truck_score` | STRING | 小货车评分 | A/B/C/D/E/X，4.8%有值 |
+| `large_truck_score` | STRING | 大货车评分 | A/B/C/D/E/X，1.0%有值 |
 
 ### 1.2 日期字段
 
@@ -76,6 +81,7 @@ claim_cases, reported_claims, fee_amount, renewal_mode
 | `commercial_pricing_factor` | FLOAT64 | 商车自主定价系数 | 0.5 ~ 1.5 | AVG |
 | `reported_claims` | FLOAT64 | 已报告赔款（元） | 0 ~ 高值 | SUM |
 | `fee_amount` | FLOAT64 | 费用金额（元） | 0 ~ 高值 | SUM |
+| `cross_sell_premium_driver` | FLOAT64 | 交叉销售保费-驾意（元） | 0 ~ 高值 | SUM |
 | `claim_cases` | INT64 | 赔案件数 | 0 ~ N | SUM |
 
 **保费特殊规则**:
@@ -95,6 +101,7 @@ claim_cases, reported_claims, fee_amount, renewal_mode
 | `is_transfer` | 是否过户车 | 8.8% | 二手车过户 |
 | `is_telemarketing` | 是否电销 | 8.3% | 电话销售渠道 |
 | `is_quote` | 是否报价 | 17.9% | 报价记录（非正式保单） |
+| `is_cross_sell` | 交叉销售标识 | ~36% | 有驾意险交叉销售 |
 
 ---
 
@@ -201,6 +208,37 @@ claim_cases, reported_claims, fee_amount, renewal_mode
 
 ### 2.9 续保模式 (renewal_mode)
 
+> 注：§2.10 车险分等级 和 §2.11 货车评分 见下方
+
+### 2.10 车险分等级 (insurance_grade)
+
+| 值 | 说明 |
+|----|------|
+| `A` | 最优等级 |
+| `B` | 优良 |
+| `C` | 良好 |
+| `D` | 一般 |
+| `E` | 较差 |
+| `F` | 差 |
+| `G` | 最差 |
+| `X` | 未评定/不适用 |
+
+**空值率**: ~46.9%（无等级数据）
+
+### 2.11 货车评分 (small_truck_score / large_truck_score)
+
+| 值 | 说明 |
+|----|------|
+| `A` | 优 |
+| `B` | 良 |
+| `C` | 中 |
+| `D` | 差 |
+| `E` | 极差 |
+| `X` | 未评定/不适用 |
+
+- `small_truck_score` 空值率 ~95.2%（仅小货车有值）
+- `large_truck_score` 空值率 ~99.0%（仅大货车有值）
+
 | 值 | 占比 | 说明 |
 |----|------|------|
 | `自留` | 18.1% | 原业务员续保 |
@@ -261,6 +299,11 @@ claim_cases, reported_claims, fee_amount, renewal_mode
 | 交三 | `coverage_combination = '交三'` |
 | 统保、套单 | `is_commercial_insure = '套单'` |
 | 退保 | `endorsement_type = '16退保'` |
+| 交叉销售、驾意 | `is_cross_sell = TRUE` |
+| 车险等级A、优质车险 | `insurance_grade = 'A'` |
+| 小货车评分 | `small_truck_score IS NOT NULL` |
+| 大货车评分 | `large_truck_score IS NOT NULL` |
+| 交叉销售保费 | `SUM(cross_sell_premium_driver)` |
 
 ---
 
@@ -442,5 +485,6 @@ ORDER BY "达成率%" DESC
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| v1.2 | 2026-02-12 | 新增5个字段：insurance_grade, small_truck_score, large_truck_score, is_cross_sell, cross_sell_premium_driver |
 | v1.1 | 2026-02-01 | 添加 SalesmanPlanFact 视图说明；明确 PolicyFact 可用字段 |
 | v1.0 | 2026-01-31 | 初始版本，整合业务规则字典与 AI SQL 需求 |

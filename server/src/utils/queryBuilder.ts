@@ -143,6 +143,17 @@ export function buildWhereClauseFromFilters(
     conditions.push(`is_renewable = ${filters.is_renewable}`);
   }
 
+  // Boolean filter - 交叉销售标识
+  if (filters.is_cross_sell !== undefined && filters.is_cross_sell !== null) {
+    conditions.push(`is_cross_sell = ${filters.is_cross_sell}`);
+  }
+
+  // Multi-select filter - 车险分等级
+  if (filters.insurance_grade && filters.insurance_grade.length > 0) {
+    const values = filters.insurance_grade.map(v => `'${sanitizeString(v)}'`).join(', ');
+    conditions.push(`insurance_grade IN (${values})`);
+  }
+
   return conditions.join(' AND ');
 }
 
