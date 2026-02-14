@@ -1,15 +1,13 @@
 import React from 'react';
 import { PremiumReportPanel } from '../premium-report';
+import { PageFilterPanel } from '../../components/layout/PageFilterPanel';
 
-/**
- * 保费报表页面
- *
- * 筛选器统一在侧边栏中管理（SidebarFilterPanel），使用 report preset。
- */
 export const PremiumReportPage: React.FC = () => {
   return (
-    <div className="p-4">
-      <PremiumReportPanel />
-    </div>
+    <PageFilterPanel preset="report">
+      <div className="p-4">
+        <PremiumReportPanel />
+      </div>
+    </PageFilterPanel>
   );
 };

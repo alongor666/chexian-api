@@ -100,6 +100,10 @@ export type {
   SortDirection,
 } from './Table'
 
+// Tabs 标签页
+export { Tabs } from './Tabs'
+export type { TabsProps, TabItem } from './Tabs'
+
 // Icon 图标
 export { Icon } from './Icon'
 export type { IconSize } from './Icon'

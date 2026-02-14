@@ -419,6 +419,22 @@ class ApiClient {
   }
 
   /**
+   * 获取续保下钻分析数据
+   */
+  async getRenewalDrilldown(params?: Record<string, any>): Promise<any[]> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value));
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/renewal-drilldown${query ? `?${query}` : ''}`);
+  }
+
+  /**
    * 获取车驾意推介率数据
    */
   async getCrossSellAnalysis(params: {
@@ -443,6 +459,47 @@ class ApiClient {
   }
 
   /**
+   * 获取车驾意推介率 - 时间维度汇总数据
+   */
+  async getCrossSellTimePeriod(params?: Record<string, string>): Promise<{
+    maxDate: string;
+    rows: Array<{
+      coverage_combination: string;
+      day_auto_count: number;
+      day_driver_count: number;
+      day_premium: number;
+      day_rate: number;
+      day_avg_premium: number;
+      week_auto_count: number;
+      week_driver_count: number;
+      week_premium: number;
+      week_rate: number;
+      week_avg_premium: number;
+      month_auto_count: number;
+      month_driver_count: number;
+      month_premium: number;
+      month_rate: number;
+      month_avg_premium: number;
+      year_auto_count: number;
+      year_driver_count: number;
+      year_premium: number;
+      year_rate: number;
+      year_avg_premium: number;
+    }>;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, value);
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/cross-sell-summary${query ? `?${query}` : ''}`);
+  }
+
+  /**
    * 获取业务员排名
    */
   async getSalesmanRanking(
@@ -458,6 +515,22 @@ class ApiClient {
       });
     }
     return this.request(`/query/salesman-ranking?${params.toString()}`);
+  }
+
+  /**
+   * 获取营销战报数据
+   */
+  async getMarketingReport(params?: Record<string, any>): Promise<any[]> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value));
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/marketing-report${query ? `?${query}` : ''}`);
   }
 
   /**

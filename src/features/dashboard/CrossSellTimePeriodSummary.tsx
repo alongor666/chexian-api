@@ -1,0 +1,178 @@
+/**
+ * 车驾意推介率 - 时间维度汇总表格
+ * Cross-Sell Time Period Summary Tables
+ *
+ * 展示推介率、件均保费、保费三个维度的当日/当周/当月/当年汇总数据
+ */
+
+import { memo } from 'react';
+import type { AdvancedFilterState } from '@/shared/types/data';
+import { Table } from '@/shared/ui/Table';
+import type { TableColumn } from '@/shared/ui/Table';
+import { textStyles, cn } from '@/shared/styles';
+import { formatPercent, formatAverage, formatPremiumWan } from '@/shared/utils/formatters';
+import { useCrossSellTimePeriod } from './hooks/useCrossSellTimePeriod';
+import type { VehicleCategory, TimePeriodRow } from './hooks/useCrossSellTimePeriod';
+
+interface CrossSellTimePeriodSummaryProps {
+  vehicleCategory: VehicleCategory;
+  filters: AdvancedFilterState;
+}
+
+type TimePeriodRecord = TimePeriodRow & Record<string, unknown>;
+
+const rateColumns: TableColumn<TimePeriodRecord>[] = [
+  { key: 'label', title: '险别组合', dataIndex: 'label', align: 'left' },
+  {
+    key: 'day',
+    title: '当日',
+    dataIndex: 'day',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatPercent(Number(value))}</span>,
+  },
+  {
+    key: 'week',
+    title: '当周',
+    dataIndex: 'week',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatPercent(Number(value))}</span>,
+  },
+  {
+    key: 'month',
+    title: '当月',
+    dataIndex: 'month',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatPercent(Number(value))}</span>,
+  },
+  {
+    key: 'year',
+    title: '当年',
+    dataIndex: 'year',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatPercent(Number(value))}</span>,
+  },
+];
+
+const avgPremiumColumns: TableColumn<TimePeriodRecord>[] = [
+  { key: 'label', title: '险别组合', dataIndex: 'label', align: 'left' },
+  {
+    key: 'day',
+    title: '当日',
+    dataIndex: 'day',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatAverage(Number(value))}</span>,
+  },
+  {
+    key: 'week',
+    title: '当周',
+    dataIndex: 'week',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatAverage(Number(value))}</span>,
+  },
+  {
+    key: 'month',
+    title: '当月',
+    dataIndex: 'month',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatAverage(Number(value))}</span>,
+  },
+  {
+    key: 'year',
+    title: '当年',
+    dataIndex: 'year',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatAverage(Number(value))}</span>,
+  },
+];
+
+const premiumColumns: TableColumn<TimePeriodRecord>[] = [
+  { key: 'label', title: '险别组合', dataIndex: 'label', align: 'left' },
+  {
+    key: 'day',
+    title: '当日',
+    dataIndex: 'day',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value) * 10000)}</span>,
+  },
+  {
+    key: 'week',
+    title: '当周',
+    dataIndex: 'week',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value) * 10000)}</span>,
+  },
+  {
+    key: 'month',
+    title: '当月',
+    dataIndex: 'month',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value) * 10000)}</span>,
+  },
+  {
+    key: 'year',
+    title: '当年',
+    dataIndex: 'year',
+    align: 'right',
+    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value) * 10000)}</span>,
+  },
+];
+
+export const CrossSellTimePeriodSummary = memo(function CrossSellTimePeriodSummary({
+  vehicleCategory,
+  filters,
+}: CrossSellTimePeriodSummaryProps) {
+  const { maxDate, rateData, avgPremiumData, premiumData, loading, error } = useCrossSellTimePeriod({
+    filters,
+    vehicleCategory,
+  });
+
+  if (error) {
+    return <p className={textStyles.caption}>加载失败: {error}</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {maxDate && (
+        <p className={textStyles.caption}>数据截至: {maxDate}</p>
+      )}
+
+      <div>
+        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>推介率</h3>
+        <Table<TimePeriodRecord>
+          columns={rateColumns}
+          dataSource={rateData as TimePeriodRecord[]}
+          rowKey="label"
+          size="small"
+          striped
+          loading={loading}
+        />
+      </div>
+
+      <div>
+        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>件均保费（元）</h3>
+        <Table<TimePeriodRecord>
+          columns={avgPremiumColumns}
+          dataSource={avgPremiumData as TimePeriodRecord[]}
+          rowKey="label"
+          size="small"
+          striped
+          loading={loading}
+        />
+      </div>
+
+      <div>
+        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>保费（万元）</h3>
+        <Table<TimePeriodRecord>
+          columns={premiumColumns}
+          dataSource={premiumData as TimePeriodRecord[]}
+          rowKey="label"
+          size="small"
+          striped
+          loading={loading}
+        />
+      </div>
+    </div>
+  );
+});
+
+export default CrossSellTimePeriodSummary;

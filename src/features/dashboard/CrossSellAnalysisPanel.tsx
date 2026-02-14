@@ -6,12 +6,19 @@
  * 1. 初始：四川分公司汇总 KPI 卡片 + "选择下钻维度"按钮
  * 2. 选择维度 → 表格展示分组数据，每行可点击继续下钻
  * 3. 面包屑导航支持任意层级回退
+ * 4. 车辆类别标签页（非营业客车/货车/摩托车）
+ * 5. 时间维度汇总表格（推介率/件均保费/保费）
  */
 
 import React, { useState, useMemo } from 'react';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { useDataStatus } from '../../shared/contexts/DataContext';
+import { Tabs } from '../../shared/ui/Tabs';
+import type { TabItem } from '../../shared/ui/Tabs';
+import { textStyles, cardStyles, tableStyles, cn } from '../../shared/styles';
+import { CrossSellTimePeriodSummary } from './CrossSellTimePeriodSummary';
+import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import {
   useCrossSellAnalysis,
   DIMENSION_LABELS,
@@ -23,6 +30,16 @@ import {
 interface CrossSellAnalysisPanelProps {
   filters: AdvancedFilterState;
 }
+
+// ============================================================
+// 车辆类别标签页
+// ============================================================
+
+const VEHICLE_TABS: TabItem[] = [
+  { key: 'passenger', label: '非营业客车' },
+  { key: 'truck', label: '货车' },
+  { key: 'motorcycle', label: '摩托车' },
+];
 
 // ============================================================
 // 排序
@@ -73,12 +90,14 @@ function SummaryCards({ data }: { data: CrossSellRow }) {
         return (
           <div
             key={card.field}
-            className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow"
+            className={cn(cardStyles.interactive, 'p-4')}
           >
-            <div className="text-xs text-gray-400 tracking-wide mb-2">{card.label}</div>
-            <div className={`text-xl font-semibold font-mono tabular-nums ${
-              isRate ? 'text-green-600' : card.label.includes('驾意') ? 'text-blue-600' : 'text-gray-800'
-            }`}>
+            <div className={cn(textStyles.caption, 'uppercase tracking-wide mb-2')}>{card.label}</div>
+            <div className={cn(
+              'text-xl font-semibold',
+              textStyles.numeric,
+              isRate ? 'text-success' : card.label.includes('驾意') ? 'text-primary' : 'text-neutral-800'
+            )}>
               {isRate ? formatPercent(value) : formatCount(value)}
             </div>
           </div>
@@ -208,9 +227,9 @@ const TABLE_COLUMNS: ColumnDef[] = [
 ];
 
 function getRateClass(rate: number): string {
-  if (rate >= 30) return 'text-green-600 font-medium';
-  if (rate >= 15) return 'text-gray-700';
-  return 'text-yellow-600 font-medium';
+  if (rate >= 30) return 'text-success font-medium';
+  if (rate >= 15) return 'text-neutral-700';
+  return 'text-warning font-medium';
 }
 
 function formatCell(col: ColumnDef, row: CrossSellRow): string {
@@ -228,6 +247,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   filters,
 }) => {
   const { isDataLoaded } = useDataStatus();
+  const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory>('passenger');
   const [sortKey, setSortKey] = useState<SortKey>('total_auto_count');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
@@ -249,6 +269,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
     error,
   } = useCrossSellAnalysis({
     filters,
+    vehicleCategory,
     enabled: isDataLoaded,
   });
 
@@ -314,6 +335,21 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         </div>
       </div>
 
+      {/* 车辆类别标签页 */}
+      <Tabs
+        items={VEHICLE_TABS}
+        activeKey={vehicleCategory}
+        onChange={(key) => setVehicleCategory(key as VehicleCategory)}
+        variant="pills"
+        size="medium"
+      />
+
+      {/* 时间维度汇总表格（推介率/件均保费/保费） */}
+      <CrossSellTimePeriodSummary
+        vehicleCategory={vehicleCategory}
+        filters={filters}
+      />
+
       {/* 面包屑导航 */}
       <div className="bg-white p-3 rounded-xl shadow-sm">
         <Breadcrumb
@@ -325,15 +361,15 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
       {/* 错误提示 */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="text-red-800 font-semibold text-sm">查询失败</p>
-          <p className="text-red-700 text-sm mt-1">{error}</p>
+        <div className="bg-danger-bg border border-danger-border rounded-xl p-4">
+          <p className="text-danger font-semibold text-sm">查询失败</p>
+          <p className="text-danger text-sm mt-1">{error}</p>
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-gray-400">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3" />
+        <div className="flex items-center justify-center py-16 text-neutral-400">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3" />
           <span>正在加载数据...</span>
         </div>
       ) : (
@@ -368,17 +404,20 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
               </div>
               <div className="overflow-x-auto max-h-[600px]">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
+                  <thead className={cn(tableStyles.header, 'sticky top-0 z-10')}>
                     <tr>
                       {TABLE_COLUMNS.map((col) => (
                         <th
                           key={col.key}
                           onClick={() => handleSort(col.key)}
-                          className="px-3 py-3 font-semibold text-gray-600 text-xs whitespace-nowrap cursor-pointer select-none hover:bg-gray-100 transition-colors border-b border-gray-200"
+                          className={cn(
+                            tableStyles.headerCell,
+                            'whitespace-nowrap cursor-pointer select-none hover:bg-neutral-100 transition-colors border-b border-neutral-200'
+                          )}
                           style={{ textAlign: col.type === 'text' ? 'left' : 'right' }}
                         >
                           {col.label}
-                          <span className={`ml-1 ${sortKey === col.key ? 'text-blue-500' : 'opacity-40'}`}>
+                          <span className={cn('ml-1', sortKey === col.key ? 'text-primary' : 'opacity-40')}>
                             {sortKey === col.key ? (sortOrder === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
                           </span>
                         </th>
@@ -399,13 +438,14 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                         {TABLE_COLUMNS.map((col) => (
                           <td
                             key={col.key}
-                            className={`px-3 py-2.5 ${
+                            className={cn(
+                              tableStyles.cell,
                               col.type === 'text'
                                 ? `text-left ${canDrillDeeper ? 'text-blue-600 font-medium' : 'text-gray-900'}`
                                 : col.type === 'rate'
-                                  ? `text-right font-mono tabular-nums ${getRateClass(Number(row[col.key] ?? 0))}`
-                                  : 'text-right font-mono tabular-nums text-gray-700'
-                            }`}
+                                  ? cn('text-right', textStyles.numeric, getRateClass(Number(row[col.key] ?? 0)))
+                                  : cn('text-right', textStyles.numeric, 'text-neutral-700')
+                            )}
                           >
                             {formatCell(col, row)}
                           </td>
@@ -420,7 +460,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
           {/* 空状态 */}
           {!summary && sortedRows.length === 0 && !loading && (
-            <div className="bg-white rounded-xl shadow-sm p-16 text-center text-gray-400">
+            <div className={cn(cardStyles.spacious, 'text-center text-neutral-400')}>
               暂无数据
             </div>
           )}

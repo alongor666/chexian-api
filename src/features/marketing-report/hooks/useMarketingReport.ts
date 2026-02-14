@@ -9,7 +9,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { apiClient } from '../../../shared/api/client';
-import { getHolidaySummary, countHolidaysInRange } from '../utils/holidayUtils';
+import { getHolidaySummary, countHolidaysInRange, getHolidayDatesInRange } from '../utils/holidayUtils';
 import { createLogger } from '../../../shared/utils/logger';
 
 const logger = createLogger('useMarketingReport');
@@ -88,27 +88,31 @@ export function useMarketingReport(
     async (filters: MarketingReportFilters): Promise<OrganizationReportRow[]> => {
       logger.debug('Loading org report from API', filters);
 
-      const params = {
-        type: 'marketing-org',
+      const holidayDates = getHolidayDatesInRange(filters.startDate, filters.endDate);
+
+      const params: Record<string, any> = {
+        reportType: 'org',
+        holidayDates: holidayDates.join(','),
         dateField: filters.dateField,
         startDate: filters.startDate,
         endDate: filters.endDate,
-        year: filters.year,
-        orgName: filters.org_level_3,
       };
+      if (filters.org_level_3?.length) {
+        params.orgNames = filters.org_level_3.join(',');
+      }
 
-      const result = await apiClient.getKpi(params);
+      const result = await apiClient.getMarketingReport(params);
 
-      if (result && Array.isArray((result as unknown as { orgReport: unknown[] }).orgReport)) {
-        return ((result as unknown as { orgReport: Record<string, unknown>[] }).orgReport).map((row) => ({
+      if (result && Array.isArray(result)) {
+        return result.map((row: Record<string, unknown>) => ({
           org_level_3: String(row.org_level_3 || ''),
-          车险保费: Number(row['车险保费'] || row.total_premium || 0),
-          商业险保费: Number(row['商业险保费'] || row.commercial_premium || 0),
-          车险开单率: Number(row['车险开单率'] || row.vehicle_order_rate || 0),
-          商业险开单率: Number(row['商业险开单率'] || row.commercial_order_rate || 0),
-          总业务员数: Number(row['总业务员数'] || row.total_salesman || 0),
-          车险出单人数: Number(row['车险出单人数'] || row.vehicle_salesman || 0),
-          商业险出单人数: Number(row['商业险出单人数'] || row.commercial_salesman || 0),
+          车险保费: Number(row['车险保费'] || 0),
+          商业险保费: Number(row['商业险保费'] || 0),
+          车险开单率: Number(row['车险开单率'] || 0),
+          商业险开单率: Number(row['商业险开单率'] || 0),
+          总业务员数: Number(row['总业务员数'] || 0),
+          车险出单人数: Number(row['车险出单人数'] || 0),
+          商业险出单人数: Number(row['商业险出单人数'] || 0),
         }));
       }
 
@@ -124,26 +128,30 @@ export function useMarketingReport(
     async (filters: MarketingReportFilters): Promise<SalesmanDetailRow[]> => {
       logger.debug('Loading salesman detail from API', filters);
 
-      const params = {
-        type: 'marketing-salesman',
+      const holidayDates = getHolidayDatesInRange(filters.startDate, filters.endDate);
+
+      const params: Record<string, any> = {
+        reportType: 'salesman',
+        holidayDates: holidayDates.join(','),
         dateField: filters.dateField,
         startDate: filters.startDate,
         endDate: filters.endDate,
-        year: filters.year,
-        orgName: filters.org_level_3,
       };
+      if (filters.org_level_3?.length) {
+        params.orgNames = filters.org_level_3.join(',');
+      }
 
-      const result = await apiClient.getSalesmanRanking(1000, params);
+      const result = await apiClient.getMarketingReport(params);
 
       return (result || []).map((row: Record<string, unknown>) => ({
         salesman_name: String(row.salesman_name || ''),
         org_level_3: String(row.org_level_3 || ''),
         team_name: String(row.team_name || ''),
-        假日车险签单天数: Number(row['假日车险签单天数'] || row.holiday_vehicle_days || 0),
-        假日天数: Number(row['假日天数'] || row.holiday_days || 0),
-        假日车险签单比例: Number(row['假日车险签单比例'] || row.holiday_vehicle_rate || 0),
-        假日商业险签单天数: Number(row['假日商业险签单天数'] || row.holiday_commercial_days || 0),
-        假日商业险签单比例: Number(row['假日商业险签单比例'] || row.holiday_commercial_rate || 0),
+        假日车险签单天数: Number(row['假日车险签单天数'] || 0),
+        假日天数: Number(row['假日天数'] || 0),
+        假日车险签单比例: Number(row['假日车险签单比例'] || 0),
+        假日商业险签单天数: Number(row['假日商业险签单天数'] || 0),
+        假日商业险签单比例: Number(row['假日商业险签单比例'] || 0),
       }));
     },
     []
