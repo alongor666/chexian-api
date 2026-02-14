@@ -3,18 +3,19 @@
  *
  * 续保率计算逻辑（基于起保日期）：
  * - 统计 N 年续保率：
- *   1. 应续保单（分母）：起保日期在 (N-1) 年的保单
- *   2. 已续保单（分子）：(N-1)年保单中 renewal_policy_no 不为空的保单（表示已续保到N年）
+ *   1. 应续保单（分母）：起保日期在 (N-1) 年的保单，且到期日 <= 当前日期（已到期）
+ *   2. 已续保单（分子）：应续保单中 renewal_policy_no 不为空的保单（表示已续保到N年）
  *   3. 续保率 = 已续保单件数 / 应续保单件数
  *
  * 数据说明：
  * - renewal_policy_no 字段含义：该保单续保到【下一年】的新保单号
- * - 例如：2025年保单A的 renewal_policy_no = B001（2026年的保单号）
- *       表示保单A已续保为2026年的保单B001
+ * - 到期日 = 起保日期 + 1年 - 1天
+ * - 只有到期的保单才计入"应续"（未到期保单不应算入分母）
  *
- * 示例（2026年续保率）：
- * - 应续保单：2025年起保的所有保单
- * - 已续保单：2025年起保且 renewal_policy_no 不为空的保单（表示已续保到2026年）
+ * 示例（2026年续保率，查询时间2026-01-27）：
+ * - 应续保单：2025年起保且到期日 <= 2026-01-27 的保单（约7万件）
+ * - 已续保单：应续保单中 renewal_policy_no 不为空的保单
+ * - 而非2025年全部53万件保单（大部分还未到期）
  */
 
 import { buildWhereClauseFromFilters, resolveDateField } from '../utils/queryBuilder';
@@ -78,32 +79,31 @@ function getTimeDimension(timeView: TimeView, targetYear: number): {
   orderBy?: string;
 } {
   const expiringYear = targetYear - 1; // 应续保单：上一年起保
-  const renewalYear = targetYear; // 已续保单：当年起保
+
+  // 核心修复：只统计已到期的保单（到期日 <= 当前日期）
+  // 到期日 = 起保日期 + 1年 - 1天
+  const expiredCondition = `DATE_ADD(CAST(insurance_start_date AS DATE), INTERVAL '1 year') - INTERVAL '1 day' <= CURRENT_DATE`;
 
   switch (timeView) {
     case 'yearly':
       return {
-        expiringWhere: `YEAR(insurance_start_date) = ${expiringYear}`,
-        renewalWhere: `YEAR(insurance_start_date) = ${renewalYear}`,
+        expiringWhere: `YEAR(insurance_start_date) = ${expiringYear} AND ${expiredCondition}`,
+        renewalWhere: `YEAR(insurance_start_date) = ${targetYear}`,
       };
 
     case 'monthly': {
-      // 按月统计续保率
-      // 应续保单：上一年各月起保
-      // 已续保单：当年各月起保（续保单号匹配上一年对应月份）
       return {
-        expiringWhere: `YEAR(insurance_start_date) = ${expiringYear}`,
-        renewalWhere: `YEAR(insurance_start_date) = ${renewalYear}`,
+        expiringWhere: `YEAR(insurance_start_date) = ${expiringYear} AND ${expiredCondition}`,
+        renewalWhere: `YEAR(insurance_start_date) = ${targetYear}`,
         groupBy: `STRFTIME(CAST(insurance_start_date AS DATE), '%Y-%m')`,
         orderBy: `time_period`,
       };
     }
 
     case 'daily': {
-      // 按日统计续保率
       return {
-        expiringWhere: `YEAR(insurance_start_date) = ${expiringYear}`,
-        renewalWhere: `YEAR(insurance_start_date) = ${renewalYear}`,
+        expiringWhere: `YEAR(insurance_start_date) = ${expiringYear} AND ${expiredCondition}`,
+        renewalWhere: `YEAR(insurance_start_date) = ${targetYear}`,
         groupBy: `CAST(insurance_start_date AS DATE)`,
         orderBy: `time_period`,
       };

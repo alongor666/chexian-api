@@ -99,7 +99,7 @@ router.get(
       req.permissionFilter || '1=1'
     );
 
-    const sql = generateKpiDetailQuery(finalWhereClause, true);
+    const sql = generateKpiDetailQuery(finalWhereClause, false);
     const result = await duckdbService.query(sql);
 
     res.json({
@@ -295,8 +295,16 @@ router.get(
       throw new AppError(400, filterResult.error.issues[0].message);
     }
 
+    const { startDate, endDate } = filterResult.data;
+
+    // custom 增长类型：日期由 currentPeriod/baselinePeriod 分别控制，
+    // whereClause 中不能包含日期条件，否则会与 baselinePeriod 的日期范围冲突导致基期数据为 0
+    const filterParamsForWhere = growthType === 'custom' && baselineStart && baselineEnd
+      ? { ...filterResult.data, startDate: undefined, endDate: undefined }
+      : filterResult.data;
+
     const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
+      filterParamsForWhere,
       req.permissionFilter || '1=1'
     );
 
@@ -307,7 +315,6 @@ router.get(
       referenceYear: referenceYear || new Date().getFullYear(),
     };
 
-    const { startDate, endDate } = filterResult.data;
     if (growthType === 'custom' && baselineStart && baselineEnd && startDate && endDate) {
       if (!isValidDateFormat(baselineStart) || !isValidDateFormat(baselineEnd)) {
         throw new AppError(400, 'Invalid baseline date format. Expected YYYY-MM-DD');

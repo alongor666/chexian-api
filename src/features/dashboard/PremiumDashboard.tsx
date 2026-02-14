@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDataStatus } from '../../shared/contexts/DataContext';
-import { AdvancedFilterPanel } from '../filters/AdvancedFilterPanel';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../shared/utils/export';
 import { PdfExportService } from '../../services/PdfExportService';
 import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
 import { useKpiData } from './hooks/useKpiData';
 import { useTrendData } from './hooks/useTrendData';
-import { useFilterState } from './hooks/useFilterState';
 import { usePremiumDashboardData } from './hooks/usePremiumDashboardData';
 import { usePerspective } from './hooks/usePerspective';
 import { useDashboardLayout } from './hooks/useDashboardLayout';
@@ -16,6 +14,7 @@ import { TrendSection } from './components/TrendSection';
 import { TableSection } from './components/TableSection';
 import { DashboardCustomizerPanel } from './components/DashboardCustomizerPanel';
 import type { DashboardSectionId } from './dashboardLayoutConfig';
+import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 
 import { Logger } from '@/shared/utils/logger';
 
@@ -27,7 +26,6 @@ type TimeView = 'daily' | 'weekly' | 'monthly';
  * 保费分析看板 - 综合分析视图
  */
 export const PremiumDashboard: React.FC = () => {
-  const [error, setError] = useState<string | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const { isDataLoaded } = useDataStatus();
@@ -54,20 +52,7 @@ export const PremiumDashboard: React.FC = () => {
     resetLayout,
   } = useDashboardLayout();
 
-  const {
-    filters,
-    setFilters,
-    filterOptions,
-    isFilterCollapsed,
-    toggleFilterCollapsed,
-    availableSalesmen,
-    loadFilterOptions,
-    loadDefaultPolicyMonth,
-    loadOrgSalesmanMapping,
-    maxDataDate,
-    availableYears,
-    loadDataMetadata,
-  } = useFilterState();
+  const { filters } = useGlobalFilters();
 
   // KPI 数据获取
   const {
@@ -75,7 +60,6 @@ export const PremiumDashboard: React.FC = () => {
     kpiDetails,
     loading: kpiLoading,
     error: kpiError,
-    refresh: refreshKpi,
   } = useKpiData({
     filters,
     enabled: true,
@@ -259,19 +243,6 @@ export const PremiumDashboard: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    (async () => {
-      if (isDataLoaded) {
-        logger.info('API 模式：初始化筛选器（从后端 API 获取）');
-        const metadata = await loadDataMetadata();
-        await loadFilterOptions();
-        await loadOrgSalesmanMapping();
-        await loadDefaultPolicyMonth(metadata);
-        refreshData();
-      }
-    })();
-  }, [isDataLoaded]);
-
   // Debounced refresh effect
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -301,28 +272,12 @@ export const PremiumDashboard: React.FC = () => {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-danger-100 border border-danger-400 text-danger-700 px-4 py-3 rounded">{error}</div>
-      )}
-
       {(kpiError || trendError) && (
         <div className="bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded text-sm">
           {kpiError && <p>KPI 数据加载失败: {kpiError.message}</p>}
           {trendError && <p>趋势数据加载失败: {trendError.message}</p>}
         </div>
       )}
-
-      {/* Advanced Filter Panel */}
-      <AdvancedFilterPanel
-        filters={filters}
-        onChange={setFilters}
-        collapsed={isFilterCollapsed}
-        onToggleCollapse={toggleFilterCollapsed}
-        options={{ ...filterOptions, availableSalesmen }}
-        availableYears={availableYears}
-        maxDataDate={maxDataDate}
-        preset="full"
-      />
 
       {/* Dashboard Content */}
       <div className="space-y-4">
