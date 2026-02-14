@@ -41,6 +41,7 @@ Thumbs.db
 node_modules/
 dist/
 .vite/
+*.tsbuildinfo
 
 # 测试覆盖率
 coverage/

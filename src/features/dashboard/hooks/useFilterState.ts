@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { createLogger } from '../../../shared/utils/logger';
-import { buildOrgSalesmanCache, getAvailableSalesmen, type OrgSalesmanCache } from '../orgSalesman';
+import { getAvailableSalesmen, type OrgSalesmanCache } from '../orgSalesman';
 import type { AdvancedFilterState, FilterOptions, DateMetadata, DualDateMetadata } from '../../../shared/types/data';
 import { getMetadataByCriteria } from '../../../shared/types/data';
 import { apiClient } from '../../../shared/api/client';
@@ -24,18 +24,6 @@ export interface UseFilterStateResult {
   loadDataMetadata: () => Promise<DualDateMetadata | undefined>;
 }
 
-const getMonthRange = (monthKey: string): { start: string; end: string } => {
-  const [yearStr, monthStr] = monthKey.split('-');
-  const year = Number(yearStr);
-  const monthIndex = Number(monthStr) - 1;
-  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
-  const paddedLastDay = String(lastDay).padStart(2, '0');
-  return {
-    start: `${monthKey}-01`,
-    end: `${monthKey}-${paddedLastDay}`,
-  };
-};
-
 export const useFilterState = (): UseFilterStateResult => {
   const [filters, setFilters] = useState<AdvancedFilterState>({
     date_criteria: 'policy_date',
@@ -43,7 +31,7 @@ export const useFilterState = (): UseFilterStateResult => {
   });
   const [isFilterCollapsed, setIsFilterCollapsed] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({});
-  const [orgSalesmanCache, setOrgSalesmanCache] = useState<OrgSalesmanCache>({});
+  const [orgSalesmanCache] = useState<OrgSalesmanCache>({});
 
   const [dualDateMetadata, setDualDateMetadata] = useState<DualDateMetadata>();
 

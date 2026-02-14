@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from 'react';
 import { createLogger } from '../utils/logger';
-import { buildOrgSalesmanCache, getAvailableSalesmen, type OrgSalesmanCache } from '../../features/dashboard/orgSalesman';
+import { getAvailableSalesmen, type OrgSalesmanCache } from '../../features/dashboard/orgSalesman';
 import type { AdvancedFilterState, FilterOptions, DateMetadata, DualDateMetadata } from '../types/data';
 import { getMetadataByCriteria } from '../types/data';
 import { useDataStatus } from './DataContext';
@@ -54,7 +54,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
   });
   const [isFilterCollapsed, setIsFilterCollapsed] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({});
-  const [orgSalesmanCache, setOrgSalesmanCache] = useState<OrgSalesmanCache>({});
+  const [orgSalesmanCache] = useState<OrgSalesmanCache>({});
   const [dualDateMetadata, setDualDateMetadata] = useState<DualDateMetadata>();
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);

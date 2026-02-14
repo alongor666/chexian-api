@@ -14,5 +14,3 @@ export {
 } from '../utils/sql-parser';
 export type { QueryParams } from '../utils/sql-parser';
 
-// DataContext 数据源类型
-export type { DataSource } from '../contexts/DataContext';

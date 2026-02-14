@@ -79,10 +79,10 @@ export const useTrendData = ({
   timeView,
   hasOrgFilter,
   enabled = true,
-  perspective = 'premium',
+  perspective: _perspective = 'premium',
 }: UseTrendDataOptions): UseTrendDataResult => {
   const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
-  const [qualityBusinessData, setQualityBusinessData] = useState<QualityBusinessDataPoint[]>([]);
+  const [qualityBusinessData] = useState<QualityBusinessDataPoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [qualityBusinessLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);

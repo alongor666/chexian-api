@@ -57,7 +57,7 @@ export function useTruckAnalysis({
     const params = {
       ...buildFilterParams(filters),
       queryType: 'all' as const,
-      metric: perspective === 'count' ? 'count' : 'premium',
+      metric: perspective === 'policy_count' ? 'count' : 'premium',
     };
 
     logger.debug('Fetching truck data from API', params);
@@ -73,7 +73,7 @@ export function useTruckAnalysis({
   }, [filters, perspective]);
 
   const fetchData = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || !isDataLoaded) return;
 
     setLoading(true);
     setError(null);
@@ -86,7 +86,7 @@ export function useTruckAnalysis({
     } finally {
       setLoading(false);
     }
-  }, [enabled, fetchFromApi]);
+  }, [enabled, isDataLoaded, fetchFromApi]);
 
   useEffect(() => {
     fetchData();
