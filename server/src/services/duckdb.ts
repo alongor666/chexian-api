@@ -202,7 +202,9 @@ class DuckDBService {
 
     let data: any;
     try {
-      data = JSON.parse(fs.readFileSync(jsonFilePath, 'utf-8'));
+      // JSON 中可能有 NaN（Python 生成），替换为 null 后解析
+      const raw = fs.readFileSync(jsonFilePath, 'utf-8').replace(/\bNaN\b/g, 'null');
+      data = JSON.parse(raw);
     } catch (err: any) {
       console.warn(`[DuckDB] Failed to read team mapping: ${err.message}`);
       return;

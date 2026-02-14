@@ -12,7 +12,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
-import { getDataDir } from './config/paths.js';
+import { getDataDir, SERVER_ROOT } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
@@ -121,7 +121,7 @@ async function startServer() {
       console.log(`[Server] PolicyFact row count: ${rowCount}`);
 
       // 加载团队映射表（业务员 → 团队归属）
-      const teamMappingPath = path.resolve(__dirname, '../../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
+      const teamMappingPath = path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
       try {
         await duckdbService.loadTeamMapping(teamMappingPath);
       } catch (err) {

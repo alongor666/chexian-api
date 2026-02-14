@@ -1,19 +1,22 @@
 /**
- * 车驾意推介率分析 Hook
- * Cross-Sell Recommendation Rate Analysis Hook
+ * 车驾意推介率分析 Hook（层层下钻版）
+ * Cross-Sell Recommendation Rate Analysis Hook (Hierarchical Drilldown)
  *
- * 第一层：四川分公司汇总
- * 下钻：按用户选择的维度展开明细
+ * 支持层层下钻：
+ *   Level 0: 四川分公司汇总 → 用户选维度
+ *   Level 1: 按选定维度分组 → 点击行继续下钻
+ *   Level N: 累积过滤 + 新维度分组
+ *
+ * 每层可停止、可上钻（面包屑导航）
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import { apiClient } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 
-/** 下钻维度 */
+/** 可选的下钻维度（不含 summary） */
 export type CrossSellDimension =
-  | 'summary'
   | 'org_level_3'
   | 'team'
   | 'salesman'
@@ -26,7 +29,6 @@ export type CrossSellDimension =
 
 /** 维度中文标签 */
 export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
-  summary: '公司汇总',
   org_level_3: '三级机构',
   team: '销售团队',
   salesman: '业务员',
@@ -38,11 +40,18 @@ export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
   is_renewal: '是否续保',
 };
 
-/** 可选的下钻维度列表（排除 summary；team 需要 SalesmanPlanFact 表，暂不可用） */
-export const DRILLDOWN_DIMENSIONS: CrossSellDimension[] = [
-  'org_level_3', 'salesman', 'customer_category',
+/** 所有可用维度 */
+export const ALL_DIMENSIONS: CrossSellDimension[] = [
+  'org_level_3', 'team', 'salesman', 'customer_category',
   'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
 ];
+
+/** 下钻路径中的一步 */
+export interface DrilldownStep {
+  dimension: CrossSellDimension;
+  value: string;
+  label: string; // 面包屑显示：如 "三级机构: 天府"
+}
 
 /** 单行数据结构 */
 export interface CrossSellRow {
@@ -66,15 +75,25 @@ interface UseCrossSellAnalysisProps {
   enabled?: boolean;
 }
 
-interface UseCrossSellAnalysisReturn {
-  /** 四川分公司汇总行 */
+export interface UseCrossSellAnalysisReturn {
+  /** 当前过滤条件下的汇总行 */
   summary: CrossSellRow | null;
-  /** 下钻明细行 */
+  /** 当前分组的数据行 */
   rows: CrossSellRow[];
-  /** 当前下钻维度 */
-  dimension: CrossSellDimension;
-  /** 切换下钻维度 */
-  setDimension: (dim: CrossSellDimension) => void;
+  /** 下钻路径栈 */
+  drillPath: DrilldownStep[];
+  /** 当前分组维度（null = 仅汇总，未下钻） */
+  currentGroupBy: CrossSellDimension | null;
+  /** 当前可选的下钻维度（排除已使用的） */
+  availableDimensions: CrossSellDimension[];
+  /** 首次选择维度（从汇总进入下钻） */
+  selectDimension: (dimension: CrossSellDimension) => void;
+  /** 下钻到某个行：将当前行加入过滤，选择新维度分组 */
+  drillDown: (rowValue: string, nextDimension: CrossSellDimension) => void;
+  /** 上钻到指定层级（面包屑点击，-1 = 回顶层） */
+  drillUp: (toIndex: number) => void;
+  /** 重置到顶层 */
+  reset: () => void;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -104,44 +123,116 @@ export function useCrossSellAnalysis({
 }: UseCrossSellAnalysisProps): UseCrossSellAnalysisReturn {
   const [summary, setSummary] = useState<CrossSellRow | null>(null);
   const [rows, setRows] = useState<CrossSellRow[]>([]);
-  const [dimension, setDimension] = useState<CrossSellDimension>('org_level_3');
+  const [drillPath, setDrillPath] = useState<DrilldownStep[]>([]);
+  const [currentGroupBy, setCurrentGroupBy] = useState<CrossSellDimension | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 计算已使用维度和可用维度
+  const usedDimensions = new Set<CrossSellDimension>([
+    ...drillPath.map(s => s.dimension),
+    ...(currentGroupBy ? [currentGroupBy] : []),
+  ]);
+  const availableDimensions = ALL_DIMENSIONS.filter(d => !usedDimensions.has(d));
+
+  // 防止 race condition
+  const fetchIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (!enabled) return;
 
+    const fetchId = ++fetchIdRef.current;
     setLoading(true);
     setError(null);
 
     try {
-      const params: Record<string, string> = {
-        ...buildFilterParams(filters),
-        dimension,
-      };
+      const filterParams = buildFilterParams(filters);
+      const apiDrillPath = drillPath.map(s => ({
+        dimension: s.dimension,
+        value: s.value,
+      }));
 
-      const result = await apiClient.getCrossSellAnalysis(params);
+      const result = await apiClient.getCrossSellAnalysis({
+        ...filterParams,
+        drillPath: apiDrillPath,
+        groupBy: currentGroupBy || undefined,
+      });
+
+      // 防止旧请求覆盖新数据
+      if (fetchId !== fetchIdRef.current) return;
 
       if (result) {
         setSummary(result.summary ? mapRow(result.summary) : null);
         setRows((result.rows || []).map(mapRow));
       }
     } catch (err) {
+      if (fetchId !== fetchIdRef.current) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (fetchId === fetchIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [filters, dimension, enabled]);
+  }, [filters, drillPath, currentGroupBy, enabled]);
 
+  // 依赖变化时自动请求
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  /** 首次选择维度（从汇总 → 分组视图） */
+  const selectDimension = useCallback((dimension: CrossSellDimension) => {
+    setDrillPath([]);
+    setCurrentGroupBy(dimension);
+  }, []);
+
+  /** 下钻：点击行 → 添加过滤 → 选择新维度 */
+  const drillDown = useCallback((rowValue: string, nextDimension: CrossSellDimension) => {
+    if (!currentGroupBy) return;
+
+    const newStep: DrilldownStep = {
+      dimension: currentGroupBy,
+      value: rowValue,
+      label: `${DIMENSION_LABELS[currentGroupBy]}: ${rowValue}`,
+    };
+
+    setDrillPath(prev => [...prev, newStep]);
+    setCurrentGroupBy(nextDimension);
+  }, [currentGroupBy]);
+
+  /** 上钻到指定层级 */
+  const drillUp = useCallback((toIndex: number) => {
+    if (toIndex < 0) {
+      // 回到顶层（汇总）
+      setDrillPath([]);
+      setCurrentGroupBy(null);
+      return;
+    }
+    if (toIndex < drillPath.length) {
+      // 回到 drillPath[toIndex] 这一层的分组视图
+      const newPath = drillPath.slice(0, toIndex);
+      const restoredGroupBy = drillPath[toIndex].dimension;
+      setDrillPath(newPath);
+      setCurrentGroupBy(restoredGroupBy);
+    }
+  }, [drillPath]);
+
+  /** 重置到顶层 */
+  const reset = useCallback(() => {
+    setDrillPath([]);
+    setCurrentGroupBy(null);
+  }, []);
+
   return {
     summary,
     rows,
-    dimension,
-    setDimension,
+    drillPath,
+    currentGroupBy,
+    availableDimensions,
+    selectDimension,
+    drillDown,
+    drillUp,
+    reset,
     loading,
     error,
     refresh: fetchData,
