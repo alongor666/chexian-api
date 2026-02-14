@@ -421,16 +421,24 @@ class ApiClient {
   /**
    * 获取车驾意推介率数据
    */
-  async getCrossSellAnalysis(filters?: Record<string, any>): Promise<any> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
+  async getCrossSellAnalysis(params: {
+    drillPath?: Array<{ dimension: string; value: string }>;
+    groupBy?: string;
+    [key: string]: any;
+  }): Promise<any> {
+    const searchParams = new URLSearchParams();
+    if (params.drillPath) {
+      searchParams.append('drillPath', JSON.stringify(params.drillPath));
     }
-    const query = params.toString();
+    if (params.groupBy) {
+      searchParams.append('groupBy', params.groupBy);
+    }
+    Object.entries(params).forEach(([key, value]) => {
+      if (key !== 'drillPath' && key !== 'groupBy' && value !== undefined && value !== null) {
+        searchParams.append(key, String(value));
+      }
+    });
+    const query = searchParams.toString();
     return this.request(`/query/cross-sell${query ? `?${query}` : ''}`);
   }
 

@@ -1,11 +1,11 @@
 /**
- * 车驾意推介率分析面板
- * Cross-Sell Recommendation Rate Analysis Panel
+ * 车驾意推介率分析面板（层层下钻版）
+ * Cross-Sell Recommendation Rate Analysis Panel (Hierarchical Drilldown)
  *
- * 参照 驾意险推介率.html 设计稿实现：
- * - 顶部汇总卡片（12 个 KPI）
- * - 维度下拉选择器
- * - 可排序数据表格（13 列）
+ * 交互流程：
+ * 1. 初始：四川分公司汇总 KPI 卡片 + "选择下钻维度"按钮
+ * 2. 选择维度 → 表格展示分组数据，每行可点击继续下钻
+ * 3. 面包屑导航支持任意层级回退
  */
 
 import React, { useState, useMemo } from 'react';
@@ -15,7 +15,7 @@ import { useDataStatus } from '../../shared/contexts/DataContext';
 import {
   useCrossSellAnalysis,
   DIMENSION_LABELS,
-  DRILLDOWN_DIMENSIONS,
+  ALL_DIMENSIONS,
   type CrossSellRow,
   type CrossSellDimension,
 } from './hooks/useCrossSellAnalysis';
@@ -25,7 +25,7 @@ interface CrossSellAnalysisPanelProps {
 }
 
 // ============================================================
-// 排序相关
+// 排序
 // ============================================================
 
 type SortKey = keyof CrossSellRow;
@@ -75,7 +75,7 @@ function SummaryCards({ data }: { data: CrossSellRow }) {
             key={card.field}
             className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow"
           >
-            <div className="text-xs text-gray-400 uppercase tracking-wide mb-2">{card.label}</div>
+            <div className="text-xs text-gray-400 tracking-wide mb-2">{card.label}</div>
             <div className={`text-xl font-semibold font-mono tabular-nums ${
               isRate ? 'text-green-600' : card.label.includes('驾意') ? 'text-blue-600' : 'text-gray-800'
             }`}>
@@ -84,6 +84,99 @@ function SummaryCards({ data }: { data: CrossSellRow }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ============================================================
+// 维度选择器弹层
+// ============================================================
+
+function DimensionPicker({
+  available,
+  onSelect,
+  onCancel,
+  title,
+}: {
+  available: CrossSellDimension[];
+  onSelect: (dim: CrossSellDimension) => void;
+  onCancel: () => void;
+  title: string;
+}) {
+  if (available.length === 0) return null;
+  return (
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onCancel}>
+      <div
+        className="bg-white rounded-xl shadow-xl p-6 min-w-[320px] max-w-[90vw]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-base font-semibold text-gray-800 mb-4">{title}</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {available.map((dim) => (
+            <button
+              key={dim}
+              onClick={() => onSelect(dim)}
+              className="px-4 py-3 text-sm rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors text-left"
+            >
+              {DIMENSION_LABELS[dim]}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onCancel}
+          className="mt-4 w-full px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          取消
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 面包屑导航
+// ============================================================
+
+function Breadcrumb({
+  drillPath,
+  currentGroupBy,
+  onDrillUp,
+}: {
+  drillPath: { label: string }[];
+  currentGroupBy: CrossSellDimension | null;
+  onDrillUp: (toIndex: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 text-sm flex-wrap">
+      <button
+        onClick={() => onDrillUp(-1)}
+        className={`px-2 py-1 rounded transition-colors ${
+          drillPath.length === 0 && !currentGroupBy
+            ? 'text-blue-600 font-semibold bg-blue-50'
+            : 'text-blue-500 hover:bg-blue-50 cursor-pointer'
+        }`}
+      >
+        四川分公司
+      </button>
+      {drillPath.map((step, idx) => (
+        <React.Fragment key={idx}>
+          <span className="text-gray-300">/</span>
+          <button
+            onClick={() => onDrillUp(idx)}
+            className="px-2 py-1 rounded text-blue-500 hover:bg-blue-50 transition-colors cursor-pointer"
+          >
+            {step.label}
+          </button>
+        </React.Fragment>
+      ))}
+      {currentGroupBy && (
+        <>
+          <span className="text-gray-300">/</span>
+          <span className="px-2 py-1 text-gray-800 font-semibold bg-gray-100 rounded">
+            {DIMENSION_LABELS[currentGroupBy]}
+          </span>
+        </>
+      )}
     </div>
   );
 }
@@ -114,7 +207,6 @@ const TABLE_COLUMNS: ColumnDef[] = [
   { key: 'zhuquan_rate', label: '主全推介率', type: 'rate' },
 ];
 
-/** 推介率色标 */
 function getRateClass(rate: number): string {
   if (rate >= 30) return 'text-green-600 font-medium';
   if (rate >= 15) return 'text-gray-700';
@@ -139,11 +231,20 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   const [sortKey, setSortKey] = useState<SortKey>('total_auto_count');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
+  // 维度选择器状态
+  const [showPicker, setShowPicker] = useState(false);
+  const [pendingRowValue, setPendingRowValue] = useState<string | null>(null);
+
   const {
     summary,
     rows,
-    dimension,
-    setDimension,
+    drillPath,
+    currentGroupBy,
+    availableDimensions,
+    selectDimension,
+    drillDown,
+    drillUp,
+    reset,
     loading,
     error,
   } = useCrossSellAnalysis({
@@ -165,36 +266,61 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
     }
   };
 
-  const handleDimensionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setDimension(e.target.value as CrossSellDimension);
+  /** 点击行 → 弹出维度选择器 */
+  const handleRowClick = (rowValue: string) => {
+    if (availableDimensions.length === 0) return;
+    setPendingRowValue(rowValue);
+    setShowPicker(true);
   };
+
+  /** 从维度选择器选择维度 */
+  const handleDimensionSelect = (dim: CrossSellDimension) => {
+    if (pendingRowValue !== null) {
+      // 下钻：当前行进入过滤，选择新维度分组
+      drillDown(pendingRowValue, dim);
+    } else {
+      // 首次选择维度
+      selectDimension(dim);
+    }
+    setShowPicker(false);
+    setPendingRowValue(null);
+  };
+
+  /** 首次下钻（从汇总 → 选择维度） */
+  const handleInitialDrill = () => {
+    setPendingRowValue(null);
+    setShowPicker(true);
+  };
+
+  const canDrillDeeper = availableDimensions.length > 0;
 
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-500 to-blue-700 text-white p-6 rounded-xl shadow-md">
-        <h1 className="text-xl font-semibold mb-1">驾意险推介率分析</h1>
-        <p className="text-sm opacity-90">四川分公司 - 交叉销售数据分析</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold mb-1">驾意险推介率分析</h1>
+            <p className="text-sm opacity-90">四川分公司 - 交叉销售数据分析</p>
+          </div>
+          {(drillPath.length > 0 || currentGroupBy) && (
+            <button
+              onClick={reset}
+              className="px-3 py-1.5 text-sm bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+            >
+              重置
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 维度选择器 */}
-      <div className="bg-white p-4 rounded-xl shadow-sm">
-        <div className="flex items-center gap-4 flex-wrap">
-          <span className="text-sm text-gray-600">下钻维度：</span>
-          <select
-            value={dimension}
-            onChange={handleDimensionChange}
-            className={`px-3 py-2 border rounded-lg text-sm min-w-[180px] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-              dimension !== 'org_level_3' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
-            }`}
-          >
-            {DRILLDOWN_DIMENSIONS.map((dim) => (
-              <option key={dim} value={dim}>
-                {DIMENSION_LABELS[dim]}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* 面包屑导航 */}
+      <div className="bg-white p-3 rounded-xl shadow-sm">
+        <Breadcrumb
+          drillPath={drillPath}
+          currentGroupBy={currentGroupBy}
+          onDrillUp={drillUp}
+        />
       </div>
 
       {/* 错误提示 */}
@@ -215,9 +341,31 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           {/* 汇总卡片 */}
           {summary && <SummaryCards data={summary} />}
 
-          {/* 数据表格 */}
-          {sortedRows.length > 0 && (
+          {/* 初始状态：仅汇总，显示"开始下钻"按钮 */}
+          {!currentGroupBy && summary && (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <p className="text-gray-500 mb-4">点击下方按钮选择下钻维度，查看明细分组数据</p>
+              <button
+                onClick={handleInitialDrill}
+                className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+              >
+                选择下钻维度
+              </button>
+            </div>
+          )}
+
+          {/* 数据表格（有 groupBy 时才显示） */}
+          {currentGroupBy && sortedRows.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <span className="text-sm text-gray-600">
+                  按<strong>{DIMENSION_LABELS[currentGroupBy]}</strong>分组
+                  {` (${sortedRows.length} 条)`}
+                </span>
+                {canDrillDeeper && (
+                  <span className="text-xs text-blue-400">点击行可继续下钻</span>
+                )}
+              </div>
               <div className="overflow-x-auto max-h-[600px]">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50 sticky top-0 z-10">
@@ -239,13 +387,21 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                   </thead>
                   <tbody>
                     {sortedRows.map((row, idx) => (
-                      <tr key={idx} className="border-b border-gray-50 hover:bg-blue-50/40 transition-colors">
+                      <tr
+                        key={idx}
+                        className={`border-b border-gray-50 transition-colors ${
+                          canDrillDeeper
+                            ? 'hover:bg-blue-50 cursor-pointer'
+                            : 'hover:bg-gray-50/60'
+                        }`}
+                        onClick={() => canDrillDeeper && handleRowClick(row.group_name)}
+                      >
                         {TABLE_COLUMNS.map((col) => (
                           <td
                             key={col.key}
                             className={`px-3 py-2.5 ${
                               col.type === 'text'
-                                ? 'text-left text-gray-900'
+                                ? `text-left ${canDrillDeeper ? 'text-blue-600 font-medium' : 'text-gray-900'}`
                                 : col.type === 'rate'
                                   ? `text-right font-mono tabular-nums ${getRateClass(Number(row[col.key] ?? 0))}`
                                   : 'text-right font-mono tabular-nums text-gray-700'
@@ -263,12 +419,22 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           )}
 
           {/* 空状态 */}
-          {!summary && sortedRows.length === 0 && (
+          {!summary && sortedRows.length === 0 && !loading && (
             <div className="bg-white rounded-xl shadow-sm p-16 text-center text-gray-400">
               暂无数据
             </div>
           )}
         </>
+      )}
+
+      {/* 维度选择器弹层 */}
+      {showPicker && (
+        <DimensionPicker
+          available={availableDimensions}
+          onSelect={handleDimensionSelect}
+          onCancel={() => { setShowPicker(false); setPendingRowValue(null); }}
+          title={pendingRowValue ? `"${pendingRowValue}" 下钻到...` : '选择下钻维度'}
+        />
       )}
     </div>
   );
