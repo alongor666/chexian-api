@@ -173,6 +173,8 @@ const isDataEnabled = isDataLoaded;
 | `src/components/layout/DataGuard.tsx` | 路由守卫 | 检查 isDataLoaded |
 | `server/src/services/duckdb.ts` | 后端 DuckDB 服务 | 查询执行、数据加载 |
 | `server/src/routes/query.ts` | 后端查询路由 | API 端点定义 |
+| `server/src/utils/security.ts` | 安全工具 | 文件名验证、路径验证、SQL表名验证、敏感信息脱敏 |
+| `server/src/middleware/audit.ts` | 审计日志中间件 | 记录已认证用户的 /api/query/* 操作 |
 
 ### 防御性编码规范
 
@@ -212,6 +214,7 @@ useEffect(() => {
 - **Bun 包管理器**：禁止使用 npm/yarn/pnpm（项目统一使用 Bun）
 - **智谱 API 端点**：`https://open.bigmodel.cn/api/paas/v4` 是标准端点（支持免费模型 glm-4.7-flash），已从 Coding 套餐迁移
 - **API 认证**：所有 `/api/*` 路由必须经过 JWT 认证中间件，禁止绕过
+- **文件名验证**：`server/src/utils/security.ts` 的 `sanitizeFilename()` 使用危险字符黑名单（非白名单），以支持中文文件名。修改时注意保持对路径遍历、控制字符的防护
 
 ---
 
@@ -327,6 +330,11 @@ bun run dev:full
 cd server && bun run dev &    # 启动后端（端口 3000）
 bun run dev                   # 启动前端（端口 5173）
 ```
+
+**启动器联动机制（必须理解）**：
+- `bun run dev:full` 会调用 `scripts/start.mjs --all`
+- 脚本会在启动前自动清理开发常用旧端口（`3000`, `5173-5176`）
+- 清理成功后再启动后端与前端；若端口仍不可用，脚本会阻断启动并输出占用进程
 
 ⚠️ **禁止只运行 `bun run dev`**：这只启动前端，后端 API 不可用会导致数据加载失败。
 
@@ -544,6 +552,10 @@ src/features/*                                    # 功能模块 UI 渲染
 | SQL 报错 | ✅ 复制完整错误信息 → ✅ 查看 `server/src/services/duckdb.ts` 字段类型定义 |
 | 日期时间处理 | ✅ 先 `CAST(field AS DATE)` → ✅ 查看 DuckDB 日期函数文档 |
 | 功能开发完成 | ✅ 截图 Console 输出 → ✅ 记录关键字段实际值 |
+| 发现启动异常（端口冲突/仅前端） | ✅ 执行 `bun run dev:full` 触发自动端口清理 → ✅ 若清理失败，按脚本输出释放端口后重试 |
+
+**执行标准（强制）**：
+- 不允许“只自检不修复”。发现环境问题后必须推进到可运行状态（后端健康 + 登录可查数）再交付结论。
 
 ---
 
@@ -619,6 +631,8 @@ src/features/*                                    # 功能模块 UI 渲染
 | SQL 执行失败 | ✅ 查看 Chrome Console 完整错误 → ✅ 检查字段类型 → ✅ 查 DuckDB 文档 |
 | 不确定 DuckDB 语法 | ✅ 先查 [DuckDB 官方文档](https://duckdb.org/docs/) → ❌ 禁止猜测 |
 | **API 调用失败/数据不显示** | ✅ 检查浏览器网络面板（是否 404/500）<br>✅ 检查前端 apiClient 和后端路由是否对应<br>⚠️ **前端新增 API 方法必须检查后端路由是否存在**<br>📝 教训：2026-02-04 KPI 显示"--"，根因是 `/api/query/kpi-detail` 路由未创建 |
+| **生产环境登录后无数据** | ✅ 检查 `/api/data/files` 是否返回空数组<br>✅ 检查 `sanitizeFilename()` 是否拒绝了中文文件名<br>📝 教训：2026-02-15 部署后"只有前端没有数据"，根因是 `security.ts` 使用 ASCII-only 白名单正则 `/^[a-zA-Z0-9_\-\.]+$/` 拒绝了中文 Parquet 文件名，改为危险字符黑名单解决 |
+| **ESM 部署问题** | ✅ TypeScript 编译 ESM 不自动添加 `.js` 扩展名 → 需手动添加或配置 `moduleResolution: NodeNext`<br>✅ ESM 模式无 `__dirname` → 用 `fileURLToPath(import.meta.url)` 替代<br>✅ Express 路由挂载后 `req.path` 变为相对路径 → 用 `req.originalUrl` |
 
 ---
 
@@ -767,6 +781,7 @@ claude --teleport
 ---
 
 **变更历史**：
+- 2026-02-15：【生产部署】完成腾讯云 VPS 部署（`https://chexian.cretvalu.com`），修复6个部署问题（ESM 导入缺 .js 扩展名、ESM __dirname 不可用、req.path vs req.originalUrl、types 目录导入、Nginx IP 白名单、sanitizeFilename 中文文件名支持），新增审计日志中间件（`server/src/middleware/audit.ts`），配置 SSL/备份/日志轮转
 - 2026-02-13：【文档同步】更新§5功能模块清单（13→14个，补充Auth/Pages模块）、§5数据链路补充SQL生成器层（14个模块）和完整路由清单（5个路由文件）、§7命令索引升级v2.3（23→30个命令）、§7 Subagents更新（4→14个）、更新最新数据文件路径（0212.parquet）、补充筛选器API端点
 - 2026-02-07：从 chexianYJFX 拆分为 API 版，移除所有 Local/DuckDB-WASM 相关内容
 - 2026-02-04 PM：【血泪教训】新增§1.5双模式架构与启动协议，记录三层状态陷阱（DataContext.isDataLoaded vs duckdbClient.isDataLoaded() vs 组件isInitialized）、正确的数据启用判断模式、防御性编码规范、排查清单；修复PremiumDashboard.tsx/Dashboard.tsx的双模式支持、LineChart.tsx空值防护
