@@ -19,6 +19,7 @@ import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
+import net from 'net';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -143,6 +144,202 @@ function runCommand(command, args, options = {}) {
   return spawn(cmd, args, spawnOptions);
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 查询端口监听进程 PID
+ */
+function getListeningPids(port) {
+  if (isWindows) {
+    try {
+      const output = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
+      const lines = output
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.includes('LISTENING') && line.includes(`:${port}`));
+
+      const pids = lines
+        .map(line => line.split(/\s+/).pop())
+        .filter(Boolean)
+        .map(pid => Number(pid))
+        .filter(pid => Number.isInteger(pid) && pid > 0);
+
+      return Array.from(new Set(pids));
+    } catch {
+      return [];
+    }
+  }
+
+  if (!commandExists('lsof')) {
+    return [];
+  }
+
+  try {
+    const output = execSync(`lsof -tiTCP:${port} -sTCP:LISTEN`, { encoding: 'utf8' }).trim();
+    if (!output) {
+      return [];
+    }
+
+    return output
+      .split('\n')
+      .map(line => Number(line.trim()))
+      .filter(pid => Number.isInteger(pid) && pid > 0);
+  } catch {
+    return [];
+  }
+}
+
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 终止占用端口的旧进程（先 SIGTERM，必要时 SIGKILL）
+ */
+async function terminatePortProcess(pid) {
+  if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) {
+    return false;
+  }
+
+  if (!isProcessAlive(pid)) {
+    return true;
+  }
+
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    return !isProcessAlive(pid);
+  }
+
+  await sleep(1200);
+
+  if (!isProcessAlive(pid)) {
+    return true;
+  }
+
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    return !isProcessAlive(pid);
+  }
+
+  await sleep(500);
+  return !isProcessAlive(pid);
+}
+
+/**
+ * 自动清理开发端口占用
+ */
+async function cleanupOccupiedPorts(ports) {
+  const uniquePorts = Array.from(new Set(ports)).filter(port => Number.isInteger(port) && port > 0);
+  let cleanedAny = false;
+
+  for (const port of uniquePorts) {
+    const pids = getListeningPids(port);
+    if (pids.length === 0) {
+      continue;
+    }
+
+    log(`检测到端口 ${port} 被占用，准备清理旧进程: ${pids.join(', ')}`, 'yellow');
+
+    for (const pid of pids) {
+      const terminated = await terminatePortProcess(pid);
+      const stillListening = getListeningPids(port).includes(pid);
+      const ok = terminated || !stillListening;
+
+      if (ok) {
+        cleanedAny = true;
+        log(`已释放端口 ${port} 的进程 PID=${pid}`, 'green');
+      } else {
+        log(`无法终止 PID=${pid}（端口 ${port}）`, 'red');
+      }
+    }
+  }
+
+  if (cleanedAny) {
+    log('旧端口清理完成，继续启动流程。', 'green');
+  }
+}
+
+/**
+ * 检查端口是否可用
+ */
+function isPortAvailable(port, host = '0.0.0.0') {
+  return new Promise((resolve) => {
+    const tester = net
+      .createServer()
+      .once('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          resolve(false);
+          return;
+        }
+        resolve(false);
+      })
+      .once('listening', () => {
+        tester.close(() => resolve(true));
+      });
+
+    tester.listen(port, host);
+  });
+}
+
+/**
+ * 获取端口占用进程提示（Unix）
+ */
+function getPortOwnerHint(port) {
+  if (isWindows || !commandExists('lsof')) {
+    return null;
+  }
+
+  try {
+    const output = execSync(`lsof -nP -iTCP:${port} -sTCP:LISTEN`, { encoding: 'utf8' }).trim();
+    const lines = output.split('\n').slice(1);
+    if (lines.length === 0) {
+      return null;
+    }
+    return lines.map(line => line.trim().replace(/\s+/g, ' ')).join('\n');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 确保后端端口可用
+ */
+async function ensureBackendPortAvailable(port = 3000) {
+  const available = await isPortAvailable(port);
+  if (available) {
+    return true;
+  }
+
+  log(`错误: 后端端口 ${port} 已被占用，无法启动新的后端实例。`, 'red');
+
+  const ownerHint = getPortOwnerHint(port);
+  if (ownerHint) {
+    log('当前占用进程：', 'yellow');
+    console.log(ownerHint);
+  }
+
+  log('请先释放端口后重试：', 'yellow');
+  if (isWindows) {
+    log(`  netstat -ano | findstr :${port}`, 'blue');
+    log('  taskkill /PID <PID> /F', 'blue');
+  } else {
+    log(`  lsof -nP -iTCP:${port} -sTCP:LISTEN`, 'blue');
+    log('  kill <PID>', 'blue');
+  }
+
+  log('若要复用已运行的后端，仅启动前端即可：`bun run dev`', 'blue');
+  return false;
+}
+
 /**
  * 启动前端开发服务器
  */
@@ -193,30 +390,55 @@ function startAll(runtime) {
   log('同时启动前端和后端...', 'green');
 
   const processes = [];
+  let frontendStarted = false;
+  let isShuttingDown = false;
 
-  // 启动后端
-  const backend = startBackend(runtime);
-  processes.push(backend);
+  const cleanup = (exitCode = 0) => {
+    if (isShuttingDown) {
+      return;
+    }
+    isShuttingDown = true;
 
-  // 延迟启动前端，给后端一点启动时间
-  setTimeout(() => {
-    const frontend = startFrontend(runtime);
-    processes.push(frontend);
-  }, 1000);
-
-  // 处理进程退出
-  const cleanup = () => {
     log('\n正在关闭服务...', 'yellow');
     processes.forEach(p => {
       if (p && !p.killed) {
         p.kill();
       }
     });
-    process.exit(0);
+    process.exit(exitCode);
   };
 
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
+  // 启动后端
+  const backend = startBackend(runtime);
+  processes.push(backend);
+
+  // 延迟启动前端，给后端一点启动时间
+  const frontendTimer = setTimeout(() => {
+    frontendStarted = true;
+    const frontend = startFrontend(runtime);
+    processes.push(frontend);
+  }, 1000);
+
+  backend.on('exit', (code) => {
+    const exitCode = code ?? 1;
+    if (!frontendStarted) {
+      clearTimeout(frontendTimer);
+      if (exitCode !== 0) {
+        log(`后端启动失败（退出码 ${exitCode}），已取消前端启动。`, 'red');
+        cleanup(exitCode);
+      }
+      return;
+    }
+
+    if (exitCode !== 0) {
+      log(`后端进程异常退出（退出码 ${exitCode}），正在关闭前端。`, 'red');
+      cleanup(exitCode);
+    }
+  });
+
+  // 处理进程退出
+  process.on('SIGINT', () => cleanup(0));
+  process.on('SIGTERM', () => cleanup(0));
 
   return processes;
 }
@@ -280,7 +502,7 @@ function showInfo() {
 /**
  * 主函数
  */
-function main() {
+async function main() {
   const args = process.argv.slice(2);
 
   // 解析参数
@@ -319,6 +541,19 @@ function main() {
   log(`平台: ${process.platform}`, 'blue');
   console.log();
 
+  if (options.all) {
+    await cleanupOccupiedPorts([3000, 5173, 5174, 5175, 5176]);
+  } else if (options.server) {
+    await cleanupOccupiedPorts([3000]);
+  }
+
+  if (options.all || options.server) {
+    const canStartBackend = await ensureBackendPortAvailable(3000);
+    if (!canStartBackend) {
+      process.exit(1);
+    }
+  }
+
   // 执行启动
   if (options.all) {
     startAll(runtime);
@@ -330,4 +565,7 @@ function main() {
   }
 }
 
-main();
+main().catch((error) => {
+  log(`启动失败: ${error?.message || error}`, 'red');
+  process.exit(1);
+});

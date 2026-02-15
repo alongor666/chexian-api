@@ -144,12 +144,18 @@ bun run scripts/check-governance.mjs
 
 ```bash
 bun install         # 安装依赖
-bun run dev         # 启动开发服务器（http://localhost:5173）
+bun run dev:full    # ✅ 一键启动前后端（联动 start.mjs 自动清理旧端口）
+bun run dev         # 仅启动前端（需确认后端已可用）
 bun run build       # 类型检查 + 生产构建
 bun test            # 运行单元测试
 bun run governance  # 治理校验（简写）
 bun run scripts/check-governance.mjs  # 治理校验（完整路径）
 ```
+
+**启动联动机制（必须）**：
+- `bun run dev:full` 会调用 `scripts/start.mjs --all`
+- 启动前自动清理常见旧端口占用（`3000`, `5173-5176`）
+- 发生端口冲突时，不允许只报告；必须完成清理并重试至后端可用
 
 **测试覆盖**（14个测试套件，273+ 单元测试）：
 
@@ -240,6 +246,10 @@ src/features/dashboard/*                          # UI 渲染
 | SQL 报错          | ✅ 复制完整错误信息 → ✅ 查看 `client.ts:78-95` 字段类型定义     |
 | 日期时间处理      | ✅ 先 `CAST(field AS DATE)` → ✅ 查看 DuckDB 日期函数文档        |
 | 功能开发完成      | ✅ 截图 Console 输出 → ✅ 记录关键字段实际值                       |
+| 启动异常（仅前端/端口冲突） | ✅ 执行 `bun run dev:full` 自动清理旧端口 → ✅ 必要时手动释放后重试 |
+
+**执行标准**：
+- 不允许“只自检不修复”。发现环境问题后，必须推进到后端健康可访问再结束任务。
 
 ---
 
@@ -333,6 +343,7 @@ src/features/dashboard/*                          # UI 渲染
 | 发现缺失文档       | ✅ 直接创建文档 `<br>`📝 在对应 INDEX.md 登记                                       |
 | SQL 执行失败       | ✅ 查看 Chrome Console 完整错误 → ✅ 检查字段类型 → ✅ 查 DuckDB 文档               |
 | 不确定 DuckDB 语法 | ✅ 先查[DuckDB 官方文档](https://duckdb.org/docs/) → ❌ 禁止猜测                        |
+| 启动时仅前端可用/后端缺失 | ✅ 先执行 `bun run dev:full`（自动端口清理） → ✅ 检查 3000 端口占用并释放后重试 |
 
 ---
 
