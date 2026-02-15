@@ -94,7 +94,7 @@ export const SidebarLayout: React.FC = () => {
 
           {/* 主内容区 - 移动端全宽，桌面端有侧边栏边距 */}
           <main
-            className={`flex-1 overflow-auto transition-all duration-300 ${
+            className={`flex-1 overflow-hidden transition-all duration-300 ${
               isMobile ? 'ml-0' : collapsed ? 'ml-16' : 'ml-72'
             }`}
           >

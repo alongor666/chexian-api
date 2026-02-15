@@ -14,6 +14,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import { apiClient } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
+import type { VehicleCategory } from './useCrossSellTimePeriod';
 
 /** 可选的下钻维度（不含 summary） */
 export type CrossSellDimension =
@@ -72,6 +73,7 @@ export interface CrossSellRow {
 
 interface UseCrossSellAnalysisProps {
   filters: AdvancedFilterState;
+  vehicleCategory?: VehicleCategory;
   enabled?: boolean;
 }
 
@@ -119,6 +121,7 @@ function mapRow(raw: Record<string, unknown>): CrossSellRow {
 
 export function useCrossSellAnalysis({
   filters,
+  vehicleCategory,
   enabled = true,
 }: UseCrossSellAnalysisProps): UseCrossSellAnalysisReturn {
   const [summary, setSummary] = useState<CrossSellRow | null>(null);
@@ -156,6 +159,7 @@ export function useCrossSellAnalysis({
         ...filterParams,
         drillPath: apiDrillPath,
         groupBy: currentGroupBy || undefined,
+        ...(vehicleCategory ? { vehicleCategory } : {}),
       });
 
       // 防止旧请求覆盖新数据
@@ -173,7 +177,7 @@ export function useCrossSellAnalysis({
         setLoading(false);
       }
     }
-  }, [filters, drillPath, currentGroupBy, enabled]);
+  }, [filters, drillPath, currentGroupBy, vehicleCategory, enabled]);
 
   // 依赖变化时自动请求
   useEffect(() => {

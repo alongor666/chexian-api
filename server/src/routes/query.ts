@@ -34,13 +34,17 @@ import { generateGrowthQuery, GrowthConfig, GrowthType, TimeView as GrowthTimeVi
 import { generateCoefficientByOrgQuery, generateFullCoefficientQuery } from '../sql/coefficient.js';
 import { generateClaimRatioQuery, generateExpenseRatioQuery, generateComprehensiveCostQuery, generateVariableCostQuery, CostDimension } from '../sql/cost.js';
 import { generateRenewalRateQuery, generateRenewalDetailTableQuery } from '../sql/renewal.js';
+import { generateRenewalDrilldownQuery, type DrilldownDimension, type DrilldownLevel, type SortField, type SortOrder } from '../sql/renewal-drilldown.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../sql/cross-sell.js';
+import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../sql/cross-sell-summary.js';
+import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery } from '../sql/marketing-report.js';
 import type { AdvancedFilterState } from '../types/data.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../sql/salesman-ranking.js';
 import { validateSQL } from '../utils/sql-validator.js';
 import { isValidDateFormat } from '../utils/sql-sanitizer.js';
 import { injectPermissionFilter, isValidPermissionFilter } from '../utils/sql-permission-injector.js';
 import { commonFilterSchema, buildWhereFromFilterParams } from '../utils/filter-params.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -568,6 +572,87 @@ router.get(
 );
 
 /**
+ * 续保下钻分析请求验证Schema
+ */
+const renewalDrilldownSchema = z.object({
+  targetYear: z.coerce.number().default(new Date().getFullYear()),
+  level: z.enum(['company', 'org', 'team', 'salesman', 'coverage']).default('company'),
+  orgFilter: z.string().optional(),
+  teamFilter: z.string().optional(),
+  salesmanFilter: z.string().optional(),
+  selfRenewalOnly: z.string().optional(),
+  bundleOnly: z.string().optional(),
+  dueMonth: z.coerce.number().optional(),
+  cutoffDate: z.string().optional(),
+  sortField: z.enum(['renewal_rate', 'quote_rate', 'due_count', 'renewed_count']).default('renewal_rate'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
+
+/**
+ * GET /api/query/renewal-drilldown
+ * 续保下钻分析（五层下钻：公司→机构→团队→业务员→险别组合）
+ */
+router.get(
+  '/renewal-drilldown',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = renewalDrilldownSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+
+    const {
+      targetYear, level, orgFilter, teamFilter, salesmanFilter,
+      selfRenewalOnly, bundleOnly, dueMonth, cutoffDate,
+      sortField, sortOrder,
+    } = parseResult.data;
+
+    if (cutoffDate && !isValidDateFormat(cutoffDate)) {
+      throw new AppError(400, `Invalid cutoffDate format: ${cutoffDate}. Expected YYYY-MM-DD`);
+    }
+
+    // 构建下钻维度
+    const dimension: DrilldownDimension = {
+      level: level as DrilldownLevel,
+      selfRenewalOnly: selfRenewalOnly === 'true',
+      bundleOnly: bundleOnly === 'true',
+      dueMonth: dueMonth,
+      filters: {
+        org: orgFilter,
+        team: teamFilter,
+        salesman: salesmanFilter,
+      },
+    };
+
+    // 构建筛选条件
+    const filters: AdvancedFilterState = {};
+    const permissionFilter = req.permissionFilter || '1=1';
+    if (permissionFilter !== '1=1') {
+      const orgMatch = permissionFilter.match(/org_level_3\s*(?:LIKE|=)\s*'%?([^%']+)%?'/i);
+      if (orgMatch && !orgFilter) {
+        dimension.filters = { ...dimension.filters, org: orgMatch[1] };
+      }
+    }
+
+    const sql = generateRenewalDrilldownQuery(
+      filters,
+      targetYear,
+      dimension,
+      { enabled: false },
+      sortField as SortField,
+      sortOrder as SortOrder,
+      cutoffDate,
+    );
+
+    const result = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  })
+);
+
+/**
  * 车驾意推介率请求验证Schema（层层下钻）
  *
  * drillPath: JSON 数组，如 [{"dimension":"org_level_3","value":"天府"}]
@@ -581,6 +666,7 @@ const CROSS_SELL_DIMENSIONS = [
 const crossSellExtraSchema = z.object({
   drillPath: z.string().optional().default('[]'),
   groupBy: z.enum(CROSS_SELL_DIMENSIONS).optional(),
+  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).optional(),
 });
 
 /**
@@ -616,10 +702,16 @@ router.get(
       throw new AppError(400, filterResult.error.issues[0].message);
     }
 
-    const finalWhereClause = buildWhereFromFilterParams(
+    let finalWhereClause = buildWhereFromFilterParams(
       filterResult.data,
       req.permissionFilter || '1=1'
     );
+
+    // 车辆类别过滤（标签页联动）
+    const vehicleCat = crossSellResult.data.vehicleCategory as VehicleCategory | undefined;
+    if (vehicleCat) {
+      finalWhereClause += ` AND ${getVehicleCategoryFilter(vehicleCat)}`;
+    }
 
     // 始终查询汇总行（应用 drillPath 过滤的汇总）
     // 如果有 groupBy，同时查询分组数据
@@ -690,6 +782,57 @@ router.get(
 );
 
 /**
+ * 营销战报请求验证Schema
+ */
+const marketingReportSchema = z.object({
+  reportType: z.enum(['org', 'salesman']).default('org'),
+  holidayDates: z.string().default(''),
+});
+
+/**
+ * GET /api/query/marketing-report
+ * 营销战报（假日签单统计）
+ */
+router.get(
+  '/marketing-report',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = marketingReportSchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+
+    const { reportType, holidayDates } = extraResult.data;
+    const dates = holidayDates.split(',').filter(d => d && isValidDateFormat(d));
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const dateField = filterResult.data.dateField || 'policy_date';
+
+    let sql: string;
+    if (reportType === 'org') {
+      sql = generateOrgHolidayReportQuery(finalWhereClause, dates, dateField);
+    } else {
+      sql = generateSalesmanHolidayDetailQuery(finalWhereClause, dates, dateField);
+    }
+
+    const result = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  })
+);
+
+/**
  * 自定义SQL请求验证Schema
  */
 const customSqlSchema = z.object({
@@ -743,6 +886,70 @@ router.post(
       meta: {
         rowCount: result.length,
         permissionApplied: permissionFilter !== '1=1',
+      },
+    });
+  })
+);
+
+// ============================================================
+// Cross-Sell Time Period Summary
+// ============================================================
+
+/**
+ * 车驾意推介率时间维度汇总请求验证Schema
+ */
+const crossSellSummarySchema = z.object({
+  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
+});
+
+/**
+ * GET /api/query/cross-sell-summary
+ * 车驾意推介率 时间维度汇总（当日/当周/当月/当年 × 险别组合）
+ */
+router.get(
+  '/cross-sell-summary',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = crossSellSummarySchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+
+    const { vehicleCategory } = extraResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const sql = generateCrossSellTimePeriodQuery(
+      finalWhereClause,
+      vehicleCategory as VehicleCategory
+    );
+
+    logger.debug('[cross-sell-summary] Generated SQL', { sqlLength: sql.length });
+
+    const result = await duckdbService.query(sql);
+
+    // 从结果中提取 maxDate（通过再查一次 date_bounds）
+    const maxDateSql = `
+      SELECT MAX(CAST(policy_date AS DATE)) AS max_date
+      FROM PolicyFact
+      WHERE ${finalWhereClause}
+        AND ${getVehicleCategoryFilter(vehicleCategory as VehicleCategory)}
+    `;
+    const maxDateResult = await duckdbService.query(maxDateSql);
+    const maxDate = maxDateResult[0]?.max_date || null;
+
+    res.json({
+      success: true,
+      data: {
+        maxDate,
+        rows: result,
       },
     });
   })

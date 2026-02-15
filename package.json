@@ -12,7 +12,7 @@
     "dev:full": "node scripts/start.mjs --all",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' vite build",
     "build:analyze": "NODE_OPTIONS='--max-old-space-size=4096' vite build --mode analyze",
-    "typecheck": "NODE_OPTIONS='--max-old-space-size=8192' tsc --noEmit",
+    "typecheck": "node scripts/typecheck.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "test:coverage": "vitest --coverage",

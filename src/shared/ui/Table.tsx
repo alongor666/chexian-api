@@ -7,10 +7,6 @@ import type { HTMLAttributes, ReactNode, CSSProperties } from 'react'
 import { cn } from '../styles'
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 
-import { Logger } from '@/shared/utils/logger';
-
-const logger = new Logger('Table');
-
 // ============================================================================
 // 类型定义
 // ============================================================================

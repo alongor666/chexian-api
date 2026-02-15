@@ -6,6 +6,7 @@ import { formatCount, formatPremiumWan, formatRate } from '../../../shared/utils
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import { WaterfallChart } from '../../../widgets/charts/WaterfallChart';
 import { usePerspective } from '../../dashboard/hooks/usePerspective';
+import { useDataStatus } from '../../../shared/contexts/DataContext';
 import {
   type ComparisonPreset,
   type ComparisonPeriods,
@@ -44,6 +45,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
   // 默认选中当前月份
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const { perspective, setPerspective, config: perspectiveConfig } = usePerspective();
+  const { isDataLoaded } = useDataStatus();
 
   // 对比分析状态
   const [comparisonPreset, setComparisonPreset] = useState<ComparisonPreset>('yoy');
@@ -143,6 +145,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
   // 对比分析effect
   useEffect(() => {
     if (analysisType !== 'comparison') return;
+    if (!isDataLoaded) return;
     if (!comparisonPeriods) return;
 
     const performComparison = async () => {
@@ -167,7 +170,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
     };
 
     performComparison();
-  }, [analysisType, comparisonPeriods, comparisonGroupBy, filters.org_level_3, additionalFilterParams, analyzeDualMetricComparison]);
+  }, [analysisType, isDataLoaded, comparisonPeriods, comparisonGroupBy, filters.org_level_3, additionalFilterParams, analyzeDualMetricComparison]);
 
   // 初始化对比期间（首次切换到对比分析时）
   useEffect(() => {
@@ -181,6 +184,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
   useEffect(() => {
     // comparison类型有自己的useEffect处理
     if (analysisType === 'comparison') return;
+    if (!isDataLoaded) return;
 
     if (!orgLevel3 && !salesmanName && analysisType === 'salesman') {
       return; // 需要指定业务员才能分析
@@ -227,6 +231,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
     performAnalysis();
   }, [
     analysisType,
+    isDataLoaded,
     growthType,
     timeView,
     orgLevel3,
@@ -243,6 +248,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
 
   // 准备图表数据
   const prepareChartData = () => {
+    if (!data || !Array.isArray(data)) return [];
     return data.map(item => ({
       dim_key: item.time_period ? getSafeDateStr(item.time_period) : String(item.salesman_name || item.org_level_3 || '-'),
       value: (item.growth_rate || 0) * 100, // 转换为百分比

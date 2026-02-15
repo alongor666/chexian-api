@@ -1,0 +1,47 @@
+#!/usr/bin/env node
+/**
+ * 跨平台 TypeScript 类型检查脚本
+ *
+ * - macOS/Linux (>=8GB RAM): 直接运行 tsc --noEmit（增量编译）
+ * - Windows 低内存 (<8GB): 跳过全量检查，提示用 VS Code 实时检查
+ * - CI 环境: 始终运行全量检查
+ */
+import { execSync } from 'node:child_process';
+import os from 'node:os';
+
+const totalMemGB = os.totalmem() / 1024 / 1024 / 1024;
+const platform = os.platform();
+const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
+const forceRun = process.argv.includes('--force');
+
+// CI 环境或 --force 参数：始终运行
+// 本地环境：内存 >= 8GB 才运行
+const memThreshold = 8;
+const canRun = isCI || forceRun || totalMemGB >= memThreshold;
+
+console.log(`[typecheck] Platform: ${platform}, RAM: ${totalMemGB.toFixed(1)}GB, CI: ${isCI}`);
+
+if (!canRun) {
+  console.log('');
+  console.log(`[typecheck] ⚠️  内存不足 ${memThreshold}GB (当前 ${totalMemGB.toFixed(1)}GB)，跳过全量类型检查`);
+  console.log('[typecheck] 💡 类型错误由 VS Code / IDE 实时检查');
+  console.log('[typecheck] 💡 全量检查在 GitHub Actions CI 中自动执行');
+  console.log('[typecheck] 💡 强制运行: bun run typecheck -- --force');
+  console.log('');
+  process.exit(0);
+}
+
+// 根据可用内存动态计算堆上限（留 4GB 给系统）
+const heapMB = Math.min(Math.round((totalMemGB - 4) * 1024), 16384);
+
+console.log(`[typecheck] 🔍 Running tsc --noEmit (heap: ${heapMB}MB)...`);
+
+try {
+  execSync(`node --max-old-space-size=${heapMB} ./node_modules/.bin/tsc --noEmit`, {
+    stdio: 'inherit',
+    cwd: process.cwd(),
+  });
+  console.log('[typecheck] ✅ 类型检查通过');
+} catch (e) {
+  process.exit(e.status || 1);
+}

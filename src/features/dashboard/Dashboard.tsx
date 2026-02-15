@@ -8,15 +8,12 @@ import { AlertPanel } from '../../widgets/alerts/AlertPanel';
 import { AlertBadge } from '../../widgets/alerts/AlertBadge';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../shared/utils/export';
 import { formatCount, formatPremiumWan, formatRate } from '../../shared/utils/formatters';
-import { createLogger } from '../../shared/utils/logger';
 import { useDashboardData } from './hooks/useDashboardData';
 import { useDashboardFilters } from './hooks/useDashboardFilters';
 import { useDataQualityCheck } from './hooks/useDataQualityCheck';
 import { useAlerts } from './hooks/useAlerts';
 import { DataErrorIndicator } from './components/DataErrorIndicator';
 import { useDataStatus } from '../../shared/contexts/DataContext';
-
-const logger = createLogger('Dashboard');
 
 export const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);

@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
-import { SidebarFilterPanel } from './SidebarFilterPanel';
+
 
 interface NavItem {
   path: string;
@@ -129,7 +129,7 @@ export const SidebarNavigation: React.FC = () => {
         </div>
       )}
 
-      {/* 导航菜单 + 筛选器 */}
+      {/* 导航菜单 */}
       <div className="flex-1 overflow-y-auto">
         <nav className="px-3 py-4 space-y-1">
           {/* 首页入口 */}
@@ -147,8 +147,6 @@ export const SidebarNavigation: React.FC = () => {
           {dataNavItems.map(renderNavItem)}
         </nav>
 
-        {/* 筛选器面板 - 仅在展开模式下显示 */}
-        {showExpanded && <SidebarFilterPanel />}
       </div>
 
       {/* 底部区域：用户面板 + 收起/展开按钮 */}

@@ -4,7 +4,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { apiClient } from '../../../shared/api/client';
-import { useDataStatus } from '../../../shared/contexts/DataContext';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { createLogger } from '../../../shared/utils/logger';
 import type { AdvancedFilterState } from '../../../shared/types/data';
@@ -69,7 +68,6 @@ export function useRenewalAnalysis({
   targetYear,
   enabled = true,
 }: UseRenewalAnalysisProps): UseRenewalAnalysisReturn {
-  const { isDataLoaded } = useDataStatus();
   const effectiveYear = targetYear ?? filters.analysis_year ?? new Date().getFullYear();
 
   const [detailData, setDetailData] = useState<RenewalDetailRow[]>([]);

@@ -1,26 +1,29 @@
 # 车险经营管理系统 (Insurance Sales Dashboard)
 
-**版本**: v2.3
-**最后更新**: 2026-02-13
+**版本**: v2.4
+**最后更新**: 2026-02-14
 
 一个基于 **React + TypeScript + DuckDB** 的高性能车险销售数据分析看板，采用纯 API 模式前后端分离架构，专为保险公司业绩管理设计。
 
 ## 核心特性
 
 ### 技术架构
-- **纯 API 模式**: Node.js 后端 (Express + DuckDB) + React 前端，所有数据查询通过 REST API
-- **JWT 认证**: 安全的用户认证和权限管理
+- **纯 API 模式**: Node.js 后端 (Express + DuckDB Neo API) + React 前端，所有数据查询通过 REST API
+- **JWT 认证**: 安全的用户认证和权限管理，支持多机构权限隔离
 - **TypeScript 严格模式**: 全面的类型安全保障
 - **渐进式加载**: KPI 优先显示，图表和明细数据异步加载
+- **审计中间件**: 请求审计日志记录
 
 ### 业务功能
 - **PolicyFact 视图**: 强制实现"保单去重"业务逻辑 (MAX Premium)
 - **多维度分析**: 支持按机构、业务员、时间等多维度下钻分析
 - **14 个功能模块**: 仪表盘、SQL 查询、系数监控、成本分析、保费报表、营销战报等
 - **智能查询**: NL2SQL 自然语言转 SQL + 17 个预置查询模板
+- **车驾意推介率分析**: 交叉销售分析面板，含时段汇总与趋势可视化
+- **续保下钻分析**: 层级式续保数据下钻，支持多维度逐级展开
 
 ### 数据处理
-- **Python 数据管道**: Excel 到 Parquet 的转换与清洗
+- **Python 数据管道**: Excel 到 Parquet 的转换与清洗（支持 34 个字段）
 - **数据质量检测**: 自动验证数据完整性和业务规则
 - **字段映射**: 灵活的字段名映射配置系统 (`server/src/normalize/mapping.ts`)
 
@@ -86,7 +89,7 @@
 │   │   │   ├── permission.ts# 权限服务
 │   │   │   ├── zhipu.ts     # 智谱 AI 服务（NL2SQL）
 │   │   │   └── column-normalizer.ts # 列名标准化
-│   │   ├── sql/             # SQL 生成器（12 个模块）
+│   │   ├── sql/             # SQL 生成器（14 个模块）
 │   │   │   ├── kpi.ts       # KPI 查询
 │   │   │   ├── kpi-detail.ts# KPI 明细
 │   │   │   ├── trend.ts     # 趋势查询
@@ -98,12 +101,16 @@
 │   │   │   ├── renewal-drilldown.ts # 续保下钻
 │   │   │   ├── truck.ts     # 营业货车
 │   │   │   ├── premiumPlan.ts # 保费计划
+│   │   │   ├── cross-sell.ts # 交叉销售分析
+│   │   │   ├── cross-sell-summary.ts # 交叉销售汇总
+│   │   │   ├── marketing-report.ts # 营销战报
 │   │   │   └── perspective-adapter.ts # 视角适配
 │   │   ├── normalize/       # 数据标准化
 │   │   │   ├── mapping.ts   # 字段映射配置
 │   │   │   └── validator.ts # 数据验证
 │   │   ├── middleware/      # 中间件
 │   │   │   ├── auth.ts      # JWT 认证中间件
+│   │   │   ├── audit.ts     # 请求审计中间件
 │   │   │   ├── error.ts     # 错误处理中间件
 │   │   │   └── permission.ts# 权限中间件
 │   │   ├── config/          # 配置（数据库/认证/CORS/路径/机构/系数）
@@ -112,16 +119,16 @@
 │   └── data/                # 数据文件目录
 │       └── *.parquet        # Parquet 数据文件
 │
-├── tests/                    # Vitest 单元测试（25 个测试文件）
-├── scripts/                  # 构建和治理脚本（28 个文件）
+├── tests/                    # Vitest 单元测试（28 个测试文件）
+├── scripts/                  # 构建和治理脚本（27 个文件）
 ├── 数据管理/                 # 数据仓库与管道
 │   ├── warehouse/           # 数据仓库（fact/dim）
 │   ├── pipelines/           # Python 数据管道
 │   ├── knowledge/           # 知识库（业务规则/数据模式/AI 参考）
 │   └── config/              # 数据管理配置
-├── 开发文档/                 # 项目文档（35 个文件）
+├── 开发文档/                 # 项目文档（33 个文件）
 └── .claude/                  # Claude Code 工作流集成
-    ├── commands/            # 30 个 Slash Commands
+    ├── commands/            # 31 个 Slash Commands
     └── agents/              # 14 个 Subagents
 ```
 
@@ -138,10 +145,9 @@
 - **Zod 4.3** - 运行时数据验证
 
 ### 后端
-- **Node.js 18+** - 服务端运行时
+- **Node.js 18+** - 服务端运行时（通过 tsx 执行 TypeScript）
 - **Express 4.18** - Web 框架
-- **DuckDB 1.1.3** - 高性能 OLAP 数据分析引擎
-- **Apache Arrow 17.0.0** - 列式内存格式
+- **@duckdb/node-api 1.4.4-r.1** - DuckDB Neo API，高性能 OLAP 数据分析引擎
 - **JWT (jsonwebtoken 9.x)** - 用户认证
 - **Bcrypt** - 密码加密
 - **Helmet + CORS** - 安全中间件
@@ -299,6 +305,10 @@ bun run preview   # 预览生产版本
 | `/api/query/cost` | GET | 获取成本分析数据 |
 | `/api/query/coefficient` | GET | 获取系数数据 |
 | `/api/query/renewal` | GET | 获取续保分析数据 |
+| `/api/query/renewal-drilldown` | GET | 续保下钻分析数据 |
+| `/api/query/cross-sell` | GET | 交叉销售（车驾意推介率）分析 |
+| `/api/query/cross-sell-summary` | GET | 交叉销售时段汇总 |
+| `/api/query/marketing-report` | GET | 营销战报数据 |
 | `/api/query/custom` | POST | 执行自定义 SQL 查询 |
 | `/api/ai/nl2sql` | POST | 自然语言转 SQL |
 | `/api/filters/options` | GET | 获取筛选器选项 |
@@ -363,7 +373,7 @@ export const fieldMapping = {
 
 ## 测试策略
 
-### 单元测试（25 个测试文件）
+### 单元测试（28 个测试文件）
 - KPI 计算逻辑测试
 - 数据映射和验证测试
 - SQL 查询模板测试
@@ -387,7 +397,7 @@ bun run governance        # 治理规则检查
 ### Claude Code 工作流
 本项目集成了完整的 Claude Code 工作流：
 
-#### Slash Commands（30 个）
+#### Slash Commands（31 个）
 
 | 类别 | 命令 | 描述 |
 |------|------|------|
@@ -494,6 +504,25 @@ lsof -i :5173  # 前端
 # 杀死占用进程
 kill -9 <PID>
 ```
+
+## 近期更新
+
+### v2.4 (2026-02-14)
+- **DuckDB Neo API 迁移**: 从废弃的 `duckdb` 包迁移到 `@duckdb/node-api` (1.4.4-r.1)，移除 `apache-arrow` 依赖
+- **新增 5 个业务字段**: `insurance_grade`(保险等级)、`small_truck_score`(小货车评分)、`large_truck_score`(大货车评分)、`is_cross_sell`(是否交叉销售)、`cross_sell_premium_driver`(交叉销售保费_驾意)
+- **车驾意推介率分析**: 新增交叉销售分析面板，含时段汇总与可视化
+- **续保下钻分析**: 层级式续保数据多维度下钻面板
+- **营销战报 SQL 生成器**: 新增 `marketing-report.ts` 和 `cross-sell-summary.ts` SQL 模块
+- **5 个数据分析板块修复**: 修复系数/成本/增长/续保/营销等面板的数据异常
+- **统一侧边栏筛选器**: 重构右侧筛选器布局，新增 `SidebarFilterPanel` 和 `PageFilterPanel` 组件
+- **12 处类型错误修复**: 优化 TypeScript 类型检查性能
+- **审计中间件**: 新增 `audit.ts` 请求审计日志
+- **UI 组件**: 新增 `Tabs` 通用组件
+
+### v2.3 (2026-02-13)
+- 文档全面更新为 API-only 架构
+- 3 项安全修复（CORS/XSS/SQL 注入）
+- GitHub Actions CI/CD 集成
 
 ## 许可证
 

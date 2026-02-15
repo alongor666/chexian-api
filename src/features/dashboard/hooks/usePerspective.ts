@@ -3,10 +3,6 @@ import type { ViewPerspective, PerspectiveConfig } from '../../../shared/types';
 import { DEFAULT_PERSPECTIVE, getPerspectiveConfig } from '../../../shared/types';
 import { safeStorage } from '../../../shared/utils/storage';
 
-import { Logger } from '@/shared/utils/logger';
-
-const logger = new Logger('Perspective');
-
 /**
  * 视角状态管理 Hook
  *
