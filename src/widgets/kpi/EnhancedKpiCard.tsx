@@ -11,7 +11,6 @@
  */
 import React, { memo } from 'react';
 import { colors } from '../../shared/styles';
-import { FONT_FAMILY_KPI, FONT_FAMILY_CHART_NUMBER } from '../../shared/config/chartStyles';
 
 /**
  * 环形图数据项
@@ -147,7 +146,7 @@ const MiniDonutChart: React.FC<{
         fontSize="14"
         fontWeight="600"
         fill="#1f2937"
-        style={{ fontFamily: FONT_FAMILY_CHART_NUMBER }}
+        className="font-chart-number"
       >
         {mainPercentage}%
       </text>
@@ -197,22 +196,20 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
     <div className="w-full">
       <div className="flex h-12 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700">
         <div
-          className="flex items-center justify-center text-sm font-semibold text-white"
+          className="flex items-center justify-center text-sm font-semibold text-white font-chart-number"
           style={{
             width: `${primaryRate}%`,
             backgroundColor: normalizedData[0]?.color || DEFAULT_COLORS[0],
             minWidth: primaryRate > 0 ? '36px' : 0,
-            fontFamily: FONT_FAMILY_CHART_NUMBER,
           }}
         >
           {primaryRate > 0 ? `${primaryRate.toFixed(1)}%` : ''}
         </div>
         <div
-          className="flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700"
+          className="flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700 font-chart-number"
           style={{
             width: `${secondaryRate}%`,
             minWidth: secondaryRate > 0 ? '36px' : 0,
-            fontFamily: FONT_FAMILY_CHART_NUMBER,
           }}
         >
           {secondaryRate > 0 ? `${secondaryRate.toFixed(1)}%` : ''}
@@ -283,10 +280,7 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
     return (
       <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 shadow-sm hover:shadow-md transition-shadow">
         <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-2">{title}</div>
-        <div
-          className="text-2xl font-bold text-neutral-900 dark:text-neutral-100"
-          style={{ fontFamily: FONT_FAMILY_KPI }}
-        >
+        <div className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 font-kpi">
           {formattedValue}
         </div>
       </div>
@@ -309,10 +303,7 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
       <div className="flex items-center justify-between mb-2">
         <div className="flex flex-col">
           <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{normalizedRatioData[1]?.label || '其他'}</div>
-          <div
-            className="text-xl font-semibold text-neutral-700 dark:text-neutral-300"
-            style={{ fontFamily: FONT_FAMILY_KPI }}
-          >
+          <div className="text-xl font-semibold text-neutral-700 dark:text-neutral-300 font-kpi">
             {secondaryRate}
           </div>
         </div>

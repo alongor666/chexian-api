@@ -68,6 +68,45 @@ export const colors = {
 } as const
 
 // ============================================================================
+// 语义化颜色扩展（用于状态指示、图表等）
+// ============================================================================
+
+export const semanticColors = {
+  /** 状态 - 成功/增长 */
+  positive: {
+    DEFAULT: '#10B981',      // emerald-500
+    light: '#34D399',        // emerald-400
+    dark: '#059669',         // emerald-600
+    bg: '#D1FAE5',           // emerald-100
+    text: '#065F46',         // emerald-800
+  },
+  /** 状态 - 负面/下降 */
+  negative: {
+    DEFAULT: '#EF4444',      // red-500
+    light: '#F87171',        // red-400
+    dark: '#DC2626',         // red-600
+    bg: '#FEE2E2',           // red-100
+    text: '#991B1B',         // red-800
+  },
+  /** 状态 - 信息/主要 */
+  info: {
+    DEFAULT: '#3B82F6',      // blue-500
+    light: '#60A5FA',        // blue-400
+    dark: '#2563EB',         // blue-600
+    bg: '#DBEAFE',           // blue-100
+    text: '#1E40AF',         // blue-800
+  },
+  /** 图表专用年份颜色（避免硬编码） */
+  chart: {
+    year2024: '#FF6B6B',
+    year2025: '#4ECDC4',
+    year2026: '#95E1D3',
+    year2027: '#F38181',
+    year2028: '#AA96DA',
+  },
+} as const
+
+// ============================================================================
 // 间距系统
 // ============================================================================
 
@@ -265,6 +304,18 @@ export const textStyles = {
 } as const
 
 /**
+ * 字体样式扩展（用于特殊场景）
+ */
+export const fontStyles = {
+  /** KPI 大数字（使用 Avenir/Century Gothic 风格） */
+  kpi: 'font-sans tabular-nums',
+  /** 图表数字 */
+  chart: 'font-sans tabular-nums',
+  /** 等宽数字（表格对齐） */
+  tabular: 'font-mono tabular-nums',
+} as const
+
+/**
  * 布局样式
  */
 export const layoutStyles = {
@@ -363,4 +414,87 @@ export function getStatusBgClass(
     default: 'bg-neutral-100',
   }
   return statusMap[status] || statusMap.default
+}
+
+// ============================================================================
+// Tailwind 颜色类名常量（语义化映射）
+// ============================================================================
+
+/**
+ * 颜色替换映射表：硬编码 Tailwind 类 → 设计系统类
+ *
+ * 使用示例：
+ *   旧代码：className="text-red-800"
+ *   新代码：className={colorClasses.text.danger}
+ */
+export const colorClasses = {
+  /** 文本颜色 */
+  text: {
+    // 危险/错误/负面
+    danger: 'text-danger dark:text-danger-light',
+    dangerDark: 'text-danger-dark dark:text-danger',
+    dangerLight: 'text-red-500 dark:text-red-400',
+    // 成功/增长/正面
+    success: 'text-success dark:text-success-light',
+    successDark: 'text-success-dark dark:text-success',
+    positive: 'text-emerald-600 dark:text-emerald-400',
+    // 警告
+    warning: 'text-warning dark:text-warning-light',
+    warningDark: 'text-warning-dark dark:text-warning',
+    // 主色
+    primary: 'text-primary dark:text-primary-light',
+    primaryDark: 'text-primary-dark dark:text-primary',
+    // 中性色
+    neutral: 'text-neutral-600 dark:text-neutral-400',
+    neutralDark: 'text-neutral-700 dark:text-neutral-300',
+    neutralLight: 'text-neutral-500 dark:text-neutral-400',
+    neutralMuted: 'text-neutral-400 dark:text-neutral-500',
+    // 增长率专用
+    growthPositive: 'text-emerald-600 dark:text-emerald-400',
+    growthNegative: 'text-red-500 dark:text-red-400',
+  },
+  /** 背景颜色 */
+  bg: {
+    // 危险/错误
+    danger: 'bg-danger-bg dark:bg-red-900/30',
+    dangerHover: 'hover:bg-red-100 dark:hover:bg-red-900/40',
+    dangerSolid: 'bg-red-100 dark:bg-red-900/20',
+    // 成功/正面
+    success: 'bg-success-bg dark:bg-green-900/30',
+    successHover: 'hover:bg-green-100 dark:hover:bg-green-900/40',
+    successSolid: 'bg-green-100 dark:bg-green-900/20',
+    // 警告
+    warning: 'bg-warning-bg dark:bg-yellow-900/30',
+    warningSolid: 'bg-yellow-100 dark:bg-yellow-900/20',
+    // 主色
+    primary: 'bg-primary-bg dark:bg-blue-900/30',
+    primarySolid: 'bg-blue-100 dark:bg-blue-900/20',
+    // 中性色
+    neutral: 'bg-neutral-50 dark:bg-neutral-800',
+    neutralLight: 'bg-neutral-100 dark:bg-neutral-700',
+    neutralMuted: 'bg-gray-50 dark:bg-neutral-800',
+  },
+  /** 边框颜色 */
+  border: {
+    danger: 'border-red-200 dark:border-red-800',
+    success: 'border-green-200 dark:border-green-800',
+    warning: 'border-yellow-200 dark:border-yellow-800',
+    primary: 'border-blue-200 dark:border-blue-800',
+    neutral: 'border-neutral-200 dark:border-neutral-700',
+  },
+} as const
+
+/**
+ * 获取年份图表颜色（替代硬编码年份颜色）
+ */
+export function getYearChartColor(year: string | number): string {
+  const yearStr = String(year)
+  const yearMap: Record<string, string> = {
+    '2024': semanticColors.chart.year2024,
+    '2025': semanticColors.chart.year2025,
+    '2026': semanticColors.chart.year2026,
+    '2027': semanticColors.chart.year2027,
+    '2028': semanticColors.chart.year2028,
+  }
+  return yearMap[yearStr] || colors.primary.DEFAULT
 }

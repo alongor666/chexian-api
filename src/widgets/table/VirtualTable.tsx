@@ -1,7 +1,7 @@
 import React from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { TableSkeleton } from '../../shared/ui/Skeleton';
-import { TABLE_CSS_CLASSES, FONT_FAMILY_TABULAR } from '../../shared/config/chartStyles';
+import { TABLE_CSS_CLASSES } from '../../shared/config/chartStyles';
 
 export type TableCellValue = React.ReactNode | string | number | bigint | null | undefined;
 
@@ -47,15 +47,9 @@ export const VirtualTable = <T extends object>({
     return 'text-left';
   };
 
-  // 数字列样式（右对齐列使用等宽数字字体）
-  const getNumberStyle = (align?: 'left' | 'right' | 'center'): React.CSSProperties => {
-    if (align === 'right') {
-      return {
-        fontFamily: FONT_FAMILY_TABULAR,
-        fontVariantNumeric: 'tabular-nums',
-      };
-    }
-    return {};
+  // 获取数字列类名（右对齐列使用等宽数字字体）
+  const getNumberClass = (align?: 'left' | 'right' | 'center'): string => {
+    return align === 'right' ? 'font-tabular' : '';
   };
 
   const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
@@ -65,8 +59,8 @@ export const VirtualTable = <T extends object>({
         {columns.map(col => (
           <div
             key={col.key}
-            style={{ width: col.width, ...getNumberStyle(col.align) }}
-            className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${getAlignClass(col.align)}`}
+            style={{ width: col.width }}
+            className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${getAlignClass(col.align)} ${getNumberClass(col.align)}`}
           >
             {(() => {
               const rawValue = (item as any)?.[col.key] as TableCellValue;
@@ -103,8 +97,8 @@ export const VirtualTable = <T extends object>({
                 {columns.map(col => (
                   <div
                     key={col.key}
-                    style={{ width: col.width, ...getNumberStyle(col.align) }}
-                    className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${getAlignClass(col.align)}`}
+                    style={{ width: col.width }}
+                    className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${getAlignClass(col.align)} ${getNumberClass(col.align)}`}
                   >
                     {(() => {
                       const rawValue = (item as any)?.[col.key] as TableCellValue;

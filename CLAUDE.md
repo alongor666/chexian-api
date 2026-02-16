@@ -28,6 +28,7 @@
 | 🎯 **开始新任务** | → [§1 必经入口](#1-必经入口critical---每次任务开始前必读) - 三大索引 + 两本账 |
 | 🚫 **了解禁止修改的文件** | → [§2 护栏](#2-护栏red-line---以下文件禁止擅自修改) - 业务口径定义、架构协议 |
 | 🔧 **写代码前查现有实现** | → [§2.5 实现前检查协议](#25-实现前检查协议must---防止重复造轮子) - 三问原则、组件注册表、全局样式 |
+| 🎨 **UI开发必读** | → [§2.7 设计系统规范](#27-设计系统规范must---ui开发强制遵守) - 字体、颜色、深色模式 |
 | ✅ **提交代码前检查** | → [§3 交付协议](#3-交付协议must---完成任务的硬性要求) - DONE 判定、治理校验 |
 | 🛠️ **查看技术栈和命令** | → [§4 项目技术栈](#4-项目技术栈快速参考) - Bun 命令、测试 |
 | 🔄 **理解数据处理流程** | → [§5 数据处理链路](#5-数据处理链路快速理解架构) - 从上传到渲染 |
@@ -36,6 +37,7 @@
 | ⚠️ **遇到问题** | → [§8 异常情况处理](#8-异常情况处理) - 口径错误、阻塞、文档缺失 |
 | 🔀 **多Agent协作** | → [§9 多Agent并发协作协议](#9-多agent并发协作协议critical---防止merge冲突) - 文档分区、任务ID预留、PR前检查 |
 | 🚀 **GitHub Actions 配置** | → [§10 GitHub Actions 集成](#10-github-actions-集成cicd---云端协作) - @claude 标记、teleport、会话移交 |
+| 🌐 **生产部署/数据同步** | → [§12 生产部署与数据同步](#12-生产部署与数据同步) - VPS 信息、一键同步脚本、部署文件 |
 
 ---
 
@@ -391,6 +393,71 @@ bun run dev                   # 启动前端（端口 5173）
 
 ---
 
+## 2.7 设计系统规范（MUST - UI开发强制遵守）
+
+> **目标**：统一字体、颜色、间距，确保代码一致性和深色模式兼容。
+
+### 字体使用规范（3类场景）
+
+| 场景 | CSS类 | 何时使用 | 示例 |
+|------|-------|---------|------|
+| **KPI大数字** | `.font-kpi` | 仪表盘KPI卡片数值 | `<div className="font-kpi">1,234</div>` |
+| **图表数字** | `.font-chart-number` | ECharts轴标签、SVG文本 | `<text className="font-chart-number">2025</text>` |
+| **表格数字** | `.font-tabular` | 表格数字列（需对齐） | `<td className="font-tabular text-right">85.6%</td>` |
+
+**字体栈**：
+- `.font-kpi`: Avenir Next / Century Gothic（现代几何感）
+- `.font-chart-number`: SF Pro / Helvetica Neue（清晰专业）
+- `.font-tabular`: 等宽数字（完美对齐）
+
+### 颜色使用规范（禁止硬编码）
+
+**❌ 错误**（硬编码Tailwind颜色）：
+```tsx
+className="text-red-800"              // 禁止
+className="bg-blue-600"               // 禁止
+```
+
+**✅ 正确**（使用设计系统）：
+```tsx
+import { colorClasses } from '@/shared/styles';
+
+className={colorClasses.text.danger}       // 'text-danger dark:text-danger-light'
+className={colorClasses.bg.dangerSolid}    // 'bg-red-100 dark:bg-red-900/20'
+className={colorClasses.border.primary}    // 'border-blue-200 dark:border-blue-800'
+```
+
+**颜色映射速查**：
+```
+text-red-800   → colorClasses.text.dangerDark
+text-green-600 → colorClasses.text.positive
+text-blue-700  → colorClasses.text.primary
+bg-red-50      → colorClasses.bg.danger
+bg-gray-50     → colorClasses.bg.neutral
+```
+
+### 图表年份颜色（统一函数）
+
+```tsx
+import { getYearChartColor } from '@/shared/styles';
+
+const color = getYearChartColor('2024');  // 返回 '#FF6B6B'
+```
+
+### 验证清单（代码审查必查）
+
+```
+□ 无硬编码 text-{color}-{number} 或 bg-{color}-{number}
+□ KPI数值使用 .font-kpi 类
+□ 图表标签使用 .font-chart-number 类
+□ 表格数字使用 .font-tabular 类
+□ 深色模式测试通过（切换 dark 类验证）
+```
+
+**参考文档**：[src/shared/styles/index.ts](src/shared/styles/index.ts) - 完整设计系统定义
+
+---
+
 ## 3. 交付协议（MUST - 完成任务的硬性要求）
 
 ### 新增需求流程
@@ -671,6 +738,7 @@ bun run governance
 |------|------|
 | `.github/workflows/claude-code.yml` | Claude Code 主 workflow |
 | `.github/workflows/governance-check.yml` | 治理检查 workflow |
+| `.github/workflows/deploy.yml` | 自动部署 workflow（push to main → VPS） |
 | `.github/instructions/claude.instructions.md` | PR 中 @claude 标记交互规范 |
 | `.claude/scripts/hooks/session-start.sh` | 会话初始化 hook |
 
@@ -780,7 +848,65 @@ claude --teleport
 
 ---
 
+## 12. 生产部署与数据同步
+
+### 生产环境
+
+| 项目 | 值 |
+|------|-----|
+| 服务器 | 腾讯云轻量 2核4G（`162.14.113.44`） |
+| 域名 | `https://chexian.cretvalu.com` |
+| 后端 | PM2 → `chexian-api`（端口 3000，仅 127.0.0.1） |
+| 前端 | Nginx 静态文件 → `/var/www/chexian/frontend/dist` |
+| 安全 | HTTPS + Nginx IP 白名单 + JWT 认证 + 审计日志 |
+
+### 自动部署（Push to main → 自动构建部署）
+
+Push 到 `main` 分支后，GitHub Actions 自动完成：构建前后端 → 打包上传 → 部署到 VPS → 健康检查（失败自动回滚）。
+
+**Workflow 文件**：`.github/workflows/deploy.yml`
+
+**支持手动触发**：GitHub Actions 页面 → Deploy to VPS → Run workflow
+
+**首次配置（一次性）**：到 GitHub 仓库 Settings → Secrets and variables → Actions，添加：
+
+| Secret | 获取方式 |
+|--------|----------|
+| `VPS_SSH_KEY` | `cat ~/.ssh/id_ed25519`（私钥内容） |
+| `VPS_KNOWN_HOSTS` | `ssh-keyscan 162.14.113.44`（输出内容） |
+
+**安全设计**：
+- 不碰 `server/data/` 和 `.env`（数据文件和环境变量保持不变）
+- 健康检查失败时自动回滚到上一版本
+- 仅更新 `dist/` 构建产物，不拉取源码到 VPS
+
+### 一键数据同步（本地 → VPS）
+
+```bash
+# 在 chexian-api 目录执行
+./deploy/sync-data.sh                   # 自动同步最新 Parquet
+./deploy/sync-data.sh 某文件.parquet     # 指定文件
+```
+
+脚本自动完成：找到最新 `.parquet` → scp 上传 → chmod 600 → PM2 重启 → 健康检查。
+
+### 部署相关文件
+
+| 文件 | 说明 |
+|------|------|
+| `.github/workflows/deploy.yml` | 自动部署 workflow（push to main 触发） |
+| `deploy/sync-data.sh` | 一键数据同步脚本 |
+| `deploy/vps-deploy.sh` | VPS 全量部署脚本（首次部署用） |
+| `DEPLOYMENT_GUIDE.md` | 完整部署步骤文档 |
+| `vps.md` | VPS 运维手册（SSH/PM2/Nginx/备份/常用命令） |
+| `server/src/middleware/audit.ts` | 审计日志中间件 |
+| `server/src/utils/security.ts` | 文件名安全校验（支持中文） |
+
+---
+
 **变更历史**：
+- 2026-02-16：新增 `.github/workflows/deploy.yml` 自动部署 workflow（push to main 触发构建+部署+健康检查+自动回滚），更新§12文档
+- 2026-02-15：新增§12生产部署与数据同步章节，创建 `deploy/sync-data.sh` 一键同步脚本
 - 2026-02-15：【生产部署】完成腾讯云 VPS 部署（`https://chexian.cretvalu.com`），修复6个部署问题（ESM 导入缺 .js 扩展名、ESM __dirname 不可用、req.path vs req.originalUrl、types 目录导入、Nginx IP 白名单、sanitizeFilename 中文文件名支持），新增审计日志中间件（`server/src/middleware/audit.ts`），配置 SSL/备份/日志轮转
 - 2026-02-13：【文档同步】更新§5功能模块清单（13→14个，补充Auth/Pages模块）、§5数据链路补充SQL生成器层（14个模块）和完整路由清单（5个路由文件）、§7命令索引升级v2.3（23→30个命令）、§7 Subagents更新（4→14个）、更新最新数据文件路径（0212.parquet）、补充筛选器API端点
 - 2026-02-07：从 chexianYJFX 拆分为 API 版，移除所有 Local/DuckDB-WASM 相关内容
