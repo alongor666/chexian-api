@@ -10,6 +10,7 @@
 
 import React from 'react';
 import type { AlertSummary } from '../../shared/types/alert';
+import { colorClasses } from '@/shared/styles';
 
 /** 组件属性 */
 export interface AlertBadgeProps {
@@ -38,10 +39,10 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
 
   // 根据最高级别确定颜色
   const getBadgeColor = () => {
-    if (hasCritical) return 'bg-red-500';
-    if (hasWarning) return 'bg-yellow-500';
-    if (hasAlerts) return 'bg-blue-500';
-    return 'bg-gray-400';
+    if (hasCritical) return 'bg-danger';
+    if (hasWarning) return 'bg-warning';
+    if (hasAlerts) return 'bg-primary';
+    return 'bg-neutral-400';
   };
 
   // 显示的数字（未读数或总数）
@@ -51,7 +52,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
     <button
       onClick={onClick}
       className={`relative inline-flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${
-        hasAlerts ? 'hover:bg-gray-100' : 'opacity-60'
+        hasAlerts ? 'hover:bg-neutral-100' : 'opacity-60'
       } ${className}`}
       title={`${summary.total} 条预警，${summary.unread} 条未读`}
     >
@@ -78,10 +79,10 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
 
       {/* 详细信息（可选） */}
       {showDetail && hasAlerts && (
-        <span className="text-xs text-gray-500">
-          {hasCritical && <span className="text-red-600">{summary.byLevel.critical}严重</span>}
+        <span className="text-xs text-neutral-500">
+          {hasCritical && <span className="text-danger">{summary.byLevel.critical}严重</span>}
           {hasCritical && hasWarning && <span className="mx-0.5">/</span>}
-          {hasWarning && <span className="text-yellow-600">{summary.byLevel.warning}警告</span>}
+          {hasWarning && <span className="text-warning">{summary.byLevel.warning}警告</span>}
         </span>
       )}
     </button>
