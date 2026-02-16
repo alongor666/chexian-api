@@ -1,7 +1,7 @@
 # 车险经营管理系统 (Insurance Sales Dashboard)
 
-**版本**: v2.4
-**最后更新**: 2026-02-14
+**版本**: v2.5
+**最后更新**: 2026-02-16
 
 一个基于 **React + TypeScript + DuckDB** 的高性能车险销售数据分析看板，采用纯 API 模式前后端分离架构，专为保险公司业绩管理设计。
 
@@ -11,6 +11,7 @@
 - **纯 API 模式**: Node.js 后端 (Express + DuckDB Neo API) + React 前端，所有数据查询通过 REST API
 - **JWT 认证**: 安全的用户认证和权限管理，支持多机构权限隔离
 - **TypeScript 严格模式**: 全面的类型安全保障
+- **设计系统**: 统一字体（`.font-kpi`/`.font-chart-number`/`.font-tabular`）和颜色系统（`colorClasses`），支持深色模式
 - **渐进式加载**: KPI 优先显示，图表和明细数据异步加载
 - **审计中间件**: 请求审计日志记录
 
@@ -89,7 +90,7 @@
 │   │   │   ├── permission.ts# 权限服务
 │   │   │   ├── zhipu.ts     # 智谱 AI 服务（NL2SQL）
 │   │   │   └── column-normalizer.ts # 列名标准化
-│   │   ├── sql/             # SQL 生成器（14 个模块）
+│   │   ├── sql/             # SQL 生成器（15 个模块）
 │   │   │   ├── kpi.ts       # KPI 查询
 │   │   │   ├── kpi-detail.ts# KPI 明细
 │   │   │   ├── trend.ts     # 趋势查询
@@ -119,7 +120,7 @@
 │   └── data/                # 数据文件目录
 │       └── *.parquet        # Parquet 数据文件
 │
-├── tests/                    # Vitest 单元测试（28 个测试文件）
+├── tests/                    # Vitest 单元测试（40 个测试文件）
 ├── scripts/                  # 构建和治理脚本（27 个文件）
 ├── 数据管理/                 # 数据仓库与管道
 │   ├── warehouse/           # 数据仓库（fact/dim）
@@ -373,7 +374,7 @@ export const fieldMapping = {
 
 ## 测试策略
 
-### 单元测试（28 个测试文件）
+### 单元测试（40 个测试文件）
 - KPI 计算逻辑测试
 - 数据映射和验证测试
 - SQL 查询模板测试
@@ -427,7 +428,7 @@ bun run governance        # 治理规则检查
 | | `/session-manager` | 管理对话历史 |
 | | `/extract-knowledge` | 提取隐性知识 |
 
-#### Subagents（14 个）
+#### Subagents（15 个）
 - `architect` / `build-error-resolver` / `business-intelligence`
 - `code-simplifier` / `data-validator` / `duckdb-optimizer`
 - `e2e-runner` / `knowledge-miner` / `react-performance`
@@ -530,6 +531,15 @@ kill -9 <PID>
 详细部署文档：[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) | [vps.md](./vps.md)
 
 ## 近期更新
+
+### v2.5 (2026-02-16)
+- **GitHub Actions 自动部署**: 新增 `deploy.yml` workflow，push to main 自动构建部署到 VPS，含健康检查与自动回滚
+- **设计系统统一**: 建立统一的字体系统（`.font-kpi`/`.font-chart-number`/`.font-tabular`）和颜色系统（`colorClasses`），支持深色模式
+- **Footer 底部组件**: 新增全局 Footer 组件到布局，统一页面底部样式
+- **开发端口自动恢复**: `dev:full` 启动前自动清理占用端口（3000/5173-5176），避免端口冲突
+- **测试覆盖扩展**: 新增 12 个测试文件（28 → 40），涵盖营销战报、类型系统、模板引擎等
+- **SQL 生成器扩展**: 新增 `cross-sell-summary.ts` 交叉销售汇总模块（14 → 15 个）
+- **Subagent 扩展**: 新增 `business-intelligence` 业务智能分析子代理（14 → 15 个）
 
 ### v2.4 (2026-02-14)
 - **DuckDB Neo API 迁移**: 从废弃的 `duckdb` 包迁移到 `@duckdb/node-api` (1.4.4-r.1)，移除 `apache-arrow` 依赖
