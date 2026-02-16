@@ -1,0 +1,110 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 前端用 Bun
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.1"
+
+      # 后端用 Node 22
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # 安装依赖 + 构建前端
+      - name: Build frontend
+        run: bun install && bun run build
+
+      # 安装依赖 + 构建后端
+      - name: Build backend
+        run: cd server && npm install && npm run build
+
+      # 打包部署产物
+      - name: Create deploy bundle
+        run: |
+          tar -czf deploy-bundle.tar.gz \
+            dist/ \
+            server/dist/ \
+            server/package.json \
+            server/ecosystem.config.cjs
+
+      # SSH 部署到 VPS
+      - name: Deploy to VPS
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          # 配置 SSH
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+          VPS="root@162.14.113.44"
+          SSH="ssh -i ~/.ssh/deploy_key"
+          SCP="scp -i ~/.ssh/deploy_key"
+
+          # 上传构建产物
+          $SCP deploy-bundle.tar.gz $VPS:/tmp/
+
+          # 远程执行部署
+          $SSH $VPS << 'DEPLOY'
+            set -e
+            source /root/.nvm/nvm.sh
+
+            cd /var/www/chexian
+
+            # 备份当前版本
+            [ -d frontend/dist ] && cp -r frontend/dist frontend/dist.bak
+            [ -d server/dist ] && cp -r server/dist server/dist.bak
+
+            # 解包新版本
+            cd /tmp && tar -xzf deploy-bundle.tar.gz
+
+            # 更新前端
+            rm -rf /var/www/chexian/frontend/dist
+            mv /tmp/dist /var/www/chexian/frontend/dist
+
+            # 更新后端
+            rm -rf /var/www/chexian/server/dist
+            mv /tmp/server/dist /var/www/chexian/server/dist
+            cp /tmp/server/package.json /var/www/chexian/server/package.json
+            cp /tmp/server/ecosystem.config.cjs /var/www/chexian/server/ecosystem.config.cjs
+
+            # 安装生产依赖
+            cd /var/www/chexian/server
+            npm install --production
+
+            # 重启后端
+            pm2 reload chexian-api
+
+            # 等待启动 + 健康检查
+            sleep 3
+            if curl -s http://localhost:3000/health | grep -q '"success":true'; then
+              echo "Deploy success!"
+              rm -rf /var/www/chexian/frontend/dist.bak
+              rm -rf /var/www/chexian/server/dist.bak
+            else
+              echo "Health check failed! Rolling back..."
+              rm -rf /var/www/chexian/frontend/dist
+              mv /var/www/chexian/frontend/dist.bak /var/www/chexian/frontend/dist
+              rm -rf /var/www/chexian/server/dist
+              mv /var/www/chexian/server/dist.bak /var/www/chexian/server/dist
+              pm2 reload chexian-api
+              exit 1
+            fi
+
+            # 清理临时文件
+            rm -f /tmp/deploy-bundle.tar.gz
+          DEPLOY
