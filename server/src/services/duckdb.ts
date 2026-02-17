@@ -177,6 +177,14 @@ class DuckDBService {
       await this.query(sql);
       console.log('[DuckDB] PolicyFact view created (pass-through mode)');
     }
+
+    // 创建 PolicyFactRenewal 视图（续保下钻模块使用）
+    // 与 PolicyFact 结构相同，WHERE 条件由 renewal-drilldown.ts 动态生成
+    await this.query(`
+      CREATE OR REPLACE VIEW PolicyFactRenewal AS
+      SELECT * FROM PolicyFact
+    `);
+    console.log('[DuckDB] PolicyFactRenewal view created');
   }
 
   /**
