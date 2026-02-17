@@ -4,11 +4,13 @@
  * 统一规范：
  * - 字体：系统默认字体
  * - 字号：12px（正文）、14px（标题）
- * - 颜色：#333（主要文字）、#666（次要文字）、#999（辅助文字）
+ * - 颜色：使用设计系统 (src/shared/styles/index.ts)
  * - 保费：万元，1位小数，不显示单位
  * - 率值/占比：百分比，1位小数
  * - 图表轴标签：水平显示（rotate: 0）
  */
+
+import { colors } from '../styles';
 
 // ==================== 颜色配置 ====================
 
@@ -21,11 +23,11 @@ export const TONNAGE_COLORS: Record<string, string> = {
   '未知': '#9A60B4',
 };
 
-/** 统一文字颜色 */
+/** 统一文字颜色 - 使用设计系统 */
 export const TEXT_COLORS = {
-  primary: '#333333',   // 主要文字
-  secondary: '#666666', // 次要文字
-  tertiary: '#999999',  // 辅助文字
+  primary: colors.neutral[800],    // #262626 - 主要文字
+  secondary: colors.neutral[600],  // #595959 - 次要文字
+  tertiary: colors.neutral[500],   // #8c8c8c - 辅助文字
   white: '#ffffff',
 } as const;
 
@@ -162,7 +164,7 @@ export const X_AXIS_CONFIG = {
   },
   axisLine: {
     lineStyle: {
-      color: '#E0E0E0',
+      color: colors.neutral[200],  // #e8e8e8
     },
   },
   axisTick: {
@@ -186,7 +188,7 @@ export const Y_AXIS_CONFIG = {
   },
   splitLine: {
     lineStyle: {
-      color: '#F0F0F0',
+      color: colors.neutral[100],  // #f5f5f5
       type: 'dashed' as const,
     },
   },
@@ -205,7 +207,7 @@ export const TABLE_STYLES = {
     fontSize: FONT_SIZES.base,
     fontWeight: 600,
     color: TEXT_COLORS.secondary,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.neutral[50],  // #fafafa
     padding: '10px 12px',
   },
   /** 单元格样式 */
@@ -229,7 +231,7 @@ export const TABLE_STYLES = {
     fontSize: FONT_SIZES.base,
     fontWeight: 600,
     color: TEXT_COLORS.primary,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.warning.bg,  // #fffbe6
   },
 } as const;
 
@@ -239,7 +241,7 @@ export const TABLE_STYLES = {
 export const TOOLTIP_CONFIG = {
   trigger: 'axis' as const,
   backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  borderColor: '#E0E0E0',
+  borderColor: colors.neutral[200],  // #e8e8e8
   borderWidth: 1,
   padding: [8, 12],
   textStyle: {
@@ -263,41 +265,41 @@ export const TOOLTIP_CONFIG = {
  */
 export const TABLE_CSS_CLASSES = {
   /** 表格容器 - 无独立滚动条 */
-  container: 'border rounded border-gray-200',
+  container: 'border rounded border-neutral-200',
   /** 表格本身 */
-  table: 'min-w-full divide-y divide-gray-200',
+  table: 'min-w-full divide-y divide-neutral-200',
   /** 表头容器 */
-  thead: 'bg-gray-50',
+  thead: 'bg-neutral-50',
   /** 表头行 */
   headerRow: '',
   /** 表头单元格（左对齐） */
-  headerCell: 'px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50',
+  headerCell: 'px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50',
   /** 表头单元格（右对齐，用于数字列） */
-  headerCellRight: 'px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50',
+  headerCellRight: 'px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50',
   /** 表体容器 */
-  tbody: 'bg-white divide-y divide-gray-200',
+  tbody: 'bg-white divide-y divide-neutral-200',
   /** 数据行 */
-  row: 'hover:bg-blue-50 transition-colors',
+  row: 'hover:bg-primary-bg transition-colors',
   /** 数据行（交替色，可选） */
-  rowAlt: 'bg-gray-50 hover:bg-blue-50 transition-colors',
+  rowAlt: 'bg-neutral-50 hover:bg-primary-bg transition-colors',
   /** 单元格（左对齐） */
-  cell: 'px-4 py-3 text-sm text-gray-900',
+  cell: 'px-4 py-3 text-sm text-neutral-900',
   /** 单元格（右对齐，用于数字） */
-  cellRight: 'px-4 py-3 text-sm text-gray-900 text-right font-mono',
+  cellRight: 'px-4 py-3 text-sm text-neutral-900 text-right font-mono',
   /** 单元格（次要文字，如基期数据） */
-  cellSecondary: 'px-4 py-3 text-sm text-gray-500 text-right font-mono',
+  cellSecondary: 'px-4 py-3 text-sm text-neutral-500 text-right font-mono',
   /** 单元格（强调，如当期数据） */
-  cellPrimary: 'px-4 py-3 text-sm font-medium text-gray-900',
+  cellPrimary: 'px-4 py-3 text-sm font-medium text-neutral-900',
   /** 增长率单元格（正向） */
-  cellGrowthPositive: 'px-4 py-3 text-sm text-right font-mono font-medium text-emerald-600',
+  cellGrowthPositive: 'px-4 py-3 text-sm text-right font-mono font-medium text-success-dark',
   /** 增长率单元格（负向） */
-  cellGrowthNegative: 'px-4 py-3 text-sm text-right font-mono font-medium text-red-500',
+  cellGrowthNegative: 'px-4 py-3 text-sm text-right font-mono font-medium text-danger',
   /** 汇总行 */
-  summaryRow: 'bg-amber-50 font-semibold hover:bg-amber-100 transition-colors',
+  summaryRow: 'bg-warning-bg font-semibold hover:bg-yellow-100 transition-colors',
   /** 汇总单元格 */
-  summaryCell: 'px-4 py-3 text-sm text-gray-800 font-semibold',
+  summaryCell: 'px-4 py-3 text-sm text-neutral-800 font-semibold',
   /** 空数据提示 */
-  emptyCell: 'px-4 py-8 text-center text-gray-500',
+  emptyCell: 'px-4 py-8 text-center text-neutral-500',
 } as const;
 
 /** 获取增长率单元格样式 */
@@ -306,8 +308,8 @@ export const getGrowthCellClass = (value: number | null | undefined): string => 
   return value >= 0 ? TABLE_CSS_CLASSES.cellGrowthPositive : TABLE_CSS_CLASSES.cellGrowthNegative;
 };
 
-/** 获取增长率颜色 */
+/** 获取增长率颜色 - 使用设计系统 */
 export const getGrowthColor = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return '#666666';
-  return value >= 0 ? '#10B981' : '#EF4444';
+  if (value === null || value === undefined) return colors.neutral[600];  // #595959
+  return value >= 0 ? colors.success.DEFAULT : colors.danger.DEFAULT;  // #52c41a : #ff4d4f
 };

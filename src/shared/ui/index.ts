@@ -104,6 +104,10 @@ export type {
 export { Tabs } from './Tabs'
 export type { TabsProps, TabItem } from './Tabs'
 
+// ConfirmDialog 确认对话框
+export { ConfirmDialog, useConfirmDialog } from './ConfirmDialog'
+export type { ConfirmDialogProps } from './ConfirmDialog'
+
 // Icon 图标
 export { Icon } from './Icon'
 export type { IconSize } from './Icon'
