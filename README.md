@@ -1,7 +1,7 @@
 # 车险经营管理系统 (Insurance Sales Dashboard)
 
-**版本**: v2.5
-**最后更新**: 2026-02-16
+**版本**: v2.6
+**最后更新**: 2026-02-17
 
 一个基于 **React + TypeScript + DuckDB** 的高性能车险销售数据分析看板，采用纯 API 模式前后端分离架构，专为保险公司业绩管理设计。
 
@@ -14,9 +14,11 @@
 - **设计系统**: 统一字体（`.font-kpi`/`.font-chart-number`/`.font-tabular`）和颜色系统（`colorClasses`），支持深色模式
 - **渐进式加载**: KPI 优先显示，图表和明细数据异步加载
 - **审计中间件**: 请求审计日志记录
+- **分级限流**: 对 `/api`、`/api/auth/login`、`/api/query` 启用限流保护
 
 ### 业务功能
 - **PolicyFact 视图**: 强制实现"保单去重"业务逻辑 (MAX Premium)
+- **PolicyFactRenewal 视图**: 续保下钻专用视图，避免与通用分析查询耦合
 - **多维度分析**: 支持按机构、业务员、时间等多维度下钻分析
 - **14 个功能模块**: 仪表盘、SQL 查询、系数监控、成本分析、保费报表、营销战报等
 - **智能查询**: NL2SQL 自然语言转 SQL + 17 个预置查询模板
@@ -24,7 +26,7 @@
 - **续保下钻分析**: 层级式续保数据下钻，支持多维度逐级展开
 
 ### 数据处理
-- **Python 数据管道**: Excel 到 Parquet 的转换与清洗（支持 34 个字段）
+- **Python 数据管道**: Excel 到 Parquet 的转换与清洗（支持 30 个核心字段）
 - **数据质量检测**: 自动验证数据完整性和业务规则
 - **字段映射**: 灵活的字段名映射配置系统 (`server/src/normalize/mapping.ts`)
 
@@ -112,6 +114,7 @@
 │   │   ├── middleware/      # 中间件
 │   │   │   ├── auth.ts      # JWT 认证中间件
 │   │   │   ├── audit.ts     # 请求审计中间件
+│   │   │   ├── rateLimiter.ts # API 限流中间件
 │   │   │   ├── error.ts     # 错误处理中间件
 │   │   │   └── permission.ts# 权限中间件
 │   │   ├── config/          # 配置（数据库/认证/CORS/路径/机构/系数）
@@ -120,7 +123,7 @@
 │   └── data/                # 数据文件目录
 │       └── *.parquet        # Parquet 数据文件
 │
-├── tests/                    # Vitest 单元测试（40 个测试文件）
+├── tests/                    # Vitest 单元测试
 ├── scripts/                  # 构建和治理脚本（27 个文件）
 ├── 数据管理/                 # 数据仓库与管道
 │   ├── warehouse/           # 数据仓库（fact/dim）
