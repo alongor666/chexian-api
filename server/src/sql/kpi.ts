@@ -54,19 +54,43 @@ export const generateKpiQuery = (whereClause: string = '1=1') => {
   `;
 };
 
+/**
+ * 允许作为分组维度的字段白名单
+ */
+export const ALLOWED_DIMENSIONS = new Set([
+  'org_level_1', 'org_level_2', 'org_level_3',
+  'salesman_name', 'customer_category', 'coverage_combination',
+  'insurance_type', 'tonnage_segment', 'is_nev', 'is_new_car',
+  'is_renewal', 'is_transfer', 'is_telemarketing',
+  'vehicle_type', 'plate_type', 'insurance_grade',
+]);
+
+/**
+ * 校验维度名是否在白名单中
+ * @throws AppError 如果维度名不合法
+ */
+export function validateDimension(dimension: string): string {
+  const trimmed = dimension.trim();
+  if (!ALLOWED_DIMENSIONS.has(trimmed)) {
+    throw new Error(`Invalid dimension: ${trimmed}. Allowed: ${[...ALLOWED_DIMENSIONS].join(', ')}`);
+  }
+  return trimmed;
+}
+
 export const generateTopNQuery = (
   dimension: string,
   metric: string = 'SUM(premium)',
   limit: number = 20,
   whereClause: string = '1=1'
 ) => {
+  const safeDimension = validateDimension(dimension);
   return `
     SELECT
-      ${dimension} as dim_key,
+      ${safeDimension} as dim_key,
       ${metric} as value
     FROM PolicyFact
     WHERE ${whereClause}
-    GROUP BY ${dimension}
+    GROUP BY ${safeDimension}
     ORDER BY value DESC
     LIMIT ${limit}
   `;
@@ -178,13 +202,14 @@ export const generateTopNQueryV2 = (
   limit: number = 20,
   whereClause: string = '1=1'
 ) => {
+  const safeDimension = validateDimension(dimension);
   return `
     SELECT
-      ${dimension} as dim_key,
+      ${safeDimension} as dim_key,
       ${metric} as value
     FROM DailyAggregated
     WHERE ${whereClause}
-    GROUP BY ${dimension}
+    GROUP BY ${safeDimension}
     ORDER BY value DESC
     LIMIT ${limit}
   `;
