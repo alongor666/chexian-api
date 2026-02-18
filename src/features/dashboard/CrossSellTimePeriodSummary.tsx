@@ -10,7 +10,7 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { Table } from '@/shared/ui/Table';
 import type { TableColumn } from '@/shared/ui/Table';
 import { textStyles, cn } from '@/shared/styles';
-import { formatPercent, formatAverage, formatPremiumWan } from '@/shared/utils/formatters';
+import { formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
 import { useCrossSellTimePeriod } from './hooks/useCrossSellTimePeriod';
 import type { VehicleCategory, TimePeriodRow } from './hooks/useCrossSellTimePeriod';
 
@@ -60,28 +60,28 @@ const avgPremiumColumns: TableColumn<TimePeriodRecord>[] = [
     title: '当日',
     dataIndex: 'day',
     align: 'right',
-    render: (value) => <span className={textStyles.numeric}>{formatAverage(Number(value))}</span>,
+    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value))}</span>,
   },
   {
     key: 'week',
     title: '当周',
     dataIndex: 'week',
     align: 'right',
-    render: (value) => <span className={textStyles.numeric}>{formatAverage(Number(value))}</span>,
+    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value))}</span>,
   },
   {
     key: 'month',
     title: '当月',
     dataIndex: 'month',
     align: 'right',
-    render: (value) => <span className={textStyles.numeric}>{formatAverage(Number(value))}</span>,
+    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value))}</span>,
   },
   {
     key: 'year',
     title: '当年',
     dataIndex: 'year',
     align: 'right',
-    render: (value) => <span className={textStyles.numeric}>{formatAverage(Number(value))}</span>,
+    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value))}</span>,
   },
 ];
 
@@ -149,7 +149,7 @@ export const CrossSellTimePeriodSummary = memo(function CrossSellTimePeriodSumma
       </div>
 
       <div>
-        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>件均保费（元）</h3>
+        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>件均保费（万元）</h3>
         <Table<TimePeriodRecord>
           columns={avgPremiumColumns}
           dataSource={avgPremiumData as TimePeriodRecord[]}
