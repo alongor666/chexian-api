@@ -111,7 +111,24 @@ export function injectPermissionFilter(sql: string, permissionFilter: string): s
 }
 
 /**
- * 验证权限过滤条件格式（防止注入）
+ * 允许在权限过滤条件中使用的字段名白名单
+ */
+const ALLOWED_PERMISSION_FIELDS = new Set([
+  'org_level_3',
+  'org_level_2',
+  'org_level_1',
+  'salesman_name',
+  'organization',
+]);
+
+/**
+ * 验证权限过滤条件格式（白名单方式，防止注入）
+ *
+ * 只允许以下格式（及其 AND/OR 组合）：
+ * - field_name LIKE '%value%'
+ * - field_name = 'value'
+ * - field_name IN ('v1', 'v2', ...)
+ *
  * @param filter - 权限过滤条件
  * @returns 是否有效
  */
@@ -121,32 +138,76 @@ export function isValidPermissionFilter(filter: string): boolean {
     return true;
   }
 
-  // 权限过滤只允许特定格式
-  // 格式1: field_name LIKE '%value%'
-  // 格式2: field_name = 'value'
-  // 格式3: field_name IN ('v1', 'v2', ...)
-  // 可以用 AND/OR 组合多个条件
+  // 长度限制（权限过滤不应太长）
+  if (filter.length > 500) {
+    return false;
+  }
 
-  // 禁止的模式
+  // 禁止危险字符和模式（第一道防线）
   const dangerousPatterns = [
-    /;\s*$/,           // SQL 语句终止符
-    /;\s*\w/,          // 多语句
+    /;/,               // 语句终止符
     /--/,              // 单行注释
-    /\/\*/,            // 多行注释开始
+    /\/\*/,            // 多行注释
     /\bunion\b/i,      // UNION 注入
-    /\bdrop\b/i,       // DROP 语句
-    /\bdelete\b/i,     // DELETE 语句
-    /\bupdate\b/i,     // UPDATE 语句
-    /\binsert\b/i,     // INSERT 语句
-    /\bcreate\b/i,     // CREATE 语句
-    /\balter\b/i,      // ALTER 语句
-    /\bexec\b/i,       // EXEC 语句
-    /\bexecute\b/i,    // EXECUTE 语句
-    /\bxp_/i,          // SQL Server 扩展存储过程
+    /\bselect\b/i,     // 子查询
+    /\bdrop\b/i,
+    /\bdelete\b/i,
+    /\bupdate\b/i,
+    /\binsert\b/i,
+    /\bcreate\b/i,
+    /\balter\b/i,
+    /\bexec\b/i,
+    /\bexecute\b/i,
+    /\bxp_/i,
+    /\binto\b/i,
+    /\bcopy\b/i,
+    /\bload\b/i,
+    /\bimport\b/i,
+    /\bpragma\b/i,
+    /\bcall\b/i,
   ];
 
   for (const pattern of dangerousPatterns) {
     if (pattern.test(filter)) {
+      return false;
+    }
+  }
+
+  // 白名单校验：提取所有标识符并检查是否在允许列表中
+  // 将 filter 按 AND/OR 分割为子条件，逐个校验格式
+  const conditions = filter.split(/\b(?:AND|OR)\b/i);
+
+  for (const cond of conditions) {
+    const trimmed = cond.trim();
+    if (!trimmed) continue;
+
+    // 允许的格式：
+    // 1. field LIKE '%value%'
+    // 2. field = 'value'
+    // 3. field IN ('v1', 'v2', ...)
+    const likePattern = /^(\w+)\s+LIKE\s+'[^']*'$/i;
+    const eqPattern = /^(\w+)\s*=\s*'[^']*'$/i;
+    const inPattern = /^(\w+)\s+IN\s*\(\s*(?:'[^']*'(?:\s*,\s*'[^']*')*)\s*\)$/i;
+
+    let fieldName: string | null = null;
+
+    const likeMatch = trimmed.match(likePattern);
+    const eqMatch = trimmed.match(eqPattern);
+    const inMatch = trimmed.match(inPattern);
+
+    if (likeMatch) {
+      fieldName = likeMatch[1];
+    } else if (eqMatch) {
+      fieldName = eqMatch[1];
+    } else if (inMatch) {
+      fieldName = inMatch[1];
+    } else {
+      // 不匹配任何允许的格式
+      return false;
+    }
+
+    // 检查字段名是否在白名单中
+    if (!ALLOWED_PERMISSION_FIELDS.has(fieldName.toLowerCase())) {
       return false;
     }
   }

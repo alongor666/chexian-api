@@ -105,10 +105,18 @@ export interface LoadResult {
 
 /**
  * API 客户端类
+ *
+ * 增强功能：
+ * - 请求取消（AbortController）：同一端点的新请求自动取消前序请求
+ * - 请求超时：默认 30 秒
  */
 class ApiClient {
   private token: string | null = null;
   private tokenExpiry: number = 0;
+  /** 进行中的请求控制器（按端点去重） */
+  private inflightControllers = new Map<string, AbortController>();
+  /** 默认请求超时（毫秒） */
+  private requestTimeoutMs = 30_000;
 
   /**
    * 设置认证 Token
@@ -158,7 +166,32 @@ class ApiClient {
   }
 
   /**
+   * 取消指定端点的进行中请求
+   */
+  cancelRequest(endpoint: string): void {
+    const controller = this.inflightControllers.get(endpoint);
+    if (controller) {
+      controller.abort();
+      this.inflightControllers.delete(endpoint);
+    }
+  }
+
+  /**
+   * 取消所有进行中的请求
+   */
+  cancelAllRequests(): void {
+    for (const controller of this.inflightControllers.values()) {
+      controller.abort();
+    }
+    this.inflightControllers.clear();
+  }
+
+  /**
    * 通用请求方法
+   *
+   * 增强：
+   * - 自动取消同一端点的前序请求（GET 请求）
+   * - 30 秒超时
    */
   private async request<T>(
     endpoint: string,
@@ -175,20 +208,48 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    const data: ApiResponse<T> = await response.json();
-
-    if (!data.success) {
-      const error = new Error(data.error?.message || '请求失败');
-      (error as any).statusCode = data.error?.statusCode || response.status;
-      throw error;
+    // 对 GET 请求自动取消同端点前序请求（避免竞态）
+    const method = (options.method || 'GET').toUpperCase();
+    const dedupeKey = method === 'GET' ? endpoint.split('?')[0] : '';
+    if (dedupeKey) {
+      this.cancelRequest(dedupeKey);
     }
 
-    return data.data as T;
+    // 创建 AbortController（合并超时和取消）
+    const controller = new AbortController();
+    if (dedupeKey) {
+      this.inflightControllers.set(dedupeKey, controller);
+    }
+    const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+
+      const data: ApiResponse<T> = await response.json();
+
+      if (!data.success) {
+        const error = new Error(data.error?.message || '请求失败');
+        (error as any).statusCode = data.error?.statusCode || response.status;
+        throw error;
+      }
+
+      return data.data as T;
+    } catch (err) {
+      // 区分取消和真实错误
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error('请求已取消或超时');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+      if (dedupeKey) {
+        this.inflightControllers.delete(dedupeKey);
+      }
+    }
   }
 
   // ============================================

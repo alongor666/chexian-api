@@ -77,7 +77,8 @@ router.get(
     );
 
     const sql = generateKpiQuery(finalWhereClause);
-    const result = await duckdbService.query(sql);
+    // KPI 高频查询，缓存 60 秒
+    const result = await duckdbService.query(sql, 60_000);
 
     res.json({
       success: true,
@@ -104,7 +105,8 @@ router.get(
     );
 
     const sql = generateKpiDetailQuery(finalWhereClause, false);
-    const result = await duckdbService.query(sql);
+    // KPI 详情高频查询，缓存 60 秒
+    const result = await duckdbService.query(sql, 60_000);
 
     res.json({
       success: true,
@@ -157,7 +159,8 @@ router.get(
       filterResult.data.dateField || 'policy_date',
       'premium'
     );
-    const result = await duckdbService.query(sql);
+    // 趋势查询缓存 120 秒
+    const result = await duckdbService.query(sql, 120_000);
 
     res.json({
       success: true,
