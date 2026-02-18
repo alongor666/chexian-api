@@ -199,6 +199,7 @@ widgets/table/VirtualTable.tsx
 - **`filters/FilterLayoutV2.tsx`**: 置顶筛选改为四维度按需展开（三级机构/客户类别/险别组合/续保模式）
 - **`filters/DateRangePicker.tsx`**: 起始日/截止日合并为起止日期，使用原生 date 输入并按需展开
 - **`filters/MultiSelectDropdown.tsx`**: 支持 compact 形态用于折叠容器内展示
+- **`dashboard/CrossSellQuadrantView.tsx`**: 交叉销售四象限判断视图（复用表格主视图数据，输出 Decision Header + 散点象限图）
 
 ### Coefficient 模块（商车自主定价系数监控）
 

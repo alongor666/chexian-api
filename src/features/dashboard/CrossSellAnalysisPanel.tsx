@@ -18,6 +18,7 @@ import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
 import { textStyles, cardStyles, tableStyles, cn } from '../../shared/styles';
 import { CrossSellTimePeriodSummary } from './CrossSellTimePeriodSummary';
+import { CrossSellQuadrantView } from './CrossSellQuadrantView';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import {
   useCrossSellAnalysis,
@@ -392,68 +393,74 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
           {/* 数据表格（有 groupBy 时才显示） */}
           {currentGroupBy && sortedRows.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <span className="text-sm text-gray-600">
-                  按<strong>{DIMENSION_LABELS[currentGroupBy]}</strong>分组
-                  {` (${sortedRows.length} 条)`}
-                </span>
-                {canDrillDeeper && (
-                  <span className="text-xs text-blue-400">点击行可继续下钻</span>
-                )}
-              </div>
-              <div className="overflow-x-auto max-h-[600px]">
-                <table className="min-w-full text-sm">
-                  <thead className={cn(tableStyles.header, 'sticky top-0 z-10')}>
-                    <tr>
-                      {TABLE_COLUMNS.map((col) => (
-                        <th
-                          key={col.key}
-                          onClick={() => handleSort(col.key)}
-                          className={cn(
-                            tableStyles.headerCell,
-                            'whitespace-nowrap cursor-pointer select-none hover:bg-neutral-100 transition-colors border-b border-neutral-200'
-                          )}
-                          style={{ textAlign: col.type === 'text' ? 'left' : 'right' }}
-                        >
-                          {col.label}
-                          <span className={cn('ml-1', sortKey === col.key ? 'text-primary' : 'opacity-40')}>
-                            {sortKey === col.key ? (sortOrder === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
-                          </span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedRows.map((row, idx) => (
-                      <tr
-                        key={idx}
-                        className={`border-b border-gray-50 transition-colors ${
-                          canDrillDeeper
-                            ? 'hover:bg-blue-50 cursor-pointer'
-                            : 'hover:bg-gray-50/60'
-                        }`}
-                        onClick={() => canDrillDeeper && handleRowClick(row.group_name)}
-                      >
+            <div className="space-y-4">
+              <CrossSellQuadrantView
+                rows={rows}
+                currentDimensionLabel={DIMENSION_LABELS[currentGroupBy]}
+              />
+              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                  <span className="text-sm text-gray-600">
+                    按<strong>{DIMENSION_LABELS[currentGroupBy]}</strong>分组
+                    {` (${sortedRows.length} 条)`}
+                  </span>
+                  {canDrillDeeper && (
+                    <span className="text-xs text-blue-400">点击行可继续下钻</span>
+                  )}
+                </div>
+                <div className="overflow-x-auto max-h-[600px]">
+                  <table className="min-w-full text-sm">
+                    <thead className={cn(tableStyles.header, 'sticky top-0 z-10')}>
+                      <tr>
                         {TABLE_COLUMNS.map((col) => (
-                          <td
+                          <th
                             key={col.key}
+                            onClick={() => handleSort(col.key)}
                             className={cn(
-                              tableStyles.cell,
-                              col.type === 'text'
-                                ? `text-left ${canDrillDeeper ? 'text-blue-600 font-medium' : 'text-gray-900'}`
-                                : col.type === 'rate'
-                                  ? cn('text-right', textStyles.numeric, getRateClass(Number(row[col.key] ?? 0)))
-                                  : cn('text-right', textStyles.numeric, 'text-neutral-700')
+                              tableStyles.headerCell,
+                              'whitespace-nowrap cursor-pointer select-none hover:bg-neutral-100 transition-colors border-b border-neutral-200'
                             )}
+                            style={{ textAlign: col.type === 'text' ? 'left' : 'right' }}
                           >
-                            {formatCell(col, row)}
-                          </td>
+                            {col.label}
+                            <span className={cn('ml-1', sortKey === col.key ? 'text-primary' : 'opacity-40')}>
+                              {sortKey === col.key ? (sortOrder === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
+                            </span>
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {sortedRows.map((row, idx) => (
+                        <tr
+                          key={idx}
+                          className={`border-b border-gray-50 transition-colors ${
+                            canDrillDeeper
+                              ? 'hover:bg-blue-50 cursor-pointer'
+                              : 'hover:bg-gray-50/60'
+                          }`}
+                          onClick={() => canDrillDeeper && handleRowClick(row.group_name)}
+                        >
+                          {TABLE_COLUMNS.map((col) => (
+                            <td
+                              key={col.key}
+                              className={cn(
+                                tableStyles.cell,
+                                col.type === 'text'
+                                  ? `text-left ${canDrillDeeper ? 'text-blue-600 font-medium' : 'text-gray-900'}`
+                                  : col.type === 'rate'
+                                    ? cn('text-right', textStyles.numeric, getRateClass(Number(row[col.key] ?? 0)))
+                                    : cn('text-right', textStyles.numeric, 'text-neutral-700')
+                              )}
+                            >
+                              {formatCell(col, row)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
