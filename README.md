@@ -505,6 +505,30 @@ lsof -i :5173  # 前端
 kill -9 <PID>
 ```
 
+## 生产部署
+
+### 生产环境
+- **地址**: `https://chexian.cretvalu.com`
+- **架构**: Nginx (HTTPS + IP 白名单) → PM2 (Node.js) → DuckDB
+- **安全**: HTTPS + 内网 IP 白名单 + JWT 认证 + 审计日志
+
+### 一键数据同步（本地 → VPS）
+
+```bash
+./deploy/sync-data.sh              # 自动同步最新 Parquet 文件到 VPS
+./deploy/sync-data.sh 文件名.parquet  # 指定文件
+```
+
+### 部署脚本
+
+| 脚本 | 说明 |
+|------|------|
+| `deploy/sync-data.sh` | 一键数据同步（上传 + 重启 + 验证） |
+| `deploy/vps-deploy.sh` | VPS 全量部署（首次部署用） |
+| `deploy/deploy-fullstack.sh` | 前后端分离部署 |
+
+详细部署文档：[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) | [vps.md](./vps.md)
+
 ## 近期更新
 
 ### v2.4 (2026-02-14)
