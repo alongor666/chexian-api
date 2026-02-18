@@ -42,7 +42,26 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 /**
- * 4. 健康检查路由
+ * 4. 审计日志中间件（生产环境）
+ * 记录所有已认证用户的查询 API 操作
+ */
+import { auditMiddleware } from './middleware/audit.js';
+app.use(auditMiddleware);
+
+/**
+ * 4.5 API 限流中间件
+ * 防止恶意高频请求
+ */
+import { apiLimiter, loginLimiter, queryLimiter } from './middleware/rateLimiter.js';
+// 通用限流
+app.use('/api', apiLimiter);
+// 登录接口严格限流
+app.use('/api/auth/login', loginLimiter);
+// 查询接口限流
+app.use('/api/query', queryLimiter);
+
+/**
+ * 5. 健康检查路由
  */
 app.get('/health', (req, res) => {
   res.json({
@@ -53,7 +72,7 @@ app.get('/health', (req, res) => {
 });
 
 /**
- * 5. API路由
+ * 6. API路由
  */
 import authRoutes from './routes/auth.js';
 import queryRoutes from './routes/query.js';
@@ -68,12 +87,12 @@ app.use('/api/data', dataRoutes);
 app.use('/api/ai', aiRoutes);
 
 /**
- * 6. 404处理
+ * 7. 404处理
  */
 app.use(notFoundHandler);
 
 /**
- * 7. 全局错误处理
+ * 8. 全局错误处理
  */
 app.use(errorHandler);
 

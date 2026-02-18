@@ -3,6 +3,7 @@ import type { EChartsOption, SeriesOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
 import { formatPremiumWan, formatRate, formatCount } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
+import { getYearChartColor } from '../../shared/styles';
 
 /** 时间视图类型（原 shared/sql/trend 导出） */
 export type TimeView = 'daily' | 'weekly' | 'monthly';
@@ -94,13 +95,7 @@ export const LineChart: React.FC<LineChartProps> = ({
       return diffDays > 183;
     })();
 
-    // 定义年份颜色映射
-    const yearColors: { [key: string]: string } = {
-      '2024': '#FF6B6B',
-      '2025': '#4ECDC4',
-      '2023': '#45B7D1',
-      '2026': '#96CEB4',
-    };
+    // 年份颜色由设计系统统一管理（getYearChartColor）
 
     // Group data by org and year
     const orgYearData = new Map<string, Map<string, {
@@ -113,11 +108,11 @@ export const LineChart: React.FC<LineChartProps> = ({
       const org = row.org_level_3 ?? '未知机构';
       const timePeriod = row.time_period ?? '';
       const year = timePeriod.includes('-') ? timePeriod.split('-')[0] : '2025';
-      
+
       if (!orgYearData.has(org)) {
         orgYearData.set(org, new Map());
       }
-      
+
       const yearMap = orgYearData.get(org)!;
       if (!yearMap.has(year)) {
         yearMap.set(year, { time_periods: [], premiums: [], ratios: [] });
@@ -136,8 +131,8 @@ export const LineChart: React.FC<LineChartProps> = ({
 
     Array.from(orgYearData.entries()).forEach(([org, yearMap], orgIndex) => {
       Array.from(yearMap.entries()).forEach(([year, orgYearInfo]) => {
-        const color = yearColors[year] || '#999';
-        
+        const color = getYearChartColor(year);
+
         premiumSeries.push({
           name: `${org} (${year}年)`,
           type: 'line',
@@ -173,7 +168,15 @@ export const LineChart: React.FC<LineChartProps> = ({
     });
 
     const option: EChartsOption = {
-      title: { text: title, left: 'center', textStyle: { fontSize: 16, fontWeight: 'bold' } },
+      title: {
+        text: title,
+        left: 'center',
+        textStyle: {
+          fontSize: 16,
+          fontWeight: 'bold',
+          fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif'
+        }
+      },
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'cross' },
@@ -219,6 +222,7 @@ export const LineChart: React.FC<LineChartProps> = ({
         axisLabel: {
           rotate: 0,
           interval: 0,
+          fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif',
           formatter: (value: string, index: number) => {
             if (!value) return value;
 
@@ -242,12 +246,12 @@ export const LineChart: React.FC<LineChartProps> = ({
               if (index === 0) return value;
               return `W${weekStr}`;
             }
-            
+
             if (timeView === 'monthly') {
               const parts = value.split('-');
               return parts.length >= 2 ? `${parseInt(parts[1])}月` : value;
             }
-            
+
             if (timeView === 'daily') {
               const date = new Date(`${value}T00:00:00`);
               const monthNum = date.getMonth() + 1;
@@ -256,7 +260,7 @@ export const LineChart: React.FC<LineChartProps> = ({
               if (monthNum === 12 && dayNum === 31) return '12月31日';
               return '';
             }
-            
+
             return value;
           },
         },
@@ -271,6 +275,7 @@ export const LineChart: React.FC<LineChartProps> = ({
           splitLine: { show: false },
           // V2.0: 根据Y轴标签选择格式化器
           axisLabel: {
+            fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif',
             formatter: yAxisLabel.includes('件数')
               ? (value: number) => formatCount(value)
               : formatPremiumWan
@@ -283,7 +288,10 @@ export const LineChart: React.FC<LineChartProps> = ({
           axisLine: { show: false },
           axisTick: { show: false },
           splitLine: { show: false },
-          axisLabel: { formatter: formatRate },
+          axisLabel: {
+            fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif',
+            formatter: formatRate
+          },
         },
       ],
       series: [...premiumSeries, ...ratioSeries],

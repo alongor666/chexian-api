@@ -1,0 +1,8 @@
+{"timestamp":"2026-02-15T13:10:38.985Z","username":"admin","userId":"admin","role":"branch_admin","ip":"::1","method":"GET","path":"/api/query/kpi","query":{},"status":200,"duration":98}
+{"timestamp":"2026-02-15T13:10:39.027Z","username":"admin","userId":"admin","role":"branch_admin","ip":"::1","method":"GET","path":"/api/query/trend?granularity=day","query":{"granularity":"day"},"status":200,"duration":35}
+{"timestamp":"2026-02-15T13:12:18.669Z","username":"admin","userId":"admin","role":"branch_admin","ip":"::1","method":"GET","path":"/api/query/kpi","query":{},"status":200,"duration":41}
+{"timestamp":"2026-02-15T13:31:25.719Z","username":"admin","userId":"admin","role":"branch_admin","ip":"::1","method":"GET","path":"/api/query/kpi","query":{},"status":200,"duration":44}
+{"timestamp":"2026-02-16T14:29:19.181Z","username":"admin","userId":"admin","role":"branch_admin","ip":"::1","method":"POST","path":"/api/query/custom","query":{},"status":200,"duration":25}
+{"timestamp":"2026-02-16T14:39:55.192Z","username":"admin","userId":"admin","role":"branch_admin","ip":"::1","method":"POST","path":"/api/query/custom","query":{},"status":200,"duration":42}
+{"timestamp":"2026-02-16T14:45:15.467Z","username":"admin","userId":"admin","role":"branch_admin","ip":"::1","method":"POST","path":"/api/query/custom","query":{},"status":200,"duration":15}
+{"timestamp":"2026-02-16T15:00:35.786Z","username":"admin","userId":"admin","role":"branch_admin","ip":"::1","method":"POST","path":"/api/query/custom","query":{},"status":200,"duration":5}

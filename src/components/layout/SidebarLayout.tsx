@@ -2,6 +2,7 @@ import React, { useState, createContext, useContext, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { SidebarNavigation } from './SidebarNavigation';
 import { TopNavigation } from './TopNavigation';
+import { Footer } from './Footer';
 
 interface SidebarContextValue {
   collapsed: boolean;
@@ -98,7 +99,12 @@ export const SidebarLayout: React.FC = () => {
               isMobile ? 'ml-0' : collapsed ? 'ml-16' : 'ml-72'
             }`}
           >
-            <Outlet />
+            <div className="h-full overflow-auto flex flex-col">
+              <div className="flex-1">
+                <Outlet />
+              </div>
+              <Footer />
+            </div>
           </main>
         </div>
       </div>

@@ -401,7 +401,40 @@ bun run governance
 
 ---
 
+## 8. 生产部署与数据同步
+
+### VPS 信息
+
+| 项目 | 值 |
+|------|-----|
+| 服务器 | 腾讯云轻量 2核4G（162.14.113.44） |
+| 域名 | `https://chexian.cretvalu.com` |
+| 后端进程 | PM2 → `chexian-api`（端口 3000） |
+| 前端 | Nginx 静态文件（`/var/www/chexian/frontend/dist`） |
+
+### 一键数据同步（本地 Mac → VPS）
+
+```bash
+# 在 chexian-api 目录执行
+./deploy/sync-data.sh              # 自动同步最新 Parquet
+./deploy/sync-data.sh 文件名.parquet  # 指定文件
+```
+
+脚本自动完成：找到最新 `.parquet` → scp 上传 → chmod 600 → PM2 重启 → 健康检查。
+
+### 相关文件
+
+| 文件 | 说明 |
+|------|------|
+| [deploy/sync-data.sh](deploy/sync-data.sh) | 数据同步脚本 |
+| [deploy/vps-deploy.sh](deploy/vps-deploy.sh) | VPS 全量部署脚本 |
+| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | 完整部署步骤文档 |
+| [vps.md](vps.md) | VPS 运维手册（SSH/PM2/Nginx/备份） |
+
+---
+
 **变更历史**：
+- 2026-02-15：新增§8生产部署与数据同步章节，添加一键 `sync-data.sh` 脚本引用
 - 2026-02-15：基于 `CLAUDE.md` 与当前代码现状重构，统一为纯 API 架构、更新红线文件与启动验证协议
 - 2026-01-19：新增实现前检查协议（防止重复造轮子）
 - 2026-01-08：重构流程描述并对齐最佳实践
