@@ -1,9 +1,15 @@
 
-# 业务数据文件（private仓库，允许提交）
-# *.xlsx
-# *.xls
-# *.csv
-# *.parquet
+# 业务数据文件（默认禁止提交）
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.tar.gz
+*.parquet
+
+# Parquet 仅保留项目运行必须 + 最新版本
+!deploy/data/data.parquet
+!deploy/data/业务数据.parquet
 
 # 临时数据文件
 parquet_data.json
