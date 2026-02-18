@@ -14,12 +14,118 @@ import { AppError } from '../middleware/error.js';
 import { generateColumnMappingSQL, getColumnMapping } from './column-normalizer.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
 
+// ============================================
+// 查询缓存
+// ============================================
+
+interface CacheEntry<T = any> {
+  data: T;
+  expiry: number;
+}
+
+class QueryCache {
+  private cache = new Map<string, CacheEntry>();
+  private maxSize = 100;
+
+  get<T = any>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry || Date.now() > entry.expiry) {
+      this.cache.delete(key);
+      return null;
+    }
+    return entry.data as T;
+  }
+
+  set(key: string, data: any, ttlMs: number): void {
+    // 超过最大缓存条目数时清理最旧的
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
+    }
+    this.cache.set(key, { data, expiry: Date.now() + ttlMs });
+  }
+
+  invalidateAll(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+}
+
+// ============================================
+// 连接池
+// ============================================
+
+class ConnectionPool {
+  private pool: DuckDBConnection[] = [];
+  private activeCount = 0;
+  private maxSize: number;
+  private waitQueue: Array<(conn: DuckDBConnection) => void> = [];
+  private instance: DuckDBInstance;
+
+  constructor(instance: DuckDBInstance, maxSize: number = 10) {
+    this.instance = instance;
+    this.maxSize = maxSize;
+  }
+
+  async acquire(): Promise<DuckDBConnection> {
+    // 优先从池中取
+    if (this.pool.length > 0) {
+      this.activeCount++;
+      return this.pool.pop()!;
+    }
+    // 未达上限则新建
+    if (this.activeCount < this.maxSize) {
+      this.activeCount++;
+      return await this.instance.connect();
+    }
+    // 达上限，排队等待
+    return new Promise<DuckDBConnection>((resolve) => {
+      this.waitQueue.push(resolve);
+    });
+  }
+
+  release(conn: DuckDBConnection): void {
+    if (this.waitQueue.length > 0) {
+      // 直接交给等待者
+      const resolve = this.waitQueue.shift()!;
+      resolve(conn);
+    } else {
+      // 归还到池中
+      this.activeCount--;
+      this.pool.push(conn);
+    }
+  }
+
+  async closeAll(): Promise<void> {
+    for (const conn of this.pool) {
+      try { conn.closeSync(); } catch { /* ignore */ }
+    }
+    this.pool = [];
+    this.activeCount = 0;
+  }
+}
+
+// ============================================
+// 慢查询监控阈值（毫秒）
+// ============================================
+const SLOW_QUERY_THRESHOLD_MS = 3000;
+
 /**
  * DuckDB服务类（单例）
+ *
+ * 增强功能：
+ * - 连接池（复用连接，默认最大 10 个）
+ * - 查询结果缓存（可选 TTL）
+ * - 慢查询监控（>3s 告警）
  */
 class DuckDBService {
   private instance: DuckDBInstance | null = null;
   private isInitialized = false;
+  private connectionPool: ConnectionPool | null = null;
+  private queryCache = new QueryCache();
 
   /**
    * 初始化数据库连接
@@ -31,41 +137,92 @@ class DuckDBService {
 
     try {
       this.instance = await DuckDBInstance.create(databaseConfig.path);
-      console.log('[DuckDB] Database initialized:', databaseConfig.path);
+      this.connectionPool = new ConnectionPool(this.instance, databaseConfig.maxConnections ?? 10);
+      console.log('[DuckDB] Database initialized:', databaseConfig.path, `(pool max: ${databaseConfig.maxConnections ?? 10})`);
       this.isInitialized = true;
-    } catch (err: any) {
-      throw new AppError(500, `Failed to initialize DuckDB: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new AppError(500, `Failed to initialize DuckDB: ${message}`);
     }
   }
 
   /**
-   * 获取数据库连接
+   * 获取数据库连接（从连接池获取）
    */
   private async getConnection(): Promise<DuckDBConnection> {
-    if (!this.instance) {
+    if (!this.connectionPool) {
       throw new AppError(500, 'DuckDB not initialized');
     }
 
-    return await this.instance.connect();
+    return await this.connectionPool.acquire();
+  }
+
+  /**
+   * 归还连接到连接池
+   */
+  private releaseConnection(conn: DuckDBConnection): void {
+    if (this.connectionPool) {
+      this.connectionPool.release(conn);
+    } else {
+      try { conn.closeSync(); } catch { /* ignore */ }
+    }
+  }
+
+  /**
+   * 使缓存失效（数据文件变更时调用）
+   */
+  invalidateCache(): void {
+    const size = this.queryCache.size;
+    this.queryCache.invalidateAll();
+    if (size > 0) {
+      console.log(`[DuckDB] Cache invalidated (${size} entries cleared)`);
+    }
   }
 
   /**
    * 执行SQL查询（返回JSON格式）
+   *
+   * @param sql - SQL 查询
+   * @param cacheTtlMs - 可选缓存 TTL（毫秒），0 表示不缓存
    */
-  async query<T = any>(sql: string): Promise<T[]> {
+  async query<T = any>(sql: string, cacheTtlMs: number = 0): Promise<T[]> {
+    // 缓存查找
+    if (cacheTtlMs > 0) {
+      const cached = this.queryCache.get<T[]>(sql);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const conn = await this.getConnection();
+    const startTime = Date.now();
 
     try {
       const reader = await conn.runAndReadAll(sql);
       const result = reader.getRowObjects();
+      const duration = Date.now() - startTime;
+
+      // 慢查询监控
+      if (duration > SLOW_QUERY_THRESHOLD_MS) {
+        console.warn(`[DuckDB] ⚠️ Slow query (${duration}ms): ${sql.substring(0, 200)}${sql.length > 200 ? '...' : ''}`);
+      }
 
       // 转换BigInt为Number（避免JSON序列化错误）
-      return this.convertBigIntToNumber(result) as T[];
-    } catch (err: any) {
-      console.error('[DuckDB] Query error:', err.message);
-      throw new AppError(400, `Query failed: ${err.message}`);
+      const converted = this.convertBigIntToNumber(result) as T[];
+
+      // 写入缓存
+      if (cacheTtlMs > 0) {
+        this.queryCache.set(sql, converted, cacheTtlMs);
+      }
+
+      return converted;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      const duration = Date.now() - startTime;
+      console.error(`[DuckDB] Query error (${duration}ms):`, message);
+      throw new AppError(400, `Query failed: ${message}`);
     } finally {
-      conn.closeSync();
+      this.releaseConnection(conn);
     }
   }
 
@@ -133,6 +290,7 @@ class DuckDBService {
     `;
 
     await this.query(sql);
+    this.invalidateCache();
     console.log(`[DuckDB] Loaded Parquet file: ${filePath} -> ${safeTableName}`);
   }
 
@@ -242,6 +400,11 @@ class DuckDBService {
    * 关闭数据库连接
    */
   async close(): Promise<void> {
+    if (this.connectionPool) {
+      await this.connectionPool.closeAll();
+      this.connectionPool = null;
+    }
+    this.queryCache.invalidateAll();
     if (this.instance) {
       this.instance = null;
       this.isInitialized = false;

@@ -5,7 +5,7 @@
  * 管理用户登录状态和 JWT Token
  */
 
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import { apiClient } from '../api/client';
 
 interface User {
@@ -98,17 +98,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
   }, []);
 
+  const isAuthenticated = !!user;
+
+  const contextValue = useMemo(
+    () => ({ user, isAuthenticated, isLoading, login, logout, error }),
+    [user, isAuthenticated, isLoading, login, logout, error]
+  );
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        login,
-        logout,
-        error,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
