@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { TableSkeleton } from '../../shared/ui/Skeleton';
 import { TABLE_CSS_CLASSES } from '../../shared/config/chartStyles';
@@ -22,6 +22,49 @@ interface VirtualTableProps<T extends object> {
   virtualized?: boolean;
 }
 
+// itemData shape passed to the module-level VirtualRow renderer
+interface VirtualRowItemData {
+  rows: any[];
+  cols: Column<any>[];
+}
+
+/**
+ * Module-level row renderer — stable reference prevents react-window from
+ * remounting all items every time the parent VirtualTable re-renders.
+ */
+const VirtualRow = ({
+  index,
+  style,
+  data: itemData,
+}: {
+  index: number;
+  style: React.CSSProperties;
+  data: VirtualRowItemData;
+}) => {
+  const item = itemData.rows[index];
+  return (
+    <div style={style} className={`flex ${TABLE_CSS_CLASSES.row}`}>
+      {itemData.cols.map(col => {
+        const alignClass =
+          col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left';
+        const numberClass = col.align === 'right' ? 'font-tabular' : '';
+        const rawValue = item?.[col.key] as TableCellValue;
+        return (
+          <div
+            key={col.key}
+            style={{ width: col.width }}
+            className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${alignClass} ${numberClass}`}
+          >
+            {typeof rawValue === 'bigint'
+              ? rawValue.toString()
+              : (rawValue as React.ReactNode) ?? ''}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export const VirtualTable = <T extends object>({
   columns,
   data,
@@ -30,6 +73,12 @@ export const VirtualTable = <T extends object>({
   loading,
   virtualized = true,
 }: VirtualTableProps<T>) => {
+  // Must be before early returns — React rules of hooks
+  const itemData = useMemo<VirtualRowItemData>(
+    () => ({ rows: data as any[], cols: columns as Column<any>[] }),
+    [data, columns]
+  );
+
   if (loading) {
     return (
       <TableSkeleton
@@ -47,30 +96,8 @@ export const VirtualTable = <T extends object>({
     return 'text-left';
   };
 
-  // 获取数字列类名（右对齐列使用等宽数字字体）
   const getNumberClass = (align?: 'left' | 'right' | 'center'): string => {
     return align === 'right' ? 'font-tabular' : '';
-  };
-
-  const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
-    const item = data[index];
-    return (
-      <div style={style} className={`flex ${TABLE_CSS_CLASSES.row}`}>
-        {columns.map(col => (
-          <div
-            key={col.key}
-            style={{ width: col.width }}
-            className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${getAlignClass(col.align)} ${getNumberClass(col.align)}`}
-          >
-            {(() => {
-              const rawValue = (item as any)?.[col.key] as TableCellValue;
-              if (typeof rawValue === 'bigint') return rawValue.toString();
-              return (rawValue as React.ReactNode) ?? '';
-            })()}
-          </div>
-        ))}
-      </div>
-    );
   };
 
   // 非虚拟化模式（小数据量）
@@ -137,8 +164,9 @@ export const VirtualTable = <T extends object>({
           itemCount={data.length}
           itemSize={rowHeight}
           width={totalWidth}
+          itemData={itemData}
         >
-          {Row}
+          {VirtualRow}
         </List>
       </div>
     </div>

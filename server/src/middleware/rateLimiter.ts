@@ -10,7 +10,7 @@
  * - 查询接口: 30 次/分钟
  */
 
-import rateLimit from 'express-rate-limit';
+import { rateLimit } from 'express-rate-limit';
 import { AppError } from './error.js';
 
 // ============================================
@@ -44,7 +44,7 @@ const defaultConfig: RateLimitConfig = {
  */
 export const apiLimiter = rateLimit({
   windowMs: defaultConfig.windowMs,
-  max: 100,
+  limit: 100,
   message: {
     success: false,
     error: '请求过于频繁，请 1 分钟后再试',
@@ -68,7 +68,7 @@ export const apiLimiter = rateLimit({
  */
 export const loginLimiter = rateLimit({
   windowMs: 60 * 1000,   // 1 分钟
-  max: 5,                // 5 次尝试
+  limit: 5,              // 5 次尝试
   message: {
     success: false,
     error: '登录尝试次数过多，请 1 分钟后再试',
@@ -94,7 +94,7 @@ export const loginLimiter = rateLimit({
  */
 export const queryLimiter = rateLimit({
   windowMs: 60 * 1000,   // 1 分钟
-  max: 30,               // 30 次查询
+  limit: 30,             // 30 次查询
   message: {
     success: false,
     error: '查询请求过于频繁，请 1 分钟后再试',
@@ -143,7 +143,7 @@ export function createDynamicLimiter(
 ) {
   return rateLimit({
     windowMs: 60 * 1000,
-    max: (req) => {
+    limit: (req) => {
       const user = (req as any).user;
       // 管理员享有更高配额
       if (user?.role === 'branch_admin') {

@@ -1,5 +1,3 @@
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { createLogger } from '../shared/utils/logger';
 import { createExportIgnoreElements } from '../shared/export/ignoreElements';
 
@@ -19,6 +17,12 @@ export class PdfExportService {
       }
 
       logger.info('Starting PDF export...');
+
+      // Lazy-load heavy libs only when the user actually requests a PDF export
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
 
       // Capture the element
       const canvas = await html2canvas(element, {
