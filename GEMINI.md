@@ -471,8 +471,42 @@ bun run scripts/check-governance.mjs
 
 ---
 
+## 10. 生产部署与数据同步
+
+### 生产环境
+
+| 项目 | 值 |
+|------|-----|
+| 服务器 | 腾讯云轻量 2核4G（`162.14.113.44`） |
+| 域名 | `https://chexian.cretvalu.com` |
+| 后端 | PM2 → `chexian-api`（端口 3000，仅内部访问） |
+| 前端 | Nginx 静态文件（`/var/www/chexian/frontend/dist`） |
+| 安全 | HTTPS + Nginx IP 白名单 + JWT 认证 + 审计日志 |
+
+### 一键数据同步（本地 → VPS）
+
+```bash
+# 在 chexian-api 目录执行
+./deploy/sync-data.sh                   # 自动同步最新 Parquet
+./deploy/sync-data.sh 某文件.parquet     # 指定文件
+```
+
+脚本自动完成：找到最新 `.parquet` → scp 上传 → chmod 600 → PM2 重启 → 健康检查。
+
+### 部署相关文件
+
+| 文件 | 说明 |
+|------|------|
+| `deploy/sync-data.sh` | 一键数据同步脚本 |
+| `deploy/vps-deploy.sh` | VPS 全量部署脚本 |
+| `DEPLOYMENT_GUIDE.md` | 完整部署步骤文档 |
+| `vps.md` | VPS 运维手册 |
+
+---
+
 **变更历史**：
 
+- 2026-02-15：新增§10生产部署与数据同步章节
 - 2026-01-11 12:00：【重大更新】版本号校正（与package.json同步）、测试覆盖更新（14套件/273+测试）、新增NL2SQL智能查询、新增session-manager子代理、扩展关键特性（增强型KPI卡片、高级筛选器）
 - 2026-01-11 04:30：新增§9多Agent并发协作协议，解决PR批量merge冲突问题（ROOT-CAUSE-001）
 - 2026-01-08 20:30：更新技术栈版本号、补全测试覆盖（新增sql-validator/natural-week测试）、添加CI/CD说明、扩展数据处理链路（增加多视图和专项分析）、更新关键特性清单

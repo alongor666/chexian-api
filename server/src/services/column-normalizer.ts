@@ -17,7 +17,7 @@ const BOOLEAN_FIELDS = [
   'is_transfer',
   'is_nev',
   'is_telemarketing',
-  'is_commercial_insure',
+  // 注意：is_commercial_insure 不是布尔字段，值为 '套单'/'非套单' 等字符串枚举
   'is_quote',
   'is_cross_sell',
 ];

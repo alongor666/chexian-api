@@ -105,10 +105,10 @@ export function useCrossSellTimePeriod({
 
         setAvgPremiumData(
           buildRows((r) => ({
-            day: Number(r.day_avg_premium ?? 0),
-            week: Number(r.week_avg_premium ?? 0),
-            month: Number(r.month_avg_premium ?? 0),
-            year: Number(r.year_avg_premium ?? 0),
+            day: Number(r.day_avg_premium ?? 0) / 10000,
+            week: Number(r.week_avg_premium ?? 0) / 10000,
+            month: Number(r.month_avg_premium ?? 0) / 10000,
+            year: Number(r.year_avg_premium ?? 0) / 10000,
           }))
         );
 

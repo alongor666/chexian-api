@@ -17,6 +17,7 @@ import {
   formatPercent,
   formatDays,
 } from '../../../shared/utils/formatters';
+import { cardStyles, buttonStyles, textStyles, colorClasses } from '@/shared/styles';
 
 interface ClaimRatioTableProps {
   data: ClaimRatioData[];
@@ -101,24 +102,24 @@ export const ClaimRatioTable: React.FC<ClaimRatioTableProps> = ({
   // 空状态
   if (!loading && data.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+      <div className={`${cardStyles.base} p-8 text-center ${textStyles.caption}`}>
         暂无数据
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm">
-      <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-        <h3 className="text-base font-medium text-gray-800">赔付率分析明细</h3>
+    <div className={cardStyles.base}>
+      <div className={`px-4 py-3 border-b flex justify-between items-center ${colorClasses.border.neutral}`}>
+        <h3 className={`text-base font-medium ${textStyles.titleSmall}`}>赔付率分析明细</h3>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">共 {data.length} 条记录</span>
+          <span className={`text-sm ${textStyles.caption}`}>共 {data.length} 条记录</span>
           {(onExportCSV || onExportExcel) && (
             <div className="flex gap-2">
               {onExportCSV && (
                 <button
                   onClick={onExportCSV}
-                  className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                  className={`px-3 py-1 text-sm rounded transition-colors ${buttonStyles.base} ${buttonStyles.success} ${buttonStyles.sizeSmall}`}
                   disabled={data.length === 0}
                 >
                   导出CSV
@@ -127,7 +128,7 @@ export const ClaimRatioTable: React.FC<ClaimRatioTableProps> = ({
               {onExportExcel && (
                 <button
                   onClick={onExportExcel}
-                  className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  className={`px-3 py-1 text-sm rounded transition-colors ${buttonStyles.base} ${buttonStyles.primary} ${buttonStyles.sizeSmall}`}
                   disabled={data.length === 0}
                 >
                   导出Excel
