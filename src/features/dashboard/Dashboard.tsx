@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FilterPanel } from '../filters/FilterPanel';
 import { KpiCard } from '../../widgets/kpi/KpiCard';
 import { BarChart } from '../../widgets/charts/BarChart';
@@ -161,13 +161,17 @@ export const Dashboard: React.FC = () => {
     applySalesmanFilter(salesmanName);
   };
 
-  // Debounced Filter Effect
+  // Stable ref to latest refresh — prevents effect from re-firing when hook recreates the function
+  const refreshRef = useRef(refresh);
+  useLayoutEffect(() => { refreshRef.current = refresh; });
+
+  // Debounced Filter Effect — depends only on filters, not on refresh identity
   useEffect(() => {
     const timer = setTimeout(() => {
-      refresh();
+      refreshRef.current();
     }, 300);
     return () => clearTimeout(timer);
-  }, [filters, refresh]);
+  }, [filters]);
 
   const tableColumns = useMemo(
     () => [

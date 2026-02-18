@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../shared/utils/export';
 import { PdfExportService } from '../../services/PdfExportService';
@@ -243,13 +243,17 @@ export const PremiumDashboard: React.FC = () => {
     }
   };
 
-  // Debounced refresh effect
+  // Stable ref to latest refreshData — prevents effect re-firing on hook identity change
+  const refreshDataRef = useRef(refreshData);
+  useLayoutEffect(() => { refreshDataRef.current = refreshData; });
+
+  // Debounced refresh effect — depends only on data inputs, not function identity
   useEffect(() => {
     const timer = setTimeout(() => {
-      refreshData();
+      refreshDataRef.current();
     }, 300);
     return () => clearTimeout(timer);
-  }, [filters, timeView, refreshData]);
+  }, [filters, timeView]);
 
   return (
     <div

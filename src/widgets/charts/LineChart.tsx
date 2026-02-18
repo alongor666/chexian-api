@@ -133,13 +133,18 @@ export const LineChart: React.FC<LineChartProps> = ({
       Array.from(yearMap.entries()).forEach(([year, orgYearInfo]) => {
         const color = getYearChartColor(year);
 
+        // Build O(1) lookup maps — avoids O(n²) indexOf inside allTimePeriods.map()
+        const premiumByPeriod = new Map(
+          orgYearInfo.time_periods.map((tp, i) => [tp, orgYearInfo.premiums[i]])
+        );
+        const ratioByPeriod = new Map(
+          orgYearInfo.time_periods.map((tp, i) => [tp, orgYearInfo.ratios[i]])
+        );
+
         premiumSeries.push({
           name: `${org} (${year}年)`,
           type: 'line',
-          data: allTimePeriods.map(tp => {
-            const idx = orgYearInfo.time_periods.indexOf(tp);
-            return idx >= 0 ? orgYearInfo.premiums[idx] : null;
-          }),
+          data: allTimePeriods.map(tp => premiumByPeriod.get(tp) ?? null),
           smooth: true,
           symbol: 'circle',
           symbolSize: 6,
@@ -152,10 +157,7 @@ export const LineChart: React.FC<LineChartProps> = ({
           ratioSeries.push({
             name: `${org} (${year}年)（次月起保占比）`,
             type: 'line',
-            data: allTimePeriods.map(tp => {
-              const idx = orgYearInfo.time_periods.indexOf(tp);
-              return idx >= 0 ? orgYearInfo.ratios[idx] : null;
-            }),
+            data: allTimePeriods.map(tp => ratioByPeriod.get(tp) ?? null),
             smooth: true,
             symbol: 'diamond',
             symbolSize: 6,
