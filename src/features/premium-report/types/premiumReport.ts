@@ -119,3 +119,56 @@ export interface PremiumReportData {
   /** 错误信息 */
   error: string | null;
 }
+
+// ============================================
+// 保费达成下钻类型
+// ============================================
+
+/** 下钻层级 */
+export type PlanDrilldownLevel = 'company' | 'org' | 'team' | 'salesman' | 'customer_category' | 'coverage';
+
+/** 面包屑步骤 */
+export interface DrillPathStep {
+  level: PlanDrilldownLevel;
+  label: string;
+  value?: string;
+}
+
+/** 下钻行数据 */
+export interface PlanDrilldownRow {
+  group_name: string;
+  parent_name?: string;
+  org_name?: string;
+  plan_year: number;
+  plan_vehicle: number;
+  plan_total: number;
+  actual_vehicle: number;
+  actual_total: number;
+  rate_vehicle: number | null;
+  rate_total: number | null;
+  salesman_count: number;
+  prev_year_premium: number;
+  yoy_growth_rate: number | null;
+  year_2025_actual: number;
+  plan_growth_rate: number | null;
+  rank_category?: 'top' | 'bottom' | null;
+  [key: string]: string | number | null | undefined;
+}
+
+/** KPI 卡片数据 */
+export interface PlanKpiData {
+  total_plan_vehicle: number;
+  total_plan_total: number;
+  total_actual_vehicle: number;
+  total_actual_total: number;
+  avg_rate_vehicle: number | null;
+  avg_rate_total: number | null;
+  total_salesman_count: number;
+}
+
+/** 达成率分布数据 */
+export interface PlanDistributionRow {
+  rate_range: string;
+  count: number;
+  percentage: number;
+}

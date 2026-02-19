@@ -401,7 +401,22 @@ class DuckDBService {
     }).join(',\n      ');
 
     await this.query(`INSERT INTO SalesmanTeamMapping VALUES\n      ${values}`);
+
+    // 创建 SalesmanPlanFact 视图（供 premiumPlan.ts / renewal-drilldown.ts 使用）
+    await this.query(`
+      CREATE OR REPLACE VIEW SalesmanPlanFact AS
+      SELECT
+        full_name AS salesman_name,
+        team_name,
+        organization AS org_name,
+        2026 AS plan_year,
+        car_insurance_plan_2026 AS plan_vehicle,
+        car_insurance_plan_2026 AS plan_total
+      FROM SalesmanTeamMapping
+    `);
+
     console.log(`[DuckDB] Team mapping loaded: ${rows.length} records, from ${jsonFilePath}`);
+    console.log(`[DuckDB] SalesmanPlanFact view created`);
   }
 
   /**

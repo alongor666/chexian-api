@@ -5,8 +5,10 @@
  */
 
 export { PremiumReportPanel } from './components/PremiumReportPanel';
+export { PremiumPlanPanel } from './components/PremiumPlanPanel';
 export { PremiumSummaryCard } from './components/PremiumSummaryCard';
 export { usePremiumReport } from './hooks/usePremiumReport';
+export { usePremiumPlan } from './hooks/usePremiumPlan';
 export type {
   OrgPremiumReportRow,
   SalesmanPremiumReportRow,
@@ -14,4 +16,9 @@ export type {
   PremiumReportData,
   PremiumReportSummary,
   SortState,
+  PlanDrilldownLevel,
+  PlanDrilldownRow,
+  PlanKpiData,
+  PlanDistributionRow,
+  DrillPathStep,
 } from './types/premiumReport';
