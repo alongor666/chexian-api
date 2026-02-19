@@ -16,6 +16,7 @@ import { CostTable } from './CostTable';
 import { EarnedPremiumTable } from './EarnedPremiumTable';
 import { NewEarnedPremiumTable } from './NewEarnedPremiumTable';
 import { ExpenseRatioForecastPanel } from './ExpenseRatioForecastPanel';
+import { VariableCostKpiBoard } from './VariableCostKpiBoard';
 import { useCostAnalysis } from '../hooks/useCostAnalysis';
 import { useExportHandlers } from '../hooks/useExportHandlers';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
@@ -137,6 +138,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
     expenseRatioState,
     comprehensiveCostState,
     variableCostState,
+    variableCostKpiState,
     earnedPremiumState,
     newEarnedPremiumState,
     expenseRatioForecastState,
@@ -144,6 +146,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
     fetchExpenseRatioData,
     fetchComprehensiveCostData,
     fetchVariableCostData,
+    fetchVariableCostKpiData,
     fetchEarnedPremiumData,
     fetchNewEarnedPremiumData,
     fetchExpenseRatioForecastData,
@@ -209,6 +212,9 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
         break;
       case 'variable':
         fetchVariableCostData(dimension, cutoffDate, filterParams);
+        if (dimension !== 'org_level_3') {
+          fetchVariableCostKpiData(cutoffDate, filterParams);
+        }
         break;
       case 'earned':
         fetchEarnedPremiumData(cutoffDate, earnedFilterParams, earnedPremiumDetailFilter);
@@ -232,6 +238,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
     fetchExpenseRatioData,
     fetchComprehensiveCostData,
     fetchVariableCostData,
+    fetchVariableCostKpiData,
     fetchEarnedPremiumData,
     fetchNewEarnedPremiumData,
     fetchExpenseRatioForecastData,
@@ -288,6 +295,19 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
 
   // 渲染表格内容
   const renderTableContent = () => {
+    const variableKpiData =
+      dimension === 'org_level_3'
+        ? variableCostState.data
+        : variableCostKpiState.data;
+    const variableKpiLoading =
+      dimension === 'org_level_3'
+        ? variableCostState.loading
+        : variableCostKpiState.loading;
+    const variableKpiError =
+      dimension === 'org_level_3'
+        ? variableCostState.error
+        : variableCostKpiState.error;
+
     switch (activeSubTab) {
       case 'claim':
         return (
@@ -326,14 +346,21 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
 
       case 'variable':
         return (
-          <CostTable<DisplayVariableData>
-            title="变动成本率分析明细"
-            data={transformVariableData(variableCostState.data)}
-            columns={variableColumns}
-            loading={variableCostState.loading}
-            onExportCSV={() => getCurrentExportHandler('csv')()}
-            onExportExcel={() => getCurrentExportHandler('excel')()}
-          />
+          <div className="space-y-4">
+            <VariableCostKpiBoard
+              data={variableKpiData}
+              loading={variableKpiLoading}
+              error={variableKpiError}
+            />
+            <CostTable<DisplayVariableData>
+              title="变动成本率分析明细"
+              data={transformVariableData(variableCostState.data)}
+              columns={variableColumns}
+              loading={variableCostState.loading}
+              onExportCSV={() => getCurrentExportHandler('csv')()}
+              onExportExcel={() => getCurrentExportHandler('excel')()}
+            />
+          </div>
         );
 
       case 'earned':

@@ -32,7 +32,21 @@ import { generatePremiumTrendQuery, TimeView } from '../sql/trend.js';
 import { generateTonnageRoseQuery, generateOrgByTonnageQuery, generateTonnageByOrgQuery } from '../sql/truck.js';
 import { generateGrowthQuery, GrowthConfig, GrowthType, TimeView as GrowthTimeView } from '../sql/growth.js';
 import { generateCoefficientByOrgQuery, generateFullCoefficientQuery } from '../sql/coefficient.js';
-import { generateClaimRatioQuery, generateExpenseRatioQuery, generateComprehensiveCostQuery, generateVariableCostQuery, CostDimension } from '../sql/cost.js';
+import {
+  generateClaimRatioQuery,
+  generateExpenseRatioQuery,
+  generateComprehensiveCostQuery,
+  generateVariableCostQuery,
+  generateEarnedPremiumQuery,
+  generatePolicy2025In2025Query,
+  generatePolicy2025In2026Query,
+  generatePolicy2026In2026Query,
+  generatePolicy2026In2027Query,
+  generateNewEarnedPremiumSummaryQuery,
+  generateNewEarnedPremiumSummaryQueryV2,
+  generateMonthlyExpenseQuery,
+  CostDimension,
+} from '../sql/cost.js';
 import { generateRenewalRateQuery, generateRenewalDetailTableQuery } from '../sql/renewal.js';
 import { generateRenewalDrilldownQuery, type DrilldownDimension, type DrilldownLevel, type SortField, type SortOrder } from '../sql/renewal-drilldown.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../sql/cross-sell.js';
@@ -418,9 +432,12 @@ router.get(
  * 成本分析请求验证Schema（特有参数）
  */
 const costExtraSchema = z.object({
-  analysisType: z.enum(['claimRatio', 'expenseRatio', 'comprehensiveCost', 'variableCost']).default('claimRatio'),
+  type: z.enum(['earned', 'earned-new', 'expense-forecast']).optional(),
+  analysisType: z.enum(['claimRatio', 'expenseRatio', 'comprehensiveCost', 'variableCost']).optional(),
   dimension: z.enum(['customer_category', 'org_level_3', 'coverage_combination', 'org_customer', 'org_coverage']).default('org_level_3'),
-  cutoffDate: z.string(),
+  cutoffDate: z.string().optional(),
+  operatingCostRate: z.string().optional(),
+  policyMonth: z.string().optional(),
 });
 
 /**
@@ -434,11 +451,7 @@ router.get(
     if (!costResult.success) {
       throw new AppError(400, costResult.error.issues[0].message);
     }
-    const { analysisType, dimension, cutoffDate } = costResult.data;
-
-    if (!isValidDateFormat(cutoffDate)) {
-      throw new AppError(400, `Invalid cutoffDate format: ${cutoffDate}. Expected YYYY-MM-DD`);
-    }
+    const { type, analysisType, dimension, cutoffDate, operatingCostRate, policyMonth } = costResult.data;
 
     const filterResult = commonFilterSchema.safeParse(req.query);
     if (!filterResult.success) {
@@ -450,6 +463,83 @@ router.get(
       req.permissionFilter || '1=1'
     );
 
+    // 新协议：type=earned/earned-new/expense-forecast
+    if (type) {
+      if (type === 'earned') {
+        if (!cutoffDate) {
+          throw new AppError(400, 'cutoffDate is required when type=earned');
+        }
+        if (!isValidDateFormat(cutoffDate)) {
+          throw new AppError(400, `Invalid cutoffDate format: ${cutoffDate}. Expected YYYY-MM-DD`);
+        }
+
+        const sql = generateEarnedPremiumQuery({
+          cutoffDate,
+          whereClause: finalWhereClause,
+          policyMonth,
+          orgLevel3: filterResult.data.orgLevel3,
+        });
+        const result = await duckdbService.query(sql);
+        res.json({ success: true, data: result });
+        return;
+      }
+
+      if (type === 'earned-new') {
+        const config = { whereClause: finalWhereClause };
+        const [policy2025In2025, policy2025In2026, policy2026In2026, policy2026In2027] = await Promise.all([
+          duckdbService.query(generatePolicy2025In2025Query(config)),
+          duckdbService.query(generatePolicy2025In2026Query(config)),
+          duckdbService.query(generatePolicy2026In2026Query(config)),
+          duckdbService.query(generatePolicy2026In2027Query(config)),
+        ]);
+
+        res.json({
+          success: true,
+          data: {
+            policy2025In2025,
+            policy2025In2026,
+            policy2026In2026,
+            policy2026In2027,
+          },
+        });
+        return;
+      }
+
+      // type=expense-forecast
+      const parsedRate = operatingCostRate === undefined ? 9 : Number(operatingCostRate);
+      if (!Number.isFinite(parsedRate) || parsedRate < 0 || parsedRate > 100) {
+        throw new AppError(400, `Invalid operatingCostRate: ${operatingCostRate}. Expected 0-100`);
+      }
+
+      const config = { whereClause: finalWhereClause };
+      const summaryData = await duckdbService.query(
+        generateNewEarnedPremiumSummaryQueryV2(config)
+      ).catch(async () => {
+        // 兼容未创建 EarnedPremiumMonthly 预聚合表的环境
+        return duckdbService.query(generateNewEarnedPremiumSummaryQuery(config));
+      });
+      const monthlyExpenseData = await duckdbService.query(generateMonthlyExpenseQuery(config));
+
+      res.json({
+        success: true,
+        data: {
+          summaryData,
+          monthlyExpenseData,
+          operatingCostRate: parsedRate,
+        },
+      });
+      return;
+    }
+
+    // 旧协议：analysisType + dimension + cutoffDate
+    const finalAnalysisType = analysisType || 'claimRatio';
+    if (!cutoffDate) {
+      throw new AppError(400, 'cutoffDate is required for cost analysis');
+    }
+    if (!isValidDateFormat(cutoffDate)) {
+      throw new AppError(400, `Invalid cutoffDate format: ${cutoffDate}. Expected YYYY-MM-DD`);
+    }
+
     const config = {
       dimension: dimension as CostDimension,
       cutoffDate,
@@ -457,7 +547,7 @@ router.get(
     };
 
     let sql: string;
-    switch (analysisType) {
+    switch (finalAnalysisType) {
       case 'claimRatio':
         sql = generateClaimRatioQuery(config);
         break;
