@@ -12,7 +12,7 @@ requires:
 dependencies:
   - scripts/check-write-conflict.mjs
   - scripts/check-governance.mjs
-last_updated: "2026-01-11"
+last_updated: "2026-02-18"
 ---
 
 # Git 提交并创建 PR
@@ -89,9 +89,30 @@ feat(kpi): 添加赔付杠杆率计算功能
 Closes #123
 ```
 
-### 3. 执行前置检查（CRITICAL - 防止 merge 冲突）
+### 3. 执行前置检查（CRITICAL - 防止推送失败和 merge 冲突）
 
-**⚠️ 根据 CLAUDE.md §9.4 多Agent协作协议，创建 PR 前必须执行冲突检测**
+**⚠️ 根据 CLAUDE.md §13 AI 协作行为规范 + §9.4 多Agent协作协议**
+
+#### 3.0 大文件检查（防止推送被 GitHub 拒绝）
+```bash
+find . -not -path './.git/*' -not -path './node_modules/*' -size +50M -exec ls -lh {} \;
+```
+
+**如果发现大文件（>50MB）**：
+1. 检查是否已被 `.gitignore` 忽略
+2. 如果需要提交，配置 Git LFS：`git lfs track "*.parquet"` 等
+3. 如果不需要提交，添加到 `.gitignore`
+4. **禁止忽略此步骤直接 push**
+
+#### 3.0b 分支共同祖先检查（防止 unrelated histories）
+```bash
+git merge-base main HEAD
+```
+
+**如果返回错误（无共同祖先）**：
+1. 不要尝试 rebase（会产生大量 add/add 冲突）
+2. 改用 cherry-pick 策略：从 main 创建新分支，cherry-pick 独有 commits
+3. 用新分支创建 PR
 
 #### 3.1 同步远程最新代码
 ```bash

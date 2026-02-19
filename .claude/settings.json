@@ -1,5 +1,18 @@
 {
   "permissions": {
     "allow": []
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -q 'git push'; then large=$(find . -not -path './.git/*' -not -path './node_modules/*' -size +50M 2>/dev/null); if [ -n \"$large\" ]; then echo \"⚠️ 发现大文件 (>50MB)，推送前请处理：\"; echo \"$large\" | while read f; do ls -lh \"$f\" 2>/dev/null; done; echo \"\n建议：添加到 .gitignore 或配置 Git LFS\"; exit 1; fi; fi"
+          }
+        ]
+      }
+    ]
   }
 }
