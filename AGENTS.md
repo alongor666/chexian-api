@@ -4,6 +4,24 @@
 
 ---
 
+## 0. AI 行为红线（ZERO TOLERANCE）
+
+> 来源：Claude Code 使用洞察报告（36 会话 / 319 消息）
+
+- **执行不规划**：涉及 Git 操作（commit/push/PR）直接执行命令，禁止用规划或摘要替代执行
+- **先搜再写**：写代码前必须全库搜索，禁止假设“模块不存在”
+- **验证不声称**：禁止声称“已可用”，必须通过真实 API 请求或浏览器验证
+- **修补不拆除**：安全加固/重构时禁止删除整块插件或集成，只能修补
+- **并行不串行**：3+ 独立模块任务必须并行执行 subagents
+- **聚焦不发散**：单次会话只完成一个明确目标，完成并验证后再继续
+
+### Git 安全检查（推送前必做）
+
+```bash
+git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | awk '$1 == "blob" && $3 > 104857600 {print $3, $4}'
+git merge-base main HEAD || echo "WARNING: no common ancestor"
+```
+
 ## 0. 适用范围与优先级
 - **适用范围**：仓库根目录及其所有子目录（除非存在更深层 `AGENTS.md`）。
 - **优先级**：System/Developer/User 指令 > 更深层 `AGENTS.md` > 本文件。
