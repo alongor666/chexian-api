@@ -6,7 +6,7 @@
  * 聚合商车自主定价系数均值 = 聚合保费 / 聚合NCD保费
  */
 
-import { formatDate, getLastDayOfMonth, type DateRange } from '../utils/coefficient-period';
+import { formatDate, getLastDayOfMonth, type DateRange } from '../utils/coefficient-period.js';
 import { ORG_GROUPS } from '../config/coefficient-thresholds.js';
 
 // 非营业个人客车的SQL条件

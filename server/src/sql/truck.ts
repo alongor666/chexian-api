@@ -9,8 +9,8 @@
  * @module truck
  */
 
-import type { ViewPerspective } from '../types';
-import { generatePerspectiveSelect, generatePerspectiveWhere } from './perspective-adapter';
+import type { ViewPerspective } from '../types/index.js';
+import { generatePerspectiveSelect, generatePerspectiveWhere } from './perspective-adapter.js';
 
 /**
  * 玫瑰图查询（支持保费和保单数两种指标）

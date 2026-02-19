@@ -15,7 +15,7 @@
  * - 保险止期 = 保险起期 + 365天
  */
 
-import { formatDate } from '../utils/coefficient-period';
+import { formatDate } from '../utils/coefficient-period.js';
 
 // ==================== 类型定义 ====================
 

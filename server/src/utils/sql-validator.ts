@@ -9,7 +9,7 @@
  * 5. 性能建议:检测潜在的性能问题
  */
 
-import type { ValidationResult } from '../types/sql-query';
+import type { ValidationResult } from '../types/sql-query.js';
 
 /**
  * SQL 长度限制 (字符)

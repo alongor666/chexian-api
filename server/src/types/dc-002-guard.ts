@@ -11,7 +11,7 @@
  * @module dc-002-guard
  */
 
-import type { AdvancedFilterState } from './data';
+import type { AdvancedFilterState } from './data.js';
 
 /**
  * DC-002 合规的日期范围类型

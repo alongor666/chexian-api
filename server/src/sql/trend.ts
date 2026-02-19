@@ -13,9 +13,9 @@
  * V2.0: 支持视角切换（保费/商业险件数/交强险件数）
  */
 
-import { DateCriteria } from '../types/data';
-import type { ViewPerspective } from '../types';
-import { generatePerspectiveWhere } from './perspective-adapter';
+import { DateCriteria } from '../types/data.js';
+import type { ViewPerspective } from '../types/index.js';
+import { generatePerspectiveWhere } from './perspective-adapter.js';
 
 export type TimeView = 'daily' | 'weekly' | 'monthly';
 

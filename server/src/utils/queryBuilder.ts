@@ -3,9 +3,9 @@
  * 构建WHERE子句的工具函数
  */
 
-import type { AdvancedFilterState, DateCriteria } from '../types/data';
-import type { UserPermission } from '../config/organizations';
-import { UserRole } from '../config/organizations';
+import type { AdvancedFilterState, DateCriteria } from '../types/data.js';
+import type { UserPermission } from '../config/organizations.js';
+import { UserRole } from '../config/organizations.js';
 
 /**
  * 从高级筛选状态构建WHERE子句

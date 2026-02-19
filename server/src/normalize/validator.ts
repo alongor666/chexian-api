@@ -4,9 +4,9 @@
  * Provides validation functions for data quality checks
  */
 
-import { ColumnMapping } from './mapping';
-import { createLogger } from '../utils/logger';
-import type { QueryResultRow } from '../types/data';
+import { ColumnMapping } from './mapping.js';
+import { createLogger } from '../utils/logger.js';
+import type { QueryResultRow } from '../types/data.js';
 
 const logger = createLogger('Validator');
 

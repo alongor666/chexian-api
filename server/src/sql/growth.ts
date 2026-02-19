@@ -11,7 +11,7 @@
  * DC-001: 支持动态日期字段（通过 dateField 参数）
  */
 
-import { DateCriteria } from '../types/data';
+import { DateCriteria } from '../types/data.js';
 
 export type GrowthType = 'yoy' | 'mom' | 'ytd' | 'custom';
 export type TimeView = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
@@ -504,7 +504,7 @@ export function generateDailyGrowthWithContextQuery(
 /**
  * 预定义的常用增长率查询配置
  */
-import { KPI_SQL } from './kpi';
+import { KPI_SQL } from './kpi.js';
 
 /**
  * 预定义的常用增长率查询配置
