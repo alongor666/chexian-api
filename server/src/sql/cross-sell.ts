@@ -68,7 +68,7 @@ const BOOLEAN_DIM_MAP: Record<string, { field: string; trueLabel: string; falseL
  * 将下钻路径中的一步转为 WHERE 条件
  */
 function drillStepToWhere(step: DrilldownStep, colPrefix: string): string {
-  const esc = (s: string) => s.replace(/'/g, "''");
+  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "''");
 
   // 布尔维度：中文显示值 → boolean
   const boolDef = BOOLEAN_DIM_MAP[step.dimension];
