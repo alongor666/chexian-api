@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { apiClient } from '../../../shared/api/client';
+import { apiClient, isRequestAbortError } from '../../../shared/api/client';
 import { createLogger } from '../../../shared/utils/logger';
 import type {
   PlanDrilldownLevel,
@@ -193,6 +193,7 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
 
       logger.debug('Premium plan data loaded', { level, rows: (drillResult || []).length });
     } catch (err) {
+      if (isRequestAbortError(err)) return;
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
       logger.error('Failed to load premium plan data', { level, error: message });

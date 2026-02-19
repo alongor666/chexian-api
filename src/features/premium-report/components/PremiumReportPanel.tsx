@@ -15,7 +15,7 @@ import { usePremiumReport } from '../hooks/usePremiumReport';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import type { TableColumn } from '../../marketing-report/types/marketingReport';
 import type { OrgPremiumReportRow, SalesmanPremiumReportRow } from '../types/premiumReport';
-import { formatPremiumWan, formatRate, formatCount } from '../../../shared/utils/formatters';
+import { formatWanDirect, formatRate, formatCount } from '../../../shared/utils/formatters';
 
 type PremiumTab = 'report' | 'plan';
 
@@ -29,21 +29,21 @@ const orgReportColumns: TableColumn<OrgPremiumReportRow>[] = [
     header: '车险保费(万元)',
     sortable: true,
     align: 'right',
-    format: (value) => formatPremiumWan(Number(value)),
+    format: (value) => formatWanDirect(Number(value)),
   },
   {
     key: '商业险保费',
     header: '商业险(万元)',
     sortable: true,
     align: 'right',
-    format: (value) => formatPremiumWan(Number(value)),
+    format: (value) => formatWanDirect(Number(value)),
   },
   {
     key: '交强险保费',
     header: '交强险(万元)',
     sortable: true,
     align: 'right',
-    format: (value) => formatPremiumWan(Number(value)),
+    format: (value) => formatWanDirect(Number(value)),
   },
   {
     key: '车险件数',
@@ -71,7 +71,7 @@ const orgReportColumns: TableColumn<OrgPremiumReportRow>[] = [
     header: '人均保费(万元)',
     sortable: true,
     align: 'right',
-    format: (value) => formatPremiumWan(Number(value)),
+    format: (value) => formatWanDirect(Number(value)),
   },
   {
     key: '业务员数',
@@ -101,21 +101,21 @@ const salesmanReportColumns: TableColumn<SalesmanPremiumReportRow>[] = [
     header: '车险保费(万元)',
     sortable: true,
     align: 'right',
-    format: (value) => formatPremiumWan(Number(value)),
+    format: (value) => formatWanDirect(Number(value)),
   },
   {
     key: '商业险保费',
     header: '商业险(万元)',
     sortable: true,
     align: 'right',
-    format: (value) => formatPremiumWan(Number(value)),
+    format: (value) => formatWanDirect(Number(value)),
   },
   {
     key: '交强险保费',
     header: '交强险(万元)',
     sortable: true,
     align: 'right',
-    format: (value) => formatPremiumWan(Number(value)),
+    format: (value) => formatWanDirect(Number(value)),
   },
   {
     key: '车险件数',
@@ -246,7 +246,7 @@ export const PremiumReportPanel: React.FC = () => {
                 columns={orgReportColumns}
                 sortState={orgReportSort}
                 onSortChange={setOrgReportSort}
-                rowKey={(row) => row.org_level_3}
+                rowKey={(row, i) => row.org_level_3 || String(i)}
                 loading={isLoading}
               />
             </div>
@@ -272,7 +272,7 @@ export const PremiumReportPanel: React.FC = () => {
                 columns={salesmanReportColumns}
                 sortState={salesmanReportSort}
                 onSortChange={setSalesmanReportSort}
-                rowKey={(row) => row.salesman_name}
+                rowKey={(row, i) => `${row.salesman_name}-${row.org_level_3}-${row.team_name}` || String(i)}
                 loading={isLoading}
               />
             </div>

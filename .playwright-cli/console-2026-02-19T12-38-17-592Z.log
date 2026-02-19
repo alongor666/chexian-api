@@ -1,0 +1,17 @@
+Total messages: 33 (Errors: 1, Warnings: 0)
+Returning 14 messages for level "info"
+
+[INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=882e9774:20102
+[ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/favicon.ico:0
+[INFO] 12:37:57.995 [DataContext][INFO] [DataContext] 检测到后端已加载文件: ca5721fc-9715-4206-a648-9906e85bbd06____________________________0212.parquet @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.011 [FilterContext][INFO] 双口径元数据：API 模式使用默认值 @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.011 [FilterContext][INFO] Filter options: loading from API @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.094 [DataContext][INFO] [DataContext] 检测到后端已加载文件: ca5721fc-9715-4206-a648-9906e85bbd06____________________________0212.parquet @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.094 [FilterContext][INFO] Filter options: loaded from API @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.094 [FilterContext][INFO] 筛选器初始化完成（API 模式） @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.352 [useKpiData][INFO] KPI API 查询执行 {dateField: policy_date, startDate: 2026-01-01, endDate: 2026-02-19} @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.353 [useTrendData][INFO] 趋势 API 查询执行 {timeView: daily, granularity: day} @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.356 [useKpiData][INFO] KPI API 查询执行 {dateField: policy_date, startDate: 2026-01-01, endDate: 2026-02-19} @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.357 [useTrendData][INFO] 趋势 API 查询执行 {timeView: daily, granularity: day} @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.441 [useTrendData][INFO] 趋势 API 查询成功，获取 539 条数据 @ http://localhost:5173/src/shared/utils/logger.ts:47
+[INFO] 12:37:58.477 [useKpiData][INFO] KPI API 查询成功 @ http://localhost:5173/src/shared/utils/logger.ts:47
