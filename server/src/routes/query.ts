@@ -38,6 +38,8 @@ import { generateRenewalDrilldownQuery, type DrilldownDimension, type DrilldownL
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../sql/cross-sell.js';
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../sql/cross-sell-summary.js';
 import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery } from '../sql/marketing-report.js';
+import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../sql/premium-report.js';
+import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../sql/premiumPlan.js';
 import type { AdvancedFilterState } from '../types/data.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../sql/salesman-ranking.js';
 import { validateSQL } from '../utils/sql-validator.js';
@@ -954,6 +956,140 @@ router.get(
         maxDate,
         rows: result,
       },
+    });
+  })
+);
+
+// ============================================================
+// Premium Report & Premium Plan Endpoints
+// ============================================================
+
+/**
+ * 保费报表请求验证Schema
+ */
+const premiumReportExtraSchema = z.object({
+  reportType: z.enum(['org', 'salesman']).default('org'),
+  planYear: z.coerce.number().default(2026),
+});
+
+/**
+ * GET /api/query/premium-report
+ * 保费报表（机构汇总 / 业务员明细）
+ */
+router.get(
+  '/premium-report',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = premiumReportExtraSchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+    const { reportType, planYear } = extraResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const dateField = filterResult.data.dateField || 'policy_date';
+
+    let sql: string;
+    if (reportType === 'org') {
+      sql = generateOrgPremiumReportQuery(finalWhereClause, dateField);
+    } else {
+      sql = generateSalesmanPremiumReportQuery(finalWhereClause, planYear);
+    }
+
+    const result = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  })
+);
+
+/**
+ * 保费达成下钻请求验证Schema
+ */
+const premiumPlanSchema = z.object({
+  queryType: z.enum(['drilldown', 'kpi', 'distribution']).default('drilldown'),
+  planYear: z.coerce.number().default(2026),
+  level: z.enum(['company', 'org', 'team', 'salesman', 'customer_category', 'coverage']).default('company'),
+  orgFilter: z.string().optional(),
+  teamFilter: z.string().optional(),
+  salesmanFilter: z.string().optional(),
+  customerCategoryFilter: z.string().optional(),
+  sortField: z.enum(['plan_vehicle', 'actual_vehicle', 'rate_vehicle', 'plan_total', 'prev_year_premium', 'yoy_growth_rate', 'year_2025_actual', 'plan_growth_rate']).default('plan_vehicle'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  rankingEnabled: z.string().optional(),
+  topN: z.coerce.number().default(10),
+  bottomN: z.coerce.number().default(10),
+});
+
+/**
+ * GET /api/query/premium-plan
+ * 保费达成下钻分析（六级下钻 + KPI + 达成率分布）
+ */
+router.get(
+  '/premium-plan',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = premiumPlanSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+
+    const {
+      queryType, planYear, level,
+      orgFilter, teamFilter, salesmanFilter, customerCategoryFilter,
+      sortField, sortOrder,
+      rankingEnabled, topN, bottomN,
+    } = parseResult.data;
+
+    const dimension: PlanDrilldownDimension = {
+      level: level as PlanDrilldownLevel,
+      filters: {
+        org: orgFilter,
+        team: teamFilter,
+        salesman: salesmanFilter,
+        customerCategory: customerCategoryFilter,
+      },
+    };
+
+    let sql: string;
+    switch (queryType) {
+      case 'kpi':
+        sql = generateKPICardQuery(planYear, dimension);
+        break;
+      case 'distribution':
+        sql = generateRateDistributionQuery(planYear, dimension);
+        break;
+      case 'drilldown':
+      default:
+        sql = generatePremiumPlanDrilldownQuery(
+          planYear,
+          dimension,
+          {
+            enabled: rankingEnabled === 'true',
+            rankField: 'rate_vehicle',
+            topN,
+            bottomN,
+          },
+          sortField as PlanSortField,
+          sortOrder as PlanSortOrder,
+        );
+        break;
+    }
+
+    const result = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: result,
     });
   })
 );

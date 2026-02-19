@@ -104,30 +104,29 @@ export function usePremiumReport(): UsePremiumReportReturn {
     async (filters: PremiumReportFilters): Promise<OrgPremiumReportRow[]> => {
       logger.debug('Loading org report from API', filters);
 
-      const params = {
-        type: 'org',
+      const params: Record<string, any> = {
+        reportType: 'org',
         dateField: filters.dateField,
         startDate: filters.startDate,
         endDate: filters.endDate,
-        year: filters.year,
-        orgName: filters.org_level_3,
       };
+      if (filters.org_level_3 && filters.org_level_3.length > 0) {
+        params.orgNames = filters.org_level_3.join(',');
+      }
 
-      const result = await apiClient.getSalesmanRanking(100, params);
+      const result = await apiClient.getPremiumReport(params);
 
       return (result || []).map((row: Record<string, unknown>) => ({
         org_level_3: String(row.org_level_3 || ''),
-        车险保费: Number(row['车险保费'] || row.total_premium || 0),
-        商业险保费: Number(row['商业险保费'] || row.commercial_premium || 0),
-        交强险保费: Number(row['交强险保费'] || row.compulsory_premium || 0),
-        车险件数: Number(row['车险件数'] || row.policy_count || 0),
-        商业险件数: Number(row['商业险件数'] || row.commercial_count || 0),
-        交强险件数: Number(row['交强险件数'] || row.compulsory_count || 0),
-        人均保费: Number(row['人均保费'] || row.per_capita_premium || 0),
-        业务员数: Number(row['业务员数'] || row.salesman_count || 0),
-        同比增长率: row['同比增长率'] !== null && row['同比增长率'] !== undefined
-          ? Number(row['同比增长率'])
-          : (row.yoy_growth !== null && row.yoy_growth !== undefined ? Number(row.yoy_growth) : null),
+        车险保费: Number(row['车险保费'] || 0),
+        商业险保费: Number(row['商业险保费'] || 0),
+        交强险保费: Number(row['交强险保费'] || 0),
+        车险件数: Number(row['车险件数'] || 0),
+        商业险件数: Number(row['商业险件数'] || 0),
+        交强险件数: Number(row['交强险件数'] || 0),
+        人均保费: Number(row['人均保费'] || 0),
+        业务员数: Number(row['业务员数'] || 0),
+        同比增长率: row['同比增长率'] != null ? Number(row['同比增长率']) : null,
       }));
     },
     []
@@ -140,29 +139,31 @@ export function usePremiumReport(): UsePremiumReportReturn {
     async (filters: PremiumReportFilters): Promise<SalesmanPremiumReportRow[]> => {
       logger.debug('Loading salesman report from API', filters);
 
-      const params = {
-        type: 'salesman',
+      const params: Record<string, any> = {
+        reportType: 'salesman',
         dateField: filters.dateField,
         startDate: filters.startDate,
         endDate: filters.endDate,
-        year: filters.year,
-        orgName: filters.org_level_3,
+        planYear: filters.year,
       };
+      if (filters.org_level_3 && filters.org_level_3.length > 0) {
+        params.orgNames = filters.org_level_3.join(',');
+      }
 
-      const result = await apiClient.getSalesmanRanking(1000, params);
+      const result = await apiClient.getPremiumReport(params);
 
       return (result || []).map((row: Record<string, unknown>) => ({
         salesman_name: String(row.salesman_name || ''),
         org_level_3: String(row.org_level_3 || ''),
         team_name: String(row.team_name || ''),
-        车险保费: Number(row['车险保费'] || row.total_premium || 0),
-        商业险保费: Number(row['商业险保费'] || row.commercial_premium || 0),
-        交强险保费: Number(row['交强险保费'] || row.compulsory_premium || 0),
-        车险件数: Number(row['车险件数'] || row.policy_count || 0),
-        商业险件数: Number(row['商业险件数'] || row.commercial_count || 0),
-        交强险件数: Number(row['交强险件数'] || row.compulsory_count || 0),
-        续保率: Number(row['续保率'] || row.renewal_rate || 0),
-        非过户率: Number(row['非过户率'] || row.non_transfer_rate || 0),
+        车险保费: Number(row['车险保费'] || 0),
+        商业险保费: Number(row['商业险保费'] || 0),
+        交强险保费: Number(row['交强险保费'] || 0),
+        车险件数: Number(row['车险件数'] || 0),
+        商业险件数: Number(row['商业险件数'] || 0),
+        交强险件数: Number(row['交强险件数'] || 0),
+        续保率: Number(row['续保率'] || 0),
+        非过户率: Number(row['非过户率'] || 0),
       }));
     },
     []

@@ -595,6 +595,38 @@ class ApiClient {
   }
 
   /**
+   * 获取保费报表数据（机构汇总 / 业务员明细）
+   */
+  async getPremiumReport(params?: Record<string, any>): Promise<any[]> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value));
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/premium-report${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取保费达成下钻数据（六级下钻 + KPI + 达成率分布）
+   */
+  async getPremiumPlan(params?: Record<string, any>): Promise<any> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value));
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/premium-plan${query ? `?${query}` : ''}`);
+  }
+
+  /**
    * 执行自定义 SQL（受限）
    */
   async executeCustomQuery(sql: string): Promise<any[]> {
