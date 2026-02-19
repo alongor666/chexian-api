@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
-import { apiClient, FileInfo, LoadResult } from '../api/client';
+import { apiClient, FileInfo, LoadResult, isRequestAbortError } from '../api/client';
 import { Logger } from '@/shared/utils/logger';
 
 const logger = new Logger('DataContext');
@@ -99,7 +99,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         }
       }
     } catch (err) {
-      logger.error('[DataContext] 获取文件列表失败:', err);
+      if (!isRequestAbortError(err)) {
+        logger.error('[DataContext] 获取文件列表失败:', err);
+      }
     }
   }, [currentFile]);
 

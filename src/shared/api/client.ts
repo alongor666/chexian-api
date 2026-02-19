@@ -21,6 +21,17 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+export class RequestAbortError extends Error {
+  constructor(message = '请求已取消或超时') {
+    super(message);
+    this.name = 'RequestAbortError';
+  }
+}
+
+export function isRequestAbortError(error: unknown): error is RequestAbortError {
+  return error instanceof RequestAbortError;
+}
+
 /**
  * 认证信息
  */
@@ -210,7 +221,9 @@ class ApiClient {
 
     // 对 GET 请求自动取消同端点前序请求（避免竞态）
     const method = (options.method || 'GET').toUpperCase();
-    const dedupeKey = method === 'GET' ? endpoint.split('?')[0] : '';
+    // 仅取消“同一完整请求”（包含 query string）
+    // 避免并发请求同一路由不同参数时互相取消（如 rankingType=all/quality）
+    const dedupeKey = method === 'GET' ? endpoint : '';
     if (dedupeKey) {
       this.cancelRequest(dedupeKey);
     }
@@ -241,7 +254,7 @@ class ApiClient {
     } catch (err) {
       // 区分取消和真实错误
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error('请求已取消或超时');
+        throw new RequestAbortError();
       }
       throw err;
     } finally {

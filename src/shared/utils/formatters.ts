@@ -59,6 +59,17 @@ export const formatPremiumWan = (value: number | bigint | null | undefined): str
 };
 
 /**
+ * 格式化“已是万元单位”的保费（整数，千分位）
+ * @example formatWanDirect(1234.56) => "1,235"
+ */
+export const formatWanDirect = (value: number | bigint | null | undefined): string => {
+  if (value === null || value === undefined) return '-';
+  const numValue = toNumber(value);
+  if (!Number.isFinite(numValue)) return '-';
+  return Math.round(numValue).toLocaleString('zh-CN');
+};
+
+/**
  * 格式化图表Y轴数值（纯数字，无单位，用于图表标签）
  * @example formatChartValue(12345678) => "1235" (万元)
  */

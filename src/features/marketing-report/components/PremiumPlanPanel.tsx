@@ -1,19 +1,17 @@
 /**
- * 保费达成下钻面板组件
+ * 保费达成下钻面板（营销战报版）
  *
- * 此功能尚未适配 API 模式，需要后端实现对应的查询接口。
+ * 复用 premium-report 模块的完整实现（六级下钻 + KPI + 达成率分布）。
+ * planYear 由全局筛选器 filters.analysis_year 控制。
  */
 
 import React from 'react';
+import { PremiumPlanPanel as PremiumPlanImpl } from '../../premium-report/components/PremiumPlanPanel';
 
 interface PremiumPlanPanelProps {
   planYear: number;
 }
 
 export const PremiumPlanPanel: React.FC<PremiumPlanPanelProps> = () => {
-  return (
-    <div className="bg-white p-8 rounded shadow text-center text-gray-500">
-      <p className="text-lg">保费达成下钻分析功能尚未适配 API 模式，敬请期待。</p>
-    </div>
-  );
+  return <PremiumPlanImpl />;
 };

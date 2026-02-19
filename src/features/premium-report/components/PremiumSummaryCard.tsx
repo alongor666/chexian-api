@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { formatPremiumWan, formatCount } from '../../../shared/utils/formatters';
+import { formatWanDirect, formatCount } from '../../../shared/utils/formatters';
 import type { PremiumReportSummary } from '../types/premiumReport';
 
 interface PremiumSummaryCardProps {
@@ -42,7 +42,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">总保费</div>
           <div className="text-xl font-bold text-blue-600">
-            {formatPremiumWan(summary.totalPremium)}
+            {formatWanDirect(summary.totalPremium)}
           </div>
           <div className="text-xs text-gray-400 mt-1">万元</div>
         </div>
@@ -78,7 +78,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">机构平均保费</div>
           <div className="text-xl font-bold text-purple-600">
-            {formatPremiumWan(summary.avgPremium)}
+            {formatWanDirect(summary.avgPremium)}
           </div>
           <div className="text-xs text-gray-400 mt-1">万元</div>
         </div>

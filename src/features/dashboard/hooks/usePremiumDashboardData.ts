@@ -2,7 +2,7 @@ import { useCallback, useState, useRef } from 'react';
 import { formatPremiumWan } from '../../../shared/utils/formatters';
 import { createLogger } from '../../../shared/utils/logger';
 import { useLoadingStates } from '../../../shared/hooks';
-import { apiClient } from '../../../shared/api/client';
+import { apiClient, isRequestAbortError } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { buildWhereClauseFromFilters } from '../../../shared/utils/queryBuilder';
 import type { AdvancedFilterState } from '../../../shared/types/data';
@@ -93,7 +93,7 @@ export const usePremiumDashboardData = ({
       setQualityBusinessTop10(mapApiRows(qualityBusiness));
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
-      logger.error('Table API Query Failed', err);
+      if (!isRequestAbortError(err)) logger.error('Table API Query Failed', err);
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading('table', false);
@@ -120,7 +120,7 @@ export const usePremiumDashboardData = ({
         })));
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
-        logger.error(`${key} API Query Failed`, err);
+        if (!isRequestAbortError(err)) logger.error(`${key} API Query Failed`, err);
       } finally {
         if (requestId === requestIdRef.current) {
           setLoading(key, false);
