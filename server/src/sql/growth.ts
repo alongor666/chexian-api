@@ -107,8 +107,6 @@ export function generateYoYGrowthQuery(
         ${metric} AS previous_value${groupByClause}
       FROM PolicyFact
       WHERE ${whereClause}
-        AND ${timeExpression} >= ${timeExpression} - INTERVAL '1 year'
-        AND ${timeExpression} < ${timeExpression} - INTERVAL '1 day'
       GROUP BY ${timeExpression}${groupByClause}
     )
     SELECT

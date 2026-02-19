@@ -20,10 +20,10 @@
 
 > 本文档描述的是**原始 Parquet 数据**的完整字段。但 AI SQL 生成器查询的是 **PolicyFact 视图**，该视图**不包含所有字段**。
 
-**PolicyFact 视图可用字段** (31个)：
+**PolicyFact 视图可用字段** (30个)：
 ```
 policy_no, premium, policy_date, insurance_start_date,
-salesman_name, org_level_3, region_group, customer_category,
+salesman_name, org_level_3, customer_category,
 insurance_type, coverage_combination, is_renewal, is_new_car,
 is_transfer, is_nev, is_telemarketing, tonnage_segment,
 is_renewable, is_commercial_insure, terminal_source,
@@ -43,6 +43,7 @@ is_cross_sell, cross_sell_premium_driver
 | `team_name` | 团队名称未包含 | 用 `salesman_name` |
 | `org_level_4` | 四级机构未包含 | 用 `org_level_3` |
 | `insurance_end_date` | 保险止期未包含 | 用 `insurance_start_date` |
+| `region_group` | 非物理字段，由 coefficient.ts 运行时 CASE 计算 | 用 `org_level_3` + CASE 表达式 |
 
 ---
 
