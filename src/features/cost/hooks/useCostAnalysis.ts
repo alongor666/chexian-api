@@ -220,6 +220,15 @@ export function useCostAnalysis() {
       summary: initialSummary,
     });
 
+  // 变动成本 KPI 状态（固定机构维度）
+  const [variableCostKpiState, setVariableCostKpiState] =
+    useState<VariableCostResult>({
+      data: [],
+      loading: false,
+      error: null,
+      summary: initialSummary,
+    });
+
   // 已赚保费状态
   const [earnedPremiumState, setEarnedPremiumState] =
     useState<EarnedPremiumResult>({
@@ -499,6 +508,71 @@ export function useCostAnalysis() {
   );
 
   /**
+   * 查询变动成本KPI数据（固定三级机构维度）
+   */
+  const fetchVariableCostKpiData = useCallback(
+    async (
+      cutoffDate: string,
+      filterParams?: Record<string, string>
+    ) => {
+      setVariableCostKpiState((prev) => ({ ...prev, loading: true, error: null }));
+
+      try {
+        logger.info('成本分析 API 查询执行（变动成本KPI）');
+
+        const response = await apiClient.getCostAnalysis({
+          analysisType: 'variableCost',
+          dimension: 'org_level_3',
+          cutoffDate,
+          ...filterParams,
+        });
+
+        const result = Array.isArray(response) ? response as VariableCostData[] : [];
+
+        const summary: CostSummary = {
+          totalPremium: result.reduce((sum, r) => sum + (r.total_premium || 0), 0),
+          totalClaims: result.reduce(
+            (sum, r) => sum + (r.total_reported_claims || 0),
+            0
+          ),
+          totalFee: result.reduce((sum, r) => sum + (r.total_fee || 0), 0),
+          policyCount: result.reduce((sum, r) => sum + (r.policy_count || 0), 0),
+          avgClaimRatio:
+            result.length > 0
+              ? result.reduce((sum, r) => sum + (r.earned_claim_ratio || 0), 0) /
+                result.filter((r) => r.earned_claim_ratio !== null).length
+              : null,
+          avgExpenseRatio:
+            result.length > 0
+              ? result.reduce((sum, r) => sum + (r.expense_ratio || 0), 0) /
+                result.filter((r) => r.expense_ratio !== null).length
+              : null,
+        };
+
+        setVariableCostKpiState({
+          data: result,
+          loading: false,
+          error: null,
+          summary,
+        });
+
+        return result;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : '查询失败';
+        logger.error('[CostAnalysis] Variable Cost KPI Error:', errorMessage);
+        setVariableCostKpiState((prev) => ({
+          ...prev,
+          loading: false,
+          error: errorMessage,
+        }));
+        return [];
+      }
+    },
+    []
+  );
+
+  /**
    * 查询已赚保费数据
    */
   const fetchEarnedPremiumData = useCallback(
@@ -760,6 +834,12 @@ export function useCostAnalysis() {
       error: null,
       summary: initialSummary,
     });
+    setVariableCostKpiState({
+      data: [],
+      loading: false,
+      error: null,
+      summary: initialSummary,
+    });
     setEarnedPremiumState({
       data: [],
       summaryData: [],
@@ -789,6 +869,7 @@ export function useCostAnalysis() {
     expenseRatioState,
     comprehensiveCostState,
     variableCostState,
+    variableCostKpiState,
     earnedPremiumState,
     newEarnedPremiumState,
     expenseRatioForecastState,
@@ -797,6 +878,7 @@ export function useCostAnalysis() {
     fetchExpenseRatioData,
     fetchComprehensiveCostData,
     fetchVariableCostData,
+    fetchVariableCostKpiData,
     fetchEarnedPremiumData,
     fetchNewEarnedPremiumData,
     fetchExpenseRatioForecastData,

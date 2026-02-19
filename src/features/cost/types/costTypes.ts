@@ -197,6 +197,26 @@ export interface VariableCostData {
 }
 
 /**
+ * 变动成本率 KPI 下钻层级
+ */
+export type VariableCostKpiDrillLevel = 'branch' | 'org';
+
+/**
+ * 变动成本率 KPI 聚合数据
+ */
+export interface VariableCostKpiData {
+  key: string;
+  policy_count: number;
+  total_premium: number;
+  earned_premium: number;
+  total_reported_claims: number;
+  total_fee: number;
+  earned_claim_ratio: number | null;
+  expense_ratio: number | null;
+  variable_cost_ratio: number | null;
+}
+
+/**
  * 已赚保费明细数据行（按三级机构×险类×保单年月）
  */
 export interface EarnedPremiumData {

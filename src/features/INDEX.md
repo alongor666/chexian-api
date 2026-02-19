@@ -217,6 +217,7 @@ widgets/table/VirtualTable.tsx
 - **`cost/components/CostAnalysisControlPanel.tsx`**: 控制面板（子Tab切换/维度选择/截止日期/月末选择器）
 - **`cost/components/ClaimRatioTable.tsx`**: 赔付率分析表格（VirtualTable渲染10列数据）
 - **`cost/components/EarnedPremiumTable.tsx`**: 已赚保费分析表格（公式展示区+汇总表+明细表，2026-01-17新增）
+- **`cost/components/VariableCostKpiBoard.tsx`**: 变动成本率KPI看板（分公司整体→点击下钻三级机构，固定机构口径）
 - **`cost/utils/transformData.ts`**: 数据转换工具（各类成本数据格式化显示）
 
 ### Settings 模块（设置菜单）
@@ -236,3 +237,4 @@ widgets/table/VirtualTable.tsx
 ### 变更记录
 
 - **`dashboard/RenewalAnalysisPanel.tsx`**: 续保明细表格支持按年份与月份切换，并更新为月日/当日/当月/当年续保字段展示
+- **`cost/components/VariableCostKpiBoard.tsx`**: 新增变动成本率KPI下钻看板（8项指标，支持分公司整体与三级机构切换）
