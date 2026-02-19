@@ -13,6 +13,7 @@
  */
 
 import { logger } from '../utils/logger.js';
+import { escapeSqlValue } from '../utils/security.js';
 
 /**
  * 支持的下钻维度
@@ -68,7 +69,8 @@ const BOOLEAN_DIM_MAP: Record<string, { field: string; trueLabel: string; falseL
  * 将下钻路径中的一步转为 WHERE 条件
  */
 function drillStepToWhere(step: DrilldownStep, colPrefix: string): string {
-  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "''");
+  // 使用统一的 SQL 转义工具函数（AUDIT-005 修复）
+  const esc = escapeSqlValue;
 
   // 布尔维度：中文显示值 → boolean
   const boolDef = BOOLEAN_DIM_MAP[step.dimension];

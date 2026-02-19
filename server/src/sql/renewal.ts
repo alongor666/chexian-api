@@ -70,9 +70,10 @@ function buildWhereClauseForRenewal(filters: AdvancedFilterState): string {
  * 获取时间维度表达式
  * @param timeView - 时间视图类型
  * @param targetYear - 目标年份（计算 N 年续保率）
+ * @param cutoffDate - 统计截止日期（AUDIT-003: 参数化，默认 CURRENT_DATE，便于测试和回溯分析）
  * @returns 时间维度SQL表达式
  */
-function getTimeDimension(timeView: TimeView, targetYear: number): {
+function getTimeDimension(timeView: TimeView, targetYear: number, cutoffDate?: string): {
   expiringWhere: string;
   renewalWhere: string;
   groupBy?: string;
@@ -80,9 +81,14 @@ function getTimeDimension(timeView: TimeView, targetYear: number): {
 } {
   const expiringYear = targetYear - 1; // 应续保单：上一年起保
 
-  // 核心修复：只统计已到期的保单（到期日 <= 当前日期）
+  // 核心修复：只统计已到期的保单（到期日 <= 截止日期）
   // 到期日 = 起保日期 + 1年 - 1天
-  const expiredCondition = `DATE_ADD(CAST(insurance_start_date AS DATE), INTERVAL '1 year') - INTERVAL '1 day' <= CURRENT_DATE`;
+  // AUDIT-003: cutoffDate 参数化，支持测试与历史回溯
+  if (cutoffDate && !/^\d{4}-\d{2}-\d{2}$/.test(cutoffDate)) {
+    throw new Error(`Invalid cutoffDate format: ${cutoffDate}, expected YYYY-MM-DD`);
+  }
+  const cutoffExpr = cutoffDate ? `DATE '${cutoffDate}'` : 'CURRENT_DATE';
+  const expiredCondition = `DATE_ADD(CAST(insurance_start_date AS DATE), INTERVAL '1 year') - INTERVAL '1 day' <= ${cutoffExpr}`;
 
   switch (timeView) {
     case 'yearly':
@@ -118,14 +124,16 @@ function getTimeDimension(timeView: TimeView, targetYear: number): {
  * 生成续保率KPI查询（年度汇总）
  * @param filters - 筛选条件
  * @param targetYear - 目标年份（如 2026 表示统计 2026 年续保率）
+ * @param cutoffDate - 统计截止日期（可选，默认 CURRENT_DATE）
  * @returns SQL 查询字符串
  */
 export function generateRenewalRateQuery(
   filters: AdvancedFilterState,
-  targetYear: number
+  targetYear: number,
+  cutoffDate?: string
 ): string {
   const whereClause = buildWhereClauseForRenewal(filters);  // ✅ 使用排除日期的筛选
-  const { expiringWhere } = getTimeDimension('yearly', targetYear);
+  const { expiringWhere } = getTimeDimension('yearly', targetYear, cutoffDate);
 
   return `
     -- 应续保单：${targetYear - 1}年起保的保单
@@ -168,17 +176,20 @@ export function generateRenewalRateQuery(
  * @param filters - 筛选条件
  * @param targetYear - 目标年份
  * @param timeView - 时间视图（yearly/monthly/daily）
+ * @param cutoffDate - 统计截止日期（可选，默认 CURRENT_DATE）
  * @returns SQL 查询字符串
  */
 export function generateRenewalTrendQuery(
   filters: AdvancedFilterState,
   targetYear: number,
-  timeView: TimeView = 'monthly'
+  timeView: TimeView = 'monthly',
+  cutoffDate?: string
 ): string {
   const whereClause = buildWhereClauseForRenewal(filters);
   const { expiringWhere, groupBy, orderBy } = getTimeDimension(
     timeView,
-    targetYear
+    targetYear,
+    cutoffDate
   );
 
   if (!groupBy) {
@@ -222,15 +233,17 @@ export function generateRenewalTrendQuery(
  * @param filters - 筛选条件
  * @param targetYear - 目标年份
  * @param dimension - 维度（salesman/org）
+ * @param cutoffDate - 统计截止日期（可选，默认 CURRENT_DATE）
  * @returns SQL 查询字符串
  */
 export function generateRenewalRankingQuery(
   filters: AdvancedFilterState,
   targetYear: number,
-  dimension: 'salesman' | 'org' = 'salesman'
+  dimension: 'salesman' | 'org' = 'salesman',
+  cutoffDate?: string
 ): string {
   const whereClause = buildWhereClauseForRenewal(filters);
-  const { expiringWhere } = getTimeDimension('yearly', targetYear);
+  const { expiringWhere } = getTimeDimension('yearly', targetYear, cutoffDate);
 
   const groupByField = dimension === 'salesman' ? 'salesman_name' : 'org_level_3';
   const additionalField = dimension === 'salesman' ? 'org_level_3' : 'NULL AS salesman_name';
@@ -273,15 +286,17 @@ export function generateRenewalRankingQuery(
  * @param filters - 筛选条件
  * @param targetYear - 目标年份
  * @param renewalStatus - 续保状态筛选（'all'/'renewed'/'not_renewed'）
+ * @param cutoffDate - 统计截止日期（可选，默认 CURRENT_DATE）
  * @returns SQL 查询字符串
  */
 export function generateRenewalDetailQuery(
   filters: AdvancedFilterState,
   targetYear: number,
-  renewalStatus: 'all' | 'renewed' | 'not_renewed' = 'all'
+  renewalStatus: 'all' | 'renewed' | 'not_renewed' = 'all',
+  cutoffDate?: string
 ): string {
   const whereClause = buildWhereClauseForRenewal(filters);
-  const { expiringWhere } = getTimeDimension('yearly', targetYear);
+  const { expiringWhere } = getTimeDimension('yearly', targetYear, cutoffDate);
 
   let statusFilter = '';
   if (renewalStatus === 'renewed') {
