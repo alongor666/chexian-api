@@ -11,12 +11,12 @@
  * @module perspective-adapter
  */
 
-import type { ViewPerspective } from '../types';
+import type { ViewPerspective } from '../types/index.js';
 import {
   generateAggregation,
   generateWhereClause,
   getPerspectiveConfig,
-} from '../types';
+} from '../types/index.js';
 
 /**
  * 生成视角SELECT子句
