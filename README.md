@@ -1,61 +1,72 @@
 # 车险数据分析平台（chexian-api）
 
-**版本**: v2.6  
-**最后更新**: 2026-02-19
+**版本**: v2.7  
+**最后更新**: 2026-02-20
 
-> 车险经营分析平台（API 版）。采用**纯 API 架构**：前端通过 REST API 访问后端 DuckDB（Node.js），不再支持 DuckDB-WASM / Local 模式。
+> 车险经营分析平台（纯 API 架构）。前端通过 REST API 访问后端 DuckDB，不再包含 DuckDB-WASM / Local 模式分支。
+
+## 最近变更（基于近期 Git 提交）
+
+- **2026-02-20**: 新增企微扫码混合登录（用户名密码 + WeCom OAuth 回调）
+  - 后端新增 `server/src/routes/wecom-auth.ts`、`server/src/services/wecom.ts`
+  - 前端登录页新增企微扫码入口与 `wecom_token` 回调处理
+- **2026-02-19**: 修复成本分析 API 与前端类型对齐问题
+  - `server/src/routes/query.ts` 成本相关接口修复
+  - `src/features/cost/` 新增/增强 `VariableCostKpiBoard`、类型与 Hook
+- **2026-02-18**: 保费达成下钻功能上线
+  - 新增 `GET /api/query/premium-plan`
+  - `premium-report` 模块新增 Tab 切换与下钻分析
+- **2026-02-19 ~ 2026-02-20**: 增补 E2E 验证产物与部署脚本增强（健康检查、VPS 发布流程）
 
 ## 项目概览
 
-- **前端**：React 19 + TypeScript + Vite
-- **后端**：Express + `@duckdb/node-api`
-- **数据格式**：Parquet（后端加载、查询）
-- **安全能力**：JWT 认证、权限控制、限流、审计日志
-- **部署状态**：已上线 `https://chexian.cretvalu.com`
+- 前端：React 19 + TypeScript + Vite（HashRouter）
+- 后端：Express + `@duckdb/node-api`
+- 数据：Parquet（后端自动加载最新文件并创建 `PolicyFact` 视图）
+- 安全：JWT 认证、行级权限过滤、限流、审计日志
+- 部署：`https://chexian.cretvalu.com`
 
-## 当前架构（最新）
-
-本项目为前后端分离的 API-only 架构：
+## 当前架构
 
 ```text
 Browser (React)
-   └─ /api/* 请求（Bearer Token）
-         └─ Node.js/Express (server/src/app.ts)
-               ├─ /api/auth     认证
-               ├─ /api/data     文件与数据加载
-               ├─ /api/query    业务查询
-               ├─ /api/filters  筛选选项
-               └─ /api/ai       NL2SQL
-                     └─ DuckDB 查询 Parquet
+  └─ /api/* (Bearer Token)
+      └─ Node.js/Express (server/src/app.ts)
+          ├─ /api/auth          用户名密码登录 + Token 刷新
+          ├─ /api/auth/wecom    企微 OAuth 配置与回调
+          ├─ /api/data          文件上传/加载/下载/元信息
+          ├─ /api/query         业务分析查询（SQL 生成器）
+          ├─ /api/filters       筛选器选项
+          └─ /api/ai            NL2SQL 与 API Key 验证
+                └─ DuckDB 查询 Parquet
 ```
 
-### 关键约束
+关键约束：
 
-- 数据源固定为 API（`DataContext` 中 `dataSource='api'`）。
-- 所有 `/api/*` 路由必须经过认证中间件。
-- SQL 由 `server/src/sql/*.ts` 统一生成，不在前端拼接 SQL。
+- 前端 `DataContext` 固定 `dataSource='api'`
+- 业务查询统一走 `server/src/sql/*.ts`，前端不拼接 SQL
+- 查询与筛选接口统一经过认证和权限注入（行级可见范围）
 
-## 目录结构
+## 目录结构（当前）
 
 ```text
 chexian-api/
-├── src/                    # 前端应用
-│   ├── app/                # 应用入口（main.tsx / App.tsx）
-│   ├── features/           # 业务模块
-│   ├── widgets/            # 通用组件
-│   ├── components/         # 页面与布局组件
-│   └── shared/             # API/Context/样式/工具/类型
-├── server/                 # 后端 API
-│   ├── src/app.ts          # 后端入口
-│   ├── src/routes/         # 路由层
-│   ├── src/services/       # 服务层（DuckDB/Auth/Permission）
-│   ├── src/sql/            # SQL 生成器
-│   ├── src/normalize/      # 字段映射与校验
-│   └── data/               # Parquet 文件目录
-├── tests/                  # Vitest 测试
-├── scripts/                # 启动/治理/计划管理脚本
-├── 开发文档/               # 项目文档与索引
-└── 数据管理/               # 数据管道与知识库
+├── src/                      # 前端应用
+│   ├── app/                  # 应用入口与路由
+│   ├── features/             # 业务功能（dashboard/cost/growth/premium-report/...）
+│   ├── widgets/              # 通用图表/表格/KPI 组件
+│   └── shared/               # API/Context/样式/工具/类型
+├── server/                   # 后端 API
+│   ├── src/app.ts            # 服务入口
+│   ├── src/routes/           # auth/wecom-auth/query/data/filters/ai
+│   ├── src/services/         # duckdb/auth/wecom/permission
+│   ├── src/sql/              # 各分析模块 SQL 生成器
+│   └── data/                 # Parquet 文件目录
+├── tests/                    # Vitest 测试
+├── scripts/                  # 启动、治理、计划管理脚本
+├── deploy/                   # VPS 部署与数据同步脚本
+├── 开发文档/                 # 索引、规范、治理文档
+└── 数据管理/                 # 数据知识库与数据管道
 ```
 
 ## 快速开始
@@ -63,8 +74,8 @@ chexian-api/
 ### 1) 环境要求
 
 - Node.js 18+
-- Bun（项目统一执行器）
-- Python 3.8+（仅用于数据管道）
+- Bun（默认执行器）
+- Python 3.8+（仅数据管道脚本需要）
 
 ### 2) 安装依赖
 
@@ -73,67 +84,112 @@ bun install
 cd server && bun install && cd ..
 ```
 
-### 3) 准备数据
+### 3) 环境变量
 
-将 `.parquet` 文件放入 `server/data/`。
+前端（可选）：`.env.local`
 
-### 4) 启动项目（推荐）
+```env
+VITE_API_BASE=http://localhost:3000/api
+```
+
+后端：`server/.env`（可从 `server/.env.example` 复制）
+
+```env
+PORT=3000
+JWT_SECRET=your-secret-key-change-in-production
+CORS_ORIGIN=http://localhost:5173
+```
+
+企微扫码登录需要额外配置：
+
+```env
+WECOM_CORP_ID=...
+WECOM_AGENT_ID=...
+WECOM_SECRET=...
+WECOM_ADMIN_USERIDS=userA,userB
+```
+
+### 4) 准备数据
+
+将 `.parquet` 文件放入 `server/data/`，或使用部署脚本同步到 VPS。
+
+### 5) 启动（推荐）
 
 ```bash
 bun run dev:full
 ```
 
-> `dev:full` 会先清理常见占用端口（3000, 5173-5176），再启动后端与前端。
+说明：
 
-### 5) 访问系统
+- 自动清理端口 `3000, 5173-5176`
+- 同时启动后端与前端
+
+### 6) 访问
 
 - 前端：`http://localhost:5173`
-- 后端：`http://localhost:3000`
+- 后端健康检查：`http://localhost:3000/health`
 
-默认管理员账号：`admin / admin123`
+登录方式：
+
+- 用户名密码登录（账号配置在 `server/src/services/auth.ts`）
+- 企微扫码登录（启用 WeCom 环境变量后可用）
 
 ## 常用命令
 
 ```bash
 bun run dev            # 仅前端
 bun run dev:full       # 前后端联动启动（推荐）
-bun run build          # 生产构建
+bun run start:server   # 仅后端（通过 scripts/start.mjs）
+bun run build          # 前端生产构建
 bun run preview        # 预览构建产物
-bun run test           # Vitest 测试
+bun run test           # Vitest
 bun run test:coverage  # 覆盖率
-bun run governance     # 治理校验
-bun run plans:manage   # plans 状态管理
+bun run governance     # 治理检查
+bun run plans:manage   # plans 快照管理
 ```
 
-## 核心 API（节选）
+## API 总览（当前实现）
 
-| 路径 | 方法 | 说明 |
-|---|---|---|
-| `/api/auth/login` | POST | 登录获取 JWT |
-| `/api/data/files` | GET | 获取可用数据文件 |
-| `/api/data/load/:filename` | POST | 加载指定 Parquet |
-| `/api/query/kpi` | GET | KPI 汇总 |
-| `/api/query/trend` | GET | 趋势分析 |
-| `/api/query/cost` | GET | 成本分析 |
-| `/api/query/renewal` | GET | 续保分析 |
-| `/api/query/renewal-drilldown` | GET | 续保下钻 |
-| `/api/query/cross-sell` | GET | 交叉销售分析 |
-| `/api/query/cross-sell-summary` | GET | 交叉销售汇总 |
-| `/api/query/marketing-report` | GET | 营销战报 |
-| `/api/ai/nl2sql` | POST | 自然语言转 SQL |
-| `/api/filters/options` | GET | 筛选器选项 |
+认证：
 
-## 文档入口（建议先读）
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `GET /api/auth/wecom/config`
+- `GET /api/auth/wecom/callback`
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md)
-- [CLAUDE.md](./CLAUDE.md)
-- [开发文档/TECH_STACK.md](./开发文档/TECH_STACK.md)
-- [开发文档/DEVELOPER_CONVENTIONS.md](./开发文档/DEVELOPER_CONVENTIONS.md)
-- [开发文档/00_index/DOC_INDEX.md](./开发文档/00_index/DOC_INDEX.md)
-- [开发文档/00_index/CODE_INDEX.md](./开发文档/00_index/CODE_INDEX.md)
-- [开发文档/00_index/DATA_INDEX.md](./开发文档/00_index/DATA_INDEX.md)
-- [BACKLOG.md](./BACKLOG.md)
-- [PROGRESS.md](./PROGRESS.md)
+数据管理：
+
+- `POST /api/data/upload`
+- `GET /api/data/files`
+- `POST /api/data/load/:filename`
+- `GET /api/data/metadata`
+- `GET /api/data/download/:filename`
+- `DELETE /api/data/clear`
+
+分析查询：
+
+- `GET /api/query/kpi`
+- `GET /api/query/kpi-detail`
+- `GET /api/query/trend`
+- `GET /api/query/truck`
+- `GET /api/query/growth`
+- `GET /api/query/coefficient`
+- `GET /api/query/cost`
+- `GET /api/query/renewal`
+- `GET /api/query/renewal-drilldown`
+- `GET /api/query/cross-sell`
+- `GET /api/query/cross-sell-summary`
+- `GET /api/query/salesman-ranking`
+- `GET /api/query/marketing-report`
+- `GET /api/query/premium-report`
+- `GET /api/query/premium-plan`
+- `POST /api/query/custom`
+
+筛选与 AI：
+
+- `GET /api/filters/options`
+- `POST /api/ai/nl2sql`
+- `POST /api/ai/validate-key`
 
 ## 生产部署与数据同步
 
@@ -144,22 +200,30 @@ bun run plans:manage   # plans 状态管理
 ./deploy/sync-data.sh <文件名.parquet>  # 同步指定文件
 ```
 
-更多说明：
+更多部署说明：
 
-- [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
-- [vps.md](./vps.md)
-- [deploy/sync-data.sh](./deploy/sync-data.sh)
+- `DEPLOYMENT_GUIDE.md`
+- `vps.md`
+- `deploy/vps-deploy.sh`
+- `deploy/sync-data.sh`
 
 ## 故障排查（API 模式）
 
-仪表盘出现“暂无数据”时按顺序检查：
+出现“暂无数据”时按顺序检查：
 
-1. 是否已登录（`auth_token` 是否存在）
-2. 后端是否运行在 3000 端口
-3. 后端是否有已加载的数据文件
-4. 浏览器 Network 中 `/api/*` 是否返回 200
-5. `isDataLoaded` 是否为 `true`
+1. 已登录且本地存在有效 `auth_token`
+2. 后端运行在 `3000` 端口
+3. 后端存在已加载数据（`/api/data/files` 有 `isCurrent=true`）
+4. 浏览器 Network 中 `/api/*` 返回 200
+5. 前端 `isDataLoaded === true`
 
-## 许可证
+## 文档入口
 
-[MIT](./LICENSE)
+- `ARCHITECTURE.md`
+- `开发文档/TECH_STACK.md`
+- `开发文档/DEVELOPER_CONVENTIONS.md`
+- `开发文档/00_index/DOC_INDEX.md`
+- `开发文档/00_index/CODE_INDEX.md`
+- `开发文档/00_index/DATA_INDEX.md`
+- `BACKLOG.md`
+- `PROGRESS.md`
