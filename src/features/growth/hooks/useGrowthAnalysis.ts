@@ -146,6 +146,13 @@ export function useGrowthAnalysis() {
         previous_value: Number(item.previous_value ?? item.previous_premium ?? 0),
         growth_rate: item.growth_rate !== undefined ? Number(item.growth_rate) : null,
         time_period: String(item.time_period ?? item.period ?? ''),
+        // 传递 MTD/YTD 上下文字段（由 daily-context 查询返回）
+        period_total_current: item.period_total_current !== undefined ? Number(item.period_total_current) : undefined,
+        period_total_previous: item.period_total_previous !== undefined ? Number(item.period_total_previous) : undefined,
+        period_growth_rate: item.period_growth_rate !== undefined ? Number(item.period_growth_rate) : undefined,
+        ytd_total_current: item.ytd_total_current !== undefined ? Number(item.ytd_total_current) : undefined,
+        ytd_total_previous: item.ytd_total_previous !== undefined ? Number(item.ytd_total_previous) : undefined,
+        ytd_growth_rate: item.ytd_growth_rate !== undefined ? Number(item.ytd_growth_rate) : undefined,
       })) : [];
 
       const summary = calculateSummary(data);
@@ -169,9 +176,9 @@ export function useGrowthAnalysis() {
         error: errorMessage,
       }));
 
-      return { success: false, error: errorMessage, data: [], summary: state.summary };
+      return { success: false, error: errorMessage, data: [], summary: { avgGrowthRate: 0, positiveGrowthPeriods: 0, totalPeriods: 0, maxGrowthRate: 0, minGrowthRate: 0 } };
     }
-  }, [calculateSummary, state.summary]);
+  }, [calculateSummary]);
 
   /**
    * 执行增长率分析（通用入口，保持接口兼容）
@@ -204,10 +211,10 @@ export function useGrowthAnalysis() {
         success: false,
         error: errorMessage,
         data: [],
-        summary: state.summary,
+        summary: { avgGrowthRate: 0, positiveGrowthPeriods: 0, totalPeriods: 0, maxGrowthRate: 0, minGrowthRate: 0 },
       };
     }
-  }, [fetchGrowthFromApi, state.summary]);
+  }, [fetchGrowthFromApi]);
 
   /**
    * 分析机构保费增长率
@@ -343,6 +350,9 @@ export function useGrowthAnalysis() {
 
     const apiFilters: Record<string, any> = {
       ...filters.additionalFilterParams,
+      // 请求 daily-context 类型，后端将返回带 MTD/YTD 上下文的日度数据
+      type: 'daily-context',
+      growthType: 'custom',
     };
     if (filters.orgLevel3 && filters.orgLevel3.length > 0) {
       apiFilters.orgNames = filters.orgLevel3.join(',');

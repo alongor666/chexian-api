@@ -18,7 +18,7 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
   // 查找截止日期当天的数据
   const todayData = useMemo(() => {
     if (!data || data.length === 0) return null;
-    
+
     // 尝试匹配截止日期
     const match = data.find(item => {
       if (!item.time_period) return false;
@@ -45,7 +45,7 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
 
     // 如果没找到匹配日期的，且数据量不大，默认取最后一条有效数据作为兜底
     if (!match && data.length > 0) {
-       return data[data.length - 1];
+      return data[data.length - 1];
     }
     return match;
   }, [data, cutoffDate]);
@@ -63,7 +63,7 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
     // 中国股市：红涨绿跌。欧美：绿涨红跌。
     // 项目中其他地方用了 '#28a745' (Green) for > 0. 遵循项目惯例。
     const projectColorClass = isPositive ? 'text-green-600' : isZero ? 'text-gray-500' : 'text-red-500';
-    
+
     return (
       <span className={`font-bold ml-1 ${projectColorClass}`}>
         {isPositive ? '↑' : isZero ? '-' : '↓'} {Math.abs(value * 100).toFixed(1)}%
@@ -71,12 +71,22 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
     );
   };
 
+  // 格式化日期：2025-01-08 -> 2025年01月08日
+  const formattedDate = useMemo(() => {
+    if (!cutoffDate) return '今日';
+    const parts = cutoffDate.split('-');
+    if (parts.length === 3) {
+      return `${parts[0]}年${parts[1]}月${parts[2]}日`;
+    }
+    return cutoffDate;
+  }, [cutoffDate]);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       {/* 1. 今日战况 (Daily) */}
       <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 flex flex-col justify-between">
         <div>
-          <div className="text-gray-500 text-sm font-medium mb-1">今日战况 (Daily)</div>
+          <div className="text-gray-500 text-sm font-medium mb-1">{formattedDate}战况 (Daily)</div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold text-gray-900">{valueFormatter(todayData.current_value)}</span>
             <span className="text-sm text-gray-500">{unitLabel}</span>
@@ -102,23 +112,23 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
             <span className="text-sm text-gray-500">{unitLabel}</span>
           </div>
         </div>
-        
+
         <div className="mt-3">
           {/* 进度条模拟：以前一年同期为基准，或者简单显示占比 */}
           <div className="flex justify-between text-xs mb-1">
-             <span className="text-gray-500">当月累计增速</span>
-             <TrendIndicator value={todayData.period_growth_rate} />
+            <span className="text-gray-500">当月累计增速</span>
+            <TrendIndicator value={todayData.period_growth_rate} />
           </div>
           <div className="w-full bg-gray-100 rounded-full h-1.5">
             {/* 这里的进度条如果没目标，就没法画准确百分比。
                 暂且用 (今年/去年) 的比例来示意，最大100%，超过变色 */}
-            <div 
+            <div
               className={`h-1.5 rounded-full ${todayData.period_total_current && todayData.period_total_previous && todayData.period_total_current >= todayData.period_total_previous ? 'bg-green-500' : 'bg-blue-500'}`}
               style={{ width: `${Math.min(100, ((todayData.period_total_current || 0) / (todayData.period_total_previous || 1)) * 100)}%` }}
             ></div>
           </div>
           <div className="flex justify-between items-center text-sm mt-2 pt-1 border-t border-gray-50">
-             <div className="text-gray-400">上年同期: {valueFormatter(todayData.period_total_previous)}</div>
+            <div className="text-gray-400">上年同期: {valueFormatter(todayData.period_total_previous)}</div>
           </div>
         </div>
       </div>
@@ -133,17 +143,17 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
           </div>
         </div>
         <div className="mt-3 pt-3 border-t border-gray-50">
-           <div className="flex justify-between items-center mb-1">
-              <span className="text-gray-400 text-sm">同比增速</span>
-              <TrendIndicator value={todayData.ytd_growth_rate} />
-           </div>
-           <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-400">规模缺口</span>
-              <span className={`font-medium ${(todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {(todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0) >= 0 ? '+' : ''}
-                {valueFormatter((todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0))}
-              </span>
-           </div>
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-gray-400 text-sm">同比增速</span>
+            <TrendIndicator value={todayData.ytd_growth_rate} />
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-400">规模缺口</span>
+            <span className={`font-medium ${(todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {(todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0) >= 0 ? '+' : ''}
+              {valueFormatter((todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0))}
+            </span>
+          </div>
         </div>
       </div>
     </div>

@@ -30,7 +30,7 @@ import { generateKpiDetailQuery } from '../sql/kpi-detail.js';
 import { generatePremiumTrendQuery, TimeView } from '../sql/trend.js';
 // Phase 2 SQL Generators
 import { generateTonnageRoseQuery, generateOrgByTonnageQuery, generateTonnageByOrgQuery } from '../sql/truck.js';
-import { generateGrowthQuery, GrowthConfig, GrowthType, TimeView as GrowthTimeView } from '../sql/growth.js';
+import { generateGrowthQuery, generateDailyGrowthWithContextQuery, GrowthConfig, GrowthType, TimeView as GrowthTimeView } from '../sql/growth.js';
 import { generateCoefficientByOrgQuery, generateFullCoefficientQuery } from '../sql/coefficient.js';
 import {
   generateClaimRatioQuery,
@@ -298,6 +298,7 @@ const growthExtraSchema = z.object({
   baselineStart: z.string().optional(),
   baselineEnd: z.string().optional(),
   referenceYear: z.coerce.number().optional(),
+  type: z.string().optional(),
 });
 
 /**
@@ -311,7 +312,7 @@ router.get(
     if (!growthResult.success) {
       throw new AppError(400, growthResult.error.issues[0].message);
     }
-    const { growthType, timeView, baselineStart, baselineEnd, referenceYear } = growthResult.data;
+    const { growthType, timeView, baselineStart, baselineEnd, referenceYear, type: queryType } = growthResult.data;
 
     const filterResult = commonFilterSchema.safeParse(req.query);
     if (!filterResult.success) {
@@ -319,6 +320,43 @@ router.get(
     }
 
     const { startDate, endDate } = filterResult.data;
+
+    // daily-context 类型：使用带月度/年度上下文的日度增长查询
+    // 返回每日 current/previous 值 + period_total + ytd_total + 各级增长率
+    if (queryType === 'daily-context' && startDate && endDate && baselineStart && baselineEnd) {
+      if (!isValidDateFormat(baselineStart) || !isValidDateFormat(baselineEnd)) {
+        throw new AppError(400, 'Invalid baseline date format. Expected YYYY-MM-DD');
+      }
+
+      // daily-context 不把日期放进 WHERE（由 SQL 的 currentPeriod/baselinePeriod 控制）
+      const filterParamsNoDates = { ...filterResult.data, startDate: undefined, endDate: undefined };
+      const finalWhereClause = buildWhereFromFilterParams(
+        filterParamsNoDates,
+        req.permissionFilter || '1=1'
+      );
+
+      // 获取视角指标
+      const perspective = (req.query as any).perspective as string | undefined;
+      const metric = perspective === 'count' ? 'COUNT(*)' : 'SUM(premium)';
+
+      const config: GrowthConfig = {
+        growthType: 'custom' as GrowthType,
+        timeView: 'daily' as GrowthTimeView,
+        whereClause: finalWhereClause,
+        currentPeriod: { startDate, endDate },
+        baselinePeriod: { startDate: baselineStart, endDate: baselineEnd },
+        metric,
+      };
+
+      const sql = generateDailyGrowthWithContextQuery(config);
+      const result = await duckdbService.query(sql);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+      return;
+    }
 
     // custom 增长类型：日期由 currentPeriod/baselinePeriod 分别控制，
     // whereClause 中不能包含日期条件，否则会与 baselinePeriod 的日期范围冲突导致基期数据为 0

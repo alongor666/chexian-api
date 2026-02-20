@@ -282,6 +282,13 @@ class ApiClient {
   }
 
   /**
+   * 获取企微登录配置
+   */
+  async getWeComConfig(): Promise<{ corpId: string; agentId: string; callbackUrl: string }> {
+    return this.request('/auth/wecom/config');
+  }
+
+  /**
    * 登出
    */
   logout(): void {
@@ -658,9 +665,12 @@ class ApiClient {
    */
   async getFilterOptions(): Promise<{
     orgs: string[];
+    visibleOrganizations?: string[];
     salesmen: string[];
+    salesmenWithOrg?: { salesman_name: string; org_level_3: string }[];
     customerCategories: string[];
     coverageCombinations: string[];
+    dateRange?: { min_date: string | null; max_date: string | null };
     insuranceGrades: Array<{ value: string; count: number }>;
     smallTruckScores: Array<{ value: string; count: number }>;
     largeTruckScores: Array<{ value: string; count: number }>;

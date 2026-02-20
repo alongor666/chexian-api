@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { Lock, User, Eye, EyeOff, AlertCircle, Shield, Building } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, AlertCircle, Shield, Building, QrCode } from 'lucide-react';
+import { apiClient } from '../../shared/api/client';
 
 /**
  * 内网登录页面
@@ -23,27 +24,80 @@ export const LoginPage: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isWeComLoading, setIsWeComLoading] = useState(false);
 
   // 获取重定向目标
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
+  const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
+  const from = rawFrom === '/login' ? '/' : rawFrom;
 
   // 如果已登录，直接跳转
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated) {
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate, from]);
 
+  // 处理企微登录回调
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const wecomToken = params.get('wecom_token');
+    const wecomError = params.get('error');
+
+    if (wecomError) {
+      const errorMap: Record<string, string> = {
+        'missing_wecom_code': '企微授权失败，请重试',
+        'wecom_not_enterprise_user': '非法用户或非企业微信成员',
+        'wecom_auth_denied': '您不在权限白名单/通讯录中，请联系业务管理员',
+        'wecom_auth_failed': '企微登录异常，请稍后重试',
+      };
+      setError(errorMap[wecomError] || '企微登录失败');
+      // 清除 URL 中的错误参数
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (wecomToken) {
+      // @ts-ignore loginWithWecomToken is added in next step
+      usePermission().loginWithWecomToken?.(wecomToken).then((success: boolean) => {
+        if (!success) setError('企微令牌无效或已过期');
+      });
+      // 清除 URL 中的 token
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const handleWeComLogin = useCallback(async () => {
+    setIsWeComLoading(true);
+    setError('');
+    try {
+      const config = await apiClient.getWeComConfig();
+      if (config) {
+        const { corpId, agentId, callbackUrl } = config;
+        // Generate State
+        const state = Math.random().toString(36).substring(7);
+        // 跳转到企微扫码授权页面
+        const qrUrl = `https://open.work.weixin.qq.com/wwopen/sso/qrConnect?appid=${corpId}&agentid=${agentId}&redirect_uri=${encodeURIComponent(callbackUrl)}&state=${state}`;
+        window.location.href = qrUrl;
+      } else {
+        setError('获取企微配置失败');
+        setIsWeComLoading(false);
+      }
+    } catch (err) {
+      setError('无法连接到服务器');
+      setIsWeComLoading(false);
+    }
+  }, []);
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!username.trim()) {
+    const normalizedUsername = username.normalize('NFKC').trim();
+    const normalizedPassword = password.normalize('NFKC');
+
+    if (!normalizedUsername) {
       setError('请输入用户名');
       return;
     }
 
-    if (!password.trim()) {
+    if (!normalizedPassword.trim()) {
       setError('请输入密码');
       return;
     }
@@ -51,7 +105,7 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const success = await loginWithPassword(username.trim(), password, rememberMe);
+      const success = await loginWithPassword(normalizedUsername, normalizedPassword, rememberMe);
       if (success) {
         navigate(from, { replace: true });
       } else {
@@ -167,6 +221,35 @@ export const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
+
+          {/* 企微扫码登录分割线 */}
+          <div className="mt-6 flex items-center justify-center space-x-4">
+            <span className="h-px w-full bg-gray-200"></span>
+            <span className="text-sm text-gray-400 whitespace-nowrap">或</span>
+            <span className="h-px w-full bg-gray-200"></span>
+          </div>
+
+          {/* 企微扫码登录按钮 */}
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={handleWeComLogin}
+              disabled={isWeComLoading}
+              className="w-full flex items-center justify-center py-3 px-4 bg-white border border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 text-gray-700 font-medium rounded-lg transition-colors shadow-sm"
+            >
+              {isWeComLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-400 border-t-transparent mr-2" />
+                  跳转中...
+                </>
+              ) : (
+                <>
+                  <QrCode size={20} className="mr-2 text-green-600" />
+                  企微扫码登录
+                </>
+              )}
+            </button>
+          </div>
 
           {/* 帮助信息 */}
           <div className="mt-6 pt-6 border-t border-gray-200">

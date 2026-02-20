@@ -1,6 +1,6 @@
 # 腾讯云轻量云服务器 (VPS) 指南
 
-> 阿龙的 VPS 全貌，供 Claude Code 在各项目中安全使用。最后更新: 2026-02-15
+> 阿龙的 VPS 全貌，供 Claude Code 在各项目中安全使用。最后更新: 2026-02-20
 
 ---
 
@@ -319,7 +319,7 @@ ss -tlnp                         # 查看监听端口
 
 ## 车险数据分析平台部署状态
 
-**部署时间**: 2026-02-14 | **最后更新**: 2026-02-15
+**部署时间**: 2026-02-14 | **最后更新**: 2026-02-20
 **项目目录**: `/var/www/chexian/`
 **访问地址**: `https://chexian.cretvalu.com`
 **后端端口**: 3000 (监听 `0.0.0.0`，安全组已阻止外网直连)
@@ -342,7 +342,8 @@ ss -tlnp                         # 查看监听端口
 | `172.16.0.0/12` | 内网 B 类 |
 | `192.168.0.0/16` | 内网 C 类 |
 | `127.0.0.0/8` | VPS 本地健康检查 |
-| `67.209.184.33` | alongor Mac 公网 IP |
+| `67.209.184.33` | alongor Mac 公网 IP (旧) |
+| `67.209.176.118` | alongor Mac 公网 IP (当前 2026-02-20) |
 
 **添加新用户 IP**（VPS 上执行）:
 ```bash
@@ -618,6 +619,48 @@ scp -i ~/.ssh/id_ed25519 chexian-deploy.tar.gz root@162.14.113.44:/tmp/
 ssh root@162.14.113.44 'cd /var/www/chexian && tar xzf /tmp/chexian-deploy.tar.gz && source /root/.nvm/nvm.sh && pm2 restart chexian-api'
 ```
 
+### 应急公网开放 Runbook（带自动回滚）
+
+> 使用场景：白名单外临时访问、当天演示。默认策略应回归白名单。
+
+```bash
+# 1) 从本地上传最新脚本
+scp -i ~/.ssh/id_ed25519 ./deploy/vps-deploy.sh \
+  root@162.14.113.44:/usr/local/bin/chexian-vps-deploy.sh
+
+# 2) 进入 VPS
+ssh -i ~/.ssh/id_ed25519 root@162.14.113.44
+chmod 755 /usr/local/bin/chexian-vps-deploy.sh
+
+# 3) 应急开放（示例：到 2026-02-20 23:59 自动回滚）
+bash /usr/local/bin/chexian-vps-deploy.sh \
+  --action emergency-open \
+  --until "2026-02-20 23:59" \
+  --basic-auth-user temp-access
+
+# 4) 确认自动回滚任务
+atq
+```
+
+**验证命令**：
+
+```bash
+# 开放后：预期 401（Basic Auth challenge）
+curl -I https://chexian.cretvalu.com/
+
+# 带 Basic Auth：预期 200（或前端入口正常）
+curl -u temp-access:'<临时密码>' -I https://chexian.cretvalu.com/
+
+# 到点回滚后：预期恢复 403（白名单生效）
+curl -I https://chexian.cretvalu.com/
+```
+
+**提前手动回滚**：
+
+```bash
+bash /usr/local/bin/chexian-vps-deploy.sh --action rollback-access
+```
+
 ### 部署血泪教训
 
 | 问题 | 根因 | 解决方案 |
@@ -631,4 +674,4 @@ ssh root@162.14.113.44 'cd /var/www/chexian && tar xzf /tmp/chexian-deploy.tar.g
 
 ---
 
-**最后更新**: 2026-02-15（中文文件名修复 + 安全加固 + 备份/日志轮转配置完成）
+**最后更新**: 2026-02-20（新增应急公网开放 + 自动回滚 Runbook）
