@@ -45,8 +45,8 @@ export function sanitizeFilename(filename: string): string {
   decoded = decoded.replace(/\x00/g, '');
 
   // 只允许安全字符：字母、数字、下划线、连字符、点、中文字符
-  // 禁止：路径分隔符（/ \ :）、特殊字符（< > | " ? *）、控制字符
-  const dangerousPattern = /[\/\\:<>|"?\*\x00-\x1f]/;
+  // 禁止：路径分隔符（/ \ :）、特殊字符（< > | " ' ? * ; $ ` \s）、控制字符以及全角斜杠
+  const dangerousPattern = /[\/\\:<>|"'?\*;$`\s\x00-\x1f／]/;
   if (dangerousPattern.test(decoded)) {
     throw new AppError(400, '文件名包含非法字符（路径分隔符或控制字符）');
   }

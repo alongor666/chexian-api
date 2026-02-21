@@ -42,12 +42,12 @@ export const NoDataPlaceholder: React.FC = () => {
   return (
     <div className="min-h-[400px] flex items-center justify-center">
       <div className="text-center">
-        <BarChart3 size={64} className="mx-auto mb-4 text-gray-300" aria-hidden="true" />
-        <h2 className="text-xl font-semibold text-gray-700 mb-2">暂无数据</h2>
-        <p className="text-gray-500 mb-4">请先在首页导入数据文件</p>
+        <BarChart3 size={64} className="mx-auto mb-4 text-neutral-300 dark:text-neutral-600" aria-hidden="true" />
+        <h2 className="text-xl font-semibold tracking-tight text-neutral-700 dark:text-neutral-200 mb-2">暂无数据</h2>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">请先在首页导入数据文件</p>
         <a
           href="#/"
-          className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          className="inline-flex items-center px-4 py-2 font-medium bg-primary text-white rounded-lg hover:bg-primary-light transition-colors shadow-sm"
         >
           <FolderOpen size={16} className="mr-2" aria-hidden="true" />
           去导入数据

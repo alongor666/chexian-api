@@ -266,10 +266,10 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 shadow-sm">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm">
         <div className="animate-pulse">
-          <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-24 mb-3"></div>
-          <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-32"></div>
+          <div className="h-4 bg-neutral-200 dark:bg-neutral-800 rounded w-24 mb-3"></div>
+          <div className="h-8 bg-neutral-200 dark:bg-neutral-800 rounded w-32"></div>
         </div>
       </div>
     );
@@ -278,9 +278,9 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
   // 数值类型卡片
   if (type === 'value') {
     return (
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 shadow-sm hover:shadow-md transition-shadow">
-        <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-2">{title}</div>
-        <div className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 font-kpi">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-2">{title}</div>
+        <div className="text-[28px] font-bold tracking-tight text-neutral-900 dark:text-white font-kpi leading-none mt-1">
           {formattedValue}
         </div>
       </div>
@@ -289,21 +289,21 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
 
   if (type === 'bar') {
     return (
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 shadow-sm hover:shadow-md transition-shadow">
-        <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-3">{title}</div>
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-4">{title}</div>
         <RatioBar data={normalizedRatioData} />
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 shadow-sm hover:shadow-md transition-shadow">
-      <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-3">{title}</div>
+    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm hover:shadow-md transition-shadow">
+      <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-3">{title}</div>
 
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3 mt-1">
         <div className="flex flex-col">
-          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{normalizedRatioData[1]?.label || '其他'}</div>
-          <div className="text-xl font-semibold text-neutral-700 dark:text-neutral-300 font-kpi">
+          <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1.5">{normalizedRatioData[1]?.label || '其他'}</div>
+          <div className="text-[22px] tracking-tight font-bold text-neutral-800 dark:text-neutral-200 font-kpi leading-none">
             {secondaryRate}
           </div>
         </div>

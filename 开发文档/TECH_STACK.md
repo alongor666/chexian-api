@@ -154,6 +154,19 @@ CAST(123 AS VARCHAR)               -- 返回 '123'
 | **API 接口验证** | 后端查询执行、API 响应 | Chrome DevTools 网络面板 / curl | 200 OK + 数据格式正确 |
 | **用户验收** | 前端交互、仪表盘渲染 | 人工测试 | 用户确认功能正常 |
 
+**全局样式设定（UI开发必用 - DC-003规则）**：
+**核心规定：禁止硬编码任何样式变体。必须确保你调用的色块与间距系统全部是由 `@/shared/styles/index.ts` 提供。**
+```typescript
+// ✅ 正确：导入语义属性组
+import { tableStyles, textStyles, buttonStyles, cardStyles, fontStyles, colorClasses, cn } from '@/shared/styles';
+import { Card, Badge, Button } from '@/shared/ui';
+
+// ❌ 错误：硬编码 Tailwind 样式组合（且不支持深色模式的严谨切换）
+// className="bg-white rounded-lg shadow-sm p-4 text-gray-800"
+// ❌ 错误：写入并未暴露于 tailwind theme 中的假定 CSS Class
+// className="font-kpi"
+```
+
 ### 4.3 后端 SQL 验证强制流程
 
 **步骤1：编写单元测试**
@@ -251,6 +264,7 @@ bun run test
   │
   └─ 修改 React 组件？
       ├─ ✅ 读取 src/features/INDEX.md
+      ├─ ⚠️  检查 DC-003（是否包含对颜色、模块阴影尺寸及原生类的硬编码行为？如是，替换为 `import` 集中常量方式）
       └─ ✅ 运行 `bun run dev:full` 前后端联调验证
 ```
 

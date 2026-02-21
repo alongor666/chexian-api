@@ -353,6 +353,52 @@ export interface AdvancedFilterState {
 }
 ```
 
+## 📌 第三原则：UI组件与样式强制导入规范
+
+**规则编号**: `DC-003`
+**优先级**: **P0 (CRITICAL)**
+**生效日期**: 2026-02-22
+**影响范围**: 所有涉及页面UI渲染、组件重构、样式修缮的任务
+
+### 核心原则
+
+**任何涉及前端 UI 修改的开发活动，必须优先从系统全局设计文件 (`src/shared/styles/index.ts` 或 `src/shared/ui/`) 导入既有的语义化常量，严禁在 `className` 中硬编码裸露的原生 Tailwind 色彩或排版原子类。**
+
+### 实施细则
+
+#### 3.1 颜色的引用与降维控制
+
+系统具备完善的深浅色自动适配的 `colorClasses`。
+**严禁使用**:
+- ❌ `<div className="text-gray-500">`
+- ❌ `<span className="bg-red-100 text-red-800">`
+**必须使用**:
+- ✅ `import { colorClasses } from '@/shared/styles'`
+- ✅ `<div className={colorClasses.text.neutralMuted}>`
+- ✅ `<span className={cn(colorClasses.bg.dangerSolid, colorClasses.text.danger)}>`
+
+#### 3.2 字体排版的强制要求
+
+KPI数值、图表数据与表格需要绝对对齐的等宽排版系统预设。
+**严禁凭空构思类名或直接使用不支持的CSS选择器**:
+- ❌ `<div className="font-kpi text-2xl">` （该类名不在 `tailwind.config` 生成树中，会导致 CSS 失效）
+- ❌ `<div className="font-bold tabular-nums font-mono">`
+**必须使用**:
+- ✅ `import { fontStyles, textStyles } from '@/shared/styles'`
+- ✅ `<div className={cn(fontStyles.kpi, textStyles.titleLarge)}>`
+
+#### 3.3 布局与容器复用
+
+**严禁重造轮子堆砌 Tailwind 属性**:
+- ❌ `<div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-200">`
+**必须使用标准化卡片容器**:
+- ✅ `import { cardStyles } from '@/shared/styles'`
+- ✅ `<div className={cardStyles.base}>` 或是直接依赖 `<Card>` 包装器组件。
+
+### 违规判定
+
+在审查 PR 及验收任务时，任何全局搜索出的违规硬编码（特别是跨组件的色彩硬编码）将被视为严重技术债，**评审员必须打回要求修正，并附带违规通知（Violation Notice）**。
+
 ---
 
 ## 📋 修复任务清单
@@ -538,6 +584,11 @@ function applyFiltersWithPriority(
 - [ ] 是否区分 `undefined`（未选择）和有效值（如 `0`、`false`、`[]`）？
 - [ ] 业务强制覆盖的筛选项是否在 UI 上有明确提示？
 
+**DC-003 UI组件与样式强制导入检查**：
+- [ ] 颜色定义是否统一使用 `colorClasses`、`semanticColors` 而非原生 Tailwind 颜色拼凑？
+- [ ] 数字排版（特别是 KPI 与图表）是否引入 `fontStyles.kpi` 或 `fontStyles.tabular`？
+- [ ] 卡片及容器边框是否使用了 `cardStyles` 组合件而非打散分布的边框圆角样式？
+
 ### 代码审查要点
 
 **在 PR 审查时，必须确认：**
@@ -554,8 +605,13 @@ function applyFiltersWithPriority(
 7. ✅ 如有业务强制覆盖，UI 上有明确提示
 8. ✅ 多选筛选区分 `undefined`（未触碰）和 `[]`（用户清空）
 
+**DC-003 相关（禁止 UI 样式硬编码）**：
+9. ✅ 代码中不包含独立的如 `text-red-500` 或 `box-shadow` 这类非标准控制参数集合，所有的颜色和边距变化都受 `@/shared/styles/index.ts` 管制。
+10. ✅ 没有将假定的 CSS 类名（如 `.font-kpi` 作为字符串类推）直接塞入 DOM 类列表。
+
 ---
 
 **变更历史**：
+- 2026-02-22：新增 DC-003 规则 - UI组件与样式强制导入规范（根治色彩硬编码乱象及排版虚假引用）
 - 2026-01-13：新增 DC-002 规则 - 用户筛选高于默认筛选（全局优先级原则）
 - 2026-01-11：初版发布，定义 DC-001 规则，诊断现有系统5个问题

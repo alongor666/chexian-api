@@ -65,46 +65,43 @@ export const MarketingReportPanel: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* 标签页切换 */}
-      <div className="bg-white rounded shadow p-2 flex gap-2 items-center">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 p-2 flex gap-2 items-center">
         <button
           onClick={() => setActiveTab('report')}
-          className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-            activeTab === 'report'
-              ? 'bg-blue-500 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'report'
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+            }`}
         >
           假日战报
         </button>
         <button
           onClick={() => setActiveTab('drilldown')}
-          className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-            activeTab === 'drilldown'
-              ? 'bg-blue-500 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'drilldown'
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+            }`}
         >
           下钻分析
         </button>
         <button
           onClick={() => setActiveTab('plan')}
-          className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-            activeTab === 'plan'
-              ? 'bg-blue-500 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'plan'
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+            }`}
         >
           保费达成
         </button>
 
         {/* 保费达成年度选择器 */}
         {activeTab === 'plan' && (
-          <div className="ml-auto flex items-center gap-2">
-            <label className="text-sm text-gray-600">计划年度：</label>
+          <div className="ml-auto flex items-center gap-2 px-2">
+            <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">计划年度：</label>
             <select
               value={planYear}
               onChange={(e) => setPlanYear(Number(e.target.value))}
-              className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1.5 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-sm"
             >
               <option value={2025}>2025年</option>
               <option value={2026}>2026年</option>
@@ -118,9 +115,9 @@ export const MarketingReportPanel: React.FC = () => {
         <>
           {/* 错误提示 */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-              <p className="font-medium">加载失败</p>
-              <p className="text-sm">{error}</p>
+            <div className="bg-danger-bg dark:bg-red-900/20 border border-danger-200 dark:border-red-800/50 rounded-lg p-4 text-danger dark:text-danger-light">
+              <p className="font-semibold tracking-tight">加载失败</p>
+              <p className="text-sm mt-1">{error}</p>
             </div>
           )}
 
@@ -135,17 +132,17 @@ export const MarketingReportPanel: React.FC = () => {
           />
 
           {/* 表一：机构战报 */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 overflow-hidden">
+            <div className="px-5 py-4 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50">
+              <h3 className="text-lg font-bold tracking-tight text-neutral-900 dark:text-white flex items-center">
                 <span className="mr-2">🏢</span>
                 机构战报
               </h3>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mt-1">
                 各机构假日营销数据汇总（开单率 = 节假日有出单的业务员数 / 总业务员数）
               </p>
             </div>
-            <div className="p-4">
+            <div className="p-0">
               <OrganizationReportTable
                 data={sortedOrgReport}
                 sortState={orgReportSort}
@@ -156,17 +153,17 @@ export const MarketingReportPanel: React.FC = () => {
           </div>
 
           {/* 表二：业务员明细表 */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 overflow-hidden mt-6">
+            <div className="px-5 py-4 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50">
+              <h3 className="text-lg font-bold tracking-tight text-neutral-900 dark:text-white flex items-center">
                 <span className="mr-2">👤</span>
                 业务员明细表
               </h3>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mt-1">
                 业务员假日签单情况（签单比例 = 签单天数 / 节假日天数）
               </p>
             </div>
-            <div className="p-4">
+            <div className="p-0">
               <SalesmanDetailTable
                 data={sortedSalesmanDetail}
                 sortState={salesmanDetailSort}
@@ -175,11 +172,12 @@ export const MarketingReportPanel: React.FC = () => {
               />
             </div>
             {/* 数据统计 */}
-            <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
-              共 {sortedSalesmanDetail.length} 名业务员
+            <div className="px-5 py-4 bg-neutral-50 dark:bg-neutral-900/50 border-t border-neutral-100 dark:border-neutral-800 text-sm font-medium text-neutral-500 dark:text-neutral-400 flex items-center">
+              共 <span className="mx-1 text-neutral-900 dark:text-white font-bold">{sortedSalesmanDetail.length}</span> 名业务员
               {holidayStats.totalDays > 0 && (
-                <span className="ml-4">
-                  | 假日天数: {holidayStats.totalDays} 天
+                <span className="ml-4 flex items-center">
+                  <span className="mx-2 text-neutral-300 dark:text-neutral-700">|</span>
+                  假日天数: <span className="mx-1 text-neutral-900 dark:text-white font-bold">{holidayStats.totalDays}</span> 天
                 </span>
               )}
             </div>

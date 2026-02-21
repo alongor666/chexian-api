@@ -4,6 +4,24 @@
 import { describe, it, expect } from 'vitest';
 import { createExportIgnoreElements } from '../src/shared/export/ignoreElements';
 
+// Simple DOM mock for bun test since it lacks a native DOM environment by default
+if (typeof document === 'undefined') {
+  (globalThis as any).document = {
+    createElement: (tagName: string) => ({
+      tagName: tagName.toUpperCase(),
+      classList: {
+        contains: (className: string) => false,
+        add: function (className: string) {
+          const self = this as any;
+          self._classes = self._classes || new Set();
+          self._classes.add(className);
+          self.contains = (c: string) => self._classes.has(c);
+        }
+      }
+    })
+  };
+}
+
 describe('export ignoreElements', () => {
   it('should ignore elements marked with no-export class', () => {
     const el = document.createElement('div');

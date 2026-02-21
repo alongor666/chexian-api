@@ -36,27 +36,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   const displayError = localError || error;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-neutral-800 rounded-xl shadow-lg border border-neutral-200 dark:border-neutral-700">
         <div>
-          <h2 className="text-center text-3xl font-bold text-gray-900">
+          <h2 className="text-center text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
             车险业绩看板
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm font-medium text-neutral-600 dark:text-neutral-400">
             请登录以访问数据分析功能
           </p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {displayError && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="text-sm text-red-700">{displayError}</div>
+            <div className="rounded-md bg-danger-bg dark:bg-red-900/20 border border-danger dark:border-red-800 p-4">
+              <div className="text-sm font-medium text-danger dark:text-danger-light">{displayError}</div>
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="username" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 用户名
               </label>
               <input
@@ -66,13 +66,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 transition-colors"
                 placeholder="请输入用户名"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 密码
               </label>
               <input
@@ -82,7 +82,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 transition-colors"
                 placeholder="请输入密码"
               />
             </div>
@@ -91,12 +91,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {isLoading ? '登录中...' : '登录'}
           </button>
 
-          <p className="text-center text-xs text-gray-500">
+          <p className="text-center text-xs font-mono text-neutral-500 dark:text-neutral-400">
             默认账号: admin / admin123
           </p>
         </form>

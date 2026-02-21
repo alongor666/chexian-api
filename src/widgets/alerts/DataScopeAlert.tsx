@@ -40,24 +40,24 @@ const scopeConfig: Record<DataScopeType, {
 }> = {
   'full-year': {
     icon: Calendar,
-    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-    borderColor: 'border-blue-200 dark:border-blue-800',
-    textColor: 'text-blue-800 dark:text-blue-200',
-    iconColor: 'text-blue-500 dark:text-blue-400',
+    bgColor: 'bg-primary-bg dark:bg-blue-900/20',
+    borderColor: 'border-primary-200 dark:border-blue-800',
+    textColor: 'text-primary-dark dark:text-primary-light',
+    iconColor: 'text-primary dark:text-primary-light',
   },
   'rolling-window': {
     icon: Clock,
-    bgColor: 'bg-amber-50 dark:bg-amber-900/20',
-    borderColor: 'border-amber-200 dark:border-amber-800',
-    textColor: 'text-amber-800 dark:text-amber-200',
-    iconColor: 'text-amber-500 dark:text-amber-400',
+    bgColor: 'bg-warning-bg dark:bg-yellow-900/20',
+    borderColor: 'border-warning-200 dark:border-yellow-800',
+    textColor: 'text-warning-dark dark:text-warning-light',
+    iconColor: 'text-warning dark:text-warning-light',
   },
   'custom': {
     icon: Info,
-    bgColor: 'bg-gray-50 dark:bg-gray-800',
-    borderColor: 'border-gray-200 dark:border-gray-700',
-    textColor: 'text-gray-700 dark:text-gray-300',
-    iconColor: 'text-gray-500 dark:text-gray-400',
+    bgColor: 'bg-neutral-50 dark:bg-neutral-800',
+    borderColor: 'border-neutral-200 dark:border-neutral-700',
+    textColor: 'text-neutral-700 dark:text-neutral-300',
+    iconColor: 'text-neutral-500 dark:text-neutral-400',
   },
 };
 
@@ -105,14 +105,14 @@ export const DataScopeAlert: React.FC<DataScopeAlertProps> = ({
 
   return (
     <div
-      className={`flex items-start gap-3 px-4 py-3 rounded-lg border ${config.bgColor} ${config.borderColor} ${className}`}
+      className={`flex items-start gap-3 px-4 py-3 rounded-lg border shadow-sm ${config.bgColor} ${config.borderColor} ${className}`}
       role="alert"
     >
       <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${config.iconColor}`} aria-hidden="true" />
       <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium ${config.textColor}`}>{title}</p>
+        <p className={`text-sm font-semibold tracking-tight ${config.textColor}`}>{title}</p>
         {description && (
-          <p className={`text-xs mt-0.5 ${config.textColor} opacity-80`}>{description}</p>
+          <p className={`text-[13px] mt-1 ${config.textColor} opacity-90 leading-relaxed`}>{description}</p>
         )}
       </div>
       {dismissible && onDismiss && (

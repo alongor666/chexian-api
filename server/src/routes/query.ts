@@ -172,11 +172,18 @@ router.get(
       req.permissionFilter || '1=1'
     );
 
+    // 动态判断分组维度
+    // 如果没有明确筛选 orgLevel3 或 orgNames，且不是 ORG_USER 强制自带的三级机构过滤，则默认升到 org_level_2
+    const isOrgSelected = filterResult.data.orgLevel3 || (filterResult.data.orgNames && filterResult.data.orgNames.length > 0);
+    const isOrgUser = req.user?.role === 'org_user';
+    const groupDim = (isOrgSelected || isOrgUser) ? 'org_level_3' : 'org_level_2';
+
     const sql = generatePremiumTrendQuery(
       timeView as TimeView,
       finalWhereClause,
       filterResult.data.dateField || 'policy_date',
-      perspective
+      perspective,
+      groupDim
     );
     // 趋势查询缓存 120 秒
     const result = await duckdbService.query(sql, 120_000);
@@ -211,11 +218,16 @@ router.get(
       req.permissionFilter || '1=1'
     );
 
+    const isOrgSelected = filterResult.data.orgLevel3 || (filterResult.data.orgNames && filterResult.data.orgNames.length > 0);
+    const isOrgUser = req.user?.role === 'org_user';
+    const groupDim = (isOrgSelected || isOrgUser) ? 'org_level_3' : 'org_level_2';
+
     const sql = generateQualityBusinessTrendQuery(
       timeView as TimeView,
       finalWhereClause,
       filterResult.data.dateField || 'policy_date',
-      perspective
+      perspective,
+      groupDim
     );
     const result = await duckdbService.query(sql, 120_000);
 
