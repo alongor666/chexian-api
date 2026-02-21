@@ -173,10 +173,10 @@ router.get(
     );
 
     // 动态判断分组维度
-    // 如果没有明确筛选 orgLevel3 或 orgNames，且不是 ORG_USER 强制自带的三级机构过滤，则默认升到 org_level_2
+    // 如果没有明确筛选 orgLevel3 或 orgNames，且不是 ORG_USER 强制自带的三级机构过滤，则默认升到分为全部的大盘数据
     const isOrgSelected = filterResult.data.orgLevel3 || (filterResult.data.orgNames && filterResult.data.orgNames.length > 0);
     const isOrgUser = req.user?.role === 'org_user';
-    const groupDim = (isOrgSelected || isOrgUser) ? 'org_level_3' : 'org_level_2';
+    const groupDim = (isOrgSelected || isOrgUser) ? 'org_level_3' : "'全部'";
 
     const sql = generatePremiumTrendQuery(
       timeView as TimeView,
@@ -220,7 +220,7 @@ router.get(
 
     const isOrgSelected = filterResult.data.orgLevel3 || (filterResult.data.orgNames && filterResult.data.orgNames.length > 0);
     const isOrgUser = req.user?.role === 'org_user';
-    const groupDim = (isOrgSelected || isOrgUser) ? 'org_level_3' : 'org_level_2';
+    const groupDim = (isOrgSelected || isOrgUser) ? 'org_level_3' : "'全部'";
 
     const sql = generateQualityBusinessTrendQuery(
       timeView as TimeView,
