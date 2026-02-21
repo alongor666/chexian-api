@@ -1,0 +1,290 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - heading "车险经营管理系统" [level=1] [ref=e10]
+      - generic [ref=e11]: v2.0
+    - navigation "主菜单" [ref=e12]:
+      - button "文件" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+        - generic [ref=e17]: 文件
+        - img [ref=e18]
+      - button "设置" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+        - generic [ref=e25]: 设置
+        - img [ref=e26]
+  - generic [ref=e28]:
+    - navigation "主导航" [ref=e29]:
+      - navigation [ref=e31]:
+        - link "首页" [ref=e32] [cursor=pointer]:
+          - /url: "#/"
+          - img [ref=e33]
+          - generic [ref=e36]: 首页
+        - separator [ref=e37]
+        - generic [ref=e38]: 数据分析
+        - link "仪表盘" [ref=e39] [cursor=pointer]:
+          - /url: "#/dashboard"
+          - img [ref=e40]
+          - generic [ref=e45]: 仪表盘
+        - link "保费报表" [ref=e46] [cursor=pointer]:
+          - /url: "#/premium-report"
+          - img [ref=e47]
+          - generic [ref=e49]: 保费报表
+        - link "营销战报" [ref=e50] [cursor=pointer]:
+          - /url: "#/marketing-report"
+          - img [ref=e51]
+          - generic [ref=e55]: 营销战报
+        - link "营业货车" [ref=e56] [cursor=pointer]:
+          - /url: "#/truck"
+          - img [ref=e57]
+          - generic [ref=e62]: 营业货车
+        - link "续保分析" [ref=e63] [cursor=pointer]:
+          - /url: "#/renewal"
+          - img [ref=e64]
+          - generic [ref=e69]: 续保分析
+        - link "车驾意推介率" [ref=e70] [cursor=pointer]:
+          - /url: "#/cross-sell"
+          - img [ref=e71]
+          - generic [ref=e75]: 车驾意推介率
+        - link "增长分析" [ref=e76] [cursor=pointer]:
+          - /url: "#/growth"
+          - img [ref=e77]
+          - generic [ref=e80]: 增长分析
+        - link "成本分析" [ref=e81] [cursor=pointer]:
+          - /url: "#/cost"
+          - img [ref=e82]
+          - generic [ref=e84]: 成本分析
+        - link "数据对比" [ref=e85] [cursor=pointer]:
+          - /url: "#/comparison"
+          - img [ref=e86]
+          - generic [ref=e90]: 数据对比
+        - link "系数监控" [ref=e91] [cursor=pointer]:
+          - /url: "#/coefficient"
+          - img [ref=e92]
+          - generic [ref=e95]: 系数监控
+        - link "SQL查询" [ref=e96] [cursor=pointer]:
+          - /url: "#/sql-query"
+          - img [ref=e97]
+          - generic [ref=e102]: SQL查询
+      - generic [ref=e103]:
+        - button "系统管理员 管理员" [ref=e105] [cursor=pointer]:
+          - img [ref=e106]
+          - paragraph [ref=e109]: 系统管理员
+          - generic [ref=e110]: 管理员
+          - img [ref=e111]
+        - button "收起侧边栏" [expanded] [ref=e113] [cursor=pointer]:
+          - img [ref=e114]
+          - generic [ref=e116]: 收起侧边栏
+    - main [ref=e117]:
+      - generic [ref=e118]:
+        - generic [ref=e120]:
+          - generic [ref=e122]:
+            - heading "保费分析看板" [level=1] [ref=e123]
+            - button "导出PDF报告" [ref=e124] [cursor=pointer]
+          - generic [ref=e125]:
+            - group [ref=e126]:
+              - generic "🎨 自定义看板" [ref=e127] [cursor=pointer]:
+                - generic [ref=e128]: 🎨
+                - generic [ref=e129]: 自定义看板
+            - generic [ref=e130]:
+              - generic [ref=e131]:
+                - generic [ref=e132]: 总保费
+                - generic [ref=e133]: 4,361
+              - generic [ref=e134]:
+                - generic [ref=e135]: 保单件数
+                - generic [ref=e136]: 61,419
+              - generic [ref=e137]:
+                - generic [ref=e138]: 人均保费
+                - generic [ref=e139]: "18"
+              - generic [ref=e140]:
+                - generic [ref=e141]: 非过户占比
+                - generic [ref=e143]:
+                  - generic [ref=e144]: 93.9%
+                  - generic [ref=e145]: 6.1%
+              - generic [ref=e146]:
+                - generic [ref=e147]: 续保占比
+                - generic [ref=e150]: 100.0%
+              - generic [ref=e151]:
+                - generic [ref=e152]: 商业险占比
+                - generic [ref=e154]:
+                  - generic [ref=e155]: 48.5%
+                  - generic [ref=e156]: 51.5%
+              - generic [ref=e157]:
+                - generic [ref=e158]: 电销占比
+                - generic [ref=e160]:
+                  - generic [ref=e161]: 7.6%
+                  - generic [ref=e162]: 92.4%
+              - generic [ref=e163]:
+                - generic [ref=e164]: 新能源占比
+                - generic [ref=e166]:
+                  - generic [ref=e167]: 2.9%
+                  - generic [ref=e168]: 97.1%
+              - generic [ref=e169]:
+                - generic [ref=e170]: 新车占比
+                - generic [ref=e172]:
+                  - generic [ref=e173]: 4.3%
+                  - generic [ref=e174]: 95.7%
+            - heading "占比分析" [level=2] [ref=e176]
+            - generic [ref=e190]:
+              - generic [ref=e192]:
+                - generic [ref=e193]: 趋势图时间视图：
+                - generic [ref=e194]:
+                  - button "签单日" [ref=e195] [cursor=pointer]
+                  - button "签单自然周" [ref=e196] [cursor=pointer]
+                  - button "签单自然月" [ref=e197] [cursor=pointer]
+              - generic [ref=e198]:
+                - generic [ref=e200]:
+                  - generic [ref=e201]: 分析视角：
+                  - group "视角选择" [ref=e202]:
+                    - button "保费" [pressed] [ref=e203] [cursor=pointer]:
+                      - generic [ref=e204]: 保费
+                    - button "保单件数" [ref=e205] [cursor=pointer]:
+                      - generic [ref=e206]: 保单件数
+                - generic [ref=e207]:
+                  - heading "保费趋势 - 按日" [level=2] [ref=e208]
+                  - generic [ref=e209]:
+                    - button "导出 CSV" [ref=e210] [cursor=pointer]
+                    - button "导出 Excel" [ref=e211] [cursor=pointer]
+              - heading "优质业务占比趋势 - 按日" [level=2] [ref=e217]
+            - generic [ref=e223]:
+              - generic [ref=e224]:
+                - generic [ref=e225]:
+                  - heading "全部业务 Top10" [level=3] [ref=e226]
+                  - generic [ref=e227]:
+                    - button "导出 CSV" [ref=e228] [cursor=pointer]
+                    - button "导出 Excel" [ref=e229] [cursor=pointer]
+                - generic [ref=e231]:
+                  - generic [ref=e232]:
+                    - generic [ref=e233]: 业务员
+                    - generic [ref=e234]: 三级机构
+                    - generic [ref=e235]: 总保费
+                    - generic [ref=e236]: 保单数
+                  - generic [ref=e237]:
+                    - generic [ref=e238]:
+                      - generic [ref=e239]: 200051155罗磊
+                      - generic [ref=e240]: 天府
+                      - generic [ref=e241]: "315"
+                      - generic [ref=e242]: "3700"
+                    - generic [ref=e243]:
+                      - generic [ref=e244]: 210000461周鑫磊
+                      - generic [ref=e245]: 青羊
+                      - generic [ref=e246]: "166"
+                      - generic [ref=e247]: "1939"
+                    - generic [ref=e248]:
+                      - generic [ref=e249]: 200053182陈晓梅
+                      - generic [ref=e250]: 青羊
+                      - generic [ref=e251]: "162"
+                      - generic [ref=e252]: "1855"
+                    - generic [ref=e253]:
+                      - generic [ref=e254]: 200046028周艳翎
+                      - generic [ref=e255]: 高新
+                      - generic [ref=e256]: "109"
+                      - generic [ref=e257]: "526"
+                    - generic [ref=e258]:
+                      - generic [ref=e259]: 110009223黄艳
+                      - generic [ref=e260]: 天府
+                      - generic [ref=e261]: "103"
+                      - generic [ref=e262]: "1123"
+                    - generic [ref=e263]:
+                      - generic [ref=e264]: 200045244李晓琴
+                      - generic [ref=e265]: 高新
+                      - generic [ref=e266]: "100"
+                      - generic [ref=e267]: "1069"
+                    - generic [ref=e268]:
+                      - generic [ref=e269]: 200052557肖波
+                      - generic [ref=e270]: 德阳
+                      - generic [ref=e271]: "86"
+                      - generic [ref=e272]: "673"
+                    - generic [ref=e273]:
+                      - generic [ref=e274]: 200045265杨希
+                      - generic [ref=e275]: 天府
+                      - generic [ref=e276]: "86"
+                      - generic [ref=e277]: "714"
+                    - generic [ref=e278]:
+                      - generic [ref=e279]: 110071594熊平
+                      - generic [ref=e280]: 新都
+                      - generic [ref=e281]: "77"
+                      - generic [ref=e282]: "185"
+                    - generic [ref=e283]:
+                      - generic [ref=e284]: 110037882魏晓军
+                      - generic [ref=e285]: 天府
+                      - generic [ref=e286]: "73"
+                      - generic [ref=e287]: "709"
+              - generic [ref=e288]:
+                - generic [ref=e289]:
+                  - heading "优质业务 Top10" [level=3] [ref=e290]
+                  - generic [ref=e291]:
+                    - button "导出 CSV" [ref=e292] [cursor=pointer]
+                    - button "导出 Excel" [ref=e293] [cursor=pointer]
+                - generic [ref=e295]:
+                  - generic [ref=e296]:
+                    - generic [ref=e297]: 业务员
+                    - generic [ref=e298]: 三级机构
+                    - generic [ref=e299]: 优质保费
+                    - generic [ref=e300]: 保单数
+                  - generic [ref=e301]:
+                    - generic [ref=e302]:
+                      - generic [ref=e303]: 110071594熊平
+                      - generic [ref=e304]: 新都
+                      - generic [ref=e305]: "17"
+                      - generic [ref=e306]: "59"
+                    - generic [ref=e307]:
+                      - generic [ref=e308]: 200051155罗磊
+                      - generic [ref=e309]: 天府
+                      - generic [ref=e310]: "14"
+                      - generic [ref=e311]: "121"
+                    - generic [ref=e312]:
+                      - generic [ref=e313]: 210000461周鑫磊
+                      - generic [ref=e314]: 青羊
+                      - generic [ref=e315]: "8"
+                      - generic [ref=e316]: "81"
+                    - generic [ref=e317]:
+                      - generic [ref=e318]: 200052557肖波
+                      - generic [ref=e319]: 德阳
+                      - generic [ref=e320]: "8"
+                      - generic [ref=e321]: "40"
+                    - generic [ref=e322]:
+                      - generic [ref=e323]: 110037882魏晓军
+                      - generic [ref=e324]: 天府
+                      - generic [ref=e325]: "7"
+                      - generic [ref=e326]: "32"
+                    - generic [ref=e327]:
+                      - generic [ref=e328]: 200053182陈晓梅
+                      - generic [ref=e329]: 青羊
+                      - generic [ref=e330]: "7"
+                      - generic [ref=e331]: "66"
+                    - generic [ref=e332]:
+                      - generic [ref=e333]: 200046028周艳翎
+                      - generic [ref=e334]: 高新
+                      - generic [ref=e335]: "6"
+                      - generic [ref=e336]: "34"
+                    - generic [ref=e337]:
+                      - generic [ref=e338]: 110027511王晓渝
+                      - generic [ref=e339]: 泸州
+                      - generic [ref=e340]: "6"
+                      - generic [ref=e341]: "58"
+                    - generic [ref=e342]:
+                      - generic [ref=e343]: 200049522王伟
+                      - generic [ref=e344]: 泸州
+                      - generic [ref=e345]: "5"
+                      - generic [ref=e346]: "38"
+                    - generic [ref=e347]:
+                      - generic [ref=e348]: 200045244李晓琴
+                      - generic [ref=e349]: 高新
+                      - generic [ref=e350]: "5"
+                      - generic [ref=e351]: "37"
+        - generic [ref=e353]:
+          - generic [ref=e354]:
+            - generic [ref=e355]: © 2026 cretvalu.com
+            - generic [ref=e356]: "|"
+            - link "蜀ICP备2024115865号" [ref=e357] [cursor=pointer]:
+              - /url: https://beian.miit.gov.cn/
+            - generic [ref=e358]: "|"
+            - link "川公网安备51019002007622号" [ref=e359] [cursor=pointer]:
+              - /url: http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=51019002007622
+              - generic [ref=e360]: 川公网安备51019002007622号
+          - generic [ref=e361]: "网站开通日期: 2024-12-22"
+```

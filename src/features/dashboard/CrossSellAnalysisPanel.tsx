@@ -23,7 +23,6 @@ import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import {
   useCrossSellAnalysis,
   DIMENSION_LABELS,
-  ALL_DIMENSIONS,
   type CrossSellRow,
   type CrossSellDimension,
 } from './hooks/useCrossSellAnalysis';

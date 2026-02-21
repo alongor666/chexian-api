@@ -198,7 +198,7 @@ export const RoseChart: React.FC<RoseChartProps> = ({
             ...item,
             itemStyle: {
               // "其他"项使用灰色，其他项使用配置颜色
-              color: item.name.startsWith('其他') ? '#9CA3AF' : (TONNAGE_COLORS[item.name] || undefined),
+              color: item.name?.startsWith('其他') ? '#9CA3AF' : (TONNAGE_COLORS[item.name] || undefined),
             },
           })),
         },

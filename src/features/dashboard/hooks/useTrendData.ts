@@ -79,22 +79,28 @@ export const useTrendData = ({
   timeView,
   hasOrgFilter,
   enabled = true,
-  perspective: _perspective = 'premium',
+  perspective = 'premium',
 }: UseTrendDataOptions): UseTrendDataResult => {
   const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
-  const [qualityBusinessData] = useState<QualityBusinessDataPoint[]>([]);
+  const [qualityBusinessData, setQualityBusinessData] = useState<QualityBusinessDataPoint[]>([]);
   const [loading, setLoading] = useState(false);
-  const [qualityBusinessLoading] = useState(false);
+  const [qualityBusinessLoading, setQualityBusinessLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const trendRequestIdRef = useRef(0);
 
   const fetchTrendFromApi = useCallback(async (requestId: number) => {
     try {
-      const params = buildFilterParams(filters);
+      const params = {
+        ...buildFilterParams(filters),
+        perspective,
+      };
       const granularity = timeViewToGranularity(timeView);
       logger.info('趋势 API 查询执行', { timeView, granularity });
 
-      const trendResponse = await apiClient.getTrend(granularity, params);
+      const [trendResponse, qualityTrendResponse] = await Promise.all([
+        apiClient.getTrend(granularity, params),
+        apiClient.getQualityBusinessTrend(granularity, params),
+      ]);
 
       if (requestId !== trendRequestIdRef.current) return;
 
@@ -105,20 +111,28 @@ export const useTrendData = ({
         premium: item.premium,
         next_month_ratio: item.next_month_ratio ?? 0,
       }));
+      const transformedQualityData: QualityBusinessDataPoint[] = qualityTrendResponse.map((item) => ({
+        time_period: item.time_period,
+        quality_premium: item.quality_premium ?? 0,
+        total_premium: item.total_premium ?? 0,
+        quality_ratio: item.quality_ratio ?? 0,
+      }));
 
       setTrendData(transformedData);
-      logger.info(`趋势 API 查询成功，获取 ${transformedData.length} 条数据`);
+      setQualityBusinessData(transformedQualityData);
+      logger.info(`趋势 API 查询成功，获取 ${transformedData.length} 条趋势数据，${transformedQualityData.length} 条优质业务数据`);
     } catch (err) {
       if (requestId !== trendRequestIdRef.current) return;
       throw err;
     }
-  }, [filters, timeView, hasOrgFilter]);
+  }, [filters, timeView, hasOrgFilter, perspective]);
 
   const fetchTrendData = useCallback(async () => {
     if (!enabled) return;
 
     const requestId = ++trendRequestIdRef.current;
     setLoading(true);
+    setQualityBusinessLoading(true);
     setError(null);
 
     try {
@@ -130,6 +144,7 @@ export const useTrendData = ({
     } finally {
       if (requestId === trendRequestIdRef.current) {
         setLoading(false);
+        setQualityBusinessLoading(false);
       }
     }
   }, [enabled, fetchTrendFromApi]);
