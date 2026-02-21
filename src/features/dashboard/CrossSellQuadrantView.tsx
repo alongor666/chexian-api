@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
@@ -115,14 +115,15 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
     tooltip: {
       trigger: 'item',
       formatter: (params: any) => {
-        const point = params.data as QuadrantPoint;
-        const meta = QUADRANT_META[point.quadrant];
+        // params.data is the full data item: { value: [x, y], ...QuadrantPoint }
+        const d = params.data as { value: number[] } & QuadrantPoint;
+        const meta = QUADRANT_META[d.quadrant];
         return `
           <div style="padding: 6px 8px; line-height: 1.6;">
-            <div style="font-weight: 600; margin-bottom: 6px;">${escapeHtml(point.entity_name)}</div>
-            <div>主全推介率：${formatPercent(point.main_full_rate)}</div>
-            <div>交三推介率：${formatPercent(point.jiaosan_rate)}</div>
-            <div>权重指标：${formatCount(point.weight_value)}</div>
+            <div style="font-weight: 600; margin-bottom: 6px;">${escapeHtml(d.entity_name)}</div>
+            <div>主全推介率：${formatPercent(d.main_full_rate)}</div>
+            <div>交三推介率：${formatPercent(d.jiaosan_rate)}</div>
+            <div>权重指标：${formatCount(d.weight_value)}</div>
             <div style="margin-top: 6px;"><strong>判断：</strong>${meta.judgment}</div>
             <div><strong>建议动作：</strong>${meta.suggestion}</div>
           </div>
@@ -160,25 +161,31 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
     series: [
       ...(['benchmark', 'risk', 'focus', 'observe'] as QuadrantId[]).map((quadrant) => {
         const meta = QUADRANT_META[quadrant];
+        // Use { value: [x, y], ...extra } format so ECharts reads coordinates from value[]
+        // while tooltip/symbolSize callbacks can access the full QuadrantPoint via params.data
         const seriesPoints = points
           .filter((p) => p.quadrant === quadrant)
           .map((p) => ({
+            value: [p.main_full_rate, p.jiaosan_rate] as [number, number],
             ...p,
             itemStyle: p.isHighWeight && p.isMisaligned
               ? {
-                  borderColor: '#111827',
-                  borderWidth: 2,
-                  shadowBlur: 14,
-                  shadowColor: 'rgba(17, 24, 39, 0.32)',
-                }
+                borderColor: '#111827',
+                borderWidth: 2,
+                shadowBlur: 14,
+                shadowColor: 'rgba(17, 24, 39, 0.32)',
+              }
               : undefined,
           }));
         return {
           name: meta.label,
-          type: 'scatter',
+          type: 'scatter' as const,
           data: seriesPoints,
-          symbolSize: (data: QuadrantPoint) =>
-            getSymbolSize(data.weight_value, data.isHighWeight, data.isMisaligned),
+          symbolSize: (_val: number[], params: any) => {
+            const d = params?.data as QuadrantPoint | undefined;
+            if (!d) return 20;
+            return getSymbolSize(d.weight_value, d.isHighWeight, d.isMisaligned);
+          },
           itemStyle: {
             color: meta.color,
             opacity: quadrant === 'focus' ? 0.96 : 0.72,
@@ -195,18 +202,18 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
           },
           markLine: quadrant === 'benchmark'
             ? {
-                silent: true,
-                symbol: 'none',
-                lineStyle: {
-                  color: '#6B7280',
-                  type: 'dashed',
-                  width: 1.5,
-                },
-                data: [
-                  { xAxis: MAIN_FULL_THRESHOLD },
-                  { yAxis: JIAOSAN_THRESHOLD },
-                ],
-              }
+              silent: true,
+              symbol: 'none',
+              lineStyle: {
+                color: '#6B7280',
+                type: 'dashed' as const,
+                width: 1.5,
+              },
+              data: [
+                { xAxis: MAIN_FULL_THRESHOLD },
+                { yAxis: JIAOSAN_THRESHOLD },
+              ],
+            }
             : undefined,
         };
       }),
