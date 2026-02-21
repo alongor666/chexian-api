@@ -2,6 +2,7 @@ import React from 'react';
 import { GrowthKpiCards } from './GrowthKpiCards';
 import { ScissorsTrendChart } from '../../../charts/ScissorsTrendChart';
 import { formatPercent1, getSafeDateStr } from '../utils/format';
+import { formatSalesmanName } from '../../../shared/utils/formatters';
 import type { GrowthAnalysisType } from './GrowthAnalysisControlPanel';
 
 interface GrowthDetailSectionProps {
@@ -120,7 +121,7 @@ export function GrowthDetailSection(props: GrowthDetailSectionProps): React.Reac
                   : '-'
                 : item.time_period
                   ? dateStr.substring(5)
-                  : item.salesman_name || item.org_level_3 || '-';
+                  : formatSalesmanName(item.salesman_name) || item.org_level_3 || '-';
 
               return (
                 <tr

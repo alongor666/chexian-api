@@ -15,7 +15,7 @@ import { usePremiumReport } from '../hooks/usePremiumReport';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import type { TableColumn } from '../../marketing-report/types/marketingReport';
 import type { OrgPremiumReportRow, SalesmanPremiumReportRow } from '../types/premiumReport';
-import { formatWanDirect, formatRate, formatCount } from '../../../shared/utils/formatters';
+import { formatWanDirect, formatRate, formatCount, formatSalesmanName } from '../../../shared/utils/formatters';
 
 type PremiumTab = 'report' | 'plan';
 
@@ -93,7 +93,13 @@ const orgReportColumns: TableColumn<OrgPremiumReportRow>[] = [
  * 业务员保费报表列定义
  */
 const salesmanReportColumns: TableColumn<SalesmanPremiumReportRow>[] = [
-  { key: 'salesman_name', header: '业务员姓名', sortable: true, align: 'left' },
+  {
+    key: 'salesman_name',
+    header: '业务员姓名',
+    sortable: true,
+    align: 'left',
+    format: (value) => formatSalesmanName(String(value)),
+  },
   { key: 'org_level_3', header: '所属机构', sortable: true, align: 'left' },
   { key: 'team_name', header: '所属团队', sortable: true, align: 'left' },
   {
@@ -197,11 +203,10 @@ export const PremiumReportPanel: React.FC = () => {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.key
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.key
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+                }`}
             >
               {tab.label}
             </button>

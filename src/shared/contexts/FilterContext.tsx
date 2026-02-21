@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from 'react';
 import { createLogger } from '../utils/logger';
+import { formatSalesmanName } from '../utils/formatters';
 import { getAvailableSalesmen, type OrgSalesmanCache } from '../../features/dashboard/orgSalesman';
 import type { AdvancedFilterState, FilterOptions, DateMetadata, DualDateMetadata } from '../types/data';
 import { getMetadataByCriteria } from '../types/data';
@@ -87,6 +88,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
         })),
         salesman_name: (apiOptions.salesmen || []).map((value: string) => ({
           value,
+          label: formatSalesmanName(value),
           count: 0,
         })),
         customer_category: (apiOptions.customerCategories || []).map((value: string) => ({

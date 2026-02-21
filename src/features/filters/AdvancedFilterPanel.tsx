@@ -45,6 +45,7 @@ interface AdvancedFilterPanelProps {
 
 type DimensionOption = {
   value: string;
+  label?: string;
   count: number;
 };
 
@@ -159,7 +160,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
       salesman_name: options.salesman_name?.length || 0,
       customer_category: options.customer_category?.length || 0,
       coverage_combination: options.coverage_combination?.length || 0,
-        renewal_mode: options.renewal_mode?.length || 0,
+      renewal_mode: options.renewal_mode?.length || 0,
     });
     logger.debug('Sample org', options.org_level_3?.slice(0, 2));
     logger.debug('Sample salesman', options.salesman_name?.slice(0, 2));
@@ -187,7 +188,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
   const toMultiSelectOptions = (optionsList: DimensionOption[]): MultiSelectOption[] =>
     optionsList.map(option => ({
       value: option.value,
-      label: option.value,
+      label: option.label || option.value,
       count: option.count,
     }));
 
@@ -220,14 +221,14 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
     onState: string;
     offState: string;
   }> = [
-    { key: 'is_nev', label: '能源类型', onState: '新能源', offState: '燃油' },
-    { key: 'is_new_car', label: '车辆新旧', onState: '新车', offState: '旧车' },
-    { key: 'is_transfer', label: '过户状态', onState: '过户', offState: '非过户' },
-    { key: 'is_renewal', label: '续保状态', onState: '续保', offState: '非续保' },
-    { key: 'is_telemarketing', label: '销售渠道', onState: '电销', offState: '非电销' },
-    { key: 'insurance_type', label: '险类', onState: '交强险', offState: '商业保险' },
-    { key: 'is_cross_sell', label: '交叉销售', onState: '交叉销售', offState: '非交叉销售' },
-  ];
+      { key: 'is_nev', label: '能源类型', onState: '新能源', offState: '燃油' },
+      { key: 'is_new_car', label: '车辆新旧', onState: '新车', offState: '旧车' },
+      { key: 'is_transfer', label: '过户状态', onState: '过户', offState: '非过户' },
+      { key: 'is_renewal', label: '续保状态', onState: '续保', offState: '非续保' },
+      { key: 'is_telemarketing', label: '销售渠道', onState: '电销', offState: '非电销' },
+      { key: 'insurance_type', label: '险类', onState: '交强险', offState: '商业保险' },
+      { key: 'is_cross_sell', label: '交叉销售', onState: '交叉销售', offState: '非交叉销售' },
+    ];
 
   // 衍生维度（快捷组合）
   const derivedScenarios = [
@@ -351,9 +352,8 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
       role="region"
     >
       <header
-        className={`flex items-center p-4 border-b gap-[5px] ${
-          fullCollapsible ? 'cursor-pointer hover:bg-neutral-50 transition-colors' : ''
-        }`}
+        className={`flex items-center p-4 border-b gap-[5px] ${fullCollapsible ? 'cursor-pointer hover:bg-neutral-50 transition-colors' : ''
+          }`}
         onClick={fullCollapsible ? onToggleCollapse : undefined}
       >
         <h2 id="filter-panel-title" className="text-lg font-semibold whitespace-nowrap flex items-center gap-2">
@@ -393,170 +393,169 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
 
       {/* 完全折叠时隐藏整个内容区域 */}
       {!isFullyCollapsed && (
-      <div className="p-4 space-y-4">
-        <FilterLayoutV2
-          filters={filters}
-          onChange={onChange}
-          availableYears={availableYears}
-          currentYear={currentYear}
-          defaultDateCriteria={defaultDateCriteria}
-          defaultDateRange={defaultDateRange}
-          defaultYear={defaultYear}
-          maxDataDate={maxDataDate}
-          options={{
-            org_level_3: options.org_level_3,
-            customer_category: options.customer_category,
-            coverage_combination: options.coverage_combination,
-            renewal_mode: options.renewal_mode,
-          }}
-          onMultiSelectChange={handleMultiSelectChange}
-          visibleFields={finalVisibleFields}
-          selectionModes={finalSelectionModes}
-          orgActions={
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={() =>
-                  handleMultiSelectChange(
-                    'org_level_3',
-                    getOrgSelectionByType(
-                      (options.org_level_3 || []).map((option) => option.value),
-                      'remote'
+        <div className="p-4 space-y-4">
+          <FilterLayoutV2
+            filters={filters}
+            onChange={onChange}
+            availableYears={availableYears}
+            currentYear={currentYear}
+            defaultDateCriteria={defaultDateCriteria}
+            defaultDateRange={defaultDateRange}
+            defaultYear={defaultYear}
+            maxDataDate={maxDataDate}
+            options={{
+              org_level_3: options.org_level_3,
+              customer_category: options.customer_category,
+              coverage_combination: options.coverage_combination,
+              renewal_mode: options.renewal_mode,
+            }}
+            onMultiSelectChange={handleMultiSelectChange}
+            visibleFields={finalVisibleFields}
+            selectionModes={finalSelectionModes}
+            orgActions={
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleMultiSelectChange(
+                      'org_level_3',
+                      getOrgSelectionByType(
+                        (options.org_level_3 || []).map((option) => option.value),
+                        'remote'
+                      )
                     )
-                  )
-                }
-                className="text-xs px-2 py-1 bg-warning-100 text-warning-700 rounded hover:bg-warning-200"
-                aria-label="筛选异地机构"
-              >
-                异地
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleMultiSelectChange(
-                    'org_level_3',
-                    getOrgSelectionByType(
-                      (options.org_level_3 || []).map((option) => option.value),
-                      'local'
-                    )
-                  )
-                }
-                className="text-xs px-2 py-1 bg-success-100 text-success-700 rounded hover:bg-success-200"
-                aria-label="筛选同城机构"
-              >
-                同城
-              </button>
-            </div>
-          }
-        />
-
-        {!collapsed && (showSalesman || showQuickCombos || showBasicOptions) && (
-          <div id="advanced-filters-content" className="space-y-4">
-            <div className="space-y-4">
-              {showSalesman && (
-                <CollapsibleFilterSection id="salesman-filter" title="业务员筛选">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <MultiSelectDropdown
-                      title="业务员"
-                      options={toMultiSelectOptions(getFilteredSalesmanOptions())}
-                      selectedValues={filters.salesman_name || []}
-                      onChange={(values) => handleMultiSelectChange('salesman_name', values)}
-                      singleSelect={finalSelectionModes.salesmanMode === 'single'}
-                    />
-                  </div>
-                </CollapsibleFilterSection>
-              )}
-
-              {showQuickCombos && (
-                <CollapsibleFilterSection
-                  id="quick-combo"
-                  title="快捷组合"
-                  defaultExpanded
+                  }
+                  className="text-xs px-2 py-1 bg-warning-100 text-warning-700 rounded hover:bg-warning-200"
+                  aria-label="筛选异地机构"
                 >
-                  <div className="flex flex-wrap gap-2" role="group" aria-label="快捷筛选组合">
-                    {derivedScenarios.map((scenario) => (
-                      <button
-                        key={scenario.label}
-                        type="button"
-                        onClick={scenario.apply}
-                        className={`px-3 py-1 text-sm rounded border transition ${
-                          scenario.isActive
-                            ? 'bg-warning text-white border-warning'
-                            : 'bg-neutral-100 text-neutral-700 border-neutral-300 hover:bg-neutral-200'
-                        }`}
-                        title={scenario.description}
-                        aria-pressed={scenario.isActive}
-                        aria-label={`${scenario.label}: ${scenario.description}`}
-                      >
-                        {scenario.label}
-                        {scenario.isActive && ' ✓'}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-neutral-400 mt-2">
-                    提示：点击快捷组合按钮将自动设置对应的筛选条件组合
-                  </p>
-                </CollapsibleFilterSection>
-              )}
+                  异地
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleMultiSelectChange(
+                      'org_level_3',
+                      getOrgSelectionByType(
+                        (options.org_level_3 || []).map((option) => option.value),
+                        'local'
+                      )
+                    )
+                  }
+                  className="text-xs px-2 py-1 bg-success-100 text-success-700 rounded hover:bg-success-200"
+                  aria-label="筛选同城机构"
+                >
+                  同城
+                </button>
+              </div>
+            }
+          />
 
-              {showBasicOptions && (
-                <CollapsibleFilterSection id="basic-options" title="基本选项">
-                  <div className="flex flex-wrap gap-2" role="group" aria-label="基本筛选选项">
-                    {basicToggleConfigs.map((config) => {
-                      const value = filters[config.key] as boolean | null | undefined;
-                      const { displayText, buttonClass } = formatToggleButton(config, value);
-                      const stateDescription = value === null || value === undefined
-                        ? '当前为全部，点击切换到' + config.onState
-                        : value === true
-                        ? `当前为${config.onState}，点击切换到${config.offState}`
-                        : `当前为${config.offState}，点击切换到全部`;
+          {!collapsed && (showSalesman || showQuickCombos || showBasicOptions) && (
+            <div id="advanced-filters-content" className="space-y-4">
+              <div className="space-y-4">
+                {showSalesman && (
+                  <CollapsibleFilterSection id="salesman-filter" title="业务员筛选">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <MultiSelectDropdown
+                        title="业务员"
+                        options={toMultiSelectOptions(getFilteredSalesmanOptions())}
+                        selectedValues={filters.salesman_name || []}
+                        onChange={(values) => handleMultiSelectChange('salesman_name', values)}
+                        singleSelect={finalSelectionModes.salesmanMode === 'single'}
+                      />
+                    </div>
+                  </CollapsibleFilterSection>
+                )}
 
-                      return (
+                {showQuickCombos && (
+                  <CollapsibleFilterSection
+                    id="quick-combo"
+                    title="快捷组合"
+                    defaultExpanded
+                  >
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="快捷筛选组合">
+                      {derivedScenarios.map((scenario) => (
                         <button
-                          key={String(config.key)}
+                          key={scenario.label}
                           type="button"
-                          onClick={() => handleBooleanChange(config.key, cycleTriState(value))}
-                          className={`px-3 py-1 text-sm rounded border transition ${buttonClass}`}
-                          aria-label={`${config.label}: ${displayText}`}
-                          aria-pressed={value !== null && value !== undefined}
-                          title={stateDescription}
+                          onClick={scenario.apply}
+                          className={`px-3 py-1 text-sm rounded border transition ${scenario.isActive
+                              ? 'bg-warning text-white border-warning'
+                              : 'bg-neutral-100 text-neutral-700 border-neutral-300 hover:bg-neutral-200'
+                            }`}
+                          title={scenario.description}
+                          aria-pressed={scenario.isActive}
+                          aria-label={`${scenario.label}: ${scenario.description}`}
                         >
-                          {displayText}
+                          {scenario.label}
+                          {scenario.isActive && ' ✓'}
                         </button>
-                      );
-                    })}
-                  </div>
-                </CollapsibleFilterSection>
-              )}
+                      ))}
+                    </div>
+                    <p className="text-xs text-neutral-400 mt-2">
+                      提示：点击快捷组合按钮将自动设置对应的筛选条件组合
+                    </p>
+                  </CollapsibleFilterSection>
+                )}
 
-              {showBasicOptions && (
-                <CollapsibleFilterSection id="grade-score-filters" title="等级评分">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <MultiSelectDropdown
-                      title="车险分等级"
-                      options={toMultiSelectOptions(options.insurance_grade || [])}
-                      selectedValues={filters.insurance_grade || []}
-                      onChange={(values) => handleMultiSelectChange('insurance_grade', values)}
-                    />
-                    <MultiSelectDropdown
-                      title="小货车评分"
-                      options={toMultiSelectOptions(options.small_truck_score || [])}
-                      selectedValues={filters.small_truck_score || []}
-                      onChange={(values) => handleMultiSelectChange('small_truck_score', values)}
-                    />
-                    <MultiSelectDropdown
-                      title="大货车评分"
-                      options={toMultiSelectOptions(options.large_truck_score || [])}
-                      selectedValues={filters.large_truck_score || []}
-                      onChange={(values) => handleMultiSelectChange('large_truck_score', values)}
-                    />
-                  </div>
-                </CollapsibleFilterSection>
-              )}
+                {showBasicOptions && (
+                  <CollapsibleFilterSection id="basic-options" title="基本选项">
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="基本筛选选项">
+                      {basicToggleConfigs.map((config) => {
+                        const value = filters[config.key] as boolean | null | undefined;
+                        const { displayText, buttonClass } = formatToggleButton(config, value);
+                        const stateDescription = value === null || value === undefined
+                          ? '当前为全部，点击切换到' + config.onState
+                          : value === true
+                            ? `当前为${config.onState}，点击切换到${config.offState}`
+                            : `当前为${config.offState}，点击切换到全部`;
+
+                        return (
+                          <button
+                            key={String(config.key)}
+                            type="button"
+                            onClick={() => handleBooleanChange(config.key, cycleTriState(value))}
+                            className={`px-3 py-1 text-sm rounded border transition ${buttonClass}`}
+                            aria-label={`${config.label}: ${displayText}`}
+                            aria-pressed={value !== null && value !== undefined}
+                            title={stateDescription}
+                          >
+                            {displayText}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </CollapsibleFilterSection>
+                )}
+
+                {showBasicOptions && (
+                  <CollapsibleFilterSection id="grade-score-filters" title="等级评分">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <MultiSelectDropdown
+                        title="车险分等级"
+                        options={toMultiSelectOptions(options.insurance_grade || [])}
+                        selectedValues={filters.insurance_grade || []}
+                        onChange={(values) => handleMultiSelectChange('insurance_grade', values)}
+                      />
+                      <MultiSelectDropdown
+                        title="小货车评分"
+                        options={toMultiSelectOptions(options.small_truck_score || [])}
+                        selectedValues={filters.small_truck_score || []}
+                        onChange={(values) => handleMultiSelectChange('small_truck_score', values)}
+                      />
+                      <MultiSelectDropdown
+                        title="大货车评分"
+                        options={toMultiSelectOptions(options.large_truck_score || [])}
+                        selectedValues={filters.large_truck_score || []}
+                        onChange={(values) => handleMultiSelectChange('large_truck_score', values)}
+                      />
+                    </div>
+                  </CollapsibleFilterSection>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
       )}
     </section>
   );

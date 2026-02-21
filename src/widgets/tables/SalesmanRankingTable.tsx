@@ -1,5 +1,6 @@
 import React from 'react';
 import { VirtualTable } from '../table/VirtualTable';
+import { formatSalesmanName } from '../../shared/utils/formatters';
 
 export interface SalesmanRankingRow {
   salesman_name: string;
@@ -31,7 +32,12 @@ export const SalesmanRankingTable: React.FC<SalesmanRankingTableProps> = ({
       </div>
       <VirtualTable
         columns={[
-          { key: 'salesman_name', header: '业务员', width: 120 },
+          {
+            key: 'salesman_name',
+            header: '业务员',
+            width: 120,
+            render: (val: string) => formatSalesmanName(val),
+          },
           { key: 'org_level_3', header: '三级机构', width: 150 },
           { key: 'total_premium', header: premiumLabel, width: 120 },
           { key: 'policy_count', header: '保单数', width: 100 },

@@ -179,3 +179,13 @@ export function formatAchievementRate(value: number | null | undefined): string 
   if (value === null || value === undefined || !Number.isFinite(value)) return '-';
   return `${(value * 100).toFixed(1)}%`;
 }
+
+/**
+ * 清理业务员名称中的数字ID与括号，仅保留纯中文字符
+ */
+export function formatSalesmanName(name: string | null | undefined): string {
+  if (!name) return '-';
+  // Remove numbers, parentheses, hyphens, underscores, and spaces
+  const cleaned = name.replace(/[0-9()（）_\-\s]+/g, '');
+  return cleaned.trim() || name;
+}
