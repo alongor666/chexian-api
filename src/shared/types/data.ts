@@ -94,6 +94,8 @@ export interface DimensionShareData {
  * 筛选器选项
  */
 export interface FilterOption {
+  /** 选项展示名称（可选，若有则优先展示） */
+  label?: string;
   /** 选项值 */
   value: string;
   /** 选项计数 */
