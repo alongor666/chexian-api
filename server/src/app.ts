@@ -75,11 +75,13 @@ app.get('/health', (req, res) => {
  * 6. API路由
  */
 import authRoutes from './routes/auth.js';
+import wecomAuthRoutes from './routes/wecom-auth.js';
 import queryRoutes from './routes/query.js';
 import filtersRoutes from './routes/filters.js';
 import dataRoutes, { setCurrentDataFile } from './routes/data.js';
 import aiRoutes from './routes/ai.js';
 
+app.use('/api/auth/wecom', wecomAuthRoutes); // 放前面避免 loginLimiter 影响
 app.use('/api/auth', authRoutes);
 app.use('/api/query', queryRoutes);
 app.use('/api/filters', filtersRoutes);
@@ -109,14 +111,14 @@ async function startServer() {
     const dataDir = getDataDir();
     const parquetFiles = fs.existsSync(dataDir)
       ? fs.readdirSync(dataDir)
-          .filter(f => f.endsWith('.parquet'))
-          .map(f => ({
-            name: f,
-            path: path.join(dataDir, f),
-            mtime: fs.statSync(path.join(dataDir, f)).mtimeMs,
-            size: fs.statSync(path.join(dataDir, f)).size,
-          }))
-          .sort((a, b) => b.mtime - a.mtime) // 最新文件优先
+        .filter(f => f.endsWith('.parquet'))
+        .map(f => ({
+          name: f,
+          path: path.join(dataDir, f),
+          mtime: fs.statSync(path.join(dataDir, f)).mtimeMs,
+          size: fs.statSync(path.join(dataDir, f)).size,
+        }))
+        .sort((a, b) => b.mtime - a.mtime) // 最新文件优先
       : [];
 
     // 优先选择非 test-data 的文件，否则回退到 test-data

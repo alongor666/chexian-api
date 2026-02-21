@@ -529,6 +529,56 @@ pm2 logs chexian-api --lines 20
 curl http://localhost:3000/health
 ```
 
+### 应急公网开放（带自动回滚）
+
+> 仅用于临时演示或紧急排障。默认策略仍应保持「白名单 + JWT」。
+
+```bash
+# 1) 从本地上传最新脚本到 VPS 固定路径
+scp -i ~/.ssh/id_ed25519 ./deploy/vps-deploy.sh \
+  root@162.14.113.44:/usr/local/bin/chexian-vps-deploy.sh
+
+# 2) 进入 VPS（Asia/Beijing 时区）
+ssh -i ~/.ssh/id_ed25519 root@162.14.113.44
+chmod 755 /usr/local/bin/chexian-vps-deploy.sh
+
+# 3) 临时开放公网访问 + Basic Auth + 到点自动回滚
+bash /usr/local/bin/chexian-vps-deploy.sh \
+  --action emergency-open \
+  --until "2026-02-20 23:59" \
+  --basic-auth-user temp-access
+
+# 4) 记录脚本输出的临时密码（若未显式传 --basic-auth-pass 会自动生成）
+# 5) 确认回滚任务
+atq
+```
+
+**开放后验证（非白名单公网）**：
+
+```bash
+# 预期：401（出现 Basic Auth challenge）
+curl -I https://chexian.cretvalu.com/
+
+# 预期：200（或前端入口正常响应）
+curl -u temp-access:'<临时密码>' -I https://chexian.cretvalu.com/
+```
+
+**手动回滚（若需提前结束）**：
+
+```bash
+bash /usr/local/bin/chexian-vps-deploy.sh --action rollback-access
+```
+
+**自动回滚后验证（2026-02-20 23:59 之后）**：
+
+```bash
+# 预期恢复 403（白名单策略）
+curl -I https://chexian.cretvalu.com/
+
+# 配置检查
+nginx -t && systemctl reload nginx
+```
+
 ---
 
 ## 八、故障恢复

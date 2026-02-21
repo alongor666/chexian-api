@@ -54,6 +54,14 @@ const PRESET_USERS: Record<string, UserCredential> = {
  * 认证服务类
  */
 class AuthService {
+  private normalizeUsername(input: string): string {
+    return input.normalize('NFKC').trim().toLowerCase();
+  }
+
+  private normalizePassword(input: string): string {
+    return input.normalize('NFKC').trim();
+  }
+
   /**
    * 用户登录
    * @param username 用户名
@@ -64,21 +72,25 @@ class AuthService {
     username: string,
     password: string
   ): Promise<{ token: string; user: Omit<UserCredential, 'passwordHash'> }> {
+    // 对输入做最小标准化，减少浏览器自动填充/输入法导致的误判
+    const normalizedUsername = this.normalizeUsername(username);
+    const normalizedPassword = this.normalizePassword(password);
+
     // 1. 查找用户
-    const user = PRESET_USERS[username];
+    const user = PRESET_USERS[normalizedUsername];
     if (!user) {
       throw new AppError(401, 'Invalid username or password');
     }
 
     // 2. 验证密码
-    const isPasswordValid = await this.verifyPassword(password, user.passwordHash);
+    const isPasswordValid = await this.verifyPassword(normalizedPassword, user.passwordHash);
     if (!isPasswordValid) {
       throw new AppError(401, 'Invalid username or password');
     }
 
     // 3. 生成JWT Token
     const payload: JwtPayload = {
-      userId: username, // 简化处理，使用username作为userId
+      userId: normalizedUsername, // 简化处理，使用username作为userId
       username: user.username,
       role: user.role,
       organization: user.organization,

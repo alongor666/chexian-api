@@ -72,30 +72,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
   const maxDataDate = getCurrentMetadata()?.maxDate;
   const availableYears = getCurrentMetadata()?.availableYears;
 
-  // API 模式：使用默认元数据
-  const loadDataMetadata = useCallback(async () => {
-    try {
-      logger.info('双口径元数据：API 模式使用默认值');
-      const today = new Date().toISOString().split('T')[0];
-      const currentYear = new Date().getFullYear();
-      const apiMetadata: DualDateMetadata = {
-        policy: { maxDate: today, availableYears: [currentYear - 1, currentYear] },
-        insurance: { maxDate: today, availableYears: [currentYear - 1, currentYear] },
-      };
-      setDualDateMetadata(apiMetadata);
-      return apiMetadata;
-    } catch (err) {
-      logger.error('双口径元数据：加载失败', err);
-      const today = new Date().toISOString().split('T')[0];
-      const currentYear = new Date().getFullYear();
-      const fallbackMetadata: DualDateMetadata = {
-        policy: { maxDate: today, availableYears: [currentYear] },
-        insurance: { maxDate: today, availableYears: [currentYear] },
-      };
-      setDualDateMetadata(fallbackMetadata);
-      return fallbackMetadata;
-    }
-  }, []);
+
 
   // API 模式：从后端获取筛选选项
   const loadFilterOptions = useCallback(async () => {
@@ -135,9 +112,23 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       };
 
       setFilterOptions(options);
-      logger.info('Filter options: loaded from API');
+
+      // Update max date from API
+      const today = new Date().toISOString().split('T')[0];
+      const maxDate = (apiOptions.dateRange && apiOptions.dateRange.max_date) ? apiOptions.dateRange.max_date.split(' ')[0] : today;
+      const dataYear = new Date(maxDate).getFullYear();
+
+      const apiMetadata: DualDateMetadata = {
+        policy: { maxDate: maxDate, availableYears: [dataYear - 1, dataYear] },
+        insurance: { maxDate: maxDate, availableYears: [dataYear - 1, dataYear] },
+      };
+      setDualDateMetadata(apiMetadata);
+
+      logger.info('Filter options: loaded from API, maxDate=', maxDate);
+      return { options, maxDate, dataYear };
     } catch (err) {
       logger.error('Filter options: load failed', err);
+      return null;
     }
   }, []);
 
@@ -151,24 +142,17 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
 
     setIsLoading(true);
     try {
-      const metadata = await loadDataMetadata();
+      const result = await loadFilterOptions();
 
-      const policyMetadata = metadata.policy;
-      if (policyMetadata && policyMetadata.availableYears.length > 0) {
-        const currentYear = new Date().getFullYear();
-        const defaultYear = policyMetadata.availableYears.includes(currentYear)
-          ? currentYear
-          : policyMetadata.availableYears[0];
-
-        setFilters({
+      if (result) {
+        setFilters(prev => ({
+          ...prev,
           date_criteria: 'policy_date',
-          analysis_year: defaultYear,
-          policy_date_start: `${defaultYear}-01-01`,
-          policy_date_end: policyMetadata.maxDate,
-        });
+          analysis_year: result.dataYear,
+          policy_date_start: `${result.dataYear}-01-01`,
+          policy_date_end: result.maxDate,
+        }));
       }
-
-      await loadFilterOptions();
 
       setIsInitialized(true);
       logger.info('筛选器初始化完成（API 模式）');
@@ -177,7 +161,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [isInitialized, isDataLoaded, loadDataMetadata, loadFilterOptions]);
+  }, [isInitialized, isDataLoaded, loadFilterOptions]);
 
   useEffect(() => {
     if (isDataLoaded && !isInitialized && !isLoading) {
