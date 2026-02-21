@@ -10,6 +10,7 @@ export interface Column<T extends object> {
   header: string;
   width: number;
   align?: 'left' | 'right' | 'center';
+  render?: (value: any, item: T) => React.ReactNode;
 }
 
 interface VirtualTableProps<T extends object> {
@@ -55,9 +56,11 @@ const VirtualRow = ({
             style={{ width: col.width }}
             className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${alignClass} ${numberClass}`}
           >
-            {typeof rawValue === 'bigint'
-              ? rawValue.toString()
-              : (rawValue as React.ReactNode) ?? ''}
+            {col.render
+              ? col.render(rawValue, item)
+              : typeof rawValue === 'bigint'
+                ? rawValue.toString()
+                : (rawValue as React.ReactNode) ?? ''}
           </div>
         );
       })}
@@ -129,6 +132,7 @@ export const VirtualTable = <T extends object>({
                   >
                     {(() => {
                       const rawValue = (item as any)?.[col.key] as TableCellValue;
+                      if (col.render) return col.render(rawValue, item);
                       if (typeof rawValue === 'bigint') return rawValue.toString();
                       return (rawValue as React.ReactNode) ?? '';
                     })()}

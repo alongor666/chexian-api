@@ -27,7 +27,8 @@ import { duckdbService } from '../services/duckdb.js';
 import { permissionService } from '../services/permission.js';
 import { generateKpiQuery } from '../sql/kpi.js';
 import { generateKpiDetailQuery } from '../sql/kpi-detail.js';
-import { generatePremiumTrendQuery, TimeView } from '../sql/trend.js';
+import { generatePremiumTrendQuery, generateQualityBusinessTrendQuery, TimeView } from '../sql/trend.js';
+import type { ViewPerspective } from '../types/view-perspective.js';
 // Phase 2 SQL Generators
 import { generateTonnageRoseQuery, generateOrgByTonnageQuery, generateTonnageByOrgQuery } from '../sql/truck.js';
 import { generateGrowthQuery, generateDailyGrowthWithContextQuery, GrowthConfig, GrowthType, TimeView as GrowthTimeView } from '../sql/growth.js';
@@ -143,6 +144,7 @@ const granularityMap: Record<string, string> = {
 const trendExtraSchema = z.object({
   timeView: z.string().optional(),
   granularity: z.string().optional(),
+  perspective: z.enum(['premium', 'policy_count']).optional(),
 });
 
 /**
@@ -157,6 +159,7 @@ router.get(
     const timeView = (granularityMap[
       trendResult.data?.timeView || trendResult.data?.granularity || 'daily'
     ] || 'daily') as 'daily' | 'weekly' | 'monthly';
+    const perspective = (trendResult.data?.perspective || 'premium') as ViewPerspective;
 
     // 解析通用筛选参数
     const filterResult = commonFilterSchema.safeParse(req.query);
@@ -173,9 +176,47 @@ router.get(
       timeView as TimeView,
       finalWhereClause,
       filterResult.data.dateField || 'policy_date',
-      'premium'
+      perspective
     );
     // 趋势查询缓存 120 秒
+    const result = await duckdbService.query(sql, 120_000);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  })
+);
+
+/**
+ * GET /api/query/quality-business-trend
+ * 获取优质业务占比趋势数据
+ */
+router.get(
+  '/quality-business-trend',
+  asyncHandler(async (req: Request, res: Response) => {
+    const trendResult = trendExtraSchema.safeParse(req.query);
+    const timeView = (granularityMap[
+      trendResult.data?.timeView || trendResult.data?.granularity || 'daily'
+    ] || 'daily') as 'daily' | 'weekly' | 'monthly';
+    const perspective = (trendResult.data?.perspective || 'premium') as ViewPerspective;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const sql = generateQualityBusinessTrendQuery(
+      timeView as TimeView,
+      finalWhereClause,
+      filterResult.data.dateField || 'policy_date',
+      perspective
+    );
     const result = await duckdbService.query(sql, 120_000);
 
     res.json({

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
+/** 用户名密码登录 */
 const login = async (page: Page) => {
   await page.goto('/#/login');
   await page.getByPlaceholder('请输入用户名').fill('admin');
@@ -8,9 +9,21 @@ const login = async (page: Page) => {
   await page.waitForURL(/#\/(dashboard)?$/);
 };
 
+/** 确认已加载数据并进入仪表盘 */
 const ensureDataLoaded = async (page: Page) => {
   await page.goto('/#/');
   await page.waitForLoadState('domcontentloaded');
+  if (page.url().includes('#/login')) {
+    await login(page);
+    await page.goto('/#/');
+    await page.waitForLoadState('domcontentloaded');
+  }
+  const loginHeading = page.getByRole('heading', { name: '车险业绩分析系统' });
+  if (await loginHeading.isVisible().catch(() => false)) {
+    await login(page);
+    await page.goto('/#/');
+    await page.waitForLoadState('domcontentloaded');
+  }
   if (page.url().includes('#/dashboard')) {
     return;
   }
@@ -38,6 +51,7 @@ const ensureDataLoaded = async (page: Page) => {
   await page.waitForURL(/#\/dashboard/);
 };
 
+/** 记录关键页面截图 */
 const attachScreenshot = async (page: Page, name: string) => {
   const buffer = await page.screenshot({ fullPage: true });
   await test.info().attach(name, { body: buffer, contentType: 'image/png' });
@@ -48,11 +62,12 @@ test('仪表盘加载、视角切换与趋势视图切换', async ({ page }: { p
   await ensureDataLoaded(page);
 
   await page.goto('/#/dashboard');
-  await expect(page.getByText('总保费')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '保费分析看板' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /保费趋势/ })).toBeVisible();
   await attachScreenshot(page, 'dashboard-loaded');
 
   await page.getByRole('button', { name: '保单件数' }).click();
-  await expect(page.getByText('保单件数趋势')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /保单件数趋势/ })).toBeVisible();
   await attachScreenshot(page, 'dashboard-perspective-policy-count');
 
   const monthlyButton = page.getByRole('button', { name: '签单自然月' });

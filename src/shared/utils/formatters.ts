@@ -179,3 +179,23 @@ export function formatAchievementRate(value: number | null | undefined): string 
   if (value === null || value === undefined || !Number.isFinite(value)) return '-';
   return `${(value * 100).toFixed(1)}%`;
 }
+
+// ==================== 业务字段专用格式化函数 ====================
+
+/**
+ * 格式化业务员名称（只保留中文字符和字母，去除数字ID、圆括号等）
+ * 全局规则要求：业务员只显示中文，不显示数字ID
+ *
+ * @example formatSalesmanName("张三(1001)") => "张三"
+ * @example formatSalesmanName("1002李四") => "李四"
+ */
+export function formatSalesmanName(name: string | null | undefined): string {
+  if (!name) return '-';
+
+  // 提取出所有中文字母，如果是全数字则返回横杠，否则返回合并后的中文
+  // 这里采用更安全的做法：移除数字、左右括号、横线、下划线及空格
+  const cleaned = name.replace(/[0-9()（）_\-\s]+/g, '');
+
+  // 如果清洗后为空（例如纯数字），为了防错依然返回原值，否则返回清洗后的名称
+  return cleaned.trim() || name;
+}

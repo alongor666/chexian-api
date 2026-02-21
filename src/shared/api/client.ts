@@ -96,6 +96,16 @@ export interface TrendData {
 }
 
 /**
+ * 优质业务占比趋势数据
+ */
+export interface QualityBusinessTrendData {
+  time_period: string;
+  quality_premium: number;
+  total_premium: number;
+  quality_ratio: number;
+}
+
+/**
  * 文件信息
  */
 export interface FileInfo {
@@ -407,6 +417,24 @@ class ApiClient {
       });
     }
     return this.request<TrendData[]>(`/query/trend?${params.toString()}`);
+  }
+
+  /**
+   * 获取优质业务占比趋势数据
+   */
+  async getQualityBusinessTrend(
+    granularity: 'day' | 'week' | 'month' = 'day',
+    filters?: Record<string, any>
+  ): Promise<QualityBusinessTrendData[]> {
+    const params = new URLSearchParams({ granularity });
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    return this.request<QualityBusinessTrendData[]>(`/query/quality-business-trend?${params.toString()}`);
   }
 
   /**

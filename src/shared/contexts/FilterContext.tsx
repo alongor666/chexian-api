@@ -3,6 +3,7 @@ import { createLogger } from '../utils/logger';
 import { getAvailableSalesmen, type OrgSalesmanCache } from '../../features/dashboard/orgSalesman';
 import type { AdvancedFilterState, FilterOptions, DateMetadata, DualDateMetadata } from '../types/data';
 import { getMetadataByCriteria } from '../types/data';
+import { formatSalesmanName } from '../utils/formatters';
 import { useDataStatus } from './DataContext';
 import { apiClient } from '../api/client';
 
@@ -87,6 +88,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
         })),
         salesman_name: (apiOptions.salesmen || []).map((value: string) => ({
           value,
+          label: formatSalesmanName(value), // add label to FilterOption if not exists or override display
           count: 0,
         })),
         customer_category: (apiOptions.customerCategories || []).map((value: string) => ({
