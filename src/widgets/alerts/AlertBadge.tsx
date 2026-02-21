@@ -10,7 +10,6 @@
 
 import React from 'react';
 import type { AlertSummary } from '../../shared/types/alert';
-import { colorClasses } from '@/shared/styles';
 
 /** 组件属性 */
 export interface AlertBadgeProps {

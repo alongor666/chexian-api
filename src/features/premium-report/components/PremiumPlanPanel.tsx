@@ -13,7 +13,7 @@ import { usePremiumPlan } from '../hooks/usePremiumPlan';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
-import { formatPremiumWan, formatCount, formatRate } from '../../../shared/utils/formatters';
+import { formatCount } from '../../../shared/utils/formatters';
 import type { PlanDrilldownRow, PlanKpiData, PlanDistributionRow, SortState } from '../types/premiumReport';
 
 /** 格式化达成率（百分比，已是 0-100 范围） */

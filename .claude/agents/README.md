@@ -1,8 +1,8 @@
-# AI Agents 索引 (v2.0)
+# AI Agents 索引 (v2.1)
 
 > 车险业绩看板项目 - 专业化 AI 子代理完整参考
 
-**最后更新**: 2026-01-16
+**最后更新**: 2026-02-20
 
 ---
 
@@ -10,29 +10,30 @@
 
 | 我需要... | 使用代理 |
 |-----------|----------|
-| 🗄️ DuckDB 查询优化 | [`duckdb-optimizer`](#duckdb-optimizer) ⭐ NEW |
-| ⚡ React 性能优化 | [`react-performance`](#react-performance) ⭐ NEW |
-| 💡 业务分析与洞察 | [`business-intelligence`](#business-intelligence) ⭐ NEW |
-| 🎨 UI/UX 设计优化 | [`ui-ux-designer`](#ui-ux-designer) ⭐ NEW |
+| 🗄️ DuckDB 查询优化 | [`duckdb-optimizer`](#duckdb-optimizer) |
+| ⚡ React 性能优化 | [`react-performance`](#react-performance) |
+| 💡 业务分析与洞察 | [`business-intelligence`](#business-intelligence) |
+| 🎨 UI/UX 设计优化 | [`ui-ux-designer`](#ui-ux-designer) |
 | 🔍 代码简化与重构 | [`code-simplifier`](#code-simplifier) |
 | ✅ 数据验证与清洗 | [`data-validator`](#data-validator) |
 | 🔧 应用验证与测试 | [`verify-app`](#verify-app) |
 | 💾 会话管理 | [`session-manager`](#session-manager) |
 | 📚 知识提取与归档 | [`knowledge-miner`](#knowledge-miner) |
-| 🏗️ 架构规划 | [`architect`](#architect) ⭐ NEW |
-| 🔨 构建错误解决 | [`build-error-resolver`](#build-error-resolver) ⭐ NEW |
-| 🔐 安全审查专家 | [`security-reviewer`](#security-reviewer) ⭐ NEW |
-| 🧪 TDD 开发指导 | [`tdd-guide`](#tdd-guide) ⭐ NEW |
-| 🎭 E2E 测试运行 | [`e2e-runner`](#e2e-runner) ⭐ NEW |
+| 🏗️ 架构规划 | [`architect`](#architect) |
+| 🔨 构建错误解决 | [`build-error-resolver`](#build-error-resolver) |
+| 🔐 安全审查 | [`security-reviewer`](#security-reviewer) |
+| 🧪 TDD 开发指导 | [`tdd-guide`](#tdd-guide) |
+| 🎭 E2E 测试运行 | [`e2e-runner`](#e2e-runner) |
 
 ---
 
 ## 🗂️ 代理分类
 
-### 性能优化 (2个新代理)
+### 性能优化 (2个代理)
 
-#### duckdb-optimizer ⭐ NEW
-**专长**: DuckDB-WASM 性能优化与 SQL 查询调优
+#### duckdb-optimizer
+**角色**: DuckDB-WASM 性能优化与 SQL 查询调优专家
+
 **触发场景**:
 - 查询执行时间超过 3 秒
 - 内存占用过高导致浏览器卡顿
@@ -54,8 +55,9 @@
 
 ---
 
-#### react-performance ⭐ NEW
-**专长**: React 应用性能优化与用户体验提升
+#### react-performance
+**角色**: React 应用性能优化与用户体验提升专家
+
 **触发场景**:
 - 组件渲染卡顿或延迟
 - 页面加载时间过长（FCP > 2s）
@@ -79,10 +81,11 @@
 
 ---
 
-### 业务分析 (1个新代理)
+### 业务分析 (1个代理)
 
-#### business-intelligence ⭐ NEW
-**专长**: 车险业务分析专家，数据洞察与可视化顾问
+#### business-intelligence
+**角色**: 车险业务分析专家，数据洞察与可视化顾问
+
 **触发场景**:
 - 需要新增业务分析维度
 - 指标计算逻辑复杂或不清晰
@@ -116,10 +119,11 @@
 
 ---
 
-### UI/UX 设计 (1个新代理)
+### UI/UX 设计 (1个代理)
 
-#### ui-ux-designer ⭐ NEW
-**专长**: 用户界面与体验设计专家，现代化布局与交互顾问
+#### ui-ux-designer
+**角色**: 用户界面与体验设计专家，现代化布局与交互顾问
+
 **触发场景**:
 - 需要新增或重构 UI 组件
 - 布局不合理或视觉混乱
@@ -132,124 +136,154 @@
 3. **颜色系统**: 主色、成功、警告、错误、中性色
 4. **响应式断点**: sm(640px) / md(768px) / lg(1024px) / xl(1280px)
 
-**组件规范**:
-```tsx
-// 按钮
-<Button variant="default" size="md">点击</Button>
-
-// 卡片
-<Card className="p-6 shadow-sm">
-  <CardHeader><CardTitle>标题</CardTitle></CardHeader>
-  <CardContent>内容</CardContent>
-</Card>
-
-// 表格
-<Table>
-  <TableHeader><TableRow>...</TableRow></TableHeader>
-  <TableBody>...</TableBody>
-</Table>
-```
-
-**可访问性检查清单**:
-- [ ] 所有交互元素可通过键盘访问
-- [ ] 图片包含 alt 属性
-- [ ] 表单元素包含 label
-- [ ] 颜色对比度 >= 4.5:1
-- [ ] 焦点状态可见
+**技术栈**: React 19 + TypeScript + Tailwind CSS + ECharts
 
 **详细文档**: [ui-ux-designer.md](./ui-ux-designer.md)
 
 ---
 
-### 代码质量 (3个原有代理)
+### 代码质量 (3个代理)
 
 #### code-simplifier
-**专长**: 代码复杂度分析与简化重构
-**职责**: 主动审查代码复杂度、消除重复、优化结构
+**角色**: 代码复杂度分析与简化重构专家
+
+**职责**:
+- 主动审查代码复杂度
+- 消除重复代码
+- 优化代码结构
+- 提取可复用模式
 
 **详细文档**: [code-simplifier.md](./code-simplifier.md)
 
 ---
 
 #### data-validator
-**专长**: 数据质量验证与清洗
-**职责**: 数据加载前验证、格式检查、完整性检查
+**角色**: 数据质量验证与清洗专家
+
+**职责**:
+- 数据加载前验证
+- 格式检查
+- 完整性检查
+- 业务规则验证
 
 **详细文档**: [data-validator.md](./data-validator.md)
 
 ---
 
 #### verify-app
-**专长**: 应用验证与测试
-**职责**: 功能验证、性能测试、兼容性检查
+**角色**: 应用验证与测试专家
+
+**职责**:
+- 功能验证
+- 性能测试
+- 兼容性检查
+- 回归测试
 
 **详细文档**: [verify-app.md](./verify-app.md)
 
 ---
 
-### 知识管理 (2个原有代理)
+### 知识管理 (2个代理)
 
 #### session-manager
-**专长**: Claude Code CLI 对话历史管理
-**职责**: 查看、搜索、重命名、导出会话
+**角色**: Claude Code CLI 对话历史管理专家
+
+**职责**:
+- 查看、搜索会话
+- 重命名、导出会话
+- 会话分析与总结
 
 **详细文档**: [session-manager.md](./session-manager.md)
 
 ---
 
 #### knowledge-miner
-**专长**: 隐性知识提取与结构化归档
-**职责**: 扫描对话、提取上下文、分类整理、归档存储
+**角色**: 隐性知识提取与结构化归档专家
+
+**职责**:
+- 扫描对话历史
+- 提取上下文知识
+- 分类整理
+- 归档存储
 
 **详细文档**: [knowledge-miner.md](./knowledge-miner.md)
 
 ---
 
-### 开发工作流 (5个新代理 - 来自 everything-claude-code)
+### 开发工作流 (5个代理)
 
-#### architect ⭐ NEW
-**专长**: 架构规划与设计
-**职责**: 系统架构设计、技术选型、设计模式建议
-**来源**: [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code)
+#### architect
+**角色**: 架构规划与设计专家
+
+**职责**:
+- 系统架构设计
+- 技术选型建议
+- 设计模式推荐
+- 可扩展性规划
+
+**项目技术栈**:
+```
+React 19.0.0 + TypeScript 5.9.3 + Vite 5.4.21
+DuckDB-WASM 1.28.0 + Apache Arrow 17.0.0
+```
 
 **详细文档**: [architect.md](./architect.md)
 
 ---
 
-#### build-error-resolver ⭐ NEW
-**专长**: 构建错误自动解决
-**职责**: 分析构建错误、识别根因、提供修复方案
-**适配**: Bun + Vite 构建链
-**来源**: [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code)
+#### build-error-resolver
+**角色**: 构建错误自动解决专家
+
+**职责**:
+- 分析构建错误
+- 识别根因
+- 提供修复方案
+
+**适配构建链**: Bun + Vite
 
 **详细文档**: [build-error-resolver.md](./build-error-resolver.md)
 
 ---
 
-#### security-reviewer ⭐ NEW
-**专长**: 安全漏洞审查专家
-**职责**: 代码安全扫描、漏洞识别、修复建议
-**审查范围**: SQL注入、XSS、CSRF、认证授权、敏感数据处理
-**来源**: [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code)
+#### security-reviewer
+**角色**: 安全漏洞审查专家
+
+**审查范围**:
+- SQL 注入
+- XSS / CSRF
+- 认证授权
+- 敏感数据处理
 
 **详细文档**: [security-reviewer.md](./security-reviewer.md)
 
 ---
 
-#### tdd-guide ⭐ NEW
-**专长**: 测试驱动开发指导
-**职责**: TDD 工作流指导、测试用例设计、覆盖率提升
+#### tdd-guide
+**角色**: 测试驱动开发 (TDD) 指导专家
+
+**职责**:
+- TDD 工作流指导
+- 测试用例设计
+- 覆盖率提升
+
 **目标**: 80%+ 测试覆盖率
-**来源**: [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code)
+
+**测试框架**: Vitest 2.1.9 + @testing-library/react
 
 **详细文档**: [tdd-guide.md](./tdd-guide.md)
 
 ---
 
-#### e2e-runner ⭐ NEW
-**专长**: E2E 测试执行专家
-**职责**: 端到端测试执行、用户流程验证、回归测试
-**来源**: [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code)
+#### e2e-runner
+**角色**: E2E 测试执行专家
+
+**职责**:
+- 端到端测试执行
+- 用户流程验证
+- 回归测试
+- 测试报告生成
+
+**测试框架**: Playwright
 
 **详细文档**: [e2e-runner.md](./e2e-runner.md)
 
@@ -257,17 +291,15 @@
 
 ## 📊 代理统计
 
-| 类别 | 代理数量 | 新增 |
-|------|---------|------|
-| 性能优化 | 2 | 0 |
-| 业务分析 | 1 | 0 |
-| UI/UX 设计 | 1 | 0 |
-| 代码质量 | 3 | 0 |
-| 知识管理 | 2 | 0 |
-| 开发工作流 | 5 | 5 |
-| **总计** | **14** | **5** |
-
-> 🔗 新增 5 个代理来自 [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code)
+| 类别 | 代理数量 |
+|------|---------|
+| 性能优化 | 2 |
+| 业务分析 | 1 |
+| UI/UX 设计 | 1 |
+| 代码质量 | 3 |
+| 知识管理 | 2 |
+| 开发工作流 | 5 |
+| **总计** | **14** |
 
 ---
 
@@ -300,32 +332,34 @@
 
 ---
 
-## 🔒 外部 API 约束（RED LINE - 禁止修改）
+## 🔒 项目约束 (RED LINE)
 
-### 智谱 GLM API 端点
+### 禁止修改区域
 
-| 约束项 | 值 | 说明 |
-|--------|-----|------|
-| **当前端点** | `https://open.bigmodel.cn/api/paas/v4` | 标准端点（支持免费模型） |
-| **默认模型** | `glm-4.7-flash` | 最新免费模型，推荐使用 |
-| **备用模型** | `glm-4-flash` | 免费模型，稳定版 |
+| 文件/路径 | 原因 | 允许操作 |
+|-----------|------|----------|
+| `src/shared/normalize/mapping.ts` | 业务口径定义 | 仅追加，禁止删除/修改 |
+| `src/shared/sql/kpi.ts` | KPI 计算逻辑 | 仅追加新模板 |
+| `src/shared/duckdb/client.ts:78-95` | PolicyFact 视图定义 | 需产品确认 |
+| 所有 `*.md` 索引文件 | 知识库完整性 | 仅追加条目 |
 
-**相关文件**：
-- `src/features/sql-query/aiSql/zhipuClient.ts` - SQL 生成
-- `src/shared/ai-insights/insight-generator.ts` - AI 洞察
+### DC-002 用户筛选优先规则
 
-**⚠️ 注意**：已从 Coding 套餐端点迁移到标准端点，仅使用免费模型。
+- SQL 中禁止使用 `CURRENT_DATE`、`NOW()` 等硬编码日期
+- 判断 filters 字段时必须使用 `??` 运算符
+- 详细文档: [开发文档/DC-002_ROOT_CAUSE_ANALYSIS.md](../../开发文档/DC-002_ROOT_CAUSE_ANALYSIS.md)
 
 ---
 
 ## 🔗 相关文档
 
-- **命令索引**: [.claude/commands/README.md](../commands/README.md)
-- **协作协议**: [CLAUDE.md](../../CLAUDE.md)
+- **协作协议**: [AGENTS.md](../../AGENTS.md)
 - **技术栈**: [开发文档/TECH_STACK.md](../../开发文档/TECH_STACK.md)
+- **代码索引**: [开发文档/00_index/CODE_INDEX.md](../../开发文档/00_index/CODE_INDEX.md)
+- **命令索引**: [.claude/commands/README.md](../commands/README.md)
 
 ---
 
-**维护者**: @claude
-**版本**: 2.0.0
-**最后更新**: 2026-01-16
+**维护者**: @claude  
+**版本**: 2.1.0  
+**最后更新**: 2026-02-20
