@@ -29,32 +29,22 @@ const HIGH_WEIGHT_PERCENTILE = 0.75;
 const QUADRANT_META: Record<QuadrantId, {
   label: string;
   color: string;
-  judgment: string;
-  suggestion: string;
 }> = {
   benchmark: {
-    label: '结构正确 · 推介达标（标杆区）',
+    label: '主全、交三双优',
     color: '#86B88A',
-    judgment: '结构与推介表现一致，可作为同维度参照对象。',
-    suggestion: '保持策略稳定，优先输出可复制做法。',
   },
   risk: {
-    label: '结构偏差 · 推介表象好（风险区）',
+    label: '主全差、交三优',
     color: '#C6A777',
-    judgment: '推介结果表面较好，但结构配比存在偏差。',
-    suggestion: '复核结构分布，防止短期表现掩盖长期风险。',
   },
   focus: {
-    label: '结构正确 · 推介不足（重点提升区）',
+    label: '主全优、交三差',
     color: '#E53935',
-    judgment: '基础结构具备，但推介执行明显不足。',
-    suggestion: '优先投放辅导与过程跟进，作为近期主攻对象。',
   },
   observe: {
-    label: '结构偏差 · 推介不足（观察区）',
+    label: '主全、交三双差',
     color: '#8A95A6',
-    judgment: '结构与推介均偏弱，短期投入产出不确定。',
-    suggestion: '先控制投入节奏，结合阶段目标持续观察。',
   },
 };
 
@@ -123,9 +113,8 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
             <div style="font-weight: 600; margin-bottom: 6px;">${escapeHtml(d.entity_name)}</div>
             <div>主全推介率：${formatPercent(d.main_full_rate)}</div>
             <div>交三推介率：${formatPercent(d.jiaosan_rate)}</div>
-            <div>权重指标：${formatCount(d.weight_value)}</div>
-            <div style="margin-top: 6px;"><strong>判断：</strong>${meta.judgment}</div>
-            <div><strong>建议动作：</strong>${meta.suggestion}</div>
+            <div>车险件数：${formatCount(d.weight_value)}</div>
+            <div style="margin-top: 6px;">${meta.label}</div>
           </div>
         `;
       },
@@ -255,31 +244,27 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
       return null;
     }
 
-    const highWeightRows = points.filter((p) => p.isHighWeight);
-    const sample = highWeightRows.length > 0 ? highWeightRows : points;
-
-    const quadrantStats = (['benchmark', 'risk', 'focus', 'observe'] as QuadrantId[]).map((quadrant) => {
-      const subset = sample.filter((p) => p.quadrant === quadrant);
-      return {
-        quadrant,
-        count: subset.length,
-        weightSum: subset.reduce((sum, p) => sum + p.weight_value, 0),
-      };
+    const totalCount = points.length;
+    const toMetric = (subset: QuadrantPoint[]) => ({
+      count: subset.length,
+      ratio: (subset.length / totalCount) * 100,
+      autoCount: subset.reduce((sum, p) => sum + p.weight_value, 0),
+      names: subset
+        .slice()
+        .sort((a, b) => b.weight_value - a.weight_value)
+        .map((p) => p.entity_name)
+        .filter(Boolean)
+        .join('、'),
     });
 
-    const dominant = quadrantStats.sort((a, b) => {
-      if (b.weightSum !== a.weightSum) return b.weightSum - a.weightSum;
-      return b.count - a.count;
-    })[0];
-
-    const baseCount = sample.length || 1;
-    const ratio = (dominant.count / baseCount) * 100;
+    const dualWeak = toMetric(points.filter((p) => p.quadrant === 'observe'));
+    const mainWeak = toMetric(points.filter((p) => p.main_full_rate < MAIN_FULL_THRESHOLD));
+    const jiaosanWeak = toMetric(points.filter((p) => p.jiaosan_rate < JIAOSAN_THRESHOLD));
 
     return {
-      label: QUADRANT_META[dominant.quadrant].label,
-      count: dominant.count,
-      ratio,
-      totalHighWeight: baseCount,
+      dualWeak,
+      mainWeak,
+      jiaosanWeak,
     };
   }, [points]);
 
@@ -325,19 +310,23 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
         {decisionSummary ? (
           <>
             <p className={cn(textStyles.body, 'text-danger font-semibold')}>
-              ⚠️ 交叉销售当前首要问题：
-              在当前分析维度下，【{decisionSummary.label}】类型的对象占比最高，
-              涉及 {decisionSummary.count} 个对象，占高权重对象 {decisionSummary.ratio.toFixed(1)}%。
+              双差（主全&lt;75%，交三&lt;60%）：{decisionSummary.dualWeak.names || '无'}
+              {decisionSummary.dualWeak.count > 0 ? `（${decisionSummary.dualWeak.count}个，${decisionSummary.dualWeak.ratio.toFixed(1)}%，车险件数 ${formatCount(decisionSummary.dualWeak.autoCount)}）` : ''}
             </p>
-            <p className={cn(textStyles.caption, 'text-neutral-500')}>
-              关系说明：本视图直接复用当前分组表格的完整数据（事实主视图）进行结构判断，不新增接口、不复制数据。
+            <p className={cn(textStyles.body, 'text-danger font-semibold')}>
+              主全差（主全&lt;75%）：{decisionSummary.mainWeak.names || '无'}
+              {decisionSummary.mainWeak.count > 0 ? `（${decisionSummary.mainWeak.count}个，${decisionSummary.mainWeak.ratio.toFixed(1)}%，车险件数 ${formatCount(decisionSummary.mainWeak.autoCount)}）` : ''}
+            </p>
+            <p className={cn(textStyles.body, 'text-danger font-semibold')}>
+              交三差（交三&lt;60%）：{decisionSummary.jiaosanWeak.names || '无'}
+              {decisionSummary.jiaosanWeak.count > 0 ? `（${decisionSummary.jiaosanWeak.count}个，${decisionSummary.jiaosanWeak.ratio.toFixed(1)}%，车险件数 ${formatCount(decisionSummary.jiaosanWeak.autoCount)}）` : ''}
             </p>
           </>
         ) : (
           <p className={cn(textStyles.body, 'text-neutral-500')}>当前分组暂无可用于结构诊断的数据。</p>
         )}
         <p className={cn(textStyles.caption, 'text-neutral-500')}>
-          当前分析维度：{currentDimensionLabel}；权重指标：车险件数（用于体现管理影响权重）。
+          当前分析维度：{currentDimensionLabel}；车险件数。
         </p>
       </div>
       <div ref={chartRef} className="h-[460px] w-full" />

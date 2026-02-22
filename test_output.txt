@@ -1,0 +1,37 @@
+[0m[1mbun test [0m[2mv1.3.5 (1e86cebd)[0m
+23:12:59.646 [App][DEBUG] Generating cross-sell query {
+  [0mbaseWhereClause[2m:[0m [0m[32m[0m[32m"1=1"[0m[0m[0m[2m,[0m
+  [0mdrillPath[2m:[0m [][0m[2m,[0m
+  [0mgroupBy[2m:[0m [0m[33mnull[0m[0m[2m,[0m
+}
+23:12:59.646 [App][DEBUG] Generating cross-sell time period summary query {
+  [0mbaseWhereClause[2m:[0m [0m[32m[0m[32m"1=1"[0m[0m[0m[2m,[0m
+  [0mvehicleCategory[2m:[0m [0m[32m[0m[32m"passenger"[0m[0m[0m[2m,[0m
+}
+23:12:59.646 [App][DEBUG] Generated cross-sell time period summary SQL {
+  [0msqlLength[2m:[0m [0m[33m7918[0m[0m[2m,[0m
+}
+  ✅ formatPremium 使用: 12 个组件
+  ✅ formatRate 使用: 7 个组件
+  ℹ️  formatNumber 使用: 0 个组件
+  ✅ formatters.test.ts 包含 14 个测试用例
+
+  📋 已迁移组件列表:
+    1. src/charts/QuadrantChart.ts
+    2. src/charts/StackedBarChart.ts
+    3. src/charts/PremiumProgressChart.ts
+    4. src/charts/ExpenseAnalysisChart.ts
+    5. src/services/charts/KpiCardRenderer.ts
+    6. src/widgets/charts/OrgPremiumPieChart.tsx
+    7. src/widgets/charts/LineChart.tsx
+    8. src/widgets/charts/RoseChart.tsx
+    9. src/charts/BubbleChart.ts
+    10. src/features/dashboard/PremiumDashboard.tsx
+    11. src/features/dashboard/Dashboard.tsx
+    12. src/features/growth/components/GrowthAnalysisPanel.tsx
+
+23:12:59.668 [InsightGenerator][DEBUG] 配置信息 {
+  [0mmodel[2m:[0m [0m[32m[0m[32m"glm-4.7-flash"[0m[0m[0m[2m,[0m
+  [0mhasApiKey[2m:[0m [0m[33mfalse[0m[0m[2m,[0m
+  [0mnote[2m:[0m [0m[32m[0m[32m"使用标准 API + 免费模型"[0m[0m[0m[2m,[0m
+}

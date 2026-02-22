@@ -34,26 +34,26 @@ const DefaultErrorFallback: React.FC<{
     <div className="text-center max-w-md">
       {/* 错误图标 */}
       <div className="mb-4">
-        <AlertTriangle size={64} className="mx-auto text-yellow-500" aria-label="错误" />
+        <AlertTriangle size={64} className="mx-auto text-warning dark:text-warning-light" aria-label="错误" />
       </div>
 
       {/* 错误标题 */}
-      <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">
+      <h2 className="text-xl font-semibold tracking-tight text-neutral-800 dark:text-neutral-100 mb-2">
         页面加载出错
       </h2>
 
       {/* 错误描述 */}
-      <p className="text-gray-600 dark:text-gray-400 mb-4">
+      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-6">
         抱歉，页面加载时遇到了问题。这可能是网络问题或临时故障。
       </p>
 
       {/* 错误详情（开发模式显示） */}
       {process.env.NODE_ENV === 'development' && error && (
-        <details className="mb-4 text-left">
-          <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+        <details className="mb-6 text-left">
+          <summary className="cursor-pointer text-sm font-medium text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors">
             查看错误详情
           </summary>
-          <pre className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs text-red-600 dark:text-red-400 overflow-auto max-h-40">
+          <pre className="mt-3 p-4 bg-neutral-100 dark:bg-neutral-800 rounded-lg text-xs font-mono text-danger dark:text-danger-light overflow-auto max-h-40 border border-neutral-200 dark:border-neutral-700">
             {error.toString()}
             {error.stack && `\n\n${error.stack}`}
           </pre>
@@ -64,13 +64,13 @@ const DefaultErrorFallback: React.FC<{
       <div className="flex gap-3 justify-center">
         <button
           onClick={onRetry}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          className="px-5 py-2.5 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-light transition-colors shadow-sm focus:ring-2 focus:ring-primary-400 focus:ring-offset-2"
         >
           重新加载
         </button>
         <button
           onClick={() => window.location.href = '#/'}
-          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+          className="px-5 py-2.5 text-sm font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors shadow-sm"
         >
           返回首页
         </button>

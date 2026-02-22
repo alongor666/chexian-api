@@ -40,16 +40,16 @@ export const KpiCard = memo(function KpiCard({
   const displayValue = loading
     ? '--'
     : value == null
-    ? '-'
-    : ((typeof value === 'number' || typeof value === 'bigint') && formatter
+      ? '-'
+      : ((typeof value === 'number' || typeof value === 'bigint') && formatter
         ? formatter(value)
         : value);
 
   return (
-    <div className={`bg-white p-4 rounded-lg shadow-sm border border-neutral-200 dark:bg-neutral-800 dark:border-neutral-700 ${className}`}>
-      <h3 className="text-sm text-neutral-500 dark:text-neutral-400 font-medium mb-1">{title}</h3>
+    <div className={`bg-white p-5 rounded-xl shadow-sm border border-neutral-200 dark:bg-neutral-900 dark:border-neutral-800 transition-shadow hover:shadow-md ${className}`}>
+      <h3 className="text-sm text-neutral-500 dark:text-neutral-400 font-medium mb-2">{title}</h3>
       <div
-        className="text-2xl font-bold text-neutral-900 dark:text-neutral-100"
+        className="text-[28px] tracking-tight font-bold text-neutral-900 dark:text-white mt-1 leading-none"
         style={{ fontFamily: FONT_FAMILY_KPI }}
       >
         {String(displayValue)}

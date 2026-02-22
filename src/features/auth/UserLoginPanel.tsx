@@ -75,9 +75,9 @@ export const UserLoginPanel: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
-        <User size={16} className="mr-2 text-gray-500" aria-hidden="true" />
+    <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 p-5">
+      <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-4 flex items-center">
+        <User size={16} className="mr-2 text-neutral-500" aria-hidden="true" />
         用户身份
       </h3>
 
@@ -85,27 +85,27 @@ export const UserLoginPanel: React.FC = () => {
       {isAuthenticated ? (
         <div className="space-y-3">
           {/* 用户卡片 */}
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
             <div className="flex items-center">
               {isBranchAdmin ? (
-                <Shield size={24} className="text-purple-500 mr-3" aria-hidden="true" />
+                <Shield size={24} className="text-purple-500 dark:text-purple-400 mr-3" aria-hidden="true" />
               ) : (
-                <Building size={24} className="text-blue-500 mr-3" aria-hidden="true" />
+                <Building size={24} className="text-primary dark:text-primary-light mr-3" aria-hidden="true" />
               )}
               <div>
-                <p className="font-medium text-gray-800">{userPermission?.displayName}</p>
-                <p className="text-sm text-gray-500">@{userPermission?.username}</p>
+                <p className="font-semibold tracking-tight text-neutral-800 dark:text-neutral-200">{userPermission?.displayName}</p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 font-mono">@{userPermission?.username}</p>
               </div>
             </div>
-            <span className={`px-2 py-1 rounded text-xs font-medium ${getRoleBadgeClass()}`}>
+            <span className={`px-2 py-1 rounded text-[11px] font-semibold tracking-wide ${getRoleBadgeClass()}`}>
               {getRoleDisplayName()}
             </span>
           </div>
 
           {/* 权限说明 */}
-          <div className="text-sm text-gray-600 bg-blue-50 rounded-lg p-3">
-            <p className="font-medium text-blue-800 mb-1">数据访问权限</p>
-            <p className="text-blue-700">
+          <div className="text-sm text-primary-dark dark:text-primary-light bg-primary-bg dark:bg-blue-900/20 rounded-lg p-3">
+            <p className="font-semibold tracking-tight mb-1">数据访问权限</p>
+            <p className="opacity-90">
               {isBranchAdmin
                 ? '✓ 可查看所有机构数据'
                 : `✓ 仅可查看 ${userPermission?.organization} 机构及分公司整体数据`}
@@ -116,7 +116,7 @@ export const UserLoginPanel: React.FC = () => {
           <div className="flex gap-2">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="flex-1 flex items-center justify-center px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors"
+              className="flex-1 flex items-center justify-center px-4 py-2 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg text-neutral-700 dark:text-neutral-300 font-medium text-sm transition-colors"
             >
               切换用户
               <ChevronDown
@@ -127,7 +127,7 @@ export const UserLoginPanel: React.FC = () => {
             </button>
             <button
               onClick={handleLogout}
-              className="flex items-center justify-center px-4 py-2 bg-red-100 hover:bg-red-200 rounded-lg text-red-700 transition-colors"
+              className="flex items-center justify-center px-4 py-2 bg-danger-bg dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg text-danger dark:text-danger-light font-medium text-sm transition-colors"
               title="登出"
             >
               <LogOut size={16} aria-hidden="true" />
@@ -137,7 +137,7 @@ export const UserLoginPanel: React.FC = () => {
 
           {/* 用户选择下拉 */}
           {isDropdownOpen && (
-            <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
+            <div className="mt-2 border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden">
               <div className="max-h-64 overflow-y-auto">
                 {quickUsers.map((quickUser) => {
                   const Icon = quickUser.icon;
@@ -147,24 +147,22 @@ export const UserLoginPanel: React.FC = () => {
                       key={quickUser.username}
                       onClick={() => handleLogin(quickUser.username)}
                       disabled={isCurrentUser}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 transition-colors ${
-                        isCurrentUser ? 'bg-gray-100 cursor-default' : ''
-                      }`}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors ${isCurrentUser ? 'bg-neutral-100 dark:bg-neutral-800 cursor-default' : ''
+                        }`}
                     >
                       <div className="flex items-center">
                         <Icon
                           size={16}
-                          className={`mr-2 ${
-                            quickUser.role === UserRole.BRANCH_ADMIN
-                              ? 'text-purple-500'
-                              : 'text-blue-500'
-                          }`}
+                          className={`mr-2 ${quickUser.role === UserRole.BRANCH_ADMIN
+                              ? 'text-purple-500 dark:text-purple-400'
+                              : 'text-primary dark:text-primary-light'
+                            }`}
                           aria-hidden="true"
                         />
-                        <span className="text-gray-700">{quickUser.displayName}</span>
+                        <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{quickUser.displayName}</span>
                       </div>
                       {isCurrentUser && (
-                        <Check size={16} className="text-green-500" aria-hidden="true" />
+                        <Check size={16} className="text-success dark:text-success-light" aria-hidden="true" />
                       )}
                     </button>
                   );
@@ -175,27 +173,27 @@ export const UserLoginPanel: React.FC = () => {
         </div>
       ) : (
         /* 未登录状态 */
-        <div className="space-y-3">
-          <p className="text-gray-600 text-sm">请选择用户身份登录：</p>
+        <div className="space-y-4">
+          <p className="text-neutral-600 dark:text-neutral-400 text-sm font-medium">请选择用户身份登录：</p>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {/* 管理员快捷登录 */}
             <button
               onClick={() => handleLogin('admin')}
-              className="w-full flex items-center justify-between p-3 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors"
+              className="w-full flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-lg border border-purple-200 dark:border-purple-800 transition-colors"
             >
               <div className="flex items-center">
-                <Shield size={20} className="text-purple-500 mr-3" aria-hidden="true" />
+                <Shield size={20} className="text-purple-500 dark:text-purple-400 mr-3" aria-hidden="true" />
                 <div className="text-left">
-                  <p className="font-medium text-purple-800">系统管理员</p>
-                  <p className="text-xs text-purple-600">可查看所有机构数据</p>
+                  <p className="text-sm font-semibold text-purple-800 dark:text-purple-300">系统管理员</p>
+                  <p className="text-xs text-purple-600 dark:text-purple-400">可查看所有机构数据</p>
                 </div>
               </div>
             </button>
 
             {/* 机构用户登录区域 */}
-            <div className="border-t border-gray-200 pt-2 mt-2">
-              <p className="text-xs text-gray-500 mb-2">三级机构用户：</p>
+            <div className="border-t border-neutral-200 dark:border-neutral-800 pt-3 mt-3">
+              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-500 mb-2">三级机构用户：</p>
               <div className="grid grid-cols-2 gap-2">
                 {quickUsers.slice(1).map((quickUser) => {
                   const Icon = quickUser.icon;
@@ -203,10 +201,10 @@ export const UserLoginPanel: React.FC = () => {
                     <button
                       key={quickUser.username}
                       onClick={() => handleLogin(quickUser.username)}
-                      className="flex items-center p-2 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors"
+                      className="flex items-center p-2 bg-primary-bg dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg border border-primary-200 dark:border-blue-800 transition-colors"
                     >
-                      <Icon size={16} className="text-blue-500 mr-2" aria-hidden="true" />
-                      <span className="text-sm text-blue-800">{quickUser.displayName}</span>
+                      <Icon size={16} className="text-primary dark:text-primary-light mr-2" aria-hidden="true" />
+                      <span className="text-sm font-medium text-primary-dark dark:text-primary-light">{quickUser.displayName}</span>
                     </button>
                   );
                 })}

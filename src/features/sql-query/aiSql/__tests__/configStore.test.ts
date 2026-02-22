@@ -27,6 +27,15 @@ Object.defineProperty(globalThis, 'localStorage', {
   writable: true,
 });
 
+(globalThis as any).import = {
+  meta: {
+    env: {
+      VITE_ZHIPU_API_KEY: '',
+      VITE_ZHIPU_MODEL: 'glm-4',
+    }
+  }
+};
+
 describe('configStore', () => {
   beforeEach(() => {
     localStorageMock.clear();

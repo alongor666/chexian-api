@@ -43,36 +43,35 @@ const AlertItem: React.FC<{
 
   return (
     <div
-      className={`p-3 rounded-lg border ${levelConfig.bgColor} ${
-        alert.read ? 'opacity-70' : ''
-      } ${alert.resolved ? 'line-through opacity-50' : ''}`}
+      className={`p-3 rounded-lg border ${levelConfig.bgColor} ${alert.read ? 'opacity-70' : ''
+        } ${alert.resolved ? 'line-through opacity-50' : ''}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1.5">
             <span className="text-lg">{levelConfig.icon}</span>
-            <span className={`font-medium ${levelConfig.color}`}>
+            <span className={`font-semibold tracking-tight ${levelConfig.color}`}>
               {alert.title}
             </span>
-            <span className="text-xs px-2 py-0.5 bg-gray-200 rounded-full text-gray-600">
+            <span className="text-[11px] font-medium px-2 py-0.5 bg-neutral-100 dark:bg-neutral-800 rounded-md text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700">
               {typeConfig.label}
             </span>
           </div>
-          <p className="text-sm text-gray-600 ml-7">{alert.description}</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 ml-8 leading-relaxed">{alert.description}</p>
           {alert.dimension && (
-            <p className="text-xs text-gray-500 ml-7 mt-1">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 ml-8 mt-1.5 font-medium">
               维度: {alert.dimension}
             </p>
           )}
-          <p className="text-xs text-gray-400 ml-7 mt-1">
+          <p className="text-xs text-neutral-400 dark:text-neutral-500 ml-8 mt-1 font-mono">
             {new Date(alert.timestamp).toLocaleString('zh-CN')}
           </p>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5 mt-1">
           {!alert.read && onMarkAsRead && (
             <button
               onClick={() => onMarkAsRead(alert.id)}
-              className="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded"
+              className="text-xs font-medium px-2.5 py-1 text-primary hover:bg-primary-bg dark:hover:bg-blue-900/20 rounded-md transition-colors"
               title="标记已读"
             >
               已读
@@ -81,7 +80,7 @@ const AlertItem: React.FC<{
           {!alert.resolved && onMarkAsResolved && (
             <button
               onClick={() => onMarkAsResolved(alert.id)}
-              className="text-xs px-2 py-1 text-green-600 hover:bg-green-50 rounded"
+              className="text-xs font-medium px-2.5 py-1 text-success dark:text-success-light hover:bg-success-bg dark:hover:bg-green-900/20 rounded-md transition-colors"
               title="标记已处理"
             >
               处理
@@ -100,10 +99,10 @@ const SummaryCard: React.FC<{
 }> = ({ level, count }) => {
   const config = ALERT_LEVEL_CONFIG[level];
   return (
-    <div className={`px-3 py-2 rounded-lg ${config.bgColor} text-center`}>
-      <div className="text-lg">{config.icon}</div>
-      <div className={`text-xl font-bold ${config.color}`}>{count}</div>
-      <div className="text-xs text-gray-500">{config.label}</div>
+    <div className={`px-3 py-2.5 rounded-lg border border-transparent hover:border-current transition-colors ${config.bgColor} text-center`}>
+      <div className="text-[22px] mb-1">{config.icon}</div>
+      <div className={`text-2xl font-bold tracking-tight font-sans ${config.color}`}>{count}</div>
+      <div className={`text-[11px] font-medium mt-0.5 ${config.color} opacity-80`}>{config.label}</div>
     </div>
   );
 };
@@ -144,17 +143,17 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({
   ];
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border">
+    <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 overflow-hidden">
       {/* 标题栏 */}
       <div
-        className="flex items-center justify-between px-4 py-3 border-b cursor-pointer hover:bg-gray-50"
+        className="flex items-center justify-between px-4 py-3.5 border-b border-neutral-100 dark:border-neutral-800 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors"
         onClick={() => onCollapsedChange?.(!collapsed)}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <span className="text-lg">🔔</span>
-          <h3 className="font-medium text-gray-800">业务预警</h3>
+          <h3 className="font-semibold tracking-tight text-neutral-800 dark:text-neutral-100">业务预警</h3>
           {summary.unread > 0 && (
-            <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+            <span className="px-2 py-0.5 text-[11px] font-bold bg-danger dark:bg-danger-dark text-white rounded-md shadow-sm">
               {summary.unread}
             </span>
           )}
@@ -167,11 +166,11 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({
                 onRefresh();
               }}
               disabled={loading}
-              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+              className="p-1.5 text-neutral-500 hover:text-primary dark:hover:text-primary-light hover:bg-primary-bg dark:hover:bg-blue-900/20 rounded-md disabled:opacity-50 transition-colors"
               title="刷新预警"
             >
               <svg
-                className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
+                className={`w-[18px] h-[18px] ${loading ? 'animate-spin' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -185,9 +184,9 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({
               </svg>
             </button>
           )}
-          <button className="p-1.5 text-gray-500 hover:text-gray-700">
+          <button className="p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors">
             <svg
-              className={`w-4 h-4 transition-transform ${collapsed ? '' : 'rotate-180'}`}
+              className={`w-[18px] h-[18px] transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -210,20 +209,19 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({
 
           {/* 筛选栏 */}
           <div className="flex items-center justify-between mb-3">
-            <div className="flex gap-1">
+            <div className="flex gap-1.5">
               {filterButtons.map(btn => (
                 <button
                   key={btn.key}
                   onClick={() => setFilter(btn.key)}
-                  className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                    filter === btn.key
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${filter === btn.key
+                      ? 'bg-neutral-800 text-white dark:bg-white dark:text-neutral-900 shadow-sm'
+                      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                    }`}
                 >
                   {btn.label}
                   {btn.count > 0 && (
-                    <span className="ml-1 text-xs">({btn.count})</span>
+                    <span className="ml-1 opacity-80">({btn.count})</span>
                   )}
                 </button>
               ))}
@@ -231,7 +229,7 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({
             {summary.unread > 0 && onMarkAllAsRead && (
               <button
                 onClick={onMarkAllAsRead}
-                className="text-xs text-blue-600 hover:underline"
+                className="text-xs font-medium text-primary dark:text-primary-light hover:underline underline-offset-2 transition-all"
               >
                 全部已读
               </button>
@@ -239,16 +237,16 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({
           </div>
 
           {/* 预警列表 */}
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
             {loading ? (
-              <div className="text-center py-8 text-gray-500">
-                <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2" />
-                正在检测预警...
+              <div className="text-center py-10 text-neutral-500 dark:text-neutral-400">
+                <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-3" />
+                <span className="text-sm font-medium">正在检测预警...</span>
               </div>
             ) : filteredAlerts.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <span className="text-3xl">✅</span>
-                <p className="mt-2">暂无预警信息</p>
+              <div className="flex flex-col items-center justify-center py-10 text-neutral-400 dark:text-neutral-500">
+                <span className="text-4xl mb-3 opacity-80 grayscale">✅</span>
+                <p className="text-sm font-medium">暂无预警信息</p>
               </div>
             ) : (
               filteredAlerts.map(alert => (
@@ -263,7 +261,7 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({
           </div>
 
           {/* 底部信息 */}
-          <div className="mt-3 pt-3 border-t text-xs text-gray-400 text-center">
+          <div className="mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-[11px] text-neutral-400 dark:text-neutral-500 text-center font-mono">
             最后更新: {summary.lastUpdated.toLocaleString('zh-CN')}
           </div>
         </div>

@@ -269,33 +269,8 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
     // },
   ];
 
-  const cycleTriState = (value: boolean | null | undefined): boolean | null => {
-    if (value === null || value === undefined) return true;
-    if (value === true) return false;
-    return null;
-  };
+  // Segmented control rendering replaces the old tri-state cycle logic
 
-  const formatToggleButton = (
-    config: (typeof basicToggleConfigs)[number],
-    value: boolean | null | undefined
-  ) => {
-    const isActive = value !== null && value !== undefined;
-    let displayText = '';
-    let buttonClass = '';
-
-    if (value === null || value === undefined) {
-      displayText = `${config.label}：全部`;
-      buttonClass = 'bg-neutral-100 text-neutral-700 border-neutral-300';
-    } else if (value === true) {
-      displayText = config.onState;
-      buttonClass = 'bg-primary text-white border-primary';
-    } else {
-      displayText = config.offState;
-      buttonClass = 'bg-success text-white border-success';
-    }
-
-    return { displayText, buttonClass, isActive };
-  };
 
   // 完全折叠状态：fullCollapsible 为 true 且当前已折叠
   const isFullyCollapsed = fullCollapsible && collapsed;
@@ -309,13 +284,13 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
         role="region"
       >
         <div className="flex items-center justify-between mb-2">
-          <h2 id="filter-panel-title" className="text-sm font-semibold text-neutral-700">
+          <h2 id="filter-panel-title" className="text-sm font-semibold tracking-tight text-slate-800">
             筛选条件
           </h2>
           <button
             type="button"
             onClick={handleReset}
-            className="px-2 py-1 text-xs bg-neutral-200 rounded hover:bg-neutral-300"
+            className="px-3 py-1 text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200 rounded hover:bg-slate-100 transition-colors shadow-sm"
             aria-label="重置筛选条件"
           >
             重置
@@ -352,18 +327,18 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
       role="region"
     >
       <header
-        className={`flex items-center p-4 border-b gap-[5px] ${fullCollapsible ? 'cursor-pointer hover:bg-neutral-50 transition-colors' : ''
+        className={`flex items-center p-4 border-b border-slate-100 gap-[5px] ${fullCollapsible ? 'cursor-pointer hover:bg-slate-50 transition-colors' : ''
           }`}
         onClick={fullCollapsible ? onToggleCollapse : undefined}
       >
-        <h2 id="filter-panel-title" className="text-lg font-semibold whitespace-nowrap flex items-center gap-2">
+        <h2 id="filter-panel-title" className="text-base font-semibold tracking-tight text-slate-800 whitespace-nowrap flex items-center gap-2">
           筛选条件
           {fullCollapsible && (
-            <ChevronRight className={cn('h-4 w-4 text-neutral-400 transition-transform', !collapsed && 'rotate-90')} aria-hidden="true" />
+            <ChevronRight className={cn('h-4 w-4 text-slate-400 transition-transform', !collapsed && 'rotate-90')} aria-hidden="true" />
           )}
         </h2>
         <div
-          className="flex items-center space-x-2"
+          className="flex items-center space-x-2.5"
           role="group"
           aria-label="筛选器控制"
           onClick={(e) => fullCollapsible && e.stopPropagation()}
@@ -371,7 +346,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
           <button
             type="button"
             onClick={handleReset}
-            className="px-3 py-1 text-sm bg-neutral-200 rounded hover:bg-neutral-300 whitespace-nowrap"
+            className="px-4 py-1.5 text-sm font-medium bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors whitespace-nowrap shadow-sm"
             aria-label="重置筛选条件并刷新数据"
           >
             刷新数据
@@ -380,7 +355,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="px-3 py-1 text-sm bg-primary text-white rounded hover:bg-primary-dark whitespace-nowrap"
+              className="px-4 py-1.5 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary-dark transition-colors whitespace-nowrap shadow-sm"
               aria-expanded={!collapsed}
               aria-controls="advanced-filters-content"
               aria-label={collapsed ? '展开高级筛选' : '折叠高级筛选'}
@@ -413,7 +388,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             visibleFields={finalVisibleFields}
             selectionModes={finalSelectionModes}
             orgActions={
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() =>
@@ -425,7 +400,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                       )
                     )
                   }
-                  className="text-xs px-2 py-1 bg-warning-100 text-warning-700 rounded hover:bg-warning-200"
+                  className="text-xs font-medium px-2.5 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md hover:bg-indigo-100 transition-colors"
                   aria-label="筛选异地机构"
                 >
                   异地
@@ -441,7 +416,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                       )
                     )
                   }
-                  className="text-xs px-2 py-1 bg-success-100 text-success-700 rounded hover:bg-success-200"
+                  className="text-xs font-medium px-2.5 py-1.5 bg-sky-50 text-sky-600 border border-sky-100 rounded-md hover:bg-sky-100 transition-colors"
                   aria-label="筛选同城机构"
                 >
                   同城
@@ -479,9 +454,9 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                           key={scenario.label}
                           type="button"
                           onClick={scenario.apply}
-                          className={`px-3 py-1 text-sm rounded border transition ${scenario.isActive
-                              ? 'bg-warning text-white border-warning'
-                              : 'bg-neutral-100 text-neutral-700 border-neutral-300 hover:bg-neutral-200'
+                          className={`px-3 py-1.5 text-sm font-medium rounded-md border transition-all duration-200 shadow-sm ${scenario.isActive
+                            ? 'bg-primary text-white border-primary shadow-primary/20'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                             }`}
                           title={scenario.description}
                           aria-pressed={scenario.isActive}
@@ -492,7 +467,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs text-neutral-400 mt-2">
+                    <p className="text-xs text-slate-400 mt-2">
                       提示：点击快捷组合按钮将自动设置对应的筛选条件组合
                     </p>
                   </CollapsibleFilterSection>
@@ -500,28 +475,57 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
 
                 {showBasicOptions && (
                   <CollapsibleFilterSection id="basic-options" title="基本选项">
-                    <div className="flex flex-wrap gap-2" role="group" aria-label="基本筛选选项">
+                    <div className="flex flex-wrap gap-4" role="group" aria-label="基本筛选选项">
                       {basicToggleConfigs.map((config) => {
                         const value = filters[config.key] as boolean | null | undefined;
-                        const { displayText, buttonClass } = formatToggleButton(config, value);
-                        const stateDescription = value === null || value === undefined
-                          ? '当前为全部，点击切换到' + config.onState
-                          : value === true
-                            ? `当前为${config.onState}，点击切换到${config.offState}`
-                            : `当前为${config.offState}，点击切换到全部`;
 
                         return (
-                          <button
+                          <div
                             key={String(config.key)}
-                            type="button"
-                            onClick={() => handleBooleanChange(config.key, cycleTriState(value))}
-                            className={`px-3 py-1 text-sm rounded border transition ${buttonClass}`}
-                            aria-label={`${config.label}: ${displayText}`}
-                            aria-pressed={value !== null && value !== undefined}
-                            title={stateDescription}
+                            className="inline-flex bg-slate-50/80 rounded-lg p-1 items-center border border-slate-200/60 shadow-inner"
+                            role="radiogroup"
+                            aria-label={config.label}
                           >
-                            {displayText}
-                          </button>
+                            <span className="text-sm text-slate-500 px-2 mr-1 select-none font-medium">{config.label}:</span>
+                            <div className="flex space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleBooleanChange(config.key, null)}
+                                className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ease-in-out ${value === null || value === undefined
+                                  ? 'bg-white shadow-sm text-primary font-semibold ring-1 ring-slate-200/60'
+                                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                                  }`}
+                                role="radio"
+                                aria-checked={value === null || value === undefined}
+                              >
+                                全部
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleBooleanChange(config.key, true)}
+                                className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ease-in-out ${value === true
+                                  ? 'bg-white shadow-sm text-primary font-semibold ring-1 ring-slate-200/60'
+                                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                                  }`}
+                                role="radio"
+                                aria-checked={value === true}
+                              >
+                                {config.onState}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleBooleanChange(config.key, false)}
+                                className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ease-in-out ${value === false
+                                  ? 'bg-white shadow-sm text-primary font-semibold ring-1 ring-slate-200/60'
+                                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                                  }`}
+                                role="radio"
+                                aria-checked={value === false}
+                              >
+                                {config.offState}
+                              </button>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>

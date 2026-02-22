@@ -30,11 +30,11 @@ interface RoseChartProps {
 const aggregateSmallSectors = (
   data: RoseChartDatum[],
   threshold: number = 5,
-  minSectorsForAggregation: number = 20
+  minSectorsForAggregation: number = 10
 ): { aggregatedData: RoseChartDatum[]; smallSectors: RoseChartDatum[] } => {
   // 扇区数量不足时不聚合
   if (data.length <= minSectorsForAggregation) {
-    return { aggregatedData: data, smallSectors: [] };
+    return { aggregatedData: [...data].sort((a, b) => b.value - a.value), smallSectors: [] };
   }
 
   const total = data.reduce((sum, item) => sum + item.value, 0);
@@ -50,9 +50,11 @@ const aggregateSmallSectors = (
     }
   });
 
+  const sortedLargeSectors = largeSectors.sort((a, b) => b.value - a.value);
+
   // 如果没有小扇区，返回原始数据
   if (smallSectors.length === 0) {
-    return { aggregatedData: data, smallSectors: [] };
+    return { aggregatedData: [...data].sort((a, b) => b.value - a.value), smallSectors: [] };
   }
 
   // 创建"其他"聚合项
@@ -63,8 +65,8 @@ const aggregateSmallSectors = (
   };
 
   return {
-    aggregatedData: [...largeSectors, othersItem],
-    smallSectors,
+    aggregatedData: [...sortedLargeSectors, othersItem],
+    smallSectors: smallSectors.sort((a, b) => b.value - a.value),
   };
 };
 
@@ -125,12 +127,12 @@ export const RoseChart: React.FC<RoseChartProps> = ({
 
     const labelFormatter = (params: EChartsParam) => {
       if (!showValueLabel) return params.name;
-      const percent = formatRate(params.percent ?? 0);
       // 小扇区（<5%）只显示名称，不显示百分比，避免拥挤
       if ((params.percent ?? 0) < 5) {
-        return params.name;
+        return `{name|${params.name}}`;
       }
-      return `${params.name}\n${percent}`;
+      const percent = formatRate(params.percent ?? 0);
+      return `{name|${params.name}}\n{percent|${percent}}`;
     };
 
     const tooltipFormatter = (params: EChartsParam) => {
@@ -138,30 +140,51 @@ export const RoseChart: React.FC<RoseChartProps> = ({
       const valueText = formatValue(rawValue);
       const percentText = formatRate(params.percent ?? 0);
 
+      const titleNode = `<div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${params.name}</div>`;
+      const valueNode = `<div style="color: #4B5563;">数值: <span style="font-weight: 600; color: #111827;">${valueText}</span> (${percentText})</div>`;
+
       // 如果是"其他"聚合项，显示详细列表
       if (params.name?.startsWith('其他') && smallSectors.length > 0) {
         const details = smallSectors
           .map((item) => {
             const itemValue = formatValue(item.value);
             const itemPercent = formatRate((item.value / data.reduce((s, d) => s + d.value, 0)) * 100);
-            return `  • ${item.name}: ${itemValue} (${itemPercent})`;
+            return `<div style="display: flex; justify-content: space-between; gap: 16px; margin-top: 4px; font-size: 12px; color: #6B7280;">
+              <span>• ${item.name}</span>
+              <span style="font-weight: 500; color: #374151;">${itemValue} (${itemPercent})</span>
+            </div>`;
           })
-          .join('<br/>');
-        return `${params.name}<br/>${valueText} (${percentText})<br/><br/>包含项：<br/>${details}`;
+          .join('');
+        return `${titleNode}${valueNode}<div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #E5E7EB;"><div style="font-size: 12px; color: #9CA3AF; margin-bottom: 4px;">包含内容详情:</div>${details}</div>`;
       }
 
-      return `${params.name}: ${valueText} (${percentText})`;
+      return `${titleNode}${valueNode}`;
     };
 
     return {
-      title: showTitle && title ? { text: title, left: 'center', textStyle: { fontSize: isSmallScreen ? 14 : 16 } } : undefined,
-      tooltip: { trigger: 'item', formatter: tooltipFormatter },
+      title: showTitle && title ? { text: title, left: 'center', textStyle: { fontSize: isSmallScreen ? 14 : 16, color: '#1F2937', fontWeight: 600 } } : undefined,
+      tooltip: {
+        trigger: 'item',
+        formatter: tooltipFormatter,
+        backgroundColor: 'rgba(255, 255, 255, 0.96)',
+        borderColor: '#E5E7EB',
+        borderWidth: 1,
+        textStyle: { color: '#374151', fontSize: 13 },
+        padding: [12, 16],
+        extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); border-radius: 8px;'
+      },
       legend: {
         bottom: 0,
         type: 'scroll',
+        icon: 'circle',
+        itemWidth: 10,
+        itemHeight: 10,
+        itemGap: 16,
         textStyle: {
           ...CHART_TEXT_STYLES.legend,
-          fontSize: isSmallScreen ? 10 : 12,
+          fontSize: isSmallScreen ? 11 : 12,
+          color: '#4B5563',
+          fontWeight: 500,
         },
       },
       series: [
@@ -174,11 +197,23 @@ export const RoseChart: React.FC<RoseChartProps> = ({
           label: {
             show: true,
             formatter: labelFormatter,
-            color: CHART_TEXT_STYLES.label.color,
-            fontSize: responsiveFontSize,
-            // 防重叠配置
-            overflow: 'truncate',
-            ellipsis: '...',
+            rich: {
+              name: {
+                fontSize: Math.max(10, responsiveFontSize - 1),
+                color: '#6B7280',
+                padding: [0, 0, 4, 0],
+              },
+              percent: {
+                fontSize: responsiveFontSize + 1,
+                fontWeight: 'bold',
+                color: '#111827',
+              },
+            },
+            // 防重叠布局
+            alignTo: 'labelLine',
+            minMargin: 8,
+            edgeDistance: '5%',
+            lineHeight: 16,
           },
           labelLine: {
             show: true,
@@ -186,19 +221,23 @@ export const RoseChart: React.FC<RoseChartProps> = ({
             length2: labelLength2,
             smooth: 0.2,
             lineStyle: {
-              width: 1,
-              color: '#999',
+              width: 1.5,
+              color: '#D1D5DB',
             },
           },
           // 小扇区标签布局优化
-          labelLayout: () => ({
-            hideOverlap: true, // 自动隐藏重叠标签
-          }),
+          labelLayout: {
+            hideOverlap: true,
+            moveOverlap: 'shiftY',
+          },
           data: aggregatedData.map(item => ({
             ...item,
             itemStyle: {
-              // "其他"项使用灰色，其他项使用配置颜色
-              color: item.name?.startsWith('其他') ? '#9CA3AF' : (TONNAGE_COLORS[item.name] || undefined),
+              // "其他"项使用更柔和的边界处理
+              color: item.name?.startsWith('其他') ? '#D1D5DB' : (TONNAGE_COLORS[item.name] || undefined),
+              borderColor: '#ffffff',
+              borderWidth: 1.5,
+              borderType: 'solid',
             },
           })),
         },

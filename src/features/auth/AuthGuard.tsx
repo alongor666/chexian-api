@@ -21,10 +21,10 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   // 正在加载认证状态时显示加载
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4" />
-          <p className="text-gray-500">验证登录状态...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">验证登录状态...</p>
         </div>
       </div>
     );

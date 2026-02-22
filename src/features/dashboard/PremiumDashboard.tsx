@@ -33,7 +33,7 @@ export const PremiumDashboard: React.FC = () => {
   const isInitialized = isDataLoaded;
 
   // Time view state
-  const [timeView, setTimeView] = useState<TimeView>('daily');
+  const [timeView, setTimeView] = useState<TimeView>('weekly');
 
   // V2.0: 视角状态管理
   const { perspective, setPerspective, config: perspectiveConfig } = usePerspective();

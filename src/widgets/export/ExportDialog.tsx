@@ -133,17 +133,17 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col overflow-hidden border border-neutral-200 dark:border-neutral-800">
         {/* 标题栏 */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-2xl font-bold text-gray-900">导出 PDF 报告</h2>
+        <div className="flex items-center justify-between p-6 border-b border-neutral-100 dark:border-neutral-800 shrink-0">
+          <h2 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white">导出 PDF 报告</h2>
           <button
             onClick={onClose}
             disabled={isExporting}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 disabled:opacity-50 transition-colors"
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -155,15 +155,15 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
         </div>
 
         {/* 内容区 */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto min-h-0">
           {/* 页面方向 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">页面方向</label>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">页面方向</label>
             <select
               value={orientation}
               onChange={(e) => setOrientation(e.target.value as PageOrientation)}
               disabled={isExporting}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              className="w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm text-neutral-900 dark:text-white disabled:opacity-50 transition-colors"
             >
               <option value="portrait">纵向（Portrait）</option>
               <option value="landscape">横向（Landscape）</option>
@@ -172,12 +172,12 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
           {/* 模板选择 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">报告模板</label>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">报告模板</label>
             <select
               value={template}
               onChange={(e) => setTemplate(e.target.value as 'default' | 'executive' | 'detailed')}
               disabled={isExporting}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              className="w-full px-3 py-2 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm text-neutral-900 dark:text-white disabled:opacity-50 transition-colors"
             >
               <option value="default">标准模板</option>
               <option value="executive">高管摘要（精简版）</option>
@@ -187,46 +187,46 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
           {/* 内容选择 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">包含内容</label>
-            <div className="space-y-2">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">包含内容</label>
+            <div className="space-y-3">
               {content.kpis && content.kpis.length > 0 && (
-                <label className="flex items-center">
+                <label className="flex items-center group cursor-pointer">
                   <input
                     type="checkbox"
                     checked={includeKPIs}
                     onChange={(e) => setIncludeKPIs(e.target.checked)}
                     disabled={isExporting}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                    className="w-4 h-4 text-primary border-neutral-300 rounded focus:ring-primary focus:ring-offset-0 disabled:opacity-50 cursor-pointer"
                   />
-                  <span className="ml-2 text-sm text-gray-700">
+                  <span className="ml-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
                     关键指标（{content.kpis.length} 项）
                   </span>
                 </label>
               )}
               {content.charts && content.charts.length > 0 && (
-                <label className="flex items-center">
+                <label className="flex items-center group cursor-pointer">
                   <input
                     type="checkbox"
                     checked={includeCharts}
                     onChange={(e) => setIncludeCharts(e.target.checked)}
                     disabled={isExporting}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                    className="w-4 h-4 text-primary border-neutral-300 rounded focus:ring-primary focus:ring-offset-0 disabled:opacity-50 cursor-pointer"
                   />
-                  <span className="ml-2 text-sm text-gray-700">
+                  <span className="ml-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
                     图表分析（{content.charts.length} 个）
                   </span>
                 </label>
               )}
               {content.tables && content.tables.length > 0 && (
-                <label className="flex items-center">
+                <label className="flex items-center group cursor-pointer">
                   <input
                     type="checkbox"
                     checked={includeTables}
                     onChange={(e) => setIncludeTables(e.target.checked)}
                     disabled={isExporting}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                    className="w-4 h-4 text-primary border-neutral-300 rounded focus:ring-primary focus:ring-offset-0 disabled:opacity-50 cursor-pointer"
                   />
-                  <span className="ml-2 text-sm text-gray-700">
+                  <span className="ml-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
                     数据表格（{content.tables.length} 个）
                   </span>
                 </label>
@@ -236,14 +236,14 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
           {/* 进度显示 */}
           {isExporting && progress && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-primary-bg dark:bg-blue-900/20 border border-primary-200 dark:border-blue-800/50 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-blue-900">{getProgressText()}</span>
-                <span className="text-sm text-blue-700">{progress.percentage.toFixed(0)}%</span>
+                <span className="text-sm font-medium text-primary-dark dark:text-primary-light">{getProgressText()}</span>
+                <span className="text-sm font-mono text-primary">{progress.percentage.toFixed(0)}%</span>
               </div>
-              <div className="w-full bg-blue-200 rounded-full h-2">
+              <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-full h-1.5">
                 <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  className="bg-primary h-1.5 rounded-full transition-all duration-300"
                   style={{ width: `${progress.percentage}%` }}
                 />
               </div>
@@ -252,10 +252,10 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
           {/* 错误提示 */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="bg-danger-bg dark:bg-red-900/20 border border-danger-200 dark:border-red-800/50 rounded-lg p-4">
               <div className="flex items-center">
                 <svg
-                  className="w-5 h-5 text-red-500 mr-2"
+                  className="w-5 h-5 text-danger mr-2 shrink-0"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -267,18 +267,18 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                     d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                <span className="text-sm text-red-900">{error}</span>
+                <span className="text-sm font-medium text-danger-dark dark:text-danger-light">{error}</span>
               </div>
             </div>
           )}
         </div>
 
         {/* 按钮栏 */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-100 dark:border-neutral-800 shrink-0">
           <button
             onClick={onClose}
             disabled={isExporting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50 transition-colors shadow-sm"
           >
             取消
           </button>
@@ -288,7 +288,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
               isExporting ||
               (!includeKPIs && !includeCharts && !includeTables)
             }
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-primary focus:outline-none"
           >
             {isExporting ? '导出中...' : '导出 PDF'}
           </button>

@@ -42,7 +42,8 @@ export function generatePremiumTrendQuery(
   timeView: TimeView,
   whereClause: string = '1=1',
   dateField: DateCriteria = 'policy_date',
-  perspective: ViewPerspective = 'premium'
+  perspective: ViewPerspective = 'premium',
+  groupDim: string = 'org_level_3'
 ): string {
   // DC-001: 使用动态日期字段（用于时间维度分组）
   const df = dateField;
@@ -151,41 +152,41 @@ export function generatePremiumTrendQuery(
       SELECT
         ${timeDimension} AS time_period,
         ${monthKeyDimension} AS month_key,
-        org_level_3,
+        ${groupDim} AS org_level_3,
         -- Metric 1: Total Value (Bar Chart) - Full Week Sum
         ${valueAggregation} AS premium,
 
         -- Metric 2: Anchor Month Value (Ratio Denominator) - Filtered by Anchor Month
         ${perspective === 'premium'
-          ? `SUM(CASE
+      ? `SUM(CASE
               WHEN STRFTIME(${df}, '%Y-%m') = ${monthKeyDimension}
               THEN premium
               ELSE 0
             END)`
-          : `COUNT(CASE
+      : `COUNT(CASE
               WHEN STRFTIME(${df}, '%Y-%m') = ${monthKeyDimension}
               THEN 1
             END)`
-        } AS anchor_month_premium,
+    } AS anchor_month_premium,
 
         -- Metric 3: Anchor Month Next Value (Ratio Numerator) - Filtered by Anchor Month AND Next Month Condition
         ${perspective === 'premium'
-          ? `SUM(CASE
+      ? `SUM(CASE
               WHEN STRFTIME(${df}, '%Y-%m') = ${monthKeyDimension}
                    AND (${nextMonthCondition})
               THEN premium
               ELSE 0
             END)`
-          : `COUNT(CASE
+      : `COUNT(CASE
               WHEN STRFTIME(${df}, '%Y-%m') = ${monthKeyDimension}
                    AND (${nextMonthCondition})
               THEN 1
             END)`
-        } AS anchor_month_next_premium
+    } AS anchor_month_next_premium
 
       FROM PolicyFact
       WHERE ${finalWhereClause}
-      GROUP BY ${timeDimension}, ${monthKeyDimension}, org_level_3
+      GROUP BY ${timeDimension}, ${monthKeyDimension}, ${groupDim}
     ),
     cumulative_stats AS (
       -- 计算截至当前时间维度的累积签单保费和次月起保保费
@@ -348,31 +349,31 @@ export function generateTotalPremiumTrendQuery(
 
         -- Metric 2: Anchor Month Premium (Ratio Denominator) - Filtered by Anchor Month
         ${perspective === 'premium'
-          ? `SUM(CASE
+      ? `SUM(CASE
             WHEN STRFTIME(${df}, '%Y-%m') = ${monthKeyDimension}
             THEN premium
             ELSE 0
           END)`
-          : `COUNT(CASE
+      : `COUNT(CASE
             WHEN STRFTIME(${df}, '%Y-%m') = ${monthKeyDimension}
             THEN 1
           END)`
-        } AS anchor_month_premium,
+    } AS anchor_month_premium,
 
         -- Metric 3: Anchor Month Next Premium (Ratio Numerator) - Filtered by Anchor Month AND Next Month Condition
         ${perspective === 'premium'
-          ? `SUM(CASE
+      ? `SUM(CASE
             WHEN STRFTIME(${df}, '%Y-%m') = ${monthKeyDimension}
                  AND (${nextMonthCondition})
             THEN premium
             ELSE 0
           END)`
-          : `COUNT(CASE
+      : `COUNT(CASE
             WHEN STRFTIME(${df}, '%Y-%m') = ${monthKeyDimension}
                  AND (${nextMonthCondition})
             THEN 1
           END)`
-        } AS anchor_month_next_premium
+    } AS anchor_month_next_premium
       FROM PolicyFact
       WHERE ${finalWhereClause}
       GROUP BY ${timeDimension}, ${monthKeyDimension}
@@ -485,7 +486,8 @@ export function generateQualityBusinessTrendQuery(
   timeView: TimeView,
   whereClause: string = '1=1',
   dateField: DateCriteria = 'policy_date',
-  perspective: ViewPerspective = 'premium'
+  perspective: ViewPerspective = 'premium',
+  groupDim: string = 'org_level_3'
 ): string {
   // DC-001: 使用动态日期字段
   const df = dateField;
@@ -535,19 +537,19 @@ export function generateQualityBusinessTrendQuery(
     SELECT
       ${timeDimension} AS time_period,
       ${perspective === 'premium'
-        ? `SUM(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN premium ELSE 0 END)`
-        : `COUNT(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN 1 END)`
-      } AS quality_premium,
+      ? `SUM(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN premium ELSE 0 END)`
+      : `COUNT(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN 1 END)`
+    } AS quality_premium,
       ${perspective === 'premium'
-        ? 'SUM(premium)'
-        : 'COUNT(*)'
-      } AS total_premium,
+      ? 'SUM(premium)'
+      : 'COUNT(*)'
+    } AS total_premium,
       CASE
         WHEN ${perspective === 'premium' ? 'SUM(premium)' : 'COUNT(*)'} > 0 THEN
           ${perspective === 'premium'
-            ? `SUM(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN premium ELSE 0 END) / SUM(premium)`
-            : `COUNT(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN 1 END) * 1.0 / COUNT(*)`
-          }
+      ? `SUM(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN premium ELSE 0 END) / SUM(premium)`
+      : `COUNT(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN 1 END) * 1.0 / COUNT(*)`
+    }
         ELSE 0
       END AS quality_ratio
     FROM PolicyFact
@@ -575,7 +577,8 @@ export function generateQualityBusinessTrendQuery(
 export function generatePremiumTrendQueryV2(
   timeView: TimeView,
   whereClause: string = '1=1',
-  perspective: ViewPerspective = 'premium'
+  perspective: ViewPerspective = 'premium',
+  groupDim: string = 'org_level_3'
 ): string {
   // V2: 使用 generatePerspectiveWhere 处理视角筛选
   const perspectiveConditions = generatePerspectiveWhere(perspective, [whereClause]);
@@ -617,13 +620,13 @@ export function generatePremiumTrendQueryV2(
   return `
     SELECT
       ${timeDimension} AS time_period,
-      org_level_3,
+      ${groupDim} AS org_level_3,
       ${valueAggregation} AS premium,
       0 AS next_month_start_premium,
       0 AS next_month_ratio
     FROM DailyAggregated
     WHERE ${finalWhereClause}
-    GROUP BY ${timeDimensionAlias}, org_level_3
+    GROUP BY ${timeDimensionAlias}, ${groupDim}
     ORDER BY time_period, org_level_3
   `;
 }
@@ -749,19 +752,19 @@ export function generateQualityBusinessTrendQueryV2(
     SELECT
       ${timeDimension} AS time_period,
       ${perspective === 'premium'
-        ? `SUM(CASE WHEN ${qualityCondition} THEN total_premium ELSE 0 END)`
-        : `SUM(CASE WHEN ${qualityCondition} THEN policy_count ELSE 0 END)`
-      } AS quality_premium,
+      ? `SUM(CASE WHEN ${qualityCondition} THEN total_premium ELSE 0 END)`
+      : `SUM(CASE WHEN ${qualityCondition} THEN policy_count ELSE 0 END)`
+    } AS quality_premium,
       ${perspective === 'premium'
-        ? 'SUM(total_premium)'
-        : 'SUM(policy_count)'
-      } AS total_premium,
+      ? 'SUM(total_premium)'
+      : 'SUM(policy_count)'
+    } AS total_premium,
       CASE
         WHEN ${perspective === 'premium' ? 'SUM(total_premium)' : 'SUM(policy_count)'} > 0 THEN
           ${perspective === 'premium'
-            ? `SUM(CASE WHEN ${qualityCondition} THEN total_premium ELSE 0 END) / SUM(total_premium)`
-            : `SUM(CASE WHEN ${qualityCondition} THEN policy_count ELSE 0 END) * 1.0 / SUM(policy_count)`
-          }
+      ? `SUM(CASE WHEN ${qualityCondition} THEN total_premium ELSE 0 END) / SUM(total_premium)`
+      : `SUM(CASE WHEN ${qualityCondition} THEN policy_count ELSE 0 END) * 1.0 / SUM(policy_count)`
+    }
         ELSE 0
       END AS quality_ratio
     FROM DailyAggregated

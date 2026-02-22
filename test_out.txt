@@ -1,0 +1,37 @@
+bun test v1.3.5 (1e86cebd)
+23:13:23.310 [App][DEBUG] Generating cross-sell query {
+  baseWhereClause: "1=1",
+  drillPath: [],
+  groupBy: null,
+}
+23:13:23.310 [App][DEBUG] Generating cross-sell time period summary query {
+  baseWhereClause: "1=1",
+  vehicleCategory: "passenger",
+}
+23:13:23.310 [App][DEBUG] Generated cross-sell time period summary SQL {
+  sqlLength: 7918,
+}
+  ✅ formatPremium 使用: 12 个组件
+  ✅ formatRate 使用: 7 个组件
+  ℹ️  formatNumber 使用: 0 个组件
+  ✅ formatters.test.ts 包含 14 个测试用例
+
+  📋 已迁移组件列表:
+    1. src/charts/QuadrantChart.ts
+    2. src/charts/StackedBarChart.ts
+    3. src/charts/PremiumProgressChart.ts
+    4. src/charts/ExpenseAnalysisChart.ts
+    5. src/services/charts/KpiCardRenderer.ts
+    6. src/widgets/charts/OrgPremiumPieChart.tsx
+    7. src/widgets/charts/LineChart.tsx
+    8. src/widgets/charts/RoseChart.tsx
+    9. src/charts/BubbleChart.ts
+    10. src/features/dashboard/PremiumDashboard.tsx
+    11. src/features/dashboard/Dashboard.tsx
+    12. src/features/growth/components/GrowthAnalysisPanel.tsx
+
+23:13:23.330 [InsightGenerator][DEBUG] 配置信息 {
+  model: "glm-4.7-flash",
+  hasApiKey: false,
+  note: "使用标准 API + 免费模型",
+}

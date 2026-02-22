@@ -1,0 +1,818 @@
+
+tests/template-engine.test.ts:
+(pass) templateEngine > escapeSQLValue > 应该正确转义 NULL 值
+(pass) templateEngine > escapeSQLValue > 应该正确处理数字 [0.14ms]
+(pass) templateEngine > escapeSQLValue > 应该拒绝非法数字 [0.02ms]
+(pass) templateEngine > escapeSQLValue > 应该正确处理布尔值
+(pass) templateEngine > escapeSQLValue > 应该正确处理字符串
+(pass) templateEngine > escapeSQLValue > 应该转义单引号
+(pass) templateEngine > escapeSQLValue > 应该转义特殊字符
+(pass) templateEngine > escapeSQLValue > 应该正确处理数组（IN 子句）
+(pass) templateEngine > escapeSQLValue > 应该拒绝空数组
+(pass) templateEngine > escapeSQLValue > 应该正确处理日期
+(pass) templateEngine > escapeSQLValue > 应该防止 SQL 注入 [0.28ms]
+(pass) templateEngine > interpolateSQL > 应该替换简单占位符 [0.03ms]
+(pass) templateEngine > interpolateSQL > 应该替换多个占位符 [0.08ms]
+(pass) templateEngine > interpolateSQL > 应该处理条件逻辑 {{#if}} [0.04ms]
+(pass) templateEngine > interpolateSQL > 应该处理条件取反 {{#unless}}
+(pass) templateEngine > interpolateSQL > 应该处理嵌套条件
+(pass) templateEngine > interpolateSQL > 应该在缺少必需参数时抛出错误
+(pass) templateEngine > interpolateSQL > 应该支持禁用转义（谨慎使用）
+(pass) templateEngine > validateParameterValue > 应该验证必填参数
+(pass) templateEngine > validateParameterValue > 应该验证数字范围
+(pass) templateEngine > validateParameterValue > 应该验证日期格式 [0.02ms]
+(pass) templateEngine > validateParameterValue > 应该验证文本正则
+(pass) templateEngine > validateParameterValue > 应该验证选项值 [0.09ms]
+(pass) templateEngine > validateParameterValue > 应该允许非必填参数为空 [0.04ms]
+(pass) templateEngine > extractGlobalFilters > 应该从全局筛选器中提取参数
+(pass) templateEngine > extractGlobalFilters > 应该忽略未配置继承的参数
+(pass) templateEngine > generateSQL > 应该生成字符串模板的 SQL
+(pass) templateEngine > generateSQL > 应该生成函数类型的 SQL
+(pass) templateEngine > generateSQL > 应该合并全局筛选器和用户参数
+(pass) templateEngine > generateSQL > 应该在参数验证失败时抛出错误
+
+tests/alert-checker.test.ts:
+(pass) 预警检测引擎 (Alert Checker) > checkGrowthDecline - 增长率下降检测 > 应检测到严重下降（-20%以下） [0.11ms]
+(pass) 预警检测引擎 (Alert Checker) > checkGrowthDecline - 增长率下降检测 > 应检测到警告下降（-10%到-20%之间）
+(pass) 预警检测引擎 (Alert Checker) > checkGrowthDecline - 增长率下降检测 > 小幅下降不应触发预警
+(pass) 预警检测引擎 (Alert Checker) > checkGrowthDecline - 增长率下降检测 > 增长情况不应触发预警
+(pass) 预警检测引擎 (Alert Checker) > checkGrowthDecline - 增长率下降检测 > 基期为0时不应崩溃
+(pass) 预警检测引擎 (Alert Checker) > checkTargetProgress - 目标进度检测 > 应检测到目标落后严重（-20%以下） [0.21ms]
+(pass) 预警检测引擎 (Alert Checker) > checkTargetProgress - 目标进度检测 > 应检测到目标落后警告（-10%到-20%之间）
+(pass) 预警检测引擎 (Alert Checker) > checkTargetProgress - 目标进度检测 > 应检测到目标达成 [0.06ms]
+(pass) 预警检测引擎 (Alert Checker) > checkTargetProgress - 目标进度检测 > 进度正常不应触发预警
+(pass) 预警检测引擎 (Alert Checker) > checkRenewalRateDrop - 续保率下降检测 > 应检测到续保率严重下降（-10%以下）
+(pass) 预警检测引擎 (Alert Checker) > checkRenewalRateDrop - 续保率下降检测 > 应检测到续保率警告下降（-5%到-10%之间） [0.05ms]
+(pass) 预警检测引擎 (Alert Checker) > checkRenewalRateDrop - 续保率下降检测 > 小幅波动不应触发预警
+(pass) 预警检测引擎 (Alert Checker) > checkPremiumSpike - 保费异常波动检测 > 应检测到严重波动（100%以上） [5.30ms]
+(pass) 预警检测引擎 (Alert Checker) > checkPremiumSpike - 保费异常波动检测 > 应检测到警告波动（50%-100%）
+(pass) 预警检测引擎 (Alert Checker) > checkPremiumSpike - 保费异常波动检测 > 正常波动不应触发预警
+(pass) 预警检测引擎 (Alert Checker) > checkPremiumSpike - 保费异常波动检测 > 应检测到负向波动
+(pass) 预警检测引擎 (Alert Checker) > checkPolicyCountDrop - 件数下降检测 > 应检测到件数严重下降
+(pass) 预警检测引擎 (Alert Checker) > checkPolicyCountDrop - 件数下降检测 > 应检测到件数警告下降
+(pass) 预警检测引擎 (Alert Checker) > runAlertChecks - 批量检测 > 应正确处理多维度数据
+(pass) 预警检测引擎 (Alert Checker) > runAlertChecks - 批量检测 > 应正确处理空数据
+(pass) 预警检测引擎 (Alert Checker) > runAlertChecks - 批量检测 > 应正确处理目标进度
+(pass) 预警检测引擎 (Alert Checker) > calculateAlertSummary - 摘要计算 > 应正确计算摘要
+(pass) 预警检测引擎 (Alert Checker) > calculateAlertSummary - 摘要计算 > 应正确处理空列表
+(pass) 预警检测引擎 (Alert Checker) > calculateTimeProgress - 时间进度计算 > 应正确计算年度进度（年中） [0.65ms]
+(pass) 预警检测引擎 (Alert Checker) > calculateTimeProgress - 时间进度计算 > 应正确计算月度进度（月中）
+(pass) 预警检测引擎 (Alert Checker) > calculateTimeProgress - 时间进度计算 > 应正确计算季度进度（季中）
+(pass) 预警检测引擎 (Alert Checker) > calculateTimeProgress - 时间进度计算 > 应正确处理年初
+(pass) 预警检测引擎 (Alert Checker) > calculateTimeProgress - 时间进度计算 > 应正确处理年末
+(pass) 预警检测引擎 (Alert Checker) > createTargetProgress - 目标进度创建 > 应正确创建年度目标进度
+(pass) 预警检测引擎 (Alert Checker) > createTargetProgress - 目标进度创建 > 应正确创建月度目标进度
+(pass) 预警检测引擎 (Alert Checker) > createTargetProgress - 目标进度创建 > 目标为0时不应崩溃
+(pass) 预警检测引擎 (Alert Checker) > 自定义规则 > 应支持自定义阈值
+(pass) 预警检测引擎 (Alert Checker) > 自定义规则 > 应支持禁用规则
+
+tests/security.test.ts:
+(pass) sanitizeInput > should remove SQL injection patterns
+(pass) sanitizeInput > should handle union-based injection attempts
+(pass) sanitizeInput > should remove quotes [0.25ms]
+(pass) sanitizeInput > should enforce max length [0.03ms]
+(pass) sanitizeInput > should preserve safe Chinese characters
+(pass) sanitizeInput > should preserve safe alphanumeric input
+(pass) sanitizeInput > should handle empty input
+(pass) sanitizeInput > should remove multiple dangerous keywords [0.07ms]
+(pass) validateFilterInput > should accept valid Chinese input
+(pass) validateFilterInput > should accept valid alphanumeric input
+(pass) validateFilterInput > should accept mixed input
+(pass) validateFilterInput > should accept safe special characters
+(pass) validateFilterInput > should reject SQL injection attempts
+(pass) validateFilterInput > should reject input longer than max length
+(pass) validateFilterInput > should reject dangerous special characters
+(pass) validateFilterInput > should return true for empty input
+(pass) validateUploadedFile > should accept valid parquet files [0.27ms]
+(pass) validateUploadedFile > should accept .pq extension
+(pass) validateUploadedFile > should reject files exceeding max size [6.59ms]
+(pass) validateUploadedFile > should reject non-parquet files
+(pass) validateUploadedFile > should reject path traversal attempts in filename
+(pass) validateUploadedFile > should reject Windows path traversal
+(pass) validateUploadedFile > be case insensitive for extension
+(pass) buildSafeLikeClause > should build correct LIKE clause for valid input
+(pass) buildSafeLikeClause > should handle Chinese input
+(pass) buildSafeLikeClause > should return null for empty input
+(pass) buildSafeLikeClause > should throw error for dangerous patterns
+(pass) buildSafeLikeClause > should escape backslashes
+(pass) buildSafeLikeClause > should throw error for invalid input
+(pass) buildSafeLikeClause > should throw error for input exceeding max length
+(pass) SECURITY_LIMITS > should have reasonable file size limit
+(pass) SECURITY_LIMITS > should have reasonable filter length limit
+(pass) SECURITY_LIMITS > should have reasonable query length limit
+(pass) SQL Injection Attack Scenarios > Classic SQL Injection > should prevent tautology attacks
+(pass) SQL Injection Attack Scenarios > Classic SQL Injection > should prevent union-based attacks
+(pass) SQL Injection Attack Scenarios > Classic SQL Injection > should prevent comment-based attacks
+(pass) SQL Injection Attack Scenarios > Advanced SQL Injection > should prevent stacked queries
+(pass) SQL Injection Attack Scenarios > Advanced SQL Injection > should prevent time-based blind attacks
+(pass) SQL Injection Attack Scenarios > Real-world Scenarios > should handle salesman name filter safely
+(pass) SQL Injection Attack Scenarios > Real-world Scenarios > should handle org filter safely [0.03ms]
+(pass) SQL Injection Attack Scenarios > Real-world Scenarios > should prevent file upload with malicious name
+
+tests/coverage-report.test.ts:
+(pass) B044: 格式化统一性覆盖率验证 > 应该能够运行测试并生成覆盖率报告
+(pass) B044: 格式化统一性覆盖率验证 > 应该列出所有已迁移到统一格式化的组件
+(pass) B044: 格式化统一性覆盖率验证 > 应该列出所有格式化函数
+(pass) B044: 格式化统一性覆盖率验证 > 应该验证格式化工具的测试文件存在
+(pass) B044: 格式化统一性覆盖率验证 > 覆盖率目标 > 格式化工具应该达到100%覆盖率
+(pass) B044: 格式化统一性覆盖率验证 > 覆盖率目标 > 已迁移组件应该至少有70%覆盖率
+(pass) B044: 格式化统一性覆盖率验证 > 格式化一致性验证 > 应该验证所有保费显示使用formatPremium
+(pass) B044: 格式化统一性覆盖率验证 > 格式化一致性验证 > 应该验证所有占比显示使用formatRate
+(pass) B044: 格式化统一性覆盖率验证 > 覆盖率报告生成 > 应该生成HTML覆盖率报告
+(pass) B044: 格式化统一性覆盖率验证 > 覆盖率报告生成 > 应该生成LCOV覆盖率报告
+(pass) B044: 格式化统一性覆盖率验证 > 覆盖率报告生成 > 应该生成JSON覆盖率报告
+
+tests/org-salesman-linkage.test.ts:
+(pass) 机构-业务员联动 > should build cache and dedupe salesmen
+(pass) 机构-业务员联动 > should return all salesmen when no org selected
+(pass) 机构-业务员联动 > should return filtered salesmen for selected orgs
+
+tests/comparison-presets.test.ts:
+(pass) comparisonPresets > calculateYoYPeriods - 同比计算 > 应正确计算年初至今的同比期间
+(pass) comparisonPresets > calculateYoYPeriods - 同比计算 > 应处理闰年2月29日的情况
+(pass) comparisonPresets > calculateYoYPeriods - 同比计算 > 应处理年末日期
+(pass) comparisonPresets > calculateYoYPeriods - 同比计算 > 应处理1月1日的边界情况
+(pass) comparisonPresets > calculateMoMPeriods - 环比(月)计算 > 应正确计算月中日期的环比期间
+(pass) comparisonPresets > calculateMoMPeriods - 环比(月)计算 > 应处理月初日期
+(pass) comparisonPresets > calculateMoMPeriods - 环比(月)计算 > 应处理31号在上月只有30天的情况 [0.36ms]
+(pass) comparisonPresets > calculateMoMPeriods - 环比(月)计算 > 应处理1月的环比（跨年）
+(pass) comparisonPresets > calculateMoMPeriods - 环比(月)计算 > 应处理闰年2月的情况 [0.01ms]
+(pass) comparisonPresets > calculateWoWPeriods - 环比(周)计算 > 应正确计算周中日期的环比期间（周三）
+(pass) comparisonPresets > calculateWoWPeriods - 环比(周)计算 > 应正确计算周一的环比期间 [0.07ms]
+(pass) comparisonPresets > calculateWoWPeriods - 环比(周)计算 > 应正确计算周日的环比期间 [0.01ms]
+(pass) comparisonPresets > calculateWoWPeriods - 环比(周)计算 > 应处理跨年的周环比 [0.02ms]
+(pass) comparisonPresets > calculatePresetPeriods - 预设期间计算 > 应正确返回同比期间
+(pass) comparisonPresets > calculatePresetPeriods - 预设期间计算 > 应正确返回环比(月)期间
+(pass) comparisonPresets > calculatePresetPeriods - 预设期间计算 > 应正确返回环比(周)期间
+(pass) comparisonPresets > calculatePresetPeriods - 预设期间计算 > 自定义模式应返回null
+(pass) comparisonPresets > calculatePeriodDays - 期间天数计算 > 应正确计算单天期间
+(pass) comparisonPresets > calculatePeriodDays - 期间天数计算 > 应正确计算多天期间
+(pass) comparisonPresets > calculatePeriodDays - 期间天数计算 > 应正确计算跨月期间
+(pass) comparisonPresets > validatePeriodAlignment - 期间对齐验证 > 应通过对齐的期间
+(pass) comparisonPresets > validatePeriodAlignment - 期间对齐验证 > 应检测不对齐的期间
+(pass) comparisonPresets > 辅助函数 > formatPeriodDisplay 应正确格式化显示
+(pass) comparisonPresets > 辅助函数 > getPresetLabel 应返回正确标签
+(pass) comparisonPresets > 辅助函数 > getPresetDescription 应返回正确描述
+(pass) comparisonPresets > PRESET_CONFIGS > 应包含所有预设配置
+
+tests/formatters.test.ts:
+(pass) formatters > formatPremium > formats premium in 万 with 1 decimal, no unit [0.11ms]
+(pass) formatters > formatPremium > handles thousand separators correctly
+(pass) formatters > formatPremium > handles rounding edge cases
+(pass) formatters > formatPremium > handles invalid numbers
+(pass) formatters > formatPremium > handles edge values
+(pass) formatters > formatRate > formats ratio or percent with one decimal
+(pass) formatters > formatRate > handles precision with rounding
+(pass) formatters > formatRate > handles edge values
+(pass) formatters > formatRate > handles invalid numbers
+(pass) formatters > formatNumber > formats number with rounding
+(pass) formatters > formatNumber > handles thousand separators correctly
+(pass) formatters > formatNumber > handles rounding edge cases
+(pass) formatters > formatNumber > handles edge values
+(pass) formatters > formatNumber > handles invalid numbers
+
+tests/date-range-picker.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module 'react/jsx-dev-runtime' from '/Users/xuechenglong/Downloads/01-正开发Git项目/chexian-api/src/features/filters/DateRangePicker.tsx'
+-------------------------------
+
+
+tests/sql-validator.test.ts:
+(pass) SQL Validator > validateSQL - Basic Constraints > should reject empty SQL [0.26ms]
+(pass) SQL Validator > validateSQL - Basic Constraints > should reject SQL exceeding max length
+(pass) SQL Validator > validateSQL - Basic Constraints > should reject multiple statements separated by semicolon
+(pass) SQL Validator > validateSQL - Basic Constraints > should allow single statement with trailing semicolon
+(pass) SQL Validator > validateSQL - Read-Only Constraints > should reject non-SELECT/WITH statements
+(pass) SQL Validator > validateSQL - Read-Only Constraints > should accept valid SELECT statements
+(pass) SQL Validator > validateSQL - Read-Only Constraints > should accept valid WITH (CTE) statements
+(pass) SQL Validator > validateSQL - Read-Only Constraints > should reject DDL keywords
+(pass) SQL Validator > validateSQL - Read-Only Constraints > should reject DML keywords
+(pass) SQL Validator > validateSQL - Read-Only Constraints > should reject file operation functions
+(pass) SQL Validator > validateSQL - Read-Only Constraints > should reject system-level keywords [0.35ms]
+(pass) SQL Validator > validateSQL - Access Boundary > should reject SQL without PolicyFact reference [0.03ms]
+(pass) SQL Validator > validateSQL - Access Boundary > should reject SQL accessing raw_parquet
+(pass) SQL Validator > validateSQL - Access Boundary > should accept SQL with PolicyFact reference [0.03ms]
+(pass) SQL Validator > validateSQL - Access Boundary > should be case-insensitive for PolicyFact [0.02ms]
+(pass) SQL Validator > validateSQL - Privacy Protection > should reject SQL selecting raw policy_no field [0.08ms]
+(pass) SQL Validator > validateSQL - Privacy Protection > should reject mixed raw and aggregated policy_no (privacy regression test)
+(pass) SQL Validator > validateSQL - Privacy Protection > should reject GROUP BY policy_no
+(pass) SQL Validator > validateSQL - Privacy Protection > should reject ORDER BY policy_no
+(pass) SQL Validator > validateSQL - Privacy Protection > should allow policy_no ONLY inside aggregate functions [0.10ms]
+(pass) SQL Validator > validateSQL - Privacy Protection > should allow policy_no in WHERE clause but not in SELECT
+(pass) SQL Validator > validateSQL - Privacy Protection > should allow policy_no in CASE inside aggregate
+(pass) SQL Validator > validateSQL - Aggregation Requirement > should reject SQL without aggregation or GROUP BY [0.06ms]
+(pass) SQL Validator > validateSQL - Aggregation Requirement > should accept SQL with COUNT
+(pass) SQL Validator > validateSQL - Aggregation Requirement > should accept SQL with SUM
+(pass) SQL Validator > validateSQL - Aggregation Requirement > should accept SQL with GROUP BY
+(pass) SQL Validator > validateSQL - Aggregation Requirement > should accept SQL with AVG, MIN, MAX [0.06ms]
+(pass) SQL Validator > validateSQL - Aggregation Requirement > should accept SQL with multiple aggregation functions
+(pass) SQL Validator > isReadOnlyQuery > should return true for SELECT statements
+(pass) SQL Validator > isReadOnlyQuery > should return true for WITH statements
+(pass) SQL Validator > isReadOnlyQuery > should return false for write operations
+(pass) SQL Validator > isReadOnlyQuery > should return false for statements with embedded write keywords
+(pass) SQL Validator > hasAggregation > should return true for SQL with GROUP BY
+(pass) SQL Validator > hasAggregation > should return true for SQL with aggregate functions [0.09ms]
+(pass) SQL Validator > hasAggregation > should return false for SQL without aggregation
+(pass) SQL Validator > hasAggregation > should be case-insensitive
+(pass) SQL Validator > validateSQL - Real-World Valid Queries > should accept KPI aggregation query with COUNT DISTINCT policy_no
+(pass) SQL Validator > validateSQL - Real-World Valid Queries > should accept salesman performance query
+(pass) SQL Validator > validateSQL - Real-World Valid Queries > should accept customer category analysis
+(pass) SQL Validator > validateSQL - Real-World Valid Queries > should accept daily premium trend query
+(pass) SQL Validator > validateSQL - Real-World Valid Queries > should accept CTE with aggregation
+
+tests/queryBuilder.test.ts:
+(pass) buildWhereClauseFromFilters > should handle insurance_type=true (交强险) [0.19ms]
+(pass) buildWhereClauseFromFilters > should handle insurance_type=false (商业保险)
+(pass) buildWhereClauseFromFilters > should handle insurance_type=null (全部)
+(pass) buildWhereClauseFromFilters > should handle insurance_type=undefined (全部)
+(pass) buildWhereClauseFromFilters > should combine insurance_type with other filters
+(pass) buildWhereClauseFromFilters > should handle date_criteria for insurance_start_date
+(pass) buildWhereClauseFromFilters > should handle multiple boolean filters including insurance_type
+
+tests/pagination.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module '@testing-library/react' from '/Users/xuechenglong/Downloads/01-正开发Git项目/chexian-api/tests/pagination.test.ts'
+-------------------------------
+
+
+tests/export-ignore-elements.test.ts:
+(pass) export ignoreElements > should ignore elements marked with no-export class
+(pass) export ignoreElements > should ignore common interactive tag names by default [0.18ms]
+(pass) export ignoreElements > should not ignore normal content elements by default
+(pass) export ignoreElements > should allow extending ignored tag names and deduplicate input
+
+tests/cross-sell-sql.test.ts:
+(pass) cross-sell SQL 兼容交叉销售字段格式 > cross-sell 下钻 SQL 应包含兼容判定表达式 [0.13ms]
+(pass) cross-sell SQL 兼容交叉销售字段格式 > cross-sell 时间维度 SQL 应包含兼容判定表达式 [0.07ms]
+
+tests/real-data-validation.test.ts:
+(pass) 真实数据：机构维度验证 > 三级机构列表 > 应包含12个三级机构
+(pass) 真实数据：机构维度验证 > 三级机构列表 > 应包含所有已知机构
+(pass) 真实数据：机构维度验证 > 机构样本数据 > 每个机构应有有效的样本数据 [0.28ms]
+(pass) 真实数据：机构维度验证 > 机构样本数据 > 天府机构样本应为营业货车
+(pass) 真实数据：机构维度验证 > 机构样本数据 > 乐山机构样本应为续保保单
+(pass) 真实数据：机构维度验证 > 机构汇总统计 > 天府机构应有最多保单
+(pass) 真实数据：机构维度验证 > 机构汇总统计 > 达州机构应有最少保单
+(pass) 真实数据：机构维度验证 > 机构汇总统计 > 达州机构续保率最高
+(pass) 真实数据：机构维度验证 > 机构汇总统计 > 自贡机构续保率最低
+(pass) 真实数据：机构维度验证 > 机构汇总统计 > 新都机构人均保费最高 [0.06ms]
+(pass) 真实数据：机构维度验证 > 机构汇总统计 > 所有机构保费总和应正确
+(pass) 真实数据：机构维度验证 > 机构汇总统计 > 所有机构保单总数应正确
+(pass) 真实数据：险类维度验证 > 应有2种险类
+(pass) 真实数据：险类维度验证 > 交强险样本应正确
+(pass) 真实数据：险类维度验证 > 商业保险样本应正确
+(pass) 真实数据：险类维度验证 > 险类分布应符合预期
+(pass) 真实数据：客户类别维度验证 > 应有11种客户类别
+(pass) 真实数据：客户类别维度验证 > 非营业个人客车应是最大类别
+(pass) 真实数据：客户类别维度验证 > 营业货车样本应为天府机构
+(pass) 真实数据：客户类别维度验证 > 特种车样本应为自贡机构
+(pass) 真实数据：客户类别维度验证 > 营业城市公交样本应为资阳机构
+(pass) 真实数据：终端来源维度验证 > 应有8种终端来源
+(pass) 真实数据：终端来源维度验证 > 移动展业App应是最大渠道
+(pass) 真实数据：终端来源维度验证 > AI出单样本应正确
+(pass) 真实数据：续保模式维度验证 > 应有2种有效续保模式（排除nan）
+(pass) 真实数据：续保模式维度验证 > 自留模式样本应正确
+(pass) 真实数据：续保模式维度验证 > 外呼模式样本应正确
+(pass) 真实数据：吨位分段维度验证 > 应有5种吨位分段
+(pass) 真实数据：吨位分段维度验证 > 10吨以上样本应为营业货车
+(pass) 真实数据：吨位分段维度验证 > 9-10吨样本应为高新机构
+(pass) 真实数据：吨位分段维度验证 > 1吨以下不应是营业货车
+(pass) 真实数据：成本分析维度验证 > 所有成本样本应有赔案
+(pass) 真实数据：成本分析维度验证 > 天府机构营业货车赔案样本应正确
+(pass) 真实数据：成本分析维度验证 > 赔付率计算验证：已报告赔款/保费
+(pass) 真实数据：成本分析维度验证 > 费用率计算验证：费用/保费
+(pass) 真实数据：成本分析维度验证 > 包含负保费的样本（批单退费）
+(pass) 真实数据：商车自主定价系数验证 > 系数范围应在0.65-1.35之间 [0.05ms]
+(pass) 真实数据：商车自主定价系数验证 > 最高系数应为1.35
+(pass) 真实数据：商车自主定价系数验证 > 最低系数样本应正确
+(pass) 真实数据：商车自主定价系数验证 > 高新机构高系数样本应正确
+(pass) 真实数据：商车自主定价系数验证 > 营业货车样本系数应为1.2
+(pass) 真实数据：整体统计验证 > 总记录数应正确
+(pass) 真实数据：整体统计验证 > 签单日期范围应正确
+(pass) 真实数据：整体统计验证 > 保险起期范围应正确
+(pass) 真实数据：整体统计验证 > 数据跨度应超过2年
+(pass) SQL生成器与真实数据一致性 > 机构筛选条件应使用真实机构名
+(pass) SQL生成器与真实数据一致性 > 客户类别筛选条件应使用真实类别名
+(pass) SQL生成器与真实数据一致性 > 真实保单号格式应为22位
+(pass) SQL生成器与真实数据一致性 > 真实业务员格式应为工号+姓名
+(pass) 业务规则与真实数据验证 > 续保保单is_renewal应为true [0.14ms]
+(pass) 业务规则与真实数据验证 > 非续保保单is_renewal应为false
+(pass) 业务规则与真实数据验证 > 商业保险系数样本应有有效系数
+(pass) 业务规则与真实数据验证 > 机构续保率应与统计数据一致
+(pass) 业务规则与真实数据验证 > 机构平均保费应与统计数据一致
+
+tests/formatters-snapshot.test.ts:
+(pass) 格式化统一性快照测试 > formatPremium 快照测试 > 应正确格式化零值 [0.29ms]
+(pass) 格式化统一性快照测试 > formatPremium 快照测试 > 应正确格式化小数值
+(pass) 格式化统一性快照测试 > formatPremium 快照测试 > 应正确格式化万级数值
+(pass) 格式化统一性快照测试 > formatPremium 快照测试 > 应正确格式化大数值（亿元）
+(pass) 格式化统一性快照测试 > formatPremium 快照测试 > 应正确处理千分位分隔
+(pass) 格式化统一性快照测试 > formatPremium 快照测试 > 应正确四舍五入到万元
+(pass) 格式化统一性快照测试 > formatRate 快照测试 > 应正确格式化0%
+(pass) 格式化统一性快照测试 > formatRate 快照测试 > 应正确格式化小数百分比
+(pass) 格式化统一性快照测试 > formatRate 快照测试 > 应正确格式整数百分比
+(pass) 格式化统一性快照测试 > formatRate 快照测试 > 应正确格式化大于100%的值
+(pass) 格式化统一性快照测试 > formatRate 快照测试 > 应保留1位小数
+(pass) 格式化统一性快照测试 > formatRate 快照测试 > 应处理边界值 0.05%
+(pass) 格式化统一性快照测试 > formatNumber 快照测试 > 应正确格式化零值
+(pass) 格式化统一性快照测试 > formatNumber 快照测试 > 应正确格式化小整数
+(pass) 格式化统一性快照测试 > formatNumber 快照测试 > 应正确格式化带千分位的数值
+(pass) 格式化统一性快照测试 > formatNumber 快照测试 > 应保留整数（无小数）
+(pass) 格式化统一性快照测试 > 边界值快照测试 > formatPremium 应处理负数
+(pass) 格式化统一性快照测试 > 边界值快照测试 > formatRate 应处理微小值
+(pass) 格式化统一性快照测试 > 边界值快照测试 > formatRate 应处理极大值
+(pass) 格式化统一性快照测试 > 边界值快照测试 > 应处理 NaN 值
+(pass) 格式化统一性快照测试 > 边界值快照测试 > 应处理 Infinity
+(pass) 格式化统一性快照测试 > 格式化一致性测试 > 相同输入应产生相同输出（formatPremium） [0.38ms]
+(pass) 格式化统一性快照测试 > 格式化一致性测试 > 相同输入应产生相同输出（formatRate）
+(pass) 格式化统一性快照测试 > 格式化一致性测试 > 千分位分隔符应一致
+
+tests/earned-premium-table-options.test.tsx:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module 'react/jsx-dev-runtime' from '/Users/xuechenglong/Downloads/01-正开发Git项目/chexian-api/tests/earned-premium-table-options.test.tsx'
+-------------------------------
+
+
+tests/logger.test.ts:
+(pass) Logger > 基本日志输出 > 应该输出 debug 日志 [0.21ms]
+(pass) Logger > 基本日志输出 > 应该输出 info 日志
+(pass) Logger > 基本日志输出 > 应该输出 warn 日志
+(pass) Logger > 基本日志输出 > 应该输出 error 日志
+(pass) Logger > 日志级别过滤 > warn 级别应该过滤 debug 和 info
+(pass) Logger > 日志级别过滤 > error 级别应该只输出 error
+(pass) Logger > 日志级别过滤 > none 级别应该不输出任何日志
+(pass) Logger > 上下文管理 > 应该包含正确的上下文标识
+(pass) Logger > 上下文管理 > child logger 应该继承父 logger 配置
+(pass) Logger > 便捷方法 > log 对象应该提供快捷方法
+(pass) Logger > 配置更新 > 应该允许动态更新日志级别
+(pass) Logger > 默认单例 > logger 应该是可用的单例
+
+tests/formatting-migration-check.test.ts:
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > 所有已迁移组件应该存在
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/QuadrantChart.ts > 应该导入至少一个格式化工具
+  ⚠️  src/charts/QuadrantChart.ts 发现潜在的硬编码格式化: .toFixed()
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/QuadrantChart.ts > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/StackedBarChart.ts > 应该导入至少一个格式化工具
+  ⚠️  src/charts/StackedBarChart.ts 发现潜在的硬编码格式化: .toFixed()
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/StackedBarChart.ts > 应该避免使用硬编码格式化逻辑 [0.30ms]
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/PremiumProgressChart.ts > 应该导入至少一个格式化工具
+  ⚠️  src/charts/PremiumProgressChart.ts 发现潜在的硬编码格式化: .toFixed()
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/PremiumProgressChart.ts > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/ExpenseAnalysisChart.ts > 应该导入至少一个格式化工具
+  ⚠️  src/charts/ExpenseAnalysisChart.ts 发现潜在的硬编码格式化: .toFixed()
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/ExpenseAnalysisChart.ts > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/services/charts/KpiCardRenderer.ts > 应该导入至少一个格式化工具
+  ⚠️  src/services/charts/KpiCardRenderer.ts 发现潜在的硬编码格式化: .toFixed()
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/services/charts/KpiCardRenderer.ts > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/widgets/charts/OrgPremiumPieChart.tsx > 应该导入至少一个格式化工具
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/widgets/charts/OrgPremiumPieChart.tsx > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/widgets/charts/LineChart.tsx > 应该导入至少一个格式化工具
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/widgets/charts/LineChart.tsx > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/widgets/charts/RoseChart.tsx > 应该导入至少一个格式化工具
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/widgets/charts/RoseChart.tsx > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/BubbleChart.ts > 应该导入至少一个格式化工具
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/charts/BubbleChart.ts > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/features/dashboard/PremiumDashboard.tsx > 应该导入至少一个格式化工具
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/features/dashboard/PremiumDashboard.tsx > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/features/dashboard/Dashboard.tsx > 应该导入至少一个格式化工具
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/features/dashboard/Dashboard.tsx > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/features/growth/components/GrowthAnalysisPanel.tsx > 应该导入至少一个格式化工具
+(pass) B044: 格式化迁移一致性验证 > 已迁移组件验证 > src/features/growth/components/GrowthAnalysisPanel.tsx > 应该避免使用硬编码格式化逻辑
+(pass) B044: 格式化迁移一致性验证 > 格式化工具使用统计 > formatPremium 使用次数统计 [0.28ms]
+(pass) B044: 格式化迁移一致性验证 > 格式化工具使用统计 > formatRate 使用次数统计 [0.65ms]
+(pass) B044: 格式化迁移一致性验证 > 格式化工具使用统计 > formatNumber 使用次数统计 [0.59ms]
+(pass) B044: 格式化迁移一致性验证 > 格式化规则一致性 > 应该验证保费格式化规则
+(pass) B044: 格式化迁移一致性验证 > 格式化规则一致性 > 应该验证占比格式化规则 [0.07ms]
+(pass) B044: 格式化迁移一致性验证 > 测试覆盖率验证 > formatters.test.ts 应该存在 [0.03ms]
+(pass) B044: 格式化迁移一致性验证 > 测试覆盖率验证 > formatters.test.ts 应该包含足够的测试用例
+(pass) B044: 格式化迁移一致性验证 > 迁移完整性检查 > 应该列出所有迁移的组件
+(pass) B044: 格式化迁移一致性验证 > 迁移完整性检查 > 应该验证迁移数量与B042一致
+
+tests/config/organizations.test.ts:
+(pass) Organizations Config > ORGANIZATIONS constant > should have 12 organizations
+(pass) Organizations Config > ORGANIZATIONS constant > should include expected organizations [0.01ms]
+(pass) Organizations Config > ORGANIZATIONS constant > should have correct type (as const)
+(pass) Organizations Config > UserRole enum > should have BRANCH_ADMIN role
+(pass) Organizations Config > UserRole enum > should have ORG_USER role
+(pass) Organizations Config > getPermissionByUsername > should return admin permission for admin user
+(pass) Organizations Config > getPermissionByUsername > should return org permission for org user
+(pass) Organizations Config > getPermissionByUsername > should return default admin permission for unknown user (dev mode)
+(pass) Organizations Config > getVisibleOrganizations > should return all orgs for branch admin
+(pass) Organizations Config > getVisibleOrganizations > should return only own org for org user
+(pass) Organizations Config > canViewOrganization > should allow admin to view any org
+(pass) Organizations Config > canViewOrganization > should allow org user to view own org
+(pass) Organizations Config > canViewOrganization > should deny org user from viewing other org
+(pass) Security Best Practices > should not expose user credentials in frontend
+
+tests/integration/critical-path.test.ts:
+(pass) Critical Path: Permission Filtering (Row-Level Security) > Permission Middleware Logic > should allow branch_admin to see all data
+(pass) Critical Path: Permission Filtering (Row-Level Security) > Permission Middleware Logic > should restrict org_user to their organization
+(pass) Critical Path: Permission Filtering (Row-Level Security) > Permission Middleware Logic > should deny access for unknown role
+(pass) Critical Path: Permission Filtering (Row-Level Security) > Permission Middleware Logic > should handle empty user filter
+(pass) Critical Path: Permission Filtering (Row-Level Security) > SQL Permission Injector Validation > should accept valid permission filters
+(pass) Critical Path: Permission Filtering (Row-Level Security) > SQL Permission Injector Validation > should reject SQL injection in permission filter
+(pass) Critical Path: Permission Filtering (Row-Level Security) > SQL Permission Injector Validation > should reject stacked queries
+(pass) Critical Path: SQL Injection Prevention > Input Sanitization > should remove SQL keywords
+(pass) Critical Path: SQL Injection Prevention > Input Sanitization > should preserve safe Chinese characters
+(pass) Critical Path: SQL Injection Prevention > Input Sanitization > should handle union-based injection
+(pass) Critical Path: SQL Injection Prevention > Input Sanitization > should handle tautology attacks
+(pass) Critical Path: SQL Injection Prevention > Date Parameter Validation > should accept valid date format [0.08ms]
+(pass) Critical Path: SQL Injection Prevention > Date Parameter Validation > should reject invalid date formats
+(pass) Critical Path: SQL Injection Prevention > Field Name Validation > should accept valid field names
+(pass) Critical Path: SQL Injection Prevention > Field Name Validation > should reject invalid field names
+(pass) Critical Path: SQL Injection Prevention > SQL Escape String > should escape single quotes
+(pass) Critical Path: SQL Injection Prevention > SQL Escape String > should handle multiple quotes
+(pass) Critical Path: SQL Injection Prevention > SQL Escape String > should not affect strings without quotes
+(pass) Critical Path: Error Boundary > Error State Management > should catch and handle component errors
+(pass) Critical Path: Error Boundary > Error State Management > should allow retry after error [0.10ms]
+(pass) Critical Path: Error Boundary > Error State Management > should preserve error info for debugging
+(pass) Critical Path: Error Boundary > Fallback Rendering > should render children when no error
+(pass) Critical Path: Error Boundary > Fallback Rendering > should render fallback on error
+(pass) Critical Path: Authentication Token Logic > Token Storage > should validate JWT structure
+(pass) Critical Path: Authentication Token Logic > Token Storage > should check token expiry
+(pass) Critical Path: Authentication Token Logic > Authorization Header > should build correct Authorization header
+(pass) Critical Path: Dual Mode Data Source > Mode Detection > should determine data enabled state correctly
+(pass) Critical Path: Dual Mode Data Source > Data Source Selection > should prioritize API mode when authenticated
+(pass) Critical Path: Rollback Strategy Documentation > should document rollback strategies
+(pass) Critical Path: Rollback Strategy Documentation > should document verification checklist
+
+tests/marketing-report/holidayUtils.test.ts:
+(pass) holidayUtils > isHoliday > should return true for holiday dates
+(pass) holidayUtils > isHoliday > should return false for non-holiday dates
+(pass) holidayUtils > getHolidayName > should return holiday name for holiday dates [0.05ms]
+(pass) holidayUtils > getHolidayName > should return null for non-holiday dates [0.01ms]
+(pass) holidayUtils > getHolidaysInRange > should return holidays within date range [0.03ms]
+(pass) holidayUtils > getHolidaysInRange > should return only weekends when no legal holidays in range [0.02ms]
+(pass) holidayUtils > countHolidaysInRange > should count holidays correctly
+(pass) holidayUtils > countHolidaysInRange > should count weekends when no legal holidays
+(pass) holidayUtils > getHolidayDatesInRange > should return date strings [0.06ms]
+(pass) holidayUtils > getHolidaysGroupedByName > should group holidays by name
+(pass) holidayUtils > generateHolidayValuesSql > should generate SQL VALUES clause
+(pass) holidayUtils > generateHolidayValuesSql > should generate multiple values
+(pass) holidayUtils > generateHolidayValuesSql > should handle no holidays case
+(pass) holidayUtils > getHolidaySummary > should return summary with correct format
+(pass) holidayUtils > HOLIDAYS_2026 > should contain all major holidays [0.16ms]
+(pass) holidayUtils > HOLIDAYS_2026 > should contain weekends [0.02ms]
+(pass) holidayUtils > HOLIDAYS_2026 > should have correct number of holiday days
+
+tests/api/sql-parser.test.ts:
+(pass) SQL Parser > parseWhereClause > 应解析空条件
+(pass) SQL Parser > parseWhereClause > 应解析日期范围条件
+(pass) SQL Parser > parseWhereClause > 应解析 BETWEEN 条件 [0.38ms]
+(pass) SQL Parser > parseWhereClause > 应解析单值机构条件
+(pass) SQL Parser > parseWhereClause > 应解析多值机构条件
+(pass) SQL Parser > parseWhereClause > 应解析业务员条件 [0.10ms]
+(pass) SQL Parser > parseWhereClause > 应解析布尔条件
+(pass) SQL Parser > parseWhereClause > 应解析复杂组合条件
+(pass) SQL Parser > paramsToQueryString > 应转换参数为查询字符串对象
+(pass) SQL Parser > paramsToQueryString > 应处理多值数组
+(pass) SQL Parser > buildQueryParams > 应从筛选器状态构建查询参数
+(pass) SQL Parser > buildQueryParams > 应处理多个机构
+(pass) SQL Parser > mergeQueryParams > 应合并多个参数对象
+(pass) SQL Parser > mergeQueryParams > 后者应覆盖前者
+(pass) SQL Parser > mergeQueryParams > 应忽略 undefined 参数
+
+tests/api/client.test.ts:
+(pass) API Client > API_BASE > should have default value for development
+(pass) API Client > API_BASE > should be a valid URL format
+(pass) API Client > Token Management > should store token in localStorage when set [0.39ms]
+(pass) API Client > Token Management > should clear token on logout [0.03ms]
+(pass) API Client > Token Management > should return false for isAuthenticated when no token [0.02ms]
+(pass) API Client > API Requests > should include Authorization header when token exists
+(pass) API Client > API Requests > should throw error on API failure
+(pass) API Client > File Operations > should call correct endpoint for getFiles [0.22ms]
+(pass) API Client > File Operations > should call correct endpoint for loadFile
+(pass) API Client > File Operations > should encode filename in URL [0.08ms]
+(pass) API Client > Query Operations > should call KPI endpoint with filters [0.12ms]
+(pass) API Client > Query Operations > should call trend endpoint with granularity [0.03ms]
+
+tests/api/data-source.test.ts:
+(pass) DataSource 数据源切换 > parseWhereClause 与 API 参数转换 > 应正确转换 WHERE clause 为 API 参数 [0.27ms]
+(pass) DataSource 数据源切换 > parseWhereClause 与 API 参数转换 > 应处理多机构 IN 子句 [0.01ms]
+(pass) DataSource 数据源切换 > parseWhereClause 与 API 参数转换 > 应处理布尔筛选条件
+(pass) DataSource 数据源切换 > buildQueryParams 从筛选器状态构建 > 应从筛选器状态构建正确的参数 [0.12ms]
+(pass) DataSource 数据源切换 > buildQueryParams 从筛选器状态构建 > 应处理多机构筛选
+(pass) DataSource 数据源切换 > paramsToQueryString URL 参数转换 > 应正确转换为 URL 参数格式
+(pass) DataSource 数据源切换 > paramsToQueryString URL 参数转换 > 应正确处理数组参数
+
+tests/e2e/02-filter-sql.spec.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module '@playwright/test' from '/Users/xuechenglong/Downloads/01-正开发Git项目/chexian-api/tests/e2e/02-filter-sql.spec.ts'
+-------------------------------
+
+
+tests/e2e/01-dashboard-flow.spec.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module '@playwright/test' from '/Users/xuechenglong/Downloads/01-正开发Git项目/chexian-api/tests/e2e/01-dashboard-flow.spec.ts'
+-------------------------------
+
+
+tests/shared/types/branded.test.ts:
+(pass) 品牌类型 - 数值类型守卫 > isMoney > 应该接受正数
+(pass) 品牌类型 - 数值类型守卫 > isMoney > 应该拒绝负数
+(pass) 品牌类型 - 数值类型守卫 > isMoney > 应该拒绝非有限数
+(pass) 品牌类型 - 数值类型守卫 > isPositiveInteger > 应该接受正整数
+(pass) 品牌类型 - 数值类型守卫 > isPositiveInteger > 应该拒绝零
+(pass) 品牌类型 - 数值类型守卫 > isPositiveInteger > 应该拒绝负数
+(pass) 品牌类型 - 数值类型守卫 > isPositiveInteger > 应该拒绝小数
+(pass) 品牌类型 - 数值类型守卫 > isPercentage > 应该接受0-100范围内的数 [0.28ms]
+(pass) 品牌类型 - 数值类型守卫 > isPercentage > 应该拒绝超出范围的数 [0.01ms]
+(pass) 品牌类型 - 数值类型守卫 > isPercentage > 应该拒绝非有限数
+(pass) 品牌类型 - 数值类型守卫 > isRatio > 应该接受0-1范围内的数
+(pass) 品牌类型 - 数值类型守卫 > isRatio > 应该拒绝超出范围的数
+(pass) 品牌类型 - 数值类型守卫 > isNonNegative > 应该接受非负数
+(pass) 品牌类型 - 数值类型守卫 > isNonNegative > 应该拒绝负数
+(pass) 品牌类型 - 类型转换 > asMoney > 应该转换有效金额
+(pass) 品牌类型 - 类型转换 > asMoney > 应该对无效金额抛出错误
+(pass) 品牌类型 - 类型转换 > asPositiveInteger > 应该转换有效正整数
+(pass) 品牌类型 - 类型转换 > asPositiveInteger > 应该对无效值抛出错误
+(pass) 品牌类型 - 类型转换 > asPercentage > 应该转换有效百分比
+(pass) 品牌类型 - 类型转换 > asPercentage > 应该对无效值抛出错误
+(pass) 品牌类型 - 类型转换 > asRatio > 应该转换有效比率
+(pass) 品牌类型 - 类型转换 > asRatio > 应该对无效值抛出错误
+(pass) 品牌类型 - 安全转换 > tryAsMoney > 应该返回有效金额
+(pass) 品牌类型 - 安全转换 > tryAsMoney > 应该对无效值返回null
+(pass) 品牌类型 - 安全转换 > tryAsPercentage > 应该返回有效百分比
+(pass) 品牌类型 - 安全转换 > tryAsPercentage > 应该对无效值返回null
+(pass) 品牌类型 - 数值转换 > ratioToPercentage > 应该将比率转换为百分比
+(pass) 品牌类型 - 数值转换 > percentageToRatio > 应该将百分比转换为比率
+(pass) 品牌类型 - 字符串类型守卫 > isPolicyNumber > 应该接受非空字符串
+(pass) 品牌类型 - 字符串类型守卫 > isPolicyNumber > 应该拒绝空字符串
+(pass) 品牌类型 - 字符串类型守卫 > isOrgCode > 应该接受非空字符串
+(pass) 品牌类型 - 字符串类型守卫 > isOrgCode > 应该拒绝空字符串
+(pass) 品牌类型 - 日期类型 > isISODateString > 应该接受有效ISO日期
+(pass) 品牌类型 - 日期类型 > isISODateString > 应该拒绝无效格式
+(pass) 品牌类型 - 日期类型 > isISODateString > 应该拒绝无效日期
+(pass) 品牌类型 - 日期类型 > asISODateString > 应该转换有效日期
+(pass) 品牌类型 - 日期类型 > asISODateString > 应该对无效日期抛出错误
+(pass) 品牌类型 - 日期类型 > dateToISOString > 应该将Date转换为ISO字符串
+
+tests/shared/types/utility.test.ts:
+(pass) 实用类型 - Result类型 > success > 应该创建成功结果
+(pass) 实用类型 - Result类型 > success > 应该支持任意数据类型
+(pass) 实用类型 - Result类型 > failure > 应该创建失败结果
+(pass) 实用类型 - Result类型 > failure > 应该支持自定义错误类型
+(pass) 实用类型 - Result类型 > isSuccess > 应该正确识别成功结果 [0.19ms]
+(pass) 实用类型 - Result类型 > isFailure > 应该正确识别失败结果 [0.02ms]
+(pass) 实用类型 - 异步状态 > idle > 应该创建空闲状态
+(pass) 实用类型 - 异步状态 > loading > 应该创建加载状态
+(pass) 实用类型 - 异步状态 > asyncSuccess > 应该创建成功状态
+(pass) 实用类型 - 异步状态 > asyncError > 应该创建错误状态
+(pass) 实用类型 - 分页 > createPaginatedResult > 应该创建分页结果
+(pass) 实用类型 - 分页 > createPaginatedResult > 应该正确计算总页数
+(pass) 实用类型 - 分页 > createPaginatedResult > 应该处理空数据
+(pass) 实用类型 - 类型守卫 > isNonEmptyString > 应该接受非空字符串
+(pass) 实用类型 - 类型守卫 > isNonEmptyString > 应该拒绝空字符串
+(pass) 实用类型 - 类型守卫 > isNonEmptyString > 应该拒绝非字符串
+(pass) 实用类型 - 类型守卫 > isValidNumber > 应该接受有效数字
+(pass) 实用类型 - 类型守卫 > isValidNumber > 应该拒绝非有限数
+(pass) 实用类型 - 类型守卫 > isValidNumber > 应该拒绝非数字
+(pass) 实用类型 - 类型守卫 > isNonEmptyArray > 应该接受非空数组
+(pass) 实用类型 - 类型守卫 > isNonEmptyArray > 应该拒绝空数组
+(pass) 实用类型 - 类型守卫 > isNonEmptyArray > 应该拒绝非数组
+(pass) 实用类型 - 类型守卫 > isValidDate > 应该接受有效日期 [0.20ms]
+(pass) 实用类型 - 类型守卫 > isValidDate > 应该拒绝无效日期
+(pass) 实用类型 - 类型守卫 > isValidDate > 应该拒绝非Date对象
+(pass) 实用类型 - 对象工具 > typedKeys > 应该返回类型安全的键数组
+(pass) 实用类型 - 对象工具 > typedValues > 应该返回类型安全的值数组
+(pass) 实用类型 - 对象工具 > typedEntries > 应该返回类型安全的条目数组
+
+src/shared/ai-insights/__tests__/insight-generator.test.ts:
+(pass) insight-generator > isInsightConfigured > should return false when no API key configured [0.67ms]
+(pass) insight-generator > generateInsights > should return error when API key not configured [0.25ms]
+(pass) parseInsights logic > should parse valid JSON array from response
+(pass) parseInsights logic > should handle malformed JSON gracefully
+
+src/shared/ai-insights/__tests__/context-builder.test.ts:
+(pass) context-builder > buildRenewalContext > should build context with all data
+(pass) context-builder > buildRenewalContext > should handle missing filters
+(pass) context-builder > buildRenewalContext > should handle empty top20 data
+(pass) context-builder > generateCacheKey > should generate consistent cache key for same data
+(pass) context-builder > generateCacheKey > should generate different keys for different data
+(pass) context-builder > generateCacheKey > should include filter conditions in key
+(pass) context-builder > formatContextForAI > should format context as readable text [0.23ms]
+(pass) context-builder > formatContextForAI > should format table rows correctly
+(pass) context-builder > formatContextForAI > should not include filter section when no filters
+
+src/shared/ai-insights/__tests__/integration.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find package 'react' from '/Users/xuechenglong/Downloads/01-正开发Git项目/chexian-api/src/shared/ai-insights/hooks/usePageInsights.ts'
+-------------------------------
+
+
+src/shared/utils/__tests__/sql-validator.test.ts:
+(pass) sql-validator > 隐私字段保护 > 应该禁止直接查询 policy_no 字段
+(pass) sql-validator > 隐私字段保护 > 应该允许在 COUNT 函数内使用 policy_no
+(pass) sql-validator > 隐私字段保护 > 应该允许在 COUNT DISTINCT 函数内使用 policy_no [0.17ms]
+(pass) sql-validator > 隐私字段保护 > 应该允许在带维度的 GROUP BY 查询中使用 COUNT(DISTINCT policy_no)
+(pass) sql-validator > 隐私字段保护 > 应该禁止在非聚合场景中使用 policy_no（即使带 GROUP BY）
+(pass) sql-validator > 聚合要求 > 应该要求包含聚合函数或 GROUP BY
+(pass) sql-validator > 聚合要求 > 应该允许有 GROUP BY 的查询
+(pass) sql-validator > 访问边界 > 应该要求使用 PolicyFact 视图 [0.06ms]
+(pass) sql-validator > 访问边界 > 应该允许使用 PolicyFactRenewal 视图
+
+server/src/utils/__tests__/security.test.ts:
+(pass) sanitizeFilename - 文件名安全验证 > 应该接受有效的文件名 > 接受: "test-data.parquet" [0.04ms]
+(pass) sanitizeFilename - 文件名安全验证 > 应该接受有效的文件名 > 接受: "file_123.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该接受有效的文件名 > 接受: "My-File-2024.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该接受有效的文件名 > 接受: "a.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该接受有效的文件名 > 接受: "123.txt"
+(pass) sanitizeFilename - 文件名安全验证 > 应该接受有效的文件名 > 接受: "test_file_v2.0.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝路径遍历攻击 > 拒绝 上级目录遍历: "../../etc/passwd"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝路径遍历攻击 > 拒绝 单层遍历: "../secret.txt"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝路径遍历攻击 > 拒绝 双点双斜杠绕过: "....//....//etc/passwd"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝路径遍历攻击 > 拒绝 Windows 风格遍历: "..\..\windows\system32"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 HTML 标签: "test<script>.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 双引号: "test"file.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 单引号: "test'file.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 命令注入: "test;rm -rf.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 管道注入: "test|cat /etc/passwd.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 反引号注入: "test`whoami`.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 命令替换: "test$(id).parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 空格: "test file.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 制表符: "test\nfile.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝特殊字符注入 > 拒绝 换行符: "test\nfile.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该正确处理 Null 字节 > 移除 Null 字节后验证结果: "test.parquet\x00.txt" [0.13ms]
+(pass) sanitizeFilename - 文件名安全验证 > 应该正确处理 Null 字节 > 移除多个 Null 字节
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝隐藏文件和无效格式 > 拒绝 隐藏文件 [0.02ms]
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝隐藏文件和无效格式 > 拒绝 仅扩展名
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝隐藏文件和无效格式 > 拒绝 空文件名
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝隐藏文件和无效格式 > 拒绝 超长文件名
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝路径分隔符 > 拒绝 Unix 斜杠: "test/file.parquet" [0.02ms]
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝路径分隔符 > 拒绝 Windows 反斜杠: "test\file.parquet"
+(pass) sanitizeFilename - 文件名安全验证 > 应该拒绝路径分隔符 > 拒绝 多级路径: "dir/subdir/file.parquet"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该接受有效的表名 > 接受: "raw_parquet"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该接受有效的表名 > 接受: "PolicyFact"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该接受有效的表名 > 接受: "_temp_table"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该接受有效的表名 > 接受: "table123"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该接受有效的表名 > 接受: "MyTable_v2"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 注入尝试 > 拒绝 DROP 注入
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 注入尝试 > 拒绝 DELETE 注入
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 注入尝试 > 拒绝 UNION 注入
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 注入尝试 > 拒绝 注释注入
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝关键字: "SELECT"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝小写关键字: "select"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝关键字: "INSERT"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝小写关键字: "insert"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝关键字: "UPDATE"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝小写关键字: "update"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝关键字: "DELETE"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝小写关键字: "delete"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝关键字: "DROP"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝小写关键字: "drop" [0.11ms]
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝关键字: "CREATE"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝小写关键字: "create"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝关键字: "ALTER"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝小写关键字: "alter"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝关键字: "TRUNCATE"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝 SQL 关键字 > 拒绝小写关键字: "truncate"
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝无效格式 > 拒绝 空表名 [0.03ms]
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝无效格式 > 拒绝 数字开头
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝无效格式 > 拒绝 包含连字符
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝无效格式 > 拒绝 包含单引号
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝无效格式 > 拒绝 包含空格
+(pass) sanitizeTableName - SQL 表名安全验证 > 应该拒绝无效格式 > 拒绝 超长表名
+(pass) maskApiKey - API Key 脱敏 > 应该正确脱敏正常的 API Key
+(pass) maskApiKey - API Key 脱敏 > 应该处理短 ID
+(pass) maskApiKey - API Key 脱敏 > 应该处理无效格式
+(pass) maskApiKey - API Key 脱敏 > 应该处理空值
+(pass) maskApiKey - API Key 脱敏 > 不应该泄露完整的 API Key
+(pass) escapeSqlValue - SQL 值转义 > 应该转义单引号
+(pass) escapeSqlValue - SQL 值转义 > 应该转义反斜杠
+(pass) escapeSqlValue - SQL 值转义 > 应该处理混合情况
+(pass) escapeSqlValue - SQL 值转义 > 应该保持普通字符串不变
+(pass) 边缘情况综合测试 > Unicode 和编码绕过 > 应该拒绝全角斜杠
+(pass) 边缘情况综合测试 > Unicode 和编码绕过 > 应该拒绝 URL 编码路径
+(pass) 边缘情况综合测试 > 组合攻击向量 > 应该拒绝路径遍历 + SQL 注入组合
+(pass) 边缘情况综合测试 > 组合攻击向量 > 应该移除 Null 字节（扩展名绕过由魔数验证处理）
+(pass) TEST_CASES 导出验证 > 应该导出测试用例常量
+(pass) TEST_CASES 导出验证 > 所有 sanitizeFilename.valid 用例应该通过
+(pass) TEST_CASES 导出验证 > 所有 sanitizeFilename.invalid 用例应该失败 [0.20ms]
+(pass) TEST_CASES 导出验证 > 所有 sanitizeTableName.valid 用例应该通过
+(pass) TEST_CASES 导出验证 > 所有 sanitizeTableName.invalid 用例应该失败
+(pass) TEST_CASES 导出验证 > 所有 maskApiKey 用例应该返回预期结果
+
+src/features/sql-query/queryBuilder/__tests__/sqlGenerator.test.ts:
+(pass) sqlGenerator > validateQueryBuilderState > should fail validation when no measures selected
+(pass) sqlGenerator > validateQueryBuilderState > should pass validation with at least one measure
+(pass) sqlGenerator > validateQueryBuilderState > should detect duplicate measure aliases
+(pass) sqlGenerator > generateSqlFromBuilder > should generate global summary SQL without dimensions [0.34ms]
+(pass) sqlGenerator > generateSqlFromBuilder > should generate grouped SQL with dimensions
+(pass) sqlGenerator > generateSqlFromBuilder > should generate SQL with filters [0.06ms]
+(pass) sqlGenerator > generateSqlFromBuilder > should handle IN operator with array values
+(pass) sqlGenerator > generateSqlFromBuilder > should handle LIKE operator
+(pass) sqlGenerator > generateSqlFromBuilder > should handle IS NULL operator
+(pass) sqlGenerator > generateSqlFromBuilder > should handle BETWEEN operator
+(pass) sqlGenerator > generateSqlFromBuilder > should handle custom order by
+(pass) sqlGenerator > generateSqlFromBuilder > should escape single quotes in string values
+(pass) sqlGenerator > generateSqlFromBuilder > should handle boolean filters
+(pass) sqlGenerator > generateDistinctValuesSql > should generate distinct values SQL
+(pass) sqlGenerator > generateCountPreviewSql > should generate count SQL with dimensions
+(pass) sqlGenerator > generateCountPreviewSql > should generate simple count SQL without dimensions
+
+src/features/sql-query/aiSql/__tests__/configStore.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+1 | })
+2 | {
+    ^
+SyntaxError: Export named 'saveConfig' not found in module '/Users/xuechenglong/Downloads/01-正开发Git项目/chexian-api/src/features/sql-query/aiSql/configStore.ts'.
+      at loadAndEvaluateModule (2:1)
+-------------------------------
+
+
+src/features/sql-query/aiSql/__tests__/zhipuClient.test.ts:
+(pass) zhipuClient > generateSqlWithZhipu > should return error when API key is empty
+(pass) zhipuClient > generateSqlWithZhipu > should call Zhipu API with correct parameters
+23:13:23.337 [ZhipuClient][ERROR] [ZhipuClient] API Error: 401 {"error":{"message":"Invalid API key"}}
+(pass) zhipuClient > generateSqlWithZhipu > should handle API error response [0.52ms]
+23:13:23.337 [ZhipuClient][ERROR] [ZhipuClient] Request Error: 80 |       expect(result.success).toBe(false);
+81 |       expect(result.error).toContain('Invalid API key');
+82 |     });
+83 | 
+84 |     it('should handle network errors', async () => {
+85 |       mockFetch.mockRejectedValueOnce(new Error('Network error'));
+                                               ^
+error: Network error
+      at <anonymous> (/Users/xuechenglong/Downloads/01-正开发Git项目/chexian-api/src/features/sql-query/aiSql/__tests__/zhipuClient.test.ts:85:43)
+      at <anonymous> (/Users/xuechenglong/Downloads/01-正开发Git项目/chexian-api/src/features/sql-query/aiSql/__tests__/zhipuClient.test.ts:84:40)
+
+(pass) zhipuClient > generateSqlWithZhipu > should handle network errors
+(pass) zhipuClient > generateSqlWithZhipu > should handle empty response content [0.22ms]
+(pass) zhipuClient > generateSqlWithZhipu > should extract SQL from code blocks [0.05ms]
+(pass) zhipuClient > generateSqlWithZhipu > should return token usage [0.04ms]
+23:13:23.338 [ZhipuClient][ERROR] [ZhipuClient] Invalid API Key format, expected {id}.{secret}
+(pass) zhipuClient > validateApiKey > should return false for invalid format
+(pass) zhipuClient > validateApiKey > should return true for valid key
+23:13:23.338 [ZhipuClient][ERROR] [ZhipuClient] Validation failed: 401 Unauthorized
+(pass) zhipuClient > validateApiKey > should return false when API returns error
+(pass) zhipuClient > validateApiKey > should use provided model for validation
+
+src/features/sql-query/aiSql/__tests__/systemPrompt.test.ts:
+(pass) extractSqlFromResponse > should extract SQL from ```sql code block
+(pass) extractSqlFromResponse > should extract SQL from generic ``` code block
+(pass) extractSqlFromResponse > should return raw SELECT statement if no code block
+(pass) extractSqlFromResponse > should return raw WITH statement if no code block
+(pass) extractSqlFromResponse > should trim whitespace
+(pass) extractSqlFromResponse > should handle response without SQL
+(pass) SYSTEM_PROMPT > should contain PolicyFact table reference
+(pass) SYSTEM_PROMPT > should contain dimension fields [0.08ms]
+(pass) SYSTEM_PROMPT > should contain measure fields [0.01ms]
+(pass) SYSTEM_PROMPT > should contain privacy protection rules
+(pass) SYSTEM_PROMPT > should contain example queries
+
+src/features/sql-query/aiSql/__tests__/sqlValidator.test.ts:
+(pass) quickSyntaxCheck > 基础验证 > should reject empty SQL
+(pass) quickSyntaxCheck > 基础验证 > should reject whitespace-only SQL
+(pass) quickSyntaxCheck > 基础验证 > should reject non-SELECT statements
+(pass) quickSyntaxCheck > 基础验证 > should accept valid SELECT statement
+(pass) quickSyntaxCheck > 基础验证 > should be case-insensitive for SELECT
+(pass) quickSyntaxCheck > 危险操作拦截 > should reject DROP statements
+(pass) quickSyntaxCheck > 危险操作拦截 > should reject DELETE statements
+(pass) quickSyntaxCheck > 危险操作拦截 > should reject INSERT statements
+(pass) quickSyntaxCheck > 危险操作拦截 > should reject UPDATE statements
+(pass) quickSyntaxCheck > 危险操作拦截 > should reject TRUNCATE statements
+(pass) quickSyntaxCheck > 危险操作拦截 > should reject ALTER statements [0.34ms]
+(pass) quickSyntaxCheck > 危险操作拦截 > should reject CREATE statements
+(pass) quickSyntaxCheck > 危险操作拦截 > should not false-positive on substrings
+(pass) quickSyntaxCheck > PolicyFact 表验证 > should require FROM PolicyFact
+(pass) quickSyntaxCheck > PolicyFact 表验证 > should accept PolicyFact in different cases
+(pass) quickSyntaxCheck > PolicyFact 表验证 > should accept PolicyFact with alias
+(pass) quickSyntaxCheck > 复杂查询 > should accept subqueries
+(pass) quickSyntaxCheck > 复杂查询 > should accept JOIN queries
+(pass) quickSyntaxCheck > 复杂查询 > should accept window functions
+
+src/features/sql-query/aiSql/__tests__/crypto.test.ts:
+(pass) crypto > encryptApiKey / decryptApiKey > should encrypt and decrypt API key correctly [0.04ms]
+(pass) crypto > encryptApiKey / decryptApiKey > should handle empty string
+(pass) crypto > encryptApiKey / decryptApiKey > should return original for non-encrypted input (legacy support)
+(pass) crypto > encryptApiKey / decryptApiKey > should produce different encrypted values for different keys
+(pass) crypto > encryptApiKey / decryptApiKey > should handle special characters
+(pass) crypto > encryptApiKey / decryptApiKey > should handle long API keys
+(pass) crypto > isEncrypted > should return true for encrypted strings
+(pass) crypto > isEncrypted > should return false for plaintext strings
+(pass) crypto > isEncrypted > should return false for partial prefix
+(pass) crypto > encryption robustness > should produce base64-safe output
+(pass) crypto > encryption robustness > should be deterministic for same input
+(pass) crypto > encryption robustness > should not reveal original key in encrypted output
+
+7 tests failed:
+
+ 667 pass
+ 7 fail
+ 7 errors
+ 28 snapshots, 1508 expect() calls
+Ran 674 tests across 39 files. [72.00ms]

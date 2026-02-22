@@ -67,7 +67,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ icon: Icon, label, items })
         aria-haspopup="menu"
       >
         <Icon size={18} aria-hidden="true" />
-        <span className="ml-1.5 text-sm font-medium">{label}</span>
+        <span className="ml-1.5 text-sm font-medium tracking-tight">{label}</span>
         <ChevronDown
           size={16}
           className={`ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -90,16 +90,15 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ icon: Icon, label, items })
                     item.onClick();
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center px-4 py-2 text-sm transition-colors ${
-                    item.active
-                      ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`w-full flex items-center px-4 py-2 text-sm font-medium transition-colors ${item.active
+                      ? 'text-primary bg-primary-bg dark:text-primary-light dark:bg-blue-900/20'
+                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                    }`}
                   role="menuitem"
                 >
                   <ItemIcon size={16} className="mr-3" aria-hidden="true" />
                   {item.label}
-                  {item.active && <Check size={14} className="ml-auto text-blue-500" aria-hidden="true" />}
+                  {item.active && <Check size={14} className="ml-auto text-primary" aria-hidden="true" />}
                 </button>
               </React.Fragment>
             );
@@ -176,9 +175,9 @@ export const TopNavigation: React.FC = () => {
             </button>
           )}
           <Car size={24} className="text-primary mr-2" aria-hidden="true" />
-          <h1 className="text-lg font-semibold text-gray-800 dark:text-white hidden sm:block">车险经营管理系统</h1>
-          <h1 className="text-lg font-semibold text-gray-800 dark:text-white sm:hidden">车险系统</h1>
-          <span className="ml-2 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded">
+          <h1 className="text-lg font-semibold tracking-tight text-neutral-800 dark:text-white hidden sm:block">车险经营管理系统</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-neutral-800 dark:text-white sm:hidden">车险系统</h1>
+          <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-primary bg-primary-bg dark:text-primary-light dark:bg-blue-900/30 rounded-full">
             v2.0
           </span>
         </div>

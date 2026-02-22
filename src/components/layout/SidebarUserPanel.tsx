@@ -82,13 +82,13 @@ export const SidebarUserPanel: React.FC = () => {
   };
 
   const getRoleBadgeClass = () => {
-    if (isBranchAdmin) return 'bg-purple-100 text-purple-700';
-    if (isOrgUser) return 'bg-blue-100 text-blue-700';
-    return 'bg-gray-100 text-gray-700';
+    if (isBranchAdmin) return 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border border-purple-100 dark:border-purple-800';
+    if (isOrgUser) return 'bg-primary-bg text-primary-dark dark:bg-blue-900/30 dark:text-blue-400 border border-primary-200 dark:border-blue-800';
+    return 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700';
   };
 
   const RoleIcon = isBranchAdmin ? Shield : isOrgUser ? Building : User;
-  const iconColor = isBranchAdmin ? 'text-purple-500' : isOrgUser ? 'text-blue-500' : 'text-gray-400';
+  const iconColor = isBranchAdmin ? 'text-purple-500 dark:text-purple-400' : isOrgUser ? 'text-primary dark:text-primary-light' : 'text-neutral-400 dark:text-neutral-500';
 
   // 弹出面板内容（共用于向上和向右弹出）
   const popoverContent = (
@@ -115,16 +115,14 @@ export const SidebarUserPanel: React.FC = () => {
               key={u.username}
               onClick={() => handleLogin(u.username)}
               disabled={isCurrent}
-              className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-gray-50 transition-colors ${
-                isCurrent ? 'bg-gray-100 cursor-default' : ''
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-gray-50 transition-colors ${isCurrent ? 'bg-gray-100 cursor-default' : ''
+                }`}
             >
               <div className="flex items-center">
                 <Icon
                   size={14}
-                  className={`mr-2 flex-shrink-0 ${
-                    u.role === UserRole.BRANCH_ADMIN ? 'text-purple-500' : 'text-blue-500'
-                  }`}
+                  className={`mr-2 flex-shrink-0 ${u.role === UserRole.BRANCH_ADMIN ? 'text-purple-500' : 'text-blue-500'
+                    }`}
                   aria-hidden="true"
                 />
                 <span className="text-gray-700 truncate">{u.displayName}</span>
@@ -137,10 +135,10 @@ export const SidebarUserPanel: React.FC = () => {
 
       {/* 登出 */}
       {isAuthenticated && (
-        <div className="border-t border-gray-200 p-1">
+        <div className="border-t border-neutral-200 dark:border-neutral-700 p-1">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded transition-colors"
+            className="w-full flex items-center px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger-bg dark:hover:bg-red-900/20 rounded transition-colors"
           >
             <LogOut size={14} className="mr-2" aria-hidden="true" />
             登出
@@ -155,27 +153,26 @@ export const SidebarUserPanel: React.FC = () => {
       {/* 触发按钮 */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center rounded-lg transition-colors hover:bg-gray-100 ${
-          showExpanded ? 'px-3 py-2 gap-2.5' : 'justify-center p-2'
-        }`}
+        className={`w-full flex items-center rounded-lg transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${showExpanded ? 'px-3 py-2 gap-2.5' : 'justify-center p-2'
+          }`}
         title={!showExpanded ? (isAuthenticated ? userPermission?.displayName : '选择用户') : undefined}
       >
         <RoleIcon size={20} className={`flex-shrink-0 ${iconColor}`} aria-hidden="true" />
         {showExpanded && (
           <>
             <div className="flex-1 text-left min-w-0">
-              <p className="text-sm font-medium text-gray-700 truncate">
+              <p className="text-sm font-semibold tracking-tight text-neutral-800 dark:text-neutral-200 truncate">
                 {isAuthenticated ? userPermission?.displayName : '未登录'}
               </p>
             </div>
             {isAuthenticated && (
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${getRoleBadgeClass()}`}>
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold tracking-wide flex-shrink-0 ${getRoleBadgeClass()}`}>
                 {getRoleLabel()}
               </span>
             )}
             <ChevronUp
               size={14}
-              className={`text-gray-400 flex-shrink-0 transition-transform ${isOpen ? '' : 'rotate-180'}`}
+              className={`text-neutral-400 dark:text-neutral-500 flex-shrink-0 transition-transform ${isOpen ? '' : 'rotate-180'}`}
               aria-hidden="true"
             />
           </>
