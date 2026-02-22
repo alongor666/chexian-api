@@ -24,11 +24,11 @@ WITH
 current_period AS (
   SELECT
     org_level_3,
-    SUM(CASE WHEN insurance_type IN ('商业险', '商车统保', '商业险+交强险') THEN premium ELSE 0 END) / 10000 AS 商业险保费,
+    SUM(CASE WHEN insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN premium ELSE 0 END) / 10000 AS 商业险保费,
     SUM(CASE WHEN insurance_type = '交强险' THEN premium ELSE 0 END) / 10000 AS 交强险保费,
     SUM(premium) / 10000 AS 车险保费,
     COUNT(DISTINCT policy_no) AS 车险件数,
-    COUNT(DISTINCT CASE WHEN insurance_type IN ('商业险', '商车统保', '商业险+交强险') THEN policy_no END) AS 商业险件数,
+    COUNT(DISTINCT CASE WHEN insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN policy_no END) AS 商业险件数,
     COUNT(DISTINCT CASE WHEN insurance_type = '交强险' THEN policy_no END) AS 交强险件数,
     COUNT(DISTINCT salesman_name) AS 业务员数
   FROM PolicyFact
@@ -97,10 +97,10 @@ SELECT
   p.org_level_3,
   COALESCE(s.team_name, '未分配团队') AS team_name,
   ROUND(SUM(p.premium) / 10000, 2) AS "车险保费",
-  ROUND(SUM(CASE WHEN p.insurance_type IN ('商业险', '商车统保', '商业险+交强险') THEN p.premium ELSE 0 END) / 10000, 2) AS "商业险保费",
+  ROUND(SUM(CASE WHEN p.insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN p.premium ELSE 0 END) / 10000, 2) AS "商业险保费",
   ROUND(SUM(CASE WHEN p.insurance_type = '交强险' THEN p.premium ELSE 0 END) / 10000, 2) AS "交强险保费",
   COUNT(DISTINCT p.policy_no) AS "车险件数",
-  COUNT(DISTINCT CASE WHEN p.insurance_type IN ('商业险', '商车统保', '商业险+交强险') THEN p.policy_no END) AS "商业险件数",
+  COUNT(DISTINCT CASE WHEN p.insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN p.policy_no END) AS "商业险件数",
   COUNT(DISTINCT CASE WHEN p.insurance_type = '交强险' THEN p.policy_no END) AS "交强险件数",
   CASE
     WHEN COUNT(DISTINCT p.policy_no) > 0 THEN

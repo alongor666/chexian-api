@@ -52,14 +52,27 @@ function timeFilter(period: 'day' | 'week' | 'month' | 'year', extra = ''): stri
 function generateTimePeriodColumns(): string {
   const periods: Array<'day' | 'week' | 'month' | 'year'> = ['day', 'week', 'month', 'year'];
   const lines: string[] = [];
+  const crossSellCondition = getCrossSellCondition();
 
   for (const p of periods) {
-    lines.push(`COUNT(DISTINCT policy_no) ${timeFilter(p)} AS ${p}_auto_count`);
-    lines.push(`COUNT(DISTINCT policy_no) ${timeFilter(p, 'is_cross_sell = true')} AS ${p}_driver_count`);
-    lines.push(`COALESCE(SUM(cross_sell_premium_driver) ${timeFilter(p, 'is_cross_sell = true')}, 0) AS ${p}_premium`);
+    lines.push(`COUNT(DISTINCT dedup_key) ${timeFilter(p)} AS ${p}_auto_count`);
+    lines.push(`COUNT(DISTINCT dedup_key) ${timeFilter(p, `(${crossSellCondition})`)} AS ${p}_driver_count`);
+    lines.push(`COALESCE(SUM(cross_sell_premium_driver) ${timeFilter(p, `(${crossSellCondition})`)}, 0) AS ${p}_premium`);
   }
 
   return lines.join(',\n        ');
+}
+
+/**
+ * 交叉销售判定（严格按交叉销售标识为“是”）
+ */
+function getCrossSellCondition(): string {
+  return `
+    (
+      TRY_CAST(is_cross_sell AS BOOLEAN) = true
+      OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+    )
+  `;
 }
 
 /**
@@ -112,7 +125,10 @@ export function generateCrossSellTimePeriodQuery(
     ),
     filtered_data AS (
       SELECT
-        policy_no,
+        COALESCE(
+          NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
+          NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
+        ) AS dedup_key,
         coverage_combination,
         is_cross_sell,
         cross_sell_premium_driver,

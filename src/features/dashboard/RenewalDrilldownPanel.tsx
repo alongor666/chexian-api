@@ -3,6 +3,7 @@ import type { AdvancedFilterState } from '../../shared/types/data';
 import { useRenewalDrilldown } from './hooks/useRenewalDrilldown';
 import { tableStyles, textStyles } from '../../shared/styles';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
+import { RenewalQuadrantView } from './RenewalQuadrantView';
 
 interface RenewalDrilldownPanelProps {
   filters: AdvancedFilterState;
@@ -17,6 +18,14 @@ interface RenewalDrilldownPanelProps {
 }
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+const LEVEL_LABELS: Record<string, string> = {
+  company: '全公司',
+  org: '机构',
+  team: '团队',
+  salesman: '业务员',
+  coverage: '险别组合',
+};
 
 export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
   targetYear,
@@ -33,6 +42,8 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
     loading,
     error,
     breadcrumb,
+    currentLevel,
+    nextLevel,
     canDrillDown,
     drillDown,
     navigateTo,
@@ -92,11 +103,10 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
           <div className="flex gap-1">
             <button
               onClick={() => setSelectedDueMonth(null)}
-              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                selectedDueMonth === null
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${selectedDueMonth === null
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
             >
               全部
             </button>
@@ -104,11 +114,10 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
               <button
                 key={m}
                 onClick={() => setSelectedDueMonth(m)}
-                className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                  selectedDueMonth === m
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                className={`px-2.5 py-1 text-xs rounded-full transition-colors ${selectedDueMonth === m
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
               >
                 {m}月
               </button>
@@ -124,8 +133,16 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
         </div>
       )}
 
+      {/* 四象限图 */}
+      {!loading && rows.length > 0 && (
+        <RenewalQuadrantView
+          rows={rows}
+          currentDimensionLabel={LEVEL_LABELS[nextLevel || currentLevel] || '维度'}
+        />
+      )}
+
       {/* 数据表格 */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
         <table className="w-full text-sm">
           <thead>
             <tr className={tableStyles.header}>

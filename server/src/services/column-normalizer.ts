@@ -42,10 +42,9 @@ export function generateColumnMappingSQL(
     if (actualColumn) {
       // 检查是否需要类型转换
       if (BOOLEAN_FIELDS.includes(standardName)) {
-        // 布尔字段：将字符串转换为布尔值
-        // 假设: "是"/"1"/"true" -> true, 其他 -> false
+        // 布尔字段：将字符串转换为布尔值，增加 LOWER 和 TRIM 处理，放宽判断条件
         mappings.push(
-          `CASE WHEN CAST("${actualColumn}" AS VARCHAR) IN ('是', '1', 'true', 'TRUE') THEN true ELSE false END as ${standardName}`
+          `CASE WHEN LOWER(TRIM(CAST("${actualColumn}" AS VARCHAR))) IN ('是', '1', 'true', 't', 'y', 'yes', '有', '有驾意险交叉销售') THEN true ELSE false END as ${standardName}`
         );
       } else if (standardName.includes('date')) {
         // 日期字段：转换为DATE类型
