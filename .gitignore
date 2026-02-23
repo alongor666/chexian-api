@@ -79,3 +79,5 @@ server/.env
 
 # 数据管理大文件（staging中间文件）
 数据管理/staging/*.xlsx
+logs/
+scripts/verify-catchup-logic.*
