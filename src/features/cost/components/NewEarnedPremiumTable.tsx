@@ -441,11 +441,11 @@ const Policy2025TriangleTable: React.FC<{
                   {MONTH_LABELS[policyMonth]}
                 </td>
                 {/* 保费 */}
-                <td className="px-1 py-1.5 text-right font-mono tabular-nums text-gray-900">
+                <td className="px-1 py-1.5 text-right font-tabular text-gray-900">
                   {formatPremiumWan(row.premium)}
                 </td>
                 {/* 首日费用 */}
-                <td className="px-1 py-1.5 text-right font-mono tabular-nums text-blue-600">
+                <td className="px-1 py-1.5 text-right font-tabular text-blue-600">
                   {formatPremiumWan(row.first_day_fee)}
                 </td>
                 {/* 25年各月 */}
@@ -461,7 +461,7 @@ const Policy2025TriangleTable: React.FC<{
                     <td
                       key={key}
                       className={cn(
-                        'px-1 py-1.5 text-right font-mono tabular-nums',
+                        'px-1 py-1.5 text-right font-tabular',
                         isZero ? 'text-gray-300' : 'text-gray-800',
                         isStartMonth && !isZero && 'bg-emerald-50 font-medium text-emerald-700'
                       )}
@@ -480,7 +480,7 @@ const Policy2025TriangleTable: React.FC<{
                     <td
                       key={key}
                       className={cn(
-                        'px-1 py-1.5 text-right font-mono tabular-nums',
+                        'px-1 py-1.5 text-right font-tabular',
                         isZero ? 'text-gray-300' : 'text-gray-800'
                       )}
                     >
@@ -489,7 +489,7 @@ const Policy2025TriangleTable: React.FC<{
                   );
                 })}
                 {/* 最终已赚 */}
-                <td className="px-1 py-1.5 text-right font-mono tabular-nums font-semibold text-indigo-700 bg-indigo-50/50">
+                <td className="px-1 py-1.5 text-right font-tabular font-semibold text-indigo-700 bg-indigo-50/50">
                   {formatPremiumWan(row.earned_total)}
                 </td>
               </tr>
@@ -548,11 +548,11 @@ const Policy2026TriangleTable: React.FC<{
                   {MONTH_LABELS[policyMonth]}
                 </td>
                 {/* 保费 */}
-                <td className="px-1 py-1.5 text-right font-mono tabular-nums text-gray-900">
+                <td className="px-1 py-1.5 text-right font-tabular text-gray-900">
                   {formatPremiumWan(row.premium)}
                 </td>
                 {/* 首日费用 */}
-                <td className="px-1 py-1.5 text-right font-mono tabular-nums text-blue-600">
+                <td className="px-1 py-1.5 text-right font-tabular text-blue-600">
                   {formatPremiumWan(row.first_day_fee)}
                 </td>
                 {/* 26年各月 */}
@@ -568,7 +568,7 @@ const Policy2026TriangleTable: React.FC<{
                     <td
                       key={key}
                       className={cn(
-                        'px-1 py-1.5 text-right font-mono tabular-nums',
+                        'px-1 py-1.5 text-right font-tabular',
                         isZero ? 'text-gray-300' : 'text-gray-800',
                         isStartMonth && !isZero && 'bg-emerald-50 font-medium text-emerald-700'
                       )}
@@ -587,7 +587,7 @@ const Policy2026TriangleTable: React.FC<{
                     <td
                       key={key}
                       className={cn(
-                        'px-1 py-1.5 text-right font-mono tabular-nums',
+                        'px-1 py-1.5 text-right font-tabular',
                         isZero ? 'text-gray-300' : 'text-gray-800'
                       )}
                     >
@@ -596,7 +596,7 @@ const Policy2026TriangleTable: React.FC<{
                   );
                 })}
                 {/* 最终已赚 */}
-                <td className="px-1 py-1.5 text-right font-mono tabular-nums font-semibold text-indigo-700 bg-indigo-50/50">
+                <td className="px-1 py-1.5 text-right font-tabular font-semibold text-indigo-700 bg-indigo-50/50">
                   {formatPremiumWan(row.earned_total)}
                 </td>
               </tr>

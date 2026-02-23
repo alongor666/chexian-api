@@ -33,24 +33,228 @@ export const KPI_SQL = {
   commercial_insurance_rate: 'COUNT(CASE WHEN insurance_type LIKE \'%商业%\' THEN 1 END) * 1.0 / NULLIF(COUNT(CASE WHEN insurance_type = \'交强险\' THEN 1 END), 0) as commercial_insurance_rate',
 };
 
-export const generateKpiQuery = (whereClause: string = '1=1') => {
+interface KpiQueryOptions {
+  orgNames?: string[];
+  salesmanNames?: string[];
+}
+
+const esc = (value: string): string => value.replace(/'/g, "''");
+
+const buildAchievementCacheWhere = (options: KpiQueryOptions = {}): string => {
+  const conditions: string[] = [];
+  if (options.orgNames && options.orgNames.length > 0) {
+    const orgList = options.orgNames.map((item) => `'${esc(item)}'`).join(', ');
+    conditions.push(`org_name IN (${orgList})`);
+  }
+  if (options.salesmanNames && options.salesmanNames.length > 0) {
+    const salesmanList = options.salesmanNames.map((item) => `'${esc(item)}'`).join(', ');
+    conditions.push(`full_name IN (${salesmanList})`);
+  }
+  if (conditions.length === 0) {
+    return '';
+  }
+  return `WHERE ${conditions.join(' AND ')}`;
+};
+
+export const generateKpiQuery = (
+  whereClause: string = '1=1',
+  options: KpiQueryOptions = {}
+) => {
+  const achievementCacheWhere = buildAchievementCacheWhere(options);
+
   return `
+    WITH filtered AS (
+      SELECT *
+      FROM PolicyFact
+      WHERE ${whereClause}
+    ),
+    latest_policy AS (
+      SELECT MAX(CAST(policy_date AS DATE)) AS latest_policy_date
+      FROM filtered
+    ),
+    latest_context AS (
+      SELECT
+        latest_policy_date,
+        CAST(EXTRACT('year' FROM latest_policy_date) AS INTEGER) AS latest_year,
+        GREATEST(
+          CAST(EXTRACT('doy' FROM latest_policy_date) AS DOUBLE) / 365.0,
+          1.0 / 365.0
+        ) AS natural_day_progress
+      FROM latest_policy
+    ),
+    focus_metrics AS (
+      SELECT
+        ${KPI_SQL.total_premium},
+        ${KPI_SQL.policy_count},
+        ${KPI_SQL.org_count},
+        ${KPI_SQL.salesman_count},
+        ${KPI_SQL.transfer_rate},
+        ${KPI_SQL.telesales_rate},
+        ${KPI_SQL.per_capita_premium},
+        ${KPI_SQL.renewal_rate},
+        ${KPI_SQL.commercial_rate},
+        ${KPI_SQL.nev_rate},
+        ${KPI_SQL.new_car_rate},
+        ${KPI_SQL.quality_business_rate},
+        ${KPI_SQL.commercial_insurance_rate}
+      FROM filtered
+    ),
+    vehicle_periods AS (
+      SELECT
+        COALESCE(
+          SUM(
+            CASE
+              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date)
+                AND CAST(f.policy_date AS DATE) <= lc.latest_policy_date
+              THEN f.premium
+              ELSE 0
+            END
+          ),
+          0
+        ) AS vehicle_ytd_premium,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND CAST(f.policy_date AS DATE) <= lc.latest_policy_date - INTERVAL 1 YEAR
+              THEN f.premium
+              ELSE 0
+            END
+          ),
+          0
+        ) AS vehicle_prev_ytd_premium
+      FROM filtered f
+      CROSS JOIN latest_context lc
+    ),
+    driver_periods AS (
+      SELECT
+        COALESCE(
+          SUM(
+            CASE
+              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date)
+                AND CAST(f.policy_date AS DATE) <= lc.latest_policy_date
+                AND f.customer_category != '摩托车'
+              THEN COALESCE(f.cross_sell_premium_driver, 0)
+              ELSE 0
+            END
+          ),
+          0
+        ) AS driver_ytd_premium,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND CAST(f.policy_date AS DATE) <= lc.latest_policy_date - INTERVAL 1 YEAR
+                AND f.customer_category != '摩托车'
+              THEN COALESCE(f.cross_sell_premium_driver, 0)
+              ELSE 0
+            END
+          ),
+          0
+        ) AS driver_prev_ytd_premium
+      FROM filtered f
+      CROSS JOIN latest_context lc
+    ),
+    bundle_renewal AS (
+      SELECT
+        CASE
+          WHEN COUNT(CASE WHEN is_commercial_insure = '套单' THEN 1 END) > 0
+          THEN COUNT(CASE WHEN is_commercial_insure = '套单' AND is_renewal THEN 1 END) * 1.0
+               / COUNT(CASE WHEN is_commercial_insure = '套单' THEN 1 END)
+          ELSE NULL
+        END AS bundle_renewal_rate
+      FROM filtered
+    ),
+    variable_cost_base AS (
+      SELECT
+        f.premium,
+        COALESCE(f.reported_claims, 0) AS reported_claims,
+        COALESCE(f.fee_amount, 0) AS fee_amount,
+        LEAST(
+          GREATEST(
+            DATEDIFF('day', CAST(f.insurance_start_date AS DATE), lc.latest_policy_date),
+            0
+          ),
+          365
+        ) AS exposure_days
+      FROM filtered f
+      CROSS JOIN latest_context lc
+      WHERE f.insurance_start_date IS NOT NULL
+    ),
+    variable_cost AS (
+      SELECT
+        CASE
+          WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
+          THEN (
+            SUM(reported_claims) / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) +
+            SUM(fee_amount) / SUM(premium)
+          )
+          ELSE NULL
+        END AS variable_cost_rate
+      FROM variable_cost_base
+    ),
+    vehicle_plan AS (
+      SELECT
+        COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
+      FROM achievement_cache
+      ${achievementCacheWhere}
+    ),
+    driver_plan AS (
+      SELECT
+        COALESCE(SUM(plan_premium), 0) AS driver_plan_wan
+      FROM KpiPlanConfig
+      WHERE business_line = 'driver'
+        AND level = 'company'
+        AND level_key = 'ALL'
+        AND plan_year = COALESCE((SELECT latest_year FROM latest_context LIMIT 1), 0)
+    )
     SELECT
-      ${KPI_SQL.total_premium},
-      ${KPI_SQL.policy_count},
-      ${KPI_SQL.org_count},
-      ${KPI_SQL.salesman_count},
-      ${KPI_SQL.transfer_rate},
-      ${KPI_SQL.telesales_rate},
-      ${KPI_SQL.per_capita_premium},
-      ${KPI_SQL.renewal_rate},
-      ${KPI_SQL.commercial_rate},
-      ${KPI_SQL.nev_rate},
-      ${KPI_SQL.new_car_rate},
-      ${KPI_SQL.quality_business_rate},
-      ${KPI_SQL.commercial_insurance_rate}
-    FROM PolicyFact
-    WHERE ${whereClause}
+      lc.latest_policy_date AS latest_policy_date,
+      vp.vehicle_ytd_premium AS vehicle_premium,
+      CASE
+        WHEN vpl.vehicle_plan_wan > 0 AND lc.natural_day_progress > 0
+        THEN (vp.vehicle_ytd_premium / 10000.0) / (vpl.vehicle_plan_wan * lc.natural_day_progress)
+        ELSE NULL
+      END AS vehicle_achievement_rate,
+      CASE
+        WHEN vp.vehicle_prev_ytd_premium > 0
+        THEN (vp.vehicle_ytd_premium - vp.vehicle_prev_ytd_premium) / vp.vehicle_prev_ytd_premium
+        ELSE NULL
+      END AS vehicle_growth_rate,
+      vc.variable_cost_rate AS variable_cost_rate,
+      br.bundle_renewal_rate AS bundle_renewal_rate,
+      dp.driver_ytd_premium AS driver_premium,
+      CASE
+        WHEN dpl.driver_plan_wan > 0 AND lc.natural_day_progress > 0
+        THEN (dp.driver_ytd_premium / 10000.0) / (dpl.driver_plan_wan * lc.natural_day_progress)
+        ELSE NULL
+      END AS driver_achievement_rate,
+      CASE
+        WHEN dp.driver_prev_ytd_premium > 0
+        THEN (dp.driver_ytd_premium - dp.driver_prev_ytd_premium) / dp.driver_prev_ytd_premium
+        ELSE NULL
+      END AS driver_growth_rate,
+      fm.total_premium,
+      fm.policy_count,
+      fm.org_count,
+      fm.salesman_count,
+      fm.transfer_rate,
+      fm.telesales_rate,
+      fm.per_capita_premium,
+      fm.renewal_rate,
+      fm.commercial_rate,
+      fm.nev_rate,
+      fm.new_car_rate,
+      fm.quality_business_rate,
+      fm.commercial_insurance_rate
+    FROM latest_context lc
+    CROSS JOIN focus_metrics fm
+    CROSS JOIN vehicle_periods vp
+    CROSS JOIN driver_periods dp
+    CROSS JOIN vehicle_plan vpl
+    CROSS JOIN driver_plan dpl
+    CROSS JOIN bundle_renewal br
+    CROSS JOIN variable_cost vc
   `;
 };
 

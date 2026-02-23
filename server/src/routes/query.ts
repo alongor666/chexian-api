@@ -93,7 +93,22 @@ router.get(
       req.permissionFilter || '1=1'
     );
 
-    const sql = generateKpiQuery(finalWhereClause);
+    const orgNames = parseResult.data.orgNames
+      ? parseResult.data.orgNames.split(',').map((item) => item.trim()).filter(Boolean)
+      : parseResult.data.orgLevel3
+        ? [parseResult.data.orgLevel3]
+        : [];
+
+    const salesmanNames = parseResult.data.salesmanNames
+      ? parseResult.data.salesmanNames.split(',').map((item) => item.trim()).filter(Boolean)
+      : parseResult.data.salesmanName
+        ? [parseResult.data.salesmanName]
+        : [];
+
+    const sql = generateKpiQuery(finalWhereClause, {
+      orgNames,
+      salesmanNames,
+    });
     // KPI 高频查询，缓存 60 秒
     const result = await duckdbService.query(sql, 60_000);
 

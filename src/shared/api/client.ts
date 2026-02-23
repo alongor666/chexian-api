@@ -48,6 +48,15 @@ interface AuthData {
  * KPI 数据
  */
 export interface KpiData {
+  latest_policy_date: string | null;
+  vehicle_premium: number;
+  vehicle_achievement_rate: number | null;
+  vehicle_growth_rate: number | null;
+  variable_cost_rate: number | null;
+  bundle_renewal_rate: number | null;
+  driver_premium: number;
+  driver_achievement_rate: number | null;
+  driver_growth_rate: number | null;
   total_premium: number;
   policy_count: number;
   salesman_count: number;
@@ -704,7 +713,18 @@ class ApiClient {
       });
     }
     const query = searchParams.toString();
-    const resp = await this.request(`/query/plan-achievement${query ? `?${query}` : ''}`);
+    const resp = await this.request<{
+      children: any[];
+      summary: any | null;
+      distribution: any[];
+      meta: { plan_year: number; level: string };
+      data?: {
+        children: any[];
+        summary: any | null;
+        distribution: any[];
+        meta: { plan_year: number; level: string };
+      };
+    }>(`/query/plan-achievement${query ? `?${query}` : ''}`);
     return resp.data ?? resp;
   }
 

@@ -31,6 +31,15 @@ export interface KpiDetailResult {
  * KPI 基础数据类型
  */
 export interface KpiData {
+  latest_policy_date?: string | null;
+  vehicle_premium?: number | bigint;
+  vehicle_achievement_rate?: number | null;
+  vehicle_growth_rate?: number | null;
+  variable_cost_rate?: number | null;
+  bundle_renewal_rate?: number | null;
+  driver_premium?: number | bigint;
+  driver_achievement_rate?: number | null;
+  driver_growth_rate?: number | null;
   total_premium?: number | bigint;
   policy_count?: number | bigint;
   transfer_rate?: number;
@@ -87,6 +96,15 @@ export const useKpiData = ({
       if (requestId !== requestIdRef.current) return;
 
       setKpiData({
+        latest_policy_date: kpiResponse.latest_policy_date,
+        vehicle_premium: kpiResponse.vehicle_premium,
+        vehicle_achievement_rate: kpiResponse.vehicle_achievement_rate,
+        vehicle_growth_rate: kpiResponse.vehicle_growth_rate,
+        variable_cost_rate: kpiResponse.variable_cost_rate,
+        bundle_renewal_rate: kpiResponse.bundle_renewal_rate,
+        driver_premium: kpiResponse.driver_premium,
+        driver_achievement_rate: kpiResponse.driver_achievement_rate,
+        driver_growth_rate: kpiResponse.driver_growth_rate,
         total_premium: kpiResponse.total_premium,
         policy_count: kpiResponse.policy_count,
         transfer_rate: kpiResponse.transfer_rate,

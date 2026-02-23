@@ -1,10 +1,16 @@
-import { memo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { EnhancedKpiCard, type EnhancedKpiCardProps } from '../../../widgets/kpi/EnhancedKpiCard';
-import { formatCount, formatPremiumWan, formatRate } from '../../../shared/utils/formatters';
+import {
+  formatAchievementRate,
+  formatCount,
+  formatPremiumWan,
+  formatRate,
+} from '../../../shared/utils/formatters';
 import type { KpiData } from '../hooks/useKpiData';
 import {
   DEFAULT_KPI_ORDER,
   KPI_CARD_META,
+  type KpiGroup,
   type KpiCardId,
 } from '../dashboardLayoutConfig';
 
@@ -89,7 +95,7 @@ interface KpiSectionProps {
   kpis: KpiData;
   kpiDetails: KpiDetailResult | null;
   loading: boolean;
-  visibleKpis?: KpiCardId[];
+  visibleKpisByGroup?: Record<KpiGroup, KpiCardId[]>;
 }
 
 /**
@@ -100,7 +106,19 @@ interface KpiSectionProps {
  * - 核心占比类 KPI（非过户占比、续保占比、商业险占比）
  * - 其他占比类 KPI（电销占比、新能源占比、新车占比）
  */
-export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, visibleKpis }) => {
+export const KpiSection = memo<KpiSectionProps>(({
+  kpis,
+  kpiDetails,
+  loading,
+  visibleKpisByGroup,
+}) => {
+  const [activeGroup, setActiveGroup] = useState<KpiGroup>('core');
+
+  const groupLabel: Record<KpiGroup, string> = {
+    core: '核心指标',
+    focus: '关注指标',
+  };
+
   const labelMap = KPI_CARD_META.reduce((acc, item) => {
     acc[item.id] = item.label;
     return acc;
@@ -109,6 +127,58 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
   const buildCardProps = (id: KpiCardId): EnhancedKpiCardProps | null => {
     const title = labelMap[id] || id;
     switch (id) {
+      case 'vehicle_premium':
+        return { title, value: kpis.vehicle_premium, formatter: formatPremiumWan, loading, type: 'value' };
+      case 'vehicle_achievement_rate':
+        return {
+          title,
+          value: kpis.vehicle_achievement_rate,
+          formatter: formatAchievementRate,
+          loading,
+          type: 'value',
+        };
+      case 'vehicle_growth_rate':
+        return {
+          title,
+          value: kpis.vehicle_growth_rate,
+          formatter: formatAchievementRate,
+          loading,
+          type: 'value',
+        };
+      case 'variable_cost_rate':
+        return {
+          title,
+          value: kpis.variable_cost_rate,
+          formatter: formatAchievementRate,
+          loading,
+          type: 'value',
+        };
+      case 'bundle_renewal_rate':
+        return {
+          title,
+          value: kpis.bundle_renewal_rate,
+          formatter: formatAchievementRate,
+          loading,
+          type: 'value',
+        };
+      case 'driver_premium':
+        return { title, value: kpis.driver_premium, formatter: formatPremiumWan, loading, type: 'value' };
+      case 'driver_achievement_rate':
+        return {
+          title,
+          value: kpis.driver_achievement_rate,
+          formatter: formatAchievementRate,
+          loading,
+          type: 'value',
+        };
+      case 'driver_growth_rate':
+        return {
+          title,
+          value: kpis.driver_growth_rate,
+          formatter: formatAchievementRate,
+          loading,
+          type: 'value',
+        };
       case 'total_premium':
         return { title, value: kpis.total_premium, formatter: formatPremiumWan, loading, type: 'value' };
       case 'policy_count':
@@ -184,7 +254,13 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
     }
   };
 
-  const effectiveOrder = visibleKpis ? visibleKpis : DEFAULT_KPI_ORDER;
+  const effectiveOrder = useMemo(() => {
+    if (visibleKpisByGroup) {
+      return visibleKpisByGroup[activeGroup] ?? [];
+    }
+    return DEFAULT_KPI_ORDER[activeGroup];
+  }, [activeGroup, visibleKpisByGroup]);
+
   const cardEntries = effectiveOrder
     .map((id) => {
       const props = buildCardProps(id);
@@ -193,27 +269,53 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
     })
     .filter((item): item is { id: KpiCardId; props: EnhancedKpiCardProps } => Boolean(item));
 
-  if (visibleKpis && visibleKpis.length === 0) {
+  if (cardEntries.length === 0 && !loading) {
     return (
-      <div className="bg-white p-6 rounded shadow text-center text-gray-500">
-        未选择KPI指标
-      </div>
-    );
-  }
-
-  if (cardEntries.length === 0) {
-    return (
-      <div className="bg-white p-6 rounded shadow text-center text-gray-500">
-        暂无可用KPI指标
+      <div className="bg-white p-4 rounded shadow space-y-4">
+        <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
+          {(['core', 'focus'] as KpiGroup[]).map((group) => (
+            <button
+              key={group}
+              type="button"
+              onClick={() => setActiveGroup(group)}
+              className={`px-3 py-1.5 text-sm rounded ${
+                activeGroup === group
+                  ? 'bg-primary text-white'
+                  : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
+              }`}
+            >
+              {groupLabel[group]}
+            </button>
+          ))}
+        </div>
+        <div className="p-2 text-center text-gray-500">暂无可用KPI指标</div>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {cardEntries.map((entry) => (
-        <EnhancedKpiCard key={entry.id} {...entry.props} />
-      ))}
+    <div className="bg-white p-4 rounded shadow space-y-4">
+      <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
+        {(['core', 'focus'] as KpiGroup[]).map((group) => (
+          <button
+            key={group}
+            type="button"
+            onClick={() => setActiveGroup(group)}
+            className={`px-3 py-1.5 text-sm rounded ${
+              activeGroup === group
+                ? 'bg-primary text-white'
+                : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
+            }`}
+          >
+            {groupLabel[group]}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {cardEntries.map((entry) => (
+          <EnhancedKpiCard key={entry.id} {...entry.props} />
+        ))}
+      </div>
     </div>
   );
 });

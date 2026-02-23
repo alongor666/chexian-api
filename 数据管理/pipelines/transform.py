@@ -524,9 +524,22 @@ def handle_duplicate_records(df):
         for policy, count in duplicated_policies.head(5).items():
             print(f"      {policy}: {count} 次")
 
+        # 在去重前，先对数值型累加字段按保单号求和
+        agg_cols = ['保费', '已报告赔款', '费用金额', '赔案件数', '交叉销售保费_驾意']
+        valid_agg_cols = [c for c in agg_cols if c in df.columns]
+        
+        if valid_agg_cols:
+            for c in valid_agg_cols:
+                df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
+            agg_df = df.groupby('保单号')[valid_agg_cols].sum().reset_index()
+
         # 去重策略：保留第一条记录
-        print(f"\n   去重策略: 保留第一条记录")
+        print(f"\n   去重策略: 保留第一条记录，数值型字段累加汇总")
         df_dedup = df.drop_duplicates(subset=['保单号'], keep='first')
+
+        if valid_agg_cols:
+            df_dedup = df_dedup.drop(columns=valid_agg_cols)
+            df_dedup = df_dedup.merge(agg_df, on='保单号', how='left')
 
         print(f"   去重前: {len(df):,} 行")
         print(f"   去重后: {len(df_dedup):,} 行")

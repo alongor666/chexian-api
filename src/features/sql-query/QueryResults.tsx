@@ -5,9 +5,9 @@
  */
 
 import { useMemo, useState } from 'react';
-import { VirtualTable } from '../../widgets/table/VirtualTable';
+import { VirtualTable, type Column } from '../../widgets/table/VirtualTable';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../shared/utils/export';
-import { formatCount } from '../../shared/utils/formatters';
+import { formatCount, formatCurrency, formatPercent } from '../../shared/utils/formatters';
 import type { QueryResult } from '../../shared/types/sql-query';
 
 export interface QueryResultsProps {
@@ -16,6 +16,46 @@ export interface QueryResultsProps {
 }
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
+
+/** 判断列是否为数值列（用于右对齐） */
+const isNumericColumn = (key: string): boolean => {
+  const numericKeywords = ['保费', '金额', '率', '%', '数', '量', '额', '成本', '价', '达成', '计划', '实际', '总', '均', '比例'];
+  return numericKeywords.some(kw => key.includes(kw));
+};
+
+/** 判断列是否为保费类（万元格式化） */
+const isPremiumColumn = (key: string): boolean => {
+  const premiumKeywords = ['保费', '金额', '成本', '价'];
+  return premiumKeywords.some(kw => key.includes(kw)) && !key.includes('率');
+};
+
+/** 判断列是否为百分比类 */
+const isPercentColumn = (key: string): boolean => {
+  const percentKeywords = ['率', '%', '达成', '比例'];
+  return percentKeywords.some(kw => key.includes(kw));
+};
+
+/** 格式化单元格值 */
+const formatCellValue = (value: unknown, columnKey: string): string => {
+  if (value === null || value === undefined) return '-';
+
+  // 数值处理
+  const numValue = typeof value === 'bigint' ? Number(value) : Number(value);
+  if (!Number.isNaN(numValue) && Number.isFinite(numValue)) {
+    // 百分比列（保留1位小数）
+    if (isPercentColumn(columnKey)) {
+      return formatPercent(numValue, 1);
+    }
+    // 保费类（保留2位小数）
+    if (isPremiumColumn(columnKey)) {
+      return formatCurrency(numValue);
+    }
+    // 普通数值（千分位，整数）
+    return formatCount(numValue);
+  }
+
+  return String(value);
+};
 
 /**
  * 查询结果组件
@@ -33,19 +73,22 @@ export function QueryResults({ result }: QueryResultsProps) {
     }
 
     const firstRow = result.data[0];
-    const cols = Object.keys(firstRow).map((key) => ({
-      key,
-      header: key,
-      width: 150,
-    }));
+    const colKeys = Object.keys(firstRow);
 
-    const data: Record<string, string>[] = result.data.map((row) => {
-      const stringRow: Record<string, string> = {};
-      for (const key of Object.keys(row)) {
-        stringRow[key] = String(row[key] ?? '');
-      }
-      return stringRow;
+    // 构建列配置（带格式化和对齐）
+    const cols: Column<Record<string, unknown>>[] = colKeys.map((key) => {
+      const isNumeric = isNumericColumn(key);
+      return {
+        key,
+        header: key,
+        width: isNumeric ? 130 : 180,
+        align: isNumeric ? 'right' : 'left',
+        render: (value: unknown) => formatCellValue(value, key),
+      };
     });
+
+    // 保持原始数据类型，格式化在 render 中处理
+    const data: Record<string, unknown>[] = result.data.map((row) => ({ ...row }));
 
     return { columns: cols, allData: data };
   }, [result.data]);

@@ -106,11 +106,11 @@ export const ComparisonQuickPresets: React.FC<ComparisonQuickPresetsProps> = ({
         <div className="text-xs text-gray-500 pl-1 space-y-0.5">
           <div className="flex items-center gap-2">
             <span className="w-12 text-gray-400">当期：</span>
-            <span className="font-mono">{formatPeriodDisplay(currentPeriods.current)}</span>
+            <span className="font-tabular">{formatPeriodDisplay(currentPeriods.current)}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-12 text-gray-400">基期：</span>
-            <span className="font-mono">{formatPeriodDisplay(currentPeriods.previous)}</span>
+            <span className="font-tabular">{formatPeriodDisplay(currentPeriods.previous)}</span>
           </div>
         </div>
       )}

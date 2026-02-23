@@ -388,7 +388,7 @@ export const NumericCell = memo(function NumericCell({
   className?: string
 }) {
   return (
-    <span className={cn('font-mono tabular-nums', className)}>
+    <span className={cn('font-tabular tabular-nums', className)}>
       {value ?? '-'}
     </span>
   )
@@ -418,7 +418,7 @@ export const TrendCell = memo(function TrendCell({
   const displayValue = formatter ? formatter(value) : value.toString()
 
   return (
-    <span className={cn('font-mono tabular-nums', colorClass, className)}>
+    <span className={cn('font-tabular tabular-nums', colorClass, className)}>
       {prefix}{displayValue}
     </span>
   )

@@ -5,6 +5,8 @@
  */
 
 import React from 'react';
+import { cn, numericStyles } from '../../../shared/styles';
+import { formatCount } from '../../../shared/utils/formatters';
 
 interface HolidaySummary {
   name: string;
@@ -52,11 +54,15 @@ export const HolidaySummaryCard: React.FC<HolidaySummaryCardProps> = ({
         <>
           <div className="flex items-center gap-4 mb-3">
             <div className="flex items-center bg-white rounded-lg px-3 py-2 shadow-sm">
-              <span className="text-2xl font-bold text-blue-600">{totalDays}</span>
+              <span className={cn(numericStyles.kpiPrimary, 'text-blue-600')}>
+                {formatCount(totalDays)}
+              </span>
               <span className="ml-2 text-sm text-gray-500">天节假日</span>
             </div>
             <div className="flex items-center bg-white rounded-lg px-3 py-2 shadow-sm">
-              <span className="text-2xl font-bold text-indigo-600">{holidays.length}</span>
+              <span className={cn(numericStyles.kpiPrimary, 'text-indigo-600')}>
+                {formatCount(holidays.length)}
+              </span>
               <span className="ml-2 text-sm text-gray-500">个节日</span>
             </div>
           </div>
@@ -69,7 +75,9 @@ export const HolidaySummaryCard: React.FC<HolidaySummaryCardProps> = ({
               >
                 <span className="font-medium text-gray-700">{holiday.name}</span>
                 <span className="mx-1 text-gray-300">|</span>
-                <span className="text-blue-600">{holiday.days}天</span>
+                <span className={cn(numericStyles.captionValue, 'text-blue-600')}>
+                  {formatCount(holiday.days)}天
+                </span>
                 <span className="ml-2 text-xs text-gray-400">({holiday.dateRange})</span>
               </div>
             ))}

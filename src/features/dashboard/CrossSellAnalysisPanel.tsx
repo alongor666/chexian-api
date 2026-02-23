@@ -16,7 +16,7 @@ import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
-import { textStyles, cardStyles, tableStyles, cn } from '../../shared/styles';
+import { textStyles, cardStyles, numericStyles, tableStyles, cn } from '../../shared/styles';
 import { CrossSellTimePeriodSummary } from './CrossSellTimePeriodSummary';
 import { CrossSellQuadrantView } from './CrossSellQuadrantView';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
@@ -94,8 +94,7 @@ function SummaryCards({ data }: { data: CrossSellRow }) {
           >
             <div className={cn(textStyles.caption, 'uppercase tracking-wide mb-2')}>{card.label}</div>
             <div className={cn(
-              'text-xl font-semibold',
-              textStyles.numeric,
+              numericStyles.kpiPrimary,
               isRate ? 'text-success' : card.label.includes('驾意') ? 'text-primary' : 'text-neutral-800'
             )}>
               {isRate ? formatPercent(value) : formatCount(value)}
