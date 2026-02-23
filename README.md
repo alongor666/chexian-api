@@ -196,8 +196,18 @@ bun run plans:manage   # plans 快照管理
 生产地址：`https://chexian.cretvalu.com`
 
 ```bash
-./deploy/sync-data.sh                  # 同步最新 Parquet
-./deploy/sync-data.sh <文件名.parquet>  # 同步指定文件
+# 完整一键链路：Excel 接收 → 续保匹配 → Parquet 转换 → VPS 同步
+./数据管理/run.sh full \
+  --source 历史数据.xlsx \
+  --target 最新数据.xlsx \
+  --output 数据管理/warehouse/fact/policy/车险保单综合明细表MMDD.parquet
+
+# 仅本地转换，不同步 VPS
+./数据管理/run.sh full ... --no-sync
+
+# 单独同步已有 Parquet（跳过转换步骤）
+./deploy/sync-data.sh                  # 自动找最新 Parquet
+./deploy/sync-data.sh <文件名.parquet>  # 指定文件
 ```
 
 更多部署说明：
