@@ -66,7 +66,14 @@ export function GrowthDetailSection(props: GrowthDetailSectionProps): React.Reac
               date: item.time_period || '',
               current_ytd: (item.ytd_total_current || 0) / 10000,
               last_year_ytd: (item.ytd_total_previous || 0) / 10000,
+              current_day: (item.current_value || 0) / 10000, // 透传当日保费
             }))}
+            selectedDate={props.cutoffDateStr}
+            // 找到全量的最新签单日
+            latestSignedDate={(() => {
+              const latest = [...props.data].reverse().find(d => (d.current_value || 0) > 0);
+              return latest?.time_period || undefined;
+            })()}
             height={400}
           />
         </div>

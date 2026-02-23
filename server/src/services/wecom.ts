@@ -56,7 +56,7 @@ class WeComService {
 
                 const url = `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${corpId}&corpsecret=${secret}`;
                 const response = await fetch(url);
-                const data = await response.json();
+                const data = await response.json() as Record<string, any>;
 
                 if (data.errcode !== 0) {
                     throw new Error(`Failed to get WeCom access token: ${data.errmsg}`);
@@ -82,13 +82,13 @@ class WeComService {
         const url = `https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo?access_token=${token}&code=${code}`;
 
         const response = await fetch(url);
-        const data = await response.json();
+        const data = await response.json() as Record<string, any>;
 
         if (data.errcode !== 0) {
             throw new Error(`WeCom getUserInfo failed: ${data.errmsg}`);
         }
 
-        return data;
+        return data as WeComUserInfo;
     }
 
     /**
