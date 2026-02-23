@@ -18,6 +18,8 @@ interface MultiSelectDropdownProps {
   disabled?: boolean;
   /** 单选模式 - 只允许选择一个选项 */
   singleSelect?: boolean;
+  /** 是否显示内置的操作按钮 (全选/反选) */
+  showButtons?: boolean;
 }
 
 const Option: React.FC<OptionProps<MultiSelectOption, true>> = (props) => {
@@ -47,6 +49,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
   variant = 'default',
   disabled = false,
   singleSelect = false,
+  showButtons = true,
 }) => {
   const allValues = options.map((option) => option.value);
   const isAllSelected = selectedValues.length === 0;
@@ -72,33 +75,35 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <label className={variant === 'compact' ? 'sr-only' : 'text-sm font-medium text-gray-700'}>
-          {title}{singleSelect && '（单选）'}
-        </label>
-        <div className="flex items-center gap-1 ml-auto">
-          {actions}
-          {!singleSelect && (
-            <>
-              <button
-                type="button"
-                onClick={handleSelectAll}
-                className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                disabled={isAllSelected}
-              >
-                全选
-              </button>
-              <button
-                type="button"
-                onClick={handleInvertSelection}
-                className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
-              >
-                反选
-              </button>
-            </>
-          )}
+      {showButtons && (
+        <div className="flex items-center justify-between gap-2">
+          <label className={variant === 'compact' ? 'sr-only' : 'text-sm font-medium text-gray-700'}>
+            {title}{singleSelect && '（单选）'}
+          </label>
+          <div className="flex items-center gap-1 ml-auto">
+            {actions}
+            {!singleSelect && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                  disabled={isAllSelected}
+                >
+                  全选
+                </button>
+                <button
+                  type="button"
+                  onClick={handleInvertSelection}
+                  className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+                >
+                  反选
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       <Select
         isMulti
         isDisabled={disabled}

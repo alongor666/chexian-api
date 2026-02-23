@@ -182,18 +182,18 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
   const firstRowGridClass = firstRowVisibleCount === 3
     ? 'grid-cols-1 xl:grid-cols-[minmax(220px,_1fr)_minmax(220px,_1fr)_minmax(320px,_2fr)]'
     : firstRowVisibleCount === 2
-    ? 'grid-cols-1 md:grid-cols-2'
-    : 'grid-cols-1';
+      ? 'grid-cols-1 md:grid-cols-2'
+      : 'grid-cols-1';
 
   // 计算第二行显示的元素数量
   const secondRowVisibleCount = [showOrganization, showCustomerCategory, showCoverageCombination, showRenewalMode].filter(Boolean).length;
   const secondRowGridClass = secondRowVisibleCount === 4
     ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'
     : secondRowVisibleCount === 3
-    ? 'grid-cols-1 sm:grid-cols-3'
-    : secondRowVisibleCount === 2
-    ? 'grid-cols-1 sm:grid-cols-2'
-    : 'grid-cols-1';
+      ? 'grid-cols-1 sm:grid-cols-3'
+      : secondRowVisibleCount === 2
+        ? 'grid-cols-1 sm:grid-cols-2'
+        : 'grid-cols-1';
 
   // 如果第一行没有任何可见元素，则不渲染
   const showFirstRow = firstRowVisibleCount > 0;
@@ -273,7 +273,37 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
         {showOrganization && (
           <details className="group" open>
             <summary className="list-none cursor-pointer flex items-center justify-between py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-800">
-              <span>三级机构{orgMode === 'single' ? '（单选）' : ''}</span>
+              <div className="flex items-center gap-2">
+                <span>三级机构{orgMode === 'single' ? '（单选）' : ''}</span>
+                {orgMode === 'multi' && (
+                  <div className="flex items-center gap-1 ml-2">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onMultiSelectChange('org_level_3', []); }}
+                      className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const allValues = filteredOrgOptions.map(o => o.value);
+                        const selected = filters.org_level_3 || [];
+                        onMultiSelectChange('org_level_3', allValues.filter(v => !selected.includes(v)));
+                      }}
+                      className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                    >
+                      反选
+                    </button>
+                    {orgActions && (
+                      <div className="flex gap-1 border-l border-neutral-200 ml-1 pl-1" onClick={(e) => e.stopPropagation()}>
+                        {orgActions}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
             </summary>
             <div className="pt-2">
@@ -283,7 +313,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                 options={filteredOrgOptions}
                 selectedValues={filters.org_level_3 || []}
                 onChange={handleOrgSingleSelect}
-                actions={orgMode === 'multi' ? orgActions : undefined}
+                showButtons={false}
                 disabled={visibleOrganizations.length <= 1 && filteredOrgOptions.length > 0}
                 singleSelect={orgMode === 'single'}
               />
@@ -295,7 +325,31 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
         {showCustomerCategory && (
           <details className="group">
             <summary className="list-none cursor-pointer flex items-center justify-between py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-800">
-              <span>客户类别</span>
+              <div className="flex items-center gap-2">
+                <span>客户类别</span>
+                <div className="flex items-center gap-1 ml-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onMultiSelectChange('customer_category', []); }}
+                    className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                  >
+                    全选
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const allOptions = toMultiSelectOptions(options.customer_category || []);
+                      const allValues = allOptions.map(o => o.value);
+                      const selected = filters.customer_category || [];
+                      onMultiSelectChange('customer_category', allValues.filter(v => !selected.includes(v)));
+                    }}
+                    className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                  >
+                    反选
+                  </button>
+                </div>
+              </div>
               <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
             </summary>
             <div className="pt-2">
@@ -305,6 +359,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                 options={toMultiSelectOptions(options.customer_category || [])}
                 selectedValues={filters.customer_category || []}
                 onChange={(values) => onMultiSelectChange('customer_category', values)}
+                showButtons={false}
               />
             </div>
           </details>
@@ -314,7 +369,31 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
         {showCoverageCombination && (
           <details className="group">
             <summary className="list-none cursor-pointer flex items-center justify-between py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-800">
-              <span>险别组合</span>
+              <div className="flex items-center gap-2">
+                <span>险别组合</span>
+                <div className="flex items-center gap-1 ml-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onMultiSelectChange('coverage_combination', []); }}
+                    className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                  >
+                    全选
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const allOptions = toMultiSelectOptions(options.coverage_combination || []);
+                      const allValues = allOptions.map(o => o.value);
+                      const selected = filters.coverage_combination || [];
+                      onMultiSelectChange('coverage_combination', allValues.filter(v => !selected.includes(v)));
+                    }}
+                    className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                  >
+                    反选
+                  </button>
+                </div>
+              </div>
               <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
             </summary>
             <div className="pt-2">
@@ -324,6 +403,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                 options={toMultiSelectOptions(options.coverage_combination || [])}
                 selectedValues={filters.coverage_combination || []}
                 onChange={(values) => onMultiSelectChange('coverage_combination', values)}
+                showButtons={false}
               />
             </div>
           </details>
@@ -333,7 +413,30 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
         {showRenewalMode && (
           <details className="group">
             <summary className="list-none cursor-pointer flex items-center justify-between py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-800">
-              <span>续保模式</span>
+              <div className="flex items-center gap-2">
+                <span>续保模式</span>
+                <div className="flex items-center gap-1 ml-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onMultiSelectChange('renewal_mode', []); }}
+                    className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                  >
+                    全选
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const allValues = renewalModeOptions.map(o => o.value);
+                      const selected = filters.renewal_mode || [];
+                      onMultiSelectChange('renewal_mode', allValues.filter(v => !selected.includes(v)));
+                    }}
+                    className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                  >
+                    反选
+                  </button>
+                </div>
+              </div>
               <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
             </summary>
             <div className="pt-2">
@@ -343,6 +446,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                 options={renewalModeOptions}
                 selectedValues={filters.renewal_mode || []}
                 onChange={(values) => onMultiSelectChange('renewal_mode', values)}
+                showButtons={false}
                 placeholder="全部"
               />
             </div>
