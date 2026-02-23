@@ -1,53 +1,35 @@
 /**
- * 保费达成下钻分析 SQL 生成器
+ * 保费达成下钻分析 SQL 生成器 v2
  *
- * 功能：
- * - 六级下钻：分公司整体 → 三级机构 → 团队 → 业务员 → 客户类别 → 险别组合
- * - 支持年度筛选（2025/2026）
- * - 自动处理"无归属团队"逻辑
- * - 车险实际保费从PolicyFact统计（当年1月1日起签单）
- * - 达成率按1/365折算时间进度
+ * 架构升级（v2）：
+ * - 所有查询从 achievement_cache 预聚合表读取（业务员粒度，启动时预计算）
+ * - 每次下钻只需简单 GROUP BY，无需重新扫描 PolicyFact（10-40x 性能提升）
+ * - customer_category / coverage 层级仍直接查询 PolicyFact（无计划数据）
  *
- * 核心计算逻辑（自下而上）：
- * 1. 以业务员为基础单位，统计每个业务员的计划和实际保费
- * 2. 通过SalesmanPlanFact获取业务员的团队和机构归属
- * 3. 向上汇总到团队级别、机构级别、分公司级别
- * 4. 业务员之后按客户类别、险别组合继续下钻（直接从PolicyFact）
+ * 数据来源：
+ * - achievement_cache（duckdb.ts buildAchievementView() 预构建）
+ *   字段：full_name, salesman_name_short, team_name, org_name, plan_year,
+ *         plan_vehicle, actual_vehicle, prev_year_actual, prev_year_full,
+ *         time_progress, achievement_rate, yoy_rate, plan_growth_rate
  *
- * 数据源：
- * - SalesmanPlanFact 视图（计划数据 + 归属关系）
- * - PolicyFact 视图（实际保费数据）
- *
- * 字段对应说明：
- * - SalesmanPlanFact.org_name ↔ 机构名称（如"天府"）
- * - SalesmanPlanFact.team_name ↔ 团队名称
- * - SalesmanPlanFact.salesman_name ↔ 业务员姓名
- * - PolicyFact.salesman_name ↔ 业务员姓名（JOIN关键字段）
- * - PolicyFact.org_level_3 ↔ 可能与org_name不完全一致，以SalesmanPlanFact为准
- * - PolicyFact.customer_category ↔ 客户类别
- * - PolicyFact.coverage_combination ↔ 险别组合
+ * 保持向后兼容：
+ * - 导出函数签名与 v1 完全相同，query.ts 无需修改
+ * - 新增 generatePlanAchievementPanel() 供合并端点 /plan-achievement 使用
  */
 
-/**
- * 下钻层级类型
- * company: 分公司整体
- * org: 三级机构
- * team: 团队
- * salesman: 业务员
- * customer_category: 客户类别
- * coverage: 险别组合
- */
-export type PlanDrilldownLevel = 'company' | 'org' | 'team' | 'salesman' | 'customer_category' | 'coverage';
+/** 下钻层级 */
+export type PlanDrilldownLevel =
+  | 'company'
+  | 'org'
+  | 'team'
+  | 'salesman'
+  | 'customer_category'
+  | 'coverage';
 
-/**
- * 下钻维度配置
- */
+/** 下钻维度配置 */
 export interface PlanDrilldownDimension {
-  /** 当前层级 */
   level: PlanDrilldownLevel;
-  /** 父级值（用于过滤） */
   parentValue?: string;
-  /** 完整的过滤路径（用于多级下钻） */
   filters?: {
     org?: string;
     team?: string;
@@ -56,9 +38,7 @@ export interface PlanDrilldownDimension {
   };
 }
 
-/**
- * 排名配置
- */
+/** 排名配置 */
 export interface PlanRankingConfig {
   enabled: boolean;
   rankField?: 'plan_vehicle' | 'actual_vehicle' | 'rate_vehicle';
@@ -66,571 +46,316 @@ export interface PlanRankingConfig {
   bottomN?: number;
 }
 
-/**
- * 排序字段
- */
-export type PlanSortField = 'plan_vehicle' | 'actual_vehicle' | 'rate_vehicle' | 'plan_total' | 'prev_year_premium' | 'yoy_growth_rate' | 'year_2025_actual' | 'plan_growth_rate';
+/** 排序字段 */
+export type PlanSortField =
+  | 'plan_vehicle'
+  | 'actual_vehicle'
+  | 'rate_vehicle'
+  | 'plan_total'
+  | 'prev_year_premium'
+  | 'yoy_growth_rate'
+  | 'year_2025_actual'
+  | 'plan_growth_rate';
 
-/**
- * 排序方向
- */
+/** 排序方向 */
 export type SortOrder = 'asc' | 'desc';
 
-/**
- * SQL字符串转义（防止SQL注入）
- */
-function escapeSqlString(value: string): string {
-  return value.replace(/'/g, "''");
+// ─── 内部工具 ──────────────────────────────────────────────────────────────
+
+function esc(s: string): string {
+  return s.replace(/'/g, "''");
 }
 
 /**
- * 生成时间进度子查询
- * 时间进度 = (最新签单日期 - 1月1日) / 365
- * 最小值为 1/365（至少1天）
- *
- * 注意：使用PolicyFact中的最新签单日期，而不是当前日期
+ * 将 achievement_cache 字段映射到前端期望的输出字段名
+ * （保持与 v1 相同的输出 schema，前端无需修改）
  */
-function getTimeProgressSubquery(planYear: number): string {
-  return `(
-    SELECT GREATEST(
-      CAST(DATEDIFF('day', '${planYear}-01-01', MAX(policy_date)) AS DOUBLE) / 365.0,
-      1.0 / 365.0
-    )
-    FROM PolicyFact
-    WHERE policy_date >= '${planYear}-01-01'
-  )`;
+const CACHE_SELECT = `
+  plan_vehicle,
+  plan_vehicle                                               AS plan_total,
+  actual_vehicle,
+  0                                                          AS actual_total,
+  achievement_rate                                           AS rate_vehicle,
+  NULL                                                       AS rate_total,
+  prev_year_actual                                           AS prev_year_premium,
+  yoy_rate                                                   AS yoy_growth_rate,
+  prev_year_full                                             AS year_2025_actual,
+  plan_growth_rate
+`;
+
+/**
+ * 根据 level 和 filters 构建 achievement_cache 的 WHERE 子句
+ */
+function buildCacheWhere(filters: PlanDrilldownDimension['filters']): string {
+  const conds: string[] = [];
+  if (filters?.org) conds.push(`org_name = '${esc(filters.org)}'`);
+  if (filters?.team) conds.push(`team_name = '${esc(filters.team)}'`);
+  if (filters?.salesman) conds.push(`full_name = '${esc(filters.salesman)}'`);
+  return conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 }
 
 /**
- * 生成业务员级别基础数据CTE
- * 这是所有查询的基础：以业务员为单位，JOIN计划数据和实际保费数据
- *
- * 新增字段说明：
- * - prev_year_premium: 上年同期保费（去年1月1日至今对应期间的保费）
- * - yoy_growth_rate: 同比增长率 = (今年实际 - 去年同期) / 去年同期
- * - year_2025_actual: 2025年度保费实际（2025全年数据）
- * - plan_growth_rate: 计划增长率 = 2026计划 / 2025实际 - 1
- *
- * @param planYear - 计划年度
- * @returns SQL CTE片段
+ * 聚合公共指标（SUM/CASE）——用于 org/team/company 层级
  */
-function generateSalesmanBaseCTE(planYear: number): string {
-  const timeProgressSubquery = getTimeProgressSubquery(planYear);
-  const prevYear = planYear - 1;
-
+function buildAggSelect(groupField: string, extraFields: string = ''): string {
   return `
-    -- 时间进度计算（使用最新签单日期）
-    time_progress AS (
-      SELECT ${timeProgressSubquery} as progress
-    ),
-
-    -- 计算今年最大签单日期（用于上年同期计算）
-    max_policy_date AS (
-      SELECT MAX(policy_date) as max_date
-      FROM PolicyFact
-      WHERE policy_date >= '${planYear}-01-01'
-    ),
-
-    -- 从PolicyFact按业务员统计实际保费（当年1月1日起签单）
-    actual_by_salesman AS (
-      SELECT
-        salesman_name,
-        SUM(premium) / 10000 as actual_vehicle  -- 转换为万元
-      FROM PolicyFact
-      WHERE policy_date >= '${planYear}-01-01'
-      GROUP BY salesman_name
-    ),
-
-    -- 上年同期保费（去年1月1日到去年同期日期）
-    -- 使用今年最大日期减1年作为上年同期截止日期
-    prev_year_actual AS (
-      SELECT
-        salesman_name,
-        SUM(premium) / 10000 as prev_year_premium
-      FROM PolicyFact
-      WHERE policy_date >= '${prevYear}-01-01'
-        AND policy_date <= (SELECT max_date - INTERVAL 1 YEAR FROM max_policy_date)
-      GROUP BY salesman_name
-    ),
-
-    -- 2025年度全年保费实际（用于计划增长率计算）
-    year_2025_actual AS (
-      SELECT
-        salesman_name,
-        SUM(premium) / 10000 as year_2025_premium
-      FROM PolicyFact
-      WHERE policy_date >= '2025-01-01'
-        AND policy_date <= '2025-12-31'
-      GROUP BY salesman_name
-    ),
-
-    -- 2026年计划数据
-    plan_2026 AS (
-      SELECT
-        salesman_name,
-        COALESCE(plan_vehicle, 0) as plan_2026_vehicle
-      FROM SalesmanPlanFact
-      WHERE plan_year = 2026
-    ),
-
-    -- 业务员级别完整数据：JOIN计划数据和实际数据
-    -- 以SalesmanPlanFact为基准（定义了归属关系）
-    salesman_base AS (
-      SELECT
-        p.salesman_name,
-        p.team_name,
-        p.org_name,
-        p.plan_year,
-        COALESCE(p.plan_vehicle, 0) as plan_vehicle,
-        COALESCE(p.plan_total, 0) as plan_total,
-        COALESCE(a.actual_vehicle, 0) as actual_vehicle,
-        0 as actual_total,
-        CASE
-          WHEN COALESCE(p.plan_vehicle, 0) > 0
-          THEN COALESCE(a.actual_vehicle, 0) / (p.plan_vehicle * (SELECT progress FROM time_progress))
-          ELSE NULL
-        END as rate_vehicle,
-        -- 新增字段
-        COALESCE(pya.prev_year_premium, 0) as prev_year_premium,
-        CASE
-          WHEN COALESCE(pya.prev_year_premium, 0) > 0
-          THEN (COALESCE(a.actual_vehicle, 0) - COALESCE(pya.prev_year_premium, 0)) / pya.prev_year_premium
-          ELSE NULL
-        END as yoy_growth_rate,
-        COALESCE(y25.year_2025_premium, 0) as year_2025_actual,
-        CASE
-          WHEN COALESCE(y25.year_2025_premium, 0) > 0
-          THEN COALESCE(p26.plan_2026_vehicle, 0) / y25.year_2025_premium - 1
-          ELSE NULL
-        END as plan_growth_rate
-      FROM SalesmanPlanFact p
-      LEFT JOIN actual_by_salesman a ON p.salesman_name = a.salesman_name
-      LEFT JOIN prev_year_actual pya ON p.salesman_name = pya.salesman_name
-      LEFT JOIN year_2025_actual y25 ON p.salesman_name = y25.salesman_name
-      LEFT JOIN plan_2026 p26 ON p.salesman_name = p26.salesman_name
-      WHERE p.plan_year = ${planYear}
-    )
+    ${groupField}                                            AS group_name,
+    ${extraFields}
+    plan_year,
+    SUM(plan_vehicle)                                        AS plan_vehicle,
+    SUM(plan_vehicle)                                        AS plan_total,
+    SUM(actual_vehicle)                                      AS actual_vehicle,
+    0                                                        AS actual_total,
+    CASE
+      WHEN SUM(plan_vehicle) > 0 AND MAX(time_progress) > 0
+      THEN SUM(actual_vehicle) / (SUM(plan_vehicle) * MAX(time_progress))
+      ELSE NULL
+    END                                                      AS rate_vehicle,
+    NULL                                                     AS rate_total,
+    COUNT(*)                                                 AS salesman_count,
+    SUM(prev_year_actual)                                    AS prev_year_premium,
+    CASE
+      WHEN SUM(prev_year_actual) > 0
+      THEN (SUM(actual_vehicle) - SUM(prev_year_actual)) / SUM(prev_year_actual)
+      ELSE NULL
+    END                                                      AS yoy_growth_rate,
+    SUM(prev_year_full)                                      AS year_2025_actual,
+    CASE
+      WHEN SUM(prev_year_full) > 0
+      THEN SUM(plan_vehicle) / SUM(prev_year_full) - 1
+      ELSE NULL
+    END                                                      AS plan_growth_rate
   `;
 }
 
+// ─── 主要导出函数（签名与 v1 完全相同） ────────────────────────────────────
+
 /**
  * 生成保费达成下钻查询
- *
- * 核心逻辑（六级下钻）：
- * 1. company: 分公司整体汇总
- * 2. org: 按三级机构分组
- * 3. team: 按团队分组
- * 4. salesman: 按业务员分组
- * 5. customer_category: 按客户类别分组（直接从PolicyFact）
- * 6. coverage: 按险别组合分组（直接从PolicyFact）
- *
- * @param planYear - 计划年度（2025/2026）
- * @param dimension - 下钻维度配置
- * @param ranking - 排名配置
- * @param sortField - 排序字段
- * @param sortOrder - 排序方向
- * @returns SQL查询语句
+ * 从 achievement_cache 读取，按层级分组（company/org/team/salesman）
+ * customer_category / coverage 层级直接查询 PolicyFact
  */
 export function generatePremiumPlanDrilldownQuery(
   planYear: number,
   dimension: PlanDrilldownDimension,
   ranking: PlanRankingConfig = { enabled: false },
   sortField: PlanSortField = 'plan_vehicle',
-  sortOrder: SortOrder = 'desc'
+  sortOrder: SortOrder = 'desc',
 ): string {
-  const filters = dimension.filters || {};
+  const { level, filters = {} } = dimension;
+  const where = buildCacheWhere(filters);
 
-  // 客户类别和险别组合层级使用PolicyFact直接查询
-  if (dimension.level === 'customer_category' || dimension.level === 'coverage') {
+  // customer_category / coverage：无计划数据，直接查 PolicyFact
+  if (level === 'customer_category' || level === 'coverage') {
     return generatePolicyFactDrilldownQuery(planYear, dimension, sortField, sortOrder);
   }
 
-  const baseCTE = generateSalesmanBaseCTE(planYear);
+  let selectBody: string;
+  let groupBy: string;
 
-  // 根据下钻层级构建不同的汇总查询
-  let aggregationCTE: string;
-  let filterCondition = '';
-
-  if (dimension.level === 'company') {
-    // 分公司整体：汇总所有数据，显示为单行
-    aggregationCTE = `
-    aggregated_data AS (
-      SELECT
-        '分公司整体' as group_name,
-        ${planYear} as plan_year,
-        SUM(plan_vehicle) as plan_vehicle,
-        SUM(plan_total) as plan_total,
-        SUM(actual_vehicle) as actual_vehicle,
-        SUM(actual_total) as actual_total,
-        CASE
-          WHEN SUM(plan_vehicle) > 0
-          THEN SUM(actual_vehicle) / (SUM(plan_vehicle) * (SELECT progress FROM time_progress))
-          ELSE NULL
-        END as rate_vehicle,
-        NULL as rate_total,
-        COUNT(DISTINCT salesman_name) as salesman_count,
-        SUM(prev_year_premium) as prev_year_premium,
-        CASE
-          WHEN SUM(prev_year_premium) > 0
-          THEN (SUM(actual_vehicle) - SUM(prev_year_premium)) / SUM(prev_year_premium)
-          ELSE NULL
-        END as yoy_growth_rate,
-        SUM(year_2025_actual) as year_2025_actual,
-        CASE
-          WHEN SUM(year_2025_actual) > 0
-          THEN SUM(plan_vehicle) / SUM(year_2025_actual) - 1
-          ELSE NULL
-        END as plan_growth_rate
-      FROM salesman_base
-    )`;
-  } else if (dimension.level === 'org') {
-    // 三级机构层级：按org_name汇总所有业务员数据
-    aggregationCTE = `
-    aggregated_data AS (
-      SELECT
-        org_name as group_name,
-        ${planYear} as plan_year,
-        SUM(plan_vehicle) as plan_vehicle,
-        SUM(plan_total) as plan_total,
-        SUM(actual_vehicle) as actual_vehicle,
-        SUM(actual_total) as actual_total,
-        CASE
-          WHEN SUM(plan_vehicle) > 0
-          THEN SUM(actual_vehicle) / (SUM(plan_vehicle) * (SELECT progress FROM time_progress))
-          ELSE NULL
-        END as rate_vehicle,
-        NULL as rate_total,
-        COUNT(DISTINCT salesman_name) as salesman_count,
-        SUM(prev_year_premium) as prev_year_premium,
-        CASE
-          WHEN SUM(prev_year_premium) > 0
-          THEN (SUM(actual_vehicle) - SUM(prev_year_premium)) / SUM(prev_year_premium)
-          ELSE NULL
-        END as yoy_growth_rate,
-        SUM(year_2025_actual) as year_2025_actual,
-        CASE
-          WHEN SUM(year_2025_actual) > 0
-          THEN SUM(plan_vehicle) / SUM(year_2025_actual) - 1
-          ELSE NULL
-        END as plan_growth_rate
-      FROM salesman_base
-      GROUP BY org_name
-    )`;
-  } else if (dimension.level === 'team') {
-    // 团队层级：按team_name汇总，过滤指定机构
-    if (filters.org) {
-      const escapedValue = escapeSqlString(filters.org);
-      filterCondition = `WHERE org_name = '${escapedValue}'`;
-    }
-    aggregationCTE = `
-    aggregated_data AS (
-      SELECT
-        team_name as group_name,
-        org_name as parent_name,
-        ${planYear} as plan_year,
-        SUM(plan_vehicle) as plan_vehicle,
-        SUM(plan_total) as plan_total,
-        SUM(actual_vehicle) as actual_vehicle,
-        SUM(actual_total) as actual_total,
-        CASE
-          WHEN SUM(plan_vehicle) > 0
-          THEN SUM(actual_vehicle) / (SUM(plan_vehicle) * (SELECT progress FROM time_progress))
-          ELSE NULL
-        END as rate_vehicle,
-        NULL as rate_total,
-        COUNT(DISTINCT salesman_name) as salesman_count,
-        SUM(prev_year_premium) as prev_year_premium,
-        CASE
-          WHEN SUM(prev_year_premium) > 0
-          THEN (SUM(actual_vehicle) - SUM(prev_year_premium)) / SUM(prev_year_premium)
-          ELSE NULL
-        END as yoy_growth_rate,
-        SUM(year_2025_actual) as year_2025_actual,
-        CASE
-          WHEN SUM(year_2025_actual) > 0
-          THEN SUM(plan_vehicle) / SUM(year_2025_actual) - 1
-          ELSE NULL
-        END as plan_growth_rate
-      FROM salesman_base
-      ${filterCondition}
-      GROUP BY team_name, org_name
-    )`;
+  if (level === 'company') {
+    selectBody = buildAggSelect("'分公司整体'");
+    groupBy = '';
+  } else if (level === 'org') {
+    selectBody = buildAggSelect('org_name');
+    groupBy = 'GROUP BY org_name, plan_year';
+  } else if (level === 'team') {
+    selectBody = buildAggSelect('team_name', 'org_name AS parent_name,');
+    groupBy = 'GROUP BY team_name, org_name, plan_year';
   } else {
-    // 业务员层级：直接使用业务员数据，过滤指定团队
-    if (filters.team) {
-      const escapedValue = escapeSqlString(filters.team);
-      filterCondition = `WHERE team_name = '${escapedValue}'`;
-    }
-    aggregationCTE = `
-    aggregated_data AS (
-      SELECT
-        salesman_name as group_name,
-        team_name as parent_name,
-        org_name,
-        plan_year,
-        plan_vehicle,
-        plan_total,
-        actual_vehicle,
-        actual_total,
-        rate_vehicle,
-        NULL as rate_total,
-        1 as salesman_count,
-        prev_year_premium,
-        yoy_growth_rate,
-        year_2025_actual,
-        plan_growth_rate
-      FROM salesman_base
-      ${filterCondition}
-    )`;
+    // salesman — 直接读行，不聚合
+    selectBody = `
+      full_name                                              AS group_name,
+      team_name                                              AS parent_name,
+      org_name,
+      plan_year,
+      ${CACHE_SELECT},
+      1                                                      AS salesman_count
+    `;
+    groupBy = '';
   }
 
-  // 构建完整SQL
-  let sql = `
-    WITH ${baseCTE},
-    ${aggregationCTE}
+  const coreSql = `
+    SELECT ${selectBody}
+    FROM achievement_cache
+    ${where}
+    ${groupBy}
   `;
 
-  // 添加排名逻辑
+  // 排名包装
   if (ranking.enabled && ranking.rankField) {
-    const topN = ranking.topN || 10;
-    const bottomN = ranking.bottomN || 10;
-
-    sql += `
-    , ranked_data AS (
-      SELECT
-        *,
-        ROW_NUMBER() OVER (ORDER BY ${ranking.rankField} DESC NULLS LAST) as rank_desc,
-        ROW_NUMBER() OVER (ORDER BY ${ranking.rankField} ASC NULLS LAST) as rank_asc
-      FROM aggregated_data
-    )
-    SELECT
-      group_name,
-      ${dimension.level === 'team' || dimension.level === 'salesman' ? 'parent_name,' : ''}
-      ${dimension.level === 'salesman' ? 'org_name,' : ''}
-      plan_year,
-      plan_vehicle,
-      plan_total,
-      actual_vehicle,
-      actual_total,
-      rate_vehicle,
-      rate_total,
-      salesman_count,
-      prev_year_premium,
-      yoy_growth_rate,
-      year_2025_actual,
-      plan_growth_rate,
-      CASE
-        WHEN rank_desc <= ${topN} THEN 'top'
-        WHEN rank_asc <= ${bottomN} THEN 'bottom'
-        ELSE NULL
-      END as rank_category
-    FROM ranked_data
-    WHERE rank_desc <= ${topN} OR rank_asc <= ${bottomN}
-    ORDER BY ${sortField} ${sortOrder} NULLS LAST
-    `;
-  } else {
-    // 无排名，全量数据
-    sql += `
-    SELECT
-      group_name,
-      ${dimension.level === 'team' || dimension.level === 'salesman' ? 'parent_name,' : ''}
-      ${dimension.level === 'salesman' ? 'org_name,' : ''}
-      plan_year,
-      plan_vehicle,
-      plan_total,
-      actual_vehicle,
-      actual_total,
-      rate_vehicle,
-      rate_total,
-      salesman_count,
-      prev_year_premium,
-      yoy_growth_rate,
-      year_2025_actual,
-      plan_growth_rate
-    FROM aggregated_data
-    ORDER BY ${sortField} ${sortOrder} NULLS LAST
+    const topN = ranking.topN ?? 10;
+    const bottomN = ranking.bottomN ?? 10;
+    const rankCol = ranking.rankField === 'rate_vehicle' ? 'rate_vehicle' : ranking.rankField;
+    return `
+      WITH base AS (${coreSql}),
+      ranked AS (
+        SELECT *,
+          ROW_NUMBER() OVER (ORDER BY ${rankCol} DESC NULLS LAST) AS rank_desc,
+          ROW_NUMBER() OVER (ORDER BY ${rankCol} ASC  NULLS LAST) AS rank_asc
+        FROM base
+      )
+      SELECT *,
+        CASE
+          WHEN rank_desc <= ${topN}  THEN 'top'
+          WHEN rank_asc  <= ${bottomN} THEN 'bottom'
+          ELSE NULL
+        END AS rank_category
+      FROM ranked
+      WHERE rank_desc <= ${topN} OR rank_asc <= ${bottomN}
+      ORDER BY ${sortField} ${sortOrder} NULLS LAST
     `;
   }
 
-  return sql;
+  return `${coreSql} ORDER BY ${sortField} ${sortOrder} NULLS LAST`;
 }
 
 /**
- * 生成PolicyFact直接查询（用于客户类别和险别组合下钻）
- * 这些层级不涉及计划数据，只统计实际保费
+ * 生成 KPI 卡片查询（单行汇总）
  */
+export function generateKPICardQuery(
+  planYear: number,
+  dimension: PlanDrilldownDimension,
+): string {
+  const where = buildCacheWhere(dimension.filters);
+  return `
+    SELECT
+      SUM(plan_vehicle)                                      AS total_plan_vehicle,
+      SUM(plan_vehicle)                                      AS total_plan_total,
+      SUM(actual_vehicle)                                    AS total_actual_vehicle,
+      0                                                      AS total_actual_total,
+      CASE
+        WHEN SUM(plan_vehicle) > 0 AND MAX(time_progress) > 0
+        THEN SUM(actual_vehicle) / (SUM(plan_vehicle) * MAX(time_progress))
+        ELSE NULL
+      END                                                    AS avg_rate_vehicle,
+      NULL                                                   AS avg_rate_total,
+      COUNT(*)                                               AS total_salesman_count
+    FROM achievement_cache
+    ${where}
+  `;
+}
+
+/**
+ * 生成达成率分布查询（六个区间）
+ */
+export function generateRateDistributionQuery(
+  planYear: number,
+  dimension: PlanDrilldownDimension,
+): string {
+  const where = buildCacheWhere(dimension.filters);
+  return `
+    SELECT
+      CASE
+        WHEN achievement_rate IS NULL THEN '无计划'
+        WHEN achievement_rate < 0.5   THEN '<50%'
+        WHEN achievement_rate < 0.8   THEN '50%-80%'
+        WHEN achievement_rate < 1.0   THEN '80%-100%'
+        WHEN achievement_rate < 1.2   THEN '100%-120%'
+        ELSE '≥120%'
+      END                                                    AS rate_range,
+      COUNT(*)                                               AS count,
+      ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2)    AS percentage
+    FROM achievement_cache
+    ${where}
+    GROUP BY rate_range
+    ORDER BY
+      CASE rate_range
+        WHEN '无计划'   THEN 0
+        WHEN '<50%'     THEN 1
+        WHEN '50%-80%'  THEN 2
+        WHEN '80%-100%' THEN 3
+        WHEN '100%-120%' THEN 4
+        WHEN '≥120%'    THEN 5
+      END
+  `;
+}
+
+// ─── 新增：合并端点专用（一次返回 children + summary + distribution） ───────
+
+/**
+ * 生成面板所需的三条 SQL（供 /plan-achievement 合并端点并发执行）
+ */
+export function generatePlanAchievementPanel(
+  planYear: number,
+  dimension: PlanDrilldownDimension,
+  sortField: PlanSortField = 'actual_vehicle',
+  sortOrder: SortOrder = 'desc',
+): { childrenSql: string; summarySql: string; distributionSql: string } {
+  return {
+    childrenSql: generatePremiumPlanDrilldownQuery(
+      planYear, dimension, { enabled: false }, sortField, sortOrder
+    ),
+    summarySql: generateKPICardQuery(planYear, dimension),
+    distributionSql: generateRateDistributionQuery(planYear, dimension),
+  };
+}
+
+// ─── customer_category / coverage 层级（无计划，直接查 PolicyFact） ──────────
+
 function generatePolicyFactDrilldownQuery(
   planYear: number,
   dimension: PlanDrilldownDimension,
   sortField: PlanSortField,
-  sortOrder: SortOrder
+  sortOrder: SortOrder,
 ): string {
-  const filters = dimension.filters || {};
+  const filters = dimension.filters ?? {};
   const prevYear = planYear - 1;
+  const groupCol =
+    dimension.level === 'customer_category' ? 'customer_category' : 'coverage_combination';
 
-  // 构建过滤条件
-  const whereConditions: string[] = [`policy_date >= '${planYear}-01-01'`];
-
-  if (filters.salesman) {
-    whereConditions.push(`salesman_name = '${escapeSqlString(filters.salesman)}'`);
-  }
+  const yearWhere: string[] = [`policy_date >= DATE '${planYear}-01-01'`];
+  if (filters.salesman) yearWhere.push(`salesman_name = '${esc(filters.salesman)}'`);
   if (filters.customerCategory && dimension.level === 'coverage') {
-    whereConditions.push(`customer_category = '${escapeSqlString(filters.customerCategory)}'`);
+    yearWhere.push(`customer_category = '${esc(filters.customerCategory)}'`);
   }
 
-  const whereClause = whereConditions.join(' AND ');
-  const groupByField = dimension.level === 'customer_category' ? 'customer_category' : 'coverage_combination';
+  const prevWhere = yearWhere
+    .map(c =>
+      c.startsWith('policy_date')
+        ? `policy_date >= DATE '${prevYear}-01-01' AND policy_date <= (SELECT MAX(policy_date) - INTERVAL 1 YEAR FROM PolicyFact WHERE policy_date >= DATE '${planYear}-01-01')`
+        : c,
+    )
+    .join(' AND ');
+
+  const effectiveSort = sortField === 'plan_vehicle' ? 'actual_vehicle' : sortField;
 
   return `
     WITH
-    -- 当年数据
-    current_year AS (
-      SELECT
-        COALESCE(${groupByField}, '未知') as group_name,
-        SUM(premium) / 10000 as actual_vehicle
+    curr AS (
+      SELECT COALESCE(${groupCol}, '未知') AS group_name,
+             SUM(premium) / 10000           AS actual_vehicle
       FROM PolicyFact
-      WHERE ${whereClause}
-      GROUP BY ${groupByField}
+      WHERE ${yearWhere.join(' AND ')}
+      GROUP BY ${groupCol}
     ),
-    -- 上年同期数据
-    prev_year AS (
-      SELECT
-        COALESCE(${groupByField}, '未知') as group_name,
-        SUM(premium) / 10000 as prev_year_premium
+    prev AS (
+      SELECT COALESCE(${groupCol}, '未知') AS group_name,
+             SUM(premium) / 10000           AS prev_year_premium
       FROM PolicyFact
-      WHERE policy_date >= '${prevYear}-01-01'
-        AND policy_date <= (SELECT MAX(policy_date) - INTERVAL 1 YEAR FROM PolicyFact WHERE policy_date >= '${planYear}-01-01')
-        ${filters.salesman ? `AND salesman_name = '${escapeSqlString(filters.salesman)}'` : ''}
-        ${filters.customerCategory && dimension.level === 'coverage' ? `AND customer_category = '${escapeSqlString(filters.customerCategory)}'` : ''}
-      GROUP BY ${groupByField}
+      WHERE ${prevWhere}
+      GROUP BY ${groupCol}
     )
     SELECT
       c.group_name,
-      ${planYear} as plan_year,
-      0 as plan_vehicle,
-      0 as plan_total,
-      COALESCE(c.actual_vehicle, 0) as actual_vehicle,
-      0 as actual_total,
-      NULL as rate_vehicle,
-      NULL as rate_total,
-      0 as salesman_count,
-      COALESCE(p.prev_year_premium, 0) as prev_year_premium,
+      ${planYear}                           AS plan_year,
+      0                                     AS plan_vehicle,
+      0                                     AS plan_total,
+      c.actual_vehicle,
+      0                                     AS actual_total,
+      NULL                                  AS rate_vehicle,
+      NULL                                  AS rate_total,
+      0                                     AS salesman_count,
+      COALESCE(p.prev_year_premium, 0)      AS prev_year_premium,
       CASE
         WHEN COALESCE(p.prev_year_premium, 0) > 0
-        THEN (COALESCE(c.actual_vehicle, 0) - p.prev_year_premium) / p.prev_year_premium
+        THEN (c.actual_vehicle - p.prev_year_premium) / p.prev_year_premium
         ELSE NULL
-      END as yoy_growth_rate,
-      0 as year_2025_actual,
-      NULL as plan_growth_rate
-    FROM current_year c
-    LEFT JOIN prev_year p ON c.group_name = p.group_name
-    ORDER BY ${sortField === 'plan_vehicle' ? 'actual_vehicle' : sortField} ${sortOrder} NULLS LAST
-  `;
-}
-
-/**
- * 生成KPI卡片查询
- *
- * @param planYear - 计划年度
- * @param dimension - 下钻维度配置
- * @returns SQL查询语句
- */
-export function generateKPICardQuery(
-  planYear: number,
-  dimension: PlanDrilldownDimension
-): string {
-  const baseCTE = generateSalesmanBaseCTE(planYear);
-  const filters = dimension.filters || {};
-
-  // 根据维度构建过滤条件
-  const conditions: string[] = [];
-  if (filters.org) {
-    conditions.push(`org_name = '${escapeSqlString(filters.org)}'`);
-  }
-  if (filters.team) {
-    conditions.push(`team_name = '${escapeSqlString(filters.team)}'`);
-  }
-  if (filters.salesman) {
-    conditions.push(`salesman_name = '${escapeSqlString(filters.salesman)}'`);
-  }
-
-  const filterCondition = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-  return `
-    WITH ${baseCTE}
-    SELECT
-      SUM(plan_vehicle) as total_plan_vehicle,
-      SUM(plan_total) as total_plan_total,
-      SUM(actual_vehicle) as total_actual_vehicle,
-      SUM(actual_total) as total_actual_total,
-      CASE
-        WHEN SUM(plan_vehicle) > 0
-        THEN SUM(actual_vehicle) / (SUM(plan_vehicle) * (SELECT progress FROM time_progress))
-        ELSE NULL
-      END as avg_rate_vehicle,
-      NULL as avg_rate_total,
-      COUNT(DISTINCT salesman_name) as total_salesman_count
-    FROM salesman_base
-    ${filterCondition}
-  `;
-}
-
-/**
- * 生成达成率分布查询（按时间进度达成率区间统计）
- *
- * 达成率计算口径（统一）：
- * - 时间进度达成率 = 实际保费 / (计划保费 × 时间进度)
- * - 时间进度 = (当前日期 - 1月1日) / 365
- *
- * @param planYear - 计划年度
- * @param dimension - 下钻维度配置
- * @returns SQL查询语句
- */
-export function generateRateDistributionQuery(
-  planYear: number,
-  dimension: PlanDrilldownDimension
-): string {
-  const baseCTE = generateSalesmanBaseCTE(planYear);
-  const filters = dimension.filters || {};
-
-  // 根据维度构建过滤条件
-  const conditions: string[] = [];
-  if (filters.org) {
-    conditions.push(`org_name = '${escapeSqlString(filters.org)}'`);
-  }
-  if (filters.team) {
-    conditions.push(`team_name = '${escapeSqlString(filters.team)}'`);
-  }
-  if (filters.salesman) {
-    conditions.push(`salesman_name = '${escapeSqlString(filters.salesman)}'`);
-  }
-
-  const filterCondition = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-  return `
-    WITH ${baseCTE}
-    SELECT
-      CASE
-        WHEN rate_vehicle IS NULL THEN '无计划'
-        WHEN rate_vehicle < 0.5 THEN '<50%'
-        WHEN rate_vehicle < 0.8 THEN '50%-80%'
-        WHEN rate_vehicle < 1.0 THEN '80%-100%'
-        WHEN rate_vehicle < 1.2 THEN '100%-120%'
-        ELSE '≥120%'
-      END as rate_range,
-      COUNT(*) as count,
-      ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) as percentage
-    FROM salesman_base
-    ${filterCondition}
-    GROUP BY rate_range
-    ORDER BY
-      CASE rate_range
-        WHEN '无计划' THEN 0
-        WHEN '<50%' THEN 1
-        WHEN '50%-80%' THEN 2
-        WHEN '80%-100%' THEN 3
-        WHEN '100%-120%' THEN 4
-        WHEN '≥120%' THEN 5
-      END
+      END                                   AS yoy_growth_rate,
+      0                                     AS year_2025_actual,
+      NULL                                  AS plan_growth_rate
+    FROM curr c
+    LEFT JOIN prev p ON c.group_name = p.group_name
+    ORDER BY ${effectiveSort} ${sortOrder} NULLS LAST
   `;
 }

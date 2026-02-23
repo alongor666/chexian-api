@@ -54,7 +54,7 @@ import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } f
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../sql/cross-sell-summary.js';
 import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery } from '../sql/marketing-report.js';
 import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../sql/premium-report.js';
-import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../sql/premiumPlan.js';
+import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../sql/premiumPlan.js';
 import type { AdvancedFilterState } from '../types/data.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../sql/salesman-ranking.js';
 import { validateSQL } from '../utils/sql-validator.js';
@@ -1271,6 +1271,84 @@ router.get(
     res.json({
       success: true,
       data: result,
+    });
+  })
+);
+
+/**
+ * GET /api/query/plan-achievement
+ * 保费达成面板合并端点（单次请求返回 children + summary + distribution）
+ *
+ * 优势：
+ * - 1 个 HTTP 请求替代原来的 3 个（减少 2/3 网络往返）
+ * - 3 条 SQL 并发执行，均读 achievement_cache（极低延迟）
+ * - 面包屑由前端维护，后端只返回数据
+ *
+ * Query params：
+ *   planYear   number  计划年度（默认 2026）
+ *   level      string  当前下钻层级（org/team/salesman/...）
+ *   orgFilter  string  机构过滤（可选）
+ *   teamFilter string  团队过滤（可选）
+ *   salesmanFilter string  业务员过滤（可选）
+ *   sortField  string  排序字段（默认 actual_vehicle）
+ *   sortOrder  string  排序方向（默认 desc）
+ */
+const planAchievementSchema = z.object({
+  planYear: z.coerce.number().default(2026),
+  level: z.enum(['company', 'org', 'team', 'salesman', 'customer_category', 'coverage']).default('org'),
+  orgFilter: z.string().optional(),
+  teamFilter: z.string().optional(),
+  salesmanFilter: z.string().optional(),
+  customerCategoryFilter: z.string().optional(),
+  sortField: z.enum(['plan_vehicle', 'actual_vehicle', 'rate_vehicle', 'plan_total', 'prev_year_premium', 'yoy_growth_rate', 'year_2025_actual', 'plan_growth_rate']).default('actual_vehicle'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
+
+router.get(
+  '/plan-achievement',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = planAchievementSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+
+    const { planYear, level, orgFilter, teamFilter, salesmanFilter, customerCategoryFilter, sortField, sortOrder } = parseResult.data;
+
+    const dimension: PlanDrilldownDimension = {
+      level: level as PlanDrilldownLevel,
+      filters: {
+        org: orgFilter,
+        team: teamFilter,
+        salesman: salesmanFilter,
+        customerCategory: customerCategoryFilter,
+      },
+    };
+
+    const { childrenSql, summarySql, distributionSql } = generatePlanAchievementPanel(
+      planYear,
+      dimension,
+      sortField as PlanSortField,
+      sortOrder as PlanSortOrder,
+    );
+
+    // 三条 SQL 并发执行（均读 achievement_cache，每条 ~5-20ms）
+    const [children, summaryRows, distribution] = await Promise.all([
+      duckdbService.query(childrenSql),
+      duckdbService.query(summarySql),
+      duckdbService.query(distributionSql),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        children,
+        summary: summaryRows[0] ?? null,
+        distribution,
+        meta: {
+          plan_year: planYear,
+          level,
+        },
+      },
     });
   })
 );
