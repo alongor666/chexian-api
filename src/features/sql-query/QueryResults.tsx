@@ -7,6 +7,7 @@
 import { useMemo, useState } from 'react';
 import { VirtualTable } from '../../widgets/table/VirtualTable';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../shared/utils/export';
+import { formatCount } from '../../shared/utils/formatters';
 import type { QueryResult } from '../../shared/types/sql-query';
 
 export interface QueryResultsProps {
@@ -104,14 +105,14 @@ export function QueryResults({ result }: QueryResultsProps) {
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-600 space-x-4">
           <span>
-            行数: <strong className="text-gray-900">{result.rowCount.toLocaleString()}</strong>
+            行数: <strong className="text-gray-900">{formatCount(result.rowCount)}</strong>
           </span>
           <span>
             列数: <strong className="text-gray-900">{result.columnCount}</strong>
           </span>
           <span>
             执行时间:{' '}
-            <strong className="text-gray-900">{result.executionTime.toLocaleString()} ms</strong>
+            <strong className="text-gray-900">{formatCount(result.executionTime)} ms</strong>
           </span>
         </div>
 
@@ -141,7 +142,7 @@ export function QueryResults({ result }: QueryResultsProps) {
           {/* 页码信息 */}
           <div className="text-sm text-gray-600">
             第 <strong>{currentPage}</strong> 页，共 <strong>{totalPages}</strong> 页 (
-            {allData.length.toLocaleString()} 行)
+            {formatCount(allData.length)} 行)
           </div>
 
           {/* 分页按钮 */}

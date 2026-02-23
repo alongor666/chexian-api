@@ -325,7 +325,7 @@ export const RenewalQuadrantView = memo(function RenewalQuadrantView({
                         <p className={cn(textStyles.body, 'text-danger font-semibold')}>
                             ⚠️ 续保转化当前首要问题：
                             在当前分析维度下，【{decisionSummary.label}】类型的对象占比最高，
-                            涉及 {decisionSummary.count} 个对象，占高权重对象 {decisionSummary.ratio.toFixed(1)}%。
+                            涉及 {decisionSummary.count} 个对象，占高权重对象 {formatPercent(decisionSummary.ratio)}。
                         </p>
                         <p className={cn(textStyles.caption, 'text-neutral-500')}>
                             关系说明：本视图基于当前表格的完整数据进行散点分布诊断，不涉及新数据接口。

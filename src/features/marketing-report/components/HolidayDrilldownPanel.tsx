@@ -17,6 +17,7 @@ import { getHolidayDatesInRange } from '../utils/holidayUtils';
 import { createLogger } from '../../../shared/utils/logger';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
+import { formatCount, formatRate } from '../../../shared/utils/formatters';
 import { SalesmanDetailTable } from './SalesmanDetailTable';
 import type { OrganizationReportRow, SalesmanDetailRow, SortState } from '../types/marketingReport';
 
@@ -30,11 +31,11 @@ interface HolidayDrilldownPanelProps {
 
 /** 格式化开单率 */
 const fmtRate = (v: number): string =>
-  v > 0 ? `${(v * 100).toFixed(1)}%` : '-';
+  formatRate(v);
 
 /** 格式化整数 */
 const fmtInt = (v: number): string =>
-  Number.isFinite(v) ? v.toLocaleString('zh-CN') : '-';
+  formatCount(v);
 
 export const HolidayDrilldownPanel: React.FC<HolidayDrilldownPanelProps> = ({
   filters,
@@ -256,7 +257,7 @@ export const HolidayDrilldownPanel: React.FC<HolidayDrilldownPanelProps> = ({
                 {selectedOrg} — 业务员假日明细
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                共 {filteredSalesmanData.length} 名业务员
+                共 {formatCount(filteredSalesmanData.length)} 名业务员
               </p>
             </div>
             <button

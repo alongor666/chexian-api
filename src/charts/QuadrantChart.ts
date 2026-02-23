@@ -6,7 +6,7 @@
 import type { ECharts, EChartsOption } from 'echarts';
 import type { AggregatedData } from '@/types/data.types';
 import { echarts } from '@/shared/utils/echarts';
-import { formatPremiumWan, formatCount } from '@/shared/utils/formatters';
+import { formatCount, formatCurrency, formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
 import { createLogger } from '@/shared/utils/logger';
 import type { EChartsParam } from '@/shared/types/echarts';
 
@@ -188,7 +188,7 @@ class QuadrantChart {
               <div style="font-weight: bold; margin-bottom: 8px;">${data.name}</div>
               <div>象限: ${quadrantName}</div>
               <div>${xAxisMetric}: ${this.formatValue(x, xAxisMetric)}</div>
-              <div>${yAxisMetric}: ${y.toFixed(2)}%</div>
+              <div>${yAxisMetric}: ${formatPercent(y, 2)}</div>
             </div>
           `;
         },
@@ -289,7 +289,7 @@ class QuadrantChart {
                   width: 2,
                 },
                 label: {
-                  formatter: `阈值: ${finalYThreshold.toFixed(2)}%`,
+                  formatter: `阈值: ${formatPercent(finalYThreshold, 2)}`,
                   position: 'end',
                 },
               },
@@ -318,7 +318,7 @@ class QuadrantChart {
   private formatValue(value: number, metric: string): string {
     if (metric.includes('元') || metric.includes('保费') || metric.includes('贡献')) {
       if (value >= 100000000) {
-        return `${(value / 100000000).toFixed(2)}亿`;
+        return `${formatCurrency(value / 100000000)}亿`;
       }
       return formatPremiumWan(value);
     }

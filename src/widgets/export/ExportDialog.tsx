@@ -13,6 +13,7 @@ import {
   type ExportProgress,
 } from '../../shared/export';
 import { Logger } from '@/shared/utils/logger';
+import { formatAverage, formatPercent } from '../../shared/utils/formatters';
 
 const logger = new Logger('ExportDialog');
 
@@ -93,7 +94,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
       if (result.success) {
         // 成功提示
-        alert(`导出成功！\n文件: ${result.filename}\n耗时: ${(result.duration! / 1000).toFixed(1)}秒`);
+        alert(`导出成功！\n文件: ${result.filename}\n耗时: ${formatAverage(result.duration! / 1000)}秒`);
         onClose();
       } else {
         setError(result.error || '导出失败');
@@ -239,7 +240,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             <div className="bg-primary-bg dark:bg-blue-900/20 border border-primary-200 dark:border-blue-800/50 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-primary-dark dark:text-primary-light">{getProgressText()}</span>
-                <span className="text-sm font-mono text-primary">{progress.percentage.toFixed(0)}%</span>
+                <span className="text-sm font-mono text-primary">{formatPercent(progress.percentage, 0)}</span>
               </div>
               <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-full h-1.5">
                 <div

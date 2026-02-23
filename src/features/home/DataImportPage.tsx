@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { apiClient, FileInfo } from '../../shared/api/client';
+import { formatAverage, formatCount } from '../../shared/utils/formatters';
 import { RefreshCw, Upload, X, ChevronRight, FileUp, Database, FileText, ShieldCheck } from 'lucide-react';
 
 /**
@@ -117,8 +118,8 @@ export const DataImportPage: React.FC = () => {
   };
 
   const formatFileSize = (mb: number) => {
-    if (mb < 1) return `${(mb * 1024).toFixed(0)} KB`;
-    return `${mb.toFixed(1)} MB`;
+    if (mb < 1) return `${formatCount(mb * 1024)} KB`;
+    return `${formatAverage(mb)} MB`;
   };
 
   const formatTime = (isoString: string) => {
@@ -174,7 +175,7 @@ export const DataImportPage: React.FC = () => {
               <Database size={14} />
               服务器文件
             </div>
-            <div className="mt-1 text-lg font-semibold text-gray-900">{files.length}</div>
+            <div className="mt-1 text-lg font-semibold text-gray-900">{formatCount(files.length)}</div>
           </div>
           <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
             <div className="flex items-center gap-2 text-gray-500 text-xs">
@@ -186,7 +187,7 @@ export const DataImportPage: React.FC = () => {
             </div>
             {currentFile && (
               <div className="text-xs text-gray-400 mt-0.5">
-                {currentFile.rowCount.toLocaleString()} 条
+                {formatCount(currentFile.rowCount)} 条
               </div>
             )}
           </div>
@@ -214,7 +215,7 @@ export const DataImportPage: React.FC = () => {
               <p className="text-green-800 text-sm font-medium">
                 数据已加载: {currentFile.filename}
                 <span className="text-green-600 font-normal ml-1">
-                  ({currentFile.rowCount.toLocaleString()} 条)
+                  ({formatCount(currentFile.rowCount)} 条)
                 </span>
               </p>
             </div>

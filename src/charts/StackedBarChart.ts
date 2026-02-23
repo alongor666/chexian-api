@@ -6,7 +6,7 @@
 import type { ECharts, EChartsOption, SeriesOption } from 'echarts';
 import type { AggregatedData } from '@/types/data.types';
 import { echarts } from '@/shared/utils/echarts';
-import { formatPremiumWan, formatCount } from '@/shared/utils/formatters';
+import { formatCount, formatCurrency, formatPremiumWan } from '@/shared/utils/formatters';
 import { createLogger } from '@/shared/utils/logger';
 import type { EChartsParam } from '@/shared/types/echarts';
 
@@ -171,7 +171,7 @@ class StackedBarChart {
   private formatValue(value: number, metric: string): string {
     if (metric.includes('元') || metric.includes('保费') || metric.includes('贡献') || metric.includes('费用')) {
       if (value >= 100000000) {
-        return `${(value / 100000000).toFixed(2)}亿`;
+        return `${formatCurrency(value / 100000000)}亿`;
       }
       return formatPremiumWan(value);
     }

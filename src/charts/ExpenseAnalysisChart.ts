@@ -6,7 +6,7 @@
 import type { ECharts, EChartsOption } from 'echarts';
 import type { AggregatedData, YearPlan } from '@/types/data.types';
 import { echarts } from '@/shared/utils/echarts';
-import { formatPremiumWan } from '@/shared/utils/formatters';
+import { formatCurrency, formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
 import { createLogger } from '@/shared/utils/logger';
 import type { EChartsParam } from '@/shared/types/echarts';
 
@@ -265,7 +265,7 @@ class ExpenseAnalysisChart {
             <div style="padding: 8px;">
               <div style="font-weight: bold; margin-bottom: 8px;">${data?.name ?? ''}</div>
               <div>签单保费: ${this.formatValue(premium)}</div>
-              <div>费用率: ${efficiency.toFixed(2)}%</div>
+              <div>费用率: ${formatPercent(efficiency, 2)}</div>
             </div>
           `;
         },
@@ -320,7 +320,7 @@ class ExpenseAnalysisChart {
    */
   private formatValue(value: number): string {
     if (value >= 100000000) {
-      return `${(value / 100000000).toFixed(2)}亿`;
+      return `${formatCurrency(value / 100000000)}亿`;
     }
     return formatPremiumWan(value);
   }

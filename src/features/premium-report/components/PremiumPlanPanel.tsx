@@ -13,18 +13,12 @@ import { usePremiumPlan } from '../hooks/usePremiumPlan';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
-import { formatCount } from '../../../shared/utils/formatters';
+import { formatCount, formatPercent, formatWanDirect } from '../../../shared/utils/formatters';
 import type { PlanDrilldownRow, PlanKpiData, PlanDistributionRow, SortState } from '../types/premiumReport';
 
 /** 格式化达成率（百分比，已是 0-100 范围） */
 const formatRateValue = (value: number | null): string => {
-  if (value === null) return '-';
-  return `${value.toFixed(1)}%`;
-};
-
-/** 格式化万元保费（已是万元单位的数值） */
-const formatWanDirect = (value: number): string => {
-  return Math.round(value).toLocaleString('zh-CN');
+  return formatPercent(value);
 };
 
 /** 达成率颜色 */
@@ -111,7 +105,7 @@ const DistributionChart: React.FC<{ data: PlanDistributionRow[] }> = ({ data }) 
               />
             </div>
             <span className="font-tabular text-xs text-gray-600 w-16 text-right shrink-0">
-              {row.count}人 ({row.percentage.toFixed(1)}%)
+              {formatCount(row.count)}人 ({formatPercent(row.percentage)})
             </span>
           </div>
         ))}

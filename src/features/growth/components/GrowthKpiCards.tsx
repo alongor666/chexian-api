@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { GrowthData } from '../hooks/useGrowthAnalysis';
+import { formatRate } from '../../../shared/utils/formatters';
 
 
 interface GrowthKpiCardsProps {
@@ -66,7 +67,7 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
 
     return (
       <span className={`font-bold ml-1 ${projectColorClass}`}>
-        {isPositive ? '↑' : isZero ? '-' : '↓'} {Math.abs(value * 100).toFixed(1)}%
+        {isPositive ? '↑' : isZero ? '-' : '↓'} {formatRate(Math.abs(value))}
       </span>
     );
   };

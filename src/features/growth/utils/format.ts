@@ -1,6 +1,8 @@
+import { formatRate } from '../../../shared/utils/formatters';
+
 export function formatPercent1(val: number | null | undefined): string {
   if (val === null || val === undefined) return '-';
-  return (val * 100).toFixed(1) + '%';
+  return formatRate(val);
 }
 
 export function getSafeDateStr(val: unknown): string {
@@ -25,4 +27,3 @@ export function getSafeDateStr(val: unknown): string {
   }
   return String(val);
 }
-

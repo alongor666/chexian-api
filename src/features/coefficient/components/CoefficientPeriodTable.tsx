@@ -15,7 +15,7 @@ import React, { useMemo, memo, useState, useCallback } from 'react';
 import { type CoefficientRow } from '../hooks/useCoefficientMonitor';
 import { CUSTOMER_CATEGORY_LABELS } from '../../../shared/config/coefficient-thresholds';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
-import { formatCoefficient, formatPremiumWan } from '../../../shared/utils/formatters';
+import { formatCoefficient, formatCurrency, formatPremiumWan } from '../../../shared/utils/formatters';
 
 /**
  * 格式化系数值（4位小数）
@@ -32,7 +32,7 @@ const formatThresholdRatio = (val: number | null | undefined): string => {
   if (val === null || val === undefined) return '-';
   if (!Number.isFinite(val)) return '-';
   const sign = val >= 0 ? '+' : '';
-  return `${sign}${val.toFixed(4)}`;
+  return `${sign}${formatCoefficient(Math.abs(val))}`;
 };
 
 /**
@@ -43,7 +43,7 @@ const formatGapPremium = (val: number | null | undefined): string => {
   if (!Number.isFinite(val)) return '-';
   const wanYuan = val / 10000;
   const sign = wanYuan >= 0 ? '+' : '';
-  return `${sign}${wanYuan.toFixed(2)}万`;
+  return `${sign}${formatCurrency(Math.abs(wanYuan))}万`;
 };
 
 /**

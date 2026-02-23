@@ -6,6 +6,7 @@
 import type { ECharts, EChartsOption } from 'echarts';
 import type { AggregatedData } from '@/types/data.types';
 import { echarts } from '@/shared/utils/echarts';
+import { formatPercent } from '@/shared/utils/formatters';
 import { createLogger } from '@/shared/utils/logger';
 import type { EChartsParam } from '@/shared/types/echarts';
 
@@ -134,7 +135,7 @@ class VariableCostChart {
                   <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; margin-right: 8px; border-radius: 50%;"></span>
                   ${param.seriesName}
                 </span>
-                <span style="font-weight: bold;">${rawValue.toFixed(2)}%</span>
+                <span style="font-weight: bold;">${formatPercent(rawValue, 2)}</span>
               </div>
             `;
           });
