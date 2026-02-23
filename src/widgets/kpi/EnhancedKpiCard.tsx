@@ -11,6 +11,7 @@
  */
 import React, { memo } from 'react';
 import { colors } from '../../shared/styles';
+import { formatCount, formatPercent, formatRate } from '../../shared/utils/formatters';
 
 /**
  * 环形图数据项
@@ -100,7 +101,7 @@ const MiniDonutChart: React.FC<{
 
   // 计算主要类别占比（第一个数据项）
   const mainRate = (normalizedData[0]?.value || 0) / total;
-  const mainPercentage = (mainRate * 100).toFixed(1);
+  const mainPercentage = formatRate(mainRate);
 
   // 环形图参数
   const radius = size / 2 - 6; // 半径
@@ -148,7 +149,7 @@ const MiniDonutChart: React.FC<{
         fill="#1f2937"
         className="font-chart-number"
       >
-        {mainPercentage}%
+        {mainPercentage}
       </text>
     </svg>
   );
@@ -203,7 +204,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
             minWidth: primaryRate > 0 ? '36px' : 0,
           }}
         >
-          {primaryRate > 0 ? `${primaryRate.toFixed(1)}%` : ''}
+          {primaryRate > 0 ? formatPercent(primaryRate) : ''}
         </div>
         <div
           className="flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700 font-chart-number"
@@ -212,7 +213,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
             minWidth: secondaryRate > 0 ? '36px' : 0,
           }}
         >
-          {secondaryRate > 0 ? `${secondaryRate.toFixed(1)}%` : ''}
+          {secondaryRate > 0 ? formatPercent(secondaryRate) : ''}
         </div>
       </div>
     </div>
@@ -244,10 +245,10 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
     if (typeof value === 'string') return value;
     if (typeof value === 'bigint') {
       if (formatter) return formatter(Number(value));
-      return value.toString();
+      return formatCount(value);
     }
     if (formatter) return formatter(value);
-    return value.toLocaleString();
+    return formatCount(value);
   }, [value, formatter, loading]);
 
   const normalizedRatioData = React.useMemo(
@@ -261,7 +262,7 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
     const total = normalizedRatioData.reduce((sum, item) => sum + item.value, 0);
     if (total === 0) return '0.0%';
     const rate = (normalizedRatioData[1].value / total) * 100;
-    return `${rate.toFixed(1)}%`;
+    return formatPercent(rate);
   }, [type, normalizedRatioData]);
 
   if (loading) {

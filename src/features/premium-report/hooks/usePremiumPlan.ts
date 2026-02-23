@@ -112,7 +112,12 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
     return filters;
   }, []);
 
-  /** 加载所有三种数据（下钻表格 + KPI + 分布） */
+  /**
+   * 加载面板所有数据（合并端点：1 次请求返回 children + summary + distribution）
+   *
+   * v2 改进：原来 3 次串/并行 API 调用，现在 1 次。
+   * 后端并发执行三条 SQL（均读 achievement_cache），前端只等一个 RTT。
+   */
   const loadAllData = useCallback(async (
     level: PlanDrilldownLevel,
     path: DrillPathStep[],
@@ -125,31 +130,16 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
     const filters = buildFiltersFromPath(path);
 
     try {
-      const [drillResult, kpiResult, distResult] = await Promise.all([
-        apiClient.getPremiumPlan({
-          queryType: 'drilldown',
-          planYear: year,
-          level,
-          sortField: sort.column,
-          sortOrder: sort.direction,
-          ...filters,
-        }),
-        apiClient.getPremiumPlan({
-          queryType: 'kpi',
-          planYear: year,
-          level,
-          ...filters,
-        }),
-        apiClient.getPremiumPlan({
-          queryType: 'distribution',
-          planYear: year,
-          level,
-          ...filters,
-        }),
-      ]);
+      const { children, summary, distribution } = await apiClient.getPlanAchievement({
+        planYear: year,
+        level,
+        sortField: sort.column,
+        sortOrder: sort.direction,
+        ...filters,
+      });
 
       setDrilldownData(
-        (drillResult || []).map((row: Record<string, unknown>) => ({
+        (children || []).map((row: Record<string, unknown>) => ({
           group_name: String(row.group_name || ''),
           parent_name: row.parent_name ? String(row.parent_name) : undefined,
           org_name: row.org_name ? String(row.org_name) : undefined,
@@ -169,9 +159,8 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
         }))
       );
 
-      // KPI 返回单行
-      if (kpiResult && kpiResult.length > 0) {
-        const k = kpiResult[0] as Record<string, unknown>;
+      if (summary) {
+        const k = summary as Record<string, unknown>;
         setKpiData({
           total_plan_vehicle: Number(k.total_plan_vehicle || 0),
           total_plan_total: Number(k.total_plan_total || 0),
@@ -184,14 +173,14 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
       }
 
       setDistributionData(
-        (distResult || []).map((row: Record<string, unknown>) => ({
+        (distribution || []).map((row: Record<string, unknown>) => ({
           rate_range: String(row.rate_range || ''),
           count: Number(row.count || 0),
           percentage: Number(row.percentage || 0),
         }))
       );
 
-      logger.debug('Premium plan data loaded', { level, rows: (drillResult || []).length });
+      logger.debug('Premium plan data loaded (merged API)', { level, rows: (children || []).length });
     } catch (err) {
       if (isRequestAbortError(err)) return;
       const message = err instanceof Error ? err.message : String(err);

@@ -20,7 +20,9 @@ import type {
   SortField,
 } from '../types/costTypes';
 import {
+  formatAverage,
   formatCount,
+  formatCurrency,
   formatPercent,
   formatPremiumWan,
 } from '../../../shared/utils/formatters';
@@ -87,8 +89,8 @@ function transformDetailData(data: EarnedPremiumData[]): DisplayEarnedPremiumDat
     total_premium: formatPremiumWan(row.total_premium),
     total_fee: formatPremiumWan(row.total_fee),
     fee_rate: formatPercent(row.fee_rate),
-    line_factor: row.line_factor?.toFixed(2) || '-',
-    avg_elapsed_days: row.avg_elapsed_days?.toFixed(1) || '-',
+    line_factor: row.line_factor === null || row.line_factor === undefined ? '-' : formatCurrency(row.line_factor),
+    avg_elapsed_days: row.avg_elapsed_days === null || row.avg_elapsed_days === undefined ? '-' : formatAverage(row.avg_elapsed_days),
     first_day_part: formatPremiumWan(row.first_day_part),
     time_part: formatPremiumWan(row.time_part),
     earned_premium_cum: formatPremiumWan(row.earned_premium_cum),

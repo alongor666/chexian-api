@@ -12,6 +12,7 @@
 import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '../../../shared/utils/echarts';
+import { formatCurrency, formatPercent } from '../../../shared/utils/formatters';
 import { EnhancedKpiCard } from '../../../widgets/kpi/EnhancedKpiCard';
 import { CHART_TEXT_STYLES, GRID_CONFIG } from '../../../shared/config/chartStyles';
 import type { EarnedPremiumData, EarnedPremiumSummaryData } from '../types/costTypes';
@@ -88,12 +89,12 @@ function aggregateByInsuranceType(data: EarnedPremiumData[]): InsuranceTypeSumma
 function formatYuan(value: number): string {
   if (value >= 100000000) {
     // >= 1亿
-    return `${(value / 100000000).toFixed(2)}亿`;
+    return `${formatCurrency(value / 100000000)}亿`;
   } else if (value >= 10000) {
     // >= 1万
-    return `${(value / 10000).toFixed(2)}万`;
+    return `${formatCurrency(value / 10000)}万`;
   }
-  return `${value.toFixed(2)}元`;
+  return `${formatCurrency(value)}元`;
 }
 
 // ==================== KPI 卡片组件 ====================
@@ -146,7 +147,7 @@ const KpiSection: React.FC<KpiSectionProps> = ({ summaryData, loading }) => {
       {/* 已赚保费率 */}
       <EnhancedKpiCard
         title="已赚保费率"
-        value={`${totals.earnedRatio.toFixed(1)}%`}
+        value={formatPercent(totals.earnedRatio)}
         loading={loading}
         type="value"
       />
@@ -188,7 +189,7 @@ const InsuranceTypePie: React.FC<InsuranceTypePieProps> = ({ data, loading }) =>
         trigger: 'item',
         formatter: (params: any) => {
           const value = formatYuan(params.value);
-          return `${params.name}<br/>已赚保费: ${value}<br/>占比: ${params.percent.toFixed(1)}%`;
+          return `${params.name}<br/>已赚保费: ${value}<br/>占比: ${formatPercent(Number(params.percent))}`;
         },
       },
       legend: {
@@ -377,7 +378,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
           const ratio = params[1]?.value || 0;
           return `<div style="font-weight:bold;margin-bottom:8px">${category}</div>
             <div>累计已赚保费: <strong>${formatYuan(earned)}</strong></div>
-            <div>已赚保费率: <strong>${ratio.toFixed(1)}%</strong></div>`;
+            <div>已赚保费率: <strong>${formatPercent(Number(ratio))}</strong></div>`;
         },
       },
       legend: {

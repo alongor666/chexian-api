@@ -6,6 +6,7 @@
  */
 
 import { SortableTable } from './SortableTable';
+import { formatCount, formatRate, formatWanDirect } from '../../../shared/utils/formatters';
 import type { OrganizationReportRow, SortState } from '../types/marketingReport';
 
 interface OrganizationReportTableProps {
@@ -25,10 +26,7 @@ interface OrganizationReportTableProps {
 const formatCurrency = (value: unknown): string => {
   const num = Number(value);
   if (isNaN(num)) return '-';
-  return num.toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatWanDirect(num);
 };
 
 /**
@@ -36,8 +34,8 @@ const formatCurrency = (value: unknown): string => {
  */
 const formatPercent = (value: unknown): string => {
   const num = Number(value);
-  if (isNaN(num) || num === 0) return '-';
-  return `${(num * 100).toFixed(1)}%`;
+  if (isNaN(num)) return '-';
+  return formatRate(num);
 };
 
 /**
@@ -46,7 +44,7 @@ const formatPercent = (value: unknown): string => {
 const formatInteger = (value: unknown): string => {
   const num = Number(value);
   if (isNaN(num)) return '-';
-  return num.toLocaleString('zh-CN');
+  return formatCount(num);
 };
 
 /**

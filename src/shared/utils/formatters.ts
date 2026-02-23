@@ -142,7 +142,7 @@ export const yAxisPremiumFormatter = (value: number): string => formatChartValue
  * 用于成本分析表格
  */
 export function formatCurrency(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '-';
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
   return value.toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -154,7 +154,7 @@ export function formatCurrency(value: number | null | undefined): string {
  * 用于成本分析比率显示
  */
 export function formatPercent(value: number | null | undefined, decimals: number = 1): string {
-  if (value === null || value === undefined) return '-';
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
   return `${value.toFixed(decimals)}%`;
 }
 
@@ -163,7 +163,7 @@ export function formatPercent(value: number | null | undefined, decimals: number
  * 用于满期天数显示
  */
 export function formatDays(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '-';
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
   return `${value.toFixed(1)}天`;
 }
 

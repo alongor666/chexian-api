@@ -417,6 +417,129 @@ class DuckDBService {
 
     console.log(`[DuckDB] Team mapping loaded: ${rows.length} records, from ${jsonFilePath}`);
     console.log(`[DuckDB] SalesmanPlanFact view created`);
+
+    // 预构建达成分析缓存表（数据加载完成后立即计算，后续查询直接读缓存）
+    await this.buildAchievementView(2026);
+  }
+
+  /**
+   * 预构建保费达成分析缓存表 achievement_cache（业务员粒度）
+   *
+   * 规则（用户确认）：
+   * - JOIN 键：full_name（含工号前缀，如 "106014762刘刚"）
+   * - 时间进度：自然日历天数 / 365（使用最新签单日期）
+   * - 上年同期：精确日期匹配（max_date - INTERVAL 1 YEAR）
+   * - 无计划业务员：出现（mapping 中 plan=0 的 + mapping 外有保单的均出现）
+   *
+   * 调用时机：loadTeamMapping() 完成后自动调用
+   * 上游视图：SalesmanTeamMapping（含归属）+ PolicyFact（实际保费）
+   * 下游：server/src/sql/premiumPlan.ts 所有查询从本表读取
+   */
+  async buildAchievementView(planYear: number = 2026): Promise<void> {
+    const prevYear = planYear - 1;
+
+    await this.query(`
+      CREATE OR REPLACE TABLE achievement_cache AS
+      WITH
+      -- 1. 时间进度：当年最新签单日到 1月1日 的自然天数 / 365
+      time_prog AS (
+        SELECT
+          GREATEST(
+            CAST(DATEDIFF('day', DATE '${planYear}-01-01', MAX(policy_date)) AS DOUBLE) / 365.0,
+            1.0 / 365.0
+          ) AS progress,
+          MAX(policy_date) AS max_date
+        FROM PolicyFact
+        WHERE policy_date >= DATE '${planYear}-01-01'
+      ),
+      -- 2. 今年 YTD 实际（JOIN 键：PolicyFact.salesman_name = SalesmanTeamMapping.full_name）
+      ytd_actual AS (
+        SELECT salesman_name, SUM(premium) / 10000 AS actual_vehicle
+        FROM PolicyFact
+        WHERE policy_date >= DATE '${planYear}-01-01'
+        GROUP BY salesman_name
+      ),
+      -- 3. 上年同期（精确日期：去年 1月1日 到 max_date-1年）
+      prev_ytd AS (
+        SELECT salesman_name, SUM(premium) / 10000 AS prev_actual
+        FROM PolicyFact
+        WHERE policy_date >= DATE '${prevYear}-01-01'
+          AND policy_date <= (SELECT max_date - INTERVAL 1 YEAR FROM time_prog)
+        GROUP BY salesman_name
+      ),
+      -- 4. 上年全年（用于计划增长率：今年计划 / 上年全年 - 1）
+      prev_full AS (
+        SELECT salesman_name, SUM(premium) / 10000 AS prev_full_year
+        FROM PolicyFact
+        WHERE policy_date BETWEEN DATE '${prevYear}-01-01' AND DATE '${prevYear}-12-31'
+        GROUP BY salesman_name
+      )
+
+      -- Part A：SalesmanTeamMapping 中所有业务员（含 plan=0 的无计划人员）
+      SELECT
+        m.full_name                                                AS full_name,
+        m.salesman_name                                            AS salesman_name_short,
+        m.team_name,
+        m.organization                                             AS org_name,
+        ${planYear}                                                AS plan_year,
+        COALESCE(m.car_insurance_plan_2026, 0)                     AS plan_vehicle,
+        COALESCE(a.actual_vehicle, 0)                              AS actual_vehicle,
+        COALESCE(pv.prev_actual, 0)                                AS prev_year_actual,
+        COALESCE(pf.prev_full_year, 0)                             AS prev_year_full,
+        tp.progress                                                AS time_progress,
+        CASE
+          WHEN COALESCE(m.car_insurance_plan_2026, 0) > 0 AND tp.progress > 0
+          THEN COALESCE(a.actual_vehicle, 0) / (m.car_insurance_plan_2026 * tp.progress)
+          ELSE NULL
+        END AS achievement_rate,
+        CASE
+          WHEN COALESCE(pv.prev_actual, 0) > 0
+          THEN (COALESCE(a.actual_vehicle, 0) - pv.prev_actual) / pv.prev_actual
+          ELSE NULL
+        END AS yoy_rate,
+        CASE
+          WHEN COALESCE(pf.prev_full_year, 0) > 0
+          THEN COALESCE(m.car_insurance_plan_2026, 0) / pf.prev_full_year - 1
+          ELSE NULL
+        END AS plan_growth_rate
+      FROM SalesmanTeamMapping m
+      LEFT JOIN ytd_actual  a  ON m.full_name = a.salesman_name
+      LEFT JOIN prev_ytd    pv ON m.full_name = pv.salesman_name
+      LEFT JOIN prev_full   pf ON m.full_name = pf.salesman_name
+      CROSS JOIN time_prog  tp
+
+      UNION ALL
+
+      -- Part B：有保单但不在 mapping 中的业务员（无归属、无计划，但必须出现）
+      SELECT
+        a.salesman_name                                            AS full_name,
+        a.salesman_name                                            AS salesman_name_short,
+        '未归属团队'                                               AS team_name,
+        '未归属机构'                                               AS org_name,
+        ${planYear}                                                AS plan_year,
+        0.0                                                        AS plan_vehicle,
+        COALESCE(a.actual_vehicle, 0)                              AS actual_vehicle,
+        COALESCE(pv.prev_actual, 0)                                AS prev_year_actual,
+        COALESCE(pf.prev_full_year, 0)                             AS prev_year_full,
+        tp.progress                                                AS time_progress,
+        NULL                                                       AS achievement_rate,
+        CASE
+          WHEN COALESCE(pv.prev_actual, 0) > 0
+          THEN (COALESCE(a.actual_vehicle, 0) - pv.prev_actual) / pv.prev_actual
+          ELSE NULL
+        END AS yoy_rate,
+        NULL                                                       AS plan_growth_rate
+      FROM ytd_actual a
+      LEFT JOIN prev_ytd  pv ON a.salesman_name = pv.salesman_name
+      LEFT JOIN prev_full pf ON a.salesman_name = pf.salesman_name
+      CROSS JOIN time_prog tp
+      WHERE a.salesman_name NOT IN (SELECT full_name FROM SalesmanTeamMapping)
+    `);
+
+    const countResult = await this.query<{ cnt: number }>(
+      'SELECT COUNT(*) AS cnt FROM achievement_cache'
+    );
+    console.log(`[DuckDB] achievement_cache built: ${countResult[0]?.cnt ?? 0} salespeople, year=${planYear}`);
   }
 
   /**

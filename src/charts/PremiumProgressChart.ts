@@ -6,7 +6,7 @@
 import type { ECharts, EChartsOption } from 'echarts';
 import type { AggregatedData, YearPlan } from '@/types/data.types';
 import { echarts } from '@/shared/utils/echarts';
-import { formatPremiumWan } from '@/shared/utils/formatters';
+import { formatCurrency, formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
 import { createLogger } from '@/shared/utils/logger';
 import type { EChartsParam } from '@/shared/types/echarts';
 
@@ -119,7 +119,7 @@ class PremiumProgressChart {
       title: title
         ? {
             text: title,
-            subtext: subtitle || `累计达成率: ${achievementRate.toFixed(1)}%`,
+            subtext: subtitle || `累计达成率: ${formatPercent(achievementRate)}`,
             left: 'center',
             textStyle: {
               fontSize: 16,
@@ -223,7 +223,7 @@ class PremiumProgressChart {
    */
   private formatValue(value: number): string {
     if (value >= 100000000) {
-      return `${(value / 100000000).toFixed(2)}亿`;
+      return `${formatCurrency(value / 100000000)}亿`;
     }
     return formatPremiumWan(value);
   }

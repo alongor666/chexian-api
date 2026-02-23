@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { formatCount, formatPercent } from '../../../shared/utils/formatters';
 
 /**
  * 计算滚动12个月窗口的起始日期
@@ -489,11 +490,11 @@ const CalculationExample: React.FC<{ cutoffDate: string; activeScenario: number 
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">保费 P</span>
-              <span className="font-mono">{example.premium.toLocaleString()}元</span>
+              <span className="font-mono">{formatCount(example.premium)}元</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">费用率 F</span>
-              <span className="font-mono">{(example.feeRate * 100).toFixed(0)}%</span>
+              <span className="font-mono">{formatPercent(example.feeRate * 100, 0)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">险类系数 α</span>
@@ -516,20 +517,20 @@ const CalculationExample: React.FC<{ cutoffDate: string; activeScenario: number 
                 {example.firstDayIncluded
                   ? `${example.premium} × ${example.feeRate} × ${example.alpha} = `
                   : '不计入（非窗口内起保）= '}
-                <span className="font-bold">{firstDayPart.toFixed(0)}元</span>
+                <span className="font-bold">{formatCount(firstDayPart)}元</span>
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-green-600">时间分摊</span>
               <span className="font-mono">
                 {example.premium} × {1 - example.feeRate} × ({example.windowDays}/365) ={' '}
-                <span className="font-bold">{timePart.toFixed(0)}元</span>
+                <span className="font-bold">{formatCount(timePart)}元</span>
               </span>
             </div>
             <div className="border-t border-amber-200 pt-2 flex justify-between items-center">
               <span className="font-medium text-amber-800">期间已赚保费</span>
               <span className="font-mono text-lg font-bold text-amber-700">
-                {totalEarned.toFixed(0)}元
+                {formatCount(totalEarned)}元
               </span>
             </div>
           </div>

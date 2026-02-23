@@ -311,15 +311,15 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
           <>
             <p className={cn(textStyles.body, 'text-danger font-semibold')}>
               双差（主全&lt;75%，交三&lt;60%）：{decisionSummary.dualWeak.names || '无'}
-              {decisionSummary.dualWeak.count > 0 ? `（${decisionSummary.dualWeak.count}个，${decisionSummary.dualWeak.ratio.toFixed(1)}%，车险件数 ${formatCount(decisionSummary.dualWeak.autoCount)}）` : ''}
+              {decisionSummary.dualWeak.count > 0 ? `（${decisionSummary.dualWeak.count}个，${formatPercent(decisionSummary.dualWeak.ratio)}，车险件数 ${formatCount(decisionSummary.dualWeak.autoCount)}）` : ''}
             </p>
             <p className={cn(textStyles.body, 'text-danger font-semibold')}>
               主全差（主全&lt;75%）：{decisionSummary.mainWeak.names || '无'}
-              {decisionSummary.mainWeak.count > 0 ? `（${decisionSummary.mainWeak.count}个，${decisionSummary.mainWeak.ratio.toFixed(1)}%，车险件数 ${formatCount(decisionSummary.mainWeak.autoCount)}）` : ''}
+              {decisionSummary.mainWeak.count > 0 ? `（${decisionSummary.mainWeak.count}个，${formatPercent(decisionSummary.mainWeak.ratio)}，车险件数 ${formatCount(decisionSummary.mainWeak.autoCount)}）` : ''}
             </p>
             <p className={cn(textStyles.body, 'text-danger font-semibold')}>
               交三差（交三&lt;60%）：{decisionSummary.jiaosanWeak.names || '无'}
-              {decisionSummary.jiaosanWeak.count > 0 ? `（${decisionSummary.jiaosanWeak.count}个，${decisionSummary.jiaosanWeak.ratio.toFixed(1)}%，车险件数 ${formatCount(decisionSummary.jiaosanWeak.autoCount)}）` : ''}
+              {decisionSummary.jiaosanWeak.count > 0 ? `（${decisionSummary.jiaosanWeak.count}个，${formatPercent(decisionSummary.jiaosanWeak.ratio)}，车险件数 ${formatCount(decisionSummary.jiaosanWeak.autoCount)}）` : ''}
             </p>
           </>
         ) : (

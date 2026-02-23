@@ -8,7 +8,7 @@
 
 import type { CSSProperties } from 'react';
 import type { CoefficientRow } from '../hooks/useCoefficientMonitor';
-import { formatCoefficient } from '../../../shared/utils/formatters';
+import { formatCoefficient, formatCurrency } from '../../../shared/utils/formatters';
 
 /**
  * 客户类别显示名称映射
@@ -33,7 +33,7 @@ export const formatRatio = (val: number | null | undefined): string => {
   if (val === null || val === undefined) return '-';
   if (!Number.isFinite(val)) return '-';
   const sign = val >= 0 ? '+' : '';
-  return `${sign}${val.toFixed(4)}`;
+  return `${sign}${formatCoefficient(Math.abs(val))}`;
 };
 
 /**
@@ -45,7 +45,7 @@ export const formatGapPremium = (val: number | null | undefined): string => {
   if (!Number.isFinite(val)) return '-';
   const wanYuan = val / 10000;
   const sign = wanYuan >= 0 ? '+' : '';
-  return `${sign}${wanYuan.toFixed(2)}万`;
+  return `${sign}${formatCurrency(Math.abs(wanYuan))}万`;
 };
 
 /**

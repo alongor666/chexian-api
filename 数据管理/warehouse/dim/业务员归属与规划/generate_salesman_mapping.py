@@ -32,6 +32,7 @@
 
 import pandas as pd
 import json
+import argparse
 from pathlib import Path
 from typing import Dict, List
 
@@ -206,16 +207,23 @@ def generate_statistics(salesman_list: List[Dict], df_2025: pd.DataFrame, df_202
 
 def main():
     """主函数"""
+    parser = argparse.ArgumentParser(description="业务员归属关系生成工具")
+    parser.add_argument('--plan-2026', type=str, help='2026年保费计划文件路径，如果不传会自动在目录下寻找')
+    parser.add_argument('--actual-2025', type=str, help='2025年达成情况文件路径，如果不传会自动在目录下寻找')
+    parser.add_argument('--out', dest='output', type=str, help='输出 JSON 文件路径')
+    args = parser.parse_args()
+
     print("\n" + "="*60)
     print("业务员归属关系生成工具")
     print("="*60)
 
-    # 文件路径
-    base_dir = Path('/Users/xuechenglong/Downloads/01-公司开发项目/chexianYJFX/数据管理/业务员归属与规划')
+    # 默认使用脚本当前所在目录，而不是硬编码的绝对路径
+    base_dir = Path(__file__).resolve().parent
 
-    file_2026 = base_dir / '2026年销售人员分产品保费计划.xlsx'
-    file_2025 = base_dir / '2025年销售人员分产品保费计划达成情况.xlsx'
-    output_file = base_dir / 'salesman_organization_mapping.json'
+    # 支持通过参数传入特定文件，例如最新下载的Excel文件
+    file_2026 = Path(args.plan_2026) if args.plan_2026 else base_dir / '2026年销售人员分产品保费计划.xlsx'
+    file_2025 = Path(args.actual_2025) if args.actual_2025 else base_dir / '2025年销售人员分产品保费计划达成情况.xlsx'
+    output_file = Path(args.output) if args.output else base_dir / 'salesman_organization_mapping.json'
 
     # 检查文件是否存在
     if not file_2026.exists():

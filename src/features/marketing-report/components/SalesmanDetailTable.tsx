@@ -7,6 +7,7 @@
  */
 
 import { SortableTable } from './SortableTable';
+import { formatCount, formatRate } from '../../../shared/utils/formatters';
 import type { SalesmanDetailRow, SortState } from '../types/marketingReport';
 
 interface SalesmanDetailTableProps {
@@ -25,8 +26,8 @@ interface SalesmanDetailTableProps {
  */
 const formatPercent = (value: unknown): string => {
   const num = Number(value);
-  if (isNaN(num) || num === 0) return '-';
-  return `${(num * 100).toFixed(1)}%`;
+  if (isNaN(num)) return '-';
+  return formatRate(num);
 };
 
 /**
@@ -35,7 +36,7 @@ const formatPercent = (value: unknown): string => {
 const formatInteger = (value: unknown): string => {
   const num = Number(value);
   if (isNaN(num)) return '-';
-  return num.toString();
+  return formatCount(num);
 };
 
 /* eslint-disable @typescript-eslint/no-unused-vars */

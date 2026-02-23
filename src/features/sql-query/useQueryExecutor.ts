@@ -15,6 +15,7 @@ import { validateSQL } from '../../shared/utils/sql-validator';
 import { SECURITY_LIMITS } from '../../shared/utils/security';
 import type { QueryResult, QueryStatus } from '../../shared/types/sql-query';
 import { createLogger } from '../../shared/utils/logger';
+import { formatCount } from '../../shared/utils/formatters';
 
 const logger = createLogger('useQueryExecutor');
 
@@ -138,7 +139,7 @@ export function useQueryExecutor(config?: {
         if (rowCount > maxRows) {
           setStatus('error');
           setError(
-            `查询结果行数过多 (${rowCount.toLocaleString()} 行)，建议添加 LIMIT 子句限制在 ${maxRows.toLocaleString()} 行以内`
+            `查询结果行数过多 (${formatCount(rowCount)} 行)，建议添加 LIMIT 子句限制在 ${formatCount(maxRows)} 行以内`
           );
           return;
         }

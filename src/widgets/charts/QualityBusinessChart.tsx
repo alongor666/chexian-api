@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import type { EChartsOption } from 'echarts';
 import type { TimeView } from './LineChart';
 import { echarts } from '../../shared/utils/echarts';
+import { formatPercent, formatPremiumWan, formatWanDirect } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 
 interface QualityBusinessChartProps {
@@ -110,11 +111,11 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
       });
       Object.values(monthlyStats).forEach(stat => {
         markPointData.push({
-          name: '月最低', coord: [stat.min.idx, stat.min.val], value: stat.min.val.toFixed(1) + '%',
+          name: '月最低', coord: [stat.min.idx, stat.min.val], value: formatPercent(stat.min.val),
           itemStyle: { color: '#5470C6' }, label: { position: 'bottom', color: '#333', fontSize: 10 }
         });
         markPointData.push({
-          name: '月最高', coord: [stat.max.idx, stat.max.val], value: stat.max.val.toFixed(1) + '%',
+          name: '月最高', coord: [stat.max.idx, stat.max.val], value: formatPercent(stat.max.val),
           itemStyle: { color: '#EE6666' }, label: { position: 'top', color: '#333', fontSize: 10 }
         });
       });
@@ -135,12 +136,12 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
             const value = typeof param.value === 'number' ? param.value : Number(param.value ?? 0);
             if (param.seriesName === '优质业务' || param.seriesName === '其他业务') totalVal += value;
             if (param.seriesName === '优质业务占比') {
-              result += `<div style="display: flex; align-items: center; margin: 2px 0;"><span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; margin-right: 5px; border-radius: 50%;"></span><span>${param.seriesName}: ${value.toFixed(1)}%</span></div>`;
+              result += `<div style="display: flex; align-items: center; margin: 2px 0;"><span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; margin-right: 5px; border-radius: 50%;"></span><span>${param.seriesName}: ${formatPercent(value)}</span></div>`;
             } else {
-              result += `<div style="display: flex; align-items: center; margin: 2px 0;"><span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; margin-right: 5px; border-radius: 50%;"></span><span>${param.seriesName}: ${Math.round(value / 10000).toLocaleString()}万</span></div>`;
+              result += `<div style="display: flex; align-items: center; margin: 2px 0;"><span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; margin-right: 5px; border-radius: 50%;"></span><span>${param.seriesName}: ${formatPremiumWan(value)}万</span></div>`;
             }
           });
-          result += `<hr style="margin: 4px 0; border: 0; border-top: 1px solid #eee;" /><div style="display: flex; justify-content: space-between;"><span>总保费:</span><b>${Math.round(totalVal / 10000).toLocaleString()}万</b></div>`;
+          result += `<hr style="margin: 4px 0; border: 0; border-top: 1px solid #eee;" /><div style="display: flex; justify-content: space-between;"><span>总保费:</span><b>${formatPremiumWan(totalVal)}万</b></div>`;
           return result;
         },
       },
@@ -222,7 +223,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
           name: '保费（万元）',
           position: 'left',
           splitLine: { show: false },
-          axisLabel: { formatter: (value: number) => Math.round(value / 10000).toLocaleString() },
+          axisLabel: { formatter: (value: number) => formatPremiumWan(value) },
         },
         {
           type: 'value',
@@ -231,7 +232,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
           splitLine: { show: false },
           min: 0,
           max: 100,
-          axisLabel: { formatter: (value: number) => value.toFixed(1) + '%' },
+          axisLabel: { formatter: (value: number) => formatPercent(value) },
         },
       ],
       series: [
@@ -248,7 +249,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
             formatter: (params: any) => {
               const safeParams = params as EChartsParam;
               const val = Number((safeParams.value as any) ?? 0) / 10000;
-              return val > 0 ? `${Math.round(val).toLocaleString()}` : '';
+              return val > 0 ? formatWanDirect(val) : '';
             },
             color: '#fff',
             fontSize: 10
@@ -280,7 +281,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
                 typeof safeParams.value === 'number'
                   ? safeParams.value
                   : Number((safeParams.value as any) ?? 0);
-              return rawValue.toFixed(1) + '%';
+              return formatPercent(rawValue);
             },
             color: '#F59E0B'
           },

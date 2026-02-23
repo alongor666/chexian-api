@@ -675,6 +675,40 @@ class ApiClient {
   }
 
   /**
+   * 获取保费达成面板数据（合并端点：1 次请求返回 children + summary + distribution）
+   *
+   * 替代原来的 3 次 getPremiumPlan() 调用，性能提升 3x。
+   * 返回结构：{ children: [...], summary: {...}, distribution: [...], meta: {...} }
+   */
+  async getPlanAchievement(params?: {
+    planYear?: number;
+    level?: string;
+    orgFilter?: string;
+    teamFilter?: string;
+    salesmanFilter?: string;
+    customerCategoryFilter?: string;
+    sortField?: string;
+    sortOrder?: string;
+  }): Promise<{
+    children: any[];
+    summary: any | null;
+    distribution: any[];
+    meta: { plan_year: number; level: string };
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value));
+        }
+      });
+    }
+    const query = searchParams.toString();
+    const resp = await this.request(`/query/plan-achievement${query ? `?${query}` : ''}`);
+    return resp.data ?? resp;
+  }
+
+  /**
    * 执行自定义 SQL（受限）
    */
   async executeCustomQuery(sql: string): Promise<any[]> {
