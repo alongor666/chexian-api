@@ -35,6 +35,7 @@ print_usage() {
     echo "  ./run.sh transform -i input.xlsx -o output.parquet"
     echo "  ./run.sh enrich --source hist.xlsx --target new.xlsx --output matched.xlsx"
     echo "  ./run.sh full --source hist.xlsx --target new.xlsx --output result.parquet"
+    echo "  ./run.sh full --source hist.xlsx --target new.xlsx --output result.parquet --no-sync"
 }
 
 # 检查Python依赖
@@ -71,11 +72,13 @@ case "${1:-help}" in
         SOURCE=""
         TARGET=""
         OUTPUT=""
+        NO_SYNC="false"
         while [[ $# -gt 0 ]]; do
             case $1 in
                 --source|-s) SOURCE="$2"; shift 2 ;;
                 --target|-t) TARGET="$2"; shift 2 ;;
                 --output|-o) OUTPUT="$2"; shift 2 ;;
+                --no-sync) NO_SYNC="true"; shift ;;
                 *) shift ;;
             esac
         done
@@ -98,6 +101,21 @@ case "${1:-help}" in
         echo ""
         echo -e "${GREEN}✅ 完整流程执行完成！${NC}"
         echo -e "输出文件: ${OUTPUT}"
+
+        # 步骤 3/3: 自动同步到 VPS（可用 --no-sync 跳过）
+        if [[ "$NO_SYNC" != "true" ]]; then
+            SYNC_SCRIPT="$(dirname "$SCRIPT_DIR")/deploy/sync-data.sh"
+            if [[ -f "$SYNC_SCRIPT" ]]; then
+                echo ""
+                echo -e "${BLUE}步骤 3/3: 同步 Parquet 到 VPS${NC}"
+                bash "$SYNC_SCRIPT" "$OUTPUT"
+            else
+                echo -e "${YELLOW}⚠ 未找到 sync-data.sh，跳过 VPS 同步${NC}"
+                echo -e "  手动同步: ./deploy/sync-data.sh ${OUTPUT}"
+            fi
+        else
+            echo -e "${YELLOW}已跳过 VPS 同步（--no-sync）${NC}"
+        fi
         ;;
     help|--help|-h)
         print_header "帮助"

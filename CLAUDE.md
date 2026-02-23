@@ -389,8 +389,18 @@ bun run governance
 # 本地开发
 bun run dev:full  # 自动加载 Parquet + JSON
 
-# 生产同步
-./deploy/sync-data.sh  # 上传最新 Parquet → PM2 重启 → 健康检查
+# 生产同步（完整一键链路）
+./数据管理/run.sh full \
+  --source 历史数据.xlsx \
+  --target 最新数据.xlsx \
+  --output 数据管理/warehouse/fact/policy/车险保单综合明细表MMDD.parquet
+# 自动执行：续保匹配 → Parquet 转换 → scp 上传 → PM2 重启 → 健康检查
+
+# 仅本地转换，不同步 VPS
+./数据管理/run.sh full ... --no-sync
+
+# 单独同步已有 Parquet（不重新转换）
+./deploy/sync-data.sh [文件路径]
 ```
 
 ### 数据知识协议

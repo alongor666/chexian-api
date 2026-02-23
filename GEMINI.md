@@ -503,15 +503,23 @@ bun run scripts/check-governance.mjs
 | 前端 | Nginx 静态文件（`/var/www/chexian/frontend/dist`） |
 | 安全 | HTTPS + Nginx IP 白名单 + JWT 认证 + 审计日志 |
 
-### 一键数据同步（本地 → VPS）
+### 数据更新全链路（Excel → Parquet → VPS）
 
 ```bash
-# 在 chexian-api 目录执行
-./deploy/sync-data.sh                   # 自动同步最新 Parquet
+# 完整一键链路（推荐）
+./数据管理/run.sh full \
+  --source 历史数据.xlsx \
+  --target 最新数据.xlsx \
+  --output 数据管理/warehouse/fact/policy/车险保单综合明细表MMDD.parquet
+# 自动执行：续保匹配 → Parquet 转换 → scp 上传 → PM2 重启 → 健康检查
+
+# 仅本地转换，不同步 VPS
+./数据管理/run.sh full ... --no-sync
+
+# 单独同步已有 Parquet（跳过转换步骤）
+./deploy/sync-data.sh                   # 自动找最新 Parquet
 ./deploy/sync-data.sh 某文件.parquet     # 指定文件
 ```
-
-脚本自动完成：找到最新 `.parquet` → scp 上传 → chmod 600 → PM2 重启 → 健康检查。
 
 ### 部署相关文件
 
