@@ -521,14 +521,35 @@ bun run scripts/check-governance.mjs
 ./deploy/sync-data.sh 某文件.parquet     # 指定文件
 ```
 
+### SSH 连接前提（sync 失败必查）
+
+```
+# 本地 ~/.ssh/config 必须存在以下配置
+Host chexian-vps
+    HostName 162.14.113.44
+    User root
+    IdentityFile ~/.ssh/chexian_deploy
+    ServerAliveInterval 60
+```
+
+验证连接：`ssh chexian-vps echo ok`
+
+**常见失败原因与修复**：
+
+| 错误 | 原因 | 修复 |
+|------|------|------|
+| `Identity file not accessible` | 密钥文件名错误或不存在 | 检查 `~/.ssh/chexian_deploy` 是否存在 |
+| `Permission denied (publickey)` | 公钥未注册到 VPS | 登录腾讯云控制台，用 `tee -a` 追加公钥到 `authorized_keys` |
+| 网页控制台命令折断 | 控制台自动加缩进换行 | 改用 `tee -a /root/.ssh/authorized_keys` 后粘贴 key，Ctrl+D 结束 |
+
 ### 部署相关文件
 
 | 文件 | 说明 |
 |------|------|
-| `deploy/sync-data.sh` | 一键数据同步脚本 |
+| `deploy/sync-data.sh` | 一键数据同步脚本（依赖 `~/.ssh/config` 别名） |
 | `deploy/vps-deploy.sh` | VPS 全量部署脚本 |
 | `DEPLOYMENT_GUIDE.md` | 完整部署步骤文档 |
-| `vps.md` | VPS 运维手册 |
+| `vps.md` | VPS 运维手册（含 SSH 配置步骤） |
 
 ---
 

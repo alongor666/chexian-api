@@ -431,21 +431,57 @@ bun run governance
 | 后端进程 | PM2 → `chexian-api`（端口 3000） |
 | 前端 | Nginx 静态文件（`/var/www/chexian/frontend/dist`） |
 
-### 一键数据同步（本地 Mac → VPS）
+### SSH 连接前提（必须先配置）
+
+**本地 `~/.ssh/config` 必须包含以下配置**（缺失则所有脚本无法运行）：
+
+```
+Host chexian-vps
+    HostName 162.14.113.44
+    User root
+    IdentityFile ~/.ssh/chexian_deploy
+    ServerAliveInterval 60
+```
+
+**验证连通性**：
+```bash
+ssh chexian-vps echo ok   # 返回 "ok" 表示配置正确
+```
+
+### 数据同步（本地 Mac → VPS）
 
 ```bash
-# 在 chexian-api 目录执行
-./deploy/sync-data.sh              # 自动同步最新 Parquet
+# 完整链路：Excel → Parquet 转换 + 自动同步 VPS
+./数据管理/run.sh full \
+  --source 历史数据.xlsx \
+  --target 最新数据.xlsx \
+  --output 数据管理/warehouse/fact/policy/车险保单综合明细表MMDD.parquet
+
+# 仅本地转换，不同步 VPS
+./数据管理/run.sh full ... --no-sync
+
+# 单独同步已有 Parquet（跳过转换步骤）
+./deploy/sync-data.sh              # 自动找最新 Parquet
 ./deploy/sync-data.sh 文件名.parquet  # 指定文件
 ```
 
-脚本自动完成：找到最新 `.parquet` → scp 上传 → chmod 600 → PM2 重启 → 健康检查。
+脚本自动完成：SSH 连通性检查 → 找到最新 `.parquet` → scp 上传 → chmod 600 → PM2 重启 → 健康检查。
+
+### SSH 故障排查
+
+| 现象 | 原因 | 修复方式 |
+|------|------|----------|
+| `ssh: Could not resolve hostname chexian-vps` | `~/.ssh/config` 未配置别名 | 添加上方 Host 配置 |
+| `Permission denied (publickey)` | 密钥不匹配或未在 VPS 授权 | 检查 `~/.ssh/chexian_deploy` 存在；确认公钥在 VPS `~/.ssh/authorized_keys` |
+| 连接超时 | 网络/防火墙问题 | 检查腾讯云安全组是否开放 22 端口 |
+| 健康检查失败（上传后） | PM2 重启期间竞争 | 手动 `ssh chexian-vps "pm2 logs chexian-api --lines 20"` 查看错误 |
 
 ### 相关文件
 
 | 文件 | 说明 |
 |------|------|
-| [deploy/sync-data.sh](deploy/sync-data.sh) | 数据同步脚本 |
+| [deploy/sync-data.sh](deploy/sync-data.sh) | 数据同步脚本（使用 `chexian-vps` 别名） |
+| [数据管理/run.sh](数据管理/run.sh) | 完整数据处理链路（enrich + transform + sync） |
 | [deploy/vps-deploy.sh](deploy/vps-deploy.sh) | VPS 全量部署脚本 |
 | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | 完整部署步骤文档 |
 | [vps.md](vps.md) | VPS 运维手册（SSH/PM2/Nginx/备份） |
@@ -453,6 +489,7 @@ bun run governance
 ---
 
 **变更历史**：
+- 2026-02-23：§8 新增 SSH 连接前提（`~/.ssh/config` 别名），补充一键链路与故障排查表
 - 2026-02-15：新增§8生产部署与数据同步章节，添加一键 `sync-data.sh` 脚本引用
 - 2026-02-15：基于 `CLAUDE.md` 与当前代码现状重构，统一为纯 API 架构、更新红线文件与启动验证协议
 - 2026-01-19：新增实现前检查协议（防止重复造轮子）
