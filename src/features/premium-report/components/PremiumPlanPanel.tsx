@@ -13,6 +13,7 @@ import { usePremiumPlan } from '../hooks/usePremiumPlan';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
+import { cn, numericStyles } from '../../../shared/styles';
 import { formatCount, formatPercent, formatWanDirect } from '../../../shared/utils/formatters';
 import type { PlanDrilldownRow, PlanKpiData, PlanDistributionRow, SortState } from '../types/premiumReport';
 
@@ -48,10 +49,10 @@ const KpiCard: React.FC<{
   subtitle?: string;
   colorClass?: string;
 }> = ({ title, value, subtitle, colorClass = 'text-gray-900' }) => (
-  <div className="bg-white rounded-lg border border-gray-200 p-4">
-    <p className="text-xs text-gray-500 font-medium mb-1">{title}</p>
-    <p className={`font-kpi text-2xl font-bold ${colorClass}`}>{value}</p>
-    {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+  <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm">
+    <p className="text-sm text-neutral-500 font-medium mb-2">{title}</p>
+    <p className={cn(numericStyles.kpiPrimary, colorClass)}>{value}</p>
+    {subtitle && <p className="text-xs text-neutral-400 mt-1">{subtitle}</p>}
   </div>
 );
 
@@ -104,7 +105,7 @@ const DistributionChart: React.FC<{ data: PlanDistributionRow[] }> = ({ data }) 
                 style={{ width: `${(row.count / maxCount) * 100}%` }}
               />
             </div>
-            <span className="font-tabular text-xs text-gray-600 w-16 text-right shrink-0">
+            <span className={cn(numericStyles.captionValue, 'text-neutral-600 w-16 text-right shrink-0')}>
               {formatCount(row.count)}人 ({formatPercent(row.percentage)})
             </span>
           </div>

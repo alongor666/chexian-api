@@ -173,13 +173,13 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
                     <td className="px-3 py-2 border-r-2 border-gray-300 text-center">
                       <RenewalStatusBadge rate={row.daily_renewal_rate} mode="dot" size="small" />
                     </td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200 font-mono tabular-nums">{valueFormatter(row.month_to_date_due_count)}</td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200 font-mono tabular-nums">{valueFormatter(row.month_to_date_renewed_count)}</td>
+                    <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.month_to_date_due_count)}</td>
+                    <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.month_to_date_renewed_count)}</td>
                     <td className="px-3 py-2 border-r-2 border-gray-300 text-center">
                       <RenewalStatusBadge rate={row.monthly_renewal_rate} mode="dot" size="small" />
                     </td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200 font-mono tabular-nums">{valueFormatter(row.year_to_date_due_count)}</td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200 font-mono tabular-nums">{valueFormatter(row.year_to_date_renewed_count)}</td>
+                    <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.year_to_date_due_count)}</td>
+                    <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.year_to_date_renewed_count)}</td>
                     <td className="px-3 py-2 text-center">
                       <RenewalStatusBadge rate={row.yearly_renewal_rate} mode="dot" size="small" />
                     </td>

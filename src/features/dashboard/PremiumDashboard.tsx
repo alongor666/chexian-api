@@ -13,7 +13,7 @@ import { RoseChartsSection } from './components/RoseChartsSection';
 import { TrendSection } from './components/TrendSection';
 import { TableSection } from './components/TableSection';
 import { DashboardCustomizerPanel } from './components/DashboardCustomizerPanel';
-import type { DashboardSectionId } from './dashboardLayoutConfig';
+import type { DashboardSectionId, KpiCardId, KpiGroup } from './dashboardLayoutConfig';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 
 import { Logger } from '@/shared/utils/logger';
@@ -41,10 +41,10 @@ export const PremiumDashboard: React.FC = () => {
   const {
     sectionOrder,
     sectionVisibility,
-    kpiOrder,
-    kpiVisibility,
+    kpiOrderByGroup,
+    kpiVisibilityByGroup,
     sectionItems,
-    kpiItems,
+    kpiItemsByGroup,
     toggleSection,
     moveSection,
     toggleKpi,
@@ -148,14 +148,22 @@ export const PremiumDashboard: React.FC = () => {
     exportArrayToCSV(qualityBusinessTop10, `${filename}.csv`);
   };
 
-  const visibleKpis = useMemo(
-    () => kpiOrder.filter((id) => kpiVisibility[id]),
-    [kpiOrder, kpiVisibility]
+  const visibleKpisByGroup = useMemo<Record<KpiGroup, KpiCardId[]>>(
+    () => ({
+      core: kpiOrderByGroup.core.filter((id) => kpiVisibilityByGroup.core[id]),
+      focus: kpiOrderByGroup.focus.filter((id) => kpiVisibilityByGroup.focus[id]),
+    }),
+    [kpiOrderByGroup, kpiVisibilityByGroup]
   );
 
   const sectionContent: Record<DashboardSectionId, React.ReactNode> = {
     kpi: (
-      <KpiSection kpis={kpis} kpiDetails={kpiDetails} loading={kpiLoading} visibleKpis={visibleKpis} />
+      <KpiSection
+        kpis={kpis}
+        kpiDetails={kpiDetails}
+        loading={kpiLoading}
+        visibleKpisByGroup={visibleKpisByGroup}
+      />
     ),
     rose: (
       <RoseChartsSection
@@ -287,7 +295,7 @@ export const PremiumDashboard: React.FC = () => {
       <div className="space-y-4">
         <DashboardCustomizerPanel
           sectionItems={sectionItems}
-          kpiItems={kpiItems}
+          kpiItemsByGroup={kpiItemsByGroup}
           onToggleSection={toggleSection}
           onMoveSection={moveSection}
           onToggleKpi={toggleKpi}

@@ -274,7 +274,7 @@ export const tableStyles = {
   /** 表体单元格 */
   cell: 'px-3 py-2 text-sm text-neutral-700',
   /** 数值单元格（右对齐） */
-  cellNumeric: 'px-3 py-2 text-sm text-neutral-700 text-right font-mono',
+  cellNumeric: 'px-3 py-2 text-sm text-neutral-700 text-right font-tabular',
   /** 深色模式 */
   dark: 'dark:bg-neutral-800 dark:border-neutral-700',
 } as const
@@ -300,7 +300,7 @@ export const textStyles = {
   /** 强调 */
   emphasis: 'font-semibold',
   /** 数值（等宽字体） */
-  numeric: 'font-mono tabular-nums',
+  numeric: 'font-tabular tabular-nums',
 } as const
 
 /**
@@ -312,7 +312,23 @@ export const fontStyles = {
   /** 图表数字 */
   chart: 'font-sans tabular-nums',
   /** 等宽数字（表格对齐） */
-  tabular: 'font-mono tabular-nums',
+  tabular: 'font-tabular tabular-nums',
+} as const
+
+/**
+ * 数字分层样式（对齐仪表盘视觉规范）
+ */
+export const numericStyles = {
+  /** KPI 主数字 */
+  kpiPrimary: 'font-kpi text-[28px] tracking-tight font-bold leading-none',
+  /** KPI 次级数字 */
+  kpiSecondary: 'font-kpi text-[22px] tracking-tight font-bold leading-none',
+  /** 表格数字单元格 */
+  tableValue: 'font-tabular tabular-nums text-sm text-neutral-900',
+  /** 表格次要数字 */
+  tableSecondary: 'font-tabular tabular-nums text-sm text-neutral-500',
+  /** 小号数字（标签/统计） */
+  captionValue: 'font-tabular tabular-nums text-xs',
 } as const
 
 /**

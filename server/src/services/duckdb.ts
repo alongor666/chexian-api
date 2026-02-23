@@ -140,6 +140,17 @@ class DuckDBService {
       this.connectionPool = new ConnectionPool(this.instance, databaseConfig.maxConnections ?? 10);
       console.log('[DuckDB] Database initialized:', databaseConfig.path, `(pool max: ${databaseConfig.maxConnections ?? 10})`);
       this.isInitialized = true;
+
+      // KPI 计划配置表（用于核心指标中的车驾意达成率，支持多层级扩展）
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS KpiPlanConfig (
+          plan_year INTEGER,
+          business_line VARCHAR,
+          level VARCHAR,
+          level_key VARCHAR,
+          plan_premium DOUBLE
+        )
+      `);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       throw new AppError(500, `Failed to initialize DuckDB: ${message}`);

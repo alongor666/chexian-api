@@ -5,6 +5,7 @@ import {
   DEFAULT_SECTION_ORDER,
   KPI_CARD_META,
   type DashboardSectionId,
+  type KpiGroup,
   type KpiCardId,
 } from '../dashboardLayoutConfig';
 import { getStorageJson, setStorageJson } from '../../../shared/utils/storage';
@@ -18,9 +19,23 @@ interface StoredLayout {
     order: DashboardSectionId[];
     visibility: LayoutVisibility<DashboardSectionId>;
   };
-  kpis: {
-    order: KpiCardId[];
-    visibility: LayoutVisibility<KpiCardId>;
+  kpis: Record<
+    KpiGroup,
+    {
+      order: KpiCardId[];
+      visibility: LayoutVisibility<KpiCardId>;
+    }
+  >;
+}
+
+interface LegacyStoredLayout {
+  sections?: {
+    order?: DashboardSectionId[];
+    visibility?: Partial<LayoutVisibility<DashboardSectionId>>;
+  };
+  kpis?: {
+    order?: KpiCardId[];
+    visibility?: Partial<LayoutVisibility<KpiCardId>>;
   };
 }
 
@@ -54,23 +69,81 @@ const defaultLayout: StoredLayout = {
     visibility: buildVisibility(DEFAULT_SECTION_ORDER),
   },
   kpis: {
-    order: DEFAULT_KPI_ORDER,
-    visibility: buildVisibility(DEFAULT_KPI_ORDER),
+    core: {
+      order: DEFAULT_KPI_ORDER.core,
+      visibility: buildVisibility(DEFAULT_KPI_ORDER.core),
+    },
+    focus: {
+      order: DEFAULT_KPI_ORDER.focus,
+      visibility: buildVisibility(DEFAULT_KPI_ORDER.focus),
+    },
   },
 };
 
+const KPI_GROUPS: KpiGroup[] = ['core', 'focus'];
+
+const resolveKpiGroup = (id: KpiCardId): KpiGroup =>
+  KPI_CARD_META.find((item) => item.id === id)?.group ?? 'focus';
+
+const normalizeKpiGroupLayout = (
+  parsed: Partial<StoredLayout> | LegacyStoredLayout
+): StoredLayout['kpis'] => {
+  // 兼容旧结构：kpis.order + kpis.visibility
+  if (parsed.kpis && !('core' in parsed.kpis) && !('focus' in parsed.kpis)) {
+    const legacy = parsed as LegacyStoredLayout;
+    const legacyOrder = legacy.kpis?.order ?? [];
+    const legacyVisibility = legacy.kpis?.visibility ?? {};
+
+    const groupedOrder: Record<KpiGroup, KpiCardId[]> = { core: [], focus: [] };
+    legacyOrder.forEach((id) => {
+      const group = resolveKpiGroup(id);
+      if (!groupedOrder[group].includes(id)) {
+        groupedOrder[group].push(id);
+      }
+    });
+
+    KPI_GROUPS.forEach((group) => {
+      DEFAULT_KPI_ORDER[group].forEach((id) => {
+        if (!groupedOrder[group].includes(id)) {
+          groupedOrder[group].push(id);
+        }
+      });
+    });
+
+    return {
+      core: {
+        order: normalizeOrder(groupedOrder.core, DEFAULT_KPI_ORDER.core),
+        visibility: normalizeVisibility(legacyVisibility, DEFAULT_KPI_ORDER.core),
+      },
+      focus: {
+        order: normalizeOrder(groupedOrder.focus, DEFAULT_KPI_ORDER.focus),
+        visibility: normalizeVisibility(legacyVisibility, DEFAULT_KPI_ORDER.focus),
+      },
+    };
+  }
+
+  const next = (parsed as Partial<StoredLayout>).kpis;
+  return {
+    core: {
+      order: normalizeOrder(next?.core?.order, DEFAULT_KPI_ORDER.core),
+      visibility: normalizeVisibility(next?.core?.visibility, DEFAULT_KPI_ORDER.core),
+    },
+    focus: {
+      order: normalizeOrder(next?.focus?.order, DEFAULT_KPI_ORDER.focus),
+      visibility: normalizeVisibility(next?.focus?.visibility, DEFAULT_KPI_ORDER.focus),
+    },
+  };
+};
+
 const getInitialLayout = (): StoredLayout => {
-  const parsed = getStorageJson<Partial<StoredLayout>>(STORAGE_KEY, {});
+  const parsed = getStorageJson<Partial<StoredLayout> | LegacyStoredLayout>(STORAGE_KEY, {});
   if (!parsed.sections && !parsed.kpis) return defaultLayout;
   return {
     sections: {
       order: normalizeOrder(parsed.sections?.order, DEFAULT_SECTION_ORDER),
       visibility: normalizeVisibility(parsed.sections?.visibility, DEFAULT_SECTION_ORDER),
     },
-    kpis: {
-      order: normalizeOrder(parsed.kpis?.order, DEFAULT_KPI_ORDER),
-      visibility: normalizeVisibility(parsed.kpis?.visibility, DEFAULT_KPI_ORDER),
-    },
+    kpis: normalizeKpiGroupLayout(parsed),
   };
 };
 
@@ -115,25 +188,31 @@ export const useDashboardLayout = () => {
     }));
   }, []);
 
-  const toggleKpi = useCallback((id: KpiCardId) => {
+  const toggleKpi = useCallback((group: KpiGroup, id: KpiCardId) => {
     setLayout((prev) => ({
       ...prev,
       kpis: {
         ...prev.kpis,
-        visibility: {
-          ...prev.kpis.visibility,
-          [id]: !prev.kpis.visibility[id],
+        [group]: {
+          ...prev.kpis[group],
+          visibility: {
+            ...prev.kpis[group].visibility,
+            [id]: !prev.kpis[group].visibility[id],
+          },
         },
       },
     }));
   }, []);
 
-  const moveKpi = useCallback((id: KpiCardId, direction: 'up' | 'down') => {
+  const moveKpi = useCallback((group: KpiGroup, id: KpiCardId, direction: 'up' | 'down') => {
     setLayout((prev) => ({
       ...prev,
       kpis: {
         ...prev.kpis,
-        order: moveItem(prev.kpis.order, id, direction),
+        [group]: {
+          ...prev.kpis[group],
+          order: moveItem(prev.kpis[group].order, id, direction),
+        },
       },
     }));
   }, []);
@@ -152,23 +231,40 @@ export const useDashboardLayout = () => {
     [layout.sections.order, layout.sections.visibility]
   );
 
-  const kpiItems = useMemo(
-    () =>
-      layout.kpis.order.map((id) => ({
+  const kpiItemsByGroup = useMemo(
+    () => ({
+      core: layout.kpis.core.order.map((id) => ({
         id,
         label: KPI_CARD_META.find((item) => item.id === id)?.label || id,
-        visible: layout.kpis.visibility[id],
+        visible: layout.kpis.core.visibility[id],
       })),
-    [layout.kpis.order, layout.kpis.visibility]
+      focus: layout.kpis.focus.order.map((id) => ({
+        id,
+        label: KPI_CARD_META.find((item) => item.id === id)?.label || id,
+        visible: layout.kpis.focus.visibility[id],
+      })),
+    }),
+    [
+      layout.kpis.core.order,
+      layout.kpis.core.visibility,
+      layout.kpis.focus.order,
+      layout.kpis.focus.visibility,
+    ]
   );
 
   return {
     sectionOrder: layout.sections.order,
     sectionVisibility: layout.sections.visibility,
-    kpiOrder: layout.kpis.order,
-    kpiVisibility: layout.kpis.visibility,
+    kpiOrderByGroup: {
+      core: layout.kpis.core.order,
+      focus: layout.kpis.focus.order,
+    },
+    kpiVisibilityByGroup: {
+      core: layout.kpis.core.visibility,
+      focus: layout.kpis.focus.visibility,
+    },
     sectionItems,
-    kpiItems,
+    kpiItemsByGroup,
     toggleSection,
     moveSection,
     toggleKpi,

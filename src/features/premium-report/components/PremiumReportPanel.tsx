@@ -251,7 +251,7 @@ export const PremiumReportPanel: React.FC = () => {
               />
             </div>
             <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
-              共 {sortedOrgReport.length} 个机构
+              共 <span className="font-tabular">{formatCount(sortedOrgReport.length)}</span> 个机构
             </div>
           </div>
 
@@ -277,7 +277,7 @@ export const PremiumReportPanel: React.FC = () => {
               />
             </div>
             <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
-              共 {sortedSalesmanReport.length} 名业务员
+              共 <span className="font-tabular">{formatCount(sortedSalesmanReport.length)}</span> 名业务员
             </div>
           </div>
         </>

@@ -17,6 +17,7 @@ import { HolidayDrilldownPanel } from './HolidayDrilldownPanel';
 import { PremiumPlanPanel } from './PremiumPlanPanel';
 import { useMarketingReport } from '../hooks/useMarketingReport';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
+import { formatCount } from '../../../shared/utils/formatters';
 
 type MarketingTab = 'report' | 'drilldown' | 'plan';
 
@@ -173,11 +174,11 @@ export const MarketingReportPanel: React.FC = () => {
             </div>
             {/* 数据统计 */}
             <div className="px-5 py-4 bg-neutral-50 dark:bg-neutral-900/50 border-t border-neutral-100 dark:border-neutral-800 text-sm font-medium text-neutral-500 dark:text-neutral-400 flex items-center">
-              共 <span className="mx-1 text-neutral-900 dark:text-white font-bold">{sortedSalesmanDetail.length}</span> 名业务员
+              共 <span className="mx-1 text-neutral-900 dark:text-white font-bold font-tabular">{formatCount(sortedSalesmanDetail.length)}</span> 名业务员
               {holidayStats.totalDays > 0 && (
                 <span className="ml-4 flex items-center">
                   <span className="mx-2 text-neutral-300 dark:text-neutral-700">|</span>
-                  假日天数: <span className="mx-1 text-neutral-900 dark:text-white font-bold">{holidayStats.totalDays}</span> 天
+                  假日天数: <span className="mx-1 text-neutral-900 dark:text-white font-bold font-tabular">{formatCount(holidayStats.totalDays)}</span> 天
                 </span>
               )}
             </div>

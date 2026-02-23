@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { cn, numericStyles } from '../../../shared/styles';
 import { formatWanDirect, formatCount } from '../../../shared/utils/formatters';
 import type { PremiumReportSummary } from '../types/premiumReport';
 
@@ -41,7 +42,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         {/* 总保费 */}
         <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">总保费</div>
-          <div className="text-xl font-bold text-blue-600">
+          <div className={cn(numericStyles.kpiPrimary, 'text-blue-600')}>
             {formatWanDirect(summary.totalPremium)}
           </div>
           <div className="text-xs text-gray-400 mt-1">万元</div>
@@ -50,7 +51,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         {/* 总件数 */}
         <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">总件数</div>
-          <div className="text-xl font-bold text-indigo-600">
+          <div className={cn(numericStyles.kpiPrimary, 'text-indigo-600')}>
             {formatCount(summary.totalPolicies)}
           </div>
           <div className="text-xs text-gray-400 mt-1">件</div>
@@ -59,8 +60,8 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         {/* 机构数量 */}
         <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">机构数</div>
-          <div className="text-xl font-bold text-green-600">
-            {summary.orgCount}
+          <div className={cn(numericStyles.kpiPrimary, 'text-green-600')}>
+            {formatCount(summary.orgCount)}
           </div>
           <div className="text-xs text-gray-400 mt-1">个</div>
         </div>
@@ -68,8 +69,8 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         {/* 业务员数量 */}
         <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">业务员数</div>
-          <div className="text-xl font-bold text-orange-600">
-            {summary.salesmanCount}
+          <div className={cn(numericStyles.kpiPrimary, 'text-orange-600')}>
+            {formatCount(summary.salesmanCount)}
           </div>
           <div className="text-xs text-gray-400 mt-1">人</div>
         </div>
@@ -77,7 +78,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         {/* 平均保费 */}
         <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
           <div className="text-xs text-gray-500 mb-1">机构平均保费</div>
-          <div className="text-xl font-bold text-purple-600">
+          <div className={cn(numericStyles.kpiPrimary, 'text-purple-600')}>
             {formatWanDirect(summary.avgPremium)}
           </div>
           <div className="text-xs text-gray-400 mt-1">万元</div>

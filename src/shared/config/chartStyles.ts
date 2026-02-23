@@ -285,15 +285,15 @@ export const TABLE_CSS_CLASSES = {
   /** 单元格（左对齐） */
   cell: 'px-4 py-3 text-sm text-neutral-900',
   /** 单元格（右对齐，用于数字） */
-  cellRight: 'px-4 py-3 text-sm text-neutral-900 text-right font-mono',
+  cellRight: 'px-4 py-3 text-sm text-neutral-900 text-right font-tabular',
   /** 单元格（次要文字，如基期数据） */
-  cellSecondary: 'px-4 py-3 text-sm text-neutral-500 text-right font-mono',
+  cellSecondary: 'px-4 py-3 text-sm text-neutral-500 text-right font-tabular',
   /** 单元格（强调，如当期数据） */
   cellPrimary: 'px-4 py-3 text-sm font-medium text-neutral-900',
   /** 增长率单元格（正向） */
-  cellGrowthPositive: 'px-4 py-3 text-sm text-right font-mono font-medium text-success-dark',
+  cellGrowthPositive: 'px-4 py-3 text-sm text-right font-tabular font-medium text-success-dark',
   /** 增长率单元格（负向） */
-  cellGrowthNegative: 'px-4 py-3 text-sm text-right font-mono font-medium text-danger',
+  cellGrowthNegative: 'px-4 py-3 text-sm text-right font-tabular font-medium text-danger',
   /** 汇总行 */
   summaryRow: 'bg-warning-bg font-semibold hover:bg-yellow-100 transition-colors',
   /** 汇总单元格 */
