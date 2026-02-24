@@ -38,9 +38,9 @@ router.post(
 
     const { username, password } = parseResult.data;
 
-    // 2. 检查 IP 锁定状态
+    // 2. 检查 IP + 用户名双键锁定状态
     const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
-    checkAccountLock(clientIp);
+    checkAccountLock(clientIp, username);
 
     // 3. 调用认证服务
     let result;
@@ -48,13 +48,13 @@ router.post(
       result = await authService.login(username, password);
     } catch (err) {
       // 登录失败：记录失败次数（可能触发锁定）+ 审计日志
-      recordLoginFailure(clientIp);
+      recordLoginFailure(clientIp, username);
       auditAuthEvent({ event: 'login_failure', username, ip: clientIp });
       throw err;
     }
 
-    // 4. 登录成功：重置失败计数 + 审计日志
-    resetLoginAttempts(clientIp);
+    // 4. 登录成功：重置失败计数（IP + 用户名） + 审计日志
+    resetLoginAttempts(clientIp, username);
     auditAuthEvent({
       event: 'login_success',
       username,

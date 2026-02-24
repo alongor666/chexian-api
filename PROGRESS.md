@@ -39,6 +39,8 @@
 | 2026-02-23 | 交叉销售保费去重修复 (B303) | transform.py 改为先 sum() 累加数值字段再去重 | check_jiayi.py 验证与源文件 100% 精确对齐 |
 | 2026-02-23 | sanitizeFilename 空格修复 (B304) | 修复正则表达式，允许文件名含空格 | security.test.ts 更新并全部通过 |
 | 2026-02-24 | 企微扫码混合登录上线 (B305) | 实现企微 OAuth 闭环，本地与生产环境双重热验证通过 | PR #41/#43 合并至 main |
+| 2026-02-24 | 安全强化 B201+B203+B204 完成 | IP+用户名双键锁定 / 环境变量密码覆盖 / AI限流补齐 | `rateLimiter.ts` / `auth.ts` / `app.ts` |
+| 2026-02-24 | E2E+组件测试框架完成 B123+B127 | 24 个图表组件单元测试通过；Playwright 配置完整含 README | `tests/components/` / `tests/e2e/README.md` |
 
 ## 2. 当前阻塞 (Blockers)
 
@@ -112,14 +114,17 @@
 - ✅ 实现三级KPI卡片 (B301)
 
 **当前重点（2026-02-24）**：
-1. **认证限流与账户锁定** - 登录 IP+用户名双键限流、失败次数锁定（B201，P0）
-2. **会话机制升级** - localStorage Token → HttpOnly Secure Cookie（B202，P0）
-3. **默认口令下线** - 环境变量强口令、首次登录改密（B203，P0）
+1. **✅ 认证限流与账户锁定** - IP+用户名双键锁定已落地（B201 DONE）
+2. **会话机制升级** - localStorage Token → HttpOnly Secure Cookie（B202，P0，待评估影响范围）
+3. **✅ 默认口令下线** - 环境变量 `USER_PASSWORDS` 覆盖机制已实现（B203 DONE）
+4. **✅ AI限流补齐** - `/api/ai` 已加 10次/分钟 限流（B204 DONE）
+5. **✅ 图表组件单测** - LineChart/BarChart/RoseChart 共 24 tests 通过（B123 DONE）
+6. **✅ Playwright 框架** - 配置完整 + test:e2e 脚本 + README（B127 DONE）
 
 **下一步行动**：
-- 启动 B201（认证限流 + 账户锁定）并验证 429/锁定响应
-- 联动 B202 设计双令牌迁移方案（access/refresh token）
-- B203 环境变量口令配置生效后同步更新 vps.md
+- 评估 B202（JWT → HttpOnly Cookie）影响范围，制定迁移方案（不影响企微 OAuth 流程）
+- 推进 B128/B129（E2E 测试用例扩展）
+- 推进 B124/B125（筛选器组件/Hooks 单元测试）
 
 ---
 

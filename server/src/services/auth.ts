@@ -23,8 +23,28 @@ export interface UserCredential {
 }
 
 /**
+ * 从环境变量加载用户密码覆盖
+ * 环境变量 USER_PASSWORDS 格式（JSON）：
+ * {"admin":"$2b$10$...","leshan":"$2b$10$..."}
+ */
+function loadPasswordOverrides(): Record<string, string> {
+  const raw = process.env.USER_PASSWORDS;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return {};
+    return parsed as Record<string, string>;
+  } catch {
+    console.warn('[Auth] USER_PASSWORDS 格式无效，使用默认配置');
+    return {};
+  }
+}
+
+const PASSWORD_OVERRIDES = loadPasswordOverrides();
+
+/**
  * 预设用户（开发/测试用）
- * 生产环境应从数据库读取
+ * 生产环境通过 USER_PASSWORDS 环境变量覆盖 passwordHash
  */
 const PRESET_USERS: Record<string, UserCredential> = {
   admin: {
@@ -145,11 +165,14 @@ class AuthService {
     const normalizedUsername = this.normalizeUsername(username);
     const normalizedPassword = this.normalizePassword(password);
 
-    // 1. 查找用户
-    const user = PRESET_USERS[normalizedUsername];
-    if (!user) {
+    // 1. 查找用户，并应用环境变量密码覆盖
+    const baseUser = PRESET_USERS[normalizedUsername];
+    if (!baseUser) {
       throw new AppError(401, 'Invalid username or password');
     }
+    const user: UserCredential = PASSWORD_OVERRIDES[normalizedUsername]
+      ? { ...baseUser, passwordHash: PASSWORD_OVERRIDES[normalizedUsername] }
+      : baseUser;
 
     // 2. 验证密码
     const isPasswordValid = await this.verifyPassword(normalizedPassword, user.passwordHash);
