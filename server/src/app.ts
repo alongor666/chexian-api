@@ -12,7 +12,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
-import { getDataDir, SERVER_ROOT } from './config/paths.js';
+import { getDataDir, getCandidateDataDirs, SERVER_ROOT } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
@@ -107,23 +107,27 @@ async function startServer() {
     console.log('[Server] Initializing DuckDB...');
     await duckdbService.init();
 
-    // 自动加载 data/ 目录中最新的 Parquet 文件
-    const dataDir = getDataDir();
-    const parquetFiles = fs.existsSync(dataDir)
-      ? fs.readdirSync(dataDir)
-        .filter(f => f.endsWith('.parquet'))
-        .map(f => ({
-          name: f,
-          path: path.join(dataDir, f),
-          mtime: fs.statSync(path.join(dataDir, f)).mtimeMs,
-          size: fs.statSync(path.join(dataDir, f)).size,
-        }))
-        .sort((a, b) => b.mtime - a.mtime) // 最新文件优先
-      : [];
+    // 扫描所有候选目录（warehouse 优先，server/data 兜底），取全局最新 Parquet
+    const candidateDirs = getCandidateDataDirs();
+    const parquetFiles = candidateDirs
+      .flatMap(dir => {
+        if (!fs.existsSync(dir)) return [];
+        return fs.readdirSync(dir)
+          .filter(f => f.endsWith('.parquet'))
+          .map(f => ({
+            name: f,
+            path: path.join(dir, f),
+            mtime: fs.statSync(path.join(dir, f)).mtimeMs,
+            size: fs.statSync(path.join(dir, f)).size,
+          }));
+      })
+      .sort((a, b) => b.mtime - a.mtime); // 全局最新优先
+
+    console.log('[Server] Parquet search dirs:', candidateDirs.filter(d => fs.existsSync(d)));
 
     // 优先选择非 test-data 的文件，否则回退到 test-data
     const dataFile = parquetFiles.find(f => !f.name.startsWith('test-data')) || parquetFiles[0];
-    const dataPath = dataFile ? dataFile.path : path.join(dataDir, 'test-data.parquet');
+    const dataPath = dataFile ? dataFile.path : path.join(getDataDir(), 'test-data.parquet');
     console.log('[Server] Loading data from:', dataPath, dataFile ? `(${(dataFile.size / 1024 / 1024).toFixed(1)} MB)` : '');
     try {
       await duckdbService.loadParquet(dataPath, 'raw_parquet');
