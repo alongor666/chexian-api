@@ -166,6 +166,60 @@ export function createDynamicLimiter(
 }
 
 // ============================================
+// 账户锁定机制（登录暴力破解防护）
+// ============================================
+
+interface LockRecord {
+  failCount: number;
+  lockedUntil?: number;
+}
+
+const loginAttempts = new Map<string, LockRecord>();
+
+const LOCK_CONFIG = {
+  MAX_ATTEMPTS: 10,                    // 连续失败超过10次触发锁定
+  LOCK_DURATION_MS: 15 * 60 * 1000,   // 锁定15分钟
+};
+
+/**
+ * 检查 IP 是否处于锁定状态（登录前调用）
+ * 若锁定则抛出 AppError(429)
+ */
+export function checkAccountLock(ip: string): void {
+  const record = loginAttempts.get(ip);
+  if (record?.lockedUntil && Date.now() < record.lockedUntil) {
+    const remaining = Math.ceil((record.lockedUntil - Date.now()) / 1000 / 60);
+    throw new AppError(429, `登录失败次数过多，请 ${remaining} 分钟后再试`);
+  }
+}
+
+/**
+ * 记录一次登录失败（登录失败后调用）
+ * 累计达到阈值后锁定 IP 15 分钟
+ */
+export function recordLoginFailure(ip: string): void {
+  const existing = loginAttempts.get(ip);
+  // 若已解锁（锁定期已过），重置计数
+  if (existing?.lockedUntil && Date.now() >= existing.lockedUntil) {
+    loginAttempts.set(ip, { failCount: 1 });
+    return;
+  }
+  const record = existing ?? { failCount: 0 };
+  record.failCount += 1;
+  if (record.failCount >= LOCK_CONFIG.MAX_ATTEMPTS) {
+    record.lockedUntil = Date.now() + LOCK_CONFIG.LOCK_DURATION_MS;
+  }
+  loginAttempts.set(ip, record);
+}
+
+/**
+ * 登录成功后重置失败计数
+ */
+export function resetLoginAttempts(ip: string): void {
+  loginAttempts.delete(ip);
+}
+
+// ============================================
 // 导出
 // ============================================
 

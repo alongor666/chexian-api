@@ -36,8 +36,20 @@ router.get('/callback', async (req: Request, res: Response) => {
     const code = req.query.code as string;
     const state = req.query.state as string;
 
+    let redirectBase = '/';
+    if (state) {
+        try {
+            const decoded = Buffer.from(state, 'base64').toString('utf-8');
+            if (decoded.startsWith('http')) {
+                redirectBase = decoded + '/';
+            }
+        } catch (e) {
+            console.warn('[WeCom Auth] Failed to decode state payload', e);
+        }
+    }
+
     if (!code) {
-        return res.redirect('/#/?error=missing_wecom_code');
+        return res.redirect(`${redirectBase}#/?error=missing_wecom_code`);
     }
 
     try {
@@ -47,7 +59,7 @@ router.get('/callback', async (req: Request, res: Response) => {
 
         if (!userId) {
             console.warn('[WeCom Auth] Could not extract UserId from WeCom response', userInfo);
-            return res.redirect('/#/?error=wecom_not_enterprise_user');
+            return res.redirect(`${redirectBase}#/?error=wecom_not_enterprise_user`);
         }
 
         // 2. 解析权限 (匹配白名单和业务员表)
@@ -57,7 +69,7 @@ router.get('/callback', async (req: Request, res: Response) => {
 
         if (!userCredential) {
             console.warn(`[WeCom Auth] User ${userId} not in admin list or salesman mapping.`);
-            return res.redirect('/#/?error=wecom_auth_denied');
+            return res.redirect(`${redirectBase}#/?error=wecom_auth_denied`);
         }
 
         // 3. 签发同格式的 JWT Token
@@ -76,11 +88,11 @@ router.get('/callback', async (req: Request, res: Response) => {
 
         // 4. 重定向回前端页面，携带 token
         // 根据需求: 302 跳回前端 /#/?wecom_token=xxx 
-        res.redirect(`/#/?wecom_token=${token}`);
+        res.redirect(`${redirectBase}#/?wecom_token=${token}`);
 
     } catch (error: any) {
         console.error('[WeCom Auth] Callback error:', error.message);
-        res.redirect('/#/?error=wecom_auth_failed');
+        res.redirect(`${redirectBase}#/?error=wecom_auth_failed`);
     }
 });
 

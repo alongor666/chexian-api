@@ -79,6 +79,13 @@ const injectKPICardStyles = () => {
   document.head.appendChild(style);
 };
 
+const escapeHtml = (str: string): string =>
+  String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
 export const renderKPICards = (kpiData: KPISummary, container: HTMLElement, logger: Logger): void => {
   const cards: KPICardData[] = [
     {
@@ -121,13 +128,13 @@ export const renderKPICards = (kpiData: KPISummary, container: HTMLElement, logg
       ${cards
         .map(
           (card) => `
-        <div class="kpi-card kpi-card--${card.status}">
-          <div class="kpi-card__label">${card.label}</div>
+        <div class="kpi-card kpi-card--${escapeHtml(card.status ?? '')}">
+          <div class="kpi-card__label">${escapeHtml(card.label)}</div>
           <div class="kpi-card__value">
-            ${formatValue(card.value, card.unit)}
+            ${escapeHtml(formatValue(card.value, card.unit))}
           </div>
           ${card.threshold !== undefined ? `
-            <div class="kpi-card__threshold">阈值: ${card.threshold}${card.unit}</div>
+            <div class="kpi-card__threshold">阈值: ${escapeHtml(String(card.threshold))}${escapeHtml(card.unit ?? '')}</div>
           ` : ''}
         </div>
       `

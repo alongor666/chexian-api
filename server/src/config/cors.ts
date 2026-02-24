@@ -37,7 +37,13 @@ const allowedOrigins = (() => {
   if (process.env.NODE_ENV === 'development') {
     return Array.from(new Set([...envOrigins, ...devOrigins]));
   }
-  return envOrigins.length > 0 ? envOrigins : devOrigins;
+  // 生产环境：必须显式配置 CORS_ORIGIN，禁止回退到开发端口
+  if (envOrigins.length === 0) {
+    throw new Error(
+      '[CORS] 生产环境必须设置 CORS_ORIGIN 环境变量（如: CORS_ORIGIN=https://chexian.cretvalu.com）'
+    );
+  }
+  return envOrigins;
 })();
 
 export const corsConfig: CorsOptions = {

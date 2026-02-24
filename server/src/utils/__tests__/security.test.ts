@@ -58,7 +58,6 @@ describe('sanitizeFilename - 文件名安全验证', () => {
       { input: 'test|cat /etc/passwd.parquet', desc: '管道注入' },
       { input: 'test`whoami`.parquet', desc: '反引号注入' },
       { input: 'test$(id).parquet', desc: '命令替换' },
-      { input: 'test file.parquet', desc: '空格' },
       { input: 'test\tfile.parquet', desc: '制表符' },
       { input: 'test\nfile.parquet', desc: '换行符' },
     ];

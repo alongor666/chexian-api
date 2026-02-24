@@ -70,8 +70,8 @@ export const LoginPage: React.FC = () => {
       const config = await apiClient.getWeComConfig();
       if (config) {
         const { corpId, agentId, callbackUrl } = config;
-        // Generate State
-        const state = Math.random().toString(36).substring(7);
+        // Generate State with frontend origin to fix callback redirect in local dev
+        const state = btoa(window.location.origin).replace(/=/g, '');
         // 跳转到企微扫码授权页面
         const qrUrl = `https://open.work.weixin.qq.com/wwopen/sso/qrConnect?appid=${corpId}&agentid=${agentId}&redirect_uri=${encodeURIComponent(callbackUrl)}&state=${state}`;
         window.location.href = qrUrl;

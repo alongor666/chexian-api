@@ -17,7 +17,7 @@ import { duckdbService } from './services/duckdb.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 const app: Application = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 /**
  * 1. 安全中间件
@@ -163,11 +163,12 @@ async function startServer() {
       console.warn('[Server] Server will start without data. APIs will return empty results.');
     }
 
-    // 启动HTTP服务器
-    app.listen(PORT, () => {
-      console.log(`[Server] 🚀 Server is running on http://localhost:${PORT}`);
+    // 启动HTTP服务器（仅监听本地回环，禁止 0.0.0.0 暴露）
+    const BIND_HOST = process.env.BIND_HOST || '127.0.0.1';
+    app.listen(PORT, BIND_HOST, () => {
+      console.log(`[Server] 🚀 Server is running on http://${BIND_HOST}:${PORT}`);
       console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`[Server] Health check: http://localhost:${PORT}/health`);
+      console.log(`[Server] Health check: http://${BIND_HOST}:${PORT}/health`);
       console.log(`[Server] API docs: See server/README.md`);
     });
   } catch (error) {

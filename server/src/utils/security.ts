@@ -44,11 +44,11 @@ export function sanitizeFilename(filename: string): string {
   // 移除 Null 字节（防止 Null 字节注入）
   decoded = decoded.replace(/\x00/g, '');
 
-  // 只允许安全字符：字母、数字、下划线、连字符、点、中文字符
-  // 禁止：路径分隔符（/ \ :）、特殊字符（< > | " ' ? * ; $ ` \s）、控制字符以及全角斜杠
-  const dangerousPattern = /[\/\\:<>|"'?\*;$`\s\x00-\x1f／]/;
+  // 只允许安全字符：字母、数字、下划线、连字符、点、中文字符、空格
+  // 禁止：路径分隔符（/ \ :）、特殊字符（< > | " ' ? * ; $ ` \x00-\x1f）、以及全角斜杠
+  const dangerousPattern = /[\/\\:<>|"'?\*;$`\x00-\x1f／]/;
   if (dangerousPattern.test(decoded)) {
-    throw new AppError(400, '文件名包含非法字符（路径分隔符或控制字符）');
+    throw new AppError(400, '文件名包含非法字符（路径分隔符、控制字符或特定符号）');
   }
 
   // 禁止路径遍历模式
@@ -331,6 +331,8 @@ export const TEST_CASES = {
       'test-data.parquet',
       'file_123.parquet',
       'My-File-2024.parquet',
+      '车险保单综合明细表 0212.parquet',
+      'file with spaces.parquet',
     ],
     invalid: [
       '',                           // 空文件名
