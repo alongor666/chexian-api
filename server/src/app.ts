@@ -142,11 +142,15 @@ async function startServer() {
       console.log(`[Server] PolicyFact row count: ${rowCount}`);
 
       // 加载团队映射表（业务员 → 团队归属）
-      const teamMappingPath = path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
+      // 本地开发路径优先，VPS 部署 fallback 到 server/data/
+      const teamMappingPrimary = path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
+      const teamMappingFallback = path.resolve(getDataDir(), 'salesman_organization_mapping.json');
+      const teamMappingPath = fs.existsSync(teamMappingPrimary) ? teamMappingPrimary : teamMappingFallback;
       try {
         await duckdbService.loadTeamMapping(teamMappingPath);
+        console.log('[Server] Team mapping loaded from:', teamMappingPath);
       } catch (err) {
-        console.warn('[Server] Warning: Failed to load team mapping:', err);
+        console.warn('[Server] Warning: Failed to load team mapping from both paths:', teamMappingPrimary, teamMappingFallback);
       }
 
       // 注册当前数据文件（使 /api/data/files 返回 isCurrent: true）

@@ -33,6 +33,12 @@ if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$VPS_HOST" true 2>/dev/null; the
     exit 1
 fi
 
+# 确保本地数据目录存在
+if [ ! -d "$LOCAL_DATA" ]; then
+    echo -e "${YELLOW}本地数据目录不存在，自动创建: $LOCAL_DATA${NC}"
+    mkdir -p "$LOCAL_DATA"
+fi
+
 # 确定要同步的文件
 if [ -n "$1" ]; then
     FILE="$1"

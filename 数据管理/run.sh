@@ -50,23 +50,35 @@ check_deps() {
     echo -e "${GREEN}依赖检查完成${NC}"
 }
 
+# 确保必要目录存在（防止 clone 后目录缺失）
+ensure_dirs() {
+    mkdir -p warehouse/fact/policy
+    mkdir -p warehouse/fact/renewal
+    mkdir -p staging
+    mkdir -p logs
+    mkdir -p 数据分析报告
+}
+
 # 主逻辑
 case "${1:-help}" in
     transform)
         print_header "Excel → Parquet 转换"
         check_deps
+        ensure_dirs
         shift
         python3 pipelines/transform.py "$@"
         ;;
     enrich)
         print_header "续保类型匹配增强"
         check_deps
+        ensure_dirs
         shift
         python3 pipelines/enrich.py "$@"
         ;;
     full)
         print_header "完整数据处理流程"
         check_deps
+        ensure_dirs
         shift
         # 解析参数
         SOURCE=""

@@ -169,18 +169,30 @@ def process_renewal_status(df):
     elif '是否续保' in df.columns:
         print(f"   找到'是否续保'字段，检查内容类型...")
 
-        # 检查"是否续保"列的值是否看起来像保单号（长度>10的字符串）
-        sample_values = df['是否续保'].dropna().head(100).astype(str)
-        looks_like_policy_no = sample_values.str.len().mean() > 10
+        # 更智能的判断：检查是否有数字/保单号格式的值（长度>=10或包含数字）
+        def is_policy_number_format(val):
+            if pd.isna(val):
+                return False
+            s = str(val).strip().lower()
+            if s in ('', 'nan', 'none', '是', '否', 'true', 'false'):
+                return False
+            # 保单号通常是长数字串或包含数字
+            has_digits = any(c.isdigit() for c in s)
+            is_long = len(s) >= 10
+            return has_digits and is_long
 
-        if looks_like_policy_no:
+        # 检查是否有保单号格式的值
+        sample_values = df['是否续保'].dropna().head(100)
+        has_policy_format = sample_values.apply(is_policy_number_format).any()
+
+        if has_policy_format:
             # "是否续保"列实际存储的是续保单号
             print(f"   ⚠️  '是否续保'列实际存储的是续保单号（保单号格式）")
             print(f"   原始值分布（前10）:\n{df['是否续保'].value_counts(dropna=False).head(10)}")
 
             # 将"是否续保"列重命名/复制为"续保单号"
             df['续保单号'] = df['是否续保'].apply(
-                lambda x: x if (pd.notna(x) and str(x).strip() != '' and str(x).lower() != 'nan') else None
+                lambda x: str(x).strip() if is_policy_number_format(x) else None
             )
             valid_renewal_no_count = df['续保单号'].notna().sum()
             print(f"   ✅ 将'是否续保'转换为'续保单号': {valid_renewal_no_count:,} 条 ({valid_renewal_no_count/len(df)*100:.2f}%)")
@@ -191,7 +203,9 @@ def process_renewal_status(df):
         else:
             # "是否续保"列存储的是布尔值
             print(f"   '是否续保'列是布尔值类型")
-            df['是否续保'] = df['是否续保'].notna() & (df['是否续保'] != '') & (df['是否续保'] != 'nan')
+            df['是否续保'] = df['是否续保'].apply(
+                lambda x: str(x).strip().lower() in ('是', 'true', '1', 'yes')
+            )
             df['续保单号'] = None
             print(f"   ⚠️  未找到续保单号数据，续保单号列设为空")
 
@@ -631,6 +645,9 @@ def save_to_parquet(df, output_path):
     for col in df.columns:
         print(f"      {col}: {df[col].dtype}")
 
+    # 确保输出目录存在（防止 clone 后目录缺失）
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
     # 保存
     df.to_parquet(output_path, index=False)
     print(f"\n   ✅ 成功保存到: {output_path}")
@@ -657,7 +674,11 @@ def main():
     print(f"\n{'='*80}")
     print(f"📂 加载数据")
     print(f"{'='*80}")
-    df = pd.read_excel(INPUT_FILE)
+
+    # 强制字符串读取可能包含大数字的列（保单号等），避免科学计数法溢出
+    str_columns = ['保单号', '是否续保', '续保单号', '车架号', '批单号']
+    dtype_map = {col: str for col in str_columns}
+    df = pd.read_excel(INPUT_FILE, dtype=dtype_map)
     print(f"✅ 加载成功: {len(df):,} 行 × {len(df.columns)} 列")
 
     # 2. 分析原始数据质量
