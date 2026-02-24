@@ -52,6 +52,7 @@
 | 综合审查报告 | `开发文档/reviews/2026-01-10-code-quality-review.md` | PR #35 审查：测试覆盖率、类型安全、性能优化 |
 | **改进路线图** | `开发文档/reviews/quality-improvement-roadmap.md` | **4周工程化实施计划（Week-by-Week）** |
 | **Linear任务导出** | `开发文档/reviews/linear-tasks-export.md` | **16个可执行任务（含验收标准）** |
+| **Code Review（2026-02-24）** | `开发文档/reviews/2026-02-24-code-review.md` | 聚焦企微登录与治理账本一致性的专项审查（2个P0） |
 
 ---
 
