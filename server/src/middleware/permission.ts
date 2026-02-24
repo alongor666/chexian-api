@@ -56,8 +56,8 @@ export function permissionMiddleware(
       if (!organization) {
         throw new AppError(403, 'Organization not specified for ORG_USER role');
       }
-      // 使用LIKE支持模糊匹配（如"乐山"可匹配"乐山中支"）
-      req.permissionFilter = `org_level_3 LIKE '%${escapeSqlString(organization)}%'`;
+      // 使用LIKE支持模糊匹配（如"乐山"可匹配"乐山中支"），ESCAPE防止通配符绕过
+      req.permissionFilter = `org_level_3 LIKE '%${escapeSqlString(organization)}%' ESCAPE '\\'`;
     } else {
       // 未知角色
       throw new AppError(403, 'Invalid user role');
@@ -70,11 +70,14 @@ export function permissionMiddleware(
 }
 
 /**
- * 转义SQL字符串，防止SQL注入
- * 注意：这是简单的转义，生产环境应使用参数化查询
+ * 转义SQL字符串，防止SQL注入和LIKE通配符绕过
+ * 转义单引号（注入）及 % _ 通配符（LIKE绕过）
  */
 function escapeSqlString(str: string): string {
-  return str.replace(/'/g, "''");
+  return str
+    .replace(/'/g, "''")
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_');
 }
 
 /**

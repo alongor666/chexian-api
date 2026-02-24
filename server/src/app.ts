@@ -17,7 +17,7 @@ import { duckdbService } from './services/duckdb.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 const app: Application = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 /**
  * 1. 安全中间件
@@ -142,11 +142,15 @@ async function startServer() {
       console.log(`[Server] PolicyFact row count: ${rowCount}`);
 
       // 加载团队映射表（业务员 → 团队归属）
-      const teamMappingPath = path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
+      // 本地开发路径优先，VPS 部署 fallback 到 server/data/
+      const teamMappingPrimary = path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
+      const teamMappingFallback = path.resolve(getDataDir(), 'salesman_organization_mapping.json');
+      const teamMappingPath = fs.existsSync(teamMappingPrimary) ? teamMappingPrimary : teamMappingFallback;
       try {
         await duckdbService.loadTeamMapping(teamMappingPath);
+        console.log('[Server] Team mapping loaded from:', teamMappingPath);
       } catch (err) {
-        console.warn('[Server] Warning: Failed to load team mapping:', err);
+        console.warn('[Server] Warning: Failed to load team mapping from both paths:', teamMappingPrimary, teamMappingFallback);
       }
 
       // 注册当前数据文件（使 /api/data/files 返回 isCurrent: true）
@@ -163,11 +167,12 @@ async function startServer() {
       console.warn('[Server] Server will start without data. APIs will return empty results.');
     }
 
-    // 启动HTTP服务器
-    app.listen(PORT, () => {
-      console.log(`[Server] 🚀 Server is running on http://localhost:${PORT}`);
+    // 启动HTTP服务器（仅监听本地回环，禁止 0.0.0.0 暴露）
+    const BIND_HOST = process.env.BIND_HOST || '127.0.0.1';
+    app.listen(PORT, BIND_HOST, () => {
+      console.log(`[Server] 🚀 Server is running on http://${BIND_HOST}:${PORT}`);
       console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`[Server] Health check: http://localhost:${PORT}/health`);
+      console.log(`[Server] Health check: http://${BIND_HOST}:${PORT}/health`);
       console.log(`[Server] API docs: See server/README.md`);
     });
   } catch (error) {

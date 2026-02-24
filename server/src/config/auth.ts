@@ -16,7 +16,7 @@ export interface AuthConfig {
 
 export const authConfig: AuthConfig = {
   jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '4h',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   bcryptSaltRounds: 10,
 };

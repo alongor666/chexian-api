@@ -36,11 +36,32 @@ interface AuditLogEntry {
   duration: number;        // 响应时间（毫秒）
 }
 
+/** 需要记录审计日志的路径前缀 */
+const AUDITED_PATHS = ['/api/query', '/api/data'];
+
+/**
+ * 将日志条目写入文件（共用工具）
+ */
+function writeAuditLog(entry: AuditLogEntry): void {
+  try {
+    const logLine = JSON.stringify(entry) + '\n';
+    const logDir = path.dirname(AUDIT_LOG_PATH);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true, mode: 0o700 });
+    }
+    fs.appendFile(AUDIT_LOG_PATH, logLine, (err) => {
+      if (err) console.error('[Audit] 写入审计日志失败:', err);
+    });
+  } catch (error) {
+    console.error('[Audit] 审计日志记录异常:', error);
+  }
+}
+
 /**
  * 审计日志中间件
  *
  * 功能：
- * - 仅记录已认证用户的查询 API 请求（/api/query/*）
+ * - 记录已认证用户的查询 API（/api/query/*）和数据上传（/api/data/*）请求
  * - 以 JSON Lines 格式追加到日志文件
  * - 记录请求的关键信息和响应时间
  *
@@ -50,19 +71,15 @@ interface AuditLogEntry {
  * - 定期轮转日志文件（通过 logrotate）
  */
 export function auditMiddleware(req: Request, res: Response, next: NextFunction) {
-  // 记录请求开始时间
   const startTime = Date.now();
 
-  // 监听响应完成事件
   res.on('finish', () => {
     try {
-      // 过滤条件：仅记录已认证用户的查询 API
-      if (!req.user || !req.originalUrl.startsWith('/api/query')) {
-        return;
-      }
+      // 过滤条件：已认证用户 + 受审计路径
+      const isAudited = AUDITED_PATHS.some(p => req.originalUrl.startsWith(p));
+      if (!req.user || !isAudited) return;
 
-      // 构建审计日志条目
-      const logEntry: AuditLogEntry = {
+      writeAuditLog({
         timestamp: new Date().toISOString(),
         username: req.user.username,
         userId: req.user.userId,
@@ -74,30 +91,39 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
         query: req.query,
         status: res.statusCode,
         duration: Date.now() - startTime,
-      };
-
-      // 以 JSON Lines 格式追加到日志文件
-      const logLine = JSON.stringify(logEntry) + '\n';
-
-      // 确保日志目录存在
-      const logDir = path.dirname(AUDIT_LOG_PATH);
-      if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true, mode: 0o700 });
-      }
-
-      // 追加到审计日志（异步，不阻塞响应）
-      fs.appendFile(AUDIT_LOG_PATH, logLine, (err) => {
-        if (err) {
-          console.error('[Audit] 写入审计日志失败:', err);
-        }
       });
     } catch (error) {
-      // 审计日志失败不应影响业务请求
       console.error('[Audit] 审计日志记录异常:', error);
     }
   });
 
   next();
+}
+
+/**
+ * 显式记录认证事件（登录成功/失败）
+ * 在 auth 路由中主动调用，无需等待 req.user 挂载
+ */
+export function auditAuthEvent(params: {
+  event: 'login_success' | 'login_failure';
+  username: string;
+  ip: string;
+  role?: string;
+  organization?: string;
+}): void {
+  writeAuditLog({
+    timestamp: new Date().toISOString(),
+    username: params.username,
+    userId: params.username,
+    role: params.role ?? 'unknown',
+    organization: params.organization,
+    ip: params.ip,
+    method: 'POST',
+    path: '/api/auth/login',
+    query: { event: params.event },
+    status: params.event === 'login_success' ? 200 : 401,
+    duration: 0,
+  });
 }
 
 /**
