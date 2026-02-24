@@ -16,6 +16,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "governance": "node scripts/check-governance.mjs",
     "plans:manage": "node scripts/manage-plans.mjs"
   },

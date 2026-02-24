@@ -28,3 +28,12 @@ if (
 ) {
   throw new Error('JWT_SECRET must be set in production environment');
 }
+
+// 生产环境下，若未配置 USER_PASSWORDS 则警告（不强制退出，允许使用默认哈希）
+if (process.env.NODE_ENV === 'production' && !process.env.USER_PASSWORDS) {
+  console.warn(
+    '[Auth] WARNING: USER_PASSWORDS environment variable is not set. ' +
+    'Default password hashes are in use. ' +
+    'Set USER_PASSWORDS to a JSON map of username -> bcrypt hash for production security.'
+  );
+}

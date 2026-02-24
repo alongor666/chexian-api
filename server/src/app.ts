@@ -52,13 +52,15 @@ app.use(auditMiddleware);
  * 4.5 API 限流中间件
  * 防止恶意高频请求
  */
-import { apiLimiter, loginLimiter, queryLimiter } from './middleware/rateLimiter.js';
-// 通用限流
+import { apiLimiter, loginLimiter, queryLimiter, aiLimiter } from './middleware/rateLimiter.js';
+// 通用限流（兜底：100次/分钟）
 app.use('/api', apiLimiter);
-// 登录接口严格限流
+// 登录接口严格限流（5次/分钟）
 app.use('/api/auth/login', loginLimiter);
-// 查询接口限流
+// 查询接口限流（30次/分钟）
 app.use('/api/query', queryLimiter);
+// AI接口最严格限流（10次/分钟）
+app.use('/api/ai', aiLimiter);
 
 /**
  * 5. 健康检查路由

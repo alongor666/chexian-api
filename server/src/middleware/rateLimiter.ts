@@ -182,11 +182,10 @@ const LOCK_CONFIG = {
 };
 
 /**
- * 检查 IP 是否处于锁定状态（登录前调用）
- * 若锁定则抛出 AppError(429)
+ * 内部：检查单个 key 是否锁定
  */
-export function checkAccountLock(ip: string): void {
-  const record = loginAttempts.get(ip);
+function _checkKeyLock(key: string): void {
+  const record = loginAttempts.get(key);
   if (record?.lockedUntil && Date.now() < record.lockedUntil) {
     const remaining = Math.ceil((record.lockedUntil - Date.now()) / 1000 / 60);
     throw new AppError(429, `登录失败次数过多，请 ${remaining} 分钟后再试`);
@@ -194,14 +193,13 @@ export function checkAccountLock(ip: string): void {
 }
 
 /**
- * 记录一次登录失败（登录失败后调用）
- * 累计达到阈值后锁定 IP 15 分钟
+ * 内部：记录单个 key 的失败次数
  */
-export function recordLoginFailure(ip: string): void {
-  const existing = loginAttempts.get(ip);
+function _recordKeyFailure(key: string): void {
+  const existing = loginAttempts.get(key);
   // 若已解锁（锁定期已过），重置计数
   if (existing?.lockedUntil && Date.now() >= existing.lockedUntil) {
-    loginAttempts.set(ip, { failCount: 1 });
+    loginAttempts.set(key, { failCount: 1 });
     return;
   }
   const record = existing ?? { failCount: 0 };
@@ -209,14 +207,42 @@ export function recordLoginFailure(ip: string): void {
   if (record.failCount >= LOCK_CONFIG.MAX_ATTEMPTS) {
     record.lockedUntil = Date.now() + LOCK_CONFIG.LOCK_DURATION_MS;
   }
-  loginAttempts.set(ip, record);
+  loginAttempts.set(key, record);
 }
 
 /**
- * 登录成功后重置失败计数
+ * 检查 IP 和用户名双键锁定状态（登录前调用）
+ * IP 锁定：同一 IP 高频失败
+ * 用户名锁定：同一用户名跨 IP 高频失败
+ * 若任一锁定则抛出 AppError(429)
  */
-export function resetLoginAttempts(ip: string): void {
+export function checkAccountLock(ip: string, username?: string): void {
+  _checkKeyLock(ip);
+  if (username) {
+    _checkKeyLock(`user:${username}`);
+  }
+}
+
+/**
+ * 记录一次登录失败（登录失败后调用）
+ * 同时累计 IP 和用户名两个维度的失败次数
+ * 累计达到阈值后锁定对应 key 15 分钟
+ */
+export function recordLoginFailure(ip: string, username?: string): void {
+  _recordKeyFailure(ip);
+  if (username) {
+    _recordKeyFailure(`user:${username}`);
+  }
+}
+
+/**
+ * 登录成功后重置失败计数（IP 和用户名两个 key）
+ */
+export function resetLoginAttempts(ip: string, username?: string): void {
   loginAttempts.delete(ip);
+  if (username) {
+    loginAttempts.delete(`user:${username}`);
+  }
 }
 
 // ============================================
