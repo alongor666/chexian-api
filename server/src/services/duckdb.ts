@@ -354,6 +354,32 @@ class DuckDBService {
       SELECT * FROM PolicyFact
     `);
     console.log('[DuckDB] PolicyFactRenewal view created');
+
+    // 若已加载团队规划映射，则在 PolicyFact 刷新后重建 achievement_cache，避免上传新数据后缓存过期
+    await this.rebuildAchievementCacheIfReady(2026);
+  }
+
+  /**
+   * 当 SalesmanTeamMapping 已存在时重建 achievement_cache；未加载映射则跳过
+   */
+  private async rebuildAchievementCacheIfReady(planYear: number = 2026): Promise<void> {
+    try {
+      const mappingTable = await this.query<{ table_name: string }>(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'main'
+          AND table_name = 'SalesmanTeamMapping'
+      `);
+
+      if (mappingTable.length === 0) {
+        console.log('[DuckDB] SalesmanTeamMapping not loaded, skip achievement_cache rebuild');
+        return;
+      }
+
+      await this.buildAchievementView(planYear);
+    } catch (error) {
+      console.warn(`[DuckDB] Failed to rebuild achievement_cache after PolicyFact refresh: ${String(error)}`);
+    }
   }
 
   /**

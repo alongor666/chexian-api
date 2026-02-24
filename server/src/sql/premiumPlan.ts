@@ -101,7 +101,7 @@ function buildAggSelect(groupField: string, extraFields: string = ''): string {
   return `
     ${groupField}                                            AS group_name,
     ${extraFields}
-    plan_year,
+    MAX(plan_year)                                           AS plan_year,
     SUM(plan_vehicle)                                        AS plan_vehicle,
     SUM(plan_vehicle)                                        AS plan_total,
     SUM(actual_vehicle)                                      AS actual_vehicle,
