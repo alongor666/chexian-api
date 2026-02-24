@@ -632,6 +632,12 @@ deploy_full() {
 
   cd ${PROJECT_ROOT}/server
 
+  # 保留可能存在的企微配置
+  EXISTING_WECOM_VARS=""
+  if [ -f .env ]; then
+    EXISTING_WECOM_VARS=$(grep '^WECOM_' .env || true)
+  fi
+
   # 生成 JWT_SECRET
   JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
 
@@ -647,6 +653,11 @@ DATA_PATH=./data
 LOG_LEVEL=warn
 AUDIT_LOG_PATH=../logs/audit.log
 ENVEOF
+
+  if [ -n "$EXISTING_WECOM_VARS" ]; then
+    echo "$EXISTING_WECOM_VARS" >> .env
+    echo -e "${YELLOW}已自动保留原有的企微配置 (WECOM_xxx)${NC}"
+  fi
 
   chmod 600 .env
 
