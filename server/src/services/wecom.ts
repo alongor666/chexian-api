@@ -56,7 +56,7 @@ class WeComService {
 
                 const url = `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${corpId}&corpsecret=${secret}`;
                 const response = await fetch(url);
-                const data = await response.json() as Record<string, any>;
+                const data = await response.json();
 
                 if (data.errcode !== 0) {
                     throw new Error(`Failed to get WeCom access token: ${data.errmsg}`);
@@ -82,13 +82,13 @@ class WeComService {
         const url = `https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo?access_token=${token}&code=${code}`;
 
         const response = await fetch(url);
-        const data = await response.json() as Record<string, any>;
+        const data = await response.json();
 
         if (data.errcode !== 0) {
             throw new Error(`WeCom getUserInfo failed: ${data.errmsg}`);
         }
 
-        return data as WeComUserInfo;
+        return data;
     }
 
     /**
@@ -107,13 +107,9 @@ class WeComService {
 
         // 2. 检查业务员映射
         try {
-            // 兼容两种数据存储路径：本地开发环境 vs VPS生产环境
-            let mappingPath = path.resolve(process.cwd(), '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
-            try {
-                await fs.access(mappingPath);
-            } catch {
-                mappingPath = path.resolve(process.cwd(), 'data/salesman_organization_mapping.json');
-            }
+            // JSON 文件路径：数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json
+            // 由于 server 从 src/ 启动，需向上跳出 server 并在项目根目录找
+            const mappingPath = path.resolve(process.cwd(), '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
             const data = await fs.readFile(mappingPath, 'utf8');
             const root = JSON.parse(data);
             const mappingList = root.salesman_mapping || [];

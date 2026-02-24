@@ -73,6 +73,7 @@ server/.env
 
 # 密码文档（禁止提交）
 PASSWORDS.txt
+PASSWORDS.local.txt
 
 # 本地设置（不提交）
 .claude/settings.local.json
