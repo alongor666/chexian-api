@@ -334,52 +334,46 @@ ss -tlnp                         # 查看监听端口
 
 #### 访问限制
 
-**当前白名单** (Nginx `geo $allowed_ip`):
+**当前策略（2026-02-24 更新）**: IP 白名单已移除，改为强密码认证。
 
-| IP/网段 | 说明 |
-|---------|------|
-| `10.0.0.0/8` | 内网 A 类 |
-| `172.16.0.0/12` | 内网 B 类 |
-| `192.168.0.0/16` | 内网 C 类 |
-| `127.0.0.0/8` | VPS 本地健康检查 |
-| `67.209.184.33` | alongor Mac 公网 IP (旧) |
-| `67.209.176.118` | alongor Mac 公网 IP (当前 2026-02-20) |
+> 原因：公司内网出口为中国电信动态 IP（ASN AS4134），无法用 CIDR 段精确限制，改为开放登录页 + 强密码保护。
 
-**添加新用户 IP**（VPS 上执行）:
-```bash
-# 1. 编辑 Nginx 配置
-vi /etc/nginx/conf.d/chexian.conf
-# 在 geo $allowed_ip 块内添加:  NEW_IP 1;
-
-# 2. 测试并重载
-nginx -t && systemctl reload nginx
-```
-
-**注意**: 如果你的公网 IP 变更（如切换网络/重启路由器），需要更新白名单才能访问。查看当前 IP: `curl ifconfig.me`
+| 层级 | 机制 | 说明 |
+|------|------|------|
+| Nginx | 无 IP 限制 | 任何 IP 均可访问登录页 |
+| Express | loginLimiter 5次/分钟 | 防暴力破解 |
+| 应用层 | JWT + 强密码 bcrypt | 唯一认证屏障 |
 
 #### 账号清单 (13个用户)
 
 | 用户名 | 密码 | 角色 | 数据范围 |
 |--------|------|------|---------|
-| admin | admin123 | branch_admin | 乐山全局（所有机构） |
-| leshan | leshan123 | org_user | 乐山分公司 |
-| tianfu | tianfu123 | org_user | 天府新区支公司 |
-| *其他机构* | *{用户名}123* | org_user | *对应机构* |
+| `admin` | `CxAdmin@2026!` | branch_admin | 乐山全局（所有机构） |
+| `leshan` | `CxLeshan@2026!` | org_user | 乐山 |
+| `tianfu` | `CxTianfu@2026!` | org_user | 天府 |
+| `yibin` | `CxYibin@2026!` | org_user | 宜宾 |
+| `deyang` | `CxDeyang@2026!` | org_user | 德阳 |
+| `xindu` | `CxXindu@2026!` | org_user | 新都 |
+| `wuhou` | `CxWuhou@2026!` | org_user | 武侯 |
+| `luzhou` | `CxLuzhou@2026!` | org_user | 泸州 |
+| `zigong` | `CxZigong@2026!` | org_user | 自贡 |
+| `ziyang` | `CxZiyang@2026!` | org_user | 资阳 |
+| `dazhou` | `CxDazhou@2026!` | org_user | 达州 |
+| `qingyang` | `CxQingyang@2026!` | org_user | 青羊 |
+| `gaoxin` | `CxGaoxin@2026!` | org_user | 高新 |
 
 **完整列表**: `server/src/services/auth.ts` → `PRESET_USERS`
 
-> ⚠️ 所有密码均为弱密码（`{用户名}123`），仅适用于内部测试环境。
-
-### 当前状态 (2026-02-15 最终验证)
+### 当前状态 (2026-02-24 更新)
 
 | 组件 | 状态 | 详情 |
 |------|------|------|
-| **后端服务 (PM2)** | ✅ 运行中 | 内存 ~231MB, 675,423 行数据已加载 |
-| **HTTPS + SSL** | ✅ 正常 | Let's Encrypt, 有效期至 **2026-05-16** (89天) |
+| **后端服务 (PM2)** | ✅ 运行中 | 681,760 行数据已加载 |
+| **HTTPS + SSL** | ✅ 正常 | Let's Encrypt, 有效期至 **2026-05-16** |
 | **HTTP→HTTPS 重定向** | ✅ 正常 | 301 Moved Permanently |
-| **Nginx IP 白名单** | ✅ 正常 | 外网非白名单 IP 返回 403 |
+| **Nginx IP 白名单** | ✅ 已移除 | 改为强密码认证，全网可访问登录页 |
 | **审计日志** | ✅ 记录中 | `/var/www/chexian/logs/audit.log` |
-| **API 登录** | ✅ 正常 | admin/admin123 → JWT Token |
+| **API 登录** | ✅ 正常 | admin/CxAdmin@2026! → JWT Token |
 | **KPI 查询** | ✅ 正常 | 总保费 5.17亿, 675,423件, 13机构, 332人 |
 | **数据文件列表** | ✅ 正常 | `/api/data/files` 返回中文 Parquet 文件 |
 | **端口 3000 外网** | ✅ 不可达 | 安全组已阻止外网直连 |
@@ -393,9 +387,9 @@ nginx -t && systemctl reload nginx
 ### 架构说明
 
 ```
-用户浏览器 (白名单IP)
+用户浏览器 (任意IP)
   ↓ HTTPS :443
-Nginx (SSL终止 + IP白名单 + 安全头)
+Nginx (SSL终止 + 安全头)
   ├─ /            → /var/www/chexian/frontend/dist  (React SPA)
   ├─ /api/        → proxy_pass http://127.0.0.1:3000  (反向代理)
   └─ /health      → proxy_pass http://127.0.0.1:3000/health
@@ -414,7 +408,7 @@ PM2: chexian-api (Node.js v22 + Express)
 | # | 问题 | 风险 | 状态 |
 |---|------|------|------|
 | 1 | **端口 3000 监听 `0.0.0.0`** | 若安全组误开端口，后端直接暴露 | ⚠️ 待修复：修改 `ecosystem.config.cjs` 设置 `HOST=127.0.0.1` |
-| 2 | **所有密码均为弱密码** | 用户名+123，易被猜测 | ⚠️ 待修复：修改 `server/src/services/auth.ts` 使用强密码 |
+| 2 | ~~所有密码均为弱密码~~ | ~~用户名+123，易被猜测~~ | ✅ 已修复（2026-02-24，升级为 `Cx{Username}@2026!`） |
 | 3 | ~~DuckDB 缓存文件权限 644~~ | ~~任意用户可读~~ | ✅ 已修复（chmod 600） |
 | 4 | ~~无自动备份~~ | ~~数据丢失无法恢复~~ | ✅ 已修复（cron 每天 02:00） |
 
@@ -674,4 +668,4 @@ bash /usr/local/bin/chexian-vps-deploy.sh --action rollback-access
 
 ---
 
-**最后更新**: 2026-02-20（新增应急公网开放 + 自动回滚 Runbook）
+**最后更新**: 2026-02-24（移除 IP 白名单，升级全员强密码，补全 13 个用户）
