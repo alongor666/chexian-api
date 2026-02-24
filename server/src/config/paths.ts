@@ -19,3 +19,13 @@ export const SERVER_ROOT = path.resolve(__dirname, '..', '..');
 export function getDataDir(): string {
   return path.resolve(SERVER_ROOT, 'data');
 }
+
+/**
+ * 获取所有候选 Parquet 数据目录（按优先级排序）。
+ * 本地开发：warehouse 目录优先（最新数据直接可用，无需手动 cp）
+ * VPS 部署：只有 server/data/，warehouse 目录不存在则自动跳过
+ */
+export function getCandidateDataDirs(): string[] {
+  const warehouseDir = path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/policy');
+  return [warehouseDir, getDataDir()];
+}
