@@ -4,6 +4,7 @@ import { useRenewalDrilldown } from './hooks/useRenewalDrilldown';
 import { tableStyles, textStyles } from '../../shared/styles';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { RenewalQuadrantView } from './RenewalQuadrantView';
+import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
 
 interface RenewalDrilldownPanelProps {
   filters: AdvancedFilterState;
@@ -47,6 +48,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
     canDrillDown,
     drillDown,
     navigateTo,
+    canGoToTop,
   } = useRenewalDrilldown({
     targetYear,
     cutoffDate,
@@ -58,23 +60,20 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
   return (
     <div className="space-y-4">
       {/* 面包屑导航 */}
-      <nav className="flex items-center gap-1 text-sm">
-        {breadcrumb.map((item, index) => (
-          <React.Fragment key={index}>
-            {index > 0 && <span className="text-gray-400 mx-1">&gt;</span>}
-            {index < breadcrumb.length - 1 ? (
-              <button
-                onClick={() => navigateTo(index)}
-                className="text-blue-600 hover:text-blue-800 hover:underline"
-              >
-                {item.label}
-              </button>
-            ) : (
-              <span className="font-semibold text-gray-900">{item.label}</span>
-            )}
-          </React.Fragment>
-        ))}
-      </nav>
+      <div className="bg-white p-3 rounded-xl shadow-sm mb-4">
+        <RBACBreadcrumb
+          drillPath={breadcrumb.slice(1).map(b => ({ label: String(b.label) }))}
+          currentGroupBy={null}
+          onDrillUp={(idx) => {
+            // idx is 0-indexed against the slice(1).
+            // So if idx === -1, go to top (index 0 for navigateTo).
+            // if idx === 0, go to the first drilled level (index 1 for navigateTo)
+            navigateTo(idx + 1);
+          }}
+          canGoToTop={canGoToTop}
+          topLevelLabel={breadcrumb[0]?.label || '全公司'}
+        />
+      </div>
 
       {/* 筛选开关行 */}
       <div className="flex flex-wrap items-center gap-4">

@@ -20,6 +20,7 @@ import { VariableCostKpiBoard } from './VariableCostKpiBoard';
 import { useCostAnalysis } from '../hooks/useCostAnalysis';
 import { useExportHandlers } from '../hooks/useExportHandlers';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 import type { CostSubTab, EarnedPremiumDetailFilter, CostDimension } from '../types/costTypes';
 import { DIMENSION_LABELS } from '../types/costTypes';
 import type { AdvancedFilterState } from '../../../shared/types';
@@ -107,6 +108,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
   maxDataDate,
   onSubTabChange,
 }) => {
+  const { isOrgUser, userOrg } = useRBAC();
   // 控制状态
   const [activeSubTab, setActiveSubTab] = useState<CostSubTab>('claim');
 
@@ -153,7 +155,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
   } = useCostAnalysis();
 
   // 构建筛选参数（直接传递给后端 API）
-  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
+  const filterParams = useMemo(() => buildFilterParams(filters, { isOrgUser, userOrg }), [filters, isOrgUser, userOrg]);
 
   /**
    * 已赚保费：忽略全局"日期范围筛选"，避免把滚动窗口错误截断到单月/单年
@@ -165,8 +167,8 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
       policy_date_start: undefined,
       policy_date_end: undefined,
     };
-    return buildFilterParams(earnedFilters);
-  }, [filters]);
+    return buildFilterParams(earnedFilters, { isOrgUser, userOrg });
+  }, [filters, isOrgUser, userOrg]);
 
   const monthEndOptions = useMemo(() => {
     const fallbackToday = formatDate(new Date());

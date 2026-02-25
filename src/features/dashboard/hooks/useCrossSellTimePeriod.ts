@@ -9,6 +9,7 @@ import { useState, useCallback, useEffect } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
+import { useRBAC } from '@/shared/hooks/useRBAC';
 
 export type VehicleCategory = 'passenger' | 'truck' | 'motorcycle';
 
@@ -49,6 +50,7 @@ export function useCrossSellTimePeriod({
   vehicleCategory,
   enabled = true,
 }: UseCrossSellTimePeriodProps): UseCrossSellTimePeriodReturn {
+  const { isOrgUser, userOrg } = useRBAC();
   const [maxDate, setMaxDate] = useState<string | null>(null);
   const [rateData, setRateData] = useState<TimePeriodRow[]>([]);
   const [avgPremiumData, setAvgPremiumData] = useState<TimePeriodRow[]>([]);
@@ -64,7 +66,7 @@ export function useCrossSellTimePeriod({
 
     try {
       const params: Record<string, string> = {
-        ...buildFilterParams(filters),
+        ...buildFilterParams(filters, { isOrgUser, userOrg }),
         vehicleCategory,
       };
 

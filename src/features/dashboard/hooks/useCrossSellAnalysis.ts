@@ -10,11 +10,12 @@
  * 每层可停止、可上钻（面包屑导航）
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import { apiClient } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import type { VehicleCategory } from './useCrossSellTimePeriod';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 /** 可选的下钻维度（不含 summary） */
 export type CrossSellDimension =
@@ -99,6 +100,8 @@ export interface UseCrossSellAnalysisReturn {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /** 是否允许回到顶层（全公司） */
+  canGoToTop: boolean;
 }
 
 function mapRow(raw: Record<string, unknown>): CrossSellRow {
@@ -124,12 +127,33 @@ export function useCrossSellAnalysis({
   vehicleCategory,
   enabled = true,
 }: UseCrossSellAnalysisProps): UseCrossSellAnalysisReturn {
+  const { isOrgUser, userOrg, canGoToTop, getMinDrillUpIndex } = useRBAC();
+
+  // 角色基础默认初始状态
+  const initialDrillPath: DrilldownStep[] = useMemo(() => {
+    if (isOrgUser && userOrg) {
+      return [{ dimension: 'org_level_3', value: userOrg, label: `三级机构: ${userOrg}` }];
+    }
+    return [];
+  }, [isOrgUser, userOrg]);
+
+  const initialGroupBy: CrossSellDimension | null = useMemo(() => {
+    if (isOrgUser) return 'salesman';
+    return 'org_level_3'; // 管理员默认看机构分布
+  }, [isOrgUser]);
+
   const [summary, setSummary] = useState<CrossSellRow | null>(null);
   const [rows, setRows] = useState<CrossSellRow[]>([]);
-  const [drillPath, setDrillPath] = useState<DrilldownStep[]>([]);
-  const [currentGroupBy, setCurrentGroupBy] = useState<CrossSellDimension | null>(null);
+  const [drillPath, setDrillPath] = useState<DrilldownStep[]>(initialDrillPath);
+  const [currentGroupBy, setCurrentGroupBy] = useState<CrossSellDimension | null>(initialGroupBy);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 当用户加载完成/变更时，重置回对应的角色的默认视图
+  useEffect(() => {
+    setDrillPath(initialDrillPath);
+    setCurrentGroupBy(initialGroupBy);
+  }, [initialDrillPath, initialGroupBy]);
 
   // 计算已使用维度和可用维度
   const usedDimensions = new Set<CrossSellDimension>([
@@ -149,7 +173,7 @@ export function useCrossSellAnalysis({
     setError(null);
 
     try {
-      const filterParams = buildFilterParams(filters);
+      const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
       const apiDrillPath = drillPath.map(s => ({
         dimension: s.dimension,
         value: s.value,
@@ -186,9 +210,9 @@ export function useCrossSellAnalysis({
 
   /** 首次选择维度（从汇总 → 分组视图） */
   const selectDimension = useCallback((dimension: CrossSellDimension) => {
-    setDrillPath([]);
+    setDrillPath(initialDrillPath);
     setCurrentGroupBy(dimension);
-  }, []);
+  }, [initialDrillPath]);
 
   /** 下钻：点击行 → 添加过滤 → 选择新维度 */
   const drillDown = useCallback((rowValue: string, nextDimension: CrossSellDimension) => {
@@ -206,26 +230,29 @@ export function useCrossSellAnalysis({
 
   /** 上钻到指定层级 */
   const drillUp = useCallback((toIndex: number) => {
-    if (toIndex < 0) {
-      // 回到顶层（汇总）
-      setDrillPath([]);
-      setCurrentGroupBy(null);
+    // Determine minimum depth: admin is -1, org user is 0 (the org level)
+    const minIndex = getMinDrillUpIndex(-1);
+
+    if (toIndex <= minIndex) {
+      setDrillPath(initialDrillPath);
+      setCurrentGroupBy(initialGroupBy);
       return;
     }
-    if (toIndex < drillPath.length) {
+
+    if (toIndex < drillPath.length && toIndex > minIndex) {
       // 回到 drillPath[toIndex] 这一层的分组视图
       const newPath = drillPath.slice(0, toIndex);
       const restoredGroupBy = drillPath[toIndex].dimension;
       setDrillPath(newPath);
       setCurrentGroupBy(restoredGroupBy);
     }
-  }, [drillPath]);
+  }, [drillPath, initialDrillPath, initialGroupBy, getMinDrillUpIndex]);
 
   /** 重置到顶层 */
   const reset = useCallback(() => {
-    setDrillPath([]);
-    setCurrentGroupBy(null);
-  }, []);
+    setDrillPath(initialDrillPath);
+    setCurrentGroupBy(initialGroupBy);
+  }, [initialDrillPath, initialGroupBy]);
 
   return {
     summary,
@@ -240,5 +267,6 @@ export function useCrossSellAnalysis({
     loading,
     error,
     refresh: fetchData,
+    canGoToTop,
   };
 }

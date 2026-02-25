@@ -5,10 +5,11 @@
  * 通过面包屑导航回退到任意层级
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { useDataStatus } from '../../../shared/contexts/DataContext';
 import { createLogger } from '../../../shared/utils/logger';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('useRenewalDrilldown');
 
@@ -56,13 +57,27 @@ interface UseRenewalDrilldownOptions {
 export function useRenewalDrilldown(options: UseRenewalDrilldownOptions) {
   const { targetYear, cutoffDate, bundleOnly, selfRenewalOnly, selectedDueMonth, sortField = 'renewal_rate', sortOrder = 'desc' } = options;
   const { isDataLoaded } = useDataStatus();
+  const { isOrgUser, userOrg, canGoToTop, getMinDrillUpIndex } = useRBAC();
+
+  const initialBreadcrumb: BreadcrumbItem[] = useMemo(() => {
+    if (isOrgUser && userOrg) {
+      return [
+        { level: 'company', label: '全公司' },
+        { level: 'org', label: userOrg, value: userOrg }
+      ];
+    }
+    return [{ level: 'company', label: '全公司' }];
+  }, [isOrgUser, userOrg]);
 
   const [rows, setRows] = useState<DrilldownRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([
-    { level: 'company', label: '全公司' },
-  ]);
+  const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>(initialBreadcrumb);
+
+  // 当用户身份变化时，重置
+  useEffect(() => {
+    setBreadcrumb(initialBreadcrumb);
+  }, [initialBreadcrumb]);
 
   /** 当前层级 */
   const currentLevel = breadcrumb[breadcrumb.length - 1].level;
@@ -149,19 +164,25 @@ export function useRenewalDrilldown(options: UseRenewalDrilldownOptions) {
 
   /** 导航到面包屑的某个位置 */
   const navigateTo = useCallback((index: number) => {
+    const minIndex = getMinDrillUpIndex(0); // 0 corresponds to the root "company" breadcrumb index
+    // The previous logic used `isOrgUser ? 1 : 0` where index 0 was 'Company' and index 1 was 'Org'.
+    // `getMinDrillUpIndex` returns 1 if isOrgUser and baseIndex <= 1.
+    const safeMinIndex = getMinDrillUpIndex(0);
+
+    if (index < safeMinIndex) return;
+
     setBreadcrumb(prev => {
       const newBc = prev.slice(0, index + 1);
       fetchData(newBc);
       return newBc;
     });
-  }, [fetchData]);
+  }, [fetchData, getMinDrillUpIndex]);
 
   /** 重置到公司层级 */
   const reset = useCallback(() => {
-    const initialBc: BreadcrumbItem[] = [{ level: 'company', label: '全公司' }];
-    setBreadcrumb(initialBc);
-    fetchData(initialBc);
-  }, [fetchData]);
+    setBreadcrumb(initialBreadcrumb);
+    fetchData(initialBreadcrumb);
+  }, [fetchData, initialBreadcrumb]);
 
   // 初始加载 + 筛选条件变化时重新加载
   const prevOptionsRef = useRef('');
@@ -184,5 +205,6 @@ export function useRenewalDrilldown(options: UseRenewalDrilldownOptions) {
     drillDown,
     navigateTo,
     reset,
+    canGoToTop: !isOrgUser,
   };
 }

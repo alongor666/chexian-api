@@ -17,7 +17,8 @@ import type { AdvancedFilterState } from '../types/data';
  * @returns 扁平化的查询参数（值均为 string，数组用逗号分隔）
  */
 export function buildFilterParams(
-  filters: AdvancedFilterState
+  filters: AdvancedFilterState,
+  rbca?: { isOrgUser?: boolean; userOrg?: string }
 ): Record<string, string> {
   const params: Record<string, string> = {};
 
@@ -33,7 +34,10 @@ export function buildFilterParams(
   }
 
   // 多选字段（数组 → 逗号分隔字符串）
-  if (filters.org_level_3 && filters.org_level_3.length > 0) {
+  if (rbca?.isOrgUser && rbca?.userOrg) {
+    // Forcefully inject the user's organization for API enforcement
+    params.orgNames = rbca.userOrg;
+  } else if (filters.org_level_3 && filters.org_level_3.length > 0) {
     params.orgNames = filters.org_level_3.join(',');
   }
   if (filters.salesman_name && filters.salesman_name.length > 0) {

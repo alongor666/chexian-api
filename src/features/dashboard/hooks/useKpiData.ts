@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createLogger } from '../../../shared/utils/logger';
 import { apiClient } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 
 const logger = createLogger('useKpiData');
@@ -83,9 +84,11 @@ export const useKpiData = ({
   const [error, setError] = useState<Error | null>(null);
   const requestIdRef = useRef(0);
 
+  const { isOrgUser, userOrg } = useRBAC();
+
   const fetchFromApi = useCallback(async (requestId: number) => {
     try {
-      const params = buildFilterParams(filters);
+      const params = buildFilterParams(filters, { isOrgUser, userOrg });
       logger.info('KPI API 查询执行', params);
 
       const [kpiResponse, kpiDetailResponse] = await Promise.all([

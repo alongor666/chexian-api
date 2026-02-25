@@ -7,6 +7,7 @@ import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { buildWhereClauseFromFilters } from '../../../shared/utils/queryBuilder';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { RoseChartDatum, SalesmanSummaryRow } from '../types';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('usePremiumDashboardData');
 
@@ -48,6 +49,7 @@ export const usePremiumDashboardData = ({
   filters,
   enabled = true,
 }: UsePremiumDashboardDataOptions): UsePremiumDashboardDataResult => {
+  const { isOrgUser, userOrg } = useRBAC();
   const [allBusinessTop10, setAllBusinessTop10] = useState<SalesmanSummaryRow[]>([]);
   const [qualityBusinessTop10, setQualityBusinessTop10] = useState<SalesmanSummaryRow[]>([]);
   const [customerCategoryData, setCustomerCategoryData] = useState<RoseChartDatum[]>([]);
@@ -63,7 +65,7 @@ export const usePremiumDashboardData = ({
   ] as const);
 
   const refreshFromApi = useCallback(async (requestId: number) => {
-    const params = buildFilterParams(filters);
+    const params = buildFilterParams(filters, { isOrgUser, userOrg });
 
     // 表格数据：业务员排名（传递完整筛选参数）
     setLoading('table', true);
