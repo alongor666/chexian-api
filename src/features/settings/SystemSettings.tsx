@@ -191,7 +191,7 @@ export const SystemSettings: React.FC = () => {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-500 dark:text-gray-400">数据库引擎</span>
-            <span className="font-mono text-gray-900 dark:text-white">DuckDB-WASM</span>
+            <span className="font-mono text-gray-900 dark:text-white">DuckDB (Server API)</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-500 dark:text-gray-400">构建环境</span>

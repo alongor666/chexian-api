@@ -1,0 +1,3 @@
+[typecheck] Platform: darwin, RAM: 24.0GB, CI: false
+[typecheck] 🔍 Running tsc --noEmit (heap: 16384MB)...
+[typecheck] ✅ 类型检查通过

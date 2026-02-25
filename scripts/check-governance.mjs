@@ -21,6 +21,9 @@
  * 8. Merge conflict 标记扫描：
  *    - 扫描 BACKLOG.md / PROGRESS.md 中是否残留 <<<<<<< / ======= / >>>>>>> 冲突标记
  *    - 残留冲突标记 → 阻断提交
+ * 9. TypeScript 检查范围护栏（API-only 清理批次）：
+ *    - tsconfig.json 不得再排除活跃源码目录（src/charts/src/components/src/services/src/types/src/core）
+ *    - 防止通过扩大 exclude 隐藏真实类型问题
  *
  * 退出码：
  * - 0: 所有检查通过
@@ -600,6 +603,45 @@ function checkMergeConflictMarkers() {
 }
 
 // ============================================================
+// 第9项检查：TypeScript 检查范围护栏
+// ============================================================
+
+function checkTsconfigTypecheckScope() {
+  info('检查 tsconfig 类型检查范围护栏...');
+
+  const tsconfigPath = path.join(ROOT_DIR, 'tsconfig.json');
+  if (!fs.existsSync(tsconfigPath)) {
+    error('tsconfig.json 不存在');
+    return false;
+  }
+
+  const content = fs.readFileSync(tsconfigPath, 'utf-8');
+
+  const forbiddenExcludes = [
+    'src/charts',
+    'src/components',
+    'src/services',
+    'src/types',
+    'src/core',
+  ];
+
+  const hit = forbiddenExcludes.filter((dir) => new RegExp(`["']${dir}["']`).test(content));
+  if (hit.length > 0) {
+    error(`tsconfig 仍排除了活跃源码目录：${hit.join(', ')}`);
+    console.log('    - 请修复真实类型问题，不要通过 exclude 规避');
+    return false;
+  }
+
+  if (!/"include"\s*:\s*\[\s*"src"\s*]/.test(content)) {
+    error('tsconfig include 未覆盖 src 目录（期望 include: [\"src\"]）');
+    return false;
+  }
+
+  success('tsconfig 类型检查范围护栏检查通过');
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -615,6 +657,7 @@ function main() {
     { name: 'DC-002合规', fn: checkDC002Compliance },
     { name: '任务ID分配', fn: checkTaskIdAllocation },
     { name: 'Conflict标记', fn: checkMergeConflictMarkers },
+    { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
   ];
 
   let passedCount = 0;

@@ -238,3 +238,14 @@ widgets/table/VirtualTable.tsx
 
 - **`dashboard/RenewalAnalysisPanel.tsx`**: 续保明细表格支持按年份与月份切换，并更新为月日/当日/当月/当年续保字段展示
 - **`cost/components/VariableCostKpiBoard.tsx`**: 新增变动成本率KPI下钻看板（8项指标，支持分公司整体与三级机构切换）
+
+## 2026-02 API-only 权威说明（新增）
+
+以下为当前页面主链路：
+
+- 入口路由：`src/app/App.tsx`
+- 主看板：`src/features/dashboard/PremiumDashboard.tsx`
+- 页面容器：`src/features/pages/*Page.tsx`
+- 统一筛选：`src/components/layout/PageFilterPanel.tsx` + `src/features/filters/AdvancedFilterPanel.tsx`
+
+历史 `Dashboard.tsx` / `FilterPanel.tsx` 相关段落视为过渡记录，不作为当前实现基线。

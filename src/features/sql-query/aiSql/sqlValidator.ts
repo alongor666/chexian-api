@@ -15,10 +15,10 @@ export interface ValidationResult {
 }
 
 /**
- * PolicyFact 视图可用字段列表（与 client.ts 中定义完全一致）
+ * PolicyFact 视图可用字段列表（与后端 SQL 语义保持一致）
  *
  * 更新日期: 2026-02-01
- * 来源: src/shared/duckdb/client.ts:206-236
+ * 来源: server/src/services/duckdb.ts + server/src/sql/*
  */
 const POLICY_FACT_FIELDS = new Set([
   // 标识字段
@@ -45,7 +45,7 @@ const POLICY_FACT_FIELDS = new Set([
  * SalesmanPlanFact 视图可用字段列表
  *
  * 更新日期: 2026-02-01
- * 来源: src/shared/duckdb/client.ts:398-440
+ * 来源: server/src/services/duckdb.ts + server/src/routes/query.ts
  */
 const SALESMAN_PLAN_FIELDS = new Set([
   // 维度字段

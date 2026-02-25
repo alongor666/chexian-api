@@ -16,7 +16,7 @@ import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
-import { textStyles, cardStyles, numericStyles, tableStyles, cn } from '../../shared/styles';
+import { textStyles, cardStyles, numericStyles, tableStyles, colorClasses, cn } from '../../shared/styles';
 import { CrossSellTimePeriodSummary } from './CrossSellTimePeriodSummary';
 import { CrossSellQuadrantView } from './CrossSellQuadrantView';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
@@ -87,18 +87,24 @@ function SummaryCards({ data }: { data: CrossSellRow }) {
       {SUMMARY_CARDS.map((card) => {
         const value = Number(data[card.field] ?? 0);
         const isRate = card.type === 'rate';
+        const hasStatusBadge = card.field === 'zhuquan_rate' || card.field === 'jiaosan_rate';
+        const rateColorClass = isRate
+          ? getRateColorByField(card.field, value)
+          : card.label.includes('驾意') ? colorClasses.text.primary : 'text-neutral-800';
+        const statusLabel = hasStatusBadge
+          ? (card.field === 'zhuquan_rate'
+              ? RATE_STATUS_LABELS[getZhuquanStatus(value)]
+              : RATE_STATUS_LABELS[getJiaosanStatus(value)])
+          : null;
         return (
-          <div
-            key={card.field}
-            className={cn(cardStyles.interactive, 'p-4')}
-          >
+          <div key={card.field} className={cn(cardStyles.interactive, 'p-4')}>
             <div className={cn(textStyles.caption, 'uppercase tracking-wide mb-2')}>{card.label}</div>
-            <div className={cn(
-              numericStyles.kpiPrimary,
-              isRate ? 'text-success' : card.label.includes('驾意') ? 'text-primary' : 'text-neutral-800'
-            )}>
+            <div className={cn(numericStyles.kpiPrimary, rateColorClass)}>
               {isRate ? formatPercent(value) : formatCount(value)}
             </div>
+            {statusLabel && (
+              <div className={cn('text-xs mt-1 font-medium', rateColorClass)}>{statusLabel}</div>
+            )}
           </div>
         );
       })}
@@ -154,6 +160,48 @@ function DimensionPicker({
 import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
 
 // ============================================================
+// 推介率状态颜色
+// ============================================================
+
+type RateStatus = 'excellent' | 'healthy' | 'abnormal' | 'danger';
+
+function getZhuquanStatus(rate: number): RateStatus {
+  if (rate >= 80) return 'excellent';
+  if (rate >= 75) return 'healthy';
+  if (rate >= 70) return 'abnormal';
+  return 'danger';
+}
+
+function getJiaosanStatus(rate: number): RateStatus {
+  if (rate >= 70) return 'excellent';
+  if (rate >= 65) return 'healthy';
+  if (rate >= 60) return 'abnormal';
+  return 'danger';
+}
+
+const RATE_STATUS_CLASSES: Record<RateStatus, string> = {
+  excellent: colorClasses.text.success,
+  healthy:   colorClasses.text.primary,
+  abnormal:  colorClasses.text.warning,
+  danger:    colorClasses.text.danger,
+};
+
+const RATE_STATUS_LABELS: Record<RateStatus, string> = {
+  excellent: '优秀',
+  healthy:   '健康',
+  abnormal:  '异常',
+  danger:    '危险',
+};
+
+function getRateColorByField(field: keyof CrossSellRow, rate: number): string {
+  if (field === 'zhuquan_rate') return RATE_STATUS_CLASSES[getZhuquanStatus(rate)];
+  if (field === 'jiaosan_rate') return RATE_STATUS_CLASSES[getJiaosanStatus(rate)];
+  if (rate >= 30) return colorClasses.text.success + ' font-medium';
+  if (rate >= 15) return 'text-neutral-700';
+  return colorClasses.text.warning + ' font-medium';
+}
+
+// ============================================================
 // 表格列定义
 // ============================================================
 
@@ -161,6 +209,7 @@ interface ColumnDef {
   key: SortKey;
   label: string;
   type: 'text' | 'count' | 'rate';
+  getColorClass?: (val: number) => string;
 }
 
 const TABLE_COLUMNS: ColumnDef[] = [
@@ -173,23 +222,32 @@ const TABLE_COLUMNS: ColumnDef[] = [
   { key: 'danjiao_rate', label: '单交推介率', type: 'rate' },
   { key: 'jiaosan_auto_count', label: '交三-车险', type: 'count' },
   { key: 'jiaosan_driver_count', label: '交三-驾意', type: 'count' },
-  { key: 'jiaosan_rate', label: '交三推介率', type: 'rate' },
+  { key: 'jiaosan_rate', label: '交三推介率', type: 'rate',
+    getColorClass: (v) => RATE_STATUS_CLASSES[getJiaosanStatus(v)] },
   { key: 'zhuquan_auto_count', label: '主全-车险', type: 'count' },
   { key: 'zhuquan_driver_count', label: '主全-驾意', type: 'count' },
-  { key: 'zhuquan_rate', label: '主全推介率', type: 'rate' },
+  { key: 'zhuquan_rate', label: '主全推介率', type: 'rate',
+    getColorClass: (v) => RATE_STATUS_CLASSES[getZhuquanStatus(v)] },
 ];
-
-function getRateClass(rate: number): string {
-  if (rate >= 30) return 'text-success font-medium';
-  if (rate >= 15) return 'text-neutral-700';
-  return 'text-warning font-medium';
-}
 
 function formatCell(col: ColumnDef, row: CrossSellRow): string {
   const val = Number(row[col.key] ?? 0);
   if (col.type === 'rate') return formatPercent(val);
   if (col.type === 'count') return formatCount(val);
   return String(row[col.key] ?? '');
+}
+
+// ============================================================
+// 板块标题
+// ============================================================
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <h2 className={cn(textStyles.titleSmall, 'font-semibold')}>{title}</h2>
+      <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-700" />
+    </div>
+  );
 }
 
 // ============================================================
@@ -298,11 +356,12 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         size="medium"
       />
 
-      {/* 时间维度汇总表格（推介率/件均保费/保费） */}
-      <CrossSellTimePeriodSummary
-        vehicleCategory={vehicleCategory}
-        filters={filters}
-      />
+      {/* 板块1：推介率汇总 */}
+      <SectionTitle title="推介率汇总" />
+      {summary && <SummaryCards data={summary} />}
+
+      {/* 板块2：下钻分析 */}
+      <SectionTitle title="下钻分析" />
 
       {/* 面包屑导航 */}
       <div className="bg-white p-3 rounded-xl shadow-sm">
@@ -330,9 +389,6 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         </div>
       ) : (
         <>
-          {/* 汇总卡片 */}
-          {summary && <SummaryCards data={summary} />}
-
           {/* 初始状态：仅汇总，显示"开始下钻"按钮 */}
           {!currentGroupBy && summary && (
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
@@ -403,7 +459,10 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                                 col.type === 'text'
                                   ? `text-left ${canDrillDeeper ? 'text-blue-600 font-medium' : 'text-gray-900'}`
                                   : col.type === 'rate'
-                                    ? cn('text-right', textStyles.numeric, getRateClass(Number(row[col.key] ?? 0)))
+                                    ? cn('text-right', textStyles.numeric,
+                                        col.getColorClass
+                                          ? col.getColorClass(Number(row[col.key] ?? 0))
+                                          : getRateColorByField(col.key, Number(row[col.key] ?? 0)))
                                     : cn('text-right', textStyles.numeric, 'text-neutral-700')
                               )}
                             >
@@ -427,6 +486,13 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           )}
         </>
       )}
+
+      {/* 板块3：时间维度推介率 */}
+      <SectionTitle title="时间维度推介率" />
+      <CrossSellTimePeriodSummary
+        vehicleCategory={vehicleCategory}
+        filters={filters}
+      />
 
       {/* 维度选择器弹层 */}
       {showPicker && (

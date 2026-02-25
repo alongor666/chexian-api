@@ -1,0 +1,129 @@
+vite v5.4.21 building for production...
+transforming...
+✓ 3947 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                   0.82 kB │ gzip:   0.48 kB
+dist/assets/index-ktAmIO6J.css                   73.26 kB │ gzip:  11.45 kB
+dist/assets/echarts-BqdrCr2z.js                   0.20 kB │ gzip:   0.15 kB
+dist/assets/usePerspective-DcW2RqXR.js            0.46 kB │ gzip:   0.31 kB
+dist/assets/useRBAC-S2yn2dTq.js                   0.69 kB │ gzip:   0.48 kB
+dist/assets/coefficient-period-BbRwZk3P.js        0.97 kB │ gzip:   0.41 kB
+dist/assets/filterParams-DVf5iAI5.js              1.81 kB │ gzip:   0.56 kB
+dist/assets/PerspectiveSwitcher-BTpOWUIj.js       1.84 kB │ gzip:   0.98 kB
+dist/assets/VirtualTable-DwQ6uRXZ.js              2.21 kB │ gzip:   0.87 kB
+dist/assets/export-cVXg8eWD.js                    2.25 kB │ gzip:   1.13 kB
+dist/assets/chartStyles-D2bCd6w_.js               2.51 kB │ gzip:   1.03 kB
+dist/assets/Skeleton-B1Om1ZHJ.js                  3.21 kB │ gzip:   1.00 kB
+dist/assets/ReportTemplatesPanel-CgRMrnkD.js      3.26 kB │ gzip:   1.76 kB
+dist/assets/PageFilterPanel-CskK8Un6.js           3.58 kB │ gzip:   1.25 kB
+dist/assets/RoseChart-COmLUb-w.js                 3.83 kB │ gzip:   1.97 kB
+dist/assets/EnhancedKpiCard-DhyiMoIt.js           4.95 kB │ gzip:   1.61 kB
+dist/assets/core-DcSY6Rr7.js                      5.93 kB │ gzip:   2.34 kB
+dist/assets/RBACBreadcrumb-BKkaFFIL.js            6.36 kB │ gzip:   2.42 kB
+dist/assets/index.esm-CbtsSBhI.js                 8.99 kB │ gzip:   3.12 kB
+dist/assets/PremiumReportPage-Do6UZsac.js         9.64 kB │ gzip:   2.99 kB
+dist/assets/TruckPage-DXLra1LU.js                10.59 kB │ gzip:   4.01 kB
+dist/assets/PremiumPlanPanel-BVFZ1-ld.js         11.19 kB │ gzip:   4.06 kB
+dist/assets/ComparisonPage-cGBkWiyh.js           13.12 kB │ gzip:   3.82 kB
+dist/assets/ComparisonQuickPresets-nYEFQAG3.js   13.30 kB │ gzip:   4.62 kB
+dist/assets/vendor-monaco-DxTflqtB.js            14.58 kB │ gzip:   5.06 kB
+dist/assets/MarketingReportPage-CgITf7ji.js      17.99 kB │ gzip:   5.23 kB
+dist/assets/CrossSellPage-BHm8Qrm6.js            20.35 kB │ gzip:   7.29 kB
+dist/assets/CoefficientPage-EpSijrM1.js          21.17 kB │ gzip:   5.42 kB
+dist/assets/purify.es-aGzT-_H7.js                22.15 kB │ gzip:   8.67 kB
+dist/assets/vendor-ui-CrEGqAnk.js                28.13 kB │ gzip:   5.96 kB
+dist/assets/RenewalPage-D9r5U5uv.js              36.59 kB │ gzip:  12.28 kB
+dist/assets/PremiumDashboard-BjhmVajE.js         39.39 kB │ gzip:  12.18 kB
+dist/assets/vendor-react-DfUNeWbn.js             48.77 kB │ gzip:  17.08 kB
+dist/assets/CostPage-BR4h4_ks.js                 86.16 kB │ gzip:  20.23 kB
+dist/assets/SqlQueryPage-BiBCT6pk.js             92.18 kB │ gzip:  28.72 kB
+dist/assets/index.es-zw297-2P.js                150.11 kB │ gzip:  51.35 kB
+dist/assets/index-Dospuc-Q.js                   380.05 kB │ gzip: 117.65 kB
+dist/assets/GrowthPage-RgkCq75l.js              383.89 kB │ gzip: 114.53 kB
+dist/assets/vendor-export-B_SOt8vP.js           591.13 kB │ gzip: 176.11 kB
+dist/assets/vendor-echarts-aYLobgVM.js          614.89 kB │ gzip: 206.42 kB
+dist/assets/vendor-data-CvdurmtA.js             961.41 kB │ gzip: 276.78 kB
+✓ built in 5.55s
+
+✨ [vite-plugin-compression]:algorithm=gzip - compressed file successfully: 
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/ComparisonPage-cGBkWiyh.js.gz           13.15kb / gzip: 3.72kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/ComparisonQuickPresets-nYEFQAG3.js.gz   13.30kb / gzip: 4.51kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/EnhancedKpiCard-DhyiMoIt.js.gz          4.84kb / gzip: 1.56kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/CoefficientPage-EpSijrM1.js.gz          21.79kb / gzip: 5.28kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/CrossSellPage-BHm8Qrm6.js.gz            20.90kb / gzip: 7.12kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/MarketingReportPage-CgITf7ji.js.gz      19.27kb / gzip: 5.09kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PageFilterPanel-CskK8Un6.js.gz          3.54kb / gzip: 1.22kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PerspectiveSwitcher-BTpOWUIj.js.gz      1.88kb / gzip: 0.96kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PremiumPlanPanel-BVFZ1-ld.js.gz         11.25kb / gzip: 3.96kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PremiumReportPage-Do6UZsac.js.gz        10.30kb / gzip: 2.92kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/RBACBreadcrumb-BKkaFFIL.js.gz           6.23kb / gzip: 2.36kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PremiumDashboard-BjhmVajE.js.gz         39.71kb / gzip: 11.88kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/RenewalPage-D9r5U5uv.js.gz              37.83kb / gzip: 11.99kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/ReportTemplatesPanel-CgRMrnkD.js.gz     3.88kb / gzip: 1.71kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/RoseChart-COmLUb-w.js.gz                3.78kb / gzip: 1.93kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/TruckPage-DXLra1LU.js.gz                10.65kb / gzip: 3.91kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/VirtualTable-DwQ6uRXZ.js.gz             2.16kb / gzip: 0.85kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/chartStyles-D2bCd6w_.js.gz              2.47kb / gzip: 1.00kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/core-DcSY6Rr7.js.gz                     5.79kb / gzip: 2.28kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/export-cVXg8eWD.js.gz                   2.19kb / gzip: 1.11kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/filterParams-DVf5iAI5.js.gz             1.77kb / gzip: 0.55kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/Skeleton-B1Om1ZHJ.js.gz                 3.15kb / gzip: 0.97kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/index.esm-CbtsSBhI.js.gz                8.77kb / gzip: 3.05kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/purify.es-aGzT-_H7.js.gz                21.63kb / gzip: 8.47kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/index-ktAmIO6J.css.gz                   71.55kb / gzip: 11.07kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-monaco-DxTflqtB.js.gz            14.24kb / gzip: 4.94kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-ui-CrEGqAnk.js.gz                27.47kb / gzip: 5.78kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/驾意险推介率.html.gz                                 24.76kb / gzip: 4.78kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/CostPage-BR4h4_ks.js.gz                 89.77kb / gzip: 19.67kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/SqlQueryPage-BiBCT6pk.js.gz             97.33kb / gzip: 28.01kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-react-DfUNeWbn.js.gz             47.63kb / gzip: 16.67kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/index.es-zw297-2P.js.gz                 146.63kb / gzip: 50.01kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/GrowthPage-RgkCq75l.js.gz               375.86kb / gzip: 111.66kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/index-Dospuc-Q.js.gz                    376.92kb / gzip: 114.67kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-export-B_SOt8vP.js.gz            578.21kb / gzip: 171.42kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-echarts-aYLobgVM.js.gz           601.09kb / gzip: 201.19kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-data-CvdurmtA.js.gz              939.45kb / gzip: 268.89kb
+
+
+
+✨ [vite-plugin-compression]:algorithm=brotliCompress - compressed file successfully: 
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/ComparisonPage-cGBkWiyh.js.br           13.15kb / brotliCompress: 3.19kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/CoefficientPage-EpSijrM1.js.br          21.79kb / brotliCompress: 4.46kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/ComparisonQuickPresets-nYEFQAG3.js.br   13.30kb / brotliCompress: 3.83kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/EnhancedKpiCard-DhyiMoIt.js.br          4.84kb / brotliCompress: 1.37kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/CrossSellPage-BHm8Qrm6.js.br            20.90kb / brotliCompress: 6.17kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PageFilterPanel-CskK8Un6.js.br          3.54kb / brotliCompress: 1.02kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/MarketingReportPage-CgITf7ji.js.br      19.27kb / brotliCompress: 4.35kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PerspectiveSwitcher-BTpOWUIj.js.br      1.88kb / brotliCompress: 0.80kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PremiumPlanPanel-BVFZ1-ld.js.br         11.25kb / brotliCompress: 3.42kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PremiumReportPage-Do6UZsac.js.br        10.30kb / brotliCompress: 2.52kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/RBACBreadcrumb-BKkaFFIL.js.br           6.23kb / brotliCompress: 2.09kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/PremiumDashboard-BjhmVajE.js.br         39.71kb / brotliCompress: 10.28kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/ReportTemplatesPanel-CgRMrnkD.js.br     3.88kb / brotliCompress: 1.36kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/Skeleton-B1Om1ZHJ.js.br                 3.15kb / brotliCompress: 0.85kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/RoseChart-COmLUb-w.js.br                3.78kb / brotliCompress: 1.69kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/TruckPage-DXLra1LU.js.br                10.65kb / brotliCompress: 3.34kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/VirtualTable-DwQ6uRXZ.js.br             2.16kb / brotliCompress: 0.75kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/chartStyles-D2bCd6w_.js.br              2.47kb / brotliCompress: 0.87kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/core-DcSY6Rr7.js.br                     5.79kb / brotliCompress: 2.02kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/export-cVXg8eWD.js.br                   2.19kb / brotliCompress: 0.96kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/filterParams-DVf5iAI5.js.br             1.77kb / brotliCompress: 0.49kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/RenewalPage-D9r5U5uv.js.br              37.83kb / brotliCompress: 10.24kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/index.esm-CbtsSBhI.js.br                8.77kb / brotliCompress: 2.73kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/purify.es-aGzT-_H7.js.br                21.63kb / brotliCompress: 7.56kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/index-ktAmIO6J.css.br                   71.55kb / brotliCompress: 8.87kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-monaco-DxTflqtB.js.br            14.24kb / brotliCompress: 4.38kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-ui-CrEGqAnk.js.br                27.47kb / brotliCompress: 4.87kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/驾意险推介率.html.br                                 24.76kb / brotliCompress: 3.97kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-react-DfUNeWbn.js.br             47.63kb / brotliCompress: 14.95kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/CostPage-BR4h4_ks.js.br                 89.77kb / brotliCompress: 16.04kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/SqlQueryPage-BiBCT6pk.js.br             97.33kb / brotliCompress: 23.30kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/index.es-zw297-2P.js.br                 146.63kb / brotliCompress: 44.22kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/index-Dospuc-Q.js.br                    376.92kb / brotliCompress: 96.82kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/GrowthPage-RgkCq75l.js.br               375.86kb / brotliCompress: 93.01kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-export-B_SOt8vP.js.br            578.21kb / brotliCompress: 142.24kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-echarts-aYLobgVM.js.br           601.09kb / brotliCompress: 168.68kb
+dist//Users/alongor666/Downloads/底层数据湖DUD/chexian-api/assets/vendor-data-CvdurmtA.js.br              939.45kb / brotliCompress: 218.17kb
+
+

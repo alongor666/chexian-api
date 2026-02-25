@@ -16,19 +16,13 @@ import { join } from 'path'
 
 describe('B044: 格式化迁移一致性验证', () => {
   const migratedComponents = [
-    'src/charts/QuadrantChart.ts',
-    'src/charts/StackedBarChart.ts',
-    'src/charts/PremiumProgressChart.ts',
-    'src/charts/ExpenseAnalysisChart.ts',
-    'src/services/charts/KpiCardRenderer.ts',
-    // 'src/components/MetricCard/MetricCard.ts', // 已移除或重构
-    'src/widgets/charts/OrgPremiumPieChart.tsx',
     'src/widgets/charts/LineChart.tsx',
     'src/widgets/charts/RoseChart.tsx',
-    'src/charts/BubbleChart.ts',
+    'src/widgets/charts/OrgPremiumPieChart.tsx',
     'src/features/dashboard/PremiumDashboard.tsx',
-    'src/features/dashboard/Dashboard.tsx',
     'src/features/growth/components/GrowthAnalysisPanel.tsx',
+    'src/features/cost/components/ClaimRatioTable.tsx',
+    'src/features/cost/components/EarnedPremiumTable.tsx',
   ]
 
   const formatterImports = [
@@ -89,7 +83,7 @@ describe('B044: 格式化迁移一致性验证', () => {
   describe('已迁移组件验证', () => {
     it('所有已迁移组件应该存在', () => {
       // 验证所有组件文件存在（实际运行时会检查）
-      expect(migratedComponents.length).toBe(12)
+      expect(migratedComponents.length).toBe(7)
     })
 
     migratedComponents.forEach((component) => {
@@ -203,17 +197,12 @@ describe('B044: 格式化迁移一致性验证', () => {
         console.log(`    ${index + 1}. ${component}`)
       })
       console.log('')
-      expect(migratedComponents.length).toBe(12)
+      expect(migratedComponents.length).toBe(7)
     })
 
     it('应该验证迁移数量与B042一致', () => {
-      // B042迁移了5个组件 (MetricCard已移除)
-      // B024迁移了7个组件
-      const b042Count = 5
-      const b024Count = 7
-      const totalMigrated = b042Count + b024Count
-
-      expect(migratedComponents.length).toBe(totalMigrated)
+      // API-only 清理后，历史组件已归档，本清单仅保留当前主链路组件
+      expect(migratedComponents.length).toBe(7)
     })
   })
 })

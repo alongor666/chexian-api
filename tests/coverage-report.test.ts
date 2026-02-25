@@ -20,36 +20,20 @@ describe('B044: 格式化统一性覆盖率验证', () => {
   })
 
   it('应该列出所有已迁移到统一格式化的组件', () => {
-    // B042迁移的组件列表：
+    // 当前 API-only 主链路中的格式化组件列表
     const migratedComponents = [
-      'src/charts/QuadrantChart.ts',
-      'src/charts/StackedBarChart.ts',
-      'src/charts/PremiumProgressChart.ts',
-      'src/charts/ExpenseAnalysisChart.ts',
-      'src/services/charts/KpiCardRenderer.ts',
-      'src/components/MetricCard/MetricCard.ts',
-      'src/widgets/charts/OrgPremiumPieChart.tsx',
-    ]
-
-    // B024迁移的组件列表：
-    const additionalComponents = [
       'src/widgets/charts/LineChart.tsx',
-      'src/widgets/charts/BarChart.tsx',
       'src/widgets/charts/RoseChart.tsx',
-      'src/charts/BubbleChart.ts',
+      'src/widgets/charts/OrgPremiumPieChart.tsx',
       'src/features/dashboard/PremiumDashboard.tsx',
-      'src/features/dashboard/Dashboard.tsx',
       'src/features/growth/components/GrowthAnalysisPanel.tsx',
-    ]
-
-    const allMigratedComponents = [
-      ...migratedComponents,
-      ...additionalComponents,
+      'src/features/cost/components/ClaimRatioTable.tsx',
+      'src/features/cost/components/EarnedPremiumCharts.tsx',
     ]
 
     // 验证所有组件都已迁移
-    expect(allMigratedComponents.length).toBeGreaterThan(0)
-    expect(allMigratedComponents.length).toBe(14)
+    expect(migratedComponents.length).toBeGreaterThan(0)
+    expect(migratedComponents.length).toBe(7)
   })
 
   it('应该列出所有格式化函数', () => {

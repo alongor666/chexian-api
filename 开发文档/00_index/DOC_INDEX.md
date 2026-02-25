@@ -138,3 +138,11 @@
 **变更规则**：
 - 业务规则/指标口径需变更：只能追加新规则，不得修改已有规则；必须提供 BACKLOG 证据链。
 - 架构文档需变更：必须同步更新本索引对应条目。
+
+## 2026-02 API-only 校正补充（新增）
+
+以下校正优先于本文件历史条目：
+
+- `src/shared/duckdb/client.ts`、`src/shared/duckdb/README.md` 已不属于当前运行架构。
+- 当前数据链路：前端 `src/shared/api/client.ts` → 后端 `server/src/routes/*` → `server/src/sql/*` → `server/src/services/duckdb.ts`。
+- 如需查看 DuckDB 业务口径，请以 `server/src/services/duckdb.ts` 和 `server/src/sql/*.ts` 为准。

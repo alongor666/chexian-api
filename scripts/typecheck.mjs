@@ -8,6 +8,8 @@
  */
 import { execSync } from 'node:child_process';
 import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const totalMemGB = os.totalmem() / 1024 / 1024 / 1024;
 const platform = os.platform();
@@ -36,8 +38,16 @@ const heapMB = Math.min(Math.round((totalMemGB - 4) * 1024), 16384);
 
 console.log(`[typecheck] 🔍 Running tsc --noEmit (heap: ${heapMB}MB)...`);
 
+const localTsc = path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
+const useLocalTsc = fs.existsSync(localTsc);
+const tscCommand = useLocalTsc ? `node --max-old-space-size=${heapMB} ./${path.relative(process.cwd(), localTsc)} --noEmit` : 'tsc --noEmit';
+
+if (!useLocalTsc) {
+  console.log('[typecheck] ⚠️  local ./node_modules/.bin/tsc 未找到，回退到全局 tsc');
+}
+
 try {
-  execSync(`node --max-old-space-size=${heapMB} ./node_modules/.bin/tsc --noEmit`, {
+  execSync(tscCommand, {
     stdio: 'inherit',
     cwd: process.cwd(),
   });

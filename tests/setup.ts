@@ -3,6 +3,7 @@
  *
  * 注意：vitest.config 已设置 environment: 'jsdom'
  * 无需手动创建 JSDOM 实例，vitest 会自动注入 DOM 全局变量
+ */
 import { setDefaultLoggerConfig } from '../src/shared/utils/logger';
 
 // 配置日志级别，减少测试输出噪音

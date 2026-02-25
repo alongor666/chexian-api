@@ -260,3 +260,14 @@ import { cn, cardStyles, getTrendColorClass, colors } from '@/shared/styles';
 // 直接使用颜色值
 <div style={{ backgroundColor: colors.primary.bg }}>
 ```
+
+## 2026-02 API-only 权威说明（新增）
+
+以下内容为当前运行事实，优先级高于本文历史段落：
+
+- 前端不再包含 `src/shared/duckdb/*` 运行链路。
+- 数据查询统一入口：`src/shared/api/client.ts` → 后端 `/api/*`。
+- 业务类型与上下文以 `src/shared/types/*`、`src/shared/contexts/*` 为准。
+- 样式规范以 `src/shared/styles/index.ts` 与 `src/shared/ui/*` 为准。
+
+如历史段落出现 `DuckDB-WASM`、`src/shared/duckdb/*` 等描述，视为历史记录，不代表当前架构。
