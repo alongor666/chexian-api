@@ -126,7 +126,7 @@ git merge-base main HEAD || echo "WARNING: no common ancestor"
 
 - **Bun 包管理器**：禁止 npm/yarn/pnpm
 - **智谱 API**：`https://open.bigmodel.cn/api/paas/v4`（glm-4.7-flash）
-- **API 限流**：`server/src/middleware/rateLimiter.ts` 三级限流（通用100/min、登录5/min、查询30/min），禁止降低
+- **API 限流**：`server/src/middleware/rateLimiter.ts` 三级限流（通用100/min、登录5/min、查询200/min），禁止降低
 - **JWT 认证**：所有 `/api/*` 必须经过认证中间件，禁止绕过
 - **文件名验证**：`server/src/utils/security.ts` 使用危险字符黑名单（非白名单），支持中文
 

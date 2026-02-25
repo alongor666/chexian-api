@@ -7,7 +7,7 @@
  * 限流策略：
  * - 通用 API: 100 次/分钟
  * - 登录接口: 5 次/分钟（严格）
- * - 查询接口: 30 次/分钟
+ * - 查询接口: 200 次/分钟（仪表盘多面板并发）
  */
 
 import { rateLimit } from 'express-rate-limit';
@@ -90,11 +90,11 @@ export const loginLimiter = rateLimit({
 
 /**
  * 查询接口限流器
- * 30 次/分钟
+ * 200 次/分钟（仪表盘多面板并发加载，单次页面加载即触发 8-10 请求）
  */
 export const queryLimiter = rateLimit({
   windowMs: 60 * 1000,   // 1 分钟
-  limit: 30,             // 30 次查询
+  limit: 200,            // 200 次查询
   message: {
     success: false,
     error: '查询请求过于频繁，请 1 分钟后再试',
