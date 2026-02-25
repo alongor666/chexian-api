@@ -86,6 +86,8 @@ export interface PremiumReportFilters {
   endDate: string;
   /** 机构筛选（可选） */
   org_level_3?: string[];
+  /** 附加筛选参数（buildFilterParams 产物） */
+  additionalParams?: Record<string, string>;
 }
 
 /**

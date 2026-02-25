@@ -232,8 +232,10 @@ export const generateKpiQuery = (
       br.bundle_renewal_rate AS bundle_renewal_rate,
       dp.driver_ytd_premium AS driver_premium,
       CASE
-        WHEN dpl.driver_plan_wan > 0 AND lc.natural_day_progress > 0
-        THEN (dp.driver_ytd_premium / 10000.0) / (dpl.driver_plan_wan * lc.natural_day_progress)
+        WHEN lc.natural_day_progress > 0
+          AND COALESCE(NULLIF(dpl.driver_plan_wan, 0), dp.driver_prev_full_premium / 10000.0) > 0
+        THEN (dp.driver_ytd_premium / 10000.0)
+          / (COALESCE(NULLIF(dpl.driver_plan_wan, 0), dp.driver_prev_full_premium / 10000.0) * lc.natural_day_progress)
         ELSE NULL
       END AS driver_achievement_rate,
       CASE

@@ -108,6 +108,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
       logger.debug('Loading org report from API', filters);
 
       const params: Record<string, any> = {
+        ...(filters.additionalParams || {}),
         reportType: 'org',
         dateField: filters.dateField,
         startDate: filters.startDate,
@@ -134,7 +135,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
         同比增长率: row['同比增长率'] != null ? Number(row['同比增长率']) : null,
       }));
     },
-    []
+    [isOrgUser, userOrg]
   );
 
   /**
@@ -145,6 +146,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
       logger.debug('Loading salesman report from API', filters);
 
       const params: Record<string, any> = {
+        ...(filters.additionalParams || {}),
         reportType: 'salesman',
         dateField: filters.dateField,
         startDate: filters.startDate,
@@ -173,7 +175,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
         非过户率: Number(row['非过户率'] || 0),
       }));
     },
-    []
+    [isOrgUser, userOrg]
   );
 
   /**

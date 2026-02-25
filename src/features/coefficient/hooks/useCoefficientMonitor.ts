@@ -23,7 +23,7 @@ export function useCoefficientMonitor({
   cutoffDate,
   analysisYear,
   enabled = true,
-  additionalWhere = '1=1',
+  additionalFilterParams = {},
 }: UseCoefficientMonitorOptions): UseCoefficientMonitorResult {
   const [data, setData] = useState<CoefficientRow[]>([]);
   const [periodGroups, setPeriodGroups] = useState<PeriodGroupData[]>([]);
@@ -45,6 +45,7 @@ export function useCoefficientMonitor({
       const startDateStr = `${analysisYear}-01-01`;
 
       const response = await apiClient.getCoefficientData({
+        ...additionalFilterParams,
         queryType: 'batch',
         dateField,
         startDate: startDateStr,
@@ -82,7 +83,7 @@ export function useCoefficientMonitor({
       if (requestId !== requestIdRef.current) return;
       throw err;
     }
-  }, [dateField, cutoffDate, analysisYear, additionalWhere]);
+  }, [dateField, cutoffDate, analysisYear, additionalFilterParams]);
 
   /**
    * 主数据获取函数

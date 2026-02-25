@@ -47,7 +47,7 @@ export interface UseCoefficientMonitorOptions {
   cutoffDate: Date;
   analysisYear: number;
   enabled?: boolean;
-  additionalWhere?: string;
+  additionalFilterParams?: Record<string, string>;
 }
 
 export interface UseCoefficientMonitorResult {
@@ -59,4 +59,3 @@ export interface UseCoefficientMonitorResult {
   error: Error | null;
   refresh: () => void;
 }
-

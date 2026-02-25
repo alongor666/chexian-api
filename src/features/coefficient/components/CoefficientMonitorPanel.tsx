@@ -15,6 +15,7 @@ import { CoefficientPeriodTable } from './CoefficientPeriodTable';
 import { CoefficientTopTable } from './CoefficientTopTable';
 import { CoefficientLegend } from './CoefficientLegend';
 import { CoefficientDetailTable } from './CoefficientDetailTable';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
 
 interface CoefficientMonitorPanelProps {
   filters: AdvancedFilterState;
@@ -32,6 +33,15 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
   const cutoffDateStr =
     filters.policy_date_end ?? new Date().toISOString().split('T')[0];
   const cutoffDate = useMemo(() => new Date(cutoffDateStr), [cutoffDateStr]);
+  const additionalFilterParams = useMemo(
+    () =>
+      buildFilterParams({
+        ...filters,
+        policy_date_start: undefined,
+        policy_date_end: undefined,
+      }),
+    [filters]
+  );
 
   // 获取系数数据
   const { data, periodGroups, provinceTop, chengduTop, loading, error, refresh } =
@@ -40,6 +50,7 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
       cutoffDate,
       analysisYear,
       enabled: true,
+      additionalFilterParams,
     });
 
   // 显示模式

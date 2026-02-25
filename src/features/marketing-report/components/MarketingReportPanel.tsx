@@ -18,6 +18,7 @@ import { PremiumPlanPanel } from './PremiumPlanPanel';
 import { useMarketingReport } from '../hooks/useMarketingReport';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import { formatCount } from '../../../shared/utils/formatters';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
 
 type MarketingTab = 'report' | 'drilldown' | 'plan';
 
@@ -55,6 +56,7 @@ export const MarketingReportPanel: React.FC = () => {
       startDate: filters.policy_date_start || `${year}-01-01`,
       endDate: filters.policy_date_end || `${year}-12-31`,
       org_level_3: filters.org_level_3,
+      additionalParams: buildFilterParams(filters),
     };
   }, [filters]);
 

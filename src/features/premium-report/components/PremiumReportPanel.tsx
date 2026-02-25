@@ -16,6 +16,7 @@ import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import type { TableColumn } from '../../marketing-report/types/marketingReport';
 import type { OrgPremiumReportRow, SalesmanPremiumReportRow } from '../types/premiumReport';
 import { formatWanDirect, formatRate, formatCount } from '../../../shared/utils/formatters';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
 
 type PremiumTab = 'report' | 'plan';
 
@@ -173,6 +174,7 @@ export const PremiumReportPanel: React.FC = () => {
       startDate: filters.policy_date_start || `${year}-01-01`,
       endDate: filters.policy_date_end || `${year}-12-31`,
       org_level_3: filters.org_level_3,
+      additionalParams: buildFilterParams(filters),
     };
   }, [filters]);
 
