@@ -20,6 +20,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
@@ -28,8 +29,9 @@ import {
   validatePathWithinDirectory,
   isValidParquetFile,
   safeLog,
+  escapeSqlValue,
 } from '../utils/security.js';
-import { getDataDir } from '../config/paths.js';
+import { getDataDir, getKpiPlanConfigPath } from '../config/paths.js';
 
 const router = Router();
 
@@ -44,6 +46,8 @@ const CONFIG = {
   RATE_LIMIT_WINDOW: 15 * 60 * 1000, // 15 分钟
   RATE_LIMIT_MAX: 10, // 最多 10 次上传
 };
+
+const KPI_PLAN_CONFIG_PATH = getKpiPlanConfigPath();
 
 // 确保数据目录存在
 if (!fs.existsSync(CONFIG.DATA_DIR)) {
@@ -619,6 +623,63 @@ router.get(
 
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
+  })
+);
+
+const kpiPlanConfigSchema = z.array(z.object({
+  plan_year: z.number().int(),
+  business_line: z.string().min(1),
+  level: z.string().min(1),
+  level_key: z.string().min(1),
+  plan_premium: z.number(),
+}));
+
+router.get(
+  '/kpi-plan-config',
+  asyncHandler(async (req: Request, res: Response) => {
+    const rows = await duckdbService.query<{
+      plan_year: number;
+      business_line: string;
+      level: string;
+      level_key: string;
+      plan_premium: number;
+    }>(
+      `SELECT plan_year, business_line, level, level_key, plan_premium
+       FROM KpiPlanConfig
+       ORDER BY plan_year DESC, business_line, level, level_key`
+    );
+
+    res.json({ success: true, data: rows });
+  })
+);
+
+router.put(
+  '/kpi-plan-config',
+  asyncHandler(async (req: Request, res: Response) => {
+    const role = (req as any).user?.role;
+    if (role !== 'branch_admin') {
+      throw new AppError(403, '权限不足');
+    }
+
+    const parsed = kpiPlanConfigSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, parsed.error.issues[0]?.message || '参数错误');
+    }
+
+    const plans = parsed.data;
+
+    fs.mkdirSync(path.dirname(KPI_PLAN_CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(KPI_PLAN_CONFIG_PATH, JSON.stringify(plans, null, 2), 'utf-8');
+
+    await duckdbService.query('DELETE FROM KpiPlanConfig');
+    if (plans.length > 0) {
+      const values = plans
+        .map((p) => `(${p.plan_year}, '${escapeSqlValue(p.business_line)}', '${escapeSqlValue(p.level)}', '${escapeSqlValue(p.level_key)}', ${p.plan_premium})`)
+        .join(',\n');
+      await duckdbService.query(`INSERT INTO KpiPlanConfig VALUES\n${values}`);
+    }
+
+    res.json({ success: true, data: { count: plans.length } });
   })
 );
 

@@ -35,9 +35,17 @@ export function generateColumnMappingSQL(
   // 遍历标准字段定义
   for (const [standardName, aliases] of Object.entries(COLUMN_ALIASES)) {
     // 查找实际列名
-    const actualColumn = actualColumns.find((col) =>
+    let actualColumn = actualColumns.find((col) =>
       aliases.some((alias) => col === alias || col.includes(alias))
     );
+    if (standardName === 'is_renewal') {
+      const renewalPolicyNoColumn = actualColumns.find((col) =>
+        (COLUMN_ALIASES as Record<string, string[]>).renewal_policy_no?.some((alias) => col === alias || col.includes(alias))
+      );
+      if (actualColumn && renewalPolicyNoColumn && actualColumn === renewalPolicyNoColumn) {
+        actualColumn = undefined;
+      }
+    }
 
     if (actualColumn) {
       // 检查是否需要类型转换
@@ -55,7 +63,18 @@ export function generateColumnMappingSQL(
       }
     } else {
       // 如果找不到，使用默认值
-      if (BOOLEAN_FIELDS.includes(standardName)) {
+      if (standardName === 'is_renewal') {
+        const renewalPolicyNoColumn = actualColumns.find((col) =>
+          (COLUMN_ALIASES as Record<string, string[]>).renewal_policy_no?.some((alias) => col === alias || col.includes(alias))
+        );
+        if (renewalPolicyNoColumn) {
+          mappings.push(
+            `CASE WHEN "${renewalPolicyNoColumn}" IS NOT NULL AND TRIM(CAST("${renewalPolicyNoColumn}" AS VARCHAR)) <> '' THEN true ELSE false END as is_renewal`
+          );
+        } else {
+          mappings.push('false as is_renewal');
+        }
+      } else if (BOOLEAN_FIELDS.includes(standardName)) {
         mappings.push(`false as ${standardName}`);
       } else {
         mappings.push(`NULL as ${standardName}`);

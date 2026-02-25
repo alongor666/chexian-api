@@ -175,9 +175,9 @@ export function formatDays(value: number | null | undefined): string {
  * @example formatAchievementRate(0.85) => "85.0%"
  * @example formatAchievementRate(0.012) => "1.2%"
  */
-export function formatAchievementRate(value: number | null | undefined): string {
+export function formatAchievementRate(value: number | null | undefined, decimals: number = 1): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '-';
-  return `${(value * 100).toFixed(1)}%`;
+  return `${(value * 100).toFixed(decimals)}%`;
 }
 
 // ==================== 业务字段专用格式化函数 ====================

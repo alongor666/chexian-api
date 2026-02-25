@@ -10,6 +10,7 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import type { DuckDBConnection } from '@duckdb/node-api';
 import { databaseConfig } from '../config/database.js';
+import { getKpiPlanConfigPath } from '../config/paths.js';
 import { AppError } from '../middleware/error.js';
 import { generateColumnMappingSQL, getColumnMapping } from './column-normalizer.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
@@ -151,6 +152,34 @@ class DuckDBService {
           plan_premium DOUBLE
         )
       `);
+
+      try {
+        const fs = (await import('fs')).default;
+        const planConfigPath = getKpiPlanConfigPath();
+        if (fs.existsSync(planConfigPath)) {
+          const raw = fs.readFileSync(planConfigPath, 'utf-8').replace(/\bNaN\b/g, 'null');
+          const parsed = JSON.parse(raw);
+          const rows: any[] = Array.isArray(parsed) ? parsed : [];
+          if (rows.length > 0) {
+            await this.query('DELETE FROM KpiPlanConfig');
+            const values = rows
+              .filter((r) => r && typeof r === 'object')
+              .map((r) => {
+                const planYear = Number(r.plan_year) || 0;
+                const businessLine = String(r.business_line ?? '');
+                const level = String(r.level ?? '');
+                const levelKey = String(r.level_key ?? '');
+                const planPremium = Number(r.plan_premium) || 0;
+                return `(${planYear}, '${escapeSqlValue(businessLine)}', '${escapeSqlValue(level)}', '${escapeSqlValue(levelKey)}', ${planPremium})`;
+              })
+              .join(',\n');
+            if (values) {
+              await this.query(`INSERT INTO KpiPlanConfig VALUES\n${values}`);
+            }
+          }
+        }
+      } catch {
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       throw new AppError(500, `Failed to initialize DuckDB: ${message}`);

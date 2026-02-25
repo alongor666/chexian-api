@@ -18,6 +18,7 @@ export interface TrendPoint {
   time_period: string;
   coverage_combination: string;
   rate: number;
+  avg_premium: number;
   auto_count: number;
 }
 
@@ -26,6 +27,7 @@ interface UseCrossSellTrendProps {
   vehicleCategory: VehicleCategory;
   granularity: TrendGranularity;
   enabled?: boolean;
+  requestKey?: string;
 }
 
 interface UseCrossSellTrendReturn {
@@ -39,6 +41,7 @@ export function useCrossSellTrend({
   vehicleCategory,
   granularity,
   enabled = true,
+  requestKey,
 }: UseCrossSellTrendProps): UseCrossSellTrendReturn {
   const { isOrgUser, userOrg } = useRBAC();
   const [rows, setRows] = useState<TrendPoint[]>([]);
@@ -59,6 +62,9 @@ export function useCrossSellTrend({
         vehicleCategory,
         granularity,
       };
+      if (requestKey) {
+        params.requestKey = requestKey;
+      }
       const result = await apiClient.getCrossSellTrend(params);
       if (fetchId !== fetchIdRef.current) return;
       setRows(
@@ -66,6 +72,7 @@ export function useCrossSellTrend({
           time_period: String(r.time_period ?? ''),
           coverage_combination: String(r.coverage_combination ?? ''),
           rate: Number(r.rate ?? 0),
+          avg_premium: Number(r.avg_premium ?? 0),
           auto_count: Number(r.auto_count ?? 0),
         }))
       );
@@ -77,7 +84,7 @@ export function useCrossSellTrend({
         setLoading(false);
       }
     }
-  }, [filters, vehicleCategory, granularity, enabled, isOrgUser, userOrg]);
+  }, [filters, vehicleCategory, granularity, enabled, isOrgUser, userOrg, requestKey]);
 
   useEffect(() => {
     fetchData();

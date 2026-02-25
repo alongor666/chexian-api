@@ -1,0 +1,247 @@
+/**
+ * 驾乘险推介率汇总 KPI 卡片组
+ * Cross-Sell Summary KPI Board
+ *
+ * 使用表格格式展示：
+ * - 非营业客车/货车：险别组合/指标 | 驾乘险保费 | 车险件数 | 推介率 | 件均保费
+ * - 摩托车：险别组合/指标 | 推介率（只有单交）
+ */
+
+import { memo, useMemo, useState } from 'react';
+import type { AdvancedFilterState } from '@/shared/types/data';
+import { textStyles, cardStyles, numericStyles, cn } from '@/shared/styles';
+import { formatCount, formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
+import { useCrossSellTimePeriod, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
+import { getRateClassByField } from './crossSellRateStatus';
+
+export type TimePeriod = 'day' | 'week' | 'month' | 'year';
+
+interface CrossSellSummaryKpiBoardProps {
+  vehicleCategory: VehicleCategory;
+  filters: AdvancedFilterState;
+  defaultTimePeriod?: TimePeriod;
+}
+
+const TIME_PERIOD_TABS: { key: TimePeriod; label: string }[] = [
+  { key: 'day', label: '当日' },
+  { key: 'week', label: '当周' },
+  { key: 'month', label: '当月' },
+  { key: 'year', label: '当年' },
+];
+
+// 非营业客车/货车的行定义：险别组合
+const COVERAGE_ROWS_FULL = [
+  { key: '整体', label: '整体' },
+  { key: '主全', label: '主全' },
+  { key: '交三', label: '交三' },
+  { key: '单交', label: '单交' },
+] as const;
+
+// 摩托车的行定义：只有单交
+const COVERAGE_ROWS_MOTORCYCLE = [
+  { key: '单交', label: '单交' },
+] as const;
+
+// 非营业客车/货车的列定义：指标
+const METRIC_COLUMNS_FULL = [
+  { key: 'premium', label: '驾乘险保费' },
+  { key: 'auto_count', label: '车险件数' },
+  { key: 'rate', label: '推介率' },
+  { key: 'avg_premium', label: '件均保费' },
+] as const;
+
+// 摩托车的列定义：只有推介率
+const METRIC_COLUMNS_MOTORCYCLE = [
+  { key: 'rate', label: '推介率' },
+] as const;
+
+interface TimePeriodData {
+  auto_count: number;
+  premium: number;
+  rate: number;
+  avg_premium: number;
+}
+
+function formatPremium(value: number): string {
+  return formatPremiumWan(value * 10000);
+}
+
+function getRateColorClass(coverageKey: string, value: number): string {
+  if (coverageKey === '主全') {
+    return getRateClassByField('zhuquan_rate', value);
+  }
+  if (coverageKey === '交三') {
+    return getRateClassByField('jiaosan_rate', value);
+  }
+  return '';
+}
+
+export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
+  vehicleCategory,
+  filters,
+  defaultTimePeriod = 'year',
+}: CrossSellSummaryKpiBoardProps) {
+  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>(defaultTimePeriod);
+  
+  const { maxDate, rawData, loading, error } = useCrossSellTimePeriod({
+    filters,
+    vehicleCategory,
+  });
+
+  // 判断是否为摩托车
+  const isMotorcycle = vehicleCategory === 'motorcycle';
+
+  // 根据车辆类别选择行和列
+  const coverageRows = isMotorcycle ? COVERAGE_ROWS_MOTORCYCLE : COVERAGE_ROWS_FULL;
+  const metricColumns = isMotorcycle ? METRIC_COLUMNS_MOTORCYCLE : METRIC_COLUMNS_FULL;
+
+  // 根据选择的时间维度获取数据
+  const dataByCoverage = useMemo(() => {
+    if (!rawData || rawData.length === 0) return new Map<string, TimePeriodData>();
+    
+    const map = new Map<string, TimePeriodData>();
+    for (const row of rawData) {
+      const prefix = selectedPeriod;
+      const rowAny = row as unknown as Record<string, unknown>;
+      map.set(row.coverage_combination, {
+        auto_count: Number(rowAny[`${prefix}_auto_count`] ?? 0),
+        premium: Number(rowAny[`${prefix}_premium`] ?? 0) / 10000,
+        rate: Number(rowAny[`${prefix}_rate`] ?? 0),
+        avg_premium: Number(rowAny[`${prefix}_avg_premium`] ?? 0),
+      });
+    }
+    return map;
+  }, [rawData, selectedPeriod]);
+
+  // 获取单元格显示内容
+  const getCellContent = (
+    metricKey: string,
+    coverageKey: string
+  ): { text: string; colorClass: string } => {
+    const data = dataByCoverage.get(coverageKey);
+    
+    if (loading) {
+      return { text: '--', colorClass: '' };
+    }
+    
+    switch (metricKey) {
+      case 'premium':
+        return { text: formatPremium(data?.premium ?? 0), colorClass: '' };
+      case 'auto_count':
+        return { text: formatCount(data?.auto_count ?? 0), colorClass: '' };
+      case 'rate': {
+        const rate = data?.rate ?? 0;
+        return {
+          text: formatPercent(rate),
+          colorClass: getRateColorClass(coverageKey, rate),
+        };
+      }
+      case 'avg_premium':
+        return { text: `${formatCount(data?.avg_premium ?? 0)}元`, colorClass: '' };
+      default:
+        return { text: '-', colorClass: '' };
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="bg-danger-bg border border-danger-border rounded-xl p-4">
+        <p className="text-danger text-sm">加载失败: {error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* 时间选择器 + 数据截止日期 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          {TIME_PERIOD_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setSelectedPeriod(tab.key)}
+              className={cn(
+                'px-3 py-1.5 text-sm rounded-lg transition-colors',
+                selectedPeriod === tab.key
+                  ? 'bg-primary text-white'
+                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {maxDate && (
+          <p className={cn(textStyles.caption, 'text-neutral-400')}>
+            数据截至: {maxDate}
+          </p>
+        )}
+      </div>
+
+      {/* 数据表格 */}
+      <div className={cn(cardStyles.interactive, 'overflow-hidden')}>
+        <table className="w-full">
+          <thead>
+            <tr className="bg-neutral-50 border-b border-neutral-200">
+              <th className="py-3 px-4 text-left font-medium text-neutral-500 w-28">
+                险别组合/指标
+              </th>
+              {metricColumns.map((col) => (
+                <th
+                  key={col.key}
+                  className="py-3 px-4 text-left font-medium text-neutral-500"
+                >
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {coverageRows.map((row, idx) => (
+              <tr
+                key={row.key}
+                className={cn(
+                  'border-b border-neutral-100 last:border-b-0',
+                  idx % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'
+                )}
+              >
+                {/* 险别组合名称 */}
+                <td className="py-4 px-4">
+                  <span className={cn(textStyles.body, 'font-medium text-neutral-700')}>
+                    {row.label}
+                  </span>
+                </td>
+                {/* 指标数值 */}
+                {metricColumns.map((col) => {
+                  const { text, colorClass } = getCellContent(col.key, row.key);
+                  return (
+                    <td key={col.key} className="py-4 px-4">
+                      <span
+                        className={cn(
+                          numericStyles.kpiPrimary,
+                          colorClass || 'text-neutral-900'
+                        )}
+                      >
+                        {text}
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 验证公式说明 - 摩托车不显示 */}
+      {!isMotorcycle && (
+        <div className={cn(textStyles.caption, 'text-neutral-400 italic')}>
+          💡 验证公式：驾乘险保费 ≈ 车险件数 × 推介率 × 件均保费
+        </div>
+      )}
+    </div>
+  );
+});
+
+export default CrossSellSummaryKpiBoard;

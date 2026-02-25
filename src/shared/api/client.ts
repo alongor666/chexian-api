@@ -625,6 +625,7 @@ class ApiClient {
       time_period: string;
       coverage_combination: string;
       rate: number;
+      avg_premium: number;
       auto_count: number;
     }>;
   }> {

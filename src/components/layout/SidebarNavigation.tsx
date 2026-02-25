@@ -20,6 +20,8 @@ import {
   X,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
+import { usePermission } from '../../shared/contexts/PermissionContext';
+import { canAccessRoute } from '../../shared/config/organizations';
 
 
 interface NavItem {
@@ -60,6 +62,7 @@ const dataNavItems: NavItem[] = [
 export const SidebarNavigation: React.FC = () => {
   const { collapsed, toggle, mobileOpen, setMobileOpen, isMobile } = useSidebar();
   const location = useLocation();
+  const { userPermission } = usePermission();
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -73,6 +76,28 @@ export const SidebarNavigation: React.FC = () => {
 
   const renderNavItem = (item: NavItem) => {
     const IconComponent = item.icon;
+    const canAccess = userPermission ? canAccessRoute(userPermission, item.path) : true;
+
+    if (!canAccess) {
+      return (
+        <div
+          key={item.path}
+          className="flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0 text-neutral-400 bg-neutral-50 cursor-not-allowed opacity-70"
+          title={!showExpanded ? `${item.label}（无权限）` : undefined}
+          aria-disabled="true"
+        >
+          <IconComponent
+            size={20}
+            className="flex-shrink-0"
+            aria-hidden="true"
+          />
+          {showExpanded && (
+            <span className="ml-3 text-sm font-medium truncate">{item.label}</span>
+          )}
+        </div>
+      );
+    }
+
     return (
       <NavLink
         key={item.path}
