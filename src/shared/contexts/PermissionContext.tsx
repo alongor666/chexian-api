@@ -86,8 +86,10 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
           const authData = JSON.parse(savedAuth);
           // 验证存储的认证信息
           if (authData.username && authData.permission) {
-            setUserPermissionState(authData.permission);
-            setPermission(authData.permission);
+            // 优先使用最新本地权限配置，避免旧缓存缺少新字段（如 allowedRoutes/defaultRoute）
+            const latestPermission = getPermissionByUsername(authData.username) || authData.permission;
+            setUserPermissionState(latestPermission);
+            setPermission(latestPermission);
           }
         } else if (import.meta.env.DEV) {
           // 开发模式：从旧的存储格式恢复
