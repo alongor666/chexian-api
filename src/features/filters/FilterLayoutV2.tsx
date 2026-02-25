@@ -22,7 +22,7 @@ const getMultiSelectSummary = (selectedValues?: string[]) => {
 const getRenewalModeSummary = (selectedValues?: string[]) => {
   if (!selectedValues || selectedValues.length === 0) return '全部';
   if (selectedValues.length === 1) {
-    return selectedValues[0] === '__NULL__' ? '新保/非续保' : selectedValues[0];
+    return selectedValues[0] === '__NULL__' ? '空白' : selectedValues[0];
   }
   return `已选${selectedValues.length}项`;
 };
@@ -48,6 +48,8 @@ interface FilterLayoutV2Props {
   visibleFields?: FilterFieldsConfig;
   /** 选择模式配置 */
   selectionModes?: FilterSelectionModeConfig;
+  /** 快捷组合插槽（标准模式：三级机构行后、起止日期前；紧凑模式：续保模式后、起止日期前） */
+  quickCombosSlot?: React.ReactNode;
   /** 紧凑模式（垂直布局） */
   compact?: boolean;
 }
@@ -105,6 +107,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
   orgActions,
   visibleFields,
   selectionModes,
+  quickCombosSlot,
   compact = false,
 }) => {
   // 默认显示所有字段
@@ -145,7 +148,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
   const startDate = filters.policy_date_start ?? `${defaultYear}-01-01`;
   const endDate = filters.policy_date_end ?? maxDataDate ?? defaultDateRange.end;
   const renewalModeOptions: MultiSelectOption[] = [
-    { value: '__NULL__', label: '新保/非续保' },
+    { value: '__NULL__', label: '空白' },
     ...toMultiSelectOptions(options.renewal_mode || []),
   ];
 
@@ -177,13 +180,11 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
     }
   };
 
-  // 计算第一行显示的元素数量，用于动态调整布局
-  const firstRowVisibleCount = [showDateCriteria, showAnalysisYear, showDateRange].filter(Boolean).length;
-  const firstRowGridClass = firstRowVisibleCount === 3
-    ? 'grid-cols-1 xl:grid-cols-[minmax(220px,_1fr)_minmax(220px,_1fr)_minmax(320px,_2fr)]'
-    : firstRowVisibleCount === 2
-      ? 'grid-cols-1 md:grid-cols-2'
-      : 'grid-cols-1';
+  // 计算第一行显示的元素数量（仅日期口径+分析年度，起止日期已移至独立行）
+  const firstRowVisibleCount = [showDateCriteria, showAnalysisYear].filter(Boolean).length;
+  const firstRowGridClass = firstRowVisibleCount === 2
+    ? 'grid-cols-1 md:grid-cols-2'
+    : 'grid-cols-1';
 
   // 计算第二行显示的元素数量
   const secondRowVisibleCount = [showOrganization, showCustomerCategory, showCoverageCombination, showRenewalMode].filter(Boolean).length;
@@ -244,22 +245,6 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
             availableYears={filteredAvailableYears}
             currentYear={currentYear}
             disabled={filteredAvailableYears.length <= 1}
-            compact
-          />
-        )}
-
-        {/* 日期范围 */}
-        {showDateRange && (
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onChange={(start, end) =>
-              onChange({
-                ...filters,
-                policy_date_start: start,
-                policy_date_end: end,
-              })
-            }
             compact
           />
         )}
@@ -452,6 +437,27 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
             </div>
           </details>
         )}
+
+        {/* 快捷组合插槽 */}
+        {quickCombosSlot && (
+          <div className="py-1">{quickCombosSlot}</div>
+        )}
+
+        {/* 日期范围（移至末尾，减少顶部占用） */}
+        {showDateRange && (
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(start, end) =>
+              onChange({
+                ...filters,
+                policy_date_start: start,
+                policy_date_end: end,
+              })
+            }
+            compact
+          />
+        )}
       </div>
     );
   }
@@ -502,20 +508,6 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
               availableYears={filteredAvailableYears}
               currentYear={currentYear}
               disabled={filteredAvailableYears.length <= 1}
-            />
-          )}
-
-          {showDateRange && (
-            <DateRangePicker
-              startDate={startDate}
-              endDate={endDate}
-              onChange={(start, end) =>
-                onChange({
-                  ...filters,
-                  policy_date_start: start,
-                  policy_date_end: end,
-                })
-              }
             />
           )}
         </div>
@@ -614,6 +606,26 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
             </details>
           )}
         </div>
+      )}
+
+      {/* 快捷组合插槽：三级机构行后、起止日期前 */}
+      {quickCombosSlot && (
+        <div className="py-1">{quickCombosSlot}</div>
+      )}
+
+      {/* 起止日期：独立成行 */}
+      {showDateRange && (
+        <DateRangePicker
+          startDate={startDate}
+          endDate={endDate}
+          onChange={(start, end) =>
+            onChange({
+              ...filters,
+              policy_date_start: start,
+              policy_date_end: end,
+            })
+          }
+        />
       )}
     </div>
   );
