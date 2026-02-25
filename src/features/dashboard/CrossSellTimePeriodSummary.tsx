@@ -10,7 +10,7 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { Table } from '@/shared/ui/Table';
 import type { TableColumn } from '@/shared/ui/Table';
 import { textStyles, cn } from '@/shared/styles';
-import { formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
+import { formatCount, formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
 import { getRateClassByField } from './crossSellRateStatus';
 import { useCrossSellTimePeriod } from './hooks/useCrossSellTimePeriod';
 import type { VehicleCategory, TimePeriodRow } from './hooks/useCrossSellTimePeriod';
@@ -87,28 +87,28 @@ const avgPremiumColumns: TableColumn<TimePeriodRecord>[] = [
     title: '当日',
     dataIndex: 'day',
     align: 'right',
-    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value))}</span>,
+    render: (value) => <span className={textStyles.numeric}>{formatCount(Number(value))}</span>,
   },
   {
     key: 'week',
     title: '当周',
     dataIndex: 'week',
     align: 'right',
-    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value))}</span>,
+    render: (value) => <span className={textStyles.numeric}>{formatCount(Number(value))}</span>,
   },
   {
     key: 'month',
     title: '当月',
     dataIndex: 'month',
     align: 'right',
-    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value))}</span>,
+    render: (value) => <span className={textStyles.numeric}>{formatCount(Number(value))}</span>,
   },
   {
     key: 'year',
     title: '当年',
     dataIndex: 'year',
     align: 'right',
-    render: (value) => <span className={textStyles.numeric}>{formatPremiumWan(Number(value))}</span>,
+    render: (value) => <span className={textStyles.numeric}>{formatCount(Number(value))}</span>,
   },
 ];
 

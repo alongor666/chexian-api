@@ -1,12 +1,13 @@
 import { lazy, Suspense, ReactNode } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SidebarLayout, DataGuard, ErrorBoundary } from '../components/layout';
+import { PageFilterPanel } from '../components/layout/PageFilterPanel';
 import { DataProvider } from '../shared/contexts/DataContext';
 import { FilterProvider } from '../shared/contexts/FilterContext';
 import { PermissionProvider } from '../shared/contexts/PermissionContext';
 import { ThemeProvider } from '../shared/theme';
 import { DataImportPage } from '../features/home/DataImportPage';
-import { LoginPage, AuthGuard } from '../features/auth';
+import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
 
 // Lazy load page components for better performance
 const PremiumDashboard = lazy(() =>
@@ -85,95 +86,128 @@ function App() {
               </AuthGuard>
             }>
               {/* 首页 - 不需要数据守卫 */}
-              <Route index element={<DataImportPage />} />
+              <Route
+                index
+                element={
+                  <RouteAccessGuard routePath="/">
+                    <DataImportPage />
+                  </RouteAccessGuard>
+                }
+              />
 
               {/* 数据分析页面 - 需要数据守卫，使用 LazyRoute 包装 */}
               <Route
                 path="dashboard"
                 element={
-                  <DataGuard>
-                    <LazyRoute><PremiumDashboard /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/dashboard">
+                    <DataGuard>
+                      <LazyRoute>
+                        <PageFilterPanel preset="full">
+                          <PremiumDashboard />
+                        </PageFilterPanel>
+                      </LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="premium-report"
                 element={
-                  <DataGuard>
-                    <LazyRoute><PremiumReportPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/premium-report">
+                    <DataGuard>
+                      <LazyRoute><PremiumReportPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="marketing-report"
                 element={
-                  <DataGuard>
-                    <LazyRoute><MarketingReportPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/marketing-report">
+                    <DataGuard>
+                      <LazyRoute><MarketingReportPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="truck"
                 element={
-                  <DataGuard>
-                    <LazyRoute><TruckPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/truck">
+                    <DataGuard>
+                      <LazyRoute><TruckPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="renewal"
                 element={
-                  <DataGuard>
-                    <LazyRoute><RenewalPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/renewal">
+                    <DataGuard>
+                      <LazyRoute><RenewalPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="cross-sell"
                 element={
-                  <DataGuard>
-                    <LazyRoute><CrossSellPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/cross-sell">
+                    <DataGuard>
+                      <LazyRoute><CrossSellPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="growth"
                 element={
-                  <DataGuard>
-                    <LazyRoute><GrowthPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/growth">
+                    <DataGuard>
+                      <LazyRoute><GrowthPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="cost"
                 element={
-                  <DataGuard>
-                    <LazyRoute><CostPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/cost">
+                    <DataGuard>
+                      <LazyRoute><CostPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="comparison"
                 element={
-                  <DataGuard>
-                    <LazyRoute><ComparisonPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/comparison">
+                    <DataGuard>
+                      <LazyRoute><ComparisonPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="coefficient"
                 element={
-                  <DataGuard>
-                    <LazyRoute><CoefficientPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/coefficient">
+                    <DataGuard>
+                      <LazyRoute><CoefficientPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
               <Route
                 path="sql-query"
                 element={
-                  <DataGuard>
-                    <LazyRoute><SqlQueryPage /></LazyRoute>
-                  </DataGuard>
+                  <RouteAccessGuard routePath="/sql-query">
+                    <DataGuard>
+                      <LazyRoute><SqlQueryPage /></LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
                 }
               />
 
@@ -181,9 +215,11 @@ function App() {
               <Route
                 path="templates"
                 element={
-                  <LazyRoute>
-                    <ReportTemplatesPanel onSelectTemplate={() => {}} />
-                  </LazyRoute>
+                  <RouteAccessGuard routePath="/templates">
+                    <LazyRoute>
+                      <ReportTemplatesPanel onSelectTemplate={() => {}} />
+                    </LazyRoute>
+                  </RouteAccessGuard>
                 }
               />
 

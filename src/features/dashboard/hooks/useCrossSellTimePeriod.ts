@@ -27,11 +27,36 @@ interface UseCrossSellTimePeriodProps {
   enabled?: boolean;
 }
 
+interface TimePeriodRawRow {
+  coverage_combination: string;
+  day_auto_count: number;
+  day_driver_count: number;
+  day_premium: number;
+  day_rate: number;
+  day_avg_premium: number;
+  week_auto_count: number;
+  week_driver_count: number;
+  week_premium: number;
+  week_rate: number;
+  week_avg_premium: number;
+  month_auto_count: number;
+  month_driver_count: number;
+  month_premium: number;
+  month_rate: number;
+  month_avg_premium: number;
+  year_auto_count: number;
+  year_driver_count: number;
+  year_premium: number;
+  year_rate: number;
+  year_avg_premium: number;
+}
+
 interface UseCrossSellTimePeriodReturn {
   maxDate: string | null;
   rateData: TimePeriodRow[];
   avgPremiumData: TimePeriodRow[];
   premiumData: TimePeriodRow[];
+  rawData: TimePeriodRawRow[];
   loading: boolean;
   error: string | null;
 }
@@ -55,6 +80,7 @@ export function useCrossSellTimePeriod({
   const [rateData, setRateData] = useState<TimePeriodRow[]>([]);
   const [avgPremiumData, setAvgPremiumData] = useState<TimePeriodRow[]>([]);
   const [premiumData, setPremiumData] = useState<TimePeriodRow[]>([]);
+  const [rawData, setRawData] = useState<TimePeriodRawRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchIdRef = useRef(0);
@@ -79,6 +105,9 @@ export function useCrossSellTimePeriod({
         setMaxDate(result.maxDate || null);
 
         const rows = result.rows || [];
+        
+        // 保存原始数据
+        setRawData(rows as TimePeriodRawRow[]);
 
         // Build lookup by coverage_combination
         const rowMap = new Map<string, typeof rows[0]>();
@@ -110,10 +139,10 @@ export function useCrossSellTimePeriod({
 
         setAvgPremiumData(
           buildRows((r) => ({
-            day: Number(r.day_avg_premium ?? 0) / 10000,
-            week: Number(r.week_avg_premium ?? 0) / 10000,
-            month: Number(r.month_avg_premium ?? 0) / 10000,
-            year: Number(r.year_avg_premium ?? 0) / 10000,
+            day: Number(r.day_avg_premium ?? 0),
+            week: Number(r.week_avg_premium ?? 0),
+            month: Number(r.month_avg_premium ?? 0),
+            year: Number(r.year_avg_premium ?? 0),
           }))
         );
 
@@ -145,6 +174,7 @@ export function useCrossSellTimePeriod({
     rateData,
     avgPremiumData,
     premiumData,
+    rawData,
     loading,
     error,
   };

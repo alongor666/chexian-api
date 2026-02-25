@@ -40,7 +40,7 @@ function getCrossSellCondition(): string {
 /**
  * 生成车驾意推介率走势查询
  *
- * 返回字段：time_period, coverage_combination, rate, auto_count
+ * 返回字段：time_period, coverage_combination, rate, avg_premium, auto_count
  * 按时间分组，包含 整体/主全/交三/单交 四条线
  *
  * @param baseWhereClause - 基础 WHERE 子句
@@ -69,6 +69,7 @@ export function generateCrossSellTrendQuery(
         ${dedup} AS dedup_key,
         coverage_combination,
         is_cross_sell,
+        cross_sell_premium_driver,
         CAST(policy_date AS DATE) AS pd
       FROM PolicyFact
       WHERE ${baseWhereClause}
@@ -79,7 +80,8 @@ export function generateCrossSellTrendQuery(
         ${timeExpr} AS time_period,
         coverage_combination,
         COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count
+        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
+        COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS premium
       FROM filtered
       GROUP BY 1, 2
     ),
@@ -88,7 +90,8 @@ export function generateCrossSellTrendQuery(
         ${timeExpr} AS time_period,
         '整体' AS coverage_combination,
         COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count
+        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
+        COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS premium
       FROM filtered
       GROUP BY 1
     ),
@@ -104,6 +107,9 @@ export function generateCrossSellTrendQuery(
       CASE WHEN auto_count = 0 THEN 0
            ELSE ROUND(driver_count * 100.0 / auto_count, 2)
       END AS rate,
+      CASE WHEN driver_count = 0 THEN 0
+           ELSE ROUND(premium / driver_count, 2)
+      END AS avg_premium,
       auto_count
     FROM combined
     WHERE time_period IS NOT NULL

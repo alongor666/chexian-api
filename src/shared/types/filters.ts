@@ -221,10 +221,10 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
     dateRange: true,
     organization: true,
     salesman: false, // 报表不支持业务员筛选
-    customerCategory: false, // 报表不支持
-    coverageCombination: false, // 报表不支持
+    customerCategory: true,
+    coverageCombination: true,
     renewalMode: false,
-    basicOptions: false,
+    basicOptions: true,
     quickCombos: false,
     organizationMode: 'multi',
     salesmanMode: 'multi',
@@ -245,10 +245,10 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
     dateRange: true,
     organization: true,
     salesman: false, // 报表不支持业务员筛选
-    customerCategory: false, // 报表不支持
-    coverageCombination: false, // 报表不支持
+    customerCategory: true,
+    coverageCombination: true,
     renewalMode: false,
-    basicOptions: false,
+    basicOptions: true,
     quickCombos: false,
     organizationMode: 'multi',
     salesmanMode: 'multi',
@@ -269,10 +269,10 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
     dateRange: true,
     organization: true,
     salesman: false,
-    customerCategory: false,
-    coverageCombination: false,
+    customerCategory: true,
+    coverageCombination: true,
     renewalMode: false,
-    basicOptions: false,
+    basicOptions: true,
     quickCombos: false,
     organizationMode: 'multi',
     salesmanMode: 'multi',

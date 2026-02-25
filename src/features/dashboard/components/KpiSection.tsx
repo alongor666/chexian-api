@@ -157,7 +157,7 @@ export const KpiSection = memo<KpiSectionProps>(({
         return {
           title,
           value: kpis.bundle_renewal_rate,
-          formatter: formatAchievementRate,
+          formatter: (value) => formatAchievementRate(value, 2),
           loading,
           type: 'value',
         };

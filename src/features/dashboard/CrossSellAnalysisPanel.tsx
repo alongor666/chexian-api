@@ -7,7 +7,6 @@
  * 2. 选择维度 → 表格展示分组数据，每行可点击继续下钻
  * 3. 面包屑导航支持任意层级回退
  * 4. 车辆类别标签页（非营业客车/货车/摩托车）
- * 5. 时间维度汇总表格（推介率/件均保费/保费）
  */
 
 import React, { useState, useMemo } from 'react';
@@ -16,17 +15,13 @@ import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
-import { textStyles, cardStyles, numericStyles, tableStyles, colorClasses, cn } from '../../shared/styles';
+import { textStyles, cardStyles, tableStyles, colorClasses, cn } from '../../shared/styles';
 import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
-import { CrossSellTimePeriodSummary } from './CrossSellTimePeriodSummary';
+import { CrossSellSummaryKpiBoard } from './CrossSellSummaryKpiBoard';
 import { CrossSellQuadrantView } from './CrossSellQuadrantView';
 import { CrossSellTrendChart } from './CrossSellTrendChart';
-import {
-  getJiaosanStatus,
-  getRateClassByField,
-  getRateStatusLabel,
-  getZhuquanStatus,
-} from './crossSellRateStatus';
+import type { TrendGranularity } from './hooks/useCrossSellTrend';
+import { getRateClassByField } from './crossSellRateStatus';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import {
   useCrossSellAnalysis,
@@ -49,6 +44,13 @@ const VEHICLE_TABS: TabItem[] = [
   { key: 'motorcycle', label: '摩托车' },
 ];
 
+const GRANULARITY_TABS: TabItem[] = [
+  { key: 'daily', label: '日' },
+  { key: 'weekly', label: '周' },
+  { key: 'monthly', label: '月' },
+  { key: 'quarterly', label: '季度' },
+];
+
 // ============================================================
 // 排序
 // ============================================================
@@ -62,62 +64,6 @@ function sortRows(rows: CrossSellRow[], key: SortKey, order: SortOrder): CrossSe
     const bVal = Number(b[key]) || 0;
     return order === 'asc' ? aVal - bVal : bVal - aVal;
   });
-}
-
-// ============================================================
-// 汇总卡片
-// ============================================================
-
-interface CardDef {
-  label: string;
-  field: keyof CrossSellRow;
-  type: 'count' | 'rate';
-}
-
-const SUMMARY_CARDS: CardDef[] = [
-  { label: '车险件数', field: 'total_auto_count', type: 'count' },
-  { label: '驾乘险件数', field: 'total_driver_count', type: 'count' },
-  { label: '综合推介率', field: 'total_rate', type: 'rate' },
-  { label: '单交-车险', field: 'danjiao_auto_count', type: 'count' },
-  { label: '单交-驾乘险', field: 'danjiao_driver_count', type: 'count' },
-  { label: '单交推介率', field: 'danjiao_rate', type: 'rate' },
-  { label: '交三-车险', field: 'jiaosan_auto_count', type: 'count' },
-  { label: '交三-驾乘险', field: 'jiaosan_driver_count', type: 'count' },
-  { label: '交三推介率', field: 'jiaosan_rate', type: 'rate' },
-  { label: '主全-车险', field: 'zhuquan_auto_count', type: 'count' },
-  { label: '主全-驾乘险', field: 'zhuquan_driver_count', type: 'count' },
-  { label: '主全推介率', field: 'zhuquan_rate', type: 'rate' },
-];
-
-function SummaryCards({ data }: { data: CrossSellRow }) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-      {SUMMARY_CARDS.map((card) => {
-        const value = Number(data[card.field] ?? 0);
-        const isRate = card.type === 'rate';
-        const hasStatusBadge = card.field === 'zhuquan_rate' || card.field === 'jiaosan_rate';
-        const rateColorClass = isRate
-          ? getRateColorByField(card.field, value)
-          : colorClasses.text.neutralBlack;
-        const statusLabel = hasStatusBadge
-          ? (card.field === 'zhuquan_rate'
-              ? getRateStatusLabel(getZhuquanStatus(value))
-              : getRateStatusLabel(getJiaosanStatus(value)))
-          : null;
-        return (
-          <div key={card.field} className={cn(cardStyles.interactive, 'p-4')}>
-            <div className={cn(textStyles.caption, 'uppercase tracking-wide mb-2')}>{card.label}</div>
-            <div className={cn(numericStyles.kpiPrimary, rateColorClass)}>
-              {isRate ? formatPercent(value) : formatCount(value)}
-            </div>
-            {statusLabel && (
-              <div className={cn('text-xs mt-1 font-medium', rateColorClass)}>{statusLabel}</div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 // ============================================================
@@ -185,7 +131,8 @@ interface ColumnDef {
   getColorClass?: (val: number) => string;
 }
 
-const TABLE_COLUMNS: ColumnDef[] = [
+// 非营业客车/货车的表格列
+const TABLE_COLUMNS_FULL: ColumnDef[] = [
   { key: 'group_name', label: '维度', type: 'text' },
   { key: 'total_auto_count', label: '车险件数', type: 'count' },
   { key: 'total_driver_count', label: '驾乘险件数', type: 'count' },
@@ -201,6 +148,14 @@ const TABLE_COLUMNS: ColumnDef[] = [
   { key: 'zhuquan_driver_count', label: '主全-驾乘险', type: 'count' },
   { key: 'zhuquan_rate', label: '主全推介率', type: 'rate',
     getColorClass: (v) => getRateClassByField('zhuquan_rate', v) },
+];
+
+// 摩托车的表格列（只有单交相关）
+const TABLE_COLUMNS_MOTORCYCLE: ColumnDef[] = [
+  { key: 'group_name', label: '维度', type: 'text' },
+  { key: 'danjiao_auto_count', label: '车险件数', type: 'count' },
+  { key: 'danjiao_driver_count', label: '驾乘险件数', type: 'count' },
+  { key: 'danjiao_rate', label: '推介率', type: 'rate' },
 ];
 
 function formatCell(col: ColumnDef, row: CrossSellRow): string {
@@ -232,6 +187,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 }) => {
   const { isDataLoaded } = useDataStatus();
   const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory>('passenger');
+  const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('monthly');
   const [sortKey, setSortKey] = useState<SortKey>('total_auto_count');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
@@ -331,14 +287,57 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
       {/* 板块1：推介率汇总 */}
       <SectionTitle title="推介率汇总" />
-      {summary && <SummaryCards data={summary} />}
-
-      {/* 板块2：推介率走势 */}
-      <SectionTitle title="推介率走势" />
-      <CrossSellTrendChart
+      <CrossSellSummaryKpiBoard
         vehicleCategory={vehicleCategory}
         filters={filters}
+        defaultTimePeriod="year"
       />
+
+      {/* 板块2：推介率走势 - 摩托车只显示推介率走势，不显示件均保费 */}
+      <SectionTitle title={vehicleCategory === 'motorcycle' ? '推介率走势' : '推介率与件均保费走势'} />
+      <div className="flex justify-end">
+        <Tabs
+          items={GRANULARITY_TABS}
+          activeKey={trendGranularity}
+          onChange={(key) => setTrendGranularity(key as TrendGranularity)}
+          variant="pills"
+          size="small"
+        />
+      </div>
+      {vehicleCategory === 'motorcycle' ? (
+        // 摩托车：只显示推介率走势
+        <CrossSellTrendChart
+          vehicleCategory={vehicleCategory}
+          filters={filters}
+          granularity={trendGranularity}
+          metric="rate"
+          title="驾乘险推介率走势"
+          requestKey="rate"
+          enabled={isDataLoaded}
+        />
+      ) : (
+        // 非营业客车/货车：显示推介率和件均保费走势
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CrossSellTrendChart
+            vehicleCategory={vehicleCategory}
+            filters={filters}
+            granularity={trendGranularity}
+            metric="rate"
+            title="驾乘险推介率走势"
+            requestKey="rate"
+            enabled={isDataLoaded}
+          />
+          <CrossSellTrendChart
+            vehicleCategory={vehicleCategory}
+            filters={filters}
+            granularity={trendGranularity}
+            metric="avg_premium"
+            title="驾乘险件均保费走势"
+            requestKey="avg_premium"
+            enabled={isDataLoaded}
+          />
+        </div>
+      )}
 
       {/* 板块3：下钻分析 */}
       <SectionTitle title="下钻分析" />
@@ -385,10 +384,13 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           {/* 数据表格（有 groupBy 时才显示） */}
           {currentGroupBy && sortedRows.length > 0 && (
             <div className="space-y-4">
-              <CrossSellQuadrantView
-                rows={rows}
-                currentDimensionLabel={DIMENSION_LABELS[currentGroupBy]}
-              />
+              {/* 摩托车不显示四象限视图 */}
+              {vehicleCategory !== 'motorcycle' && (
+                <CrossSellQuadrantView
+                  rows={rows}
+                  currentDimensionLabel={DIMENSION_LABELS[currentGroupBy]}
+                />
+              )}
               <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                   <span className="text-sm text-gray-600">
@@ -403,7 +405,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                   <table className="min-w-full text-sm">
                     <thead className={cn(tableStyles.header, 'sticky top-0 z-10')}>
                       <tr>
-                        {TABLE_COLUMNS.map((col) => (
+                        {(vehicleCategory === 'motorcycle' ? TABLE_COLUMNS_MOTORCYCLE : TABLE_COLUMNS_FULL).map((col) => (
                           <th
                             key={col.key}
                             onClick={() => handleSort(col.key)}
@@ -431,7 +433,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                             }`}
                           onClick={() => canDrillDeeper && handleRowClick(row.group_name)}
                         >
-                          {TABLE_COLUMNS.map((col) => (
+                          {(vehicleCategory === 'motorcycle' ? TABLE_COLUMNS_MOTORCYCLE : TABLE_COLUMNS_FULL).map((col) => (
                             <td
                               key={col.key}
                               className={cn(
@@ -466,13 +468,6 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           )}
         </>
       )}
-
-      {/* 板块4：时间维度推介率 */}
-      <SectionTitle title="时间维度推介率" />
-      <CrossSellTimePeriodSummary
-        vehicleCategory={vehicleCategory}
-        filters={filters}
-      />
 
       {/* 维度选择器弹层 */}
       {showPicker && (

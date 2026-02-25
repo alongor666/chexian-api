@@ -49,7 +49,7 @@ const PASSWORD_OVERRIDES = loadPasswordOverrides();
 const PRESET_USERS: Record<string, UserCredential> = {
   admin: {
     username: 'admin',
-    passwordHash: '$2b$10$dsP3p4iH3h.QTivD1NjaquSOL4NEv9Xiu9dGuqwssvfw0fHcJFaqe',
+    passwordHash: '$2b$10$KnMNQRjZdQj2VUHCHuL9OuZpWd/yxgua5fd1FfYr946/cRAD/KpB2',
     displayName: '系统管理员',
     role: 'branch_admin',
   },
@@ -136,6 +136,12 @@ const PRESET_USERS: Record<string, UserCredential> = {
     displayName: '高新机构',
     role: 'org_user',
     organization: '高新',
+  },
+  jiachengxian: {
+    username: 'jiachengxian',
+    passwordHash: '$2b$10$BKwNRNiky7ArpLdZjgZuZ.vzuNUpj63jrVJQ3S.WpEYPzl9HFBDtK',
+    displayName: 'jiachengxian',
+    role: 'branch_admin',
   },
 };
 

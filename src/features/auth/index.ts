@@ -11,3 +11,4 @@
 export { LoginPage } from './LoginPage';
 export { UserLoginPanel } from './UserLoginPanel';
 export { AuthGuard } from './AuthGuard';
+export { RouteAccessGuard } from './RouteAccessGuard';

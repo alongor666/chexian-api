@@ -50,6 +50,10 @@ export interface UserPermission {
   role: UserRole;
   /** 所属机构（三级机构用户必填） */
   organization?: Organization;
+  /** 可访问路由（未设置表示不限制） */
+  allowedRoutes?: string[];
+  /** 默认落地路由 */
+  defaultRoute?: string;
 }
 
 /**
@@ -126,6 +130,13 @@ export const DEFAULT_USER_PERMISSIONS: UserPermission[] = [
     username: 'admin',
     displayName: '系统管理员',
     role: UserRole.BRANCH_ADMIN,
+  },
+  {
+    username: 'jiachengxian',
+    displayName: 'jiachengxian',
+    role: UserRole.BRANCH_ADMIN,
+    allowedRoutes: ['/dashboard', '/cross-sell'],
+    defaultRoute: '/cross-sell',
   },
   // 各三级机构用户（可按需添加）
   {
@@ -260,6 +271,29 @@ export function getPermissionByUsername(username: string): UserPermission | null
     displayName: username,
     role: UserRole.BRANCH_ADMIN,
   };
+}
+
+/**
+ * 检查用户是否可访问某个路由
+ */
+export function canAccessRoute(permission: UserPermission, pathname: string): boolean {
+  if (!permission.allowedRoutes || permission.allowedRoutes.length === 0) {
+    return true;
+  }
+
+  return permission.allowedRoutes.some((allowedRoute) => {
+    if (allowedRoute === '/') {
+      return pathname === '/';
+    }
+    return pathname === allowedRoute || pathname.startsWith(`${allowedRoute}/`);
+  });
+}
+
+/**
+ * 获取用户默认落地路由
+ */
+export function getDefaultRoute(permission: UserPermission): string {
+  return permission.defaultRoute || '/';
 }
 
 /**

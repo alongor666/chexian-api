@@ -61,7 +61,7 @@ import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusines
 import { validateSQL } from '../utils/sql-validator.js';
 import { isValidDateFormat } from '../utils/sql-sanitizer.js';
 import { injectPermissionFilter, isValidPermissionFilter } from '../utils/sql-permission-injector.js';
-import { commonFilterSchema, buildWhereFromFilterParams } from '../utils/filter-params.js';
+import { commonFilterSchema, buildWhereFromFilterParams, buildWhereFromFilterParamsWithoutDate } from '../utils/filter-params.js';
 import { logger } from '../utils/logger.js';
 
 const router = Router();
@@ -93,6 +93,10 @@ router.get(
       parseResult.data,
       req.permissionFilter || '1=1'
     );
+    const finalWhereClauseWithoutDate = buildWhereFromFilterParamsWithoutDate(
+      parseResult.data,
+      req.permissionFilter || '1=1'
+    );
 
     const orgNames = parseResult.data.orgNames
       ? parseResult.data.orgNames.split(',').map((item) => item.trim()).filter(Boolean)
@@ -106,10 +110,11 @@ router.get(
         ? [parseResult.data.salesmanName]
         : [];
 
-    const sql = generateKpiQuery(finalWhereClause, {
-      orgNames,
-      salesmanNames,
-    });
+    const sql = generateKpiQuery(
+      finalWhereClause,
+      { orgNames, salesmanNames },
+      finalWhereClauseWithoutDate
+    );
     // KPI 高频查询，缓存 60 秒
     const result = await duckdbService.query(sql, 60_000);
 

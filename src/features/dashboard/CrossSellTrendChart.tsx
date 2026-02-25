@@ -6,10 +6,10 @@
  * 时间基准：自然签单日期
  */
 
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
-import { formatPercent } from '../../shared/utils/formatters';
+import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { cardStyles, textStyles, colors, cn } from '../../shared/styles';
 import { useCrossSellTrend, type TrendGranularity } from './hooks/useCrossSellTrend';
 import type { AdvancedFilterState } from '../../shared/types/data';
@@ -18,14 +18,12 @@ import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
 interface CrossSellTrendChartProps {
   vehicleCategory: VehicleCategory;
   filters: AdvancedFilterState;
+  granularity: TrendGranularity;
+  metric?: 'rate' | 'avg_premium';
+  title?: string;
+  requestKey?: string;
+  enabled?: boolean;
 }
-
-const GRANULARITY_TABS: Array<{ key: TrendGranularity; label: string }> = [
-  { key: 'daily', label: '日' },
-  { key: 'weekly', label: '周' },
-  { key: 'monthly', label: '月' },
-  { key: 'quarterly', label: '季度' },
-];
 
 /** 与统一设计系统颜色令牌对齐 */
 const SERIES_CONFIG: Record<string, { color: string }> = {
@@ -40,8 +38,12 @@ const SERIES_ORDER = ['整体', '主全', '交三', '单交'];
 export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   vehicleCategory,
   filters,
+  granularity,
+  metric = 'rate',
+  title = '驾乘险推介率走势',
+  requestKey,
+  enabled = true,
 }: CrossSellTrendChartProps) {
-  const [granularity, setGranularity] = useState<TrendGranularity>('monthly');
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
@@ -49,6 +51,8 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     filters,
     vehicleCategory,
     granularity,
+    requestKey,
+    enabled,
   });
 
   // 将平铺的行转换为按时间轴 + 4 条 series 的结构
@@ -61,7 +65,8 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
       if (!byCombination[row.coverage_combination]) {
         byCombination[row.coverage_combination] = {};
       }
-      byCombination[row.coverage_combination][row.time_period] = row.rate;
+      byCombination[row.coverage_combination][row.time_period] =
+        metric === 'rate' ? row.rate : row.avg_premium;
     }
 
     const timePeriods = Array.from(periodsSet).sort();
@@ -73,7 +78,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     }
 
     return { timePeriods, seriesData };
-  }, [rows]);
+  }, [rows, metric]);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -103,9 +108,12 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
-          const lines = (params as any[]).map((p) =>
-            `<div>${p.marker}${p.seriesName}: <strong>${formatPercent(p.value ?? 0)}</strong></div>`
-          );
+          const lines = (params as any[]).map((p) => {
+            if (metric === 'rate') {
+              return `<div>${p.marker}${p.seriesName}: <strong>${formatPercent(p.value ?? 0)}</strong></div>`;
+            }
+            return `<div>${p.marker}${p.seriesName}: <strong>${formatCount(p.value ?? 0)}元</strong></div>`;
+          });
           return `<div style="font-size:12px"><div style="font-weight:600;margin-bottom:4px">${(params as any[])[0]?.axisValue}</div>${lines.join('')}</div>`;
         },
       },
@@ -121,13 +129,23 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
         axisLabel: { fontSize: 11, rotate: timePeriods.length > 18 ? 30 : 0 },
         axisTick: { alignWithLabel: true },
       },
-      yAxis: {
-        type: 'value',
-        min: 0,
-        max: 100,
-        axisLabel: { formatter: '{value}%', fontSize: 11 },
-        splitLine: { lineStyle: { color: colors.neutral[200] } },
-      },
+      yAxis: metric === 'rate'
+        ? {
+            type: 'value',
+            min: 0,
+            max: 100,
+            axisLabel: { formatter: '{value}%', fontSize: 11 },
+            splitLine: { lineStyle: { color: colors.neutral[200] } },
+          }
+        : {
+            type: 'value',
+            min: 0,
+            axisLabel: {
+              formatter: (value: number) => formatCount(value),
+              fontSize: 11,
+            },
+            splitLine: { lineStyle: { color: colors.neutral[200] } },
+          },
       series: SERIES_ORDER.map((name) => ({
         name,
         type: 'line' as const,
@@ -145,7 +163,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     const handleResize = () => chart.resize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [timePeriods, seriesData, loading]);
+  }, [timePeriods, seriesData, loading, metric]);
 
   useEffect(() => {
     return () => {
@@ -157,23 +175,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   return (
     <section className={cn(cardStyles.standard, 'space-y-3')}>
       <div className="flex items-center justify-between">
-        <h3 className={textStyles.titleSmall}>驾乘险推介率走势</h3>
-        <div className="flex gap-1">
-          {GRANULARITY_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setGranularity(tab.key)}
-              className={cn(
-                'px-3 py-1 text-xs rounded transition-colors',
-                granularity === tab.key
-                  ? 'bg-primary text-white'
-                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <h3 className={textStyles.titleSmall}>{title}</h3>
       </div>
 
       {error ? (

@@ -241,6 +241,7 @@ widgets/table/VirtualTable.tsx
 
 - **`dashboard/RenewalAnalysisPanel.tsx`**: 续保明细表格支持按年份与月份切换，并更新为月日/当日/当月/当年续保字段展示
 - **`cost/components/VariableCostKpiBoard.tsx`**: 新增变动成本率KPI下钻看板（8项指标，支持分公司整体与三级机构切换）
+- **`auth/RouteAccessGuard.tsx`**: 页面级路由权限守卫（按用户白名单限制访问，未授权路由重定向默认页）
 
 ## 2026-02 API-only 权威说明（新增）
 

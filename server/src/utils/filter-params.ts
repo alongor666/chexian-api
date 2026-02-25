@@ -82,22 +82,28 @@ export type CommonFilterParams = z.infer<typeof commonFilterSchema>;
  * @param params - 通过 commonFilterSchema 解析后的参数
  * @returns SQL 条件数组（不含 WHERE 关键字）
  */
-export function buildConditionsFromFilterParams(params: CommonFilterParams): string[] {
+export function buildConditionsFromFilterParams(
+  params: CommonFilterParams,
+  options: { includeDate?: boolean } = {}
+): string[] {
   const conditions: string[] = ['1=1'];
   const dateField = params.dateField || 'policy_date';
+  const includeDate = options.includeDate !== false;
 
   // 日期范围
-  if (params.startDate) {
-    if (!isValidDateFormat(params.startDate)) {
-      throw new AppError(400, `Invalid startDate format: ${params.startDate}`);
+  if (includeDate) {
+    if (params.startDate) {
+      if (!isValidDateFormat(params.startDate)) {
+        throw new AppError(400, `Invalid startDate format: ${params.startDate}`);
+      }
+      conditions.push(buildDateCondition(dateField, '>=', params.startDate));
     }
-    conditions.push(buildDateCondition(dateField, '>=', params.startDate));
-  }
-  if (params.endDate) {
-    if (!isValidDateFormat(params.endDate)) {
-      throw new AppError(400, `Invalid endDate format: ${params.endDate}`);
+    if (params.endDate) {
+      if (!isValidDateFormat(params.endDate)) {
+        throw new AppError(400, `Invalid endDate format: ${params.endDate}`);
+      }
+      conditions.push(buildDateCondition(dateField, '<=', params.endDate));
     }
-    conditions.push(buildDateCondition(dateField, '<=', params.endDate));
   }
 
   // 机构（兼容新旧参数名）
@@ -210,6 +216,18 @@ export function buildWhereFromFilterParams(
   permissionFilter: string = '1=1'
 ): string {
   const conditions = buildConditionsFromFilterParams(params);
+  const userWhere = conditions.join(' AND ');
+
+  if (permissionFilter && permissionFilter !== '1=1') {
+    return `${userWhere} AND ${permissionFilter}`;
+  }
+  return userWhere;
+}
+export function buildWhereFromFilterParamsWithoutDate(
+  params: CommonFilterParams,
+  permissionFilter: string = '1=1'
+): string {
+  const conditions = buildConditionsFromFilterParams(params, { includeDate: false });
   const userWhere = conditions.join(' AND ');
 
   if (permissionFilter && permissionFilter !== '1=1') {

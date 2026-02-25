@@ -221,13 +221,14 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
     onState: string;
     offState: string;
   }> = [
-      { key: 'is_nev', label: '能源类型', onState: '新能源', offState: '燃油' },
-      { key: 'is_new_car', label: '车辆新旧', onState: '新车', offState: '旧车' },
-      { key: 'is_transfer', label: '过户状态', onState: '过户', offState: '非过户' },
-      { key: 'is_renewal', label: '续保状态', onState: '续保', offState: '非续保' },
-      { key: 'is_telemarketing', label: '销售渠道', onState: '电销', offState: '非电销' },
+      { key: 'is_telemarketing', label: '是否电销', onState: '电销', offState: '非电销' },
+      { key: 'is_nev', label: '是否新能源', onState: '新能源', offState: '燃油' },
+      { key: 'is_new_car', label: '是否新车', onState: '新车', offState: '旧车' },
+      { key: 'is_transfer', label: '是否过户', onState: '过户', offState: '非过户' },
+      { key: 'is_cross_sell', label: '是否交叉销售', onState: '交叉销售', offState: '非交叉销售' },
+      { key: 'is_commercial_insure', label: '是否交商同保', onState: '同保', offState: '非同保' },
+      { key: 'is_renewal', label: '是否续保', onState: '续保', offState: '非续保' },
       { key: 'insurance_type', label: '险类', onState: '交强险', offState: '商业保险' },
-      { key: 'is_cross_sell', label: '交叉销售', onState: '交叉销售', offState: '非交叉销售' },
     ];
 
   // 衍生维度（快捷组合）
@@ -277,13 +278,17 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
 
   // 紧凑模式下使用简化的布局
   if (compact) {
+    const compactToggleConfigs = basicToggleConfigs.filter((config) =>
+      ['is_telemarketing', 'is_nev', 'is_new_car', 'is_transfer', 'is_cross_sell', 'is_commercial_insure'].includes(String(config.key))
+    );
+
     return (
       <section
-        className="space-y-4"
+        className="space-y-3"
         aria-labelledby="filter-panel-title"
         role="region"
       >
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <h2 id="filter-panel-title" className="text-sm font-semibold tracking-tight text-slate-800">
             筛选条件
           </h2>
@@ -296,6 +301,8 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             重置
           </button>
         </div>
+
+        <div className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">核心维度</div>
         <FilterLayoutV2
           filters={filters}
           onChange={onChange}
@@ -316,6 +323,158 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
           selectionModes={finalSelectionModes}
           compact={true}
         />
+
+        {!collapsed && (showSalesman || showQuickCombos || showBasicOptions) && (
+          <div className="space-y-2">
+            {showSalesman && (
+              <details className="group" open>
+                <summary className="list-none cursor-pointer flex items-center justify-between py-1 text-xs font-medium text-neutral-600 hover:text-neutral-800">
+                  <span>人员维度</span>
+                  <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="pt-1">
+                  <MultiSelectDropdown
+                    variant="compact"
+                    title="业务员"
+                    options={toMultiSelectOptions(getFilteredSalesmanOptions())}
+                    selectedValues={filters.salesman_name || []}
+                    onChange={(values) => handleMultiSelectChange('salesman_name', values)}
+                    showButtons={false}
+                    singleSelect={finalSelectionModes.salesmanMode === 'single'}
+                  />
+                </div>
+              </details>
+            )}
+
+            {showBasicOptions && (
+              <details className="group" open>
+                <summary className="list-none cursor-pointer flex items-center justify-between py-1 text-xs font-medium text-neutral-600 hover:text-neutral-800">
+                  <span>业务属性（布尔）</span>
+                  <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="pt-1 space-y-1.5">
+                  {compactToggleConfigs.map((config) => {
+                    const value = filters[config.key] as boolean | null | undefined;
+
+                    return (
+                      <div
+                        key={String(config.key)}
+                        className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-1.5"
+                        role="radiogroup"
+                        aria-label={config.label}
+                      >
+                        <span className="text-[11px] text-slate-600">{config.label}</span>
+                        <div className="inline-flex bg-slate-50 rounded-md p-0.5 items-center border border-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => handleBooleanChange(config.key, null)}
+                            className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${value === null || value === undefined
+                              ? 'bg-white text-primary font-medium shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            role="radio"
+                            aria-checked={value === null || value === undefined}
+                          >
+                            全部
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleBooleanChange(config.key, true)}
+                            className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${value === true
+                              ? 'bg-white text-primary font-medium shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            role="radio"
+                            aria-checked={value === true}
+                          >
+                            {config.onState}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleBooleanChange(config.key, false)}
+                            className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${value === false
+                              ? 'bg-white text-primary font-medium shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'
+                              }`}
+                            role="radio"
+                            aria-checked={value === false}
+                          >
+                            {config.offState}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            )}
+
+            {showBasicOptions && (
+              <details className="group" open>
+                <summary className="list-none cursor-pointer flex items-center justify-between py-1 text-xs font-medium text-neutral-600 hover:text-neutral-800">
+                  <span>等级评分（多选）</span>
+                  <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="pt-1 space-y-2">
+                  <MultiSelectDropdown
+                    variant="compact"
+                    title="车险分等级"
+                    options={toMultiSelectOptions(options.insurance_grade || [])}
+                    selectedValues={filters.insurance_grade || []}
+                    onChange={(values) => handleMultiSelectChange('insurance_grade', values)}
+                    showButtons={false}
+                  />
+                  <MultiSelectDropdown
+                    variant="compact"
+                    title="小货车评分"
+                    options={toMultiSelectOptions(options.small_truck_score || [])}
+                    selectedValues={filters.small_truck_score || []}
+                    onChange={(values) => handleMultiSelectChange('small_truck_score', values)}
+                    showButtons={false}
+                  />
+                  <MultiSelectDropdown
+                    variant="compact"
+                    title="大货车评分"
+                    options={toMultiSelectOptions(options.large_truck_score || [])}
+                    selectedValues={filters.large_truck_score || []}
+                    onChange={(values) => handleMultiSelectChange('large_truck_score', values)}
+                    showButtons={false}
+                  />
+                </div>
+              </details>
+            )}
+
+            {showQuickCombos && (
+              <details className="group">
+                <summary className="list-none cursor-pointer flex items-center justify-between py-1 text-xs font-medium text-neutral-600 hover:text-neutral-800">
+                  <span>快捷组合</span>
+                  <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="pt-1">
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="快捷筛选组合">
+                    {derivedScenarios.map((scenario) => (
+                      <button
+                        key={scenario.label}
+                        type="button"
+                        onClick={scenario.apply}
+                        className={`px-2 py-1 text-xs font-medium rounded border transition-colors ${scenario.isActive
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        title={scenario.description}
+                        aria-pressed={scenario.isActive}
+                        aria-label={`${scenario.label}: ${scenario.description}`}
+                      >
+                        {scenario.label}
+                        {scenario.isActive && ' ✓'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </details>
+            )}
+          </div>
+        )}
       </section>
     );
   }

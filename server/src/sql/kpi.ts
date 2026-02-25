@@ -58,15 +58,22 @@ const buildAchievementCacheWhere = (options: KpiQueryOptions = {}): string => {
 
 export const generateKpiQuery = (
   whereClause: string = '1=1',
-  options: KpiQueryOptions = {}
+  options: KpiQueryOptions = {},
+  baseWhereClause?: string
 ) => {
   const achievementCacheWhere = buildAchievementCacheWhere(options);
+  const finalBaseWhereClause = baseWhereClause ?? whereClause;
 
   return `
     WITH filtered AS (
       SELECT *
       FROM PolicyFact
       WHERE ${whereClause}
+    ),
+    filtered_base AS (
+      SELECT *
+      FROM PolicyFact
+      WHERE ${finalBaseWhereClause}
     ),
     latest_policy AS (
       SELECT MAX(CAST(policy_date AS DATE)) AS latest_policy_date
@@ -123,7 +130,7 @@ export const generateKpiQuery = (
           ),
           0
         ) AS vehicle_prev_ytd_premium
-      FROM filtered f
+      FROM filtered_base f
       CROSS JOIN latest_context lc
     ),
     driver_periods AS (
@@ -152,7 +159,7 @@ export const generateKpiQuery = (
           ),
           0
         ) AS driver_prev_ytd_premium
-      FROM filtered f
+      FROM filtered_base f
       CROSS JOIN latest_context lc
     ),
     bundle_renewal AS (

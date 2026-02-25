@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermission } from '../../shared/contexts/PermissionContext';
+import { canAccessRoute, getDefaultRoute } from '../../shared/config/organizations';
 import { Lock, User, Eye, EyeOff, AlertCircle, Shield, Building, QrCode } from 'lucide-react';
 import { apiClient } from '../../shared/api/client';
 
@@ -16,7 +17,7 @@ import { apiClient } from '../../shared/api/client';
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loginWithPassword, isAuthenticated } = usePermission();
+  const { loginWithPassword, isAuthenticated, userPermission } = usePermission();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -29,13 +30,19 @@ export const LoginPage: React.FC = () => {
   // 获取重定向目标
   const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
   const from = rawFrom === '/login' ? '/' : rawFrom;
+  const resolveTargetPath = useCallback(() => {
+    if (!userPermission) {
+      return from;
+    }
+    return canAccessRoute(userPermission, from) ? from : getDefaultRoute(userPermission);
+  }, [userPermission, from]);
 
   // 如果已登录，直接跳转
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(from, { replace: true });
+      navigate(resolveTargetPath(), { replace: true });
     }
-  }, [isAuthenticated, navigate, from]);
+  }, [isAuthenticated, navigate, resolveTargetPath]);
 
   // 处理企微登录回调
   useEffect(() => {
@@ -107,7 +114,7 @@ export const LoginPage: React.FC = () => {
     try {
       const success = await loginWithPassword(normalizedUsername, normalizedPassword, rememberMe);
       if (success) {
-        navigate(from, { replace: true });
+        navigate(resolveTargetPath(), { replace: true });
       } else {
         setError('用户名或密码错误');
       }
@@ -116,7 +123,7 @@ export const LoginPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [username, password, rememberMe, loginWithPassword, navigate, from]);
+  }, [username, password, rememberMe, loginWithPassword, navigate, resolveTargetPath]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
