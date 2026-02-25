@@ -52,6 +52,7 @@ import { generateRenewalRateQuery, generateRenewalDetailTableQuery } from '../sq
 import { generateRenewalDrilldownQuery, type DrilldownDimension, type DrilldownLevel, type SortField, type SortOrder } from '../sql/renewal-drilldown.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../sql/cross-sell.js';
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../sql/cross-sell-summary.js';
+import { generateCrossSellTrendQuery, type TrendGranularity } from '../sql/cross-sell-trend.js';
 import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery } from '../sql/marketing-report.js';
 import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../sql/premium-report.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../sql/premiumPlan.js';
@@ -1095,6 +1096,51 @@ router.post(
 // ============================================================
 // Cross-Sell Time Period Summary
 // ============================================================
+
+/**
+ * GET /api/query/cross-sell-trend
+ * 车驾意推介率走势（按日/周/月/季粒度，4条险别组合折线）
+ */
+const crossSellTrendSchema = z.object({
+  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
+  granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly']).default('monthly'),
+});
+
+router.get(
+  '/cross-sell-trend',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = crossSellTrendSchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+    const { vehicleCategory, granularity } = extraResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const sql = generateCrossSellTrendQuery(
+      finalWhereClause,
+      vehicleCategory as VehicleCategory,
+      granularity as TrendGranularity
+    );
+
+    logger.debug('[cross-sell-trend] Generated SQL', { sqlLength: sql.length });
+
+    const rows = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: { rows },
+    });
+  })
+);
 
 /**
  * 车驾意推介率时间维度汇总请求验证Schema

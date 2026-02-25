@@ -58,6 +58,16 @@ export interface KpiDetailResult {
 - `generateQualityBusinessTrendQuery()`: 生成优质业务趋势查询
 - `generateDimensionOptionsQuery()`: 生成维度选项查询
 
+### cross-sell-trend.ts
+**用途**: 驾乘险推介率趋势 SQL 查询生成器  
+**状态**: 生效中（2026-02-25 新增）  
+**支持视图**: 日/周/月/季度  
+**输出字段**: `time_period`, `coverage_combination`, `rate`, `auto_count`
+
+**关键函数**:
+- `generateCrossSellTrendQuery()`: 生成交叉销售趋势查询
+- `getTimeGroupExpr()`: 生成时间粒度分组表达式
+
 ### truck.ts
 **用途**: 营业货车专项分析 SQL 查询生成器  
 **状态**: 生效中  
@@ -114,6 +124,7 @@ export interface KpiDetailResult {
 
 | 日期 | 文件 | 变更内容 |
 |------|------|---------|
+| 2026-02-25 | cross-sell-trend.ts | 新增驾乘险推介率趋势 SQL 生成器（支持日/周/月/季度，含整体+主全/交三/单交） |
 | 2026-01-09 | kpi-detail.ts | 新增 KPI 详细数据 SQL 生成器 |
 | 2026-01-08 | truck.ts | 新增营业货车专项分析 SQL |
 | 2026-01-08 | trend.ts | 新增自然周/月视图支持 |

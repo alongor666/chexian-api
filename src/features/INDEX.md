@@ -200,6 +200,9 @@ widgets/table/VirtualTable.tsx
 - **`filters/DateRangePicker.tsx`**: 起始日/截止日合并为起止日期，使用原生 date 输入并按需展开
 - **`filters/MultiSelectDropdown.tsx`**: 支持 compact 形态用于折叠容器内展示
 - **`dashboard/CrossSellQuadrantView.tsx`**: 交叉销售四象限判断视图（复用表格主视图数据，输出 Decision Header + 散点象限图）
+- **`dashboard/CrossSellTrendChart.tsx`**: 驾乘险推介率走势组件（日/周/月/季度四粒度，主全/交三/单交/整体四线）
+- **`dashboard/hooks/useCrossSellTrend.ts`**: 驾乘险推介率走势数据 Hook（调用 `/api/query/cross-sell-trend`，含并发请求防抖）
+- **`dashboard/crossSellRateStatus.ts`**: 驾乘险推介率统一状态规则（主全/交三阈值、状态文案、四象限分类与配色）
 
 ### Coefficient 模块（商车自主定价系数监控）
 
@@ -238,3 +241,14 @@ widgets/table/VirtualTable.tsx
 
 - **`dashboard/RenewalAnalysisPanel.tsx`**: 续保明细表格支持按年份与月份切换，并更新为月日/当日/当月/当年续保字段展示
 - **`cost/components/VariableCostKpiBoard.tsx`**: 新增变动成本率KPI下钻看板（8项指标，支持分公司整体与三级机构切换）
+
+## 2026-02 API-only 权威说明（新增）
+
+以下为当前页面主链路：
+
+- 入口路由：`src/app/App.tsx`
+- 主看板：`src/features/dashboard/PremiumDashboard.tsx`
+- 页面容器：`src/features/pages/*Page.tsx`
+- 统一筛选：`src/components/layout/PageFilterPanel.tsx` + `src/features/filters/AdvancedFilterPanel.tsx`
+
+历史 `Dashboard.tsx` / `FilterPanel.tsx` 相关段落视为过渡记录，不作为当前实现基线。

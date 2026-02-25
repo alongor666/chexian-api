@@ -247,7 +247,7 @@ CREATE INDEX idx_date ON PolicyFact(policy_date);
 
 ### Arrow IPC Efficiency
 
-DuckDB-WASM returns results as Arrow tables:
+DuckDB returns results as Arrow tables:
 ```typescript
 const table = await conn.query(sql);
 const buffer = tableToIPC(table);  // Efficient binary format

@@ -2,10 +2,15 @@ import { memo, useEffect, useMemo, useRef } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
-import { cardStyles, textStyles, cn } from '../../shared/styles';
+import { cardStyles, textStyles, colors, cn } from '../../shared/styles';
+import {
+  classifyQuadrant,
+  JIAOSAN_THRESHOLD,
+  MAIN_FULL_THRESHOLD,
+  QUADRANT_META,
+  type QuadrantId,
+} from './crossSellRateStatus';
 import type { CrossSellRow } from './hooks/useCrossSellAnalysis';
-
-type QuadrantId = 'benchmark' | 'risk' | 'focus' | 'observe';
 
 interface QuadrantPoint {
   entity_name: string;
@@ -22,44 +27,7 @@ interface CrossSellQuadrantViewProps {
   currentDimensionLabel: string;
 }
 
-const MAIN_FULL_THRESHOLD = 75;
-const JIAOSAN_THRESHOLD = 60;
 const HIGH_WEIGHT_PERCENTILE = 0.75;
-
-const QUADRANT_META: Record<QuadrantId, {
-  label: string;
-  color: string;
-}> = {
-  benchmark: {
-    label: '主全、交三双优',
-    color: '#86B88A',
-  },
-  risk: {
-    label: '主全差、交三优',
-    color: '#C6A777',
-  },
-  focus: {
-    label: '主全优、交三差',
-    color: '#E53935',
-  },
-  observe: {
-    label: '主全、交三双差',
-    color: '#8A95A6',
-  },
-};
-
-function classifyQuadrant(mainFullRate: number, jiaosanRate: number): QuadrantId {
-  if (mainFullRate >= MAIN_FULL_THRESHOLD && jiaosanRate >= JIAOSAN_THRESHOLD) {
-    return 'benchmark';
-  }
-  if (mainFullRate < MAIN_FULL_THRESHOLD && jiaosanRate >= JIAOSAN_THRESHOLD) {
-    return 'risk';
-  }
-  if (mainFullRate >= MAIN_FULL_THRESHOLD && jiaosanRate < JIAOSAN_THRESHOLD) {
-    return 'focus';
-  }
-  return 'observe';
-}
 
 function quantile(values: number[], q: number): number {
   if (values.length === 0) return 0;
@@ -137,7 +105,7 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
       min: 0,
       max: 100,
       axisLabel: { formatter: '{value}%' },
-      splitLine: { lineStyle: { color: '#E8E8E8' } },
+      splitLine: { lineStyle: { color: colors.neutral[200] } },
     },
     yAxis: {
       type: 'value',
@@ -145,10 +113,15 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
       min: 0,
       max: 100,
       axisLabel: { formatter: '{value}%' },
-      splitLine: { lineStyle: { color: '#E8E8E8' } },
+      splitLine: { lineStyle: { color: colors.neutral[200] } },
     },
     series: [
-      ...(['benchmark', 'risk', 'focus', 'observe'] as QuadrantId[]).map((quadrant) => {
+      ...([
+        'dual_excellent',
+        'main_weak_jiaosan_excellent',
+        'main_excellent_jiaosan_weak',
+        'dual_weak',
+      ] as QuadrantId[]).map((quadrant) => {
         const meta = QUADRANT_META[quadrant];
         // Use { value: [x, y], ...extra } format so ECharts reads coordinates from value[]
         // while tooltip/symbolSize callbacks can access the full QuadrantPoint via params.data
@@ -159,7 +132,7 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
             ...p,
             itemStyle: p.isHighWeight && p.isMisaligned
               ? {
-                borderColor: '#111827',
+                borderColor: colors.neutral[900],
                 borderWidth: 2,
                 shadowBlur: 14,
                 shadowColor: 'rgba(17, 24, 39, 0.32)',
@@ -177,24 +150,24 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
           },
           itemStyle: {
             color: meta.color,
-            opacity: quadrant === 'focus' ? 0.96 : 0.72,
+            opacity: quadrant === 'dual_weak' ? 0.96 : 0.75,
           },
           emphasis: {
             scale: true,
             itemStyle: {
-              borderColor: '#1F2937',
+              borderColor: colors.neutral[900],
               borderWidth: 2,
               shadowBlur: 16,
               shadowColor: 'rgba(31, 41, 55, 0.35)',
               opacity: 1,
             },
           },
-          markLine: quadrant === 'benchmark'
+          markLine: quadrant === 'dual_excellent'
             ? {
               silent: true,
               symbol: 'none',
               lineStyle: {
-                color: '#6B7280',
+                color: colors.neutral[500],
                 type: 'dashed' as const,
                 width: 1.5,
               },
@@ -235,7 +208,7 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
     return basePoints.map((point) => ({
       ...point,
       isHighWeight: point.weight_value >= threshold,
-      isMisaligned: point.quadrant !== 'benchmark',
+      isMisaligned: point.quadrant !== 'dual_excellent',
     }));
   }, [rows]);
 
@@ -257,7 +230,7 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
         .join('、'),
     });
 
-    const dualWeak = toMetric(points.filter((p) => p.quadrant === 'observe'));
+    const dualWeak = toMetric(points.filter((p) => p.quadrant === 'dual_weak'));
     const mainWeak = toMetric(points.filter((p) => p.main_full_rate < MAIN_FULL_THRESHOLD));
     const jiaosanWeak = toMetric(points.filter((p) => p.jiaosan_rate < JIAOSAN_THRESHOLD));
 
@@ -282,7 +255,7 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
           type: 'text',
           left: 'center',
           top: 'middle',
-          style: { text: '暂无可用于四象限分析的数据', fill: '#9CA3AF', fontSize: 14 },
+          style: { text: '暂无可用于四象限分析的数据', fill: colors.neutral[400], fontSize: 14 },
         },
       });
       return;
@@ -306,6 +279,9 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
 
   return (
     <section className={cn(cardStyles.standard, 'space-y-3')}>
+      <h3 className={cn(textStyles.titleSmall, 'font-semibold')}>
+        主全 × 交三驾乘险推介率分布图
+      </h3>
       <div className="space-y-1">
         {decisionSummary ? (
           <>

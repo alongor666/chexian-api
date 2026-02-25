@@ -32,7 +32,7 @@ export const TruckAnalysisPanel: React.FC<TruckAnalysisPanelProps> = ({
   perspective,
   setPerspective,
 }) => {
-  // 使用 useTruckAnalysis hook 获取数据（支持 API/Local 双模式）
+  // 使用 useTruckAnalysis hook 获取数据（API-only 模式）
   const {
     rosePremiumData,
     roseCountData,

@@ -57,7 +57,7 @@ interface UseRenewalDrilldownOptions {
 export function useRenewalDrilldown(options: UseRenewalDrilldownOptions) {
   const { targetYear, cutoffDate, bundleOnly, selfRenewalOnly, selectedDueMonth, sortField = 'renewal_rate', sortOrder = 'desc' } = options;
   const { isDataLoaded } = useDataStatus();
-  const { isOrgUser, userOrg, canGoToTop, getMinDrillUpIndex } = useRBAC();
+  const { isOrgUser, userOrg, getMinDrillUpIndex } = useRBAC();
 
   const initialBreadcrumb: BreadcrumbItem[] = useMemo(() => {
     if (isOrgUser && userOrg) {
@@ -164,7 +164,6 @@ export function useRenewalDrilldown(options: UseRenewalDrilldownOptions) {
 
   /** 导航到面包屑的某个位置 */
   const navigateTo = useCallback((index: number) => {
-    const minIndex = getMinDrillUpIndex(0); // 0 corresponds to the root "company" breadcrumb index
     // The previous logic used `isOrgUser ? 1 : 0` where index 0 was 'Company' and index 1 was 'Org'.
     // `getMinDrillUpIndex` returns 1 if isOrgUser and baseIndex <= 1.
     const safeMinIndex = getMinDrillUpIndex(0);

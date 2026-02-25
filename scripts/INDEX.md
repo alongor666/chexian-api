@@ -156,3 +156,7 @@ python3 scripts/generate-renewal-analysis.py # 生成报告
 ---
 
 **变更规则**：新增脚本必须在此登记，包含：脚本名、作用、运行命令。
+
+## 2026-02-25 追加记录
+
+- `check-governance.mjs` 新增“TS检查范围”校验：禁止在 `tsconfig.json` 中重新排除 `src/charts`、`src/components`、`src/services`、`src/types`、`src/core` 等活跃目录，以防通过 `exclude` 掩盖真实类型问题。

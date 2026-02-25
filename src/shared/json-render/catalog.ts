@@ -8,6 +8,12 @@
 import { z } from 'zod'
 import { createCatalog, generateCatalogPrompt } from '@json-render/core'
 
+/**
+ * @json-render/core 当前会携带自己的一份 zod 类型，和仓库顶层 zod 在 TS 层不兼容。
+ * 运行时 schema 完全兼容，这里仅在 catalog 创建点做类型降级，避免泛型深度爆炸。
+ */
+const createCatalogLoose = createCatalog as unknown as (config: unknown) => ReturnType<typeof createCatalog>
+
 // ============================================================================
 // 属性 Schema 定义
 // ============================================================================
@@ -25,7 +31,7 @@ const alignSchema = z.enum(['left', 'center', 'right'])
 // 组件 Catalog 定义
 // ============================================================================
 
-export const catalog = createCatalog({
+export const catalog = createCatalogLoose({
   name: 'chexian-dashboard',
   components: {
     // --------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import { VirtualTable, type Column } from '../../widgets/table/VirtualTable';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../shared/utils/export';
 import { formatCount, formatCurrency, formatPercent } from '../../shared/utils/formatters';
 import type { QueryResult } from '../../shared/types/sql-query';
+import type { ExportDataRow } from '../../shared/types/data';
 
 export interface QueryResultsProps {
   /** 查询结果 */
@@ -56,6 +57,29 @@ const formatCellValue = (value: unknown, columnKey: string): string => {
 
   return String(value);
 };
+
+const toExportCellValue = (value: unknown): ExportDataRow[string] => {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  return String(value);
+};
+
+const toExportRows = (rows: Record<string, unknown>[]): ExportDataRow[] =>
+  rows.map((row) => {
+    const exportRow: ExportDataRow = {};
+    Object.entries(row).forEach(([key, value]) => {
+      exportRow[key] = toExportCellValue(value);
+    });
+    return exportRow;
+  });
 
 /**
  * 查询结果组件
@@ -113,7 +137,7 @@ export function QueryResults({ result }: QueryResultsProps) {
   const handleExportCSV = () => {
     if (result.data) {
       const filename = `query_result_${getTimestampForFilename()}.csv`;
-      exportArrayToCSV(allData, filename);
+      exportArrayToCSV(toExportRows(allData), filename);
     }
   };
 
@@ -123,7 +147,7 @@ export function QueryResults({ result }: QueryResultsProps) {
   const handleExportExcel = async () => {
     if (result.data) {
       const filename = `query_result_${getTimestampForFilename()}`;
-      await exportToExcel(allData, filename, 'Query Result');
+      await exportToExcel(toExportRows(allData), filename, 'Query Result');
     }
   };
 

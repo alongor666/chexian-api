@@ -583,7 +583,7 @@ router.post(
 
 /**
  * GET /api/data/download/:filename
- * 下载 Parquet 文件（用于前端 DuckDB-WASM 加载）
+ * 下载 Parquet 文件（用于备份、调试或离线分析）
  *
  * 安全措施：
  * 1. 文件名验证

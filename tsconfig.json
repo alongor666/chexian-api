@@ -27,15 +27,5 @@
     }
   },
   "include": ["src"],
-  "exclude": [
-    "src/charts",
-    "src/components",
-    "src/core",
-    "src/services",
-    "src/tests",
-    "src/types",
-    "src/workers",
-    "src/shared/json-render"
-  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
