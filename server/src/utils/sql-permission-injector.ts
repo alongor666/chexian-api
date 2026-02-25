@@ -185,7 +185,7 @@ export function isValidPermissionFilter(filter: string): boolean {
     // 1. field LIKE '%value%'
     // 2. field = 'value'
     // 3. field IN ('v1', 'v2', ...)
-    const likePattern = /^(\w+)\s+LIKE\s+'[^']*'$/i;
+    const likePattern = /^(\w+)\s+LIKE\s+'[^']*'(?:\s+ESCAPE\s+'[^']*')?$/i;
     const eqPattern = /^(\w+)\s*=\s*'[^']*'$/i;
     const inPattern = /^(\w+)\s+IN\s*\(\s*(?:'[^']*'(?:\s*,\s*'[^']*')*)\s*\)$/i;
 

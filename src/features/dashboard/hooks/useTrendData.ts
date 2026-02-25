@@ -4,6 +4,7 @@ import { apiClient } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { ViewPerspective } from '../../../shared/types/view-perspective';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('useTrendData');
 
@@ -81,6 +82,7 @@ export const useTrendData = ({
   enabled = true,
   perspective = 'premium',
 }: UseTrendDataOptions): UseTrendDataResult => {
+  const { isOrgUser, userOrg } = useRBAC();
   const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
   const [qualityBusinessData, setQualityBusinessData] = useState<QualityBusinessDataPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -91,7 +93,7 @@ export const useTrendData = ({
   const fetchTrendFromApi = useCallback(async (requestId: number) => {
     try {
       const params = {
-        ...buildFilterParams(filters),
+        ...buildFilterParams(filters, { isOrgUser, userOrg }),
         perspective,
       };
       const granularity = timeViewToGranularity(timeView);

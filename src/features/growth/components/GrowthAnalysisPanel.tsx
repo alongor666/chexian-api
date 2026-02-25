@@ -18,6 +18,7 @@ import { GrowthComparisonSection } from './GrowthComparisonSection';
 import { GrowthDetailSection } from './GrowthDetailSection';
 import { formatPercent1, getSafeDateStr } from '../utils/format';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 interface GrowthAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -46,6 +47,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const { perspective, setPerspective, config: perspectiveConfig } = usePerspective();
   const { isDataLoaded } = useDataStatus();
+  const { isOrgUser, userOrg } = useRBAC();
 
   // 对比分析状态
   const [comparisonPreset, setComparisonPreset] = useState<ComparisonPreset>('yoy');
@@ -89,7 +91,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
       // 不传入机构/业务员（在各函数中单独处理）
     };
 
-    return buildFilterParams(filtersForParams);
+    return buildFilterParams(filtersForParams, { isOrgUser, userOrg });
   }, [
     filters.customer_category,
     filters.coverage_combination,
@@ -274,10 +276,10 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
   // 过滤当前选中月份的数据
   const displayData = isDailyDetailMode
     ? data.filter(item => {
-        if (!item.time_period) return false;
-        const date = new Date(item.time_period);
-        return (date.getMonth() + 1) === selectedMonth;
-      })
+      if (!item.time_period) return false;
+      const date = new Date(item.time_period);
+      return (date.getMonth() + 1) === selectedMonth;
+    })
     : data;
 
   // 获取截止日期（用于样式判断）

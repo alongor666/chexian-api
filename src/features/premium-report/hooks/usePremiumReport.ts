@@ -10,6 +10,7 @@
 import { useState, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { createLogger } from '../../../shared/utils/logger';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('usePremiumReport');
 import type {
@@ -46,6 +47,8 @@ interface UsePremiumReportReturn extends PremiumReportData {
  * 保费报表数据Hook
  */
 export function usePremiumReport(): UsePremiumReportReturn {
+  const { isOrgUser, userOrg } = useRBAC();
+
   // 数据状态
   const [state, setState] = useState<PremiumReportData>({
     orgReport: [],
@@ -110,7 +113,9 @@ export function usePremiumReport(): UsePremiumReportReturn {
         startDate: filters.startDate,
         endDate: filters.endDate,
       };
-      if (filters.org_level_3 && filters.org_level_3.length > 0) {
+      if (isOrgUser && userOrg) {
+        params.orgNames = userOrg;
+      } else if (filters.org_level_3 && filters.org_level_3.length > 0) {
         params.orgNames = filters.org_level_3.join(',');
       }
 
@@ -146,7 +151,9 @@ export function usePremiumReport(): UsePremiumReportReturn {
         endDate: filters.endDate,
         planYear: filters.year,
       };
-      if (filters.org_level_3 && filters.org_level_3.length > 0) {
+      if (isOrgUser && userOrg) {
+        params.orgNames = userOrg;
+      } else if (filters.org_level_3 && filters.org_level_3.length > 0) {
         params.orgNames = filters.org_level_3.join(',');
       }
 

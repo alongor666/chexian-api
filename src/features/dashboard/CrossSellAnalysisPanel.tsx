@@ -151,53 +151,7 @@ function DimensionPicker({
   );
 }
 
-// ============================================================
-// 面包屑导航
-// ============================================================
-
-function Breadcrumb({
-  drillPath,
-  currentGroupBy,
-  onDrillUp,
-}: {
-  drillPath: { label: string }[];
-  currentGroupBy: CrossSellDimension | null;
-  onDrillUp: (toIndex: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1 text-sm flex-wrap">
-      <button
-        onClick={() => onDrillUp(-1)}
-        className={`px-2 py-1 rounded transition-colors ${
-          drillPath.length === 0 && !currentGroupBy
-            ? 'text-blue-600 font-semibold bg-blue-50'
-            : 'text-blue-500 hover:bg-blue-50 cursor-pointer'
-        }`}
-      >
-        四川分公司
-      </button>
-      {drillPath.map((step, idx) => (
-        <React.Fragment key={idx}>
-          <span className="text-gray-300">/</span>
-          <button
-            onClick={() => onDrillUp(idx)}
-            className="px-2 py-1 rounded text-blue-500 hover:bg-blue-50 transition-colors cursor-pointer"
-          >
-            {step.label}
-          </button>
-        </React.Fragment>
-      ))}
-      {currentGroupBy && (
-        <>
-          <span className="text-gray-300">/</span>
-          <span className="px-2 py-1 text-gray-800 font-semibold bg-gray-100 rounded">
-            {DIMENSION_LABELS[currentGroupBy]}
-          </span>
-        </>
-      )}
-    </div>
-  );
-}
+import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
 
 // ============================================================
 // 表格列定义
@@ -266,6 +220,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
     reset,
     loading,
     error,
+    canGoToTop,
   } = useCrossSellAnalysis({
     filters,
     vehicleCategory,
@@ -351,10 +306,12 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
       {/* 面包屑导航 */}
       <div className="bg-white p-3 rounded-xl shadow-sm">
-        <Breadcrumb
+        <RBACBreadcrumb
           drillPath={drillPath}
           currentGroupBy={currentGroupBy}
           onDrillUp={drillUp}
+          canGoToTop={canGoToTop}
+          dimensionLabels={DIMENSION_LABELS}
         />
       </div>
 
@@ -432,11 +389,10 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                       {sortedRows.map((row, idx) => (
                         <tr
                           key={idx}
-                          className={`border-b border-gray-50 transition-colors ${
-                            canDrillDeeper
-                              ? 'hover:bg-blue-50 cursor-pointer'
-                              : 'hover:bg-gray-50/60'
-                          }`}
+                          className={`border-b border-gray-50 transition-colors ${canDrillDeeper
+                            ? 'hover:bg-blue-50 cursor-pointer'
+                            : 'hover:bg-gray-50/60'
+                            }`}
                           onClick={() => canDrillDeeper && handleRowClick(row.group_name)}
                         >
                           {TABLE_COLUMNS.map((col) => (

@@ -8,6 +8,7 @@ import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { createLogger } from '../../../shared/utils/logger';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { ViewPerspective } from '../../../shared/types';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('useRenewalAnalysis');
 
@@ -69,6 +70,7 @@ export function useRenewalAnalysis({
   enabled = true,
 }: UseRenewalAnalysisProps): UseRenewalAnalysisReturn {
   const effectiveYear = targetYear ?? filters.analysis_year ?? new Date().getFullYear();
+  const { isOrgUser, userOrg } = useRBAC();
 
   const [detailData, setDetailData] = useState<RenewalDetailRow[]>([]);
   const [availableMonths, setAvailableMonths] = useState<number[]>([]);
@@ -85,7 +87,7 @@ export function useRenewalAnalysis({
       policy_date_end: undefined,
     };
     const params = {
-      ...buildFilterParams(renewalFilters),
+      ...buildFilterParams(renewalFilters, { isOrgUser, userOrg }),
       queryType: 'full' as const,
       targetYear: effectiveYear,
       targetMonth: selectedMonth,

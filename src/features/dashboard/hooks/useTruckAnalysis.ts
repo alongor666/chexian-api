@@ -10,6 +10,7 @@ import { createLogger } from '../../../shared/utils/logger';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { RoseChartDatum } from '../types';
 import type { ViewPerspective } from '../../../shared/types';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('useTruckAnalysis');
 
@@ -45,6 +46,7 @@ export function useTruckAnalysis({
   enabled = true,
 }: UseTruckAnalysisProps): UseTruckAnalysisReturn {
   const { isDataLoaded } = useDataStatus();
+  const { isOrgUser, userOrg } = useRBAC();
 
   const [rosePremiumData, setRosePremiumData] = useState<RoseChartDatum[]>([]);
   const [roseCountData, setRoseCountData] = useState<RoseChartDatum[]>([]);
@@ -55,7 +57,7 @@ export function useTruckAnalysis({
 
   const fetchFromApi = useCallback(async () => {
     const params = {
-      ...buildFilterParams(filters),
+      ...buildFilterParams(filters, { isOrgUser, userOrg }),
       queryType: 'all' as const,
       metric: perspective === 'policy_count' ? 'count' : 'premium',
     };
