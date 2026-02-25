@@ -495,8 +495,17 @@ router.get(
 
     const { queryType, dateField, startDate, endDate, cutoffDate, analysisYear } = parseResult.data;
 
-    // 权限过滤条件
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    // 权限 + 通用筛选（不含日期，系数接口使用独立日期参数）
     const permissionFilter = req.permissionFilter || '1=1';
+    const finalWhereClauseWithoutDate = buildWhereFromFilterParamsWithoutDate(
+      filterResult.data,
+      permissionFilter
+    );
 
     // queryType=batch: 返回结构化数据（成都/全省/各机构三层）
     if (queryType === 'batch') {
@@ -505,7 +514,7 @@ router.get(
         end: new Date(endDate),
       };
 
-      const sql = generateFullCoefficientQuery(dateField, dateRange, permissionFilter);
+      const sql = generateFullCoefficientQuery(dateField, dateRange, finalWhereClauseWithoutDate);
       const rawData = await duckdbService.query(sql);
 
       const data = rawData.filter((r: Record<string, any>) => r.region_group !== 'chengdu' && r.region_group !== 'province');
@@ -526,9 +535,9 @@ router.get(
 
     let sql: string;
     if (queryType === 'byOrg') {
-      sql = generateCoefficientByOrgQuery(dateField, dateRange, permissionFilter);
+      sql = generateCoefficientByOrgQuery(dateField, dateRange, finalWhereClauseWithoutDate);
     } else {
-      sql = generateFullCoefficientQuery(dateField, dateRange, permissionFilter);
+      sql = generateFullCoefficientQuery(dateField, dateRange, finalWhereClauseWithoutDate);
     }
 
     const result = await duckdbService.query(sql);

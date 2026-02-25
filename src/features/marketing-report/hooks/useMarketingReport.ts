@@ -91,6 +91,7 @@ export function useMarketingReport(
       const holidayDates = getHolidayDatesInRange(filters.startDate, filters.endDate);
 
       const params: Record<string, any> = {
+        ...(filters.additionalParams || {}),
         reportType: 'org',
         holidayDates: holidayDates.join(','),
         dateField: filters.dateField,
@@ -131,6 +132,7 @@ export function useMarketingReport(
       const holidayDates = getHolidayDatesInRange(filters.startDate, filters.endDate);
 
       const params: Record<string, any> = {
+        ...(filters.additionalParams || {}),
         reportType: 'salesman',
         holidayDates: holidayDates.join(','),
         dateField: filters.dateField,
