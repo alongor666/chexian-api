@@ -158,7 +158,19 @@ export const generateKpiQuery = (
             END
           ),
           0
-        ) AS driver_prev_ytd_premium
+        ) AS driver_prev_ytd_premium,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND CAST(f.policy_date AS DATE) < DATE_TRUNC('year', lc.latest_policy_date)
+                AND f.customer_category != '摩托车'
+              THEN COALESCE(f.cross_sell_premium_driver, 0)
+              ELSE 0
+            END
+          ),
+          0
+        ) AS driver_prev_full_premium
       FROM filtered_base f
       CROSS JOIN latest_context lc
     ),
