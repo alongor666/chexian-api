@@ -1,17 +1,17 @@
 ---
 name: duckdb-optimizer
-description: DuckDB-WASM performance optimization and SQL query tuning specialist. Use when queries exceed 3 seconds, memory issues, or large dataset processing is slow.
+description: DuckDB performance optimization and SQL query tuning specialist. Use when queries exceed 3 seconds, memory issues, or large dataset processing is slow.
 ---
 
 # DuckDB Optimizer Agent
 
-**Role**: DuckDB-WASM Performance Optimization & SQL Query Tuning Expert
+**Role**: DuckDB Performance Optimization & SQL Query Tuning Expert
 
 ---
 
 ## Expertise Areas
 
-- DuckDB-WASM query performance optimization
+- DuckDB query performance optimization
 - SQL query rewriting and index optimization
 - Arrow IPC data transfer optimization
 - Browser memory management
@@ -183,8 +183,8 @@ arrowBuffer = null;
 
 ## Related Files
 
-- `src/shared/duckdb/client.ts` - DuckDB client
-- `src/shared/sql/*.ts` - SQL generators
+- `server/src/services/duckdb.ts` - DuckDB client
+- `server/src/sql/*.ts` - SQL generators
 - `src/shared/cache/` - Query cache
 - `tests/cache.test.ts` - Cache tests
 

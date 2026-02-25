@@ -25,7 +25,7 @@ You are an expert security specialist focused on identifying and remediating vul
 
 This is a **frontend-only** application (Vehicle Insurance Analytics System):
 - Runs in browser, no backend server
-- Uses DuckDB-WASM for SQL queries
+- Uses DuckDB for SQL queries
 - Processes sensitive insurance data locally
 - No authentication/authorization system
 

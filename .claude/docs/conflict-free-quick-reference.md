@@ -199,8 +199,8 @@ git rebase origin/main
 # 开发过程中（每30分钟）
 # ========================================
 # 完成小功能A
-vim src/shared/sql/kpi.ts
-git add src/shared/sql/kpi.ts
+vim server/src/sql/kpi.ts
+git add server/src/sql/kpi.ts
 git commit -m "feat(kpi): 添加损失率计算SQL模板"
 git push
 
@@ -331,6 +331,5 @@ NEW_ID=$(bun run scripts/assign-task-id.mjs @codex)
 
 ---
 
-**版本**: v1.0.0
-**最后更新**: 2026-01-11
-**维护者**: @claude
+**版本**: v1.1.0
+**最后更新**: 2026-02-24

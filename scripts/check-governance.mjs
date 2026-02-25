@@ -18,6 +18,9 @@
  *    - 检测任务ID重复
  *    - Agent专属ID范围：@user(B001-099), @claude(B100-199), @codex(B200-299),
  *      @gemini(B300-399), @trae(B400-499), @kilo(B500-599), @codebuddy(B600-699)
+ * 8. Merge conflict 标记扫描：
+ *    - 扫描 BACKLOG.md / PROGRESS.md 中是否残留 <<<<<<< / ======= / >>>>>>> 冲突标记
+ *    - 残留冲突标记 → 阻断提交
  *
  * 退出码：
  * - 0: 所有检查通过
@@ -552,6 +555,51 @@ function checkTaskIdAllocation() {
 }
 
 // ============================================================
+// 第8项检查：Merge conflict 标记扫描
+// ============================================================
+
+/**
+ * 扫描治理文件中是否残留未解决的 merge conflict 标记
+ * 来源：PR #47 中 BACKLOG.md/PROGRESS.md 残留 <<<<<<< HEAD 标记（P0 级问题）
+ */
+function checkMergeConflictMarkers() {
+  info('检查 merge conflict 标记...');
+
+  const filesToCheck = [
+    'BACKLOG.md',
+    'PROGRESS.md',
+    'CLAUDE.md',
+    'AGENTS.md',
+  ];
+
+  const conflictPattern = /^(<{7}\s|={7}$|>{7}\s)/;
+  const errors = [];
+
+  for (const file of filesToCheck) {
+    const filePath = path.join(ROOT_DIR, file);
+    if (!fs.existsSync(filePath)) continue;
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      if (conflictPattern.test(lines[i])) {
+        errors.push(`${file}:${i + 1} 残留 merge conflict 标记: ${lines[i].substring(0, 40)}`);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    error(`Merge conflict 标记检查失败（${errors.length} 处残留）：`);
+    errors.forEach(err => console.log(`    - ${err}`));
+    return false;
+  } else {
+    success(`Merge conflict 标记检查通过（扫描 ${filesToCheck.length} 个治理文件）`);
+    return true;
+  }
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -566,6 +614,7 @@ function main() {
     { name: 'CLAUDE章节', fn: checkClaudeMdSections },
     { name: 'DC-002合规', fn: checkDC002Compliance },
     { name: '任务ID分配', fn: checkTaskIdAllocation },
+    { name: 'Conflict标记', fn: checkMergeConflictMarkers },
   ];
 
   let passedCount = 0;

@@ -200,7 +200,7 @@ cat 签单清洗/字段关联分析报告.md
 
 ⚠️ **所有数据处理代码必须遵守**: [开发文档/SECURITY_CONSTRAINTS.md](../开发文档/SECURITY_CONSTRAINTS.md)
 
-### DuckDB-WASM 强制要求
+### DuckDB 强制要求
 
 **COOP/COEP 配置**（必须）:
 ```typescript
@@ -212,7 +212,7 @@ server: {
   },
 }
 ```
-- **不配置的后果**: DuckDB-WASM 无法初始化,应用完全无法使用
+- **不配置的后果**: DuckDB 无法初始化,应用完全无法使用
 - **验证方法**: Chrome DevTools → Network → 检查响应头
 
 **日期字段类型转换**（必须）:
@@ -228,12 +228,12 @@ YEAR(CAST(policy_date AS DATE))
 
 **Worker 架构**（必须）:
 ```typescript
-// src/shared/duckdb/client.ts
+// server/src/services/duckdb.ts
 this.worker = new Worker(new URL('./worker.ts', import.meta.url), {
   type: 'module'
 });
 ```
-- **原因**: DuckDB-WASM 必须在独立线程运行,避免阻塞 UI
+- **原因**: DuckDB 必须在独立线程运行,避免阻塞 UI
 - **优势**: 并发控制、请求取消、沙箱安全
 
 ### Arrow IPC 协议约束
@@ -299,9 +299,9 @@ SELECT COUNT(*) as total, SUM(premium) as total_premium FROM PolicyFact
 ### 实现位置
 
 **代码验证**:
-- Arrow IPC: `src/shared/duckdb/worker.ts:76-77`
-- Worker 初始化: `src/shared/duckdb/client.ts:30`
-- PolicyFact 视图: `src/shared/duckdb/client.ts:136-156`
+- Arrow IPC: `server/src/services/duckdb.ts:76-77`
+- Worker 初始化: `server/src/services/duckdb.ts:30`
+- PolicyFact 视图: `server/src/services/duckdb.ts:136-156`
 - SQL 验证: `src/shared/utils/sql-validator.ts`
 
 **安全测试**:

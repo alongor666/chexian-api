@@ -7,11 +7,11 @@ author: "@claude"
 tags: ["trends","growth","anomaly"]
 scope: project
 requires:
-  - DuckDB-WASM
+  - DuckDB
   - bun
 dependencies:
-  - src/shared/duckdb/client.ts
-  - src/shared/sql/*.ts
+  - server/src/services/duckdb.ts
+  - server/src/sql/*.ts
 parent_command: data-report
 parent_version: "2.0.0"
 last_updated: "2026-01-11"

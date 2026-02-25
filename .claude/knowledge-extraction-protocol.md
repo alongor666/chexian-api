@@ -62,7 +62,7 @@
 示例:
 - "日期字段存储为字符串,必须CAST转换后才能计算"
 - "Worker与主线程通信必须使用Arrow IPC,禁止JSON序列化"
-- "DuckDB-WASM强制要求COOP/COEP头"
+- "DuckDB强制要求COOP/COEP头"
 
 存储位置:
   - CLAUDE.md § 2 护栏 (架构协议)

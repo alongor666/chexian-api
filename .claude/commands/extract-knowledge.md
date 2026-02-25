@@ -9,7 +9,7 @@ scope: global
 requires: []
 dependencies:
   - .claude/knowledge-extraction-protocol.md
-  - .claude/subagents/knowledge-miner.md
+  - .claude/agents/knowledge-miner.md
 last_updated: "2026-01-11"
 ---
 
@@ -81,5 +81,5 @@ last_updated: "2026-01-11"
 ## 相关文档
 
 - `.claude/knowledge-extraction-protocol.md` - 知识提取协议
-- `.claude/subagents/knowledge-miner.md` - Knowledge Miner Subagent
+- `.claude/agents/knowledge-miner.md` - Knowledge Miner Agent
 - `开发文档/00_index/DATA_INDEX.md` - 数据索引

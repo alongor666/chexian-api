@@ -7,11 +7,11 @@ author: "@claude"
 tags: ["cors","file-upload","headers"]
 scope: project
 requires:
-  - DuckDB-WASM
+  - DuckDB
   - bun
 dependencies:
-  - src/shared/duckdb/client.ts
-  - src/shared/sql/*.ts
+  - server/src/services/duckdb.ts
+  - server/src/sql/*.ts
 parent_command: security-review
 parent_version: "2.0.0"
 last_updated: "2026-01-11"
@@ -24,7 +24,7 @@ last_updated: "2026-01-11"
 ## 检查项
 
 ### 1. CORS 配置
-- [ ] COOP 头部（DuckDB-WASM要求）
+- [ ] COOP 头部（DuckDB要求）
 - [ ] COEP 头部
 
 ### 2. 文件上传安全

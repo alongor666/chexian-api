@@ -151,10 +151,10 @@ MoM Growth Rate = (Current Period Premium - Previous Period) / Previous Period
 
 ## Related Files
 
-- `src/shared/sql/kpi.ts` - KPI queries
-- `src/shared/sql/trend.ts` - Trend queries
-- `src/shared/sql/growth.ts` - Growth rate queries
-- `src/shared/sql/cost.ts` - Cost analysis queries
+- `server/src/sql/kpi.ts` - KPI queries
+- `server/src/sql/trend.ts` - Trend queries
+- `server/src/sql/growth.ts` - Growth rate queries
+- `server/src/sql/cost.ts` - Cost analysis queries
 - `src/widgets/charts/*.tsx` - Chart components
 
 ---

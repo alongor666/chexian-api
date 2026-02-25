@@ -10,7 +10,7 @@ requires:
   - bun
 dependencies:
   - scripts/session-manager.mjs
-  - .claude/subagents/session-manager.md
+  - .claude/agents/session-manager.md
 last_updated: "2026-01-11"
 ---
 

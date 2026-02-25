@@ -83,5 +83,8 @@ PASSWORDS.local.txt
 
 # 数据管理大文件（staging中间文件）
 数据管理/staging/*.xlsx
+
+# 数据管理生成报告（对比输出，不追踪）
+数据管理/output/
 logs/
 scripts/verify-catchup-logic.*

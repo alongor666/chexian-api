@@ -10,7 +10,7 @@ requires:
   - bun
   - Chrome DevTools
 dependencies:
-  - src/shared/duckdb/client.ts
+  - server/src/services/duckdb.ts
   - src/features/dashboard/hooks/
   - src/widgets/table/
 last_updated: "2026-01-16"

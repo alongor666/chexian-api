@@ -115,7 +115,7 @@ git add \
   .claude/knowledge-extraction-protocol.md \
   .claude/knowledge-mining-plan.md \
   .claude/scripts/extract_knowledge.py \
-  .claude/subagents/knowledge-miner.md \
+  .claude/agents/knowledge-miner.md \
   开发文档/00_index/DATA_INDEX.md \
   签单清洗/QUICK_REFERENCE.md \
   签单清洗/车险数据业务规则字典.md \

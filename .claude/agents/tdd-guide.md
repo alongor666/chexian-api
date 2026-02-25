@@ -67,7 +67,7 @@ bun test tests/sql/kpi.test.ts
 
 ### Step 3: Write Minimal Implementation (GREEN)
 ```typescript
-// src/shared/sql/kpi.ts
+// server/src/sql/kpi.ts
 export function buildKpiQuery(filters: KpiFilters): string {
   return `
     SELECT ${filters.dimension}, SUM(premium) as total_premium

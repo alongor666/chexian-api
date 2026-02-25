@@ -10,7 +10,7 @@
 这是一个基于Claude Code生态的可复用知识提取系统,用于从对话中提取隐性知识并结构化归档。
 
 **核心组件**:
-1. **Subagent**: `.claude/subagents/knowledge-miner.md` - AI知识提取专家
+1. **Subagent**: `.claude/agents/knowledge-miner.md` - AI知识提取专家
 2. **Slash Command**: `/extract-knowledge` - 快捷触发命令
 3. **辅助脚本**: `.claude/scripts/extract_knowledge.py` - Python辅助工具
 4. **协议文档**: `.claude/knowledge-extraction-protocol.md` - 完整协议说明
@@ -239,7 +239,7 @@ KEYWORDS = {
 
 ### 自定义存储位置
 
-编辑 `.claude/subagents/knowledge-miner.md`:
+编辑 `.claude/agents/knowledge-miner.md`:
 
 ```markdown
 **存储位置映射**:

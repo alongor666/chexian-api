@@ -7,10 +7,10 @@ author: "@claude"
 tags: [cost, profitability, claims, expense]
 scope: project
 requires:
-  - DuckDB-WASM
+  - DuckDB
   - 数据管理/业务员保费计划标准化数据.parquet
 dependencies:
-  - src/shared/sql/cost.ts
+  - server/src/sql/cost.ts
   - src/features/cost/
   - src/features/dashboard/PremiumDashboard.tsx
 last_updated: "2026-01-16"
@@ -256,7 +256,7 @@ ORDER BY profit_margin ASC
 
 ## 相关文件
 
-- `src/shared/sql/cost.ts` - 成本分析 SQL 生成器
+- `server/src/sql/cost.ts` - 成本分析 SQL 生成器
 - `src/features/cost/` - 成本分析面板组件
 - `开发文档/业务员计划数据集成说明.md` - 数据集成文档
 

@@ -23,7 +23,7 @@ last_updated: "2026-01-11"
 自动生成以下内容：
 1. CLAUDE.md 项目文档
 2. .claude/commands/ 自定义命令
-3. .claude/subagents/ AI 子代理
+3. .claude/agents/ AI 子代理
 4. .claude/settings.json 配置
 5. .mcp.json MCP 服务器配置
 6. Git hooks

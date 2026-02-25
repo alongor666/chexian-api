@@ -302,7 +302,7 @@ for record in records:
 
 **关键产出**:
 - `src/features/renewal/RenewalAnalysisPanel.tsx`
-- `src/shared/sql/renewal.ts`
+- `server/src/sql/renewal.ts`
 
 ---
 ```

@@ -1,0 +1,79 @@
+# Agent-Command 对应关系
+
+> 何时用 Agent、何时用 Command？
+
+**最后更新**: 2026-02-24
+
+---
+
+## 选择原则
+
+| 场景 | 用 Agent | 用 Command |
+|------|---------|-----------|
+| 需要深度分析/多轮推理 | Y | |
+| 需要标准化输出格式 | | Y |
+| 作为 sub-agent 被调用 | Y | |
+| 用户直接通过 `/` 调用 | | Y |
+| 需要交互式确认 | Y | |
+
+---
+
+## 对应关系表
+
+| Agent | 对应 Command | 关系说明 |
+|-------|-------------|---------|
+| `architect` | — | 独立 agent，无对应 command |
+| `build-error-resolver` | — | 构建失败时自动触发 |
+| `business-intelligence` | `/data-analysis` | BI agent 提供分析能力，command 提供标准化流程 |
+| `code-simplifier` | — | 代码审查后触发 |
+| `data-validator` | `/data-profile` | validator 做深度校验，profile 做概览 |
+| `duckdb-optimizer` | — | 查询慢时触发 |
+| `e2e-runner` | — | E2E 测试专用 |
+| `knowledge-miner` | `/extract-knowledge` | miner 提取知识，command 触发流程 |
+| `react-performance` | `/performance-audit` | agent 专注 React，command 做全栈审计 |
+| `security-reviewer` | `/security-review` | agent 深度分析，command 8 项检查清单 |
+| `session-manager` | `/session-manager` | 功能相同，command 是快捷入口 |
+| `tdd-guide` | `/tdd` | agent 引导 TDD，command 执行 TDD 流程 |
+| `ui-ux-designer` | `/ui-review` | agent 设计，command 审查 |
+| `verify-app` | `/verify` | agent 全面验证，command 快速检查 |
+
+---
+
+## Command 分类速查
+
+### 数据分析类
+| Command | 说明 | 耗时 |
+|---------|------|------|
+| `/data-analysis` | 全量 12 维度分析 | 长 |
+| `/data-profile` | 数据概览+质量 | 短 |
+| `/data-kpi` | 业绩+排名 | 中 |
+| `/data-trends` | 时间趋势 | 中 |
+| `/data-export` | 导出结果 | 短 |
+| `/cost-analysis` | 成本深度审计 | 中 |
+
+### 报告类
+| Command | 说明 |
+|---------|------|
+| `/weekly-report` | 董事会级完整周报 |
+| `/report-weekly` | 快速周报 |
+| `/report-monthly` | 月报 |
+| `/report-custom` | 自定义时间范围 |
+
+### 安全类
+| Command | 说明 |
+|---------|------|
+| `/security-review` | 全量 8 项审查 |
+| `/security-sql` | SQL 注入专项 |
+| `/security-xss` | XSS 专项 |
+| `/security-cors` | CORS+文件上传 |
+| `/security-all` | 快速全量 |
+
+### 工作流类
+| Command | 说明 |
+|---------|------|
+| `/commit-push-pr` | Git 提交+推送+PR |
+| `/sync-and-rebase` | 同步远程+Rebase |
+| `/tdd` | TDD 开发流程 |
+| `/verify` | 多层验证 |
+| `/checkpoint` | 会话存档 |
+| `/test-coverage` | 测试覆盖率 |

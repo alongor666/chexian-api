@@ -38,14 +38,14 @@ Vitest 2.1.9           - Testing
 ### Data Analysis Engine (Special Constraints)
 
 ```
-DuckDB-WASM 1.28.0     - In-browser SQL Engine
+DuckDB 1.28.0     - Server-side SQL Engine
 Apache Arrow 17.0.0    - In-memory Data Format
 ```
 
 **Critical Constraints**:
-- DuckDB runs in browser, cannot use backend tools for testing
+- DuckDB runs on server, cannot use backend tools for testing
 - MUST verify SQL execution results via Chrome DevTools Console
-- Field types defined in `src/shared/duckdb/client.ts:78-95` (PolicyFact view)
+- Field types defined in `server/src/services/duckdb.ts:78-95` (PolicyFact view)
 
 ---
 
@@ -54,8 +54,8 @@ Apache Arrow 17.0.0    - In-memory Data Format
 | File/Path | Reason | Allowed Action |
 |-----------|--------|----------------|
 | `src/shared/normalize/mapping.ts` | Business metric definitions | Append only, no deletion/modification |
-| `src/shared/sql/kpi.ts` | KPI calculation logic | Append new templates only |
-| `src/shared/duckdb/client.ts:78-95` | PolicyFact view definition | Requires product approval |
+| `server/src/sql/kpi.ts` | KPI calculation logic | Append new templates only |
+| `server/src/services/duckdb.ts:78-95` | PolicyFact view definition | Requires product approval |
 | All `*.md` index files | Knowledge base integrity | Append only, no deletion |
 
 ---
@@ -203,13 +203,13 @@ worker.postMessage({
 For significant architectural decisions, create ADRs:
 
 ```markdown
-# ADR-001: Use DuckDB-WASM as In-Browser SQL Engine
+# ADR-001: Use DuckDB as In-Browser SQL Engine
 
 ## Context
 Need to execute complex SQL queries in browser with aggregation, grouping, JOINs, etc.
 
 ## Decision
-Use DuckDB-WASM as the in-browser SQL engine.
+Use DuckDB as the server-side SQL engine.
 
 ## Consequences
 

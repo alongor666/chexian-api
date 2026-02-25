@@ -303,7 +303,7 @@ const Component = ({ children }: Props) => {
 }
 ```
 
-### DuckDB-WASM Types
+### DuckDB Types
 ```typescript
 // ERROR: DuckDB types missing
 import * as duckdb from '@duckdb/duckdb-wasm'
