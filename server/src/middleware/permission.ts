@@ -52,12 +52,11 @@ export function permissionMiddleware(
       // 分公司管理员：可查看所有数据
       req.permissionFilter = '1=1';
     } else if (role === UserRole.ORG_USER) {
-      // 三级机构用户：只能查看本机构数据
+      // 三级机构用户：只能查看本机构数据（严格等值匹配）
       if (!organization) {
         throw new AppError(403, 'Organization not specified for ORG_USER role');
       }
-      // 使用LIKE支持模糊匹配（如"乐山"可匹配"乐山中支"），ESCAPE防止通配符绕过
-      req.permissionFilter = `org_level_3 LIKE '%${escapeSqlString(organization)}%' ESCAPE '\\'`;
+      req.permissionFilter = `org_level_3 = '${escapeSqlString(organization)}'`;
     } else {
       // 未知角色
       throw new AppError(403, 'Invalid user role');
@@ -70,14 +69,11 @@ export function permissionMiddleware(
 }
 
 /**
- * 转义SQL字符串，防止SQL注入和LIKE通配符绕过
- * 转义单引号（注入）及 % _ 通配符（LIKE绕过）
+ * 转义SQL字符串，防止SQL注入
+ * 当前为等值匹配，仅转义单引号
  */
 function escapeSqlString(str: string): string {
-  return str
-    .replace(/'/g, "''")
-    .replace(/%/g, '\\%')
-    .replace(/_/g, '\\_');
+  return str.replace(/'/g, "''");
 }
 
 /**

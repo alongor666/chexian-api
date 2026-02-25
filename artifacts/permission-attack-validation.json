@@ -1,0 +1,186 @@
+{
+  "checked": 12,
+  "failures": [],
+  "details": [
+    {
+      "username": "leshan",
+      "org": "乐山",
+      "attackOrg": "天府",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "乐山"
+      ],
+      "planAchievementOrgs": [
+        "乐山"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "tianfu",
+      "org": "天府",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "天府"
+      ],
+      "planAchievementOrgs": [
+        "天府"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "yibin",
+      "org": "宜宾",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "宜宾"
+      ],
+      "planAchievementOrgs": [
+        "宜宾"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "deyang",
+      "org": "德阳",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "德阳"
+      ],
+      "planAchievementOrgs": [
+        "德阳"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "xindu",
+      "org": "新都",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "新都"
+      ],
+      "planAchievementOrgs": [
+        "新都"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "wuhou",
+      "org": "武侯",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "武侯"
+      ],
+      "planAchievementOrgs": [
+        "武侯"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "luzhou",
+      "org": "泸州",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "泸州"
+      ],
+      "planAchievementOrgs": [
+        "泸州"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "zigong",
+      "org": "自贡",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "自贡"
+      ],
+      "planAchievementOrgs": [
+        "自贡"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "ziyang",
+      "org": "资阳",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "资阳"
+      ],
+      "planAchievementOrgs": [
+        "资阳"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "dazhou",
+      "org": "达州",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "达州"
+      ],
+      "planAchievementOrgs": [
+        "达州"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "qingyang",
+      "org": "青羊",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "青羊"
+      ],
+      "planAchievementOrgs": [
+        "青羊"
+      ],
+      "sqlRows": 0
+    },
+    {
+      "username": "gaoxin",
+      "org": "高新",
+      "attackOrg": "乐山",
+      "marketingRows": 0,
+      "growthRows": 0,
+      "costRows": 0,
+      "premiumPlanOrgs": [
+        "高新"
+      ],
+      "planAchievementOrgs": [
+        "高新"
+      ],
+      "sqlRows": 0
+    }
+  ]
+}

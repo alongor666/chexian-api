@@ -110,6 +110,18 @@ router.get(
         ? [parseResult.data.salesmanName]
         : [];
 
+    // Extract implicit filters from permissionFilter
+    if (req.permissionFilter && req.permissionFilter !== '1=1') {
+      const orgMatch = req.permissionFilter.match(/org_level_3\s*(?:LIKE|=)\s*'%?([^%']+)%?'/i);
+      if (orgMatch && !orgNames.includes(orgMatch[1])) {
+        orgNames.push(orgMatch[1]);
+      }
+      const salesmanMatch = req.permissionFilter.match(/salesman_name\s*(?:LIKE|=)\s*'%?([^%']+)%?'/i);
+      if (salesmanMatch && !salesmanNames.includes(salesmanMatch[1])) {
+        salesmanNames.push(salesmanMatch[1]);
+      }
+    }
+
     const sql = generateKpiQuery(
       finalWhereClause,
       { orgNames, salesmanNames },
@@ -1306,10 +1318,17 @@ router.get(
       rankingEnabled, topN, bottomN,
     } = parseResult.data;
 
+    const isOrgUser = req.user?.role === 'org_user';
+    const forcedOrg = isOrgUser ? req.user?.organization : undefined;
+    if (isOrgUser && !forcedOrg) {
+      throw new AppError(403, 'Organization not specified for ORG_USER role');
+    }
+
     const dimension: PlanDrilldownDimension = {
       level: level as PlanDrilldownLevel,
       filters: {
-        org: orgFilter,
+        // 三级机构账号：强制锁定本机构，忽略前端传参
+        org: forcedOrg || orgFilter,
         team: teamFilter,
         salesman: salesmanFilter,
         customerCategory: customerCategoryFilter,
@@ -1388,11 +1407,17 @@ router.get(
     }
 
     const { planYear, level, orgFilter, teamFilter, salesmanFilter, customerCategoryFilter, sortField, sortOrder } = parseResult.data;
+    const isOrgUser = req.user?.role === 'org_user';
+    const forcedOrg = isOrgUser ? req.user?.organization : undefined;
+    if (isOrgUser && !forcedOrg) {
+      throw new AppError(403, 'Organization not specified for ORG_USER role');
+    }
 
     const dimension: PlanDrilldownDimension = {
       level: level as PlanDrilldownLevel,
       filters: {
-        org: orgFilter,
+        // 三级机构账号：强制锁定本机构，忽略前端传参
+        org: forcedOrg || orgFilter,
         team: teamFilter,
         salesman: salesmanFilter,
         customerCategory: customerCategoryFilter,

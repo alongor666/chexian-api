@@ -86,12 +86,15 @@ const CACHE_SELECT = `
 /**
  * 根据 level 和 filters 构建 achievement_cache 的 WHERE 子句
  */
-function buildCacheWhere(filters: PlanDrilldownDimension['filters']): string {
-  const conds: string[] = [];
+function buildCacheWhere(
+  filters: PlanDrilldownDimension['filters'],
+  planYear: number
+): string {
+  const conds: string[] = [`plan_year = ${Number(planYear)}`];
   if (filters?.org) conds.push(`org_name = '${esc(filters.org)}'`);
   if (filters?.team) conds.push(`team_name = '${esc(filters.team)}'`);
   if (filters?.salesman) conds.push(`full_name = '${esc(filters.salesman)}'`);
-  return conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+  return `WHERE ${conds.join(' AND ')}`;
 }
 
 /**
@@ -143,7 +146,7 @@ export function generatePremiumPlanDrilldownQuery(
   sortOrder: SortOrder = 'desc',
 ): string {
   const { level, filters = {} } = dimension;
-  const where = buildCacheWhere(filters);
+  const where = buildCacheWhere(filters, planYear);
 
   // customer_category / coverage：无计划数据，直接查 PolicyFact
   if (level === 'customer_category' || level === 'coverage') {
@@ -217,7 +220,7 @@ export function generateKPICardQuery(
   planYear: number,
   dimension: PlanDrilldownDimension,
 ): string {
-  const where = buildCacheWhere(dimension.filters);
+  const where = buildCacheWhere(dimension.filters, planYear);
   return `
     SELECT
       SUM(plan_vehicle)                                      AS total_plan_vehicle,
@@ -243,7 +246,7 @@ export function generateRateDistributionQuery(
   planYear: number,
   dimension: PlanDrilldownDimension,
 ): string {
-  const where = buildCacheWhere(dimension.filters);
+  const where = buildCacheWhere(dimension.filters, planYear);
   return `
     SELECT
       CASE
@@ -305,6 +308,16 @@ function generatePolicyFactDrilldownQuery(
     dimension.level === 'customer_category' ? 'customer_category' : 'coverage_combination';
 
   const yearWhere: string[] = [`policy_date >= DATE '${planYear}-01-01'`];
+  if (filters.org) yearWhere.push(`org_level_3 = '${esc(filters.org)}'`);
+  if (filters.team) {
+    yearWhere.push(
+      `salesman_name IN (
+        SELECT DISTINCT salesman_name
+        FROM SalesmanPlanFact
+        WHERE team_name = '${esc(filters.team)}'
+      )`
+    );
+  }
   if (filters.salesman) yearWhere.push(`salesman_name = '${esc(filters.salesman)}'`);
   if (filters.customerCategory && dimension.level === 'coverage') {
     yearWhere.push(`customer_category = '${esc(filters.customerCategory)}'`);

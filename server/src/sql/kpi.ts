@@ -177,12 +177,23 @@ export const generateKpiQuery = (
     bundle_renewal AS (
       SELECT
         CASE
-          WHEN COUNT(CASE WHEN is_commercial_insure = '套单' THEN 1 END) > 0
-          THEN COUNT(CASE WHEN is_commercial_insure = '套单' AND is_renewal THEN 1 END) * 1.0
-               / COUNT(CASE WHEN is_commercial_insure = '套单' THEN 1 END)
+          -- 分母：上一年起保的套单（应续件数），与续保分析板块口径一致
+          WHEN COUNT(CASE WHEN is_commercial_insure = '套单' 
+                           AND YEAR(CAST(insurance_start_date AS DATE)) = lc.latest_year - 1 
+                      THEN 1 END) > 0
+          THEN 
+            -- 分子：上一年起保的套单中，有续保单号的数量（已续件数）
+            COUNT(CASE WHEN is_commercial_insure = '套单' 
+                            AND YEAR(CAST(insurance_start_date AS DATE)) = lc.latest_year - 1 
+                            AND renewal_policy_no IS NOT NULL AND renewal_policy_no <> '' 
+                       THEN 1 END) * 1.0
+            / COUNT(CASE WHEN is_commercial_insure = '套单' 
+                              AND YEAR(CAST(insurance_start_date AS DATE)) = lc.latest_year - 1 
+                         THEN 1 END)
           ELSE NULL
         END AS bundle_renewal_rate
       FROM filtered
+      CROSS JOIN latest_context lc
     ),
     variable_cost_base AS (
       SELECT

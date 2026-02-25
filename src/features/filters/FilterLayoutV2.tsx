@@ -144,6 +144,15 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
 
   // 获取用户可见的机构列表（权限控制）
   const visibleOrganizations = useVisibleOrganizations();
+  const visibleOrgValues = React.useMemo(
+    () => visibleOrganizations.filter((org) => org !== '全部'),
+    [visibleOrganizations]
+  );
+  const lockedOrg = visibleOrgValues.length === 1 ? visibleOrgValues[0] : undefined;
+  const isOrgLocked = Boolean(lockedOrg);
+  const effectiveOrgSelection = (isOrgLocked && lockedOrg)
+    ? [lockedOrg]
+    : (filters.org_level_3 || []);
 
   const startDate = filters.policy_date_start ?? `${defaultYear}-01-01`;
   const endDate = filters.policy_date_end ?? maxDataDate ?? defaultDateRange.end;
@@ -155,23 +164,17 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
   // 根据权限过滤三级机构选项
   const filteredOrgOptions: MultiSelectOption[] = React.useMemo(() => {
     const allOrgs = toMultiSelectOptions(options.org_level_3 || []);
-
-    // 如果可见所有机构（管理员或未登录），返回全部
-    if (visibleOrganizations.length > 1) {
-      return allOrgs;
+    if (lockedOrg) {
+      return allOrgs.filter((opt) => opt.value === lockedOrg);
     }
-
-    // 只能查看"全部"和特定机构的情况（三级机构用户）
-    const userOrg = visibleOrganizations.find(o => o !== '全部');
-    if (userOrg) {
-      return allOrgs.filter(opt => opt.value === userOrg);
-    }
-
-    return [];
-  }, [options.org_level_3, visibleOrganizations]);
+    return allOrgs;
+  }, [options.org_level_3, lockedOrg]);
 
   // 处理单选模式的 onChange
   const handleOrgSingleSelect = (values: string[]) => {
+    if (isOrgLocked) {
+      return;
+    }
     // 单选模式下只保留最后一个选中的值
     if (orgMode === 'single' && values.length > 1) {
       onMultiSelectChange('org_level_3', [values[values.length - 1]]);
@@ -260,7 +263,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
             <summary className="list-none cursor-pointer flex items-center justify-between py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-800">
               <div className="flex items-center gap-2">
                 <span>三级机构{orgMode === 'single' ? '（单选）' : ''}</span>
-                {orgMode === 'multi' && (
+                {orgMode === 'multi' && !isOrgLocked && (
                   <div className="flex items-center gap-1 ml-2">
                     <button
                       type="button"
@@ -296,10 +299,10 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                 variant="compact"
                 title="三级机构"
                 options={filteredOrgOptions}
-                selectedValues={filters.org_level_3 || []}
+                selectedValues={effectiveOrgSelection}
                 onChange={handleOrgSingleSelect}
                 showButtons={false}
-                disabled={visibleOrganizations.length <= 1 && filteredOrgOptions.length > 0}
+                disabled={isOrgLocked}
                 singleSelect={orgMode === 'single'}
               />
             </div>
@@ -522,7 +525,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                   三级机构{orgMode === 'single' ? '（单选）' : ''}
                 </span>
                 <span className="text-sm text-neutral-500 truncate">
-                  {getMultiSelectSummary(filters.org_level_3)}
+                  {getMultiSelectSummary(effectiveOrgSelection)}
                 </span>
               </summary>
               <div className="px-3 pb-3">
@@ -530,13 +533,14 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                   variant="compact"
                   title="三级机构"
                   options={filteredOrgOptions}
-                  selectedValues={filters.org_level_3 || []}
+                  selectedValues={effectiveOrgSelection}
                   onChange={handleOrgSingleSelect}
-                  actions={orgMode === 'multi' ? orgActions : undefined}
-                  disabled={visibleOrganizations.length <= 1 && filteredOrgOptions.length > 0}
+                  actions={orgMode === 'multi' && !isOrgLocked ? orgActions : undefined}
+                  disabled={isOrgLocked}
                   singleSelect={orgMode === 'single'}
+                  showButtons={!isOrgLocked}
                 />
-                {visibleOrganizations.length <= 1 && filteredOrgOptions.length > 0 && (
+                {isOrgLocked && filteredOrgOptions.length > 0 && (
                   <p className="text-xs text-neutral-400 mt-1">
                     权限限制：仅可查看本机构数据
                   </p>

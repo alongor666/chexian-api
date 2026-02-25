@@ -42,7 +42,7 @@ class PermissionService {
 
     if (user.role === UserRole.ORG_USER && user.organization) {
       // 三级机构用户：只能查看本机构
-      return `org_level_3 LIKE '%${this.escapeSqlString(user.organization)}%'`;
+      return `org_level_3 = '${this.escapeSqlString(user.organization)}'`;
     }
 
     // 未知角色或缺少机构信息：拒绝访问

@@ -9,6 +9,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
+import { permissionMiddleware } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { generateSqlWithZhipu, validateApiKey } from '../services/zhipu.js';
 import { validateSQL } from '../utils/sql-validator.js';
@@ -21,6 +22,7 @@ const router = Router();
  * 应用认证中间件
  */
 router.use(authMiddleware);
+router.use(permissionMiddleware);
 
 /**
  * NL2SQL 请求验证 Schema
