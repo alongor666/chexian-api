@@ -618,6 +618,29 @@ class ApiClient {
   }
 
   /**
+   * 获取车驾意推介率走势数据（按日/周/月/季粒度）
+   */
+  async getCrossSellTrend(params?: Record<string, string>): Promise<{
+    rows: Array<{
+      time_period: string;
+      coverage_combination: string;
+      rate: number;
+      auto_count: number;
+    }>;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, value);
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/cross-sell-trend${query ? `?${query}` : ''}`);
+  }
+
+  /**
    * 获取业务员排名
    */
   async getSalesmanRanking(

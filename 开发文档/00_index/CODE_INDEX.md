@@ -211,5 +211,12 @@ src/features/*                                    # 功能模块 UI 渲染
 - 新增关键类型：必须在"关键类型定义"表格登记。
 - 修改禁止文件：必须先在 BACKLOG.md 登记需求并提供证据链。
 
+## 2026-02-25 API-only 清理补充（新增）
+
+- `src/features/dashboard/hooks/useDashboardData.ts`、`src/features/dashboard/Dashboard.tsx`、`src/features/filters/FilterPanel.tsx` 已归档，不再作为当前运行链路入口。
+- 归档目录：`archive/legacy-code/2026-02-api-only/`（先归档，后续迭代再物理删除）。
+- 当前看板主链路入口：`src/features/dashboard/PremiumDashboard.tsx` + `src/components/layout/PageFilterPanel.tsx`。
+- 类型检查护栏：`scripts/check-governance.mjs` 新增 `TS检查范围`，禁止通过 `tsconfig.exclude` 排除活跃目录规避类型问题。
+
 **变更记录**：
 - 2026-02-13：全面更新为 API-only 架构，移除所有 DuckDB-WASM/Local 模式引用，更新数据链路为前端 API Client → 后端路由 → SQL 生成器 → DuckDB 服务，补全后端模块清单（路由/SQL/服务/中间件/工具）、前端模块清单（API/上下文/Hooks/功能模块）、测试清单。

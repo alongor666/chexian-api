@@ -461,6 +461,7 @@ export const colorClasses = {
     primary: 'text-primary dark:text-primary-light',
     primaryDark: 'text-primary-dark dark:text-primary',
     // 中性色
+    neutralBlack: 'text-neutral-900 dark:text-neutral-100',
     neutral: 'text-neutral-600 dark:text-neutral-400',
     neutralDark: 'text-neutral-700 dark:text-neutral-300',
     neutralLight: 'text-neutral-500 dark:text-neutral-400',

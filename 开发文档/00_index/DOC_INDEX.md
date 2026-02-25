@@ -146,3 +146,8 @@
 - `src/shared/duckdb/client.ts`、`src/shared/duckdb/README.md` 已不属于当前运行架构。
 - 当前数据链路：前端 `src/shared/api/client.ts` → 后端 `server/src/routes/*` → `server/src/sql/*` → `server/src/services/duckdb.ts`。
 - 如需查看 DuckDB 业务口径，请以 `server/src/services/duckdb.ts` 和 `server/src/sql/*.ts` 为准。
+
+## 2026-02-25 清理门禁报告（新增）
+
+- `开发文档/reviews/2026-02-25-api-only-cleanup-gate-report.md`：API-only 分批清理（Batch0-3）与零故障门禁执行报告。
+- 运行证据日志目录：`artifacts/cleanup-gates/2026-02-25/`。

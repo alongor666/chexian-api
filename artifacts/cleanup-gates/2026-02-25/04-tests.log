@@ -2,6 +2,7 @@
  RUN  v2.1.9 /Users/alongor666/Downloads/底层数据湖DUD/chexian-api
 
  ✓ tests/coverage-report.test.ts (11 tests) 2ms
+ ✓ tests/integration/critical-path.test.ts (30 tests) 4ms
 stdout | tests/formatting-migration-check.test.ts > B044: 格式化迁移一致性验证 > 格式化工具使用统计 > formatPremium 使用次数统计
   ✅ formatPremium 使用: 7 个组件
 
@@ -27,12 +28,11 @@ stdout | tests/formatting-migration-check.test.ts > B044: 格式化迁移一致�
 
 
  ✓ tests/formatting-migration-check.test.ts (24 tests) 4ms
- ✓ tests/integration/critical-path.test.ts (30 tests) 5ms
  ✓ tests/queryBuilder.test.ts (7 tests) 2ms
- ✓ tests/api/client.test.ts (12 tests) 6ms
+ ✓ tests/api/client.test.ts (12 tests) 5ms
 
  Test Files  5 passed (5)
       Tests  84 passed (84)
-   Start at  19:13:20
-   Duration  654ms (transform 114ms, setup 78ms, collect 145ms, tests 20ms, environment 1.67s, prepare 320ms)
+   Start at  19:20:20
+   Duration  731ms (transform 118ms, setup 90ms, collect 147ms, tests 17ms, environment 1.65s, prepare 299ms)
 

@@ -39,7 +39,7 @@ const dataNavItems: NavItem[] = [
   { path: '/marketing-report', icon: Target, label: '营销战报', shortLabel: '战报' },
   { path: '/truck', icon: Truck, label: '营业货车', shortLabel: '货车' },
   { path: '/renewal', icon: RefreshCw, label: '续保分析', shortLabel: '续保' },
-  { path: '/cross-sell', icon: Gift, label: '车驾意推介率', shortLabel: '推介' },
+  { path: '/cross-sell', icon: Gift, label: '驾乘险推介率', shortLabel: '推介' },
   { path: '/growth', icon: TrendingUp, label: '增长分析', shortLabel: '增长' },
   { path: '/cost', icon: Calculator, label: '成本分析', shortLabel: '成本' },
   { path: '/comparison', icon: Scale, label: '数据对比', shortLabel: '对比' },

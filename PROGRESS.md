@@ -2,7 +2,7 @@
 
 **状态机思维**：记录里程碑、阻塞点、下一步接力入口。详细任务追踪请查看 [BACKLOG.md](./BACKLOG.md)。
 
-**最后更新时间**: 2026-02-24
+**最后更新时间**: 2026-02-25
 
 ---
 
@@ -41,6 +41,8 @@
 | 2026-02-24 | 企微扫码混合登录上线 (B305) | 实现企微 OAuth 闭环，本地与生产环境双重热验证通过 | PR #41/#43 合并至 main |
 | 2026-02-24 | 安全强化 B201+B203+B204 完成 | IP+用户名双键锁定 / 环境变量密码覆盖 / AI限流补齐 | `rateLimiter.ts` / `auth.ts` / `app.ts` |
 | 2026-02-24 | E2E+组件测试框架完成 B123+B127 | 24 个图表组件单元测试通过；Playwright 配置完整含 README | `tests/components/` / `tests/e2e/README.md` |
+| 2026-02-25 | API-only 分批清理零故障门禁完成 (B208) | 完成 Batch0-3：归档过渡代码、收紧 `tsconfig`、新增 TS 检查范围治理护栏、补齐运行门禁 E2E | 静态+自动化+运行门禁日志：`artifacts/cleanup-gates/2026-02-25/*.log`；报告：`开发文档/reviews/2026-02-25-api-only-cleanup-gate-report.md` |
+| 2026-02-25 | 驾乘险推介率子页面收敛完成 (B209) | 完成统一阈值规则源、KPI/下钻/时间维度着色、四象限颜色与标题规范、趋势图四粒度与版位；修复趋势 Hook 并发取消导致“无数据” | 验证证据：`bun run test -- --run tests/cross-sell-rate-status.test.ts tests/cross-sell-sql.test.ts` 7/7；`bun run governance` 9/9；API `cross-sell-trend` 四粒度均200；截图 `artifacts/b209/cross-sell-trend-verify.png` |
 
 ## 2. 当前阻塞 (Blockers)
 

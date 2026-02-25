@@ -1,5 +1,5 @@
 /**
- * 车驾意推介率分析面板（层层下钻版）
+ * 驾乘险推介率分析面板（层层下钻版）
  * Cross-Sell Recommendation Rate Analysis Panel (Hierarchical Drilldown)
  *
  * 交互流程：
@@ -17,8 +17,16 @@ import { useDataStatus } from '../../shared/contexts/DataContext';
 import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
 import { textStyles, cardStyles, numericStyles, tableStyles, colorClasses, cn } from '../../shared/styles';
+import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
 import { CrossSellTimePeriodSummary } from './CrossSellTimePeriodSummary';
 import { CrossSellQuadrantView } from './CrossSellQuadrantView';
+import { CrossSellTrendChart } from './CrossSellTrendChart';
+import {
+  getJiaosanStatus,
+  getRateClassByField,
+  getRateStatusLabel,
+  getZhuquanStatus,
+} from './crossSellRateStatus';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import {
   useCrossSellAnalysis,
@@ -68,16 +76,16 @@ interface CardDef {
 
 const SUMMARY_CARDS: CardDef[] = [
   { label: '车险件数', field: 'total_auto_count', type: 'count' },
-  { label: '驾意件数', field: 'total_driver_count', type: 'count' },
+  { label: '驾乘险件数', field: 'total_driver_count', type: 'count' },
   { label: '综合推介率', field: 'total_rate', type: 'rate' },
   { label: '单交-车险', field: 'danjiao_auto_count', type: 'count' },
-  { label: '单交-驾意', field: 'danjiao_driver_count', type: 'count' },
+  { label: '单交-驾乘险', field: 'danjiao_driver_count', type: 'count' },
   { label: '单交推介率', field: 'danjiao_rate', type: 'rate' },
   { label: '交三-车险', field: 'jiaosan_auto_count', type: 'count' },
-  { label: '交三-驾意', field: 'jiaosan_driver_count', type: 'count' },
+  { label: '交三-驾乘险', field: 'jiaosan_driver_count', type: 'count' },
   { label: '交三推介率', field: 'jiaosan_rate', type: 'rate' },
   { label: '主全-车险', field: 'zhuquan_auto_count', type: 'count' },
-  { label: '主全-驾意', field: 'zhuquan_driver_count', type: 'count' },
+  { label: '主全-驾乘险', field: 'zhuquan_driver_count', type: 'count' },
   { label: '主全推介率', field: 'zhuquan_rate', type: 'rate' },
 ];
 
@@ -90,11 +98,11 @@ function SummaryCards({ data }: { data: CrossSellRow }) {
         const hasStatusBadge = card.field === 'zhuquan_rate' || card.field === 'jiaosan_rate';
         const rateColorClass = isRate
           ? getRateColorByField(card.field, value)
-          : card.label.includes('驾意') ? colorClasses.text.primary : 'text-neutral-800';
+          : colorClasses.text.neutralBlack;
         const statusLabel = hasStatusBadge
           ? (card.field === 'zhuquan_rate'
-              ? RATE_STATUS_LABELS[getZhuquanStatus(value)]
-              : RATE_STATUS_LABELS[getJiaosanStatus(value)])
+              ? getRateStatusLabel(getZhuquanStatus(value))
+              : getRateStatusLabel(getJiaosanStatus(value)))
           : null;
         return (
           <div key={card.field} className={cn(cardStyles.interactive, 'p-4')}>
@@ -157,47 +165,12 @@ function DimensionPicker({
   );
 }
 
-import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
-
-// ============================================================
-// 推介率状态颜色
-// ============================================================
-
-type RateStatus = 'excellent' | 'healthy' | 'abnormal' | 'danger';
-
-function getZhuquanStatus(rate: number): RateStatus {
-  if (rate >= 80) return 'excellent';
-  if (rate >= 75) return 'healthy';
-  if (rate >= 70) return 'abnormal';
-  return 'danger';
-}
-
-function getJiaosanStatus(rate: number): RateStatus {
-  if (rate >= 70) return 'excellent';
-  if (rate >= 65) return 'healthy';
-  if (rate >= 60) return 'abnormal';
-  return 'danger';
-}
-
-const RATE_STATUS_CLASSES: Record<RateStatus, string> = {
-  excellent: colorClasses.text.success,
-  healthy:   colorClasses.text.primary,
-  abnormal:  colorClasses.text.warning,
-  danger:    colorClasses.text.danger,
-};
-
-const RATE_STATUS_LABELS: Record<RateStatus, string> = {
-  excellent: '优秀',
-  healthy:   '健康',
-  abnormal:  '异常',
-  danger:    '危险',
-};
-
 function getRateColorByField(field: keyof CrossSellRow, rate: number): string {
-  if (field === 'zhuquan_rate') return RATE_STATUS_CLASSES[getZhuquanStatus(rate)];
-  if (field === 'jiaosan_rate') return RATE_STATUS_CLASSES[getJiaosanStatus(rate)];
+  if (field === 'zhuquan_rate' || field === 'jiaosan_rate') {
+    return getRateClassByField(field, rate);
+  }
   if (rate >= 30) return colorClasses.text.success + ' font-medium';
-  if (rate >= 15) return 'text-neutral-700';
+  if (rate >= 15) return colorClasses.text.neutralDark;
   return colorClasses.text.warning + ' font-medium';
 }
 
@@ -215,19 +188,19 @@ interface ColumnDef {
 const TABLE_COLUMNS: ColumnDef[] = [
   { key: 'group_name', label: '维度', type: 'text' },
   { key: 'total_auto_count', label: '车险件数', type: 'count' },
-  { key: 'total_driver_count', label: '驾意件数', type: 'count' },
+  { key: 'total_driver_count', label: '驾乘险件数', type: 'count' },
   { key: 'total_rate', label: '综合推介率', type: 'rate' },
   { key: 'danjiao_auto_count', label: '单交-车险', type: 'count' },
-  { key: 'danjiao_driver_count', label: '单交-驾意', type: 'count' },
+  { key: 'danjiao_driver_count', label: '单交-驾乘险', type: 'count' },
   { key: 'danjiao_rate', label: '单交推介率', type: 'rate' },
   { key: 'jiaosan_auto_count', label: '交三-车险', type: 'count' },
-  { key: 'jiaosan_driver_count', label: '交三-驾意', type: 'count' },
+  { key: 'jiaosan_driver_count', label: '交三-驾乘险', type: 'count' },
   { key: 'jiaosan_rate', label: '交三推介率', type: 'rate',
-    getColorClass: (v) => RATE_STATUS_CLASSES[getJiaosanStatus(v)] },
+    getColorClass: (v) => getRateClassByField('jiaosan_rate', v) },
   { key: 'zhuquan_auto_count', label: '主全-车险', type: 'count' },
-  { key: 'zhuquan_driver_count', label: '主全-驾意', type: 'count' },
+  { key: 'zhuquan_driver_count', label: '主全-驾乘险', type: 'count' },
   { key: 'zhuquan_rate', label: '主全推介率', type: 'rate',
-    getColorClass: (v) => RATE_STATUS_CLASSES[getZhuquanStatus(v)] },
+    getColorClass: (v) => getRateClassByField('zhuquan_rate', v) },
 ];
 
 function formatCell(col: ColumnDef, row: CrossSellRow): string {
@@ -333,7 +306,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       <div className="bg-gradient-to-r from-blue-500 to-blue-700 text-white p-6 rounded-xl shadow-md">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold mb-1">驾意险推介率分析</h1>
+            <h1 className="text-xl font-semibold mb-1">驾乘险推介率分析</h1>
             <p className="text-sm opacity-90">四川分公司 - 交叉销售数据分析</p>
           </div>
           {(drillPath.length > 0 || currentGroupBy) && (
@@ -360,7 +333,14 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       <SectionTitle title="推介率汇总" />
       {summary && <SummaryCards data={summary} />}
 
-      {/* 板块2：下钻分析 */}
+      {/* 板块2：推介率走势 */}
+      <SectionTitle title="推介率走势" />
+      <CrossSellTrendChart
+        vehicleCategory={vehicleCategory}
+        filters={filters}
+      />
+
+      {/* 板块3：下钻分析 */}
       <SectionTitle title="下钻分析" />
 
       {/* 面包屑导航 */}
@@ -487,7 +467,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         </>
       )}
 
-      {/* 板块3：时间维度推介率 */}
+      {/* 板块4：时间维度推介率 */}
       <SectionTitle title="时间维度推介率" />
       <CrossSellTimePeriodSummary
         vehicleCategory={vehicleCategory}

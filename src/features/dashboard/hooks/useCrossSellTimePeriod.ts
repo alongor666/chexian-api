@@ -5,7 +5,7 @@
  * 提供当日/当周/当月/当年四个时间维度的推介率、件均保费、保费汇总数据
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
@@ -57,10 +57,12 @@ export function useCrossSellTimePeriod({
   const [premiumData, setPremiumData] = useState<TimePeriodRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fetchIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (!enabled) return;
 
+    const fetchId = ++fetchIdRef.current;
     setLoading(true);
     setError(null);
 
@@ -71,6 +73,7 @@ export function useCrossSellTimePeriod({
       };
 
       const result = await apiClient.getCrossSellTimePeriod(params);
+      if (fetchId !== fetchIdRef.current) return;
 
       if (result) {
         setMaxDate(result.maxDate || null);
@@ -124,11 +127,14 @@ export function useCrossSellTimePeriod({
         );
       }
     } catch (err) {
+      if (fetchId !== fetchIdRef.current) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (fetchId === fetchIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [filters, vehicleCategory, enabled]);
+  }, [filters, vehicleCategory, enabled, isOrgUser, userOrg]);
 
   useEffect(() => {
     fetchData();

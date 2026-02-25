@@ -1,5 +1,5 @@
 /**
- * 车驾意推介率 - 时间维度汇总表格
+ * 驾乘险推介率 - 时间维度汇总表格
  * Cross-Sell Time Period Summary Tables
  *
  * 展示推介率、件均保费、保费三个维度的当日/当周/当月/当年汇总数据
@@ -9,8 +9,9 @@ import { memo } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { Table } from '@/shared/ui/Table';
 import type { TableColumn } from '@/shared/ui/Table';
-import { textStyles, colorClasses, cn } from '@/shared/styles';
+import { textStyles, cn } from '@/shared/styles';
 import { formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
+import { getRateClassByField } from './crossSellRateStatus';
 import { useCrossSellTimePeriod } from './hooks/useCrossSellTimePeriod';
 import type { VehicleCategory, TimePeriodRow } from './hooks/useCrossSellTimePeriod';
 
@@ -22,18 +23,8 @@ interface CrossSellTimePeriodSummaryProps {
 type TimePeriodRecord = TimePeriodRow & Record<string, unknown>;
 
 function getTimePeriodRateClass(rate: number, label: string): string {
-  if (label === '主全') {
-    if (rate >= 80) return colorClasses.text.success;
-    if (rate >= 75) return colorClasses.text.primary;
-    if (rate >= 70) return colorClasses.text.warning;
-    return colorClasses.text.danger;
-  }
-  if (label === '交三') {
-    if (rate >= 70) return colorClasses.text.success;
-    if (rate >= 65) return colorClasses.text.primary;
-    if (rate >= 60) return colorClasses.text.warning;
-    return colorClasses.text.danger;
-  }
+  if (label === '主全') return getRateClassByField('zhuquan_rate', rate);
+  if (label === '交三') return getRateClassByField('jiaosan_rate', rate);
   return '';
 }
 
@@ -185,7 +176,7 @@ export const CrossSellTimePeriodSummary = memo(function CrossSellTimePeriodSumma
       </div>
 
       <div>
-        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>件均保费（万元）</h3>
+        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>件均保费（元）</h3>
         <Table<TimePeriodRecord>
           columns={avgPremiumColumns}
           dataSource={avgPremiumData as TimePeriodRecord[]}
