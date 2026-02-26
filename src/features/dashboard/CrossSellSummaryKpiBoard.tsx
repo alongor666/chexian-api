@@ -5,13 +5,14 @@
  * 使用表格格式展示：
  * - 非营业客车/货车：险别组合/指标 | 驾乘险保费 | 车险件数 | 推介率 | 件均保费
  * - 摩托车：险别组合/指标 | 推介率（只有单交）
+ * - 环比状态：显示与上一周期的变化（当日vs昨日、当周vs上周、当月vs上月）
  */
 
 import { memo, useMemo, useState } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
-import { textStyles, cardStyles, numericStyles, cn } from '@/shared/styles';
+import { textStyles, cardStyles, numericStyles, cn, colorClasses } from '@/shared/styles';
 import { formatCount, formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
-import { useCrossSellTimePeriod, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
+import { useCrossSellTimePeriod, type VehicleCategory, type TimePeriodRawRow } from './hooks/useCrossSellTimePeriod';
 import { getRateClassByField } from './crossSellRateStatus';
 
 export type TimePeriod = 'day' | 'week' | 'month' | 'year';
@@ -60,6 +61,11 @@ interface TimePeriodData {
   premium: number;
   rate: number;
   avg_premium: number;
+  // 上一周期数据
+  prev_auto_count: number;
+  prev_premium: number;
+  prev_rate: number;
+  prev_avg_premium: number;
 }
 
 function formatPremium(value: number): string {
@@ -74,6 +80,62 @@ function getRateColorClass(coverageKey: string, value: number): string {
     return getRateClassByField('jiaosan_rate', value);
   }
   return '';
+}
+
+/**
+ * 计算环比变化
+ */
+function calcChange(current: number, prev: number): { value: number; status: 'up' | 'down' | 'flat' } {
+  const diff = current - prev;
+  if (Math.abs(diff) < 0.01) {
+    return { value: 0, status: 'flat' };
+  }
+  return {
+    value: diff,
+    status: diff > 0 ? 'up' : 'down'
+  };
+}
+
+/**
+ * 格式化环比变化值
+ */
+function formatChangeValue(value: number, metricKey: string): string {
+  const sign = value >= 0 ? '+' : '';
+  if (metricKey === 'rate') {
+    return `${sign}${value.toFixed(1)}%`;
+  }
+  if (metricKey === 'premium') {
+    return `${sign}${value.toFixed(1)}`;
+  }
+  return `${sign}${Math.round(value)}`;
+}
+
+/**
+ * 获取环比状态样式类
+ */
+function getChangeStatusClass(status: 'up' | 'down' | 'flat'): string {
+  switch (status) {
+    case 'up':
+      return colorClasses.text.success;
+    case 'down':
+      return colorClasses.text.danger;
+    case 'flat':
+      return 'text-neutral-400';
+  }
+}
+
+/**
+ * 获取环比箭头符号
+ */
+function getChangeArrow(status: 'up' | 'down' | 'flat'): string {
+  switch (status) {
+    case 'up':
+      return '↗';
+    case 'down':
+      return '↘';
+    case 'flat':
+      return '—';
+  }
 }
 
 export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
@@ -98,46 +160,79 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
   // 根据选择的时间维度获取数据
   const dataByCoverage = useMemo(() => {
     if (!rawData || rawData.length === 0) return new Map<string, TimePeriodData>();
-    
+
     const map = new Map<string, TimePeriodData>();
     for (const row of rawData) {
       const prefix = selectedPeriod;
       const rowAny = row as unknown as Record<string, unknown>;
+
+      // 当年不需要环比数据
+      const showPrev = selectedPeriod !== 'year';
+      const prevPrefix = showPrev ? `prev_${prefix}` : '';
+
       map.set(row.coverage_combination, {
         auto_count: Number(rowAny[`${prefix}_auto_count`] ?? 0),
         premium: Number(rowAny[`${prefix}_premium`] ?? 0) / 10000,
         rate: Number(rowAny[`${prefix}_rate`] ?? 0),
         avg_premium: Number(rowAny[`${prefix}_avg_premium`] ?? 0),
+        // 上一周期数据
+        prev_auto_count: showPrev ? Number(rowAny[`${prevPrefix}_auto_count`] ?? 0) : 0,
+        prev_premium: showPrev ? Number(rowAny[`${prevPrefix}_premium`] ?? 0) / 10000 : 0,
+        prev_rate: showPrev ? Number(rowAny[`${prevPrefix}_rate`] ?? 0) : 0,
+        prev_avg_premium: showPrev ? Number(rowAny[`${prevPrefix}_avg_premium`] ?? 0) : 0,
       });
     }
     return map;
   }, [rawData, selectedPeriod]);
 
-  // 获取单元格显示内容
+  // 获取单元格显示内容（包含环比状态）
   const getCellContent = (
     metricKey: string,
     coverageKey: string
-  ): { text: string; colorClass: string } => {
+  ): { text: string; colorClass: string; change?: { value: number; status: 'up' | 'down' | 'flat' } } => {
     const data = dataByCoverage.get(coverageKey);
-    
+
     if (loading) {
       return { text: '--', colorClass: '' };
     }
-    
+
+    // 当年不显示环比
+    const showChange = selectedPeriod !== 'year';
+
     switch (metricKey) {
-      case 'premium':
-        return { text: formatPremium(data?.premium ?? 0), colorClass: '' };
-      case 'auto_count':
-        return { text: formatCount(data?.auto_count ?? 0), colorClass: '' };
+      case 'premium': {
+        const change = showChange ? calcChange(data?.premium ?? 0, data?.prev_premium ?? 0) : undefined;
+        return {
+          text: formatPremium(data?.premium ?? 0),
+          colorClass: '',
+          change
+        };
+      }
+      case 'auto_count': {
+        const change = showChange ? calcChange(data?.auto_count ?? 0, data?.prev_auto_count ?? 0) : undefined;
+        return {
+          text: formatCount(data?.auto_count ?? 0),
+          colorClass: '',
+          change
+        };
+      }
       case 'rate': {
         const rate = data?.rate ?? 0;
+        const change = showChange ? calcChange(rate, data?.prev_rate ?? 0) : undefined;
         return {
           text: formatPercent(rate),
           colorClass: getRateColorClass(coverageKey, rate),
+          change
         };
       }
-      case 'avg_premium':
-        return { text: `${formatCount(data?.avg_premium ?? 0)}元`, colorClass: '' };
+      case 'avg_premium': {
+        const change = showChange ? calcChange(data?.avg_premium ?? 0, data?.prev_avg_premium ?? 0) : undefined;
+        return {
+          text: `${formatCount(data?.avg_premium ?? 0)}元`,
+          colorClass: '',
+          change
+        };
+      }
       default:
         return { text: '-', colorClass: '' };
     }
@@ -174,7 +269,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
         </div>
         {maxDate && (
           <p className={cn(textStyles.caption, 'text-neutral-400')}>
-            数据截至: {maxDate}
+            数据截至: {maxDate} (保费单位: 万元)
           </p>
         )}
       </div>
@@ -212,19 +307,33 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                     {row.label}
                   </span>
                 </td>
-                {/* 指标数值 */}
+                {/* 指标数值 + 环比状态 */}
                 {metricColumns.map((col) => {
-                  const { text, colorClass } = getCellContent(col.key, row.key);
+                  const { text, colorClass, change } = getCellContent(col.key, row.key);
                   return (
                     <td key={col.key} className="py-4 px-4">
-                      <span
-                        className={cn(
-                          numericStyles.kpiPrimary,
-                          colorClass || 'text-neutral-900'
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            numericStyles.kpiPrimary,
+                            colorClass || 'text-neutral-900'
+                          )}
+                        >
+                          {text}
+                        </span>
+                        {change && (
+                          <span
+                            className={cn(
+                              textStyles.caption,
+                              getChangeStatusClass(change.status),
+                              'flex items-center gap-0.5'
+                            )}
+                          >
+                            <span>{formatChangeValue(change.value, col.key)}</span>
+                            <span>{getChangeArrow(change.status)}</span>
+                          </span>
                         )}
-                      >
-                        {text}
-                      </span>
+                      </div>
                     </td>
                   );
                 })}
