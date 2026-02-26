@@ -80,7 +80,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
   }, [rightSidebarWidth]);
 
   return (
-    <div className="flex h-full relative">
+    <div className="flex h-full w-full overflow-hidden relative">
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-neutral-50/50">
         {title && (
@@ -92,7 +92,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
             />
           </div>
         )}
-        <div className="flex-1 overflow-y-auto w-full relative">
+        <div className="flex-1 overflow-y-auto w-full relative p-4">
           {children}
         </div>
       </div>
@@ -159,7 +159,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
 
       {/* 桌面端右侧筛选器 */}
       <div
-        className={`hidden lg:flex relative flex-shrink-0 border-l border-neutral-200 bg-white flex-col ${!isDraggingRight ? 'transition-all duration-300' : ''} ${collapsed ? 'w-10 items-center justify-start pt-4' : ''}`}
+        className={`hidden lg:flex relative flex-shrink-0 border-l border-neutral-200 bg-white flex-col h-full overflow-hidden ${!isDraggingRight ? 'transition-all duration-300' : ''} ${collapsed ? 'w-10 items-center justify-start pt-4' : ''}`}
         style={!collapsed ? { width: `${rightSidebarWidth}px` } : undefined}
       >
         {/* 拖拽把手 - 拉左侧边缘 */}

@@ -1492,7 +1492,9 @@ router.get(
 
     res.json({
       success: true,
-      data: result,
+      data: {
+        rows: result,
+      },
     });
   })
 );

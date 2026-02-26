@@ -144,7 +144,7 @@ function getChangeStatusClass(status: 'up' | 'down' | 'flat'): string {
     case 'down':
       return colorClasses.text.danger;
     case 'flat':
-      return 'text-neutral-400';
+      return colorClasses.text.neutralMuted;
   }
 }
 
@@ -273,7 +273,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
       {/* 时间选择器 + 数据截止日期 */}
       <div className="flex items-center justify-end">
         {maxDate && (
-          <p className={cn(textStyles.caption, 'text-neutral-400')}>
+          <p className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
             数据截至: {maxDate} (保费单位: 万元)
           </p>
         )}
@@ -284,13 +284,13 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
         <table className="w-full">
           <thead>
             <tr className="bg-neutral-50 border-b border-neutral-200">
-              <th className="py-3 px-4 text-left font-medium text-neutral-500 w-28">
+              <th className={cn('py-3 px-4 text-left font-medium w-28', colorClasses.text.neutralLight)}>
                 险别组合/指标
               </th>
               {metricColumns.map((col) => (
                 <th
                   key={col.key}
-                  className="py-3 px-4 text-left font-medium text-neutral-500"
+                  className={cn('py-3 px-4 text-left font-medium', colorClasses.text.neutralLight)}
                 >
                   {col.label}
                 </th>
@@ -308,7 +308,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
               >
                 {/* 险别组合名称 */}
                 <td className="py-4 px-4">
-                  <span className={cn(textStyles.body, 'font-medium text-neutral-700')}>
+                  <span className={cn(textStyles.body, 'font-medium', colorClasses.text.neutralDark)}>
                     {row.label}
                   </span>
                 </td>
@@ -321,7 +321,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                         <span
                           className={cn(
                             numericStyles.kpiPrimary,
-                            colorClass || 'text-neutral-900'
+                            colorClass || colorClasses.text.neutralBlack
                           )}
                         >
                           {text}
@@ -348,7 +348,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
 
       {/* 验证公式说明 - 摩托车不显示 */}
       {!isMotorcycle && (
-        <div className={cn(textStyles.caption, 'text-neutral-400 italic')}>
+        <div className={cn(textStyles.caption, colorClasses.text.neutralMuted, 'italic')}>
           💡 验证公式：驾乘险保费 ≈ 车险件数 × 推介率 × 件均保费
         </div>
       )}

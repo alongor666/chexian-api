@@ -8,9 +8,7 @@ export const CrossSellPage: React.FC = () => {
 
   return (
     <PageFilterPanel preset="full" title="交叉销售分析">
-      <div className="p-4">
-        <CrossSellAnalysisPanel filters={filters} />
-      </div>
+      <CrossSellAnalysisPanel filters={filters} />
     </PageFilterPanel>
   );
 };
