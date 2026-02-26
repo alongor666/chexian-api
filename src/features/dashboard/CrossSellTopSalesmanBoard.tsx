@@ -10,10 +10,12 @@ import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import { cardStyles, textStyles, cn } from '@/shared/styles';
 import { TopSalesmanQuadrantChart } from './TopSalesmanQuadrantChart';
+import type { TrendGranularity } from './hooks/useCrossSellTrend';
 
 interface TopSalesmanBoardProps {
     filters: AdvancedFilterState;
     vehicleCategory: VehicleCategory;
+    timePeriod: TrendGranularity;
 }
 
 type SortField = 'org_level_3' | 'driver_premium' | 'auto_count' | 'avg_premium' | 'rate';
@@ -23,6 +25,7 @@ type ViewMode = 'table' | 'chart';
 export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard({
     filters,
     vehicleCategory,
+    timePeriod,
 }: TopSalesmanBoardProps) {
     return (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -31,12 +34,14 @@ export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard
                 coverage="主全"
                 filters={filters}
                 vehicleCategory={vehicleCategory}
+                timePeriod={timePeriod}
             />
             <SalesmanPanel
                 title="交三"
                 coverage="交三"
                 filters={filters}
                 vehicleCategory={vehicleCategory}
+                timePeriod={timePeriod}
             />
         </div>
     );
@@ -48,11 +53,13 @@ const SalesmanPanel = memo(function SalesmanPanel({
     coverage,
     filters,
     vehicleCategory,
+    timePeriod,
 }: {
     title: string;
     coverage: '主全' | '交三';
     filters: AdvancedFilterState;
     vehicleCategory: VehicleCategory;
+    timePeriod: TrendGranularity;
 }) {
     const [viewMode, setViewMode] = useState<ViewMode>('table');
     const [sortField, setSortField] = useState<SortField>('rate');
@@ -62,6 +69,7 @@ const SalesmanPanel = memo(function SalesmanPanel({
         filters,
         vehicleCategory,
         coverage,
+        timePeriod,
     });
 
     const handleSort = (field: SortField) => {
@@ -142,32 +150,37 @@ const SalesmanPanel = memo(function SalesmanPanel({
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 whitespace-nowrap"
                                         onClick={() => handleSort('org_level_3')}
+                                        title="点击按三级机构排序"
                                     >
                                         三级机构 {sortField === 'org_level_3' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 text-right whitespace-nowrap"
                                         onClick={() => handleSort('driver_premium')}
+                                        title="点击按驾乘首年保费排序"
                                     >
-                                        驾乘保费 {sortField === 'driver_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                        驾乘险保费-万 {sortField === 'driver_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 text-right whitespace-nowrap"
                                         onClick={() => handleSort('auto_count')}
+                                        title="点击按车险件数排序"
                                     >
                                         车险件数 {sortField === 'auto_count' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 text-right whitespace-nowrap"
                                         onClick={() => handleSort('rate')}
+                                        title="点击按推介率排序"
                                     >
                                         推介率 {sortField === 'rate' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 text-right whitespace-nowrap"
                                         onClick={() => handleSort('avg_premium')}
+                                        title="点击按件均保费排序"
                                     >
-                                        件均保费 {sortField === 'avg_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                        件均保费-元 {sortField === 'avg_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
                                 </tr>
                             </thead>
@@ -176,10 +189,10 @@ const SalesmanPanel = memo(function SalesmanPanel({
                                     <tr key={`${row.salesman_name}-${idx}`} className="hover:bg-neutral-50/50 transition-colors">
                                         <td className="py-2 px-3 text-neutral-900 font-medium whitespace-nowrap">{row.salesman_name}</td>
                                         <td className="py-2 px-3 text-neutral-600 whitespace-nowrap">{row.org_level_3}</td>
-                                        <td className="py-2 px-3 text-right text-neutral-900 whitespace-nowrap">{formatCount(row.driver_premium)}元</td>
+                                        <td className="py-2 px-3 text-right text-neutral-900 whitespace-nowrap">{(row.driver_premium / 10000).toFixed(1)}</td>
                                         <td className="py-2 px-3 text-right text-neutral-900 whitespace-nowrap">{formatCount(row.auto_count)}</td>
                                         <td className="py-2 px-3 text-right text-primary font-medium whitespace-nowrap">{formatPercent(row.rate)}</td>
-                                        <td className="py-2 px-3 text-right text-neutral-800 whitespace-nowrap">{formatCount(row.avg_premium)}元</td>
+                                        <td className="py-2 px-3 text-right text-neutral-800 whitespace-nowrap">{formatCount(row.avg_premium)}</td>
                                     </tr>
                                 ))}
                             </tbody>

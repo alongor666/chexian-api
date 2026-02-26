@@ -8,6 +8,7 @@ import type { EChartsOption } from 'echarts';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import { colors } from '@/shared/styles';
+import { classifyQuadrant, QUADRANT_META } from './crossSellRateStatus';
 import type { TopSalesmanRow } from './hooks/useCrossSellTopSalesman';
 
 interface TopSalesmanQuadrantChartProps {
@@ -54,13 +55,18 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
         const scatterData = data.map(item => {
             const rate = Number(item.rate) || 0;
             const premium = Number(item.avg_premium) || 0;
-            // 这里的尺寸可能需要根据实际返回驾乘险保费数据做缩放处理
             const sizeval = Math.sqrt(Number(item.driver_premium) || 0);
+
+            // 主全或交三根据当前面板分别传两个参数去获取红橙黄绿的划分
+            const q = classifyQuadrant(
+                coverage === '主全' ? rate : 100,
+                coverage === '交三' ? rate : 100
+            );
 
             return {
                 value: [rate, premium, sizeval, item.salesman_name, item.org_level_3, Number(item.driver_premium)],
                 itemStyle: {
-                    color: coverage === '主全' ? 'rgba(59, 130, 246, 0.6)' : 'rgba(16, 185, 129, 0.6)',
+                    color: QUADRANT_META[q].color,
                 }
             };
         });
@@ -80,8 +86,8 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                     return `
             <div style="font-weight:600;margin-bottom:4px">${val[3]} (${val[4]})</div>
             <div>推介率: <span style="font-weight:600">${formatPercent(val[0])}</span></div>
-            <div>件均保费: <span style="font-weight:600">${formatCount(val[1])}元</span></div>
-            <div>驾乘保费: <span style="font-weight:600">${formatCount(val[5])}元</span></div>
+            <div>件均保费: <span style="font-weight:600">${formatCount(val[1])}</span></div>
+            <div>驾乘保费: <span style="font-weight:600">${(val[5] / 10000).toFixed(1)} 万</span></div>
           `;
                 },
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',

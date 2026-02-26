@@ -1461,6 +1461,7 @@ router.get(
 const crossSellTopSalesmanSchema = z.object({
   vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
   coverage: z.enum(['主全', '交三']).default('主全'),
+  timePeriod: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
 });
 
 router.get(
@@ -1470,7 +1471,7 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, coverage } = extraResult.data;
+    const { vehicleCategory, coverage, timePeriod } = extraResult.data;
 
     const filterResult = commonFilterSchema.safeParse(req.query);
     if (!filterResult.success) {
@@ -1485,7 +1486,8 @@ router.get(
     const sql = generateCrossSellTopSalesmanQuery(
       finalWhereClause,
       vehicleCategory as VehicleCategory,
-      coverage as TopSalesmanCoverage
+      coverage as TopSalesmanCoverage,
+      timePeriod
     );
 
     const result = await duckdbService.query(sql);

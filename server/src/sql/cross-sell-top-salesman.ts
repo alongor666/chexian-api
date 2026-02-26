@@ -14,7 +14,7 @@ export type TopSalesmanCoverage = '主全' | '交三';
  * 交叉销售判定条件
  */
 function getCrossSellCondition(): string {
-    return `(
+  return `(
     TRY_CAST(is_cross_sell AS BOOLEAN) = true
     OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
   )`;
@@ -24,35 +24,60 @@ function getCrossSellCondition(): string {
  * 生成 TOP20 业务员查询
  */
 export function generateCrossSellTopSalesmanQuery(
-    baseWhereClause: string,
-    vehicleCategory: VehicleCategory,
-    coverage: TopSalesmanCoverage
+  baseWhereClause: string,
+  vehicleCategory: VehicleCategory,
+  coverage: TopSalesmanCoverage,
+  timePeriod: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' = 'daily'
 ): string {
-    logger.debug('Generating cross-sell top salesman query', { vehicleCategory, coverage });
+  logger.debug('Generating cross-sell top salesman query', { vehicleCategory, coverage });
 
-    const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
-    const crossSellCond = getCrossSellCondition();
+  const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
+  const crossSellCond = getCrossSellCondition();
 
-    const dedup = `COALESCE(
+  const dedup = `COALESCE(
       NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
       NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
     )`;
 
-    const sql = `
-    WITH filtered AS (
+  const sql = `
+    WITH date_bounds AS (
+      SELECT MAX(CAST(policy_date AS DATE)) AS max_date
+      FROM PolicyFact
+      WHERE ${baseWhereClause}
+        AND ${vehicleFilter}
+    ),
+    time_filtered AS (
       SELECT
         salesman_name,
         org_level_3,
         ${dedup} AS dedup_key,
         coverage_combination,
         is_cross_sell,
-        cross_sell_premium_driver
+        cross_sell_premium_driver,
+        CAST(policy_date AS DATE) AS pd,
+        (SELECT max_date FROM date_bounds) AS tp_max,
+        (SELECT max_date FROM date_bounds) AS tp_day,
+        CAST(DATE_TRUNC('week', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_week,
+        CAST(DATE_TRUNC('month', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_month,
+        CAST(DATE_TRUNC('quarter', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_quarter,
+        CAST(DATE_TRUNC('year', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_year
       FROM PolicyFact
       WHERE ${baseWhereClause}
         AND ${vehicleFilter}
         AND coverage_combination = '${coverage}'
         AND salesman_name IS NOT NULL
         AND TRIM(salesman_name) != ''
+    ),
+    filtered AS (
+      SELECT * FROM time_filtered
+      WHERE CASE 
+        WHEN '${timePeriod}' = 'daily' THEN pd = tp_day
+        WHEN '${timePeriod}' = 'weekly' THEN pd >= tp_week AND pd <= tp_max
+        WHEN '${timePeriod}' = 'monthly' THEN pd >= tp_month AND pd <= tp_max
+        WHEN '${timePeriod}' = 'quarterly' THEN pd >= tp_quarter AND pd <= tp_max
+        WHEN '${timePeriod}' = 'yearly' THEN pd >= tp_year AND pd <= tp_max
+        ELSE pd = tp_day
+      END
     ),
     salesman_summary AS (
       SELECT
@@ -91,6 +116,6 @@ export function generateCrossSellTopSalesmanQuery(
     LIMIT 20
   `;
 
-    logger.debug('Generated cross-sell top salesman SQL', { sqlLength: sql.length });
-    return sql;
+  logger.debug('Generated cross-sell top salesman SQL', { sqlLength: sql.length });
+  return sql;
 }

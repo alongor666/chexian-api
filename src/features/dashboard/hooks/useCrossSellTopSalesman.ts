@@ -11,6 +11,7 @@ import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import type { VehicleCategory } from './useCrossSellTimePeriod';
+import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import type { TopSalesmanCoverage } from '../../../../server/src/sql/cross-sell-top-salesman';
 
 export interface TopSalesmanRow {
@@ -26,6 +27,7 @@ interface UseCrossSellTopSalesmanProps {
     filters: AdvancedFilterState;
     vehicleCategory: VehicleCategory;
     coverage: TopSalesmanCoverage;
+    timePeriod: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     enabled?: boolean;
 }
 
@@ -39,6 +41,7 @@ export function useCrossSellTopSalesman({
     filters,
     vehicleCategory,
     coverage,
+    timePeriod,
     enabled = true,
 }: UseCrossSellTopSalesmanProps): UseCrossSellTopSalesmanReturn {
     const { isOrgUser, userOrg } = useRBAC();
@@ -59,6 +62,7 @@ export function useCrossSellTopSalesman({
                 ...buildFilterParams(filters, { isOrgUser, userOrg }),
                 vehicleCategory,
                 coverage,
+                timePeriod,
             };
 
             const result = await apiClient.getCrossSellTopSalesman(params);
@@ -69,6 +73,7 @@ export function useCrossSellTopSalesman({
                 // 从需求上看，如果是驾乘保费可以保留一位小数，我们在组件渲染中处理格式化
                 setData(result.rows.map(row => ({
                     ...row,
+                    salesman_name: (row.salesman_name || '').replace(/[0-9()[\]_-]/g, '').trim(),
                     driver_premium: Number(row.driver_premium) || 0,
                     auto_count: Number(row.auto_count) || 0,
                     rate: Number(row.rate) || 0,
@@ -83,7 +88,7 @@ export function useCrossSellTopSalesman({
                 setLoading(false);
             }
         }
-    }, [filters, vehicleCategory, coverage, enabled, isOrgUser, userOrg]);
+    }, [filters, vehicleCategory, coverage, timePeriod, enabled, isOrgUser, userOrg]);
 
     useEffect(() => {
         fetchData();

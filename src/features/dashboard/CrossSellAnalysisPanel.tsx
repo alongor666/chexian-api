@@ -495,6 +495,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       <CrossSellTopSalesmanBoard
         filters={filters}
         vehicleCategory={vehicleCategory}
+        timePeriod={trendGranularity}
       />
     </div>
   );
