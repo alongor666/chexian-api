@@ -160,3 +160,9 @@ python3 scripts/generate-renewal-analysis.py # 生成报告
 ## 2026-02-25 追加记录
 
 - `check-governance.mjs` 新增“TS检查范围”校验：禁止在 `tsconfig.json` 中重新排除 `src/charts`、`src/components`、`src/services`、`src/types`、`src/core` 等活跃目录，以防通过 `exclude` 掩盖真实类型问题。
+
+## 2026-02-26 追加记录
+
+- 新增 `test-burn-down.mjs`：生成测试债务燃尽报告（`artifacts/test-burndown/current.md`），用于每周失败用例清零跟踪。
+- 新增 `install-git-hooks.sh`：一键安装本地 Git Hooks（`core.hooksPath=.githooks`）。
+- 新增仓库级 `.githooks/pre-commit`：提交前强制执行治理检查 + 核心回归测试。

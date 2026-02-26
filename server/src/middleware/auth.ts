@@ -39,13 +39,27 @@ export function authMiddleware(
   next: NextFunction
 ) {
   try {
-    // 1. 从Authorization头获取Token
+    // 1. 从 Authorization 头或 HttpOnly Cookie 获取 Token
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const bearerToken = authHeader?.startsWith('Bearer ')
+      ? authHeader.split(' ')[1]
+      : null;
+    const cookieToken = (() => {
+      const raw = req.headers.cookie;
+      if (!raw) return null;
+      const pairs = raw.split(';').map(part => part.trim());
+      for (const pair of pairs) {
+        if (pair.startsWith('cx_access_token=')) {
+          return decodeURIComponent(pair.slice('cx_access_token='.length));
+        }
+      }
+      return null;
+    })();
+    const token = bearerToken || cookieToken;
+
+    if (!token) {
       throw new AppError(401, 'No token provided');
     }
-
-    const token = authHeader.split(' ')[1];
 
     // 2. 验证Token
     const decoded = jwt.verify(token, authConfig.jwtSecret) as JwtPayload;
@@ -75,8 +89,9 @@ export function optionalAuthMiddleware(
   next: NextFunction
 ) {
   const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const hasBearer = !!(authHeader && authHeader.startsWith('Bearer '));
+  const hasCookie = !!req.headers.cookie?.includes('cx_access_token=');
+  if (!hasBearer && !hasCookie) {
     // 没有Token，跳过认证
     return next();
   }

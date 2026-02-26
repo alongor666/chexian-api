@@ -131,15 +131,9 @@ test('API-only 清理门禁：受保护接口 401 / 鉴权后 200', async ({ pag
     data: { username: E2E_USERNAME, password: E2E_PASSWORD },
   });
   expect(loginRes.status()).toBe(200);
-  const loginJson = await loginRes.json();
-  const token = loginJson?.data?.token as string | undefined;
-  expect(token, '登录响应缺少 token').toBeTruthy();
 
   const authRes = await page.request.get(
-    `${API_BASE}/api/query/kpi?startDate=2026-01-01&endDate=2026-01-31`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    }
+    `${API_BASE}/api/query/kpi?startDate=2026-01-01&endDate=2026-01-31`
   );
   expect(authRes.status()).toBe(200);
 });

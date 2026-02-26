@@ -167,6 +167,8 @@ const PRESET_USERS: Record<string, UserCredential> = {
  * 认证服务类
  */
 class AuthService {
+  private refreshTokenStore = new Map<string, { userId: string; expiresAt: number }>();
+
   private normalizeUsername(input: string): string {
     return input.normalize('NFKC').trim().toLowerCase();
   }
@@ -226,6 +228,61 @@ class AuthService {
     };
   }
 
+  private signAccessToken(payload: JwtPayload): string {
+    return jwt.sign(
+      payload as object,
+      authConfig.jwtSecret,
+      { expiresIn: authConfig.jwtExpiresIn } as SignOptions
+    );
+  }
+
+  private signRefreshToken(payload: JwtPayload, sessionId: string): string {
+    return jwt.sign(
+      { ...payload, type: 'refresh', sid: sessionId } as object,
+      authConfig.jwtSecret,
+      { expiresIn: authConfig.jwtRefreshExpiresIn } as SignOptions
+    );
+  }
+
+  private getExpiryTimestamp(secondsFromNow: number): number {
+    return Date.now() + secondsFromNow * 1000;
+  }
+
+  private parseDurationToSeconds(duration: string | undefined, fallbackSeconds: number): number {
+    if (!duration) return fallbackSeconds;
+    const match = duration.match(/^(\d+)([smhd])$/);
+    if (!match) return fallbackSeconds;
+    const value = Number(match[1]);
+    const unit = match[2];
+    const factors: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+    return value * (factors[unit] || 1);
+  }
+
+  issueCookieSession(user: Omit<UserCredential, 'passwordHash'>): {
+    accessToken: string;
+    refreshToken: string;
+    sessionId: string;
+  } {
+    const payload: JwtPayload = {
+      userId: user.username,
+      username: user.username,
+      role: user.role,
+      organization: user.organization,
+    };
+    const sessionId = `sid_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const refreshTtlSec = this.parseDurationToSeconds(authConfig.jwtRefreshExpiresIn, 7 * 24 * 3600);
+    const refreshToken = this.signRefreshToken(payload, sessionId);
+    this.refreshTokenStore.set(sessionId, {
+      userId: user.username,
+      expiresAt: this.getExpiryTimestamp(refreshTtlSec),
+    });
+    return {
+      accessToken: this.signAccessToken(payload),
+      refreshToken,
+      sessionId,
+    };
+  }
+
   /**
    * 验证密码
    */
@@ -274,6 +331,60 @@ class AuthService {
       authConfig.jwtSecret,
       { expiresIn: authConfig.jwtExpiresIn } as SignOptions
     );
+  }
+
+  refreshCookieSession(refreshToken: string): {
+    accessToken: string;
+    refreshToken: string;
+    sessionId: string;
+    payload: JwtPayload;
+  } {
+    let decoded: any;
+    try {
+      decoded = jwt.verify(refreshToken, authConfig.jwtSecret) as any;
+    } catch {
+      throw new AppError(401, 'Invalid refresh token');
+    }
+
+    if (!decoded || decoded.type !== 'refresh' || !decoded.sid) {
+      throw new AppError(401, 'Invalid refresh token');
+    }
+
+    const session = this.refreshTokenStore.get(decoded.sid);
+    if (!session || session.userId !== decoded.username || session.expiresAt < Date.now()) {
+      this.refreshTokenStore.delete(decoded.sid);
+      throw new AppError(401, 'Refresh token expired or revoked');
+    }
+
+    this.refreshTokenStore.delete(decoded.sid);
+    const payload: JwtPayload = {
+      userId: decoded.userId,
+      username: decoded.username,
+      role: decoded.role,
+      organization: decoded.organization,
+    };
+    const next = this.issueCookieSession({
+      username: payload.username,
+      displayName: payload.username,
+      role: payload.role,
+      organization: payload.organization,
+    });
+    return {
+      ...next,
+      payload,
+    };
+  }
+
+  revokeCookieSession(refreshToken: string | null | undefined): void {
+    if (!refreshToken) return;
+    try {
+      const decoded = jwt.verify(refreshToken, authConfig.jwtSecret) as any;
+      if (decoded?.sid) {
+        this.refreshTokenStore.delete(decoded.sid);
+      }
+    } catch {
+      // token invalid/expired: nothing to revoke
+    }
   }
 }
 

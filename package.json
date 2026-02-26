@@ -19,8 +19,10 @@
     "test:e2e": "playwright test",
     "test:e2e:cleanup-gate": "playwright test tests/e2e/03-cleanup-zero-downtime-gate.spec.ts",
     "test:e2e:ui": "playwright test --ui",
+    "test:burn-down": "node scripts/test-burn-down.mjs",
     "governance": "node scripts/check-governance.mjs",
-    "plans:manage": "node scripts/manage-plans.mjs"
+    "plans:manage": "node scripts/manage-plans.mjs",
+    "hooks:install": "bash scripts/install-git-hooks.sh"
   },
   "dependencies": {
     "@json-render/core": "^0.2.0",

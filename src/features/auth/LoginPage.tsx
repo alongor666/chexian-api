@@ -17,7 +17,7 @@ import { apiClient } from '../../shared/api/client';
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loginWithPassword, isAuthenticated, userPermission } = usePermission();
+  const { loginWithPassword, loginWithWecomToken, restoreSession, isAuthenticated, userPermission } = usePermission();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -48,6 +48,7 @@ export const LoginPage: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const wecomToken = params.get('wecom_token');
+    const wecomSuccess = params.get('wecom');
     const wecomError = params.get('error');
 
     if (wecomError) {
@@ -61,14 +62,19 @@ export const LoginPage: React.FC = () => {
       // 清除 URL 中的错误参数
       window.history.replaceState({}, '', window.location.pathname);
     } else if (wecomToken) {
-      // @ts-ignore loginWithWecomToken is added in next step
-      usePermission().loginWithWecomToken?.(wecomToken).then((success: boolean) => {
+      loginWithWecomToken(wecomToken).then((success: boolean) => {
         if (!success) setError('企微令牌无效或已过期');
       });
       // 清除 URL 中的 token
       window.history.replaceState({}, '', window.location.pathname);
+    } else if (wecomSuccess === 'success') {
+      restoreSession().then((success) => {
+        if (!success) setError('企微会话恢复失败，请重新扫码登录');
+      });
+      // 清除 URL 中的 token
+      window.history.replaceState({}, '', window.location.pathname);
     }
-  }, []);
+  }, [loginWithWecomToken, restoreSession]);
 
   const handleWeComLogin = useCallback(async () => {
     setIsWeComLoading(true);

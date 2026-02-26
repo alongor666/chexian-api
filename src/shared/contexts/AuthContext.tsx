@@ -58,20 +58,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // 初始化：检查本地存储的 Token
   useEffect(() => {
     const initAuth = async () => {
-      const token = apiClient.getToken();
-      if (token) {
-        try {
-          // 解析 JWT 获取用户信息
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          setUser({
-            username: payload.username,
-            displayName: payload.username === 'admin' ? '系统管理员' : payload.username,
-            role: payload.role,
-          });
-        } catch {
-          // Token 无效，清除
-          apiClient.clearToken();
-        }
+      try {
+        const me = await apiClient.getCurrentUser();
+        setUser({
+          username: me.username,
+          displayName: me.displayName,
+          role: me.role,
+        });
+      } catch {
+        apiClient.clearToken();
       }
       setIsLoading(false);
     };

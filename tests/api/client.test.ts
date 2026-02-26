@@ -42,7 +42,7 @@ describe('API Client', () => {
   });
 
   describe('Token Management', () => {
-    it('should store token in localStorage when set', async () => {
+    it('should keep token in memory when login returns token', async () => {
       // 这里需要动态导入以便可以测试 setToken
       const { apiClient } = await import('../../src/shared/api/client');
 
@@ -52,7 +52,7 @@ describe('API Client', () => {
         json: () => Promise.resolve({
           success: true,
           data: {
-            token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxIiwiZXhwIjoxNzA5OTk5OTk5fQ.test',
+            token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxIiwiZXhwIjo0MTAyNDQ0ODAwfQ.test',
             user: { username: 'admin', displayName: '管理员', role: 'admin' }
           }
         }),
@@ -60,23 +60,19 @@ describe('API Client', () => {
 
       await apiClient.login('admin', 'password');
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'auth_token',
-        expect.stringContaining('eyJ')
-      );
+      expect(apiClient.getToken()).toContain('eyJ');
     });
 
     it('should clear token on logout', async () => {
       const { apiClient } = await import('../../src/shared/api/client');
+      (apiClient as any).setToken('test-token');
       apiClient.logout();
-
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('auth_token');
+      expect(apiClient.getToken()).toBeNull();
     });
 
-    it('should return false for isAuthenticated when no token', async () => {
-      localStorageMock.getItem.mockReturnValue(null);
+    it('should return false for isAuthenticated when no session', async () => {
       const { apiClient } = await import('../../src/shared/api/client');
-
+      (apiClient as any).clearToken();
       expect(apiClient.isAuthenticated()).toBe(false);
     });
   });
@@ -84,8 +80,6 @@ describe('API Client', () => {
   describe('API Requests', () => {
     it('should include Authorization header when token exists', async () => {
       const testToken = 'test-jwt-token';
-      localStorageMock.getItem.mockReturnValue(testToken);
-
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, data: [] }),
@@ -102,6 +96,7 @@ describe('API Client', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/data/files'),
         expect.objectContaining({
+          credentials: 'include',
           headers: expect.objectContaining({
             Authorization: `Bearer ${testToken}`,
           }),
@@ -316,6 +311,27 @@ describe('API Client', () => {
       expect(calledUrl).toContain('/query/renewal?');
       expect(calledUrl).toContain('queryType=full');
       expect(calledUrl).toContain('targetMonth=2026-02');
+    });
+  });
+
+  describe('Session Operations', () => {
+    it('should fetch current user from /auth/me', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          data: { username: 'admin', displayName: '系统管理员', role: 'branch_admin' },
+        }),
+      });
+
+      const { apiClient } = await import('../../src/shared/api/client');
+      const user = await apiClient.getCurrentUser();
+
+      expect(user.username).toBe('admin');
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/auth/me'),
+        expect.objectContaining({ credentials: 'include' })
+      );
     });
   });
 });
