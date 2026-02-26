@@ -24,6 +24,7 @@ import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import { getRateClassByField } from './crossSellRateStatus';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { CrossSellTopSalesmanBoard } from './CrossSellTopSalesmanBoard';
+import { CrossSellOrgTrendChart } from './CrossSellOrgTrendChart';
 import {
   useCrossSellAnalysis,
   DIMENSION_LABELS,
@@ -489,6 +490,13 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           title={pendingRowValue ? `"${pendingRowValue}" 下钻到...` : '选择下钻维度'}
         />
       )}
+
+      {/* 机构推介率走势图 */}
+      <SectionTitle title="机构推介率走势图" />
+      <CrossSellOrgTrendChart
+        filters={filters}
+        vehicleCategory={vehicleCategory}
+      />
 
       {/* TOP20 业务员推介率板块 */}
       <SectionTitle title="TOP20 业务员推介率分析" />

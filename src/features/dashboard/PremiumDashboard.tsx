@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../shared/utils/export';
-import { PdfExportService } from '../../services/PdfExportService';
 import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
 import { useKpiData } from './hooks/useKpiData';
 import { useTrendData } from './hooks/useTrendData';
@@ -16,17 +15,18 @@ import { DashboardCustomizerPanel } from './components/DashboardCustomizerPanel'
 import type { DashboardSectionId, KpiCardId, KpiGroup } from './dashboardLayoutConfig';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 
-import { Logger } from '@/shared/utils/logger';
-
-const logger = new Logger('PremiumDashboard');
-
 type TimeView = 'daily' | 'weekly' | 'monthly';
 
 /**
  * 保费分析看板 - 综合分析视图
  */
-export const PremiumDashboard: React.FC = () => {
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
+interface PremiumDashboardProps {
+  showCustomizerPanel?: boolean;
+}
+
+export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
+  showCustomizerPanel = false,
+}) => {
 
   const { isDataLoaded } = useDataStatus();
 
@@ -238,19 +238,6 @@ export const PremiumDashboard: React.FC = () => {
     [sectionOrder, sectionVisibility]
   );
 
-  const handleExportPdf = async () => {
-    if (!isInitialized) return;
-    try {
-      setIsExportingPdf(true);
-      await PdfExportService.exportDashboardToPdf('premium-dashboard-content', '保费分析看板报告');
-    } catch (err) {
-      logger.error('PDF export failed', err);
-      alert('PDF导出失败，请重试');
-    } finally {
-      setIsExportingPdf(false);
-    }
-  };
-
   // Stable ref to latest refreshData — prevents effect re-firing on hook identity change
   const refreshDataRef = useRef(refreshData);
   useLayoutEffect(() => { refreshDataRef.current = refreshData; });
@@ -268,19 +255,6 @@ export const PremiumDashboard: React.FC = () => {
       id="premium-dashboard-content"
       className="p-2 sm:p-3 md:p-4 max-w-[1600px] mx-auto space-y-3 sm:space-y-4"
     >
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end bg-white p-3 sm:p-4 rounded shadow">
-        {isInitialized && (
-          <button
-            onClick={handleExportPdf}
-            disabled={isExportingPdf}
-            className="no-export px-3 py-1 bg-primary text-white text-sm rounded hover:bg-primary-dark disabled:bg-neutral-400 transition-colors w-full sm:w-auto"
-          >
-            {isExportingPdf ? '正在导出...' : '导出PDF报告'}
-          </button>
-        )}
-      </div>
-
       {(kpiError || trendError) && (
         <div className="bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded text-sm">
           {kpiError && <p>KPI 数据加载失败: {kpiError.message}</p>}
@@ -290,15 +264,19 @@ export const PremiumDashboard: React.FC = () => {
 
       {/* Dashboard Content */}
       <div className="space-y-4">
-        <DashboardCustomizerPanel
-          sectionItems={sectionItems}
-          kpiItemsByGroup={kpiItemsByGroup}
-          onToggleSection={toggleSection}
-          onMoveSection={moveSection}
-          onToggleKpi={toggleKpi}
-          onMoveKpi={moveKpi}
-          onReset={resetLayout}
-        />
+        {showCustomizerPanel && (
+          <div className="no-export">
+            <DashboardCustomizerPanel
+              sectionItems={sectionItems}
+              kpiItemsByGroup={kpiItemsByGroup}
+              onToggleSection={toggleSection}
+              onMoveSection={moveSection}
+              onToggleKpi={toggleKpi}
+              onMoveKpi={moveKpi}
+              onReset={resetLayout}
+            />
+          </div>
+        )}
 
         {visibleSections.length === 0 ? (
           <div className="bg-white p-6 rounded shadow text-center text-neutral-500">

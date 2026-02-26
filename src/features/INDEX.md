@@ -269,3 +269,14 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/hooks/usePerformanceDrilldown.ts`**: 达成率+增长率下钻分析 Hook
 - **`dashboard/hooks/usePerformanceTopSalesman.ts`**: Top20 业务员业绩分析 Hook
 - **`dashboard/PerformanceTrendChart.tsx`**: 业绩分析双趋势图组件（保费/件数）
+
+## 2026-02-26 标题栏操作与 PDF 导出布局优化
+
+### Pages 模块新增
+- **`pages/PremiumDashboardPage.tsx`**: 保费分析看板页面容器（标题右侧统一操作区：`自定义看板` + `导出PDF报告`）
+
+### Dashboard 模块调整
+- **`dashboard/PremiumDashboard.tsx`**: 移除内容区顶部导出按钮卡片；`DashboardCustomizerPanel` 改为受外部开关控制，默认不占用看板首屏空间
+
+### 导出链路调整
+- **`services/PdfExportService.ts`**: 长页面导出改为按 canvas 分页切片写入 PDF，降低边界截断与重叠风险

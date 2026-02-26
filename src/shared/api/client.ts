@@ -985,6 +985,29 @@ class ApiClient {
     return this.request('/filters/options');
   }
 
+  /**
+   * 获取机构推介率走势（最近14天，叠加柱+折线）
+   */
+  async getCrossSellOrgTrend(params?: Record<string, string>): Promise<{
+    rows: Array<{
+      date: string;
+      auto_count: number;
+      driver_count: number;
+      rate: number;
+    }>;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, value);
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/cross-sell-org-trend${query ? `?${query}` : ''}`);
+  }
+
   // ============================================
   // AI API
   // ============================================

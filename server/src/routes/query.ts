@@ -53,6 +53,7 @@ import { generateRenewalDrilldownQuery, type DrilldownDimension, type DrilldownL
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../sql/cross-sell.js';
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../sql/cross-sell-summary.js';
 import { generateCrossSellTrendQuery, type TrendGranularity } from '../sql/cross-sell-trend.js';
+import { generateCrossSellOrgTrendQuery, type CoverageCombinationFilter } from '../sql/cross-sell-org-trend.js';
 import { generateCrossSellTopSalesmanQuery, type TopSalesmanCoverage } from '../sql/cross-sell-top-salesman.js';
 import {
   generatePerformanceSummaryQuery,
@@ -1771,6 +1772,53 @@ router.get(
       growthMode as PerformanceGrowthMode,
       limit
     );
+
+    const rows = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: { rows },
+    });
+  })
+);
+
+/**
+ * GET /api/query/cross-sell-org-trend
+ * 机构推介率走势（最近14天，按日，叠加柱+推介率折线）
+ */
+const crossSellOrgTrendSchema = z.object({
+  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
+  coverageCombination: z.enum(['整体', '交三', '主全', '单交']).default('整体'),
+  days: z.coerce.number().int().min(1).max(90).default(14),
+});
+
+router.get(
+  '/cross-sell-org-trend',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = crossSellOrgTrendSchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+    const { vehicleCategory, coverageCombination, days } = extraResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const finalWhereClause = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const sql = generateCrossSellOrgTrendQuery(
+      finalWhereClause,
+      vehicleCategory as VehicleCategory,
+      coverageCombination as CoverageCombinationFilter,
+      days
+    );
+
+    logger.debug('[cross-sell-org-trend] Generated SQL', { sqlLength: sql.length });
 
     const rows = await duckdbService.query(sql);
 
