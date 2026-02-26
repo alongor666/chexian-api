@@ -255,3 +255,17 @@ widgets/table/VirtualTable.tsx
 - 统一筛选：`src/components/layout/PageFilterPanel.tsx` + `src/features/filters/AdvancedFilterPanel.tsx`
 
 历史 `Dashboard.tsx` / `FilterPanel.tsx` 相关段落视为过渡记录，不作为当前实现基线。
+
+## 2026-02-26 新增业绩分析独立页面
+
+### Pages 模块新增
+- **`pages/PerformanceAnalysisPage.tsx`**: 业绩分析独立页面容器（`/performance-analysis`，完整筛选 preset + 独立面板）
+
+### Dashboard 模块新增
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: 业绩分析主面板（险别组合业绩环比、双趋势图、达成率+增长率分布图、下钻分组、Top20业务员）
+- **`dashboard/performanceStatus.ts`**: 业绩分析状态规则（达成率区间与增长率区间）
+- **`dashboard/hooks/usePerformanceSummary.ts`**: 险别组合业绩环比数据 Hook
+- **`dashboard/hooks/usePerformanceTrend.ts`**: 车险保费/车险件数趋势数据 Hook
+- **`dashboard/hooks/usePerformanceDrilldown.ts`**: 达成率+增长率下钻分析 Hook
+- **`dashboard/hooks/usePerformanceTopSalesman.ts`**: Top20 业务员业绩分析 Hook
+- **`dashboard/PerformanceTrendChart.tsx`**: 业绩分析双趋势图组件（保费/件数）

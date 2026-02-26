@@ -128,3 +128,21 @@ export interface KpiDetailResult {
 | 2026-01-09 | kpi-detail.ts | 新增 KPI 详细数据 SQL 生成器 |
 | 2026-01-08 | truck.ts | 新增营业货车专项分析 SQL |
 | 2026-01-08 | trend.ts | 新增自然周/月视图支持 |
+
+### performance-analysis.ts
+**用途**: 业绩分析独立页面 SQL 生成器（`/performance-analysis`）  
+**状态**: 生效中（2026-02-26 新增）  
+**输出范围**:
+- 险别组合业绩环比（车险保费/车险件数/件均保费/增长率）
+- 车险保费/车险件数趋势
+- 下钻分组（达成率+增长率+结构占比）
+- Top20 业务员
+
+**关键函数**:
+- `generatePerformanceSummaryQuery()`
+- `generatePerformanceTrendQuery()`
+- `generatePerformanceDrilldownQuery()`
+- `generatePerformanceTopSalesmanQuery()`
+- `getPerformanceVehicleCategoryFilter()`
+
+| 2026-02-26 | performance-analysis.ts | 新增业绩分析独立页面 SQL 生成器与 4 个 performance 接口查询模板 |
