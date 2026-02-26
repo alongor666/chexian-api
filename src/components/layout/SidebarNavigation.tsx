@@ -37,6 +37,7 @@ const navItems: NavItem[] = [
 
 const dataNavItems: NavItem[] = [
   { path: '/dashboard', icon: LayoutDashboard, label: '仪表盘', shortLabel: '仪表' },
+  { path: '/performance-analysis', icon: TrendingUp, label: '业绩分析', shortLabel: '业绩' },
   { path: '/premium-report', icon: DollarSign, label: '保费报表', shortLabel: '报表' },
   { path: '/marketing-report', icon: Target, label: '营销战报', shortLabel: '战报' },
   { path: '/truck', icon: Truck, label: '营业货车', shortLabel: '货车' },

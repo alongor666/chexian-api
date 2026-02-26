@@ -59,6 +59,22 @@ export const formatPremiumWan = (value: number | bigint | null | undefined): str
 };
 
 /**
+ * 格式化驾意险保费（万元为单位，>=1万保留1位小数，<1万保留2位小数，不显示单位）
+ * @example formatDriverPremiumWan(15000) => "1.5"
+ * @example formatDriverPremiumWan(5000) => "0.50"
+ */
+export const formatDriverPremiumWan = (value: number | bigint | null | undefined): string => {
+  if (value === null || value === undefined) return '-';
+  const numValue = toNumber(value);
+  if (!Number.isFinite(numValue)) return '-';
+  const inWan = numValue / 10000;
+  if (Math.abs(inWan) < 1) {
+    return inWan.toFixed(2);
+  }
+  return inWan.toFixed(1);
+};
+
+/**
  * 格式化“已是万元单位”的保费（整数，千分位）
  * @example formatWanDirect(1234.56) => "1,235"
  */

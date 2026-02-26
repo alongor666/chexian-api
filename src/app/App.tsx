@@ -27,6 +27,9 @@ const RenewalPage = lazy(() =>
 const CrossSellPage = lazy(() =>
   import('../features/pages/CrossSellPage').then((m) => ({ default: m.CrossSellPage }))
 );
+const PerformanceAnalysisPage = lazy(() =>
+  import('../features/pages/PerformanceAnalysisPage').then((m) => ({ default: m.PerformanceAnalysisPage }))
+);
 const GrowthPage = lazy(() =>
   import('../features/pages/GrowthPage').then((m) => ({ default: m.GrowthPage }))
 );
@@ -106,6 +109,16 @@ function App() {
                           <PremiumDashboard />
                         </PageFilterPanel>
                       </LazyRoute>
+                    </DataGuard>
+                  </RouteAccessGuard>
+                }
+              />
+              <Route
+                path="performance-analysis"
+                element={
+                  <RouteAccessGuard routePath="/performance-analysis">
+                    <DataGuard>
+                      <LazyRoute><PerformanceAnalysisPage /></LazyRoute>
                     </DataGuard>
                   </RouteAccessGuard>
                 }

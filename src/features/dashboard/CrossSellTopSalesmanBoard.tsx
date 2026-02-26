@@ -7,7 +7,7 @@ import { memo, useState } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { useCrossSellTopSalesman } from './hooks/useCrossSellTopSalesman';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
-import { formatCount, formatPercent } from '@/shared/utils/formatters';
+import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { cardStyles, textStyles, cn } from '@/shared/styles';
 import { TopSalesmanQuadrantChart } from './TopSalesmanQuadrantChart';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
@@ -189,7 +189,7 @@ const SalesmanPanel = memo(function SalesmanPanel({
                                     <tr key={`${row.salesman_name}-${idx}`} className="hover:bg-neutral-50/50 transition-colors">
                                         <td className="py-2 px-3 text-neutral-900 font-medium whitespace-nowrap">{row.salesman_name}</td>
                                         <td className="py-2 px-3 text-neutral-600 whitespace-nowrap">{row.org_level_3}</td>
-                                        <td className="py-2 px-3 text-right text-neutral-900 whitespace-nowrap">{(row.driver_premium / 10000).toFixed(1)}</td>
+                                        <td className="py-2 px-3 text-right text-neutral-900 whitespace-nowrap">{formatDriverPremiumWan(row.driver_premium)}</td>
                                         <td className="py-2 px-3 text-right text-neutral-900 whitespace-nowrap">{formatCount(row.auto_count)}</td>
                                         <td className="py-2 px-3 text-right text-primary font-medium whitespace-nowrap">{formatPercent(row.rate)}</td>
                                         <td className="py-2 px-3 text-right text-neutral-800 whitespace-nowrap">{formatCount(row.avg_premium)}</td>

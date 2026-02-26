@@ -6,7 +6,7 @@
 import { memo, useEffect, useRef, useMemo } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '@/shared/utils/echarts';
-import { formatCount, formatPercent } from '@/shared/utils/formatters';
+import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { colors } from '@/shared/styles';
 import { classifyQuadrant, QUADRANT_META } from './crossSellRateStatus';
 import type { TopSalesmanRow } from './hooks/useCrossSellTopSalesman';
@@ -87,7 +87,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             <div style="font-weight:600;margin-bottom:4px">${val[3]} (${val[4]})</div>
             <div>推介率: <span style="font-weight:600">${formatPercent(val[0])}</span></div>
             <div>件均保费: <span style="font-weight:600">${formatCount(val[1])}</span></div>
-            <div>驾乘保费: <span style="font-weight:600">${(val[5] / 10000).toFixed(1)} 万</span></div>
+            <div>驾乘保费: <span style="font-weight:600">${formatDriverPremiumWan(val[5])} 万</span></div>
           `;
                 },
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',

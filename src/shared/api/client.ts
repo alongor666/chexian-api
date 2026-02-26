@@ -690,6 +690,111 @@ class ApiClient {
   }
 
   /**
+   * 获取业绩分析 - 险别组合业绩环比
+   */
+  async getPerformanceSummary(params?: Record<string, string>): Promise<{
+    rows: Array<{
+      coverage_combination: string;
+      premium: number;
+      auto_count: number;
+      avg_premium: number;
+      growth_rate: number | null;
+    }>;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, value);
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/performance-summary${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取业绩分析 - 车险保费/件数走势
+   */
+  async getPerformanceTrend(params?: Record<string, string>): Promise<{
+    rows: Array<{
+      time_period: string;
+      premium: number;
+      auto_count: number;
+    }>;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, value);
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/performance-trend${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取业绩分析 - 下钻数据
+   */
+  async getPerformanceDrilldown(params: {
+    drillPath?: Array<{ dimension: string; value: string }>;
+    groupBy?: string;
+    [key: string]: any;
+  }): Promise<{
+    summary: Record<string, unknown> | null;
+    rows: Array<Record<string, unknown>>;
+    drillPath: Array<{ dimension: string; value: string }>;
+    groupBy: string | null;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params.drillPath) {
+      searchParams.append('drillPath', JSON.stringify(params.drillPath));
+    }
+    if (params.groupBy) {
+      searchParams.append('groupBy', params.groupBy);
+    }
+    Object.entries(params).forEach(([key, value]) => {
+      if (key !== 'drillPath' && key !== 'groupBy' && value !== undefined && value !== null) {
+        searchParams.append(key, String(value));
+      }
+    });
+    const query = searchParams.toString();
+    return this.request(`/query/performance-drilldown${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取业绩分析 - TOP20 业务员
+   */
+  async getPerformanceTopSalesman(params?: Record<string, string>): Promise<{
+    rows: Array<{
+      dimension_name: string;
+      org_level_3: string;
+      premium: number;
+      auto_count: number;
+      achievement_rate: number | null;
+      growth_rate: number | null;
+      nev_rate: number;
+      renewal_rate: number;
+      transfer_business_rate: number;
+      new_car_rate: number;
+      transfer_rate: number;
+    }>;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, value);
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/performance-top-salesman${query ? `?${query}` : ''}`);
+  }
+
+  /**
    * 获取营销战报数据
    */
   async getMarketingReport(params?: Record<string, any>): Promise<any[]> {

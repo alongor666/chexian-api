@@ -11,3 +11,4 @@ export { CostPage } from './CostPage';
 export { ComparisonPage } from './ComparisonPage';
 export { CoefficientPage } from './CoefficientPage';
 export { MarketingReportPage } from './MarketingReportPage';
+export { PerformanceAnalysisPage } from './PerformanceAnalysisPage';

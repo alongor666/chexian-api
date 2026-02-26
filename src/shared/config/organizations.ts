@@ -135,7 +135,7 @@ export const DEFAULT_USER_PERMISSIONS: UserPermission[] = [
     username: 'jiachengxian',
     displayName: 'jiachengxian',
     role: UserRole.BRANCH_ADMIN,
-    allowedRoutes: ['/dashboard', '/cross-sell'],
+    allowedRoutes: ['/dashboard', '/cross-sell', '/performance-analysis'],
     defaultRoute: '/cross-sell',
   },
   // 各三级机构用户（可按需添加）

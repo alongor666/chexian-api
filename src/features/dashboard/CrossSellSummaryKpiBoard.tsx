@@ -11,7 +11,7 @@
 import { memo, useMemo } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { textStyles, cardStyles, numericStyles, cn, colorClasses } from '@/shared/styles';
-import { formatCount, formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
+import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { useCrossSellTimePeriod, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { getRateClassByField } from './crossSellRateStatus';
 
@@ -64,7 +64,7 @@ interface TimePeriodData {
 }
 
 function formatPremium(value: number): string {
-  return formatPremiumWan(value * 10000);
+  return formatDriverPremiumWan(value * 10000);
 }
 
 function getRateColorClass(coverageKey: string, value: number): string {

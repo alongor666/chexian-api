@@ -54,6 +54,18 @@ import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } f
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../sql/cross-sell-summary.js';
 import { generateCrossSellTrendQuery, type TrendGranularity } from '../sql/cross-sell-trend.js';
 import { generateCrossSellTopSalesmanQuery, type TopSalesmanCoverage } from '../sql/cross-sell-top-salesman.js';
+import {
+  generatePerformanceSummaryQuery,
+  generatePerformanceTrendQuery,
+  generatePerformanceDrilldownQuery,
+  generatePerformanceTopSalesmanQuery,
+  type PerformanceVehicleCategory,
+  type PerformanceGrowthMode,
+  type PerformanceTimePeriod,
+  type PerformanceTrendGranularity,
+  type PerformanceDimension,
+  type PerformanceDrilldownStep,
+} from '../sql/performance-analysis.js';
 import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery } from '../sql/marketing-report.js';
 import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../sql/premium-report.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../sql/premiumPlan.js';
@@ -1497,6 +1509,233 @@ router.get(
       data: {
         rows: result,
       },
+    });
+  })
+);
+
+// ============================================================
+// Performance Analysis Endpoints
+// ============================================================
+
+const PERFORMANCE_DIMENSIONS = [
+  'org_level_3', 'team', 'salesman', 'customer_category',
+  'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
+] as const;
+
+const performanceSummarySchema = z.object({
+  vehicleCategory: z.enum(['passenger', 'business_passenger', 'truck', 'motorcycle']).default('passenger'),
+  timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
+  growthMode: z.enum(['mom', 'yoy']).default('mom'),
+});
+
+router.get(
+  '/performance-summary',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = performanceSummarySchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+    const { vehicleCategory, timePeriod, growthMode } = extraResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const whereWithDate = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+    const whereWithoutDate = buildWhereFromFilterParamsWithoutDate(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const sql = generatePerformanceSummaryQuery(
+      whereWithDate,
+      whereWithoutDate,
+      vehicleCategory as PerformanceVehicleCategory,
+      timePeriod as PerformanceTimePeriod,
+      growthMode as PerformanceGrowthMode
+    );
+
+    const rows = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: { rows },
+    });
+  })
+);
+
+const performanceTrendSchema = z.object({
+  vehicleCategory: z.enum(['passenger', 'business_passenger', 'truck', 'motorcycle']).default('passenger'),
+  granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
+});
+
+router.get(
+  '/performance-trend',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = performanceTrendSchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+    const { vehicleCategory, granularity } = extraResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const whereWithDate = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const sql = generatePerformanceTrendQuery(
+      whereWithDate,
+      vehicleCategory as PerformanceVehicleCategory,
+      granularity as PerformanceTrendGranularity
+    );
+
+    const rows = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: { rows },
+    });
+  })
+);
+
+const performanceDrilldownSchema = z.object({
+  drillPath: z.string().optional().default('[]'),
+  groupBy: z.enum(PERFORMANCE_DIMENSIONS).optional(),
+  vehicleCategory: z.enum(['passenger', 'business_passenger', 'truck', 'motorcycle']).default('passenger'),
+  timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
+  growthMode: z.enum(['mom', 'yoy']).default('mom'),
+});
+
+router.get(
+  '/performance-drilldown',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = performanceDrilldownSchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+    const { vehicleCategory, timePeriod, growthMode } = extraResult.data;
+
+    let drillPath: PerformanceDrilldownStep[] = [];
+    try {
+      const parsed = JSON.parse(extraResult.data.drillPath);
+      if (Array.isArray(parsed)) {
+        drillPath = parsed.map((s: any) => ({
+          dimension: String(s.dimension) as PerformanceDimension,
+          value: String(s.value),
+        }));
+      }
+    } catch {
+      throw new AppError(400, 'Invalid drillPath JSON');
+    }
+
+    const groupBy = extraResult.data.groupBy as PerformanceDimension | undefined;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const whereWithDate = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+    const whereWithoutDate = buildWhereFromFilterParamsWithoutDate(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const [summaryRows, drilldownRows] = await Promise.all([
+      duckdbService.query(
+        generatePerformanceDrilldownQuery(
+          whereWithDate,
+          whereWithoutDate,
+          vehicleCategory as PerformanceVehicleCategory,
+          timePeriod as PerformanceTimePeriod,
+          growthMode as PerformanceGrowthMode,
+          drillPath,
+          null
+        )
+      ),
+      groupBy
+        ? duckdbService.query(
+            generatePerformanceDrilldownQuery(
+              whereWithDate,
+              whereWithoutDate,
+              vehicleCategory as PerformanceVehicleCategory,
+              timePeriod as PerformanceTimePeriod,
+              growthMode as PerformanceGrowthMode,
+              drillPath,
+              groupBy
+            )
+          )
+        : Promise.resolve([]),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        summary: summaryRows[0] || null,
+        rows: drilldownRows,
+        drillPath,
+        groupBy: groupBy || null,
+      },
+    });
+  })
+);
+
+const performanceTopSalesmanSchema = z.object({
+  vehicleCategory: z.enum(['passenger', 'business_passenger', 'truck', 'motorcycle']).default('passenger'),
+  timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
+  growthMode: z.enum(['mom', 'yoy']).default('mom'),
+  limit: z.coerce.number().default(20),
+});
+
+router.get(
+  '/performance-top-salesman',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = performanceTopSalesmanSchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+    const { vehicleCategory, timePeriod, growthMode, limit } = extraResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const whereWithDate = buildWhereFromFilterParams(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+    const whereWithoutDate = buildWhereFromFilterParamsWithoutDate(
+      filterResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const sql = generatePerformanceTopSalesmanQuery(
+      whereWithDate,
+      whereWithoutDate,
+      vehicleCategory as PerformanceVehicleCategory,
+      timePeriod as PerformanceTimePeriod,
+      growthMode as PerformanceGrowthMode,
+      limit
+    );
+
+    const rows = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: { rows },
     });
   })
 );
