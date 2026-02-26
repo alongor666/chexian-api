@@ -59,10 +59,13 @@ import {
   generatePerformanceTrendQuery,
   generatePerformanceDrilldownQuery,
   generatePerformanceTopSalesmanQuery,
+  mapLegacyVehicleCategoryToSegmentTag,
+  type PerformanceSegmentTag,
   type PerformanceVehicleCategory,
   type PerformanceGrowthMode,
   type PerformanceTimePeriod,
   type PerformanceTrendGranularity,
+  type PerformanceSummaryExpandDims,
   type PerformanceDimension,
   type PerformanceDrilldownStep,
 } from '../sql/performance-analysis.js';
@@ -1522,10 +1525,39 @@ const PERFORMANCE_DIMENSIONS = [
   'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
 ] as const;
 
+const PERFORMANCE_SEGMENT_TAGS = [
+  'all',
+  'non_business_passenger',
+  'business_passenger',
+  'business_truck',
+  'non_business_truck',
+  'motorcycle',
+  // 兼容旧参数
+  'truck',
+] as const;
+
+const PERFORMANCE_LEGACY_CATEGORIES = ['passenger', 'business_passenger', 'truck', 'motorcycle'] as const;
+const PERFORMANCE_EXPAND_DIMS = ['none', 'energy', 'business_nature', 'energy_business_nature'] as const;
+
+function resolvePerformanceSegmentTag(data: {
+  segmentTag?: string;
+  vehicleCategory?: string;
+}): PerformanceSegmentTag {
+  if (data.segmentTag) {
+    return data.segmentTag as PerformanceSegmentTag;
+  }
+  if (data.vehicleCategory) {
+    return mapLegacyVehicleCategoryToSegmentTag(data.vehicleCategory as PerformanceVehicleCategory);
+  }
+  return 'all';
+}
+
 const performanceSummarySchema = z.object({
-  vehicleCategory: z.enum(['passenger', 'business_passenger', 'truck', 'motorcycle']).default('passenger'),
+  segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
+  vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
   timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
   growthMode: z.enum(['mom', 'yoy']).default('mom'),
+  expandDims: z.enum(PERFORMANCE_EXPAND_DIMS).default('none'),
 });
 
 router.get(
@@ -1535,7 +1567,8 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, timePeriod, growthMode } = extraResult.data;
+    const { timePeriod, growthMode, expandDims } = extraResult.data;
+    const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
     const filterResult = commonFilterSchema.safeParse(req.query);
     if (!filterResult.success) {
@@ -1554,9 +1587,10 @@ router.get(
     const sql = generatePerformanceSummaryQuery(
       whereWithDate,
       whereWithoutDate,
-      vehicleCategory as PerformanceVehicleCategory,
+      segmentTag as PerformanceSegmentTag,
       timePeriod as PerformanceTimePeriod,
-      growthMode as PerformanceGrowthMode
+      growthMode as PerformanceGrowthMode,
+      expandDims as PerformanceSummaryExpandDims
     );
 
     const rows = await duckdbService.query(sql);
@@ -1569,8 +1603,10 @@ router.get(
 );
 
 const performanceTrendSchema = z.object({
-  vehicleCategory: z.enum(['passenger', 'business_passenger', 'truck', 'motorcycle']).default('passenger'),
+  segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
+  vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
   granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
+  growthMode: z.enum(['mom', 'yoy']).default('mom'),
 });
 
 router.get(
@@ -1580,7 +1616,8 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, granularity } = extraResult.data;
+    const { granularity } = extraResult.data;
+    const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
     const filterResult = commonFilterSchema.safeParse(req.query);
     if (!filterResult.success) {
@@ -1594,7 +1631,7 @@ router.get(
 
     const sql = generatePerformanceTrendQuery(
       whereWithDate,
-      vehicleCategory as PerformanceVehicleCategory,
+      segmentTag as PerformanceSegmentTag,
       granularity as PerformanceTrendGranularity
     );
 
@@ -1610,7 +1647,8 @@ router.get(
 const performanceDrilldownSchema = z.object({
   drillPath: z.string().optional().default('[]'),
   groupBy: z.enum(PERFORMANCE_DIMENSIONS).optional(),
-  vehicleCategory: z.enum(['passenger', 'business_passenger', 'truck', 'motorcycle']).default('passenger'),
+  segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
+  vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
   timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
   growthMode: z.enum(['mom', 'yoy']).default('mom'),
 });
@@ -1622,7 +1660,8 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, timePeriod, growthMode } = extraResult.data;
+    const { timePeriod, growthMode } = extraResult.data;
+    const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
     let drillPath: PerformanceDrilldownStep[] = [];
     try {
@@ -1658,7 +1697,7 @@ router.get(
         generatePerformanceDrilldownQuery(
           whereWithDate,
           whereWithoutDate,
-          vehicleCategory as PerformanceVehicleCategory,
+          segmentTag as PerformanceSegmentTag,
           timePeriod as PerformanceTimePeriod,
           growthMode as PerformanceGrowthMode,
           drillPath,
@@ -1670,7 +1709,7 @@ router.get(
             generatePerformanceDrilldownQuery(
               whereWithDate,
               whereWithoutDate,
-              vehicleCategory as PerformanceVehicleCategory,
+              segmentTag as PerformanceSegmentTag,
               timePeriod as PerformanceTimePeriod,
               growthMode as PerformanceGrowthMode,
               drillPath,
@@ -1693,7 +1732,8 @@ router.get(
 );
 
 const performanceTopSalesmanSchema = z.object({
-  vehicleCategory: z.enum(['passenger', 'business_passenger', 'truck', 'motorcycle']).default('passenger'),
+  segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
+  vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
   timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
   growthMode: z.enum(['mom', 'yoy']).default('mom'),
   limit: z.coerce.number().default(20),
@@ -1706,7 +1746,8 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, timePeriod, growthMode, limit } = extraResult.data;
+    const { timePeriod, growthMode, limit } = extraResult.data;
+    const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
     const filterResult = commonFilterSchema.safeParse(req.query);
     if (!filterResult.success) {
@@ -1725,7 +1766,7 @@ router.get(
     const sql = generatePerformanceTopSalesmanQuery(
       whereWithDate,
       whereWithoutDate,
-      vehicleCategory as PerformanceVehicleCategory,
+      segmentTag as PerformanceSegmentTag,
       timePeriod as PerformanceTimePeriod,
       growthMode as PerformanceGrowthMode,
       limit

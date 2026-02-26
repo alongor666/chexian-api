@@ -74,6 +74,7 @@ export interface FilterConfig extends FilterFieldsConfig, FilterSelectionModeCon
  */
 export type FilterPresetName =
   | 'full'
+  | 'performance'
   | 'growth'
   | 'renewal'
   | 'renewalDetail'
@@ -102,6 +103,26 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
     organization: true,
     salesman: true,
     customerCategory: true,
+    coverageCombination: true,
+    renewalMode: true,
+    basicOptions: true,
+    quickCombos: true,
+    organizationMode: 'multi',
+    salesmanMode: 'multi',
+  },
+
+  /**
+   * 业绩分析预设
+   * - 客户类别由页面标签控制，筛选器中隐藏
+   */
+  performance: {
+    dateCriteria: true,
+    allowedYears: 'currentAndPrevious',
+    analysisYear: true,
+    dateRange: true,
+    organization: true,
+    salesman: true,
+    customerCategory: false,
     coverageCombination: true,
     renewalMode: true,
     basicOptions: true,

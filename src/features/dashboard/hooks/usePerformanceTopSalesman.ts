@@ -5,17 +5,17 @@ import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import type {
   PerformanceGrowthMode,
+  PerformanceSegmentTag,
   PerformanceTimePeriod,
-  PerformanceVehicleCategory,
 } from './usePerformanceSummary';
 
 export interface PerformanceTopSalesmanRow {
   dimension_name: string;
-  org_level_3: string;
   premium: number;
   auto_count: number;
   achievement_rate: number | null;
   growth_rate: number | null;
+  quadrant?: string;
   nev_rate: number;
   renewal_rate: number;
   transfer_business_rate: number;
@@ -25,7 +25,7 @@ export interface PerformanceTopSalesmanRow {
 
 interface UsePerformanceTopSalesmanProps {
   filters: AdvancedFilterState;
-  vehicleCategory: PerformanceVehicleCategory;
+  segmentTag: PerformanceSegmentTag;
   timePeriod: PerformanceTimePeriod;
   growthMode: PerformanceGrowthMode;
   enabled?: boolean;
@@ -39,7 +39,7 @@ interface UsePerformanceTopSalesmanReturn {
 
 export function usePerformanceTopSalesman({
   filters,
-  vehicleCategory,
+  segmentTag,
   timePeriod,
   growthMode,
   enabled = true,
@@ -60,7 +60,7 @@ export function usePerformanceTopSalesman({
     try {
       const params: Record<string, string> = {
         ...buildFilterParams(filters, { isOrgUser, userOrg }),
-        vehicleCategory,
+        segmentTag,
         timePeriod,
         growthMode,
       };
@@ -70,11 +70,11 @@ export function usePerformanceTopSalesman({
 
       setRows((result?.rows || []).map((row) => ({
         dimension_name: String(row.dimension_name ?? ''),
-        org_level_3: String(row.org_level_3 ?? ''),
         premium: Number(row.premium ?? 0),
         auto_count: Number(row.auto_count ?? 0),
         achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
         growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
+        quadrant: row.quadrant == null ? undefined : String(row.quadrant),
         nev_rate: Number(row.nev_rate ?? 0),
         renewal_rate: Number(row.renewal_rate ?? 0),
         transfer_business_rate: Number(row.transfer_business_rate ?? 0),
@@ -89,7 +89,7 @@ export function usePerformanceTopSalesman({
         setLoading(false);
       }
     }
-  }, [enabled, filters, growthMode, isOrgUser, timePeriod, userOrg, vehicleCategory]);
+  }, [enabled, filters, growthMode, isOrgUser, segmentTag, timePeriod, userOrg]);
 
   useEffect(() => {
     fetchData();
@@ -97,4 +97,3 @@ export function usePerformanceTopSalesman({
 
   return { rows, loading, error };
 }
-

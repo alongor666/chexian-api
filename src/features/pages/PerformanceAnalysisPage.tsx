@@ -7,7 +7,7 @@ export const PerformanceAnalysisPage: React.FC = () => {
   const { filters } = useGlobalFilters();
 
   return (
-    <PageFilterPanel preset="full" title="业绩分析">
+    <PageFilterPanel preset="performance" title="业绩分析">
       <PerformanceAnalysisPanel filters={filters} />
     </PageFilterPanel>
   );

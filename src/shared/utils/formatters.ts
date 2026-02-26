@@ -86,6 +86,21 @@ export const formatWanDirect = (value: number | bigint | null | undefined): stri
 };
 
 /**
+ * 格式化“已是万元单位”的保费（>=1 保留1位，<1 保留2位，不显示单位）
+ * @example formatWanAdaptive(1.28) => "1.3"
+ * @example formatWanAdaptive(0.58) => "0.58"
+ */
+export const formatWanAdaptive = (value: number | bigint | null | undefined): string => {
+  if (value === null || value === undefined) return '-';
+  const numValue = toNumber(value);
+  if (!Number.isFinite(numValue)) return '-';
+  if (Math.abs(numValue) < 1) {
+    return numValue.toFixed(2);
+  }
+  return numValue.toFixed(1);
+};
+
+/**
  * 格式化图表Y轴数值（纯数字，无单位，用于图表标签）
  * @example formatChartValue(12345678) => "1235" (万元)
  */

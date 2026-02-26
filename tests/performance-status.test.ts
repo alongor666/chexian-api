@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyAchievementBand,
   classifyGrowthBand,
+  classifyPerformanceQuadrant,
   getAchievementBandLabel,
   getGrowthBandLabel,
+  PERFORMANCE_ACHIEVEMENT_THRESHOLD,
+  PERFORMANCE_GROWTH_THRESHOLD,
 } from '../src/features/dashboard/performanceStatus';
 
 describe('performance status rules', () => {
@@ -43,5 +46,21 @@ describe('performance status rules', () => {
     expect(getGrowthBandLabel('abnormal')).toBe('异常');
     expect(getGrowthBandLabel('danger')).toBe('危险');
     expect(getGrowthBandLabel('negative')).toBe('负增长');
+  });
+
+  it('should classify performance quadrant boundaries', () => {
+    expect(
+      classifyPerformanceQuadrant(PERFORMANCE_ACHIEVEMENT_THRESHOLD, PERFORMANCE_GROWTH_THRESHOLD)
+    ).toBe('high_growth_high_achievement');
+    expect(
+      classifyPerformanceQuadrant(PERFORMANCE_ACHIEVEMENT_THRESHOLD - 0.01, PERFORMANCE_GROWTH_THRESHOLD)
+    ).toBe('high_growth_low_achievement');
+    expect(
+      classifyPerformanceQuadrant(PERFORMANCE_ACHIEVEMENT_THRESHOLD, PERFORMANCE_GROWTH_THRESHOLD - 0.01)
+    ).toBe('low_growth_high_achievement');
+    expect(
+      classifyPerformanceQuadrant(PERFORMANCE_ACHIEVEMENT_THRESHOLD - 0.01, PERFORMANCE_GROWTH_THRESHOLD - 0.01)
+    ).toBe('low_growth_low_achievement');
+    expect(classifyPerformanceQuadrant(null, 10)).toBe('unknown');
   });
 });

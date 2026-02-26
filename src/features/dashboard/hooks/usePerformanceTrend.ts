@@ -3,7 +3,7 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
-import type { PerformanceVehicleCategory } from './usePerformanceSummary';
+import type { PerformanceSegmentTag } from './usePerformanceSummary';
 
 export type PerformanceTrendGranularity = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
@@ -13,27 +13,34 @@ export interface PerformanceTrendPoint {
   auto_count: number;
 }
 
+export interface PerformanceTrendSeries {
+  line_key: string;
+  line_label: string;
+  line_order: number;
+  points: PerformanceTrendPoint[];
+}
+
 interface UsePerformanceTrendProps {
   filters: AdvancedFilterState;
-  vehicleCategory: PerformanceVehicleCategory;
+  segmentTag: PerformanceSegmentTag;
   granularity: PerformanceTrendGranularity;
   enabled?: boolean;
 }
 
 interface UsePerformanceTrendResult {
-  rows: PerformanceTrendPoint[];
+  series: PerformanceTrendSeries[];
   loading: boolean;
   error: string | null;
 }
 
 export function usePerformanceTrend({
   filters,
-  vehicleCategory,
+  segmentTag,
   granularity,
   enabled = true,
 }: UsePerformanceTrendProps): UsePerformanceTrendResult {
   const { isOrgUser, userOrg } = useRBAC();
-  const [rows, setRows] = useState<PerformanceTrendPoint[]>([]);
+  const [series, setSeries] = useState<PerformanceTrendSeries[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchIdRef = useRef(0);
@@ -48,20 +55,45 @@ export function usePerformanceTrend({
     try {
       const params: Record<string, string> = {
         ...buildFilterParams(filters, { isOrgUser, userOrg }),
-        vehicleCategory,
+        segmentTag,
         granularity,
       };
 
       const result = await apiClient.getPerformanceTrend(params);
       if (fetchId !== fetchIdRef.current) return;
 
-      setRows(
-        (result?.rows || []).map((row) => ({
+      const grouped = new Map<string, PerformanceTrendSeries>();
+      (result?.rows || []).forEach((row) => {
+        const lineKey = String(row.line_key ?? 'overall');
+        const current = grouped.get(lineKey);
+        if (!current) {
+          grouped.set(lineKey, {
+            line_key: lineKey,
+            line_label: String(row.line_label ?? lineKey),
+            line_order: Number(row.line_order ?? 99),
+            points: [{
+              time_period: String(row.time_period ?? ''),
+              premium: Number(row.premium ?? 0),
+              auto_count: Number(row.auto_count ?? 0),
+            }],
+          });
+          return;
+        }
+        current.points.push({
           time_period: String(row.time_period ?? ''),
           premium: Number(row.premium ?? 0),
           auto_count: Number(row.auto_count ?? 0),
-        }))
-      );
+        });
+      });
+
+      const mapped = Array.from(grouped.values())
+        .sort((a, b) => a.line_order - b.line_order)
+        .map((item) => ({
+          ...item,
+          points: item.points.sort((a, b) => a.time_period.localeCompare(b.time_period)),
+        }));
+
+      setSeries(mapped);
     } catch (err) {
       if (fetchId !== fetchIdRef.current) return;
       setError(err instanceof Error ? err.message : String(err));
@@ -70,12 +102,11 @@ export function usePerformanceTrend({
         setLoading(false);
       }
     }
-  }, [enabled, filters, granularity, isOrgUser, userOrg, vehicleCategory]);
+  }, [enabled, filters, granularity, isOrgUser, segmentTag, userOrg]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  return { rows, loading, error };
+  return { series, loading, error };
 }
-

@@ -14,7 +14,7 @@ import type { FilterPresetName } from '../../shared/types/filters';
 const ROUTE_PRESET_MAP: Record<string, FilterPresetName | null> = {
   '/': null,                    // 首页 - 无筛选器
   '/dashboard': 'full',         // 仪表盘 - 完整筛选
-  '/performance-analysis': 'full', // 业绩分析
+  '/performance-analysis': 'performance', // 业绩分析
   '/premium-report': 'report',  // 保费报表
   '/marketing-report': 'marketingReport', // 营销战报
   '/truck': 'full',             // 营业货车

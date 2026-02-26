@@ -4,12 +4,22 @@ import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 
-export type PerformanceVehicleCategory = 'passenger' | 'business_passenger' | 'truck' | 'motorcycle';
+export type PerformanceSegmentTag =
+  | 'all'
+  | 'non_business_passenger'
+  | 'business_passenger'
+  | 'business_truck'
+  | 'non_business_truck'
+  | 'motorcycle';
 export type PerformanceTimePeriod = 'day' | 'week' | 'month' | 'quarter' | 'year';
 export type PerformanceGrowthMode = 'mom' | 'yoy';
+export type PerformanceSummaryExpandDims = 'none' | 'energy' | 'business_nature' | 'energy_business_nature';
 
 export interface PerformanceSummaryRow {
   coverage_combination: string;
+  row_label: string;
+  row_level: number;
+  expand_key: string | null;
   premium: number;
   auto_count: number;
   avg_premium: number;
@@ -18,9 +28,10 @@ export interface PerformanceSummaryRow {
 
 interface UsePerformanceSummaryProps {
   filters: AdvancedFilterState;
-  vehicleCategory: PerformanceVehicleCategory;
+  segmentTag: PerformanceSegmentTag;
   timePeriod: PerformanceTimePeriod;
   growthMode: PerformanceGrowthMode;
+  expandDims: PerformanceSummaryExpandDims;
   enabled?: boolean;
 }
 
@@ -32,9 +43,10 @@ interface UsePerformanceSummaryResult {
 
 export function usePerformanceSummary({
   filters,
-  vehicleCategory,
+  segmentTag,
   timePeriod,
   growthMode,
+  expandDims,
   enabled = true,
 }: UsePerformanceSummaryProps): UsePerformanceSummaryResult {
   const { isOrgUser, userOrg } = useRBAC();
@@ -53,9 +65,10 @@ export function usePerformanceSummary({
     try {
       const params: Record<string, string> = {
         ...buildFilterParams(filters, { isOrgUser, userOrg }),
-        vehicleCategory,
+        segmentTag,
         timePeriod,
         growthMode,
+        expandDims,
       };
 
       const result = await apiClient.getPerformanceSummary(params);
@@ -63,6 +76,9 @@ export function usePerformanceSummary({
 
       const mapped = (result?.rows || []).map((row) => ({
         coverage_combination: String(row.coverage_combination ?? ''),
+        row_label: String(row.row_label ?? row.coverage_combination ?? ''),
+        row_level: Number(row.row_level ?? 0),
+        expand_key: row.expand_key == null ? null : String(row.expand_key),
         premium: Number(row.premium ?? 0),
         auto_count: Number(row.auto_count ?? 0),
         avg_premium: Number(row.avg_premium ?? 0),
@@ -78,7 +94,7 @@ export function usePerformanceSummary({
         setLoading(false);
       }
     }
-  }, [enabled, filters, growthMode, isOrgUser, timePeriod, userOrg, vehicleCategory]);
+  }, [enabled, expandDims, filters, growthMode, isOrgUser, segmentTag, timePeriod, userOrg]);
 
   useEffect(() => {
     fetchData();
@@ -86,4 +102,3 @@ export function usePerformanceSummary({
 
   return { rows, loading, error };
 }
-

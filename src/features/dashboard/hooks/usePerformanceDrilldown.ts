@@ -5,8 +5,8 @@ import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import type {
   PerformanceGrowthMode,
+  PerformanceSegmentTag,
   PerformanceTimePeriod,
-  PerformanceVehicleCategory,
 } from './usePerformanceSummary';
 
 export type PerformanceDimension =
@@ -32,6 +32,7 @@ export interface PerformanceRow {
   auto_count: number;
   achievement_rate: number | null;
   growth_rate: number | null;
+  quadrant?: string;
   nev_rate: number;
   renewal_rate: number;
   transfer_business_rate: number;
@@ -65,7 +66,7 @@ const ALL_DIMENSIONS: PerformanceDimension[] = [
 
 interface UsePerformanceDrilldownProps {
   filters: AdvancedFilterState;
-  vehicleCategory: PerformanceVehicleCategory;
+  segmentTag: PerformanceSegmentTag;
   timePeriod: PerformanceTimePeriod;
   growthMode: PerformanceGrowthMode;
   enabled?: boolean;
@@ -93,6 +94,7 @@ function mapRow(raw: Record<string, unknown>): PerformanceRow {
     auto_count: Number(raw.auto_count ?? 0),
     achievement_rate: raw.achievement_rate == null ? null : Number(raw.achievement_rate),
     growth_rate: raw.growth_rate == null ? null : Number(raw.growth_rate),
+    quadrant: raw.quadrant == null ? undefined : String(raw.quadrant),
     nev_rate: Number(raw.nev_rate ?? 0),
     renewal_rate: Number(raw.renewal_rate ?? 0),
     transfer_business_rate: Number(raw.transfer_business_rate ?? 0),
@@ -103,7 +105,7 @@ function mapRow(raw: Record<string, unknown>): PerformanceRow {
 
 export function usePerformanceDrilldown({
   filters,
-  vehicleCategory,
+  segmentTag,
   timePeriod,
   growthMode,
   enabled = true,
@@ -153,7 +155,7 @@ export function usePerformanceDrilldown({
         ...filterParams,
         drillPath: drillPath.map((item) => ({ dimension: item.dimension, value: item.value })),
         groupBy: currentGroupBy || undefined,
-        vehicleCategory,
+        segmentTag,
         timePeriod,
         growthMode,
       });
@@ -169,7 +171,7 @@ export function usePerformanceDrilldown({
         setLoading(false);
       }
     }
-  }, [currentGroupBy, drillPath, enabled, filters, growthMode, isOrgUser, timePeriod, userOrg, vehicleCategory]);
+  }, [currentGroupBy, drillPath, enabled, filters, growthMode, isOrgUser, segmentTag, timePeriod, userOrg]);
 
   useEffect(() => {
     fetchData();
@@ -229,4 +231,3 @@ export function usePerformanceDrilldown({
     canGoToTop,
   };
 }
-

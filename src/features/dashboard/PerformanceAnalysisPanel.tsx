@@ -6,15 +6,18 @@ import type { TabItem } from '@/shared/ui/Tabs';
 import { RBACBreadcrumb } from '@/shared/ui/RBACBreadcrumb';
 import { useDataStatus } from '@/shared/contexts/DataContext';
 import { echarts } from '@/shared/utils/echarts';
-import { formatCount, formatPercent, formatWanDirect } from '@/shared/utils/formatters';
+import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
 import { cardStyles, cn, colorClasses, colors, textStyles } from '@/shared/styles';
 import {
   classifyAchievementBand,
   classifyGrowthBand,
-  getAchievementBandLabel,
+  classifyPerformanceQuadrant,
   getAchievementTextClass,
-  getGrowthBandLabel,
   getGrowthTextClass,
+  getQuadrantLabel,
+  PERFORMANCE_ACHIEVEMENT_THRESHOLD,
+  PERFORMANCE_GROWTH_THRESHOLD,
+  PERFORMANCE_QUADRANT_META,
 } from './performanceStatus';
 import {
   PERFORMANCE_DIMENSION_LABELS,
@@ -26,7 +29,8 @@ import {
   usePerformanceSummary,
   type PerformanceGrowthMode,
   type PerformanceTimePeriod,
-  type PerformanceVehicleCategory,
+  type PerformanceSegmentTag,
+  type PerformanceSummaryExpandDims,
   type PerformanceSummaryRow,
 } from './hooks/usePerformanceSummary';
 import { usePerformanceTrend } from './hooks/usePerformanceTrend';
@@ -37,10 +41,12 @@ interface PerformanceAnalysisPanelProps {
   filters: AdvancedFilterState;
 }
 
-const VEHICLE_TABS: TabItem[] = [
-  { key: 'passenger', label: '非营业客车' },
-  { key: 'business_passenger', label: '营业客车' },
-  { key: 'truck', label: '货车' },
+const SEGMENT_TABS: TabItem[] = [
+  { key: 'all', label: '全部' },
+  { key: 'non_business_passenger', label: '非营客' },
+  { key: 'business_passenger', label: '营客' },
+  { key: 'business_truck', label: '营货' },
+  { key: 'non_business_truck', label: '非营货' },
   { key: 'motorcycle', label: '摩托车' },
 ];
 
@@ -57,9 +63,14 @@ const GROWTH_MODE_TABS: TabItem[] = [
   { key: 'yoy', label: '同比' },
 ];
 
+const EXPAND_DIMS_TABS: TabItem[] = [
+  { key: 'none', label: '不展开' },
+  { key: 'energy', label: '油电' },
+  { key: 'business_nature', label: '续新转' },
+  { key: 'energy_business_nature', label: '油电+续新转' },
+];
+
 const SUMMARY_ORDER = ['整体', '主全', '交三', '单交'];
-const ACHIEVEMENT_LINE_HINTS = ['105%', '100%', '95%', '90%'];
-const GROWTH_LINE_HINTS = ['15%', '10%', '5%', '0%'];
 
 function mapTimePeriodToTrendGranularity(timePeriod: PerformanceTimePeriod): 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' {
   switch (timePeriod) {
@@ -88,7 +99,7 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 function formatPremiumWanDisplay(value: number): string {
-  return `${formatWanDirect(value)}万`;
+  return formatWanAdaptive(value);
 }
 
 function formatAvgPremiumDisplay(value: number): string {
@@ -132,40 +143,42 @@ function DistributionChart({
     const filtered = rows.filter((row) => row.achievement_rate !== null && row.growth_rate !== null);
     const maxCount = Math.max(...filtered.map((item) => safeNumber(item.auto_count)), 1);
 
-    const getPointColor = (growthRate: number) => {
-      switch (classifyGrowthBand(growthRate)) {
-        case 'excellent':
-          return colors.success.DEFAULT;
-        case 'healthy':
-          return colors.primary.DEFAULT;
-        case 'abnormal':
-          return colors.warning.DEFAULT;
-        case 'danger':
-          return colors.danger.DEFAULT;
-        case 'negative':
-          return colors.neutral[600];
-        default:
-          return colors.neutral[400];
-      }
-    };
-
     return filtered.map((row) => {
       const achievement = safeNumber(row.achievement_rate);
       const growth = safeNumber(row.growth_rate);
       const autoCount = Math.max(0, safeNumber(row.auto_count));
+      const quadrant = classifyPerformanceQuadrant(achievement, growth);
       const symbolSize = 12 + (autoCount / maxCount) * 18;
+      const color = quadrant === 'unknown'
+        ? colors.neutral[400]
+        : PERFORMANCE_QUADRANT_META[quadrant].color;
 
       return {
         name: row.group_name,
         value: [achievement, growth, autoCount],
+        quadrant,
         itemStyle: {
-          color: getPointColor(growth),
-          opacity: 0.85,
+          color,
+          opacity: 0.86,
         },
         symbolSize,
       };
     });
   }, [rows]);
+
+  const axisRange = useMemo(() => {
+    if (points.length === 0) {
+      return { xMin: 80, xMax: 120, yMin: -5, yMax: 20 };
+    }
+    const xs = points.map((p) => Number(p.value[0] || 0));
+    const ys = points.map((p) => Number(p.value[1] || 0));
+    return {
+      xMin: Math.min(80, Math.floor(Math.min(...xs) - 5)),
+      xMax: Math.max(120, Math.ceil(Math.max(...xs) + 5)),
+      yMin: Math.min(-5, Math.floor(Math.min(...ys) - 2)),
+      yMax: Math.max(20, Math.ceil(Math.max(...ys) + 2)),
+    };
+  }, [points]);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -174,10 +187,7 @@ function DistributionChart({
     }
     const chart = chartInstanceRef.current;
     if (!chart) return;
-
-    if (loading) {
-      return;
-    }
+    if (loading) return;
 
     if (error) {
       chart.clear();
@@ -213,6 +223,13 @@ function DistributionChart({
       return;
     }
 
+    const bucket = {
+      high_growth_high_achievement: points.filter((item) => item.quadrant === 'high_growth_high_achievement'),
+      high_growth_low_achievement: points.filter((item) => item.quadrant === 'high_growth_low_achievement'),
+      low_growth_high_achievement: points.filter((item) => item.quadrant === 'low_growth_high_achievement'),
+      low_growth_low_achievement: points.filter((item) => item.quadrant === 'low_growth_low_achievement'),
+    };
+
     const option: EChartsOption = {
       tooltip: {
         trigger: 'item',
@@ -221,44 +238,94 @@ function DistributionChart({
           const achievement = Number(value[0] || 0);
           const growth = Number(value[1] || 0);
           const count = Number(value[2] || 0);
+          const quadrant = params?.data?.quadrant;
+          const quadrantLabel = typeof quadrant === 'string' ? getQuadrantLabel(quadrant as any) : '-';
           return [
             `<div style="font-size:12px;line-height:1.6;">`,
             `<div style="font-weight:600;">${params?.name || ''}</div>`,
             `<div>达成率：${formatPercent(achievement)}</div>`,
             `<div>增长率：${formatPercent(growth)}</div>`,
             `<div>车险件数：${formatCount(count)}</div>`,
+            `<div>象限：${quadrantLabel}</div>`,
             `</div>`,
           ].join('');
         },
       },
+      legend: {
+        top: 0,
+        type: 'scroll',
+        data: ['高增长高达成（优秀）', '高增长低达成（异常）', '低增长高达成（预警）', '低增长低达成（危险）'],
+      },
       grid: {
         left: '7%',
         right: '6%',
-        top: 36,
+        top: 54,
         bottom: 46,
         containLabel: true,
       },
       xAxis: {
         type: 'value',
         name: '达成率',
+        min: axisRange.xMin,
+        max: axisRange.xMax,
         axisLabel: { formatter: '{value}%' },
         splitLine: { lineStyle: { color: colors.neutral[200] } },
       },
       yAxis: {
         type: 'value',
         name: '增长率',
+        min: axisRange.yMin,
+        max: axisRange.yMax,
         axisLabel: { formatter: '{value}%' },
         splitLine: { lineStyle: { color: colors.neutral[200] } },
       },
       series: [
         {
+          name: '背景',
           type: 'scatter',
-          data: points,
-          symbolSize: (value: any, params: any) => {
-            const data = params?.data;
-            if (typeof data?.symbolSize === 'number') return data.symbolSize;
-            return 16;
+          data: [],
+          markArea: {
+            silent: true,
+            itemStyle: { opacity: 0.08 },
+            data: [
+              [
+                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: PERFORMANCE_GROWTH_THRESHOLD, itemStyle: { color: colors.success.DEFAULT } },
+                { xAxis: axisRange.xMax, yAxis: axisRange.yMax },
+              ],
+              [
+                { xAxis: axisRange.xMin, yAxis: PERFORMANCE_GROWTH_THRESHOLD, itemStyle: { color: colors.warning.DEFAULT } },
+                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: axisRange.yMax },
+              ],
+              [
+                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: axisRange.yMin, itemStyle: { color: '#fa8c16' } },
+                { xAxis: axisRange.xMax, yAxis: PERFORMANCE_GROWTH_THRESHOLD },
+              ],
+              [
+                { xAxis: axisRange.xMin, yAxis: axisRange.yMin, itemStyle: { color: colors.danger.DEFAULT } },
+                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: PERFORMANCE_GROWTH_THRESHOLD },
+              ],
+            ],
           },
+        },
+        {
+          name: '高增长高达成（优秀）',
+          type: 'scatter',
+          data: bucket.high_growth_high_achievement,
+        },
+        {
+          name: '高增长低达成（异常）',
+          type: 'scatter',
+          data: bucket.high_growth_low_achievement,
+        },
+        {
+          name: '低增长高达成（预警）',
+          type: 'scatter',
+          data: bucket.low_growth_high_achievement,
+        },
+        {
+          name: '低增长低达成（危险）',
+          type: 'scatter',
+          data: bucket.low_growth_low_achievement,
           markLine: {
             silent: true,
             symbol: 'none',
@@ -268,18 +335,19 @@ function DistributionChart({
               width: 1,
             },
             data: [
-              { xAxis: 105 },
-              { xAxis: 100 },
-              { xAxis: 95 },
-              { xAxis: 90 },
-              { yAxis: 15 },
-              { yAxis: 10 },
-              { yAxis: 5 },
-              { yAxis: 0 },
+              { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD },
+              { yAxis: PERFORMANCE_GROWTH_THRESHOLD },
             ],
           },
         },
-      ],
+      ].map((seriesItem) => ({
+        ...seriesItem,
+        symbolSize: (value: any, params: any) => {
+          const data = params?.data;
+          if (typeof data?.symbolSize === 'number') return data.symbolSize;
+          return 16;
+        },
+      })),
     };
 
     chart.setOption(option, true);
@@ -287,7 +355,7 @@ function DistributionChart({
     const handleResize = () => chart.resize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [error, loading, points]);
+  }, [axisRange, error, loading, points]);
 
   useEffect(() => {
     return () => {
@@ -300,7 +368,7 @@ function DistributionChart({
     <section className={cn(cardStyles.standard, 'space-y-3')}>
       <h3 className={textStyles.titleSmall}>达成率+增长率分布图</h3>
       <div className={cn(textStyles.caption, colorClasses.text.neutralLight)}>
-        达成率分界: {ACHIEVEMENT_LINE_HINTS.join(' / ')}；增长率分界: {GROWTH_LINE_HINTS.join(' / ')}。
+        分界线：达成率 {PERFORMANCE_ACHIEVEMENT_THRESHOLD}% / 增长率 {PERFORMANCE_GROWTH_THRESHOLD}%。
       </div>
       <div ref={chartRef} className="h-[360px] w-full" />
     </section>
@@ -383,9 +451,11 @@ type SortOrder = 'asc' | 'desc';
 export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> = ({ filters }) => {
   const { isDataLoaded } = useDataStatus();
 
-  const [vehicleCategory, setVehicleCategory] = useState<PerformanceVehicleCategory>('passenger');
+  const [segmentTag, setSegmentTag] = useState<PerformanceSegmentTag>('all');
   const [timePeriod, setTimePeriod] = useState<PerformanceTimePeriod>('day');
   const [growthMode, setGrowthMode] = useState<PerformanceGrowthMode>('mom');
+  const [expandDims, setExpandDims] = useState<PerformanceSummaryExpandDims>('none');
+  const [expandedCoverage, setExpandedCoverage] = useState<Record<string, boolean>>({});
 
   const [showPicker, setShowPicker] = useState(false);
   const [pendingRowValue, setPendingRowValue] = useState<string | null>(null);
@@ -400,22 +470,23 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   const summaryQuery = usePerformanceSummary({
     filters,
-    vehicleCategory,
+    segmentTag,
     timePeriod,
     growthMode,
+    expandDims,
     enabled: isDataLoaded,
   });
 
   const trendQuery = usePerformanceTrend({
     filters,
-    vehicleCategory,
+    segmentTag,
     granularity: trendGranularity,
     enabled: isDataLoaded,
   });
 
   const drilldownQuery = usePerformanceDrilldown({
     filters,
-    vehicleCategory,
+    segmentTag,
     timePeriod,
     growthMode,
     enabled: isDataLoaded,
@@ -423,20 +494,36 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   const topSalesmanQuery = usePerformanceTopSalesman({
     filters,
-    vehicleCategory,
+    segmentTag,
     timePeriod,
     growthMode,
     enabled: isDataLoaded,
   });
 
-  const summaryRows = useMemo(() => {
-    const rowMap = new Map(summaryQuery.rows.map((row) => [row.coverage_combination, row]));
+  useEffect(() => {
+    setExpandedCoverage({});
+  }, [expandDims, segmentTag, timePeriod, growthMode]);
+
+  const parentSummaryRows = useMemo(() => {
+    const rows = summaryQuery.rows.filter((row) => row.row_level === 0);
+    const rowMap = new Map(rows.map((row) => [row.coverage_combination, row]));
     const ordered = SUMMARY_ORDER
       .map((key) => rowMap.get(key))
       .filter((item): item is PerformanceSummaryRow => Boolean(item));
-
-    const rest = summaryQuery.rows.filter((row) => !SUMMARY_ORDER.includes(row.coverage_combination));
+    const rest = rows.filter((row) => !SUMMARY_ORDER.includes(row.coverage_combination));
     return [...ordered, ...rest];
+  }, [summaryQuery.rows]);
+
+  const childSummaryMap = useMemo(() => {
+    const map = new Map<string, PerformanceSummaryRow[]>();
+    summaryQuery.rows
+      .filter((row) => row.row_level === 1)
+      .forEach((row) => {
+        const list = map.get(row.coverage_combination) || [];
+        list.push(row);
+        map.set(row.coverage_combination, list);
+      });
+    return map;
   }, [summaryQuery.rows]);
 
   const sortedGroupRows = useMemo(() => {
@@ -517,19 +604,22 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   };
 
   const isDrillClickable = drilldownQuery.availableDimensions.length > 0;
-
   const currentDimensionLabel = drilldownQuery.currentGroupBy
     ? PERFORMANCE_DIMENSION_LABELS[drilldownQuery.currentGroupBy]
     : '维度';
 
+  const toggleCoverageExpand = (coverage: string) => {
+    setExpandedCoverage((prev) => ({ ...prev, [coverage]: !prev[coverage] }));
+  };
+
   return (
     <div className="space-y-5">
       <div className="sticky top-0 z-20 bg-neutral-50/90 backdrop-blur-md pb-4 pt-2 -mx-2 px-2 border-b border-neutral-200 space-y-3">
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-3">
           <Tabs
-            items={VEHICLE_TABS}
-            activeKey={vehicleCategory}
-            onChange={(key) => setVehicleCategory(key as PerformanceVehicleCategory)}
+            items={SEGMENT_TABS}
+            activeKey={segmentTag}
+            onChange={(key) => setSegmentTag(key as PerformanceSegmentTag)}
             variant="pills"
             size="medium"
           />
@@ -554,6 +644,15 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
       <SectionTitle title="险别组合业绩环比" />
       <section className={cn(cardStyles.standard, 'p-0 overflow-hidden')}>
+        <div className="px-4 pt-3">
+          <Tabs
+            items={EXPAND_DIMS_TABS}
+            activeKey={expandDims}
+            onChange={(key) => setExpandDims(key as PerformanceSummaryExpandDims)}
+            variant="pills"
+            size="small"
+          />
+        </div>
         {summaryQuery.error ? (
           <div className={cn('p-4', colorClasses.text.danger)}>加载失败: {summaryQuery.error}</div>
         ) : (
@@ -562,7 +661,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
               <thead className="bg-neutral-50 border-b border-neutral-200">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-neutral-600">险别组合</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">车险保费</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">车险保费(万元)</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">车险件数</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">件均保费</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">增长率</th>
@@ -574,22 +673,45 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                     <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">数据加载中...</td>
                   </tr>
                 )}
-                {!summaryQuery.loading && summaryRows.length === 0 && (
+                {!summaryQuery.loading && parentSummaryRows.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">暂无数据</td>
                   </tr>
                 )}
-                {!summaryQuery.loading && summaryRows.map((row, index) => (
-                  <tr key={`${row.coverage_combination}-${index}`} className="border-b border-neutral-100 last:border-b-0">
-                    <td className="px-4 py-3 font-medium text-neutral-800">{row.coverage_combination}</td>
-                    <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
-                    <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>
-                    <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(row.avg_premium)}</td>
-                    <td className={cn('px-4 py-3 text-right', textStyles.numeric, getGrowthTextClass(classifyGrowthBand(row.growth_rate)), 'font-semibold')}>
-                      {row.growth_rate === null ? '-' : formatPercent(row.growth_rate)}
-                    </td>
-                  </tr>
-                ))}
+                {!summaryQuery.loading && parentSummaryRows.map((row, index) => {
+                  const childRows = childSummaryMap.get(row.coverage_combination) || [];
+                  const canExpand = expandDims !== 'none' && childRows.length > 0;
+                  const isExpanded = Boolean(expandedCoverage[row.coverage_combination]);
+                  return (
+                    <React.Fragment key={`${row.coverage_combination}-${index}`}>
+                      <tr className="border-b border-neutral-100">
+                        <td
+                          className={cn('px-4 py-3 font-medium text-neutral-800', canExpand && 'cursor-pointer')}
+                          onClick={() => canExpand && toggleCoverageExpand(row.coverage_combination)}
+                        >
+                          {canExpand ? `${isExpanded ? '▾' : '▸'} ` : ''}{row.row_label}
+                        </td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(row.avg_premium)}</td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric, getGrowthTextClass(classifyGrowthBand(row.growth_rate)), 'font-semibold')}>
+                          {row.growth_rate === null ? '-' : formatPercent(row.growth_rate)}
+                        </td>
+                      </tr>
+                      {isExpanded && childRows.map((child) => (
+                        <tr key={`${row.coverage_combination}-${child.expand_key}`} className="border-b border-neutral-100 bg-neutral-50/40">
+                          <td className={cn('px-4 py-2 pl-8', colorClasses.text.neutralDark)}>{child.row_label}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(child.premium)}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatCount(child.auto_count)}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(child.avg_premium)}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric, getGrowthTextClass(classifyGrowthBand(child.growth_rate)), 'font-semibold')}>
+                            {child.growth_rate === null ? '-' : formatPercent(child.growth_rate)}
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -600,14 +722,14 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
       <div className="grid gap-4 lg:grid-cols-2">
         <PerformanceTrendChart
           title="车险保费走势"
-          rows={trendQuery.rows}
+          series={trendQuery.series}
           metric="premium"
           loading={trendQuery.loading}
           error={trendQuery.error}
         />
         <PerformanceTrendChart
           title="车险件数走势"
-          rows={trendQuery.rows}
+          series={trendQuery.series}
           metric="auto_count"
           loading={trendQuery.loading}
           error={trendQuery.error}
@@ -615,7 +737,6 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
       </div>
 
       <SectionTitle title="下钻分析" />
-
       <DistributionChart rows={drilldownQuery.rows} loading={drilldownQuery.loading} error={drilldownQuery.error} />
 
       <section className={cn(cardStyles.standard, 'space-y-3')}>
@@ -648,7 +769,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         {drilldownQuery.summary && (
           <div className={cn(cardStyles.compact, 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3')}>
             <div>
-              <p className={cn(textStyles.caption, colorClasses.text.neutralLight)}>车险保费</p>
+              <p className={cn(textStyles.caption, colorClasses.text.neutralLight)}>车险保费(万元)</p>
               <p className={cn(textStyles.titleSmall, textStyles.numeric)}>{formatPremiumWanDisplay(drilldownQuery.summary.premium)}</p>
             </div>
             <div>
@@ -668,10 +789,9 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
               </p>
             </div>
             <div>
-              <p className={cn(textStyles.caption, colorClasses.text.neutralLight)}>分布提示</p>
+              <p className={cn(textStyles.caption, colorClasses.text.neutralLight)}>象限</p>
               <p className={cn(textStyles.body, colorClasses.text.neutralDark)}>
-                达成率 {drilldownQuery.summary.achievement_rate === null ? '-' : getAchievementBandLabel(classifyAchievementBand(drilldownQuery.summary.achievement_rate))} /
-                增长率 {drilldownQuery.summary.growth_rate === null ? '-' : getGrowthBandLabel(classifyGrowthBand(drilldownQuery.summary.growth_rate))}
+                {getQuadrantLabel(classifyPerformanceQuadrant(drilldownQuery.summary.achievement_rate, drilldownQuery.summary.growth_rate))}
               </p>
             </div>
           </div>
@@ -688,7 +808,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                     维度（{currentDimensionLabel}） {groupSortKey === 'group_name' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleGroupSort('premium')}>
-                    车险保费 {groupSortKey === 'premium' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
+                    车险保费(万元) {groupSortKey === 'premium' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleGroupSort('auto_count')}>
                     车险件数 {groupSortKey === 'auto_count' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
@@ -764,7 +884,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                     维度 {topSortKey === 'dimension_name' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleTopSort('premium')}>
-                    车险保费 {topSortKey === 'premium' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
+                    车险保费(万元) {topSortKey === 'premium' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleTopSort('auto_count')}>
                     车险件数 {topSortKey === 'auto_count' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}

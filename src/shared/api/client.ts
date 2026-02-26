@@ -695,6 +695,9 @@ class ApiClient {
   async getPerformanceSummary(params?: Record<string, string>): Promise<{
     rows: Array<{
       coverage_combination: string;
+      row_label: string;
+      row_level: number;
+      expand_key: string | null;
       premium: number;
       auto_count: number;
       avg_premium: number;
@@ -719,6 +722,9 @@ class ApiClient {
   async getPerformanceTrend(params?: Record<string, string>): Promise<{
     rows: Array<{
       time_period: string;
+      line_key: string;
+      line_label: string;
+      line_order: number;
       premium: number;
       auto_count: number;
     }>;
@@ -770,7 +776,6 @@ class ApiClient {
   async getPerformanceTopSalesman(params?: Record<string, string>): Promise<{
     rows: Array<{
       dimension_name: string;
-      org_level_3: string;
       premium: number;
       auto_count: number;
       achievement_rate: number | null;
@@ -780,6 +785,7 @@ class ApiClient {
       transfer_business_rate: number;
       new_car_rate: number;
       transfer_rate: number;
+      quadrant?: string;
     }>;
   }> {
     const searchParams = new URLSearchParams();
