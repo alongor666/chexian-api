@@ -7,7 +7,7 @@ export const CoefficientPage: React.FC = () => {
   const { filters } = useGlobalFilters();
 
   return (
-    <PageFilterPanel preset="coefficient">
+    <PageFilterPanel preset="coefficient" title="系数监控">
       <div className="p-4">
         <CoefficientMonitorPanel filters={filters} />
       </div>

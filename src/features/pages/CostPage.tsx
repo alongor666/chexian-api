@@ -7,7 +7,7 @@ export const CostPage: React.FC = () => {
   const { filters, maxDataDate } = useGlobalFilters();
 
   return (
-    <PageFilterPanel preset="cost">
+    <PageFilterPanel preset="cost" title="成本分析">
       <div className="p-4">
         <CostAnalysisPanel filters={filters} maxDataDate={maxDataDate} />
       </div>

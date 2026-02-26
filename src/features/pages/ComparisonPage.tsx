@@ -7,7 +7,7 @@ export const ComparisonPage: React.FC = () => {
   const { filters } = useGlobalFilters();
 
   return (
-    <PageFilterPanel preset="full">
+    <PageFilterPanel preset="full" title="数据对比">
       <div className="p-4">
         <ComparisonAnalysisPanel filters={filters} />
       </div>

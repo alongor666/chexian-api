@@ -7,7 +7,7 @@ export const GrowthPage: React.FC = () => {
   const { filters } = useGlobalFilters();
 
   return (
-    <PageFilterPanel preset="full">
+    <PageFilterPanel preset="full" title="增长分析">
       <div className="p-4">
         <GrowthAnalysisPanel filters={filters} />
       </div>

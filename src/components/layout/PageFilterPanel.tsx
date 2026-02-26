@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { AdvancedFilterPanel } from '../../features/filters/AdvancedFilterPanel';
+import { PageHeaderBar } from '../../features/filters/PageHeaderBar';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { FilterPresetName } from '../../shared/types/filters';
@@ -9,6 +10,7 @@ const STORAGE_KEY = 'page-filter-collapsed';
 interface PageFilterPanelProps {
   preset: FilterPresetName;
   children: React.ReactNode;
+  title?: string; // 页面标题，用于置顶显示
 }
 
 /**
@@ -24,6 +26,7 @@ interface PageFilterPanelProps {
 export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
   preset,
   children,
+  title,
 }) => {
   const {
     filters,
@@ -63,6 +66,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
     <div className="flex h-full relative">
       {/* 主内容区 */}
       <div className="flex-1 overflow-auto">
+        {title && <PageHeaderBar title={title} filters={filters} />}
         {children}
       </div>
 

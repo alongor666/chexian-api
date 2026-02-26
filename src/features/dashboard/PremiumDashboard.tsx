@@ -269,19 +269,16 @@ export const PremiumDashboard: React.FC = () => {
       className="p-2 sm:p-3 md:p-4 max-w-[1600px] mx-auto space-y-3 sm:space-y-4"
     >
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white p-3 sm:p-4 rounded shadow">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-          <h1 className="no-export text-xl sm:text-2xl font-bold">保费分析看板</h1>
-          {isInitialized && (
-            <button
-              onClick={handleExportPdf}
-              disabled={isExportingPdf}
-              className="no-export px-3 py-1 bg-primary text-white text-sm rounded hover:bg-primary-dark disabled:bg-neutral-400 transition-colors w-full sm:w-auto"
-            >
-              {isExportingPdf ? '正在导出...' : '导出PDF报告'}
-            </button>
-          )}
-        </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end bg-white p-3 sm:p-4 rounded shadow">
+        {isInitialized && (
+          <button
+            onClick={handleExportPdf}
+            disabled={isExportingPdf}
+            className="no-export px-3 py-1 bg-primary text-white text-sm rounded hover:bg-primary-dark disabled:bg-neutral-400 transition-colors w-full sm:w-auto"
+          >
+            {isExportingPdf ? '正在导出...' : '导出PDF报告'}
+          </button>
+        )}
       </div>
 
       {(kpiError || trendError) && (
