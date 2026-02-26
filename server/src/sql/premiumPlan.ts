@@ -111,7 +111,7 @@ function buildAggSelect(groupField: string, extraFields: string = ''): string {
     0                                                        AS actual_total,
     CASE
       WHEN SUM(plan_vehicle) > 0 AND MAX(time_progress) > 0
-      THEN SUM(actual_vehicle) / (SUM(plan_vehicle) * MAX(time_progress))
+      THEN ROUND((SUM(actual_vehicle) / (SUM(plan_vehicle) * MAX(time_progress))) * 100.0, 2)
       ELSE NULL
     END                                                      AS rate_vehicle,
     NULL                                                     AS rate_total,
@@ -119,13 +119,13 @@ function buildAggSelect(groupField: string, extraFields: string = ''): string {
     SUM(prev_year_actual)                                    AS prev_year_premium,
     CASE
       WHEN SUM(prev_year_actual) > 0
-      THEN (SUM(actual_vehicle) - SUM(prev_year_actual)) / SUM(prev_year_actual)
+      THEN ROUND(((SUM(actual_vehicle) - SUM(prev_year_actual)) / SUM(prev_year_actual)) * 100.0, 2)
       ELSE NULL
     END                                                      AS yoy_growth_rate,
     SUM(prev_year_full)                                      AS year_2025_actual,
     CASE
       WHEN SUM(prev_year_full) > 0
-      THEN SUM(plan_vehicle) / SUM(prev_year_full) - 1
+      THEN ROUND((SUM(plan_vehicle) / SUM(prev_year_full) - 1) * 100.0, 2)
       ELSE NULL
     END                                                      AS plan_growth_rate
   `;
@@ -229,7 +229,7 @@ export function generateKPICardQuery(
       0                                                      AS total_actual_total,
       CASE
         WHEN SUM(plan_vehicle) > 0 AND MAX(time_progress) > 0
-        THEN SUM(actual_vehicle) / (SUM(plan_vehicle) * MAX(time_progress))
+        THEN ROUND((SUM(actual_vehicle) / (SUM(plan_vehicle) * MAX(time_progress))) * 100.0, 2)
         ELSE NULL
       END                                                    AS avg_rate_vehicle,
       NULL                                                   AS avg_rate_total,
@@ -251,10 +251,10 @@ export function generateRateDistributionQuery(
     SELECT
       CASE
         WHEN achievement_rate IS NULL THEN '无计划'
-        WHEN achievement_rate < 0.5   THEN '<50%'
-        WHEN achievement_rate < 0.8   THEN '50%-80%'
-        WHEN achievement_rate < 1.0   THEN '80%-100%'
-        WHEN achievement_rate < 1.2   THEN '100%-120%'
+        WHEN achievement_rate < 50   THEN '<50%'
+        WHEN achievement_rate < 80   THEN '50%-80%'
+        WHEN achievement_rate < 100   THEN '80%-100%'
+        WHEN achievement_rate < 120   THEN '100%-120%'
         ELSE '≥120%'
       END                                                    AS rate_range,
       COUNT(*)                                               AS count,

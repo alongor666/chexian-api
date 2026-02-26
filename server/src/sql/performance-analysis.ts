@@ -409,6 +409,15 @@ function getGroupByConfig(dimension: PerformanceDimension | null, colPrefix: str
   }
 }
 
+function supportsAnnualPlanByDimension(dimension: PerformanceDimension | null): boolean {
+  return (
+    dimension === null
+    || dimension === 'org_level_3'
+    || dimension === 'team'
+    || dimension === 'salesman'
+  );
+}
+
 function getTrendLineSourceSql(segmentTag: PerformanceSegmentTag): string {
   if (segmentTag === 'all') {
     return `
@@ -598,16 +607,8 @@ export function generatePerformanceSummaryQuery(
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.premium * 10000.0 / c.auto_count, 2) END AS avg_premium,
-        CASE
-          WHEN pp.total_days <= 0 THEN NULL
-          WHEN COALESCE(c.allocated_plan, 0) <= 0 OR COALESCE(pp.period_plan_ratio, 0) <= 0 THEN NULL
-          WHEN COALESCE(pp.elapsed_days, 0) <= 0 THEN 0
-          ELSE ROUND(
-            (c.premium / (c.allocated_plan * pp.period_plan_ratio))
-            * (pp.elapsed_days * 100.0 / pp.total_days),
-            2
-          )
-        END AS achievement_rate,
+        NULL::DOUBLE AS plan_premium,
+        NULL::DOUBLE AS achievement_rate,
         CASE
           WHEN COALESCE(p.premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.premium) * 100.0 / p.premium, 2)
@@ -711,16 +712,8 @@ export function generatePerformanceSummaryQuery(
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.premium * 10000.0 / c.auto_count, 2) END AS avg_premium,
-        CASE
-          WHEN pp.total_days <= 0 THEN NULL
-          WHEN COALESCE(c.allocated_plan, 0) <= 0 OR COALESCE(pp.period_plan_ratio, 0) <= 0 THEN NULL
-          WHEN COALESCE(pp.elapsed_days, 0) <= 0 THEN 0
-          ELSE ROUND(
-            (c.premium / (c.allocated_plan * pp.period_plan_ratio))
-            * (pp.elapsed_days * 100.0 / pp.total_days),
-            2
-          )
-        END AS achievement_rate,
+        NULL::DOUBLE AS plan_premium,
+        NULL::DOUBLE AS achievement_rate,
         CASE
           WHEN COALESCE(p.premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.premium) * 100.0 / p.premium, 2)
@@ -749,6 +742,7 @@ export function generatePerformanceSummaryQuery(
       premium,
       auto_count,
       avg_premium,
+      plan_premium,
       achievement_rate,
       growth_rate,
       nev_rate,
@@ -766,6 +760,7 @@ export function generatePerformanceSummaryQuery(
       premium,
       auto_count,
       avg_premium,
+      plan_premium,
       achievement_rate,
       growth_rate,
       nev_rate,
@@ -853,6 +848,7 @@ export function generatePerformanceDrilldownQuery(
   const periodBounds = buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode);
   const periodProgress = buildPeriodProgressCte();
   const groupCfg = getGroupByConfig(groupBy, 'p.');
+  const hasAnnualPlanSql = supportsAnnualPlanByDimension(groupBy) ? 'TRUE' : 'FALSE';
 
   const stepWheres = drillPath.map((step) => drillStepToWhere(step, 'p.'));
   const drillWhere = stepWheres.length > 0 ? `AND ${stepWheres.join('\n        AND ')}` : '';
@@ -937,6 +933,11 @@ export function generatePerformanceDrilldownQuery(
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         CASE
+          WHEN ${hasAnnualPlanSql} = FALSE THEN NULL
+          ELSE ROUND(c.allocated_plan, 4)
+        END AS plan_premium,
+        CASE
+          WHEN ${hasAnnualPlanSql} = FALSE THEN NULL
           WHEN pp.total_days <= 0 THEN NULL
           WHEN COALESCE(c.allocated_plan, 0) <= 0 OR COALESCE(pp.period_plan_ratio, 0) <= 0 THEN NULL
           WHEN COALESCE(pp.elapsed_days, 0) <= 0 THEN 0
@@ -1075,6 +1076,7 @@ export function generatePerformanceTopSalesmanQuery(
         c.dimension_name,
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
+        ROUND(c.allocated_plan, 4) AS plan_premium,
         CASE
           WHEN pp.total_days <= 0 THEN NULL
           WHEN COALESCE(c.allocated_plan, 0) <= 0 OR COALESCE(pp.period_plan_ratio, 0) <= 0 THEN NULL

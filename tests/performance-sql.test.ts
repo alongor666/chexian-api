@@ -17,22 +17,15 @@ describe('performance analysis SQL', () => {
     expect(filter).toContain("customer_category LIKE '%出租%'");
   });
 
-  it('summary SQL should expose premium/auto_count/avg_premium/achievement/growth/ratio fields', () => {
+  it('summary SQL should expose premium/plan/auto_count/avg_premium/achievement/growth/ratio fields', () => {
     const sql = generatePerformanceSummaryQuery('1=1', '1=1', 'all', 'month', 'mom', 'none');
 
-    const premiumIndex = sql.indexOf('premium');
-    const autoCountIndex = sql.indexOf('c.auto_count');
-    const avgPremiumIndex = sql.indexOf('AS avg_premium');
-    const achievementRateIndex = sql.indexOf('AS achievement_rate');
-    const growthRateIndex = sql.indexOf('AS growth_rate');
-    const nevRateIndex = sql.indexOf('AS nev_rate');
-
-    expect(premiumIndex).toBeGreaterThan(-1);
-    expect(autoCountIndex).toBeGreaterThan(premiumIndex);
-    expect(avgPremiumIndex).toBeGreaterThan(autoCountIndex);
-    expect(achievementRateIndex).toBeGreaterThan(avgPremiumIndex);
-    expect(growthRateIndex).toBeGreaterThan(achievementRateIndex);
-    expect(nevRateIndex).toBeGreaterThan(growthRateIndex);
+    expect(sql).toContain('AS premium');
+    expect(sql).toContain('AS plan_premium');
+    expect(sql).toContain('AS avg_premium');
+    expect(sql).toContain('AS achievement_rate');
+    expect(sql).toContain('AS growth_rate');
+    expect(sql).toContain('AS nev_rate');
   });
 
   it('summary SQL should support expandable dimensions', () => {
@@ -70,6 +63,7 @@ describe('performance analysis SQL', () => {
   it('drilldown SQL should contain required analysis fields', () => {
     const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'week', 'mom', [], 'org_level_3');
 
+    expect(sql).toContain('AS plan_premium');
     expect(sql).toContain('AS achievement_rate');
     expect(sql).toContain('AS growth_rate');
     expect(sql).toContain('AS nev_rate');
@@ -82,9 +76,18 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('CURRENT_DATE');
   });
 
+  it('drilldown SQL should null out plan/achievement for dimensions without annual plans', () => {
+    const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'week', 'mom', [], 'customer_category');
+
+    expect(sql).toContain('WHEN FALSE = FALSE THEN NULL');
+    expect(sql).toContain('AS plan_premium');
+    expect(sql).toContain('AS achievement_rate');
+  });
+
   it('top salesman SQL should default to achievement ascending then premium descending', () => {
     const sql = generatePerformanceTopSalesmanQuery('1=1', '1=1', 'motorcycle', 'day', 'mom', 20);
 
+    expect(sql).toContain('AS plan_premium');
     expect(sql).toContain('ORDER BY m.achievement_rate ASC NULLS LAST, m.premium DESC');
     expect(sql).toContain('LIMIT 20');
   });

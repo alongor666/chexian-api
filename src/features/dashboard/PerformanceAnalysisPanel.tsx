@@ -107,7 +107,7 @@ function SectionTitle({
   );
 }
 
-function formatPremiumWanDisplay(value: number): string {
+function formatPremiumWanDisplay(value: number | null | undefined): string {
   return formatWanAdaptive(value);
 }
 
@@ -434,6 +434,7 @@ function DimensionPicker({
 type GroupSortKey =
   | 'group_name'
   | 'premium'
+  | 'plan_premium'
   | 'auto_count'
   | 'achievement_rate'
   | 'growth_rate'
@@ -446,6 +447,7 @@ type GroupSortKey =
 type TopSortKey =
   | 'dimension_name'
   | 'premium'
+  | 'plan_premium'
   | 'auto_count'
   | 'achievement_rate'
   | 'growth_rate'
@@ -543,10 +545,10 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         return groupSortOrder === 'asc' ? diff : -diff;
       }
 
-      const aVal = groupSortKey === 'achievement_rate' || groupSortKey === 'growth_rate'
+      const aVal = groupSortKey === 'achievement_rate' || groupSortKey === 'growth_rate' || groupSortKey === 'plan_premium'
         ? sortWithNull(a[groupSortKey], groupSortOrder)
         : safeNumber(a[groupSortKey]);
-      const bVal = groupSortKey === 'achievement_rate' || groupSortKey === 'growth_rate'
+      const bVal = groupSortKey === 'achievement_rate' || groupSortKey === 'growth_rate' || groupSortKey === 'plan_premium'
         ? sortWithNull(b[groupSortKey], groupSortOrder)
         : safeNumber(b[groupSortKey]);
 
@@ -562,10 +564,10 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         return topSortOrder === 'asc' ? diff : -diff;
       }
 
-      const aVal = topSortKey === 'achievement_rate' || topSortKey === 'growth_rate'
+      const aVal = topSortKey === 'achievement_rate' || topSortKey === 'growth_rate' || topSortKey === 'plan_premium'
         ? sortWithNull(a[topSortKey], topSortOrder)
         : safeNumber(a[topSortKey]);
-      const bVal = topSortKey === 'achievement_rate' || topSortKey === 'growth_rate'
+      const bVal = topSortKey === 'achievement_rate' || topSortKey === 'growth_rate' || topSortKey === 'plan_premium'
         ? sortWithNull(b[topSortKey], topSortOrder)
         : safeNumber(b[topSortKey]);
 
@@ -675,6 +677,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-neutral-600">险别组合</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">车险保费(万元)</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">车险计划(万元)</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">车险件数</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">件均保费</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">达成率</th>
@@ -689,12 +692,12 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
               <tbody>
                 {summaryQuery.loading && (
                   <tr>
-                    <td colSpan={11} className="px-4 py-8 text-center text-neutral-400">数据加载中...</td>
+                    <td colSpan={12} className="px-4 py-8 text-center text-neutral-400">数据加载中...</td>
                   </tr>
                 )}
                 {!summaryQuery.loading && parentSummaryRows.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="px-4 py-8 text-center text-neutral-400">暂无数据</td>
+                    <td colSpan={12} className="px-4 py-8 text-center text-neutral-400">暂无数据</td>
                   </tr>
                 )}
                 {!summaryQuery.loading && parentSummaryRows.map((row, index) => {
@@ -711,6 +714,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                           {canExpand ? `${isExpanded ? '▾' : '▸'} ` : ''}{row.row_label}
                         </td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.plan_premium)}</td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(row.avg_premium)}</td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric, getRateTextClass('achievement', row.achievement_rate))}>
@@ -729,6 +733,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                         <tr key={`${row.coverage_combination}-${child.expand_key}`} className="border-b border-neutral-100 bg-neutral-50/40">
                           <td className={cn('px-4 py-2 pl-8', colorClasses.text.neutralDark)}>{child.row_label}</td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(child.premium)}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(child.plan_premium)}</td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatCount(child.auto_count)}</td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(child.avg_premium)}</td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric, getRateTextClass('achievement', child.achievement_rate))}>
@@ -845,6 +850,9 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleGroupSort('premium')}>
                     车险保费(万元) {groupSortKey === 'premium' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
+                  <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleGroupSort('plan_premium')}>
+                    车险计划(万元) {groupSortKey === 'plan_premium' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
+                  </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleGroupSort('auto_count')}>
                     车险件数 {groupSortKey === 'auto_count' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
@@ -864,12 +872,12 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
               <tbody>
                 {drilldownQuery.loading && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-center text-neutral-400">数据加载中...</td>
+                    <td colSpan={11} className="px-3 py-8 text-center text-neutral-400">数据加载中...</td>
                   </tr>
                 )}
                 {!drilldownQuery.loading && sortedGroupRows.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-center text-neutral-400">暂无下钻数据</td>
+                    <td colSpan={11} className="px-3 py-8 text-center text-neutral-400">暂无下钻数据</td>
                   </tr>
                 )}
                 {!drilldownQuery.loading && sortedGroupRows.map((row, index) => (
@@ -883,6 +891,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                   >
                     <td className={cn('px-3 py-2', colorClasses.text.neutralDark, 'font-medium')}>{row.group_name}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
+                    <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.plan_premium)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric, getRateTextClass('achievement', row.achievement_rate))}>
                       {row.achievement_rate === null ? '-' : formatPercent(row.achievement_rate)}
@@ -921,6 +930,9 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleTopSort('premium')}>
                     车险保费(万元) {topSortKey === 'premium' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
+                  <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleTopSort('plan_premium')}>
+                    车险计划(万元) {topSortKey === 'plan_premium' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
+                  </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleTopSort('auto_count')}>
                     车险件数 {topSortKey === 'auto_count' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
@@ -940,18 +952,19 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
               <tbody>
                 {topSalesmanQuery.loading && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-center text-neutral-400">数据加载中...</td>
+                    <td colSpan={11} className="px-3 py-8 text-center text-neutral-400">数据加载中...</td>
                   </tr>
                 )}
                 {!topSalesmanQuery.loading && sortedTopRows.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-center text-neutral-400">暂无业务员数据</td>
+                    <td colSpan={11} className="px-3 py-8 text-center text-neutral-400">暂无业务员数据</td>
                   </tr>
                 )}
                 {!topSalesmanQuery.loading && sortedTopRows.map((row: PerformanceTopSalesmanRow, index: number) => (
                   <tr key={`${row.dimension_name}-${index}`} className="border-b border-neutral-100 last:border-b-0">
                     <td className={cn('px-3 py-2 font-medium', colorClasses.text.neutralDark)}>{row.dimension_name}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
+                    <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.plan_premium)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric, getRateTextClass('achievement', row.achievement_rate))}>
                       {row.achievement_rate === null ? '-' : formatPercent(row.achievement_rate)}

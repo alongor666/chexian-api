@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { canAccessRoute } from '../../shared/config/organizations';
+import { canAccessRoute, canAccessMotoCost } from '../../shared/config/organizations';
 
 
 interface NavItem {
@@ -217,7 +217,15 @@ export const SidebarNavigation: React.FC = () => {
               工具
             </div>
           )}
-          {toolNavItems.map(renderNavItem)}
+          {toolNavItems
+            .filter(item => {
+              // 摩意模型功能仅对白名单用户开放
+              if (item.path === '/moto-cost') {
+                return canAccessMotoCost(userPermission?.username);
+              }
+              return true;
+            })
+            .map(renderNavItem)}
         </nav>
 
       </div>

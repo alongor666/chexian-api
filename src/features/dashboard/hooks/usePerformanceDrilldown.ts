@@ -30,6 +30,7 @@ export interface PerformanceRow {
   group_name: string;
   premium: number;
   auto_count: number;
+  plan_premium: number | null;
   achievement_rate: number | null;
   growth_rate: number | null;
   quadrant?: string;
@@ -92,6 +93,7 @@ function mapRow(raw: Record<string, unknown>): PerformanceRow {
     group_name: String(raw.group_name ?? ''),
     premium: Number(raw.premium ?? 0),
     auto_count: Number(raw.auto_count ?? 0),
+    plan_premium: raw.plan_premium == null ? null : Number(raw.plan_premium),
     achievement_rate: raw.achievement_rate == null ? null : Number(raw.achievement_rate),
     growth_rate: raw.growth_rate == null ? null : Number(raw.growth_rate),
     quadrant: raw.quadrant == null ? undefined : String(raw.quadrant),

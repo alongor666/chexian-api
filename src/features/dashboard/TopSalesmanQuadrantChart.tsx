@@ -8,7 +8,6 @@ import type { EChartsOption } from 'echarts';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { colors } from '@/shared/styles';
-import { classifyQuadrant, QUADRANT_META } from './crossSellRateStatus';
 import type { TopSalesmanRow } from './hooks/useCrossSellTopSalesman';
 import type { QuadrantCategory } from './CrossSellAIAnalysisPanel';
 
@@ -21,28 +20,22 @@ interface QuadrantStats {
 interface TopSalesmanQuadrantChartProps {
     data: TopSalesmanRow[];
     coverage: '主全' | '交三';
+    rateThreshold: number;
+    avgPremiumThreshold: number;
 }
 
 export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
     data,
     coverage,
+    rateThreshold,
+    avgPremiumThreshold,
 }: TopSalesmanQuadrantChartProps) {
     const chartRef = useRef<HTMLDivElement>(null);
     const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
-    // 计算四象限分界线（中位数）
-    const { avgRate, avgPremiumPrice, quadrantStats } = useMemo(() => {
-        if (data.length === 0) return { avgRate: 0, avgPremiumPrice: 0, quadrantStats: [] };
-        
-        let totalRate = 0;
-        let totalAvgPremium = 0;
-        data.forEach(d => {
-            totalRate += Number(d.rate) || 0;
-            totalAvgPremium += Number(d.avg_premium) || 0;
-        });
-        
-        const rateMedian = totalRate / data.length;
-        const avgPremiumMedian = totalAvgPremium / data.length;
+    // 基于固定阈值统计四象限
+    const { quadrantStats } = useMemo(() => {
+        if (data.length === 0) return { quadrantStats: [] };
         
         // 计算各象限统计
         const stats: Record<QuadrantCategory, { count: number; names: string[] }> = {
@@ -53,8 +46,8 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
         };
         
         data.forEach(item => {
-            const rateGood = item.rate >= rateMedian;
-            const avgGood = item.avg_premium >= avgPremiumMedian;
+            const rateGood = item.rate >= rateThreshold;
+            const avgGood = item.avg_premium >= avgPremiumThreshold;
             
             let category: QuadrantCategory;
             if (rateGood && avgGood) {
@@ -78,20 +71,8 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             { category: 'dual_weak', ...stats.dual_weak },
         ];
         
-        return { 
-            avgRate: rateMedian, 
-            avgPremiumPrice: avgPremiumMedian, 
-            quadrantStats 
-        };
-    }, [data]);
-
-    // 象限配置
-    const quadrantConfig = useMemo(() => ({
-        'dual_excellent': { label: '★ 双优', color: colors.success.DEFAULT, position: 'rightTop' },
-        'rate_weak_avg_excellent': { label: '◆ 推介差件均优', color: colors.warning.dark, position: 'leftTop' },
-        'rate_excellent_avg_weak': { label: '◆ 推介优件均差', color: colors.warning.DEFAULT, position: 'rightBottom' },
-        'dual_weak': { label: '○ 双差', color: colors.danger.DEFAULT, position: 'leftBottom' },
-    }), []);
+        return { quadrantStats };
+    }, [data, rateThreshold, avgPremiumThreshold]);
 
     useEffect(() => {
         if (!chartRef.current) return;
@@ -108,10 +89,10 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
         // 计算数据范围
         const rates = data.map(d => d.rate);
         const premiums = data.map(d => d.avg_premium);
-        const minRate = Math.floor(Math.min(...rates) * 0.9);
-        const maxRate = Math.ceil(Math.max(...rates) * 1.1);
-        const minPremium = Math.floor(Math.min(...premiums) * 0.9);
-        const maxPremium = Math.ceil(Math.max(...premiums) * 1.1);
+        const minRate = Math.floor(Math.min(...rates, rateThreshold) * 0.9);
+        const maxRate = Math.ceil(Math.max(...rates, rateThreshold) * 1.1);
+        const minPremium = Math.floor(Math.min(...premiums, avgPremiumThreshold) * 0.9);
+        const maxPremium = Math.ceil(Math.max(...premiums, avgPremiumThreshold) * 1.1);
 
         // 将数据映射为气泡图系列
         const scatterData = data.map(item => {
@@ -120,8 +101,8 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             const sizeval = Math.sqrt(Number(item.driver_premium) || 0);
 
             // 根据推介率获取颜色
-            const rateGood = rate >= avgRate;
-            const avgGood = premium >= avgPremiumPrice;
+            const rateGood = rate >= rateThreshold;
+            const avgGood = premium >= avgPremiumThreshold;
             
             let color: string;
             if (rateGood && avgGood) {
@@ -213,16 +194,16 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                         },
                         data: [
                             { 
-                                xAxis: avgRate,
+                                xAxis: rateThreshold,
                                 label: { 
-                                    formatter: `推介率${formatPercent(avgRate)}`,
+                                    formatter: `推介率阈值${formatPercent(rateThreshold)}`,
                                     position: 'end',
                                 }
                             },
                             { 
-                                yAxis: avgPremiumPrice,
+                                yAxis: avgPremiumThreshold,
                                 label: { 
-                                    formatter: `件均${formatCount(avgPremiumPrice)}`,
+                                    formatter: `件均阈值${formatCount(avgPremiumThreshold)}`,
                                     position: 'end',
                                 }
                             }
@@ -270,7 +251,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
         const handleResize = () => chart.resize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
-    }, [data, avgRate, avgPremiumPrice, coverage, quadrantStats]);
+    }, [data, coverage, quadrantStats, rateThreshold, avgPremiumThreshold]);
 
     useEffect(() => {
         return () => {

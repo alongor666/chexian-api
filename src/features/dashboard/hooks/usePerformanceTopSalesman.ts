@@ -13,6 +13,7 @@ export interface PerformanceTopSalesmanRow {
   dimension_name: string;
   premium: number;
   auto_count: number;
+  plan_premium: number | null;
   achievement_rate: number | null;
   growth_rate: number | null;
   quadrant?: string;
@@ -75,6 +76,7 @@ export function usePerformanceTopSalesman({
         dimension_name: String(row.dimension_name ?? ''),
         premium: Number(row.premium ?? 0),
         auto_count: Number(row.auto_count ?? 0),
+        plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),
         achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
         growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
         quadrant: row.quadrant == null ? undefined : String(row.quadrant),

@@ -485,7 +485,8 @@ class DuckDBService {
       time_prog AS (
         SELECT
           GREATEST(
-            CAST(DATEDIFF('day', DATE '${planYear}-01-01', MAX(policy_date)) AS DOUBLE) / 365.0,
+            CAST(DATEDIFF('day', DATE '${planYear}-01-01', LEAST(CAST(CURRENT_DATE AS DATE), DATE '${planYear}-12-31')) + 1 AS DOUBLE) / 
+            CAST(DATEDIFF('day', DATE '${planYear}-01-01', DATE '${planYear}-12-31') + 1 AS DOUBLE),
             1.0 / 365.0
           ) AS progress,
           MAX(policy_date) AS max_date
@@ -529,17 +530,17 @@ class DuckDBService {
         tp.progress                                                AS time_progress,
         CASE
           WHEN COALESCE(m.car_insurance_plan_2026, 0) > 0 AND tp.progress > 0
-          THEN COALESCE(a.actual_vehicle, 0) / (m.car_insurance_plan_2026 * tp.progress)
+          THEN ROUND((COALESCE(a.actual_vehicle, 0) / (m.car_insurance_plan_2026 * tp.progress)) * 100.0, 2)
           ELSE NULL
         END AS achievement_rate,
         CASE
           WHEN COALESCE(pv.prev_actual, 0) > 0
-          THEN (COALESCE(a.actual_vehicle, 0) - pv.prev_actual) / pv.prev_actual
+          THEN ROUND(((COALESCE(a.actual_vehicle, 0) - pv.prev_actual) / pv.prev_actual) * 100.0, 2)
           ELSE NULL
         END AS yoy_rate,
         CASE
           WHEN COALESCE(pf.prev_full_year, 0) > 0
-          THEN COALESCE(m.car_insurance_plan_2026, 0) / pf.prev_full_year - 1
+          THEN ROUND((COALESCE(m.car_insurance_plan_2026, 0) / pf.prev_full_year - 1) * 100.0, 2)
           ELSE NULL
         END AS plan_growth_rate
       FROM SalesmanTeamMapping m
@@ -565,7 +566,7 @@ class DuckDBService {
         NULL                                                       AS achievement_rate,
         CASE
           WHEN COALESCE(pv.prev_actual, 0) > 0
-          THEN (COALESCE(a.actual_vehicle, 0) - pv.prev_actual) / pv.prev_actual
+          THEN ROUND(((COALESCE(a.actual_vehicle, 0) - pv.prev_actual) / pv.prev_actual) * 100.0, 2)
           ELSE NULL
         END AS yoy_rate,
         NULL                                                       AS plan_growth_rate

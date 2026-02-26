@@ -4,8 +4,11 @@
  * 使用车险平台设计系统重构的摩托车成本计算器
  */
 import React, { useState, useMemo, useCallback } from 'react';
+import { Navigate } from 'react-router-dom';
 import { cardStyles, textStyles, colorClasses, buttonStyles, badgeStyles } from '@/shared/styles';
 import { cn } from '@/shared/styles';
+import { canAccessMotoCost } from '@/shared/config/organizations';
+import { usePermission } from '@/shared/contexts/PermissionContext';
 import { performCalculations, calculateBreakEvenAnalysis, calculateMotoPremiumRatio, calculateMotoHandlingFeeRate } from './services/calculator';
 import { DEFAULT_INPUTS, SCHEMES, type MotoCostInputs, type AnalysisTab, type Scheme } from './types';
 import { MotoCostKpiCards } from './components/MotoCostKpiCards';
@@ -40,6 +43,13 @@ const HelpIcon = () => (
 );
 
 export const MotoCostPage: React.FC = () => {
+  const { userPermission } = usePermission();
+
+  // 权限检查：仅 admin 和 xuechenglong 可访问
+  if (!canAccessMotoCost(userPermission?.username)) {
+    return <Navigate to="/" replace />;
+  }
+
   // 状态
   const [inputs, setInputs] = useState<MotoCostInputs>(DEFAULT_INPUTS);
   const [activeTab, setActiveTab] = useState<AnalysisTab>('combined');

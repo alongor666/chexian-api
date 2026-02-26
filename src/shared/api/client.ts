@@ -701,6 +701,7 @@ class ApiClient {
       premium: number;
       auto_count: number;
       avg_premium: number;
+      plan_premium: number | null;
       achievement_rate: number | null;
       growth_rate: number | null;
       nev_rate: number;
@@ -784,6 +785,7 @@ class ApiClient {
       dimension_name: string;
       premium: number;
       auto_count: number;
+      plan_premium: number | null;
       achievement_rate: number | null;
       growth_rate: number | null;
       nev_rate: number;

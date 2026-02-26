@@ -304,3 +304,18 @@ export function loginAs(username: string): void {
   const permission = getPermissionByUsername(username);
   setCurrentUserPermission(permission);
 }
+
+/**
+ * 摩意模型功能白名单用户
+ * 仅这些用户可访问 /moto-cost
+ */
+export const MOTO_COST_ALLOWED_USERS = ['admin', 'xuechenglong'];
+
+/**
+ * 检查用户是否有权访问摩意模型
+ * @param username 用户名
+ */
+export function canAccessMotoCost(username: string | undefined): boolean {
+  if (!username) return false;
+  return MOTO_COST_ALLOWED_USERS.includes(username);
+}
