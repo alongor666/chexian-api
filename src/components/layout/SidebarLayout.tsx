@@ -99,7 +99,7 @@ export const SidebarLayout: React.FC = () => {
 
   return (
     <SidebarContext.Provider value={{ collapsed, toggle, mobileOpen, setMobileOpen, isMobile, sidebarWidth, setSidebarWidth, isDragging, setIsDragging }}>
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="h-screen overflow-hidden bg-gray-50 flex flex-col">
         {/* 顶部导航栏 */}
         <TopNavigation />
 
@@ -123,7 +123,7 @@ export const SidebarLayout: React.FC = () => {
             style={{ marginLeft: isMobile ? '0px' : collapsed ? '64px' : `${sidebarWidth}px` }}
           >
             <div className="h-full flex flex-col">
-              <div className="flex-1 flex flex-col min-h-0 bg-white">
+              <div className="flex-1 flex flex-col min-h-0 bg-white overflow-y-auto relative" id="main-scroll-container">
                 <Outlet />
               </div>
               <Footer />
