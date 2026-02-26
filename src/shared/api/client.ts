@@ -151,6 +151,25 @@ class ApiClient {
   private requestTimeoutMs = 30_000;
 
   /**
+   * 将 filters 对象转为 URL 查询字符串
+   * 跳过 undefined 和 null 值
+   */
+  private buildQueryString(
+    filters?: Record<string, any>,
+    initialParams?: Record<string, string>
+  ): string {
+    const params = new URLSearchParams(initialParams);
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    return params.toString();
+  }
+
+  /**
    * 设置认证 Token
    */
   setToken(token: string): void {
@@ -434,15 +453,7 @@ class ApiClient {
    * 获取 KPI 数据
    */
   async getKpi(filters?: Record<string, any>): Promise<KpiData> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    const query = params.toString();
+    const query = this.buildQueryString(filters);
     return this.request<KpiData>(`/query/kpi${query ? `?${query}` : ''}`);
   }
 
@@ -450,15 +461,7 @@ class ApiClient {
    * 获取 KPI 详细数据（用于环形图展示）
    */
   async getKpiDetail(filters?: Record<string, any>): Promise<KpiDetailData> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    const query = params.toString();
+    const query = this.buildQueryString(filters);
     return this.request<KpiDetailData>(`/query/kpi-detail${query ? `?${query}` : ''}`);
   }
 
@@ -469,15 +472,8 @@ class ApiClient {
     granularity: 'day' | 'week' | 'month' = 'day',
     filters?: Record<string, any>
   ): Promise<TrendData[]> {
-    const params = new URLSearchParams({ granularity });
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    return this.request<TrendData[]>(`/query/trend?${params.toString()}`);
+    const query = this.buildQueryString(filters, { granularity });
+    return this.request<TrendData[]>(`/query/trend?${query}`);
   }
 
   /**
@@ -487,30 +483,15 @@ class ApiClient {
     granularity: 'day' | 'week' | 'month' = 'day',
     filters?: Record<string, any>
   ): Promise<QualityBusinessTrendData[]> {
-    const params = new URLSearchParams({ granularity });
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    return this.request<QualityBusinessTrendData[]>(`/query/quality-business-trend?${params.toString()}`);
+    const query = this.buildQueryString(filters, { granularity });
+    return this.request<QualityBusinessTrendData[]>(`/query/quality-business-trend?${query}`);
   }
 
   /**
    * 获取货车分析数据
    */
   async getTruckAnalysis(filters?: Record<string, any>): Promise<any> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    const query = params.toString();
+    const query = this.buildQueryString(filters);
     return this.request(`/query/truck${query ? `?${query}` : ''}`);
   }
 
@@ -524,35 +505,15 @@ class ApiClient {
     baselineEnd: string,
     filters?: Record<string, any>
   ): Promise<any> {
-    const params = new URLSearchParams({
-      startDate,
-      endDate,
-      baselineStart,
-      baselineEnd,
-    });
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    return this.request(`/query/growth?${params.toString()}`);
+    const query = this.buildQueryString(filters, { startDate, endDate, baselineStart, baselineEnd });
+    return this.request(`/query/growth?${query}`);
   }
 
   /**
    * 获取系数监控数据
    */
   async getCoefficientData(filters?: Record<string, any>): Promise<any> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    const query = params.toString();
+    const query = this.buildQueryString(filters);
     return this.request(`/query/coefficient${query ? `?${query}` : ''}`);
   }
 
@@ -560,15 +521,7 @@ class ApiClient {
    * 获取成本分析数据
    */
   async getCostAnalysis(filters?: Record<string, any>): Promise<any> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    const query = params.toString();
+    const query = this.buildQueryString(filters);
     return this.request(`/query/cost${query ? `?${query}` : ''}`);
   }
 
@@ -576,15 +529,7 @@ class ApiClient {
    * 获取续保分析数据
    */
   async getRenewalAnalysis(filters?: Record<string, any>): Promise<any> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    const query = params.toString();
+    const query = this.buildQueryString(filters);
     return this.request(`/query/renewal${query ? `?${query}` : ''}`);
   }
 
@@ -592,15 +537,7 @@ class ApiClient {
    * 获取续保下钻分析数据
    */
   async getRenewalDrilldown(params?: Record<string, any>): Promise<any[]> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/renewal-drilldown${query ? `?${query}` : ''}`);
   }
 
@@ -662,15 +599,7 @@ class ApiClient {
       year_avg_premium: number;
     }>;
   }> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, value);
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/cross-sell-summary${query ? `?${query}` : ''}`);
   }
 
@@ -686,15 +615,7 @@ class ApiClient {
       auto_count: number;
     }>;
   }> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, value);
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/cross-sell-trend${query ? `?${query}` : ''}`);
   }
 
@@ -705,15 +626,8 @@ class ApiClient {
     limit: number = 20,
     filters?: Record<string, any>
   ): Promise<any[]> {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    return this.request(`/query/salesman-ranking?${params.toString()}`);
+    const query = this.buildQueryString(filters, { limit: String(limit) });
+    return this.request(`/query/salesman-ranking?${query}`);
   }
 
   /**
@@ -729,15 +643,7 @@ class ApiClient {
       avg_premium: number;
     }>;
   }> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, value);
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/cross-sell-top-salesman${query ? `?${query}` : ''}`);
   }
 
@@ -763,15 +669,7 @@ class ApiClient {
       transfer_rate: number;
     }>;
   }> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, value);
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/performance-summary${query ? `?${query}` : ''}`);
   }
 
@@ -788,15 +686,7 @@ class ApiClient {
       auto_count: number;
     }>;
   }> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, value);
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/performance-trend${query ? `?${query}` : ''}`);
   }
 
@@ -848,15 +738,7 @@ class ApiClient {
       quadrant?: string;
     }>;
   }> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, value);
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/performance-top-salesman${query ? `?${query}` : ''}`);
   }
 
@@ -864,15 +746,7 @@ class ApiClient {
    * 获取营销战报数据
    */
   async getMarketingReport(params?: Record<string, any>): Promise<any[]> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/marketing-report${query ? `?${query}` : ''}`);
   }
 
@@ -880,15 +754,7 @@ class ApiClient {
    * 获取保费报表数据（机构汇总 / 业务员明细）
    */
   async getPremiumReport(params?: Record<string, any>): Promise<any[]> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/premium-report${query ? `?${query}` : ''}`);
   }
 
@@ -896,15 +762,7 @@ class ApiClient {
    * 获取保费达成下钻数据（六级下钻 + KPI + 达成率分布）
    */
   async getPremiumPlan(params?: Record<string, any>): Promise<any> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/premium-plan${query ? `?${query}` : ''}`);
   }
 
@@ -929,15 +787,7 @@ class ApiClient {
     distribution: any[];
     meta: { plan_year: number; level: string };
   }> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     const resp = await this.request<{
       children: any[];
       summary: any | null;
@@ -996,15 +846,7 @@ class ApiClient {
       rate: number;
     }>;
   }> {
-    const searchParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, value);
-        }
-      });
-    }
-    const query = searchParams.toString();
+    const query = this.buildQueryString(params);
     return this.request(`/query/cross-sell-org-trend${query ? `?${query}` : ''}`);
   }
 
