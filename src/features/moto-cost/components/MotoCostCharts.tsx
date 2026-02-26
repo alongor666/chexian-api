@@ -5,7 +5,6 @@
 import React, { useMemo, useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 import { cardStyles, cn } from '@/shared/styles';
-import { determineColor } from '../services/calculator';
 import type { MotoCostCalculation, AnalysisTab } from '../types';
 
 interface MotoCostChartsProps {
@@ -13,24 +12,24 @@ interface MotoCostChartsProps {
   activeTab: AnalysisTab;
 }
 
-// 指标配置 - 与原版完全一致
+// 指标配置 - 带固定颜色
 const ABSOLUTE_INDICATORS = [
-  { key: 'PREMIUM', label: '保费', colorKey: 'neutral' },
-  { key: 'LOSS', label: '赔款', colorKey: 'neutral' },
-  { key: 'HANDLING_FEE', label: '手续费', colorKey: 'neutral' },
-  { key: 'SALES_PROMOTION', label: '销推费用', colorKey: 'neutral' },
-  { key: 'LABOR_COST', label: '人力成本', colorKey: 'neutral' },
-  { key: 'FIXED_COST', label: '固定成本', colorKey: 'neutral' },
-  { key: 'PROFIT', label: '利润', colorKey: 'conditional', positiveGood: true },
+  { key: 'PREMIUM', label: '保费', color: '#1890ff' },
+  { key: 'LOSS', label: '赔款', color: '#ff4d4f' },
+  { key: 'HANDLING_FEE', label: '手续费', color: '#faad14' },
+  { key: 'SALES_PROMOTION', label: '销推费用', color: '#722ed1' },
+  { key: 'LABOR_COST', label: '人力成本', color: '#13c2c2' },
+  { key: 'FIXED_COST', label: '固定成本', color: '#eb2f96' },
+  { key: 'PROFIT', label: '利润', color: null }, // 动态计算
 ];
 
 const RATE_INDICATORS = [
-  { key: 'TCR', label: '综合成本率', colorKey: 'conditional', threshold: 1, higherIsWorse: true },
-  { key: 'LOSS_RATIO', label: '赔付率', colorKey: 'neutral' },
-  { key: 'HANDLING_FEE_RATIO', label: '手续费率', colorKey: 'neutral' },
-  { key: 'SALES_PROMOTION_RATIO', label: '销推费用率', colorKey: 'neutral' },
-  { key: 'LABOR_COST_RATIO', label: '人力成本率', colorKey: 'neutral' },
-  { key: 'FIXED_COST_RATIO', label: '固定成本率', colorKey: 'neutral' },
+  { key: 'TCR', label: '综合成本率', color: '#1890ff' },
+  { key: 'LOSS_RATIO', label: '赔付率', color: '#ff4d4f' },
+  { key: 'HANDLING_FEE_RATIO', label: '手续费率', color: '#faad14' },
+  { key: 'SALES_PROMOTION_RATIO', label: '销推费用率', color: '#722ed1' },
+  { key: 'LABOR_COST_RATIO', label: '人力成本率', color: '#13c2c2' },
+  { key: 'FIXED_COST_RATIO', label: '固定成本率', color: '#eb2f96' },
 ];
 
 export const MotoCostCharts: React.FC<MotoCostChartsProps> = ({ calculation, activeTab }) => {
@@ -86,11 +85,14 @@ export const MotoCostCharts: React.FC<MotoCostChartsProps> = ({ calculation, act
 
     const seriesData = values.map((value, idx) => {
       const config = ABSOLUTE_INDICATORS[idx];
-      const color = determineColor(value, config);
+      // 利润使用动态颜色（正数绿色，负数红色）
+      const color = config.key === 'PROFIT'
+        ? (value >= 0 ? '#52c41a' : '#ff4d4f')
+        : config.color;
       return {
         value,
         itemStyle: { color, borderRadius: [5, 5, 0, 0] },
-        label: { color },
+        label: { color: '#262626' },
       };
     });
 
@@ -174,11 +176,14 @@ export const MotoCostCharts: React.FC<MotoCostChartsProps> = ({ calculation, act
 
     const seriesData = values.map((value, idx) => {
       const config = RATE_INDICATORS[idx];
-      const color = determineColor(value / 100, config);
+      // TCR 使用动态颜色（<=100% 绿色，>100% 红色）
+      const color = config.key === 'TCR'
+        ? (value <= 100 ? '#52c41a' : '#ff4d4f')
+        : config.color;
       return {
         value,
         itemStyle: { color, borderRadius: [5, 5, 0, 0] },
-        label: { color },
+        label: { color: '#262626' },
       };
     });
 
