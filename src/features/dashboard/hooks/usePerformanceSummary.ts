@@ -23,7 +23,13 @@ export interface PerformanceSummaryRow {
   premium: number;
   auto_count: number;
   avg_premium: number;
+  achievement_rate: number | null;
   growth_rate: number | null;
+  nev_rate: number;
+  renewal_rate: number;
+  transfer_business_rate: number;
+  new_car_rate: number;
+  transfer_rate: number;
 }
 
 interface UsePerformanceSummaryProps {
@@ -85,7 +91,13 @@ export function usePerformanceSummary({
         premium: Number(row.premium ?? 0),
         auto_count: Number(row.auto_count ?? 0),
         avg_premium: Number(row.avg_premium ?? 0),
+        achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
         growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
+        nev_rate: Number(row.nev_rate ?? 0),
+        renewal_rate: Number(row.renewal_rate ?? 0),
+        transfer_business_rate: Number(row.transfer_business_rate ?? 0),
+        new_car_rate: Number(row.new_car_rate ?? 0),
+        transfer_rate: Number(row.transfer_rate ?? 0),
       }));
 
       setRows(mapped);

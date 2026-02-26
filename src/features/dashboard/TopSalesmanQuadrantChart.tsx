@@ -1,5 +1,5 @@
 /**
- * TOP20 业务员推介率四象限图
+ * TOP20 业务员推介率分布图（四象限）
  * Top Salesman Quadrant Chart
  */
 
@@ -10,6 +10,13 @@ import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/uti
 import { colors } from '@/shared/styles';
 import { classifyQuadrant, QUADRANT_META } from './crossSellRateStatus';
 import type { TopSalesmanRow } from './hooks/useCrossSellTopSalesman';
+import type { QuadrantCategory } from './CrossSellAIAnalysisPanel';
+
+interface QuadrantStats {
+    category: QuadrantCategory;
+    count: number;
+    names: string[];
+}
 
 interface TopSalesmanQuadrantChartProps {
     data: TopSalesmanRow[];
@@ -23,20 +30,68 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
     const chartRef = useRef<HTMLDivElement>(null);
     const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
-    // 计算四象限分界线（均值）
-    const { avgRate, avgPremiumPrice } = useMemo(() => {
-        if (data.length === 0) return { avgRate: 0, avgPremiumPrice: 0 };
+    // 计算四象限分界线（中位数）
+    const { avgRate, avgPremiumPrice, quadrantStats } = useMemo(() => {
+        if (data.length === 0) return { avgRate: 0, avgPremiumPrice: 0, quadrantStats: [] };
+        
         let totalRate = 0;
         let totalAvgPremium = 0;
         data.forEach(d => {
             totalRate += Number(d.rate) || 0;
             totalAvgPremium += Number(d.avg_premium) || 0;
         });
-        return {
-            avgRate: totalRate / data.length,
-            avgPremiumPrice: totalAvgPremium / data.length,
+        
+        const rateMedian = totalRate / data.length;
+        const avgPremiumMedian = totalAvgPremium / data.length;
+        
+        // 计算各象限统计
+        const stats: Record<QuadrantCategory, { count: number; names: string[] }> = {
+            dual_excellent: { count: 0, names: [] },
+            rate_excellent_avg_weak: { count: 0, names: [] },
+            rate_weak_avg_excellent: { count: 0, names: [] },
+            dual_weak: { count: 0, names: [] },
+        };
+        
+        data.forEach(item => {
+            const rateGood = item.rate >= rateMedian;
+            const avgGood = item.avg_premium >= avgPremiumMedian;
+            
+            let category: QuadrantCategory;
+            if (rateGood && avgGood) {
+                category = 'dual_excellent';
+            } else if (rateGood && !avgGood) {
+                category = 'rate_excellent_avg_weak';
+            } else if (!rateGood && avgGood) {
+                category = 'rate_weak_avg_excellent';
+            } else {
+                category = 'dual_weak';
+            }
+            
+            stats[category].count++;
+            stats[category].names.push(item.salesman_name);
+        });
+        
+        const quadrantStats: QuadrantStats[] = [
+            { category: 'dual_excellent', ...stats.dual_excellent },
+            { category: 'rate_excellent_avg_weak', ...stats.rate_excellent_avg_weak },
+            { category: 'rate_weak_avg_excellent', ...stats.rate_weak_avg_excellent },
+            { category: 'dual_weak', ...stats.dual_weak },
+        ];
+        
+        return { 
+            avgRate: rateMedian, 
+            avgPremiumPrice: avgPremiumMedian, 
+            quadrantStats 
         };
     }, [data]);
+
+    // 象限配置
+    const quadrantConfig = useMemo(() => ({
+        'dual_excellent': { label: '★ 双优', color: colors.success.DEFAULT, position: 'rightTop' },
+        'rate_weak_avg_excellent': { label: '◆ 推介差件均优', color: colors.warning.dark, position: 'leftTop' },
+        'rate_excellent_avg_weak': { label: '◆ 推介优件均差', color: colors.warning.DEFAULT, position: 'rightBottom' },
+        'dual_weak': { label: '○ 双差', color: colors.danger.DEFAULT, position: 'leftBottom' },
+    }), []);
 
     useEffect(() => {
         if (!chartRef.current) return;
@@ -50,33 +105,47 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             return;
         }
 
+        // 计算数据范围
+        const rates = data.map(d => d.rate);
+        const premiums = data.map(d => d.avg_premium);
+        const minRate = Math.floor(Math.min(...rates) * 0.9);
+        const maxRate = Math.ceil(Math.max(...rates) * 1.1);
+        const minPremium = Math.floor(Math.min(...premiums) * 0.9);
+        const maxPremium = Math.ceil(Math.max(...premiums) * 1.1);
+
         // 将数据映射为气泡图系列
-        // [x:推介率, y:件均保费, size:驾乘险保费, 业务员, 三级机构]
         const scatterData = data.map(item => {
             const rate = Number(item.rate) || 0;
             const premium = Number(item.avg_premium) || 0;
             const sizeval = Math.sqrt(Number(item.driver_premium) || 0);
 
-            // 主全或交三根据当前面板分别传两个参数去获取红橙黄绿的划分
-            const q = classifyQuadrant(
-                coverage === '主全' ? rate : 100,
-                coverage === '交三' ? rate : 100
-            );
+            // 根据推介率获取颜色
+            const rateGood = rate >= avgRate;
+            const avgGood = premium >= avgPremiumPrice;
+            
+            let color: string;
+            if (rateGood && avgGood) {
+                color = colors.success.DEFAULT;
+            } else if (rateGood && !avgGood) {
+                color = colors.warning.DEFAULT;
+            } else if (!rateGood && avgGood) {
+                color = colors.warning.dark;
+            } else {
+                color = colors.danger.DEFAULT;
+            }
 
             return {
                 value: [rate, premium, sizeval, item.salesman_name, item.org_level_3, Number(item.driver_premium)],
-                itemStyle: {
-                    color: QUADRANT_META[q].color,
-                }
+                itemStyle: { color },
             };
         });
 
         const option: EChartsOption = {
             grid: {
-                left: '5%',
-                right: '5%',
-                top: '6%',
-                bottom: '8%',
+                left: '12%',
+                right: '12%',
+                top: '15%',
+                bottom: '12%',
                 containLabel: true,
             },
             tooltip: {
@@ -99,7 +168,9 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                 type: 'value',
                 name: '推介率',
                 nameLocation: 'middle',
-                nameGap: 25,
+                nameGap: 30,
+                min: minRate,
+                max: maxRate,
                 axisLabel: {
                     formatter: '{value}%',
                     color: colors.neutral[500],
@@ -113,7 +184,9 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                 type: 'value',
                 name: '件均保费',
                 nameLocation: 'middle',
-                nameGap: 40,
+                nameGap: 50,
+                min: minPremium,
+                max: maxPremium,
                 axisLabel: {
                     formatter: '{value}',
                     color: colors.neutral[500],
@@ -128,26 +201,66 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                     type: 'scatter',
                     data: scatterData,
                     symbolSize: (val: any) => {
-                        // 归一化气泡大小，避免过大或过小
                         const size = val[2];
-                        // 这里假定 size 是经过开方后的数值，做简单的等比例放大，具体系数可调
-                        return Math.max(8, Math.min(60, size / 5));
+                        return Math.max(8, Math.min(50, size / 5));
                     },
                     markLine: {
                         silent: true,
                         lineStyle: {
-                            type: 'solid',
-                            color: colors.neutral[300],
+                            type: 'dashed',
+                            color: colors.neutral[400],
                             width: 1,
                         },
                         data: [
-                            { xAxis: avgRate },
-                            { yAxis: avgPremiumPrice }
+                            { 
+                                xAxis: avgRate,
+                                label: { 
+                                    formatter: `推介率${formatPercent(avgRate)}`,
+                                    position: 'end',
+                                }
+                            },
+                            { 
+                                yAxis: avgPremiumPrice,
+                                label: { 
+                                    formatter: `件均${formatCount(avgPremiumPrice)}`,
+                                    position: 'end',
+                                }
+                            }
                         ],
+                    },
+                    // 添加象限标签
+                    markPoint: {
+                        silent: true,
+                        symbol: 'pin',
+                        symbolSize: 0,
                         label: {
-                            formatter: '', // 取消标记线文字
-                        }
-                    }
+                            show: true,
+                            position: 'inside',
+                            formatter: (params: any) => {
+                                return params.name;
+                            },
+                            color: '#666',
+                            fontSize: 10,
+                        },
+                        data: [
+                            {
+                                name: `★ 双优\n${quadrantStats.find(s => s.category === 'dual_excellent')?.count || 0}人`,
+                                coord: [maxRate * 0.85, maxPremium * 0.9],
+                            },
+                            {
+                                name: `◆ 推介差件均优\n${quadrantStats.find(s => s.category === 'rate_weak_avg_excellent')?.count || 0}人`,
+                                coord: [minRate * 1.15, maxPremium * 0.9],
+                            },
+                            {
+                                name: `◆ 推介优件均差\n${quadrantStats.find(s => s.category === 'rate_excellent_avg_weak')?.count || 0}人`,
+                                coord: [maxRate * 0.85, minPremium * 1.1],
+                            },
+                            {
+                                name: `○ 双差\n${quadrantStats.find(s => s.category === 'dual_weak')?.count || 0}人`,
+                                coord: [minRate * 1.15, minPremium * 1.1],
+                            },
+                        ],
+                    },
                 },
             ],
         };
@@ -157,7 +270,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
         const handleResize = () => chart.resize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
-    }, [data, avgRate, avgPremiumPrice, coverage]);
+    }, [data, avgRate, avgPremiumPrice, coverage, quadrantStats]);
 
     useEffect(() => {
         return () => {

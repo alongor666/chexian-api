@@ -52,7 +52,7 @@ const ReportTemplatesPanel = lazy(() =>
   import('../features/report/components/ReportTemplatesPanel').then((m) => ({ default: m.ReportTemplatesPanel }))
 );
 const MotoCostPage = lazy(() =>
-  import('../features/pages/MotoCostPage').then((m) => ({ default: m.MotoCostPage }))
+  import('../features/moto-cost').then((m) => ({ default: m.MotoCostPage }))
 );
 
 // Loading fallback component

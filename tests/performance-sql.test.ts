@@ -17,26 +17,29 @@ describe('performance analysis SQL', () => {
     expect(filter).toContain("customer_category LIKE '%出租%'");
   });
 
-  it('summary SQL should expose premium/auto_count/avg_premium/growth_rate without achievement', () => {
+  it('summary SQL should expose premium/auto_count/avg_premium/achievement/growth/ratio fields', () => {
     const sql = generatePerformanceSummaryQuery('1=1', '1=1', 'all', 'month', 'mom', 'none');
 
     const premiumIndex = sql.indexOf('premium');
     const autoCountIndex = sql.indexOf('c.auto_count');
     const avgPremiumIndex = sql.indexOf('AS avg_premium');
+    const achievementRateIndex = sql.indexOf('AS achievement_rate');
     const growthRateIndex = sql.indexOf('AS growth_rate');
+    const nevRateIndex = sql.indexOf('AS nev_rate');
 
     expect(premiumIndex).toBeGreaterThan(-1);
     expect(autoCountIndex).toBeGreaterThan(premiumIndex);
     expect(avgPremiumIndex).toBeGreaterThan(autoCountIndex);
-    expect(growthRateIndex).toBeGreaterThan(avgPremiumIndex);
-    expect(sql).not.toContain('achievement_rate');
+    expect(achievementRateIndex).toBeGreaterThan(avgPremiumIndex);
+    expect(growthRateIndex).toBeGreaterThan(achievementRateIndex);
+    expect(nevRateIndex).toBeGreaterThan(growthRateIndex);
   });
 
   it('summary SQL should support expandable dimensions', () => {
     const sql = generatePerformanceSummaryQuery('1=1', '1=1', 'all', 'month', 'mom', 'energy_business_nature');
     expect(sql).toContain('child_current');
     expect(sql).toContain("|| '+' ||");
-    expect(sql).toContain('row_level');
+    expect(sql).toContain('ORDER BY coverage_order, row_level, child_order');
   });
 
   it('segment tag filter should include all truck branches', () => {

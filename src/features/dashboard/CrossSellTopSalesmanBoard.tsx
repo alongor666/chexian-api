@@ -1,9 +1,11 @@
 /**
  * TOP20 业务员推介率看板 (主全 / 交三)
  * Cross-Sell Top Salesman Board
+ * 
+ * 包含：AI智能分析面板 + 主全/交三表格/分布图 + 导出CSV功能
  */
 
-import { memo, useState } from 'react';
+import { memo, useState, useCallback } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { useCrossSellTopSalesman } from './hooks/useCrossSellTopSalesman';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
@@ -12,6 +14,8 @@ import { cardStyles, textStyles, cn } from '@/shared/styles';
 import { TopSalesmanQuadrantChart } from './TopSalesmanQuadrantChart';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import { getRateClassByField, getAvgPremiumClassByCoverage } from './crossSellRateStatus';
+import { CrossSellAIAnalysisPanel } from './CrossSellAIAnalysisPanel';
+import { prepareExportData, exportToCSV, downloadCSV, generateExportFilename } from './utils/crossSellExport';
 
 interface TopSalesmanBoardProps {
     filters: AdvancedFilterState;
@@ -23,27 +27,99 @@ type SortField = 'org_level_3' | 'driver_premium' | 'auto_count' | 'avg_premium'
 type SortOrder = 'asc' | 'desc';
 type ViewMode = 'table' | 'chart';
 
+const TIME_PERIOD_LABELS: Record<TrendGranularity, string> = {
+    daily: '当日',
+    weekly: '当周',
+    monthly: '当月',
+    quarterly: '当季',
+    yearly: '当年',
+};
+
 export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard({
     filters,
     vehicleCategory,
     timePeriod,
 }: TopSalesmanBoardProps) {
+    // 主全数据
+    const zhuquanResult = useCrossSellTopSalesman({
+        filters,
+        vehicleCategory,
+        coverage: '主全',
+        timePeriod,
+    });
+    
+    // 交三数据
+    const jiaosanResult = useCrossSellTopSalesman({
+        filters,
+        vehicleCategory,
+        coverage: '交三',
+        timePeriod,
+    });
+
+    const loading = zhuquanResult.loading || jiaosanResult.loading;
+    const error = zhuquanResult.error || jiaosanResult.error;
+    const hasData = zhuquanResult.data.length > 0 || jiaosanResult.data.length > 0;
+
+    // 导出CSV
+    const handleExport = useCallback(() => {
+        if (!hasData) return;
+        
+        const exportData = prepareExportData(zhuquanResult.data, jiaosanResult.data);
+        const csvContent = exportToCSV(exportData);
+        const filename = generateExportFilename(TIME_PERIOD_LABELS[timePeriod]);
+        downloadCSV(csvContent, filename);
+    }, [zhuquanResult.data, jiaosanResult.data, timePeriod, hasData]);
+
     return (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <SalesmanPanel
-                title="主全"
-                coverage="主全"
-                filters={filters}
-                vehicleCategory={vehicleCategory}
-                timePeriod={timePeriod}
-            />
-            <SalesmanPanel
-                title="交三"
-                coverage="交三"
-                filters={filters}
-                vehicleCategory={vehicleCategory}
-                timePeriod={timePeriod}
-            />
+        <div className="space-y-4">
+            {/* 顶部标题栏 */}
+            <div className="flex items-center justify-between">
+                <h3 className={cn(textStyles.h4, 'text-neutral-800')}>
+                    TOP20 业务员分析
+                </h3>
+                <button
+                    onClick={handleExport}
+                    disabled={!hasData || loading}
+                    className={cn(
+                        'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                        hasData && !loading
+                            ? 'bg-primary text-white hover:bg-primary/90'
+                            : 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
+                    )}
+                >
+                    导出CSV
+                </button>
+            </div>
+
+            {/* 主内容区：左侧AI分析 + 右侧表格/图表 */}
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+                {/* 左侧：AI智能分析面板 */}
+                <div className="xl:col-span-1 h-auto xl:h-[460px]">
+                    <CrossSellAIAnalysisPanel
+                        zhuquanData={zhuquanResult.data}
+                        jiaosanData={jiaosanResult.data}
+                        timePeriodLabel={TIME_PERIOD_LABELS[timePeriod]}
+                    />
+                </div>
+
+                {/* 右侧：主全和交三面板 */}
+                <div className="xl:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <SalesmanPanel
+                        title="主全"
+                        coverage="主全"
+                        data={zhuquanResult.data}
+                        loading={zhuquanResult.loading}
+                        error={zhuquanResult.error}
+                    />
+                    <SalesmanPanel
+                        title="交三"
+                        coverage="交三"
+                        data={jiaosanResult.data}
+                        loading={jiaosanResult.loading}
+                        error={jiaosanResult.error}
+                    />
+                </div>
+            </div>
         </div>
     );
 });
@@ -52,26 +128,19 @@ export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard
 const SalesmanPanel = memo(function SalesmanPanel({
     title,
     coverage,
-    filters,
-    vehicleCategory,
-    timePeriod,
+    data,
+    loading,
+    error,
 }: {
     title: string;
     coverage: '主全' | '交三';
-    filters: AdvancedFilterState;
-    vehicleCategory: VehicleCategory;
-    timePeriod: TrendGranularity;
+    data: ReturnType<typeof useCrossSellTopSalesman>['data'];
+    loading: boolean;
+    error: string | null;
 }) {
     const [viewMode, setViewMode] = useState<ViewMode>('table');
     const [sortField, setSortField] = useState<SortField>('rate');
     const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
-
-    const { data, loading, error } = useCrossSellTopSalesman({
-        filters,
-        vehicleCategory,
-        coverage,
-        timePeriod,
-    });
 
     const handleSort = (field: SortField) => {
         if (sortField === field) {
@@ -86,21 +155,19 @@ const SalesmanPanel = memo(function SalesmanPanel({
         let aVal: any = a[sortField];
         let bVal: any = b[sortField];
 
-        // 如果是字符串，使用 localeCompare
         if (typeof aVal === 'string' && typeof bVal === 'string') {
             return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
         }
 
-        // 数值比较
         aVal = Number(aVal) || 0;
         bVal = Number(bVal) || 0;
         return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
     });
 
     return (
-        <div className={cn(cardStyles.standard, 'p-0 flex flex-col overflow-hidden border border-neutral-200 shadow-sm')}>
+        <div className={cn(cardStyles.standard, 'p-0 flex flex-col overflow-hidden border border-neutral-200 shadow-sm h-[400px]')}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100 bg-neutral-50">
-                <h4 className={cn(textStyles.body, 'font-semibold text-neutral-800')}>{title} TOP 20 业务员</h4>
+                <h4 className={cn(textStyles.body, 'font-semibold text-neutral-800')}>{title} TOP 20</h4>
                 <div className="flex bg-white rounded-lg border border-neutral-200 p-0.5 shadow-sm">
                     <button
                         onClick={() => setViewMode('table')}
@@ -118,12 +185,12 @@ const SalesmanPanel = memo(function SalesmanPanel({
                             viewMode === 'chart' ? 'bg-primary text-white shadow' : 'text-neutral-500 hover:text-neutral-700'
                         )}
                     >
-                        四象限
+                        分布图
                     </button>
                 </div>
             </div>
 
-            <div className="p-4 flex-1 h-[400px] overflow-hidden relative">
+            <div className="p-4 flex-1 overflow-hidden relative">
                 {loading && (
                     <div className="absolute inset-0 z-10 bg-white/60 flex items-center justify-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -151,35 +218,30 @@ const SalesmanPanel = memo(function SalesmanPanel({
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 whitespace-nowrap"
                                         onClick={() => handleSort('org_level_3')}
-                                        title="点击按三级机构排序"
                                     >
                                         三级机构 {sortField === 'org_level_3' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 text-right whitespace-nowrap"
                                         onClick={() => handleSort('driver_premium')}
-                                        title="点击按驾乘首年保费排序"
                                     >
                                         驾乘险保费-万 {sortField === 'driver_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 text-right whitespace-nowrap"
                                         onClick={() => handleSort('auto_count')}
-                                        title="点击按车险件数排序"
                                     >
                                         车险件数 {sortField === 'auto_count' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 text-right whitespace-nowrap"
                                         onClick={() => handleSort('rate')}
-                                        title="点击按推介率排序"
                                     >
                                         推介率 {sortField === 'rate' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th
                                         className="py-2.5 px-3 font-medium text-neutral-500 cursor-pointer hover:bg-neutral-50 text-right whitespace-nowrap"
                                         onClick={() => handleSort('avg_premium')}
-                                        title="点击按件均保费排序"
                                     >
                                         件均保费-元 {sortField === 'avg_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>

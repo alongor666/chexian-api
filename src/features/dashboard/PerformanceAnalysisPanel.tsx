@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { EChartsOption } from 'echarts';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { Tabs } from '@/shared/ui/Tabs';
@@ -89,11 +89,20 @@ function mapTimePeriodToTrendGranularity(timePeriod: PerformanceTimePeriod): 'da
   }
 }
 
-function SectionTitle({ title }: { title: string }) {
+function SectionTitle({
+  title,
+  rightContent,
+}: {
+  title: string;
+  rightContent?: ReactNode;
+}) {
   return (
-    <div className="flex items-center gap-2 mb-3">
-      <h2 className={cn(textStyles.titleSmall, 'font-semibold')}>{title}</h2>
-      <div className={cn('flex-1 h-px', colorClasses.bg.neutralLight)} />
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <div className="flex items-center gap-2 min-w-0">
+        <h2 className={cn(textStyles.titleSmall, 'font-semibold')}>{title}</h2>
+        <div className={cn('flex-1 h-px min-w-[48px]', colorClasses.bg.neutralLight)} />
+      </div>
+      {rightContent}
     </div>
   );
 }
@@ -612,37 +621,41 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     setExpandedCoverage((prev) => ({ ...prev, [coverage]: !prev[coverage] }));
   };
 
+  const segmentLabel = String(SEGMENT_TABS.find((item) => item.key === segmentTag)?.label || '全部');
+  const timeLabel = String(TIME_PERIOD_TABS.find((item) => item.key === timePeriod)?.label || '日');
+  const growthLabel = String(GROWTH_MODE_TABS.find((item) => item.key === growthMode)?.label || '环比');
+  const summaryTitle = `险别组合业绩${growthLabel}（${segmentLabel} · ${timeLabel}）`;
+
   return (
     <div className="space-y-5">
-      <div className="sticky top-0 z-20 bg-neutral-50/90 backdrop-blur-md pb-4 pt-2 -mx-2 px-2 border-b border-neutral-200 space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Tabs
-            items={SEGMENT_TABS}
-            activeKey={segmentTag}
-            onChange={(key) => setSegmentTag(key as PerformanceSegmentTag)}
-            variant="pills"
-            size="medium"
-          />
-          <div className="w-px h-6 bg-neutral-300" />
-          <Tabs
-            items={TIME_PERIOD_TABS}
-            activeKey={timePeriod}
-            onChange={(key) => setTimePeriod(key as PerformanceTimePeriod)}
-            variant="pills"
-            size="medium"
-          />
-          <div className="w-px h-6 bg-neutral-300" />
-          <Tabs
-            items={GROWTH_MODE_TABS}
-            activeKey={growthMode}
-            onChange={(key) => setGrowthMode(key as PerformanceGrowthMode)}
-            variant="pills"
-            size="medium"
-          />
-        </div>
-      </div>
-
-      <SectionTitle title="险别组合业绩环比" />
+      <SectionTitle
+        title={summaryTitle}
+        rightContent={(
+          <div className="flex flex-wrap items-center gap-2">
+            <Tabs
+              items={SEGMENT_TABS}
+              activeKey={segmentTag}
+              onChange={(key) => setSegmentTag(key as PerformanceSegmentTag)}
+              variant="pills"
+              size="small"
+            />
+            <Tabs
+              items={TIME_PERIOD_TABS}
+              activeKey={timePeriod}
+              onChange={(key) => setTimePeriod(key as PerformanceTimePeriod)}
+              variant="pills"
+              size="small"
+            />
+            <Tabs
+              items={GROWTH_MODE_TABS}
+              activeKey={growthMode}
+              onChange={(key) => setGrowthMode(key as PerformanceGrowthMode)}
+              variant="pills"
+              size="small"
+            />
+          </div>
+        )}
+      />
       <section className={cn(cardStyles.standard, 'p-0 overflow-hidden')}>
         <div className="px-4 pt-3">
           <Tabs
@@ -664,18 +677,24 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">车险保费(万元)</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">车险件数</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">件均保费</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">达成率</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">增长率</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">新能源占比</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">续保占比</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">转保占比</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">新车占比</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">过户占比</th>
                 </tr>
               </thead>
               <tbody>
                 {summaryQuery.loading && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">数据加载中...</td>
+                    <td colSpan={11} className="px-4 py-8 text-center text-neutral-400">数据加载中...</td>
                   </tr>
                 )}
                 {!summaryQuery.loading && parentSummaryRows.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">暂无数据</td>
+                    <td colSpan={11} className="px-4 py-8 text-center text-neutral-400">暂无数据</td>
                   </tr>
                 )}
                 {!summaryQuery.loading && parentSummaryRows.map((row, index) => {
@@ -694,9 +713,17 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(row.avg_premium)}</td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric, getRateTextClass('achievement', row.achievement_rate))}>
+                          {row.achievement_rate === null ? '-' : formatPercent(row.achievement_rate)}
+                        </td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric, getGrowthTextClass(classifyGrowthBand(row.growth_rate)), 'font-semibold')}>
                           {row.growth_rate === null ? '-' : formatPercent(row.growth_rate)}
                         </td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.nev_rate)}</td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.renewal_rate)}</td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.transfer_business_rate)}</td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.new_car_rate)}</td>
+                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.transfer_rate)}</td>
                       </tr>
                       {isExpanded && childRows.map((child) => (
                         <tr key={`${row.coverage_combination}-${child.expand_key}`} className="border-b border-neutral-100 bg-neutral-50/40">
@@ -704,9 +731,17 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(child.premium)}</td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatCount(child.auto_count)}</td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(child.avg_premium)}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric, getRateTextClass('achievement', child.achievement_rate))}>
+                            {child.achievement_rate === null ? '-' : formatPercent(child.achievement_rate)}
+                          </td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric, getGrowthTextClass(classifyGrowthBand(child.growth_rate)), 'font-semibold')}>
                             {child.growth_rate === null ? '-' : formatPercent(child.growth_rate)}
                           </td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.nev_rate)}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.renewal_rate)}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.transfer_business_rate)}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.new_car_rate)}</td>
+                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.transfer_rate)}</td>
                         </tr>
                       ))}
                     </React.Fragment>

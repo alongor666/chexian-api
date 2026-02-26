@@ -475,112 +475,14 @@ export function generatePerformanceSummaryQuery(
 ): string {
   const segmentFilter = getPerformanceSegmentFilter(segmentTag);
   const periodBounds = buildPeriodBoundsCte(whereWithDate, segmentFilter, timePeriod, growthMode);
+  const periodProgress = buildPeriodProgressCte();
   const useExpandRows = expandDims !== 'none';
   const expandConfig = useExpandRows ? getExpandDimensionConfig(expandDims) : null;
-
-  const summarySql = useExpandRows
-    ? `
-    ,
-    child_current AS (
-      SELECT
-        '整体' AS coverage_combination,
-        ${expandConfig!.labelExpr} AS row_label,
-        ${expandConfig!.keyExpr} AS expand_key,
-        ${expandConfig!.orderExpr} AS child_order,
-        SUM(premium_wan) AS premium,
-        COUNT(DISTINCT dedup_key) AS auto_count
-      FROM current_rows
-      GROUP BY row_label, expand_key, child_order
-      UNION ALL
-      SELECT
-        coverage_combination,
-        ${expandConfig!.labelExpr} AS row_label,
-        ${expandConfig!.keyExpr} AS expand_key,
-        ${expandConfig!.orderExpr} AS child_order,
-        SUM(premium_wan) AS premium,
-        COUNT(DISTINCT dedup_key) AS auto_count
-      FROM current_rows
-      WHERE coverage_combination IN ('主全', '交三', '单交')
-      GROUP BY coverage_combination, row_label, expand_key, child_order
-    ),
-    child_prev AS (
-      SELECT
-        '整体' AS coverage_combination,
-        ${expandConfig!.keyExpr} AS expand_key,
-        SUM(premium_wan) AS premium
-      FROM prev_rows
-      GROUP BY expand_key
-      UNION ALL
-      SELECT
-        coverage_combination,
-        ${expandConfig!.keyExpr} AS expand_key,
-        SUM(premium_wan) AS premium
-      FROM prev_rows
-      WHERE coverage_combination IN ('主全', '交三', '单交')
-      GROUP BY coverage_combination, expand_key
-    ),
-    child_metrics AS (
-      SELECT
-        c.coverage_combination,
-        c.row_label,
-        1 AS row_level,
-        c.expand_key,
-        c.child_order,
-        ROUND(c.premium, 4) AS premium,
-        c.auto_count,
-        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.premium * 10000.0 / c.auto_count, 2) END AS avg_premium,
-        CASE
-          WHEN COALESCE(p.premium, 0) = 0 THEN NULL
-          ELSE ROUND((c.premium - p.premium) * 100.0 / p.premium, 2)
-        END AS growth_rate
-      FROM child_current c
-      LEFT JOIN child_prev p
-        ON c.coverage_combination = p.coverage_combination
-        AND c.expand_key = p.expand_key
-    )
-    SELECT
-      coverage_combination,
-      row_label,
-      row_level,
-      expand_key,
-      premium,
-      auto_count,
-      avg_premium,
-      growth_rate
-    FROM parent_metrics
-    UNION ALL
-    SELECT
-      coverage_combination,
-      row_label,
-      row_level,
-      expand_key,
-      premium,
-      auto_count,
-      avg_premium,
-      growth_rate
-    FROM child_metrics
-    ORDER BY
-      ${coverageOrderExpr()},
-      row_level,
-      CASE WHEN row_level = 0 THEN 0 ELSE child_order END
-  `
-    : `
-    SELECT
-      coverage_combination,
-      row_label,
-      row_level,
-      expand_key,
-      premium,
-      auto_count,
-      avg_premium,
-      growth_rate
-    FROM parent_metrics
-    ORDER BY ${coverageOrderExpr()}
-  `;
 
   const sql = `
     WITH
     ${periodBounds},
+    ${periodProgress},
     filtered AS (
       SELECT
         CASE
@@ -593,10 +495,14 @@ export function generatePerformanceSummaryQuery(
           NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
         ) AS dedup_key,
         CASE WHEN premium > 0 THEN premium / 10000.0 ELSE 0 END AS premium_wan,
+        salesman_name,
         CASE WHEN ${truthyExpr('is_nev')} THEN true ELSE false END AS is_nev_bool,
         CASE WHEN ${truthyExpr('is_renewal')} THEN true ELSE false END AS is_renewal_bool,
-        CASE WHEN ${truthyExpr('is_new_car')} THEN true ELSE false END AS is_new_car_bool
+        CASE WHEN ${truthyExpr('is_new_car')} THEN true ELSE false END AS is_new_car_bool,
+        CASE WHEN ${truthyExpr('is_transfer')} THEN true ELSE false END AS is_transfer_bool,
+        COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
       FROM PolicyFact
+      LEFT JOIN achievement_cache ac ON PolicyFact.salesman_name = ac.full_name
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
     ),
@@ -612,20 +518,61 @@ export function generatePerformanceSummaryQuery(
       CROSS JOIN period_bounds pb
       WHERE f.pd >= pb.prev_start AND f.pd <= pb.prev_end
     ),
-    parent_current AS (
+    salesman_totals AS (
       SELECT
-        '整体' AS coverage_combination,
-        SUM(premium_wan) AS premium,
-        COUNT(DISTINCT dedup_key) AS auto_count
+        salesman_name,
+        SUM(premium_wan) AS salesman_premium_wan
       FROM current_rows
-      UNION ALL
+      GROUP BY salesman_name
+    ),
+    parent_current_cov AS (
       SELECT
         coverage_combination,
         SUM(premium_wan) AS premium,
-        COUNT(DISTINCT dedup_key) AS auto_count
-      FROM current_rows
+        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(*) AS row_count,
+        SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
+        SUM(CASE WHEN is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
+        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
+        SUM(CASE WHEN is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(
+          CASE
+            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
+              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
+            ELSE 0
+          END
+        ) AS allocated_plan
+      FROM current_rows cr
+      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
       WHERE coverage_combination IN ('主全', '交三', '单交')
       GROUP BY coverage_combination
+    ),
+    parent_current_all AS (
+      SELECT
+        '整体' AS coverage_combination,
+        SUM(premium_wan) AS premium,
+        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(*) AS row_count,
+        SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
+        SUM(CASE WHEN is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
+        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
+        SUM(CASE WHEN is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(
+          CASE
+            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
+              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
+            ELSE 0
+          END
+        ) AS allocated_plan
+      FROM current_rows cr
+      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
+    ),
+    parent_current AS (
+      SELECT * FROM parent_current_all
+      UNION ALL
+      SELECT * FROM parent_current_cov
     ),
     parent_prev AS (
       SELECT
@@ -646,17 +593,188 @@ export function generatePerformanceSummaryQuery(
         c.coverage_combination AS row_label,
         0 AS row_level,
         NULL::VARCHAR AS expand_key,
+        ${coverageOrderExpr('c.coverage_combination')} AS coverage_order,
+        0 AS child_order,
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.premium * 10000.0 / c.auto_count, 2) END AS avg_premium,
         CASE
+          WHEN pp.total_days <= 0 THEN NULL
+          WHEN COALESCE(c.allocated_plan, 0) <= 0 OR COALESCE(pp.period_plan_ratio, 0) <= 0 THEN NULL
+          WHEN COALESCE(pp.elapsed_days, 0) <= 0 THEN 0
+          ELSE ROUND(
+            (c.premium / (c.allocated_plan * pp.period_plan_ratio))
+            * (pp.elapsed_days * 100.0 / pp.total_days),
+            2
+          )
+        END AS achievement_rate,
+        CASE
           WHEN COALESCE(p.premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.premium) * 100.0 / p.premium, 2)
-        END AS growth_rate
+        END AS growth_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.row_count, 2) END AS nev_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.row_count, 2) END AS renewal_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.row_count, 2) END AS transfer_business_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.row_count, 2) END AS new_car_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.row_count, 2) END AS transfer_rate
       FROM parent_current c
       LEFT JOIN parent_prev p ON c.coverage_combination = p.coverage_combination
+      CROSS JOIN period_progress pp
     )
-    ${summarySql}
+    ${useExpandRows ? `,
+    child_current_cov AS (
+      SELECT
+        coverage_combination,
+        ${expandConfig!.labelExpr} AS row_label,
+        ${expandConfig!.keyExpr} AS expand_key,
+        ${expandConfig!.orderExpr} AS child_order,
+        SUM(premium_wan) AS premium,
+        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(*) AS row_count,
+        SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
+        SUM(CASE WHEN is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
+        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
+        SUM(CASE WHEN is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(
+          CASE
+            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
+              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
+            ELSE 0
+          END
+        ) AS allocated_plan
+      FROM current_rows cr
+      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
+      WHERE coverage_combination IN ('主全', '交三', '单交')
+      GROUP BY coverage_combination, row_label, expand_key, child_order
+    ),
+    child_current_all AS (
+      SELECT
+        '整体' AS coverage_combination,
+        ${expandConfig!.labelExpr} AS row_label,
+        ${expandConfig!.keyExpr} AS expand_key,
+        ${expandConfig!.orderExpr} AS child_order,
+        SUM(premium_wan) AS premium,
+        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(*) AS row_count,
+        SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
+        SUM(CASE WHEN is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
+        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
+        SUM(CASE WHEN is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(
+          CASE
+            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
+              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
+            ELSE 0
+          END
+        ) AS allocated_plan
+      FROM current_rows cr
+      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
+      GROUP BY row_label, expand_key, child_order
+    ),
+    child_current AS (
+      SELECT * FROM child_current_all
+      UNION ALL
+      SELECT * FROM child_current_cov
+    ),
+    child_prev_cov AS (
+      SELECT
+        coverage_combination,
+        ${expandConfig!.keyExpr} AS expand_key,
+        SUM(premium_wan) AS premium
+      FROM prev_rows
+      WHERE coverage_combination IN ('主全', '交三', '单交')
+      GROUP BY coverage_combination, expand_key
+    ),
+    child_prev_all AS (
+      SELECT
+        '整体' AS coverage_combination,
+        ${expandConfig!.keyExpr} AS expand_key,
+        SUM(premium_wan) AS premium
+      FROM prev_rows
+      GROUP BY expand_key
+    ),
+    child_prev AS (
+      SELECT * FROM child_prev_all
+      UNION ALL
+      SELECT * FROM child_prev_cov
+    ),
+    child_metrics AS (
+      SELECT
+        c.coverage_combination,
+        c.row_label,
+        1 AS row_level,
+        c.expand_key,
+        ${coverageOrderExpr('c.coverage_combination')} AS coverage_order,
+        c.child_order,
+        ROUND(c.premium, 4) AS premium,
+        c.auto_count,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.premium * 10000.0 / c.auto_count, 2) END AS avg_premium,
+        CASE
+          WHEN pp.total_days <= 0 THEN NULL
+          WHEN COALESCE(c.allocated_plan, 0) <= 0 OR COALESCE(pp.period_plan_ratio, 0) <= 0 THEN NULL
+          WHEN COALESCE(pp.elapsed_days, 0) <= 0 THEN 0
+          ELSE ROUND(
+            (c.premium / (c.allocated_plan * pp.period_plan_ratio))
+            * (pp.elapsed_days * 100.0 / pp.total_days),
+            2
+          )
+        END AS achievement_rate,
+        CASE
+          WHEN COALESCE(p.premium, 0) = 0 THEN NULL
+          ELSE ROUND((c.premium - p.premium) * 100.0 / p.premium, 2)
+        END AS growth_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.row_count, 2) END AS nev_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.row_count, 2) END AS renewal_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.row_count, 2) END AS transfer_business_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.row_count, 2) END AS new_car_rate,
+        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.row_count, 2) END AS transfer_rate
+      FROM child_current c
+      LEFT JOIN child_prev p
+        ON c.coverage_combination = p.coverage_combination
+        AND c.expand_key = p.expand_key
+      CROSS JOIN period_progress pp
+    ),
+    combined AS (
+      SELECT * FROM parent_metrics
+      UNION ALL
+      SELECT * FROM child_metrics
+    )
+    SELECT
+      coverage_combination,
+      row_label,
+      row_level,
+      expand_key,
+      premium,
+      auto_count,
+      avg_premium,
+      achievement_rate,
+      growth_rate,
+      nev_rate,
+      renewal_rate,
+      transfer_business_rate,
+      new_car_rate,
+      transfer_rate
+    FROM combined
+    ORDER BY coverage_order, row_level, child_order` : `
+    SELECT
+      coverage_combination,
+      row_label,
+      row_level,
+      expand_key,
+      premium,
+      auto_count,
+      avg_premium,
+      achievement_rate,
+      growth_rate,
+      nev_rate,
+      renewal_rate,
+      transfer_business_rate,
+      new_car_rate,
+      transfer_rate
+    FROM parent_metrics
+    ORDER BY coverage_order`}
   `;
 
   logger.debug('Generated performance summary SQL', {

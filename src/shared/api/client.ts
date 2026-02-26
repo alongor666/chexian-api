@@ -701,7 +701,13 @@ class ApiClient {
       premium: number;
       auto_count: number;
       avg_premium: number;
+      achievement_rate: number | null;
       growth_rate: number | null;
+      nev_rate: number;
+      renewal_rate: number;
+      transfer_business_rate: number;
+      new_car_rate: number;
+      transfer_rate: number;
     }>;
   }> {
     const searchParams = new URLSearchParams();
