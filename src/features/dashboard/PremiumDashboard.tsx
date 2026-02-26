@@ -15,6 +15,7 @@ import { TableSection } from './components/TableSection';
 import { DashboardCustomizerPanel } from './components/DashboardCustomizerPanel';
 import type { DashboardSectionId, KpiCardId, KpiGroup } from './dashboardLayoutConfig';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
+import { cardStyles, cn } from '../../shared/styles';
 
 import { Logger } from '@/shared/utils/logger';
 
@@ -181,7 +182,7 @@ export const PremiumDashboard: React.FC = () => {
     trend: (
       <div className="space-y-4">
         {isInitialized && (
-          <div className="bg-white p-4 rounded shadow">
+          <div className={cn(cardStyles.standard)}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
               <span className="font-semibold">趋势图时间视图：</span>
               <div className="flex flex-wrap gap-2">
@@ -193,9 +194,8 @@ export const PremiumDashboard: React.FC = () => {
                   <button
                     key={value}
                     onClick={() => setTimeView(value)}
-                    className={`px-4 py-2 rounded ${
-                      timeView === value ? 'bg-primary text-white' : 'bg-neutral-200 hover:bg-neutral-300'
-                    }`}
+                    className={`px-4 py-2 rounded ${timeView === value ? 'bg-primary text-white' : 'bg-neutral-200 hover:bg-neutral-300'
+                      }`}
                   >
                     {label}
                   </button>
@@ -269,7 +269,7 @@ export const PremiumDashboard: React.FC = () => {
       className="p-2 sm:p-3 md:p-4 max-w-[1600px] mx-auto space-y-3 sm:space-y-4"
     >
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end bg-white p-3 sm:p-4 rounded shadow">
+      <div className={cn(cardStyles.compact, "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end border-none")}>
         {isInitialized && (
           <button
             onClick={handleExportPdf}
@@ -301,7 +301,7 @@ export const PremiumDashboard: React.FC = () => {
         />
 
         {visibleSections.length === 0 ? (
-          <div className="bg-white p-6 rounded shadow text-center text-neutral-500">
+          <div className={cn(cardStyles.spacious, "text-center text-neutral-500 border-none")}>
             未选择显示模块
           </div>
         ) : (

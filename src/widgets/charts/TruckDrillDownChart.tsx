@@ -13,6 +13,7 @@ import { formatCount, formatPremiumWan, formatRate } from '../../shared/utils/fo
 import type { EChartsParam } from '../../shared/types/echarts';
 import type { ViewPerspective } from '../../shared/types';
 import { getPerspectiveConfig } from '../../shared/types';
+import { cardStyles, cn } from '../../shared/styles';
 
 interface TruckDrillDownData {
   org_level_3: string;
@@ -400,5 +401,5 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
     return <div>{content}</div>;
   }
 
-  return <div className="bg-white p-4 rounded shadow">{content}</div>;
+  return <div className={cn(cardStyles.standard)}>{content}</div>;
 };

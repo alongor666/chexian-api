@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { RoseChart } from '../../../widgets/charts/RoseChart';
 import type { RoseChartDatum } from '../types';
+import { cardStyles, textStyles, cn } from '../../../shared/styles';
 
 interface RoseChartsSectionProps {
   customerCategoryData: RoseChartDatum[];
@@ -31,7 +32,7 @@ export const RoseChartsSection = memo<RoseChartsSectionProps>(function RoseChart
 }) {
   if (!isInitialized) {
     return (
-      <div className="bg-white p-8 rounded shadow text-center text-gray-500">
+      <div className={cn(cardStyles.spacious, textStyles.body, "text-center")}>
         <p className="text-lg">请先上传数据文件以查看占比分析</p>
       </div>
     );

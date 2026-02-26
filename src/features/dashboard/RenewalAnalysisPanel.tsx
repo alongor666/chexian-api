@@ -7,6 +7,7 @@ import { getPerspectiveConfig } from '../../shared/types';
 import { PerspectiveSwitcher } from '../../widgets/filters/PerspectiveSwitcher';
 import { useRenewalAnalysis } from './hooks/useRenewalAnalysis';
 import { useDataStatus } from '../../shared/contexts/DataContext';
+import { cardStyles, textStyles, cn } from '../../shared/styles';
 
 interface RenewalAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -81,7 +82,7 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
         </ul>
       </div>
 
-      <div className="bg-white p-4 rounded shadow">
+      <div className={cn(cardStyles.standard)}>
         <div className="flex flex-wrap items-center gap-4">
           <PerspectiveSwitcher
             value={perspective}
@@ -130,8 +131,8 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
       )}
 
       {/* 续保明细表格 */}
-      <div className="bg-white rounded shadow p-4">
-        <h3 className="text-lg font-semibold mb-4">
+      <div className={cn(cardStyles.standard)}>
+        <h3 className={cn(textStyles.titleMedium, "mb-4")}>
           续保明细表格（{targetYear}年{selectedMonth}月，{perspectiveConfig.label}视角）
         </h3>
         {loading ? (
@@ -159,31 +160,30 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
                   return (
                     <tr
                       key={idx}
-                      className={`border-t hover:bg-gray-50 ${
-                        isLatestDate ? 'bg-yellow-100 font-semibold' : ''
-                      }`}
+                      className={`border-t hover:bg-gray-50 ${isLatestDate ? 'bg-yellow-100 font-semibold' : ''
+                        }`}
                       title={isLatestDate ? '最新签单日期对应的到期日' : ''}
                     >
                       <td className="px-3 py-2 border-r border-gray-200">
                         {row.month_day}
                         {isLatestDate && <span className="ml-2 text-yellow-600">★</span>}
                       </td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200">{valueFormatter(row.daily_due_count)}</td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200">{valueFormatter(row.daily_renewed_count)}</td>
-                    <td className="px-3 py-2 border-r-2 border-gray-300 text-center">
-                      <RenewalStatusBadge rate={row.daily_renewal_rate} mode="dot" size="small" />
-                    </td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.month_to_date_due_count)}</td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.month_to_date_renewed_count)}</td>
-                    <td className="px-3 py-2 border-r-2 border-gray-300 text-center">
-                      <RenewalStatusBadge rate={row.monthly_renewal_rate} mode="dot" size="small" />
-                    </td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.year_to_date_due_count)}</td>
-                    <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.year_to_date_renewed_count)}</td>
-                    <td className="px-3 py-2 text-center">
-                      <RenewalStatusBadge rate={row.yearly_renewal_rate} mode="dot" size="small" />
-                    </td>
-                  </tr>
+                      <td className="px-3 py-2 text-right border-r border-gray-200">{valueFormatter(row.daily_due_count)}</td>
+                      <td className="px-3 py-2 text-right border-r border-gray-200">{valueFormatter(row.daily_renewed_count)}</td>
+                      <td className="px-3 py-2 border-r-2 border-gray-300 text-center">
+                        <RenewalStatusBadge rate={row.daily_renewal_rate} mode="dot" size="small" />
+                      </td>
+                      <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.month_to_date_due_count)}</td>
+                      <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.month_to_date_renewed_count)}</td>
+                      <td className="px-3 py-2 border-r-2 border-gray-300 text-center">
+                        <RenewalStatusBadge rate={row.monthly_renewal_rate} mode="dot" size="small" />
+                      </td>
+                      <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.year_to_date_due_count)}</td>
+                      <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.year_to_date_renewed_count)}</td>
+                      <td className="px-3 py-2 text-center">
+                        <RenewalStatusBadge rate={row.yearly_renewal_rate} mode="dot" size="small" />
+                      </td>
+                    </tr>
                   );
                 })}
                 {!loading && detailData.length === 0 && (

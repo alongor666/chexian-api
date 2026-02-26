@@ -4,6 +4,7 @@ import type { TimeView } from './LineChart';
 import { echarts } from '../../shared/utils/echarts';
 import { formatPercent, formatPremiumWan, formatWanDirect } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
+import { cardStyles, cn } from '../../shared/styles';
 
 interface QualityBusinessChartProps {
   title: string;
@@ -300,12 +301,14 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
     };
 
     chart.setOption(option, true);
+  }, [data, loading, title, height, timeView, startDate, endDate]);
 
+  useEffect(() => {
     return () => {
-      chart.dispose();
+      chartInstance.current?.dispose();
       chartInstance.current = null;
     };
-  }, [data, loading, title, height, timeView, startDate, endDate]);
+  }, []);
 
   // Handle resize
   useEffect(() => {
@@ -318,7 +321,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
   }, []);
 
   return (
-    <div className="bg-white rounded shadow p-4">
+    <div className={cn(cardStyles.standard)}>
       <div ref={chartRef} style={{ width: '100%', height: `${height}px` }} />
     </div>
   );
