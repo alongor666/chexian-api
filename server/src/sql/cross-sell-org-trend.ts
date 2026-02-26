@@ -50,8 +50,16 @@ export function generateCrossSellOrgTrendQuery(
       : '';
 
   const sql = `
-    WITH date_series AS (
-      SELECT CAST(CURRENT_DATE - (INTERVAL '1 day' * i) AS DATE) AS date_val
+    WITH latest AS (
+      -- 以数据中实际最新签单日期为基准，而非 CURRENT_DATE
+      SELECT MAX(CAST(policy_date AS DATE)) AS latest_date
+      FROM PolicyFact
+      WHERE ${baseWhereClause}
+        AND ${vehicleFilter}
+        ${coverageFilter}
+    ),
+    date_series AS (
+      SELECT ((SELECT latest_date FROM latest) - (INTERVAL '1 day' * i)) AS date_val
       FROM generate_series(0, ${safedays - 1}) AS gs(i)
     ),
     filtered AS (
@@ -65,8 +73,8 @@ export function generateCrossSellOrgTrendQuery(
       FROM PolicyFact
       WHERE ${baseWhereClause}
         AND ${vehicleFilter}
-        AND CAST(policy_date AS DATE) >= CURRENT_DATE - INTERVAL '${safedays - 1} days'
-        AND CAST(policy_date AS DATE) <= CURRENT_DATE
+        AND CAST(policy_date AS DATE) >= (SELECT latest_date FROM latest) - INTERVAL '${safedays - 1} days'
+        AND CAST(policy_date AS DATE) <= (SELECT latest_date FROM latest)
         ${coverageFilter}
     ),
     daily AS (

@@ -325,6 +325,83 @@ export async function generateSqlWithZhipu(
 }
 
 /**
+ * 机构推介率趋势分析结果
+ */
+export interface TrendAnalysisResult {
+  success: boolean;
+  analysis: string;
+  error?: string;
+}
+
+/**
+ * 调用智谱 AI 分析机构推介率趋势
+ */
+export async function analyzeOrgTrendWithZhipu(
+  rows: Array<{ date: string; auto_count: number; driver_count: number; rate: number }>,
+  context: { org: string; coverage: string },
+  config: ZhipuConfig
+): Promise<TrendAnalysisResult> {
+  const { apiKey, model = DEFAULT_MODEL } = config;
+
+  if (!apiKey) {
+    return { success: false, analysis: '', error: '未配置智谱 API Key' };
+  }
+
+  const parts = apiKey.split('.');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return { success: false, analysis: '', error: 'API Key 格式无效' };
+  }
+
+  const dataStr = rows
+    .map(r => `${r.date} 车险${r.auto_count}件 驾意${r.driver_count}件 推介率${r.rate}%`)
+    .join('\n');
+
+  const systemPrompt = `你是车险业务分析专家。请根据机构最近每日推介率数据，给出简洁的趋势分析（150字以内）。
+分析要点：
+1. 整体趋势方向（上升/下降/波动）
+2. 近3天与前期对比
+3. 异常日及可能原因
+4. 一条具体行动建议
+格式：纯文本，不用标题，不用序号，直接写分析结论。`;
+
+  const userMsg = `机构：${context.org}，险种：${context.coverage}\n数据（日期 车险件数 驾意件数 推介率）：\n${dataStr}`;
+
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userMsg },
+  ];
+
+  try {
+    const token = generateJwtToken(apiKey);
+    const response = await fetch(`${ZHIPU_API_BASE}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: 300 }),
+    });
+
+    if (!response.ok) {
+      return { success: false, analysis: '', error: `API 错误: ${response.status}` };
+    }
+
+    const data = await response.json() as ZhipuResponse;
+    if (data.error) {
+      return { success: false, analysis: '', error: data.error.message };
+    }
+
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (!content) {
+      return { success: false, analysis: '', error: '模型返回内容为空' };
+    }
+
+    return { success: true, analysis: content };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '请求失败';
+    safeLog('error', 'Zhipu', `TrendAnalysis Error: ${msg}`);
+    return { success: false, analysis: '', error: msg };
+  }
+}
+
+/**
  * 验证 API Key 是否有效
  */
 export async function validateApiKey(apiKey: string): Promise<boolean> {

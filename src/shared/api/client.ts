@@ -1024,6 +1024,20 @@ class ApiClient {
       body: JSON.stringify({ query }),
     });
   }
+
+  /**
+   * AI 分析机构推介率趋势（后端读取 API Key，无需前端传）
+   */
+  async analyzeTrend(params: {
+    rows: Array<{ date: string; auto_count: number; driver_count: number; rate: number }>;
+    org: string;
+    coverage: string;
+  }): Promise<{ success: boolean; analysis: string; error?: string }> {
+    return this.request('/ai/trend-analysis', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
 }
 
 // 导出单例

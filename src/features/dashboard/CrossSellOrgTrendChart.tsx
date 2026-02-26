@@ -7,13 +7,15 @@
  * 机构：同城 / 异地 快捷点选
  */
 
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
 import { formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import { cardStyles, colors, cn } from '../../shared/styles';
 import { ORG_GROUPS } from '../../shared/config/coefficient-thresholds';
 import { useCrossSellOrgTrend, type CoverageCombinationFilter } from './hooks/useCrossSellOrgTrend';
+import { calcTrendStats, type TrendStats } from './utils/orgTrendStats';
+import { apiClient } from '../../shared/api/client';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
 
@@ -69,6 +71,37 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
     selectedOrg,
   });
 
+  // ── 程序统计摘要（零延迟，仅取最新 14 天显示窗口数据计算） ──────────────────
+  const stats: TrendStats | null = useMemo(() => calcTrendStats(rows.slice(-14)), [rows]);
+
+  // ── AI 解读状态 ────────────────────────────────────────────────────────────
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // 切换险种/机构时清除旧 AI 结论
+  useEffect(() => { setAiText(null); setAiError(null); }, [coverage, selectedOrg, region]);
+
+  const handleAiAnalyze = useCallback(async () => {
+    if (rows.length === 0) return;
+    setAiLoading(true);
+    setAiText(null);
+    setAiError(null);
+    try {
+      const result = await apiClient.analyzeTrend({
+        rows: rows.slice(-14),
+        org: selectedOrg ?? (region === 'local' ? '同城汇总' : '异地汇总'),
+        coverage,
+      });
+      if (result.success) setAiText(result.analysis);
+      else setAiError(result.error ?? 'AI 分析失败');
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'AI 分析失败');
+    } finally {
+      setAiLoading(false);
+    }
+  }, [rows, coverage, selectedOrg, region]);
+
   // ── ECharts option ────────────────────────────────────────────────────────
   const option = useMemo((): EChartsOption => {
     const dates = rows.map((r) => r.date);
@@ -90,8 +123,8 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         itemHeight: 12,
         textStyle: { fontSize: 12, color: colors.neutral[600] },
         data: [
-          { name: '车险件数', icon: 'rect' },
           { name: '驾意件数', icon: 'rect' },
+          { name: '非驾意件数', icon: 'rect' },
           { name: '推介率', icon: 'circle' },
         ],
       },
@@ -104,7 +137,9 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           const lines = p.map((item: any) => {
             const val = item.seriesName === '推介率'
               ? `${Number(item.value ?? 0).toFixed(1)}%`
-              : `${Number(item.value ?? 0)}件`;
+              : item.seriesName === '驾意件数'
+                ? `${Number(item.value ?? 0)}件`
+                : `${Number(item.value ?? 0)}件（非驾意）`;
             return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};margin-right:4px"></span>${item.seriesName}: <b>${val}</b>`;
           });
           return `<div style="font-size:12px"><b>${date}</b><br/>${lines.join('<br/>')}</div>`;
@@ -147,19 +182,19 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
       ],
       series: [
         {
-          name: '车险件数',
-          type: 'bar',
-          stack: 'count',
-          data: nonDriverCounts,
-          itemStyle: { color: BAR_AUTO_COLOR },
-          barMaxWidth: 28,
-        },
-        {
           name: '驾意件数',
           type: 'bar',
           stack: 'count',
           data: driverCounts,
           itemStyle: { color: BAR_DRIVER_COLOR },
+          barMaxWidth: 28,
+        },
+        {
+          name: '非驾意件数',
+          type: 'bar',
+          stack: 'count',
+          data: nonDriverCounts,
+          itemStyle: { color: BAR_AUTO_COLOR },
           barMaxWidth: 28,
         },
         {
@@ -187,7 +222,8 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           type: 'slider',
           bottom: 4,
           height: 18,
-          start: 0,
+          // 默认展示最后 14 天，可向左滚动查看最多 90 天
+          start: Math.round((90 - 14) / 90 * 100),
           end: 100,
           borderColor: 'transparent',
           fillerColor: `${colors.primary.DEFAULT}22`,
@@ -310,6 +346,78 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         )}
         <div ref={chartRef} style={{ height: 300, width: '100%' }} />
       </div>
+
+      {/* ── 程序摘要 + AI 解读 ───────────────────────────────────────────── */}
+      {stats && !loading && (
+        <div className="mt-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3">
+          {/* 摘要指标行 */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
+            {/* 均值 */}
+            <span className="text-neutral-500">
+              近14天均值&nbsp;
+              <span className="font-semibold text-neutral-800">{stats.avgRate}%</span>
+            </span>
+
+            {/* 近3天变化 */}
+            <span className="text-neutral-500">
+              近3天&nbsp;
+              <span className="font-semibold text-neutral-800">{stats.recent3Avg}%</span>
+              &nbsp;
+              <span className={cn(
+                'font-medium',
+                stats.changeVsPrev > 0 ? 'text-success-dark' : stats.changeVsPrev < 0 ? 'text-danger' : 'text-neutral-500'
+              )}>
+                {stats.changeVsPrev > 0 ? '↑' : stats.changeVsPrev < 0 ? '↓' : '→'}
+                &nbsp;{Math.abs(stats.changeVsPrev)}pp
+              </span>
+            </span>
+
+            {/* 连续天数 */}
+            {stats.consecutiveDays !== 0 && (
+              <span className={cn(
+                'font-medium',
+                stats.consecutiveDays > 0 ? 'text-success-dark' : 'text-danger'
+              )}>
+                连续{stats.consecutiveDays > 0 ? '上升' : '下降'}{Math.abs(stats.consecutiveDays)}天
+              </span>
+            )}
+
+            {/* 最高/最低 */}
+            <span className="text-neutral-400">
+              最高&nbsp;
+              <span className="text-neutral-700">{stats.maxDay.date.slice(5)}&nbsp;·&nbsp;{stats.maxDay.rate}%</span>
+            </span>
+            <span className="text-neutral-400">
+              最低&nbsp;
+              <span className="text-neutral-700">{stats.minDay.date.slice(5)}&nbsp;·&nbsp;{stats.minDay.rate}%</span>
+            </span>
+
+            {/* AI 按钮（右对齐） */}
+            <button
+              onClick={handleAiAnalyze}
+              disabled={aiLoading}
+              className={cn(
+                'ml-auto flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                aiLoading
+                  ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  : 'bg-primary-bg text-primary-dark border border-primary-border hover:bg-blue-100'
+              )}
+            >
+              {aiLoading ? '分析中…' : '✨ AI 深度解读'}
+            </button>
+          </div>
+
+          {/* AI 分析结果 */}
+          {aiError && (
+            <p className="mt-2 text-xs text-danger">{aiError}</p>
+          )}
+          {aiText && (
+            <p className="mt-2 text-xs leading-relaxed text-neutral-600 border-t border-neutral-200 pt-2">
+              {aiText}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 });

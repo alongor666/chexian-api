@@ -34,6 +34,8 @@ import {
 
 interface CrossSellAnalysisPanelProps {
   filters: AdvancedFilterState;
+  vehicleCategory: VehicleCategory;
+  trendGranularity: TrendGranularity;
 }
 
 // ============================================================
@@ -53,6 +55,45 @@ const GRANULARITY_TABS: TabItem[] = [
   { key: 'quarterly', label: '季' },
   { key: 'yearly', label: '年' },
 ];
+
+interface CrossSellHeaderControlsProps {
+  vehicleCategory: VehicleCategory;
+  trendGranularity: TrendGranularity;
+  onVehicleCategoryChange: (value: VehicleCategory) => void;
+  onTrendGranularityChange: (value: TrendGranularity) => void;
+}
+
+export const CrossSellHeaderControls: React.FC<CrossSellHeaderControlsProps> = ({
+  vehicleCategory,
+  trendGranularity,
+  onVehicleCategoryChange,
+  onTrendGranularityChange,
+}) => (
+  <div className="no-export max-w-full overflow-x-auto">
+    <div className="flex items-center gap-2 whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
+        客户类别
+      </span>
+      <Tabs
+        items={VEHICLE_TABS}
+        activeKey={vehicleCategory}
+        onChange={(key) => onVehicleCategoryChange(key as VehicleCategory)}
+        variant="pills"
+        size="small"
+      />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
+        时间维度
+      </span>
+      <Tabs
+        items={GRANULARITY_TABS}
+        activeKey={trendGranularity}
+        onChange={(key) => onTrendGranularityChange(key as TrendGranularity)}
+        variant="pills"
+        size="small"
+      />
+    </div>
+  </div>
+);
 
 // ============================================================
 // 排序
@@ -191,10 +232,10 @@ function SectionTitle({ title }: { title: string }) {
 
 export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   filters,
+  vehicleCategory,
+  trendGranularity,
 }) => {
   const { isDataLoaded } = useDataStatus();
-  const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory>('passenger');
-  const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
   const [sortKey, setSortKey] = useState<SortKey>('total_auto_count');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
@@ -277,35 +318,6 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* 顶部固定标题与筛选项：车辆类别与时间维度 */}
-      <div className="sticky top-0 z-20 bg-neutral-50/90 backdrop-blur-md pb-4 pt-2 -mx-2 px-2 border-b border-neutral-200 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Tabs
-            items={VEHICLE_TABS}
-            activeKey={vehicleCategory}
-            onChange={(key) => setVehicleCategory(key as VehicleCategory)}
-            variant="pills"
-            size="medium"
-          />
-          <div className="w-px h-6 bg-neutral-300"></div>
-          <Tabs
-            items={GRANULARITY_TABS}
-            activeKey={trendGranularity}
-            onChange={(key) => setTrendGranularity(key as TrendGranularity)}
-            variant="pills"
-            size="medium"
-          />
-        </div>
-        {(drillPath.length > 0 || currentGroupBy) && (
-          <button
-            onClick={reset}
-            className="px-4 py-2 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors font-medium border border-blue-200"
-          >
-            重置分析
-          </button>
-        )}
-      </div>
-
       {/* 板块1：推介率驱动因子环比 */}
       <SectionTitle title="推介率驱动因子环比" />
       <CrossSellSummaryKpiBoard
@@ -355,7 +367,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       <SectionTitle title="下钻分析" />
 
       {/* 面包屑导航 */}
-      <div className="bg-white p-3 rounded-xl shadow-sm">
+      <div className="bg-white p-3 rounded-xl shadow-sm flex flex-wrap items-center justify-between gap-2">
         <RBACBreadcrumb
           drillPath={drillPath}
           currentGroupBy={currentGroupBy}
@@ -363,6 +375,14 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           canGoToTop={canGoToTop}
           dimensionLabels={DIMENSION_LABELS}
         />
+        {(drillPath.length > 0 || currentGroupBy) && (
+          <button
+            onClick={reset}
+            className="px-3 py-1.5 text-xs bg-primary-bg text-primary-dark hover:bg-blue-100 rounded-md transition-colors font-medium border border-primary-border"
+          >
+            重置分析
+          </button>
+        )}
       </div>
 
       {/* 错误提示 */}

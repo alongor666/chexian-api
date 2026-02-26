@@ -69,7 +69,7 @@ export function useCrossSellOrgTrend({
         ...baseParams,
         vehicleCategory,
         coverageCombination,
-        days: '14',
+        days: '90',
       };
 
       const result = await apiClient.getCrossSellOrgTrend(params);
