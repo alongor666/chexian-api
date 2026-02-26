@@ -125,14 +125,14 @@ function getChangeStatusClass(status: 'up' | 'down' | 'flat'): string {
 }
 
 /**
- * 获取环比箭头符号
+ * 获取环比箭头符号（垂直箭头）
  */
 function getChangeArrow(status: 'up' | 'down' | 'flat'): string {
   switch (status) {
     case 'up':
-      return '↗';
+      return '↑';
     case 'down':
-      return '↘';
+      return '↓';
     case 'flat':
       return '—';
   }
@@ -324,7 +324,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                         {change && (
                           <span
                             className={cn(
-                              textStyles.caption,
+                              'text-base leading-tight',
                               getChangeStatusClass(change.status),
                               'flex items-center gap-0.5'
                             )}

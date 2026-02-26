@@ -404,6 +404,42 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
           quickCombosSlot={quickCombosContent}
           coverageCombinationSlot={coverageCombinationSlot}
           compact={true}
+          orgActions={
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() =>
+                  handleMultiSelectChange(
+                    'org_level_3',
+                    getOrgSelectionByType(
+                      (options.org_level_3 || []).map((option) => option.value),
+                      'remote'
+                    )
+                  )
+                }
+                className="text-[10px] font-medium px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded hover:bg-indigo-100 transition-colors"
+                aria-label="筛选异地机构"
+              >
+                异地
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleMultiSelectChange(
+                    'org_level_3',
+                    getOrgSelectionByType(
+                      (options.org_level_3 || []).map((option) => option.value),
+                      'local'
+                    )
+                  )
+                }
+                className="text-[10px] font-medium px-1.5 py-0.5 bg-sky-50 text-sky-600 border border-sky-100 rounded hover:bg-sky-100 transition-colors"
+                aria-label="筛选同城机构"
+              >
+                同城
+              </button>
+            </div>
+          }
         />
 
         {!collapsed && (showSalesman || showQuickCombos || showBasicOptions) && (
@@ -411,7 +447,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             {showSalesman && (
               <details className="group" open>
                 <summary className="list-none cursor-pointer flex items-center justify-between py-1 text-xs font-medium text-neutral-600 hover:text-neutral-800">
-                  <span>人员维度</span>
+                  <span>业务员</span>
                   <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <div className="pt-1">

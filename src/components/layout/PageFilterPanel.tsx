@@ -10,7 +10,8 @@ const STORAGE_KEY = 'page-filter-collapsed';
 interface PageFilterPanelProps {
   preset: FilterPresetName;
   children: React.ReactNode;
-  title?: string; // 页面标题，用于置顶显示
+  /** 页面基础标题（如"保费分析"），会根据筛选范围自动添加前缀 */
+  title?: string;
 }
 
 /**
@@ -66,7 +67,13 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
     <div className="flex h-full relative">
       {/* 主内容区 */}
       <div className="flex-1 overflow-auto">
-        {title && <PageHeaderBar title={title} filters={filters} />}
+        {title && (
+          <PageHeaderBar
+            baseTitle={title}
+            filters={filters}
+            allOrgCount={filterOptions.org_level_3?.length || 0}
+          />
+        )}
         {children}
       </div>
 

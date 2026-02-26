@@ -285,8 +285,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         size="medium"
       />
 
-      {/* 板块1：推介率汇总 */}
-      <SectionTitle title="推介率汇总" />
+      {/* 板块1：推介率驱动因子环比 */}
+      <SectionTitle title="推介率驱动因子环比" />
       <CrossSellSummaryKpiBoard
         vehicleCategory={vehicleCategory}
         filters={filters}

@@ -95,6 +95,21 @@ const getDateCriteriaLabel = (criteria: DateCriteriaType): string => {
   return criteria === 'policy_date' ? '签单日期' : '起保日期';
 };
 
+/**
+ * 异地城市列表
+ */
+const REMOTE_CITIES = ['宜宾', '德阳', '资阳', '泸州', '自贡', '乐山', '达州'];
+
+/**
+ * 根据机构类型筛选机构列表
+ */
+const getOrgSelectionByType = (orgs: string[], type: 'remote' | 'local'): string[] => {
+  return orgs.filter((org) => {
+    const isRemote = REMOTE_CITIES.some((city) => org.includes(city));
+    return type === 'remote' ? isRemote : !isRemote;
+  });
+};
+
 export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
   filters,
   onChange,
@@ -251,6 +266,22 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
             availableYears={filteredAvailableYears}
             currentYear={currentYear}
             disabled={filteredAvailableYears.length <= 1}
+            compact
+          />
+        )}
+
+        {/* 日期范围（紧随年度之后，逻辑更清晰） */}
+        {showDateRange && (
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(start, end) =>
+              onChange({
+                ...filters,
+                policy_date_start: start,
+                policy_date_end: end,
+              })
+            }
             compact
           />
         )}
@@ -451,22 +482,6 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
               />
             </div>
           </details>
-        )}
-
-        {/* 日期范围（移至末尾，减少顶部占用） */}
-        {showDateRange && (
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onChange={(start, end) =>
-              onChange({
-                ...filters,
-                policy_date_start: start,
-                policy_date_end: end,
-              })
-            }
-            compact
-          />
         )}
       </div>
     );

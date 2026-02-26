@@ -1,20 +1,56 @@
 import React, { useMemo } from 'react';
-import { X } from 'lucide-react';
 import { cn } from '../../shared/styles';
 import type { AdvancedFilterState } from '../../shared/types/data';
 
 interface PageHeaderBarProps {
-  title: string;
+  /** 页面基础标题（如"保费分析"、"交叉销售分析"） */
+  baseTitle: string;
   filters: AdvancedFilterState;
+  /** 可见机构总数（用于判断是否为全选） */
+  allOrgCount?: number;
 }
 
 /**
  * 页面标题栏组件 — sticky top-0 置顶
  *
- * 显示页面标题 + 已筛选条件摘要（极简 chips）
+ * 显示动态标题 + 已筛选条件摘要（极简 chips）
+ *
+ * 标题规则（范围从窄到宽）：
+ * 1. 单个业务员 → "{机构}{业务员}{baseTitle}"（如"天府罗磊交叉销售分析"）
+ * 2. 多个业务员（同一机构） → "{机构}{baseTitle}"
+ * 3. 单个机构（无业务员筛选） → "{机构}{baseTitle}"（如"天府保费分析"）
+ * 4. 多个/全部机构 → "四川分公司{baseTitle}"
  */
-export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ title, filters }) => {
-  // 计算已筛选条件的摘要 chips
+export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
+  baseTitle,
+  filters,
+  allOrgCount = 12
+}) => {
+  // 计算动态标题前缀
+  const dynamicTitle = useMemo(() => {
+    const selectedOrgs = filters.org_level_3 || [];
+    const selectedSalesmen = filters.salesman_name || [];
+
+    // 1. 单个业务员：显示"机构+业务员"
+    if (selectedSalesmen.length === 1) {
+      const salesman = selectedSalesmen[0];
+      // 如果只选了一个机构，显示机构名
+      const org = selectedOrgs.length === 1 ? selectedOrgs[0] : '';
+      return org ? `${org}${salesman}` : salesman;
+    }
+
+    // 2. 单个机构（没有业务员筛选或多个业务员）
+    if (selectedOrgs.length === 1) {
+      return selectedOrgs[0];
+    }
+
+    // 3. 多个或全部机构 → 显示分公司
+    return '四川分公司';
+  }, [filters.org_level_3, filters.salesman_name]);
+
+  const fullTitle = `${dynamicTitle}${baseTitle}`;
+
+  // 计算已筛选条件的摘要 chips（不重复显示标题中已包含的范围信息）
   const filterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string }> = [];
 
@@ -27,14 +63,14 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ title, filters }) 
     const criteriaLabel = filters.date_criteria === 'policy_date' ? '签单' : '起保';
     chips.push({ key: 'criteria', label: criteriaLabel });
 
-    // 机构
-    if (filters.org_level_3 && filters.org_level_3.length > 0) {
-      const count = filters.org_level_3.length;
-      if (count === 1) {
-        chips.push({ key: 'org', label: filters.org_level_3[0] });
-      } else {
-        chips.push({ key: 'org', label: `${filters.org_level_3[0]}+${count - 1}` });
-      }
+    // 机构（仅在多机构时显示，单机构已在标题中）
+    const selectedOrgs = filters.org_level_3 || [];
+    if (selectedOrgs.length > 1) {
+      chips.push({ key: 'org', label: `${selectedOrgs[0]}+${selectedOrgs.length - 1}` });
+    }
+    // 如果机构数等于全部机构数，显示"全部机构"
+    if (selectedOrgs.length === 0 || selectedOrgs.length === allOrgCount) {
+      // 全部机构时不显示（标题已经是四川分公司）
     }
 
     // 客户类别
@@ -52,9 +88,10 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ title, filters }) 
       chips.push({ key: 'renewal', label: filters.renewal_mode.join('/') });
     }
 
-    // 业务员
-    if (filters.salesman_name && filters.salesman_name.length > 0) {
-      chips.push({ key: 'salesman', label: `${filters.salesman_name.length}业务员` });
+    // 业务员（仅在多业务员时显示，单业务员已在标题中）
+    const selectedSalesmen = filters.salesman_name || [];
+    if (selectedSalesmen.length > 1) {
+      chips.push({ key: 'salesman', label: `${selectedSalesmen.length}业务员` });
     }
 
     // 布尔字段
@@ -64,7 +101,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ title, filters }) 
     if (filters.is_transfer === true) chips.push({ key: 'transfer', label: '过户' });
     if (filters.is_cross_sell === true) chips.push({ key: 'cross_sell', label: '交叉销售' });
     if (filters.is_commercial_insure === true) chips.push({ key: 'commercial', label: '交商同保' });
-    if (filters.is_renewal === true) chips.push({ key: 'renewal', label: '续保' });
+    if (filters.is_renewal === true) chips.push({ key: 'renewal_bool', label: '续保' });
 
     // 等级评分
     if (filters.insurance_grade && filters.insurance_grade.length > 0) {
@@ -90,11 +127,11 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ title, filters }) 
     }
 
     return chips;
-  }, [filters]);
+  }, [filters, allOrgCount]);
 
   return (
     <div className="sticky top-0 z-10 bg-white border-b border-neutral-200 shadow-sm px-4 py-2.5">
-      <h1 className="text-lg font-semibold text-neutral-800">{title}</h1>
+      <h1 className="text-lg font-semibold text-neutral-800">{fullTitle}</h1>
       {filterChips.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5">
           {filterChips.map(chip => (
