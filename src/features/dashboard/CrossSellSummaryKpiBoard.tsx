@@ -83,31 +83,60 @@ function getRateColorClass(coverageKey: string, value: number): string {
 }
 
 /**
- * 计算环比变化
+ * 计算环比变化（包含百分比）
  */
-function calcChange(current: number, prev: number): { value: number; status: 'up' | 'down' | 'flat' } {
+function calcChange(current: number, prev: number): {
+  value: number;
+  percent: number;
+  status: 'up' | 'down' | 'flat';
+} {
   const diff = current - prev;
-  if (Math.abs(diff) < 0.01) {
-    return { value: 0, status: 'flat' };
+  // 计算百分比变化（避免除零）
+  const percentChange = prev !== 0 ? (diff / prev) * 100 : 0;
+
+  // 判断状态（使用阈值避免浮点误差）
+  if (Math.abs(diff) < 0.01 && Math.abs(percentChange) < 0.1) {
+    return { value: 0, percent: 0, status: 'flat' };
   }
   return {
     value: diff,
+    percent: percentChange,
     status: diff > 0 ? 'up' : 'down'
   };
 }
 
 /**
- * 格式化环比变化值
+ * 格式化环比变化显示文本
+ * - rate: 只显示百分比（如 +2.1%）
+ * - 其他: 显示绝对值 + 百分比（如 +8.3, +7.1%）
  */
-function formatChangeValue(value: number, metricKey: string): string {
-  const sign = value >= 0 ? '+' : '';
+function formatChangeDisplay(change: { value: number; percent: number; status: 'up' | 'down' | 'flat' }, metricKey: string): string {
+  const arrow = getChangeArrow(change.status);
+
+  // 持平状态
+  if (change.status === 'flat') {
+    if (metricKey === 'rate') {
+      return `${arrow} 0%`;
+    }
+    return `${arrow} 0, 0%`;
+  }
+
+  const sign = change.value >= 0 ? '+' : '';
+
+  // 推介率：只显示百分比
   if (metricKey === 'rate') {
-    return `${sign}${value.toFixed(1)}%`;
+    return `${arrow} ${sign}${change.percent.toFixed(1)}%`;
   }
+
+  // 其他指标：绝对值 + 百分比
+  let absValue: string;
   if (metricKey === 'premium') {
-    return `${sign}${value.toFixed(1)}`;
+    absValue = change.value.toFixed(1);
+  } else {
+    absValue = Math.round(change.value).toString();
   }
-  return `${sign}${Math.round(value)}`;
+
+  return `${arrow} ${sign}${absValue}, ${sign}${change.percent.toFixed(1)}%`;
 }
 
 /**
@@ -189,7 +218,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
   const getCellContent = (
     metricKey: string,
     coverageKey: string
-  ): { text: string; colorClass: string; change?: { value: number; status: 'up' | 'down' | 'flat' } } => {
+  ): { text: string; colorClass: string; change?: { value: number; percent: number; status: 'up' | 'down' | 'flat' } } => {
     const data = dataByCoverage.get(coverageKey);
 
     if (loading) {
@@ -325,12 +354,10 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                           <span
                             className={cn(
                               'text-base leading-tight',
-                              getChangeStatusClass(change.status),
-                              'flex items-center gap-0.5'
+                              getChangeStatusClass(change.status)
                             )}
                           >
-                            <span>{formatChangeValue(change.value, col.key)}</span>
-                            <span>{getChangeArrow(change.status)}</span>
+                            {formatChangeDisplay(change, col.key)}
                           </span>
                         )}
                       </div>
