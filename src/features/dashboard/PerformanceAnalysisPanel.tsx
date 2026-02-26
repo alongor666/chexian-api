@@ -39,6 +39,9 @@ import { usePerformanceTopSalesman, type PerformanceTopSalesmanRow } from './hoo
 
 interface PerformanceAnalysisPanelProps {
   filters: AdvancedFilterState;
+  segmentTag: PerformanceSegmentTag;
+  timePeriod: PerformanceTimePeriod;
+  growthMode: PerformanceGrowthMode;
 }
 
 const SEGMENT_TABS: TabItem[] = [
@@ -62,6 +65,48 @@ const GROWTH_MODE_TABS: TabItem[] = [
   { key: 'mom', label: '环比' },
   { key: 'yoy', label: '同比' },
 ];
+
+interface PerformanceHeaderControlsProps {
+  segmentTag: PerformanceSegmentTag;
+  timePeriod: PerformanceTimePeriod;
+  growthMode: PerformanceGrowthMode;
+  onSegmentTagChange: (value: PerformanceSegmentTag) => void;
+  onTimePeriodChange: (value: PerformanceTimePeriod) => void;
+  onGrowthModeChange: (value: PerformanceGrowthMode) => void;
+}
+
+export const PerformanceHeaderControls: React.FC<PerformanceHeaderControlsProps> = ({
+  segmentTag,
+  timePeriod,
+  growthMode,
+  onSegmentTagChange,
+  onTimePeriodChange,
+  onGrowthModeChange,
+}) => (
+  <div className="flex flex-wrap items-center justify-end gap-2">
+    <Tabs
+      items={SEGMENT_TABS}
+      activeKey={segmentTag}
+      onChange={(key) => onSegmentTagChange(key as PerformanceSegmentTag)}
+      variant="pills"
+      size="small"
+    />
+    <Tabs
+      items={TIME_PERIOD_TABS}
+      activeKey={timePeriod}
+      onChange={(key) => onTimePeriodChange(key as PerformanceTimePeriod)}
+      variant="pills"
+      size="small"
+    />
+    <Tabs
+      items={GROWTH_MODE_TABS}
+      activeKey={growthMode}
+      onChange={(key) => onGrowthModeChange(key as PerformanceGrowthMode)}
+      variant="pills"
+      size="small"
+    />
+  </div>
+);
 
 const EXPAND_DIMS_TABS: TabItem[] = [
   { key: 'none', label: '不展开' },
@@ -459,12 +504,14 @@ type TopSortKey =
 
 type SortOrder = 'asc' | 'desc';
 
-export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> = ({ filters }) => {
+export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> = ({
+  filters,
+  segmentTag,
+  timePeriod,
+  growthMode,
+}) => {
   const { isDataLoaded } = useDataStatus();
 
-  const [segmentTag, setSegmentTag] = useState<PerformanceSegmentTag>('all');
-  const [timePeriod, setTimePeriod] = useState<PerformanceTimePeriod>('day');
-  const [growthMode, setGrowthMode] = useState<PerformanceGrowthMode>('mom');
   const [expandDims, setExpandDims] = useState<PerformanceSummaryExpandDims>('none');
   const [expandedCoverage, setExpandedCoverage] = useState<Record<string, boolean>>({});
 
@@ -630,34 +677,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   return (
     <div className="space-y-5">
-      <SectionTitle
-        title={summaryTitle}
-        rightContent={(
-          <div className="flex flex-wrap items-center gap-2">
-            <Tabs
-              items={SEGMENT_TABS}
-              activeKey={segmentTag}
-              onChange={(key) => setSegmentTag(key as PerformanceSegmentTag)}
-              variant="pills"
-              size="small"
-            />
-            <Tabs
-              items={TIME_PERIOD_TABS}
-              activeKey={timePeriod}
-              onChange={(key) => setTimePeriod(key as PerformanceTimePeriod)}
-              variant="pills"
-              size="small"
-            />
-            <Tabs
-              items={GROWTH_MODE_TABS}
-              activeKey={growthMode}
-              onChange={(key) => setGrowthMode(key as PerformanceGrowthMode)}
-              variant="pills"
-              size="small"
-            />
-          </div>
-        )}
-      />
+      <SectionTitle title={summaryTitle} />
       <section className={cn(cardStyles.standard, 'p-0 overflow-hidden')}>
         <div className="px-4 pt-3">
           <Tabs

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { EChartsOption, SeriesOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
-import { formatPremiumWan, formatRate, formatCount } from '../../shared/utils/formatters';
+import { formatPremiumWan, formatRate, formatCount, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 import { getYearChartColor } from '../../shared/styles';
 
@@ -213,10 +213,6 @@ export const LineChart: React.FC<LineChartProps> = ({
               const [pY, pW] = allTimePeriods[index - 1].split('-W').map(Number);
               return getWeekStartDate(y, w).getMonth() !== getWeekStartDate(pY, pW).getMonth();
             }
-            if (timeView === 'daily') {
-              const d = new Date(value);
-              return d.getDate() === 1 || (d.getMonth() === 11 && d.getDate() === 31);
-            }
             return true;
           }
         },
@@ -255,16 +251,12 @@ export const LineChart: React.FC<LineChartProps> = ({
             }
 
             if (timeView === 'daily') {
-              const date = new Date(`${value}T00:00:00`);
-              const monthNum = date.getMonth() + 1;
-              const dayNum = date.getDate();
-              if (dayNum === 1) return `${monthNum}月1日`;
-              if (monthNum === 12 && dayNum === 31) return '12月31日';
-              return '';
+              return formatTrendDailyXAxis(value);
             }
 
             return value;
           },
+          rich: TREND_DAILY_XAXIS_RICH,
         },
       },
       yAxis: [

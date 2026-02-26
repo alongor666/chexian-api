@@ -230,3 +230,36 @@ export function formatSalesmanName(name: string | null | undefined): string {
   // 如果清洗后为空（例如纯数字），为了防错依然返回原值，否则返回清洗后的名称
   return cleaned.trim() || name;
 }
+
+// ==================== 走势图 X 轴日期格式化 ====================
+
+/**
+ * 格式化走势图日维度X轴（月度第1日显示“M月1日”并加粗18px，其他显示“D”）
+ * 配合 ECharts axisLabel.rich 配置使用
+ * @example formatTrendDailyXAxis("2026-02-02") => "2"
+ * @example formatTrendDailyXAxis("2026-01-01") => "{startOfMonth|1月1日}"
+ */
+export function formatTrendDailyXAxis(value: string): string {
+  if (!value) return value;
+  // 匹配 YYYY-MM-DD
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const m = parseInt(match[2], 10);
+    const d = parseInt(match[3], 10);
+    if (d === 1) {
+      return `{startOfMonth|${m}月1日}`;
+    }
+    return `${d}`;
+  }
+  return value;
+}
+
+/**
+ * 走势图日维度X轴 ECharts rich 配置
+ */
+export const TREND_DAILY_XAXIS_RICH = {
+  startOfMonth: {
+    fontWeight: 'bold' as const,
+    fontSize: 18,
+  },
+};

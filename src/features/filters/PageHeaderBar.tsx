@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, type ReactNode } from 'react';
 import { cn, colorClasses } from '../../shared/styles';
 import type { AdvancedFilterState } from '../../shared/types/data';
 
@@ -8,6 +8,8 @@ interface PageHeaderBarProps {
   filters: AdvancedFilterState;
   /** 可见机构总数（用于判断是否为全选） */
   allOrgCount?: number;
+  /** 标题右侧扩展内容（如页面级快捷切换） */
+  rightContent?: ReactNode;
 }
 
 /**
@@ -24,7 +26,8 @@ interface PageHeaderBarProps {
 export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
   baseTitle,
   filters,
-  allOrgCount = 12
+  allOrgCount = 12,
+  rightContent,
 }) => {
   // 计算动态标题前缀
   const dynamicTitle = useMemo(() => {
@@ -131,7 +134,14 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
 
   return (
     <div className="sticky top-0 z-10 bg-white border-b border-neutral-200 shadow-sm px-4 py-2.5">
-      <h1 className={cn('text-lg font-semibold', colorClasses.text.neutralBlack)}>{fullTitle}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className={cn('text-lg font-semibold', colorClasses.text.neutralBlack)}>{fullTitle}</h1>
+        {rightContent && (
+          <div className="max-w-full flex-shrink-0">
+            {rightContent}
+          </div>
+        )}
+      </div>
       {filterChips.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5">
           {filterChips.map(chip => (

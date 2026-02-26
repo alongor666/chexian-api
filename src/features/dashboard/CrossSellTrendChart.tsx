@@ -9,7 +9,7 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
-import { formatCount, formatPercent } from '../../shared/utils/formatters';
+import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import { cardStyles, textStyles, colors, cn } from '../../shared/styles';
 import { useCrossSellTrend, type TrendGranularity } from './hooks/useCrossSellTrend';
 import type { AdvancedFilterState } from '../../shared/types/data';
@@ -126,26 +126,31 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
       xAxis: {
         type: 'category',
         data: timePeriods,
-        axisLabel: { fontSize: 11, rotate: timePeriods.length > 18 ? 30 : 0 },
+        axisLabel: {
+          fontSize: 11,
+          rotate: timePeriods.length > 18 ? 30 : 0,
+          formatter: formatTrendDailyXAxis,
+          rich: TREND_DAILY_XAXIS_RICH,
+        },
         axisTick: { alignWithLabel: true },
       },
       yAxis: metric === 'rate'
         ? {
-            type: 'value',
-            min: 0,
-            max: 100,
-            axisLabel: { formatter: '{value}%', fontSize: 11 },
-            splitLine: { lineStyle: { color: colors.neutral[200] } },
-          }
+          type: 'value',
+          min: 0,
+          max: 100,
+          axisLabel: { formatter: '{value}%', fontSize: 11 },
+          splitLine: { lineStyle: { color: colors.neutral[200] } },
+        }
         : {
-            type: 'value',
-            min: 0,
-            axisLabel: {
-              formatter: (value: number) => formatCount(value),
-              fontSize: 11,
-            },
-            splitLine: { lineStyle: { color: colors.neutral[200] } },
+          type: 'value',
+          min: 0,
+          axisLabel: {
+            formatter: (value: number) => formatCount(value),
+            fontSize: 11,
           },
+          splitLine: { lineStyle: { color: colors.neutral[200] } },
+        },
       series: SERIES_ORDER.map((name) => ({
         name,
         type: 'line' as const,

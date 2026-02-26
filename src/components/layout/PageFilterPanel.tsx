@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { AdvancedFilterPanel } from '../../features/filters/AdvancedFilterPanel';
 import { PageHeaderBar } from '../../features/filters/PageHeaderBar';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
@@ -12,6 +12,8 @@ interface PageFilterPanelProps {
   children: React.ReactNode;
   /** 页面基础标题（如"保费分析"），会根据筛选范围自动添加前缀 */
   title?: string;
+  /** 页面标题栏右侧扩展区 */
+  headerRightContent?: ReactNode;
 }
 
 /**
@@ -28,6 +30,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
   preset,
   children,
   title,
+  headerRightContent,
 }) => {
   const {
     filters,
@@ -88,6 +91,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
             baseTitle={title}
             filters={filters}
             allOrgCount={filterOptions.org_level_3?.length || 0}
+            rightContent={headerRightContent}
           />
         </div>
       )}
