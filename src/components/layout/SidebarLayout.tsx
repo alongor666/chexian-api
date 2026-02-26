@@ -123,7 +123,7 @@ export const SidebarLayout: React.FC = () => {
             style={{ marginLeft: isMobile ? '0px' : collapsed ? '64px' : `${sidebarWidth}px` }}
           >
             <div className="h-full flex flex-col">
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 flex flex-col min-h-0 bg-white">
                 <Outlet />
               </div>
               <Footer />
