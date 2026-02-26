@@ -598,6 +598,11 @@ class ApiClient {
       month_premium: number;
       month_rate: number;
       month_avg_premium: number;
+      quarter_auto_count: number;
+      quarter_driver_count: number;
+      quarter_premium: number;
+      quarter_rate: number;
+      quarter_avg_premium: number;
       year_auto_count: number;
       year_driver_count: number;
       year_premium: number;
@@ -657,6 +662,31 @@ class ApiClient {
       });
     }
     return this.request(`/query/salesman-ranking?${params.toString()}`);
+  }
+
+  /**
+   * 获取车驾意推介率 TOP20 业务员分析
+   */
+  async getCrossSellTopSalesman(params?: Record<string, string>): Promise<{
+    rows: Array<{
+      salesman_name: string;
+      org_level_3: string;
+      driver_premium: number;
+      auto_count: number;
+      rate: number;
+      avg_premium: number;
+    }>;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, value);
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return this.request(`/query/cross-sell-top-salesman${query ? `?${query}` : ''}`);
   }
 
   /**

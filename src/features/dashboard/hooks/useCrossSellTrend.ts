@@ -12,7 +12,7 @@ import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import type { VehicleCategory } from './useCrossSellTimePeriod';
 
-export type TrendGranularity = 'daily' | 'weekly' | 'monthly' | 'quarterly';
+export type TrendGranularity = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
 export interface TrendPoint {
   time_period: string;

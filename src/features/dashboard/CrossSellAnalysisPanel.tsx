@@ -23,6 +23,7 @@ import { CrossSellTrendChart } from './CrossSellTrendChart';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import { getRateClassByField } from './crossSellRateStatus';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
+import { CrossSellTopSalesmanBoard } from './CrossSellTopSalesmanBoard';
 import {
   useCrossSellAnalysis,
   DIMENSION_LABELS,
@@ -48,7 +49,8 @@ const GRANULARITY_TABS: TabItem[] = [
   { key: 'daily', label: '日' },
   { key: 'weekly', label: '周' },
   { key: 'monthly', label: '月' },
-  { key: 'quarterly', label: '季度' },
+  { key: 'quarterly', label: '季' },
+  { key: 'yearly', label: '年' },
 ];
 
 // ============================================================
@@ -142,12 +144,16 @@ const TABLE_COLUMNS_FULL: ColumnDef[] = [
   { key: 'danjiao_rate', label: '单交推介率', type: 'rate' },
   { key: 'jiaosan_auto_count', label: '交三-车险', type: 'count' },
   { key: 'jiaosan_driver_count', label: '交三-驾乘险', type: 'count' },
-  { key: 'jiaosan_rate', label: '交三推介率', type: 'rate',
-    getColorClass: (v) => getRateClassByField('jiaosan_rate', v) },
+  {
+    key: 'jiaosan_rate', label: '交三推介率', type: 'rate',
+    getColorClass: (v) => getRateClassByField('jiaosan_rate', v)
+  },
   { key: 'zhuquan_auto_count', label: '主全-车险', type: 'count' },
   { key: 'zhuquan_driver_count', label: '主全-驾乘险', type: 'count' },
-  { key: 'zhuquan_rate', label: '主全推介率', type: 'rate',
-    getColorClass: (v) => getRateClassByField('zhuquan_rate', v) },
+  {
+    key: 'zhuquan_rate', label: '主全推介率', type: 'rate',
+    getColorClass: (v) => getRateClassByField('zhuquan_rate', v)
+  },
 ];
 
 // 摩托车的表格列（只有单交相关）
@@ -187,7 +193,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 }) => {
   const { isDataLoaded } = useDataStatus();
   const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory>('passenger');
-  const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('monthly');
+  const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
   const [sortKey, setSortKey] = useState<SortKey>('total_auto_count');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
@@ -213,6 +219,18 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
     vehicleCategory,
     enabled: isDataLoaded,
   });
+
+  // 映射时间粒度到 KpiBoard 的 TimePeriod
+  const mappedTimePeriodForKpi = useMemo(() => {
+    switch (trendGranularity) {
+      case 'daily': return 'day';
+      case 'weekly': return 'week';
+      case 'monthly': return 'month';
+      case 'quarterly': return 'quarter';
+      case 'yearly': return 'year';
+      default: return 'day';
+    }
+  }, [trendGranularity]);
 
   const sortedRows = useMemo(
     () => sortRows(rows, sortKey, sortOrder),
@@ -258,15 +276,25 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* 车辆类别与重置 */}
-      <div className="flex items-center justify-between">
-        <Tabs
-          items={VEHICLE_TABS}
-          activeKey={vehicleCategory}
-          onChange={(key) => setVehicleCategory(key as VehicleCategory)}
-          variant="pills"
-          size="medium"
-        />
+      {/* 顶部固定标题与筛选项：车辆类别与时间维度 */}
+      <div className="sticky top-0 z-20 bg-neutral-50/90 backdrop-blur-md pb-4 pt-2 -mx-2 px-2 border-b border-neutral-200 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <Tabs
+            items={VEHICLE_TABS}
+            activeKey={vehicleCategory}
+            onChange={(key) => setVehicleCategory(key as VehicleCategory)}
+            variant="pills"
+            size="medium"
+          />
+          <div className="w-px h-6 bg-neutral-300"></div>
+          <Tabs
+            items={GRANULARITY_TABS}
+            activeKey={trendGranularity}
+            onChange={(key) => setTrendGranularity(key as TrendGranularity)}
+            variant="pills"
+            size="medium"
+          />
+        </div>
         {(drillPath.length > 0 || currentGroupBy) && (
           <button
             onClick={reset}
@@ -282,20 +310,11 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       <CrossSellSummaryKpiBoard
         vehicleCategory={vehicleCategory}
         filters={filters}
-        defaultTimePeriod="year"
+        timePeriod={mappedTimePeriodForKpi as any}
       />
 
       {/* 板块2：推介率走势 - 摩托车只显示推介率走势，不显示件均保费 */}
       <SectionTitle title={vehicleCategory === 'motorcycle' ? '推介率走势' : '推介率与件均保费走势'} />
-      <div className="flex justify-end">
-        <Tabs
-          items={GRANULARITY_TABS}
-          activeKey={trendGranularity}
-          onChange={(key) => setTrendGranularity(key as TrendGranularity)}
-          variant="pills"
-          size="small"
-        />
-      </div>
       {vehicleCategory === 'motorcycle' ? (
         // 摩托车：只显示推介率走势
         <CrossSellTrendChart
@@ -434,9 +453,9 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                                   ? `text-left ${canDrillDeeper ? 'text-blue-600 font-medium' : 'text-gray-900'}`
                                   : col.type === 'rate'
                                     ? cn('text-right', textStyles.numeric,
-                                        col.getColorClass
-                                          ? col.getColorClass(Number(row[col.key] ?? 0))
-                                          : getRateColorByField(col.key, Number(row[col.key] ?? 0)))
+                                      col.getColorClass
+                                        ? col.getColorClass(Number(row[col.key] ?? 0))
+                                        : getRateColorByField(col.key, Number(row[col.key] ?? 0)))
                                     : cn('text-right', textStyles.numeric, 'text-neutral-700')
                               )}
                             >
@@ -470,6 +489,13 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           title={pendingRowValue ? `"${pendingRowValue}" 下钻到...` : '选择下钻维度'}
         />
       )}
+
+      {/* TOP20 业务员推介率板块 */}
+      <SectionTitle title="TOP20 业务员推介率分析" />
+      <CrossSellTopSalesmanBoard
+        filters={filters}
+        vehicleCategory={vehicleCategory}
+      />
     </div>
   );
 };

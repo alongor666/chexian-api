@@ -53,6 +53,7 @@ import { generateRenewalDrilldownQuery, type DrilldownDimension, type DrilldownL
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../sql/cross-sell.js';
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../sql/cross-sell-summary.js';
 import { generateCrossSellTrendQuery, type TrendGranularity } from '../sql/cross-sell-trend.js';
+import { generateCrossSellTopSalesmanQuery, type TopSalesmanCoverage } from '../sql/cross-sell-top-salesman.js';
 import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery } from '../sql/marketing-report.js';
 import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../sql/premium-report.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../sql/premiumPlan.js';
@@ -1129,7 +1130,7 @@ router.post(
  */
 const crossSellTrendSchema = z.object({
   vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
-  granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly']).default('monthly'),
+  granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('monthly'),
 });
 
 router.get(
@@ -1449,6 +1450,49 @@ router.get(
           level,
         },
       },
+    });
+  })
+);
+
+/**
+ * GET /api/query/cross-sell-top-salesman
+ * 车驾意推介率 TOP20 业务员分析
+ */
+const crossSellTopSalesmanSchema = z.object({
+  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
+  coverage: z.enum(['主全', '交三']).default('主全'),
+});
+
+router.get(
+  '/cross-sell-top-salesman',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = crossSellTopSalesmanSchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+    const { vehicleCategory, coverage } = extraResult.data;
+
+    const filterResult = commonFilterSchema.safeParse(req.query);
+    if (!filterResult.success) {
+      throw new AppError(400, filterResult.error.issues[0].message);
+    }
+
+    const finalWhereClause = buildWhereFromFilterParamsWithoutDate(
+      filterResult.data,
+      req.permissionFilter || '1=1',
+    );
+
+    const sql = generateCrossSellTopSalesmanQuery(
+      finalWhereClause,
+      vehicleCategory as VehicleCategory,
+      coverage as TopSalesmanCoverage
+    );
+
+    const result = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: result,
     });
   })
 );

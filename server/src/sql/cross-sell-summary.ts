@@ -32,7 +32,7 @@ export function getVehicleCategoryFilter(category: VehicleCategory, colPrefix = 
 /**
  * 生成时间段 FILTER 子句（复用模板减少重复）
  */
-function timeFilter(period: 'day' | 'week' | 'month' | 'year', extra = ''): string {
+function timeFilter(period: 'day' | 'week' | 'month' | 'quarter' | 'year', extra = ''): string {
   const extraClause = extra ? ` AND ${extra}` : '';
   switch (period) {
     case 'day':
@@ -41,6 +41,8 @@ function timeFilter(period: 'day' | 'week' | 'month' | 'year', extra = ''): stri
       return `FILTER (WHERE pd >= tp_week AND pd <= tp_max${extraClause})`;
     case 'month':
       return `FILTER (WHERE pd >= tp_month AND pd <= tp_max${extraClause})`;
+    case 'quarter':
+      return `FILTER (WHERE pd >= tp_quarter AND pd <= tp_max${extraClause})`;
     case 'year':
       return `FILTER (WHERE pd >= tp_year AND pd <= tp_max${extraClause})`;
   }
@@ -53,7 +55,7 @@ function timeFilter(period: 'day' | 'week' | 'month' | 'year', extra = ''): stri
  * - month: 上月 (上个月同范围天数)
  * - year: 无环比，返回空
  */
-function prevTimeFilter(period: 'day' | 'week' | 'month' | 'year', extra = ''): string {
+function prevTimeFilter(period: 'day' | 'week' | 'month' | 'quarter' | 'year', extra = ''): string {
   const extraClause = extra ? ` AND ${extra}` : '';
   switch (period) {
     case 'day':
@@ -65,6 +67,9 @@ function prevTimeFilter(period: 'day' | 'week' | 'month' | 'year', extra = ''): 
     case 'month':
       // 上月同期 (上个月同范围天数)
       return `FILTER (WHERE pd >= tp_month - INTERVAL 1 MONTH AND pd < tp_month${extraClause})`;
+    case 'quarter':
+      // 上个季度同期 (向前3个月同范围天数)
+      return `FILTER (WHERE pd >= tp_quarter - INTERVAL 3 MONTH AND pd < tp_quarter${extraClause})`;
     case 'year':
       // 当年无环比
       return `FILTER (WHERE 1=0${extraClause})`;
@@ -75,7 +80,7 @@ function prevTimeFilter(period: 'day' | 'week' | 'month' | 'year', extra = ''): 
  * 生成一组时间段的聚合列（auto_count, driver_count, premium × 4 个时间段）
  */
 function generateTimePeriodColumns(): string {
-  const periods: Array<'day' | 'week' | 'month' | 'year'> = ['day', 'week', 'month', 'year'];
+  const periods: Array<'day' | 'week' | 'month' | 'quarter' | 'year'> = ['day', 'week', 'month', 'quarter', 'year'];
   const lines: string[] = [];
   const crossSellCondition = getCrossSellCondition();
 
@@ -92,7 +97,7 @@ function generateTimePeriodColumns(): string {
  * 生成上一周期时间段的聚合列（用于环比）
  */
 function generatePrevTimePeriodColumns(): string {
-  const periods: Array<'day' | 'week' | 'month'> = ['day', 'week', 'month'];
+  const periods: Array<'day' | 'week' | 'month' | 'quarter'> = ['day', 'week', 'month', 'quarter'];
   const lines: string[] = [];
   const crossSellCondition = getCrossSellCondition();
 
@@ -121,7 +126,7 @@ function getCrossSellCondition(): string {
  * 生成计算列（rate, avg_premium × 4 个时间段 + 环比差值）
  */
 function generateCalculatedColumns(): string {
-  const periods: Array<'day' | 'week' | 'month' | 'year'> = ['day', 'week', 'month', 'year'];
+  const periods: Array<'day' | 'week' | 'month' | 'quarter' | 'year'> = ['day', 'week', 'month', 'quarter', 'year'];
   const lines: string[] = [];
 
   // 当期数据
@@ -133,8 +138,8 @@ function generateCalculatedColumns(): string {
     lines.push(`CASE WHEN ${p}_driver_count = 0 THEN 0 ELSE ROUND(${p}_premium / ${p}_driver_count, 2) END AS ${p}_avg_premium`);
   }
 
-  // 上一期数据 (day/week/month)
-  const prevPeriods: Array<'day' | 'week' | 'month'> = ['day', 'week', 'month'];
+  // 上一期数据 (day/week/month/quarter)
+  const prevPeriods: Array<'day' | 'week' | 'month' | 'quarter'> = ['day', 'week', 'month', 'quarter'];
   for (const p of prevPeriods) {
     lines.push(`prev_${p}_auto_count`);
     lines.push(`prev_${p}_driver_count`);
@@ -192,6 +197,7 @@ export function generateCrossSellTimePeriodQuery(
         (SELECT max_date FROM date_bounds) AS tp_day,
         CAST(DATE_TRUNC('week', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_week,
         CAST(DATE_TRUNC('month', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_month,
+        CAST(DATE_TRUNC('quarter', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_quarter,
         CAST(DATE_TRUNC('year', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_year
       FROM PolicyFact
       WHERE ${baseWhereClause}

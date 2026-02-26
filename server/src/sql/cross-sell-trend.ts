@@ -9,7 +9,7 @@
 import { logger } from '../utils/logger.js';
 import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell-summary.js';
 
-export type TrendGranularity = 'daily' | 'weekly' | 'monthly' | 'quarterly';
+export type TrendGranularity = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
 /**
  * 生成时间分组表达式（pd = CAST(policy_date AS DATE)）
@@ -24,6 +24,8 @@ function getTimeGroupExpr(granularity: TrendGranularity): string {
       return `STRFTIME(DATE_TRUNC('month', pd), '%Y-%m')`;
     case 'quarterly':
       return `CAST(EXTRACT(YEAR FROM pd) AS VARCHAR) || '-Q' || CAST(EXTRACT(QUARTER FROM pd) AS VARCHAR)`;
+    case 'yearly':
+      return `STRFTIME(DATE_TRUNC('year', pd), '%Y')`;
   }
 }
 

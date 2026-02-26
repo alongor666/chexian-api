@@ -8,11 +8,11 @@
  * - 环比状态：显示与上一周期的变化（当日vs昨日、当周vs上周、当月vs上月）
  */
 
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { textStyles, cardStyles, numericStyles, cn, colorClasses } from '@/shared/styles';
 import { formatCount, formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
-import { useCrossSellTimePeriod, type VehicleCategory, type TimePeriodRawRow } from './hooks/useCrossSellTimePeriod';
+import { useCrossSellTimePeriod, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { getRateClassByField } from './crossSellRateStatus';
 
 export type TimePeriod = 'day' | 'week' | 'month' | 'year';
@@ -20,15 +20,10 @@ export type TimePeriod = 'day' | 'week' | 'month' | 'year';
 interface CrossSellSummaryKpiBoardProps {
   vehicleCategory: VehicleCategory;
   filters: AdvancedFilterState;
-  defaultTimePeriod?: TimePeriod;
+  timePeriod: TimePeriod;
 }
 
-const TIME_PERIOD_TABS: { key: TimePeriod; label: string }[] = [
-  { key: 'day', label: '当日' },
-  { key: 'week', label: '当周' },
-  { key: 'month', label: '当月' },
-  { key: 'year', label: '当年' },
-];
+
 
 // 非营业客车/货车的行定义：险别组合
 const COVERAGE_ROWS_FULL = [
@@ -170,10 +165,8 @@ function getChangeArrow(status: 'up' | 'down' | 'flat'): string {
 export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
   vehicleCategory,
   filters,
-  defaultTimePeriod = 'year',
+  timePeriod,
 }: CrossSellSummaryKpiBoardProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>(defaultTimePeriod);
-  
   const { maxDate, rawData, loading, error } = useCrossSellTimePeriod({
     filters,
     vehicleCategory,
@@ -192,11 +185,11 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
 
     const map = new Map<string, TimePeriodData>();
     for (const row of rawData) {
-      const prefix = selectedPeriod;
+      const prefix = timePeriod;
       const rowAny = row as unknown as Record<string, unknown>;
 
       // 当年不需要环比数据
-      const showPrev = selectedPeriod !== 'year';
+      const showPrev = timePeriod !== 'year';
       const prevPrefix = showPrev ? `prev_${prefix}` : '';
 
       map.set(row.coverage_combination, {
@@ -212,7 +205,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
       });
     }
     return map;
-  }, [rawData, selectedPeriod]);
+  }, [rawData, timePeriod]);
 
   // 获取单元格显示内容（包含环比状态）
   const getCellContent = (
@@ -226,7 +219,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
     }
 
     // 当年不显示环比
-    const showChange = selectedPeriod !== 'year';
+    const showChange = timePeriod !== 'year';
 
     switch (metricKey) {
       case 'premium': {
@@ -278,24 +271,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
   return (
     <div className="space-y-3">
       {/* 时间选择器 + 数据截止日期 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          {TIME_PERIOD_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setSelectedPeriod(tab.key)}
-              className={cn(
-                'px-3 py-1.5 text-sm rounded-lg transition-colors',
-                selectedPeriod === tab.key
-                  ? 'bg-primary text-white'
-                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex items-center justify-end">
         {maxDate && (
           <p className={cn(textStyles.caption, 'text-neutral-400')}>
             数据截至: {maxDate} (保费单位: 万元)

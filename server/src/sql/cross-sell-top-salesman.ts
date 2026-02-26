@@ -1,0 +1,96 @@
+/**
+ * 车驾意推介率 TOP20 业务员分析 SQL 生成器
+ * Cross-Sell Top Salesman SQL Generator
+ *
+ * 基于主全、交三维度分析业务员推介率 TOP 20
+ */
+
+import { logger } from '../utils/logger.js';
+import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell-summary.js';
+
+export type TopSalesmanCoverage = '主全' | '交三';
+
+/**
+ * 交叉销售判定条件
+ */
+function getCrossSellCondition(): string {
+    return `(
+    TRY_CAST(is_cross_sell AS BOOLEAN) = true
+    OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+  )`;
+}
+
+/**
+ * 生成 TOP20 业务员查询
+ */
+export function generateCrossSellTopSalesmanQuery(
+    baseWhereClause: string,
+    vehicleCategory: VehicleCategory,
+    coverage: TopSalesmanCoverage
+): string {
+    logger.debug('Generating cross-sell top salesman query', { vehicleCategory, coverage });
+
+    const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
+    const crossSellCond = getCrossSellCondition();
+
+    const dedup = `COALESCE(
+      NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
+      NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
+    )`;
+
+    const sql = `
+    WITH filtered AS (
+      SELECT
+        salesman_name,
+        org_level_3,
+        ${dedup} AS dedup_key,
+        coverage_combination,
+        is_cross_sell,
+        cross_sell_premium_driver
+      FROM PolicyFact
+      WHERE ${baseWhereClause}
+        AND ${vehicleFilter}
+        AND coverage_combination = '${coverage}'
+        AND salesman_name IS NOT NULL
+        AND TRIM(salesman_name) != ''
+    ),
+    salesman_summary AS (
+      SELECT
+        salesman_name,
+        MAX(org_level_3) AS org_level_3,
+        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
+        COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium
+      FROM filtered
+      GROUP BY salesman_name
+    ),
+    calculated AS (
+      SELECT
+        salesman_name,
+        org_level_3,
+        auto_count,
+        driver_count,
+        ROUND(driver_premium, 2) AS driver_premium,
+        CASE WHEN auto_count = 0 THEN 0
+             ELSE ROUND(driver_count * 100.0 / auto_count, 2)
+        END AS rate,
+        CASE WHEN driver_count = 0 THEN 0
+             ELSE ROUND(driver_premium / driver_count, 2)
+        END AS avg_premium
+      FROM salesman_summary
+    )
+    SELECT
+      salesman_name,
+      org_level_3,
+      driver_premium,
+      auto_count,
+      rate,
+      avg_premium
+    FROM calculated
+    ORDER BY auto_count DESC, rate DESC
+    LIMIT 20
+  `;
+
+    logger.debug('Generated cross-sell top salesman SQL', { sqlLength: sql.length });
+    return sql;
+}

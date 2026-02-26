@@ -18,6 +18,7 @@ export interface TimePeriodRow {
   day: number;
   week: number;
   month: number;
+  quarter: number;
   year: number;
 }
 
@@ -44,6 +45,11 @@ interface TimePeriodRawRow {
   month_premium: number;
   month_rate: number;
   month_avg_premium: number;
+  quarter_auto_count: number;
+  quarter_driver_count: number;
+  quarter_premium: number;
+  quarter_rate: number;
+  quarter_avg_premium: number;
   year_auto_count: number;
   year_driver_count: number;
   year_premium: number;
@@ -65,6 +71,11 @@ interface TimePeriodRawRow {
   prev_month_premium: number;
   prev_month_rate: number;
   prev_month_avg_premium: number;
+  prev_quarter_auto_count: number;
+  prev_quarter_driver_count: number;
+  prev_quarter_premium: number;
+  prev_quarter_rate: number;
+  prev_quarter_avg_premium: number;
 }
 
 interface UseCrossSellTimePeriodReturn {
@@ -121,7 +132,7 @@ export function useCrossSellTimePeriod({
         setMaxDate(result.maxDate || null);
 
         const rows = result.rows || [];
-        
+
         // 保存原始数据
         setRawData(rows as TimePeriodRawRow[]);
 
@@ -132,12 +143,12 @@ export function useCrossSellTimePeriod({
         }
 
         const buildRows = (
-          getter: (row: typeof rows[0]) => { day: number; week: number; month: number; year: number }
+          getter: (row: typeof rows[0]) => { day: number; week: number; month: number; quarter: number; year: number }
         ): TimePeriodRow[] => {
           return LABEL_ORDER.map((key) => {
             const row = rowMap.get(key);
             if (!row) {
-              return { label: LABEL_MAP[key] || key, day: 0, week: 0, month: 0, year: 0 };
+              return { label: LABEL_MAP[key] || key, day: 0, week: 0, month: 0, quarter: 0, year: 0 };
             }
             const values = getter(row);
             return { label: LABEL_MAP[key] || key, ...values };
@@ -149,6 +160,7 @@ export function useCrossSellTimePeriod({
             day: Number(r.day_rate ?? 0),
             week: Number(r.week_rate ?? 0),
             month: Number(r.month_rate ?? 0),
+            quarter: Number(r.quarter_rate ?? 0),
             year: Number(r.year_rate ?? 0),
           }))
         );
@@ -158,6 +170,7 @@ export function useCrossSellTimePeriod({
             day: Number(r.day_avg_premium ?? 0),
             week: Number(r.week_avg_premium ?? 0),
             month: Number(r.month_avg_premium ?? 0),
+            quarter: Number(r.quarter_avg_premium ?? 0),
             year: Number(r.year_avg_premium ?? 0),
           }))
         );
@@ -167,6 +180,7 @@ export function useCrossSellTimePeriod({
             day: Number(r.day_premium ?? 0) / 10000,
             week: Number(r.week_premium ?? 0) / 10000,
             month: Number(r.month_premium ?? 0) / 10000,
+            quarter: Number(r.quarter_premium ?? 0) / 10000,
             year: Number(r.year_premium ?? 0) / 10000,
           }))
         );
