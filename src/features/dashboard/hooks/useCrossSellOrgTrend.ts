@@ -19,6 +19,7 @@ export interface OrgTrendPoint {
   auto_count: number;
   driver_count: number;
   rate: number;
+  avg_premium: number;
 }
 
 interface UseCrossSellOrgTrendProps {
@@ -81,6 +82,7 @@ export function useCrossSellOrgTrend({
           auto_count: Number(r.auto_count ?? 0),
           driver_count: Number(r.driver_count ?? 0),
           rate: Number(r.rate ?? 0),
+          avg_premium: Number(r.avg_premium ?? 0),
         }))
       );
     } catch (err) {
