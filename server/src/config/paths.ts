@@ -33,3 +33,17 @@ export function getCandidateDataDirs(): string[] {
 export function getKpiPlanConfigPath(): string {
   return path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/kpi_plan_config.json');
 }
+
+/**
+ * 获取业务员机构映射 JSON 的候选路径（按优先级）。
+ * 1) 本地开发优先使用 warehouse 最新文件
+ * 2) VPS/部署环境回退到 server/data/
+ */
+export function getSalesmanMappingPaths(): string[] {
+  const warehousePath = path.resolve(
+    SERVER_ROOT,
+    '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json'
+  );
+  const fallbackPath = path.resolve(getDataDir(), 'salesman_organization_mapping.json');
+  return [warehousePath, fallbackPath];
+}

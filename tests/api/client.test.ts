@@ -220,5 +220,102 @@ describe('API Client', () => {
       );
       expect(trend).toHaveLength(1);
     });
+
+    it('should preserve growth contract params for baseline comparison', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          data: [{ growth_rate: 0.12 }]
+        }),
+      });
+
+      const { apiClient } = await import('../../src/shared/api/client');
+      await apiClient.getGrowthAnalysis(
+        '2026-01-01',
+        '2026-01-31',
+        '2025-01-01',
+        '2025-01-31',
+        { growthType: 'yearly', timeView: 'month' }
+      );
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/query/growth?');
+      expect(calledUrl).toContain('startDate=2026-01-01');
+      expect(calledUrl).toContain('endDate=2026-01-31');
+      expect(calledUrl).toContain('baselineStart=2025-01-01');
+      expect(calledUrl).toContain('baselineEnd=2025-01-31');
+      expect(calledUrl).toContain('growthType=yearly');
+      expect(calledUrl).toContain('timeView=month');
+    });
+
+    it('should preserve cost query contract fields', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          data: { summaryData: [] }
+        }),
+      });
+
+      const { apiClient } = await import('../../src/shared/api/client');
+      await apiClient.getCostAnalysis({
+        analysisType: 'expense-forecast',
+        dimension: 'month',
+        cutoffDate: '2026-02-01',
+        operatingCostRate: 9,
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/query/cost?');
+      expect(calledUrl).toContain('analysisType=expense-forecast');
+      expect(calledUrl).toContain('dimension=month');
+      expect(calledUrl).toContain('cutoffDate=2026-02-01');
+      expect(calledUrl).toContain('operatingCostRate=9');
+    });
+
+    it('should preserve coefficient batch query contract fields', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          data: { summary: [] }
+        }),
+      });
+
+      const { apiClient } = await import('../../src/shared/api/client');
+      await apiClient.getCoefficientData({
+        queryType: 'batch',
+        startDate: '2026-01-01',
+        endDate: '2026-01-31',
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/query/coefficient?');
+      expect(calledUrl).toContain('queryType=batch');
+      expect(calledUrl).toContain('startDate=2026-01-01');
+      expect(calledUrl).toContain('endDate=2026-01-31');
+    });
+
+    it('should preserve renewal full query contract fields', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          data: { detailData: [] }
+        }),
+      });
+
+      const { apiClient } = await import('../../src/shared/api/client');
+      await apiClient.getRenewalAnalysis({
+        queryType: 'full',
+        targetMonth: '2026-02',
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/query/renewal?');
+      expect(calledUrl).toContain('queryType=full');
+      expect(calledUrl).toContain('targetMonth=2026-02');
+    });
   });
 });

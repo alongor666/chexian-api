@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import { UserCredential } from './auth.js';
-import path from 'path';
+import { getSalesmanMappingPaths } from '../config/paths.js';
 
 export interface WeComConfig {
     corpId: string;
@@ -105,28 +105,32 @@ class WeComService {
             };
         }
 
-        // 2. 检查业务员映射
-        try {
-            // JSON 文件路径：数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json
-            // 由于 server 从 src/ 启动，需向上跳出 server 并在项目根目录找
-            const mappingPath = path.resolve(process.cwd(), '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
-            const data = await fs.readFile(mappingPath, 'utf8');
-            const root = JSON.parse(data);
-            const mappingList = root.salesman_mapping || [];
+        // 2. 检查业务员映射（warehouse 优先，server/data 兜底）
+        const mappingPaths = getSalesmanMappingPaths();
+        for (const mappingPath of mappingPaths) {
+            try {
+                const data = await fs.readFile(mappingPath, 'utf8');
+                const root = JSON.parse(data);
+                const mappingList = root.salesman_mapping || [];
 
-            const orgData = mappingList.find((item: any) => item.business_no === userId || (name && item.salesman_name === name));
+                const orgData = mappingList.find(
+                  (item: any) => item.business_no === userId || (name && item.salesman_name === name)
+                );
 
-            if (orgData) {
-                return {
-                    username: userId,
-                    displayName: name || userId,
-                    role: 'org_user',
-                    organization: orgData.organization || orgData.team || orgData.branch, // 兼容可能的字段名
-                };
+                if (orgData) {
+                    return {
+                        username: userId,
+                        displayName: name || userId,
+                        role: 'org_user',
+                        organization: orgData.organization || orgData.team || orgData.branch, // 兼容可能的字段名
+                    };
+                }
+
+                // 读取成功但未命中，直接结束，不需要继续 fallback
+                return null;
+            } catch (error: any) {
+                console.warn(`[WeComService] Mapping load failed at ${mappingPath}: ${error.message}`);
             }
-        } catch (error: any) {
-            console.error('[WeComService] Failed to read or parse salesman mapping:', error.message);
-            // 找不到文件或解析失败属于后端异常
         }
 
         // 不在管理员且没有机构匹配
