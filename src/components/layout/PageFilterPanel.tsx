@@ -14,6 +14,10 @@ interface PageFilterPanelProps {
   title?: string;
   /** 页面标题栏右侧扩展区 */
   headerRightContent?: ReactNode;
+  /** 页面标题栏下方左侧扩展区 */
+  headerBottomLeftContent?: ReactNode;
+  /** 页面标题栏已选条件 chips 对齐方式 */
+  headerChipsAlign?: 'left' | 'right';
 }
 
 /**
@@ -31,6 +35,8 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
   children,
   title,
   headerRightContent,
+  headerBottomLeftContent,
+  headerChipsAlign,
 }) => {
   const {
     filters,
@@ -92,6 +98,8 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
             filters={filters}
             allOrgCount={filterOptions.org_level_3?.length || 0}
             rightContent={headerRightContent}
+            bottomLeftContent={headerBottomLeftContent}
+            chipsAlign={headerChipsAlign}
           />
         </div>
       )}

@@ -18,7 +18,7 @@ export const PerformanceAnalysisPage: React.FC = () => {
     <PageFilterPanel
       preset="performance"
       title="业绩分析"
-      headerRightContent={(
+      headerBottomLeftContent={(
         <PerformanceHeaderControls
           segmentTag={segmentTag}
           timePeriod={timePeriod}
@@ -28,6 +28,7 @@ export const PerformanceAnalysisPage: React.FC = () => {
           onGrowthModeChange={setGrowthMode}
         />
       )}
+      headerChipsAlign="right"
     >
       <PerformanceAnalysisPanel
         filters={filters}
