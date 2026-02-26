@@ -143,6 +143,24 @@ const PRESET_USERS: Record<string, UserCredential> = {
     displayName: 'jiachengxian',
     role: 'branch_admin',
   },
+  xuechenglong: {
+    username: 'xuechenglong',
+    passwordHash: '$2b$10$NHIOCyjuqXWLXyq5UaP8Y.5p/NNsDMXBrsnk/eHsmq.tVSd0swcwu',
+    displayName: '薛成龙',
+    role: 'branch_admin',
+  },
+  linxia: {
+    username: 'linxia',
+    passwordHash: '$2b$10$IPuFIhlNl6NFLXSC8A4o4.tuqMsK9J7B6D5DbeKzpOnJtE9uLA/BO',
+    displayName: '林霞',
+    role: 'branch_admin',
+  },
+  chexianbu: {
+    username: 'chexianbu',
+    passwordHash: '$2b$10$MNXiN2ASW4I1h.uqWRKySuQH80CmVCn1wjnXbXWzV5ersVLcoE4wu',
+    displayName: '车险部',
+    role: 'branch_admin',
+  },
 };
 
 /**
