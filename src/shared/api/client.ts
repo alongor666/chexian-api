@@ -844,6 +844,7 @@ class ApiClient {
       auto_count: number;
       driver_count: number;
       rate: number;
+      avg_premium: number;
     }>;
   }> {
     const query = this.buildQueryString(params);
@@ -871,7 +872,7 @@ class ApiClient {
    * AI 分析机构推介率趋势（后端读取 API Key，无需前端传）
    */
   async analyzeTrend(params: {
-    rows: Array<{ date: string; auto_count: number; driver_count: number; rate: number }>;
+    rows: Array<{ date: string; auto_count: number; driver_count: number; rate: number; avg_premium: number }>;
     org: string;
     coverage: string;
   }): Promise<{ success: boolean; analysis: string; error?: string }> {

@@ -40,6 +40,7 @@ const REGION_ORGS: Record<RegionType, readonly string[]> = {
 const BAR_AUTO_COLOR = colors.neutral[300];   // 灰色：车险件数（底层）
 const BAR_DRIVER_COLOR = colors.success.DEFAULT; // 绿色：驾意件数（上叠）
 const LINE_RATE_COLOR = colors.warning.DEFAULT;  // 橙色：推介率折线
+const LINE_AVG_PREMIUM_COLOR = colors.primary.DEFAULT; // 蓝色：件均保费折线
 
 export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   vehicleCategory,
@@ -110,6 +111,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
     const nonDriverCounts = rows.map((r) => Math.max(0, r.auto_count - r.driver_count));
     const driverCounts = rows.map((r) => r.driver_count);
     const rates = rows.map((r) => r.rate);
+    const avgPremiums = rows.map((r) => r.avg_premium);
 
     const maxCount = Math.max(...autoCounts, 1);
     const leftMax = Math.ceil(maxCount * 1.45); // 为折线留出上方空间
@@ -126,6 +128,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           { name: '驾意件数', icon: 'rect' },
           { name: '非驾意件数', icon: 'rect' },
           { name: '推介率', icon: 'circle' },
+          { name: '件均保费', icon: 'circle' },
         ],
       },
       tooltip: {
@@ -137,6 +140,8 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           const lines = p.map((item: any) => {
             const val = item.seriesName === '推介率'
               ? `${Number(item.value ?? 0).toFixed(1)}%`
+              : item.seriesName === '件均保费'
+                ? `${Number(item.value ?? 0).toFixed(0)}元`
               : item.seriesName === '驾意件数'
                 ? `${Number(item.value ?? 0)}件`
                 : `${Number(item.value ?? 0)}件（非驾意）`;
@@ -179,6 +184,18 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
             formatter: (v: number) => `${v}%`,
           },
         },
+        {
+          type: 'value',
+          name: '件均保费(元)',
+          nameTextStyle: { fontSize: 11, color: colors.neutral[500] },
+          splitLine: { show: false },
+          axisLabel: {
+            fontSize: 11,
+            color: colors.neutral[500],
+            formatter: (v: number) => `${Math.round(v)}`,
+          },
+          offset: 58,
+        },
       ],
       series: [
         {
@@ -215,6 +232,17 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
             color: colors.warning.dark,
             fontWeight: 600,
           },
+        },
+        {
+          name: '件均保费',
+          type: 'line',
+          yAxisIndex: 2,
+          data: avgPremiums,
+          smooth: false,
+          symbol: 'circle',
+          symbolSize: 5,
+          lineStyle: { color: LINE_AVG_PREMIUM_COLOR, width: 2 },
+          itemStyle: { color: LINE_AVG_PREMIUM_COLOR, borderWidth: 2, borderColor: '#fff' },
         },
       ],
       dataZoom: [
@@ -265,6 +293,8 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   const displayTitle = selectedOrg
     ? `机构推介率走势图 — ${selectedOrg}`
     : `机构推介率走势图 — ${REGION_LABELS[region]}汇总`;
+  const avgPremium14Days = rows.length ? (rows.reduce((sum, row) => sum + row.avg_premium, 0) / rows.length) : 0;
+  const recent3AvgPremium = rows.length ? (rows.slice(-3).reduce((sum, row) => sum + row.avg_premium, 0) / Math.min(3, rows.length)) : 0;
 
   return (
     <div className={cn(cardStyles.spacious, 'mt-4')}>
@@ -390,6 +420,15 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
             <span className="text-neutral-400">
               最低&nbsp;
               <span className="text-neutral-700">{stats.minDay.date.slice(5)}&nbsp;·&nbsp;{stats.minDay.rate}%</span>
+            </span>
+
+            <span className="text-neutral-500">
+              近14天件均保费&nbsp;
+              <span className="font-semibold text-neutral-800">{Math.round(avgPremium14Days)}元</span>
+            </span>
+            <span className="text-neutral-500">
+              近3天件均保费&nbsp;
+              <span className="font-semibold text-neutral-800">{Math.round(recent3AvgPremium)}元</span>
             </span>
 
             {/* AI 按钮（右对齐） */}

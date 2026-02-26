@@ -150,6 +150,7 @@ const trendAnalysisSchema = z.object({
     auto_count: z.number(),
     driver_count: z.number(),
     rate: z.number(),
+    avg_premium: z.number(),
   })).min(1).max(90),
   org: z.string().default('全部'),
   coverage: z.string().default('整体'),
