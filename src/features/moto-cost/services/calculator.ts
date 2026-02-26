@@ -1,41 +1,35 @@
 /**
  * 摩意模型 - 计算服务
- * 完全对齐原版 moto_cost 的计算逻辑
+ * 完全对齐原版 moto_cost/src/services/calculator.js
  */
 import type { MotoCostInputs, MotoCostCalculation, BreakEvenAnalysis } from '../types';
 
 /**
- * 将百分比输入转换为小数
- * 如果值 > 1，认为是百分比输入（如 104.2 → 1.042）
- * 如果值 <= 1，认为已经是小数（如 0.04 → 0.04）
+ * 获取比率值（百分比 → 小数）
+ * 对应原版 getInputValueAsRate: 直接除以100
  */
-function toRate(value: number): number {
-  return value > 1 ? value / 100 : value;
+function asRate(value: number): number {
+  return value / 100;
 }
 
 /**
  * 执行成本计算
- * 返回结构：
- * - absolute: [保费, 赔款, 手续费, 销推费用, 人力成本, 固定成本, 利润]
- * - rate: [综合成本率, 赔付率, 手续费率, 销推费用率, 人力成本率, 固定成本率]
+ * 对应原版 performCalculations 函数
  */
 export function performCalculations(inputs: MotoCostInputs): MotoCostCalculation {
-  // 转换比率参数（百分比 → 小数）
-  const carLossRatio = toRate(inputs.carLossRatio);
-  const carHandlingFeeRate = toRate(inputs.carHandlingFeeRate);
-  const carSalesPromotionRate = toRate(inputs.carSalesPromotionRate);
-  const motoLossRatio = toRate(inputs.motoLossRatio);
-  const motoWithCarFeeRate = toRate(inputs.motoWithCarFeeRate);
-  const motoCardFeeRate = toRate(inputs.motoCardFeeRate);
-  const motoSalesPromotionRate = toRate(inputs.motoSalesPromotionRate);
-  const laborBaseRate = toRate(inputs.laborBaseRate);
-  const fixedOperationRate = toRate(inputs.fixedOperationRate);
+  // 比率类参数：除以100转换为小数
+  const carLossRatio = asRate(inputs.carLossRatio);
+  const carHandlingFeeRate = asRate(inputs.carHandlingFeeRate);
+  const carSalesPromotionRate = asRate(inputs.carSalesPromotionRate);
+  const motoLossRatio = asRate(inputs.motoLossRatio);
+  const motoWithCarFeeRate = asRate(inputs.motoWithCarFeeRate);
+  const motoCardFeeRate = asRate(inputs.motoCardFeeRate);
+  const motoSalesPromotionRate = asRate(inputs.motoSalesPromotionRate);
+  const laborBaseRate = asRate(inputs.laborBaseRate);
+  const fixedOperationRate = asRate(inputs.fixedOperationRate);
 
-  const {
-    carPremium, motoPremium,
-    carStandardPremiumRatio,
-    motoStandardPremiumRatio,
-  } = inputs;
+  // 绝对值类参数：直接使用
+  const { carPremium, motoPremium, carStandardPremiumRatio, motoStandardPremiumRatio } = inputs;
 
   // 摩意险手续费率 = (随车费用率 + 卡单费用率) / 2
   const motoHandlingFeeRate = (motoWithCarFeeRate + motoCardFeeRate) / 2;
@@ -44,24 +38,28 @@ export function performCalculations(inputs: MotoCostInputs): MotoCostCalculation
   const carLaborCostRate = carStandardPremiumRatio * laborBaseRate;
   const carVariableCostRate = carLossRatio + carHandlingFeeRate + carSalesPromotionRate + carLaborCostRate;
   const carTotalCostRate = carVariableCostRate + fixedOperationRate;
+  const carEdgeContributionRate = 1 - carVariableCostRate;
 
   const carLoss = carPremium * carLossRatio;
   const carHandlingFee = carPremium * carHandlingFeeRate;
   const carSalesPromotion = carPremium * carSalesPromotionRate;
   const carLaborCost = carPremium * carLaborCostRate;
   const carFixedCost = carPremium * fixedOperationRate;
+  const carEdgeContribution = carPremium * carEdgeContributionRate;
   const carProfit = carPremium * (1 - carTotalCostRate);
 
   // ============ 摩意险计算 ============
   const motoLaborCostRate = motoStandardPremiumRatio * laborBaseRate;
   const motoVariableCostRate = motoLossRatio + motoHandlingFeeRate + motoSalesPromotionRate + motoLaborCostRate;
   const motoTotalCostRate = motoVariableCostRate + fixedOperationRate;
+  const motoEdgeContributionRate = 1 - motoVariableCostRate;
 
   const motoLoss = motoPremium * motoLossRatio;
   const motoHandlingFee = motoPremium * motoHandlingFeeRate;
   const motoSalesPromotion = motoPremium * motoSalesPromotionRate;
   const motoLaborCost = motoPremium * motoLaborCostRate;
   const motoFixedCost = motoPremium * fixedOperationRate;
+  const motoEdgeContribution = motoPremium * motoEdgeContributionRate;
   const motoProfit = motoPremium * (1 - motoTotalCostRate);
 
   // ============ 合计计算 ============
@@ -71,19 +69,12 @@ export function performCalculations(inputs: MotoCostInputs): MotoCostCalculation
   const totalSalesPromotion = carSalesPromotion + motoSalesPromotion;
   const totalLaborCost = carLaborCost + motoLaborCost;
   const totalFixedCost = carFixedCost + motoFixedCost;
+  const totalVariableCost = totalLoss + totalHandlingFee + totalSalesPromotion + totalLaborCost;
+  const totalVariableCostRate = totalPremium > 0 ? totalVariableCost / totalPremium : 0;
+  const totalCostRate = totalVariableCostRate + fixedOperationRate;
+  const totalEdgeContribution = carEdgeContribution + motoEdgeContribution;
   const totalProfit = carProfit + motoProfit;
-
-  // 综合成本率 = (赔款 + 手续费 + 销推 + 人力成本 + 固定成本) / 保费
-  const totalCostRate = totalPremium > 0
-    ? (totalLoss + totalHandlingFee + totalSalesPromotion + totalLaborCost + totalFixedCost) / totalPremium
-    : 0;
-
-  // 各项比率（相对保费）
-  const totalLossRatio = totalPremium > 0 ? totalLoss / totalPremium : 0;
-  const totalHandlingFeeRatio = totalPremium > 0 ? totalHandlingFee / totalPremium : 0;
-  const totalSalesPromotionRatio = totalPremium > 0 ? totalSalesPromotion / totalPremium : 0;
-  const totalLaborCostRatio = totalPremium > 0 ? totalLaborCost / totalPremium : 0;
-  const totalFixedCostRatio = fixedOperationRate; // 固定成本率直接使用
+  const totalEdgeContributionRate = 1 - totalVariableCostRate;
 
   return {
     car: {
@@ -96,27 +87,35 @@ export function performCalculations(inputs: MotoCostInputs): MotoCostCalculation
     },
     combined: {
       absolute: [totalPremium, totalLoss, totalHandlingFee, totalSalesPromotion, totalLaborCost, totalFixedCost, totalProfit],
-      rate: [totalCostRate, totalLossRatio, totalHandlingFeeRatio, totalSalesPromotionRatio, totalLaborCostRatio, totalFixedCostRatio],
+      rate: [
+        totalCostRate,
+        totalPremium > 0 ? totalLoss / totalPremium : 0,
+        totalPremium > 0 ? totalHandlingFee / totalPremium : 0,
+        totalPremium > 0 ? totalSalesPromotion / totalPremium : 0,
+        totalPremium > 0 ? totalLaborCost / totalPremium : 0,
+        fixedOperationRate,
+      ],
     },
   };
 }
 
 /**
  * 盈亏平衡分析
+ * 对应原版 calculateBreakEvenAnalysis 函数
  */
 export function calculateBreakEvenAnalysis(inputs: MotoCostInputs): BreakEvenAnalysis {
   const { carPremium, motoPremium, carStandardPremiumRatio, motoStandardPremiumRatio } = inputs;
 
-  // 转换比率参数
-  const carLossRatio = toRate(inputs.carLossRatio);
-  const carHandlingFeeRate = toRate(inputs.carHandlingFeeRate);
-  const carSalesPromotionRate = toRate(inputs.carSalesPromotionRate);
-  const motoLossRatio = toRate(inputs.motoLossRatio);
-  const motoWithCarFeeRate = toRate(inputs.motoWithCarFeeRate);
-  const motoCardFeeRate = toRate(inputs.motoCardFeeRate);
-  const motoSalesPromotionRate = toRate(inputs.motoSalesPromotionRate);
-  const laborBaseRate = toRate(inputs.laborBaseRate);
-  const fixedOperationRate = toRate(inputs.fixedOperationRate);
+  // 比率类参数转换
+  const carLossRatio = asRate(inputs.carLossRatio);
+  const carHandlingFeeRate = asRate(inputs.carHandlingFeeRate);
+  const carSalesPromotionRate = asRate(inputs.carSalesPromotionRate);
+  const motoLossRatio = asRate(inputs.motoLossRatio);
+  const motoWithCarFeeRate = asRate(inputs.motoWithCarFeeRate);
+  const motoCardFeeRate = asRate(inputs.motoCardFeeRate);
+  const motoSalesPromotionRate = asRate(inputs.motoSalesPromotionRate);
+  const laborBaseRate = asRate(inputs.laborBaseRate);
+  const fixedOperationRate = asRate(inputs.fixedOperationRate);
 
   const motoPremiumRatio = carPremium > 0 ? motoPremium / carPremium : 0;
   const motoHandlingFeeRate = (motoWithCarFeeRate + motoCardFeeRate) / 2;
@@ -152,12 +151,10 @@ export function calculateMotoPremiumRatio(inputs: MotoCostInputs): number {
 }
 
 /**
- * 计算摩意险手续费率
+ * 计算摩意险手续费率（百分比形式）
  */
 export function calculateMotoHandlingFeeRate(inputs: MotoCostInputs): number {
-  const motoWithCarFeeRate = toRate(inputs.motoWithCarFeeRate);
-  const motoCardFeeRate = toRate(inputs.motoCardFeeRate);
-  return (motoWithCarFeeRate + motoCardFeeRate) / 2;
+  return (inputs.motoWithCarFeeRate + inputs.motoCardFeeRate) / 2;
 }
 
 /**
