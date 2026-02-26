@@ -67,24 +67,28 @@ export const PRESET_CONFIGS: Record<ComparisonPreset, PresetConfig> = {
  * 格式化日期为 YYYY-MM-DD 格式
  */
 function formatDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function parseIsoDate(baseDate: string): Date {
+  return new Date(`${baseDate}T00:00:00Z`);
 }
 
 /**
  * 获取某月的第一天
  */
 function getFirstDayOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 }
 
 /**
  * 获取某月的最后一天
  */
 function getLastDayOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
 }
 
 /**
@@ -92,9 +96,10 @@ function getLastDayOfMonth(date: Date): Date {
  */
 function getMondayOfWeek(date: Date): Date {
   const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 周日调整为-6
-  return new Date(d.setDate(diff));
+  const day = d.getUTCDay();
+  const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // 周日调整为-6
+  d.setUTCDate(diff);
+  return d;
 }
 
 /**
@@ -106,8 +111,8 @@ function getMondayOfWeek(date: Date): Date {
  * @param baseDate 基准日期，默认为数据最大日期（DC-002：从外部传入）
  */
 export function calculateYoYPeriods(baseDate: string): ComparisonPeriods {
-  const base = new Date(baseDate);
-  const currentYear = base.getFullYear();
+  const base = parseIsoDate(baseDate);
+  const currentYear = base.getUTCFullYear();
   const previousYear = currentYear - 1;
 
   // 当期：今年1月1日 ~ 基准日期
@@ -117,10 +122,10 @@ export function calculateYoYPeriods(baseDate: string): ComparisonPeriods {
   // 基期：去年1月1日 ~ 去年同日
   const previousStart = `${previousYear}-01-01`;
   // 处理闰年2月29日的情况
-  const previousBase = new Date(previousYear, base.getMonth(), base.getDate());
+  const previousBase = new Date(Date.UTC(previousYear, base.getUTCMonth(), base.getUTCDate()));
   // 如果日期不存在（如2月29日在非闰年），取月末
-  if (previousBase.getMonth() !== base.getMonth()) {
-    previousBase.setDate(0); // 回到上月最后一天
+  if (previousBase.getUTCMonth() !== base.getUTCMonth()) {
+    previousBase.setUTCDate(0); // 回到上月最后一天
   }
   const previousEnd = formatDate(previousBase);
 
@@ -139,21 +144,21 @@ export function calculateYoYPeriods(baseDate: string): ComparisonPeriods {
  * @param baseDate 基准日期，默认为数据最大日期（DC-002：从外部传入）
  */
 export function calculateMoMPeriods(baseDate: string): ComparisonPeriods {
-  const base = new Date(baseDate);
+  const base = parseIsoDate(baseDate);
 
   // 当期：本月1日 ~ 基准日期
   const currentStart = formatDate(getFirstDayOfMonth(base));
   const currentEnd = formatDate(base);
 
   // 基期：上月1日 ~ 上月对应日
-  const previousMonth = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+  const previousMonth = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - 1, 1));
   const previousStart = formatDate(previousMonth);
 
   // 上月对应日（处理月末情况）
-  const dayOfMonth = base.getDate();
-  const lastDayOfPreviousMonth = getLastDayOfMonth(previousMonth).getDate();
+  const dayOfMonth = base.getUTCDate();
+  const lastDayOfPreviousMonth = getLastDayOfMonth(previousMonth).getUTCDate();
   const previousDay = Math.min(dayOfMonth, lastDayOfPreviousMonth);
-  const previousEndDate = new Date(previousMonth.getFullYear(), previousMonth.getMonth(), previousDay);
+  const previousEndDate = new Date(Date.UTC(previousMonth.getUTCFullYear(), previousMonth.getUTCMonth(), previousDay));
   const previousEnd = formatDate(previousEndDate);
 
   return {
@@ -171,7 +176,7 @@ export function calculateMoMPeriods(baseDate: string): ComparisonPeriods {
  * @param baseDate 基准日期，默认为数据最大日期（DC-002：从外部传入）
  */
 export function calculateWoWPeriods(baseDate: string): ComparisonPeriods {
-  const base = new Date(baseDate);
+  const base = parseIsoDate(baseDate);
 
   // 当期：本周一 ~ 基准日期
   const currentMonday = getMondayOfWeek(base);
@@ -180,13 +185,13 @@ export function calculateWoWPeriods(baseDate: string): ComparisonPeriods {
 
   // 基期：上周一 ~ 上周对应日
   const previousMonday = new Date(currentMonday);
-  previousMonday.setDate(currentMonday.getDate() - 7);
+  previousMonday.setUTCDate(currentMonday.getUTCDate() - 7);
   const previousStart = formatDate(previousMonday);
 
   // 上周对应日（与当期相同的星期几）
-  const dayOffset = Math.floor((base.getTime() - currentMonday.getTime()) / (24 * 60 * 60 * 1000));
+  const dayOffset = Math.round((base.getTime() - currentMonday.getTime()) / (24 * 60 * 60 * 1000));
   const previousEndDate = new Date(previousMonday);
-  previousEndDate.setDate(previousMonday.getDate() + dayOffset);
+  previousEndDate.setUTCDate(previousMonday.getUTCDate() + dayOffset);
   const previousEnd = formatDate(previousEndDate);
 
   return {
@@ -245,8 +250,8 @@ export function formatPeriodDisplay(period: DatePeriod): string {
  * 计算期间天数
  */
 export function calculatePeriodDays(period: DatePeriod): number {
-  const start = new Date(period.startDate);
-  const end = new Date(period.endDate);
+  const start = parseIsoDate(period.startDate);
+  const end = parseIsoDate(period.endDate);
   const diffTime = Math.abs(end.getTime() - start.getTime());
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // 包含起止两天
 }

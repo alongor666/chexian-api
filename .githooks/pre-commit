@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[pre-commit] Running governance checks..."
+bun run governance
+
+echo "[pre-commit] Running core regression tests..."
+bun run test -- --run \
+  tests/api/client.test.ts \
+  tests/api/client-contracts.test.ts \
+  tests/api/wecom-mapping-path.test.ts \
+  tests/comparison-presets.test.ts \
+  tests/shared/types/branded.test.ts

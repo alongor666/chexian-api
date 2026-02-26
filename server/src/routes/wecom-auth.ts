@@ -1,10 +1,21 @@
 import { Router, Request, Response } from 'express';
 import { wecomService } from '../services/wecom.js';
-import { authConfig } from '../config/auth.js';
-import jwt, { SignOptions } from 'jsonwebtoken';
-import { JwtPayload } from '../middleware/auth.js';
+import { authService } from '../services/auth.js';
 
 const router = Router();
+
+const ACCESS_COOKIE = 'cx_access_token';
+const REFRESH_COOKIE = 'cx_refresh_token';
+
+function parseDurationToMs(duration: string | undefined, fallbackMs: number): number {
+    if (!duration) return fallbackMs;
+    const match = duration.match(/^(\d+)([smhd])$/);
+    if (!match) return fallbackMs;
+    const value = Number(match[1]);
+    const unit = match[2];
+    const factors: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+    return value * (factors[unit] || 1000);
+}
 
 /**
  * GET /api/auth/wecom/config
@@ -60,23 +71,29 @@ router.get('/callback', async (req: Request, res: Response) => {
             return res.redirect('/#/?error=wecom_auth_denied');
         }
 
-        // 3. 签发同格式的 JWT Token
-        const payload: JwtPayload = {
-            userId: userCredential.username,
-            username: userCredential.username,
-            role: userCredential.role,
-            organization: userCredential.organization,
-        };
+        // 3. 签发 cookie 会话（access+refresh）
+        const secure = process.env.NODE_ENV === 'production';
+        const accessMaxAge = parseDurationToMs(process.env.JWT_EXPIRES_IN || '4h', 4 * 60 * 60 * 1000);
+        const refreshMaxAge = parseDurationToMs(process.env.JWT_REFRESH_EXPIRES_IN || '7d', 7 * 24 * 60 * 60 * 1000);
+        const session = authService.issueCookieSession(userCredential);
 
-        const token = jwt.sign(
-            payload as object,
-            authConfig.jwtSecret,
-            { expiresIn: authConfig.jwtExpiresIn } as SignOptions
-        );
+        res.cookie(ACCESS_COOKIE, session.accessToken, {
+            httpOnly: true,
+            secure,
+            sameSite: 'lax',
+            maxAge: accessMaxAge,
+            path: '/',
+        });
+        res.cookie(REFRESH_COOKIE, session.refreshToken, {
+            httpOnly: true,
+            secure,
+            sameSite: 'lax',
+            maxAge: refreshMaxAge,
+            path: '/',
+        });
 
-        // 4. 重定向回前端页面，携带 token
-        // 根据需求: 302 跳回前端 /#/?wecom_token=xxx 
-        res.redirect(`/#/?wecom_token=${token}`);
+        // 4. 重定向回前端页面（不再在 URL 暴露 token）
+        res.redirect('/#/?wecom=success');
 
     } catch (error: any) {
         console.error('[WeCom Auth] Callback error:', error.message);

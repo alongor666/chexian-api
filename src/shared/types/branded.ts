@@ -203,14 +203,14 @@ export type ISODateString = Branded<string, 'ISODateString'>;
 export const isISODateString = (value: string): value is ISODateString => {
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(value)) return false;
-  const date = new Date(value);
+  const date = new Date(`${value}T00:00:00Z`);
   if (isNaN(date.getTime())) return false;
   // 验证日期组件匹配（排除如 2024-02-30 被解析为 2024-03-01 的情况）
   const [year, month, day] = value.split('-').map(Number);
   return (
-    date.getFullYear() === year &&
-    date.getMonth() + 1 === month &&
-    date.getDate() === day
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() + 1 === month &&
+    date.getUTCDate() === day
   );
 };
 

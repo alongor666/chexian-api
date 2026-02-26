@@ -31,8 +31,10 @@ interface PermissionContextValue {
   login: (username: string) => void;
   /** 密码登录（内网认证） */
   loginWithPassword: (username: string, password: string, remember?: boolean) => Promise<boolean>;
-  /** 企微 token 快捷登录 */
-  loginWithWecomToken: (token: string) => Promise<boolean>;
+  /** 企微/会话恢复登录 */
+  loginWithWecomToken: (token?: string) => Promise<boolean>;
+  /** 基于 cookie 会话恢复当前用户 */
+  restoreSession: () => Promise<boolean>;
   /** 登出 */
   logout: () => void;
   /** 检查是否可查看指定机构 */
@@ -50,6 +52,7 @@ const PermissionContext = createContext<PermissionContextValue>({
   login: () => { },
   loginWithPassword: async () => false,
   loginWithWecomToken: async () => false,
+  restoreSession: async () => false,
   logout: () => { },
   canView: () => true,
 });
@@ -57,10 +60,6 @@ const PermissionContext = createContext<PermissionContextValue>({
 interface PermissionProviderProps {
   children: ReactNode;
 }
-
-/** localStorage 键名常量 */
-const STORAGE_KEY_USER = 'chexian_user';
-const STORAGE_KEY_AUTH = 'chexian_auth';
 
 /**
  * 权限上下文 Provider
@@ -71,73 +70,58 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
   const [userPermission, setUserPermissionState] = useState<UserPermission | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 初始化时从 localStorage 恢复登录状态
+  const setUserPermission = useCallback((permission: UserPermission | null) => {
+    setUserPermissionState(permission);
+    setPermission(permission);
+  }, []);
+
+  const restoreSession = useCallback(async (): Promise<boolean> => {
+    try {
+      const me = await apiClient.getCurrentUser();
+      const localPermission = getPermissionByUsername(me.username);
+      const permission: UserPermission = localPermission || {
+        username: me.username,
+        displayName: me.displayName,
+        role: me.role === 'branch_admin' ? UserRole.BRANCH_ADMIN : UserRole.ORG_USER,
+        organization: me.organization as UserPermission['organization'],
+      };
+      setUserPermission(permission);
+      return true;
+    } catch {
+      setUserPermission(null);
+      return false;
+    }
+  }, [setUserPermission]);
+
+  // 初始化时基于 cookie 会话恢复登录状态
   useEffect(() => {
     const restoreAuth = async () => {
       try {
-        const savedAuth = localStorage.getItem(STORAGE_KEY_AUTH);
-        if (savedAuth) {
-          // token 不可用时不恢复，避免“已登录UI + 未认证API”的状态抖动
-          if (!apiClient.isAuthenticated()) {
-            localStorage.removeItem(STORAGE_KEY_AUTH);
-            localStorage.removeItem(STORAGE_KEY_USER);
-            return;
-          }
-          const authData = JSON.parse(savedAuth);
-          // 验证存储的认证信息
-          if (authData.username && authData.permission) {
-            // 优先使用最新本地权限配置，避免旧缓存缺少新字段（如 allowedRoutes/defaultRoute）
-            const latestPermission = getPermissionByUsername(authData.username) || authData.permission;
-            setUserPermissionState(latestPermission);
-            setPermission(latestPermission);
-          }
-        } else if (import.meta.env.DEV) {
-          // 开发模式：从旧的存储格式恢复
-          const savedUser = localStorage.getItem(STORAGE_KEY_USER);
-          if (savedUser) {
-            const permission = getPermissionByUsername(savedUser);
-            setUserPermissionState(permission);
-            setPermission(permission);
-          }
-        }
+        await restoreSession();
       } catch (e) {
         logger.error('恢复登录状态失败:', e);
-        localStorage.removeItem(STORAGE_KEY_AUTH);
-        localStorage.removeItem(STORAGE_KEY_USER);
       } finally {
         setIsLoading(false);
       }
     };
 
     restoreAuth();
-  }, []);
+  }, [restoreSession]);
 
   // 与 apiClient.logout 事件对齐，防止权限状态残留导致重复跳转
   useEffect(() => {
     const handleLogout = () => {
       setUserPermissionState(null);
       setPermission(null);
-      localStorage.removeItem(STORAGE_KEY_AUTH);
-      localStorage.removeItem(STORAGE_KEY_USER);
     };
     window.addEventListener('auth-logout', handleLogout);
     return () => window.removeEventListener('auth-logout', handleLogout);
-  }, []);
-
-  const setUserPermission = useCallback((permission: UserPermission | null) => {
-    setUserPermissionState(permission);
-    setPermission(permission);
   }, []);
 
   /** 快速登录（无密码验证，开发模式使用） */
   const login = useCallback((username: string) => {
     const permission = getPermissionByUsername(username);
     setUserPermission(permission);
-
-    // 开发模式：保存到 localStorage
-    if (import.meta.env.DEV && permission) {
-      localStorage.setItem(STORAGE_KEY_USER, permission.username);
-    }
 
     // 触发登录事件（通知 DataContext 刷新数据），与 loginWithPassword 保持一致
     window.dispatchEvent(new Event('auth-login'));
@@ -147,7 +131,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
   const loginWithPassword = useCallback(async (
     username: string,
     password: string,
-    remember: boolean = true
+    _remember: boolean = true
   ): Promise<boolean> => {
     try {
       // 1. 调用后端 API 登录
@@ -165,19 +149,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
 
       setUserPermission(permission);
 
-      // 3. 记住登录状态
-      if (remember) {
-        localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify({
-          username: permission.username,
-          permission,
-          timestamp: Date.now(),
-        }));
-      } else {
-        localStorage.removeItem(STORAGE_KEY_AUTH);
-        localStorage.removeItem(STORAGE_KEY_USER);
-      }
-
-      // 4. 触发登录事件（通知 DataContext 刷新数据）
+      // 3. 触发登录事件（通知 DataContext 刷新数据）
       window.dispatchEvent(new Event('auth-login'));
 
       return true;
@@ -189,45 +161,26 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     }
   }, [setUserPermission]);
 
-  /** 企微 token 解析登录 */
-  const loginWithWecomToken = useCallback(async (token: string): Promise<boolean> => {
+  /** 企微 token 解析登录（兼容）/ 基于 cookie 会话恢复 */
+  const loginWithWecomToken = useCallback(async (token?: string): Promise<boolean> => {
     try {
-      // 1. 设置 token
-      apiClient.setToken(token);
-
-      // 2. 解析 JWT Payload
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const permission: UserPermission = {
-        username: payload.username,
-        displayName: payload.username,
-        role: payload.role as UserRole,
-        organization: payload.organization,
-      };
-
-      setUserPermission(permission);
-
-      // 3. 记住登录状态
-      localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify({
-        username: permission.username,
-        permission,
-        timestamp: Date.now(),
-      }));
-
-      // 4. 触发登录事件
+      if (token) {
+        apiClient.setToken(token);
+      }
+      const ok = await restoreSession();
+      if (!ok) return false;
       window.dispatchEvent(new Event('auth-login'));
       return true;
     } catch (e) {
       logger.error('WeCom token 校验或解析失败:', e);
       return false;
     }
-  }, [setUserPermission]);
+  }, [restoreSession]);
 
   /** 登出 */
   const logout = useCallback(() => {
     setUserPermission(null);
     apiClient.logout(); // 清除 API 客户端 token
-    localStorage.removeItem(STORAGE_KEY_AUTH);
-    localStorage.removeItem(STORAGE_KEY_USER);
   }, [setUserPermission]);
 
   const canView = useCallback((organization: string): boolean => {
@@ -257,6 +210,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       login,
       loginWithPassword,
       loginWithWecomToken,
+      restoreSession,
       logout,
       canView,
     }),
@@ -271,6 +225,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       login,
       loginWithPassword,
       loginWithWecomToken,
+      restoreSession,
       logout,
       canView,
     ]

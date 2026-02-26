@@ -1,0 +1,169 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+async function importClient() {
+  return import('../../src/shared/api/client');
+}
+
+describe('API client contract coverage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: {} }),
+    });
+  });
+
+  it('truck endpoint preserves queryType and metric', async () => {
+    const { apiClient } = await importClient();
+    await apiClient.getTruckAnalysis({ queryType: 'all', metric: 'premium' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/truck?');
+    expect(calledUrl).toContain('queryType=all');
+    expect(calledUrl).toContain('metric=premium');
+  });
+
+  it('cross-sell trend endpoint preserves time granularity and path', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { labels: [], series: {} } }),
+    });
+    await apiClient.getCrossSellTrend({ granularity: 'monthly', org: '乐山' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/cross-sell-trend?');
+    expect(calledUrl).toContain('granularity=monthly');
+    expect(calledUrl).toContain('org=%E4%B9%90%E5%B1%B1');
+  });
+
+  it('cross-sell top-salesman endpoint preserves ranking params', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { rows: [] } }),
+    });
+    await apiClient.getCrossSellTopSalesman({ rankingType: 'quality', topN: '20' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/cross-sell-top-salesman?');
+    expect(calledUrl).toContain('rankingType=quality');
+    expect(calledUrl).toContain('topN=20');
+  });
+
+  it('performance summary endpoint preserves year and dimension', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: {} }),
+    });
+    await apiClient.getPerformanceSummary({ year: '2026', dimension: 'team' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/performance-summary?');
+    expect(calledUrl).toContain('year=2026');
+    expect(calledUrl).toContain('dimension=team');
+  });
+
+  it('performance drilldown endpoint preserves drill path payload', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: [] }),
+    });
+    await apiClient.getPerformanceDrilldown({
+      year: '2026',
+      level: 'salesman',
+      parentValue: '天府',
+    });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/performance-drilldown?');
+    expect(calledUrl).toContain('level=salesman');
+    expect(calledUrl).toContain('parentValue=');
+  });
+
+  it('marketing report endpoint preserves date range filters', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: [] }),
+    });
+    await apiClient.getMarketingReport({ startDate: '2026-01-01', endDate: '2026-01-31', groupBy: 'org' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/marketing-report?');
+    expect(calledUrl).toContain('startDate=2026-01-01');
+    expect(calledUrl).toContain('endDate=2026-01-31');
+    expect(calledUrl).toContain('groupBy=org');
+  });
+
+  it('premium report endpoint preserves scope filters', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: [] }),
+    });
+    await apiClient.getPremiumReport({ startDate: '2026-01-01', endDate: '2026-01-31', org: '乐山' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/premium-report?');
+    expect(calledUrl).toContain('org=%E4%B9%90%E5%B1%B1');
+  });
+
+  it('plan achievement endpoint preserves planType and dimension', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: {} }),
+    });
+    await apiClient.getPlanAchievement({ year: 2026, planType: 'driver', dimension: 'org' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/plan-achievement?');
+    expect(calledUrl).toContain('planType=driver');
+    expect(calledUrl).toContain('dimension=org');
+  });
+
+  it('custom SQL endpoint uses POST with sql body', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: [] }),
+    });
+    await apiClient.executeCustomQuery('SELECT 1');
+    const [calledUrl, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toContain('/query/custom');
+    expect(options.method).toBe('POST');
+    expect(String(options.body)).toContain('SELECT 1');
+  });
+
+  it('filter options endpoint remains stable', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: {} }),
+    });
+    await apiClient.getFilterOptions();
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/filters/options');
+  });
+
+  it('AI SQL generation endpoint uses POST', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { sql: 'SELECT * FROM PolicyFact' } }),
+    });
+    await apiClient.generateSql('查询乐山保费');
+    const [calledUrl, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toContain('/ai/generate-sql');
+    expect(options.method).toBe('POST');
+  });
+});

@@ -36,11 +36,12 @@ export function isRequestAbortError(error: unknown): error is RequestAbortError 
  * 认证信息
  */
 interface AuthData {
-  token: string;
+  token?: string;
   user: {
     username: string;
     displayName: string;
     role: string;
+    organization?: string;
   };
 }
 
@@ -143,6 +144,7 @@ export interface LoadResult {
 class ApiClient {
   private token: string | null = null;
   private tokenExpiry: number = 0;
+  private hasSessionCookieHint = false;
   /** 进行中的请求控制器（按端点去重） */
   private inflightControllers = new Map<string, AbortController>();
   /** 默认请求超时（毫秒） */
@@ -160,17 +162,13 @@ class ApiClient {
     } catch {
       this.tokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // 默认 24 小时
     }
-    // 保存到 localStorage
-    localStorage.setItem('auth_token', token);
+    this.hasSessionCookieHint = true;
   }
 
   /**
    * 获取 Token
    */
   getToken(): string | null {
-    if (!this.token) {
-      this.token = localStorage.getItem('auth_token');
-    }
     // 检查是否过期
     if (this.token && this.tokenExpiry && Date.now() > this.tokenExpiry) {
       this.clearToken();
@@ -185,14 +183,14 @@ class ApiClient {
   clearToken(): void {
     this.token = null;
     this.tokenExpiry = 0;
-    localStorage.removeItem('auth_token');
+    this.hasSessionCookieHint = false;
   }
 
   /**
    * 是否已认证
    */
   isAuthenticated(): boolean {
-    return !!this.getToken();
+    return !!this.getToken() || this.hasSessionCookieHint;
   }
 
   /**
@@ -225,7 +223,8 @@ class ApiClient {
    */
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    hasRetriedAfterRefresh = false
   ): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
     const headers: Record<string, string> = {
@@ -258,8 +257,16 @@ class ApiClient {
       const response = await fetch(url, {
         ...options,
         headers,
+        credentials: 'include',
         signal: controller.signal,
       });
+
+      if (response.status === 401 && !hasRetriedAfterRefresh) {
+        const refreshed = await this.tryRefreshSession();
+        if (refreshed) {
+          return this.request<T>(endpoint, options, true);
+        }
+      }
 
       const data: ApiResponse<T> = await response.json();
 
@@ -296,8 +303,18 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
-    this.setToken(result.token);
+    if (result.token) {
+      this.setToken(result.token);
+    } else {
+      this.hasSessionCookieHint = true;
+    }
     return result;
+  }
+
+  async getCurrentUser(): Promise<AuthData['user']> {
+    const user = await this.request<AuthData['user']>('/auth/me');
+    this.hasSessionCookieHint = true;
+    return user;
   }
 
   /**
@@ -311,10 +328,44 @@ class ApiClient {
    * 登出
    */
   logout(): void {
+    void Promise.resolve(fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })).catch(() => undefined);
     this.clearToken();
     // 触发登出事件，通知 DataContext 切换数据源
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('auth-logout'));
+    }
+  }
+
+  private async tryRefreshSession(): Promise<boolean> {
+    try {
+      const refreshed = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!refreshed.ok) {
+        this.clearToken();
+        return false;
+      }
+      const data: ApiResponse<{ token?: string }> = await refreshed.json();
+      if (!data.success) {
+        this.clearToken();
+        return false;
+      }
+      if (data.data?.token) {
+        this.setToken(data.data.token);
+      } else {
+        this.hasSessionCookieHint = true;
+      }
+      return true;
+    } catch {
+      this.clearToken();
+      return false;
     }
   }
 
@@ -355,6 +406,7 @@ class ApiClient {
     const response = await fetch(url, {
       method: 'POST',
       headers,
+      credentials: 'include',
       body: formData,
     });
 

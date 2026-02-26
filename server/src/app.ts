@@ -12,7 +12,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
-import { getDataDir, getCandidateDataDirs, SERVER_ROOT } from './config/paths.js';
+import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
@@ -109,8 +109,14 @@ async function startServer() {
     console.log('[Server] Initializing DuckDB...');
     await duckdbService.init();
 
-    // 扫描所有候选目录（warehouse 优先，server/data 兜底），取全局最新 Parquet
+    // 启动期健康检查：数据目录与映射路径可见性
     const candidateDirs = getCandidateDataDirs();
+    const mappingCandidates = getSalesmanMappingPaths();
+    console.log('[Server] Startup health check:');
+    console.log('  - Parquet dirs:', candidateDirs.map(d => `${d}${fs.existsSync(d) ? ' [ok]' : ' [missing]'}`).join(' | '));
+    console.log('  - Team mapping paths:', mappingCandidates.map(p => `${p}${fs.existsSync(p) ? ' [ok]' : ' [missing]'}`).join(' | '));
+
+    // 扫描所有候选目录（warehouse 优先，server/data 兜底），取全局最新 Parquet
     const parquetFiles = candidateDirs
       .flatMap(dir => {
         if (!fs.existsSync(dir)) return [];
@@ -149,14 +155,22 @@ async function startServer() {
 
       // 加载团队映射表（业务员 → 团队归属）
       // 本地开发路径优先，VPS 部署 fallback 到 server/data/
-      const teamMappingPrimary = path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json');
-      const teamMappingFallback = path.resolve(getDataDir(), 'salesman_organization_mapping.json');
-      const teamMappingPath = fs.existsSync(teamMappingPrimary) ? teamMappingPrimary : teamMappingFallback;
-      try {
-        await duckdbService.loadTeamMapping(teamMappingPath);
-        console.log('[Server] Team mapping loaded from:', teamMappingPath);
-      } catch (err) {
-        console.warn('[Server] Warning: Failed to load team mapping from both paths:', teamMappingPrimary, teamMappingFallback);
+      const teamMappingCandidates = getSalesmanMappingPaths();
+      let teamMappingLoaded = false;
+      for (const mappingPath of teamMappingCandidates) {
+        if (!fs.existsSync(mappingPath)) continue;
+        try {
+          await duckdbService.loadTeamMapping(mappingPath);
+          console.log('[Server] Team mapping loaded from:', mappingPath);
+          teamMappingLoaded = true;
+          break;
+        } catch (err) {
+          console.warn('[Server] Team mapping load failed:', mappingPath);
+        }
+      }
+      if (!teamMappingLoaded) {
+        console.warn('[Server] Warning: Team mapping unavailable. Checked paths:', teamMappingCandidates.join(' , '));
+        console.warn('[Server] Hint: ensure salesman_organization_mapping.json exists in warehouse dim or server/data.');
       }
 
       // 注册当前数据文件（使 /api/data/files 返回 isCurrent: true）
