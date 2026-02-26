@@ -259,15 +259,19 @@ function buildPeriodProgressCte(): string {
     ),
     period_progress AS (
       SELECT
-        CASE
-          WHEN pb.current_end < pb.current_start THEN 0
-          ELSE DATE_DIFF('day', pb.current_start, pb.current_end) + 1
-        END AS total_days,
-        CASE
-          -- DC-002 Exception: 时间进度达成率必须用自然日“已过天数”
-          WHEN LEAST(CAST(CURRENT_DATE AS DATE), pb.current_end) < pb.current_start THEN 0
-          ELSE DATE_DIFF('day', pb.current_start, LEAST(CAST(CURRENT_DATE AS DATE), pb.current_end)) + 1
-        END AS elapsed_days,
+        MAX(
+          CASE
+            WHEN pb.current_end < pb.current_start THEN 0
+            ELSE DATE_DIFF('day', pb.current_start, pb.current_end) + 1
+          END
+        ) AS total_days,
+        MAX(
+          CASE
+            -- DC-002 Exception: 时间进度达成率必须用自然日“已过天数”
+            WHEN LEAST(CAST(CURRENT_DATE AS DATE), pb.current_end) < pb.current_start THEN 0
+            ELSE DATE_DIFF('day', pb.current_start, LEAST(CAST(CURRENT_DATE AS DATE), pb.current_end)) + 1
+          END
+        ) AS elapsed_days,
         COALESCE(
           SUM(
             CASE
