@@ -102,7 +102,7 @@ function App() {
                   <RouteAccessGuard routePath="/dashboard">
                     <DataGuard>
                       <LazyRoute>
-                        <PageFilterPanel preset="full">
+                        <PageFilterPanel preset="full" title="保费分析看板">
                           <PremiumDashboard />
                         </PageFilterPanel>
                       </LazyRoute>

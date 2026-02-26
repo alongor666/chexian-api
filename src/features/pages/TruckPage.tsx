@@ -9,7 +9,7 @@ export const TruckPage: React.FC = () => {
   const [perspective, setPerspective] = useState<ViewPerspective>('premium');
 
   return (
-    <PageFilterPanel preset="full">
+    <PageFilterPanel preset="full" title="营业货车分析">
       <div className="p-4">
         <TruckAnalysisPanel
           filters={filters}

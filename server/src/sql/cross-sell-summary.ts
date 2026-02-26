@@ -47,6 +47,31 @@ function timeFilter(period: 'day' | 'week' | 'month' | 'year', extra = ''): stri
 }
 
 /**
+ * 生成上一时间段 FILTER 子句（用于环比计算）
+ * - day: 昨日 (tp_day - 1)
+ * - week: 上周 (tp_week - 7 到 tp_week - 1)
+ * - month: 上月 (上个月同范围天数)
+ * - year: 无环比，返回空
+ */
+function prevTimeFilter(period: 'day' | 'week' | 'month' | 'year', extra = ''): string {
+  const extraClause = extra ? ` AND ${extra}` : '';
+  switch (period) {
+    case 'day':
+      // 昨日
+      return `FILTER (WHERE pd = tp_day - INTERVAL 1 DAY${extraClause})`;
+    case 'week':
+      // 上周同期 (当前周开始前7天)
+      return `FILTER (WHERE pd >= tp_week - INTERVAL 7 DAY AND pd < tp_week${extraClause})`;
+    case 'month':
+      // 上月同期 (上个月同范围天数)
+      return `FILTER (WHERE pd >= tp_month - INTERVAL 1 MONTH AND pd < tp_month${extraClause})`;
+    case 'year':
+      // 当年无环比
+      return `FILTER (WHERE 1=0${extraClause})`;
+  }
+}
+
+/**
  * 生成一组时间段的聚合列（auto_count, driver_count, premium × 4 个时间段）
  */
 function generateTimePeriodColumns(): string {
@@ -58,6 +83,23 @@ function generateTimePeriodColumns(): string {
     lines.push(`COUNT(DISTINCT dedup_key) ${timeFilter(p)} AS ${p}_auto_count`);
     lines.push(`COUNT(DISTINCT dedup_key) ${timeFilter(p, `(${crossSellCondition})`)} AS ${p}_driver_count`);
     lines.push(`COALESCE(SUM(cross_sell_premium_driver) ${timeFilter(p, `(${crossSellCondition})`)}, 0) AS ${p}_premium`);
+  }
+
+  return lines.join(',\n        ');
+}
+
+/**
+ * 生成上一周期时间段的聚合列（用于环比）
+ */
+function generatePrevTimePeriodColumns(): string {
+  const periods: Array<'day' | 'week' | 'month'> = ['day', 'week', 'month'];
+  const lines: string[] = [];
+  const crossSellCondition = getCrossSellCondition();
+
+  for (const p of periods) {
+    lines.push(`COUNT(DISTINCT dedup_key) ${prevTimeFilter(p)} AS prev_${p}_auto_count`);
+    lines.push(`COUNT(DISTINCT dedup_key) ${prevTimeFilter(p, `(${crossSellCondition})`)} AS prev_${p}_driver_count`);
+    lines.push(`COALESCE(SUM(cross_sell_premium_driver) ${prevTimeFilter(p, `(${crossSellCondition})`)}, 0) AS prev_${p}_premium`);
   }
 
   return lines.join(',\n        ');
@@ -76,18 +118,29 @@ function getCrossSellCondition(): string {
 }
 
 /**
- * 生成计算列（rate, avg_premium × 4 个时间段）
+ * 生成计算列（rate, avg_premium × 4 个时间段 + 环比差值）
  */
 function generateCalculatedColumns(): string {
   const periods: Array<'day' | 'week' | 'month' | 'year'> = ['day', 'week', 'month', 'year'];
   const lines: string[] = [];
 
+  // 当期数据
   for (const p of periods) {
     lines.push(`${p}_auto_count`);
     lines.push(`${p}_driver_count`);
     lines.push(`ROUND(${p}_premium, 2) AS ${p}_premium`);
     lines.push(`CASE WHEN ${p}_auto_count = 0 THEN 0 ELSE ROUND(${p}_driver_count * 100.0 / ${p}_auto_count, 2) END AS ${p}_rate`);
     lines.push(`CASE WHEN ${p}_driver_count = 0 THEN 0 ELSE ROUND(${p}_premium / ${p}_driver_count, 2) END AS ${p}_avg_premium`);
+  }
+
+  // 上一期数据 (day/week/month)
+  const prevPeriods: Array<'day' | 'week' | 'month'> = ['day', 'week', 'month'];
+  for (const p of prevPeriods) {
+    lines.push(`prev_${p}_auto_count`);
+    lines.push(`prev_${p}_driver_count`);
+    lines.push(`ROUND(prev_${p}_premium, 2) AS prev_${p}_premium`);
+    lines.push(`CASE WHEN prev_${p}_auto_count = 0 THEN 0 ELSE ROUND(prev_${p}_driver_count * 100.0 / prev_${p}_auto_count, 2) END AS prev_${p}_rate`);
+    lines.push(`CASE WHEN prev_${p}_driver_count = 0 THEN 0 ELSE ROUND(prev_${p}_premium / prev_${p}_driver_count, 2) END AS prev_${p}_avg_premium`);
   }
 
   return lines.join(',\n      ');
@@ -98,6 +151,7 @@ function generateCalculatedColumns(): string {
  *
  * 一次查询返回 4 行（整体/主全/交三/单交），每行包含 4 个时间段的指标。
  * 使用 DuckDB 的 FILTER (WHERE ...) 语法高效计算。
+ * 包含环比数据（上一周期）用于计算变化趋势。
  *
  * @param baseWhereClause - 基础 WHERE 子句（来自筛选器 + 权限过滤，无表前缀）
  * @param vehicleCategory - 车辆类别过滤
@@ -111,6 +165,7 @@ export function generateCrossSellTimePeriodQuery(
 
   const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
   const aggColumns = generateTimePeriodColumns();
+  const prevAggColumns = generatePrevTimePeriodColumns();
   const calcColumns = generateCalculatedColumns();
 
   // filtered_data CTE 先用无前缀的 baseWhereClause 过滤数据，
@@ -145,14 +200,16 @@ export function generateCrossSellTimePeriodQuery(
     by_coverage AS (
       SELECT
         coverage_combination,
-        ${aggColumns}
+        ${aggColumns},
+        ${prevAggColumns}
       FROM filtered_data
       GROUP BY coverage_combination
     ),
     total_row AS (
       SELECT
         '整体' AS coverage_combination,
-        ${aggColumns}
+        ${aggColumns},
+        ${prevAggColumns}
       FROM filtered_data
     ),
     combined AS (

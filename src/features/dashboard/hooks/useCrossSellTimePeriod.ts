@@ -49,6 +49,22 @@ interface TimePeriodRawRow {
   year_premium: number;
   year_rate: number;
   year_avg_premium: number;
+  // 上一周期数据（环比）
+  prev_day_auto_count: number;
+  prev_day_driver_count: number;
+  prev_day_premium: number;
+  prev_day_rate: number;
+  prev_day_avg_premium: number;
+  prev_week_auto_count: number;
+  prev_week_driver_count: number;
+  prev_week_premium: number;
+  prev_week_rate: number;
+  prev_week_avg_premium: number;
+  prev_month_auto_count: number;
+  prev_month_driver_count: number;
+  prev_month_premium: number;
+  prev_month_rate: number;
+  prev_month_avg_premium: number;
 }
 
 interface UseCrossSellTimePeriodReturn {

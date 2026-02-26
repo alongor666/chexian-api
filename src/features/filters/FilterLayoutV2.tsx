@@ -48,8 +48,10 @@ interface FilterLayoutV2Props {
   visibleFields?: FilterFieldsConfig;
   /** 选择模式配置 */
   selectionModes?: FilterSelectionModeConfig;
-  /** 快捷组合插槽（标准模式：三级机构行后、起止日期前；紧凑模式：续保模式后、起止日期前） */
+  /** 快捷组合插槽（紧凑模式：分析年度后、三级机构前） */
   quickCombosSlot?: React.ReactNode;
+  /** 险别组合自定义渲染（默认 MultiSelectDropdown，可传入 CoverageTabSelector） */
+  coverageCombinationSlot?: React.ReactNode;
   /** 紧凑模式（垂直布局） */
   compact?: boolean;
 }
@@ -108,6 +110,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
   visibleFields,
   selectionModes,
   quickCombosSlot,
+  coverageCombinationSlot,
   compact = false,
 }) => {
   // 默认显示所有字段
@@ -257,6 +260,11 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
           <div className="border-t border-neutral-200 my-2" />
         )}
 
+        {/* 快捷组合插槽 */}
+        {quickCombosSlot && (
+          <div className="py-1">{quickCombosSlot}</div>
+        )}
+
         {/* 三级机构 */}
         {showOrganization && (
           <details className="group" open>
@@ -355,46 +363,50 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
 
         {/* 险别组合 */}
         {showCoverageCombination && (
-          <details className="group">
-            <summary className="list-none cursor-pointer flex items-center justify-between py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-800">
-              <div className="flex items-center gap-2">
-                <span>险别组合</span>
-                <div className="flex items-center gap-1 ml-2">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onMultiSelectChange('coverage_combination', []); }}
-                    className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                  >
-                    全选
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const allOptions = toMultiSelectOptions(options.coverage_combination || []);
-                      const allValues = allOptions.map(o => o.value);
-                      const selected = filters.coverage_combination || [];
-                      onMultiSelectChange('coverage_combination', allValues.filter(v => !selected.includes(v)));
-                    }}
-                    className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
-                  >
-                    反选
-                  </button>
+          coverageCombinationSlot ? (
+            <div>{coverageCombinationSlot}</div>
+          ) : (
+            <details className="group">
+              <summary className="list-none cursor-pointer flex items-center justify-between py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-800">
+                <div className="flex items-center gap-2">
+                  <span>险别组合</span>
+                  <div className="flex items-center gap-1 ml-2">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onMultiSelectChange('coverage_combination', []); }}
+                      className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const allOptions = toMultiSelectOptions(options.coverage_combination || []);
+                        const allValues = allOptions.map(o => o.value);
+                        const selected = filters.coverage_combination || [];
+                        onMultiSelectChange('coverage_combination', allValues.filter(v => !selected.includes(v)));
+                      }}
+                      className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                    >
+                      反选
+                    </button>
+                  </div>
                 </div>
+                <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="pt-2">
+                <MultiSelectDropdown
+                  variant="compact"
+                  title="险别组合"
+                  options={toMultiSelectOptions(options.coverage_combination || [])}
+                  selectedValues={filters.coverage_combination || []}
+                  onChange={(values) => onMultiSelectChange('coverage_combination', values)}
+                  showButtons={false}
+                />
               </div>
-              <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
-            </summary>
-            <div className="pt-2">
-              <MultiSelectDropdown
-                variant="compact"
-                title="险别组合"
-                options={toMultiSelectOptions(options.coverage_combination || [])}
-                selectedValues={filters.coverage_combination || []}
-                onChange={(values) => onMultiSelectChange('coverage_combination', values)}
-                showButtons={false}
-              />
-            </div>
-          </details>
+            </details>
+          )
         )}
 
         {/* 续保模式 */}
@@ -439,11 +451,6 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
               />
             </div>
           </details>
-        )}
-
-        {/* 快捷组合插槽 */}
-        {quickCombosSlot && (
-          <div className="py-1">{quickCombosSlot}</div>
         )}
 
         {/* 日期范围（移至末尾，减少顶部占用） */}
@@ -612,7 +619,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
         </div>
       )}
 
-      {/* 快捷组合插槽：三级机构行后、起止日期前 */}
+      {/* 快捷组合插槽：二级网格行后、起止日期前 */}
       {quickCombosSlot && (
         <div className="py-1">{quickCombosSlot}</div>
       )}

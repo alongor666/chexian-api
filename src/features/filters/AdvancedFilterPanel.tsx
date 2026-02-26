@@ -1,5 +1,7 @@
 import React from 'react';
 import { MultiSelectDropdown, type MultiSelectOption } from './MultiSelectDropdown';
+import { TagSelector } from './TagSelector';
+import { CoverageTabSelector } from './CoverageTabSelector';
 import { createLogger } from '../../shared/utils/logger';
 import { DateCriteria, type AdvancedFilterState } from '../../shared/types/data';
 import type { FilterFieldsConfig, FilterSelectionModeConfig, FilterPresetName } from '../../shared/types/filters';
@@ -238,11 +240,20 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
       description: '旧车+非续保',
       isActive: filters.is_new_car === false && filters.is_renewal === false,
       apply: () => {
-        onChange({
-          ...filters,
-          is_new_car: false,  // 旧车
-          is_renewal: false,  // 非续保
-        });
+        // toggle 行为：已激活时清除，未激活时设置
+        if (filters.is_new_car === false && filters.is_renewal === false) {
+          onChange({
+            ...filters,
+            is_new_car: undefined,
+            is_renewal: undefined,
+          });
+        } else {
+          onChange({
+            ...filters,
+            is_new_car: false,  // 旧车
+            is_renewal: false,  // 非续保
+          });
+        }
       },
     },
     {
@@ -253,12 +264,22 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
         filters.is_commercial_insure === true &&
         filters.insurance_type === false,
       apply: () => {
-        onChange({
-          ...filters,
-          is_renewable: true,
-          is_commercial_insure: true,
-          insurance_type: false,
-        });
+        // toggle 行为：已激活时清除，未激活时设置
+        if (filters.is_renewable === true && filters.is_commercial_insure === true && filters.insurance_type === false) {
+          onChange({
+            ...filters,
+            is_renewable: undefined,
+            is_commercial_insure: undefined,
+            insurance_type: undefined,
+          });
+        } else {
+          onChange({
+            ...filters,
+            is_renewable: true,
+            is_commercial_insure: true,
+            insurance_type: false,
+          });
+        }
       },
     },
     // 预留：未来可以增加更多快捷组合
@@ -297,26 +318,40 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
 
   // 快捷组合按钮（供标准模式和紧凑模式共用，通过 quickCombosSlot 注入 FilterLayoutV2）
   const quickCombosContent = showQuickCombos ? (
-    <div className="flex flex-wrap gap-1.5" role="group" aria-label="快捷筛选组合">
-      {derivedScenarios.map((scenario) => (
-        <button
-          key={scenario.label}
-          type="button"
-          onClick={scenario.apply}
-          className={`px-2 py-1 text-xs font-medium rounded border transition-colors ${
-            scenario.isActive
-              ? 'bg-primary text-white border-primary'
-              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-          }`}
-          title={scenario.description}
-          aria-pressed={scenario.isActive}
-          aria-label={`${scenario.label}: ${scenario.description}`}
-        >
-          {scenario.label}{scenario.isActive && ' ✓'}
-        </button>
-      ))}
+    <div className="space-y-1.5">
+      <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+        场景快选
+      </span>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="快捷筛选组合">
+        {derivedScenarios.map((scenario) => (
+          <button
+            key={scenario.label}
+            type="button"
+            onClick={scenario.apply}
+            className={`px-2 py-1 text-xs font-medium rounded border transition-colors ${
+              scenario.isActive
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+            }`}
+            title={scenario.description}
+            aria-pressed={scenario.isActive}
+            aria-label={`${scenario.label}: ${scenario.description}`}
+          >
+            {scenario.label}{scenario.isActive && ' ✓'}
+          </button>
+        ))}
+      </div>
     </div>
   ) : undefined;
+
+  // 险别组合 Tab 选择器（替代 MultiSelectDropdown）
+  const coverageCombinationSlot = (
+    <CoverageTabSelector
+      options={options.coverage_combination || []}
+      selectedValues={filters.coverage_combination || []}
+      onChange={(values) => handleMultiSelectChange('coverage_combination', values)}
+    />
+  );
 
   // 完全折叠状态：fullCollapsible 为 true 且当前已折叠
   const isFullyCollapsed = fullCollapsible && collapsed;
@@ -367,6 +402,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
           visibleFields={finalVisibleFields}
           selectionModes={finalSelectionModes}
           quickCombosSlot={quickCombosContent}
+          coverageCombinationSlot={coverageCombinationSlot}
           compact={true}
         />
 
@@ -456,32 +492,26 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             )}
 
             {showBasicOptions && (
-              <div className="space-y-2">
-                <MultiSelectDropdown
-                  variant="compact"
+              <div className="space-y-3">
+                <TagSelector
                   title="车险分等级"
-                  options={toMultiSelectOptions(options.insurance_grade || [])}
+                  options={(options.insurance_grade || []).map(o => o.value)}
                   selectedValues={filters.insurance_grade || []}
                   onChange={(values) => handleMultiSelectChange('insurance_grade', values)}
-                  showButtons={false}
                   disabled={!insuranceGradeEnabled}
                 />
-                <MultiSelectDropdown
-                  variant="compact"
+                <TagSelector
                   title="小货车评分"
-                  options={toMultiSelectOptions(options.small_truck_score || [])}
+                  options={(options.small_truck_score || []).map(o => o.value)}
                   selectedValues={filters.small_truck_score || []}
                   onChange={(values) => handleMultiSelectChange('small_truck_score', values)}
-                  showButtons={false}
                   disabled={!truckScoreEnabled}
                 />
-                <MultiSelectDropdown
-                  variant="compact"
+                <TagSelector
                   title="大货车评分"
-                  options={toMultiSelectOptions(options.large_truck_score || [])}
+                  options={(options.large_truck_score || []).map(o => o.value)}
                   selectedValues={filters.large_truck_score || []}
                   onChange={(values) => handleMultiSelectChange('large_truck_score', values)}
-                  showButtons={false}
                   disabled={!truckScoreEnabled}
                 />
               </div>
@@ -560,6 +590,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             visibleFields={finalVisibleFields}
             selectionModes={finalSelectionModes}
             quickCombosSlot={quickCombosContent}
+            coverageCombinationSlot={coverageCombinationSlot}
             orgActions={
               <div className="flex gap-2">
                 <button
@@ -676,24 +707,24 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
 
                 {showBasicOptions && (
                   <CollapsibleFilterSection id="grade-score-filters" title="等级评分（受客户类别限制）">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <MultiSelectDropdown
+                    <div className="space-y-3">
+                      <TagSelector
                         title="车险分等级"
-                        options={toMultiSelectOptions(options.insurance_grade || [])}
+                        options={(options.insurance_grade || []).map(o => o.value)}
                         selectedValues={filters.insurance_grade || []}
                         onChange={(values) => handleMultiSelectChange('insurance_grade', values)}
                         disabled={!insuranceGradeEnabled}
                       />
-                      <MultiSelectDropdown
+                      <TagSelector
                         title="小货车评分"
-                        options={toMultiSelectOptions(options.small_truck_score || [])}
+                        options={(options.small_truck_score || []).map(o => o.value)}
                         selectedValues={filters.small_truck_score || []}
                         onChange={(values) => handleMultiSelectChange('small_truck_score', values)}
                         disabled={!truckScoreEnabled}
                       />
-                      <MultiSelectDropdown
+                      <TagSelector
                         title="大货车评分"
-                        options={toMultiSelectOptions(options.large_truck_score || [])}
+                        options={(options.large_truck_score || []).map(o => o.value)}
                         selectedValues={filters.large_truck_score || []}
                         onChange={(values) => handleMultiSelectChange('large_truck_score', values)}
                         disabled={!truckScoreEnabled}

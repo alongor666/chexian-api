@@ -26,7 +26,7 @@ export const RenewalPage: React.FC = () => {
   };
 
   return (
-    <PageFilterPanel preset="renewalDetail">
+    <PageFilterPanel preset="renewalDetail" title="续保分析">
       <div className="p-4 space-y-4">
         <div className="bg-white rounded shadow">
           <div className="border-b border-gray-200">

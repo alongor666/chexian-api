@@ -99,8 +99,8 @@ export const SidebarLayout: React.FC = () => {
               isMobile ? 'ml-0' : collapsed ? 'ml-16' : 'ml-72'
             }`}
           >
-            <div className="h-full overflow-auto flex flex-col">
-              <div className="flex-1">
+            <div className="h-full flex flex-col">
+              <div className="flex-1 overflow-hidden">
                 <Outlet />
               </div>
               <Footer />
