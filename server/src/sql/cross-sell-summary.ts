@@ -151,6 +151,7 @@ function generateCalculatedColumns(): string {
  *
  * 一次查询返回 4 行（整体/主全/交三/单交），每行包含 4 个时间段的指标。
  * 使用 DuckDB 的 FILTER (WHERE ...) 语法高效计算。
+ * 包含环比数据（上一周期）用于计算变化趋势。
  *
  * @param baseWhereClause - 基础 WHERE 子句（来自筛选器 + 权限过滤，无表前缀）
  * @param vehicleCategory - 车辆类别过滤
@@ -164,6 +165,7 @@ export function generateCrossSellTimePeriodQuery(
 
   const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
   const aggColumns = generateTimePeriodColumns();
+  const prevAggColumns = generatePrevTimePeriodColumns();
   const calcColumns = generateCalculatedColumns();
 
   // filtered_data CTE 先用无前缀的 baseWhereClause 过滤数据，
@@ -198,14 +200,16 @@ export function generateCrossSellTimePeriodQuery(
     by_coverage AS (
       SELECT
         coverage_combination,
-        ${aggColumns}
+        ${aggColumns},
+        ${prevAggColumns}
       FROM filtered_data
       GROUP BY coverage_combination
     ),
     total_row AS (
       SELECT
         '整体' AS coverage_combination,
-        ${aggColumns}
+        ${aggColumns},
+        ${prevAggColumns}
       FROM filtered_data
     ),
     combined AS (
