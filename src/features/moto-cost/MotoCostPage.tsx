@@ -88,15 +88,14 @@ export const MotoCostPage: React.FC = () => {
   const insightText = useMemo(() => {
     const profit = calculation.combined.absolute[6];
     const tcr = calculation.combined.rate[0] * 100;
-    const edgeContribution = calculation.combined.absolute[6] + calculation.combined.absolute[5];
     const isProfit = profit >= 0;
 
-    // 构建详细分析文本
-    let text = `基于当前刚性成本配置（人力成本${(inputs.laborBaseRate).toFixed(1)}%、固定运营成本${(inputs.fixedOperationRate).toFixed(2)}%），`;
+    // 构建详细分析文本（输入值已经是百分比形式，直接显示）
+    let text = `基于当前刚性成本配置（人力成本${inputs.laborBaseRate.toFixed(1)}%、固定运营成本${inputs.fixedOperationRate.toFixed(2)}%），`;
     text += `摩意险保费配比为${(breakEven.motoPremiumRatio * 100).toFixed(1)}%。`;
-    text += ` 要实现盈亏平衡，在保持摩意险赔付率${(inputs.motoLossRatio).toFixed(1)}%不变的情况下，`;
+    text += ` 要实现盈亏平衡，在保持摩意险赔付率${inputs.motoLossRatio.toFixed(1)}%不变的情况下，`;
     text += `车险赔付率需控制在${breakEven.carBreakEvenLossRatio}%以内；`;
-    text += ` 若车险赔付率固定为${(inputs.carLossRatio).toFixed(1)}%，摩意险赔付率需控制在${breakEven.motoBreakEvenLossRatio}%以内。`;
+    text += ` 若车险赔付率固定为${inputs.carLossRatio.toFixed(1)}%，摩意险赔付率需控制在${breakEven.motoBreakEvenLossRatio}%以内。`;
     text += ` 车险赔付率每上浮1个百分点将减少利润${Math.abs(breakEven.carSensitivity)}万元；`;
     text += `摩意险赔付率每上浮1个百分点将减少利润${Math.abs(breakEven.motoSensitivity)}万元。`;
 
