@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { permissionMiddleware } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
-import { generateSqlWithZhipu, validateApiKey } from '../services/zhipu.js';
+import { generateSqlWithZhipu, validateApiKey, analyzeOrgTrendWithZhipu } from '../services/zhipu.js';
 import { validateSQL } from '../utils/sql-validator.js';
 import { duckdbService } from '../services/duckdb.js';
 import { injectPermissionFilter, isValidPermissionFilter } from '../utils/sql-permission-injector.js';
@@ -136,6 +136,49 @@ router.post(
       success: true,
       valid: isValid,
       message: isValid ? 'API Key 有效' : 'API Key 无效或已过期',
+    });
+  })
+);
+
+/**
+ * POST /api/ai/trend-analysis
+ * 机构推介率趋势 AI 分析（后端从环境变量读取 API Key）
+ */
+const trendAnalysisSchema = z.object({
+  rows: z.array(z.object({
+    date: z.string(),
+    auto_count: z.number(),
+    driver_count: z.number(),
+    rate: z.number(),
+    avg_premium: z.number(),
+  })).min(1).max(90),
+  org: z.string().default('全部'),
+  coverage: z.string().default('整体'),
+});
+
+router.post(
+  '/trend-analysis',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = trendAnalysisSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+
+    const { rows, org, coverage } = parseResult.data;
+
+    // 本地开发读 VITE_ZHIPU_API_KEY（Bun 自动加载 .env.local）
+    // 生产环境读 ZHIPU_API_KEY（dotenv 加载 /var/www/chexian/server/.env）
+    const apiKey = process.env.ZHIPU_API_KEY || process.env.VITE_ZHIPU_API_KEY || '';
+    if (!apiKey) {
+      throw new AppError(503, '服务端未配置 AI Key，无法使用 AI 分析');
+    }
+
+    const result = await analyzeOrgTrendWithZhipu(rows, { org, coverage }, { apiKey });
+
+    res.json({
+      success: result.success,
+      analysis: result.analysis,
+      ...(result.error && { error: result.error }),
     });
   })
 );

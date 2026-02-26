@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '@/shared/utils/echarts';
-import { formatCount, formatWanAdaptive } from '@/shared/utils/formatters';
+import { formatCount, formatWanAdaptive, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '@/shared/utils/formatters';
 import { cardStyles, colors, textStyles, colorClasses, cn } from '@/shared/styles';
 import { TONNAGE_COLORS } from '@/shared/config/chartStyles';
 import type { PerformanceTrendSeries } from './hooks/usePerformanceTrend';
@@ -115,7 +115,12 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
       xAxis: {
         type: 'category',
         data: xData,
-        axisLabel: { fontSize: 11, rotate: xData.length > 16 ? 30 : 0 },
+        axisLabel: {
+          fontSize: 11,
+          rotate: xData.length > 16 ? 30 : 0,
+          formatter: formatTrendDailyXAxis,
+          rich: TREND_DAILY_XAXIS_RICH,
+        },
       },
       yAxis: {
         type: 'value',

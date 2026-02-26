@@ -269,3 +269,34 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/hooks/usePerformanceDrilldown.ts`**: 达成率+增长率下钻分析 Hook
 - **`dashboard/hooks/usePerformanceTopSalesman.ts`**: Top20 业务员业绩分析 Hook
 - **`dashboard/PerformanceTrendChart.tsx`**: 业绩分析双趋势图组件（保费/件数）
+
+## 2026-02-26 标题栏操作与 PDF 导出布局优化
+
+### Pages 模块新增
+- **`pages/PremiumDashboardPage.tsx`**: 保费分析看板页面容器（标题右侧统一操作区：`自定义看板` + `导出PDF报告`）
+
+### Dashboard 模块调整
+- **`dashboard/PremiumDashboard.tsx`**: 移除内容区顶部导出按钮卡片；`DashboardCustomizerPanel` 改为受外部开关控制，默认不占用看板首屏空间
+
+### 导出链路调整
+- **`services/PdfExportService.ts`**: 长页面导出改为按 canvas 分页切片写入 PDF，降低边界截断与重叠风险
+
+## 2026-02-26 交叉销售页标题栏控件统一
+
+### Pages 模块调整
+- **`pages/CrossSellPage.tsx`**: 车辆类别与时间维度切换状态提升到页面层，并挂载到页面标题右侧
+
+### Dashboard 模块调整
+- **`dashboard/CrossSellAnalysisPanel.tsx`**: 新增标题栏控件组件 `CrossSellHeaderControls`（客户类别/时间维度标签+Tab）；移除内容区顶部 sticky 切换条，重置分析入口迁移到下钻导航区
+
+## 2026-02-26 业绩分析页标题栏左右分区
+
+### Layout/Filters 调整
+- **`filters/PageHeaderBar.tsx`**: 新增标题下方左侧插槽 `bottomLeftContent` 与 chips 右对齐参数 `chipsAlign`
+- **`components/layout/PageFilterPanel.tsx`**: 新增 `headerBottomLeftContent` 与 `headerChipsAlign` 透传能力
+
+### Pages 模块调整
+- **`pages/PerformanceAnalysisPage.tsx`**: 将标签选择控件移至标题下方左侧，筛选条件 chips 改为右侧对齐展示（左选右条件）
+
+### Dashboard 模块补充
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: 业绩分析标题栏控件补充分组标签（客户类别/时间维度/对比方式），并改为左侧优先显示 + 横向滚动

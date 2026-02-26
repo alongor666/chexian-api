@@ -33,7 +33,6 @@ export class PdfExportService {
         ignoreElements: createExportIgnoreElements(),
       });
 
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
@@ -42,9 +41,10 @@ export class PdfExportService {
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const contentTop = 20;
+      const contentHeight = pdfHeight - contentTop;
+      const pxPerMm = canvas.width / pdfWidth;
+      const pageHeightPx = Math.max(1, Math.floor(contentHeight * pxPerMm));
 
       // Add title
       pdf.setFontSize(16);
@@ -54,22 +54,44 @@ export class PdfExportService {
       pdf.setFontSize(10);
       pdf.text(`生成时间: ${dateStr}`, pdfWidth - 14, 15, { align: 'right' });
 
-      // If content is taller than page, we might need multiple pages or scaling
-      // For dashboard, we usually fit width and let height expand (single page PDF usually has fixed size)
-      // We will split into pages if too long
-      
-      let heightLeft = imgHeight;
-      let position = 20; // Start below title
+      // 按页面内容高度对原始 canvas 切片，避免长页面导出时出现截断/重叠。
+      let renderedHeightPx = 0;
+      let pageIndex = 0;
 
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= (pdfHeight - position);
+      while (renderedHeightPx < canvas.height) {
+        const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedHeightPx);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeightPx;
+        const context = pageCanvas.getContext('2d');
 
-      // Add pages if needed (simple implementation)
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
+        if (!context) {
+          throw new Error('Failed to get 2D context for PDF page canvas');
+        }
+
+        context.drawImage(
+          canvas,
+          0,
+          renderedHeightPx,
+          canvas.width,
+          sliceHeightPx,
+          0,
+          0,
+          canvas.width,
+          sliceHeightPx
+        );
+
+        if (pageIndex > 0) {
+          // 新页沿用相同顶部留白，确保视觉一致。
+          pdf.addPage();
+        }
+
+        const pageImageData = pageCanvas.toDataURL('image/png');
+        const sliceHeightMm = sliceHeightPx / pxPerMm;
+        pdf.addImage(pageImageData, 'PNG', 0, contentTop, pdfWidth, sliceHeightMm);
+
+        renderedHeightPx += sliceHeightPx;
+        pageIndex += 1;
       }
 
       pdf.save(`${title}_${new Date().toISOString().slice(0, 10)}.pdf`);

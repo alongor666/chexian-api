@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, type ReactNode } from 'react';
 import { cn, colorClasses } from '../../shared/styles';
 import type { AdvancedFilterState } from '../../shared/types/data';
 
@@ -8,6 +8,12 @@ interface PageHeaderBarProps {
   filters: AdvancedFilterState;
   /** 可见机构总数（用于判断是否为全选） */
   allOrgCount?: number;
+  /** 标题右侧扩展内容（如页面级快捷切换） */
+  rightContent?: ReactNode;
+  /** 标题下方左侧扩展内容 */
+  bottomLeftContent?: ReactNode;
+  /** 已选条件 chips 对齐方式 */
+  chipsAlign?: 'left' | 'right';
 }
 
 /**
@@ -24,7 +30,10 @@ interface PageHeaderBarProps {
 export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
   baseTitle,
   filters,
-  allOrgCount = 12
+  allOrgCount = 12,
+  rightContent,
+  bottomLeftContent,
+  chipsAlign = 'left',
 }) => {
   // 计算动态标题前缀
   const dynamicTitle = useMemo(() => {
@@ -131,21 +140,38 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
 
   return (
     <div className="sticky top-0 z-10 bg-white border-b border-neutral-200 shadow-sm px-4 py-2.5">
-      <h1 className={cn('text-lg font-semibold', colorClasses.text.neutralBlack)}>{fullTitle}</h1>
-      {filterChips.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1.5">
-          {filterChips.map(chip => (
-            <span
-              key={chip.key}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className={cn('text-lg font-semibold', colorClasses.text.neutralBlack)}>{fullTitle}</h1>
+        {rightContent && (
+          <div className="max-w-full flex-shrink-0">
+            {rightContent}
+          </div>
+        )}
+      </div>
+      {(bottomLeftContent || filterChips.length > 0) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          {bottomLeftContent && <div className="flex-1 min-w-0">{bottomLeftContent}</div>}
+          {filterChips.length > 0 && (
+            <div
               className={cn(
-                'inline-flex items-center gap-1',
-                'px-2 py-0.5 rounded-md text-[11px] font-medium',
-                'bg-primary-bg text-primary-dark border border-primary-border'
+                'flex flex-wrap gap-1',
+                bottomLeftContent || chipsAlign === 'right' ? 'ml-auto justify-end' : 'justify-start'
               )}
             >
-              {chip.label}
-            </span>
-          ))}
+              {filterChips.map(chip => (
+                <span
+                  key={chip.key}
+                  className={cn(
+                    'inline-flex items-center gap-1',
+                    'px-2 py-0.5 rounded-md text-[11px] font-medium',
+                    'bg-primary-bg text-primary-dark border border-primary-border'
+                  )}
+                >
+                  {chip.label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

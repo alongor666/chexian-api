@@ -1,7 +1,6 @@
 import { lazy, Suspense, ReactNode } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SidebarLayout, DataGuard, ErrorBoundary } from '../components/layout';
-import { PageFilterPanel } from '../components/layout/PageFilterPanel';
 import { DataProvider } from '../shared/contexts/DataContext';
 import { FilterProvider } from '../shared/contexts/FilterContext';
 import { PermissionProvider } from '../shared/contexts/PermissionContext';
@@ -10,8 +9,8 @@ import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
 
 // Lazy load page components for better performance
-const PremiumDashboard = lazy(() =>
-  import('../features/dashboard/PremiumDashboard').then((m) => ({ default: m.PremiumDashboard }))
+const PremiumDashboardPage = lazy(() =>
+  import('../features/pages/PremiumDashboardPage').then((m) => ({ default: m.PremiumDashboardPage }))
 );
 const SqlQueryPage = lazy(() =>
   import('../features/sql-query/SqlQueryPage').then((m) => ({ default: m.SqlQueryPage }))
@@ -108,9 +107,7 @@ function App() {
                   <RouteAccessGuard routePath="/dashboard">
                     <DataGuard>
                       <LazyRoute>
-                        <PageFilterPanel preset="full" title="保费分析看板">
-                          <PremiumDashboard />
-                        </PageFilterPanel>
+                        <PremiumDashboardPage />
                       </LazyRoute>
                     </DataGuard>
                   </RouteAccessGuard>
