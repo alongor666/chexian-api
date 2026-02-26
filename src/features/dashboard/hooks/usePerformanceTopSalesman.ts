@@ -58,8 +58,11 @@ export function usePerformanceTopSalesman({
     setError(null);
 
     try {
+      const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+      delete filterParams.customerCategories;
+
       const params: Record<string, string> = {
-        ...buildFilterParams(filters, { isOrgUser, userOrg }),
+        ...filterParams,
         segmentTag,
         timePeriod,
         growthMode,

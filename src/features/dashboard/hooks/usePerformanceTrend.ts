@@ -53,8 +53,11 @@ export function usePerformanceTrend({
     setError(null);
 
     try {
+      const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+      delete filterParams.customerCategories;
+
       const params: Record<string, string> = {
-        ...buildFilterParams(filters, { isOrgUser, userOrg }),
+        ...filterParams,
         segmentTag,
         granularity,
       };

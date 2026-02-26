@@ -51,6 +51,9 @@ const PremiumReportPage = lazy(() =>
 const ReportTemplatesPanel = lazy(() =>
   import('../features/report/components/ReportTemplatesPanel').then((m) => ({ default: m.ReportTemplatesPanel }))
 );
+const MotoCostPage = lazy(() =>
+  import('../features/pages/MotoCostPage').then((m) => ({ default: m.MotoCostPage }))
+);
 
 // Loading fallback component
 const PageLoader = () => (
@@ -232,6 +235,16 @@ function App() {
                     <LazyRoute>
                       <ReportTemplatesPanel onSelectTemplate={() => {}} />
                     </LazyRoute>
+                  </RouteAccessGuard>
+                }
+              />
+
+              {/* 摩意模型 - 外部 iframe 嵌入，不需要数据守卫 */}
+              <Route
+                path="moto-cost"
+                element={
+                  <RouteAccessGuard routePath="/moto-cost">
+                    <LazyRoute><MotoCostPage /></LazyRoute>
                   </RouteAccessGuard>
                 }
               />

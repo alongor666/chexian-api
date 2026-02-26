@@ -13,7 +13,7 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { textStyles, cardStyles, numericStyles, cn, colorClasses } from '@/shared/styles';
 import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { useCrossSellTimePeriod, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
-import { getRateClassByField } from './crossSellRateStatus';
+import { getRateClassByField, getAvgPremiumClassByCoverage } from './crossSellRateStatus';
 
 export type TimePeriod = 'day' | 'week' | 'month' | 'year';
 
@@ -248,10 +248,11 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
         };
       }
       case 'avg_premium': {
-        const change = showChange ? calcChange(data?.avg_premium ?? 0, data?.prev_avg_premium ?? 0) : undefined;
+        const avg_premium = data?.avg_premium ?? 0;
+        const change = showChange ? calcChange(avg_premium, data?.prev_avg_premium ?? 0) : undefined;
         return {
-          text: `${formatCount(data?.avg_premium ?? 0)}元`,
-          colorClass: '',
+          text: `${formatCount(avg_premium)}元`,
+          colorClass: getAvgPremiumClassByCoverage(coverageKey, avg_premium),
           change
         };
       }

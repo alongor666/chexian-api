@@ -60,6 +60,30 @@ export function getRateClassByField(field: CrossSellRateField, rate: number): st
     : getRateStatusClass(getJiaosanStatus(rate));
 }
 
+export function getAvgPremiumZhuquanStatus(premium: number): RateStatus {
+  if (premium >= 333) return 'excellent';
+  if (premium >= 300) return 'healthy';
+  if (premium >= 260) return 'abnormal';
+  return 'danger';
+}
+
+export function getAvgPremiumJiaosanStatus(premium: number): RateStatus {
+  if (premium >= 288) return 'excellent';
+  if (premium >= 200) return 'healthy';
+  if (premium >= 150) return 'abnormal';
+  return 'danger';
+}
+
+export function getAvgPremiumClassByCoverage(coverageKey: string, premium: number): string {
+  if (coverageKey === '主全') {
+    return getRateStatusClass(getAvgPremiumZhuquanStatus(premium));
+  }
+  if (coverageKey === '交三') {
+    return getRateStatusClass(getAvgPremiumJiaosanStatus(premium));
+  }
+  return '';
+}
+
 export function classifyQuadrant(zhuquanRate: number, jiaosanRate: number): QuadrantId {
   if (zhuquanRate >= MAIN_FULL_THRESHOLD && jiaosanRate >= JIAOSAN_THRESHOLD) {
     return 'dual_excellent';

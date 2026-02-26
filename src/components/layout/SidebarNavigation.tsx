@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Bike,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
@@ -48,6 +49,10 @@ const dataNavItems: NavItem[] = [
   { path: '/comparison', icon: Scale, label: '数据对比', shortLabel: '对比' },
   { path: '/coefficient', icon: Search, label: '系数监控', shortLabel: '系数' },
   { path: '/sql-query', icon: FileCode, label: 'SQL查询', shortLabel: 'SQL' },
+];
+
+const toolNavItems: NavItem[] = [
+  { path: '/moto-cost', icon: Bike, label: '摩意模型', shortLabel: '摩意' },
 ];
 
 /**
@@ -204,6 +209,15 @@ export const SidebarNavigation: React.FC = () => {
             </div>
           )}
           {dataNavItems.map(renderNavItem)}
+
+          {/* 工具模块 */}
+          <div className="my-3 border-t border-neutral-200" role="separator" />
+          {showExpanded && (
+            <div className="px-3 py-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+              工具
+            </div>
+          )}
+          {toolNavItems.map(renderNavItem)}
         </nav>
 
       </div>

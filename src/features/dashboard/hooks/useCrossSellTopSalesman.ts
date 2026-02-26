@@ -72,7 +72,7 @@ export function useCrossSellTopSalesman({
                 // 从需求上看，如果是驾乘保费可以保留一位小数，我们在组件渲染中处理格式化
                 setData(result.rows.map(row => {
                     let cleanName = (row.salesman_name || '').replace(/[0-9()[\]_-]/g, '').trim();
-                    if (cleanName.toLowerCase() === 'admin' || String(row.salesman_name).toLowerCase() === 'admin') {
+                    if (cleanName.toLowerCase().includes('admin') || String(row.salesman_name).toLowerCase().includes('admin')) {
                         cleanName = '直接个代';
                     }
                     return {

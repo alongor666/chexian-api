@@ -151,6 +151,7 @@ export function usePerformanceDrilldown({
 
     try {
       const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+      delete filterParams.customerCategories;
       const result = await apiClient.getPerformanceDrilldown({
         ...filterParams,
         drillPath: drillPath.map((item) => ({ dimension: item.dimension, value: item.value })),

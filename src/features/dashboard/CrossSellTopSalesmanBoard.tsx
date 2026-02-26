@@ -11,6 +11,7 @@ import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/uti
 import { cardStyles, textStyles, cn } from '@/shared/styles';
 import { TopSalesmanQuadrantChart } from './TopSalesmanQuadrantChart';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
+import { getRateClassByField, getAvgPremiumClassByCoverage } from './crossSellRateStatus';
 
 interface TopSalesmanBoardProps {
     filters: AdvancedFilterState;
@@ -191,8 +192,8 @@ const SalesmanPanel = memo(function SalesmanPanel({
                                         <td className="py-2 px-3 text-neutral-600 whitespace-nowrap">{row.org_level_3}</td>
                                         <td className="py-2 px-3 text-right text-neutral-900 whitespace-nowrap">{formatDriverPremiumWan(row.driver_premium)}</td>
                                         <td className="py-2 px-3 text-right text-neutral-900 whitespace-nowrap">{formatCount(row.auto_count)}</td>
-                                        <td className="py-2 px-3 text-right text-primary font-medium whitespace-nowrap">{formatPercent(row.rate)}</td>
-                                        <td className="py-2 px-3 text-right text-neutral-800 whitespace-nowrap">{formatCount(row.avg_premium)}</td>
+                                        <td className={cn("py-2 px-3 text-right font-medium whitespace-nowrap", getRateClassByField(coverage === '主全' ? 'zhuquan_rate' : 'jiaosan_rate', row.rate))}>{formatPercent(row.rate)}</td>
+                                        <td className={cn("py-2 px-3 text-right font-medium whitespace-nowrap", getAvgPremiumClassByCoverage(coverage, row.avg_premium))}>{formatCount(row.avg_premium)}</td>
                                     </tr>
                                 ))}
                             </tbody>
