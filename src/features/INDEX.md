@@ -203,6 +203,8 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/CrossSellTrendChart.tsx`**: 驾乘险推介率走势组件（日/周/月/季度四粒度，主全/交三/单交/整体四线）
 - **`dashboard/hooks/useCrossSellTrend.ts`**: 驾乘险推介率走势数据 Hook（调用 `/api/query/cross-sell-trend`，含并发请求防抖）
 - **`dashboard/crossSellRateStatus.ts`**: 驾乘险推介率统一状态规则（主全/交三阈值、状态文案、四象限分类与配色）
+- **`dashboard/CrossSellSummaryKpiBoard.tsx`**: 推介率驱动因子环比看板（2026-02-25 新增环比功能：当日/周/月视角显示绝对值+百分比变化，格式如 `↑ +8.3, +7.1%`）
+- **`filters/PageHeaderBar.tsx`**: 页面标题栏组件（2026-02-25 新增：动态标题根据筛选范围显示，sticky top-0 置顶，已筛选条件 chips 展示）
 
 ### Coefficient 模块（商车自主定价系数监控）
 

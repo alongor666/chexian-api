@@ -258,32 +258,24 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-700 text-white p-6 rounded-xl shadow-md">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold mb-1">驾乘险推介率分析</h1>
-            <p className="text-sm opacity-90">四川分公司 - 交叉销售数据分析</p>
-          </div>
-          {(drillPath.length > 0 || currentGroupBy) && (
-            <button
-              onClick={reset}
-              className="px-3 py-1.5 text-sm bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-            >
-              重置
-            </button>
-          )}
-        </div>
+      {/* 车辆类别与重置 */}
+      <div className="flex items-center justify-between">
+        <Tabs
+          items={VEHICLE_TABS}
+          activeKey={vehicleCategory}
+          onChange={(key) => setVehicleCategory(key as VehicleCategory)}
+          variant="pills"
+          size="medium"
+        />
+        {(drillPath.length > 0 || currentGroupBy) && (
+          <button
+            onClick={reset}
+            className="px-4 py-2 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors font-medium border border-blue-200"
+          >
+            重置分析
+          </button>
+        )}
       </div>
-
-      {/* 车辆类别标签页 */}
-      <Tabs
-        items={VEHICLE_TABS}
-        activeKey={vehicleCategory}
-        onChange={(key) => setVehicleCategory(key as VehicleCategory)}
-        variant="pills"
-        size="medium"
-      />
 
       {/* 板块1：推介率驱动因子环比 */}
       <SectionTitle title="推介率驱动因子环比" />

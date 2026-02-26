@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AdvancedFilterPanel } from '../../features/filters/AdvancedFilterPanel';
 import { PageHeaderBar } from '../../features/filters/PageHeaderBar';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
@@ -63,18 +63,38 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
     });
   }, []);
 
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('right-sidebar-width');
+      return saved ? parseInt(saved, 10) : 280;
+    } catch {
+      return 280;
+    }
+  });
+  const [isDraggingRight, setIsDraggingRight] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('right-sidebar-width', rightSidebarWidth.toString());
+    } catch { }
+  }, [rightSidebarWidth]);
+
   return (
     <div className="flex h-full relative">
       {/* 主内容区 */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-neutral-50/50">
         {title && (
-          <PageHeaderBar
-            baseTitle={title}
-            filters={filters}
-            allOrgCount={filterOptions.org_level_3?.length || 0}
-          />
+          <div className="flex-none z-10 sticky top-0 bg-white border-b border-neutral-100 shadow-sm">
+            <PageHeaderBar
+              baseTitle={title}
+              filters={filters}
+              allOrgCount={filterOptions.org_level_3?.length || 0}
+            />
+          </div>
         )}
-        {children}
+        <div className="flex-1 overflow-y-auto w-full relative">
+          {children}
+        </div>
       </div>
 
       {/* 移动端筛选器按钮 */}
@@ -96,9 +116,8 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
 
       {/* 移动端筛选器抽屉 */}
       <div
-        className={`lg:hidden fixed inset-y-0 right-0 z-50 w-80 max-w-[85vw] bg-white shadow-xl transform transition-transform duration-300 ${
-          mobileOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`lg:hidden fixed inset-y-0 right-0 z-50 w-80 max-w-[85vw] bg-white shadow-xl transform transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
           <span className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
@@ -139,61 +158,99 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
       </div>
 
       {/* 桌面端右侧筛选器 */}
-      {collapsed ? (
-        /* 折叠态：窄条 + 展开按钮 */
-        <div className="hidden lg:flex w-10 flex-shrink-0 border-l border-neutral-200 bg-white flex-col items-center pt-4">
-          <button
-            onClick={toggleCollapsed}
-            className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
-            title="展开筛选器"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <div className="mt-2">
-            <Filter size={16} className="text-neutral-400" />
-          </div>
-        </div>
-      ) : (
-        /* 展开态：筛选器面板 */
-        <div className="hidden lg:block w-72 flex-shrink-0 border-l border-neutral-200 bg-white overflow-y-auto">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-neutral-100">
-            <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
-              <Filter size={14} />
-              筛选条件
-            </span>
+      <div
+        className={`hidden lg:flex relative flex-shrink-0 border-l border-neutral-200 bg-white flex-col ${!isDraggingRight ? 'transition-all duration-300' : ''} ${collapsed ? 'w-10 items-center justify-start pt-4' : ''}`}
+        style={!collapsed ? { width: `${rightSidebarWidth}px` } : undefined}
+      >
+        {/* 拖拽把手 - 拉左侧边缘 */}
+        {!collapsed && (
+          <div
+            className="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize hover:bg-blue-400 z-50 transition-colors"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsDraggingRight(true);
+              const startX = e.clientX;
+              const startWidth = rightSidebarWidth;
+
+              const handleMouseMove = (moveEvent: MouseEvent) => {
+                let newWidth = startWidth - (moveEvent.clientX - startX); // 向左拉是增加宽度
+                if (newWidth < 240) newWidth = 240;
+                if (newWidth > 500) newWidth = 500;
+                setRightSidebarWidth(newWidth);
+              };
+
+              const handleMouseUp = () => {
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                setIsDraggingRight(false);
+              };
+
+              document.addEventListener('mousemove', handleMouseMove);
+              document.addEventListener('mouseup', handleMouseUp);
+              document.body.style.cursor = 'col-resize';
+              document.body.style.userSelect = 'none';
+            }}
+          />
+        )}
+
+        {collapsed ? (
+          /* 折叠态内容 */
+          <>
             <button
               onClick={toggleCollapsed}
-              className="p-1 rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
-              title="收起筛选器"
+              className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
+              title="展开筛选器"
             >
-              <ChevronRight size={14} />
+              <ChevronLeft size={16} />
             </button>
-          </div>
-          <div className="px-3 py-3">
-            <AdvancedFilterPanel
-              filters={filters}
-              onChange={setFilters}
-              collapsed={isFilterCollapsed}
-              onToggleCollapse={toggleFilterCollapsed}
-              availableYears={availableYears}
-              maxDataDate={maxDataDate}
-              preset={preset}
-              compact={true}
-              options={{
-                org_level_3: filterOptions.org_level_3,
-                salesman_name: filterOptions.salesman_name,
-                customer_category: filterOptions.customer_category,
-                coverage_combination: filterOptions.coverage_combination,
-                renewal_mode: filterOptions.renewal_mode,
-                insurance_grade: filterOptions.insurance_grade,
-                small_truck_score: filterOptions.small_truck_score,
-                large_truck_score: filterOptions.large_truck_score,
-                availableSalesmen,
-              }}
-            />
-          </div>
-        </div>
-      )}
+            <div className="mt-2">
+              <Filter size={16} className="text-neutral-400" />
+            </div>
+          </>
+        ) : (
+          /* 展开态内容 */
+          <>
+            <div className="flex items-center justify-between px-3 py-2.5 border-b border-neutral-100">
+              <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Filter size={14} />
+                筛选条件
+              </span>
+              <button
+                onClick={toggleCollapsed}
+                className="p-1 rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
+                title="收起筛选器"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+            <div className="px-3 py-3 overflow-y-auto flex-1 h-0">
+              <AdvancedFilterPanel
+                filters={filters}
+                onChange={setFilters}
+                collapsed={isFilterCollapsed}
+                onToggleCollapse={toggleFilterCollapsed}
+                availableYears={availableYears}
+                maxDataDate={maxDataDate}
+                preset={preset}
+                compact={true}
+                options={{
+                  org_level_3: filterOptions.org_level_3,
+                  salesman_name: filterOptions.salesman_name,
+                  customer_category: filterOptions.customer_category,
+                  coverage_combination: filterOptions.coverage_combination,
+                  renewal_mode: filterOptions.renewal_mode,
+                  insurance_grade: filterOptions.insurance_grade,
+                  small_truck_score: filterOptions.small_truck_score,
+                  large_truck_score: filterOptions.large_truck_score,
+                  availableSalesmen,
+                }}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };

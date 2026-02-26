@@ -60,7 +60,7 @@ const dataNavItems: NavItem[] = [
  * - Lucide图标 + 文字标签
  */
 export const SidebarNavigation: React.FC = () => {
-  const { collapsed, toggle, mobileOpen, setMobileOpen, isMobile } = useSidebar();
+  const { collapsed, toggle, mobileOpen, setMobileOpen, isMobile, sidebarWidth, setSidebarWidth, isDragging, setIsDragging } = useSidebar();
   const location = useLocation();
   const { userPermission } = usePermission();
 
@@ -102,11 +102,10 @@ export const SidebarNavigation: React.FC = () => {
       <NavLink
         key={item.path}
         to={item.path}
-        className={`flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 group min-h-[44px] md:min-h-0 ${
-          isActive(item.path)
+        className={`flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 group min-h-[44px] md:min-h-0 ${isActive(item.path)
             ? 'bg-primary text-white shadow-md'
             : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
-        }`}
+          }`}
         title={!showExpanded ? item.label : undefined}
       >
         <IconComponent
@@ -123,7 +122,7 @@ export const SidebarNavigation: React.FC = () => {
 
   // 计算侧边栏的显示状态和样式
   const getSidebarClasses = () => {
-    const baseClasses = 'fixed left-0 top-14 bottom-0 bg-white border-r border-neutral-200 transition-all duration-300 z-40 flex flex-col';
+    const baseClasses = `fixed left-0 top-14 bottom-0 bg-white border-r border-neutral-200 z-40 flex flex-col ${!isDragging ? 'transition-all duration-300' : ''}`;
 
     if (isMobile) {
       // 移动端：抽屉模式，总是宽展开
@@ -131,15 +130,49 @@ export const SidebarNavigation: React.FC = () => {
     }
 
     // 桌面端：根据 collapsed 状态
-    return `${baseClasses} ${collapsed ? 'w-16' : 'w-72'}`;
+    return baseClasses;
   };
 
   return (
     <aside
       className={getSidebarClasses()}
+      style={!isMobile ? { width: collapsed ? '64px' : `${sidebarWidth}px` } : undefined}
       role="navigation"
       aria-label="主导航"
     >
+      {/* 拖拽把手 - 放侧边栏右侧 */}
+      {!isMobile && !collapsed && (
+        <div
+          className="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-blue-400 z-50 transition-colors"
+          style={{ transform: 'translateX(50%)' }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+            const startX = e.clientX;
+            const startWidth = sidebarWidth;
+
+            const handleMouseMove = (moveEvent: MouseEvent) => {
+              let newWidth = startWidth + (moveEvent.clientX - startX); // 向右拉增加宽度
+              if (newWidth < 200) newWidth = 200;
+              if (newWidth > 400) newWidth = 400;
+              setSidebarWidth(newWidth);
+            };
+
+            const handleMouseUp = () => {
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+              document.body.style.cursor = '';
+              document.body.style.userSelect = '';
+              setIsDragging(false);
+            };
+
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+          }}
+        />
+      )}
       {/* 移动端：关闭按钮 */}
       {isMobile && (
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 md:hidden">

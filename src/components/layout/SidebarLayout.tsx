@@ -10,14 +10,22 @@ interface SidebarContextValue {
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
   isMobile: boolean;
+  sidebarWidth: number;
+  setSidebarWidth: (width: number) => void;
+  isDragging: boolean;
+  setIsDragging: (dragging: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextValue>({
   collapsed: false,
-  toggle: () => {},
+  toggle: () => { },
   mobileOpen: false,
-  setMobileOpen: () => {},
+  setMobileOpen: () => { },
   isMobile: false,
+  sidebarWidth: 240,
+  setSidebarWidth: () => { },
+  isDragging: false,
+  setIsDragging: () => { },
 });
 
 export const useSidebar = () => useContext(SidebarContext);
@@ -39,7 +47,23 @@ export const SidebarLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const location = useLocation();
+
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sidebar-width');
+      return saved ? parseInt(saved, 10) : 240;
+    } catch {
+      return 240;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sidebar-width', sidebarWidth.toString());
+    } catch { }
+  }, [sidebarWidth]);
 
   const toggle = () => setCollapsed((prev) => !prev);
 
@@ -74,7 +98,7 @@ export const SidebarLayout: React.FC = () => {
   }, [mobileOpen, isMobile]);
 
   return (
-    <SidebarContext.Provider value={{ collapsed, toggle, mobileOpen, setMobileOpen, isMobile }}>
+    <SidebarContext.Provider value={{ collapsed, toggle, mobileOpen, setMobileOpen, isMobile, sidebarWidth, setSidebarWidth, isDragging, setIsDragging }}>
       <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* 顶部导航栏 */}
         <TopNavigation />
@@ -95,9 +119,8 @@ export const SidebarLayout: React.FC = () => {
 
           {/* 主内容区 - 移动端全宽，桌面端有侧边栏边距 */}
           <main
-            className={`flex-1 overflow-hidden transition-all duration-300 ${
-              isMobile ? 'ml-0' : collapsed ? 'ml-16' : 'ml-72'
-            }`}
+            className={`flex-1 overflow-hidden ${!isDragging ? 'transition-all duration-300' : ''}`}
+            style={{ marginLeft: isMobile ? '0px' : collapsed ? '64px' : `${sidebarWidth}px` }}
           >
             <div className="h-full flex flex-col">
               <div className="flex-1 overflow-hidden">

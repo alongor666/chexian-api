@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { cn } from '../../shared/styles';
+import { cn, colorClasses } from '../../shared/styles';
 import type { AdvancedFilterState } from '../../shared/types/data';
 
 interface PageHeaderBarProps {
@@ -131,7 +131,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
 
   return (
     <div className="sticky top-0 z-10 bg-white border-b border-neutral-200 shadow-sm px-4 py-2.5">
-      <h1 className="text-lg font-semibold text-neutral-800">{fullTitle}</h1>
+      <h1 className={cn('text-lg font-semibold', colorClasses.text.neutralBlack)}>{fullTitle}</h1>
       {filterChips.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5">
           {filterChips.map(chip => (
