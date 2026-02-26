@@ -84,15 +84,35 @@ export const MotoCostPage: React.FC = () => {
     alert('导出功能开发中...');
   }, []);
 
-  // 智能洞察文本
+  // 智能洞察文本 - 对齐原版详细分析
   const insightText = useMemo(() => {
     const profit = calculation.combined.absolute[6];
     const tcr = calculation.combined.rate[0] * 100;
     const isProfit = profit >= 0;
 
-    return isProfit
-      ? `当前盈利 ${profit.toFixed(1)} 万元，综合成本率 ${tcr.toFixed(1)}%，表现良好。`
-      : `当前亏损 ${Math.abs(profit).toFixed(1)} 万元，综合成本率 ${tcr.toFixed(1)}%，需优化赔付率控制。`;
+    // 构建详细分析文本（输入值已经是百分比形式，直接显示）
+    let text = `基于当前刚性成本配置（人力成本${inputs.laborBaseRate.toFixed(1)}%、固定运营成本${inputs.fixedOperationRate.toFixed(2)}%），`;
+    text += `摩意险保费配比为${(breakEven.motoPremiumRatio * 100).toFixed(1)}%。`;
+    text += ` 要实现盈亏平衡，在保持摩意险赔付率${inputs.motoLossRatio.toFixed(1)}%不变的情况下，`;
+    text += `车险赔付率需控制在${breakEven.carBreakEvenLossRatio}%以内；`;
+    text += ` 若车险赔付率固定为${inputs.carLossRatio.toFixed(1)}%，摩意险赔付率需控制在${breakEven.motoBreakEvenLossRatio}%以内。`;
+    text += ` 车险赔付率每上浮1个百分点将减少利润${Math.abs(breakEven.carSensitivity)}万元；`;
+    text += `摩意险赔付率每上浮1个百分点将减少利润${Math.abs(breakEven.motoSensitivity)}万元。`;
+
+    const statusText = isProfit
+      ? `当前状态为盈利${profit.toFixed(1)}万元，综合成本率${tcr.toFixed(1)}%，表现良好。`
+      : `当前状态为亏损${Math.abs(profit).toFixed(1)}万元，综合成本率${tcr.toFixed(1)}%，需优化赔付率控制。`;
+
+    text += ` ${statusText}`;
+
+    return text;
+  }, [calculation, breakEven, inputs]);
+
+  // 状态栏简要文本
+  const summaryText = useMemo(() => {
+    const profit = calculation.combined.absolute[6];
+    const edgeContribution = calculation.combined.absolute[6] + calculation.combined.absolute[5];
+    return `边际贡献${edgeContribution.toFixed(1)}万元 · 总利润${profit.toFixed(1)}万元`;
   }, [calculation]);
 
   return (
@@ -154,7 +174,7 @@ export const MotoCostPage: React.FC = () => {
           </div>
           <div className={cn(cardStyles.standard, 'flex items-center gap-3', colorClasses.bg.success)}>
             <span className={textStyles.caption}>体验提示</span>
-            <span className={textStyles.label}>实时测算已开启，调整参数即可秒级获得趋势</span>
+            <span className={textStyles.label}>{summaryText}</span>
           </div>
         </div>
 
