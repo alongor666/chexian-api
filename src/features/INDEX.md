@@ -297,3 +297,6 @@ widgets/table/VirtualTable.tsx
 
 ### Pages 模块调整
 - **`pages/PerformanceAnalysisPage.tsx`**: 将标签选择控件移至标题下方左侧，筛选条件 chips 改为右侧对齐展示（左选右条件）
+
+### Dashboard 模块补充
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: 业绩分析标题栏控件补充分组标签（客户类别/时间维度/对比方式），并改为左侧优先显示 + 横向滚动

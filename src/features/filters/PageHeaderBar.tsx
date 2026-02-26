@@ -150,7 +150,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
       </div>
       {(bottomLeftContent || filterChips.length > 0) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
-          {bottomLeftContent && <div className="min-w-0">{bottomLeftContent}</div>}
+          {bottomLeftContent && <div className="flex-1 min-w-0">{bottomLeftContent}</div>}
           {filterChips.length > 0 && (
             <div
               className={cn(

@@ -83,28 +83,39 @@ export const PerformanceHeaderControls: React.FC<PerformanceHeaderControlsProps>
   onTimePeriodChange,
   onGrowthModeChange,
 }) => (
-  <div className="flex flex-wrap items-center justify-end gap-2">
-    <Tabs
-      items={SEGMENT_TABS}
-      activeKey={segmentTag}
-      onChange={(key) => onSegmentTagChange(key as PerformanceSegmentTag)}
-      variant="pills"
-      size="small"
-    />
-    <Tabs
-      items={TIME_PERIOD_TABS}
-      activeKey={timePeriod}
-      onChange={(key) => onTimePeriodChange(key as PerformanceTimePeriod)}
-      variant="pills"
-      size="small"
-    />
-    <Tabs
-      items={GROWTH_MODE_TABS}
-      activeKey={growthMode}
-      onChange={(key) => onGrowthModeChange(key as PerformanceGrowthMode)}
-      variant="pills"
-      size="small"
-    />
+  <div className="no-export max-w-full overflow-x-auto">
+    <div className="flex items-center gap-2 whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
+        客户类别
+      </span>
+      <Tabs
+        items={SEGMENT_TABS}
+        activeKey={segmentTag}
+        onChange={(key) => onSegmentTagChange(key as PerformanceSegmentTag)}
+        variant="pills"
+        size="small"
+      />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
+        时间维度
+      </span>
+      <Tabs
+        items={TIME_PERIOD_TABS}
+        activeKey={timePeriod}
+        onChange={(key) => onTimePeriodChange(key as PerformanceTimePeriod)}
+        variant="pills"
+        size="small"
+      />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
+        对比方式
+      </span>
+      <Tabs
+        items={GROWTH_MODE_TABS}
+        activeKey={growthMode}
+        onChange={(key) => onGrowthModeChange(key as PerformanceGrowthMode)}
+        variant="pills"
+        size="small"
+      />
+    </div>
   </div>
 );
 
