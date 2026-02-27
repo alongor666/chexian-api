@@ -10,8 +10,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
-import { formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
-import { cardStyles, colors, cn } from '../../shared/styles';
+import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
+import { buttonStyles, cardStyles, colors, cn, tableStyles, textStyles } from '../../shared/styles';
 import { ORG_GROUPS } from '../../shared/config/coefficient-thresholds';
 import { useCrossSellOrgTrend, type CoverageCombinationFilter, type OrgTrendPoint } from './hooks/useCrossSellOrgTrend';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
@@ -113,6 +113,36 @@ function shortDate(date: string): string {
   return date.length >= 10 ? date.slice(5) : date;
 }
 
+function exportRowsToCsv(rows: OrgTrendPoint[], filename: string): void {
+  const headers = ['日期', '车险件数', '驾意件数', '非驾意件数', '推介率(%)', '件均保费(元)'];
+  const dataRows = rows.map((row) => [
+    row.date,
+    String(row.auto_count),
+    String(row.driver_count),
+    String(Math.max(0, row.auto_count - row.driver_count)),
+    row.rate.toFixed(1),
+    String(Math.round(row.avg_premium)),
+  ]);
+
+  const escapeCsv = (field: string) => {
+    if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+      return `"${field.replace(/"/g, '""')}"`;
+    }
+    return field;
+  };
+
+  const csvText = '\uFEFF' + [headers, ...dataRows].map((line) => line.map(escapeCsv).join(',')).join('\n');
+  const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   vehicleCategory,
   seatCoverageLevel,
@@ -126,6 +156,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   const [coverage, setCoverage] = useState<CoverageCombinationFilter>('交三');
   const [region, setRegion] = useState<RegionType>('local');
   const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
 
   const regionOrgNames = useMemo<string[] | null | undefined>(() => {
     if (selectedOrg) return undefined;
@@ -187,6 +218,14 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
     } finally {
       setAiLoading(false);
     }
+  }, [rows, coverage, selectedOrg, region]);
+
+  const handleDownloadTable = useCallback(() => {
+    if (rows.length === 0) return;
+    const now = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const orgLabel = selectedOrg ?? `${REGION_LABELS[region]}汇总`;
+    const filename = `${now}_机构推介率趋势_${coverage}_${orgLabel}.csv`;
+    exportRowsToCsv(rows, filename);
   }, [rows, coverage, selectedOrg, region]);
 
   // ── ECharts option ────────────────────────────────────────────────────────
@@ -425,6 +464,35 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
       {/* 标题 */}
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm font-semibold text-neutral-700">{displayTitle}</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setViewMode('chart')}
+            className={cn(
+              buttonStyles.base,
+              buttonStyles.sizeSmall,
+              viewMode === 'chart' ? buttonStyles.primary : buttonStyles.secondary
+            )}
+          >
+            图表视图
+          </button>
+          <button
+            onClick={() => setViewMode('table')}
+            className={cn(
+              buttonStyles.base,
+              buttonStyles.sizeSmall,
+              viewMode === 'table' ? buttonStyles.primary : buttonStyles.secondary
+            )}
+          >
+            表格视图
+          </button>
+          <button
+            onClick={handleDownloadTable}
+            disabled={rows.length === 0}
+            className={cn(buttonStyles.base, buttonStyles.secondary, buttonStyles.sizeSmall)}
+          >
+            下载表格
+          </button>
+        </div>
       </div>
 
       {/* 控制栏 */}
@@ -486,20 +554,60 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         </div>
       </div>
 
-      {/* 图表区 */}
-      <div className="relative">
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10 rounded">
-            <span className="text-xs text-neutral-400">加载中…</span>
-          </div>
-        )}
-        {error && !loading && (
-          <div className="flex items-center justify-center h-48 text-xs text-danger-500">
-            {error}
-          </div>
-        )}
-        <div ref={chartRef} style={{ height: 300, width: '100%' }} />
-      </div>
+      {/* 图表区 / 表格区 */}
+      {viewMode === 'chart' ? (
+        <div className="relative">
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10 rounded">
+              <span className="text-xs text-neutral-400">加载中…</span>
+            </div>
+          )}
+          {error && !loading && (
+            <div className="flex items-center justify-center h-48 text-xs text-danger-500">
+              {error}
+            </div>
+          )}
+          <div ref={chartRef} style={{ height: 300, width: '100%' }} />
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-neutral-200">
+          {error && !loading && <div className="p-4 text-xs text-danger">{error}</div>}
+          <table className={cn(tableStyles.container, 'w-full border-0 shadow-none')}>
+            <thead className={tableStyles.header}>
+              <tr>
+                <th className={tableStyles.headerCell}>日期</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>车险件数</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>驾意件数</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>非驾意件数</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>推介率</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>件均保费</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.date} className={tableStyles.row}>
+                  <td className={tableStyles.cell}>{row.date}</td>
+                  <td className={cn(tableStyles.cellNumeric, textStyles.numeric)}>{formatCount(row.auto_count)}件</td>
+                  <td className={cn(tableStyles.cellNumeric, textStyles.numeric)}>{formatCount(row.driver_count)}件</td>
+                  <td className={cn(tableStyles.cellNumeric, textStyles.numeric)}>{formatCount(Math.max(0, row.auto_count - row.driver_count))}件</td>
+                  <td className={cn(tableStyles.cellNumeric, textStyles.numeric)}>{formatPercent(row.rate)}</td>
+                  <td className={cn(tableStyles.cellNumeric, textStyles.numeric)}>{formatCount(Math.round(row.avg_premium))}元</td>
+                </tr>
+              ))}
+              {!loading && rows.length === 0 && (
+                <tr>
+                  <td className={cn(tableStyles.cell, 'text-center')} colSpan={6}>暂无数据</td>
+                </tr>
+              )}
+              {loading && (
+                <tr>
+                  <td className={cn(tableStyles.cell, 'text-center')} colSpan={6}>加载中…</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* ── 程序解读 + AI 解读 ─────────────────────────────────────────────── */}
       {(rateDigest || premiumDigest) && !loading && (
