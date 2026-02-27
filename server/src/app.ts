@@ -14,6 +14,7 @@ import path from 'path';
 import { corsConfig } from './config/cors.js';
 import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
+import { seedAccessControlData } from './services/access-control.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 const app: Application = express();
@@ -108,6 +109,8 @@ async function startServer() {
     // 初始化DuckDB
     console.log('[Server] Initializing DuckDB...');
     await duckdbService.init();
+
+    await seedAccessControlData();
 
     // 启动期健康检查：数据目录与映射路径可见性
     const candidateDirs = getCandidateDataDirs();

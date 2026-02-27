@@ -92,6 +92,8 @@ plate_no, seat_count
 | `third_party_coverage` | FLOAT64 | 三者保额（元） | 0 ~ 高值 | AVG/MAX |
 | `driver_coverage` | FLOAT64 | 司机保额（元） | 0 ~ 高值 | AVG/MAX |
 | `passenger_coverage` | FLOAT64 | 乘客险保额（元） | 0 ~ 高值 | AVG/MAX |
+| `plate_no` | STRING | 车牌号码 | 川A12345 格式 | — |
+| `seat_count` | INT64 | 座位数 | 2 ~ 9（乘用车通常5座） | — |
 
 **保费特殊规则**:
 - `保费 > 0` = 正常承保
@@ -495,6 +497,7 @@ ORDER BY "达成率%" DESC
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| v1.4 | 2026-02-27 | 新增2个字段：plate_no（车牌号码）、seat_count（座位数）；字段总数34→36；用于费用分析规则匹配 |
 | v1.3 | 2026-02-26 | 新增4个字段：underwriting_date, third_party_coverage, driver_coverage, passenger_coverage；前后端统一"签单日期"命名；支持多 Parquet 文件 UNION ALL 加载 |
 | v1.2 | 2026-02-12 | 新增5个字段：insurance_grade, small_truck_score, large_truck_score, is_cross_sell, cross_sell_premium_driver |
 | v1.1 | 2026-02-01 | 添加 SalesmanPlanFact 视图说明；明确 PolicyFact 可用字段 |

@@ -94,6 +94,7 @@ import { parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNam
 import { logger } from '../utils/logger.js';
 import { buildResponseMeta } from '../utils/api-meta.js';
 import { markRequestCacheHit } from '../utils/request-context.js';
+import { generateFeeAnalysisQuery } from '../sql/fee-analysis.js';
 
 const router = Router();
 
@@ -942,6 +943,10 @@ function getSeatCoverageClause(level?: CrossSellSeatCoverageLevel): string {
   }
 }
 
+async function ensureCrossSellAggregateTablesReady(): Promise<void> {
+  await duckdbService.ensureAggregatesReady();
+}
+
 const crossSellExtraSchema = z.object({
   drillPath: z.string().optional().default('[]'),
   groupBy: z.enum(CROSS_SELL_DIMENSIONS).optional(),
@@ -977,6 +982,7 @@ router.get(
     }
 
     const groupBy = crossSellResult.data.groupBy as CrossSellDimension | undefined;
+    await ensureCrossSellAggregateTablesReady();
 
     let { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
@@ -1174,6 +1180,7 @@ router.get(
       throw new AppError(400, extraResult.error.issues[0].message);
     }
     const { vehicleCategory, granularity, seatCoverageLevel } = extraResult.data;
+    await ensureCrossSellAggregateTablesReady();
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
     let finalWhereClause = whereClause;
@@ -1220,6 +1227,7 @@ router.get(
     }
 
     const { vehicleCategory, seatCoverageLevel } = extraResult.data;
+    await ensureCrossSellAggregateTablesReady();
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
     let finalWhereClause = whereClause;
@@ -1493,6 +1501,7 @@ router.get(
       throw new AppError(400, extraResult.error.issues[0].message);
     }
     const { vehicleCategory, coverage, timePeriod, seatCoverageLevel } = extraResult.data;
+    await ensureCrossSellAggregateTablesReady();
 
     const { whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
     let finalWhereClause = whereWithoutDate;
@@ -1554,6 +1563,7 @@ router.get(
       });
       return;
     }
+    await ensureCrossSellAggregateTablesReady();
 
     const {
       drillPath: drillPathRaw,
@@ -2238,6 +2248,24 @@ router.get(
     res.json({
       success: true,
       data: { rows },
+    });
+  })
+);
+
+/**
+ * GET /api/query/fee-analysis
+ * 费用分析（成都同城机构 | 非营业个人客车 | 非新能源 | 非电销 | 22条规则分档）
+ */
+router.get(
+  '/fee-analysis',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateFeeAnalysisQuery(whereClause);
+    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
+
+    res.json({
+      success: true,
+      data: result,
     });
   })
 );

@@ -97,15 +97,18 @@ router.post(
     const { username, password } = parseResult.data;
 
     // 2. 检查 IP + 用户名双键锁定状态
-    const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+    const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
     checkAccountLock(clientIp, username);
 
     // 3. 调用认证服务
     let result;
     try {
-      result = await authService.login(username, password);
+      result = await authService.login(username, password, clientIp);
     } catch (err) {
-      // 登录失败：记录失败次数（可能触发锁定）+ 审计日志
+      if (err instanceof AppError && err.statusCode === 403 && err.message === 'IP not allowed') {
+        auditAuthEvent({ event: 'login_ip_denied', username, ip: clientIp });
+        throw err;
+      }
       recordLoginFailure(clientIp, username);
       auditAuthEvent({ event: 'login_failure', username, ip: clientIp });
       throw err;

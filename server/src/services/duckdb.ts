@@ -128,6 +128,9 @@ class DuckDBService {
   private isInitialized = false;
   private connectionPool: ConnectionPool | null = null;
   private queryCache = new QueryCache();
+  private aggregateEnsurePromise: Promise<void> | null = null;
+  private lastAggregateCheckAt = 0;
+  private readonly aggregateCheckIntervalMs = 30_000;
 
   /**
    * 初始化数据库连接
@@ -151,6 +154,35 @@ class DuckDBService {
           level VARCHAR,
           level_key VARCHAR,
           plan_premium DOUBLE
+        )
+      `);
+
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS UserAccount (
+          id VARCHAR,
+          username VARCHAR,
+          display_name VARCHAR,
+          password_hash VARCHAR,
+          role VARCHAR,
+          organization VARCHAR,
+          allowed_routes VARCHAR,
+          default_route VARCHAR,
+          allowed_ips VARCHAR,
+          active BOOLEAN,
+          created_at TIMESTAMP,
+          updated_at TIMESTAMP
+        )
+      `);
+
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS RoleConfig (
+          role VARCHAR,
+          name VARCHAR,
+          data_scope VARCHAR,
+          allowed_routes VARCHAR,
+          default_route VARCHAR,
+          created_at TIMESTAMP,
+          updated_at TIMESTAMP
         )
       `);
 
@@ -720,6 +752,58 @@ class DuckDBService {
         driver_coverage,
         passenger_coverage
     `);
+  }
+
+  /**
+   * 确保预聚合表存在（用于部署后自动自愈）
+   * - 默认检查 DailyAggregated / PeriodAggregated / CrossSellDailyAgg
+   * - 使用进程内锁避免并发重复重建
+   */
+  async ensureAggregatesReady(requiredTables: string[] = ['DailyAggregated', 'PeriodAggregated', 'CrossSellDailyAgg']): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastAggregateCheckAt < this.aggregateCheckIntervalMs) {
+      return;
+    }
+    if (this.aggregateEnsurePromise) {
+      await this.aggregateEnsurePromise;
+      return;
+    }
+
+    this.aggregateEnsurePromise = (async () => {
+      const missing = await this.getMissingTables(requiredTables);
+      if (missing.length === 0) {
+        this.lastAggregateCheckAt = Date.now();
+        return;
+      }
+
+      console.warn(`[DuckDB] Missing aggregate tables detected: ${missing.join(', ')}. Rebuilding aggregates...`);
+      await this.buildAggregates();
+      this.lastAggregateCheckAt = Date.now();
+      this.invalidateCache();
+    })();
+
+    try {
+      await this.aggregateEnsurePromise;
+    } finally {
+      this.aggregateEnsurePromise = null;
+    }
+  }
+
+  private async getMissingTables(tableNames: string[]): Promise<string[]> {
+    const checks = await Promise.all(
+      tableNames.map(async (tableName) => {
+        const escapedTableName = escapeSqlValue(tableName);
+        const rows = await this.query<{ exists_flag: number }>(`
+          SELECT 1 AS exists_flag
+          FROM information_schema.tables
+          WHERE table_schema = 'main'
+            AND table_name = '${escapedTableName}'
+          LIMIT 1
+        `);
+        return rows.length > 0 ? null : tableName;
+      })
+    );
+    return checks.filter((name): name is string => Boolean(name));
   }
 
   /**

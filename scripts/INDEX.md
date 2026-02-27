@@ -167,3 +167,7 @@ python3 scripts/generate-renewal-analysis.py # 生成报告
 - 新增 `test-burn-down.mjs`：生成测试债务燃尽报告（`artifacts/test-burndown/current.md`），用于每周失败用例清零跟踪。
 - 新增 `install-git-hooks.sh`：一键安装本地 Git Hooks（`core.hooksPath=.githooks`）。
 - 新增仓库级 `.githooks/pre-commit`：提交前强制执行治理检查 + 核心回归测试。
+
+## 2026-02-27 追加记录
+
+- `benchmark-key-routes.mjs` 增强：支持 429 自动退避重试、失败原因与状态码统计、`p95`（成功样本）与 `p95All`（全样本）分离统计，并可从 `logs/audit.log` 提取指定日期基线自动计算新旧 P95 对比。

@@ -1,0 +1,432 @@
+{
+  "startedAt": "2026-02-27T10:35:09.181Z",
+  "finishedAt": "2026-02-27T10:35:23.582Z",
+  "baseUrl": "https://chexian.cretvalu.com",
+  "iterations": 1,
+  "warmup": 0,
+  "paceMs": 0,
+  "max429Retries": 0,
+  "retryAfterMs": 60000,
+  "routeCooldownMs": 0,
+  "baselineDate": "2026-02-25",
+  "baselineLog": "logs/audit.log",
+  "baseline": {
+    "source": "logs/audit.log",
+    "baselineDate": "2026-02-25",
+    "found": true,
+    "routes": {
+      "/api/query/cross-sell-summary": {
+        "count": 78,
+        "p50": 167,
+        "p95": 1534,
+        "p99": 1696,
+        "avg": 423,
+        "max": 1982,
+        "min": 57
+      },
+      "/api/query/cross-sell": {
+        "count": 87,
+        "p50": 150,
+        "p95": 1138,
+        "p99": 1313,
+        "avg": 327,
+        "max": 1480,
+        "min": 36
+      },
+      "/api/query/cross-sell-trend": {
+        "count": 145,
+        "p50": 106,
+        "p95": 1088,
+        "p99": 1313,
+        "avg": 253,
+        "max": 1461,
+        "min": 23
+      },
+      "/api/query/cross-sell-bundle": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      },
+      "/api/query/performance-summary": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      },
+      "/api/query/performance-top-salesman": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      },
+      "/api/query/performance-bundle": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      },
+      "/api/query/dashboard-bundle": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "route": "/api/query/cross-sell-summary?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&vehicleCategory=passenger",
+      "routeKey": "/api/query/cross-sell-summary",
+      "baselineP95": 1534,
+      "currentP95": null,
+      "currentP95All": 901,
+      "p95ImprovementPct": null,
+      "baselineCount": 78,
+      "failures": 1,
+      "successes": 0
+    },
+    {
+      "route": "/api/query/cross-sell?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&vehicleCategory=passenger",
+      "routeKey": "/api/query/cross-sell",
+      "baselineP95": 1138,
+      "currentP95": null,
+      "currentP95All": 180,
+      "p95ImprovementPct": null,
+      "baselineCount": 87,
+      "failures": 1,
+      "successes": 0
+    },
+    {
+      "route": "/api/query/cross-sell-trend?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&vehicleCategory=passenger&granularity=monthly",
+      "routeKey": "/api/query/cross-sell-trend",
+      "baselineP95": 1088,
+      "currentP95": null,
+      "currentP95All": 600,
+      "p95ImprovementPct": null,
+      "baselineCount": 145,
+      "failures": 1,
+      "successes": 0
+    },
+    {
+      "route": "/api/query/cross-sell-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&vehicleCategory=passenger&granularity=monthly&timePeriod=monthly",
+      "routeKey": "/api/query/cross-sell-bundle",
+      "baselineP95": null,
+      "currentP95": null,
+      "currentP95All": 187,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 1,
+      "successes": 0
+    },
+    {
+      "route": "/api/query/performance-summary?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none",
+      "routeKey": "/api/query/performance-summary",
+      "baselineP95": null,
+      "currentP95": 1296,
+      "currentP95All": 1296,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 0,
+      "successes": 1
+    },
+    {
+      "route": "/api/query/performance-top-salesman?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&segmentTag=all&timePeriod=month&growthMode=mom&limit=20",
+      "routeKey": "/api/query/performance-top-salesman",
+      "baselineP95": null,
+      "currentP95": 2767,
+      "currentP95All": 2767,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 0,
+      "successes": 1
+    },
+    {
+      "route": "/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none&granularity=monthly&limit=20",
+      "routeKey": "/api/query/performance-bundle",
+      "baselineP95": null,
+      "currentP95": 5774,
+      "currentP95All": 5774,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 0,
+      "successes": 1
+    },
+    {
+      "route": "/api/query/dashboard-bundle?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&granularity=week&perspective=premium",
+      "routeKey": "/api/query/dashboard-bundle",
+      "baselineP95": null,
+      "currentP95": 2674,
+      "currentP95All": 2674,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 0,
+      "successes": 1
+    }
+  ],
+  "results": [
+    {
+      "route": "/api/query/cross-sell-summary?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&vehicleCategory=passenger",
+      "routeKey": "/api/query/cross-sell-summary",
+      "iterations": 1,
+      "warmup": 0,
+      "retries429": 0,
+      "failures": 1,
+      "successes": 0,
+      "statusCounts": {
+        "400": 1
+      },
+      "errorCounts": {
+        "400 Query failed: Catalog Error: Table with name CrossSellDailyAgg does not exist!\nDid you mean \"SalesmanTeamMapping\"?\n\nLINE 4:       FROM CrossSellDailyAgg\n                   ^": 1
+      },
+      "p50": null,
+      "p95": null,
+      "p99": null,
+      "avg": null,
+      "max": null,
+      "min": null,
+      "p50All": 901,
+      "p95All": 901,
+      "p99All": 901,
+      "avgAll": 901,
+      "maxAll": 901,
+      "minAll": 901,
+      "samples": [],
+      "samplesAll": [
+        901
+      ]
+    },
+    {
+      "route": "/api/query/cross-sell?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&vehicleCategory=passenger",
+      "routeKey": "/api/query/cross-sell",
+      "iterations": 1,
+      "warmup": 0,
+      "retries429": 0,
+      "failures": 1,
+      "successes": 0,
+      "statusCounts": {
+        "400": 1
+      },
+      "errorCounts": {
+        "400 Query failed: Catalog Error: Table with name CrossSellDailyAgg does not exist!\nDid you mean \"SalesmanTeamMapping\"?\n\nLINE 13:       FROM CrossSellDailyAgg\n                    ^": 1
+      },
+      "p50": null,
+      "p95": null,
+      "p99": null,
+      "avg": null,
+      "max": null,
+      "min": null,
+      "p50All": 180,
+      "p95All": 180,
+      "p99All": 180,
+      "avgAll": 180,
+      "maxAll": 180,
+      "minAll": 180,
+      "samples": [],
+      "samplesAll": [
+        180
+      ]
+    },
+    {
+      "route": "/api/query/cross-sell-trend?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&vehicleCategory=passenger&granularity=monthly",
+      "routeKey": "/api/query/cross-sell-trend",
+      "iterations": 1,
+      "warmup": 0,
+      "retries429": 0,
+      "failures": 1,
+      "successes": 0,
+      "statusCounts": {
+        "400": 1
+      },
+      "errorCounts": {
+        "400 Query failed: Catalog Error: Table with name CrossSellDailyAgg does not exist!\nDid you mean \"SalesmanTeamMapping\"?\n\nLINE 9:       FROM CrossSellDailyAgg\n                   ^": 1
+      },
+      "p50": null,
+      "p95": null,
+      "p99": null,
+      "avg": null,
+      "max": null,
+      "min": null,
+      "p50All": 600,
+      "p95All": 600,
+      "p99All": 600,
+      "avgAll": 600,
+      "maxAll": 600,
+      "minAll": 600,
+      "samples": [],
+      "samplesAll": [
+        600
+      ]
+    },
+    {
+      "route": "/api/query/cross-sell-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&vehicleCategory=passenger&granularity=monthly&timePeriod=monthly",
+      "routeKey": "/api/query/cross-sell-bundle",
+      "iterations": 1,
+      "warmup": 0,
+      "retries429": 0,
+      "failures": 1,
+      "successes": 0,
+      "statusCounts": {
+        "400": 1
+      },
+      "errorCounts": {
+        "400 Query failed: Catalog Error: Table with name CrossSellDailyAgg does not exist!\nDid you mean \"SalesmanTeamMapping\"?\n\nLINE 13:       FROM CrossSellDailyAgg\n                    ^": 1
+      },
+      "p50": null,
+      "p95": null,
+      "p99": null,
+      "avg": null,
+      "max": null,
+      "min": null,
+      "p50All": 187,
+      "p95All": 187,
+      "p99All": 187,
+      "avgAll": 187,
+      "maxAll": 187,
+      "minAll": 187,
+      "samples": [],
+      "samplesAll": [
+        187
+      ]
+    },
+    {
+      "route": "/api/query/performance-summary?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none",
+      "routeKey": "/api/query/performance-summary",
+      "iterations": 1,
+      "warmup": 0,
+      "retries429": 0,
+      "failures": 0,
+      "successes": 1,
+      "statusCounts": {
+        "200": 1
+      },
+      "errorCounts": {},
+      "p50": 1296,
+      "p95": 1296,
+      "p99": 1296,
+      "avg": 1296,
+      "max": 1296,
+      "min": 1296,
+      "p50All": 1296,
+      "p95All": 1296,
+      "p99All": 1296,
+      "avgAll": 1296,
+      "maxAll": 1296,
+      "minAll": 1296,
+      "samples": [
+        1296
+      ],
+      "samplesAll": [
+        1296
+      ]
+    },
+    {
+      "route": "/api/query/performance-top-salesman?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&segmentTag=all&timePeriod=month&growthMode=mom&limit=20",
+      "routeKey": "/api/query/performance-top-salesman",
+      "iterations": 1,
+      "warmup": 0,
+      "retries429": 0,
+      "failures": 0,
+      "successes": 1,
+      "statusCounts": {
+        "200": 1
+      },
+      "errorCounts": {},
+      "p50": 2767,
+      "p95": 2767,
+      "p99": 2767,
+      "avg": 2767,
+      "max": 2767,
+      "min": 2767,
+      "p50All": 2767,
+      "p95All": 2767,
+      "p99All": 2767,
+      "avgAll": 2767,
+      "maxAll": 2767,
+      "minAll": 2767,
+      "samples": [
+        2767
+      ],
+      "samplesAll": [
+        2767
+      ]
+    },
+    {
+      "route": "/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none&granularity=monthly&limit=20",
+      "routeKey": "/api/query/performance-bundle",
+      "iterations": 1,
+      "warmup": 0,
+      "retries429": 0,
+      "failures": 0,
+      "successes": 1,
+      "statusCounts": {
+        "200": 1
+      },
+      "errorCounts": {},
+      "p50": 5774,
+      "p95": 5774,
+      "p99": 5774,
+      "avg": 5774,
+      "max": 5774,
+      "min": 5774,
+      "p50All": 5774,
+      "p95All": 5774,
+      "p99All": 5774,
+      "avgAll": 5774,
+      "maxAll": 5774,
+      "minAll": 5774,
+      "samples": [
+        5774
+      ],
+      "samplesAll": [
+        5774
+      ]
+    },
+    {
+      "route": "/api/query/dashboard-bundle?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-27&granularity=week&perspective=premium",
+      "routeKey": "/api/query/dashboard-bundle",
+      "iterations": 1,
+      "warmup": 0,
+      "retries429": 0,
+      "failures": 0,
+      "successes": 1,
+      "statusCounts": {
+        "200": 1
+      },
+      "errorCounts": {},
+      "p50": 2674,
+      "p95": 2674,
+      "p99": 2674,
+      "avg": 2674,
+      "max": 2674,
+      "min": 2674,
+      "p50All": 2674,
+      "p95All": 2674,
+      "p99All": 2674,
+      "avgAll": 2674,
+      "maxAll": 2674,
+      "minAll": 2674,
+      "samples": [
+        2674
+      ],
+      "samplesAll": [
+        2674
+      ]
+    }
+  ]
+}

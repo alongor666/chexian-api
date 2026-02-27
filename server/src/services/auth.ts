@@ -8,8 +8,10 @@
 import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
+import { PRESET_USERS } from '../config/preset-users.js';
 import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
+import { ensurePresetUser, getUserByUsername } from './access-control.js';
 
 /**
  * 用户凭证（从前端复用）
@@ -20,6 +22,10 @@ export interface UserCredential {
   displayName: string;
   role: string;
   organization?: string;
+  allowedIps?: string[];
+  allowedRoutes?: string[];
+  defaultRoute?: string;
+  active?: boolean;
 }
 
 /**
@@ -41,133 +47,30 @@ function loadPasswordOverrides(): Record<string, string> {
 }
 
 const PASSWORD_OVERRIDES = loadPasswordOverrides();
+const ALLOWED_IP_OVERRIDES = loadAllowedIpOverrides();
 
-/**
- * 预设用户（开发/测试用）
- * 生产环境通过 USER_PASSWORDS 环境变量覆盖 passwordHash
- */
-const PRESET_USERS: Record<string, UserCredential> = {
-  admin: {
-    username: 'admin',
-    passwordHash: '$2b$10$APRNUh5SQwF3N7Ew0TbM/OuZJ6mnB6FgPvxni5OXiejDCDfQlJIRW',
-    displayName: '系统管理员',
-    role: 'branch_admin',
-  },
-  leshan: {
-    username: 'leshan',
-    passwordHash: '$2b$10$zg8QffrtojxjkuOuncgtG.SLPAbOsuS29USERwXVNlbs9suHdFihe',
-    displayName: '乐山机构',
-    role: 'org_user',
-    organization: '乐山',
-  },
-  tianfu: {
-    username: 'tianfu',
-    passwordHash: '$2b$10$UDpOw8NOHWEokrdBlbZHRecw9cPnYFwevi.AZ5w5s0rywxH737zv.',
-    displayName: '天府机构',
-    role: 'org_user',
-    organization: '天府',
-  },
-  yibin: {
-    username: 'yibin',
-    passwordHash: '$2b$10$bE6z5mFnpLIkH3Q/xxAV0ecRuAnQH8hls9Tk0RLxkbQc6ue0X/tCy',
-    displayName: '宜宾机构',
-    role: 'org_user',
-    organization: '宜宾',
-  },
-  deyang: {
-    username: 'deyang',
-    passwordHash: '$2b$10$Ibn1z1Z3mlpCzV2Uxa7IzO6eDvvmd4zan65yrVaLtqLGhqj04XN92',
-    displayName: '德阳机构',
-    role: 'org_user',
-    organization: '德阳',
-  },
-  xindu: {
-    username: 'xindu',
-    passwordHash: '$2b$10$MN/5HppLscWDiXbqgmxJH.f3pO3x3/JU38xkKtTr.ERFDXiKU7nPe',
-    displayName: '新都机构',
-    role: 'org_user',
-    organization: '新都',
-  },
-  wuhou: {
-    username: 'wuhou',
-    passwordHash: '$2b$10$AC8yYRbjP9sep/CP3O7KPey/FgqpxY55ChPUzsyp.DGoYsveSW/Zy',
-    displayName: '武侯机构',
-    role: 'org_user',
-    organization: '武侯',
-  },
-  luzhou: {
-    username: 'luzhou',
-    passwordHash: '$2b$10$Ca0AjfYyulOjBb3II5qkg.KrbZ6ZvPSS64tHLya7gfHNt5YmZuoCK',
-    displayName: '泸州机构',
-    role: 'org_user',
-    organization: '泸州',
-  },
-  zigong: {
-    username: 'zigong',
-    passwordHash: '$2b$10$RjJSNiUzFUDQzsgSQyxoP.mQgzZiQTOZmiTCbt7./Uw2LDe0KwOy2',
-    displayName: '自贡机构',
-    role: 'org_user',
-    organization: '自贡',
-  },
-  ziyang: {
-    username: 'ziyang',
-    passwordHash: '$2b$10$ilZd3i9kJuxq8AreozLABuqycttUPyzzDg4J3PI3pgohJFMMd40b.',
-    displayName: '资阳机构',
-    role: 'org_user',
-    organization: '资阳',
-  },
-  dazhou: {
-    username: 'dazhou',
-    passwordHash: '$2b$10$DJdJxQxlnHDKuARwaMFZkuGlzP7PUgcy9HrfZRz/kGDv2qa/lZDIe',
-    displayName: '达州机构',
-    role: 'org_user',
-    organization: '达州',
-  },
-  qingyang: {
-    username: 'qingyang',
-    passwordHash: '$2b$10$UaIDl3P3r5LsT9m.K23JXeg3MnUq7U40UPNjqFeuCKQhCVLFufiAW',
-    displayName: '青羊机构',
-    role: 'org_user',
-    organization: '青羊',
-  },
-  gaoxin: {
-    username: 'gaoxin',
-    passwordHash: '$2b$10$uOtJ/1ctlLBNEzmQnhYXIuq.vYsn8VR3kcskjEY3vCUUsI/xQ.Sty',
-    displayName: '高新机构',
-    role: 'org_user',
-    organization: '高新',
-  },
-  jiachengxian: {
-    username: 'jiachengxian',
-    passwordHash: '$2b$10$gy9XfxPHgbFrdSJfFrTtW.tu3kRzGYsPxGRrtvMyleCGNTpdTDhL6',
-    displayName: 'jiachengxian',
-    role: 'branch_admin',
-  },
-  xuechenglong: {
-    username: 'xuechenglong',
-    passwordHash: '$2b$10$NHIOCyjuqXWLXyq5UaP8Y.5p/NNsDMXBrsnk/eHsmq.tVSd0swcwu',
-    displayName: '薛成龙',
-    role: 'branch_admin',
-  },
-  linxia: {
-    username: 'linxia',
-    passwordHash: '$2b$10$IPuFIhlNl6NFLXSC8A4o4.tuqMsK9J7B6D5DbeKzpOnJtE9uLA/BO',
-    displayName: '林霞',
-    role: 'branch_admin',
-  },
-  chexianbu: {
-    username: 'chexianbu',
-    passwordHash: '$2b$10$MNXiN2ASW4I1h.uqWRKySuQH80CmVCn1wjnXbXWzV5ersVLcoE4wu',
-    displayName: '车险部',
-    role: 'branch_admin',
-  },
-  scdianxiao: {
-    username: 'scdianxiao',
-    passwordHash: '$2b$10$LGsDuG1.fieDoR/mbsII1u2ecFY0iteEyFMKkgzO98OKfdbUAj4cK',
-    displayName: '四川电销',
-    role: 'telemarketing_user',
-  },
-};
+function loadAllowedIpOverrides(): Record<string, string[]> {
+  const raw = process.env.USER_ALLOWED_IPS;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return {};
+    const result: Record<string, string[]> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (Array.isArray(value)) {
+        result[key] = value.map(item => String(item));
+      } else if (typeof value === 'string') {
+        result[key] = [value];
+      }
+    }
+    return result;
+  } catch {
+    console.warn('[Auth] USER_ALLOWED_IPS 格式无效，忽略 IP 白名单覆盖');
+    return {};
+  }
+}
+
+const PRESET_USER_KEYS = new Set(Object.keys(PRESET_USERS));
 
 /**
  * 认证服务类
@@ -191,23 +94,38 @@ class AuthService {
    */
   async login(
     username: string,
-    password: string
+    password: string,
+    clientIp?: string
   ): Promise<{ token: string; user: Omit<UserCredential, 'passwordHash'> }> {
     // 对输入做最小标准化，减少浏览器自动填充/输入法导致的误判
     const normalizedUsername = this.normalizeUsername(username);
     const normalizedPassword = this.normalizePassword(password);
 
     // 1. 查找用户，并应用环境变量密码覆盖
-    const baseUser = PRESET_USERS[normalizedUsername];
-    if (!baseUser) {
+    let user = await getUserByUsername(normalizedUsername);
+    if (!user && PRESET_USER_KEYS.has(normalizedUsername)) {
+      user = await ensurePresetUser(normalizedUsername);
+    }
+    if (!user) {
       throw new AppError(401, 'Invalid username or password');
     }
-    const user: UserCredential = PASSWORD_OVERRIDES[normalizedUsername]
-      ? { ...baseUser, passwordHash: PASSWORD_OVERRIDES[normalizedUsername] }
-      : baseUser;
+    if (!user.active) {
+      throw new AppError(403, 'Account disabled');
+    }
+    const passwordOverride = PASSWORD_OVERRIDES[normalizedUsername];
+    const allowedIpsOverride = ALLOWED_IP_OVERRIDES[normalizedUsername];
+    const userCredential: UserCredential = {
+      ...user,
+      passwordHash: passwordOverride ?? user.passwordHash,
+      allowedIps: allowedIpsOverride ?? user.allowedIps,
+    };
+
+    if (!this.isIpAllowed(clientIp, userCredential.allowedIps)) {
+      throw new AppError(403, 'IP not allowed');
+    }
 
     // 2. 验证密码
-    const isPasswordValid = await this.verifyPassword(normalizedPassword, user.passwordHash);
+    const isPasswordValid = await this.verifyPassword(normalizedPassword, userCredential.passwordHash);
     if (!isPasswordValid) {
       throw new AppError(401, 'Invalid username or password');
     }
@@ -215,9 +133,9 @@ class AuthService {
     // 3. 生成JWT Token
     const payload: JwtPayload = {
       userId: normalizedUsername, // 简化处理，使用username作为userId
-      username: user.username,
-      role: user.role,
-      organization: user.organization,
+      username: userCredential.username,
+      role: userCredential.role,
+      organization: userCredential.organization,
     };
 
     const token = jwt.sign(
@@ -227,7 +145,7 @@ class AuthService {
     );
 
     // 4. 返回Token和用户信息（不包含密码）
-    const { passwordHash, ...userInfo } = user;
+    const { passwordHash, ...userInfo } = userCredential;
     return {
       token,
       user: userInfo,
@@ -302,6 +220,27 @@ class AuthService {
       console.error('[Auth] Password verification error:', error);
       return false;
     }
+  }
+
+  private normalizeIpValue(ip: string): string {
+    let normalized = ip.trim();
+    if (normalized.includes(',')) {
+      normalized = normalized.split(',')[0].trim();
+    }
+    if (normalized.startsWith('::ffff:')) {
+      normalized = normalized.slice(7);
+    }
+    if (normalized === '::1') {
+      normalized = '127.0.0.1';
+    }
+    return normalized;
+  }
+
+  private isIpAllowed(clientIp: string | undefined, allowedIps: string[] | undefined): boolean {
+    if (!allowedIps || allowedIps.length === 0) return true;
+    if (!clientIp) return false;
+    const normalizedClient = this.normalizeIpValue(clientIp);
+    return allowedIps.some(ip => this.normalizeIpValue(ip) === normalizedClient);
   }
 
   /**

@@ -123,7 +123,7 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
  * 在 auth 路由中主动调用，无需等待 req.user 挂载
  */
 export function auditAuthEvent(params: {
-  event: 'login_success' | 'login_failure';
+  event: 'login_success' | 'login_failure' | 'login_ip_denied';
   username: string;
   ip: string;
   role?: string;

@@ -1002,6 +1002,14 @@ class ApiClient {
   }
 
   /**
+   * 获取费用分析数据（成都同城机构规则分档）
+   */
+  async getFeeAnalysis(filters?: Record<string, any>): Promise<any[]> {
+    const query = this.buildQueryString(filters);
+    return this.request(`/query/fee-analysis${query ? `?${query}` : ''}`);
+  }
+
+  /**
    * 执行自定义 SQL（受限）
    */
   async executeCustomQuery(sql: string): Promise<any[]> {
