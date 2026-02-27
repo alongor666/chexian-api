@@ -838,10 +838,10 @@ const CROSS_SELL_DIMENSIONS = [
 ] as const;
 
 const CROSS_SELL_SEAT_COVERAGE_LEVELS = ['eq_1w', 'gte_2w', 'lt_1w'] as const;
-type CrossSellSeatCoverageLevel = typeof CROSS_SELL_SEAT_COVERAGE_LEVELS[number];
+type CrossSellSeatCoverageLevel = typeof CROSS_SELL_SEAT_COVERAGE_LEVELS[number] | 'all';
 
 function getSeatCoverageClause(level?: CrossSellSeatCoverageLevel): string {
-  if (!level) return '';
+  if (!level || level === 'all') return '';
   switch (level) {
     case 'eq_1w':
       return 'COALESCE(driver_coverage, 0) = 10000 AND COALESCE(passenger_coverage, 0) = 10000';
@@ -857,8 +857,8 @@ function getSeatCoverageClause(level?: CrossSellSeatCoverageLevel): string {
 const crossSellExtraSchema = z.object({
   drillPath: z.string().optional().default('[]'),
   groupBy: z.enum(CROSS_SELL_DIMENSIONS).optional(),
-  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).optional(),
-  seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS).optional(),
+  vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).optional(),
+  seatCoverageLevel: z.enum(['all', 'eq_1w', 'gte_2w', 'lt_1w']).optional(),
   timePeriod: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).optional(),
 });
 
@@ -1073,9 +1073,9 @@ router.post(
  * 车驾意推介率走势（按日/周/月/季粒度，4条险别组合折线）
  */
 const crossSellTrendSchema = z.object({
-  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
+  vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
   granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('monthly'),
-  seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS).optional(),
+  seatCoverageLevel: z.enum(['all', 'eq_1w', 'gte_2w', 'lt_1w']).optional(),
 });
 
 router.get(
@@ -1115,8 +1115,8 @@ router.get(
  * 车驾意推介率时间维度汇总请求验证Schema
  */
 const crossSellSummarySchema = z.object({
-  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
-  seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS).optional(),
+  vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
+  seatCoverageLevel: z.enum(['all', 'eq_1w', 'gte_2w', 'lt_1w']).optional(),
 });
 
 /**
@@ -1391,10 +1391,10 @@ router.get(
  * 车驾意推介率 TOP20 业务员分析
  */
 const crossSellTopSalesmanSchema = z.object({
-  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
+  vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
   coverage: z.enum(['主全', '交三']).default('主全'),
   timePeriod: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
-  seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS).optional(),
+  seatCoverageLevel: z.enum(['all', 'eq_1w', 'gte_2w', 'lt_1w']).optional(),
 });
 
 router.get(

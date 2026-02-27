@@ -44,6 +44,7 @@ interface CrossSellAnalysisPanelProps {
 // ============================================================
 
 const VEHICLE_TABS: TabItem[] = [
+  { key: 'all', label: '全部' },
   { key: 'passenger', label: '非营业客车' },
   { key: 'truck', label: '货车' },
   { key: 'motorcycle', label: '摩托车' },
@@ -58,6 +59,7 @@ const GRANULARITY_TABS: TabItem[] = [
 ];
 
 const SEAT_COVERAGE_TABS: TabItem[] = [
+  { key: 'all', label: '不分保额' },
   { key: 'eq_1w', label: '=1万' },
   { key: 'gte_2w', label: '>=2万' },
   { key: 'lt_1w', label: '<1万' },

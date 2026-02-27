@@ -7,8 +7,8 @@ import type { TrendGranularity } from '../dashboard/hooks/useCrossSellTrend';
 
 export const CrossSellPage: React.FC = () => {
   const { filters } = useGlobalFilters();
-  const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory>('passenger');
-  const [seatCoverageLevel, setSeatCoverageLevel] = useState<SeatCoverageLevel>('eq_1w');
+  const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory>('all');
+  const [seatCoverageLevel, setSeatCoverageLevel] = useState<SeatCoverageLevel>('all');
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
 
   return (

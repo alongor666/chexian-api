@@ -12,9 +12,10 @@ import { logger } from '../utils/logger.js';
 // 车辆类别过滤
 // ============================================================
 
-export type VehicleCategory = 'passenger' | 'truck' | 'motorcycle';
+export type VehicleCategory = 'all' | 'passenger' | 'truck' | 'motorcycle';
 
 export function getVehicleCategoryFilter(category: VehicleCategory, colPrefix = ''): string {
+  if (category === 'all') return '1=1';
   switch (category) {
     case 'passenger':
       return `${colPrefix}customer_category IN ('非营业个人客车', '非营业企业客车', '非营业机关客车')`;

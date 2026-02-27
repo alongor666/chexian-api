@@ -11,8 +11,8 @@ import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 
-export type VehicleCategory = 'passenger' | 'truck' | 'motorcycle';
-export type SeatCoverageLevel = 'eq_1w' | 'gte_2w' | 'lt_1w';
+export type VehicleCategory = 'all' | 'passenger' | 'truck' | 'motorcycle';
+export type SeatCoverageLevel = 'all' | 'eq_1w' | 'gte_2w' | 'lt_1w';
 
 export interface TimePeriodRow {
   label: string;

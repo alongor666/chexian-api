@@ -46,6 +46,7 @@
 | 2026-02-25 | 受限账号页面权限落地完成 (B210) | 新增 `jiachengxian` 账号并实现页面白名单控制：仅仪表盘/驾乘险推介率可访问；其他页面菜单置灰不可点且 URL 自动拦截跳转 | 验证：`bun run governance`、`bun run build`、`bun run test -- --run tests/config/organizations.test.ts` 通过 |
 | 2026-02-27 | 业务员姓名展示规则全项目统一完成 (B211) | 统一“仅中文名 + admin→直接个代”规则，落地到保费报表/营销战报/续保分析/增长分析，并补齐全局开发约束文档 | 代码证据：`formatSalesmanName` + 相关4页数据链路改造；验证证据：`tests/formatters.test.ts` 新增规则用例 |
 | 2026-02-26 | 驾乘险推介率布局优化 (B309) | 将客户类别等标签移到页面标题下方靠左对齐，筛选器条件右置，统一两区域Tabs和小chips块字体样式(@gemini) | `src/features/pages/CrossSellPage.tsx` 布局优化；`Tabs.tsx`增加 `size="mini"` |
+| 2026-02-26 | 驾乘险推介率标签选项扩充 (B310) | 客户类别和车上责任增加“全部”/“不分保额”，支持全量数据查看(@gemini) | 修改 `CrossSellPage` 默认状态，更新前端组件、Zod校验及后端 `cross-sell-summary` SQL逻辑 |
 
 ## 2. 当前阻塞 (Blockers)
 
