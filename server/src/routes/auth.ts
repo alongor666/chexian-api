@@ -10,9 +10,23 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { authService } from '../services/auth.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
+import { authMiddleware } from '../middleware/auth.js';
+import { requireRole, UserRole } from '../middleware/permission.js';
 import { checkAccountLock, recordLoginFailure, resetLoginAttempts } from '../middleware/rateLimiter.js';
 import { auditAuthEvent } from '../middleware/audit.js';
 import { authConfig } from '../config/auth.js';
+import {
+  listUsers,
+  listRoles,
+  createUser,
+  updateUser,
+  deleteUser,
+  createRole,
+  updateRole,
+  deleteRole,
+  getUserByUsername,
+  ensurePresetUser,
+} from '../services/access-control.js';
 
 const router = Router();
 
@@ -79,6 +93,37 @@ function clearSessionCookies(res: Response): void {
 const loginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
+});
+
+const userCreateSchema = z.object({
+  username: z.string().min(1, 'Username is required'),
+  displayName: z.string().min(1, 'Display name is required'),
+  password: z.string().min(1, 'Password is required'),
+  role: z.string().min(1, 'Role is required'),
+  organization: z.string().optional(),
+  allowedRoutes: z.array(z.string().min(1)).optional().default([]),
+  defaultRoute: z.string().optional(),
+  allowedIps: z.array(z.string().min(1)).optional().default([]),
+  active: z.boolean().optional().default(true),
+});
+
+const userUpdateSchema = z.object({
+  displayName: z.string().min(1, 'Display name is required'),
+  password: z.string().optional(),
+  role: z.string().min(1, 'Role is required'),
+  organization: z.string().optional(),
+  allowedRoutes: z.array(z.string().min(1)).optional().default([]),
+  defaultRoute: z.string().optional(),
+  allowedIps: z.array(z.string().min(1)).optional().default([]),
+  active: z.boolean().optional().default(true),
+});
+
+const roleSchema = z.object({
+  role: z.string().min(1, 'Role is required'),
+  name: z.string().min(1, 'Name is required'),
+  dataScope: z.enum(['all', 'org', 'telemarketing']),
+  allowedRoutes: z.array(z.string().min(1)).optional().default([]),
+  defaultRoute: z.string().optional(),
 });
 
 /**
@@ -176,6 +221,130 @@ router.post(
   })
 );
 
+router.get(
+  '/users',
+  authMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const users = await listUsers();
+    res.json({
+      success: true,
+      data: users.map(({ passwordHash, ...rest }) => rest),
+    });
+  })
+);
+
+router.post(
+  '/users',
+  authMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = userCreateSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const data = parseResult.data;
+    const passwordHash = await authService.hashPassword(data.password);
+    const created = await createUser({
+      username: data.username,
+      displayName: data.displayName,
+      passwordHash,
+      role: data.role,
+      organization: data.organization,
+      allowedRoutes: data.allowedRoutes,
+      defaultRoute: data.defaultRoute,
+      allowedIps: data.allowedIps,
+      active: data.active,
+    });
+    const { passwordHash: _pw, ...rest } = created;
+    res.json({ success: true, data: rest });
+  })
+);
+
+router.put(
+  '/users/:id',
+  authMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = userUpdateSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const data = parseResult.data;
+    const passwordHash = data.password ? await authService.hashPassword(data.password) : undefined;
+    const updated = await updateUser(req.params.id, {
+      displayName: data.displayName,
+      passwordHash,
+      role: data.role,
+      organization: data.organization,
+      allowedRoutes: data.allowedRoutes,
+      defaultRoute: data.defaultRoute,
+      allowedIps: data.allowedIps,
+      active: data.active,
+    });
+    const { passwordHash: _pw, ...rest } = updated;
+    res.json({ success: true, data: rest });
+  })
+);
+
+router.delete(
+  '/users/:id',
+  authMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    await deleteUser(req.params.id);
+    res.json({ success: true, data: { deleted: true } });
+  })
+);
+
+router.get(
+  '/roles',
+  authMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const roles = await listRoles();
+    res.json({ success: true, data: roles });
+  })
+);
+
+router.post(
+  '/roles',
+  authMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = roleSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const created = await createRole(parseResult.data);
+    res.json({ success: true, data: created });
+  })
+);
+
+router.put(
+  '/roles/:role',
+  authMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = roleSchema.safeParse({ ...req.body, role: req.params.role });
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const updated = await updateRole(parseResult.data);
+    res.json({ success: true, data: updated });
+  })
+);
+
+router.delete(
+  '/roles/:role',
+  authMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    await deleteRole(req.params.role);
+    res.json({ success: true, data: { deleted: true } });
+  })
+);
+
 /**
  * GET /api/auth/me
  * 返回当前登录用户（基于 access cookie 或 bearer）
@@ -190,6 +359,18 @@ router.get(
     if (!accessToken) throw new AppError(401, 'No token provided');
 
     const payload = authService.verifyToken(accessToken);
+    let user = await getUserByUsername(payload.username);
+    if (!user) {
+      user = await ensurePresetUser(payload.username);
+    }
+    if (user) {
+      const { passwordHash: _pw, ...rest } = user;
+      res.json({
+        success: true,
+        data: rest,
+      });
+      return;
+    }
     res.json({
       success: true,
       data: {

@@ -56,6 +56,9 @@ const ReportTemplatesPanel = lazy(() =>
 const MotoCostPage = lazy(() =>
   import('../features/moto-cost').then((m) => ({ default: m.MotoCostPage }))
 );
+const AccessControlPage = lazy(() =>
+  import('../features/admin/AccessControlPage').then((m) => ({ default: m.AccessControlPage }))
+);
 
 // Loading fallback component
 const PageLoader = () => (
@@ -163,6 +166,16 @@ function App() {
                     <DataGuard>
                       <LazyRoute><RenewalPage /></LazyRoute>
                     </DataGuard>
+                  </RouteAccessGuard>
+                }
+              />
+              <Route
+                path="admin/access-control"
+                element={
+                  <RouteAccessGuard routePath="/admin/access-control">
+                    <LazyRoute>
+                      <AccessControlPage />
+                    </LazyRoute>
                   </RouteAccessGuard>
                 }
               />

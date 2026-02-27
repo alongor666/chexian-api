@@ -73,6 +73,29 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
   const [userPermission, setUserPermissionState] = useState<UserPermission | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const buildPermission = useCallback((user: {
+    username: string;
+    displayName: string;
+    role: string;
+    organization?: string;
+    allowedRoutes?: string[];
+    defaultRoute?: string;
+  }): UserPermission => {
+    const localPermission = getPermissionByUsername(user.username);
+    return {
+      username: user.username,
+      displayName: user.displayName || localPermission?.displayName || user.username,
+      role: user.role === 'branch_admin'
+        ? UserRole.BRANCH_ADMIN
+        : user.role === 'telemarketing_user'
+          ? UserRole.TELEMARKETING_USER
+          : UserRole.ORG_USER,
+      organization: (user.organization as UserPermission['organization']) || localPermission?.organization,
+      allowedRoutes: user.allowedRoutes || localPermission?.allowedRoutes,
+      defaultRoute: user.defaultRoute || localPermission?.defaultRoute,
+    };
+  }, []);
+
   const setUserPermission = useCallback((permission: UserPermission | null) => {
     setUserPermissionState(permission);
     setPermission(permission);
@@ -81,13 +104,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
   const restoreSession = useCallback(async (): Promise<boolean> => {
     try {
       const me = await apiClient.getCurrentUser();
-      const localPermission = getPermissionByUsername(me.username);
-      const permission: UserPermission = localPermission || {
-        username: me.username,
-        displayName: me.displayName,
-        role: me.role === 'branch_admin' ? UserRole.BRANCH_ADMIN : me.role === 'telemarketing_user' ? UserRole.TELEMARKETING_USER : UserRole.ORG_USER,
-        organization: me.organization as UserPermission['organization'],
-      };
+      const permission = buildPermission(me);
       setUserPermission(permission);
       return true;
     } catch {
@@ -95,7 +112,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       apiClient.clearToken();
       return false;
     }
-  }, [setUserPermission]);
+  }, [buildPermission, setUserPermission]);
 
   // 初始化时基于 cookie 会话恢复登录状态
   useEffect(() => {
@@ -144,15 +161,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       // 1. 调用后端 API 登录
       const authResult = await apiClient.login(username, password);
 
-      // 2. 根据后端返回的角色获取前端权限配置
-      // 优先使用本地配置（包含详细的机构权限），否则从后端角色推断
-      const localPermission = getPermissionByUsername(username);
-      const permission: UserPermission = localPermission || {
-        username: authResult.user.username,
-        displayName: authResult.user.displayName,
-        role: authResult.user.role === 'branch_admin' ? UserRole.BRANCH_ADMIN : authResult.user.role === 'telemarketing_user' ? UserRole.TELEMARKETING_USER : UserRole.ORG_USER,
-        // organization 字段对于管理员可以不设置
-      };
+      const permission = buildPermission(authResult.user);
 
       setUserPermission(permission);
 
@@ -166,7 +175,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       // 所有认证必须通过后端 API，确保安全性
       return false;
     }
-  }, [setUserPermission]);
+  }, [buildPermission, setUserPermission]);
 
   /** 企微 token 解析登录（兼容）/ 基于 cookie 会话恢复 */
   const loginWithWecomToken = useCallback(async (token?: string): Promise<boolean> => {

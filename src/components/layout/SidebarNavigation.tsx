@@ -20,10 +20,11 @@ import {
   ChevronRight,
   X,
   Bike,
+  Shield,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { canAccessRoute, canAccessMotoCost } from '../../shared/config/organizations';
+import { canAccessRoute, canAccessMotoCost, UserRole } from '../../shared/config/organizations';
 
 
 interface NavItem {
@@ -55,6 +56,10 @@ const dataNavItems: NavItem[] = [
 
 const toolNavItems: NavItem[] = [
   { path: '/moto-cost', icon: Bike, label: '摩意模型', shortLabel: '摩意' },
+];
+
+const adminNavItems: NavItem[] = [
+  { path: '/admin/access-control', icon: Shield, label: '权限管理', shortLabel: '权限' },
 ];
 
 /**
@@ -228,6 +233,18 @@ export const SidebarNavigation: React.FC = () => {
               return true;
             })
             .map(renderNavItem)}
+
+          {userPermission?.role === UserRole.BRANCH_ADMIN && (
+            <>
+              <div className="my-3 border-t border-neutral-200" role="separator" />
+              {showExpanded && (
+                <div className="px-3 py-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                  管理
+                </div>
+              )}
+              {adminNavItems.map(renderNavItem)}
+            </>
+          )}
         </nav>
 
       </div>

@@ -431,6 +431,10 @@ class DuckDBService {
     });
 
     const selects = await Promise.all(selectParts);
+    // raw_parquet 在单文件路径下会是 TABLE，多文件路径需要 VIEW。
+    // 先显式清理同名对象，避免重启后出现“Table -> View 替换失败”导致加载中断。
+    await this.query('DROP VIEW IF EXISTS raw_parquet');
+    await this.query('DROP TABLE IF EXISTS raw_parquet');
     const unionSQL = `
       CREATE OR REPLACE VIEW raw_parquet AS
       ${selects.join('\n      UNION ALL\n      ')}

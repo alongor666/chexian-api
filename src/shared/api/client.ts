@@ -57,7 +57,29 @@ interface AuthData {
     displayName: string;
     role: string;
     organization?: string;
+    allowedRoutes?: string[];
+    defaultRoute?: string;
   };
+}
+
+export interface AccessUser extends Record<string, unknown> {
+  id: string;
+  username: string;
+  displayName: string;
+  role: string;
+  organization?: string;
+  allowedRoutes?: string[];
+  defaultRoute?: string;
+  allowedIps?: string[];
+  active: boolean;
+}
+
+export interface AccessRole extends Record<string, unknown> {
+  role: string;
+  name: string;
+  dataScope: 'all' | 'org' | 'telemarketing';
+  allowedRoutes?: string[];
+  defaultRoute?: string;
 }
 
 /**
@@ -476,6 +498,90 @@ class ApiClient {
     const user = await this.request<AuthData['user']>('/auth/me');
     this.setSessionCookieHint(true);
     return user;
+  }
+
+  async listUsers(): Promise<AccessUser[]> {
+    return this.request<AccessUser[]>('/auth/users');
+  }
+
+  async createUser(payload: {
+    username: string;
+    displayName: string;
+    password: string;
+    role: string;
+    organization?: string;
+    allowedRoutes?: string[];
+    defaultRoute?: string;
+    allowedIps?: string[];
+    active?: boolean;
+  }): Promise<AccessUser> {
+    return this.request<AccessUser>('/auth/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateUser(
+    id: string,
+    payload: {
+      displayName: string;
+      password?: string;
+      role: string;
+      organization?: string;
+      allowedRoutes?: string[];
+      defaultRoute?: string;
+      allowedIps?: string[];
+      active?: boolean;
+    }
+  ): Promise<AccessUser> {
+    return this.request<AccessUser>(`/auth/users/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await this.request(`/auth/users/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async listRoles(): Promise<AccessRole[]> {
+    return this.request<AccessRole[]>('/auth/roles');
+  }
+
+  async createRole(payload: {
+    role: string;
+    name: string;
+    dataScope: 'all' | 'org' | 'telemarketing';
+    allowedRoutes?: string[];
+    defaultRoute?: string;
+  }): Promise<AccessRole> {
+    return this.request<AccessRole>('/auth/roles', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateRole(
+    role: string,
+    payload: {
+      name: string;
+      dataScope: 'all' | 'org' | 'telemarketing';
+      allowedRoutes?: string[];
+      defaultRoute?: string;
+    }
+  ): Promise<AccessRole> {
+    return this.request<AccessRole>(`/auth/roles/${encodeURIComponent(role)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteRole(role: string): Promise<void> {
+    await this.request(`/auth/roles/${encodeURIComponent(role)}`, {
+      method: 'DELETE',
+    });
   }
 
   /**

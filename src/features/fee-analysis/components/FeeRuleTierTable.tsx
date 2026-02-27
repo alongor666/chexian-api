@@ -58,10 +58,10 @@ export const FeeRuleTierTable: React.FC<Props> = ({ data, activeTab }) => {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className={tableStyles.table}>
+    <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
+      <table className="w-full text-sm">
         <thead>
-          <tr className={tableStyles.headerRow}>
+          <tr className={tableStyles.header}>
             <th className={tableStyles.headerCell}>险类</th>
             <th className={tableStyles.headerCell}>规则名称</th>
             <th className={tableStyles.headerCell}>费率</th>
@@ -77,14 +77,14 @@ export const FeeRuleTierTable: React.FC<Props> = ({ data, activeTab }) => {
           {filtered.map((row) => {
             const isOos = row.fee_rule_id === 'OUT_OF_SCOPE';
             return (
-              <tr key={row.fee_rule_id} className={`${tableStyles.dataRow} ${isOos ? 'opacity-60' : ''}`}>
-                <td className={tableStyles.dataCell}>
+              <tr key={row.fee_rule_id} className={`${tableStyles.row} ${isOos ? 'opacity-60' : ''}`}>
+                <td className={tableStyles.cell}>
                   {getInsuranceBadge(row.insurance_type_label)}
                 </td>
-                <td className={`${tableStyles.dataCell} text-sm`}>
+                <td className={`${tableStyles.cell} text-sm`}>
                   {row.fee_rule_name}
                 </td>
-                <td className={tableStyles.dataCell}>
+                <td className={tableStyles.cell}>
                   {row.fee_rate !== null ? (
                     <span className={`font-semibold ${getFeeRateColor(row.fee_rate)}`}>
                       {formatPercent(row.fee_rate)}
@@ -93,26 +93,26 @@ export const FeeRuleTierTable: React.FC<Props> = ({ data, activeTab }) => {
                     <span className={colorClasses.text.neutralMuted}>—</span>
                   )}
                 </td>
-                <td className={`${tableStyles.dataCell} text-sm ${colorClasses.text.neutralMuted}`}>
+                <td className={`${tableStyles.cell} text-sm ${colorClasses.text.neutralMuted}`}>
                   {row.effective_start ?? '—'}
                 </td>
-                <td className={`${tableStyles.dataCell} text-sm ${colorClasses.text.neutralMuted}`}>
+                <td className={`${tableStyles.cell} text-sm ${colorClasses.text.neutralMuted}`}>
                   {row.effective_end ?? '当前生效'}
                 </td>
-                <td className={`${tableStyles.dataCell} text-right`}>
+                <td className={`${tableStyles.cell} text-right`}>
                   <span className={textStyles.numeric}>{formatCount(row.policy_count)}</span>
                 </td>
-                <td className={`${tableStyles.dataCell} text-right`}>
+                <td className={`${tableStyles.cell} text-right`}>
                   <span className={textStyles.numeric}>{formatPremiumWan(row.total_premium)}</span>
                 </td>
-                <td className={`${tableStyles.dataCell} text-right`}>
+                <td className={`${tableStyles.cell} text-right`}>
                   {row.expected_fee !== null ? (
                     <span className={textStyles.numeric}>{formatPremiumWan(row.expected_fee)}</span>
                   ) : (
                     <span className={colorClasses.text.neutralMuted}>—</span>
                   )}
                 </td>
-                <td className={`${tableStyles.dataCell} text-right`}>
+                <td className={`${tableStyles.cell} text-right`}>
                   <span className={textStyles.numeric}>{formatPremiumWan(row.performance_fee)}</span>
                 </td>
               </tr>

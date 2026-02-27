@@ -14,17 +14,6 @@ export interface FeeAnalysisState {
   error: string | null;
 }
 
-const EMPTY_SUMMARY: FeeAnalysisSummary = {
-  total_policy_count: 0,
-  total_premium: 0,
-  matched_premium: 0,
-  total_expected_fee: 0,
-  total_performance_fee: 0,
-  weighted_avg_fee_rate: 0,
-  out_of_scope_count: 0,
-  out_of_scope_premium: 0,
-};
-
 function computeSummary(rows: FeeRuleTierData[]): FeeAnalysisSummary {
   const outOfScope = rows.filter((r) => r.fee_rule_id === 'OUT_OF_SCOPE');
   const matched = rows.filter((r) => r.fee_rule_id !== 'OUT_OF_SCOPE');
