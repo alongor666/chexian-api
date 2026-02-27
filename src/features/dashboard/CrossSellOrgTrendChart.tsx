@@ -1,10 +1,10 @@
 /**
  * 机构推介率走势图
  *
- * 叠加柱（灰色=车险件数底层，绿色=驾意件数上叠）+ 右Y轴推介率折线
- * X 轴：最近连续 14 天
+ * 叠加柱（灰色=车险件数底层，绿色=驾意件数上叠）+ 双右轴折线（推介率/件均保费）
+ * X 轴：最近连续 90 天（默认显示最后 14 天）
  * 险种：交三 / 主全 / 单交 标签切换
- * 机构：同城 / 异地 快捷点选
+ * 区域：同城 / 异地 / 全省（全部机构）切换
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,8 +13,7 @@ import { echarts } from '../../shared/utils/echarts';
 import { formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import { cardStyles, colors, cn } from '../../shared/styles';
 import { ORG_GROUPS } from '../../shared/config/coefficient-thresholds';
-import { useCrossSellOrgTrend, type CoverageCombinationFilter } from './hooks/useCrossSellOrgTrend';
-import { calcTrendStats, type TrendStats } from './utils/orgTrendStats';
+import { useCrossSellOrgTrend, type CoverageCombinationFilter, type OrgTrendPoint } from './hooks/useCrossSellOrgTrend';
 import { apiClient } from '../../shared/api/client';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
@@ -28,19 +27,88 @@ interface CrossSellOrgTrendChartProps {
 const COVERAGE_TABS: CoverageCombinationFilter[] = ['交三', '主全', '单交'];
 
 /** 机构区域定义 */
-type RegionType = 'local' | 'remote';
+type RegionType = 'local' | 'remote' | 'province';
 
-const REGION_LABELS: Record<RegionType, string> = { local: '同城', remote: '异地' };
+const ALL_ORGS = Array.from(new Set([...ORG_GROUPS.SAME_CITY, ...ORG_GROUPS.REMOTE]));
+const REGION_LABELS: Record<RegionType, string> = { local: '同城', remote: '异地', province: '全省' };
 const REGION_ORGS: Record<RegionType, readonly string[]> = {
   local: ORG_GROUPS.SAME_CITY,
   remote: ORG_GROUPS.REMOTE,
+  province: ALL_ORGS,
 };
 
 // ── 颜色 ──────────────────────────────────────────────────────────────────────
-const BAR_AUTO_COLOR = colors.neutral[300];   // 灰色：车险件数（底层）
-const BAR_DRIVER_COLOR = colors.success.DEFAULT; // 绿色：驾意件数（上叠）
-const LINE_RATE_COLOR = colors.warning.DEFAULT;  // 橙色：推介率折线
-const LINE_AVG_PREMIUM_COLOR = colors.primary.DEFAULT; // 蓝色：件均保费折线
+const BAR_AUTO_COLOR = colors.neutral[300];
+const BAR_DRIVER_COLOR = colors.success.DEFAULT;
+const LINE_RATE_COLOR = colors.warning.DEFAULT;
+const LINE_AVG_PREMIUM_COLOR = colors.primary.DEFAULT;
+
+interface MetricDigest {
+  avg30: number;
+  avg7: number;
+  consecutiveDownDays: number;
+  maxPoint: { date: string; value: number };
+  minPoint: { date: string; value: number };
+}
+
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function calcMetricDigest(rows: OrgTrendPoint[], pick: (row: OrgTrendPoint) => number): MetricDigest | null {
+  if (rows.length === 0) return null;
+
+  const window30 = rows.slice(-30);
+  const values30 = window30.map(pick);
+  const values7 = window30.slice(-7).map(pick);
+
+  let maxIdx = 0;
+  let minIdx = 0;
+  for (let i = 1; i < values30.length; i++) {
+    if (values30[i] > values30[maxIdx]) maxIdx = i;
+    if (values30[i] < values30[minIdx]) minIdx = i;
+  }
+
+  let consecutiveDownDays = 0;
+  for (let i = values30.length - 1; i > 0; i--) {
+    if (values30[i] < values30[i - 1]) consecutiveDownDays += 1;
+    else break;
+  }
+
+  return {
+    avg30: mean(values30),
+    avg7: mean(values7),
+    consecutiveDownDays,
+    maxPoint: { date: window30[maxIdx].date, value: values30[maxIdx] },
+    minPoint: { date: window30[minIdx].date, value: values30[minIdx] },
+  };
+}
+
+function buildPremiumLabelVisibility(
+  rates: number[],
+  avgPremiums: number[],
+  premiumAxisMin: number,
+  premiumAxisMax: number
+): boolean[] {
+  const axisRange = Math.max(1, premiumAxisMax - premiumAxisMin);
+  const diffs = rates.map((rate, index) => {
+    const rateNorm = Math.max(0, Math.min(1, rate / 100));
+    const premiumNorm = Math.max(0, Math.min(1, (avgPremiums[index] - premiumAxisMin) / axisRange));
+    return premiumNorm - rateNorm;
+  });
+
+  return diffs.map((diff, index) => {
+    const near = Math.abs(diff) < 0.06;
+    const crossPrev = index > 0 && diff * diffs[index - 1] < 0;
+    const crossNext = index < diffs.length - 1 && diff * diffs[index + 1] < 0;
+    return !(near || crossPrev || crossNext);
+  });
+}
+
+function shortDate(date: string): string {
+  return date.length >= 10 ? date.slice(5) : date;
+}
 
 export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   vehicleCategory,
@@ -53,6 +121,12 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   const [coverage, setCoverage] = useState<CoverageCombinationFilter>('交三');
   const [region, setRegion] = useState<RegionType>('local');
   const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
+
+  const regionOrgNames = useMemo<string[] | null | undefined>(() => {
+    if (selectedOrg) return undefined;
+    if (region === 'province') return null;
+    return [...REGION_ORGS[region]];
+  }, [region, selectedOrg]);
 
   // 切换区域时清除机构选择
   const handleRegionChange = (r: RegionType) => {
@@ -70,10 +144,12 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
     vehicleCategory,
     coverageCombination: coverage,
     selectedOrg,
+    regionOrgNames,
   });
 
-  // ── 程序统计摘要（零延迟，仅取最新 14 天显示窗口数据计算） ──────────────────
-  const stats: TrendStats | null = useMemo(() => calcTrendStats(rows.slice(-14)), [rows]);
+  // ── 程序解读（近30天口径） ─────────────────────────────────────────────────
+  const rateDigest = useMemo(() => calcMetricDigest(rows, (row) => row.rate), [rows]);
+  const premiumDigest = useMemo(() => calcMetricDigest(rows, (row) => row.avg_premium), [rows]);
 
   // ── AI 解读状态 ────────────────────────────────────────────────────────────
   const [aiText, setAiText] = useState<string | null>(null);
@@ -81,7 +157,10 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   const [aiError, setAiError] = useState<string | null>(null);
 
   // 切换险种/机构时清除旧 AI 结论
-  useEffect(() => { setAiText(null); setAiError(null); }, [coverage, selectedOrg, region]);
+  useEffect(() => {
+    setAiText(null);
+    setAiError(null);
+  }, [coverage, selectedOrg, region]);
 
   const handleAiAnalyze = useCallback(async () => {
     if (rows.length === 0) return;
@@ -90,8 +169,8 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
     setAiError(null);
     try {
       const result = await apiClient.analyzeTrend({
-        rows: rows.slice(-14),
-        org: selectedOrg ?? (region === 'local' ? '同城汇总' : '异地汇总'),
+        rows: rows.slice(-30),
+        org: selectedOrg ?? `${REGION_LABELS[region]}汇总`,
         coverage,
       });
       if (result.success) setAiText(result.analysis);
@@ -107,18 +186,34 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   const option = useMemo((): EChartsOption => {
     const dates = rows.map((r) => r.date);
     const autoCounts = rows.map((r) => r.auto_count);
-    // 灰色底层：纯车险部分（总件数 - 驾意件数），叠加后总高度 = auto_count
     const nonDriverCounts = rows.map((r) => Math.max(0, r.auto_count - r.driver_count));
     const driverCounts = rows.map((r) => r.driver_count);
     const rates = rows.map((r) => r.rate);
     const avgPremiums = rows.map((r) => r.avg_premium);
 
     const maxCount = Math.max(...autoCounts, 1);
-    const leftMax = Math.ceil(maxCount * 1.45); // 为折线留出上方空间
+    const leftMax = Math.ceil(maxCount * 1.45);
+
+    const premiumMin = Math.min(...avgPremiums, 0);
+    const premiumMax = Math.max(...avgPremiums, 1);
+    const premiumRange = Math.max(1, premiumMax - premiumMin);
+    // 让件均保费线主要分布在图上方，尽量减少与推介率线交叉
+    const premiumAxisMin = Math.max(0, premiumMin - premiumRange * 3);
+    const premiumAxisMax = premiumMax + premiumRange * 0.2;
+    const premiumLabelVisibility = buildPremiumLabelVisibility(
+      rates,
+      avgPremiums,
+      premiumAxisMin,
+      premiumAxisMax
+    );
+
+    const zoomStart = rows.length > 14
+      ? Math.round(((rows.length - 14) / rows.length) * 100)
+      : 0;
 
     return {
       animation: true,
-      grid: { top: 50, right: 64, bottom: 60, left: 56, containLabel: false },
+      grid: { top: 50, right: 126, bottom: 60, left: 56, containLabel: false },
       legend: {
         top: 8,
         itemWidth: 12,
@@ -135,16 +230,16 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
         formatter: (params: any) => {
-          const p = Array.isArray(params) ? params : [params];
-          const date = p[0]?.axisValue ?? '';
-          const lines = p.map((item: any) => {
+          const points = Array.isArray(params) ? params : [params];
+          const date = points[0]?.axisValue ?? '';
+          const lines = points.map((item: any) => {
             const val = item.seriesName === '推介率'
               ? `${Number(item.value ?? 0).toFixed(1)}%`
               : item.seriesName === '件均保费'
-                ? `${Number(item.value ?? 0).toFixed(0)}元`
-              : item.seriesName === '驾意件数'
-                ? `${Number(item.value ?? 0)}件`
-                : `${Number(item.value ?? 0)}件（非驾意）`;
+                ? `${Math.round(Number(item.value ?? 0))}元`
+                : item.seriesName === '驾意件数'
+                  ? `${Number(item.value ?? 0)}件`
+                  : `${Number(item.value ?? 0)}件（非驾意）`;
             return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};margin-right:4px"></span>${item.seriesName}: <b>${val}</b>`;
           });
           return `<div style="font-size:12px"><b>${date}</b><br/>${lines.join('<br/>')}</div>`;
@@ -174,27 +269,35 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         {
           type: 'value',
           name: '推介率(%)',
-          nameTextStyle: { fontSize: 11, color: colors.neutral[500] },
+          position: 'right',
           min: 0,
           max: 100,
+          alignTicks: true,
+          nameTextStyle: { fontSize: 11, color: LINE_RATE_COLOR },
+          axisLine: { show: true, lineStyle: { color: LINE_RATE_COLOR } },
           splitLine: { show: false },
           axisLabel: {
             fontSize: 11,
-            color: colors.neutral[500],
+            color: LINE_RATE_COLOR,
             formatter: (v: number) => `${v}%`,
           },
         },
         {
           type: 'value',
           name: '件均保费(元)',
-          nameTextStyle: { fontSize: 11, color: colors.neutral[500] },
+          position: 'right',
+          offset: 62,
+          min: premiumAxisMin,
+          max: premiumAxisMax,
+          alignTicks: true,
+          nameTextStyle: { fontSize: 11, color: LINE_AVG_PREMIUM_COLOR },
+          axisLine: { show: true, lineStyle: { color: LINE_AVG_PREMIUM_COLOR } },
           splitLine: { show: false },
           axisLabel: {
             fontSize: 11,
-            color: colors.neutral[500],
+            color: LINE_AVG_PREMIUM_COLOR,
             formatter: (v: number) => `${Math.round(v)}`,
           },
-          offset: 58,
         },
       ],
       series: [
@@ -218,6 +321,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           name: '推介率',
           type: 'line',
           yAxisIndex: 1,
+          z: 4,
           data: rates,
           smooth: false,
           symbol: 'circle',
@@ -232,17 +336,33 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
             color: colors.warning.dark,
             fontWeight: 600,
           },
+          labelLayout: { hideOverlap: true },
         },
         {
           name: '件均保费',
           type: 'line',
           yAxisIndex: 2,
+          z: 5,
           data: avgPremiums,
           smooth: false,
           symbol: 'circle',
           symbolSize: 5,
           lineStyle: { color: LINE_AVG_PREMIUM_COLOR, width: 2 },
           itemStyle: { color: LINE_AVG_PREMIUM_COLOR, borderWidth: 2, borderColor: '#fff' },
+          label: {
+            show: true,
+            position: 'top',
+            distance: 2,
+            formatter: (p: any) => {
+              const index = Number(p.dataIndex ?? -1);
+              if (!premiumLabelVisibility[index]) return '';
+              return `${Math.round(Number(p.value ?? 0))}元`;
+            },
+            fontSize: 10,
+            color: colors.primary.dark,
+            fontWeight: 600,
+          },
+          labelLayout: { hideOverlap: true },
         },
       ],
       dataZoom: [
@@ -250,8 +370,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           type: 'slider',
           bottom: 4,
           height: 18,
-          // 默认展示最后 14 天，可向左滚动查看最多 90 天
-          start: Math.round((90 - 14) / 90 * 100),
+          start: zoomStart,
           end: 100,
           borderColor: 'transparent',
           fillerColor: `${colors.primary.DEFAULT}22`,
@@ -291,10 +410,8 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   // ── 当前区域的机构列表 ────────────────────────────────────────────────────
   const orgList = REGION_ORGS[region];
   const displayTitle = selectedOrg
-    ? `机构推介率走势图 — ${selectedOrg}`
-    : `机构推介率走势图 — ${REGION_LABELS[region]}汇总`;
-  const avgPremium14Days = rows.length ? (rows.reduce((sum, row) => sum + row.avg_premium, 0) / rows.length) : 0;
-  const recent3AvgPremium = rows.length ? (rows.slice(-3).reduce((sum, row) => sum + row.avg_premium, 0) / Math.min(3, rows.length)) : 0;
+    ? `机构驾意险推介率走势图（${coverage}）— ${selectedOrg}`
+    : `机构驾意险推介率走势图（${coverage}）— ${REGION_LABELS[region]}汇总`;
 
   return (
     <div className={cn(cardStyles.spacious, 'mt-4')}>
@@ -333,7 +450,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
               onClick={() => handleRegionChange(key)}
               className={cn(
                 'px-2.5 py-0.5 rounded text-xs font-medium transition-colors',
-                region === key && !selectedOrg
+                region === key
                   ? 'bg-primary text-white'
                   : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
               )}
@@ -377,61 +494,11 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         <div ref={chartRef} style={{ height: 300, width: '100%' }} />
       </div>
 
-      {/* ── 程序摘要 + AI 解读 ───────────────────────────────────────────── */}
-      {stats && !loading && (
+      {/* ── 程序解读 + AI 解读 ─────────────────────────────────────────────── */}
+      {(rateDigest || premiumDigest) && !loading && (
         <div className="mt-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3">
-          {/* 摘要指标行 */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
-            {/* 均值 */}
-            <span className="text-neutral-500">
-              近14天均值&nbsp;
-              <span className="font-semibold text-neutral-800">{stats.avgRate}%</span>
-            </span>
-
-            {/* 近3天变化 */}
-            <span className="text-neutral-500">
-              近3天&nbsp;
-              <span className="font-semibold text-neutral-800">{stats.recent3Avg}%</span>
-              &nbsp;
-              <span className={cn(
-                'font-medium',
-                stats.changeVsPrev > 0 ? 'text-success-dark' : stats.changeVsPrev < 0 ? 'text-danger' : 'text-neutral-500'
-              )}>
-                {stats.changeVsPrev > 0 ? '↑' : stats.changeVsPrev < 0 ? '↓' : '→'}
-                &nbsp;{Math.abs(stats.changeVsPrev)}pp
-              </span>
-            </span>
-
-            {/* 连续天数 */}
-            {stats.consecutiveDays !== 0 && (
-              <span className={cn(
-                'font-medium',
-                stats.consecutiveDays > 0 ? 'text-success-dark' : 'text-danger'
-              )}>
-                连续{stats.consecutiveDays > 0 ? '上升' : '下降'}{Math.abs(stats.consecutiveDays)}天
-              </span>
-            )}
-
-            {/* 最高/最低 */}
-            <span className="text-neutral-400">
-              最高&nbsp;
-              <span className="text-neutral-700">{stats.maxDay.date.slice(5)}&nbsp;·&nbsp;{stats.maxDay.rate}%</span>
-            </span>
-            <span className="text-neutral-400">
-              最低&nbsp;
-              <span className="text-neutral-700">{stats.minDay.date.slice(5)}&nbsp;·&nbsp;{stats.minDay.rate}%</span>
-            </span>
-
-            <span className="text-neutral-500">
-              近14天件均保费&nbsp;
-              <span className="font-semibold text-neutral-800">{Math.round(avgPremium14Days)}元</span>
-            </span>
-            <span className="text-neutral-500">
-              近3天件均保费&nbsp;
-              <span className="font-semibold text-neutral-800">{Math.round(recent3AvgPremium)}元</span>
-            </span>
-
-            {/* AI 按钮（右对齐） */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium text-neutral-600">程序解读（近30天口径）</span>
             <button
               onClick={handleAiAnalyze}
               disabled={aiLoading}
@@ -446,12 +513,27 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
             </button>
           </div>
 
-          {/* AI 分析结果 */}
+          {rateDigest && (
+            <p className="mt-2 text-xs leading-relaxed text-neutral-600">
+              推介率：近30天均值 {rateDigest.avg30.toFixed(1)}%，近7天均值 {rateDigest.avg7.toFixed(1)}%，连续下降
+              {rateDigest.consecutiveDownDays}天，最高 {rateDigest.maxPoint.value.toFixed(1)}%（{shortDate(rateDigest.maxPoint.date)}），最低
+              {rateDigest.minPoint.value.toFixed(1)}%（{shortDate(rateDigest.minPoint.date)}）。
+            </p>
+          )}
+
+          {premiumDigest && (
+            <p className="mt-2 text-xs leading-relaxed text-neutral-600">
+              件均保费：近30天均值 {Math.round(premiumDigest.avg30)}元，近7天均值 {Math.round(premiumDigest.avg7)}元，连续下降
+              {premiumDigest.consecutiveDownDays}天，最高 {Math.round(premiumDigest.maxPoint.value)}元（{shortDate(premiumDigest.maxPoint.date)}），最低
+              {Math.round(premiumDigest.minPoint.value)}元（{shortDate(premiumDigest.minPoint.date)}）。
+            </p>
+          )}
+
           {aiError && (
-            <p className="mt-2 text-xs text-danger">{aiError}</p>
+            <p className="mt-2 text-xs text-danger border-t border-neutral-200 pt-2">{aiError}</p>
           )}
           {aiText && (
-            <p className="mt-2 text-xs leading-relaxed text-neutral-600 border-t border-neutral-200 pt-2">
+            <p className="mt-2 text-xs leading-relaxed text-neutral-600 whitespace-pre-line border-t border-neutral-200 pt-2">
               {aiText}
             </p>
           )}

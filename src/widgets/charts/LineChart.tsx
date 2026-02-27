@@ -4,6 +4,7 @@ import { echarts } from '../../shared/utils/echarts';
 import { formatPremiumWan, formatRate, formatCount, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 import { getYearChartColor } from '../../shared/styles';
+import { cardStyles, cn } from '../../shared/styles';
 
 /** 时间视图类型（原 shared/sql/trend 导出） */
 export type TimeView = 'daily' | 'weekly' | 'monthly';
@@ -307,7 +308,7 @@ export const LineChart: React.FC<LineChartProps> = ({
   }, []);
 
   return (
-    <div className="bg-white p-4 rounded shadow">
+    <div className={cn(cardStyles.standard)}>
       <div ref={chartRef} style={{ height: `${height}px`, width: '100%' }} />
     </div>
   );

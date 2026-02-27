@@ -27,9 +27,13 @@ vi.mock('../../src/shared/utils/echarts', () => ({
   },
 }));
 
-vi.mock('../../src/shared/styles', () => ({
-  getYearChartColor: (year: string) => '#FF6B6B',
-}));
+vi.mock('../../src/shared/styles', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/shared/styles')>();
+  return {
+    ...actual,
+    getYearChartColor: (year: string) => '#FF6B6B',
+  };
+});
 
 import { LineChart } from '../../src/widgets/charts/LineChart';
 

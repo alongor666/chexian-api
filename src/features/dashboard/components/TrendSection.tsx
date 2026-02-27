@@ -5,6 +5,7 @@ import type { TimeView } from '../../../widgets/charts/LineChart';
 import { TrendDataPoint, QualityBusinessDataPoint } from '../hooks/useTrendData';
 import { PerspectiveSwitcher } from '../../../widgets/filters/PerspectiveSwitcher';
 import type { ViewPerspective, PerspectiveConfig } from '../../../shared/types/view-perspective';
+import { cardStyles, textStyles, cn } from '../../../shared/styles';
 
 interface TrendSectionProps {
   trendData: TrendDataPoint[];
@@ -52,13 +53,13 @@ export const TrendSection = memo<TrendSectionProps>(function TrendSection({
     <>
       {/* Premium Trend Chart */}
       {!isInitialized ? (
-        <div className="bg-white p-8 rounded shadow text-center text-gray-500">
+        <div className={cn(cardStyles.spacious, textStyles.body, "text-center")}>
           <p className="text-lg">请先上传数据文件以查看保费趋势图</p>
         </div>
       ) : (
         <div className="space-y-2">
           {/* V2.0: 视角切换器 */}
-          <div className="bg-white p-4 rounded shadow">
+          <div className={cn(cardStyles.standard)}>
             <PerspectiveSwitcher
               value={perspective}
               onChange={setPerspective}

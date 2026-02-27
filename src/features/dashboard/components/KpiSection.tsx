@@ -13,6 +13,7 @@ import {
   type KpiGroup,
   type KpiCardId,
 } from '../dashboardLayoutConfig';
+import { cardStyles, cn } from '../../../shared/styles';
 
 // ==================== 类型和函数（原 shared/sql/kpi-detail 导出） ====================
 
@@ -190,18 +191,18 @@ export const KpiSection = memo<KpiSectionProps>(({
           title,
           value: kpiDetails
             ? calculateRate(
-                toNumber(kpiDetails.non_transfer_count),
-                toNumber(kpiDetails.non_transfer_count) + toNumber(kpiDetails.transfer_count)
-              )
+              toNumber(kpiDetails.non_transfer_count),
+              toNumber(kpiDetails.non_transfer_count) + toNumber(kpiDetails.transfer_count)
+            )
             : undefined,
           formatter: formatRate,
           loading,
           type: 'bar',
           ratioData: kpiDetails
             ? [
-                { label: '非过户', value: kpiDetails.non_transfer_count || 0 },
-                { label: '过户', value: kpiDetails.transfer_count || 0 },
-              ]
+              { label: '非过户', value: kpiDetails.non_transfer_count || 0 },
+              { label: '过户', value: kpiDetails.transfer_count || 0 },
+            ]
             : [],
         };
       case 'renewal_rate':
@@ -271,18 +272,17 @@ export const KpiSection = memo<KpiSectionProps>(({
 
   if (cardEntries.length === 0 && !loading) {
     return (
-      <div className="bg-white p-4 rounded shadow space-y-4">
+      <div className={cn(cardStyles.standard, "space-y-4")}>
         <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
           {(['core', 'focus'] as KpiGroup[]).map((group) => (
             <button
               key={group}
               type="button"
               onClick={() => setActiveGroup(group)}
-              className={`px-3 py-1.5 text-sm rounded ${
-                activeGroup === group
+              className={`px-3 py-1.5 text-sm rounded ${activeGroup === group
                   ? 'bg-primary text-white'
                   : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
-              }`}
+                }`}
             >
               {groupLabel[group]}
             </button>
@@ -294,18 +294,17 @@ export const KpiSection = memo<KpiSectionProps>(({
   }
 
   return (
-    <div className="bg-white p-4 rounded shadow space-y-4">
+    <div className={cn(cardStyles.standard, "space-y-4")}>
       <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
         {(['core', 'focus'] as KpiGroup[]).map((group) => (
           <button
             key={group}
             type="button"
             onClick={() => setActiveGroup(group)}
-            className={`px-3 py-1.5 text-sm rounded ${
-              activeGroup === group
+            className={`px-3 py-1.5 text-sm rounded ${activeGroup === group
                 ? 'bg-primary text-white'
                 : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
-            }`}
+              }`}
           >
             {groupLabel[group]}
           </button>

@@ -8,6 +8,7 @@ import type { ViewPerspective } from '../../shared/types';
 import { getPerspectiveConfig } from '../../shared/types';
 import { formatCount, formatPremiumWan } from '../../shared/utils/formatters';
 import { useTruckAnalysis } from './hooks/useTruckAnalysis';
+import { cardStyles, textStyles, cn } from '../../shared/styles';
 
 interface TruckAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -48,7 +49,7 @@ export const TruckAnalysisPanel: React.FC<TruckAnalysisPanelProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-4 rounded shadow">
+      <div className={cn(cardStyles.standard)}>
         <PerspectiveSwitcher
           value={perspective}
           onChange={setPerspective}
@@ -57,8 +58,8 @@ export const TruckAnalysisPanel: React.FC<TruckAnalysisPanelProps> = ({
         />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-lg font-bold mb-4 text-center text-gray-800">吨位分段占比</h3>
+        <div className={cn(cardStyles.standard)}>
+          <h3 className={cn(textStyles.titleSmall, "mb-4 text-center")}>吨位分段占比</h3>
           <TonnageRoseChart
             premiumData={rosePremiumData}
             countData={roseCountData}
@@ -67,8 +68,8 @@ export const TruckAnalysisPanel: React.FC<TruckAnalysisPanelProps> = ({
             showContainer={false}
           />
         </div>
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-lg font-bold mb-4 text-center text-gray-800">
+        <div className={cn(cardStyles.standard)}>
+          <h3 className={cn(textStyles.titleSmall, "mb-4 text-center")}>
             三级机构{valueLabel}占比
           </h3>
           <OrgPremiumPieChart
@@ -82,8 +83,8 @@ export const TruckAnalysisPanel: React.FC<TruckAnalysisPanelProps> = ({
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded shadow">
-        <h3 className="text-lg font-bold mb-1 text-center text-gray-800">
+      <div className={cn(cardStyles.standard)}>
+        <h3 className={cn(textStyles.titleSmall, "mb-1 text-center")}>
           三级机构营业货车堆叠图（{perspectiveConfig.label}）
         </h3>
         <TruckDrillDownChart

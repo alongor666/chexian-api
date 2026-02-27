@@ -511,8 +511,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         />
       )}
 
-      {/* 机构推介率走势图 */}
-      <SectionTitle title="机构推介率走势图" />
+      {/* 机构推介率走势图（标题由子组件动态展示） */}
       <CrossSellOrgTrendChart
         filters={filters}
         vehicleCategory={vehicleCategory}

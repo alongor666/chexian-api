@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { SalesmanRankingTable } from '../../../widgets/tables/SalesmanRankingTable';
 import type { SalesmanSummaryRow } from '../types';
+import { cardStyles, textStyles, cn } from '../../../shared/styles';
 
 interface TableSectionProps {
   allBusinessData: SalesmanSummaryRow[];
@@ -28,7 +29,7 @@ export const TableSection = memo<TableSectionProps>(function TableSection({
 }) {
   if (!isInitialized) {
     return (
-      <div className="bg-white p-8 rounded shadow text-center text-gray-500">
+      <div className={cn(cardStyles.spacious, textStyles.body, "text-center")}>
         <p className="text-lg">请先上传数据文件以查看业务员明细表</p>
       </div>
     );
