@@ -691,6 +691,11 @@ router.get(
       if (orgMatch && !filters.org_level_3) {
         filters.org_level_3 = [orgMatch[1]];
       }
+
+      const tmMatch = permissionFilter.match(/is_telemarketing\s*=\s*(true|false)/i);
+      if (tmMatch) {
+        filters.is_telemarketing = tmMatch[1].toLowerCase() === 'true';
+      }
     }
 
     // queryType=full: 返回结构化数据（明细 + 可用月份 + 最新日期）
@@ -794,6 +799,11 @@ router.get(
       const orgMatch = permissionFilter.match(/org_level_3\s*(?:LIKE|=)\s*'%?([^%']+)%?'/i);
       if (orgMatch && !orgFilter) {
         dimension.filters = { ...dimension.filters, org: orgMatch[1] };
+      }
+
+      const tmMatch = permissionFilter.match(/is_telemarketing\s*=\s*(true|false)/i);
+      if (tmMatch) {
+        filters.is_telemarketing = tmMatch[1].toLowerCase() === 'true';
       }
     }
 
@@ -1538,16 +1548,16 @@ router.get(
       ),
       groupBy
         ? duckdbService.query(
-            generatePerformanceDrilldownQuery(
-              whereWithDate,
-              whereWithoutDate,
-              segmentTag as PerformanceSegmentTag,
-              timePeriod as PerformanceTimePeriod,
-              growthMode as PerformanceGrowthMode,
-              drillPath,
-              groupBy
-            )
+          generatePerformanceDrilldownQuery(
+            whereWithDate,
+            whereWithoutDate,
+            segmentTag as PerformanceSegmentTag,
+            timePeriod as PerformanceTimePeriod,
+            growthMode as PerformanceGrowthMode,
+            drillPath,
+            groupBy
           )
+        )
         : Promise.resolve([]),
     ]);
 
