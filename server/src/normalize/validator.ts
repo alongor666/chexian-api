@@ -51,6 +51,10 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   large_truck_score: ['VARCHAR', 'TEXT', 'STRING'],
   is_cross_sell: ['BOOLEAN', 'BOOL', 'INTEGER', 'TINYINT', 'VARCHAR'],
   cross_sell_premium_driver: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'],
+  underwriting_date: ['DATE', 'TIMESTAMP', 'VARCHAR', 'TEXT'],
+  third_party_coverage: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'],
+  driver_coverage: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'],
+  passenger_coverage: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'],
 };
 
 /**

@@ -473,15 +473,50 @@ def process_new_fields(df):
         total = df['交叉销售保费_驾意'].sum()
         print(f"      ✅ 交叉销售保费_驾意: 总计 {total:,.2f} 元")
 
+    # 12. 处理三者保额
+    if '三者保额' in df.columns:
+        print(f"\n   处理三者保额:")
+        df['三者保额'] = pd.to_numeric(df['三者保额'], errors='coerce').fillna(0.0)
+        avg_val = df['三者保额'].mean()
+        print(f"      ✅ 三者保额: 平均值 {avg_val:,.2f}")
+
+    # 13. 处理司机保额
+    if '司机保额' in df.columns:
+        print(f"\n   处理司机保额:")
+        df['司机保额'] = pd.to_numeric(df['司机保额'], errors='coerce').fillna(0.0)
+        avg_val = df['司机保额'].mean()
+        print(f"      ✅ 司机保额: 平均值 {avg_val:,.2f}")
+
+    # 14. 处理乘客险保额
+    if '乘客险保额' in df.columns:
+        print(f"\n   处理乘客险保额:")
+        df['乘客险保额'] = pd.to_numeric(df['乘客险保额'], errors='coerce').fillna(0.0)
+        avg_val = df['乘客险保额'].mean()
+        print(f"      ✅ 乘客险保额: 平均值 {avg_val:,.2f}")
+
     return df
 
 def process_dates(df):
-    """处理日期字段：转换为标准的 datetime64 格式"""
+    """处理日期字段：转换为标准的 datetime64 格式
+
+    关键重命名：源数据"缴费日期"→ Parquet"签单日期"（保持后端 policy_date 映射不变）
+    源数据的原"签单日期"已重命名为"提核日期"，作为独立字段保留。
+    """
     print(f"\n{'='*80}")
     print(f"📅 处理日期字段")
     print(f"{'='*80}")
 
-    date_fields = ['签单日期', '保险起期']
+    # 缴费日期 → 签单日期（保持 Parquet 列名与后端映射一致）
+    if '缴费日期' in df.columns:
+        if '签单日期' in df.columns:
+            print("   ⚠️  同时存在'签单日期'和'缴费日期'，'签单日期'已重命名为'提核日期'")
+            if '提核日期' not in df.columns:
+                df['提核日期'] = df['签单日期']
+                print("   ✅ 原'签单日期' → '提核日期'")
+        df['签单日期'] = df['缴费日期']
+        print("   ✅ '缴费日期' → '签单日期'（供 policy_date 映射使用）")
+
+    date_fields = ['签单日期', '保险起期', '提核日期']
 
     for field in date_fields:
         if field not in df.columns:
@@ -577,6 +612,7 @@ def finalize_schema(df):
         '业务员',
         '三级机构',
         '签单日期',
+        '提核日期',
         '保险起期',
         '险类',
         '险别组合',
@@ -610,7 +646,10 @@ def finalize_schema(df):
         '小货车评分',
         '大货车评分',
         '交叉销售标识',
-        '交叉销售保费_驾意'
+        '交叉销售保费_驾意',
+        '三者保额',
+        '司机保额',
+        '乘客险保额'
     ]
 
     # 选择存在的字段

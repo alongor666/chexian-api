@@ -42,7 +42,11 @@ export type DomainField =
   | 'small_truck_score'         // 小货车评分
   | 'large_truck_score'         // 大货车评分
   | 'is_cross_sell'             // 交叉销售标识
-  | 'cross_sell_premium_driver'; // 交叉销售保费-驾意
+  | 'cross_sell_premium_driver' // 交叉销售保费-驾意
+  | 'underwriting_date'        // 提核日期（原"签单日期"重命名）
+  | 'third_party_coverage'     // 三者保额
+  | 'driver_coverage'          // 司机保额
+  | 'passenger_coverage';      // 乘客险保额
 
 /**
  * Column Alias Configuration
@@ -138,6 +142,10 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   large_truck_score: ['大货车评分', 'large_truck_score', 'largeTruckScore'],
   is_cross_sell: ['交叉销售标识', 'is_cross_sell', 'isCrossSell'],
   cross_sell_premium_driver: ['交叉销售保费_驾意', 'cross_sell_premium_driver', 'crossSellPremiumDriver'],
+  underwriting_date: ['underwriting_date', '提核日期', 'review_date'],
+  third_party_coverage: ['third_party_coverage', '三者保额', '第三者保额'],
+  driver_coverage: ['driver_coverage', '司机保额', '司机座位保额'],
+  passenger_coverage: ['passenger_coverage', '乘客险保额', '乘客座位保额'],
 };
 
 /**
@@ -167,6 +175,10 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'large_truck_score',
   'is_cross_sell',
   'cross_sell_premium_driver',
+  'underwriting_date',
+  'third_party_coverage',
+  'driver_coverage',
+  'passenger_coverage',
 ]);
 
 /**
@@ -209,6 +221,10 @@ export interface ColumnMapping {
   large_truck_score?: string; // Optional field
   is_cross_sell?: string; // Optional field
   cross_sell_premium_driver?: string; // Optional field
+  underwriting_date?: string; // Optional field - 提核日期
+  third_party_coverage?: string; // Optional field - 三者保额
+  driver_coverage?: string; // Optional field - 司机保额
+  passenger_coverage?: string; // Optional field - 乘客险保额
 }
 
 /**
@@ -322,4 +338,8 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   large_truck_score: 'large_truck_score',
   is_cross_sell: 'is_cross_sell',
   cross_sell_premium_driver: 'cross_sell_premium_driver',
+  underwriting_date: 'underwriting_date',
+  third_party_coverage: 'third_party_coverage',
+  driver_coverage: 'driver_coverage',
+  passenger_coverage: 'passenger_coverage',
 };

@@ -26,8 +26,9 @@ export function getDataDir(): string {
  * VPS 部署：只有 server/data/，warehouse 目录不存在则自动跳过
  */
 export function getCandidateDataDirs(): string[] {
-  const warehouseDir = path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/policy');
-  return [warehouseDir, getDataDir()];
+  const warehouseCurrent = path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/policy/current');
+  const serverDataCurrent = path.resolve(getDataDir(), 'current');
+  return [warehouseCurrent, serverDataCurrent];
 }
 
 export function getKpiPlanConfigPath(): string {

@@ -4,8 +4,9 @@
 # ============================================================
 # 前提：本地 ~/.ssh/config 必须配置 chexian-vps 别名（见 vps.md）
 # 使用方法（在本地 Mac 的 chexian-api 目录执行）：
-#   ./deploy/sync-data.sh          # 自动同步最新 Parquet 文件
-#   ./deploy/sync-data.sh 文件名   # 指定同步某个文件
+#   ./deploy/sync-data.sh                     # 自动同步 current/ 下最新文件
+#   ./deploy/sync-data.sh 文件路径            # 指定同步某个文件
+#   ./deploy/sync-data.sh 文件路径 --no-restart  # 同步但不重启（批量同步中间文件用）
 # ============================================================
 
 set -e
@@ -13,13 +14,24 @@ set -e
 # 配置（通过 ~/.ssh/config 中的 chexian-vps 别名管理密钥，无需硬编码）
 VPS_HOST="chexian-vps"
 VPS_DATA="/var/www/chexian/server/data"
-LOCAL_DATA="数据管理/warehouse/fact/policy"
+LOCAL_DATA="数据管理/warehouse/fact/policy/current"
 
 # 颜色
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
+
+# 解析参数
+NO_RESTART=false
+FILE=""
+for arg in "$@"; do
+    if [[ "$arg" == "--no-restart" ]]; then
+        NO_RESTART=true
+    elif [[ -z "$FILE" ]]; then
+        FILE="$arg"
+    fi
+done
 
 # 前提检查：验证 SSH 连通性
 if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$VPS_HOST" true 2>/dev/null; then
@@ -33,25 +45,21 @@ if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$VPS_HOST" true 2>/dev/null; the
     exit 1
 fi
 
-# 确保本地数据目录存在
-if [ ! -d "$LOCAL_DATA" ]; then
-    echo -e "${YELLOW}本地数据目录不存在，自动创建: $LOCAL_DATA${NC}"
-    mkdir -p "$LOCAL_DATA"
+# 确定要同步的文件
+if [ -z "$FILE" ]; then
+    FILE=$(ls -t ${LOCAL_DATA}/*.parquet 2>/dev/null | head -1)
 fi
 
-# 确定要同步的文件
-if [ -n "$1" ]; then
-    FILE="$1"
-    if [ ! -f "$FILE" ]; then
-        FILE="${LOCAL_DATA}/$1"
+if [ ! -f "$FILE" ]; then
+    # 尝试在 LOCAL_DATA 下查找
+    if [ -f "${LOCAL_DATA}/$FILE" ]; then
+        FILE="${LOCAL_DATA}/$FILE"
     fi
-else
-    FILE=$(ls -t ${LOCAL_DATA}/*.parquet 2>/dev/null | head -1)
 fi
 
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
     echo -e "${RED}错误：未找到 Parquet 文件${NC}"
-    echo "用法: ./deploy/sync-data.sh [文件路径]"
+    echo "用法: ./deploy/sync-data.sh [文件路径] [--no-restart]"
     exit 1
 fi
 
@@ -60,21 +68,30 @@ SIZE=$(du -h "$FILE" | cut -f1)
 
 echo -e "${GREEN}[同步]${NC} $BASENAME ($SIZE)"
 
-# 上传
+# 确保 VPS 上 current/ 和 archive/ 目录存在
+ssh "$VPS_HOST" "mkdir -p ${VPS_DATA}/current ${VPS_DATA}/archive"
+
+# 上传到 VPS 的 current/ 目录
 echo -e "${YELLOW}  上传中...${NC}"
-scp "$FILE" "${VPS_HOST}:${VPS_DATA}/"
+scp "$FILE" "${VPS_HOST}:${VPS_DATA}/current/"
 
-# 设权限 + 重启
-echo -e "${YELLOW}  重启服务...${NC}"
-ssh "$VPS_HOST" "chmod 600 ${VPS_DATA}/$(printf '%q' "$BASENAME") && source /root/.nvm/nvm.sh && pm2 restart chexian-api"
+# 设权限
+ssh "$VPS_HOST" "chmod 600 ${VPS_DATA}/current/$(printf '%q' "$BASENAME")"
 
-# 验证
-echo -e "${YELLOW}  验证中...${NC}"
-sleep 3
-HEALTH=$(ssh "$VPS_HOST" "curl -s http://localhost:3000/health" 2>/dev/null)
-if echo "$HEALTH" | grep -q "success"; then
-    echo -e "${GREEN}✓ 同步完成！${NC} 服务运行正常"
+if [ "$NO_RESTART" = true ]; then
+    echo -e "${GREEN}✓ 上传完成（跳过重启）${NC}"
 else
-    echo -e "${RED}⚠ 上传完成，但健康检查失败，请检查 VPS 日志${NC}"
-    echo "  ssh chexian-vps 'source /root/.nvm/nvm.sh && pm2 logs chexian-api --lines 20'"
+    # 重启 + 验证
+    echo -e "${YELLOW}  重启服务...${NC}"
+    ssh "$VPS_HOST" "source /root/.nvm/nvm.sh && pm2 restart chexian-api"
+
+    echo -e "${YELLOW}  验证中...${NC}"
+    sleep 3
+    HEALTH=$(ssh "$VPS_HOST" "curl -s http://localhost:3000/health" 2>/dev/null)
+    if echo "$HEALTH" | grep -q "success"; then
+        echo -e "${GREEN}✓ 同步完成！${NC} 服务运行正常"
+    else
+        echo -e "${RED}⚠ 上传完成，但健康检查失败，请检查 VPS 日志${NC}"
+        echo "  ssh chexian-vps 'source /root/.nvm/nvm.sh && pm2 logs chexian-api --lines 20'"
+    fi
 fi

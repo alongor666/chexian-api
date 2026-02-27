@@ -116,7 +116,7 @@ async function startServer() {
     console.log('  - Parquet dirs:', candidateDirs.map(d => `${d}${fs.existsSync(d) ? ' [ok]' : ' [missing]'}`).join(' | '));
     console.log('  - Team mapping paths:', mappingCandidates.map(p => `${p}${fs.existsSync(p) ? ' [ok]' : ' [missing]'}`).join(' | '));
 
-    // 扫描所有候选目录（warehouse 优先，server/data 兜底），取全局最新 Parquet
+    // 扫描 current/ 子目录，加载全部活跃 Parquet 文件（无需 mtime 排序）
     const parquetFiles = candidateDirs
       .flatMap(dir => {
         if (!fs.existsSync(dir)) return [];
@@ -125,21 +125,32 @@ async function startServer() {
           .map(f => ({
             name: f,
             path: path.join(dir, f),
-            mtime: fs.statSync(path.join(dir, f)).mtimeMs,
             size: fs.statSync(path.join(dir, f)).size,
           }));
-      })
-      .sort((a, b) => b.mtime - a.mtime); // 全局最新优先
+      });
 
     console.log('[Server] Parquet search dirs:', candidateDirs.filter(d => fs.existsSync(d)));
 
-    // 优先选择非 test-data 的文件，否则回退到 test-data
-    const dataFile = parquetFiles.find(f => !f.name.startsWith('test-data')) || parquetFiles[0];
-    const dataPath = dataFile ? dataFile.path : path.join(getDataDir(), 'test-data.parquet');
-    console.log('[Server] Loading data from:', dataPath, dataFile ? `(${(dataFile.size / 1024 / 1024).toFixed(1)} MB)` : '');
+    // 筛选非 test-data 的数据文件；无实际文件则回退到 test-data
+    const realDataFiles = parquetFiles.filter(f => !f.name.startsWith('test-data'));
+    const filesToLoad = realDataFiles.length > 0 ? realDataFiles : parquetFiles.slice(0, 1);
+
+    if (filesToLoad.length === 0) {
+      console.warn('[Server] No parquet files found. Server will start without data.');
+    }
+
+    console.log(`[Server] Found ${filesToLoad.length} parquet file(s) to load:`);
+    filesToLoad.forEach((f, i) => console.log(`  [${i}] ${f.path} (${(f.size / 1024 / 1024).toFixed(1)} MB)`));
+
     try {
-      await duckdbService.loadParquet(dataPath, 'raw_parquet');
-      console.log('[Server] Data loaded successfully:', path.basename(dataPath));
+      // 多文件或单文件加载
+      if (filesToLoad.length > 1) {
+        const { totalRows: multiRows } = await duckdbService.loadMultipleParquet(filesToLoad.map(f => f.path));
+        console.log(`[Server] Multi-parquet loaded: ${filesToLoad.length} files, ${multiRows} total rows`);
+      } else if (filesToLoad.length === 1) {
+        await duckdbService.loadParquet(filesToLoad[0].path, 'raw_parquet');
+        console.log('[Server] Data loaded successfully:', path.basename(filesToLoad[0].path));
+      }
 
       // 创建PolicyFact视图（去重逻辑）
       console.log('[Server] Creating PolicyFact view...');
@@ -174,13 +185,15 @@ async function startServer() {
       }
 
       // 注册当前数据文件（使 /api/data/files 返回 isCurrent: true）
-      if (dataFile) {
+      if (filesToLoad.length > 0) {
+        const totalSize = filesToLoad.reduce((sum, f) => sum + f.size, 0);
+        const fileNames = filesToLoad.map(f => f.name).join(' + ');
         setCurrentDataFile({
-          filename: dataFile.name,
+          filename: fileNames,
           rowCount,
-          fileSizeBytes: dataFile.size,
+          fileSizeBytes: totalSize,
         });
-        console.log(`[Server] Current data file set: ${dataFile.name}`);
+        console.log(`[Server] Current data file set: ${fileNames} (${filesToLoad.length} file(s))`);
       }
     } catch (error) {
       console.warn('[Server] Warning: Failed to load test data:', error);

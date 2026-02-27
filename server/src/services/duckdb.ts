@@ -335,6 +335,81 @@ class DuckDBService {
   }
 
   /**
+   * 加载多个 Parquet 文件并合并为 raw_parquet 视图
+   *
+   * 策略：
+   * - 单文件时走快速路径（直接 CREATE TABLE，保持原行为）
+   * - 多文件时：每个文件加载到独立表，UNION ALL 合并为视图
+   * - 兼容 schema 差异：缺失列填 NULL
+   */
+  async loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number }> {
+    if (filePaths.length === 0) {
+      throw new AppError(400, 'No parquet files provided');
+    }
+
+    // 单文件快速路径
+    if (filePaths.length === 1) {
+      await this.loadParquet(filePaths[0], 'raw_parquet');
+      const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
+      return { totalRows: countResult[0]?.cnt ?? 0 };
+    }
+
+    // 多文件：逐个加载到独立表
+    const tableNames: string[] = [];
+    const allColumns = new Map<string, string>(); // column_name -> column_type
+
+    for (let i = 0; i < filePaths.length; i++) {
+      const tableName = `raw_parquet_${i}`;
+      const safeTableName = sanitizeTableName(tableName);
+      const escapedPath = escapeSqlValue(filePaths[i]);
+
+      await this.query(`
+        CREATE OR REPLACE TABLE ${safeTableName} AS
+        SELECT * FROM read_parquet('${escapedPath}')
+      `);
+      tableNames.push(safeTableName);
+
+      // 收集列信息
+      const schema = await this.getTableSchema(safeTableName);
+      for (const col of schema) {
+        if (!allColumns.has(col.column_name)) {
+          allColumns.set(col.column_name, col.column_type);
+        }
+      }
+
+      const countResult = await this.query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM ${safeTableName}`);
+      console.log(`[DuckDB] Loaded parquet[${i}]: ${filePaths[i]} → ${safeTableName} (${countResult[0]?.cnt ?? 0} rows)`);
+    }
+
+    // 构建 UNION ALL 视图，缺失列填 NULL
+    const allColumnNames = Array.from(allColumns.keys());
+    const selectParts = tableNames.map((table) => {
+      return this.query<{ column_name: string }>(`SELECT column_name FROM (DESCRIBE ${table})`).then((schema) => {
+        const existingCols = new Set(schema.map((c) => c.column_name));
+        const cols = allColumnNames.map((col) =>
+          existingCols.has(col) ? `"${col}"` : `NULL AS "${col}"`
+        );
+        return `SELECT ${cols.join(', ')} FROM ${table}`;
+      });
+    });
+
+    const selects = await Promise.all(selectParts);
+    const unionSQL = `
+      CREATE OR REPLACE VIEW raw_parquet AS
+      ${selects.join('\n      UNION ALL\n      ')}
+    `;
+    await this.query(unionSQL);
+
+    this.invalidateCache();
+
+    const totalResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
+    const totalRows = totalResult[0]?.cnt ?? 0;
+    console.log(`[DuckDB] Multi-parquet loaded: ${filePaths.length} files, ${totalRows} total rows`);
+
+    return { totalRows };
+  }
+
+  /**
    * 创建PolicyFact视图（带列名映射和去重）
    *
    * @param sourceTable 源表名

@@ -1,16 +1,17 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-02-26T16:18:59.629401",
+  "timestamp": "2026-02-26T20:58:18.648224",
   "basic_stats": {
-    "rows": 708067,
-    "columns": 32,
+    "rows": 660853,
+    "columns": 37,
     "column_names": [
       "三级机构",
       "保单号",
       "批单号",
       "是否续保",
       "吨位分段",
-      "签单日期",
+      "缴费日期",
+      "提核日期",
       "保险起期",
       "客户类别",
       "新车购置价",
@@ -20,6 +21,7 @@
       "是否交商统保",
       "险别",
       "厂牌车型",
+      "座位数",
       "业务员",
       "终端来源",
       "险类",
@@ -36,6 +38,9 @@
       "大货车评分",
       "交叉销售标识",
       "交叉销售保费-驾意",
+      "三者保额",
+      "司机保额",
+      "乘客险保额",
       "续保业务类型"
     ]
   },
@@ -43,27 +48,22 @@
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 693206
+      "unique_count": 647575
     },
     "业务员": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 332
+      "unique_count": 326
     },
     "三级机构": {
       "null_count": 0,
       "null_rate": 0.0,
       "unique_count": 13
     },
-    "签单日期": {
-      "null_count": 0,
-      "null_rate": 0.0,
-      "unique_count": 774
-    },
     "保险起期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 855
+      "unique_count": 828
     },
     "险类": {
       "null_count": 0,

@@ -24,6 +24,29 @@ git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objec
 git merge-base main HEAD || echo "WARNING: no common ancestor"
 ```
 
+### 0.1 基于最近20次提交的反思加固（2026-02-27）
+
+样本范围：`git log -20`（`a8f9863` → `df5b96b`）
+
+**观察结论（来自真实提交）**：
+- 高频改动热点集中在 `src/shared/api/client.ts`（5次）、`server/src/routes/query.ts`（3次）、`CrossSellOrgTrend*`（各4次），接口与趋势图联动是回归高发区。
+- 权限改动出现“二次补丁链”：`fe3d58e` 后又有 `b15ac95` 补修续保分析过滤，说明权限注入存在遗漏风险。
+- `b8fa05d` 出现 1132 行回滚（恢复 iframe），说明替换式重构在缺少等价验证时风险极高。
+- 提交主题与改动范围有偏差（如 `docs:`/`BACKLOG` 标题但包含大量业务代码改动），降低审计和回溯效率。
+- 测试产物进入版本库（`test_output.txt`、`vitest_log.txt`），增加噪声并影响评审焦点。
+
+**新增硬规则（立即生效）**：
+1. 权限/角色变更必须执行“路由覆盖扫描”：至少检查 `server/src/routes/query.ts` 与 `server/src/routes/ai.ts` 是否同步注入过滤，且补 1 个对应测试（`tests/api/*` 或路由单测）。
+2. 替换式重构必须“并行保底 + 等价验证”后再删除旧实现；禁止先删后证（参照 `b8fa05d` 教训）。
+3. `docs` / `BACKLOG` 类提交不得混入业务代码；若必须同日完成，必须拆分为独立提交。
+4. 提交前执行产物清理检查，禁止提交调试输出文件。
+
+```bash
+git diff --cached --name-only | rg "(^|/)(test_output|vitest_log|.*\\.log)$" && echo "BLOCK: remove debug artifacts" || true
+```
+
+5. 高频热点文件改动（`api/client.ts`、`routes/query.ts`）必须优先复用已有 helper 与 contract tests，禁止同类逻辑再复制一份。
+
 ## 📖 快速导航
 
 | 我想...                        | 查看章节                                                                                                  |
@@ -47,7 +70,7 @@ git merge-base main HEAD || echo "WARNING: no common ancestor"
 
 ⚠️ **所有开发任务开始前必读**：[开发文档/TECH_STACK.md](./开发文档/TECH_STACK.md)
 
-- 了解项目技术栈特性（DuckDB-WASM、React、Vite）
+- 了解项目技术栈特性（纯 API 模式、React、Vite）
 - 查看架构强制入口（修改代码前必读文件列表）
 - 掌握验证协议（单元测试 → 浏览器实测 → 用户验收）
 
@@ -71,9 +94,9 @@ git merge-base main HEAD || echo "WARNING: no common ancestor"
 ⚠️ **所有数据处理任务必读**: [.claude/data-knowledge-protocol.md](./.claude/data-knowledge-protocol.md)
 
 - **分层加载策略**: 第1层快速索引(200tokens) → 第2层业务规则摘要(500tokens) → 第3层完整字典(按需)
-- **唯一事实源**: [签单清洗/车险数据业务规则字典.md](./签单清洗/车险数据业务规则字典.md) - 所有字段定义、业务规则
-- **快速参考**: [签单清洗/QUICK_REFERENCE.md](./签单清洗/QUICK_REFERENCE.md) - 200 tokens速查表
-- **分析价值矩阵**: [签单清洗/字段分析价值矩阵.md](./签单清洗/字段分析价值矩阵.md) - 8大分析维度、30+SQL示例
+- **唯一事实源**: [数据管理/knowledge/rules/车险数据业务规则字典.md](./数据管理/knowledge/rules/车险数据业务规则字典.md) - 所有字段定义、业务规则
+- **快速参考**: [数据管理/knowledge/QUICK_REFERENCE.md](./数据管理/knowledge/QUICK_REFERENCE.md) - 200 tokens速查表
+- **Schema 知识库**: [数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md](./数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md) - 字段语义、值域、NL→SQL 映射
 
 **数据协作最佳实践**:
 
@@ -95,14 +118,15 @@ git merge-base main HEAD || echo "WARNING: no common ancestor"
 
 | 文件                                  | 原因                            | 如需变更                                                                                                 |
 | ------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `src/shared/normalize/mapping.ts`   | 列名映射规则（指标口径）        | ❌ 不得删除已有别名 `<br>`✅ 只能追加新别名 `<br>`📝 需在 BACKLOG.md 登记（状态=PROPOSED）并提供证据 |
-| `src/shared/sql/kpi.ts`             | KPI 计算逻辑（业务规则）        | ❌ 不得修改已有 SQL 模板 `<br>`✅ 只能追加新模板 `<br>`📝 需在 BACKLOG.md 登记并提供证据             |
-| `src/shared/duckdb/client.ts:78-95` | PolicyFact 视图定义（去重规则） | ❌ 涉及业务口径，需产品确认 `<br>`📝 需在 BACKLOG.md 登记并提供产品确认证据                            |
+| `server/src/normalize/mapping.ts` | 列名映射规则（指标口径） | ❌ 不得删除已有别名 `<br>`✅ 只能追加新别名 `<br>`📝 需在 BACKLOG.md 登记（状态=PROPOSED）并提供证据 |
+| `server/src/sql/kpi.ts` | KPI 计算逻辑（业务规则） | ❌ 不得修改已有 SQL 模板 `<br>`✅ 只能追加新模板 `<br>`📝 需在 BACKLOG.md 登记并提供证据 |
+| `server/src/services/duckdb.ts` | 查询执行与核心视图语义 | ❌ 不得随意改写既有语义 `<br>`📝 涉及口径变更需产品确认并留证据 |
 
 ### 架构协议（不可破坏）
 
-- **Arrow IPC 协议**：Worker 与主线程通信必须使用 Arrow IPC，禁止 JSON 序列化
-- **CORS 配置**：`vite.config.ts` 的 COOP/COEP 头不得删除（DuckDB-WASM 强制要求）
+- **纯 API 协议**：禁止新增 DuckDB-WASM / 本地 DuckDB 分支逻辑
+- **认证协议**：`/api/*` 路由必须经过 `server/src/middleware/auth.ts`
+- **向后兼容**：`server/src/routes/query.ts` 不得删除既有路由，仅允许追加并保持兼容
 - **Bun 包管理器**：禁止使用 npm/yarn/pnpm（项目统一使用 Bun）
 
 ---
@@ -151,7 +175,7 @@ bun run scripts/check-governance.mjs
 
 - Frontend: React 18.3.1 + TypeScript 5.9.3 + Vite 5.4.21
 - Styling: Tailwind CSS 3.4.19 + PostCSS
-- Analytics: DuckDB-WASM 1.32.0 + Apache Arrow 17.0.0
+- Backend Analytics: Node/Bun + DuckDB（后端执行 SQL）
 - Charts: ECharts 5.6.0 + echarts-for-react 3.0.5
 - Testing: Vitest 2.1.9
 - Editor: Monaco Editor 4.7.0 (SQL 编辑器)
@@ -167,7 +191,7 @@ bun install         # 安装依赖
 bun run dev:full    # ✅ 一键启动前后端（联动 start.mjs 自动清理旧端口）
 bun run dev         # 仅启动前端（需确认后端已可用）
 bun run build       # 类型检查 + 生产构建
-bun test            # 运行单元测试
+bun run test        # 运行单元测试（Vitest）
 bun run governance  # 治理校验（简写）
 bun run scripts/check-governance.mjs  # 治理校验（完整路径）
 ```
@@ -204,22 +228,19 @@ bun run scripts/check-governance.mjs  # 治理校验（完整路径）
 ## 5. 数据处理链路（快速理解架构）
 
 ```
-用户上传 Parquet
+用户在前端触发筛选/查询
   ↓
-src/shared/duckdb/client.ts:loadParquet()        # 加载文件
+src/shared/api/client.ts                          # 统一 API 客户端
   ↓
-src/shared/normalize/validator.ts:validateSchema() # 列名校验（别名解析）
+server/src/routes/query.ts / ai.ts                # 路由层（认证后接收请求）
   ↓
-src/shared/duckdb/client.ts:78-95                # 创建 PolicyFact 视图（MAX去重）
+server/src/sql/*.ts                               # SQL 生成器（kpi/trend/cross-sell/growth）
   ↓
-src/shared/sql/*.ts                               # 生成 SQL（kpi/trend/truck/growth）
+server/src/services/duckdb.ts                     # DuckDB 执行查询
   ↓
-src/shared/duckdb/worker.ts:query()              # Worker 执行（返回 Arrow IPC）
+server 返回 JSON
   ↓
-src/features/dashboard/*                          # UI 渲染
-    ├─ PremiumDashboard.tsx                      # 主仪表盘（KPI、趋势、分析）
-    ├─ TruckAnalysisPanel.tsx                     # 营业货车专项分析
-    └─ sql-query/SqlQueryPanel.tsx                # 交互式SQL查询
+src/features/dashboard/*                           # UI 渲染
 ```
 
 **关键特性**：
@@ -248,10 +269,10 @@ src/features/dashboard/*                          # UI 渲染
 ### 强制三层验证
 
 ```
-第1层：单元测试（bun test）
+第1层：单元测试（bun run test）
   ↓  验证 SQL 生成逻辑语法正确
 第2层：浏览器实测（Chrome DevTools）
-  ↓  验证 DuckDB 实际执行结果
+  ↓  验证 `/api/*` 实际返回结果
 第3层：用户验收（人工确认）
   ↓  验证功能符合需求
 ```
@@ -263,7 +284,7 @@ src/features/dashboard/*                          # UI 渲染
 | 场景              | 必须执行                                                            |
 | ----------------- | ------------------------------------------------------------------- |
 | 修改 SQL 生成逻辑 | ✅ 单元测试通过 → ✅**打开 Chrome Console 验证实际执行结果** |
-| SQL 报错          | ✅ 复制完整错误信息 → ✅ 查看 `client.ts:78-95` 字段类型定义     |
+| SQL 报错          | ✅ 复制完整错误信息 → ✅ 检查 `server/src/sql/*.ts` 与 `server/src/services/duckdb.ts` |
 | 日期时间处理      | ✅ 先 `CAST(field AS DATE)` → ✅ 查看 DuckDB 日期函数文档        |
 | 功能开发完成      | ✅ 截图 Console 输出 → ✅ 记录关键字段实际值                       |
 | 启动异常（仅前端/端口冲突） | ✅ 执行 `bun run dev:full` 自动清理旧端口 → ✅ 必要时手动释放后重试 |
@@ -339,7 +360,7 @@ src/features/dashboard/*                          # UI 渲染
 
 ### 数据准备
 
-**示例数据位置**：`签单清洗/` 目录
+**示例数据位置**：`数据管理/` 目录
 
 - `优化处理后的业务数据.parquet` - 已清洗的业务数据（可直接上传测试）
 - `Excel转Parquet优化处理脚本.py` - Excel → Parquet 转换脚本
@@ -348,7 +369,7 @@ src/features/dashboard/*                          # UI 渲染
 **数据格式要求**：
 
 - 必须是 Parquet 格式
-- 列名必须匹配 `src/shared/normalize/mapping.ts` 中的别名（支持中英文）
+- 列名必须匹配 `server/src/normalize/mapping.ts` 中的别名（支持中英文）
 - 必需字段：`policy_no`, `premium`, `org_name`, `salesman_name`
 
 ---
@@ -555,6 +576,7 @@ Host chexian-vps
 
 **变更历史**：
 
+- 2026-02-27：新增 §0.1「最近20次提交反思加固」，并将关键路径校准为纯 API 架构（`server/src/normalize`、`server/src/sql`、`server/src/services/duckdb.ts`）
 - 2026-02-15：新增§10生产部署与数据同步章节
 - 2026-01-11 12:00：【重大更新】版本号校正（与package.json同步）、测试覆盖更新（14套件/273+测试）、新增NL2SQL智能查询、新增session-manager子代理、扩展关键特性（增强型KPI卡片、高级筛选器）
 - 2026-01-11 04:30：新增§9多Agent并发协作协议，解决PR批量merge冲突问题（ROOT-CAUSE-001）

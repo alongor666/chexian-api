@@ -1,8 +1,8 @@
 # Parquet 表结构与字段值域知识库
 
 **文档性质**: AI 必读知识源（NL2SQL 语义理解基础）
-**更新时间**: 2026-02-01
-**数据规模**: ~44万条记录 / 30个字段
+**更新时间**: 2026-02-26
+**数据规模**: ~44万条记录 / 34个字段
 
 ---
 
@@ -20,17 +20,18 @@
 
 > 本文档描述的是**原始 Parquet 数据**的完整字段。但 AI SQL 生成器查询的是 **PolicyFact 视图**，该视图**不包含所有字段**。
 
-**PolicyFact 视图可用字段** (30个)：
+**PolicyFact 视图可用字段** (34个)：
 ```
 policy_no, premium, policy_date, insurance_start_date,
-salesman_name, org_level_3, customer_category,
+underwriting_date, salesman_name, org_level_3, customer_category,
 insurance_type, coverage_combination, is_renewal, is_new_car,
 is_transfer, is_nev, is_telemarketing, tonnage_segment,
 is_renewable, is_commercial_insure, terminal_source,
 commercial_pricing_factor, vehicle_frame_no, is_quote,
 claim_cases, reported_claims, fee_amount, renewal_mode,
 insurance_grade, small_truck_score, large_truck_score,
-is_cross_sell, cross_sell_premium_driver
+is_cross_sell, cross_sell_premium_driver,
+third_party_coverage, driver_coverage, passenger_coverage
 ```
 
 **❌ 以下字段在 PolicyFact 视图中不可用**：
@@ -65,13 +66,16 @@ is_cross_sell, cross_sell_premium_driver
 
 | 字段名 | 类型 | 说明 | 值域 |
 |--------|------|------|------|
-| `policy_date` | DATE/STRING | 签单日期 | 2023-12-05 ~ 2026-01-27 |
+| `policy_date` | DATE/STRING | 签单日期（transform.py 将源数据"缴费日期"重命名为"签单日期"，前后端统一使用"签单日期"） | 2023-12-05 ~ 2026-01-27 |
+| `underwriting_date` | DATE/STRING | 提核日期（源数据原"签单日期"重命名为"提核日期"） | 2023-12-05 ~ 2026-01-27 |
 | `insurance_start_date` | DATE/STRING | 保险起期 | 2023-12-29 ~ 2026-01-27 |
 
 **日期使用规则**:
 - 业绩统计 → 用 `policy_date`（签单日期）
 - 保险责任 → 用 `insurance_start_date`（起保日期）
+- 提核/审批时间 → 用 `underwriting_date`（提核日期）
 - 格式: `YYYY-MM-DD`
+- Parquet 列名为"签单日期"，后端映射 policy_date，前后端统一显示为"签单日期"
 
 ### 1.3 金额字段
 
@@ -84,6 +88,9 @@ is_cross_sell, cross_sell_premium_driver
 | `fee_amount` | FLOAT64 | 费用金额（元） | 0 ~ 高值 | SUM |
 | `cross_sell_premium_driver` | FLOAT64 | 交叉销售保费-驾意（元） | 0 ~ 高值 | SUM |
 | `claim_cases` | INT64 | 赔案件数 | 0 ~ N | SUM |
+| `third_party_coverage` | FLOAT64 | 三者保额（元） | 0 ~ 高值 | AVG/MAX |
+| `driver_coverage` | FLOAT64 | 司机保额（元） | 0 ~ 高值 | AVG/MAX |
+| `passenger_coverage` | FLOAT64 | 乘客险保额（元） | 0 ~ 高值 | AVG/MAX |
 
 **保费特殊规则**:
 - `保费 > 0` = 正常承保
@@ -258,7 +265,8 @@ is_cross_sell, cross_sell_premium_driver
 | 上月、12月 | `EXTRACT(MONTH FROM policy_date) = 12` |
 | 最近30天 | `policy_date >= CURRENT_DATE - INTERVAL '30 days'` |
 | 起保、生效 | 使用 `insurance_start_date` |
-| 签单、出单 | 使用 `policy_date` |
+| 签单、缴费、付款 | 使用 `policy_date` |
+| 签单、出单、提核 | 使用 `underwriting_date` |
 | YTD、年累计 | `policy_date >= DATE_TRUNC('year', CURRENT_DATE)` |
 
 ### 3.2 指标表达
@@ -486,6 +494,7 @@ ORDER BY "达成率%" DESC
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| v1.3 | 2026-02-26 | 新增4个字段：underwriting_date, third_party_coverage, driver_coverage, passenger_coverage；前后端统一"签单日期"命名；支持多 Parquet 文件 UNION ALL 加载 |
 | v1.2 | 2026-02-12 | 新增5个字段：insurance_grade, small_truck_score, large_truck_score, is_cross_sell, cross_sell_premium_driver |
 | v1.1 | 2026-02-01 | 添加 SalesmanPlanFact 视图说明；明确 PolicyFact 可用字段 |
 | v1.0 | 2026-01-31 | 初始版本，整合业务规则字典与 AI SQL 需求 |

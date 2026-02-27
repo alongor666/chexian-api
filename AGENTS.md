@@ -23,6 +23,29 @@ git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objec
 git merge-base main HEAD || echo "WARNING: no common ancestor"
 ```
 
+### 0.1 基于最近20次提交的反思加固（2026-02-27）
+
+样本范围：`git log -20`（`a8f9863` → `df5b96b`）
+
+**观察结论（来自真实提交）**：
+- 高频改动热点集中在 `src/shared/api/client.ts`（5次）、`server/src/routes/query.ts`（3次）、`CrossSellOrgTrend*`（各4次），接口与趋势图联动是回归高发区。
+- 权限改动出现“二次补丁链”：`fe3d58e` 后又有 `b15ac95` 补修续保分析过滤，说明权限注入存在遗漏风险。
+- `b8fa05d` 出现 1132 行回滚（恢复 iframe），说明替换式重构在缺少等价验证时风险极高。
+- 提交主题与改动范围有偏差（如 `docs:`/`BACKLOG` 标题但包含大量业务代码改动），降低审计和回溯效率。
+- 测试产物进入版本库（`test_output.txt`、`vitest_log.txt`），增加噪声并影响评审焦点。
+
+**新增硬规则（立即生效）**：
+1. 权限/角色变更必须执行“路由覆盖扫描”：至少检查 `server/src/routes/query.ts` 与 `server/src/routes/ai.ts` 是否同步注入过滤，且补 1 个对应测试（`tests/api/*` 或路由单测）。
+2. 替换式重构必须“并行保底 + 等价验证”后再删除旧实现；禁止先删后证（参照 `b8fa05d` 教训）。
+3. `docs` / `BACKLOG` 类提交不得混入业务代码；若必须同日完成，必须拆分为独立提交。
+4. 提交前执行产物清理检查，禁止提交调试输出文件。
+
+```bash
+git diff --cached --name-only | rg "(^|/)(test_output|vitest_log|.*\\.log)$" && echo "BLOCK: remove debug artifacts" || true
+```
+
+5. 高频热点文件改动（`api/client.ts`、`routes/query.ts`）必须优先复用已有 helper 与 contract tests，禁止同类逻辑再复制一份。
+
 ## 0. 适用范围与优先级
 - **适用范围**：仓库根目录及其所有子目录（除非存在更深层 `AGENTS.md`）。
 - **优先级**：System/Developer/User 指令 > 更深层 `AGENTS.md` > 本文件。
@@ -489,6 +512,7 @@ ssh chexian-vps echo ok   # 返回 "ok" 表示配置正确
 ---
 
 **变更历史**：
+- 2026-02-27：新增 §0.1「最近20次提交反思加固」，补充权限过滤漏检、替换式重构回滚、提交范围失真与调试产物入库的防回归规则
 - 2026-02-23：§8 新增 SSH 连接前提（`~/.ssh/config` 别名），补充一键链路与故障排查表
 - 2026-02-15：新增§8生产部署与数据同步章节，添加一键 `sync-data.sh` 脚本引用
 - 2026-02-15：基于 `CLAUDE.md` 与当前代码现状重构，统一为纯 API 架构、更新红线文件与启动验证协议
