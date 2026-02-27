@@ -1,691 +1,259 @@
 # 车险数据分析平台（chexian-api）
 
-<div align="center">
-
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-blue.svg)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19.0.0-61dafb.svg)](https://reactjs.org/)
-[![Vite](https://img.shields.io/badge/Vite-5.4.21-646cff.svg)](https://vitejs.dev/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
-**企业级车险数据分析平台** | React + Express + DuckDB
-
-[快速开始](#快速开始) • [API文档](#api-总览当前实现) • [部署指南](#生产部署与数据同步) • [开发文档](#文档入口)
-
-</div>
+一个面向车险经营场景的前后端分离分析平台。  
+当前为 **API-only 架构**：前端通过 REST API 访问后端 DuckDB（不再使用 DuckDB-WASM 本地模式）。
 
 ---
 
-## 📊 项目概览
+## 项目简介
 
-车险数据分析平台是一个现代化的企业级数据分析系统，采用前后端分离架构，专注于车险业务数据的深度分析和可视化呈现。
+`chexian-api` 聚焦车险业务的经营分析与数据查询，核心能力包括：
 
-### 核心能力
+- Parquet 数据导入、加载与管理
+- 经营看板（KPI、趋势、排名、结构占比）
+- 多专题分析（业绩、交叉销售、续保、增长、成本、系数、营销战报、保费报表、费用分析）
+- SQL 查询工作台（模板、可视化构建器、AI 辅助）
+- 用户认证、路由权限和行级数据权限控制
 
-- 🚀 **高性能查询** - 基于 DuckDB 的 OLAP 引擎
-- 📈 **多维度分析** - KPI、趋势、成本、增长、续保、交叉销售
-- 🔐 **权限控制** - 基于 RBAC 的行级数据权限
-- 📊 **可视化展示** - 丰富的图表组件和数据看板
-- 🤖 **AI 辅助** - 自然语言转 SQL (NL2SQL)
-- 🎫 **安全认证** - JWT + 企业微信 OAuth
+代码事实入口：
+
+- 前端入口：`src/app/main.tsx`、`src/app/App.tsx`
+- API 客户端：`src/shared/api/client.ts`
+- 后端入口：`server/src/app.ts`
+- 查询路由：`server/src/routes/query.ts`
+- DuckDB 服务：`server/src/services/duckdb.ts`
 
 ---
 
-# 车险数据分析平台（chexian-api）
+## 技术栈
 
-**版本**: v2.8  
-**最后更新**: 2026-02-20
+> 依据 `package.json`（根目录）与 `server/package.json`（后端子项目）整理。
 
-> 车险经营分析平台（纯 API 架构）。前端通过 REST API 访问后端 DuckDB，不再包含 DuckDB-WASM / Local 模式分支。
+### 前端与构建（根 `package.json`）
 
-## 最近变更（基于近期 Git 提交）
+- 框架：React 19 + TypeScript + Vite 5
+- 路由：`react-router-dom`（`HashRouter`）
+- 图表：`echarts` + `echarts-for-react`，`recharts`
+- 编辑器：`@monaco-editor/react`
+- 表单/选择：`react-select`、`react-datepicker`
+- 大数据列表：`react-window`
+- 导出能力：`exceljs`、`jspdf`、`jspdf-autotable`、`html2canvas`
+- 工具与类型：`zod`、`date-fns`、`clsx`、`tailwind-merge`
+- 样式体系：Tailwind CSS + 项目内共享样式层（`src/shared/styles`）
 
-- **2026-02-20**: 新增企微扫码混合登录（用户名密码 + WeCom OAuth 回调）
-  - 后端新增 `server/src/routes/wecom-auth.ts`、`server/src/services/wecom.ts`
-  - 前端登录页新增企微扫码入口与 `wecom_token` 回调处理
-- **2026-02-19**: 修复成本分析 API 与前端类型对齐问题
-  - `server/src/routes/query.ts` 成本相关接口修复
-  - `src/features/cost/` 新增/增强 `VariableCostKpiBoard`、类型与 Hook
-- **2026-02-18**: 保费达成下钻功能上线
-  - 新增 `GET /api/query/premium-plan`
-  - `premium-report` 模块新增 Tab 切换与下钻分析
-- **2026-02-19 ~ 2026-02-20**: 增补 E2E 验证产物与部署脚本增强（健康检查、VPS 发布流程）
+### 后端与数据引擎（`server/package.json`）
 
-## 项目概览
+- 运行时服务：Express 4 + TypeScript
+- 数据引擎：`@duckdb/node-api`
+- 认证与安全：`jsonwebtoken`、`bcrypt`、`helmet`、`express-rate-limit`、`cors`
+- 文件上传：`multer`
+- 参数校验：`zod`
 
-- 前端：React 19 + TypeScript + Vite（HashRouter）
-- 后端：Express + `@duckdb/node-api`
-- 数据：Parquet（后端自动加载最新文件并创建 `PolicyFact` 视图）
-- 安全：JWT 认证、行级权限过滤、限流、审计日志
-- 部署：`https://chexian.cretvalu.com`
+### 测试与质量保障
 
-## 当前架构
+- 单元/集成：Vitest
+- 组件测试：Testing Library（React）
+- E2E：Playwright
+- 治理与规范检查：`scripts/check-governance.mjs`
+
+---
+
+## 架构概览
 
 ```text
-Browser (React)
-  └─ /api/* (Bearer Token)
-      └─ Node.js/Express (server/src/app.ts)
-          ├─ /api/auth          用户名密码登录 + Token 刷新
-          ├─ /api/auth/wecom    企微 OAuth 配置与回调
-          ├─ /api/data          文件上传/加载/下载/元信息
-          ├─ /api/query         业务分析查询（SQL 生成器）
-          ├─ /api/filters       筛选器选项
-          └─ /api/ai            NL2SQL 与 API Key 验证
-                └─ DuckDB 查询 Parquet
+Browser (React + Vite)
+  └─ /api/* (JWT / Cookie Session)
+      └─ Express API (server/src/app.ts)
+          ├─ /api/auth         登录/刷新/用户角色管理
+          ├─ /api/auth/wecom   企业微信扫码登录
+          ├─ /api/data         Parquet 文件管理与加载
+          ├─ /api/filters      筛选器选项
+          ├─ /api/query        业务分析查询（SQL 生成器）
+          └─ /api/ai           NL2SQL/趋势解读
+               └─ DuckDB (@duckdb/node-api)
+                   └─ Parquet + PolicyFact 视图
 ```
 
-关键约束：
+关键实现特征：
 
-- 前端 `DataContext` 固定 `dataSource='api'`
-- 业务查询统一走 `server/src/sql/*.ts`，前端不拼接 SQL
-- 查询与筛选接口统一经过认证和权限注入（行级可见范围）
+- 启动时后端自动扫描候选数据目录并加载最新 Parquet，创建 `PolicyFact` 视图。
+- 查询侧使用 SQL 生成器（`server/src/sql/*.ts`）+ 权限过滤注入，避免前端拼接业务 SQL。
+- 高频接口提供查询缓存与 bundle 聚合端点，减少前端并发请求压力。
 
-## 目录结构（当前）
+---
+
+## 项目结构总览
 
 ```text
 chexian-api/
-├── 📂 src/                      # 前端应用
-│   ├── 📂 app/                  # 应用入口与路由
-│   ├── 📂 features/             # 业务功能模块
-│   │   ├── 📂 auth/            # 认证登录
-│   │   ├── 📂 dashboard/       # 总览看板
-│   │   ├── 📂 cost/            # 成本分析
-│   │   ├── 📂 growth/          # 增长分析
-│   │   ├── 📂 premium-report/  # 保费报告
-│   │   ├── 📂 filters/         # 筛选器
-│   │   └── 📂 sql-query/       # SQL 查询工具
-│   ├── 📂 widgets/              # 通用图表/表格/KPI 组件
-│   └── 📂 shared/               # API/Context/样式/工具/类型
-├── 📂 server/                   # 后端 API
-│   ├── 📂 src/
-│   │   ├── 📄 app.ts            # 服务入口
-│   │   ├── 📂 routes/           # auth/wecom-auth/query/data/filters/ai
-│   │   ├── 📂 services/         # duckdb/auth/wecom/permission
-│   │   ├── 📂 sql/              # 各分析模块 SQL 生成器
-│   │   ├── 📂 middleware/       # Express 中间件
-│   │   └── 📂 types/            # TypeScript 类型定义
-│   └── 📂 data/                 # Parquet 文件目录
-├── 📂 tests/                    # Vitest 测试
-│   ├── 📂 api/                  # API 测试
-│   ├── 📂 e2e/                  # E2E 测试
-│   └── 📂 integration/          # 集成测试
-├── 📂 scripts/                  # 启动、治理、计划管理脚本
-├── 📂 deploy/                   # VPS 部署与数据同步脚本
-├── 📂 数据管理/                 # 数据知识库与数据管道
-├── 📂 开发文档/                 # 索引、规范、治理文档
-└── 📂 docs/                     # 用户文档
+├── src/                         # 前端应用
+│   ├── app/                     # 入口与路由
+│   ├── features/                # 业务功能模块（dashboard/cost/growth/...）
+│   ├── components/              # 布局与页面容器
+│   ├── widgets/                 # 图表/表格/KPI 等复用组件
+│   ├── shared/                  # API/上下文/样式/工具/类型
+│   └── services/                # 前端服务（如导出）
+├── server/                      # 后端子项目
+│   ├── src/app.ts               # 服务入口
+│   ├── src/routes/              # auth/query/data/filters/ai/wecom-auth
+│   ├── src/services/            # duckdb/auth/permission/wecom 等
+│   ├── src/sql/                 # 各分析模块 SQL 生成器
+│   ├── src/middleware/          # auth/permission/rate-limit/audit/error
+│   └── data/                    # 本地数据目录（含 current）
+├── scripts/                     # 启动、治理、任务与诊断脚本
+├── tests/                       # Vitest + Playwright 测试
+├── deploy/                      # 部署与数据同步脚本
+├── 数据管理/                     # 数据处理与知识库
+└── 开发文档/                     # 规范、索引与治理文档
 ```
 
 ---
 
-## 🎨 功能模块详解
+## 安装与启动
 
-### 1. Dashboard 总览看板
+### 1. 环境要求
 
-**路径**: `src/features/dashboard/`
+- Bun（推荐，日常命令默认使用 Bun）
+- Node.js（建议 18+）
+- Python 3（用于部分数据脚本，可选）
 
-**功能**:
-- 核心业务 KPI 展示（保费、件数、赔付率等）
-- 多维度趋势图表
-- 预警指标监控
-- 数据质量检查
-- 交叉销售数据展示
+### 2. 安装依赖
 
-**API**: `GET /api/query/kpi`, `GET /api/query/trend`
-
-**特性**:
-- 实时数据更新
-- 可配置的 KPI 卡片
-- 多种图表类型（折线图、柱状图、饼图等）
-
-### 2. 保费分析报告
-
-**路径**: `src/features/premium-report/`
-
-**功能**:
-- 保费达成率分析
-- 保费计划对比
-- 多维度下钻分析（机构、渠道、产品等）
-- 同比/环比趋势
-- 保费预测
-
-**API**: `GET /api/query/premium-report`, `GET /api/query/premium-plan`
-
-**特性**:
-- Tab 切换展示不同维度
-- 可导出报告
-- 历史数据对比
-
-### 3. 成本分析
-
-**路径**: `src/features/cost/`
-
-**功能**:
-- 变动成本结构分析
-- 费用率监控
-- 成本趋势追踪
-- 成本 KPI 看板
-- 成本构成分解
-
-**API**: `GET /api/query/cost`
-
-**特性**:
-- 成本科目细分
-- 成本预警
-- 成本优化建议
-
-### 4. 增长分析
-
-**路径**: `src/features/growth/`
-
-**功能**:
-- 业务增长率分析
-- 增长贡献度分解
-- 增长趋势预测
-- 增长因素分析
-
-**API**: `GET /api/query/growth`
-
-**特性**:
-- 多期对比
-- 增长驱动因素识别
-
-### 5. 续保管理
-
-**路径**: `src/features/renewal/`
-
-**功能**:
-- 续保率统计
-- 续保预测分析
-- 续保明细查询
-- 下钻分析（按机构、渠道等）
-- 续保跟进提醒
-
-**API**: `GET /api/query/renewal`, `GET /api/query/renewal-drilldown`
-
-**特性**:
-- 续保概率预测
-- 续保机会识别
-- 续保策略建议
-
-### 6. 交叉销售
-
-**路径**: `src/features/cross-sell/`
-
-**功能**:
-- 驾乘险推介率分析
-- 交叉销售趋势
-- 交叉销售汇总报告
-- 客户购买倾向分析
-
-**API**: `GET /api/query/cross-sell`, `GET /api/query/cross-sell-summary`
-
-**特性**:
-- 推介效果追踪
-- 交叉销售机会挖掘
-
-### 7. SQL 查询工具
-
-**路径**: `src/features/sql-query/`
-
-**功能**:
-- 自定义 SQL 查询
-- NL2SQL 自然语言转 SQL（AI 辅助）
-- 查询结果可视化
-- 查询历史管理
-- SQL 模板库
-
-**API**: `POST /api/query/custom`, `POST /api/ai/nl2sql`
-
-**特性**:
-- 智能 SQL 补全
-- 查询性能分析
-- 结果导出（Excel、CSV）
-
-### 8. 营销报告
-
-**路径**: `src/features/marketing-report/`
-
-**功能**:
-- 营销数据统计
-- 业务员排名
-- 多维度报表
-- 营销效果分析
-
-**API**: `GET /api/query/marketing-report`, `GET /api/query/salesman-ranking`
-
-**特性**:
-- 自定义报表维度
-- 排名趋势追踪
-
----
-
-## 🔑 认证与权限
-
-### 认证方式
-
-#### 1. 用户名密码登录
-
-```bash
-POST /api/auth/login
-{
-  "username": "your-username",
-  "password": "your-password"
-}
-```
-
-#### 2. 企业微信扫码登录
-
-```bash
-# 获取企微配置
-GET /api/auth/wecom/config
-
-# 扫码回调
-GET /api/auth/wecom/callback?code=xxx
-```
-
-### 权限控制
-
-- **RBAC (基于角色的访问控制)** - 不同角色拥有不同的数据访问权限
-- **行级权限** - 用户只能查看其权限范围内的数据
-- **功能权限** - 控制用户可访问的功能模块
-
-### 权限配置
-
-权限配置位于 `server/src/services/permission.ts`，支持：
-- 按机构过滤
-- 按渠道过滤
-- 按产品线过滤
-- 自定义权限规则
-
----
-
-## 快速开始
-
-### 1) 环境要求
-
-- Node.js 18+
-- Bun（默认执行器）
-- Python 3.8+（仅数据管道脚本需要）
-
-### 2) 安装依赖
+在仓库根目录执行：
 
 ```bash
 bun install
 cd server && bun install && cd ..
 ```
 
-### 3) 环境变量
+### 3. 配置环境变量
 
-前端（可选）：`.env.local`
-
-```env
-VITE_API_BASE=http://localhost:3000/api
+```bash
+cp .env.example .env.local
+cp server/.env.example server/.env
 ```
 
-后端：`server/.env`（可从 `server/.env.example` 复制）
+可选 AI 相关配置见根目录 `.env.example`（OpenRouter / 智谱）。
 
-```env
-PORT=3000
-JWT_SECRET=your-secret-key-change-in-production
-CORS_ORIGIN=http://localhost:5173
-```
-
-企微扫码登录需要额外配置：
-
-```env
-WECOM_CORP_ID=...
-WECOM_AGENT_ID=...
-WECOM_SECRET=...
-WECOM_ADMIN_USERIDS=userA,userB
-```
-
-### 4) 准备数据
-
-将 `.parquet` 文件放入 `server/data/`，或使用部署脚本同步到 VPS。
-
-### 5) 启动（推荐）
+### 4. 启动开发环境（前后端一起）
 
 ```bash
 bun run dev:full
 ```
 
-说明：
-
-- 自动清理端口 `3000, 5173-5176`
-- 同时启动后端与前端
-
-### 6) 访问
+默认地址：
 
 - 前端：`http://localhost:5173`
 - 后端健康检查：`http://localhost:3000/health`
 
-登录方式：
+### 5. 数据准备
 
-- 用户名密码登录（账号配置在 `server/src/services/auth.ts`）
-- 企微扫码登录（启用 WeCom 环境变量后可用）
+可通过两种方式启用数据：
 
-## 常用命令
-
-```bash
-bun run dev            # 仅前端
-bun run dev:full       # 前后端联动启动（推荐）
-bun run start:server   # 仅后端（通过 scripts/start.mjs）
-bun run build          # 前端生产构建
-bun run preview        # 预览构建产物
-bun run test           # Vitest
-bun run test:coverage  # 覆盖率
-bun run governance     # 治理检查
-bun run plans:manage   # plans 快照管理
-```
-
-## API 总览（当前实现）
-
-认证：
-
-- `POST /api/auth/login`
-- `POST /api/auth/refresh`
-- `GET /api/auth/wecom/config`
-- `GET /api/auth/wecom/callback`
-
-数据管理：
-
-- `POST /api/data/upload`
-- `GET /api/data/files`
-- `POST /api/data/load/:filename`
-- `GET /api/data/metadata`
-- `GET /api/data/download/:filename`
-- `DELETE /api/data/clear`
-
-分析查询：
-
-- `GET /api/query/kpi`
-- `GET /api/query/kpi-detail`
-- `GET /api/query/trend`
-- `GET /api/query/truck`
-- `GET /api/query/growth`
-- `GET /api/query/coefficient`
-- `GET /api/query/cost`
-- `GET /api/query/renewal`
-- `GET /api/query/renewal-drilldown`
-- `GET /api/query/cross-sell`
-- `GET /api/query/cross-sell-summary`
-- `GET /api/query/salesman-ranking`
-- `GET /api/query/marketing-report`
-- `GET /api/query/premium-report`
-- `GET /api/query/premium-plan`
-- `POST /api/query/custom`
-
-筛选与 AI：
-
-- `GET /api/filters/options`
-- `POST /api/ai/nl2sql`
-- `POST /api/ai/validate-key`
-
-## 生产部署与数据同步
-
-生产地址：`https://chexian.cretvalu.com`
-
-```bash
-# 完整一键链路：Excel 接收 → 续保匹配 → Parquet 转换 → VPS 同步
-./数据管理/run.sh full \
-  --source 历史数据.xlsx \
-  --target 最新数据.xlsx \
-  --output 数据管理/warehouse/fact/policy/车险保单综合明细表MMDD.parquet
-
-# 仅本地转换，不同步 VPS
-./数据管理/run.sh full ... --no-sync
-
-# 单独同步已有 Parquet（跳过转换步骤）
-./deploy/sync-data.sh                  # 自动找最新 Parquet
-./deploy/sync-data.sh <文件名.parquet>  # 指定文件
-```
-
-更多部署说明：
-
-- `DEPLOYMENT_GUIDE.md`
-- `vps.md`
-- `deploy/vps-deploy.sh`
-- `deploy/sync-data.sh`
-
-## 故障排查（API 模式）
-
-出现“暂无数据”时按顺序检查：
-
-1. 已登录且本地存在有效 `auth_token`
-2. 后端运行在 `3000` 端口
-3. 后端存在已加载数据（`/api/data/files` 有 `isCurrent=true`）
-4. 浏览器 Network 中 `/api/*` 返回 200
-5. 前端 `isDataLoaded === true`
-
-## 文档入口
-
-- `ARCHITECTURE.md` - 架构规范与模块边界
-- `开发文档/TECH_STACK.md` - 技术栈声明与验证协议
-- `开发文档/DEVELOPER_CONVENTIONS.md` - 开发规范与最佳实践
-- `开发文档/00_index/DOC_INDEX.md` - 文档索引
-- `开发文档/00_index/CODE_INDEX.md` - 代码结构导航
-- `开发文档/00_index/DATA_INDEX.md` - 数据字典
-- `BACKLOG.md` - 任务清单
-- `PROGRESS.md` - 进度追踪
-- `DEPLOYMENT_GUIDE.md` - 部署指南
-- `TESTING_GUIDE.md` - 测试指南
-- `TROUBLESHOOTING.md` - 故障排查
+- 进入首页“数据导入”上传 `.parquet`
+- 将数据放入候选目录（后端会自动扫描）：
+  - `数据管理/warehouse/fact/policy/current`
+  - `server/data/current`
 
 ---
 
-## 🧪 测试
+## 根项目脚本（来自 `package.json`）
 
-### 测试框架
+| 脚本 | 命令 | 说明 |
+|---|---|---|
+| `start` | `node scripts/start.mjs` | 启动器（默认前端） |
+| `start:dev` | `node scripts/start.mjs --dev` | 启动前端开发服务器 |
+| `start:server` | `node scripts/start.mjs --server` | 仅启动后端 |
+| `start:all` | `node scripts/start.mjs --all` | 同时启动前后端 |
+| `dev` | `vite` | 前端开发模式 |
+| `dev:full` | `node scripts/start.mjs --all` | 推荐：全栈开发启动 |
+| `build` | `NODE_OPTIONS='--max-old-space-size=4096' vite build` | 生产构建 |
+| `build:analyze` | `NODE_OPTIONS='--max-old-space-size=4096' vite build --mode analyze` | 构建分析模式 |
+| `typecheck` | `node scripts/typecheck.mjs` | 类型检查 |
+| `preview` | `vite preview` | 预览构建产物 |
+| `test` | `vitest` | 单元/集成测试 |
+| `test:coverage` | `vitest --coverage` | 覆盖率 |
+| `test:e2e` | `playwright test` | E2E 自动化测试 |
+| `test:e2e:cleanup-gate` | `playwright test tests/e2e/03-cleanup-zero-downtime-gate.spec.ts` | 指定 E2E 场景 |
+| `test:e2e:ui` | `playwright test --ui` | Playwright UI 模式 |
+| `test:burn-down` | `node scripts/test-burn-down.mjs` | 测试债务燃尽报告 |
+| `benchmark:key-routes` | `node scripts/benchmark-key-routes.mjs` | 关键路由性能压测 |
+| `governance` | `node scripts/check-governance.mjs` | 治理一致性检查 |
+| `plans:manage` | `node scripts/manage-plans.mjs` | plans 状态管理 |
+| `hooks:install` | `bash scripts/install-git-hooks.sh` | 安装 Git hooks |
 
-- **Vitest** - 单元测试和集成测试
-- **Playwright** - E2E 测试
-- **Testing Library** - React 组件测试
+补充：后端子项目自身脚本见 `server/package.json`（`dev/build/start/test/lint`）。
 
-### 运行测试
+---
+
+## 关键功能（基于代码分析）
+
+### 1) 数据接入与管理
+
+- 支持 Parquet 上传、加载、删除、下载、元信息查询（`/api/data/*`）。
+- 启动期自动加载数据并创建 `PolicyFact` 视图。
+- 数据上下文固定 API 模式（`DataContext` 中 `dataSource: 'api'`）。
+
+### 2) 多主题经营分析 API
+
+`/api/query/*` 已实现高覆盖业务分析接口，包含：
+
+- Dashboard：`kpi`、`kpi-detail`、`trend`、`dashboard-bundle`
+- 业绩分析：`performance-summary/trend/drilldown/top-salesman/bundle`
+- 交叉销售：`cross-sell`、`cross-sell-summary`、`cross-sell-trend`、`cross-sell-bundle`、`cross-sell-org-trend`
+- 成本与费用：`cost`、`fee-analysis`
+- 续保：`renewal`、`renewal-drilldown`
+- 其他：`growth`、`coefficient`、`truck`、`salesman-ranking`、`marketing-report`、`premium-report`、`premium-plan`、`plan-achievement`
+
+### 3) SQL 工作台
+
+- 预置模板库 + 参数化 SQL
+- 可视化查询构建器（维度/度量/筛选）
+- 查询结果展示与导出
+- 只读 SQL 安全校验（禁止写入/明细泄露/越界访问）
+
+### 4) 认证、权限与安全
+
+- 账号密码登录 + refresh + logout（支持 Cookie 会话）
+- 企业微信 OAuth 登录（`/api/auth/wecom/*`）
+- 路由级权限 + 行级数据过滤（管理员/机构用户/电销用户）
+- 安全中间件：Helmet、限流、审计日志、上传安全校验（文件类型/路径遍历防护）
+
+### 5) AI 辅助能力
+
+- NL2SQL（后端生成并可选执行，执行前做 SQL 安全检查）
+- 机构趋势 AI 解读（OpenRouter 主路由 + 智谱兜底 + 缓存）
+
+### 6) 性能与稳定性
+
+- DuckDB 连接池 + 查询缓存 + 慢查询监控
+- 高频查询聚合为 bundle 接口，支持路由级缓存
+- 启动器可自动清理开发端口冲突并检查端口可用性
+
+---
+
+## 常用开发命令
 
 ```bash
-# 单元测试
+# 全栈开发
+bun run dev:full
+
+# 测试与治理
 bun run test
+bun run governance
 
-# 测试覆盖率
-bun run test:coverage
-
-# E2E 测试
-bun run test:e2e
-
-# E2E 测试 UI 模式
-bun run test:e2e:ui
-```
-
-### 测试统计
-
-- **单元测试**: 29+ 测试文件
-- **E2E 测试**: 关键业务流程覆盖
-- **集成测试**: API 接口测试
-- **组件测试**: React 组件功能测试
-
----
-
-## 🤝 开发指南
-
-### 开发流程
-
-1. **创建功能分支**
-   ```bash
-   git branch feature/your-feature-name
-   git checkout feature/your-feature-name
-   ```
-
-2. **开发和测试**
-   ```bash
-   bun run dev:full    # 启动开发环境
-   bun run test        # 运行测试
-   ```
-
-3. **代码质量检查**
-   ```bash
-   bun run typecheck   # TypeScript 类型检查
-   bun run governance  # 代码规范检查
-   ```
-
-4. **提交代码**
-   ```bash
-   git add .
-   git commit -m "feat: your feature description"
-   git push origin feature/your-feature-name
-   ```
-
-5. **创建 Pull Request**
-   - 确保 CI 通过
-   - 添加必要的文档
-   - 请求代码审查
-
-### 代码规范
-
-- 使用 TypeScript strict 模式
-- 遵循 ESLint 和 Prettier 规则
-- 组件采用函数式写法 + Hooks
-- 编写单元测试覆盖新功能
-
-### Git 提交规范
-
-```
-feat: 新功能
-fix: 修复 bug
-docs: 文档更新
-refactor: 代码重构
-test: 测试相关
-chore: 构建/工具相关
-perf: 性能优化
-style: 代码格式
+# 构建与预览
+bun run build
+bun run preview
 ```
 
 ---
 
-## 🔧 性能优化
+## 相关文档
 
-### 前端优化
-
-- ✅ 代码分割和懒加载
-- ✅ 虚拟滚动（大数据列表）
-- ✅ 图表按需渲染
-- ✅ 资源压缩和缓存
-
-### 后端优化
-
-- ✅ DuckDB 查询优化
-- ✅ API 响应缓存
-- ✅ 连接池管理
-- ✅ 请求限流保护
-
-### 数据优化
-
-- ✅ Parquet 列式存储
-- ✅ 数据预聚合
-- ✅ 索引优化
-
----
-
-## 🛡️ 安全特性
-
-### 认证与授权
-
-- **JWT Token 认证** - 安全的用户身份验证
-- **企业微信 OAuth** - 企业级单点登录
-- **RBAC 权限控制** - 基于角色的访问控制
-- **行级数据权限** - 精细化的数据访问控制
-
-### 安全措施
-
-- **HTTPS 加密传输** - 生产环境强制 HTTPS
-- **SQL 注入防护** - 参数化查询
-- **XSS 防护** - 输入验证和转义
-- **CSRF 防护** - Token 验证
-- **限流保护** - API 访问频率控制
-- **审计日志** - 操作记录追踪
-
----
-
-## 📦 技术栈详情
-
-### 前端技术栈
-
-| 技术 | 版本 | 说明 |
-|------|------|------|
-| React | 19.0.0 | UI 框架 |
-| TypeScript | 5.9.3 | 类型系统 |
-| Vite | 5.4.21 | 构建工具 |
-| Tailwind CSS | 3.4.19 | 样式框架 |
-| ECharts | 5.6.0 | 图表库 |
-| React Router | 7.12.0 | 路由管理 |
-| Vitest | 2.1.9 | 单元测试 |
-
-### 后端技术栈
-
-| 技术 | 版本 | 说明 |
-|------|------|------|
-| Express | 4.18.2 | Web 框架 |
-| DuckDB | 1.1.3 | OLAP 数据库 |
-| jsonwebtoken | 9.0.2 | JWT 认证 |
-| bcrypt | 5.1.1 | 密码哈希 |
-| Helmet | 7.1.0 | HTTP 安全头 |
-| Zod | 4.3.6 | 输入校验 |
-
-### 数据层
-
-- **DuckDB** - 嵌入式 OLAP 数据库
-- **Parquet** - 列式存储格式
-- **Apache Arrow** - 内存数据格式
-
----
-
-## 📈 项目统计
-
-- **代码行数**: 1831+ TypeScript/TSX 文件
-- **功能模块**: 15+ 业务功能模块
-- **API 接口**: 20+ REST API 端点
-- **测试用例**: 29+ 测试文件
-- **文档数量**: 20+ 文档文件
-
----
-
-## 🔄 更新日志
-
-查看 [最近变更](#最近变更基于近期-git-提交) 部分了解最新更新。
-
-完整更新日志请查看 Git 提交历史。
-
----
-
-## 📞 支持与反馈
-
-### 获取帮助
-
-- 📖 查看 [文档入口](#文档入口)
-- 🐛 提交 Issue
-- 💬 联系开发团队
-
-### 贡献指南
-
-欢迎贡献代码、文档或提出建议！
-
-1. Fork 项目
-2. 创建功能分支
-3. 提交 Pull Request
-4. 等待代码审查
-
----
-
-## 📄 许可证
-
-本项目采用 MIT 许可证
-
----
-
-<div align="center">
-
-**Built with ❤️ using React + TypeScript + DuckDB**
-
-**© 2026 车险数据分析平台**
-
-</div>
+- 架构规范：[`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- 技术栈说明：[`开发文档/TECH_STACK.md`](./开发文档/TECH_STACK.md)
+- 开发约定：[`开发文档/DEVELOPER_CONVENTIONS.md`](./开发文档/DEVELOPER_CONVENTIONS.md)
+- 部署指南：[`DEPLOYMENT_GUIDE.md`](./DEPLOYMENT_GUIDE.md)
+- 后端说明：[`server/README.md`](./server/README.md)
+- 治理脚本索引：[`scripts/INDEX.md`](./scripts/INDEX.md)
