@@ -16,6 +16,8 @@ export enum UserRole {
   BRANCH_ADMIN = 'branch_admin',
   /** 三级机构用户 - 只能查看本机构 + 分公司整体 */
   ORG_USER = 'org_user',
+  /** 电销用户 - 只能查看电销数据，但可以跨机构查看 */
+  TELEMARKETING_USER = 'telemarketing_user',
 }
 
 /**
@@ -57,6 +59,9 @@ export function permissionMiddleware(
         throw new AppError(403, 'Organization not specified for ORG_USER role');
       }
       req.permissionFilter = `org_level_3 = '${escapeSqlString(organization)}'`;
+    } else if (role === UserRole.TELEMARKETING_USER) {
+      // 电销用户：只能查看电销数据
+      req.permissionFilter = 'is_telemarketing = true';
     } else {
       // 未知角色
       throw new AppError(403, 'Invalid user role');

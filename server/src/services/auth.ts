@@ -161,6 +161,12 @@ const PRESET_USERS: Record<string, UserCredential> = {
     displayName: '车险部',
     role: 'branch_admin',
   },
+  scdianxiao: {
+    username: 'scdianxiao',
+    passwordHash: '$2b$10$LGsDuG1.fieDoR/mbsII1u2ecFY0iteEyFMKkgzO98OKfdbUAj4cK',
+    displayName: '四川电销',
+    role: 'telemarketing_user',
+  },
 };
 
 /**

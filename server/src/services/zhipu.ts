@@ -331,6 +331,11 @@ export interface TrendAnalysisResult {
   success: boolean;
   analysis: string;
   error?: string;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 /**
@@ -392,7 +397,15 @@ export async function analyzeOrgTrendWithZhipu(
       return { success: false, analysis: '', error: '模型返回内容为空' };
     }
 
-    return { success: true, analysis: content };
+    return {
+      success: true,
+      analysis: content,
+      usage: {
+        prompt_tokens: Number(data.usage?.prompt_tokens ?? 0),
+        completion_tokens: Number(data.usage?.completion_tokens ?? 0),
+        total_tokens: Number(data.usage?.total_tokens ?? 0),
+      },
+    };
   } catch (error) {
     const msg = error instanceof Error ? error.message : '请求失败';
     safeLog('error', 'Zhipu', `TrendAnalysis Error: ${msg}`);

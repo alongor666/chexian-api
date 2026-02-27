@@ -12,6 +12,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { permissionMiddleware } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { generateSqlWithZhipu, validateApiKey, analyzeOrgTrendWithZhipu } from '../services/zhipu.js';
+import { analyzeOrgTrendWithOpenRouter } from '../services/openrouter.js';
 import { validateSQL } from '../utils/sql-validator.js';
 import { duckdbService } from '../services/duckdb.js';
 import { injectPermissionFilter, isValidPermissionFilter } from '../utils/sql-permission-injector.js';
@@ -117,6 +118,50 @@ const validateKeySchema = z.object({
 });
 
 /**
+ * 解析逗号分隔模型列表
+ */
+function parseModelList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+interface TrendCacheEntry {
+  analysis: string;
+  source: string;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+  expiresAt: number;
+}
+
+const trendAnalysisCache = new Map<string, TrendCacheEntry>();
+
+function getTrendCacheKey(
+  rows: Array<{ date: string; auto_count: number; driver_count: number; rate: number; avg_premium: number }>,
+  org: string,
+  coverage: string,
+  openRouterModels: string[]
+): string {
+  return JSON.stringify({
+    org,
+    coverage,
+    models: openRouterModels,
+    rows,
+  });
+}
+
+/**
  * POST /api/ai/validate-key
  * 验证智谱 API Key
  */
@@ -159,25 +204,89 @@ const trendAnalysisSchema = z.object({
 router.post(
   '/trend-analysis',
   asyncHandler(async (req: Request, res: Response) => {
+    const requestStartAt = Date.now();
     const parseResult = trendAnalysisSchema.safeParse(req.body);
     if (!parseResult.success) {
       throw new AppError(400, parseResult.error.issues[0].message);
     }
 
     const { rows, org, coverage } = parseResult.data;
+    const timeoutMs = parsePositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS, 4500);
+    const cacheTtlMs = parsePositiveInt(process.env.AI_TREND_CACHE_TTL_MS, 180000);
 
-    // 本地开发读 VITE_ZHIPU_API_KEY（Bun 自动加载 .env.local）
-    // 生产环境读 ZHIPU_API_KEY（dotenv 加载 /var/www/chexian/server/.env）
-    const apiKey = process.env.ZHIPU_API_KEY || process.env.VITE_ZHIPU_API_KEY || '';
-    if (!apiKey) {
-      throw new AppError(503, '服务端未配置 AI Key，无法使用 AI 分析');
+    // 主路由：OpenRouter（支持逗号分隔模型顺序降级）
+    const openRouterApiKey = process.env.OPENROUTER_API_KEY || '';
+    const openRouterModels = parseModelList(
+      process.env.AI_PRIMARY_MODEL || process.env.OPENROUTER_MODELS
+    );
+    const cacheKey = getTrendCacheKey(rows, org, coverage, openRouterModels);
+    const cached = trendAnalysisCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      res.json({
+        success: true,
+        analysis: cached.analysis,
+        source: `${cached.source}:cache`,
+        cached: true,
+        usage: cached.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        elapsed_ms: Date.now() - requestStartAt,
+      });
+      return;
     }
 
-    const result = await analyzeOrgTrendWithZhipu(rows, { org, coverage }, { apiKey });
+    if (openRouterApiKey && openRouterModels.length > 0) {
+      const openRouterResult = await analyzeOrgTrendWithOpenRouter(
+        rows,
+        { org, coverage },
+        {
+          apiKey: openRouterApiKey,
+          models: openRouterModels,
+          timeoutMs,
+        }
+      );
+
+      if (openRouterResult.success) {
+        trendAnalysisCache.set(cacheKey, {
+          analysis: openRouterResult.analysis,
+          source: `openrouter:${openRouterResult.model || openRouterModels[0]}`,
+          usage: openRouterResult.usage,
+          expiresAt: Date.now() + cacheTtlMs,
+        });
+        res.json({
+          success: true,
+          analysis: openRouterResult.analysis,
+          source: `openrouter:${openRouterResult.model || openRouterModels[0]}`,
+          cached: false,
+          usage: openRouterResult.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+          elapsed_ms: Date.now() - requestStartAt,
+        });
+        return;
+      }
+    }
+
+    // 免费兜底：保持当前智谱配置
+    const zhipuApiKey = process.env.ZHIPU_API_KEY || process.env.VITE_ZHIPU_API_KEY || '';
+    if (!zhipuApiKey) {
+      throw new AppError(503, '服务端未配置可用 AI Key（OpenRouter/Zhipu），无法使用 AI 分析');
+    }
+
+    const result = await analyzeOrgTrendWithZhipu(rows, { org, coverage }, { apiKey: zhipuApiKey });
+
+    if (result.success) {
+      trendAnalysisCache.set(cacheKey, {
+        analysis: result.analysis,
+        source: 'zhipu',
+        usage: result.usage,
+        expiresAt: Date.now() + cacheTtlMs,
+      });
+    }
 
     res.json({
       success: result.success,
       analysis: result.analysis,
+      source: 'zhipu',
+      cached: false,
+      usage: result.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      elapsed_ms: Date.now() - requestStartAt,
       ...(result.error && { error: result.error }),
     });
   })

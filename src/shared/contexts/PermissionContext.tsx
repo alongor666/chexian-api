@@ -23,6 +23,8 @@ interface PermissionContextValue {
   isBranchAdmin: boolean;
   /** 是否为三级机构用户 */
   isOrgUser: boolean;
+  /** 是否为电销用户 */
+  isTelemarketingUser: boolean;
   /** 用户可见的机构列表 */
   visibleOrganizations: string[];
   /** 设置用户权限 */
@@ -47,6 +49,7 @@ const PermissionContext = createContext<PermissionContextValue>({
   isLoading: true,
   isBranchAdmin: false,
   isOrgUser: false,
+  isTelemarketingUser: false,
   visibleOrganizations: ['全部'],
   setUserPermission: () => { },
   login: () => { },
@@ -82,7 +85,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       const permission: UserPermission = localPermission || {
         username: me.username,
         displayName: me.displayName,
-        role: me.role === 'branch_admin' ? UserRole.BRANCH_ADMIN : UserRole.ORG_USER,
+        role: me.role === 'branch_admin' ? UserRole.BRANCH_ADMIN : me.role === 'telemarketing_user' ? UserRole.TELEMARKETING_USER : UserRole.ORG_USER,
         organization: me.organization as UserPermission['organization'],
       };
       setUserPermission(permission);
@@ -143,7 +146,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       const permission: UserPermission = localPermission || {
         username: authResult.user.username,
         displayName: authResult.user.displayName,
-        role: authResult.user.role === 'branch_admin' ? UserRole.BRANCH_ADMIN : UserRole.ORG_USER,
+        role: authResult.user.role === 'branch_admin' ? UserRole.BRANCH_ADMIN : authResult.user.role === 'telemarketing_user' ? UserRole.TELEMARKETING_USER : UserRole.ORG_USER,
         // organization 字段对于管理员可以不设置
       };
 
@@ -192,6 +195,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
   const isAuthenticated = userPermission !== null;
   const isBranchAdmin = userPermission?.role === UserRole.BRANCH_ADMIN;
   const isOrgUser = userPermission?.role === UserRole.ORG_USER;
+  const isTelemarketingUser = userPermission?.role === UserRole.TELEMARKETING_USER;
   const visibleOrganizations = userPermission
     ? getVisibleOrganizations(userPermission)
     : ['全部'];
@@ -205,6 +209,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       isLoading,
       isBranchAdmin,
       isOrgUser,
+      isTelemarketingUser,
       visibleOrganizations,
       setUserPermission,
       login,
@@ -220,6 +225,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       isLoading,
       isBranchAdmin,
       isOrgUser,
+      isTelemarketingUser,
       visibleOrganizations,
       setUserPermission,
       login,

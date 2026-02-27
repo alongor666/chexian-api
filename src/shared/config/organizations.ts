@@ -36,6 +36,8 @@ export enum UserRole {
   BRANCH_ADMIN = 'branch_admin',
   /** 三级机构用户 - 只能查看本机构 + 分公司整体 */
   ORG_USER = 'org_user',
+  /** 电销用户 - 只能查看电销数据，但可以跨机构查看 */
+  TELEMARKETING_USER = 'telemarketing_user',
 }
 
 /**
@@ -82,8 +84,8 @@ export const ORGANIZATION_HIERARCHY = {
  * @returns 可见的机构列表（包含"全部"和用户所属机构）
  */
 export function getVisibleOrganizations(permission: UserPermission): string[] {
-  if (permission.role === UserRole.BRANCH_ADMIN) {
-    // 分公司管理员：可见所有机构
+  if (permission.role === UserRole.BRANCH_ADMIN || permission.role === UserRole.TELEMARKETING_USER) {
+    // 分公司管理员/电销用户：可见所有机构
     return ['全部', ...ORGANIZATIONS];
   }
 
@@ -105,8 +107,8 @@ export function canViewOrganization(
   permission: UserPermission,
   organization: string
 ): boolean {
-  if (permission.role === UserRole.BRANCH_ADMIN) {
-    return true; // 管理员可查看所有
+  if (permission.role === UserRole.BRANCH_ADMIN || permission.role === UserRole.TELEMARKETING_USER) {
+    return true; // 管理员/电销用户可查看所有
   }
 
   if (organization === '全部') {
@@ -210,6 +212,12 @@ export const DEFAULT_USER_PERMISSIONS: UserPermission[] = [
     displayName: '高新机构',
     role: UserRole.ORG_USER,
     organization: '高新',
+  },
+  // 电销用户
+  {
+    username: 'scdianxiao',
+    displayName: '四川电销',
+    role: UserRole.TELEMARKETING_USER,
   },
 ];
 

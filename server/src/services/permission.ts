@@ -45,6 +45,11 @@ class PermissionService {
       return `org_level_3 = '${this.escapeSqlString(user.organization)}'`;
     }
 
+    if (user.role === UserRole.TELEMARKETING_USER) {
+      // 电销用户：只能查看电销数据
+      return 'is_telemarketing = true';
+    }
+
     // 未知角色或缺少机构信息：拒绝访问
     return '1=0';
   }
@@ -72,8 +77,8 @@ class PermissionService {
    * 获取用户可见的机构列表
    */
   getVisibleOrganizations(user: JwtPayload): string[] {
-    if (user.role === UserRole.BRANCH_ADMIN) {
-      // 分公司管理员：可见所有机构
+    if (user.role === UserRole.BRANCH_ADMIN || user.role === UserRole.TELEMARKETING_USER) {
+      // 分公司管理员/电销用户：可见所有机构
       return ['全部', ...ORGANIZATIONS];
     }
 
