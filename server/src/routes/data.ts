@@ -517,6 +517,9 @@ router.delete(
       // 删除 DuckDB 中的表和视图
       await duckdbService.query('DROP VIEW IF EXISTS PolicyFact');
       await duckdbService.query('DROP TABLE IF EXISTS raw_parquet');
+      await duckdbService.query('DROP TABLE IF EXISTS DailyAggregated');
+      await duckdbService.query('DROP TABLE IF EXISTS PeriodAggregated');
+      await duckdbService.query('DROP TABLE IF EXISTS CrossSellDailyAgg');
 
       // 删除文件（兼容 current/ 与根目录）
       const filePath = resolveManagedParquetPath(currentDataFile.filename);

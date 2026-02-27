@@ -11,16 +11,6 @@ import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell-sum
 export type TopSalesmanCoverage = '主全' | '交三';
 
 /**
- * 交叉销售判定条件
- */
-function getCrossSellCondition(): string {
-  return `(
-    TRY_CAST(is_cross_sell AS BOOLEAN) = true
-    OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-  )`;
-}
-
-/**
  * 生成 TOP20 业务员查询
  */
 export function generateCrossSellTopSalesmanQuery(
@@ -32,17 +22,11 @@ export function generateCrossSellTopSalesmanQuery(
   logger.debug('Generating cross-sell top salesman query', { vehicleCategory, coverage });
 
   const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
-  const crossSellCond = getCrossSellCondition();
-
-  const dedup = `COALESCE(
-      NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
-      NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
-    )`;
 
   const sql = `
     WITH date_bounds AS (
       SELECT MAX(CAST(policy_date AS DATE)) AS max_date
-      FROM PolicyFact
+      FROM CrossSellDailyAgg
       WHERE ${baseWhereClause}
         AND ${vehicleFilter}
     ),
@@ -50,10 +34,10 @@ export function generateCrossSellTopSalesmanQuery(
       SELECT
         salesman_name,
         org_level_3,
-        ${dedup} AS dedup_key,
         coverage_combination,
-        is_cross_sell,
-        cross_sell_premium_driver,
+        auto_count,
+        driver_count,
+        driver_premium,
         CAST(policy_date AS DATE) AS pd,
         (SELECT max_date FROM date_bounds) AS tp_max,
         (SELECT max_date FROM date_bounds) AS tp_day,
@@ -61,7 +45,7 @@ export function generateCrossSellTopSalesmanQuery(
         CAST(DATE_TRUNC('month', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_month,
         CAST(DATE_TRUNC('quarter', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_quarter,
         CAST(DATE_TRUNC('year', (SELECT max_date FROM date_bounds)) AS DATE) AS tp_year
-      FROM PolicyFact
+      FROM CrossSellDailyAgg
       WHERE ${baseWhereClause}
         AND ${vehicleFilter}
         AND coverage_combination = '${coverage}'
@@ -83,9 +67,9 @@ export function generateCrossSellTopSalesmanQuery(
       SELECT
         salesman_name,
         MAX(org_level_3) AS org_level_3,
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
-        COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium
+        COALESCE(SUM(auto_count), 0) AS auto_count,
+        COALESCE(SUM(driver_count), 0) AS driver_count,
+        COALESCE(SUM(driver_premium), 0) AS driver_premium
       FROM filtered
       GROUP BY salesman_name
     ),

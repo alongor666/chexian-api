@@ -46,7 +46,9 @@ export type DomainField =
   | 'underwriting_date'        // 提核日期（原"签单日期"重命名）
   | 'third_party_coverage'     // 三者保额
   | 'driver_coverage'          // 司机保额
-  | 'passenger_coverage';      // 乘客险保额
+  | 'passenger_coverage'       // 乘客险保额
+  | 'plate_no'                 // 车牌号码
+  | 'seat_count';              // 座位数
 
 /**
  * Column Alias Configuration
@@ -146,6 +148,8 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   third_party_coverage: ['third_party_coverage', '三者保额', '第三者保额'],
   driver_coverage: ['driver_coverage', '司机保额', '司机座位保额'],
   passenger_coverage: ['passenger_coverage', '乘客险保额', '乘客座位保额'],
+  plate_no: ['plate_no', '车牌号码', '车牌', 'license_plate', 'plateNo', 'plate_number'],
+  seat_count: ['seat_count', '座位数', 'seats', 'seatCount', 'seat_number'],
 };
 
 /**
@@ -179,6 +183,8 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'third_party_coverage',
   'driver_coverage',
   'passenger_coverage',
+  'plate_no',
+  'seat_count',
 ]);
 
 /**
@@ -225,6 +231,8 @@ export interface ColumnMapping {
   third_party_coverage?: string; // Optional field - 三者保额
   driver_coverage?: string; // Optional field - 司机保额
   passenger_coverage?: string; // Optional field - 乘客险保额
+  plate_no?: string; // Optional field - 车牌号码
+  seat_count?: string; // Optional field - 座位数
 }
 
 /**
@@ -342,4 +350,6 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   third_party_coverage: 'third_party_coverage',
   driver_coverage: 'driver_coverage',
   passenger_coverage: 'passenger_coverage',
+  plate_no: 'plate_no',
+  seat_count: 'seat_count',
 };

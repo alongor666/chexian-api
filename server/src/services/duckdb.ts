@@ -474,6 +474,7 @@ class DuckDBService {
    * 说明：
    * - DailyAggregated：日粒度预聚合，支撑趋势/KPI/货车等 V2 查询
    * - PeriodAggregated：月粒度预聚合，支撑增长分析 V2 查询
+   * - CrossSellDailyAgg：交叉销售热点查询聚合（summary/trend/drilldown/top）
    */
   async buildAggregates(): Promise<void> {
     await this.query(`
@@ -613,6 +614,111 @@ class DuckDBService {
         is_renewable,
         is_commercial_insure,
         insurance_type
+    `);
+
+    await this.query(`
+      CREATE OR REPLACE TABLE CrossSellDailyAgg AS
+      WITH normalized AS (
+        SELECT
+          CAST(policy_date AS DATE) AS policy_date,
+          CAST(insurance_start_date AS DATE) AS insurance_start_date,
+          org_level_3,
+          salesman_name,
+          customer_category,
+          coverage_combination,
+          renewal_mode,
+          tonnage_segment,
+          insurance_grade,
+          small_truck_score,
+          large_truck_score,
+          COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
+          (
+            TRY_CAST(is_transfer AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_transfer AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+          ) AS is_transfer,
+          (
+            TRY_CAST(is_telemarketing AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_telemarketing AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+          ) AS is_telemarketing,
+          (
+            TRY_CAST(is_renewal AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_renewal AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+          ) AS is_renewal,
+          (
+            TRY_CAST(is_nev AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_nev AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+          ) AS is_nev,
+          (
+            TRY_CAST(is_new_car AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_new_car AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+          ) AS is_new_car,
+          (
+            TRY_CAST(is_renewable AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_renewable AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+          ) AS is_renewable,
+          (
+            TRY_CAST(is_cross_sell AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+          ) AS is_cross_sell,
+          COALESCE(driver_coverage, 0) AS driver_coverage,
+          COALESCE(passenger_coverage, 0) AS passenger_coverage,
+          COALESCE(cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
+          COALESCE(
+            NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
+            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
+          ) AS dedup_key
+        FROM PolicyFact
+        WHERE policy_date IS NOT NULL
+      )
+      SELECT
+        policy_date,
+        insurance_start_date,
+        org_level_3,
+        salesman_name,
+        customer_category,
+        coverage_combination,
+        renewal_mode,
+        tonnage_segment,
+        insurance_grade,
+        small_truck_score,
+        large_truck_score,
+        is_commercial_insure,
+        is_transfer,
+        is_telemarketing,
+        is_renewal,
+        is_nev,
+        is_new_car,
+        is_renewable,
+        is_cross_sell,
+        driver_coverage,
+        passenger_coverage,
+        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
+        COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium
+      FROM normalized
+      WHERE dedup_key IS NOT NULL
+      GROUP BY
+        policy_date,
+        insurance_start_date,
+        org_level_3,
+        salesman_name,
+        customer_category,
+        coverage_combination,
+        renewal_mode,
+        tonnage_segment,
+        insurance_grade,
+        small_truck_score,
+        large_truck_score,
+        is_commercial_insure,
+        is_transfer,
+        is_telemarketing,
+        is_renewal,
+        is_nev,
+        is_new_car,
+        is_renewable,
+        is_cross_sell,
+        driver_coverage,
+        passenger_coverage
     `);
   }
 

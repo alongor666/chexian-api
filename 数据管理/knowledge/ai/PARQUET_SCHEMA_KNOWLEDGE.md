@@ -2,7 +2,7 @@
 
 **文档性质**: AI 必读知识源（NL2SQL 语义理解基础）
 **更新时间**: 2026-02-26
-**数据规模**: ~44万条记录 / 34个字段
+**数据规模**: ~44万条记录 / 36个字段
 
 ---
 
@@ -31,7 +31,8 @@ commercial_pricing_factor, vehicle_frame_no, is_quote,
 claim_cases, reported_claims, fee_amount, renewal_mode,
 insurance_grade, small_truck_score, large_truck_score,
 is_cross_sell, cross_sell_premium_driver,
-third_party_coverage, driver_coverage, passenger_coverage
+third_party_coverage, driver_coverage, passenger_coverage,
+plate_no, seat_count
 ```
 
 **❌ 以下字段在 PolicyFact 视图中不可用**：

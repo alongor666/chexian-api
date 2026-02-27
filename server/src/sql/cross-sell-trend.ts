@@ -30,16 +30,6 @@ function getTimeGroupExpr(granularity: TrendGranularity): string {
 }
 
 /**
- * 交叉销售判定条件（与 cross-sell-summary.ts 保持一致）
- */
-function getCrossSellCondition(): string {
-  return `(
-    TRY_CAST(is_cross_sell AS BOOLEAN) = true
-    OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-  )`;
-}
-
-/**
  * 生成车驾意推介率走势查询
  *
  * 返回字段：time_period, coverage_combination, rate, avg_premium, auto_count
@@ -58,22 +48,16 @@ export function generateCrossSellTrendQuery(
 
   const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
   const timeExpr = getTimeGroupExpr(granularity);
-  const crossSellCond = getCrossSellCondition();
-
-  const dedup = `COALESCE(
-      NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
-      NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
-    )`;
 
   const sql = `
     WITH filtered AS (
       SELECT
-        ${dedup} AS dedup_key,
         coverage_combination,
-        is_cross_sell,
-        cross_sell_premium_driver,
+        auto_count,
+        driver_count,
+        driver_premium,
         CAST(policy_date AS DATE) AS pd
-      FROM PolicyFact
+      FROM CrossSellDailyAgg
       WHERE ${baseWhereClause}
         AND ${vehicleFilter}
     ),
@@ -81,9 +65,9 @@ export function generateCrossSellTrendQuery(
       SELECT
         ${timeExpr} AS time_period,
         coverage_combination,
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
-        COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS premium
+        COALESCE(SUM(auto_count), 0) AS auto_count,
+        COALESCE(SUM(driver_count), 0) AS driver_count,
+        COALESCE(SUM(driver_premium), 0) AS premium
       FROM filtered
       GROUP BY 1, 2
     ),
@@ -91,9 +75,9 @@ export function generateCrossSellTrendQuery(
       SELECT
         ${timeExpr} AS time_period,
         '整体' AS coverage_combination,
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
-        COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS premium
+        COALESCE(SUM(auto_count), 0) AS auto_count,
+        COALESCE(SUM(driver_count), 0) AS driver_count,
+        COALESCE(SUM(driver_premium), 0) AS premium
       FROM filtered
       GROUP BY 1
     ),

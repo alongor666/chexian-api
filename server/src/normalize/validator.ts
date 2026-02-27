@@ -55,6 +55,8 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   third_party_coverage: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'],
   driver_coverage: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'],
   passenger_coverage: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'],
+  plate_no: ['VARCHAR', 'TEXT', 'STRING'],
+  seat_count: ['INTEGER', 'BIGINT', 'DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT'],
 };
 
 /**

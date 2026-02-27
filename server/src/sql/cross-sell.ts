@@ -148,30 +148,6 @@ function needsTeamJoin(drillPath: DrilldownStep[], groupBy: CrossSellDimension |
   return drillPath.some(s => s.dimension === 'team');
 }
 
-/**
- * 交叉销售判定（严格按交叉销售标识为“是”）
- */
-function getCrossSellCondition(colPrefix: string): string {
-  const flagCol = `${colPrefix}is_cross_sell`;
-
-  return `
-    (
-      TRY_CAST(${flagCol} AS BOOLEAN) = true
-      OR LOWER(TRIM(CAST(${flagCol} AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-    )
-  `;
-}
-
-/**
- * 统一去重键：优先车架号，缺失时回退保单号
- */
-function getDedupKeyExpr(colPrefix: string): string {
-  return `COALESCE(
-    NULLIF(TRIM(CAST(${colPrefix}vehicle_frame_no AS VARCHAR)), ''),
-    NULLIF(TRIM(CAST(${colPrefix}policy_no AS VARCHAR)), '')
-  )`;
-}
-
 // ============================================================
 // 主查询生成
 // ============================================================
@@ -192,10 +168,8 @@ export function generateCrossSellQuery(
   logger.debug('Generating cross-sell query', { baseWhereClause, drillPath, groupBy });
 
   const useJoin = needsTeamJoin(drillPath, groupBy);
-  const colPrefix = useJoin ? 'p.' : '';
-  const crossSellCondition = getCrossSellCondition(colPrefix);
-  const dedupKeyExpr = getDedupKeyExpr(colPrefix);
-  const tableRef = useJoin ? 'PolicyFact p' : 'PolicyFact';
+  const colPrefix = useJoin ? 'c.' : '';
+  const tableRef = useJoin ? 'CrossSellDailyAgg c' : 'CrossSellDailyAgg';
   const teamJoin = useJoin
     ? `LEFT JOIN SalesmanTeamMapping tm ON ${colPrefix}salesman_name = tm.full_name`
     : '';
@@ -219,19 +193,19 @@ export function generateCrossSellQuery(
     WITH cross_sell_base AS (
       SELECT
         ${config.selectExpr},
-        COUNT(DISTINCT ${dedupKeyExpr}) AS total_auto_count,
-        COUNT(DISTINCT CASE WHEN (${crossSellCondition}) THEN ${dedupKeyExpr} END) AS total_driver_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${dedupKeyExpr} END) AS danjiao_auto_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '单交' AND (${crossSellCondition}) THEN ${dedupKeyExpr} END) AS danjiao_driver_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${dedupKeyExpr} END) AS jiaosan_auto_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '交三' AND (${crossSellCondition}) THEN ${dedupKeyExpr} END) AS jiaosan_driver_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '主全' THEN ${dedupKeyExpr} END) AS zhuquan_auto_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '主全' AND (${crossSellCondition}) THEN ${dedupKeyExpr} END) AS zhuquan_driver_count
+        COALESCE(SUM(${colPrefix}auto_count), 0) AS total_auto_count,
+        COALESCE(SUM(${colPrefix}driver_count), 0) AS total_driver_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS danjiao_auto_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}driver_count ELSE 0 END), 0) AS danjiao_driver_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS jiaosan_auto_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${colPrefix}driver_count ELSE 0 END), 0) AS jiaosan_driver_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '主全' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS zhuquan_auto_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '主全' THEN ${colPrefix}driver_count ELSE 0 END), 0) AS zhuquan_driver_count
       FROM ${tableRef}
       ${teamJoin}
       WHERE ${fullWhere}
       GROUP BY ${config.groupByExpr}
-      HAVING COUNT(DISTINCT ${dedupKeyExpr}) > 0
+      HAVING COALESCE(SUM(${colPrefix}auto_count), 0) > 0
     )
     SELECT
       group_name,
@@ -272,21 +246,18 @@ function generateSummaryOnly(
   fullWhere: string,
   colPrefix: string
 ): string {
-  const crossSellCondition = getCrossSellCondition(colPrefix);
-  const dedupKeyExpr = getDedupKeyExpr(colPrefix);
-
   return `
     WITH summary AS (
       SELECT
         '四川分公司' AS group_name,
-        COUNT(DISTINCT ${dedupKeyExpr}) AS total_auto_count,
-        COUNT(DISTINCT CASE WHEN (${crossSellCondition}) THEN ${dedupKeyExpr} END) AS total_driver_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${dedupKeyExpr} END) AS danjiao_auto_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '单交' AND (${crossSellCondition}) THEN ${dedupKeyExpr} END) AS danjiao_driver_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${dedupKeyExpr} END) AS jiaosan_auto_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '交三' AND (${crossSellCondition}) THEN ${dedupKeyExpr} END) AS jiaosan_driver_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '主全' THEN ${dedupKeyExpr} END) AS zhuquan_auto_count,
-        COUNT(DISTINCT CASE WHEN ${colPrefix}coverage_combination = '主全' AND (${crossSellCondition}) THEN ${dedupKeyExpr} END) AS zhuquan_driver_count
+        COALESCE(SUM(${colPrefix}auto_count), 0) AS total_auto_count,
+        COALESCE(SUM(${colPrefix}driver_count), 0) AS total_driver_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS danjiao_auto_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}driver_count ELSE 0 END), 0) AS danjiao_driver_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS jiaosan_auto_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${colPrefix}driver_count ELSE 0 END), 0) AS jiaosan_driver_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '主全' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS zhuquan_auto_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '主全' THEN ${colPrefix}driver_count ELSE 0 END), 0) AS zhuquan_driver_count
       FROM ${tableRef}
       ${teamJoin}
       WHERE ${fullWhere}

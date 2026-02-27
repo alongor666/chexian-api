@@ -494,6 +494,25 @@ def process_new_fields(df):
         avg_val = df['乘客险保额'].mean()
         print(f"      ✅ 乘客险保额: 平均值 {avg_val:,.2f}")
 
+    # 15. 处理车牌号码（字符串，保留原值）
+    if '车牌号码' in df.columns:
+        print(f"\n   处理车牌号码:")
+        print(f"      数据类型: {df['车牌号码'].dtype}")
+        print(f"      空值数: {df['车牌号码'].isna().sum():,}")
+        df['车牌号码'] = df['车牌号码'].astype(str).where(df['车牌号码'].notna(), None)
+        sample_vals = df['车牌号码'].dropna().head(3).tolist()
+        print(f"      示例值: {sample_vals}")
+        print(f"      ✅ 车牌号码字段处理完成")
+
+    # 16. 处理座位数（整数）
+    if '座位数' in df.columns:
+        print(f"\n   处理座位数:")
+        print(f"      原始数据类型: {df['座位数'].dtype}")
+        print(f"      空值数: {df['座位数'].isna().sum():,}")
+        df['座位数'] = pd.to_numeric(df['座位数'], errors='coerce').fillna(0).astype('int64')
+        dist = df['座位数'].value_counts().head(10).to_dict()
+        print(f"      ✅ 座位数分布 (TOP10): {dist}")
+
     return df
 
 def process_dates(df):
@@ -649,7 +668,9 @@ def finalize_schema(df):
         '交叉销售保费_驾意',
         '三者保额',
         '司机保额',
-        '乘客险保额'
+        '乘客险保额',
+        '车牌号码',
+        '座位数'
     ]
 
     # 选择存在的字段

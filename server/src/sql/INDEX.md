@@ -147,3 +147,4 @@ export interface KpiDetailResult {
 
 | 2026-02-26 | performance-analysis.ts | 新增业绩分析独立页面 SQL 生成器与 4 个 performance 接口查询模板 |
 | 2026-02-27 | performance-analysis.ts | 新增 `generatePerformancePeriodBoundsQuery` 与 period bounds 复用参数，供 `performance-bundle` 减少重复时间窗口扫描 |
+| 2026-02-27 | cross-sell.ts / cross-sell-summary.ts / cross-sell-trend.ts / cross-sell-top-salesman.ts | 交叉销售热点查询切换到 `CrossSellDailyAgg` 预聚合表，减少运行时重复去重与布尔兼容计算 |
