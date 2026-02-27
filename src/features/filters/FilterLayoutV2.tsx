@@ -95,24 +95,6 @@ const getDateCriteriaLabel = (criteria: DateCriteriaType): string => {
   return criteria === 'policy_date' ? '签单日期' : '起保日期';
 };
 
-/**
- * 机构分类（根据【功能实施】商车自主定价系数监控板块开发计划.md）
- * 同城（成都）: 天府、高新、新都、青羊、武侯、重客、本部
- * 异地（中支）: 宜宾、德阳、资阳、泸州、自贡、乐山、达州
- */
-const LOCAL_ORGS = ['天府', '高新', '新都', '青羊', '武侯', '重客', '本部'];
-const REMOTE_ORGS = ['宜宾', '德阳', '资阳', '泸州', '自贡', '乐山', '达州'];
-
-/**
- * 根据机构类型筛选机构列表
- */
-const getOrgSelectionByType = (orgs: string[], type: 'remote' | 'local'): string[] => {
-  const targetList = type === 'remote' ? REMOTE_ORGS : LOCAL_ORGS;
-  return orgs.filter((org) =>
-    targetList.some((target) => org.includes(target))
-  );
-};
-
 export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
   filters,
   onChange,

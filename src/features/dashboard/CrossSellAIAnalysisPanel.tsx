@@ -148,17 +148,17 @@ export const CrossSellAIAnalysisPanel = memo(function CrossSellAIAnalysisPanel({
                         </div>
                         
                         {group.names.length > 0 ? (
-                            <p className={cn(textStyles.small, 'text-neutral-600 leading-relaxed')}>
+                            <p className={cn(textStyles.caption, 'text-neutral-600 leading-relaxed')}>
                                 {group.names.slice(0, 5).join('、')}
                                 {group.names.length > 5 && ` 等${group.names.length}人`}
                             </p>
                         ) : (
-                            <p className={cn(textStyles.small, 'text-neutral-400 italic')}>
+                            <p className={cn(textStyles.caption, 'text-neutral-400 italic')}>
                                 暂无
                             </p>
                         )}
                         
-                        <p className={cn(textStyles.small, 'text-neutral-400 mt-1')}>
+                        <p className={cn(textStyles.caption, 'text-neutral-400 mt-1')}>
                             → {group.description}
                         </p>
                     </div>
@@ -167,10 +167,10 @@ export const CrossSellAIAnalysisPanel = memo(function CrossSellAIAnalysisPanel({
             
             {/* 分析依据 */}
             <div className="mt-4 pt-3 border-t border-neutral-200">
-                <p className={cn(textStyles.small, 'font-medium text-neutral-700 mb-2')}>
+                <p className={cn(textStyles.caption, 'font-medium text-neutral-700 mb-2')}>
                     📈 分析依据
                 </p>
-                <div className={cn(textStyles.small, 'text-neutral-500 space-y-1')}>
+                <div className={cn(textStyles.caption, 'text-neutral-500 space-y-1')}>
                     <p>• 推介率阈值：{formatPercent(thresholds.rateMedian)}</p>
                     <p>• 件均阈值：{formatCount(thresholds.avgPremiumMedian)}元</p>
                     <p>• 统计时间：{timePeriodLabel}</p>

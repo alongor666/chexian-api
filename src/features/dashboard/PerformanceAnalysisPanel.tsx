@@ -295,6 +295,12 @@ function DistributionChart({
       low_growth_low_achievement: points.filter((item) => item.quadrant === 'low_growth_low_achievement'),
     };
 
+    const scatterSymbolSize = (_value: unknown, params: any) => {
+      const data = params?.data;
+      if (typeof data?.symbolSize === 'number') return data.symbolSize;
+      return 16;
+    };
+
     const option: EChartsOption = {
       tooltip: {
         trigger: 'item',
@@ -349,6 +355,7 @@ function DistributionChart({
           name: '背景',
           type: 'scatter',
           data: [],
+          symbolSize: scatterSymbolSize,
           markArea: {
             silent: true,
             itemStyle: { opacity: 0.08 },
@@ -376,21 +383,25 @@ function DistributionChart({
           name: '高增长高达成（优秀）',
           type: 'scatter',
           data: bucket.high_growth_high_achievement,
+          symbolSize: scatterSymbolSize,
         },
         {
           name: '高增长低达成（异常）',
           type: 'scatter',
           data: bucket.high_growth_low_achievement,
+          symbolSize: scatterSymbolSize,
         },
         {
           name: '低增长高达成（预警）',
           type: 'scatter',
           data: bucket.low_growth_high_achievement,
+          symbolSize: scatterSymbolSize,
         },
         {
           name: '低增长低达成（危险）',
           type: 'scatter',
           data: bucket.low_growth_low_achievement,
+          symbolSize: scatterSymbolSize,
           markLine: {
             silent: true,
             symbol: 'none',
@@ -405,14 +416,7 @@ function DistributionChart({
             ],
           },
         },
-      ].map((seriesItem) => ({
-        ...seriesItem,
-        symbolSize: (value: any, params: any) => {
-          const data = params?.data;
-          if (typeof data?.symbolSize === 'number') return data.symbolSize;
-          return 16;
-        },
-      })),
+      ],
     };
 
     chart.setOption(option, true);
