@@ -1,0 +1,152 @@
+- generic [ref=e7]:
+  - banner [ref=e8]:
+    - generic [ref=e9]:
+      - img [ref=e10]
+      - heading "车险经营管理系统" [level=1] [ref=e14]
+      - generic [ref=e15]: v2.0
+    - navigation "主菜单" [ref=e16]:
+      - button "文件" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+        - generic [ref=e21]: 文件
+        - img [ref=e22]
+      - button "设置" [ref=e25] [cursor=pointer]:
+        - img [ref=e26]
+        - generic [ref=e29]: 设置
+        - img [ref=e30]
+  - generic [ref=e32]:
+    - navigation "主导航" [ref=e33]:
+      - navigation [ref=e36]:
+        - link "首页" [ref=e37] [cursor=pointer]:
+          - /url: "#/"
+          - img [ref=e38]
+          - generic [ref=e41]: 首页
+        - separator [ref=e42]
+        - generic [ref=e43]: 数据分析
+        - link "仪表盘" [ref=e44] [cursor=pointer]:
+          - /url: "#/dashboard"
+          - img [ref=e45]
+          - generic [ref=e50]: 仪表盘
+        - link "业绩分析" [ref=e51] [cursor=pointer]:
+          - /url: "#/performance-analysis"
+          - img [ref=e52]
+          - generic [ref=e55]: 业绩分析
+        - link "保费报表" [ref=e56] [cursor=pointer]:
+          - /url: "#/premium-report"
+          - img [ref=e57]
+          - generic [ref=e59]: 保费报表
+        - link "营销战报" [ref=e60] [cursor=pointer]:
+          - /url: "#/marketing-report"
+          - img [ref=e61]
+          - generic [ref=e65]: 营销战报
+        - link "营业货车" [ref=e66] [cursor=pointer]:
+          - /url: "#/truck"
+          - img [ref=e67]
+          - generic [ref=e72]: 营业货车
+        - link "续保分析" [ref=e73] [cursor=pointer]:
+          - /url: "#/renewal"
+          - img [ref=e74]
+          - generic [ref=e79]: 续保分析
+        - link "驾乘险推介率" [ref=e80] [cursor=pointer]:
+          - /url: "#/cross-sell"
+          - img [ref=e81]
+          - generic [ref=e85]: 驾乘险推介率
+        - link "增长分析" [ref=e86] [cursor=pointer]:
+          - /url: "#/growth"
+          - img [ref=e87]
+          - generic [ref=e90]: 增长分析
+        - link "成本分析" [ref=e91] [cursor=pointer]:
+          - /url: "#/cost"
+          - img [ref=e92]
+          - generic [ref=e94]: 成本分析
+        - link "数据对比" [ref=e95] [cursor=pointer]:
+          - /url: "#/comparison"
+          - img [ref=e96]
+          - generic [ref=e100]: 数据对比
+        - link "系数监控" [ref=e101] [cursor=pointer]:
+          - /url: "#/coefficient"
+          - img [ref=e102]
+          - generic [ref=e105]: 系数监控
+        - link "SQL查询" [ref=e106] [cursor=pointer]:
+          - /url: "#/sql-query"
+          - img [ref=e107]
+          - generic [ref=e112]: SQL查询
+        - separator [ref=e113]
+        - generic [ref=e114]: 工具
+        - link "摩意模型" [ref=e115] [cursor=pointer]:
+          - /url: "#/moto-cost"
+          - img [ref=e116]
+          - generic [ref=e121]: 摩意模型
+      - generic [ref=e122]:
+        - button "xuechenglong 管理员" [ref=e124] [cursor=pointer]:
+          - img [ref=e125]
+          - paragraph [ref=e128]: xuechenglong
+          - generic [ref=e129]: 管理员
+          - img [ref=e130]
+        - button "收起侧边栏" [expanded] [ref=e132] [cursor=pointer]:
+          - img [ref=e133]
+          - generic [ref=e135]: 收起侧边栏
+    - main [ref=e136]:
+      - generic [ref=e140]:
+        - generic [ref=e141]:
+          - generic [ref=e142]:
+            - heading "数据导入" [level=1] [ref=e143]
+            - paragraph [ref=e144]: 上传 Parquet 文件后自动进入分析看板
+          - generic [ref=e145]:
+            - button "刷新" [ref=e146] [cursor=pointer]:
+              - img [ref=e147]
+              - text: 刷新
+            - button "收起上传" [ref=e152] [cursor=pointer]:
+              - img [ref=e153]
+              - text: 收起上传
+        - generic [ref=e156]:
+          - generic [ref=e157]:
+            - generic [ref=e158]:
+              - img [ref=e159]
+              - text: 服务器文件
+            - generic [ref=e163]: "0"
+          - generic [ref=e164]:
+            - generic [ref=e165]:
+              - img [ref=e166]
+              - text: 当前加载
+            - generic [ref=e169]: 未加载
+          - generic [ref=e170]:
+            - generic [ref=e171]:
+              - img [ref=e172]
+              - text: 最近更新
+            - generic [ref=e175]: 暂无
+        - generic [ref=e176]:
+          - generic [ref=e177]:
+            - generic [ref=e178]: 上传文件
+            - button [ref=e179] [cursor=pointer]:
+              - img [ref=e180]
+          - generic [ref=e183]:
+            - button "Choose File" [ref=e184] [cursor=pointer]
+            - generic [ref=e185]:
+              - img [ref=e187]
+              - paragraph [ref=e191]: 拖拽文件到此处或点击选择
+              - generic [ref=e193]: 点击上传
+              - paragraph [ref=e194]: .parquet 格式，最大 500MB
+              - paragraph [ref=e195]: "必需字段: policy_no, premium, org_name, salesman_name"
+        - generic [ref=e196]:
+          - generic [ref=e197]:
+            - generic [ref=e198]:
+              - img [ref=e199]
+              - text: 文件格式
+            - paragraph [ref=e202]: 仅支持 Parquet，建议上传最近一个月的数据
+          - generic [ref=e203]:
+            - generic [ref=e204]:
+              - img [ref=e205]
+              - text: 数据字段
+            - paragraph [ref=e209]: 核心字段需完整，缺失会影响图表展示
+          - generic [ref=e210]:
+            - generic [ref=e211]:
+              - img [ref=e212]
+              - text: 安全提示
+            - paragraph [ref=e215]: 数据仅在内网使用，不会上传至外部
+        - generic [ref=e216]:
+          - heading "服务器数据文件" [level=2] [ref=e218]
+          - generic [ref=e219]:
+            - generic [ref=e220]: 暂无数据文件，请上传
+            - button "打开上传区域" [ref=e221] [cursor=pointer]:
+              - img [ref=e222]
+              - text: 打开上传区域

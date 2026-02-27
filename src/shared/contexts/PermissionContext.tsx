@@ -92,6 +92,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       return true;
     } catch {
       setUserPermission(null);
+      apiClient.clearToken();
       return false;
     }
   }, [setUserPermission]);
@@ -100,6 +101,9 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
   useEffect(() => {
     const restoreAuth = async () => {
       try {
+        if (!apiClient.isAuthenticated()) {
+          return;
+        }
         await restoreSession();
       } catch (e) {
         logger.error('恢复登录状态失败:', e);

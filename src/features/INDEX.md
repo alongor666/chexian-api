@@ -316,6 +316,7 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/hooks/usePerformanceBundle.ts`**: 新增业绩分析 bundle 数据 Hook（`performance-bundle`）。
 - **`dashboard/hooks/useDashboardBundle.ts`**: 新增仪表盘 bundle 数据 Hook（`dashboard-bundle`）。
 - **`dashboard/PerformanceAnalysisPanel.tsx`**: summary/trend/top 优先消费 bundle 预取数据，支持 `VITE_ENABLE_BUNDLE_ROUTES=false` 回退旧链路。
+- **`dashboard/hooks/usePerformanceDrilldown.ts`**、**`dashboard/PerformanceAnalysisPanel.tsx`**: 下钻链路支持 bundle 预取首屏数据，避免首屏再发一次 drilldown 重复请求；用户交互后再切回按需请求。
 - **`dashboard/PremiumDashboard.tsx`**: KPI/trend/排名/玫瑰图优先消费 bundle 预取数据，支持开关回退。
 - **`dashboard/CrossSellSummaryKpiBoard.tsx`**、**`dashboard/CrossSellTrendChart.tsx`**、**`dashboard/CrossSellTopSalesmanBoard.tsx`**: 增加 prefetched 数据入口，消除页面内重复请求。
 - **`home/DataImportPage.tsx`**: 移除重复 `refreshFiles()` 触发路径，避免进入页时双请求。

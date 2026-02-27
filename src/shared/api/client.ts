@@ -8,6 +8,7 @@
 /** API 基础地址（从环境变量获取，默认本地开发地址） */
 export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api';
 export const ENABLE_BUNDLE_ROUTES = import.meta.env.VITE_ENABLE_BUNDLE_ROUTES !== 'false';
+const AUTH_SESSION_HINT_KEY = 'chexian_auth_session_hint';
 
 /**
  * API 响应格式
@@ -232,13 +233,36 @@ export interface LoadResult {
 class ApiClient {
   private token: string | null = null;
   private tokenExpiry: number = 0;
-  private hasSessionCookieHint = false;
+  private hasSessionCookieHint = this.loadSessionCookieHint();
   /** 进行中的请求控制器（按端点去重） */
   private inflightControllers = new Map<string, AbortController>();
   /** 进行中的同 key 请求 Promise（用于请求合并） */
   private inflightRequests = new Map<string, Promise<unknown>>();
   /** 默认请求超时（毫秒） */
   private requestTimeoutMs = 30_000;
+
+  private loadSessionCookieHint(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem(AUTH_SESSION_HINT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  private setSessionCookieHint(value: boolean): void {
+    this.hasSessionCookieHint = value;
+    if (typeof window === 'undefined') return;
+    try {
+      if (value) {
+        window.localStorage.setItem(AUTH_SESSION_HINT_KEY, '1');
+      } else {
+        window.localStorage.removeItem(AUTH_SESSION_HINT_KEY);
+      }
+    } catch {
+      // 忽略 localStorage 失败
+    }
+  }
 
   private normalizeGetEndpoint(endpoint: string): string {
     const [path, query = ''] = endpoint.split('?');
@@ -286,7 +310,7 @@ class ApiClient {
     } catch {
       this.tokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // 默认 24 小时
     }
-    this.hasSessionCookieHint = true;
+    this.setSessionCookieHint(true);
   }
 
   /**
@@ -307,7 +331,7 @@ class ApiClient {
   clearToken(): void {
     this.token = null;
     this.tokenExpiry = 0;
-    this.hasSessionCookieHint = false;
+    this.setSessionCookieHint(false);
   }
 
   /**
@@ -389,7 +413,9 @@ class ApiClient {
           signal: controller.signal,
         });
 
-        if (response.status === 401 && !hasRetriedAfterRefresh) {
+        const canTryRefresh = !endpoint.startsWith('/auth/')
+          && (Boolean(token) || this.hasSessionCookieHint);
+        if (response.status === 401 && !hasRetriedAfterRefresh && canTryRefresh) {
           const refreshed = await this.tryRefreshSession();
           if (refreshed) {
             return this.request<T>(endpoint, options, true);
@@ -441,14 +467,14 @@ class ApiClient {
     if (result.token) {
       this.setToken(result.token);
     } else {
-      this.hasSessionCookieHint = true;
+      this.setSessionCookieHint(true);
     }
     return result;
   }
 
   async getCurrentUser(): Promise<AuthData['user']> {
     const user = await this.request<AuthData['user']>('/auth/me');
-    this.hasSessionCookieHint = true;
+    this.setSessionCookieHint(true);
     return user;
   }
 
@@ -495,7 +521,7 @@ class ApiClient {
       if (data.data?.token) {
         this.setToken(data.data.token);
       } else {
-        this.hasSessionCookieHint = true;
+        this.setSessionCookieHint(true);
       }
       return true;
     } catch {

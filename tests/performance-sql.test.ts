@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   generatePerformanceDrilldownQuery,
+  generatePerformancePeriodBoundsQuery,
   generatePerformanceSummaryQuery,
   generatePerformanceTopSalesmanQuery,
   generatePerformanceTrendQuery,
@@ -33,6 +34,27 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('child_current');
     expect(sql).toContain("|| '+' ||");
     expect(sql).toContain('ORDER BY coverage_order, row_level, child_order');
+  });
+
+  it('summary SQL should allow reusing precomputed period bounds', () => {
+    const sql = generatePerformanceSummaryQuery(
+      'policy_date >= \'2026-01-01\'',
+      '1=1',
+      'all',
+      'month',
+      'mom',
+      'none',
+      {
+        refDate: '2026-02-27',
+        currentStart: '2026-02-01',
+        currentEnd: '2026-02-27',
+        prevStart: '2026-01-01',
+        prevEnd: '2026-01-31',
+      }
+    );
+
+    expect(sql).toContain("CAST('2026-02-27' AS DATE) AS ref_date");
+    expect(sql).not.toContain('COALESCE(MAX(CAST(policy_date AS DATE)), CURRENT_DATE)');
   });
 
   it('segment tag filter should include all truck branches', () => {
@@ -90,5 +112,13 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('AS plan_premium');
     expect(sql).toContain('ORDER BY m.achievement_rate ASC NULLS LAST, m.premium DESC');
     expect(sql).toContain('LIMIT 20');
+  });
+
+  it('period bounds SQL should expose current/previous windows', () => {
+    const sql = generatePerformancePeriodBoundsQuery('1=1', 'all', 'month', 'mom');
+    expect(sql).toContain('AS current_start');
+    expect(sql).toContain('AS current_end');
+    expect(sql).toContain('AS prev_start');
+    expect(sql).toContain('AS prev_end');
   });
 });

@@ -48,8 +48,14 @@ export function usePerformanceBundle({
 
     const run = async () => {
       try {
+        const defaultDrillPath = isOrgUser && userOrg
+          ? [{ dimension: 'org_level_3', value: userOrg }]
+          : [];
+        const defaultGroupBy = isOrgUser ? 'salesman' : 'org_level_3';
         const params = {
           ...buildFilterParams(filters, { isOrgUser, userOrg }),
+          drillPath: defaultDrillPath,
+          groupBy: defaultGroupBy,
           segmentTag,
           timePeriod,
           growthMode,

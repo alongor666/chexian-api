@@ -1,0 +1,7 @@
+[GET] https://chexian.cretvalu.com/api/auth/me => [401] Unauthorized
+[POST] https://chexian.cretvalu.com/api/auth/refresh => [401] Unauthorized
+[POST] https://chexian.cretvalu.com/api/auth/login => [200] OK
+[GET] https://chexian.cretvalu.com/api/data/files => [200] OK
+[GET] https://chexian.cretvalu.com/api/filters/options => [200] OK
+[GET] https://chexian.cretvalu.com/api/data/files => [200] OK
+[GET] https://chexian.cretvalu.com/api/query/dashboard-bundle?dateField=policy_date&startDate=2026-01-01&endDate=2026-02-26&granularity=week&perspective=premium&rankingLimit=10 => [200] OK

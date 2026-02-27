@@ -65,11 +65,13 @@ import { generateCrossSellTrendQuery, type TrendGranularity } from '../sql/cross
 import { generateCrossSellOrgTrendQuery, type CoverageCombinationFilter } from '../sql/cross-sell-org-trend.js';
 import { generateCrossSellTopSalesmanQuery, type TopSalesmanCoverage } from '../sql/cross-sell-top-salesman.js';
 import {
+  generatePerformancePeriodBoundsQuery,
   generatePerformanceSummaryQuery,
   generatePerformanceTrendQuery,
   generatePerformanceDrilldownQuery,
   generatePerformanceTopSalesmanQuery,
   mapLegacyVehicleCategoryToSegmentTag,
+  type PerformancePeriodBounds,
   type PerformanceSegmentTag,
   type PerformanceVehicleCategory,
   type PerformanceGrowthMode,
@@ -91,6 +93,7 @@ import { commonFilterSchema, buildWhereFromFilterParams, buildWhereFromFilterPar
 import { parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, resolveGroupDim } from '../utils/route-helpers.js';
 import { logger } from '../utils/logger.js';
 import { buildResponseMeta } from '../utils/api-meta.js';
+import { markRequestCacheHit } from '../utils/request-context.js';
 
 const router = Router();
 
@@ -99,6 +102,45 @@ const QUERY_CACHE = {
   hotspotMedium: 45_000,
   hotspotLong: 60_000,
 } as const;
+
+interface RouteCacheEntry<T> {
+  data: T;
+  expiry: number;
+}
+
+const routeResponseCache = new Map<string, RouteCacheEntry<unknown>>();
+
+function buildRouteCacheKey(req: Request, routeName: string): string {
+  const normalizedQuery = Object.entries(req.query)
+    .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : String(value)] as const)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+  return `${routeName}|${req.permissionFilter || '1=1'}|${normalizedQuery}`;
+}
+
+function getRouteCache<T>(key: string): T | null {
+  const entry = routeResponseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiry) {
+    routeResponseCache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setRouteCache<T>(key: string, data: T, ttlMs: number): void {
+  if (routeResponseCache.size >= 500) {
+    const oldestKey = routeResponseCache.keys().next().value;
+    if (oldestKey) {
+      routeResponseCache.delete(oldestKey);
+    }
+  }
+  routeResponseCache.set(key, {
+    data,
+    expiry: Date.now() + ttlMs,
+  });
+}
 
 function isBundleRoutesEnabled(): boolean {
   return process.env.ENABLE_QUERY_BUNDLES !== 'false';
@@ -1501,6 +1543,17 @@ router.get(
     if (!parseResult.success) {
       throw new AppError(400, parseResult.error.issues[0].message);
     }
+    const routeCacheKey = buildRouteCacheKey(req, 'cross-sell-bundle');
+    const cachedBundleData = getRouteCache<Record<string, unknown>>(routeCacheKey);
+    if (cachedBundleData) {
+      markRequestCacheHit();
+      res.json({
+        success: true,
+        data: cachedBundleData,
+        meta: buildResponseMeta(res),
+      });
+      return;
+    }
 
     const {
       drillPath: drillPathRaw,
@@ -1591,27 +1644,30 @@ router.get(
       duckdbService.query(maxDateSql, QUERY_CACHE.hotspotMedium),
     ]);
 
+    const bundleData = {
+      summary: {
+        maxDate: maxDateRows[0]?.max_date || null,
+        rows: timePeriodRows,
+      },
+      trend: {
+        rows: trendRows,
+      },
+      drilldown: {
+        summary: drillSummaryRows[0] || null,
+        rows: drillRows,
+        drillPath,
+        groupBy: groupBy || null,
+      },
+      topSalesman: {
+        zhuquanRows: zhuquanTopSalesmanRows,
+        jiaosanRows: jiaosanTopSalesmanRows,
+      },
+    };
+    setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
+
     res.json({
       success: true,
-      data: {
-        summary: {
-          maxDate: maxDateRows[0]?.max_date || null,
-          rows: timePeriodRows,
-        },
-        trend: {
-          rows: trendRows,
-        },
-        drilldown: {
-          summary: drillSummaryRows[0] || null,
-          rows: drillRows,
-          drillPath,
-          groupBy: groupBy || null,
-        },
-        topSalesman: {
-          zhuquanRows: zhuquanTopSalesmanRows,
-          jiaosanRows: jiaosanTopSalesmanRows,
-        },
-      },
+      data: bundleData,
       meta: buildResponseMeta(res),
     });
   })
@@ -1884,6 +1940,17 @@ router.get(
     if (!parseResult.success) {
       throw new AppError(400, parseResult.error.issues[0].message);
     }
+    const routeCacheKey = buildRouteCacheKey(req, 'performance-bundle');
+    const cachedBundleData = getRouteCache<Record<string, unknown>>(routeCacheKey);
+    if (cachedBundleData) {
+      markRequestCacheHit();
+      res.json({
+        success: true,
+        data: cachedBundleData,
+        meta: buildResponseMeta(res),
+      });
+      return;
+    }
     const {
       drillPath: drillPathRaw,
       groupBy,
@@ -1910,6 +1977,26 @@ router.get(
 
     const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
     const trendGranularity = (granularity || mapPerformanceTimeToGranularity(timePeriod as PerformanceTimePeriod)) as PerformanceTrendGranularity;
+    const periodBoundsSql = generatePerformancePeriodBoundsQuery(
+      whereWithDate,
+      segmentTag as PerformanceSegmentTag,
+      timePeriod as PerformanceTimePeriod,
+      growthMode as PerformanceGrowthMode
+    );
+    const periodBoundsRows = await duckdbService.query<Record<string, unknown>>(
+      periodBoundsSql,
+      QUERY_CACHE.hotspotShort
+    );
+    const periodBoundsRow = periodBoundsRows[0];
+    const periodBounds: PerformancePeriodBounds | undefined = periodBoundsRow
+      ? {
+        refDate: String(periodBoundsRow.ref_date ?? ''),
+        currentStart: String(periodBoundsRow.current_start ?? ''),
+        currentEnd: String(periodBoundsRow.current_end ?? ''),
+        prevStart: String(periodBoundsRow.prev_start ?? ''),
+        prevEnd: String(periodBoundsRow.prev_end ?? ''),
+      }
+      : undefined;
 
     const summarySql = generatePerformanceSummaryQuery(
       whereWithDate,
@@ -1917,7 +2004,8 @@ router.get(
       segmentTag as PerformanceSegmentTag,
       timePeriod as PerformanceTimePeriod,
       growthMode as PerformanceGrowthMode,
-      expandDims as PerformanceSummaryExpandDims
+      expandDims as PerformanceSummaryExpandDims,
+      periodBounds
     );
     const trendSql = generatePerformanceTrendQuery(
       whereWithDate,
@@ -1931,7 +2019,8 @@ router.get(
       timePeriod as PerformanceTimePeriod,
       growthMode as PerformanceGrowthMode,
       drillPath,
-      null
+      null,
+      periodBounds
     );
     const drillRowsSql = groupBy
       ? generatePerformanceDrilldownQuery(
@@ -1941,7 +2030,8 @@ router.get(
         timePeriod as PerformanceTimePeriod,
         growthMode as PerformanceGrowthMode,
         drillPath,
-        groupBy as PerformanceDimension
+        groupBy as PerformanceDimension,
+        periodBounds
       )
       : null;
     const topSalesmanSql = generatePerformanceTopSalesmanQuery(
@@ -1950,7 +2040,8 @@ router.get(
       segmentTag as PerformanceSegmentTag,
       timePeriod as PerformanceTimePeriod,
       growthMode as PerformanceGrowthMode,
-      limit
+      limit,
+      periodBounds
     );
 
     const [summaryRows, trendRows, drillSummaryRows, drillRows, topSalesmanRows] = await Promise.all([
@@ -1961,19 +2052,22 @@ router.get(
       duckdbService.query(topSalesmanSql, QUERY_CACHE.hotspotShort),
     ]);
 
+    const bundleData = {
+      summary: { rows: summaryRows },
+      trend: { rows: trendRows },
+      drilldown: {
+        summary: drillSummaryRows[0] || null,
+        rows: drillRows,
+        drillPath,
+        groupBy: groupBy || null,
+      },
+      topSalesman: { rows: topSalesmanRows },
+    };
+    setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
+
     res.json({
       success: true,
-      data: {
-        summary: { rows: summaryRows },
-        trend: { rows: trendRows },
-        drilldown: {
-          summary: drillSummaryRows[0] || null,
-          rows: drillRows,
-          drillPath,
-          groupBy: groupBy || null,
-        },
-        topSalesman: { rows: topSalesmanRows },
-      },
+      data: bundleData,
       meta: buildResponseMeta(res),
     });
   })
@@ -2000,6 +2094,17 @@ router.get(
     const parseResult = dashboardBundleSchema.safeParse(req.query);
     if (!parseResult.success) {
       throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const routeCacheKey = buildRouteCacheKey(req, 'dashboard-bundle');
+    const cachedBundleData = getRouteCache<Record<string, unknown>>(routeCacheKey);
+    if (cachedBundleData) {
+      markRequestCacheHit();
+      res.json({
+        success: true,
+        data: cachedBundleData,
+        meta: buildResponseMeta(res),
+      });
+      return;
     }
     const { perspective = 'premium', rankingLimit } = parseResult.data;
     const timeView = (granularityMap[
@@ -2066,23 +2171,26 @@ router.get(
       duckdbService.query(terminalRoseSql, QUERY_CACHE.hotspotMedium),
     ]);
 
+    const bundleData = {
+      kpi: kpiRows[0] || {},
+      kpiDetail: kpiDetailRows[0] || {},
+      trend: trendRows,
+      qualityTrend: qualityTrendRows,
+      ranking: {
+        allBusinessTop: allRankingRows,
+        qualityBusinessTop: qualityRankingRows,
+      },
+      rose: {
+        customerCategory: customerRoseRows,
+        coverageCombination: coverageRoseRows,
+        terminalSource: terminalRoseRows,
+      },
+    };
+    setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
+
     res.json({
       success: true,
-      data: {
-        kpi: kpiRows[0] || {},
-        kpiDetail: kpiDetailRows[0] || {},
-        trend: trendRows,
-        qualityTrend: qualityTrendRows,
-        ranking: {
-          allBusinessTop: allRankingRows,
-          qualityBusinessTop: qualityRankingRows,
-        },
-        rose: {
-          customerCategory: customerRoseRows,
-          coverageCombination: coverageRoseRows,
-          terminalSource: terminalRoseRows,
-        },
-      },
+      data: bundleData,
       meta: buildResponseMeta(res),
     });
   })

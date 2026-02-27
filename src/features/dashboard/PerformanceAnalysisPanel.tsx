@@ -540,6 +540,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   const [topSortKey, setTopSortKey] = useState<TopSortKey>('achievement_rate');
   const [topSortOrder, setTopSortOrder] = useState<SortOrder>('asc');
+  const [hasDrillInteraction, setHasDrillInteraction] = useState(false);
 
   const trendGranularity = useMemo(() => mapTimePeriodToTrendGranularity(timePeriod), [timePeriod]);
   const fallbackToLegacy = !ENABLE_BUNDLE_ROUTES;
@@ -570,12 +571,19 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     enabled: isDataLoaded && (fallbackToLegacy || Boolean(performanceBundle.error)),
   });
 
+  const useLegacyDrilldown = fallbackToLegacy || Boolean(performanceBundle.error) || hasDrillInteraction;
   const drilldownQuery = usePerformanceDrilldown({
     filters,
     segmentTag,
     timePeriod,
     growthMode,
-    enabled: isDataLoaded,
+    prefetched: performanceBundle.bundle?.drilldown
+      ? {
+        summary: performanceBundle.bundle.drilldown.summary,
+        rows: performanceBundle.bundle.drilldown.rows,
+      }
+      : undefined,
+    enabled: isDataLoaded && useLegacyDrilldown,
   });
 
   const topSalesmanQuery = usePerformanceTopSalesman({
@@ -590,6 +598,14 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   useEffect(() => {
     setExpandedCoverage({});
   }, [expandDims, segmentTag, timePeriod, growthMode]);
+
+  useEffect(() => {
+    setHasDrillInteraction(false);
+    drilldownQuery.reset();
+  }, [segmentTag, timePeriod, growthMode]);
+
+  const drilldownLoading = useLegacyDrilldown ? drilldownQuery.loading : performanceBundle.loading;
+  const drilldownError = useLegacyDrilldown ? drilldownQuery.error : null;
 
   const parentSummaryRows = useMemo(() => {
     const rows = summaryQuery.rows.filter((row) => row.row_level === 0);
@@ -681,6 +697,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   };
 
   const handleDimensionSelect = (dimension: PerformanceDimension) => {
+    setHasDrillInteraction(true);
     if (pendingRowValue === null) {
       drilldownQuery.selectDimension(dimension);
     } else {
@@ -688,6 +705,11 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     }
     setPendingRowValue(null);
     setShowPicker(false);
+  };
+
+  const handleDrillReset = () => {
+    setHasDrillInteraction(false);
+    drilldownQuery.reset();
   };
 
   const isDrillClickable = drilldownQuery.availableDimensions.length > 0;
@@ -826,7 +848,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
       </div>
 
       <SectionTitle title="下钻分析" />
-      <DistributionChart rows={drilldownQuery.rows} loading={drilldownQuery.loading} error={drilldownQuery.error} />
+      <DistributionChart rows={drilldownQuery.rows} loading={drilldownLoading} error={drilldownError} />
 
       <section className={cn(cardStyles.standard, 'space-y-3')}>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -846,7 +868,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
             </button>
             {(drilldownQuery.drillPath.length > 0 || drilldownQuery.currentGroupBy) && (
               <button
-                onClick={drilldownQuery.reset}
+                onClick={handleDrillReset}
                 className={cn('px-3 py-1.5 text-sm rounded-lg border transition-colors', colorClasses.border.neutral, colorClasses.text.neutralDark)}
               >
                 重置分析
@@ -886,8 +908,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           </div>
         )}
 
-        {drilldownQuery.error ? (
-          <p className={cn(textStyles.body, colorClasses.text.danger)}>加载失败: {drilldownQuery.error}</p>
+        {drilldownError ? (
+          <p className={cn(textStyles.body, colorClasses.text.danger)}>加载失败: {drilldownError}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -919,17 +941,17 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                 </tr>
               </thead>
               <tbody>
-                {drilldownQuery.loading && (
+                {drilldownLoading && (
                   <tr>
                     <td colSpan={11} className="px-3 py-8 text-center text-neutral-400">数据加载中...</td>
                   </tr>
                 )}
-                {!drilldownQuery.loading && sortedGroupRows.length === 0 && (
+                {!drilldownLoading && sortedGroupRows.length === 0 && (
                   <tr>
                     <td colSpan={11} className="px-3 py-8 text-center text-neutral-400">暂无下钻数据</td>
                   </tr>
                 )}
-                {!drilldownQuery.loading && sortedGroupRows.map((row, index) => (
+                {!drilldownLoading && sortedGroupRows.map((row, index) => (
                   <tr
                     key={`${row.group_name}-${index}`}
                     className={cn(

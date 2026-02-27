@@ -36,6 +36,14 @@ export interface PerformanceDrilldownStep {
   value: string;
 }
 
+export interface PerformancePeriodBounds {
+  refDate: string;
+  currentStart: string;
+  currentEnd: string;
+  prevStart: string;
+  prevEnd: string;
+}
+
 type GroupByConfig = {
   selectExpr: string;
   groupByExpr: string;
@@ -237,6 +245,24 @@ function buildPeriodBoundsCte(
         CAST(${currentEnd} AS DATE) AS current_end,
         CAST(${prevStart} AS DATE) AS prev_start,
         CAST(${prevEnd} AS DATE) AS prev_end
+      FROM reference_date
+    )
+  `;
+}
+
+function buildStaticPeriodBoundsCte(bounds: PerformancePeriodBounds): string {
+  const esc = escapeSqlValue;
+  return `
+    reference_date AS (
+      SELECT CAST('${esc(bounds.refDate)}' AS DATE) AS ref_date
+    ),
+    period_bounds AS (
+      SELECT
+        ref_date,
+        CAST('${esc(bounds.currentStart)}' AS DATE) AS current_start,
+        CAST('${esc(bounds.currentEnd)}' AS DATE) AS current_end,
+        CAST('${esc(bounds.prevStart)}' AS DATE) AS prev_start,
+        CAST('${esc(bounds.prevEnd)}' AS DATE) AS prev_end
       FROM reference_date
     )
   `;
@@ -480,10 +506,13 @@ export function generatePerformanceSummaryQuery(
   segmentTag: PerformanceSegmentTag,
   timePeriod: PerformanceTimePeriod,
   growthMode: PerformanceGrowthMode,
-  expandDims: PerformanceSummaryExpandDims = 'none'
+  expandDims: PerformanceSummaryExpandDims = 'none',
+  periodBoundsOverride?: PerformancePeriodBounds
 ): string {
   const segmentFilter = getPerformanceSegmentFilter(segmentTag);
-  const periodBounds = buildPeriodBoundsCte(whereWithDate, segmentFilter, timePeriod, growthMode);
+  const periodBounds = periodBoundsOverride
+    ? buildStaticPeriodBoundsCte(periodBoundsOverride)
+    : buildPeriodBoundsCte(whereWithDate, segmentFilter, timePeriod, growthMode);
   const periodProgress = buildPeriodProgressCte();
   const useExpandRows = expandDims !== 'none';
   const expandConfig = useExpandRows ? getExpandDimensionConfig(expandDims) : null;
@@ -782,6 +811,27 @@ export function generatePerformanceSummaryQuery(
   return sql;
 }
 
+export function generatePerformancePeriodBoundsQuery(
+  whereWithDate: string,
+  segmentTag: PerformanceSegmentTag,
+  timePeriod: PerformanceTimePeriod,
+  growthMode: PerformanceGrowthMode
+): string {
+  const segmentFilter = getPerformanceSegmentFilter(segmentTag);
+  const periodBounds = buildPeriodBoundsCte(whereWithDate, segmentFilter, timePeriod, growthMode);
+  return `
+    WITH
+    ${periodBounds}
+    SELECT
+      CAST(ref_date AS VARCHAR) AS ref_date,
+      CAST(current_start AS VARCHAR) AS current_start,
+      CAST(current_end AS VARCHAR) AS current_end,
+      CAST(prev_start AS VARCHAR) AS prev_start,
+      CAST(prev_end AS VARCHAR) AS prev_end
+    FROM period_bounds
+  `;
+}
+
 export function generatePerformanceTrendQuery(
   whereWithDate: string,
   segmentTag: PerformanceSegmentTag,
@@ -841,11 +891,14 @@ export function generatePerformanceDrilldownQuery(
   timePeriod: PerformanceTimePeriod,
   growthMode: PerformanceGrowthMode,
   drillPath: PerformanceDrilldownStep[] = [],
-  groupBy: PerformanceDimension | null = null
+  groupBy: PerformanceDimension | null = null,
+  periodBoundsOverride?: PerformancePeriodBounds
 ): string {
   const segmentFilterNoAlias = getPerformanceSegmentFilter(segmentTag);
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
-  const periodBounds = buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode);
+  const periodBounds = periodBoundsOverride
+    ? buildStaticPeriodBoundsCte(periodBoundsOverride)
+    : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode);
   const periodProgress = buildPeriodProgressCte();
   const groupCfg = getGroupByConfig(groupBy, 'p.');
   const hasAnnualPlanSql = supportsAnnualPlanByDimension(groupBy) ? 'TRUE' : 'FALSE';
@@ -990,11 +1043,14 @@ export function generatePerformanceTopSalesmanQuery(
   segmentTag: PerformanceSegmentTag,
   timePeriod: PerformanceTimePeriod,
   growthMode: PerformanceGrowthMode,
-  limit = 20
+  limit = 20,
+  periodBoundsOverride?: PerformancePeriodBounds
 ): string {
   const segmentFilterNoAlias = getPerformanceSegmentFilter(segmentTag);
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
-  const periodBounds = buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode);
+  const periodBounds = periodBoundsOverride
+    ? buildStaticPeriodBoundsCte(periodBoundsOverride)
+    : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode);
   const periodProgress = buildPeriodProgressCte();
 
   const sql = `

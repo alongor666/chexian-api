@@ -1,0 +1,44 @@
+- generic [ref=e8]:
+  - generic [ref=e9]:
+    - img [ref=e11]
+    - heading "车险业绩分析系统" [level=1] [ref=e13]
+    - paragraph [ref=e14]: 内网用户登录
+  - generic [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]: 用户名
+        - generic [ref=e19]:
+          - generic:
+            - img
+          - textbox "用户名" [active] [ref=e20]:
+            - /placeholder: 请输入用户名
+      - generic [ref=e21]:
+        - generic [ref=e22]: 密码
+        - generic [ref=e23]:
+          - generic:
+            - img
+          - textbox "密码" [ref=e24]:
+            - /placeholder: 请输入密码
+          - button "显示密码" [ref=e25] [cursor=pointer]:
+            - img [ref=e26]
+      - generic [ref=e30] [cursor=pointer]:
+        - checkbox "记住登录状态" [checked] [ref=e31]
+        - generic [ref=e32]: 记住登录状态
+      - button "登录" [ref=e33] [cursor=pointer]
+    - generic [ref=e36]: 或
+    - button "企微扫码登录" [ref=e39] [cursor=pointer]:
+      - img [ref=e40]
+      - text: 企微扫码登录
+    - paragraph [ref=e47]: 如需帮助，请联系系统管理员
+  - generic [ref=e48]:
+    - heading "用户角色说明" [level=3] [ref=e49]:
+      - img [ref=e50]
+      - text: 用户角色说明
+    - generic [ref=e53]:
+      - generic [ref=e54]:
+        - generic [ref=e55]: 管理员
+        - generic [ref=e56]: 可查看所有机构数据
+      - generic [ref=e57]:
+        - generic [ref=e58]: 机构用户
+        - generic [ref=e59]: 仅可查看本机构及分公司整体数据
+  - paragraph [ref=e60]: © 2026 车险业绩分析系统 · 内网专用

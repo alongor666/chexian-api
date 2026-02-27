@@ -146,3 +146,4 @@ export interface KpiDetailResult {
 - `getPerformanceVehicleCategoryFilter()`
 
 | 2026-02-26 | performance-analysis.ts | 新增业绩分析独立页面 SQL 生成器与 4 个 performance 接口查询模板 |
+| 2026-02-27 | performance-analysis.ts | 新增 `generatePerformancePeriodBoundsQuery` 与 period bounds 复用参数，供 `performance-bundle` 减少重复时间窗口扫描 |

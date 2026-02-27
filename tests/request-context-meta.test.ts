@@ -4,6 +4,7 @@ import {
   buildRequestContext,
   getRequestContext,
   getServerTimingValue,
+  markRequestCacheHit,
   recordQueryMetric,
   runWithRequestContext,
 } from '../server/src/utils/request-context';
@@ -51,5 +52,14 @@ describe('request-context + api-meta', () => {
     });
 
     expect(setHeader).toHaveBeenCalledWith('Server-Timing', expect.stringContaining('db;dur=15'));
+  });
+
+  it('supports route-level cache hit mark without sql metrics', () => {
+    const ctx = buildRequestContext(mockRequest({ granularity: 'monthly' }));
+    runWithRequestContext(ctx, () => {
+      markRequestCacheHit();
+      const meta = buildResponseMeta();
+      expect(meta.cacheHit).toBe(true);
+    });
   });
 });

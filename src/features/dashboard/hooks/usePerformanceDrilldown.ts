@@ -70,6 +70,10 @@ interface UsePerformanceDrilldownProps {
   segmentTag: PerformanceSegmentTag;
   timePeriod: PerformanceTimePeriod;
   growthMode: PerformanceGrowthMode;
+  prefetched?: {
+    summary: Record<string, unknown> | null;
+    rows: Array<Record<string, unknown>>;
+  };
   enabled?: boolean;
 }
 
@@ -110,6 +114,7 @@ export function usePerformanceDrilldown({
   segmentTag,
   timePeriod,
   growthMode,
+  prefetched,
   enabled = true,
 }: UsePerformanceDrilldownProps): UsePerformanceDrilldownReturn {
   const { isOrgUser, userOrg, canGoToTop, getMinDrillUpIndex } = useRBAC();
@@ -137,6 +142,21 @@ export function usePerformanceDrilldown({
     setDrillPath(initialDrillPath);
     setCurrentGroupBy(initialGroupBy);
   }, [initialDrillPath, initialGroupBy]);
+
+  useEffect(() => {
+    if (enabled) return;
+    if (!prefetched) {
+      setSummary(null);
+      setRows([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    setSummary(prefetched.summary ? mapRow(prefetched.summary) : null);
+    setRows((prefetched.rows || []).map((row) => mapRow(row)));
+    setError(null);
+    setLoading(false);
+  }, [enabled, prefetched]);
 
   const usedDimensions = new Set<PerformanceDimension>([
     ...drillPath.map((item) => item.dimension),

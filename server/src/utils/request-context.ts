@@ -73,6 +73,12 @@ export function recordQueryMetric(sql: string, sqlTimeMs: number, cacheHit: bool
   }
 }
 
+export function markRequestCacheHit(): void {
+  const ctx = requestContextStore.getStore();
+  if (!ctx) return;
+  ctx.cacheHit = true;
+}
+
 export function getServerTimingValue(): string {
   const ctx = requestContextStore.getStore();
   if (!ctx) return '';
