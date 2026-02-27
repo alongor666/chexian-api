@@ -14,7 +14,7 @@ import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
 import { cn, numericStyles } from '../../../shared/styles';
-import { formatCount, formatPercent, formatWanDirect } from '../../../shared/utils/formatters';
+import { formatCount, formatPercent, formatSalesmanName, formatWanDirect } from '../../../shared/utils/formatters';
 import type { PlanDrilldownRow, PlanKpiData, PlanDistributionRow, SortState } from '../types/premiumReport';
 
 /** 格式化达成率（百分比，已是 0-100 范围） */
@@ -155,8 +155,9 @@ const DrilldownTable: React.FC<{
   onSortChange: (sort: SortState) => void;
   onRowClick: (groupName: string) => void;
   canDrill: boolean;
+  displaySalesmanName: boolean;
   loading: boolean;
-}> = ({ data, sortState, onSortChange, onRowClick, canDrill, loading }) => {
+}> = ({ data, sortState, onSortChange, onRowClick, canDrill, displaySalesmanName, loading }) => {
   if (loading) {
     return <TableSkeleton rows={6} columns={8} />;
   }
@@ -168,7 +169,13 @@ const DrilldownTable: React.FC<{
     format: (row: PlanDrilldownRow) => string;
     sortable: boolean;
   }[] = [
-    { key: 'group_name', header: '名称', align: 'left', format: (r) => r.group_name, sortable: true },
+    {
+      key: 'group_name',
+      header: '名称',
+      align: 'left',
+      format: (r) => (displaySalesmanName ? formatSalesmanName(r.group_name) : r.group_name),
+      sortable: true,
+    },
     { key: 'plan_vehicle', header: '计划保费(万)', align: 'right', format: (r) => formatWanDirect(r.plan_vehicle), sortable: true },
     { key: 'actual_vehicle', header: '实际保费(万)', align: 'right', format: (r) => formatWanDirect(r.actual_vehicle), sortable: true },
     { key: 'rate_vehicle', header: '达成率', align: 'right', format: (r) => formatRateValue(r.rate_vehicle), sortable: true },
@@ -349,6 +356,7 @@ export const PremiumPlanPanel: React.FC = () => {
             onSortChange={setSortState}
             onRowClick={drillDown}
             canDrill={canDrill}
+            displaySalesmanName={currentLevel === 'team'}
             loading={isLoading}
           />
         </div>

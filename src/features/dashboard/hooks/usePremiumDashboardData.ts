@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef } from 'react';
-import { formatPremiumWan } from '../../../shared/utils/formatters';
+import { formatPremiumWan, formatSalesmanName } from '../../../shared/utils/formatters';
 import { createLogger } from '../../../shared/utils/logger';
 import { useLoadingStates } from '../../../shared/hooks';
 import { apiClient, isRequestAbortError } from '../../../shared/api/client';
@@ -85,7 +85,7 @@ export const usePremiumDashboardData = ({
 
       const mapApiRows = (rows: any[]): SalesmanSummaryRow[] =>
         rows.map((row: any) => ({
-          salesman_name: String(row.salesman_name ?? ''),
+          salesman_name: formatSalesmanName(String(row.salesman_name ?? '')),
           org_level_3: String(row.org_level_3 ?? ''),
           total_premium: formatPremiumWan(Number(row.total_premium ?? 0)),
           policy_count: Number(row.policy_count ?? 0),

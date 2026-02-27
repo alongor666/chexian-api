@@ -44,6 +44,7 @@
 | 2026-02-25 | API-only 分批清理零故障门禁完成 (B208) | 完成 Batch0-3：归档过渡代码、收紧 `tsconfig`、新增 TS 检查范围治理护栏、补齐运行门禁 E2E | 静态+自动化+运行门禁日志：`artifacts/cleanup-gates/2026-02-25/*.log`；报告：`开发文档/reviews/2026-02-25-api-only-cleanup-gate-report.md` |
 | 2026-02-25 | 驾乘险推介率子页面收敛完成 (B209) | 完成统一阈值规则源、KPI/下钻/时间维度着色、四象限颜色与标题规范、趋势图四粒度与版位；修复趋势 Hook 并发取消导致“无数据” | 验证证据：`bun run test -- --run tests/cross-sell-rate-status.test.ts tests/cross-sell-sql.test.ts` 7/7；`bun run governance` 9/9；API `cross-sell-trend` 四粒度均200；截图 `artifacts/b209/cross-sell-trend-verify.png` |
 | 2026-02-25 | 受限账号页面权限落地完成 (B210) | 新增 `jiachengxian` 账号并实现页面白名单控制：仅仪表盘/驾乘险推介率可访问；其他页面菜单置灰不可点且 URL 自动拦截跳转 | 验证：`bun run governance`、`bun run build`、`bun run test -- --run tests/config/organizations.test.ts` 通过 |
+| 2026-02-27 | 业务员姓名展示规则全项目统一完成 (B211) | 统一“仅中文名 + admin→直接个代”规则，落地到保费报表/营销战报/续保分析/增长分析，并补齐全局开发约束文档 | 代码证据：`formatSalesmanName` + 相关4页数据链路改造；验证证据：`tests/formatters.test.ts` 新增规则用例 |
 
 ## 2. 当前阻塞 (Blockers)
 

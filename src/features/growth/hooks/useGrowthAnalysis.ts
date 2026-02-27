@@ -9,6 +9,7 @@
 import { useState, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { createLogger } from '../../../shared/utils/logger';
+import { formatSalesmanName } from '../../../shared/utils/formatters';
 import type { ViewPerspective } from '../../../shared/types';
 
 const logger = createLogger('useGrowthAnalysis');
@@ -141,19 +142,25 @@ export function useGrowthAnalysis() {
         filters
       );
 
-      const data: GrowthData[] = Array.isArray(response) ? response.map((item: Record<string, unknown>) => ({
-        current_value: Number(item.current_value ?? item.current_premium ?? 0),
-        previous_value: Number(item.previous_value ?? item.previous_premium ?? 0),
-        growth_rate: item.growth_rate !== undefined ? Number(item.growth_rate) : null,
-        time_period: String(item.time_period ?? item.period ?? ''),
-        // 传递 MTD/YTD 上下文字段（由 daily-context 查询返回）
-        period_total_current: item.period_total_current !== undefined ? Number(item.period_total_current) : undefined,
-        period_total_previous: item.period_total_previous !== undefined ? Number(item.period_total_previous) : undefined,
-        period_growth_rate: item.period_growth_rate !== undefined ? Number(item.period_growth_rate) : undefined,
-        ytd_total_current: item.ytd_total_current !== undefined ? Number(item.ytd_total_current) : undefined,
-        ytd_total_previous: item.ytd_total_previous !== undefined ? Number(item.ytd_total_previous) : undefined,
-        ytd_growth_rate: item.ytd_growth_rate !== undefined ? Number(item.ytd_growth_rate) : undefined,
-      })) : [];
+      const data: GrowthData[] = Array.isArray(response) ? response.map((item: Record<string, unknown>) => {
+        const rawSalesmanName = item.salesman_name != null ? String(item.salesman_name) : '';
+
+        return {
+          current_value: Number(item.current_value ?? item.current_premium ?? 0),
+          previous_value: Number(item.previous_value ?? item.previous_premium ?? 0),
+          growth_rate: item.growth_rate !== undefined ? Number(item.growth_rate) : null,
+          time_period: String(item.time_period ?? item.period ?? ''),
+          org_level_3: item.org_level_3 != null ? String(item.org_level_3) : undefined,
+          salesman_name: rawSalesmanName ? formatSalesmanName(rawSalesmanName) : undefined,
+          // 传递 MTD/YTD 上下文字段（由 daily-context 查询返回）
+          period_total_current: item.period_total_current !== undefined ? Number(item.period_total_current) : undefined,
+          period_total_previous: item.period_total_previous !== undefined ? Number(item.period_total_previous) : undefined,
+          period_growth_rate: item.period_growth_rate !== undefined ? Number(item.period_growth_rate) : undefined,
+          ytd_total_current: item.ytd_total_current !== undefined ? Number(item.ytd_total_current) : undefined,
+          ytd_total_previous: item.ytd_total_previous !== undefined ? Number(item.ytd_total_previous) : undefined,
+          ytd_growth_rate: item.ytd_growth_rate !== undefined ? Number(item.ytd_growth_rate) : undefined,
+        };
+      }) : [];
 
       const summary = calculateSummary(data);
 
@@ -392,8 +399,12 @@ export function useGrowthAnalysis() {
         { growthType: 'custom', type: 'dual-metric', groupBy: groupBy.join(','), ...additionalFilterParams }
       );
 
+      const useSalesmanDisplay = groupBy.includes('salesman_name');
+
       const data: DualMetricComparisonData[] = Array.isArray(response) ? response.map((row: Record<string, unknown>) => ({
-        dim_key: String(row.dim_key ?? row.org_level_3 ?? '-'),
+        dim_key: useSalesmanDisplay
+          ? formatSalesmanName(String(row.dim_key ?? row.salesman_name ?? '-'))
+          : String(row.dim_key ?? row.org_level_3 ?? '-'),
         current_premium: Number(row.current_premium ?? 0),
         previous_premium: Number(row.previous_premium ?? 0),
         current_count: Number(row.current_count ?? 0),

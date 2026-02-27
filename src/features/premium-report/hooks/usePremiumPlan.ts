@@ -11,6 +11,7 @@
 import { useState, useCallback } from 'react';
 import { apiClient, isRequestAbortError } from '../../../shared/api/client';
 import { createLogger } from '../../../shared/utils/logger';
+import { formatSalesmanName } from '../../../shared/utils/formatters';
 import type {
   PlanDrilldownLevel,
   PlanDrilldownRow,
@@ -212,7 +213,7 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
 
     const newStep: DrillPathStep = {
       level: filterLevel,
-      label: `${LEVEL_LABELS[filterLevel]}: ${groupName}`,
+      label: `${LEVEL_LABELS[filterLevel]}: ${filterLevel === 'salesman' ? formatSalesmanName(groupName) : groupName}`,
       value: groupName,
     };
 

@@ -10,6 +10,7 @@
 import { useState, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { createLogger } from '../../../shared/utils/logger';
+import { formatSalesmanName } from '../../../shared/utils/formatters';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('usePremiumReport');
@@ -86,7 +87,9 @@ export function usePremiumReport(): UsePremiumReportReturn {
       const totalPremium = orgReport.reduce((sum, row) => sum + row.车险保费, 0);
       const totalPolicies = orgReport.reduce((sum, row) => sum + row.车险件数, 0);
       const orgCount = orgReport.length;
-      const salesmanCount = new Set(salesmanReport.map((row) => row.salesman_name)).size;
+      const salesmanCount = new Set(
+        salesmanReport.map((row) => String(row.raw_salesman_name ?? row.salesman_name))
+      ).size;
       const avgPremium = orgCount > 0 ? totalPremium / orgCount : 0;
 
       return {
@@ -162,7 +165,8 @@ export function usePremiumReport(): UsePremiumReportReturn {
       const result = await apiClient.getPremiumReport(params);
 
       return (result || []).map((row: Record<string, unknown>) => ({
-        salesman_name: String(row.salesman_name || ''),
+        salesman_name: formatSalesmanName(String(row.salesman_name || '')),
+        raw_salesman_name: String(row.salesman_name || ''),
         org_level_3: String(row.org_level_3 || ''),
         team_name: String(row.team_name || ''),
         车险保费: Number(row['车险保费'] || 0),

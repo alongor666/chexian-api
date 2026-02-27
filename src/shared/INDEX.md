@@ -271,3 +271,7 @@ import { cn, cardStyles, getTrendColorClass, colors } from '@/shared/styles';
 - 样式规范以 `src/shared/styles/index.ts` 与 `src/shared/ui/*` 为准。
 
 如历史段落出现 `DuckDB-WASM`、`src/shared/duckdb/*` 等描述，视为历史记录，不代表当前架构。
+
+## 2026-02-27 业务员姓名展示规则补充
+
+- `utils/formatters.ts`：`formatSalesmanName` 升级为全局统一规则（仅保留中文名；移除数字/英文ID；`admin` 统一显示为 `直接个代`）。

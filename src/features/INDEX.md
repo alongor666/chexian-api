@@ -300,3 +300,12 @@ widgets/table/VirtualTable.tsx
 
 ### Dashboard 模块补充
 - **`dashboard/PerformanceAnalysisPanel.tsx`**: 业绩分析标题栏控件补充分组标签（客户类别/时间维度/对比方式），并改为左侧优先显示 + 横向滚动
+
+## 2026-02-27 业务员姓名展示规则统一
+
+- **`premium-report/hooks/usePremiumReport.ts`**: 保费报表业务员姓名统一走 `formatSalesmanName`，展示仅保留中文名。
+- **`marketing-report/hooks/useMarketingReport.ts`**: 营销战报业务员明细统一走 `formatSalesmanName`。
+- **`marketing-report/components/HolidayDrilldownPanel.tsx`**: 下钻业务员明细展示统一走 `formatSalesmanName`。
+- **`dashboard/hooks/useRenewalDrilldown.ts`**: 续保下钻“业务员层/父级业务员名”统一展示规则。
+- **`growth/hooks/useGrowthAnalysis.ts`**: 增长分析“分业务员/对比明细”维度名统一展示规则。
+- **`dashboard/hooks/usePremiumDashboardData.ts`**: 保费分析看板 Top 业务员姓名统一展示规则。

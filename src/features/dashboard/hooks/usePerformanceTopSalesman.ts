@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
+import { formatSalesmanName } from '@/shared/utils/formatters';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import type {
   PerformanceGrowthMode,
@@ -73,7 +74,7 @@ export function usePerformanceTopSalesman({
       if (fetchId !== fetchIdRef.current) return;
 
       setRows((result?.rows || []).map((row) => ({
-        dimension_name: String(row.dimension_name ?? ''),
+        dimension_name: formatSalesmanName(String(row.dimension_name ?? '')),
         premium: Number(row.premium ?? 0),
         auto_count: Number(row.auto_count ?? 0),
         plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),

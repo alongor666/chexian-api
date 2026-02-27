@@ -9,6 +9,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { useDataStatus } from '../../../shared/contexts/DataContext';
 import { createLogger } from '../../../shared/utils/logger';
+import { formatSalesmanName } from '../../../shared/utils/formatters';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('useRenewalDrilldown');
@@ -141,7 +142,18 @@ export function useRenewalDrilldown(options: UseRenewalDrilldownOptions) {
 
     try {
       const result = await apiClient.getRenewalDrilldown(params);
-      setRows(Array.isArray(result) ? result : []);
+      const mappedRows = (Array.isArray(result) ? result : []).map((row: Record<string, unknown>) => {
+        const groupName = String(row.group_name ?? '');
+        const parentName = String(row.parent_name ?? '');
+
+        return {
+          ...row,
+          group_name: queryLevel === 'salesman' ? formatSalesmanName(groupName) : groupName,
+          parent_name: queryLevel === 'coverage' ? formatSalesmanName(parentName) : parentName,
+        };
+      });
+
+      setRows(mappedRows as DrilldownRow[]);
     } catch (err) {
       logger.error('Failed to fetch renewal drilldown data', err);
       setError(err instanceof Error ? err.message : String(err));

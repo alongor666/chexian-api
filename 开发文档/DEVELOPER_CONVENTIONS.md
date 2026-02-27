@@ -563,6 +563,45 @@ function applyFiltersWithPriority(
 
 ---
 
+## 📌 第四原则：业务员姓名展示规范
+
+**规则编号**: `DC-004`
+**优先级**: **P0 (CRITICAL)**
+**生效日期**: 2026-02-27
+**影响范围**: 所有展示业务员姓名的页面、表格、图表、导出与筛选标签
+
+### 核心原则
+
+**业务员姓名仅展示中文名，禁止展示数字工号、英文 ID。若值包含 `admin`（不区分大小写），统一显示为 `直接个代`。**
+
+### 实施细则
+
+1. 必须统一使用 `formatSalesmanName`：
+```typescript
+import { formatSalesmanName } from '@/shared/utils/formatters';
+```
+
+2. 禁止散落实现（正则手写、各模块私有转换）：
+- ❌ `name.replace(/[0-9()[\\]_-]/g, '')`
+- ❌ `name.toLowerCase().includes('admin') ? '直接个代' : name`
+- ✅ `formatSalesmanName(name)`
+
+3. 显示层与筛选值分离：
+- 展示名称使用 `formatSalesmanName`
+- 下钻/查询真实值按业务需要保留原字段（避免筛选失效）
+
+4. 默认回退：
+- 无中文姓名且不含 admin 时，显示 `-`
+
+### 首批强制覆盖页面
+
+- 保费报表（`/premium-report` 及相关业务员明细）
+- 营销战报（`/marketing-report` 及下钻业务员明细）
+- 续保分析（`/renewal` 下钻业务员层）
+- 增长分析（`/growth` 分业务员与对比明细）
+
+---
+
 ## 🔄 后续维护
 
 ### 新增报表/页面清单检查
@@ -589,6 +628,11 @@ function applyFiltersWithPriority(
 - [ ] 数字排版（特别是 KPI 与图表）是否引入 `fontStyles.kpi` 或 `fontStyles.tabular`？
 - [ ] 卡片及容器边框是否使用了 `cardStyles` 组合件而非打散分布的边框圆角样式？
 
+**DC-004 业务员姓名展示检查**：
+- [ ] 所有业务员展示是否统一走 `formatSalesmanName`？
+- [ ] 是否去除数字工号、英文 ID，仅保留中文名？
+- [ ] `admin` 展示是否统一为 `直接个代`？
+
 ### 代码审查要点
 
 **在 PR 审查时，必须确认：**
@@ -612,6 +656,7 @@ function applyFiltersWithPriority(
 ---
 
 **变更历史**：
+- 2026-02-27：新增 DC-004 规则 - 业务员姓名仅展示中文名，admin 统一显示“直接个代”
 - 2026-02-22：新增 DC-003 规则 - UI组件与样式强制导入规范（根治色彩硬编码乱象及排版虚假引用）
 - 2026-01-13：新增 DC-002 规则 - 用户筛选高于默认筛选（全局优先级原则）
 - 2026-01-11：初版发布，定义 DC-001 规则，诊断现有系统5个问题

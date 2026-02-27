@@ -4,6 +4,7 @@ import { getAvailableSalesmen, type OrgSalesmanCache } from '../orgSalesman';
 import type { AdvancedFilterState, FilterOptions, DateMetadata, DualDateMetadata } from '../../../shared/types/data';
 import { getMetadataByCriteria } from '../../../shared/types/data';
 import { apiClient } from '../../../shared/api/client';
+import { formatSalesmanName } from '../../../shared/utils/formatters';
 
 const logger = createLogger('useFilterState');
 
@@ -101,6 +102,7 @@ export const useFilterState = (): UseFilterStateResult => {
         })),
         salesman_name: (apiOptions.salesmen || []).map((value: string) => ({
           value,
+          label: formatSalesmanName(value),
           count: 0,
         })),
         customer_category: (apiOptions.customerCategories || []).map((value: string) => ({

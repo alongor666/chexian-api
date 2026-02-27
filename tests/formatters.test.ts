@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatPremium, formatRate, formatNumber } from '../src/shared/utils/formatters';
+import { formatPremium, formatRate, formatNumber, formatSalesmanName } from '../src/shared/utils/formatters';
 
 describe('formatters', () => {
   describe('formatPremium', () => {
@@ -99,6 +99,27 @@ describe('formatters', () => {
       expect(formatNumber(Number.NaN)).toBe('-');
       expect(formatNumber(Number.POSITIVE_INFINITY)).toBe('-');
       expect(formatNumber(Number.NEGATIVE_INFINITY)).toBe('-');
+    });
+  });
+
+  describe('formatSalesmanName', () => {
+    it('only keeps Chinese name and removes numeric/english IDs', () => {
+      expect(formatSalesmanName('210000461周鑫磊')).toBe('周鑫磊');
+      expect(formatSalesmanName('A1002王小明')).toBe('王小明');
+      expect(formatSalesmanName('陈晓梅(200053182)')).toBe('陈晓梅');
+    });
+
+    it('maps admin to 直接个代', () => {
+      expect(formatSalesmanName('admin')).toBe('直接个代');
+      expect(formatSalesmanName('ADMIN001')).toBe('直接个代');
+      expect(formatSalesmanName('Admin_系统')).toBe('直接个代');
+    });
+
+    it('returns fallback for invalid names', () => {
+      expect(formatSalesmanName('100200300')).toBe('-');
+      expect(formatSalesmanName('')).toBe('-');
+      expect(formatSalesmanName(undefined)).toBe('-');
+      expect(formatSalesmanName(null)).toBe('-');
     });
   });
 });
