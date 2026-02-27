@@ -337,7 +337,7 @@ export interface TrendAnalysisResult {
  * 调用智谱 AI 分析机构推介率趋势
  */
 export async function analyzeOrgTrendWithZhipu(
-  rows: Array<{ date: string; auto_count: number; driver_count: number; rate: number }>,
+  rows: Array<{ date: string; auto_count: number; driver_count: number; rate: number; avg_premium: number }>,
   context: { org: string; coverage: string },
   config: ZhipuConfig
 ): Promise<TrendAnalysisResult> {
@@ -353,18 +353,17 @@ export async function analyzeOrgTrendWithZhipu(
   }
 
   const dataStr = rows
-    .map(r => `${r.date} 车险${r.auto_count}件 驾意${r.driver_count}件 推介率${r.rate}%`)
+    .map(r => `${r.date} 车险${r.auto_count}件 驾意${r.driver_count}件 推介率${r.rate}% 件均保费${r.avg_premium}元`)
     .join('\n');
 
-  const systemPrompt = `你是车险业务分析专家。请根据机构最近每日推介率数据，给出简洁的趋势分析（150字以内）。
-分析要点：
-1. 整体趋势方向（上升/下降/波动）
-2. 近3天与前期对比
-3. 异常日及可能原因
-4. 一条具体行动建议
-格式：纯文本，不用标题，不用序号，直接写分析结论。`;
+  const systemPrompt = `你是车险业务分析专家。请根据机构最近每日推介率和件均保费数据，输出两段式趋势分析（总字数220字以内）。
+硬性格式要求：
+1) 第一段只讲“推介率”；
+2) 第二段只讲“件均保费”。
+每一段都必须包含：近30天均值、近7天均值、连续下降天数、最高值（含日期）、最低值（含日期）。
+可补充一句可执行建议，但不要写标题、不要编号、不要Markdown。`;
 
-  const userMsg = `机构：${context.org}，险种：${context.coverage}\n数据（日期 车险件数 驾意件数 推介率）：\n${dataStr}`;
+  const userMsg = `机构：${context.org}，险种：${context.coverage}\n数据（日期 车险件数 驾意件数 推介率 件均保费）：\n${dataStr}`;
 
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
@@ -376,7 +375,7 @@ export async function analyzeOrgTrendWithZhipu(
     const response = await fetch(`${ZHIPU_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: 300 }),
+      body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: 420 }),
     });
 
     if (!response.ok) {

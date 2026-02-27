@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { RoseChart } from './RoseChart';
 import { TONNAGE_COLORS } from '../../shared/config/chartStyles';
 import { formatCount, formatPremiumWan } from '../../shared/utils/formatters';
+import { cardStyles, cn } from '../../shared/styles';
 
 interface TonnageRoseChartProps {
   premiumData: { name: string; value: number }[];
@@ -61,21 +62,19 @@ export const TonnageRoseChart: React.FC<TonnageRoseChartProps> = ({
         <div className="flex space-x-2">
           <button
             onClick={() => setMetric('premium')}
-            className={`px-3 py-1 text-sm rounded transition-colors ${
-              metric === 'premium'
+            className={`px-3 py-1 text-sm rounded transition-colors ${metric === 'premium'
                 ? 'bg-blue-500 text-white shadow-sm'
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+              }`}
           >
             保费
           </button>
           <button
             onClick={() => setMetric('count')}
-            className={`px-3 py-1 text-sm rounded transition-colors ${
-              metric === 'count'
+            className={`px-3 py-1 text-sm rounded transition-colors ${metric === 'count'
                 ? 'bg-blue-500 text-white shadow-sm'
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+              }`}
           >
             保单数
           </button>
@@ -99,5 +98,5 @@ export const TonnageRoseChart: React.FC<TonnageRoseChartProps> = ({
     return <div>{content}</div>;
   }
 
-  return <div className="bg-white p-4 rounded shadow">{content}</div>;
+  return <div className={cn(cardStyles.standard)}>{content}</div>;
 };

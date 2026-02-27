@@ -2,7 +2,7 @@
  * 机构推介率走势 SQL 生成器
  * Cross-Sell Org Trend SQL Generator
  *
- * 按日分组，返回最近 N 天的车险件数/驾意件数/推介率
+ * 按日分组，返回最近 N 天的车险件数/驾意件数/推介率/件均保费
  * 支持险种组合过滤（交三/主全/单交/整体）
  */
 
@@ -24,7 +24,7 @@ function getCrossSellCondition(): string {
 /**
  * 生成机构推介率走势查询
  *
- * 返回字段：date, auto_count, driver_count, rate
+ * 返回字段：date, auto_count, driver_count, rate, avg_premium
  * 按最近 days 天每日分组
  *
  * @param baseWhereClause - 基础 WHERE 子句（含日期/org 等过滤）
@@ -69,6 +69,7 @@ export function generateCrossSellOrgTrendQuery(
           NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
         ) AS dedup_key,
         is_cross_sell,
+        cross_sell_premium_driver,
         CAST(policy_date AS DATE) AS pd
       FROM PolicyFact
       WHERE ${baseWhereClause}
@@ -81,7 +82,8 @@ export function generateCrossSellOrgTrendQuery(
       SELECT
         STRFTIME(pd, '%Y-%m-%d') AS date_str,
         COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count
+        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
+        COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS premium
       FROM filtered
       GROUP BY 1
     )
@@ -92,7 +94,11 @@ export function generateCrossSellOrgTrendQuery(
       CASE
         WHEN COALESCE(d.auto_count, 0) = 0 THEN 0
         ELSE ROUND(COALESCE(d.driver_count, 0) * 100.0 / COALESCE(d.auto_count, 0), 2)
-      END AS rate
+      END AS rate,
+      CASE
+        WHEN COALESCE(d.driver_count, 0) = 0 THEN 0
+        ELSE ROUND(COALESCE(d.premium, 0) / COALESCE(d.driver_count, 0), 2)
+      END AS avg_premium
     FROM date_series ds
     LEFT JOIN daily d ON d.date_str = STRFTIME(ds.date_val, '%Y-%m-%d')
     ORDER BY ds.date_val

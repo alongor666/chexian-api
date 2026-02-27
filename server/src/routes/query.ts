@@ -79,6 +79,7 @@ import { validateSQL } from '../utils/sql-validator.js';
 import { isValidDateFormat } from '../utils/sql-sanitizer.js';
 import { injectPermissionFilter, isValidPermissionFilter } from '../utils/sql-permission-injector.js';
 import { commonFilterSchema, buildWhereFromFilterParams, buildWhereFromFilterParamsWithoutDate } from '../utils/filter-params.js';
+import { parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, resolveGroupDim } from '../utils/route-helpers.js';
 import { logger } from '../utils/logger.js';
 
 const router = Router();
@@ -101,48 +102,15 @@ router.use(permissionMiddleware);
 router.get(
   '/kpi',
   asyncHandler(async (req: Request, res: Response) => {
-    const parseResult = commonFilterSchema.safeParse(req.query);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
-    }
+    const { filterData, whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
 
-    const finalWhereClause = buildWhereFromFilterParams(
-      parseResult.data,
-      req.permissionFilter || '1=1'
-    );
-    const finalWhereClauseWithoutDate = buildWhereFromFilterParamsWithoutDate(
-      parseResult.data,
-      req.permissionFilter || '1=1'
-    );
-
-    const orgNames = parseResult.data.orgNames
-      ? parseResult.data.orgNames.split(',').map((item) => item.trim()).filter(Boolean)
-      : parseResult.data.orgLevel3
-        ? [parseResult.data.orgLevel3]
-        : [];
-
-    const salesmanNames = parseResult.data.salesmanNames
-      ? parseResult.data.salesmanNames.split(',').map((item) => item.trim()).filter(Boolean)
-      : parseResult.data.salesmanName
-        ? [parseResult.data.salesmanName]
-        : [];
-
-    // Extract implicit filters from permissionFilter
-    if (req.permissionFilter && req.permissionFilter !== '1=1') {
-      const orgMatch = req.permissionFilter.match(/org_level_3\s*(?:LIKE|=)\s*'%?([^%']+)%?'/i);
-      if (orgMatch && !orgNames.includes(orgMatch[1])) {
-        orgNames.push(orgMatch[1]);
-      }
-      const salesmanMatch = req.permissionFilter.match(/salesman_name\s*(?:LIKE|=)\s*'%?([^%']+)%?'/i);
-      if (salesmanMatch && !salesmanNames.includes(salesmanMatch[1])) {
-        salesmanNames.push(salesmanMatch[1]);
-      }
-    }
+    const orgNames = extractOrgNames(filterData, req.permissionFilter);
+    const salesmanNames = extractSalesmanNames(filterData, req.permissionFilter);
 
     const sql = generateKpiQuery(
-      finalWhereClause,
+      whereWithDate,
       { orgNames, salesmanNames },
-      finalWhereClauseWithoutDate
+      whereWithoutDate
     );
     // KPI 高频查询，缓存 60 秒
     const result = await duckdbService.query(sql, 60_000);
@@ -161,17 +129,9 @@ router.get(
 router.get(
   '/kpi-detail',
   asyncHandler(async (req: Request, res: Response) => {
-    const parseResult = commonFilterSchema.safeParse(req.query);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
-    }
+    const { whereClause } = parseFiltersAndBuildWhere(req);
 
-    const finalWhereClause = buildWhereFromFilterParams(
-      parseResult.data,
-      req.permissionFilter || '1=1'
-    );
-
-    const sql = generateKpiDetailQuery(finalWhereClause, false);
+    const sql = generateKpiDetailQuery(whereClause, false);
     // KPI 详情高频查询，缓存 60 秒
     const result = await duckdbService.query(sql, 60_000);
 
@@ -211,27 +171,13 @@ router.get(
     ] || 'daily') as 'daily' | 'weekly' | 'monthly';
     const perspective = (trendResult.data?.perspective || 'premium') as ViewPerspective;
 
-    // 解析通用筛选参数
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
-
-    // 动态判断分组维度
-    // 如果没有明确筛选 orgLevel3 或 orgNames，且不是 ORG_USER 强制自带的三级机构过滤，则默认升到分为全部的大盘数据
-    const isOrgSelected = filterResult.data.orgLevel3 || (filterResult.data.orgNames && filterResult.data.orgNames.length > 0);
-    const isOrgUser = req.user?.role === 'org_user';
-    const groupDim = (isOrgSelected || isOrgUser) ? 'org_level_3' : "'全部'";
+    const { filterData, whereClause } = parseFiltersAndBuildWhere(req);
+    const groupDim = resolveGroupDim(filterData, req);
 
     const sql = generatePremiumTrendQuery(
       timeView as TimeView,
-      finalWhereClause,
-      filterResult.data.dateField || 'policy_date',
+      whereClause,
+      filterData.dateField || 'policy_date',
       perspective,
       groupDim
     );
@@ -258,24 +204,13 @@ router.get(
     ] || 'daily') as 'daily' | 'weekly' | 'monthly';
     const perspective = (trendResult.data?.perspective || 'premium') as ViewPerspective;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
-
-    const isOrgSelected = filterResult.data.orgLevel3 || (filterResult.data.orgNames && filterResult.data.orgNames.length > 0);
-    const isOrgUser = req.user?.role === 'org_user';
-    const groupDim = (isOrgSelected || isOrgUser) ? 'org_level_3' : "'全部'";
+    const { filterData, whereClause } = parseFiltersAndBuildWhere(req);
+    const groupDim = resolveGroupDim(filterData, req);
 
     const sql = generateQualityBusinessTrendQuery(
       timeView as TimeView,
-      finalWhereClause,
-      filterResult.data.dateField || 'policy_date',
+      whereClause,
+      filterData.dateField || 'policy_date',
       perspective,
       groupDim
     );
@@ -342,15 +277,7 @@ router.get(
     }
     const { queryType, metric } = truckResult.data;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
     // queryType=all: 一次性返回所有4个子查询结果（前端货车面板需要）
     if (queryType === 'all') {
@@ -603,15 +530,7 @@ router.get(
     }
     const { type, analysisType, dimension, cutoffDate, operatingCostRate, policyMonth } = costResult.data;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { filterData, whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
     // 新协议：type=earned/earned-new/expense-forecast
     if (type) {
@@ -627,7 +546,7 @@ router.get(
           cutoffDate,
           whereClause: finalWhereClause,
           policyMonth,
-          orgLevel3: filterResult.data.orgLevel3,
+          orgLevel3: filterData.orgLevel3,
         });
         const result = await duckdbService.query(sql);
         res.json({ success: true, data: result });
@@ -942,15 +861,7 @@ router.get(
 
     const groupBy = crossSellResult.data.groupBy as CrossSellDimension | undefined;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    let finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    let { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
     // 车辆类别过滤（标签页联动）
     const vehicleCat = crossSellResult.data.vehicleCategory as VehicleCategory | undefined;
@@ -1000,15 +911,7 @@ router.get(
     }
     const { rankingType, limit } = rankingResult.data;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
     let sql: string;
     if (rankingType === 'all') {
@@ -1049,17 +952,9 @@ router.get(
     const { reportType, holidayDates } = extraResult.data;
     const dates = holidayDates.split(',').filter(d => d && isValidDateFormat(d));
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
+    const { filterData, whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
-
-    const dateField = filterResult.data.dateField || 'policy_date';
+    const dateField = filterData.dateField || 'policy_date';
 
     let sql: string;
     if (reportType === 'org') {
@@ -1158,15 +1053,7 @@ router.get(
     }
     const { vehicleCategory, granularity } = extraResult.data;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
     const sql = generateCrossSellTrendQuery(
       finalWhereClause,
@@ -1206,15 +1093,7 @@ router.get(
 
     const { vehicleCategory } = extraResult.data;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
     const sql = generateCrossSellTimePeriodQuery(
       finalWhereClause,
@@ -1270,17 +1149,9 @@ router.get(
     }
     const { reportType, planYear } = extraResult.data;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
+    const { filterData, whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
-
-    const dateField = filterResult.data.dateField || 'policy_date';
+    const dateField = filterData.dateField || 'policy_date';
 
     let sql: string;
     if (reportType === 'org') {
@@ -1489,15 +1360,7 @@ router.get(
     }
     const { vehicleCategory, coverage, timePeriod } = extraResult.data;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const finalWhereClause = buildWhereFromFilterParamsWithoutDate(
-      filterResult.data,
-      req.permissionFilter || '1=1',
-    );
+    const { whereWithoutDate: finalWhereClause } = parseFiltersAndBuildBothWhere(req);
 
     const sql = generateCrossSellTopSalesmanQuery(
       finalWhereClause,
@@ -1571,19 +1434,7 @@ router.get(
     const { timePeriod, growthMode, expandDims } = extraResult.data;
     const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const whereWithDate = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
-    const whereWithoutDate = buildWhereFromFilterParamsWithoutDate(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
 
     const sql = generatePerformanceSummaryQuery(
       whereWithDate,
@@ -1620,15 +1471,7 @@ router.get(
     const { granularity } = extraResult.data;
     const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const whereWithDate = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { whereWithDate } = parseFiltersAndBuildBothWhere(req);
 
     const sql = generatePerformanceTrendQuery(
       whereWithDate,
@@ -1679,19 +1522,7 @@ router.get(
 
     const groupBy = extraResult.data.groupBy as PerformanceDimension | undefined;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const whereWithDate = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
-    const whereWithoutDate = buildWhereFromFilterParamsWithoutDate(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
 
     const [summaryRows, drilldownRows] = await Promise.all([
       duckdbService.query(
@@ -1750,19 +1581,7 @@ router.get(
     const { timePeriod, growthMode, limit } = extraResult.data;
     const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const whereWithDate = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
-    const whereWithoutDate = buildWhereFromFilterParamsWithoutDate(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
 
     const sql = generatePerformanceTopSalesmanQuery(
       whereWithDate,
@@ -1801,15 +1620,7 @@ router.get(
     }
     const { vehicleCategory, coverageCombination, days } = extraResult.data;
 
-    const filterResult = commonFilterSchema.safeParse(req.query);
-    if (!filterResult.success) {
-      throw new AppError(400, filterResult.error.issues[0].message);
-    }
-
-    const finalWhereClause = buildWhereFromFilterParams(
-      filterResult.data,
-      req.permissionFilter || '1=1'
-    );
+    const { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
     const sql = generateCrossSellOrgTrendQuery(
       finalWhereClause,
