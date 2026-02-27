@@ -92,27 +92,51 @@ export const useTrendData = ({
 
   const fetchTrendFromApi = useCallback(async (requestId: number) => {
     try {
-      const params = {
+      const currentParams = {
         ...buildFilterParams(filters, { isOrgUser, userOrg }),
         perspective,
       };
-      const granularity = timeViewToGranularity(timeView);
-      logger.info('趋势 API 查询执行', { timeView, granularity });
 
-      const [trendResponse, qualityTrendResponse] = await Promise.all([
-        apiClient.getTrend(granularity, params),
-        apiClient.getQualityBusinessTrend(granularity, params),
+      // Construct params for previous year
+      const prevFilters = { ...filters };
+      if (prevFilters.policy_date_start) {
+        prevFilters.policy_date_start = prevFilters.policy_date_start.replace(/^\d{4}/, String((filters.analysis_year || new Date().getFullYear()) - 1));
+      }
+      if (prevFilters.policy_date_end) {
+        prevFilters.policy_date_end = prevFilters.policy_date_end.replace(/^\d{4}/, String((filters.analysis_year || new Date().getFullYear()) - 1));
+      }
+      if (prevFilters.analysis_year) {
+        prevFilters.analysis_year -= 1;
+      }
+      const prevParams = {
+        ...buildFilterParams(prevFilters, { isOrgUser, userOrg }),
+        perspective,
+      };
+
+      const granularity = timeViewToGranularity(timeView);
+      logger.info('趋势 API 查询执行 (含同比)', { timeView, granularity });
+
+      const [trendResponseCurrent, trendResponsePrev, qualityTrendResponse] = await Promise.all([
+        apiClient.getTrend(granularity, currentParams),
+        apiClient.getTrend(granularity, prevParams),
+        apiClient.getQualityBusinessTrend(granularity, currentParams),
       ]);
 
       if (requestId !== trendRequestIdRef.current) return;
 
       const orgLabel = hasOrgFilter ? (filters.org_level_3?.[0] || '机构') : '四川';
-      const transformedData: TrendDataPoint[] = trendResponse.map((item) => ({
+
+      const combineTrendData = (response: any[]) => response.map((item) => ({
         time_period: item.time_period,
         org_level_3: item.org_level_3 || orgLabel,
         premium: item.premium,
         next_month_ratio: item.next_month_ratio ?? 0,
       }));
+
+      const transformedData: TrendDataPoint[] = [
+        ...combineTrendData(trendResponsePrev),
+        ...combineTrendData(trendResponseCurrent)
+      ];
       const transformedQualityData: QualityBusinessDataPoint[] = qualityTrendResponse.map((item) => ({
         time_period: item.time_period,
         quality_premium: item.quality_premium ?? 0,
