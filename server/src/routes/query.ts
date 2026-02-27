@@ -31,7 +31,16 @@ import { generatePremiumTrendQuery, generateQualityBusinessTrendQuery, TimeView 
 import type { ViewPerspective } from '../types/view-perspective.js';
 // Phase 2 SQL Generators
 import { generateTonnageRoseQuery, generateOrgByTonnageQuery, generateTonnageByOrgQuery } from '../sql/truck.js';
-import { generateGrowthQuery, generateDailyGrowthWithContextQuery, GrowthConfig, GrowthType, TimeView as GrowthTimeView } from '../sql/growth.js';
+import {
+  generateGrowthQuery,
+  generateDailyGrowthWithContextQuery,
+  generateYoYGrowthQueryV2,
+  generateMoMGrowthQueryV2,
+  generateYTDGrowthQueryV2,
+  GrowthConfig,
+  GrowthType,
+  TimeView as GrowthTimeView,
+} from '../sql/growth.js';
 import { generateCoefficientByOrgQuery, generateFullCoefficientQuery } from '../sql/coefficient.js';
 import {
   generateClaimRatioQuery,
@@ -81,8 +90,43 @@ import { injectPermissionFilter, isValidPermissionFilter } from '../utils/sql-pe
 import { commonFilterSchema, buildWhereFromFilterParams, buildWhereFromFilterParamsWithoutDate } from '../utils/filter-params.js';
 import { parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, resolveGroupDim } from '../utils/route-helpers.js';
 import { logger } from '../utils/logger.js';
+import { buildResponseMeta } from '../utils/api-meta.js';
 
 const router = Router();
+
+const QUERY_CACHE = {
+  hotspotShort: 30_000,
+  hotspotMedium: 45_000,
+  hotspotLong: 60_000,
+} as const;
+
+function isBundleRoutesEnabled(): boolean {
+  return process.env.ENABLE_QUERY_BUNDLES !== 'false';
+}
+
+function shouldUseGrowthV2(config: GrowthConfig): boolean {
+  if (process.env.ENABLE_GROWTH_V2 === 'false') return false;
+  if (!['yoy', 'mom', 'ytd'].includes(config.growthType)) return false;
+  if (config.timeView !== 'monthly') return false;
+
+  // V2 的 PeriodAggregated 不包含原始日期字段，遇到日期条件则回退 V1。
+  const where = config.whereClause || '';
+  if (/policy_date|insurance_start_date/i.test(where)) return false;
+  return true;
+}
+
+function buildGrowthV2Sql(config: GrowthConfig): string {
+  switch (config.growthType) {
+    case 'yoy':
+      return generateYoYGrowthQueryV2(config);
+    case 'mom':
+      return generateMoMGrowthQueryV2(config);
+    case 'ytd':
+      return generateYTDGrowthQueryV2(config);
+    default:
+      return generateGrowthQuery(config);
+  }
+}
 
 /**
  * 应用认证和权限中间件到所有查询路由
@@ -379,7 +423,7 @@ router.get(
       };
 
       const sql = generateDailyGrowthWithContextQuery(config);
-      const result = await duckdbService.query(sql);
+      const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
       res.json({
         success: true,
@@ -414,8 +458,10 @@ router.get(
       config.currentPeriod = { startDate, endDate };
     }
 
-    const sql = generateGrowthQuery(config);
-    const result = await duckdbService.query(sql);
+    const sql = shouldUseGrowthV2(config)
+      ? buildGrowthV2Sql(config)
+      : generateGrowthQuery(config);
+    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
 
     res.json({
       success: true,
@@ -905,9 +951,9 @@ router.get(
     // 始终查询汇总行（应用 drillPath 过滤的汇总）
     // 如果有 groupBy，同时查询分组数据
     const [summaryResult, drilldownResult] = await Promise.all([
-      duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, null)),
+      duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, null), QUERY_CACHE.hotspotShort),
       groupBy
-        ? duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, groupBy))
+        ? duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, groupBy), QUERY_CACHE.hotspotShort)
         : Promise.resolve([]),
     ]);
 
@@ -1102,7 +1148,7 @@ router.get(
 
     logger.debug('[cross-sell-trend] Generated SQL', { sqlLength: sql.length });
 
-    const rows = await duckdbService.query(sql);
+    const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
     res.json({
       success: true,
@@ -1147,7 +1193,7 @@ router.get(
 
     logger.debug('[cross-sell-summary] Generated SQL', { sqlLength: sql.length });
 
-    const result = await duckdbService.query(sql);
+    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
 
     // 从结果中提取 maxDate（通过再查一次 date_bounds）
     const maxDateSql = `
@@ -1156,7 +1202,7 @@ router.get(
       WHERE ${finalWhereClause}
         AND ${getVehicleCategoryFilter(vehicleCategory as VehicleCategory)}
     `;
-    const maxDateResult = await duckdbService.query(maxDateSql);
+    const maxDateResult = await duckdbService.query(maxDateSql, QUERY_CACHE.hotspotMedium);
     const maxDate = maxDateResult[0]?.max_date || null;
 
     res.json({
@@ -1205,7 +1251,7 @@ router.get(
       sql = generateSalesmanPremiumReportQuery(finalWhereClause, planYear);
     }
 
-    const result = await duckdbService.query(sql);
+    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
     res.json({
       success: true,
@@ -1420,13 +1466,153 @@ router.get(
       timePeriod
     );
 
-    const result = await duckdbService.query(sql);
+    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
     res.json({
       success: true,
       data: {
         rows: result,
       },
+    });
+  })
+);
+
+/**
+ * GET /api/query/cross-sell-bundle
+ * 交叉销售页面聚合端点：summary + trend + drilldown + topSalesman
+ */
+const crossSellBundleSchema = z.object({
+  drillPath: z.string().optional().default('[]'),
+  groupBy: z.enum(CROSS_SELL_DIMENSIONS).optional(),
+  vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
+  seatCoverageLevel: z.enum(['all', 'eq_1w', 'gte_2w', 'lt_1w']).optional(),
+  granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('monthly'),
+  timePeriod: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('monthly'),
+});
+
+router.get(
+  '/cross-sell-bundle',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!isBundleRoutesEnabled()) {
+      throw new AppError(503, 'Cross-sell bundle route is disabled');
+    }
+
+    const parseResult = crossSellBundleSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+
+    const {
+      drillPath: drillPathRaw,
+      groupBy,
+      vehicleCategory,
+      seatCoverageLevel,
+      granularity,
+      timePeriod,
+    } = parseResult.data;
+
+    let drillPath: DrilldownStep[] = [];
+    try {
+      const parsed = JSON.parse(drillPathRaw);
+      if (Array.isArray(parsed)) {
+        drillPath = parsed.map((s: any) => ({
+          dimension: String(s.dimension) as CrossSellDimension,
+          value: String(s.value),
+        }));
+      }
+    } catch {
+      throw new AppError(400, 'Invalid drillPath JSON');
+    }
+
+    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const seatCoverageClause = getSeatCoverageClause(seatCoverageLevel);
+
+    let withDateWhere = `${whereWithDate} AND ${getVehicleCategoryFilter(vehicleCategory as VehicleCategory)}`;
+    let withoutDateWhere = `${whereWithoutDate} AND ${getVehicleCategoryFilter(vehicleCategory as VehicleCategory)}`;
+    if (seatCoverageClause) {
+      withDateWhere += ` AND ${seatCoverageClause}`;
+      withoutDateWhere += ` AND ${seatCoverageClause}`;
+    }
+
+    const trendSql = generateCrossSellTrendQuery(
+      withDateWhere,
+      vehicleCategory as VehicleCategory,
+      granularity as TrendGranularity
+    );
+
+    const timePeriodSql = generateCrossSellTimePeriodQuery(
+      withDateWhere,
+      vehicleCategory as VehicleCategory
+    );
+
+    const drillSummarySql = generateCrossSellQuery(
+      withDateWhere,
+      drillPath,
+      null
+    );
+    const drillRowsSql = groupBy
+      ? generateCrossSellQuery(withDateWhere, drillPath, groupBy as CrossSellDimension)
+      : null;
+
+    const zhuquanTopSalesmanSql = generateCrossSellTopSalesmanQuery(
+      withoutDateWhere,
+      vehicleCategory as VehicleCategory,
+      '主全',
+      timePeriod
+    );
+    const jiaosanTopSalesmanSql = generateCrossSellTopSalesmanQuery(
+      withoutDateWhere,
+      vehicleCategory as VehicleCategory,
+      '交三',
+      timePeriod
+    );
+
+    const maxDateSql = `
+      SELECT MAX(CAST(policy_date AS DATE)) AS max_date
+      FROM PolicyFact
+      WHERE ${withDateWhere}
+    `;
+
+    const [
+      trendRows,
+      timePeriodRows,
+      drillSummaryRows,
+      drillRows,
+      zhuquanTopSalesmanRows,
+      jiaosanTopSalesmanRows,
+      maxDateRows,
+    ] = await Promise.all([
+      duckdbService.query(trendSql, QUERY_CACHE.hotspotMedium),
+      duckdbService.query(timePeriodSql, QUERY_CACHE.hotspotMedium),
+      duckdbService.query(drillSummarySql, QUERY_CACHE.hotspotShort),
+      drillRowsSql ? duckdbService.query(drillRowsSql, QUERY_CACHE.hotspotShort) : Promise.resolve([]),
+      duckdbService.query(zhuquanTopSalesmanSql, QUERY_CACHE.hotspotShort),
+      duckdbService.query(jiaosanTopSalesmanSql, QUERY_CACHE.hotspotShort),
+      duckdbService.query(maxDateSql, QUERY_CACHE.hotspotMedium),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          maxDate: maxDateRows[0]?.max_date || null,
+          rows: timePeriodRows,
+        },
+        trend: {
+          rows: trendRows,
+        },
+        drilldown: {
+          summary: drillSummaryRows[0] || null,
+          rows: drillRows,
+          drillPath,
+          groupBy: groupBy || null,
+        },
+        topSalesman: {
+          zhuquanRows: zhuquanTopSalesmanRows,
+          jiaosanRows: jiaosanTopSalesmanRows,
+        },
+      },
+      meta: buildResponseMeta(res),
     });
   })
 );
@@ -1496,7 +1682,7 @@ router.get(
       expandDims as PerformanceSummaryExpandDims
     );
 
-    const rows = await duckdbService.query(sql);
+    const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
     res.json({
       success: true,
@@ -1530,7 +1716,7 @@ router.get(
       granularity as PerformanceTrendGranularity
     );
 
-    const rows = await duckdbService.query(sql);
+    const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
     res.json({
       success: true,
@@ -1585,7 +1771,8 @@ router.get(
           growthMode as PerformanceGrowthMode,
           drillPath,
           null
-        )
+        ),
+        QUERY_CACHE.hotspotShort
       ),
       groupBy
         ? duckdbService.query(
@@ -1597,7 +1784,8 @@ router.get(
             growthMode as PerformanceGrowthMode,
             drillPath,
             groupBy
-          )
+          ),
+          QUERY_CACHE.hotspotShort
         )
         : Promise.resolve([]),
     ]);
@@ -1643,11 +1831,259 @@ router.get(
       limit
     );
 
-    const rows = await duckdbService.query(sql);
+    const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
     res.json({
       success: true,
       data: { rows },
+    });
+  })
+);
+
+/**
+ * GET /api/query/performance-bundle
+ * 业绩分析页面聚合端点：summary + trend + drilldown + topSalesman
+ */
+const performanceBundleSchema = z.object({
+  drillPath: z.string().optional().default('[]'),
+  groupBy: z.enum(PERFORMANCE_DIMENSIONS).optional(),
+  segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
+  vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
+  timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
+  growthMode: z.enum(['mom', 'yoy']).default('mom'),
+  expandDims: z.enum(PERFORMANCE_EXPAND_DIMS).default('none'),
+  granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).optional(),
+  limit: z.coerce.number().default(20),
+});
+
+function mapPerformanceTimeToGranularity(timePeriod: PerformanceTimePeriod): PerformanceTrendGranularity {
+  switch (timePeriod) {
+    case 'day':
+      return 'daily';
+    case 'week':
+      return 'weekly';
+    case 'month':
+      return 'monthly';
+    case 'quarter':
+      return 'quarterly';
+    case 'year':
+      return 'yearly';
+    default:
+      return 'daily';
+  }
+}
+
+router.get(
+  '/performance-bundle',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!isBundleRoutesEnabled()) {
+      throw new AppError(503, 'Performance bundle route is disabled');
+    }
+
+    const parseResult = performanceBundleSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const {
+      drillPath: drillPathRaw,
+      groupBy,
+      timePeriod,
+      growthMode,
+      expandDims,
+      granularity,
+      limit,
+    } = parseResult.data;
+    const segmentTag = resolvePerformanceSegmentTag(parseResult.data);
+
+    let drillPath: PerformanceDrilldownStep[] = [];
+    try {
+      const parsed = JSON.parse(drillPathRaw);
+      if (Array.isArray(parsed)) {
+        drillPath = parsed.map((s: any) => ({
+          dimension: String(s.dimension) as PerformanceDimension,
+          value: String(s.value),
+        }));
+      }
+    } catch {
+      throw new AppError(400, 'Invalid drillPath JSON');
+    }
+
+    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const trendGranularity = (granularity || mapPerformanceTimeToGranularity(timePeriod as PerformanceTimePeriod)) as PerformanceTrendGranularity;
+
+    const summarySql = generatePerformanceSummaryQuery(
+      whereWithDate,
+      whereWithoutDate,
+      segmentTag as PerformanceSegmentTag,
+      timePeriod as PerformanceTimePeriod,
+      growthMode as PerformanceGrowthMode,
+      expandDims as PerformanceSummaryExpandDims
+    );
+    const trendSql = generatePerformanceTrendQuery(
+      whereWithDate,
+      segmentTag as PerformanceSegmentTag,
+      trendGranularity
+    );
+    const drillSummarySql = generatePerformanceDrilldownQuery(
+      whereWithDate,
+      whereWithoutDate,
+      segmentTag as PerformanceSegmentTag,
+      timePeriod as PerformanceTimePeriod,
+      growthMode as PerformanceGrowthMode,
+      drillPath,
+      null
+    );
+    const drillRowsSql = groupBy
+      ? generatePerformanceDrilldownQuery(
+        whereWithDate,
+        whereWithoutDate,
+        segmentTag as PerformanceSegmentTag,
+        timePeriod as PerformanceTimePeriod,
+        growthMode as PerformanceGrowthMode,
+        drillPath,
+        groupBy as PerformanceDimension
+      )
+      : null;
+    const topSalesmanSql = generatePerformanceTopSalesmanQuery(
+      whereWithDate,
+      whereWithoutDate,
+      segmentTag as PerformanceSegmentTag,
+      timePeriod as PerformanceTimePeriod,
+      growthMode as PerformanceGrowthMode,
+      limit
+    );
+
+    const [summaryRows, trendRows, drillSummaryRows, drillRows, topSalesmanRows] = await Promise.all([
+      duckdbService.query(summarySql, QUERY_CACHE.hotspotShort),
+      duckdbService.query(trendSql, QUERY_CACHE.hotspotShort),
+      duckdbService.query(drillSummarySql, QUERY_CACHE.hotspotShort),
+      drillRowsSql ? duckdbService.query(drillRowsSql, QUERY_CACHE.hotspotShort) : Promise.resolve([]),
+      duckdbService.query(topSalesmanSql, QUERY_CACHE.hotspotShort),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        summary: { rows: summaryRows },
+        trend: { rows: trendRows },
+        drilldown: {
+          summary: drillSummaryRows[0] || null,
+          rows: drillRows,
+          drillPath,
+          groupBy: groupBy || null,
+        },
+        topSalesman: { rows: topSalesmanRows },
+      },
+      meta: buildResponseMeta(res),
+    });
+  })
+);
+
+/**
+ * GET /api/query/dashboard-bundle
+ * 仪表盘聚合端点：kpi + kpi-detail + trend + quality-trend + ranking + rose
+ */
+const dashboardBundleSchema = z.object({
+  timeView: z.string().optional(),
+  granularity: z.string().optional(),
+  perspective: z.enum(['premium', 'policy_count']).optional(),
+  rankingLimit: z.coerce.number().default(10),
+});
+
+router.get(
+  '/dashboard-bundle',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!isBundleRoutesEnabled()) {
+      throw new AppError(503, 'Dashboard bundle route is disabled');
+    }
+
+    const parseResult = dashboardBundleSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const { perspective = 'premium', rankingLimit } = parseResult.data;
+    const timeView = (granularityMap[
+      parseResult.data.timeView || parseResult.data.granularity || 'weekly'
+    ] || 'weekly') as TimeView;
+
+    const { filterData, whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const groupDim = resolveGroupDim(filterData, req);
+
+    const orgNames = extractOrgNames(filterData, req.permissionFilter);
+    const salesmanNames = extractSalesmanNames(filterData, req.permissionFilter);
+
+    const kpiSql = generateKpiQuery(whereWithDate, { orgNames, salesmanNames }, whereWithoutDate);
+    const kpiDetailSql = generateKpiDetailQuery(whereWithDate, false);
+    const trendSql = generatePremiumTrendQuery(
+      timeView,
+      whereWithDate,
+      filterData.dateField || 'policy_date',
+      perspective as ViewPerspective,
+      groupDim
+    );
+    const qualityTrendSql = generateQualityBusinessTrendQuery(
+      timeView,
+      whereWithDate,
+      filterData.dateField || 'policy_date',
+      perspective as ViewPerspective,
+      groupDim
+    );
+    const allRankingSql = generateSalesmanAllBusinessRankingQuery(whereWithDate, rankingLimit);
+    const qualityRankingSql = generateSalesmanQualityBusinessRankingQuery(whereWithDate, rankingLimit);
+    const customerRoseSql = `
+      SELECT COALESCE(customer_category, '未知') AS dim_key, SUM(premium) AS value
+      FROM PolicyFact
+      WHERE ${whereWithDate}
+      GROUP BY COALESCE(customer_category, '未知')
+      ORDER BY value DESC
+    `;
+    const coverageRoseSql = `
+      SELECT COALESCE(coverage_combination, '未知') AS dim_key, SUM(premium) AS value
+      FROM PolicyFact
+      WHERE ${whereWithDate}
+      GROUP BY COALESCE(coverage_combination, '未知')
+      ORDER BY value DESC
+    `;
+    const terminalRoseSql = `
+      SELECT
+        CASE WHEN is_telemarketing THEN '电销' ELSE '非电销' END AS dim_key,
+        SUM(premium) AS value
+      FROM PolicyFact
+      WHERE ${whereWithDate}
+      GROUP BY CASE WHEN is_telemarketing THEN '电销' ELSE '非电销' END
+      ORDER BY value DESC
+    `;
+
+    const [kpiRows, kpiDetailRows, trendRows, qualityTrendRows, allRankingRows, qualityRankingRows, customerRoseRows, coverageRoseRows, terminalRoseRows] = await Promise.all([
+      duckdbService.query(kpiSql, QUERY_CACHE.hotspotLong),
+      duckdbService.query(kpiDetailSql, QUERY_CACHE.hotspotLong),
+      duckdbService.query(trendSql, QUERY_CACHE.hotspotLong),
+      duckdbService.query(qualityTrendSql, QUERY_CACHE.hotspotLong),
+      duckdbService.query(allRankingSql, QUERY_CACHE.hotspotMedium),
+      duckdbService.query(qualityRankingSql, QUERY_CACHE.hotspotMedium),
+      duckdbService.query(customerRoseSql, QUERY_CACHE.hotspotMedium),
+      duckdbService.query(coverageRoseSql, QUERY_CACHE.hotspotMedium),
+      duckdbService.query(terminalRoseSql, QUERY_CACHE.hotspotMedium),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        kpi: kpiRows[0] || {},
+        kpiDetail: kpiDetailRows[0] || {},
+        trend: trendRows,
+        qualityTrend: qualityTrendRows,
+        ranking: {
+          allBusinessTop: allRankingRows,
+          qualityBusinessTop: qualityRankingRows,
+        },
+        rose: {
+          customerCategory: customerRoseRows,
+          coverageCombination: coverageRoseRows,
+          terminalSource: terminalRoseRows,
+        },
+      },
+      meta: buildResponseMeta(res),
     });
   })
 );

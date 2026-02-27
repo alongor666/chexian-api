@@ -7,6 +7,7 @@
 
 /** API 基础地址（从环境变量获取，默认本地开发地址） */
 export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api';
+export const ENABLE_BUNDLE_ROUTES = import.meta.env.VITE_ENABLE_BUNDLE_ROUTES !== 'false';
 
 /**
  * API 响应格式
@@ -14,11 +15,24 @@ export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/
 interface ApiResponse<T> {
   success: boolean;
   data?: T;
+  meta?: {
+    requestId?: string;
+    cacheHit?: boolean;
+    serverTiming?: string;
+    dataVersion?: string;
+  };
   error?: {
     message: string;
     statusCode: number;
   };
   message?: string;
+}
+
+export interface ApiResponseMeta {
+  requestId?: string;
+  cacheHit?: boolean;
+  serverTiming?: string;
+  dataVersion?: string;
 }
 
 export class RequestAbortError extends Error {
@@ -115,6 +129,80 @@ export interface QualityBusinessTrendData {
   quality_ratio: number;
 }
 
+export interface CrossSellBundleResponse {
+  summary: {
+    maxDate: string | null;
+    rows: Array<Record<string, unknown>>;
+  };
+  trend: {
+    rows: Array<{
+      time_period: string;
+      coverage_combination: string;
+      rate: number;
+      avg_premium: number;
+      auto_count: number;
+    }>;
+  };
+  drilldown: {
+    summary: Record<string, unknown> | null;
+    rows: Array<Record<string, unknown>>;
+    drillPath: Array<{ dimension: string; value: string }>;
+    groupBy: string | null;
+  };
+  topSalesman: {
+    zhuquanRows: Array<{
+      salesman_name: string;
+      org_level_3: string;
+      driver_premium: number;
+      auto_count: number;
+      rate: number;
+      avg_premium: number;
+    }>;
+    jiaosanRows: Array<{
+      salesman_name: string;
+      org_level_3: string;
+      driver_premium: number;
+      auto_count: number;
+      rate: number;
+      avg_premium: number;
+    }>;
+  };
+}
+
+export interface PerformanceBundleResponse {
+  summary: {
+    rows: Array<Record<string, unknown>>;
+  };
+  trend: {
+    rows: Array<Record<string, unknown>>;
+  };
+  drilldown: {
+    summary: Record<string, unknown> | null;
+    rows: Array<Record<string, unknown>>;
+    drillPath: Array<{ dimension: string; value: string }>;
+    groupBy: string | null;
+  };
+  topSalesman: {
+    rows: Array<Record<string, unknown>>;
+  };
+}
+
+export interface DashboardBundleResponse {
+  kpi: KpiData;
+  kpiDetail: KpiDetailData;
+  trend: TrendData[];
+  qualityTrend: QualityBusinessTrendData[];
+  ranking: {
+    allBusinessTop: Array<Record<string, unknown>>;
+    qualityBusinessTop: Array<Record<string, unknown>>;
+  };
+  rose: {
+    customerCategory: Array<{ dim_key: string; value: number }>;
+    coverageCombination: Array<{ dim_key: string; value: number }>;
+    terminalSource: Array<{ dim_key: string; value: number }>;
+  };
+}
+
 /**
  * 文件信息
  */
@@ -147,8 +235,25 @@ class ApiClient {
   private hasSessionCookieHint = false;
   /** 进行中的请求控制器（按端点去重） */
   private inflightControllers = new Map<string, AbortController>();
+  /** 进行中的同 key 请求 Promise（用于请求合并） */
+  private inflightRequests = new Map<string, Promise<unknown>>();
   /** 默认请求超时（毫秒） */
   private requestTimeoutMs = 30_000;
+
+  private normalizeGetEndpoint(endpoint: string): string {
+    const [path, query = ''] = endpoint.split('?');
+    if (!query) return path;
+
+    const search = new URLSearchParams(query);
+    const entries = Array.from(search.entries())
+      .sort(([aKey, aValue], [bKey, bValue]) => {
+        if (aKey === bKey) return aValue.localeCompare(bValue);
+        return aKey.localeCompare(bKey);
+      })
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+
+    return `${path}?${entries.join('&')}`;
+  }
 
   /**
    * 将 filters 对象转为 URL 查询字符串
@@ -231,13 +336,14 @@ class ApiClient {
       controller.abort();
     }
     this.inflightControllers.clear();
+    this.inflightRequests.clear();
   }
 
   /**
    * 通用请求方法
    *
    * 增强：
-   * - 自动取消同一端点的前序请求（GET 请求）
+   * - GET 同 key 请求合并（in-flight coalescing）
    * - 30 秒超时
    */
   private async request<T>(
@@ -256,58 +362,68 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // 对 GET 请求自动取消同端点前序请求（避免竞态）
     const method = (options.method || 'GET').toUpperCase();
-    // 仅取消“同一完整请求”（包含 query string）
-    // 避免并发请求同一路由不同参数时互相取消（如 rankingType=all/quality）
-    const dedupeKey = method === 'GET' ? endpoint : '';
+    const dedupeKey = method === 'GET'
+      ? `${method}:${this.normalizeGetEndpoint(endpoint)}`
+      : '';
+
     if (dedupeKey) {
-      this.cancelRequest(dedupeKey);
+      const existing = this.inflightRequests.get(dedupeKey) as Promise<T> | undefined;
+      if (existing) {
+        return existing;
+      }
     }
 
-    // 创建 AbortController（合并超时和取消）
-    const controller = new AbortController();
-    if (dedupeKey) {
-      this.inflightControllers.set(dedupeKey, controller);
-    }
-    const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+    const execute = async (): Promise<T> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+      if (dedupeKey) {
+        this.inflightControllers.set(dedupeKey, controller);
+      }
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        credentials: 'include',
-        signal: controller.signal,
-      });
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          credentials: 'include',
+          signal: controller.signal,
+        });
 
-      if (response.status === 401 && !hasRetriedAfterRefresh) {
-        const refreshed = await this.tryRefreshSession();
-        if (refreshed) {
-          return this.request<T>(endpoint, options, true);
+        if (response.status === 401 && !hasRetriedAfterRefresh) {
+          const refreshed = await this.tryRefreshSession();
+          if (refreshed) {
+            return this.request<T>(endpoint, options, true);
+          }
+        }
+
+        const data: ApiResponse<T> = await response.json();
+
+        if (!data.success) {
+          const error = new Error(data.error?.message || '请求失败');
+          (error as any).statusCode = data.error?.statusCode || response.status;
+          throw error;
+        }
+
+        return data.data as T;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          throw new RequestAbortError();
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+        if (dedupeKey) {
+          this.inflightControllers.delete(dedupeKey);
+          this.inflightRequests.delete(dedupeKey);
         }
       }
+    };
 
-      const data: ApiResponse<T> = await response.json();
-
-      if (!data.success) {
-        const error = new Error(data.error?.message || '请求失败');
-        (error as any).statusCode = data.error?.statusCode || response.status;
-        throw error;
-      }
-
-      return data.data as T;
-    } catch (err) {
-      // 区分取消和真实错误
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new RequestAbortError();
-      }
-      throw err;
-    } finally {
-      clearTimeout(timeoutId);
-      if (dedupeKey) {
-        this.inflightControllers.delete(dedupeKey);
-      }
+    const requestPromise = execute();
+    if (dedupeKey) {
+      this.inflightRequests.set(dedupeKey, requestPromise);
     }
+    return requestPromise;
   }
 
   // ============================================
@@ -648,6 +764,30 @@ class ApiClient {
   }
 
   /**
+   * 获取交叉销售聚合数据（summary + trend + drilldown + topSalesman）
+   */
+  async getCrossSellBundle(params: {
+    drillPath?: Array<{ dimension: string; value: string }>;
+    groupBy?: string;
+    [key: string]: any;
+  }): Promise<CrossSellBundleResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.drillPath) {
+      searchParams.append('drillPath', JSON.stringify(params.drillPath));
+    }
+    if (params.groupBy) {
+      searchParams.append('groupBy', params.groupBy);
+    }
+    Object.entries(params).forEach(([key, value]) => {
+      if (key !== 'drillPath' && key !== 'groupBy' && value !== undefined && value !== null) {
+        searchParams.append(key, String(value));
+      }
+    });
+    const query = searchParams.toString();
+    return this.request(`/query/cross-sell-bundle${query ? `?${query}` : ''}`);
+  }
+
+  /**
    * 获取业绩分析 - 险别组合业绩环比
    */
   async getPerformanceSummary(params?: Record<string, string>): Promise<{
@@ -740,6 +880,38 @@ class ApiClient {
   }> {
     const query = this.buildQueryString(params);
     return this.request(`/query/performance-top-salesman${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取业绩分析聚合数据（summary + trend + drilldown + topSalesman）
+   */
+  async getPerformanceBundle(params: {
+    drillPath?: Array<{ dimension: string; value: string }>;
+    groupBy?: string;
+    [key: string]: any;
+  }): Promise<PerformanceBundleResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.drillPath) {
+      searchParams.append('drillPath', JSON.stringify(params.drillPath));
+    }
+    if (params.groupBy) {
+      searchParams.append('groupBy', params.groupBy);
+    }
+    Object.entries(params).forEach(([key, value]) => {
+      if (key !== 'drillPath' && key !== 'groupBy' && value !== undefined && value !== null) {
+        searchParams.append(key, String(value));
+      }
+    });
+    const query = searchParams.toString();
+    return this.request(`/query/performance-bundle${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取仪表盘聚合数据（kpi + trend + ranking + rose）
+   */
+  async getDashboardBundle(params?: Record<string, any>): Promise<DashboardBundleResponse> {
+    const query = this.buildQueryString(params);
+    return this.request(`/query/dashboard-bundle${query ? `?${query}` : ''}`);
   }
 
   /**

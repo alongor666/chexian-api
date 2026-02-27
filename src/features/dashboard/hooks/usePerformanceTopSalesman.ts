@@ -30,6 +30,7 @@ interface UsePerformanceTopSalesmanProps {
   segmentTag: PerformanceSegmentTag;
   timePeriod: PerformanceTimePeriod;
   growthMode: PerformanceGrowthMode;
+  prefetchedRows?: Array<Record<string, unknown>>;
   enabled?: boolean;
 }
 
@@ -44,6 +45,7 @@ export function usePerformanceTopSalesman({
   segmentTag,
   timePeriod,
   growthMode,
+  prefetchedRows,
   enabled = true,
 }: UsePerformanceTopSalesmanProps): UsePerformanceTopSalesmanReturn {
   const { isOrgUser, userOrg } = useRBAC();
@@ -53,6 +55,25 @@ export function usePerformanceTopSalesman({
   const fetchIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    if (prefetchedRows) {
+      setRows(prefetchedRows.map((row) => ({
+        dimension_name: formatSalesmanName(String(row.dimension_name ?? '')),
+        premium: Number(row.premium ?? 0),
+        auto_count: Number(row.auto_count ?? 0),
+        plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),
+        achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
+        growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
+        quadrant: row.quadrant == null ? undefined : String(row.quadrant),
+        nev_rate: Number(row.nev_rate ?? 0),
+        renewal_rate: Number(row.renewal_rate ?? 0),
+        transfer_business_rate: Number(row.transfer_business_rate ?? 0),
+        new_car_rate: Number(row.new_car_rate ?? 0),
+        transfer_rate: Number(row.transfer_rate ?? 0),
+      })));
+      setLoading(false);
+      setError(null);
+      return;
+    }
     if (!enabled) return;
 
     const fetchId = ++fetchIdRef.current;
@@ -95,7 +116,7 @@ export function usePerformanceTopSalesman({
         setLoading(false);
       }
     }
-  }, [enabled, filters, growthMode, isOrgUser, segmentTag, timePeriod, userOrg]);
+  }, [enabled, filters, growthMode, isOrgUser, prefetchedRows, segmentTag, timePeriod, userOrg]);
 
   useEffect(() => {
     fetchData();

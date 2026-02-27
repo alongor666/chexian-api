@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { formatPremiumWan, formatSalesmanName } from '../../../shared/utils/formatters';
 import { createLogger } from '../../../shared/utils/logger';
 import { useLoadingStates } from '../../../shared/hooks';
@@ -13,6 +13,13 @@ const logger = createLogger('usePremiumDashboardData');
 
 export interface UsePremiumDashboardDataOptions {
   filters: AdvancedFilterState;
+  prefetched?: {
+    allBusinessTop10: SalesmanSummaryRow[];
+    qualityBusinessTop10: SalesmanSummaryRow[];
+    customerCategoryData: RoseChartDatum[];
+    coverageCombinationData: RoseChartDatum[];
+    terminalSourceData: RoseChartDatum[];
+  };
   enabled?: boolean;
 }
 
@@ -47,6 +54,7 @@ function buildDimensionShareSql(
 
 export const usePremiumDashboardData = ({
   filters,
+  prefetched,
   enabled = true,
 }: UsePremiumDashboardDataOptions): UsePremiumDashboardDataResult => {
   const { isOrgUser, userOrg } = useRBAC();
@@ -63,6 +71,19 @@ export const usePremiumDashboardData = ({
     'coverageCombination',
     'terminalSource',
   ] as const);
+
+  useEffect(() => {
+    if (!prefetched) return;
+    setAllBusinessTop10(prefetched.allBusinessTop10 || []);
+    setQualityBusinessTop10(prefetched.qualityBusinessTop10 || []);
+    setCustomerCategoryData(prefetched.customerCategoryData || []);
+    setCoverageCombinationData(prefetched.coverageCombinationData || []);
+    setTerminalSourceData(prefetched.terminalSourceData || []);
+    setLoading('table', false);
+    setLoading('customerCategory', false);
+    setLoading('coverageCombination', false);
+    setLoading('terminalSource', false);
+  }, [prefetched, setLoading]);
 
   const refreshFromApi = useCallback(async (requestId: number) => {
     const params = buildFilterParams(filters, { isOrgUser, userOrg });
@@ -132,11 +153,23 @@ export const usePremiumDashboardData = ({
   }, [filters, setLoading]);
 
   const refresh = useCallback(() => {
+    if (prefetched) {
+      setAllBusinessTop10(prefetched.allBusinessTop10 || []);
+      setQualityBusinessTop10(prefetched.qualityBusinessTop10 || []);
+      setCustomerCategoryData(prefetched.customerCategoryData || []);
+      setCoverageCombinationData(prefetched.coverageCombinationData || []);
+      setTerminalSourceData(prefetched.terminalSourceData || []);
+      setLoading('table', false);
+      setLoading('customerCategory', false);
+      setLoading('coverageCombination', false);
+      setLoading('terminalSource', false);
+      return;
+    }
     if (!enabled) return;
 
     const requestId = ++requestIdRef.current;
     void refreshFromApi(requestId);
-  }, [enabled, refreshFromApi]);
+  }, [enabled, prefetched, refreshFromApi, setLoading]);
 
   return {
     allBusinessTop10,

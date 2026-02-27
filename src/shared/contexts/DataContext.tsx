@@ -4,7 +4,7 @@
  * 纯 API 模式：用户登录后使用后端 DuckDB，数据全部通过 API 获取
  */
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import { apiClient, FileInfo, LoadResult, isRequestAbortError } from '../api/client';
 import { Logger } from '@/shared/utils/logger';
 
@@ -75,34 +75,45 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const refreshFilesPromiseRef = useRef<Promise<void> | null>(null);
 
   // 刷新文件列表
   const refreshFiles = useCallback(async () => {
     if (!apiClient.isAuthenticated()) {
       return;
     }
-
-    try {
-      const fileList = await apiClient.getFiles();
-      setFiles(fileList);
-
-      const current = fileList.find((f) => f.isCurrent);
-      if (current) {
-        setIsDataLoaded(true);
-        if (!currentFile) {
-          setCurrentFile({
-            filename: current.filename,
-            rowCount: 0,
-            fileSizeMB: current.sizeMB,
-          });
-          logger.info('[DataContext] 检测到后端已加载文件:', current.filename);
-        }
-      }
-    } catch (err) {
-      if (!isRequestAbortError(err)) {
-        logger.error('[DataContext] 获取文件列表失败:', err);
-      }
+    if (refreshFilesPromiseRef.current) {
+      return refreshFilesPromiseRef.current;
     }
+
+    const task = (async () => {
+      try {
+        const fileList = await apiClient.getFiles();
+        setFiles(fileList);
+
+        const current = fileList.find((f) => f.isCurrent);
+        if (current) {
+          setIsDataLoaded(true);
+          if (!currentFile) {
+            setCurrentFile({
+              filename: current.filename,
+              rowCount: 0,
+              fileSizeMB: current.sizeMB,
+            });
+            logger.info('[DataContext] 检测到后端已加载文件:', current.filename);
+          }
+        }
+      } catch (err) {
+        if (!isRequestAbortError(err)) {
+          logger.error('[DataContext] 获取文件列表失败:', err);
+        }
+      } finally {
+        refreshFilesPromiseRef.current = null;
+      }
+    })();
+
+    refreshFilesPromiseRef.current = task;
+    return task;
   }, [currentFile]);
 
   // 加载文件

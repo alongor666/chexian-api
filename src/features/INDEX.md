@@ -309,3 +309,13 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/hooks/useRenewalDrilldown.ts`**: 续保下钻“业务员层/父级业务员名”统一展示规则。
 - **`growth/hooks/useGrowthAnalysis.ts`**: 增长分析“分业务员/对比明细”维度名统一展示规则。
 - **`dashboard/hooks/usePremiumDashboardData.ts`**: 保费分析看板 Top 业务员姓名统一展示规则。
+
+## 2026-02-27 关键页面性能与体验升级（B212）
+
+- **`dashboard/hooks/useCrossSellAnalysis.ts`**: 交叉销售主链路改为 bundle 优先（`cross-sell-bundle`），并支持 bundle 失败/关闭时自动回退旧接口组合查询。
+- **`dashboard/hooks/usePerformanceBundle.ts`**: 新增业绩分析 bundle 数据 Hook（`performance-bundle`）。
+- **`dashboard/hooks/useDashboardBundle.ts`**: 新增仪表盘 bundle 数据 Hook（`dashboard-bundle`）。
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: summary/trend/top 优先消费 bundle 预取数据，支持 `VITE_ENABLE_BUNDLE_ROUTES=false` 回退旧链路。
+- **`dashboard/PremiumDashboard.tsx`**: KPI/trend/排名/玫瑰图优先消费 bundle 预取数据，支持开关回退。
+- **`dashboard/CrossSellSummaryKpiBoard.tsx`**、**`dashboard/CrossSellTrendChart.tsx`**、**`dashboard/CrossSellTopSalesmanBoard.tsx`**: 增加 prefetched 数据入口，消除页面内重复请求。
+- **`home/DataImportPage.tsx`**: 移除重复 `refreshFiles()` 触发路径，避免进入页时双请求。

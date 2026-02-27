@@ -24,6 +24,10 @@ interface TopSalesmanBoardProps {
   vehicleCategory: VehicleCategory;
   seatCoverageLevel?: SeatCoverageLevel;
   timePeriod: TrendGranularity;
+  prefetchedTopSalesman?: {
+    zhuquanRows: TopSalesmanRow[];
+    jiaosanRows: TopSalesmanRow[];
+  };
 }
 
 type CoverageType = '主全' | '交三';
@@ -137,6 +141,7 @@ export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard
   vehicleCategory,
   seatCoverageLevel,
   timePeriod,
+  prefetchedTopSalesman,
 }: TopSalesmanBoardProps) {
   const [activeCoverage, setActiveCoverage] = useState<CoverageType>('主全');
 
@@ -146,6 +151,7 @@ export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard
     seatCoverageLevel,
     coverage: '主全',
     timePeriod,
+    enabled: !prefetchedTopSalesman,
   });
 
   const jiaosanResult = useCrossSellTopSalesman({
@@ -154,21 +160,25 @@ export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard
     seatCoverageLevel,
     coverage: '交三',
     timePeriod,
+    enabled: !prefetchedTopSalesman,
   });
+  const zhuquanData = prefetchedTopSalesman?.zhuquanRows ?? zhuquanResult.data;
+  const jiaosanData = prefetchedTopSalesman?.jiaosanRows ?? jiaosanResult.data;
+  const hasData = zhuquanData.length > 0 || jiaosanData.length > 0;
+  const loading = prefetchedTopSalesman ? false : (zhuquanResult.loading || jiaosanResult.loading);
 
-  const hasData = zhuquanResult.data.length > 0 || jiaosanResult.data.length > 0;
-  const loading = zhuquanResult.loading || jiaosanResult.loading;
-
-  const activeResult = activeCoverage === '主全' ? zhuquanResult : jiaosanResult;
+  const activeResult = activeCoverage === '主全'
+    ? { data: zhuquanData, loading, error: zhuquanResult.error }
+    : { data: jiaosanData, loading, error: jiaosanResult.error };
 
   const handleExport = useCallback(() => {
     if (!hasData) return;
 
-    const exportData = prepareExportData(zhuquanResult.data, jiaosanResult.data);
+    const exportData = prepareExportData(zhuquanData, jiaosanData);
     const csvContent = exportToCSV(exportData);
     const filename = generateExportFilename(TIME_PERIOD_LABELS[timePeriod]);
     downloadCSV(csvContent, filename);
-  }, [zhuquanResult.data, jiaosanResult.data, timePeriod, hasData]);
+  }, [zhuquanData, jiaosanData, timePeriod, hasData]);
 
   return (
     <div className="space-y-4">

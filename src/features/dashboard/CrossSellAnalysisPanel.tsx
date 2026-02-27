@@ -44,7 +44,6 @@ interface CrossSellAnalysisPanelProps {
 // ============================================================
 
 const VEHICLE_TABS: TabItem[] = [
-  { key: 'all', label: '全部' },
   { key: 'passenger', label: '非营业客车' },
   { key: 'truck', label: '货车' },
   { key: 'motorcycle', label: '摩托车' },
@@ -59,7 +58,6 @@ const GRANULARITY_TABS: TabItem[] = [
 ];
 
 const SEAT_COVERAGE_TABS: TabItem[] = [
-  { key: 'all', label: '不分保额' },
   { key: 'eq_1w', label: '=1万' },
   { key: 'gte_2w', label: '>=2万' },
   { key: 'lt_1w', label: '<1万' },
@@ -84,8 +82,16 @@ export const CrossSellHeaderControls: React.FC<CrossSellHeaderControlsProps> = (
 }) => (
   <div className="no-export max-w-full overflow-x-auto">
     <div className="flex items-center gap-2 whitespace-nowrap">
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
-        客户类别
+      <span
+        onClick={() => onVehicleCategoryChange(vehicleCategory === 'all' ? 'passenger' : 'all')}
+        className={cn(
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border cursor-pointer transition-colors select-none",
+          vehicleCategory === 'all'
+            ? 'bg-primary text-white border-primary hover:bg-primary-hover'
+            : 'bg-primary-bg text-primary-dark border-primary-border hover:bg-blue-100'
+        )}
+      >
+        客户类别 {vehicleCategory === 'all' ? '(全选)' : ''}
       </span>
       <Tabs
         items={VEHICLE_TABS}
@@ -94,8 +100,16 @@ export const CrossSellHeaderControls: React.FC<CrossSellHeaderControlsProps> = (
         variant="pills"
         size="mini"
       />
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
-        车上责任
+      <span
+        onClick={() => onSeatCoverageLevelChange(seatCoverageLevel === 'all' ? 'eq_1w' : 'all')}
+        className={cn(
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border cursor-pointer transition-colors select-none",
+          seatCoverageLevel === 'all'
+            ? 'bg-primary text-white border-primary hover:bg-primary-hover'
+            : 'bg-primary-bg text-primary-dark border-primary-border hover:bg-blue-100'
+        )}
+      >
+        车上责任 {seatCoverageLevel === 'all' ? '(不分保额)' : ''}
       </span>
       <Tabs
         items={SEAT_COVERAGE_TABS}
@@ -273,6 +287,9 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
     drillPath,
     currentGroupBy,
     availableDimensions,
+    timePeriodSummary,
+    trendRows,
+    topSalesman,
     selectDimension,
     drillDown,
     drillUp,
@@ -351,6 +368,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         seatCoverageLevel={seatCoverageLevel}
         filters={filters}
         timePeriod={mappedTimePeriodForKpi as any}
+        prefetchedSummary={timePeriodSummary}
       />
 
       {/* 板块2：推介率走势 - 摩托车只显示推介率走势，不显示件均保费 */}
@@ -364,8 +382,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           granularity={trendGranularity}
           metric="rate"
           title="驾乘险推介率走势"
-          requestKey="rate"
           enabled={isDataLoaded}
+          rowsOverride={trendRows}
         />
       ) : (
         // 非营业客车/货车：显示推介率和件均保费走势
@@ -377,8 +395,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
             granularity={trendGranularity}
             metric="rate"
             title="驾乘险推介率走势"
-            requestKey="rate"
             enabled={isDataLoaded}
+            rowsOverride={trendRows}
           />
           <CrossSellTrendChart
             vehicleCategory={vehicleCategory}
@@ -387,8 +405,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
             granularity={trendGranularity}
             metric="avg_premium"
             title="驾乘险件均保费走势"
-            requestKey="avg_premium"
             enabled={isDataLoaded}
+            rowsOverride={trendRows}
           />
         </div>
       )}
@@ -556,6 +574,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         vehicleCategory={vehicleCategory}
         seatCoverageLevel={seatCoverageLevel}
         timePeriod={trendGranularity}
+        prefetchedTopSalesman={topSalesman}
       />
     </div>
   );

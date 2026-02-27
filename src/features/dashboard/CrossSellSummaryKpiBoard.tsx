@@ -22,6 +22,10 @@ interface CrossSellSummaryKpiBoardProps {
   seatCoverageLevel?: SeatCoverageLevel;
   filters: AdvancedFilterState;
   timePeriod: TimePeriod;
+  prefetchedSummary?: {
+    maxDate: string | null;
+    rows: Array<Record<string, unknown>>;
+  };
 }
 
 
@@ -43,6 +47,7 @@ const COVERAGE_ROWS_MOTORCYCLE = [
 const METRIC_COLUMNS_FULL = [
   { key: 'premium', label: '驾乘险保费' },
   { key: 'auto_count', label: '车险件数' },
+  { key: 'driver_count', label: '驾乘险件数' },
   { key: 'rate', label: '推介率' },
   { key: 'avg_premium', label: '件均保费' },
 ] as const;
@@ -54,11 +59,13 @@ const METRIC_COLUMNS_MOTORCYCLE = [
 
 interface TimePeriodData {
   auto_count: number;
+  driver_count: number;
   premium: number;
   rate: number;
   avg_premium: number;
   // 上一周期数据
   prev_auto_count: number;
+  prev_driver_count: number;
   prev_premium: number;
   prev_rate: number;
   prev_avg_premium: number;
@@ -168,12 +175,18 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
   seatCoverageLevel,
   filters,
   timePeriod,
+  prefetchedSummary,
 }: CrossSellSummaryKpiBoardProps) {
-  const { maxDate, rawData, loading, error } = useCrossSellTimePeriod({
+  const summaryQuery = useCrossSellTimePeriod({
     filters,
     vehicleCategory,
     seatCoverageLevel,
+    enabled: !prefetchedSummary,
   });
+  const maxDate = prefetchedSummary?.maxDate ?? summaryQuery.maxDate;
+  const rawData = (prefetchedSummary?.rows as any[] | undefined) ?? summaryQuery.rawData;
+  const loading = prefetchedSummary ? false : summaryQuery.loading;
+  const error = prefetchedSummary ? null : summaryQuery.error;
 
   // 判断是否为摩托车
   const isMotorcycle = vehicleCategory === 'motorcycle';
@@ -197,11 +210,13 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
 
       map.set(row.coverage_combination, {
         auto_count: Number(rowAny[`${prefix}_auto_count`] ?? 0),
+        driver_count: Number(rowAny[`${prefix}_driver_count`] ?? 0),
         premium: Number(rowAny[`${prefix}_premium`] ?? 0) / 10000,
         rate: Number(rowAny[`${prefix}_rate`] ?? 0),
         avg_premium: Number(rowAny[`${prefix}_avg_premium`] ?? 0),
         // 上一周期数据
         prev_auto_count: showPrev ? Number(rowAny[`${prevPrefix}_auto_count`] ?? 0) : 0,
+        prev_driver_count: showPrev ? Number(rowAny[`${prevPrefix}_driver_count`] ?? 0) : 0,
         prev_premium: showPrev ? Number(rowAny[`${prevPrefix}_premium`] ?? 0) / 10000 : 0,
         prev_rate: showPrev ? Number(rowAny[`${prevPrefix}_rate`] ?? 0) : 0,
         prev_avg_premium: showPrev ? Number(rowAny[`${prevPrefix}_avg_premium`] ?? 0) : 0,
@@ -237,6 +252,14 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
         const change = showChange ? calcChange(data?.auto_count ?? 0, data?.prev_auto_count ?? 0) : undefined;
         return {
           text: formatCount(data?.auto_count ?? 0),
+          colorClass: '',
+          change
+        };
+      }
+      case 'driver_count': {
+        const change = showChange ? calcChange(data?.driver_count ?? 0, data?.prev_driver_count ?? 0) : undefined;
+        return {
+          text: formatCount(data?.driver_count ?? 0),
           colorClass: '',
           change
         };
@@ -325,6 +348,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                         <span
                           className={cn(
                             numericStyles.kpiPrimary,
+                            '!text-[15px]',
                             colorClass || colorClasses.text.neutralBlack
                           )}
                         >
@@ -333,7 +357,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                         {change && (
                           <span
                             className={cn(
-                              'text-base leading-tight',
+                              'text-sm leading-tight whitespace-nowrap',
                               getChangeStatusClass(change.status)
                             )}
                           >

@@ -275,3 +275,8 @@ import { cn, cardStyles, getTrendColorClass, colors } from '@/shared/styles';
 ## 2026-02-27 业务员姓名展示规则补充
 
 - `utils/formatters.ts`：`formatSalesmanName` 升级为全局统一规则（仅保留中文名；移除数字/英文ID；`admin` 统一显示为 `直接个代`）。
+
+## 2026-02-27 关键页面性能链路补充（B212）
+
+- `api/client.ts`：GET 请求改为 in-flight coalescing（同 key 并发请求合并）；去重 key 增加 query 参数排序归一化；新增 `VITE_ENABLE_BUNDLE_ROUTES` 开关与 bundle API 类型导出。
+- `contexts/DataContext.tsx`：`refreshFiles` 增加 Promise 级合并，避免同一时段重复触发 `getFiles()`。

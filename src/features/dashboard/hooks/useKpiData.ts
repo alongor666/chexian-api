@@ -57,6 +57,10 @@ export interface KpiData {
  */
 export interface UseKpiDataOptions {
   filters: AdvancedFilterState;
+  prefetched?: {
+    kpi: KpiData;
+    kpiDetail: KpiDetailResult | null;
+  };
   enabled?: boolean;
 }
 
@@ -76,6 +80,7 @@ export interface UseKpiDataResult {
  */
 export const useKpiData = ({
   filters,
+  prefetched,
   enabled = true,
 }: UseKpiDataOptions): UseKpiDataResult => {
   const [kpiData, setKpiData] = useState<KpiData>({});
@@ -145,6 +150,13 @@ export const useKpiData = ({
   }, [filters]);
 
   const fetchKpiData = useCallback(async () => {
+    if (prefetched) {
+      setKpiData(prefetched.kpi || {});
+      setKpiDetails(prefetched.kpiDetail);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     if (!enabled) {
       logger.debug('KPI 查询未启用');
       return;
@@ -165,7 +177,7 @@ export const useKpiData = ({
         setLoading(false);
       }
     }
-  }, [enabled, fetchFromApi]);
+  }, [enabled, fetchFromApi, prefetched]);
 
   useEffect(() => {
     void fetchKpiData();

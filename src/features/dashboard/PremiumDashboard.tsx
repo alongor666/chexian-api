@@ -7,6 +7,7 @@ import { useTrendData } from './hooks/useTrendData';
 import { usePremiumDashboardData } from './hooks/usePremiumDashboardData';
 import { usePerspective } from './hooks/usePerspective';
 import { useDashboardLayout } from './hooks/useDashboardLayout';
+import { useDashboardBundle } from './hooks/useDashboardBundle';
 import { KpiSection } from './components/KpiSection';
 import { RoseChartsSection } from './components/RoseChartsSection';
 import { TrendSection } from './components/TrendSection';
@@ -15,6 +16,7 @@ import { DashboardCustomizerPanel } from './components/DashboardCustomizerPanel'
 import type { DashboardSectionId, KpiCardId, KpiGroup } from './dashboardLayoutConfig';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { cardStyles, cn } from '../../shared/styles';
+import { ENABLE_BUNDLE_ROUTES } from '../../shared/api/client';
 
 type TimeView = 'daily' | 'weekly' | 'monthly';
 
@@ -54,8 +56,16 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
   } = useDashboardLayout();
 
   const { filters } = useGlobalFilters();
+  const fallbackToLegacy = !ENABLE_BUNDLE_ROUTES;
 
   // KPI 数据获取
+  const dashboardBundle = useDashboardBundle({
+    filters,
+    timeView,
+    perspective,
+    enabled: isInitialized && ENABLE_BUNDLE_ROUTES,
+  });
+
   const {
     kpiData: kpis,
     kpiDetails,
@@ -63,7 +73,11 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     error: kpiError,
   } = useKpiData({
     filters,
-    enabled: true,
+    prefetched: dashboardBundle.bundle ? {
+      kpi: dashboardBundle.bundle.kpi,
+      kpiDetail: dashboardBundle.bundle.kpiDetail,
+    } : undefined,
+    enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
   });
 
   // 趋势数据获取
@@ -77,7 +91,21 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     filters,
     timeView,
     hasOrgFilter: (filters.org_level_3?.length ?? 0) > 0,
-    enabled: isInitialized,
+    prefetched: dashboardBundle.bundle ? {
+      trendData: dashboardBundle.bundle.trend.map((item) => ({
+        time_period: String(item.time_period ?? ''),
+        org_level_3: String(item.org_level_3 ?? '四川'),
+        premium: Number(item.premium ?? 0),
+        next_month_ratio: Number(item.next_month_ratio ?? 0),
+      })),
+      qualityBusinessData: dashboardBundle.bundle.qualityTrend.map((item) => ({
+        time_period: String(item.time_period ?? ''),
+        quality_premium: Number(item.quality_premium ?? 0),
+        total_premium: Number(item.total_premium ?? 0),
+        quality_ratio: Number(item.quality_ratio ?? 0),
+      })),
+    } : undefined,
+    enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
     perspective,
   });
 
@@ -92,7 +120,33 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     refresh: refreshData,
   } = usePremiumDashboardData({
     filters,
-    enabled: isInitialized,
+    prefetched: dashboardBundle.bundle ? {
+      allBusinessTop10: dashboardBundle.bundle.ranking.allBusinessTop.map((row: any) => ({
+        salesman_name: String(row.salesman_name ?? ''),
+        org_level_3: String(row.org_level_3 ?? ''),
+        total_premium: formatPremiumWan(Number(row.total_premium ?? 0)),
+        policy_count: Number(row.policy_count ?? 0),
+      })),
+      qualityBusinessTop10: dashboardBundle.bundle.ranking.qualityBusinessTop.map((row: any) => ({
+        salesman_name: String(row.salesman_name ?? ''),
+        org_level_3: String(row.org_level_3 ?? ''),
+        total_premium: formatPremiumWan(Number(row.total_premium ?? 0)),
+        policy_count: Number(row.policy_count ?? 0),
+      })),
+      customerCategoryData: dashboardBundle.bundle.rose.customerCategory.map((row) => ({
+        name: String(row.dim_key ?? '未知'),
+        value: Number(row.value ?? 0),
+      })),
+      coverageCombinationData: dashboardBundle.bundle.rose.coverageCombination.map((row) => ({
+        name: String(row.dim_key ?? '未知'),
+        value: Number(row.value ?? 0),
+      })),
+      terminalSourceData: dashboardBundle.bundle.rose.terminalSource.map((row) => ({
+        name: String(row.dim_key ?? '未知'),
+        value: Number(row.value ?? 0),
+      })),
+    } : undefined,
+    enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
   });
 
   const handleExportTrend = (format: 'csv' | 'excel') => {
@@ -255,10 +309,11 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
       id="premium-dashboard-content"
       className="p-2 sm:p-3 md:p-4 max-w-[1600px] mx-auto space-y-3 sm:space-y-4"
     >
-      {(kpiError || trendError) && (
+      {(kpiError || trendError || dashboardBundle.error) && (
         <div className="bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded text-sm">
           {kpiError && <p>KPI 数据加载失败: {kpiError.message}</p>}
           {trendError && <p>趋势数据加载失败: {trendError.message}</p>}
+          {dashboardBundle.error && <p>聚合接口加载失败: {dashboardBundle.error}</p>}
         </div>
       )}
 

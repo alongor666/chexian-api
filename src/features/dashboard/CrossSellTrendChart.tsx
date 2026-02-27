@@ -24,6 +24,13 @@ interface CrossSellTrendChartProps {
   title?: string;
   requestKey?: string;
   enabled?: boolean;
+  rowsOverride?: Array<{
+    time_period: string;
+    coverage_combination: string;
+    rate: number;
+    avg_premium: number;
+    auto_count: number;
+  }>;
 }
 
 /** 与统一设计系统颜色令牌对齐 */
@@ -45,18 +52,22 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   title = '驾乘险推介率走势',
   requestKey,
   enabled = true,
+  rowsOverride,
 }: CrossSellTrendChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
-  const { rows, loading, error } = useCrossSellTrend({
+  const trendQuery = useCrossSellTrend({
     filters,
     vehicleCategory,
     seatCoverageLevel,
     granularity,
     requestKey,
-    enabled,
+    enabled: rowsOverride ? false : enabled,
   });
+  const rows = rowsOverride ?? trendQuery.rows;
+  const loading = rowsOverride ? false : trendQuery.loading;
+  const error = rowsOverride ? null : trendQuery.error;
 
   // 将平铺的行转换为按时间轴 + 4 条 series 的结构
   const { timePeriods, seriesData } = useMemo(() => {

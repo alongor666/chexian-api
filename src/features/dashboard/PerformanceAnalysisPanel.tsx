@@ -8,6 +8,7 @@ import { useDataStatus } from '@/shared/contexts/DataContext';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
 import { cardStyles, cn, colorClasses, colors, textStyles } from '@/shared/styles';
+import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
 import {
   classifyAchievementBand,
   classifyGrowthBand,
@@ -36,6 +37,7 @@ import {
 import { usePerformanceTrend } from './hooks/usePerformanceTrend';
 import { PerformanceTrendChart } from './PerformanceTrendChart';
 import { usePerformanceTopSalesman, type PerformanceTopSalesmanRow } from './hooks/usePerformanceTopSalesman';
+import { usePerformanceBundle } from './hooks/usePerformanceBundle';
 
 interface PerformanceAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -540,6 +542,15 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const [topSortOrder, setTopSortOrder] = useState<SortOrder>('asc');
 
   const trendGranularity = useMemo(() => mapTimePeriodToTrendGranularity(timePeriod), [timePeriod]);
+  const fallbackToLegacy = !ENABLE_BUNDLE_ROUTES;
+  const performanceBundle = usePerformanceBundle({
+    filters,
+    segmentTag,
+    timePeriod,
+    growthMode,
+    expandDims,
+    enabled: isDataLoaded && ENABLE_BUNDLE_ROUTES,
+  });
 
   const summaryQuery = usePerformanceSummary({
     filters,
@@ -547,14 +558,16 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     timePeriod,
     growthMode,
     expandDims,
-    enabled: isDataLoaded,
+    prefetchedRows: (performanceBundle.bundle?.summary.rows as PerformanceSummaryRow[] | undefined),
+    enabled: isDataLoaded && (fallbackToLegacy || Boolean(performanceBundle.error)),
   });
 
   const trendQuery = usePerformanceTrend({
     filters,
     segmentTag,
     granularity: trendGranularity,
-    enabled: isDataLoaded,
+    prefetchedRows: performanceBundle.bundle?.trend.rows as Array<Record<string, unknown>> | undefined,
+    enabled: isDataLoaded && (fallbackToLegacy || Boolean(performanceBundle.error)),
   });
 
   const drilldownQuery = usePerformanceDrilldown({
@@ -570,7 +583,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     segmentTag,
     timePeriod,
     growthMode,
-    enabled: isDataLoaded,
+    prefetchedRows: performanceBundle.bundle?.topSalesman.rows as Array<Record<string, unknown>> | undefined,
+    enabled: isDataLoaded && (fallbackToLegacy || Boolean(performanceBundle.error)),
   });
 
   useEffect(() => {

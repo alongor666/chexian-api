@@ -67,9 +67,6 @@ export function useCrossSellTrend({
       if (seatCoverageLevel) {
         params.seatCoverageLevel = seatCoverageLevel;
       }
-      if (requestKey) {
-        params.requestKey = requestKey;
-      }
       const result = await apiClient.getCrossSellTrend(params);
       if (fetchId !== fetchIdRef.current) return;
       setRows(

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDataStatus } from '../../shared/contexts/DataContext';
-import { apiClient, FileInfo } from '../../shared/api/client';
+import { FileInfo } from '../../shared/api/client';
 import { formatAverage, formatCount } from '../../shared/utils/formatters';
 import { RefreshCw, Upload, X, ChevronRight, FileUp, Database, FileText, ShieldCheck } from 'lucide-react';
 
@@ -24,13 +24,6 @@ export const DataImportPage: React.FC = () => {
 
   // 获取原始路径（从路由守卫重定向过来时携带）
   const fromPath = (location.state as { from?: string })?.from;
-
-  // 初始化加载文件列表
-  useEffect(() => {
-    if (apiClient.isAuthenticated()) {
-      refreshFiles();
-    }
-  }, [refreshFiles]);
 
   // 后端已加载数据时自动跳转到仪表盘
   useEffect(() => {

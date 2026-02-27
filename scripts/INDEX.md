@@ -73,6 +73,7 @@
 | `diagnose-renewal.mjs` | 续保诊断工具（JS版，调用DuckDB） | `node scripts/diagnose-renewal.mjs` |
 | `split-commands.mjs` | 拆分过长的slash command文件 | `node scripts/split-commands.mjs` |
 | `reorganize-commands.sh` | 重组.claude/commands目录结构 | `bash scripts/reorganize-commands.sh` |
+| `benchmark-key-routes.mjs` | 关键路由基准压测（输出P50/P95/P99到artifacts/perf） | `bun run benchmark:key-routes` |
 
 ### 📁 hooks/ 子目录
 

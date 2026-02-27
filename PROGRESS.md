@@ -2,7 +2,7 @@
 
 **状态机思维**：记录里程碑、阻塞点、下一步接力入口。详细任务追踪请查看 [BACKLOG.md](./BACKLOG.md)。
 
-**最后更新时间**: 2026-02-25
+**最后更新时间**: 2026-02-27
 
 ---
 
@@ -45,6 +45,7 @@
 | 2026-02-25 | 驾乘险推介率子页面收敛完成 (B209) | 完成统一阈值规则源、KPI/下钻/时间维度着色、四象限颜色与标题规范、趋势图四粒度与版位；修复趋势 Hook 并发取消导致“无数据” | 验证证据：`bun run test -- --run tests/cross-sell-rate-status.test.ts tests/cross-sell-sql.test.ts` 7/7；`bun run governance` 9/9；API `cross-sell-trend` 四粒度均200；截图 `artifacts/b209/cross-sell-trend-verify.png` |
 | 2026-02-25 | 受限账号页面权限落地完成 (B210) | 新增 `jiachengxian` 账号并实现页面白名单控制：仅仪表盘/驾乘险推介率可访问；其他页面菜单置灰不可点且 URL 自动拦截跳转 | 验证：`bun run governance`、`bun run build`、`bun run test -- --run tests/config/organizations.test.ts` 通过 |
 | 2026-02-27 | 业务员姓名展示规则全项目统一完成 (B211) | 统一“仅中文名 + admin→直接个代”规则，落地到保费报表/营销战报/续保分析/增长分析，并补齐全局开发约束文档 | 代码证据：`formatSalesmanName` + 相关4页数据链路改造；验证证据：`tests/formatters.test.ts` 新增规则用例 |
+| 2026-02-27 | 关键页面性能与体验升级完成 (B212) | 落地请求链路观测、前端请求合并、三类 bundle 聚合接口、热点缓存与并行查询、聚合表构建与灰度回退开关 | 验证：`bun run typecheck`、`bun run governance`、`bun run test -- --run`（783 tests）；新增 `scripts/benchmark-key-routes.mjs` 输出 `artifacts/perf/*.json` |
 | 2026-02-26 | 驾乘险推介率布局优化 (B309) | 将客户类别等标签移到页面标题下方靠左对齐，筛选器条件右置，统一两区域Tabs和小chips块字体样式(@gemini) | `src/features/pages/CrossSellPage.tsx` 布局优化；`Tabs.tsx`增加 `size="mini"` |
 | 2026-02-26 | 驾乘险推介率标签选项扩充 (B310) | 客户类别和车上责任增加“全部”/“不分保额”，支持全量数据查看(@gemini) | 修改 `CrossSellPage` 默认状态，更新前端组件、Zod校验及后端 `cross-sell-summary` SQL逻辑 |
 

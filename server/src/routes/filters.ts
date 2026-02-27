@@ -42,9 +42,6 @@ router.get(
     `;
     // 筛选器选项缓存 300 秒（数据不常变动）
     const FILTER_CACHE_TTL = 300_000;
-    const orgResult = await duckdbService.query<{ org_level_3: string }>(orgSql, FILTER_CACHE_TTL);
-    const actualOrgs = orgResult.map((r) => r.org_level_3);
-
     // 4. 查询业务员列表
     const salesmanSql = `
       SELECT DISTINCT salesman_name, org_level_3
@@ -52,11 +49,6 @@ router.get(
       WHERE ${permissionWhere}
       ORDER BY salesman_name
     `;
-    const salesmanResult = await duckdbService.query<{
-      salesman_name: string;
-      org_level_3: string;
-    }>(salesmanSql, FILTER_CACHE_TTL);
-
     // 5. 查询客户类别列表
     const customerSql = `
       SELECT DISTINCT customer_category
@@ -64,10 +56,6 @@ router.get(
       WHERE ${permissionWhere}
       ORDER BY customer_category
     `;
-    const customerResult = await duckdbService.query<{ customer_category: string }>(
-      customerSql, FILTER_CACHE_TTL
-    );
-
     // 6. 查询险别组合列表
     const insuranceSql = `
       SELECT DISTINCT coverage_combination
@@ -75,10 +63,6 @@ router.get(
       WHERE ${permissionWhere}
       ORDER BY coverage_combination
     `;
-    const insuranceResult = await duckdbService.query<{ coverage_combination: string }>(
-      insuranceSql, FILTER_CACHE_TTL
-    );
-
     // 7. 查询日期范围
     const dateRangeSql = `
       SELECT
@@ -87,11 +71,6 @@ router.get(
       FROM PolicyFact
       WHERE ${permissionWhere}
     `;
-    const dateRangeResult = await duckdbService.query<{
-      min_date: string;
-      max_date: string;
-    }>(dateRangeSql, FILTER_CACHE_TTL);
-
     // 8. 查询车险分等级选项
     const insuranceGradeSql = `
       SELECT insurance_grade AS value, COUNT(*) AS count
@@ -100,8 +79,6 @@ router.get(
       GROUP BY insurance_grade
       ORDER BY insurance_grade
     `;
-    const insuranceGradeResult = await duckdbService.query<{ value: string; count: number }>(insuranceGradeSql, FILTER_CACHE_TTL);
-
     // 9. 查询小货车评分选项
     const smallTruckScoreSql = `
       SELECT small_truck_score AS value, COUNT(*) AS count
@@ -110,8 +87,6 @@ router.get(
       GROUP BY small_truck_score
       ORDER BY small_truck_score
     `;
-    const smallTruckScoreResult = await duckdbService.query<{ value: string; count: number }>(smallTruckScoreSql, FILTER_CACHE_TTL);
-
     // 10. 查询大货车评分选项
     const largeTruckScoreSql = `
       SELECT large_truck_score AS value, COUNT(*) AS count
@@ -120,7 +95,27 @@ router.get(
       GROUP BY large_truck_score
       ORDER BY large_truck_score
     `;
-    const largeTruckScoreResult = await duckdbService.query<{ value: string; count: number }>(largeTruckScoreSql, FILTER_CACHE_TTL);
+    const [
+      orgResult,
+      salesmanResult,
+      customerResult,
+      insuranceResult,
+      dateRangeResult,
+      insuranceGradeResult,
+      smallTruckScoreResult,
+      largeTruckScoreResult,
+    ] = await Promise.all([
+      duckdbService.query<{ org_level_3: string }>(orgSql, FILTER_CACHE_TTL),
+      duckdbService.query<{ salesman_name: string; org_level_3: string }>(salesmanSql, FILTER_CACHE_TTL),
+      duckdbService.query<{ customer_category: string }>(customerSql, FILTER_CACHE_TTL),
+      duckdbService.query<{ coverage_combination: string }>(insuranceSql, FILTER_CACHE_TTL),
+      duckdbService.query<{ min_date: string; max_date: string }>(dateRangeSql, FILTER_CACHE_TTL),
+      duckdbService.query<{ value: string; count: number }>(insuranceGradeSql, FILTER_CACHE_TTL),
+      duckdbService.query<{ value: string; count: number }>(smallTruckScoreSql, FILTER_CACHE_TTL),
+      duckdbService.query<{ value: string; count: number }>(largeTruckScoreSql, FILTER_CACHE_TTL),
+    ]);
+
+    const actualOrgs = orgResult.map((r) => r.org_level_3);
 
     // 11. 返回筛选器选项（字段名与前端 apiClient.getFilterOptions() 类型对齐）
     res.json({

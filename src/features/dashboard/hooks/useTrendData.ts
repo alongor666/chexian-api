@@ -40,6 +40,10 @@ export interface UseTrendDataOptions {
   filters: AdvancedFilterState;
   timeView: TimeView;
   hasOrgFilter: boolean;
+  prefetched?: {
+    trendData: TrendDataPoint[];
+    qualityBusinessData: QualityBusinessDataPoint[];
+  };
   enabled?: boolean;
   perspective?: ViewPerspective;
 }
@@ -79,6 +83,7 @@ export const useTrendData = ({
   filters,
   timeView,
   hasOrgFilter,
+  prefetched,
   enabled = true,
   perspective = 'premium',
 }: UseTrendDataOptions): UseTrendDataResult => {
@@ -154,6 +159,14 @@ export const useTrendData = ({
   }, [filters, timeView, hasOrgFilter, perspective]);
 
   const fetchTrendData = useCallback(async () => {
+    if (prefetched) {
+      setTrendData(prefetched.trendData || []);
+      setQualityBusinessData(prefetched.qualityBusinessData || []);
+      setLoading(false);
+      setQualityBusinessLoading(false);
+      setError(null);
+      return;
+    }
     if (!enabled) return;
 
     const requestId = ++trendRequestIdRef.current;
@@ -173,7 +186,7 @@ export const useTrendData = ({
         setQualityBusinessLoading(false);
       }
     }
-  }, [enabled, fetchTrendFromApi]);
+  }, [enabled, fetchTrendFromApi, prefetched]);
 
   useEffect(() => {
     void fetchTrendData();

@@ -12,11 +12,13 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { AdvancedFilterState } from '../../../shared/types/data';
-import { apiClient } from '../../../shared/api/client';
+import { apiClient, ENABLE_BUNDLE_ROUTES } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePeriod';
 import type { TrendGranularity } from './useCrossSellTrend';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
+import type { TopSalesmanRow } from './useCrossSellTopSalesman';
+import { formatSalesmanName } from '../../../shared/utils/formatters';
 
 /** 可选的下钻维度（不含 summary） */
 export type CrossSellDimension =
@@ -92,6 +94,24 @@ export interface UseCrossSellAnalysisReturn {
   currentGroupBy: CrossSellDimension | null;
   /** 当前可选的下钻维度（排除已使用的） */
   availableDimensions: CrossSellDimension[];
+  /** 时间维度汇总（供 KPI 看板复用） */
+  timePeriodSummary: {
+    maxDate: string | null;
+    rows: Array<Record<string, unknown>>;
+  };
+  /** 趋势行数据（供趋势图复用） */
+  trendRows: Array<{
+    time_period: string;
+    coverage_combination: string;
+    rate: number;
+    avg_premium: number;
+    auto_count: number;
+  }>;
+  /** TOP20 业务员（主全 / 交三） */
+  topSalesman: {
+    zhuquanRows: TopSalesmanRow[];
+    jiaosanRows: TopSalesmanRow[];
+  };
   /** 首次选择维度（从汇总进入下钻） */
   selectDimension: (dimension: CrossSellDimension) => void;
   /** 下钻到某个行：将当前行加入过滤，选择新维度分组 */
@@ -133,6 +153,7 @@ export function useCrossSellAnalysis({
   enabled = true,
 }: UseCrossSellAnalysisProps): UseCrossSellAnalysisReturn {
   const { isOrgUser, userOrg, canGoToTop, getMinDrillUpIndex } = useRBAC();
+  const bundleEnabled = ENABLE_BUNDLE_ROUTES;
 
   // 角色基础默认初始状态
   const initialDrillPath: DrilldownStep[] = useMemo(() => {
@@ -149,6 +170,21 @@ export function useCrossSellAnalysis({
 
   const [summary, setSummary] = useState<CrossSellRow | null>(null);
   const [rows, setRows] = useState<CrossSellRow[]>([]);
+  const [timePeriodSummary, setTimePeriodSummary] = useState<{
+    maxDate: string | null;
+    rows: Array<Record<string, unknown>>;
+  }>({ maxDate: null, rows: [] });
+  const [trendRows, setTrendRows] = useState<Array<{
+    time_period: string;
+    coverage_combination: string;
+    rate: number;
+    avg_premium: number;
+    auto_count: number;
+  }>>([]);
+  const [topSalesman, setTopSalesman] = useState<{
+    zhuquanRows: TopSalesmanRow[];
+    jiaosanRows: TopSalesmanRow[];
+  }>({ zhuquanRows: [], jiaosanRows: [] });
   const [drillPath, setDrillPath] = useState<DrilldownStep[]>(initialDrillPath);
   const [currentGroupBy, setCurrentGroupBy] = useState<CrossSellDimension | null>(initialGroupBy);
   const [loading, setLoading] = useState(false);
@@ -183,22 +219,124 @@ export function useCrossSellAnalysis({
         dimension: s.dimension,
         value: s.value,
       }));
-
-      const result = await apiClient.getCrossSellAnalysis({
+      const baseParams = {
         ...filterParams,
         drillPath: apiDrillPath,
         groupBy: currentGroupBy || undefined,
         ...(vehicleCategory ? { vehicleCategory } : {}),
         ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
-        ...(timePeriod ? { timePeriod } : {}),
-      });
+        ...(timePeriod ? { timePeriod, granularity: timePeriod } : {}),
+      };
+
+      const applyBundleResult = (result: {
+        summary: { maxDate: string | null; rows: Array<Record<string, unknown>> };
+        trend: { rows: Array<Record<string, unknown>> };
+        drilldown: {
+          summary: Record<string, unknown> | null;
+          rows: Array<Record<string, unknown>>;
+        };
+        topSalesman: {
+          zhuquanRows: Array<Record<string, unknown>>;
+          jiaosanRows: Array<Record<string, unknown>>;
+        };
+      }) => {
+        setSummary(result.drilldown.summary ? mapRow(result.drilldown.summary) : null);
+        setRows((result.drilldown.rows || []).map(mapRow));
+        setTrendRows((result.trend.rows || []).map((row) => ({
+          time_period: String(row.time_period ?? ''),
+          coverage_combination: String(row.coverage_combination ?? ''),
+          rate: Number(row.rate ?? 0),
+          avg_premium: Number(row.avg_premium ?? 0),
+          auto_count: Number(row.auto_count ?? 0),
+        })));
+        setTimePeriodSummary({
+          maxDate: result.summary.maxDate ?? null,
+          rows: result.summary.rows || [],
+        });
+        setTopSalesman({
+          zhuquanRows: (result.topSalesman.zhuquanRows || []).map((row) => ({
+            salesman_name: formatSalesmanName(String(row.salesman_name ?? '')),
+            org_level_3: String(row.org_level_3 ?? ''),
+            driver_premium: Number(row.driver_premium ?? 0),
+            auto_count: Number(row.auto_count ?? 0),
+            rate: Number(row.rate ?? 0),
+            avg_premium: Number(row.avg_premium ?? 0),
+          })),
+          jiaosanRows: (result.topSalesman.jiaosanRows || []).map((row) => ({
+            salesman_name: formatSalesmanName(String(row.salesman_name ?? '')),
+            org_level_3: String(row.org_level_3 ?? ''),
+            driver_premium: Number(row.driver_premium ?? 0),
+            auto_count: Number(row.auto_count ?? 0),
+            rate: Number(row.rate ?? 0),
+            avg_premium: Number(row.avg_premium ?? 0),
+          })),
+        });
+      };
+
+      type BundleLikeResult = Parameters<typeof applyBundleResult>[0];
+
+      const fetchLegacyBundleLikeData = async (): Promise<BundleLikeResult> => {
+        const trendParams: Record<string, string> = {
+          ...filterParams,
+          ...(vehicleCategory ? { vehicleCategory } : {}),
+          ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
+          ...(timePeriod ? { granularity: timePeriod } : {}),
+        };
+        const summaryParams: Record<string, string> = {
+          ...filterParams,
+          ...(vehicleCategory ? { vehicleCategory } : {}),
+          ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
+        };
+        const topSalesmanParams: Record<string, string> = {
+          ...filterParams,
+          ...(vehicleCategory ? { vehicleCategory } : {}),
+          ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
+          ...(timePeriod ? { timePeriod } : {}),
+        };
+
+        const [analysis, summaryResp, trendResp, zhuquanResp, jiaosanResp] = await Promise.all([
+          apiClient.getCrossSellAnalysis(baseParams),
+          apiClient.getCrossSellTimePeriod(summaryParams),
+          apiClient.getCrossSellTrend(trendParams),
+          apiClient.getCrossSellTopSalesman({ ...topSalesmanParams, coverage: '主全' }),
+          apiClient.getCrossSellTopSalesman({ ...topSalesmanParams, coverage: '交三' }),
+        ]);
+
+        return {
+          summary: {
+            maxDate: summaryResp.maxDate ? String(summaryResp.maxDate) : null,
+            rows: summaryResp.rows || [],
+          },
+          trend: {
+            rows: trendResp.rows || [],
+          },
+          drilldown: {
+            summary: analysis.summary ?? null,
+            rows: analysis.rows || [],
+          },
+          topSalesman: {
+            zhuquanRows: zhuquanResp.rows || [],
+            jiaosanRows: jiaosanResp.rows || [],
+          },
+        };
+      };
+
+      let result: BundleLikeResult | null = null;
+      if (bundleEnabled) {
+        try {
+          result = await apiClient.getCrossSellBundle(baseParams);
+        } catch {
+          result = await fetchLegacyBundleLikeData();
+        }
+      } else {
+        result = await fetchLegacyBundleLikeData();
+      }
 
       // 防止旧请求覆盖新数据
       if (fetchId !== fetchIdRef.current) return;
 
       if (result) {
-        setSummary(result.summary ? mapRow(result.summary) : null);
-        setRows((result.rows || []).map(mapRow));
+        applyBundleResult(result);
       }
     } catch (err) {
       if (fetchId !== fetchIdRef.current) return;
@@ -208,7 +346,7 @@ export function useCrossSellAnalysis({
         setLoading(false);
       }
     }
-  }, [filters, drillPath, currentGroupBy, vehicleCategory, seatCoverageLevel, timePeriod, enabled]);
+  }, [filters, drillPath, currentGroupBy, vehicleCategory, seatCoverageLevel, timePeriod, enabled, isOrgUser, userOrg, bundleEnabled]);
 
   // 依赖变化时自动请求
   useEffect(() => {
@@ -267,6 +405,9 @@ export function useCrossSellAnalysis({
     drillPath,
     currentGroupBy,
     availableDimensions,
+    timePeriodSummary,
+    trendRows,
+    topSalesman,
     selectDimension,
     drillDown,
     drillUp,

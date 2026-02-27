@@ -9,6 +9,7 @@ import { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { buildRequestContext, getRequestContext, runWithRequestContext } from '../utils/request-context.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +25,9 @@ const AUDIT_LOG_PATH = process.env.AUDIT_LOG_PATH || path.resolve(__dirname, '..
  */
 interface AuditLogEntry {
   timestamp: string;       // ISO 8601 时间戳
+  request_id: string;      // 请求ID（链路追踪）
+  route_key: string;       // 路由路径（不含 query）
+  query_hash: string;      // query 参数哈希
   username: string;        // 用户名
   userId: string;          // 用户 ID
   role: string;            // 用户角色
@@ -32,6 +36,9 @@ interface AuditLogEntry {
   method: string;          // HTTP 方法（GET/POST/PUT/DELETE）
   path: string;            // 请求路径
   query: Record<string, any>;  // 查询参数
+  cache_hit: boolean;      // 本次请求是否命中缓存
+  sql_time_ms: number;     // SQL 累计耗时
+  total_time_ms: number;   // 总耗时
   status: number;          // HTTP 状态码
   duration: number;        // 响应时间（毫秒）
 }
@@ -71,33 +78,44 @@ function writeAuditLog(entry: AuditLogEntry): void {
  * - 定期轮转日志文件（通过 logrotate）
  */
 export function auditMiddleware(req: Request, res: Response, next: NextFunction) {
-  const startTime = Date.now();
+  const requestCtx = buildRequestContext(req);
+  res.setHeader('X-Request-Id', requestCtx.requestId);
 
-  res.on('finish', () => {
-    try {
-      // 过滤条件：已认证用户 + 受审计路径
-      const isAudited = AUDITED_PATHS.some(p => req.originalUrl.startsWith(p));
-      if (!req.user || !isAudited) return;
+  runWithRequestContext(requestCtx, () => {
+    res.on('finish', () => {
+      try {
+        // 过滤条件：已认证用户 + 受审计路径
+        const isAudited = AUDITED_PATHS.some(p => req.originalUrl.startsWith(p));
+        if (!req.user || !isAudited) return;
 
-      writeAuditLog({
-        timestamp: new Date().toISOString(),
-        username: req.user.username,
-        userId: req.user.userId,
-        role: req.user.role,
-        organization: req.user.organization,
-        ip: req.ip || req.socket.remoteAddress || 'unknown',
-        method: req.method,
-        path: req.originalUrl,
-        query: req.query,
-        status: res.statusCode,
-        duration: Date.now() - startTime,
-      });
-    } catch (error) {
-      console.error('[Audit] 审计日志记录异常:', error);
-    }
+        const ctx = getRequestContext();
+        const totalTimeMs = Date.now() - requestCtx.startedAt;
+        writeAuditLog({
+          timestamp: new Date().toISOString(),
+          request_id: ctx?.requestId || requestCtx.requestId,
+          route_key: ctx?.routeKey || requestCtx.routeKey,
+          query_hash: ctx?.queryHash || requestCtx.queryHash,
+          username: req.user.username,
+          userId: req.user.userId,
+          role: req.user.role,
+          organization: req.user.organization,
+          ip: req.ip || req.socket.remoteAddress || 'unknown',
+          method: req.method,
+          path: req.originalUrl,
+          query: req.query,
+          cache_hit: Boolean(ctx?.cacheHit),
+          sql_time_ms: ctx?.sqlTimeMs || 0,
+          total_time_ms: totalTimeMs,
+          status: res.statusCode,
+          duration: totalTimeMs,
+        });
+      } catch (error) {
+        console.error('[Audit] 审计日志记录异常:', error);
+      }
+    });
+
+    next();
   });
-
-  next();
 }
 
 /**
@@ -113,6 +131,9 @@ export function auditAuthEvent(params: {
 }): void {
   writeAuditLog({
     timestamp: new Date().toISOString(),
+    request_id: 'auth-event',
+    route_key: '/api/auth/login',
+    query_hash: `${params.event}:${params.username}`,
     username: params.username,
     userId: params.username,
     role: params.role ?? 'unknown',
@@ -121,6 +142,9 @@ export function auditAuthEvent(params: {
     method: 'POST',
     path: '/api/auth/login',
     query: { event: params.event },
+    cache_hit: false,
+    sql_time_ms: 0,
+    total_time_ms: 0,
     status: params.event === 'login_success' ? 200 : 401,
     duration: 0,
   });

@@ -14,6 +14,7 @@ import { getKpiPlanConfigPath } from '../config/paths.js';
 import { AppError } from '../middleware/error.js';
 import { generateColumnMappingSQL, getColumnMapping } from './column-normalizer.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
+import { recordQueryMetric } from '../utils/request-context.js';
 
 // ============================================
 // 查询缓存
@@ -230,6 +231,7 @@ class DuckDBService {
     if (cacheTtlMs > 0) {
       const cached = this.queryCache.get<T[]>(sql);
       if (cached) {
+        recordQueryMetric(sql, 0, true);
         return cached;
       }
     }
@@ -255,10 +257,13 @@ class DuckDBService {
         this.queryCache.set(sql, converted, cacheTtlMs);
       }
 
+      recordQueryMetric(sql, duration, false);
+
       return converted;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       const duration = Date.now() - startTime;
+      recordQueryMetric(sql, duration, false);
       console.error(`[DuckDB] Query error (${duration}ms):`, message);
       throw new AppError(400, `Query failed: ${message}`);
     } finally {
@@ -458,6 +463,157 @@ class DuckDBService {
       SELECT * FROM PolicyFact
     `);
     console.log('[DuckDB] PolicyFactRenewal view created');
+
+    await this.buildAggregates();
+    console.log('[DuckDB] Aggregated tables created (DailyAggregated / PeriodAggregated)');
+  }
+
+  /**
+   * 构建预聚合表（用于热点查询提速）
+   *
+   * 说明：
+   * - DailyAggregated：日粒度预聚合，支撑趋势/KPI/货车等 V2 查询
+   * - PeriodAggregated：月粒度预聚合，支撑增长分析 V2 查询
+   */
+  async buildAggregates(): Promise<void> {
+    await this.query(`
+      CREATE OR REPLACE TABLE DailyAggregated AS
+      WITH base AS (
+        SELECT
+          CAST(policy_date AS DATE) AS agg_date,
+          CAST(EXTRACT(YEAR FROM CAST(policy_date AS DATE)) AS INTEGER) AS policy_year,
+          CAST(FLOOR((EXTRACT(DOY FROM CAST(policy_date AS DATE)) - 1) / 7) + 1 AS INTEGER) AS natural_week_num,
+          STRFTIME(CAST(policy_date AS DATE), '%Y-%m') AS policy_ym,
+          org_level_3,
+          salesman_name,
+          customer_category,
+          coverage_combination,
+          renewal_mode,
+          tonnage_segment,
+          insurance_grade,
+          small_truck_score,
+          large_truck_score,
+          COALESCE(is_transfer, false) AS is_transfer,
+          COALESCE(is_telemarketing, false) AS is_telemarketing,
+          COALESCE(is_renewal, false) AS is_renewal,
+          COALESCE(is_nev, false) AS is_nev,
+          COALESCE(is_new_car, false) AS is_new_car,
+          COALESCE(is_cross_sell, false) AS is_cross_sell,
+          COALESCE(is_renewable, false) AS is_renewable,
+          COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
+          COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
+          COALESCE(premium, 0) AS premium,
+          policy_no
+        FROM PolicyFact
+        WHERE policy_date IS NOT NULL
+      )
+      SELECT
+        agg_date,
+        policy_year,
+        natural_week_num,
+        policy_ym,
+        org_level_3,
+        salesman_name,
+        customer_category,
+        coverage_combination,
+        renewal_mode,
+        tonnage_segment,
+        insurance_grade,
+        small_truck_score,
+        large_truck_score,
+        is_transfer,
+        is_telemarketing,
+        is_renewal,
+        is_nev,
+        is_new_car,
+        is_cross_sell,
+        is_renewable,
+        is_commercial_insure,
+        insurance_type,
+        SUM(premium) AS total_premium,
+        COUNT(DISTINCT policy_no) AS policy_count,
+        SUM(CASE WHEN is_transfer THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(CASE WHEN is_telemarketing THEN 1 ELSE 0 END) AS telesales_count,
+        SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN insurance_type LIKE '%商业%' THEN premium ELSE 0 END) AS commercial_premium,
+        SUM(CASE WHEN is_nev THEN 1 ELSE 0 END) AS nev_count,
+        SUM(CASE WHEN is_new_car THEN 1 ELSE 0 END) AS new_car_count
+      FROM base
+      GROUP BY
+        agg_date,
+        policy_year,
+        natural_week_num,
+        policy_ym,
+        org_level_3,
+        salesman_name,
+        customer_category,
+        coverage_combination,
+        renewal_mode,
+        tonnage_segment,
+        insurance_grade,
+        small_truck_score,
+        large_truck_score,
+        is_transfer,
+        is_telemarketing,
+        is_renewal,
+        is_nev,
+        is_new_car,
+        is_cross_sell,
+        is_renewable,
+        is_commercial_insure,
+        insurance_type
+    `);
+
+    await this.query(`
+      CREATE OR REPLACE TABLE PeriodAggregated AS
+      SELECT
+        policy_ym,
+        policy_year,
+        CAST(RIGHT(policy_ym, 2) AS INTEGER) AS policy_month,
+        org_level_3,
+        salesman_name,
+        customer_category,
+        coverage_combination,
+        renewal_mode,
+        tonnage_segment,
+        insurance_grade,
+        small_truck_score,
+        large_truck_score,
+        is_transfer,
+        is_telemarketing,
+        is_renewal,
+        is_nev,
+        is_new_car,
+        is_cross_sell,
+        is_renewable,
+        is_commercial_insure,
+        insurance_type,
+        SUM(total_premium) AS period_premium,
+        SUM(policy_count) AS period_count
+      FROM DailyAggregated
+      GROUP BY
+        policy_ym,
+        policy_year,
+        policy_month,
+        org_level_3,
+        salesman_name,
+        customer_category,
+        coverage_combination,
+        renewal_mode,
+        tonnage_segment,
+        insurance_grade,
+        small_truck_score,
+        large_truck_score,
+        is_transfer,
+        is_telemarketing,
+        is_renewal,
+        is_nev,
+        is_new_car,
+        is_cross_sell,
+        is_renewable,
+        is_commercial_insure,
+        insurance_type
+    `);
   }
 
   /**

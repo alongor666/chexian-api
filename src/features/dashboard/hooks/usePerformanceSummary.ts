@@ -39,6 +39,7 @@ interface UsePerformanceSummaryProps {
   timePeriod: PerformanceTimePeriod;
   growthMode: PerformanceGrowthMode;
   expandDims: PerformanceSummaryExpandDims;
+  prefetchedRows?: PerformanceSummaryRow[];
   enabled?: boolean;
 }
 
@@ -54,6 +55,7 @@ export function usePerformanceSummary({
   timePeriod,
   growthMode,
   expandDims,
+  prefetchedRows,
   enabled = true,
 }: UsePerformanceSummaryProps): UsePerformanceSummaryResult {
   const { isOrgUser, userOrg } = useRBAC();
@@ -63,6 +65,12 @@ export function usePerformanceSummary({
   const fetchIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    if (prefetchedRows) {
+      setRows(prefetchedRows);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     if (!enabled) return;
 
     const fetchId = ++fetchIdRef.current;
@@ -111,7 +119,7 @@ export function usePerformanceSummary({
         setLoading(false);
       }
     }
-  }, [enabled, expandDims, filters, growthMode, isOrgUser, segmentTag, timePeriod, userOrg]);
+  }, [enabled, expandDims, filters, growthMode, isOrgUser, prefetchedRows, segmentTag, timePeriod, userOrg]);
 
   useEffect(() => {
     fetchData();
