@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { canAccessRoute, canAccessMotoCost, UserRole } from '../../shared/config/organizations';
+import { canAccessRoute, canAccessMotoCost, canAccessFeeAnalysis, canAccessCost, UserRole } from '../../shared/config/organizations';
 
 
 interface NavItem {
@@ -215,7 +215,15 @@ export const SidebarNavigation: React.FC = () => {
               数据分析
             </div>
           )}
-          {dataNavItems.map(renderNavItem)}
+          {dataNavItems
+            .filter(item => {
+              // 超级用户专属功能
+              if (item.path === '/fee-analysis') return canAccessFeeAnalysis(userPermission?.username);
+              // 成本分析白名单控制
+              if (item.path === '/cost') return canAccessCost(userPermission?.username);
+              return true;
+            })
+            .map(renderNavItem)}
 
           {/* 工具模块 */}
           <div className="my-3 border-t border-neutral-200" role="separator" />

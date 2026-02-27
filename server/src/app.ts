@@ -156,8 +156,8 @@ async function startServer() {
 
         if (legacyFiles.length > 0) {
           const realLegacyFiles = legacyFiles.filter(f => !f.name.startsWith('test-data'));
-          filesToLoad = (realLegacyFiles.length > 0 ? realLegacyFiles : legacyFiles).slice(0, 1);
-          console.warn(`[Server] current/ has no parquet, fallback to latest file in ${legacyDataDir}`);
+          filesToLoad = realLegacyFiles.length > 0 ? realLegacyFiles : legacyFiles.slice(0, 1);
+          console.warn(`[Server] current/ has no parquet, fallback to parquet files in ${legacyDataDir}`);
         }
       }
     } else {
