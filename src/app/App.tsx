@@ -1,12 +1,38 @@
-import { lazy, Suspense, ReactNode } from 'react';
+import { lazy, Suspense, ReactNode, FC } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SidebarLayout, DataGuard, ErrorBoundary } from '../components/layout';
 import { DataProvider } from '../shared/contexts/DataContext';
 import { FilterProvider } from '../shared/contexts/FilterContext';
-import { PermissionProvider } from '../shared/contexts/PermissionContext';
+import { PermissionProvider, usePermission } from '../shared/contexts/PermissionContext';
 import { ThemeProvider } from '../shared/theme';
 import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
+import { canAccessFeeAnalysis, canAccessCost } from '../shared/config/organizations';
+
+/**
+ * 费用分析路由级守卫，仅对超级用户（SUPER_USERS）开放。
+ * 注：此组件始终在 AuthGuard 内渲染，AuthGuard 已处理 isLoading，
+ * 因此 userPermission 求值时会话已完全恢复，不存在误重定向风险。
+ */
+const FeeAnalysisGuard: FC<{ children: ReactNode }> = ({ children }) => {
+  const { userPermission } = usePermission();
+  if (!canAccessFeeAnalysis(userPermission?.username)) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
+
+/**
+ * 成本分析路由级守卫，仅对 COST_ALLOWED_USERS 白名单开放。
+ * 同 FeeAnalysisGuard，依赖 AuthGuard 的 isLoading 保护，无需额外处理。
+ */
+const CostGuard: FC<{ children: ReactNode }> = ({ children }) => {
+  const { userPermission } = usePermission();
+  if (!canAccessCost(userPermission?.username)) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
 
 // Lazy load page components for better performance
 const PremiumDashboardPage = lazy(() =>
@@ -203,9 +229,11 @@ function App() {
                 path="cost"
                 element={
                   <RouteAccessGuard routePath="/cost">
-                    <DataGuard>
-                      <LazyRoute><CostPage /></LazyRoute>
-                    </DataGuard>
+                    <CostGuard>
+                      <DataGuard>
+                        <LazyRoute><CostPage /></LazyRoute>
+                      </DataGuard>
+                    </CostGuard>
                   </RouteAccessGuard>
                 }
               />
@@ -213,9 +241,11 @@ function App() {
                 path="fee-analysis"
                 element={
                   <RouteAccessGuard routePath="/fee-analysis">
-                    <DataGuard>
-                      <LazyRoute><FeeAnalysisPage /></LazyRoute>
-                    </DataGuard>
+                    <FeeAnalysisGuard>
+                      <DataGuard>
+                        <LazyRoute><FeeAnalysisPage /></LazyRoute>
+                      </DataGuard>
+                    </FeeAnalysisGuard>
                   </RouteAccessGuard>
                 }
               />

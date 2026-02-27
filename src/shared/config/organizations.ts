@@ -314,16 +314,60 @@ export function loginAs(username: string): void {
 }
 
 /**
+ * 超级用户列表（系统管理员 + 开发者）
+ * admin 和 xuechenglong 具有所有功能的完整访问权限。
+ * 如需调整，同时影响所有依赖此列表的特殊功能白名单。
+ */
+export const SUPER_USERS = ['admin', 'xuechenglong'] as const;
+
+/**
+ * 检查用户是否为超级用户
+ * @param username 用户名
+ */
+export function isSuperUser(username: string | undefined): boolean {
+  if (!username) return false;
+  return (SUPER_USERS as readonly string[]).includes(username);
+}
+
+/**
  * 摩意模型功能白名单用户
  * 仅这些用户可访问 /moto-cost
  */
-export const MOTO_COST_ALLOWED_USERS = ['admin', 'xuechenglong'];
+export const MOTO_COST_ALLOWED_USERS: readonly string[] = SUPER_USERS;
 
 /**
  * 检查用户是否有权访问摩意模型
  * @param username 用户名
  */
 export function canAccessMotoCost(username: string | undefined): boolean {
+  return isSuperUser(username);
+}
+
+/**
+ * 费用分析功能白名单用户
+ * 仅这些用户可访问 /fee-analysis
+ */
+export const FEE_ANALYSIS_ALLOWED_USERS: readonly string[] = SUPER_USERS;
+
+/**
+ * 检查用户是否有权访问费用分析
+ * @param username 用户名
+ */
+export function canAccessFeeAnalysis(username: string | undefined): boolean {
+  return isSuperUser(username);
+}
+
+/**
+ * 成本分析功能白名单用户
+ * 仅这些用户可访问 /cost
+ */
+export const COST_ALLOWED_USERS = ['chexianbu', 'linxia', 'xuechenglong', 'admin'];
+
+/**
+ * 检查用户是否有权访问成本分析
+ * @param username 用户名
+ */
+export function canAccessCost(username: string | undefined): boolean {
   if (!username) return false;
-  return MOTO_COST_ALLOWED_USERS.includes(username);
+  return COST_ALLOWED_USERS.includes(username);
 }
