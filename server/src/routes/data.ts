@@ -48,10 +48,28 @@ const CONFIG = {
 };
 
 const KPI_PLAN_CONFIG_PATH = getKpiPlanConfigPath();
+const CURRENT_DATA_SUBDIR = path.join(CONFIG.DATA_DIR, 'current');
 
 // 确保数据目录存在
 if (!fs.existsSync(CONFIG.DATA_DIR)) {
   fs.mkdirSync(CONFIG.DATA_DIR, { recursive: true });
+}
+if (!fs.existsSync(CURRENT_DATA_SUBDIR)) {
+  fs.mkdirSync(CURRENT_DATA_SUBDIR, { recursive: true });
+}
+
+function resolveManagedParquetPath(safeFilename: string): string | null {
+  const candidateDirs = [CURRENT_DATA_SUBDIR, CONFIG.DATA_DIR];
+
+  for (const dir of candidateDirs) {
+    const candidatePath = path.join(dir, safeFilename);
+    validatePathWithinDirectory(candidatePath, dir);
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  return null;
 }
 
 // ============================================
@@ -165,6 +183,68 @@ async function cleanupOldFiles(): Promise<void> {
   } catch (err) {
     safeLog('error', 'Data', 'Cleanup error', { error: String(err) });
   }
+}
+
+function listManagedParquetFiles(): Array<{
+  filename: string;
+  sizeMB: number;
+  modifiedTime: Date;
+  isCurrent: boolean;
+}> {
+  const candidateDirs = [CURRENT_DATA_SUBDIR, CONFIG.DATA_DIR];
+  const byFilename = new Map<string, {
+    filename: string;
+    sizeMB: number;
+    modifiedTime: Date;
+    isCurrent: boolean;
+  }>();
+
+  for (const dir of candidateDirs) {
+    if (!fs.existsSync(dir)) continue;
+
+    const files = fs.readdirSync(dir)
+      .filter((f) => f.endsWith('.parquet'))
+      .map((filename) => {
+        try {
+          sanitizeFilename(filename);
+        } catch {
+          return null;
+        }
+
+        const filePath = path.join(dir, filename);
+        validatePathWithinDirectory(filePath, dir);
+        const stats = fs.statSync(filePath);
+        return {
+          filename,
+          sizeMB: Math.round(stats.size / 1024 / 1024 * 100) / 100,
+          modifiedTime: stats.mtime,
+          isCurrent: currentDataFile?.filename === filename,
+        };
+      })
+      .filter((f): f is NonNullable<typeof f> => f !== null);
+
+    for (const file of files) {
+      const existing = byFilename.get(file.filename);
+      if (!existing || file.modifiedTime.getTime() > existing.modifiedTime.getTime()) {
+        byFilename.set(file.filename, file);
+      }
+    }
+  }
+
+  const listed = Array.from(byFilename.values())
+    .sort((a, b) => b.modifiedTime.getTime() - a.modifiedTime.getTime());
+
+  const activeDataFile = currentDataFile;
+  if (activeDataFile && !listed.some(file => file.filename === activeDataFile.filename)) {
+    listed.unshift({
+      filename: activeDataFile.filename,
+      sizeMB: Math.round(activeDataFile.fileSizeBytes / 1024 / 1024 * 100) / 100,
+      modifiedTime: activeDataFile.uploadTime,
+      isCurrent: true,
+    });
+  }
+
+  return listed;
 }
 
 // ============================================
@@ -438,11 +518,9 @@ router.delete(
       await duckdbService.query('DROP VIEW IF EXISTS PolicyFact');
       await duckdbService.query('DROP TABLE IF EXISTS raw_parquet');
 
-      // 删除文件（安全验证路径）
-      const filePath = path.join(CONFIG.DATA_DIR, currentDataFile.filename);
-      validatePathWithinDirectory(filePath, CONFIG.DATA_DIR);
-
-      if (fs.existsSync(filePath)) {
+      // 删除文件（兼容 current/ 与根目录）
+      const filePath = resolveManagedParquetPath(currentDataFile.filename);
+      if (filePath && fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
 
@@ -472,28 +550,7 @@ router.delete(
 router.get(
   '/files',
   asyncHandler(async (req: Request, res: Response) => {
-    const files = fs.readdirSync(CONFIG.DATA_DIR)
-      .filter((f) => f.endsWith('.parquet'))
-      .map((filename) => {
-        // 验证文件名安全性
-        try {
-          sanitizeFilename(filename);
-        } catch {
-          // 跳过不安全的文件名
-          return null;
-        }
-
-        const filePath = path.join(CONFIG.DATA_DIR, filename);
-        const stats = fs.statSync(filePath);
-        return {
-          filename,
-          sizeMB: Math.round(stats.size / 1024 / 1024 * 100) / 100,
-          modifiedTime: stats.mtime,
-          isCurrent: currentDataFile?.filename === filename,
-        };
-      })
-      .filter((f): f is NonNullable<typeof f> => f !== null)
-      .sort((a, b) => b.modifiedTime.getTime() - a.modifiedTime.getTime());
+    const files = listManagedParquetFiles();
 
     res.json({
       success: true,
@@ -519,12 +576,9 @@ router.post(
     // 1. 安全验证：文件名清理（防止路径遍历）
     const safeFilename = sanitizeFilename(filename);
 
-    // 2. 构建并验证路径（防止符号链接绕过）
-    const filePath = path.join(CONFIG.DATA_DIR, safeFilename);
-    validatePathWithinDirectory(filePath, CONFIG.DATA_DIR);
-
-    // 3. 检查文件存在
-    if (!fs.existsSync(filePath)) {
+    // 2. 构建并验证路径（兼容 current/ 与根目录）
+    const filePath = resolveManagedParquetPath(safeFilename);
+    if (!filePath) {
       throw new AppError(404, `文件不存在: ${safeFilename}`);
     }
 
@@ -602,12 +656,9 @@ router.get(
     // 1. 安全验证：文件名清理
     const safeFilename = sanitizeFilename(filename);
 
-    // 2. 构建并验证路径
-    const filePath = path.join(CONFIG.DATA_DIR, safeFilename);
-    validatePathWithinDirectory(filePath, CONFIG.DATA_DIR);
-
-    // 3. 检查文件存在
-    if (!fs.existsSync(filePath)) {
+    // 2. 构建并验证路径（兼容 current/ 与根目录）
+    const filePath = resolveManagedParquetPath(safeFilename);
+    if (!filePath) {
       throw new AppError(404, '文件不存在');
     }
 

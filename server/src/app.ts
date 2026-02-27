@@ -116,7 +116,7 @@ async function startServer() {
     console.log('  - Parquet dirs:', candidateDirs.map(d => `${d}${fs.existsSync(d) ? ' [ok]' : ' [missing]'}`).join(' | '));
     console.log('  - Team mapping paths:', mappingCandidates.map(p => `${p}${fs.existsSync(p) ? ' [ok]' : ' [missing]'}`).join(' | '));
 
-    // 扫描 current/ 子目录，加载全部活跃 Parquet 文件（无需 mtime 排序）
+    // 优先扫描 current/ 子目录，加载活跃 Parquet 文件
     const parquetFiles = candidateDirs
       .flatMap(dir => {
         if (!fs.existsSync(dir)) return [];
@@ -126,14 +126,42 @@ async function startServer() {
             name: f,
             path: path.join(dir, f),
             size: fs.statSync(path.join(dir, f)).size,
+            mtimeMs: fs.statSync(path.join(dir, f)).mtimeMs,
           }));
       });
 
     console.log('[Server] Parquet search dirs:', candidateDirs.filter(d => fs.existsSync(d)));
 
-    // 筛选非 test-data 的数据文件；无实际文件则回退到 test-data
-    const realDataFiles = parquetFiles.filter(f => !f.name.startsWith('test-data'));
-    const filesToLoad = realDataFiles.length > 0 ? realDataFiles : parquetFiles.slice(0, 1);
+    // 若 current/ 为空，回退到 server/data 根目录，选最新 parquet（兼容历史上传路径）
+    let filesToLoad = parquetFiles;
+    if (filesToLoad.length === 0) {
+      const legacyDataDir = getDataDir();
+      if (fs.existsSync(legacyDataDir)) {
+        const legacyFiles = fs.readdirSync(legacyDataDir)
+          .filter(f => f.endsWith('.parquet'))
+          .map(f => {
+            const fullPath = path.join(legacyDataDir, f);
+            const stat = fs.statSync(fullPath);
+            return {
+              name: f,
+              path: fullPath,
+              size: stat.size,
+              mtimeMs: stat.mtimeMs,
+            };
+          })
+          .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+        if (legacyFiles.length > 0) {
+          const realLegacyFiles = legacyFiles.filter(f => !f.name.startsWith('test-data'));
+          filesToLoad = (realLegacyFiles.length > 0 ? realLegacyFiles : legacyFiles).slice(0, 1);
+          console.warn(`[Server] current/ has no parquet, fallback to latest file in ${legacyDataDir}`);
+        }
+      }
+    } else {
+      // 有 current/ 数据时：筛选非 test-data；若只有测试文件则仅加载一个
+      const realDataFiles = parquetFiles.filter(f => !f.name.startsWith('test-data'));
+      filesToLoad = realDataFiles.length > 0 ? realDataFiles : parquetFiles.slice(0, 1);
+    }
 
     if (filesToLoad.length === 0) {
       console.warn('[Server] No parquet files found. Server will start without data.');

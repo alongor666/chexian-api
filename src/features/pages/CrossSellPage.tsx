@@ -15,7 +15,7 @@ export const CrossSellPage: React.FC = () => {
     <PageFilterPanel
       preset="full"
       title="交叉销售分析"
-      headerRightContent={(
+      headerBottomLeftContent={(
         <CrossSellHeaderControls
           vehicleCategory={vehicleCategory}
           seatCoverageLevel={seatCoverageLevel}

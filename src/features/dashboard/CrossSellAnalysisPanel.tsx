@@ -90,7 +90,7 @@ export const CrossSellHeaderControls: React.FC<CrossSellHeaderControlsProps> = (
         activeKey={vehicleCategory}
         onChange={(key) => onVehicleCategoryChange(key as VehicleCategory)}
         variant="pills"
-        size="small"
+        size="mini"
       />
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
         车上责任
@@ -100,7 +100,7 @@ export const CrossSellHeaderControls: React.FC<CrossSellHeaderControlsProps> = (
         activeKey={seatCoverageLevel}
         onChange={(key) => onSeatCoverageLevelChange(key as SeatCoverageLevel)}
         variant="pills"
-        size="small"
+        size="mini"
       />
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
         时间维度
@@ -110,7 +110,7 @@ export const CrossSellHeaderControls: React.FC<CrossSellHeaderControlsProps> = (
         activeKey={trendGranularity}
         onChange={(key) => onTrendGranularityChange(key as TrendGranularity)}
         variant="pills"
-        size="small"
+        size="mini"
       />
     </div>
   </div>
