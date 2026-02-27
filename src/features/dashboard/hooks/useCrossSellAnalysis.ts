@@ -14,7 +14,8 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import { apiClient } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
-import type { VehicleCategory } from './useCrossSellTimePeriod';
+import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePeriod';
+import type { TrendGranularity } from './useCrossSellTrend';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 /** 可选的下钻维度（不含 summary） */
@@ -75,6 +76,8 @@ export interface CrossSellRow {
 interface UseCrossSellAnalysisProps {
   filters: AdvancedFilterState;
   vehicleCategory?: VehicleCategory;
+  seatCoverageLevel?: SeatCoverageLevel;
+  timePeriod?: TrendGranularity;
   enabled?: boolean;
 }
 
@@ -125,6 +128,8 @@ function mapRow(raw: Record<string, unknown>): CrossSellRow {
 export function useCrossSellAnalysis({
   filters,
   vehicleCategory,
+  seatCoverageLevel,
+  timePeriod,
   enabled = true,
 }: UseCrossSellAnalysisProps): UseCrossSellAnalysisReturn {
   const { isOrgUser, userOrg, canGoToTop, getMinDrillUpIndex } = useRBAC();
@@ -184,6 +189,8 @@ export function useCrossSellAnalysis({
         drillPath: apiDrillPath,
         groupBy: currentGroupBy || undefined,
         ...(vehicleCategory ? { vehicleCategory } : {}),
+        ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
+        ...(timePeriod ? { timePeriod } : {}),
       });
 
       // 防止旧请求覆盖新数据
@@ -201,7 +208,7 @@ export function useCrossSellAnalysis({
         setLoading(false);
       }
     }
-  }, [filters, drillPath, currentGroupBy, vehicleCategory, enabled]);
+  }, [filters, drillPath, currentGroupBy, vehicleCategory, seatCoverageLevel, timePeriod, enabled]);
 
   // 依赖变化时自动请求
   useEffect(() => {

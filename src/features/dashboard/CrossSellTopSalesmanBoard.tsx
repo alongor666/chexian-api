@@ -11,7 +11,7 @@
 import { memo, useState, useCallback, useMemo } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { useCrossSellTopSalesman, type TopSalesmanRow } from './hooks/useCrossSellTopSalesman';
-import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
+import type { SeatCoverageLevel, VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { cardStyles, textStyles, buttonStyles, colorClasses, cn } from '@/shared/styles';
 import { TopSalesmanQuadrantChart } from './TopSalesmanQuadrantChart';
@@ -22,6 +22,7 @@ import { prepareExportData, exportToCSV, downloadCSV, generateExportFilename } f
 interface TopSalesmanBoardProps {
   filters: AdvancedFilterState;
   vehicleCategory: VehicleCategory;
+  seatCoverageLevel?: SeatCoverageLevel;
   timePeriod: TrendGranularity;
 }
 
@@ -134,6 +135,7 @@ function buildCoverageInsight(data: TopSalesmanRow[], coverage: CoverageType): C
 export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard({
   filters,
   vehicleCategory,
+  seatCoverageLevel,
   timePeriod,
 }: TopSalesmanBoardProps) {
   const [activeCoverage, setActiveCoverage] = useState<CoverageType>('主全');
@@ -141,6 +143,7 @@ export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard
   const zhuquanResult = useCrossSellTopSalesman({
     filters,
     vehicleCategory,
+    seatCoverageLevel,
     coverage: '主全',
     timePeriod,
   });
@@ -148,6 +151,7 @@ export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard
   const jiaosanResult = useCrossSellTopSalesman({
     filters,
     vehicleCategory,
+    seatCoverageLevel,
     coverage: '交三',
     timePeriod,
   });

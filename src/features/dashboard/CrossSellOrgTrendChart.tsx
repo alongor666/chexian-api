@@ -14,12 +14,15 @@ import { formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/util
 import { cardStyles, colors, cn } from '../../shared/styles';
 import { ORG_GROUPS } from '../../shared/config/coefficient-thresholds';
 import { useCrossSellOrgTrend, type CoverageCombinationFilter, type OrgTrendPoint } from './hooks/useCrossSellOrgTrend';
+import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import { apiClient } from '../../shared/api/client';
 import type { AdvancedFilterState } from '../../shared/types/data';
-import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
+import type { VehicleCategory, SeatCoverageLevel } from './hooks/useCrossSellTimePeriod';
 
 interface CrossSellOrgTrendChartProps {
   vehicleCategory: VehicleCategory;
+  seatCoverageLevel?: SeatCoverageLevel;
+  granularity?: TrendGranularity;
   filters: AdvancedFilterState;
 }
 
@@ -112,6 +115,8 @@ function shortDate(date: string): string {
 
 export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   vehicleCategory,
+  seatCoverageLevel,
+  granularity,
   filters,
 }: CrossSellOrgTrendChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -142,6 +147,8 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   const { rows, loading, error } = useCrossSellOrgTrend({
     filters,
     vehicleCategory,
+    seatCoverageLevel,
+    granularity,
     coverageCombination: coverage,
     selectedOrg,
     regionOrgNames,

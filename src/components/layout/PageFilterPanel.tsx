@@ -4,6 +4,7 @@ import { PageHeaderBar } from '../../features/filters/PageHeaderBar';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { FilterPresetName } from '../../shared/types/filters';
+import { Footer } from './Footer';
 
 const STORAGE_KEY = 'page-filter-collapsed';
 
@@ -146,28 +147,31 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
               <X size={18} />
             </button>
           </div>
-          <div className="overflow-y-auto h-[calc(100%-56px)] p-4">
-            <AdvancedFilterPanel
-              filters={filters}
-              onChange={setFilters}
-              collapsed={isFilterCollapsed}
-              onToggleCollapse={toggleFilterCollapsed}
-              availableYears={availableYears}
-              maxDataDate={maxDataDate}
-              preset={preset}
-              compact={true}
-              options={{
-                org_level_3: filterOptions.org_level_3,
-                salesman_name: filterOptions.salesman_name,
-                customer_category: filterOptions.customer_category,
-                coverage_combination: filterOptions.coverage_combination,
-                renewal_mode: filterOptions.renewal_mode,
-                insurance_grade: filterOptions.insurance_grade,
-                small_truck_score: filterOptions.small_truck_score,
-                large_truck_score: filterOptions.large_truck_score,
-                availableSalesmen,
-              }}
-            />
+          <div className="overflow-y-auto h-[calc(100%-56px)] p-4 flex flex-col">
+            <div className="flex-1">
+              <AdvancedFilterPanel
+                filters={filters}
+                onChange={setFilters}
+                collapsed={isFilterCollapsed}
+                onToggleCollapse={toggleFilterCollapsed}
+                availableYears={availableYears}
+                maxDataDate={maxDataDate}
+                preset={preset}
+                compact={true}
+                options={{
+                  org_level_3: filterOptions.org_level_3,
+                  salesman_name: filterOptions.salesman_name,
+                  customer_category: filterOptions.customer_category,
+                  coverage_combination: filterOptions.coverage_combination,
+                  renewal_mode: filterOptions.renewal_mode,
+                  insurance_grade: filterOptions.insurance_grade,
+                  small_truck_score: filterOptions.small_truck_score,
+                  large_truck_score: filterOptions.large_truck_score,
+                  availableSalesmen,
+                }}
+              />
+            </div>
+            <Footer />
           </div>
         </div>
 
@@ -239,28 +243,31 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
                   <ChevronRight size={14} />
                 </button>
               </div>
-              <div className="px-3 py-3 overflow-y-auto flex-1 h-0">
-                <AdvancedFilterPanel
-                  filters={filters}
-                  onChange={setFilters}
-                  collapsed={isFilterCollapsed}
-                  onToggleCollapse={toggleFilterCollapsed}
-                  availableYears={availableYears}
-                  maxDataDate={maxDataDate}
-                  preset={preset}
-                  compact={true}
-                  options={{
-                    org_level_3: filterOptions.org_level_3,
-                    salesman_name: filterOptions.salesman_name,
-                    customer_category: filterOptions.customer_category,
-                    coverage_combination: filterOptions.coverage_combination,
-                    renewal_mode: filterOptions.renewal_mode,
-                    insurance_grade: filterOptions.insurance_grade,
-                    small_truck_score: filterOptions.small_truck_score,
-                    large_truck_score: filterOptions.large_truck_score,
-                    availableSalesmen,
-                  }}
-                />
+              <div className="px-3 py-3 overflow-y-auto flex-1 h-0 flex flex-col">
+                <div className="flex-1">
+                  <AdvancedFilterPanel
+                    filters={filters}
+                    onChange={setFilters}
+                    collapsed={isFilterCollapsed}
+                    onToggleCollapse={toggleFilterCollapsed}
+                    availableYears={availableYears}
+                    maxDataDate={maxDataDate}
+                    preset={preset}
+                    compact={true}
+                    options={{
+                      org_level_3: filterOptions.org_level_3,
+                      salesman_name: filterOptions.salesman_name,
+                      customer_category: filterOptions.customer_category,
+                      coverage_combination: filterOptions.coverage_combination,
+                      renewal_mode: filterOptions.renewal_mode,
+                      insurance_grade: filterOptions.insurance_grade,
+                      small_truck_score: filterOptions.small_truck_score,
+                      large_truck_score: filterOptions.large_truck_score,
+                      availableSalesmen,
+                    }}
+                  />
+                </div>
+                <Footer />
               </div>
             </>
           )}

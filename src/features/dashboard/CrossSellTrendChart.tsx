@@ -13,10 +13,11 @@ import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RI
 import { cardStyles, textStyles, colors, cn } from '../../shared/styles';
 import { useCrossSellTrend, type TrendGranularity } from './hooks/useCrossSellTrend';
 import type { AdvancedFilterState } from '../../shared/types/data';
-import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
+import type { VehicleCategory, SeatCoverageLevel } from './hooks/useCrossSellTimePeriod';
 
 interface CrossSellTrendChartProps {
   vehicleCategory: VehicleCategory;
+  seatCoverageLevel?: SeatCoverageLevel;
   filters: AdvancedFilterState;
   granularity: TrendGranularity;
   metric?: 'rate' | 'avg_premium';
@@ -37,6 +38,7 @@ const SERIES_ORDER = ['整体', '主全', '交三', '单交'];
 
 export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   vehicleCategory,
+  seatCoverageLevel,
   filters,
   granularity,
   metric = 'rate',
@@ -50,6 +52,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   const { rows, loading, error } = useCrossSellTrend({
     filters,
     vehicleCategory,
+    seatCoverageLevel,
     granularity,
     requestKey,
     enabled,

@@ -22,7 +22,7 @@ import { CrossSellQuadrantView } from './CrossSellQuadrantView';
 import { CrossSellTrendChart } from './CrossSellTrendChart';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import { getRateClassByField } from './crossSellRateStatus';
-import type { VehicleCategory } from './hooks/useCrossSellTimePeriod';
+import type { SeatCoverageLevel, VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { CrossSellTopSalesmanBoard } from './CrossSellTopSalesmanBoard';
 import { CrossSellOrgTrendChart } from './CrossSellOrgTrendChart';
 import {
@@ -35,6 +35,7 @@ import {
 interface CrossSellAnalysisPanelProps {
   filters: AdvancedFilterState;
   vehicleCategory: VehicleCategory;
+  seatCoverageLevel: SeatCoverageLevel;
   trendGranularity: TrendGranularity;
 }
 
@@ -56,17 +57,27 @@ const GRANULARITY_TABS: TabItem[] = [
   { key: 'yearly', label: '年' },
 ];
 
+const SEAT_COVERAGE_TABS: TabItem[] = [
+  { key: 'eq_1w', label: '=1万' },
+  { key: 'gte_2w', label: '>=2万' },
+  { key: 'lt_1w', label: '<1万' },
+];
+
 interface CrossSellHeaderControlsProps {
   vehicleCategory: VehicleCategory;
+  seatCoverageLevel: SeatCoverageLevel;
   trendGranularity: TrendGranularity;
   onVehicleCategoryChange: (value: VehicleCategory) => void;
+  onSeatCoverageLevelChange: (value: SeatCoverageLevel) => void;
   onTrendGranularityChange: (value: TrendGranularity) => void;
 }
 
 export const CrossSellHeaderControls: React.FC<CrossSellHeaderControlsProps> = ({
   vehicleCategory,
+  seatCoverageLevel,
   trendGranularity,
   onVehicleCategoryChange,
+  onSeatCoverageLevelChange,
   onTrendGranularityChange,
 }) => (
   <div className="no-export max-w-full overflow-x-auto">
@@ -78,6 +89,16 @@ export const CrossSellHeaderControls: React.FC<CrossSellHeaderControlsProps> = (
         items={VEHICLE_TABS}
         activeKey={vehicleCategory}
         onChange={(key) => onVehicleCategoryChange(key as VehicleCategory)}
+        variant="pills"
+        size="small"
+      />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
+        车上责任
+      </span>
+      <Tabs
+        items={SEAT_COVERAGE_TABS}
+        activeKey={seatCoverageLevel}
+        onChange={(key) => onSeatCoverageLevelChange(key as SeatCoverageLevel)}
         variant="pills"
         size="small"
       />
@@ -233,6 +254,7 @@ function SectionTitle({ title }: { title: string }) {
 export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   filters,
   vehicleCategory,
+  seatCoverageLevel,
   trendGranularity,
 }) => {
   const { isDataLoaded } = useDataStatus();
@@ -259,6 +281,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   } = useCrossSellAnalysis({
     filters,
     vehicleCategory,
+    seatCoverageLevel,
+    timePeriod: trendGranularity,
     enabled: isDataLoaded,
   });
 
@@ -322,6 +346,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       <SectionTitle title="推介率驱动因子环比" />
       <CrossSellSummaryKpiBoard
         vehicleCategory={vehicleCategory}
+        seatCoverageLevel={seatCoverageLevel}
         filters={filters}
         timePeriod={mappedTimePeriodForKpi as any}
       />
@@ -332,6 +357,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         // 摩托车：只显示推介率走势
         <CrossSellTrendChart
           vehicleCategory={vehicleCategory}
+          seatCoverageLevel={seatCoverageLevel}
           filters={filters}
           granularity={trendGranularity}
           metric="rate"
@@ -344,6 +370,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         <div className="grid gap-4 lg:grid-cols-2">
           <CrossSellTrendChart
             vehicleCategory={vehicleCategory}
+            seatCoverageLevel={seatCoverageLevel}
             filters={filters}
             granularity={trendGranularity}
             metric="rate"
@@ -353,6 +380,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           />
           <CrossSellTrendChart
             vehicleCategory={vehicleCategory}
+            seatCoverageLevel={seatCoverageLevel}
             filters={filters}
             granularity={trendGranularity}
             metric="avg_premium"
@@ -515,6 +543,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       <CrossSellOrgTrendChart
         filters={filters}
         vehicleCategory={vehicleCategory}
+        seatCoverageLevel={seatCoverageLevel}
+        granularity={trendGranularity}
       />
 
       {/* TOP20 业务员推介率板块 */}
@@ -522,6 +552,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       <CrossSellTopSalesmanBoard
         filters={filters}
         vehicleCategory={vehicleCategory}
+        seatCoverageLevel={seatCoverageLevel}
         timePeriod={trendGranularity}
       />
     </div>

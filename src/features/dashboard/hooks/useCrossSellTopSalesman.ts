@@ -11,7 +11,7 @@ import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { formatSalesmanName } from '@/shared/utils/formatters';
 import { useRBAC } from '@/shared/hooks/useRBAC';
-import type { VehicleCategory } from './useCrossSellTimePeriod';
+import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePeriod';
 import type { TopSalesmanCoverage } from '../../../../server/src/sql/cross-sell-top-salesman';
 
 export interface TopSalesmanRow {
@@ -26,6 +26,7 @@ export interface TopSalesmanRow {
 interface UseCrossSellTopSalesmanProps {
     filters: AdvancedFilterState;
     vehicleCategory: VehicleCategory;
+    seatCoverageLevel?: SeatCoverageLevel;
     coverage: TopSalesmanCoverage;
     timePeriod: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     enabled?: boolean;
@@ -40,6 +41,7 @@ interface UseCrossSellTopSalesmanReturn {
 export function useCrossSellTopSalesman({
     filters,
     vehicleCategory,
+    seatCoverageLevel,
     coverage,
     timePeriod,
     enabled = true,
@@ -64,6 +66,9 @@ export function useCrossSellTopSalesman({
                 coverage,
                 timePeriod,
             };
+            if (seatCoverageLevel) {
+                params.seatCoverageLevel = seatCoverageLevel;
+            }
 
             const result = await apiClient.getCrossSellTopSalesman(params);
             if (fetchId !== fetchIdRef.current) return;
@@ -90,7 +95,7 @@ export function useCrossSellTopSalesman({
                 setLoading(false);
             }
         }
-    }, [filters, vehicleCategory, coverage, timePeriod, enabled, isOrgUser, userOrg]);
+    }, [filters, vehicleCategory, seatCoverageLevel, coverage, timePeriod, enabled, isOrgUser, userOrg]);
 
     useEffect(() => {
         fetchData();

@@ -10,7 +10,8 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
-import type { VehicleCategory } from './useCrossSellTimePeriod';
+import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePeriod';
+import type { TrendGranularity } from './useCrossSellTrend';
 
 export type CoverageCombinationFilter = '整体' | '交三' | '主全' | '单交';
 
@@ -25,6 +26,8 @@ export interface OrgTrendPoint {
 interface UseCrossSellOrgTrendProps {
   filters: AdvancedFilterState;
   vehicleCategory: VehicleCategory;
+  seatCoverageLevel?: SeatCoverageLevel;
+  granularity?: TrendGranularity;
   coverageCombination: CoverageCombinationFilter;
   /** 图表内部选中的具体机构（覆盖 globalFilters 的 org 过滤） */
   selectedOrg: string | null;
@@ -45,6 +48,8 @@ interface UseCrossSellOrgTrendReturn {
 export function useCrossSellOrgTrend({
   filters,
   vehicleCategory,
+  seatCoverageLevel,
+  granularity,
   coverageCombination,
   selectedOrg,
   regionOrgNames,
@@ -86,6 +91,12 @@ export function useCrossSellOrgTrend({
         coverageCombination,
         days: '90',
       };
+      if (granularity) {
+        params.granularity = granularity;
+      }
+      if (seatCoverageLevel) {
+        params.seatCoverageLevel = seatCoverageLevel;
+      }
 
       const result = await apiClient.getCrossSellOrgTrend(params);
       if (fetchId !== fetchIdRef.current) return;
@@ -107,7 +118,7 @@ export function useCrossSellOrgTrend({
         setLoading(false);
       }
     }
-  }, [filters, vehicleCategory, coverageCombination, selectedOrg, regionOrgNames, enabled, isOrgUser, userOrg]);
+  }, [filters, vehicleCategory, seatCoverageLevel, granularity, coverageCombination, selectedOrg, regionOrgNames, enabled, isOrgUser, userOrg]);
 
   useEffect(() => {
     fetchData();

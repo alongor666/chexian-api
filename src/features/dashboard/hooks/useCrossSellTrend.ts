@@ -10,7 +10,7 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
-import type { VehicleCategory } from './useCrossSellTimePeriod';
+import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePeriod';
 
 export type TrendGranularity = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
@@ -25,6 +25,7 @@ export interface TrendPoint {
 interface UseCrossSellTrendProps {
   filters: AdvancedFilterState;
   vehicleCategory: VehicleCategory;
+  seatCoverageLevel?: SeatCoverageLevel;
   granularity: TrendGranularity;
   enabled?: boolean;
   requestKey?: string;
@@ -39,6 +40,7 @@ interface UseCrossSellTrendReturn {
 export function useCrossSellTrend({
   filters,
   vehicleCategory,
+  seatCoverageLevel,
   granularity,
   enabled = true,
   requestKey,
@@ -62,6 +64,9 @@ export function useCrossSellTrend({
         vehicleCategory,
         granularity,
       };
+      if (seatCoverageLevel) {
+        params.seatCoverageLevel = seatCoverageLevel;
+      }
       if (requestKey) {
         params.requestKey = requestKey;
       }
@@ -84,7 +89,7 @@ export function useCrossSellTrend({
         setLoading(false);
       }
     }
-  }, [filters, vehicleCategory, granularity, enabled, isOrgUser, userOrg, requestKey]);
+  }, [filters, vehicleCategory, seatCoverageLevel, granularity, enabled, isOrgUser, userOrg, requestKey]);
 
   useEffect(() => {
     fetchData();

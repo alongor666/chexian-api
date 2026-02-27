@@ -12,13 +12,14 @@ import { memo, useMemo } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { textStyles, cardStyles, numericStyles, cn, colorClasses } from '@/shared/styles';
 import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
-import { useCrossSellTimePeriod, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
+import { useCrossSellTimePeriod, type SeatCoverageLevel, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { getRateClassByField, getAvgPremiumClassByCoverage } from './crossSellRateStatus';
 
 export type TimePeriod = 'day' | 'week' | 'month' | 'year';
 
 interface CrossSellSummaryKpiBoardProps {
   vehicleCategory: VehicleCategory;
+  seatCoverageLevel?: SeatCoverageLevel;
   filters: AdvancedFilterState;
   timePeriod: TimePeriod;
 }
@@ -164,12 +165,14 @@ function getChangeArrow(status: 'up' | 'down' | 'flat'): string {
 
 export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
   vehicleCategory,
+  seatCoverageLevel,
   filters,
   timePeriod,
 }: CrossSellSummaryKpiBoardProps) {
   const { maxDate, rawData, loading, error } = useCrossSellTimePeriod({
     filters,
     vehicleCategory,
+    seatCoverageLevel,
   });
 
   // 判断是否为摩托车

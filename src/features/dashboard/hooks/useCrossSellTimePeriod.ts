@@ -12,6 +12,7 @@ import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 
 export type VehicleCategory = 'passenger' | 'truck' | 'motorcycle';
+export type SeatCoverageLevel = 'eq_1w' | 'gte_2w' | 'lt_1w';
 
 export interface TimePeriodRow {
   label: string;
@@ -25,6 +26,7 @@ export interface TimePeriodRow {
 interface UseCrossSellTimePeriodProps {
   filters: AdvancedFilterState;
   vehicleCategory: VehicleCategory;
+  seatCoverageLevel?: SeatCoverageLevel;
   enabled?: boolean;
 }
 
@@ -100,6 +102,7 @@ const LABEL_ORDER = ['整体', '主全', '交三', '单交'];
 export function useCrossSellTimePeriod({
   filters,
   vehicleCategory,
+  seatCoverageLevel,
   enabled = true,
 }: UseCrossSellTimePeriodProps): UseCrossSellTimePeriodReturn {
   const { isOrgUser, userOrg } = useRBAC();
@@ -124,6 +127,9 @@ export function useCrossSellTimePeriod({
         ...buildFilterParams(filters, { isOrgUser, userOrg }),
         vehicleCategory,
       };
+      if (seatCoverageLevel) {
+        params.seatCoverageLevel = seatCoverageLevel;
+      }
 
       const result = await apiClient.getCrossSellTimePeriod(params);
       if (fetchId !== fetchIdRef.current) return;
@@ -193,7 +199,7 @@ export function useCrossSellTimePeriod({
         setLoading(false);
       }
     }
-  }, [filters, vehicleCategory, enabled, isOrgUser, userOrg]);
+  }, [filters, vehicleCategory, seatCoverageLevel, enabled, isOrgUser, userOrg]);
 
   useEffect(() => {
     fetchData();
