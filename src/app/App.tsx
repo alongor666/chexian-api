@@ -195,14 +195,13 @@ function App() {
                   </RouteAccessGuard>
                 }
               />
+              {/* 权限管理 - BRANCH_ADMIN 专属，页面内部已有 isBranchAdmin 守卫，不套 RouteAccessGuard */}
               <Route
                 path="admin/access-control"
                 element={
-                  <RouteAccessGuard routePath="/admin/access-control">
-                    <LazyRoute>
-                      <AccessControlPage />
-                    </LazyRoute>
-                  </RouteAccessGuard>
+                  <LazyRoute>
+                    <AccessControlPage />
+                  </LazyRoute>
                 }
               />
               <Route

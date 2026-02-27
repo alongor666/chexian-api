@@ -283,8 +283,12 @@ export function getPermissionByUsername(username: string): UserPermission | null
 
 /**
  * 检查用户是否可访问某个路由
+ * 注：BRANCH_ADMIN 始终拥有完整路由访问权，allowedRoutes 仅对 ORG_USER/TELEMARKETING_USER 生效。
  */
 export function canAccessRoute(permission: UserPermission, pathname: string): boolean {
+  // 分公司管理员不受路由白名单限制
+  if (permission.role === UserRole.BRANCH_ADMIN) return true;
+
   if (!permission.allowedRoutes || permission.allowedRoutes.length === 0) {
     return true;
   }
