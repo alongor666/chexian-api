@@ -9,7 +9,7 @@
  * - 机构对比横向条形图：已赚保费 Top N
  */
 
-import React, { useMemo } from 'react';
+import React, { memo, useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '../../../shared/utils/echarts';
 import { formatCurrency, formatPercent } from '../../../shared/utils/formatters';
@@ -487,12 +487,12 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
  * - 第二行：险类构成环形图 + 堆叠柱状图（2列）
  * - 第三行：机构对比横向条形图（全宽）
  */
-export const EarnedPremiumCharts: React.FC<EarnedPremiumChartsProps> = ({
+export const EarnedPremiumCharts = memo<EarnedPremiumChartsProps>(function EarnedPremiumCharts({
   detailData,
   summaryData,
   loading = false,
   cutoffDate: _cutoffDate, // Reserved for future use (e.g., trend charts)
-}) => {
+}) {
   // 按险类汇总数据
   const insuranceTypeSummary = useMemo(
     () => aggregateByInsuranceType(detailData),
@@ -519,6 +519,6 @@ export const EarnedPremiumCharts: React.FC<EarnedPremiumChartsProps> = ({
       <OrgComparisonBar summaryData={summaryData} loading={loading} />
     </div>
   );
-};
+});
 
 export default EarnedPremiumCharts;
