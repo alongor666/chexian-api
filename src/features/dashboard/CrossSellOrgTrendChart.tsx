@@ -1,7 +1,7 @@
 /**
  * 机构推介率走势图
  *
- * 叠加柱（灰色=车险件数底层，绿色=驾意件数上叠）+ 双右轴折线（推介率/件均保费）
+ * 叠加柱（灰色=车险件数底层，绿色=驾意件数上叠）+ 双右轴折线（推介率/驾乘件均）
  * X 轴：最近连续 90 天（默认显示最后 14 天）
  * 险种：交三 / 主全 / 单交 标签切换
  * 区域：同城 / 异地 / 全省（全部机构）切换
@@ -114,7 +114,7 @@ function shortDate(date: string): string {
 }
 
 function exportRowsToCsv(rows: OrgTrendPoint[], filename: string): void {
-  const headers = ['日期', '车险件数', '驾意件数', '非驾意件数', '推介率(%)', '件均保费(元)'];
+  const headers = ['日期', '车险件数', '驾意件数', '非驾意件数', '推介率(%)', '驾乘件均(元)'];
   const dataRows = rows.map((row) => [
     row.date,
     String(row.auto_count),
@@ -243,7 +243,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
     const premiumMin = Math.min(...avgPremiums, 0);
     const premiumMax = Math.max(...avgPremiums, 1);
     const premiumRange = Math.max(1, premiumMax - premiumMin);
-    // 让件均保费线主要分布在图上方，尽量减少与推介率线交叉
+    // 让驾乘件均线主要分布在图上方，尽量减少与推介率线交叉
     const premiumAxisMin = Math.max(0, premiumMin - premiumRange * 3);
     const premiumAxisMax = premiumMax + premiumRange * 0.2;
     const premiumLabelVisibility = buildPremiumLabelVisibility(
@@ -269,7 +269,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           { name: '驾意件数', icon: 'rect' },
           { name: '非驾意件数', icon: 'rect' },
           { name: '推介率', icon: 'circle' },
-          { name: '件均保费', icon: 'circle' },
+          { name: '驾乘件均', icon: 'circle' },
         ],
       },
       tooltip: {
@@ -281,7 +281,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           const lines = points.map((item: any) => {
             const val = item.seriesName === '推介率'
               ? `${Number(item.value ?? 0).toFixed(1)}%`
-              : item.seriesName === '件均保费'
+              : item.seriesName === '驾乘件均'
                 ? `${Math.round(Number(item.value ?? 0))}元`
                 : item.seriesName === '驾意件数'
                   ? `${Number(item.value ?? 0)}件`
@@ -330,7 +330,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         },
         {
           type: 'value',
-          name: '件均保费(元)',
+          name: '驾乘件均(元)',
           position: 'right',
           offset: 62,
           min: premiumAxisMin,
@@ -385,7 +385,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           labelLayout: { hideOverlap: true },
         },
         {
-          name: '件均保费',
+          name: '驾乘件均',
           type: 'line',
           yAxisIndex: 2,
           z: 5,
@@ -580,7 +580,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
                 <th className={cn(tableStyles.headerCell, 'text-right')}>驾意件数</th>
                 <th className={cn(tableStyles.headerCell, 'text-right')}>非驾意件数</th>
                 <th className={cn(tableStyles.headerCell, 'text-right')}>推介率</th>
-                <th className={cn(tableStyles.headerCell, 'text-right')}>件均保费</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>驾乘件均</th>
               </tr>
             </thead>
             <tbody>
@@ -638,7 +638,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
 
           {premiumDigest && (
             <p className="mt-2 text-xs leading-relaxed text-neutral-600">
-              件均保费：近30天均值 {Math.round(premiumDigest.avg30)}元，近7天均值 {Math.round(premiumDigest.avg7)}元，连续下降
+              驾乘件均：近30天均值 {Math.round(premiumDigest.avg30)}元，近7天均值 {Math.round(premiumDigest.avg7)}元，连续下降
               {premiumDigest.consecutiveDownDays}天，最高 {Math.round(premiumDigest.maxPoint.value)}元（{shortDate(premiumDigest.maxPoint.date)}），最低
               {Math.round(premiumDigest.minPoint.value)}元（{shortDate(premiumDigest.minPoint.date)}）。
             </p>

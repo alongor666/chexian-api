@@ -3,7 +3,7 @@
  * Cross-Sell Summary KPI Board
  *
  * 使用表格格式展示：
- * - 非营业客车/货车：险别组合/指标 | 驾乘险保费 | 车险件数 | 推介率 | 件均保费
+ * - 非营业客车/货车：险别组合/指标 | 驾乘保费 | 车险件数 | 推介率 | 驾乘件均 | 车险件均
  * - 摩托车：险别组合/指标 | 推介率（只有单交）
  * - 环比状态：显示与上一周期的变化（当日vs昨日、当周vs上周、当月vs上月）
  */
@@ -45,11 +45,12 @@ const COVERAGE_ROWS_MOTORCYCLE = [
 
 // 非营业客车/货车的列定义：指标
 const METRIC_COLUMNS_FULL = [
-  { key: 'premium', label: '驾乘险保费' },
+  { key: 'premium', label: '驾乘保费' },
   { key: 'auto_count', label: '车险件数' },
   { key: 'driver_count', label: '驾乘险件数' },
   { key: 'rate', label: '推介率' },
-  { key: 'avg_premium', label: '件均保费' },
+  { key: 'avg_premium', label: '驾乘件均' },
+  { key: 'auto_avg_premium', label: '车险件均' },
 ] as const;
 
 // 摩托车的列定义：只有推介率
@@ -63,12 +64,14 @@ interface TimePeriodData {
   premium: number;
   rate: number;
   avg_premium: number;
+  auto_avg_premium: number;
   // 上一周期数据
   prev_auto_count: number;
   prev_driver_count: number;
   prev_premium: number;
   prev_rate: number;
   prev_avg_premium: number;
+  prev_auto_avg_premium: number;
 }
 
 function formatPremium(value: number): string {
@@ -214,12 +217,14 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
         premium: Number(rowAny[`${prefix}_premium`] ?? 0) / 10000,
         rate: Number(rowAny[`${prefix}_rate`] ?? 0),
         avg_premium: Number(rowAny[`${prefix}_avg_premium`] ?? 0),
+        auto_avg_premium: Number(rowAny[`${prefix}_auto_avg_premium`] ?? 0),
         // 上一周期数据
         prev_auto_count: showPrev ? Number(rowAny[`${prevPrefix}_auto_count`] ?? 0) : 0,
         prev_driver_count: showPrev ? Number(rowAny[`${prevPrefix}_driver_count`] ?? 0) : 0,
         prev_premium: showPrev ? Number(rowAny[`${prevPrefix}_premium`] ?? 0) / 10000 : 0,
         prev_rate: showPrev ? Number(rowAny[`${prevPrefix}_rate`] ?? 0) : 0,
         prev_avg_premium: showPrev ? Number(rowAny[`${prevPrefix}_avg_premium`] ?? 0) : 0,
+        prev_auto_avg_premium: showPrev ? Number(rowAny[`${prevPrefix}_auto_avg_premium`] ?? 0) : 0,
       });
     }
     return map;
@@ -279,6 +284,15 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
         return {
           text: `${formatCount(avg_premium)}元`,
           colorClass: getAvgPremiumClassByCoverage(coverageKey, avg_premium),
+          change
+        };
+      }
+      case 'auto_avg_premium': {
+        const auto_avg_premium = data?.auto_avg_premium ?? 0;
+        const change = showChange ? calcChange(auto_avg_premium, data?.prev_auto_avg_premium ?? 0) : undefined;
+        return {
+          text: `${formatCount(auto_avg_premium)}元`,
+          colorClass: '',
           change
         };
       }
@@ -377,7 +391,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
       {/* 验证公式说明 - 摩托车不显示 */}
       {!isMotorcycle && (
         <div className={cn(textStyles.caption, colorClasses.text.neutralMuted, 'italic')}>
-          💡 验证公式：驾乘险保费 ≈ 车险件数 × 推介率 × 件均保费
+          💡 验证公式：驾乘保费 ≈ 车险件数 × 推介率 × 驾乘件均
         </div>
       )}
     </div>

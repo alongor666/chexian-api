@@ -70,6 +70,8 @@ export function generateCrossSellOrgTrendQuery(
         ) AS dedup_key,
         is_cross_sell,
         cross_sell_premium_driver,
+        COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
+        COALESCE(premium, 0) AS premium,
         CAST(policy_date AS DATE) AS pd
       FROM PolicyFact
       WHERE ${baseWhereClause}
@@ -81,7 +83,7 @@ export function generateCrossSellOrgTrendQuery(
     daily AS (
       SELECT
         STRFTIME(pd, '%Y-%m-%d') AS date_str,
-        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(DISTINCT CASE WHEN insurance_type LIKE '%商业%' THEN dedup_key END) AS auto_count,
         COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
         COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS premium
       FROM filtered

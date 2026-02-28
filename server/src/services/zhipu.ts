@@ -358,17 +358,17 @@ export async function analyzeOrgTrendWithZhipu(
   }
 
   const dataStr = rows
-    .map(r => `${r.date} 车险${r.auto_count}件 驾意${r.driver_count}件 推介率${r.rate}% 件均保费${r.avg_premium}元`)
+    .map(r => `${r.date} 车险${r.auto_count}件 驾意${r.driver_count}件 推介率${r.rate}% 驾乘件均${r.avg_premium}元`)
     .join('\n');
 
-  const systemPrompt = `你是车险业务分析专家。请根据机构最近每日推介率和件均保费数据，输出两段式趋势分析（总字数220字以内）。
+  const systemPrompt = `你是车险业务分析专家。请根据机构最近每日推介率和驾乘件均数据，输出两段式趋势分析（总字数220字以内）。
 硬性格式要求：
 1) 第一段只讲“推介率”；
-2) 第二段只讲“件均保费”。
+2) 第二段只讲“驾乘件均”。
 每一段都必须包含：近30天均值、近7天均值、连续下降天数、最高值（含日期）、最低值（含日期）。
 可补充一句可执行建议，但不要写标题、不要编号、不要Markdown。`;
 
-  const userMsg = `机构：${context.org}，险种：${context.coverage}\n数据（日期 车险件数 驾意件数 推介率 件均保费）：\n${dataStr}`;
+  const userMsg = `机构：${context.org}，险种：${context.coverage}\n数据（日期 车险件数 驾意件数 推介率 驾乘件均）：\n${dataStr}`;
 
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },

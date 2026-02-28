@@ -371,8 +371,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         prefetchedSummary={timePeriodSummary}
       />
 
-      {/* 板块2：推介率走势 - 摩托车只显示推介率走势，不显示件均保费 */}
-      <SectionTitle title={vehicleCategory === 'motorcycle' ? '推介率走势' : '推介率与件均保费走势'} />
+      {/* 板块2：推介率走势 - 摩托车只显示推介率走势，不显示驾乘件均 */}
+      <SectionTitle title={vehicleCategory === 'motorcycle' ? '推介率走势' : '推介率与驾乘件均走势'} />
       {vehicleCategory === 'motorcycle' ? (
         // 摩托车：只显示推介率走势
         <CrossSellTrendChart
@@ -386,7 +386,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           rowsOverride={trendRows}
         />
       ) : (
-        // 非营业客车/货车：显示推介率和件均保费走势
+        // 非营业客车/货车：显示推介率和驾乘件均走势
         <div className="grid gap-4 lg:grid-cols-2">
           <CrossSellTrendChart
             vehicleCategory={vehicleCategory}
@@ -404,7 +404,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
             filters={filters}
             granularity={trendGranularity}
             metric="avg_premium"
-            title="驾乘险件均保费走势"
+            title="驾乘件均走势"
             enabled={isDataLoaded}
             rowsOverride={trendRows}
           />

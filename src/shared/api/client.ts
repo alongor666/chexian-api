@@ -502,7 +502,7 @@ class ApiClient {
 
         // 缓存 GET 响应（存储 ETag 以支持 304）
         if (dedupeKey) {
-          const etag = response.headers.get('etag');
+          const etag = response.headers?.get?.('etag') ?? null;
           setResponseCache(dedupeKey, result, etag);
         }
 

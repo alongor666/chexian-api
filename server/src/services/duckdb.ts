@@ -673,6 +673,7 @@ class DuckDBService {
           small_truck_score,
           large_truck_score,
           COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
+          COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
           (
             TRY_CAST(is_transfer AS BOOLEAN) = true
             OR LOWER(TRIM(CAST(is_transfer AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
@@ -704,6 +705,7 @@ class DuckDBService {
           COALESCE(driver_coverage, 0) AS driver_coverage,
           COALESCE(passenger_coverage, 0) AS passenger_coverage,
           COALESCE(cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
+          COALESCE(premium, 0) AS premium,
           COALESCE(
             NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
             NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
@@ -733,9 +735,10 @@ class DuckDBService {
         is_cross_sell,
         driver_coverage,
         passenger_coverage,
-        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(DISTINCT CASE WHEN insurance_type LIKE '%商业%' THEN dedup_key END) AS auto_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
-        COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium
+        COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
+        COALESCE(SUM(CASE WHEN insurance_type LIKE '%商业%' THEN premium ELSE 0 END), 0) AS auto_premium
       FROM normalized
       WHERE dedup_key IS NOT NULL
       GROUP BY

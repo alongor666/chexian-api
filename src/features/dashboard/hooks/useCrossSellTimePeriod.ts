@@ -2,7 +2,7 @@
  * 车驾意推介率 - 时间维度汇总 Hook
  * Cross-Sell Time Period Summary Hook
  *
- * 提供当日/当周/当月/当年四个时间维度的推介率、件均保费、保费汇总数据
+ * 提供当日/当周/当月/当年四个时间维度的推介率、驾乘件均、驾乘保费汇总数据
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -37,47 +37,56 @@ interface TimePeriodRawRow {
   day_premium: number;
   day_rate: number;
   day_avg_premium: number;
+  day_auto_avg_premium: number;
   week_auto_count: number;
   week_driver_count: number;
   week_premium: number;
   week_rate: number;
   week_avg_premium: number;
+  week_auto_avg_premium: number;
   month_auto_count: number;
   month_driver_count: number;
   month_premium: number;
   month_rate: number;
   month_avg_premium: number;
+  month_auto_avg_premium: number;
   quarter_auto_count: number;
   quarter_driver_count: number;
   quarter_premium: number;
   quarter_rate: number;
   quarter_avg_premium: number;
+  quarter_auto_avg_premium: number;
   year_auto_count: number;
   year_driver_count: number;
   year_premium: number;
   year_rate: number;
   year_avg_premium: number;
+  year_auto_avg_premium: number;
   // 上一周期数据（环比）
   prev_day_auto_count: number;
   prev_day_driver_count: number;
   prev_day_premium: number;
   prev_day_rate: number;
   prev_day_avg_premium: number;
+  prev_day_auto_avg_premium: number;
   prev_week_auto_count: number;
   prev_week_driver_count: number;
   prev_week_premium: number;
   prev_week_rate: number;
   prev_week_avg_premium: number;
+  prev_week_auto_avg_premium: number;
   prev_month_auto_count: number;
   prev_month_driver_count: number;
   prev_month_premium: number;
   prev_month_rate: number;
   prev_month_avg_premium: number;
+  prev_month_auto_avg_premium: number;
   prev_quarter_auto_count: number;
   prev_quarter_driver_count: number;
   prev_quarter_premium: number;
   prev_quarter_rate: number;
   prev_quarter_avg_premium: number;
+  prev_quarter_auto_avg_premium: number;
 }
 
 interface UseCrossSellTimePeriodReturn {
