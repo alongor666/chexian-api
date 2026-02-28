@@ -125,14 +125,22 @@ echo ""
 if [[ -f "$SYNC_SCRIPT" ]]; then
     LAST_IDX=$((${#PARQUET_FILES[@]} - 1))
     for i in "${!PARQUET_FILES[@]}"; do
-        if [[ $i -eq $LAST_IDX ]]; then
-            bash "$SYNC_SCRIPT" "${PARQUET_FILES[$i]}"          # 最后一个：正常重启
-        else
-            bash "$SYNC_SCRIPT" "${PARQUET_FILES[$i]}" --no-restart  # 中间：不重启
+        # 决定是否清理 VPS（只有第一个文件上传时需要清理一次）
+        CLEAN_FLAG=""
+        if [[ $i -eq 0 ]]; then
+            CLEAN_FLAG="--clean-vps"
         fi
+        
+        # 决定是否重启（只有最后一个文件上传完才重启）
+        RESTART_FLAG=""
+        if [[ $i -ne $LAST_IDX ]]; then
+            RESTART_FLAG="--no-restart"
+        fi
+        
+        bash "$SYNC_SCRIPT" "${PARQUET_FILES[$i]}" $CLEAN_FLAG $RESTART_FLAG
     done
     echo ""
-    echo -e "${GREEN}✅ 全部同步完成，服务器已重启并加载 current/ 下所有文件${NC}"
+    echo -e "${GREEN}✅ 全部同步完成，服务器已重启并仅加载了最新的文件${NC}"
 else
     echo -e "${YELLOW}⚠ 未找到 sync-data.sh，请手动同步${NC}"
     for f in "${PARQUET_FILES[@]}"; do

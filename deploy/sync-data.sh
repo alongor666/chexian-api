@@ -7,6 +7,7 @@
 #   ./deploy/sync-data.sh                     # 自动同步 current/ 下最新文件
 #   ./deploy/sync-data.sh 文件路径            # 指定同步某个文件
 #   ./deploy/sync-data.sh 文件路径 --no-restart  # 同步但不重启（批量同步中间文件用）
+#   ./deploy/sync-data.sh 文件路径 --clean-vps   # 上传前清理 VPS 的 current/ 目录（将旧文件移入 archive）
 # ============================================================
 
 set -e
@@ -24,10 +25,13 @@ NC='\033[0m'
 
 # 解析参数
 NO_RESTART=false
+CLEAN_VPS=false
 FILE=""
 for arg in "$@"; do
     if [[ "$arg" == "--no-restart" ]]; then
         NO_RESTART=true
+    elif [[ "$arg" == "--clean-vps" ]]; then
+        CLEAN_VPS=true
     elif [[ -z "$FILE" ]]; then
         FILE="$arg"
     fi
@@ -70,6 +74,14 @@ echo -e "${GREEN}[同步]${NC} $BASENAME ($SIZE)"
 
 # 确保 VPS 上 current/ 和 archive/ 目录存在
 ssh "$VPS_HOST" "mkdir -p ${VPS_DATA}/current ${VPS_DATA}/archive"
+
+# 如果指定了 --clean-vps，则把 current/ 中原有的 .parquet 移入 archive 带时间戳夹里
+if [ "$CLEAN_VPS" = true ]; then
+    echo -e "${YELLOW}  清理 VPS 的 current 目录...${NC}"
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    # 若有 .parquet 则移动，忽略找不到文件的报错
+    ssh "$VPS_HOST" "mkdir -p ${VPS_DATA}/archive/backup_${TIMESTAMP} && mv ${VPS_DATA}/current/*.parquet ${VPS_DATA}/archive/backup_${TIMESTAMP}/ 2>/dev/null || true"
+fi
 
 # 上传到 VPS 的 current/ 目录
 echo -e "${YELLOW}  上传中...${NC}"
