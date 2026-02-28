@@ -960,7 +960,8 @@ function getSeatCoverageClause(level?: CrossSellSeatCoverageLevel): string {
     case 'gte_2w':
       return 'COALESCE(driver_coverage, 0) >= 20000 AND COALESCE(passenger_coverage, 0) >= 20000';
     case 'lt_1w':
-      return 'COALESCE(driver_coverage, 0) < 10000 AND COALESCE(passenger_coverage, 0) < 10000';
+      // 必须有至少一项保额 > 0，否则会把没买驾乘险（保额全为0）的也算进去，导致推介率分母极大，件均异常
+      return '(COALESCE(driver_coverage, 0) > 0 OR COALESCE(passenger_coverage, 0) > 0) AND COALESCE(driver_coverage, 0) < 10000 AND COALESCE(passenger_coverage, 0) < 10000';
     default:
       return '';
   }
