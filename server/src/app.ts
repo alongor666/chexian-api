@@ -118,6 +118,74 @@ async function startServer() {
 
     await seedAccessControlData();
 
+    // VPS 模式：加载预聚合 Parquet 并跳过原始数据加载
+    if (duckdbService.isVpsMode) {
+      console.log('[Server] 🚀 VPS Mode: loading pre-aggregated data only');
+
+      const dataDir = getDataDir();
+      const candidateDirs = getCandidateDataDirs();
+      // 在 current/ 或 data/ 中查找预聚合文件
+      let vpsDataDir: string | null = null;
+      for (const dir of [...candidateDirs, dataDir]) {
+        if (!fs.existsSync(dir)) continue;
+        const aggFile = path.join(dir, 'aggregated.parquet');
+        if (fs.existsSync(aggFile)) {
+          vpsDataDir = dir;
+          break;
+        }
+      }
+
+      if (vpsDataDir) {
+        console.log(`[Server] VPS pre-aggregated data dir: ${vpsDataDir}`);
+        await duckdbService.loadVpsPreAggregated(vpsDataDir);
+
+        // 同时加载原始 Parquet（如有，用于续保等少量查询）
+        const rawParquets = fs.readdirSync(vpsDataDir)
+          .filter(f => f.endsWith('.parquet') && !['aggregated', 'cross_sell_agg', 'renewal_agg'].some(prefix => f.startsWith(prefix)))
+          .map(f => path.join(vpsDataDir!, f));
+
+        if (rawParquets.length > 0) {
+          try {
+            await duckdbService.loadParquet(rawParquets[0], 'raw_parquet');
+            console.log(`[Server] VPS: raw parquet loaded for backup: ${path.basename(rawParquets[0])}`);
+          } catch (e) {
+            console.warn('[Server] VPS: raw parquet load failed (non-critical):', e);
+          }
+        }
+
+        // 创建 PolicyFact 视图（VPS 模式：最小化）
+        await duckdbService.createPolicyFactView('raw_parquet');
+
+        // 加载团队映射
+        const teamMappingCandidates = getSalesmanMappingPaths();
+        for (const mappingPath of teamMappingCandidates) {
+          if (!fs.existsSync(mappingPath)) continue;
+          try {
+            await duckdbService.loadTeamMapping(mappingPath);
+            console.log('[Server] VPS: Team mapping loaded from:', mappingPath);
+            break;
+          } catch { /* ignore */ }
+        }
+
+        console.log('[Server] 🚀 VPS Mode startup complete (memory-optimized)');
+      } else {
+        console.warn('[Server] VPS Mode: no pre-aggregated data found, falling back to standard startup');
+      }
+
+      // 跳过后续标准数据加载路径
+      if (vpsDataDir) {
+        // 启动HTTP服务器
+        const BIND_HOST = process.env.BIND_HOST || '127.0.0.1';
+        app.listen(PORT, BIND_HOST, () => {
+          console.log(`[Server] 🚀 VPS Server running on http://${BIND_HOST}:${PORT}`);
+          console.log(`[Server] Health check: http://${BIND_HOST}:${PORT}/health`);
+        });
+        return;
+      }
+    }
+
+    // ---- 以下为标准（Mac 开发）启动路径 ----
+
     // 启动期健康检查：数据目录与映射路径可见性
     const candidateDirs = getCandidateDataDirs();
     const mappingCandidates = getSalesmanMappingPaths();

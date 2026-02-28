@@ -80,6 +80,16 @@ Browser (React + Vite)
 - 查询侧使用 SQL 生成器（`server/src/sql/*.ts`）+ 权限过滤注入，避免前端拼接业务 SQL。
 - 高频接口提供查询缓存与 bundle 聚合端点，减少前端并发请求压力。
 
+ℹ️ **VPS 分层数据架构约束（所有人类和 AI 必读）**
+
+> VPS 为腾讯云轻量 2核4G。以下为不可破坏的架构设计原则（与 AGENTS.md §4.6 同步）:
+> - ❌ **禁止**在 VPS 上对 `PolicyFact` 进行全量扫描构建新功能
+> - ✅ 新功能必须使用已有预聚合表：`DailyAggregated` / `PeriodAggregated` / `CrossSellDailyAgg` / `KpiDailySummary`
+> - ✅ 新分析维度必须先在 Mac 本地扩展聚合表并导出 Parquet，再推送 VPS
+> - ✅ VPS 只接收 `aggregated.parquet` + `renewal_slim.parquet` 两个精简文件
+> - 续保化外，PolicyFact 字段集限定为 8 个（详见 AGENTS.md §4.6）
+
+
 ---
 
 ## 项目结构总览

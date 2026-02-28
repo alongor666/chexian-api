@@ -23,6 +23,11 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 3000,
+        // VPS 分层数据架构：预聚合模式
+        VPS_MODE: 'true',
+        // DuckDB 内存限制（预聚合 ~5MB，大幅降低内存占用）
+        DUCKDB_MAX_MEMORY: '400MB',
+        DUCKDB_THREADS: '2',
       },
 
       // 日志配置
@@ -33,7 +38,7 @@ module.exports = {
       log_type: 'json',
 
       // 自动重启配置
-      max_memory_restart: '1500M', // 内存超过 1.5G 自动重启
+      max_memory_restart: '600M', // 预聚合模式下内存应 < 400MB
       restart_delay: 3000, // 重启间隔 3 秒
       max_restarts: 10, // 最多重启 10 次
       min_uptime: '10s', // 最小运行时间

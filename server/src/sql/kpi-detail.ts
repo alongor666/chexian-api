@@ -10,56 +10,8 @@
  * 关联文档：开发文档/KPI口径说明.md
  */
 
-export interface KpiDetailResult {
-  // 基础 KPI（数值类）
-  total_premium: number | bigint;
-  policy_count: number | bigint;
-  per_capita_premium: number | bigint;
-
-  // 过户占比（分解数据）
-  transfer_count: number | bigint;
-  non_transfer_count: number | bigint;
-
-  // 电销占比（分解数据）
-  telesales_count: number | bigint;
-  non_telesales_count: number | bigint;
-
-  // 续保占比（分解数据）
-  renewal_count: number | bigint;
-  non_renewal_count: number | bigint;
-
-  // 商业险占比（分解数据）
-  commercial_premium: number | bigint;
-  non_commercial_premium: number | bigint;
-
-  // 新能源占比（分解数据）
-  nev_count: number | bigint;
-  non_nev_count: number | bigint;
-
-  // 新车占比（分解数据）
-  new_car_count: number | bigint;
-  non_new_car_count: number | bigint;
-
-  // 优质业务占比（分解数据 - A/B 等级为优质）
-  quality_business_count: number | bigint;
-  non_quality_business_count: number | bigint;
-
-  // 险别组合占比（分解数据）
-  coverage_danjiao_count: number | bigint;     // 单交
-  coverage_jiaosan_count: number | bigint;     // 交三
-  coverage_zhuquan_count: number | bigint;     // 主全
-  coverage_other_count: number | bigint;       // 其他
-
-  // 车辆类型占比（分解数据）
-  vehicle_truck_count: number | bigint;        // 货车（含营业/非营业）
-  vehicle_bus_count: number | bigint;          // 客车（含非营业个人/企业）
-  vehicle_motorcycle_count: number | bigint;   // 摩托车
-  vehicle_other_count: number | bigint;        // 其他
-
-  // 同城/异地占比（分解数据 - 基于机构归属）
-  same_city_count: number | bigint;            // 同城（成都）
-  remote_count: number | bigint;               // 异地（中支）
-}
+import { QUALITY_BUSINESS_CONDITION } from './kpi';
+export type { KpiDetailResult } from '../types/kpi';
 
 /**
  * 生成 KPI 详细数据查询
@@ -107,9 +59,14 @@ export const generateKpiDetailQuery = (
       COUNT(CASE WHEN is_new_car THEN 1 END) as new_car_count,
       COUNT(CASE WHEN NOT is_new_car THEN 1 END) as non_new_car_count,
 
-      -- 优质业务占比（分解数据 - A/B 等级为优质）
-      COUNT(CASE WHEN insurance_grade IN ('A', 'B') THEN 1 END) as quality_business_count,
-      COUNT(CASE WHEN insurance_grade NOT IN ('A', 'B') OR insurance_grade IS NULL THEN 1 END) as non_quality_business_count,
+      -- 优质业务占比（与 kpi.ts 同口径：category+tonnage 条件）
+      COUNT(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN 1 END) as quality_business_count,
+      COUNT(CASE WHEN NOT (${QUALITY_BUSINESS_CONDITION}) THEN 1 END) as non_quality_business_count,
+
+      -- 业务等级分布（AB/CD/EFG 三分，基于 insurance_grade）
+      COUNT(CASE WHEN insurance_grade IN ('A', 'B') THEN 1 END) as grade_ab_count,
+      COUNT(CASE WHEN insurance_grade IN ('C', 'D') THEN 1 END) as grade_cd_count,
+      COUNT(CASE WHEN insurance_grade NOT IN ('A', 'B', 'C', 'D') OR insurance_grade IS NULL THEN 1 END) as grade_efg_count,
 
       -- 险别组合占比（分解数据）
       COUNT(CASE WHEN coverage_combination = '单交' THEN 1 END) as coverage_danjiao_count,
@@ -123,9 +80,9 @@ export const generateKpiDetailQuery = (
       COUNT(CASE WHEN customer_category = '摩托车' THEN 1 END) as vehicle_motorcycle_count,
       COUNT(CASE WHEN customer_category NOT LIKE '%货车%' AND customer_category NOT LIKE '%客车%' AND customer_category != '非营业个人客车' AND customer_category != '摩托车' THEN 1 END) as vehicle_other_count,
 
-      -- 同城/异地占比（分解数据 - 基于机构归属）
-      COUNT(CASE WHEN org_level_3 IN ('天府', '高新', '新都', '青羊', '武侯', '重客', '本部') THEN 1 END) as same_city_count,
-      COUNT(CASE WHEN org_level_3 IN ('宜宾', '德阳', '资阳', '泸州', '自贡', '乐山', '达州') THEN 1 END) as remote_count
+      -- 同城/异地占比（保费口径 - 基于机构归属）
+      SUM(CASE WHEN org_level_3 IN ('天府', '高新', '新都', '青羊', '武侯', '重客', '本部') THEN premium ELSE 0 END) as same_city_premium,
+      SUM(CASE WHEN org_level_3 IN ('宜宾', '德阳', '资阳', '泸州', '自贡', '乐山', '达州') THEN premium ELSE 0 END) as remote_premium
     FROM PolicyFact
     WHERE ${whereClause} ${scopeFilter}
   `;
@@ -193,7 +150,7 @@ export const extractDonutData = (
       ];
     case 'quality_business':
       return [
-        { label: '优质(A/B)', value: toNumber(kpiDetail.quality_business_count || 0) },
+        { label: '优质', value: toNumber(kpiDetail.quality_business_count || 0) },
         { label: '其他', value: toNumber(kpiDetail.non_quality_business_count || 0) },
       ];
     case 'coverage_mix':
@@ -201,19 +158,17 @@ export const extractDonutData = (
         { label: '单交', value: toNumber(kpiDetail.coverage_danjiao_count || 0) },
         { label: '交三', value: toNumber(kpiDetail.coverage_jiaosan_count || 0) },
         { label: '主全', value: toNumber(kpiDetail.coverage_zhuquan_count || 0) },
-        { label: '其他', value: toNumber(kpiDetail.coverage_other_count || 0) },
       ];
     case 'vehicle_type':
       return [
         { label: '货车', value: toNumber(kpiDetail.vehicle_truck_count || 0) },
         { label: '客车', value: toNumber(kpiDetail.vehicle_bus_count || 0) },
-        { label: '摩托车', value: toNumber(kpiDetail.vehicle_motorcycle_count || 0) },
-        { label: '其他', value: toNumber(kpiDetail.vehicle_other_count || 0) },
+        { label: '摩托', value: toNumber(kpiDetail.vehicle_motorcycle_count || 0) },
       ];
     case 'region':
       return [
-        { label: '同城', value: toNumber(kpiDetail.same_city_count || 0) },
-        { label: '异地', value: toNumber(kpiDetail.remote_count || 0) },
+        { label: '同城', value: toNumber(kpiDetail.same_city_premium || 0) },
+        { label: '异地', value: toNumber(kpiDetail.remote_premium || 0) },
       ];
     default:
       return [];

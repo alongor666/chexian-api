@@ -1,4 +1,5 @@
 export * from './data';
+export * from './kpi';
 export * from './view-perspective';
 export * from './dc-002-guard';
 export * from './alert';

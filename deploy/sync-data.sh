@@ -16,6 +16,7 @@ set -e
 VPS_HOST="chexian-vps"
 VPS_DATA="/var/www/chexian/server/data"
 LOCAL_DATA="数据管理/warehouse/fact/policy/current"
+VPS_EXPORT_DIR="数据管理/warehouse/vps-export"
 
 # 颜色
 GREEN='\033[0;32m'
@@ -26,12 +27,15 @@ NC='\033[0m'
 # 解析参数
 NO_RESTART=false
 CLEAN_VPS=false
+EXPORT_MODE=false
 FILE=""
 for arg in "$@"; do
     if [[ "$arg" == "--no-restart" ]]; then
         NO_RESTART=true
     elif [[ "$arg" == "--clean-vps" ]]; then
         CLEAN_VPS=true
+    elif [[ "$arg" == "--export" ]]; then
+        EXPORT_MODE=true
     elif [[ -z "$FILE" ]]; then
         FILE="$arg"
     fi
@@ -49,6 +53,56 @@ if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$VPS_HOST" true 2>/dev/null; the
     exit 1
 fi
 
+# ============================================================
+# 导出模式：运行预聚合导出 → 上传 3 个精简 Parquet
+# ============================================================
+if [ "$EXPORT_MODE" = true ]; then
+    echo -e "${GREEN}[导出模式]${NC} 运行预聚合导出脚本..."
+    node scripts/export-for-vps.mjs
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}错误：导出脚本失败${NC}"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}  确保 VPS 目录存在...${NC}"
+    ssh "$VPS_HOST" "mkdir -p ${VPS_DATA}/current ${VPS_DATA}/archive"
+
+    # 上传 3 个预聚合文件
+    for PARQUET_FILE in aggregated.parquet cross_sell_agg.parquet renewal_agg.parquet; do
+        LOCAL_FILE="${VPS_EXPORT_DIR}/${PARQUET_FILE}"
+        if [ -f "$LOCAL_FILE" ]; then
+            SIZE=$(du -h "$LOCAL_FILE" | cut -f1)
+            echo -e "${YELLOW}  上传 ${PARQUET_FILE} (${SIZE})...${NC}"
+            scp "$LOCAL_FILE" "${VPS_HOST}:${VPS_DATA}/current/"
+            ssh "$VPS_HOST" "chmod 600 ${VPS_DATA}/current/${PARQUET_FILE}"
+        else
+            echo -e "${YELLOW}  跳过 ${PARQUET_FILE}（文件不存在）${NC}"
+        fi
+    done
+
+    if [ "$NO_RESTART" = true ]; then
+        echo -e "${GREEN}✓ 预聚合数据上传完成（跳过重启）${NC}"
+    else
+        echo -e "${YELLOW}  重启服务...${NC}"
+        ssh "$VPS_HOST" "source /root/.nvm/nvm.sh && pm2 restart chexian-api"
+
+        echo -e "${YELLOW}  验证中...${NC}"
+        sleep 3
+        HEALTH=$(ssh "$VPS_HOST" "curl -s http://localhost:3000/health" 2>/dev/null)
+        if echo "$HEALTH" | grep -q "success"; then
+            echo -e "${GREEN}✓ 预聚合数据同步完成！${NC} VPS 服务运行正常"
+        else
+            echo -e "${RED}⚠ 上传完成，但健康检查失败，请检查 VPS 日志${NC}"
+            echo "  ssh chexian-vps 'source /root/.nvm/nvm.sh && pm2 logs chexian-api --lines 20'"
+        fi
+    fi
+    exit 0
+fi
+
+# ============================================================
+# 标准模式：上传单个原始 Parquet（兼容旧流程）
+# ============================================================
+
 # 确定要同步的文件
 if [ -z "$FILE" ]; then
     FILE=$(ls -t ${LOCAL_DATA}/*.parquet 2>/dev/null | head -1)
@@ -64,6 +118,7 @@ fi
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
     echo -e "${RED}错误：未找到 Parquet 文件${NC}"
     echo "用法: ./deploy/sync-data.sh [文件路径] [--no-restart]"
+    echo "      ./deploy/sync-data.sh --export    # 预聚合模式（推荐）"
     exit 1
 fi
 

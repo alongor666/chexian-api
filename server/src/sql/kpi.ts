@@ -5,7 +5,7 @@
  * 1. 非新能源车 AND (客户类别为非营业个人/企业/机关客车)
  * 2. 货车 AND 吨位分段为1吨以下或2-9吨
  */
-const QUALITY_BUSINESS_CONDITION = `
+export const QUALITY_BUSINESS_CONDITION = `
   (
     (is_nev = false AND (
       customer_category LIKE '%非营业个人%'

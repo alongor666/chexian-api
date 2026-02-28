@@ -302,6 +302,42 @@ WHERE year = EXTRACT(YEAR FROM CURRENT_DATE)
 
 高风险改动（SQL、筛选、时间维度、权限）必须记录可复现证据（日志/截图/测试输出）。
 
+### 4.6 VPS 分层数据架构（CRITICAL - 违反将导致生产内存崩溃）
+
+**背景**：VPS 仅有 2核4G 内存。历史上因全量原始 Parquet 在 VPS 上聚合，DuckDB 内存飙升至 800MB+ 并被 PM2 反复杀死重启（177次）。2026-02-28 确立以下不可破坏的架构原则。
+
+**黄金规则：新功能必须新增预聚合表，禁止在 VPS 上查询原始 `PolicyFact`（续保除外）。**
+
+| 场景 | 正确做法 | 禁止做法 |
+|------|---------|----------|
+| 新增仪表盘指标 | 在 `DailyAggregated` 或新建预聚合表上执行 | 直接 `SELECT ... FROM PolicyFact` |
+| 新增趋势分析 | 在 `PeriodAggregated` 上聚合 | 扫描全量保单行 |
+| 新增续保功能 | 查 `PolicyFact`（仅8字段，见下） | 引入 PolicyFact 额外字段 |
+| 数据推送 VPS | 推送 `aggregated.parquet` + `renewal_slim.parquet` | 推送原始全量 Parquet |
+| 增加新分析维度 | Mac 本地新建聚合表 → 导出 Parquet → 推送 VPS | 在 VPS 重建聚合 |
+
+**VPS 预聚合表清单（已有，禁止在 VPS 上从 PolicyFact 重建）**：
+- `DailyAggregated`：日粒度，含所有筛选维度
+- `PeriodAggregated`：月粒度
+- `CrossSellDailyAgg`：交叉销售
+- `KpiDailySummary`：KPI 轻量汇总
+
+**续保模块的 PolicyFact 最小字段集（不可扩展，扩展需改造 renewal_slim.parquet）**：
+`policy_no`, `premium`, `salesman_name`, `org_level_3`, `customer_category`, `insurance_type`, `insurance_start_date`, `renewal_policy_no`
+
+**新增功能 Checklist（上线前必须确认）**：
+```
+[ ] 新 API 是否只查预聚合表？（若否，必须先扩展 Mac 本地导出脚本）
+[ ] 新维度是否已加入对应聚合表的 GROUP BY 键？
+[ ] scripts/export-for-vps.mjs 是否已更新以包含新维度？
+[ ] VPS 上是否通过 pm2 monit 确认内存未超过 600MB？
+```
+
+**相关文件**：
+- 导出脚本：`scripts/export-for-vps.mjs`（Mac 本地运行）
+- 数据同步：`deploy/sync-data.sh`（同步精简 Parquet，不同步原始数据）
+- 数据库配置：`server/src/config/database.ts`（`VPS_MODE` 环境变量控制加载路径）
+
 ---
 
 ## 5. 角色定义与边界

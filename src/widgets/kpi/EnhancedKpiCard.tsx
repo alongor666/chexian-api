@@ -52,6 +52,16 @@ export interface EnhancedKpiCardProps {
  */
 const DEFAULT_COLORS = [colors.primary.DEFAULT, colors.neutral[400]];
 
+/**
+ * 多段条形图颜色方案（最多支持 4 段）
+ */
+const SEGMENT_COLORS = [
+  colors.primary.DEFAULT, // 蓝
+  '#10B981',              // 翠绿
+  '#F59E0B',              // 琥珀
+  colors.neutral[400],    // 灰（兜底）
+];
+
 const normalizeNumeric = (value: number | bigint): number => {
   if (typeof value === 'bigint') {
     return Number(value);
@@ -180,6 +190,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
     [data]
   );
   const total = normalizedData.reduce((sum, item) => sum + item.value, 0);
+
   if (total === 0) {
     return (
       <div className="w-full">
@@ -189,6 +200,49 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
       </div>
     );
   }
+
+  // 多段条形图（3项及以上）
+  if (normalizedData.length >= 3) {
+    return (
+      <div className="w-full">
+        <div className="flex h-10 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700">
+          {normalizedData.map((item, index) => {
+            const rate = (item.value / total) * 100;
+            const color = item.color || SEGMENT_COLORS[index] || SEGMENT_COLORS[SEGMENT_COLORS.length - 1];
+            return (
+              <div
+                key={index}
+                className="flex items-center justify-center text-xs font-bold text-white font-chart-number"
+                style={{
+                  width: `${rate}%`,
+                  backgroundColor: color,
+                  minWidth: rate > 0 ? '24px' : 0,
+                }}
+              >
+                {rate >= 8 ? `${Math.round(rate)}%` : ''}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center justify-around mt-2">
+          {normalizedData.map((item, index) => {
+            const rate = (item.value / total) * 100;
+            const color = item.color || SEGMENT_COLORS[index] || SEGMENT_COLORS[SEGMENT_COLORS.length - 1];
+            return (
+              <div key={index} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+                  {item.label} {Math.round(rate)}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // 2段条形图（原有逻辑）
   const primaryValue = normalizedData[0]?.value || 0;
   const secondaryValue = normalizedData[1]?.value || 0;
   const primaryRate = (primaryValue / total) * 100;

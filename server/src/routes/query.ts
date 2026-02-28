@@ -1440,60 +1440,15 @@ router.get(
 );
 
 /**
- * 自定义SQL请求验证Schema
- */
-const customSqlSchema = z.object({
-  sql: z.string().min(1).max(8000),
-});
-
-/**
- * POST /api/query/custom
- * 自定义SQL查询（带安全校验）
+ * POST /api/query/custom - 已移除（SQL 编辑器功能已删除）
+ * 保留端点返回 410 Gone
  */
 router.post(
   '/custom',
-  asyncHandler(async (req: Request, res: Response) => {
-    const parseResult = customSqlSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
-    }
-
-    const { sql: userSql } = parseResult.data;
-
-    // 1. SQL 安全校验（只读 + 聚合检查）
-    const validation = validateSQL(userSql);
-    if (!validation.valid) {
-      throw new AppError(400, validation.error || 'SQL验证失败');
-    }
-
-    // 2. 获取权限过滤条件
-    const permissionFilter = req.permissionFilter || '1=1';
-
-    // 2.1 验证权限过滤条件格式（防止注入）
-    if (!isValidPermissionFilter(permissionFilter)) {
-      console.error('[Security] Invalid permission filter detected:', permissionFilter);
-      throw new AppError(500, '权限配置错误，请联系管理员');
-    }
-
-    // 3. 使用健壮的权限注入工具
-    let finalSql: string;
-    try {
-      finalSql = injectPermissionFilter(userSql, permissionFilter);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '无法应用权限过滤';
-      throw new AppError(400, errorMessage);
-    }
-
-    // 4. 执行查询
-    const result = await duckdbService.query(finalSql);
-
-    res.json({
-      success: true,
-      data: result,
-      meta: {
-        rowCount: result.length,
-        permissionApplied: permissionFilter !== '1=1',
-      },
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.status(410).json({
+      success: false,
+      error: '自定义 SQL 查询功能已关闭',
     });
   })
 );
