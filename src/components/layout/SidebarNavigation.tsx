@@ -13,7 +13,6 @@ import {
   Calculator,
   Scale,
   Search,
-  FileCode,
   Gift,
   Percent,
   ChevronLeft,
@@ -51,7 +50,6 @@ const dataNavItems: NavItem[] = [
   { path: '/fee-analysis', icon: Percent, label: '费用分析', shortLabel: '费用' },
   { path: '/comparison', icon: Scale, label: '数据对比', shortLabel: '对比' },
   { path: '/coefficient', icon: Search, label: '系数监控', shortLabel: '系数' },
-  { path: '/sql-query', icon: FileCode, label: 'SQL查询', shortLabel: 'SQL' },
 ];
 
 const toolNavItems: NavItem[] = [
@@ -116,8 +114,8 @@ export const SidebarNavigation: React.FC = () => {
         key={item.path}
         to={item.path}
         className={`flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 group min-h-[44px] md:min-h-0 ${isActive(item.path)
-            ? 'bg-primary text-white shadow-md'
-            : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+          ? 'bg-primary text-white shadow-md'
+          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
           }`}
         title={!showExpanded ? item.label : undefined}
       >

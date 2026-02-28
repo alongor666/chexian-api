@@ -129,7 +129,32 @@ git diff --cached --name-only | rg "(^|/)(test_output|vitest_log|.*\\.log)$" && 
 - **向后兼容**：`server/src/routes/query.ts` 不得删除既有路由，仅允许追加并保持兼容
 - **Bun 包管理器**：禁止使用 npm/yarn/pnpm（项目统一使用 Bun）
 
----
+### VPS 分层数据架构（RED LINE - 2026-02-28 起强制执行）
+
+> **背景**：VPS 2核4G，历史上全量原始 Parquet 在 VPS 端聚合导致 DuckDB 内存飙至 800MB+，PM2 累计重启 177 次。
+
+**🔴 黄金规则：新增功能必须新增预聚合表，禁止在 VPS 上查询原始 `PolicyFact`（续保除外）。**
+
+| 场景 | 正确做法 | 禁止做法 |
+|------|---------|----------|
+| 新增仪表盘/趋势功能 | 查已有预聚合表（`DailyAggregated` / `PeriodAggregated` / `CrossSellDailyAgg`） | 直接 `SELECT ... FROM PolicyFact` |
+| 新增分析维度 | Mac 本地扩展聚合表 → `scripts/export-for-vps.mjs` 导出 → 推送 VPS | 在 VPS 上新建或重建聚合逻辑 |
+| 数据同步 VPS | 只推 `aggregated.parquet` + `renewal_slim.parquet` | 推原始全量 Parquet |
+| 新增续保字段 | 修改 `renewal_slim.parquet` 导出定义 | 访问 PolicyFact 8字段以外的列 |
+
+**VPS 预聚合表清单（只增不减）**：`DailyAggregated`、`PeriodAggregated`、`CrossSellDailyAgg`、`KpiDailySummary`
+
+**续保 PolicyFact 最小字段集（冻结，不可扩展）**：
+`policy_no`, `premium`, `salesman_name`, `org_level_3`, `customer_category`, `insurance_type`, `insurance_start_date`, `renewal_policy_no`
+
+**新增功能上线前 Checklist**：
+```
+[ ] 新 API 是否只查预聚合表？
+[ ] 新维度是否已计入对应聚合表的 GROUP BY 键？
+[ ] scripts/export-for-vps.mjs 是否已更新？
+[ ] VPS pm2 monit 确认内存 < 600MB？
+```
+
 
 ## 3. 交付协议（MUST - 完成任务的硬性要求）
 

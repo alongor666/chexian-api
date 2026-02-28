@@ -8,10 +8,38 @@
 import type { Insight, InsightAnalysisResult, RenewalDataContext, InsightConfig } from './types';
 import { getPromptByType } from './prompts';
 import { formatContextForAI } from './context-builder';
-import { getStoredConfig } from '../../features/sql-query/aiSql/configStore';
 import { Logger } from '@/shared/utils/logger';
 
 const logger = new Logger('InsightGenerator');
+
+// ---- 内联 API Key 配置读取（原依赖已删除的 sql-query/aiSql/configStore）----
+const STORAGE_KEY = 'zhipu_sql_config';
+
+interface StoredConfig {
+  apiKey: string;
+  model: string;
+}
+
+/**
+ * 读取存储的 AI API Key 配置
+ * 优先级：localStorage > 环境变量 > 空
+ */
+function getStoredConfig(): StoredConfig {
+  const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ZHIPU_API_KEY) || '';
+  const envModel = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ZHIPU_MODEL) || 'glm-4-flash';
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // configStore 使用 XOR+Base64 混淆，但 key 仍可直接使用
+      return {
+        apiKey: parsed.apiKey || envKey,
+        model: parsed.model || envModel,
+      };
+    }
+  } catch { /* ignore */ }
+  return { apiKey: envKey, model: envModel };
+}
 
 /**
  * API 端点说明：
@@ -31,8 +59,8 @@ const INSIGHT_DEFAULT_MODEL = 'glm-4.7-flash';
  */
 function isCryptoSubtleAvailable(): boolean {
   return typeof crypto !== 'undefined' &&
-         typeof crypto.subtle !== 'undefined' &&
-         typeof crypto.subtle.importKey === 'function';
+    typeof crypto.subtle !== 'undefined' &&
+    typeof crypto.subtle.importKey === 'function';
 }
 
 /**
@@ -138,11 +166,11 @@ function parseInsights(content: string): Insight[] {
       priority: validatePriority(item.priority) || 'medium',
       metric: item.metric
         ? {
-            name: String(item.metric.name || ''),
-            value: item.metric.value ?? '',
-            benchmark: item.metric.benchmark,
-            delta: item.metric.delta,
-          }
+          name: String(item.metric.name || ''),
+          value: item.metric.value ?? '',
+          benchmark: item.metric.benchmark,
+          delta: item.metric.delta,
+        }
         : undefined,
       affectedEntities: Array.isArray(item.affectedEntities)
         ? item.affectedEntities.map(String)
@@ -353,10 +381,10 @@ export async function generateInsights(
       insights: limitedInsights,
       tokens: data.usage
         ? {
-            prompt: data.usage.prompt_tokens,
-            completion: data.usage.completion_tokens,
-            total: data.usage.total_tokens,
-          }
+          prompt: data.usage.prompt_tokens,
+          completion: data.usage.completion_tokens,
+          total: data.usage.total_tokens,
+        }
         : undefined,
       duration: Date.now() - startTime,
     };

@@ -130,6 +130,22 @@ git merge-base main HEAD || echo "WARNING: no common ancestor"
 - **JWT 认证**：所有 `/api/*` 必须经过认证中间件，禁止绕过
 - **文件名验证**：`server/src/utils/security.ts` 使用危险字符黑名单（非白名单），支持中文
 
+### VPS 分层数据架构（RED LINE - 2026-02-28 起强制执行）
+
+> **背景**：VPS 2核4G，历史上原始 Parquet 在 VPS 聚合导致内存 800MB+、PM2 177次重启。
+
+**黄金规则**：❌ **禁止在 VPS 上查询原始 `PolicyFact` 构建新功能**（续保模块除外）
+
+| 做什么 | 正确方式 |
+|--------|----------|
+| 新增仪表盘/趋势功能 | 在已有预聚合表（`DailyAggregated` / `PeriodAggregated` / `CrossSellDailyAgg`）上查询 |
+| 新增分析维度 | 在 **Mac 本地** 用 `scripts/export-for-vps.mjs` 增加聚合维度 → 导出 → 推送 |
+| 数据推送 VPS | 只推 `aggregated.parquet` + `renewal_slim.parquet`，禁止推原始数据 |
+| 新增续保字段 | 修改 `renewal_slim.parquet` 导出定义，**不可**在查询时访问 PolicyFact 的其他字段 |
+
+**续保 PolicyFact 最小字段集（不可扩展）**：
+`policy_no`, `premium`, `salesman_name`, `org_level_3`, `customer_category`, `insurance_type`, `insurance_start_date`, `renewal_policy_no`
+
 ---
 
 ## 3. 实现前检查协议（防止重复造轮子）

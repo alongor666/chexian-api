@@ -4,29 +4,11 @@ import { apiClient } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
 import type { AdvancedFilterState } from '../../../shared/types/data';
+import type { KpiDetailResult } from '../../../shared/types/kpi';
+
+export type { KpiDetailResult };
 
 const logger = createLogger('useKpiData');
-
-/**
- * KPI 详细数据（用于环形图展示）
- */
-export interface KpiDetailResult {
-  total_premium: number | bigint;
-  policy_count: number | bigint;
-  per_capita_premium: number | bigint;
-  transfer_count: number | bigint;
-  non_transfer_count: number | bigint;
-  telesales_count: number | bigint;
-  non_telesales_count: number | bigint;
-  renewal_count: number | bigint;
-  non_renewal_count: number | bigint;
-  commercial_premium: number | bigint;
-  non_commercial_premium: number | bigint;
-  nev_count: number | bigint;
-  non_nev_count: number | bigint;
-  new_car_count: number | bigint;
-  non_new_car_count: number | bigint;
-}
 
 /**
  * KPI 基础数据类型
@@ -140,6 +122,21 @@ export const useKpiData = ({
         non_nev_count: kpiDetailResponse.non_nev_count,
         new_car_count: kpiDetailResponse.new_car_count,
         non_new_car_count: kpiDetailResponse.non_new_car_count,
+        quality_business_count: kpiDetailResponse.quality_business_count,
+        non_quality_business_count: kpiDetailResponse.non_quality_business_count,
+        grade_ab_count: kpiDetailResponse.grade_ab_count,
+        grade_cd_count: kpiDetailResponse.grade_cd_count,
+        grade_efg_count: kpiDetailResponse.grade_efg_count,
+        coverage_danjiao_count: kpiDetailResponse.coverage_danjiao_count,
+        coverage_jiaosan_count: kpiDetailResponse.coverage_jiaosan_count,
+        coverage_zhuquan_count: kpiDetailResponse.coverage_zhuquan_count,
+        coverage_other_count: kpiDetailResponse.coverage_other_count,
+        vehicle_truck_count: kpiDetailResponse.vehicle_truck_count,
+        vehicle_bus_count: kpiDetailResponse.vehicle_bus_count,
+        vehicle_motorcycle_count: kpiDetailResponse.vehicle_motorcycle_count,
+        vehicle_other_count: kpiDetailResponse.vehicle_other_count,
+        same_city_premium: kpiDetailResponse.same_city_premium,
+        remote_premium: kpiDetailResponse.remote_premium,
       });
 
       logger.info('KPI API 查询成功');

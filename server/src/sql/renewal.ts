@@ -281,72 +281,7 @@ export function generateRenewalRankingQuery(
   `;
 }
 
-/**
- * 生成续保详情查询（应续保单列表及续保状态）
- * @param filters - 筛选条件
- * @param targetYear - 目标年份
- * @param renewalStatus - 续保状态筛选（'all'/'renewed'/'not_renewed'）
- * @param cutoffDate - 统计截止日期（可选，默认 CURRENT_DATE）
- * @returns SQL 查询字符串
- */
-export function generateRenewalDetailQuery(
-  filters: AdvancedFilterState,
-  targetYear: number,
-  renewalStatus: 'all' | 'renewed' | 'not_renewed' = 'all',
-  cutoffDate?: string
-): string {
-  const whereClause = buildWhereClauseForRenewal(filters);
-  const { expiringWhere } = getTimeDimension('yearly', targetYear, cutoffDate);
-
-  let statusFilter = '';
-  if (renewalStatus === 'renewed') {
-    statusFilter = `WHERE renewal_policy_no IS NOT NULL AND renewal_policy_no <> ''`;
-  } else if (renewalStatus === 'not_renewed') {
-    statusFilter = `WHERE renewal_policy_no IS NULL OR renewal_policy_no = ''`;
-  }
-
-  return `
-    -- 应续保单：${targetYear - 1}年起保的保单
-    -- renewal_policy_no 直接表示该保单续保到的新保单号
-    -- 到期日 = 起保日期 + 1年 - 1天（例：2025-01-02起保 → 2026-01-01到期）
-    WITH expiring_policies AS (
-      SELECT
-        policy_no,
-        premium,
-        salesman_name,
-        org_level_3,
-        customer_category,
-        insurance_type,
-        insurance_start_date,
-        DATE_ADD(CAST(insurance_start_date AS DATE), INTERVAL '1 year') - INTERVAL '1 day' AS expiry_date,
-        renewal_policy_no,
-        CASE
-          WHEN renewal_policy_no IS NOT NULL AND renewal_policy_no <> '' THEN '已续保'
-          ELSE '未续保'
-        END AS renewal_status
-      FROM PolicyFact
-      WHERE ${expiringWhere}
-        AND ${whereClause}
-    )
-
-    SELECT
-      policy_no,
-      premium,
-      salesman_name,
-      org_level_3,
-      customer_category,
-      insurance_type,
-      insurance_start_date,
-      expiry_date,
-      renewal_policy_no AS new_policy_no,
-      NULL AS renewal_start_date,
-      NULL AS renewal_premium,
-      renewal_status
-    FROM expiring_policies
-    ${statusFilter}
-    ORDER BY renewal_status DESC, expiry_date ASC
-  `;
-}
+// generateRenewalDetailQuery 已删除（VPS 内存优化：不再暴露行级保单明细）
 
 /**
  * 生成数据质量检查查询（检测保单号重复）

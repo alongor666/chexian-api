@@ -7,6 +7,7 @@ import {
   formatRate,
 } from '../../../shared/utils/formatters';
 import type { KpiData } from '../hooks/useKpiData';
+import type { KpiDetailResult } from '../../../shared/types/kpi';
 import {
   DEFAULT_KPI_ORDER,
   KPI_CARD_META,
@@ -14,39 +15,6 @@ import {
   type KpiCardId,
 } from '../dashboardLayoutConfig';
 import { cardStyles, cn } from '../../../shared/styles';
-
-// ==================== 类型和函数（原 shared/sql/kpi-detail 导出） ====================
-
-export interface KpiDetailResult {
-  total_premium: number | bigint;
-  policy_count: number | bigint;
-  per_capita_premium: number | bigint;
-  transfer_count: number | bigint;
-  non_transfer_count: number | bigint;
-  telesales_count: number | bigint;
-  non_telesales_count: number | bigint;
-  renewal_count: number | bigint;
-  non_renewal_count: number | bigint;
-  commercial_premium: number | bigint;
-  non_commercial_premium: number | bigint;
-  nev_count: number | bigint;
-  non_nev_count: number | bigint;
-  new_car_count: number | bigint;
-  non_new_car_count: number | bigint;
-  // 新增字段
-  quality_business_count?: number | bigint;
-  non_quality_business_count?: number | bigint;
-  coverage_danjiao_count?: number | bigint;
-  coverage_jiaosan_count?: number | bigint;
-  coverage_zhuquan_count?: number | bigint;
-  coverage_other_count?: number | bigint;
-  vehicle_truck_count?: number | bigint;
-  vehicle_bus_count?: number | bigint;
-  vehicle_motorcycle_count?: number | bigint;
-  vehicle_other_count?: number | bigint;
-  same_city_count?: number | bigint;
-  remote_count?: number | bigint;
-}
 
 const calculateRate = (part: number, total: number): number => {
   if (total === 0 || total === null || total === undefined) {
@@ -95,7 +63,7 @@ const extractDonutData = (
       ];
     case 'quality_business':
       return [
-        { label: '优质(A/B)', value: toBigNumber(kpiDetail.quality_business_count || 0) },
+        { label: '优质', value: toBigNumber(kpiDetail.quality_business_count || 0) },
         { label: '其他', value: toBigNumber(kpiDetail.non_quality_business_count || 0) },
       ];
     case 'coverage_mix':
@@ -103,19 +71,17 @@ const extractDonutData = (
         { label: '单交', value: toBigNumber(kpiDetail.coverage_danjiao_count || 0) },
         { label: '交三', value: toBigNumber(kpiDetail.coverage_jiaosan_count || 0) },
         { label: '主全', value: toBigNumber(kpiDetail.coverage_zhuquan_count || 0) },
-        { label: '其他', value: toBigNumber(kpiDetail.coverage_other_count || 0) },
       ];
     case 'vehicle_type':
       return [
         { label: '货车', value: toBigNumber(kpiDetail.vehicle_truck_count || 0) },
         { label: '客车', value: toBigNumber(kpiDetail.vehicle_bus_count || 0) },
-        { label: '摩托车', value: toBigNumber(kpiDetail.vehicle_motorcycle_count || 0) },
-        { label: '其他', value: toBigNumber(kpiDetail.vehicle_other_count || 0) },
+        { label: '摩托', value: toBigNumber(kpiDetail.vehicle_motorcycle_count || 0) },
       ];
     case 'region':
       return [
-        { label: '同城', value: toBigNumber(kpiDetail.same_city_count || 0) },
-        { label: '异地', value: toBigNumber(kpiDetail.remote_count || 0) },
+        { label: '同城', value: toBigNumber(kpiDetail.same_city_premium || 0) },
+        { label: '异地', value: toBigNumber(kpiDetail.remote_premium || 0) },
       ];
     default:
       return [];
@@ -287,7 +253,7 @@ export const KpiSection = memo<KpiSectionProps>(({
           type: 'bar',
           ratioData: kpiDetails ? extractDonutData(kpiDetails, 'new_car') : [],
         };
-      // 新增：优质业务占比（核心指标）
+      // 优质业务占比（核心指标，与 kpi.ts 同口径：category+tonnage 条件）
       case 'quality_business_rate':
         return {
           title,
@@ -302,44 +268,34 @@ export const KpiSection = memo<KpiSectionProps>(({
           type: 'bar',
           ratioData: kpiDetails ? extractDonutData(kpiDetails, 'quality_business') : [],
         };
-      // 新增：单交/交三/主全占比
+      // 单交/交三/主全占比（3段条形图）
       case 'coverage_mix_rate':
         return {
           title,
-          value: kpiDetails
-            ? calculateRate(
-              toNumber(kpiDetails.coverage_danjiao_count) + toNumber(kpiDetails.coverage_jiaosan_count) + toNumber(kpiDetails.coverage_zhuquan_count),
-              toNumber(kpiDetails.coverage_danjiao_count) + toNumber(kpiDetails.coverage_jiaosan_count) + toNumber(kpiDetails.coverage_zhuquan_count) + toNumber(kpiDetails.coverage_other_count)
-            )
-            : undefined,
+          value: undefined,
           formatter: formatRate,
           loading,
           type: 'bar',
           ratioData: kpiDetails ? extractDonutData(kpiDetails, 'coverage_mix') : [],
         };
-      // 新增：货车/客车/摩托车占比
+      // 货车/客车/摩托占比（3段条形图）
       case 'vehicle_type_rate':
         return {
           title,
-          value: kpiDetails
-            ? calculateRate(
-              toNumber(kpiDetails.vehicle_truck_count) + toNumber(kpiDetails.vehicle_bus_count) + toNumber(kpiDetails.vehicle_motorcycle_count),
-              toNumber(kpiDetails.vehicle_truck_count) + toNumber(kpiDetails.vehicle_bus_count) + toNumber(kpiDetails.vehicle_motorcycle_count) + toNumber(kpiDetails.vehicle_other_count)
-            )
-            : undefined,
+          value: undefined,
           formatter: formatRate,
           loading,
           type: 'bar',
           ratioData: kpiDetails ? extractDonutData(kpiDetails, 'vehicle_type') : [],
         };
-      // 新增：同城/异地占比
+      // 同城/异地占比（保费口径）
       case 'region_rate':
         return {
           title,
           value: kpiDetails
             ? calculateRate(
-              toNumber(kpiDetails.same_city_count),
-              toNumber(kpiDetails.same_city_count) + toNumber(kpiDetails.remote_count)
+              toNumber(kpiDetails.same_city_premium),
+              toNumber(kpiDetails.same_city_premium) + toNumber(kpiDetails.remote_premium)
             )
             : undefined,
           formatter: formatRate,
