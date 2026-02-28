@@ -27,7 +27,7 @@ interface CacheEntry<T = any> {
 
 class QueryCache {
   private cache = new Map<string, CacheEntry>();
-  private maxSize = 100;
+  private maxSize = 500;
 
   get<T = any>(key: string): T | null {
     const entry = this.cache.get(key);
@@ -761,6 +761,39 @@ class DuckDBService {
         driver_coverage,
         passenger_coverage
     `);
+
+    // 索引：加速频繁筛选列的过滤查询
+    await Promise.all([
+      this.query('CREATE INDEX IF NOT EXISTS idx_daily_date ON DailyAggregated(agg_date)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_daily_org ON DailyAggregated(org_level_3)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_daily_ym ON DailyAggregated(policy_ym)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_period_ym ON PeriodAggregated(policy_ym)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_period_org ON PeriodAggregated(org_level_3)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_cross_date ON CrossSellDailyAgg(policy_date)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_cross_org ON CrossSellDailyAgg(org_level_3)'),
+    ]);
+
+    // KPI 轻量聚合表：将 20+ 维度压缩到 4 维，大幅减少 KPI 热点查询扫描量
+    await this.query(`
+      CREATE OR REPLACE TABLE KpiDailySummary AS
+      SELECT
+        agg_date,
+        policy_ym,
+        org_level_3,
+        insurance_type,
+        SUM(total_premium) AS total_premium,
+        SUM(policy_count) AS policy_count,
+        SUM(commercial_premium) AS commercial_premium,
+        SUM(renewal_count) AS renewal_count,
+        SUM(transfer_count) AS transfer_count,
+        SUM(nev_count) AS nev_count,
+        SUM(new_car_count) AS new_car_count,
+        SUM(telesales_count) AS telesales_count
+      FROM DailyAggregated
+      GROUP BY agg_date, policy_ym, org_level_3, insurance_type
+    `);
+    await this.query('CREATE INDEX IF NOT EXISTS idx_kpi_date ON KpiDailySummary(agg_date)');
+    await this.query('CREATE INDEX IF NOT EXISTS idx_kpi_org ON KpiDailySummary(org_level_3)');
   }
 
   /**

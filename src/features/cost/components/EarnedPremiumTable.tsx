@@ -9,7 +9,7 @@
  * - 明细表：按月份+机构筛选，展示已赚保费明细
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { memo, useMemo, useState, useCallback } from 'react';
 import { VirtualTable, Column } from '../../../widgets/table/VirtualTable';
 import { EarnedPremiumCharts } from './EarnedPremiumCharts';
 import { EarnedPremiumGuide } from './EarnedPremiumGuide';
@@ -162,7 +162,7 @@ function sortSummaryData(
 /**
  * 已赚保费分析表格组件
  */
-export const EarnedPremiumTable: React.FC<EarnedPremiumTableProps> = ({
+export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedPremiumTable({
   data,
   summaryData,
   loading = false,
@@ -170,7 +170,7 @@ export const EarnedPremiumTable: React.FC<EarnedPremiumTableProps> = ({
   onExportCSV,
   onExportExcel,
   onDetailFilterChange,
-}) => {
+}) {
   // 明细表筛选状态（默认显示全部月份，覆盖滚动12个月完整窗口）
   const [detailFilter, setDetailFilter] = useState<EarnedPremiumDetailFilter>({
     policyMonth: 'all',
@@ -387,6 +387,6 @@ export const EarnedPremiumTable: React.FC<EarnedPremiumTableProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default EarnedPremiumTable;

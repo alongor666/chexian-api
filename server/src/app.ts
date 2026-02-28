@@ -7,6 +7,7 @@
 
 import 'dotenv/config';
 import express, { Application } from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import fs from 'fs';
@@ -25,6 +26,11 @@ const PORT = Number(process.env.PORT) || 3000;
  */
 app.use(helmet()); // HTTP安全头
 app.use(cors(corsConfig)); // 跨域配置
+
+/**
+ * 1.5 HTTP 响应压缩（gzip，>1KB 自动压缩）
+ */
+app.use(compression({ level: 6, threshold: 1024 }));
 
 /**
  * 2. 请求解析中间件

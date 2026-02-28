@@ -95,17 +95,19 @@ import { logger } from '../utils/logger.js';
 import { buildResponseMeta } from '../utils/api-meta.js';
 import { markRequestCacheHit } from '../utils/request-context.js';
 import { generateFeeAnalysisQuery } from '../sql/fee-analysis.js';
+import crypto from 'crypto';
 
 const router = Router();
 
 const QUERY_CACHE = {
-  hotspotShort: 30_000,
-  hotspotMedium: 45_000,
-  hotspotLong: 60_000,
+  hotspotShort: 120_000,
+  hotspotMedium: 180_000,
+  hotspotLong: 300_000,
 } as const;
 
 interface RouteCacheEntry<T> {
   data: T;
+  etag: string;
   expiry: number;
 }
 
@@ -120,6 +122,26 @@ function buildRouteCacheKey(req: Request, routeName: string): string {
   return `${routeName}|${req.permissionFilter || '1=1'}|${normalizedQuery}`;
 }
 
+function computeEtag(data: unknown): string {
+  const json = JSON.stringify(data);
+  return `"${crypto.createHash('md5').update(json).digest('hex').slice(0, 16)}"`;
+}
+
+/**
+ * 发送带 ETag + Cache-Control 的 JSON 响应。
+ * 若客户端 If-None-Match 命中则返回 304。
+ */
+function sendWithEtag(req: Request, res: Response, body: unknown, maxAgeSec: number): void {
+  const etag = computeEtag(body);
+  res.set('ETag', etag);
+  res.set('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=60`);
+  if (req.headers['if-none-match'] === etag) {
+    res.status(304).end();
+    return;
+  }
+  res.json(body);
+}
+
 function getRouteCache<T>(key: string): T | null {
   const entry = routeResponseCache.get(key);
   if (!entry) return null;
@@ -131,7 +153,7 @@ function getRouteCache<T>(key: string): T | null {
 }
 
 function setRouteCache<T>(key: string, data: T, ttlMs: number): void {
-  if (routeResponseCache.size >= 500) {
+  if (routeResponseCache.size >= 2000) {
     const oldestKey = routeResponseCache.keys().next().value;
     if (oldestKey) {
       routeResponseCache.delete(oldestKey);
@@ -139,6 +161,7 @@ function setRouteCache<T>(key: string, data: T, ttlMs: number): void {
   }
   routeResponseCache.set(key, {
     data,
+    etag: computeEtag(data),
     expiry: Date.now() + ttlMs,
   });
 }
@@ -199,13 +222,13 @@ router.get(
       { orgNames, salesmanNames },
       whereWithoutDate
     );
-    // KPI 高频查询，缓存 60 秒
-    const result = await duckdbService.query(sql, 60_000);
+    // KPI 高频查询，缓存 120 秒
+    const result = await duckdbService.query(sql, 120_000);
 
-    res.json({
+    sendWithEtag(req, res, {
       success: true,
       data: result[0] || {},
-    });
+    }, 30);
   })
 );
 
@@ -219,13 +242,13 @@ router.get(
     const { whereClause } = parseFiltersAndBuildWhere(req);
 
     const sql = generateKpiDetailQuery(whereClause, false);
-    // KPI 详情高频查询，缓存 60 秒
-    const result = await duckdbService.query(sql, 60_000);
+    // KPI 详情高频查询，缓存 120 秒
+    const result = await duckdbService.query(sql, 120_000);
 
-    res.json({
+    sendWithEtag(req, res, {
       success: true,
       data: result[0] || {},
-    });
+    }, 30);
   })
 );
 
@@ -268,13 +291,13 @@ router.get(
       perspective,
       groupDim
     );
-    // 趋势查询缓存 120 秒
-    const result = await duckdbService.query(sql, 120_000);
+    // 趋势查询缓存 180 秒
+    const result = await duckdbService.query(sql, 180_000);
 
-    res.json({
+    sendWithEtag(req, res, {
       success: true,
       data: result,
-    });
+    }, 60);
   })
 );
 
@@ -301,12 +324,12 @@ router.get(
       perspective,
       groupDim
     );
-    const result = await duckdbService.query(sql, 120_000);
+    const result = await duckdbService.query(sql, 180_000);
 
-    res.json({
+    sendWithEtag(req, res, {
       success: true,
       data: result,
-    });
+    }, 60);
   })
 );
 
@@ -1556,11 +1579,11 @@ router.get(
     const cachedBundleData = getRouteCache<Record<string, unknown>>(routeCacheKey);
     if (cachedBundleData) {
       markRequestCacheHit();
-      res.json({
+      sendWithEtag(req, res, {
         success: true,
         data: cachedBundleData,
         meta: buildResponseMeta(res),
-      });
+      }, 60);
       return;
     }
     await ensureCrossSellAggregateTablesReady();
@@ -1675,11 +1698,11 @@ router.get(
     };
     setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
 
-    res.json({
+    sendWithEtag(req, res, {
       success: true,
       data: bundleData,
       meta: buildResponseMeta(res),
-    });
+    }, 60);
   })
 );
 
@@ -1954,11 +1977,11 @@ router.get(
     const cachedBundleData = getRouteCache<Record<string, unknown>>(routeCacheKey);
     if (cachedBundleData) {
       markRequestCacheHit();
-      res.json({
+      sendWithEtag(req, res, {
         success: true,
         data: cachedBundleData,
         meta: buildResponseMeta(res),
-      });
+      }, 60);
       return;
     }
     const {
@@ -2075,11 +2098,11 @@ router.get(
     };
     setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
 
-    res.json({
+    sendWithEtag(req, res, {
       success: true,
       data: bundleData,
       meta: buildResponseMeta(res),
-    });
+    }, 60);
   })
 );
 
@@ -2109,11 +2132,11 @@ router.get(
     const cachedBundleData = getRouteCache<Record<string, unknown>>(routeCacheKey);
     if (cachedBundleData) {
       markRequestCacheHit();
-      res.json({
+      sendWithEtag(req, res, {
         success: true,
         data: cachedBundleData,
         meta: buildResponseMeta(res),
-      });
+      }, 30);
       return;
     }
     const { perspective = 'premium', rankingLimit } = parseResult.data;
@@ -2198,11 +2221,11 @@ router.get(
     };
     setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
 
-    res.json({
+    sendWithEtag(req, res, {
       success: true,
       data: bundleData,
       meta: buildResponseMeta(res),
-    });
+    }, 30);
   })
 );
 
