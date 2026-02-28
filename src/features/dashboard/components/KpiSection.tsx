@@ -34,18 +34,18 @@ export interface KpiDetailResult {
   new_car_count: number | bigint;
   non_new_car_count: number | bigint;
   // 新增字段
-  quality_business_count: number | bigint;
-  non_quality_business_count: number | bigint;
-  coverage_danjiao_count: number | bigint;
-  coverage_jiaosan_count: number | bigint;
-  coverage_zhuquan_count: number | bigint;
-  coverage_other_count: number | bigint;
-  vehicle_truck_count: number | bigint;
-  vehicle_bus_count: number | bigint;
-  vehicle_motorcycle_count: number | bigint;
-  vehicle_other_count: number | bigint;
-  same_city_count: number | bigint;
-  remote_count: number | bigint;
+  quality_business_count?: number | bigint;
+  non_quality_business_count?: number | bigint;
+  coverage_danjiao_count?: number | bigint;
+  coverage_jiaosan_count?: number | bigint;
+  coverage_zhuquan_count?: number | bigint;
+  coverage_other_count?: number | bigint;
+  vehicle_truck_count?: number | bigint;
+  vehicle_bus_count?: number | bigint;
+  vehicle_motorcycle_count?: number | bigint;
+  vehicle_other_count?: number | bigint;
+  same_city_count?: number | bigint;
+  remote_count?: number | bigint;
 }
 
 const calculateRate = (part: number, total: number): number => {
