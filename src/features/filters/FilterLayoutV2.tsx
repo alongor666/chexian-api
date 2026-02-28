@@ -289,25 +289,36 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                 <span>三级机构{orgMode === 'single' ? '（单选）' : ''}</span>
                 {orgMode === 'multi' && !isOrgLocked && (
                   <div className="flex items-center gap-1 ml-2">
-                    <button
-                      type="button"
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); onMultiSelectChange('org_level_3', []); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('org_level_3', []); } }}
                       className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                     >
                       全选
-                    </button>
-                    <button
-                      type="button"
+                    </span>
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();
                         const allValues = filteredOrgOptions.map(o => o.value);
                         const selected = filters.org_level_3 || [];
                         onMultiSelectChange('org_level_3', allValues.filter(v => !selected.includes(v)));
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault(); e.stopPropagation();
+                          const allValues = filteredOrgOptions.map(o => o.value);
+                          const selected = filters.org_level_3 || [];
+                          onMultiSelectChange('org_level_3', allValues.filter(v => !selected.includes(v)));
+                        }
+                      }}
                       className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
                     >
                       反选
-                    </button>
+                    </span>
                     {orgActions && (
                       <div className="flex gap-1 border-l border-neutral-200 ml-1 pl-1" onClick={(e) => e.stopPropagation()}>
                         {orgActions}
@@ -340,15 +351,18 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
               <div className="flex items-center gap-2">
                 <span>客户类别</span>
                 <div className="flex items-center gap-1 ml-2">
-                  <button
-                    type="button"
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); onMultiSelectChange('customer_category', []); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('customer_category', []); } }}
                     className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                   >
                     全选
-                  </button>
-                  <button
-                    type="button"
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => {
                       e.stopPropagation();
                       const allOptions = toMultiSelectOptions(options.customer_category || []);
@@ -356,10 +370,19 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                       const selected = filters.customer_category || [];
                       onMultiSelectChange('customer_category', allValues.filter(v => !selected.includes(v)));
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault(); e.stopPropagation();
+                        const allOptions = toMultiSelectOptions(options.customer_category || []);
+                        const allValues = allOptions.map(o => o.value);
+                        const selected = filters.customer_category || [];
+                        onMultiSelectChange('customer_category', allValues.filter(v => !selected.includes(v)));
+                      }
+                    }}
                     className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
                   >
                     反选
-                  </button>
+                  </span>
                 </div>
               </div>
               <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
@@ -387,15 +410,18 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                 <div className="flex items-center gap-2">
                   <span>险别组合</span>
                   <div className="flex items-center gap-1 ml-2">
-                    <button
-                      type="button"
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); onMultiSelectChange('coverage_combination', []); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('coverage_combination', []); } }}
                       className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                     >
                       全选
-                    </button>
-                    <button
-                      type="button"
+                    </span>
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();
                         const allOptions = toMultiSelectOptions(options.coverage_combination || []);
@@ -403,10 +429,19 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                         const selected = filters.coverage_combination || [];
                         onMultiSelectChange('coverage_combination', allValues.filter(v => !selected.includes(v)));
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault(); e.stopPropagation();
+                          const allOptions = toMultiSelectOptions(options.coverage_combination || []);
+                          const allValues = allOptions.map(o => o.value);
+                          const selected = filters.coverage_combination || [];
+                          onMultiSelectChange('coverage_combination', allValues.filter(v => !selected.includes(v)));
+                        }
+                      }}
                       className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
                     >
                       反选
-                    </button>
+                    </span>
                   </div>
                 </div>
                 <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
@@ -432,25 +467,36 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
               <div className="flex items-center gap-2">
                 <span>续保模式</span>
                 <div className="flex items-center gap-1 ml-2">
-                  <button
-                    type="button"
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); onMultiSelectChange('renewal_mode', []); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('renewal_mode', []); } }}
                     className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                   >
                     全选
-                  </button>
-                  <button
-                    type="button"
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => {
                       e.stopPropagation();
                       const allValues = renewalModeOptions.map(o => o.value);
                       const selected = filters.renewal_mode || [];
                       onMultiSelectChange('renewal_mode', allValues.filter(v => !selected.includes(v)));
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault(); e.stopPropagation();
+                        const allValues = renewalModeOptions.map(o => o.value);
+                        const selected = filters.renewal_mode || [];
+                        onMultiSelectChange('renewal_mode', allValues.filter(v => !selected.includes(v)));
+                      }
+                    }}
                     className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
                   >
                     反选
-                  </button>
+                  </span>
                 </div>
               </div>
               <span className="text-neutral-400 text-[10px] group-open:rotate-180 transition-transform">▼</span>
