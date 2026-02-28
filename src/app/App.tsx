@@ -61,6 +61,9 @@ const GrowthPage = lazy(() =>
 const CostPage = lazy(() =>
   import('../features/pages/CostPage').then((m) => ({ default: m.CostPage }))
 );
+const ComprehensiveAnalysisPage = lazy(() =>
+  import('../features/pages/ComprehensiveAnalysisPage').then((m) => ({ default: m.ComprehensiveAnalysisPage }))
+);
 const FeeAnalysisPage = lazy(() =>
   import('../features/pages/FeeAnalysisPage').then((m) => ({ default: m.FeeAnalysisPage }))
 );
@@ -231,6 +234,18 @@ function App() {
                     <CostGuard>
                       <DataGuard>
                         <LazyRoute><CostPage /></LazyRoute>
+                      </DataGuard>
+                    </CostGuard>
+                  </RouteAccessGuard>
+                }
+              />
+              <Route
+                path="comprehensive-analysis"
+                element={
+                  <RouteAccessGuard routePath="/cost">
+                    <CostGuard>
+                      <DataGuard>
+                        <LazyRoute><ComprehensiveAnalysisPage /></LazyRoute>
                       </DataGuard>
                     </CostGuard>
                   </RouteAccessGuard>

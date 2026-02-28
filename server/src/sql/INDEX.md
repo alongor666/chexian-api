@@ -148,3 +148,18 @@ export interface KpiDetailResult {
 | 2026-02-26 | performance-analysis.ts | 新增业绩分析独立页面 SQL 生成器与 4 个 performance 接口查询模板 |
 | 2026-02-27 | performance-analysis.ts | 新增 `generatePerformancePeriodBoundsQuery` 与 period bounds 复用参数，供 `performance-bundle` 减少重复时间窗口扫描 |
 | 2026-02-27 | cross-sell.ts / cross-sell-summary.ts / cross-sell-trend.ts / cross-sell-top-salesman.ts | 交叉销售热点查询切换到 `CrossSellDailyAgg` 预聚合表，减少运行时重复去重与布尔兼容计算 |
+
+### comprehensive-analysis.ts
+**用途**: 综合分析页 SQL 生成器（`/comprehensive-analysis`）  
+**状态**: 生效中（2026-02-28 新增）  
+**输出范围**:
+- 综合汇总指标（签单保费/赔款/费用/变动成本率）
+- 维度聚合明细（机构/客户类别/业务类型）
+- 赔付趋势（日/周/月）
+- 年计划（按机构）
+
+**关键函数**:
+- `generateComprehensiveSummaryQuery()`
+- `generateComprehensiveDimensionMetricsQuery()`
+- `generateComprehensiveLossTrendQuery()`
+- `generateComprehensivePlanByOrgQuery()`

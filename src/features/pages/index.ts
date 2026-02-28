@@ -8,6 +8,7 @@ export { TruckPage } from './TruckPage';
 export { RenewalPage } from './RenewalPage';
 export { GrowthPage } from './GrowthPage';
 export { CostPage } from './CostPage';
+export { ComprehensiveAnalysisPage } from './ComprehensiveAnalysisPage';
 export { ComparisonPage } from './ComparisonPage';
 export { CoefficientPage } from './CoefficientPage';
 export { MarketingReportPage } from './MarketingReportPage';

@@ -1,8 +1,7 @@
-export type DashboardSectionId = 'kpi' | 'rose' | 'trend' | 'table';
+export type DashboardSectionId = 'kpi' | 'trend' | 'table';
 
 export const DASHBOARD_SECTION_META: Array<{ id: DashboardSectionId; label: string }> = [
   { id: 'kpi', label: 'KPI指标' },
-  { id: 'rose', label: '占比分析' },
   { id: 'trend', label: '趋势分析' },
   { id: 'table', label: '业务员明细' },
 ];
@@ -22,6 +21,7 @@ export type KpiCardId =
   | 'driver_premium'
   | 'driver_achievement_rate'
   | 'driver_growth_rate'
+  | 'quality_business_rate'  // 新增：优质业务占比（核心指标）
   | 'total_premium'
   | 'policy_count'
   | 'per_capita_premium'
@@ -30,7 +30,10 @@ export type KpiCardId =
   | 'commercial_rate'
   | 'telesales_rate'
   | 'nev_rate'
-  | 'new_car_rate';
+  | 'new_car_rate'
+  | 'coverage_mix_rate'      // 新增：单交/交三/主全占比
+  | 'vehicle_type_rate'      // 新增：货车/客车/摩托车占比
+  | 'region_rate';           // 新增：异地/同城占比
 
 export const KPI_CARD_META: Array<{ id: KpiCardId; label: string; group: KpiGroup }> = [
   { id: 'vehicle_premium', label: '车险保费', group: 'core' },
@@ -41,6 +44,7 @@ export const KPI_CARD_META: Array<{ id: KpiCardId; label: string; group: KpiGrou
   { id: 'driver_premium', label: '车驾意保费', group: 'core' },
   { id: 'driver_achievement_rate', label: '车驾意达成率', group: 'core' },
   { id: 'driver_growth_rate', label: '车驾意增长率', group: 'core' },
+  { id: 'quality_business_rate', label: '优质业务占比', group: 'core' },
   { id: 'total_premium', label: '总保费', group: 'focus' },
   { id: 'policy_count', label: '保单件数', group: 'focus' },
   { id: 'per_capita_premium', label: '人均保费', group: 'focus' },
@@ -50,6 +54,9 @@ export const KPI_CARD_META: Array<{ id: KpiCardId; label: string; group: KpiGrou
   { id: 'telesales_rate', label: '电销占比', group: 'focus' },
   { id: 'nev_rate', label: '新能源占比', group: 'focus' },
   { id: 'new_car_rate', label: '新车占比', group: 'focus' },
+  { id: 'coverage_mix_rate', label: '单交/交三/主全占比', group: 'focus' },
+  { id: 'vehicle_type_rate', label: '货车/客车/摩托占比', group: 'focus' },
+  { id: 'region_rate', label: '同城/异地占比', group: 'focus' },
 ];
 
 export const DEFAULT_KPI_ORDER: Record<KpiGroup, KpiCardId[]> = {

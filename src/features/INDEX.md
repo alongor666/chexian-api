@@ -15,6 +15,7 @@
 | Report | `report/` | 报表模板功能（预设分析场景模板） | [README](./report/README.md) |
 | Coefficient | `coefficient/` | 商车自主定价系数监控（阈值合规、周期分表、缺口保费） | 无独立文档 |
 | Cost | `cost/` | 成本分析（赔付率/费用率/综合费用率/变动成本率/已赚保费） | 无独立文档 |
+| Comprehensive Analysis | `comprehensive-analysis/` | 综合分析页（autowrKPI 六模块复刻，单接口 bundle） | 无独立文档 |
 | Marketing Report | `marketing-report/` | 营销战报（假日营销分析：机构战报+业务员明细） | 无独立文档 |
 | Pages | `pages/` | 独立页面组件（筛选器+分析面板） | 无独立文档 |
 | Settings | `settings/` | 设置面板（主题设置、系统设置） | 无独立文档 |
@@ -85,6 +86,7 @@
 - **`pages/CostPage.tsx`**: 成本分析页面（筛选面板+分析面板）
 - **`pages/ComparisonPage.tsx`**: 数据对比页面（筛选面板+分析面板）
 - **`pages/CoefficientPage.tsx`**: 系数监控页面（筛选面板+分析面板）
+- **`pages/ComprehensiveAnalysisPage.tsx`**: 综合分析页面（6模块 Tab + loss 子视图 + bundle 单请求）
 - **`pages/PremiumReportPage.tsx`**: 保费报表页面（筛选面板+保费报表面板）
 - **`pages/MarketingReportPage.tsx`**: 营销战报页面（筛选面板+战报面板）
 
@@ -224,6 +226,15 @@ widgets/table/VirtualTable.tsx
 - **`cost/components/EarnedPremiumTable.tsx`**: 已赚保费分析表格（公式展示区+汇总表+明细表，2026-01-17新增）
 - **`cost/components/VariableCostKpiBoard.tsx`**: 变动成本率KPI看板（分公司整体→点击下钻三级机构，固定机构口径）
 - **`cost/utils/transformData.ts`**: 数据转换工具（各类成本数据格式化显示）
+
+### Comprehensive Analysis 模块（综合分析）
+
+- **`comprehensive-analysis/types.ts`**: 综合分析类型定义（bundle contract / view model / tab key）
+- **`comprehensive-analysis/hooks/useComprehensiveBundle.ts`**: 综合分析单接口数据 Hook（复用全局筛选+权限注入）
+- **`comprehensive-analysis/adapters/*`**: 字段适配层（后端响应 -> 图表输入模型）
+- **`comprehensive-analysis/rules.ts`**: 阈值与告警规则（可单测）
+- **`comprehensive-analysis/charts/options/*`**: 图表 option 生成器（overview/premium/cost/loss/expense/roi）
+- **`comprehensive-analysis/components/ComprehensiveMetricTable.tsx`**: 综合分析明细表组件
 
 ### Settings 模块（设置菜单）
 

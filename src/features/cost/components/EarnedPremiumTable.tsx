@@ -9,7 +9,7 @@
  * - 明细表：按月份+机构筛选，展示已赚保费明细
  */
 
-import React, { memo, useMemo, useState, useCallback } from 'react';
+import { memo, useMemo, useState, useCallback } from 'react';
 import { VirtualTable, Column } from '../../../widgets/table/VirtualTable';
 import { EarnedPremiumCharts } from './EarnedPremiumCharts';
 import { EarnedPremiumGuide } from './EarnedPremiumGuide';

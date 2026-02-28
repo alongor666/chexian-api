@@ -15,6 +15,7 @@ import { AppError } from '../middleware/error.js';
 import { generateColumnMappingSQL, getColumnMapping } from './column-normalizer.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
 import { recordQueryMetric } from '../utils/request-context.js';
+import { cacheWarmer } from './cache-warmer.js';
 
 // ============================================
 // 查询缓存
@@ -507,6 +508,16 @@ class DuckDBService {
 
     await this.buildAggregates();
     console.log('[DuckDB] Aggregated tables created (DailyAggregated / PeriodAggregated)');
+
+    // 触发智能预热服务 (异步，不阻塞主流程)
+    setTimeout(() => {
+      // 当前数据主要是2026和2025，默认预热当前查看的年份
+      const currentYear = new Date().getFullYear();
+      const targetYear = currentYear > 2026 ? currentYear : 2026;
+      cacheWarmer.runAll(targetYear).catch(e => {
+        console.error('[DuckDB] CacheWarmer failed to run:', e);
+      });
+    }, 1000); // 稍微延迟，等内存稳定
   }
 
   /**
