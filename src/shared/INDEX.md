@@ -280,3 +280,8 @@ import { cn, cardStyles, getTrendColorClass, colors } from '@/shared/styles';
 
 - `api/client.ts`：GET 请求改为 in-flight coalescing（同 key 并发请求合并）；去重 key 增加 query 参数排序归一化；新增 `VITE_ENABLE_BUNDLE_ROUTES` 开关与 bundle API 类型导出。
 - `contexts/DataContext.tsx`：`refreshFiles` 增加 Promise 级合并，避免同一时段重复触发 `getFiles()`。
+
+## 2026-02-28 综合分析接入补充（B2xx）
+
+- `api/client.ts`：新增 `getComprehensiveBundle()`、`ComprehensiveBundleResponse`、`ComprehensiveFilterParams`、`ComprehensiveTabKey`，统一接入 `/api/query/comprehensive-bundle`。
+- `styles/index.ts`：新增 `comprehensiveTheme`，作为综合分析图表与阈值可视化的语义令牌。

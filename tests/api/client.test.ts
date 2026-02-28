@@ -24,6 +24,7 @@ import { API_BASE } from '../../src/shared/api/client';
 describe('API Client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.resetModules();
     localStorageMock.getItem.mockReturnValue(null);
   });
 
@@ -107,16 +108,16 @@ describe('API Client', () => {
     it('should throw error on API failure', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        status: 401,
+        status: 500,
         json: () => Promise.resolve({
           success: false,
-          error: { message: '认证失败', statusCode: 401 }
+          error: { message: '服务器内部错误', statusCode: 500 }
         }),
       });
 
       const { apiClient } = await import('../../src/shared/api/client');
 
-      await expect(apiClient.getFiles()).rejects.toThrow('认证失败');
+      await expect(apiClient.getFiles()).rejects.toThrow('服务器内部错误');
     });
   });
 

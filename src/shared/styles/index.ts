@@ -106,6 +106,32 @@ export const semanticColors = {
   },
 } as const
 
+/**
+ * 综合分析页主题令牌
+ * - 用于图表 option 与模块状态色统一
+ * - 避免在页面层硬编码色值
+ */
+export const comprehensiveTheme = {
+  palette: {
+    premium: '#0050B3',
+    claim: '#C41D7F',
+    expense: '#FA8C16',
+    cost: '#531DAB',
+    roi: '#08979C',
+    neutral: '#8C8C8C',
+    splitLine: '#F0F0F0',
+    success: '#389E0D',
+    danger: '#CF1322',
+  },
+  threshold: {
+    premiumProgressWarn: 99,
+    costRateWarn: 91,
+    lossRateWarn: 70,
+    expenseRateWarn: 16,
+    expenseBudget: 14,
+  },
+} as const
+
 // ============================================================================
 // 间距系统
 // ============================================================================

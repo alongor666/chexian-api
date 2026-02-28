@@ -9,7 +9,6 @@ import { usePerspective } from './hooks/usePerspective';
 import { useDashboardLayout } from './hooks/useDashboardLayout';
 import { useDashboardBundle } from './hooks/useDashboardBundle';
 import { KpiSection } from './components/KpiSection';
-import { RoseChartsSection } from './components/RoseChartsSection';
 import { TrendSection } from './components/TrendSection';
 import { TableSection } from './components/TableSection';
 import { DashboardCustomizerPanel } from './components/DashboardCustomizerPanel';
@@ -113,9 +112,6 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
   const {
     allBusinessTop10,
     qualityBusinessTop10,
-    customerCategoryData,
-    coverageCombinationData,
-    terminalSourceData,
     loading,
     refresh: refreshData,
   } = usePremiumDashboardData({
@@ -132,18 +128,6 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
         org_level_3: String(row.org_level_3 ?? ''),
         total_premium: formatPremiumWan(Number(row.total_premium ?? 0)),
         policy_count: Number(row.policy_count ?? 0),
-      })),
-      customerCategoryData: dashboardBundle.bundle.rose.customerCategory.map((row) => ({
-        name: String(row.dim_key ?? '未知'),
-        value: Number(row.value ?? 0),
-      })),
-      coverageCombinationData: dashboardBundle.bundle.rose.coverageCombination.map((row) => ({
-        name: String(row.dim_key ?? '未知'),
-        value: Number(row.value ?? 0),
-      })),
-      terminalSourceData: dashboardBundle.bundle.rose.terminalSource.map((row) => ({
-        name: String(row.dim_key ?? '未知'),
-        value: Number(row.value ?? 0),
       })),
     } : undefined,
     enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
@@ -218,19 +202,6 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
         kpiDetails={kpiDetails}
         loading={kpiLoading}
         visibleKpisByGroup={visibleKpisByGroup}
-      />
-    ),
-    rose: (
-      <RoseChartsSection
-        customerCategoryData={customerCategoryData}
-        coverageCombinationData={coverageCombinationData}
-        terminalSourceData={terminalSourceData}
-        isInitialized={isInitialized}
-        loading={{
-          customerCategory: loading.customerCategory,
-          coverageCombination: loading.coverageCombination,
-          terminalSource: loading.terminalSource,
-        }}
       />
     ),
     trend: (

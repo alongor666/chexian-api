@@ -166,4 +166,23 @@ describe('API client contract coverage', () => {
     expect(calledUrl).toContain('/ai/generate-sql');
     expect(options.method).toBe('POST');
   });
+
+  it('comprehensive bundle endpoint preserves granularity and cutoffDate', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { meta: {}, overview: {}, premium: {}, cost: {}, loss: {}, expense: {}, roi: {} } }),
+    });
+    await apiClient.getComprehensiveBundle({
+      granularity: 'monthly',
+      cutoffDate: '2026-02-27',
+      orgNames: '天府',
+    });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/comprehensive-bundle?');
+    expect(calledUrl).toContain('granularity=monthly');
+    expect(calledUrl).toContain('cutoffDate=2026-02-27');
+    expect(calledUrl).toContain('orgNames=');
+  });
 });

@@ -226,6 +226,54 @@ export interface DashboardBundleResponse {
   };
 }
 
+export type ComprehensiveTabKey = 'overview' | 'premium' | 'cost' | 'loss' | 'expense' | 'roi';
+
+export interface ComprehensiveFilterParams extends Record<string, string | number | boolean | undefined> {
+  cutoffDate?: string;
+  planYear?: number;
+  granularity?: 'daily' | 'weekly' | 'monthly';
+}
+
+export interface ComprehensiveBundleResponse {
+  meta: {
+    cutoffDate: string;
+    maxDataDate: string | null;
+    planYear: number;
+    orgScope: string[];
+    permissionFilter: string;
+    thresholds: {
+      premiumProgressWarn: number;
+      costRateWarn: number;
+      lossRateWarn: number;
+      expenseRateWarn: number;
+      expenseBudget: number;
+    };
+    timeProgress?: number | null;
+  };
+  overview: {
+    summary: Record<string, number | null>;
+    rows: Array<Record<string, unknown>>;
+    alerts: string[];
+  };
+  premium: {
+    rows: Array<Record<string, unknown>>;
+  };
+  cost: {
+    rows: Array<Record<string, unknown>>;
+  };
+  loss: {
+    quadrantRows: Array<Record<string, unknown>>;
+    trendRows: Array<Record<string, unknown>>;
+  };
+  expense: {
+    rows: Array<Record<string, unknown>>;
+    surplusRows: Array<Record<string, unknown>>;
+  };
+  roi: {
+    rows: Array<Record<string, unknown>>;
+  };
+}
+
 /**
  * 文件信息
  */
@@ -825,6 +873,18 @@ class ApiClient {
   async getCostAnalysis(filters?: Record<string, any>): Promise<any> {
     const query = this.buildQueryString(filters);
     return this.request(`/query/cost${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * 获取综合分析聚合数据（6模块）
+   */
+  async getComprehensiveBundle(
+    params?: ComprehensiveFilterParams
+  ): Promise<ComprehensiveBundleResponse> {
+    const query = this.buildQueryString(params as Record<string, unknown>);
+    return this.request<ComprehensiveBundleResponse>(
+      `/query/comprehensive-bundle${query ? `?${query}` : ''}`
+    );
   }
 
   /**

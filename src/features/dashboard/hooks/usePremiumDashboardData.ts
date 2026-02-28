@@ -4,9 +4,8 @@ import { createLogger } from '../../../shared/utils/logger';
 import { useLoadingStates } from '../../../shared/hooks';
 import { apiClient, isRequestAbortError } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
-import { buildWhereClauseFromFilters } from '../../../shared/utils/queryBuilder';
 import type { AdvancedFilterState } from '../../../shared/types/data';
-import type { RoseChartDatum, SalesmanSummaryRow } from '../types';
+import type { SalesmanSummaryRow } from '../types';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('usePremiumDashboardData');
@@ -16,9 +15,6 @@ export interface UsePremiumDashboardDataOptions {
   prefetched?: {
     allBusinessTop10: SalesmanSummaryRow[];
     qualityBusinessTop10: SalesmanSummaryRow[];
-    customerCategoryData: RoseChartDatum[];
-    coverageCombinationData: RoseChartDatum[];
-    terminalSourceData: RoseChartDatum[];
   };
   enabled?: boolean;
 }
@@ -26,30 +22,8 @@ export interface UsePremiumDashboardDataOptions {
 export interface UsePremiumDashboardDataResult {
   allBusinessTop10: SalesmanSummaryRow[];
   qualityBusinessTop10: SalesmanSummaryRow[];
-  customerCategoryData: RoseChartDatum[];
-  coverageCombinationData: RoseChartDatum[];
-  terminalSourceData: RoseChartDatum[];
-  loading: Record<'table' | 'customerCategory' | 'coverageCombination' | 'terminalSource', boolean>;
+  loading: Record<'table', boolean>;
   refresh: () => void;
-}
-
-/**
- * 生成维度占比查询 SQL（内联版本）
- */
-function buildDimensionShareSql(
-  dimensionExpr: string,
-  metric: string,
-  whereClause: string
-): string {
-  return `
-    SELECT
-      COALESCE(${dimensionExpr}, '未知') as dim_key,
-      ${metric} as value
-    FROM PolicyFact
-    WHERE ${whereClause}
-    GROUP BY COALESCE(${dimensionExpr}, '未知')
-    ORDER BY value DESC
-  `;
 }
 
 export const usePremiumDashboardData = ({
@@ -60,29 +34,15 @@ export const usePremiumDashboardData = ({
   const { isOrgUser, userOrg } = useRBAC();
   const [allBusinessTop10, setAllBusinessTop10] = useState<SalesmanSummaryRow[]>([]);
   const [qualityBusinessTop10, setQualityBusinessTop10] = useState<SalesmanSummaryRow[]>([]);
-  const [customerCategoryData, setCustomerCategoryData] = useState<RoseChartDatum[]>([]);
-  const [coverageCombinationData, setCoverageCombinationData] = useState<RoseChartDatum[]>([]);
-  const [terminalSourceData, setTerminalSourceData] = useState<RoseChartDatum[]>([]);
   const requestIdRef = useRef(0);
 
-  const { loading, setLoading } = useLoadingStates([
-    'table',
-    'customerCategory',
-    'coverageCombination',
-    'terminalSource',
-  ] as const);
+  const { loading, setLoading } = useLoadingStates(['table'] as const);
 
   useEffect(() => {
     if (!prefetched) return;
     setAllBusinessTop10(prefetched.allBusinessTop10 || []);
     setQualityBusinessTop10(prefetched.qualityBusinessTop10 || []);
-    setCustomerCategoryData(prefetched.customerCategoryData || []);
-    setCoverageCombinationData(prefetched.coverageCombinationData || []);
-    setTerminalSourceData(prefetched.terminalSourceData || []);
     setLoading('table', false);
-    setLoading('customerCategory', false);
-    setLoading('coverageCombination', false);
-    setLoading('terminalSource', false);
   }, [prefetched, setLoading]);
 
   const refreshFromApi = useCallback(async (requestId: number) => {
@@ -122,47 +82,13 @@ export const usePremiumDashboardData = ({
         setLoading('table', false);
       }
     }
-
-    // 玫瑰图数据：通过 custom SQL 查询（使用 buildWhereClauseFromFilters 构建 WHERE）
-    const whereClause = buildWhereClauseFromFilters(filters);
-    const roseQueries = [
-      { key: 'customerCategory' as const, dim: 'customer_category', setter: setCustomerCategoryData },
-      { key: 'coverageCombination' as const, dim: 'coverage_combination', setter: setCoverageCombinationData },
-      { key: 'terminalSource' as const, dim: "CASE WHEN is_telemarketing THEN '电销' ELSE '非电销' END", setter: setTerminalSourceData },
-    ];
-
-    for (const { key, dim, setter } of roseQueries) {
-      setLoading(key, true);
-      try {
-        const sql = buildDimensionShareSql(dim, 'SUM(premium)', whereClause);
-        const rows = await apiClient.executeCustomQuery(sql);
-        if (requestId !== requestIdRef.current) return;
-        setter(rows.map((row: any) => ({
-          name: String(row.dim_key ?? '未知'),
-          value: Number(row.value ?? 0),
-        })));
-      } catch (err) {
-        if (requestId !== requestIdRef.current) return;
-        if (!isRequestAbortError(err)) logger.error(`${key} API Query Failed`, err);
-      } finally {
-        if (requestId === requestIdRef.current) {
-          setLoading(key, false);
-        }
-      }
-    }
   }, [filters, setLoading]);
 
   const refresh = useCallback(() => {
     if (prefetched) {
       setAllBusinessTop10(prefetched.allBusinessTop10 || []);
       setQualityBusinessTop10(prefetched.qualityBusinessTop10 || []);
-      setCustomerCategoryData(prefetched.customerCategoryData || []);
-      setCoverageCombinationData(prefetched.coverageCombinationData || []);
-      setTerminalSourceData(prefetched.terminalSourceData || []);
       setLoading('table', false);
-      setLoading('customerCategory', false);
-      setLoading('coverageCombination', false);
-      setLoading('terminalSource', false);
       return;
     }
     if (!enabled) return;
@@ -174,9 +100,6 @@ export const usePremiumDashboardData = ({
   return {
     allBusinessTop10,
     qualityBusinessTop10,
-    customerCategoryData,
-    coverageCombinationData,
-    terminalSourceData,
     loading,
     refresh,
   };

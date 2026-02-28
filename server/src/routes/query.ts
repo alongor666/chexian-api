@@ -57,6 +57,14 @@ import {
   generateMonthlyExpenseQuery,
   CostDimension,
 } from '../sql/cost.js';
+import {
+  generateComprehensiveDimensionMetricsQuery,
+  generateComprehensiveLossTrendQuery,
+  generateComprehensivePlanByOrgQuery,
+  generateComprehensiveSummaryQuery,
+  type ComprehensiveDimension,
+  type ComprehensiveGranularity,
+} from '../sql/comprehensive-analysis.js';
 import { generateRenewalRateQuery, generateRenewalDetailTableQuery } from '../sql/renewal.js';
 import { generateRenewalDrilldownQuery, type DrilldownDimension, type DrilldownLevel, type SortField, type SortOrder } from '../sql/renewal-drilldown.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../sql/cross-sell.js';
@@ -84,7 +92,7 @@ import {
 import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery } from '../sql/marketing-report.js';
 import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../sql/premium-report.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../sql/premiumPlan.js';
-import type { AdvancedFilterState } from '../types/data.js';
+import type { AdvancedFilterState, DateCriteria } from '../types/data.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../sql/salesman-ranking.js';
 import { validateSQL } from '../utils/sql-validator.js';
 import { isValidDateFormat } from '../utils/sql-sanitizer.js';
@@ -94,8 +102,9 @@ import { parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNam
 import { logger } from '../utils/logger.js';
 import { buildResponseMeta } from '../utils/api-meta.js';
 import { markRequestCacheHit } from '../utils/request-context.js';
+import { getRouteCache, setRouteCache, computeEtag, sendWithEtag } from '../services/route-cache.js';
 import { generateFeeAnalysisQuery } from '../sql/fee-analysis.js';
-import crypto from 'crypto';
+import { DEFAULT_COMPREHENSIVE_THRESHOLDS } from '../config/comprehensive-thresholds.js';
 
 const router = Router();
 
@@ -105,65 +114,13 @@ const QUERY_CACHE = {
   hotspotLong: 300_000,
 } as const;
 
-interface RouteCacheEntry<T> {
-  data: T;
-  etag: string;
-  expiry: number;
-}
-
-const routeResponseCache = new Map<string, RouteCacheEntry<unknown>>();
-
-function buildRouteCacheKey(req: Request, routeName: string): string {
+export function buildRouteCacheKey(req: Request, routeName: string): string {
   const normalizedQuery = Object.entries(req.query)
     .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : String(value)] as const)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)
     .join('&');
   return `${routeName}|${req.permissionFilter || '1=1'}|${normalizedQuery}`;
-}
-
-function computeEtag(data: unknown): string {
-  const json = JSON.stringify(data);
-  return `"${crypto.createHash('md5').update(json).digest('hex').slice(0, 16)}"`;
-}
-
-/**
- * 发送带 ETag + Cache-Control 的 JSON 响应。
- * 若客户端 If-None-Match 命中则返回 304。
- */
-function sendWithEtag(req: Request, res: Response, body: unknown, maxAgeSec: number): void {
-  const etag = computeEtag(body);
-  res.set('ETag', etag);
-  res.set('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=60`);
-  if (req.headers['if-none-match'] === etag) {
-    res.status(304).end();
-    return;
-  }
-  res.json(body);
-}
-
-function getRouteCache<T>(key: string): T | null {
-  const entry = routeResponseCache.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.expiry) {
-    routeResponseCache.delete(key);
-    return null;
-  }
-  return entry.data as T;
-}
-
-function setRouteCache<T>(key: string, data: T, ttlMs: number): void {
-  if (routeResponseCache.size >= 2000) {
-    const oldestKey = routeResponseCache.keys().next().value;
-    if (oldestKey) {
-      routeResponseCache.delete(oldestKey);
-    }
-  }
-  routeResponseCache.set(key, {
-    data,
-    etag: computeEtag(data),
-    expiry: Date.now() + ttlMs,
-  });
 }
 
 function isBundleRoutesEnabled(): boolean {
@@ -192,6 +149,104 @@ function buildGrowthV2Sql(config: GrowthConfig): string {
     default:
       return generateGrowthQuery(config);
   }
+}
+
+function resolveCutoffDate(
+  requestedCutoffDate: string | undefined,
+  filterEndDate: string | undefined,
+  maxDataDate: string | null
+): string {
+  if (requestedCutoffDate) return requestedCutoffDate;
+  if (filterEndDate) return filterEndDate;
+  if (maxDataDate) return maxDataDate;
+  return new Date().toISOString().slice(0, 10);
+}
+
+function computeTimeProgress(dateStr: string): number | null {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const year = date.getFullYear();
+  const start = new Date(year, 0, 1);
+  const end = new Date(year + 1, 0, 1);
+
+  const elapsedDays = Math.max(1, Math.floor((date.getTime() - start.getTime()) / 86400000) + 1);
+  const totalDays = Math.max(1, Math.floor((end.getTime() - start.getTime()) / 86400000));
+  return Number((elapsedDays / totalDays).toFixed(6));
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const num = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+interface ComprehensiveMetricRow {
+  dim_type: string;
+  dim_key: string;
+  policy_count: number;
+  signed_premium: number;
+  reported_claims: number;
+  fee_amount: number;
+  claim_cases: number;
+  earned_premium: number;
+  earned_claim_ratio: number | null;
+  expense_ratio: number | null;
+  variable_cost_ratio: number | null;
+  avg_claim_amount: number | null;
+  claim_frequency: number | null;
+  premium_share: number;
+  claim_share: number;
+  expense_share: number;
+  plan_premium: number | null;
+  achievement_rate: number | null;
+}
+
+function buildComprehensiveAlerts(
+  rows: ComprehensiveMetricRow[],
+  thresholds: typeof DEFAULT_COMPREHENSIVE_THRESHOLDS
+): string[] {
+  const premiumLag = rows
+    .filter((row) => row.achievement_rate !== null && row.achievement_rate < thresholds.premiumProgressWarn)
+    .slice(0, 5)
+    .map((row) => row.dim_key);
+  const highCost = rows
+    .filter((row) => row.variable_cost_ratio !== null && row.variable_cost_ratio > thresholds.costRateWarn)
+    .slice(0, 5)
+    .map((row) => row.dim_key);
+  const highLoss = rows
+    .filter((row) => row.earned_claim_ratio !== null && row.earned_claim_ratio > thresholds.lossRateWarn)
+    .slice(0, 5)
+    .map((row) => row.dim_key);
+  const highExpense = rows
+    .filter((row) => row.expense_ratio !== null && row.expense_ratio > thresholds.expenseRateWarn)
+    .slice(0, 5)
+    .map((row) => row.dim_key);
+
+  const alerts: string[] = [];
+  if (premiumLag.length > 0) alerts.push(`${premiumLag.join('、')}保费进度落后`);
+  if (highCost.length > 0) alerts.push(`${highCost.join('、')}变动成本率超标`);
+  if (highLoss.length > 0) alerts.push(`${highLoss.join('、')}满期赔付率偏高`);
+  if (highExpense.length > 0) alerts.push(`${highExpense.join('、')}费用率超标`);
+  return alerts;
+}
+
+function withRankByDimType(rows: ComprehensiveMetricRow[]): Array<ComprehensiveMetricRow & { rank: number }> {
+  const grouped = new Map<string, ComprehensiveMetricRow[]>();
+  for (const row of rows) {
+    if (!grouped.has(row.dim_type)) {
+      grouped.set(row.dim_type, []);
+    }
+    grouped.get(row.dim_type)!.push(row);
+  }
+
+  const rankedRows: Array<ComprehensiveMetricRow & { rank: number }> = [];
+  for (const groupRows of grouped.values()) {
+    const sorted = [...groupRows].sort((a, b) => b.signed_premium - a.signed_premium);
+    sorted.forEach((row, index) => {
+      rankedRows.push({ ...row, rank: index + 1 });
+    });
+  }
+  return rankedRows;
 }
 
 /**
@@ -751,6 +806,267 @@ router.get(
       success: true,
       data: result,
     });
+  })
+);
+
+const comprehensiveExtraSchema = z.object({
+  cutoffDate: z.string().optional(),
+  planYear: z.coerce.number().int().optional(),
+  granularity: z.enum(['daily', 'weekly', 'monthly']).default('monthly'),
+});
+
+async function handleComprehensiveBundle(req: Request, res: Response): Promise<void> {
+  const parseResult = comprehensiveExtraSchema.safeParse(req.query);
+  if (!parseResult.success) {
+    throw new AppError(400, parseResult.error.issues[0].message);
+  }
+
+  const routeCacheKey = buildRouteCacheKey(req, 'comprehensive-bundle');
+  const cachedBundleData = getRouteCache<Record<string, unknown>>(routeCacheKey);
+  if (cachedBundleData) {
+    markRequestCacheHit();
+    sendWithEtag(req, res, {
+      success: true,
+      data: cachedBundleData,
+      meta: buildResponseMeta(res),
+    }, 60);
+    return;
+  }
+
+  const { cutoffDate: requestedCutoffDate, planYear: requestedPlanYear, granularity } = parseResult.data;
+  const { filterData, whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+
+  if (requestedCutoffDate && !isValidDateFormat(requestedCutoffDate)) {
+    throw new AppError(400, `Invalid cutoffDate format: ${requestedCutoffDate}. Expected YYYY-MM-DD`);
+  }
+
+  const maxDateRows = await duckdbService.query<{ max_data_date: string | null }>(
+    `SELECT MAX(CAST(policy_date AS DATE)) AS max_data_date FROM PolicyFact WHERE ${whereWithoutDate}`,
+    QUERY_CACHE.hotspotShort
+  );
+  const maxDataDate = maxDateRows[0]?.max_data_date ? String(maxDateRows[0].max_data_date) : null;
+  const resolvedCutoffDate = resolveCutoffDate(requestedCutoffDate, filterData.endDate, maxDataDate);
+
+  if (!isValidDateFormat(resolvedCutoffDate)) {
+    throw new AppError(400, `Invalid resolved cutoffDate: ${resolvedCutoffDate}. Expected YYYY-MM-DD`);
+  }
+
+  const resolvedPlanYear = requestedPlanYear ?? Number(resolvedCutoffDate.slice(0, 4));
+  const timeProgress = computeTimeProgress(resolvedCutoffDate);
+  const thresholds = DEFAULT_COMPREHENSIVE_THRESHOLDS;
+
+  const dimensions: ComprehensiveDimension[] = ['org', 'category', 'business'];
+  const [summaryRows, ...dimensionResults] = await Promise.all([
+    duckdbService.query(generateComprehensiveSummaryQuery(whereWithDate, resolvedCutoffDate), QUERY_CACHE.hotspotShort),
+    ...dimensions.map((dimension) =>
+      duckdbService.query(
+        generateComprehensiveDimensionMetricsQuery({
+          dimension,
+          whereClause: whereWithDate,
+          cutoffDate: resolvedCutoffDate,
+        }),
+        QUERY_CACHE.hotspotShort
+      )
+    ),
+  ]);
+
+  const orgNames = extractOrgNames(filterData, req.permissionFilter);
+  let planRows: Array<{ dim_key: string; plan_premium: number }> = [];
+  try {
+    planRows = await duckdbService.query(
+      generateComprehensivePlanByOrgQuery(resolvedPlanYear, orgNames),
+      QUERY_CACHE.hotspotMedium
+    );
+  } catch (error) {
+    logger.warn('comprehensive-bundle: failed to load achievement_cache plan data, fallback to null plan.', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const planMap = new Map<string, number>();
+  for (const row of planRows) {
+    if (!row?.dim_key) continue;
+    planMap.set(String(row.dim_key), toFiniteNumber(row.plan_premium));
+  }
+
+  const normalizedRows: ComprehensiveMetricRow[] = dimensionResults.flatMap((rows, idx) => {
+    const dimType = dimensions[idx];
+    return (rows as Array<Record<string, unknown>>).map((row) => {
+      const dimKey = String(row.dim_key ?? '未知');
+      const planPremium = dimType === 'org' ? (planMap.get(dimKey) ?? null) : null;
+      const signedPremium = toFiniteNumber(row.signed_premium);
+      const achievementRate =
+        planPremium && planPremium > 0 && timeProgress && timeProgress > 0
+          ? Number(((signedPremium / planPremium) / timeProgress * 100).toFixed(2))
+          : null;
+
+      return {
+        dim_type: dimType,
+        dim_key: dimKey,
+        policy_count: Math.max(0, Math.round(toFiniteNumber(row.policy_count))),
+        signed_premium: signedPremium,
+        reported_claims: toFiniteNumber(row.reported_claims),
+        fee_amount: toFiniteNumber(row.fee_amount),
+        claim_cases: Math.max(0, Math.round(toFiniteNumber(row.claim_cases))),
+        earned_premium: toFiniteNumber(row.earned_premium),
+        earned_claim_ratio: row.earned_claim_ratio === null ? null : toFiniteNumber(row.earned_claim_ratio, NaN),
+        expense_ratio: row.expense_ratio === null ? null : toFiniteNumber(row.expense_ratio, NaN),
+        variable_cost_ratio:
+          row.variable_cost_ratio === null ? null : toFiniteNumber(row.variable_cost_ratio, NaN),
+        avg_claim_amount: row.avg_claim_amount === null ? null : toFiniteNumber(row.avg_claim_amount, NaN),
+        claim_frequency: row.claim_frequency === null ? null : toFiniteNumber(row.claim_frequency, NaN),
+        premium_share: toFiniteNumber(row.premium_share),
+        claim_share: toFiniteNumber(row.claim_share),
+        expense_share: toFiniteNumber(row.expense_share),
+        plan_premium: planPremium,
+        achievement_rate: achievementRate,
+      };
+    });
+  }).map((row) => ({
+    ...row,
+    earned_claim_ratio: Number.isFinite(row.earned_claim_ratio ?? NaN) ? row.earned_claim_ratio : null,
+    expense_ratio: Number.isFinite(row.expense_ratio ?? NaN) ? row.expense_ratio : null,
+    variable_cost_ratio: Number.isFinite(row.variable_cost_ratio ?? NaN) ? row.variable_cost_ratio : null,
+    avg_claim_amount: Number.isFinite(row.avg_claim_amount ?? NaN) ? row.avg_claim_amount : null,
+    claim_frequency: Number.isFinite(row.claim_frequency ?? NaN) ? row.claim_frequency : null,
+  }));
+
+  const rankedRows = withRankByDimType(normalizedRows);
+  const orgRows = rankedRows.filter((row) => row.dim_type === 'org');
+  const orgScope = orgRows.map((row) => row.dim_key);
+
+  const summaryRow = (summaryRows[0] || {}) as Record<string, unknown>;
+  const totalPlanPremium = orgRows.reduce((sum, row) => sum + (row.plan_premium || 0), 0);
+  const totalSignedPremium = toFiniteNumber(summaryRow.signed_premium);
+  const summaryAchievementRate =
+    totalPlanPremium > 0 && timeProgress && timeProgress > 0
+      ? Number(((totalSignedPremium / totalPlanPremium) / timeProgress * 100).toFixed(2))
+      : null;
+
+  const lossTrendRows = await duckdbService.query(
+    generateComprehensiveLossTrendQuery(
+      whereWithDate,
+      resolvedCutoffDate,
+      granularity as ComprehensiveGranularity
+    ),
+    QUERY_CACHE.hotspotShort
+  );
+
+  const overviewRows = rankedRows;
+  const overviewAlerts = buildComprehensiveAlerts(orgRows, thresholds);
+
+  const expenseSurplusRows = rankedRows.map((row) => {
+    const expenseRateDeviation =
+      row.expense_ratio === null
+        ? null
+        : Number((row.expense_ratio - thresholds.expenseBudget).toFixed(2));
+    const expenseSurplusAmount =
+      expenseRateDeviation === null
+        ? null
+        : Number((row.signed_premium * expenseRateDeviation / 100).toFixed(2));
+
+    return {
+      dim_type: row.dim_type,
+      dim_key: row.dim_key,
+      expenseRateDeviation,
+      expenseSurplusAmount,
+    };
+  });
+
+  const roiRows = rankedRows.map((row) => {
+    const claimRatio = row.earned_claim_ratio !== null ? row.earned_claim_ratio / 100 : null;
+    const expenseRatio = row.expense_ratio !== null ? row.expense_ratio / 100 : null;
+    const marginContribution =
+      claimRatio !== null && expenseRatio !== null
+        ? Number((row.signed_premium * (1 - claimRatio - expenseRatio)).toFixed(2))
+        : null;
+    const expenseOutputPremiumRatio =
+      row.fee_amount > 0 ? Number((row.signed_premium / row.fee_amount).toFixed(4)) : null;
+    const expenseOutputMarginRatio =
+      row.fee_amount > 0 && marginContribution !== null
+        ? Number((marginContribution / row.fee_amount).toFixed(4))
+        : null;
+    const marginRate =
+      row.signed_premium > 0 && marginContribution !== null
+        ? Number((marginContribution * 100.0 / row.signed_premium).toFixed(2))
+        : null;
+
+    return {
+      dim_type: row.dim_type,
+      dim_key: row.dim_key,
+      signed_premium: row.signed_premium,
+      expense_amount: row.fee_amount,
+      marginContribution,
+      expenseOutputPremiumRatio,
+      expenseOutputMarginRatio,
+      marginRate,
+    };
+  });
+
+  const bundleData = {
+    meta: {
+      cutoffDate: resolvedCutoffDate,
+      maxDataDate,
+      planYear: resolvedPlanYear,
+      orgScope,
+      permissionFilter: req.permissionFilter || '1=1',
+      thresholds,
+      timeProgress,
+    },
+    overview: {
+      summary: {
+        signedPremium: totalSignedPremium,
+        reportedClaims: toFiniteNumber(summaryRow.reported_claims),
+        expenseAmount: toFiniteNumber(summaryRow.fee_amount),
+        earnedClaimRatio:
+          summaryRow.earned_claim_ratio === null ? null : toFiniteNumber(summaryRow.earned_claim_ratio, NaN),
+        expenseRatio: summaryRow.expense_ratio === null ? null : toFiniteNumber(summaryRow.expense_ratio, NaN),
+        variableCostRatio:
+          summaryRow.variable_cost_ratio === null ? null : toFiniteNumber(summaryRow.variable_cost_ratio, NaN),
+        achievementRate: summaryAchievementRate,
+      },
+      rows: overviewRows,
+      alerts: overviewAlerts,
+    },
+    premium: {
+      rows: rankedRows,
+    },
+    cost: {
+      rows: rankedRows,
+    },
+    loss: {
+      quadrantRows: rankedRows,
+      trendRows: lossTrendRows,
+    },
+    expense: {
+      rows: rankedRows,
+      surplusRows: expenseSurplusRows,
+    },
+    roi: {
+      rows: roiRows,
+    },
+  };
+
+  setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
+
+  sendWithEtag(req, res, {
+    success: true,
+    data: bundleData,
+    meta: buildResponseMeta(res),
+  }, 60);
+}
+
+router.get(
+  '/comprehensive-bundle',
+  asyncHandler(async (req: Request, res: Response) => {
+    await handleComprehensiveBundle(req, res);
+  })
+);
+
+router.get(
+  '/comprehensive-analysis-bundle',
+  asyncHandler(async (req: Request, res: Response) => {
+    await handleComprehensiveBundle(req, res);
   })
 );
 
@@ -2151,75 +2467,63 @@ router.get(
     const orgNames = extractOrgNames(filterData, req.permissionFilter);
     const salesmanNames = extractSalesmanNames(filterData, req.permissionFilter);
 
-    const kpiSql = generateKpiQuery(whereWithDate, { orgNames, salesmanNames }, whereWithoutDate);
-    const kpiDetailSql = generateKpiDetailQuery(whereWithDate, false);
-    const trendSql = generatePremiumTrendQuery(
-      timeView,
-      whereWithDate,
-      filterData.dateField || 'policy_date',
-      perspective as ViewPerspective,
-      groupDim
-    );
-    const qualityTrendSql = generateQualityBusinessTrendQuery(
-      timeView,
-      whereWithDate,
-      filterData.dateField || 'policy_date',
-      perspective as ViewPerspective,
-      groupDim
-    );
-    const allRankingSql = generateSalesmanAllBusinessRankingQuery(whereWithDate, rankingLimit);
-    const qualityRankingSql = generateSalesmanQualityBusinessRankingQuery(whereWithDate, rankingLimit);
-    const customerRoseSql = `
-      SELECT COALESCE(customer_category, '未知') AS dim_key, SUM(premium) AS value
-      FROM PolicyFact
-      WHERE ${whereWithDate}
-      GROUP BY COALESCE(customer_category, '未知')
-      ORDER BY value DESC
-    `;
-    const coverageRoseSql = `
-      SELECT COALESCE(coverage_combination, '未知') AS dim_key, SUM(premium) AS value
-      FROM PolicyFact
-      WHERE ${whereWithDate}
-      GROUP BY COALESCE(coverage_combination, '未知')
-      ORDER BY value DESC
-    `;
-    const terminalRoseSql = `
-      SELECT
-        CASE WHEN is_telemarketing THEN '电销' ELSE '非电销' END AS dim_key,
-        SUM(premium) AS value
-      FROM PolicyFact
-      WHERE ${whereWithDate}
-      GROUP BY CASE WHEN is_telemarketing THEN '电销' ELSE '非电销' END
-      ORDER BY value DESC
-    `;
+    // 检查是否符合 Tier 1 绝对默认条件
+    // 默认条件：没有选机构、没有选业务员、时间范围是整年（简化判断：通过前端不传额外的 filtering details 即可）
+    // 为了极致性能，我们可以简单判断是否有额外的 filterData (例如 org_filter, salesman_filter, customer_category_filter)
+    const isDefaultCondition =
+      orgNames.length === 0 &&
+      salesmanNames.length === 0 &&
+      !filterData.customerCategories &&
+      !filterData.coverageCombinations &&
+      !filterData.renewalModes &&
+      !filterData.tonnageSegments &&
+      !filterData.insuranceGrades &&
+      !filterData.smallTruckScores &&
+      !filterData.largeTruckScores &&
+      !filterData.isRenewal &&
+      !filterData.isNewCar &&
+      !filterData.isTransfer &&
+      !filterData.isNev &&
+      !filterData.isTelemarketing &&
+      !filterData.isCommercialInsure &&
+      filterData.dateField === 'policy_date' &&
+      timeView === 'daily' &&
+      perspective === 'premium';
 
-    const [kpiRows, kpiDetailRows, trendRows, qualityTrendRows, allRankingRows, qualityRankingRows, customerRoseRows, coverageRoseRows, terminalRoseRows] = await Promise.all([
-      duckdbService.query(kpiSql, QUERY_CACHE.hotspotLong),
-      duckdbService.query(kpiDetailSql, QUERY_CACHE.hotspotLong),
-      duckdbService.query(trendSql, QUERY_CACHE.hotspotLong),
-      duckdbService.query(qualityTrendSql, QUERY_CACHE.hotspotLong),
-      duckdbService.query(allRankingSql, QUERY_CACHE.hotspotMedium),
-      duckdbService.query(qualityRankingSql, QUERY_CACHE.hotspotMedium),
-      duckdbService.query(customerRoseSql, QUERY_CACHE.hotspotMedium),
-      duckdbService.query(coverageRoseSql, QUERY_CACHE.hotspotMedium),
-      duckdbService.query(terminalRoseSql, QUERY_CACHE.hotspotMedium),
-    ]);
+    if (isDefaultCondition) {
+      try {
+        const defaultCacheRows = await duckdbService.query<{ json_data: string }>(
+          `SELECT json_data FROM DefaultDashboardCache WHERE cache_key = 'dashboard-bundle|default'`
+        );
+        if (defaultCacheRows.length > 0 && defaultCacheRows[0].json_data) {
+          logger.info('[query.ts] Tier 1 Hard Cache Hit for dashboard-bundle!');
+          const bundleData = JSON.parse(defaultCacheRows[0].json_data);
+          markRequestCacheHit();
+          sendWithEtag(req, res, {
+            success: true,
+            data: bundleData,
+            meta: buildResponseMeta(res),
+          }, 60); // 暂存更久一点
+          return;
+        }
+      } catch (e) {
+        logger.warn('[query.ts] Failed to read DefaultDashboardCache, falling back to execution.', e);
+      }
+    }
 
-    const bundleData = {
-      kpi: kpiRows[0] || {},
-      kpiDetail: kpiDetailRows[0] || {},
-      trend: trendRows,
-      qualityTrend: qualityTrendRows,
-      ranking: {
-        allBusinessTop: allRankingRows,
-        qualityBusinessTop: qualityRankingRows,
-      },
-      rose: {
-        customerCategory: customerRoseRows,
-        coverageCombination: coverageRoseRows,
-        terminalSource: terminalRoseRows,
-      },
-    };
+    // Tier 3: 动态执行 Fallback
+    const bundleData = await fetchDashboardBundleData({
+      whereWithDate,
+      whereWithoutDate,
+      orgNames,
+      salesmanNames,
+      rankingLimit,
+      timeView,
+      perspective,
+      groupDim,
+      dateField: filterData.dateField || 'policy_date'
+    });
+
     setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
 
     sendWithEtag(req, res, {
@@ -2230,6 +2534,97 @@ router.get(
   })
 );
 
+export async function fetchDashboardBundleData({
+  whereWithDate,
+  whereWithoutDate,
+  orgNames,
+  salesmanNames,
+  rankingLimit,
+  timeView,
+  perspective,
+  groupDim,
+  dateField
+}: {
+  whereWithDate: string;
+  whereWithoutDate: string;
+  orgNames: string[];
+  salesmanNames: string[];
+  rankingLimit: number;
+  timeView: TimeView;
+  perspective: ViewPerspective;
+  groupDim?: string;
+  dateField: DateCriteria;
+}) {
+  const kpiSql = generateKpiQuery(whereWithDate, { orgNames, salesmanNames }, whereWithoutDate);
+  const kpiDetailSql = generateKpiDetailQuery(whereWithDate, false);
+  const trendSql = generatePremiumTrendQuery(
+    timeView,
+    whereWithDate,
+    dateField,
+    perspective,
+    groupDim || undefined
+  );
+  const qualityTrendSql = generateQualityBusinessTrendQuery(
+    timeView,
+    whereWithDate,
+    dateField,
+    perspective,
+    groupDim || undefined
+  );
+  const allRankingSql = generateSalesmanAllBusinessRankingQuery(whereWithDate, rankingLimit);
+  const qualityRankingSql = generateSalesmanQualityBusinessRankingQuery(whereWithDate, rankingLimit);
+  const customerRoseSql = `
+      SELECT COALESCE(customer_category, '未知') AS dim_key, SUM(premium) AS value
+      FROM PolicyFact
+      WHERE ${whereWithDate}
+      GROUP BY COALESCE(customer_category, '未知')
+      ORDER BY value DESC
+    `;
+  const coverageRoseSql = `
+      SELECT COALESCE(coverage_combination, '未知') AS dim_key, SUM(premium) AS value
+      FROM PolicyFact
+      WHERE ${whereWithDate}
+      GROUP BY COALESCE(coverage_combination, '未知')
+      ORDER BY value DESC
+    `;
+  const terminalRoseSql = `
+      SELECT
+        CASE WHEN is_telemarketing THEN '电销' ELSE '非电销' END AS dim_key,
+        SUM(premium) AS value
+      FROM PolicyFact
+      WHERE ${whereWithDate}
+      GROUP BY CASE WHEN is_telemarketing THEN '电销' ELSE '非电销' END
+      ORDER BY value DESC
+    `;
+
+  const [kpiRows, kpiDetailRows, trendRows, qualityTrendRows, allRankingRows, qualityRankingRows, customerRoseRows, coverageRoseRows, terminalRoseRows] = await Promise.all([
+    duckdbService.query(kpiSql, QUERY_CACHE.hotspotLong),
+    duckdbService.query(kpiDetailSql, QUERY_CACHE.hotspotLong),
+    duckdbService.query(trendSql, QUERY_CACHE.hotspotLong),
+    duckdbService.query(qualityTrendSql, QUERY_CACHE.hotspotLong),
+    duckdbService.query(allRankingSql, QUERY_CACHE.hotspotMedium),
+    duckdbService.query(qualityRankingSql, QUERY_CACHE.hotspotMedium),
+    duckdbService.query(customerRoseSql, QUERY_CACHE.hotspotMedium),
+    duckdbService.query(coverageRoseSql, QUERY_CACHE.hotspotMedium),
+    duckdbService.query(terminalRoseSql, QUERY_CACHE.hotspotMedium),
+  ]);
+
+  return {
+    kpi: kpiRows[0] || {},
+    kpiDetail: kpiDetailRows[0] || {},
+    trend: trendRows,
+    qualityTrend: qualityTrendRows,
+    ranking: {
+      allBusinessTop: allRankingRows,
+      qualityBusinessTop: qualityRankingRows,
+    },
+    rose: {
+      customerCategory: customerRoseRows,
+      coverageCombination: coverageRoseRows,
+      terminalSource: terminalRoseRows,
+    },
+  };
+}
 /**
  * GET /api/query/cross-sell-org-trend
  * 机构推介率走势（最近14天，按日，叠加柱+推介率折线）
