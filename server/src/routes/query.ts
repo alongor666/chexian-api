@@ -34,9 +34,6 @@ import { generateTonnageRoseQuery, generateOrgByTonnageQuery, generateTonnageByO
 import {
   generateGrowthQuery,
   generateDailyGrowthWithContextQuery,
-  generateYoYGrowthQueryV2,
-  generateMoMGrowthQueryV2,
-  generateYTDGrowthQueryV2,
   GrowthConfig,
   GrowthType,
   TimeView as GrowthTimeView,
@@ -53,7 +50,6 @@ import {
   generatePolicy2026In2026Query,
   generatePolicy2026In2027Query,
   generateNewEarnedPremiumSummaryQuery,
-  generateNewEarnedPremiumSummaryQueryV2,
   generateMonthlyExpenseQuery,
   CostDimension,
 } from '../sql/cost.js';
@@ -125,30 +121,6 @@ export function buildRouteCacheKey(req: Request, routeName: string): string {
 
 function isBundleRoutesEnabled(): boolean {
   return process.env.ENABLE_QUERY_BUNDLES !== 'false';
-}
-
-function shouldUseGrowthV2(config: GrowthConfig): boolean {
-  if (process.env.ENABLE_GROWTH_V2 === 'false') return false;
-  if (!['yoy', 'mom', 'ytd'].includes(config.growthType)) return false;
-  if (config.timeView !== 'monthly') return false;
-
-  // V2 的 PeriodAggregated 不包含原始日期字段，遇到日期条件则回退 V1。
-  const where = config.whereClause || '';
-  if (/policy_date|insurance_start_date/i.test(where)) return false;
-  return true;
-}
-
-function buildGrowthV2Sql(config: GrowthConfig): string {
-  switch (config.growthType) {
-    case 'yoy':
-      return generateYoYGrowthQueryV2(config);
-    case 'mom':
-      return generateMoMGrowthQueryV2(config);
-    case 'ytd':
-      return generateYTDGrowthQueryV2(config);
-    default:
-      return generateGrowthQuery(config);
-  }
 }
 
 function resolveCutoffDate(
@@ -579,9 +551,7 @@ router.get(
       config.currentPeriod = { startDate, endDate };
     }
 
-    const sql = shouldUseGrowthV2(config)
-      ? buildGrowthV2Sql(config)
-      : generateGrowthQuery(config);
+    const sql = generateGrowthQuery(config);
     const result = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
 
     res.json({
@@ -748,12 +718,7 @@ router.get(
       }
 
       const config = { whereClause: finalWhereClause };
-      const summaryData = await duckdbService.query(
-        generateNewEarnedPremiumSummaryQueryV2(config)
-      ).catch(async () => {
-        // 兼容未创建 EarnedPremiumMonthly 预聚合表的环境
-        return duckdbService.query(generateNewEarnedPremiumSummaryQuery(config));
-      });
+      const summaryData = await duckdbService.query(generateNewEarnedPremiumSummaryQuery(config));
       const monthlyExpenseData = await duckdbService.query(generateMonthlyExpenseQuery(config));
 
       res.json({
@@ -1284,7 +1249,8 @@ function getSeatCoverageClause(level?: CrossSellSeatCoverageLevel): string {
 }
 
 async function ensureCrossSellAggregateTablesReady(): Promise<void> {
-  await duckdbService.ensureAggregatesReady();
+  // 全环境实时聚合：CrossSellDailyAgg 由 DuckDB 服务启动时创建为实时视图。
+  return;
 }
 
 const crossSellExtraSchema = z.object({
@@ -1543,7 +1509,7 @@ router.get(
     // 从结果中提取 maxDate（通过再查一次 date_bounds）
     const maxDateSql = `
       SELECT MAX(CAST(policy_date AS DATE)) AS max_date
-      FROM CrossSellDailyAgg
+      FROM PolicyFact
       WHERE ${finalWhereClause}
         AND ${getVehicleCategoryFilter(vehicleCategory as VehicleCategory)}
     `;
@@ -1927,7 +1893,7 @@ router.get(
 
     const maxDateSql = `
       SELECT MAX(CAST(policy_date AS DATE)) AS max_date
-      FROM CrossSellDailyAgg
+      FROM PolicyFact
       WHERE ${withDateWhere}
     `;
 

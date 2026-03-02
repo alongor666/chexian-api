@@ -22,6 +22,7 @@
     "cleanup:artifacts": "node scripts/cleanup-debug-artifacts.mjs",
     "test:burn-down": "node scripts/test-burn-down.mjs",
     "benchmark:key-routes": "node scripts/benchmark-key-routes.mjs",
+    "benchmark:key-routes:soak": "node scripts/benchmark-key-routes-soak.mjs",
     "governance": "node scripts/check-governance.mjs",
     "plans:manage": "node scripts/manage-plans.mjs",
     "hooks:install": "bash scripts/install-git-hooks.sh"

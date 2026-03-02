@@ -1,10 +1,14 @@
 import React, { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { usePermission } from '../../shared/contexts/PermissionContext';
+import { buildRedirectState } from '../../shared/utils/redirect-state';
+import { Logger } from '../../shared/utils/logger';
 
 interface AuthGuardProps {
   children: ReactNode;
 }
+
+const logger = new Logger('AuthGuard');
 
 /**
  * 认证守卫组件
@@ -17,6 +21,7 @@ interface AuthGuardProps {
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const { isAuthenticated, isLoading } = usePermission();
   const location = useLocation();
+  const fromPath = `${location.pathname}${location.search}`;
 
   // 正在加载认证状态时显示加载
   if (isLoading) {
@@ -32,7 +37,8 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
 
   // 未登录重定向到登录页
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    logger.debug('Redirect unauthenticated request to login', { fromPath });
+    return <Navigate to="/login" state={buildRedirectState(fromPath)} replace />;
   }
 
   return <>{children}</>;

@@ -4,6 +4,10 @@ import { useDataStatus } from '../../shared/contexts/DataContext';
 import { FileInfo } from '../../shared/api/client';
 import { formatAverage, formatCount } from '../../shared/utils/formatters';
 import { RefreshCw, Upload, X, ChevronRight, FileUp, Database, FileText, ShieldCheck } from 'lucide-react';
+import { resolveRedirectPath } from '../../shared/utils/redirect-state';
+import { Logger } from '../../shared/utils/logger';
+
+const logger = new Logger('DataImportPage');
 
 /**
  * 首页 - 数据文件管理器
@@ -23,12 +27,13 @@ export const DataImportPage: React.FC = () => {
   const [showUpload, setShowUpload] = useState(false);
 
   // 获取原始路径（从路由守卫重定向过来时携带）
-  const fromPath = (location.state as { from?: string })?.from;
+  const fromPath = resolveRedirectPath(location.state, '/dashboard');
 
   // 后端已加载数据时自动跳转到仪表盘
   useEffect(() => {
     if (isDataLoaded && currentFile && !dataLoading) {
       const targetPath = fromPath || '/dashboard';
+      logger.debug('Data ready, navigate to target path', { targetPath, currentFile: currentFile.filename });
       navigate(targetPath, { replace: true });
     }
   }, [isDataLoaded, currentFile, dataLoading, navigate, fromPath]);

@@ -76,6 +76,19 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const refreshFilesPromiseRef = useRef<Promise<void> | null>(null);
+  const loadingCounterRef = useRef(0);
+
+  const beginLoading = useCallback(() => {
+    loadingCounterRef.current += 1;
+    setIsLoading(true);
+  }, []);
+
+  const endLoading = useCallback(() => {
+    loadingCounterRef.current = Math.max(0, loadingCounterRef.current - 1);
+    if (loadingCounterRef.current === 0) {
+      setIsLoading(false);
+    }
+  }, []);
 
   // 刷新文件列表
   const refreshFiles = useCallback(async () => {
@@ -86,6 +99,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       return refreshFilesPromiseRef.current;
     }
 
+    beginLoading();
     const task = (async () => {
       try {
         const fileList = await apiClient.getFiles();
@@ -109,16 +123,17 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         }
       } finally {
         refreshFilesPromiseRef.current = null;
+        endLoading();
       }
     })();
 
     refreshFilesPromiseRef.current = task;
     return task;
-  }, [currentFile]);
+  }, [beginLoading, currentFile, endLoading]);
 
   // 加载文件
   const loadFile = useCallback(async (filename: string) => {
-    setIsLoading(true);
+    beginLoading();
     setError(null);
 
     try {
@@ -132,13 +147,13 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(message);
       throw err;
     } finally {
-      setIsLoading(false);
+      endLoading();
     }
-  }, []);
+  }, [beginLoading, endLoading]);
 
   // 上传文件
   const uploadFile = useCallback(async (file: File) => {
-    setIsLoading(true);
+    beginLoading();
     setError(null);
 
     try {
@@ -153,9 +168,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(message);
       throw err;
     } finally {
-      setIsLoading(false);
+      endLoading();
     }
-  }, [refreshFiles]);
+  }, [beginLoading, endLoading, refreshFiles]);
 
   // 兼容旧接口
   const setDataLoaded = useCallback((loaded: boolean) => {
