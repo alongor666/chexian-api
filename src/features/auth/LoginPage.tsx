@@ -4,6 +4,10 @@ import { usePermission } from '../../shared/contexts/PermissionContext';
 import { canAccessRoute, getDefaultRoute } from '../../shared/config/organizations';
 import { Lock, User, Eye, EyeOff, AlertCircle, Shield, Building, QrCode } from 'lucide-react';
 import { apiClient } from '../../shared/api/client';
+import { resolveRedirectPath } from '../../shared/utils/redirect-state';
+import { Logger } from '../../shared/utils/logger';
+
+const logger = new Logger('LoginPage');
 
 /**
  * 内网登录页面
@@ -28,8 +32,7 @@ export const LoginPage: React.FC = () => {
   const [isWeComLoading, setIsWeComLoading] = useState(false);
 
   // 获取重定向目标
-  const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
-  const from = rawFrom === '/login' ? '/' : rawFrom;
+  const from = resolveRedirectPath(location.state, '/');
   const resolveTargetPath = useCallback(() => {
     if (!userPermission) {
       return from;
@@ -40,9 +43,11 @@ export const LoginPage: React.FC = () => {
   // 如果已登录，直接跳转
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(resolveTargetPath(), { replace: true });
+      const targetPath = resolveTargetPath();
+      logger.debug('Auth restored, navigate to target path', { targetPath, from });
+      navigate(targetPath, { replace: true });
     }
-  }, [isAuthenticated, navigate, resolveTargetPath]);
+  }, [from, isAuthenticated, navigate, resolveTargetPath]);
 
   // 处理企微登录回调
   useEffect(() => {
@@ -120,7 +125,9 @@ export const LoginPage: React.FC = () => {
     try {
       const success = await loginWithPassword(normalizedUsername, normalizedPassword, rememberMe);
       if (success) {
-        navigate(resolveTargetPath(), { replace: true });
+        const targetPath = resolveTargetPath();
+        logger.debug('Login succeeded, navigate to target path', { username: normalizedUsername, targetPath, from });
+        navigate(targetPath, { replace: true });
       } else {
         setError('用户名或密码错误');
       }

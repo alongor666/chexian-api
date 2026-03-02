@@ -15,7 +15,6 @@ import { AppError } from '../middleware/error.js';
 import { generateColumnMappingSQL, getColumnMapping } from './column-normalizer.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
 import { recordQueryMetric } from '../utils/request-context.js';
-import { cacheWarmer } from './cache-warmer.js';
 
 // ============================================
 // 查询缓存
@@ -129,15 +128,6 @@ class DuckDBService {
   private isInitialized = false;
   private connectionPool: ConnectionPool | null = null;
   private queryCache = new QueryCache();
-  private aggregateEnsurePromise: Promise<void> | null = null;
-  private lastAggregateCheckAt = 0;
-  private readonly aggregateCheckIntervalMs = 30_000;
-
-  /**
-   * VPS 模式标志：启用后跳过原始 Parquet 聚合，直接加载预构建的聚合 Parquet
-   * 通过环境变量 VPS_MODE=true 控制
-   */
-  readonly isVpsMode = process.env.VPS_MODE === 'true';
 
   /**
    * 初始化数据库连接
@@ -478,43 +468,7 @@ class DuckDBService {
    * 安全修复：表名验证（防止 SQL 注入）
    */
   async createPolicyFactView(sourceTable: string = 'raw_parquet'): Promise<void> {
-    // VPS 模式：聚合表已通过 loadVpsPreAggregated() 加载，
-    // 仅需创建最小化 PolicyFact 视图（供续保等查询使用）
-    if (this.isVpsMode) {
-      console.log('[DuckDB] VPS mode: skipping full PolicyFact build, using pre-aggregated data');
-
-      // 创建空 PolicyFact 视图（续保已走 RenewalDailyAgg，其余走聚合表）
-      try {
-        // 尝试从 raw_parquet 创建（如果 VPS 上仍有原始数据作为后备）
-        const safeSourceTable = sanitizeTableName(sourceTable);
-        const schema = await this.getTableSchema(safeSourceTable);
-        const actualColumns = schema.map((col: any) => col.column_name);
-        const needsMapping = /[\u4e00-\u9fa5]/.test(actualColumns[0] || '');
-
-        if (needsMapping) {
-          const mappingSQL = generateColumnMappingSQL(safeSourceTable, actualColumns);
-          await this.query(mappingSQL);
-        } else {
-          await this.query(`CREATE OR REPLACE VIEW PolicyFact AS SELECT * FROM ${safeSourceTable}`);
-        }
-        console.log('[DuckDB] VPS mode: PolicyFact created from raw_parquet (backup)');
-      } catch {
-        // 无原始数据（VPS 精简模式），创建空占位视图
-        console.log('[DuckDB] VPS mode: no raw_parquet, creating empty PolicyFact placeholder');
-        await this.query(`
-          CREATE OR REPLACE VIEW PolicyFact AS
-          SELECT NULL AS policy_no, NULL AS premium, NULL AS policy_date,
-                 NULL AS org_level_3, NULL AS salesman_name, NULL AS insurance_type
-          WHERE false
-        `);
-      }
-
-      // VPS 模式下跳过 buildAggregates()（聚合表已通过 loadVpsPreAggregated 注册）
-      console.log('[DuckDB] VPS mode: skipping buildAggregates() (pre-aggregated data loaded)');
-      return;
-    }
-
-    // ---- 以下为 Mac 本地开发的原有逻辑（从原始 Parquet 构建） ----
+    // 全环境统一实时模式：从原始 Parquet 构建标准化 PolicyFact 行级数据。
 
     // 1. 验证表名（防止 SQL 注入）
     const safeSourceTable = sanitizeTableName(sourceTable);
@@ -558,257 +512,53 @@ class DuckDBService {
     `);
     console.log('[DuckDB] PolicyFactRenewal view created');
 
-    await this.buildAggregates();
-    console.log('[DuckDB] Aggregated tables created (DailyAggregated / PeriodAggregated)');
-
-    // 触发智能预热服务 (异步，不阻塞主流程)
-    setTimeout(() => {
-      // 当前数据主要是2026和2025，默认预热当前查看的年份
-      const currentYear = new Date().getFullYear();
-      const targetYear = currentYear > 2026 ? currentYear : 2026;
-      cacheWarmer.runAll(targetYear).catch(e => {
-        console.error('[DuckDB] CacheWarmer failed to run:', e);
-      });
-    }, 1000); // 稍微延迟，等内存稳定
+    await this.materializePolicyFactWorkingSet();
+    await this.createCrossSellRealtimeView();
+    console.log('[DuckDB] Realtime mode enabled: using PolicyFact realtime aggregation (no pre-aggregated tables)');
   }
 
   /**
-   * VPS 模式：加载预聚合 Parquet 文件并注册为各聚合表视图
-   *
-   * 文件来源：Mac 本地运行 scripts/export-for-vps.mjs 导出
-   * - aggregated.parquet → DailyAggregated / PeriodAggregated / KpiDailySummary（通过 table_name 字段分离）
-   * - cross_sell_agg.parquet → CrossSellDailyAgg
-   * - renewal_agg.parquet → RenewalDailyAgg
+   * 将标准化视图物化为行级实时工作表，并建立查询友好索引。
+   * 不改变业务口径，仅提升实时查询吞吐与过滤性能。
    */
-  async loadVpsPreAggregated(dataDir: string): Promise<void> {
-    const fs = (await import('fs')).default;
-    const path = (await import('path')).default;
+  private async materializePolicyFactWorkingSet(): Promise<void> {
+    await this.query('DROP TABLE IF EXISTS PolicyFactRealtime');
+    await this.query(`
+      CREATE TABLE PolicyFactRealtime AS
+      SELECT * FROM PolicyFactRenewal
+    `);
 
-    const aggPath = path.join(dataDir, 'aggregated.parquet');
-    const crossSellPath = path.join(dataDir, 'cross_sell_agg.parquet');
-    const renewalPath = path.join(dataDir, 'renewal_agg.parquet');
+    await Promise.all([
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_policy_date ON PolicyFactRealtime(policy_date)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_start_date ON PolicyFactRealtime(insurance_start_date)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_org ON PolicyFactRealtime(org_level_3)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_salesman ON PolicyFactRealtime(salesman_name)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_customer ON PolicyFactRealtime(customer_category)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_cov ON PolicyFactRealtime(coverage_combination)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_vehicle ON PolicyFactRealtime(insurance_type)'),
+    ]);
 
-    const loadedFiles: string[] = [];
-
-    // 1. 加载 aggregated.parquet（含 DailyAggregated + PeriodAggregated + KpiDailySummary）
-    if (fs.existsSync(aggPath)) {
-      const escapedPath = escapeSqlValue(aggPath);
-      await this.query(`CREATE OR REPLACE TABLE _vps_aggregated AS SELECT * FROM read_parquet('${escapedPath}')`);
-
-      // 按 table_name 字段分离为各聚合表的视图
-      await this.query(`
-        CREATE OR REPLACE VIEW DailyAggregated AS
-        SELECT * EXCLUDE (table_name) FROM _vps_aggregated WHERE table_name = 'DailyAggregated'
-      `);
-      await this.query(`
-        CREATE OR REPLACE VIEW PeriodAggregated AS
-        SELECT
-          policy_ym, policy_year,
-          CAST(RIGHT(policy_ym, 2) AS INTEGER) AS policy_month,
-          org_level_3, salesman_name, customer_category,
-          coverage_combination, renewal_mode, tonnage_segment,
-          insurance_grade, small_truck_score, large_truck_score,
-          is_transfer, is_telemarketing, is_renewal,
-          is_nev, is_new_car, is_cross_sell, is_renewable,
-          is_commercial_insure, insurance_type,
-          total_premium AS period_premium,
-          policy_count AS period_count
-        FROM _vps_aggregated WHERE table_name = 'PeriodAggregated'
-      `);
-      await this.query(`
-        CREATE OR REPLACE VIEW KpiDailySummary AS
-        SELECT agg_date, policy_ym, org_level_3, insurance_type,
-               total_premium, policy_count, commercial_premium,
-               renewal_count, transfer_count, nev_count, new_car_count, telesales_count
-        FROM _vps_aggregated WHERE table_name = 'KpiDailySummary'
-      `);
-
-      const counts = await this.query<{ table_name: string; cnt: number }>(`
-        SELECT table_name, COUNT(*) AS cnt FROM _vps_aggregated GROUP BY table_name
-      `);
-      for (const row of counts) {
-        console.log(`[DuckDB] VPS pre-agg: ${row.table_name} = ${row.cnt} rows`);
-      }
-      loadedFiles.push('aggregated.parquet');
-    } else {
-      console.warn(`[DuckDB] VPS mode: ${aggPath} not found, skipping`);
-    }
-
-    // 2. 加载 cross_sell_agg.parquet
-    if (fs.existsSync(crossSellPath)) {
-      const escapedPath = escapeSqlValue(crossSellPath);
-      await this.query(`CREATE OR REPLACE TABLE CrossSellDailyAgg AS SELECT * FROM read_parquet('${escapedPath}')`);
-      const cnt = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CrossSellDailyAgg');
-      console.log(`[DuckDB] VPS pre-agg: CrossSellDailyAgg = ${cnt[0]?.cnt ?? 0} rows`);
-      loadedFiles.push('cross_sell_agg.parquet');
-    } else {
-      console.warn(`[DuckDB] VPS mode: ${crossSellPath} not found, skipping`);
-    }
-
-    // 3. 加载 renewal_agg.parquet
-    if (fs.existsSync(renewalPath)) {
-      const escapedPath = escapeSqlValue(renewalPath);
-      await this.query(`CREATE OR REPLACE TABLE RenewalDailyAgg AS SELECT * FROM read_parquet('${escapedPath}')`);
-      const cnt = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalDailyAgg');
-      console.log(`[DuckDB] VPS pre-agg: RenewalDailyAgg = ${cnt[0]?.cnt ?? 0} rows`);
-      loadedFiles.push('renewal_agg.parquet');
-    } else {
-      console.warn(`[DuckDB] VPS mode: ${renewalPath} not found, skipping`);
-    }
-
-    console.log(`[DuckDB] VPS pre-aggregated data loaded: ${loadedFiles.join(', ')}`);
+    await this.query(`
+      CREATE OR REPLACE VIEW PolicyFact AS
+      SELECT * FROM PolicyFactRealtime
+    `);
+    await this.query(`
+      CREATE OR REPLACE VIEW PolicyFactRenewal AS
+      SELECT * FROM PolicyFact
+    `);
+    console.log('[DuckDB] PolicyFactRealtime materialized with realtime indexes');
   }
 
   /**
-   * 构建预聚合表（用于热点查询提速）
+   * 实时聚合模式专用：创建 CrossSellDailyAgg 实时视图（非物化）
    *
    * 说明：
-   * - DailyAggregated：日粒度预聚合，支撑趋势/KPI/货车等 V2 查询
-   * - PeriodAggregated：月粒度预聚合，支撑增长分析 V2 查询
-   * - CrossSellDailyAgg：交叉销售热点查询聚合（summary/trend/drilldown/top）
+   * - 结构与历史 CrossSellDailyAgg 表保持一致，复用现有 SQL 生成器和路由
+   * - 数据来源实时读取 PolicyFact，不依赖预聚合导出文件
    */
-  async buildAggregates(): Promise<void> {
+  async createCrossSellRealtimeView(): Promise<void> {
     await this.query(`
-      CREATE OR REPLACE TABLE DailyAggregated AS
-      WITH base AS (
-        SELECT
-          CAST(policy_date AS DATE) AS agg_date,
-          CAST(EXTRACT(YEAR FROM CAST(policy_date AS DATE)) AS INTEGER) AS policy_year,
-          CAST(FLOOR((EXTRACT(DOY FROM CAST(policy_date AS DATE)) - 1) / 7) + 1 AS INTEGER) AS natural_week_num,
-          STRFTIME(CAST(policy_date AS DATE), '%Y-%m') AS policy_ym,
-          org_level_3,
-          salesman_name,
-          customer_category,
-          coverage_combination,
-          renewal_mode,
-          tonnage_segment,
-          insurance_grade,
-          small_truck_score,
-          large_truck_score,
-          COALESCE(is_transfer, false) AS is_transfer,
-          COALESCE(is_telemarketing, false) AS is_telemarketing,
-          COALESCE(is_renewal, false) AS is_renewal,
-          COALESCE(is_nev, false) AS is_nev,
-          COALESCE(is_new_car, false) AS is_new_car,
-          COALESCE(is_cross_sell, false) AS is_cross_sell,
-          COALESCE(is_renewable, false) AS is_renewable,
-          COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
-          COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
-          COALESCE(premium, 0) AS premium,
-          policy_no
-        FROM PolicyFact
-        WHERE policy_date IS NOT NULL
-      )
-      SELECT
-        agg_date,
-        policy_year,
-        natural_week_num,
-        policy_ym,
-        org_level_3,
-        salesman_name,
-        customer_category,
-        coverage_combination,
-        renewal_mode,
-        tonnage_segment,
-        insurance_grade,
-        small_truck_score,
-        large_truck_score,
-        is_transfer,
-        is_telemarketing,
-        is_renewal,
-        is_nev,
-        is_new_car,
-        is_cross_sell,
-        is_renewable,
-        is_commercial_insure,
-        insurance_type,
-        SUM(premium) AS total_premium,
-        COUNT(DISTINCT policy_no) AS policy_count,
-        SUM(CASE WHEN is_transfer THEN 1 ELSE 0 END) AS transfer_count,
-        SUM(CASE WHEN is_telemarketing THEN 1 ELSE 0 END) AS telesales_count,
-        SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS renewal_count,
-        SUM(CASE WHEN insurance_type LIKE '%商业%' THEN premium ELSE 0 END) AS commercial_premium,
-        SUM(CASE WHEN is_nev THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN is_new_car THEN 1 ELSE 0 END) AS new_car_count
-      FROM base
-      GROUP BY
-        agg_date,
-        policy_year,
-        natural_week_num,
-        policy_ym,
-        org_level_3,
-        salesman_name,
-        customer_category,
-        coverage_combination,
-        renewal_mode,
-        tonnage_segment,
-        insurance_grade,
-        small_truck_score,
-        large_truck_score,
-        is_transfer,
-        is_telemarketing,
-        is_renewal,
-        is_nev,
-        is_new_car,
-        is_cross_sell,
-        is_renewable,
-        is_commercial_insure,
-        insurance_type
-    `);
-
-    await this.query(`
-      CREATE OR REPLACE TABLE PeriodAggregated AS
-      SELECT
-        policy_ym,
-        policy_year,
-        CAST(RIGHT(policy_ym, 2) AS INTEGER) AS policy_month,
-        org_level_3,
-        salesman_name,
-        customer_category,
-        coverage_combination,
-        renewal_mode,
-        tonnage_segment,
-        insurance_grade,
-        small_truck_score,
-        large_truck_score,
-        is_transfer,
-        is_telemarketing,
-        is_renewal,
-        is_nev,
-        is_new_car,
-        is_cross_sell,
-        is_renewable,
-        is_commercial_insure,
-        insurance_type,
-        SUM(total_premium) AS period_premium,
-        SUM(policy_count) AS period_count
-      FROM DailyAggregated
-      GROUP BY
-        policy_ym,
-        policy_year,
-        policy_month,
-        org_level_3,
-        salesman_name,
-        customer_category,
-        coverage_combination,
-        renewal_mode,
-        tonnage_segment,
-        insurance_grade,
-        small_truck_score,
-        large_truck_score,
-        is_transfer,
-        is_telemarketing,
-        is_renewal,
-        is_nev,
-        is_new_car,
-        is_cross_sell,
-        is_renewable,
-        is_commercial_insure,
-        insurance_type
-    `);
-
-    await this.query(`
-      CREATE OR REPLACE TABLE CrossSellDailyAgg AS
+      CREATE OR REPLACE VIEW CrossSellDailyAgg AS
       WITH normalized AS (
         SELECT
           CAST(policy_date AS DATE) AS policy_date,
@@ -885,11 +635,9 @@ class DuckDBService {
         is_cross_sell,
         driver_coverage,
         passenger_coverage,
-        -- 口径对齐：车险件数按“保单号优先、车架号兜底”去重，避免同车多保单被错误合并
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
         COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
-        -- 口径对齐：车险件均分子按车险总保费口径（与 auto_count 同口径）
         COALESCE(SUM(premium), 0) AS auto_premium
       FROM normalized
       WHERE dedup_key IS NOT NULL
@@ -916,91 +664,13 @@ class DuckDBService {
         driver_coverage,
         passenger_coverage
     `);
-
-    // 索引：加速频繁筛选列的过滤查询
-    await Promise.all([
-      this.query('CREATE INDEX IF NOT EXISTS idx_daily_date ON DailyAggregated(agg_date)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_daily_org ON DailyAggregated(org_level_3)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_daily_ym ON DailyAggregated(policy_ym)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_period_ym ON PeriodAggregated(policy_ym)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_period_org ON PeriodAggregated(org_level_3)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_cross_date ON CrossSellDailyAgg(policy_date)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_cross_org ON CrossSellDailyAgg(org_level_3)'),
-    ]);
-
-    // KPI 轻量聚合表：将 20+ 维度压缩到 4 维，大幅减少 KPI 热点查询扫描量
-    await this.query(`
-      CREATE OR REPLACE TABLE KpiDailySummary AS
-      SELECT
-        agg_date,
-        policy_ym,
-        org_level_3,
-        insurance_type,
-        SUM(total_premium) AS total_premium,
-        SUM(policy_count) AS policy_count,
-        SUM(commercial_premium) AS commercial_premium,
-        SUM(renewal_count) AS renewal_count,
-        SUM(transfer_count) AS transfer_count,
-        SUM(nev_count) AS nev_count,
-        SUM(new_car_count) AS new_car_count,
-        SUM(telesales_count) AS telesales_count
-      FROM DailyAggregated
-      GROUP BY agg_date, policy_ym, org_level_3, insurance_type
-    `);
-    await this.query('CREATE INDEX IF NOT EXISTS idx_kpi_date ON KpiDailySummary(agg_date)');
-    await this.query('CREATE INDEX IF NOT EXISTS idx_kpi_org ON KpiDailySummary(org_level_3)');
   }
 
   /**
-   * 确保预聚合表存在（用于部署后自动自愈）
-   * - 默认检查 DailyAggregated / PeriodAggregated / CrossSellDailyAgg
-   * - 使用进程内锁避免并发重复重建
+   * 兼容历史调用点。系统已固定实时聚合，不再存在预聚合自愈流程。
    */
-  async ensureAggregatesReady(requiredTables: string[] = ['DailyAggregated', 'PeriodAggregated', 'CrossSellDailyAgg']): Promise<void> {
-    const now = Date.now();
-    if (now - this.lastAggregateCheckAt < this.aggregateCheckIntervalMs) {
-      return;
-    }
-    if (this.aggregateEnsurePromise) {
-      await this.aggregateEnsurePromise;
-      return;
-    }
-
-    this.aggregateEnsurePromise = (async () => {
-      const missing = await this.getMissingTables(requiredTables);
-      if (missing.length === 0) {
-        this.lastAggregateCheckAt = Date.now();
-        return;
-      }
-
-      console.warn(`[DuckDB] Missing aggregate tables detected: ${missing.join(', ')}. Rebuilding aggregates...`);
-      await this.buildAggregates();
-      this.lastAggregateCheckAt = Date.now();
-      this.invalidateCache();
-    })();
-
-    try {
-      await this.aggregateEnsurePromise;
-    } finally {
-      this.aggregateEnsurePromise = null;
-    }
-  }
-
-  private async getMissingTables(tableNames: string[]): Promise<string[]> {
-    const checks = await Promise.all(
-      tableNames.map(async (tableName) => {
-        const escapedTableName = escapeSqlValue(tableName);
-        const rows = await this.query<{ exists_flag: number }>(`
-          SELECT 1 AS exists_flag
-          FROM information_schema.tables
-          WHERE table_schema = 'main'
-            AND table_name = '${escapedTableName}'
-          LIMIT 1
-        `);
-        return rows.length > 0 ? null : tableName;
-      })
-    );
-    return checks.filter((name): name is string => Boolean(name));
+  async ensureAggregatesReady(): Promise<void> {
+    return;
   }
 
   /**

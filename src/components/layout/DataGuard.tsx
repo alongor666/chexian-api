@@ -2,6 +2,10 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { BarChart3, FolderOpen } from 'lucide-react';
+import { buildRedirectState } from '../../shared/utils/redirect-state';
+import { Logger } from '../../shared/utils/logger';
+
+const logger = new Logger('DataGuard');
 
 interface DataGuardProps {
   children: React.ReactNode;
@@ -16,15 +20,28 @@ interface DataGuardProps {
  * - 已加载数据时正常渲染子组件
  */
 export const DataGuard: React.FC<DataGuardProps> = ({ children }) => {
-  const { isDataLoaded } = useDataStatus();
+  const { isDataLoaded, isLoading } = useDataStatus();
   const location = useLocation();
+  const fromPath = `${location.pathname}${location.search}`;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">正在确认数据状态...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isDataLoaded) {
     // 保存原始路径，以便导入数据后可以返回
+    logger.debug('Redirect to home because no data is loaded', { fromPath });
     return (
       <Navigate
         to="/"
-        state={{ from: location.pathname }}
+        state={buildRedirectState(fromPath)}
         replace
       />
     );

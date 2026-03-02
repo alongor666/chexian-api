@@ -68,6 +68,7 @@
 - **`utils/echarts.ts`**: ECharts 按需导入注册（图表组件与渲染器）
 - **`utils/alertChecker.ts`**: 预警检测引擎（增长率下降/目标落后/续保率下降/保费波动检测）
 - **`utils/storage.ts`**: 安全 localStorage 封装（隐私模式兼容、错误处理、内存后备）
+- **`utils/redirect-state.ts`**: 路由回跳状态契约工具（统一 `fromPath`，兼容历史 state 结构）
 
 ### Config 模块
 - **`config/chartStyles.ts`**: 图表样式配置（颜色、字体、轴样式）

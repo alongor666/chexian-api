@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { execSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 
 function parseArgs(argv) {
@@ -24,6 +25,15 @@ function parseArgs(argv) {
 function asNumber(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function asBoolean(value, fallback = false) {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false;
+  return fallback;
 }
 
 function percentile(values, p) {
@@ -145,6 +155,7 @@ async function runOne(baseUrl, route, token, fallbackRetryAfterMs) {
 async function benchmarkRoute({
   baseUrl,
   route,
+  coldRuns,
   iterations,
   warmup,
   token,
@@ -167,6 +178,25 @@ async function benchmarkRoute({
       return { result, retried429: retries };
     }
   };
+
+  const coldSamplesAll = [];
+  const coldSamplesSuccess = [];
+  let coldFailures = 0;
+  let coldRetries429 = 0;
+
+  for (let i = 0; i < coldRuns; i += 1) {
+    const { result, retried429 } = await runWith429Retry();
+    coldRetries429 += retried429;
+    coldSamplesAll.push(result.durationMs);
+    if (result.ok) {
+      coldSamplesSuccess.push(result.durationMs);
+    } else {
+      coldFailures += 1;
+    }
+    if (paceMs > 0 && i < coldRuns - 1) {
+      await sleep(paceMs);
+    }
+  }
 
   for (let i = 0; i < warmup; i += 1) {
     await runWith429Retry();
@@ -202,17 +232,31 @@ async function benchmarkRoute({
 
   const statsSuccess = summarize(samplesSuccess);
   const statsAll = summarize(samplesAll);
+  const coldStatsSuccess = summarize(coldSamplesSuccess);
+  const coldStatsAll = summarize(coldSamplesAll);
 
   return {
     route,
     routeKey: routeKey(route),
+    coldRuns,
     iterations,
     warmup,
+    coldRetries429,
     retries429,
+    coldFailures,
     failures,
+    coldSuccesses: coldSamplesSuccess.length,
     successes: samplesSuccess.length,
     statusCounts,
     errorCounts,
+    coldP50: coldStatsSuccess.p50,
+    coldP95: coldStatsSuccess.p95,
+    coldP99: coldStatsSuccess.p99,
+    coldAvg: coldStatsSuccess.avg,
+    coldP50All: coldStatsAll.p50,
+    coldP95All: coldStatsAll.p95,
+    coldP99All: coldStatsAll.p99,
+    coldAvgAll: coldStatsAll.avg,
     p50: statsSuccess.p50,
     p95: statsSuccess.p95,
     p99: statsSuccess.p99,
@@ -225,6 +269,8 @@ async function benchmarkRoute({
     avgAll: statsAll.avg,
     maxAll: statsAll.max,
     minAll: statsAll.min,
+    coldSamples: coldSamplesSuccess,
+    coldSamplesAll,
     samples: samplesSuccess,
     samplesAll,
   };
@@ -334,15 +380,53 @@ function buildComparisons(results, baselineRoutes) {
   });
 }
 
+function getProcessRssMb(pid) {
+  if (!pid || !Number.isFinite(Number(pid))) return null;
+  try {
+    const output = execSync(`ps -o rss= -p ${Number(pid)}`, { encoding: 'utf-8' }).trim();
+    const rssKb = Number(output.split(/\s+/)[0]);
+    if (!Number.isFinite(rssKb) || rssKb <= 0) return null;
+    return round2(rssKb / 1024);
+  } catch {
+    return null;
+  }
+}
+
+function evaluateRouteGates(results, thresholds) {
+  const violations = [];
+  for (const result of results) {
+    if (result.failures > 0) {
+      violations.push(`${result.routeKey}: has ${result.failures} failed responses`);
+    }
+    if (result.p95 !== null && result.p95 > thresholds.warmP95Ms) {
+      violations.push(`${result.routeKey}: warm p95 ${result.p95}ms > ${thresholds.warmP95Ms}ms`);
+    }
+    if (result.p99 !== null && result.p99 > thresholds.warmP99Ms) {
+      violations.push(`${result.routeKey}: warm p99 ${result.p99}ms > ${thresholds.warmP99Ms}ms`);
+    }
+    if (result.coldP95 !== null && result.coldP95 > thresholds.coldP95Ms) {
+      violations.push(`${result.routeKey}: cold p95 ${result.coldP95}ms > ${thresholds.coldP95Ms}ms`);
+    }
+  }
+  return violations;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const baseUrl = String(args.baseUrl || process.env.BENCH_BASE_URL || 'http://127.0.0.1:3000');
+  const coldRuns = asNumber(args.coldRuns || process.env.BENCH_COLD_RUNS, 1);
   const iterations = asNumber(args.iterations || process.env.BENCH_ITERATIONS, 15);
   const warmup = asNumber(args.warmup || process.env.BENCH_WARMUP, 2);
   const paceMs = asNumber(args.paceMs || process.env.BENCH_PACE_MS, 0);
   const max429Retries = asNumber(args.max429Retries || process.env.BENCH_MAX_429_RETRIES, 1);
   const retryAfterMs = asNumber(args.retryAfterMs || process.env.BENCH_RETRY_AFTER_MS, 60_000);
   const routeCooldownMs = asNumber(args.routeCooldownMs || process.env.BENCH_ROUTE_COOLDOWN_MS, 0);
+  const warmP95ThresholdMs = asNumber(args.warmP95ThresholdMs || process.env.BENCH_GATE_WARM_P95_MS, 800);
+  const warmP99ThresholdMs = asNumber(args.warmP99ThresholdMs || process.env.BENCH_GATE_WARM_P99_MS, 1500);
+  const coldP95ThresholdMs = asNumber(args.coldP95ThresholdMs || process.env.BENCH_GATE_COLD_P95_MS, 3000);
+  const maxRssMb = asNumber(args.maxRssMb || process.env.BENCH_GATE_MAX_RSS_MB, 1229);
+  const serverPid = asNumber(args.serverPid || process.env.BENCH_SERVER_PID, NaN);
+  const strictGate = asBoolean(args.strictGate ?? process.env.BENCH_STRICT_GATE, true);
 
   const now = new Date();
   const y = now.getFullYear();
@@ -381,6 +465,7 @@ async function main() {
     const report = await benchmarkRoute({
       baseUrl,
       route,
+      coldRuns,
       iterations,
       warmup,
       token,
@@ -391,8 +476,9 @@ async function main() {
     results.push(report);
 
     const p95Label = report.p95 === null ? 'n/a' : `${report.p95}ms`;
+    const coldP95Label = report.coldP95 === null ? 'n/a' : `${report.coldP95}ms`;
     console.log(
-      `  -> p95=${p95Label}, p95All=${report.p95All}ms, fail=${report.failures}/${report.iterations}, status=${JSON.stringify(report.statusCounts)}`
+      `  -> coldP95=${coldP95Label}, warmP95=${p95Label}, warmP95All=${report.p95All}ms, fail=${report.failures}/${report.iterations}, status=${JSON.stringify(report.statusCounts)}`
     );
 
     if (routeCooldownMs > 0 && idx < routes.length - 1) {
@@ -414,11 +500,24 @@ async function main() {
     });
 
   const comparisons = buildComparisons(results, baseline?.routes || null);
+  const thresholds = {
+    warmP95Ms: warmP95ThresholdMs,
+    warmP99Ms: warmP99ThresholdMs,
+    coldP95Ms: coldP95ThresholdMs,
+    maxRssMb,
+  };
+  const gateViolations = evaluateRouteGates(results, thresholds);
+  const rssMb = Number.isFinite(serverPid) ? getProcessRssMb(serverPid) : null;
+  if (rssMb !== null && rssMb > maxRssMb) {
+    gateViolations.push(`server rss ${rssMb}MB > ${maxRssMb}MB`);
+  }
+  const gatePassed = gateViolations.length === 0;
 
   const payload = {
     startedAt,
     finishedAt: new Date().toISOString(),
     baseUrl,
+    coldRuns,
     iterations,
     warmup,
     paceMs,
@@ -429,6 +528,16 @@ async function main() {
     baselineLog: disableBaseline ? null : baselineLog,
     baseline,
     comparisons,
+    thresholds,
+    runtime: {
+      serverPid: Number.isFinite(serverPid) ? Number(serverPid) : null,
+      rssMb,
+    },
+    gate: {
+      strictGate,
+      passed: gatePassed,
+      violations: gateViolations,
+    },
     results,
   };
 
@@ -439,8 +548,17 @@ async function main() {
   fs.writeFileSync(outputPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
 
   console.log(`[benchmark] report written: ${outputPath}`);
+  console.log(`[benchmark] gate=${gatePassed ? 'PASS' : 'FAIL'}`);
+  if (gateViolations.length > 0) {
+    for (const violation of gateViolations) {
+      console.warn(`[benchmark][gate] ${violation}`);
+    }
+  }
   if (!disableBaseline && !baseline?.found) {
     console.warn(`[benchmark] baseline log not found: ${baselineLog}`);
+  }
+  if (strictGate && !gatePassed) {
+    process.exitCode = 2;
   }
 }
 

@@ -21,6 +21,7 @@
 | 计算续保率 | `calculate-renewal-rate.py` | `python3 scripts/calculate-renewal-rate.py` |
 | 提取业务员计划数据 | `extract_salesman_plan.py` | `python3 scripts/extract_salesman_plan.py` |
 | 测试 DuckDB SQL 语法 | `test-duckdb-sql.py` | `python3 scripts/test-duckdb-sql.py` |
+| 执行关键路由 15 分钟并发稳定性压测 | `benchmark-key-routes-soak.mjs` | `bun run benchmark:key-routes:soak` |
 
 ---
 
@@ -76,6 +77,7 @@
 | `split-commands.mjs` | 拆分过长的slash command文件 | `node scripts/split-commands.mjs` |
 | `reorganize-commands.sh` | 重组.claude/commands目录结构 | `bash scripts/reorganize-commands.sh` |
 | `benchmark-key-routes.mjs` | 关键路由基准压测（输出P50/P95/P99到artifacts/perf） | `bun run benchmark:key-routes` |
+| `benchmark-key-routes-soak.mjs` | 关键路由并发稳定性压测（默认15分钟，检测5xx漂移与RSS峰值） | `bun run benchmark:key-routes:soak` |
 
 ### 📁 hooks/ 子目录
 
