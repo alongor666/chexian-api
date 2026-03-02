@@ -15,7 +15,7 @@ import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/uti
 import { useCrossSellTimePeriod, type SeatCoverageLevel, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { getRateClassByField, getAvgPremiumClassByCoverage } from './crossSellRateStatus';
 
-export type TimePeriod = 'day' | 'week' | 'month' | 'year';
+export type TimePeriod = 'day' | 'week' | 'month' | 'quarter' | 'year';
 
 interface CrossSellSummaryKpiBoardProps {
   vehicleCategory: VehicleCategory;

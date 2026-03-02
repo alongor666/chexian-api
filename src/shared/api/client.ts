@@ -129,6 +129,21 @@ export interface KpiDetailData {
   non_nev_count: number;
   new_car_count: number;
   non_new_car_count: number;
+  quality_business_count?: number;
+  non_quality_business_count?: number;
+  grade_ab_count?: number;
+  grade_cd_count?: number;
+  grade_efg_count?: number;
+  coverage_danjiao_count?: number;
+  coverage_jiaosan_count?: number;
+  coverage_zhuquan_count?: number;
+  coverage_other_count?: number;
+  vehicle_truck_count?: number;
+  vehicle_bus_count?: number;
+  vehicle_motorcycle_count?: number;
+  vehicle_other_count?: number;
+  same_city_premium?: number;
+  remote_premium?: number;
 }
 
 /**

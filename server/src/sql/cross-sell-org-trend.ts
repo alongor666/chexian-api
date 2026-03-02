@@ -83,7 +83,8 @@ export function generateCrossSellOrgTrendQuery(
     daily AS (
       SELECT
         STRFTIME(pd, '%Y-%m-%d') AS date_str,
-        COUNT(DISTINCT CASE WHEN insurance_type LIKE '%商业%' THEN dedup_key END) AS auto_count,
+        -- 口径对齐：车险件数按去重保单口径
+        COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
         COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS premium
       FROM filtered

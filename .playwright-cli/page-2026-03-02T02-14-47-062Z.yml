@@ -1,0 +1,400 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - heading "车险经营管理系统" [level=1] [ref=e10]
+      - generic [ref=e11]: v2.0
+    - navigation "主菜单" [ref=e12]:
+      - button "文件" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+        - generic [ref=e17]: 文件
+        - img [ref=e18]
+      - button "设置" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+        - generic [ref=e25]: 设置
+        - img [ref=e26]
+  - generic [ref=e28]:
+    - navigation "主导航" [ref=e29]:
+      - navigation [ref=e32]:
+        - link "首页" [ref=e33] [cursor=pointer]:
+          - /url: "#/"
+          - img [ref=e34]
+          - generic [ref=e37]: 首页
+        - separator [ref=e38]
+        - generic [ref=e39]: 数据分析
+        - link "仪表盘" [ref=e40] [cursor=pointer]:
+          - /url: "#/dashboard"
+          - img [ref=e41]
+          - generic [ref=e46]: 仪表盘
+        - link "业绩分析" [ref=e47] [cursor=pointer]:
+          - /url: "#/performance-analysis"
+          - img [ref=e48]
+          - generic [ref=e51]: 业绩分析
+        - link "保费报表" [ref=e52] [cursor=pointer]:
+          - /url: "#/premium-report"
+          - img [ref=e53]
+          - generic [ref=e55]: 保费报表
+        - link "营销战报" [ref=e56] [cursor=pointer]:
+          - /url: "#/marketing-report"
+          - img [ref=e57]
+          - generic [ref=e61]: 营销战报
+        - link "营业货车" [ref=e62] [cursor=pointer]:
+          - /url: "#/truck"
+          - img [ref=e63]
+          - generic [ref=e68]: 营业货车
+        - link "续保分析" [ref=e69] [cursor=pointer]:
+          - /url: "#/renewal"
+          - img [ref=e70]
+          - generic [ref=e75]: 续保分析
+        - link "驾乘险推介率" [ref=e76] [cursor=pointer]:
+          - /url: "#/cross-sell"
+          - img [ref=e77]
+          - generic [ref=e81]: 驾乘险推介率
+        - link "增长分析" [ref=e82] [cursor=pointer]:
+          - /url: "#/growth"
+          - img [ref=e83]
+          - generic [ref=e86]: 增长分析
+        - link "成本分析" [ref=e87] [cursor=pointer]:
+          - /url: "#/cost"
+          - img [ref=e88]
+          - generic [ref=e90]: 成本分析
+        - link "费用分析" [ref=e91] [cursor=pointer]:
+          - /url: "#/fee-analysis"
+          - img [ref=e92]
+          - generic [ref=e96]: 费用分析
+        - link "数据对比" [ref=e97] [cursor=pointer]:
+          - /url: "#/comparison"
+          - img [ref=e98]
+          - generic [ref=e102]: 数据对比
+        - link "系数监控" [ref=e103] [cursor=pointer]:
+          - /url: "#/coefficient"
+          - img [ref=e104]
+          - generic [ref=e107]: 系数监控
+        - separator [ref=e108]
+        - generic [ref=e109]: 工具
+        - link "摩意模型" [ref=e110] [cursor=pointer]:
+          - /url: "#/moto-cost"
+          - img [ref=e111]
+          - generic [ref=e116]: 摩意模型
+        - separator [ref=e117]
+        - generic [ref=e118]: 管理
+        - link "权限管理" [ref=e119] [cursor=pointer]:
+          - /url: "#/admin/access-control"
+          - img [ref=e120]
+          - generic [ref=e122]: 权限管理
+      - generic [ref=e123]:
+        - button "薛成龙 管理员" [ref=e125] [cursor=pointer]:
+          - img [ref=e126]
+          - paragraph [ref=e129]: 薛成龙
+          - generic [ref=e130]: 管理员
+          - img [ref=e131]
+        - button "收起侧边栏" [expanded] [ref=e133] [cursor=pointer]:
+          - img [ref=e134]
+          - generic [ref=e136]: 收起侧边栏
+    - main [ref=e137]:
+      - generic [ref=e144]:
+        - generic [ref=e146]:
+          - heading "四川分公司成本分析" [level=1] [ref=e148]
+          - generic [ref=e150]:
+            - generic [ref=e151]: 2026年
+            - generic [ref=e152]: 起保
+            - generic [ref=e153]: 01-01~03-01
+        - generic [ref=e154]:
+          - generic [ref=e157]:
+            - generic [ref=e158]:
+              - generic [ref=e159]:
+                - button "变动成本率" [ref=e160] [cursor=pointer]
+                - button "赔付率" [ref=e161] [cursor=pointer]
+                - button "费用率" [ref=e162] [cursor=pointer]
+                - button "综合费用率" [ref=e163] [cursor=pointer]
+                - button "已赚保费" [ref=e164] [cursor=pointer]
+                - button "新口径已赚保费" [ref=e165] [cursor=pointer]
+                - button "综合费用率预测" [ref=e166] [cursor=pointer]
+              - generic [ref=e167]:
+                - generic [ref=e168]:
+                  - generic [ref=e169]: "分析维度:"
+                  - combobox [ref=e170]:
+                    - option "客户类别" [selected]
+                    - option "三级机构"
+                    - option "险别组合"
+                - generic [ref=e171]:
+                  - generic [ref=e172]: "统计截止日:"
+                  - textbox [ref=e173]: 2026-03-31
+                - generic [ref=e174]: "当前视图: 客户类别"
+            - generic [ref=e175]:
+              - generic [ref=e176]:
+                - heading "赔付率分析明细" [level=3] [ref=e177]
+                - generic [ref=e178]:
+                  - generic [ref=e179]: 共 10 条记录
+                  - generic [ref=e180]:
+                    - button "导出CSV" [ref=e181] [cursor=pointer]
+                    - button "导出Excel" [ref=e182] [cursor=pointer]
+              - generic [ref=e184]:
+                - generic [ref=e185]:
+                  - generic [ref=e186]: 客户类别
+                  - generic [ref=e187]: 保单件数
+                  - generic [ref=e188]: 保费(万)
+                  - generic [ref=e189]: 赔案件数
+                  - generic [ref=e190]: 已报告赔款(万)
+                  - generic [ref=e191]: 案均赔款
+                  - generic [ref=e192]: 满期保费(万)
+                  - generic [ref=e193]: 平均满期天数
+                  - generic [ref=e194]: 满期赔付率
+                  - generic [ref=e195]: 满期出险率
+                - generic [ref=e196]:
+                  - generic [ref=e197]:
+                    - generic [ref=e198]: 非营业个人客车
+                    - generic [ref=e199]: 60,001
+                    - generic [ref=e200]: 5,745
+                    - generic [ref=e201]: "984"
+                    - generic [ref=e202]: "310"
+                    - generic [ref=e203]: 3,148
+                    - generic [ref=e204]: "947"
+                    - generic [ref=e205]: 60.0天
+                    - generic [ref=e206]: 32.7%
+                    - generic [ref=e207]: 10.0%
+                  - generic [ref=e208]:
+                    - generic [ref=e209]: 营业货车
+                    - generic [ref=e210]: 1,623
+                    - generic [ref=e211]: "601"
+                    - generic [ref=e212]: "35"
+                    - generic [ref=e213]: "32"
+                    - generic [ref=e214]: 9,281
+                    - generic [ref=e215]: "101"
+                    - generic [ref=e216]: 58.7天
+                    - generic [ref=e217]: 32.2%
+                    - generic [ref=e218]: 13.4%
+                  - generic [ref=e219]:
+                    - generic [ref=e220]: 摩托车
+                    - generic [ref=e221]: 44,906
+                    - generic [ref=e222]: "507"
+                    - generic [ref=e223]: "126"
+                    - generic [ref=e224]: "86"
+                    - generic [ref=e225]: 6,801
+                    - generic [ref=e226]: "81"
+                    - generic [ref=e227]: 58.6天
+                    - generic [ref=e228]: 105.3%
+                    - generic [ref=e229]: 1.8%
+                  - generic [ref=e230]:
+                    - generic [ref=e231]: 非营业货车
+                    - generic [ref=e232]: 3,623
+                    - generic [ref=e233]: "374"
+                    - generic [ref=e234]: "28"
+                    - generic [ref=e235]: "8"
+                    - generic [ref=e236]: 2,846
+                    - generic [ref=e237]: "57"
+                    - generic [ref=e238]: 55.9天
+                    - generic [ref=e239]: 13.9%
+                    - generic [ref=e240]: 5.0%
+                  - generic [ref=e241]:
+                    - generic [ref=e242]: 非营业企业客车
+                    - generic [ref=e243]: 3,625
+                    - generic [ref=e244]: "351"
+                    - generic [ref=e245]: "39"
+                    - generic [ref=e246]: "8"
+                    - generic [ref=e247]: 2,082
+                    - generic [ref=e248]: "59"
+                    - generic [ref=e249]: 61.1天
+                    - generic [ref=e250]: 13.8%
+                    - generic [ref=e251]: 6.4%
+                  - generic [ref=e252]:
+                    - generic [ref=e253]: 营业出租租赁
+                    - generic [ref=e254]: "338"
+                    - generic [ref=e255]: "127"
+                    - generic [ref=e256]: "6"
+                    - generic [ref=e257]: "1"
+                    - generic [ref=e258]: 1,571
+                    - generic [ref=e259]: "20"
+                    - generic [ref=e260]: 55.8天
+                    - generic [ref=e261]: 4.8%
+                    - generic [ref=e262]: 11.6%
+                  - generic [ref=e263]:
+                    - generic [ref=e264]: 营业公路客运
+                    - generic [ref=e265]: "49"
+                    - generic [ref=e266]: "24"
+                    - generic [ref=e267]: "3"
+                    - generic [ref=e268]: "0"
+                    - generic [ref=e269]: "733"
+                    - generic [ref=e270]: "4"
+                    - generic [ref=e271]: 60.3天
+                    - generic [ref=e272]: 5.6%
+                    - generic [ref=e273]: 37.1%
+                  - generic [ref=e274]:
+                    - generic [ref=e275]: 特种车
+                    - generic [ref=e276]: "34"
+                    - generic [ref=e277]: "11"
+                    - generic [ref=e278]: "0"
+                    - generic [ref=e279]: "0"
+                    - generic [ref=e280]: "0"
+                    - generic [ref=e281]: "2"
+                    - generic [ref=e282]: 65.9天
+                    - generic [ref=e283]: 0.0%
+                    - generic [ref=e284]: 0.0%
+                  - generic [ref=e285]:
+                    - generic [ref=e286]: 挂车
+                    - generic [ref=e287]: "6"
+                    - generic [ref=e288]: "2"
+                    - generic [ref=e289]: "0"
+                    - generic [ref=e290]: "0"
+                    - generic [ref=e291]: "0"
+                    - generic [ref=e292]: "0"
+                    - generic [ref=e293]: 57.2天
+                    - generic [ref=e294]: 0.0%
+                    - generic [ref=e295]: 0.0%
+                  - generic [ref=e296]:
+                    - generic [ref=e297]: 非营业机关客车
+                    - generic [ref=e298]: "7"
+                    - generic [ref=e299]: "1"
+                    - generic [ref=e300]: "0"
+                    - generic [ref=e301]: "0"
+                    - generic [ref=e302]: "0"
+                    - generic [ref=e303]: "0"
+                    - generic [ref=e304]: 55.6天
+                    - generic [ref=e305]: 0.0%
+                    - generic [ref=e306]: 0.0%
+          - generic [ref=e307]:
+            - generic [ref=e309]:
+              - generic [ref=e310]:
+                - img [ref=e311]
+                - text: 筛选条件
+              - button "收起筛选器" [ref=e313] [cursor=pointer]:
+                - img [ref=e314]
+            - generic [ref=e316]:
+              - region "筛选条件" [ref=e318]:
+                - generic [ref=e319]:
+                  - heading "筛选条件" [level=2] [ref=e320]
+                  - button "重置筛选条件" [ref=e321] [cursor=pointer]: 重置
+                - generic [ref=e322]: 核心维度
+                - generic [ref=e323]:
+                  - generic [ref=e324]:
+                    - generic [ref=e325]: 统计口径
+                    - generic [ref=e326]:
+                      - img [ref=e327]
+                      - generic [ref=e330]: 起保日期
+                  - generic [ref=e331]:
+                    - generic [ref=e332]: 分析年度
+                    - combobox "选择分析年度" [ref=e333] [cursor=pointer]:
+                      - option "2025年"
+                      - option "2026年" [selected]
+                  - generic [ref=e334]:
+                    - generic [ref=e335]:
+                      - generic [ref=e336]: 起止日期
+                      - generic [ref=e337]: 2026-01-01 ~ 2026-03-01
+                    - generic [ref=e338]:
+                      - textbox "起始日" [ref=e339]: 2026-01-01
+                      - textbox "截止日" [ref=e340]: 2026-03-01
+                  - group [ref=e342]:
+                    - generic "三级机构 全选 反选 筛选异地机构 筛选同城机构 ▼" [ref=e343] [cursor=pointer]:
+                      - generic [ref=e344]:
+                        - generic [ref=e345]: 三级机构
+                        - generic [ref=e346]:
+                          - button "全选" [ref=e347]
+                          - button "反选" [ref=e348]
+                          - generic [ref=e350]:
+                            - button "筛选异地机构" [ref=e351]: 异地
+                            - button "筛选同城机构" [ref=e352]: 同城
+                      - generic [ref=e353]: ▼
+                    - generic [ref=e356]:
+                      - log [ref=e358]
+                      - generic [ref=e359]:
+                        - generic [ref=e360]:
+                          - generic [ref=e361]: 全部
+                          - combobox [ref=e363]
+                        - img [ref=e367]
+                  - group [ref=e369]:
+                    - generic "客户类别 全选 反选 ▼" [ref=e370] [cursor=pointer]:
+                      - generic [ref=e371]:
+                        - generic [ref=e372]: 客户类别
+                        - generic [ref=e373]:
+                          - button "全选" [ref=e374]
+                          - button "反选" [ref=e375]
+                      - generic [ref=e376]: ▼
+                  - generic [ref=e378]:
+                    - text: 险别组合
+                    - generic [ref=e379]:
+                      - button "全部" [ref=e380] [cursor=pointer]
+                      - button "主全" [ref=e381] [cursor=pointer]
+                      - button "交三" [ref=e382] [cursor=pointer]
+                      - button "其他" [ref=e383] [cursor=pointer]
+                      - button "单交" [ref=e384] [cursor=pointer]
+                - generic [ref=e385]:
+                  - group [ref=e386]:
+                    - generic "业务属性（布尔） ▼" [ref=e387] [cursor=pointer]:
+                      - generic [ref=e388]: 业务属性（布尔）
+                      - generic [ref=e389]: ▼
+                    - generic [ref=e390]:
+                      - radiogroup "是否电销" [ref=e391]:
+                        - generic [ref=e392]: 是否电销
+                        - generic [ref=e393]:
+                          - radio "全部" [checked] [ref=e394] [cursor=pointer]
+                          - radio "电销" [ref=e395] [cursor=pointer]
+                          - radio "非电销" [ref=e396] [cursor=pointer]
+                      - radiogroup "是否新能源" [ref=e397]:
+                        - generic [ref=e398]: 是否新能源
+                        - generic [ref=e399]:
+                          - radio "全部" [checked] [ref=e400] [cursor=pointer]
+                          - radio "新能源" [ref=e401] [cursor=pointer]
+                          - radio "燃油" [ref=e402] [cursor=pointer]
+                      - radiogroup "是否新车" [ref=e403]:
+                        - generic [ref=e404]: 是否新车
+                        - generic [ref=e405]:
+                          - radio "全部" [checked] [ref=e406] [cursor=pointer]
+                          - radio "新车" [ref=e407] [cursor=pointer]
+                          - radio "旧车" [ref=e408] [cursor=pointer]
+                      - radiogroup "是否过户" [ref=e409]:
+                        - generic [ref=e410]: 是否过户
+                        - generic [ref=e411]:
+                          - radio "全部" [checked] [ref=e412] [cursor=pointer]
+                          - radio "过户" [ref=e413] [cursor=pointer]
+                          - radio "非过户" [ref=e414] [cursor=pointer]
+                      - radiogroup "是否交叉销售" [ref=e415]:
+                        - generic [ref=e416]: 是否交叉销售
+                        - generic [ref=e417]:
+                          - radio "全部" [checked] [ref=e418] [cursor=pointer]
+                          - radio "交叉销售" [ref=e419] [cursor=pointer]
+                          - radio "非交叉销售" [ref=e420] [cursor=pointer]
+                      - radiogroup "是否交商同保" [ref=e421]:
+                        - generic [ref=e422]: 是否交商同保
+                        - generic [ref=e423]:
+                          - radio "全部" [checked] [ref=e424] [cursor=pointer]
+                          - radio "同保" [ref=e425] [cursor=pointer]
+                          - radio "非同保" [ref=e426] [cursor=pointer]
+                  - generic [ref=e427]:
+                    - generic [ref=e428]:
+                      - text: 车险分等级
+                      - generic [ref=e429]:
+                        - button "全部" [ref=e430] [cursor=pointer]
+                        - button "A" [ref=e431] [cursor=pointer]
+                        - button "B" [ref=e432] [cursor=pointer]
+                        - button "C" [ref=e433] [cursor=pointer]
+                        - button "D" [ref=e434] [cursor=pointer]
+                        - button "E" [ref=e435] [cursor=pointer]
+                        - button "F" [ref=e436] [cursor=pointer]
+                        - button "G" [ref=e437] [cursor=pointer]
+                        - button "X" [ref=e438] [cursor=pointer]
+                    - generic [ref=e439]:
+                      - text: 小货车评分
+                      - generic [ref=e440]:
+                        - button "全部" [ref=e441] [cursor=pointer]
+                        - button "A" [ref=e442] [cursor=pointer]
+                        - button "B" [ref=e443] [cursor=pointer]
+                        - button "C" [ref=e444] [cursor=pointer]
+                        - button "D" [ref=e445] [cursor=pointer]
+                        - button "E" [ref=e446] [cursor=pointer]
+                        - button "X" [ref=e447] [cursor=pointer]
+                    - generic [ref=e448]:
+                      - text: 大货车评分
+                      - generic [ref=e449]:
+                        - button "全部" [ref=e450] [cursor=pointer]
+                        - button "A" [ref=e451] [cursor=pointer]
+                        - button "B" [ref=e452] [cursor=pointer]
+                        - button "C" [ref=e453] [cursor=pointer]
+                        - button "D" [ref=e454] [cursor=pointer]
+                        - button "E" [ref=e455] [cursor=pointer]
+                        - button "X" [ref=e456] [cursor=pointer]
+              - generic [ref=e457]:
+                - link "蜀ICP备2024115865号" [ref=e458] [cursor=pointer]:
+                  - /url: https://beian.miit.gov.cn/
+                - link "川公网安备51019002007622号" [ref=e459] [cursor=pointer]:
+                  - /url: http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=51019002007622
+                  - generic [ref=e460]: 川公网安备51019002007622号

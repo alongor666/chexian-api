@@ -885,10 +885,12 @@ class DuckDBService {
         is_cross_sell,
         driver_coverage,
         passenger_coverage,
-        COUNT(DISTINCT CASE WHEN insurance_type LIKE '%商业%' THEN dedup_key END) AS auto_count,
+        -- 口径对齐：车险件数按去重保单口径（不再限定商业险），避免推介率分母与分子口径不一致
+        COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
         COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
-        COALESCE(SUM(CASE WHEN insurance_type LIKE '%商业%' THEN premium ELSE 0 END), 0) AS auto_premium
+        -- 口径对齐：车险件均分子按车险总保费口径（与 auto_count 同口径）
+        COALESCE(SUM(premium), 0) AS auto_premium
       FROM normalized
       WHERE dedup_key IS NOT NULL
       GROUP BY

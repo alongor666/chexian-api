@@ -63,14 +63,26 @@ function prevTimeFilter(period: 'day' | 'week' | 'month' | 'quarter' | 'year', e
       // 昨日
       return `FILTER (WHERE pd = tp_day - INTERVAL 1 DAY${extraClause})`;
     case 'week':
-      // 上周同期 (当前周开始前7天)
-      return `FILTER (WHERE pd >= tp_week - INTERVAL 7 DAY AND pd < tp_week${extraClause})`;
+      // 上周同期（与当前周“从 tp_week 开始到 tp_max”的同天数窗口保持一致）
+      return `FILTER (
+        WHERE pd >= tp_week - INTERVAL 7 DAY
+          AND pd <= tp_week - INTERVAL 7 DAY + DATEDIFF('day', tp_week, tp_max) * INTERVAL 1 DAY
+          ${extraClause}
+      )`;
     case 'month':
-      // 上月同期 (上个月同范围天数)
-      return `FILTER (WHERE pd >= tp_month - INTERVAL 1 MONTH AND pd < tp_month${extraClause})`;
+      // 上月同期（与当前月“从 tp_month 开始到 tp_max”的同天数窗口保持一致）
+      return `FILTER (
+        WHERE pd >= tp_month - INTERVAL 1 MONTH
+          AND pd <= tp_month - INTERVAL 1 MONTH + DATEDIFF('day', tp_month, tp_max) * INTERVAL 1 DAY
+          ${extraClause}
+      )`;
     case 'quarter':
-      // 上个季度同期 (向前3个月同范围天数)
-      return `FILTER (WHERE pd >= tp_quarter - INTERVAL 3 MONTH AND pd < tp_quarter${extraClause})`;
+      // 上季度同期（与当前季度“从 tp_quarter 开始到 tp_max”的同天数窗口保持一致）
+      return `FILTER (
+        WHERE pd >= tp_quarter - INTERVAL 3 MONTH
+          AND pd <= tp_quarter - INTERVAL 3 MONTH + DATEDIFF('day', tp_quarter, tp_max) * INTERVAL 1 DAY
+          ${extraClause}
+      )`;
     case 'year':
       // 当年无环比
       return `FILTER (WHERE 1=0${extraClause})`;

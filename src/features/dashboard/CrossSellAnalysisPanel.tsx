@@ -367,7 +367,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         vehicleCategory={vehicleCategory}
         seatCoverageLevel={seatCoverageLevel}
         filters={filters}
-        timePeriod={mappedTimePeriodForKpi as any}
+        timePeriod={mappedTimePeriodForKpi}
         prefetchedSummary={timePeriodSummary}
       />
 
