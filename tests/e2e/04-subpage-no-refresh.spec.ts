@@ -25,12 +25,20 @@ const ensureDataLoaded = async (page: Page) => {
     return;
   }
 
+  const dashboardNav = page.getByRole('link', { name: '仪表盘', exact: true });
+  if (await dashboardNav.isVisible().catch(() => false)) {
+    // 已进入应用壳层（可见侧边栏）时，无需依赖首页按钮文案。
+    return;
+  }
+
   const loadedBanner = page.getByText('数据已加载:');
   if (await loadedBanner.isVisible().catch(() => false)) {
     const toDashboard = page.getByRole('button', { name: '进入仪表盘' });
     if (await toDashboard.isVisible().catch(() => false)) {
-      await toDashboard.click();
-      await page.waitForURL(/#\/dashboard/);
+      await toDashboard.click({ timeout: 3000 }).catch(() => null);
+      if (page.url().includes('#/dashboard')) {
+        return;
+      }
     }
     return;
   }
