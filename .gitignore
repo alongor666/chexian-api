@@ -88,3 +88,15 @@ PASSWORDS.local.txt
 数据管理/output/
 logs/
 scripts/verify-catchup-logic.*
+
+# Playwright/调试产物（禁止提交）
+.playwright-cli/page-*.yml
+.playwright-cli/page-*.png
+.playwright-cli/console-*.log
+.playwright-cli/network-*.log
+playwright-report/
+test-results/
+test_output.txt
+vitest_log.txt
+dev_log.txt
+test_err.txt

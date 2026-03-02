@@ -36,6 +36,7 @@ WITH policy_exposure AS (
     org_level_3,
     customer_category,
     coverage_combination,
+    CAST(insurance_start_date AS DATE) AS insurance_start_date,
     premium,
     COALESCE(reported_claims, 0) AS reported_claims,
     COALESCE(fee_amount, 0) AS fee_amount,
@@ -260,4 +261,3 @@ WHERE plan_year = ${Number(planYear)}
 GROUP BY org_name
   `.trim();
 }
-

@@ -57,13 +57,58 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
   const { filters } = useGlobalFilters();
   const fallbackToLegacy = !ENABLE_BUNDLE_ROUTES;
 
-  // KPI 数据获取
   const dashboardBundle = useDashboardBundle({
     filters,
     timeView,
     perspective,
     enabled: isInitialized && ENABLE_BUNDLE_ROUTES,
   });
+
+  const kpiPrefetched = useMemo(() => {
+    if (!dashboardBundle.bundle) return undefined;
+    return {
+      kpi: dashboardBundle.bundle.kpi,
+      kpiDetail: dashboardBundle.bundle.kpiDetail,
+    };
+  }, [dashboardBundle.bundle]);
+
+  const trendPrefetched = useMemo(() => {
+    if (!dashboardBundle.bundle) return undefined;
+    return {
+      trendData: dashboardBundle.bundle.trend.map((item) => ({
+        time_period: String(item.time_period ?? ''),
+        org_level_3: String(item.org_level_3 ?? '四川'),
+        premium: Number(item.premium ?? 0),
+        next_month_ratio: Number(item.next_month_ratio ?? 0),
+      })),
+      qualityBusinessData: dashboardBundle.bundle.qualityTrend.map((item) => ({
+        time_period: String(item.time_period ?? ''),
+        quality_premium: Number(item.quality_premium ?? 0),
+        total_premium: Number(item.total_premium ?? 0),
+        quality_ratio: Number(item.quality_ratio ?? 0),
+      })),
+    };
+  }, [dashboardBundle.bundle]);
+
+  const rankingPrefetched = useMemo(() => {
+    if (!dashboardBundle.bundle) return undefined;
+    return {
+      allBusinessTop10: dashboardBundle.bundle.ranking.allBusinessTop.map((row: any) => ({
+        salesman_name: String(row.salesman_name ?? ''),
+        org_level_3: String(row.org_level_3 ?? ''),
+        total_premium: formatPremiumWan(Number(row.total_premium ?? 0)),
+        policy_count: Number(row.policy_count ?? 0),
+      })),
+      qualityBusinessTop10: dashboardBundle.bundle.ranking.qualityBusinessTop.map((row: any) => ({
+        salesman_name: String(row.salesman_name ?? ''),
+        org_level_3: String(row.org_level_3 ?? ''),
+        total_premium: formatPremiumWan(Number(row.total_premium ?? 0)),
+        policy_count: Number(row.policy_count ?? 0),
+      })),
+    };
+  }, [dashboardBundle.bundle]);
+
+  // KPI 数据获取
 
   const {
     kpiData: kpis,
@@ -72,10 +117,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     error: kpiError,
   } = useKpiData({
     filters,
-    prefetched: dashboardBundle.bundle ? {
-      kpi: dashboardBundle.bundle.kpi,
-      kpiDetail: dashboardBundle.bundle.kpiDetail,
-    } : undefined,
+    prefetched: kpiPrefetched,
     enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
   });
 
@@ -90,20 +132,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     filters,
     timeView,
     hasOrgFilter: (filters.org_level_3?.length ?? 0) > 0,
-    prefetched: dashboardBundle.bundle ? {
-      trendData: dashboardBundle.bundle.trend.map((item) => ({
-        time_period: String(item.time_period ?? ''),
-        org_level_3: String(item.org_level_3 ?? '四川'),
-        premium: Number(item.premium ?? 0),
-        next_month_ratio: Number(item.next_month_ratio ?? 0),
-      })),
-      qualityBusinessData: dashboardBundle.bundle.qualityTrend.map((item) => ({
-        time_period: String(item.time_period ?? ''),
-        quality_premium: Number(item.quality_premium ?? 0),
-        total_premium: Number(item.total_premium ?? 0),
-        quality_ratio: Number(item.quality_ratio ?? 0),
-      })),
-    } : undefined,
+    prefetched: trendPrefetched,
     enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
     perspective,
   });
@@ -116,20 +145,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     refresh: refreshData,
   } = usePremiumDashboardData({
     filters,
-    prefetched: dashboardBundle.bundle ? {
-      allBusinessTop10: dashboardBundle.bundle.ranking.allBusinessTop.map((row: any) => ({
-        salesman_name: String(row.salesman_name ?? ''),
-        org_level_3: String(row.org_level_3 ?? ''),
-        total_premium: formatPremiumWan(Number(row.total_premium ?? 0)),
-        policy_count: Number(row.policy_count ?? 0),
-      })),
-      qualityBusinessTop10: dashboardBundle.bundle.ranking.qualityBusinessTop.map((row: any) => ({
-        salesman_name: String(row.salesman_name ?? ''),
-        org_level_3: String(row.org_level_3 ?? ''),
-        total_premium: formatPremiumWan(Number(row.total_premium ?? 0)),
-        policy_count: Number(row.policy_count ?? 0),
-      })),
-    } : undefined,
+    prefetched: rankingPrefetched,
     enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
   });
 

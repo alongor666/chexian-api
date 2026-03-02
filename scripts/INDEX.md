@@ -12,6 +12,7 @@
 |-----------|----------|----------|
 | 跨平台启动项目（自动检测运行时） | `start.mjs` | `node scripts/start.mjs --all` |
 | 检查代码提交前是否合规 | `check-governance.mjs` | `bun run governance` |
+| 清理未跟踪调试产物（日志/报告） | `cleanup-debug-artifacts.mjs` | `bun run cleanup:artifacts` |
 | 归档已完成的任务 | `archive-backlog.mjs` | `node scripts/archive-backlog.mjs` |
 | 扫描/归档已完成的 plans 计划文件 | `manage-plans.mjs` | `bun run plans:manage` |
 | 统计项目 Token 数 | `count-tokens.mjs` | `bun run count-tokens` |
@@ -30,6 +31,7 @@
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
 | `check-governance.mjs` | **主治理校验**：检查必需文件、索引完整性、BACKLOG证据链、DC-002合规 | `bun run governance` |
+| `cleanup-debug-artifacts.mjs` | 清理未跟踪调试产物（`.playwright-cli`、`playwright-report`、`test-results`、常见调试日志） | `bun run cleanup:artifacts` |
 | `check-task-id-conflict.mjs` | 检测多Agent任务ID是否冲突（B100-199/@claude等范围） | `node scripts/check-task-id-conflict.mjs` |
 | `check-write-conflict.mjs` | PR前检测文件写入冲突，防止merge冲突 | `node scripts/check-write-conflict.mjs` |
 | `check-document-partition.mjs` | 检查文档分区是否符合多Agent协作规范 | `node scripts/check-document-partition.mjs` |
@@ -171,3 +173,8 @@ python3 scripts/generate-renewal-analysis.py # 生成报告
 ## 2026-02-27 追加记录
 
 - `benchmark-key-routes.mjs` 增强：支持 429 自动退避重试、失败原因与状态码统计、`p95`（成功样本）与 `p95All`（全样本）分离统计，并可从 `logs/audit.log` 提取指定日期基线自动计算新旧 P95 对比。
+
+## 2026-03-02 追加记录
+
+- 新增 `cleanup-debug-artifacts.mjs`：提交前自动清理未跟踪调试产物，避免日志/报告误入版本库。
+- `check-governance.mjs` 新增“暂存区调试产物”门禁：若检测到 `.playwright-cli/`、`playwright-report/`、`test-results/` 或 `.log` 等文件进入暂存区，直接阻断提交。

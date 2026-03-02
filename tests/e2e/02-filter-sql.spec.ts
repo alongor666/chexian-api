@@ -1,10 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 
+const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'CxAdmin@2026!';
+
 /** 用户名密码登录 */
 const login = async (page: Page) => {
   await page.goto('/#/login');
-  await page.getByPlaceholder('请输入用户名').fill('admin');
-  await page.getByPlaceholder('请输入密码').fill('admin123');
+  await page.getByPlaceholder('请输入用户名').fill(E2E_USERNAME);
+  await page.getByPlaceholder('请输入密码').fill(E2E_PASSWORD);
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await page.waitForURL(/#\/(dashboard)?$/, { waitUntil: 'domcontentloaded' });
 };

@@ -21,7 +21,9 @@
  * 8. Merge conflict 标记扫描：
  *    - 扫描 BACKLOG.md / PROGRESS.md 中是否残留 <<<<<<< / ======= / >>>>>>> 冲突标记
  *    - 残留冲突标记 → 阻断提交
- * 9. TypeScript 检查范围护栏（API-only 清理批次）：
+ * 9. 暂存区调试产物阻断：
+ *    - 阻止日志/Playwright 报告等调试产物进入提交
+ * 10. TypeScript 检查范围护栏（API-only 清理批次）：
  *    - tsconfig.json 不得再排除活跃源码目录（src/charts/src/components/src/services/src/types/src/core）
  *    - 防止通过扩大 exclude 隐藏真实类型问题
  *
@@ -33,6 +35,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -603,7 +606,47 @@ function checkMergeConflictMarkers() {
 }
 
 // ============================================================
-// 第9项检查：TypeScript 检查范围护栏
+// 第9项检查：暂存区调试产物阻断
+// ============================================================
+
+function checkStagedDebugArtifacts() {
+  info('检查暂存区调试产物...');
+
+  let stagedFiles = [];
+  try {
+    const output = execSync('git diff --cached --name-only -z', {
+      cwd: ROOT_DIR,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    stagedFiles = output.split('\0').filter(Boolean);
+  } catch {
+    warning('无法读取 git 暂存区，跳过调试产物检查');
+    return true;
+  }
+
+  if (stagedFiles.length === 0) {
+    success('暂存区为空，无调试产物风险');
+    return true;
+  }
+
+  const blockedPattern = /(^|\/)(\.playwright-cli\/|playwright-report\/|test-results\/|.*\.log$|test_output\.txt$|vitest_log\.txt$|dev_log\.txt$|test_err\.txt$)/;
+  const blockedFiles = stagedFiles.filter((file) => blockedPattern.test(file));
+
+  if (blockedFiles.length > 0) {
+    error(`检测到 ${blockedFiles.length} 个调试产物已加入暂存区（阻断提交）：`);
+    blockedFiles.forEach((file) => console.log(`    - ${file}`));
+    console.log('    - 请执行: bun run cleanup:artifacts');
+    console.log('    - 对已跟踪文件请移出暂存: git restore --staged <file>');
+    return false;
+  }
+
+  success('暂存区调试产物检查通过');
+  return true;
+}
+
+// ============================================================
+// 第10项检查：TypeScript 检查范围护栏
 // ============================================================
 
 function checkTsconfigTypecheckScope() {
@@ -657,6 +700,7 @@ function main() {
     { name: 'DC-002合规', fn: checkDC002Compliance },
     { name: '任务ID分配', fn: checkTaskIdAllocation },
     { name: 'Conflict标记', fn: checkMergeConflictMarkers },
+    { name: '调试产物', fn: checkStagedDebugArtifacts },
     { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
   ];
 

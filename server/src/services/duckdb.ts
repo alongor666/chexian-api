@@ -857,8 +857,8 @@ class DuckDBService {
           COALESCE(cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
           COALESCE(premium, 0) AS premium,
           COALESCE(
-            NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
-            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
+            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''),
+            NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')
           ) AS dedup_key
         FROM PolicyFact
         WHERE policy_date IS NOT NULL
@@ -885,7 +885,7 @@ class DuckDBService {
         is_cross_sell,
         driver_coverage,
         passenger_coverage,
-        -- 口径对齐：车险件数按去重保单口径（不再限定商业险），避免推介率分母与分子口径不一致
+        -- 口径对齐：车险件数按“保单号优先、车架号兜底”去重，避免同车多保单被错误合并
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
         COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,

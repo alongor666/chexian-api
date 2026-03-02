@@ -571,18 +571,21 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     enabled: isDataLoaded && (fallbackToLegacy || Boolean(performanceBundle.error)),
   });
 
+  const drilldownPrefetched = useMemo(() => {
+    if (!performanceBundle.bundle?.drilldown) return undefined;
+    return {
+      summary: performanceBundle.bundle.drilldown.summary,
+      rows: performanceBundle.bundle.drilldown.rows,
+    };
+  }, [performanceBundle.bundle?.drilldown]);
+
   const useLegacyDrilldown = fallbackToLegacy || Boolean(performanceBundle.error) || hasDrillInteraction;
   const drilldownQuery = usePerformanceDrilldown({
     filters,
     segmentTag,
     timePeriod,
     growthMode,
-    prefetched: performanceBundle.bundle?.drilldown
-      ? {
-        summary: performanceBundle.bundle.drilldown.summary,
-        rows: performanceBundle.bundle.drilldown.rows,
-      }
-      : undefined,
+    prefetched: drilldownPrefetched,
     enabled: isDataLoaded && useLegacyDrilldown,
   });
 

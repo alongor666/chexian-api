@@ -5,10 +5,17 @@ import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { PageFilterPanel } from '../../components/layout/PageFilterPanel';
 import { buttonStyles, cn } from '@/shared/styles';
 import { ArrowRight } from 'lucide-react';
+import { usePermission } from '@/shared/contexts/PermissionContext';
+import { canAccessCost } from '@/shared/config/organizations';
 
 export const CostPage: React.FC = () => {
   const { filters, maxDataDate } = useGlobalFilters();
-  const enableComprehensiveAnalysis = import.meta.env.VITE_ENABLE_COMPREHENSIVE_ANALYSIS === 'true';
+  const { userPermission } = usePermission();
+
+  const comprehensiveSwitch = import.meta.env.VITE_ENABLE_COMPREHENSIVE_ANALYSIS;
+  const enableComprehensiveAnalysis =
+    comprehensiveSwitch === 'true'
+      || (comprehensiveSwitch !== 'false' && canAccessCost(userPermission?.username));
 
   return (
     <PageFilterPanel

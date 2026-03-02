@@ -50,6 +50,8 @@ describe('cross-sell SQL 兼容交叉销售字段格式', () => {
     const sql = generateCrossSellOrgTrendQuery('1=1', 'passenger', '主全', 14);
 
     expect(sql).toContain('COUNT(DISTINCT dedup_key) AS auto_count');
+    expect(sql).toContain("NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')");
+    expect(sql).toContain("NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')");
     expect(sql).not.toContain("COUNT(DISTINCT CASE WHEN insurance_type LIKE '%商业%' THEN dedup_key END) AS auto_count");
   });
 });

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "[pre-commit] Cleaning untracked debug artifacts..."
+bun run cleanup:artifacts
+
 echo "[pre-commit] Running governance checks..."
 bun run governance
 
