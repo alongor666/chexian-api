@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { createLogger } from '../../../shared/utils/logger';
 import { apiClient } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
+import { queryKeys } from '../../../shared/api/query-keys';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { KpiDetailResult } from '../../../shared/types/kpi';
 
@@ -58,24 +59,19 @@ export interface UseKpiDataResult {
 }
 
 /**
- * KPI 数据获取 Hook（API-only 模式）
+ * KPI 数据获取 Hook（React Query 模式）
  */
 export const useKpiData = ({
   filters,
   prefetched,
   enabled = true,
 }: UseKpiDataOptions): UseKpiDataResult => {
-  const [kpiData, setKpiData] = useState<KpiData>({});
-  const [kpiDetails, setKpiDetails] = useState<KpiDetailResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const requestIdRef = useRef(0);
-
   const { isOrgUser, userOrg } = useRBAC();
+  const params = buildFilterParams(filters, { isOrgUser, userOrg });
 
-  const fetchFromApi = useCallback(async (requestId: number) => {
-    try {
-      const params = buildFilterParams(filters, { isOrgUser, userOrg });
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.kpi(params),
+    queryFn: async () => {
       logger.info('KPI API 查询执行', params);
 
       const [kpiResponse, kpiDetailResponse] = await Promise.all([
@@ -83,9 +79,7 @@ export const useKpiData = ({
         apiClient.getKpiDetail(params),
       ]);
 
-      if (requestId !== requestIdRef.current) return;
-
-      setKpiData({
+      const kpi: KpiData = {
         latest_policy_date: kpiResponse.latest_policy_date,
         vehicle_premium: kpiResponse.vehicle_premium,
         vehicle_achievement_rate: kpiResponse.vehicle_achievement_rate,
@@ -104,9 +98,9 @@ export const useKpiData = ({
         commercial_rate: kpiResponse.commercial_rate,
         nev_rate: kpiResponse.nev_rate,
         new_car_rate: kpiResponse.new_car_rate,
-      });
+      };
 
-      setKpiDetails({
+      const kpiDetail: KpiDetailResult = {
         total_premium: kpiDetailResponse.total_premium,
         policy_count: kpiDetailResponse.policy_count,
         per_capita_premium: kpiDetailResponse.per_capita_premium,
@@ -137,54 +131,22 @@ export const useKpiData = ({
         vehicle_other_count: kpiDetailResponse.vehicle_other_count,
         same_city_premium: kpiDetailResponse.same_city_premium,
         remote_premium: kpiDetailResponse.remote_premium,
-      });
+      };
 
       logger.info('KPI API 查询成功');
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      throw err;
-    }
-  }, [filters]);
+      return { kpi, kpiDetail };
+    },
+    enabled: enabled && !prefetched,
+  });
 
-  const fetchKpiData = useCallback(async () => {
-    if (prefetched) {
-      setKpiData(prefetched.kpi || {});
-      setKpiDetails(prefetched.kpiDetail);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    if (!enabled) {
-      logger.debug('KPI 查询未启用');
-      return;
-    }
-
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    setError(null);
-
-    try {
-      await fetchFromApi(requestId);
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      logger.error('KPI API 查询错误:', err);
-      setError(err instanceof Error ? err : new Error('Unknown error'));
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [enabled, fetchFromApi, prefetched]);
-
-  useEffect(() => {
-    void fetchKpiData();
-  }, [fetchKpiData]);
+  const kpiData = prefetched?.kpi ?? data?.kpi ?? {};
+  const kpiDetails = prefetched?.kpiDetail ?? data?.kpiDetail ?? null;
 
   return {
     kpiData,
     kpiDetails,
-    loading,
-    error,
-    refresh: fetchKpiData,
+    loading: prefetched ? false : isLoading,
+    error: prefetched ? null : (error instanceof Error ? error : null),
+    refresh: () => { void refetch(); },
   };
 };

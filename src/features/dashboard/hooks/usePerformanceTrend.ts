@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
@@ -34,6 +34,43 @@ interface UsePerformanceTrendResult {
   error: string | null;
 }
 
+function groupRowsToSeries(rows: Array<Record<string, unknown>>): PerformanceTrendSeries[] {
+  const grouped = new Map<string, PerformanceTrendSeries>();
+
+  rows.forEach((row) => {
+    const lineKey = String(row.line_key ?? 'overall');
+    const current = grouped.get(lineKey);
+    const point: PerformanceTrendPoint = {
+      time_period: String(row.time_period ?? ''),
+      premium: Number(row.premium ?? 0),
+      auto_count: Number(row.auto_count ?? 0),
+    };
+
+    if (!current) {
+      grouped.set(lineKey, {
+        line_key: lineKey,
+        line_label: String(row.line_label ?? lineKey),
+        line_order: Number(row.line_order ?? 99),
+        points: [point],
+      });
+      return;
+    }
+
+    const updated: PerformanceTrendSeries = {
+      ...current,
+      points: [...current.points, point],
+    };
+    grouped.set(lineKey, updated);
+  });
+
+  return Array.from(grouped.values())
+    .sort((a, b) => a.line_order - b.line_order)
+    .map((item) => ({
+      ...item,
+      points: [...item.points].sort((a, b) => a.time_period.localeCompare(b.time_period)),
+    }));
+}
+
 export function usePerformanceTrend({
   filters,
   segmentTag,
@@ -42,111 +79,28 @@ export function usePerformanceTrend({
   enabled = true,
 }: UsePerformanceTrendProps): UsePerformanceTrendResult {
   const { isOrgUser, userOrg } = useRBAC();
-  const [series, setSeries] = useState<PerformanceTrendSeries[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fetchIdRef = useRef(0);
 
-  const fetchData = useCallback(async () => {
-    if (prefetchedRows) {
-      const grouped = new Map<string, PerformanceTrendSeries>();
-      prefetchedRows.forEach((row) => {
-        const lineKey = String(row.line_key ?? 'overall');
-        const current = grouped.get(lineKey);
-        if (!current) {
-          grouped.set(lineKey, {
-            line_key: lineKey,
-            line_label: String(row.line_label ?? lineKey),
-            line_order: Number(row.line_order ?? 99),
-            points: [{
-              time_period: String(row.time_period ?? ''),
-              premium: Number(row.premium ?? 0),
-              auto_count: Number(row.auto_count ?? 0),
-            }],
-          });
-          return;
-        }
-        current.points.push({
-          time_period: String(row.time_period ?? ''),
-          premium: Number(row.premium ?? 0),
-          auto_count: Number(row.auto_count ?? 0),
-        });
-      });
+  const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+  delete filterParams.customerCategories;
 
-      setSeries(Array.from(grouped.values())
-        .sort((a, b) => a.line_order - b.line_order)
-        .map((item) => ({
-          ...item,
-          points: item.points.sort((a, b) => a.time_period.localeCompare(b.time_period)),
-        })));
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    if (!enabled) return;
+  const params: Record<string, string> = {
+    ...filterParams,
+    segmentTag,
+    granularity,
+  };
 
-    const fetchId = ++fetchIdRef.current;
-    setLoading(true);
-    setError(null);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['performance-trend', params],
+    queryFn: () => apiClient.getPerformanceTrend(params),
+    enabled: enabled && !prefetchedRows,
+    select: (result) => groupRowsToSeries(result?.rows || []),
+  });
 
-    try {
-      const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
-      delete filterParams.customerCategories;
+  const series = prefetchedRows ? groupRowsToSeries(prefetchedRows) : (data ?? []);
 
-      const params: Record<string, string> = {
-        ...filterParams,
-        segmentTag,
-        granularity,
-      };
-
-      const result = await apiClient.getPerformanceTrend(params);
-      if (fetchId !== fetchIdRef.current) return;
-
-      const grouped = new Map<string, PerformanceTrendSeries>();
-      (result?.rows || []).forEach((row) => {
-        const lineKey = String(row.line_key ?? 'overall');
-        const current = grouped.get(lineKey);
-        if (!current) {
-          grouped.set(lineKey, {
-            line_key: lineKey,
-            line_label: String(row.line_label ?? lineKey),
-            line_order: Number(row.line_order ?? 99),
-            points: [{
-              time_period: String(row.time_period ?? ''),
-              premium: Number(row.premium ?? 0),
-              auto_count: Number(row.auto_count ?? 0),
-            }],
-          });
-          return;
-        }
-        current.points.push({
-          time_period: String(row.time_period ?? ''),
-          premium: Number(row.premium ?? 0),
-          auto_count: Number(row.auto_count ?? 0),
-        });
-      });
-
-      const mapped = Array.from(grouped.values())
-        .sort((a, b) => a.line_order - b.line_order)
-        .map((item) => ({
-          ...item,
-          points: item.points.sort((a, b) => a.time_period.localeCompare(b.time_period)),
-        }));
-
-      setSeries(mapped);
-    } catch (err) {
-      if (fetchId !== fetchIdRef.current) return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (fetchId === fetchIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [enabled, filters, granularity, isOrgUser, prefetchedRows, segmentTag, userOrg]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  return { series, loading, error };
+  return {
+    series,
+    loading: prefetchedRows ? false : isLoading,
+    error: prefetchedRows ? null : (error ? (error instanceof Error ? error.message : String(error)) : null),
+  };
 }

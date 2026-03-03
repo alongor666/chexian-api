@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient, type PerformanceBundleResponse } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
+import { queryKeys } from '@/shared/api/query-keys';
 import type {
   PerformanceGrowthMode,
   PerformanceSegmentTag,
@@ -34,48 +35,31 @@ export function usePerformanceBundle({
   enabled = true,
 }: UsePerformanceBundleProps): UsePerformanceBundleResult {
   const { isOrgUser, userOrg } = useRBAC();
-  const [bundle, setBundle] = useState<PerformanceBundleResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fetchIdRef = useRef(0);
 
-  useEffect(() => {
-    if (!enabled) return;
+  const defaultDrillPath = isOrgUser && userOrg
+    ? [{ dimension: 'org_level_3', value: userOrg }]
+    : [];
+  const defaultGroupBy = isOrgUser ? 'salesman' : 'org_level_3';
 
-    const fetchId = ++fetchIdRef.current;
-    setLoading(true);
-    setError(null);
+  const params = {
+    ...buildFilterParams(filters, { isOrgUser, userOrg }),
+    drillPath: defaultDrillPath,
+    groupBy: defaultGroupBy,
+    segmentTag,
+    timePeriod,
+    growthMode,
+    expandDims,
+  };
 
-    const run = async () => {
-      try {
-        const defaultDrillPath = isOrgUser && userOrg
-          ? [{ dimension: 'org_level_3', value: userOrg }]
-          : [];
-        const defaultGroupBy = isOrgUser ? 'salesman' : 'org_level_3';
-        const params = {
-          ...buildFilterParams(filters, { isOrgUser, userOrg }),
-          drillPath: defaultDrillPath,
-          groupBy: defaultGroupBy,
-          segmentTag,
-          timePeriod,
-          growthMode,
-          expandDims,
-        };
-        const result = await apiClient.getPerformanceBundle(params);
-        if (fetchId !== fetchIdRef.current) return;
-        setBundle(result);
-      } catch (err) {
-        if (fetchId !== fetchIdRef.current) return;
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (fetchId === fetchIdRef.current) {
-          setLoading(false);
-        }
-      }
-    };
+  const { data, isFetching, error } = useQuery<PerformanceBundleResponse, Error>({
+    queryKey: queryKeys.performanceBundle(params as Record<string, unknown>),
+    queryFn: () => apiClient.getPerformanceBundle(params),
+    enabled,
+  });
 
-    void run();
-  }, [enabled, expandDims, filters, growthMode, isOrgUser, segmentTag, timePeriod, userOrg]);
-
-  return { bundle, loading, error };
+  return {
+    bundle: data ?? null,
+    loading: isFetching,
+    error: error instanceof Error ? error.message : error ? String(error) : null,
+  };
 }

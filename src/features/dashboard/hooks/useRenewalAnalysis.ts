@@ -1,9 +1,11 @@
 /**
- * 续保分析数据 Hook（API-only 模式）
+ * 续保分析数据 Hook（React Query 模式）
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
+import { queryKeys } from '../../../shared/api/query-keys';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { createLogger } from '../../../shared/utils/logger';
 import type { AdvancedFilterState } from '../../../shared/types/data';
@@ -44,6 +46,12 @@ interface UseRenewalAnalysisReturn {
   checkAvailableMonths: () => Promise<void>;
 }
 
+interface RenewalApiResult {
+  detailData: RenewalDetailRow[];
+  availableMonths: number[];
+  latestPolicyDate: string | null;
+}
+
 /**
  * 格式化月日
  */
@@ -71,85 +79,77 @@ export function useRenewalAnalysis({
 }: UseRenewalAnalysisProps): UseRenewalAnalysisReturn {
   const effectiveYear = targetYear ?? filters.analysis_year ?? new Date().getFullYear();
   const { isOrgUser, userOrg } = useRBAC();
+  const queryClient = useQueryClient();
 
-  const [detailData, setDetailData] = useState<RenewalDetailRow[]>([]);
-  const [availableMonths, setAvailableMonths] = useState<number[]>([]);
-  const [latestPolicyDate, setLatestPolicyDate] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasCheckedAvailability, setHasCheckedAvailability] = useState(false);
+  // 续保分析排除日期范围，保留机构等筛选
+  const renewalFilters: AdvancedFilterState = {
+    ...filters,
+    policy_date_start: undefined,
+    policy_date_end: undefined,
+  };
 
-  const fetchFromApi = useCallback(async () => {
-    // 续保分析：排除日期范围（使用 targetYear/Month 替代），但保留机构等筛选
-    const renewalFilters: AdvancedFilterState = {
-      ...filters,
-      policy_date_start: undefined,
-      policy_date_end: undefined,
-    };
-    const params = {
-      ...buildFilterParams(renewalFilters, { isOrgUser, userOrg }),
-      queryType: 'full' as const,
-      targetYear: effectiveYear,
-      targetMonth: selectedMonth,
-    };
+  const params: Record<string, unknown> = {
+    ...buildFilterParams(renewalFilters, { isOrgUser, userOrg }),
+    queryType: 'full' as const,
+    targetYear: effectiveYear,
+    targetMonth: selectedMonth,
+    // perspective 作为 cache key 的一部分，但不传给 API
+    _perspective: perspective,
+  };
 
-    logger.debug('Fetching renewal data from API', params);
+  const { data, isLoading, error: queryError } = useQuery<RenewalApiResult>({
+    queryKey: queryKeys.renewalAnalysis(params),
+    queryFn: async () => {
+      logger.debug('Fetching renewal data from API', params);
 
-    const result = await apiClient.getRenewalAnalysis(params);
+      const result = await apiClient.getRenewalAnalysis({
+        ...buildFilterParams(renewalFilters, { isOrgUser, userOrg }),
+        queryType: 'full' as const,
+        targetYear: effectiveYear,
+        targetMonth: selectedMonth,
+      });
 
-    if (result) {
-      const mappedData = (result.detailData || []).map((row: Record<string, unknown>) => ({
-        month_day: formatMonthDay(row.month_day),
-        daily_due_count: Number(row.daily_due_count ?? 0),
-        daily_renewed_count: Number(row.daily_renewed_count ?? 0),
-        daily_renewal_rate: Number(row.daily_renewal_rate ?? 0),
-        month_to_date_due_count: Number(row.month_to_date_due_count ?? 0),
-        month_to_date_renewed_count: Number(row.month_to_date_renewed_count ?? 0),
-        monthly_renewal_rate: Number(row.monthly_renewal_rate ?? 0),
-        year_to_date_due_count: Number(row.year_to_date_due_count ?? 0),
-        year_to_date_renewed_count: Number(row.year_to_date_renewed_count ?? 0),
-        yearly_renewal_rate: Number(row.yearly_renewal_rate ?? 0),
-      }));
+      const detailData: RenewalDetailRow[] = (result?.detailData ?? []).map(
+        (row: Record<string, unknown>) => ({
+          month_day: formatMonthDay(row.month_day),
+          daily_due_count: Number(row.daily_due_count ?? 0),
+          daily_renewed_count: Number(row.daily_renewed_count ?? 0),
+          daily_renewal_rate: Number(row.daily_renewal_rate ?? 0),
+          month_to_date_due_count: Number(row.month_to_date_due_count ?? 0),
+          month_to_date_renewed_count: Number(row.month_to_date_renewed_count ?? 0),
+          monthly_renewal_rate: Number(row.monthly_renewal_rate ?? 0),
+          year_to_date_due_count: Number(row.year_to_date_due_count ?? 0),
+          year_to_date_renewed_count: Number(row.year_to_date_renewed_count ?? 0),
+          yearly_renewal_rate: Number(row.yearly_renewal_rate ?? 0),
+        }),
+      );
 
-      setDetailData(mappedData);
-      setAvailableMonths(result.availableMonths || []);
-      setLatestPolicyDate(result.latestPolicyDate || null);
-      setHasCheckedAvailability(true);
-    }
-  }, [filters, perspective, effectiveYear, selectedMonth]);
+      return {
+        detailData,
+        availableMonths: result?.availableMonths ?? [],
+        latestPolicyDate: result?.latestPolicyDate ?? null,
+      };
+    },
+    enabled,
+  });
 
-  const checkAvailableMonths = useCallback(async () => {
-    // In API mode, available months are fetched together with data
-  }, []);
+  const refresh = useCallback(async () => {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.renewalAnalysis(params),
+    });
+  }, [queryClient, params]);
 
-  const fetchData = useCallback(async () => {
-    if (!enabled) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      await fetchFromApi();
-    } catch (err) {
-      logger.error('续保明细表格查询失败', err);
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled, fetchFromApi]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  // noop — available months are fetched together with data
+  const checkAvailableMonths = useCallback(async () => {}, []);
 
   return {
-    detailData,
-    availableMonths,
-    latestPolicyDate,
-    loading,
-    error,
-    hasCheckedAvailability,
-    refresh: fetchData,
+    detailData: data?.detailData ?? [],
+    availableMonths: data?.availableMonths ?? [],
+    latestPolicyDate: data?.latestPolicyDate ?? null,
+    loading: isLoading,
+    error: queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null,
+    hasCheckedAvailability: !isLoading && data !== undefined,
+    refresh,
     checkAvailableMonths,
   };
 }

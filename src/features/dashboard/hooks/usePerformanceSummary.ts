@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
@@ -49,6 +49,26 @@ interface UsePerformanceSummaryResult {
   error: string | null;
 }
 
+function mapSummaryRow(row: Record<string, unknown>): PerformanceSummaryRow {
+  return {
+    coverage_combination: String(row.coverage_combination ?? ''),
+    row_label: String(row.row_label ?? row.coverage_combination ?? ''),
+    row_level: Number(row.row_level ?? 0),
+    expand_key: row.expand_key == null ? null : String(row.expand_key),
+    premium: Number(row.premium ?? 0),
+    auto_count: Number(row.auto_count ?? 0),
+    avg_premium: Number(row.avg_premium ?? 0),
+    plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),
+    achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
+    growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
+    nev_rate: Number(row.nev_rate ?? 0),
+    renewal_rate: Number(row.renewal_rate ?? 0),
+    transfer_business_rate: Number(row.transfer_business_rate ?? 0),
+    new_car_rate: Number(row.new_car_rate ?? 0),
+    transfer_rate: Number(row.transfer_rate ?? 0),
+  };
+}
+
 export function usePerformanceSummary({
   filters,
   segmentTag,
@@ -59,71 +79,30 @@ export function usePerformanceSummary({
   enabled = true,
 }: UsePerformanceSummaryProps): UsePerformanceSummaryResult {
   const { isOrgUser, userOrg } = useRBAC();
-  const [rows, setRows] = useState<PerformanceSummaryRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fetchIdRef = useRef(0);
 
-  const fetchData = useCallback(async () => {
-    if (prefetchedRows) {
-      setRows(prefetchedRows);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    if (!enabled) return;
+  const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+  delete filterParams.customerCategories;
 
-    const fetchId = ++fetchIdRef.current;
-    setLoading(true);
-    setError(null);
+  const params: Record<string, string> = {
+    ...filterParams,
+    segmentTag,
+    timePeriod,
+    growthMode,
+    expandDims,
+  };
 
-    try {
-      const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
-      delete filterParams.customerCategories;
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['performance-summary', params],
+    queryFn: () => apiClient.getPerformanceSummary(params),
+    enabled: enabled && !prefetchedRows,
+    select: (result) => (result?.rows || []).map(mapSummaryRow),
+  });
 
-      const params: Record<string, string> = {
-        ...filterParams,
-        segmentTag,
-        timePeriod,
-        growthMode,
-        expandDims,
-      };
+  const rows = prefetchedRows ?? data ?? [];
 
-      const result = await apiClient.getPerformanceSummary(params);
-      if (fetchId !== fetchIdRef.current) return;
-
-      const mapped = (result?.rows || []).map((row) => ({
-        coverage_combination: String(row.coverage_combination ?? ''),
-        row_label: String(row.row_label ?? row.coverage_combination ?? ''),
-        row_level: Number(row.row_level ?? 0),
-        expand_key: row.expand_key == null ? null : String(row.expand_key),
-        premium: Number(row.premium ?? 0),
-        auto_count: Number(row.auto_count ?? 0),
-        avg_premium: Number(row.avg_premium ?? 0),
-        plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),
-        achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
-        growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
-        nev_rate: Number(row.nev_rate ?? 0),
-        renewal_rate: Number(row.renewal_rate ?? 0),
-        transfer_business_rate: Number(row.transfer_business_rate ?? 0),
-        new_car_rate: Number(row.new_car_rate ?? 0),
-        transfer_rate: Number(row.transfer_rate ?? 0),
-      }));
-
-      setRows(mapped);
-    } catch (err) {
-      if (fetchId !== fetchIdRef.current) return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (fetchId === fetchIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [enabled, expandDims, filters, growthMode, isOrgUser, prefetchedRows, segmentTag, timePeriod, userOrg]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  return { rows, loading, error };
+  return {
+    rows,
+    loading: prefetchedRows ? false : isLoading,
+    error: prefetchedRows ? null : (error ? (error instanceof Error ? error.message : String(error)) : null),
+  };
 }

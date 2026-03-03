@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { queryKeys } from '@/shared/api/query-keys';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { Logger } from '@/shared/utils/logger';
 import { useRBAC } from '@/shared/hooks/useRBAC';
@@ -22,7 +24,7 @@ interface UseComprehensiveBundleResult {
   data: ComprehensiveViewModel | null;
   loading: boolean;
   error: string | null;
-  reload: () => Promise<void>;
+  reload: () => void;
 }
 
 const logger = new Logger('ComprehensiveBundle');
@@ -32,9 +34,7 @@ export function useComprehensiveBundle(
   maxDataDate?: string
 ): UseComprehensiveBundleResult {
   const { isOrgUser, userOrg } = useRBAC();
-  const [data, setData] = useState<ComprehensiveViewModel | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const params = useMemo(() => {
     const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
@@ -46,19 +46,18 @@ export function useComprehensiveBundle(
     return filterParams;
   }, [filters, isOrgUser, maxDataDate, userOrg]);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await apiClient.getComprehensiveBundle(params);
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.comprehensiveBundle(params),
+    queryFn: () => apiClient.getComprehensiveBundle(params),
+    select: (response) => {
       const thresholds = mergeThresholds(response.meta.thresholds);
       const overviewRows = adaptOverviewRows(response);
-      const alertRows = response.overview.alerts.length > 0
-        ? response.overview.alerts
-        : buildOverviewAlerts(overviewRows, thresholds);
+      const alertRows =
+        response.overview.alerts.length > 0
+          ? response.overview.alerts
+          : buildOverviewAlerts(overviewRows, thresholds);
 
-      setData({
+      const viewModel: ComprehensiveViewModel = {
         meta: {
           cutoffDate: response.meta.cutoffDate,
           maxDataDate: response.meta.maxDataDate,
@@ -90,20 +89,31 @@ export function useComprehensiveBundle(
         roi: {
           rows: adaptRoiRows(response),
         },
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '综合分析数据加载失败';
-      logger.error('failed to load comprehensive bundle', err);
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [params]);
+      };
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+      return viewModel;
+    },
+  });
 
-  return { data, loading, error, reload };
+  const reload = () => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.comprehensiveBundle(params),
+    });
+  };
+
+  const errorMessage = error instanceof Error
+    ? (() => {
+        logger.error('failed to load comprehensive bundle', error);
+        return error.message;
+      })()
+    : error != null
+      ? '综合分析数据加载失败'
+      : null;
+
+  return {
+    data: data ?? null,
+    loading: isLoading,
+    error: errorMessage,
+    reload,
+  };
 }
-

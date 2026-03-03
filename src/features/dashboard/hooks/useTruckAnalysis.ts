@@ -2,8 +2,9 @@
  * 营业货车分析数据 Hook（API-only 模式）
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
+import { queryKeys } from '../../../shared/api/query-keys';
 import { useDataStatus } from '../../../shared/contexts/DataContext';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { createLogger } from '../../../shared/utils/logger';
@@ -37,6 +38,13 @@ interface UseTruckAnalysisReturn {
   refresh: () => Promise<void>;
 }
 
+interface TruckAnalysisSelected {
+  rosePremiumData: RoseChartDatum[];
+  roseCountData: RoseChartDatum[];
+  tonnageByOrgData: TruckByOrgData[];
+  orgPremiumData: RoseChartDatum[];
+}
+
 /**
  * 营业货车分析数据 Hook
  */
@@ -47,60 +55,38 @@ export function useTruckAnalysis({
 }: UseTruckAnalysisProps): UseTruckAnalysisReturn {
   const { isDataLoaded } = useDataStatus();
   const { isOrgUser, userOrg } = useRBAC();
+  const queryClient = useQueryClient();
 
-  const [rosePremiumData, setRosePremiumData] = useState<RoseChartDatum[]>([]);
-  const [roseCountData, setRoseCountData] = useState<RoseChartDatum[]>([]);
-  const [tonnageByOrgData, setTonnageByOrgData] = useState<TruckByOrgData[]>([]);
-  const [orgPremiumData, setOrgPremiumData] = useState<RoseChartDatum[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const params = {
+    ...buildFilterParams(filters, { isOrgUser, userOrg }),
+    queryType: 'all' as const,
+    metric: perspective === 'policy_count' ? 'count' : 'premium',
+  };
 
-  const fetchFromApi = useCallback(async () => {
-    const params = {
-      ...buildFilterParams(filters, { isOrgUser, userOrg }),
-      queryType: 'all' as const,
-      metric: perspective === 'policy_count' ? 'count' : 'premium',
-    };
+  logger.debug('useTruckAnalysis params', params);
 
-    logger.debug('Fetching truck data from API', params);
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.truckAnalysis(params),
+    queryFn: () => apiClient.getTruckAnalysis(params),
+    enabled: enabled && isDataLoaded,
+    select: (result): TruckAnalysisSelected => ({
+      rosePremiumData: result?.rosePremium ?? [],
+      roseCountData: result?.roseCount ?? [],
+      tonnageByOrgData: result?.tonnageByOrg ?? [],
+      orgPremiumData: result?.orgPremium ?? [],
+    }),
+  });
 
-    const result = await apiClient.getTruckAnalysis(params);
-
-    if (result) {
-      setRosePremiumData(result.rosePremium || []);
-      setRoseCountData(result.roseCount || []);
-      setTonnageByOrgData(result.tonnageByOrg || []);
-      setOrgPremiumData(result.orgPremium || []);
-    }
-  }, [filters, perspective]);
-
-  const fetchData = useCallback(async () => {
-    if (!enabled || !isDataLoaded) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      await fetchFromApi();
-    } catch (err) {
-      logger.error('Failed to load truck analysis data', err);
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled, isDataLoaded, fetchFromApi]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const refresh = (): Promise<void> =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.truckAnalysis(params) });
 
   return {
-    rosePremiumData,
-    roseCountData,
-    tonnageByOrgData,
-    orgPremiumData,
-    loading,
-    error,
-    refresh: fetchData,
+    rosePremiumData: data?.rosePremiumData ?? [],
+    roseCountData: data?.roseCountData ?? [],
+    tonnageByOrgData: data?.tonnageByOrgData ?? [],
+    orgPremiumData: data?.orgPremiumData ?? [],
+    loading: isLoading,
+    error: error instanceof Error ? error.message : error != null ? String(error) : null,
+    refresh,
   };
 }

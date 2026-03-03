@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
@@ -118,6 +119,8 @@ export function usePerformanceDrilldown({
   enabled = true,
 }: UsePerformanceDrilldownProps): UsePerformanceDrilldownReturn {
   const { isOrgUser, userOrg, canGoToTop, getMinDrillUpIndex } = useRBAC();
+
+  // UI 状态：下钻路径和分组维度（不属于缓存数据，保留 useState）
   const initialDrillPath = useMemo<PerformanceDrilldownStep[]>(() => {
     if (isOrgUser && userOrg) {
       return [{ dimension: 'org_level_3', value: userOrg, label: `三级机构: ${userOrg}` }];
@@ -130,75 +133,54 @@ export function usePerformanceDrilldown({
     return 'org_level_3';
   }, [isOrgUser]);
 
-  const [summary, setSummary] = useState<PerformanceRow | null>(null);
-  const [rows, setRows] = useState<PerformanceRow[]>([]);
   const [drillPath, setDrillPath] = useState<PerformanceDrilldownStep[]>(initialDrillPath);
   const [currentGroupBy, setCurrentGroupBy] = useState<PerformanceDimension | null>(initialGroupBy);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fetchIdRef = useRef(0);
 
+  // 当角色/机构变更时同步重置下钻状态
   useEffect(() => {
     setDrillPath(initialDrillPath);
     setCurrentGroupBy(initialGroupBy);
   }, [initialDrillPath, initialGroupBy]);
 
-  useEffect(() => {
-    if (enabled) return;
-    if (!prefetched) {
-      setSummary(null);
-      setRows([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    setSummary(prefetched.summary ? mapRow(prefetched.summary) : null);
-    setRows((prefetched.rows || []).map((row) => mapRow(row)));
-    setError(null);
-    setLoading(false);
-  }, [enabled, prefetched]);
+  // 构建 API 请求参数（drillPath/currentGroupBy 变化时 query key 自动失效）
+  const apiParams = useMemo(() => {
+    const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+    delete filterParams.customerCategories;
+    return {
+      ...filterParams,
+      drillPath: drillPath.map((item) => ({ dimension: item.dimension, value: item.value })),
+      groupBy: currentGroupBy || undefined,
+      segmentTag,
+      timePeriod,
+      growthMode,
+    };
+  }, [filters, isOrgUser, userOrg, drillPath, currentGroupBy, segmentTag, timePeriod, growthMode]);
 
+  // useQuery 替代手动 fetch + fetchIdRef，自动处理竞态和缓存
+  const { data: queryData, isLoading, error: queryError } = useQuery({
+    queryKey: ['performance-drilldown', apiParams],
+    queryFn: () => apiClient.getPerformanceDrilldown(apiParams),
+    enabled: enabled && !prefetched,
+    select: (result) => ({
+      summary: result.summary ? mapRow(result.summary as Record<string, unknown>) : null,
+      rows: (result.rows || []).map((row) => mapRow(row as Record<string, unknown>)),
+    }),
+  });
+
+  // 合并预取数据与 query 数据：prefetched 存在时直接使用，否则使用 queryData
+  const summary = prefetched
+    ? (prefetched.summary ? mapRow(prefetched.summary) : null)
+    : (queryData?.summary ?? null);
+  const rows = prefetched
+    ? (prefetched.rows || []).map((row) => mapRow(row))
+    : (queryData?.rows ?? []);
+
+  // 已用维度集合 + 可选维度列表
   const usedDimensions = new Set<PerformanceDimension>([
     ...drillPath.map((item) => item.dimension),
     ...(currentGroupBy ? [currentGroupBy] : []),
   ]);
   const availableDimensions = ALL_DIMENSIONS.filter((dim) => !usedDimensions.has(dim));
-
-  const fetchData = useCallback(async () => {
-    if (!enabled) return;
-
-    const fetchId = ++fetchIdRef.current;
-    setLoading(true);
-    setError(null);
-
-    try {
-      const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
-      delete filterParams.customerCategories;
-      const result = await apiClient.getPerformanceDrilldown({
-        ...filterParams,
-        drillPath: drillPath.map((item) => ({ dimension: item.dimension, value: item.value })),
-        groupBy: currentGroupBy || undefined,
-        segmentTag,
-        timePeriod,
-        growthMode,
-      });
-
-      if (fetchId !== fetchIdRef.current) return;
-      setSummary(result.summary ? mapRow(result.summary as Record<string, unknown>) : null);
-      setRows((result.rows || []).map((row) => mapRow(row as Record<string, unknown>)));
-    } catch (err) {
-      if (fetchId !== fetchIdRef.current) return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (fetchId === fetchIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [currentGroupBy, drillPath, enabled, filters, growthMode, isOrgUser, segmentTag, timePeriod, userOrg]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const selectDimension = useCallback((dimension: PerformanceDimension) => {
     setDrillPath(initialDrillPath);
@@ -238,6 +220,11 @@ export function usePerformanceDrilldown({
     setDrillPath(initialDrillPath);
     setCurrentGroupBy(initialGroupBy);
   }, [initialDrillPath, initialGroupBy]);
+
+  const loading = prefetched ? false : isLoading;
+  const error = prefetched
+    ? null
+    : (queryError ? (queryError instanceof Error ? queryError.message : String(queryError)) : null);
 
   return {
     summary,

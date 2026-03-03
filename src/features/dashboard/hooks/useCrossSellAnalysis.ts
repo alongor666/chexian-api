@@ -10,7 +10,8 @@
  * 每层可停止、可上钻（面包屑导航）
  */
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import { apiClient, ENABLE_BUNDLE_ROUTES } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
@@ -19,6 +20,7 @@ import type { TrendGranularity } from './useCrossSellTrend';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
 import type { TopSalesmanRow } from './useCrossSellTopSalesman';
 import { formatSalesmanName } from '../../../shared/utils/formatters';
+import { queryKeys } from '../../../shared/api/query-keys';
 
 /** 可选的下钻维度（不含 summary） */
 export type CrossSellDimension =
@@ -122,7 +124,7 @@ export interface UseCrossSellAnalysisReturn {
   reset: () => void;
   loading: boolean;
   error: string | null;
-  refresh: () => Promise<void>;
+  refresh: () => void;
   /** 是否允许回到顶层（全公司） */
   canGoToTop: boolean;
 }
@@ -145,6 +147,82 @@ function mapRow(raw: Record<string, unknown>): CrossSellRow {
   };
 }
 
+// bundle 结果的标准结构类型
+type BundleLikeResult = {
+  summary: { maxDate: string | null; rows: Array<Record<string, unknown>> };
+  trend: { rows: Array<Record<string, unknown>> };
+  drilldown: {
+    summary: Record<string, unknown> | null;
+    rows: Array<Record<string, unknown>>;
+  };
+  topSalesman: {
+    zhuquanRows: Array<Record<string, unknown>>;
+    jiaosanRows: Array<Record<string, unknown>>;
+  };
+};
+
+// select 转换后的标准数据结构
+type TransformedData = {
+  summary: CrossSellRow | null;
+  rows: CrossSellRow[];
+  timePeriodSummary: { maxDate: string | null; rows: Array<Record<string, unknown>> };
+  trendRows: Array<{
+    time_period: string;
+    coverage_combination: string;
+    rate: number;
+    avg_premium: number;
+    auto_count: number;
+  }>;
+  topSalesman: {
+    zhuquanRows: TopSalesmanRow[];
+    jiaosanRows: TopSalesmanRow[];
+  };
+};
+
+const EMPTY_TRANSFORMED_DATA: TransformedData = {
+  summary: null,
+  rows: [],
+  timePeriodSummary: { maxDate: null, rows: [] },
+  trendRows: [],
+  topSalesman: { zhuquanRows: [], jiaosanRows: [] },
+};
+
+function transformBundleResult(result: BundleLikeResult): TransformedData {
+  return {
+    summary: result.drilldown.summary ? mapRow(result.drilldown.summary) : null,
+    rows: (result.drilldown.rows || []).map(mapRow),
+    trendRows: (result.trend.rows || []).map((row) => ({
+      time_period: String(row.time_period ?? ''),
+      coverage_combination: String(row.coverage_combination ?? ''),
+      rate: Number(row.rate ?? 0),
+      avg_premium: Number(row.avg_premium ?? 0),
+      auto_count: Number(row.auto_count ?? 0),
+    })),
+    timePeriodSummary: {
+      maxDate: result.summary.maxDate ?? null,
+      rows: result.summary.rows || [],
+    },
+    topSalesman: {
+      zhuquanRows: (result.topSalesman.zhuquanRows || []).map((row) => ({
+        salesman_name: formatSalesmanName(String(row.salesman_name ?? '')),
+        org_level_3: String(row.org_level_3 ?? ''),
+        driver_premium: Number(row.driver_premium ?? 0),
+        auto_count: Number(row.auto_count ?? 0),
+        rate: Number(row.rate ?? 0),
+        avg_premium: Number(row.avg_premium ?? 0),
+      })),
+      jiaosanRows: (result.topSalesman.jiaosanRows || []).map((row) => ({
+        salesman_name: formatSalesmanName(String(row.salesman_name ?? '')),
+        org_level_3: String(row.org_level_3 ?? ''),
+        driver_premium: Number(row.driver_premium ?? 0),
+        auto_count: Number(row.auto_count ?? 0),
+        rate: Number(row.rate ?? 0),
+        avg_premium: Number(row.avg_premium ?? 0),
+      })),
+    },
+  };
+}
+
 export function useCrossSellAnalysis({
   filters,
   vehicleCategory,
@@ -155,7 +233,7 @@ export function useCrossSellAnalysis({
   const { isOrgUser, userOrg, canGoToTop, getMinDrillUpIndex } = useRBAC();
   const bundleEnabled = ENABLE_BUNDLE_ROUTES;
 
-  // 角色基础默认初始状态
+  // UI 状态：下钻路径和分组维度（保留 useState，属于交互状态）
   const initialDrillPath: DrilldownStep[] = useMemo(() => {
     if (isOrgUser && userOrg) {
       return [{ dimension: 'org_level_3', value: userOrg, label: `三级机构: ${userOrg}` }];
@@ -168,27 +246,8 @@ export function useCrossSellAnalysis({
     return 'org_level_3'; // 管理员默认看机构分布
   }, [isOrgUser]);
 
-  const [summary, setSummary] = useState<CrossSellRow | null>(null);
-  const [rows, setRows] = useState<CrossSellRow[]>([]);
-  const [timePeriodSummary, setTimePeriodSummary] = useState<{
-    maxDate: string | null;
-    rows: Array<Record<string, unknown>>;
-  }>({ maxDate: null, rows: [] });
-  const [trendRows, setTrendRows] = useState<Array<{
-    time_period: string;
-    coverage_combination: string;
-    rate: number;
-    avg_premium: number;
-    auto_count: number;
-  }>>([]);
-  const [topSalesman, setTopSalesman] = useState<{
-    zhuquanRows: TopSalesmanRow[];
-    jiaosanRows: TopSalesmanRow[];
-  }>({ zhuquanRows: [], jiaosanRows: [] });
   const [drillPath, setDrillPath] = useState<DrilldownStep[]>(initialDrillPath);
   const [currentGroupBy, setCurrentGroupBy] = useState<CrossSellDimension | null>(initialGroupBy);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // 当用户加载完成/变更时，重置回对应的角色的默认视图
   useEffect(() => {
@@ -203,155 +262,96 @@ export function useCrossSellAnalysis({
   ]);
   const availableDimensions = ALL_DIMENSIONS.filter(d => !usedDimensions.has(d));
 
-  // 防止 race condition
-  const fetchIdRef = useRef(0);
+  // 构建基础 API 参数（drillPath/currentGroupBy 变化时 queryKey 自动失效触发重新请求）
+  const baseParams = useMemo(() => {
+    const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+    return {
+      ...filterParams,
+      drillPath: drillPath.map(s => ({ dimension: s.dimension, value: s.value })),
+      groupBy: currentGroupBy || undefined,
+      ...(vehicleCategory ? { vehicleCategory } : {}),
+      ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
+      ...(timePeriod ? { timePeriod, granularity: timePeriod } : {}),
+    };
+  }, [filters, isOrgUser, userOrg, drillPath, currentGroupBy, vehicleCategory, seatCoverageLevel, timePeriod]);
 
-  const fetchData = useCallback(async () => {
-    if (!enabled) return;
+  // legacy 并行请求降级函数（queryFn 外部定义，保持引用稳定）
+  const fetchLegacyBundleLikeData = useCallback(async (): Promise<BundleLikeResult> => {
+    const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+    const apiDrillPath = drillPath.map(s => ({ dimension: s.dimension, value: s.value }));
+    const legacyBaseParams = {
+      ...filterParams,
+      drillPath: apiDrillPath,
+      groupBy: currentGroupBy || undefined,
+      ...(vehicleCategory ? { vehicleCategory } : {}),
+      ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
+      ...(timePeriod ? { timePeriod, granularity: timePeriod } : {}),
+    };
+    const trendParams: Record<string, string> = {
+      ...filterParams,
+      ...(vehicleCategory ? { vehicleCategory } : {}),
+      ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
+      ...(timePeriod ? { granularity: timePeriod } : {}),
+    };
+    const summaryParams: Record<string, string> = {
+      ...filterParams,
+      ...(vehicleCategory ? { vehicleCategory } : {}),
+      ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
+    };
+    const topSalesmanParams: Record<string, string> = {
+      ...filterParams,
+      ...(vehicleCategory ? { vehicleCategory } : {}),
+      ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
+      ...(timePeriod ? { timePeriod } : {}),
+    };
 
-    const fetchId = ++fetchIdRef.current;
-    setLoading(true);
-    setError(null);
+    const [analysis, summaryResp, trendResp, zhuquanResp, jiaosanResp] = await Promise.all([
+      apiClient.getCrossSellAnalysis(legacyBaseParams),
+      apiClient.getCrossSellTimePeriod(summaryParams),
+      apiClient.getCrossSellTrend(trendParams),
+      apiClient.getCrossSellTopSalesman({ ...topSalesmanParams, coverage: '主全' }),
+      apiClient.getCrossSellTopSalesman({ ...topSalesmanParams, coverage: '交三' }),
+    ]);
 
-    try {
-      const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
-      const apiDrillPath = drillPath.map(s => ({
-        dimension: s.dimension,
-        value: s.value,
-      }));
-      const baseParams = {
-        ...filterParams,
-        drillPath: apiDrillPath,
-        groupBy: currentGroupBy || undefined,
-        ...(vehicleCategory ? { vehicleCategory } : {}),
-        ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
-        ...(timePeriod ? { timePeriod, granularity: timePeriod } : {}),
-      };
+    return {
+      summary: {
+        maxDate: summaryResp.maxDate ? String(summaryResp.maxDate) : null,
+        rows: summaryResp.rows || [],
+      },
+      trend: {
+        rows: trendResp.rows || [],
+      },
+      drilldown: {
+        summary: analysis.summary ?? null,
+        rows: analysis.rows || [],
+      },
+      topSalesman: {
+        zhuquanRows: zhuquanResp.rows || [],
+        jiaosanRows: jiaosanResp.rows || [],
+      },
+    };
+  }, [filters, isOrgUser, userOrg, drillPath, currentGroupBy, vehicleCategory, seatCoverageLevel, timePeriod]);
 
-      const applyBundleResult = (result: {
-        summary: { maxDate: string | null; rows: Array<Record<string, unknown>> };
-        trend: { rows: Array<Record<string, unknown>> };
-        drilldown: {
-          summary: Record<string, unknown> | null;
-          rows: Array<Record<string, unknown>>;
-        };
-        topSalesman: {
-          zhuquanRows: Array<Record<string, unknown>>;
-          jiaosanRows: Array<Record<string, unknown>>;
-        };
-      }) => {
-        setSummary(result.drilldown.summary ? mapRow(result.drilldown.summary) : null);
-        setRows((result.drilldown.rows || []).map(mapRow));
-        setTrendRows((result.trend.rows || []).map((row) => ({
-          time_period: String(row.time_period ?? ''),
-          coverage_combination: String(row.coverage_combination ?? ''),
-          rate: Number(row.rate ?? 0),
-          avg_premium: Number(row.avg_premium ?? 0),
-          auto_count: Number(row.auto_count ?? 0),
-        })));
-        setTimePeriodSummary({
-          maxDate: result.summary.maxDate ?? null,
-          rows: result.summary.rows || [],
-        });
-        setTopSalesman({
-          zhuquanRows: (result.topSalesman.zhuquanRows || []).map((row) => ({
-            salesman_name: formatSalesmanName(String(row.salesman_name ?? '')),
-            org_level_3: String(row.org_level_3 ?? ''),
-            driver_premium: Number(row.driver_premium ?? 0),
-            auto_count: Number(row.auto_count ?? 0),
-            rate: Number(row.rate ?? 0),
-            avg_premium: Number(row.avg_premium ?? 0),
-          })),
-          jiaosanRows: (result.topSalesman.jiaosanRows || []).map((row) => ({
-            salesman_name: formatSalesmanName(String(row.salesman_name ?? '')),
-            org_level_3: String(row.org_level_3 ?? ''),
-            driver_premium: Number(row.driver_premium ?? 0),
-            auto_count: Number(row.auto_count ?? 0),
-            rate: Number(row.rate ?? 0),
-            avg_premium: Number(row.avg_premium ?? 0),
-          })),
-        });
-      };
-
-      type BundleLikeResult = Parameters<typeof applyBundleResult>[0];
-
-      const fetchLegacyBundleLikeData = async (): Promise<BundleLikeResult> => {
-        const trendParams: Record<string, string> = {
-          ...filterParams,
-          ...(vehicleCategory ? { vehicleCategory } : {}),
-          ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
-          ...(timePeriod ? { granularity: timePeriod } : {}),
-        };
-        const summaryParams: Record<string, string> = {
-          ...filterParams,
-          ...(vehicleCategory ? { vehicleCategory } : {}),
-          ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
-        };
-        const topSalesmanParams: Record<string, string> = {
-          ...filterParams,
-          ...(vehicleCategory ? { vehicleCategory } : {}),
-          ...(seatCoverageLevel ? { seatCoverageLevel } : {}),
-          ...(timePeriod ? { timePeriod } : {}),
-        };
-
-        const [analysis, summaryResp, trendResp, zhuquanResp, jiaosanResp] = await Promise.all([
-          apiClient.getCrossSellAnalysis(baseParams),
-          apiClient.getCrossSellTimePeriod(summaryParams),
-          apiClient.getCrossSellTrend(trendParams),
-          apiClient.getCrossSellTopSalesman({ ...topSalesmanParams, coverage: '主全' }),
-          apiClient.getCrossSellTopSalesman({ ...topSalesmanParams, coverage: '交三' }),
-        ]);
-
-        return {
-          summary: {
-            maxDate: summaryResp.maxDate ? String(summaryResp.maxDate) : null,
-            rows: summaryResp.rows || [],
-          },
-          trend: {
-            rows: trendResp.rows || [],
-          },
-          drilldown: {
-            summary: analysis.summary ?? null,
-            rows: analysis.rows || [],
-          },
-          topSalesman: {
-            zhuquanRows: zhuquanResp.rows || [],
-            jiaosanRows: jiaosanResp.rows || [],
-          },
-        };
-      };
-
-      let result: BundleLikeResult | null = null;
-      if (bundleEnabled) {
-        try {
-          result = await apiClient.getCrossSellBundle(baseParams);
-        } catch {
-          result = await fetchLegacyBundleLikeData();
-        }
-      } else {
-        result = await fetchLegacyBundleLikeData();
-      }
-
-      // 防止旧请求覆盖新数据
-      if (fetchId !== fetchIdRef.current) return;
-
-      if (result) {
-        applyBundleResult(result);
-      }
-    } catch (err) {
-      if (fetchId !== fetchIdRef.current) return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (fetchId === fetchIdRef.current) {
-        setLoading(false);
+  // queryFn：bundle/legacy 降级逻辑封装在此，useQuery 自动处理竞态
+  const queryFn = useCallback(async (): Promise<BundleLikeResult> => {
+    if (bundleEnabled) {
+      try {
+        return await apiClient.getCrossSellBundle(baseParams);
+      } catch {
+        return await fetchLegacyBundleLikeData();
       }
     }
-  }, [filters, drillPath, currentGroupBy, vehicleCategory, seatCoverageLevel, timePeriod, enabled, isOrgUser, userOrg, bundleEnabled]);
+    return await fetchLegacyBundleLikeData();
+  }, [bundleEnabled, baseParams, fetchLegacyBundleLikeData]);
 
-  // 依赖变化时自动请求
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data: queryData, isLoading, error: queryError, refetch } = useQuery({
+    queryKey: queryKeys.crossSellBundle(baseParams as Record<string, unknown>),
+    queryFn,
+    enabled,
+    select: transformBundleResult,
+  });
+
+  const resolvedData = queryData ?? EMPTY_TRANSFORMED_DATA;
 
   /** 首次选择维度（从汇总 → 分组视图） */
   const selectDimension = useCallback((dimension: CrossSellDimension) => {
@@ -399,22 +399,27 @@ export function useCrossSellAnalysis({
     setCurrentGroupBy(initialGroupBy);
   }, [initialDrillPath, initialGroupBy]);
 
+  const loading = isLoading;
+  const error = queryError
+    ? (queryError instanceof Error ? queryError.message : String(queryError))
+    : null;
+
   return {
-    summary,
-    rows,
+    summary: resolvedData.summary,
+    rows: resolvedData.rows,
     drillPath,
     currentGroupBy,
     availableDimensions,
-    timePeriodSummary,
-    trendRows,
-    topSalesman,
+    timePeriodSummary: resolvedData.timePeriodSummary,
+    trendRows: resolvedData.trendRows,
+    topSalesman: resolvedData.topSalesman,
     selectDimension,
     drillDown,
     drillUp,
     reset,
     loading,
     error,
-    refresh: fetchData,
+    refresh: refetch,
     canGoToTop,
   };
 }

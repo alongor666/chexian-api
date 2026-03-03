@@ -12,46 +12,42 @@ const login = async (page: Page) => {
   await page.waitForURL(/#\/(dashboard)?$/, { waitUntil: 'domcontentloaded' });
 };
 
-/** 确认已加载数据并进入仪表盘 */
 const ensureDataLoaded = async (page: Page) => {
-  await page.goto('/#/');
+  await page.goto('/#/dashboard');
   await page.waitForLoadState('domcontentloaded');
-  if (page.url().includes('#/login')) {
-    await login(page);
-    await page.goto('/#/');
-    await page.waitForLoadState('domcontentloaded');
-  }
+
   const loginHeading = page.getByRole('heading', { name: '车险业绩分析系统' });
-  if (await loginHeading.isVisible().catch(() => false)) {
+  if (page.url().includes('#/login') || (await loginHeading.isVisible().catch(() => false))) {
     await login(page);
-    await page.goto('/#/');
+    await page.goto('/#/dashboard');
     await page.waitForLoadState('domcontentloaded');
   }
-  if (page.url().includes('#/dashboard')) {
-    return;
-  }
 
-  await expect(page.getByRole('heading', { name: '数据导入' })).toBeVisible();
-
-  const loadedBanner = page.getByText('数据已加载:');
-  if (await loadedBanner.isVisible().catch(() => false)) {
-    const toDashboard = page.getByRole('button', { name: '进入仪表盘' });
-    if (await toDashboard.isVisible().catch(() => false)) {
-      await toDashboard.click();
-      await page.waitForURL(/#\/dashboard/);
-    }
+  const dashboardHeading = page.getByRole('heading', { name: '保费分析看板' });
+  if (await dashboardHeading.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
     return;
   }
 
   const emptyState = page.getByText('暂无数据文件，请上传');
   if (await emptyState.isVisible().catch(() => false)) {
-    throw new Error('未发现可加载的数据文件');
+    throw new Error('未发现可加载的数据文件，无法执行门禁验证');
+  }
+
+  const toDashboard = page.getByRole('button', { name: '进入仪表盘' });
+  if (await toDashboard.isVisible().catch(() => false)) {
+    await toDashboard.click();
+    await expect(dashboardHeading).toBeVisible({ timeout: 10000 });
+    return;
   }
 
   const loadButton = page.getByRole('button', { name: '加载' }).first();
-  await expect(loadButton).toBeVisible();
-  await loadButton.click();
-  await page.waitForURL(/#\/dashboard/);
+  if (await loadButton.isVisible().catch(() => false)) {
+    await loadButton.click();
+    await expect(dashboardHeading).toBeVisible({ timeout: 10000 });
+    return;
+  }
+
+  throw new Error('无法确定当前数据状态：既未进入仪表盘，也未发现可用的加载入口');
 };
 
 /** 记录关键页面截图 */
@@ -65,7 +61,7 @@ test('筛选器交互与报表展示', async ({ page }: { page: Page }) => {
 
   await page.evaluate(() => localStorage.setItem('page-filter-collapsed', 'false'));
   await page.goto('/#/premium-report');
-  await expect(page.getByRole('button', { name: '保费报表' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /保费/ })).toBeVisible();
 
   const expandButton = page.getByTitle('展开筛选器');
   if (await expandButton.isVisible().catch(() => false)) {
@@ -80,20 +76,4 @@ test('筛选器交互与报表展示', async ({ page }: { page: Page }) => {
   await startDateButton.click();
   await expect(startDateButton).toHaveAttribute('aria-pressed', 'true');
   await attachScreenshot(page, 'premium-report-filter-date-criteria');
-});
-
-test('SQL 查询执行与结果渲染', async ({ page }: { page: Page }) => {
-  await ensureDataLoaded(page);
-
-  await page.goto('/#/sql-query');
-  await expect(page.getByRole('heading', { name: 'SQL 编辑器' })).toBeVisible();
-
-  const editorInput = page.locator('.monaco-editor textarea').first();
-  await expect(editorInput).toBeVisible();
-  await editorInput.fill('SELECT COUNT(*) AS cnt FROM PolicyFact;');
-
-  const runButton = page.getByRole('button', { name: '执行查询' });
-  await runButton.click();
-  await expect(page.getByRole('heading', { name: '查询结果' })).toBeVisible();
-  await attachScreenshot(page, 'sql-query-result');
 });

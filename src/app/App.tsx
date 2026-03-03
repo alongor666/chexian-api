@@ -1,5 +1,7 @@
 import { lazy, Suspense, ReactNode, FC } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { SidebarLayout, DataGuard, ErrorBoundary } from '../components/layout';
 import { DataProvider } from '../shared/contexts/DataContext';
 import { FilterProvider } from '../shared/contexts/FilterContext';
@@ -8,6 +10,19 @@ import { ThemeProvider } from '../shared/theme';
 import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
 import { canAccessFeeAnalysis, canAccessCost } from '../shared/config/organizations';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,      // 5 分钟内数据视为 fresh，不重新请求
+      gcTime: 30 * 60 * 1000,         // 30 分钟后垃圾回收
+      refetchOnWindowFocus: false,     // 车险数据非实时，关闭窗口聚焦刷新
+      retry: 1,                        // 失败重试 1 次
+    },
+  },
+});
+
+export { queryClient };
 
 /**
  * 费用分析路由级守卫，仅对超级用户（SUPER_USERS）开放。
@@ -108,11 +123,12 @@ const LazyRoute: React.FC<{ children: ReactNode }> = ({ children }) => (
 
 function App() {
   return (
-    <ThemeProvider>
-      <HashRouter>
-        <DataProvider>
-          <PermissionProvider>
-            <FilterProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <HashRouter>
+          <DataProvider>
+            <PermissionProvider>
+              <FilterProvider>
               <Routes>
                 {/* 登录页面 - 不需要认证 */}
                 <Route path="/login" element={<LoginPage />} />
@@ -311,11 +327,13 @@ function App() {
                 {/* 向后兼容旧路由 */}
                 <Route path="/old-dashboard" element={<Navigate to="/dashboard" replace />} />
               </Routes>
-            </FilterProvider>
-          </PermissionProvider>
-        </DataProvider>
-      </HashRouter>
-    </ThemeProvider>
+              </FilterProvider>
+            </PermissionProvider>
+          </DataProvider>
+        </HashRouter>
+      </ThemeProvider>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 }
 

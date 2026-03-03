@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient, type DashboardBundleResponse } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
+import { queryKeys } from '@/shared/api/query-keys';
 import type { TimeView } from './useTrendData';
 import type { ViewPerspective } from '@/shared/types/view-perspective';
 import { useRBAC } from '@/shared/hooks/useRBAC';
@@ -39,39 +40,23 @@ export function useDashboardBundle({
   enabled = true,
 }: UseDashboardBundleProps): UseDashboardBundleResult {
   const { isOrgUser, userOrg } = useRBAC();
-  const [bundle, setBundle] = useState<DashboardBundleResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fetchIdRef = useRef(0);
 
-  useEffect(() => {
-    if (!enabled) return;
-    const fetchId = ++fetchIdRef.current;
-    setLoading(true);
-    setError(null);
+  const params = {
+    ...buildFilterParams(filters, { isOrgUser, userOrg }),
+    granularity: timeViewToGranularity(timeView),
+    perspective,
+    rankingLimit: '10',
+  };
 
-    const run = async () => {
-      try {
-        const params = {
-          ...buildFilterParams(filters, { isOrgUser, userOrg }),
-          granularity: timeViewToGranularity(timeView),
-          perspective,
-          rankingLimit: '10',
-        };
-        const result = await apiClient.getDashboardBundle(params);
-        if (fetchId !== fetchIdRef.current) return;
-        setBundle(result);
-      } catch (err) {
-        if (fetchId !== fetchIdRef.current) return;
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (fetchId === fetchIdRef.current) {
-          setLoading(false);
-        }
-      }
-    };
-    void run();
-  }, [enabled, filters, isOrgUser, perspective, timeView, userOrg]);
+  const { data, isLoading, error } = useQuery<DashboardBundleResponse, Error>({
+    queryKey: queryKeys.dashboardBundle(params),
+    queryFn: () => apiClient.getDashboardBundle(params),
+    enabled,
+  });
 
-  return { bundle, loading, error };
+  return {
+    bundle: data ?? null,
+    loading: isLoading,
+    error: error ? (error instanceof Error ? error.message : String(error)) : null,
+  };
 }

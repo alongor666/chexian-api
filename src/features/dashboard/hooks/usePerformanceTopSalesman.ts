@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
@@ -40,6 +40,23 @@ interface UsePerformanceTopSalesmanReturn {
   error: string | null;
 }
 
+function mapTopSalesmanRow(row: Record<string, unknown>): PerformanceTopSalesmanRow {
+  return {
+    dimension_name: formatSalesmanName(String(row.dimension_name ?? '')),
+    premium: Number(row.premium ?? 0),
+    auto_count: Number(row.auto_count ?? 0),
+    plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),
+    achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
+    growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
+    quadrant: row.quadrant == null ? undefined : String(row.quadrant),
+    nev_rate: Number(row.nev_rate ?? 0),
+    renewal_rate: Number(row.renewal_rate ?? 0),
+    transfer_business_rate: Number(row.transfer_business_rate ?? 0),
+    new_car_rate: Number(row.new_car_rate ?? 0),
+    transfer_rate: Number(row.transfer_rate ?? 0),
+  };
+}
+
 export function usePerformanceTopSalesman({
   filters,
   segmentTag,
@@ -49,78 +66,29 @@ export function usePerformanceTopSalesman({
   enabled = true,
 }: UsePerformanceTopSalesmanProps): UsePerformanceTopSalesmanReturn {
   const { isOrgUser, userOrg } = useRBAC();
-  const [rows, setRows] = useState<PerformanceTopSalesmanRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fetchIdRef = useRef(0);
 
-  const fetchData = useCallback(async () => {
-    if (prefetchedRows) {
-      setRows(prefetchedRows.map((row) => ({
-        dimension_name: formatSalesmanName(String(row.dimension_name ?? '')),
-        premium: Number(row.premium ?? 0),
-        auto_count: Number(row.auto_count ?? 0),
-        plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),
-        achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
-        growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
-        quadrant: row.quadrant == null ? undefined : String(row.quadrant),
-        nev_rate: Number(row.nev_rate ?? 0),
-        renewal_rate: Number(row.renewal_rate ?? 0),
-        transfer_business_rate: Number(row.transfer_business_rate ?? 0),
-        new_car_rate: Number(row.new_car_rate ?? 0),
-        transfer_rate: Number(row.transfer_rate ?? 0),
-      })));
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    if (!enabled) return;
+  const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+  delete filterParams.customerCategories;
 
-    const fetchId = ++fetchIdRef.current;
-    setLoading(true);
-    setError(null);
+  const params: Record<string, string> = {
+    ...filterParams,
+    segmentTag,
+    timePeriod,
+    growthMode,
+  };
 
-    try {
-      const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
-      delete filterParams.customerCategories;
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['performance-top-salesman', params],
+    queryFn: () => apiClient.getPerformanceTopSalesman(params),
+    enabled: enabled && !prefetchedRows,
+    select: (result) => (result?.rows || []).map(mapTopSalesmanRow),
+  });
 
-      const params: Record<string, string> = {
-        ...filterParams,
-        segmentTag,
-        timePeriod,
-        growthMode,
-      };
+  const rows = prefetchedRows ? prefetchedRows.map(mapTopSalesmanRow) : (data ?? []);
 
-      const result = await apiClient.getPerformanceTopSalesman(params);
-      if (fetchId !== fetchIdRef.current) return;
-
-      setRows((result?.rows || []).map((row) => ({
-        dimension_name: formatSalesmanName(String(row.dimension_name ?? '')),
-        premium: Number(row.premium ?? 0),
-        auto_count: Number(row.auto_count ?? 0),
-        plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),
-        achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
-        growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
-        quadrant: row.quadrant == null ? undefined : String(row.quadrant),
-        nev_rate: Number(row.nev_rate ?? 0),
-        renewal_rate: Number(row.renewal_rate ?? 0),
-        transfer_business_rate: Number(row.transfer_business_rate ?? 0),
-        new_car_rate: Number(row.new_car_rate ?? 0),
-        transfer_rate: Number(row.transfer_rate ?? 0),
-      })));
-    } catch (err) {
-      if (fetchId !== fetchIdRef.current) return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (fetchId === fetchIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [enabled, filters, growthMode, isOrgUser, prefetchedRows, segmentTag, timePeriod, userOrg]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  return { rows, loading, error };
+  return {
+    rows,
+    loading: prefetchedRows ? false : isLoading,
+    error: prefetchedRows ? null : (error ? (error instanceof Error ? error.message : String(error)) : null),
+  };
 }

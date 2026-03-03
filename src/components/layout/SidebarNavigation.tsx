@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSidebar } from './SidebarLayout';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -24,6 +25,11 @@ import {
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
 import { canAccessRoute, canAccessMotoCost, canAccessFeeAnalysis, canAccessCost, UserRole } from '../../shared/config/organizations';
+import { useGlobalFilters } from '../../shared/contexts/FilterContext';
+import { useRBAC } from '../../shared/hooks/useRBAC';
+import { buildFilterParams } from '../../shared/utils/filterParams';
+import { apiClient } from '../../shared/api/client';
+import { queryKeys } from '../../shared/api/query-keys';
 
 
 interface NavItem {
@@ -74,6 +80,9 @@ export const SidebarNavigation: React.FC = () => {
   const { collapsed, toggle, mobileOpen, setMobileOpen, isMobile, sidebarWidth, setSidebarWidth, isDragging, setIsDragging } = useSidebar();
   const location = useLocation();
   const { userPermission } = usePermission();
+  const queryClient = useQueryClient();
+  const { filters } = useGlobalFilters();
+  const { isOrgUser, userOrg } = useRBAC();
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -81,6 +90,54 @@ export const SidebarNavigation: React.FC = () => {
     }
     return location.pathname.startsWith(path);
   };
+
+  /** hover 时预取对应页面的 bundle 数据（利用 150-300ms hover 时间差） */
+  /** hover 时预取对应页面的 bundle 数据（利用 150-300ms hover 时间差） */
+  const handlePrefetch = useCallback((path: string) => {
+    const params = buildFilterParams(filters, { isOrgUser, userOrg });
+
+    // staleTime 继承全局 QueryClient 配置（5min），无需重复指定
+    switch (path) {
+      case '/dashboard':
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.dashboardBundle(params),
+          queryFn: () => apiClient.getDashboardBundle(params),
+        });
+        break;
+      case '/performance-analysis':
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.performanceBundle(params),
+          queryFn: () => apiClient.getPerformanceBundle(params),
+        });
+        break;
+      case '/cross-sell':
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.crossSellBundle(params),
+          queryFn: () => apiClient.getCrossSellBundle(params),
+        });
+        break;
+      case '/renewal':
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.renewalAnalysis(params),
+          queryFn: () => apiClient.getRenewalAnalysis(params),
+        });
+        break;
+      case '/truck':
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.truckAnalysis(params),
+          queryFn: () => apiClient.getTruckAnalysis(params),
+        });
+        break;
+      case '/coefficient':
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.coefficient(params),
+          queryFn: () => apiClient.getCoefficientData(params),
+        });
+        break;
+      // growth/cost/fee-analysis/marketing-report/premium-report/comprehensive-analysis
+      // 采用命令式加载模式或需要额外参数，不适合简单 prefetch
+    }
+  }, [filters, isOrgUser, userOrg, queryClient]);
 
   // 移动端：总是展开显示；桌面端：根据 collapsed 状态
   const showExpanded = isMobile || !collapsed;
@@ -118,6 +175,7 @@ export const SidebarNavigation: React.FC = () => {
           : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
           }`}
         title={!showExpanded ? item.label : undefined}
+        onMouseEnter={() => handlePrefetch(item.path)}
       >
         <IconComponent
           size={20}

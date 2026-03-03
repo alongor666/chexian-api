@@ -309,43 +309,13 @@ export interface LoadResult {
 }
 
 /**
- * 轻量 GET 响应缓存（LRU 淘汰，TTL 过期）
- * 用于页面内导航时避免重复请求相同数据
- */
-interface ResponseCacheEntry {
-  data: unknown;
-  etag: string | null;
-  expiry: number;
-}
-const responseCache = new Map<string, ResponseCacheEntry>();
-const RESPONSE_CACHE_TTL = 60_000; // 1 分钟
-const RESPONSE_CACHE_MAX = 200;
-
-function getResponseCache(key: string): ResponseCacheEntry | null {
-  const entry = responseCache.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.expiry) {
-    responseCache.delete(key);
-    return null;
-  }
-  return entry;
-}
-
-function setResponseCache(key: string, data: unknown, etag: string | null): void {
-  if (responseCache.size >= RESPONSE_CACHE_MAX) {
-    const oldestKey = responseCache.keys().next().value;
-    if (oldestKey) responseCache.delete(oldestKey);
-  }
-  responseCache.set(key, { data, etag, expiry: Date.now() + RESPONSE_CACHE_TTL });
-}
-
-/**
  * API 客户端类
  *
  * 增强功能：
  * - 请求取消（AbortController）：同一端点的新请求自动取消前序请求
  * - 请求超时：默认 30 秒
- * - GET 响应缓存：TTL 内直接返回缓存数据，ETag 304 支持
+ * - GET 同 key 请求合并（in-flight coalescing）
+ * - 缓存由 React Query 管理（staleTime 5min, gcTime 30min）
  */
 class ApiClient {
   private token: string | null = null;
@@ -513,12 +483,6 @@ class ApiClient {
       if (existing) {
         return existing;
       }
-
-      // 检查 GET 响应缓存（TTL 内直接返回）
-      const cached = getResponseCache(dedupeKey);
-      if (cached) {
-        return cached.data as T;
-      }
     }
 
     const execute = async (): Promise<T> => {
@@ -535,14 +499,6 @@ class ApiClient {
           credentials: 'include',
           signal: controller.signal,
         });
-
-        // 304 Not Modified → 使用缓存数据
-        if (response.status === 304 && dedupeKey) {
-          const cached = getResponseCache(dedupeKey);
-          if (cached) {
-            return cached.data as T;
-          }
-        }
 
         const canTryRefresh = !endpoint.startsWith('/auth/')
           && (Boolean(token) || this.hasSessionCookieHint);
@@ -561,15 +517,7 @@ class ApiClient {
           throw error;
         }
 
-        const result = data.data as T;
-
-        // 缓存 GET 响应（存储 ETag 以支持 304）
-        if (dedupeKey) {
-          const etag = response.headers?.get?.('etag') ?? null;
-          setResponseCache(dedupeKey, result, etag);
-        }
-
-        return result;
+        return data.data as T;
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           throw new RequestAbortError();
