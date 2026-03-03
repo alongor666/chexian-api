@@ -74,6 +74,7 @@ import {
   generatePerformanceTrendQuery,
   generatePerformanceDrilldownQuery,
   generatePerformanceTopSalesmanQuery,
+  generatePerformanceOrgHeatmapQuery,
   mapLegacyVehicleCategoryToSegmentTag,
   type PerformancePeriodBounds,
   type PerformanceSegmentTag,
@@ -2128,6 +2129,40 @@ router.get(
     });
   })
 );
+
+const performanceOrgHeatmapSchema = z.object({
+  segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
+  vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
+  days: z.coerce.number().int().min(7).max(31).default(14),
+});
+
+router.get(
+  '/performance-org-heatmap',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = performanceOrgHeatmapSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+
+    const { days } = parseResult.data;
+    const segmentTag = resolvePerformanceSegmentTag(parseResult.data);
+    const { whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+
+    const sql = generatePerformanceOrgHeatmapQuery(
+      whereWithoutDate,
+      segmentTag as PerformanceSegmentTag,
+      days
+    );
+
+    const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
+
+    res.json({
+      success: true,
+      data: { rows },
+    });
+  })
+);
+
 
 const performanceTopSalesmanSchema = z.object({
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),

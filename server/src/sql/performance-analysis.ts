@@ -1179,3 +1179,114 @@ export function generatePerformanceTopSalesmanQuery(
   });
   return sql;
 }
+
+export function generatePerformanceOrgHeatmapQuery(
+  whereWithoutDate: string,
+  segmentTag: PerformanceSegmentTag,
+  days = 14
+): string {
+  const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
+  const safeDays = Math.max(7, Math.min(31, Math.floor(days)));
+
+  const sql = `
+    WITH filtered AS (
+      SELECT
+        CAST(p.policy_date AS DATE) AS pd,
+        COALESCE(NULLIF(TRIM(CAST(p.org_level_3 AS VARCHAR)), ''), '未知机构') AS org_level_3,
+        COALESCE(NULLIF(TRIM(CAST(p.salesman_name AS VARCHAR)), ''), '__unknown__') AS salesman_name,
+        CASE WHEN p.premium > 0 THEN p.premium / 10000.0 ELSE 0 END AS premium_wan,
+        COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
+      FROM PolicyFact p
+      LEFT JOIN achievement_cache ac ON p.salesman_name = ac.full_name
+      WHERE ${whereWithoutDate}
+        AND ${segmentFilter}
+    ),
+    period_bounds AS (
+      SELECT
+        MAX(pd) AS ref_date,
+        MAX(pd) - INTERVAL ${safeDays - 1} DAY AS start_date
+      FROM filtered
+    ),
+    window_rows AS (
+      SELECT f.*
+      FROM filtered f
+      CROSS JOIN period_bounds pb
+      WHERE f.pd BETWEEN pb.start_date AND pb.ref_date
+    ),
+    daily_salesman_total AS (
+      SELECT salesman_name, SUM(premium_wan) AS salesman_premium_wan
+      FROM window_rows
+      GROUP BY salesman_name
+    ),
+    org_daily AS (
+      SELECT
+        wr.org_level_3,
+        wr.pd,
+        ROUND(SUM(wr.premium_wan), 4) AS premium,
+        ROUND(SUM(
+          CASE
+            WHEN COALESCE(dst.salesman_premium_wan, 0) > 0
+              THEN wr.plan_vehicle * wr.premium_wan / dst.salesman_premium_wan
+            ELSE 0
+          END
+        ), 4) AS plan_premium
+      FROM window_rows wr
+      LEFT JOIN daily_salesman_total dst ON wr.salesman_name = dst.salesman_name
+      GROUP BY wr.org_level_3, wr.pd
+    ),
+    org_pool AS (
+      SELECT DISTINCT org_level_3 FROM window_rows
+    ),
+    day_pool AS (
+      SELECT d::DATE AS pd
+      FROM period_bounds pb,
+      generate_series(pb.start_date, pb.ref_date, INTERVAL 1 DAY) AS t(d)
+    ),
+    base_grid AS (
+      SELECT o.org_level_3, d.pd
+      FROM org_pool o
+      CROSS JOIN day_pool d
+    )
+    SELECT
+      bg.org_level_3,
+      bg.pd AS policy_date,
+      COALESCE(cur.premium, 0) AS premium,
+      cur.plan_premium,
+      CASE
+        WHEN COALESCE(cur.plan_premium, 0) <= 0 THEN NULL
+        ELSE ROUND(cur.premium * 100.0 / cur.plan_premium, 2)
+      END AS achievement_rate,
+      CASE
+        WHEN COALESCE(prev_week.premium, 0) = 0 THEN NULL
+        ELSE ROUND((COALESCE(cur.premium, 0) - prev_week.premium) * 100.0 / prev_week.premium, 2)
+      END AS mom_growth_rate,
+      CASE
+        WHEN COALESCE(prev_year.premium, 0) = 0 THEN NULL
+        ELSE ROUND((COALESCE(cur.premium, 0) - prev_year.premium) * 100.0 / prev_year.premium, 2)
+      END AS yoy_growth_rate
+    FROM base_grid bg
+    LEFT JOIN org_daily cur ON cur.org_level_3 = bg.org_level_3 AND cur.pd = bg.pd
+    LEFT JOIN org_daily prev_week ON prev_week.org_level_3 = bg.org_level_3 AND prev_week.pd = bg.pd - INTERVAL 7 DAY
+    LEFT JOIN (
+      SELECT org_level_3, pd, SUM(premium_wan) AS premium
+      FROM filtered
+      GROUP BY org_level_3, pd
+    ) prev_year ON prev_year.org_level_3 = bg.org_level_3 AND prev_year.pd = bg.pd - INTERVAL 1 YEAR
+    GROUP BY
+      bg.org_level_3,
+      bg.pd,
+      cur.premium,
+      cur.plan_premium,
+      prev_week.premium,
+      prev_year.premium
+    ORDER BY bg.org_level_3, bg.pd
+  `;
+
+  logger.debug('Generated performance org heatmap SQL', {
+    segmentTag,
+    days: safeDays,
+    sqlLength: sql.length,
+  });
+
+  return sql;
+}

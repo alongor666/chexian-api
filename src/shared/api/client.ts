@@ -1069,6 +1069,25 @@ class ApiClient {
   }
 
   /**
+   * 获取业绩分析 - 三级机构14天热力图
+   */
+  async getPerformanceOrgHeatmap(params?: Record<string, string>): Promise<{
+    rows: Array<{
+      org_level_3: string;
+      policy_date: string;
+      premium: number;
+      plan_premium: number | null;
+      achievement_rate: number | null;
+      mom_growth_rate: number | null;
+      yoy_growth_rate: number | null;
+    }>;
+  }> {
+    const query = this.buildQueryString(params);
+    return this.request(`/query/performance-org-heatmap${query ? `?${query}` : ''}`);
+  }
+
+
+  /**
    * 获取业绩分析 - TOP20 业务员
    */
   async getPerformanceTopSalesman(params?: Record<string, string>): Promise<{

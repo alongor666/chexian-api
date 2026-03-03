@@ -163,3 +163,4 @@ export interface KpiDetailResult {
 - `generateComprehensiveDimensionMetricsQuery()`
 - `generateComprehensiveLossTrendQuery()`
 - `generateComprehensivePlanByOrgQuery()`
+| 2026-03-03 | performance-analysis.ts | 新增 `generatePerformanceOrgHeatmapQuery`，支持三级机构连续14天热力图（增长率/达成率/保费）查询 |

@@ -331,3 +331,8 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/PremiumDashboard.tsx`**: KPI/trend/排名/玫瑰图优先消费 bundle 预取数据，支持开关回退。
 - **`dashboard/CrossSellSummaryKpiBoard.tsx`**、**`dashboard/CrossSellTrendChart.tsx`**、**`dashboard/CrossSellTopSalesmanBoard.tsx`**: 增加 prefetched 数据入口，消除页面内重复请求。
 - **`home/DataImportPage.tsx`**: 移除重复 `refreshFiles()` 触发路径，避免进入页时双请求。
+
+## 2026-03-03 业绩分析新增机构14天热力图
+
+- **`dashboard/hooks/usePerformanceOrgHeatmap.ts`**: 新增业绩分析热力图数据 Hook（调用 `performance-org-heatmap`，返回三级机构连续14天矩阵数据）。
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: 在业绩分析页面顶部新增三级机构14天热力图模块，支持“增长率/计划达成率/保费规模”标签切换，增长率单元格展示周环比与同比双值。
