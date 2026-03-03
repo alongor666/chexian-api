@@ -74,6 +74,7 @@ import {
   generatePerformanceTrendQuery,
   generatePerformanceDrilldownQuery,
   generatePerformanceTopSalesmanQuery,
+  generatePerformanceOrgHeatmapQuery,
   mapLegacyVehicleCategoryToSegmentTag,
   type PerformancePeriodBounds,
   type PerformanceSegmentTag,
@@ -1231,6 +1232,7 @@ const CROSS_SELL_DIMENSIONS = [
 ] as const;
 
 const CROSS_SELL_SEAT_COVERAGE_LEVELS = ['eq_1w', 'gte_2w', 'lt_1w'] as const;
+const CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL = ['all', ...CROSS_SELL_SEAT_COVERAGE_LEVELS] as const;
 type CrossSellSeatCoverageLevel = typeof CROSS_SELL_SEAT_COVERAGE_LEVELS[number] | 'all';
 
 function getSeatCoverageClause(level?: CrossSellSeatCoverageLevel): string {
@@ -2129,6 +2131,40 @@ router.get(
   })
 );
 
+const performanceOrgHeatmapSchema = z.object({
+  segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
+  vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
+  days: z.coerce.number().int().min(7).max(31).default(14),
+});
+
+router.get(
+  '/performance-org-heatmap',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = performanceOrgHeatmapSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+
+    const { days } = parseResult.data;
+    const segmentTag = resolvePerformanceSegmentTag(parseResult.data);
+    const { whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+
+    const sql = generatePerformanceOrgHeatmapQuery(
+      whereWithoutDate,
+      segmentTag as PerformanceSegmentTag,
+      days
+    );
+
+    const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
+
+    res.json({
+      success: true,
+      data: { rows },
+    });
+  })
+);
+
+
 const performanceTopSalesmanSchema = z.object({
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
   vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
@@ -2554,7 +2590,7 @@ const crossSellOrgTrendSchema = z.object({
   vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
   coverageCombination: z.enum(['整体', '交三', '主全', '单交']).default('整体'),
   days: z.coerce.number().int().min(1).max(90).default(14),
-  seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS).optional(),
+  seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional(),
   granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).optional(),
 });
 

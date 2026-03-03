@@ -86,6 +86,21 @@ describe('API client contract coverage', () => {
     expect(calledUrl).toContain('parentValue=');
   });
 
+
+  it('performance heatmap endpoint preserves segment and days params', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { rows: [] } }),
+    });
+    await apiClient.getPerformanceOrgHeatmap({ segmentTag: 'business_passenger', days: '14' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/performance-org-heatmap?');
+    expect(calledUrl).toContain('segmentTag=business_passenger');
+    expect(calledUrl).toContain('days=14');
+  });
+
   it('marketing report endpoint preserves date range filters', async () => {
     const { apiClient } = await importClient();
     mockFetch.mockResolvedValueOnce({

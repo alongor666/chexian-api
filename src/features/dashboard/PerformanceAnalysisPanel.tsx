@@ -38,6 +38,7 @@ import { usePerformanceTrend } from './hooks/usePerformanceTrend';
 import { PerformanceTrendChart } from './PerformanceTrendChart';
 import { usePerformanceTopSalesman, type PerformanceTopSalesmanRow } from './hooks/usePerformanceTopSalesman';
 import { usePerformanceBundle } from './hooks/usePerformanceBundle';
+import { usePerformanceOrgHeatmap, type PerformanceOrgHeatmapRow } from './hooks/usePerformanceOrgHeatmap';
 
 interface PerformanceAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -127,6 +128,206 @@ const EXPAND_DIMS_TABS: TabItem[] = [
   { key: 'business_nature', label: '续新转' },
   { key: 'energy_business_nature', label: '油电+续新转' },
 ];
+
+
+const HEATMAP_METRIC_TABS: TabItem[] = [
+  { key: 'growth', label: '增长率' },
+  { key: 'achievement', label: '计划达成率' },
+  { key: 'premium', label: '保费规模' },
+];
+
+type HeatmapMetric = 'growth' | 'achievement' | 'premium';
+type HeatmapState = 'excellent' | 'healthy' | 'abnormal' | 'danger' | 'unknown';
+
+function getHeatmapStateColor(state: HeatmapState): string {
+  switch (state) {
+    case 'excellent':
+      return colors.success.bg;
+    case 'healthy':
+      return colors.primary.bg;
+    case 'abnormal':
+      return colors.warning.bg;
+    case 'danger':
+      return colors.danger.bg;
+    default:
+      return colors.neutral[100];
+  }
+}
+
+function classifyAchievementState(rate: number | null): HeatmapState {
+  if (rate === null || Number.isNaN(rate)) return 'unknown';
+  if (rate >= 105) return 'excellent';
+  if (rate >= 100) return 'healthy';
+  if (rate >= 95) return 'abnormal';
+  return 'danger';
+}
+
+function classifyGrowthState(rate: number | null): HeatmapState {
+  if (rate === null || Number.isNaN(rate)) return 'unknown';
+  if (rate >= 15) return 'excellent';
+  if (rate >= 10) return 'healthy';
+  if (rate >= 5) return 'abnormal';
+  return 'danger';
+}
+
+function PerformanceOrgHeatmap({
+  rows,
+  loading,
+  error,
+  growthMode,
+}: {
+  rows: PerformanceOrgHeatmapRow[];
+  loading: boolean;
+  error: string | null;
+  growthMode: PerformanceGrowthMode;
+}) {
+  const [metric, setMetric] = useState<HeatmapMetric>('growth');
+
+  const orgRows = useMemo(() => {
+    const dateSet = new Set<string>();
+    const orgMap = new Map<string, Map<string, PerformanceOrgHeatmapRow>>();
+
+    rows.forEach((row) => {
+      dateSet.add(row.policyDate);
+      const orgLine = orgMap.get(row.orgLevel3) || new Map<string, PerformanceOrgHeatmapRow>();
+      orgLine.set(row.policyDate, row);
+      orgMap.set(row.orgLevel3, orgLine);
+    });
+
+    const dates = [...dateSet].sort((a, b) => a.localeCompare(b));
+    const organizations = [...orgMap.keys()].sort((a, b) => a.localeCompare(b));
+
+    return {
+      dates,
+      organizations,
+      matrix: orgMap,
+    };
+  }, [rows]);
+
+  const renderCell = (row: PerformanceOrgHeatmapRow | undefined) => {
+    if (!row) {
+      return (
+        <div className={cn('rounded px-1 py-1 text-center text-xs', colorClasses.text.neutralMuted)}>
+          -
+        </div>
+      );
+    }
+
+    if (metric === 'premium') {
+      return (
+        <div
+          className={cn('rounded px-1 py-1 text-center', textStyles.numeric, colorClasses.text.neutralDark)}
+          style={{ backgroundColor: colors.neutral[100] }}
+        >
+          {formatPremiumWanDisplay(row.premium)}
+        </div>
+      );
+    }
+
+    if (metric === 'achievement') {
+      const state = classifyAchievementState(row.achievementRate);
+      return (
+        <div
+          className={cn('rounded px-1 py-1 text-center', textStyles.numeric, colorClasses.text.neutralDark)}
+          style={{ backgroundColor: getHeatmapStateColor(state) }}
+        >
+          {row.achievementRate === null ? '-' : formatPercent(row.achievementRate)}
+        </div>
+      );
+    }
+
+    const majorRate = growthMode === 'mom' ? row.momGrowthRate : row.yoyGrowthRate;
+    const state = classifyGrowthState(majorRate);
+    return (
+      <div
+        className={cn('rounded px-1 py-1 text-center', textStyles.numeric, colorClasses.text.neutralDark)}
+        style={{ backgroundColor: getHeatmapStateColor(state) }}
+      >
+        <div>{majorRate === null ? '-' : formatPercent(majorRate)}</div>
+        <div className={cn('text-[10px]', colorClasses.text.neutralMuted)}>
+          环:{row.momGrowthRate === null ? '-' : formatPercent(row.momGrowthRate)} / 同:{row.yoyGrowthRate === null ? '-' : formatPercent(row.yoyGrowthRate)}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <section className={cn(cardStyles.standard, 'space-y-3')}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Tabs
+          items={HEATMAP_METRIC_TABS}
+          activeKey={metric}
+          onChange={(key) => setMetric(key as HeatmapMetric)}
+          variant="pills"
+          size="small"
+        />
+        <p className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
+          增长率环比按同星期几对比（周环比），同比按上年同日对比。
+        </p>
+      </div>
+      {error && <p className={cn(textStyles.body, colorClasses.text.danger)}>加载失败: {error}</p>}
+      {!error && (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1120px] text-xs border-separate border-spacing-1">
+            <thead>
+              <tr>
+                <th className={cn('px-2 py-2 text-left sticky left-0 bg-white z-10', colorClasses.text.neutralDark)}>三级机构</th>
+                {orgRows.dates.map((date) => (
+                  <th key={date} className={cn('px-2 py-2 text-center', colorClasses.text.neutralMuted)}>{date.slice(5)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={orgRows.dates.length + 1} className={cn('px-3 py-6 text-center', colorClasses.text.neutralMuted)}>
+                    数据加载中...
+                  </td>
+                </tr>
+              )}
+              {!loading && orgRows.organizations.length === 0 && (
+                <tr>
+                  <td colSpan={orgRows.dates.length + 1} className={cn('px-3 py-6 text-center', colorClasses.text.neutralMuted)}>
+                    暂无热力图数据
+                  </td>
+                </tr>
+              )}
+              {!loading && orgRows.organizations.map((org) => {
+                const orgLine = orgRows.matrix.get(org);
+                return (
+                  <tr key={org}>
+                    <td className={cn('px-2 py-1 sticky left-0 bg-white z-10 whitespace-nowrap', colorClasses.text.neutralDark)}>{org}</td>
+                    {orgRows.dates.map((date) => (
+                      <td key={`${org}-${date}`} className="p-0.5 min-w-[84px]">
+                        {renderCell(orgLine?.get(date))}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {[
+          { key: 'excellent', label: '优秀', color: getHeatmapStateColor('excellent') },
+          { key: 'healthy', label: '健康', color: getHeatmapStateColor('healthy') },
+          { key: 'abnormal', label: '异常', color: getHeatmapStateColor('abnormal') },
+          { key: 'danger', label: '危险', color: getHeatmapStateColor('danger') },
+        ].map((item) => (
+          <span
+            key={item.key}
+            className={cn('inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs', colorClasses.text.neutralDark)}
+            style={{ backgroundColor: item.color }}
+          >
+            {item.label}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 const SUMMARY_ORDER = ['整体', '主全', '交三', '单交'];
 
@@ -553,6 +754,13 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     enabled: isDataLoaded && ENABLE_BUNDLE_ROUTES,
   });
 
+  const heatmapQuery = usePerformanceOrgHeatmap({
+    filters,
+    segmentTag,
+    growthMode,
+    days: 14,
+  });
+
   const summaryQuery = usePerformanceSummary({
     filters,
     segmentTag,
@@ -731,6 +939,14 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   return (
     <div className="space-y-5">
+      <SectionTitle title="三级机构连续14天热力图" />
+      <PerformanceOrgHeatmap
+        rows={heatmapQuery.rows}
+        loading={heatmapQuery.loading}
+        error={heatmapQuery.error}
+        growthMode={growthMode}
+      />
+
       <SectionTitle title={summaryTitle} />
       <section className={cn(cardStyles.standard, 'p-0 overflow-hidden')}>
         <div className="px-4 pt-3">
