@@ -1509,7 +1509,7 @@ router.get(
     // 从结果中提取 maxDate（通过再查一次 date_bounds）
     const maxDateSql = `
       SELECT MAX(CAST(policy_date AS DATE)) AS max_date
-      FROM PolicyFact
+      FROM CrossSellDailyAgg
       WHERE ${finalWhereClause}
         AND ${getVehicleCategoryFilter(vehicleCategory as VehicleCategory)}
     `;
@@ -1893,7 +1893,7 @@ router.get(
 
     const maxDateSql = `
       SELECT MAX(CAST(policy_date AS DATE)) AS max_date
-      FROM PolicyFact
+      FROM CrossSellDailyAgg
       WHERE ${withDateWhere}
     `;
 

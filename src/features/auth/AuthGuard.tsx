@@ -1,7 +1,7 @@
 import React, { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { buildRedirectState } from '../../shared/utils/redirect-state';
+import { buildRedirectState, sanitizePathForLog } from '../../shared/utils/redirect-state';
 import { Logger } from '../../shared/utils/logger';
 
 interface AuthGuardProps {
@@ -37,7 +37,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
 
   // 未登录重定向到登录页
   if (!isAuthenticated) {
-    logger.debug('Redirect unauthenticated request to login', { fromPath });
+    logger.debug('Redirect unauthenticated request to login', { fromPath: sanitizePathForLog(fromPath) });
     return <Navigate to="/login" state={buildRedirectState(fromPath)} replace />;
   }
 

@@ -2,7 +2,7 @@ import React, { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { usePermission } from '../../shared/contexts/PermissionContext';
 import { canAccessRoute, getDefaultRoute } from '../../shared/config/organizations';
-import { buildRedirectState } from '../../shared/utils/redirect-state';
+import { buildRedirectState, sanitizePathForLog } from '../../shared/utils/redirect-state';
 import { Logger } from '../../shared/utils/logger';
 
 interface RouteAccessGuardProps {
@@ -27,7 +27,11 @@ export const RouteAccessGuard: React.FC<RouteAccessGuardProps> = ({ children, ro
 
   if (!canAccessRoute(userPermission, routePath)) {
     const fallbackPath = getDefaultRoute(userPermission);
-    logger.debug('Route access denied, redirect to fallback', { routePath, fallbackPath, fromPath });
+    logger.debug('Route access denied, redirect to fallback', {
+      routePath,
+      fallbackPath,
+      fromPath: sanitizePathForLog(fromPath),
+    });
     return <Navigate to={fallbackPath} replace state={buildRedirectState(fromPath)} />;
   }
 
