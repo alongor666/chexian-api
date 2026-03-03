@@ -1232,6 +1232,7 @@ const CROSS_SELL_DIMENSIONS = [
 ] as const;
 
 const CROSS_SELL_SEAT_COVERAGE_LEVELS = ['eq_1w', 'gte_2w', 'lt_1w'] as const;
+const CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL = ['all', ...CROSS_SELL_SEAT_COVERAGE_LEVELS] as const;
 type CrossSellSeatCoverageLevel = typeof CROSS_SELL_SEAT_COVERAGE_LEVELS[number] | 'all';
 
 function getSeatCoverageClause(level?: CrossSellSeatCoverageLevel): string {
@@ -2589,7 +2590,7 @@ const crossSellOrgTrendSchema = z.object({
   vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
   coverageCombination: z.enum(['整体', '交三', '主全', '单交']).default('整体'),
   days: z.coerce.number().int().min(1).max(90).default(14),
-  seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS).optional(),
+  seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional(),
   granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).optional(),
 });
 
