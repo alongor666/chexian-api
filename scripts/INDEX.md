@@ -12,6 +12,7 @@
 |-----------|----------|----------|
 | 跨平台启动项目（自动检测运行时） | `start.mjs` | `node scripts/start.mjs --all` |
 | 检查代码提交前是否合规 | `check-governance.mjs` | `bun run governance` |
+| 一键执行生产级门禁（治理+构建+测试+关键e2e） | `production-gate.mjs` | `bun run production:gate` |
 | 清理未跟踪调试产物（日志/报告） | `cleanup-debug-artifacts.mjs` | `bun run cleanup:artifacts` |
 | 归档已完成的任务 | `archive-backlog.mjs` | `node scripts/archive-backlog.mjs` |
 | 扫描/归档已完成的 plans 计划文件 | `manage-plans.mjs` | `bun run plans:manage` |
@@ -32,6 +33,7 @@
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
 | `check-governance.mjs` | **主治理校验**：检查必需文件、索引完整性、BACKLOG证据链、DC-002合规 | `bun run governance` |
+| `production-gate.mjs` | **生产门禁编排**：治理 + 构建 + 全量测试 + 关键E2E（可选压测门禁） | `bun run production:gate [-- --with-perf]` |
 | `cleanup-debug-artifacts.mjs` | 清理未跟踪调试产物（`.playwright-cli`、`playwright-report`、`test-results`、常见调试日志） | `bun run cleanup:artifacts` |
 | `check-task-id-conflict.mjs` | 检测多Agent任务ID是否冲突（B100-199/@claude等范围） | `node scripts/check-task-id-conflict.mjs` |
 | `check-write-conflict.mjs` | PR前检测文件写入冲突，防止merge冲突 | `node scripts/check-write-conflict.mjs` |
@@ -180,3 +182,7 @@ python3 scripts/generate-renewal-analysis.py # 生成报告
 
 - 新增 `cleanup-debug-artifacts.mjs`：提交前自动清理未跟踪调试产物，避免日志/报告误入版本库。
 - `check-governance.mjs` 新增“暂存区调试产物”门禁：若检测到 `.playwright-cli/`、`playwright-report/`、`test-results/` 或 `.log` 等文件进入暂存区，直接阻断提交。
+
+## 2026-03-03 追加记录
+
+- 新增 `production-gate.mjs`：统一串联治理校验、构建、全量单测与关键 E2E（支持 `--with-perf` 扩展压测门禁）。
