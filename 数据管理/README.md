@@ -69,23 +69,56 @@
 
 ## 快速开始
 
+### 跨平台支持
+
+| 平台 | 脚本 | 命令 |
+|------|------|------|
+| **Windows** | `daily.mjs` / `run.mjs` | `node daily.mjs` 或 `node run.mjs full ...` |
+| **macOS/Linux** | `daily.sh` / `run.sh` | `./daily.sh` 或 `./run.sh full ...` |
+| **智能启动** | `etl.mjs` | `node etl.mjs`（自动检测平台） |
+
 ### 数据更新（推荐：一键命令）
 
+**Windows (PowerShell/CMD):**
+```powershell
+cd 数据管理
+
+# 智能启动（自动检测平台）
+node etl.mjs
+
+# 或直接运行
+node daily.mjs
+```
+
+**macOS/Linux (Bash):**
 ```bash
 cd 数据管理
 
-./run.sh full \
-    --source "staging/续保类型匹配至2026年4月.xlsx" \
-    --target "/path/to/新导出数据.xlsx" \
-    --output "warehouse/fact/policy/车险保单综合明细表YYYYMMDD.parquet"
+# 智能启动（自动检测平台）
+node etl.mjs
 
-# 然后复制到应用目录
-cp warehouse/fact/policy/车险保单综合明细表YYYYMMDD.parquet ../public/data/data.parquet
+# 或原生 Bash 脚本（支持 VPS 同步）
+./daily.sh
+```
+
+**手动指定参数:**
+```bash
+# Windows
+node run.mjs full --source "续保类型匹配至2026年4月.xlsx" --target "车险2526年清单更新至20260302.xlsx" --output "warehouse/fact/policy/test.parquet"
+
+# macOS/Linux
+./run.sh full --source "续保类型匹配至2026年4月.xlsx" --target "车险2526年清单更新至20260302.xlsx" --output "warehouse/fact/policy/test.parquet"
 ```
 
 ### 其他命令
 
 ```bash
+# Windows
+node run.mjs help       # 查看所有命令
+node run.mjs enrich     # 仅续保匹配
+node run.mjs transform  # 仅转换Parquet
+
+# macOS/Linux
 ./run.sh help       # 查看所有命令
 ./run.sh enrich     # 仅续保匹配
 ./run.sh transform  # 仅转换Parquet

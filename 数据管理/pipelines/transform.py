@@ -513,6 +513,25 @@ def process_new_fields(df):
         dist = df['座位数'].value_counts().head(10).to_dict()
         print(f"      ✅ 座位数分布 (TOP10): {dist}")
 
+    # 17. 处理代理人/经纪人 → 经代名（重命名）
+    if '代理人/经纪人' in df.columns:
+        print(f"\n   处理代理人/经纪人:")
+        print(f"      原始数据类型: {df['代理人/经纪人'].dtype}")
+        print(f"      空值数: {df['代理人/经纪人'].isna().sum():,}")
+        # 重命名为经代名
+        df['经代名'] = df['代理人/经纪人'].astype(str).where(df['代理人/经纪人'].notna(), None)
+        unique_count = df['经代名'].nunique()
+        print(f"      ✅ '代理人/经纪人' → '经代名': {unique_count} 个唯一值")
+
+    # 18. 处理客户源（字符串，保留原值）
+    if '客户源' in df.columns:
+        print(f"\n   处理客户源:")
+        print(f"      原始数据类型: {df['客户源'].dtype}")
+        print(f"      空值数: {df['客户源'].isna().sum():,}")
+        df['客户源'] = df['客户源'].astype(str).where(df['客户源'].notna(), None)
+        value_counts = df['客户源'].value_counts().head(10).to_dict()
+        print(f"      ✅ 客户源分布 (TOP10): {value_counts}")
+
     return df
 
 def process_dates(df):
@@ -646,7 +665,9 @@ def finalize_schema(df):
         '客户类别',
         '厂牌车型',
         '吨位分段',
-        '新车购置价'
+        '新车购置价',
+        '经代名',    # ✅ 新增：代理人/经纪人 重命名
+        '客户源'     # ✅ 新增：客户来源
     ]
 
     # 新增字段（如果存在）
