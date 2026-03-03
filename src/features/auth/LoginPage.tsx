@@ -4,7 +4,7 @@ import { usePermission } from '../../shared/contexts/PermissionContext';
 import { canAccessRoute, getDefaultRoute } from '../../shared/config/organizations';
 import { Lock, User, Eye, EyeOff, AlertCircle, Shield, Building, QrCode } from 'lucide-react';
 import { apiClient } from '../../shared/api/client';
-import { resolveRedirectPath } from '../../shared/utils/redirect-state';
+import { maskUsernameForLog, resolveRedirectPath, sanitizePathForLog } from '../../shared/utils/redirect-state';
 import { Logger } from '../../shared/utils/logger';
 
 const logger = new Logger('LoginPage');
@@ -44,7 +44,10 @@ export const LoginPage: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated) {
       const targetPath = resolveTargetPath();
-      logger.debug('Auth restored, navigate to target path', { targetPath, from });
+      logger.debug('Auth restored, navigate to target path', {
+        targetPath: sanitizePathForLog(targetPath),
+        fromPath: sanitizePathForLog(from),
+      });
       navigate(targetPath, { replace: true });
     }
   }, [from, isAuthenticated, navigate, resolveTargetPath]);
@@ -126,7 +129,11 @@ export const LoginPage: React.FC = () => {
       const success = await loginWithPassword(normalizedUsername, normalizedPassword, rememberMe);
       if (success) {
         const targetPath = resolveTargetPath();
-        logger.debug('Login succeeded, navigate to target path', { username: normalizedUsername, targetPath, from });
+        logger.debug('Login succeeded, navigate to target path', {
+          username: maskUsernameForLog(normalizedUsername),
+          targetPath: sanitizePathForLog(targetPath),
+          fromPath: sanitizePathForLog(from),
+        });
         navigate(targetPath, { replace: true });
       } else {
         setError('用户名或密码错误');

@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { BarChart3, FolderOpen } from 'lucide-react';
-import { buildRedirectState } from '../../shared/utils/redirect-state';
+import { buildRedirectState, sanitizePathForLog } from '../../shared/utils/redirect-state';
 import { Logger } from '../../shared/utils/logger';
 
 const logger = new Logger('DataGuard');
@@ -37,7 +37,7 @@ export const DataGuard: React.FC<DataGuardProps> = ({ children }) => {
 
   if (!isDataLoaded) {
     // 保存原始路径，以便导入数据后可以返回
-    logger.debug('Redirect to home because no data is loaded', { fromPath });
+    logger.debug('Redirect to home because no data is loaded', { fromPath: sanitizePathForLog(fromPath) });
     return (
       <Navigate
         to="/"

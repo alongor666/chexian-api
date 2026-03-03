@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildRedirectState, resolveRedirectPath } from '../src/shared/utils/redirect-state';
+import {
+  buildRedirectState,
+  maskUsernameForLog,
+  resolveRedirectPath,
+  sanitizePathForLog,
+} from '../src/shared/utils/redirect-state';
 
 describe('redirect state contract', () => {
   it('builds normalized fromPath payload', () => {
@@ -22,5 +27,19 @@ describe('redirect state contract', () => {
     expect(resolveRedirectPath(undefined, '/dashboard')).toBe('/dashboard');
     expect(resolveRedirectPath({ fromPath: '/login' }, '/dashboard')).toBe('/dashboard');
     expect(resolveRedirectPath({ fromPath: '' }, '/dashboard')).toBe('/dashboard');
+  });
+
+  it('sanitizes path for logs by removing querystring and hash', () => {
+    expect(sanitizePathForLog('/growth?token=abc')).toBe('/growth');
+    expect(sanitizePathForLog('/renewal#section-a')).toBe('/renewal');
+    expect(sanitizePathForLog('dashboard?tab=1')).toBe('/dashboard');
+    expect(sanitizePathForLog('/login?next=/cost', '/dashboard')).toBe('/login');
+  });
+
+  it('masks username for logs with first 2 characters only', () => {
+    expect(maskUsernameForLog('admin')).toBe('ad***');
+    expect(maskUsernameForLog('a')).toBe('a***');
+    expect(maskUsernameForLog('')).toBe('***');
+    expect(maskUsernameForLog(undefined)).toBe('***');
   });
 });
