@@ -7,11 +7,16 @@ function readSource(relativePath: string): string {
 }
 
 describe('cross-sell-org-trend route contract', () => {
-  it('accepts all for seat coverage level and vehicle category', () => {
+  it('accepts all for seat coverage level and vehicle category in org trend schema', () => {
     const content = readSource('server/src/routes/query.ts');
 
     expect(content).toContain("const CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL = ['all', ...CROSS_SELL_SEAT_COVERAGE_LEVELS] as const;");
-    expect(content).toContain("seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional()");
-    expect(content).toContain("vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger')");
+
+    const orgTrendStart = content.indexOf('const crossSellOrgTrendSchema = z.object({');
+    const orgTrendEnd = content.indexOf('});', orgTrendStart);
+    const orgTrendSchema = content.slice(orgTrendStart, orgTrendEnd);
+    expect(orgTrendSchema).toContain("vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger')");
+    expect(orgTrendSchema).toContain("seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional()");
+
   });
 });
