@@ -353,6 +353,34 @@ class DuckDBService {
   }
 
   /**
+   * 按真实对象类型清理同名 relation（TABLE / VIEW）。
+   * DuckDB 的 `DROP VIEW IF EXISTS table_name` 在对象为 TABLE 时仍会报错，
+   * 因此需要先查类型，再执行对应 DROP。
+   */
+  private async dropRelationIfExists(relationName: string): Promise<void> {
+    const safeRelationName = sanitizeTableName(relationName);
+    const escapedRelationName = escapeSqlValue(safeRelationName);
+
+    const rows = await this.query<{ table_type: string }>(`
+      SELECT table_type
+      FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_name = '${escapedRelationName}'
+      LIMIT 1
+    `);
+
+    const tableType = (rows[0]?.table_type || '').toUpperCase();
+    if (tableType === 'VIEW') {
+      await this.query(`DROP VIEW IF EXISTS ${safeRelationName}`);
+      return;
+    }
+
+    if (tableType) {
+      await this.query(`DROP TABLE IF EXISTS ${safeRelationName}`);
+    }
+  }
+
+  /**
    * 加载Parquet文件
    *
    * 安全修复：
@@ -366,14 +394,8 @@ class DuckDBService {
     // 2. 转义文件路径中的单引号
     const escapedPath = escapeSqlValue(filePath);
 
-    // 兼容同名对象类型切换（VIEW ↔ TABLE）：
-    // 当 raw_parquet 之前由多文件加载路径创建为 VIEW 时，直接 CREATE OR REPLACE TABLE 会报错。
-    try {
-      await this.query(`DROP VIEW IF EXISTS ${safeTableName}`);
-    } catch { /* ignore */ }
-    try {
-      await this.query(`DROP TABLE IF EXISTS ${safeTableName}`);
-    } catch { /* ignore */ }
+    // 兼容同名对象类型切换（VIEW ↔ TABLE）
+    await this.dropRelationIfExists(safeTableName);
 
     const sql = `
       CREATE OR REPLACE TABLE ${safeTableName} AS
@@ -445,14 +467,8 @@ class DuckDBService {
     });
 
     const selects = await Promise.all(selectParts);
-    // raw_parquet 在单文件路径下会是 TABLE，多文件路径需要 VIEW。
-    // 先显式清理同名对象，避免重启后出现“Table -> View 替换失败”导致加载中断。
-    try {
-      await this.query('DROP VIEW IF EXISTS raw_parquet');
-    } catch { /* ignore */ }
-    try {
-      await this.query('DROP TABLE IF EXISTS raw_parquet');
-    } catch { /* ignore */ }
+    // raw_parquet 在单文件路径下可能是 TABLE，多文件路径需要 VIEW。
+    await this.dropRelationIfExists('raw_parquet');
 
     const unionSQL = `
       CREATE OR REPLACE VIEW raw_parquet AS
