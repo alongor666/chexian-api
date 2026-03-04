@@ -7,21 +7,15 @@ function readSource(relativePath: string): string {
 }
 
 describe('raw_parquet object-type compatibility contract', () => {
-  it('drops both view and table before recreating raw_parquet as table', () => {
+  it('uses typed relation drop helper before recreating raw_parquet', () => {
     const content = readSource('server/src/services/duckdb.ts');
 
-    const dropViewToken = 'await this.query(`DROP VIEW IF EXISTS ${safeTableName}`)';
-    const dropTableToken = 'await this.query(`DROP TABLE IF EXISTS ${safeTableName}`)';
-    const createToken = 'CREATE OR REPLACE TABLE ${safeTableName} AS';
-
-    const dropViewPos = content.indexOf(dropViewToken);
-    const dropTablePos = content.indexOf(dropTableToken);
-    const createPos = content.indexOf(createToken);
-
-    expect(dropViewPos).toBeGreaterThan(-1);
-    expect(dropTablePos).toBeGreaterThan(-1);
-    expect(createPos).toBeGreaterThan(-1);
-    expect(dropViewPos).toBeLessThan(createPos);
-    expect(dropTablePos).toBeLessThan(createPos);
+    expect(content).toContain('private async dropRelationIfExists(relationName: string): Promise<void>');
+    expect(content).toContain('FROM information_schema.tables');
+    expect(content).toContain("if (tableType === 'VIEW') {");
+    expect(content).toContain('await this.query(`DROP VIEW IF EXISTS ${safeRelationName}`)');
+    expect(content).toContain('await this.query(`DROP TABLE IF EXISTS ${safeRelationName}`)');
+    expect(content).toContain('await this.dropRelationIfExists(safeTableName);');
+    expect(content).toContain("await this.dropRelationIfExists('raw_parquet');");
   });
 });
