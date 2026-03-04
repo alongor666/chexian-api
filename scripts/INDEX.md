@@ -11,6 +11,8 @@
 | 我想要... | 使用脚本 | 运行命令 |
 |-----------|----------|----------|
 | 跨平台启动项目（自动检测运行时） | `start.mjs` | `node scripts/start.mjs --all` |
+| 一键发布“业绩分析热力图”到 VPS 并自动验收 | `release-vps-heatmap.mjs` | `bun run release:vps:heatmap` |
+| 仅做 VPS 线上热力图验收（不部署） | `verify-vps-heatmap.mjs` | `bun run verify:vps:heatmap` |
 | 检查代码提交前是否合规 | `check-governance.mjs` | `bun run governance` |
 | 一键执行生产级门禁（治理+构建+测试+关键e2e） | `production-gate.mjs` | `bun run production:gate` |
 | 清理未跟踪调试产物（日志/报告） | `cleanup-debug-artifacts.mjs` | `bun run cleanup:artifacts` |
@@ -68,6 +70,13 @@
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
 | `start.mjs` | **跨平台自适应启动**：自动检测bun/node，支持前端/后端/全栈启动 | `node scripts/start.mjs [--dev\|--server\|--all]` |
+
+### 🌐 发布/验收类
+
+| 脚本 | 作用 | 运行命令 |
+|------|------|----------|
+| `release-vps-heatmap.mjs` | **VPS 一键发布 + 验收编排**：构建前后端、同步 VPS、重启 PM2、健康检查并调用线上热力图验收 | `bun run release:vps:heatmap` |
+| `verify-vps-heatmap.mjs` | **VPS 热力图专项验收**：真实登录线上页面并校验热力图标题/三标签切换/`performance-org-heatmap` 200 | `bun run verify:vps:heatmap` |
 
 ### 🛠️ 工具类
 
@@ -186,3 +195,8 @@ python3 scripts/generate-renewal-analysis.py # 生成报告
 ## 2026-03-03 追加记录
 
 - 新增 `production-gate.mjs`：统一串联治理校验、构建、全量单测与关键 E2E（支持 `--with-perf` 扩展压测门禁）。
+
+## 2026-03-04 追加记录
+
+- 新增 `release-vps-heatmap.mjs`：发布“业绩分析热力图”到 VPS 的一键编排脚本（构建、同步、重启、健康检查、验收）。
+- 新增 `verify-vps-heatmap.mjs`：线上热力图专项验收脚本（真实登录 + 页面与接口双重校验 + 证据落盘）。

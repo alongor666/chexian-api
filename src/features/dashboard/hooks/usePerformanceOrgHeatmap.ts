@@ -20,6 +20,7 @@ interface UsePerformanceOrgHeatmapProps {
   segmentTag: PerformanceSegmentTag;
   growthMode: PerformanceGrowthMode;
   days?: number;
+  enabled?: boolean;
 }
 
 interface UsePerformanceOrgHeatmapResult {
@@ -45,6 +46,7 @@ export function usePerformanceOrgHeatmap({
   segmentTag,
   growthMode,
   days = 14,
+  enabled = true,
 }: UsePerformanceOrgHeatmapProps): UsePerformanceOrgHeatmapResult {
   const { isOrgUser, userOrg } = useRBAC();
   const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
@@ -61,6 +63,7 @@ export function usePerformanceOrgHeatmap({
     queryKey: ['performance-org-heatmap', params],
     queryFn: () => apiClient.getPerformanceOrgHeatmap(params),
     select: (result) => (result?.rows || []).map(mapHeatmapRow),
+    enabled,
   });
 
   return {

@@ -79,5 +79,6 @@ test('首页侧边栏逐个进入子页面无需刷新', async ({ page }) => {
 
     const loginHeading = page.getByRole('heading', { name: '车险业绩分析系统' });
     await expect(loginHeading).not.toBeVisible();
+
   }
 });

@@ -125,6 +125,7 @@
 | 主题 | 路径 | 说明 |
 |------|------|------|
 | **会话管理器** | `开发文档/会话管理器.md` | **管理 Claude Code CLI 对话历史的完整工具**（快速开始、命令参考、故障排除） |
+| **VPS热力图发布SOP** | `开发文档/VPS_HEATMAP_RELEASE_SOP.md` | 业绩分析热力图的一键发布与验收标准流程（发布脚本 + 验收脚本 + 证据产物） |
 | 会话管理 Slash Command | `.claude/commands/session-manager.md` | 技能定义和功能规范 |
 | 会话管理 Subagent | `.claude/subagents/session-manager.md` | 智能助手工作流程、最佳实践 |
 | 会话管理快速参考 | `.claude/commands/session-manager-quickref.md` | 一页纸速查表 |

@@ -597,6 +597,15 @@ Host chexian-vps
 | `DEPLOYMENT_GUIDE.md` | 完整部署步骤文档 |
 | `vps.md` | VPS 运维手册（含 SSH 配置步骤） |
 
+### 热力图发布/验收入口（优先命令）
+
+```bash
+bun run release:vps:heatmap
+bun run verify:vps:heatmap
+```
+
+唯一流程文档：`开发文档/VPS_HEATMAP_RELEASE_SOP.md`
+
 ---
 
 **变更历史**：

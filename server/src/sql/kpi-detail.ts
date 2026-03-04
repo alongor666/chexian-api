@@ -10,7 +10,8 @@
  * 关联文档：开发文档/KPI口径说明.md
  */
 
-import { QUALITY_BUSINESS_CONDITION } from './kpi';
+import { QUALITY_BUSINESS_CONDITION } from './kpi.js';
+import type { KpiDetailResult } from '../types/kpi';
 export type { KpiDetailResult } from '../types/kpi';
 
 /**
