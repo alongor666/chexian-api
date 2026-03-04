@@ -21,6 +21,8 @@
     "test:e2e:ui": "playwright test --ui",
     "cleanup:artifacts": "node scripts/cleanup-debug-artifacts.mjs",
     "test:burn-down": "node scripts/test-burn-down.mjs",
+    "verify:vps:heatmap": "node scripts/verify-vps-heatmap.mjs",
+    "release:vps:heatmap": "node scripts/release-vps-heatmap.mjs",
     "benchmark:key-routes": "node scripts/benchmark-key-routes.mjs",
     "benchmark:key-routes:soak": "node scripts/benchmark-key-routes-soak.mjs",
     "production:gate": "node scripts/production-gate.mjs",

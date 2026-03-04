@@ -526,6 +526,18 @@ ssh chexian-vps echo ok   # 返回 "ok" 表示配置正确
 
 脚本自动完成：SSH 连通性检查 → 找到最新 `.parquet` → scp 上传 → chmod 600 → PM2 重启 → 健康检查。
 
+### 热力图发布与验收入口（每次上线优先使用）
+
+```bash
+# 一键发布 + 验收
+bun run release:vps:heatmap
+
+# 仅验收（不部署）
+bun run verify:vps:heatmap
+```
+
+唯一流程文档：`开发文档/VPS_HEATMAP_RELEASE_SOP.md`
+
 ### SSH 故障排查
 
 | 现象 | 原因 | 修复方式 |

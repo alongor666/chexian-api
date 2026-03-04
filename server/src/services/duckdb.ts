@@ -580,8 +580,11 @@ class DuckDBService {
    * 说明：
    * - 结构与历史 CrossSellDailyAgg 表保持一致，复用现有 SQL 生成器和路由
    * - 数据来源实时读取 PolicyFact，不依赖预聚合导出文件
-   */
+  */
   async createCrossSellRealtimeView(): Promise<void> {
+    // 兼容历史部署中 CrossSellDailyAgg 可能是 TABLE 的情况
+    await this.dropRelationIfExists('CrossSellDailyAgg');
+
     await this.query(`
       CREATE OR REPLACE VIEW CrossSellDailyAgg AS
       WITH normalized AS (

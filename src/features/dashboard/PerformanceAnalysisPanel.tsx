@@ -759,6 +759,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     segmentTag,
     growthMode,
     days: 14,
+    enabled: isDataLoaded,
   });
 
   const summaryQuery = usePerformanceSummary({
