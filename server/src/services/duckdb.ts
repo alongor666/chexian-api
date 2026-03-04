@@ -366,6 +366,15 @@ class DuckDBService {
     // 2. 转义文件路径中的单引号
     const escapedPath = escapeSqlValue(filePath);
 
+    // 兼容同名对象类型切换（VIEW ↔ TABLE）：
+    // 当 raw_parquet 之前由多文件加载路径创建为 VIEW 时，直接 CREATE OR REPLACE TABLE 会报错。
+    try {
+      await this.query(`DROP VIEW IF EXISTS ${safeTableName}`);
+    } catch { /* ignore */ }
+    try {
+      await this.query(`DROP TABLE IF EXISTS ${safeTableName}`);
+    } catch { /* ignore */ }
+
     const sql = `
       CREATE OR REPLACE TABLE ${safeTableName} AS
       SELECT * FROM read_parquet('${escapedPath}')
