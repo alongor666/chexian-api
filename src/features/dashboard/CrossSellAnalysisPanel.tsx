@@ -25,6 +25,7 @@ import { getRateClassByField } from './crossSellRateStatus';
 import type { SeatCoverageLevel, VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { CrossSellTopSalesmanBoard } from './CrossSellTopSalesmanBoard';
 import { CrossSellOrgTrendChart } from './CrossSellOrgTrendChart';
+import { CrossSellMetricsHeatmap } from './CrossSellMetricsHeatmap';
 import {
   useCrossSellAnalysis,
   DIMENSION_LABELS,
@@ -361,6 +362,15 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
   return (
     <div className="space-y-5">
+      {/* 板块0：三级机构热力图 */}
+      <SectionTitle title={`三级机构驾意险${mappedTimePeriodForKpi === 'day' ? '14日' : mappedTimePeriodForKpi === 'week' ? '14周' : mappedTimePeriodForKpi === 'month' ? '14月' : '14季度'}热力图`} />
+      <CrossSellMetricsHeatmap
+        filters={filters}
+        vehicleCategory={vehicleCategory}
+        seatCoverageLevel={seatCoverageLevel}
+        timePeriod={mappedTimePeriodForKpi as 'day' | 'week' | 'month' | 'quarter'}
+      />
+
       {/* 板块1：推介率驱动因子环比 */}
       <SectionTitle title="推介率驱动因子环比" />
       <CrossSellSummaryKpiBoard

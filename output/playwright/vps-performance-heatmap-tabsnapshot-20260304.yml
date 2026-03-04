@@ -1,0 +1,1245 @@
+- generic [ref=e57]:
+  - banner [ref=e58]:
+    - generic [ref=e59]:
+      - img [ref=e60]
+      - heading "车险经营管理系统" [level=1] [ref=e64]
+      - generic [ref=e65]: v2.0
+    - navigation "主菜单" [ref=e66]:
+      - button "文件" [ref=e68] [cursor=pointer]:
+        - img [ref=e69]
+        - generic [ref=e71]: 文件
+        - img [ref=e72]
+      - button "设置" [ref=e75] [cursor=pointer]:
+        - img [ref=e76]
+        - generic [ref=e79]: 设置
+        - img [ref=e80]
+  - generic [ref=e82]:
+    - navigation "主导航" [ref=e83]:
+      - navigation [ref=e86]:
+        - link "首页" [ref=e87] [cursor=pointer]:
+          - /url: "#/"
+          - img [ref=e88]
+          - generic [ref=e91]: 首页
+        - separator [ref=e92]
+        - generic [ref=e93]: 数据分析
+        - link "仪表盘" [ref=e94] [cursor=pointer]:
+          - /url: "#/dashboard"
+          - img [ref=e95]
+          - generic [ref=e100]: 仪表盘
+        - link "业绩分析" [ref=e101] [cursor=pointer]:
+          - /url: "#/performance-analysis"
+          - img [ref=e102]
+          - generic [ref=e105]: 业绩分析
+        - link "保费报表" [ref=e106] [cursor=pointer]:
+          - /url: "#/premium-report"
+          - img [ref=e107]
+          - generic [ref=e109]: 保费报表
+        - link "营销战报" [ref=e110] [cursor=pointer]:
+          - /url: "#/marketing-report"
+          - img [ref=e111]
+          - generic [ref=e115]: 营销战报
+        - link "营业货车" [ref=e116] [cursor=pointer]:
+          - /url: "#/truck"
+          - img [ref=e117]
+          - generic [ref=e122]: 营业货车
+        - link "续保分析" [ref=e123] [cursor=pointer]:
+          - /url: "#/renewal"
+          - img [ref=e124]
+          - generic [ref=e129]: 续保分析
+        - link "驾乘险推介率" [ref=e130] [cursor=pointer]:
+          - /url: "#/cross-sell"
+          - img [ref=e131]
+          - generic [ref=e135]: 驾乘险推介率
+        - link "增长分析" [ref=e136] [cursor=pointer]:
+          - /url: "#/growth"
+          - img [ref=e137]
+          - generic [ref=e140]: 增长分析
+        - link "成本分析" [ref=e141] [cursor=pointer]:
+          - /url: "#/cost"
+          - img [ref=e142]
+          - generic [ref=e144]: 成本分析
+        - link "费用分析" [ref=e145] [cursor=pointer]:
+          - /url: "#/fee-analysis"
+          - img [ref=e146]
+          - generic [ref=e150]: 费用分析
+        - link "数据对比" [ref=e151] [cursor=pointer]:
+          - /url: "#/comparison"
+          - img [ref=e152]
+          - generic [ref=e156]: 数据对比
+        - link "系数监控" [ref=e157] [cursor=pointer]:
+          - /url: "#/coefficient"
+          - img [ref=e158]
+          - generic [ref=e161]: 系数监控
+        - separator [ref=e162]
+        - generic [ref=e163]: 工具
+        - link "摩意模型" [ref=e164] [cursor=pointer]:
+          - /url: "#/moto-cost"
+          - img [ref=e165]
+          - generic [ref=e170]: 摩意模型
+        - separator [ref=e171]
+        - generic [ref=e172]: 管理
+        - link "权限管理" [ref=e173] [cursor=pointer]:
+          - /url: "#/admin/access-control"
+          - img [ref=e174]
+          - generic [ref=e176]: 权限管理
+      - generic [ref=e177]:
+        - button "系统管理员 管理员" [ref=e179] [cursor=pointer]:
+          - img [ref=e180]
+          - paragraph [ref=e183]: 系统管理员
+          - generic [ref=e184]: 管理员
+          - img [ref=e185]
+        - button "收起侧边栏" [expanded] [ref=e187] [cursor=pointer]:
+          - img [ref=e188]
+          - generic [ref=e190]: 收起侧边栏
+    - main [ref=e191]:
+      - generic [ref=e593]:
+        - generic [ref=e595]:
+          - heading "四川分公司业绩分析" [level=1] [ref=e597]
+          - generic [ref=e598]:
+            - generic [ref=e601]:
+              - generic [ref=e602]: 客户类别
+              - tablist [ref=e603]:
+                - tab "全部" [selected] [ref=e604] [cursor=pointer]
+                - tab "非营客" [ref=e605] [cursor=pointer]
+                - tab "营客" [ref=e606] [cursor=pointer]
+                - tab "营货" [ref=e607] [cursor=pointer]
+                - tab "非营货" [ref=e608] [cursor=pointer]
+                - tab "摩托车" [ref=e609] [cursor=pointer]
+              - generic [ref=e610]: 时间维度
+              - tablist [ref=e611]:
+                - tab "日" [selected] [ref=e612] [cursor=pointer]
+                - tab "周" [ref=e613] [cursor=pointer]
+                - tab "月" [ref=e614] [cursor=pointer]
+                - tab "季" [ref=e615] [cursor=pointer]
+                - tab "年" [ref=e616] [cursor=pointer]
+              - generic [ref=e617]: 对比方式
+              - tablist [ref=e618]:
+                - tab "环比" [selected] [ref=e619] [cursor=pointer]
+                - tab "同比" [ref=e620] [cursor=pointer]
+            - generic [ref=e621]:
+              - generic [ref=e622]: 2026年
+              - generic [ref=e623]: 签单
+              - generic [ref=e624]: 01-01~03-03
+        - generic [ref=e625]:
+          - generic [ref=e627]:
+            - heading "三级机构连续14天热力图" [level=2] [ref=e630]
+            - generic [ref=e632]:
+              - generic [ref=e633]:
+                - tablist [ref=e634]:
+                  - tab "增长率" [ref=e635] [cursor=pointer]
+                  - tab "计划达成率" [ref=e636] [cursor=pointer]
+                  - tab "保费规模" [active] [selected] [ref=e637] [cursor=pointer]
+                - paragraph [ref=e638]: 增长率环比按同星期几对比（周环比），同比按上年同日对比。
+              - table [ref=e640]:
+                - rowgroup [ref=e641]:
+                  - row "三级机构 02-18 02-19 02-20 02-21 02-22 02-23 02-24 02-25 02-26 02-27 02-28 03-01 03-02 03-03" [ref=e642]:
+                    - columnheader "三级机构" [ref=e643]
+                    - columnheader "02-18" [ref=e644]
+                    - columnheader "02-19" [ref=e645]
+                    - columnheader "02-20" [ref=e646]
+                    - columnheader "02-21" [ref=e647]
+                    - columnheader "02-22" [ref=e648]
+                    - columnheader "02-23" [ref=e649]
+                    - columnheader "02-24" [ref=e650]
+                    - columnheader "02-25" [ref=e651]
+                    - columnheader "02-26" [ref=e652]
+                    - columnheader "02-27" [ref=e653]
+                    - columnheader "02-28" [ref=e654]
+                    - columnheader "03-01" [ref=e655]
+                    - columnheader "03-02" [ref=e656]
+                    - columnheader "03-03" [ref=e657]
+                - rowgroup [ref=e658]:
+                  - row "本部 0.00 0.00 1.7 0.00 0.00 0.00 0.00 0.33 0.00 1.6 2.6 0.00 2.1 3.5" [ref=e3302]:
+                    - cell "本部" [ref=e660]
+                    - cell "0.00" [ref=e3303]:
+                      - generic [ref=e662]: "0.00"
+                    - cell "0.00" [ref=e3304]:
+                      - generic [ref=e666]: "0.00"
+                    - cell "1.7" [ref=e3305]:
+                      - generic [ref=e670]: "1.7"
+                    - cell "0.00" [ref=e3306]:
+                      - generic [ref=e674]: "0.00"
+                    - cell "0.00" [ref=e3307]:
+                      - generic [ref=e678]: "0.00"
+                    - cell "0.00" [ref=e3308]:
+                      - generic [ref=e682]: "0.00"
+                    - cell "0.00" [ref=e3309]:
+                      - generic [ref=e686]: "0.00"
+                    - cell "0.33" [ref=e3310]:
+                      - generic [ref=e690]: "0.33"
+                    - cell "0.00" [ref=e3311]:
+                      - generic [ref=e694]: "0.00"
+                    - cell "1.6" [ref=e3312]:
+                      - generic [ref=e698]: "1.6"
+                    - cell "2.6" [ref=e3313]:
+                      - generic [ref=e702]: "2.6"
+                    - cell "0.00" [ref=e3314]:
+                      - generic [ref=e706]: "0.00"
+                    - cell "2.1" [ref=e3315]:
+                      - generic [ref=e710]: "2.1"
+                    - cell "3.5" [ref=e3316]:
+                      - generic [ref=e714]: "3.5"
+                  - row "达州 0.00 0.00 0.00 0.26 0.25 0.57 1.8 1.8 2.6 4.1 2.3 0.58 1.6 3.9" [ref=e3317]:
+                    - cell "达州" [ref=e718]
+                    - cell "0.00" [ref=e3318]:
+                      - generic [ref=e720]: "0.00"
+                    - cell "0.00" [ref=e3319]:
+                      - generic [ref=e724]: "0.00"
+                    - cell "0.00" [ref=e3320]:
+                      - generic [ref=e728]: "0.00"
+                    - cell "0.26" [ref=e3321]:
+                      - generic [ref=e732]: "0.26"
+                    - cell "0.25" [ref=e3322]:
+                      - generic [ref=e736]: "0.25"
+                    - cell "0.57" [ref=e3323]:
+                      - generic [ref=e740]: "0.57"
+                    - cell "1.8" [ref=e3324]:
+                      - generic [ref=e744]: "1.8"
+                    - cell "1.8" [ref=e3325]:
+                      - generic [ref=e748]: "1.8"
+                    - cell "2.6" [ref=e3326]:
+                      - generic [ref=e752]: "2.6"
+                    - cell "4.1" [ref=e3327]:
+                      - generic [ref=e756]: "4.1"
+                    - cell "2.3" [ref=e3328]:
+                      - generic [ref=e760]: "2.3"
+                    - cell "0.58" [ref=e3329]:
+                      - generic [ref=e764]: "0.58"
+                    - cell "1.6" [ref=e3330]:
+                      - generic [ref=e768]: "1.6"
+                    - cell "3.9" [ref=e3331]:
+                      - generic [ref=e772]: "3.9"
+                  - row "德阳 0.46 0.65 0.75 1.8 1.5 1.1 9.2 7.8 7.8 11.2 6.0 2.1 19.5 12.6" [ref=e3332]:
+                    - cell "德阳" [ref=e776]
+                    - cell "0.46" [ref=e3333]:
+                      - generic [ref=e778]: "0.46"
+                    - cell "0.65" [ref=e3334]:
+                      - generic [ref=e782]: "0.65"
+                    - cell "0.75" [ref=e3335]:
+                      - generic [ref=e786]: "0.75"
+                    - cell "1.8" [ref=e3336]:
+                      - generic [ref=e790]: "1.8"
+                    - cell "1.5" [ref=e3337]:
+                      - generic [ref=e794]: "1.5"
+                    - cell "1.1" [ref=e3338]:
+                      - generic [ref=e798]: "1.1"
+                    - cell "9.2" [ref=e3339]:
+                      - generic [ref=e802]: "9.2"
+                    - cell "7.8" [ref=e3340]:
+                      - generic [ref=e806]: "7.8"
+                    - cell "7.8" [ref=e3341]:
+                      - generic [ref=e810]: "7.8"
+                    - cell "11.2" [ref=e3342]:
+                      - generic [ref=e814]: "11.2"
+                    - cell "6.0" [ref=e3343]:
+                      - generic [ref=e818]: "6.0"
+                    - cell "2.1" [ref=e3344]:
+                      - generic [ref=e822]: "2.1"
+                    - cell "19.5" [ref=e3345]:
+                      - generic [ref=e826]: "19.5"
+                    - cell "12.6" [ref=e3346]:
+                      - generic [ref=e830]: "12.6"
+                  - row "高新 0.95 2.6 4.9 3.3 5.7 5.9 39.5 33.5 26.3 28.1 30.3 14.2 55.7 32.1" [ref=e3347]:
+                    - cell "高新" [ref=e834]
+                    - cell "0.95" [ref=e3348]:
+                      - generic [ref=e836]: "0.95"
+                    - cell "2.6" [ref=e3349]:
+                      - generic [ref=e840]: "2.6"
+                    - cell "4.9" [ref=e3350]:
+                      - generic [ref=e844]: "4.9"
+                    - cell "3.3" [ref=e3351]:
+                      - generic [ref=e848]: "3.3"
+                    - cell "5.7" [ref=e3352]:
+                      - generic [ref=e852]: "5.7"
+                    - cell "5.9" [ref=e3353]:
+                      - generic [ref=e856]: "5.9"
+                    - cell "39.5" [ref=e3354]:
+                      - generic [ref=e860]: "39.5"
+                    - cell "33.5" [ref=e3355]:
+                      - generic [ref=e864]: "33.5"
+                    - cell "26.3" [ref=e3356]:
+                      - generic [ref=e868]: "26.3"
+                    - cell "28.1" [ref=e3357]:
+                      - generic [ref=e872]: "28.1"
+                    - cell "30.3" [ref=e3358]:
+                      - generic [ref=e876]: "30.3"
+                    - cell "14.2" [ref=e3359]:
+                      - generic [ref=e880]: "14.2"
+                    - cell "55.7" [ref=e3360]:
+                      - generic [ref=e884]: "55.7"
+                    - cell "32.1" [ref=e3361]:
+                      - generic [ref=e888]: "32.1"
+                  - row "乐山 0.25 0.72 0.67 0.90 0.91 0.75 5.8 3.9 6.6 4.7 1.6 2.3 5.8 2.2" [ref=e3362]:
+                    - cell "乐山" [ref=e892]
+                    - cell "0.25" [ref=e3363]:
+                      - generic [ref=e894]: "0.25"
+                    - cell "0.72" [ref=e3364]:
+                      - generic [ref=e898]: "0.72"
+                    - cell "0.67" [ref=e3365]:
+                      - generic [ref=e902]: "0.67"
+                    - cell "0.90" [ref=e3366]:
+                      - generic [ref=e906]: "0.90"
+                    - cell "0.91" [ref=e3367]:
+                      - generic [ref=e910]: "0.91"
+                    - cell "0.75" [ref=e3368]:
+                      - generic [ref=e914]: "0.75"
+                    - cell "5.8" [ref=e3369]:
+                      - generic [ref=e918]: "5.8"
+                    - cell "3.9" [ref=e3370]:
+                      - generic [ref=e922]: "3.9"
+                    - cell "6.6" [ref=e3371]:
+                      - generic [ref=e926]: "6.6"
+                    - cell "4.7" [ref=e3372]:
+                      - generic [ref=e930]: "4.7"
+                    - cell "1.6" [ref=e3373]:
+                      - generic [ref=e934]: "1.6"
+                    - cell "2.3" [ref=e3374]:
+                      - generic [ref=e938]: "2.3"
+                    - cell "5.8" [ref=e3375]:
+                      - generic [ref=e942]: "5.8"
+                    - cell "2.2" [ref=e3376]:
+                      - generic [ref=e946]: "2.2"
+                  - row "泸州 0.36 0.95 1.4 1.5 2.8 3.1 9.2 6.6 6.5 7.6 4.9 3.1 8.9 7.5" [ref=e3377]:
+                    - cell "泸州" [ref=e950]
+                    - cell "0.36" [ref=e3378]:
+                      - generic [ref=e952]: "0.36"
+                    - cell "0.95" [ref=e3379]:
+                      - generic [ref=e956]: "0.95"
+                    - cell "1.4" [ref=e3380]:
+                      - generic [ref=e960]: "1.4"
+                    - cell "1.5" [ref=e3381]:
+                      - generic [ref=e964]: "1.5"
+                    - cell "2.8" [ref=e3382]:
+                      - generic [ref=e968]: "2.8"
+                    - cell "3.1" [ref=e3383]:
+                      - generic [ref=e972]: "3.1"
+                    - cell "9.2" [ref=e3384]:
+                      - generic [ref=e976]: "9.2"
+                    - cell "6.6" [ref=e3385]:
+                      - generic [ref=e980]: "6.6"
+                    - cell "6.5" [ref=e3386]:
+                      - generic [ref=e984]: "6.5"
+                    - cell "7.6" [ref=e3387]:
+                      - generic [ref=e988]: "7.6"
+                    - cell "4.9" [ref=e3388]:
+                      - generic [ref=e992]: "4.9"
+                    - cell "3.1" [ref=e3389]:
+                      - generic [ref=e996]: "3.1"
+                    - cell "8.9" [ref=e3390]:
+                      - generic [ref=e1000]: "8.9"
+                    - cell "7.5" [ref=e3391]:
+                      - generic [ref=e1004]: "7.5"
+                  - row "青羊 0.72 2.4 1.1 1.7 2.6 2.4 31.0 23.8 21.3 22.1 21.0 3.9 27.0 18.6" [ref=e3392]:
+                    - cell "青羊" [ref=e1008]
+                    - cell "0.72" [ref=e3393]:
+                      - generic [ref=e1010]: "0.72"
+                    - cell "2.4" [ref=e3394]:
+                      - generic [ref=e1014]: "2.4"
+                    - cell "1.1" [ref=e3395]:
+                      - generic [ref=e1018]: "1.1"
+                    - cell "1.7" [ref=e3396]:
+                      - generic [ref=e1022]: "1.7"
+                    - cell "2.6" [ref=e3397]:
+                      - generic [ref=e1026]: "2.6"
+                    - cell "2.4" [ref=e3398]:
+                      - generic [ref=e1030]: "2.4"
+                    - cell "31.0" [ref=e3399]:
+                      - generic [ref=e1034]: "31.0"
+                    - cell "23.8" [ref=e3400]:
+                      - generic [ref=e1038]: "23.8"
+                    - cell "21.3" [ref=e3401]:
+                      - generic [ref=e1042]: "21.3"
+                    - cell "22.1" [ref=e3402]:
+                      - generic [ref=e1046]: "22.1"
+                    - cell "21.0" [ref=e3403]:
+                      - generic [ref=e1050]: "21.0"
+                    - cell "3.9" [ref=e3404]:
+                      - generic [ref=e1054]: "3.9"
+                    - cell "27.0" [ref=e3405]:
+                      - generic [ref=e1058]: "27.0"
+                    - cell "18.6" [ref=e3406]:
+                      - generic [ref=e1062]: "18.6"
+                  - row "天府 5.5 8.2 10.4 14.2 16.6 25.9 108.0 80.7 83.6 72.0 65.8 36.4 116.0 64.3" [ref=e3407]:
+                    - cell "天府" [ref=e1066]
+                    - cell "5.5" [ref=e3408]:
+                      - generic [ref=e1068]: "5.5"
+                    - cell "8.2" [ref=e3409]:
+                      - generic [ref=e1072]: "8.2"
+                    - cell "10.4" [ref=e3410]:
+                      - generic [ref=e1076]: "10.4"
+                    - cell "14.2" [ref=e3411]:
+                      - generic [ref=e1080]: "14.2"
+                    - cell "16.6" [ref=e3412]:
+                      - generic [ref=e1084]: "16.6"
+                    - cell "25.9" [ref=e3413]:
+                      - generic [ref=e1088]: "25.9"
+                    - cell "108.0" [ref=e3414]:
+                      - generic [ref=e1092]: "108.0"
+                    - cell "80.7" [ref=e3415]:
+                      - generic [ref=e1096]: "80.7"
+                    - cell "83.6" [ref=e3416]:
+                      - generic [ref=e1100]: "83.6"
+                    - cell "72.0" [ref=e3417]:
+                      - generic [ref=e1104]: "72.0"
+                    - cell "65.8" [ref=e3418]:
+                      - generic [ref=e1108]: "65.8"
+                    - cell "36.4" [ref=e3419]:
+                      - generic [ref=e1112]: "36.4"
+                    - cell "116.0" [ref=e3420]:
+                      - generic [ref=e1116]: "116.0"
+                    - cell "64.3" [ref=e3421]:
+                      - generic [ref=e1120]: "64.3"
+                  - row "武侯 0.00 0.86 0.68 0.64 1.8 1.2 12.3 11.3 13.4 12.3 9.3 3.1 14.0 8.5" [ref=e3422]:
+                    - cell "武侯" [ref=e1124]
+                    - cell "0.00" [ref=e3423]:
+                      - generic [ref=e1126]: "0.00"
+                    - cell "0.86" [ref=e3424]:
+                      - generic [ref=e1130]: "0.86"
+                    - cell "0.68" [ref=e3425]:
+                      - generic [ref=e1134]: "0.68"
+                    - cell "0.64" [ref=e3426]:
+                      - generic [ref=e1138]: "0.64"
+                    - cell "1.8" [ref=e3427]:
+                      - generic [ref=e1142]: "1.8"
+                    - cell "1.2" [ref=e3428]:
+                      - generic [ref=e1146]: "1.2"
+                    - cell "12.3" [ref=e3429]:
+                      - generic [ref=e1150]: "12.3"
+                    - cell "11.3" [ref=e3430]:
+                      - generic [ref=e1154]: "11.3"
+                    - cell "13.4" [ref=e3431]:
+                      - generic [ref=e1158]: "13.4"
+                    - cell "12.3" [ref=e3432]:
+                      - generic [ref=e1162]: "12.3"
+                    - cell "9.3" [ref=e3433]:
+                      - generic [ref=e1166]: "9.3"
+                    - cell "3.1" [ref=e3434]:
+                      - generic [ref=e1170]: "3.1"
+                    - cell "14.0" [ref=e3435]:
+                      - generic [ref=e1174]: "14.0"
+                    - cell "8.5" [ref=e3436]:
+                      - generic [ref=e1178]: "8.5"
+                  - row "新都 1.0 0.13 3.5 0.46 1.5 1.2 22.5 25.3 25.1 22.7 21.1 10.1 42.4 35.5" [ref=e3437]:
+                    - cell "新都" [ref=e1182]
+                    - cell "1.0" [ref=e3438]:
+                      - generic [ref=e1184]: "1.0"
+                    - cell "0.13" [ref=e3439]:
+                      - generic [ref=e1188]: "0.13"
+                    - cell "3.5" [ref=e3440]:
+                      - generic [ref=e1192]: "3.5"
+                    - cell "0.46" [ref=e3441]:
+                      - generic [ref=e1196]: "0.46"
+                    - cell "1.5" [ref=e3442]:
+                      - generic [ref=e1200]: "1.5"
+                    - cell "1.2" [ref=e3443]:
+                      - generic [ref=e1204]: "1.2"
+                    - cell "22.5" [ref=e3444]:
+                      - generic [ref=e1208]: "22.5"
+                    - cell "25.3" [ref=e3445]:
+                      - generic [ref=e1212]: "25.3"
+                    - cell "25.1" [ref=e3446]:
+                      - generic [ref=e1216]: "25.1"
+                    - cell "22.7" [ref=e3447]:
+                      - generic [ref=e1220]: "22.7"
+                    - cell "21.1" [ref=e3448]:
+                      - generic [ref=e1224]: "21.1"
+                    - cell "10.1" [ref=e3449]:
+                      - generic [ref=e1228]: "10.1"
+                    - cell "42.4" [ref=e3450]:
+                      - generic [ref=e1232]: "42.4"
+                    - cell "35.5" [ref=e3451]:
+                      - generic [ref=e1236]: "35.5"
+                  - row "宜宾 0.73 0.91 1.6 3.8 6.6 6.1 14.1 13.4 14.6 12.5 14.8 9.2 10.7 7.9" [ref=e3452]:
+                    - cell "宜宾" [ref=e1240]
+                    - cell "0.73" [ref=e3453]:
+                      - generic [ref=e1242]: "0.73"
+                    - cell "0.91" [ref=e3454]:
+                      - generic [ref=e1246]: "0.91"
+                    - cell "1.6" [ref=e3455]:
+                      - generic [ref=e1250]: "1.6"
+                    - cell "3.8" [ref=e3456]:
+                      - generic [ref=e1254]: "3.8"
+                    - cell "6.6" [ref=e3457]:
+                      - generic [ref=e1258]: "6.6"
+                    - cell "6.1" [ref=e3458]:
+                      - generic [ref=e1262]: "6.1"
+                    - cell "14.1" [ref=e3459]:
+                      - generic [ref=e1266]: "14.1"
+                    - cell "13.4" [ref=e3460]:
+                      - generic [ref=e1270]: "13.4"
+                    - cell "14.6" [ref=e3461]:
+                      - generic [ref=e1274]: "14.6"
+                    - cell "12.5" [ref=e3462]:
+                      - generic [ref=e1278]: "12.5"
+                    - cell "14.8" [ref=e3463]:
+                      - generic [ref=e1282]: "14.8"
+                    - cell "9.2" [ref=e3464]:
+                      - generic [ref=e1286]: "9.2"
+                    - cell "10.7" [ref=e3465]:
+                      - generic [ref=e1290]: "10.7"
+                    - cell "7.9" [ref=e3466]:
+                      - generic [ref=e1294]: "7.9"
+                  - row "资阳 0.50 1.1 0.44 0.48 0.47 1.9 6.0 4.6 4.6 3.0 3.6 0.88 4.5 7.6" [ref=e3467]:
+                    - cell "资阳" [ref=e1298]
+                    - cell "0.50" [ref=e3468]:
+                      - generic [ref=e1300]: "0.50"
+                    - cell "1.1" [ref=e3469]:
+                      - generic [ref=e1304]: "1.1"
+                    - cell "0.44" [ref=e3470]:
+                      - generic [ref=e1308]: "0.44"
+                    - cell "0.48" [ref=e3471]:
+                      - generic [ref=e1312]: "0.48"
+                    - cell "0.47" [ref=e3472]:
+                      - generic [ref=e1316]: "0.47"
+                    - cell "1.9" [ref=e3473]:
+                      - generic [ref=e1320]: "1.9"
+                    - cell "6.0" [ref=e3474]:
+                      - generic [ref=e1324]: "6.0"
+                    - cell "4.6" [ref=e3475]:
+                      - generic [ref=e1328]: "4.6"
+                    - cell "4.6" [ref=e3476]:
+                      - generic [ref=e1332]: "4.6"
+                    - cell "3.0" [ref=e3477]:
+                      - generic [ref=e1336]: "3.0"
+                    - cell "3.6" [ref=e3478]:
+                      - generic [ref=e1340]: "3.6"
+                    - cell "0.88" [ref=e3479]:
+                      - generic [ref=e1344]: "0.88"
+                    - cell "4.5" [ref=e3480]:
+                      - generic [ref=e1348]: "4.5"
+                    - cell "7.6" [ref=e3481]:
+                      - generic [ref=e1352]: "7.6"
+                  - row "自贡 0.14 0.29 0.73 0.94 1.1 1.5 7.3 7.2 5.0 5.7 6.1 2.7 4.6 4.0" [ref=e3482]:
+                    - cell "自贡" [ref=e1356]
+                    - cell "0.14" [ref=e3483]:
+                      - generic [ref=e1358]: "0.14"
+                    - cell "0.29" [ref=e3484]:
+                      - generic [ref=e1362]: "0.29"
+                    - cell "0.73" [ref=e3485]:
+                      - generic [ref=e1366]: "0.73"
+                    - cell "0.94" [ref=e3486]:
+                      - generic [ref=e1370]: "0.94"
+                    - cell "1.1" [ref=e3487]:
+                      - generic [ref=e1374]: "1.1"
+                    - cell "1.5" [ref=e3488]:
+                      - generic [ref=e1378]: "1.5"
+                    - cell "7.3" [ref=e3489]:
+                      - generic [ref=e1382]: "7.3"
+                    - cell "7.2" [ref=e3490]:
+                      - generic [ref=e1386]: "7.2"
+                    - cell "5.0" [ref=e3491]:
+                      - generic [ref=e1390]: "5.0"
+                    - cell "5.7" [ref=e3492]:
+                      - generic [ref=e1394]: "5.7"
+                    - cell "6.1" [ref=e3493]:
+                      - generic [ref=e1398]: "6.1"
+                    - cell "2.7" [ref=e3494]:
+                      - generic [ref=e1402]: "2.7"
+                    - cell "4.6" [ref=e3495]:
+                      - generic [ref=e1406]: "4.6"
+                    - cell "4.0" [ref=e3496]:
+                      - generic [ref=e1410]: "4.0"
+              - generic [ref=e1413]:
+                - generic [ref=e1414]: 优秀
+                - generic [ref=e1415]: 健康
+                - generic [ref=e1416]: 异常
+                - generic [ref=e1417]: 危险
+            - heading "险别组合业绩环比（全部 · 日）" [level=2] [ref=e1420]
+            - generic [ref=e1422]:
+              - tablist [ref=e1424]:
+                - tab "不展开" [selected] [ref=e1425] [cursor=pointer]
+                - tab "油电" [ref=e1426] [cursor=pointer]
+                - tab "续新转" [ref=e1427] [cursor=pointer]
+                - tab "油电+续新转" [ref=e1428] [cursor=pointer]
+              - table [ref=e1430]:
+                - rowgroup [ref=e1431]:
+                  - row "险别组合 车险保费(万元) 车险计划(万元) 车险件数 件均保费 达成率 增长率 新能源占比 续保占比 转保占比 新车占比 过户占比" [ref=e1432]:
+                    - columnheader "险别组合" [ref=e1433]
+                    - columnheader "车险保费(万元)" [ref=e1434]
+                    - columnheader "车险计划(万元)" [ref=e1435]
+                    - columnheader "车险件数" [ref=e1436]
+                    - columnheader "件均保费" [ref=e1437]
+                    - columnheader "达成率" [ref=e1438]
+                    - columnheader "增长率" [ref=e1439]
+                    - columnheader "新能源占比" [ref=e1440]
+                    - columnheader "续保占比" [ref=e1441]
+                    - columnheader "转保占比" [ref=e1442]
+                    - columnheader "新车占比" [ref=e1443]
+                    - columnheader "过户占比" [ref=e1444]
+                - rowgroup [ref=e1445]:
+                  - row "整体 208.3 - 1,981 1,052元 - -33.4% 4.0% 0.0% 91.5% 8.5% 5.0%" [ref=e1446]:
+                    - cell "整体" [ref=e1447]
+                    - cell "208.3" [ref=e1448]
+                    - cell "-" [ref=e1449]
+                    - cell "1,981" [ref=e1450]
+                    - cell "1,052元" [ref=e1451]
+                    - cell "-" [ref=e1452]
+                    - cell "-33.4%" [ref=e1453]
+                    - cell "4.0%" [ref=e1454]
+                    - cell "0.0%" [ref=e1455]
+                    - cell "91.5%" [ref=e1456]
+                    - cell "8.5%" [ref=e1457]
+                    - cell "5.0%" [ref=e1458]
+                  - row "主全 110.7 - 243 4,556元 - -31.2% 3.0% 0.0% 80.3% 19.7% 2.4%" [ref=e1459]:
+                    - cell "主全" [ref=e1460]
+                    - cell "110.7" [ref=e1461]
+                    - cell "-" [ref=e1462]
+                    - cell "243" [ref=e1463]
+                    - cell "4,556元" [ref=e1464]
+                    - cell "-" [ref=e1465]
+                    - cell "-31.2%" [ref=e1466]
+                    - cell "3.0%" [ref=e1467]
+                    - cell "0.0%" [ref=e1468]
+                    - cell "80.3%" [ref=e1469]
+                    - cell "19.7%" [ref=e1470]
+                    - cell "2.4%" [ref=e1471]
+                  - row "交三 44.2 - 262 1,688元 - -50.6% 0.0% 0.0% 98.3% 1.7% 9.0%" [ref=e1472]:
+                    - cell "交三" [ref=e1473]
+                    - cell "44.2" [ref=e1474]
+                    - cell "-" [ref=e1475]
+                    - cell "262" [ref=e1476]
+                    - cell "1,688元" [ref=e1477]
+                    - cell "-" [ref=e1478]
+                    - cell "-50.6%" [ref=e1479]
+                    - cell "0.0%" [ref=e1480]
+                    - cell "0.0%" [ref=e1481]
+                    - cell "98.3%" [ref=e1482]
+                    - cell "1.7%" [ref=e1483]
+                    - cell "9.0%" [ref=e1484]
+                  - row "单交 53.4 - 1,487 359元 - -14.6% 5.6% 0.1% 92.9% 7.1% 4.5%" [ref=e1485]:
+                    - cell "单交" [ref=e1486]
+                    - cell "53.4" [ref=e1487]
+                    - cell "-" [ref=e1488]
+                    - cell "1,487" [ref=e1489]
+                    - cell "359元" [ref=e1490]
+                    - cell "-" [ref=e1491]
+                    - cell "-14.6%" [ref=e1492]
+                    - cell "5.6%" [ref=e1493]
+                    - cell "0.1%" [ref=e1494]
+                    - cell "92.9%" [ref=e1495]
+                    - cell "7.1%" [ref=e1496]
+                    - cell "4.5%" [ref=e1497]
+            - heading "车险保费、车险件数走势" [level=2] [ref=e1500]
+            - generic [ref=e1502]:
+              - heading "车险保费走势" [level=3] [ref=e1504]
+              - heading "车险件数走势" [level=3] [ref=e1509]
+            - heading "下钻分析" [level=2] [ref=e1515]
+            - generic [ref=e1517]:
+              - heading "达成率+增长率分布图" [level=3] [ref=e1518]
+              - generic [ref=e1519]: 分界线：达成率 100% / 增长率 7%。
+            - generic [ref=e1523]:
+              - generic [ref=e1524]:
+                - generic [ref=e1525]:
+                  - button "四川分公司" [ref=e1526] [cursor=pointer]
+                  - generic [ref=e1527]: /
+                  - generic [ref=e1528]: 三级机构
+                - generic [ref=e1529]:
+                  - button "选择下钻维度" [ref=e1530] [cursor=pointer]
+                  - button "重置分析" [ref=e1531] [cursor=pointer]
+              - generic [ref=e1532]:
+                - generic [ref=e1533]:
+                  - paragraph [ref=e1534]: 车险保费(万元)
+                  - paragraph [ref=e1535]: "208.3"
+                - generic [ref=e1536]:
+                  - paragraph [ref=e1537]: 车险件数
+                  - paragraph [ref=e1538]: 1,981
+                - generic [ref=e1539]:
+                  - paragraph [ref=e1540]: 达成率
+                  - paragraph [ref=e1541]: 204.9%
+                - generic [ref=e1542]:
+                  - paragraph [ref=e1543]: 增长率
+                  - paragraph [ref=e1544]: "-33.4%"
+                - generic [ref=e1545]:
+                  - paragraph [ref=e1546]: 象限
+                  - paragraph [ref=e1547]: 低增长高达成
+              - table [ref=e1549]:
+                - rowgroup [ref=e1550]:
+                  - row "维度（三级机构） 车险保费(万元) ↓ 车险计划(万元) 车险件数 达成率 增长率 新能源占比 续保占比 转保占比 新车占比 过户占比" [ref=e1551]:
+                    - columnheader "维度（三级机构）" [ref=e1552] [cursor=pointer]
+                    - columnheader "车险保费(万元) ↓" [ref=e1553] [cursor=pointer]
+                    - columnheader "车险计划(万元)" [ref=e1554] [cursor=pointer]
+                    - columnheader "车险件数" [ref=e1555] [cursor=pointer]
+                    - columnheader "达成率" [ref=e1556] [cursor=pointer]
+                    - columnheader "增长率" [ref=e1557] [cursor=pointer]
+                    - columnheader "新能源占比" [ref=e1558]
+                    - columnheader "续保占比" [ref=e1559]
+                    - columnheader "转保占比" [ref=e1560]
+                    - columnheader "新车占比" [ref=e1561]
+                    - columnheader "过户占比" [ref=e1562]
+                - rowgroup [ref=e1563]:
+                  - row "天府 64.3 14629.0 673 160.5% -44.5% 2.4% 0.0% 93.0% 7.0% 2.7%" [ref=e1564] [cursor=pointer]:
+                    - cell "天府" [ref=e1565]
+                    - cell "64.3" [ref=e1566]
+                    - cell "14629.0" [ref=e1567]
+                    - cell "673" [ref=e1568]
+                    - cell "160.5%" [ref=e1569]
+                    - cell "-44.5%" [ref=e1570]
+                    - cell "2.4%" [ref=e1571]
+                    - cell "0.0%" [ref=e1572]
+                    - cell "93.0%" [ref=e1573]
+                    - cell "7.0%" [ref=e1574]
+                    - cell "2.7%" [ref=e1575]
+                  - row "新都 35.5 4029.0 65 321.4% -16.4% 7.3% 0.0% 69.1% 30.9% 4.5%" [ref=e1576] [cursor=pointer]:
+                    - cell "新都" [ref=e1577]
+                    - cell "35.5" [ref=e1578]
+                    - cell "4029.0" [ref=e1579]
+                    - cell "65" [ref=e1580]
+                    - cell "321.4%" [ref=e1581]
+                    - cell "-16.4%" [ref=e1582]
+                    - cell "7.3%" [ref=e1583]
+                    - cell "0.0%" [ref=e1584]
+                    - cell "69.1%" [ref=e1585]
+                    - cell "30.9%" [ref=e1586]
+                    - cell "4.5%" [ref=e1587]
+                  - row "高新 32.1 5533.0 228 211.6% -42.4% 6.3% 0.0% 86.7% 13.3% 4.9%" [ref=e1588] [cursor=pointer]:
+                    - cell "高新" [ref=e1589]
+                    - cell "32.1" [ref=e1590]
+                    - cell "5533.0" [ref=e1591]
+                    - cell "228" [ref=e1592]
+                    - cell "211.6%" [ref=e1593]
+                    - cell "-42.4%" [ref=e1594]
+                    - cell "6.3%" [ref=e1595]
+                    - cell "0.0%" [ref=e1596]
+                    - cell "86.7%" [ref=e1597]
+                    - cell "13.3%" [ref=e1598]
+                    - cell "4.9%" [ref=e1599]
+                  - row "青羊 18.6 3840.0 125 177.2% -31.0% 2.1% 0.5% 96.3% 3.2% 5.8%" [ref=e1600] [cursor=pointer]:
+                    - cell "青羊" [ref=e1601]
+                    - cell "18.6" [ref=e1602]
+                    - cell "3840.0" [ref=e1603]
+                    - cell "125" [ref=e1604]
+                    - cell "177.2%" [ref=e1605]
+                    - cell "-31.0%" [ref=e1606]
+                    - cell "2.1%" [ref=e1607]
+                    - cell "0.5%" [ref=e1608]
+                    - cell "96.3%" [ref=e1609]
+                    - cell "3.2%" [ref=e1610]
+                    - cell "5.8%" [ref=e1611]
+                  - row "德阳 12.6 960.0 51 480.1% -35.2% 1.4% 0.0% 84.5% 15.5% 12.7%" [ref=e1612] [cursor=pointer]:
+                    - cell "德阳" [ref=e1613]
+                    - cell "12.6" [ref=e1614]
+                    - cell "960.0" [ref=e1615]
+                    - cell "51" [ref=e1616]
+                    - cell "480.1%" [ref=e1617]
+                    - cell "-35.2%" [ref=e1618]
+                    - cell "1.4%" [ref=e1619]
+                    - cell "0.0%" [ref=e1620]
+                    - cell "84.5%" [ref=e1621]
+                    - cell "15.5%" [ref=e1622]
+                    - cell "12.7%" [ref=e1623]
+                  - row "武侯 8.5 995.0 60 311.0% -39.3% 1.4% 0.0% 90.4% 9.6% 4.1%" [ref=e1624] [cursor=pointer]:
+                    - cell "武侯" [ref=e1625]
+                    - cell "8.5" [ref=e1626]
+                    - cell "995.0" [ref=e1627]
+                    - cell "60" [ref=e1628]
+                    - cell "311.0%" [ref=e1629]
+                    - cell "-39.3%" [ref=e1630]
+                    - cell "1.4%" [ref=e1631]
+                    - cell "0.0%" [ref=e1632]
+                    - cell "90.4%" [ref=e1633]
+                    - cell "9.6%" [ref=e1634]
+                    - cell "4.1%" [ref=e1635]
+                  - row "宜宾 7.9 3160.0 380 91.8% -25.9% 4.3% 0.0% 100.0% 0.0% 5.1%" [ref=e1636] [cursor=pointer]:
+                    - cell "宜宾" [ref=e1637]
+                    - cell "7.9" [ref=e1638]
+                    - cell "3160.0" [ref=e1639]
+                    - cell "380" [ref=e1640]
+                    - cell "91.8%" [ref=e1641]
+                    - cell "-25.9%" [ref=e1642]
+                    - cell "4.3%" [ref=e1643]
+                    - cell "0.0%" [ref=e1644]
+                    - cell "100.0%" [ref=e1645]
+                    - cell "0.0%" [ref=e1646]
+                    - cell "5.1%" [ref=e1647]
+                  - row "资阳 7.6 900.0 62 308.6% 70.3% 0.0% 0.0% 98.9% 1.1% 12.2%" [ref=e1648] [cursor=pointer]:
+                    - cell "资阳" [ref=e1649]
+                    - cell "7.6" [ref=e1650]
+                    - cell "900.0" [ref=e1651]
+                    - cell "62" [ref=e1652]
+                    - cell "308.6%" [ref=e1653]
+                    - cell "70.3%" [ref=e1654]
+                    - cell "0.0%" [ref=e1655]
+                    - cell "0.0%" [ref=e1656]
+                    - cell "98.9%" [ref=e1657]
+                    - cell "1.1%" [ref=e1658]
+                    - cell "12.2%" [ref=e1659]
+                  - row "泸州 7.5 1320.0 192 208.7% -15.4% 10.3% 0.0% 84.1% 15.9% 7.0%" [ref=e1660] [cursor=pointer]:
+                    - cell "泸州" [ref=e1661]
+                    - cell "7.5" [ref=e1662]
+                    - cell "1320.0" [ref=e1663]
+                    - cell "192" [ref=e1664]
+                    - cell "208.7%" [ref=e1665]
+                    - cell "-15.4%" [ref=e1666]
+                    - cell "10.3%" [ref=e1667]
+                    - cell "0.0%" [ref=e1668]
+                    - cell "84.1%" [ref=e1669]
+                    - cell "15.9%" [ref=e1670]
+                    - cell "7.0%" [ref=e1671]
+                  - row "自贡 4.0 785.0 108 185.7% -12.9% 5.1% 0.0% 89.7% 10.3% 4.3%" [ref=e1672] [cursor=pointer]:
+                    - cell "自贡" [ref=e1673]
+                    - cell "4.0" [ref=e1674]
+                    - cell "785.0" [ref=e1675]
+                    - cell "108" [ref=e1676]
+                    - cell "185.7%" [ref=e1677]
+                    - cell "-12.9%" [ref=e1678]
+                    - cell "5.1%" [ref=e1679]
+                    - cell "0.0%" [ref=e1680]
+                    - cell "89.7%" [ref=e1681]
+                    - cell "10.3%" [ref=e1682]
+                    - cell "4.3%" [ref=e1683]
+                  - row "达州 3.9 325.0 8 436.5% 140.1% 0.0% 0.0% 100.0% 0.0% 21.4%" [ref=e1684] [cursor=pointer]:
+                    - cell "达州" [ref=e1685]
+                    - cell "3.9" [ref=e1686]
+                    - cell "325.0" [ref=e1687]
+                    - cell "8" [ref=e1688]
+                    - cell "436.5%" [ref=e1689]
+                    - cell "140.1%" [ref=e1690]
+                    - cell "0.0%" [ref=e1691]
+                    - cell "0.0%" [ref=e1692]
+                    - cell "100.0%" [ref=e1693]
+                    - cell "0.0%" [ref=e1694]
+                    - cell "21.4%" [ref=e1695]
+                  - row "本部 3.5 0.00 2 - 67.6% 0.0% 0.0% 0.0% 100.0% 0.0%" [ref=e1696] [cursor=pointer]:
+                    - cell "本部" [ref=e1697]
+                    - cell "3.5" [ref=e1698]
+                    - cell "0.00" [ref=e1699]
+                    - cell "2" [ref=e1700]
+                    - cell "-" [ref=e1701]
+                    - cell "67.6%" [ref=e1702]
+                    - cell "0.0%" [ref=e1703]
+                    - cell "0.0%" [ref=e1704]
+                    - cell "0.0%" [ref=e1705]
+                    - cell "100.0%" [ref=e1706]
+                    - cell "0.0%" [ref=e1707]
+                  - row "乐山 2.2 633.0 27 128.4% -61.5% 0.0% 0.0% 100.0% 0.0% 5.9%" [ref=e1708] [cursor=pointer]:
+                    - cell "乐山" [ref=e1709]
+                    - cell "2.2" [ref=e1710]
+                    - cell "633.0" [ref=e1711]
+                    - cell "27" [ref=e1712]
+                    - cell "128.4%" [ref=e1713]
+                    - cell "-61.5%" [ref=e1714]
+                    - cell "0.0%" [ref=e1715]
+                    - cell "0.0%" [ref=e1716]
+                    - cell "100.0%" [ref=e1717]
+                    - cell "0.0%" [ref=e1718]
+                    - cell "5.9%" [ref=e1719]
+            - heading "Top20业务员" [level=2] [ref=e1722]
+            - generic [ref=e1724]:
+              - paragraph [ref=e1725]: "默认排序: 达成率升序"
+              - table [ref=e1727]:
+                - rowgroup [ref=e1728]:
+                  - row "维度 车险保费(万元) 车险计划(万元) 车险件数 达成率 ↑ 增长率 新能源占比 续保占比 转保占比 新车占比 过户占比" [ref=e1729]:
+                    - columnheader "维度" [ref=e1730] [cursor=pointer]
+                    - columnheader "车险保费(万元)" [ref=e1731] [cursor=pointer]
+                    - columnheader "车险计划(万元)" [ref=e1732] [cursor=pointer]
+                    - columnheader "车险件数" [ref=e1733] [cursor=pointer]
+                    - columnheader "达成率 ↑" [ref=e1734] [cursor=pointer]
+                    - columnheader "增长率" [ref=e1735] [cursor=pointer]
+                    - columnheader "新能源占比" [ref=e1736]
+                    - columnheader "续保占比" [ref=e1737]
+                    - columnheader "转保占比" [ref=e1738]
+                    - columnheader "新车占比" [ref=e1739]
+                    - columnheader "过户占比" [ref=e1740]
+                - rowgroup [ref=e1741]:
+                  - row "骆跃强 0.04 170.0 1 9.1% - 0.0% 0.0% 100.0% 0.0% 100.0%" [ref=e1742]:
+                    - cell "骆跃强" [ref=e1743]
+                    - cell "0.04" [ref=e1744]
+                    - cell "170.0" [ref=e1745]
+                    - cell "1" [ref=e1746]
+                    - cell "9.1%" [ref=e1747]
+                    - cell "-" [ref=e1748]
+                    - cell "0.0%" [ref=e1749]
+                    - cell "0.0%" [ref=e1750]
+                    - cell "100.0%" [ref=e1751]
+                    - cell "0.0%" [ref=e1752]
+                    - cell "100.0%" [ref=e1753]
+                  - row "陈昱舟 0.10 298.0 9 12.5% -10.0% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1754]:
+                    - cell "陈昱舟" [ref=e1755]
+                    - cell "0.10" [ref=e1756]
+                    - cell "298.0" [ref=e1757]
+                    - cell "9" [ref=e1758]
+                    - cell "12.5%" [ref=e1759]
+                    - cell "-10.0%" [ref=e1760]
+                    - cell "0.0%" [ref=e1761]
+                    - cell "0.0%" [ref=e1762]
+                    - cell "100.0%" [ref=e1763]
+                    - cell "0.0%" [ref=e1764]
+                    - cell "0.0%" [ref=e1765]
+                  - row "林立飞 0.06 165.0 5 12.5% 25.0% 0.0% 0.0% 100.0% 0.0% 20.0%" [ref=e1766]:
+                    - cell "林立飞" [ref=e1767]
+                    - cell "0.06" [ref=e1768]
+                    - cell "165.0" [ref=e1769]
+                    - cell "5" [ref=e1770]
+                    - cell "12.5%" [ref=e1771]
+                    - cell "25.0%" [ref=e1772]
+                    - cell "0.0%" [ref=e1773]
+                    - cell "0.0%" [ref=e1774]
+                    - cell "100.0%" [ref=e1775]
+                    - cell "0.0%" [ref=e1776]
+                    - cell "20.0%" [ref=e1777]
+                  - row "付培 0.06 150.0 1 15.3% -87.3% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1778]:
+                    - cell "付培" [ref=e1779]
+                    - cell "0.06" [ref=e1780]
+                    - cell "150.0" [ref=e1781]
+                    - cell "1" [ref=e1782]
+                    - cell "15.3%" [ref=e1783]
+                    - cell "-87.3%" [ref=e1784]
+                    - cell "0.0%" [ref=e1785]
+                    - cell "0.0%" [ref=e1786]
+                    - cell "100.0%" [ref=e1787]
+                    - cell "0.0%" [ref=e1788]
+                    - cell "0.0%" [ref=e1789]
+                  - row "于绍强 0.09 210.0 2 16.2% -48.0% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1790]:
+                    - cell "于绍强" [ref=e1791]
+                    - cell "0.09" [ref=e1792]
+                    - cell "210.0" [ref=e1793]
+                    - cell "2" [ref=e1794]
+                    - cell "16.2%" [ref=e1795]
+                    - cell "-48.0%" [ref=e1796]
+                    - cell "0.0%" [ref=e1797]
+                    - cell "0.0%" [ref=e1798]
+                    - cell "100.0%" [ref=e1799]
+                    - cell "0.0%" [ref=e1800]
+                    - cell "0.0%" [ref=e1801]
+                  - row "李育丽 0.09 200.0 1 16.4% -79.6% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1802]:
+                    - cell "李育丽" [ref=e1803]
+                    - cell "0.09" [ref=e1804]
+                    - cell "200.0" [ref=e1805]
+                    - cell "1" [ref=e1806]
+                    - cell "16.4%" [ref=e1807]
+                    - cell "-79.6%" [ref=e1808]
+                    - cell "0.0%" [ref=e1809]
+                    - cell "0.0%" [ref=e1810]
+                    - cell "100.0%" [ref=e1811]
+                    - cell "0.0%" [ref=e1812]
+                    - cell "0.0%" [ref=e1813]
+                  - row "肖照耀 0.02 50.0 2 16.5% -88.9% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1814]:
+                    - cell "肖照耀" [ref=e1815]
+                    - cell "0.02" [ref=e1816]
+                    - cell "50.0" [ref=e1817]
+                    - cell "2" [ref=e1818]
+                    - cell "16.5%" [ref=e1819]
+                    - cell "-88.9%" [ref=e1820]
+                    - cell "0.0%" [ref=e1821]
+                    - cell "0.0%" [ref=e1822]
+                    - cell "100.0%" [ref=e1823]
+                    - cell "0.0%" [ref=e1824]
+                    - cell "0.0%" [ref=e1825]
+                  - row "何婉玲 0.27 550.0 3 17.7% -43.7% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1826]:
+                    - cell "何婉玲" [ref=e1827]
+                    - cell "0.27" [ref=e1828]
+                    - cell "550.0" [ref=e1829]
+                    - cell "3" [ref=e1830]
+                    - cell "17.7%" [ref=e1831]
+                    - cell "-43.7%" [ref=e1832]
+                    - cell "0.0%" [ref=e1833]
+                    - cell "0.0%" [ref=e1834]
+                    - cell "100.0%" [ref=e1835]
+                    - cell "0.0%" [ref=e1836]
+                    - cell "0.0%" [ref=e1837]
+                  - row "黄春杨 0.08 170.0 1 17.8% -7.4% 100.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1838]:
+                    - cell "黄春杨" [ref=e1839]
+                    - cell "0.08" [ref=e1840]
+                    - cell "170.0" [ref=e1841]
+                    - cell "1" [ref=e1842]
+                    - cell "17.8%" [ref=e1843]
+                    - cell "-7.4%" [ref=e1844]
+                    - cell "100.0%" [ref=e1845]
+                    - cell "0.0%" [ref=e1846]
+                    - cell "100.0%" [ref=e1847]
+                    - cell "0.0%" [ref=e1848]
+                    - cell "0.0%" [ref=e1849]
+                  - row "陈君才 0.10 194.0 2 18.0% -86.4% 0.0% 0.0% 100.0% 0.0% 50.0%" [ref=e1850]:
+                    - cell "陈君才" [ref=e1851]
+                    - cell "0.10" [ref=e1852]
+                    - cell "194.0" [ref=e1853]
+                    - cell "2" [ref=e1854]
+                    - cell "18.0%" [ref=e1855]
+                    - cell "-86.4%" [ref=e1856]
+                    - cell "0.0%" [ref=e1857]
+                    - cell "0.0%" [ref=e1858]
+                    - cell "100.0%" [ref=e1859]
+                    - cell "0.0%" [ref=e1860]
+                    - cell "50.0%" [ref=e1861]
+                  - row "杨希 0.51 800.0 6 23.4% -88.1% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1862]:
+                    - cell "杨希" [ref=e1863]
+                    - cell "0.51" [ref=e1864]
+                    - cell "800.0" [ref=e1865]
+                    - cell "6" [ref=e1866]
+                    - cell "23.4%" [ref=e1867]
+                    - cell "-88.1%" [ref=e1868]
+                    - cell "0.0%" [ref=e1869]
+                    - cell "0.0%" [ref=e1870]
+                    - cell "100.0%" [ref=e1871]
+                    - cell "0.0%" [ref=e1872]
+                    - cell "0.0%" [ref=e1873]
+                  - row "喻凤 0.09 140.0 1 23.4% -92.6% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1874]:
+                    - cell "喻凤" [ref=e1875]
+                    - cell "0.09" [ref=e1876]
+                    - cell "140.0" [ref=e1877]
+                    - cell "1" [ref=e1878]
+                    - cell "23.4%" [ref=e1879]
+                    - cell "-92.6%" [ref=e1880]
+                    - cell "0.0%" [ref=e1881]
+                    - cell "0.0%" [ref=e1882]
+                    - cell "100.0%" [ref=e1883]
+                    - cell "0.0%" [ref=e1884]
+                    - cell "0.0%" [ref=e1885]
+                  - row "刘琨 0.37 550.0 5 24.6% -54.0% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1886]:
+                    - cell "刘琨" [ref=e1887]
+                    - cell "0.37" [ref=e1888]
+                    - cell "550.0" [ref=e1889]
+                    - cell "5" [ref=e1890]
+                    - cell "24.6%" [ref=e1891]
+                    - cell "-54.0%" [ref=e1892]
+                    - cell "0.0%" [ref=e1893]
+                    - cell "0.0%" [ref=e1894]
+                    - cell "100.0%" [ref=e1895]
+                    - cell "0.0%" [ref=e1896]
+                    - cell "0.0%" [ref=e1897]
+                  - row "刘乔 0.68 1000.0 5 25.0% 471.0% 0.0% 0.0% 100.0% 0.0% 25.0%" [ref=e1898]:
+                    - cell "刘乔" [ref=e1899]
+                    - cell "0.68" [ref=e1900]
+                    - cell "1000.0" [ref=e1901]
+                    - cell "5" [ref=e1902]
+                    - cell "25.0%" [ref=e1903]
+                    - cell "471.0%" [ref=e1904]
+                    - cell "0.0%" [ref=e1905]
+                    - cell "0.0%" [ref=e1906]
+                    - cell "100.0%" [ref=e1907]
+                    - cell "0.0%" [ref=e1908]
+                    - cell "25.0%" [ref=e1909]
+                  - row "韦丹 0.10 130.0 7 27.0% -79.9% 28.6% 0.0% 100.0% 0.0% 0.0%" [ref=e1910]:
+                    - cell "韦丹" [ref=e1911]
+                    - cell "0.10" [ref=e1912]
+                    - cell "130.0" [ref=e1913]
+                    - cell "7" [ref=e1914]
+                    - cell "27.0%" [ref=e1915]
+                    - cell "-79.9%" [ref=e1916]
+                    - cell "28.6%" [ref=e1917]
+                    - cell "0.0%" [ref=e1918]
+                    - cell "100.0%" [ref=e1919]
+                    - cell "0.0%" [ref=e1920]
+                    - cell "0.0%" [ref=e1921]
+                  - row "刘吉曦 0.02 30.0 2 27.6% -86.4% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1922]:
+                    - cell "刘吉曦" [ref=e1923]
+                    - cell "0.02" [ref=e1924]
+                    - cell "30.0" [ref=e1925]
+                    - cell "2" [ref=e1926]
+                    - cell "27.6%" [ref=e1927]
+                    - cell "-86.4%" [ref=e1928]
+                    - cell "0.0%" [ref=e1929]
+                    - cell "0.0%" [ref=e1930]
+                    - cell "100.0%" [ref=e1931]
+                    - cell "0.0%" [ref=e1932]
+                    - cell "0.0%" [ref=e1933]
+                  - row "熊红梅 0.02 30.0 2 27.6% -50.0% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1934]:
+                    - cell "熊红梅" [ref=e1935]
+                    - cell "0.02" [ref=e1936]
+                    - cell "30.0" [ref=e1937]
+                    - cell "2" [ref=e1938]
+                    - cell "27.6%" [ref=e1939]
+                    - cell "-50.0%" [ref=e1940]
+                    - cell "0.0%" [ref=e1941]
+                    - cell "0.0%" [ref=e1942]
+                    - cell "100.0%" [ref=e1943]
+                    - cell "0.0%" [ref=e1944]
+                    - cell "0.0%" [ref=e1945]
+                  - row "曾志超 0.09 108.0 1 31.9% -88.7% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1946]:
+                    - cell "曾志超" [ref=e1947]
+                    - cell "0.09" [ref=e1948]
+                    - cell "108.0" [ref=e1949]
+                    - cell "1" [ref=e1950]
+                    - cell "31.9%" [ref=e1951]
+                    - cell "-88.7%" [ref=e1952]
+                    - cell "0.0%" [ref=e1953]
+                    - cell "0.0%" [ref=e1954]
+                    - cell "100.0%" [ref=e1955]
+                    - cell "0.0%" [ref=e1956]
+                    - cell "0.0%" [ref=e1957]
+                  - row "苟俊 0.15 151.0 1 35.3% - 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1958]:
+                    - cell "苟俊" [ref=e1959]
+                    - cell "0.15" [ref=e1960]
+                    - cell "151.0" [ref=e1961]
+                    - cell "1" [ref=e1962]
+                    - cell "35.3%" [ref=e1963]
+                    - cell "-" [ref=e1964]
+                    - cell "0.0%" [ref=e1965]
+                    - cell "0.0%" [ref=e1966]
+                    - cell "100.0%" [ref=e1967]
+                    - cell "0.0%" [ref=e1968]
+                    - cell "0.0%" [ref=e1969]
+                  - row "何秋 0.10 102.0 9 36.5% -58.5% 0.0% 0.0% 100.0% 0.0% 0.0%" [ref=e1970]:
+                    - cell "何秋" [ref=e1971]
+                    - cell "0.10" [ref=e1972]
+                    - cell "102.0" [ref=e1973]
+                    - cell "9" [ref=e1974]
+                    - cell "36.5%" [ref=e1975]
+                    - cell "-58.5%" [ref=e1976]
+                    - cell "0.0%" [ref=e1977]
+                    - cell "0.0%" [ref=e1978]
+                    - cell "100.0%" [ref=e1979]
+                    - cell "0.0%" [ref=e1980]
+                    - cell "0.0%" [ref=e1981]
+          - generic [ref=e1982]:
+            - generic [ref=e1984]:
+              - generic [ref=e1985]:
+                - img [ref=e1986]
+                - text: 筛选条件
+              - button "收起筛选器" [ref=e1988] [cursor=pointer]:
+                - img [ref=e1989]
+            - generic [ref=e1991]:
+              - region "筛选条件" [ref=e1993]:
+                - generic [ref=e1994]:
+                  - heading "筛选条件" [level=2] [ref=e1995]
+                  - button "重置筛选条件" [ref=e1996] [cursor=pointer]: 重置
+                - generic [ref=e1997]: 核心维度
+                - generic [ref=e1998]:
+                  - generic [ref=e1999]:
+                    - generic [ref=e2000]: 统计口径
+                    - group "日期口径选择" [ref=e2001]:
+                      - button "签单日期" [pressed] [ref=e2002] [cursor=pointer]
+                      - button "起保日期" [ref=e2003] [cursor=pointer]
+                  - generic [ref=e2004]:
+                    - generic [ref=e2005]: 分析年度
+                    - combobox "选择分析年度" [ref=e2006] [cursor=pointer]:
+                      - option "2025年"
+                      - option "2026年" [selected]
+                  - generic [ref=e2007]:
+                    - generic [ref=e2008]:
+                      - generic [ref=e2009]: 起止日期
+                      - generic [ref=e2010]: 2026-01-01 ~ 2026-03-03
+                    - generic [ref=e2011]:
+                      - textbox "起始日" [ref=e2012]: 2026-01-01
+                      - textbox "截止日" [ref=e2013]: 2026-03-03
+                  - generic [ref=e2016]:
+                    - text: 场景快选
+                    - group "快捷筛选组合" [ref=e2017]:
+                      - 'button "转保: 旧车+非续保" [ref=e2018] [cursor=pointer]': 转保
+                      - 'button "可续: 可续+套单+商业险" [ref=e2019] [cursor=pointer]': 可续
+                  - group [ref=e2020]:
+                    - generic "三级机构 全选 反选 筛选异地机构 筛选同城机构 ▼" [ref=e2021] [cursor=pointer]:
+                      - generic [ref=e2022]:
+                        - generic [ref=e2023]: 三级机构
+                        - generic [ref=e2024]:
+                          - button "全选" [ref=e2025]
+                          - button "反选" [ref=e2026]
+                          - generic [ref=e2028]:
+                            - button "筛选异地机构" [ref=e2029]: 异地
+                            - button "筛选同城机构" [ref=e2030]: 同城
+                      - generic [ref=e2031]: ▼
+                    - generic [ref=e2034]:
+                      - log [ref=e2036]
+                      - generic [ref=e2037]:
+                        - generic [ref=e2038]:
+                          - generic [ref=e2039]: 全部
+                          - combobox [ref=e2041]
+                        - img [ref=e2045]
+                  - generic [ref=e2048]:
+                    - text: 险别组合
+                    - generic [ref=e2049]:
+                      - button "全部" [ref=e2050] [cursor=pointer]
+                      - button "主全" [ref=e2051] [cursor=pointer]
+                      - button "交三" [ref=e2052] [cursor=pointer]
+                      - button "其他" [ref=e2053] [cursor=pointer]
+                      - button "单交" [ref=e2054] [cursor=pointer]
+                  - group [ref=e2055]:
+                    - generic "续保模式 全选 反选 ▼" [ref=e2056] [cursor=pointer]:
+                      - generic [ref=e2057]:
+                        - generic [ref=e2058]: 续保模式
+                        - generic [ref=e2059]:
+                          - button "全选" [ref=e2060]
+                          - button "反选" [ref=e2061]
+                      - generic [ref=e2062]: ▼
+                - generic [ref=e2063]:
+                  - group [ref=e2064]:
+                    - generic "业务员 ▼" [ref=e2065] [cursor=pointer]:
+                      - generic [ref=e2066]: 业务员
+                      - generic [ref=e2067]: ▼
+                    - generic [ref=e2070]:
+                      - log [ref=e2072]
+                      - generic [ref=e2073]:
+                        - generic [ref=e2074]:
+                          - generic [ref=e2075]: 全部
+                          - combobox [ref=e2077]
+                        - img [ref=e2081]
+                  - group [ref=e2083]:
+                    - generic "业务属性（布尔） ▼" [ref=e2084] [cursor=pointer]:
+                      - generic [ref=e2085]: 业务属性（布尔）
+                      - generic [ref=e2086]: ▼
+                    - generic [ref=e2087]:
+                      - radiogroup "是否电销" [ref=e2088]:
+                        - generic [ref=e2089]: 是否电销
+                        - generic [ref=e2090]:
+                          - radio "全部" [checked] [ref=e2091] [cursor=pointer]
+                          - radio "电销" [ref=e2092] [cursor=pointer]
+                          - radio "非电销" [ref=e2093] [cursor=pointer]
+                      - radiogroup "是否新能源" [ref=e2094]:
+                        - generic [ref=e2095]: 是否新能源
+                        - generic [ref=e2096]:
+                          - radio "全部" [checked] [ref=e2097] [cursor=pointer]
+                          - radio "新能源" [ref=e2098] [cursor=pointer]
+                          - radio "燃油" [ref=e2099] [cursor=pointer]
+                      - radiogroup "是否新车" [ref=e2100]:
+                        - generic [ref=e2101]: 是否新车
+                        - generic [ref=e2102]:
+                          - radio "全部" [checked] [ref=e2103] [cursor=pointer]
+                          - radio "新车" [ref=e2104] [cursor=pointer]
+                          - radio "旧车" [ref=e2105] [cursor=pointer]
+                      - radiogroup "是否过户" [ref=e2106]:
+                        - generic [ref=e2107]: 是否过户
+                        - generic [ref=e2108]:
+                          - radio "全部" [checked] [ref=e2109] [cursor=pointer]
+                          - radio "过户" [ref=e2110] [cursor=pointer]
+                          - radio "非过户" [ref=e2111] [cursor=pointer]
+                      - radiogroup "是否交叉销售" [ref=e2112]:
+                        - generic [ref=e2113]: 是否交叉销售
+                        - generic [ref=e2114]:
+                          - radio "全部" [checked] [ref=e2115] [cursor=pointer]
+                          - radio "交叉销售" [ref=e2116] [cursor=pointer]
+                          - radio "非交叉销售" [ref=e2117] [cursor=pointer]
+                      - radiogroup "是否交商同保" [ref=e2118]:
+                        - generic [ref=e2119]: 是否交商同保
+                        - generic [ref=e2120]:
+                          - radio "全部" [checked] [ref=e2121] [cursor=pointer]
+                          - radio "同保" [ref=e2122] [cursor=pointer]
+                          - radio "非同保" [ref=e2123] [cursor=pointer]
+                  - generic [ref=e2124]:
+                    - generic [ref=e2125]:
+                      - text: 车险分等级
+                      - generic [ref=e2126]:
+                        - button "全部" [ref=e2127] [cursor=pointer]
+                        - button "A" [ref=e2128] [cursor=pointer]
+                        - button "B" [ref=e2129] [cursor=pointer]
+                        - button "C" [ref=e2130] [cursor=pointer]
+                        - button "D" [ref=e2131] [cursor=pointer]
+                        - button "E" [ref=e2132] [cursor=pointer]
+                        - button "F" [ref=e2133] [cursor=pointer]
+                        - button "G" [ref=e2134] [cursor=pointer]
+                        - button "X" [ref=e2135] [cursor=pointer]
+                    - generic [ref=e2136]:
+                      - text: 小货车评分
+                      - generic [ref=e2137]:
+                        - button "全部" [ref=e2138] [cursor=pointer]
+                        - button "A" [ref=e2139] [cursor=pointer]
+                        - button "B" [ref=e2140] [cursor=pointer]
+                        - button "C" [ref=e2141] [cursor=pointer]
+                        - button "D" [ref=e2142] [cursor=pointer]
+                        - button "E" [ref=e2143] [cursor=pointer]
+                        - button "X" [ref=e2144] [cursor=pointer]
+                    - generic [ref=e2145]:
+                      - text: 大货车评分
+                      - generic [ref=e2146]:
+                        - button "全部" [ref=e2147] [cursor=pointer]
+                        - button "A" [ref=e2148] [cursor=pointer]
+                        - button "B" [ref=e2149] [cursor=pointer]
+                        - button "C" [ref=e2150] [cursor=pointer]
+                        - button "D" [ref=e2151] [cursor=pointer]
+                        - button "E" [ref=e2152] [cursor=pointer]
+                        - button "X" [ref=e2153] [cursor=pointer]
+              - generic [ref=e2154]:
+                - link "蜀ICP备2024115865号" [ref=e2155] [cursor=pointer]:
+                  - /url: https://beian.miit.gov.cn/
+                - link "川公网安备51019002007622号" [ref=e2156] [cursor=pointer]:
+                  - /url: http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=51019002007622
+                  - generic [ref=e2157]: 川公网安备51019002007622号

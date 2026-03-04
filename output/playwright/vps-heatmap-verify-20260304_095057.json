@@ -1,0 +1,25 @@
+{
+  "startedAt": "2026-03-04T01:50:57.512Z",
+  "baseUrl": "https://chexian.cretvalu.com",
+  "targetPath": "/#/performance-analysis",
+  "reportPath": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/output/playwright/vps-heatmap-verify-20260304_095057.json",
+  "screenshotPath": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/output/playwright/vps-heatmap-verify-20260304_095057.png",
+  "networkPath": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/output/playwright/vps-heatmap-verify-network-20260304_095057.log",
+  "checks": {
+    "finalUrl": "https://chexian.cretvalu.com/#/performance-analysis",
+    "selectedTabsAfterSwitch": [
+      "计划达成率",
+      "保费规模",
+      "增长率"
+    ],
+    "hasLoadErrorText": false,
+    "heatmapRequestCount": 1,
+    "heatmapRequestStatuses": [
+      200
+    ],
+    "performanceBundleStatuses": [],
+    "consoleErrorCount": 0
+  },
+  "status": "passed",
+  "endedAt": "2026-03-04T01:51:04.872Z"
+}

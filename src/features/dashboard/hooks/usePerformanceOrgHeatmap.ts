@@ -3,7 +3,7 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
-import type { PerformanceGrowthMode, PerformanceSegmentTag } from './usePerformanceSummary';
+import type { PerformanceGrowthMode, PerformanceSegmentTag, PerformanceTimePeriod } from './usePerformanceSummary';
 
 export interface PerformanceOrgHeatmapRow {
   orgLevel3: string;
@@ -19,7 +19,7 @@ interface UsePerformanceOrgHeatmapProps {
   filters: AdvancedFilterState;
   segmentTag: PerformanceSegmentTag;
   growthMode: PerformanceGrowthMode;
-  days?: number;
+  timePeriod: PerformanceTimePeriod;
   enabled?: boolean;
 }
 
@@ -45,7 +45,7 @@ export function usePerformanceOrgHeatmap({
   filters,
   segmentTag,
   growthMode,
-  days = 14,
+  timePeriod,
   enabled = true,
 }: UsePerformanceOrgHeatmapProps): UsePerformanceOrgHeatmapResult {
   const { isOrgUser, userOrg } = useRBAC();
@@ -56,7 +56,7 @@ export function usePerformanceOrgHeatmap({
     ...filterParams,
     segmentTag,
     growthMode,
-    days: String(days),
+    timePeriod,
   };
 
   const { data, isLoading, error } = useQuery({

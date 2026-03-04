@@ -130,8 +130,8 @@ const EXPAND_DIMS_TABS: TabItem[] = [
 ];
 
 
-const HEATMAP_METRIC_TABS: TabItem[] = [
-  { key: 'growth', label: '增长率' },
+const getHeatmapMetricTabs = (growthMode: PerformanceGrowthMode): TabItem[] => [
+  { key: 'growth', label: growthMode === 'mom' ? '周环比增长率' : '年同比增长率' },
   { key: 'achievement', label: '计划达成率' },
   { key: 'premium', label: '保费规模' },
 ];
@@ -175,11 +175,13 @@ function PerformanceOrgHeatmap({
   loading,
   error,
   growthMode,
+  timePeriod,
 }: {
   rows: PerformanceOrgHeatmapRow[];
   loading: boolean;
   error: string | null;
   growthMode: PerformanceGrowthMode;
+  timePeriod: PerformanceTimePeriod;
 }) {
   const [metric, setMetric] = useState<HeatmapMetric>('growth');
 
@@ -195,14 +197,26 @@ function PerformanceOrgHeatmap({
     });
 
     const dates = [...dateSet].sort((a, b) => a.localeCompare(b));
-    const organizations = [...orgMap.keys()].sort((a, b) => a.localeCompare(b));
+    const latestDate = dates.length > 0 ? dates[dates.length - 1] : '';
+
+    // 按当前指标的最新一列值降序排序，空值排最后
+    const getOrgSortValue = (org: string): number => {
+      const latestRow = orgMap.get(org)?.get(latestDate);
+      if (!latestRow) return -Infinity;
+      if (metric === 'premium') return latestRow.premium ?? -Infinity;
+      if (metric === 'achievement') return latestRow.achievementRate ?? -Infinity;
+      // growth
+      const rate = growthMode === 'mom' ? latestRow.momGrowthRate : latestRow.yoyGrowthRate;
+      return rate ?? -Infinity;
+    };
+    const organizations = [...orgMap.keys()].sort((a, b) => getOrgSortValue(b) - getOrgSortValue(a));
 
     return {
       dates,
       organizations,
       matrix: orgMap,
     };
-  }, [rows]);
+  }, [rows, metric, growthMode]);
 
   const renderCell = (row: PerformanceOrgHeatmapRow | undefined) => {
     if (!row) {
@@ -244,9 +258,6 @@ function PerformanceOrgHeatmap({
         style={{ backgroundColor: getHeatmapStateColor(state) }}
       >
         <div>{majorRate === null ? '-' : formatPercent(majorRate)}</div>
-        <div className={cn('text-[10px]', colorClasses.text.neutralMuted)}>
-          环:{row.momGrowthRate === null ? '-' : formatPercent(row.momGrowthRate)} / 同:{row.yoyGrowthRate === null ? '-' : formatPercent(row.yoyGrowthRate)}
-        </div>
       </div>
     );
   };
@@ -255,14 +266,17 @@ function PerformanceOrgHeatmap({
     <section className={cn(cardStyles.standard, 'space-y-3')}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs
-          items={HEATMAP_METRIC_TABS}
+          items={getHeatmapMetricTabs(growthMode)}
           activeKey={metric}
           onChange={(key) => setMetric(key as HeatmapMetric)}
           variant="pills"
           size="small"
         />
         <p className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
-          增长率环比按同星期几对比（周环比），同比按上年同日对比。
+          {timePeriod === 'day' && '增长率环比按同星期几对比（周环比），同比按上年同日对比。'}
+          {timePeriod === 'week' && '每列为一个自然周的汇总保费，环比按上一周对比，同比按上年同周对比。'}
+          {timePeriod === 'month' && '每列为一个自然月的汇总保费，环比按上一月对比，同比按上年同月对比。'}
+          {timePeriod === 'quarter' && '每列为一个季度的汇总保费，环比按上一季度对比，同比按上年同季对比。'}
         </p>
       </div>
       {error && <p className={cn(textStyles.body, colorClasses.text.danger)}>加载失败: {error}</p>}
@@ -272,9 +286,23 @@ function PerformanceOrgHeatmap({
             <thead>
               <tr>
                 <th className={cn('px-2 py-2 text-left sticky left-0 bg-white z-10', colorClasses.text.neutralDark)}>三级机构</th>
-                {orgRows.dates.map((date) => (
-                  <th key={date} className={cn('px-2 py-2 text-center', colorClasses.text.neutralMuted)}>{date.slice(5)}</th>
-                ))}
+                {orgRows.dates.map((date) => {
+                  let headerLabel: string;
+                  if (timePeriod === 'month') {
+                    headerLabel = date.slice(0, 7); // YYYY-MM
+                  } else if (timePeriod === 'quarter') {
+                    const month = parseInt(date.slice(5, 7), 10);
+                    const q = Math.ceil(month / 3);
+                    headerLabel = `${date.slice(0, 4)}-Q${q}`;
+                  } else if (timePeriod === 'week') {
+                    headerLabel = `${date.slice(5)}周`; // MM-DD周
+                  } else {
+                    headerLabel = date.slice(5); // MM-DD
+                  }
+                  return (
+                    <th key={date} className={cn('px-2 py-2 text-center', colorClasses.text.neutralMuted)}>{headerLabel}</th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -758,7 +786,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     filters,
     segmentTag,
     growthMode,
-    days: 14,
+    timePeriod,
     enabled: isDataLoaded,
   });
 
@@ -940,12 +968,13 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   return (
     <div className="space-y-5">
-      <SectionTitle title="三级机构连续14天热力图" />
+      <SectionTitle title={`三级机构连续14${timePeriod === 'day' ? '天' : timePeriod === 'week' ? '周' : timePeriod === 'month' ? '月' : timePeriod === 'quarter' ? '季度' : '天'}热力图`} />
       <PerformanceOrgHeatmap
         rows={heatmapQuery.rows}
         loading={heatmapQuery.loading}
         error={heatmapQuery.error}
         growthMode={growthMode}
+        timePeriod={timePeriod}
       />
 
       <SectionTitle title={summaryTitle} />

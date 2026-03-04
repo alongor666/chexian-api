@@ -1259,6 +1259,24 @@ class ApiClient {
     return this.request(`/query/cross-sell-org-trend${query ? `?${query}` : ''}`);
   }
 
+  /**
+   * 获取交叉销售热力图数据（最近14个时段 × 所有三级机构）
+   */
+  async getCrossSellHeatmap(params?: Record<string, string>): Promise<{
+    rows: Array<{
+      date: string;
+      org_level_3: string;
+      auto_count: number;
+      driver_count: number;
+      rate: number;
+      avg_premium: number;
+      achievement_rate: number | null;
+    }>;
+  }> {
+    const query = this.buildQueryString(params);
+    return this.request(`/query/cross-sell-heatmap${query ? `?${query}` : ''}`);
+  }
+
   // ============================================
   // AI API
   // ============================================

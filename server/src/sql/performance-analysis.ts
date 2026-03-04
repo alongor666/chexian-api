@@ -17,6 +17,18 @@ export type PerformanceSegmentTag =
   | 'truck';
 export type PerformanceGrowthMode = 'mom' | 'yoy';
 export type PerformanceTimePeriod = 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+export function getPlanDenominator(timePeriod: PerformanceTimePeriod): number {
+  switch (timePeriod) {
+    case 'day': return 365;
+    case 'week': return 52;
+    case 'month': return 12;
+    case 'quarter': return 4;
+    case 'year': return 1;
+    default: return 365;
+  }
+}
+
 export type PerformanceTrendGranularity = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 export type PerformanceSummaryExpandDims = 'none' | 'energy' | 'business_nature' | 'energy_business_nature';
 
@@ -991,12 +1003,9 @@ export function generatePerformanceDrilldownQuery(
         END AS plan_premium,
         CASE
           WHEN ${hasAnnualPlanSql} = FALSE THEN NULL
-          WHEN pp.total_days <= 0 THEN NULL
-          WHEN COALESCE(c.allocated_plan, 0) <= 0 OR COALESCE(pp.period_plan_ratio, 0) <= 0 THEN NULL
-          WHEN COALESCE(pp.elapsed_days, 0) <= 0 THEN 0
+          WHEN COALESCE(c.allocated_plan, 0) <= 0 THEN NULL
           ELSE ROUND(
-            (c.premium / (c.allocated_plan * pp.period_plan_ratio))
-            * (pp.elapsed_days * 100.0 / pp.total_days),
+            (c.premium * 100.0) / (c.allocated_plan / ${getPlanDenominator(timePeriod)}),
             2
           )
         END AS achievement_rate,
@@ -1134,12 +1143,9 @@ export function generatePerformanceTopSalesmanQuery(
         c.auto_count,
         ROUND(c.allocated_plan, 4) AS plan_premium,
         CASE
-          WHEN pp.total_days <= 0 THEN NULL
-          WHEN COALESCE(c.allocated_plan, 0) <= 0 OR COALESCE(pp.period_plan_ratio, 0) <= 0 THEN NULL
-          WHEN COALESCE(pp.elapsed_days, 0) <= 0 THEN 0
+          WHEN COALESCE(c.allocated_plan, 0) <= 0 THEN NULL
           ELSE ROUND(
-            (c.premium / (c.allocated_plan * pp.period_plan_ratio))
-            * (pp.elapsed_days * 100.0 / pp.total_days),
+            (c.premium * 100.0) / (c.allocated_plan / ${getPlanDenominator(timePeriod)}),
             2
           )
         END AS achievement_rate,
@@ -1183,10 +1189,55 @@ export function generatePerformanceTopSalesmanQuery(
 export function generatePerformanceOrgHeatmapQuery(
   whereWithoutDate: string,
   segmentTag: PerformanceSegmentTag,
-  days = 14
+  timePeriod: PerformanceTimePeriod = 'day',
+  periods = 14
 ): string {
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
-  const safeDays = Math.max(7, Math.min(31, Math.floor(days)));
+  const safePeriods = Math.max(7, Math.min(31, Math.floor(periods)));
+
+  // 根据 timePeriod 动态生成 SQL 片段
+  let truncExpr: string;        // 分组键：DATE_TRUNC 或原始日期
+  let windowOffset: string;     // 窗口向前偏移量
+  let seriesStep: string;       // generate_series 步长
+  let momOffset: string;        // 环比偏移
+  let yoyTruncExpr: string;     // 同比聚合的分组键
+  let yoyOffset: string;        // 同比偏移
+  const planDenom = getPlanDenominator(timePeriod);
+
+  switch (timePeriod) {
+    case 'week':
+      truncExpr = `DATE_TRUNC('week', pd)::DATE`;
+      windowOffset = `${safePeriods - 1} WEEK`;
+      seriesStep = 'INTERVAL 1 WEEK';
+      momOffset = 'INTERVAL 1 WEEK';
+      yoyTruncExpr = `DATE_TRUNC('week', pd)::DATE`;
+      yoyOffset = 'INTERVAL 1 YEAR';
+      break;
+    case 'month':
+      truncExpr = `DATE_TRUNC('month', pd)::DATE`;
+      windowOffset = `${safePeriods - 1} MONTH`;
+      seriesStep = 'INTERVAL 1 MONTH';
+      momOffset = 'INTERVAL 1 MONTH';
+      yoyTruncExpr = `DATE_TRUNC('month', pd)::DATE`;
+      yoyOffset = 'INTERVAL 1 YEAR';
+      break;
+    case 'quarter':
+      truncExpr = `DATE_TRUNC('quarter', pd)::DATE`;
+      windowOffset = `${(safePeriods - 1) * 3} MONTH`;
+      seriesStep = 'INTERVAL 3 MONTH';
+      momOffset = 'INTERVAL 3 MONTH';
+      yoyTruncExpr = `DATE_TRUNC('quarter', pd)::DATE`;
+      yoyOffset = 'INTERVAL 1 YEAR';
+      break;
+    default: // 'day'
+      truncExpr = 'pd';
+      windowOffset = `${safePeriods - 1} DAY`;
+      seriesStep = 'INTERVAL 1 DAY';
+      momOffset = 'INTERVAL 7 DAY';  // 日视图环比=上周同天
+      yoyTruncExpr = 'pd';
+      yoyOffset = 'INTERVAL 1 YEAR';
+      break;
+  }
 
   const sql = `
     WITH filtered AS (
@@ -1203,88 +1254,88 @@ export function generatePerformanceOrgHeatmapQuery(
     ),
     period_bounds AS (
       SELECT
-        MAX(pd) AS ref_date,
-        MAX(pd) - INTERVAL ${safeDays - 1} DAY AS start_date
+        ${timePeriod === 'day' ? 'MAX(pd)' : `DATE_TRUNC('${timePeriod === 'quarter' ? 'quarter' : timePeriod}', MAX(pd))::DATE`} AS ref_date,
+        ${timePeriod === 'day' ? 'MAX(pd)' : `DATE_TRUNC('${timePeriod === 'quarter' ? 'quarter' : timePeriod}', MAX(pd))::DATE`} - INTERVAL ${windowOffset} AS start_date
       FROM filtered
     ),
     window_rows AS (
-      SELECT f.*
+      SELECT f.*, ${truncExpr} AS period_key
       FROM filtered f
       CROSS JOIN period_bounds pb
-      WHERE f.pd BETWEEN pb.start_date AND pb.ref_date
+      WHERE f.pd >= pb.start_date AND f.pd <= pb.ref_date + ${timePeriod === 'day' ? "INTERVAL 0 DAY" : `INTERVAL ${timePeriod === 'quarter' ? '3 MONTH' : '1 ' + timePeriod} - INTERVAL 1 DAY`}
     ),
-    daily_salesman_total AS (
+    period_salesman_total AS (
       SELECT salesman_name, SUM(premium_wan) AS salesman_premium_wan
       FROM window_rows
       GROUP BY salesman_name
     ),
-    org_daily AS (
+    org_period AS (
       SELECT
         wr.org_level_3,
-        wr.pd,
+        wr.period_key,
         ROUND(SUM(wr.premium_wan), 4) AS premium,
         ROUND(SUM(
           CASE
-            WHEN COALESCE(dst.salesman_premium_wan, 0) > 0
-              THEN wr.plan_vehicle * wr.premium_wan / dst.salesman_premium_wan
+            WHEN COALESCE(pst.salesman_premium_wan, 0) > 0
+              THEN wr.plan_vehicle * wr.premium_wan / pst.salesman_premium_wan
             ELSE 0
           END
         ), 4) AS plan_premium
       FROM window_rows wr
-      LEFT JOIN daily_salesman_total dst ON wr.salesman_name = dst.salesman_name
-      GROUP BY wr.org_level_3, wr.pd
+      LEFT JOIN period_salesman_total pst ON wr.salesman_name = pst.salesman_name
+      GROUP BY wr.org_level_3, wr.period_key
     ),
     org_pool AS (
       SELECT DISTINCT org_level_3 FROM window_rows
     ),
-    day_pool AS (
-      SELECT d::DATE AS pd
+    period_pool AS (
+      SELECT d::DATE AS period_key
       FROM period_bounds pb,
-      generate_series(pb.start_date, pb.ref_date, INTERVAL 1 DAY) AS t(d)
+      generate_series(pb.start_date, pb.ref_date, ${seriesStep}) AS t(d)
     ),
     base_grid AS (
-      SELECT o.org_level_3, d.pd
+      SELECT o.org_level_3, pp.period_key
       FROM org_pool o
-      CROSS JOIN day_pool d
+      CROSS JOIN period_pool pp
+    ),
+    prev_mom_data AS (
+      SELECT ${yoyTruncExpr} AS period_key, org_level_3, ROUND(SUM(premium_wan), 4) AS premium
+      FROM filtered
+      GROUP BY ${yoyTruncExpr}, org_level_3
+    ),
+    prev_yoy_data AS (
+      SELECT ${yoyTruncExpr} AS period_key, org_level_3, ROUND(SUM(premium_wan), 4) AS premium
+      FROM filtered
+      GROUP BY ${yoyTruncExpr}, org_level_3
     )
     SELECT
       bg.org_level_3,
-      bg.pd AS policy_date,
+      bg.period_key AS policy_date,
       COALESCE(cur.premium, 0) AS premium,
       cur.plan_premium,
       CASE
         WHEN COALESCE(cur.plan_premium, 0) <= 0 THEN NULL
-        ELSE ROUND(cur.premium * 100.0 / cur.plan_premium, 2)
+        ELSE ROUND(COALESCE(cur.premium, 0) * 100.0 / (cur.plan_premium / ${planDenom}.0), 2)
       END AS achievement_rate,
       CASE
-        WHEN COALESCE(prev_week.premium, 0) = 0 THEN NULL
-        ELSE ROUND((COALESCE(cur.premium, 0) - prev_week.premium) * 100.0 / prev_week.premium, 2)
+        WHEN COALESCE(prev_mom.premium, 0) = 0 THEN NULL
+        ELSE ROUND((COALESCE(cur.premium, 0) - prev_mom.premium) * 100.0 / prev_mom.premium, 2)
       END AS mom_growth_rate,
       CASE
-        WHEN COALESCE(prev_year.premium, 0) = 0 THEN NULL
-        ELSE ROUND((COALESCE(cur.premium, 0) - prev_year.premium) * 100.0 / prev_year.premium, 2)
+        WHEN COALESCE(prev_yoy.premium, 0) = 0 THEN NULL
+        ELSE ROUND((COALESCE(cur.premium, 0) - prev_yoy.premium) * 100.0 / prev_yoy.premium, 2)
       END AS yoy_growth_rate
     FROM base_grid bg
-    LEFT JOIN org_daily cur ON cur.org_level_3 = bg.org_level_3 AND cur.pd = bg.pd
-    LEFT JOIN org_daily prev_week ON prev_week.org_level_3 = bg.org_level_3 AND prev_week.pd = bg.pd - INTERVAL 7 DAY
-    LEFT JOIN (
-      SELECT org_level_3, pd, SUM(premium_wan) AS premium
-      FROM filtered
-      GROUP BY org_level_3, pd
-    ) prev_year ON prev_year.org_level_3 = bg.org_level_3 AND prev_year.pd = bg.pd - INTERVAL 1 YEAR
-    GROUP BY
-      bg.org_level_3,
-      bg.pd,
-      cur.premium,
-      cur.plan_premium,
-      prev_week.premium,
-      prev_year.premium
-    ORDER BY bg.org_level_3, bg.pd
+    LEFT JOIN org_period cur ON cur.org_level_3 = bg.org_level_3 AND cur.period_key = bg.period_key
+    LEFT JOIN prev_mom_data prev_mom ON prev_mom.org_level_3 = bg.org_level_3 AND prev_mom.period_key = bg.period_key - ${momOffset}
+    LEFT JOIN prev_yoy_data prev_yoy ON prev_yoy.org_level_3 = bg.org_level_3 AND prev_yoy.period_key = bg.period_key - ${yoyOffset}
+    ORDER BY bg.org_level_3, bg.period_key
   `;
 
   logger.debug('Generated performance org heatmap SQL', {
     segmentTag,
-    days: safeDays,
+    timePeriod,
+    periods: safePeriods,
     sqlLength: sql.length,
   });
 

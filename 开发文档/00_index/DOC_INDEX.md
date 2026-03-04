@@ -32,6 +32,7 @@
 | 数据映射规则 | `src/shared/normalize/mapping.ts` | 列名别名映射（中英文兼容）、DEFAULT_MAPPING |
 | 指标计算口径 | `src/shared/sql/kpi.ts` | KPI/TopN/Table SQL 模板生成规则 |
 | KPI口径说明 | `开发文档/KPI口径说明.md` | KPI 承保/净额口径、退保影响指标与展示规范 |
+| 业绩分析口径 | `开发文档/业绩分析指标口径说明.md` | 业绩分析板块专有的计划达成率分母折算逻辑 |
 | PolicyFact 视图定义 | `src/shared/duckdb/client.ts:78-95` | 业务规则：MAX(premium) 去重、FIRST() 其他字段 |
 | 数据契约 | `src/shared/normalize/validator.ts` | 类型验证、数据质量检查规则 |
 

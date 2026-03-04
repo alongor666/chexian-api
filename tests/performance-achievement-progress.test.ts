@@ -14,8 +14,13 @@ describe('performance achievement progress sql', () => {
     expect(sql).toContain('total_days');
   });
 
-  it('should apply elapsed/total progress multiplier in achievement formula', () => {
+  it('should apply static plan denominator for weekly achievement calculation', () => {
+    const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'week', 'mom', [], 'org_level_3');
+    expect(sql).toContain('(c.allocated_plan / 52)');
+  });
+
+  it('should apply static plan denominator for monthly achievement calculation', () => {
     const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'month', 'mom', [], 'org_level_3');
-    expect(sql).toContain('(pp.elapsed_days * 100.0 / pp.total_days)');
+    expect(sql).toContain('(c.allocated_plan / 12)');
   });
 });

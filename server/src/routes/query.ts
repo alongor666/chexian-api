@@ -67,6 +67,7 @@ import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } f
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../sql/cross-sell-summary.js';
 import { generateCrossSellTrendQuery, type TrendGranularity } from '../sql/cross-sell-trend.js';
 import { generateCrossSellOrgTrendQuery, type CoverageCombinationFilter } from '../sql/cross-sell-org-trend.js';
+import { generateCrossSellHeatmapQuery } from '../sql/cross-sell-heatmap.js';
 import { generateCrossSellTopSalesmanQuery, type TopSalesmanCoverage } from '../sql/cross-sell-top-salesman.js';
 import {
   generatePerformancePeriodBoundsQuery,
@@ -2134,7 +2135,7 @@ router.get(
 const performanceOrgHeatmapSchema = z.object({
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
   vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
-  days: z.coerce.number().int().min(7).max(31).default(14),
+  timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
 });
 
 router.get(
@@ -2145,14 +2146,14 @@ router.get(
       throw new AppError(400, parseResult.error.issues[0].message);
     }
 
-    const { days } = parseResult.data;
+    const { timePeriod } = parseResult.data;
     const segmentTag = resolvePerformanceSegmentTag(parseResult.data);
     const { whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
 
     const sql = generatePerformanceOrgHeatmapQuery(
       whereWithoutDate,
       segmentTag as PerformanceSegmentTag,
-      days
+      timePeriod as PerformanceTimePeriod
     );
 
     const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
@@ -2618,6 +2619,46 @@ router.get(
     );
 
     logger.debug('[cross-sell-org-trend] Generated SQL', { sqlLength: sql.length });
+
+    const rows = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: { rows },
+    });
+  })
+);
+
+/**
+ * GET /api/query/cross-sell-heatmap
+ * 交叉销售热力图（最近14天 × 所有三级机构，推介率/件均保费）
+ */
+const crossSellHeatmapSchema = z.object({
+  vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
+  seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional(),
+  timePeriod: z.enum(['day', 'week', 'month', 'quarter']).default('day'),
+});
+
+router.get(
+  '/cross-sell-heatmap',
+  asyncHandler(async (req: Request, res: Response) => {
+    const extraResult = crossSellHeatmapSchema.safeParse(req.query);
+    if (!extraResult.success) {
+      throw new AppError(400, extraResult.error.issues[0].message);
+    }
+    const { vehicleCategory, seatCoverageLevel, timePeriod } = extraResult.data;
+
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const seatCoverageClause = getSeatCoverageClause(seatCoverageLevel);
+
+    const sql = generateCrossSellHeatmapQuery(
+      whereClause,
+      vehicleCategory as VehicleCategory,
+      seatCoverageClause,
+      timePeriod as 'day' | 'week' | 'month' | 'quarter'
+    );
+
+    logger.debug('[cross-sell-heatmap] Generated SQL', { sqlLength: sql.length });
 
     const rows = await duckdbService.query(sql);
 

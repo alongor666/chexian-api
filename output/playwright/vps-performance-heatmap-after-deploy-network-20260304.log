@@ -1,0 +1,10 @@
+[POST] https://chexian.cretvalu.com/api/auth/login => [200] OK
+[GET] https://chexian.cretvalu.com/api/data/files => [200] OK
+[GET] https://chexian.cretvalu.com/api/filters/options => [200] OK
+[GET] https://chexian.cretvalu.com/api/data/files => [200] OK
+[GET] https://chexian.cretvalu.com/api/query/dashboard-bundle?dateField=policy_date&startDate=2026-01-01&endDate=2026-03-03&granularity=week&perspective=premium&rankingLimit=10 => [200] OK
+[GET] https://chexian.cretvalu.com/api/query/salesman-ranking?limit=10&rankingType=all&dateField=policy_date&startDate=2026-01-01&endDate=2026-03-03 => [200] OK
+[GET] https://chexian.cretvalu.com/api/query/salesman-ranking?limit=10&rankingType=quality&dateField=policy_date&startDate=2026-01-01&endDate=2026-03-03 => [200] OK
+[GET] https://chexian.cretvalu.com/api/query/performance-bundle?dateField=policy_date&startDate=2026-01-01&endDate=2026-03-03 => [200] OK
+[GET] https://chexian.cretvalu.com/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-03-03&segmentTag=all&timePeriod=day&growthMode=mom&expandDims=none => [200] OK
+[GET] https://chexian.cretvalu.com/api/query/performance-org-heatmap?dateField=policy_date&startDate=2026-01-01&endDate=2026-03-03&segmentTag=all&growthMode=mom&days=14 => [200] OK

@@ -48,6 +48,9 @@ export const queryKeys = {
   crossSellOrgTrend: (params: Record<string, string>) =>
     ['cross-sell-org-trend', params] as const,
 
+  crossSellHeatmap: (params: Record<string, string>) =>
+    ['cross-sell-heatmap', params] as const,
+
   // ── 续保 ──
   renewalAnalysis: (params: Record<string, unknown>) =>
     ['renewal-analysis', params] as const,
