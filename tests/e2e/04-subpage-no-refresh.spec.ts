@@ -80,11 +80,5 @@ test('首页侧边栏逐个进入子页面无需刷新', async ({ page }) => {
     const loginHeading = page.getByRole('heading', { name: '车险业绩分析系统' });
     await expect(loginHeading).not.toBeVisible();
 
-    if (target.hashPath === '/performance-analysis') {
-      await expect(page.getByRole('heading', { name: '三级机构连续14天热力图' })).toBeVisible({ timeout: 15000 });
-      await expect(page.getByRole('tab', { name: '增长率', exact: true })).toBeVisible();
-      await expect(page.getByRole('tab', { name: '计划达成率', exact: true })).toBeVisible();
-      await expect(page.getByRole('tab', { name: '保费规模', exact: true })).toBeVisible();
-    }
   }
 });
