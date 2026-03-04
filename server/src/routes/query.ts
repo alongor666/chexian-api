@@ -2587,7 +2587,7 @@ export async function fetchDashboardBundleData({
  * 机构推介率走势（最近14天，按日，叠加柱+推介率折线）
  */
 const crossSellOrgTrendSchema = z.object({
-  vehicleCategory: z.enum(['passenger', 'truck', 'motorcycle']).default('passenger'),
+  vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
   coverageCombination: z.enum(['整体', '交三', '主全', '单交']).default('整体'),
   days: z.coerce.number().int().min(1).max(90).default(14),
   seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional(),
