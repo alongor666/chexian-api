@@ -7,6 +7,7 @@ import {
   generatePerformanceTrendQuery,
   getPerformanceSegmentFilter,
   getPerformanceVehicleCategoryFilter,
+  getPlanDenominator,
 } from '../server/src/sql/performance-analysis';
 
 describe('performance analysis SQL', () => {
@@ -72,6 +73,15 @@ describe('performance analysis SQL', () => {
     expect(yoySql).toContain('INTERVAL 1 YEAR');
   });
 
+
+  it('plan denominator should follow day/week/month/quarter/year formula', () => {
+    expect(getPlanDenominator('day')).toBe(365);
+    expect(getPlanDenominator('week')).toBe(52);
+    expect(getPlanDenominator('month')).toBe(12);
+    expect(getPlanDenominator('quarter')).toBe(4);
+    expect(getPlanDenominator('year')).toBe(1);
+  });
+
   it('trend SQL should contain multi-series outputs', () => {
     const sql = generatePerformanceTrendQuery('1=1', 'all', 'monthly');
 
@@ -96,6 +106,22 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('period_progress');
     expect(sql).toContain('generate_series');
     expect(sql).toContain('CURRENT_DATE');
+  });
+
+
+  it('drilldown SQL should support tonnage segment grouping for truck categories', () => {
+    const sql = generatePerformanceDrilldownQuery(
+      "customer_category = '营业货车'",
+      "customer_category = '营业货车'",
+      'business_truck',
+      'day',
+      'mom',
+      [{ dimension: 'customer_category', value: '营业货车' }],
+      'tonnage_segment'
+    );
+
+    expect(sql).toContain('tonnage_segment');
+    expect(sql).toContain('未分段');
   });
 
   it('drilldown SQL should null out plan/achievement for dimensions without annual plans', () => {

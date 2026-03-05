@@ -111,10 +111,19 @@ echo -e "${GREEN}▶ 步骤 2/2: 每日数据转换${NC}"
 echo ""
 
 # ============================================================
-# 7. 同步 current/ 下所有 parquet 到 VPS（最后一个文件才重启）
+# 7. 运行本地预聚合 (export-for-vps.mjs)
+# 确保在上传之前在本地计算好所有聚合数据，防止 VPS 资源爆炸及数据不一致
+# ============================================================
+echo -e "${GREEN}▶ 步骤 3: 运行预聚合数据导出...${NC}"
+(cd .. && node scripts/export-for-vps.mjs)
+echo ""
+
+# ============================================================
+# 8. 同步 current/ 下所有基础明细 parquet 以及 vps-export/ 下的预聚合 parquet 到 VPS
 # ============================================================
 SYNC_SCRIPT="$(dirname "$SCRIPT_DIR")/deploy/sync-data.sh"
-PARQUET_FILES=("$CURRENT_DIR"/*.parquet)
+# 收集全量明细数据，以及刚才生成的预聚合数据
+PARQUET_FILES=("$CURRENT_DIR"/*.parquet "warehouse/vps-export"/*.parquet)
 
 echo -e "${GREEN}📦 同步 ${#PARQUET_FILES[@]} 个文件到 VPS${NC}"
 for f in "${PARQUET_FILES[@]}"; do

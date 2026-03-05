@@ -1953,6 +1953,7 @@ router.get(
 
 const PERFORMANCE_DIMENSIONS = [
   'org_level_3', 'team', 'salesman', 'customer_category',
+  'tonnage_segment',
   'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
 ] as const;
 

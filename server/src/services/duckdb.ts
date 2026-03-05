@@ -635,9 +635,10 @@ class DuckDBService {
           COALESCE(cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
           COALESCE(premium, 0) AS premium,
           COALESCE(
-            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''),
-            NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')
-          ) AS dedup_key
+            NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
+            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
+          ) AS dedup_key,
+          NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '') AS raw_policy_no
         FROM PolicyFact
         WHERE policy_date IS NOT NULL
       )
@@ -665,6 +666,7 @@ class DuckDBService {
         passenger_coverage,
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
+        COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
         COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
         COALESCE(SUM(premium), 0) AS auto_premium
       FROM normalized

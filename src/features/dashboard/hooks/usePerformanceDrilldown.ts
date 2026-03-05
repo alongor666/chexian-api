@@ -15,6 +15,7 @@ export type PerformanceDimension =
   | 'team'
   | 'salesman'
   | 'customer_category'
+  | 'tonnage_segment'
   | 'is_new_car'
   | 'is_transfer'
   | 'is_nev'
@@ -47,6 +48,7 @@ export const PERFORMANCE_DIMENSION_LABELS: Record<PerformanceDimension, string> 
   team: '销售团队',
   salesman: '业务员',
   customer_category: '客户类别',
+  tonnage_segment: '吨位分段',
   is_new_car: '是否新车',
   is_transfer: '是否过户',
   is_nev: '是否新能源',
@@ -59,12 +61,38 @@ const ALL_DIMENSIONS: PerformanceDimension[] = [
   'team',
   'salesman',
   'customer_category',
+  'tonnage_segment',
   'is_new_car',
   'is_transfer',
   'is_nev',
   'is_telemarketing',
   'is_renewal',
 ];
+
+
+function computeAvailableDimensions(
+  drillPath: PerformanceDrilldownStep[],
+  currentGroupBy: PerformanceDimension | null
+): PerformanceDimension[] {
+  const usedDimensions = new Set<PerformanceDimension>([
+    ...drillPath.map((item) => item.dimension),
+    ...(currentGroupBy ? [currentGroupBy] : []),
+  ]);
+
+  const hasTonnageInPath = drillPath.some((step) => step.dimension === 'tonnage_segment');
+  if (hasTonnageInPath || currentGroupBy === 'tonnage_segment') {
+    return [];
+  }
+
+  const selectedCustomerCategory = [...drillPath].reverse().find((step) => step.dimension === 'customer_category')?.value;
+  const canUseTonnage = selectedCustomerCategory === '营业货车' || selectedCustomerCategory === '非营业货车';
+
+  return ALL_DIMENSIONS.filter((dim) => {
+    if (usedDimensions.has(dim)) return false;
+    if (dim === 'tonnage_segment') return canUseTonnage;
+    return true;
+  });
+}
 
 interface UsePerformanceDrilldownProps {
   filters: AdvancedFilterState;
@@ -175,12 +203,10 @@ export function usePerformanceDrilldown({
     ? (prefetched.rows || []).map((row) => mapRow(row))
     : (queryData?.rows ?? []);
 
-  // 已用维度集合 + 可选维度列表
-  const usedDimensions = new Set<PerformanceDimension>([
-    ...drillPath.map((item) => item.dimension),
-    ...(currentGroupBy ? [currentGroupBy] : []),
-  ]);
-  const availableDimensions = ALL_DIMENSIONS.filter((dim) => !usedDimensions.has(dim));
+  const availableDimensions = useMemo(
+    () => computeAvailableDimensions(drillPath, currentGroupBy),
+    [drillPath, currentGroupBy]
+  );
 
   const selectDimension = useCallback((dimension: PerformanceDimension) => {
     setDrillPath(initialDrillPath);
