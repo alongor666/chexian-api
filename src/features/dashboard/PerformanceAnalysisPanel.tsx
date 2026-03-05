@@ -185,12 +185,14 @@ function PerformanceOrgHeatmap({
   error,
   growthMode,
   timePeriod,
+  onCellClick,
 }: {
   rows: PerformanceOrgHeatmapRow[];
   loading: boolean;
   error: string | null;
   growthMode: PerformanceGrowthMode;
   timePeriod: PerformanceTimePeriod;
+  onCellClick?: (payload: { org: string; date: string }) => void;
 }) {
   const [metric, setMetric] = useState<HeatmapMetric>('growth');
   const [activeCell, setActiveCell] = useState<{ org: string; date: string } | null>(null);
@@ -245,7 +247,10 @@ function PerformanceOrgHeatmap({
       return (
         <button
           type="button"
-          onClick={() => setActiveCell({ org, date })}
+          onClick={() => {
+            setActiveCell({ org, date });
+            onCellClick?.({ org, date });
+          }}
           onMouseEnter={() => setHoverCell({ org, date })}
           onMouseLeave={() => setHoverCell(null)}
           className={cn('w-full rounded px-1 py-1 text-center text-xs transition-all', colorClasses.text.neutralMuted, degradeOpacity, ringClass)}
@@ -259,7 +264,10 @@ function PerformanceOrgHeatmap({
       return (
         <button
           type="button"
-          onClick={() => setActiveCell({ org, date })}
+          onClick={() => {
+            setActiveCell({ org, date });
+            onCellClick?.({ org, date });
+          }}
           onMouseEnter={() => setHoverCell({ org, date })}
           onMouseLeave={() => setHoverCell(null)}
           className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
@@ -279,7 +287,10 @@ function PerformanceOrgHeatmap({
       return (
         <button
           type="button"
-          onClick={() => setActiveCell({ org, date })}
+          onClick={() => {
+            setActiveCell({ org, date });
+            onCellClick?.({ org, date });
+          }}
           onMouseEnter={() => setHoverCell({ org, date })}
           onMouseLeave={() => setHoverCell(null)}
           className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
@@ -299,7 +310,10 @@ function PerformanceOrgHeatmap({
     return (
       <button
         type="button"
-        onClick={() => setActiveCell({ org, date })}
+        onClick={() => {
+          setActiveCell({ org, date });
+          onCellClick?.({ org, date });
+        }}
         onMouseEnter={() => setHoverCell({ org, date })}
         onMouseLeave={() => setHoverCell(null)}
         className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
@@ -822,6 +836,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const [topSortKey, setTopSortKey] = useState<TopSortKey>('achievement_rate');
   const [topSortOrder, setTopSortOrder] = useState<SortOrder>('asc');
   const [hasDrillInteraction, setHasDrillInteraction] = useState(false);
+  const [heatmapSelection, setHeatmapSelection] = useState<{ org: string; date: string } | null>(null);
 
   const trendGranularity = useMemo(() => mapTimePeriodToTrendGranularity(timePeriod), [timePeriod]);
   const fallbackToLegacy = !ENABLE_BUNDLE_ROUTES;
@@ -893,6 +908,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   useEffect(() => {
     setHasDrillInteraction(false);
+    setHeatmapSelection(null);
     drilldownQuery.reset();
   }, [segmentTag, timePeriod, growthMode]);
 
@@ -990,13 +1006,31 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   const handleDimensionSelect = (dimension: PerformanceDimension) => {
     setHasDrillInteraction(true);
-    if (pendingRowValue === null) {
+    if (pendingRowValue === null && heatmapSelection === null) {
       drilldownQuery.selectDimension(dimension);
+    } else if (heatmapSelection) {
+      drilldownQuery.drillFromRoot(heatmapSelection.org, dimension, 'org_level_3');
     } else {
       drilldownQuery.drillDown(pendingRowValue, dimension);
     }
     setPendingRowValue(null);
     setShowPicker(false);
+  };
+
+  const handleHeatmapCellClick = ({ org, date }: { org: string; date: string }) => {
+    setHeatmapSelection({ org, date });
+  };
+
+  const handleHeatmapQuickDrill = (dimension: PerformanceDimension) => {
+    if (!heatmapSelection) return;
+    setHasDrillInteraction(true);
+    drilldownQuery.drillFromRoot(heatmapSelection.org, dimension, 'org_level_3');
+  };
+
+  const handleHeatmapFreeDrill = () => {
+    if (!heatmapSelection) return;
+    setPendingRowValue(null);
+    setShowPicker(true);
   };
 
   const handleDrillReset = () => {
@@ -1027,7 +1061,42 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         error={heatmapQuery.error}
         growthMode={growthMode}
         timePeriod={timePeriod}
+        onCellClick={handleHeatmapCellClick}
       />
+
+      {heatmapSelection && (
+        <section className={cn(cardStyles.standard, 'space-y-3')}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className={cn(textStyles.body, colorClasses.text.neutralDark)}>
+              已选择：<span className={cn(textStyles.numeric, 'font-semibold')}>{heatmapSelection.org}</span>
+              <span className={cn(colorClasses.text.neutralMuted, 'ml-2')}>（{heatmapSelection.date}）</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleHeatmapQuickDrill('salesman')}
+                className={cn('px-3 py-1.5 text-sm rounded-lg border transition-colors', colorClasses.border.primary, colorClasses.text.primary)}
+              >
+                下钻到业务员
+              </button>
+              <button
+                type="button"
+                onClick={() => handleHeatmapQuickDrill('customer_category')}
+                className={cn('px-3 py-1.5 text-sm rounded-lg border transition-colors', colorClasses.border.primary, colorClasses.text.primary)}
+              >
+                下钻到客户类别
+              </button>
+              <button
+                type="button"
+                onClick={handleHeatmapFreeDrill}
+                className={cn('px-3 py-1.5 text-sm rounded-lg border transition-colors', colorClasses.border.neutral, colorClasses.text.neutralDark)}
+              >
+                自由选择下钻维度
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <SectionTitle title={summaryTitle} />
       <section className={cn(cardStyles.standard, 'p-0 overflow-hidden')}>
@@ -1365,7 +1434,11 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
             setPendingRowValue(null);
             setShowPicker(false);
           }}
-          title={pendingRowValue === null ? '选择分组维度' : `继续下钻：${pendingRowValue}`}
+          title={
+            heatmapSelection
+              ? `热力图下钻：${heatmapSelection.org}`
+              : (pendingRowValue === null ? '选择分组维度' : `继续下钻：${pendingRowValue}`)
+          }
         />
       )}
     </div>
