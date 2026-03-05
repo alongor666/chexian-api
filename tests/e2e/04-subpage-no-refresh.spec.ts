@@ -1,14 +1,41 @@
 import { test, expect, type Page } from '@playwright/test';
 
 const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
-const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'CxAdmin@2026!';
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'admin123';
+
+const waitForBackendReady = async (page: Page) => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await page.request
+      .get('http://localhost:3000/health', { timeout: 3000 })
+      .catch(() => null);
+    if (response?.ok()) {
+      return;
+    }
+    await page.waitForTimeout(500);
+  }
+  throw new Error('Backend not ready for login requests');
+};
 
 const login = async (page: Page) => {
+  await waitForBackendReady(page);
   await page.goto('/#/login');
   await page.getByPlaceholder('请输入用户名').fill(E2E_USERNAME);
   await page.getByPlaceholder('请输入密码').fill(E2E_PASSWORD);
-  await page.getByRole('button', { name: '登录', exact: true }).click();
-  await page.waitForURL(/#\/(dashboard)?$/);
+  const [loginResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' && response.url().includes('/api/auth/login'),
+      { timeout: 30000 }
+    ),
+    page.getByRole('button', { name: '登录', exact: true }).click(),
+  ]);
+
+  expect(loginResponse.status()).toBe(200);
+
+  await page.waitForURL(
+    (url) => !url.hash.startsWith('#/login') && !url.pathname.endsWith('/login'),
+    { waitUntil: 'domcontentloaded', timeout: 30000 }
+  );
 };
 
 const ensureDataLoaded = async (page: Page) => {
