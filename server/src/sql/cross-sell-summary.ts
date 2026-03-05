@@ -99,6 +99,7 @@ function generateTimePeriodColumns(): string {
   for (const p of periods) {
     lines.push(`COALESCE(SUM(auto_count) ${timeFilter(p)}, 0) AS ${p}_auto_count`);
     lines.push(`COALESCE(SUM(driver_count) ${timeFilter(p)}, 0) AS ${p}_driver_count`);
+    lines.push(`COALESCE(SUM(driver_policy_count) ${timeFilter(p)}, 0) AS ${p}_driver_policy_count`);
     lines.push(`COALESCE(SUM(driver_premium) ${timeFilter(p)}, 0) AS ${p}_premium`);
     lines.push(`COALESCE(SUM(auto_premium) ${timeFilter(p)}, 0) AS ${p}_auto_premium`);
   }
@@ -116,6 +117,7 @@ function generatePrevTimePeriodColumns(): string {
   for (const p of periods) {
     lines.push(`COALESCE(SUM(auto_count) ${prevTimeFilter(p)}, 0) AS prev_${p}_auto_count`);
     lines.push(`COALESCE(SUM(driver_count) ${prevTimeFilter(p)}, 0) AS prev_${p}_driver_count`);
+    lines.push(`COALESCE(SUM(driver_policy_count) ${prevTimeFilter(p)}, 0) AS prev_${p}_driver_policy_count`);
     lines.push(`COALESCE(SUM(driver_premium) ${prevTimeFilter(p)}, 0) AS prev_${p}_premium`);
     lines.push(`COALESCE(SUM(auto_premium) ${prevTimeFilter(p)}, 0) AS prev_${p}_auto_premium`);
   }
@@ -136,7 +138,7 @@ function generateCalculatedColumns(): string {
     lines.push(`${p}_driver_count`);
     lines.push(`ROUND(${p}_premium, 2) AS ${p}_premium`);
     lines.push(`CASE WHEN ${p}_auto_count = 0 THEN 0 ELSE ROUND(${p}_driver_count * 100.0 / ${p}_auto_count, 2) END AS ${p}_rate`);
-    lines.push(`CASE WHEN ${p}_driver_count = 0 THEN 0 ELSE ROUND(${p}_premium / ${p}_driver_count, 2) END AS ${p}_avg_premium`);
+    lines.push(`CASE WHEN ${p}_driver_policy_count = 0 THEN 0 ELSE ROUND(${p}_premium / ${p}_driver_policy_count, 2) END AS ${p}_avg_premium`);
     lines.push(`CASE WHEN ${p}_auto_count = 0 THEN 0 ELSE ROUND(${p}_auto_premium / ${p}_auto_count, 2) END AS ${p}_auto_avg_premium`);
   }
 
@@ -147,7 +149,7 @@ function generateCalculatedColumns(): string {
     lines.push(`prev_${p}_driver_count`);
     lines.push(`ROUND(prev_${p}_premium, 2) AS prev_${p}_premium`);
     lines.push(`CASE WHEN prev_${p}_auto_count = 0 THEN 0 ELSE ROUND(prev_${p}_driver_count * 100.0 / prev_${p}_auto_count, 2) END AS prev_${p}_rate`);
-    lines.push(`CASE WHEN prev_${p}_driver_count = 0 THEN 0 ELSE ROUND(prev_${p}_premium / prev_${p}_driver_count, 2) END AS prev_${p}_avg_premium`);
+    lines.push(`CASE WHEN prev_${p}_driver_policy_count = 0 THEN 0 ELSE ROUND(prev_${p}_premium / prev_${p}_driver_policy_count, 2) END AS prev_${p}_avg_premium`);
     lines.push(`CASE WHEN prev_${p}_auto_count = 0 THEN 0 ELSE ROUND(prev_${p}_auto_premium / prev_${p}_auto_count, 2) END AS prev_${p}_auto_avg_premium`);
   }
 
@@ -191,6 +193,7 @@ export function generateCrossSellTimePeriodQuery(
         coverage_combination,
         auto_count,
         driver_count,
+        driver_policy_count,
         driver_premium,
         auto_premium,
         CAST(policy_date AS DATE) AS pd,

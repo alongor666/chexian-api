@@ -55,6 +55,7 @@ export function generateCrossSellTrendQuery(
         coverage_combination,
         auto_count,
         driver_count,
+        driver_policy_count,
         driver_premium,
         CAST(policy_date AS DATE) AS pd
       FROM CrossSellDailyAgg
@@ -67,6 +68,7 @@ export function generateCrossSellTrendQuery(
         coverage_combination,
         COALESCE(SUM(auto_count), 0) AS auto_count,
         COALESCE(SUM(driver_count), 0) AS driver_count,
+        COALESCE(SUM(driver_policy_count), 0) AS driver_policy_count,
         COALESCE(SUM(driver_premium), 0) AS premium
       FROM filtered
       GROUP BY 1, 2
@@ -77,6 +79,7 @@ export function generateCrossSellTrendQuery(
         '整体' AS coverage_combination,
         COALESCE(SUM(auto_count), 0) AS auto_count,
         COALESCE(SUM(driver_count), 0) AS driver_count,
+        COALESCE(SUM(driver_policy_count), 0) AS driver_policy_count,
         COALESCE(SUM(driver_premium), 0) AS premium
       FROM filtered
       GROUP BY 1
@@ -93,8 +96,8 @@ export function generateCrossSellTrendQuery(
       CASE WHEN auto_count = 0 THEN 0
            ELSE ROUND(driver_count * 100.0 / auto_count, 2)
       END AS rate,
-      CASE WHEN driver_count = 0 THEN 0
-           ELSE ROUND(premium / driver_count, 2)
+      CASE WHEN driver_policy_count = 0 THEN 0
+           ELSE ROUND(premium / driver_policy_count, 2)
       END AS avg_premium,
       auto_count
     FROM combined
