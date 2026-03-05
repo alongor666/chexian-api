@@ -37,6 +37,7 @@ export type PerformanceDimension =
   | 'team'
   | 'salesman'
   | 'customer_category'
+  | 'tonnage_segment'
   | 'is_new_car'
   | 'is_transfer'
   | 'is_nev'
@@ -397,6 +398,8 @@ function drillStepToWhere(step: PerformanceDrilldownStep, colPrefix: string): st
       return `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') = '${esc(step.value)}'`;
     case 'customer_category':
       return `COALESCE(${colPrefix}customer_category, '未知') = '${esc(step.value)}'`;
+    case 'tonnage_segment':
+      return `COALESCE(${colPrefix}tonnage_segment, '未分段') = '${esc(step.value)}'`;
     default:
       return '1=1';
   }
@@ -438,6 +441,11 @@ function getGroupByConfig(dimension: PerformanceDimension | null, colPrefix: str
       return {
         selectExpr: `COALESCE(${colPrefix}customer_category, '未知') AS group_name`,
         groupByExpr: `COALESCE(${colPrefix}customer_category, '未知')`,
+      };
+    case 'tonnage_segment':
+      return {
+        selectExpr: `COALESCE(${colPrefix}tonnage_segment, '未分段') AS group_name`,
+        groupByExpr: `COALESCE(${colPrefix}tonnage_segment, '未分段')`,
       };
     default:
       return {

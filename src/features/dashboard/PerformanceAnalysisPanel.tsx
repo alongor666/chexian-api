@@ -170,6 +170,15 @@ function classifyGrowthState(rate: number | null): HeatmapState {
   return 'danger';
 }
 
+function getWeekdayKey(dateText: string): number {
+  const date = new Date(`${dateText}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? -1 : date.getDay();
+}
+
+function getMonthKey(dateText: string): string {
+  return dateText.slice(5, 7);
+}
+
 function PerformanceOrgHeatmap({
   rows,
   loading,
@@ -184,6 +193,8 @@ function PerformanceOrgHeatmap({
   timePeriod: PerformanceTimePeriod;
 }) {
   const [metric, setMetric] = useState<HeatmapMetric>('growth');
+  const [activeCell, setActiveCell] = useState<{ org: string; date: string } | null>(null);
+  const [hoverCell, setHoverCell] = useState<{ org: string; date: string } | null>(null);
 
   const orgRows = useMemo(() => {
     const dateSet = new Set<string>();
@@ -218,47 +229,88 @@ function PerformanceOrgHeatmap({
     };
   }, [rows, metric, growthMode]);
 
-  const renderCell = (row: PerformanceOrgHeatmapRow | undefined) => {
+  const focusDate = activeCell?.date ?? hoverCell?.date ?? null;
+  const focusWeekday = focusDate && timePeriod === 'day' ? getWeekdayKey(focusDate) : null;
+  const focusMonth = focusDate && timePeriod === 'month' ? getMonthKey(focusDate) : null;
+
+  const renderCell = (org: string, date: string, row: PerformanceOrgHeatmapRow | undefined) => {
+    const isSelected = activeCell?.org === org && activeCell?.date === date;
+    const isSameWeekday = focusWeekday !== null && focusWeekday >= 0 && getWeekdayKey(date) === focusWeekday;
+    const isSameMonth = focusMonth !== null && getMonthKey(date) === focusMonth;
+    const isFocusRelated = isSelected || (timePeriod === 'day' ? isSameWeekday : false) || (timePeriod === 'month' ? isSameMonth : false);
+    const degradeOpacity = (activeCell || hoverCell) && !isFocusRelated ? 'opacity-40' : '';
+    const ringClass = isSelected ? 'ring-2 border' : '';
+
     if (!row) {
       return (
-        <div className={cn('rounded px-1 py-1 text-center text-xs', colorClasses.text.neutralMuted)}>
+        <button
+          type="button"
+          onClick={() => setActiveCell({ org, date })}
+          onMouseEnter={() => setHoverCell({ org, date })}
+          onMouseLeave={() => setHoverCell(null)}
+          className={cn('w-full rounded px-1 py-1 text-center text-xs transition-all', colorClasses.text.neutralMuted, degradeOpacity, ringClass)}
+        >
           -
-        </div>
+        </button>
       );
     }
 
     if (metric === 'premium') {
       return (
-        <div
-          className={cn('rounded px-1 py-1 text-center', textStyles.numeric, colorClasses.text.neutralDark)}
-          style={{ backgroundColor: colors.neutral[100] }}
+        <button
+          type="button"
+          onClick={() => setActiveCell({ org, date })}
+          onMouseEnter={() => setHoverCell({ org, date })}
+          onMouseLeave={() => setHoverCell(null)}
+          className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
+          style={{
+            backgroundColor: colors.neutral[100],
+            borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
+            boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
+          }}
         >
           {formatPremiumWanDisplay(row.premium)}
-        </div>
+        </button>
       );
     }
 
     if (metric === 'achievement') {
       const state = classifyAchievementState(row.achievementRate);
       return (
-        <div
-          className={cn('rounded px-1 py-1 text-center', textStyles.numeric, colorClasses.text.neutralDark)}
-          style={{ backgroundColor: getHeatmapStateColor(state) }}
+        <button
+          type="button"
+          onClick={() => setActiveCell({ org, date })}
+          onMouseEnter={() => setHoverCell({ org, date })}
+          onMouseLeave={() => setHoverCell(null)}
+          className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
+          style={{
+          backgroundColor: getHeatmapStateColor(state),
+          borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
+          boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
+        }}
         >
           {row.achievementRate === null ? '-' : formatPercent(row.achievementRate)}
-        </div>
+        </button>
       );
     }
 
     const majorRate = growthMode === 'mom' ? row.momGrowthRate : row.yoyGrowthRate;
     const state = classifyGrowthState(majorRate);
     return (
-      <div
-        className={cn('rounded px-1 py-1 text-center', textStyles.numeric, colorClasses.text.neutralDark)}
-        style={{ backgroundColor: getHeatmapStateColor(state) }}
+      <button
+        type="button"
+        onClick={() => setActiveCell({ org, date })}
+        onMouseEnter={() => setHoverCell({ org, date })}
+        onMouseLeave={() => setHoverCell(null)}
+        className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
+        style={{
+          backgroundColor: getHeatmapStateColor(state),
+          borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
+          boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
+        }}
       >
         <div>{majorRate === null ? '-' : formatPercent(majorRate)}</div>
-      </div>
+      </button>
     );
   };
 
@@ -273,9 +325,9 @@ function PerformanceOrgHeatmap({
           size="small"
         />
         <p className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
-          {timePeriod === 'day' && '增长率环比按同星期几对比（周环比），同比按上年同日对比。'}
+          {timePeriod === 'day' && '增长率环比按同星期几对比（周环比），同比按上年同日对比；点选单元格后将高亮同星期几列。'}
           {timePeriod === 'week' && '每列为一个自然周的汇总保费，环比按上一周对比，同比按上年同周对比。'}
-          {timePeriod === 'month' && '每列为一个自然月的汇总保费，环比按上一月对比，同比按上年同月对比。'}
+          {timePeriod === 'month' && '每列为一个自然月的汇总保费，环比按上一月对比，同比按上年同月对比；点选后高亮同月列。'}
           {timePeriod === 'quarter' && '每列为一个季度的汇总保费，环比按上一季度对比，同比按上年同季对比。'}
         </p>
       </div>
@@ -327,7 +379,7 @@ function PerformanceOrgHeatmap({
                     <td className={cn('px-2 py-1 sticky left-0 bg-white z-10 whitespace-nowrap', colorClasses.text.neutralDark)}>{org}</td>
                     {orgRows.dates.map((date) => (
                       <td key={`${org}-${date}`} className="p-0.5 min-w-[84px]">
-                        {renderCell(orgLine?.get(date))}
+                        {renderCell(org, date, orgLine?.get(date))}
                       </td>
                     ))}
                   </tr>
