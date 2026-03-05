@@ -104,7 +104,7 @@ function checkRateLimit(userId: string): void {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, CONFIG.DATA_DIR);
+    cb(null, CURRENT_DATA_SUBDIR);
   },
   filename: (req, file, cb) => {
     // 使用 UUID + 安全化的原文件名，避免冲突和注入
@@ -338,31 +338,74 @@ router.post(
             return;
           }
 
-          // 3. 加载到 DuckDB
-          await duckdbService.loadParquet(filePath, 'raw_parquet');
+          // 3. 整理相同前缀的旧文件并归档
+          const ARCHIVE_DIR = path.join(CONFIG.DATA_DIR, 'archive');
+          const timestampDir = path.join(ARCHIVE_DIR, `backup_${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}`);
 
-          // 4. 创建 PolicyFact 视图
+          const matchNew = originalName.match(/(.*?)(\d{8})(.*?)\.parquet$/i);
+          if (matchNew) {
+            const prefix = matchNew[1];
+            const newDate = parseInt(matchNew[2], 10);
+            const suffix = matchNew[3];
+
+            const existingFiles = fs.readdirSync(CURRENT_DATA_SUBDIR).filter(f => f.endsWith('.parquet') && f !== req.file!.filename);
+            for (const f of existingFiles) {
+              const fullPathOld = path.join(CURRENT_DATA_SUBDIR, f);
+              const matchOld = f.match(/(?:^[a-f0-9\-]{36}_)?(.*?)(\d{8})(.*?)\.parquet$/i);
+
+              if (matchOld) {
+                const oldPrefix = matchOld[1];
+                const oldDate = parseInt(matchOld[2], 10);
+                const oldSuffix = matchOld[3];
+
+                if (oldPrefix === prefix && oldSuffix === suffix) {
+                  if (oldDate <= newDate) {
+                    if (!fs.existsSync(timestampDir)) {
+                      fs.mkdirSync(timestampDir, { recursive: true });
+                    }
+                    fs.renameSync(fullPathOld, path.join(timestampDir, f));
+                    safeLog('info', 'Data', `Archived old file: ${f} (replaced by ${originalName})`);
+                  }
+                }
+              }
+            }
+          }
+
+          // 4. 加载 current 目录下所有有效的 Parquet
+          const candidateFiles = fs.readdirSync(CURRENT_DATA_SUBDIR)
+            .filter(f => f.endsWith('.parquet'))
+            .map(f => path.join(CURRENT_DATA_SUBDIR, f));
+
+          if (candidateFiles.length > 1) {
+            await duckdbService.loadMultipleParquet(candidateFiles);
+          } else if (candidateFiles.length === 1) {
+            await duckdbService.loadParquet(candidateFiles[0], 'raw_parquet');
+          } else {
+            throw new AppError(400, 'Current directory is empty somehow');
+          }
+
+          // 5. 创建 PolicyFact 视图
           await duckdbService.createPolicyFactView('raw_parquet');
 
-          // 5. 获取数据统计
+          // 6. 获取数据统计
           const countResult = await duckdbService.query<{ count: number }>(
             'SELECT COUNT(*) as count FROM PolicyFact'
           );
           const rowCount = countResult[0]?.count || 0;
 
-          // 6. 更新当前数据文件信息
+          // 7. 更新当前数据文件信息
           currentDataFile = {
-            filename: req.file.filename,
+            filename: req.file!.filename,
             originalName,
             uploadTime: new Date(),
             rowCount,
-            fileSizeBytes: req.file.size,
+            fileSizeBytes: req.file!.size,
           };
 
           safeLog('info', 'Data', `File loaded: ${rowCount} rows`);
 
-          // 7. 异步清理旧文件（不阻塞响应）
-          cleanupOldFiles().catch(() => {});
+          // 8. 异步清理根目录旧文件
+          cleanupOldFiles().catch(() => { });
 
           res.json({
             success: true,
@@ -370,9 +413,9 @@ router.post(
               filename: currentDataFile.filename,
               originalName: currentDataFile.originalName,
               rowCount,
-              fileSizeMB: Math.round(req.file.size / 1024 / 1024 * 100) / 100,
+              fileSizeMB: Math.round(req.file!.size / 1024 / 1024 * 100) / 100,
             },
-            message: `成功加载 ${rowCount.toLocaleString()} 条数据`,
+            message: `成功合并加载最新数据，当前总计 ${rowCount.toLocaleString()} 条数据`,
           });
 
           resolve();

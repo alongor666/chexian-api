@@ -414,7 +414,8 @@ async function main() {
           COALESCE(
             NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
             NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
-          ) AS dedup_key
+          ) AS dedup_key,
+          NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '') AS raw_policy_no
         FROM PolicyFact
         WHERE policy_date IS NOT NULL
       )
@@ -427,10 +428,11 @@ async function main() {
         is_transfer, is_telemarketing, is_renewal,
         is_nev, is_new_car, is_renewable, is_cross_sell,
         driver_coverage, passenger_coverage,
-        COUNT(DISTINCT CASE WHEN insurance_type LIKE '%商业%' THEN dedup_key END) AS auto_count,
+        COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
+        COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
         COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
-        COALESCE(SUM(CASE WHEN insurance_type LIKE '%商业%' THEN premium ELSE 0 END), 0) AS auto_premium
+        COALESCE(SUM(premium), 0) AS auto_premium
       FROM normalized
       WHERE dedup_key IS NOT NULL
       GROUP BY

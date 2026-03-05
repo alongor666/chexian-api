@@ -37,6 +37,7 @@ export function generateCrossSellTopSalesmanQuery(
         coverage_combination,
         auto_count,
         driver_count,
+        driver_policy_count,
         driver_premium,
         CAST(policy_date AS DATE) AS pd,
         (SELECT max_date FROM date_bounds) AS tp_max,
@@ -69,6 +70,7 @@ export function generateCrossSellTopSalesmanQuery(
         MAX(org_level_3) AS org_level_3,
         COALESCE(SUM(auto_count), 0) AS auto_count,
         COALESCE(SUM(driver_count), 0) AS driver_count,
+        COALESCE(SUM(driver_policy_count), 0) AS driver_policy_count,
         COALESCE(SUM(driver_premium), 0) AS driver_premium
       FROM filtered
       GROUP BY salesman_name
@@ -83,8 +85,8 @@ export function generateCrossSellTopSalesmanQuery(
         CASE WHEN auto_count = 0 THEN 0
              ELSE ROUND(driver_count * 100.0 / auto_count, 2)
         END AS rate,
-        CASE WHEN driver_count = 0 THEN 0
-             ELSE ROUND(driver_premium / driver_count, 2)
+        CASE WHEN driver_policy_count = 0 THEN 0
+             ELSE ROUND(driver_premium / driver_policy_count, 2)
         END AS avg_premium
       FROM salesman_summary
     )

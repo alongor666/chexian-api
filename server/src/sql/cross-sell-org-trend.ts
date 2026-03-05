@@ -65,9 +65,10 @@ export function generateCrossSellOrgTrendQuery(
     filtered AS (
       SELECT
         COALESCE(
-          NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''),
-          NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')
+          NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
+          NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
         ) AS dedup_key,
+        NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '') AS raw_policy_no,
         is_cross_sell,
         cross_sell_premium_driver,
         COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
@@ -83,9 +84,10 @@ export function generateCrossSellOrgTrendQuery(
     daily AS (
       SELECT
         STRFTIME(pd, '%Y-%m-%d') AS date_str,
-        -- 口径对齐：保单号优先去重，车架号仅作为兜底键
+        -- 口径对齐：车架号去重作为推介率分母和分子，保单号去重作为件均分母
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN dedup_key END) AS driver_count,
+        COUNT(DISTINCT CASE WHEN ${crossSellCond} THEN raw_policy_no END) AS driver_policy_count,
         COALESCE(SUM(CASE WHEN ${crossSellCond} THEN cross_sell_premium_driver ELSE 0 END), 0) AS premium
       FROM filtered
       GROUP BY 1
@@ -99,8 +101,8 @@ export function generateCrossSellOrgTrendQuery(
         ELSE ROUND(COALESCE(d.driver_count, 0) * 100.0 / COALESCE(d.auto_count, 0), 2)
       END AS rate,
       CASE
-        WHEN COALESCE(d.driver_count, 0) = 0 THEN 0
-        ELSE ROUND(COALESCE(d.premium, 0) / COALESCE(d.driver_count, 0), 2)
+        WHEN COALESCE(d.driver_policy_count, 0) = 0 THEN 0
+        ELSE ROUND(COALESCE(d.premium, 0) / COALESCE(d.driver_policy_count, 0), 2)
       END AS avg_premium
     FROM date_series ds
     LEFT JOIN daily d ON d.date_str = STRFTIME(ds.date_val, '%Y-%m-%d')

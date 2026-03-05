@@ -98,6 +98,7 @@ export function generateCrossSellHeatmapQuery(
         org_level_3,
         SUM(auto_count) AS auto_count,
         SUM(driver_count) AS driver_count,
+        SUM(driver_policy_count) AS driver_policy_count,
         SUM(driver_premium) AS driver_premium
       FROM CrossSellDailyAgg
       WHERE ${baseWhereClause}
@@ -125,6 +126,7 @@ export function generateCrossSellHeatmapQuery(
         wr.period_key,
         SUM(wr.auto_count) AS auto_count,
         SUM(wr.driver_count) AS driver_count,
+        SUM(wr.driver_policy_count) AS driver_policy_count,
         SUM(wr.driver_premium) AS driver_premium
       FROM window_rows wr
       GROUP BY wr.org_level_3, wr.period_key
@@ -164,8 +166,8 @@ export function generateCrossSellHeatmapQuery(
         ELSE ROUND(COALESCE(cur.driver_count, 0) * 100.0 / COALESCE(cur.auto_count, 0), 2)
       END AS rate,
       CASE
-        WHEN COALESCE(cur.driver_count, 0) = 0 THEN 0
-        ELSE ROUND(COALESCE(cur.driver_premium, 0) / COALESCE(cur.driver_count, 0), 2)
+        WHEN COALESCE(cur.driver_policy_count, 0) = 0 THEN 0
+        ELSE ROUND(COALESCE(cur.driver_premium, 0) / COALESCE(cur.driver_policy_count, 0), 2)
       END AS avg_premium,
       CASE
         WHEN COALESCE(dp.plan_premium_wan, 0) <= 0 THEN NULL
