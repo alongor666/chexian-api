@@ -2,7 +2,6 @@
  * AI 路由
  * AI Routes
  *
- * POST /api/ai/nl2sql - 自然语言转 SQL
  * POST /api/ai/validate-key - 验证 API Key
  */
 
@@ -11,11 +10,8 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { permissionMiddleware } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
-import { generateSqlWithZhipu, validateApiKey, analyzeOrgTrendWithZhipu } from '../services/zhipu.js';
+import { validateApiKey, analyzeOrgTrendWithZhipu } from '../services/zhipu.js';
 import { analyzeOrgTrendWithOpenRouter } from '../services/openrouter.js';
-import { validateSQL } from '../utils/sql-validator.js';
-import { duckdbService } from '../services/duckdb.js';
-import { injectPermissionFilter, isValidPermissionFilter } from '../utils/sql-permission-injector.js';
 
 const router = Router();
 
@@ -24,20 +20,6 @@ const router = Router();
  */
 router.use(authMiddleware);
 router.use(permissionMiddleware);
-
-/**
- * POST /api/ai/nl2sql - 已移除（SQL 编辑器功能已删除）
- * 保留端点返回 410 Gone 以通知客户端
- */
-router.post(
-  '/nl2sql',
-  asyncHandler(async (_req: Request, res: Response) => {
-    res.status(410).json({
-      success: false,
-      error: 'NL2SQL 功能已关闭',
-    });
-  })
-);
 
 /**
  * API Key 验证请求 Schema

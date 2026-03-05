@@ -38,7 +38,6 @@ const ALL_ROUTES = [
   { path: '/growth', label: '增长分析' },
   { path: '/comparison', label: '数据对比' },
   { path: '/coefficient', label: '系数监控' },
-  { path: '/sql-query', label: 'SQL查询' },
   { path: '/templates', label: '报表模板' },
 ];
 

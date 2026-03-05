@@ -143,20 +143,6 @@ describe('API client contract coverage', () => {
     expect(calledUrl).toContain('dimension=org');
   });
 
-  it('custom SQL endpoint uses POST with sql body', async () => {
-    const { apiClient } = await importClient();
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ success: true, data: [] }),
-    });
-    await apiClient.executeCustomQuery('SELECT 1');
-    const [calledUrl, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(calledUrl).toContain('/query/custom');
-    expect(options.method).toBe('POST');
-    expect(String(options.body)).toContain('SELECT 1');
-  });
-
   it('filter options endpoint remains stable', async () => {
     const { apiClient } = await importClient();
     mockFetch.mockResolvedValueOnce({
@@ -167,19 +153,6 @@ describe('API client contract coverage', () => {
     await apiClient.getFilterOptions();
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/filters/options');
-  });
-
-  it('AI SQL generation endpoint uses POST', async () => {
-    const { apiClient } = await importClient();
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ success: true, data: { sql: 'SELECT * FROM PolicyFact' } }),
-    });
-    await apiClient.generateSql('查询乐山保费');
-    const [calledUrl, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(calledUrl).toContain('/ai/generate-sql');
-    expect(options.method).toBe('POST');
   });
 
   it('comprehensive bundle endpoint preserves granularity and cutoffDate', async () => {

@@ -139,7 +139,7 @@ export const InsightPanel = memo(function InsightPanel({
                 <div>
                   <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">需要配置 API</p>
                   <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                    请先在「SQL 查询」页面的 AI 设置中配置智谱 API Key
+                    请先在系统 AI 设置中配置智谱 API Key
                   </p>
                 </div>
               </div>

@@ -245,8 +245,8 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
         </div>
       </div>
 
-      <div style={{ height: height }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <div style={{ height, minHeight: 280 }}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <ComposedChart data={chartData} margin={{ top: 10, right: 40, left: 10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
             <XAxis

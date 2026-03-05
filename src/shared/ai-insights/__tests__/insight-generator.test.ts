@@ -5,11 +5,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { RenewalDataContext } from '../types';
 
-// Mock configStore
-vi.mock('../../../features/sql-query/aiSql/configStore', () => ({
-  getStoredConfig: vi.fn(() => ({ apiKey: '', model: 'codegeex-4' })),
-}));
-
 // 动态导入以确保 mock 生效
 const getInsightGenerator = async () => {
   const module = await import('../insight-generator');

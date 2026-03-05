@@ -15,7 +15,6 @@
  * GET /api/query/renewal - 续保分析
  * GET /api/query/cross-sell - 车驾意推介率
  * GET /api/query/salesman-ranking - 业务员排名
- * POST /api/query/custom - 自定义SQL查询
  */
 
 import { Router, Request, Response } from 'express';
@@ -92,9 +91,7 @@ import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } fro
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../sql/premiumPlan.js';
 import type { AdvancedFilterState, DateCriteria } from '../types/data.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../sql/salesman-ranking.js';
-import { validateSQL } from '../utils/sql-validator.js';
 import { isValidDateFormat } from '../utils/sql-sanitizer.js';
-import { injectPermissionFilter, isValidPermissionFilter } from '../utils/sql-permission-injector.js';
 import { commonFilterSchema, buildWhereFromFilterParams, buildWhereFromFilterParamsWithoutDate } from '../utils/filter-params.js';
 import { parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, resolveGroupDim } from '../utils/route-helpers.js';
 import { logger } from '../utils/logger.js';
@@ -1404,20 +1401,6 @@ router.get(
     res.json({
       success: true,
       data: result,
-    });
-  })
-);
-
-/**
- * POST /api/query/custom - 已移除（SQL 编辑器功能已删除）
- * 保留端点返回 410 Gone
- */
-router.post(
-  '/custom',
-  asyncHandler(async (_req: Request, res: Response) => {
-    res.status(410).json({
-      success: false,
-      error: '自定义 SQL 查询功能已关闭',
     });
   })
 );

@@ -12,7 +12,7 @@ import { Logger } from '@/shared/utils/logger';
 
 const logger = new Logger('InsightGenerator');
 
-// ---- 内联 API Key 配置读取（原依赖已删除的 sql-query/aiSql/configStore）----
+// ---- 内联 API Key 配置读取（避免依赖已移除的 SQL 编辑器模块）----
 const STORAGE_KEY = 'zhipu_sql_config';
 
 interface StoredConfig {
@@ -226,7 +226,7 @@ export async function generateInsights(
     return {
       success: false,
       insights: [],
-      error: '请先配置智谱 API Key（在 SQL 查询页面的 AI 设置中配置）',
+      error: '请先配置智谱 API Key（在系统 AI 设置中配置）',
     };
   }
 

@@ -23,6 +23,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
+import { COLUMN_ALIASES } from '../normalize/mapping.js';
 import { duckdbService } from '../services/duckdb.js';
 import {
   sanitizeFilename,
@@ -70,6 +71,24 @@ function resolveManagedParquetPath(safeFilename: string): string | null {
   }
 
   return null;
+}
+
+async function isRealtimeRowLevelParquet(filePath: string): Promise<boolean> {
+  try {
+    const escapedPath = escapeSqlValue(filePath);
+    const schema = await duckdbService.query<{ column_name: string }>(`
+      SELECT column_name
+      FROM (DESCRIBE SELECT * FROM read_parquet('${escapedPath}'))
+    `);
+    const columns = schema.map((row) => String(row.column_name).toLowerCase());
+    const hasAlias = (field: keyof typeof COLUMN_ALIASES): boolean => {
+      const aliases = (COLUMN_ALIASES[field] || []).map((alias) => alias.toLowerCase());
+      return columns.some((column) => aliases.some((alias) => column === alias || column.includes(alias)));
+    };
+    return hasAlias('policy_no') && hasAlias('premium');
+  } catch {
+    return false;
+  }
 }
 
 // ============================================
@@ -371,17 +390,34 @@ router.post(
             }
           }
 
-          // 4. 加载 current 目录下所有有效的 Parquet
+          // 4. 加载 current 目录下所有有效的 Parquet（跳过损坏/空文件，避免整批加载失败）
           const candidateFiles = fs.readdirSync(CURRENT_DATA_SUBDIR)
             .filter(f => f.endsWith('.parquet'))
             .map(f => path.join(CURRENT_DATA_SUBDIR, f));
 
-          if (candidateFiles.length > 1) {
-            await duckdbService.loadMultipleParquet(candidateFiles);
-          } else if (candidateFiles.length === 1) {
-            await duckdbService.loadParquet(candidateFiles[0], 'raw_parquet');
+          const validCandidateFiles: string[] = [];
+          for (const candidateFile of candidateFiles) {
+            const validation = await isValidParquetFile(candidateFile);
+            if (!validation.valid) {
+              safeLog('warn', 'Data', `Skip invalid parquet during merge-load: ${path.basename(candidateFile)} (${validation.error || 'unknown reason'})`);
+              continue;
+            }
+
+            const rowLevel = await isRealtimeRowLevelParquet(candidateFile);
+            if (!rowLevel) {
+              safeLog('warn', 'Data', `Skip non-row-level parquet during merge-load: ${path.basename(candidateFile)}`);
+              continue;
+            }
+
+            validCandidateFiles.push(candidateFile);
+          }
+
+          if (validCandidateFiles.length > 1) {
+            await duckdbService.loadMultipleParquet(validCandidateFiles);
+          } else if (validCandidateFiles.length === 1) {
+            await duckdbService.loadParquet(validCandidateFiles[0], 'raw_parquet');
           } else {
-            throw new AppError(400, 'Current directory is empty somehow');
+            throw new AppError(400, 'current 目录中没有有效的 Parquet 文件');
           }
 
           // 5. 创建 PolicyFact 视图
@@ -637,6 +673,10 @@ router.post(
     const validation = await isValidParquetFile(filePath);
     if (!validation.valid) {
       throw new AppError(400, validation.error || '不是有效的 Parquet 文件');
+    }
+    const rowLevel = await isRealtimeRowLevelParquet(filePath);
+    if (!rowLevel) {
+      throw new AppError(400, '仅允许加载行级实时数据文件');
     }
 
     safeLog('info', 'Data', `Loading file: ${safeFilename}`);

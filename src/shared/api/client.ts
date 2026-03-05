@@ -1211,16 +1211,6 @@ class ApiClient {
     return this.request(`/query/fee-analysis${query ? `?${query}` : ''}`);
   }
 
-  /**
-   * 执行自定义 SQL（受限）
-   */
-  async executeCustomQuery(sql: string): Promise<any[]> {
-    return this.request('/query/custom', {
-      method: 'POST',
-      body: JSON.stringify({ sql }),
-    });
-  }
-
   // ============================================
   // 筛选器 API
   // ============================================
@@ -1280,19 +1270,6 @@ class ApiClient {
   // ============================================
   // AI API
   // ============================================
-
-  /**
-   * AI 生成 SQL
-   */
-  async generateSql(query: string): Promise<{
-    sql: string;
-    explanation?: string;
-  }> {
-    return this.request('/ai/generate-sql', {
-      method: 'POST',
-      body: JSON.stringify({ query }),
-    });
-  }
 
   /**
    * AI 分析机构推介率趋势（后端读取 API Key，无需前端传）
