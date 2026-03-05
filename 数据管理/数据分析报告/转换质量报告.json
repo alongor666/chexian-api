@@ -1,9 +1,9 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-03-03T19:01:25.597284",
+  "timestamp": "2026-03-05T10:35:16.198503",
   "basic_stats": {
-    "rows": 671340,
-    "columns": 38,
+    "rows": 676504,
+    "columns": 40,
     "column_names": [
       "三级机构",
       "保单号",
@@ -24,6 +24,8 @@
       "座位数",
       "车牌号码",
       "业务员",
+      "代理人/经纪人",
+      "客户源",
       "终端来源",
       "险类",
       "签单/批改保费",
@@ -49,7 +51,7 @@
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 657881
+      "unique_count": 662886
     },
     "业务员": {
       "null_count": 0,
@@ -64,7 +66,7 @@
     "保险起期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 835
+      "unique_count": 842
     },
     "险类": {
       "null_count": 0,
