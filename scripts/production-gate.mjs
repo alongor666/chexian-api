@@ -103,6 +103,7 @@ function main() {
   ];
 
   const steps = [
+    { name: '测试运行时预检', command: ['bun', 'run', 'test:preflight'] },
     { name: '治理校验', command: ['bun', 'run', 'governance'] },
     { name: '前端构建', command: ['bun', 'run', 'build'] },
     fast

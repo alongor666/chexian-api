@@ -15,6 +15,7 @@
     "typecheck": "node scripts/typecheck.mjs",
     "preview": "vite preview",
     "test": "vitest",
+    "test:preflight": "node scripts/test-preflight.mjs",
     "test:coverage": "vitest --coverage",
     "test:e2e": "playwright test",
     "test:e2e:cleanup-gate": "playwright test tests/e2e/03-cleanup-zero-downtime-gate.spec.ts",
@@ -27,6 +28,7 @@
     "benchmark:key-routes:soak": "node scripts/benchmark-key-routes-soak.mjs",
     "production:gate": "node scripts/production-gate.mjs",
     "governance": "node scripts/check-governance.mjs",
+    "governance:hotfiles": "node scripts/check-hotfile-contracts.mjs",
     "plans:manage": "node scripts/manage-plans.mjs",
     "hooks:install": "bash scripts/install-git-hooks.sh"
   },
