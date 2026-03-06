@@ -23,7 +23,10 @@
  *    - 残留冲突标记 → 阻断提交
  * 9. 暂存区调试产物阻断：
  *    - 阻止日志/Playwright 报告等调试产物进入提交
- * 10. TypeScript 检查范围护栏（API-only 清理批次）：
+ * 10. 热点文件契约联动：
+ *    - `server/src/routes/query.ts` 改动时，必须同步更新 `tests/api/*route-contract.test.ts`
+ *    - `src/shared/api/client.ts` 改动时，必须同步更新 `tests/api/client-contracts.test.ts`
+ * 11. TypeScript 检查范围护栏（API-only 清理批次）：
  *    - tsconfig.json 不得再排除活跃源码目录（src/charts/src/components/src/services/src/types/src/core）
  *    - 防止通过扩大 exclude 隐藏真实类型问题
  *
@@ -35,7 +38,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -646,7 +649,36 @@ function checkStagedDebugArtifacts() {
 }
 
 // ============================================================
-// 第10项检查：TypeScript 检查范围护栏
+// 第10项检查：热点文件契约联动
+// ============================================================
+
+function checkHotfileContractCoverage() {
+  info('检查热点文件契约测试联动...');
+
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(ROOT_DIR, 'scripts/check-hotfile-contracts.mjs'), '--quiet-pass'],
+      {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+    success('热点文件契约联动检查通过');
+    return true;
+  } catch (cause) {
+    error('热点文件契约联动检查失败');
+    const stdout = cause?.stdout?.toString().trim();
+    const stderr = cause?.stderr?.toString().trim();
+    if (stdout) console.log(stdout);
+    if (stderr) console.log(stderr);
+    return false;
+  }
+}
+
+// ============================================================
+// 第11项检查：TypeScript 检查范围护栏
 // ============================================================
 
 function checkTsconfigTypecheckScope() {
@@ -701,6 +733,7 @@ function main() {
     { name: '任务ID分配', fn: checkTaskIdAllocation },
     { name: 'Conflict标记', fn: checkMergeConflictMarkers },
     { name: '调试产物', fn: checkStagedDebugArtifacts },
+    { name: '热点文件契约', fn: checkHotfileContractCoverage },
     { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
   ];
 

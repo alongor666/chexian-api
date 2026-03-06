@@ -7,6 +7,9 @@ bun run cleanup:artifacts
 echo "[pre-commit] Running governance checks..."
 bun run governance
 
+echo "[pre-commit] Running test preflight..."
+bun run test:preflight -- --mode unit
+
 echo "[pre-commit] Running core regression tests..."
 bun run test -- --run \
   tests/api/client.test.ts \

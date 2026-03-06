@@ -14,7 +14,9 @@
 | 一键发布“业绩分析热力图”到 VPS 并自动验收 | `release-vps-heatmap.mjs` | `bun run release:vps:heatmap` |
 | 仅做 VPS 线上热力图验收（不部署） | `verify-vps-heatmap.mjs` | `bun run verify:vps:heatmap` |
 | 检查代码提交前是否合规 | `check-governance.mjs` | `bun run governance` |
+| 检查热点文件是否带上契约测试 | `check-hotfile-contracts.mjs` | `bun run governance:hotfiles` |
 | 一键执行生产级门禁（治理+构建+测试+关键e2e） | `production-gate.mjs` | `bun run production:gate` |
+| 测试前快速验证依赖与运行时前提 | `test-preflight.mjs` | `bun run test:preflight [-- --mode unit]` |
 | 清理未跟踪调试产物（日志/报告） | `cleanup-debug-artifacts.mjs` | `bun run cleanup:artifacts` |
 | 归档已完成的任务 | `archive-backlog.mjs` | `node scripts/archive-backlog.mjs` |
 | 扫描/归档已完成的 plans 计划文件 | `manage-plans.mjs` | `bun run plans:manage` |
@@ -35,7 +37,9 @@
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
 | `check-governance.mjs` | **主治理校验**：检查必需文件、索引完整性、BACKLOG证据链、DC-002合规 | `bun run governance` |
+| `check-hotfile-contracts.mjs` | **热点契约门禁**：`query.ts` / `client.ts` 改动时要求同步修改契约测试 | `bun run governance:hotfiles` |
 | `production-gate.mjs` | **生产门禁编排**：治理 + 构建 + 全量测试 + 关键E2E（可选压测门禁） | `bun run production:gate [-- --with-perf]` |
+| `test-preflight.mjs` | **测试运行时预检**：检查 `node_modules`、`vitest`、`playwright` 与关键 E2E 文件是否就绪 | `bun run test:preflight [-- --mode all]` |
 | `cleanup-debug-artifacts.mjs` | 清理未跟踪调试产物（`.playwright-cli`、`playwright-report`、`test-results`、常见调试日志） | `bun run cleanup:artifacts` |
 | `check-task-id-conflict.mjs` | 检测多Agent任务ID是否冲突（B100-199/@claude等范围） | `node scripts/check-task-id-conflict.mjs` |
 | `check-write-conflict.mjs` | PR前检测文件写入冲突，防止merge冲突 | `node scripts/check-write-conflict.mjs` |
@@ -200,3 +204,9 @@ python3 scripts/generate-renewal-analysis.py # 生成报告
 
 - 新增 `release-vps-heatmap.mjs`：发布“业绩分析热力图”到 VPS 的一键编排脚本（构建、同步、重启、健康检查、验收）。
 - 新增 `verify-vps-heatmap.mjs`：线上热力图专项验收脚本（真实登录 + 页面与接口双重校验 + 证据落盘）。
+
+## 2026-03-06 追加记录
+
+- 新增 `check-hotfile-contracts.mjs`：当 `server/src/routes/query.ts` 或 `src/shared/api/client.ts` 进入暂存区时，要求同步修改契约测试。
+- 新增 `test-preflight.mjs`：在执行单测或 E2E 前快速检查依赖和关键测试入口是否就绪。
+- `check-governance.mjs` 新增“热点文件契约联动”校验，`production-gate.mjs` 与 `.githooks/pre-commit` 新增测试运行时预检步骤。
