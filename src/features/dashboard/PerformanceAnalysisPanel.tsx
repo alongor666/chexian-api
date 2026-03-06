@@ -51,6 +51,18 @@ interface PerformanceAnalysisPanelProps {
   growthMode: PerformanceGrowthMode;
 }
 
+export interface PerformanceDrilldownPrefetchedData {
+  summary: Record<string, unknown> | null;
+  rows: Array<Record<string, unknown>>;
+}
+
+export function resolvePerformanceDrilldownPrefetched(
+  prefetched: PerformanceDrilldownPrefetchedData | undefined,
+  useLegacyDrilldown: boolean
+): PerformanceDrilldownPrefetchedData | undefined {
+  return useLegacyDrilldown ? undefined : prefetched;
+}
+
 const SEGMENT_TABS: TabItem[] = [
   { key: 'all', label: '全部' },
   { key: 'non_business_passenger', label: '非营客' },
@@ -879,7 +891,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     enabled: isDataLoaded && (fallbackToLegacy || Boolean(performanceBundle.error)),
   });
 
-  const drilldownPrefetched = useMemo(() => {
+  const drilldownPrefetched = useMemo<PerformanceDrilldownPrefetchedData | undefined>(() => {
     if (!performanceBundle.bundle?.drilldown) return undefined;
     return {
       summary: performanceBundle.bundle.drilldown.summary,
@@ -894,7 +906,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     timePeriod,
     growthMode,
     heatmapSelection,
-    prefetched: drilldownPrefetched,
+    prefetched: resolvePerformanceDrilldownPrefetched(drilldownPrefetched, useLegacyDrilldown),
     enabled: isDataLoaded && useLegacyDrilldown,
   });
 

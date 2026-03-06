@@ -337,3 +337,7 @@ widgets/table/VirtualTable.tsx
 
 - **`dashboard/hooks/usePerformanceOrgHeatmap.ts`**: 新增业绩分析热力图数据 Hook（调用 `performance-org-heatmap`，返回三级机构连续14天矩阵数据）。
 - **`dashboard/PerformanceAnalysisPanel.tsx`**: 在业绩分析页面顶部新增三级机构14天热力图模块，支持“增长率/计划达成率/保费规模”标签切换，增长率单元格展示周环比与同比双值。
+
+## 2026-03-06 业绩分析热力图下钻切换修复
+
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: 修复业绩分析下钻链路在用户交互后仍被 bundle 首屏 `prefetched` 数据短路的问题；热力图/表格下钻开始后强制切回 `performance-drilldown` 实时请求。
