@@ -114,6 +114,11 @@ interface UsePerformanceDrilldownReturn {
   availableDimensions: PerformanceDimension[];
   selectDimension: (dimension: PerformanceDimension) => void;
   drillDown: (rowValue: string, nextDimension: PerformanceDimension) => void;
+  drillFromRoot: (
+    rootValue: string,
+    nextDimension: PerformanceDimension,
+    rootDimension?: PerformanceDimension
+  ) => void;
   drillUp: (toIndex: number) => void;
   reset: () => void;
   loading: boolean;
@@ -226,6 +231,29 @@ export function usePerformanceDrilldown({
     setCurrentGroupBy(nextDimension);
   }, [currentGroupBy]);
 
+  const drillFromRoot = useCallback((
+    rootValue: string,
+    nextDimension: PerformanceDimension,
+    rootDimension: PerformanceDimension = 'org_level_3'
+  ) => {
+    const normalizedRootValue = rootValue.trim();
+    if (!normalizedRootValue) return;
+
+    setDrillPath(() => {
+      const basePath = initialDrillPath.length > 0 ? [...initialDrillPath] : [];
+      const inInitialPath = basePath.some((step) => step.dimension === rootDimension && step.value === normalizedRootValue);
+      if (!inInitialPath) {
+        basePath.push({
+          dimension: rootDimension,
+          value: normalizedRootValue,
+          label: `${PERFORMANCE_DIMENSION_LABELS[rootDimension]}: ${normalizedRootValue}`,
+        });
+      }
+      return basePath;
+    });
+    setCurrentGroupBy(nextDimension);
+  }, [initialDrillPath]);
+
   const drillUp = useCallback((toIndex: number) => {
     const minIndex = getMinDrillUpIndex(-1);
     if (toIndex <= minIndex) {
@@ -260,6 +288,7 @@ export function usePerformanceDrilldown({
     availableDimensions,
     selectDimension,
     drillDown,
+    drillFromRoot,
     drillUp,
     reset,
     loading,
