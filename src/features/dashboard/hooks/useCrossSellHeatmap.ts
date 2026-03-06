@@ -20,10 +20,12 @@ export interface CrossSellHeatmapDrillStep {
   value: string;
 }
 
-export type CrossSellHeatmapDimension = 'org_level_3' | 'customer_category' | 'coverage_combination' | 'energy_type' | 'business_nature';
+export type CrossSellHeatmapDimension = 'org_level_3' | 'team' | 'salesman' | 'customer_category' | 'coverage_combination' | 'energy_type' | 'business_nature';
 
 export const CROSS_SELL_HEATMAP_DIMENSION_LABELS: Record<CrossSellHeatmapDimension, string> = {
   org_level_3: '三级机构',
+  team: '团队',
+  salesman: '业务员',
   customer_category: '客户类别',
   coverage_combination: '险别组合',
   energy_type: '能源类型',

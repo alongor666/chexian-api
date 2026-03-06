@@ -16,7 +16,8 @@ export interface CrossSellHeatmapDrillStep {
   value: string;
 }
 
-function crossSellDrillToWhere(steps: CrossSellHeatmapDrillStep[]): string {
+/** 生成 CrossSellDailyAgg 的 drillFilter WHERE 子句（无表前缀） */
+function crossSellDrillToWhereAgg(steps: CrossSellHeatmapDrillStep[]): string {
   if (!steps || steps.length === 0) return '';
   const clauses = steps.map((step) => {
     const v = `'${escapeSqlValue(step.value)}'`;
@@ -29,14 +30,48 @@ function crossSellDrillToWhere(steps: CrossSellHeatmapDrillStep[]): string {
         return `TRIM(CAST(coverage_combination AS VARCHAR)) = ${v}`;
       case 'energy_type':
         return step.value === '新能源'
-          ? `(COALESCE(CAST(is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE'))`
-          : `NOT (COALESCE(CAST(is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE'))`;
+          ? `COALESCE(CAST(is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`
+          : `NOT COALESCE(CAST(is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
       case 'business_nature':
         switch (step.value) {
           case '续保': return `COALESCE(CAST(is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
           case '新车': return `COALESCE(CAST(is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
           case '过户': return `COALESCE(CAST(is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
           default: return `NOT COALESCE(CAST(is_renewal AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(is_new_car AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(is_transfer AS VARCHAR), '0') IN ('1','true','TRUE')`;
+        }
+      default:
+        return 'TRUE';
+    }
+  });
+  return clauses.join(' AND ');
+}
+
+/** 生成 PolicyFact（别名 p. + tm.）的 drillFilter WHERE 子句 */
+function crossSellDrillToWherePF(steps: CrossSellHeatmapDrillStep[]): string {
+  if (!steps || steps.length === 0) return '';
+  const clauses = steps.map((step) => {
+    const v = `'${escapeSqlValue(step.value)}'`;
+    switch (step.dimension) {
+      case 'org_level_3':
+        return `TRIM(CAST(p.org_level_3 AS VARCHAR)) = ${v}`;
+      case 'team':
+        return `COALESCE(tm.team_name, '未归属团队') = ${v}`;
+      case 'salesman':
+        return `TRIM(CAST(p.salesman_name AS VARCHAR)) = ${v}`;
+      case 'customer_category':
+        return `TRIM(CAST(p.customer_category AS VARCHAR)) = ${v}`;
+      case 'coverage_combination':
+        return `TRIM(CAST(p.coverage_combination AS VARCHAR)) = ${v}`;
+      case 'energy_type':
+        return step.value === '新能源'
+          ? `COALESCE(CAST(p.is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`
+          : `NOT COALESCE(CAST(p.is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+      case 'business_nature':
+        switch (step.value) {
+          case '续保': return `COALESCE(CAST(p.is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+          case '新车': return `COALESCE(CAST(p.is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+          case '过户': return `COALESCE(CAST(p.is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+          default: return `NOT COALESCE(CAST(p.is_renewal AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(p.is_new_car AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(p.is_transfer AS VARCHAR), '0') IN ('1','true','TRUE')`;
         }
       default:
         return 'TRUE';
@@ -75,30 +110,33 @@ function getDriverPlanDenominator(timePeriod: CrossSellHeatmapTimePeriod): numbe
  */
 export type CrossSellHeatmapGroupDimension =
   | 'org_level_3'
+  | 'team'
+  | 'salesman'
   | 'customer_category'
   | 'coverage_combination'
   | 'energy_type'
   | 'business_nature';
 
-function getCrossSellHeatmapDimExpr(
+/** 是否需要用 PolicyFact（team/salesman 不在 CrossSellDailyAgg 中） */
+function needsPolicyFact(
+  groupByDimension: CrossSellHeatmapGroupDimension,
+  drillFilter: CrossSellHeatmapDrillStep[]
+): boolean {
+  if (groupByDimension === 'team' || groupByDimension === 'salesman') return true;
+  return drillFilter.some((s) => s.dimension === 'team' || s.dimension === 'salesman');
+}
+
+/** CrossSellDailyAgg 的维度表达式（无表前缀） */
+function getCrossSellHeatmapDimExprAgg(
   dimension: CrossSellHeatmapGroupDimension
 ): { selectExpr: string; alias: string } {
   switch (dimension) {
     case 'customer_category':
-      return {
-        selectExpr: `COALESCE(NULLIF(TRIM(CAST(customer_category AS VARCHAR)), ''), '未知')`,
-        alias: 'dim_value',
-      };
+      return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(customer_category AS VARCHAR)), ''), '未知')`, alias: 'dim_value' };
     case 'coverage_combination':
-      return {
-        selectExpr: `COALESCE(NULLIF(TRIM(CAST(coverage_combination AS VARCHAR)), ''), '未知')`,
-        alias: 'dim_value',
-      };
+      return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(coverage_combination AS VARCHAR)), ''), '未知')`, alias: 'dim_value' };
     case 'energy_type':
-      return {
-        selectExpr: `CASE WHEN COALESCE(CAST(is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '新能源' ELSE '燃油' END`,
-        alias: 'dim_value',
-      };
+      return { selectExpr: `CASE WHEN COALESCE(CAST(is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '新能源' ELSE '燃油' END`, alias: 'dim_value' };
     case 'business_nature':
       return {
         selectExpr: `CASE
@@ -110,10 +148,37 @@ function getCrossSellHeatmapDimExpr(
         alias: 'dim_value',
       };
     default: // org_level_3
+      return { selectExpr: 'org_level_3', alias: 'dim_value' };
+  }
+}
+
+/** PolicyFact（别名 p. + tm.）的维度表达式 */
+function getCrossSellHeatmapDimExprPF(
+  dimension: CrossSellHeatmapGroupDimension
+): { selectExpr: string; alias: string } {
+  switch (dimension) {
+    case 'team':
+      return { selectExpr: `COALESCE(tm.team_name, '未归属团队')`, alias: 'dim_value' };
+    case 'salesman':
+      return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(p.salesman_name AS VARCHAR)), ''), '未知业务员')`, alias: 'dim_value' };
+    case 'customer_category':
+      return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(p.customer_category AS VARCHAR)), ''), '未知')`, alias: 'dim_value' };
+    case 'coverage_combination':
+      return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(p.coverage_combination AS VARCHAR)), ''), '未知')`, alias: 'dim_value' };
+    case 'energy_type':
+      return { selectExpr: `CASE WHEN COALESCE(CAST(p.is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '新能源' ELSE '燃油' END`, alias: 'dim_value' };
+    case 'business_nature':
       return {
-        selectExpr: 'org_level_3',
+        selectExpr: `CASE
+          WHEN COALESCE(CAST(p.is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '续保'
+          WHEN COALESCE(CAST(p.is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '新车'
+          WHEN COALESCE(CAST(p.is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '过户'
+          ELSE '转保'
+        END`,
         alias: 'dim_value',
       };
+    default: // org_level_3
+      return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(p.org_level_3 AS VARCHAR)), ''), '未知机构')`, alias: 'dim_value' };
   }
 }
 
@@ -141,11 +206,14 @@ export function generateCrossSellHeatmapQuery(
 
   const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
   const seatClause = seatCoverageClause ? `AND ${seatCoverageClause}` : '';
-  const drillWhereClause = crossSellDrillToWhere(drillFilter);
-  const drillAnd = drillWhereClause ? `AND ${drillWhereClause}` : '';
+  const usePF = needsPolicyFact(groupByDimension, drillFilter);
+  const drillAnd = (() => {
+    const clause = usePF ? crossSellDrillToWherePF(drillFilter) : crossSellDrillToWhereAgg(drillFilter);
+    return clause ? `AND ${clause}` : '';
+  })();
   const safePeriods = 15;
   const planDenom = getDriverPlanDenominator(timePeriod);
-  const dimConfig = getCrossSellHeatmapDimExpr(groupByDimension);
+  const dimConfig = usePF ? getCrossSellHeatmapDimExprPF(groupByDimension) : getCrossSellHeatmapDimExprAgg(groupByDimension);
 
   // 根据 timePeriod 动态生成 SQL 片段
   let truncExpr: string;
@@ -179,7 +247,27 @@ export function generateCrossSellHeatmapQuery(
     ? 'MAX(pd)'
     : `DATE_TRUNC('${timePeriod === 'quarter' ? 'quarter' : timePeriod}', MAX(pd))::DATE`;
 
-  const sql = `
+  const isCrossSelltruthy = `COALESCE(CAST(p.is_cross_sell AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+
+  const filteredCte = usePF ? `
+    WITH filtered AS (
+      SELECT
+        CAST(p.policy_date AS DATE) AS pd,
+        ${dimConfig.selectExpr} AS ${dimConfig.alias},
+        COUNT(*) AS auto_count,
+        SUM(CASE WHEN ${isCrossSelltruthy} THEN 1 ELSE 0 END) AS driver_count,
+        SUM(CASE WHEN ${isCrossSelltruthy} THEN 1 ELSE 0 END) AS driver_policy_count,
+        SUM(CASE WHEN ${isCrossSelltruthy} THEN COALESCE(CAST(p.cross_sell_premium_driver AS DOUBLE), 0) ELSE 0 END) AS driver_premium
+      FROM PolicyFact p
+      LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))
+      WHERE ${baseWhereClause}
+        AND ${vehicleFilter}
+        ${seatClause}
+        ${drillAnd}
+        AND p.org_level_3 IS NOT NULL
+        AND TRIM(CAST(p.org_level_3 AS VARCHAR)) != ''
+      GROUP BY pd, ${dimConfig.alias}
+    ),` : `
     WITH filtered AS (
       SELECT
         CAST(policy_date AS DATE) AS pd,
@@ -196,7 +284,9 @@ export function generateCrossSellHeatmapQuery(
         AND org_level_3 IS NOT NULL
         AND TRIM(org_level_3) != ''
       GROUP BY pd, ${dimConfig.alias}
-    ),
+    ),`;
+
+  const sql = `${filteredCte}
     period_bounds AS (
       SELECT
         ${refDateExpr} AS ref_date,

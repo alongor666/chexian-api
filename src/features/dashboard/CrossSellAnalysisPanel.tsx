@@ -292,6 +292,9 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   const [pendingHeatmapRow, setPendingHeatmapRow] = useState<string | null>(null);
 
   const HEATMAP_DRILL_DIMENSIONS: { key: CrossSellHeatmapDimension; label: string }[] = [
+    { key: 'org_level_3', label: '三级机构' },
+    { key: 'team', label: '团队' },
+    { key: 'salesman', label: '业务员' },
     { key: 'customer_category', label: '客户类别' },
     { key: 'coverage_combination', label: '险别组合' },
     { key: 'energy_type', label: '能源类型' },

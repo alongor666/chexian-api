@@ -6,7 +6,7 @@
  * 颜色映射：优秀(绿)/健康(蓝)/异常(橙)/危险(红)
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import type { VehicleCategory, SeatCoverageLevel } from './hooks/useCrossSellTimePeriod';
 import {
@@ -110,6 +110,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
 }) => {
   const { isDataLoaded } = useDataStatus();
   const [activeMetric, setActiveMetric] = useState<MetricType>('rate');
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const { rows, loading, error } = useCrossSellHeatmap({
     filters,
@@ -162,6 +163,12 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
 
     return { orgs: sortedOrgs, dates: sortedDates, matrix: matrixMap };
   }, [rows, activeMetric]);
+
+  // 数据变化时自动滚动到最右（最新日期）
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = el.scrollWidth - el.clientWidth;
+  }, [dates.length, timePeriod]);
 
   // 格式化日期显示（根据时间粒度）
   const formatDateLabel = (dateStr: string): string => {
@@ -326,13 +333,13 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
       </div>
 
       {/* 热力图表格 - 使用 CSS Grid 实现自适应 */}
-      <div className="overflow-x-auto -mx-4 px-4">
-        {/* Grid 容器：第一列固定宽度（机构名），其余列等分 */}
+      <div ref={scrollRef} className="overflow-x-auto -mx-4 px-4">
+        {/* Grid 容器：第一列固定宽度（维度名），其余列等宽自适应，最小40px确保15列在边栏展开时可滚动，1fr在边栏收起时自动撑满 */}
         <div
           className="grid gap-0"
           style={{
-            gridTemplateColumns: `minmax(70px, auto) repeat(${dates.length}, minmax(36px, 1fr))`,
-            minWidth: `${70 + dates.length * 36}px`
+            gridTemplateColumns: `minmax(72px, 120px) repeat(${dates.length}, minmax(40px, 1fr))`,
+            minWidth: `${80 + dates.length * 40}px`,
           }}
         >
           {/* 表头：机构 + 日期 */}
