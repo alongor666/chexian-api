@@ -66,7 +66,7 @@ import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } f
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../sql/cross-sell-summary.js';
 import { generateCrossSellTrendQuery, type TrendGranularity } from '../sql/cross-sell-trend.js';
 import { generateCrossSellOrgTrendQuery, type CoverageCombinationFilter } from '../sql/cross-sell-org-trend.js';
-import { generateCrossSellHeatmapQuery } from '../sql/cross-sell-heatmap.js';
+import { generateCrossSellHeatmapQuery, type CrossSellHeatmapGroupDimension, type CrossSellHeatmapDrillStep } from '../sql/cross-sell-heatmap.js';
 import { generateCrossSellTopSalesmanQuery, type TopSalesmanCoverage } from '../sql/cross-sell-top-salesman.js';
 import {
   generatePerformancePeriodBoundsQuery,
@@ -75,6 +75,8 @@ import {
   generatePerformanceDrilldownQuery,
   generatePerformanceTopSalesmanQuery,
   generatePerformanceOrgHeatmapQuery,
+  type HeatmapGroupDimension,
+  type HeatmapDrillStep,
   mapLegacyVehicleCategoryToSegmentTag,
   type PerformancePeriodBounds,
   type PerformanceSegmentTag,
@@ -2116,10 +2118,15 @@ router.get(
   })
 );
 
+const HEATMAP_DIMENSIONS = ['org_level_3', 'customer_category', 'coverage_combination', 'energy_type', 'business_nature'] as const;
+const PERFORMANCE_HEATMAP_DIMENSIONS = ['org_level_3', 'team', 'salesman', 'customer_category', 'coverage_combination', 'energy_type', 'business_nature'] as const;
+
 const performanceOrgHeatmapSchema = z.object({
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
   vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
   timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
+  groupByDimension: z.enum(PERFORMANCE_HEATMAP_DIMENSIONS).default('org_level_3'),
+  drillFilter: z.string().optional().default('[]'),
 });
 
 router.get(
@@ -2130,14 +2137,25 @@ router.get(
       throw new AppError(400, parseResult.error.issues[0].message);
     }
 
-    const { timePeriod } = parseResult.data;
+    const { timePeriod, groupByDimension, drillFilter: drillFilterStr } = parseResult.data;
     const segmentTag = resolvePerformanceSegmentTag(parseResult.data);
     const { whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+
+    let drillFilter: HeatmapDrillStep[] = [];
+    try {
+      drillFilter = JSON.parse(drillFilterStr || '[]');
+      if (!Array.isArray(drillFilter)) drillFilter = [];
+    } catch {
+      drillFilter = [];
+    }
 
     const sql = generatePerformanceOrgHeatmapQuery(
       whereWithoutDate,
       segmentTag as PerformanceSegmentTag,
-      timePeriod as PerformanceTimePeriod
+      timePeriod as PerformanceTimePeriod,
+      15,
+      groupByDimension as HeatmapGroupDimension,
+      drillFilter
     );
 
     const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
@@ -2621,6 +2639,8 @@ const crossSellHeatmapSchema = z.object({
   vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
   seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional(),
   timePeriod: z.enum(['day', 'week', 'month', 'quarter']).default('day'),
+  groupByDimension: z.enum(HEATMAP_DIMENSIONS).default('org_level_3'),
+  drillFilter: z.string().optional().default('[]'),
 });
 
 router.get(
@@ -2630,16 +2650,26 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, seatCoverageLevel, timePeriod } = extraResult.data;
+    const { vehicleCategory, seatCoverageLevel, timePeriod, groupByDimension, drillFilter: drillFilterStr } = extraResult.data;
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
     const seatCoverageClause = getSeatCoverageClause(seatCoverageLevel);
+
+    let crossSellDrillFilter: CrossSellHeatmapDrillStep[] = [];
+    try {
+      crossSellDrillFilter = JSON.parse(drillFilterStr || '[]');
+      if (!Array.isArray(crossSellDrillFilter)) crossSellDrillFilter = [];
+    } catch {
+      crossSellDrillFilter = [];
+    }
 
     const sql = generateCrossSellHeatmapQuery(
       whereClause,
       vehicleCategory as VehicleCategory,
       seatCoverageClause,
-      timePeriod as 'day' | 'week' | 'month' | 'quarter'
+      timePeriod as 'day' | 'week' | 'month' | 'quarter',
+      groupByDimension as CrossSellHeatmapGroupDimension,
+      crossSellDrillFilter
     );
 
     logger.debug('[cross-sell-heatmap] Generated SQL', { sqlLength: sql.length });

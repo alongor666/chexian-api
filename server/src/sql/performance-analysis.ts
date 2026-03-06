@@ -347,6 +347,11 @@ function trendTimeGroupExpr(granularity: PerformanceTrendGranularity): string {
   }
 }
 
+function normalizeSqlTableAliasPrefix(tableAlias = ''): string {
+  const normalizedAlias = tableAlias.trim().replace(/\.+$/, '');
+  return normalizedAlias ? `${normalizedAlias}.` : '';
+}
+
 function getExpandDimensionConfig(expandDims: PerformanceSummaryExpandDims): ExpandDimensionConfig {
   const energyLabelExpr = `CASE WHEN is_nev_bool THEN '电' ELSE '油' END`;
   const energyKeyExpr = `CASE WHEN is_nev_bool THEN 'electric' ELSE 'oil' END`;
@@ -1194,14 +1199,145 @@ export function generatePerformanceTopSalesmanQuery(
   return sql;
 }
 
+/**
+ * 热力图维度分组类型
+ * 支持的常用维度：三级机构、团队、业务员、客户类别、险别组合、能源类型、新转续
+ */
+export type HeatmapGroupDimension =
+  | 'org_level_3'
+  | 'team'
+  | 'salesman'
+  | 'customer_category'
+  | 'coverage_combination'
+  | 'energy_type'
+  | 'business_nature';
+
+export const HEATMAP_DIMENSION_LABELS: Record<HeatmapGroupDimension, string> = {
+  org_level_3: '三级机构',
+  team: '团队',
+  salesman: '业务员',
+  customer_category: '客户类别',
+  coverage_combination: '险别组合',
+  energy_type: '能源类型',
+  business_nature: '新转续',
+};
+
+/** 热力图下钻步骤 */
+export interface HeatmapDrillStep {
+  dimension: string;
+  value: string;
+}
+
+/**
+ * 将下钻步骤转换为 WHERE 条件（用于 PolicyFact 表，有 p. 别名）
+ */
+function heatmapDrillToWhere(steps: HeatmapDrillStep[]): string {
+  if (!steps || steps.length === 0) return '';
+  const clauses = steps.map((step) => {
+    const v = `'${escapeSqlValue(step.value)}'`;
+    switch (step.dimension) {
+      case 'org_level_3':
+        return `TRIM(CAST(p.org_level_3 AS VARCHAR)) = ${v}`;
+      case 'team':
+        return `COALESCE(tm.team_name, '未归属团队') = ${v}`;
+      case 'salesman':
+        return `TRIM(CAST(p.salesman_name AS VARCHAR)) = ${v}`;
+      case 'customer_category':
+        return `TRIM(CAST(p.customer_category AS VARCHAR)) = ${v}`;
+      case 'coverage_combination':
+        return `TRIM(CAST(p.coverage_combination AS VARCHAR)) = ${v}`;
+      case 'energy_type':
+        return step.value === '新能源'
+          ? `(TRY_CAST(p.is_nev AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_nev AS VARCHAR))) IN ('1','y','yes','true','t','是'))`
+          : `NOT (TRY_CAST(p.is_nev AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_nev AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+      case 'business_nature':
+        switch (step.value) {
+          case '续保': return `(TRY_CAST(p.is_renewal AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_renewal AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+          case '新车': return `(TRY_CAST(p.is_new_car AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_new_car AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+          case '过户': return `(TRY_CAST(p.is_transfer AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_transfer AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+          default: return `NOT (TRY_CAST(p.is_renewal AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_renewal AS VARCHAR))) IN ('1','y','yes','true','t','是')) AND NOT (TRY_CAST(p.is_new_car AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_new_car AS VARCHAR))) IN ('1','y','yes','true','t','是')) AND NOT (TRY_CAST(p.is_transfer AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_transfer AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+        }
+      default:
+        return 'TRUE';
+    }
+  });
+  return clauses.join(' AND ');
+}
+
+/**
+ * 获取热力图维度的 SQL SELECT 表达式和别名
+ */
+function getHeatmapGroupByExpr(
+  dimension: HeatmapGroupDimension,
+  tableAlias = ''
+): { selectExpr: string; alias: string; label: string } {
+  const prefix = normalizeSqlTableAliasPrefix(tableAlias);
+  switch (dimension) {
+    case 'team':
+      return {
+        selectExpr: `COALESCE(tm.team_name, '未归属团队')`,
+        alias: 'dimension_value',
+        label: '团队',
+      };
+    case 'salesman':
+      return {
+        selectExpr: `COALESCE(NULLIF(TRIM(CAST(${prefix}salesman_name AS VARCHAR)), ''), '未知业务员')`,
+        alias: 'dimension_value',
+        label: '业务员',
+      };
+    case 'customer_category':
+      return {
+        selectExpr: `COALESCE(NULLIF(TRIM(CAST(${prefix}customer_category AS VARCHAR)), ''), '未知')`,
+        alias: 'dimension_value',
+        label: '客户类别',
+      };
+    case 'coverage_combination':
+      return {
+        selectExpr: `COALESCE(NULLIF(TRIM(CAST(${prefix}coverage_combination AS VARCHAR)), ''), '未知')`,
+        alias: 'dimension_value',
+        label: '险别组合',
+      };
+    case 'energy_type':
+      return {
+        selectExpr: `CASE WHEN ${truthyExpr(`${prefix}is_nev`)} THEN '新能源' ELSE '燃油' END`,
+        alias: 'dimension_value',
+        label: '能源类型',
+      };
+    case 'business_nature':
+      return {
+        selectExpr: `CASE
+          WHEN ${truthyExpr(`${prefix}is_renewal`)} THEN '续保'
+          WHEN ${truthyExpr(`${prefix}is_new_car`)} THEN '新车'
+          WHEN ${truthyExpr(`${prefix}is_transfer`)} THEN '过户'
+          ELSE '转保'
+        END`,
+        alias: 'dimension_value',
+        label: '新转续',
+      };
+    default: // org_level_3
+      return {
+        selectExpr: `COALESCE(NULLIF(TRIM(CAST(${prefix}org_level_3 AS VARCHAR)), ''), '未知机构')`,
+        alias: 'dimension_value',
+        label: '三级机构',
+      };
+  }
+}
+
 export function generatePerformanceOrgHeatmapQuery(
   whereWithoutDate: string,
   segmentTag: PerformanceSegmentTag,
   timePeriod: PerformanceTimePeriod = 'day',
-  periods = 15
+  periods = 15,
+  groupByDimension: HeatmapGroupDimension = 'org_level_3',
+  drillFilter: HeatmapDrillStep[] = []
 ): string {
-  const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
+  const tableAlias = 'p.';
+  const segmentFilter = getPerformanceSegmentFilter(segmentTag, tableAlias);
   const safePeriods = Math.max(7, Math.min(31, Math.floor(periods)));
+  const dimConfig = getHeatmapGroupByExpr(groupByDimension, tableAlias);
+  const needsTeamJoin = groupByDimension === 'team' || drillFilter.some((s) => s.dimension === 'team');
+  const drillWhereClause = heatmapDrillToWhere(drillFilter);
+  const drillAnd = drillWhereClause ? `AND ${drillWhereClause}` : '';
 
   // 根据 timePeriod 动态生成 SQL 片段
   let truncExpr: string;        // 分组键：DATE_TRUNC 或原始日期
@@ -1251,14 +1387,16 @@ export function generatePerformanceOrgHeatmapQuery(
     WITH filtered AS (
       SELECT
         CAST(p.policy_date AS DATE) AS pd,
-        COALESCE(NULLIF(TRIM(CAST(p.org_level_3 AS VARCHAR)), ''), '未知机构') AS org_level_3,
+        ${dimConfig.selectExpr} AS ${dimConfig.alias},
         COALESCE(NULLIF(TRIM(CAST(p.salesman_name AS VARCHAR)), ''), '__unknown__') AS salesman_name,
         CASE WHEN p.premium > 0 THEN p.premium / 10000.0 ELSE 0 END AS premium_wan,
         COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
       FROM PolicyFact p
       LEFT JOIN achievement_cache ac ON p.salesman_name = ac.full_name
+      ${needsTeamJoin ? "LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))" : ''}
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
+        ${drillAnd}
     ),
     period_bounds AS (
       SELECT
@@ -1277,9 +1415,9 @@ export function generatePerformanceOrgHeatmapQuery(
       FROM window_rows
       GROUP BY salesman_name
     ),
-    org_period AS (
+    dim_period AS (
       SELECT
-        wr.org_level_3,
+        wr.${dimConfig.alias},
         wr.period_key,
         ROUND(SUM(wr.premium_wan), 4) AS premium,
         ROUND(SUM(
@@ -1291,10 +1429,10 @@ export function generatePerformanceOrgHeatmapQuery(
         ), 4) AS plan_premium
       FROM window_rows wr
       LEFT JOIN period_salesman_total pst ON wr.salesman_name = pst.salesman_name
-      GROUP BY wr.org_level_3, wr.period_key
+      GROUP BY wr.${dimConfig.alias}, wr.period_key
     ),
-    org_pool AS (
-      SELECT DISTINCT org_level_3 FROM window_rows
+    dim_pool AS (
+      SELECT DISTINCT ${dimConfig.alias} FROM window_rows
     ),
     period_pool AS (
       SELECT d::DATE AS period_key
@@ -1302,22 +1440,22 @@ export function generatePerformanceOrgHeatmapQuery(
       generate_series(pb.start_date, pb.ref_date, ${seriesStep}) AS t(d)
     ),
     base_grid AS (
-      SELECT o.org_level_3, pp.period_key
-      FROM org_pool o
+      SELECT o.${dimConfig.alias}, pp.period_key
+      FROM dim_pool o
       CROSS JOIN period_pool pp
     ),
     prev_mom_data AS (
-      SELECT ${yoyTruncExpr} AS period_key, org_level_3, ROUND(SUM(premium_wan), 4) AS premium
+      SELECT ${yoyTruncExpr} AS period_key, ${dimConfig.alias}, ROUND(SUM(premium_wan), 4) AS premium
       FROM filtered
-      GROUP BY ${yoyTruncExpr}, org_level_3
+      GROUP BY ${yoyTruncExpr}, ${dimConfig.alias}
     ),
     prev_yoy_data AS (
-      SELECT ${yoyTruncExpr} AS period_key, org_level_3, ROUND(SUM(premium_wan), 4) AS premium
+      SELECT ${yoyTruncExpr} AS period_key, ${dimConfig.alias}, ROUND(SUM(premium_wan), 4) AS premium
       FROM filtered
-      GROUP BY ${yoyTruncExpr}, org_level_3
+      GROUP BY ${yoyTruncExpr}, ${dimConfig.alias}
     )
     SELECT
-      bg.org_level_3,
+      bg.${dimConfig.alias} AS org_level_3,
       bg.period_key AS policy_date,
       COALESCE(cur.premium, 0) AS premium,
       cur.plan_premium,
@@ -1334,16 +1472,18 @@ export function generatePerformanceOrgHeatmapQuery(
         ELSE ROUND((COALESCE(cur.premium, 0) - prev_yoy.premium) * 100.0 / prev_yoy.premium, 2)
       END AS yoy_growth_rate
     FROM base_grid bg
-    LEFT JOIN org_period cur ON cur.org_level_3 = bg.org_level_3 AND cur.period_key = bg.period_key
-    LEFT JOIN prev_mom_data prev_mom ON prev_mom.org_level_3 = bg.org_level_3 AND prev_mom.period_key = bg.period_key - ${momOffset}
-    LEFT JOIN prev_yoy_data prev_yoy ON prev_yoy.org_level_3 = bg.org_level_3 AND prev_yoy.period_key = bg.period_key - ${yoyOffset}
-    ORDER BY bg.org_level_3, bg.period_key
+    LEFT JOIN dim_period cur ON cur.${dimConfig.alias} = bg.${dimConfig.alias} AND cur.period_key = bg.period_key
+    LEFT JOIN prev_mom_data prev_mom ON prev_mom.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_mom.period_key = bg.period_key - ${momOffset}
+    LEFT JOIN prev_yoy_data prev_yoy ON prev_yoy.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_yoy.period_key = bg.period_key - ${yoyOffset}
+    ORDER BY bg.${dimConfig.alias}, bg.period_key
   `;
 
   logger.debug('Generated performance org heatmap SQL', {
     segmentTag,
     timePeriod,
     periods: safePeriods,
+    groupByDimension,
+    drillFilterCount: drillFilter.length,
     sqlLength: sql.length,
   });
 

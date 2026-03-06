@@ -5,6 +5,23 @@ import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import type { PerformanceGrowthMode, PerformanceSegmentTag, PerformanceTimePeriod } from './usePerformanceSummary';
 
+export type HeatmapDimension = 'org_level_3' | 'team' | 'salesman' | 'customer_category' | 'coverage_combination' | 'energy_type' | 'business_nature';
+
+export const HEATMAP_DIMENSION_LABELS: Record<HeatmapDimension, string> = {
+  org_level_3: '三级机构',
+  team: '团队',
+  salesman: '业务员',
+  customer_category: '客户类别',
+  coverage_combination: '险别组合',
+  energy_type: '能源类型',
+  business_nature: '新转续',
+};
+
+export interface HeatmapDrillStep {
+  dimension: string;
+  value: string;
+}
+
 export interface PerformanceOrgHeatmapRow {
   orgLevel3: string;
   policyDate: string;
@@ -20,6 +37,8 @@ interface UsePerformanceOrgHeatmapProps {
   segmentTag: PerformanceSegmentTag;
   growthMode: PerformanceGrowthMode;
   timePeriod: PerformanceTimePeriod;
+  groupByDimension?: HeatmapDimension;
+  drillFilter?: HeatmapDrillStep[];
   enabled?: boolean;
 }
 
@@ -46,6 +65,8 @@ export function usePerformanceOrgHeatmap({
   segmentTag,
   growthMode,
   timePeriod,
+  groupByDimension = 'org_level_3',
+  drillFilter = [],
   enabled = true,
 }: UsePerformanceOrgHeatmapProps): UsePerformanceOrgHeatmapResult {
   const { isOrgUser, userOrg } = useRBAC();
@@ -57,6 +78,8 @@ export function usePerformanceOrgHeatmap({
     segmentTag,
     growthMode,
     timePeriod,
+    groupByDimension,
+    drillFilter: JSON.stringify(drillFilter),
   };
 
   const { data, isLoading, error } = useQuery({

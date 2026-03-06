@@ -9,7 +9,13 @@
 import React, { useState, useMemo } from 'react';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import type { VehicleCategory, SeatCoverageLevel } from './hooks/useCrossSellTimePeriod';
-import { useCrossSellHeatmap, type HeatmapPoint, type CrossSellHeatmapTimePeriod } from './hooks/useCrossSellHeatmap';
+import {
+  useCrossSellHeatmap,
+  type HeatmapPoint,
+  type CrossSellHeatmapTimePeriod,
+  type CrossSellHeatmapDimension,
+  type CrossSellHeatmapDrillStep,
+} from './hooks/useCrossSellHeatmap';
 import {
   getZhuquanStatus,
   getAvgPremiumZhuquanStatus,
@@ -35,6 +41,10 @@ interface CrossSellMetricsHeatmapProps {
   vehicleCategory: VehicleCategory;
   seatCoverageLevel: SeatCoverageLevel;
   timePeriod?: CrossSellHeatmapTimePeriod;
+  groupByDimension?: CrossSellHeatmapDimension;
+  dimensionLabel?: string;
+  drillFilter?: CrossSellHeatmapDrillStep[];
+  onRowClick?: (rowLabel: string) => void;
 }
 
 // 状态 → 背景色 class 映射
@@ -93,6 +103,10 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
   vehicleCategory,
   seatCoverageLevel,
   timePeriod = 'day',
+  groupByDimension = 'org_level_3',
+  dimensionLabel = '机构',
+  drillFilter = [],
+  onRowClick,
 }) => {
   const { isDataLoaded } = useDataStatus();
   const [activeMetric, setActiveMetric] = useState<MetricType>('rate');
@@ -102,6 +116,8 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
     vehicleCategory,
     seatCoverageLevel,
     timePeriod,
+    groupByDimension,
+    drillFilter,
     enabled: isDataLoaded,
   });
 
@@ -327,7 +343,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
               'text-neutral-500 border-b border-neutral-200 dark:border-neutral-700'
             )}
           >
-            机构
+            {dimensionLabel}
           </div>
           {dates.map((date) => (
             <div
@@ -350,8 +366,11 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
                 className={cn(
                   'sticky left-0 z-10 bg-white dark:bg-neutral-800',
                   'px-2 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300',
-                  'border-b border-neutral-50 dark:border-neutral-700 whitespace-nowrap'
+                  'border-b border-neutral-50 dark:border-neutral-700 whitespace-nowrap',
+                  onRowClick ? 'cursor-pointer hover:text-primary hover:underline' : 'cursor-default'
                 )}
+                onClick={onRowClick ? () => onRowClick(org) : undefined}
+                title={onRowClick ? `点击下钻 ${org}` : undefined}
               >
                 {org}
               </div>
@@ -364,7 +383,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
 
       {/* 底部提示 */}
       <div className={cn(textStyles.caption, 'text-neutral-400')}>
-        鼠标悬停查看详细数据 · 共 {orgs.length} 个机构 · {dates.length} {periodLabel}
+        鼠标悬停查看详细数据 · 共 {orgs.length} 个{dimensionLabel} · {dates.length} {periodLabel}
       </div>
     </div>
   );
