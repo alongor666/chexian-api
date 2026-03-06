@@ -333,10 +333,10 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/CrossSellSummaryKpiBoard.tsx`**、**`dashboard/CrossSellTrendChart.tsx`**、**`dashboard/CrossSellTopSalesmanBoard.tsx`**: 增加 prefetched 数据入口，消除页面内重复请求。
 - **`home/DataImportPage.tsx`**: 移除重复 `refreshFiles()` 触发路径，避免进入页时双请求。
 
-## 2026-03-03 业绩分析新增机构14天热力图
+## 2026-03-03 业绩分析新增机构热力图
 
-- **`dashboard/hooks/usePerformanceOrgHeatmap.ts`**: 新增业绩分析热力图数据 Hook（调用 `performance-org-heatmap`，返回三级机构连续14天矩阵数据）。
-- **`dashboard/PerformanceAnalysisPanel.tsx`**: 在业绩分析页面顶部新增三级机构14天热力图模块，支持“增长率/计划达成率/保费规模”标签切换，增长率单元格展示周环比与同比双值。
+- **`dashboard/hooks/usePerformanceOrgHeatmap.ts`**: 新增业绩分析热力图数据 Hook（调用 `performance-org-heatmap`，返回三级机构连续15周期矩阵数据）。
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: 在业绩分析页面顶部新增三级机构连续15周期热力图模块，支持点击单元格后直接弹出下钻维度选择，并在下钻分析标题中动态展示已选维度。
 
 ## 2026-03-06 业绩分析热力图下钻切换修复
 

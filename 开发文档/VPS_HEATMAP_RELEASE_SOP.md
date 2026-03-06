@@ -2,7 +2,7 @@
 
 ## 目标
 
-将“业绩分析-三级机构连续14天热力图”相关前后端改动发布到 VPS，并用真实网页与 API 完成验收，避免“本地有、线上无”。
+将“业绩分析-三级机构连续15天热力图”相关前后端改动发布到 VPS，并用真实网页与 API 完成验收，避免“本地有、线上无”。
 
 ## 一键命令（推荐）
 
@@ -82,4 +82,3 @@ node scripts/verify-vps-heatmap.mjs --username admin --password '你的密码'
 2. 健康检查失败：`ssh chexian-vps "pm2 logs chexian-api --lines 100"`
 3. 页面回到“数据导入”：先排查 `/api/data/load/*` 的状态码
 4. 热力图不显示：优先看网络日志里 `/api/query/performance-org-heatmap` 是否 200
-

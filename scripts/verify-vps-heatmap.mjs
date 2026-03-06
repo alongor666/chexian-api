@@ -148,6 +148,15 @@ async function main() {
     await page.getByRole('button', { name: '登录', exact: true }).click();
     await page.waitForLoadState('domcontentloaded');
 
+    const heatmapResponsePromise = page.waitForResponse(
+      (res) => res.url().includes('/api/query/performance-org-heatmap'),
+      { timeout: options.timeoutMs }
+    ).catch(() => null);
+    const bundleResponsePromise = page.waitForResponse(
+      (res) => res.url().includes('/api/query/performance-bundle'),
+      { timeout: options.timeoutMs }
+    ).catch(() => null);
+
     await page.goto(`${options.baseUrl}/#/performance-analysis`, { waitUntil: 'domcontentloaded', timeout: options.timeoutMs });
     await page.waitForTimeout(1200);
 
@@ -161,7 +170,7 @@ async function main() {
       await page.waitForTimeout(1200);
     }
 
-    await ensureVisible(page.getByRole('heading', { name: '三级机构连续14天热力图' }), options.timeoutMs, 'heatmap title');
+    await ensureVisible(page.getByRole('heading', { name: '三级机构连续15天热力图' }), options.timeoutMs, 'heatmap title');
     const growthTab = page.getByRole('tab', { name: /增长率/ });
     const achievementTab = page.getByRole('tab', { name: '计划达成率', exact: true });
     const premiumTab = page.getByRole('tab', { name: '保费规模', exact: true });
@@ -194,18 +203,26 @@ async function main() {
     await page.screenshot({ path: screenshotPath, fullPage: false });
 
     const hasErrorText = await page.locator('text=加载失败').count();
+    const heatmapResponse = await heatmapResponsePromise;
+    const bundleResponse = await bundleResponsePromise;
     const heatmapRequests = networkRecords.filter((item) => item.url.includes('/api/query/performance-org-heatmap'));
-    const heatmapOk = heatmapRequests.some((item) => item.status === 200);
+    const heatmapOk = (heatmapResponse?.status() === 200) || heatmapRequests.some((item) => item.status === 200);
 
     result.checks = {
       finalUrl: page.url(),
       selectedTabsAfterSwitch: selectedTabs,
       hasLoadErrorText: hasErrorText > 0,
-      heatmapRequestCount: heatmapRequests.length,
-      heatmapRequestStatuses: heatmapRequests.map((item) => item.status),
-      performanceBundleStatuses: networkRecords
-        .filter((item) => item.url.includes('/api/query/performance-bundle'))
-        .map((item) => item.status),
+      heatmapRequestCount: heatmapRequests.length + (heatmapResponse ? 1 : 0),
+      heatmapRequestStatuses: [
+        ...(heatmapResponse ? [heatmapResponse.status()] : []),
+        ...heatmapRequests.map((item) => item.status),
+      ],
+      performanceBundleStatuses: [
+        ...(bundleResponse ? [bundleResponse.status()] : []),
+        ...networkRecords
+          .filter((item) => item.url.includes('/api/query/performance-bundle'))
+          .map((item) => item.status),
+      ],
       consoleErrorCount: consoleRecords.filter((item) => item.type === 'error').length,
     };
 
