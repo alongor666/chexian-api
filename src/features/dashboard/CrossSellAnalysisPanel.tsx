@@ -27,6 +27,11 @@ import { CrossSellTopSalesmanBoard } from './CrossSellTopSalesmanBoard';
 import { CrossSellOrgTrendChart } from './CrossSellOrgTrendChart';
 import { CrossSellMetricsHeatmap } from './CrossSellMetricsHeatmap';
 import {
+  type CrossSellHeatmapDimension,
+  CROSS_SELL_HEATMAP_DIMENSION_LABELS,
+  type CrossSellHeatmapDrillStep,
+} from './hooks/useCrossSellHeatmap';
+import {
   useCrossSellAnalysis,
   DIMENSION_LABELS,
   type CrossSellRow,
@@ -255,10 +260,12 @@ function formatCell(col: ColumnDef, row: CrossSellRow): string {
 // 板块标题
 // ============================================================
 
-function SectionTitle({ title }: { title: string }) {
+function SectionTitle({ title, leftContent }: { title: string; leftContent?: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2 mb-3">
-      <h2 className={cn(textStyles.titleSmall, 'font-semibold')}>{title}</h2>
+    <div className="flex items-center gap-3 mb-3">
+      {leftContent && <div className="flex items-center gap-2 flex-shrink-0">{leftContent}</div>}
+      <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-700" />
+      <h2 className={cn(textStyles.titleSmall, 'font-semibold whitespace-nowrap')}>{title}</h2>
       <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-700" />
     </div>
   );
@@ -277,6 +284,44 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   const { isDataLoaded } = useDataStatus();
   const [sortKey, setSortKey] = useState<SortKey>('total_auto_count');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [heatmapDimension, setHeatmapDimension] = useState<CrossSellHeatmapDimension>('org_level_3');
+  // 热力图下钻状态
+  const [heatmapDrillPath, setHeatmapDrillPath] = useState<CrossSellHeatmapDrillStep[]>([]);
+  const [heatmapGroupBy, setHeatmapGroupBy] = useState<CrossSellHeatmapDimension>('org_level_3');
+  const [showHeatmapPicker, setShowHeatmapPicker] = useState(false);
+  const [pendingHeatmapRow, setPendingHeatmapRow] = useState<string | null>(null);
+
+  const HEATMAP_DRILL_DIMENSIONS: { key: CrossSellHeatmapDimension; label: string }[] = [
+    { key: 'customer_category', label: '客户类别' },
+    { key: 'coverage_combination', label: '险别组合' },
+    { key: 'energy_type', label: '能源类型' },
+    { key: 'business_nature', label: '新转续' },
+  ];
+
+  const handleHeatmapRowClick = (rowLabel: string) => {
+    setPendingHeatmapRow(rowLabel);
+    setShowHeatmapPicker(true);
+  };
+
+  const handleHeatmapDimSelect = (dim: CrossSellHeatmapDimension) => {
+    if (!pendingHeatmapRow) return;
+    const newStep: CrossSellHeatmapDrillStep = { dimension: heatmapGroupBy, value: pendingHeatmapRow };
+    setHeatmapDrillPath((prev) => [...prev, newStep]);
+    setHeatmapGroupBy(dim);
+    setShowHeatmapPicker(false);
+    setPendingHeatmapRow(null);
+  };
+
+  const handleHeatmapBreadcrumbClick = (index: number) => {
+    if (index < 0) {
+      setHeatmapDrillPath([]);
+      setHeatmapGroupBy('org_level_3');
+      return;
+    }
+    const nextDim = heatmapDrillPath[index + 1]?.dimension as CrossSellHeatmapDimension | undefined;
+    setHeatmapDrillPath(heatmapDrillPath.slice(0, index + 1));
+    if (nextDim) setHeatmapGroupBy(nextDim);
+  };
 
   // 维度选择器状态
   const [showPicker, setShowPicker] = useState(false);
@@ -362,13 +407,77 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* 板块0：三级机构热力图 */}
-      <SectionTitle title={`三级机构驾意险${mappedTimePeriodForKpi === 'day' ? '14日' : mappedTimePeriodForKpi === 'week' ? '14周' : mappedTimePeriodForKpi === 'month' ? '14月' : '14季度'}热力图`} />
+      {/* 板块0：热力图 */}
+      <SectionTitle
+        title={`${CROSS_SELL_HEATMAP_DIMENSION_LABELS[heatmapGroupBy]}驾意险${mappedTimePeriodForKpi === 'day' ? '15日' : mappedTimePeriodForKpi === 'week' ? '15周' : mappedTimePeriodForKpi === 'month' ? '15月' : '15季度'}热力图`}
+        leftContent={
+          heatmapDrillPath.length === 0 ? (
+            <Tabs
+              items={(Object.entries(CROSS_SELL_HEATMAP_DIMENSION_LABELS) as [CrossSellHeatmapDimension, string][]).map(([key, label]) => ({ key, label }))}
+              activeKey={heatmapDimension}
+              onChange={(key) => { setHeatmapDimension(key as CrossSellHeatmapDimension); setHeatmapGroupBy(key as CrossSellHeatmapDimension); }}
+              variant="pills"
+              size="mini"
+            />
+          ) : (
+            <div className="flex items-center gap-1 text-xs text-neutral-500">
+              <button
+                className="hover:text-primary hover:underline cursor-pointer"
+                onClick={() => handleHeatmapBreadcrumbClick(-1)}
+              >
+                全部
+              </button>
+              {heatmapDrillPath.map((step, i) => (
+                <React.Fragment key={i}>
+                  <span>/</span>
+                  <button
+                    className={cn(
+                      'hover:text-primary hover:underline cursor-pointer',
+                      i === heatmapDrillPath.length - 1 ? 'text-neutral-700 dark:text-neutral-200 font-medium' : ''
+                    )}
+                    onClick={() => handleHeatmapBreadcrumbClick(i)}
+                  >
+                    {step.value}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+          )
+        }
+      />
+      {showHeatmapPicker && (
+        <div className={cn(cardStyles.base, 'p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800')}>
+          <p className="text-xs text-neutral-600 dark:text-neutral-300 mb-2">
+            选择 <strong>{pendingHeatmapRow}</strong> 的下钻维度：
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {HEATMAP_DRILL_DIMENSIONS.filter((d) => d.key !== heatmapGroupBy).map((d) => (
+              <button
+                key={d.key}
+                className="px-3 py-1 text-xs rounded-full bg-white dark:bg-neutral-800 border border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer"
+                onClick={() => handleHeatmapDimSelect(d.key)}
+              >
+                {d.label}
+              </button>
+            ))}
+            <button
+              className="px-3 py-1 text-xs rounded-full bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 cursor-pointer"
+              onClick={() => { setShowHeatmapPicker(false); setPendingHeatmapRow(null); }}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
       <CrossSellMetricsHeatmap
         filters={filters}
         vehicleCategory={vehicleCategory}
         seatCoverageLevel={seatCoverageLevel}
         timePeriod={mappedTimePeriodForKpi as 'day' | 'week' | 'month' | 'quarter'}
+        groupByDimension={heatmapDrillPath.length === 0 ? heatmapDimension : heatmapGroupBy}
+        dimensionLabel={CROSS_SELL_HEATMAP_DIMENSION_LABELS[heatmapDrillPath.length === 0 ? heatmapDimension : heatmapGroupBy]}
+        drillFilter={heatmapDrillPath}
+        onRowClick={handleHeatmapRowClick}
       />
 
       {/* 板块1：推介率驱动因子环比 */}

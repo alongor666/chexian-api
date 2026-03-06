@@ -38,7 +38,13 @@ import { usePerformanceTrend } from './hooks/usePerformanceTrend';
 import { PerformanceTrendChart } from './PerformanceTrendChart';
 import { usePerformanceTopSalesman, type PerformanceTopSalesmanRow } from './hooks/usePerformanceTopSalesman';
 import { usePerformanceBundle } from './hooks/usePerformanceBundle';
-import { usePerformanceOrgHeatmap, type PerformanceOrgHeatmapRow } from './hooks/usePerformanceOrgHeatmap';
+import {
+  usePerformanceOrgHeatmap,
+  type PerformanceOrgHeatmapRow,
+  type HeatmapDimension,
+  HEATMAP_DIMENSION_LABELS,
+  type HeatmapDrillStep,
+} from './hooks/usePerformanceOrgHeatmap';
 import {
   resolvePerformanceDrillSource,
   type PerformanceHeatmapSelection,
@@ -82,8 +88,8 @@ function getPerformanceHeatmapPeriodUnit(timePeriod: PerformanceTimePeriod): str
   }
 }
 
-export function getPerformanceHeatmapTitle(timePeriod: PerformanceTimePeriod): string {
-  return `三级机构连续${PERFORMANCE_HEATMAP_PERIOD_COUNT}${getPerformanceHeatmapPeriodUnit(timePeriod)}热力图`;
+export function getPerformanceHeatmapTitle(timePeriod: PerformanceTimePeriod, dimensionLabel = '三级机构'): string {
+  return `${dimensionLabel}连续${PERFORMANCE_HEATMAP_PERIOD_COUNT}${getPerformanceHeatmapPeriodUnit(timePeriod)}热力图`;
 }
 
 export function getPerformanceDrilldownTitle(
@@ -240,14 +246,18 @@ function PerformanceOrgHeatmap({
   error,
   growthMode,
   timePeriod,
+  dimensionLabel = '三级机构',
   onCellClick,
+  onRowClick,
 }: {
   rows: PerformanceOrgHeatmapRow[];
   loading: boolean;
   error: string | null;
   growthMode: PerformanceGrowthMode;
   timePeriod: PerformanceTimePeriod;
+  dimensionLabel?: string;
   onCellClick?: (payload: { org: string; date: string }) => void;
+  onRowClick?: (org: string) => void;
 }) {
   const [metric, setMetric] = useState<HeatmapMetric>('growth');
   const [activeCell, setActiveCell] = useState<{ org: string; date: string } | null>(null);
@@ -350,10 +360,10 @@ function PerformanceOrgHeatmap({
           onMouseLeave={() => setHoverCell(null)}
           className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
           style={{
-          backgroundColor: getHeatmapStateColor(state),
-          borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
-          boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
-        }}
+            backgroundColor: getHeatmapStateColor(state),
+            borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
+            boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
+          }}
         >
           {row.achievementRate === null ? '-' : formatPercent(row.achievementRate)}
         </button>
@@ -406,7 +416,7 @@ function PerformanceOrgHeatmap({
           <table className="w-full min-w-[1120px] text-xs border-separate border-spacing-1">
             <thead>
               <tr>
-                <th className={cn('px-2 py-2 text-left sticky left-0 bg-white z-10', colorClasses.text.neutralDark)}>三级机构</th>
+                <th className={cn('px-2 py-2 text-left sticky left-0 bg-white z-10', colorClasses.text.neutralDark)}>{dimensionLabel}</th>
                 {orgRows.dates.map((date) => {
                   let headerLabel: string;
                   if (timePeriod === 'month') {
@@ -445,7 +455,15 @@ function PerformanceOrgHeatmap({
                 const orgLine = orgRows.matrix.get(org);
                 return (
                   <tr key={org}>
-                    <td className={cn('px-2 py-1 sticky left-0 bg-white z-10 whitespace-nowrap', colorClasses.text.neutralDark)}>{org}</td>
+                    <td
+                      className={cn(
+                        'px-2 py-1 sticky left-0 bg-white z-10 whitespace-nowrap',
+                        colorClasses.text.neutralDark,
+                        onRowClick ? 'cursor-pointer hover:text-primary hover:underline' : ''
+                      )}
+                      onClick={onRowClick ? () => onRowClick(org) : undefined}
+                      title={onRowClick ? `点击下钻 ${org}` : undefined}
+                    >{org}</td>
                     {orgRows.dates.map((date) => (
                       <td key={`${org}-${date}`} className="p-0.5 min-w-[84px]">
                         {renderCell(org, date, orgLine?.get(date))}
@@ -499,18 +517,20 @@ function mapTimePeriodToTrendGranularity(timePeriod: PerformanceTimePeriod): 'da
 
 function SectionTitle({
   title,
+  leftContent,
   rightContent,
 }: {
   title: string;
+  leftContent?: ReactNode;
   rightContent?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-      <div className="flex items-center gap-2 min-w-0">
-        <h2 className={cn(textStyles.titleSmall, 'font-semibold')}>{title}</h2>
-        <div className={cn('flex-1 h-px min-w-[48px]', colorClasses.bg.neutralLight)} />
-      </div>
-      {rightContent}
+    <div className="flex items-center gap-3 mb-3">
+      {leftContent && <div className="flex items-center gap-2 flex-shrink-0">{leftContent}</div>}
+      <div className={cn('flex-1 h-px', colorClasses.bg.neutralLight)} />
+      <h2 className={cn(textStyles.titleSmall, 'font-semibold whitespace-nowrap')}>{title}</h2>
+      <div className={cn('flex-1 h-px', colorClasses.bg.neutralLight)} />
+      {rightContent && <div className="flex items-center gap-2 flex-shrink-0">{rightContent}</div>}
     </div>
   );
 }
@@ -904,11 +924,56 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     enabled: isDataLoaded && ENABLE_BUNDLE_ROUTES,
   });
 
+  const [heatmapDimension, setHeatmapDimension] = useState<HeatmapDimension>('org_level_3');
+  // 热力图下钻状态
+  const [heatmapDrillPath, setHeatmapDrillPath] = useState<HeatmapDrillStep[]>([]);
+  const [heatmapGroupBy, setHeatmapGroupBy] = useState<HeatmapDimension>('org_level_3');
+  const [showHeatmapPicker, setShowHeatmapPicker] = useState(false);
+  const [pendingHeatmapRow, setPendingHeatmapRow] = useState<string | null>(null);
+
+  const PERF_HEATMAP_DRILL_DIMENSIONS: { key: HeatmapDimension; label: string }[] = [
+    { key: 'team', label: '团队' },
+    { key: 'salesman', label: '业务员' },
+    { key: 'customer_category', label: '客户类别' },
+    { key: 'coverage_combination', label: '险别组合' },
+    { key: 'energy_type', label: '能源类型' },
+    { key: 'business_nature', label: '新转续' },
+  ];
+
+  const handlePerfHeatmapRowClick = (org: string) => {
+    setPendingHeatmapRow(org);
+    setShowHeatmapPicker(true);
+  };
+
+  const handlePerfHeatmapDimSelect = (dim: HeatmapDimension) => {
+    if (!pendingHeatmapRow) return;
+    const newStep: HeatmapDrillStep = { dimension: heatmapGroupBy, value: pendingHeatmapRow };
+    setHeatmapDrillPath((prev) => [...prev, newStep]);
+    setHeatmapGroupBy(dim);
+    setShowHeatmapPicker(false);
+    setPendingHeatmapRow(null);
+  };
+
+  const handlePerfHeatmapBreadcrumbClick = (index: number) => {
+    if (index < 0) {
+      setHeatmapDrillPath([]);
+      setHeatmapGroupBy('org_level_3');
+      return;
+    }
+    const nextDim = heatmapDrillPath[index + 1]?.dimension as HeatmapDimension | undefined;
+    setHeatmapDrillPath(heatmapDrillPath.slice(0, index + 1));
+    if (nextDim) setHeatmapGroupBy(nextDim);
+  };
+
+  const activeHeatmapGroupBy = heatmapDrillPath.length === 0 ? heatmapDimension : heatmapGroupBy;
+
   const heatmapQuery = usePerformanceOrgHeatmap({
     filters,
     segmentTag,
     growthMode,
     timePeriod,
+    groupByDimension: activeHeatmapGroupBy,
+    drillFilter: heatmapDrillPath,
     enabled: isDataLoaded,
   });
 
@@ -1108,14 +1173,76 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   return (
     <div className="space-y-5">
-      <SectionTitle title={getPerformanceHeatmapTitle(timePeriod)} />
+      <SectionTitle
+        title={getPerformanceHeatmapTitle(timePeriod, HEATMAP_DIMENSION_LABELS[activeHeatmapGroupBy])}
+        leftContent={
+          heatmapDrillPath.length === 0 ? (
+            <Tabs
+              items={(Object.entries(HEATMAP_DIMENSION_LABELS) as [HeatmapDimension, string][]).map(([key, label]) => ({ key, label }))}
+              activeKey={heatmapDimension}
+              onChange={(key) => { setHeatmapDimension(key as HeatmapDimension); setHeatmapGroupBy(key as HeatmapDimension); }}
+              variant="pills"
+              size="mini"
+            />
+          ) : (
+            <div className="flex items-center gap-1 text-xs text-neutral-500">
+              <button
+                className="hover:text-primary hover:underline cursor-pointer"
+                onClick={() => handlePerfHeatmapBreadcrumbClick(-1)}
+              >
+                全部
+              </button>
+              {heatmapDrillPath.map((step, i) => (
+                <React.Fragment key={i}>
+                  <span>/</span>
+                  <button
+                    className={cn(
+                      'hover:text-primary hover:underline cursor-pointer',
+                      i === heatmapDrillPath.length - 1 ? 'text-neutral-700 dark:text-neutral-200 font-medium' : ''
+                    )}
+                    onClick={() => handlePerfHeatmapBreadcrumbClick(i)}
+                  >
+                    {step.value}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+          )
+        }
+      />
+      {showHeatmapPicker && (
+        <div className={cn(cardStyles.base, 'p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800')}>
+          <p className="text-xs text-neutral-600 dark:text-neutral-300 mb-2">
+            选择 <strong>{pendingHeatmapRow}</strong> 的下钻维度：
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {PERF_HEATMAP_DRILL_DIMENSIONS.filter((d) => d.key !== activeHeatmapGroupBy).map((d) => (
+              <button
+                key={d.key}
+                className="px-3 py-1 text-xs rounded-full bg-white dark:bg-neutral-800 border border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer"
+                onClick={() => handlePerfHeatmapDimSelect(d.key)}
+              >
+                {d.label}
+              </button>
+            ))}
+            <button
+              className="px-3 py-1 text-xs rounded-full bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 cursor-pointer"
+              onClick={() => { setShowHeatmapPicker(false); setPendingHeatmapRow(null); }}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
       <PerformanceOrgHeatmap
         rows={heatmapQuery.rows}
         loading={heatmapQuery.loading}
         error={heatmapQuery.error}
         growthMode={growthMode}
         timePeriod={timePeriod}
+        dimensionLabel={HEATMAP_DIMENSION_LABELS[activeHeatmapGroupBy]}
         onCellClick={handleHeatmapCellClick}
+        onRowClick={handlePerfHeatmapRowClick}
       />
 
       {heatmapSelection && (

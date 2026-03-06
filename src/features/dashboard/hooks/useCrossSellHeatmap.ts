@@ -1,8 +1,8 @@
 /**
  * 交叉销售热力图 Hook
  *
- * 返回最近14个时段所有三级机构的热力图数据
- * 支持车辆类别、座位险保额、时间粒度过滤
+ * 返回最近15个时段所有分组维度的热力图数据
+ * 支持车辆类别、座位险保额、时间粒度过滤、维度切换
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -14,6 +14,21 @@ import { queryKeys } from '@/shared/api/query-keys';
 import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePeriod';
 
 export type CrossSellHeatmapTimePeriod = 'day' | 'week' | 'month' | 'quarter';
+
+export interface CrossSellHeatmapDrillStep {
+  dimension: string;
+  value: string;
+}
+
+export type CrossSellHeatmapDimension = 'org_level_3' | 'customer_category' | 'coverage_combination' | 'energy_type' | 'business_nature';
+
+export const CROSS_SELL_HEATMAP_DIMENSION_LABELS: Record<CrossSellHeatmapDimension, string> = {
+  org_level_3: '三级机构',
+  customer_category: '客户类别',
+  coverage_combination: '险别组合',
+  energy_type: '能源类型',
+  business_nature: '新转续',
+};
 
 export interface HeatmapPoint {
   date: string;
@@ -30,6 +45,8 @@ interface UseCrossSellHeatmapProps {
   vehicleCategory: VehicleCategory;
   seatCoverageLevel?: SeatCoverageLevel;
   timePeriod?: CrossSellHeatmapTimePeriod;
+  groupByDimension?: CrossSellHeatmapDimension;
+  drillFilter?: CrossSellHeatmapDrillStep[];
   enabled?: boolean;
 }
 
@@ -44,6 +61,8 @@ export function useCrossSellHeatmap({
   vehicleCategory,
   seatCoverageLevel,
   timePeriod = 'day',
+  groupByDimension = 'org_level_3',
+  drillFilter = [],
   enabled = true,
 }: UseCrossSellHeatmapProps): UseCrossSellHeatmapReturn {
   const { isOrgUser, userOrg } = useRBAC();
@@ -54,6 +73,8 @@ export function useCrossSellHeatmap({
     ...baseParams,
     vehicleCategory,
     timePeriod,
+    groupByDimension,
+    drillFilter: JSON.stringify(drillFilter),
   };
   if (seatCoverageLevel) {
     params.seatCoverageLevel = seatCoverageLevel;
