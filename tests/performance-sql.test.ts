@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   generatePerformanceDrilldownQuery,
+  generatePerformanceOrgHeatmapQuery,
   generatePerformancePeriodBoundsQuery,
   generatePerformanceSummaryQuery,
   generatePerformanceTopSalesmanQuery,
@@ -146,5 +147,10 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('AS current_end');
     expect(sql).toContain('AS prev_start');
     expect(sql).toContain('AS prev_end');
+  });
+
+  it('heatmap SQL should default to 15 consecutive periods', () => {
+    const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day');
+    expect(sql).toContain('INTERVAL 14 DAY');
   });
 });

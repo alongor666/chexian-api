@@ -1,0 +1,12 @@
+{
+  "heatmapTitle": "三级机构连续15天热力图",
+  "pickerTitle": "热力图下钻：资阳（2026-02-19）",
+  "hasBusinessmanOption": true,
+  "drilldownTitle": "下钻分析（已选维度：业务员 · 热力图机构：资阳）",
+  "drillRequestCount": 1,
+  "latestDrillRequest": {
+    "url": "https://chexian.cretvalu.com/api/query/performance-drilldown?drillPath=%5B%7B%22dimension%22%3A%22org_level_3%22%2C%22value%22%3A%22%E8%B5%84%E9%98%B3%22%7D%5D&groupBy=salesman&dateField=policy_date&startDate=2026-02-19&endDate=2026-02-19&segmentTag=all&timePeriod=day&growthMode=mom",
+    "status": 200,
+    "method": "GET"
+  }
+}

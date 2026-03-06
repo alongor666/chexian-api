@@ -1069,7 +1069,7 @@ class ApiClient {
   }
 
   /**
-   * 获取业绩分析 - 三级机构14天热力图
+   * 获取业绩分析 - 三级机构15周期热力图
    */
   async getPerformanceOrgHeatmap(params?: Record<string, string>): Promise<{
     rows: Array<{

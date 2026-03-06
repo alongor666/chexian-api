@@ -63,6 +63,45 @@ export function resolvePerformanceDrilldownPrefetched(
   return useLegacyDrilldown ? undefined : prefetched;
 }
 
+export const PERFORMANCE_HEATMAP_PERIOD_COUNT = 15;
+
+function getPerformanceHeatmapPeriodUnit(timePeriod: PerformanceTimePeriod): string {
+  switch (timePeriod) {
+    case 'day':
+      return '天';
+    case 'week':
+      return '周';
+    case 'month':
+      return '月';
+    case 'quarter':
+      return '季度';
+    case 'year':
+      return '年';
+    default:
+      return '天';
+  }
+}
+
+export function getPerformanceHeatmapTitle(timePeriod: PerformanceTimePeriod): string {
+  return `三级机构连续${PERFORMANCE_HEATMAP_PERIOD_COUNT}${getPerformanceHeatmapPeriodUnit(timePeriod)}热力图`;
+}
+
+export function getPerformanceDrilldownTitle(
+  currentGroupBy: PerformanceDimension | null,
+  currentDimensionLabel: string,
+  heatmapSelection: PerformanceHeatmapSelection | null
+): string {
+  if (!currentGroupBy) {
+    return '下钻分析';
+  }
+
+  const details = [`已选维度：${currentDimensionLabel}`];
+  if (heatmapSelection?.org) {
+    details.push(`热力图机构：${heatmapSelection.org}`);
+  }
+  return `下钻分析（${details.join(' · ')}）`;
+}
+
 const SEGMENT_TABS: TabItem[] = [
   { key: 'all', label: '全部' },
   { key: 'non_business_passenger', label: '非营客' },
@@ -925,6 +964,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   useEffect(() => {
     setHasDrillInteraction(false);
+    setPendingRowValue(null);
+    setShowPicker(false);
     setHeatmapSelection(null);
     drilldownQuery.reset();
   }, [segmentTag, timePeriod, growthMode]);
@@ -1036,18 +1077,10 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   };
 
   const handleHeatmapCellClick = ({ org, date }: { org: string; date: string }) => {
-    setHeatmapSelection({ org, date });
-  };
-
-  const handleHeatmapQuickDrill = (dimension: PerformanceDimension) => {
-    if (!heatmapSelection) return;
-    setHasDrillInteraction(true);
-    drilldownQuery.drillFromRoot(heatmapSelection.org, dimension, 'org_level_3');
-  };
-
-  const handleHeatmapFreeDrill = () => {
-    if (!heatmapSelection) return;
+    setHasDrillInteraction(false);
     setPendingRowValue(null);
+    setHeatmapSelection({ org, date });
+    drilldownQuery.reset();
     setShowPicker(true);
   };
 
@@ -1075,7 +1108,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   return (
     <div className="space-y-5">
-      <SectionTitle title={`三级机构连续14${timePeriod === 'day' ? '天' : timePeriod === 'week' ? '周' : timePeriod === 'month' ? '月' : timePeriod === 'quarter' ? '季度' : '天'}热力图`} />
+      <SectionTitle title={getPerformanceHeatmapTitle(timePeriod)} />
       <PerformanceOrgHeatmap
         rows={heatmapQuery.rows}
         loading={heatmapQuery.loading}
@@ -1095,24 +1128,10 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => handleHeatmapQuickDrill('salesman')}
+                onClick={() => setShowPicker(true)}
                 className={cn('px-3 py-1.5 text-sm rounded-lg border transition-colors', colorClasses.border.primary, colorClasses.text.primary)}
               >
-                下钻到业务员
-              </button>
-              <button
-                type="button"
-                onClick={() => handleHeatmapQuickDrill('customer_category')}
-                className={cn('px-3 py-1.5 text-sm rounded-lg border transition-colors', colorClasses.border.primary, colorClasses.text.primary)}
-              >
-                下钻到客户类别
-              </button>
-              <button
-                type="button"
-                onClick={handleHeatmapFreeDrill}
-                className={cn('px-3 py-1.5 text-sm rounded-lg border transition-colors', colorClasses.border.neutral, colorClasses.text.neutralDark)}
-              >
-                自由选择下钻维度
+                选择下钻维度
               </button>
             </div>
           </div>
@@ -1238,7 +1257,11 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         />
       </div>
 
-      <SectionTitle title="下钻分析" />
+      <SectionTitle title={getPerformanceDrilldownTitle(
+        drilldownQuery.currentGroupBy,
+        currentDimensionLabel,
+        heatmapSelection
+      )} />
       <DistributionChart rows={drilldownQuery.rows} loading={drilldownLoading} error={drilldownError} />
 
       <section className={cn(cardStyles.standard, 'space-y-3')}>
@@ -1457,7 +1480,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           }}
           title={
             heatmapSelection
-              ? `热力图下钻：${heatmapSelection.org}`
+              ? `热力图下钻：${heatmapSelection.org}（${heatmapSelection.date}）`
               : (pendingRowValue === null ? '选择分组维度' : `继续下钻：${pendingRowValue}`)
           }
         />

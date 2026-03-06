@@ -1198,7 +1198,7 @@ export function generatePerformanceOrgHeatmapQuery(
   whereWithoutDate: string,
   segmentTag: PerformanceSegmentTag,
   timePeriod: PerformanceTimePeriod = 'day',
-  periods = 14
+  periods = 15
 ): string {
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
   const safePeriods = Math.max(7, Math.min(31, Math.floor(periods)));
