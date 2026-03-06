@@ -162,7 +162,7 @@ async function main() {
     }
 
     await ensureVisible(page.getByRole('heading', { name: '三级机构连续14天热力图' }), options.timeoutMs, 'heatmap title');
-    const growthTab = page.getByRole('tab', { name: '增长率', exact: true });
+    const growthTab = page.getByRole('tab', { name: /增长率/ });
     const achievementTab = page.getByRole('tab', { name: '计划达成率', exact: true });
     const premiumTab = page.getByRole('tab', { name: '保费规模', exact: true });
     await ensureVisible(growthTab, options.timeoutMs, 'growth tab');
