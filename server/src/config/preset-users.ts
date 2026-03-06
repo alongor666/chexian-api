@@ -27,7 +27,7 @@ export const PRESET_ROLES: PresetRole[] = [
 export const PRESET_USERS: Record<string, PresetUser> = {
   admin: {
     username: 'admin',
-    passwordHash: '$2b$10$X.cHV7Z0RpL8geG2lrDBsuLXNW6rnbd1x1z.d8hmucvMazpbvUTU2',
+    passwordHash: '$2b$10$04CoRcf7Hk9iSiPD6QWRmelsAGNWoqJ3DGB5Mvfjcc/CH6GEJRUC6',
     displayName: '系统管理员',
     role: 'branch_admin',
   },

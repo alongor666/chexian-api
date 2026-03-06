@@ -1,0 +1,12 @@
+{
+  "startedAt": "2026-03-06T01:01:02.989Z",
+  "baseUrl": "https://chexian.cretvalu.com",
+  "targetPath": "/#/performance-analysis",
+  "reportPath": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/output/playwright/vps-heatmap-verify-20260306_090102.json",
+  "screenshotPath": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/output/playwright/vps-heatmap-verify-20260306_090102.png",
+  "networkPath": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/output/playwright/vps-heatmap-verify-network-20260306_090102.log",
+  "checks": {},
+  "status": "failed",
+  "endedAt": "2026-03-06T01:01:54.445Z",
+  "error": "locator.waitFor: Timeout 45000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: '增长率', exact: true }).first() to be visible\u001b[22m\n"
+}
