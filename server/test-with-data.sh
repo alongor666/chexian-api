@@ -6,7 +6,7 @@ echo "=== Testing APIs with Real Data ==="
 echo -e "\n1. Login as admin..."
 TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  --data-raw '{"username":"admin","password":"admin123"}' | jq -r '.data.token')
+  --data-raw '{"username":"admin","password":"CxAdmin@2026!"}' | jq -r '.data.token')
 
 echo "Token: ${TOKEN:0:50}..."
 

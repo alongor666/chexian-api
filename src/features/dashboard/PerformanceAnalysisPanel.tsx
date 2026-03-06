@@ -39,6 +39,10 @@ import { PerformanceTrendChart } from './PerformanceTrendChart';
 import { usePerformanceTopSalesman, type PerformanceTopSalesmanRow } from './hooks/usePerformanceTopSalesman';
 import { usePerformanceBundle } from './hooks/usePerformanceBundle';
 import { usePerformanceOrgHeatmap, type PerformanceOrgHeatmapRow } from './hooks/usePerformanceOrgHeatmap';
+import {
+  resolvePerformanceDrillSource,
+  type PerformanceHeatmapSelection,
+} from './utils/performanceHeatmapSelection';
 
 interface PerformanceAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -836,7 +840,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const [topSortKey, setTopSortKey] = useState<TopSortKey>('achievement_rate');
   const [topSortOrder, setTopSortOrder] = useState<SortOrder>('asc');
   const [hasDrillInteraction, setHasDrillInteraction] = useState(false);
-  const [heatmapSelection, setHeatmapSelection] = useState<{ org: string; date: string } | null>(null);
+  const [heatmapSelection, setHeatmapSelection] = useState<PerformanceHeatmapSelection | null>(null);
 
   const trendGranularity = useMemo(() => mapTimePeriodToTrendGranularity(timePeriod), [timePeriod]);
   const fallbackToLegacy = !ENABLE_BUNDLE_ROUTES;
@@ -889,6 +893,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     segmentTag,
     timePeriod,
     growthMode,
+    heatmapSelection,
     prefetched: drilldownPrefetched,
     enabled: isDataLoaded && useLegacyDrilldown,
   });
@@ -1006,12 +1011,13 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   const handleDimensionSelect = (dimension: PerformanceDimension) => {
     setHasDrillInteraction(true);
-    if (pendingRowValue === null && heatmapSelection === null) {
-      drilldownQuery.selectDimension(dimension);
-    } else if (heatmapSelection) {
+    const drillSource = resolvePerformanceDrillSource(pendingRowValue, heatmapSelection);
+    if (drillSource === 'row' && pendingRowValue !== null) {
+      drilldownQuery.drillDown(pendingRowValue, dimension);
+    } else if (drillSource === 'heatmap' && heatmapSelection) {
       drilldownQuery.drillFromRoot(heatmapSelection.org, dimension, 'org_level_3');
     } else {
-      drilldownQuery.drillDown(pendingRowValue, dimension);
+      drilldownQuery.selectDimension(dimension);
     }
     setPendingRowValue(null);
     setShowPicker(false);
@@ -1035,6 +1041,9 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   const handleDrillReset = () => {
     setHasDrillInteraction(false);
+    setPendingRowValue(null);
+    setShowPicker(false);
+    setHeatmapSelection(null);
     drilldownQuery.reset();
   };
 

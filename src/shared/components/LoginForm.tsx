@@ -13,7 +13,7 @@ interface LoginFormProps {
 export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   const { login, isLoading, error } = useAuth();
   const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [password, setPassword] = useState('CxAdmin@2026!');
   const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -97,7 +97,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
           </button>
 
           <p className="text-center text-xs font-mono text-neutral-500 dark:text-neutral-400">
-            默认账号: admin / admin123
+            默认账号: admin / CxAdmin@2026!
           </p>
         </form>
       </div>

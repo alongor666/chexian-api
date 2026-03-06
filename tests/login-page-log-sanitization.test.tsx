@@ -41,11 +41,11 @@ describe('LoginPage log sanitization', () => {
     );
 
     fireEvent.change(screen.getByLabelText('用户名'), { target: { value: 'admin' } });
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'admin123' } });
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'CxAdmin@2026!' } });
     fireEvent.click(screen.getByRole('button', { name: '登录' }));
 
     await waitFor(() => {
-      expect(loginWithPassword).toHaveBeenCalledWith('admin', 'admin123', true);
+      expect(loginWithPassword).toHaveBeenCalledWith('admin', 'CxAdmin@2026!', true);
     });
 
     expect(debugSpy).toHaveBeenCalledWith('Login succeeded, navigate to target path', {

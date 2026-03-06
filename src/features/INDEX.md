@@ -207,6 +207,7 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/crossSellRateStatus.ts`**: 驾乘险推介率统一状态规则（主全/交三阈值、状态文案、四象限分类与配色）
 - **`dashboard/CrossSellSummaryKpiBoard.tsx`**: 推介率驱动因子环比看板（2026-02-25 新增环比功能：当日/周/月视角显示绝对值+百分比变化，格式如 `↑ +8.3, +7.1%`）
 - **`filters/PageHeaderBar.tsx`**: 页面标题栏组件（2026-02-25 新增：动态标题根据筛选范围显示，sticky top-0 置顶，已筛选条件 chips 展示）
+- **`dashboard/utils/performanceHeatmapSelection.ts`**: 绩效热力图选择工具（将热力图时间桶映射为签单日期范围，并统一下钻来源判定，避免日期丢失与行下钻被热力图上下文抢占）
 
 ### Coefficient 模块（商车自主定价系数监控）
 
