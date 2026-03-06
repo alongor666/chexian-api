@@ -2,7 +2,7 @@
 
 **状态机思维**：记录里程碑、阻塞点、下一步接力入口。详细任务追踪请查看 [BACKLOG.md](./BACKLOG.md)。
 
-**最后更新时间**: 2026-03-03（B216）
+**最后更新时间**: 2026-03-06（B217）
 
 ---
 
@@ -50,6 +50,7 @@
 | 2026-02-28 | 综合分析页一体化交付完成 (B214) | 新增 `/comprehensive-analysis` 页面与 `comprehensive-bundle` 双路由（含别名），完成6模块复刻、成本页入口、灰度开关与适配层测试 | 代码证据：`server/src/sql/comprehensive-analysis.ts`、`server/src/routes/query.ts`、`src/features/comprehensive-analysis/*`、`src/features/pages/ComprehensiveAnalysisPage.tsx`、`tests/comprehensive/*` |
 | 2026-03-03 | 全环境实时聚合闭环交付完成 (B215) | 后端固定实时聚合、子页面首次打开无需刷新、压测门槛与证据链全部收口 | 验证证据：`bun run test --run`（743/743）+ `bun run build` + `bun run governance` + `tests/e2e/04-subpage-no-refresh.spec.ts`；性能证据：`artifacts/perf/benchmark-key-routes-2026-03-02_21-36-27-008.json`、`artifacts/perf/benchmark-key-routes-soak-2026-03-02_21-49-52-153.json` |
 | 2026-03-03 | 生产级门禁基线落地完成 (B216) | 新增统一 `production:gate` 脚本并接入 `production-gate.yml`，把治理/构建/全量测试/关键 E2E 串成单命令闭环，同时修复子页面导航 E2E 竞态 | 代码证据：`scripts/production-gate.mjs`、`package.json`、`.github/workflows/production-gate.yml`、`tests/e2e/04-subpage-no-refresh.spec.ts`；运行证据：`bun run production:gate` 全绿 |
+| 2026-03-06 | 端到端回归与测试基线修复完成 (B217) | Playwright 全量 E2E 5/5 通过；修复 Vitest 误扫 `.claude/worktrees` 导致的工作树测试污染 | 代码证据：`vite.config.ts`；运行证据：`bun run test:e2e --reporter=line` 5/5、`bun run test -- --run` 不再收录 `.claude/worktrees/loving-satoshi/tests/e2e/*.spec.ts` |
 | 2026-02-26 | 驾乘险推介率布局优化 (B309) | 将客户类别等标签移到页面标题下方靠左对齐，筛选器条件右置，统一两区域Tabs和小chips块字体样式(@gemini) | `src/features/pages/CrossSellPage.tsx` 布局优化；`Tabs.tsx`增加 `size="mini"` |
 | 2026-02-26 | 驾乘险推介率标签选项扩充 (B310) | 客户类别和车上责任增加“全部”/“不分保额”，支持全量数据查看(@gemini) | 修改 `CrossSellPage` 默认状态，更新前端组件、Zod校验及后端 `cross-sell-summary` SQL逻辑 |
 
