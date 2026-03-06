@@ -2635,11 +2635,12 @@ router.get(
  * GET /api/query/cross-sell-heatmap
  * 交叉销售热力图（最近14天 × 所有三级机构，推介率/件均保费）
  */
+const CROSS_SELL_HEATMAP_DIMENSIONS = ['org_level_3', 'team', 'salesman', 'customer_category', 'coverage_combination', 'energy_type', 'business_nature'] as const;
 const crossSellHeatmapSchema = z.object({
   vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
   seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional(),
   timePeriod: z.enum(['day', 'week', 'month', 'quarter']).default('day'),
-  groupByDimension: z.enum(HEATMAP_DIMENSIONS).default('org_level_3'),
+  groupByDimension: z.enum(CROSS_SELL_HEATMAP_DIMENSIONS).default('org_level_3'),
   drillFilter: z.string().optional().default('[]'),
 });
 

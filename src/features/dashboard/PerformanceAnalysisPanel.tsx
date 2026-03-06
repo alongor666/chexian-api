@@ -262,6 +262,7 @@ function PerformanceOrgHeatmap({
   const [metric, setMetric] = useState<HeatmapMetric>('growth');
   const [activeCell, setActiveCell] = useState<{ org: string; date: string } | null>(null);
   const [hoverCell, setHoverCell] = useState<{ org: string; date: string } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const orgRows = useMemo(() => {
     const dateSet = new Set<string>();
@@ -295,6 +296,12 @@ function PerformanceOrgHeatmap({
       matrix: orgMap,
     };
   }, [rows, metric, growthMode]);
+
+  // 数据变化时自动滚动到最右（最新日期）
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = el.scrollWidth - el.clientWidth;
+  }, [orgRows.dates.length, timePeriod]);
 
   const focusDate = activeCell?.date ?? hoverCell?.date ?? null;
   const focusWeekday = focusDate && timePeriod === 'day' ? getWeekdayKey(focusDate) : null;
@@ -412,8 +419,8 @@ function PerformanceOrgHeatmap({
       </div>
       {error && <p className={cn(textStyles.body, colorClasses.text.danger)}>加载失败: {error}</p>}
       {!error && (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-xs border-separate border-spacing-1">
+        <div ref={scrollRef} className="overflow-x-auto">
+          <table className="w-full text-xs border-separate border-spacing-1" style={{ minWidth: `${100 + orgRows.dates.length * 72}px` }}>
             <thead>
               <tr>
                 <th className={cn('px-2 py-2 text-left sticky left-0 bg-white z-10', colorClasses.text.neutralDark)}>{dimensionLabel}</th>
@@ -932,6 +939,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const [pendingHeatmapRow, setPendingHeatmapRow] = useState<string | null>(null);
 
   const PERF_HEATMAP_DRILL_DIMENSIONS: { key: HeatmapDimension; label: string }[] = [
+    { key: 'org_level_3', label: '三级机构' },
     { key: 'team', label: '团队' },
     { key: 'salesman', label: '业务员' },
     { key: 'customer_category', label: '客户类别' },
