@@ -4,6 +4,10 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
+import {
+  applyPerformanceHeatmapSelectionToParams,
+  type PerformanceHeatmapSelection,
+} from '../utils/performanceHeatmapSelection';
 import type {
   PerformanceGrowthMode,
   PerformanceSegmentTag,
@@ -99,6 +103,7 @@ interface UsePerformanceDrilldownProps {
   segmentTag: PerformanceSegmentTag;
   timePeriod: PerformanceTimePeriod;
   growthMode: PerformanceGrowthMode;
+  heatmapSelection?: PerformanceHeatmapSelection | null;
   prefetched?: {
     summary: Record<string, unknown> | null;
     rows: Array<Record<string, unknown>>;
@@ -148,6 +153,7 @@ export function usePerformanceDrilldown({
   segmentTag,
   timePeriod,
   growthMode,
+  heatmapSelection = null,
   prefetched,
   enabled = true,
 }: UsePerformanceDrilldownProps): UsePerformanceDrilldownReturn {
@@ -177,7 +183,11 @@ export function usePerformanceDrilldown({
 
   // 构建 API 请求参数（drillPath/currentGroupBy 变化时 query key 自动失效）
   const apiParams = useMemo(() => {
-    const filterParams = buildFilterParams(filters, { isOrgUser, userOrg });
+    const filterParams = applyPerformanceHeatmapSelectionToParams(
+      buildFilterParams(filters, { isOrgUser, userOrg }),
+      heatmapSelection,
+      timePeriod
+    );
     delete filterParams.customerCategories;
     return {
       ...filterParams,
@@ -187,7 +197,7 @@ export function usePerformanceDrilldown({
       timePeriod,
       growthMode,
     };
-  }, [filters, isOrgUser, userOrg, drillPath, currentGroupBy, segmentTag, timePeriod, growthMode]);
+  }, [filters, isOrgUser, userOrg, heatmapSelection, timePeriod, drillPath, currentGroupBy, segmentTag, growthMode]);
 
   // useQuery 替代手动 fetch + fetchIdRef，自动处理竞态和缓存
   const { data: queryData, isLoading, error: queryError } = useQuery({

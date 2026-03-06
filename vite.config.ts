@@ -70,6 +70,8 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
+      '.claude/**',
+      '**/.claude/**',
       'tests/e2e/**',
     ],
     browser: {

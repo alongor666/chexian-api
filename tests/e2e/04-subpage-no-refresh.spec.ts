@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
-const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'admin123';
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'CxAdmin@2026!';
 
 const waitForBackendReady = async (page: Page) => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
