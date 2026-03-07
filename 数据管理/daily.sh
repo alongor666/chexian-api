@@ -114,9 +114,15 @@ echo ""
 # 7. 运行本地预聚合 (export-for-vps.mjs)
 # 确保在上传之前在本地计算好所有聚合数据，防止 VPS 资源爆炸及数据不一致
 # ============================================================
-echo -e "${GREEN}▶ 步骤 3: 运行预聚合数据导出...${NC}"
-(cd .. && node scripts/export-for-vps.mjs)
-echo ""
+EXPORT_SCRIPT="$(dirname "$SCRIPT_DIR")/scripts/export-for-vps.mjs"
+if [[ -f "$EXPORT_SCRIPT" ]]; then
+    echo -e "${GREEN}▶ 步骤 3: 运行预聚合数据导出...${NC}"
+    (cd "$(dirname "$SCRIPT_DIR")" && node scripts/export-for-vps.mjs)
+    echo ""
+else
+    echo -e "${YELLOW}⚠ 未找到 scripts/export-for-vps.mjs，跳过预聚合导出${NC}"
+    echo ""
+fi
 
 # ============================================================
 # 8. 同步 current/ 下所有基础明细 parquet 以及 vps-export/ 下的预聚合 parquet 到 VPS

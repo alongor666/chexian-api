@@ -11,7 +11,7 @@
  */
 
 import { execSync, spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { platform } from 'os';
 import { fileURLToPath } from 'url';
@@ -39,13 +39,14 @@ function main() {
   log('blue', '═'.repeat(60));
   console.log('');
   
-  // 检查必要的数据文件
-  const sourceFiles = ['续保类型匹配至2026年4月.xlsx', '车险2526年清单更新至20260302.xlsx'];
-  const missingFiles = sourceFiles.filter(f => !existsSync(join(scriptDir, f)));
-  
-  if (missingFiles.length > 0) {
-    log('yellow', '提示: 以下数据文件未找到:');
-    missingFiles.forEach(f => console.log(`  - ${f}`));
+  // 检查必要的数据文件（动态匹配，不依赖硬编码文件名）
+  const dirFiles = readdirSync(scriptDir);
+  const hasSource = dirFiles.some(f => f.startsWith('续保类型匹配') && f.endsWith('.xlsx'));
+  const hasDaily = dirFiles.some(f => f.startsWith('车险2526年清单更新至') && f.endsWith('.xlsx'));
+
+  if (!hasSource || !hasDaily) {
+    if (!hasSource) log('yellow', '提示: 未找到续保源文件（续保类型匹配*.xlsx）');
+    if (!hasDaily) log('yellow', '提示: 未找到每日清单文件（车险2526年清单更新至*.xlsx）');
     console.log('');
     log('yellow', 'ETL 将自动搜索匹配的文件名模式');
   }

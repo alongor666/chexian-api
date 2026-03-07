@@ -67,6 +67,8 @@ jobs:
             [ -d frontend/dist ] && cp -r frontend/dist frontend/dist.bak
             [ -d server/dist ] && cp -r server/dist server/dist.bak
 
+            # 清理残留临时文件（避免 root 遗留目录导致 deployer Permission denied）
+            rm -rf /tmp/dist /tmp/server
             # 解包新版本
             cd /tmp && tar -xzf deploy-bundle.tar.gz
 
