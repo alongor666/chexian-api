@@ -800,9 +800,15 @@ function DistributionChart({
 
     chart.setOption(option, true);
 
-    const handleResize = () => chart.resize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const resizeObserver = new ResizeObserver(() => {
+      chart.resize();
+    });
+    if (chartRef.current) {
+      resizeObserver.observe(chartRef.current);
+    }
+    return () => {
+      resizeObserver.disconnect();
+    };
   }, [axisRange, error, loading, points]);
 
   useEffect(() => {

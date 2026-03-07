@@ -153,4 +153,11 @@ describe('performance analysis SQL', () => {
     const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day');
     expect(sql).toContain('INTERVAL 14 DAY');
   });
+
+  it('heatmap SQL should normalize table aliases without generating double dots', () => {
+    const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'org_level_3');
+
+    expect(sql).toContain('CAST(p.org_level_3 AS VARCHAR)');
+    expect(sql).not.toContain('p..org_level_3');
+  });
 });

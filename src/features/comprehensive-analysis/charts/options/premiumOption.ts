@@ -15,7 +15,7 @@ export function buildPremiumOption(rows: ComprehensiveMetricRow[]): EChartsOptio
     xAxis: {
       type: 'category',
       data: categories,
-      axisLabel: { interval: 0, rotate: categories.length > 8 ? 25 : 0 },
+      axisLabel: { interval: 0, rotate: 0 },
     },
     yAxis: [
       {

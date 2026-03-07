@@ -439,10 +439,14 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   useEffect(() => {
     const chart = chartInstanceRef.current;
     if (!chart) return;
-    const handler = () => chart.resize();
-    window.addEventListener('resize', handler);
+    const resizeObserver = new ResizeObserver(() => {
+      chart.resize();
+    });
+    if (chartRef.current) {
+      resizeObserver.observe(chartRef.current);
+    }
     return () => {
-      window.removeEventListener('resize', handler);
+      resizeObserver.disconnect();
     };
   }, []);
 

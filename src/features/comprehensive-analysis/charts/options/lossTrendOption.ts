@@ -14,7 +14,7 @@ export function buildLossTrendOption(rows: ComprehensiveLossTrendRow[]): ECharts
     xAxis: {
       type: 'category',
       data: categories,
-      axisLabel: { interval: 0, rotate: categories.length > 8 ? 20 : 0 },
+      axisLabel: { interval: 0, rotate: 0 },
     },
     yAxis: [
       {
