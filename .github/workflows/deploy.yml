@@ -50,9 +50,9 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -t ed25519,rsa,ecdsa 162.14.113.44 >> ~/.ssh/known_hosts 2>/dev/null
 
-          VPS="root@162.14.113.44"
-          SSH="ssh -i ~/.ssh/deploy_key"
-          SCP="scp -i ~/.ssh/deploy_key"
+          VPS="deployer@162.14.113.44"
+          SSH="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key"
+          SCP="scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key"
 
           # 上传构建产物
           $SCP deploy-bundle.tar.gz $VPS:/tmp/
@@ -60,7 +60,6 @@ jobs:
           # 远程执行部署
           $SSH $VPS << 'DEPLOY'
             set -e
-            source /root/.nvm/nvm.sh
 
             cd /var/www/chexian
 
@@ -81,12 +80,11 @@ jobs:
             cp /tmp/server/package.json /var/www/chexian/server/package.json
             cp /tmp/server/ecosystem.config.cjs /var/www/chexian/server/ecosystem.config.cjs
 
-            # 安装生产依赖
-            cd /var/www/chexian/server
-            npm install --production
+            # 安装生产依赖 (通过提权脚本执行，因为 deployer 无法访问 root 的 nvm)
+            sudo /usr/local/bin/deploy-chexian-api install
 
-            # 重启后端
-            pm2 reload chexian-api
+            # 重启后端 (通过提权脚本执行)
+            sudo /usr/local/bin/deploy-chexian-api restart
 
             # 等待启动 + 健康检查（重试最多180秒，兼容多 parquet 慢启动）
             HEALTHY=false
@@ -108,7 +106,7 @@ jobs:
               mv /var/www/chexian/frontend/dist.bak /var/www/chexian/frontend/dist
               rm -rf /var/www/chexian/server/dist
               mv /var/www/chexian/server/dist.bak /var/www/chexian/server/dist
-              pm2 reload chexian-api
+              sudo /usr/local/bin/deploy-chexian-api restart
               exit 1
             fi
 

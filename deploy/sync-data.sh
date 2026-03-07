@@ -2,7 +2,7 @@
 # ============================================================
 # 车险数据分析平台 - 一键数据同步到 VPS
 # ============================================================
-# 前提：本地 ~/.ssh/config 必须配置 chexian-vps 别名（见 vps.md）
+# 前提：本地 ~/.ssh/config 必须配置 chexian-vps-deploy 别名（见 vps.md）
 # 使用方法（在本地 Mac 的 chexian-api 目录执行）：
 #   ./deploy/sync-data.sh                     # 自动同步 current/ 下最新文件
 #   ./deploy/sync-data.sh 文件路径            # 指定同步某个文件
@@ -12,8 +12,8 @@
 
 set -e
 
-# 配置（通过 ~/.ssh/config 中的 chexian-vps 别名管理密钥，无需硬编码）
-VPS_HOST="chexian-vps"
+# 配置（通过 ~/.ssh/config 中的 chexian-vps-deploy 别名管理密钥，无需硬编码）
+VPS_HOST="chexian-vps-deploy"
 VPS_DATA="/var/www/chexian/server/data"
 LOCAL_DATA="数据管理/warehouse/fact/policy/current"
 VPS_EXPORT_DIR="数据管理/warehouse/vps-export"
@@ -43,13 +43,13 @@ done
 
 # 前提检查：验证 SSH 连通性
 if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$VPS_HOST" true 2>/dev/null; then
-    echo -e "${RED}错误：无法连接 VPS（chexian-vps）${NC}"
+    echo -e "${RED}错误：无法连接 VPS（chexian-vps-deploy）${NC}"
     echo "请检查："
-    echo "  1. ~/.ssh/config 是否配置了 chexian-vps 别名"
+    echo "  1. ~/.ssh/config 是否配置了 chexian-vps-deploy 别名"
     echo "  2. ~/.ssh/chexian_deploy 私钥是否存在"
     echo "  3. VPS authorized_keys 是否包含对应公钥"
     echo ""
-    echo "验证命令: ssh chexian-vps echo ok"
+    echo "验证命令: ssh chexian-vps-deploy echo ok"
     exit 1
 fi
 
@@ -84,7 +84,7 @@ if [ "$EXPORT_MODE" = true ]; then
         echo -e "${GREEN}✓ 预聚合数据上传完成（跳过重启）${NC}"
     else
         echo -e "${YELLOW}  重启服务...${NC}"
-        ssh "$VPS_HOST" "source /root/.nvm/nvm.sh && pm2 restart chexian-api"
+        ssh "$VPS_HOST" "sudo /usr/local/bin/deploy-chexian-api restart"
 
         echo -e "${YELLOW}  验证中...${NC}"
         sleep 3
@@ -93,7 +93,7 @@ if [ "$EXPORT_MODE" = true ]; then
             echo -e "${GREEN}✓ 预聚合数据同步完成！${NC} VPS 服务运行正常"
         else
             echo -e "${RED}⚠ 上传完成，但健康检查失败，请检查 VPS 日志${NC}"
-            echo "  ssh chexian-vps 'source /root/.nvm/nvm.sh && pm2 logs chexian-api --lines 20'"
+            echo "  ssh chexian-vps-deploy 'sudo /usr/local/bin/deploy-chexian-api logs 20'"
         fi
     fi
     exit 0
@@ -150,7 +150,7 @@ if [ "$NO_RESTART" = true ]; then
 else
     # 重启 + 验证
     echo -e "${YELLOW}  重启服务...${NC}"
-    ssh "$VPS_HOST" "source /root/.nvm/nvm.sh && pm2 restart chexian-api"
+    ssh "$VPS_HOST" "sudo /usr/local/bin/deploy-chexian-api restart"
 
     echo -e "${YELLOW}  验证中...${NC}"
     sleep 3
@@ -159,6 +159,6 @@ else
         echo -e "${GREEN}✓ 同步完成！${NC} 服务运行正常"
     else
         echo -e "${RED}⚠ 上传完成，但健康检查失败，请检查 VPS 日志${NC}"
-        echo "  ssh chexian-vps 'source /root/.nvm/nvm.sh && pm2 logs chexian-api --lines 20'"
+        echo "  ssh chexian-vps-deploy 'sudo /usr/local/bin/deploy-chexian-api logs 20'"
     fi
 fi

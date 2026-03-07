@@ -495,16 +495,16 @@ bun run governance
 **本地 `~/.ssh/config` 必须包含以下配置**（缺失则所有脚本无法运行）：
 
 ```
-Host chexian-vps
+Host chexian-vps-deploy
     HostName 162.14.113.44
-    User root
+    User deployer
     IdentityFile ~/.ssh/chexian_deploy
     ServerAliveInterval 60
 ```
 
 **验证连通性**：
 ```bash
-ssh chexian-vps echo ok   # 返回 "ok" 表示配置正确
+ssh chexian-vps-deploy echo ok   # 返回 "ok" 表示配置正确
 ```
 
 ### 数据同步（本地 Mac → VPS）
@@ -542,16 +542,16 @@ bun run verify:vps:heatmap
 
 | 现象 | 原因 | 修复方式 |
 |------|------|----------|
-| `ssh: Could not resolve hostname chexian-vps` | `~/.ssh/config` 未配置别名 | 添加上方 Host 配置 |
+| `ssh: Could not resolve hostname chexian-vps-deploy` | `~/.ssh/config` 未配置别名 | 添加上方 Host 配置 |
 | `Permission denied (publickey)` | 密钥不匹配或未在 VPS 授权 | 检查 `~/.ssh/chexian_deploy` 存在；确认公钥在 VPS `~/.ssh/authorized_keys` |
 | 连接超时 | 网络/防火墙问题 | 检查腾讯云安全组是否开放 22 端口 |
-| 健康检查失败（上传后） | PM2 重启期间竞争 | 手动 `ssh chexian-vps "pm2 logs chexian-api --lines 20"` 查看错误 |
+| 健康检查失败（上传后） | PM2 重启期间竞争 | 手动 `ssh chexian-vps-deploy "sudo /usr/local/bin/deploy-chexian-api logs 20"` 查看错误 |
 
 ### 相关文件
 
 | 文件 | 说明 |
 |------|------|
-| [deploy/sync-data.sh](deploy/sync-data.sh) | 数据同步脚本（使用 `chexian-vps` 别名） |
+| [deploy/sync-data.sh](deploy/sync-data.sh) | 数据同步脚本（使用 `chexian-vps-deploy` 别名） |
 | [数据管理/run.sh](数据管理/run.sh) | 完整数据处理链路（enrich + transform + sync） |
 | [deploy/vps-deploy.sh](deploy/vps-deploy.sh) | VPS 全量部署脚本 |
 | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | 完整部署步骤文档 |

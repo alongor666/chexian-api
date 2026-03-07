@@ -43,17 +43,18 @@
 ## SSH 访问
 
 ```bash
-# 从 Mac 连接
-ssh -i ~/.ssh/id_ed25519 root@162.14.113.44
+# 从 Mac 连接 (更推荐使用 SSH 别名：ssh chexian-vps-deploy)
+ssh -i ~/.ssh/chexian_deploy deployer@162.14.113.44
 ```
 
 | 配置项 | 当前值 |
 |--------|--------|
 | 端口 | 22 (默认) |
 | 认证方式 | 公钥 (ed25519) |
-| 私钥位置 (Mac) | `~/.ssh/id_ed25519` |
+| 私钥位置 (Mac) | `~/.ssh/chexian_deploy` |
+| 自动化用户 | `deployer` (配合 sudo wrapper 管理 PM2) |
 | PermitRootLogin | yes |
-| PasswordAuthentication | (未明确禁用) |
+| PasswordAuthentication | no (已彻底禁用密码登录) |
 
 ### 系统用户
 
@@ -236,11 +237,11 @@ openclaw logs --follow
 
 ### 安全注意事项
 
-1. **SSH root 登录已开启** — 当前通过公钥认证，但 PasswordAuthentication 未明确禁用
-2. **frp 控制端口 7000 对外开放** — 受 token 认证保护
-3. **frp 数据端口 18790 对外开放** — 仅 frpc 客户端可连接
-4. **OpenClaw 仅绑定 127.0.0.1** — 不可从外部直接访问
-5. **主机安全有风险提示** — 控制台显示安全状态为「风险」，建议在腾讯云控制台查看具体安全事件并处理
+1. **SSH 已开启高强度防御** — PasswordAuthentication 已彻底禁用，仅允许秘钥登录。
+2. **自动化强制使用 deployer 用户** — 不再使用 root 跑自动化。
+3. **frp 控制端口 7000 对外开放** — 受 token 认证保护
+4. **frp 数据端口 18790 对外开放** — 仅 frpc 客户端可连接
+5. **OpenClaw 仅绑定 127.0.0.1** — 不可从外部直接访问
 
 ---
 
@@ -259,7 +260,9 @@ openclaw logs --follow
 
 ```bash
 # SSH 连接 (从 Mac)
-ssh -i ~/.ssh/id_ed25519 root@162.14.113.44
+ssh chexian-vps-deploy
+# 或者
+ssh -i ~/.ssh/chexian_deploy deployer@162.14.113.44
 
 # 服务管理
 systemctl status nginx frps
@@ -572,7 +575,7 @@ cat /var/www/chexian/logs/audit.log | jq 'select(.username == "admin")'
 
 ```bash
 # SSH 连接
-ssh -i ~/.ssh/id_ed25519 root@162.14.113.44
+ssh chexian-vps-deploy
 
 # === PM2 管理 (需先加载 nvm) ===
 source /root/.nvm/nvm.sh
@@ -608,10 +611,34 @@ ls -lh /var/backups/chexian/
 bun run build
 # 2. 打包上传
 tar czf chexian-deploy.tar.gz dist/ server/dist/ server/package.json server/ecosystem.config.cjs
-scp -i ~/.ssh/id_ed25519 chexian-deploy.tar.gz root@162.14.113.44:/tmp/
+scp -i ~/.ssh/chexian_deploy chexian-deploy.tar.gz deployer@162.14.113.44:/tmp/
 # 3. VPS 上解压并重启
-ssh root@162.14.113.44 'cd /var/www/chexian && tar xzf /tmp/chexian-deploy.tar.gz && source /root/.nvm/nvm.sh && pm2 restart chexian-api'
+ssh chexian-vps-deploy 'cd /var/www/chexian && tar xzf /tmp/chexian-deploy.tar.gz && sudo /usr/local/bin/deploy-chexian-api restart'
 ```
+
+---
+
+## GitHub Actions自动化部署与Runner配置
+
+为了让云端 Runner（如 GitHub Actions）能安全连接到 VPS 执行推送和重启部署，需进行如下 Secret 配置：
+
+1. **获取私钥**：在本地 Mac 执行 `cat ~/.ssh/chexian_deploy`
+2. **配置 GitHub Secrets**：
+   - 到 GitHub 仓库 `Settings` > `Secrets and variables` > `Actions` > `New repository secret`
+   - **名称**: `VPS_SSH_KEY`
+   - **内容**: 粘贴上面的私钥完整内容（包含 `-----BEGIN OPENSSH PRIVATE KEY-----` 和尾部标签）
+3. **在 Action Workflow（如 `deploy.yml`）中使用**：
+   通过类似于 `webfactory/ssh-agent` 或直接写入 `~/.ssh/id_ed25519` 来注入凭据，同时通过 `deployer` 身份执行操作：
+   ```yaml
+   steps:
+     - name: Setup SSH
+       uses: webfactory/ssh-agent@v0.8.0
+       with:
+         ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+     - name: Deploy
+       run: |
+         ssh -o StrictHostKeyChecking=no deployer@162.14.113.44 "sudo /usr/local/bin/deploy-chexian-api restart"
+   ```
 
 ### 应急公网开放 Runbook（带自动回滚）
 

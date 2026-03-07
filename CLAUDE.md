@@ -513,8 +513,8 @@ bun run verify:vps:heatmap
 ```bash
 bash scripts/setup-local-env.sh   # 自动写入 ~/.ssh/config + 验证连通性
 ```
-验证：`ssh chexian-vps echo ok`
-密钥文件：`~/.ssh/id_ed25519`（私钥，需提前放置）/ `~/.ssh/id_ed25519.pub`（公钥已注册 VPS）
+验证：`ssh chexian-vps-deploy echo ok`
+密钥文件：`~/.ssh/chexian_deploy`（私钥，需提前放置）/ `~/.ssh/chexian_deploy.pub`（公钥已注册 VPS）
 
 ---
 

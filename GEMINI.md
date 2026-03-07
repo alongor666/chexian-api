@@ -571,14 +571,14 @@ bun run scripts/check-governance.mjs
 
 ```
 # 本地 ~/.ssh/config 必须存在以下配置
-Host chexian-vps
+Host chexian-vps-deploy
     HostName 162.14.113.44
-    User root
+    User deployer
     IdentityFile ~/.ssh/chexian_deploy
     ServerAliveInterval 60
 ```
 
-验证连接：`ssh chexian-vps echo ok`
+验证连接：`ssh chexian-vps-deploy echo ok`
 
 **常见失败原因与修复**：
 

@@ -18,7 +18,7 @@ bun run verify:vps:heatmap
 
 ```bash
 # 1) SSH 别名可连通（见 AGENTS.md §8）
-ssh chexian-vps echo ok
+ssh chexian-vps-deploy echo ok
 
 # 2) 如需覆盖默认验收账号，可设置环境变量
 export E2E_USERNAME=admin
@@ -43,7 +43,7 @@ export E2E_PASSWORD='你的密码'
 常用参数：
 
 ```bash
-node scripts/release-vps-heatmap.mjs --host chexian-vps --base-url https://chexian.cretvalu.com
+node scripts/release-vps-heatmap.mjs --host chexian-vps-deploy --base-url https://chexian.cretvalu.com
 node scripts/release-vps-heatmap.mjs --skip-verify
 ```
 
@@ -78,7 +78,7 @@ node scripts/verify-vps-heatmap.mjs --username admin --password '你的密码'
 
 ## 失败排查（最短路径）
 
-1. SSH 失败：先修 `~/.ssh/config` 的 `chexian-vps` 别名
-2. 健康检查失败：`ssh chexian-vps "pm2 logs chexian-api --lines 100"`
+1. SSH 失败：先修 `~/.ssh/config` 的 `chexian-vps-deploy` 别名
+2. 健康检查失败：`ssh chexian-vps-deploy "sudo /usr/local/bin/deploy-chexian-api logs 100"`
 3. 页面回到“数据导入”：先排查 `/api/data/load/*` 的状态码
 4. 热力图不显示：优先看网络日志里 `/api/query/performance-org-heatmap` 是否 200

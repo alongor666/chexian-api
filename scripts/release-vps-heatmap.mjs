@@ -24,7 +24,7 @@ function shellQuote(value) {
 
 function parseArgs(argv) {
   const options = {
-    host: process.env.VPS_HOST || 'chexian-vps',
+    host: process.env.VPS_HOST || 'chexian-vps-deploy',
     remoteRoot: process.env.VPS_REMOTE_ROOT || '/var/www/chexian',
     baseUrl: process.env.VPS_BASE_URL || 'https://chexian.cretvalu.com',
     username: process.env.E2E_USERNAME || 'admin',
@@ -80,7 +80,7 @@ function printHelp() {
       '  node scripts/release-vps-heatmap.mjs [options]',
       '',
       'Options:',
-      '  --host <ssh-alias>       SSH host alias (default: chexian-vps)',
+      '  --host <ssh-alias>       SSH host alias (default: chexian-vps-deploy)',
       '  --remote-root <path>     VPS deployment root (default: /var/www/chexian)',
       '  --base-url <url>         Verify URL (default: https://chexian.cretvalu.com)',
       '  --username <name>        Verify username (default: admin)',
@@ -140,11 +140,10 @@ function main() {
 
   run(
     [
-      `ssh ${host} "source /root/.nvm/nvm.sh >/dev/null 2>&1 || true;`,
-      `pm2 restart chexian-api;`,
+      `ssh ${host} "sudo /usr/local/bin/deploy-chexian-api restart;`,
       'sleep 3;',
-      'pm2 status chexian-api;',
-      'curl -sS -m 10 http://127.0.0.1:3000/health"',
+      'sudo /usr/local/bin/deploy-chexian-api status;',
+      'curl -sS -m 10 http://127.0.0.1:3000/health"'
     ].join(' '),
     rootDir
   );
