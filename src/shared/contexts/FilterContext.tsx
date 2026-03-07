@@ -120,9 +120,14 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       const maxDate = (apiOptions.dateRange && apiOptions.dateRange.max_date) ? apiOptions.dateRange.max_date.split(' ')[0] : today;
       const dataYear = new Date(maxDate).getFullYear();
 
+      // 优先使用 API 返回的实际可用年份（从数据中动态查询），回退到 [dataYear-1, dataYear]
+      const yearsFromApi = (apiOptions.availableYears && apiOptions.availableYears.length > 0)
+        ? apiOptions.availableYears
+        : [dataYear - 1, dataYear];
+
       const apiMetadata: DualDateMetadata = {
-        policy: { maxDate: maxDate, availableYears: [dataYear - 1, dataYear] },
-        insurance: { maxDate: maxDate, availableYears: [dataYear - 1, dataYear] },
+        policy: { maxDate: maxDate, availableYears: yearsFromApi },
+        insurance: { maxDate: maxDate, availableYears: yearsFromApi },
       };
       setDualDateMetadata(apiMetadata);
 

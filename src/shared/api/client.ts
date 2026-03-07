@@ -1226,6 +1226,7 @@ class ApiClient {
     customerCategories: string[];
     coverageCombinations: string[];
     dateRange?: { min_date: string | null; max_date: string | null };
+    availableYears?: number[];
     insuranceGrades: Array<{ value: string; count: number }>;
     smallTruckScores: Array<{ value: string; count: number }>;
     largeTruckScores: Array<{ value: string; count: number }>;

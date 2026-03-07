@@ -15,7 +15,7 @@ export type DateCriteriaType = 'policy_date' | 'insurance_start_date';
 /**
  * 允许的分析年度范围
  */
-export type AllowedYearsRange = 'currentOnly' | 'currentAndPrevious';
+export type AllowedYearsRange = 'currentOnly' | 'currentAndPrevious' | 'allAvailable';
 
 /**
  * 筛选器字段配置接口
@@ -67,7 +67,7 @@ export interface FilterSelectionModeConfig {
 /**
  * 完整的筛选器配置
  */
-export interface FilterConfig extends FilterFieldsConfig, FilterSelectionModeConfig {}
+export interface FilterConfig extends FilterFieldsConfig, FilterSelectionModeConfig { }
 
 /**
  * 预设配置名称
@@ -97,7 +97,7 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
    */
   full: {
     dateCriteria: true,
-    allowedYears: 'currentAndPrevious',
+    allowedYears: 'allAvailable',
     analysisYear: true,
     dateRange: true,
     organization: true,
@@ -117,7 +117,7 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
    */
   performance: {
     dateCriteria: true,
-    allowedYears: 'currentAndPrevious',
+    allowedYears: 'allAvailable',
     analysisYear: true,
     dateRange: true,
     organization: true,
@@ -141,7 +141,7 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
    */
   growth: {
     dateCriteria: true,
-    allowedYears: 'currentAndPrevious',
+    allowedYears: 'allAvailable',
     analysisYear: true,
     dateRange: false, // 代码强制全年
     organization: true, // 改为单选
@@ -165,7 +165,7 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
   renewal: {
     dateCriteria: true, // 显示但锁定
     lockedDateCriteria: 'insurance_start_date', // 锁定为起保日期
-    allowedYears: 'currentAndPrevious',
+    allowedYears: 'allAvailable',
     analysisYear: true,
     dateRange: false, // 强制全年
     organization: true,
@@ -189,7 +189,7 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
   renewalDetail: {
     dateCriteria: true, // 显示但锁定
     lockedDateCriteria: 'insurance_start_date', // 锁定为起保日期
-    allowedYears: 'currentAndPrevious',
+    allowedYears: 'allAvailable',
     analysisYear: true,
     dateRange: false, // 不支持日期范围
     organization: true,
@@ -237,7 +237,7 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
    */
   report: {
     dateCriteria: true,
-    allowedYears: 'currentAndPrevious',
+    allowedYears: 'allAvailable',
     analysisYear: true,
     dateRange: true,
     organization: true,
@@ -285,7 +285,7 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
   cost: {
     dateCriteria: true, // 显示但锁定
     lockedDateCriteria: 'insurance_start_date', // 锁定为起保日期
-    allowedYears: 'currentAndPrevious',
+    allowedYears: 'allAvailable',
     analysisYear: true,
     dateRange: true,
     organization: true,
