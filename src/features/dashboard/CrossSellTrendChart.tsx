@@ -142,7 +142,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
         data: timePeriods,
         axisLabel: {
           fontSize: 11,
-          rotate: timePeriods.length > 18 ? 30 : 0,
+          rotate: 0,
           formatter: formatTrendDailyXAxis,
           rich: TREND_DAILY_XAXIS_RICH,
         },
@@ -179,9 +179,15 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     };
 
     chart.setOption(option, true);
-    const handleResize = () => chart.resize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const resizeObserver = new ResizeObserver(() => {
+      chart.resize();
+    });
+    if (chartRef.current) {
+      resizeObserver.observe(chartRef.current);
+    }
+    return () => {
+      resizeObserver.disconnect();
+    };
   }, [timePeriods, seriesData, loading, metric]);
 
   useEffect(() => {

@@ -51,7 +51,8 @@
 | 2026-03-03 | 全环境实时聚合闭环交付完成 (B215) | 后端固定实时聚合、子页面首次打开无需刷新、压测门槛与证据链全部收口 | 验证证据：`bun run test --run`（743/743）+ `bun run build` + `bun run governance` + `tests/e2e/04-subpage-no-refresh.spec.ts`；性能证据：`artifacts/perf/benchmark-key-routes-2026-03-02_21-36-27-008.json`、`artifacts/perf/benchmark-key-routes-soak-2026-03-02_21-49-52-153.json` |
 | 2026-03-03 | 生产级门禁基线落地完成 (B216) | 新增统一 `production:gate` 脚本并接入 `production-gate.yml`，把治理/构建/全量测试/关键 E2E 串成单命令闭环，同时修复子页面导航 E2E 竞态 | 代码证据：`scripts/production-gate.mjs`、`package.json`、`.github/workflows/production-gate.yml`、`tests/e2e/04-subpage-no-refresh.spec.ts`；运行证据：`bun run production:gate` 全绿 |
 | 2026-03-06 | 端到端回归与测试基线修复完成 (B217) | Playwright 全量 E2E 5/5 通过；修复 Vitest 误扫 `.claude/worktrees` 导致的工作树测试污染 | 代码证据：`vite.config.ts`；运行证据：`bun run test:e2e --reporter=line` 5/5、`bun run test -- --run` 不再收录 `.claude/worktrees/loving-satoshi/tests/e2e/*.spec.ts` |
-| 2026-03-06 | 业绩分析热力图交互与周期数收口完成 (B219) | 点击热力图单元格即弹下钻维度选择、下钻标题动态展示已选维度、默认周期由14扩展到15，并同步更新线上验收脚本 | 验证证据：定向测试、构建、治理通过；发布后需复跑 `release:vps:heatmap` 与热力图下钻实测 |
+| 2026-03-06 | 业绩分析热力图交互与周期数收口完成 (B219) | 点击热力图单元格即弹下钻维度选择、下钻标题动态展示已选维度、默认周期由14扩展到15，并同步更新线上验收脚本 | 验证证据：定向测试、构建、治理通过；线上复验 `output/playwright/vps-heatmap-verify-20260306_090250.json` / `20260306_130325.json` / `20260306_133056.json` 均 passed，热力图下钻 `output/playwright/vps-heatmap-drilldown-verify-1772775070694.json` 返回 1 次 `performance-drilldown` 200 |
+| 2026-03-06 | 今日夜间流水线执行记录补全 | 驾乘险推介率日报、机构拆分汇总与 VPS 热力图线上复验证据已归档 | 证据：`数据管理/驾乘险推荐率/输出/数据分析报告/驾乘险推介率日报_2026-03-06.md`、`数据管理/驾乘险推荐率/机构数据/数据拆分汇总.json`、`开发文档/reviews/2026-03-06-nightly-pipeline-summary.md` |
 | 2026-02-26 | 驾乘险推介率布局优化 (B309) | 将客户类别等标签移到页面标题下方靠左对齐，筛选器条件右置，统一两区域Tabs和小chips块字体样式(@gemini) | `src/features/pages/CrossSellPage.tsx` 布局优化；`Tabs.tsx`增加 `size="mini"` |
 | 2026-02-26 | 驾乘险推介率标签选项扩充 (B310) | 客户类别和车上责任增加“全部”/“不分保额”，支持全量数据查看(@gemini) | 修改 `CrossSellPage` 默认状态，更新前端组件、Zod校验及后端 `cross-sell-summary` SQL逻辑 |
 
@@ -85,10 +86,20 @@
 
 | 优先级 | 任务 ID | 描述 | 状态 | 入口文件 |
 |--------|---------|------|------|----------|
-| P2 | B006 | 优化请求取消机制 | TRIAGED | `src/shared/duckdb/client.ts` |
-| P3 | B008 | 实现图表下钻功能 | PROPOSED | `src/widgets/charts/BarChart.tsx` |
+| P0 | B202 | 会话安全改造：JWT 从 localStorage 迁移到 HttpOnly Secure Cookie，落地 access/refresh 双令牌机制 | PROPOSED | `src/shared/api/client.ts`<br>`server/src/routes/auth.ts` |
+| P1 | B124 | 编写 React 筛选器组件单元测试（DateRangePicker / MultiSelectDropdown / AdvancedFilterPanel） | PROPOSED | `tests/components/` |
+| P2 | B131 | 集成性能监控（Web Vitals） | PROPOSED | `src/shared/monitoring/performance.ts` |
 
-### 3.3 已完成工作总结
+### 3.3 性能监控与夜间流水线观察（2026-03-06）
+
+- 驾乘险日报流水线已生成 `数据管理/驾乘险推荐率/输出/数据分析报告/驾乘险推介率日报_2026-03-06.md`，报告生成时间为 `2026-03-06 08:26:55`，统计周期最近 14 天，数据截止 `2026-03-06`。
+- 机构拆分汇总 `数据管理/驾乘险推荐率/机构数据/数据拆分汇总.json` 显示，源数据 `每日数据_20250101_20260304.parquet` 已完成 13 家机构拆分，总记录数 `28,341`，汇总生成时间 `2026-03-06 09:06:32`。
+- VPS 热力图验收在 `2026-03-06` 共留下 5 次执行记录，其中 `09:02:50`、`13:03:25`、`13:30:56` 三次通过；`09:01:02` 首次失败原因为“增长率”标签超时未可见，`13:29:49` 一次失败原因为未捕获到 `performance-org-heatmap` 的 200 响应，均在随后的重试中恢复。
+- 成功验收样本 `output/playwright/vps-heatmap-verify-20260306_133056.json` 显示：热力图与 bundle 请求均返回 `200`，三类标签切换正常，`consoleErrorCount=0`。
+- 下钻专项复验 `output/playwright/vps-heatmap-drilldown-verify-1772775070694.json` 显示：热力图标题已为“三级机构连续15天热力图”，下钻标题正确携带“已选维度：业务员 · 热力图机构：资阳”，并实际发起 1 次 `performance-drilldown` 200 请求。
+- 当前性能监控仍以压测工件和专项验收脚本为主，`B131/B132` 尚未落地前端运行时 Web Vitals 与业务埋点；现有最近一次基线仍以 `artifacts/perf/benchmark-key-routes-2026-03-02_21-36-27-008.json` 和 `artifacts/perf/benchmark-key-routes-soak-2026-03-02_21-49-52-153.json` 为准。
+
+### 3.4 已完成工作总结
 
 **Phase 1：项目初始化与数据处理**（2026-01-07 上午）
 - ✅ 项目初始化：React + Vite + DuckDB-Wasm 基础架构
@@ -126,18 +137,16 @@
 - ✅ 修复增长率表格视觉样式与数据格式 (B300)
 - ✅ 实现三级KPI卡片 (B301)
 
-**当前重点（2026-02-24）**：
-1. **✅ 认证限流与账户锁定** - IP+用户名双键锁定已落地（B201 DONE）
-2. **会话机制升级** - localStorage Token → HttpOnly Secure Cookie（B202，P0，待评估影响范围）
-3. **✅ 默认口令下线** - 环境变量 `USER_PASSWORDS` 覆盖机制已实现（B203 DONE）
-4. **✅ AI限流补齐** - `/api/ai` 已加 10次/分钟 限流（B204 DONE）
-5. **✅ 图表组件单测** - LineChart/BarChart/RoseChart 共 24 tests 通过（B123 DONE）
-6. **✅ Playwright 框架** - 配置完整 + test:e2e 脚本 + README（B127 DONE）
+**当前重点（2026-03-06）**：
+1. **会话机制升级** - `B202` 仍待把认证从 localStorage Token 迁移到 HttpOnly Secure Cookie。
+2. **测试覆盖补齐** - `B124/B125` 仍缺筛选器组件与核心 Hooks 单测。
+3. **E2E 用例扩展** - `B128/B129` 仍待覆盖更多业务主流程与专项分析场景。
+4. **运行时性能监控补齐** - `B130-B132` 仍未落地 Sentry、Web Vitals 与自定义业务指标上报。
 
 **下一步行动**：
-- 评估 B202（JWT → HttpOnly Cookie）影响范围，制定迁移方案（不影响企微 OAuth 流程）
-- 推进 B128/B129（E2E 测试用例扩展）
-- 推进 B124/B125（筛选器组件/Hooks 单元测试）
+- 推进 `B202`，明确 access/refresh token 与企微 OAuth 共存方案。
+- 推进 `B124/B125`，补齐筛选器与 Hooks 回归测试。
+- 推进 `B131/B132`，把当前脚本化验收补成运行时性能与业务指标监控。
 
 ---
 

@@ -154,3 +154,7 @@
 
 - `开发文档/reviews/2026-02-25-api-only-cleanup-gate-report.md`：API-only 分批清理（Batch0-3）与零故障门禁执行报告。
 - 运行证据日志目录：`artifacts/cleanup-gates/2026-02-25/`。
+
+## 2026-03-06 夜间流水线执行摘要（新增）
+
+- `开发文档/reviews/2026-03-06-nightly-pipeline-summary.md`：记录今日驾乘险日报流水线、机构拆分汇总与 VPS 热力图/下钻复验结果。

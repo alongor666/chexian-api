@@ -36,7 +36,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
     // 基于固定阈值统计四象限
     const { quadrantStats } = useMemo(() => {
         if (data.length === 0) return { quadrantStats: [] };
-        
+
         // 计算各象限统计
         const stats: Record<QuadrantCategory, { count: number; names: string[] }> = {
             dual_excellent: { count: 0, names: [] },
@@ -44,11 +44,11 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             rate_weak_avg_excellent: { count: 0, names: [] },
             dual_weak: { count: 0, names: [] },
         };
-        
+
         data.forEach(item => {
             const rateGood = item.rate >= rateThreshold;
             const avgGood = item.avg_premium >= avgPremiumThreshold;
-            
+
             let category: QuadrantCategory;
             if (rateGood && avgGood) {
                 category = 'dual_excellent';
@@ -59,18 +59,18 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             } else {
                 category = 'dual_weak';
             }
-            
+
             stats[category].count++;
             stats[category].names.push(item.salesman_name);
         });
-        
+
         const quadrantStats: QuadrantStats[] = [
             { category: 'dual_excellent', ...stats.dual_excellent },
             { category: 'rate_excellent_avg_weak', ...stats.rate_excellent_avg_weak },
             { category: 'rate_weak_avg_excellent', ...stats.rate_weak_avg_excellent },
             { category: 'dual_weak', ...stats.dual_weak },
         ];
-        
+
         return { quadrantStats };
     }, [data, rateThreshold, avgPremiumThreshold]);
 
@@ -103,7 +103,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             // 根据推介率获取颜色
             const rateGood = rate >= rateThreshold;
             const avgGood = premium >= avgPremiumThreshold;
-            
+
             let color: string;
             if (rateGood && avgGood) {
                 color = colors.success.DEFAULT;
@@ -193,16 +193,16 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                             width: 1,
                         },
                         data: [
-                            { 
+                            {
                                 xAxis: rateThreshold,
-                                label: { 
+                                label: {
                                     formatter: `推介率阈值${formatPercent(rateThreshold)}`,
                                     position: 'end',
                                 }
                             },
-                            { 
+                            {
                                 yAxis: avgPremiumThreshold,
-                                label: { 
+                                label: {
                                     formatter: `件均阈值${formatCount(avgPremiumThreshold)}`,
                                     position: 'end',
                                 }
@@ -248,9 +248,15 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
 
         chart.setOption(option, true);
 
-        const handleResize = () => chart.resize();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        const resizeObserver = new ResizeObserver(() => {
+            chart.resize();
+        });
+        if (chartRef.current) {
+            resizeObserver.observe(chartRef.current);
+        }
+        return () => {
+            resizeObserver.disconnect();
+        };
     }, [data, coverage, quadrantStats, rateThreshold, avgPremiumThreshold]);
 
     useEffect(() => {

@@ -270,6 +270,6 @@ export function formatTrendDailyXAxis(value: string): string {
 export const TREND_DAILY_XAXIS_RICH = {
   startOfMonth: {
     fontWeight: 'bold' as const,
-    fontSize: 18,
+    fontSize: 11,
   },
 };

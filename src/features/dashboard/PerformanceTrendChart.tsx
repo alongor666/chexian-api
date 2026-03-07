@@ -117,7 +117,7 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
         data: xData,
         axisLabel: {
           fontSize: 11,
-          rotate: xData.length > 16 ? 30 : 0,
+          rotate: 0,
           formatter: formatTrendDailyXAxis,
           rich: TREND_DAILY_XAXIS_RICH,
         },
@@ -135,9 +135,15 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
     };
 
     chart.setOption(option, true);
-    const onResize = () => chart.resize();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const resizeObserver = new ResizeObserver(() => {
+      chart.resize();
+    });
+    if (chartRef.current) {
+      resizeObserver.observe(chartRef.current);
+    }
+    return () => {
+      resizeObserver.disconnect();
+    };
   }, [lineSeries, loading, metric, title, xData]);
 
   useEffect(() => {
