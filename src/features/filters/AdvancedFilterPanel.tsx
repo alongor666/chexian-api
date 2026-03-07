@@ -124,6 +124,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
         return currentYear;
       }
     }
+    // allAvailable 或未设置：允许任何年份
     return year;
   }, [filters.analysis_year, currentYear, allowedYears]);
 
@@ -139,6 +140,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
     }
 
     // 如果年度被限制且当前值不在范围内，更新
+    // allAvailable 模式：不限制年度选择
     if (allowedYears === 'currentOnly' && filters.analysis_year !== currentYear) {
       updates.analysis_year = currentYear;
       needUpdate = true;
@@ -149,6 +151,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
         needUpdate = true;
       }
     }
+    // allAvailable: 不强制重置，允许任何年份
 
     if (needUpdate) {
       onChange({ ...filters, ...updates });
@@ -333,11 +336,10 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             key={scenario.label}
             type="button"
             onClick={scenario.apply}
-            className={`px-2 py-1 text-xs font-medium rounded border transition-colors ${
-              scenario.isActive
+            className={`px-2 py-1 text-xs font-medium rounded border transition-colors ${scenario.isActive
                 ? 'bg-primary text-white border-primary'
                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-            }`}
+              }`}
             title={scenario.description}
             aria-pressed={scenario.isActive}
             aria-label={`${scenario.label}: ${scenario.description}`}

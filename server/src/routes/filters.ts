@@ -95,6 +95,13 @@ router.get(
       GROUP BY large_truck_score
       ORDER BY large_truck_score
     `;
+    // 11. 查询实际可用年份（签单日期维度）
+    const availableYearsSql = `
+      SELECT DISTINCT YEAR(policy_date) AS year
+      FROM PolicyFact
+      WHERE ${permissionWhere} AND policy_date IS NOT NULL
+      ORDER BY year DESC
+    `;
     const [
       orgResult,
       salesmanResult,
@@ -104,6 +111,7 @@ router.get(
       insuranceGradeResult,
       smallTruckScoreResult,
       largeTruckScoreResult,
+      availableYearsResult,
     ] = await Promise.all([
       duckdbService.query<{ org_level_3: string }>(orgSql, FILTER_CACHE_TTL),
       duckdbService.query<{ salesman_name: string; org_level_3: string }>(salesmanSql, FILTER_CACHE_TTL),
@@ -113,11 +121,12 @@ router.get(
       duckdbService.query<{ value: string; count: number }>(insuranceGradeSql, FILTER_CACHE_TTL),
       duckdbService.query<{ value: string; count: number }>(smallTruckScoreSql, FILTER_CACHE_TTL),
       duckdbService.query<{ value: string; count: number }>(largeTruckScoreSql, FILTER_CACHE_TTL),
+      duckdbService.query<{ year: number }>(availableYearsSql, FILTER_CACHE_TTL),
     ]);
 
     const actualOrgs = orgResult.map((r) => r.org_level_3);
 
-    // 11. 返回筛选器选项（字段名与前端 apiClient.getFilterOptions() 类型对齐）
+    // 12. 返回筛选器选项（字段名与前端 apiClient.getFilterOptions() 类型对齐）
     res.json({
       success: true,
       data: {
@@ -128,6 +137,7 @@ router.get(
         customerCategories: customerResult.map((r) => r.customer_category),
         coverageCombinations: insuranceResult.map((r) => r.coverage_combination),
         dateRange: dateRangeResult[0] || { min_date: null, max_date: null },
+        availableYears: availableYearsResult.map((r) => Number(r.year)),
         insuranceGrades: insuranceGradeResult.map((r) => ({ value: String(r.value), count: Number(r.count) })),
         smallTruckScores: smallTruckScoreResult.map((r) => ({ value: String(r.value), count: Number(r.count) })),
         largeTruckScores: largeTruckScoreResult.map((r) => ({ value: String(r.value), count: Number(r.count) })),

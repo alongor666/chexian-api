@@ -52,9 +52,10 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) === 'true';
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved === null ? true : saved === 'true'; // 默认隐藏
     } catch {
-      return false;
+      return true;
     }
   });
 

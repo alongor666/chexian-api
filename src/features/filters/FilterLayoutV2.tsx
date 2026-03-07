@@ -71,7 +71,7 @@ const filterAvailableYears = (
   allowedYears: AllowedYearsRange | undefined,
   currentYear: number
 ): number[] => {
-  if (!allowedYears || years.length === 0) {
+  if (!allowedYears || allowedYears === 'allAvailable' || years.length === 0) {
     return years;
   }
 
