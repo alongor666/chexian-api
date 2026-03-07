@@ -82,8 +82,8 @@ export const generateKpiDetailQuery = (
       COUNT(CASE WHEN customer_category NOT LIKE '%货车%' AND customer_category NOT LIKE '%客车%' AND customer_category != '非营业个人客车' AND customer_category != '摩托车' THEN 1 END) as vehicle_other_count,
 
       -- 同城/异地占比（保费口径 - 基于机构归属）
-      SUM(CASE WHEN org_level_3 IN ('天府', '高新', '新都', '青羊', '武侯', '重客', '本部') THEN premium ELSE 0 END) as same_city_premium,
-      SUM(CASE WHEN org_level_3 IN ('宜宾', '德阳', '资阳', '泸州', '自贡', '乐山', '达州') THEN premium ELSE 0 END) as remote_premium
+      SUM(CASE WHEN CAST(org_level_3 AS VARCHAR) IN ('天府', '高新', '新都', '青羊', '武侯', '重客', '本部') THEN premium ELSE 0 END) as same_city_premium,
+      SUM(CASE WHEN CAST(org_level_3 AS VARCHAR) IN ('宜宾', '德阳', '资阳', '泸州', '自贡', '乐山', '达州') THEN premium ELSE 0 END) as remote_premium
     FROM PolicyFact
     WHERE ${whereClause} ${scopeFilter}
   `;
