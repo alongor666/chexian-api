@@ -86,9 +86,14 @@ if [ "$EXPORT_MODE" = true ]; then
         echo -e "${YELLOW}  重启服务...${NC}"
         ssh "$VPS_HOST" "sudo /usr/local/bin/deploy-chexian-api restart"
 
-        echo -e "${YELLOW}  验证中...${NC}"
-        sleep 3
-        HEALTH=$(ssh "$VPS_HOST" "curl -s http://localhost:3000/health" 2>/dev/null)
+        echo -e "${YELLOW}  验证中（最多等待 40 秒）...${NC}"
+        HEALTH=""
+        for i in $(seq 1 8); do
+            sleep 5
+            HEALTH=$(ssh "$VPS_HOST" "curl -s http://localhost:3000/health" 2>/dev/null)
+            if echo "$HEALTH" | grep -q "success"; then break; fi
+            echo -e "${YELLOW}  等待服务启动... (${i}/8)${NC}"
+        done
         if echo "$HEALTH" | grep -q "success"; then
             echo -e "${GREEN}✓ 预聚合数据同步完成！${NC} VPS 服务运行正常"
         else
@@ -152,9 +157,14 @@ else
     echo -e "${YELLOW}  重启服务...${NC}"
     ssh "$VPS_HOST" "sudo /usr/local/bin/deploy-chexian-api restart"
 
-    echo -e "${YELLOW}  验证中...${NC}"
-    sleep 3
-    HEALTH=$(ssh "$VPS_HOST" "curl -s http://localhost:3000/health" 2>/dev/null)
+    echo -e "${YELLOW}  验证中（最多等待 40 秒）...${NC}"
+    HEALTH=""
+    for i in $(seq 1 8); do
+        sleep 5
+        HEALTH=$(ssh "$VPS_HOST" "curl -s http://localhost:3000/health" 2>/dev/null)
+        if echo "$HEALTH" | grep -q "success"; then break; fi
+        echo -e "${YELLOW}  等待服务启动... (${i}/8)${NC}"
+    done
     if echo "$HEALTH" | grep -q "success"; then
         echo -e "${GREEN}✓ 同步完成！${NC} 服务运行正常"
     else
