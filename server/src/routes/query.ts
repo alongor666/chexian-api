@@ -1250,6 +1250,35 @@ function getSeatCoverageClause(level?: CrossSellSeatCoverageLevel): string {
   }
 }
 
+function parseInsuranceTypeFlag(raw: unknown): boolean | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return null;
+}
+
+function buildPolicyFactInsuranceClause(raw: unknown): string {
+  const insuranceType = parseInsuranceTypeFlag(raw);
+  if (insuranceType === true) {
+    return "insurance_type = '交强险'";
+  }
+  if (insuranceType === false) {
+    return "insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险')";
+  }
+  return '';
+}
+
+function buildCrossSellAggInsuranceClause(raw: unknown): string {
+  const insuranceType = parseInsuranceTypeFlag(raw);
+  if (insuranceType === true) {
+    return 'COALESCE(compulsory_premium, 0) > 0';
+  }
+  if (insuranceType === false) {
+    return 'COALESCE(commercial_premium, 0) > 0';
+  }
+  return '';
+}
+
 async function ensureCrossSellAggregateTablesReady(): Promise<void> {
   // 全环境实时聚合：CrossSellDailyAgg 由 DuckDB 服务启动时创建为实时视图。
   return;
@@ -1301,6 +1330,10 @@ router.get(
     const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
+    }
+    const insuranceClause = buildCrossSellAggInsuranceClause(req.query.insuranceType);
+    if (insuranceClause) {
+      finalWhereClause += ` AND ${insuranceClause}`;
     }
 
     // 始终查询汇总行（应用 drillPath 过滤的汇总）
@@ -1438,6 +1471,10 @@ router.get(
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
     }
+    const insuranceClause = buildCrossSellAggInsuranceClause(req.query.insuranceType);
+    if (insuranceClause) {
+      finalWhereClause += ` AND ${insuranceClause}`;
+    }
 
     const sql = generateCrossSellTrendQuery(
       finalWhereClause,
@@ -1485,6 +1522,10 @@ router.get(
     const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
+    }
+    const insuranceClause = buildCrossSellAggInsuranceClause(req.query.insuranceType);
+    if (insuranceClause) {
+      finalWhereClause += ` AND ${insuranceClause}`;
     }
 
     const sql = generateCrossSellTimePeriodQuery(
@@ -1762,6 +1803,10 @@ router.get(
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
     }
+    const insuranceClause = buildCrossSellAggInsuranceClause(req.query.insuranceType);
+    if (insuranceClause) {
+      finalWhereClause += ` AND ${insuranceClause}`;
+    }
 
     const sql = generateCrossSellTopSalesmanQuery(
       finalWhereClause,
@@ -1848,6 +1893,11 @@ router.get(
     if (seatCoverageClause) {
       withDateWhere += ` AND ${seatCoverageClause}`;
       withoutDateWhere += ` AND ${seatCoverageClause}`;
+    }
+    const insuranceClause = buildCrossSellAggInsuranceClause(req.query.insuranceType);
+    if (insuranceClause) {
+      withDateWhere += ` AND ${insuranceClause}`;
+      withoutDateWhere += ` AND ${insuranceClause}`;
     }
 
     const trendSql = generateCrossSellTrendQuery(
@@ -2618,6 +2668,10 @@ router.get(
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
     }
+    const insuranceClause = buildPolicyFactInsuranceClause(req.query.insuranceType);
+    if (insuranceClause) {
+      finalWhereClause += ` AND ${insuranceClause}`;
+    }
 
     const sql = generateCrossSellOrgTrendQuery(
       finalWhereClause,
@@ -2685,8 +2739,17 @@ router.get(
       crossSellDrillFilter = [];
     }
 
+    const usePolicyFactHeatmap =
+      groupByDimension === 'team'
+      || groupByDimension === 'salesman'
+      || crossSellDrillFilter.some((item) => item.dimension === 'team' || item.dimension === 'salesman');
+    const insuranceClause = usePolicyFactHeatmap
+      ? buildPolicyFactInsuranceClause(req.query.insuranceType)
+      : buildCrossSellAggInsuranceClause(req.query.insuranceType);
+    const finalWhereClause = insuranceClause ? `${whereClause} AND ${insuranceClause}` : whereClause;
+
     const sql = generateCrossSellHeatmapQuery(
-      whereClause,
+      finalWhereClause,
       normalizedVehicleCategory,
       seatCoverageClause,
       timePeriod as 'day' | 'week' | 'month' | 'quarter',

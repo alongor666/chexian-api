@@ -83,6 +83,9 @@ export function buildFilterParams(
   if (filters.is_telemarketing !== undefined && filters.is_telemarketing !== null) {
     params.isTelemarketing = String(filters.is_telemarketing);
   }
+  if (filters.insurance_type !== undefined && filters.insurance_type !== null) {
+    params.insuranceType = String(filters.insurance_type);
+  }
   if (filters.is_commercial_insure !== undefined && filters.is_commercial_insure !== null) {
     params.isCommercialInsure = String(filters.is_commercial_insure);
   }
