@@ -1,5 +1,5 @@
 #!/bin/bash
-# 驾乘险推介率日报生成脚本
+# 驾意险推介率日报生成脚本
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,12 +10,12 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${GREEN}🚀 开始生成驾乘险推介率日报...${NC}"
+echo -e "${GREEN}🚀 开始生成驾意险推介率日报...${NC}"
 echo "执行时间: $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
 # 运行 Python 脚本
-python3 daily_report_jiacheng.py
+python3 daily_report_jiayi.py
 
 if [ $? -eq 0 ]; then
     echo ""
