@@ -1,12 +1,12 @@
 /**
- * 驾乘险推介率分析面板（层层下钻版）
+ * 驾意险推介率分析面板（层层下钻版）
  * Cross-Sell Recommendation Rate Analysis Panel (Hierarchical Drilldown)
  *
  * 交互流程：
  * 1. 初始：四川分公司汇总 KPI 卡片 + "选择下钻维度"按钮
  * 2. 选择维度 → 表格展示分组数据，每行可点击继续下钻
  * 3. 面包屑导航支持任意层级回退
- * 4. 车辆类别标签页（非营业客车/货车/摩托车）
+ * 4. 固定口径：非营业客车 + 不分保额
  */
 
 import React, { useState, useMemo } from 'react';
@@ -40,20 +40,8 @@ import {
 
 interface CrossSellAnalysisPanelProps {
   filters: AdvancedFilterState;
-  vehicleCategory: VehicleCategory;
-  seatCoverageLevel: SeatCoverageLevel;
   trendGranularity: TrendGranularity;
 }
-
-// ============================================================
-// 车辆类别标签页
-// ============================================================
-
-const VEHICLE_TABS: TabItem[] = [
-  { key: 'passenger', label: '非营业客车' },
-  { key: 'truck', label: '货车' },
-  { key: 'motorcycle', label: '摩托车' },
-];
 
 const GRANULARITY_TABS: TabItem[] = [
   { key: 'daily', label: '日' },
@@ -63,67 +51,17 @@ const GRANULARITY_TABS: TabItem[] = [
   { key: 'yearly', label: '年' },
 ];
 
-const SEAT_COVERAGE_TABS: TabItem[] = [
-  { key: 'eq_1w', label: '=1万' },
-  { key: 'gte_2w', label: '>=2万' },
-  { key: 'lt_1w', label: '<1万' },
-];
-
 interface CrossSellHeaderControlsProps {
-  vehicleCategory: VehicleCategory;
-  seatCoverageLevel: SeatCoverageLevel;
   trendGranularity: TrendGranularity;
-  onVehicleCategoryChange: (value: VehicleCategory) => void;
-  onSeatCoverageLevelChange: (value: SeatCoverageLevel) => void;
   onTrendGranularityChange: (value: TrendGranularity) => void;
 }
 
 export const CrossSellHeaderControls: React.FC<CrossSellHeaderControlsProps> = ({
-  vehicleCategory,
-  seatCoverageLevel,
   trendGranularity,
-  onVehicleCategoryChange,
-  onSeatCoverageLevelChange,
   onTrendGranularityChange,
 }) => (
   <div className="no-export max-w-full overflow-x-auto">
     <div className="flex items-center gap-2 whitespace-nowrap">
-      <span
-        onClick={() => onVehicleCategoryChange(vehicleCategory === 'all' ? 'passenger' : 'all')}
-        className={cn(
-          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border cursor-pointer transition-colors select-none",
-          vehicleCategory === 'all'
-            ? 'bg-primary text-white border-primary hover:bg-primary-hover'
-            : 'bg-primary-bg text-primary-dark border-primary-border hover:bg-blue-100'
-        )}
-      >
-        客户类别 {vehicleCategory === 'all' ? '(全选)' : ''}
-      </span>
-      <Tabs
-        items={VEHICLE_TABS}
-        activeKey={vehicleCategory}
-        onChange={(key) => onVehicleCategoryChange(key as VehicleCategory)}
-        variant="pills"
-        size="mini"
-      />
-      <span
-        onClick={() => onSeatCoverageLevelChange(seatCoverageLevel === 'all' ? 'eq_1w' : 'all')}
-        className={cn(
-          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border cursor-pointer transition-colors select-none",
-          seatCoverageLevel === 'all'
-            ? 'bg-primary text-white border-primary hover:bg-primary-hover'
-            : 'bg-primary-bg text-primary-dark border-primary-border hover:bg-blue-100'
-        )}
-      >
-        车上责任 {seatCoverageLevel === 'all' ? '(不分保额)' : ''}
-      </span>
-      <Tabs
-        items={SEAT_COVERAGE_TABS}
-        activeKey={seatCoverageLevel}
-        onChange={(key) => onSeatCoverageLevelChange(key as SeatCoverageLevel)}
-        variant="pills"
-        size="mini"
-      />
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
         时间维度
       </span>
@@ -218,35 +156,26 @@ interface ColumnDef {
   getColorClass?: (val: number) => string;
 }
 
-// 非营业客车/货车的表格列
 const TABLE_COLUMNS_FULL: ColumnDef[] = [
   { key: 'group_name', label: '维度', type: 'text' },
   { key: 'total_auto_count', label: '车险件数', type: 'count' },
-  { key: 'total_driver_count', label: '驾乘险件数', type: 'count' },
+  { key: 'total_driver_count', label: '驾意险件数', type: 'count' },
   { key: 'total_rate', label: '综合推介率', type: 'rate' },
   { key: 'danjiao_auto_count', label: '单交-车险', type: 'count' },
-  { key: 'danjiao_driver_count', label: '单交-驾乘险', type: 'count' },
+  { key: 'danjiao_driver_count', label: '单交-驾意险', type: 'count' },
   { key: 'danjiao_rate', label: '单交推介率', type: 'rate' },
   { key: 'jiaosan_auto_count', label: '交三-车险', type: 'count' },
-  { key: 'jiaosan_driver_count', label: '交三-驾乘险', type: 'count' },
+  { key: 'jiaosan_driver_count', label: '交三-驾意险', type: 'count' },
   {
     key: 'jiaosan_rate', label: '交三推介率', type: 'rate',
     getColorClass: (v) => getRateClassByField('jiaosan_rate', v)
   },
   { key: 'zhuquan_auto_count', label: '主全-车险', type: 'count' },
-  { key: 'zhuquan_driver_count', label: '主全-驾乘险', type: 'count' },
+  { key: 'zhuquan_driver_count', label: '主全-驾意险', type: 'count' },
   {
     key: 'zhuquan_rate', label: '主全推介率', type: 'rate',
     getColorClass: (v) => getRateClassByField('zhuquan_rate', v)
   },
-];
-
-// 摩托车的表格列（只有单交相关）
-const TABLE_COLUMNS_MOTORCYCLE: ColumnDef[] = [
-  { key: 'group_name', label: '维度', type: 'text' },
-  { key: 'danjiao_auto_count', label: '车险件数', type: 'count' },
-  { key: 'danjiao_driver_count', label: '驾乘险件数', type: 'count' },
-  { key: 'danjiao_rate', label: '推介率', type: 'rate' },
 ];
 
 function formatCell(col: ColumnDef, row: CrossSellRow): string {
@@ -277,10 +206,10 @@ function SectionTitle({ title, leftContent }: { title: string; leftContent?: Rea
 
 export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   filters,
-  vehicleCategory,
-  seatCoverageLevel,
   trendGranularity,
 }) => {
+  const vehicleCategory: VehicleCategory = 'passenger';
+  const seatCoverageLevel: SeatCoverageLevel = 'all';
   const { isDataLoaded } = useDataStatus();
   const [sortKey, setSortKey] = useState<SortKey>('total_auto_count');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -295,7 +224,6 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
     { key: 'org_level_3', label: '三级机构' },
     { key: 'team', label: '团队' },
     { key: 'salesman', label: '业务员' },
-    { key: 'customer_category', label: '客户类别' },
     { key: 'coverage_combination', label: '险别组合' },
     { key: 'energy_type', label: '能源类型' },
     { key: 'business_nature', label: '新转续' },
@@ -493,45 +421,30 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         prefetchedSummary={timePeriodSummary}
       />
 
-      {/* 板块2：推介率走势 - 摩托车只显示推介率走势，不显示驾乘件均 */}
-      <SectionTitle title={vehicleCategory === 'motorcycle' ? '推介率走势' : '推介率与驾乘件均走势'} />
-      {vehicleCategory === 'motorcycle' ? (
-        // 摩托车：只显示推介率走势
+      {/* 板块2：推介率与驾意件均走势 */}
+      <SectionTitle title="推介率与驾意件均走势" />
+      <div className="grid gap-4 lg:grid-cols-2">
         <CrossSellTrendChart
           vehicleCategory={vehicleCategory}
           seatCoverageLevel={seatCoverageLevel}
           filters={filters}
           granularity={trendGranularity}
           metric="rate"
-          title="驾乘险推介率走势"
+          title="驾意险推介率走势"
           enabled={isDataLoaded}
           rowsOverride={trendRows}
         />
-      ) : (
-        // 非营业客车/货车：显示推介率和驾乘件均走势
-        <div className="grid gap-4 lg:grid-cols-2">
-          <CrossSellTrendChart
-            vehicleCategory={vehicleCategory}
-            seatCoverageLevel={seatCoverageLevel}
-            filters={filters}
-            granularity={trendGranularity}
-            metric="rate"
-            title="驾乘险推介率走势"
-            enabled={isDataLoaded}
-            rowsOverride={trendRows}
-          />
-          <CrossSellTrendChart
-            vehicleCategory={vehicleCategory}
-            seatCoverageLevel={seatCoverageLevel}
-            filters={filters}
-            granularity={trendGranularity}
-            metric="avg_premium"
-            title="驾乘件均走势"
-            enabled={isDataLoaded}
-            rowsOverride={trendRows}
-          />
-        </div>
-      )}
+        <CrossSellTrendChart
+          vehicleCategory={vehicleCategory}
+          seatCoverageLevel={seatCoverageLevel}
+          filters={filters}
+          granularity={trendGranularity}
+          metric="avg_premium"
+          title="驾意件均走势"
+          enabled={isDataLoaded}
+          rowsOverride={trendRows}
+        />
+      </div>
 
       {/* 板块3：下钻分析 */}
       <SectionTitle title="下钻分析" />
@@ -586,13 +499,10 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           {/* 数据表格（有 groupBy 时才显示） */}
           {currentGroupBy && sortedRows.length > 0 && (
             <div className="space-y-4">
-              {/* 摩托车不显示四象限视图 */}
-              {vehicleCategory !== 'motorcycle' && (
-                <CrossSellQuadrantView
-                  rows={rows}
-                  currentDimensionLabel={DIMENSION_LABELS[currentGroupBy]}
-                />
-              )}
+              <CrossSellQuadrantView
+                rows={rows}
+                currentDimensionLabel={DIMENSION_LABELS[currentGroupBy]}
+              />
               <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                   <span className="text-sm text-gray-600">
@@ -607,7 +517,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                   <table className="min-w-full text-sm">
                     <thead className={cn(tableStyles.header, 'sticky top-0 z-10')}>
                       <tr>
-                        {(vehicleCategory === 'motorcycle' ? TABLE_COLUMNS_MOTORCYCLE : TABLE_COLUMNS_FULL).map((col) => (
+                        {TABLE_COLUMNS_FULL.map((col) => (
                           <th
                             key={col.key}
                             onClick={() => handleSort(col.key)}
@@ -635,7 +545,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                             }`}
                           onClick={() => canDrillDeeper && handleRowClick(row.group_name)}
                         >
-                          {(vehicleCategory === 'motorcycle' ? TABLE_COLUMNS_MOTORCYCLE : TABLE_COLUMNS_FULL).map((col) => (
+                          {TABLE_COLUMNS_FULL.map((col) => (
                             <td
                               key={col.key}
                               className={cn(

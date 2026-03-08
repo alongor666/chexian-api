@@ -12,7 +12,7 @@ import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell-sum
 import { escapeSqlValue } from '../utils/security.js';
 
 export interface CrossSellHeatmapDrillStep {
-  dimension: string;
+  dimension: CrossSellHeatmapGroupDimension;
   value: string;
 }
 
@@ -24,8 +24,6 @@ function crossSellDrillToWhereAgg(steps: CrossSellHeatmapDrillStep[]): string {
     switch (step.dimension) {
       case 'org_level_3':
         return `TRIM(CAST(org_level_3 AS VARCHAR)) = ${v}`;
-      case 'customer_category':
-        return `TRIM(CAST(customer_category AS VARCHAR)) = ${v}`;
       case 'coverage_combination':
         return `TRIM(CAST(coverage_combination AS VARCHAR)) = ${v}`;
       case 'energy_type':
@@ -58,8 +56,6 @@ function crossSellDrillToWherePF(steps: CrossSellHeatmapDrillStep[]): string {
         return `COALESCE(tm.team_name, '未归属团队') = ${v}`;
       case 'salesman':
         return `TRIM(CAST(p.salesman_name AS VARCHAR)) = ${v}`;
-      case 'customer_category':
-        return `TRIM(CAST(p.customer_category AS VARCHAR)) = ${v}`;
       case 'coverage_combination':
         return `TRIM(CAST(p.coverage_combination AS VARCHAR)) = ${v}`;
       case 'energy_type':
@@ -87,7 +83,11 @@ export interface HeatmapRow {
   org_level_3: string;
   auto_count: number;
   driver_count: number;
+  driver_policy_count: number;
+  driver_premium: number;
+  penetration_base_premium: number;
   rate: number;
+  penetration_rate: number | null;
   avg_premium: number;
   achievement_rate: number | null;
 }
@@ -106,13 +106,12 @@ function getDriverPlanDenominator(timePeriod: CrossSellHeatmapTimePeriod): numbe
 }
 
 /**
- * 热力图维度分组类型（驾乘险）
+ * 热力图维度分组类型（驾意险）
  */
 export type CrossSellHeatmapGroupDimension =
   | 'org_level_3'
   | 'team'
   | 'salesman'
-  | 'customer_category'
   | 'coverage_combination'
   | 'energy_type'
   | 'business_nature';
@@ -131,8 +130,6 @@ function getCrossSellHeatmapDimExprAgg(
   dimension: CrossSellHeatmapGroupDimension
 ): { selectExpr: string; alias: string } {
   switch (dimension) {
-    case 'customer_category':
-      return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(customer_category AS VARCHAR)), ''), '未知')`, alias: 'dim_value' };
     case 'coverage_combination':
       return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(coverage_combination AS VARCHAR)), ''), '未知')`, alias: 'dim_value' };
     case 'energy_type':
@@ -161,8 +158,6 @@ function getCrossSellHeatmapDimExprPF(
       return { selectExpr: `COALESCE(tm.team_name, '未归属团队')`, alias: 'dim_value' };
     case 'salesman':
       return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(p.salesman_name AS VARCHAR)), ''), '未知业务员')`, alias: 'dim_value' };
-    case 'customer_category':
-      return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(p.customer_category AS VARCHAR)), ''), '未知')`, alias: 'dim_value' };
     case 'coverage_combination':
       return { selectExpr: `COALESCE(NULLIF(TRIM(CAST(p.coverage_combination AS VARCHAR)), ''), '未知')`, alias: 'dim_value' };
     case 'energy_type':
@@ -185,7 +180,7 @@ function getCrossSellHeatmapDimExprPF(
 /**
  * 生成交叉销售热力图查询（支持多时间粒度 + 计划达成率 + 多维度分组）
  *
- * 返回字段：date, org_level_3, auto_count, driver_count, rate, avg_premium, achievement_rate
+ * 返回字段：date, org_level_3, auto_count, driver_count, rate, penetration_rate, avg_premium, achievement_rate
  * 按最近15个时间窗口 + 所有分组维度分组
  *
  * @param baseWhereClause - 基础 WHERE 子句（含 RBAC + org 过滤）
@@ -247,17 +242,35 @@ export function generateCrossSellHeatmapQuery(
     ? 'MAX(pd)'
     : `DATE_TRUNC('${timePeriod === 'quarter' ? 'quarter' : timePeriod}', MAX(pd))::DATE`;
 
-  const isCrossSelltruthy = `COALESCE(CAST(p.is_cross_sell AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+  const isCrossSelltruthy = `(
+    TRY_CAST(p.is_cross_sell AS BOOLEAN) = true
+    OR LOWER(TRIM(CAST(p.is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+  )`;
 
   const filteredCte = usePF ? `
-    WITH filtered AS (
+    WITH normalized AS (
       SELECT
         CAST(p.policy_date AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
-        COUNT(*) AS auto_count,
-        SUM(CASE WHEN ${isCrossSelltruthy} THEN 1 ELSE 0 END) AS driver_count,
-        SUM(CASE WHEN ${isCrossSelltruthy} THEN 1 ELSE 0 END) AS driver_policy_count,
-        SUM(CASE WHEN ${isCrossSelltruthy} THEN COALESCE(CAST(p.cross_sell_premium_driver AS DOUBLE), 0) ELSE 0 END) AS driver_premium
+        COALESCE(
+          NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), ''),
+          NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), '')
+        ) AS dedup_key,
+        NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), '') AS raw_policy_no,
+        COALESCE(NULLIF(TRIM(CAST(p.coverage_combination AS VARCHAR)), ''), '未知') AS coverage_combination,
+        ${isCrossSelltruthy} AS is_cross_sell,
+        COALESCE(CAST(p.cross_sell_premium_driver AS DOUBLE), 0) AS cross_sell_premium_driver,
+        COALESCE(CAST(p.premium AS DOUBLE), 0) AS premium,
+        CASE
+          WHEN COALESCE(CAST(p.insurance_type AS VARCHAR), '') IN ('商业险', '商业保险', '商车统保', '商业险+交强险')
+          THEN COALESCE(CAST(p.premium AS DOUBLE), 0)
+          ELSE 0
+        END AS commercial_premium,
+        CASE
+          WHEN COALESCE(CAST(p.insurance_type AS VARCHAR), '') = '交强险'
+          THEN COALESCE(CAST(p.premium AS DOUBLE), 0)
+          ELSE 0
+        END AS compulsory_premium
       FROM PolicyFact p
       LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))
       WHERE ${baseWhereClause}
@@ -266,6 +279,26 @@ export function generateCrossSellHeatmapQuery(
         ${drillAnd}
         AND p.org_level_3 IS NOT NULL
         AND TRIM(CAST(p.org_level_3 AS VARCHAR)) != ''
+    ),
+    filtered AS (
+      SELECT
+        pd,
+        ${dimConfig.alias},
+        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
+        COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
+        SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END) AS driver_premium,
+        SUM(commercial_premium) AS commercial_premium,
+        SUM(compulsory_premium) AS compulsory_premium,
+        SUM(
+          CASE
+            WHEN coverage_combination = '单交' THEN compulsory_premium
+            WHEN coverage_combination IN ('交三', '主全') THEN commercial_premium
+            ELSE 0
+          END
+        ) AS penetration_base_premium
+      FROM normalized
+      WHERE dedup_key IS NOT NULL
       GROUP BY pd, ${dimConfig.alias}
     ),` : `
     WITH filtered AS (
@@ -275,7 +308,16 @@ export function generateCrossSellHeatmapQuery(
         SUM(auto_count) AS auto_count,
         SUM(driver_count) AS driver_count,
         SUM(driver_policy_count) AS driver_policy_count,
-        SUM(driver_premium) AS driver_premium
+        SUM(driver_premium) AS driver_premium,
+        SUM(commercial_premium) AS commercial_premium,
+        SUM(compulsory_premium) AS compulsory_premium,
+        SUM(
+          CASE
+            WHEN coverage_combination = '单交' THEN compulsory_premium
+            WHEN coverage_combination IN ('交三', '主全') THEN commercial_premium
+            ELSE 0
+          END
+        ) AS penetration_base_premium
       FROM CrossSellDailyAgg
       WHERE ${baseWhereClause}
         AND ${vehicleFilter}
@@ -306,7 +348,8 @@ export function generateCrossSellHeatmapQuery(
         SUM(wr.auto_count) AS auto_count,
         SUM(wr.driver_count) AS driver_count,
         SUM(wr.driver_policy_count) AS driver_policy_count,
-        SUM(wr.driver_premium) AS driver_premium
+        SUM(wr.driver_premium) AS driver_premium,
+        SUM(wr.penetration_base_premium) AS penetration_base_premium
       FROM window_rows wr
       GROUP BY wr.${dimConfig.alias}, wr.period_key
     ),
@@ -340,10 +383,17 @@ export function generateCrossSellHeatmapQuery(
       STRFTIME(bg.period_key, '%Y-%m-%d') AS date,
       COALESCE(cur.auto_count, 0) AS auto_count,
       COALESCE(cur.driver_count, 0) AS driver_count,
+      COALESCE(cur.driver_policy_count, 0) AS driver_policy_count,
+      COALESCE(cur.driver_premium, 0) AS driver_premium,
+      COALESCE(cur.penetration_base_premium, 0) AS penetration_base_premium,
       CASE
         WHEN COALESCE(cur.auto_count, 0) = 0 THEN 0
         ELSE ROUND(COALESCE(cur.driver_count, 0) * 100.0 / COALESCE(cur.auto_count, 0), 2)
       END AS rate,
+      CASE
+        WHEN COALESCE(cur.penetration_base_premium, 0) <= 0 THEN NULL
+        ELSE ROUND(COALESCE(cur.driver_premium, 0) * 100.0 / COALESCE(cur.penetration_base_premium, 0), 2)
+      END AS penetration_rate,
       CASE
         WHEN COALESCE(cur.driver_policy_count, 0) = 0 THEN 0
         ELSE ROUND(COALESCE(cur.driver_premium, 0) / COALESCE(cur.driver_policy_count, 0), 2)

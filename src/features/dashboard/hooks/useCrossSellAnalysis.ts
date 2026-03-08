@@ -27,7 +27,6 @@ export type CrossSellDimension =
   | 'org_level_3'
   | 'team'
   | 'salesman'
-  | 'customer_category'
   | 'is_new_car'
   | 'is_transfer'
   | 'is_nev'
@@ -39,7 +38,6 @@ export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
   org_level_3: '三级机构',
   team: '销售团队',
   salesman: '业务员',
-  customer_category: '客户类别',
   is_new_car: '是否新车',
   is_transfer: '是否过户',
   is_nev: '是否新能源',
@@ -49,7 +47,7 @@ export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
 
 /** 所有可用维度 */
 export const ALL_DIMENSIONS: CrossSellDimension[] = [
-  'org_level_3', 'team', 'salesman', 'customer_category',
+  'org_level_3', 'team', 'salesman',
   'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
 ];
 

@@ -59,7 +59,7 @@ export interface KpiDetailResult {
 - `generateDimensionOptionsQuery()`: 生成维度选项查询
 
 ### cross-sell-trend.ts
-**用途**: 驾乘险推介率趋势 SQL 查询生成器  
+**用途**: 驾意险推介率趋势 SQL 查询生成器  
 **状态**: 生效中（2026-02-25 新增）  
 **支持视图**: 日/周/月/季度  
 **输出字段**: `time_period`, `coverage_combination`, `rate`, `auto_count`
@@ -124,7 +124,7 @@ export interface KpiDetailResult {
 
 | 日期 | 文件 | 变更内容 |
 |------|------|---------|
-| 2026-02-25 | cross-sell-trend.ts | 新增驾乘险推介率趋势 SQL 生成器（支持日/周/月/季度，含整体+主全/交三/单交） |
+| 2026-02-25 | cross-sell-trend.ts | 新增驾意险推介率趋势 SQL 生成器（支持日/周/月/季度，含整体+主全/交三/单交） |
 | 2026-01-09 | kpi-detail.ts | 新增 KPI 详细数据 SQL 生成器 |
 | 2026-01-08 | truck.ts | 新增营业货车专项分析 SQL |
 | 2026-01-08 | trend.ts | 新增自然周/月视图支持 |
@@ -149,6 +149,7 @@ export interface KpiDetailResult {
 | 2026-02-27 | performance-analysis.ts | 新增 `generatePerformancePeriodBoundsQuery` 与 period bounds 复用参数，供 `performance-bundle` 减少重复时间窗口扫描 |
 | 2026-02-27 | cross-sell.ts / cross-sell-summary.ts / cross-sell-trend.ts / cross-sell-top-salesman.ts | 交叉销售热点查询切换到 `CrossSellDailyAgg` 预聚合表，减少运行时重复去重与布尔兼容计算 |
 | 2026-03-04 | cross-sell-heatmap.ts | 新增交叉销售热力图 SQL 生成器，返回最近14天所有三级机构的推介率和件均保费数据 |
+| 2026-03-08 | performance-analysis.ts | `generatePerformanceOrgHeatmapQuery` 新增 `prev_mom_premium` / `prev_yoy_premium` 输出列，支持前端按分公司总分母重算同比/环比，消除跨维度分公司增长率不一致 |
 
 ### comprehensive-analysis.ts
 **用途**: 综合分析页 SQL 生成器（`/comprehensive-analysis`）  

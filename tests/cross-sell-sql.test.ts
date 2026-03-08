@@ -3,6 +3,7 @@ import { generateCrossSellQuery } from '../server/src/sql/cross-sell';
 import { generateCrossSellTimePeriodQuery } from '../server/src/sql/cross-sell-summary';
 import { generateCrossSellTrendQuery } from '../server/src/sql/cross-sell-trend';
 import { generateCrossSellOrgTrendQuery } from '../server/src/sql/cross-sell-org-trend';
+import { generateCrossSellHeatmapQuery } from '../server/src/sql/cross-sell-heatmap';
 
 describe('cross-sell SQL 兼容交叉销售字段格式', () => {
   it('cross-sell 下钻 SQL 应使用预聚合表并按聚合值求和', () => {
@@ -53,5 +54,43 @@ describe('cross-sell SQL 兼容交叉销售字段格式', () => {
     expect(sql).toContain("NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')");
     expect(sql).toContain("NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')");
     expect(sql).not.toContain("COUNT(DISTINCT CASE WHEN insurance_type LIKE '%商业%' THEN dedup_key END) AS auto_count");
+  });
+
+  it('cross-sell 热力图 SQL 在 PolicyFact 分支应按 VIN/保单去重并输出渗透率', () => {
+    const sql = generateCrossSellHeatmapQuery('1=1', 'passenger', '', 'month', 'team', []);
+
+    expect(sql).toContain("NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), '')");
+    expect(sql).toContain("NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), '') AS raw_policy_no");
+    expect(sql).toContain('COUNT(DISTINCT dedup_key) AS auto_count');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count');
+    expect(sql).toContain('SUM(commercial_premium) AS commercial_premium');
+    expect(sql).toContain('SUM(compulsory_premium) AS compulsory_premium');
+    expect(sql).toContain("WHEN coverage_combination = '单交' THEN compulsory_premium");
+    expect(sql).toContain("WHEN coverage_combination IN ('交三', '主全') THEN commercial_premium");
+    expect(sql).toContain('AS penetration_rate');
+  });
+
+  it('cross-sell 热力图 SQL 在聚合表分支应复用商业险/交强险保费原子量', () => {
+    const sql = generateCrossSellHeatmapQuery('1=1', 'passenger', '', 'month', 'org_level_3', []);
+
+    expect(sql).toContain('FROM CrossSellDailyAgg');
+    expect(sql).toContain('SUM(commercial_premium) AS commercial_premium');
+    expect(sql).toContain('SUM(compulsory_premium) AS compulsory_premium');
+    expect(sql).toContain('AS penetration_base_premium');
+    expect(sql).toContain('AS penetration_rate');
+  });
+
+  it('cross-sell 热力图 SQL 应忽略已下线的客户类别下钻维度', () => {
+    const sql = generateCrossSellHeatmapQuery(
+      '1=1',
+      'passenger',
+      '',
+      'month',
+      'org_level_3',
+      [{ dimension: 'customer_category' as any, value: '企业客户' }] as any,
+    );
+
+    expect(sql).not.toContain("TRIM(CAST(customer_category AS VARCHAR)) = '企业客户'");
+    expect(sql).not.toContain("TRIM(CAST(p.customer_category AS VARCHAR)) = '企业客户'");
   });
 });

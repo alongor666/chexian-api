@@ -2,7 +2,7 @@
  * AI智能分析面板（驾意险推介率）
  * Cross-Sell AI Analysis Panel
  *
- * 基于推介率和驾乘件均两个维度，将业务员分为四象限
+ * 基于推介率和驾意件均两个维度，将业务员分为四象限
  */
 
 import { memo, useMemo } from 'react';

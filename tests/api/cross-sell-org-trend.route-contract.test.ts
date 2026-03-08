@@ -19,4 +19,23 @@ describe('cross-sell-org-trend route contract', () => {
     expect(orgTrendSchema).toContain("seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional()");
 
   });
+
+  it('locks cross-sell routes to passenger + all while keeping params compatible', () => {
+    const content = readSource('server/src/routes/query.ts');
+
+    const crossSellDimsStart = content.indexOf('const CROSS_SELL_DIMENSIONS = [');
+    const crossSellDimsEnd = content.indexOf('] as const;', crossSellDimsStart);
+    const crossSellDims = content.slice(crossSellDimsStart, crossSellDimsEnd);
+    expect(crossSellDims).not.toContain('customer_category');
+
+    const crossSellHeatmapDimsStart = content.indexOf('const CROSS_SELL_HEATMAP_DIMENSIONS = [');
+    const crossSellHeatmapDimsEnd = content.indexOf('] as const;', crossSellHeatmapDimsStart);
+    const crossSellHeatmapDims = content.slice(crossSellHeatmapDimsStart, crossSellHeatmapDimsEnd);
+    expect(crossSellHeatmapDims).not.toContain('customer_category');
+    expect(content).toContain('const CROSS_SELL_HEATMAP_DIMENSION_SET = new Set<string>(CROSS_SELL_HEATMAP_DIMENSIONS);');
+    expect(content).toContain('.filter((item) => CROSS_SELL_HEATMAP_DIMENSION_SET.has(item.dimension))');
+
+    expect(content).toContain("const normalizedVehicleCategory: VehicleCategory = 'passenger';");
+    expect(content).toContain("const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';");
+  });
 });

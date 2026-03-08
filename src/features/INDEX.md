@@ -202,9 +202,9 @@ widgets/table/VirtualTable.tsx
 - **`filters/DateRangePicker.tsx`**: 起始日/截止日合并为起止日期，使用原生 date 输入并按需展开
 - **`filters/MultiSelectDropdown.tsx`**: 支持 compact 形态用于折叠容器内展示
 - **`dashboard/CrossSellQuadrantView.tsx`**: 交叉销售四象限判断视图（复用表格主视图数据，输出 Decision Header + 散点象限图）
-- **`dashboard/CrossSellTrendChart.tsx`**: 驾乘险推介率走势组件（日/周/月/季度四粒度，主全/交三/单交/整体四线）
-- **`dashboard/hooks/useCrossSellTrend.ts`**: 驾乘险推介率走势数据 Hook（调用 `/api/query/cross-sell-trend`，含并发请求防抖）
-- **`dashboard/crossSellRateStatus.ts`**: 驾乘险推介率统一状态规则（主全/交三阈值、状态文案、四象限分类与配色）
+- **`dashboard/CrossSellTrendChart.tsx`**: 驾意险推介率走势组件（日/周/月/季度四粒度，主全/交三/单交/整体四线）
+- **`dashboard/hooks/useCrossSellTrend.ts`**: 驾意险推介率走势数据 Hook（调用 `/api/query/cross-sell-trend`，含并发请求防抖）
+- **`dashboard/crossSellRateStatus.ts`**: 驾意险推介率统一状态规则（主全/交三阈值、状态文案、四象限分类与配色）
 - **`dashboard/CrossSellSummaryKpiBoard.tsx`**: 推介率驱动因子环比看板（2026-02-25 新增环比功能：当日/周/月视角显示绝对值+百分比变化，格式如 `↑ +8.3, +7.1%`）
 - **`filters/PageHeaderBar.tsx`**: 页面标题栏组件（2026-02-25 新增：动态标题根据筛选范围显示，sticky top-0 置顶，已筛选条件 chips 展示）
 - **`dashboard/utils/performanceHeatmapSelection.ts`**: 绩效热力图选择工具（将热力图时间桶映射为签单日期范围，并统一下钻来源判定，避免日期丢失与行下钻被热力图上下文抢占）
@@ -341,3 +341,13 @@ widgets/table/VirtualTable.tsx
 ## 2026-03-06 业绩分析热力图下钻切换修复
 
 - **`dashboard/PerformanceAnalysisPanel.tsx`**: 修复业绩分析下钻链路在用户交互后仍被 bundle 首屏 `prefetched` 数据短路的问题；热力图/表格下钻开始后强制切回 `performance-drilldown` 实时请求。
+
+## 2026-03-08 热力图新增分公司固定行
+
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: 业绩分析连续15周期热力图新增“分公司”汇总行，固定插入在首行之后；该行字体加粗且禁用下钻点击，避免误触发无效机构下钻。
+- **`dashboard/CrossSellMetricsHeatmap.tsx`**: 驾意险推介率连续15周期热力图新增“分公司”汇总行，固定插入在首行之后；该行名称与单元格加粗，并保持机构总数展示口径不变。
+
+## 2026-03-08 热力图分公司同比口径修正
+
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: “分公司”行调整为表头下第一行；同比/环比从“维度同比加权均值”改为“分公司总保费 ÷ 上年同期/上期总保费”重算，确保在三级机构/团队/业务员/客户类别/险别组合/能源类型/新转续七个维度一致。
+- **`dashboard/hooks/usePerformanceOrgHeatmap.ts`**: 热力图行模型新增 `prevMomPremium`、`prevYoyPremium` 字段，用于分公司汇总行按分母还原统一增长率。

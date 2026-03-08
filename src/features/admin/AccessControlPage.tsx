@@ -34,7 +34,7 @@ const ALL_ROUTES = [
   { path: '/marketing-report', label: '营销战报' },
   { path: '/truck', label: '营业货车' },
   { path: '/renewal', label: '续保分析' },
-  { path: '/cross-sell', label: '驾乘险推介率' },
+  { path: '/cross-sell', label: '驾意险推介率' },
   { path: '/growth', label: '增长分析' },
   { path: '/comparison', label: '数据对比' },
   { path: '/coefficient', label: '系数监控' },

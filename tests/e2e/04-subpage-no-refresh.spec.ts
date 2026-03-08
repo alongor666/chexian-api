@@ -84,7 +84,7 @@ const sidebarTargets: Array<{ label: string; hashPath: string }> = [
   { label: '营销战报', hashPath: '/marketing-report' },
   { label: '营业货车', hashPath: '/truck' },
   { label: '续保分析', hashPath: '/renewal' },
-  { label: '驾乘险推介率', hashPath: '/cross-sell' },
+  { label: '驾意险推介率', hashPath: '/cross-sell' },
   { label: '增长分析', hashPath: '/growth' },
   { label: '成本分析', hashPath: '/cost' },
   { label: '数据对比', hashPath: '/comparison' },

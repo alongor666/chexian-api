@@ -1,5 +1,5 @@
 /**
- * 驾乘险推介率走势 Hook
+ * 驾意险推介率走势 Hook
  * Cross-Sell Recommendation Rate Trend Hook
  *
  * 按时间粒度（日/周/月/季度）返回 4 条险别组合的推介率时序数据
