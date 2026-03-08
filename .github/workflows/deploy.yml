@@ -79,16 +79,19 @@ jobs:
           )
           SSH_CMD=(ssh "${SSH_OPTS[@]}")
           SCP_CMD=(scp "${SSH_OPTS[@]}")
+          BUNDLE_NAME="deploy-bundle-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}.tar.gz"
 
           # 网络抖动场景下先做 SSH 连通性预检，降低一次性超时失败概率
           retry 6 10 "${SSH_CMD[@]}" "$VPS" "echo 'SSH preflight OK'"
 
           # 上传构建产物
-          retry 6 10 "${SCP_CMD[@]}" deploy-bundle.tar.gz "$VPS:/tmp/"
+          retry 6 10 "${SCP_CMD[@]}" deploy-bundle.tar.gz "$VPS:/tmp/${BUNDLE_NAME}"
 
           # 远程执行部署
-          "${SSH_CMD[@]}" "$VPS" << 'DEPLOY'
+          "${SSH_CMD[@]}" "$VPS" "bash -s -- '$BUNDLE_NAME'" << 'DEPLOY'
             set -e
+            BUNDLE_NAME="$1"
+            STAGING_DIR="$(mktemp -d /tmp/chexian-deploy.XXXXXX)"
 
             cd /var/www/chexian
 
@@ -96,20 +99,18 @@ jobs:
             [ -d frontend/dist ] && cp -r frontend/dist frontend/dist.bak
             [ -d server/dist ] && cp -r server/dist server/dist.bak
 
-            # 清理残留临时文件（避免 root 遗留目录导致 deployer Permission denied）
-            rm -rf /tmp/dist /tmp/server
-            # 解包新版本
-            cd /tmp && tar -xzf deploy-bundle.tar.gz
+            # 解包新版本到独立临时目录，避免 /tmp 共享路径权限冲突
+            tar -xzf "/tmp/${BUNDLE_NAME}" -C "${STAGING_DIR}"
 
             # 更新前端
             rm -rf /var/www/chexian/frontend/dist
-            mv /tmp/dist /var/www/chexian/frontend/dist
+            mv "${STAGING_DIR}/dist" /var/www/chexian/frontend/dist
 
             # 更新后端
             rm -rf /var/www/chexian/server/dist
-            mv /tmp/server/dist /var/www/chexian/server/dist
-            cp /tmp/server/package.json /var/www/chexian/server/package.json
-            cp /tmp/server/ecosystem.config.cjs /var/www/chexian/server/ecosystem.config.cjs
+            mv "${STAGING_DIR}/server/dist" /var/www/chexian/server/dist
+            cp "${STAGING_DIR}/server/package.json" /var/www/chexian/server/package.json
+            cp "${STAGING_DIR}/server/ecosystem.config.cjs" /var/www/chexian/server/ecosystem.config.cjs
 
             # 安装生产依赖 (通过提权脚本执行，因为 deployer 无法访问 root 的 nvm)
             sudo /usr/local/bin/deploy-chexian-api install
@@ -142,5 +143,6 @@ jobs:
             fi
 
             # 清理临时文件
-            rm -f /tmp/deploy-bundle.tar.gz
+            rm -f "/tmp/${BUNDLE_NAME}"
+            rm -rf "${STAGING_DIR}"
           DEPLOY
