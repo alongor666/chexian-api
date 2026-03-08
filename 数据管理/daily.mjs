@@ -3,12 +3,11 @@
  * 每日一键 ETL：跨平台版本（Windows/macOS/Linux）
  * 
  * 源文件命名规范：
- *   续保类型匹配至*.xlsx            ← --source（续保匹配库）
- *   车险2024年清单更新至YYYYMMDD.xlsx  ← 历史数据（2023-11 ~ 2024-12）
- *   车险2526年清单更新至YYYYMMDD.xlsx  ← 每日数据（2025-01 ~ 今）
+ *   续保业务类型匹配更新至YYYY年M月.xlsx
+ *   车险24-26年清单更新至YYYYMMDD.xlsx
  * 
  * 输出目录结构：
- *   warehouse/fact/policy/current/   ← 服务器只加载此目录（≤2 个活跃文件）
+ *   warehouse/fact/policy/current/   ← 服务器只加载此目录（单个活跃文件）
  *   warehouse/fact/policy/archive/   ← 旧文件归档，不加载
  */
 
@@ -150,40 +149,32 @@ async function main() {
   }
 
   // 1. 找续保源文件
-  const sourceFiles = ls('续保类型匹配*.xlsx', scriptDir);
-  if (sourceFiles.length === 0) {
-    log('red', '❌ 未找到续保源文件: 续保类型匹配*.xlsx');
-    process.exit(1);
-  }
-  const source = sourceFiles[0].path;
-  log('green', `续保源文件: ${basename(source)}`);
-
-  // 2. 找历史清单文件
-  const histFiles = ls('车险2024年清单更新至*.xlsx', scriptDir);
-  let histOutput = null;
-  if (histFiles.length > 0) {
-    histOutput = join(currentDir, '历史数据_20231101_20241231.parquet');
-    log('green', `历史清单: ${histFiles[0].name} → 历史数据_20231101_20241231.parquet`);
+  const sourceFiles = [
+    ...ls('续保业务类型匹配*.xlsx', scriptDir),
+    ...ls('续保类型匹配*.xlsx', scriptDir)
+  ].sort((a, b) => b.name.localeCompare(a.name));
+  const source = sourceFiles.length > 0 ? sourceFiles[0].path : null;
+  if (source) {
+    log('green', `续保源文件: ${basename(source)}`);
   } else {
-    log('yellow', '⚠ 未找到历史清单（车险2024年清单更新至*.xlsx），跳过历史文件生成');
+    log('yellow', '⚠ 未找到续保源文件，将跳过续保业务类型匹配');
   }
 
-  // 3. 找每日清单文件
-  const dailyFiles = ls('车险2526年清单更新至*.xlsx', scriptDir);
-  if (dailyFiles.length === 0) {
-    log('red', '❌ 未找到每日清单（车险2526年清单更新至*.xlsx）');
+  // 2. 找单清单文件
+  const policyFiles = ls('车险24-26年清单更新至*.xlsx', scriptDir);
+  if (policyFiles.length === 0) {
+    log('red', '❌ 未找到单清单（车险24-26年清单更新至*.xlsx）');
     process.exit(1);
   }
-  const dailyXlsx = dailyFiles[0];
-  const dailyDate = extractDate(dailyXlsx.name);
-  const dailyOutput = join(currentDir, `每日数据_20250101_${dailyDate}.parquet`);
-  log('green', `每日清单: ${dailyXlsx.name} → 每日数据_20250101_${dailyDate}.parquet`);
+  const policyXlsx = policyFiles[0];
+  const policyDate = extractDate(policyXlsx.name) || formatDate();
+  const policyOutput = join(currentDir, `车险24-26年清单_${policyDate}.parquet`);
+  log('green', `数据清单: ${policyXlsx.name} → ${basename(policyOutput)}`);
 
   console.log('');
 
-  // 4. 归档旧文件
-  if (histOutput) archiveOld(currentDir, archiveDir, '历史数据', histOutput);
-  archiveOld(currentDir, archiveDir, '每日数据', dailyOutput);
+  // 3. 归档旧文件
+  archiveOld(currentDir, archiveDir, '车险24-26年清单', policyOutput);
 
   console.log('');
 
@@ -191,46 +182,19 @@ async function main() {
   const python = findPython();
   log('green', `使用 Python: ${python}`);
 
-  const enrichScript = join(scriptDir, 'pipelines/enrich.py');
   const transformScript = join(scriptDir, 'pipelines/transform.py');
 
-  // 5. 执行历史文件转换
-  if (histOutput && histFiles.length > 0) {
-    log('green', '▶ 步骤 1/2: 历史数据转换');
-    const stagingHist = join(scriptDir, `staging/${histFiles[0].name.replace('.xlsx', '_已匹配.xlsx')}`);
-
-    runPythonScript(python, enrichScript, [
-      '--source', `"${source}"`,
-      '--target', `"${histFiles[0].path}"`,
-      '--output', `"${stagingHist}"`
-    ]);
-
-    runPythonScript(python, transformScript, [
-      '-i', `"${stagingHist}"`,
-      '-o', `"${histOutput}"`
-    ]);
-
-    console.log('');
+  // 4. 执行单清单转换
+  log('green', '▶ 步骤 1/1: 单清单数据转换');
+  const transformArgs = ['-i', `"${policyXlsx.path}"`, '-o', `"${policyOutput}"`];
+  if (source) {
+    transformArgs.push('-r', `"${source}"`);
   }
-
-  // 6. 执行每日文件转换
-  log('green', '▶ 步骤 2/2: 每日数据转换');
-  const stagingDaily = join(scriptDir, `staging/${dailyXlsx.name.replace('.xlsx', '_已匹配.xlsx')}`);
-
-  runPythonScript(python, enrichScript, [
-    '--source', `"${source}"`,
-    '--target', `"${dailyXlsx.path}"`,
-    '--output', `"${stagingDaily}"`
-  ]);
-
-  runPythonScript(python, transformScript, [
-    '-i', `"${stagingDaily}"`,
-    '-o', `"${dailyOutput}"`
-  ]);
+  runPythonScript(python, transformScript, transformArgs);
 
   console.log('');
 
-  // 7. 运行本地预聚合 (export-for-vps.mjs)
+  // 5. 运行本地预聚合 (export-for-vps.mjs)
   // 确保在上传之前在本地计算好所有聚合数据，防止 VPS 资源爆炸及数据不一致
   log('green', '▶ 步骤 3: 运行预聚合数据导出...');
   const projectRoot = dirname(scriptDir);
@@ -243,7 +207,7 @@ async function main() {
 
   console.log('');
 
-  // 8. 同步 current/ 下所有基础明细 parquet 以及 vps-export/ 下的预聚合 parquet 到 VPS
+  // 6. 同步 current/ 下所有基础明细 parquet 以及 vps-export/ 下的预聚合 parquet 到 VPS
   if (!isWindows()) {
     const syncScript = join(projectRoot, 'deploy/sync-data.sh');
     const vpsExportDir = join(scriptDir, 'warehouse/vps-export');

@@ -34,7 +34,8 @@ print_usage() {
     echo "示例:"
     echo "  ./run.sh transform -i input.xlsx -o output.parquet"
     echo "  ./run.sh enrich --source hist.xlsx --target new.xlsx --output matched.xlsx"
-    echo "  ./run.sh full --source hist.xlsx --target new.xlsx --output result.parquet"
+    echo "  ./run.sh full --source 续保业务类型匹配更新至2026年4月.xlsx --target 车险24-26年清单更新至20260307.xlsx --output result.parquet"
+    echo "  ./run.sh full --target 车险24-26年清单更新至20260307.xlsx --output warehouse/fact/policy/current/车险24-26年清单_20260307.parquet"
     echo "  ./run.sh full --source hist.xlsx --target new.xlsx --output result.parquet --no-sync"
 }
 
@@ -83,32 +84,44 @@ case "${1:-help}" in
         # 解析参数
         SOURCE=""
         TARGET=""
+        INPUT=""
         OUTPUT=""
         NO_SYNC="false"
         while [[ $# -gt 0 ]]; do
             case $1 in
                 --source|-s) SOURCE="$2"; shift 2 ;;
                 --target|-t) TARGET="$2"; shift 2 ;;
+                --input|-i) INPUT="$2"; shift 2 ;;
                 --output|-o) OUTPUT="$2"; shift 2 ;;
                 --no-sync) NO_SYNC="true"; shift ;;
                 *) shift ;;
             esac
         done
 
-        if [[ -z "$SOURCE" || -z "$TARGET" || -z "$OUTPUT" ]]; then
-            echo -e "${RED}错误: 完整流程需要 --source, --target, --output 参数${NC}"
+        if [[ -z "$TARGET" && -n "$INPUT" ]]; then
+            TARGET="$INPUT"
+        fi
+
+        if [[ -z "$TARGET" ]]; then
+            echo -e "${RED}错误: 完整流程至少需要 --target 或 --input 参数${NC}"
             exit 1
         fi
 
-        # 中间文件
-        STAGING_FILE="staging/$(basename "${TARGET%.*}")_已匹配.xlsx"
+        if [[ -z "$OUTPUT" ]]; then
+            FILE_DATE=$(basename "$TARGET" | grep -oE '[0-9]{8}' | tail -1)
+            if [[ -z "$FILE_DATE" ]]; then
+                FILE_DATE=$(date +%Y%m%d)
+            fi
+            OUTPUT="warehouse/fact/policy/current/车险24-26年清单_${FILE_DATE}.parquet"
+        fi
 
-        echo -e "${BLUE}步骤 1/2: 续保类型匹配${NC}"
-        python3 pipelines/enrich.py --source "$SOURCE" --target "$TARGET" --output "$STAGING_FILE"
-
-        echo ""
-        echo -e "${BLUE}步骤 2/2: 转换为 Parquet${NC}"
-        python3 pipelines/transform.py -i "$STAGING_FILE" -o "$OUTPUT"
+        if [[ -n "$SOURCE" ]]; then
+            echo -e "${BLUE}步骤 1/1: 续保匹配 + 转换为 Parquet（单次读取）${NC}"
+            python3 pipelines/transform.py -i "$TARGET" -o "$OUTPUT" -r "$SOURCE"
+        else
+            echo -e "${BLUE}步骤 1/1: 单文件直转 Parquet（跳过续保匹配）${NC}"
+            python3 pipelines/transform.py -i "$TARGET" -o "$OUTPUT"
+        fi
 
         echo ""
         echo -e "${GREEN}✅ 完整流程执行完成！${NC}"

@@ -24,6 +24,7 @@ from datetime import datetime
 import json
 import argparse
 import sys
+import time
 
 # 默认配置（可通过命令行参数覆盖）
 DEFAULT_INPUT_FILE = Path("/Users/xuechenglong/Downloads/车险签单报价数据20260127_已匹配.xlsx")
@@ -52,6 +53,7 @@ def parse_args():
     parser.add_argument('-o', '--output', type=str, help='输出Parquet文件路径')
     parser.add_argument('-m', '--mode', choices=['merged', 'full'], default='merged',
                         help='处理模式: merged=合并批改记录(默认), full=保留所有记录')
+    parser.add_argument('-r', '--renewal-source', type=str, help='续保业务类型源文件路径（可选）')
     return parser.parse_args()
 
 # 解析命令行参数
@@ -59,6 +61,129 @@ args = parse_args()
 INPUT_FILE = Path(args.input) if args.input else DEFAULT_INPUT_FILE
 OUTPUT_FILE = Path(args.output) if args.output else DEFAULT_OUTPUT_FILE
 OUTPUT_MODE = args.mode
+RENEWAL_SOURCE_FILE = Path(args.renewal_source) if args.renewal_source else None
+
+POLICY_KEY_ALIASES = ['保单号', '保单号码', '保单编号', '保单']
+RENEWAL_TYPE_ALIASES = ['续保业务类型', '续保类型', '业务类型', '续保分类']
+
+def first_existing_column(columns, candidates):
+    """返回第一个存在于列集合中的候选列名"""
+    column_set = set(columns)
+    for name in candidates:
+        if name in column_set:
+            return name
+    return None
+
+def normalize_policy_series(series):
+    """标准化保单号，避免匹配失败"""
+    normalized = series.astype(str).str.strip()
+    normalized = normalized.replace({'': np.nan, 'nan': np.nan, 'None': np.nan})
+    normalized = normalized.str.replace(r'\.0$', '', regex=True)
+    return normalized
+
+def load_target_excel(input_file, dtype_map):
+    """加载目标 Excel，自动合并可用工作表"""
+    start_ts = time.perf_counter()
+    sheet_data = pd.read_excel(input_file, sheet_name=None, dtype=dtype_map)
+    if isinstance(sheet_data, pd.DataFrame):
+        elapsed = time.perf_counter() - start_ts
+        print(f"✅ 加载成功: {len(sheet_data):,} 行 × {len(sheet_data.columns)} 列（{elapsed:.2f}s）")
+        return sheet_data
+
+    valid_frames = []
+    base_columns = None
+    headerless_sheets = []
+    for sheet_name, sheet_df in sheet_data.items():
+        if not isinstance(sheet_df, pd.DataFrame) or sheet_df.empty:
+            continue
+        key_column = first_existing_column(sheet_df.columns, POLICY_KEY_ALIASES)
+        if key_column is None:
+            headerless_sheets.append(sheet_name)
+            continue
+        if base_columns is None:
+            base_columns = list(sheet_df.columns)
+        valid_frames.append(sheet_df)
+        print(f"   读取工作表: {sheet_name}，行数: {len(sheet_df):,}")
+
+    if base_columns is not None and headerless_sheets:
+        for sheet_name in headerless_sheets:
+            raw_sheet = pd.read_excel(input_file, sheet_name=sheet_name, header=None)
+            if raw_sheet.empty or raw_sheet.shape[1] != len(base_columns):
+                continue
+            raw_sheet.columns = base_columns
+            key_column = first_existing_column(raw_sheet.columns, POLICY_KEY_ALIASES)
+            if key_column is None:
+                continue
+            valid_frames.append(raw_sheet)
+            print(f"   读取续表: {sheet_name}，行数: {len(raw_sheet):,}")
+
+    if not valid_frames:
+        raise ValueError("未找到包含保单号字段的工作表")
+
+    if len(valid_frames) == 1:
+        df = valid_frames[0]
+    else:
+        df = pd.concat(valid_frames, ignore_index=True)
+
+    elapsed = time.perf_counter() - start_ts
+    print(f"✅ 加载成功: {len(df):,} 行 × {len(df.columns)} 列（{elapsed:.2f}s）")
+    return df
+
+def merge_renewal_type_from_source(df, renewal_source_file):
+    """把续保业务类型从源文件匹配到主数据"""
+    if renewal_source_file is None:
+        print("   未提供续保源文件，跳过续保业务类型匹配")
+        return df
+
+    if not renewal_source_file.exists():
+        print(f"   ⚠️  续保源文件不存在，跳过匹配: {renewal_source_file}")
+        return df
+
+    print(f"   续保源文件: {renewal_source_file}")
+    source_columns = pd.read_excel(renewal_source_file, nrows=0).columns.tolist()
+    source_key_col = first_existing_column(source_columns, POLICY_KEY_ALIASES)
+    source_type_col = first_existing_column(source_columns, RENEWAL_TYPE_ALIASES)
+    target_key_col = first_existing_column(df.columns, POLICY_KEY_ALIASES)
+
+    if source_key_col is None or source_type_col is None or target_key_col is None:
+        print("   ⚠️  续保匹配列未找到，跳过匹配")
+        return df
+
+    start_ts = time.perf_counter()
+    source_df = pd.read_excel(
+        renewal_source_file,
+        usecols=[source_key_col, source_type_col],
+        dtype={source_key_col: str, source_type_col: str}
+    )
+    source_df[source_key_col] = normalize_policy_series(source_df[source_key_col])
+    source_df[source_type_col] = source_df[source_type_col].astype(str).str.strip()
+    source_df = source_df.dropna(subset=[source_key_col]).drop_duplicates(subset=[source_key_col], keep='last')
+    source_mapping = source_df.set_index(source_key_col)[source_type_col]
+
+    target_key_series = normalize_policy_series(df[target_key_col])
+    existing_series = df['续保业务类型'] if '续保业务类型' in df.columns else pd.Series([None] * len(df), index=df.index)
+    mapped_series = target_key_series.map(source_mapping)
+    if mapped_series.notna().sum() == 0 and '是否续保' in df.columns:
+        alt_key_series = normalize_policy_series(df['是否续保'])
+        mapped_series = alt_key_series.map(source_mapping)
+    df['续保业务类型'] = existing_series.where(existing_series.notna() & (existing_series.astype(str).str.strip() != ''), mapped_series)
+
+    matched_rows = df['续保业务类型'].notna().sum()
+    elapsed = time.perf_counter() - start_ts
+    print(f"   ✅ 续保业务类型匹配完成: {matched_rows:,}/{len(df):,}（{elapsed:.2f}s）")
+    return df
+
+def normalize_identifier_columns(df):
+    """标准化标识字段类型"""
+    columns = ['保单号', '续保单号', '批单号', '车架号', '车牌号码']
+    for column in columns:
+        if column not in df.columns:
+            continue
+        normalized = df[column].astype(str).str.strip()
+        normalized = normalized.replace({'': np.nan, 'nan': np.nan, 'None': np.nan})
+        normalized = normalized.str.replace(r'\.0$', '', regex=True)
+        df[column] = normalized.where(normalized.notna(), None)
+    return df
 
 def analyze_data_quality(df, stage="原始数据"):
     """分析数据质量并生成报告"""
@@ -154,10 +279,9 @@ def process_renewal_status(df):
 
     # 1. 检查是否有独立的"续保单号"列
     if '续保单号' in df.columns:
-        # 清理续保单号：去除空字符串、nan等无效值
-        df['续保单号'] = df['续保单号'].apply(
-            lambda x: x if (pd.notna(x) and str(x).strip() != '' and str(x).lower() != 'nan') else None
-        )
+        renewal_no = df['续保单号'].astype(str).str.strip()
+        renewal_no = renewal_no.replace({'': np.nan, 'nan': np.nan, 'None': np.nan})
+        df['续保单号'] = renewal_no.where(renewal_no.notna(), None)
         valid_renewal_no_count = df['续保单号'].notna().sum()
         print(f"   ✅ 找到续保单号字段: {valid_renewal_no_count:,} 条有效续保单号 ({valid_renewal_no_count/len(df)*100:.2f}%)")
 
@@ -191,9 +315,8 @@ def process_renewal_status(df):
             print(f"   原始值分布（前10）:\n{df['是否续保'].value_counts(dropna=False).head(10)}")
 
             # 将"是否续保"列重命名/复制为"续保单号"
-            df['续保单号'] = df['是否续保'].apply(
-                lambda x: str(x).strip() if is_policy_number_format(x) else None
-            )
+            policy_mask = df['是否续保'].astype(str).map(is_policy_number_format)
+            df['续保单号'] = df['是否续保'].astype(str).str.strip().where(policy_mask, None)
             valid_renewal_no_count = df['续保单号'].notna().sum()
             print(f"   ✅ 将'是否续保'转换为'续保单号': {valid_renewal_no_count:,} 条 ({valid_renewal_no_count/len(df)*100:.2f}%)")
 
@@ -203,9 +326,8 @@ def process_renewal_status(df):
         else:
             # "是否续保"列存储的是布尔值
             print(f"   '是否续保'列是布尔值类型")
-            df['是否续保'] = df['是否续保'].apply(
-                lambda x: str(x).strip().lower() in ('是', 'true', '1', 'yes')
-            )
+            yes_values = {'是', 'true', '1', 'yes'}
+            df['是否续保'] = df['是否续保'].astype(str).str.strip().str.lower().isin(yes_values)
             df['续保单号'] = None
             print(f"   ⚠️  未找到续保单号数据，续保单号列设为空")
 
@@ -257,17 +379,9 @@ def process_renewable_status(df):
     print(f"   批改类型分布:")
     print(df['批改类型'].value_counts(dropna=False).head(10).to_string())
 
-    # 判断是否可续：批改类型包含"解除合同"或"退保"为不可续，其他为可续
-    def is_renewable(batch_type):
-        if pd.isna(batch_type):
-            return True  # 空值默认可续
-        batch_str = str(batch_type)
-        # 包含"解除合同"或"退保"则为不可续
-        if '解除合同' in batch_str or '退保' in batch_str:
-            return False
-        return True  # 其他情况可续
-
-    df['是否可续'] = df['批改类型'].apply(is_renewable)
+    batch_type = df['批改类型'].astype(str)
+    non_renewable_mask = batch_type.str.contains('解除合同|退保', regex=True, na=False)
+    df['是否可续'] = ~non_renewable_mask
 
     renewable_count = df['是否可续'].sum()
     non_renewable_count = len(df) - renewable_count
@@ -459,10 +573,16 @@ def process_new_fields(df):
         print(f"      ✅ 大货车评分: {score_count:,} 条有值 ({score_count/len(df)*100:.2f}%)")
 
     # 10. 处理交叉销售标识（布尔值：是→True，否→False）
+    cross_sell_col = None
     if '交叉销售标识' in df.columns:
+        cross_sell_col = '交叉销售标识'
+    elif '交叉销售标识-驾意' in df.columns:
+        cross_sell_col = '交叉销售标识-驾意'
+
+    if cross_sell_col:
         print(f"\n   处理交叉销售标识:")
-        print(f"      原始值分布: {df['交叉销售标识'].value_counts().to_dict()}")
-        df['交叉销售标识'] = df['交叉销售标识'].astype(str).map({'是': True, '否': False}).fillna(False)
+        print(f"      原始值分布: {df[cross_sell_col].value_counts().to_dict()}")
+        df['交叉销售标识'] = df[cross_sell_col].astype(str).map({'是': True, '否': False}).fillna(False)
         cross_sell_count = df['交叉销售标识'].sum()
         print(f"      ✅ 交叉销售: {cross_sell_count:,} ({cross_sell_count/len(df)*100:.2f}%)")
 
@@ -672,6 +792,7 @@ def finalize_schema(df):
 
     # 新增字段（如果存在）
     optional_fields = [
+        '续保业务类型',
         '批单号',
         '批改类型',
         '商车自主定价系数',
@@ -745,6 +866,7 @@ def main():
     print(f"输入文件: {INPUT_FILE}")
     print(f"输出文件: {OUTPUT_FILE}")
     print(f"处理模式: {OUTPUT_MODE}")
+    print(f"续保源文件: {RENEWAL_SOURCE_FILE if RENEWAL_SOURCE_FILE else '未提供'}")
     print(f"运行时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     if not INPUT_FILE.exists():
@@ -759,8 +881,9 @@ def main():
     # 强制字符串读取可能包含大数字的列（保单号等），避免科学计数法溢出
     str_columns = ['保单号', '是否续保', '续保单号', '车架号', '批单号']
     dtype_map = {col: str for col in str_columns}
-    df = pd.read_excel(INPUT_FILE, dtype=dtype_map)
-    print(f"✅ 加载成功: {len(df):,} 行 × {len(df.columns)} 列")
+    df = load_target_excel(INPUT_FILE, dtype_map)
+    df = merge_renewal_type_from_source(df, RENEWAL_SOURCE_FILE)
+    df = normalize_identifier_columns(df)
 
     # 2. 分析原始数据质量
     analyze_data_quality(df, "原始数据")

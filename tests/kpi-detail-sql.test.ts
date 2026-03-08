@@ -39,9 +39,9 @@ describe('generateKpiDetailQuery', () => {
     expect(sql).toContain('same_city_premium');
     expect(sql).toContain('remote_premium');
     // 必须是保费求和
-    expect(sql).toMatch(/SUM\(CASE WHEN org_level_3[^)]*\) THEN premium/);
+    expect(sql).toMatch(/SUM\(CASE WHEN\s+(?:CAST\()?org_level_3[\s\S]*?THEN premium/);
     // 不应是 COUNT 口径
-    expect(sql).not.toMatch(/COUNT\(CASE WHEN org_level_3[^)]*same_city/);
+    expect(sql).not.toMatch(/COUNT\(CASE WHEN\s+(?:CAST\()?org_level_3[\s\S]*?same_city/);
   });
 
   it('默认承保口径：包含 premium > 0 过滤', () => {

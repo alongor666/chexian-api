@@ -67,7 +67,8 @@ function printUsage() {
   console.log('示例:');
   console.log('  node run.mjs transform -i input.xlsx -o output.parquet');
   console.log('  node run.mjs enrich --source hist.xlsx --target new.xlsx --output matched.xlsx');
-  console.log('  node run.mjs full --source hist.xlsx --target new.xlsx --output result.parquet');
+  console.log('  node run.mjs full --source 续保业务类型匹配更新至2026年4月.xlsx --target 车险24-26年清单更新至20260307.xlsx --output result.parquet');
+  console.log('  node run.mjs full --target 车险24-26年清单更新至20260307.xlsx --output warehouse/fact/policy/current/车险24-26年清单_20260307.parquet');
   console.log('  node run.mjs full --source hist.xlsx --target new.xlsx --output result.parquet --no-sync');
 }
 
@@ -123,13 +124,13 @@ function parseArgs(args) {
       case '-t':
         result.target = args[++i];
         break;
-      case '--output':
-      case '-o':
-        result.output = args[++i];
-        break;
       case '--input':
       case '-i':
         result.input = args[++i];
+        break;
+      case '--output':
+      case '-o':
+        result.output = args[++i];
         break;
       case '--mode':
       case '-m':
@@ -210,27 +211,37 @@ async function main() {
       ensureDirs(scriptDir);
       
       const opts = parseArgs(args.slice(1));
-      if (!opts.source || !opts.target || !opts.output) {
-        log('red', '错误: 完整流程需要 --source, --target, --output 参数');
+      if (!opts.target && opts.input) {
+        opts.target = opts.input;
+      }
+
+      if (!opts.target) {
+        log('red', '错误: 完整流程至少需要 --target 或 --input 参数');
         process.exit(1);
       }
+
+      if (!opts.output) {
+        const dateMatch = basename(opts.target).match(/(\d{8})/g);
+        const fileDate = dateMatch && dateMatch.length > 0
+          ? dateMatch[dateMatch.length - 1]
+          : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        opts.output = join(scriptDir, 'warehouse/fact/policy/current', `车险24-26年清单_${fileDate}.parquet`);
+      }
       
-      // 中间文件
-      const stagingFile = join(scriptDir, 'staging', basename(opts.target).replace(/\.xlsx$/i, '_已匹配.xlsx'));
-      
-      log('blue', '步骤 1/2: 续保类型匹配');
-      runPython(python, enrichScript, [
-        `--source "${opts.source}"`,
-        `--target "${opts.target}"`,
-        `--output "${stagingFile}"`
-      ]);
-      
-      console.log('');
-      log('blue', '步骤 2/2: 转换为 Parquet');
-      runPython(python, transformScript, [
-        `-i "${stagingFile}"`,
-        `-o "${opts.output}"`
-      ]);
+      if (opts.source) {
+        log('blue', '步骤 1/1: 续保匹配 + 转换为 Parquet（单次读取）');
+        runPython(python, transformScript, [
+          `-i "${opts.target}"`,
+          `-o "${opts.output}"`,
+          `-r "${opts.source}"`
+        ]);
+      } else {
+        log('blue', '步骤 1/1: 单文件直转 Parquet（跳过续保匹配）');
+        runPython(python, transformScript, [
+          `-i "${opts.target}"`,
+          `-o "${opts.output}"`
+        ]);
+      }
       
       console.log('');
       log('green', `✅ 完整流程执行完成！`);
