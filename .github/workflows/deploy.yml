@@ -44,21 +44,50 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
+          set -euo pipefail
+
+          retry() {
+            local max_attempts="$1"
+            local sleep_seconds="$2"
+            shift 2
+            local attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "Command failed after ${attempt} attempts: $*"
+                return 1
+              fi
+              echo "Attempt ${attempt}/${max_attempts} failed, retrying in ${sleep_seconds}s: $*"
+              sleep "$sleep_seconds"
+              attempt=$((attempt + 1))
+            done
+          }
+
           # 配置 SSH
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -t ed25519,rsa,ecdsa 162.14.113.44 >> ~/.ssh/known_hosts 2>/dev/null
+          retry 5 5 ssh-keyscan -T 10 -t ed25519,rsa,ecdsa 162.14.113.44 >> ~/.ssh/known_hosts 2>/dev/null
 
           VPS="deployer@162.14.113.44"
-          SSH="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key"
-          SCP="scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key"
+          SSH_OPTS=(
+            -o StrictHostKeyChecking=no
+            -o ConnectTimeout=20
+            -o ConnectionAttempts=3
+            -o ServerAliveInterval=30
+            -o ServerAliveCountMax=3
+            -i ~/.ssh/deploy_key
+          )
+          SSH_CMD=(ssh "${SSH_OPTS[@]}")
+          SCP_CMD=(scp "${SSH_OPTS[@]}")
+
+          # 网络抖动场景下先做 SSH 连通性预检，降低一次性超时失败概率
+          retry 6 10 "${SSH_CMD[@]}" "$VPS" "echo 'SSH preflight OK'"
 
           # 上传构建产物
-          $SCP deploy-bundle.tar.gz $VPS:/tmp/
+          retry 6 10 "${SCP_CMD[@]}" deploy-bundle.tar.gz "$VPS:/tmp/"
 
           # 远程执行部署
-          $SSH $VPS << 'DEPLOY'
+          "${SSH_CMD[@]}" "$VPS" << 'DEPLOY'
             set -e
 
             cd /var/www/chexian
