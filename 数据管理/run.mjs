@@ -67,8 +67,8 @@ function printUsage() {
   console.log('示例:');
   console.log('  node run.mjs transform -i input.xlsx -o output.parquet');
   console.log('  node run.mjs enrich --source hist.xlsx --target new.xlsx --output matched.xlsx');
-  console.log('  node run.mjs full --source 续保业务类型匹配更新至2026年4月.xlsx --target 车险24-26年清单更新至20260307.xlsx --output result.parquet');
-  console.log('  node run.mjs full --target 车险24-26年清单更新至20260307.xlsx --output warehouse/fact/policy/current/车险24-26年清单_20260307.parquet');
+  console.log('  node run.mjs full --source 续保业务类型匹配更新至2026年4月.xlsx --target 每日数据_20231101_20260307.xlsx --output result.parquet');
+  console.log('  node run.mjs full --target 每日数据_20231101_20260307.xlsx --output warehouse/fact/policy/current/每日数据_20231101_20260307.parquet');
   console.log('  node run.mjs full --source hist.xlsx --target new.xlsx --output result.parquet --no-sync');
 }
 
@@ -225,7 +225,7 @@ async function main() {
         const fileDate = dateMatch && dateMatch.length > 0
           ? dateMatch[dateMatch.length - 1]
           : new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        opts.output = join(scriptDir, 'warehouse/fact/policy/current', `车险24-26年清单_${fileDate}.parquet`);
+        opts.output = join(scriptDir, 'warehouse/fact/policy/current', `每日数据_20231101_${fileDate}.parquet`);
       }
       
       if (opts.source) {

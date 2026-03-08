@@ -1,9 +1,9 @@
 #!/bin/bash
-# 每日一键 ETL：单清单模式（24-26 年），零参数运行
+# 每日一键 ETL：单清单模式，零参数运行
 #
 # 源文件命名规范：
 #   续保业务类型匹配更新至YYYY年M月.xlsx
-#   车险24-26年清单更新至YYYYMMDD.xlsx
+#   每日数据_20231101_YYYYMMDD.xlsx
 #
 # 输出目录结构：
 #   warehouse/fact/policy/current/   ← 服务器只加载此目录（单个活跃文件）
@@ -35,6 +35,16 @@ if [[ -n "$OLD_FILES" ]]; then
     echo ""
 fi
 
+OLD_24_26=$(ls -1 "$CURRENT_DIR"/车险24-26年清单_*.parquet 2>/dev/null || true)
+if [[ -n "$OLD_24_26" ]]; then
+    echo -e "${YELLOW}📦 发现旧命名格式文件，迁移到 archive/${NC}"
+    for f in $OLD_24_26; do
+        mv "$f" "$ARCHIVE_DIR/"
+        echo "   → $(basename "$f")"
+    done
+    echo ""
+fi
+
 # ============================================================
 # 1. 找续保源文件（续保业务类型匹配*.xlsx / 续保类型匹配*.xlsx）
 # ============================================================
@@ -46,15 +56,15 @@ else
 fi
 
 # ============================================================
-# 2. 找单清单文件（车险24-26年清单更新至*.xlsx）
+# 2. 找每日数据文件（每日数据_*.xlsx）
 # ============================================================
-POLICY_XLSX=$(ls -1 车险24-26年清单更新至*.xlsx 2>/dev/null | sort -r | head -1)
+POLICY_XLSX=$(ls -1 每日数据_*.xlsx 2>/dev/null | sort -r | head -1)
 if [[ -n "$POLICY_XLSX" ]]; then
-    POLICY_DATE=$(echo "$POLICY_XLSX" | grep -oE '[0-9]{8}' | tail -1)
-    POLICY_OUTPUT="$CURRENT_DIR/车险24-26年清单_${POLICY_DATE}.parquet"
-    echo -e "${GREEN}数据清单: $POLICY_XLSX → $(basename "$POLICY_OUTPUT")${NC}"
+    POLICY_BASENAME="${POLICY_XLSX%.xlsx}"
+    POLICY_OUTPUT="$CURRENT_DIR/${POLICY_BASENAME}.parquet"
+    echo -e "${GREEN}每日数据: $POLICY_XLSX → $(basename "$POLICY_OUTPUT")${NC}"
 else
-    echo -e "${RED}❌ 未找到单清单（车险24-26年清单更新至*.xlsx）${NC}"
+    echo -e "${RED}❌ 未找到每日数据文件（每日数据_*.xlsx）${NC}"
     exit 1
 fi
 
@@ -75,7 +85,7 @@ archive_old() {
     done
 }
 
-archive_old "车险24-26年清单" "$POLICY_OUTPUT"
+archive_old "每日数据" "$POLICY_OUTPUT"
 
 echo ""
 
@@ -109,8 +119,26 @@ fi
 # 6. 同步 current/ 下所有基础明细 parquet 以及 vps-export/ 下的预聚合 parquet 到 VPS
 # ============================================================
 SYNC_SCRIPT="$(dirname "$SCRIPT_DIR")/deploy/sync-data.sh"
-# 收集全量明细数据，以及刚才生成的预聚合数据
-PARQUET_FILES=("$CURRENT_DIR"/*.parquet "warehouse/vps-export"/*.parquet)
+VPS_HOST="chexian-vps-deploy"
+
+if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$VPS_HOST" true 2>/dev/null; then
+    echo -e "${RED}❌ 无法连接 VPS（${VPS_HOST}），终止同步${NC}"
+    echo "建议先执行：bash scripts/setup-local-env.sh"
+    echo "验证命令：ssh ${VPS_HOST} echo ok"
+    exit 1
+fi
+
+shopt -s nullglob
+PARQUET_FILES=("$CURRENT_DIR"/*.parquet)
+if [[ -d "warehouse/vps-export" ]]; then
+    PARQUET_FILES+=("warehouse/vps-export"/*.parquet)
+fi
+shopt -u nullglob
+
+if [[ ${#PARQUET_FILES[@]} -eq 0 ]]; then
+    echo -e "${RED}❌ 未找到可同步的 Parquet 文件，终止同步${NC}"
+    exit 1
+fi
 
 echo -e "${GREEN}📦 同步 ${#PARQUET_FILES[@]} 个文件到 VPS${NC}"
 for f in "${PARQUET_FILES[@]}"; do

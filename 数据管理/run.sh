@@ -34,8 +34,8 @@ print_usage() {
     echo "示例:"
     echo "  ./run.sh transform -i input.xlsx -o output.parquet"
     echo "  ./run.sh enrich --source hist.xlsx --target new.xlsx --output matched.xlsx"
-    echo "  ./run.sh full --source 续保业务类型匹配更新至2026年4月.xlsx --target 车险24-26年清单更新至20260307.xlsx --output result.parquet"
-    echo "  ./run.sh full --target 车险24-26年清单更新至20260307.xlsx --output warehouse/fact/policy/current/车险24-26年清单_20260307.parquet"
+    echo "  ./run.sh full --source 续保业务类型匹配更新至2026年4月.xlsx --target 每日数据_20231101_20260307.xlsx --output result.parquet"
+    echo "  ./run.sh full --target 每日数据_20231101_20260307.xlsx --output warehouse/fact/policy/current/每日数据_20231101_20260307.parquet"
     echo "  ./run.sh full --source hist.xlsx --target new.xlsx --output result.parquet --no-sync"
 }
 
@@ -112,7 +112,7 @@ case "${1:-help}" in
             if [[ -z "$FILE_DATE" ]]; then
                 FILE_DATE=$(date +%Y%m%d)
             fi
-            OUTPUT="warehouse/fact/policy/current/车险24-26年清单_${FILE_DATE}.parquet"
+            OUTPUT="warehouse/fact/policy/current/每日数据_20231101_${FILE_DATE}.parquet"
         fi
 
         if [[ -n "$SOURCE" ]]; then

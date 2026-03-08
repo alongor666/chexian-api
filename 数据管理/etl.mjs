@@ -42,11 +42,11 @@ function main() {
   // 检查必要的数据文件（动态匹配，不依赖硬编码文件名）
   const dirFiles = readdirSync(scriptDir);
   const hasSource = dirFiles.some(f => f.startsWith('续保类型匹配') && f.endsWith('.xlsx'));
-  const hasDaily = dirFiles.some(f => f.startsWith('车险2526年清单更新至') && f.endsWith('.xlsx'));
+  const hasDaily = dirFiles.some(f => f.startsWith('每日数据_') && f.endsWith('.xlsx'));
 
   if (!hasSource || !hasDaily) {
     if (!hasSource) log('yellow', '提示: 未找到续保源文件（续保类型匹配*.xlsx）');
-    if (!hasDaily) log('yellow', '提示: 未找到每日清单文件（车险2526年清单更新至*.xlsx）');
+    if (!hasDaily) log('yellow', '提示: 未找到每日数据文件（每日数据_*.xlsx）');
     console.log('');
     log('yellow', 'ETL 将自动搜索匹配的文件名模式');
   }

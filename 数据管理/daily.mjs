@@ -4,7 +4,7 @@
  * 
  * 源文件命名规范：
  *   续保业务类型匹配更新至YYYY年M月.xlsx
- *   车险24-26年清单更新至YYYYMMDD.xlsx
+ *   每日数据_20231101_YYYYMMDD.xlsx
  * 
  * 输出目录结构：
  *   warehouse/fact/policy/current/   ← 服务器只加载此目录（单个活跃文件）
@@ -121,6 +121,15 @@ function runPythonScript(python, scriptPath, args) {
   });
 }
 
+function checkVpsConnectivity() {
+  try {
+    execSync('ssh -o BatchMode=yes -o ConnectTimeout=10 chexian-vps-deploy true', { stdio: 'pipe' });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function main() {
   const scriptDir = getScriptDir();
   process.chdir(scriptDir);
@@ -148,6 +157,16 @@ async function main() {
     }
   }
 
+  const old2426Files = readdirSync(currentDir)
+    .filter(f => f.startsWith('车险24-26年清单_') && f.endsWith('.parquet'));
+  if (old2426Files.length > 0) {
+    log('yellow', '📦 发现旧命名格式文件，迁移到 archive/');
+    for (const f of old2426Files) {
+      renameSync(join(currentDir, f), join(archiveDir, f));
+      console.log(`   → ${f}`);
+    }
+  }
+
   // 1. 找续保源文件
   const sourceFiles = [
     ...ls('续保业务类型匹配*.xlsx', scriptDir),
@@ -161,20 +180,20 @@ async function main() {
   }
 
   // 2. 找单清单文件
-  const policyFiles = ls('车险24-26年清单更新至*.xlsx', scriptDir);
+  const policyFiles = ls('每日数据_*.xlsx', scriptDir);
   if (policyFiles.length === 0) {
-    log('red', '❌ 未找到单清单（车险24-26年清单更新至*.xlsx）');
+    log('red', '❌ 未找到每日数据文件（每日数据_*.xlsx）');
     process.exit(1);
   }
   const policyXlsx = policyFiles[0];
-  const policyDate = extractDate(policyXlsx.name) || formatDate();
-  const policyOutput = join(currentDir, `车险24-26年清单_${policyDate}.parquet`);
-  log('green', `数据清单: ${policyXlsx.name} → ${basename(policyOutput)}`);
+  const policyBasename = policyXlsx.name.replace(/\.xlsx$/i, '');
+  const policyOutput = join(currentDir, `${policyBasename}.parquet`);
+  log('green', `每日数据: ${policyXlsx.name} → ${basename(policyOutput)}`);
 
   console.log('');
 
   // 3. 归档旧文件
-  archiveOld(currentDir, archiveDir, '车险24-26年清单', policyOutput);
+  archiveOld(currentDir, archiveDir, '每日数据', policyOutput);
 
   console.log('');
 
@@ -212,12 +231,17 @@ async function main() {
     const syncScript = join(projectRoot, 'deploy/sync-data.sh');
     const vpsExportDir = join(scriptDir, 'warehouse/vps-export');
 
-    // 收集全量明细数据
+    if (!checkVpsConnectivity()) {
+      log('red', '❌ 无法连接 VPS（chexian-vps-deploy），终止同步');
+      console.log('建议先执行：bash scripts/setup-local-env.sh');
+      console.log('验证命令：ssh chexian-vps-deploy echo ok');
+      process.exit(1);
+    }
+
     const currentFiles = readdirSync(currentDir)
       .filter(f => f.endsWith('.parquet'))
       .map(f => join(currentDir, f));
 
-    // 收集预聚合数据
     const exportFiles = existsSync(vpsExportDir)
       ? readdirSync(vpsExportDir)
         .filter(f => f.endsWith('.parquet'))
@@ -225,6 +249,11 @@ async function main() {
       : [];
 
     const allFiles = [...currentFiles, ...exportFiles];
+
+    if (allFiles.length === 0) {
+      log('red', '❌ 未找到可同步的 Parquet 文件，终止同步');
+      process.exit(1);
+    }
 
     log('green', `📦 同步 ${allFiles.length} 个文件到 VPS`);
     for (const f of allFiles) {
