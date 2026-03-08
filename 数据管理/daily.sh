@@ -1,13 +1,12 @@
 #!/bin/bash
-# 每日一键 ETL：双清单模式（历史 + 每日），零参数运行
+# 每日一键 ETL：单清单模式（24-26 年），零参数运行
 #
 # 源文件命名规范：
-#   续保类型匹配至*.xlsx            ← --source（续保匹配库）
-#   车险2024年清单更新至YYYYMMDD.xlsx  ← 历史数据（2023-11 ~ 2024-12）
-#   车险2526年清单更新至YYYYMMDD.xlsx  ← 每日数据（2025-01 ~ 今）
+#   续保业务类型匹配更新至YYYY年M月.xlsx
+#   车险24-26年清单更新至YYYYMMDD.xlsx
 #
 # 输出目录结构：
-#   warehouse/fact/policy/current/   ← 服务器只加载此目录（≤2 个活跃文件）
+#   warehouse/fact/policy/current/   ← 服务器只加载此目录（单个活跃文件）
 #   warehouse/fact/policy/archive/   ← 旧文件归档，不加载
 
 set -e
@@ -37,44 +36,32 @@ if [[ -n "$OLD_FILES" ]]; then
 fi
 
 # ============================================================
-# 1. 找续保源文件（--source 通用）
+# 1. 找续保源文件（续保业务类型匹配*.xlsx / 续保类型匹配*.xlsx）
 # ============================================================
-SOURCE=$(ls -1 续保类型匹配*.xlsx 2>/dev/null | sort -r | head -1)
-if [[ -z "$SOURCE" ]]; then
-    echo -e "${RED}❌ 未找到续保源文件: 续保类型匹配*.xlsx${NC}"
-    exit 1
-fi
-echo -e "${GREEN}续保源文件: $SOURCE${NC}"
-
-# ============================================================
-# 2. 找历史清单文件（车险2024年清单更新至*.xlsx）
-# ============================================================
-HIST_XLSX=$(ls -1 车险2024年清单更新至*.xlsx 2>/dev/null | sort -r | head -1)
-if [[ -n "$HIST_XLSX" ]]; then
-    HIST_DATE=$(echo "$HIST_XLSX" | grep -oE '[0-9]{8}' | tail -1)
-    HIST_OUTPUT="$CURRENT_DIR/历史数据_20231101_20241231.parquet"
-    echo -e "${GREEN}历史清单: $HIST_XLSX → $(basename $HIST_OUTPUT)${NC}"
+SOURCE_XLSX=$(ls -1 续保业务类型匹配*.xlsx 续保类型匹配*.xlsx 2>/dev/null | sort -r | head -1)
+if [[ -n "$SOURCE_XLSX" ]]; then
+    echo -e "${GREEN}续保源文件: $SOURCE_XLSX${NC}"
 else
-    echo -e "${YELLOW}⚠ 未找到历史清单（车险2024年清单更新至*.xlsx），跳过历史文件生成${NC}"
+    echo -e "${YELLOW}⚠ 未找到续保源文件，将跳过续保业务类型匹配${NC}"
 fi
 
 # ============================================================
-# 3. 找每日清单文件（车险2526年清单更新至*.xlsx）
+# 2. 找单清单文件（车险24-26年清单更新至*.xlsx）
 # ============================================================
-DAILY_XLSX=$(ls -1 车险2526年清单更新至*.xlsx 2>/dev/null | sort -r | head -1)
-if [[ -n "$DAILY_XLSX" ]]; then
-    DAILY_DATE=$(echo "$DAILY_XLSX" | grep -oE '[0-9]{8}' | tail -1)
-    DAILY_OUTPUT="$CURRENT_DIR/每日数据_20250101_${DAILY_DATE}.parquet"
-    echo -e "${GREEN}每日清单: $DAILY_XLSX → $(basename $DAILY_OUTPUT)${NC}"
+POLICY_XLSX=$(ls -1 车险24-26年清单更新至*.xlsx 2>/dev/null | sort -r | head -1)
+if [[ -n "$POLICY_XLSX" ]]; then
+    POLICY_DATE=$(echo "$POLICY_XLSX" | grep -oE '[0-9]{8}' | tail -1)
+    POLICY_OUTPUT="$CURRENT_DIR/车险24-26年清单_${POLICY_DATE}.parquet"
+    echo -e "${GREEN}数据清单: $POLICY_XLSX → $(basename "$POLICY_OUTPUT")${NC}"
 else
-    echo -e "${RED}❌ 未找到每日清单（车险2526年清单更新至*.xlsx）${NC}"
+    echo -e "${RED}❌ 未找到单清单（车险24-26年清单更新至*.xlsx）${NC}"
     exit 1
 fi
 
 echo ""
 
 # ============================================================
-# 4. 归档 current/ 下旧的同类文件（避免重复）
+# 3. 归档 current/ 下旧的同类文件（避免重复）
 # ============================================================
 archive_old() {
     local PREFIX="$1"   # e.g. "历史数据" or "每日数据"
@@ -88,30 +75,24 @@ archive_old() {
     done
 }
 
-archive_old "历史数据" "$HIST_OUTPUT"
-archive_old "每日数据" "$DAILY_OUTPUT"
+archive_old "车险24-26年清单" "$POLICY_OUTPUT"
 
 echo ""
 
 # ============================================================
-# 5. 执行历史文件转换（如有）
+# 4. 执行单清单转换
 # ============================================================
-if [[ -n "$HIST_XLSX" ]]; then
-    echo -e "${GREEN}▶ 步骤 1/2: 历史数据转换${NC}"
-    ./run.sh full --source "$SOURCE" --target "$HIST_XLSX" --output "$HIST_OUTPUT" --no-sync
-    echo ""
+echo -e "${GREEN}▶ 步骤 1/1: 单清单数据转换${NC}"
+if [[ -n "$SOURCE_XLSX" ]]; then
+    ./run.sh full --source "$SOURCE_XLSX" --target "$POLICY_XLSX" --output "$POLICY_OUTPUT" --no-sync
+else
+    ./run.sh full --target "$POLICY_XLSX" --output "$POLICY_OUTPUT" --no-sync
 fi
 
-# ============================================================
-# 6. 执行每日文件转换
-# ============================================================
-echo -e "${GREEN}▶ 步骤 2/2: 每日数据转换${NC}"
-./run.sh full --source "$SOURCE" --target "$DAILY_XLSX" --output "$DAILY_OUTPUT" --no-sync
-
 echo ""
 
 # ============================================================
-# 7. 运行本地预聚合 (export-for-vps.mjs)
+# 5. 运行本地预聚合 (export-for-vps.mjs)
 # 确保在上传之前在本地计算好所有聚合数据，防止 VPS 资源爆炸及数据不一致
 # ============================================================
 EXPORT_SCRIPT="$(dirname "$SCRIPT_DIR")/scripts/export-for-vps.mjs"
@@ -125,7 +106,7 @@ else
 fi
 
 # ============================================================
-# 8. 同步 current/ 下所有基础明细 parquet 以及 vps-export/ 下的预聚合 parquet 到 VPS
+# 6. 同步 current/ 下所有基础明细 parquet 以及 vps-export/ 下的预聚合 parquet 到 VPS
 # ============================================================
 SYNC_SCRIPT="$(dirname "$SCRIPT_DIR")/deploy/sync-data.sh"
 # 收集全量明细数据，以及刚才生成的预聚合数据

@@ -26,6 +26,8 @@ PROJECT_ROOT = Path(__file__).parent.parent
 CONFIG_DIR = PROJECT_ROOT / "config"
 LOG_DIR = PROJECT_ROOT / "logs"
 OUTPUT_DIR = PROJECT_ROOT / "output"
+POLICY_KEY_ALIASES = ["保单号", "保单号码", "保单编号", "保单"]
+RENEWAL_TYPE_ALIASES = ["续保业务类型", "续保类型", "业务类型", "续保分类"]
 
 # 确保日志目录存在
 LOG_DIR.mkdir(exist_ok=True)
@@ -51,6 +53,23 @@ def load_config(config_path: str) -> dict:
     """加载YAML配置文件"""
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def first_existing_column(columns, candidates):
+    """返回第一个存在于列集合中的候选列名"""
+    column_set = set(columns)
+    for name in candidates:
+        if name in column_set:
+            return name
+    return None
+
+
+def normalize_policy_series(series: pd.Series) -> pd.Series:
+    """标准化保单号，避免匹配失败"""
+    normalized = series.astype(str).str.strip()
+    normalized = normalized.replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+    normalized = normalized.str.replace(r"\.0$", "", regex=True)
+    return normalized
 
 
 def match_renewal_type(
@@ -84,33 +103,45 @@ def match_renewal_type(
 
     # 读取源文件
     logger.info("正在读取源文件...")
-    df_source = pd.read_excel(source_file, dtype={key_column: str})
-    logger.info(f"源文件行数: {len(df_source)}, 列数: {len(df_source.columns)}")
+    source_header = pd.read_excel(source_file, nrows=0)
+    source_key_column = key_column if key_column in source_header.columns else first_existing_column(source_header.columns, POLICY_KEY_ALIASES)
+    source_match_column = match_column if match_column in source_header.columns else first_existing_column(source_header.columns, RENEWAL_TYPE_ALIASES)
+    if source_key_column is None:
+        raise ValueError(f"源文件缺少关键列，候选列: {POLICY_KEY_ALIASES}")
+    if source_match_column is None:
+        raise ValueError(f"源文件缺少匹配列，候选列: {RENEWAL_TYPE_ALIASES}")
 
-    # 检查源文件是否包含必要列
-    if key_column not in df_source.columns:
-        raise ValueError(f"源文件缺少关键列: {key_column}")
-    if match_column not in df_source.columns:
-        raise ValueError(f"源文件缺少匹配列: {match_column}")
+    df_source = pd.read_excel(
+        source_file,
+        usecols=[source_key_column, source_match_column],
+        dtype={source_key_column: str, source_match_column: str}
+    )
+    logger.info(f"源文件行数: {len(df_source)}, 列数: {len(df_source.columns)}")
 
     # 读取目标文件
     logger.info("正在读取目标文件...")
-    df_target = pd.read_excel(target_file, dtype={key_column: str})
-    logger.info(f"目标文件行数: {len(df_target)}, 列数: {len(df_target.columns)}")
+    target_header = pd.read_excel(target_file, nrows=0)
+    target_key_column = key_column if key_column in target_header.columns else first_existing_column(target_header.columns, POLICY_KEY_ALIASES)
+    if target_key_column is None:
+        raise ValueError(f"目标文件缺少关键列，候选列: {POLICY_KEY_ALIASES}")
 
-    # 检查目标文件是否包含关键列
-    if key_column not in df_target.columns:
-        raise ValueError(f"目标文件缺少关键列: {key_column}")
+    df_target = pd.read_excel(target_file, dtype={target_key_column: str})
+    logger.info(f"目标文件行数: {len(df_target)}, 列数: {len(df_target.columns)}")
 
     # 创建源文件的映射字典（保单号 -> 续保业务类型）
     logger.info("正在创建匹配映射...")
-    source_mapping = df_source.set_index(key_column)[match_column].to_dict()
-    unique_source_keys = len(source_mapping)
+    df_source[source_key_column] = normalize_policy_series(df_source[source_key_column])
+    df_source[source_match_column] = df_source[source_match_column].astype(str).str.strip()
+    df_source = df_source.dropna(subset=[source_key_column]).drop_duplicates(subset=[source_key_column], keep="last")
+
+    source_mapping = df_source.set_index(source_key_column)[source_match_column].to_dict()
+    unique_source_keys = len(df_source)
     logger.info(f"源文件唯一{key_column}数: {unique_source_keys}")
 
     # 匹配续保业务类型到目标文件
     logger.info("正在执行匹配...")
-    df_target[match_column] = df_target[key_column].map(source_mapping)
+    df_target[target_key_column] = normalize_policy_series(df_target[target_key_column])
+    df_target[match_column] = df_target[target_key_column].map(source_mapping)
 
     # 统计匹配结果
     total_rows = len(df_target)
