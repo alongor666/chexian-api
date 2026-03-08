@@ -286,7 +286,7 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
   return (
     <section className={cn(cardStyles.standard, 'space-y-3')}>
       <h3 className={cn(textStyles.titleSmall, 'font-semibold')}>
-        主全 × 交三驾乘险推介率分布图
+        主全 × 交三驾意险推介率分布图
       </h3>
       <div className="space-y-1">
         {decisionSummary ? (

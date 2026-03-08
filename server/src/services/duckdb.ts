@@ -668,6 +668,8 @@ class DuckDBService {
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
         COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
+        COALESCE(SUM(CASE WHEN insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN premium ELSE 0 END), 0) AS commercial_premium,
+        COALESCE(SUM(CASE WHEN insurance_type = '交强险' THEN premium ELSE 0 END), 0) AS compulsory_premium,
         COALESCE(SUM(premium), 0) AS auto_premium
       FROM normalized
       WHERE dedup_key IS NOT NULL

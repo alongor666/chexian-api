@@ -16,17 +16,16 @@ import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePerio
 export type CrossSellHeatmapTimePeriod = 'day' | 'week' | 'month' | 'quarter';
 
 export interface CrossSellHeatmapDrillStep {
-  dimension: string;
+  dimension: CrossSellHeatmapDimension;
   value: string;
 }
 
-export type CrossSellHeatmapDimension = 'org_level_3' | 'team' | 'salesman' | 'customer_category' | 'coverage_combination' | 'energy_type' | 'business_nature';
+export type CrossSellHeatmapDimension = 'org_level_3' | 'team' | 'salesman' | 'coverage_combination' | 'energy_type' | 'business_nature';
 
 export const CROSS_SELL_HEATMAP_DIMENSION_LABELS: Record<CrossSellHeatmapDimension, string> = {
   org_level_3: '三级机构',
   team: '团队',
   salesman: '业务员',
-  customer_category: '客户类别',
   coverage_combination: '险别组合',
   energy_type: '能源类型',
   business_nature: '新转续',
@@ -37,7 +36,11 @@ export interface HeatmapPoint {
   org_level_3: string;
   auto_count: number;
   driver_count: number;
+  driver_policy_count: number;
+  driver_premium: number;
+  penetration_base_premium: number;
   rate: number;
+  penetration_rate: number | null;
   avg_premium: number;
   achievement_rate: number | null;
 }
@@ -92,7 +95,11 @@ export function useCrossSellHeatmap({
         org_level_3: String(r.org_level_3 ?? ''),
         auto_count: Number(r.auto_count ?? 0),
         driver_count: Number(r.driver_count ?? 0),
+        driver_policy_count: Number(r.driver_policy_count ?? 0),
+        driver_premium: Number(r.driver_premium ?? 0),
+        penetration_base_premium: Number(r.penetration_base_premium ?? 0),
         rate: Number(r.rate ?? 0),
+        penetration_rate: r.penetration_rate == null ? null : Number(r.penetration_rate),
         avg_premium: Number(r.avg_premium ?? 0),
         achievement_rate: r.achievement_rate == null ? null : Number(r.achievement_rate),
       })),

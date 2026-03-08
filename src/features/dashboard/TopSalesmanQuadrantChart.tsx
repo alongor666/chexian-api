@@ -136,8 +136,8 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                     return `
             <div style="font-weight:600;margin-bottom:4px">${val[3]} (${val[4]})</div>
             <div>推介率: <span style="font-weight:600">${formatPercent(val[0])}</span></div>
-            <div>驾乘件均: <span style="font-weight:600">${formatCount(val[1])}</span></div>
-            <div>驾乘保费: <span style="font-weight:600">${formatDriverPremiumWan(val[5])} 万</span></div>
+            <div>驾意件均: <span style="font-weight:600">${formatCount(val[1])}</span></div>
+            <div>驾意保费: <span style="font-weight:600">${formatDriverPremiumWan(val[5])} 万</span></div>
           `;
                 },
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -163,7 +163,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             },
             yAxis: {
                 type: 'value',
-                name: '驾乘件均',
+                name: '驾意件均',
                 nameLocation: 'middle',
                 nameGap: 50,
                 min: minPremium,

@@ -1077,6 +1077,8 @@ class ApiClient {
       policy_date: string;
       premium: number;
       plan_premium: number | null;
+      prev_mom_premium: number;
+      prev_yoy_premium: number;
       achievement_rate: number | null;
       mom_growth_rate: number | null;
       yoy_growth_rate: number | null;
@@ -1259,7 +1261,11 @@ class ApiClient {
       org_level_3: string;
       auto_count: number;
       driver_count: number;
+      driver_policy_count: number;
+      driver_premium: number;
+      penetration_base_premium: number;
       rate: number;
+      penetration_rate: number | null;
       avg_premium: number;
       achievement_rate: number | null;
     }>;

@@ -1227,7 +1227,7 @@ router.get(
  * groupBy: 当前分组维度（不传则仅返回汇总）
  */
 const CROSS_SELL_DIMENSIONS = [
-  'org_level_3', 'team', 'salesman', 'customer_category',
+  'org_level_3', 'team', 'salesman',
   'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
 ] as const;
 
@@ -1243,7 +1243,7 @@ function getSeatCoverageClause(level?: CrossSellSeatCoverageLevel): string {
     case 'gte_2w':
       return 'COALESCE(driver_coverage, 0) >= 20000 AND COALESCE(passenger_coverage, 0) >= 20000';
     case 'lt_1w':
-      // 必须有至少一项保额 > 0，否则会把没买驾乘险（保额全为0）的也算进去，导致推介率分母极大，件均异常
+      // 必须有至少一项保额 > 0，否则会把没买驾意险（保额全为0）的也算进去，导致推介率分母极大，件均异常
       return '(COALESCE(driver_coverage, 0) > 0 OR COALESCE(passenger_coverage, 0) > 0) AND COALESCE(driver_coverage, 0) < 10000 AND COALESCE(passenger_coverage, 0) < 10000';
     default:
       return '';
@@ -1290,16 +1290,15 @@ router.get(
     }
 
     const groupBy = crossSellResult.data.groupBy as CrossSellDimension | undefined;
+    const normalizedVehicleCategory: VehicleCategory = 'passenger';
+    const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
     await ensureCrossSellAggregateTablesReady();
 
     let { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
 
-    // 车辆类别过滤（标签页联动）
-    const vehicleCat = crossSellResult.data.vehicleCategory as VehicleCategory | undefined;
-    if (vehicleCat) {
-      finalWhereClause += ` AND ${getVehicleCategoryFilter(vehicleCat)}`;
-    }
-    const seatCoverageClause = getSeatCoverageClause(crossSellResult.data.seatCoverageLevel);
+    // 兼容保留参数：统一强制非营业客车 + 不分保额
+    finalWhereClause += ` AND ${getVehicleCategoryFilter(normalizedVehicleCategory)}`;
+    const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
     }
@@ -1428,19 +1427,21 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, granularity, seatCoverageLevel } = extraResult.data;
+    const { granularity } = extraResult.data;
+    const normalizedVehicleCategory: VehicleCategory = 'passenger';
+    const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
     await ensureCrossSellAggregateTablesReady();
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
     let finalWhereClause = whereClause;
-    const seatCoverageClause = getSeatCoverageClause(seatCoverageLevel);
+    const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
     }
 
     const sql = generateCrossSellTrendQuery(
       finalWhereClause,
-      vehicleCategory as VehicleCategory,
+      normalizedVehicleCategory,
       granularity as TrendGranularity
     );
 
@@ -1475,19 +1476,20 @@ router.get(
       throw new AppError(400, extraResult.error.issues[0].message);
     }
 
-    const { vehicleCategory, seatCoverageLevel } = extraResult.data;
+    const normalizedVehicleCategory: VehicleCategory = 'passenger';
+    const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
     await ensureCrossSellAggregateTablesReady();
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
     let finalWhereClause = whereClause;
-    const seatCoverageClause = getSeatCoverageClause(seatCoverageLevel);
+    const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
     }
 
     const sql = generateCrossSellTimePeriodQuery(
       finalWhereClause,
-      vehicleCategory as VehicleCategory
+      normalizedVehicleCategory
     );
 
     logger.debug('[cross-sell-summary] Generated SQL', { sqlLength: sql.length });
@@ -1499,7 +1501,7 @@ router.get(
       SELECT MAX(CAST(policy_date AS DATE)) AS max_date
       FROM CrossSellDailyAgg
       WHERE ${finalWhereClause}
-        AND ${getVehicleCategoryFilter(vehicleCategory as VehicleCategory)}
+        AND ${getVehicleCategoryFilter(normalizedVehicleCategory)}
     `;
     const maxDateResult = await duckdbService.query(maxDateSql, QUERY_CACHE.hotspotMedium);
     const maxDate = maxDateResult[0]?.max_date || null;
@@ -1749,19 +1751,21 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, coverage, timePeriod, seatCoverageLevel } = extraResult.data;
+    const { coverage, timePeriod } = extraResult.data;
+    const normalizedVehicleCategory: VehicleCategory = 'passenger';
+    const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
     await ensureCrossSellAggregateTablesReady();
 
     const { whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
     let finalWhereClause = whereWithoutDate;
-    const seatCoverageClause = getSeatCoverageClause(seatCoverageLevel);
+    const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
     }
 
     const sql = generateCrossSellTopSalesmanQuery(
       finalWhereClause,
-      vehicleCategory as VehicleCategory,
+      normalizedVehicleCategory,
       coverage as TopSalesmanCoverage,
       timePeriod
     );
@@ -1817,11 +1821,11 @@ router.get(
     const {
       drillPath: drillPathRaw,
       groupBy,
-      vehicleCategory,
-      seatCoverageLevel,
       granularity,
       timePeriod,
     } = parseResult.data;
+    const normalizedVehicleCategory: VehicleCategory = 'passenger';
+    const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
 
     let drillPath: DrilldownStep[] = [];
     try {
@@ -1837,10 +1841,10 @@ router.get(
     }
 
     const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
-    const seatCoverageClause = getSeatCoverageClause(seatCoverageLevel);
+    const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
 
-    let withDateWhere = `${whereWithDate} AND ${getVehicleCategoryFilter(vehicleCategory as VehicleCategory)}`;
-    let withoutDateWhere = `${whereWithoutDate} AND ${getVehicleCategoryFilter(vehicleCategory as VehicleCategory)}`;
+    let withDateWhere = `${whereWithDate} AND ${getVehicleCategoryFilter(normalizedVehicleCategory)}`;
+    let withoutDateWhere = `${whereWithoutDate} AND ${getVehicleCategoryFilter(normalizedVehicleCategory)}`;
     if (seatCoverageClause) {
       withDateWhere += ` AND ${seatCoverageClause}`;
       withoutDateWhere += ` AND ${seatCoverageClause}`;
@@ -1848,13 +1852,13 @@ router.get(
 
     const trendSql = generateCrossSellTrendQuery(
       withDateWhere,
-      vehicleCategory as VehicleCategory,
+      normalizedVehicleCategory,
       granularity as TrendGranularity
     );
 
     const timePeriodSql = generateCrossSellTimePeriodQuery(
       withDateWhere,
-      vehicleCategory as VehicleCategory
+      normalizedVehicleCategory
     );
 
     const drillSummarySql = generateCrossSellQuery(
@@ -1868,13 +1872,13 @@ router.get(
 
     const zhuquanTopSalesmanSql = generateCrossSellTopSalesmanQuery(
       withoutDateWhere,
-      vehicleCategory as VehicleCategory,
+      normalizedVehicleCategory,
       '主全',
       timePeriod
     );
     const jiaosanTopSalesmanSql = generateCrossSellTopSalesmanQuery(
       withoutDateWhere,
-      vehicleCategory as VehicleCategory,
+      normalizedVehicleCategory,
       '交三',
       timePeriod
     );
@@ -2604,18 +2608,20 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, coverageCombination, days, seatCoverageLevel } = extraResult.data;
+    const { coverageCombination, days } = extraResult.data;
+    const normalizedVehicleCategory: VehicleCategory = 'passenger';
+    const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
     let finalWhereClause = whereClause;
-    const seatCoverageClause = getSeatCoverageClause(seatCoverageLevel);
+    const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
     if (seatCoverageClause) {
       finalWhereClause += ` AND ${seatCoverageClause}`;
     }
 
     const sql = generateCrossSellOrgTrendQuery(
       finalWhereClause,
-      vehicleCategory as VehicleCategory,
+      normalizedVehicleCategory,
       coverageCombination as CoverageCombinationFilter,
       days
     );
@@ -2635,7 +2641,8 @@ router.get(
  * GET /api/query/cross-sell-heatmap
  * 交叉销售热力图（最近14天 × 所有三级机构，推介率/件均保费）
  */
-const CROSS_SELL_HEATMAP_DIMENSIONS = ['org_level_3', 'team', 'salesman', 'customer_category', 'coverage_combination', 'energy_type', 'business_nature'] as const;
+const CROSS_SELL_HEATMAP_DIMENSIONS = ['org_level_3', 'team', 'salesman', 'coverage_combination', 'energy_type', 'business_nature'] as const;
+const CROSS_SELL_HEATMAP_DIMENSION_SET = new Set<string>(CROSS_SELL_HEATMAP_DIMENSIONS);
 const crossSellHeatmapSchema = z.object({
   vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
   seatCoverageLevel: z.enum(CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL).optional(),
@@ -2651,22 +2658,36 @@ router.get(
     if (!extraResult.success) {
       throw new AppError(400, extraResult.error.issues[0].message);
     }
-    const { vehicleCategory, seatCoverageLevel, timePeriod, groupByDimension, drillFilter: drillFilterStr } = extraResult.data;
+    const { timePeriod, groupByDimension, drillFilter: drillFilterStr } = extraResult.data;
+    const normalizedVehicleCategory: VehicleCategory = 'passenger';
+    const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
-    const seatCoverageClause = getSeatCoverageClause(seatCoverageLevel);
+    const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
 
     let crossSellDrillFilter: CrossSellHeatmapDrillStep[] = [];
     try {
-      crossSellDrillFilter = JSON.parse(drillFilterStr || '[]');
-      if (!Array.isArray(crossSellDrillFilter)) crossSellDrillFilter = [];
+      const parsed = JSON.parse(drillFilterStr || '[]');
+      if (Array.isArray(parsed)) {
+        crossSellDrillFilter = parsed
+          .filter((item) => item && typeof item === 'object')
+          .map((item) => ({
+            dimension: String((item as Record<string, unknown>).dimension || ''),
+            value: String((item as Record<string, unknown>).value || ''),
+          }))
+          .filter((item) => CROSS_SELL_HEATMAP_DIMENSION_SET.has(item.dimension))
+          .map((item) => ({
+            dimension: item.dimension as CrossSellHeatmapGroupDimension,
+            value: item.value,
+          }));
+      }
     } catch {
       crossSellDrillFilter = [];
     }
 
     const sql = generateCrossSellHeatmapQuery(
       whereClause,
-      vehicleCategory as VehicleCategory,
+      normalizedVehicleCategory,
       seatCoverageClause,
       timePeriod as 'day' | 'week' | 'month' | 'quarter',
       groupByDimension as CrossSellHeatmapGroupDimension,

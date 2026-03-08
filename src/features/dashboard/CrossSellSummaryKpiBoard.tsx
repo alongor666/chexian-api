@@ -1,10 +1,9 @@
 /**
- * 驾乘险推介率汇总 KPI 卡片组
+ * 驾意险推介率汇总 KPI 卡片组
  * Cross-Sell Summary KPI Board
  *
  * 使用表格格式展示：
- * - 非营业客车/货车：险别组合/指标 | 驾乘保费 | 车险件数 | 推介率 | 驾乘件均 | 车险件均
- * - 摩托车：险别组合/指标 | 推介率（只有单交）
+ * - 非营业客车：险别组合/指标 | 驾意保费 | 车险件数 | 推介率 | 驾意件均 | 车险件均
  * - 环比状态：显示与上一周期的变化（当日vs昨日、当周vs上周、当月vs上月）
  */
 
@@ -30,7 +29,7 @@ interface CrossSellSummaryKpiBoardProps {
 
 
 
-// 非营业客车/货车的行定义：险别组合
+// 非营业客车的行定义：险别组合
 const COVERAGE_ROWS_FULL = [
   { key: '整体', label: '整体' },
   { key: '主全', label: '主全' },
@@ -38,25 +37,16 @@ const COVERAGE_ROWS_FULL = [
   { key: '单交', label: '单交' },
 ] as const;
 
-// 摩托车的行定义：只有单交
-const COVERAGE_ROWS_MOTORCYCLE = [
-  { key: '单交', label: '单交' },
-] as const;
-
-// 非营业客车/货车的列定义：指标
+// 非营业客车的列定义：指标
 const METRIC_COLUMNS_FULL = [
-  { key: 'premium', label: '驾乘保费' },
+  { key: 'premium', label: '驾意保费' },
   { key: 'auto_count', label: '车险件数' },
-  { key: 'driver_count', label: '驾乘险件数' },
+  { key: 'driver_count', label: '驾意险件数' },
   { key: 'rate', label: '推介率' },
-  { key: 'avg_premium', label: '驾乘件均' },
+  { key: 'avg_premium', label: '驾意件均' },
   { key: 'auto_avg_premium', label: '车险件均' },
 ] as const;
 
-// 摩托车的列定义：只有推介率
-const METRIC_COLUMNS_MOTORCYCLE = [
-  { key: 'rate', label: '推介率' },
-] as const;
 
 interface TimePeriodData {
   auto_count: number;
@@ -191,12 +181,8 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
   const loading = prefetchedSummary ? false : summaryQuery.loading;
   const error = prefetchedSummary ? null : summaryQuery.error;
 
-  // 判断是否为摩托车
-  const isMotorcycle = vehicleCategory === 'motorcycle';
-
-  // 根据车辆类别选择行和列
-  const coverageRows = isMotorcycle ? COVERAGE_ROWS_MOTORCYCLE : COVERAGE_ROWS_FULL;
-  const metricColumns = isMotorcycle ? METRIC_COLUMNS_MOTORCYCLE : METRIC_COLUMNS_FULL;
+  const coverageRows = COVERAGE_ROWS_FULL;
+  const metricColumns = METRIC_COLUMNS_FULL;
 
   // 根据选择的时间维度获取数据
   const dataByCoverage = useMemo(() => {
@@ -388,12 +374,9 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
         </table>
       </div>
 
-      {/* 验证公式说明 - 摩托车不显示 */}
-      {!isMotorcycle && (
-        <div className={cn(textStyles.caption, colorClasses.text.neutralMuted, 'italic')}>
-          💡 验证公式：驾乘保费 ≈ 车险件数 × 推介率 × 驾乘件均
-        </div>
-      )}
+      <div className={cn(textStyles.caption, colorClasses.text.neutralMuted, 'italic')}>
+        💡 验证公式：驾意保费 ≈ 车险件数 × 推介率 × 驾意件均
+      </div>
     </div>
   );
 });

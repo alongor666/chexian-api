@@ -1,5 +1,5 @@
 /**
- * 驾乘险推介率走势图
+ * 驾意险推介率走势图
  * Cross-Sell Recommendation Rate Trend Chart
  *
  * 4 条折线（整体/主全/交三/单交），支持日/周/月/季粒度切换
@@ -49,7 +49,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   filters,
   granularity,
   metric = 'rate',
-  title = '驾乘险推介率走势',
+  title = '驾意险推介率走势',
   requestKey,
   enabled = true,
   rowsOverride,

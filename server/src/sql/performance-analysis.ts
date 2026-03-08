@@ -1459,6 +1459,8 @@ export function generatePerformanceOrgHeatmapQuery(
       bg.period_key AS policy_date,
       COALESCE(cur.premium, 0) AS premium,
       cur.plan_premium,
+      COALESCE(prev_mom.premium, 0) AS prev_mom_premium,
+      COALESCE(prev_yoy.premium, 0) AS prev_yoy_premium,
       CASE
         WHEN COALESCE(cur.plan_premium, 0) <= 0 THEN NULL
         ELSE ROUND(COALESCE(cur.premium, 0) * 100.0 / (cur.plan_premium / ${planDenom}.0), 2)

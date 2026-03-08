@@ -240,6 +240,47 @@ function getMonthKey(dateText: string): string {
   return dateText.slice(5, 7);
 }
 
+const BRANCH_SUMMARY_ROW_LABEL = '分公司';
+
+function buildPerformanceBranchSummaryRow(
+  date: string,
+  dateRows: PerformanceOrgHeatmapRow[]
+): PerformanceOrgHeatmapRow | null {
+  if (dateRows.length === 0) {
+    return null;
+  }
+
+  const premium = dateRows.reduce((sum, row) => sum + row.premium, 0);
+  const planRows = dateRows.filter((row) => row.planPremium !== null);
+  const planPremium = planRows.length > 0
+    ? planRows.reduce((sum, row) => sum + (row.planPremium ?? 0), 0)
+    : null;
+  const achievementRate = planPremium !== null && planPremium > 0
+    ? (premium / planPremium) * 100
+    : null;
+
+  const prevMomPremium = dateRows.reduce((sum, row) => sum + row.prevMomPremium, 0);
+  const prevYoyPremium = dateRows.reduce((sum, row) => sum + row.prevYoyPremium, 0);
+  const momGrowthRate = prevMomPremium > 0
+    ? ((premium - prevMomPremium) / prevMomPremium) * 100
+    : null;
+  const yoyGrowthRate = prevYoyPremium > 0
+    ? ((premium - prevYoyPremium) / prevYoyPremium) * 100
+    : null;
+
+  return {
+    orgLevel3: BRANCH_SUMMARY_ROW_LABEL,
+    policyDate: date,
+    premium,
+    planPremium,
+    prevMomPremium,
+    prevYoyPremium,
+    achievementRate,
+    momGrowthRate,
+    yoyGrowthRate,
+  };
+}
+
 function PerformanceOrgHeatmap({
   rows,
   loading,
@@ -288,7 +329,24 @@ function PerformanceOrgHeatmap({
       const rate = growthMode === 'mom' ? latestRow.momGrowthRate : latestRow.yoyGrowthRate;
       return rate ?? -Infinity;
     };
-    const organizations = [...orgMap.keys()].sort((a, b) => getOrgSortValue(b) - getOrgSortValue(a));
+    const baseOrganizations = [...orgMap.keys()].sort((a, b) => getOrgSortValue(b) - getOrgSortValue(a));
+    const branchSummaryLine = new Map<string, PerformanceOrgHeatmapRow>();
+    dates.forEach((date) => {
+      const dateRows = baseOrganizations
+        .map((org) => orgMap.get(org)?.get(date))
+        .filter((row): row is PerformanceOrgHeatmapRow => Boolean(row));
+      const summary = buildPerformanceBranchSummaryRow(date, dateRows);
+      if (summary) {
+        branchSummaryLine.set(date, summary);
+      }
+    });
+
+    if (branchSummaryLine.size > 0) {
+      orgMap.set(BRANCH_SUMMARY_ROW_LABEL, branchSummaryLine);
+    }
+    const organizations = branchSummaryLine.size > 0
+      ? [BRANCH_SUMMARY_ROW_LABEL, ...baseOrganizations]
+      : baseOrganizations;
 
     return {
       dates,
@@ -307,8 +365,14 @@ function PerformanceOrgHeatmap({
   const focusWeekday = focusDate && timePeriod === 'day' ? getWeekdayKey(focusDate) : null;
   const focusMonth = focusDate && timePeriod === 'month' ? getMonthKey(focusDate) : null;
 
-  const renderCell = (org: string, date: string, row: PerformanceOrgHeatmapRow | undefined) => {
-    const isSelected = activeCell?.org === org && activeCell?.date === date;
+  const renderCell = (
+    org: string,
+    date: string,
+    row: PerformanceOrgHeatmapRow | undefined,
+    isBranchSummaryRow = false
+  ) => {
+    const canInteract = !isBranchSummaryRow;
+    const isSelected = canInteract && activeCell?.org === org && activeCell?.date === date;
     const isSameWeekday = focusWeekday !== null && focusWeekday >= 0 && getWeekdayKey(date) === focusWeekday;
     const isSameMonth = focusMonth !== null && getMonthKey(date) === focusMonth;
     const isFocusRelated = isSelected || (timePeriod === 'day' ? isSameWeekday : false) || (timePeriod === 'month' ? isSameMonth : false);
@@ -320,12 +384,25 @@ function PerformanceOrgHeatmap({
         <button
           type="button"
           onClick={() => {
+            if (!canInteract) return;
             setActiveCell({ org, date });
             onCellClick?.({ org, date });
           }}
-          onMouseEnter={() => setHoverCell({ org, date })}
-          onMouseLeave={() => setHoverCell(null)}
-          className={cn('w-full rounded px-1 py-1 text-center text-xs transition-all', colorClasses.text.neutralMuted, degradeOpacity, ringClass)}
+          onMouseEnter={() => {
+            if (!canInteract) return;
+            setHoverCell({ org, date });
+          }}
+          onMouseLeave={() => {
+            if (!canInteract) return;
+            setHoverCell(null);
+          }}
+          className={cn(
+            'w-full rounded px-1 py-1 text-center text-xs transition-all',
+            colorClasses.text.neutralMuted,
+            isBranchSummaryRow ? 'font-semibold cursor-default' : '',
+            degradeOpacity,
+            ringClass
+          )}
         >
           -
         </button>
@@ -337,12 +414,26 @@ function PerformanceOrgHeatmap({
         <button
           type="button"
           onClick={() => {
+            if (!canInteract) return;
             setActiveCell({ org, date });
             onCellClick?.({ org, date });
           }}
-          onMouseEnter={() => setHoverCell({ org, date })}
-          onMouseLeave={() => setHoverCell(null)}
-          className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
+          onMouseEnter={() => {
+            if (!canInteract) return;
+            setHoverCell({ org, date });
+          }}
+          onMouseLeave={() => {
+            if (!canInteract) return;
+            setHoverCell(null);
+          }}
+          className={cn(
+            'w-full rounded px-1 py-1 text-center transition-all',
+            textStyles.numeric,
+            colorClasses.text.neutralDark,
+            isBranchSummaryRow ? 'font-semibold cursor-default' : '',
+            degradeOpacity,
+            ringClass
+          )}
           style={{
             backgroundColor: colors.neutral[100],
             borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
@@ -360,12 +451,26 @@ function PerformanceOrgHeatmap({
         <button
           type="button"
           onClick={() => {
+            if (!canInteract) return;
             setActiveCell({ org, date });
             onCellClick?.({ org, date });
           }}
-          onMouseEnter={() => setHoverCell({ org, date })}
-          onMouseLeave={() => setHoverCell(null)}
-          className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
+          onMouseEnter={() => {
+            if (!canInteract) return;
+            setHoverCell({ org, date });
+          }}
+          onMouseLeave={() => {
+            if (!canInteract) return;
+            setHoverCell(null);
+          }}
+          className={cn(
+            'w-full rounded px-1 py-1 text-center transition-all',
+            textStyles.numeric,
+            colorClasses.text.neutralDark,
+            isBranchSummaryRow ? 'font-semibold cursor-default' : '',
+            degradeOpacity,
+            ringClass
+          )}
           style={{
             backgroundColor: getHeatmapStateColor(state),
             borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
@@ -383,12 +488,26 @@ function PerformanceOrgHeatmap({
       <button
         type="button"
         onClick={() => {
+          if (!canInteract) return;
           setActiveCell({ org, date });
           onCellClick?.({ org, date });
         }}
-        onMouseEnter={() => setHoverCell({ org, date })}
-        onMouseLeave={() => setHoverCell(null)}
-        className={cn('w-full rounded px-1 py-1 text-center transition-all', textStyles.numeric, colorClasses.text.neutralDark, degradeOpacity, ringClass)}
+        onMouseEnter={() => {
+          if (!canInteract) return;
+          setHoverCell({ org, date });
+        }}
+        onMouseLeave={() => {
+          if (!canInteract) return;
+          setHoverCell(null);
+        }}
+        className={cn(
+          'w-full rounded px-1 py-1 text-center transition-all',
+          textStyles.numeric,
+          colorClasses.text.neutralDark,
+          isBranchSummaryRow ? 'font-semibold cursor-default' : '',
+          degradeOpacity,
+          ringClass
+        )}
         style={{
           backgroundColor: getHeatmapStateColor(state),
           borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
@@ -460,20 +579,23 @@ function PerformanceOrgHeatmap({
               )}
               {!loading && orgRows.organizations.map((org) => {
                 const orgLine = orgRows.matrix.get(org);
+                const isBranchSummaryRow = org === BRANCH_SUMMARY_ROW_LABEL;
+                const canRowClick = Boolean(onRowClick) && !isBranchSummaryRow;
                 return (
                   <tr key={org}>
                     <td
                       className={cn(
                         'px-2 py-1 sticky left-0 bg-white z-10 whitespace-nowrap',
                         colorClasses.text.neutralDark,
-                        onRowClick ? 'cursor-pointer hover:text-primary hover:underline' : ''
+                        isBranchSummaryRow ? 'font-semibold' : '',
+                        canRowClick ? 'cursor-pointer hover:text-primary hover:underline' : ''
                       )}
-                      onClick={onRowClick ? () => onRowClick(org) : undefined}
-                      title={onRowClick ? `点击下钻 ${org}` : undefined}
+                      onClick={canRowClick ? () => onRowClick?.(org) : undefined}
+                      title={canRowClick ? `点击下钻 ${org}` : undefined}
                     >{org}</td>
                     {orgRows.dates.map((date) => (
                       <td key={`${org}-${date}`} className="p-0.5 min-w-[84px]">
-                        {renderCell(org, date, orgLine?.get(date))}
+                        {renderCell(org, date, orgLine?.get(date), isBranchSummaryRow)}
                       </td>
                     ))}
                   </tr>

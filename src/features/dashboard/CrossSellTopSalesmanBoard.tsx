@@ -366,7 +366,7 @@ const SalesmanPanel = memo(function SalesmanPanel({
                     className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-right font-medium text-neutral-500 hover:bg-neutral-50"
                     onClick={() => handleSort('driver_premium')}
                   >
-                    驾乘保费-万 {sortField === 'driver_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    驾意保费-万 {sortField === 'driver_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
                   <th
                     className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-right font-medium text-neutral-500 hover:bg-neutral-50"
@@ -384,7 +384,7 @@ const SalesmanPanel = memo(function SalesmanPanel({
                     className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-right font-medium text-neutral-500 hover:bg-neutral-50"
                     onClick={() => handleSort('avg_premium')}
                   >
-                    驾乘件均-元 {sortField === 'avg_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    驾意件均-元 {sortField === 'avg_premium' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
                 </tr>
               </thead>

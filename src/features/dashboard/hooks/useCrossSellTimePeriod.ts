@@ -2,7 +2,7 @@
  * 车驾意推介率 - 时间维度汇总 Hook
  * Cross-Sell Time Period Summary Hook
  *
- * 提供当日/当周/当月/当年四个时间维度的推介率、驾乘件均、驾乘保费汇总数据
+ * 提供当日/当周/当月/当年四个时间维度的推介率、驾意件均、驾意保费汇总数据
  */
 
 import { useQuery } from '@tanstack/react-query';

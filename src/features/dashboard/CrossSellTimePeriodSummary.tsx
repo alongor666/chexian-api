@@ -1,8 +1,8 @@
 /**
- * 驾乘险推介率 - 时间维度汇总表格
+ * 驾意险推介率 - 时间维度汇总表格
  * Cross-Sell Time Period Summary Tables
  *
- * 展示推介率、驾乘件均、驾乘保费三个维度的当日/当周/当月/当年汇总数据
+ * 展示推介率、驾意件均、驾意保费三个维度的当日/当周/当月/当年汇总数据
  */
 
 import { memo } from 'react';
@@ -176,7 +176,7 @@ export const CrossSellTimePeriodSummary = memo(function CrossSellTimePeriodSumma
       </div>
 
       <div>
-        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>驾乘件均（元）</h3>
+        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>驾意件均（元）</h3>
         <Table<TimePeriodRecord>
           columns={avgPremiumColumns}
           dataSource={avgPremiumData as TimePeriodRecord[]}
@@ -188,7 +188,7 @@ export const CrossSellTimePeriodSummary = memo(function CrossSellTimePeriodSumma
       </div>
 
       <div>
-        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>驾乘保费（万元）</h3>
+        <h3 className={cn(textStyles.titleSmall, 'mb-2')}>驾意保费（万元）</h3>
         <Table<TimePeriodRecord>
           columns={premiumColumns}
           dataSource={premiumData as TimePeriodRecord[]}

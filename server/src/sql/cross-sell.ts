@@ -22,7 +22,6 @@ export type CrossSellDimension =
   | 'org_level_3'       // 三级机构
   | 'team'              // 销售团队（JOIN SalesmanTeamMapping）
   | 'salesman'          // 业务员
-  | 'customer_category' // 客户类别
   | 'is_new_car'        // 是否新车
   | 'is_transfer'       // 是否过户
   | 'is_nev'            // 是否新能源
@@ -44,7 +43,6 @@ export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
   org_level_3: '三级机构',
   team: '销售团队',
   salesman: '业务员',
-  customer_category: '客户类别',
   is_new_car: '是否新车',
   is_transfer: '是否过户',
   is_nev: '是否新能源',
@@ -89,8 +87,6 @@ function drillStepToWhere(step: DrilldownStep, colPrefix: string): string {
     case 'salesman':
       // salesman 的 group_name 是去掉工号的名字，所以用 LIKE 匹配
       return `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') = '${esc(step.value)}'`;
-    case 'customer_category':
-      return `COALESCE(${colPrefix}customer_category, '未知') = '${esc(step.value)}'`;
     default:
       return '1=1';
   }
@@ -126,11 +122,6 @@ function getGroupByConfig(dimension: CrossSellDimension, colPrefix: string): {
       return {
         selectExpr: `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') AS group_name`,
         groupByExpr: `${colPrefix}salesman_name`,
-      };
-    case 'customer_category':
-      return {
-        selectExpr: `COALESCE(${colPrefix}customer_category, '未知') AS group_name`,
-        groupByExpr: `COALESCE(${colPrefix}customer_category, '未知')`,
       };
     default:
       return {

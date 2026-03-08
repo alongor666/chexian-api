@@ -27,6 +27,8 @@ export interface PerformanceOrgHeatmapRow {
   policyDate: string;
   premium: number;
   planPremium: number | null;
+  prevMomPremium: number;
+  prevYoyPremium: number;
   achievementRate: number | null;
   momGrowthRate: number | null;
   yoyGrowthRate: number | null;
@@ -54,6 +56,8 @@ function mapHeatmapRow(row: Record<string, unknown>): PerformanceOrgHeatmapRow {
     policyDate: String(row.policy_date ?? ''),
     premium: Number(row.premium ?? 0),
     planPremium: row.plan_premium == null ? null : Number(row.plan_premium),
+    prevMomPremium: Number(row.prev_mom_premium ?? 0),
+    prevYoyPremium: Number(row.prev_yoy_premium ?? 0),
     achievementRate: row.achievement_rate == null ? null : Number(row.achievement_rate),
     momGrowthRate: row.mom_growth_rate == null ? null : Number(row.mom_growth_rate),
     yoyGrowthRate: row.yoy_growth_rate == null ? null : Number(row.yoy_growth_rate),

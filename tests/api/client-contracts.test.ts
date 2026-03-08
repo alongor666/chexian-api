@@ -54,6 +54,37 @@ describe('API client contract coverage', () => {
     expect(calledUrl).toContain('topN=20');
   });
 
+  it('cross-sell heatmap endpoint keeps penetration_rate contract', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          rows: [{
+            date: '2026-03-07',
+            org_level_3: '分公司',
+            auto_count: 10,
+            driver_count: 5,
+            driver_policy_count: 5,
+            driver_premium: 1200,
+            penetration_base_premium: 8000,
+            rate: 50,
+            penetration_rate: 15,
+            avg_premium: 240,
+            achievement_rate: 100,
+          }],
+        },
+      }),
+    });
+    const resp = await apiClient.getCrossSellHeatmap({ groupByDimension: 'org_level_3', timePeriod: 'month' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/cross-sell-heatmap?');
+    expect(calledUrl).toContain('groupByDimension=org_level_3');
+    expect(resp.rows[0]?.penetration_rate).toBe(15);
+  });
+
   it('performance summary endpoint preserves year and dimension', async () => {
     const { apiClient } = await importClient();
     mockFetch.mockResolvedValueOnce({
