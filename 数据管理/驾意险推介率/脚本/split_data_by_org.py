@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-按机构拆分驾乘险数据
+按机构拆分驾意险数据
 
 功能：
 1. 读取最新数据
@@ -17,7 +17,6 @@
 - 交叉销售保费_驾意（驾意险签单保费）
 """
 
-import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -26,7 +25,7 @@ import pandas as pd
 # 配置
 SCRIPT_DIR = Path(__file__).parent.parent
 CONFIG = {
-    'data_source': Path('/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/warehouse/fact/policy/current'),
+    'data_source': SCRIPT_DIR.parent / 'warehouse/fact/policy/current',
     'output_dir': SCRIPT_DIR / '机构数据',
     'days_to_extract': 14
 }
@@ -52,16 +51,22 @@ def find_latest_parquet():
 
 def get_latest_date_range(df):
     """获取数据中的最新日期和连续14天范围"""
-    # 转换日期
-    df['签单日期'] = pd.to_datetime(df['签单日期'])
+    date_col = None
+    for col in ['签单日期', 'policy_date']:
+        if col in df.columns:
+            date_col = col
+            break
+    if date_col is None:
+        raise ValueError('未找到签单日期列')
+
+    df[date_col] = pd.to_datetime(df[date_col])
     
-    # 获取最新日期
-    latest_date = df['签单日期'].max().date()
+    latest_date = df[date_col].max().date()
     
     # 计算14天前的日期
     start_date = latest_date - timedelta(days=CONFIG['days_to_extract'] - 1)
     
-    return start_date, latest_date
+    return start_date, latest_date, date_col
 
 
 def split_by_org(parquet_path):
@@ -72,25 +77,52 @@ def split_by_org(parquet_path):
     df = pd.read_parquet(parquet_path)
     
     # 获取日期范围
-    start_date, end_date = get_latest_date_range(df)
+    start_date, end_date, date_col = get_latest_date_range(df)
     print(f'📅 数据日期范围: {start_date} 至 {end_date}（连续{CONFIG["days_to_extract"]}天）')
     
-    # 筛选最近14天的数据
-    df['签单日期'] = pd.to_datetime(df['签单日期'])
+    df[date_col] = pd.to_datetime(df[date_col])
     df_filtered = df[
-        (df['签单日期'].dt.date >= start_date) &
-        (df['签单日期'].dt.date <= end_date)
+        (df[date_col].dt.date >= start_date) &
+        (df[date_col].dt.date <= end_date)
     ]
+
+    quote_col = None
+    for col in ['是否报价', 'is_quote']:
+        if col in df_filtered.columns:
+            quote_col = col
+            break
+    if quote_col is not None:
+        df_filtered = df_filtered[df_filtered[quote_col] == False]
+
+    insurance_col = None
+    for col in ['险类', 'insurance_type']:
+        if col in df_filtered.columns:
+            insurance_col = col
+            break
+    if insurance_col is not None:
+        df_filtered = df_filtered[df_filtered[insurance_col] == '商业保险']
     
     print(f'✓ 筛选到 {len(df_filtered)} 条记录（最近{CONFIG["days_to_extract"]}天）')
     
     # 选择需要的字段
+    org_col = '三级机构' if '三级机构' in df_filtered.columns else 'org_level_3'
+    vin_col = '车架号' if '车架号' in df_filtered.columns else 'vehicle_frame_no'
+    premium_col = '保费' if '保费' in df_filtered.columns else '签单/批改保费'
+
+    cross_premium_col = None
+    for col in ['交叉销售保费-驾意', '交叉销售保费_驾意']:
+        if col in df_filtered.columns:
+            cross_premium_col = col
+            break
+    if cross_premium_col is None:
+        raise ValueError('未找到交叉销售保费列')
+
     output_columns = [
-        '签单日期',
-        '三级机构',
-        '车架号',
-        '保费',
-        '交叉销售保费_驾意'
+        date_col,
+        org_col,
+        vin_col,
+        premium_col,
+        cross_premium_col
     ]
     
     # 检查字段是否存在
@@ -101,7 +133,7 @@ def split_by_org(parquet_path):
         return
     
     # 按机构分组
-    orgs = df_filtered['三级机构'].unique()
+    orgs = df_filtered[org_col].unique()
     print(f'📊 找到 {len(orgs)} 个机构: {", ".join(sorted(orgs))}\n')
     
     # 确保输出目录存在
@@ -110,7 +142,7 @@ def split_by_org(parquet_path):
     # 拆分并导出
     file_list = []
     for org in sorted(orgs):
-        org_data = df_filtered[df_filtered['三级机构'] == org][output_columns]
+        org_data = df_filtered[df_filtered[org_col] == org][output_columns]
         
         # 生成文件名
         filename = f"{org}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
@@ -133,7 +165,7 @@ def split_by_org(parquet_path):
 
 def main():
     """主函数"""
-    print('🚀 按机构拆分驾乘险数据...\n')
+    print('🚀 按机构拆分驾意险数据...\n')
     
     try:
         # 1. 查找最新数据文件

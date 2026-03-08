@@ -39,10 +39,10 @@ function generateOrgGroupCase(): string {
   }
 
   const sameCityConditions = ORG_GROUPS.SAME_CITY
-    .map(city => `org_level_3 LIKE '%${city}%'`)
+    .map(city => `CAST(org_level_3 AS VARCHAR) LIKE '%${city}%'`)
     .join(' OR ');
   const remoteConditions = ORG_GROUPS.REMOTE
-    .map(city => `org_level_3 LIKE '%${city}%'`)
+    .map(city => `CAST(org_level_3 AS VARCHAR) LIKE '%${city}%'`)
     .join(' OR ');
 
   _cachedOrgGroupCase = `CASE
