@@ -37,6 +37,7 @@ interface NavItem {
   icon: LucideIcon;
   label: string;
   shortLabel?: string;
+  tooltipLabel?: string;
 }
 
 const navItems: NavItem[] = [
@@ -142,6 +143,13 @@ export const SidebarNavigation: React.FC = () => {
   // 移动端：总是展开显示；桌面端：根据 collapsed 状态
   const showExpanded = isMobile || !collapsed;
 
+  const renderCollapsedTooltip = (label: string, description?: string) => (
+    <div className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-50 -translate-y-1/2 rounded-lg border border-neutral-200 bg-white px-3 py-2 shadow-lg opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+      <div className="whitespace-nowrap text-sm font-medium text-neutral-800">{label}</div>
+      {description ? <div className="mt-0.5 whitespace-nowrap text-xs text-neutral-500">{description}</div> : null}
+    </div>
+  );
+
   const renderNavItem = (item: NavItem) => {
     const IconComponent = item.icon;
     const canAccess = userPermission ? canAccessRoute(userPermission, item.path) : true;
@@ -150,7 +158,7 @@ export const SidebarNavigation: React.FC = () => {
       return (
         <div
           key={item.path}
-          className="flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0 text-neutral-400 bg-neutral-50 cursor-not-allowed opacity-70"
+          className="group relative flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0 text-neutral-400 bg-neutral-50 cursor-not-allowed opacity-70"
           title={!showExpanded ? `${item.label}（无权限）` : undefined}
           aria-disabled="true"
         >
@@ -162,6 +170,7 @@ export const SidebarNavigation: React.FC = () => {
           {showExpanded && (
             <span className="ml-3 text-sm font-medium truncate">{item.label}</span>
           )}
+          {!showExpanded && renderCollapsedTooltip(item.tooltipLabel ?? item.label, '当前账号无权限')}
         </div>
       );
     }
@@ -170,8 +179,8 @@ export const SidebarNavigation: React.FC = () => {
       <NavLink
         key={item.path}
         to={item.path}
-        className={`flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 group min-h-[44px] md:min-h-0 ${isActive(item.path)
-          ? 'bg-primary text-white shadow-md'
+        className={`group relative flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0 ${isActive(item.path)
+          ? 'bg-primary text-white shadow-md ring-1 ring-primary-border'
           : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
           }`}
         title={!showExpanded ? item.label : undefined}
@@ -185,9 +194,26 @@ export const SidebarNavigation: React.FC = () => {
         {showExpanded && (
           <span className="ml-3 text-sm font-medium truncate">{item.label}</span>
         )}
+        {!showExpanded && renderCollapsedTooltip(item.tooltipLabel ?? item.label)}
       </NavLink>
     );
   };
+
+  const renderSection = (title: string, items: NavItem[]) => (
+    <>
+      <div className="my-3 border-t border-neutral-200" role="separator" />
+      {showExpanded ? (
+        <div className="px-3 py-2 text-xs font-semibold text-neutral-400 uppercase tracking-[0.16em]">
+          {title}
+        </div>
+      ) : (
+        <div className="flex justify-center py-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-neutral-300" aria-hidden="true" />
+        </div>
+      )}
+      {items.map(renderNavItem)}
+    </>
+  );
 
   // 计算侧边栏的显示状态和样式
   const getSidebarClasses = () => {
@@ -257,57 +283,32 @@ export const SidebarNavigation: React.FC = () => {
       )}
 
       {/* 导航菜单 */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-visible">
         <nav className="px-3 py-4 space-y-1">
           {/* 首页入口 */}
           {navItems.map(renderNavItem)}
 
-          {/* 分隔线 */}
-          <div className="my-3 border-t border-neutral-200" role="separator" />
-
-          {/* 数据模块 */}
-          {showExpanded && (
-            <div className="px-3 py-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-              数据分析
-            </div>
-          )}
-          {dataNavItems
-            .filter(item => {
-              // 超级用户专属功能
+          {renderSection(
+            '数据分析',
+            dataNavItems.filter(item => {
               if (item.path === '/fee-analysis') return canAccessFeeAnalysis(userPermission?.username);
-              // 成本分析白名单控制
               if (item.path === '/cost') return canAccessCost(userPermission?.username);
               return true;
             })
-            .map(renderNavItem)}
-
-          {/* 工具模块 */}
-          <div className="my-3 border-t border-neutral-200" role="separator" />
-          {showExpanded && (
-            <div className="px-3 py-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-              工具
-            </div>
           )}
-          {toolNavItems
-            .filter(item => {
-              // 摩意模型功能仅对白名单用户开放
+
+          {renderSection(
+            '工具',
+            toolNavItems.filter(item => {
               if (item.path === '/moto-cost') {
                 return canAccessMotoCost(userPermission?.username);
               }
               return true;
             })
-            .map(renderNavItem)}
+          )}
 
           {userPermission?.role === UserRole.BRANCH_ADMIN && (
-            <>
-              <div className="my-3 border-t border-neutral-200" role="separator" />
-              {showExpanded && (
-                <div className="px-3 py-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                  管理
-                </div>
-              )}
-              {adminNavItems.map(renderNavItem)}
-            </>
+            renderSection('管理', adminNavItems)
           )}
         </nav>
 

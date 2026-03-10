@@ -4,7 +4,8 @@
  */
 import { memo, forwardRef, useState } from 'react'
 import type { HTMLAttributes, ReactNode, CSSProperties } from 'react'
-import { cn } from '../styles'
+import { cn, getTrendColorClassByPolarity, getTrendDirection } from '../styles'
+import type { MetricPolarity } from '../styles'
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 
 // ============================================================================
@@ -401,19 +402,23 @@ export const TrendCell = memo(function TrendCell({
   value,
   formatter,
   inverse = false,
+  metricPolarity,
   className,
 }: {
   value: number | null | undefined
   formatter?: (v: number) => string
+  /** @deprecated 优先使用 metricPolarity */
   inverse?: boolean
+  /** 指标方向（默认正向指标：涨绿跌红） */
+  metricPolarity?: MetricPolarity
   className?: string
 }) {
   if (value === null || value === undefined) {
     return <span className="text-neutral-400">-</span>
   }
 
-  const isPositive = inverse ? value < 0 : value > 0
-  const colorClass = value === 0 ? 'text-neutral-500' : isPositive ? 'text-success' : 'text-danger'
+  const resolvedPolarity: MetricPolarity = metricPolarity ?? (inverse ? 'negative' : 'positive')
+  const colorClass = getTrendColorClassByPolarity(getTrendDirection(value), resolvedPolarity)
   const prefix = value > 0 ? '+' : ''
   const displayValue = formatter ? formatter(value) : value.toString()
 

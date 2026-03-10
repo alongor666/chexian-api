@@ -351,3 +351,36 @@ widgets/table/VirtualTable.tsx
 
 - **`dashboard/PerformanceAnalysisPanel.tsx`**: “分公司”行调整为表头下第一行；同比/环比从“维度同比加权均值”改为“分公司总保费 ÷ 上年同期/上期总保费”重算，确保在三级机构/团队/业务员/客户类别/险别组合/能源类型/新转续七个维度一致。
 - **`dashboard/hooks/usePerformanceOrgHeatmap.ts`**: 热力图行模型新增 `prevMomPremium`、`prevYoyPremium` 字段，用于分公司汇总行按分母还原统一增长率。
+
+## 2026-03-09 指标涨跌颜色语义统一（B2xx）
+
+- **`dashboard/CrossSellSummaryKpiBoard.tsx`**: 环比状态改为基于 `metricPolarity` 计算颜色；当前 cross-sell 指标全部标记为正向指标（涨绿跌红）。
+- **`growth/components/GrowthKpiCards.tsx`**、**`growth/components/ComparisonAnalysisPanel.tsx`**、**`growth/components/GrowthComparisonSection.tsx`**、**`growth/components/GrowthDetailSection.tsx`**: 增长率/变化量颜色统一改为共享趋势语义函数，移除硬编码红绿值。
+
+## 2026-03-10 交叉销售页 UX 骨架与长页面体验升级（B221）
+
+- **`pages/CrossSellPage.tsx`**: 接入页面锚点导航、顶部场景快选与基础筛选常驻区。
+- **`dashboard/CrossSellAnalysisPanel.tsx`**: 模块顺序重排为 KPI → AI 洞察 → 热力图 → 趋势 → 下钻 → TOP20；下钻表默认只显示核心列，支持展开险种明细，并为核心列增加数据条。
+- **`dashboard/CrossSellSummaryKpiBoard.tsx`**: 驱动因子改为“整体 KPI 卡片 + 险别组合对比矩阵”双层结构。
+- **`dashboard/CrossSellTrendChart.tsx`**: 整体趋势线增加最高/最低值注释点，与顶部洞察形成图文联动。
+- **`dashboard/CrossSellOrgTrendChart.tsx`**: 底部 AI 主洞察降级为程序解读摘要，避免与页面顶部主洞察重复。
+
+## 2026-03-10 长页面 UX 骨架平移与交互回归（B222）
+
+- **`pages/PerformanceAnalysisPage.tsx`**: 复用顶部基础筛选 + 右侧锚点骨架，补充热力图/汇总/趋势/下钻/TOP20 五段锚点。
+- **`pages/GrowthPage.tsx`**、**`pages/CostPage.tsx`**: 接入统一页面骨架，保持基础筛选与高级抽屉行为一致。
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: 为热力图、汇总、趋势、下钻、TOP20 补充锚点区块 ID，支持长页面电梯导航。
+- **`dashboard/CrossSellAnalysisPanel.tsx`**: 维持管理员默认首层下钻视图，配合新 E2E 用例锁定抽屉、锚点和险种明细展开行为。
+
+## 2026-03-10 长表体验组件化补充（B225）
+
+- **`dashboard/CrossSellMetricsHeatmap.tsx`**: 接入统一长表滚动容器，补齐表头吸顶与首列冻结，支持热力图长宽同时滚动时保持上下文。
+- **`dashboard/CrossSellAnalysisPanel.tsx`**: 下钻表改为复用统一长表滚动容器和 sticky 语义，减少页面内手写吸顶样式。
+- **`dashboard/PerformanceAnalysisPanel.tsx`**: 业绩热力图与下钻表接入同一套吸顶/冻结样式规则，对齐原计划中的“热力图 + 下钻分析”长表体验。
+
+## 2026-03-10 Code Review 回归修复（B226）
+
+- **`dashboard/CrossSellAnalysisPanel.tsx`**: 年维度下不再把 `year` 强行传给热力图；热力图区块改为显式禁用态说明，并新增 helper 统一标题与时间粒度映射。
+- **`dashboard/CrossSellAnalysisPanel.tsx`**: 热力图下钻维度选择器改为排除当前层级与已走过层级，避免 `机构 -> 团队 -> 机构` 循环路径。
+- **`dashboard/CrossSellOrgTrendChart.tsx`**: 机构趋势程序解读改为按 `daily/weekly/monthly/quarterly/yearly` 动态生成“近N期口径”和“连续回落/未回落”文案。
+- **`../tests/cross-sell-ux-review-fixes.test.tsx`**: 新增回归单测，锁定年维度热力图禁用、热力图下钻维度去重、程序解读动态文案与高级筛选计数基线。

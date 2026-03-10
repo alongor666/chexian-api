@@ -4,7 +4,8 @@
  */
 import { memo, forwardRef } from 'react'
 import type { HTMLAttributes, ReactNode } from 'react'
-import { cn } from '../styles'
+import { cn, getTrendColorClassByPolarity } from '../styles'
+import type { MetricPolarity } from '../styles'
 
 export type CardVariant = 'default' | 'interactive' | 'flat' | 'elevated'
 export type CardPadding = 'none' | 'compact' | 'standard' | 'spacious'
@@ -210,6 +211,8 @@ export interface StatCardProps extends Omit<CardProps, 'title' | 'children'> {
   trend?: 'up' | 'down' | 'neutral'
   /** 趋势值 */
   trendValue?: string
+  /** 指标方向（默认正向指标：涨绿跌红） */
+  metricPolarity?: MetricPolarity
 }
 
 export const StatCard = memo(function StatCard({
@@ -219,14 +222,16 @@ export const StatCard = memo(function StatCard({
   icon,
   trend,
   trendValue,
+  metricPolarity = 'positive',
   loading,
   ...props
 }: StatCardProps) {
-  const trendColorClass = {
-    up: 'text-success',
-    down: 'text-danger',
-    neutral: 'text-neutral-500',
-  }
+  const trendColorClass = trend
+    ? getTrendColorClassByPolarity(
+      trend === 'neutral' ? 'flat' : trend,
+      metricPolarity
+    )
+    : ''
 
   return (
     <Card variant="default" padding="standard" loading={loading} {...props}>
@@ -241,7 +246,7 @@ export const StatCard = memo(function StatCard({
           {(description || (trend && trendValue)) && (
             <div className="mt-2 flex items-center gap-2">
               {trend && trendValue && (
-                <span className={cn('text-sm font-medium', trendColorClass[trend])}>
+                <span className={cn('text-sm font-medium', trendColorClass)}>
                   {trend === 'up' && '+'}{trendValue}
                 </span>
               )}

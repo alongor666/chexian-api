@@ -25,3 +25,6 @@
 | 2026-01-16 | 添加ErrorBoundary组件，处理Lazy路由加载失败 | Code Review修复 |
 | 2026-01-16 | 添加DataGuard路由守卫，实现数据加载状态管理 | 页面布局重构Phase 2 |
 | 2026-01-16 | 创建Layout模块，实现侧边栏布局重构 | 页面布局重构Phase 1 |
+| 2026-03-10 | `layout/DashboardAnchorNav.tsx`：新增长页面锚点导航组件；`layout/PageFilterPanel.tsx`：页面容器改为顶部基础筛选 + 高级抽屉 + 右侧锚点挂载位；`layout/SidebarNavigation.tsx`：收起态新增悬浮 Tooltip 与分组层级强化 | B221 |
+| 2026-03-10 | `layout/DashboardAnchorNav.tsx`：锚点跳转改为容器级稳定滚动（`scrollTop` + smooth 兜底），支撑多页面长内容导航与 E2E 回归 | B222 |
+| 2026-03-10 | `layout/PageFilterPanel.tsx`：高级筛选计数改为复用 reset 基线（`resolveResetYear + maxDataDate`），修复历史数据年份下重置后仍显示计数的问题 | B226 |

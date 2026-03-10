@@ -100,6 +100,10 @@ export type {
   SortDirection,
 } from './Table'
 
+// StickyTableFrame 长表滚动容器
+export { StickyTableFrame } from './StickyTableFrame'
+export type { StickyTableFrameProps } from './StickyTableFrame'
+
 // Tabs 标签页
 export { Tabs } from './Tabs'
 export type { TabsProps, TabItem } from './Tabs'
@@ -261,7 +265,13 @@ export {
   // 工具函数
   cn,
   conditionalStyle,
+  getTrendDirection,
   getTrendColorClass,
+  getTrendColorClassByPolarity,
   getStatusColorClass,
   getStatusBgClass,
+} from '../styles'
+export type {
+  MetricPolarity,
+  TrendDirection,
 } from '../styles'

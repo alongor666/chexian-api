@@ -170,6 +170,7 @@ function parseInsights(content: string): Insight[] {
           value: item.metric.value ?? '',
           benchmark: item.metric.benchmark,
           delta: item.metric.delta,
+          metricPolarity: item.metric.metricPolarity === 'negative' ? 'negative' : 'positive',
         }
         : undefined,
       affectedEntities: Array.isArray(item.affectedEntities)

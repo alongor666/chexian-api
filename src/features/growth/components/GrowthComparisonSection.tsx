@@ -6,6 +6,7 @@ import type { ComparisonPeriods, ComparisonPreset } from '../utils/comparisonPre
 import { formatPeriodDisplay } from '../utils/comparisonPresets';
 import { formatCount, formatPremiumWan } from '../../../shared/utils/formatters';
 import { formatPercent1 } from '../utils/format';
+import { cn, getTrendColorClass } from '../../../shared/styles';
 
 interface GrowthComparisonSectionProps {
   baseDate: string;
@@ -98,16 +99,10 @@ export function GrowthComparisonSection(props: GrowthComparisonSectionProps): Re
                     <td style={{ padding: '12px', textAlign: 'right' }}>{formatPremiumWan(item.current_premium)}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>{formatPremiumWan(item.previous_premium)}</td>
                     <td
+                      className={cn(getTrendColorClass(item.premium_growth_rate || 0, 'positive'), 'font-medium')}
                       style={{
                         padding: '12px',
                         textAlign: 'right',
-                        color:
-                          item.premium_growth_rate && item.premium_growth_rate > 0
-                            ? '#28a745'
-                            : item.premium_growth_rate && item.premium_growth_rate < 0
-                              ? '#dc3545'
-                              : '#666',
-                        fontWeight: '500',
                       }}
                     >
                       {formatPercent1(item.premium_growth_rate)}
@@ -115,16 +110,10 @@ export function GrowthComparisonSection(props: GrowthComparisonSectionProps): Re
                     <td style={{ padding: '12px', textAlign: 'right' }}>{formatCount(item.current_count)}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>{formatCount(item.previous_count)}</td>
                     <td
+                      className={cn(getTrendColorClass(item.count_growth_rate || 0, 'positive'), 'font-medium')}
                       style={{
                         padding: '12px',
                         textAlign: 'right',
-                        color:
-                          item.count_growth_rate && item.count_growth_rate > 0
-                            ? '#28a745'
-                            : item.count_growth_rate && item.count_growth_rate < 0
-                              ? '#dc3545'
-                              : '#666',
-                        fontWeight: '500',
                       }}
                     >
                       {formatPercent1(item.count_growth_rate)}
@@ -139,4 +128,3 @@ export function GrowthComparisonSection(props: GrowthComparisonSectionProps): Re
     </div>
   );
 }
-

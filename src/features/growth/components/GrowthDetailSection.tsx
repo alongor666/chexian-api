@@ -3,6 +3,7 @@ import { GrowthKpiCards } from './GrowthKpiCards';
 import { ScissorsTrendChart } from '../../../charts/ScissorsTrendChart';
 import { formatPercent1, getSafeDateStr } from '../utils/format';
 import type { GrowthAnalysisType } from './GrowthAnalysisControlPanel';
+import { cn, getTrendColorClass } from '../../../shared/styles';
 
 interface GrowthDetailSectionProps {
   analysisType: GrowthAnalysisType;
@@ -146,16 +147,10 @@ export function GrowthDetailSection(props: GrowthDetailSectionProps): React.Reac
                     {props.formatValueNoUnit(item.previous_value)}
                   </td>
                   <td
+                    className={cn(getTrendColorClass(item.growth_rate || 0, 'positive'), isAfterCutoff ? '' : 'font-medium')}
                     style={{
                       padding: '12px',
                       textAlign: 'right',
-                      color:
-                        item.growth_rate && item.growth_rate > 0
-                          ? '#28a745'
-                          : item.growth_rate && item.growth_rate < 0
-                            ? '#dc3545'
-                            : '#666',
-                      fontWeight: isAfterCutoff ? 'normal' : '500',
                     }}
                   >
                     {formatPercent1(item.growth_rate)}
@@ -170,16 +165,10 @@ export function GrowthDetailSection(props: GrowthDetailSectionProps): React.Reac
                         {props.formatValueNoUnit(item.period_total_previous)}
                       </td>
                       <td
+                        className={cn(getTrendColorClass(item.period_growth_rate || 0, 'positive'), isAfterCutoff ? '' : 'font-bold')}
                         style={{
                           padding: '12px',
                           textAlign: 'right',
-                          color:
-                            item.period_growth_rate && item.period_growth_rate > 0
-                              ? '#28a745'
-                              : item.period_growth_rate && item.period_growth_rate < 0
-                                ? '#dc3545'
-                                : '#666',
-                          fontWeight: isAfterCutoff ? 'normal' : 'bold',
                         }}
                       >
                         {formatPercent1(item.period_growth_rate)}
@@ -191,16 +180,10 @@ export function GrowthDetailSection(props: GrowthDetailSectionProps): React.Reac
                         {props.formatValueNoUnit(item.ytd_total_previous)}
                       </td>
                       <td
+                        className={cn(getTrendColorClass(item.ytd_growth_rate || 0, 'positive'), isAfterCutoff ? '' : 'font-bold')}
                         style={{
                           padding: '12px',
                           textAlign: 'right',
-                          color:
-                            item.ytd_growth_rate && item.ytd_growth_rate > 0
-                              ? '#28a745'
-                              : item.ytd_growth_rate && item.ytd_growth_rate < 0
-                                ? '#dc3545'
-                                : '#666',
-                          fontWeight: isAfterCutoff ? 'normal' : 'bold',
                         }}
                       >
                         {formatPercent1(item.ytd_growth_rate)}
