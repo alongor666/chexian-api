@@ -310,7 +310,7 @@ ss -tlnp                         # 查看监听端口
 
 以下内容**绝不可**出现在聊天输出、日志或公开仓库中:
 
-- SSH 私钥 (`~/.ssh/id_ed25519`)
+- SSH 私钥 (`~/.ssh/chexian_deploy`)
 - frp token (`/etc/frp/frps.toml` 中的 `auth.token`)
 - OpenClaw gateway token (`openclaw-gateway.service` 中的 `OPENCLAW_GATEWAY_TOKEN`)
 - OpenClaw 配置文件中的 API key 和 secret (`/root/.openclaw/openclaw.json`)
@@ -421,8 +421,8 @@ PM2: chexian-api (Node.js v22 + Express)
 |---|------|------|------|
 | 5 | ~~审计日志无轮转~~ | ~~持续增长占满磁盘~~ | ✅ 已修复（logrotate: audit 90天, nginx 30天） |
 | 6 | **无 fail2ban** | SSH 暴力破解无防护 | ⚠️ 待修复：`dnf install fail2ban` |
-| 7 | **SSH 密码认证可能未禁用** | 弱密码可被暴力破解 | ⚠️ 待修复：`PasswordAuthentication no` |
-| 8 | **公网 IP 白名单会变** | ISP 动态 IP，切换网络后无法访问 | 📝 已知限制：`curl ifconfig.me` 查看新 IP |
+| 7 | ~~SSH 密码认证可能未禁用~~ | ~~弱密码可被暴力破解~~ | ✅ 已修复：`PasswordAuthentication no` |
+| 8 | ~~公网 IP 白名单会变~~ | ~~ISP 动态 IP，切换网络后无法访问~~ | ✅ 已移除白名单策略（2026-02-24） |
 | 9 | **无 API 限流** | 恶意用户可高频请求 | ⚠️ 待修复：express-rate-limit |
 
 #### 🟢 低优先级
@@ -436,7 +436,7 @@ PM2: chexian-api (Node.js v22 + Express)
 #### 修复高优先级问题的命令
 
 ```bash
-ssh -i ~/.ssh/id_ed25519 root@162.14.113.44
+ssh chexian-vps-deploy
 
 # --- 修复 #3: DuckDB 文件权限 ---
 chmod 600 /var/www/chexian/server/data/chexian.duckdb*
@@ -628,7 +628,7 @@ ssh chexian-vps-deploy 'cd /var/www/chexian && tar xzf /tmp/chexian-deploy.tar.g
    - **名称**: `VPS_SSH_KEY`
    - **内容**: 粘贴上面的私钥完整内容（包含 `-----BEGIN OPENSSH PRIVATE KEY-----` 和尾部标签）
 3. **在 Action Workflow（如 `deploy.yml`）中使用**：
-   通过类似于 `webfactory/ssh-agent` 或直接写入 `~/.ssh/id_ed25519` 来注入凭据，同时通过 `deployer` 身份执行操作：
+   通过类似于 `webfactory/ssh-agent` 或直接写入 `~/.ssh/chexian_deploy` 来注入凭据，同时通过 `deployer` 身份执行操作：
    ```yaml
    steps:
      - name: Setup SSH
@@ -646,12 +646,13 @@ ssh chexian-vps-deploy 'cd /var/www/chexian && tar xzf /tmp/chexian-deploy.tar.g
 
 ```bash
 # 1) 从本地上传最新脚本
-scp -i ~/.ssh/id_ed25519 ./deploy/vps-deploy.sh \
-  root@162.14.113.44:/usr/local/bin/chexian-vps-deploy.sh
+scp -i ~/.ssh/chexian_deploy ./deploy/vps-deploy.sh \
+  deployer@162.14.113.44:/tmp/chexian-vps-deploy.sh
 
 # 2) 进入 VPS
-ssh -i ~/.ssh/id_ed25519 root@162.14.113.44
-chmod 755 /usr/local/bin/chexian-vps-deploy.sh
+ssh chexian-vps-deploy
+sudo mv /tmp/chexian-vps-deploy.sh /usr/local/bin/chexian-vps-deploy.sh
+sudo chmod 755 /usr/local/bin/chexian-vps-deploy.sh
 
 # 3) 应急开放（示例：到 2026-02-20 23:59 自动回滚）
 bash /usr/local/bin/chexian-vps-deploy.sh \

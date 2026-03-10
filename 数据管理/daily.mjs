@@ -290,7 +290,7 @@ async function main() {
       console.log(`  ${join(currentDir, f)}`);
     }
     console.log('');
-    log('blue', '提示: 在 macOS/Linux 上运行此脚本可自动同步到 VPS');
+    log('blue', '提示: Windows 请执行 node scripts/sync-vps.mjs --check / --export 进行上传');
   }
 
   console.log('');
