@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PageFilterPanel } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
 import { PremiumDashboard } from '../dashboard/PremiumDashboard';
 import { PdfExportService } from '../../services/PdfExportService';
 import { useDataStatus } from '../../shared/contexts/DataContext';
@@ -47,8 +47,9 @@ export const PremiumDashboardPage: React.FC = () => {
     <PageFilterPanel
       preset="full"
       title="保费分析看板"
-      headerRightContent={(
-        <div className="no-export flex items-center gap-2">
+      showBasicFilterBar={false}
+      headerRightContent={(actions) => (
+        <FilterQuickActions {...actions}>
           <button
             type="button"
             onClick={() => setShowCustomizerPanel((prev) => !prev)}
@@ -72,7 +73,7 @@ export const PremiumDashboardPage: React.FC = () => {
           >
             {isExportingPdf ? '正在导出...' : '导出PDF报告'}
           </button>
-        </div>
+        </FilterQuickActions>
       )}
     >
       <PremiumDashboard showCustomizerPanel={showCustomizerPanel} />

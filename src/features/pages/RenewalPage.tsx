@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { RenewalAnalysisPanel } from '../dashboard/RenewalAnalysisPanel';
 import { RenewalDrilldownPanel } from '../dashboard/RenewalDrilldownPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { PageFilterPanel } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
 import type { ViewPerspective } from '../../shared/types';
 
 type RenewalTab = 'drilldown' | 'detail';
@@ -26,7 +26,12 @@ export const RenewalPage: React.FC = () => {
   };
 
   return (
-    <PageFilterPanel preset="renewalDetail" title="续保分析">
+    <PageFilterPanel
+      preset="renewalDetail"
+      title="续保分析"
+      showBasicFilterBar={false}
+      headerRightContent={(actions) => <FilterQuickActions {...actions} />}
+    >
       <div className="p-4 space-y-4">
         <div className="bg-white rounded shadow">
           <div className="border-b border-gray-200">
