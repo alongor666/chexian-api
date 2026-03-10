@@ -204,7 +204,11 @@ async function main() {
   const transformScript = join(scriptDir, 'pipelines/transform.py');
 
   // 4. 执行单清单转换
-  log('green', '▶ 步骤 1/1: 单清单数据转换');
+  if (source) {
+    log('green', '▶ 步骤 1: 续保匹配 + 转换为 Parquet（单次读取）');
+  } else {
+    log('green', '▶ 步骤 1: 单文件直转 Parquet（跳过续保匹配）');
+  }
   const transformArgs = ['-i', `"${policyXlsx.path}"`, '-o', `"${policyOutput}"`];
   if (source) {
     transformArgs.push('-r', `"${source}"`);
@@ -215,7 +219,7 @@ async function main() {
 
   // 5. 运行本地预聚合 (export-for-vps.mjs)
   // 确保在上传之前在本地计算好所有聚合数据，防止 VPS 资源爆炸及数据不一致
-  log('green', '▶ 步骤 3: 运行预聚合数据导出...');
+  log('green', '▶ 步骤 2: 运行预聚合数据导出...');
   const projectRoot = dirname(scriptDir);
   const exportScript = join(projectRoot, 'scripts/export-for-vps.mjs');
   if (existsSync(exportScript)) {
