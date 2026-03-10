@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TruckAnalysisPanel } from '../dashboard/TruckAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { PageFilterPanel } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
 import type { ViewPerspective } from '../../shared/types';
 
 export const TruckPage: React.FC = () => {
@@ -9,7 +9,12 @@ export const TruckPage: React.FC = () => {
   const [perspective, setPerspective] = useState<ViewPerspective>('premium');
 
   return (
-    <PageFilterPanel preset="full" title="营业货车分析">
+    <PageFilterPanel
+      preset="full"
+      title="营业货车分析"
+      showBasicFilterBar={false}
+      headerRightContent={(actions) => <FilterQuickActions {...actions} />}
+    >
       <div className="p-4">
         <TruckAnalysisPanel
           filters={filters}

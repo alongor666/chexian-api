@@ -14,6 +14,8 @@ interface PageHeaderBarProps {
   bottomLeftContent?: ReactNode;
   /** 已选条件 chips 对齐方式 */
   chipsAlign?: 'left' | 'right';
+  /** 隐藏筛选条件 chips（数据先行模式） */
+  hideChips?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
   rightContent,
   bottomLeftContent,
   chipsAlign = 'left',
+  hideChips = false,
 }) => {
   // 计算动态标题前缀
   const dynamicTitle = useMemo(() => {
@@ -148,10 +151,10 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
           </div>
         )}
       </div>
-      {(bottomLeftContent || filterChips.length > 0) && (
+      {(bottomLeftContent || (!hideChips && filterChips.length > 0)) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           {bottomLeftContent && <div className="flex-1 min-w-0">{bottomLeftContent}</div>}
-          {filterChips.length > 0 && (
+          {!hideChips && filterChips.length > 0 && (
             <div
               className={cn(
                 'flex flex-wrap gap-1',

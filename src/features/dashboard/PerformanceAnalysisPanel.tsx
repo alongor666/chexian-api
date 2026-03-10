@@ -8,7 +8,8 @@ import { StickyTableFrame } from '@/shared/ui';
 import { useDataStatus } from '@/shared/contexts/DataContext';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
-import { cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles } from '@/shared/styles';
+import { RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { buttonStyles, cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles } from '@/shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
 import {
   classifyAchievementBand,
@@ -56,6 +57,8 @@ interface PerformanceAnalysisPanelProps {
   segmentTag: PerformanceSegmentTag;
   timePeriod: PerformanceTimePeriod;
   growthMode: PerformanceGrowthMode;
+  onTimePeriodChange?: (v: PerformanceTimePeriod) => void;
+  onGrowthModeChange?: (v: PerformanceGrowthMode) => void;
 }
 
 export interface PerformanceDrilldownPrefetchedData {
@@ -131,56 +134,43 @@ const GROWTH_MODE_TABS: TabItem[] = [
   { key: 'yoy', label: '同比' },
 ];
 
-interface PerformanceHeaderControlsProps {
-  segmentTag: PerformanceSegmentTag;
-  timePeriod: PerformanceTimePeriod;
-  growthMode: PerformanceGrowthMode;
-  onSegmentTagChange: (value: PerformanceSegmentTag) => void;
-  onTimePeriodChange: (value: PerformanceTimePeriod) => void;
-  onGrowthModeChange: (value: PerformanceGrowthMode) => void;
-}
+const SEGMENT_OPTIONS = [
+  { value: 'all', label: '全部客户' },
+  { value: 'non_business_passenger', label: '非营客' },
+  { value: 'business_passenger', label: '营客' },
+  { value: 'business_truck', label: '营货' },
+  { value: 'non_business_truck', label: '非营货' },
+  { value: 'motorcycle', label: '摩托车' },
+];
 
-export const PerformanceHeaderControls: React.FC<PerformanceHeaderControlsProps> = ({
-  segmentTag,
-  timePeriod,
-  growthMode,
-  onSegmentTagChange,
-  onTimePeriodChange,
-  onGrowthModeChange,
-}) => (
-  <div className="no-export max-w-full overflow-x-auto">
-    <div className="flex items-center gap-2 whitespace-nowrap">
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
-        客户类别
-      </span>
-      <Tabs
-        items={SEGMENT_TABS}
-        activeKey={segmentTag}
-        onChange={(key) => onSegmentTagChange(key as PerformanceSegmentTag)}
-        variant="pills"
-        size="small"
-      />
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
-        时间维度
-      </span>
-      <Tabs
-        items={TIME_PERIOD_TABS}
-        activeKey={timePeriod}
-        onChange={(key) => onTimePeriodChange(key as PerformanceTimePeriod)}
-        variant="pills"
-        size="small"
-      />
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary-bg text-primary-dark border border-primary-border">
-        对比方式
-      </span>
-      <Tabs
-        items={GROWTH_MODE_TABS}
-        activeKey={growthMode}
-        onChange={(key) => onGrowthModeChange(key as PerformanceGrowthMode)}
-        variant="pills"
-        size="small"
-      />
-    </div>
+export const PerformanceHeaderActions: React.FC<{
+  segmentTag: PerformanceSegmentTag;
+  onSegmentTagChange: (v: PerformanceSegmentTag) => void;
+  onReset: () => void;
+  onOpenAdvanced: () => void;
+  activeFilterCount: number;
+}> = ({ segmentTag, onSegmentTagChange, onReset, onOpenAdvanced, activeFilterCount }) => (
+  <div className="flex items-center gap-2">
+    <select
+      value={segmentTag}
+      onChange={(e) => onSegmentTagChange(e.target.value as PerformanceSegmentTag)}
+      className={cn(buttonStyles.base, buttonStyles.secondary, 'px-2 py-1.5 text-xs cursor-pointer')}
+    >
+      {SEGMENT_OPTIONS.map(opt => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+    <button type="button" onClick={onReset} className={cn(buttonStyles.base, buttonStyles.secondary, 'px-2 py-1.5 text-xs')}>
+      <RotateCcw size={14} className="mr-1" />重置
+    </button>
+    <button type="button" onClick={onOpenAdvanced} className={cn(buttonStyles.base, buttonStyles.primary, 'px-2 py-1.5 text-xs')}>
+      <SlidersHorizontal size={14} className="mr-1" />筛选
+      {activeFilterCount > 0 && (
+        <span className="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-white/20 px-1 text-[10px]">
+          {activeFilterCount}
+        </span>
+      )}
+    </button>
   </div>
 );
 
@@ -1047,6 +1037,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   segmentTag,
   timePeriod,
   growthMode,
+  onTimePeriodChange,
+  onGrowthModeChange,
 }) => {
   const { isDataLoaded } = useDataStatus();
 
@@ -1328,6 +1320,26 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
       <SectionBlock id="performance-heatmap">
         <SectionTitle
           title={getPerformanceHeatmapTitle(timePeriod, HEATMAP_DIMENSION_LABELS[activeHeatmapGroupBy])}
+          rightContent={
+            onTimePeriodChange && onGrowthModeChange ? (
+              <div className="flex items-center gap-2">
+                <Tabs
+                  items={TIME_PERIOD_TABS}
+                  activeKey={timePeriod}
+                  onChange={(k) => onTimePeriodChange(k as PerformanceTimePeriod)}
+                  variant="pills"
+                  size="mini"
+                />
+                <Tabs
+                  items={GROWTH_MODE_TABS}
+                  activeKey={growthMode}
+                  onChange={(k) => onGrowthModeChange(k as PerformanceGrowthMode)}
+                  variant="pills"
+                  size="mini"
+                />
+              </div>
+            ) : undefined
+          }
           leftContent={
             heatmapDrillPath.length === 0 ? (
               <Tabs

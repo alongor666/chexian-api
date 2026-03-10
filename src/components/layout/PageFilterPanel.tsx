@@ -19,7 +19,11 @@ interface PageFilterPanelProps {
   preset: FilterPresetName;
   children: React.ReactNode;
   title?: string;
-  headerRightContent?: ReactNode;
+  headerRightContent?: ReactNode | ((actions: {
+    onOpenAdvanced: () => void;
+    onReset: () => void;
+    activeFilterCount: number;
+  }) => ReactNode);
   headerBottomLeftContent?: ReactNode;
   headerChipsAlign?: 'left' | 'right';
   anchorSections?: DashboardAnchorSection[];
@@ -262,9 +266,18 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
               baseTitle={title}
               filters={filters}
               allOrgCount={filterOptions.org_level_3?.length || 0}
-              rightContent={headerRightContent}
-              bottomLeftContent={headerBottomLeftContent}
+              rightContent={
+                typeof headerRightContent === 'function'
+                  ? headerRightContent({
+                      onOpenAdvanced: () => setAdvancedOpen(true),
+                      onReset: handleResetFilters,
+                      activeFilterCount,
+                    })
+                  : headerRightContent
+              }
+              bottomLeftContent={showBasicFilterBar ? headerBottomLeftContent : undefined}
               chipsAlign={headerChipsAlign}
+              hideChips={!showBasicFilterBar}
             />
           )}
 
@@ -371,3 +384,34 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
     </div>
   );
 };
+
+/** 通用标题栏操作按钮：[children] [重置] [⚙筛选] */
+export const FilterQuickActions: React.FC<{
+  onReset: () => void;
+  onOpenAdvanced: () => void;
+  activeFilterCount: number;
+  children?: React.ReactNode;
+}> = ({ onReset, onOpenAdvanced, activeFilterCount, children }) => (
+  <div className="flex items-center gap-2">
+    {children}
+    <button
+      type="button"
+      onClick={onReset}
+      className={cn(buttonStyles.base, buttonStyles.secondary, 'px-2 py-1.5 text-xs')}
+    >
+      <RotateCcw size={14} className="mr-1" />重置
+    </button>
+    <button
+      type="button"
+      onClick={onOpenAdvanced}
+      className={cn(buttonStyles.base, buttonStyles.primary, 'px-2 py-1.5 text-xs')}
+    >
+      <SlidersHorizontal size={14} className="mr-1" />筛选
+      {activeFilterCount > 0 && (
+        <span className="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-white/20 px-1 text-[10px]">
+          {activeFilterCount}
+        </span>
+      )}
+    </button>
+  </div>
+);

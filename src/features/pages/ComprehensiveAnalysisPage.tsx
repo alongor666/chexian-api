@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { PageFilterPanel } from '@/components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFilterPanel';
 import { Tabs, Button } from '@/shared/ui';
 import { cardStyles, cn, colorClasses, textStyles, buttonStyles } from '@/shared/styles';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
@@ -211,12 +211,18 @@ export const ComprehensiveAnalysisPage: React.FC = () => {
     <PageFilterPanel
       preset="cost"
       title="综合分析"
-      headerRightContent={
-        <Link to="/cost" className={cn(buttonStyles.base, buttonStyles.secondary, buttonStyles.sizeSmall)}>
-          <ArrowLeft size={14} className="mr-1" />
-          返回成本分析
-        </Link>
-      }
+      showBasicFilterBar={false}
+      headerRightContent={(actions) => (
+        <FilterQuickActions {...actions}>
+          <Link
+            to="/cost"
+            className={cn(buttonStyles.base, buttonStyles.secondary, buttonStyles.sizeSmall)}
+          >
+            <ArrowLeft size={14} className="mr-1" />
+            返回成本分析
+          </Link>
+        </FilterQuickActions>
+      )}
     >
       <div className="space-y-4">
         <section className={cn(cardStyles.standard, 'space-y-3')}>

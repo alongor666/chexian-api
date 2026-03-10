@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { CrossSellAnalysisPanel, CrossSellHeaderControls } from '../dashboard/CrossSellAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { PageFilterPanel } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
 import type { TrendGranularity } from '../dashboard/hooks/useCrossSellTrend';
-import { buttonStyles, cardStyles, colorClasses, textStyles, cn } from '../../shared/styles';
+import { buttonStyles, cn } from '../../shared/styles';
 
 const CROSS_SELL_ANCHORS = [
   { id: 'cross-sell-kpi', label: '驱动因子', shortLabel: '驱动因子' },
@@ -61,45 +61,29 @@ export const CrossSellPage: React.FC = () => {
       preset="full"
       title="非营业客车交叉销售分析"
       anchorSections={[...CROSS_SELL_ANCHORS]}
-      basicFilterVisibleFields={{
-        dateCriteria: true,
-        analysisYear: true,
-        dateRange: true,
-        organization: true,
-        coverageCombination: true,
-        customerCategory: false,
-        renewalMode: false,
-      }}
-      filterBarExtraContent={(
-        <div className={cn(cardStyles.compact, 'space-y-2')}>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={cn(textStyles.caption, colorClasses.text.neutralDark)}>场景快选</span>
-            {quickScenes.map((scene) => (
-              <button
-                key={scene.label}
-                type="button"
-                onClick={scene.onClick}
-                className={cn(
-                  buttonStyles.base,
-                  scene.active ? buttonStyles.primary : buttonStyles.secondary,
-                  'px-3 py-1.5 text-xs'
-                )}
-                aria-pressed={scene.active}
-              >
-                {scene.label}
-              </button>
-            ))}
-          </div>
-          <p className={cn(textStyles.caption, colorClasses.text.neutral)}>
-            当前页默认聚焦长页面阅读效率，基础筛选常驻，高级维度进入抽屉。
-          </p>
-        </div>
-      )}
-      headerBottomLeftContent={(
-        <CrossSellHeaderControls
-          trendGranularity={trendGranularity}
-          onTrendGranularityChange={setTrendGranularity}
-        />
+      showBasicFilterBar={false}
+      headerRightContent={(actions) => (
+        <FilterQuickActions {...actions}>
+          {quickScenes.map((scene) => (
+            <button
+              key={scene.label}
+              type="button"
+              onClick={scene.onClick}
+              className={cn(
+                buttonStyles.base,
+                scene.active ? buttonStyles.primary : buttonStyles.secondary,
+                'px-3 py-1.5 text-xs'
+              )}
+              aria-pressed={scene.active}
+            >
+              {scene.label}
+            </button>
+          ))}
+          <CrossSellHeaderControls
+            trendGranularity={trendGranularity}
+            onTrendGranularityChange={setTrendGranularity}
+          />
+        </FilterQuickActions>
       )}
     >
       <CrossSellAnalysisPanel
