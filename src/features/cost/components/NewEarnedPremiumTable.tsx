@@ -15,6 +15,7 @@
 
 import React, { useMemo, useState, useCallback } from 'react';
 import { VirtualTable, Column } from '../../../widgets/table/VirtualTable';
+import { StickyTableFrame } from '../../../shared/ui';
 import { formatPremiumWan, formatPercent } from '../../../shared/utils/formatters';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../../shared/utils/export';
 import {
@@ -23,6 +24,7 @@ import {
   buttonStyles,
   cardStyles,
   badgeStyles,
+  stickyTableStyles,
   cn,
 } from '../../../shared/styles';
 import type {
@@ -416,7 +418,7 @@ const Policy2025TriangleTable: React.FC<{
   ];
 
   return (
-    <div className="overflow-x-auto">
+    <StickyTableFrame maxHeight={520}>
       <table className="text-xs border-collapse" style={{ minWidth: '1400px' }}>
         <thead>
           <tr className="bg-gray-50 border-b border-gray-200">
@@ -424,7 +426,10 @@ const Policy2025TriangleTable: React.FC<{
               <th
                 key={h.key}
                 style={{ width: h.width, minWidth: h.width }}
-                className="px-1 py-2 text-center font-medium text-gray-600 whitespace-nowrap"
+                className={cn(
+                  'px-1 py-2 text-center font-medium text-gray-600 whitespace-nowrap',
+                  h.key === 'policy_month' ? stickyTableStyles.firstColumnHeader : stickyTableStyles.header
+                )}
               >
                 {h.label}
               </th>
@@ -437,7 +442,7 @@ const Policy2025TriangleTable: React.FC<{
             return (
               <tr key={policyMonth} className="border-b border-gray-100 hover:bg-blue-50/30">
                 {/* 起保月 */}
-                <td className="px-1 py-1.5 text-center font-medium text-gray-700">
+                <td className={cn('px-1 py-1.5 text-center font-medium text-gray-700', stickyTableStyles.firstColumn)}>
                   {MONTH_LABELS[policyMonth]}
                 </td>
                 {/* 保费 */}
@@ -497,7 +502,7 @@ const Policy2025TriangleTable: React.FC<{
           })}
         </tbody>
       </table>
-    </div>
+    </StickyTableFrame>
   );
 };
 
@@ -523,7 +528,7 @@ const Policy2026TriangleTable: React.FC<{
   ];
 
   return (
-    <div className="overflow-x-auto">
+    <StickyTableFrame maxHeight={520}>
       <table className="text-xs border-collapse" style={{ minWidth: '1400px' }}>
         <thead>
           <tr className="bg-gray-50 border-b border-gray-200">
@@ -531,7 +536,10 @@ const Policy2026TriangleTable: React.FC<{
               <th
                 key={h.key}
                 style={{ width: h.width, minWidth: h.width }}
-                className="px-1 py-2 text-center font-medium text-gray-600 whitespace-nowrap"
+                className={cn(
+                  'px-1 py-2 text-center font-medium text-gray-600 whitespace-nowrap',
+                  h.key === 'policy_month' ? stickyTableStyles.firstColumnHeader : stickyTableStyles.header
+                )}
               >
                 {h.label}
               </th>
@@ -544,7 +552,7 @@ const Policy2026TriangleTable: React.FC<{
             return (
               <tr key={policyMonth} className="border-b border-gray-100 hover:bg-blue-50/30">
                 {/* 起保月 */}
-                <td className="px-1 py-1.5 text-center font-medium text-gray-700">
+                <td className={cn('px-1 py-1.5 text-center font-medium text-gray-700', stickyTableStyles.firstColumn)}>
                   {MONTH_LABELS[policyMonth]}
                 </td>
                 {/* 保费 */}
@@ -604,7 +612,7 @@ const Policy2026TriangleTable: React.FC<{
           })}
         </tbody>
       </table>
-    </div>
+    </StickyTableFrame>
   );
 };
 

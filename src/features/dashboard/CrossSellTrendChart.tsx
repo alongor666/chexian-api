@@ -31,6 +31,14 @@ interface CrossSellTrendChartProps {
     avg_premium: number;
     auto_count: number;
   }>;
+  annotations?: CrossSellTrendAnnotation[];
+}
+
+export interface CrossSellTrendAnnotation {
+  name: string;
+  timePeriod: string;
+  value: number;
+  color?: string;
 }
 
 /** 与统一设计系统颜色令牌对齐 */
@@ -43,6 +51,50 @@ const SERIES_CONFIG: Record<string, { color: string }> = {
 
 const SERIES_ORDER = ['整体', '主全', '交三', '单交'];
 
+export function buildCrossSellTrendMarkPointData(
+  timePeriods: string[],
+  annotations: CrossSellTrendAnnotation[] | undefined,
+  fallback: { min: { value: number; index: number } | null; max: { value: number; index: number } | null }
+) {
+  if (annotations && annotations.length > 0) {
+    return annotations
+      .filter((item) => timePeriods.includes(item.timePeriod))
+      .map((item) => ({
+        name: item.name,
+        coord: [item.timePeriod, item.value] as [string, number],
+        value: item.value,
+        itemStyle: { color: item.color ?? colors.primary.DEFAULT },
+      }));
+  }
+
+  const markPointData: Array<{
+    name: string;
+    coord: [string, number];
+    value: number;
+    itemStyle: { color: string };
+  }> = [];
+
+  if (fallback.max) {
+    markPointData.push({
+      name: '最高',
+      coord: [timePeriods[fallback.max.index], fallback.max.value],
+      value: fallback.max.value,
+      itemStyle: { color: colors.success.DEFAULT },
+    });
+  }
+
+  if (fallback.min) {
+    markPointData.push({
+      name: '最低',
+      coord: [timePeriods[fallback.min.index], fallback.min.value],
+      value: fallback.min.value,
+      itemStyle: { color: colors.warning.DEFAULT },
+    });
+  }
+
+  return markPointData;
+}
+
 export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   vehicleCategory,
   seatCoverageLevel,
@@ -53,6 +105,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   requestKey,
   enabled = true,
   rowsOverride,
+  annotations,
 }: CrossSellTrendChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
@@ -130,23 +183,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
       return;
     }
 
-    const markPointData: any[] = [];
-    if (overallExtremes.max) {
-      markPointData.push({
-        name: '最高',
-        coord: [timePeriods[overallExtremes.max.index], overallExtremes.max.value],
-        value: overallExtremes.max.value,
-        itemStyle: { color: colors.success.DEFAULT },
-      });
-    }
-    if (overallExtremes.min) {
-      markPointData.push({
-        name: '最低',
-        coord: [timePeriods[overallExtremes.min.index], overallExtremes.min.value],
-        value: overallExtremes.min.value,
-        itemStyle: { color: colors.warning.DEFAULT },
-      });
-    }
+    const markPointData = buildCrossSellTrendMarkPointData(timePeriods, annotations, overallExtremes);
 
     const option: EChartsOption = {
       tooltip: {
@@ -229,7 +266,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [timePeriods, seriesData, loading, metric, overallExtremes]);
+  }, [annotations, timePeriods, seriesData, loading, metric, overallExtremes]);
 
   useEffect(() => {
     return () => {

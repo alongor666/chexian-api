@@ -384,3 +384,11 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/CrossSellAnalysisPanel.tsx`**: 热力图下钻维度选择器改为排除当前层级与已走过层级，避免 `机构 -> 团队 -> 机构` 循环路径。
 - **`dashboard/CrossSellOrgTrendChart.tsx`**: 机构趋势程序解读改为按 `daily/weekly/monthly/quarterly/yearly` 动态生成“近N期口径”和“连续回落/未回落”文案。
 - **`../tests/cross-sell-ux-review-fixes.test.tsx`**: 新增回归单测，锁定年维度热力图禁用、热力图下钻维度去重、程序解读动态文案与高级筛选计数基线。
+
+## 2026-03-10 AI 注释联动与长表平移（B227）
+
+- **`dashboard/CrossSellAnalysisPanel.tsx`**: `buildInsightSummary` 现在输出结构化的推介率/驾意件均极值注释，AI 卡片和趋势图复用同一份极值事实。
+- **`dashboard/CrossSellTrendChart.tsx`**: 新增 `CrossSellTrendAnnotation` 与 `buildCrossSellTrendMarkPointData`，优先渲染显式注释点，保留默认极值兜底。
+- **`growth/components/GrowthDetailSection.tsx`**、**`growth/components/GrowthComparisonSection.tsx`**、**`growth/components/ComparisonAnalysisPanel.tsx`**: 三张增长分析长表统一接入 `StickyTableFrame + stickyTableStyles`，补齐表头吸顶与首列冻结。
+- **`cost/components/NewEarnedPremiumTable.tsx`**: 已赚保费 2025/2026 三角表接入同一套 sticky/frozen 容器，滚动体验与其他长表统一。
+- **`../tests/cross-sell-trend-annotations.test.ts`**: 新增 AI 注释联动单测，锁定 `buildInsightSummary` 与图表 `markPoint` helper 共用同一批极值数据。

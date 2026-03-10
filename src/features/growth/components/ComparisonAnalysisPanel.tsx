@@ -5,7 +5,8 @@ import { BarChart } from '../../../widgets/charts/BarChart';
 import { DualYAxisComparisonChart } from '../../../widgets/charts/DualYAxisComparisonChart';
 import { formatPremiumWan, formatRate, formatCount } from '../../../shared/utils/formatters';
 import type { AdvancedFilterState } from '../../../shared/types/data';
-import { cn, getTrendColorClass } from '../../../shared/styles';
+import { StickyTableFrame } from '../../../shared/ui';
+import { cn, getTrendColorClass, stickyTableStyles } from '../../../shared/styles';
 import { usePerspective } from '../../dashboard/hooks/usePerspective';
 import { PerspectiveSwitcher } from '../../../widgets/filters/PerspectiveSwitcher';
 import { ComparisonQuickPresets } from './ComparisonQuickPresets';
@@ -262,23 +263,23 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
           {/* 双指标详细表格 */}
           <div className="bg-white p-4 rounded shadow border border-gray-100">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">详细数据对比（双指标）</h3>
-            <div className="overflow-auto border rounded border-gray-200 max-h-[400px]">
+            <StickyTableFrame maxHeight={400}>
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0 z-10">
+                <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase bg-gray-50">维度</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50">当期保费</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50">基期保费</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50">保费增长率</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50">当期件数</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50">基期件数</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50">件数增长率</th>
+                    <th className={cn('px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.firstColumnHeader)}>维度</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>当期保费</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>基期保费</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>保费增长率</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>当期件数</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>基期件数</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>件数增长率</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {dualMetricData.map((row, idx) => (
                     <tr key={idx} className="hover:bg-blue-50 transition-colors">
-                      <td className="px-3 py-2 text-sm font-medium text-gray-900">{row.dim_key}</td>
+                      <td className={cn('px-3 py-2 text-sm font-medium text-gray-900', stickyTableStyles.firstColumn)}>{row.dim_key}</td>
                       <td className="px-3 py-2 text-sm text-gray-900 text-right font-tabular">{formatPremiumWan(row.current_premium)}</td>
                       <td className="px-3 py-2 text-sm text-gray-500 text-right font-tabular">{formatPremiumWan(row.previous_premium)}</td>
                       <td className={cn('px-3 py-2 text-sm text-right font-tabular font-medium', getTrendColorClass(row.premium_growth_rate || 0, 'positive'))}>
@@ -293,7 +294,7 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
                   ))}
                 </tbody>
               </table>
-            </div>
+            </StickyTableFrame>
           </div>
         </div>
       )}
@@ -345,21 +346,21 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
 
             <div className="bg-white p-4 rounded shadow border border-gray-100 flex flex-col h-[500px]">
                 <h3 className="text-lg font-semibold mb-4 text-gray-800">详细数据对比</h3>
-                <div className="flex-1 overflow-auto border rounded border-gray-200">
+                <StickyTableFrame className="flex-1" maxHeight="100%">
                   <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50 sticky top-0 z-10">
+                      <thead className="bg-gray-50">
                           <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">维度</th>
-                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">当前期间</th>
-                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">对比期间</th>
-                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">变化量</th>
-                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">增长率</th>
+                              <th className={cn('px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.firstColumnHeader)}>维度</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.header)}>当前期间</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.header)}>对比期间</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.header)}>变化量</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.header)}>增长率</th>
                           </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                           {data.map((row, idx) => (
                               <tr key={idx} className="hover:bg-blue-50 transition-colors">
-                                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.org_level_3 || row.salesman_name || '-'}</td>
+                                  <td className={cn('px-4 py-3 text-sm font-medium text-gray-900', stickyTableStyles.firstColumn)}>{row.org_level_3 || row.salesman_name || '-'}</td>
                                   <td className="px-4 py-3 text-sm text-gray-900 text-right font-tabular">{formatValue(row.current_value)}</td>
                                   <td className="px-4 py-3 text-sm text-gray-500 text-right font-tabular">{formatValue(row.previous_value)}</td>
                                   <td className={cn('px-4 py-3 text-sm text-right font-tabular font-medium', getTrendColorClass(row.current_value - row.previous_value, 'positive'))}>
@@ -372,7 +373,7 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
                           ))}
                       </tbody>
                   </table>
-                </div>
+                </StickyTableFrame>
             </div>
         </div>
       )}

@@ -16,11 +16,11 @@ import { useDataStatus } from '../../shared/contexts/DataContext';
 import { StickyTableFrame } from '../../shared/ui';
 import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
-import { textStyles, cardStyles, tableStyles, colorClasses, stickyTableStyles, cn } from '../../shared/styles';
+import { textStyles, cardStyles, tableStyles, colorClasses, stickyTableStyles, colors, cn } from '../../shared/styles';
 import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
 import { CrossSellSummaryKpiBoard } from './CrossSellSummaryKpiBoard';
 import { CrossSellQuadrantView } from './CrossSellQuadrantView';
-import { CrossSellTrendChart } from './CrossSellTrendChart';
+import { CrossSellTrendChart, type CrossSellTrendAnnotation } from './CrossSellTrendChart';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import { getRateClassByField } from './crossSellRateStatus';
 import type { SeatCoverageLevel, VehicleCategory } from './hooks/useCrossSellTimePeriod';
@@ -184,6 +184,8 @@ interface InsightSummary {
   title: string;
   summary: string;
   bullets: string[];
+  rateAnnotations: CrossSellTrendAnnotation[];
+  premiumAnnotations: CrossSellTrendAnnotation[];
 }
 
 export const CROSS_SELL_HEATMAP_PERIOD_COUNT = 15;
@@ -233,7 +235,7 @@ function formatCell(col: ColumnDef, row: CrossSellRow): string {
   return String(row[col.key] ?? '');
 }
 
-function buildInsightSummary(
+export function buildInsightSummary(
   trendRows: Array<{ time_period: string; coverage_combination: string; rate: number; avg_premium: number }>,
   trendGranularity: TrendGranularity
 ): InsightSummary | null {
@@ -247,6 +249,14 @@ function buildInsightSummary(
   const previous = overallRows[overallRows.length - 2];
   const maxRateRow = overallRows.reduce((best, current) => (current.rate > best.rate ? current : best), overallRows[0]);
   const minRateRow = overallRows.reduce((best, current) => (current.rate < best.rate ? current : best), overallRows[0]);
+  const maxPremiumRow = overallRows.reduce(
+    (best, current) => (current.avg_premium > best.avg_premium ? current : best),
+    overallRows[0]
+  );
+  const minPremiumRow = overallRows.reduce(
+    (best, current) => (current.avg_premium < best.avg_premium ? current : best),
+    overallRows[0]
+  );
   const avgRate = overallRows.reduce((sum, row) => sum + row.rate, 0) / overallRows.length;
   const avgPremium = overallRows.reduce((sum, row) => sum + row.avg_premium, 0) / overallRows.length;
   const momentum = previous ? latest.rate - previous.rate : 0;
@@ -266,10 +276,19 @@ function buildInsightSummary(
     summary: `整体推介率当前为 ${formatPercent(latest.rate)}，相较上一${granularityLabelMap[trendGranularity]}${directionText}${formatPercent(Math.abs(momentum))}，当前驾意件均 ${formatCount(Math.round(latest.avg_premium))} 元。`,
     bullets: [
       `最高推介率出现在 ${maxRateRow.time_period}，达到 ${formatPercent(maxRateRow.rate)}；最低值出现在 ${minRateRow.time_period}，为 ${formatPercent(minRateRow.rate)}。`,
+      `驾意件均最高出现在 ${maxPremiumRow.time_period}，达到 ${formatCount(Math.round(maxPremiumRow.avg_premium))} 元；最低值出现在 ${minPremiumRow.time_period}，为 ${formatCount(Math.round(minPremiumRow.avg_premium))} 元。`,
       `最近${overallRows.length}${granularityLabelMap[trendGranularity]}平均推介率 ${formatPercent(avgRate)}，平均驾意件均 ${formatCount(Math.round(avgPremium))} 元。`,
       momentum < 0
         ? '当前更适合优先排查机构和业务员明细，确认是转化效率回落还是高价值保单减少。'
         : '当前趋势偏正向，建议结合热力图与 TOP20 排行确认增长来自哪些机构与业务员。',
+    ],
+    rateAnnotations: [
+      { name: '最高推介率', timePeriod: maxRateRow.time_period, value: maxRateRow.rate, color: colors.success.DEFAULT },
+      { name: '最低推介率', timePeriod: minRateRow.time_period, value: minRateRow.rate, color: colors.warning.DEFAULT },
+    ],
+    premiumAnnotations: [
+      { name: '最高件均', timePeriod: maxPremiumRow.time_period, value: maxPremiumRow.avg_premium, color: colors.success.DEFAULT },
+      { name: '最低件均', timePeriod: minPremiumRow.time_period, value: minPremiumRow.avg_premium, color: colors.warning.DEFAULT },
     ],
   };
 }
@@ -631,6 +650,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
             title="驾意险推介率走势"
             enabled={isDataLoaded}
             rowsOverride={trendRows}
+            annotations={insightSummary?.rateAnnotations}
           />
           <CrossSellTrendChart
             vehicleCategory={vehicleCategory}
@@ -641,6 +661,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
             title="驾意件均走势"
             enabled={isDataLoaded}
             rowsOverride={trendRows}
+            annotations={insightSummary?.premiumAnnotations}
           />
         </div>
         <CrossSellOrgTrendChart
