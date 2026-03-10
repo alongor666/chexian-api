@@ -3,7 +3,8 @@ import { GrowthKpiCards } from './GrowthKpiCards';
 import { ScissorsTrendChart } from '../../../charts/ScissorsTrendChart';
 import { formatPercent1, getSafeDateStr } from '../utils/format';
 import type { GrowthAnalysisType } from './GrowthAnalysisControlPanel';
-import { cn, getTrendColorClass } from '../../../shared/styles';
+import { StickyTableFrame } from '../../../shared/ui';
+import { cn, getTrendColorClass, stickyTableStyles } from '../../../shared/styles';
 
 interface GrowthDetailSectionProps {
   analysisType: GrowthAnalysisType;
@@ -80,38 +81,38 @@ export function GrowthDetailSection(props: GrowthDetailSectionProps): React.Reac
         </div>
       )}
 
-      <div style={{ overflow: 'auto', border: '1px solid #ddd', borderRadius: '6px' }}>
+      <StickyTableFrame maxHeight={520}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
           <thead>
             <tr>
-              <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
+              <th className={cn(stickyTableStyles.firstColumnHeader)} style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
                 {props.isDailyDetailMode ? '日期' : props.analysisType === 'org' ? '机构' : props.analysisType === 'salesman' ? '业务员' : '时间'}
               </th>
-              <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
+              <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
                 {props.isDailyDetailMode ? `当年当日${props.valueLabel}` : `当期${props.valueLabel}`}
               </th>
-              <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
+              <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
                 {props.isDailyDetailMode ? `上年当日${props.valueLabel}` : `基期${props.valueLabel}`}
               </th>
-              <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
+              <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
                 {props.isDailyDetailMode ? '日增速' : '增长率'}
               </th>
               {props.isDailyDetailMode && (
                 <>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
                     当年当月累计{props.valueLabel}
                   </th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
                     上年当月累计{props.valueLabel}
                   </th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>当月增速</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>当月增速</th>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
                     当年累计{props.valueLabel}
                   </th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
                     上年累计{props.valueLabel}
                   </th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>当年增速</th>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>当年增速</th>
                 </>
               )}
             </tr>
@@ -139,7 +140,7 @@ export function GrowthDetailSection(props: GrowthDetailSectionProps): React.Reac
                     backgroundColor: isCutoffDay ? '#e0f2fe' : 'transparent',
                   }}
                 >
-                  <td style={{ padding: '12px', fontWeight: isAfterCutoff ? 'normal' : 'inherit' }}>{displayLabel}</td>
+                  <td className={cn(stickyTableStyles.firstColumn)} style={{ padding: '12px', fontWeight: isAfterCutoff ? 'normal' : 'inherit' }}>{displayLabel}</td>
                   <td style={{ padding: '12px', textAlign: 'right', fontWeight: isAfterCutoff ? 'normal' : 'inherit' }}>
                     {props.formatValueNoUnit(item.current_value)}
                   </td>
@@ -195,7 +196,7 @@ export function GrowthDetailSection(props: GrowthDetailSectionProps): React.Reac
             })}
           </tbody>
         </table>
-      </div>
+      </StickyTableFrame>
     </div>
   );
 }

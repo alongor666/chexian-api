@@ -15,6 +15,14 @@ import { useCrossSellTrend, type TrendGranularity } from './hooks/useCrossSellTr
 import type { AdvancedFilterState } from '../../shared/types/data';
 import type { VehicleCategory, SeatCoverageLevel } from './hooks/useCrossSellTimePeriod';
 
+export interface CrossSellTrendAnnotation {
+  kind: 'max' | 'min';
+  timePeriod: string;
+  value: number;
+  label: string;
+  description?: string;
+}
+
 interface CrossSellTrendChartProps {
   vehicleCategory: VehicleCategory;
   seatCoverageLevel?: SeatCoverageLevel;
@@ -24,6 +32,7 @@ interface CrossSellTrendChartProps {
   title?: string;
   requestKey?: string;
   enabled?: boolean;
+  annotations?: CrossSellTrendAnnotation[];
   rowsOverride?: Array<{
     time_period: string;
     coverage_combination: string;
@@ -43,6 +52,54 @@ const SERIES_CONFIG: Record<string, { color: string }> = {
 
 const SERIES_ORDER = ['整体', '主全', '交三', '单交'];
 
+export function buildCrossSellTrendMarkPointData(
+  annotations: CrossSellTrendAnnotation[] | undefined,
+  fallbackExtremes: {
+    min: { index: number; value: number } | null;
+    max: { index: number; value: number } | null;
+  },
+  timePeriods: string[]
+) {
+  if (annotations && annotations.length > 0) {
+    return annotations
+      .filter((annotation) => timePeriods.includes(annotation.timePeriod))
+      .map((annotation) => ({
+        name: annotation.label,
+        coord: [annotation.timePeriod, annotation.value] as [string, number],
+        value: annotation.value,
+        itemStyle: {
+          color: annotation.kind === 'max' ? colors.success.DEFAULT : colors.warning.DEFAULT,
+        },
+      }));
+  }
+
+  const markPointData: Array<{
+    name: string;
+    coord: [string, number];
+    value: number;
+    itemStyle: { color: string };
+  }> = [];
+
+  if (fallbackExtremes.max) {
+    markPointData.push({
+      name: '最高',
+      coord: [timePeriods[fallbackExtremes.max.index], fallbackExtremes.max.value],
+      value: fallbackExtremes.max.value,
+      itemStyle: { color: colors.success.DEFAULT },
+    });
+  }
+  if (fallbackExtremes.min) {
+    markPointData.push({
+      name: '最低',
+      coord: [timePeriods[fallbackExtremes.min.index], fallbackExtremes.min.value],
+      value: fallbackExtremes.min.value,
+      itemStyle: { color: colors.warning.DEFAULT },
+    });
+  }
+
+  return markPointData;
+}
+
 export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   vehicleCategory,
   seatCoverageLevel,
@@ -52,6 +109,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   title = '驾意险推介率走势',
   requestKey,
   enabled = true,
+  annotations,
   rowsOverride,
 }: CrossSellTrendChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -130,23 +188,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
       return;
     }
 
-    const markPointData: any[] = [];
-    if (overallExtremes.max) {
-      markPointData.push({
-        name: '最高',
-        coord: [timePeriods[overallExtremes.max.index], overallExtremes.max.value],
-        value: overallExtremes.max.value,
-        itemStyle: { color: colors.success.DEFAULT },
-      });
-    }
-    if (overallExtremes.min) {
-      markPointData.push({
-        name: '最低',
-        coord: [timePeriods[overallExtremes.min.index], overallExtremes.min.value],
-        value: overallExtremes.min.value,
-        itemStyle: { color: colors.warning.DEFAULT },
-      });
-    }
+    const markPointData = buildCrossSellTrendMarkPointData(annotations, overallExtremes, timePeriods);
 
     const option: EChartsOption = {
       tooltip: {
@@ -229,7 +271,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [timePeriods, seriesData, loading, metric, overallExtremes]);
+  }, [timePeriods, seriesData, loading, metric, overallExtremes, annotations]);
 
   useEffect(() => {
     return () => {

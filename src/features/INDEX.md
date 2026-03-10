@@ -384,3 +384,10 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/CrossSellAnalysisPanel.tsx`**: 热力图下钻维度选择器改为排除当前层级与已走过层级，避免 `机构 -> 团队 -> 机构` 循环路径。
 - **`dashboard/CrossSellOrgTrendChart.tsx`**: 机构趋势程序解读改为按 `daily/weekly/monthly/quarterly/yearly` 动态生成“近N期口径”和“连续回落/未回落”文案。
 - **`../tests/cross-sell-ux-review-fixes.test.tsx`**: 新增回归单测，锁定年维度热力图禁用、热力图下钻维度去重、程序解读动态文案与高级筛选计数基线。
+
+## 2026-03-10 AI 图文联动与 Growth 长表平移（B227）
+
+- **`dashboard/CrossSellAnalysisPanel.tsx`**: `buildInsightSummary()` 新增结构化注释输出，统一沉淀推介率/驾意件均的最高点与最低点。
+- **`dashboard/CrossSellTrendChart.tsx`**: 新增 `CrossSellTrendAnnotation` 与 `buildCrossSellTrendMarkPointData()`，让趋势图优先使用 AI 结论生成 markPoint，建立图文联动契约。
+- **`growth/components/GrowthDetailSection.tsx`**、**`growth/components/GrowthComparisonSection.tsx`**、**`growth/components/ComparisonAnalysisPanel.tsx`**: 三张核心长表接入 `StickyTableFrame + stickyTableStyles`，统一表头吸顶与首列冻结。
+- **`../tests/cross-sell-trend-annotations.test.ts`**: 锁定 AI 摘要与趋势图注释使用同一批极值数据，避免后续回归为“双份计算”。
