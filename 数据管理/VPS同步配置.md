@@ -5,7 +5,7 @@
 ```
 Windows: daily.mjs → Parquet 文件
     ↓
-Windows: sync-vps.mjs → SSH 连接 → 上传 → 重启服务
+Windows: sync-vps.mjs → 预检/上传 → 重启服务
     ↓
 VPS: 数据更新完成
 ```
@@ -20,6 +20,15 @@ VPS: 数据更新完成
 - ✅ Config: `C:\Users\xuechenglong\.ssh\config`
 
 **待完成：将公钥添加到 VPS**
+
+### 1.1 OpenSSH 客户端（Windows）
+
+必须保证 `ssh` / `scp` 命令可用（`ssh -V` 能输出版本号）。
+建议在 PowerShell 执行：
+
+```powershell
+ssh -V
+```
 
 ### 2. 公钥内容
 
@@ -57,10 +66,12 @@ echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJWBw54+ZDn8MxeKsjVc9qcZOck6/3L8lfF2yR
 ### Step 1: 验证 SSH 连接（Windows）
 
 ```powershell
-node d:\chexian-api\scripts\sync-vps.mjs
+node d:\chexian-api\scripts\sync-vps.mjs --check
 ```
 
-预期输出：显示可同步的文件列表
+预期输出：
+- SSH 连通成功
+- 本地待同步 Parquet 文件列表
 
 ### Step 2: 同步数据到 VPS
 
@@ -70,6 +81,9 @@ node d:\chexian-api\scripts\sync-vps.mjs
 
 # 或预聚合模式（推荐，更省资源）
 node d:\chexian-api\scripts\sync-vps.mjs --export
+
+# 仅上传不重启（可选）
+node d:\chexian-api\scripts\sync-vps.mjs --no-restart
 ```
 
 ---

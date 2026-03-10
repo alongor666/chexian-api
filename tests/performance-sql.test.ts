@@ -160,4 +160,21 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('CAST(p.org_level_3 AS VARCHAR)');
     expect(sql).not.toContain('p..org_level_3');
   });
+
+  it('heatmap SQL should use period plan and natural-day progress for achievement', () => {
+    const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'month', 15, 'org_level_3');
+
+    expect(sql).toContain('FROM SalesmanTeamMapping m');
+    expect(sql).toContain('period_progress');
+    expect(sql).toContain('progress_ratio');
+    expect(sql).toContain('ppd.period_plan_wan * pr.progress_ratio');
+    expect(sql).not.toContain('cur.plan_premium / 12');
+  });
+
+  it('heatmap SQL should null out plan fields for non-plan dimensions', () => {
+    const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'customer_category');
+
+    expect(sql).toContain('NULL::DOUBLE AS plan_premium');
+    expect(sql).toContain('NULL AS achievement_rate');
+  });
 });

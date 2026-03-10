@@ -1323,6 +1323,41 @@ function getHeatmapGroupByExpr(
   }
 }
 
+function heatmapSupportsAnnualPlan(dimension: HeatmapGroupDimension): boolean {
+  return dimension === 'org_level_3' || dimension === 'team' || dimension === 'salesman';
+}
+
+function getHeatmapPlanDimensionExpr(dimension: HeatmapGroupDimension): string | null {
+  switch (dimension) {
+    case 'org_level_3':
+      return `COALESCE(NULLIF(TRIM(CAST(m.organization AS VARCHAR)), ''), '未知机构')`;
+    case 'team':
+      return `COALESCE(NULLIF(TRIM(CAST(m.team_name AS VARCHAR)), ''), '未归属团队')`;
+    case 'salesman':
+      return `COALESCE(NULLIF(TRIM(CAST(m.full_name AS VARCHAR)), ''), '未知业务员')`;
+    default:
+      return null;
+  }
+}
+
+function heatmapDrillToMappingWhere(steps: HeatmapDrillStep[]): string {
+  if (!steps || steps.length === 0) return '';
+  const clauses = steps.flatMap((step) => {
+    const v = `'${escapeSqlValue(step.value)}'`;
+    switch (step.dimension) {
+      case 'org_level_3':
+        return [`TRIM(CAST(m.organization AS VARCHAR)) = ${v}`];
+      case 'team':
+        return [`COALESCE(NULLIF(TRIM(CAST(m.team_name AS VARCHAR)), ''), '未归属团队') = ${v}`];
+      case 'salesman':
+        return [`TRIM(CAST(m.full_name AS VARCHAR)) = ${v}`];
+      default:
+        return [];
+    }
+  });
+  return clauses.join(' AND ');
+}
+
 export function generatePerformanceOrgHeatmapQuery(
   whereWithoutDate: string,
   segmentTag: PerformanceSegmentTag,
@@ -1335,9 +1370,13 @@ export function generatePerformanceOrgHeatmapQuery(
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, tableAlias);
   const safePeriods = Math.max(7, Math.min(31, Math.floor(periods)));
   const dimConfig = getHeatmapGroupByExpr(groupByDimension, tableAlias);
+  const supportsAnnualPlan = heatmapSupportsAnnualPlan(groupByDimension);
+  const planDimExpr = getHeatmapPlanDimensionExpr(groupByDimension);
   const needsTeamJoin = groupByDimension === 'team' || drillFilter.some((s) => s.dimension === 'team');
   const drillWhereClause = heatmapDrillToWhere(drillFilter);
   const drillAnd = drillWhereClause ? `AND ${drillWhereClause}` : '';
+  const mappingDrillWhereClause = supportsAnnualPlan ? heatmapDrillToMappingWhere(drillFilter) : '';
+  const mappingDrillAnd = mappingDrillWhereClause ? `AND ${mappingDrillWhereClause}` : '';
 
   // 根据 timePeriod 动态生成 SQL 片段
   let truncExpr: string;        // 分组键：DATE_TRUNC 或原始日期
@@ -1346,6 +1385,7 @@ export function generatePerformanceOrgHeatmapQuery(
   let momOffset: string;        // 环比偏移
   let yoyTruncExpr: string;     // 同比聚合的分组键
   let yoyOffset: string;        // 同比偏移
+  let periodEndExpr: string;    // 当前 period_key 对应的周期结束日
   const planDenom = getPlanDenominator(timePeriod);
 
   switch (timePeriod) {
@@ -1356,6 +1396,7 @@ export function generatePerformanceOrgHeatmapQuery(
       momOffset = 'INTERVAL 1 WEEK';
       yoyTruncExpr = `DATE_TRUNC('week', pd)::DATE`;
       yoyOffset = 'INTERVAL 1 YEAR';
+      periodEndExpr = `pp.period_key + INTERVAL 6 DAY`;
       break;
     case 'month':
       truncExpr = `DATE_TRUNC('month', pd)::DATE`;
@@ -1364,6 +1405,7 @@ export function generatePerformanceOrgHeatmapQuery(
       momOffset = 'INTERVAL 1 MONTH';
       yoyTruncExpr = `DATE_TRUNC('month', pd)::DATE`;
       yoyOffset = 'INTERVAL 1 YEAR';
+      periodEndExpr = `DATE_TRUNC('month', pp.period_key)::DATE + INTERVAL 1 MONTH - INTERVAL 1 DAY`;
       break;
     case 'quarter':
       truncExpr = `DATE_TRUNC('quarter', pd)::DATE`;
@@ -1372,6 +1414,16 @@ export function generatePerformanceOrgHeatmapQuery(
       momOffset = 'INTERVAL 3 MONTH';
       yoyTruncExpr = `DATE_TRUNC('quarter', pd)::DATE`;
       yoyOffset = 'INTERVAL 1 YEAR';
+      periodEndExpr = `DATE_TRUNC('quarter', pp.period_key)::DATE + INTERVAL 3 MONTH - INTERVAL 1 DAY`;
+      break;
+    case 'year':
+      truncExpr = `DATE_TRUNC('year', pd)::DATE`;
+      windowOffset = `${safePeriods - 1} YEAR`;
+      seriesStep = 'INTERVAL 1 YEAR';
+      momOffset = 'INTERVAL 1 YEAR';
+      yoyTruncExpr = `DATE_TRUNC('year', pd)::DATE`;
+      yoyOffset = 'INTERVAL 1 YEAR';
+      periodEndExpr = `DATE_TRUNC('year', pp.period_key)::DATE + INTERVAL 1 YEAR - INTERVAL 1 DAY`;
       break;
     default: // 'day'
       truncExpr = 'pd';
@@ -1380,8 +1432,42 @@ export function generatePerformanceOrgHeatmapQuery(
       momOffset = 'INTERVAL 7 DAY';  // 日视图环比=上周同天
       yoyTruncExpr = 'pd';
       yoyOffset = 'INTERVAL 1 YEAR';
+      periodEndExpr = `pp.period_key`;
       break;
   }
+
+  const planCtes = supportsAnnualPlan && planDimExpr ? `,
+    plan_by_dim AS (
+      SELECT
+        ${planDimExpr} AS dimension_value,
+        ROUND(SUM(COALESCE(m.car_insurance_plan_2026, 0)), 4) AS annual_plan
+      FROM SalesmanTeamMapping m
+      WHERE 1=1
+        ${mappingDrillAnd}
+      GROUP BY 1
+    ),
+    plan_period AS (
+      SELECT
+        pbd.dimension_value,
+        pp.period_key,
+        ROUND(pbd.annual_plan / ${planDenom}.0, 4) AS period_plan_wan
+      FROM plan_by_dim pbd
+      CROSS JOIN period_pool pp
+    )` : '';
+
+  const planPremiumSelect = supportsAnnualPlan ? 'ppd.period_plan_wan' : 'NULL::DOUBLE';
+  const achievementRateSelect = supportsAnnualPlan
+    ? `CASE
+        WHEN COALESCE(ppd.period_plan_wan, 0) <= 0 THEN NULL
+        WHEN COALESCE(pr.progress_ratio, 0) <= 0 THEN NULL
+        WHEN pr.progress_ratio < 1 THEN ROUND(COALESCE(cur.premium, 0) * 100.0 / (ppd.period_plan_wan * pr.progress_ratio), 2)
+        ELSE ROUND(COALESCE(cur.premium, 0) * 100.0 / ppd.period_plan_wan, 2)
+      END`
+    : 'NULL';
+
+  const planJoin = supportsAnnualPlan
+    ? `LEFT JOIN plan_period ppd ON ppd.dimension_value = bg.${dimConfig.alias} AND ppd.period_key = bg.period_key`
+    : '';
 
   const sql = `
     WITH filtered AS (
@@ -1389,10 +1475,8 @@ export function generatePerformanceOrgHeatmapQuery(
         CAST(p.policy_date AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         COALESCE(NULLIF(TRIM(CAST(p.salesman_name AS VARCHAR)), ''), '__unknown__') AS salesman_name,
-        CASE WHEN p.premium > 0 THEN p.premium / 10000.0 ELSE 0 END AS premium_wan,
-        COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
+        CASE WHEN p.premium > 0 THEN p.premium / 10000.0 ELSE 0 END AS premium_wan
       FROM PolicyFact p
-      LEFT JOIN achievement_cache ac ON p.salesman_name = ac.full_name
       ${needsTeamJoin ? "LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))" : ''}
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
@@ -1410,25 +1494,12 @@ export function generatePerformanceOrgHeatmapQuery(
       CROSS JOIN period_bounds pb
       WHERE f.pd >= pb.start_date AND f.pd <= pb.ref_date + ${timePeriod === 'day' ? "INTERVAL 0 DAY" : `INTERVAL ${timePeriod === 'quarter' ? '3 MONTH' : '1 ' + timePeriod} - INTERVAL 1 DAY`}
     ),
-    period_salesman_total AS (
-      SELECT salesman_name, SUM(premium_wan) AS salesman_premium_wan
-      FROM window_rows
-      GROUP BY salesman_name
-    ),
     dim_period AS (
       SELECT
         wr.${dimConfig.alias},
         wr.period_key,
-        ROUND(SUM(wr.premium_wan), 4) AS premium,
-        ROUND(SUM(
-          CASE
-            WHEN COALESCE(pst.salesman_premium_wan, 0) > 0
-              THEN wr.plan_vehicle * wr.premium_wan / pst.salesman_premium_wan
-            ELSE 0
-          END
-        ), 4) AS plan_premium
+        ROUND(SUM(wr.premium_wan), 4) AS premium
       FROM window_rows wr
-      LEFT JOIN period_salesman_total pst ON wr.salesman_name = pst.salesman_name
       GROUP BY wr.${dimConfig.alias}, wr.period_key
     ),
     dim_pool AS (
@@ -1438,6 +1509,26 @@ export function generatePerformanceOrgHeatmapQuery(
       SELECT d::DATE AS period_key
       FROM period_bounds pb,
       generate_series(pb.start_date, pb.ref_date, ${seriesStep}) AS t(d)
+    ),
+    period_progress AS (
+      SELECT
+        pp.period_key,
+        CAST(DATE_DIFF('day', pp.period_key, ${periodEndExpr}) + 1 AS DOUBLE) AS total_days,
+        CAST(
+          CASE
+            WHEN LEAST(CAST(CURRENT_DATE AS DATE), ${periodEndExpr}) < pp.period_key THEN 0
+            ELSE DATE_DIFF('day', pp.period_key, LEAST(CAST(CURRENT_DATE AS DATE), ${periodEndExpr})) + 1
+          END AS DOUBLE
+        ) AS elapsed_days,
+        CASE
+          WHEN DATE_DIFF('day', pp.period_key, ${periodEndExpr}) + 1 <= 0 THEN 0
+          WHEN LEAST(CAST(CURRENT_DATE AS DATE), ${periodEndExpr}) < pp.period_key THEN 0
+          ELSE CAST(
+            DATE_DIFF('day', pp.period_key, LEAST(CAST(CURRENT_DATE AS DATE), ${periodEndExpr})) + 1
+            AS DOUBLE
+          ) / CAST(DATE_DIFF('day', pp.period_key, ${periodEndExpr}) + 1 AS DOUBLE)
+        END AS progress_ratio
+      FROM period_pool pp
     ),
     base_grid AS (
       SELECT o.${dimConfig.alias}, pp.period_key
@@ -1454,17 +1545,15 @@ export function generatePerformanceOrgHeatmapQuery(
       FROM filtered
       GROUP BY ${yoyTruncExpr}, ${dimConfig.alias}
     )
+    ${planCtes}
     SELECT
       bg.${dimConfig.alias} AS org_level_3,
       bg.period_key AS policy_date,
       COALESCE(cur.premium, 0) AS premium,
-      cur.plan_premium,
+      ${planPremiumSelect} AS plan_premium,
       COALESCE(prev_mom.premium, 0) AS prev_mom_premium,
       COALESCE(prev_yoy.premium, 0) AS prev_yoy_premium,
-      CASE
-        WHEN COALESCE(cur.plan_premium, 0) <= 0 THEN NULL
-        ELSE ROUND(COALESCE(cur.premium, 0) * 100.0 / (cur.plan_premium / ${planDenom}.0), 2)
-      END AS achievement_rate,
+      ${achievementRateSelect} AS achievement_rate,
       CASE
         WHEN COALESCE(prev_mom.premium, 0) = 0 THEN NULL
         ELSE ROUND((COALESCE(cur.premium, 0) - prev_mom.premium) * 100.0 / prev_mom.premium, 2)
@@ -1475,6 +1564,8 @@ export function generatePerformanceOrgHeatmapQuery(
       END AS yoy_growth_rate
     FROM base_grid bg
     LEFT JOIN dim_period cur ON cur.${dimConfig.alias} = bg.${dimConfig.alias} AND cur.period_key = bg.period_key
+    LEFT JOIN period_progress pr ON pr.period_key = bg.period_key
+    ${planJoin}
     LEFT JOIN prev_mom_data prev_mom ON prev_mom.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_mom.period_key = bg.period_key - ${momOffset}
     LEFT JOIN prev_yoy_data prev_yoy ON prev_yoy.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_yoy.period_key = bg.period_key - ${yoyOffset}
     ORDER BY bg.${dimConfig.alias}, bg.period_key
@@ -1485,6 +1576,7 @@ export function generatePerformanceOrgHeatmapQuery(
     timePeriod,
     periods: safePeriods,
     groupByDimension,
+    supportsAnnualPlan,
     drillFilterCount: drillFilter.length,
     sqlLength: sql.length,
   });
