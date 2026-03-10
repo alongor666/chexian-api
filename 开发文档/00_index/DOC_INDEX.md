@@ -55,6 +55,7 @@
 | **改进路线图** | `开发文档/reviews/quality-improvement-roadmap.md` | **4周工程化实施计划（Week-by-Week）** |
 | **Linear任务导出** | `开发文档/reviews/linear-tasks-export.md` | **16个可执行任务（含验收标准）** |
 | **Code Review（2026-02-24）** | `开发文档/reviews/2026-02-24-code-review.md` | 聚焦企微登录与治理账本一致性的专项审查（2个P0） |
+| **Cross-sell UX 线框规格 V1（2026-03-09）** | `开发文档/reviews/2026-03-09-cross-sell-ux-wireframe-v1.md` | 交叉销售页重构前的实现级线框规格：页面骨架、吸顶层级、筛选重组、锚点导航与组件契约 |
 
 ---
 

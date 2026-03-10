@@ -1,36 +1,101 @@
-import React, { useState, useCallback, useEffect, type ReactNode } from 'react';
+import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Filter, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { AdvancedFilterPanel } from '../../features/filters/AdvancedFilterPanel';
+import { FilterLayoutV2 } from '../../features/filters/FilterLayoutV2';
 import { PageHeaderBar } from '../../features/filters/PageHeaderBar';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import type { FilterPresetName } from '../../shared/types/filters';
+import type {
+  FilterFieldsConfig,
+  FilterPresetName,
+  FilterSelectionModeConfig,
+} from '../../shared/types/filters';
+import { FILTER_PRESETS } from '../../shared/types/filters';
+import type { AdvancedFilterState } from '../../shared/types/data';
+import { buttonStyles, cardStyles, colorClasses, textStyles, cn } from '../../shared/styles';
+import { DashboardAnchorNav, type DashboardAnchorSection } from './DashboardAnchorNav';
 import { Footer } from './Footer';
-
-const STORAGE_KEY = 'page-filter-collapsed';
 
 interface PageFilterPanelProps {
   preset: FilterPresetName;
   children: React.ReactNode;
-  /** 页面基础标题（如"保费分析"），会根据筛选范围自动添加前缀 */
   title?: string;
-  /** 页面标题栏右侧扩展区 */
   headerRightContent?: ReactNode;
-  /** 页面标题栏下方左侧扩展区 */
   headerBottomLeftContent?: ReactNode;
-  /** 页面标题栏已选条件 chips 对齐方式 */
   headerChipsAlign?: 'left' | 'right';
+  anchorSections?: DashboardAnchorSection[];
+  contentScrollId?: string;
+  basicFilterVisibleFields?: FilterFieldsConfig;
+  basicFilterSelectionModes?: FilterSelectionModeConfig;
+  filterBarExtraContent?: ReactNode;
+  filterBarQuickCombosSlot?: ReactNode;
+  filterBarCoverageCombinationSlot?: ReactNode;
+  filterBarOrgActions?: ReactNode;
+  showBasicFilterBar?: boolean;
 }
 
-/**
- * 页面级筛选器布局组件
- *
- * 包裹页面内容，在右侧提供可折叠的筛选器面板。
- * 筛选状态通过 FilterContext 在所有页面间共享。
- *
- * 响应式设计：
- * - 移动端（<lg）：筛选器为浮动抽屉，点击按钮显示
- * - 桌面端（≥lg）：筛选器固定在右侧
- */
+const DEFAULT_SCROLL_ID = 'dashboard-page-scroll';
+
+function getDefaultDateEnd(maxDataDate?: string) {
+  return maxDataDate ?? new Date().toISOString().split('T')[0];
+}
+
+function resolveResetYear(availableYears?: number[]) {
+  const currentYear = new Date().getFullYear();
+  if (!availableYears || availableYears.length === 0) return currentYear;
+  if (availableYears.includes(currentYear)) return currentYear;
+  return availableYears[availableYears.length - 1] ?? currentYear;
+}
+
+export function countActiveFilters(
+  filters: AdvancedFilterState,
+  maxDataDate?: string,
+  availableYears?: number[]
+): number {
+  const resetYear = resolveResetYear(availableYears);
+  const expectedStart = `${resetYear}-01-01`;
+  const expectedEnd = getDefaultDateEnd(maxDataDate);
+  let count = 0;
+
+  const arrayKeys: Array<keyof AdvancedFilterState> = [
+    'org_level_3',
+    'salesman_name',
+    'customer_category',
+    'coverage_combination',
+    'renewal_mode',
+    'insurance_grade',
+    'small_truck_score',
+    'large_truck_score',
+  ];
+
+  arrayKeys.forEach((key) => {
+    const value = filters[key];
+    if (Array.isArray(value) && value.length > 0) count += 1;
+  });
+
+  const booleanKeys: Array<keyof AdvancedFilterState> = [
+    'is_telemarketing',
+    'is_nev',
+    'is_new_car',
+    'is_transfer',
+    'is_cross_sell',
+    'is_commercial_insure',
+    'is_renewal',
+    'is_renewable',
+    'insurance_type',
+  ];
+
+  booleanKeys.forEach((key) => {
+    if (typeof filters[key] === 'boolean') count += 1;
+  });
+
+  if ((filters.date_criteria ?? 'policy_date') !== 'policy_date') count += 1;
+  if ((filters.analysis_year ?? resetYear) !== resetYear) count += 1;
+  if (filters.policy_date_start && filters.policy_date_start !== expectedStart) count += 1;
+  if (filters.policy_date_end && filters.policy_date_end !== expectedEnd) count += 1;
+
+  return count;
+}
+
 export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
   preset,
   children,
@@ -38,6 +103,15 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
   headerRightContent,
   headerBottomLeftContent,
   headerChipsAlign,
+  anchorSections = [],
+  contentScrollId = DEFAULT_SCROLL_ID,
+  basicFilterVisibleFields,
+  basicFilterSelectionModes,
+  filterBarExtraContent,
+  filterBarQuickCombosSlot,
+  filterBarCoverageCombinationSlot,
+  filterBarOrgActions,
+  showBasicFilterBar = true,
 }) => {
   const {
     filters,
@@ -50,230 +124,250 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
     availableYears,
   } = useGlobalFilters();
 
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved === null ? true : saved === 'true'; // 默认隐藏
-    } catch {
-      return true;
-    }
-  });
-
-  // 移动端筛选器显示状态
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(STORAGE_KEY, String(next));
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  }, []);
-
-  const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
-    try {
-      const saved = localStorage.getItem('right-sidebar-width');
-      return saved ? parseInt(saved, 10) : 280;
-    } catch {
-      return 280;
-    }
-  });
-  const [isDraggingRight, setIsDraggingRight] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('right-sidebar-width', rightSidebarWidth.toString());
-    } catch { }
-  }, [rightSidebarWidth]);
+    if (!advancedOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setAdvancedOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [advancedOpen]);
+
+  const presetConfig = FILTER_PRESETS[preset];
+  const defaultBasicFields = useMemo<FilterFieldsConfig>(
+    () => ({
+      dateCriteria: presetConfig.dateCriteria ?? true,
+      lockedDateCriteria: presetConfig.lockedDateCriteria,
+      allowedYears: presetConfig.allowedYears,
+      analysisYear: presetConfig.analysisYear ?? true,
+      dateRange: presetConfig.dateRange ?? true,
+      organization: presetConfig.organization ?? true,
+      customerCategory: false,
+      coverageCombination: presetConfig.coverageCombination ?? true,
+      renewalMode: false,
+      basicOptions: false,
+      quickCombos: false,
+      salesman: false,
+    }),
+    [presetConfig]
+  );
+
+  const mergedBasicVisibleFields = useMemo<FilterFieldsConfig>(
+    () => ({
+      ...defaultBasicFields,
+      ...basicFilterVisibleFields,
+    }),
+    [basicFilterVisibleFields, defaultBasicFields]
+  );
+
+  const mergedBasicSelectionModes = useMemo<FilterSelectionModeConfig>(
+    () => ({
+      organizationMode:
+        basicFilterSelectionModes?.organizationMode ??
+        presetConfig.organizationMode ??
+        'multi',
+      salesmanMode:
+        basicFilterSelectionModes?.salesmanMode ??
+        presetConfig.salesmanMode ??
+        'multi',
+    }),
+    [basicFilterSelectionModes, presetConfig.organizationMode, presetConfig.salesmanMode]
+  );
+
+  const activeFilterCount = useMemo(
+    () => countActiveFilters(filters, maxDataDate, availableYears),
+    [filters, maxDataDate, availableYears]
+  );
+
+  const handleResetFilters = () => {
+    const analysisYear = resolveResetYear(availableYears);
+    setFilters({
+      date_criteria: mergedBasicVisibleFields.lockedDateCriteria ?? 'policy_date',
+      analysis_year: analysisYear,
+      policy_date_start: `${analysisYear}-01-01`,
+      policy_date_end: getDefaultDateEnd(maxDataDate),
+    });
+  };
+
+  const renderAdvancedDrawer = () => (
+    <>
+      <div
+        className={cn(
+          'fixed inset-0 z-40 bg-neutral-900/30 transition-opacity',
+          advancedOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        )}
+        onClick={() => setAdvancedOpen(false)}
+      />
+      <aside
+        className={cn(
+          'fixed inset-y-0 right-0 z-50 flex w-[380px] max-w-[92vw] flex-col bg-white shadow-2xl transition-transform duration-300',
+          advancedOpen ? 'translate-x-0' : 'translate-x-full'
+        )}
+        aria-label="高级筛选"
+      >
+        <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+          <div>
+            <h2 className={textStyles.titleSmall}>高级筛选</h2>
+            <p className={cn(textStyles.caption, 'mt-1')}>保留完整筛选能力，不再占用主内容横向空间。</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen(false)}
+            className={cn(buttonStyles.base, buttonStyles.ghost, 'h-9 w-9 rounded-full p-0')}
+            aria-label="关闭高级筛选"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          <AdvancedFilterPanel
+            filters={filters}
+            onChange={setFilters}
+            collapsed={isFilterCollapsed}
+            onToggleCollapse={toggleFilterCollapsed}
+            availableYears={availableYears}
+            maxDataDate={maxDataDate}
+            preset={preset}
+            compact
+            options={{
+              org_level_3: filterOptions.org_level_3,
+              salesman_name: filterOptions.salesman_name,
+              customer_category: filterOptions.customer_category,
+              coverage_combination: filterOptions.coverage_combination,
+              renewal_mode: filterOptions.renewal_mode,
+              insurance_grade: filterOptions.insurance_grade,
+              small_truck_score: filterOptions.small_truck_score,
+              large_truck_score: filterOptions.large_truck_score,
+              availableSalesmen,
+            }}
+          />
+        </div>
+        <div className="border-t border-neutral-200 px-4 py-4">
+          <Footer />
+        </div>
+      </aside>
+    </>
+  );
 
   return (
-    <div className="flex flex-col h-full w-full bg-neutral-50/50">
-      {/* 顶部固定标题区域 */}
-      {title && (
-        <div className="flex-none z-20 sticky top-0 bg-white border-b border-neutral-100 shadow-sm w-full">
-          <PageHeaderBar
-            baseTitle={title}
-            filters={filters}
-            allOrgCount={filterOptions.org_level_3?.length || 0}
-            rightContent={headerRightContent}
-            bottomLeftContent={headerBottomLeftContent}
-            chipsAlign={headerChipsAlign}
-          />
-        </div>
-      )}
-
-      {/* 下方内容与侧边栏的横向包裹区 */}
-      <div className="flex flex-1 flex-row min-h-0 w-full overflow-hidden relative">
-        {/* 左侧主内容区（独立滚动） */}
-        <div className="flex-1 overflow-y-auto min-w-0 p-4 relative">
-          {children}
-        </div>
-
-        {/* 移动端筛选器按钮 */}
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="lg:hidden fixed bottom-4 right-4 z-40 p-3 bg-primary text-white rounded-full shadow-lg hover:bg-primary-dark transition-colors"
-          title="打开筛选器"
-        >
-          <Filter size={20} />
-        </button>
-
-        {/* 移动端筛选器遮罩 */}
-        {mobileOpen && (
-          <div
-            className="lg:hidden fixed inset-0 z-40 bg-black/30"
-            onClick={() => setMobileOpen(false)}
-          />
-        )}
-
-        {/* 移动端筛选器抽屉 */}
-        <div
-          className={`lg:hidden fixed inset-y-0 right-0 z-50 w-80 max-w-[85vw] bg-white shadow-xl transform transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : 'translate-x-full'
-            }`}
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
-            <span className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-              <Filter size={16} />
-              筛选条件
-            </span>
-            <button
-              onClick={() => setMobileOpen(false)}
-              className="p-1 rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
-              title="关闭"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="overflow-y-auto h-[calc(100%-56px)] p-4 flex flex-col">
-            <div className="flex-1">
-              <AdvancedFilterPanel
-                filters={filters}
-                onChange={setFilters}
-                collapsed={isFilterCollapsed}
-                onToggleCollapse={toggleFilterCollapsed}
-                availableYears={availableYears}
-                maxDataDate={maxDataDate}
-                preset={preset}
-                compact={true}
-                options={{
-                  org_level_3: filterOptions.org_level_3,
-                  salesman_name: filterOptions.salesman_name,
-                  customer_category: filterOptions.customer_category,
-                  coverage_combination: filterOptions.coverage_combination,
-                  renewal_mode: filterOptions.renewal_mode,
-                  insurance_grade: filterOptions.insurance_grade,
-                  small_truck_score: filterOptions.small_truck_score,
-                  large_truck_score: filterOptions.large_truck_score,
-                  availableSalesmen,
-                }}
-              />
-            </div>
-            <Footer />
-          </div>
-        </div>
-
-        {/* 桌面端右侧筛选器 */}
-        <div
-          className={`hidden lg:flex relative flex-shrink-0 border-l border-neutral-200 bg-white flex-col h-full overflow-hidden ${!isDraggingRight ? 'transition-all duration-300' : ''} ${collapsed ? 'w-10 items-center justify-start pt-4' : ''}`}
-          style={!collapsed ? { width: `${rightSidebarWidth}px` } : undefined}
-        >
-          {/* 拖拽把手 - 拉左侧边缘 */}
-          {!collapsed && (
-            <div
-              className="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize hover:bg-blue-400 z-50 transition-colors"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                setIsDraggingRight(true);
-                const startX = e.clientX;
-                const startWidth = rightSidebarWidth;
-
-                const handleMouseMove = (moveEvent: MouseEvent) => {
-                  let newWidth = startWidth - (moveEvent.clientX - startX); // 向左拉是增加宽度
-                  if (newWidth < 240) newWidth = 240;
-                  if (newWidth > 500) newWidth = 500;
-                  setRightSidebarWidth(newWidth);
-                };
-
-                const handleMouseUp = () => {
-                  document.removeEventListener('mousemove', handleMouseMove);
-                  document.removeEventListener('mouseup', handleMouseUp);
-                  document.body.style.cursor = '';
-                  document.body.style.userSelect = '';
-                  setIsDraggingRight(false);
-                };
-
-                document.addEventListener('mousemove', handleMouseMove);
-                document.addEventListener('mouseup', handleMouseUp);
-                document.body.style.cursor = 'col-resize';
-                document.body.style.userSelect = 'none';
-              }}
+    <div className="flex h-full w-full flex-col bg-neutral-50/60">
+      {(title || showBasicFilterBar) && (
+        <div className="sticky top-0 z-30 border-b border-neutral-200 bg-white shadow-sm">
+          {title && (
+            <PageHeaderBar
+              baseTitle={title}
+              filters={filters}
+              allOrgCount={filterOptions.org_level_3?.length || 0}
+              rightContent={headerRightContent}
+              bottomLeftContent={headerBottomLeftContent}
+              chipsAlign={headerChipsAlign}
             />
           )}
 
-          {collapsed ? (
-            /* 折叠态内容 */
-            <>
-              <button
-                onClick={toggleCollapsed}
-                className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
-                title="展开筛选器"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <div className="mt-2">
-                <Filter size={16} className="text-neutral-400" />
-              </div>
-            </>
-          ) : (
-            /* 展开态内容 */
-            <>
-              <div className="flex items-center justify-between px-3 py-2.5 border-b border-neutral-100">
-                <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Filter size={14} />
-                  筛选条件
-                </span>
-                <button
-                  onClick={toggleCollapsed}
-                  className="p-1 rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
-                  title="收起筛选器"
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-              <div className="px-3 py-3 overflow-y-auto flex-1 h-0 flex flex-col">
-                <div className="flex-1">
-                  <AdvancedFilterPanel
-                    filters={filters}
-                    onChange={setFilters}
-                    collapsed={isFilterCollapsed}
-                    onToggleCollapse={toggleFilterCollapsed}
-                    availableYears={availableYears}
-                    maxDataDate={maxDataDate}
-                    preset={preset}
-                    compact={true}
-                    options={{
-                      org_level_3: filterOptions.org_level_3,
-                      salesman_name: filterOptions.salesman_name,
-                      customer_category: filterOptions.customer_category,
-                      coverage_combination: filterOptions.coverage_combination,
-                      renewal_mode: filterOptions.renewal_mode,
-                      insurance_grade: filterOptions.insurance_grade,
-                      small_truck_score: filterOptions.small_truck_score,
-                      large_truck_score: filterOptions.large_truck_score,
-                      availableSalesmen,
-                    }}
-                  />
+          {showBasicFilterBar && (
+            <div className="border-t border-neutral-100 bg-neutral-50/90 px-4 py-3 backdrop-blur">
+              <div className="mb-3 flex flex-wrap items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  {filterBarExtraContent ?? (
+                    <div className={cn(cardStyles.compact, 'border-dashed')}>
+                      <p className={cn(textStyles.caption, colorClasses.text.neutralDark)}>
+                        常用筛选常驻显示，其他筛选进入高级抽屉。
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <Footer />
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className={cn(buttonStyles.base, buttonStyles.secondary, 'px-3 py-2 text-xs')}
+                  >
+                    <RotateCcw size={14} className="mr-1.5" />
+                    重置
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdvancedOpen(true)}
+                    className={cn(buttonStyles.base, buttonStyles.primary, 'px-3 py-2 text-xs shadow-sm')}
+                  >
+                    <SlidersHorizontal size={14} className="mr-1.5" />
+                    高级筛选
+                    {activeFilterCount > 0 && (
+                      <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
-            </>
+
+              <FilterLayoutV2
+                filters={filters}
+                onChange={setFilters}
+                availableYears={availableYears ?? []}
+                currentYear={new Date().getFullYear()}
+                defaultDateCriteria={mergedBasicVisibleFields.lockedDateCriteria ?? filters.date_criteria ?? 'policy_date'}
+                defaultDateRange={{
+                  start: `${resolveResetYear(availableYears)}-01-01`,
+                  end: getDefaultDateEnd(maxDataDate),
+                }}
+                defaultYear={filters.analysis_year ?? resolveResetYear(availableYears)}
+                maxDataDate={maxDataDate}
+                options={{
+                  org_level_3: filterOptions.org_level_3,
+                  customer_category: filterOptions.customer_category,
+                  coverage_combination: filterOptions.coverage_combination,
+                  renewal_mode: filterOptions.renewal_mode,
+                }}
+                onMultiSelectChange={(key, values) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    [key]: values.length > 0 ? values : undefined,
+                  }))
+                }
+                visibleFields={mergedBasicVisibleFields}
+                selectionModes={mergedBasicSelectionModes}
+                quickCombosSlot={filterBarQuickCombosSlot}
+                coverageCombinationSlot={filterBarCoverageCombinationSlot}
+                orgActions={filterBarOrgActions}
+              />
+            </div>
           )}
         </div>
+      )}
+
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div id={contentScrollId} className="h-full flex-1 overflow-y-auto">
+          <div
+            className={cn(
+              'mx-auto grid max-w-[1680px] gap-5 p-4 lg:p-5',
+              anchorSections.length > 0 ? 'lg:grid-cols-[minmax(0,1fr)_13rem]' : 'grid-cols-1'
+            )}
+          >
+            <div className="min-w-0">{children}</div>
+            {anchorSections.length > 0 && (
+              <div className="hidden lg:block">
+                <DashboardAnchorNav sections={anchorSections} containerId={contentScrollId} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen(true)}
+          className="fixed bottom-4 right-4 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-colors hover:bg-primary-dark lg:hidden"
+          aria-label="打开高级筛选"
+        >
+          <Filter size={20} />
+        </button>
       </div>
+
+      {renderAdvancedDrawer()}
     </div>
   );
 };

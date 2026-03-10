@@ -306,6 +306,24 @@ export const tableStyles = {
 } as const
 
 /**
+ * 长表滚动与吸顶样式
+ */
+export const stickyTableStyles = {
+  /** 滚动容器 */
+  scrollFrame:
+    'overflow-auto overscroll-contain rounded-lg border border-neutral-100 bg-white/80 dark:bg-neutral-900/40 dark:border-neutral-800',
+  /** 吸顶表头 */
+  header:
+    'sticky top-0 z-20 bg-white dark:bg-neutral-800 shadow-[inset_0_-1px_0_0_rgba(229,231,235,1)] dark:shadow-[inset_0_-1px_0_0_rgba(64,64,64,1)]',
+  /** 首列冻结 */
+  firstColumn:
+    'sticky left-0 bg-white dark:bg-neutral-800 shadow-[inset_-1px_0_0_0_rgba(229,231,235,1)] dark:shadow-[inset_-1px_0_0_0_rgba(64,64,64,1)]',
+  /** 首列表头交叉单元格 */
+  firstColumnHeader:
+    'sticky left-0 top-0 z-30 bg-white dark:bg-neutral-800 shadow-[inset_-1px_0_0_0_rgba(229,231,235,1),inset_0_-1px_0_0_rgba(229,231,235,1)] dark:shadow-[inset_-1px_0_0_0_rgba(64,64,64,1),inset_0_-1px_0_0_rgba(64,64,64,1)]',
+} as const
+
+/**
  * 文本样式
  */
 export const textStyles = {
@@ -420,10 +438,49 @@ export function conditionalStyle(
 /**
  * 获取趋势颜色类名（正/负/中性）
  */
-export function getTrendColorClass(value: number, inverse = false): string {
-  if (value === 0) return 'text-neutral-500'
-  const isPositive = inverse ? value < 0 : value > 0
-  return isPositive ? 'text-success' : 'text-danger'
+export type MetricPolarity = 'positive' | 'negative'
+export type TrendDirection = 'up' | 'down' | 'flat'
+
+/**
+ * 根据数值计算趋势方向
+ */
+export function getTrendDirection(value: number): TrendDirection {
+  if (value > 0) return 'up'
+  if (value < 0) return 'down'
+  return 'flat'
+}
+
+/**
+ * 根据趋势方向 + 指标方向返回文本颜色
+ * - positive: 值越大越好（涨绿跌红）
+ * - negative: 值越小越好（涨红跌绿）
+ */
+export function getTrendColorClassByPolarity(
+  direction: TrendDirection,
+  metricPolarity: MetricPolarity = 'positive'
+): string {
+  if (direction === 'flat') {
+    return colorClasses.text.neutralMuted
+  }
+
+  const isPositiveMetricGood = direction === 'up'
+  const isGoodChange =
+    metricPolarity === 'positive'
+      ? isPositiveMetricGood
+      : !isPositiveMetricGood
+
+  return isGoodChange ? colorClasses.text.success : colorClasses.text.danger
+}
+
+/**
+ * 获取趋势颜色类名（兼容旧 inverse 参数）
+ */
+export function getTrendColorClass(value: number, inverseOrPolarity: boolean | MetricPolarity = false): string {
+  const metricPolarity: MetricPolarity = typeof inverseOrPolarity === 'boolean'
+    ? (inverseOrPolarity ? 'negative' : 'positive')
+    : inverseOrPolarity
+
+  return getTrendColorClassByPolarity(getTrendDirection(value), metricPolarity)
 }
 
 /**

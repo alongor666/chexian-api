@@ -6,7 +6,7 @@
 
 import { memo } from 'react';
 import type { Insight, InsightType } from '../types';
-import { cn } from '../../styles';
+import { cn, getTrendColorClassByPolarity, getTrendDirection, colorClasses } from '../../styles';
 
 interface InsightCardProps {
   insight: Insight;
@@ -68,6 +68,19 @@ const priorityConfig: Record<'high' | 'medium' | 'low', { label: string; colorCl
 export const InsightCard = memo(function InsightCard({ insight, className }: InsightCardProps) {
   const typeInfo = typeConfig[insight.type];
   const priorityInfo = priorityConfig[insight.priority];
+  const metricDelta = insight.metric?.delta;
+  const metricPolarity = insight.metric?.metricPolarity ?? 'positive';
+  const deltaTextClass = metricDelta === undefined
+    ? colorClasses.text.neutralMuted
+    : getTrendColorClassByPolarity(getTrendDirection(metricDelta), metricPolarity);
+  const deltaArrow = metricDelta === undefined
+    ? ''
+    : metricDelta > 0
+      ? '↑'
+      : metricDelta < 0
+        ? '↓'
+        : '—';
+  const deltaPrefix = metricDelta !== undefined && metricDelta > 0 ? '+' : '';
 
   return (
     <div
@@ -105,6 +118,11 @@ export const InsightCard = memo(function InsightCard({ insight, className }: Ins
           <div className="flex items-center gap-4 text-xs">
             <span className="font-medium">{insight.metric.name}:</span>
             <span className="font-mono font-semibold">{insight.metric.value}</span>
+            {metricDelta !== undefined && (
+              <span className={cn('font-mono font-semibold', deltaTextClass)}>
+                {deltaArrow} {deltaPrefix}{metricDelta}
+              </span>
+            )}
             {insight.metric.benchmark && (
               <span className="opacity-70">基准: {insight.metric.benchmark}</span>
             )}

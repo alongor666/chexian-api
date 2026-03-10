@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { GrowthData } from '../hooks/useGrowthAnalysis';
 import { formatRate } from '../../../shared/utils/formatters';
+import { cn, getTrendColorClass } from '../../../shared/styles';
 
 
 interface GrowthKpiCardsProps {
@@ -60,13 +61,10 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
     if (value == null) return <span className="text-gray-400">-</span>;
     const isPositive = value > 0;
     const isZero = value === 0;
-    // 保险业务通常：增长是好事(红/绿取决于习惯，这里假设红色为涨/热，绿色为跌/冷，或者遵循国际惯例绿色为涨)
-    // 中国股市：红涨绿跌。欧美：绿涨红跌。
-    // 项目中其他地方用了 '#28a745' (Green) for > 0. 遵循项目惯例。
-    const projectColorClass = isPositive ? 'text-green-600' : isZero ? 'text-gray-500' : 'text-red-500';
+    const trendColorClass = getTrendColorClass(value, 'positive');
 
     return (
-      <span className={`font-bold ml-1 ${projectColorClass}`}>
+      <span className={cn('font-bold ml-1', trendColorClass)}>
         {isPositive ? '↑' : isZero ? '-' : '↓'} {formatRate(Math.abs(value))}
       </span>
     );
@@ -150,7 +148,16 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-gray-400">规模缺口</span>
-            <span className={`font-medium ${(todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+            <span
+              className={cn(
+                'font-medium',
+                // 规模缺口默认视为正向指标：增加更优
+                getTrendColorClass(
+                  (todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0),
+                  'positive'
+                )
+              )}
+            >
               {(todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0) >= 0 ? '+' : ''}
               {valueFormatter((todayData.ytd_total_current || 0) - (todayData.ytd_total_previous || 0))}
             </span>

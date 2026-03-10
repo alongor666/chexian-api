@@ -15,7 +15,6 @@ import { buttonStyles, cardStyles, colors, cn, tableStyles, textStyles } from '.
 import { ORG_GROUPS } from '../../shared/config/coefficient-thresholds';
 import { useCrossSellOrgTrend, type CoverageCombinationFilter, type OrgTrendPoint } from './hooks/useCrossSellOrgTrend';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
-import { apiClient } from '../../shared/api/client';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import type { VehicleCategory, SeatCoverageLevel } from './hooks/useCrossSellTimePeriod';
 
@@ -49,9 +48,56 @@ const LINE_AVG_PREMIUM_COLOR = colors.primary.DEFAULT;
 interface MetricDigest {
   avg30: number;
   avg7: number;
-  consecutiveDownDays: number;
+  consecutiveDownPeriods: number;
   maxPoint: { date: string; value: number };
   minPoint: { date: string; value: number };
+}
+
+const DIGEST_PRIMARY_WINDOW = 30;
+const DIGEST_SECONDARY_WINDOW = 7;
+
+export function getCrossSellTrendGranularityUnit(granularity: TrendGranularity = 'daily'): string {
+  const unitMap: Record<TrendGranularity, string> = {
+    daily: '天',
+    weekly: '周',
+    monthly: '月',
+    quarterly: '季',
+    yearly: '年',
+  };
+
+  return unitMap[granularity];
+}
+
+export function getCrossSellTrendDigestHeading(
+  granularity: TrendGranularity = 'daily',
+  rowCount: number
+): string {
+  return `程序解读（近${Math.min(rowCount, DIGEST_PRIMARY_WINDOW)}${getCrossSellTrendGranularityUnit(granularity)}口径）`;
+}
+
+export function formatCrossSellTrendDeclineLabel(
+  granularity: TrendGranularity = 'daily',
+  consecutiveDownPeriods: number
+): string {
+  const unit = getCrossSellTrendGranularityUnit(granularity);
+  if (consecutiveDownPeriods <= 0) {
+    return '最近未出现连续回落';
+  }
+  return `连续回落${consecutiveDownPeriods}${unit}`;
+}
+
+export function buildCrossSellTrendDigestText(
+  metricLabel: string,
+  digest: MetricDigest,
+  granularity: TrendGranularity = 'daily',
+  rowCount: number,
+  formatValue: (value: number) => string
+): string {
+  const unit = getCrossSellTrendGranularityUnit(granularity);
+  const primaryWindow = Math.min(rowCount, DIGEST_PRIMARY_WINDOW);
+  const secondaryWindow = Math.min(rowCount, DIGEST_SECONDARY_WINDOW);
+
+  return `${metricLabel}：近${primaryWindow}${unit}均值 ${formatValue(digest.avg30)}，近${secondaryWindow}${unit}均值 ${formatValue(digest.avg7)}，${formatCrossSellTrendDeclineLabel(granularity, digest.consecutiveDownPeriods)}，最高 ${formatValue(digest.maxPoint.value)}（${shortDate(digest.maxPoint.date)}），最低 ${formatValue(digest.minPoint.value)}（${shortDate(digest.minPoint.date)}）。`;
 }
 
 function mean(values: number[]): number {
@@ -73,16 +119,16 @@ function calcMetricDigest(rows: OrgTrendPoint[], pick: (row: OrgTrendPoint) => n
     if (values30[i] < values30[minIdx]) minIdx = i;
   }
 
-  let consecutiveDownDays = 0;
+  let consecutiveDownPeriods = 0;
   for (let i = values30.length - 1; i > 0; i--) {
-    if (values30[i] < values30[i - 1]) consecutiveDownDays += 1;
+    if (values30[i] < values30[i - 1]) consecutiveDownPeriods += 1;
     else break;
   }
 
   return {
     avg30: mean(values30),
     avg7: mean(values7),
-    consecutiveDownDays,
+    consecutiveDownPeriods,
     maxPoint: { date: window30[maxIdx].date, value: values30[maxIdx] },
     minPoint: { date: window30[minIdx].date, value: values30[minIdx] },
   };
@@ -185,40 +231,11 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
     regionOrgNames,
   });
 
-  // ── 程序解读（近30天口径） ─────────────────────────────────────────────────
+  const effectiveGranularity = granularity ?? 'daily';
+
+  // ── 程序解读（按当前粒度动态切换） ──────────────────────────────────────────
   const rateDigest = useMemo(() => calcMetricDigest(rows, (row) => row.rate), [rows]);
   const premiumDigest = useMemo(() => calcMetricDigest(rows, (row) => row.avg_premium), [rows]);
-
-  // ── AI 解读状态 ────────────────────────────────────────────────────────────
-  const [aiText, setAiText] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-
-  // 切换险种/机构时清除旧 AI 结论
-  useEffect(() => {
-    setAiText(null);
-    setAiError(null);
-  }, [coverage, selectedOrg, region]);
-
-  const handleAiAnalyze = useCallback(async () => {
-    if (rows.length === 0) return;
-    setAiLoading(true);
-    setAiText(null);
-    setAiError(null);
-    try {
-      const result = await apiClient.analyzeTrend({
-        rows: rows.slice(-30),
-        org: selectedOrg ?? `${REGION_LABELS[region]}汇总`,
-        coverage,
-      });
-      if (result.success) setAiText(result.analysis);
-      else setAiError(result.error ?? 'AI 分析失败');
-    } catch (e) {
-      setAiError(e instanceof Error ? e.message : 'AI 分析失败');
-    } finally {
-      setAiLoading(false);
-    }
-  }, [rows, coverage, selectedOrg, region]);
 
   const handleDownloadTable = useCallback(() => {
     if (rows.length === 0) return;
@@ -613,47 +630,37 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         </div>
       )}
 
-      {/* ── 程序解读 + AI 解读 ─────────────────────────────────────────────── */}
+      {/* ── 程序解读摘要 ───────────────────────────────────────────────────── */}
       {(rateDigest || premiumDigest) && !loading && (
         <div className="mt-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-neutral-600">程序解读（近30天口径）</span>
-            <button
-              onClick={handleAiAnalyze}
-              disabled={aiLoading}
-              className={cn(
-                'ml-auto flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                aiLoading
-                  ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                  : 'bg-primary-bg text-primary-dark border border-primary-border hover:bg-blue-100'
-              )}
-            >
-              {aiLoading ? '分析中…' : '✨ AI 深度解读'}
-            </button>
+            <span className="text-xs font-medium text-neutral-600">
+              {getCrossSellTrendDigestHeading(effectiveGranularity, rows.length)}
+            </span>
+            <span className="ml-auto text-[11px] text-neutral-400">AI 主洞察已上移到页面顶部</span>
           </div>
 
           {rateDigest && (
             <p className="mt-2 text-xs leading-relaxed text-neutral-600">
-              推介率：近30天均值 {rateDigest.avg30.toFixed(1)}%，近7天均值 {rateDigest.avg7.toFixed(1)}%，连续下降
-              {rateDigest.consecutiveDownDays}天，最高 {rateDigest.maxPoint.value.toFixed(1)}%（{shortDate(rateDigest.maxPoint.date)}），最低
-              {rateDigest.minPoint.value.toFixed(1)}%（{shortDate(rateDigest.minPoint.date)}）。
+              {buildCrossSellTrendDigestText(
+                '推介率',
+                rateDigest,
+                effectiveGranularity,
+                rows.length,
+                (value) => `${value.toFixed(1)}%`
+              )}
             </p>
           )}
 
           {premiumDigest && (
             <p className="mt-2 text-xs leading-relaxed text-neutral-600">
-              驾意件均：近30天均值 {Math.round(premiumDigest.avg30)}元，近7天均值 {Math.round(premiumDigest.avg7)}元，连续下降
-              {premiumDigest.consecutiveDownDays}天，最高 {Math.round(premiumDigest.maxPoint.value)}元（{shortDate(premiumDigest.maxPoint.date)}），最低
-              {Math.round(premiumDigest.minPoint.value)}元（{shortDate(premiumDigest.minPoint.date)}）。
-            </p>
-          )}
-
-          {aiError && (
-            <p className="mt-2 text-xs text-danger border-t border-neutral-200 pt-2">{aiError}</p>
-          )}
-          {aiText && (
-            <p className="mt-2 text-xs leading-relaxed text-neutral-600 whitespace-pre-line border-t border-neutral-200 pt-2">
-              {aiText}
+              {buildCrossSellTrendDigestText(
+                '驾意件均',
+                premiumDigest,
+                effectiveGranularity,
+                rows.length,
+                (value) => `${Math.round(value)}元`
+              )}
             </p>
           )}
         </div>

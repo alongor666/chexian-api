@@ -9,7 +9,8 @@
 
 import { memo, useMemo } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
-import { textStyles, cardStyles, numericStyles, cn, colorClasses } from '@/shared/styles';
+import { textStyles, cardStyles, numericStyles, cn, colorClasses, getTrendColorClassByPolarity } from '@/shared/styles';
+import type { MetricPolarity } from '@/shared/styles';
 import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { useCrossSellTimePeriod, type SeatCoverageLevel, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
 import { getRateClassByField, getAvgPremiumClassByCoverage } from './crossSellRateStatus';
@@ -46,6 +47,15 @@ const METRIC_COLUMNS_FULL = [
   { key: 'avg_premium', label: '驾意件均' },
   { key: 'auto_avg_premium', label: '车险件均' },
 ] as const;
+
+const METRIC_POLARITY: Record<(typeof METRIC_COLUMNS_FULL)[number]['key'], MetricPolarity> = {
+  premium: 'positive',
+  auto_count: 'positive',
+  driver_count: 'positive',
+  rate: 'positive',
+  avg_premium: 'positive',
+  auto_avg_premium: 'positive',
+};
 
 
 interface TimePeriodData {
@@ -138,15 +148,11 @@ function formatChangeDisplay(change: { value: number; percent: number; status: '
 /**
  * 获取环比状态样式类
  */
-function getChangeStatusClass(status: 'up' | 'down' | 'flat'): string {
-  switch (status) {
-    case 'up':
-      return colorClasses.text.success;
-    case 'down':
-      return colorClasses.text.danger;
-    case 'flat':
-      return colorClasses.text.neutralMuted;
-  }
+function getChangeStatusClass(
+  status: 'up' | 'down' | 'flat',
+  metricPolarity: MetricPolarity = 'positive'
+): string {
+  return getTrendColorClassByPolarity(status, metricPolarity);
 }
 
 /**
@@ -215,6 +221,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
     }
     return map;
   }, [rawData, timePeriod]);
+  const overallCoverage = coverageRows[0]?.key ?? '整体';
 
   // 获取单元格显示内容（包含环比状态）
   const getCellContent = (
@@ -297,8 +304,12 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
 
   return (
     <div className="space-y-3">
-      {/* 时间选择器 + 数据截止日期 */}
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className={cn(textStyles.body, colorClasses.text.neutralDark)}>
+            先看整体，再按险别比较。核心指标已卡片化，细分口径仍保留在下方对比矩阵。
+          </p>
+        </div>
         {maxDate && (
           <p className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
             数据截至: {maxDate} (保费单位: 万元)
@@ -306,11 +317,47 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
         )}
       </div>
 
-      {/* 数据表格 */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        {metricColumns.map((col) => {
+          const { text, colorClass, change } = getCellContent(col.key, overallCoverage);
+          return (
+            <div key={col.key} className={cn(cardStyles.standard, 'space-y-3 border-neutral-200')}>
+              <div className="flex items-center justify-between gap-2">
+                <span className={cn(textStyles.caption, colorClasses.text.neutralDark)}>{col.label}</span>
+                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-500">
+                  整体
+                </span>
+              </div>
+              <div className="space-y-1">
+                <div className={cn(numericStyles.kpiPrimary, '!text-[24px]', colorClass || colorClasses.text.neutralBlack)}>
+                  {text}
+                </div>
+                {change ? (
+                  <span
+                    className={cn(
+                      'inline-flex rounded-full px-2 py-1 text-xs font-semibold',
+                      getChangeStatusClass(change.status, METRIC_POLARITY[col.key]),
+                      change.status === 'flat' ? 'bg-neutral-100' : change.status === 'up' ? 'bg-success-bg' : 'bg-danger-bg'
+                    )}
+                  >
+                    {formatChangeDisplay(change, col.key)}
+                  </span>
+                ) : (
+                  <span className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>年度视图不显示环比</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       <div className={cn(cardStyles.interactive, 'overflow-hidden')}>
+        <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-3">
+          <h3 className={cn(textStyles.titleSmall, 'font-semibold')}>险别组合对比</h3>
+        </div>
         <table className="w-full">
           <thead>
-            <tr className="bg-neutral-50 border-b border-neutral-200">
+            <tr className="border-b border-neutral-200 bg-white">
               <th className={cn('py-3 px-4 text-left font-medium w-28', colorClasses.text.neutralLight)}>
                 险别组合/指标
               </th>
@@ -333,18 +380,16 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                   idx % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'
                 )}
               >
-                {/* 险别组合名称 */}
                 <td className="py-4 px-4">
                   <span className={cn(textStyles.body, 'font-medium', colorClasses.text.neutralDark)}>
                     {row.label}
                   </span>
                 </td>
-                {/* 指标数值 + 环比状态 */}
                 {metricColumns.map((col) => {
                   const { text, colorClass, change } = getCellContent(col.key, row.key);
                   return (
                     <td key={col.key} className="py-4 px-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-1">
                         <span
                           className={cn(
                             numericStyles.kpiPrimary,
@@ -357,8 +402,8 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                         {change && (
                           <span
                             className={cn(
-                              'text-sm leading-tight whitespace-nowrap',
-                              getChangeStatusClass(change.status)
+                              'text-xs leading-tight whitespace-nowrap',
+                              getChangeStatusClass(change.status, METRIC_POLARITY[col.key])
                             )}
                           >
                             {formatChangeDisplay(change, col.key)}

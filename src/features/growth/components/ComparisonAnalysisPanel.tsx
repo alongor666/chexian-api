@@ -5,6 +5,7 @@ import { BarChart } from '../../../widgets/charts/BarChart';
 import { DualYAxisComparisonChart } from '../../../widgets/charts/DualYAxisComparisonChart';
 import { formatPremiumWan, formatRate, formatCount } from '../../../shared/utils/formatters';
 import type { AdvancedFilterState } from '../../../shared/types/data';
+import { cn, getTrendColorClass } from '../../../shared/styles';
 import { usePerspective } from '../../dashboard/hooks/usePerspective';
 import { PerspectiveSwitcher } from '../../../widgets/filters/PerspectiveSwitcher';
 import { ComparisonQuickPresets } from './ComparisonQuickPresets';
@@ -280,12 +281,12 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
                       <td className="px-3 py-2 text-sm font-medium text-gray-900">{row.dim_key}</td>
                       <td className="px-3 py-2 text-sm text-gray-900 text-right font-tabular">{formatPremiumWan(row.current_premium)}</td>
                       <td className="px-3 py-2 text-sm text-gray-500 text-right font-tabular">{formatPremiumWan(row.previous_premium)}</td>
-                      <td className="px-3 py-2 text-sm text-right font-tabular font-medium" style={{ color: (row.premium_growth_rate || 0) >= 0 ? '#10B981' : '#EF4444' }}>
+                      <td className={cn('px-3 py-2 text-sm text-right font-tabular font-medium', getTrendColorClass(row.premium_growth_rate || 0, 'positive'))}>
                         {row.premium_growth_rate !== null ? formatRate(row.premium_growth_rate) : '-'}
                       </td>
                       <td className="px-3 py-2 text-sm text-gray-900 text-right font-tabular">{formatCount(row.current_count)}</td>
                       <td className="px-3 py-2 text-sm text-gray-500 text-right font-tabular">{formatCount(row.previous_count)}</td>
-                      <td className="px-3 py-2 text-sm text-right font-tabular font-medium" style={{ color: (row.count_growth_rate || 0) >= 0 ? '#10B981' : '#EF4444' }}>
+                      <td className={cn('px-3 py-2 text-sm text-right font-tabular font-medium', getTrendColorClass(row.count_growth_rate || 0, 'positive'))}>
                         {row.count_growth_rate !== null ? formatRate(row.count_growth_rate) : '-'}
                       </td>
                     </tr>
@@ -361,10 +362,10 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
                                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.org_level_3 || row.salesman_name || '-'}</td>
                                   <td className="px-4 py-3 text-sm text-gray-900 text-right font-tabular">{formatValue(row.current_value)}</td>
                                   <td className="px-4 py-3 text-sm text-gray-500 text-right font-tabular">{formatValue(row.previous_value)}</td>
-                                  <td className="px-4 py-3 text-sm text-right font-tabular font-medium" style={{ color: (row.current_value - row.previous_value) >= 0 ? '#10B981' : '#EF4444' }}>
+                                  <td className={cn('px-4 py-3 text-sm text-right font-tabular font-medium', getTrendColorClass(row.current_value - row.previous_value, 'positive'))}>
                                       {formatValue(row.current_value - row.previous_value)}
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-right font-tabular font-medium" style={{ color: (row.growth_rate || 0) >= 0 ? '#10B981' : '#EF4444' }}>
+                                  <td className={cn('px-4 py-3 text-sm text-right font-tabular font-medium', getTrendColorClass(row.growth_rate || 0, 'positive'))}>
                                       {formatRate(row.growth_rate || 0)}
                                   </td>
                               </tr>

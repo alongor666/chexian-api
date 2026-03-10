@@ -36,6 +36,11 @@ bunx playwright show-report
 | `01-dashboard-flow.spec.ts` | 仪表盘核心流程 | 登录→仪表盘加载→视角切换→趋势视图 |
 | `02-filter-sql.spec.ts` | 筛选器与SQL查询 | 保费报表筛选→SQL编辑器执行→结果渲染 |
 | `03-cleanup-zero-downtime-gate.spec.ts` | 清理门禁回归 | 关键页面可达→筛选/查询/图表→CSV/Excel/PDF导出→401/200 鉴权 |
+| `04-subpage-no-refresh.spec.ts` | 子页面可达性回归 | 首页侧边栏逐个进入主要子页面，无需手工刷新 |
+| `05-cross-sell-ux.spec.ts` | 驾意险推介率 UX 回归 | 高级筛选抽屉→右侧锚点→下钻险种明细展开 |
+| `06-page-shell-ux.spec.ts` | 长页面骨架 UX 回归 | 业绩页锚点导航 + Growth/Cost 顶部基础筛选与高级抽屉复用 |
+| `07-performance-heatmap-drilldown.spec.ts` | 业绩热力图下钻回归 | 热力图单元格选中→热力图下钻维度→下钻标题联动与后续分组入口 |
+| `08-cross-sell-yearly-guard.spec.ts` | 交叉销售年维度热力图防回归 | 切换到年维度→热力图区块进入禁用态并显示明确说明 |
 
 ## 测试架构
 
@@ -44,7 +49,13 @@ tests/e2e/
 ├── README.md              # 本文件
 ├── 01-dashboard-flow.spec.ts   # 仪表盘流程测试（B128）
 ├── 02-filter-sql.spec.ts       # 筛选器+SQL测试（B129）
-└── 03-cleanup-zero-downtime-gate.spec.ts # API-only 清理门禁测试（B208）
+├── 03-cleanup-zero-downtime-gate.spec.ts # API-only 清理门禁测试（B208）
+├── 04-subpage-no-refresh.spec.ts # 子页面无刷新回归（B216）
+├── 05-cross-sell-ux.spec.ts    # cross-sell UX 骨架回归（B222）
+├── 06-page-shell-ux.spec.ts    # 长页面骨架 UX 回归（B223）
+├── 07-performance-heatmap-drilldown.spec.ts # 业绩热力图下钻回归（B224）
+├── 08-cross-sell-yearly-guard.spec.ts # cross-sell 年维度热力图防回归（B226）
+└── helpers/session.ts          # 登录/数据就绪/高级筛选抽屉公共 helper
 ```
 
 ## 配置说明

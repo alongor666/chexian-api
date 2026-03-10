@@ -4,10 +4,11 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { Tabs } from '@/shared/ui/Tabs';
 import type { TabItem } from '@/shared/ui/Tabs';
 import { RBACBreadcrumb } from '@/shared/ui/RBACBreadcrumb';
+import { StickyTableFrame } from '@/shared/ui';
 import { useDataStatus } from '@/shared/contexts/DataContext';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
-import { cardStyles, cn, colorClasses, colors, textStyles } from '@/shared/styles';
+import { cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles } from '@/shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
 import {
   classifyAchievementBand,
@@ -538,11 +539,11 @@ function PerformanceOrgHeatmap({
       </div>
       {error && <p className={cn(textStyles.body, colorClasses.text.danger)}>加载失败: {error}</p>}
       {!error && (
-        <div ref={scrollRef} className="overflow-x-auto">
+        <StickyTableFrame ref={scrollRef} maxHeight={560}>
           <table className="w-full text-xs border-separate border-spacing-1" style={{ minWidth: `${100 + orgRows.dates.length * 72}px` }}>
             <thead>
               <tr>
-                <th className={cn('px-2 py-2 text-left sticky left-0 bg-white z-10', colorClasses.text.neutralDark)}>{dimensionLabel}</th>
+                <th className={cn('px-2 py-2 text-left', stickyTableStyles.firstColumnHeader, colorClasses.text.neutralDark)}>{dimensionLabel}</th>
                 {orgRows.dates.map((date) => {
                   let headerLabel: string;
                   if (timePeriod === 'month') {
@@ -557,7 +558,7 @@ function PerformanceOrgHeatmap({
                     headerLabel = date.slice(5); // MM-DD
                   }
                   return (
-                    <th key={date} className={cn('px-2 py-2 text-center', colorClasses.text.neutralMuted)}>{headerLabel}</th>
+                    <th key={date} className={cn('px-2 py-2 text-center', stickyTableStyles.header, colorClasses.text.neutralMuted)}>{headerLabel}</th>
                   );
                 })}
               </tr>
@@ -585,7 +586,8 @@ function PerformanceOrgHeatmap({
                   <tr key={org}>
                     <td
                       className={cn(
-                        'px-2 py-1 sticky left-0 bg-white z-10 whitespace-nowrap',
+                        stickyTableStyles.firstColumn,
+                        'px-2 py-1 z-10 whitespace-nowrap',
                         colorClasses.text.neutralDark,
                         isBranchSummaryRow ? 'font-semibold' : '',
                         canRowClick ? 'cursor-pointer hover:text-primary hover:underline' : ''
@@ -603,7 +605,7 @@ function PerformanceOrgHeatmap({
               })}
             </tbody>
           </table>
-        </div>
+        </StickyTableFrame>
       )}
       <div className="flex flex-wrap gap-2">
         {[
@@ -661,6 +663,20 @@ function SectionTitle({
       <div className={cn('flex-1 h-px', colorClasses.bg.neutralLight)} />
       {rightContent && <div className="flex items-center gap-2 flex-shrink-0">{rightContent}</div>}
     </div>
+  );
+}
+
+function SectionBlock({
+  id,
+  children,
+}: {
+  id: string;
+  children: ReactNode;
+}) {
+  return (
+    <section id={id} className="scroll-mt-40 space-y-3">
+      {children}
+    </section>
   );
 }
 
@@ -1309,77 +1325,79 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   return (
     <div className="space-y-5">
-      <SectionTitle
-        title={getPerformanceHeatmapTitle(timePeriod, HEATMAP_DIMENSION_LABELS[activeHeatmapGroupBy])}
-        leftContent={
-          heatmapDrillPath.length === 0 ? (
-            <Tabs
-              items={(Object.entries(HEATMAP_DIMENSION_LABELS) as [HeatmapDimension, string][]).map(([key, label]) => ({ key, label }))}
-              activeKey={heatmapDimension}
-              onChange={(key) => { setHeatmapDimension(key as HeatmapDimension); setHeatmapGroupBy(key as HeatmapDimension); }}
-              variant="pills"
-              size="mini"
-            />
-          ) : (
-            <div className="flex items-center gap-1 text-xs text-neutral-500">
-              <button
-                className="hover:text-primary hover:underline cursor-pointer"
-                onClick={() => handlePerfHeatmapBreadcrumbClick(-1)}
-              >
-                全部
-              </button>
-              {heatmapDrillPath.map((step, i) => (
-                <React.Fragment key={i}>
-                  <span>/</span>
-                  <button
-                    className={cn(
-                      'hover:text-primary hover:underline cursor-pointer',
-                      i === heatmapDrillPath.length - 1 ? 'text-neutral-700 dark:text-neutral-200 font-medium' : ''
-                    )}
-                    onClick={() => handlePerfHeatmapBreadcrumbClick(i)}
-                  >
-                    {step.value}
-                  </button>
-                </React.Fragment>
+      <SectionBlock id="performance-heatmap">
+        <SectionTitle
+          title={getPerformanceHeatmapTitle(timePeriod, HEATMAP_DIMENSION_LABELS[activeHeatmapGroupBy])}
+          leftContent={
+            heatmapDrillPath.length === 0 ? (
+              <Tabs
+                items={(Object.entries(HEATMAP_DIMENSION_LABELS) as [HeatmapDimension, string][]).map(([key, label]) => ({ key, label }))}
+                activeKey={heatmapDimension}
+                onChange={(key) => { setHeatmapDimension(key as HeatmapDimension); setHeatmapGroupBy(key as HeatmapDimension); }}
+                variant="pills"
+                size="mini"
+              />
+            ) : (
+              <div className="flex items-center gap-1 text-xs text-neutral-500">
+                <button
+                  className="hover:text-primary hover:underline cursor-pointer"
+                  onClick={() => handlePerfHeatmapBreadcrumbClick(-1)}
+                >
+                  全部
+                </button>
+                {heatmapDrillPath.map((step, i) => (
+                  <React.Fragment key={i}>
+                    <span>/</span>
+                    <button
+                      className={cn(
+                        'hover:text-primary hover:underline cursor-pointer',
+                        i === heatmapDrillPath.length - 1 ? 'text-neutral-700 dark:text-neutral-200 font-medium' : ''
+                      )}
+                      onClick={() => handlePerfHeatmapBreadcrumbClick(i)}
+                    >
+                      {step.value}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+            )
+          }
+        />
+        {showHeatmapPicker && (
+          <div className={cn(cardStyles.base, 'p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800')}>
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 mb-2">
+              选择 <strong>{pendingHeatmapRow}</strong> 的下钻维度：
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {PERF_HEATMAP_DRILL_DIMENSIONS.filter((d) => d.key !== activeHeatmapGroupBy).map((d) => (
+                <button
+                  key={d.key}
+                  className="px-3 py-1 text-xs rounded-full bg-white dark:bg-neutral-800 border border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer"
+                  onClick={() => handlePerfHeatmapDimSelect(d.key)}
+                >
+                  {d.label}
+                </button>
               ))}
-            </div>
-          )
-        }
-      />
-      {showHeatmapPicker && (
-        <div className={cn(cardStyles.base, 'p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800')}>
-          <p className="text-xs text-neutral-600 dark:text-neutral-300 mb-2">
-            选择 <strong>{pendingHeatmapRow}</strong> 的下钻维度：
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {PERF_HEATMAP_DRILL_DIMENSIONS.filter((d) => d.key !== activeHeatmapGroupBy).map((d) => (
               <button
-                key={d.key}
-                className="px-3 py-1 text-xs rounded-full bg-white dark:bg-neutral-800 border border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer"
-                onClick={() => handlePerfHeatmapDimSelect(d.key)}
+                className="px-3 py-1 text-xs rounded-full bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 cursor-pointer"
+                onClick={() => { setShowHeatmapPicker(false); setPendingHeatmapRow(null); }}
               >
-                {d.label}
+                取消
               </button>
-            ))}
-            <button
-              className="px-3 py-1 text-xs rounded-full bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 cursor-pointer"
-              onClick={() => { setShowHeatmapPicker(false); setPendingHeatmapRow(null); }}
-            >
-              取消
-            </button>
+            </div>
           </div>
-        </div>
-      )}
-      <PerformanceOrgHeatmap
-        rows={heatmapQuery.rows}
-        loading={heatmapQuery.loading}
-        error={heatmapQuery.error}
-        growthMode={growthMode}
-        timePeriod={timePeriod}
-        dimensionLabel={HEATMAP_DIMENSION_LABELS[activeHeatmapGroupBy]}
-        onCellClick={handleHeatmapCellClick}
-        onRowClick={handlePerfHeatmapRowClick}
-      />
+        )}
+        <PerformanceOrgHeatmap
+          rows={heatmapQuery.rows}
+          loading={heatmapQuery.loading}
+          error={heatmapQuery.error}
+          growthMode={growthMode}
+          timePeriod={timePeriod}
+          dimensionLabel={HEATMAP_DIMENSION_LABELS[activeHeatmapGroupBy]}
+          onCellClick={handleHeatmapCellClick}
+          onRowClick={handlePerfHeatmapRowClick}
+        />
+      </SectionBlock>
 
       {heatmapSelection && (
         <section className={cn(cardStyles.standard, 'space-y-3')}>
@@ -1401,6 +1419,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         </section>
       )}
 
+      <SectionBlock id="performance-summary">
       <SectionTitle title={summaryTitle} />
       <section className={cn(cardStyles.standard, 'p-0 overflow-hidden')}>
         <div className="px-4 pt-3">
@@ -1415,9 +1434,9 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         {summaryQuery.error ? (
           <div className={cn('p-4', colorClasses.text.danger)}>加载失败: {summaryQuery.error}</div>
         ) : (
-          <div className="overflow-x-auto">
+          <StickyTableFrame maxHeight={620}>
             <table className="w-full text-sm">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
+              <thead className={cn('bg-neutral-50 border-b border-neutral-200', stickyTableStyles.header)}>
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-neutral-600">险别组合</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">车险保费(万元)</th>
@@ -1498,10 +1517,12 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                 })}
               </tbody>
             </table>
-          </div>
+          </StickyTableFrame>
         )}
       </section>
+      </SectionBlock>
 
+      <SectionBlock id="performance-trend">
       <SectionTitle title="车险保费、车险件数走势" />
       <div className="grid gap-4 lg:grid-cols-2">
         <PerformanceTrendChart
@@ -1519,7 +1540,9 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           error={trendQuery.error}
         />
       </div>
+      </SectionBlock>
 
+      <SectionBlock id="performance-drilldown">
       <SectionTitle title={getPerformanceDrilldownTitle(
         drilldownQuery.currentGroupBy,
         currentDimensionLabel,
@@ -1659,7 +1682,9 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           </div>
         )}
       </section>
+      </SectionBlock>
 
+      <SectionBlock id="performance-top20">
       <SectionTitle title="Top20业务员" />
       <section className={cn(cardStyles.standard, 'space-y-3')}>
         <p className={cn(textStyles.caption, colorClasses.text.neutralLight)}>
@@ -1732,6 +1757,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           </div>
         )}
       </section>
+      </SectionBlock>
 
       {showPicker && (
         <DimensionPicker

@@ -94,6 +94,18 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     return { timePeriods, seriesData };
   }, [rows, metric]);
 
+  const overallExtremes = useMemo(() => {
+    const values = (seriesData['整体'] || [])
+      .map((value, index) => ({ value, index }))
+      .filter((item): item is { value: number; index: number } => typeof item.value === 'number');
+
+    if (values.length === 0) return { min: null, max: null };
+
+    const max = values.reduce((best, current) => (current.value > best.value ? current : best));
+    const min = values.reduce((best, current) => (current.value < best.value ? current : best));
+    return { min, max };
+  }, [seriesData]);
+
   useEffect(() => {
     if (!chartRef.current) return;
     if (!chartInstanceRef.current) {
@@ -116,6 +128,24 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
         },
       });
       return;
+    }
+
+    const markPointData: any[] = [];
+    if (overallExtremes.max) {
+      markPointData.push({
+        name: '最高',
+        coord: [timePeriods[overallExtremes.max.index], overallExtremes.max.value],
+        value: overallExtremes.max.value,
+        itemStyle: { color: colors.success.DEFAULT },
+      });
+    }
+    if (overallExtremes.min) {
+      markPointData.push({
+        name: '最低',
+        coord: [timePeriods[overallExtremes.min.index], overallExtremes.min.value],
+        value: overallExtremes.min.value,
+        itemStyle: { color: colors.warning.DEFAULT },
+      });
     }
 
     const option: EChartsOption = {
@@ -175,7 +205,18 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
         symbol: 'circle',
         symbolSize: 4,
         connectNulls: true,
-      })),
+        markPoint: name === '整体' && markPointData.length > 0
+          ? {
+            symbol: 'pin',
+            symbolSize: 42,
+            label: {
+              fontSize: 10,
+              formatter: ({ data }: { data?: { name?: string } }) => data?.name ?? '',
+            },
+            data: markPointData,
+          }
+          : undefined,
+      })) as any,
     };
 
     chart.setOption(option, true);
@@ -188,7 +229,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [timePeriods, seriesData, loading, metric]);
+  }, [timePeriods, seriesData, loading, metric, overallExtremes]);
 
   useEffect(() => {
     return () => {

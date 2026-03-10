@@ -1,0 +1,2 @@
+[GET] 200 https://chexian.cretvalu.com/api/query/performance-org-heatmap?dateField=policy_date&startDate=2026-01-01&endDate=2026-03-07&segmentTag=all&growthMode=mom&timePeriod=day&groupByDimension=org_level_3&drillFilter=%5B%5D
+[GET] 200 https://chexian.cretvalu.com/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-03-07&segmentTag=all&timePeriod=day&growthMode=mom&expandDims=none

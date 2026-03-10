@@ -25,6 +25,7 @@ export interface Insight {
     value: string | number;
     benchmark?: string | number;
     delta?: number;
+    metricPolarity?: 'positive' | 'negative';
   };
   affectedEntities?: string[];  // 受影响的实体（如业务员名字）
   priority: 'high' | 'medium' | 'low';

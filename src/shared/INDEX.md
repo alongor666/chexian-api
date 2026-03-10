@@ -286,3 +286,14 @@ import { cn, cardStyles, getTrendColorClass, colors } from '@/shared/styles';
 
 - `api/client.ts`：新增 `getComprehensiveBundle()`、`ComprehensiveBundleResponse`、`ComprehensiveFilterParams`、`ComprehensiveTabKey`，统一接入 `/api/query/comprehensive-bundle`。
 - `styles/index.ts`：新增 `comprehensiveTheme`，作为综合分析图表与阈值可视化的语义令牌。
+
+## 2026-03-09 指标方向语义补充（B2xx）
+
+- `styles/index.ts`：新增 `MetricPolarity`（`positive`/`negative`）、`getTrendDirection()`、`getTrendColorClassByPolarity()`；`getTrendColorClass()` 兼容旧 `inverse` 参数并支持直接传 `metricPolarity`。
+- `ui/Card.tsx`、`ui/Table.tsx`、`json-render/components.tsx`：趋势展示统一支持 `metricPolarity`，默认按正向指标（涨绿跌红）。
+- `ai-insights/types.ts` + `ai-insights/components/InsightCard.tsx`：洞察指标支持 `metricPolarity` 与 `delta` 颜色标记，统一涨跌语义。
+
+## 2026-03-10 长表吸顶与冻结能力补充（B225）
+
+- `styles/index.ts`：新增 `stickyTableStyles`，统一长表滚动容器、表头吸顶、首列冻结和交叉单元格阴影规则。
+- `ui/StickyTableFrame.tsx`、`ui/index.ts`：新增轻量长表滚动容器组件，支持 `maxHeight` 与可复用滚动框架。

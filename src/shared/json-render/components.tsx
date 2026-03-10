@@ -34,6 +34,7 @@ import {
   cn,
   getTrendColorClass,
 } from '../styles'
+import type { MetricPolarity } from '../styles'
 import { formatPercent, formatCount, formatPremiumWan } from '../utils/formatters'
 
 // 注册 ECharts 组件
@@ -154,13 +155,22 @@ export const componentRegistry: ComponentRegistry = {
   // --------------------------------------------------------------------------
 
   KpiCard: ({ element }: ComponentRenderProps) => {
-    const { title, value, unit, trend, trendLabel, variant = 'default' } = element.props as {
+    const {
+      title,
+      value,
+      unit,
+      trend,
+      trendLabel,
+      variant = 'default',
+      metricPolarity = 'positive',
+    } = element.props as {
       title: string
       value: string | number
       unit?: string
       trend?: number
       trendLabel?: string
       variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger'
+      metricPolarity?: MetricPolarity
     }
     const variantColorMap: Record<string, string> = {
       default: 'border-neutral-200',
@@ -179,7 +189,7 @@ export const componentRegistry: ComponentRegistry = {
           {unit && <span className={textStyles.caption}>{unit}</span>}
         </div>
         {trend !== undefined && (
-          <div className={cn('flex items-center gap-1 mt-2', getTrendColorClass(trend))}>
+          <div className={cn('flex items-center gap-1 mt-2', getTrendColorClass(trend, metricPolarity))}>
             {trend > 0 ? <TrendingUp size={14} /> : trend < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
             <span className={cn(textStyles.caption, textStyles.numeric)}>
               {formatPercent(Math.abs(trend))}
@@ -517,13 +527,15 @@ export const componentRegistry: ComponentRegistry = {
   },
 
   TrendIndicator: ({ element }: ComponentRenderProps) => {
-    const { value, label, inverse = false, format = 'percent' } = element.props as {
+    const { value, label, inverse = false, metricPolarity, format = 'percent' } = element.props as {
       value: number
       label?: string
       inverse?: boolean
+      metricPolarity?: MetricPolarity
       format?: 'percent' | 'number'
     }
-    const colorClass = getTrendColorClass(value, inverse)
+    const effectivePolarity = metricPolarity ?? (inverse ? 'negative' : 'positive')
+    const colorClass = getTrendColorClass(value, effectivePolarity)
     const Icon = value > 0 ? TrendingUp : value < 0 ? TrendingDown : Minus
     const formattedValue = format === 'percent'
       ? formatPercent(Math.abs(value))

@@ -349,7 +349,7 @@ export const systemPrompt = `你是一个车险业绩分析助手，负责根据
 - Stack: { direction, gap, align } - 堆叠布局（可包含子组件）
 
 ### 数据展示
-- KpiCard: { title, value, unit?, trend?, trendLabel?, variant? } - KPI 指标卡
+- KpiCard: { title, value, unit?, trend?, trendLabel?, metricPolarity?, variant? } - KPI 指标卡
 - DataTable: { columns, data, title?, pageSize?, sortable? } - 数据表格
 - BarChart: { title?, data, xAxisLabel?, yAxisLabel?, stacked?, horizontal? } - 柱状图
 - LineChart: { title?, data, xAxisLabel?, yAxisLabel?, smooth?, showArea? } - 折线图
@@ -358,7 +358,7 @@ export const systemPrompt = `你是一个车险业绩分析助手，负责根据
 ### 文本和状态
 - Text: { content, variant, color?, align? } - 文本
 - Badge: { text, variant, size? } - 徽章
-- TrendIndicator: { value, label?, inverse?, format? } - 趋势指示器
+- TrendIndicator: { value, label?, inverse?, metricPolarity?, format? } - 趋势指示器
 - Progress: { value, max?, label?, showValue?, variant? } - 进度条
 
 ### 交互

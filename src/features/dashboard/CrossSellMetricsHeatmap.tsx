@@ -23,7 +23,8 @@ import {
 } from './crossSellRateStatus';
 import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
-import { textStyles, cardStyles, colorClasses, cn } from '../../shared/styles';
+import { StickyTableFrame } from '../../shared/ui';
+import { textStyles, cardStyles, colorClasses, stickyTableStyles, cn } from '../../shared/styles';
 import { formatPercent } from '../../shared/utils/formatters';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 
@@ -401,7 +402,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
         </div>
       </div>
 
-      <div ref={scrollRef} className="overflow-x-auto -mx-4 px-4">
+      <StickyTableFrame ref={scrollRef} className="-mx-4 px-4" maxHeight={560}>
         <div
           className="grid gap-0"
           style={{
@@ -411,7 +412,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
         >
           <div
             className={cn(
-              'sticky left-0 z-20 bg-white dark:bg-neutral-800',
+              stickyTableStyles.firstColumnHeader,
               'px-2 py-2 text-left text-xs font-medium',
               'text-neutral-500 border-b border-neutral-200 dark:border-neutral-700',
             )}
@@ -422,6 +423,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
             <div
               key={date}
               className={cn(
+                stickyTableStyles.header,
                 'px-0.5 py-2 text-center text-[11px] font-medium',
                 'text-neutral-500 border-b border-neutral-200 dark:border-neutral-700',
               )}
@@ -438,7 +440,8 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
               <React.Fragment key={org}>
                 <div
                   className={cn(
-                    'sticky left-0 z-10 bg-white dark:bg-neutral-800',
+                    stickyTableStyles.firstColumn,
+                    'z-10',
                     'px-2 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300',
                     isBranchSummaryRow ? 'font-semibold' : '',
                     'border-b border-neutral-50 dark:border-neutral-700 whitespace-nowrap',
@@ -454,7 +457,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
             );
           })}
         </div>
-      </div>
+      </StickyTableFrame>
 
       <div className={cn(textStyles.caption, 'text-neutral-400')}>
         鼠标悬停查看详细数据 · 共 {orgCount} 个{dimensionLabel} · {dates.length} {periodLabel}
