@@ -717,6 +717,32 @@ function checkTsconfigTypecheckScope() {
 }
 
 // ============================================================
+// 第12项检查：包管理器锁文件策略（Bun-only）
+// ============================================================
+
+function checkPackageManagerLockPolicy() {
+  info('检查包管理器锁文件策略（Bun-only）...');
+
+  const lockfiles = ['bun.lock', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'];
+  const existing = lockfiles.filter((name) => fs.existsSync(path.join(ROOT_DIR, name)));
+
+  if (!existing.includes('bun.lock')) {
+    error('缺少 bun.lock（项目默认执行器为 Bun）');
+    return false;
+  }
+
+  const disallowed = existing.filter((name) => name !== 'bun.lock');
+  if (disallowed.length > 0) {
+    error(`检测到非 Bun 锁文件：${disallowed.join(', ')}`);
+    console.log('    - 请移除非 Bun 锁文件，避免依赖解析漂移');
+    return false;
+  }
+
+  success('包管理器锁文件策略检查通过');
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -735,6 +761,7 @@ function main() {
     { name: '调试产物', fn: checkStagedDebugArtifacts },
     { name: '热点文件契约', fn: checkHotfileContractCoverage },
     { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
+    { name: '锁文件策略', fn: checkPackageManagerLockPolicy },
   ];
 
   let passedCount = 0;
