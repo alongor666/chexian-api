@@ -10,6 +10,8 @@ import {
   getPermissionByUsername,
   getVisibleOrganizations,
   canViewOrganization,
+  canAccessRoute,
+  getDefaultRoute,
 } from '../../src/shared/config/organizations';
 
 // ⚠️ SECURITY FIX: 以下函数已从前端移除，所有认证通过后端 API
@@ -93,6 +95,29 @@ describe('Organizations Config', () => {
       expect(visibleOrgs).toContain('全部');
       expect(visibleOrgs).toContain('乐山');
       expect(visibleOrgs).not.toContain('天府');
+    });
+  });
+
+
+
+  describe('route defaults for org users', () => {
+    it('should restrict org user to 4 analysis modules when allowedRoutes is empty', () => {
+      const orgUser = getPermissionByUsername('leshan')!;
+
+      expect(canAccessRoute(orgUser, '/performance-analysis')).toBe(true);
+      expect(canAccessRoute(orgUser, '/growth')).toBe(true);
+      expect(canAccessRoute(orgUser, '/renewal')).toBe(true);
+      expect(canAccessRoute(orgUser, '/cross-sell')).toBe(true);
+
+      expect(canAccessRoute(orgUser, '/dashboard')).toBe(false);
+      expect(canAccessRoute(orgUser, '/premium-report')).toBe(false);
+      expect(canAccessRoute(orgUser, '/marketing-report')).toBe(false);
+      expect(canAccessRoute(orgUser, '/truck')).toBe(false);
+    });
+
+    it('should use performance-analysis as fallback default route for org user', () => {
+      const orgUser = getPermissionByUsername('leshan')!;
+      expect(getDefaultRoute(orgUser)).toBe('/performance-analysis');
     });
   });
 
