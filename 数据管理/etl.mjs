@@ -3,7 +3,7 @@
  * 智能启动脚本 - 自动检测平台并运行 ETL
  * 
  * Windows:  使用 Node.js/Bun 运行 daily.mjs
- * macOS/Linux: 使用 bash 运行 daily.sh（支持 VPS 同步）
+ * macOS/Linux: 使用 bash 运行 daily.mjs（支持 VPS 同步）
  * 
  * 用法:
  *   node etl.mjs          # 完整 ETL 流程
@@ -74,13 +74,13 @@ function main() {
     result.on('close', code => process.exit(code));
     
   } else {
-    // macOS/Linux: 使用 bash 运行 daily.sh
-    log('blue', '使用 Bash 运行原生脚本 (daily.sh)');
+    // macOS/Linux: 使用 bash 运行 daily.mjs
+    log('blue', '使用 Bash 运行原生脚本 (daily.mjs)');
     console.log('');
     
-    const dailySh = join(scriptDir, 'daily.sh');
+    const dailySh = join(scriptDir, 'daily.mjs');
     if (!existsSync(dailySh)) {
-      console.error('错误: 未找到 daily.sh');
+      console.error('错误: 未找到 daily.mjs');
       process.exit(1);
     }
     

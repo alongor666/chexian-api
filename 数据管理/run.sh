@@ -129,14 +129,14 @@ case "${1:-help}" in
 
         # 步骤 3/3: 自动同步到 VPS（可用 --no-sync 跳过）
         if [[ "$NO_SYNC" != "true" ]]; then
-            SYNC_SCRIPT="$(dirname "$SCRIPT_DIR")/deploy/sync-data.sh"
+            SYNC_SCRIPT="$(dirname "$SCRIPT_DIR")/scripts/sync-vps.mjs"
             if [[ -f "$SYNC_SCRIPT" ]]; then
                 echo ""
                 echo -e "${BLUE}步骤 3/3: 同步 Parquet 到 VPS${NC}"
                 bash "$SYNC_SCRIPT" "$OUTPUT"
             else
                 echo -e "${YELLOW}⚠ 未找到 sync-data.sh，跳过 VPS 同步${NC}"
-                echo -e "  手动同步: ./deploy/sync-data.sh ${OUTPUT}"
+                echo -e "  手动同步: ./scripts/sync-vps.mjs ${OUTPUT}"
             fi
         else
             echo -e "${YELLOW}已跳过 VPS 同步（--no-sync）${NC}"

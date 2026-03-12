@@ -114,9 +114,29 @@ git merge-base main HEAD
 2. 改用 cherry-pick 策略：从 main 创建新分支，cherry-pick 独有 commits
 3. 用新分支创建 PR
 
-#### 3.1 同步远程最新代码
+#### 3.1 同步远程最新代码并处理 lockfile
 ```bash
 git fetch origin main
+```
+
+**分支落后 main 时（check-write-conflict 报"未基于最新 main"）：**
+```bash
+# 有共同祖先 → stash + rebase（常规情况）
+git stash && git rebase origin/main && git stash pop
+
+# 无共同祖先 → cherry-pick（禁止用 rebase，会产生 add/add 冲突）
+git checkout -b fix/new-branch origin/main && git cherry-pick <commit-hash>
+```
+
+**rebase 后必须同步 lockfile（否则 CI frozen-lockfile 报错）：**
+```bash
+bun install          # 更新 bun.lock
+git add bun.lock && git commit -m "chore: sync bun.lock after rebase" 2>/dev/null || true
+```
+
+**push 时遇到 LFS locksverify EOF：**
+```bash
+git config lfs.https://github.com/$(git remote get-url origin | sed 's/.*github.com\///').git/info/lfs.locksverify false
 ```
 
 #### 3.2 运行冲突检测
@@ -200,8 +220,8 @@ Closes #[issue编号]
 1. **前置检查（强制执行）**：
    - ⚠️ **必须通过冲突检测**才能创建 PR
    - ⚠️ **必须通过治理校验**才能提交代码
-   - 如果检测到冲突，参考 CLAUDE.md §9.5 处理流程
-   - 建议在开发前先 `git rebase origin/main` 同步最新代码
+   - 如果检测到冲突，参考步骤 3.1 的分支同步策略
+   - **禁止在注意事项中推荐 rebase——策略已在步骤 3.1 统一**
 
 2. **Commit Message 质量**：
    - subject 使用动词开头（"添加"、"修复"、"优化"）
@@ -226,9 +246,9 @@ Closes #[issue编号]
 
 ## 冲突处理参考
 
-如果检测到 merge 冲突，请参考：
-- **快速处理**：`git rebase origin/main` → 解决冲突 → `git rebase --continue`
-- **复杂情况**：参考 CLAUDE.md §9.5 紧急冲突处理流程
+如果检测到分支落后 main：
+- **有共同祖先（正常情况）**：`git stash && git rebase origin/main && git stash pop` → 再跑 `bun install && git add bun.lock`
+- **无共同祖先**：cherry-pick 策略，禁止 rebase
 - **多Agent协作**：遵守 CLAUDE.md §9 任务ID分配规则
 
 ---

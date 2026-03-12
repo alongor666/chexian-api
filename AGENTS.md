@@ -335,7 +335,7 @@ WHERE year = EXTRACT(YEAR FROM CURRENT_DATE)
 
 **相关文件**：
 - 导出脚本：`scripts/export-for-vps.mjs`（Mac 本地运行）
-- 数据同步：`deploy/sync-data.sh`（同步精简 Parquet，不同步原始数据）
+- 数据同步：`scripts/sync-vps.mjs`（同步精简 Parquet，不同步原始数据）
 - 数据库配置：`server/src/config/database.ts`（`VPS_MODE` 环境变量控制加载路径）
 
 ---
@@ -520,8 +520,8 @@ ssh chexian-vps-deploy echo ok   # 返回 "ok" 表示配置正确
 ./数据管理/run.sh full ... --no-sync
 
 # 单独同步已有 Parquet（跳过转换步骤）
-./deploy/sync-data.sh              # 自动找最新 Parquet
-./deploy/sync-data.sh 文件名.parquet  # 指定文件
+./scripts/sync-vps.mjs              # 自动找最新 Parquet
+./scripts/sync-vps.mjs 文件名.parquet  # 指定文件
 ```
 
 脚本自动完成：SSH 连通性检查 → 找到最新 `.parquet` → scp 上传 → chmod 600 → PM2 重启 → 健康检查。
@@ -551,7 +551,7 @@ bun run verify:vps:heatmap
 
 | 文件 | 说明 |
 |------|------|
-| [deploy/sync-data.sh](deploy/sync-data.sh) | 数据同步脚本（使用 `chexian-vps-deploy` 别名） |
+| [scripts/sync-vps.mjs](scripts/sync-vps.mjs) | 数据同步脚本（使用 `chexian-vps-deploy` 别名） |
 | [数据管理/run.sh](数据管理/run.sh) | 完整数据处理链路（enrich + transform + sync） |
 | [deploy/vps-deploy.sh](deploy/vps-deploy.sh) | VPS 全量部署脚本 |
 | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | 完整部署步骤文档 |

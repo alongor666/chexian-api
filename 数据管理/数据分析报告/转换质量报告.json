@@ -1,8 +1,8 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-03-10T21:51:03.663863",
+  "timestamp": "2026-03-12T16:33:29.470301",
   "basic_stats": {
-    "rows": 685873,
+    "rows": 689340,
     "columns": 40,
     "column_names": [
       "三级机构",
@@ -51,7 +51,7 @@
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 672050
+      "unique_count": 675443
     },
     "业务员": {
       "null_count": 0,

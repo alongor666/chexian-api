@@ -232,7 +232,7 @@ async function main() {
 
   // 6. 同步 current/ 下所有基础明细 parquet 以及 vps-export/ 下的预聚合 parquet 到 VPS
   if (!isWindows()) {
-    const syncScript = join(projectRoot, 'deploy/sync-data.sh');
+    const syncScript = join(projectRoot, 'scripts/sync-vps.mjs');
     const vpsExportDir = join(scriptDir, 'warehouse/vps-export');
 
     if (!checkVpsConnectivity()) {
@@ -279,18 +279,53 @@ async function main() {
     } else {
       log('yellow', '⚠ 未找到 sync-data.sh，请手动同步');
       for (const f of allFiles) {
-        console.log(`  ./deploy/sync-data.sh ${f}`);
+        console.log(`  ./scripts/sync-vps.mjs ${f}`);
       }
     }
   } else {
-    console.log('');
-    log('yellow', '⚠ Windows 环境不支持自动同步到 VPS，请手动同步以下文件:');
-    const parquetFiles = readdirSync(currentDir).filter(f => f.endsWith('.parquet'));
-    for (const f of parquetFiles) {
-      console.log(`  ${join(currentDir, f)}`);
+    const syncScript = join(projectRoot, 'scripts/sync-vps.mjs');
+    const vpsExportDir = join(scriptDir, 'warehouse/vps-export');
+
+    const currentFiles = readdirSync(currentDir)
+      .filter(f => f.endsWith('.parquet'))
+      .map(f => join(currentDir, f));
+
+    const exportFiles = existsSync(vpsExportDir)
+      ? readdirSync(vpsExportDir)
+        .filter(f => f.endsWith('.parquet'))
+        .map(f => join(vpsExportDir, f))
+      : [];
+
+    const allFiles = [...currentFiles, ...exportFiles];
+
+    if (allFiles.length === 0) {
+      log('red', '❌ 未找到可同步的 Parquet 文件，终止同步');
+      process.exit(1);
+    }
+
+    log('green', `📦 Windows 开始同步 ${allFiles.length} 个文件到 VPS`);
+    for (const f of allFiles) {
+      console.log(`   ${basename(f)}`);
     }
     console.log('');
-    log('blue', '提示: Windows 请执行 node scripts/sync-vps.mjs --check / --export 进行上传');
+
+    if (existsSync(syncScript)) {
+      for (let i = 0; i < allFiles.length; i++) {
+        const cleanFlag = i === 0 ? '--clean-vps' : '';
+        const restartFlag = i < allFiles.length - 1 ? '--no-restart' : '';
+
+        execSync(`node "${syncScript}" "${allFiles[i]}" ${cleanFlag} ${restartFlag}`, {
+          stdio: 'inherit'
+        });
+      }
+      console.log('');
+      log('green', '✅ 全部同步完成，服务器已重启并仅加载了最新的文件');
+    } else {
+      log('yellow', '⚠ 未找到 scripts/sync-vps.mjs，请手动同步');
+      for (const f of allFiles) {
+        console.log(`  ${f}`);
+      }
+    }
   }
 
   console.log('');

@@ -73,7 +73,7 @@ if ssh -o BatchMode=yes -o ConnectTimeout=10 "$ALIAS" true 2>/dev/null; then
     echo ""
     echo -e "${GREEN}=== 初始化完成 ===${NC}"
     echo "现在可以运行："
-    echo "  ./deploy/sync-data.sh    # 同步 Parquet 到 VPS"
+    echo "  ./scripts/sync-vps.mjs    # 同步 Parquet 到 VPS"
     echo "  ssh chexian-vps-deploy   # 连接 VPS"
 else
     echo -e "${RED}失败${NC}"

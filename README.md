@@ -276,10 +276,10 @@ bun run preview
 ./数据管理/run.sh full --source 历史数据.xlsx --target 最新数据.xlsx --output 数据管理/warehouse/fact/policy/xxx.parquet
 
 # 仅同步最新 parquet
-./deploy/sync-data.sh
+./scripts/sync-vps.mjs
 
 # 预聚合导出并同步（推荐）
-./deploy/sync-data.sh --export
+./scripts/sync-vps.mjs --export
 ```
 
 ### 生产部署

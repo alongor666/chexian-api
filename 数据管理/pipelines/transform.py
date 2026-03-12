@@ -614,15 +614,15 @@ def process_new_fields(df):
         avg_val = df['乘客险保额'].mean()
         print(f"      ✅ 乘客险保额: 平均值 {avg_val:,.2f}")
 
-    # 15. 处理车牌号码（字符串，保留原值）
+    # 15. 处理车牌号码（只保留前2位）
     if '车牌号码' in df.columns:
         print(f"\n   处理车牌号码:")
         print(f"      数据类型: {df['车牌号码'].dtype}")
         print(f"      空值数: {df['车牌号码'].isna().sum():,}")
-        df['车牌号码'] = df['车牌号码'].astype(str).where(df['车牌号码'].notna(), None)
+        df['车牌号码'] = df['车牌号码'].astype(str).str[:2].where(df['车牌号码'].notna(), None)
         sample_vals = df['车牌号码'].dropna().head(3).tolist()
         print(f"      示例值: {sample_vals}")
-        print(f"      ✅ 车牌号码字段处理完成")
+        print(f"      ✅ 车牌号码字段处理完成(保留前2位)")
 
     # 16. 处理座位数（整数）
     if '座位数' in df.columns:

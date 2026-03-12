@@ -63,7 +63,7 @@
 │   └── tasks/                   # 任务配置模板
 │
 ├── cli.py                       # 命令行工具
-├── run.sh                       # 快捷执行脚本
+├── run.mjs                       # 快捷执行脚本
 └── logs/                        # 运行日志
 ```
 
@@ -74,7 +74,7 @@
 | 平台 | 脚本 | 命令 |
 |------|------|------|
 | **Windows** | `daily.mjs` / `run.mjs` | `node daily.mjs` 或 `node run.mjs full ...` |
-| **macOS/Linux** | `daily.sh` / `run.sh` | `./daily.sh` 或 `./run.sh full ...` |
+| **macOS/Linux** | `daily.mjs` / `run.mjs` | `./daily.mjs` 或 `./run.mjs full ...` |
 | **智能启动** | `etl.mjs` | `node etl.mjs`（自动检测平台） |
 
 ### 数据更新（推荐：一键命令）
@@ -98,7 +98,7 @@ cd 数据管理
 node etl.mjs
 
 # 或原生 Bash 脚本（支持 VPS 同步）
-./daily.sh
+./daily.mjs
 ```
 
 **手动指定参数:**
@@ -107,7 +107,7 @@ node etl.mjs
 node run.mjs full --source "续保类型匹配至2026年4月.xlsx" --target "车险2526年清单更新至20260302.xlsx" --output "warehouse/fact/policy/test.parquet"
 
 # macOS/Linux
-./run.sh full --source "续保类型匹配至2026年4月.xlsx" --target "车险2526年清单更新至20260302.xlsx" --output "warehouse/fact/policy/test.parquet"
+./run.mjs full --source "续保类型匹配至2026年4月.xlsx" --target "车险2526年清单更新至20260302.xlsx" --output "warehouse/fact/policy/test.parquet"
 ```
 
 ### 其他命令
@@ -119,9 +119,9 @@ node run.mjs enrich     # 仅续保匹配
 node run.mjs transform  # 仅转换Parquet
 
 # macOS/Linux
-./run.sh help       # 查看所有命令
-./run.sh enrich     # 仅续保匹配
-./run.sh transform  # 仅转换Parquet
+./run.mjs help       # 查看所有命令
+./run.mjs enrich     # 仅续保匹配
+./run.mjs transform  # 仅转换Parquet
 ```
 
 ## 数据资产清单

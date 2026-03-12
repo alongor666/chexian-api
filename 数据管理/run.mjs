@@ -249,14 +249,14 @@ async function main() {
       
       // 同步到 VPS
       if (!opts.noSync && !isWindows()) {
-        const syncScript = join(dirname(scriptDir), 'deploy/sync-data.sh');
+        const syncScript = join(dirname(scriptDir), 'scripts/sync-vps.mjs');
         if (existsSync(syncScript)) {
           console.log('');
           log('blue', '步骤 3/3: 同步 Parquet 到 VPS');
           execSync(`bash "${syncScript}" "${opts.output}"`, { stdio: 'inherit' });
         } else {
           log('yellow', '⚠ 未找到 sync-data.sh，跳过 VPS 同步');
-          console.log(`  手动同步: ./deploy/sync-data.sh ${opts.output}`);
+          console.log(`  手动同步: ./scripts/sync-vps.mjs ${opts.output}`);
         }
       } else if (opts.noSync) {
         log('yellow', '已跳过 VPS 同步（--no-sync）');

@@ -6,7 +6,7 @@
 - 2026-02-18：v2.5 新增§13 AI 协作行为规范（Git 工作流/安全操作/开发规范/效率优化）
 - 2026-02-18：【全面更新 v2.5】新增 `rateLimiter.ts` 到关键文件清单和护栏；更新SQL生成器（12→16个，新增 cross-sell.ts/cross-sell-summary.ts/marketing-report.ts）；更新功能模块（14→15个，新增车驾意推介率+四象限散点图）；更新仪表盘 Hooks 清单（新增10个专用 Hooks）；新增安全整改待办（B201-B204）；更新数据文件引用（0214）；新增渲染循环和日期序列化异常处理教训
 - 2026-02-16：新增 `.github/workflows/deploy.yml` 自动部署 workflow（push to main 触发构建+部署+健康检查+自动回滚），更新§12文档
-- 2026-02-15：新增§12生产部署与数据同步章节，创建 `deploy/sync-data.sh` 一键同步脚本
+- 2026-02-15：新增§12生产部署与数据同步章节，创建 `scripts/sync-vps.mjs` 一键同步脚本
 - 2026-02-15：【生产部署】完成腾讯云 VPS 部署（`https://chexian.cretvalu.com`），修复6个部署问题（ESM 导入缺 .js 扩展名、ESM __dirname 不可用、req.path vs req.originalUrl、types 目录导入、Nginx IP 白名单、sanitizeFilename 中文文件名支持），新增审计日志中间件（`server/src/middleware/audit.ts`），配置 SSL/备份/日志轮转
 - 2026-02-13：【文档同步】更新§5功能模块清单（13→14个，补充Auth/Pages模块）、§5数据链路补充SQL生成器层（14个模块）和完整路由清单（5个路由文件）、§7命令索引升级v2.3（23→30个命令）、§7 Subagents更新（4→14个）、更新最新数据文件路径（0212.parquet）、补充筛选器API端点
 - 2026-02-07：从 chexianYJFX 拆分为 API 版，移除所有 Local/DuckDB-WASM 相关内容

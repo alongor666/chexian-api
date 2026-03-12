@@ -473,8 +473,8 @@ curl -I https://chexian.cretvalu.com
 
 ```bash
 # 在本地 Mac 的 chexian-api 目录执行
-./deploy/sync-data.sh                   # 自动同步最新 Parquet
-./deploy/sync-data.sh 某文件.parquet     # 指定文件
+./scripts/sync-vps.mjs                   # 自动同步最新 Parquet
+./scripts/sync-vps.mjs 某文件.parquet     # 指定文件
 ```
 
 脚本自动完成：

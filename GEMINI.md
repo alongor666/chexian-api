@@ -563,8 +563,8 @@ bun run scripts/check-governance.mjs
 ./数据管理/run.sh full ... --no-sync
 
 # 单独同步已有 Parquet（跳过转换步骤）
-./deploy/sync-data.sh                   # 自动找最新 Parquet
-./deploy/sync-data.sh 某文件.parquet     # 指定文件
+./scripts/sync-vps.mjs                   # 自动找最新 Parquet
+./scripts/sync-vps.mjs 某文件.parquet     # 指定文件
 ```
 
 ### SSH 连接前提（sync 失败必查）
@@ -592,7 +592,7 @@ Host chexian-vps-deploy
 
 | 文件 | 说明 |
 |------|------|
-| `deploy/sync-data.sh` | 一键数据同步脚本（依赖 `~/.ssh/config` 别名） |
+| `scripts/sync-vps.mjs` | 一键数据同步脚本（依赖 `~/.ssh/config` 别名） |
 | `deploy/vps-deploy.sh` | VPS 全量部署脚本 |
 | `DEPLOYMENT_GUIDE.md` | 完整部署步骤文档 |
 | `vps.md` | VPS 运维手册（含 SSH 配置步骤） |

@@ -275,11 +275,13 @@ async function main() {
   let exportMode = false;
   let noRestart = false;
   let checkMode = false;
+  let cleanVps = false;
   let targetFile = null;
 
   for (const arg of args) {
     if (arg === '--export') exportMode = true;
     else if (arg === '--no-restart') noRestart = true;
+    else if (arg === '--clean-vps') cleanVps = true;
     else if (arg === '--check') checkMode = true;
     else if (!arg.startsWith('-')) targetFile = arg;
   }
@@ -366,6 +368,24 @@ async function main() {
       sshConfig,
       `mkdir -p ${quoteForSingle(`${VPS_DATA_DIR}/current`)} ${quoteForSingle(`${VPS_DATA_DIR}/archive`)}`,
     );
+
+    if (cleanVps) {
+      log('yellow', '  清理 VPS 的 current 目录...');
+      const d = new Date();
+      const ts = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
+      await execRemote(
+        sshConfig,
+        `mkdir -p ${VPS_DATA_DIR}/archive/backup_${ts} && mv ${VPS_DATA_DIR}/current/*.parquet ${VPS_DATA_DIR}/archive/backup_${ts}/ 2>/dev/null || true`,
+        { allowFailure: true }
+      );
+      
+      log('yellow', '  清理 VPS 上超过 30 天的过期归档...');
+      await execRemote(
+        sshConfig,
+        `find ${VPS_DATA_DIR}/archive -type d -name 'backup_*' -mtime +30 -exec rm -rf {} + 2>/dev/null || true`,
+        { allowFailure: true }
+      );
+    }
   } catch (e) {
     log('red', `错误：创建远端目录失败: ${e.message}`);
     process.exit(1);

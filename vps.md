@@ -604,7 +604,7 @@ ls -lh /var/backups/chexian/
 
 # === 一键同步数据（从本地 Mac 的 chexian-api 目录执行）===
 # 自动找到最新 .parquet → 上传 → 设权限 600 → 重启 PM2 → 健康检查
-./deploy/sync-data.sh
+./scripts/sync-vps.mjs
 
 # === 更新代码（从本地 Mac 执行）===
 # 1. 本地构建
