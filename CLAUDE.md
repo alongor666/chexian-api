@@ -511,7 +511,7 @@ bun run verify:vps:heatmap
 
 **SSH 前提（新机器首次运行一键初始化）**：
 ```bash
-bash scripts/setup-local-env.sh   # 自动写入 ~/.ssh/config + 验证连通性
+bash scripts/setup-local-env.mjs   # 自动写入 ~/.ssh/config + 验证连通性
 ```
 验证：`ssh chexian-vps-deploy echo ok`
 密钥文件：`~/.ssh/chexian_deploy`（私钥，需提前放置）/ `~/.ssh/chexian_deploy.pub`（公钥已注册 VPS）

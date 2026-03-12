@@ -646,16 +646,16 @@ ssh chexian-vps-deploy 'cd /var/www/chexian && tar xzf /tmp/chexian-deploy.tar.g
 
 ```bash
 # 1) 从本地上传最新脚本
-scp -i ~/.ssh/chexian_deploy ./deploy/vps-deploy.sh \
-  deployer@162.14.113.44:/tmp/chexian-vps-deploy.sh
+scp -i ~/.ssh/chexian_deploy ./deploy/vps-deploy.mjs \
+  deployer@162.14.113.44:/tmp/chexian-vps-deploy.mjs
 
 # 2) 进入 VPS
 ssh chexian-vps-deploy
-sudo mv /tmp/chexian-vps-deploy.sh /usr/local/bin/chexian-vps-deploy.sh
-sudo chmod 755 /usr/local/bin/chexian-vps-deploy.sh
+sudo mv /tmp/chexian-vps-deploy.mjs /usr/local/bin/chexian-vps-deploy.mjs
+sudo chmod 755 /usr/local/bin/chexian-vps-deploy.mjs
 
 # 3) 应急开放（示例：到 2026-02-20 23:59 自动回滚）
-bash /usr/local/bin/chexian-vps-deploy.sh \
+bash /usr/local/bin/chexian-vps-deploy.mjs \
   --action emergency-open \
   --until "2026-02-20 23:59" \
   --basic-auth-user temp-access
@@ -680,7 +680,7 @@ curl -I https://chexian.cretvalu.com/
 **提前手动回滚**：
 
 ```bash
-bash /usr/local/bin/chexian-vps-deploy.sh --action rollback-access
+bash /usr/local/bin/chexian-vps-deploy.mjs --action rollback-access
 ```
 
 ### 部署血泪教训

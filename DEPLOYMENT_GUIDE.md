@@ -538,15 +538,15 @@ curl http://localhost:3000/health
 
 ```bash
 # 1) 从本地上传最新脚本到 VPS 固定路径
-scp -i ~/.ssh/id_ed25519 ./deploy/vps-deploy.sh \
-  root@162.14.113.44:/usr/local/bin/chexian-vps-deploy.sh
+scp -i ~/.ssh/id_ed25519 ./deploy/vps-deploy.mjs \
+  root@162.14.113.44:/usr/local/bin/chexian-vps-deploy.mjs
 
 # 2) 进入 VPS（Asia/Beijing 时区）
 ssh -i ~/.ssh/id_ed25519 root@162.14.113.44
-chmod 755 /usr/local/bin/chexian-vps-deploy.sh
+chmod 755 /usr/local/bin/chexian-vps-deploy.mjs
 
 # 3) 临时开放公网访问 + Basic Auth + 到点自动回滚
-bash /usr/local/bin/chexian-vps-deploy.sh \
+bash /usr/local/bin/chexian-vps-deploy.mjs \
   --action emergency-open \
   --until "2026-02-20 23:59" \
   --basic-auth-user temp-access
@@ -569,7 +569,7 @@ curl -u temp-access:'<临时密码>' -I https://chexian.cretvalu.com/
 **手动回滚（若需提前结束）**：
 
 ```bash
-bash /usr/local/bin/chexian-vps-deploy.sh --action rollback-access
+bash /usr/local/bin/chexian-vps-deploy.mjs --action rollback-access
 ```
 
 **自动回滚后验证（2026-02-20 23:59 之后）**：

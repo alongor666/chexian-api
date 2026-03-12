@@ -553,7 +553,7 @@ bun run verify:vps:heatmap
 |------|------|
 | [scripts/sync-vps.mjs](scripts/sync-vps.mjs) | 数据同步脚本（使用 `chexian-vps-deploy` 别名） |
 | [数据管理/run.sh](数据管理/run.sh) | 完整数据处理链路（enrich + transform + sync） |
-| [deploy/vps-deploy.sh](deploy/vps-deploy.sh) | VPS 全量部署脚本 |
+| [deploy/vps-deploy.mjs](deploy/vps-deploy.mjs) | VPS 全量部署脚本 |
 | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | 完整部署步骤文档 |
 | [vps.md](vps.md) | VPS 运维手册（SSH/PM2/Nginx/备份） |
 

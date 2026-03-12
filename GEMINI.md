@@ -593,7 +593,7 @@ Host chexian-vps-deploy
 | 文件 | 说明 |
 |------|------|
 | `scripts/sync-vps.mjs` | 一键数据同步脚本（依赖 `~/.ssh/config` 别名） |
-| `deploy/vps-deploy.sh` | VPS 全量部署脚本 |
+| `deploy/vps-deploy.mjs` | VPS 全量部署脚本 |
 | `DEPLOYMENT_GUIDE.md` | 完整部署步骤文档 |
 | `vps.md` | VPS 运维手册（含 SSH 配置步骤） |
 

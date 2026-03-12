@@ -284,7 +284,7 @@ bun run preview
 
 ### 生产部署
 
-- 全量部署脚本：`deploy/vps-deploy.sh`
+- 全量部署脚本：`deploy/vps-deploy.mjs`
 - 详细步骤：`DEPLOYMENT_GUIDE.md`
 - 运维说明：`vps.md`
 
