@@ -18,9 +18,24 @@ export interface PresetRole {
   defaultRoute?: string;
 }
 
+export const ORG_ROLE_ALLOWED_ROUTES: string[] = [
+  '/performance-analysis',
+  '/growth',
+  '/renewal',
+  '/cross-sell',
+];
+
+export const ORG_ROLE_DEFAULT_ROUTE = '/performance-analysis';
+
 export const PRESET_ROLES: PresetRole[] = [
   { role: 'branch_admin', name: '分公司管理员', dataScope: 'all' },
-  { role: 'org_user', name: '三级机构用户', dataScope: 'org' },
+  {
+    role: 'org_user',
+    name: '三级机构用户',
+    dataScope: 'org',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+  },
   { role: 'telemarketing_user', name: '电销用户', dataScope: 'telemarketing' },
 ];
 
@@ -37,6 +52,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '乐山机构',
     role: 'org_user',
     organization: '乐山',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   tianfu: {
     username: 'tianfu',
@@ -44,6 +61,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '天府机构',
     role: 'org_user',
     organization: '天府',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   yibin: {
     username: 'yibin',
@@ -51,6 +70,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '宜宾机构',
     role: 'org_user',
     organization: '宜宾',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   deyang: {
     username: 'deyang',
@@ -58,6 +79,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '德阳机构',
     role: 'org_user',
     organization: '德阳',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   xindu: {
     username: 'xindu',
@@ -65,6 +88,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '新都机构',
     role: 'org_user',
     organization: '新都',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   wuhou: {
     username: 'wuhou',
@@ -72,6 +97,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '武侯机构',
     role: 'org_user',
     organization: '武侯',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   luzhou: {
     username: 'luzhou',
@@ -79,6 +106,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '泸州机构',
     role: 'org_user',
     organization: '泸州',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   zigong: {
     username: 'zigong',
@@ -86,6 +115,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '自贡机构',
     role: 'org_user',
     organization: '自贡',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   ziyang: {
     username: 'ziyang',
@@ -93,6 +124,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '资阳机构',
     role: 'org_user',
     organization: '资阳',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   dazhou: {
     username: 'dazhou',
@@ -100,6 +133,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '达州机构',
     role: 'org_user',
     organization: '达州',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   qingyang: {
     username: 'qingyang',
@@ -107,6 +142,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '青羊机构',
     role: 'org_user',
     organization: '青羊',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   gaoxin: {
     username: 'gaoxin',
@@ -114,6 +151,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '高新机构',
     role: 'org_user',
     organization: '高新',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
   jiachengxian: {
     username: 'jiachengxian',

@@ -59,6 +59,21 @@ export interface UserPermission {
 }
 
 /**
+ * 机构角色默认可访问路由（未单独配置 allowedRoutes 时生效）
+ */
+export const ORG_USER_DEFAULT_ALLOWED_ROUTES: readonly string[] = [
+  '/performance-analysis',
+  '/growth',
+  '/renewal',
+  '/cross-sell',
+];
+
+/**
+ * 机构角色默认落地页
+ */
+export const ORG_USER_DEFAULT_ROUTE = '/performance-analysis';
+
+/**
  * 用户认证配置（含密码）
  * 内网部署使用，密码通过SHA-256哈希存储
  */
@@ -289,11 +304,18 @@ export function canAccessRoute(permission: UserPermission, pathname: string): bo
   // 分公司管理员不受路由白名单限制
   if (permission.role === UserRole.BRANCH_ADMIN) return true;
 
-  if (!permission.allowedRoutes || permission.allowedRoutes.length === 0) {
+  const effectiveAllowedRoutes =
+    permission.allowedRoutes && permission.allowedRoutes.length > 0
+      ? permission.allowedRoutes
+      : permission.role === UserRole.ORG_USER
+        ? ORG_USER_DEFAULT_ALLOWED_ROUTES
+        : undefined;
+
+  if (!effectiveAllowedRoutes || effectiveAllowedRoutes.length === 0) {
     return true;
   }
 
-  return permission.allowedRoutes.some((allowedRoute) => {
+  return effectiveAllowedRoutes.some((allowedRoute) => {
     if (allowedRoute === '/') {
       return pathname === '/';
     }
@@ -305,6 +327,9 @@ export function canAccessRoute(permission: UserPermission, pathname: string): bo
  * 获取用户默认落地路由
  */
 export function getDefaultRoute(permission: UserPermission): string {
+  if (!permission.defaultRoute && permission.role === UserRole.ORG_USER) {
+    return ORG_USER_DEFAULT_ROUTE;
+  }
   return permission.defaultRoute || '/';
 }
 
