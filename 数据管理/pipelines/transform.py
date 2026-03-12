@@ -19,6 +19,8 @@
 
 import pandas as pd
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 from pathlib import Path
 from datetime import datetime
 import json
@@ -29,7 +31,7 @@ import time
 # 默认配置（可通过命令行参数覆盖）
 DEFAULT_INPUT_FILE = Path("/Users/xuechenglong/Downloads/车险签单报价数据20260127_已匹配.xlsx")
 DEFAULT_OUTPUT_FILE = Path("/Users/xuechenglong/Downloads/01-正开发Git项目/chexianYJFX/数据管理/warehouse/fact/policy/车险保单综合明细表0127.parquet")
-DEFAULT_OUTPUT_MODE = "merged"  # "merged" = 合并批改记录（推荐）, "full" = 保留所有记录
+DEFAULT_OUTPUT_MODE = "full"  # "full" = 保留所有记录（分析默认）, "merged" = 显式合并批改记录
 QUALITY_REPORT_FILE = Path("./数据分析报告/转换质量报告.json")
 
 def parse_args():
@@ -51,8 +53,8 @@ def parse_args():
     )
     parser.add_argument('-i', '--input', type=str, help='输入Excel文件路径')
     parser.add_argument('-o', '--output', type=str, help='输出Parquet文件路径')
-    parser.add_argument('-m', '--mode', choices=['merged', 'full'], default='merged',
-                        help='处理模式: merged=合并批改记录(默认), full=保留所有记录')
+    parser.add_argument('-m', '--mode', choices=['merged', 'full'], default='full',
+                        help='处理模式: full=保留所有记录(默认), merged=合并批改记录')
     parser.add_argument('-r', '--renewal-source', type=str, help='续保业务类型源文件路径（可选）')
     return parser.parse_args()
 
@@ -850,8 +852,18 @@ def save_to_parquet(df, output_path):
     # 确保输出目录存在（防止 clone 后目录缺失）
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
+    # 写入 schema metadata，确保加载端能识别 row-level/full 与 merged 产物
+    table = pa.Table.from_pandas(df, preserve_index=False)
+    schema_metadata = dict(table.schema.metadata or {})
+    schema_metadata.update({
+        b'processing_mode': str(OUTPUT_MODE).encode('utf-8'),
+        b'generated_at': datetime.now().isoformat().encode('utf-8'),
+        b'source_file': str(INPUT_FILE.name).encode('utf-8'),
+    })
+    table = table.replace_schema_metadata(schema_metadata)
+
     # 保存
-    df.to_parquet(output_path, index=False)
+    pq.write_table(table, output_path)
     print(f"\n   ✅ 成功保存到: {output_path}")
 
     # 验证

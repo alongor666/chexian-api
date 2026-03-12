@@ -17,29 +17,11 @@ import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths } from './con
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
-import { COLUMN_ALIASES } from './normalize/mapping.js';
-import { escapeSqlValue, isValidParquetFile } from './utils/security.js';
+import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from './utils/parquet-source.js';
+import { isValidParquetFile } from './utils/security.js';
 
 const app: Application = express();
 const PORT = Number(process.env.PORT) || 3000;
-
-async function isRealtimeRowLevelParquet(filePath: string): Promise<boolean> {
-  try {
-    const escapedPath = escapeSqlValue(filePath);
-    const schema = await duckdbService.query<{ column_name: string }>(`
-      SELECT column_name
-      FROM (DESCRIBE SELECT * FROM read_parquet('${escapedPath}'))
-    `);
-    const columns = schema.map((row) => String(row.column_name).toLowerCase());
-    const hasAlias = (field: keyof typeof COLUMN_ALIASES): boolean => {
-      const aliases = (COLUMN_ALIASES[field] || []).map((alias) => alias.toLowerCase());
-      return columns.some((column) => aliases.some((alias) => column === alias || column.includes(alias)));
-    };
-    return hasAlias('policy_no') && hasAlias('premium');
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 1. 安全中间件
@@ -223,12 +205,19 @@ async function startServer() {
     if (filesToLoad.length > 0) {
       const realtimeFiles: typeof filesToLoad = [];
       for (const file of filesToLoad) {
-        const rowLevel = await isRealtimeRowLevelParquet(file.path);
-        if (rowLevel) {
-          realtimeFiles.push(file);
+        const inspection = await inspectParquetSource(file.path);
+        const rejectionReason = getParquetLoadRejectionReason(inspection);
+        if (rejectionReason) {
+          console.warn(`[Server] Skip unsupported parquet source: ${file.path} (${rejectionReason})`);
           continue;
         }
-        console.warn(`[Server] Skip non-row-level parquet source: ${file.path}`);
+
+        const warning = getParquetLoadWarning(inspection);
+        if (warning) {
+          console.warn(`[Server] Parquet source warning: ${file.path} (${warning})`);
+        }
+
+        realtimeFiles.push(file);
       }
       filesToLoad = realtimeFiles;
     }

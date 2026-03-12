@@ -23,16 +23,15 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
-import { COLUMN_ALIASES } from '../normalize/mapping.js';
 import { duckdbService } from '../services/duckdb.js';
 import {
   sanitizeFilename,
   validatePathWithinDirectory,
   isValidParquetFile,
   safeLog,
-  escapeSqlValue,
 } from '../utils/security.js';
 import { getDataDir, getKpiPlanConfigPath } from '../config/paths.js';
+import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 
 const router = Router();
 
@@ -71,24 +70,6 @@ function resolveManagedParquetPath(safeFilename: string): string | null {
   }
 
   return null;
-}
-
-async function isRealtimeRowLevelParquet(filePath: string): Promise<boolean> {
-  try {
-    const escapedPath = escapeSqlValue(filePath);
-    const schema = await duckdbService.query<{ column_name: string }>(`
-      SELECT column_name
-      FROM (DESCRIBE SELECT * FROM read_parquet('${escapedPath}'))
-    `);
-    const columns = schema.map((row) => String(row.column_name).toLowerCase());
-    const hasAlias = (field: keyof typeof COLUMN_ALIASES): boolean => {
-      const aliases = (COLUMN_ALIASES[field] || []).map((alias) => alias.toLowerCase());
-      return columns.some((column) => aliases.some((alias) => column === alias || column.includes(alias)));
-    };
-    return hasAlias('policy_no') && hasAlias('premium');
-  } catch {
-    return false;
-  }
 }
 
 // ============================================
@@ -403,10 +384,16 @@ router.post(
               continue;
             }
 
-            const rowLevel = await isRealtimeRowLevelParquet(candidateFile);
-            if (!rowLevel) {
-              safeLog('warn', 'Data', `Skip non-row-level parquet during merge-load: ${path.basename(candidateFile)}`);
+            const inspection = await inspectParquetSource(candidateFile);
+            const rejectionReason = getParquetLoadRejectionReason(inspection);
+            if (rejectionReason) {
+              safeLog('warn', 'Data', `Skip unsupported parquet during merge-load: ${path.basename(candidateFile)} (${rejectionReason})`);
               continue;
+            }
+
+            const warning = getParquetLoadWarning(inspection);
+            if (warning) {
+              safeLog('warn', 'Data', `Parquet load warning: ${path.basename(candidateFile)} (${warning})`);
             }
 
             validCandidateFiles.push(candidateFile);
@@ -674,9 +661,15 @@ router.post(
     if (!validation.valid) {
       throw new AppError(400, validation.error || '不是有效的 Parquet 文件');
     }
-    const rowLevel = await isRealtimeRowLevelParquet(filePath);
-    if (!rowLevel) {
-      throw new AppError(400, '仅允许加载行级实时数据文件');
+    const inspection = await inspectParquetSource(filePath);
+    const rejectionReason = getParquetLoadRejectionReason(inspection);
+    if (rejectionReason) {
+      throw new AppError(400, rejectionReason);
+    }
+
+    const warning = getParquetLoadWarning(inspection);
+    if (warning) {
+      safeLog('warn', 'Data', `Parquet load warning: ${safeFilename} (${warning})`);
     }
 
     safeLog('info', 'Data', `Loading file: ${safeFilename}`);

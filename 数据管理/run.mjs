@@ -111,7 +111,7 @@ function parseArgs(args) {
     output: null,
     noSync: false,
     input: null,
-    mode: 'merged'
+    mode: 'full'
   };
   
   for (let i = 0; i < args.length; i++) {
@@ -233,13 +233,15 @@ async function main() {
         runPython(python, transformScript, [
           `-i "${opts.target}"`,
           `-o "${opts.output}"`,
-          `-r "${opts.source}"`
+          `-r "${opts.source}"`,
+          '-m full'
         ]);
       } else {
         log('blue', '步骤 1/1: 单文件直转 Parquet（跳过续保匹配）');
         runPython(python, transformScript, [
           `-i "${opts.target}"`,
-          `-o "${opts.output}"`
+          `-o "${opts.output}"`,
+          '-m full'
         ]);
       }
       

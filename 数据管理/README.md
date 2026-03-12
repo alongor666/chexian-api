@@ -157,6 +157,8 @@ node run.mjs transform  # 仅转换Parquet
 python3 pipelines/transform.py -i input.xlsx -o output.parquet
 ```
 
+默认输出为 `full` 逐行事实表；如需显式合并批改记录，使用 `-m merged`。
+
 ### 2. Enrich (增强)
 
 **脚本**: `pipelines/enrich.py`
