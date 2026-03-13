@@ -36,6 +36,7 @@ bunx playwright show-report
 | `01-dashboard-flow.spec.ts` | 仪表盘核心流程 | 登录→仪表盘加载→视角切换→趋势视图 |
 | `02-filter-sql.spec.ts` | 筛选器与SQL查询 | 保费报表筛选→SQL编辑器执行→结果渲染 |
 | `03-cleanup-zero-downtime-gate.spec.ts` | 清理门禁回归 | 关键页面可达→筛选/查询/图表→CSV/Excel/PDF导出→401/200 鉴权 |
+| `auth.setup.ts` | 认证预热 | 登录一次并缓存 storage state，供后续用例复用 |
 | `04-subpage-no-refresh.spec.ts` | 子页面可达性回归 | 首页侧边栏逐个进入主要子页面，无需手工刷新 |
 | `05-cross-sell-ux.spec.ts` | 驾意险推介率 UX 回归 | 高级筛选抽屉→右侧锚点→下钻险种明细展开 |
 | `06-page-shell-ux.spec.ts` | 长页面骨架 UX 回归 | 业绩页锚点导航 + Growth/Cost 顶部基础筛选与高级抽屉复用 |
@@ -47,6 +48,7 @@ bunx playwright show-report
 ```
 tests/e2e/
 ├── README.md              # 本文件
+├── auth.setup.ts               # 复用登录态 setup
 ├── 01-dashboard-flow.spec.ts   # 仪表盘流程测试（B128）
 ├── 02-filter-sql.spec.ts       # 筛选器+SQL测试（B129）
 ├── 03-cleanup-zero-downtime-gate.spec.ts # API-only 清理门禁测试（B208）
@@ -69,6 +71,7 @@ tests/e2e/
 | `baseURL` | `http://localhost:5173` | 前端开发服务器地址 |
 | `testDir` | `./tests/e2e` | 测试文件目录 |
 | `webServer.command` | `bun run dev:full` | 自动启动前后端服务 |
+| `projects.setup` | `auth.setup.ts` | 预先登录并生成 `output/playwright/.auth/user.json` |
 | `retries` | CI: 2 次 / 本地: 0 次 | CI 环境自动重试 |
 | `screenshot` | `only-on-failure` | 仅失败时截图 |
 

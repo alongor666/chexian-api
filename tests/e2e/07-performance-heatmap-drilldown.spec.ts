@@ -1,12 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { ensureDataLoaded, login } from './helpers/session';
+import { ensureDataLoaded } from './helpers/session';
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 test('performance 热力图支持从单元格进入下钻并继续下钻', async ({ page }) => {
-  await login(page);
   await ensureDataLoaded(page);
 
   await page.goto('/#/performance-analysis');

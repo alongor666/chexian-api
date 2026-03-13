@@ -18,6 +18,31 @@ export const waitForBackendReady = async (page: Page) => {
 
 export const login = async (page: Page) => {
   await waitForBackendReady(page);
+  await page.goto('/#/');
+  await page.waitForLoadState('domcontentloaded');
+
+  const appShell = page.getByRole('navigation', { name: '主导航' });
+  const appShellVisible = await appShell.isVisible().catch(() => false);
+  if (!page.url().includes('#/login') && appShellVisible) {
+    return;
+  }
+
+  if (page.url().includes('#/login')) {
+    await Promise.race([
+      page.waitForURL((url) => !url.hash.startsWith('#/login'), {
+        waitUntil: 'domcontentloaded',
+        timeout: 3000,
+      }).catch(() => null),
+      page.getByRole('button', { name: '登录', exact: true }).waitFor({
+        state: 'visible',
+        timeout: 3000,
+      }).catch(() => null),
+    ]);
+    if (!page.url().includes('#/login') && await appShell.isVisible().catch(() => false)) {
+      return;
+    }
+  }
+
   await page.goto('/#/login');
   await page.getByPlaceholder('请输入用户名').fill(E2E_USERNAME);
   await page.getByPlaceholder('请输入密码').fill(E2E_PASSWORD);

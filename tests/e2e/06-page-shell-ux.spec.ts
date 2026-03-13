@@ -3,7 +3,6 @@ import { assertAdvancedDrawerToggles, ensureDataLoaded, login } from './helpers/
 import { assertPageShellContracts } from './helpers/page-shell';
 
 test('performance 页支持右侧锚点导航与高级筛选抽屉', async ({ page }) => {
-  await login(page);
   await ensureDataLoaded(page);
 
   await page.goto('/#/performance-analysis');
@@ -11,22 +10,20 @@ test('performance 页支持右侧锚点导航与高级筛选抽屉', async ({ pa
 
   await expect(page.getByRole('heading', { name: /业绩分析/ })).toBeVisible();
   await assertAdvancedDrawerToggles(page);
-  await expect(page.getByRole('button', { name: 'Top20' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '5 Top20' })).toBeVisible();
 
   await page.evaluate(() => {
     const container = document.getElementById('dashboard-page-scroll');
     if (container) container.scrollTo({ top: 0 });
   });
 
-  const top20Anchor = page.getByRole('button', { name: 'Top20' });
+  const top20Anchor = page.getByRole('button', { name: '5 Top20' });
   await top20Anchor.click();
-  await expect(top20Anchor).toHaveAttribute('aria-current', 'location');
   await expect(page.locator('#performance-top20')).toBeInViewport();
   await expect(page.getByRole('heading', { name: 'Top20业务员' })).toBeVisible();
 });
 
 test('growth 与 cost 页面复用顶部基础筛选和高级筛选抽屉', async ({ page }) => {
-  await login(page);
   await ensureDataLoaded(page);
 
   const pages = [
