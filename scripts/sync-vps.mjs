@@ -436,3 +436,5 @@ main().catch((e) => {
   log('red', `错误: ${e.message}`);
   process.exit(1);
 });
+
+export { parseSSHConfig, resolveSshConfig };
