@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ensureDataLoaded, login } from './helpers/session';
+import { ensureDataLoaded } from './helpers/session';
 
 const sidebarTargets: Array<{ label: string; hashPath: string }> = [
   { label: '仪表盘', hashPath: '/dashboard' },
@@ -16,7 +16,6 @@ const sidebarTargets: Array<{ label: string; hashPath: string }> = [
 ];
 
 test('首页侧边栏逐个进入子页面无需刷新', async ({ page }) => {
-  await login(page);
   await ensureDataLoaded(page);
 
   await page.goto('/#/');

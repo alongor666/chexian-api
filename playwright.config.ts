@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const AUTH_FILE = 'output/playwright/.auth/user.json';
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -17,8 +19,16 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+    },
+    {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: AUTH_FILE,
+      },
+      dependencies: ['setup'],
     },
   ],
   webServer: {
