@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSidebar } from './SidebarLayout';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Home,
+  Sparkles,
   LayoutDashboard,
   DollarSign,
   Target,
@@ -21,6 +21,7 @@ import {
   X,
   Bike,
   Shield,
+  Database,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
@@ -41,7 +42,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { path: '/', icon: Home, label: '首页', shortLabel: '首页' },
+  { path: '/', icon: Sparkles, label: 'AI 助手', shortLabel: 'AI' },
 ];
 
 const dataNavItems: NavItem[] = [
@@ -60,6 +61,7 @@ const dataNavItems: NavItem[] = [
 ];
 
 const toolNavItems: NavItem[] = [
+  { path: '/data-import', icon: Database, label: '数据导入', shortLabel: '导入' },
   { path: '/moto-cost', icon: Bike, label: '摩意模型', shortLabel: '摩意' },
 ];
 

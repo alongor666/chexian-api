@@ -8,6 +8,7 @@ import { FilterProvider } from '../shared/contexts/FilterContext';
 import { PermissionProvider, usePermission } from '../shared/contexts/PermissionContext';
 import { ThemeProvider } from '../shared/theme';
 import { DataImportPage } from '../features/home/DataImportPage';
+import { AIAssistantPage } from '../features/home/AIAssistantPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
 import { canAccessFeeAnalysis, canAccessCost } from '../shared/config/organizations';
 
@@ -139,9 +140,19 @@ function App() {
                     <SidebarLayout />
                   </AuthGuard>
                 }>
-                  {/* 首页 - 不需要数据守卫 */}
+                  {/* 首页 - AI 智能助手 */}
                   <Route
                     index
+                    element={
+                      <RouteAccessGuard routePath="/">
+                        <AIAssistantPage />
+                      </RouteAccessGuard>
+                    }
+                  />
+
+                  {/* 数据导入页（原首页） */}
+                  <Route
+                    path="data-import"
                     element={
                       <RouteAccessGuard routePath="/">
                         <DataImportPage />
