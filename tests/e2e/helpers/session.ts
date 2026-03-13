@@ -133,7 +133,11 @@ export const ensureDataLoaded = async (page: Page): Promise<boolean> => {
 
 export const assertAdvancedDrawerToggles = async (page: Page) => {
   const advancedDrawer = page.locator('aside[aria-label="高级筛选"]');
-  const openButton = page.getByRole('button', { name: /筛选/ }).first();
+  const plainFilterButton = page.getByRole('button', { name: /^筛选(?:\s+\d+)?$/ }).first();
+  const labeledFilterButton = page.getByRole('button', { name: /^(打开高级筛选|高级筛选.*)$/ }).first();
+  const openButton = await plainFilterButton.isVisible().catch(() => false)
+    ? plainFilterButton
+    : labeledFilterButton;
   await expect(openButton).toBeVisible();
   await openButton.click();
   await expect(advancedDrawer).toBeVisible();
