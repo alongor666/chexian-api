@@ -55,7 +55,9 @@ tests/e2e/
 ├── 06-page-shell-ux.spec.ts    # 长页面骨架 UX 回归（B223）
 ├── 07-performance-heatmap-drilldown.spec.ts # 业绩热力图下钻回归（B224）
 ├── 08-cross-sell-yearly-guard.spec.ts # cross-sell 年维度热力图防回归（B226）
-└── helpers/session.ts          # 登录/数据就绪/高级筛选抽屉公共 helper
+└── helpers/
+    - session.ts                # 登录/数据就绪/高级筛选抽屉公共 helper
+    - page-shell.ts             # 页面壳统一断言 helper（标题/描述/筛选抽屉）
 ```
 
 ## 配置说明

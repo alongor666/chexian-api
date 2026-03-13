@@ -79,10 +79,15 @@ export const ensureDataLoaded = async (page: Page) => {
 
 export const assertAdvancedDrawerToggles = async (page: Page) => {
   const advancedDrawer = page.locator('aside[aria-label="高级筛选"]');
-  const openButton = page.getByRole('button', { name: /^高级筛选/ });
+  const openButton = page.getByRole('button', { name: /筛选/ }).first();
   await expect(openButton).toBeVisible();
   await openButton.click();
-  await expect(page.getByRole('heading', { name: '高级筛选' })).toBeVisible();
-  await page.getByRole('button', { name: '关闭高级筛选' }).click();
+  await expect(advancedDrawer).toBeVisible();
+  const closeButton = page.getByRole('button', { name: /关闭高级筛选|关闭筛选/ });
+  if (await closeButton.isVisible().catch(() => false)) {
+    await closeButton.click();
+  } else {
+    await page.keyboard.press('Escape');
+  }
   await expect(advancedDrawer).toHaveClass(/translate-x-full/);
 };

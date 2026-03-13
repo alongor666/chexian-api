@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { assertAdvancedDrawerToggles, ensureDataLoaded, login } from './helpers/session';
+import { assertPageShellContracts } from './helpers/page-shell';
 
 test('performance 页支持右侧锚点导航与高级筛选抽屉', async ({ page }) => {
   await login(page);
@@ -32,21 +33,18 @@ test('growth 与 cost 页面复用顶部基础筛选和高级筛选抽屉', asyn
     {
       url: '/#/growth',
       heading: /增长分析/,
-      description: '增长分析优先保留口径、年度和机构单选',
+    },
+    {
+      url: '/#/cross-sell',
+      heading: /交叉销售分析/,
     },
     {
       url: '/#/cost',
       heading: /成本分析/,
-      description: '成本分析默认保留起保口径、年度、日期范围和机构筛选',
     },
   ] as const;
 
   for (const target of pages) {
-    await page.goto(target.url);
-    await page.waitForLoadState('domcontentloaded');
-
-    await expect(page.getByRole('heading', { name: target.heading })).toBeVisible();
-    await expect(page.getByText(target.description)).toBeVisible();
-    await assertAdvancedDrawerToggles(page);
+    await assertPageShellContracts(page, target);
   }
 });

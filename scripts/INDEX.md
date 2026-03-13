@@ -210,3 +210,8 @@ python3 scripts/generate-renewal-analysis.py # 生成报告
 - 新增 `check-hotfile-contracts.mjs`：当 `server/src/routes/query.ts` 或 `src/shared/api/client.ts` 进入暂存区时，要求同步修改契约测试。
 - 新增 `test-preflight.mjs`：在执行单测或 E2E 前快速检查依赖和关键测试入口是否就绪。
 - `check-governance.mjs` 新增“热点文件契约联动”校验，`production-gate.mjs` 与 `.githooks/pre-commit` 新增测试运行时预检步骤。
+
+## 2026-03-11 追加记录
+
+- `check-governance.mjs` 新增“包管理器锁文件策略（Bun-only）”检查：`bun.lock` 必须存在且禁止 `package-lock.json`/`yarn.lock`/`pnpm-lock.yaml` 混入。
+- `sync-vps.mjs` 升级为真正跨系统配置解析：支持从 `~/.ssh/config`、环境变量和 CLI 参数分层覆盖，并新增 `--dry-run` 用于无副作用预演。
