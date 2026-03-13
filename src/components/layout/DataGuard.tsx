@@ -63,7 +63,7 @@ export const NoDataPlaceholder: React.FC = () => {
         <h2 className="text-xl font-semibold tracking-tight text-neutral-700 dark:text-neutral-200 mb-2">暂无数据</h2>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">请先在首页导入数据文件</p>
         <a
-          href="#/"
+          href="#/data-import"
           className="inline-flex items-center px-4 py-2 font-medium bg-primary text-white rounded-lg hover:bg-primary-light transition-colors shadow-sm"
         >
           <FolderOpen size={16} className="mr-2" aria-hidden="true" />

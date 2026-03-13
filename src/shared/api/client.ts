@@ -83,6 +83,34 @@ export interface AccessRole extends Record<string, unknown> {
 }
 
 /**
+ * AI 能力信息
+ */
+export interface CapabilityInfo {
+  id: string;
+  route: string;
+  name: string;
+  icon: string;
+  description: string;
+  keywords: string[];
+  exampleQueries: string[];
+  requiresPermission?: string;
+}
+
+/**
+ * AI 需求识别响应
+ */
+export interface DetectRequirementResponse {
+  success: boolean;
+  type: 'match' | 'clarify' | 'no_match';
+  capabilities?: CapabilityInfo[];
+  followUp?: string;
+  options?: string[];
+  suggestion?: string;
+  source?: string;
+  elapsed_ms?: number;
+}
+
+/**
  * KPI 数据
  */
 export interface KpiData {
@@ -1290,6 +1318,33 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(params),
     });
+  }
+
+  /**
+   * AI 智能需求识别
+   */
+  async detectRequirement(params: {
+    message: string;
+    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  }): Promise<DetectRequirementResponse> {
+    return this.request('/ai/detect-requirement', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  /**
+   * 获取能力注册表
+   */
+  async getCapabilities(): Promise<{ success: boolean; data: CapabilityInfo[] }> {
+    return this.request('/ai/capabilities');
+  }
+
+  /**
+   * 获取首页快捷建议
+   */
+  async getQuickSuggestions(): Promise<{ success: boolean; data: Array<{ text: string; capabilityId: string }> }> {
+    return this.request('/ai/quick-suggestions');
   }
 }
 
