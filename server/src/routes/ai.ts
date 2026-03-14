@@ -18,6 +18,7 @@ import { validateApiKey, analyzeOrgTrendWithZhipu } from '../services/zhipu.js';
 import { analyzeOrgTrendWithOpenRouter } from '../services/openrouter.js';
 import { detectRequirement } from '../services/requirement-detector.js';
 import { capabilities, getQuickSuggestions } from '../config/capability-registry.js';
+import { notifyUnmatchedIntent } from '../services/notify.js';
 
 const router = Router();
 
@@ -231,6 +232,16 @@ router.post(
 
     const startAt = Date.now();
     const result = await detectRequirement(parseResult.data);
+
+    // 未匹配时异步通知开发者（fire-and-forget，不阻塞响应）
+    if (result.type === 'no_match') {
+      const username = (req as any).user?.username as string | undefined;
+      notifyUnmatchedIntent({
+        userMessage: parseResult.data.message,
+        aiSuggestion: result.suggestion,
+        username,
+      }).catch(() => {/* 静默忽略 */});
+    }
 
     res.json({
       success: true,
