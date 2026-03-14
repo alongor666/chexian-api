@@ -1,10 +1,13 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import ExcelJS from 'exceljs';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+
+// pandas が利用できない環境（CI など）では全テストをスキップ
+const hasPandas = spawnSync('python3', ['-c', 'import pandas'], { stdio: 'pipe' }).status === 0;
 
 import { DuckDBInstance } from '../server/node_modules/@duckdb/node-api/lib/index.js';
 import { generateColumnMappingSQL } from '../server/src/services/column-normalizer';
@@ -116,7 +119,7 @@ async function buildPolicyFactViewFromParquet(parquetPath: string): Promise<stri
   }
 }
 
-describe.sequential('Parquet processing defaults and load guards', () => {
+describe.skipIf(!hasPandas).sequential('Parquet processing defaults and load guards', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'chexian-parquet-fix-'));
   const inputXlsx = join(tempDir, 'fixture.xlsx');
   const fullParquet = join(tempDir, 'fixture-full.parquet');
