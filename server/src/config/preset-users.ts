@@ -184,4 +184,13 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     displayName: '四川电销',
     role: 'telemarketing_user',
   },
+  test_org_user: {
+    username: 'test_org_user',
+    passwordHash: '$2b$10$JyCWJdWGvcPKjSBJ5/KcAeFQOryg6d6GbMcq5jdX99L2PCEsCMDOi',
+    displayName: '测试机构用户',
+    role: 'org_user',
+    organization: '乐山',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+  },
 };
