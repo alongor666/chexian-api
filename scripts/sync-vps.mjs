@@ -4,10 +4,11 @@
  * 支持 Windows / macOS / Linux
  *
  * 使用方法:
- *   node scripts/sync-vps.mjs                    # 同步最新数据
+ *   node scripts/sync-vps.mjs                    # 同步最新数据（默认清理 current/，防重复）
  *   node scripts/sync-vps.mjs --check            # 仅预检 SSH 与本地待同步文件
  *   node scripts/sync-vps.mjs --export           # 预聚合模式（推荐）
  *   node scripts/sync-vps.mjs 文件路径            # 指定文件
+ *   node scripts/sync-vps.mjs --keep-old         # 保留 current/ 旧文件（谨慎使用，会导致重复数据）
  *   node scripts/sync-vps.mjs --no-restart       # 同步但不重启
  *   node scripts/sync-vps.mjs --dry-run          # 仅打印执行计划，不连接 VPS
  *
@@ -63,7 +64,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     noRestart: false,
     dryRun: false,
     checkMode: false,
-    cleanVps: false,
+    keepOld: false,
     helpMode: false,
     targetFile: null,
     alias: undefined,
@@ -97,8 +98,8 @@ function parseArgs(argv = process.argv.slice(2)) {
       case '--check':
         parsed.checkMode = true;
         break;
-      case '--clean-vps':
-        parsed.cleanVps = true;
+      case '--keep-old':
+        parsed.keepOld = true;
         break;
       case '--help':
       case '-h':
@@ -252,7 +253,7 @@ function resolveRunConfig(parsedArgs) {
     noRestart: parsedArgs.noRestart,
     dryRun: parsedArgs.dryRun,
     checkMode: parsedArgs.checkMode,
-    cleanVps: parsedArgs.cleanVps,
+    keepOld: parsedArgs.keepOld,
     helpMode: parsedArgs.helpMode,
     targetFile: parsedArgs.targetFile,
   };
@@ -412,11 +413,14 @@ function resolveTargetFile(inputTarget) {
 
 function printHelp() {
   console.log(`用法:
-  node scripts/sync-vps.mjs [文件路径] [--clean-vps] [--no-restart]
+  node scripts/sync-vps.mjs [文件路径] [--no-restart]
   node scripts/sync-vps.mjs --check
   node scripts/sync-vps.mjs --export [--dry-run]
 
+⚠️  默认行为：上传前自动清理 current/ 旧文件（归档到 archive/），防止重复数据。
+
 可选参数:
+  --keep-old           保留 current/ 旧文件（谨慎：会导致多文件叠加，数据翻倍）
   --alias <name>       覆盖 SSH alias
   --host <host>        覆盖远端主机
   --user <user>        覆盖远端用户名
@@ -438,7 +442,7 @@ function printDryRun(sshConfig, runConfig) {
   console.log(`Restart: ${runConfig.noRestart ? 'no' : 'yes'}`);
   console.log(`Health URL: ${runConfig.healthUrl}`);
   console.log(`Check only: ${runConfig.checkMode ? 'yes' : 'no'}`);
-  console.log(`Clean VPS: ${runConfig.cleanVps ? 'yes' : 'no'}`);
+  console.log(`清理旧文件: ${runConfig.keepOld ? '跳过（--keep-old）' : '是（默认，防重复数据）'}`);
   if (!runConfig.exportMode) {
     console.log(`Target file: ${runConfig.targetFile || '(auto latest parquet)'}`);
   }
@@ -504,9 +508,11 @@ async function runExportMode(config, runConfig) {
   log('green', '▶ 步骤 2: 上传预聚合文件...');
   await ensureRemoteDirs(config, runConfig.remoteDir);
 
-  if (runConfig.cleanVps) {
-    log('yellow', '  清理 VPS 的 current 目录...');
+  if (!runConfig.keepOld) {
+    log('yellow', '  清理 VPS 的 current 目录（默认行为，防止重复数据）...');
     await cleanVpsCurrent(config, runConfig.remoteDir);
+  } else {
+    log('yellow', '  跳过清理（--keep-old）');
   }
 
   const exportFiles = ['aggregated.parquet', 'cross_sell_agg.parquet', 'renewal_agg.parquet'];
@@ -538,9 +544,11 @@ async function runStandardMode(config, runConfig) {
   log('green', `[同步] ${fileName} (${size})`);
 
   await ensureRemoteDirs(config, runConfig.remoteDir);
-  if (runConfig.cleanVps) {
-    log('yellow', '  清理 VPS 的 current 目录...');
+  if (!runConfig.keepOld) {
+    log('yellow', '  清理 VPS 的 current 目录（默认行为，防止重复数据）...');
     await cleanVpsCurrent(config, runConfig.remoteDir);
+  } else {
+    log('yellow', '  跳过清理（--keep-old）');
   }
 
   log('yellow', '  上传中...');

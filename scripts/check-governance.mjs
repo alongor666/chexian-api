@@ -743,6 +743,72 @@ function checkPackageManagerLockPolicy() {
 }
 
 // ============================================================
+// 第13项检查：本地 current/ Parquet 文件重叠检测
+// ============================================================
+
+/**
+ * 从文件名中解析日期范围（格式：*_YYYYMMDD_YYYYMMDD.parquet）
+ * @returns {{ start: number, end: number } | null}
+ */
+function parseDateRangeFromFilename(filename) {
+  const match = filename.match(/_(\d{8})_(\d{8})\.parquet$/);
+  if (!match) return null;
+  return { start: parseInt(match[1], 10), end: parseInt(match[2], 10) };
+}
+
+/**
+ * 检查本地 current/ 目录中是否存在时间范围重叠的 Parquet 文件。
+ *
+ * 根因：多个重叠文件经 UNION ALL 后数据翻倍（历史事故：1,837,252行 vs 正确的 1,161,809行）。
+ * 修复：sync-vps.mjs 已默认清理，本检查作为提交前最后一道防线。
+ */
+function checkParquetOverlapInCurrent() {
+  info('检查 current/ Parquet 文件时间范围重叠...');
+
+  const currentDir = path.join(ROOT_DIR, '数据管理/warehouse/fact/policy/current');
+
+  if (!fs.existsSync(currentDir)) {
+    success('current/ 目录不存在，跳过重叠检测');
+    return true;
+  }
+
+  const parquetFiles = fs.readdirSync(currentDir)
+    .filter(f => f.endsWith('.parquet') && !f.startsWith('test-data'))
+    .map(f => ({ name: f, range: parseDateRangeFromFilename(f) }))
+    .filter(f => f.range !== null); // 只检测有日期范围的文件（聚合文件无日期不参与检测）
+
+  if (parquetFiles.length <= 1) {
+    success(`current/ Parquet 重叠检测通过（${parquetFiles.length} 个有效文件，无重叠风险）`);
+    return true;
+  }
+
+  const overlaps = [];
+  for (let i = 0; i < parquetFiles.length; i++) {
+    for (let j = i + 1; j < parquetFiles.length; j++) {
+      const a = parquetFiles[i];
+      const b = parquetFiles[j];
+      // 两个区间重叠条件：a.start <= b.end AND b.start <= a.end
+      if (a.range.start <= b.range.end && b.range.start <= a.range.end) {
+        overlaps.push(
+          `"${a.name}" [${a.range.start}~${a.range.end}] ↔ "${b.name}" [${b.range.start}~${b.range.end}]`
+        );
+      }
+    }
+  }
+
+  if (overlaps.length > 0) {
+    error(`current/ Parquet 文件存在时间范围重叠（将导致数据翻倍）：`);
+    overlaps.forEach(o => console.log(`    - ${o}`));
+    console.log('    ▶ 修复：删除或移出重叠文件，保留互补的文件集合');
+    console.log('    ▶ 同步时使用 node scripts/sync-vps.mjs（默认清理旧文件）');
+    return false;
+  }
+
+  success(`current/ Parquet 重叠检测通过（${parquetFiles.length} 个文件，区间互补无重叠）`);
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -762,6 +828,7 @@ function main() {
     { name: '热点文件契约', fn: checkHotfileContractCoverage },
     { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
     { name: '锁文件策略', fn: checkPackageManagerLockPolicy },
+    { name: 'Parquet重叠', fn: checkParquetOverlapInCurrent },
   ];
 
   let passedCount = 0;
