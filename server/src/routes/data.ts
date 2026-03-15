@@ -25,6 +25,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
 import {
+  escapeSqlValue,
   sanitizeFilename,
   validatePathWithinDirectory,
   isValidParquetFile,
