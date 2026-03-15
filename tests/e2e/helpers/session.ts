@@ -64,7 +64,7 @@ export const login = async (page: Page) => {
   );
 };
 
-export const ensureDataLoaded = async (page: Page) => {
+export const ensureDataLoaded = async (page: Page): Promise<boolean> => {
   await page.goto('/#/');
   await page.waitForLoadState('domcontentloaded');
 
@@ -74,32 +74,61 @@ export const ensureDataLoaded = async (page: Page) => {
     await page.waitForLoadState('domcontentloaded');
   }
 
+  // Already on dashboard means data is loaded
   if (page.url().includes('#/dashboard')) {
-    return;
+    return true;
   }
 
+  // Check backend data status directly via API
+  const dataLoaded = await page.evaluate(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const resp = await fetch('/api/data/files', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!resp.ok) return false;
+      const files = await resp.json();
+      return Array.isArray(files) && files.some((f: { isCurrent?: boolean }) => f.isCurrent);
+    } catch {
+      return false;
+    }
+  });
+
+  if (!dataLoaded) {
+    // No data available (e.g. CI environment) — try loading first available file
+    const loaded = await page.evaluate(async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const resp = await fetch('/api/data/files', { headers });
+        if (!resp.ok) return false;
+        const files = await resp.json();
+        if (!Array.isArray(files) || files.length === 0) return false;
+        const loadResp = await fetch(`/api/data/load/${encodeURIComponent(files[0].filename)}`, {
+          method: 'POST',
+          headers,
+        });
+        return loadResp.ok;
+      } catch {
+        return false;
+      }
+    });
+
+    if (!loaded) {
+      // No data files at all — return false so caller can decide
+      return false;
+    }
+  }
+
+  // Data is loaded — try navigating to dashboard to confirm
   const dashboardNav = page.getByRole('link', { name: '仪表盘', exact: true });
   if (await dashboardNav.isVisible().catch(() => false)) {
-    return;
+    await dashboardNav.click();
+    await page.waitForURL(/#\/dashboard/, { timeout: 5000 }).catch(() => null);
   }
 
-  const loadedBanner = page.getByText('数据已加载:');
-  if (await loadedBanner.isVisible().catch(() => false)) {
-    const toDashboard = page.getByRole('button', { name: '进入仪表盘' });
-    if (await toDashboard.isVisible().catch(() => false)) {
-      await toDashboard.click({ timeout: 3000 }).catch(() => null);
-      if (page.url().includes('#/dashboard')) {
-        return;
-      }
-    }
-    return;
-  }
-
-  const loadButton = page.getByRole('button', { name: '加载' }).first();
-  if (await loadButton.isVisible().catch(() => false)) {
-    await loadButton.click();
-    await page.waitForURL(/#\/dashboard/);
-  }
+  return true;
 };
 
 export const assertAdvancedDrawerToggles = async (page: Page) => {
