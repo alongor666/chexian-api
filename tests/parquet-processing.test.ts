@@ -1,12 +1,38 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import ExcelJS from 'exceljs';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
-import { DuckDBInstance } from '../server/node_modules/@duckdb/node-api/lib/index.js';
+type DuckDbReader = { getRows(): unknown[][] };
+type DuckDbConnection = {
+  run(sql: string): Promise<unknown>;
+  runAndReadAll(sql: string): Promise<DuckDbReader>;
+  closeSync(): void;
+};
+type DuckDbInstanceFactory = {
+  create(databasePath: string): Promise<{
+    connect(): Promise<DuckDbConnection>;
+  }>;
+};
+
+const require = createRequire(import.meta.url);
+
+// pandas または DuckDB native 依存が利用できない環境（CI など）では全テストをスキップ
+const hasPandas = spawnSync('python3', ['-c', 'import pandas'], { stdio: 'pipe' }).status === 0;
+const duckDbEntry = (() => {
+  try {
+    return require.resolve('@duckdb/node-api', { paths: [resolve('server')] });
+  } catch {
+    return null;
+  }
+})();
+const hasDuckDbNodeApi = duckDbEntry !== null;
+const hasParquetProcessingDeps = hasPandas && hasDuckDbNodeApi;
+
 import { generateColumnMappingSQL } from '../server/src/services/column-normalizer';
 import { generatePerformanceOrgHeatmapQuery } from '../server/src/sql/performance-analysis';
 import { getParquetLoadRejectionReason } from '../server/src/utils/parquet-source';
@@ -37,8 +63,15 @@ async function createFixtureWorkbook(filePath: string): Promise<void> {
   await workbook.xlsx.writeFile(filePath);
 }
 
+function getDuckDbInstanceFactory(): DuckDbInstanceFactory {
+  if (!duckDbEntry) {
+    throw new Error('@duckdb/node-api is unavailable for parquet-processing.test.ts');
+  }
+  return require(duckDbEntry).DuckDBInstance as DuckDbInstanceFactory;
+}
+
 async function runDuckDbQuery<T = unknown[]>(sql: string): Promise<T[]> {
-  const db = await DuckDBInstance.create(':memory:');
+  const db = await getDuckDbInstanceFactory().create(':memory:');
   const conn = await db.connect();
   try {
     const reader = await conn.runAndReadAll(sql);
@@ -90,7 +123,7 @@ async function getPremiumByDateAndCategory(parquetPath: string): Promise<Record<
 
 async function buildPolicyFactViewFromParquet(parquetPath: string): Promise<string> {
   const escapedPath = escapeSqlValue(parquetPath);
-  const db = await DuckDBInstance.create(':memory:');
+  const db = await getDuckDbInstanceFactory().create(':memory:');
   const conn = await db.connect();
   try {
     await conn.run(`CREATE TABLE raw_parquet AS SELECT * FROM read_parquet('${escapedPath}')`);
@@ -116,7 +149,7 @@ async function buildPolicyFactViewFromParquet(parquetPath: string): Promise<stri
   }
 }
 
-describe.sequential('Parquet processing defaults and load guards', () => {
+describe.skipIf(!hasParquetProcessingDeps).sequential('Parquet processing defaults and load guards', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'chexian-parquet-fix-'));
   const inputXlsx = join(tempDir, 'fixture.xlsx');
   const fullParquet = join(tempDir, 'fixture-full.parquet');
