@@ -1,465 +1,401 @@
-
 # GEMINI.md
 
-**协作操作系统**：GEMINI 工作前必读协议。
+> **chexian-api** — 车险数据分析平台（API 版）。前端 React + TypeScript + Vite + ECharts，后端 Express + DuckDB。纯 REST API 模式，已上线生产环境 `https://chexian.cretvalu.com`。
+
+**协作操作系统**：Gemini 工作前必读协议。以最新 `CLAUDE.md` 为公共基线，补充 Gemini 专属协作、写入分区与部署约束。
 
 ---
 
-## 0. AI 行为红线（ZERO TOLERANCE）
+## 0. AI 行为红线（ZERO TOLERANCE - 违反即失败）
 
-> 来源：Claude Code 使用洞察报告（36 会话 / 319 消息）
+> **来源**：36 个会话、319 条消息的 Insights 分析。18 次“方法错误”是最高频返工源。
 
-- **执行不规划**：涉及 Git 操作（commit/push/PR）直接执行命令，禁止用规划或摘要替代执行
-- **先搜再写**：写代码前必须全库搜索，禁止假设“模块不存在”
-- **验证不声称**：禁止声称“已可用”，必须通过真实 API 请求或浏览器验证
-- **修补不拆除**：安全加固/重构时禁止删除整块插件或集成，只能修补
-- **排版合规要求 (DC-003)**：严禁在 UI 层面硬编码 Tailwind 色值或虚构 CSS 类，必须通过 `import { colorClasses, fontStyles, cardStyles } from '@/shared/styles'` 获取样式。
-- **并行不串行**：3+ 独立模块任务必须并行执行 subagents
-- **聚焦不发散**：单次会话只完成一个明确目标，完成并验证后再继续
+### 执行纪律
+
+| 红线 | 反面教训 | 正确做法 |
+|------|---------|---------|
+| **执行不规划** | 用户要求 commit/push/PR，却输出分析文档代替执行 | Git 操作直接执行命令，禁止用摘要替代 |
+| **先搜再写** | 假设“模块/数据不存在”后误删逻辑 | 写代码前 `grep/glob/find` 全库搜索 |
+| **验证不声称** | 声称“已可用/已集成”，实际 API 不通 | 必须用真实 API 请求或浏览器验证 |
+| **修补不拆除** | 安全加固时整块删除插件或集成 | 只能补漏洞，不得直接拆除整个模块 |
+| **并行不串行** | 逐个串行检查多个独立模块，效率低且易中断 | 3+ 独立模块/任务必须并行执行 |
+| **层级不扁平** | 将“下钻”误做成扁平筛选 | 先确认交互模型：点击行 → 选维度 → 重组 + 面包屑 |
+| **聚焦不发散** | 一次会话并行推进多个目标导致半途而废 | 单次只完成一个明确目标并闭环验证 |
 
 ### Git 安全检查（推送前必做）
 
 ```bash
+# 1. 检查大文件（>100MB 会阻塞推送）
 git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | awk '$1 == "blob" && $3 > 104857600 {print $3, $4}'
+
+# 2. 检查与 main 的共同祖先
 git merge-base main HEAD || echo "WARNING: no common ancestor"
+
+# 3. 扫描冲突标记
+grep -rn '<<<<<<< \|=======$\|>>>>>>>' BACKLOG.md PROGRESS.md
 ```
 
-### 0.1 基于最近20次提交的反思加固（2026-02-27）
+### 破坏性操作（项目特有红线）
+
+删除插件/集成、修改 `rateLimiter.ts` 或 `security.ts` 前，必须列出影响范围并获得用户确认。
+
+### 强制 Pre-flight Checklist（每次任务启动前逐条执行，不可跳过）
+
+| # | 检查项 | 命令/动作 | 触发条件 |
+|---|--------|----------|---------|
+| 1 | 搜索已有实现 | `grep -r "关键词" src/ server/src/` | 写任何新代码前 |
+| 2 | 搜索已有数据 | `find 数据管理/ -name "*.json" -o -name "*.parquet"` | 涉及数据源时 |
+| 3 | API 端点验证 | `curl -s -w '%{http_code}' http://localhost:3000/api/[路由]` | 声称功能“已完成”前 |
+| 4 | 破坏性影响清单 | 列出将删除/修改的文件，等待确认 | 删除文件/模块/插件前 |
+| 5 | 大文件检查 | `git rev-list --objects --all | ...` | 任意 `git push` 前 |
+| 6 | 冲突标记扫描 | `grep -rn '<<<<<<< \|=======$\|>>>>>>>' BACKLOG.md PROGRESS.md` | 任意 `git push` / PR 前 |
+| 7 | 治理校验 | `bun run governance` | 任意 `git push` / PR 前 |
+
+**执行规则**：任一项跳过即视为任务未完成；检查结果必须在输出中可见。
+
+### 0.1 方法确认协议（防止方向性错误）
+
+遇到以下关键词时，必须先确认再实现：
+
+| 触发关键词 | 必须确认的问题 | 确认方式 |
+|-----------|--------------|---------|
+| “下钻 / drill-down / 层级” | 是层级面包屑还是扁平筛选？ | 先问用户 |
+| “已集成 / 已可用 / 已完成” | 是否有真实 API / 浏览器证据？ | 执行验证命令 |
+| “不存在 / 没有数据 / 缺少” | 是否已全库搜索？ | `grep -r` + `find` |
+| “安全加固 / 重构 / 清理” | 将删除或修改哪些文件？ | 列清单并等待确认 |
+| “commit / push / PR” | - | 直接执行命令，禁止输出规划文档 |
+| “全部检查 / 逐个验证” | - | 必须并行执行，不得串行替代 |
+
+### 0.2 基于最近 20 次提交的反思加固（2026-02-27）
 
 样本范围：`git log -20`（`a8f9863` → `df5b96b`）
 
-**观察结论（来自真实提交）**：
-- 高频改动热点集中在 `src/shared/api/client.ts`（5次）、`server/src/routes/query.ts`（3次）、`CrossSellOrgTrend*`（各4次），接口与趋势图联动是回归高发区。
-- 权限改动出现“二次补丁链”：`fe3d58e` 后又有 `b15ac95` 补修续保分析过滤，说明权限注入存在遗漏风险。
-- `b8fa05d` 出现 1132 行回滚（恢复 iframe），说明替换式重构在缺少等价验证时风险极高。
-- 提交主题与改动范围有偏差（如 `docs:`/`BACKLOG` 标题但包含大量业务代码改动），降低审计和回溯效率。
-- 测试产物进入版本库（`test_output.txt`、`vitest_log.txt`），增加噪声并影响评审焦点。
+**观察结论**：
+- 高频热点集中在 `src/shared/api/client.ts`、`server/src/routes/query.ts`、`CrossSellOrgTrend*`，接口与趋势图联动是回归高发区。
+- 权限改动出现“二次补丁链”，说明过滤注入容易遗漏。
+- 替换式重构曾出现大规模回滚，证明“先删后证”风险极高。
+- `docs` / `BACKLOG` 标题混入业务代码，降低审计与回溯效率。
+- 调试产物进入版本库，会稀释评审焦点。
 
-**新增硬规则（立即生效）**：
-1. 权限/角色变更必须执行“路由覆盖扫描”：至少检查 `server/src/routes/query.ts` 与 `server/src/routes/ai.ts` 是否同步注入过滤，且补 1 个对应测试（`tests/api/*` 或路由单测）。
-2. 替换式重构必须“并行保底 + 等价验证”后再删除旧实现；禁止先删后证（参照 `b8fa05d` 教训）。
-3. `docs` / `BACKLOG` 类提交不得混入业务代码；若必须同日完成，必须拆分为独立提交。
-4. 提交前执行产物清理检查，禁止提交调试输出文件。
+**新增硬规则**：
+1. 权限/角色变更必须同时检查 `server/src/routes/query.ts` 与 `server/src/routes/ai.ts`，并补至少 1 个相关测试。
+2. 替换式重构必须“并行保底 + 等价验证”后再删除旧实现。
+3. `docs` / `BACKLOG` 类提交不得混入业务代码；如必须同日完成，应拆分提交。
+4. 提交前执行调试产物清理检查。
+5. 高频热点文件优先复用已有 helper 与 contract tests，禁止复制同类逻辑。
 
 ```bash
 git diff --cached --name-only | rg "(^|/)(test_output|vitest_log|.*\\.log)$" && echo "BLOCK: remove debug artifacts" || true
 ```
 
-5. 高频热点文件改动（`api/client.ts`、`routes/query.ts`）必须优先复用已有 helper 与 contract tests，禁止同类逻辑再复制一份。
+---
 
 ## 📖 快速导航
 
-| 我想...                        | 查看章节                                                                                                  |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| 🚨**遵守行为红线**       | →[§0 AI 行为红线](#0-ai-行为红线zero-tolerance)                                                            |
-| 🎯**开始新任务**         | →[§1 必经入口](#1-必经入口critical---每次任务开始前必读) - 三大索引 + 两本账                               |
-| 🚫**了解禁止修改的文件** | →[§2 护栏](#2-护栏red-line---以下文件禁止擅自修改) - 业务口径定义、架构协议                                |
-| ✅**提交代码前检查**     | →[§3 交付协议](#3-交付协议must---完成任务的硬性要求) - DONE 判定、治理校验                                 |
-| 🛠️**查看技术栈和命令** | →[§4 项目技术栈](#4-项目技术栈快速参考) - Bun 命令、测试                                                   |
-| 🔄**理解数据处理流程**   | →[§5 数据处理链路](#5-数据处理链路快速理解架构) - 从上传到渲染                                             |
-| ✅**验证代码质量**       | →[§6 验证协议](#6-验证协议critical---禁止自我安慰式开发) - 强制三层验证                                    |
-| 🤖**使用自动化工具**     | →[§7 Claude Code 工作流](#7-claude-code-工作流集成) - Slash Commands、Subagents                            |
-| ⚠️**遇到问题**         | →[§8 异常情况处理](#8-异常情况处理) - 口径错误、阻塞、文档缺失                                             |
-| 🔀**多Agent协作**        | →[§9 多Agent并发协作协议](#9-多agent并发协作协议critical---防止merge冲突) - 文档分区、任务ID预留、PR前检查 |
+| 我想... | 查看章节 |
+|--------|---------|
+| 遵守行为红线 | [§0](#0-ai-行为红线zero-tolerance---违反即失败) |
+| 开始新任务 | [§1](#1-必经入口每次任务开始前必读) |
+| 看项目护栏 | [§2](#2-护栏red-line---禁止擅自修改) |
+| 避免重复造轮子 | [§3](#3-实现前检查协议防止重复造轮子) |
+| 启动和排查 API | [§4](#4-api-架构与启动) |
+| 遵守 UI 设计系统 | [§5](#5-设计系统规范-dc-003) |
+| 完成交付并验收 | [§6](#6-交付与验证协议) |
+| 使用协作工具 | [§7](#7-协作工具箱) |
+| 处理异常/阻塞 | [§8](#8-异常情况处理) |
+| 避免多 Agent 冲突 | [§9](#9-多-agent-并发协作协议) |
+| 做生产部署/数据同步 | [§10](#10-生产部署与数据同步) |
 
 ---
 
-## 1. 必经入口（CRITICAL - 每次任务开始前必读）
+## 1. 必经入口（每次任务开始前必读）
 
-### 技术栈声明（第一优先级）
+### 智能加载（按任务复杂度选择阅读深度）
 
-⚠️ **所有开发任务开始前必读**：[开发文档/TECH_STACK.md](./开发文档/TECH_STACK.md)
+| 任务类型 | 特征关键词 | 必读章节 | 可跳过 |
+|---------|-----------|---------|-------|
+| 简单 | 修复、改、调整、查看 | §0-3 | §4-10 |
+| 中等 | 新增、实现、开发、重构 | §0-6、§8-10 | §7 |
+| 复杂 | 架构、设计、协作、CI/CD | 全部 | 无 |
 
-- 了解项目技术栈特性（纯 API 模式、React、Vite）
-- 查看架构强制入口（修改代码前必读文件列表）
-- 掌握验证协议（单元测试 → 浏览器实测 → 用户验收）
+### 核心索引
 
-### 开发者全局约定（强制遵守）
+- [开发文档/00_index/DOC_INDEX.md](./开发文档/00_index/DOC_INDEX.md)
+- [开发文档/00_index/CODE_INDEX.md](./开发文档/00_index/CODE_INDEX.md)
+- [开发文档/00_index/DATA_INDEX.md](./开发文档/00_index/DATA_INDEX.md)
+- [开发文档/00_index/PROGRESS_INDEX.md](./开发文档/00_index/PROGRESS_INDEX.md)
+- [.claude/plans/STATUS_SNAPSHOT.md](./.claude/plans/STATUS_SNAPSHOT.md)
 
-⚠️ **所有代码和文档必须遵守**：[开发文档/DEVELOPER_CONVENTIONS.md](./开发文档/DEVELOPER_CONVENTIONS.md)
+### 强制前置文档
 
-- **DC-001**：数据分析三要素强制前置（分析年度、数据口径、时间段）
-- 禁止硬编码日期口径（签单日期/起保日期必须通过状态管理）
-- 所有报表/查询必须提供三要素选择器，缺一不可
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [开发文档/TECH_STACK.md](./开发文档/TECH_STACK.md)
+- [开发文档/DEVELOPER_CONVENTIONS.md](./开发文档/DEVELOPER_CONVENTIONS.md)
+- [开发文档/缺口清单.md](./开发文档/缺口清单.md)
+- [数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md](./数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md)
 
-### 三大索引（5分钟快速定位）
+### 缺口清单工作流
 
-1. **文档索引**: [开发文档/00_index/DOC_INDEX.md](./开发文档/00_index/DOC_INDEX.md) - 业务规则、架构文档、指标口径
-2. **代码索引**: [开发文档/00_index/CODE_INDEX.md](./开发文档/00_index/CODE_INDEX.md) - 核心模块、关键文件、禁止修改区域
-3. **数据索引**: [开发文档/00_index/DATA_INDEX.md](./开发文档/00_index/DATA_INDEX.md) - ⭐ 字段定义、业务规则、分析场景
-4. **进展索引**: [开发文档/00_index/PROGRESS_INDEX.md](./开发文档/00_index/PROGRESS_INDEX.md) - 任务状态、证据链规则、接力入口
-
-### 数据知识协议 (DATA-KNOWLEDGE-PROTOCOL)
-
-⚠️ **所有数据处理任务必读**: [.claude/data-knowledge-protocol.md](./.claude/data-knowledge-protocol.md)
-
-- **分层加载策略**: 第1层快速索引(200tokens) → 第2层业务规则摘要(500tokens) → 第3层完整字典(按需)
-- **唯一事实源**: [数据管理/knowledge/rules/车险数据业务规则字典.md](./数据管理/knowledge/rules/车险数据业务规则字典.md) - 所有字段定义、业务规则
-- **快速参考**: [数据管理/knowledge/QUICK_REFERENCE.md](./数据管理/knowledge/QUICK_REFERENCE.md) - 200 tokens速查表
-- **Schema 知识库**: [数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md](./数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md) - 字段语义、值域、NL→SQL 映射
-
-**数据协作最佳实践**:
-
-- ✅ 简单任务: 仅加载快速参考(200tokens)
-- ✅ 中等任务: 快速参考 + 业务规则摘要(700tokens)
-- ✅ 复杂任务: 按需加载完整字典(验证阶段)
-- ✅ 跨会话接力: 通过PROGRESS.md复用上下文
+发现信息缺口 → 登记到 [开发文档/缺口清单.md](./开发文档/缺口清单.md) → 当前任务标记 `BLOCKED` → 用户补充信息后再恢复。核心原则：**没有完备信息 = 不能开始开发**。
 
 ### 两本账（唯一真理来源）
 
-1. **需求账本**: [BACKLOG.md](./BACKLOG.md) - 所有任务状态追踪（PROPOSED → DONE）
-2. **进展账本**: [PROGRESS.md](./PROGRESS.md) - 里程碑、阻塞、下一步行动
+1. [BACKLOG.md](./BACKLOG.md)：需求账本
+2. [PROGRESS.md](./PROGRESS.md)：进展账本
+
+### 数据知识协议
+
+数据处理任务必读：[.claude/data-knowledge-protocol.md](./.claude/data-knowledge-protocol.md)
+
+- 唯一事实源：[数据管理/knowledge/rules/车险数据业务规则字典.md](./数据管理/knowledge/rules/车险数据业务规则字典.md)
+- 快速参考：[数据管理/knowledge/QUICK_REFERENCE.md](./数据管理/knowledge/QUICK_REFERENCE.md)
 
 ---
 
-## 2. 护栏（RED LINE - 以下文件禁止擅自修改）
+## 2. 护栏（RED LINE - 禁止擅自修改）
 
-### 业务口径定义（不可改，只能追加且需证据）
+### 业务口径定义（只能追加，不得删改已有语义）
 
-| 文件                                  | 原因                            | 如需变更                                                                                                 |
-| ------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `server/src/normalize/mapping.ts` | 列名映射规则（指标口径） | ❌ 不得删除已有别名 `<br>`✅ 只能追加新别名 `<br>`📝 需在 BACKLOG.md 登记（状态=PROPOSED）并提供证据 |
-| `server/src/sql/kpi.ts` | KPI 计算逻辑（业务规则） | ❌ 不得修改已有 SQL 模板 `<br>`✅ 只能追加新模板 `<br>`📝 需在 BACKLOG.md 登记并提供证据 |
-| `server/src/services/duckdb.ts` | 查询执行与核心视图语义 | ❌ 不得随意改写既有语义 `<br>`📝 涉及口径变更需产品确认并留证据 |
+- `server/src/normalize/mapping.ts`
+- `server/src/sql/kpi.ts`
+- `server/src/services/duckdb.ts`
+- `server/src/routes/query.ts`
 
-### 架构协议（不可破坏）
+### 架构协议
 
-- **纯 API 协议**：禁止新增 DuckDB-WASM / 本地 DuckDB 分支逻辑
-- **认证协议**：`/api/*` 路由必须经过 `server/src/middleware/auth.ts`
-- **向后兼容**：`server/src/routes/query.ts` 不得删除既有路由，仅允许追加并保持兼容
-- **Bun 包管理器**：禁止使用 npm/yarn/pnpm（项目统一使用 Bun）
+- 纯 API 模式，禁止新增 DuckDB-WASM / Local DuckDB 分支逻辑。
+- `/api/*` 必须经过 `server/src/middleware/auth.ts`。
+- `server/src/routes/query.ts` 不得删除既有路由，只允许追加并保持向后兼容。
+- `src/shared/contexts/DataContext.tsx` 中 `dataSource='api'` 语义不可破坏。
+- 默认使用 **Bun**，禁止 npm/yarn/pnpm。
+- `server/src/middleware/rateLimiter.ts` 的限流语义不得降低。
+- `server/src/utils/security.ts` 文件名/路径/表名校验不得绕开。
 
-### VPS 分层数据架构（RED LINE - 2026-02-28 起强制执行）
+### VPS 分层数据架构（CRITICAL）
 
-> **背景**：VPS 2核4G，历史上全量原始 Parquet 在 VPS 端聚合导致 DuckDB 内存飙至 800MB+，PM2 累计重启 177 次。
-
-**🔴 黄金规则：新增功能必须新增预聚合表，禁止在 VPS 上查询原始 `PolicyFact`（续保除外）。**
+**黄金规则**：新增功能必须建立或复用预聚合表，禁止在 VPS 上直接查询原始 `PolicyFact`（续保除外）。
 
 | 场景 | 正确做法 | 禁止做法 |
 |------|---------|----------|
-| 新增仪表盘/趋势功能 | 查已有预聚合表（`DailyAggregated` / `PeriodAggregated` / `CrossSellDailyAgg`） | 直接 `SELECT ... FROM PolicyFact` |
-| 新增分析维度 | Mac 本地扩展聚合表 → `scripts/export-for-vps.mjs` 导出 → 推送 VPS | 在 VPS 上新建或重建聚合逻辑 |
-| 数据同步 VPS | 只推 `aggregated.parquet` + `renewal_slim.parquet` | 推原始全量 Parquet |
-| 新增续保字段 | 修改 `renewal_slim.parquet` 导出定义 | 访问 PolicyFact 8字段以外的列 |
+| 新增仪表盘 / 趋势 | 查 `DailyAggregated` / `PeriodAggregated` / `CrossSellDailyAgg` / `KpiDailySummary` | 直接扫 `PolicyFact` |
+| 增加新维度 | 本地扩展聚合表 → `scripts/export-for-vps.mjs` 导出 → 推送 VPS | 在 VPS 重建聚合 |
+| 数据同步 | 仅推 `aggregated.parquet` + `renewal_slim.parquet` | 推送原始全量 Parquet |
+| 续保查询 | 仅访问冻结的 8 个字段 | 引入更多 `PolicyFact` 字段 |
 
-**VPS 预聚合表清单（只增不减）**：`DailyAggregated`、`PeriodAggregated`、`CrossSellDailyAgg`、`KpiDailySummary`
-
-**续保 PolicyFact 最小字段集（冻结，不可扩展）**：
+**续保最小字段集**：
 `policy_no`, `premium`, `salesman_name`, `org_level_3`, `customer_category`, `insurance_type`, `insurance_start_date`, `renewal_policy_no`
 
-**新增功能上线前 Checklist**：
+---
+
+## 3. 实现前检查协议（防止重复造轮子）
+
+### 三问原则
+
+| 问题 | 检查方式 |
+|------|----------|
+| 已有吗？ | 查 `CODE_INDEX.md` 与对应模块 `INDEX.md` |
+| 能复用吗？ | 查 `src/shared/`、`server/src/utils/` |
+| 有模式吗？ | 查同类实现、同类 SQL 生成器或页面 |
+
+### 组件 / 工具注册表
+
+| 类别 | 位置 |
+|------|------|
+| UI 组件 | `src/widgets/INDEX.md` |
+| 样式系统 | `src/shared/styles/index.ts` |
+| API 客户端 | `src/shared/api/client.ts` |
+| SQL 生成器 | `server/src/sql/` |
+| 格式化函数 | `src/shared/utils/formatters.ts` |
+
+### 基本规范
+
+```typescript
+// ✅ 样式
+import { tableStyles, textStyles, colorClasses } from '@/shared/styles';
+
+// ✅ 格式化
+import { formatCount, formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
+
+// ❌ 禁止
+// className="text-red-800 bg-blue-50"
+// (premium / 10000).toFixed(2)
 ```
-[ ] 新 API 是否只查预聚合表？
-[ ] 新维度是否已计入对应聚合表的 GROUP BY 键？
-[ ] scripts/export-for-vps.mjs 是否已更新？
-[ ] VPS pm2 monit 确认内存 < 600MB？
+
+违规判定：
+- 已有能力重复实现
+- 硬编码 Tailwind 通用颜色/布局类
+- 新增通用组件或脚本但未登记 `INDEX.md`
+
+---
+
+## 4. API 架构与启动
+
+### 数据流
+
+```text
+用户登录 → JWT Token → DataContext.isDataLoaded = true
+    ↓
+前端 Hook → apiClient.* → /api/*
+    ↓
+server/src/routes/*.ts → server/src/sql/*.ts → server/src/services/duckdb.ts
+    ↓
+DuckDB 执行查询 → JSON 响应 → 前端渲染
 ```
 
-
-## 3. 交付协议（MUST - 完成任务的硬性要求）
-
-### 新增需求流程
-
-```
-1. 在 BACKLOG.md 添加新行，状态=PROPOSED
-2. 填写：提出时间、板块、需求描述、优先级
-3. 开始开发前，状态改为 IN_PROGRESS，填写关联文档/代码
-4. 完成后，状态改为 DONE，**必须填写验收/证据**
-```
-
-### DONE 判定（缺一不可）
-
-- ✅ 关联文档：已填写（若无则填 `N/A`）
-- ✅ 关联代码：已填写（若纯文档任务则填 `N/A`）
-- ✅ 验收/证据：必填（PR链接/Commit哈希/测试报告/截图，至少一项）
-
-### 核心层改动规则
-
-修改以下目录时，必须同步更新对应 INDEX.md：
-
-- `src/shared/` → 更新 `src/shared/INDEX.md`
-- `src/features/` → 更新 `src/features/INDEX.md`
-- `src/widgets/` → 更新 `src/widgets/INDEX.md`
-- `scripts/` → 更新 `scripts/INDEX.md`
-
-### 治理校验
-
-每次提交前运行：
+### 启动命令
 
 ```bash
-bun run scripts/check-governance.mjs
+bun run dev:full    # 推荐：一键启动前后端
 ```
 
-校验失败则**禁止提交**。
+禁止只运行 `bun run dev` 后直接排查“暂无数据”问题。
+
+### 核心入口
+
+- 前端：`src/app/main.tsx`、`src/app/App.tsx`
+- 状态源：`src/shared/contexts/DataContext.tsx`
+- API 客户端：`src/shared/api/client.ts`
+- 后端：`server/src/app.ts`
+- 查询路由：`server/src/routes/query.ts`
+- 查询执行：`server/src/services/duckdb.ts`
+
+### “暂无数据”排查顺序
+
+1. Token 是否存在
+2. 后端 3000 端口是否启动
+3. 当前是否已加载数据文件
+4. `/api/*` 是否返回 200
+5. `isDataLoaded` 是否为 `true`
 
 ---
 
-## 4. 项目技术栈（快速参考）
+## 5. 设计系统规范 (DC-003)
 
-**核心技术**：
+所有 UI 开发必须复用 `src/shared/styles/index.ts`，严禁手写离散 Tailwind 颜色和虚构类名。
 
-- Frontend: React 18.3.1 + TypeScript 5.9.3 + Vite 5.4.21
-- Styling: Tailwind CSS 3.4.19 + PostCSS
-- Backend Analytics: Node/Bun + DuckDB（后端执行 SQL）
-- Charts: ECharts 5.6.0 + echarts-for-react 3.0.5
-- Testing: Vitest 2.1.9
-- Editor: Monaco Editor 4.7.0 (SQL 编辑器)
-- Export: ExcelJS 4.4.0
-- Routing: React Router DOM 7.12.0
+### 强制规则
 
-**包管理器**：Bun（⚠️ 必须使用 `bun install`, `bun run dev` 等）
+- KPI 大数字使用 `fontStyles.kpi`
+- 图表数字使用 `fontStyles.chart`
+- 表格数字使用 `fontStyles.tabular`
+- 动态趋势颜色使用 `getTrendColorClass(value)`
+- 卡片/按钮优先复用 `cardStyles`、`buttonStyles` 或 `src/shared/ui/*`
 
-**关键命令**：
+### 明确禁止
 
-```bash
-bun install         # 安装依赖
-bun run dev:full    # ✅ 一键启动前后端（联动 start.mjs 自动清理旧端口）
-bun run dev         # 仅启动前端（需确认后端已可用）
-bun run build       # 类型检查 + 生产构建
-bun run test        # 运行单元测试（Vitest）
-bun run governance  # 治理校验（简写）
-bun run scripts/check-governance.mjs  # 治理校验（完整路径）
-```
-
-**启动联动机制（必须）**：
-- `bun run dev:full` 会调用 `scripts/start.mjs --all`
-- 启动前自动清理常见旧端口占用（`3000`, `5173-5176`）
-- 发生端口冲突时，不允许只报告；必须完成清理并重试至后端可用
-
-**测试覆盖**（14个测试套件，273+ 单元测试）：
-
-- `tests/mapping.test.ts` - 列名映射和别名解析（多别名支持）
-- `tests/validator.test.ts` - 数据验证和质量检查
-- `tests/kpi.test.ts` - KPI SQL 生成和业务规则
-- `tests/kpi-detail.test.ts` - KPI 详细数据分解（环形图数据源）
-- `tests/security.test.ts` - 安全性测试（XSS、SQL注入、CORS等）
-- `tests/sql-validator.test.ts` - SQL查询安全校验（只读+聚合强制）
-- `tests/natural-week.test.ts` - 自然周计算逻辑
-- `tests/formatters.test.ts` - 数字格式化工具（保费、占比、通用数字）
-- `tests/logger.test.ts` - 日志系统测试
-- `tests/renewal.test.ts` - 续保业务逻辑测试
-- `tests/org-salesman-linkage.test.ts` - 机构-业务员联动测试
-- `tests/date-range-picker.test.ts` - 日期范围选择器测试
-- `tests/nl2sql-rule-engine.test.ts` - 自然语言转SQL规则引擎测试
-- `tests/template-engine.test.ts` - SQL模板引擎测试
-
-**CI/CD**：
-
-- GitHub Actions 自动治理校验（`.github/workflows/governance-check.yml`）
-- PR 前自动运行 5 项治理检查
+- `className="font-kpi text-xl"` 这类未注册类名
+- `text-red-500`、`bg-blue-50` 这类直接硬编码语义色
+- 重新拼装通用卡片/按钮基础样式
 
 ---
 
-## 5. 数据处理链路（快速理解架构）
+## 6. 交付与验证协议
 
-```
-用户在前端触发筛选/查询
-  ↓
-src/shared/api/client.ts                          # 统一 API 客户端
-  ↓
-server/src/routes/query.ts / ai.ts                # 路由层（认证后接收请求）
-  ↓
-server/src/sql/*.ts                               # SQL 生成器（kpi/trend/cross-sell/growth）
-  ↓
-server/src/services/duckdb.ts                     # DuckDB 执行查询
-  ↓
-server 返回 JSON
-  ↓
-src/features/dashboard/*                           # UI 渲染
-```
+### BACKLOG 工作流
 
-**关键特性**：
+1. 新任务先登记到 `BACKLOG.md`
+2. 开发前置为 `IN_PROGRESS`
+3. 完成后置为 `DONE`
+4. `DONE` 必须补全关联文档、关联代码、验收/证据
 
-- **多视图支持**：业绩看板 + SQL查询 + 营业货车专项 + 增长分析
-- **时间维度**：日/自然周/自然月/年度趋势分析
-- **智能查询**：
-  - Monaco编辑器 + 只读安全校验
-  - NL2SQL自然语言转SQL（支持中文语义理解）
-  - 8个预置查询模板 + 参数化模板引擎
-- **专项分析**：
-  - 营业货车按吨位分段 + 下钻式堆叠柱状图
-  - 增强型KPI卡片 + SVG环形图可视化
-  - 机构-业务员联动筛选
-- **高级筛选**：
-  - 日期范围选择器（默认今年至今YTD）
-  - 多选下拉框（机构/业务员/客户类别/险别组合）
-  - 同城/异地机构快速分类按钮
+### DONE 判定
+
+- 关联文档已填写，无则 `N/A`
+- 关联代码已填写，纯文档则 `N/A`
+- 验收/证据至少一项：测试报告、命令结果、截图、PR、commit
+
+### 强制验证
+
+1. 单元测试：`bun run test`
+2. 浏览器实测：Network / Console 或真实页面交互
+3. 用户验收：按需求场景人工确认
+
+### 自动化验证基线
+
+| 场景 | 最低要求 |
+|------|---------|
+| 修改 SQL / 路由 | 至少一个真实 API 返回 `200` + 非空 JSON |
+| 修改前端组件 | `bun run build` 通过 |
+| 任意提交 / PR 前 | `bun run governance` 通过 |
+| 声称完成 | 输出里必须出现关键验证结果 |
+
+禁止“只自检不修复”或“请用户自行验证”替代执行。
 
 ---
 
-## 6. 验证协议（CRITICAL - 禁止自我安慰式开发）
+## 7. 协作工具箱
 
-**教训来源**：2026-01-08 自然周/月视图实现，未浏览器实测导致多次返工。
+项目已集成 `.claude/` 下的命令与子代理，可用于辅助验证和协作。
 
-### 强制三层验证
+### 常用命令
 
-```
-第1层：单元测试（bun run test）
-  ↓  验证 SQL 生成逻辑语法正确
-第2层：浏览器实测（Chrome DevTools）
-  ↓  验证 `/api/*` 实际返回结果
-第3层：用户验收（人工确认）
-  ↓  验证功能符合需求
-```
+- `.claude/commands/README.md`
+- `/commit-push-pr`
+- `/sync-and-rebase`
+- `/data-analysis`
+- `/security-review`
+- `/verify`
 
-**详细验证步骤**：见 [开发文档/TECH_STACK.md § 4](./开发文档/TECH_STACK.md#4-通用验证协议所有开发必须遵守)
+### 常用子代理
 
-### 特别提醒
-
-| 场景              | 必须执行                                                            |
-| ----------------- | ------------------------------------------------------------------- |
-| 修改 SQL 生成逻辑 | ✅ 单元测试通过 → ✅**打开 Chrome Console 验证实际执行结果** |
-| SQL 报错          | ✅ 复制完整错误信息 → ✅ 检查 `server/src/sql/*.ts` 与 `server/src/services/duckdb.ts` |
-| 日期时间处理      | ✅ 先 `CAST(field AS DATE)` → ✅ 查看 DuckDB 日期函数文档        |
-| 功能开发完成      | ✅ 截图 Console 输出 → ✅ 记录关键字段实际值                       |
-| 启动异常（仅前端/端口冲突） | ✅ 执行 `bun run dev:full` 自动清理旧端口 → ✅ 必要时手动释放后重试 |
-
-**执行标准**：
-- 不允许“只自检不修复”。发现环境问题后，必须推进到后端健康可访问再结束任务。
-
----
-
-## 7. Claude Code 工作流集成
-
-**自动化工具箱**：项目已集成 Claude Code Slash Commands 和 Subagents，位于 `.claude/` 目录。
-
-### 可用的 Slash Commands
-
-**完整命令索引**: [.claude/commands/README.md](./.claude/commands/README.md)
-
-#### Git 工作流 (2个)
-
-| 命令                 | 功能                      | 使用场景                                                |
-| -------------------- | ------------------------- | ------------------------------------------------------- |
-| `/commit-push-pr`  | Git 提交 + 推送 + 创建 PR | 完成功能开发后，自动生成语义化 commit message 并创建 PR |
-| `/sync-and-rebase` | 同步并 Rebase             | 每天开始工作前、创建 PR 前同步最新代码                  |
-
-#### 数据分析 (2个)
-
-| 命令               | 功能             | 使用场景                                                  |
-| ------------------ | ---------------- | --------------------------------------------------------- |
-| `/data-analysis` | 车险数据深度分析 | 对已加载的 Parquet 数据执行多维度分析，生成 Markdown 报告 |
-| `/weekly-report` | 董事会级周报生成 | 生成业务周报（KPI、趋势、异常预警）                       |
-
-#### 开发工具 (3个)
-
-| 命令                   | 功能         | 使用场景                                      |
-| ---------------------- | ------------ | --------------------------------------------- |
-| `/security-review`   | 代码安全审查 | 全面检查 XSS、SQL注入、CORS 等安全漏洞        |
-| `/session-manager`   | 会话历史管理 | 查看、搜索、重命名、导出 Claude Code 对话历史 |
-| `/extract-knowledge` | 知识提取     | 提取对话中的隐性知识并结构化归档到知识库      |
-
-#### 项目管理 (1个)
-
-| 命令              | 功能       | 使用场景                             |
-| ----------------- | ---------- | ------------------------------------ |
-| `/init-project` | 项目初始化 | 快速初始化新项目结构（仅用于新项目） |
-
-**使用示例**：
-
-```bash
-# Git 工作流
-/sync-and-rebase                    # 每天开始前同步代码
-/commit-push-pr                     # 完成开发后提交并创建 PR
-
-# 数据分析
-/data-analysis --dimensions 机构,业务员 --start 2025-10-01
-/weekly-report --period week --number 50
-
-# 开发工具
-/security-review --target src/shared
-/session-manager --search "KPI分析"
-/extract-knowledge --focus business-rules
-```
-
-### 可用的 Subagents
-
-| Subagent            | 功能               | 调用场景                       |
-| ------------------- | ------------------ | ------------------------------ |
-| `code-simplifier` | 代码简化和重构建议 | 发现冗余代码、复杂逻辑时       |
-| `data-validator`  | 数据质量深度校验   | 数据加载后验证完整性、一致性   |
-| `verify-app`      | 应用功能验证       | 发布前全面检查应用功能是否正常 |
-| `session-manager` | 会话管理和任务追踪 | 管理多轮对话、追踪任务进度     |
-
-**位置**：`.claude/subagents/*.md`
+- `code-simplifier`
+- `data-validator`
+- `verify-app`
+- `session-manager`
 
 ### 数据准备
 
-**示例数据位置**：`数据管理/` 目录
-
-- `优化处理后的业务数据.parquet` - 已清洗的业务数据（可直接上传测试）
-- `Excel转Parquet优化处理脚本.py` - Excel → Parquet 转换脚本
-- `数据质量验证脚本.py` - 数据质量检查脚本
-
-**数据格式要求**：
-
-- 必须是 Parquet 格式
-- 列名必须匹配 `server/src/normalize/mapping.ts` 中的别名（支持中英文）
-- 必需字段：`policy_no`, `premium`, `org_name`, `salesman_name`
+- 示例数据位置：`数据管理/`
+- 优先使用真实 Parquet / JSON 数据，不要靠伪造数据声称完成
 
 ---
 
 ## 8. 异常情况处理
 
-| 情况               | 处理方式                                                                              |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| 发现业务口径错误   | ❌ 禁止直接修改 `<br>`📝 在 BACKLOG.md 添加任务（状态=BLOCKED），标注"需产品确认"   |
-| 需要重构核心逻辑   | 📝 在 BACKLOG.md 添加任务（状态=PROPOSED），提供重构理由和影响范围                    |
-| 遇到阻塞无法继续   | 📝 在 BACKLOG.md 将任务状态改为 BLOCKED `<br>`📝 在 PROGRESS.md 第 2 节补充阻塞详情 |
-| 发现缺失文档       | ✅ 直接创建文档 `<br>`📝 在对应 INDEX.md 登记                                       |
-| SQL 执行失败       | ✅ 查看 Chrome Console 完整错误 → ✅ 检查字段类型 → ✅ 查 DuckDB 文档               |
-| 不确定 DuckDB 语法 | ✅ 先查[DuckDB 官方文档](https://duckdb.org/docs/) → ❌ 禁止猜测                        |
-| 启动时仅前端可用/后端缺失 | ✅ 先执行 `bun run dev:full`（自动端口清理） → ✅ 检查 3000 端口占用并释放后重试 |
+| 情况 | 处理方式 |
+|------|----------|
+| 信息缺口 | 登记 `开发文档/缺口清单.md`，任务转 `BLOCKED` |
+| 业务口径错误 | 禁止直接改，先在 `BACKLOG.md` 建 `BLOCKED` 任务并标注“需产品确认” |
+| API 调用失败 | 先核对 `apiClient` 与后端路由是否一一对应，再查认证与权限注入 |
+| SQL 语法不确定 | 先查 [DuckDB 官方文档](https://duckdb.org/docs/)，禁止猜测 |
+| 启动异常 | 先跑 `bun run dev:full`，再按端口占用和脚本输出处理 |
+| 生产环境无数据 | 先查 `/api/data/files` 与文件名校验逻辑 |
 
 ---
 
----
+## 9. 多 Agent 并发协作协议
 
-## 9. 多Agent并发协作协议（CRITICAL - 防止merge冲突）
+> 详细背景见：[开发文档/MERGE_CONFLICT_ROOT_CAUSE_ANALYSIS.md](./开发文档/MERGE_CONFLICT_ROOT_CAUSE_ANALYSIS.md)
 
-**问题背景**：2026-01-11发现多个PR (#51, #49, #48, #43) 因BACKLOG.md冲突无法合并
-**根本原因**：Claude、Codex、Gemini同时在BACKLOG.md末尾追加任务，缺乏协调机制
-**解决方案**：文档分区 + 任务ID预留 + PR前强制检查
+### 9.1 文档写入分区
 
-详细分析见：[开发文档/MERGE_CONFLICT_ROOT_CAUSE_ANALYSIS.md](./开发文档/MERGE_CONFLICT_ROOT_CAUSE_ANALYSIS.md)
+| 文档 | 写入权限 | 读取权限 | 冲突策略 |
+|------|---------|---------|---------|
+| `BACKLOG.md` | 所有 Agent | 所有 Agent | 使用 `merge-backlog.mjs` 合并 |
+| `CLAUDE.md` 公共区 | `@user` | 所有 Agent | 只读 |
+| `PROGRESS.md` | 所有 Agent | 所有 Agent | 追加 + 时间戳 + Agent 标识 |
+| 索引文件 | 所有 Agent | 所有 Agent | 分区写入 |
 
-### 9.1 文档写入分区（强制遵守）
+### 9.2 任务 ID 规则
 
-| 文档                   | 写入权限  | 读取权限  | 冲突策略                      |
-| ---------------------- | --------- | --------- | ----------------------------- |
-| BACKLOG.md             | 所有Agent | 所有Agent | 使用merge-backlog.mjs工具合并 |
-| CLAUDE.md § 1-8       | @user     | 所有Agent | 只读，禁止修改                |
-| CLAUDE.md § 9         | @user     | 所有Agent | 只读，禁止修改                |
-| PROGRESS.md            | 所有Agent | 所有Agent | 追加+时间戳，注明Agent ID     |
-| 索引文件 (DOC_INDEX等) | 所有Agent | 所有Agent | 分区写入（见§9.3）           |
+- `@user`：B001-B099
+- `@claude`：B100-B199
+- `@codex`：B200-B299
+- `@gemini`：B300-B399
+- 未来扩展：B400+
 
-**关键规则**：
+### 9.3 并行执行触发规则
 
-- ❌ 禁止修改其他Agent的工作区内容
-- ✅ 允许追加到公共文档（需添加Agent标识）
-- ⚠️ PR前必须运行 `bun run scripts/check-write-conflict.mjs`
+满足以下任一条件时，必须并行执行：
 
-### 9.2 任务ID分配规则
+| 触发条件 | 示例 |
+|---------|------|
+| 3+ 独立文件/模块检查 | “把 8 个页面都检查一遍” |
+| 用户要求“全部/逐个/每个/所有” | “逐个验证接口” |
+| 多表 / 多字段数据验证 | 验证 30 个字段映射 |
+| 互不依赖的前后端任务 | 前端修复 + 后端修复 |
 
-**防止ID冲突**，每个Agent使用独立ID范围：
-
-| Agent    | ID范围    | 当前使用  | 示例          |
-| -------- | --------- | --------- | ------------- |
-| @user    | B001-B099 | B001-B055 | B056, B057... |
-| @claude  | B100-B199 | 未使用    | B100, B101... |
-| @codex   | B200-B299 | 未使用    | B200, B201... |
-| @gemini  | B300-B399 | 未使用    | B300, B301... |
-| 未来扩展 | B400-B999 | -         | B400-B999     |
-
-**使用规则**：
-
-1. 在BACKLOG.md添加任务时，使用自己的ID范围
-2. 归属对象列填写自己的Agent ID（如 `@claude`）
-3. 发现ID冲突时，优先使用main分支的任务状态
-
-### 9.3 索引文件分区写入
-
-**示例**：DOC_INDEX.md分区标记
+### 9.4 索引文件分区示例
 
 ```markdown
 ## 核心协议（@user专属，Agent只读）
@@ -470,7 +406,6 @@ src/features/dashboard/*                           # UI 渲染
 <!-- @claude-section-start -->
 ## Claude工作区索引（@claude专属写入）
 - 开发文档/TECH_STACK.md
-- 开发文档/AI_COLLABORATION.md
 <!-- @claude-section-end -->
 
 <!-- @codex-section-start -->
@@ -479,61 +414,28 @@ src/features/dashboard/*                           # UI 渲染
 <!-- @codex-section-end -->
 ```
 
-**规则**：
+规则：
+- 只能在自己的 section 内修改
+- 禁止删除其他 section 内容
+- 新增 section 前先通知 `@user`
 
-- 只能在自己的section内添加/修改内容
-- 禁止删除其他section的内容
-- 新增section需先通知@user
-
-### 9.4 PR前强制检查（三步骤）
-
-**所有Agent在创建PR前必须执行**：
+### 9.5 PR 前强制检查
 
 ```bash
-# Step 1: 同步main最新更新
 git fetch origin main
 git rebase origin/main
-
-# Step 2: 运行冲突检测（即将开发）
 bun run scripts/check-write-conflict.mjs
-
-# Step 3: 运行治理校验
-bun run scripts/check-governance.mjs
-
-# Step 4: 确认所有检查通过后才能创建PR
+bun run governance
 ```
 
-**冲突检测内容**：
+### 9.6 紧急冲突处理
 
-- ✅ 当前分支是否基于最新main
-- ✅ BACKLOG.md是否有追加冲突
-- ✅ 索引文件是否跨区写入
-- ✅ 任务ID是否在分配范围内
-
-### 9.5 紧急冲突处理流程
-
-**发现merge冲突时**：
-
-1. ❌ **禁止**：直接在PR中解决冲突并force push
-2. ✅ **正确流程**：
-   ```
-   a. 通知@user（在PR评论区）
-   b. 在BACKLOG.md添加BLOCKED任务，说明冲突原因
-   c. 等待@user确认修复方案
-   d. 使用merge-backlog.mjs工具合并BACKLOG.md
-   e. 手动检查其他文件冲突
-   f. 更新PR并通知@user验收
-   ```
-
-### 9.6 自动化工具
-
-| 工具                     | 功能                                | 使用时机                 |
-| ------------------------ | ----------------------------------- | ------------------------ |
-| merge-backlog.mjs        | 智能合并BACKLOG.md（去重+状态统一） | merge冲突时              |
-| check-write-conflict.mjs | PR前冲突检测                        | 创建PR前（即将开发）     |
-| assign-task-id.mjs       | 自动分配Agent专属ID                 | 创建新任务时（即将开发） |
-
-**工具位置**：`scripts/`
+发现冲突时：
+1. 禁止直接 force push 解决
+2. 在 `BACKLOG.md` 新增 `BLOCKED` 任务说明原因
+3. 通知 `@user`
+4. 使用 `scripts/merge-backlog.mjs` 合并
+5. 手动复核其他冲突文件
 
 ---
 
@@ -545,32 +447,14 @@ bun run scripts/check-governance.mjs
 |------|-----|
 | 服务器 | 腾讯云轻量 2核4G（`162.14.113.44`） |
 | 域名 | `https://chexian.cretvalu.com` |
-| 后端 | PM2 → `chexian-api`（端口 3000，仅内部访问） |
+| 后端 | PM2 → `chexian-api`（端口 3000） |
 | 前端 | Nginx 静态文件（`/var/www/chexian/frontend/dist`） |
-| 安全 | HTTPS + Nginx IP 白名单 + JWT 认证 + 审计日志 |
 
-### 数据更新全链路（Excel → Parquet → VPS）
+### SSH 连接前提
 
-```bash
-# 完整一键链路（推荐）
-./数据管理/run.sh full \
-  --source 历史数据.xlsx \
-  --target 最新数据.xlsx \
-  --output 数据管理/warehouse/fact/policy/车险保单综合明细表MMDD.parquet
-# 自动执行：续保匹配 → Parquet 转换 → scp 上传 → PM2 重启 → 健康检查
+本地 `~/.ssh/config` 必须包含：
 
-# 仅本地转换，不同步 VPS
-./数据管理/run.sh full ... --no-sync
-
-# 单独同步已有 Parquet（跳过转换步骤）
-./scripts/sync-vps.mjs                   # 自动找最新 Parquet
-./scripts/sync-vps.mjs 某文件.parquet     # 指定文件
-```
-
-### SSH 连接前提（sync 失败必查）
-
-```
-# 本地 ~/.ssh/config 必须存在以下配置
+```sshconfig
 Host chexian-vps-deploy
     HostName 162.14.113.44
     User deployer
@@ -578,43 +462,53 @@ Host chexian-vps-deploy
     ServerAliveInterval 60
 ```
 
-验证连接：`ssh chexian-vps-deploy echo ok`
+验证：
 
-**常见失败原因与修复**：
+```bash
+ssh chexian-vps-deploy echo ok
+```
 
-| 错误 | 原因 | 修复 |
-|------|------|------|
-| `Identity file not accessible` | 密钥文件名错误或不存在 | 检查 `~/.ssh/chexian_deploy` 是否存在 |
-| `Permission denied (publickey)` | 公钥未注册到 VPS | 登录腾讯云控制台，用 `tee -a` 追加公钥到 `authorized_keys` |
-| 网页控制台命令折断 | 控制台自动加缩进换行 | 改用 `tee -a /root/.ssh/authorized_keys` 后粘贴 key，Ctrl+D 结束 |
+### 数据更新全链路
 
-### 部署相关文件
+```bash
+./数据管理/run.sh full \
+  --source 历史数据.xlsx \
+  --target 最新数据.xlsx \
+  --output 数据管理/warehouse/fact/policy/车险保单综合明细表MMDD.parquet
 
-| 文件 | 说明 |
-|------|------|
-| `scripts/sync-vps.mjs` | 一键数据同步脚本（依赖 `~/.ssh/config` 别名） |
-| `deploy/vps-deploy.mjs` | VPS 全量部署脚本 |
-| `DEPLOYMENT_GUIDE.md` | 完整部署步骤文档 |
-| `vps.md` | VPS 运维手册（含 SSH 配置步骤） |
+./scripts/sync-vps.mjs
+./scripts/sync-vps.mjs 文件名.parquet
+```
 
-### 热力图发布/验收入口（优先命令）
+### 热力图发布 / 验收入口
 
 ```bash
 bun run release:vps:heatmap
 bun run verify:vps:heatmap
 ```
 
-唯一流程文档：`开发文档/VPS_HEATMAP_RELEASE_SOP.md`
+唯一流程文档：[开发文档/VPS_HEATMAP_RELEASE_SOP.md](./开发文档/VPS_HEATMAP_RELEASE_SOP.md)
+
+### 常见 SSH 故障
+
+| 现象 | 原因 | 修复 |
+|------|------|------|
+| `Could not resolve hostname` | 未配置 `~/.ssh/config` 别名 | 补充 Host 配置 |
+| `Permission denied (publickey)` | 私钥不匹配或公钥未授权 | 检查 `~/.ssh/chexian_deploy` 与 VPS `authorized_keys` |
+| 上传后健康检查失败 | PM2 重启竞争或后端异常 | 登录 VPS 查看 `deploy-chexian-api logs` |
+
+### 相关文件
+
+- `scripts/sync-vps.mjs`
+- `数据管理/run.sh`
+- `deploy/vps-deploy.mjs`
+- `DEPLOYMENT_GUIDE.md`
+- `vps.md`
 
 ---
 
 **变更历史**：
-
-- 2026-02-27：新增 §0.1「最近20次提交反思加固」，并将关键路径校准为纯 API 架构（`server/src/normalize`、`server/src/sql`、`server/src/services/duckdb.ts`）
-- 2026-02-15：新增§10生产部署与数据同步章节
-- 2026-01-11 12:00：【重大更新】版本号校正（与package.json同步）、测试覆盖更新（14套件/273+测试）、新增NL2SQL智能查询、新增session-manager子代理、扩展关键特性（增强型KPI卡片、高级筛选器）
-- 2026-01-11 04:30：新增§9多Agent并发协作协议，解决PR批量merge冲突问题（ROOT-CAUSE-001）
-- 2026-01-08 20:30：更新技术栈版本号、补全测试覆盖（新增sql-validator/natural-week测试）、添加CI/CD说明、扩展数据处理链路（增加多视图和专项分析）、更新关键特性清单
-- 2026-01-08 早期：新增验证协议，引入技术栈声明，记录 DuckDB 实测教训；实现交互式SQL查询（B020）、营业货车专项分析（B022/B023/B025）
-- 2026-01-07 22:00：新增 Claude Code 工作流集成章节（Slash Commands、Subagents、数据准备）；补充测试覆盖说明
-- 2026-01-07 16:00：协作操作系统化加固，建立三大索引 + 两本账 + 护栏机制
+- 2026-03-15：基于最新 `CLAUDE.md` 重构公共治理基线，新增 pre-flight、方法确认协议、API-only 启动与 DC-003 细则，并收敛 Gemini 专属并发协作与部署约束
+- 2026-02-27：新增最近 20 次提交反思加固，补充权限过滤漏检、替换式重构与调试产物入库防回归规则
+- 2026-02-15：新增生产部署与数据同步章节
+- 2026-01-11：新增多 Agent 并发协作协议，解决批量 PR merge 冲突

@@ -1,0 +1,39 @@
+{
+  "cookies": [
+    {
+      "name": "cx_access_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhZG1pbiIsInVzZXJuYW1lIjoiYWRtaW4iLCJyb2xlIjoiYnJhbmNoX2FkbWluIiwiaWF0IjoxNzczMzg0OTkwLCJleHAiOjE3NzM0NzEzOTB9.GvI8PaZFDTzfSADvyflCE8e1LS1PBm4jFIDLbTrMJO4",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1773471390.096384,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "cx_refresh_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhZG1pbiIsInVzZXJuYW1lIjoiYWRtaW4iLCJyb2xlIjoiYnJhbmNoX2FkbWluIiwidHlwZSI6InJlZnJlc2giLCJzaWQiOiJzaWRfMTc3MzM4NDk5MDA5NF83bHhmNmI3NSIsImlhdCI6MTc3MzM4NDk5MCwiZXhwIjoxNzczOTg5NzkwfQ.CEQDiD2s9AEGBjpF9wCn-MESb4axBjln_nGsxv4UnCU",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1773989790.096429,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:5173",
+      "localStorage": [
+        {
+          "name": "chexian_auth_session_hint",
+          "value": "1"
+        },
+        {
+          "name": "sidebar-width",
+          "value": "240"
+        }
+      ]
+    }
+  ]
+}
