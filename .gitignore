@@ -103,3 +103,4 @@ test_output.txt
 vitest_log.txt
 dev_log.txt
 test_err.txt
+output/playwright/.auth/
