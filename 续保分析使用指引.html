@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>续保分析页面 · 使用指引</title>
+<style>
+  :root {
+    --blue: #2563EB;
+    --blue-light: #EFF6FF;
+    --blue-mid: #BFDBFE;
+    --green: #16A34A;
+    --green-light: #F0FDF4;
+    --red: #DC2626;
+    --red-light: #FEF2F2;
+    --amber: #D97706;
+    --amber-light: #FFFBEB;
+    --gray: #6B7280;
+    --gray-light: #F9FAFB;
+    --gray-border: #E5E7EB;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #F1F5F9; color: #1E293B; line-height: 1.6; }
+
+  /* 顶部标题 */
+  .hero {
+    background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 60%, #3B82F6 100%);
+    color: white; padding: 40px 32px 32px; text-align: center;
+  }
+  .hero h1 { font-size: 26px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
+  .hero p { font-size: 14px; opacity: 0.85; }
+  .hero .badge { display: inline-block; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; padding: 3px 14px; font-size: 12px; margin-top: 12px; }
+
+  /* 大纲导航 */
+  .toc {
+    background: white; border-bottom: 1px solid var(--gray-border);
+    display: flex; gap: 4px; padding: 10px 24px; position: sticky; top: 0; z-index: 100;
+    overflow-x: auto; flex-wrap: nowrap;
+  }
+  .toc a {
+    white-space: nowrap; padding: 5px 14px; border-radius: 20px; font-size: 13px;
+    text-decoration: none; color: var(--gray); border: 1px solid var(--gray-border);
+    transition: all .2s;
+  }
+  .toc a:hover { background: var(--blue); color: white; border-color: var(--blue); }
+
+  /* 容器 */
+  .container { max-width: 960px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  /* 卡片 */
+  .card {
+    background: white; border-radius: var(--radius); border: 1px solid var(--gray-border);
+    margin-bottom: 24px; overflow: hidden;
+  }
+  .card-header {
+    padding: 16px 22px 12px; border-bottom: 1px solid var(--gray-border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card-header h2 { font-size: 16px; font-weight: 700; }
+  .card-header .icon { font-size: 20px; }
+  .card-body { padding: 20px 22px; }
+
+  /* 章节标题 */
+  .section-title {
+    font-size: 13px; font-weight: 700; color: var(--blue); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 14px; padding-bottom: 6px;
+    border-bottom: 2px solid var(--blue-mid);
+  }
+
+  /* 步骤流 */
+  .step-flow { display: flex; flex-direction: column; gap: 0; }
+  .step {
+    display: flex; gap: 16px; padding: 16px 0;
+    border-bottom: 1px dashed var(--gray-border);
+  }
+  .step:last-child { border-bottom: none; }
+  .step-num {
+    width: 28px; height: 28px; background: var(--blue); color: white;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+  }
+  .step-content h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .step-content p, .step-content li { font-size: 13px; color: #374151; }
+  .step-content ul { padding-left: 18px; margin-top: 4px; }
+  .step-content li { margin-bottom: 3px; }
+
+  /* 信息框 */
+  .info-box {
+    border-radius: 8px; padding: 12px 16px; margin: 12px 0; font-size: 13px;
+  }
+  .info-box.blue { background: var(--blue-light); border-left: 4px solid var(--blue); color: #1E40AF; }
+  .info-box.green { background: var(--green-light); border-left: 4px solid var(--green); color: #14532D; }
+  .info-box.red { background: var(--red-light); border-left: 4px solid var(--red); color: #7F1D1D; }
+  .info-box.amber { background: var(--amber-light); border-left: 4px solid var(--amber); color: #78350F; }
+  .info-box strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  /* UI 模拟截图 */
+  .ui-mock {
+    background: var(--gray-light); border: 1px solid var(--gray-border);
+    border-radius: 8px; padding: 16px; margin: 14px 0; font-size: 12px;
+  }
+  .ui-mock .mock-label { font-size: 11px; color: var(--gray); margin-bottom: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Tab 模拟 */
+  .mock-tabs { display: flex; border-bottom: 2px solid var(--gray-border); margin-bottom: 14px; }
+  .mock-tab {
+    padding: 8px 18px; font-size: 13px; cursor: default; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; color: var(--gray);
+  }
+  .mock-tab.active { border-color: var(--blue); color: var(--blue); font-weight: 700; }
+
+  /* 面包屑模拟 */
+  .mock-breadcrumb {
+    display: flex; align-items: center; gap: 6px; background: white;
+    border: 1px solid var(--gray-border); border-radius: 8px; padding: 8px 14px;
+    margin-bottom: 12px;
+  }
+  .bc-item { font-size: 12px; color: var(--blue); cursor: pointer; text-decoration: underline; }
+  .bc-item.current { color: #1E293B; font-weight: 600; text-decoration: none; cursor: default; }
+  .bc-sep { color: var(--gray); font-size: 11px; }
+
+  /* 表格模拟 */
+  .mock-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .mock-table th { background: #F3F4F6; padding: 7px 10px; text-align: left; font-weight: 600; color: #374151; border: 1px solid var(--gray-border); }
+  .mock-table th.right, .mock-table td.right { text-align: right; }
+  .mock-table td { padding: 6px 10px; border: 1px solid var(--gray-border); color: #1E293B; }
+  .mock-table tr:hover td { background: #F0F9FF; }
+  .mock-table .link { color: var(--blue); text-decoration: underline; cursor: pointer; font-weight: 600; }
+  .rate-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;
+  }
+  .rate-good { background: #DCFCE7; color: #166534; }
+  .rate-mid { background: #FEF3C7; color: #92400E; }
+  .rate-bad { background: #FEE2E2; color: #991B1B; }
+
+  /* 四象限说明 */
+  .quadrant-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .q-cell {
+    border-radius: 8px; padding: 12px 14px; font-size: 12px;
+  }
+  .q-cell .q-label { font-weight: 700; font-size: 13px; margin-bottom: 5px; }
+  .q-cell .q-judge { color: #374151; margin-bottom: 4px; }
+  .q-cell .q-suggest { color: #6B7280; font-size: 11px; }
+  .q-benchmark { background: #F0FDF4; border: 1px solid #86EFAC; }
+  .q-risk { background: #FFFBEB; border: 1px solid #FCD34D; }
+  .q-focus { background: #FEF2F2; border: 1px solid #FCA5A5; }
+  .q-observe { background: #F8FAFC; border: 1px solid #CBD5E1; }
+
+  /* 指标卡片 */
+  .kpi-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+  .kpi-card {
+    flex: 1; min-width: 100px; background: white; border: 1px solid var(--gray-border);
+    border-radius: 8px; padding: 10px 14px;
+  }
+  .kpi-card .kpi-label { font-size: 11px; color: var(--gray); margin-bottom: 4px; }
+  .kpi-card .kpi-value { font-size: 20px; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
+  .kpi-card .kpi-sub { font-size: 11px; color: var(--gray); }
+
+  /* 控制条模拟 */
+  .mock-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .mock-checkbox { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+  .mock-checkbox input[type=checkbox] { accent-color: var(--blue); }
+  .month-btn {
+    padding: 3px 9px; border-radius: 12px; font-size: 11px; cursor: default;
+    border: 1px solid var(--gray-border); background: #F3F4F6; color: #4B5563;
+  }
+  .month-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
+
+  /* 日历式日期选择 */
+  .date-picker-mock {
+    display: flex; align-items: center; gap: 8px; background: white;
+    border: 1px solid #93C5FD; border-radius: 8px; padding: 8px 14px;
+    font-size: 13px; color: #1E40AF; margin-bottom: 12px;
+  }
+
+  /* 公式块 */
+  .formula-block {
+    background: #0F172A; color: #E2E8F0; border-radius: 8px;
+    padding: 14px 18px; font-family: 'Courier New', monospace; font-size: 13px;
+    margin: 12px 0; line-height: 1.9;
+  }
+  .formula-block .comment { color: #64748B; }
+  .formula-block .key { color: #93C5FD; font-weight: 700; }
+  .formula-block .val { color: #86EFAC; }
+  .formula-block .warn { color: #FCD34D; }
+
+  /* 到期日对照表 */
+  .expiry-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 10px 0; }
+  .expiry-table th { background: #1E3A8A; color: white; padding: 7px 12px; }
+  .expiry-table td { padding: 6px 12px; border: 1px solid var(--gray-border); }
+  .expiry-table tr:nth-child(even) td { background: var(--blue-light); }
+  .expiry-table .highlight-cell { background: #FEF9C3 !important; font-weight: 700; color: #92400E; }
+
+  /* 明细表列头说明 */
+  .col-group { display: flex; gap: 0; margin: 12px 0; }
+  .col-group .cg-item {
+    flex: 1; text-align: center; padding: 8px 4px; font-size: 11px; font-weight: 700;
+    border: 1px solid var(--gray-border);
+  }
+  .cg-daily { background: #DBEAFE; color: #1E40AF; }
+  .cg-monthly { background: #D1FAE5; color: #065F46; }
+  .cg-yearly { background: #FCE7F3; color: #831843; }
+
+  /* 权限说明 */
+  .rbac-row { display: flex; gap: 10px; margin: 10px 0; }
+  .rbac-cell {
+    flex: 1; border-radius: 8px; padding: 12px; font-size: 12px;
+    border: 1px solid var(--gray-border);
+  }
+  .rbac-cell .role { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+
+  /* FAQ */
+  .faq-item { margin-bottom: 14px; }
+  .faq-q { font-size: 13px; font-weight: 700; color: #1E3A8A; margin-bottom: 5px; }
+  .faq-a { font-size: 13px; color: #374151; padding-left: 16px; border-left: 3px solid var(--blue-mid); }
+
+  /* 小标签 */
+  .tag {
+    display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+    vertical-align: middle; margin: 0 2px;
+  }
+  .tag-blue { background: var(--blue); color: white; }
+  .tag-green { background: #16A34A; color: white; }
+  .tag-red { background: var(--red); color: white; }
+  .tag-gray { background: #9CA3AF; color: white; }
+  .tag-amber { background: var(--amber); color: white; }
+
+  /* 分割线 */
+  hr { border: none; border-top: 1px solid var(--gray-border); margin: 20px 0; }
+
+  /* 响应式 */
+  @media(max-width: 600px) {
+    .quadrant-grid { grid-template-columns: 1fr; }
+    .kpi-row { gap: 6px; }
+    .kpi-card .kpi-value { font-size: 16px; }
+    .col-group { flex-direction: column; }
+  }
+
+  /* 动画高亮 */
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+  .pulse { animation: pulse 2s infinite; }
+</style>
+</head>
+<body>
+
+<!-- 顶部标题区 -->
+<div class="hero">
+  <h1>续保分析 · 使用指引</h1>
+  <p>车险数据分析平台 — 续保分析页面完整操作说明</p>
+  <span class="badge">适用角色：管理员 · 机构用户</span>
+</div>
+
+<!-- 导航 -->
+<nav class="toc">
+  <a href="#overview">页面概览</a>
+  <a href="#core-concept">核心概念</a>
+  <a href="#tab1">续保下钻分析</a>
+  <a href="#drilldown">五层下钻</a>
+  <a href="#quadrant">四象限图</a>
+  <a href="#tab2">续保明细表</a>
+  <a href="#rbac">权限说明</a>
+  <a href="#faq">常见问题</a>
+</nav>
+
+<div class="container">
+
+<!-- ①页面概览 -->
+<div id="overview" class="card">
+  <div class="card-header">
+    <span class="icon">🗺️</span>
+    <h2>页面概览</h2>
+  </div>
+  <div class="card-body">
+    <p style="font-size:13px;color:#374151;margin-bottom:16px;">
+      续保分析页面提供两个核心分析视角，通过顶部两个 Tab 切换：
+    </p>
+
+    <div class="ui-mock">
+      <div class="mock-label">页面 Tab 结构示意</div>
+      <div class="mock-tabs">
+        <div class="mock-tab active">续保下钻分析</div>
+        <div class="mock-tab">续保明细表</div>
+      </div>
+      <div style="font-size:12px;color:#6B7280;padding:6px 0;">
+        当前显示：续保下钻分析
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+      <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:14px;">
+        <div style="font-weight:700;font-size:14px;color:#1E40AF;margin-bottom:8px;">📊 续保下钻分析</div>
+        <ul style="font-size:12px;color:#1E3A8A;padding-left:16px;line-height:1.8;">
+          <li>五层层级下钻（公司→机构→团队→业务员→险别）</li>
+          <li>四象限散点图（报价率 × 续保率）</li>
+          <li>各层级续保率 / 报价率对比表</li>
+          <li>按到期月份筛选 / 套单 / 自留模式</li>
+        </ul>
+      </div>
+      <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:14px;">
+        <div style="font-weight:700;font-size:14px;color:#166534;margin-bottom:8px;">📋 续保明细表</div>
+        <ul style="font-size:12px;color:#14532D;padding-left:16px;line-height:1.8;">
+          <li>每日/月累计/年累计续保率明细</li>
+          <li>件数 / 保费双视角切换</li>
+          <li>按月选择查看具体月份明细</li>
+          <li>★ 标记最新签单到期日</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="info-box blue" style="margin-top:16px;">
+      <strong>⚠️ 重要说明：日期口径固定为起保日期</strong>
+      续保率分析<strong>始终固定使用起保日期</strong>计算，不受页面顶部「数据口径」切换器（签单日期 / 起保日期）的影响。
+      这是业务规则强制要求，确保续保率统计口径一致。
+    </div>
+  </div>
+</div>
+
+<!-- ②核心概念 -->
+<div id="core-concept" class="card">
+  <div class="card-header">
+    <span class="icon">📐</span>
+    <h2>核心业务概念</h2>
+  </div>
+  <div class="card-body">
+
+    <div class="section-title">续保率计算公式</div>
+
+    <div class="formula-block">
+<span class="comment">-- 核心公式</span>
+<span class="key">到期日</span> = <span class="val">起保日期</span> + 1年 - 1天
+
+<span class="key">应续保单（分母）</span> = <span class="val">上一年</span>起保的保单，且到期日 ≤ 统计截止日期
+<span class="key">已续保单（分子）</span> = 应续保单中 <span class="val">续保单号不为空</span> 的保单
+
+<span class="key">续保率（件数）</span> = 已续件数 / 应续件数 × 100%
+<span class="key">续保率（保费）</span> = 已续保费 / 应续保费 × 100%
+    </div>
+
+    <div class="section-title" style="margin-top:20px;">"-1天"的业务含义（易踩坑）</div>
+    <p style="font-size:13px;color:#374151;margin-bottom:10px;">
+      「到期日 = 起保日 + 1年 - 1天」这个 -1天非常关键，会导致每月1日起保的保单在<strong>上个月最后一天</strong>到期：
+    </p>
+
+    <table class="expiry-table">
+      <tr><th>起保日期</th><th>到期日期</th><th>实际到期月份</th></tr>
+      <tr><td>2025-01-01</td><td>2025-12-31</td><td class="highlight-cell">12月（不是1月！）</td></tr>
+      <tr><td>2025-02-01</td><td>2026-01-31</td><td class="highlight-cell">1月（不是2月！）</td></tr>
+      <tr><td>2025-02-02</td><td>2026-02-01</td><td>2月</td></tr>
+      <tr><td>2025-03-01</td><td>2026-02-28</td><td class="highlight-cell">2月（不是3月！）</td></tr>
+      <tr><td>2024-02-29</td><td>2025-02-28</td><td>2月（闰年→非闰年）</td></tr>
+      <tr><td>2025-12-31</td><td>2026-12-30</td><td>12月</td></tr>
+    </table>
+
+    <div class="info-box amber">
+      <strong>实际操作建议</strong>
+      使用「到期月份」筛选时，选择的是保单<strong>实际到期</strong>的月份（而非起保月份）。例如：想看所有在2月到期的保单续保情况，选「2月」即可，系统已自动换算。
+    </div>
+
+    <hr>
+    <div class="section-title">两种统计模式对比</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="info-box blue">
+        <strong>模式一：按到期月份统计（选了具体月份）</strong>
+        <ul style="padding-left:14px;line-height:1.8;margin-top:4px;">
+          <li>分母：该月所有到期保单（含未来）</li>
+          <li>适合：查看某月完整续保情况</li>
+          <li>截止日期：<span style="color:#DC2626;font-weight:700;">❌ 不起作用</span></li>
+          <li>场景：追踪1月到期保单、提前看2月预警</li>
+        </ul>
+      </div>
+      <div class="info-box green">
+        <strong>模式二：按截止日期统计（选"全部"）</strong>
+        <ul style="padding-left:14px;line-height:1.8;margin-top:4px;">
+          <li>分母：[年初, 截止日期] 内到期保单</li>
+          <li>适合：年度累计续保率追踪</li>
+          <li>截止日期：<span style="color:#16A34A;font-weight:700;">✅ 生效</span></li>
+          <li>场景：今日整体续保率、特定时间段统计</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ③续保下钻分析 -->
+<div id="tab1" class="card">
+  <div class="card-header">
+    <span class="icon">🔍</span>
+    <h2>Tab 一：续保下钻分析</h2>
+  </div>
+  <div class="card-body">
+
+    <div class="section-title">第1步：设置统计截止日期</div>
+    <div class="date-picker-mock">
+      📅 统计截止日期：
+      <strong>2026-03-15</strong>
+      <span style="font-size:11px;color:#6B7280;margin-left:8px;">起始日期固定为 2026-01-01</span>
+    </div>
+    <p style="font-size:13px;color:#374151;margin-bottom:12px;">
+      截止日期决定「应续件数」的分母范围——只有<strong>到期日 ≤ 截止日期</strong>的保单才纳入统计。
+      默认为系统最新数据日期，可手动调整为历史日期以进行回溯分析。
+    </p>
+
+    <div class="info-box blue">
+      <strong>例：今天是3月15日，截止日期设为3月15日</strong>
+      系统统计 2026年1月1日 ～ 2026年3月15日 之间到期的保单（即2025年1月至3月初起保的保单）。
+      尚未到期的3月16日后到期保单<strong>不纳入分母</strong>，避免分母虚大导致续保率虚低。
+    </div>
+
+    <hr>
+    <div class="section-title">第2步：配置筛选条件</div>
+    <div class="ui-mock">
+      <div class="mock-label">筛选控制条</div>
+      <div class="mock-controls">
+        <label class="mock-checkbox"><input type="checkbox"> 仅套单</label>
+        <label class="mock-checkbox"><input type="checkbox"> 仅自留续保</label>
+        <span style="font-size:12px;color:#374151;font-weight:600;">到期月份：</span>
+        <span class="month-btn active">全部</span>
+        <span class="month-btn">1月</span>
+        <span class="month-btn">2月</span>
+        <span class="month-btn">3月</span>
+        <span style="font-size:11px;color:#9CA3AF;">...12月</span>
+      </div>
+    </div>
+
+    <div class="step-flow">
+      <div class="step">
+        <div class="step-num">A</div>
+        <div class="step-content">
+          <h3>仅套单 <span class="tag tag-gray">可选</span></h3>
+          <p>勾选后只统计「是否交商统保 = 套单」的保单，即商业险+交强险同时投保的套餐单。
+          适合分析主力续保业务，剔除散单干扰。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">B</div>
+        <div class="step-content">
+          <h3>仅自留续保 <span class="tag tag-gray">可选</span></h3>
+          <p>勾选后只统计「续保模式 = 自留」的保单，剔除流转、合作渠道等其他模式。
+          适合考核业务员自身续保能力。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">C</div>
+        <div class="step-content">
+          <h3>到期月份 <span class="tag tag-blue">关键筛选</span></h3>
+          <ul>
+            <li><strong>全部（默认）</strong>：使用截止日期模式，统计年初至今所有到期保单</li>
+            <li><strong>选某月（如3月）</strong>：切换为月份模式，统计该月所有到期保单（截止日期不再生效）</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <div class="section-title">第3步：查看下钻数据表格</div>
+
+    <div class="ui-mock">
+      <div class="mock-label">续保下钻数据表格（机构层级示例）</div>
+      <div class="mock-breadcrumb">
+        <span class="bc-item">全公司</span>
+        <span class="bc-sep">›</span>
+        <span class="bc-item current">各机构</span>
+      </div>
+      <table class="mock-table">
+        <tr>
+          <th>名称</th>
+          <th class="right">应续件数</th>
+          <th class="right">已续件数</th>
+          <th class="right">续保率</th>
+          <th class="right">有报价件数</th>
+          <th class="right">报价率</th>
+        </tr>
+        <tr>
+          <td><span class="link">成都分公司</span></td>
+          <td class="right">3,240</td>
+          <td class="right">2,187</td>
+          <td class="right"><span class="rate-badge rate-good">67.5%</span></td>
+          <td class="right">2,890</td>
+          <td class="right"><span class="rate-badge rate-good">89.2%</span></td>
+        </tr>
+        <tr>
+          <td><span class="link">乐山分公司</span></td>
+          <td class="right">1,856</td>
+          <td class="right">890</td>
+          <td class="right"><span class="rate-badge rate-mid">48.0%</span></td>
+          <td class="right">1,120</td>
+          <td class="right"><span class="rate-badge rate-mid">60.3%</span></td>
+        </tr>
+        <tr>
+          <td><span class="link">天府分公司</span></td>
+          <td class="right">2,100</td>
+          <td class="right">520</td>
+          <td class="right"><span class="rate-badge rate-bad">24.8%</span></td>
+          <td class="right">1,960</td>
+          <td class="right"><span class="rate-badge rate-good">93.3%</span></td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">应续件数</div>
+        <div class="kpi-value" style="color:#1E293B;">7,196</div>
+        <div class="kpi-sub">分母：已到期保单</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">已续件数</div>
+        <div class="kpi-value">3,597</div>
+        <div class="kpi-sub">分子：已有续保单号</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">续保率</div>
+        <div class="kpi-value" style="color:#16A34A;">50.0%</div>
+        <div class="kpi-sub">整体续保率</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">报价率</div>
+        <div class="kpi-value" style="color:#2563EB;">80.5%</div>
+        <div class="kpi-sub">过程指标</div>
+      </div>
+    </div>
+
+    <div class="info-box green">
+      <strong>续保率色阶参考（系统阈值）</strong>
+      <span class="rate-badge rate-good" style="margin-right:8px;">≥ 40%</span>达标区（标杆 / 风险）
+      &nbsp;&nbsp;
+      <span class="rate-badge rate-bad" style="margin-right:8px;">&lt; 40%</span>未达标区（重点提升 / 观察）
+    </div>
+  </div>
+</div>
+
+<!-- ④五层下钻导航 -->
+<div id="drilldown" class="card">
+  <div class="card-header">
+    <span class="icon">🏗️</span>
+    <h2>五层下钻导航操作</h2>
+  </div>
+  <div class="card-body">
+
+    <div class="section-title">下钻层级结构</div>
+
+    <div style="display:flex;align-items:center;gap:0;overflow-x:auto;margin-bottom:16px;padding:4px 0;">
+      <div style="text-align:center;padding:12px 16px;background:#1E3A8A;color:white;border-radius:8px 0 0 8px;font-size:12px;font-weight:700;min-width:80px;">
+        🏢<br>全公司
+      </div>
+      <div style="color:#94A3B8;font-size:18px;padding:0 4px;">▶</div>
+      <div style="text-align:center;padding:12px 16px;background:#2563EB;color:white;font-size:12px;font-weight:700;min-width:80px;">
+        🏪<br>机构<br><span style="font-size:10px;font-weight:400;">三级机构</span>
+      </div>
+      <div style="color:#94A3B8;font-size:18px;padding:0 4px;">▶</div>
+      <div style="text-align:center;padding:12px 16px;background:#3B82F6;color:white;font-size:12px;font-weight:700;min-width:80px;">
+        👥<br>团队<br><span style="font-size:10px;font-weight:400;">销售团队</span>
+      </div>
+      <div style="color:#94A3B8;font-size:18px;padding:0 4px;">▶</div>
+      <div style="text-align:center;padding:12px 16px;background:#60A5FA;color:white;font-size:12px;font-weight:700;min-width:80px;">
+        👤<br>业务员<br><span style="font-size:10px;font-weight:400;">个人绩效</span>
+      </div>
+      <div style="color:#94A3B8;font-size:18px;padding:0 4px;">▶</div>
+      <div style="text-align:center;padding:12px 16px;background:#93C5FD;color:#1E3A8A;border-radius:0 8px 8px 0;font-size:12px;font-weight:700;min-width:80px;">
+        📦<br>险别组合<br><span style="font-size:10px;font-weight:400;">产品维度</span>
+      </div>
+    </div>
+
+    <div class="step-flow">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>点击名称链接进行下钻</h3>
+          <p>数据表格中，名称列的蓝色下划线文字可点击。点击「成都分公司」即可进入该机构的团队层级视图。面包屑会自动更新。</p>
+          <div class="mock-breadcrumb" style="margin-top:8px;">
+            <span class="bc-item">全公司</span>
+            <span class="bc-sep">›</span>
+            <span class="bc-item">成都分公司</span>
+            <span class="bc-sep">›</span>
+            <span class="bc-item current">各团队</span>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>点击面包屑回退到任意层级</h3>
+          <p>点击面包屑中的历史层级名称，即可回退。例如在业务员层级时点击「成都分公司」可跳回机构层级，无需逐层退出。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>险别组合层级是终点</h3>
+          <p>在险别组合层级，名称不再是链接（无法继续下钻），仅展示数据。如需返回，使用面包屑导航。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box amber">
+      <strong>团队层级的特殊说明</strong>
+      团队层级需要额外关联「业务员计划表（SalesmanPlanFact）」获取团队归属。
+      如果某个业务员未出现在当年计划表中，其保单会被归类到「[机构名]未归属团队」。
+    </div>
+  </div>
+</div>
+
+<!-- ⑤四象限图 -->
+<div id="quadrant" class="card">
+  <div class="card-header">
+    <span class="icon">📈</span>
+    <h2>四象限分析图解读</h2>
+  </div>
+  <div class="card-body">
+
+    <p style="font-size:13px;color:#374151;margin-bottom:16px;">
+      四象限图在下钻数据表格上方自动显示，基于当前层级数据计算。X轴为报价率，Y轴为续保率，
+      圆点大小代表应续件数（体量权重），按两条达标线分为四个区域。
+    </p>
+
+    <div style="background:#F8FAFC;border:1px solid var(--gray-border);border-radius:8px;padding:16px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 60px 1fr;grid-template-rows:1fr 40px 1fr;gap:0;height:260px;position:relative;">
+        <!-- 象限格子 -->
+        <div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:6px 0 0 0;padding:10px;display:flex;flex-direction:column;justify-content:flex-start;">
+          <div style="font-size:11px;font-weight:700;color:#DC2626;">⚡ 重点提升区</div>
+          <div style="font-size:10px;color:#991B1B;margin-top:3px;">报价✓ 但续保✗<br>话术/转化问题</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;font-size:10px;color:#6B7280;writing-mode:vertical-rl;text-align:center;">续保率≥40%</div>
+        <div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:0 6px 0 0;padding:10px;">
+          <div style="font-size:11px;font-weight:700;color:#16A34A;">⭐ 标杆区</div>
+          <div style="font-size:10px;color:#166534;margin-top:3px;">报价✓ 且续保✓<br>推广成功经验</div>
+        </div>
+        <!-- 横轴标注 -->
+        <div style="grid-column:1;display:flex;align-items:center;justify-content:center;font-size:10px;color:#6B7280;">报价率&lt;80%</div>
+        <div style="display:flex;align-items:center;justify-content:center;">
+          <div style="width:1px;height:100%;background:#9CA3AF;position:relative;"><div style="position:absolute;top:50%;left:-30px;transform:translateY(-50%);font-size:10px;color:#6B7280;white-space:nowrap;">x=80%</div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;font-size:10px;color:#6B7280;">报价率≥80%</div>
+        <!-- 下方两个象限 -->
+        <div style="background:#F8FAFC;border:1px solid #CBD5E1;border-radius:0 0 0 6px;padding:10px;">
+          <div style="font-size:11px;font-weight:700;color:#64748B;">👁 观察区</div>
+          <div style="font-size:10px;color:#475569;margin-top:3px;">报价✗ 且续保✗<br>从基础督导</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;font-size:10px;color:#6B7280;writing-mode:vertical-rl;text-align:center;">续保率&lt;40%</div>
+        <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:0 0 6px 0;padding:10px;">
+          <div style="font-size:11px;font-weight:700;color:#D97706;">⚠️ 风险区</div>
+          <div style="font-size:10px;color:#92400E;margin-top:3px;">报价✗ 但续保✓<br>依赖大客户自留</div>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:10px;color:#6B7280;margin-top:8px;">→ X轴：报价率（达标线80%）&nbsp;&nbsp;↑ Y轴：续保率（达标线40%）</div>
+    </div>
+
+    <div class="quadrant-grid">
+      <div class="q-cell q-benchmark">
+        <div class="q-label">⭐ 标杆区（右上）</div>
+        <div class="q-judge">报价率≥80% 且 续保率≥40%</div>
+        <div class="q-judge">过程动作到位，结果也优异，可作为业务标杆。</div>
+        <div class="q-suggest">▶ 建议：保持节奏，复盘输出成功经验</div>
+      </div>
+      <div class="q-cell q-risk">
+        <div class="q-label">⚠️ 风险区（右下）</div>
+        <div class="q-judge">报价率&lt;80% 但 续保率≥40%</div>
+        <div class="q-judge">续保达标但报价动作不足，可能依赖少数大客户自然续留。</div>
+        <div class="q-suggest">▶ 建议：强化报价动作管理，降低波动风险</div>
+      </div>
+      <div class="q-cell q-focus">
+        <div class="q-label">⚡ 重点提升区（左上）</div>
+        <div class="q-judge">报价率≥80% 但 续保率&lt;40%</div>
+        <div class="q-judge">报价充分但转化率低，「雷声大雨点小」，出单环节有问题。</div>
+        <div class="q-suggest">▶ 建议：干预报价到出单的转化，提供话术支持</div>
+      </div>
+      <div class="q-cell q-observe">
+        <div class="q-label">👁 观察区（左下）</div>
+        <div class="q-judge">报价率&lt;80% 且 续保率&lt;40%</div>
+        <div class="q-judge">过程和结果双双落后，推进意愿或能力存在明显短板。</div>
+        <div class="q-suggest">▶ 建议：专项督导，从基础报价动作重建工作习惯</div>
+      </div>
+    </div>
+
+    <div class="info-box blue" style="margin-top:14px;">
+      <strong>圆点大小的含义</strong>
+      圆点大小代表「应续件数」（体量权重）。圆点越大表示该对象的业务体量越大，
+      管理优先级也越高。系统会自动识别高权重对象（前75%分位数以上），并在页面顶部给出首要问题判断。
+    </div>
+  </div>
+</div>
+
+<!-- ⑥续保明细表 -->
+<div id="tab2" class="card">
+  <div class="card-header">
+    <span class="icon">📋</span>
+    <h2>Tab 二：续保明细表</h2>
+  </div>
+  <div class="card-body">
+
+    <div class="section-title">第1步：选择分析视角和月份</div>
+
+    <div class="ui-mock">
+      <div class="mock-label">控制栏</div>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="font-size:12px;">
+          <strong style="margin-right:6px;">分析视角：</strong>
+          <span class="month-btn active">件数</span>
+          <span class="month-btn" style="margin-left:4px;">保费</span>
+        </div>
+        <div style="font-size:12px;">
+          <strong style="margin-right:6px;">月份：</strong>
+          <select style="border:1px solid #D1D5DB;border-radius:4px;padding:3px 8px;font-size:12px;">
+            <option>3 月 ✓</option>
+            <option>2 月 ✓</option>
+            <option>1 月 ✓</option>
+          </select>
+          <span style="font-size:11px;color:#6B7280;margin-left:6px;">有数据的月份：1, 2, 3</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box blue" style="margin-bottom:16px;">
+      <strong>件数视角 vs 保费视角</strong>
+      件数视角：以保单件数计算续保率，关注续保数量覆盖面。<br>
+      保费视角：以保费金额计算续保率，关注续保保费收入留存。两者通常有差异，保费视角更体现高价值客户留存。
+    </div>
+
+    <div class="section-title">第2步：读懂明细表的9列数据</div>
+
+    <div class="col-group">
+      <div class="cg-item" style="background:#F3F4F6;color:#374151;">到期日</div>
+      <div class="cg-item cg-daily">当日应续</div>
+      <div class="cg-item cg-daily">当日已续</div>
+      <div class="cg-item cg-daily">当日续保率</div>
+      <div class="cg-item cg-monthly">月累计应续</div>
+      <div class="cg-item cg-monthly">月累计已续</div>
+      <div class="cg-item cg-monthly">当月续保率</div>
+      <div class="cg-item cg-yearly">年累计应续</div>
+      <div class="cg-item cg-yearly">年累计已续</div>
+      <div class="cg-item cg-yearly">当年续保率</div>
+    </div>
+
+    <div class="ui-mock">
+      <div class="mock-label">续保明细表格（2026年3月，件数视角）</div>
+      <div style="overflow-x:auto;">
+        <table class="mock-table">
+          <tr>
+            <th>到期日</th>
+            <th class="right" style="background:#DBEAFE;color:#1E40AF;">当日应续件数</th>
+            <th class="right" style="background:#DBEAFE;color:#1E40AF;">当日已续件数</th>
+            <th class="right" style="background:#DBEAFE;color:#1E40AF;">当日续保率</th>
+            <th class="right" style="background:#D1FAE5;color:#065F46;">月累计应续</th>
+            <th class="right" style="background:#D1FAE5;color:#065F46;">月累计已续</th>
+            <th class="right" style="background:#D1FAE5;color:#065F46;">当月续保率</th>
+            <th class="right" style="background:#FCE7F3;color:#831843;">年累计应续</th>
+            <th class="right" style="background:#FCE7F3;color:#831843;">年累计已续</th>
+            <th class="right" style="background:#FCE7F3;color:#831843;">当年续保率</th>
+          </tr>
+          <tr>
+            <td>2026-03-01</td>
+            <td class="right">145</td><td class="right">89</td>
+            <td class="right"><span class="rate-badge rate-good">61.4%</span></td>
+            <td class="right">145</td><td class="right">89</td>
+            <td class="right"><span class="rate-badge rate-good">61.4%</span></td>
+            <td class="right">3,890</td><td class="right">2,105</td>
+            <td class="right"><span class="rate-badge rate-mid">54.1%</span></td>
+          </tr>
+          <tr style="background:#FEF9C3;">
+            <td>2026-03-15 ★</td>
+            <td class="right">210</td><td class="right">78</td>
+            <td class="right"><span class="rate-badge rate-mid">37.1%</span></td>
+            <td class="right">2,340</td><td class="right">1,120</td>
+            <td class="right"><span class="rate-badge rate-mid">47.9%</span></td>
+            <td class="right">6,085</td><td class="right">3,225</td>
+            <td class="right"><span class="rate-badge rate-mid">53.0%</span></td>
+          </tr>
+          <tr>
+            <td>2026-03-16</td>
+            <td class="right">0</td><td class="right">0</td>
+            <td class="right"><span class="rate-badge rate-gray" style="background:#F3F4F6;color:#6B7280;">—</span></td>
+            <td class="right">2,340</td><td class="right">1,120</td>
+            <td class="right"><span class="rate-badge rate-mid">47.9%</span></td>
+            <td class="right">6,085</td><td class="right">3,225</td>
+            <td class="right"><span class="rate-badge rate-mid">53.0%</span></td>
+          </tr>
+        </table>
+      </div>
+      <div style="font-size:11px;color:#6B7280;margin-top:8px;">★ 黄色行 = 最新签单对应的到期日（数据截止位置）；3月16日之后当日应续=0（尚未有到期保单数据）</div>
+    </div>
+
+    <div class="step-flow">
+      <div class="step">
+        <div class="step-num">A</div>
+        <div class="step-content">
+          <h3>当日续保率</h3>
+          <p>仅统计当天到期的保单，分母为「当日应续件数」。
+          如果当天没有到期保单，显示 0/0（不会产生无效续保率）。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">B</div>
+        <div class="step-content">
+          <h3>当月续保率（月累计）</h3>
+          <p>使用窗口函数累计计算：截至该行日期，当月所有已到期保单的续保率。
+          每行数据都是「截至当日」的月度累计值，随日期推移分母逐渐增大。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">C</div>
+        <div class="step-content">
+          <h3>当年续保率（年累计）</h3>
+          <p>从 1月1日 累计到当行日期的年度整体续保率，是最重要的考核指标。
+          黄色 ★ 行的「当年续保率」即为当前时点的年度续保率实时值。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box green">
+      <strong>如何找到「当前实际续保率」？</strong>
+      找到 ★ 黄色标记行（最新签单对应到期日），查看该行的「当年续保率」列，即为截至今日的年度续保率。
+      ★ 行之后的日期行，当日应续=0，月/年累计值不变（显示截止位置的累计情况）。
+    </div>
+
+    <div class="info-box amber">
+      <strong>为什么某月显示「无数据」？</strong>
+      例如「1月 (无数据)」，说明上一年（2025年）1月没有符合当前筛选条件的起保保单，
+      因此该月无应续件数。请检查机构/业务员筛选条件，或确认数据文件是否包含该时间段数据。
+    </div>
+  </div>
+</div>
+
+<!-- ⑦权限说明 -->
+<div id="rbac" class="card">
+  <div class="card-header">
+    <span class="icon">🔐</span>
+    <h2>角色权限说明</h2>
+  </div>
+  <div class="card-body">
+
+    <div class="rbac-row">
+      <div class="rbac-cell" style="background:#EFF6FF;border-color:#BFDBFE;">
+        <div class="role" style="color:#1E40AF;">👑 管理员（admin）</div>
+        <ul style="font-size:12px;color:#1E3A8A;padding-left:14px;line-height:1.9;">
+          <li>下钻起点：全公司层级</li>
+          <li>可查看所有机构数据</li>
+          <li>可自由回退到「全公司」层级（面包屑第一项可点击）</li>
+          <li>下钻路径：公司→机构→团队→业务员→险别</li>
+        </ul>
+      </div>
+      <div class="rbac-cell" style="background:#F0FDF4;border-color:#BBF7D0;">
+        <div class="role" style="color:#166534;">🏢 机构用户（org_user）</div>
+        <ul style="font-size:12px;color:#14532D;padding-left:14px;line-height:1.9;">
+          <li>下钻起点：直接锁定到自己的机构</li>
+          <li>仅可查看本机构及下属团队、业务员</li>
+          <li>面包屑「全公司」不可点击（权限锁定）</li>
+          <li>下钻路径：[本机构]→团队→业务员→险别</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="info-box blue" style="margin-top:4px;">
+      <strong>数据过滤说明</strong>
+      机构用户登录后，系统自动在所有查询中附加机构过滤条件（org_level_3 = 本机构），确保跨机构数据不可见。
+      此过滤由后端权限服务（access-control.ts）强制执行，前端无法绕过。
+    </div>
+  </div>
+</div>
+
+<!-- ⑧常见问题 -->
+<div id="faq" class="card">
+  <div class="card-header">
+    <span class="icon">❓</span>
+    <h2>常见问题解答</h2>
+  </div>
+  <div class="card-body">
+
+    <div class="faq-item">
+      <div class="faq-q">Q1：续保率为什么和我印象中的数字不一样？</div>
+      <div class="faq-a">
+        最常见原因：<br>
+        ① <strong>截止日期设置</strong>：系统默认截止日期为最新数据日期，只统计已到期保单。保单未到期则不纳入分母，会导致续保率高于月末全量统计。<br>
+        ② <strong>筛选条件</strong>：勾选了「仅套单」或「仅自留续保」会缩小统计范围。<br>
+        ③ <strong>到期月份选择</strong>：选了具体月份（如3月），截止日期不生效，统计全月数据。
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Q2：为什么3月选择「2月到期月份」时，有些2025年2月起保的保单不在结果里？</div>
+      <div class="faq-a">
+        这是「-1天」规则导致的。2025年2月1日起保的保单到期日是2026年1月31日（1月！）而非2月。
+        系统按<strong>到期日月份</strong>筛选，而非起保月份。2月到期的保单实际是2025年2月2日及之后起保的保单。
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Q3：续保明细表某个月显示「暂无续保数据」是什么原因？</div>
+      <div class="faq-a">
+        说明上一年（分析年份-1年）该月没有符合当前筛选条件的起保保单。
+        可能原因：① 该机构/业务员当月没有保单 ② 数据文件不包含该时间段 ③ 筛选条件过严。
+        建议先取消所有机构/业务员筛选后重试。
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Q4：页面顶部的「数据口径」切换（签单/起保）对续保分析有影响吗？</div>
+      <div class="faq-a">
+        <strong>没有影响。</strong>续保率计算强制使用起保日期口径，已在代码层面隔离（剥离 policy_date_start / policy_date_end 筛选参数）。
+        切换口径选择器不会改变续保分析结果。
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Q5：四象限图中圆点的大小代表什么？越大越好吗？</div>
+      <div class="faq-a">
+        圆点大小代表「应续件数」，即该对象的业务体量。体量大不代表好，要结合象限位置判断：
+        在「重点提升区」的大圆点（高体量、低续保率）才是最需要优先干预的对象。
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Q6：为什么有些日期行的当日应续=0，但月/年累计数字不变？</div>
+      <div class="faq-a">
+        正常现象。当日没有到期保单（0应续），因此当日续保率无意义，但月累计和年累计是滚动累积值，
+        不会因当日为0而归零——它们显示的是截至该日的历史累计情况。★ 标记行之后的日期就是这种情况。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 底部 -->
+<div style="text-align:center;padding:20px;font-size:12px;color:#9CA3AF;">
+  车险数据分析平台 · 续保分析使用指引 · 基于真实代码逻辑生成
+</div>
+
+</div><!-- /container -->
+</body>
+</html>

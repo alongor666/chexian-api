@@ -62,7 +62,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ icon: Icon, label, items })
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center px-3 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors"
+        className="flex items-center px-3 py-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors"
         aria-expanded={isOpen}
         aria-haspopup="menu"
       >
@@ -77,14 +77,14 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ icon: Icon, label, items })
 
       {isOpen && (
         <div
-          className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50"
+          className="absolute right-0 mt-2 w-48 bg-white dark:bg-neutral-800 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 py-1 z-50"
           role="menu"
         >
           {items.map((item, index) => {
             const ItemIcon = item.icon;
             return (
               <React.Fragment key={index}>
-                {item.divider && <div className="my-1 border-t border-gray-100 dark:border-gray-700" role="separator" />}
+                {item.divider && <div className="my-1 border-t border-neutral-100 dark:border-neutral-700" role="separator" />}
                 <button
                   onClick={() => {
                     item.onClick();
@@ -161,14 +161,14 @@ export const TopNavigation: React.FC = () => {
 
   return (
     <>
-      <header className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 fixed top-0 left-0 right-0 z-50">
+      <header className="h-14 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between px-4 fixed top-0 left-0 right-0 z-50">
         {/* 左侧：移动端菜单按钮 + 项目名称 */}
         <div className="flex items-center">
           {/* 移动端汉堡菜单按钮 */}
           {isMobile && (
             <button
               onClick={() => setMobileOpen(true)}
-              className="mr-2 p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors md:hidden min-w-[44px] min-h-[44px] flex items-center justify-center"
+              className="mr-2 p-2 rounded-lg text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 transition-colors md:hidden min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="打开导航菜单"
             >
               <Menu size={24} aria-hidden="true" />

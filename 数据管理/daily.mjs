@@ -267,11 +267,12 @@ async function main() {
 
     if (existsSync(syncScript)) {
       for (let i = 0; i < allFiles.length; i++) {
-        const cleanFlag = i === 0 ? '--clean-vps' : '';
+        const cleanFlag = i === 0 ? '' : '--keep-old';
         const restartFlag = i < allFiles.length - 1 ? '--no-restart' : '';
 
-        execSync(`bash "${syncScript}" "${allFiles[i]}" ${cleanFlag} ${restartFlag}`, {
-          stdio: 'inherit'
+        execSync(`node "${syncScript}" "${allFiles[i]}" ${cleanFlag} ${restartFlag}`, {
+          stdio: 'inherit',
+          env: { ...process.env, RUN_MAIN: '1' }
         });
       }
       console.log('');
@@ -311,11 +312,12 @@ async function main() {
 
     if (existsSync(syncScript)) {
       for (let i = 0; i < allFiles.length; i++) {
-        const cleanFlag = i === 0 ? '--clean-vps' : '';
+        const cleanFlag = i === 0 ? '' : '--keep-old';
         const restartFlag = i < allFiles.length - 1 ? '--no-restart' : '';
 
         execSync(`node "${syncScript}" "${allFiles[i]}" ${cleanFlag} ${restartFlag}`, {
-          stdio: 'inherit'
+          stdio: 'inherit',
+          env: { ...process.env, RUN_MAIN: '1' }
         });
       }
       console.log('');

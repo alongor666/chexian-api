@@ -64,8 +64,7 @@ export interface UserPermission {
 export const ORG_USER_DEFAULT_ALLOWED_ROUTES: readonly string[] = [
   '/performance-analysis',
   '/growth',
-  '/renewal',
-  '/cross-sell',
+  '/specialty',
 ];
 
 /**

@@ -93,6 +93,12 @@ const MarketingReportPage = lazy(() =>
 const PremiumReportPage = lazy(() =>
   import('../features/pages/PremiumReportPage').then((m) => ({ default: m.PremiumReportPage }))
 );
+const ReportsPage = lazy(() =>
+  import('../features/pages/ReportsPage').then((m) => ({ default: m.ReportsPage }))
+);
+const SpecialtyPage = lazy(() =>
+  import('../features/pages/SpecialtyPage').then((m) => ({ default: m.SpecialtyPage }))
+);
 const ReportTemplatesPanel = lazy(() =>
   import('../features/report/components/ReportTemplatesPanel').then((m) => ({ default: m.ReportTemplatesPanel }))
 );
@@ -103,13 +109,17 @@ const AccessControlPage = lazy(() =>
   import('../features/admin/AccessControlPage').then((m) => ({ default: m.AccessControlPage }))
 );
 
-// Loading fallback component
+// Loading fallback — content-aware skeleton screen
 const PageLoader = () => (
-  <div className="flex items-center justify-center min-h-[400px]">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
-      <p className="text-gray-500">加载中...</p>
+  <div className="p-6 space-y-6 animate-pulse">
+    <div className="h-10 bg-neutral-100 dark:bg-neutral-800 rounded-lg w-full" />
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="h-28 bg-neutral-100 dark:bg-neutral-800 rounded-xl" />
+      ))}
     </div>
+    <div className="h-64 bg-neutral-100 dark:bg-neutral-800 rounded-xl" />
+    <div className="h-48 bg-neutral-100 dark:bg-neutral-800 rounded-xl" />
   </div>
 );
 
@@ -183,46 +193,7 @@ function App() {
                       </RouteAccessGuard>
                     }
                   />
-                  <Route
-                    path="premium-report"
-                    element={
-                      <RouteAccessGuard routePath="/premium-report">
-                        <DataGuard>
-                          <LazyRoute><PremiumReportPage /></LazyRoute>
-                        </DataGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
-                  <Route
-                    path="marketing-report"
-                    element={
-                      <RouteAccessGuard routePath="/marketing-report">
-                        <DataGuard>
-                          <LazyRoute><MarketingReportPage /></LazyRoute>
-                        </DataGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
-                  <Route
-                    path="truck"
-                    element={
-                      <RouteAccessGuard routePath="/truck">
-                        <DataGuard>
-                          <LazyRoute><TruckPage /></LazyRoute>
-                        </DataGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
-                  <Route
-                    path="renewal"
-                    element={
-                      <RouteAccessGuard routePath="/renewal">
-                        <DataGuard>
-                          <LazyRoute><RenewalPage /></LazyRoute>
-                        </DataGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
+                  {/* premium-report, marketing-report, truck, renewal 已合并，见上方重定向 */}
                   {/* 权限管理 - BRANCH_ADMIN 专属，页面内部已有 isBranchAdmin 守卫，不套 RouteAccessGuard */}
                   <Route
                     path="admin/access-control"
@@ -232,16 +203,7 @@ function App() {
                       </LazyRoute>
                     }
                   />
-                  <Route
-                    path="cross-sell"
-                    element={
-                      <RouteAccessGuard routePath="/cross-sell">
-                        <DataGuard>
-                          <LazyRoute><CrossSellPage /></LazyRoute>
-                        </DataGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
+                  {/* cross-sell 已合并到 /specialty，见上方重定向 */}
                   <Route
                     path="growth"
                     element={
@@ -264,18 +226,7 @@ function App() {
                       </RouteAccessGuard>
                     }
                   />
-                  <Route
-                    path="comprehensive-analysis"
-                    element={
-                      <RouteAccessGuard routePath="/cost">
-                        <CostGuard>
-                          <DataGuard>
-                            <LazyRoute><ComprehensiveAnalysisPage /></LazyRoute>
-                          </DataGuard>
-                        </CostGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
+                  {/* comprehensive-analysis 已合并到 /cost，见上方重定向 */}
                   <Route
                     path="fee-analysis"
                     element={
@@ -288,16 +239,7 @@ function App() {
                       </RouteAccessGuard>
                     }
                   />
-                  <Route
-                    path="comparison"
-                    element={
-                      <RouteAccessGuard routePath="/comparison">
-                        <DataGuard>
-                          <LazyRoute><ComparisonPage /></LazyRoute>
-                        </DataGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
+                  {/* comparison 已合并到 /growth，见上方重定向 */}
                   <Route
                     path="coefficient"
                     element={
@@ -309,6 +251,38 @@ function App() {
                     }
                   />
 
+                  {/* 合并页面：业务报表（保费报表 + 营销战报）*/}
+                  <Route
+                    path="reports"
+                    element={
+                      <RouteAccessGuard routePath="/reports">
+                        <DataGuard>
+                          <LazyRoute><ReportsPage /></LazyRoute>
+                        </DataGuard>
+                      </RouteAccessGuard>
+                    }
+                  />
+
+                  {/* 合并页面：专项分析（驾意险 + 续保 + 货车）*/}
+                  <Route
+                    path="specialty"
+                    element={
+                      <RouteAccessGuard routePath="/specialty">
+                        <DataGuard>
+                          <LazyRoute><SpecialtyPage /></LazyRoute>
+                        </DataGuard>
+                      </RouteAccessGuard>
+                    }
+                  />
+
+                  {/* 旧路由重定向到合并页面 */}
+                  <Route path="premium-report" element={<Navigate to="/reports?tab=premium" replace />} />
+                  <Route path="marketing-report" element={<Navigate to="/reports?tab=marketing" replace />} />
+                  <Route path="truck" element={<Navigate to="/specialty?tab=truck" replace />} />
+                  <Route path="renewal" element={<Navigate to="/specialty?tab=renewal" replace />} />
+                  <Route path="cross-sell" element={<Navigate to="/specialty?tab=cross-sell" replace />} />
+                  <Route path="comparison" element={<Navigate to="/growth" replace />} />
+                  <Route path="comprehensive-analysis" element={<Navigate to="/cost?view=comprehensive" replace />} />
 
                   {/* 报表模板 - 不需要数据守卫 */}
                   <Route

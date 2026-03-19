@@ -261,7 +261,7 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
     <div>
       {useVirtualScroll ? (
         // 虚拟滚动表格
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="border border-neutral-200 rounded-lg overflow-hidden">
           <div style={{ minWidth: totalWidth, overflowX: 'auto' }}>
             <VirtualTableHeader />
             <List
@@ -274,7 +274,7 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
               {renderVirtualRow}
             </List>
           </div>
-          <div className="px-3 py-2 bg-gray-50 text-xs text-gray-500 border-t">
+          <div className="px-3 py-2 bg-neutral-50 text-xs text-neutral-500 border-t">
             显示 {Math.min(Math.floor(virtualListHeight / ROW_HEIGHT), data.length)} / {data.length} 行（虚拟滚动）
           </div>
         </div>
@@ -312,7 +312,7 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap justify-between gap-2 text-sm text-gray-500">
+      <div className="mt-4 flex flex-wrap justify-between gap-2 text-sm text-neutral-500">
         <div>
           共 {stats.total} 条记录 | 合规 {stats.compliant} 条 | 超限{' '}
           {stats.exceeded} 条 | 待定 {stats.pending} 条

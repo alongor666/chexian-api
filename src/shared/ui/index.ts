@@ -211,6 +211,14 @@ export {
   ListSkeleton,
 } from './Skeleton'
 
+// EmptyState 空状态
+export { EmptyState } from './EmptyState'
+export type { EmptyStateProps } from './EmptyState'
+
+// ErrorState 错误状态
+export { ErrorState } from './ErrorState'
+export type { ErrorStateProps } from './ErrorState'
+
 // 布局组件
 export { PageWithRightFilter } from './PageWithRightFilter'
 

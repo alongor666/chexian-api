@@ -49,7 +49,7 @@ export const capabilities: Capability[] = [
   },
   {
     id: 'premium-report',
-    route: '/premium-report',
+    route: '/reports?tab=premium',
     name: '保费报表',
     icon: 'DollarSign',
     description: '保费明细报表，含计划达成率、完成进度、机构对比',
@@ -63,7 +63,7 @@ export const capabilities: Capability[] = [
   },
   {
     id: 'marketing-report',
-    route: '/marketing-report',
+    route: '/reports?tab=marketing',
     name: '营销战报',
     icon: 'Target',
     description: '营销战报，汇总当期签单战绩、机构对比',
@@ -76,7 +76,7 @@ export const capabilities: Capability[] = [
   },
   {
     id: 'truck',
-    route: '/truck',
+    route: '/specialty?tab=truck',
     name: '营业货车',
     icon: 'Truck',
     description: '营业货车分析：吨位段分布、堆叠柱状图、机构对比',
@@ -89,7 +89,7 @@ export const capabilities: Capability[] = [
   },
   {
     id: 'renewal',
-    route: '/renewal',
+    route: '/specialty?tab=renewal',
     name: '续保分析',
     icon: 'RefreshCw',
     description: '续保率分析，含机构/团队/业务员维度续保率、续保明细下钻',
@@ -103,7 +103,7 @@ export const capabilities: Capability[] = [
   },
   {
     id: 'cross-sell',
-    route: '/cross-sell',
+    route: '/specialty?tab=cross-sell',
     name: '驾意险推介率',
     icon: 'Gift',
     description: '驾意险交叉销售推介率分析，四象限散点图（件均保费 vs 推介件数）',
@@ -134,8 +134,8 @@ export const capabilities: Capability[] = [
     route: '/cost',
     name: '成本分析',
     icon: 'Calculator',
-    description: '成本四子板块：赔付率、费用率、综合费用率、变动成本率',
-    keywords: ['成本', '赔付率', '费用率', '综合费用率', '变动成本率', '综合成本'],
+    description: '成本四子板块：赔付率、费用率、综合费用率、变动成本率，含综合分析视图',
+    keywords: ['成本', '赔付率', '费用率', '综合费用率', '变动成本率', '综合成本', '综合分析'],
     exampleQueries: [
       '成本分析',
       '赔付率是多少',
@@ -159,10 +159,10 @@ export const capabilities: Capability[] = [
   },
   {
     id: 'comparison',
-    route: '/comparison',
+    route: '/growth',
     name: '数据对比',
     icon: 'Scale',
-    description: '多维度数据横向对比：机构间、时间段间对比',
+    description: '多维度数据横向对比：机构间、时间段间对比（已合并至增长分析）',
     keywords: ['对比', '比较', '横向对比', '机构对比'],
     exampleQueries: [
       '机构之间数据对比',

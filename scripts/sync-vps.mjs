@@ -618,7 +618,8 @@ export {
   resolveTargetFile,
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMain = process.env.RUN_MAIN || (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]));
+if (isMain) {
   main().catch((e) => {
     log('red', `错误: ${e.message}`);
     process.exit(1);
