@@ -21,8 +21,7 @@ export interface PresetRole {
 export const ORG_ROLE_ALLOWED_ROUTES: string[] = [
   '/performance-analysis',
   '/growth',
-  '/renewal',
-  '/cross-sell',
+  '/specialty',
 ];
 
 export const ORG_ROLE_DEFAULT_ROUTE = '/performance-analysis';

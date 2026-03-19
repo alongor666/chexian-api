@@ -7,12 +7,8 @@ import {
   Sparkles,
   LayoutDashboard,
   DollarSign,
-  Target,
-  Truck,
-  RefreshCw,
   TrendingUp,
   Calculator,
-  Scale,
   Search,
   Gift,
   Percent,
@@ -48,15 +44,11 @@ const navItems: NavItem[] = [
 const dataNavItems: NavItem[] = [
   { path: '/dashboard', icon: LayoutDashboard, label: '仪表盘', shortLabel: '仪表' },
   { path: '/performance-analysis', icon: TrendingUp, label: '业绩分析', shortLabel: '业绩' },
-  { path: '/premium-report', icon: DollarSign, label: '保费报表', shortLabel: '报表' },
-  { path: '/marketing-report', icon: Target, label: '营销战报', shortLabel: '战报' },
-  { path: '/truck', icon: Truck, label: '营业货车', shortLabel: '货车' },
-  { path: '/renewal', icon: RefreshCw, label: '续保分析', shortLabel: '续保' },
-  { path: '/cross-sell', icon: Gift, label: '驾意险推介率', shortLabel: '推介' },
-  { path: '/growth', icon: TrendingUp, label: '增长分析', shortLabel: '增长' },
-  { path: '/cost', icon: Calculator, label: '成本分析', shortLabel: '成本' },
+  { path: '/reports', icon: DollarSign, label: '业务报表', shortLabel: '报表' },
+  { path: '/specialty', icon: Gift, label: '专项分析', shortLabel: '专项' },
+  { path: '/growth', icon: TrendingUp, label: '增长与对比', shortLabel: '增长' },
+  { path: '/cost', icon: Calculator, label: '成本综合', shortLabel: '成本' },
   { path: '/fee-analysis', icon: Percent, label: '费用分析', shortLabel: '费用' },
-  { path: '/comparison', icon: Scale, label: '数据对比', shortLabel: '对比' },
   { path: '/coefficient', icon: Search, label: '系数监控', shortLabel: '系数' },
 ];
 
@@ -113,22 +105,11 @@ export const SidebarNavigation: React.FC = () => {
           queryFn: () => apiClient.getPerformanceBundle(params),
         });
         break;
-      case '/cross-sell':
+      case '/specialty':
+        // 预取专项分析默认 tab（驾意险推介率）
         queryClient.prefetchQuery({
           queryKey: queryKeys.crossSellBundle(params),
           queryFn: () => apiClient.getCrossSellBundle(params),
-        });
-        break;
-      case '/renewal':
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.renewalAnalysis(params),
-          queryFn: () => apiClient.getRenewalAnalysis(params),
-        });
-        break;
-      case '/truck':
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.truckAnalysis(params),
-          queryFn: () => apiClient.getTruckAnalysis(params),
         });
         break;
       case '/coefficient':
@@ -182,12 +163,15 @@ export const SidebarNavigation: React.FC = () => {
         key={item.path}
         to={item.path}
         className={`group relative flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0 ${isActive(item.path)
-          ? 'bg-primary text-white shadow-md ring-1 ring-primary-border'
-          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+          ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-semibold'
+          : 'text-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 hover:text-neutral-900'
           }`}
         title={!showExpanded ? item.label : undefined}
         onMouseEnter={() => handlePrefetch(item.path)}
       >
+        {isActive(item.path) && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" aria-hidden="true" />
+        )}
         <IconComponent
           size={20}
           className="flex-shrink-0"

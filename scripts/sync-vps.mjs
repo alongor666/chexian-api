@@ -18,7 +18,7 @@
  */
 
 import { existsSync, statSync, readdirSync, readFileSync } from 'fs';
-import { join, dirname, basename } from 'path';
+import { join, dirname, basename, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import os from 'os';
@@ -618,7 +618,8 @@ export {
   resolveTargetFile,
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMain = process.env.RUN_MAIN || (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]));
+if (isMain) {
   main().catch((e) => {
     log('red', `错误: ${e.message}`);
     process.exit(1);

@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "前端开发服务器 (Vite)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "后端 API 服务器 (Express + DuckDB)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/start.mjs", "--server"],
+      "port": 3000
+    },
+    {
+      "name": "全栈一键启动 (前端 + 后端)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/start.mjs", "--all"],
+      "port": 5173
+    }
+  ]
+}

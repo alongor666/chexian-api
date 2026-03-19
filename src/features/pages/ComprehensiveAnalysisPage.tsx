@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFilterPanel';
 import { Tabs, Button } from '@/shared/ui';
@@ -50,7 +49,11 @@ function filterRowsByDimension(
   return rows.filter((row) => row.dimType === dimension);
 }
 
-export const ComprehensiveAnalysisPage: React.FC = () => {
+interface ComprehensiveAnalysisPageProps {
+  onBack?: () => void;
+}
+
+export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps> = ({ onBack }) => {
   const { filters, maxDataDate } = useGlobalFilters();
   const { data, loading, error } = useComprehensiveBundle(filters, maxDataDate);
 
@@ -214,13 +217,15 @@ export const ComprehensiveAnalysisPage: React.FC = () => {
       showBasicFilterBar={false}
       headerRightContent={(actions) => (
         <FilterQuickActions {...actions}>
-          <Link
-            to="/cost"
-            className={cn(buttonStyles.base, buttonStyles.secondary, buttonStyles.sizeSmall)}
-          >
-            <ArrowLeft size={14} className="mr-1" />
-            返回成本分析
-          </Link>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className={cn(buttonStyles.base, buttonStyles.secondary, buttonStyles.sizeSmall)}
+            >
+              <ArrowLeft size={14} className="mr-1" />
+              返回成本分析
+            </button>
+          )}
         </FilterQuickActions>
       )}
     >

@@ -43,7 +43,7 @@ export const CoefficientTopTable = memo<CoefficientTopTableProps>(({
     return (
       <div className="mb-6">
         <h3 className="text-base font-semibold mb-2">{title}</h3>
-        <div className="text-sm text-gray-500">暂无数据</div>
+        <div className="text-sm text-neutral-500 py-4 text-center">暂无数据</div>
       </div>
     );
   }

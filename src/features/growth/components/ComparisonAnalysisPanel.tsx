@@ -130,9 +130,9 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+      <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200">
         {/* 快捷预设按钮 */}
-        <div className="mb-4 pb-3 border-b border-gray-200">
+        <div className="mb-4 pb-3 border-b border-neutral-200">
           <ComparisonQuickPresets
             activePreset={activePreset}
             onPresetChange={handlePresetChange}
@@ -143,9 +143,9 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
         {/* 日期选择器（自定义模式显示，预设模式折叠） */}
         <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 ${activePreset !== 'custom' ? 'opacity-60' : ''}`}>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 mb-1">
               当前期间 (Period 1)
-              {activePreset !== 'custom' && <span className="text-xs text-gray-400 ml-2">自动计算</span>}
+              {activePreset !== 'custom' && <span className="text-xs text-neutral-400 ml-2">自动计算</span>}
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -154,7 +154,7 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
                 onChange={e => { setPeriod1Start(e.target.value); setActivePreset('custom'); }}
                 className="border rounded px-2 py-1 text-sm shadow-sm"
               />
-              <span className="text-gray-500">to</span>
+              <span className="text-neutral-500">to</span>
               <input
                 type="date"
                 value={period1End}
@@ -164,9 +164,9 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 mb-1">
               对比期间 (Period 2)
-              {activePreset !== 'custom' && <span className="text-xs text-gray-400 ml-2">自动计算</span>}
+              {activePreset !== 'custom' && <span className="text-xs text-neutral-400 ml-2">自动计算</span>}
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -175,7 +175,7 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
                 onChange={e => { setPeriod2Start(e.target.value); setActivePreset('custom'); }}
                 className="border rounded px-2 py-1 text-sm shadow-sm"
               />
-              <span className="text-gray-500">to</span>
+              <span className="text-neutral-500">to</span>
               <input
                 type="date"
                 value={period2End}
@@ -186,7 +186,7 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
           </div>
           <div className="flex items-end gap-3 flex-wrap">
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">分析维度</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">分析维度</label>
                 <select
                     value={groupBy}
                     onChange={e => setGroupBy(e.target.value as 'org' | 'salesman')}
@@ -199,16 +199,16 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
 
             {/* 指标模式切换 */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">指标模式</label>
-                <div className="flex bg-gray-100 rounded p-0.5">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">指标模式</label>
+                <div className="flex bg-neutral-100 rounded p-0.5">
                   <button
-                    className={`px-3 py-1 text-xs rounded transition-all ${metricMode === 'single' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500'}`}
+                    className={`px-3 py-1 text-xs rounded transition-all ${metricMode === 'single' ? 'bg-white shadow text-primary font-medium' : 'text-neutral-500'}`}
                     onClick={() => setMetricMode('single')}
                   >
                     单指标
                   </button>
                   <button
-                    className={`px-3 py-1 text-xs rounded transition-all ${metricMode === 'dual' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500'}`}
+                    className={`px-3 py-1 text-xs rounded transition-all ${metricMode === 'dual' ? 'bg-white shadow text-primary font-medium' : 'text-neutral-500'}`}
                     onClick={() => setMetricMode('dual')}
                     title="同时显示保费和件数"
                   >
@@ -225,22 +225,22 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
             <button
                 onClick={handleAnalyze}
                 disabled={loading}
-                className="bg-blue-600 text-white px-4 py-1.5 rounded hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium shadow-sm transition-colors"
+                className="bg-primary-dark text-white px-4 py-1.5 rounded hover:bg-primary-dark disabled:bg-neutral-400 text-sm font-medium shadow-sm transition-colors"
             >
                 {loading ? '分析中...' : '开始对比'}
             </button>
           </div>
         </div>
-        <div className="text-xs text-gray-500 flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-blue-400"></span>
+        <div className="text-xs text-neutral-500 flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-primary-light"></span>
           <span>使用全局筛选条件 (不含日期)</span>
-          <span className="inline-block w-2 h-2 rounded-full bg-green-400 ml-2"></span>
+          <span className="inline-block w-2 h-2 rounded-full bg-success-light ml-2"></span>
           <span>日期口径: {filters.date_criteria === 'insurance_start_date' ? '起保日期' : '签单日期'}</span>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-danger-bg border border-danger-border text-danger-dark px-4 py-3 rounded">
           {error}
         </div>
       )}
@@ -249,7 +249,7 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
       {metricMode === 'dual' && dualMetricData.length > 0 && (
         <div className="space-y-6">
           {/* 双Y轴图表 */}
-          <div className="bg-white p-4 rounded shadow border border-gray-100">
+          <div className="bg-white p-4 rounded shadow border border-neutral-100">
             <DualYAxisComparisonChart
               data={dualMetricData}
               loading={loading}
@@ -261,32 +261,32 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
           </div>
 
           {/* 双指标详细表格 */}
-          <div className="bg-white p-4 rounded shadow border border-gray-100">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">详细数据对比（双指标）</h3>
+          <div className="bg-white p-4 rounded shadow border border-neutral-100">
+            <h3 className="text-lg font-semibold mb-4 text-neutral-800">详细数据对比（双指标）</h3>
             <StickyTableFrame maxHeight={400}>
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-neutral-200">
+                <thead className="bg-neutral-50">
                   <tr>
-                    <th className={cn('px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.firstColumnHeader)}>维度</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>当期保费</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>基期保费</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>保费增长率</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>当期件数</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>基期件数</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase bg-gray-50', stickyTableStyles.header)}>件数增长率</th>
+                    <th className={cn('px-3 py-2 text-left text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.firstColumnHeader)}>维度</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>当期保费</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>基期保费</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>保费增长率</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>当期件数</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>基期件数</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>件数增长率</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-neutral-200">
                   {dualMetricData.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-blue-50 transition-colors">
-                      <td className={cn('px-3 py-2 text-sm font-medium text-gray-900 bg-white', stickyTableStyles.firstColumn)}>{row.dim_key}</td>
-                      <td className="px-3 py-2 text-sm text-gray-900 text-right font-tabular">{formatPremiumWan(row.current_premium)}</td>
-                      <td className="px-3 py-2 text-sm text-gray-500 text-right font-tabular">{formatPremiumWan(row.previous_premium)}</td>
+                    <tr key={idx} className="hover:bg-primary-bg transition-colors">
+                      <td className={cn('px-3 py-2 text-sm font-medium text-neutral-900 bg-white', stickyTableStyles.firstColumn)}>{row.dim_key}</td>
+                      <td className="px-3 py-2 text-sm text-neutral-900 text-right font-tabular">{formatPremiumWan(row.current_premium)}</td>
+                      <td className="px-3 py-2 text-sm text-neutral-500 text-right font-tabular">{formatPremiumWan(row.previous_premium)}</td>
                       <td className={cn('px-3 py-2 text-sm text-right font-tabular font-medium', getTrendColorClass(row.premium_growth_rate || 0, 'positive'))}>
                         {row.premium_growth_rate !== null ? formatRate(row.premium_growth_rate) : '-'}
                       </td>
-                      <td className="px-3 py-2 text-sm text-gray-900 text-right font-tabular">{formatCount(row.current_count)}</td>
-                      <td className="px-3 py-2 text-sm text-gray-500 text-right font-tabular">{formatCount(row.previous_count)}</td>
+                      <td className="px-3 py-2 text-sm text-neutral-900 text-right font-tabular">{formatCount(row.current_count)}</td>
+                      <td className="px-3 py-2 text-sm text-neutral-500 text-right font-tabular">{formatCount(row.previous_count)}</td>
                       <td className={cn('px-3 py-2 text-sm text-right font-tabular font-medium', getTrendColorClass(row.count_growth_rate || 0, 'positive'))}>
                         {row.count_growth_rate !== null ? formatRate(row.count_growth_rate) : '-'}
                       </td>
@@ -302,18 +302,18 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
       {/* 单指标模式结果 */}
       {metricMode === 'single' && data.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white p-4 rounded shadow border border-gray-100 flex flex-col h-[500px]">
+            <div className="bg-white p-4 rounded shadow border border-neutral-100 flex flex-col h-[500px]">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800">对比分析图表 (Top 15)</h3>
-                  <div className="flex bg-gray-100 rounded p-1">
+                  <h3 className="text-lg font-semibold text-neutral-800">对比分析图表 (Top 15)</h3>
+                  <div className="flex bg-neutral-100 rounded p-1">
                     <button
-                      className={`px-3 py-1 text-xs rounded transition-all ${chartMode === 'comparison' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+                      className={`px-3 py-1 text-xs rounded transition-all ${chartMode === 'comparison' ? 'bg-white shadow text-primary font-medium' : 'text-neutral-500 hover:text-neutral-700'}`}
                       onClick={() => setChartMode('comparison')}
                     >
                       数值对比
                     </button>
                     <button
-                      className={`px-3 py-1 text-xs rounded transition-all ${chartMode === 'growth' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+                      className={`px-3 py-1 text-xs rounded transition-all ${chartMode === 'growth' ? 'bg-white shadow text-primary font-medium' : 'text-neutral-500 hover:text-neutral-700'}`}
                       onClick={() => setChartMode('growth')}
                     >
                       增长率
@@ -344,25 +344,25 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
                 </div>
             </div>
 
-            <div className="bg-white p-4 rounded shadow border border-gray-100 flex flex-col h-[500px]">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">详细数据对比</h3>
+            <div className="bg-white p-4 rounded shadow border border-neutral-100 flex flex-col h-[500px]">
+                <h3 className="text-lg font-semibold mb-4 text-neutral-800">详细数据对比</h3>
                 <StickyTableFrame className="flex-1" maxHeight={420}>
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-neutral-200">
+                      <thead className="bg-neutral-50">
                           <tr>
-                              <th className={cn('px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.firstColumnHeader)}>维度</th>
-                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.header)}>当前期间</th>
-                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.header)}>对比期间</th>
-                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.header)}>变化量</th>
-                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50', stickyTableStyles.header)}>增长率</th>
+                              <th className={cn('px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.firstColumnHeader)}>维度</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.header)}>当前期间</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.header)}>对比期间</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.header)}>变化量</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.header)}>增长率</th>
                           </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
+                      <tbody className="bg-white divide-y divide-neutral-200">
                           {data.map((row, idx) => (
-                              <tr key={idx} className="hover:bg-blue-50 transition-colors">
-                                  <td className={cn('px-4 py-3 text-sm font-medium text-gray-900 bg-white', stickyTableStyles.firstColumn)}>{row.org_level_3 || row.salesman_name || '-'}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-900 text-right font-tabular">{formatValue(row.current_value)}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-500 text-right font-tabular">{formatValue(row.previous_value)}</td>
+                              <tr key={idx} className="hover:bg-primary-bg transition-colors">
+                                  <td className={cn('px-4 py-3 text-sm font-medium text-neutral-900 bg-white', stickyTableStyles.firstColumn)}>{row.org_level_3 || row.salesman_name || '-'}</td>
+                                  <td className="px-4 py-3 text-sm text-neutral-900 text-right font-tabular">{formatValue(row.current_value)}</td>
+                                  <td className="px-4 py-3 text-sm text-neutral-500 text-right font-tabular">{formatValue(row.previous_value)}</td>
                                   <td className={cn('px-4 py-3 text-sm text-right font-tabular font-medium', getTrendColorClass(row.current_value - row.previous_value, 'positive'))}>
                                       {formatValue(row.current_value - row.previous_value)}
                                   </td>

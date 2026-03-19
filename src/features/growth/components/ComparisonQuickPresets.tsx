@@ -64,14 +64,14 @@ export const ComparisonQuickPresets: React.FC<ComparisonQuickPresetsProps> = ({
       : 'px-3 py-1.5 text-sm rounded-md';
 
     if (disabled) {
-      return `${baseClasses} bg-gray-100 text-gray-400 cursor-not-allowed`;
+      return `${baseClasses} bg-neutral-100 text-neutral-400 cursor-not-allowed`;
     }
 
     if (isActive) {
-      return `${baseClasses} bg-blue-600 text-white font-medium shadow-sm`;
+      return `${baseClasses} bg-primary text-white font-medium shadow-sm`;
     }
 
-    return `${baseClasses} bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors`;
+    return `${baseClasses} bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors`;
   };
 
   /** 获取当前预设的期间显示 */
@@ -83,7 +83,7 @@ export const ComparisonQuickPresets: React.FC<ComparisonQuickPresetsProps> = ({
     <div className="space-y-2">
       {/* 预设按钮组 */}
       <div className="flex items-center gap-1 flex-wrap">
-        <span className="text-xs text-gray-500 mr-1">对比模式：</span>
+        <span className="text-xs text-neutral-500 mr-1">对比模式：</span>
         {PRESET_ORDER.map((preset) => {
           const config = PRESET_CONFIGS[preset];
           return (
@@ -103,13 +103,13 @@ export const ComparisonQuickPresets: React.FC<ComparisonQuickPresetsProps> = ({
 
       {/* 期间预览（非自定义模式） */}
       {!compact && currentPeriods && (
-        <div className="text-xs text-gray-500 pl-1 space-y-0.5">
+        <div className="text-xs text-neutral-500 pl-1 space-y-0.5">
           <div className="flex items-center gap-2">
-            <span className="w-12 text-gray-400">当期：</span>
+            <span className="w-12 text-neutral-400">当期：</span>
             <span className="font-tabular">{formatPeriodDisplay(currentPeriods.current)}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-12 text-gray-400">基期：</span>
+            <span className="w-12 text-neutral-400">基期：</span>
             <span className="font-tabular">{formatPeriodDisplay(currentPeriods.previous)}</span>
           </div>
         </div>
@@ -117,7 +117,7 @@ export const ComparisonQuickPresets: React.FC<ComparisonQuickPresetsProps> = ({
 
       {/* 自定义模式提示 */}
       {!compact && activePreset === 'custom' && (
-        <div className="text-xs text-gray-400 pl-1">
+        <div className="text-xs text-neutral-400 pl-1">
           请在下方手动选择对比期间
         </div>
       )}
