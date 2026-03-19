@@ -2,28 +2,71 @@
 
 本文件是仓库级 AI Agent 协作操作系统，用于统一角色边界、流程与交付约束。执行任务时请同时遵守顶层 System/Developer/User 指令。
 
+> **chexian-api** — 车险数据分析平台（API 版）。前端 React + TypeScript + Vite + ECharts，后端 Express + DuckDB。纯 REST API 模式，已上线生产环境 `https://chexian.cretvalu.com`。
+
 ---
 
-## 0. AI 行为红线（ZERO TOLERANCE）
+## 0. AI 行为红线（ZERO TOLERANCE - 违反即失败）
 
-> 来源：Claude Code 使用洞察报告（36 会话 / 319 消息）
+> **来源**：36 个会话、319 条消息的 Insights 分析。18 次“方法错误”是头号摩擦源。
 
-- **执行不规划**：涉及 Git 操作（commit/push/PR）直接执行命令，禁止用规划或摘要替代执行
-- **先搜再写**：写代码前必须全库搜索，禁止假设“模块不存在”
-- **验证不声称**：禁止声称“已可用”，必须通过真实 API 请求或浏览器验证
-- **修补不拆除**：安全加固/重构时禁止删除整块插件或集成，只能修补
-- **排版合规要求 (DC-003)**：严禁在 UI 层面硬编码 Tailwind 色值或虚构 CSS 类，必须通过 `import { colorClasses, fontStyles, cardStyles } from '@/shared/styles'` 获取样式。
-- **并行不串行**：3+ 独立模块任务必须并行执行 subagents
-- **聚焦不发散**：单次会话只完成一个明确目标，完成并验证后再继续
+### 执行纪律
+
+| 红线 | 反面教训 | 正确做法 |
+|------|---------|---------|
+| **执行不规划** | 用户要求 commit/push/PR，却输出规划或摘要代替执行 | Git 操作直接执行命令，禁止用分析替代 |
+| **先搜再写** | 假设“模块/数据不存在”后误删逻辑 | 写代码前必须 `grep/glob/find` 全库搜索 |
+| **验证不声称** | 声称“已可用/已集成”，实际 API 不通 | 必须通过真实 API 请求或浏览器验证 |
+| **修补不拆除** | 安全加固时整块删除插件或集成 | 只能修补漏洞，禁止直接拆除整个模块 |
+| **并行不串行** | 逐个串行检查多个独立模块，被用户要求重做 | 3+ 独立模块/任务必须并行执行 |
+| **层级不扁平** | 将“下钻”误做成扁平筛选 | 先确认交互模型：点击行 → 选维度 → 筛选重组 + 面包屑 |
+| **聚焦不发散** | 一次会话并行推进多个目标导致半途而废 | 单次会话只完成一个明确目标并验证闭环 |
 
 ### Git 安全检查（推送前必做）
 
 ```bash
+# 1. 检查大文件（>100MB 阻塞推送）
 git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | awk '$1 == "blob" && $3 > 104857600 {print $3, $4}'
+
+# 2. 检查分支共同祖先
 git merge-base main HEAD || echo "WARNING: no common ancestor"
+
+# 3. 扫描冲突标记
+grep -rn '<<<<<<< \|=======$\|>>>>>>>' BACKLOG.md PROGRESS.md
 ```
 
-### 0.1 基于最近20次提交的反思加固（2026-02-27）
+### 破坏性操作（项目特有红线）
+
+删除插件/集成、修改 `rateLimiter.ts` / `security.ts` 安全配置前，必须列出影响范围并获得用户确认。
+
+### 强制 Pre-flight Checklist（每次任务启动前逐条执行，不可跳过）
+
+| # | 检查项 | 命令/动作 | 触发条件 |
+|---|--------|----------|---------|
+| 1 | 搜索已有实现 | `grep -r "关键词" src/ server/src/` | 写任何新代码前 |
+| 2 | 搜索已有数据 | `find 数据管理/ -name "*.json" -o -name "*.parquet"` | 涉及数据源时 |
+| 3 | API 端点验证 | `curl -s -w '%{http_code}' http://localhost:3000/api/[路由]` | 声称功能“已完成”前 |
+| 4 | 破坏性影响清单 | 列出将删除/修改的文件并等待确认 | 删除文件/模块/插件前 |
+| 5 | 大文件检查 | `git rev-list --objects --all | ...` | 任意 `git push` 前 |
+| 6 | 冲突标记扫描 | `grep -rn '<<<<<<< \|=======$\|>>>>>>>' BACKLOG.md PROGRESS.md` | 任意 `git push` / PR 前 |
+| 7 | 治理校验 | `bun run governance` | 任意 `git push` / PR 前 |
+
+**执行规则**：任一项跳过即视为任务未完成；检查结果必须在输出中可见。
+
+### 0.1 方法确认协议（防止方向性错误）
+
+遇到以下关键词时，必须先确认再实现：
+
+| 触发关键词 | 必须确认的问题 | 确认方式 |
+|-----------|--------------|---------|
+| “下钻 / drill-down / 层级” | 是层级面包屑还是扁平筛选？ | 先问用户 |
+| “已集成 / 已可用 / 已完成” | 是否有真实 API / 浏览器证据？ | 执行验证命令 |
+| “不存在 / 没有数据 / 缺少” | 是否已全库搜索？ | `grep -r` + `find` |
+| “安全加固 / 重构 / 清理” | 将删除或修改哪些文件？ | 列清单并等待确认 |
+| “commit / push / PR” | - | 直接执行命令，禁止输出规划文档 |
+| “全部检查 / 逐个验证” | - | 必须并行执行，不得串行替代 |
+
+### 0.2 基于最近20次提交的反思加固（2026-02-27）
 
 样本范围：`git log -20`（`a8f9863` → `df5b96b`）
 
@@ -54,6 +97,14 @@ git diff --cached --name-only | rg "(^|/)(test_output|vitest_log|.*\\.log)$" && 
 
 ## 1. 启动前必读（3分钟）
 
+### 智能加载（按任务复杂度选择阅读深度）
+
+| 任务类型 | 特征关键词 | 必读章节 | 可跳过 |
+|---------|-----------|---------|-------|
+| 简单 | 修复、改、调整、查看 | §0-3 | §4-8 |
+| 中等 | 新增、实现、开发、重构 | §0-5、§8 | §6-7 |
+| 复杂 | 架构、设计、协作、CI/CD | 全部 | 无 |
+
 ### 必经入口（强制）
 - 项目架构规范（嵌套项目/子模块必读）：[ARCHITECTURE.md](./ARCHITECTURE.md)
 - 技术栈声明：[开发文档/TECH_STACK.md](./开发文档/TECH_STACK.md)
@@ -76,6 +127,10 @@ git diff --cached --name-only | rg "(^|/)(test_output|vitest_log|.*\\.log)$" && 
 - 数据知识协议：[.claude/data-knowledge-protocol.md](./.claude/data-knowledge-protocol.md)
 - 唯一事实源（业务字段/规则）：[车险数据业务规则字典.md](./数据管理/knowledge/rules/车险数据业务规则字典.md)
 - 快速参考：[QUICK_REFERENCE.md](./数据管理/knowledge/QUICK_REFERENCE.md)
+
+### 缺口清单工作流
+
+发现信息缺口 → 登记到 [开发文档/缺口清单.md](./开发文档/缺口清单.md) → 当前任务标记 `BLOCKED` → 用户补充信息后恢复开发。禁止在信息缺口未补齐时继续编码。
 
 ### Parquet Schema 知识库（AI SQL 必读）
 - ⭐ [PARQUET_SCHEMA_KNOWLEDGE.md](./数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md)
@@ -144,6 +199,7 @@ PROPOSED → TRIAGED → IN_PROGRESS → DONE
 2. 在 `BACKLOG.md` 领取任务并标记 `IN_PROGRESS`。
 3. 填写关联文档与关联代码路径。
 4. 若发现信息缺口，立即登记到 `开发文档/缺口清单.md` 并按需将任务标记 `BLOCKED`。
+5. 执行 §0 的 Pre-flight Checklist，禁止跳过“先搜再写”。
 
 ### 开发中
 - 默认使用 **Bun**（禁止 npm/yarn/pnpm 作为日常执行器）。
@@ -156,6 +212,7 @@ PROPOSED → TRIAGED → IN_PROGRESS → DONE
 2. 运行治理校验：`bun run governance`。
 3. 执行测试（至少 `bun run test`；按改动补充专项验证）。
 4. 建议执行冲突检查：`bun run scripts/check-write-conflict.mjs`。
+5. 禁止在没有可见验证结果的情况下声称“已完成”。
 
 ### 常用命令
 - 安装依赖：`bun install`
@@ -241,6 +298,12 @@ import { Card, Badge, Button } from '@/shared/ui';
 // className="bg-white rounded-lg shadow-sm p-4"
 ```
 
+**DC-003 细则补充（与最新 `CLAUDE.md` 对齐）**：
+- 数字和数据展示必须使用 `fontStyles.kpi` / `fontStyles.chart` / `fontStyles.tabular`
+- 趋势颜色必须使用 `colorClasses` 或 `getTrendColorClass(value)`
+- 卡片和按钮优先复用 `cardStyles` / `buttonStyles` 或 `src/shared/ui/*`
+- 禁止虚构 Tailwind 类名，例如 `font-kpi`、`text-brand-danger`
+
 **格式化规范（MUST）**：
 - 统一使用 `src/shared/utils/formatters.ts` 中函数（如 `formatCount`, `formatPercent`, `formatPremiumWan`）
 - 数字展示统一使用 `textStyles.numeric`
@@ -301,6 +364,11 @@ WHERE year = EXTRACT(YEAR FROM CURRENT_DATE)
 3. 用户验收：按需求场景做人工确认
 
 高风险改动（SQL、筛选、时间维度、权限）必须记录可复现证据（日志/截图/测试输出）。
+
+**补充要求**：
+- 声称“已完成/已可用”前，至少提供一个真实 API 或浏览器验证结果
+- 禁止用“请用户自行检查”替代自动化或浏览器验证
+- 验证结果必须在输出中可见，例如 HTTP 状态码、返回行数、关键截图或测试通过日志
 
 ### 4.6 VPS 分层数据架构（CRITICAL - 违反将导致生产内存崩溃）
 
@@ -452,11 +520,23 @@ WHERE year = EXTRACT(YEAR FROM CURRENT_DATE)
 - `@kilo`：B500-B599
 - `@codebuddy`：B600-B699
 
+### 并行执行触发规则（自动判断，不可串行替代）
+
+满足以下任一条件时，必须并行执行：
+
+| 触发条件 | 示例 |
+|---------|------|
+| 3+ 独立文件/模块检查 | “把 8 个页面都检查一遍” |
+| 用户要求“全部/逐个/每个/所有” | “逐个验证接口” |
+| 多表 / 多字段数据验证 | 验证 30 个字段映射 |
+| 互不依赖的前后端任务 | 前端修复 + 后端修复 |
+
 ### PR 前检查（推荐）
 ```bash
 git fetch origin main && git rebase origin/main
 bun run scripts/check-write-conflict.mjs
 bun run governance
+git diff --cached --name-only | rg "(^|/)(test_output|vitest_log|.*\\.log)$" && echo "BLOCK: remove debug artifacts" || true
 ```
 
 ### 异常处理
@@ -560,7 +640,8 @@ bun run verify:vps:heatmap
 ---
 
 **变更历史**：
-- 2026-02-27：新增 §0.1「最近20次提交反思加固」，补充权限过滤漏检、替换式重构回滚、提交范围失真与调试产物入库的防回归规则
+- 2026-03-15：对齐最新 `CLAUDE.md`，新增执行纪律表、Pre-flight Checklist、方法确认协议、DC-003 细则补充与并行触发规则
+- 2026-02-27：新增 §0.2「最近20次提交反思加固」，补充权限过滤漏检、替换式重构回滚、提交范围失真与调试产物入库的防回归规则
 - 2026-02-23：§8 新增 SSH 连接前提（`~/.ssh/config` 别名），补充一键链路与故障排查表
 - 2026-02-15：新增§8生产部署与数据同步章节，添加一键 `sync-data.sh` 脚本引用
 - 2026-02-15：基于 `CLAUDE.md` 与当前代码现状重构，统一为纯 API 架构、更新红线文件与启动验证协议

@@ -106,7 +106,8 @@ async function callOpenRouter(
  */
 async function callZhipu(
   messages: ChatMessage[],
-  apiKey: string
+  apiKey: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<{ success: boolean; content?: string; error?: string }> {
   // 复用 zhipu.ts 的 JWT 生成逻辑
   const parts = apiKey.split('.');
@@ -126,11 +127,14 @@ async function callZhipu(
   const signature = b64url(createHmac('sha256', secret).update(`${header}.${payload}`).digest());
   const token = `${header}.${payload}.${signature}`;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${ZHIPU_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ model: 'glm-4.7-flash', messages, temperature: 0.3, max_tokens: 500 }),
+      signal: controller.signal,
     });
 
     if (!response.ok) return { success: false, error: `Zhipu API 错误: ${response.status}` };
@@ -142,6 +146,8 @@ async function callZhipu(
     return { success: false, error: '模型返回内容为空' };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : '请求失败' };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -232,7 +238,7 @@ export async function detectRequirement(
   // 2. 兜底 Zhipu
   const zhipuApiKey = process.env.ZHIPU_API_KEY || process.env.VITE_ZHIPU_API_KEY || '';
   if (zhipuApiKey) {
-    const result = await callZhipu(messages, zhipuApiKey);
+    const result = await callZhipu(messages, zhipuApiKey, timeoutMs);
     if (result.success && result.content) {
       const response = parseLLMResponse(result.content);
       response.source = 'zhipu';

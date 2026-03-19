@@ -2,7 +2,7 @@
 
 **状态机思维**：记录里程碑、阻塞点、下一步接力入口。详细任务追踪请查看 [BACKLOG.md](./BACKLOG.md)。
 
-**最后更新时间**: 2026-03-15（B229）
+**最后更新时间**: 2026-03-15（B230）
 
 ---
 
@@ -62,6 +62,7 @@
 | 2026-03-10 | AI 图文联动与 Growth 长表平移完成 (B227) | `cross-sell` AI 解读中的极值结论已沉淀为结构化注释并注入趋势图；增长分析页三张核心长表接入统一 sticky/frozen 容器，继续向原计划的“图文联动 + 全站长表一致体验”推进 | 代码证据：`src/features/dashboard/CrossSellAnalysisPanel.tsx`、`src/features/dashboard/CrossSellTrendChart.tsx`、`tests/cross-sell-trend-annotations.test.ts`、`src/features/growth/components/GrowthDetailSection.tsx`、`src/features/growth/components/GrowthComparisonSection.tsx`、`src/features/growth/components/ComparisonAnalysisPanel.tsx`；验证证据：`bun run test -- --run tests/cross-sell-trend-annotations.test.ts tests/cross-sell-ux-review-fixes.test.tsx`、`bun run typecheck`、`bun run build` |
 | 2026-03-13 | Playwright 全量基线二次收敛完成 (B228) | 引入共享登录态 setup project，修复过期的页面断言与筛选抽屉匹配逻辑，恢复端到端全量回归 11/11 稳定通过，并完成真实登录/数据准确性/设计复用抽查 | 代码证据：`playwright.config.ts`、`tests/e2e/auth.setup.ts`、`tests/e2e/helpers/session.ts`、`tests/e2e/01-dashboard-flow.spec.ts`、`tests/e2e/02-filter-sql.spec.ts`、`tests/e2e/03-cleanup-zero-downtime-gate.spec.ts`、`tests/e2e/06-page-shell-ux.spec.ts`；验证证据：`bun run governance`、`bun run test:e2e --reporter=line` |
 | 2026-03-15 | PR #116 production gate 修复完成 (B229) | 修复根级 Vitest 对 server DuckDB native 依赖解析不稳定导致的 `Production Readiness Gate` 失败；把 parquet-processing 测试从硬编码 `server/node_modules` 改为运行时解析，并为 clean runner 场景补齐根级依赖 | 代码证据：`package.json`、`bun.lock`、`tests/parquet-processing.test.ts`；验证证据：`bun run test -- --run tests/parquet-processing.test.ts` 在正常环境与临时移走 `server/node_modules` 的场景均 4/4 通过；`bun run production:gate -- --ci` 已通过预检/治理/构建/全量单测，剩余本机 E2E 端口占用不属于代码回归 |
+| 2026-03-15 | 治理文档基线同步完成 (B230) | `GEMINI.md` 与 `AGENTS.md` 对齐最新 `CLAUDE.md`：新增执行纪律表、Pre-flight Checklist、方法确认协议、DC-003 细则和并行触发规则，并保留各自专属章节 | 代码证据：`GEMINI.md`、`AGENTS.md`、`BACKLOG.md`；验证证据：`bun run governance` |
 | 2026-03-06 | 今日夜间流水线执行记录补全 | 驾乘险推介率日报、机构拆分汇总与 VPS 热力图线上复验证据已归档 | 证据：`数据管理/驾乘险推荐率/输出/数据分析报告/驾乘险推介率日报_2026-03-06.md`、`数据管理/驾乘险推荐率/机构数据/数据拆分汇总.json`、`开发文档/reviews/2026-03-06-nightly-pipeline-summary.md` |
 | 2026-02-26 | 驾乘险推介率布局优化 (B309) | 将客户类别等标签移到页面标题下方靠左对齐，筛选器条件右置，统一两区域Tabs和小chips块字体样式(@gemini) | `src/features/pages/CrossSellPage.tsx` 布局优化；`Tabs.tsx`增加 `size="mini"` |
 | 2026-02-26 | 驾乘险推介率标签选项扩充 (B310) | 客户类别和车上责任增加“全部”/“不分保额”，支持全量数据查看(@gemini) | 修改 `CrossSellPage` 默认状态，更新前端组件、Zod校验及后端 `cross-sell-summary` SQL逻辑 |

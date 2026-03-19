@@ -1,9 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, Loader2, ExternalLink, MessageSquare, Sparkles } from 'lucide-react';
+import { Send, Loader2, ExternalLink, MessageSquare, Sparkles, Star, Zap } from 'lucide-react';
 import { apiClient, type CapabilityInfo } from '../../shared/api/client';
 import { useDataStatus } from '../../shared/contexts/DataContext';
+import { useGlobalFilters } from '../../shared/contexts/FilterContext';
+import { usePermission } from '../../shared/contexts/PermissionContext';
 import { cn } from '../../shared/styles';
+import { parseIntent } from './intentParser/intentParser';
+import type { QuickLink } from './intentParser/types';
 
 /** 飞书需求提交链接 */
 const FEATURE_REQUEST_URL = import.meta.env.VITE_FEATURE_REQUEST_URL || '';
@@ -13,9 +17,15 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type?: 'match' | 'clarify' | 'no_match' | 'loading' | 'error';
+  type?: 'match' | 'clarify' | 'no_match' | 'loading' | 'error' | 'local_match';
   capabilities?: CapabilityInfo[];
   options?: string[];
+  /** 本地匹配的快捷链接 */
+  quickLinks?: QuickLink[];
+  /** 是否显示"AI 深度分析"按钮（LOW 置信度时） */
+  showAiFallback?: boolean;
+  /** 本地匹配的原始输入（用于 AI fallback） */
+  originalInput?: string;
 }
 
 /**
@@ -26,10 +36,13 @@ interface ChatMessage {
 export const AIAssistantPage: React.FC = () => {
   const navigate = useNavigate();
   const { isDataLoaded } = useDataStatus();
+  const { filterOptions, setFilters } = useGlobalFilters();
+  const { userPermission } = usePermission();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Array<{ text: string; capabilityId: string }>>([]);
+  const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -41,6 +54,17 @@ export const AIAssistantPage: React.FC = () => {
       }
     }).catch(() => {
       // 静默失败，快捷建议非关键功能
+    });
+  }, []);
+
+  // 加载能力列表（用于本地意图匹配）
+  useEffect(() => {
+    apiClient.getCapabilities().then((res) => {
+      if (res.success && res.data) {
+        setCapabilities(res.data);
+      }
+    }).catch(() => {
+      // 静默失败，能力列表缺失时退化为纯 AI 模式
     });
   }, []);
 
@@ -56,16 +80,44 @@ export const AIAssistantPage: React.FC = () => {
       .map((m) => ({ role: m.role, content: m.content }));
   }, [messages]);
 
-  // 发送消息
-  const sendMessage = useCallback(async (text: string) => {
+  // 发送消息（双路径：本地规则匹配 → AI fallback）
+  const sendMessage = useCallback(async (text: string, forceAI = false) => {
     if (!text.trim() || isLoading) return;
+
+    const trimmed = text.trim();
 
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: text.trim(),
+      content: trimmed,
     };
 
+    // ─── 路径 1：本地意图匹配（<10ms） ───
+    if (!forceAI && capabilities.length > 0) {
+      const result = parseIntent(trimmed, capabilities, filterOptions, {
+        allowedRoutes: userPermission?.allowedRoutes,
+      });
+
+      if (result.confidence !== 'none') {
+        const localMsg: ChatMessage = {
+          id: `local-${Date.now()}`,
+          role: 'assistant',
+          content: result.confidence === 'high'
+            ? '为您找到以下匹配功能：'
+            : '可能相关的功能（不确定时可点击 AI 深度分析）：',
+          type: 'local_match',
+          quickLinks: result.links,
+          showAiFallback: result.confidence === 'low',
+          originalInput: trimmed,
+        };
+
+        setMessages((prev) => [...prev, userMsg, localMsg]);
+        setInput('');
+        return;
+      }
+    }
+
+    // ─── 路径 2：后端 AI 分析（原有逻辑） ───
     const loadingMsg: ChatMessage = {
       id: `loading-${Date.now()}`,
       role: 'assistant',
@@ -79,7 +131,7 @@ export const AIAssistantPage: React.FC = () => {
 
     try {
       const response = await apiClient.detectRequirement({
-        message: text.trim(),
+        message: trimmed,
         conversationHistory: getConversationHistory(),
       });
 
@@ -116,7 +168,7 @@ export const AIAssistantPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, getConversationHistory]);
+  }, [isLoading, getConversationHistory, capabilities, filterOptions, userPermission]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,13 +190,39 @@ export const AIAssistantPage: React.FC = () => {
     sendMessage(option);
   };
 
+  // 带筛选参数的跳转（本地匹配专用）
+  const handleNavigateWithFilters = useCallback((route: string, filters: Record<string, unknown>) => {
+    // 将提取的筛选参数写入 FilterContext
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (Array.isArray(filters.org_level_3)) {
+        next.org_level_3 = filters.org_level_3 as string[];
+      }
+      if (Array.isArray(filters.salesman_name)) {
+        next.salesman_name = filters.salesman_name as string[];
+      }
+      if (Array.isArray(filters.customer_category)) {
+        next.customer_category = filters.customer_category as string[];
+      }
+      if (typeof filters.policy_date_start === 'string') {
+        next.policy_date_start = filters.policy_date_start;
+      }
+      if (typeof filters.policy_date_end === 'string') {
+        next.policy_date_end = filters.policy_date_end;
+      }
+      return next;
+    });
+    navigate(route);
+  }, [setFilters, navigate]);
+
   const handleNavigate = (route: string) => {
-    if (isDataLoaded) {
-      navigate(route);
-    } else {
-      navigate(route);
-    }
+    navigate(route);
   };
+
+  // AI 深度分析（用户点击 fallback 按钮时触发）
+  const handleAiFallback = useCallback((originalInput: string) => {
+    sendMessage(originalInput, true);
+  }, [sendMessage]);
 
   const hasMessages = messages.length > 0;
 
@@ -189,6 +267,8 @@ export const AIAssistantPage: React.FC = () => {
                 message={msg}
                 onOptionClick={handleOptionClick}
                 onNavigate={handleNavigate}
+                onNavigateWithFilters={handleNavigateWithFilters}
+                onAiFallback={handleAiFallback}
                 isDataLoaded={isDataLoaded}
               />
             ))}
@@ -242,8 +322,10 @@ const MessageBubble: React.FC<{
   message: ChatMessage;
   onOptionClick: (option: string) => void;
   onNavigate: (route: string) => void;
+  onNavigateWithFilters: (route: string, filters: Record<string, unknown>) => void;
+  onAiFallback: (originalInput: string) => void;
   isDataLoaded: boolean;
-}> = ({ message, onOptionClick, onNavigate, isDataLoaded }) => {
+}> = ({ message, onOptionClick, onNavigate, onNavigateWithFilters, onAiFallback, isDataLoaded }) => {
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -272,6 +354,74 @@ const MessageBubble: React.FC<{
       <div className="flex justify-start">
         <div className="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-tl-sm bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
           {message.content}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── 本地匹配的快捷链接 ───
+  if (message.type === 'local_match' && message.quickLinks) {
+    return (
+      <div className="flex justify-start">
+        <div className="max-w-[85%] space-y-3">
+          <div className="px-4 py-2.5 rounded-2xl rounded-tl-sm bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-sm">
+            <div className="flex items-start gap-2">
+              <Zap size={14} className="mt-0.5 text-amber-500 flex-shrink-0" />
+              <span>{message.content}</span>
+            </div>
+          </div>
+
+          {/* 快捷链接卡片 */}
+          <div className="space-y-2 pl-2">
+            {message.quickLinks.map((link, idx) => (
+              <button
+                key={link.capability.id}
+                onClick={() => onNavigateWithFilters(link.capability.route, link.filters)}
+                className={cn(
+                  'w-full text-left p-3 rounded-xl border transition-all group',
+                  link.isPrimary
+                    ? 'border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 hover:border-blue-400 hover:shadow-md'
+                    : 'border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 hover:border-blue-300 hover:shadow-sm'
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {link.isPrimary && <Star size={13} className="text-amber-500" />}
+                    <span className="font-medium text-sm text-neutral-800 dark:text-neutral-200">
+                      {link.label}
+                    </span>
+                  </div>
+                  <ExternalLink
+                    size={14}
+                    className="text-neutral-400 group-hover:text-blue-500 transition-colors"
+                  />
+                </div>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2">
+                  {link.capability.description}
+                </p>
+                {/* 筛选参数标签 */}
+                <FilterChips filters={link.filters} />
+                {idx === 0 && link.isPrimary && (
+                  <p className="text-[11px] text-blue-500 dark:text-blue-400 mt-1.5">
+                    ⭐ 最佳匹配 — 点击直接跳转
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* LOW 置信度：显示 AI 深度分析按钮 */}
+          {message.showAiFallback && message.originalInput && (
+            <div className="pl-2">
+              <button
+                onClick={() => onAiFallback(message.originalInput!)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-purple-200 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+              >
+                <Sparkles size={13} />
+                不对？AI 深度分析
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -349,6 +499,42 @@ const MessageBubble: React.FC<{
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+/**
+ * 筛选参数标签（显示提取到的机构/业务员/时间等）
+ */
+const FilterChips: React.FC<{ filters: Record<string, unknown> }> = ({ filters }) => {
+  const chips: string[] = [];
+
+  if (Array.isArray(filters.org_level_3)) {
+    chips.push(...(filters.org_level_3 as string[]));
+  }
+  if (Array.isArray(filters.salesman_name)) {
+    chips.push(...(filters.salesman_name as string[]));
+  }
+  if (Array.isArray(filters.customer_category)) {
+    chips.push(...(filters.customer_category as string[]));
+  }
+  if (typeof filters.policy_date_start === 'string') {
+    const end = typeof filters.policy_date_end === 'string' ? filters.policy_date_end : '';
+    chips.push(`${filters.policy_date_start} ~ ${end}`);
+  }
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1 mt-2">
+      {chips.map((chip, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center px-2 py-0.5 text-[11px] rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+        >
+          {chip}
+        </span>
+      ))}
     </div>
   );
 };
