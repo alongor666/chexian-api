@@ -101,18 +101,21 @@ describe('Organizations Config', () => {
 
 
   describe('route defaults for org users', () => {
-    it('should restrict org user to 4 analysis modules when allowedRoutes is empty', () => {
+    it('should allow merged specialty routes and keep legacy aliases compatible for org users', () => {
       const orgUser = getPermissionByUsername('leshan')!;
 
       expect(canAccessRoute(orgUser, '/performance-analysis')).toBe(true);
       expect(canAccessRoute(orgUser, '/growth')).toBe(true);
+      expect(canAccessRoute(orgUser, '/specialty')).toBe(true);
       expect(canAccessRoute(orgUser, '/renewal')).toBe(true);
       expect(canAccessRoute(orgUser, '/cross-sell')).toBe(true);
+      expect(canAccessRoute(orgUser, '/truck')).toBe(true);
 
       expect(canAccessRoute(orgUser, '/dashboard')).toBe(false);
+      expect(canAccessRoute(orgUser, '/reports')).toBe(false);
       expect(canAccessRoute(orgUser, '/premium-report')).toBe(false);
       expect(canAccessRoute(orgUser, '/marketing-report')).toBe(false);
-      expect(canAccessRoute(orgUser, '/truck')).toBe(false);
+      expect(canAccessRoute(orgUser, '/cost')).toBe(false);
     });
 
     it('should use performance-analysis as fallback default route for org user', () => {
