@@ -177,8 +177,8 @@ export const PerformanceHeaderActions: React.FC<{
 const EXPAND_DIMS_TABS: TabItem[] = [
   { key: 'none', label: '不展开' },
   { key: 'energy', label: '油电' },
-  { key: 'business_nature', label: '续新转' },
-  { key: 'energy_business_nature', label: '油电+续新转' },
+  { key: 'business_nature', label: '新转续' },
+  { key: 'energy_business_nature', label: '油电+新转续' },
 ];
 
 
@@ -1460,8 +1460,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">新能源占比</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">续保占比</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">转保占比</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">新车占比</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">过户占比</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">新保占比</th>
+                  <th className="px-4 py-3 text-right font-medium text-neutral-600">过户转保占比</th>
                 </tr>
               </thead>
               <tbody>
@@ -1648,8 +1648,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                   <th className="px-3 py-2 text-right font-medium text-neutral-600">新能源占比</th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600">续保占比</th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600">转保占比</th>
-                  <th className="px-3 py-2 text-right font-medium text-neutral-600">新车占比</th>
-                  <th className="px-3 py-2 text-right font-medium text-neutral-600">过户占比</th>
+                  <th className="px-3 py-2 text-right font-medium text-neutral-600">新保占比</th>
+                  <th className="px-3 py-2 text-right font-medium text-neutral-600">过户转保占比</th>
                 </tr>
               </thead>
               <tbody>
@@ -1730,8 +1730,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                   <th className="px-3 py-2 text-right font-medium text-neutral-600">新能源占比</th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600">续保占比</th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600">转保占比</th>
-                  <th className="px-3 py-2 text-right font-medium text-neutral-600">新车占比</th>
-                  <th className="px-3 py-2 text-right font-medium text-neutral-600">过户占比</th>
+                  <th className="px-3 py-2 text-right font-medium text-neutral-600">新保占比</th>
+                  <th className="px-3 py-2 text-right font-medium text-neutral-600">过户转保占比</th>
                 </tr>
               </thead>
               <tbody>

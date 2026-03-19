@@ -357,9 +357,9 @@ function getExpandDimensionConfig(expandDims: PerformanceSummaryExpandDims): Exp
   const energyKeyExpr = `CASE WHEN is_nev_bool THEN 'electric' ELSE 'oil' END`;
   const energyOrderExpr = `CASE WHEN is_nev_bool THEN 2 ELSE 1 END`;
 
-  const natureLabelExpr = `CASE WHEN is_renewal_bool THEN '续' WHEN is_new_car_bool THEN '新' ELSE '转' END`;
-  const natureKeyExpr = `CASE WHEN is_renewal_bool THEN 'renewal' WHEN is_new_car_bool THEN 'new' ELSE 'transfer' END`;
-  const natureOrderExpr = `CASE WHEN is_renewal_bool THEN 1 WHEN is_new_car_bool THEN 2 ELSE 3 END`;
+  const natureLabelExpr = `CASE WHEN is_new_car_bool THEN '新保' WHEN is_renewal_bool THEN '续保' ELSE '转保' END`;
+  const natureKeyExpr = `CASE WHEN is_new_car_bool THEN 'new_business' WHEN is_renewal_bool THEN 'renewal' ELSE 'transfer_business' END`;
+  const natureOrderExpr = `CASE WHEN is_new_car_bool THEN 1 WHEN is_renewal_bool THEN 3 ELSE 2 END`;
 
   if (expandDims === 'energy') {
     return {
@@ -595,10 +595,10 @@ export function generatePerformanceSummaryQuery(
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
         SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
         SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
         SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
         SUM(
           CASE
             WHEN COALESCE(st.salesman_premium_wan, 0) > 0
@@ -618,10 +618,10 @@ export function generatePerformanceSummaryQuery(
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
         SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
         SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
         SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
         SUM(
           CASE
             WHEN COALESCE(st.salesman_premium_wan, 0) > 0
@@ -687,10 +687,10 @@ export function generatePerformanceSummaryQuery(
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
         SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
         SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
         SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
         SUM(
           CASE
             WHEN COALESCE(st.salesman_premium_wan, 0) > 0
@@ -713,10 +713,10 @@ export function generatePerformanceSummaryQuery(
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
         SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
         SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
         SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
         SUM(
           CASE
             WHEN COALESCE(st.salesman_premium_wan, 0) > 0
@@ -983,10 +983,10 @@ export function generatePerformanceDrilldownQuery(
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
         SUM(CASE WHEN is_nev THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car) AND is_renewal THEN 1 ELSE 0 END) AS renewal_count,
         SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) THEN 1 ELSE 0 END) AS transfer_business_count,
         SUM(CASE WHEN is_new_car THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN is_transfer THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN 1 ELSE 0 END) AS transfer_count,
         SUM(
           CASE
             WHEN COALESCE(st.salesman_premium_wan, 0) > 0
@@ -1127,10 +1127,10 @@ export function generatePerformanceTopSalesmanQuery(
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
         SUM(CASE WHEN is_nev THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car) AND is_renewal THEN 1 ELSE 0 END) AS renewal_count,
         SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) THEN 1 ELSE 0 END) AS transfer_business_count,
         SUM(CASE WHEN is_new_car THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN is_transfer THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN 1 ELSE 0 END) AS transfer_count,
         SUM(
           CASE
             WHEN COALESCE(st.salesman_premium_wan, 0) > 0
@@ -1250,13 +1250,26 @@ function heatmapDrillToWhere(steps: HeatmapDrillStep[]): string {
         return step.value === '新能源'
           ? `(TRY_CAST(p.is_nev AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_nev AS VARCHAR))) IN ('1','y','yes','true','t','是'))`
           : `NOT (TRY_CAST(p.is_nev AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_nev AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
-      case 'business_nature':
+      case 'business_nature': {
+        const renewalBaseWhere = `(TRY_CAST(p.is_renewal AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_renewal AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+        const newCarWhere = `(TRY_CAST(p.is_new_car AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_new_car AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+        const transferBaseWhere = `(TRY_CAST(p.is_transfer AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_transfer AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+        const renewalWhere = `NOT ${newCarWhere} AND ${renewalBaseWhere}`;
+        const transferBusinessWhere = `NOT ${newCarWhere} AND NOT ${renewalBaseWhere}`;
+        const transferInTransferWhere = `${transferBusinessWhere} AND ${transferBaseWhere}`;
+        const nonTransferInTransferWhere = `${transferBusinessWhere} AND NOT ${transferBaseWhere}`;
         switch (step.value) {
-          case '续保': return `(TRY_CAST(p.is_renewal AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_renewal AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
-          case '新车': return `(TRY_CAST(p.is_new_car AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_new_car AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
-          case '过户': return `(TRY_CAST(p.is_transfer AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_transfer AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
-          default: return `NOT (TRY_CAST(p.is_renewal AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_renewal AS VARCHAR))) IN ('1','y','yes','true','t','是')) AND NOT (TRY_CAST(p.is_new_car AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_new_car AS VARCHAR))) IN ('1','y','yes','true','t','是')) AND NOT (TRY_CAST(p.is_transfer AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_transfer AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+          case '新保':
+          case '新车':
+            return newCarWhere;
+          case '续保':
+            return renewalWhere;
+          case '转保': return transferBusinessWhere;
+          case '过户转保': return transferInTransferWhere;
+          case '非过户转保': return nonTransferInTransferWhere;
+          default: return 'FALSE';
         }
+      }
       default:
         return 'TRUE';
     }
@@ -1306,9 +1319,8 @@ function getHeatmapGroupByExpr(
     case 'business_nature':
       return {
         selectExpr: `CASE
+          WHEN ${truthyExpr(`${prefix}is_new_car`)} THEN '新保'
           WHEN ${truthyExpr(`${prefix}is_renewal`)} THEN '续保'
-          WHEN ${truthyExpr(`${prefix}is_new_car`)} THEN '新车'
-          WHEN ${truthyExpr(`${prefix}is_transfer`)} THEN '过户'
           ELSE '转保'
         END`,
         alias: 'dimension_value',

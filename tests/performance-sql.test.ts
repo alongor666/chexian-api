@@ -38,6 +38,19 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('ORDER BY coverage_order, row_level, child_order');
   });
 
+  it('summary business_nature should use 新转续三分类键值', () => {
+    const sql = generatePerformanceSummaryQuery('1=1', '1=1', 'all', 'month', 'mom', 'business_nature');
+
+    expect(sql).toContain("WHEN is_new_car_bool THEN '新保'");
+    expect(sql).toContain("WHEN is_renewal_bool THEN '续保'");
+    expect(sql).toContain("WHEN is_new_car_bool THEN 'new_business'");
+    expect(sql).toContain("WHEN is_renewal_bool THEN 'renewal'");
+    expect(sql).toContain("ELSE 'transfer_business' END AS expand_key");
+    expect(sql).toContain("WHEN is_new_car_bool THEN 1");
+    expect(sql).toContain("WHEN is_renewal_bool THEN 3");
+    expect(sql).toContain("ELSE 2 END AS child_order");
+  });
+
   it('summary SQL should allow reusing precomputed period bounds', () => {
     const sql = generatePerformanceSummaryQuery(
       'policy_date >= \'2026-01-01\'',
@@ -109,6 +122,13 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('CURRENT_DATE');
   });
 
+  it('drilldown SQL should treat 续保为旧车续保且过户为过户转保', () => {
+    const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'week', 'mom', [], 'org_level_3');
+
+    expect(sql).toContain('SUM(CASE WHEN (NOT is_new_car) AND is_renewal THEN 1 ELSE 0 END) AS renewal_count');
+    expect(sql).toContain('SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN 1 ELSE 0 END) AS transfer_count');
+  });
+
 
   it('drilldown SQL should support tonnage segment grouping for truck categories', () => {
     const sql = generatePerformanceDrilldownQuery(
@@ -176,5 +196,43 @@ describe('performance analysis SQL', () => {
 
     expect(sql).toContain('NULL::DOUBLE AS plan_premium');
     expect(sql).toContain('NULL AS achievement_rate');
+  });
+
+  it('heatmap business_nature should not split 过户为独立值域', () => {
+    const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature');
+
+    expect(sql).toContain("THEN '新保'");
+    expect(sql).toContain("THEN '续保'");
+    expect(sql).toContain("ELSE '转保'");
+    expect(sql).not.toContain("THEN '过户'");
+  });
+
+  it('heatmap business_nature drill filter should map 转保 to 旧车非续保', () => {
+    const sql = generatePerformanceOrgHeatmapQuery(
+      '1=1',
+      'all',
+      'day',
+      15,
+      'business_nature',
+      [{ dimension: 'business_nature', value: '转保' }]
+    );
+
+    expect(sql).toContain("NOT (TRY_CAST(p.is_renewal AS BOOLEAN) = true");
+    expect(sql).toContain("NOT (TRY_CAST(p.is_new_car AS BOOLEAN) = true");
+  });
+
+  it('heatmap business_nature drill filter should support 过户转保子类', () => {
+    const sql = generatePerformanceOrgHeatmapQuery(
+      '1=1',
+      'all',
+      'day',
+      15,
+      'business_nature',
+      [{ dimension: 'business_nature', value: '过户转保' }]
+    );
+
+    expect(sql).toContain("NOT (TRY_CAST(p.is_renewal AS BOOLEAN) = true");
+    expect(sql).toContain("NOT (TRY_CAST(p.is_new_car AS BOOLEAN) = true");
+    expect(sql).toContain("(TRY_CAST(p.is_transfer AS BOOLEAN) = true");
   });
 });
