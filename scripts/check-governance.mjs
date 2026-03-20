@@ -809,6 +809,154 @@ function checkParquetOverlapInCurrent() {
 }
 
 // ============================================================
+// 第14项检查：暂存区凭据/敏感产物扫描
+// ============================================================
+
+/**
+ * 阻止含 token 的 Playwright auth 状态文件或含敏感 key 的文件进入提交。
+ * 根因：commit 82c78ac 将 output/playwright/.auth/user.json（含 cx_access_token）直接提交到仓库。
+ */
+function checkStagedCredentials() {
+  info('检查暂存区凭据/敏感产物...');
+
+  let stagedFiles = [];
+  try {
+    const output = execSync('git diff --cached --name-only -z', {
+      cwd: ROOT_DIR,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    stagedFiles = output.split('\0').filter(Boolean);
+  } catch {
+    warning('无法读取 git 暂存区，跳过凭据扫描');
+    return true;
+  }
+
+  if (stagedFiles.length === 0) {
+    success('暂存区为空，无凭据风险');
+    return true;
+  }
+
+  const credErrors = [];
+
+  // 规则1：路径匹配 Playwright auth 状态目录
+  const authPathPattern = /output[\\/]playwright[\\/]\.auth[\\/]/;
+  const authPathFiles = stagedFiles.filter(f => authPathPattern.test(f));
+  if (authPathFiles.length > 0) {
+    authPathFiles.forEach(f =>
+      credErrors.push(`路径命中 Playwright auth 目录（含 token）：${f}`)
+    );
+  }
+
+  // 规则2：文件内容包含敏感 key（cx_access_token / cx_refresh_token）
+  const SENSITIVE_KEYS = ['cx_access_token', 'cx_refresh_token'];
+  for (const file of stagedFiles) {
+    if (authPathPattern.test(file)) continue; // 已被路径规则标记，跳过
+
+    const filePath = path.join(ROOT_DIR, file);
+    if (!fs.existsSync(filePath)) continue;
+
+    let content;
+    try {
+      content = fs.readFileSync(filePath, 'utf-8');
+    } catch {
+      continue; // 二进制文件跳过
+    }
+
+    for (const key of SENSITIVE_KEYS) {
+      if (content.includes(key)) {
+        credErrors.push(`文件内容包含敏感 key "${key}"：${file}`);
+        break;
+      }
+    }
+  }
+
+  if (credErrors.length > 0) {
+    error(`检测到 ${credErrors.length} 个凭据/敏感产物已加入暂存区（阻断提交）：`);
+    credErrors.forEach(e => console.log(`    - ${e}`));
+    console.log('    ▶ 移出暂存区：git restore --staged <file>');
+    console.log('    ▶ 确认 .gitignore 包含 output/playwright/.auth/');
+    return false;
+  }
+
+  success('暂存区凭据扫描通过');
+  return true;
+}
+
+// ============================================================
+// 第15项检查：PR 体量门禁（大体量提交切片）
+// ============================================================
+
+/**
+ * 检查本次变更行数，防止工具/文档大包与业务逻辑混合提交。
+ *
+ * 规则：
+ *   > 800 行  → WARNING（不阻断，但提示拆分意图）
+ *   > 2000 行 → ERROR + exit(1)（强制拆分或注明例外原因）
+ *
+ * 背景：本窗口出现 +44,852 行大包提交，淹没了业务改动评审焦点，
+ * 并引发事后热修复（fix: restore auto-deploy gate）。
+ */
+function checkPrSizeLimit() {
+  info('检查 PR 体量门禁（大体量提交切片）...');
+
+  let statOutput = '';
+
+  // 优先使用 HEAD~1（已提交的变更），回退到暂存区统计
+  for (const args of [
+    ['diff', 'HEAD~1', '--stat'],
+    ['diff', '--cached', '--stat'],
+  ]) {
+    try {
+      statOutput = execSync(`git ${args.join(' ')}`, {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      if (statOutput.trim()) break;
+    } catch {
+      // 继续尝试下一种
+    }
+  }
+
+  if (!statOutput.trim()) {
+    success('PR 体量检查跳过（无法获取 git diff，非 git 上下文）');
+    return true;
+  }
+
+  // 解析 "N insertions(+), M deletions(-)" 末行
+  const summaryMatch = statOutput.match(/(\d+)\s+insertion|(\d+)\s+deletion/g);
+  let totalLines = 0;
+  if (summaryMatch) {
+    for (const seg of summaryMatch) {
+      const n = parseInt(seg, 10);
+      if (!isNaN(n)) totalLines += n;
+    }
+  }
+
+  if (totalLines > 2000) {
+    error(
+      `PR 体量超过 2000 行（实际: ${totalLines} 行）——必须拆分或在 PR 描述中注明例外原因。\n` +
+      '    ▶ 工具/文档批量导入 vs 业务逻辑变更请拆成独立 PR\n' +
+      '    ▶ 若确为合法大包（如技能库更新），请在 PR body 中写明原因后重试'
+    );
+    return false;
+  }
+
+  if (totalLines > 800) {
+    warning(
+      `本次变更超过 800 行（实际: ${totalLines} 行）。\n` +
+      '    ▶ 请确认：工具/文档批量导入 vs 业务逻辑变更是否已拆分到独立 PR？\n' +
+      '    ▶ PR 描述中是否说明了大体量原因？（不阻断，仅提醒）'
+    );
+    return true;
+  }
+
+  success(`PR 体量检查通过（${totalLines} 行，在 800 行阈值内）`);
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -829,6 +977,8 @@ function main() {
     { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
     { name: '锁文件策略', fn: checkPackageManagerLockPolicy },
     { name: 'Parquet重叠', fn: checkParquetOverlapInCurrent },
+    { name: '凭据扫描', fn: checkStagedCredentials },
+    { name: 'PR体量门禁', fn: checkPrSizeLimit },
   ];
 
   let passedCount = 0;
