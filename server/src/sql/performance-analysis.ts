@@ -548,9 +548,9 @@ export function generatePerformanceSummaryQuery(
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
         SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
         SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
-        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
+        SUM(CASE WHEN (NOT is_renewal_bool) AND is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
         SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
         SUM(
           CASE
@@ -1212,14 +1212,15 @@ function heatmapDrillToWhere(steps: HeatmapDrillStep[]): string {
         const renewalBaseWhere = truthyExpr('p.is_renewal');
         const newCarWhere = truthyExpr('p.is_new_car');
         const transferBaseWhere = truthyExpr('p.is_transfer');
-        const renewalWhere = `NOT ${newCarWhere} AND ${renewalBaseWhere}`;
-        const transferBusinessWhere = `NOT ${newCarWhere} AND NOT ${renewalBaseWhere}`;
+        const renewalWhere = renewalBaseWhere;
+        const newBusinessWhere = `NOT ${renewalBaseWhere} AND ${newCarWhere}`;
+        const transferBusinessWhere = `NOT ${renewalBaseWhere} AND NOT ${newCarWhere}`;
         const transferInTransferWhere = `${transferBusinessWhere} AND ${transferBaseWhere}`;
         const nonTransferInTransferWhere = `${transferBusinessWhere} AND NOT ${transferBaseWhere}`;
         switch (step.value) {
           case '新保':
           case '新车':
-            return newCarWhere;
+            return newBusinessWhere;
           case '续保':
             return renewalWhere;
           case '转保': return transferBusinessWhere;
@@ -1276,11 +1277,11 @@ function getHeatmapGroupByExpr(
       };
     case 'business_nature':
       return {
-        // 四分类：新保 / 续保 / 过户转保 / 非过户转保
-        // CASE 顺序即优先级：先判新车，再判续保，再判过户，其余为非过户转保
+        // 四分类：续保 / 新保 / 过户转保 / 非过户转保
+        // CASE 顺序即优先级：先按是否续保，其次判新车，再判过户，其余为非过户转保
         selectExpr: `CASE
-          WHEN ${truthyExpr(`${prefix}is_new_car`)} THEN '新保'
           WHEN ${truthyExpr(`${prefix}is_renewal`)} THEN '续保'
+          WHEN ${truthyExpr(`${prefix}is_new_car`)} THEN '新保'
           WHEN ${truthyExpr(`${prefix}is_transfer`)} THEN '过户转保'
           ELSE '非过户转保'
         END`,
@@ -1448,11 +1449,12 @@ export function generatePerformanceOrgHeatmapQuery(
         CAST(p.policy_date AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         COALESCE(NULLIF(TRIM(CAST(p.salesman_name AS VARCHAR)), ''), '__unknown__') AS salesman_name,
-        COALESCE(p.premium, 0) / 10000.0 AS premium_wan
+        p.premium / 10000.0 AS premium_wan
       FROM PolicyFact p
       ${needsTeamJoin ? "LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))" : ''}
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
+        AND COALESCE(p.premium, 0) > 0
         ${drillAnd}
     ),
     period_bounds AS (

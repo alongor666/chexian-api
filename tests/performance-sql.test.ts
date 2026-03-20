@@ -202,6 +202,13 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('NULL AS achievement_rate');
   });
 
+  it('heatmap SQL should use 承保口径并排除零负保费记录', () => {
+    const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature');
+
+    expect(sql).toContain('p.premium / 10000.0 AS premium_wan');
+    expect(sql).toContain('AND COALESCE(p.premium, 0) > 0');
+  });
+
   it('heatmap business_nature should generate 4-category dimension: 新保/续保/过户转保/非过户转保', () => {
     const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature');
 
@@ -243,5 +250,124 @@ describe('performance analysis SQL', () => {
     expect(sql).toMatch(/NOT\s*\(\s*\n?\s*TRY_CAST\(p\.is_renewal AS BOOLEAN\)/);
     expect(sql).toMatch(/NOT\s*\(\s*\n?\s*TRY_CAST\(p\.is_new_car AS BOOLEAN\)/);
     expect(sql).toContain("TRY_CAST(p.is_transfer AS BOOLEAN) = true");
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 测试组 A：业务性质维度快照（12 个组合）
+  // 固化四分类口径（新保/续保/过户转保/非过户转保），防止回退。
+  // ─────────────────────────────────────────────────────────────────────────
+
+  describe('业务性质维度快照 — 四分类不变量（12 组合）', () => {
+    it('[A-01] heatmap: 新保 × 非新能源 × 非下钻 → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature');
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-02] heatmap: 新保 × 新能源 × 非下钻 → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('is_nev = true', 'all', 'day', 15, 'business_nature');
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-03] heatmap: 续保 × 非新能源 × 非下钻 → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('is_renewal = true AND is_nev = false', 'all', 'day', 15, 'business_nature');
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-04] heatmap: 续保 × 新能源 × 非下钻 → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('is_renewal = true AND is_nev = true', 'all', 'day', 15, 'business_nature');
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-05] heatmap: 过户转保 × 非新能源 × 非下钻 → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('is_transfer = true AND is_nev = false', 'all', 'day', 15, 'business_nature');
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-06] heatmap: 非过户转保 × 非新能源 × 非下钻 → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery(
+        'is_transfer = false AND is_new_car = false AND is_renewal = false AND is_nev = false',
+        'all', 'day', 15, 'business_nature'
+      );
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-07] heatmap: 新保 × 非新能源 × 下钻(过户转保) → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature',
+        [{ dimension: 'business_nature', value: '过户转保' }]);
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-08] heatmap: 续保 × 非新能源 × 下钻(续保) → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('is_renewal = true', 'all', 'day', 15, 'business_nature',
+        [{ dimension: 'business_nature', value: '续保' }]);
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-09] heatmap: 过户转保 × 非新能源 × 下钻(过户转保) → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('is_transfer = true', 'all', 'day', 15, 'business_nature',
+        [{ dimension: 'business_nature', value: '过户转保' }]);
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-10] heatmap: 非过户转保 × 非新能源 × 下钻(非过户转保) → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature',
+        [{ dimension: 'business_nature', value: '非过户转保' }]);
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-11] heatmap: 新保 × 新能源 × 下钻(新保) → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('is_nev = true', 'all', 'day', 15, 'business_nature',
+        [{ dimension: 'business_nature', value: '新保' }]);
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+
+    it('[A-12] heatmap: 续保 × 新能源 × 下钻(续保) → 包含四分类关键字', () => {
+      const sql = generatePerformanceOrgHeatmapQuery('is_renewal = true AND is_nev = true', 'all', 'day', 15, 'business_nature',
+        [{ dimension: 'business_nature', value: '续保' }]);
+      expect(sql).toContain('过户转保');
+      expect(sql).toContain('非过户转保');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 测试组 B：不可回退到三分类
+  // 断言 business_nature 维度 SQL 中不以 '其他' 作为最终分类标签。
+  // ─────────────────────────────────────────────────────────────────────────
+
+  describe('业务性质不可回退三分类（B 组）', () => {
+    it("[B-01] heatmap business_nature SQL 不得包含 ELSE '其他' 作为兜底分类", () => {
+      const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature');
+      expect(sql).not.toContain("ELSE '其他'");
+    });
+
+    it("[B-02] heatmap business_nature 下钻 SQL 同样不得包含 ELSE '其他'", () => {
+      const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature',
+        [{ dimension: 'business_nature', value: '非过户转保' }]);
+      expect(sql).not.toContain("ELSE '其他'");
+    });
+
+    it("[B-03] summary business_nature 保留三分类，转保以 '其他' 为展示标签（预期行为，与 heatmap 四分类不同）", () => {
+      const sql = generatePerformanceSummaryQuery('1=1', '1=1', 'all', 'month', 'mom', 'business_nature');
+      // summary 维度保持三分类：新保/续保/其他（转保），是已知口径差异，不是回退
+      expect(sql).toContain("ELSE '其他'");
+      // expand_key 仍用 transfer_business（内部键与展示标签分离）
+      expect(sql).toContain("ELSE 'transfer_business' END AS expand_key");
+    });
+
+    it("[B-04] drilldown SQL 不得包含 ELSE '其他' 作为 business_nature 分类标签", () => {
+      const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'week', 'mom', [], 'org_level_3');
+      expect(sql).not.toContain("ELSE '其他'");
+    });
   });
 });

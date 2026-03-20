@@ -104,4 +104,5 @@ vitest_log.txt
 dev_log.txt
 test_err.txt
 output/playwright/.auth/
+output/**/*.auth.json
 .gstack/
