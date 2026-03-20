@@ -353,9 +353,12 @@ describe('performance analysis SQL', () => {
       expect(sql).not.toContain("ELSE '其他'");
     });
 
-    it("[B-03] summary expandDims=business_nature SQL 不得包含 ELSE '其他'", () => {
+    it("[B-03] summary business_nature 保留三分类，转保以 '其他' 为展示标签（预期行为，与 heatmap 四分类不同）", () => {
       const sql = generatePerformanceSummaryQuery('1=1', '1=1', 'all', 'month', 'mom', 'business_nature');
-      expect(sql).not.toContain("ELSE '其他'");
+      // summary 维度保持三分类：新保/续保/其他（转保），是已知口径差异，不是回退
+      expect(sql).toContain("ELSE '其他'");
+      // expand_key 仍用 transfer_business（内部键与展示标签分离）
+      expect(sql).toContain("ELSE 'transfer_business' END AS expand_key");
     });
 
     it("[B-04] drilldown SQL 不得包含 ELSE '其他' 作为 business_nature 分类标签", () => {
