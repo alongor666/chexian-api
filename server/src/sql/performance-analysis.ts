@@ -542,6 +542,24 @@ export function generatePerformanceSummaryQuery(
   const useExpandRows = expandDims !== 'none';
   const expandConfig = useExpandRows ? getExpandDimensionConfig(expandDims) : null;
 
+  // 业务性质指标聚合 SQL — 4个CTE共用，避免重复定义
+  const businessMetricsSql = `
+        SUM(premium_wan) AS premium,
+        COUNT(DISTINCT dedup_key) AS auto_count,
+        COUNT(*) AS row_count,
+        SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
+        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
+        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
+        SUM(
+          CASE
+            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
+              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
+            ELSE 0
+          END
+        ) AS allocated_plan`;
+
   const sql = `
     WITH
     ${periodBounds},
@@ -590,22 +608,7 @@ export function generatePerformanceSummaryQuery(
     ),
     parent_current_cov AS (
       SELECT
-        coverage_combination,
-        SUM(premium_wan) AS premium,
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(*) AS row_count,
-        SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
-        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
-        SUM(
-          CASE
-            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
-              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
-            ELSE 0
-          END
-        ) AS allocated_plan
+        coverage_combination,${businessMetricsSql}
       FROM current_rows cr
       LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
       WHERE coverage_combination IN ('主全', '交三', '单交')
@@ -613,22 +616,7 @@ export function generatePerformanceSummaryQuery(
     ),
     parent_current_all AS (
       SELECT
-        '整体' AS coverage_combination,
-        SUM(premium_wan) AS premium,
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(*) AS row_count,
-        SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
-        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
-        SUM(
-          CASE
-            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
-              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
-            ELSE 0
-          END
-        ) AS allocated_plan
+        '整体' AS coverage_combination,${businessMetricsSql}
       FROM current_rows cr
       LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
     ),
@@ -682,22 +670,7 @@ export function generatePerformanceSummaryQuery(
         coverage_combination,
         ${expandConfig!.labelExpr} AS row_label,
         ${expandConfig!.keyExpr} AS expand_key,
-        ${expandConfig!.orderExpr} AS child_order,
-        SUM(premium_wan) AS premium,
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(*) AS row_count,
-        SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
-        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
-        SUM(
-          CASE
-            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
-              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
-            ELSE 0
-          END
-        ) AS allocated_plan
+        ${expandConfig!.orderExpr} AS child_order,${businessMetricsSql}
       FROM current_rows cr
       LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
       WHERE coverage_combination IN ('主全', '交三', '单交')
@@ -708,22 +681,7 @@ export function generatePerformanceSummaryQuery(
         '整体' AS coverage_combination,
         ${expandConfig!.labelExpr} AS row_label,
         ${expandConfig!.keyExpr} AS expand_key,
-        ${expandConfig!.orderExpr} AS child_order,
-        SUM(premium_wan) AS premium,
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(*) AS row_count,
-        SUM(CASE WHEN is_nev_bool THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND is_renewal_bool THEN 1 ELSE 0 END) AS renewal_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN 1 ELSE 0 END) AS transfer_business_count,
-        SUM(CASE WHEN is_new_car_bool THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN 1 ELSE 0 END) AS transfer_count,
-        SUM(
-          CASE
-            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
-              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
-            ELSE 0
-          END
-        ) AS allocated_plan
+        ${expandConfig!.orderExpr} AS child_order,${businessMetricsSql}
       FROM current_rows cr
       LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
       GROUP BY row_label, expand_key, child_order
@@ -1318,10 +1276,13 @@ function getHeatmapGroupByExpr(
       };
     case 'business_nature':
       return {
+        // 四分类：新保 / 续保 / 过户转保 / 非过户转保
+        // CASE 顺序即优先级：先判新车，再判续保，再判过户，其余为非过户转保
         selectExpr: `CASE
           WHEN ${truthyExpr(`${prefix}is_new_car`)} THEN '新保'
           WHEN ${truthyExpr(`${prefix}is_renewal`)} THEN '续保'
-          ELSE '转保'
+          WHEN ${truthyExpr(`${prefix}is_transfer`)} THEN '过户转保'
+          ELSE '非过户转保'
         END`,
         alias: 'dimension_value',
         label: '新转续',

@@ -198,13 +198,15 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('NULL AS achievement_rate');
   });
 
-  it('heatmap business_nature should not split 过户为独立值域', () => {
+  it('heatmap business_nature should generate 4-category dimension: 新保/续保/过户转保/非过户转保', () => {
     const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature');
 
     expect(sql).toContain("THEN '新保'");
     expect(sql).toContain("THEN '续保'");
-    expect(sql).toContain("ELSE '转保'");
-    expect(sql).not.toContain("THEN '过户'");
+    expect(sql).toContain("THEN '过户转保'");
+    expect(sql).toContain("ELSE '非过户转保'");
+    // 过户转保/非过户转保 完全覆盖转保空间，不应再有聚合 '转保' 输出值
+    expect(sql).not.toContain("ELSE '转保'");
   });
 
   it('heatmap business_nature drill filter should map 转保 to 旧车非续保', () => {
