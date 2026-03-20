@@ -15,7 +15,7 @@ export function RBACBreadcrumb<T extends string>({
     onDrillUp,
     canGoToTop,
     dimensionLabels,
-    topLevelLabel = '整体',
+    topLevelLabel = '四川分公司',
 }: RBACBreadcrumbProps<T>) {
     return (
         <div className="flex items-center gap-1 text-sm flex-wrap">

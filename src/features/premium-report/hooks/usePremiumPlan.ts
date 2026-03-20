@@ -30,7 +30,7 @@ const LEVEL_ORDER: PlanDrilldownLevel[] = [
 
 /** 层级中文标签 */
 const LEVEL_LABELS: Record<PlanDrilldownLevel, string> = {
-  company: '整体',
+  company: '分公司整体',
   org: '三级机构',
   team: '团队',
   salesman: '业务员',
@@ -77,7 +77,7 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
   const [kpiData, setKpiData] = useState<PlanKpiData | null>(null);
   const [distributionData, setDistributionData] = useState<PlanDistributionRow[]>([]);
   const [drillPath, setDrillPath] = useState<DrillPathStep[]>([
-    { level: 'company', label: '整体' },
+    { level: 'company', label: '分公司整体' },
   ]);
   const [sortState, setSortState] = useState<SortState>({
     column: 'actual_vehicle',
@@ -195,7 +195,7 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
   /** 初始加载 */
   const loadInitial = useCallback(async (year: number = 2026) => {
     setPlanYear(year);
-    const initialPath: DrillPathStep[] = [{ level: 'company', label: '整体' }];
+    const initialPath: DrillPathStep[] = [{ level: 'company', label: '分公司整体' }];
     setDrillPath(initialPath);
     await loadAllData('org', initialPath, year, sortState);
   }, [loadAllData, sortState]);
@@ -239,7 +239,7 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
 
   /** 重置到顶层 */
   const resetDrill = useCallback(async () => {
-    const initialPath: DrillPathStep[] = [{ level: 'company', label: '整体' }];
+    const initialPath: DrillPathStep[] = [{ level: 'company', label: '分公司整体' }];
     setDrillPath(initialPath);
     await loadAllData('org', initialPath, planYear, sortState);
   }, [planYear, sortState, loadAllData]);

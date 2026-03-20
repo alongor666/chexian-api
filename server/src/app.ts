@@ -87,7 +87,7 @@ app.get('/health', (req, res) => {
  */
 import authRoutes from './routes/auth.js';
 import wecomAuthRoutes from './routes/wecom-auth.js';
-import queryRoutes from './routes/query.js';
+import queryRoutes from './routes/query/index.js';
 import filtersRoutes from './routes/filters.js';
 import dataRoutes, { setCurrentDataFile } from './routes/data.js';
 import aiRoutes from './routes/ai.js';

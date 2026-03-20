@@ -26,7 +26,7 @@
     "release:vps:heatmap": "node scripts/release-vps-heatmap.mjs",
     "benchmark:key-routes": "node scripts/benchmark-key-routes.mjs",
     "benchmark:key-routes:soak": "node scripts/benchmark-key-routes-soak.mjs",
-    "production:gate": "node scripts/production-gate.mjs",
+    "test:all": "bun run typecheck && bun run build && bun run test --run && bun run test:e2e tests/e2e/04-subpage-no-refresh.spec.ts",
     "governance": "node scripts/check-governance.mjs",
     "governance:hotfiles": "node scripts/check-hotfile-contracts.mjs",
     "plans:manage": "node scripts/manage-plans.mjs",

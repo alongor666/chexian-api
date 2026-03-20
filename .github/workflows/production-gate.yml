@@ -11,6 +11,9 @@ jobs:
   production-gate:
     name: Production Readiness Gate
     runs-on: ubuntu-latest
+    env:
+      CI: "1"
+      CORS_ORIGIN: "http://localhost:5173,http://127.0.0.1:5173"
 
     steps:
       - name: Checkout repository
@@ -24,11 +27,17 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Typecheck (Catch ESM Errors)
+        run: bun run typecheck
+
+      - name: Frontend Build
+        run: bun run build
+
+      - name: Unit & Integration Tests
+        run: bun run test --run
+
       - name: Install Playwright browser
         run: bunx playwright install --with-deps chromium
 
-      - name: Run production gate
-        env:
-          CI: "1"
-          CORS_ORIGIN: "http://localhost:5173,http://127.0.0.1:5173"
-        run: bun run production:gate -- --ci
+      - name: E2E Tests (Subpage No Refresh)
+        run: bun run test:e2e tests/e2e/04-subpage-no-refresh.spec.ts

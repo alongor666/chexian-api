@@ -1,7 +1,6 @@
 import React, { useMemo, type ReactNode } from 'react';
 import { cn, colorClasses } from '../../shared/styles';
 import type { AdvancedFilterState } from '../../shared/types/data';
-import { useRBAC } from '../../shared/hooks/useRBAC';
 
 interface PageHeaderBarProps {
   /** 页面基础标题（如"保费分析"、"交叉销售分析"） */
@@ -39,8 +38,6 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
   chipsAlign = 'left',
   hideChips = false,
 }) => {
-  const { userOrg } = useRBAC();
-
   // 计算动态标题前缀
   const dynamicTitle = useMemo(() => {
     const selectedOrgs = filters.org_level_3 || [];
@@ -59,9 +56,9 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
       return selectedOrgs[0];
     }
 
-    // 3. 多个或全部机构 → 显示分公司/整体或者用户当前所在的机构
-    return userOrg && userOrg !== '四川分公司' && userOrg !== '全省' ? userOrg : '整体';
-  }, [filters.org_level_3, filters.salesman_name, userOrg]);
+    // 3. 多个或全部机构 → 显示分公司
+    return '四川分公司';
+  }, [filters.org_level_3, filters.salesman_name]);
 
   const fullTitle = `${dynamicTitle}${baseTitle}`;
 

@@ -11,8 +11,10 @@ import { permissionService } from '../../server/src/services/permission';
 
 describe('comprehensive bundle route contract', () => {
   it('exposes both canonical and alias endpoints in query router', () => {
-    const queryRoutePath = path.resolve(process.cwd(), 'server/src/routes/query.ts');
-    const content = fs.readFileSync(queryRoutePath, 'utf-8');
+    // After route split, comprehensive endpoints live in bundles.ts and comprehensive.ts
+    const bundlesPath = path.resolve(process.cwd(), 'server/src/routes/query/bundles.ts');
+    const comprehensivePath = path.resolve(process.cwd(), 'server/src/routes/query/comprehensive.ts');
+    const content = fs.readFileSync(bundlesPath, 'utf-8') + fs.readFileSync(comprehensivePath, 'utf-8');
 
     expect(content).toContain("'/comprehensive-bundle'");
     expect(content).toContain("'/comprehensive-analysis-bundle'");

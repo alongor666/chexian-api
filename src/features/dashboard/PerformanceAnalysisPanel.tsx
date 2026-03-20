@@ -230,7 +230,8 @@ function getWeekdayKey(dateText: string): number {
 function getMonthKey(dateText: string): string {
   return dateText.slice(5, 7);
 }
-const BRANCH_SUMMARY_ROW_LABEL = '整体';
+
+const BRANCH_SUMMARY_ROW_LABEL = '分公司';
 
 function buildPerformanceBranchSummaryRow(
   date: string,

@@ -157,7 +157,7 @@ export function generatePremiumPlanDrilldownQuery(
   let groupBy: string;
 
   if (level === 'company') {
-    selectBody = buildAggSelect("'整体'");
+    selectBody = buildAggSelect("'分公司整体'");
     groupBy = '';
   } else if (level === 'org') {
     selectBody = buildAggSelect('org_name');

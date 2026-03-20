@@ -33,46 +33,21 @@ export interface UserCredential {
  * 环境变量 USER_PASSWORDS 格式（JSON）：
  * {"admin":"$2b$10$...","leshan":"$2b$10$..."}
  */
-let cachedPasswordOverrides: Record<string, string> | null = null;
-function getPasswordOverrides(): Record<string, string> {
-  if (cachedPasswordOverrides !== null) return cachedPasswordOverrides;
+function loadPasswordOverrides(): Record<string, string> {
   const raw = process.env.USER_PASSWORDS;
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return {};
-    cachedPasswordOverrides = parsed as Record<string, string>;
-    return cachedPasswordOverrides;
+    return parsed as Record<string, string>;
   } catch {
     console.warn('[Auth] USER_PASSWORDS 格式无效，使用默认配置');
     return {};
   }
 }
 
-let cachedAllowedIpOverrides: Record<string, string[]> | null = null;
-function getAllowedIpOverrides(): Record<string, string[]> {
-  if (cachedAllowedIpOverrides !== null) return cachedAllowedIpOverrides;
-  const raw = process.env.USER_ALLOWED_IPS;
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return {};
-    const result: Record<string, string[]> = {};
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-      if (Array.isArray(value)) {
-        result[key] = value.map(item => String(item));
-      } else if (typeof value === 'string') {
-        result[key] = [value];
-      }
-    }
-    cachedAllowedIpOverrides = result;
-    return result;
-  } catch {
-    console.warn('[Auth] USER_ALLOWED_IPS 格式无效，忽略 IP 白名单覆盖');
-    return {};
-  }
-}
-
+const PASSWORD_OVERRIDES = loadPasswordOverrides();
+const ALLOWED_IP_OVERRIDES = loadAllowedIpOverrides();
 
 function loadAllowedIpOverrides(): Record<string, string[]> {
   const raw = process.env.USER_ALLOWED_IPS;
@@ -137,8 +112,8 @@ class AuthService {
     if (!user.active) {
       throw new AppError(403, 'Account disabled');
     }
-    const passwordOverride = getPasswordOverrides()[normalizedUsername];
-    const allowedIpsOverride = getAllowedIpOverrides()[normalizedUsername];
+    const passwordOverride = PASSWORD_OVERRIDES[normalizedUsername];
+    const allowedIpsOverride = ALLOWED_IP_OVERRIDES[normalizedUsername];
     const userCredential: UserCredential = {
       ...user,
       passwordHash: passwordOverride ?? user.passwordHash,

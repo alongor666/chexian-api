@@ -98,12 +98,8 @@ function archiveOld(currentDir, archiveDir, prefix, newFile) {
     const archivePath = join(archiveDir, archivedName);
 
     ensureDir(archiveDir);
-    try {
-      renameSync(oldPath, archivePath);
-      log('yellow', `📦 归档: ${old} → archive/${archivedName}`);
-    } catch (e) {
-      log('red', `⚠️  无法归档 ${old}: ${e.message} (请手动清理 current 目录以避免重复加载)`);
-    }
+    renameSync(oldPath, archivePath);
+    log('yellow', `📦 归档: ${old} → archive/${archivedName}`);
   }
 }
 
@@ -155,12 +151,8 @@ async function main() {
       for (const f of oldFiles) {
         const src = join(policyDir, f);
         const dst = join(archiveDir, f);
-        try {
-          renameSync(src, dst);
-          console.log(`   → ${f}`);
-        } catch (e) {
-          console.log(`   ⚠ 迁移失败: ${f} (${e.message})`);
-        }
+        renameSync(src, dst);
+        console.log(`   → ${f}`);
       }
     }
   }
@@ -170,12 +162,8 @@ async function main() {
   if (old2426Files.length > 0) {
     log('yellow', '📦 发现旧命名格式文件，迁移到 archive/');
     for (const f of old2426Files) {
-      try {
-        renameSync(join(currentDir, f), join(archiveDir, f));
-        console.log(`   → ${f}`);
-      } catch (e) {
-        console.log(`   ⚠ 迁移失败: ${f} (${e.message})`);
-      }
+      renameSync(join(currentDir, f), join(archiveDir, f));
+      console.log(`   → ${f}`);
     }
   }
 

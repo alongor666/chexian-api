@@ -192,12 +192,12 @@ export function generateHolidayDrilldownQuery(
   switch (dimension.level) {
     case 'company':
       groupByField = ''; // 全局聚合
-      groupNameExpr = "'整体'";
+      groupNameExpr = "'分公司整体'";
       break;
     case 'org':
       groupByField = 'COALESCE(s.org_name, p.org_level_3)';
       groupNameExpr = 'COALESCE(s.org_name, p.org_level_3)';
-      parentNameExpr = "'整体'";
+      parentNameExpr = "'分公司整体'";
       break;
     case 'team':
       groupByField = 's.team_name, COALESCE(s.org_name, p.org_level_3)';

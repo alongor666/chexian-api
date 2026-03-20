@@ -60,7 +60,7 @@ const BOOLEAN_DIM_MAP: Record<string, { field: string; trueLabel: string; falseL
   is_transfer: { field: 'is_transfer', trueLabel: '过户车', falseLabel: '非过户车' },
   is_nev: { field: 'is_nev', trueLabel: '新能源', falseLabel: '非新能源' },
   is_telemarketing: { field: 'is_telemarketing', trueLabel: '电销', falseLabel: '非电销' },
-  is_renewal: { field: 'is_renewal', trueLabel: '续保', falseLabel: '新保' },
+  is_renewal: { field: 'is_renewal', trueLabel: '续保', falseLabel: '非续保' },
 };
 
 /**
@@ -240,7 +240,7 @@ function generateSummaryOnly(
   return `
     WITH summary AS (
       SELECT
-        '整体' AS group_name,
+        '四川分公司' AS group_name,
         COALESCE(SUM(${colPrefix}auto_count), 0) AS total_auto_count,
         COALESCE(SUM(${colPrefix}driver_count), 0) AS total_driver_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS danjiao_auto_count,

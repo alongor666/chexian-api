@@ -16,6 +16,14 @@
  */
 
 import { formatDate } from '../utils/coefficient-period.js';
+import {
+  buildDimKeyExpression,
+  buildPolicyExposureCTE,
+  buildEarnedPremiumCase,
+  getMonthEndDate,
+  generateEarnedPremiumPeriodQuery,
+  type EarnedPremiumPeriodConfig,
+} from './sql-builder.js';
 
 // ==================== 类型定义 ====================
 
@@ -615,359 +623,58 @@ export interface NewEarnedPremiumConfig {
 // ==================== 新口径已赚保费 V3 - 拆分表格 ====================
 
 /**
- * 计算某保单在指定统计月末的时间分摊部分
- * 时间分摊 = P × (1-F) × min(有效天数, 365) / 365
- *
- * @param statMonthEnd - 统计月末日期，格式 YYYY-MM-DD
- */
-function buildTimePartCase(statMonthEnd: string): string {
-  return `
-    CASE
-      WHEN CAST(insurance_start_date AS DATE) <= DATE '${statMonthEnd}'
-      THEN premium * (1 - fee_rate) * LEAST(
-        GREATEST(
-          DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1,
-          0
-        ),
-        365
-      ) / 365.0
-      ELSE 0
-    END
-  `;
-}
-
-/**
- * 计算保单在指定统计月的已赚保费（月度增量）
- * - 起保月：首日费用 + 时间分摊增量
- * - 非起保月：仅时间分摊增量
- *
- * 首日费用并入起保月的核心逻辑：
- * 当 EXTRACT(MONTH FROM start_date) = statMonth 且 EXTRACT(YEAR FROM start_date) = statYear 时，
- * 该保单在此统计月的已赚包含首日费用。
- *
- * @param statMonth - 统计月份（1-12）
- * @param statYear - 统计年份（如 2025, 2026）
- * @param prevMonthEnd - 上月末日期，格式 YYYY-MM-DD（1月时为 null）
- * @param currentMonthEnd - 当月末日期，格式 YYYY-MM-DD
- */
-function buildEarnedMonthlyCase(
-  statMonth: number,
-  statYear: number,
-  prevMonthEnd: string | null,
-  currentMonthEnd: string
-): string {
-  const timePartCurrent = buildTimePartCase(currentMonthEnd);
-  const timePartPrev = prevMonthEnd ? buildTimePartCase(prevMonthEnd) : '0';
-  const timePartIncrement = `(${timePartCurrent}) - (${timePartPrev})`;
-
-  return `
-    CASE
-      WHEN EXTRACT(MONTH FROM start_date) = ${statMonth}
-       AND EXTRACT(YEAR FROM start_date) = ${statYear}
-      THEN premium * fee_rate * line_factor + ${timePartIncrement}
-      ELSE ${timePartIncrement}
-    END
-  `;
-}
-
-/**
  * 生成2025年保单在2025年的已赚保费查询SQL（V3版本）
- *
- * 字段：起保月、保费、首日费用、25年1月~12月当月已赚、25年已赚
- * 25年已赚 = 首日费用 + 25年各月当月已赚合计
- *
- * @param config - 配置
- * @returns SQL查询字符串
+ * 委托给 generateEarnedPremiumPeriodQuery，保持向后兼容
  */
 export function generatePolicy2025In2025Query(config: NewEarnedPremiumConfig = {}): string {
-  const { whereClause = '1=1' } = config;
-
-  // 生成25年各月的已赚保费（含起保月首日费用）
-  // 新规则：起保月的 earned = 首日费用 + 时间分摊增量，非起保月仅时间分摊增量
-  const earned2025MonthlyFields: string[] = [];
-  for (let m = 1; m <= 12; m++) {
-    const currentMonthEnd = getMonthEndDate(2025, m);
-    const prevMonthEnd = m === 1 ? null : getMonthEndDate(2025, m - 1);
-    earned2025MonthlyFields.push(
-      `ROUND(SUM(${buildEarnedMonthlyCase(m, 2025, prevMonthEnd, currentMonthEnd).trim()}), 2) AS earned_2025_${String(m).padStart(2, '0')}`
-    );
-  }
-
-  return `
-WITH policy_base AS (
-  SELECT
-    policy_no,
-    premium,
-    COALESCE(fee_amount, 0) AS fee_amount,
-    CAST(insurance_start_date AS DATE) AS start_date,
-    EXTRACT(MONTH FROM CAST(insurance_start_date AS DATE)) AS policy_month,
-    -- 费用率 F
-    CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
-    -- 险类系数 α
-    CASE insurance_type
-      WHEN '交强险' THEN 0.82
-      WHEN '商业保险' THEN 0.94
-      ELSE 0.90
-    END AS line_factor,
-    insurance_start_date
-  FROM PolicyFact
-  WHERE ${whereClause}
-    AND insurance_start_date IS NOT NULL
-    AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2025
-    AND insurance_type IN ('交强险', '商业保险')
-)
-SELECT
-  CAST(policy_month AS INTEGER) AS policy_month,
-  ROUND(SUM(premium), 2) AS premium,
-  -- 首日费用（在起保年度计入）
-  ROUND(SUM(premium * fee_rate * line_factor), 2) AS first_day_fee,
-  -- 25年各月当月已赚（时间分摊部分的增量）
-  ${earned2025MonthlyFields.join(',\n  ')},
-  -- 25年已赚 = 首日费用 + 25年各月时间分摊合计
-  ROUND(
-    SUM(premium * fee_rate * line_factor) +
-    SUM(${buildTimePartCase(getMonthEndDate(2025, 12)).trim()}),
-    2
-  ) AS earned_2025_total
-FROM policy_base
-GROUP BY policy_month
-ORDER BY policy_month
-  `.trim();
+  return generateEarnedPremiumPeriodQuery({
+    policyYear: 2025,
+    earnedYear: 2025,
+    isSameYear: true,
+    whereClause: config.whereClause ?? '1=1',
+  });
 }
 
 /**
  * 生成2025年保单在2026年的已赚保费查询SQL（V3版本）
- *
- * 字段：起保月、26年1月~12月当月已赚、26年已赚
- * 26年已赚 = 26年各月当月已赚合计（不含首日费用，首日费用已在2025年计入）
- *
- * @param config - 配置
- * @returns SQL查询字符串
+ * 委托给 generateEarnedPremiumPeriodQuery，保持向后兼容
  */
 export function generatePolicy2025In2026Query(config: NewEarnedPremiumConfig = {}): string {
-  const { whereClause = '1=1' } = config;
-
-  // 生成26年各月的当月已赚时间分摊部分（增量）
-  const earned2026MonthlyFields: string[] = [];
-  for (let m = 1; m <= 12; m++) {
-    const currentMonthEnd = getMonthEndDate(2026, m);
-    // 上一期末：1月用25年12月末，后续用26年上一个月末
-    const prevMonthEnd = m === 1 ? getMonthEndDate(2025, 12) : getMonthEndDate(2026, m - 1);
-
-    // 当月增量 = 当月末时间分摊 - 上月末时间分摊
-    earned2026MonthlyFields.push(
-      `ROUND(SUM(${buildTimePartCase(currentMonthEnd).trim()}) - SUM(${buildTimePartCase(prevMonthEnd).trim()}), 2) AS earned_2026_${String(m).padStart(2, '0')}`
-    );
-  }
-
-  return `
-WITH policy_base AS (
-  SELECT
-    policy_no,
-    premium,
-    COALESCE(fee_amount, 0) AS fee_amount,
-    CAST(insurance_start_date AS DATE) AS start_date,
-    EXTRACT(MONTH FROM CAST(insurance_start_date AS DATE)) AS policy_month,
-    -- 费用率 F
-    CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
-    -- 险类系数 α
-    CASE insurance_type
-      WHEN '交强险' THEN 0.82
-      WHEN '商业保险' THEN 0.94
-      ELSE 0.90
-    END AS line_factor,
-    insurance_start_date
-  FROM PolicyFact
-  WHERE ${whereClause}
-    AND insurance_start_date IS NOT NULL
-    AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2025
-    AND insurance_type IN ('交强险', '商业保险')
-)
-SELECT
-  CAST(policy_month AS INTEGER) AS policy_month,
-  -- 26年各月当月已赚（时间分摊部分的增量）
-  ${earned2026MonthlyFields.join(',\n  ')},
-  -- 26年已赚 = 26年各月时间分摊合计（无首日费用）
-  ROUND(
-    SUM(${buildTimePartCase(getMonthEndDate(2026, 12)).trim()}) -
-    SUM(${buildTimePartCase(getMonthEndDate(2025, 12)).trim()}),
-    2
-  ) AS earned_2026_total
-FROM policy_base
-GROUP BY policy_month
-ORDER BY policy_month
-  `.trim();
+  return generateEarnedPremiumPeriodQuery({
+    policyYear: 2025,
+    earnedYear: 2026,
+    isSameYear: false,
+    whereClause: config.whereClause ?? '1=1',
+  });
 }
 
 /**
  * 生成2026年保单在2026年的已赚保费查询SQL（V3版本）
- *
- * 字段：起保月、保费、首日费用、26年1月~12月当月已赚、26年已赚
- * 26年已赚 = 首日费用 + 26年各月当月已赚合计
- *
- * @param config - 配置
- * @returns SQL查询字符串
+ * 委托给 generateEarnedPremiumPeriodQuery，保持向后兼容
  */
 export function generatePolicy2026In2026Query(config: NewEarnedPremiumConfig = {}): string {
-  const { whereClause = '1=1' } = config;
-
-  // 生成26年各月的已赚保费（含起保月首日费用）
-  // 新规则：起保月的 earned = 首日费用 + 时间分摊增量，非起保月仅时间分摊增量
-  const earned2026MonthlyFields: string[] = [];
-  for (let m = 1; m <= 12; m++) {
-    const currentMonthEnd = getMonthEndDate(2026, m);
-    const prevMonthEnd = m === 1 ? null : getMonthEndDate(2026, m - 1);
-    earned2026MonthlyFields.push(
-      `ROUND(SUM(${buildEarnedMonthlyCase(m, 2026, prevMonthEnd, currentMonthEnd).trim()}), 2) AS earned_2026_${String(m).padStart(2, '0')}`
-    );
-  }
-
-  return `
-WITH policy_base AS (
-  SELECT
-    policy_no,
-    premium,
-    COALESCE(fee_amount, 0) AS fee_amount,
-    CAST(insurance_start_date AS DATE) AS start_date,
-    EXTRACT(MONTH FROM CAST(insurance_start_date AS DATE)) AS policy_month,
-    -- 费用率 F
-    CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
-    -- 险类系数 α
-    CASE insurance_type
-      WHEN '交强险' THEN 0.82
-      WHEN '商业保险' THEN 0.94
-      ELSE 0.90
-    END AS line_factor,
-    insurance_start_date
-  FROM PolicyFact
-  WHERE ${whereClause}
-    AND insurance_start_date IS NOT NULL
-    AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026
-    AND insurance_type IN ('交强险', '商业保险')
-)
-SELECT
-  CAST(policy_month AS INTEGER) AS policy_month,
-  ROUND(SUM(premium), 2) AS premium,
-  -- 首日费用（在起保年度计入）
-  ROUND(SUM(premium * fee_rate * line_factor), 2) AS first_day_fee,
-  -- 26年各月当月已赚（时间分摊部分的增量）
-  ${earned2026MonthlyFields.join(',\n  ')},
-  -- 26年已赚 = 首日费用 + 26年各月时间分摊合计
-  ROUND(
-    SUM(premium * fee_rate * line_factor) +
-    SUM(${buildTimePartCase(getMonthEndDate(2026, 12)).trim()}),
-    2
-  ) AS earned_2026_total
-FROM policy_base
-GROUP BY policy_month
-ORDER BY policy_month
-  `.trim();
+  return generateEarnedPremiumPeriodQuery({
+    policyYear: 2026,
+    earnedYear: 2026,
+    isSameYear: true,
+    whereClause: config.whereClause ?? '1=1',
+  });
 }
 
 /**
  * 生成2026年保单在2027年的已赚保费查询SQL（V3版本）
- *
- * 字段：起保月、27年1月~12月当月已赚、27年已赚
- * 27年已赚 = 27年各月当月已赚合计（不含首日费用，首日费用已在2026年计入）
- *
- * @param config - 配置
- * @returns SQL查询字符串
+ * 委托给 generateEarnedPremiumPeriodQuery，保持向后兼容
  */
 export function generatePolicy2026In2027Query(config: NewEarnedPremiumConfig = {}): string {
-  const { whereClause = '1=1' } = config;
-
-  // 生成27年各月的当月已赚时间分摊部分（增量）
-  const earned2027MonthlyFields: string[] = [];
-  for (let m = 1; m <= 12; m++) {
-    const currentMonthEnd = getMonthEndDate(2027, m);
-    // 上一期末：1月用26年12月末，后续用27年上一个月末
-    const prevMonthEnd = m === 1 ? getMonthEndDate(2026, 12) : getMonthEndDate(2027, m - 1);
-
-    // 当月增量 = 当月末时间分摊 - 上月末时间分摊
-    earned2027MonthlyFields.push(
-      `ROUND(SUM(${buildTimePartCase(currentMonthEnd).trim()}) - SUM(${buildTimePartCase(prevMonthEnd).trim()}), 2) AS earned_2027_${String(m).padStart(2, '0')}`
-    );
-  }
-
-  return `
-WITH policy_base AS (
-  SELECT
-    policy_no,
-    premium,
-    COALESCE(fee_amount, 0) AS fee_amount,
-    CAST(insurance_start_date AS DATE) AS start_date,
-    EXTRACT(MONTH FROM CAST(insurance_start_date AS DATE)) AS policy_month,
-    -- 费用率 F
-    CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
-    -- 险类系数 α
-    CASE insurance_type
-      WHEN '交强险' THEN 0.82
-      WHEN '商业保险' THEN 0.94
-      ELSE 0.90
-    END AS line_factor,
-    insurance_start_date
-  FROM PolicyFact
-  WHERE ${whereClause}
-    AND insurance_start_date IS NOT NULL
-    AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026
-    AND insurance_type IN ('交强险', '商业保险')
-)
-SELECT
-  CAST(policy_month AS INTEGER) AS policy_month,
-  -- 27年各月当月已赚（时间分摊部分的增量）
-  ${earned2027MonthlyFields.join(',\n  ')},
-  -- 27年已赚 = 27年各月时间分摊合计（无首日费用）
-  ROUND(
-    SUM(${buildTimePartCase(getMonthEndDate(2027, 12)).trim()}) -
-    SUM(${buildTimePartCase(getMonthEndDate(2026, 12)).trim()}),
-    2
-  ) AS earned_2027_total
-FROM policy_base
-GROUP BY policy_month
-ORDER BY policy_month
-  `.trim();
+  return generateEarnedPremiumPeriodQuery({
+    policyYear: 2026,
+    earnedYear: 2027,
+    isSameYear: false,
+    whereClause: config.whereClause ?? '1=1',
+  });
 }
 
-/**
- * 计算某保单在指定统计月末的已赚保费
- * 已赚保费 = 首日费用部分 + 时间分摊部分
- * - 首日费用部分 = P × F × α（仅当起保日在统计月末之前时计入）
- * - 时间分摊部分 = P × (1-F) × min(有效天数, 365) / 365
- * - 有效天数 = 统计月末 - 起保日 + 1（封顶365天）
- *
- * @param statMonthEnd - 统计月末日期，格式 YYYY-MM-DD
- */
-function buildEarnedPremiumCase(statMonthEnd: string): string {
-  // 有效天数 = min(统计月末 - 起保日 + 1, 365)，至少0
-  return `
-    CASE
-      WHEN CAST(insurance_start_date AS DATE) <= DATE '${statMonthEnd}'
-      THEN
-        -- 首日费用部分 = P × F × α
-        premium * fee_rate * line_factor +
-        -- 时间分摊部分 = P × (1-F) × min(有效天数, 365) / 365
-        premium * (1 - fee_rate) * LEAST(
-          GREATEST(
-            DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1,
-            0
-          ),
-          365
-        ) / 365.0
-      ELSE 0
-    END
-  `;
-}
-
-/**
- * 获取月末日期
- * @param year 年份
- * @param month 月份（1-12）
- */
-function getMonthEndDate(year: number, month: number): string {
-  // 下个月1号减1天即为当月最后一天
-  const lastDay = new Date(year, month, 0).getDate();
-  return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-}
+// buildEarnedPremiumCase 和 getMonthEndDate 已从 sql-builder.ts 导入（见文件顶部）
 
 /**
  * 生成2025年保单已赚保费查询SQL

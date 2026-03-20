@@ -92,7 +92,7 @@ export const VariableCostKpiBoard: React.FC<VariableCostKpiBoardProps> = ({
   );
 
   const branchSummary = useMemo(
-    () => aggregateRows('整体', orgRows),
+    () => aggregateRows('分公司整体', orgRows),
     [orgRows]
   );
 
@@ -134,7 +134,7 @@ export const VariableCostKpiBoard: React.FC<VariableCostKpiBoardProps> = ({
             className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
             onClick={() => setDrillLevel('branch')}
           >
-            返回整体
+            返回分公司整体
           </button>
         )}
       </div>
