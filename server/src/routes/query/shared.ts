@@ -2,14 +2,14 @@
  * Shared utilities, types, and constants used across query route modules.
  */
 
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { getRouteCache, setRouteCache, computeEtag, sendWithEtag } from '../../services/route-cache.js';
 import { markRequestCacheHit } from '../../utils/request-context.js';
 import { buildResponseMeta } from '../../utils/api-meta.js';
 import { DEFAULT_COMPREHENSIVE_THRESHOLDS } from '../../config/comprehensive-thresholds.js';
 
 // Re-export commonly used items for convenience
-export { Request, Response } from 'express';
+export type { Request, Response } from 'express';
 export { z } from 'zod';
 export { asyncHandler, AppError } from '../../middleware/error.js';
 export { duckdbService } from '../../services/duckdb.js';

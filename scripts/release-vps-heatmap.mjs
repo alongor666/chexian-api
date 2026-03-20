@@ -141,9 +141,16 @@ function main() {
   run(
     [
       `ssh ${host} "sudo /usr/local/bin/deploy-chexian-api restart;`,
-      'sleep 3;',
+      'for i in \\$(seq 1 20); do',
+      'if curl -fsS -m 10 http://127.0.0.1:3000/health; then',
+      'echo;',
       'sudo /usr/local/bin/deploy-chexian-api status;',
-      'curl -sS -m 10 http://127.0.0.1:3000/health"'
+      'exit 0;',
+      'fi;',
+      'sleep 2;',
+      'done;',
+      'sudo /usr/local/bin/deploy-chexian-api status;',
+      'exit 1"'
     ].join(' '),
     rootDir
   );

@@ -4,6 +4,7 @@ import { PremiumReportPanel } from '../premium-report';
 import { MarketingReportPanel } from '../marketing-report';
 import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
 import { Tabs } from '../../shared/ui';
+import type { FilterPresetName } from '../../shared/types/filters';
 
 type ReportTab = 'premium' | 'marketing';
 
@@ -12,7 +13,7 @@ const tabItems = [
   { key: 'marketing', label: '营销战报' },
 ];
 
-const presetMap: Record<ReportTab, string> = {
+const presetMap: Record<ReportTab, FilterPresetName> = {
   premium: 'report',
   marketing: 'marketingReport',
 };

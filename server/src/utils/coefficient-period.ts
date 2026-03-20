@@ -7,7 +7,7 @@
  * 3. 月度周期（monthly）：1日-月末（适用于全省聚合行）
  */
 
-import type { RegionType, CustomerCategoryType } from '../config/coefficient-thresholds';
+import type { RegionType, CustomerCategoryType } from '../config/coefficient-thresholds.js';
 
 // 周期类型
 export type PeriodType = 'general' | 'special' | 'monthly';

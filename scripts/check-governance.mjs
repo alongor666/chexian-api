@@ -900,38 +900,148 @@ function checkStagedCredentials() {
 function checkPrSizeLimit() {
   info('检查 PR 体量门禁（大体量提交切片）...');
 
-  let statOutput = '';
-
-  // 优先使用 HEAD~1（已提交的变更），回退到暂存区统计
-  for (const args of [
-    ['diff', 'HEAD~1', '--stat'],
-    ['diff', '--cached', '--stat'],
-  ]) {
+  const readText = (filePath) => {
     try {
-      statOutput = execSync(`git ${args.join(' ')}`, {
+      return fs.readFileSync(filePath, 'utf8');
+    } catch {
+      return null;
+    }
+  };
+
+  const listUntrackedFiles = () => {
+    try {
+      const output = execSync('git ls-files --others --exclude-standard', {
         cwd: ROOT_DIR,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
-      });
-      if (statOutput.trim()) break;
+      }).trim();
+      return output ? output.split('\n').filter(Boolean) : [];
     } catch {
-      // 继续尝试下一种
+      return [];
+    }
+  };
+
+  const getTrackedChanges = () => {
+    try {
+      const output = execSync('git diff --numstat --find-renames=90% HEAD --', {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      if (!output) return [];
+      return output
+        .split('\n')
+        .map((line) => {
+          const [addedRaw, deletedRaw, ...pathParts] = line.split('\t');
+          const file = pathParts.join('\t');
+          return {
+            file,
+            added: addedRaw === '-' ? 0 : Number(addedRaw || 0),
+            deleted: deletedRaw === '-' ? 0 : Number(deletedRaw || 0),
+          };
+        })
+        .filter((entry) => entry.file);
+    } catch {
+      return [];
+    }
+  };
+
+  const pendingChanges = getTrackedChanges();
+  const untrackedFiles = listUntrackedFiles();
+  const hasPendingChanges = pendingChanges.length > 0 || untrackedFiles.length > 0;
+
+  const archivedLegacyFiles = new Map();
+  for (const file of untrackedFiles) {
+    if (!file.startsWith('archive/legacy-code/')) continue;
+    const fullPath = path.join(ROOT_DIR, file);
+    const content = readText(fullPath);
+    if (content !== null) {
+      archivedLegacyFiles.set(path.basename(file), content);
     }
   }
 
-  if (!statOutput.trim()) {
+  const ignoredChanges = [];
+  const countedChanges = [];
+
+  if (hasPendingChanges) {
+    for (const change of pendingChanges) {
+      if (change.file.startsWith('archive/legacy-code/')) {
+        ignoredChanges.push({ ...change, reason: 'archive-only' });
+        continue;
+      }
+
+      if (change.added === 0 && change.deleted > 0) {
+        try {
+          const headContent = execSync(`git show HEAD:${change.file}`, {
+            cwd: ROOT_DIR,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore'],
+          });
+          const archivedCopy = archivedLegacyFiles.get(path.basename(change.file));
+          if (archivedCopy !== undefined && archivedCopy === headContent) {
+            ignoredChanges.push({ ...change, reason: 'archived-relocation' });
+            continue;
+          }
+        } catch {
+          // ignore compare failure, count as normal change
+        }
+      }
+
+      countedChanges.push(change);
+    }
+
+    for (const file of untrackedFiles) {
+      if (file.startsWith('archive/legacy-code/')) {
+        ignoredChanges.push({ file, added: 0, deleted: 0, reason: 'archive-only-untracked' });
+        continue;
+      }
+      const content = readText(path.join(ROOT_DIR, file));
+      if (content === null) continue;
+      const lines = content === '' ? 0 : content.split('\n').length;
+      countedChanges.push({ file, added: lines, deleted: 0 });
+    }
+  }
+
+  let totalLines = countedChanges.reduce((sum, change) => sum + change.added + change.deleted, 0);
+
+  if (!hasPendingChanges) {
+    let statOutput = '';
+
+    for (const args of [
+      ['diff', 'HEAD~1', '--stat'],
+      ['diff', '--cached', '--stat'],
+    ]) {
+      try {
+        statOutput = execSync(`git ${args.join(' ')}`, {
+          cwd: ROOT_DIR,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        if (statOutput.trim()) break;
+      } catch {
+        // 继续尝试下一种
+      }
+    }
+
+    if (statOutput.trim()) {
+      const summaryMatch = statOutput.match(/(\d+)\s+insertion|(\d+)\s+deletion/g);
+      if (summaryMatch) {
+        totalLines = 0;
+        for (const seg of summaryMatch) {
+          const n = parseInt(seg, 10);
+          if (!isNaN(n)) totalLines += n;
+        }
+      }
+    }
+  }
+
+  if (!hasPendingChanges && totalLines === 0) {
     success('PR 体量检查跳过（无法获取 git diff，非 git 上下文）');
     return true;
   }
 
-  // 解析 "N insertions(+), M deletions(-)" 末行
-  const summaryMatch = statOutput.match(/(\d+)\s+insertion|(\d+)\s+deletion/g);
-  let totalLines = 0;
-  if (summaryMatch) {
-    for (const seg of summaryMatch) {
-      const n = parseInt(seg, 10);
-      if (!isNaN(n)) totalLines += n;
-    }
+  if (ignoredChanges.length > 0) {
+    info(`PR 体量已忽略 ${ignoredChanges.length} 个归档类变更（archive/legacy-code 或等内容归档迁移）`);
   }
 
   if (totalLines > 2000) {

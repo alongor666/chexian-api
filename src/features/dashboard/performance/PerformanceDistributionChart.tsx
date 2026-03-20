@@ -3,7 +3,7 @@
  * Scatter chart showing achievement rate vs growth rate quadrant distribution.
  */
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';

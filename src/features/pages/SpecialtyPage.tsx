@@ -9,6 +9,7 @@ import { PageFilterPanel, FilterQuickActions } from '../../components/layout/Pag
 import { Tabs } from '../../shared/ui';
 import { buttonStyles, cn } from '../../shared/styles';
 import type { ViewPerspective } from '../../shared/types';
+import type { FilterPresetName } from '../../shared/types/filters';
 import type { TrendGranularity } from '../dashboard/hooks/useCrossSellTrend';
 
 type SpecialtyTab = 'cross-sell' | 'renewal' | 'truck';
@@ -19,7 +20,7 @@ const tabItems = [
   { key: 'truck', label: '营业货车' },
 ];
 
-const presetMap: Record<SpecialtyTab, string> = {
+const presetMap: Record<SpecialtyTab, FilterPresetName> = {
   'cross-sell': 'full',
   'renewal': 'renewalDetail',
   'truck': 'full',

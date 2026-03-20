@@ -7,6 +7,7 @@ import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { usePermission } from '../../shared/contexts/PermissionContext';
 import { cn } from '../../shared/styles';
 import { parseIntent } from './intentParser/intentParser';
+import type { ExtractedFilters } from './intentParser/types';
 import type { QuickLink } from './intentParser/types';
 
 /** 飞书需求提交链接 */
@@ -191,18 +192,18 @@ export const AIAssistantPage: React.FC = () => {
   };
 
   // 带筛选参数的跳转（本地匹配专用）
-  const handleNavigateWithFilters = useCallback((route: string, filters: Record<string, unknown>) => {
+  const handleNavigateWithFilters = useCallback((route: string, filters: ExtractedFilters) => {
     // 将提取的筛选参数写入 FilterContext
     setFilters((prev) => {
       const next = { ...prev };
       if (Array.isArray(filters.org_level_3)) {
-        next.org_level_3 = filters.org_level_3 as string[];
+        next.org_level_3 = filters.org_level_3;
       }
       if (Array.isArray(filters.salesman_name)) {
-        next.salesman_name = filters.salesman_name as string[];
+        next.salesman_name = filters.salesman_name;
       }
       if (Array.isArray(filters.customer_category)) {
-        next.customer_category = filters.customer_category as string[];
+        next.customer_category = filters.customer_category;
       }
       if (typeof filters.policy_date_start === 'string') {
         next.policy_date_start = filters.policy_date_start;
@@ -322,7 +323,7 @@ const MessageBubble: React.FC<{
   message: ChatMessage;
   onOptionClick: (option: string) => void;
   onNavigate: (route: string) => void;
-  onNavigateWithFilters: (route: string, filters: Record<string, unknown>) => void;
+  onNavigateWithFilters: (route: string, filters: ExtractedFilters) => void;
   onAiFallback: (originalInput: string) => void;
   isDataLoaded: boolean;
 }> = ({ message, onOptionClick, onNavigate, onNavigateWithFilters, onAiFallback, isDataLoaded }) => {
@@ -506,7 +507,7 @@ const MessageBubble: React.FC<{
 /**
  * 筛选参数标签（显示提取到的机构/业务员/时间等）
  */
-const FilterChips: React.FC<{ filters: Record<string, unknown> }> = ({ filters }) => {
+const FilterChips: React.FC<{ filters: ExtractedFilters }> = ({ filters }) => {
   const chips: string[] = [];
 
   if (Array.isArray(filters.org_level_3)) {

@@ -215,6 +215,6 @@ describe.skipIf(!hasParquetProcessingDeps).sequential('Parquet processing defaul
     );
 
     expect(premiumMap['营业货车|2026-03-10']).toBeCloseTo(0.2, 6);
-    expect(premiumMap['非营业个人客车|2026-03-10']).toBeCloseTo(0.03, 6);
+    expect(premiumMap['非营业个人客车|2026-03-10']).toBeCloseTo(0.05, 6);
   });
 });

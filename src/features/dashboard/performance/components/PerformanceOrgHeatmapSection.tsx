@@ -3,15 +3,15 @@
  * Renders the heatmap grid with metric tabs, date columns, and interactive cells.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tabs } from '@/shared/ui/Tabs';
 import type { TabItem } from '@/shared/ui/Tabs';
 import { StickyTableFrame } from '@/shared/ui';
 import { formatPercent } from '@/shared/utils/formatters';
 import { cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles } from '@/shared/styles';
 import { formatWanAdaptive } from '@/shared/utils/formatters';
-import type { PerformanceOrgHeatmapRow } from '../hooks/usePerformanceOrgHeatmap';
-import type { PerformanceGrowthMode, PerformanceTimePeriod } from '../hooks/usePerformanceSummary';
+import type { PerformanceOrgHeatmapRow } from '../../hooks/usePerformanceOrgHeatmap';
+import type { PerformanceGrowthMode, PerformanceTimePeriod } from '../../hooks/usePerformanceSummary';
 
 // ==================== Constants & Helpers ====================
 

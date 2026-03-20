@@ -57,15 +57,6 @@ const PremiumDashboardPage = lazy(() =>
 
 
 // 独立页面组件（包含筛选器）
-const TruckPage = lazy(() =>
-  import('../features/pages/TruckPage').then((m) => ({ default: m.TruckPage }))
-);
-const RenewalPage = lazy(() =>
-  import('../features/pages/RenewalPage').then((m) => ({ default: m.RenewalPage }))
-);
-const CrossSellPage = lazy(() =>
-  import('../features/pages/CrossSellPage').then((m) => ({ default: m.CrossSellPage }))
-);
 const PerformanceAnalysisPage = lazy(() =>
   import('../features/pages/PerformanceAnalysisPage').then((m) => ({ default: m.PerformanceAnalysisPage }))
 );
@@ -75,23 +66,11 @@ const GrowthPage = lazy(() =>
 const CostPage = lazy(() =>
   import('../features/pages/CostPage').then((m) => ({ default: m.CostPage }))
 );
-const ComprehensiveAnalysisPage = lazy(() =>
-  import('../features/pages/ComprehensiveAnalysisPage').then((m) => ({ default: m.ComprehensiveAnalysisPage }))
-);
 const FeeAnalysisPage = lazy(() =>
   import('../features/pages/FeeAnalysisPage').then((m) => ({ default: m.FeeAnalysisPage }))
 );
-const ComparisonPage = lazy(() =>
-  import('../features/pages/ComparisonPage').then((m) => ({ default: m.ComparisonPage }))
-);
 const CoefficientPage = lazy(() =>
   import('../features/pages/CoefficientPage').then((m) => ({ default: m.CoefficientPage }))
-);
-const MarketingReportPage = lazy(() =>
-  import('../features/pages/MarketingReportPage').then((m) => ({ default: m.MarketingReportPage }))
-);
-const PremiumReportPage = lazy(() =>
-  import('../features/pages/PremiumReportPage').then((m) => ({ default: m.PremiumReportPage }))
 );
 const ReportsPage = lazy(() =>
   import('../features/pages/ReportsPage').then((m) => ({ default: m.ReportsPage }))

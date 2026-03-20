@@ -8,7 +8,7 @@ function readSource(relativePath: string): string {
 
 describe('permission injection chain regression', () => {
   it('query route keeps auth + permission middleware chain', () => {
-    const content = readSource('server/src/routes/query/index.ts');
+    const content = readSource('server/src/routes/query.ts');
     expect(content).toContain('router.use(authMiddleware);');
     expect(content).toContain('router.use(permissionMiddleware);');
   });
@@ -19,4 +19,3 @@ describe('permission injection chain regression', () => {
     expect(content).toContain('router.use(permissionMiddleware);');
   });
 });
-

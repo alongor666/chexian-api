@@ -13,7 +13,7 @@ import {
   maskApiKey,
   escapeSqlValue,
   TEST_CASES,
-} from '../security';
+} from '../security.js';
 
 describe('sanitizeFilename - 文件名安全验证', () => {
   describe('应该接受有效的文件名', () => {
@@ -272,31 +272,31 @@ describe('TEST_CASES 导出验证', () => {
   });
 
   it('所有 sanitizeFilename.valid 用例应该通过', () => {
-    TEST_CASES.sanitizeFilename.valid.forEach((filename) => {
+    TEST_CASES.sanitizeFilename.valid.forEach((filename: string) => {
       expect(() => sanitizeFilename(filename)).not.toThrow();
     });
   });
 
   it('所有 sanitizeFilename.invalid 用例应该失败', () => {
-    TEST_CASES.sanitizeFilename.invalid.forEach((filename) => {
+    TEST_CASES.sanitizeFilename.invalid.forEach((filename: string) => {
       expect(() => sanitizeFilename(filename)).toThrow();
     });
   });
 
   it('所有 sanitizeTableName.valid 用例应该通过', () => {
-    TEST_CASES.sanitizeTableName.valid.forEach((name) => {
+    TEST_CASES.sanitizeTableName.valid.forEach((name: string) => {
       expect(() => sanitizeTableName(name)).not.toThrow();
     });
   });
 
   it('所有 sanitizeTableName.invalid 用例应该失败', () => {
-    TEST_CASES.sanitizeTableName.invalid.forEach((name) => {
+    TEST_CASES.sanitizeTableName.invalid.forEach((name: string) => {
       expect(() => sanitizeTableName(name)).toThrow();
     });
   });
 
   it('所有 maskApiKey 用例应该返回预期结果', () => {
-    TEST_CASES.maskApiKey.cases.forEach(({ input, expected }) => {
+    TEST_CASES.maskApiKey.cases.forEach(({ input, expected }: { input: string | undefined; expected: string }) => {
       expect(maskApiKey(input)).toBe(expected);
     });
   });

@@ -3,7 +3,7 @@
  * Displays a heatmap grid of orgs × dates with growth/achievement/premium metrics.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StickyTableFrame } from '@/shared/ui';
 import { Tabs } from '@/shared/ui/Tabs';
 import type { TabItem } from '@/shared/ui/Tabs';

@@ -11,8 +11,8 @@
  */
 
 import { QUALITY_BUSINESS_CONDITION } from './kpi.js';
-import type { KpiDetailResult } from '../types/kpi';
-export type { KpiDetailResult } from '../types/kpi';
+import type { KpiDetailResult } from '../types/kpi.js';
+export type { KpiDetailResult } from '../types/kpi.js';
 
 /**
  * 生成 KPI 详细数据查询
