@@ -29,7 +29,7 @@ import { formatPercent } from '../../shared/utils/formatters';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 
 type MetricType = 'rate' | 'penetration' | 'achievement' | 'driver_count' | 'auto_count' | 'avg_premium';
-const BRANCH_SUMMARY_ROW_LABEL = '分公司';
+const BRANCH_SUMMARY_ROW_LABEL = '整体';
 
 const METRIC_TABS: TabItem[] = [
   { key: 'rate', label: '推介率' },

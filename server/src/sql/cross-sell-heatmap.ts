@@ -31,21 +31,11 @@ function crossSellDrillToWhereAgg(steps: CrossSellHeatmapDrillStep[]): string {
           ? `COALESCE(CAST(is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`
           : `NOT COALESCE(CAST(is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
       case 'business_nature':
-        {
-          const renewalWhere = `COALESCE(CAST(is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
-          const newBusinessWhere = `NOT COALESCE(CAST(is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE') AND COALESCE(CAST(is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
-          const transferBusinessWhere = `NOT COALESCE(CAST(is_renewal AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(is_new_car AS VARCHAR), '0') IN ('1','true','TRUE')`;
-          const transferInTransferWhere = `${transferBusinessWhere} AND COALESCE(CAST(is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
-          const nonTransferInTransferWhere = `${transferBusinessWhere} AND NOT COALESCE(CAST(is_transfer AS VARCHAR), '0') IN ('1','true','TRUE')`;
-          switch (step.value) {
-            case '续保': return renewalWhere;
-            case '新保':
-            case '新车': return newBusinessWhere;
-            case '转保': return transferBusinessWhere;
-            case '过户转保': return transferInTransferWhere;
-            case '非过户转保': return nonTransferInTransferWhere;
-            default: return 'FALSE';
-          }
+        switch (step.value) {
+          case '续保': return `COALESCE(CAST(is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+          case '新车': return `COALESCE(CAST(is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+          case '过户': return `COALESCE(CAST(is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+          default: return `NOT COALESCE(CAST(is_renewal AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(is_new_car AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(is_transfer AS VARCHAR), '0') IN ('1','true','TRUE')`;
         }
       default:
         return 'TRUE';
@@ -73,21 +63,11 @@ function crossSellDrillToWherePF(steps: CrossSellHeatmapDrillStep[]): string {
           ? `COALESCE(CAST(p.is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`
           : `NOT COALESCE(CAST(p.is_nev AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
       case 'business_nature':
-        {
-          const renewalWhere = `COALESCE(CAST(p.is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
-          const newBusinessWhere = `NOT COALESCE(CAST(p.is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE') AND COALESCE(CAST(p.is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
-          const transferBusinessWhere = `NOT COALESCE(CAST(p.is_renewal AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(p.is_new_car AS VARCHAR), '0') IN ('1','true','TRUE')`;
-          const transferInTransferWhere = `${transferBusinessWhere} AND COALESCE(CAST(p.is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
-          const nonTransferInTransferWhere = `${transferBusinessWhere} AND NOT COALESCE(CAST(p.is_transfer AS VARCHAR), '0') IN ('1','true','TRUE')`;
-          switch (step.value) {
-            case '续保': return renewalWhere;
-            case '新保':
-            case '新车': return newBusinessWhere;
-            case '转保': return transferBusinessWhere;
-            case '过户转保': return transferInTransferWhere;
-            case '非过户转保': return nonTransferInTransferWhere;
-            default: return 'FALSE';
-          }
+        switch (step.value) {
+          case '续保': return `COALESCE(CAST(p.is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+          case '新车': return `COALESCE(CAST(p.is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+          case '过户': return `COALESCE(CAST(p.is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE')`;
+          default: return `NOT COALESCE(CAST(p.is_renewal AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(p.is_new_car AS VARCHAR), '0') IN ('1','true','TRUE') AND NOT COALESCE(CAST(p.is_transfer AS VARCHAR), '0') IN ('1','true','TRUE')`;
         }
       default:
         return 'TRUE';
@@ -158,9 +138,9 @@ function getCrossSellHeatmapDimExprAgg(
       return {
         selectExpr: `CASE
           WHEN COALESCE(CAST(is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '续保'
-          WHEN COALESCE(CAST(is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '新保'
-          WHEN COALESCE(CAST(is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '过户转保'
-          ELSE '非过户转保'
+          WHEN COALESCE(CAST(is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '新车'
+          WHEN COALESCE(CAST(is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '过户'
+          ELSE '转保'
         END`,
         alias: 'dim_value',
       };
@@ -186,9 +166,9 @@ function getCrossSellHeatmapDimExprPF(
       return {
         selectExpr: `CASE
           WHEN COALESCE(CAST(p.is_renewal AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '续保'
-          WHEN COALESCE(CAST(p.is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '新保'
-          WHEN COALESCE(CAST(p.is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '过户转保'
-          ELSE '非过户转保'
+          WHEN COALESCE(CAST(p.is_new_car AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '新车'
+          WHEN COALESCE(CAST(p.is_transfer AS VARCHAR), '0') IN ('1', 'true', 'TRUE') THEN '过户'
+          ELSE '转保'
         END`,
         alias: 'dim_value',
       };

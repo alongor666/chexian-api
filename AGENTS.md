@@ -599,10 +599,20 @@ ssh chexian-vps-deploy echo ok   # 返回 "ok" 表示配置正确
 # 仅本地转换，不同步 VPS
 ./数据管理/run.sh full ... --no-sync
 
+# ⭐ 推荐：每日数据一键 ETL（更简易，适配 MacOS 权限补丁）
+# 此命令由于 MacOS TCC 限制，AI Agent 往往无法执行，必须由人类在本地终端运行
+cd 数据管理 && node daily.mjs
+
 # 单独同步已有 Parquet（跳过转换步骤）
 ./scripts/sync-vps.mjs              # 自动找最新 Parquet
 ./scripts/sync-vps.mjs 文件名.parquet  # 指定文件
 ```
+
+> [!WARNING]
+> **MacOS Downloads 文件夹权限限制**：
+> 在 Downloads/Desktop/Documents 目录下，MacOS TCC 机制会拦截 AI Agent 的子进程（如 `python3` 或 `node`）读取非本进程创建的文件。
+> 若 AI 执行 `daily.mjs` 报错 `EPERM` 或 `Input file does not exist`，属于系统级拦截，**必须由人类手动执行以上命令**。
+
 
 脚本自动完成：SSH 连通性检查 → 找到最新 `.parquet` → scp 上传 → chmod 600 → PM2 重启 → 健康检查。
 

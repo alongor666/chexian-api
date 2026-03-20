@@ -1,0 +1,550 @@
+{
+  "file_path": "数据管理/warehouse/fact/policy/current/每日数据_20250101_20260317.parquet",
+  "total_rows": 703263,
+  "total_columns": 44,
+  "fields": [
+    {
+      "field_name": "保单号",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "6103001030120260000772",
+        "6100901030120260002691",
+        "6100501030120260005985"
+      ]
+    },
+    {
+      "field_name": "续保单号",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 53842,
+      "null_count": 649421,
+      "null_percentage": 92.34,
+      "sample_values": []
+    },
+    {
+      "field_name": "业务员",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "210011913曾玲",
+        "110023646李志蓉",
+        "200053182陈晓梅"
+      ]
+    },
+    {
+      "field_name": "三级机构",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "天府",
+        "高新",
+        "青羊"
+      ]
+    },
+    {
+      "field_name": "签单日期",
+      "field_type": "timestamp[us]",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "2026-03-17 00:00:00",
+        "2026-03-17 00:00:00",
+        "2026-03-17 00:00:00"
+      ]
+    },
+    {
+      "field_name": "提核日期",
+      "field_type": "timestamp[us]",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "2026-03-17 00:00:00",
+        "2026-03-17 00:00:00",
+        "2026-03-17 00:00:00"
+      ]
+    },
+    {
+      "field_name": "保险起期",
+      "field_type": "timestamp[us]",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "2026-04-04 00:00:00",
+        "2026-04-13 00:00:00",
+        "2026-03-24 00:00:00"
+      ]
+    },
+    {
+      "field_name": "险类",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "交强险",
+        "交强险",
+        "交强险"
+      ]
+    },
+    {
+      "field_name": "险别组合",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "交三",
+        "单交",
+        "交三"
+      ]
+    },
+    {
+      "field_name": "保费",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "933.96",
+        "806.6",
+        "792.45"
+      ]
+    },
+    {
+      "field_name": "是否续保",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "是否可续",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "True",
+        "True",
+        "True"
+      ]
+    },
+    {
+      "field_name": "是否新车",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "是否新能源",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "是否过户车",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "是否电销",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "True"
+      ]
+    },
+    {
+      "field_name": "终端来源",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "0106移动展业(App)",
+        "0106移动展业(App)",
+        "0110融合销售"
+      ]
+    },
+    {
+      "field_name": "客户类别",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "非营业个人客车",
+        "非营业个人客车",
+        "非营业货车"
+      ]
+    },
+    {
+      "field_name": "厂牌车型",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "长安SC6449D4客车",
+        "别克SGM7102JBA2轿车",
+        "长安SC1026DAN4载货汽车"
+      ]
+    },
+    {
+      "field_name": "吨位分段",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "1吨以下",
+        "1吨以下",
+        "1吨以下"
+      ]
+    },
+    {
+      "field_name": "新车购置价",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "55900.0",
+        "80700.0",
+        "30000.0"
+      ]
+    },
+    {
+      "field_name": "经代名",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 695553,
+      "null_count": 7710,
+      "null_percentage": 1.1,
+      "sample_values": [
+        "0110104738四川希望保险代理有限公司成都市龙泉营业部",
+        "0110103005侯娣",
+        "0110101601升华茂林保险销售服务有限公司"
+      ]
+    },
+    {
+      "field_name": "客户源",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 624963,
+      "null_count": 78300,
+      "null_percentage": 11.13,
+      "sample_values": [
+        "0001100149个人",
+        "0001100149个人",
+        "0001100149个人"
+      ]
+    },
+    {
+      "field_name": "续保业务类型",
+      "field_type": "string",
+      "nullable": true,
+      "non_null_count": 164423,
+      "null_count": 538840,
+      "null_percentage": 76.62,
+      "sample_values": []
+    },
+    {
+      "field_name": "批单号",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 19137,
+      "null_count": 684126,
+      "null_percentage": 97.28,
+      "sample_values": []
+    },
+    {
+      "field_name": "批改类型",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 19137,
+      "null_count": 684126,
+      "null_percentage": 97.28,
+      "sample_values": []
+    },
+    {
+      "field_name": "商车自主定价系数",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 165961,
+      "null_count": 537302,
+      "null_percentage": 76.4,
+      "sample_values": [
+        "0.95"
+      ]
+    },
+    {
+      "field_name": "是否交商统保",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "套单",
+        "单交",
+        "套单"
+      ]
+    },
+    {
+      "field_name": "车架号",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "LS4ASB3E9GA676440",
+        "LSGEP83A8LG064856",
+        "LSCBB13D9CG211187"
+      ]
+    },
+    {
+      "field_name": "是否报价",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "赔案件数",
+      "field_type": "int64",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "0",
+        "0",
+        "0"
+      ]
+    },
+    {
+      "field_name": "已报告赔款",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "0.0",
+        "0.0",
+        "0.0"
+      ]
+    },
+    {
+      "field_name": "费用金额",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "46.7",
+        "0.0",
+        "0.0"
+      ]
+    },
+    {
+      "field_name": "续保模式",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 164423,
+      "null_count": 538840,
+      "null_percentage": 76.62,
+      "sample_values": []
+    },
+    {
+      "field_name": "车险分等级",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 357387,
+      "null_count": 345876,
+      "null_percentage": 49.18,
+      "sample_values": [
+        "B",
+        "F"
+      ]
+    },
+    {
+      "field_name": "小货车评分",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 34902,
+      "null_count": 668361,
+      "null_percentage": 95.04,
+      "sample_values": [
+        "A"
+      ]
+    },
+    {
+      "field_name": "大货车评分",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 7397,
+      "null_count": 695866,
+      "null_percentage": 98.95,
+      "sample_values": []
+    },
+    {
+      "field_name": "交叉销售标识",
+      "field_type": "bool",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "False",
+        "False",
+        "False"
+      ]
+    },
+    {
+      "field_name": "交叉销售保费_驾意",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "0.0",
+        "0.0",
+        "0.0"
+      ]
+    },
+    {
+      "field_name": "三者保额",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "0.0",
+        "0.0",
+        "0.0"
+      ]
+    },
+    {
+      "field_name": "司机保额",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "0.0",
+        "0.0",
+        "0.0"
+      ]
+    },
+    {
+      "field_name": "乘客险保额",
+      "field_type": "double",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "0.0",
+        "0.0",
+        "0.0"
+      ]
+    },
+    {
+      "field_name": "车牌号码",
+      "field_type": "large_string",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "川G",
+        "川G",
+        "川A"
+      ]
+    },
+    {
+      "field_name": "座位数",
+      "field_type": "int64",
+      "nullable": true,
+      "non_null_count": 703263,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "sample_values": [
+        "7",
+        "5",
+        "2"
+      ]
+    }
+  ]
+}

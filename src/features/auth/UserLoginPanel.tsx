@@ -108,7 +108,7 @@ export const UserLoginPanel: React.FC = () => {
             <p className="opacity-90">
               {isBranchAdmin
                 ? '✓ 可查看所有机构数据'
-                : `✓ 仅可查看 ${userPermission?.organization} 机构及分公司整体数据`}
+                : `✓ 仅可查看 ${userPermission?.organization} 机构及整体数据`}
             </p>
           </div>
 
