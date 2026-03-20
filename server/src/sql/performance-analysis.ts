@@ -73,7 +73,7 @@ const BOOL_DIMENSIONS: Record<string, { field: string; trueLabel: string; falseL
   is_transfer: { field: 'is_transfer', trueLabel: '过户车', falseLabel: '非过户车' },
   is_nev: { field: 'is_nev', trueLabel: '新能源', falseLabel: '非新能源' },
   is_telemarketing: { field: 'is_telemarketing', trueLabel: '电销', falseLabel: '非电销' },
-  is_renewal: { field: 'is_renewal', trueLabel: '续保', falseLabel: '新保' },
+  is_renewal: { field: 'is_renewal', trueLabel: '续保', falseLabel: '非续保' },
 };
 
 function truthyExpr(fieldExpr: string): string {
@@ -357,8 +357,8 @@ function getExpandDimensionConfig(expandDims: PerformanceSummaryExpandDims): Exp
   const energyKeyExpr = `CASE WHEN is_nev_bool THEN 'electric' ELSE 'oil' END`;
   const energyOrderExpr = `CASE WHEN is_nev_bool THEN 2 ELSE 1 END`;
 
-  const natureLabelExpr = `CASE WHEN is_new_car_bool THEN '新保' WHEN is_renewal_bool THEN '续保' ELSE '转保' END`;
-  const natureKeyExpr = `CASE WHEN is_new_car_bool THEN 'new_business' WHEN is_renewal_bool THEN 'renewal' ELSE 'transfer_business' END`;
+  const natureLabelExpr = `CASE WHEN is_renewal_bool THEN '续保' WHEN is_new_car_bool THEN '新保' ELSE '转保' END`;
+  const natureKeyExpr = `CASE WHEN is_renewal_bool THEN 'renewal' WHEN is_new_car_bool THEN 'new_business' ELSE 'transfer_business' END`;
   const natureOrderExpr = `CASE WHEN is_new_car_bool THEN 1 WHEN is_renewal_bool THEN 3 ELSE 2 END`;
 
   if (expandDims === 'energy') {
@@ -941,9 +941,9 @@ export function generatePerformanceDrilldownQuery(
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
         SUM(CASE WHEN is_nev THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN (NOT is_new_car) AND is_renewal THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS renewal_count,
         SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) THEN 1 ELSE 0 END) AS transfer_business_count,
-        SUM(CASE WHEN is_new_car THEN 1 ELSE 0 END) AS new_car_count,
+        SUM(CASE WHEN (NOT is_renewal) AND is_new_car THEN 1 ELSE 0 END) AS new_car_count,
         SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN 1 ELSE 0 END) AS transfer_count,
         SUM(
           CASE
@@ -1085,9 +1085,9 @@ export function generatePerformanceTopSalesmanQuery(
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
         SUM(CASE WHEN is_nev THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN (NOT is_new_car) AND is_renewal THEN 1 ELSE 0 END) AS renewal_count,
+        SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS renewal_count,
         SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) THEN 1 ELSE 0 END) AS transfer_business_count,
-        SUM(CASE WHEN is_new_car THEN 1 ELSE 0 END) AS new_car_count,
+        SUM(CASE WHEN (NOT is_renewal) AND is_new_car THEN 1 ELSE 0 END) AS new_car_count,
         SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN 1 ELSE 0 END) AS transfer_count,
         SUM(
           CASE

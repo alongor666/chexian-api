@@ -41,10 +41,8 @@ describe('performance analysis SQL', () => {
   it('summary business_nature should use 新转续三分类键值', () => {
     const sql = generatePerformanceSummaryQuery('1=1', '1=1', 'all', 'month', 'mom', 'business_nature');
 
-    expect(sql).toContain("WHEN is_new_car_bool THEN '新保'");
-    expect(sql).toContain("WHEN is_renewal_bool THEN '续保'");
-    expect(sql).toContain("WHEN is_new_car_bool THEN 'new_business'");
-    expect(sql).toContain("WHEN is_renewal_bool THEN 'renewal'");
+    expect(sql).toContain("WHEN is_renewal_bool THEN '续保' WHEN is_new_car_bool THEN '新保'");
+    expect(sql).toContain("WHEN is_renewal_bool THEN 'renewal' WHEN is_new_car_bool THEN 'new_business'");
     expect(sql).toContain("ELSE 'transfer_business' END AS expand_key");
     expect(sql).toContain("WHEN is_new_car_bool THEN 1");
     expect(sql).toContain("WHEN is_renewal_bool THEN 3");
@@ -122,11 +120,17 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('CURRENT_DATE');
   });
 
-  it('drilldown SQL should treat 续保为旧车续保且过户为过户转保', () => {
+  it('drilldown SQL should treat 续保直接等于是否续保且过户为过户转保', () => {
     const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'week', 'mom', [], 'org_level_3');
 
-    expect(sql).toContain('SUM(CASE WHEN (NOT is_new_car) AND is_renewal THEN 1 ELSE 0 END) AS renewal_count');
+    expect(sql).toContain('SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS renewal_count');
     expect(sql).toContain('SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN 1 ELSE 0 END) AS transfer_count');
+  });
+
+  it('drilldown SQL should render is_renewal grouping as 续保/非续保', () => {
+    const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'week', 'mom', [], 'is_renewal');
+
+    expect(sql).toContain("THEN '续保' ELSE '非续保' END AS group_name");
   });
 
 
