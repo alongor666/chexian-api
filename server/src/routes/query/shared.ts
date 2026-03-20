@@ -22,6 +22,7 @@ export { getRouteCache, setRouteCache, computeEtag, sendWithEtag } from '../../s
 export { markRequestCacheHit } from '../../utils/request-context.js';
 export { buildResponseMeta } from '../../utils/api-meta.js';
 export { DEFAULT_COMPREHENSIVE_THRESHOLDS } from '../../config/comprehensive-thresholds.js';
+export type { AdvancedFilterState, DateCriteria } from '../../types/data.js';
 
 export const QUERY_CACHE = {
   hotspotShort: 120_000,

@@ -674,46 +674,7 @@ export function generatePolicy2026In2027Query(config: NewEarnedPremiumConfig = {
   });
 }
 
-/**
- * 计算某保单在指定统计月末的已赚保费
- * 已赚保费 = 首日费用部分 + 时间分摊部分
- * - 首日费用部分 = P × F × α（仅当起保日在统计月末之前时计入）
- * - 时间分摊部分 = P × (1-F) × min(有效天数, 365) / 365
- * - 有效天数 = 统计月末 - 起保日 + 1（封顶365天）
- *
- * @param statMonthEnd - 统计月末日期，格式 YYYY-MM-DD
- */
-function buildEarnedPremiumCase(statMonthEnd: string): string {
-  // 有效天数 = min(统计月末 - 起保日 + 1, 365)，至少0
-  return `
-    CASE
-      WHEN CAST(insurance_start_date AS DATE) <= DATE '${statMonthEnd}'
-      THEN
-        -- 首日费用部分 = P × F × α
-        premium * fee_rate * line_factor +
-        -- 时间分摊部分 = P × (1-F) × min(有效天数, 365) / 365
-        premium * (1 - fee_rate) * LEAST(
-          GREATEST(
-            DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1,
-            0
-          ),
-          365
-        ) / 365.0
-      ELSE 0
-    END
-  `;
-}
-
-/**
- * 获取月末日期
- * @param year 年份
- * @param month 月份（1-12）
- */
-function getMonthEndDate(year: number, month: number): string {
-  // 下个月1号减1天即为当月最后一天
-  const lastDay = new Date(year, month, 0).getDate();
-  return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-}
+// buildEarnedPremiumCase 和 getMonthEndDate 已从 sql-builder.ts 导入（见文件顶部）
 
 /**
  * 生成2025年保单已赚保费查询SQL
