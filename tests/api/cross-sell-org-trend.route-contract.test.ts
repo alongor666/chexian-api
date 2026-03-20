@@ -8,7 +8,7 @@ function readSource(relativePath: string): string {
 
 describe('cross-sell-org-trend route contract', () => {
   it('accepts all for seat coverage level and vehicle category in org trend schema', () => {
-    const content = readSource('server/src/routes/query.ts');
+    const content = readSource('server/src/routes/query/cross-sell.ts');
 
     expect(content).toContain("const CROSS_SELL_SEAT_COVERAGE_LEVELS_WITH_ALL = ['all', ...CROSS_SELL_SEAT_COVERAGE_LEVELS] as const;");
 
@@ -21,7 +21,7 @@ describe('cross-sell-org-trend route contract', () => {
   });
 
   it('locks cross-sell routes to passenger + all while keeping params compatible', () => {
-    const content = readSource('server/src/routes/query.ts');
+    const content = readSource('server/src/routes/query/cross-sell.ts');
 
     const crossSellDimsStart = content.indexOf('const CROSS_SELL_DIMENSIONS = [');
     const crossSellDimsEnd = content.indexOf('] as const;', crossSellDimsStart);
