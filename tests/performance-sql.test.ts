@@ -217,8 +217,11 @@ describe('performance analysis SQL', () => {
       [{ dimension: 'business_nature', value: '转保' }]
     );
 
-    expect(sql).toContain("NOT (TRY_CAST(p.is_renewal AS BOOLEAN) = true");
-    expect(sql).toContain("NOT (TRY_CAST(p.is_new_car AS BOOLEAN) = true");
+    expect(sql).toContain("TRY_CAST(p.is_renewal AS BOOLEAN) = true");
+    expect(sql).toContain("TRY_CAST(p.is_new_car AS BOOLEAN) = true");
+    // Both fields negated — verify compound condition pattern
+    expect(sql).toMatch(/NOT\s*\(\s*\n?\s*TRY_CAST\(p\.is_new_car AS BOOLEAN\)/);
+    expect(sql).toMatch(/NOT\s*\(\s*\n?\s*TRY_CAST\(p\.is_renewal AS BOOLEAN\)/);
   });
 
   it('heatmap business_nature drill filter should support 过户转保子类', () => {
@@ -231,8 +234,8 @@ describe('performance analysis SQL', () => {
       [{ dimension: 'business_nature', value: '过户转保' }]
     );
 
-    expect(sql).toContain("NOT (TRY_CAST(p.is_renewal AS BOOLEAN) = true");
-    expect(sql).toContain("NOT (TRY_CAST(p.is_new_car AS BOOLEAN) = true");
-    expect(sql).toContain("(TRY_CAST(p.is_transfer AS BOOLEAN) = true");
+    expect(sql).toMatch(/NOT\s*\(\s*\n?\s*TRY_CAST\(p\.is_renewal AS BOOLEAN\)/);
+    expect(sql).toMatch(/NOT\s*\(\s*\n?\s*TRY_CAST\(p\.is_new_car AS BOOLEAN\)/);
+    expect(sql).toContain("TRY_CAST(p.is_transfer AS BOOLEAN) = true");
   });
 });

@@ -1248,12 +1248,12 @@ function heatmapDrillToWhere(steps: HeatmapDrillStep[]): string {
         return `TRIM(CAST(p.coverage_combination AS VARCHAR)) = ${v}`;
       case 'energy_type':
         return step.value === '新能源'
-          ? `(TRY_CAST(p.is_nev AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_nev AS VARCHAR))) IN ('1','y','yes','true','t','是'))`
-          : `NOT (TRY_CAST(p.is_nev AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_nev AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+          ? truthyExpr('p.is_nev')
+          : `NOT ${truthyExpr('p.is_nev')}`;
       case 'business_nature': {
-        const renewalBaseWhere = `(TRY_CAST(p.is_renewal AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_renewal AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
-        const newCarWhere = `(TRY_CAST(p.is_new_car AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_new_car AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
-        const transferBaseWhere = `(TRY_CAST(p.is_transfer AS BOOLEAN) = true OR LOWER(TRIM(CAST(p.is_transfer AS VARCHAR))) IN ('1','y','yes','true','t','是'))`;
+        const renewalBaseWhere = truthyExpr('p.is_renewal');
+        const newCarWhere = truthyExpr('p.is_new_car');
+        const transferBaseWhere = truthyExpr('p.is_transfer');
         const renewalWhere = `NOT ${newCarWhere} AND ${renewalBaseWhere}`;
         const transferBusinessWhere = `NOT ${newCarWhere} AND NOT ${renewalBaseWhere}`;
         const transferInTransferWhere = `${transferBusinessWhere} AND ${transferBaseWhere}`;
