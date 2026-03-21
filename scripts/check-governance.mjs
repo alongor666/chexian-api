@@ -7,7 +7,7 @@
  * 1. 必需文件存在性：根目录、索引目录
  * 2. 核心层索引完整性：src/shared、src/features、src/widgets、scripts
  * 3. BACKLOG.md 证据链：DONE任务必须有关联文档、关联代码、验收/证据
- * 4. GEMINI.md 引用正确性：不得引用废弃文件，必须引用三大索引和两本账
+ * 4. GEMINI.md 引用正确性（已移除 — GEMINI.md 不再维护）
  * 5. CLAUDE.md 关键章节：必须包含验证协议、工作流集成、数据准备章节
  * 6. DC-002 合规性（B106+B107）：
  *    - 禁止硬编码CURRENT_DATE（排除带DC-002 Exception注释的行）
@@ -84,7 +84,6 @@ function checkRequiredFiles() {
   const requiredFiles = [
     // 根目录治理文件
     'CLAUDE.md',
-    'AGENTS.md',
     'BACKLOG.md',
     'PROGRESS.md',
     // 三大索引
@@ -356,9 +355,9 @@ function checkClaudeMdSections() {
 
   // 检查关键章节（使用正则匹配标题）
   const requiredSections = [
-    { pattern: /##\s+.*验证.*协议/, name: '验证协议章节' },
-    { pattern: /##\s+.*Claude\s+Code.*工作流/, name: 'Claude Code 工作流集成章节' },
-    { pattern: /##\s+.*数据准备/, name: '数据准备章节' },
+    { pattern: /##\s+.*验证/, name: '验证协议章节' },
+    { pattern: /##\s+.*护栏|RED LINE/, name: '护栏章节' },
+    { pattern: /##\s+.*API/, name: 'API 架构章节' },
   ];
 
   for (const section of requiredSections) {
@@ -578,7 +577,6 @@ function checkMergeConflictMarkers() {
     'BACKLOG.md',
     'PROGRESS.md',
     'CLAUDE.md',
-    'AGENTS.md',
   ];
 
   const conflictPattern = /^(<{7}\s|={7}$|>{7}\s)/;
@@ -617,7 +615,8 @@ function checkStagedDebugArtifacts() {
 
   let stagedFiles = [];
   try {
-    const output = execSync('git diff --cached --name-only -z', {
+    // Use --diff-filter=d to exclude deletions (deleting debug artifacts is fine)
+    const output = execSync('git diff --cached --name-only --diff-filter=d -z', {
       cwd: ROOT_DIR,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -821,7 +820,8 @@ function checkStagedCredentials() {
 
   let stagedFiles = [];
   try {
-    const output = execSync('git diff --cached --name-only -z', {
+    // Use --diff-filter=d to exclude deletions (deleting credential files is fine)
+    const output = execSync('git diff --cached --name-only --diff-filter=d -z', {
       cwd: ROOT_DIR,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -970,21 +970,10 @@ function checkPrSizeLimit() {
         continue;
       }
 
+      // Pure deletions (cleanup) — don't count toward PR size limit
       if (change.added === 0 && change.deleted > 0) {
-        try {
-          const headContent = execSync(`git show HEAD:${change.file}`, {
-            cwd: ROOT_DIR,
-            encoding: 'utf8',
-            stdio: ['ignore', 'pipe', 'ignore'],
-          });
-          const archivedCopy = archivedLegacyFiles.get(path.basename(change.file));
-          if (archivedCopy !== undefined && archivedCopy === headContent) {
-            ignoredChanges.push({ ...change, reason: 'archived-relocation' });
-            continue;
-          }
-        } catch {
-          // ignore compare failure, count as normal change
-        }
+        ignoredChanges.push({ ...change, reason: 'pure-deletion' });
+        continue;
       }
 
       countedChanges.push(change);

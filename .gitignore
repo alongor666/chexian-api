@@ -93,16 +93,15 @@ logs/
 scripts/verify-catchup-logic.*
 
 # Playwright/调试产物（禁止提交）
-.playwright-cli/page-*.yml
-.playwright-cli/page-*.png
-.playwright-cli/console-*.log
-.playwright-cli/network-*.log
+.playwright-cli/
 playwright-report/
 test-results/
 test_output.txt
 vitest_log.txt
 dev_log.txt
 test_err.txt
-output/playwright/.auth/
-output/**/*.auth.json
+output/playwright/
 .gstack/
+
+# npm lockfile（项目用 Bun）
+server/package-lock.json

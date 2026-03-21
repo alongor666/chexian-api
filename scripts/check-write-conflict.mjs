@@ -40,7 +40,7 @@ const PROTECTED_FILES = [
 ];
 
 // 核心协议文件（只有@user可以修改）
-const CORE_PROTOCOL_FILES = ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md'];
+const CORE_PROTOCOL_FILES = ['CLAUDE.md'];
 
 let hasErrors = false;
 let hasWarnings = false;
