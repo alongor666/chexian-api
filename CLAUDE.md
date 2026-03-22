@@ -154,6 +154,11 @@ bun run governance                 # 治理校验
 
 ---
 
+## 语言规范
+所有回复必须使用**中文**，除非涉及代码、命令、专有名词或英文引用。
+
+---
+
 ## gstack
 Use /browse from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
 Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review,
