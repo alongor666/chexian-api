@@ -2,6 +2,7 @@ import React, { useState, createContext, useContext, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { SidebarNavigation } from './SidebarNavigation';
 import { TopNavigation } from './TopNavigation';
+import { Watermark } from './Watermark';
 
 interface SidebarContextValue {
   collapsed: boolean;
@@ -124,6 +125,7 @@ export const SidebarLayout: React.FC = () => {
             <div className="h-full flex flex-col">
               <div className="flex-1 flex flex-col min-h-0 bg-white overflow-y-auto relative" id="main-scroll-container">
                 <Outlet />
+                <Watermark />
               </div>
             </div>
           </main>
