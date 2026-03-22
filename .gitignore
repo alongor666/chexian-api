@@ -103,5 +103,3 @@ test_err.txt
 output/playwright/
 .gstack/
 
-# npm lockfile（项目用 Bun）
-server/package-lock.json
