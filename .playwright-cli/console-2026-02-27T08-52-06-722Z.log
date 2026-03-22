@@ -1,2 +1,0 @@
-[    5579ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ https://chexian.cretvalu.com/api/auth/me:0
-[    6467ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ https://chexian.cretvalu.com/api/auth/refresh:0

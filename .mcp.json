@@ -9,7 +9,7 @@
         "GITHUB_TOKEN": "${GITHUB_TOKEN}"
       },
       "description": "GitHub API integration - issues, PRs, repos",
-      "enabled": false,
+      "enabled": true,
       "timeout": 30000,
       "tools": [
         "create_issue",
