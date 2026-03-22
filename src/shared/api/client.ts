@@ -500,6 +500,20 @@ class ApiClient {
     return this.request<T>(`/query/${path}${query ? `?${query}` : ''}`);
   }
 
+  /** 带 drillPath 序列化的查询请求（用于下钻场景） */
+  private drilldownGet<T = any>(path: string, params: { drillPath?: Array<{ dimension: string; value: string }>; groupBy?: string; [key: string]: any }): Promise<T> {
+    const searchParams = new URLSearchParams();
+    if (params.drillPath) searchParams.append('drillPath', JSON.stringify(params.drillPath));
+    if (params.groupBy) searchParams.append('groupBy', params.groupBy);
+    Object.entries(params).forEach(([key, value]) => {
+      if (key !== 'drillPath' && key !== 'groupBy' && value !== undefined && value !== null) {
+        searchParams.append(key, String(value));
+      }
+    });
+    const query = searchParams.toString();
+    return this.request<T>(`/query/${path}${query ? `?${query}` : ''}`);
+  }
+
   async getKpi(filters?: Record<string, any>): Promise<KpiData> { return this.queryGet<KpiData>('kpi', filters); }
   async getKpiDetail(filters?: Record<string, any>): Promise<KpiDetailData> { return this.queryGet<KpiDetailData>('kpi-detail', filters); }
   async getTrend(granularity: 'day' | 'week' | 'month' = 'day', filters?: Record<string, any>): Promise<TrendData[]> { return this.queryGet<TrendData[]>('trend', filters, { granularity }); }
@@ -520,20 +534,7 @@ class ApiClient {
     groupBy?: string;
     [key: string]: any;
   }): Promise<any> {
-    const searchParams = new URLSearchParams();
-    if (params.drillPath) {
-      searchParams.append('drillPath', JSON.stringify(params.drillPath));
-    }
-    if (params.groupBy) {
-      searchParams.append('groupBy', params.groupBy);
-    }
-    Object.entries(params).forEach(([key, value]) => {
-      if (key !== 'drillPath' && key !== 'groupBy' && value !== undefined && value !== null) {
-        searchParams.append(key, String(value));
-      }
-    });
-    const query = searchParams.toString();
-    return this.request(`/query/cross-sell${query ? `?${query}` : ''}`);
+    return this.drilldownGet('cross-sell', params);
   }
 
   /**
@@ -626,20 +627,7 @@ class ApiClient {
     groupBy?: string;
     [key: string]: any;
   }): Promise<CrossSellBundleResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.drillPath) {
-      searchParams.append('drillPath', JSON.stringify(params.drillPath));
-    }
-    if (params.groupBy) {
-      searchParams.append('groupBy', params.groupBy);
-    }
-    Object.entries(params).forEach(([key, value]) => {
-      if (key !== 'drillPath' && key !== 'groupBy' && value !== undefined && value !== null) {
-        searchParams.append(key, String(value));
-      }
-    });
-    const query = searchParams.toString();
-    return this.request(`/query/cross-sell-bundle${query ? `?${query}` : ''}`);
+    return this.drilldownGet<CrossSellBundleResponse>('cross-sell-bundle', params);
   }
 
   /**
@@ -698,20 +686,7 @@ class ApiClient {
     drillPath: Array<{ dimension: string; value: string }>;
     groupBy: string | null;
   }> {
-    const searchParams = new URLSearchParams();
-    if (params.drillPath) {
-      searchParams.append('drillPath', JSON.stringify(params.drillPath));
-    }
-    if (params.groupBy) {
-      searchParams.append('groupBy', params.groupBy);
-    }
-    Object.entries(params).forEach(([key, value]) => {
-      if (key !== 'drillPath' && key !== 'groupBy' && value !== undefined && value !== null) {
-        searchParams.append(key, String(value));
-      }
-    });
-    const query = searchParams.toString();
-    return this.request(`/query/performance-drilldown${query ? `?${query}` : ''}`);
+    return this.drilldownGet('performance-drilldown', params);
   }
 
   /**
@@ -766,20 +741,7 @@ class ApiClient {
     groupBy?: string;
     [key: string]: any;
   }): Promise<PerformanceBundleResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.drillPath) {
-      searchParams.append('drillPath', JSON.stringify(params.drillPath));
-    }
-    if (params.groupBy) {
-      searchParams.append('groupBy', params.groupBy);
-    }
-    Object.entries(params).forEach(([key, value]) => {
-      if (key !== 'drillPath' && key !== 'groupBy' && value !== undefined && value !== null) {
-        searchParams.append(key, String(value));
-      }
-    });
-    const query = searchParams.toString();
-    return this.request(`/query/performance-bundle${query ? `?${query}` : ''}`);
+    return this.drilldownGet<PerformanceBundleResponse>('performance-bundle', params);
   }
 
   /**
