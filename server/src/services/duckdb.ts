@@ -621,16 +621,15 @@ class DuckDBService {
     // 兼容历史部署中 CrossSellDailyAgg 可能是 VIEW 或 TABLE 的情况
     await this.dropRelationIfExists('CrossSellDailyAgg');
 
-    console.log('[DuckDB] Materializing CrossSellDailyAgg...');
+    console.log('[DuckDB] Materializing CrossSellDailyAgg (batched by month)...');
     const t0 = Date.now();
 
-    // 降低内存峰值：单线程 + 关闭插入顺序保留（VPS 2核4G 场景关键）
+    // 降低内存峰值：单线程 + 关闭插入顺序保留
     await this.query('SET threads=1');
     await this.query('SET preserve_insertion_order=false');
 
-    await this.query(`
-      CREATE TABLE CrossSellDailyAgg AS
-      WITH normalized AS (
+    // normalized CTE 的 SELECT 列（复用于建表和每月 INSERT）
+    const normalizedSelect = `
         SELECT
           CAST(policy_date AS DATE) AS policy_date,
           CAST(insurance_start_date AS DATE) AS insurance_start_date,
@@ -683,30 +682,18 @@ class DuckDBService {
           ) AS dedup_key,
           NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '') AS raw_policy_no
         FROM PolicyFact
-        WHERE policy_date IS NOT NULL
-      )
+        WHERE policy_date IS NOT NULL`;
+
+    const groupByColumns = `
+        policy_date, insurance_start_date, org_level_3, salesman_name,
+        customer_category, coverage_combination, renewal_mode, tonnage_segment,
+        insurance_grade, small_truck_score, large_truck_score, is_commercial_insure,
+        is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,
+        is_renewable, is_cross_sell, driver_coverage, passenger_coverage`;
+
+    const aggregateSelect = `
       SELECT
-        policy_date,
-        insurance_start_date,
-        org_level_3,
-        salesman_name,
-        customer_category,
-        coverage_combination,
-        renewal_mode,
-        tonnage_segment,
-        insurance_grade,
-        small_truck_score,
-        large_truck_score,
-        is_commercial_insure,
-        is_transfer,
-        is_telemarketing,
-        is_renewal,
-        is_nev,
-        is_new_car,
-        is_renewable,
-        is_cross_sell,
-        driver_coverage,
-        passenger_coverage,
+        ${groupByColumns},
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
@@ -716,29 +703,49 @@ class DuckDBService {
         COALESCE(SUM(premium), 0) AS auto_premium
       FROM normalized
       WHERE dedup_key IS NOT NULL
-      GROUP BY
-        policy_date,
-        insurance_start_date,
-        org_level_3,
-        salesman_name,
-        customer_category,
-        coverage_combination,
-        renewal_mode,
-        tonnage_segment,
-        insurance_grade,
-        small_truck_score,
-        large_truck_score,
-        is_commercial_insure,
-        is_transfer,
-        is_telemarketing,
-        is_renewal,
-        is_nev,
-        is_new_car,
-        is_renewable,
-        is_cross_sell,
-        driver_coverage,
-        passenger_coverage
+      GROUP BY ${groupByColumns}`;
+
+    // 获取数据中的年月范围
+    const monthsResult = await this.query<{ ym: string }>(`
+      SELECT DISTINCT strftime(CAST(policy_date AS DATE), '%Y-%m') AS ym
+      FROM PolicyFact
+      WHERE policy_date IS NOT NULL
+      ORDER BY ym
     `);
+    const months = monthsResult.map((r) => r.ym);
+
+    if (months.length === 0) {
+      // 无数据时创建空表
+      await this.query(`
+        CREATE TABLE CrossSellDailyAgg AS
+        WITH normalized AS (${normalizedSelect})
+        ${aggregateSelect}
+      `);
+    } else {
+      // 第一个月：CREATE TABLE AS（建表+首批数据）
+      const firstMonth = months[0];
+      await this.query(`
+        CREATE TABLE CrossSellDailyAgg AS
+        WITH normalized AS (${normalizedSelect}
+          AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${firstMonth}'
+        )
+        ${aggregateSelect}
+      `);
+      console.log(`[DuckDB] CrossSellDailyAgg batch 1/${months.length}: ${firstMonth}`);
+
+      // 后续月份：INSERT INTO（逐月追加，每批峰值内存低）
+      for (let i = 1; i < months.length; i++) {
+        const month = months[i];
+        await this.query(`
+          INSERT INTO CrossSellDailyAgg
+          WITH normalized AS (${normalizedSelect}
+            AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${month}'
+          )
+          ${aggregateSelect}
+        `);
+        console.log(`[DuckDB] CrossSellDailyAgg batch ${i + 1}/${months.length}: ${month}`);
+      }
+    }
 
     // 恢复线程数（查询阶段用多线程提速）
     await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
