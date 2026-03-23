@@ -63,6 +63,17 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
+  liangqin: {
+    username: 'liangqin',
+    // 初始密码: Tf7C8KQ7142（管理员可见，请分发后提醒用户修改）
+    passwordHash: '$2b$10$PCmiRIqjJrZyapvmUcISs.Q63n9kJWVG017tYxoHlQWe/Gyql.VIi',
+    displayName: '天府机构-梁琴',
+    role: 'org_user',
+    organization: '天府',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    allowedIps: ['10.204.48.6'],
+  },
   yibin: {
     username: 'yibin',
     passwordHash: '$2b$10$2tbYhm0rBqaSQQsHOuWdAeQg6c4mCO/4fwLbjBDkn8Rfc3XVv4rBm',
