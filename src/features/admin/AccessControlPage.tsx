@@ -12,19 +12,9 @@ import {
   Table,
   useConfirmDialog,
 } from '../../shared/ui';
-import {
-  FEE_ANALYSIS_ALLOWED_USERS,
-  MOTO_COST_ALLOWED_USERS,
-  COST_ALLOWED_USERS,
-} from '../../shared/config/organizations';
 
 /**
  * 所有可通过路由白名单配置的路由列表。
- * 注意：以下路由通过代码白名单控制，不在此处配置：
- *   - /fee-analysis  → FEE_ANALYSIS_ALLOWED_USERS
- *   - /cost          → COST_ALLOWED_USERS
- *   - /moto-cost     → MOTO_COST_ALLOWED_USERS
- *   - /admin/access-control → 由 isBranchAdmin 角色控制
  */
 const ALL_ROUTES = [
   { path: '/', label: '首页' },
@@ -41,6 +31,12 @@ const ALL_ROUTES = [
   { path: '/templates', label: '报表模板' },
 ];
 
+const ALL_SPECIAL_FEATURES = [
+  { key: 'cost', label: '成本分析', path: '/cost' },
+  { key: 'fee_analysis', label: '费用分析', path: '/fee-analysis' },
+  { key: 'moto_cost', label: '摩意模型', path: '/moto-cost' },
+];
+
 type UserFormState = {
   id?: string;
   username: string;
@@ -51,6 +47,7 @@ type UserFormState = {
   allowedRoutes: string[];
   defaultRoute: string;
   allowedIps: string;
+  specialFeatures: string[];
   active: boolean;
 };
 
@@ -71,6 +68,7 @@ const emptyUserForm: UserFormState = {
   allowedRoutes: [],
   defaultRoute: '',
   allowedIps: '',
+  specialFeatures: [],
   active: true,
 };
 
@@ -124,6 +122,40 @@ const RouteCheckboxGroup: React.FC<{
   );
 };
 
+// 特殊功能复选框组件
+const SpecialFeaturesCheckboxGroup: React.FC<{
+  selected: string[];
+  onChange: (features: string[]) => void;
+}> = ({ selected, onChange }) => {
+  const toggle = (key: string, checked: boolean) => {
+    const next = checked ? [...selected, key] : selected.filter(f => f !== key);
+    onChange(next);
+  };
+
+  return (
+    <div className="mt-1 p-3 rounded-lg border border-neutral-200 bg-neutral-50">
+      <p className="text-xs text-neutral-400 mb-2">勾选后该用户可访问对应的特殊功能页面</p>
+      <div className="flex flex-wrap gap-3">
+        {ALL_SPECIAL_FEATURES.map(feature => (
+          <label
+            key={feature.key}
+            className="flex items-center gap-2 cursor-pointer rounded px-3 py-1.5 hover:bg-white transition-colors border border-neutral-200"
+          >
+            <input
+              type="checkbox"
+              checked={selected.includes(feature.key)}
+              onChange={e => toggle(feature.key, e.target.checked)}
+              className="w-4 h-4 rounded accent-primary cursor-pointer"
+            />
+            <span className="text-sm text-neutral-700">{feature.label}</span>
+            <span className="text-xs text-neutral-400">{feature.path}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const AccessControlPage: React.FC = () => {
   const { isBranchAdmin } = usePermission();
   const [users, setUsers] = useState<AccessUser[]>([]);
@@ -132,12 +164,18 @@ export const AccessControlPage: React.FC = () => {
   const [roleForm, setRoleForm] = useState<RoleFormState>(emptyRoleForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   // 删除确认对话框
   const deleteUserConfirm = useConfirmDialog();
   const deleteRoleConfirm = useConfirmDialog();
   const [pendingDeleteUser, setPendingDeleteUser] = useState<AccessUser | null>(null);
   const [pendingDeleteRole, setPendingDeleteRole] = useState<AccessRole | null>(null);
+
+  // 密码重置对话框
+  const resetPwdConfirm = useConfirmDialog();
+  const [resetPwdUser, setResetPwdUser] = useState<AccessUser | null>(null);
+  const [resetPwdValue, setResetPwdValue] = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -177,6 +215,7 @@ export const AccessControlPage: React.FC = () => {
       allowedRoutes: record.allowedRoutes || [],
       defaultRoute: record.defaultRoute || '',
       allowedIps: joinList(record.allowedIps),
+      specialFeatures: record.specialFeatures || [],
       active: record.active,
     });
   };
@@ -185,7 +224,7 @@ export const AccessControlPage: React.FC = () => {
 
   const handleUserSubmit = async () => {
     setError('');
-    // 所有校验在 setLoading(true) 之前，避免 loading 状态闪烁
+    setSuccess('');
     if (!userForm.displayName.trim() || !userForm.role) {
       setError('请完善用户信息');
       return;
@@ -201,6 +240,7 @@ export const AccessControlPage: React.FC = () => {
       allowedRoutes: userForm.allowedRoutes,
       defaultRoute: userForm.defaultRoute.trim() || undefined,
       allowedIps: splitIpList(userForm.allowedIps),
+      specialFeatures: userForm.specialFeatures,
       active: userForm.active,
     };
     setLoading(true);
@@ -210,12 +250,14 @@ export const AccessControlPage: React.FC = () => {
           ...payload,
           password: userForm.password.trim() || undefined,
         });
+        setSuccess(`用户「${userForm.displayName}」更新成功`);
       } else {
         await apiClient.createUser({
           username: userForm.username.trim(),
           password: userForm.password.trim(),
           ...payload,
         });
+        setSuccess(`用户「${userForm.displayName}」创建成功`);
       }
       resetUserForm();
       await loadData();
@@ -230,14 +272,49 @@ export const AccessControlPage: React.FC = () => {
   const handleUserDelete = async (record: AccessUser) => {
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
       await apiClient.deleteUser(record.id);
+      setSuccess(`用户「${record.displayName}」已删除`);
       await loadData();
       deleteUserConfirm.hide();
     } catch (err) {
       const message = err instanceof Error ? err.message : '删除失败';
       setError(message);
-      deleteUserConfirm.hide(); // 关闭弹窗，让用户在页面顶部看到错误
+      deleteUserConfirm.hide();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPwdUser || !resetPwdValue.trim()) {
+      setError('请输入新密码');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      await apiClient.updateUser(resetPwdUser.id, {
+        displayName: resetPwdUser.displayName,
+        role: resetPwdUser.role,
+        organization: resetPwdUser.organization,
+        allowedRoutes: resetPwdUser.allowedRoutes || [],
+        defaultRoute: resetPwdUser.defaultRoute,
+        allowedIps: resetPwdUser.allowedIps || [],
+        specialFeatures: resetPwdUser.specialFeatures || [],
+        active: resetPwdUser.active,
+        password: resetPwdValue.trim(),
+      });
+      setSuccess(`用户「${resetPwdUser.displayName}」密码已重置`);
+      resetPwdConfirm.hide();
+      setResetPwdValue('');
+      setResetPwdUser(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '密码重置失败';
+      setError(message);
+      resetPwdConfirm.hide();
     } finally {
       setLoading(false);
     }
@@ -257,6 +334,7 @@ export const AccessControlPage: React.FC = () => {
 
   const handleRoleSubmit = async () => {
     setError('');
+    setSuccess('');
     if (!roleForm.role.trim() || !roleForm.name.trim()) {
       setError('请完善角色信息');
       return;
@@ -278,6 +356,7 @@ export const AccessControlPage: React.FC = () => {
           ...payload,
         });
       }
+      setSuccess(`角色「${roleForm.name}」保存成功`);
       resetRoleForm();
       await loadData();
     } catch (err) {
@@ -291,14 +370,16 @@ export const AccessControlPage: React.FC = () => {
   const handleRoleDelete = async (record: AccessRole) => {
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
       await apiClient.deleteRole(record.role);
+      setSuccess(`角色「${record.name}」已删除`);
       await loadData();
       deleteRoleConfirm.hide();
     } catch (err) {
       const message = err instanceof Error ? err.message : '删除失败';
       setError(message);
-      deleteRoleConfirm.hide(); // 关闭弹窗，让用户在页面顶部看到错误
+      deleteRoleConfirm.hide();
     } finally {
       setLoading(false);
     }
@@ -313,7 +394,7 @@ export const AccessControlPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-neutral-900">用户与权限管理</h1>
-          <p className="text-sm text-neutral-500 mt-1">管理员可配置用户、角色、IP 与路由权限</p>
+          <p className="text-sm text-neutral-500 mt-1">管理员可配置用户、角色、IP/路由权限、特殊功能权限，所有修改实时持久化生效</p>
         </div>
         <Button variant="secondary" onClick={loadData} loading={loading}>
           刷新
@@ -326,55 +407,16 @@ export const AccessControlPage: React.FC = () => {
         </div>
       )}
 
-      {/* 特殊功能权限说明 */}
-      <Card title="特殊功能访问控制" subtitle="以下功能通过代码白名单控制，需修改配置文件才能变更" padding="standard">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="rounded-lg border border-neutral-200 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full bg-success" />
-              <span className="text-sm font-medium text-neutral-800">成本分析 <span className="text-xs text-neutral-400">/cost</span></span>
-            </div>
-            <p className="text-xs text-neutral-500 mb-2">仅以下用户可见并访问：</p>
-            <div className="flex flex-wrap gap-1">
-              {COST_ALLOWED_USERS.map(u => (
-                <span key={u} className="px-2 py-0.5 rounded-full bg-success/10 text-success text-xs font-mono">{u}</span>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-lg border border-neutral-200 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full bg-warning" />
-              <span className="text-sm font-medium text-neutral-800">费用分析 <span className="text-xs text-neutral-400">/fee-analysis</span></span>
-            </div>
-            <p className="text-xs text-neutral-500 mb-2">仅以下用户可见并访问（超级用户）：</p>
-            <div className="flex flex-wrap gap-1">
-              {FEE_ANALYSIS_ALLOWED_USERS.map(u => (
-                <span key={u} className="px-2 py-0.5 rounded-full bg-warning/10 text-warning-dark text-xs font-mono">{u}</span>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-lg border border-neutral-200 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full bg-primary" />
-              <span className="text-sm font-medium text-neutral-800">摩意模型 <span className="text-xs text-neutral-400">/moto-cost</span></span>
-            </div>
-            <p className="text-xs text-neutral-500 mb-2">仅以下用户可见并访问（超级用户）：</p>
-            <div className="flex flex-wrap gap-1">
-              {MOTO_COST_ALLOWED_USERS.map(u => (
-                <span key={u} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-mono">{u}</span>
-              ))}
-            </div>
-          </div>
+      {success && (
+        <div className="rounded-lg border border-success/30 bg-success/10 text-success px-4 py-3 text-sm">
+          {success}
         </div>
-        <p className="text-xs text-neutral-400 mt-3">
-          如需调整白名单，请修改 <code className="bg-neutral-100 px-1 rounded">src/shared/config/organizations.ts</code> 中对应的常量并重新部署。
-        </p>
-      </Card>
+      )}
 
       {/* 用户管理 */}
       <Card
         title="用户管理"
-        subtitle="创建或编辑用户权限"
+        subtitle="创建或编辑用户权限（所有修改自动持久化，重启不丢失）"
         extra={
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={resetUserForm}>
@@ -458,6 +500,13 @@ export const AccessControlPage: React.FC = () => {
           />
         </FormItem>
 
+        <FormItem label="特殊功能权限" className="mt-4">
+          <SpecialFeaturesCheckboxGroup
+            selected={userForm.specialFeatures}
+            onChange={(features) => setUserForm(prev => ({ ...prev, specialFeatures: features }))}
+          />
+        </FormItem>
+
         <div className="mt-6">
           <Table<AccessUser>
             rowKey="id"
@@ -478,8 +527,30 @@ export const AccessControlPage: React.FC = () => {
                 ),
               },
               {
+                key: 'specialFeatures',
+                title: '特殊功能',
+                render: (_, record) => {
+                  const features = record.specialFeatures;
+                  if (!features || features.length === 0) {
+                    return <span className="text-neutral-400">-</span>;
+                  }
+                  return (
+                    <div className="flex flex-wrap gap-1">
+                      {features.map(f => {
+                        const label = ALL_SPECIAL_FEATURES.find(sf => sf.key === f)?.label || f;
+                        return (
+                          <span key={f} className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs">
+                            {label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  );
+                },
+              },
+              {
                 key: 'allowedRoutes',
-                title: '路由白名单',
+                title: '路由',
                 render: (_, record) => {
                   const count = record.allowedRoutes?.length ?? 0;
                   return count > 0 ? `${count} 条` : <span className="text-neutral-400">不限</span>;
@@ -487,7 +558,7 @@ export const AccessControlPage: React.FC = () => {
               },
               {
                 key: 'allowedIps',
-                title: 'IP 白名单',
+                title: 'IP',
                 render: (_, record) => {
                   const count = record.allowedIps?.length ?? 0;
                   return count > 0 ? `${count} 条` : <span className="text-neutral-400">不限</span>;
@@ -497,9 +568,20 @@ export const AccessControlPage: React.FC = () => {
                 key: 'actions',
                 title: '操作',
                 render: (_, record) => (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1">
                     <Button variant="ghost" size="small" onClick={() => handleUserEdit(record)}>
                       编辑
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={() => {
+                        setResetPwdUser(record);
+                        setResetPwdValue('');
+                        resetPwdConfirm.show();
+                      }}
+                    >
+                      重置密码
                     </Button>
                     <Button
                       variant="danger"
@@ -643,6 +725,31 @@ export const AccessControlPage: React.FC = () => {
         danger
         loading={loading}
       />
+
+      {/* 密码重置弹窗 */}
+      <ConfirmDialog
+        open={resetPwdConfirm.open}
+        onClose={() => {
+          resetPwdConfirm.hide();
+          setResetPwdValue('');
+          setResetPwdUser(null);
+        }}
+        onConfirm={handleResetPassword}
+        title="重置密码"
+        description={`为用户「${resetPwdUser?.displayName || resetPwdUser?.username}」设置新密码：`}
+        confirmText="确认重置"
+        danger={false}
+        loading={loading}
+      >
+        <div className="mt-3">
+          <Input
+            type="password"
+            value={resetPwdValue}
+            onChange={(e) => setResetPwdValue(e.target.value)}
+            placeholder="请输入新密码"
+          />
+        </div>
+      </ConfirmDialog>
     </div>
   );
 };

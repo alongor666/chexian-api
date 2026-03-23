@@ -7,6 +7,7 @@ export interface PresetUser {
   allowedRoutes?: string[];
   defaultRoute?: string;
   allowedIps?: string[];
+  specialFeatures?: string[];
   active?: boolean;
 }
 
@@ -44,6 +45,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     passwordHash: '$2b$10$04CoRcf7Hk9iSiPD6QWRmelsAGNWoqJ3DGB5Mvfjcc/CH6GEJRUC6',
     displayName: '系统管理员',
     role: 'branch_admin',
+    specialFeatures: ['cost', 'fee_analysis', 'moto_cost'],
   },
   leshan: {
     username: 'leshan',
@@ -174,18 +176,21 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     passwordHash: '$2b$10$NHIOCyjuqXWLXyq5UaP8Y.5p/NNsDMXBrsnk/eHsmq.tVSd0swcwu',
     displayName: '薛成龙',
     role: 'branch_admin',
+    specialFeatures: ['cost', 'fee_analysis', 'moto_cost'],
   },
   linxia: {
     username: 'linxia',
     passwordHash: '$2b$10$IPuFIhlNl6NFLXSC8A4o4.tuqMsK9J7B6D5DbeKzpOnJtE9uLA/BO',
     displayName: '林霞',
     role: 'branch_admin',
+    specialFeatures: ['cost'],
   },
   chexianbu: {
     username: 'chexianbu',
     passwordHash: '$2b$10$MNXiN2ASW4I1h.uqWRKySuQH80CmVCn1wjnXbXWzV5ersVLcoE4wu',
     displayName: '车险部',
     role: 'branch_admin',
+    specialFeatures: ['cost'],
   },
   scdianxiao: {
     username: 'scdianxiao',

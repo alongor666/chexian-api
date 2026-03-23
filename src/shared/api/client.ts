@@ -310,6 +310,7 @@ class ApiClient {
     allowedRoutes?: string[];
     defaultRoute?: string;
     allowedIps?: string[];
+    specialFeatures?: string[];
     active?: boolean;
   }): Promise<AccessUser> {
     return this.request<AccessUser>('/auth/users', {
@@ -328,6 +329,7 @@ class ApiClient {
       allowedRoutes?: string[];
       defaultRoute?: string;
       allowedIps?: string[];
+      specialFeatures?: string[];
       active?: boolean;
     }
   ): Promise<AccessUser> {

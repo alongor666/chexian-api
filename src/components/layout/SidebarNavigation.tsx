@@ -277,8 +277,8 @@ export const SidebarNavigation: React.FC = () => {
           {renderSection(
             '数据分析',
             dataNavItems.filter(item => {
-              if (item.path === '/fee-analysis') return canAccessFeeAnalysis(userPermission?.username);
-              if (item.path === '/cost') return canAccessCost(userPermission?.username);
+              if (item.path === '/fee-analysis') return canAccessFeeAnalysis(userPermission?.username, userPermission?.specialFeatures);
+              if (item.path === '/cost') return canAccessCost(userPermission?.username, userPermission?.specialFeatures);
               return true;
             })
           )}
@@ -287,7 +287,7 @@ export const SidebarNavigation: React.FC = () => {
             '工具',
             toolNavItems.filter(item => {
               if (item.path === '/moto-cost') {
-                return canAccessMotoCost(userPermission?.username);
+                return canAccessMotoCost(userPermission?.username, userPermission?.specialFeatures);
               }
               return true;
             })

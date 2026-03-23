@@ -44,6 +44,7 @@ export interface AccessUser extends Record<string, unknown> {
   allowedRoutes?: string[];
   defaultRoute?: string;
   allowedIps?: string[];
+  specialFeatures?: string[];
   active: boolean;
 }
 

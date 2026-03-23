@@ -56,6 +56,8 @@ export interface UserPermission {
   allowedRoutes?: string[];
   /** 默认落地路由 */
   defaultRoute?: string;
+  /** 特殊功能权限（如 cost, fee_analysis, moto_cost） */
+  specialFeatures?: string[];
 }
 
 /**
@@ -382,35 +384,36 @@ export const MOTO_COST_ALLOWED_USERS: readonly string[] = SUPER_USERS;
  * 检查用户是否有权访问摩意模型
  * @param username 用户名
  */
-export function canAccessMotoCost(username: string | undefined): boolean {
+export function canAccessMotoCost(username: string | undefined, specialFeatures?: string[]): boolean {
+  if (specialFeatures !== undefined) {
+    return specialFeatures.includes('moto_cost');
+  }
   return isSuperUser(username);
 }
 
 /**
- * 费用分析功能白名单用户
- * 仅这些用户可访问 /fee-analysis
+ * 费用分析功能白名单用户（静态回退）
+ * 优先使用动态 specialFeatures
  */
 export const FEE_ANALYSIS_ALLOWED_USERS: readonly string[] = SUPER_USERS;
 
-/**
- * 检查用户是否有权访问费用分析
- * @param username 用户名
- */
-export function canAccessFeeAnalysis(username: string | undefined): boolean {
+export function canAccessFeeAnalysis(username: string | undefined, specialFeatures?: string[]): boolean {
+  if (specialFeatures !== undefined) {
+    return specialFeatures.includes('fee_analysis');
+  }
   return isSuperUser(username);
 }
 
 /**
- * 成本分析功能白名单用户
- * 仅这些用户可访问 /cost
+ * 成本分析功能白名单用户（静态回退）
+ * 优先使用动态 specialFeatures
  */
 export const COST_ALLOWED_USERS = ['chexianbu', 'linxia', 'xuechenglong', 'admin'];
 
-/**
- * 检查用户是否有权访问成本分析
- * @param username 用户名
- */
-export function canAccessCost(username: string | undefined): boolean {
+export function canAccessCost(username: string | undefined, specialFeatures?: string[]): boolean {
   if (!username) return false;
+  if (specialFeatures !== undefined) {
+    return specialFeatures.includes('cost');
+  }
   return COST_ALLOWED_USERS.includes(username);
 }

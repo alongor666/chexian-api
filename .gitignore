@@ -81,6 +81,9 @@ PASSWORDS.local.txt
 # 本地设置（不提交）
 .claude/settings.local.json
 
+# 用户配置持久化文件（含 bcrypt hash，禁止提交）
+server/data/user_store.json
+
 # 数据管理日志
 数据管理/logs/*.log
 

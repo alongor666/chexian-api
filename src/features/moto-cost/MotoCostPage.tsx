@@ -10,7 +10,7 @@ export const MotoCostPage: React.FC = () => {
   const { userPermission } = usePermission();
 
   // 权限检查：仅 admin 和 xuechenglong 可访问
-  if (!canAccessMotoCost(userPermission?.username)) {
+  if (!canAccessMotoCost(userPermission?.username, userPermission?.specialFeatures)) {
     return <Navigate to="/" replace />;
   }
 

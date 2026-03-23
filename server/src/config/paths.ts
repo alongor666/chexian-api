@@ -40,6 +40,10 @@ export function getKpiPlanConfigPath(): string {
  * 1) 本地开发优先使用 warehouse 最新文件
  * 2) VPS/部署环境回退到 server/data/
  */
+export function getUserStorePath(): string {
+  return path.resolve(getDataDir(), 'user_store.json');
+}
+
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,

@@ -25,6 +25,7 @@ export interface UserCredential {
   allowedIps?: string[];
   allowedRoutes?: string[];
   defaultRoute?: string;
+  specialFeatures?: string[];
   active?: boolean;
 }
 

@@ -23,7 +23,7 @@ export const CostPage: React.FC = () => {
   const comprehensiveSwitch = import.meta.env.VITE_ENABLE_COMPREHENSIVE_ANALYSIS;
   const enableComprehensiveAnalysis =
     comprehensiveSwitch === 'true'
-      || (comprehensiveSwitch !== 'false' && canAccessCost(userPermission?.username));
+      || (comprehensiveSwitch !== 'false' && canAccessCost(userPermission?.username, userPermission?.specialFeatures));
 
   if (view === 'comprehensive' && enableComprehensiveAnalysis) {
     return (

@@ -173,6 +173,7 @@ class DuckDBService {
           allowed_routes VARCHAR,
           default_route VARCHAR,
           allowed_ips VARCHAR,
+          special_features VARCHAR,
           active BOOLEAN,
           created_at TIMESTAMP,
           updated_at TIMESTAMP

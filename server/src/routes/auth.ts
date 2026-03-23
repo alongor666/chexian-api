@@ -104,6 +104,7 @@ const userCreateSchema = z.object({
   allowedRoutes: z.array(z.string().min(1)).optional().default([]),
   defaultRoute: z.string().optional(),
   allowedIps: z.array(z.string().min(1)).optional().default([]),
+  specialFeatures: z.array(z.string().min(1)).optional().default([]),
   active: z.boolean().optional().default(true),
 });
 
@@ -115,6 +116,7 @@ const userUpdateSchema = z.object({
   allowedRoutes: z.array(z.string().min(1)).optional().default([]),
   defaultRoute: z.string().optional(),
   allowedIps: z.array(z.string().min(1)).optional().default([]),
+  specialFeatures: z.array(z.string().min(1)).optional().default([]),
   active: z.boolean().optional().default(true),
 });
 
@@ -254,6 +256,7 @@ router.post(
       allowedRoutes: data.allowedRoutes,
       defaultRoute: data.defaultRoute,
       allowedIps: data.allowedIps,
+      specialFeatures: data.specialFeatures,
       active: data.active,
     });
     const { passwordHash: _pw, ...rest } = created;
@@ -280,6 +283,7 @@ router.put(
       allowedRoutes: data.allowedRoutes,
       defaultRoute: data.defaultRoute,
       allowedIps: data.allowedIps,
+      specialFeatures: data.specialFeatures,
       active: data.active,
     });
     const { passwordHash: _pw, ...rest } = updated;

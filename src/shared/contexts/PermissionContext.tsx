@@ -80,6 +80,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     organization?: string;
     allowedRoutes?: string[];
     defaultRoute?: string;
+    specialFeatures?: string[];
   }): UserPermission => {
     const localPermission = getPermissionByUsername(user.username);
     return {
@@ -93,6 +94,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       organization: (user.organization as UserPermission['organization']) || localPermission?.organization,
       allowedRoutes: user.allowedRoutes || localPermission?.allowedRoutes,
       defaultRoute: user.defaultRoute || localPermission?.defaultRoute,
+      specialFeatures: user.specialFeatures,
     };
   }, []);
 

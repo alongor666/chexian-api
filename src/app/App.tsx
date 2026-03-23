@@ -32,7 +32,7 @@ export { queryClient };
  */
 const FeeAnalysisGuard: FC<{ children: ReactNode }> = ({ children }) => {
   const { userPermission } = usePermission();
-  if (!canAccessFeeAnalysis(userPermission?.username)) {
+  if (!canAccessFeeAnalysis(userPermission?.username, userPermission?.specialFeatures)) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
@@ -44,7 +44,7 @@ const FeeAnalysisGuard: FC<{ children: ReactNode }> = ({ children }) => {
  */
 const CostGuard: FC<{ children: ReactNode }> = ({ children }) => {
   const { userPermission } = usePermission();
-  if (!canAccessCost(userPermission?.username)) {
+  if (!canAccessCost(userPermission?.username, userPermission?.specialFeatures)) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;

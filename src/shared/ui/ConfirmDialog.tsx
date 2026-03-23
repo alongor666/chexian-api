@@ -33,6 +33,8 @@ export interface ConfirmDialogProps {
   loading?: boolean;
   /** 自定义类名 */
   className?: string;
+  /** 额外内容（如表单输入） */
+  children?: React.ReactNode;
 }
 
 /**
@@ -55,6 +57,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   danger = false,
   loading = false,
   className,
+  children,
 }) => {
   // ESC 键关闭
   const handleKeyDown = useCallback(
@@ -140,6 +143,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 {description}
               </p>
             )}
+
+            {/* 额外内容 */}
+            {children}
           </div>
         </div>
 
