@@ -581,12 +581,8 @@ router.delete(
     }
 
     try {
-      // 删除 DuckDB 中的表和视图
-      await duckdbService.query('DROP VIEW IF EXISTS PolicyFactRenewal');
-      await duckdbService.query('DROP VIEW IF EXISTS PolicyFact');
-      await duckdbService.query('DROP TABLE IF EXISTS CrossSellDailyAgg');
-      await duckdbService.query('DROP TABLE IF EXISTS PolicyFactRealtime');
-      await duckdbService.query('DROP TABLE IF EXISTS raw_parquet');
+      // 删除 DuckDB 中所有派生表和视图（集中管理，避免遗漏）
+      await duckdbService.dropAllDerivedTables();
 
       // 删除文件（兼容 current/ 与根目录）
       const filePath = resolveManagedParquetPath(currentDataFile.filename);

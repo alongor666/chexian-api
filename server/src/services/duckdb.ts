@@ -609,91 +609,197 @@ class DuckDBService {
     console.log('[DuckDB] PolicyFactRealtime materialized with realtime indexes');
   }
 
+  // ============================================
+  // 通用分批物化引擎
+  // ============================================
+
   /**
-   * 创建并物化 CrossSellDailyAgg 预聚合表
+   * 分批物化查询为 TABLE，降低峰值内存。
    *
-   * 说明：
-   * - 启动时一次性将 PolicyFact 聚合为 TABLE，后续查询直接走物化表
-   * - 避免每次查询对 115 万行做全表 GROUP BY + DISTINCT 导致 VPS OOM
-   * - 结构与所有 SQL 生成器兼容，无需修改下游代码
+   * 流程：
+   * 1. 查询源表的年月范围
+   * 2. 第一个月 CREATE TABLE AS ... WHERE month = ?
+   * 3. 后续月份 INSERT INTO ... WHERE month = ?
+   * 4. 创建索引
+   *
+   * 失败时自动回退到 VIEW（降级模式：慢但不挂）。
+   *
+   * @param tableName  目标表名
+   * @param cteSql     CTE 内的 SELECT（不含 WITH/FROM 外层），必须包含 policy_date
+   * @param aggregateSql  聚合 SELECT + GROUP BY（引用 CTE 别名 normalized）
+   * @param viewFallbackSql  回退 VIEW 的完整 SQL（物化失败时使用）
+   * @param indexes    物化后创建的索引列表 [{name, column}]
+   * @returns 'table' | 'view' 表示最终状态
+   */
+  private async materializeInBatches(
+    tableName: string,
+    cteSql: string,
+    aggregateSql: string,
+    viewFallbackSql: string,
+    indexes: Array<{ name: string; column: string }> = [],
+  ): Promise<'table' | 'view'> {
+    await this.dropRelationIfExists(tableName);
+
+    const t0 = Date.now();
+    console.log(`[DuckDB] Materializing ${tableName} (batched by month)...`);
+
+    try {
+      // 降低内存峰值
+      await this.query('SET threads=1');
+      await this.query('SET preserve_insertion_order=false');
+
+      // 获取年月范围
+      const monthsResult = await this.query<{ ym: string }>(`
+        SELECT DISTINCT strftime(CAST(policy_date AS DATE), '%Y-%m') AS ym
+        FROM PolicyFact WHERE policy_date IS NOT NULL ORDER BY ym
+      `);
+      const months = monthsResult.map((r) => r.ym);
+
+      if (months.length === 0) {
+        await this.query(`
+          CREATE TABLE ${tableName} AS
+          WITH normalized AS (${cteSql}) ${aggregateSql}
+        `);
+      } else {
+        // 首批：建表
+        await this.query(`
+          CREATE TABLE ${tableName} AS
+          WITH normalized AS (${cteSql}
+            AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[0]}'
+          ) ${aggregateSql}
+        `);
+        console.log(`[DuckDB] ${tableName} batch 1/${months.length}: ${months[0]}`);
+
+        // 后续批次：追加
+        for (let i = 1; i < months.length; i++) {
+          await this.query(`
+            INSERT INTO ${tableName}
+            WITH normalized AS (${cteSql}
+              AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[i]}'
+            ) ${aggregateSql}
+          `);
+          console.log(`[DuckDB] ${tableName} batch ${i + 1}/${months.length}: ${months[i]}`);
+        }
+      }
+
+      // 恢复线程数
+      await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
+      await this.query('SET preserve_insertion_order=true');
+
+      // 创建索引
+      if (indexes.length > 0) {
+        await Promise.all(
+          indexes.map(({ name, column }) =>
+            this.query(`CREATE INDEX IF NOT EXISTS ${name} ON ${tableName}(${column})`)
+          )
+        );
+      }
+
+      console.log(`[DuckDB] ${tableName} materialized as TABLE in ${Date.now() - t0}ms`);
+      return 'table';
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[DuckDB] ⚠️ ${tableName} materialization failed (${Date.now() - t0}ms): ${msg}`);
+      console.warn(`[DuckDB] Falling back to VIEW for ${tableName} — queries will be slower`);
+
+      // 恢复线程数（可能在异常前未执行）
+      try {
+        await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
+        await this.query('SET preserve_insertion_order=true');
+      } catch { /* ignore */ }
+
+      // 清理失败的半成品表
+      await this.dropRelationIfExists(tableName);
+
+      // 创建回退 VIEW
+      await this.query(viewFallbackSql);
+      console.warn(`[DuckDB] ${tableName} running as VIEW (degraded mode)`);
+      return 'view';
+    }
+  }
+
+  // ============================================
+  // 派生表注册表（集中管理清理）
+  // ============================================
+
+  /** 所有启动时创建的派生 TABLE/VIEW，卸载数据时统一清理 */
+  private static readonly DERIVED_RELATIONS = [
+    'CrossSellDailyAgg',
+    'PolicyFactRenewal',
+    'PolicyFact',
+    'PolicyFactRealtime',
+  ] as const;
+
+  /**
+   * 清理所有派生表/视图 + raw_parquet 系列表。
+   * data.ts 卸载数据时调用，避免硬编码 DROP 列表不同步。
+   */
+  async dropAllDerivedTables(): Promise<void> {
+    for (const name of DuckDBService.DERIVED_RELATIONS) {
+      await this.dropRelationIfExists(name);
+    }
+    // raw_parquet 系列
+    const rawTables = await this.query<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_name LIKE 'raw_parquet%' AND table_schema = 'main'`
+    );
+    for (const { table_name } of rawTables) {
+      await this.dropRelationIfExists(table_name);
+    }
+  }
+
+  // ============================================
+  // CrossSellDailyAgg 物化
+  // ============================================
+
+  /**
+   * 物化 CrossSellDailyAgg 预聚合表（分批 + 自动回退 VIEW）
+   *
+   * 成功时：TABLE + 索引，查询走预聚合数据
+   * 失败时：VIEW 回退，查询实时聚合（慢但可用）
    */
   async createCrossSellRealtimeView(): Promise<void> {
-    // 兼容历史部署中 CrossSellDailyAgg 可能是 VIEW 或 TABLE 的情况
-    await this.dropRelationIfExists('CrossSellDailyAgg');
-
-    console.log('[DuckDB] Materializing CrossSellDailyAgg (batched by month)...');
-    const t0 = Date.now();
-
-    // 降低内存峰值：单线程 + 关闭插入顺序保留
-    await this.query('SET threads=1');
-    await this.query('SET preserve_insertion_order=false');
-
-    // normalized CTE 的 SELECT 列（复用于建表和每月 INSERT）
-    const normalizedSelect = `
+    const cteSql = `
         SELECT
           CAST(policy_date AS DATE) AS policy_date,
           CAST(insurance_start_date AS DATE) AS insurance_start_date,
-          org_level_3,
-          salesman_name,
-          customer_category,
-          coverage_combination,
-          renewal_mode,
-          tonnage_segment,
-          insurance_grade,
-          small_truck_score,
-          large_truck_score,
+          org_level_3, salesman_name, customer_category, coverage_combination,
+          renewal_mode, tonnage_segment, insurance_grade, small_truck_score, large_truck_score,
           COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
           COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
-          (
-            TRY_CAST(is_transfer AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_transfer AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-          ) AS is_transfer,
-          (
-            TRY_CAST(is_telemarketing AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_telemarketing AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-          ) AS is_telemarketing,
-          (
-            TRY_CAST(is_renewal AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_renewal AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-          ) AS is_renewal,
-          (
-            TRY_CAST(is_nev AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_nev AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-          ) AS is_nev,
-          (
-            TRY_CAST(is_new_car AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_new_car AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-          ) AS is_new_car,
-          (
-            TRY_CAST(is_renewable AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_renewable AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-          ) AS is_renewable,
-          (
-            TRY_CAST(is_cross_sell AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-          ) AS is_cross_sell,
+          (TRY_CAST(is_transfer AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_transfer AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_transfer,
+          (TRY_CAST(is_telemarketing AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_telemarketing AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_telemarketing,
+          (TRY_CAST(is_renewal AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_renewal AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_renewal,
+          (TRY_CAST(is_nev AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_nev AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_nev,
+          (TRY_CAST(is_new_car AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_new_car AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_new_car,
+          (TRY_CAST(is_renewable AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_renewable AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_renewable,
+          (TRY_CAST(is_cross_sell AS BOOLEAN) = true
+            OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_cross_sell,
           COALESCE(driver_coverage, 0) AS driver_coverage,
           COALESCE(passenger_coverage, 0) AS passenger_coverage,
           COALESCE(cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
           COALESCE(premium, 0) AS premium,
           COALESCE(
             NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
-            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
-          ) AS dedup_key,
+            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')) AS dedup_key,
           NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '') AS raw_policy_no
         FROM PolicyFact
         WHERE policy_date IS NOT NULL`;
 
-    const groupByColumns = `
-        policy_date, insurance_start_date, org_level_3, salesman_name,
+    const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
         customer_category, coverage_combination, renewal_mode, tonnage_segment,
         insurance_grade, small_truck_score, large_truck_score, is_commercial_insure,
         is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,
         is_renewable, is_cross_sell, driver_coverage, passenger_coverage`;
 
-    const aggregateSelect = `
-      SELECT
-        ${groupByColumns},
+    const aggregateSql = `
+      SELECT ${groupByColumns},
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
@@ -701,63 +807,25 @@ class DuckDBService {
         COALESCE(SUM(CASE WHEN insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN premium ELSE 0 END), 0) AS commercial_premium,
         COALESCE(SUM(CASE WHEN insurance_type = '交强险' THEN premium ELSE 0 END), 0) AS compulsory_premium,
         COALESCE(SUM(premium), 0) AS auto_premium
-      FROM normalized
-      WHERE dedup_key IS NOT NULL
+      FROM normalized WHERE dedup_key IS NOT NULL
       GROUP BY ${groupByColumns}`;
 
-    // 获取数据中的年月范围
-    const monthsResult = await this.query<{ ym: string }>(`
-      SELECT DISTINCT strftime(CAST(policy_date AS DATE), '%Y-%m') AS ym
-      FROM PolicyFact
-      WHERE policy_date IS NOT NULL
-      ORDER BY ym
-    `);
-    const months = monthsResult.map((r) => r.ym);
+    // VIEW 回退：物化失败时用实时聚合保底
+    const viewFallbackSql = `
+      CREATE OR REPLACE VIEW CrossSellDailyAgg AS
+      WITH normalized AS (${cteSql})
+      ${aggregateSql}`;
 
-    if (months.length === 0) {
-      // 无数据时创建空表
-      await this.query(`
-        CREATE TABLE CrossSellDailyAgg AS
-        WITH normalized AS (${normalizedSelect})
-        ${aggregateSelect}
-      `);
-    } else {
-      // 第一个月：CREATE TABLE AS（建表+首批数据）
-      const firstMonth = months[0];
-      await this.query(`
-        CREATE TABLE CrossSellDailyAgg AS
-        WITH normalized AS (${normalizedSelect}
-          AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${firstMonth}'
-        )
-        ${aggregateSelect}
-      `);
-      console.log(`[DuckDB] CrossSellDailyAgg batch 1/${months.length}: ${firstMonth}`);
-
-      // 后续月份：INSERT INTO（逐月追加，每批峰值内存低）
-      for (let i = 1; i < months.length; i++) {
-        const month = months[i];
-        await this.query(`
-          INSERT INTO CrossSellDailyAgg
-          WITH normalized AS (${normalizedSelect}
-            AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${month}'
-          )
-          ${aggregateSelect}
-        `);
-        console.log(`[DuckDB] CrossSellDailyAgg batch ${i + 1}/${months.length}: ${month}`);
-      }
-    }
-
-    // 恢复线程数（查询阶段用多线程提速）
-    await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
-    await this.query('SET preserve_insertion_order=true');
-
-    // 创建查询索引加速 WHERE policy_date 和 customer_category 过滤
-    await Promise.all([
-      this.query('CREATE INDEX IF NOT EXISTS idx_cross_sell_agg_date ON CrossSellDailyAgg(policy_date)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_cross_sell_agg_category ON CrossSellDailyAgg(customer_category)'),
-    ]);
-
-    console.log(`[DuckDB] CrossSellDailyAgg materialized in ${Date.now() - t0}ms`);
+    await this.materializeInBatches(
+      'CrossSellDailyAgg',
+      cteSql,
+      aggregateSql,
+      viewFallbackSql,
+      [
+        { name: 'idx_cross_sell_agg_date', column: 'policy_date' },
+        { name: 'idx_cross_sell_agg_category', column: 'customer_category' },
+      ],
+    );
   }
 
   /**
