@@ -72,7 +72,6 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '天府',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
-    allowedIps: ['10.204.48.6'],
   },
   yibin: {
     username: 'yibin',
