@@ -10,7 +10,7 @@ import { useDataStatus } from '@/shared/contexts/DataContext';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { useScopeLabel } from '@/shared/hooks/useScopeLabel';
 import { echarts } from '@/shared/utils/echarts';
-import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
+import { formatCount, formatPercent, formatWanAdaptive, formatTeamName, formatSalesmanName } from '@/shared/utils/formatters';
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { buttonStyles, cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles } from '@/shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
@@ -62,6 +62,7 @@ interface PerformanceAnalysisPanelProps {
   growthMode: PerformanceGrowthMode;
   onTimePeriodChange?: (v: PerformanceTimePeriod) => void;
   onGrowthModeChange?: (v: PerformanceGrowthMode) => void;
+  defaultHeatmapMetric?: HeatmapMetric;
 }
 
 export interface PerformanceDrilldownPrefetchedData {
@@ -282,6 +283,7 @@ function PerformanceOrgHeatmap({
   growthMode,
   timePeriod,
   dimensionLabel = '三级机构',
+  defaultHeatmapMetric,
   onCellClick,
   onRowClick,
 }: {
@@ -291,10 +293,11 @@ function PerformanceOrgHeatmap({
   growthMode: PerformanceGrowthMode;
   timePeriod: PerformanceTimePeriod;
   dimensionLabel?: string;
+  defaultHeatmapMetric?: HeatmapMetric;
   onCellClick?: (payload: { org: string; date: string }) => void;
   onRowClick?: (org: string) => void;
 }) {
-  const [metric, setMetric] = useState<HeatmapMetric>('growth');
+  const [metric, setMetric] = useState<HeatmapMetric>(defaultHeatmapMetric ?? 'growth');
   const [activeCell, setActiveCell] = useState<{ org: string; date: string } | null>(null);
   const [hoverCell, setHoverCell] = useState<{ org: string; date: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1010,6 +1013,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   growthMode,
   onTimePeriodChange,
   onGrowthModeChange,
+  defaultHeatmapMetric,
 }) => {
   const { isDataLoaded } = useDataStatus();
   const { salesmanTeamMap } = useGlobalFilters();
@@ -1379,6 +1383,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           growthMode={growthMode}
           timePeriod={timePeriod}
           dimensionLabel={HEATMAP_DIMENSION_LABELS[activeHeatmapGroupBy]}
+          defaultHeatmapMetric={defaultHeatmapMetric}
           onCellClick={handleHeatmapCellClick}
           onRowClick={handlePerfHeatmapRowClick}
         />
@@ -1645,7 +1650,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                     )}
                     onClick={() => handleRowClick(row.group_name)}
                   >
-                    <td className={cn('px-3 py-2', colorClasses.text.neutralDark, 'font-medium')}>{row.group_name}</td>
+                    <td className={cn('px-3 py-2', colorClasses.text.neutralDark, 'font-medium')}>{drilldownQuery.currentGroupBy === 'team' ? formatTeamName(row.group_name) : drilldownQuery.currentGroupBy === 'salesman' ? formatSalesmanName(row.group_name) : row.group_name}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.plan_premium)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>

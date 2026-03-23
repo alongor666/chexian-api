@@ -11,7 +11,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { useDataStatus } from '../../../shared/contexts/DataContext';
-import { formatSalesmanName } from '../../../shared/utils/formatters';
+import { formatSalesmanName, formatTeamName } from '../../../shared/utils/formatters';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
 import { queryKeys } from '../../../shared/api/query-keys';
 
@@ -113,7 +113,7 @@ function mapDrilldownRows(result: unknown, queryLevel: string): DrilldownRow[] {
 
     return {
       ...row,
-      group_name: queryLevel === 'salesman' ? formatSalesmanName(groupName) : groupName,
+      group_name: queryLevel === 'team' ? formatTeamName(groupName) : queryLevel === 'salesman' ? formatSalesmanName(groupName) : groupName,
       parent_name: queryLevel === 'coverage' ? formatSalesmanName(parentName) : parentName,
     } as DrilldownRow;
   });

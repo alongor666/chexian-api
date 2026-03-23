@@ -11,7 +11,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import type { AdvancedFilterState } from '../../shared/types/data';
-import { formatCount, formatPercent } from '../../shared/utils/formatters';
+import { formatCount, formatPercent, formatTeamName, formatSalesmanName } from '../../shared/utils/formatters';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { useScopeLabel } from '../../shared/hooks/useScopeLabel';
@@ -231,11 +231,16 @@ export function getAvailableHeatmapDrillDimensions(
   return dimensions.filter((dimension) => !usedDimensions.has(dimension.key));
 }
 
-function formatCell(col: ColumnDef, row: CrossSellRow): string {
+function formatCell(col: ColumnDef, row: CrossSellRow, currentDimension?: string): string {
   const val = Number(row[col.key] ?? 0);
   if (col.type === 'rate') return formatPercent(val);
   if (col.type === 'count') return formatCount(val);
-  return String(row[col.key] ?? '');
+  const text = String(row[col.key] ?? '');
+  if (col.key === 'group_name') {
+    if (currentDimension === 'team') return formatTeamName(text);
+    if (currentDimension === 'salesman') return formatSalesmanName(text);
+  }
+  return text;
 }
 
 export function buildInsightSummary(
@@ -804,7 +809,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                                         : cn('block text-right', textStyles.numeric, 'text-neutral-700')
                                   )}
                                 >
-                                  {formatCell(col, row)}
+                                  {formatCell(col, row, currentGroupBy ?? undefined)}
                                 </span>
                               );
 

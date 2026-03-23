@@ -11,7 +11,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { getHolidaySummary, countHolidaysInRange, getHolidayDatesInRange } from '../utils/holidayUtils';
 import { createLogger } from '../../../shared/utils/logger';
-import { formatSalesmanName } from '../../../shared/utils/formatters';
+import { formatSalesmanName, formatTeamName } from '../../../shared/utils/formatters';
 
 const logger = createLogger('useMarketingReport');
 import type {
@@ -149,7 +149,7 @@ export function useMarketingReport(
       return (result || []).map((row: Record<string, unknown>) => ({
         salesman_name: formatSalesmanName(String(row.salesman_name || '')),
         org_level_3: String(row.org_level_3 || ''),
-        team_name: String(row.team_name || ''),
+        team_name: formatTeamName(row.team_name as string),
         假日车险签单天数: Number(row['假日车险签单天数'] || 0),
         假日天数: Number(row['假日天数'] || 0),
         假日车险签单比例: Number(row['假日车险签单比例'] || 0),

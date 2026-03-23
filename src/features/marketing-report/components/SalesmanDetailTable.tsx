@@ -7,7 +7,7 @@
  */
 
 import { SortableTable } from './SortableTable';
-import { formatCount, formatRate } from '../../../shared/utils/formatters';
+import { formatCount, formatRate, formatTeamName } from '../../../shared/utils/formatters';
 import type { SalesmanDetailRow, SortState } from '../types/marketingReport';
 
 interface SalesmanDetailTableProps {
@@ -68,6 +68,7 @@ export const SalesmanDetailTable: React.FC<SalesmanDetailTableProps> = ({
       header: '团队',
       width: 120,
       align: 'left' as const,
+      format: (v: string | number) => formatTeamName(v as string),
     },
     {
       key: '假日天数' as keyof SalesmanDetailRow,

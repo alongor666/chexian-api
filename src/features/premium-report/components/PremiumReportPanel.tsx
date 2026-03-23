@@ -15,7 +15,7 @@ import { usePremiumReport } from '../hooks/usePremiumReport';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import type { TableColumn } from '../../marketing-report/types/marketingReport';
 import type { OrgPremiumReportRow, SalesmanPremiumReportRow } from '../types/premiumReport';
-import { formatWanDirect, formatRate, formatCount } from '../../../shared/utils/formatters';
+import { formatWanDirect, formatRate, formatCount, formatTeamName } from '../../../shared/utils/formatters';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 
 type PremiumTab = 'report' | 'plan';
@@ -96,7 +96,7 @@ const orgReportColumns: TableColumn<OrgPremiumReportRow>[] = [
 const salesmanReportColumns: TableColumn<SalesmanPremiumReportRow>[] = [
   { key: 'salesman_name', header: '业务员姓名', sortable: true, align: 'left' },
   { key: 'org_level_3', header: '所属机构', sortable: true, align: 'left' },
-  { key: 'team_name', header: '所属团队', sortable: true, align: 'left' },
+  { key: 'team_name', header: '所属团队', sortable: true, align: 'left', format: (v) => formatTeamName(v as string) },
   {
     key: '车险保费',
     header: '车险保费(万元)',

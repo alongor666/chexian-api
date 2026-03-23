@@ -10,7 +10,7 @@
 import { useState, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { createLogger } from '../../../shared/utils/logger';
-import { formatSalesmanName } from '../../../shared/utils/formatters';
+import { formatSalesmanName, formatTeamName } from '../../../shared/utils/formatters';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
 
 const logger = createLogger('usePremiumReport');
@@ -168,7 +168,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
         salesman_name: formatSalesmanName(String(row.salesman_name || '')),
         raw_salesman_name: String(row.salesman_name || ''),
         org_level_3: String(row.org_level_3 || ''),
-        team_name: String(row.team_name || ''),
+        team_name: formatTeamName(row.team_name as string),
         车险保费: Number(row['车险保费'] || 0),
         商业险保费: Number(row['商业险保费'] || 0),
         交强险保费: Number(row['交强险保费'] || 0),

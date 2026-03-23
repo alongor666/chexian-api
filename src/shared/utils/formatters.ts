@@ -241,6 +241,22 @@ export function formatSalesmanName(name: string | null | undefined): string {
   return hanParts.join('');
 }
 
+// ==================== 团队名简称 ====================
+
+const TEAM_SHORT_NAMES: Record<string, string> = {
+  '温江业务团队': '温江',
+  '龙泉业务团队': '龙泉',
+  '都江堰业务团队': '都江堰',
+  '天府业务二部': '天府二部',
+};
+
+export function formatTeamName(name: string | null | undefined): string {
+  if (name == null) return '-';
+  const raw = String(name).trim();
+  if (!raw) return '-';
+  return TEAM_SHORT_NAMES[raw] ?? raw;
+}
+
 // ==================== 走势图 X 轴日期格式化 ====================
 
 /**

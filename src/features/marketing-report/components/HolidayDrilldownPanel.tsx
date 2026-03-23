@@ -17,7 +17,7 @@ import { getHolidayDatesInRange } from '../utils/holidayUtils';
 import { createLogger } from '../../../shared/utils/logger';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
-import { formatCount, formatRate, formatSalesmanName } from '../../../shared/utils/formatters';
+import { formatCount, formatRate, formatSalesmanName, formatTeamName } from '../../../shared/utils/formatters';
 import { SalesmanDetailTable } from './SalesmanDetailTable';
 import type { OrganizationReportRow, SalesmanDetailRow, SortState } from '../types/marketingReport';
 
@@ -108,7 +108,7 @@ export const HolidayDrilldownPanel: React.FC<HolidayDrilldownPanelProps> = ({
           (salesmanResult || []).map((r: Record<string, unknown>) => ({
             salesman_name: formatSalesmanName(String(r.salesman_name || '')),
             org_level_3: String(r.org_level_3 || ''),
-            team_name: String(r.team_name || ''),
+            team_name: formatTeamName(r.team_name as string),
             假日车险签单天数: Number(r['假日车险签单天数'] || 0),
             假日天数: Number(r['假日天数'] || 0),
             假日车险签单比例: Number(r['假日车险签单比例'] || 0),
