@@ -180,6 +180,13 @@ class DuckDBService {
         )
       `);
 
+      // 迁移：已有表可能缺少 special_features 列
+      try {
+        await this.query(`ALTER TABLE UserAccount ADD COLUMN IF NOT EXISTS special_features VARCHAR`);
+      } catch {
+        // 列已存在或表刚创建，忽略
+      }
+
       await this.query(`
         CREATE TABLE IF NOT EXISTS RoleConfig (
           role VARCHAR,
@@ -549,21 +556,16 @@ class DuckDBService {
    */
   private async materializePolicyFactWorkingSet(): Promise<void> {
     await this.query('DROP TABLE IF EXISTS PolicyFactRealtime');
+    console.log('[DuckDB] Materializing PolicyFactRealtime...');
+    const t0 = Date.now();
     await this.query(`
       CREATE TABLE PolicyFactRealtime AS
       SELECT * FROM PolicyFactRenewal
     `);
+    console.log(`[DuckDB] PolicyFactRealtime table created in ${Date.now() - t0}ms`);
 
-    await Promise.all([
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_policy_date ON PolicyFactRealtime(policy_date)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_start_date ON PolicyFactRealtime(insurance_start_date)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_org ON PolicyFactRealtime(org_level_3)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_salesman ON PolicyFactRealtime(salesman_name)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_customer ON PolicyFactRealtime(customer_category)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_cov ON PolicyFactRealtime(coverage_combination)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_vehicle ON PolicyFactRealtime(insurance_type)'),
-    ]);
-
+    // 重建视图指向物化表，然后释放原始 raw_parquet 表以回收内存
+    // （raw_parquet 是 Parquet 文件的全量副本，物化后不再需要）
     await this.query(`
       CREATE OR REPLACE VIEW PolicyFact AS
       SELECT * FROM PolicyFactRealtime
@@ -572,6 +574,28 @@ class DuckDBService {
       CREATE OR REPLACE VIEW PolicyFactRenewal AS
       SELECT * FROM PolicyFact
     `);
+
+    // 释放原始表 — 此时所有视图已指向 PolicyFactRealtime，raw_parquet 无引用
+    // 多文件加载时还有 raw_parquet_0, raw_parquet_1... 子表
+    const rawTables = await this.query<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_name LIKE 'raw_parquet%' AND table_schema = 'main'`
+    );
+    for (const { table_name } of rawTables) {
+      await this.dropRelationIfExists(table_name);
+    }
+    if (rawTables.length > 0) {
+      console.log(`[DuckDB] Dropped ${rawTables.length} raw_parquet table(s) to free memory`);
+    }
+
+    // 创建高频查询索引（仅保留最高收益的 3 个，减少内存和启动时间）
+    const t1 = Date.now();
+    await Promise.all([
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_policy_date ON PolicyFactRealtime(policy_date)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_org ON PolicyFactRealtime(org_level_3)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_salesman ON PolicyFactRealtime(salesman_name)'),
+    ]);
+    console.log(`[DuckDB] 3 indexes created in ${Date.now() - t1}ms`);
     console.log('[DuckDB] PolicyFactRealtime materialized with realtime indexes');
   }
 

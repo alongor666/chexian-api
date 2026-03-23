@@ -191,6 +191,10 @@ async function loadFromStore(store: UserStoreData): Promise<void> {
 }
 
 async function seedFromPreset(): Promise<void> {
+  // 清空已有数据（文件数据库可能已有旧数据）
+  await duckdbService.query('DELETE FROM UserAccount');
+  await duckdbService.query('DELETE FROM RoleConfig');
+
   // 插入预置角色
   const roleValues = PRESET_ROLES.map((role) => `(
     '${escapeSqlValue(role.role)}',
