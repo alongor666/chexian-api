@@ -471,7 +471,7 @@ async function cleanVpsCurrent(config, remoteDir) {
   );
   await execRemote(
     config,
-    `find ${quoteForSingle(`${remoteDir}/archive`)} -type d -name 'backup_*' -mtime +30 -exec rm -rf {} + 2>/dev/null || true`,
+    `find ${quoteForSingle(`${remoteDir}/archive`)} -type d -name 'backup_*' -mtime +15 -exec rm -rf {} + 2>/dev/null || true`,
     { allowFailure: true },
   );
 }

@@ -12,9 +12,9 @@
  */
 
 import { execSync, spawn } from 'child_process';
-import { existsSync, readdirSync, statSync, renameSync, mkdirSync } from 'fs';
+import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
-import { platform } from 'os';
+import { platform, homedir } from 'os';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -99,7 +99,17 @@ function archiveOld(currentDir, archiveDir, prefix, newFile) {
 
     ensureDir(archiveDir);
     renameSync(oldPath, archivePath);
-    log('yellow', `📦 归档: ${old} → archive/${archivedName}`);
+    log('yellow', `📦 归档: ${old} → ${archivePath}`);
+  }
+
+  // 清理 15 天前的旧归档，防止项目外目录膨胀
+  if (!existsSync(archiveDir)) return;
+  const cutoff = Date.now() - 15 * 24 * 60 * 60 * 1000;
+  const stale = readdirSync(archiveDir)
+    .filter(f => f.endsWith('.parquet') && statSync(join(archiveDir, f)).mtimeMs < cutoff);
+  for (const f of stale) {
+    unlinkSync(join(archiveDir, f));
+    log('yellow', `🗑  清理过期归档: ${f}`);
   }
 }
 
@@ -130,15 +140,37 @@ function checkVpsConnectivity() {
   }
 }
 
+// 从文件名提取日期范围，如 "每日数据_20231201-20241231.xlsx" → { start: "20231201", end: "20241231" }
+function extractDateRange(filename) {
+  const m = filename.match(/每日数据_(\d{8})-(\d{8})/);
+  return m ? { start: m[1], end: m[2] } : null;
+}
+
+// 历史文件判断：结束日期固定为 20241231（2024年保单已全部满期）
+function isHistoricalFile(filename) {
+  return /每日数据_\d{8}-20241231\.xlsx$/i.test(filename);
+}
+
+// 缓存是否过期：xlsx 比缓存 parquet 更新时返回 true
+function isCacheStale(xlsxPath, cachePath) {
+  if (!existsSync(cachePath)) return true;
+  return statSync(xlsxPath).mtimeMs > statSync(cachePath).mtimeMs;
+}
+
 async function main() {
   const scriptDir = getScriptDir();
   process.chdir(scriptDir);
 
   const currentDir = join(scriptDir, 'warehouse/fact/policy/current');
-  const archiveDir = join(scriptDir, 'warehouse/fact/policy/archive');
+  // 归档目录放在项目外，避免 git 仓库膨胀
+  const archiveDir = join(homedir(), 'chexian-archive');
+  const cacheDir  = join(scriptDir, 'warehouse/fact/policy/cache');
+  const tmpDir    = join(scriptDir, 'warehouse/fact/policy/tmp');
 
   ensureDir(currentDir);
   ensureDir(archiveDir);
+  ensureDir(cacheDir);
+  ensureDir(tmpDir);
 
   // 0. 迁移旧格式文件
   const policyDir = join(scriptDir, 'warehouse/fact/policy');
@@ -179,41 +211,90 @@ async function main() {
     log('yellow', '⚠ 未找到续保源文件，将跳过续保业务类型匹配');
   }
 
-  // 2. 找单清单文件
-  const policyFiles = ls('每日数据_*.xlsx', scriptDir);
-  if (policyFiles.length === 0) {
-    log('red', '❌ 未找到每日数据文件（每日数据_*.xlsx）');
+  // 2. 识别历史文件 vs 当前文件
+  const allPolicyFiles = ls('每日数据_*.xlsx', scriptDir);
+  const histFile    = allPolicyFiles.find(f => isHistoricalFile(f.name)) || null;
+  const currentFile = allPolicyFiles.find(f => !isHistoricalFile(f.name)) || null;
+
+  if (!currentFile) {
+    log('red', '❌ 未找到当前数据文件（每日数据_YYYYMMDD-YYYYMMDD.xlsx，结束日期≠20241231）');
     process.exit(1);
   }
-  const policyXlsx = policyFiles[0];
-  const policyBasename = policyXlsx.name.replace(/\.xlsx$/i, '');
-  const policyOutput = join(currentDir, `${policyBasename}.parquet`);
-  log('green', `每日数据: ${policyXlsx.name} → ${basename(policyOutput)}`);
 
+  const currentRange = extractDateRange(currentFile.name);
+  const histRange    = histFile ? extractDateRange(histFile.name) : null;
+
+  // 输出文件名：历史起始日（若有）+ 当前结束日
+  const outputStart  = histRange ? histRange.start : currentRange.start;
+  const outputEnd    = currentRange.end;
+  const outputName   = `每日数据_${outputStart}-${outputEnd}.parquet`;
+  const finalOutput  = join(currentDir, outputName);
+
+  if (histFile) {
+    log('green', `历史数据: ${histFile.name}`);
+  } else {
+    log('yellow', '⚠ 未找到历史数据文件（每日数据_YYYYMMDD-20241231.xlsx），仅处理当前文件');
+  }
+  log('green', `当前数据: ${currentFile.name}`);
+  log('green', `输出文件: ${outputName}`);
   console.log('');
 
-  // 3. 归档旧文件
-  archiveOld(currentDir, archiveDir, '每日数据', policyOutput);
-
+  // 3. 归档旧 current/ 中的同前缀文件（保留最新输出）
+  archiveOld(currentDir, archiveDir, '每日数据', finalOutput);
+  // 同时归档历史数据_ 前缀文件（合并后不再需要，避免 DuckDB 重复计入）
+  archiveOld(currentDir, archiveDir, '历史数据', finalOutput);
   console.log('');
 
   // 找 Python
   const python = findPython();
   log('green', `使用 Python: ${python}`);
-
   const transformScript = join(scriptDir, 'pipelines/transform.py');
+  const mergeScript     = join(scriptDir, 'pipelines/merge_parquet.py');
 
-  // 4. 执行单清单转换
+  // === Stage A: 历史缓存（仅在 xlsx 更新时重建）===
+  let histCachePath = null;
+  if (histFile && histRange) {
+    const histCacheFile = `每日数据_${histRange.start}-${histRange.end}.parquet`;
+    histCachePath = join(cacheDir, histCacheFile);
+
+    if (isCacheStale(histFile.path, histCachePath)) {
+      log('green', `▶ Stage A: 历史缓存过期，重建 → ${histCacheFile}`);
+      runPythonScript(python, transformScript, [
+        '-i', `"${histFile.path}"`,
+        '-o', `"${histCachePath}"`
+        // 无 -r：历史年度无续保类型匹配数据
+      ]);
+    } else {
+      log('green', `▶ Stage A: 历史缓存命中，跳过重建 → ${histCacheFile}`);
+    }
+    console.log('');
+  }
+
+  // === Stage B: 当前数据转换（每日必跑）===
+  const needMerge     = !!(histFile && histCachePath);
+  const currentTmpPath = needMerge
+    ? join(tmpDir, `current_tmp_${formatDate()}.parquet`)
+    : finalOutput;
+
   if (source) {
-    log('green', '▶ 步骤 1: 续保匹配 + 转换为 Parquet（单次读取）');
+    log('green', '▶ Stage B: 续保匹配 + 转换当前数据 → Parquet');
   } else {
-    log('green', '▶ 步骤 1: 单文件直转 Parquet（跳过续保匹配）');
+    log('green', '▶ Stage B: 转换当前数据 → Parquet（跳过续保匹配）');
   }
-  const transformArgs = ['-i', `"${policyXlsx.path}"`, '-o', `"${policyOutput}"`];
-  if (source) {
-    transformArgs.push('-r', `"${source}"`);
-  }
+  const transformArgs = ['-i', `"${currentFile.path}"`, '-o', `"${currentTmpPath}"`];
+  if (source) transformArgs.push('-r', `"${source}"`);
   runPythonScript(python, transformScript, transformArgs);
+  console.log('');
+
+  // === Stage C: 合并（仅在双文件模式下）===
+  if (needMerge) {
+    log('green', `▶ Stage C: 合并历史缓存 + 当前数据 → ${outputName}`);
+    runPythonScript(python, mergeScript, [
+      `"${histCachePath}"`, `"${currentTmpPath}"`, `"${finalOutput}"`
+    ]);
+    try { unlinkSync(currentTmpPath); } catch (_) {}
+    console.log('');
+  }
 
   console.log('');
 
