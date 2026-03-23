@@ -143,6 +143,16 @@ class DuckDBService {
         threads: String(DUCKDB_INIT_OPTIONS.threads),
       });
       this.connectionPool = new ConnectionPool(this.instance, databaseConfig.maxConnections ?? 10);
+
+      // 显式 SET 确保内存/线程配置生效（DuckDBInstance.create options 可能被忽略）
+      const conn = await this.connectionPool.acquire();
+      try {
+        await conn.run(`SET memory_limit='${DUCKDB_INIT_OPTIONS.max_memory}'`);
+        await conn.run(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
+      } finally {
+        this.connectionPool.release(conn);
+      }
+
       console.log(
         '[DuckDB] Database initialized:', databaseConfig.path,
         `(pool max: ${databaseConfig.maxConnections ?? 10},`,
