@@ -2,7 +2,7 @@ import { test, expect, request as playwrightRequest, type Page } from '@playwrig
 import fs from 'node:fs/promises';
 import { ensureDataLoaded } from './helpers/session';
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE = process.env.E2E_BASE_URL || 'http://localhost:3000';
 const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
 const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'CxAdmin@2026!';
 

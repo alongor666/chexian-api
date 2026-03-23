@@ -1,28 +1,31 @@
 import { test, expect } from '@playwright/test';
 
+// These tests use independent login (not the shared admin session)
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Organization Permission Verification', () => {
   const username = 'test_org_user';
   const password = 'TestUser@2026!';
 
-  test('Verify visible and hidden pages for single org user', async ({ page }) => {
-    // 1. Login
+  async function loginAsOrgUser(page: import('@playwright/test').Page) {
     await page.goto('/#/login');
     await page.getByPlaceholder('请输入用户名').fill(username);
     await page.getByPlaceholder('请输入密码').fill(password);
     await page.getByRole('button', { name: '登录', exact: true }).click();
+    await page.waitForURL((url) => !url.hash.startsWith('#/login'), { timeout: 10000 });
+  }
 
-    // Wait for login to complete
-    await page.waitForURL((url) => !url.hash.startsWith('#/login'));
+  test('Verify visible and hidden pages for single org user', async ({ page }) => {
+    await loginAsOrgUser(page);
 
     const sidebar = page.getByRole('navigation', { name: '主导航' });
     await expect(sidebar).toBeVisible();
 
-    // 2. Verify allowed pages are visible in sidebar
-    // Sidebar labels: 业绩分析, 增长与对比, 专项分析
+    // Verify allowed pages are visible in sidebar
     const allowedPages = [
-      { name: '业绩分析', path: '/#/performance-analysis' },
-      { name: '增长与对比', path: '/#/growth' },
-      { name: '专项分析', path: '/#/specialty' },
+      { name: '业绩分析' },
+      { name: '增长与对比' },
+      { name: '专项分析' },
     ];
 
     for (const pageInfo of allowedPages) {
@@ -31,7 +34,7 @@ test.describe('Organization Permission Verification', () => {
       await expect(link).not.toHaveClass(/cursor-not-allowed/);
     }
 
-    // 3. Verify forbidden pages are disabled (cursor-not-allowed + opacity)
+    // Verify forbidden pages are disabled
     const forbiddenPages = [
       { name: '仪表盘' },
       { name: '成本综合' },
@@ -46,27 +49,22 @@ test.describe('Organization Permission Verification', () => {
       }
     }
 
-    // 4. Try manual navigation to forbidden page
+    // Try manual navigation to forbidden page
     await page.goto('/#/cost');
-    // Should redirect to default route (/performance-analysis)
     await page.waitForURL((url) => url.hash.includes('performance-analysis'));
     expect(page.url()).toContain('performance-analysis');
   });
 
   test('Verify organization selection refers to authorized org only', async ({ page }) => {
-    // 1. Login if not already
-    await page.goto('/#/performance-analysis');
-    if (page.url().includes('login')) {
-        await page.getByPlaceholder('请输入用户名').fill(username);
-        await page.getByPlaceholder('请输入密码').fill(password);
-        await page.getByRole('button', { name: '登录', exact: true }).click();
-        await page.waitForURL((url) => url.hash.includes('performance-analysis'));
-    }
+    await loginAsOrgUser(page);
 
-    // 2. The org user should see their org name (乐山) in the scope label
-    await expect(page.getByText('乐山')).toBeVisible();
+    // Wait for page to fully load with data
+    await page.waitForLoadState('networkidle');
 
-    // 3. Try to find an unauthorized org name like '天府'
+    // The org user should see their org name (乐山) in the scope label or page title
+    await expect(page.getByText('乐山')).toBeVisible({ timeout: 10000 });
+
+    // Try to find an unauthorized org name like '天府'
     await expect(page.getByText('天府')).not.toBeVisible();
   });
 });
