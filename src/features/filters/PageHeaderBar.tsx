@@ -1,6 +1,7 @@
 import React, { useMemo, type ReactNode } from 'react';
 import { cn, colorClasses } from '../../shared/styles';
 import type { AdvancedFilterState } from '../../shared/types/data';
+import { useScopeLabel } from '../../shared/hooks/useScopeLabel';
 
 interface PageHeaderBarProps {
   /** 页面基础标题（如"保费分析"、"交叉销售分析"） */
@@ -8,6 +9,8 @@ interface PageHeaderBarProps {
   filters: AdvancedFilterState;
   /** 可见机构总数（用于判断是否为全选） */
   allOrgCount?: number;
+  /** 业务员→团队名映射（用于动态标题中的团队层级） */
+  salesmanTeamMap?: Map<string, string>;
   /** 标题右侧扩展内容（如页面级快捷切换） */
   rightContent?: ReactNode;
   /** 标题下方左侧扩展内容 */
@@ -29,36 +32,20 @@ interface PageHeaderBarProps {
  * 3. 单个机构（无业务员筛选） → "{机构}{baseTitle}"（如"天府保费分析"）
  * 4. 多个/全部机构 → "四川分公司{baseTitle}"
  */
+const EMPTY_TEAM_MAP = new Map<string, string>();
+
 export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
   baseTitle,
   filters,
   allOrgCount = 12,
+  salesmanTeamMap = EMPTY_TEAM_MAP,
   rightContent,
   bottomLeftContent,
   chipsAlign = 'left',
   hideChips = false,
 }) => {
-  // 计算动态标题前缀
-  const dynamicTitle = useMemo(() => {
-    const selectedOrgs = filters.org_level_3 || [];
-    const selectedSalesmen = filters.salesman_name || [];
-
-    // 1. 单个业务员：显示"机构+业务员"
-    if (selectedSalesmen.length === 1) {
-      const salesman = selectedSalesmen[0];
-      // 如果只选了一个机构，显示机构名
-      const org = selectedOrgs.length === 1 ? selectedOrgs[0] : '';
-      return org ? `${org}${salesman}` : salesman;
-    }
-
-    // 2. 单个机构（没有业务员筛选或多个业务员）
-    if (selectedOrgs.length === 1) {
-      return selectedOrgs[0];
-    }
-
-    // 3. 多个或全部机构 → 显示分公司
-    return '四川分公司';
-  }, [filters.org_level_3, filters.salesman_name]);
+  // 计算动态标题前缀（含机构/团队/业务员层级）
+  const { prefix: dynamicTitle } = useScopeLabel(filters, salesmanTeamMap);
 
   const fullTitle = `${dynamicTitle}${baseTitle}`;
 

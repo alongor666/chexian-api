@@ -16,5 +16,9 @@ export type {
   ServerPaginationConfig,
 } from './usePagination';
 
+// 数据范围标签
+export { useScopeLabel } from './useScopeLabel';
+export type { ScopeInfo } from './useScopeLabel';
+
 // 可访问性相关 Hooks
 export { useFocusTrap, useKeyboardNavigation } from './useFocusTrap';

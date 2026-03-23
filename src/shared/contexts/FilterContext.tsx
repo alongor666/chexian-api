@@ -22,6 +22,8 @@ interface FilterContextValue {
   toggleFilterCollapsed: () => void;
   /** 可用的业务员列表（基于已选机构过滤） */
   availableSalesmen: string[];
+  /** 业务员→团队名映射（用于动态标题） */
+  salesmanTeamMap: Map<string, string>;
   /** 当前口径的最大日期 */
   maxDataDate?: string;
   /** 当前口径的可用年份 */
@@ -56,6 +58,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
   const [isFilterCollapsed, setIsFilterCollapsed] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({});
   const [orgSalesmanCache] = useState<OrgSalesmanCache>({});
+  const [salesmanTeamMap, setSalesmanTeamMap] = useState<Map<string, string>>(new Map());
   const [dualDateMetadata, setDualDateMetadata] = useState<DualDateMetadata>();
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -114,6 +117,15 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       };
 
       setFilterOptions(options);
+
+      // 构建业务员→团队映射（用于动态标题）
+      const teamMap = new Map<string, string>();
+      (apiOptions.salesmenWithTeam || []).forEach((item) => {
+        if (item.salesman_name && item.team_name && item.team_name !== '未归属团队') {
+          teamMap.set(item.salesman_name, item.team_name);
+        }
+      });
+      setSalesmanTeamMap(teamMap);
 
       // Update max date from API
       const today = new Date().toISOString().split('T')[0];
@@ -189,6 +201,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       isFilterCollapsed,
       toggleFilterCollapsed,
       availableSalesmen,
+      salesmanTeamMap,
       maxDataDate,
       availableYears,
       isLoading,
@@ -201,6 +214,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       isFilterCollapsed,
       toggleFilterCollapsed,
       availableSalesmen,
+      salesmanTeamMap,
       maxDataDate,
       availableYears,
       isLoading,

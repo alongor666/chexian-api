@@ -835,6 +835,7 @@ class ApiClient {
     visibleOrganizations?: string[];
     salesmen: string[];
     salesmenWithOrg?: { salesman_name: string; org_level_3: string }[];
+    salesmenWithTeam?: { salesman_name: string; team_name: string; org_name: string }[];
     customerCategories: string[];
     coverageCombinations: string[];
     dateRange?: { min_date: string | null; max_date: string | null };

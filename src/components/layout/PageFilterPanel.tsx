@@ -124,6 +124,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
     isFilterCollapsed,
     toggleFilterCollapsed,
     availableSalesmen,
+    salesmanTeamMap,
     maxDataDate,
     availableYears,
   } = useGlobalFilters();
@@ -266,6 +267,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
               baseTitle={title}
               filters={filters}
               allOrgCount={filterOptions.org_level_3?.length || 0}
+              salesmanTeamMap={salesmanTeamMap}
               rightContent={
                 typeof headerRightContent === 'function'
                   ? headerRightContent({

@@ -102,6 +102,16 @@ router.get(
       WHERE ${permissionWhere} AND policy_date IS NOT NULL
       ORDER BY year DESC
     `;
+    // 12. 查询业务员-团队映射（从 SalesmanTeamMapping 维度表，降级为空数组）
+    const salesmanTeamSql = `
+      SELECT DISTINCT
+        full_name AS salesman_name,
+        COALESCE(NULLIF(TRIM(CAST(team_name AS VARCHAR)), ''), '未归属团队') AS team_name,
+        organization AS org_name
+      FROM SalesmanTeamMapping
+      ORDER BY full_name
+    `;
+
     const [
       orgResult,
       salesmanResult,
@@ -112,6 +122,7 @@ router.get(
       smallTruckScoreResult,
       largeTruckScoreResult,
       availableYearsResult,
+      salesmanTeamResult,
     ] = await Promise.all([
       duckdbService.query<{ org_level_3: string }>(orgSql, FILTER_CACHE_TTL),
       duckdbService.query<{ salesman_name: string; org_level_3: string }>(salesmanSql, FILTER_CACHE_TTL),
@@ -122,11 +133,12 @@ router.get(
       duckdbService.query<{ value: string; count: number }>(smallTruckScoreSql, FILTER_CACHE_TTL),
       duckdbService.query<{ value: string; count: number }>(largeTruckScoreSql, FILTER_CACHE_TTL),
       duckdbService.query<{ year: number }>(availableYearsSql, FILTER_CACHE_TTL),
+      duckdbService.query<{ salesman_name: string; team_name: string; org_name: string }>(salesmanTeamSql, FILTER_CACHE_TTL).catch(() => [] as { salesman_name: string; team_name: string; org_name: string }[]),
     ]);
 
     const actualOrgs = orgResult.map((r) => r.org_level_3);
 
-    // 12. 返回筛选器选项（字段名与前端 apiClient.getFilterOptions() 类型对齐）
+    // 13. 返回筛选器选项（字段名与前端 apiClient.getFilterOptions() 类型对齐）
     res.json({
       success: true,
       data: {
@@ -134,6 +146,7 @@ router.get(
         visibleOrganizations, // 用户权限可见的机构
         salesmen: salesmanResult.map((r) => r.salesman_name),
         salesmenWithOrg: salesmanResult, // 保留原始对象数组供后续机构-业务员映射
+        salesmenWithTeam: salesmanTeamResult, // 业务员-团队映射（用于动态标题）
         customerCategories: customerResult.map((r) => r.customer_category),
         coverageCombinations: insuranceResult.map((r) => r.coverage_combination),
         dateRange: dateRangeResult[0] || { min_date: null, max_date: null },

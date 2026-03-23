@@ -13,9 +13,12 @@ import React, { useEffect, useState, useMemo } from 'react';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { useDataStatus } from '../../shared/contexts/DataContext';
+import { useGlobalFilters } from '../../shared/contexts/FilterContext';
+import { useScopeLabel } from '../../shared/hooks/useScopeLabel';
 import { StickyTableFrame } from '../../shared/ui';
 import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
+import { SectionBlock } from '../../shared/ui/SectionTitle';
 import { textStyles, cardStyles, tableStyles, colorClasses, stickyTableStyles, cn } from '../../shared/styles';
 import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
 import { CrossSellSummaryKpiBoard } from './CrossSellSummaryKpiBoard';
@@ -345,39 +348,7 @@ function DataBarCell({
   );
 }
 
-// ============================================================
-// 板块标题
-// ============================================================
-
-function SectionTitle({ title, leftContent }: { title: string; leftContent?: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-3 mb-3">
-      {leftContent && <div className="flex items-center gap-2 flex-shrink-0">{leftContent}</div>}
-      <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-700" />
-      <h2 className={cn(textStyles.titleSmall, 'font-semibold whitespace-nowrap')}>{title}</h2>
-      <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-700" />
-    </div>
-  );
-}
-
-function SectionBlock({
-  id,
-  title,
-  leftContent,
-  children,
-}: {
-  id: string;
-  title: string;
-  leftContent?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className="scroll-mt-40 space-y-3">
-      <SectionTitle title={title} leftContent={leftContent} />
-      {children}
-    </section>
-  );
-}
+// SectionTitle 和 SectionBlock 已提取到 shared/ui/SectionTitle
 
 // ============================================================
 // 主组件
@@ -390,6 +361,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   const vehicleCategory: VehicleCategory = 'passenger';
   const seatCoverageLevel: SeatCoverageLevel = 'all';
   const { isDataLoaded } = useDataStatus();
+  const { salesmanTeamMap } = useGlobalFilters();
+  const { prefix: scopePrefix } = useScopeLabel(filters, salesmanTeamMap);
   const [sortKey, setSortKey] = useState<SortKey>('total_auto_count');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [showDetailedColumns, setShowDetailedColumns] = useState(false);
@@ -663,7 +636,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         )}
       </SectionBlock>
 
-      <SectionBlock id="cross-sell-trend" title="推介率与驾意件均走势">
+      <SectionBlock id="cross-sell-trend" title={`${scopePrefix}推介率与驾意件均走势`}>
         <div className="grid gap-4 xl:grid-cols-2">
           <CrossSellTrendChart
             vehicleCategory={vehicleCategory}
@@ -890,7 +863,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         />
       )}
 
-      <SectionBlock id="cross-sell-top20" title="TOP20 业务员推介率分析">
+      <SectionBlock id="cross-sell-top20" title={`${scopePrefix}TOP20推介率`}>
         <CrossSellTopSalesmanBoard
           filters={filters}
           vehicleCategory={vehicleCategory}

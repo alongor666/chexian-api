@@ -1,11 +1,14 @@
-import React, { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { EChartsOption } from 'echarts';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { Tabs } from '@/shared/ui/Tabs';
 import type { TabItem } from '@/shared/ui/Tabs';
 import { RBACBreadcrumb } from '@/shared/ui/RBACBreadcrumb';
 import { StickyTableFrame } from '@/shared/ui';
+import { SectionTitle, SectionBlock } from '@/shared/ui/SectionTitle';
 import { useDataStatus } from '@/shared/contexts/DataContext';
+import { useGlobalFilters } from '@/shared/contexts/FilterContext';
+import { useScopeLabel } from '@/shared/hooks/useScopeLabel';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
@@ -636,39 +639,7 @@ function mapTimePeriodToTrendGranularity(timePeriod: PerformanceTimePeriod): 'da
   }
 }
 
-function SectionTitle({
-  title,
-  leftContent,
-  rightContent,
-}: {
-  title: string;
-  leftContent?: ReactNode;
-  rightContent?: ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-3 mb-3">
-      {leftContent && <div className="flex items-center gap-2 flex-shrink-0">{leftContent}</div>}
-      <div className={cn('flex-1 h-px', colorClasses.bg.neutralLight)} />
-      <h2 className={cn(textStyles.titleSmall, 'font-semibold whitespace-nowrap')}>{title}</h2>
-      <div className={cn('flex-1 h-px', colorClasses.bg.neutralLight)} />
-      {rightContent && <div className="flex items-center gap-2 flex-shrink-0">{rightContent}</div>}
-    </div>
-  );
-}
-
-function SectionBlock({
-  id,
-  children,
-}: {
-  id: string;
-  children: ReactNode;
-}) {
-  return (
-    <section id={id} className="scroll-mt-40 space-y-3">
-      {children}
-    </section>
-  );
-}
+// SectionTitle 和 SectionBlock 已提取到 @/shared/ui/SectionTitle
 
 function formatPremiumWanDisplay(value: number | null | undefined): string {
   return formatWanAdaptive(value);
@@ -1041,6 +1012,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   onGrowthModeChange,
 }) => {
   const { isDataLoaded } = useDataStatus();
+  const { salesmanTeamMap } = useGlobalFilters();
+  const { prefix: scopePrefix } = useScopeLabel(filters, salesmanTeamMap);
 
   const [expandDims, setExpandDims] = useState<PerformanceSummaryExpandDims>('none');
   const [expandedCoverage, setExpandedCoverage] = useState<Record<string, boolean>>({});
@@ -1535,7 +1508,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
       </SectionBlock>
 
       <SectionBlock id="performance-trend">
-      <SectionTitle title="车险保费、车险件数走势" />
+      <SectionTitle title={`${scopePrefix}保费与件数走势`} />
       <div className="grid gap-4 lg:grid-cols-2">
         <PerformanceTrendChart
           title="车险保费走势"
@@ -1697,7 +1670,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
       </SectionBlock>
 
       <SectionBlock id="performance-top20">
-      <SectionTitle title="Top20业务员" />
+      <SectionTitle title={`${scopePrefix}Top20业务员`} />
       <section className={cn(cardStyles.standard, 'space-y-3')}>
         <p className={cn(textStyles.caption, colorClasses.text.neutralLight)}>
           默认排序: 达成率升序
