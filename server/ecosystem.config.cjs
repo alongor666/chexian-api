@@ -25,8 +25,8 @@ module.exports = {
         PORT: 3000,
         // VPS 运行模式：实时查询
         VPS_MODE: 'true',
-        // DuckDB 内存限制（实时查询）
-        DUCKDB_MAX_MEMORY: '400MB',
+        // DuckDB 内存限制（VPS 2核4G，预留 2G 给 OS+Node.js）
+        DUCKDB_MAX_MEMORY: '1536MB',
         DUCKDB_THREADS: '2',
       },
 
@@ -38,10 +38,10 @@ module.exports = {
       log_type: 'json',
 
       // 自动重启配置
-      max_memory_restart: '600M', // 实时查询模式下建议 < 600MB
-      restart_delay: 3000, // 重启间隔 3 秒
-      max_restarts: 10, // 最多重启 10 次
-      min_uptime: '10s', // 最小运行时间
+      max_memory_restart: '2048M', // 启动加载 Parquet+索引峰值约 1.5G，稳态约 800M
+      restart_delay: 5000, // 重启间隔 5 秒（给 OS 回收内存）
+      max_restarts: 5, // 最多重启 5 次（减少 OOM 循环）
+      min_uptime: '30s', // 最小运行时间（启动加载需 30-40s）
 
       // 监控配置
       watch: false, // 生产环境不监听文件变化
@@ -49,8 +49,8 @@ module.exports = {
 
       // 优雅关闭
       kill_timeout: 5000, // 5 秒后强制关闭
-      wait_ready: true, // 等待 ready 信号
-      listen_timeout: 10000, // 10 秒启动超时
+      wait_ready: true, // 等待 ready 信号（app.ts 数据加载完发 process.send('ready')）
+      listen_timeout: 120000, // 120 秒启动超时（Parquet 加载+索引创建约 30-60s）
     },
   ],
 

@@ -23,6 +23,9 @@ import { isValidParquetFile } from './utils/security.js';
 const app: Application = express();
 const PORT = Number(process.env.PORT) || 3000;
 
+/** 数据加载完成标志 — 健康检查依赖此状态 */
+let dataReady = false;
+
 /**
  * 1. 安全中间件
  */
@@ -75,6 +78,14 @@ app.use('/api/ai', aiLimiter);
  * 5. 健康检查路由
  */
 app.get('/health', (req, res) => {
+  if (!dataReady) {
+    res.status(503).json({
+      success: false,
+      message: 'Server is starting, data not loaded yet',
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
   res.json({
     success: true,
     message: 'Server is running',
@@ -287,6 +298,10 @@ async function startServer() {
       console.warn('[Server] Server will start without data. APIs will return empty results.');
     }
 
+    // 标记数据就绪
+    dataReady = true;
+    console.log('[Server] Data loading complete, marking server as ready');
+
     // 启动HTTP服务器（仅监听本地回环，禁止 0.0.0.0 暴露）
     const BIND_HOST = process.env.BIND_HOST || '127.0.0.1';
     app.listen(PORT, BIND_HOST, () => {
@@ -294,6 +309,12 @@ async function startServer() {
       console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`[Server] Health check: http://${BIND_HOST}:${PORT}/health`);
       console.log(`[Server] API docs: See server/README.md`);
+
+      // 通知 PM2 进程已就绪（配合 wait_ready: true）
+      if (typeof process.send === 'function') {
+        process.send('ready');
+        console.log('[Server] PM2 ready signal sent');
+      }
     });
   } catch (error) {
     console.error('[Server] Failed to start server:', error);
