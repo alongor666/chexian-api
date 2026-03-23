@@ -600,18 +600,22 @@ class DuckDBService {
   }
 
   /**
-   * 实时聚合模式专用：创建 CrossSellDailyAgg 实时视图（非物化）
+   * 创建并物化 CrossSellDailyAgg 预聚合表
    *
    * 说明：
-   * - 结构与历史 CrossSellDailyAgg 表保持一致，复用现有 SQL 生成器和路由
-   * - 数据来源实时读取 PolicyFact，不依赖预聚合导出文件
-  */
+   * - 启动时一次性将 PolicyFact 聚合为 TABLE，后续查询直接走物化表
+   * - 避免每次查询对 115 万行做全表 GROUP BY + DISTINCT 导致 VPS OOM
+   * - 结构与所有 SQL 生成器兼容，无需修改下游代码
+   */
   async createCrossSellRealtimeView(): Promise<void> {
-    // 兼容历史部署中 CrossSellDailyAgg 可能是 TABLE 的情况
+    // 兼容历史部署中 CrossSellDailyAgg 可能是 VIEW 或 TABLE 的情况
     await this.dropRelationIfExists('CrossSellDailyAgg');
 
+    console.log('[DuckDB] Materializing CrossSellDailyAgg...');
+    const t0 = Date.now();
+
     await this.query(`
-      CREATE OR REPLACE VIEW CrossSellDailyAgg AS
+      CREATE TABLE CrossSellDailyAgg AS
       WITH normalized AS (
         SELECT
           CAST(policy_date AS DATE) AS policy_date,
@@ -721,6 +725,14 @@ class DuckDBService {
         driver_coverage,
         passenger_coverage
     `);
+
+    // 创建查询索引加速 WHERE policy_date 和 customer_category 过滤
+    await Promise.all([
+      this.query('CREATE INDEX IF NOT EXISTS idx_cross_sell_agg_date ON CrossSellDailyAgg(policy_date)'),
+      this.query('CREATE INDEX IF NOT EXISTS idx_cross_sell_agg_category ON CrossSellDailyAgg(customer_category)'),
+    ]);
+
+    console.log(`[DuckDB] CrossSellDailyAgg materialized in ${Date.now() - t0}ms`);
   }
 
   /**

@@ -584,7 +584,7 @@ router.delete(
       // 删除 DuckDB 中的表和视图
       await duckdbService.query('DROP VIEW IF EXISTS PolicyFactRenewal');
       await duckdbService.query('DROP VIEW IF EXISTS PolicyFact');
-      await duckdbService.query('DROP VIEW IF EXISTS CrossSellDailyAgg');
+      await duckdbService.query('DROP TABLE IF EXISTS CrossSellDailyAgg');
       await duckdbService.query('DROP TABLE IF EXISTS PolicyFactRealtime');
       await duckdbService.query('DROP TABLE IF EXISTS raw_parquet');
 
