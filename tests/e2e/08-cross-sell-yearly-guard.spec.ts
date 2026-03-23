@@ -4,7 +4,7 @@ import { ensureDataLoaded } from './helpers/session';
 test('cross-sell 年维度下热力图区块进入禁用态而不是继续请求不受支持的 15 期热力图', async ({ page }) => {
   await ensureDataLoaded(page);
 
-  await page.goto('/#/cross-sell');
+  await page.goto('/#/specialty?tab=cross-sell');
   await page.waitForLoadState('domcontentloaded');
 
   await expect(page.getByRole('heading', { name: /交叉销售分析/ })).toBeVisible();

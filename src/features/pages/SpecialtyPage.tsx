@@ -130,10 +130,16 @@ export const SpecialtyPage: React.FC = () => {
     </FilterQuickActions>
   );
 
+  const titleMap: Record<SpecialtyTab, string> = {
+    'cross-sell': '交叉销售分析',
+    'renewal': '续保分析',
+    'truck': '营业货车分析',
+  };
+
   return (
     <PageFilterPanel
       preset={presetMap[activeTab]}
-      title="专项分析"
+      title={titleMap[activeTab]}
       anchorSections={activeTab === 'cross-sell' ? [...CROSS_SELL_ANCHORS] : undefined}
       showBasicFilterBar={false}
       headerRightContent={renderHeaderControls}

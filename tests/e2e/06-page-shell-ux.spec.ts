@@ -32,7 +32,7 @@ test('growth 与 cost 页面复用顶部基础筛选和高级筛选抽屉', asyn
       heading: /增长分析/,
     },
     {
-      url: '/#/cross-sell',
+      url: '/#/specialty?tab=cross-sell',
       heading: /交叉销售分析/,
     },
     {

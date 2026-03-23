@@ -10,19 +10,19 @@ test.describe('Organization Permission Verification', () => {
     await page.getByPlaceholder('请输入用户名').fill(username);
     await page.getByPlaceholder('请输入密码').fill(password);
     await page.getByRole('button', { name: '登录', exact: true }).click();
-    
+
     // Wait for login to complete
     await page.waitForURL((url) => !url.hash.startsWith('#/login'));
-    
+
     const sidebar = page.getByRole('navigation', { name: '主导航' });
     await expect(sidebar).toBeVisible();
 
     // 2. Verify allowed pages are visible in sidebar
+    // Sidebar labels: 业绩分析, 增长与对比, 专项分析
     const allowedPages = [
       { name: '业绩分析', path: '/#/performance-analysis' },
-      { name: '增长分析', path: '/#/growth' },
-      { name: '续保分析', path: '/#/renewal' },
-      { name: '驾意险推介率', path: '/#/cross-sell' },
+      { name: '增长与对比', path: '/#/growth' },
+      { name: '专项分析', path: '/#/specialty' },
     ];
 
     for (const pageInfo of allowedPages) {
@@ -31,19 +31,15 @@ test.describe('Organization Permission Verification', () => {
       await expect(link).not.toHaveClass(/cursor-not-allowed/);
     }
 
-    // 3. Verify forbidden pages are not interactive or hidden
-    // Based on SidebarNavigation.tsx, forbidden pages are rendered with 'cursor-not-allowed' class and opacity-70
+    // 3. Verify forbidden pages are disabled (cursor-not-allowed + opacity)
     const forbiddenPages = [
-      { name: '仪表盘', path: '/#/dashboard' },
-      { name: '成本分析', path: '/#/cost' },
-      { name: '费用分析', path: '/#/fee-analysis' },
-      { name: '权限管理', path: '/#/admin/access-control' },
+      { name: '仪表盘' },
+      { name: '成本综合' },
+      { name: '费用分析' },
     ];
 
     for (const pageInfo of forbiddenPages) {
       const item = page.locator('div, a').filter({ hasText: new RegExp(`^${pageInfo.name}$`) });
-      // Forbidden pages should have cursor-not-allowed class if they are rendered as placeholder divs
-      // or they are simply not found in the DOM if filtered out (though SidebarNavigation seems to render them as disabled)
       const count = await item.count();
       if (count > 0) {
         await expect(item.first()).toHaveClass(/cursor-not-allowed/);
@@ -67,20 +63,10 @@ test.describe('Organization Permission Verification', () => {
         await page.waitForURL((url) => url.hash.includes('performance-analysis'));
     }
 
-    // 2. Open Global Filter
-    const filterPanel = page.getByRole('button', { name: '筛选' }).first();
-    if (await filterPanel.isVisible()) {
-        await filterPanel.click();
-    }
-
-    // 3. Check Organization Dropdown
-    // Note: The actual UI implementation might vary, but we expect only '全部' and '乐山'
-    const orgSelect = page.locator('select, .ant-select, [role="combobox"]').filter({ hasText: /机构/ });
-    // This part is highly dependent on the library used (e.g., Ant Design, Headless UI).
-    // Let's look for text '乐山' and '全部' in the filter area
+    // 2. The org user should see their org name (乐山) in the scope label
     await expect(page.getByText('乐山')).toBeVisible();
-    
-    // Try to find an unauthorized org name like '天府'
+
+    // 3. Try to find an unauthorized org name like '天府'
     await expect(page.getByText('天府')).not.toBeVisible();
   });
 });

@@ -58,20 +58,20 @@ test('API-only 清理门禁：关键页面/API/导出全链路', async ({ page }
   expect(excelStat.size, 'Excel 导出文件为空').toBeGreaterThan(0);
 
   const routes = [
-    'dashboard',
-    'truck',
-    'renewal',
-    'growth',
-    'cost',
-    'coefficient',
-    'premium-report',
-    'marketing-report',
+    { goto: 'dashboard', expectHash: 'dashboard' },
+    { goto: 'specialty?tab=truck', expectHash: 'specialty' },
+    { goto: 'specialty?tab=renewal', expectHash: 'specialty' },
+    { goto: 'growth', expectHash: 'growth' },
+    { goto: 'cost', expectHash: 'cost' },
+    { goto: 'coefficient', expectHash: 'coefficient' },
+    { goto: 'reports?tab=premium', expectHash: 'reports' },
+    { goto: 'reports?tab=marketing', expectHash: 'reports' },
   ];
 
-  for (const route of routes) {
-    await page.goto(`/#/${route}`);
+  for (const { goto, expectHash } of routes) {
+    await page.goto(`/#/${goto}`);
     await page.waitForLoadState('domcontentloaded');
-    await expect(page).toHaveURL(new RegExp(`#/${route}$`));
+    await expect(page).toHaveURL(new RegExp(`#/${expectHash}`));
   }
 });
 

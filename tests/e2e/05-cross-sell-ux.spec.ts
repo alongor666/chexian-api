@@ -4,7 +4,7 @@ import { assertAdvancedDrawerToggles, ensureDataLoaded } from './helpers/session
 test('cross-sell 页骨架支持锚点导航、高级筛选抽屉与下钻明细展开', async ({ page }) => {
   await ensureDataLoaded(page);
 
-  await page.goto('/#/cross-sell');
+  await page.goto('/#/specialty?tab=cross-sell');
   await page.waitForLoadState('domcontentloaded');
 
   await expect(page.getByRole('heading', { name: /交叉销售分析/ })).toBeVisible();
