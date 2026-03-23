@@ -614,6 +614,10 @@ class DuckDBService {
     console.log('[DuckDB] Materializing CrossSellDailyAgg...');
     const t0 = Date.now();
 
+    // 降低内存峰值：单线程 + 关闭插入顺序保留（VPS 2核4G 场景关键）
+    await this.query('SET threads=1');
+    await this.query('SET preserve_insertion_order=false');
+
     await this.query(`
       CREATE TABLE CrossSellDailyAgg AS
       WITH normalized AS (
@@ -725,6 +729,10 @@ class DuckDBService {
         driver_coverage,
         passenger_coverage
     `);
+
+    // 恢复线程数（查询阶段用多线程提速）
+    await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
+    await this.query('SET preserve_insertion_order=true');
 
     // 创建查询索引加速 WHERE policy_date 和 customer_category 过滤
     await Promise.all([
