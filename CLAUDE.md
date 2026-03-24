@@ -48,9 +48,28 @@
 
 **架构协议**：Bun 包管理器（禁止 npm/yarn）· 智谱 API `glm-4.7-flash` · 三级限流（禁止降低）· JWT 认证（禁止绕过）· `security.ts` 危险字符黑名单支持中文
 
-**VPS 分层数据架构**（RED LINE）：❌ 禁止在 VPS 上查询原始 `PolicyFact`（续保除外）。新功能只能查 `DailyAggregated`/`PeriodAggregated`/`CrossSellDailyAgg`。新维度在本地 `scripts/export-for-vps.mjs` 聚合后推送。续保 PolicyFact 最小字段集不可扩展：`policy_no, premium, salesman_name, org_level_3, customer_category, insurance_type, insurance_start_date, renewal_policy_no`
+**分域 Lakehouse 架构**（RED LINE）：数据拆分为 3 个独立域，禁止合回单体 parquet：
 
-**数据同步护栏**（RED LINE）：❌ 禁止 `current/` 中保留时间重叠的 Parquet。同步命令：`node scripts/sync-vps.mjs`（默认清理防重叠），`--dry-run` 预览，`--export` 预聚合，`--keep-old` 危险。
+```
+warehouse/fact/
+├── policy/daily/YYYY-MM-DD.parquet   ← 保单+保费（每日增量追加，~100KB/天）
+├── claims/latest.parquet             ← 赔付+费用（每周全量替换，~10MB）
+└── quotes/latest.parquet             ← 报价状态（每日全量替换，~3MB）
+```
+
+- 服务器启动自动检测 `policy/daily/` → 走 JOIN 加载；不存在 → 回退旧 `current/` 模式
+- ETL 入口：`node 数据管理/etl.mjs`（智能检测，无参数自动判断需更新的域）
+- 强制子命令：`node 数据管理/etl.mjs premium|claims|quotes|all`
+- 关键方法：`duckdb.ts:loadDomainParquet()` — 创建 3 路 LEFT JOIN 的 `raw_parquet` 视图
+- PolicyFact 视图接口不变 — 24 个 SQL 生成器零改动
+
+**VPS 数据目录**：`server/data/fact/policy/daily/`、`server/data/fact/claims/`、`server/data/fact/quotes/`
+
+**报价数据口径**（待修正）：当前 `是否报价` 字段不可靠，正确逻辑应以「续保单号非空」判定已报价。用户待办，AI 不得擅自修改。
+
+**VPS 分层查询**（RED LINE）：❌ 禁止在 VPS 上查询原始 `PolicyFact`（续保除外）。新功能只能查 `DailyAggregated`/`PeriodAggregated`/`CrossSellDailyAgg`。续保 PolicyFact 最小字段集不可扩展：`policy_no, premium, salesman_name, org_level_3, customer_category, insurance_type, insurance_start_date, renewal_policy_no`
+
+**数据同步护栏**（RED LINE）：VPS 同步使用 `rsync` 直接同步 3 个域目录。旧的 `current/` 保留作为回退。`node scripts/sync-vps.mjs` 仍可用于旧模式。
 
 ---
 
@@ -78,7 +97,7 @@
 
 **启动**：`bun run dev:full`（禁止只运行 `bun run dev`）
 
-**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行）· `server/src/routes/query.ts`（路由）· `server/src/sql/`（16 个 SQL 生成器）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
+**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行 + `loadDomainParquet()`）· `server/src/config/paths.ts`（域路径函数）· `server/src/routes/query.ts`（路由）· `server/src/sql/`（24 个 SQL 生成器）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
 
 **API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录）· `/api/filters/*`（筛选器）
 
@@ -146,7 +165,9 @@ bun run governance                 # 治理校验
 
 **生产环境**：腾讯云 2核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist`
 
-**数据同步**：`./scripts/sync-vps.mjs` 一键同步。生产转换：`./数据管理/run.sh full --source X --target Y --output Z`
+**数据 ETL**：`node 数据管理/etl.mjs`（智能检测）· `node 数据管理/etl.mjs premium|claims|quotes|all`（强制）· 迁移脚本：`python3 数据管理/pipelines/split_existing.py`
+
+**数据同步**：`rsync -azv 数据管理/warehouse/fact/{policy/daily,claims,quotes}/ chexian-vps-deploy:/var/www/chexian/server/data/fact/...`
 
 **CI/CD**：`deploy.yml`（push main → 构建→部署→健康检查）· `claude-code.yml`（@claude 触发）· `governance-check.yml`（PR 治理）
 

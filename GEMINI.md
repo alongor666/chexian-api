@@ -1,0 +1,130 @@
+# GEMINI.md
+
+> Google Gemini 协作指南 — **chexian-api** 车险数据分析平台
+
+## 项目简介
+
+车险经营管理系统，为保险公司提供 KPI 仪表盘、业绩分析、成本综合、续保追踪等数据分析能力。
+
+- **前端**: React + TypeScript + Vite + ECharts
+- **后端**: Express + DuckDB (内存数据库) + JWT
+- **数据层**: 分域 Lakehouse 架构（Python + Node.js ETL）
+- **部署**: GitHub Actions → 腾讯云 VPS (PM2)
+- **生产地址**: https://chexian.cretvalu.com
+
+## 数据架构（核心）
+
+### 分域 Lakehouse
+
+数据拆分为 3 个独立域，各自独立更新频率：
+
+| 域 | 路径 | 更新频率 | 内容 |
+|---|---|---|---|
+| Policy | `warehouse/fact/policy/daily/*.parquet` | 每日增量 | 保单+保费，按签单日期分区 |
+| Claims | `warehouse/fact/claims/latest.parquet` | 每周全量 | 赔付+费用（按保单号聚合） |
+| Quotes | `warehouse/fact/quotes/latest.parquet` | 每日全量 | 报价状态（续保单号→上年保单） |
+
+### 服务器加载链
+
+```
+启动 → 检测 policy/daily/ 存在?
+  [是] → loadDomainParquet() → 3路 LEFT JOIN → raw_parquet VIEW
+  [否] → 旧模式：加载 current/ 单体 parquet（回退兼容）
+→ createPolicyFactView() → 中文列名映射为英文 → PolicyFact VIEW
+→ 物化为 PolicyFactRealtime TABLE（3索引）
+→ 物化 CrossSellDailyAgg（按月分批，防 OOM）
+```
+
+### ETL 工具
+
+```bash
+# 智能模式（推荐）：自动检测哪些域需要更新
+node 数据管理/etl.mjs
+
+# 强制指定域
+node 数据管理/etl.mjs premium    # 保费增量（秒级）
+node 数据管理/etl.mjs claims     # 赔付费用（选最大xlsx）
+node 数据管理/etl.mjs quotes     # 报价状态（选最大xlsx）
+node 数据管理/etl.mjs all        # 全部重跑
+
+# 底层工具
+python3 数据管理/pipelines/transform.py -i input.xlsx -o output.parquet --domain policy --after-date 2026-03-22
+python3 数据管理/pipelines/split_existing.py  # 一次性迁移：拆分单体parquet为3域
+```
+
+## 索引与文档
+
+| 索引 | 路径 |
+|------|------|
+| 文档索引 | `开发文档/00_index/DOC_INDEX.md` |
+| 代码索引 | `开发文档/00_index/CODE_INDEX.md` |
+| 进展索引 | `开发文档/00_index/PROGRESS_INDEX.md` |
+
+**两本账**：[BACKLOG.md](./BACKLOG.md)（需求）· [PROGRESS.md](./PROGRESS.md)（进展）
+
+## 目录结构
+
+```
+chexian-api/
+├── src/                          # 前端 React 应用
+│   ├── shared/                   #   共享组件/工具/类型/样式
+│   └── widgets/                  #   页面级组件
+├── server/                       # 后端 Express API
+│   └── src/
+│       ├── services/duckdb.ts    #   DuckDB 服务 + loadDomainParquet()
+│       ├── config/paths.ts       #   路径配置（域路径函数）
+│       ├── sql/                  #   24 个 SQL 生成器
+│       ├── normalize/mapping.ts  #   中→英列名映射
+│       └── routes/               #   API 路由
+├── 数据管理/                      # ETL + 数据仓库
+│   ├── etl.mjs                   #   分域 ETL 入口
+│   ├── pipelines/                #   transform.py, split_existing.py
+│   └── warehouse/fact/           #   3域 parquet 存储
+├── scripts/                      # 部署/同步脚本
+└── tests/                        # 单元+E2E 测试
+```
+
+## 红线规则（必须遵守）
+
+1. **业务口径只追加不删改** — `duckdb.ts` 和 `query.ts` 已有 SQL 逻辑禁止修改/删除
+2. **分域架构不可合回单体** — 3 个域独立更新，禁止合回一个大 parquet
+3. **报价数据口径待修正** — 当前 `是否报价` 字段不可靠，正确应以「续保单号非空」判定。**用户待办，AI 不得修改**
+4. **VPS 禁止查询原始 PolicyFact**（续保除外）— 只能查预聚合表
+5. **包管理用 Bun** — 禁止 npm/yarn
+6. **安全**: JWT 禁止绕过，三级限流禁止降低
+
+## 开发命令
+
+```bash
+bun install && bun run dev:full    # 安装+启动前后端
+bun run build                      # TypeScript 类型检查+构建
+bun run test                       # 单元测试
+bun run test:e2e                   # E2E 测试
+bun run governance                 # 治理校验（push 前必跑）
+```
+
+## API 概览
+
+| 前缀 | 功能 |
+|------|------|
+| `/api/query/*` | KPI、趋势、排名、成本、系数、续保、交叉销售 |
+| `/api/data/*` | 文件管理 |
+| `/api/ai/*` | NL2SQL、需求识别 |
+| `/api/auth/*` | 登录认证 (JWT) |
+| `/api/filters/*` | 筛选器选项 |
+
+## 生产环境
+
+- **VPS**: 腾讯云 2核4G `162.14.113.44`
+- **域名**: https://chexian.cretvalu.com
+- **进程管理**: PM2 `chexian-api` 端口 3000
+- **前端**: Nginx 静态文件 `/var/www/chexian/frontend/dist`
+- **数据路径**: `/var/www/chexian/server/data/fact/{policy/daily,claims,quotes}`
+- **CI/CD**: push main → GitHub Actions 自动构建部署
+
+## 关键约束
+
+- DuckDB 日期序列化：DATE → `{days:N}`，TIMESTAMP → `{micros:N}`，需在 `duckdb.ts` 中反序列化
+- 后端运行在 Node.js (tsx)，不是 Bun（multer 文件上传在 Bun 下会出错）
+- 前端样式必须使用 `src/shared/styles/index.ts` 的全局样式，禁止硬编码 Tailwind 颜色
+- 所有回复使用中文，代码/命令/专有名词除外
