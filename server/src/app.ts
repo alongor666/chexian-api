@@ -29,7 +29,19 @@ let dataReady = false;
 /**
  * 1. 安全中间件
  */
-app.use(helmet()); // HTTP安全头
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "https://open.bigmodel.cn", "https://openrouter.ai"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+})); // HTTP安全头（含 CSP）
 app.use(cors(corsConfig)); // 跨域配置
 
 /**

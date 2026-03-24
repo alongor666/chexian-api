@@ -63,7 +63,7 @@ export async function ensureCrossSellAggregateTablesReady(): Promise<void> {
 const router = Router();
 
 const crossSellExtraSchema = z.object({
-  drillPath: z.string().optional().default('[]'),
+  drillPath: z.string().max(2000).optional().default('[]'),
   groupBy: z.enum(CROSS_SELL_DIMENSIONS).optional(),
   vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).optional(),
   seatCoverageLevel: z.enum(['all', 'eq_1w', 'gte_2w', 'lt_1w']).optional(),
@@ -82,7 +82,7 @@ router.get('/cross-sell', asyncHandler(async (req, res) => {
     if (Array.isArray(parsed)) {
       drillPath = parsed.map((s: any) => ({
         dimension: String(s.dimension) as CrossSellDimension,
-        value: String(s.value),
+        value: String(s.value).slice(0, 255),
       }));
     }
   } catch {

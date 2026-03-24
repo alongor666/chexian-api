@@ -105,7 +105,7 @@ function validateYear(year: number): number {
  */
 function escapeSQL(str: string): string {
   if (str == null) return '';
-  return String(str).replace(/'/g, "''");
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "''");
 }
 
 /**

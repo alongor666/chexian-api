@@ -56,11 +56,11 @@ function writeAuditLog(entry: AuditLogEntry): void {
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true, mode: 0o700 });
     }
-    fs.appendFile(AUDIT_LOG_PATH, logLine, (err) => {
-      if (err) console.error('[Audit] 写入审计日志失败:', err);
+    fs.appendFile(AUDIT_LOG_PATH, logLine, { mode: 0o600 }, (err) => {
+      if (err) console.error('[Audit] 写入审计日志失败');
     });
-  } catch (error) {
-    console.error('[Audit] 审计日志记录异常:', error);
+  } catch {
+    console.error('[Audit] 审计日志记录异常');
   }
 }
 

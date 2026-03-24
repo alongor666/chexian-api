@@ -63,7 +63,7 @@ export type SortOrder = 'asc' | 'desc';
 // ─── 内部工具 ──────────────────────────────────────────────────────────────
 
 function esc(s: string): string {
-  return s.replace(/'/g, "''");
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "''");
 }
 
 /**

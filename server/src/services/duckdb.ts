@@ -320,7 +320,8 @@ class DuckDBService {
       const duration = Date.now() - startTime;
       recordQueryMetric(sql, duration, false);
       console.error(`[DuckDB] Query error (${duration}ms):`, message);
-      throw new AppError(400, `Query failed: ${message}`);
+      // 不向客户端暴露内部 SQL 错误细节
+      throw new AppError(400, '查询执行失败，请检查参数后重试');
     } finally {
       this.releaseConnection(conn);
     }

@@ -57,7 +57,7 @@ router.get('/callback', async (req: Request, res: Response) => {
         const userId = userInfo.UserId || userInfo.userid; // WeCom returns UserId
 
         if (!userId) {
-            console.warn('[WeCom Auth] Could not extract UserId from WeCom response', userInfo);
+            console.warn('[WeCom Auth] Could not extract UserId from WeCom response');
             return res.redirect('/#/?error=wecom_not_enterprise_user');
         }
 
@@ -96,7 +96,7 @@ router.get('/callback', async (req: Request, res: Response) => {
         res.redirect('/#/?wecom=success');
 
     } catch (error: any) {
-        console.error('[WeCom Auth] Callback error:', error.message);
+        console.error('[WeCom Auth] Callback error occurred');
         res.redirect('/#/?error=wecom_auth_failed');
     }
 });

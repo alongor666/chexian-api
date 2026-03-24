@@ -449,8 +449,9 @@ router.post(
             fs.unlinkSync(filePath);
           }
 
-          const errorMessage = loadErr instanceof Error ? loadErr.message : '数据加载失败';
-          reject(new AppError(400, errorMessage));
+          const errorDetail = loadErr instanceof Error ? loadErr.message : '未知错误';
+          console.error('[Data] 数据加载失败:', errorDetail);
+          reject(new AppError(400, '数据加载失败，请检查文件格式后重试'));
         }
       });
     });

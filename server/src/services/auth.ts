@@ -218,7 +218,7 @@ class AuthService {
     try {
       return await bcrypt.compare(plainPassword, hashedPassword);
     } catch (error) {
-      console.error('[Auth] Password verification error:', error);
+      console.error('[Auth] Password verification error: bcrypt compare failed');
       return false;
     }
   }

@@ -40,8 +40,8 @@ export function errorHandler(
     });
   }
 
-  // 未知错误，打印日志
-  console.error('Unexpected error:', err);
+  // 未知错误，仅记录错误名和消息（不暴露完整堆栈到标准输出）
+  console.error(`Unexpected error: [${err.name}] ${err.message}`);
 
   // 生产环境隐藏错误详情
   const message =

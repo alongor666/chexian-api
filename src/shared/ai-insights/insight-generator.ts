@@ -25,7 +25,8 @@ interface StoredConfig {
  * 优先级：localStorage > 环境变量 > 空
  */
 function getStoredConfig(): StoredConfig {
-  const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ZHIPU_API_KEY) || '';
+  // 安全：API Key 不应暴露到前端 bundle，始终通过后端代理调用
+  const envKey = '';
   const envModel = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ZHIPU_MODEL) || 'glm-4-flash';
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
