@@ -13,7 +13,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
-import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths } from './config/paths.js';
+import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getPolicyDailyDirs, getClaimsDomainPaths, getQuotesDomainPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
@@ -253,11 +253,29 @@ async function startServer() {
     filesToLoad.forEach((f, i) => console.log(`  [${i}] ${f.path} (${(f.size / 1024 / 1024).toFixed(1)} MB)`));
 
     try {
-      // 多文件或单文件加载
-      if (filesToLoad.length > 1) {
+      // ── 分域 Lakehouse 检测（优先于单体 parquet）──
+      const policyDailyDir = getPolicyDailyDirs().find(d =>
+        fs.existsSync(d) && fs.readdirSync(d).some(f => f.endsWith('.parquet'))
+      );
+
+      if (policyDailyDir) {
+        // 新路径：域拆分模式
+        const claimsFile = getClaimsDomainPaths().find(f => fs.existsSync(f)) ?? null;
+        const quotesFile = getQuotesDomainPaths().find(f => fs.existsSync(f)) ?? null;
+
+        console.log('[Server] Domain-split mode detected:');
+        console.log(`  - Policy daily: ${policyDailyDir} (${fs.readdirSync(policyDailyDir).filter(f => f.endsWith('.parquet')).length} files)`);
+        console.log(`  - Claims: ${claimsFile ?? 'not found'}`);
+        console.log(`  - Quotes: ${quotesFile ?? 'not found'}`);
+
+        const { totalRows } = await duckdbService.loadDomainParquet(policyDailyDir, claimsFile, quotesFile);
+        console.log(`[Server] Domain-split loaded: ${totalRows} rows`);
+      } else if (filesToLoad.length > 1) {
+        // 兼容路径：多文件加载
         const { totalRows: multiRows } = await duckdbService.loadMultipleParquet(filesToLoad.map(f => f.path));
         console.log(`[Server] Multi-parquet loaded: ${filesToLoad.length} files, ${multiRows} total rows`);
       } else if (filesToLoad.length === 1) {
+        // 兼容路径：单文件加载
         await duckdbService.loadParquet(filesToLoad[0].path, 'raw_parquet');
         console.log('[Server] Data loaded successfully:', path.basename(filesToLoad[0].path));
       }

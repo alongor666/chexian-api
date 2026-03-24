@@ -56,6 +56,10 @@ def parse_args():
     parser.add_argument('-m', '--mode', choices=['merged', 'full'], default='full',
                         help='处理模式: full=保留所有记录(默认), merged=合并批改记录')
     parser.add_argument('-r', '--renewal-source', type=str, help='续保业务类型源文件路径（可选）')
+    parser.add_argument('--domain', choices=['policy', 'claims', 'quotes', 'all'],
+                        default='all', help='输出域: policy(排除赔付费用报价), claims(赔付+费用), quotes(报价), all(默认全量)')
+    parser.add_argument('--after-date', type=str, default=None,
+                        help='增量模式：只保留签单日期 > 此日期的记录（格式 YYYY-MM-DD 或 YYYYMMDD）')
     return parser.parse_args()
 
 # 解析命令行参数
@@ -64,6 +68,8 @@ INPUT_FILE = Path(args.input) if args.input else DEFAULT_INPUT_FILE
 OUTPUT_FILE = Path(args.output) if args.output else DEFAULT_OUTPUT_FILE
 OUTPUT_MODE = args.mode
 RENEWAL_SOURCE_FILE = Path(args.renewal_source) if args.renewal_source else None
+DOMAIN = args.domain          # 输出域: policy/claims/quotes/all
+AFTER_DATE = args.after_date  # 增量截止日期
 
 POLICY_KEY_ALIASES = ['保单号', '保单号码', '保单编号', '保单']
 RENEWAL_TYPE_ALIASES = ['续保业务类型', '续保类型', '业务类型', '续保分类']
@@ -760,15 +766,53 @@ def handle_duplicate_records(df):
         return df
 
 def finalize_schema(df):
-    """最终化数据结构：选择保留的字段、排序"""
+    """最终化数据结构：根据 DOMAIN 参数选择保留的字段"""
     print(f"\n{'='*80}")
-    print(f"🎯 最终化数据结构")
+    print(f"🎯 最终化数据结构 (域: {DOMAIN})")
     print(f"{'='*80}")
 
-    # 定义核心字段（必须保留）
+    # ── 域模式：claims（赔付+费用）──
+    if DOMAIN == 'claims':
+        claims_fields = ['保单号', '车架号', '赔案件数', '已报告赔款', '费用金额']
+        final_fields = [f for f in claims_fields if f in df.columns]
+        df_final = df[final_fields].copy()
+        # 按保单号聚合去重（同一保单可能有多条记录：原单+批改）
+        agg_cols = [c for c in ['赔案件数', '已报告赔款', '费用金额'] if c in df_final.columns]
+        if agg_cols:
+            agg_dict = {c: 'sum' for c in agg_cols}
+            if '车架号' in df_final.columns:
+                agg_dict['车架号'] = 'first'
+            df_final = df_final.groupby('保单号', as_index=False).agg(agg_dict)
+        # 只保留有赔付或费用数据的行
+        has_data = (
+            (df_final.get('赔案件数', pd.Series(0)) != 0) |
+            (df_final.get('已报告赔款', pd.Series(0)) != 0) |
+            (df_final.get('费用金额', pd.Series(0)) != 0)
+        )
+        df_final = df_final[has_data]
+        print(f"   Claims 域: {len(df_final):,} 行（按保单号聚合去重）, {len(final_fields)} 列")
+        return df_final
+
+    # ── 域模式：quotes（报价状态）──
+    if DOMAIN == 'quotes':
+        # 只保留 是否报价=True 且 续保单号非空
+        if '是否报价' in df.columns:
+            df = df[df['是否报价'] == True].copy()
+        quotes_fields = ['续保单号', '签单日期']
+        final_fields = [f for f in quotes_fields if f in df.columns]
+        df_final = df[final_fields].copy()
+        if '续保单号' in df_final.columns:
+            df_final = df_final[df_final['续保单号'].notna() & (df_final['续保单号'] != '')]
+            df_final = df_final.drop_duplicates(subset=['续保单号'], keep='first')
+        print(f"   Quotes 域: {len(df_final):,} 行（续保单号去重）, {len(final_fields)} 列")
+        return df_final
+
+    # ── 域模式：policy（排除赔付/费用/报价）或 all（全量兼容）──
+    policy_exclude = {'是否报价', '赔案件数', '已报告赔款', '费用金额'} if DOMAIN == 'policy' else set()
+
     core_fields = [
         '保单号',
-        '续保单号',  # ✅ 添加续保单号字段（用于续保率分析）
+        '续保单号',
         '业务员',
         '三级机构',
         '签单日期',
@@ -788,11 +832,10 @@ def finalize_schema(df):
         '厂牌车型',
         '吨位分段',
         '新车购置价',
-        '经代名',    # ✅ 新增：代理人/经纪人 重命名
-        '客户源'     # ✅ 新增：客户来源
+        '经代名',
+        '客户源'
     ]
 
-    # 新增字段（如果存在）
     optional_fields = [
         '续保业务类型',
         '批单号',
@@ -817,16 +860,12 @@ def finalize_schema(df):
         '座位数'
     ]
 
-    # 选择存在的字段
-    final_fields = [f for f in core_fields if f in df.columns]
-
-    # 添加可选字段
+    final_fields = [f for f in core_fields if f in df.columns and f not in policy_exclude]
     for field in optional_fields:
-        if field in df.columns:
+        if field in df.columns and field not in policy_exclude:
             final_fields.append(field)
             print(f"   ✅ 保留可选字段: {field}")
 
-    # 按字段顺序重新排列
     df_final = df[final_fields]
 
     print(f"\n   最终字段数: {len(df_final.columns)}")
@@ -926,6 +965,20 @@ def main():
 
     # 10. 处理日期字段
     df = process_dates(df)
+
+    # 10.5 增量过滤：只保留签单日期 > after_date 的记录
+    if AFTER_DATE:
+        cutoff = pd.to_datetime(AFTER_DATE)
+        before_count = len(df)
+        df = df[df['签单日期'] > cutoff].copy()
+        print(f"\n{'='*80}")
+        print(f"📅 增量过滤: 签单日期 > {cutoff.strftime('%Y-%m-%d')}")
+        print(f"   过滤前: {before_count:,} 行")
+        print(f"   过滤后: {len(df):,} 行（增量 {len(df):,} 条）")
+        print(f"{'='*80}")
+        if len(df) == 0:
+            print("   ⚠️  无增量数据，跳过输出")
+            return
 
     # 11. 处理重复记录
     df = handle_duplicate_records(df)

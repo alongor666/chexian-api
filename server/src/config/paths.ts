@@ -31,6 +31,29 @@ export function getCandidateDataDirs(): string[] {
   return [warehouseCurrent, serverDataCurrent];
 }
 
+// ── 分域 Lakehouse 路径（本地优先，VPS 回退）──
+
+export function getPolicyDailyDirs(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/policy/daily'),
+    path.resolve(getDataDir(), 'fact/policy/daily'),
+  ];
+}
+
+export function getClaimsDomainPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/claims/latest.parquet'),
+    path.resolve(getDataDir(), 'fact/claims/latest.parquet'),
+  ];
+}
+
+export function getQuotesDomainPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/quotes/latest.parquet'),
+    path.resolve(getDataDir(), 'fact/quotes/latest.parquet'),
+  ];
+}
+
 export function getKpiPlanConfigPath(): string {
   return path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/kpi_plan_config.json');
 }
