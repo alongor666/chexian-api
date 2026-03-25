@@ -254,11 +254,13 @@ export function useCrossSellAnalysis({
   }, [initialDrillPath, initialGroupBy]);
 
   // 计算已使用维度和可用维度
-  const usedDimensions = new Set<CrossSellDimension>([
-    ...drillPath.map(s => s.dimension),
-    ...(currentGroupBy ? [currentGroupBy] : []),
-  ]);
-  const availableDimensions = ALL_DIMENSIONS.filter(d => !usedDimensions.has(d));
+  const availableDimensions = useMemo(() => {
+    const usedDimensions = new Set<CrossSellDimension>([
+      ...drillPath.map(s => s.dimension),
+      ...(currentGroupBy ? [currentGroupBy] : []),
+    ]);
+    return ALL_DIMENSIONS.filter(d => !usedDimensions.has(d));
+  }, [drillPath, currentGroupBy]);
 
   // 构建基础 API 参数（drillPath/currentGroupBy 变化时 queryKey 自动失效触发重新请求）
   const baseParams = useMemo(() => {

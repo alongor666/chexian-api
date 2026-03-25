@@ -534,7 +534,7 @@ class DuckDBService {
     const sql = `
       CREATE OR REPLACE VIEW raw_parquet AS
       SELECT p.*, ${claimsCols}, ${quoteCol}
-      FROM read_parquet('${policyGlob}') p
+      FROM read_parquet('${policyGlob}', union_by_name=true) p
       ${claimsJoin}
       ${quotesJoin}
     `;

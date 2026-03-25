@@ -20,7 +20,13 @@ import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
 import { SectionBlock } from '../../shared/ui/SectionTitle';
 import { textStyles, cardStyles, tableStyles, colorClasses, stickyTableStyles, cn } from '../../shared/styles';
-import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
+import {
+  DrilldownBreadcrumb,
+  DrilldownCell,
+  DrilldownLoadingOverlay,
+  DrilldownExhaustedBanner,
+} from '../../shared/ui';
+import type { DrilldownBreadcrumbStep } from '../../shared/ui';
 import { CrossSellSummaryKpiBoard } from './CrossSellSummaryKpiBoard';
 import { CrossSellQuadrantView } from './CrossSellQuadrantView';
 import { CrossSellTrendChart, type CrossSellTrendAnnotation } from './CrossSellTrendChart';
@@ -412,9 +418,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
     if (nextDim) setHeatmapGroupBy(nextDim);
   };
 
-  // 维度选择器状态
+  // 维度选择器状态（仅初始选维度使用）
   const [showPicker, setShowPicker] = useState(false);
-  const [pendingRowValue, setPendingRowValue] = useState<string | null>(null);
 
   const {
     summary,
@@ -488,29 +493,19 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
     }
   };
 
-  /** 点击行 → 弹出维度选择器 */
-  const handleRowClick = (rowValue: string) => {
-    if (availableDimensions.length === 0) return;
-    setPendingRowValue(rowValue);
-    setShowPicker(true);
+  /** DrilldownCell 行内选择维度 → 直接下钻 */
+  const handleCellDrillDown = (rowValue: string, dimension: string) => {
+    drillDown(rowValue, dimension as CrossSellDimension);
   };
 
-  /** 从维度选择器选择维度 */
+  /** DimensionPicker（仅初始选维度） */
   const handleDimensionSelect = (dim: CrossSellDimension) => {
-    if (pendingRowValue !== null) {
-      // 下钻：当前行进入过滤，选择新维度分组
-      drillDown(pendingRowValue, dim);
-    } else {
-      // 首次选择维度
-      selectDimension(dim);
-    }
+    selectDimension(dim);
     setShowPicker(false);
-    setPendingRowValue(null);
   };
 
   /** 首次下钻（从汇总 → 选择维度） */
   const handleInitialDrill = () => {
-    setPendingRowValue(null);
     setShowPicker(true);
   };
 
@@ -676,12 +671,16 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
 
       <SectionBlock id="cross-sell-drilldown" title="下钻分析">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-3 shadow-sm">
-          <RBACBreadcrumb
-            drillPath={drillPath}
-            currentGroupBy={currentGroupBy}
-            onDrillUp={drillUp}
+          <DrilldownBreadcrumb
+            path={drillPath.map((s): DrilldownBreadcrumbStep => ({
+              label: s.label,
+              dimension: s.dimension,
+              value: s.value,
+            }))}
+            onNavigate={drillUp}
             canGoToTop={canGoToTop}
             dimensionLabels={DIMENSION_LABELS}
+            currentGroupBy={currentGroupBy}
           />
           <div className="flex flex-wrap items-center gap-2">
             {currentGroupBy && (
@@ -711,14 +710,14 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           </div>
         )}
 
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-neutral-400">
-            <div className="mr-3 h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
-            <span>正在加载数据...</span>
-          </div>
-        ) : (
+        <DrilldownExhaustedBanner
+          visible={!canDrillDeeper && sortedRows.length > 0 && !loading}
+          onReset={reset}
+        />
+
+        <DrilldownLoadingOverlay loading={loading}>
           <>
-            {!currentGroupBy && summary && (
+            {!currentGroupBy && summary && !loading && (
               <div className={cn(cardStyles.spacious, 'text-center')}>
                 <p className="mb-4 text-gray-500">默认仅展示核心指标。选择维度后可继续下钻到团队、业务员等明细层级。</p>
                 <button
@@ -742,9 +741,6 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                       按<strong>{DIMENSION_LABELS[currentGroupBy]}</strong>分组
                       {` (${sortedRows.length} 条)`}
                     </span>
-                    {canDrillDeeper && (
-                      <span className="text-xs text-blue-500">点击行可继续下钻</span>
-                    )}
                   </div>
                   <StickyTableFrame maxHeight={600}>
                     <table className="min-w-full text-sm">
@@ -772,14 +768,10 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedRows.map((row, idx) => (
+                        {sortedRows.map((row) => (
                           <tr
-                            key={idx}
-                            className={`border-b border-gray-50 transition-colors ${canDrillDeeper
-                              ? 'cursor-pointer hover:bg-blue-50'
-                              : 'hover:bg-gray-50/60'
-                              }`}
-                            onClick={() => canDrillDeeper && handleRowClick(row.group_name)}
+                            key={row.group_name}
+                            className="border-b border-gray-50 transition-colors hover:bg-gray-50/60"
                           >
                             {tableColumns.map((col) => {
                               const numericValue = Number(row[col.key] ?? 0);
@@ -792,21 +784,43 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                                       ? maxRate
                                       : 0;
 
+                              // 名称列使用 DrilldownCell
+                              if (col.key === 'group_name') {
+                                const displayName = formatCell(col, row, currentGroupBy ?? undefined);
+                                return (
+                                  <td
+                                    key={col.key}
+                                    className={cn(
+                                      'relative bg-white',
+                                      stickyTableStyles.firstColumn, 'z-10 min-w-[180px]'
+                                    )}
+                                  >
+                                    <span className={tableStyles.cell}>
+                                      <DrilldownCell
+                                        label={displayName}
+                                        availableDimensions={availableDimensions}
+                                        dimensionLabels={DIMENSION_LABELS}
+                                        onSelect={(dim) => handleCellDrillDown(row.group_name, dim)}
+                                        className="font-medium"
+                                      />
+                                    </span>
+                                  </td>
+                                );
+                              }
+
                               const content = (
                                 <span
                                   className={cn(
                                     tableStyles.cell,
-                                    col.type === 'text'
-                                      ? `${canDrillDeeper ? 'text-blue-600 font-medium' : 'text-gray-900'}`
-                                      : col.type === 'rate'
-                                        ? cn(
+                                    col.type === 'rate'
+                                      ? cn(
                                           'block text-right',
                                           textStyles.numeric,
                                           col.getColorClass
                                             ? col.getColorClass(numericValue)
                                             : getRateColorByField(col.key, numericValue)
                                         )
-                                        : cn('block text-right', textStyles.numeric, 'text-neutral-700')
+                                      : cn('block text-right', textStyles.numeric, 'text-neutral-700')
                                   )}
                                 >
                                   {formatCell(col, row, currentGroupBy ?? undefined)}
@@ -816,16 +830,9 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                               return (
                                 <td
                                   key={col.key}
-                                  className={cn(
-                                    'relative bg-white',
-                                    col.key === 'group_name'
-                                      ? cn(stickyTableStyles.firstColumn, 'z-10 min-w-[180px]')
-                                      : ''
-                                  )}
+                                  className="relative bg-white"
                                 >
-                                  {col.key === 'group_name' ? (
-                                    content
-                                  ) : ['total_auto_count', 'total_driver_count', 'total_rate'].includes(String(col.key)) ? (
+                                  {['total_auto_count', 'total_driver_count', 'total_rate'].includes(String(col.key)) ? (
                                     <DataBarCell value={numericValue} maxValue={maxValue}>
                                       {content}
                                     </DataBarCell>
@@ -855,16 +862,16 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
               </div>
             )}
           </>
-        )}
+        </DrilldownLoadingOverlay>
       </SectionBlock>
 
-      {/* 维度选择器弹层 */}
+      {/* 维度选择器弹层（仅初始选维度） */}
       {showPicker && (
         <DimensionPicker
           available={availableDimensions}
           onSelect={handleDimensionSelect}
-          onCancel={() => { setShowPicker(false); setPendingRowValue(null); }}
-          title={pendingRowValue ? `"${pendingRowValue}" 下钻到...` : '选择下钻维度'}
+          onCancel={() => setShowPicker(false)}
+          title="选择下钻维度"
         />
       )}
 

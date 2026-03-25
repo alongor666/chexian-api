@@ -1,12 +1,6 @@
 import { useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
-export interface RBACBreadcrumbItem<T = string> {
-    level: T;
-    label: string;
-    value?: string;
-}
-
 export function useRBAC() {
     const { user } = useAuth();
 
@@ -14,26 +8,6 @@ export function useRBAC() {
     // Use a fallback to ensure we don't crash if organization is missing on the type
     const userOrg: string | undefined = (user as any)?.organization;
     const canGoToTop = !isOrgUser;
-
-    /**
-     * Generates the initial breadcrumb stack based on the user's role.
-     * Admin: [{ level: fullLevels[0], label: companyLabel }]
-     * Org User: [{ level: fullLevels[0], label: companyLabel }, { level: fullLevels[1], label: org, value: org }]
-     */
-    const getInitialBreadcrumbs = useCallback(<T>(
-        fullLevels: T[],
-        companyLabel: string = '四川分公司' // Default to typical top-level name
-    ): RBACBreadcrumbItem<T>[] => {
-        if (!fullLevels || fullLevels.length < 2) return [];
-
-        if (isOrgUser && userOrg) {
-            return [
-                { level: fullLevels[0], label: companyLabel },
-                { level: fullLevels[1], label: userOrg, value: userOrg }
-            ];
-        }
-        return [{ level: fullLevels[0], label: companyLabel }];
-    }, [isOrgUser, userOrg]);
 
     /**
      * Returns the minimum safe drill-up index to prevent org_users from clearing their organization filter.
@@ -62,7 +36,6 @@ export function useRBAC() {
         isOrgUser,
         userOrg,
         canGoToTop,
-        getInitialBreadcrumbs,
         getMinDrillUpIndex,
         enforceOrgFilter
     };

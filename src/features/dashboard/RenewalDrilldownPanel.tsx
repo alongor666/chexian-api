@@ -4,7 +4,14 @@ import { useRenewalDrilldown } from './hooks/useRenewalDrilldown';
 import { tableStyles, textStyles } from '../../shared/styles';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { RenewalQuadrantView } from './RenewalQuadrantView';
-import { RBACBreadcrumb } from '../../shared/ui/RBACBreadcrumb';
+import {
+  DrilldownBreadcrumb,
+  DrilldownCell,
+  DrilldownLoadingOverlay,
+  DrilldownExhaustedBanner,
+} from '../../shared/ui';
+import { RENEWAL_LEVEL_LABELS } from '../../shared/config/drilldown-dimensions';
+import type { DrilldownBreadcrumbStep } from '../../shared/ui';
 
 interface RenewalDrilldownPanelProps {
   filters: AdvancedFilterState;
@@ -20,12 +27,15 @@ interface RenewalDrilldownPanelProps {
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
+/**
+ * 续保层级中文标签。
+ * RENEWAL_LEVEL_LABELS.company = '四川分公司'（维度选择器用），
+ * 此处覆盖为 '全公司' 仅影响 dimensionLabels tooltip，
+ * 面包屑顶部显示由 topLabel prop 独立控制。
+ */
 const LEVEL_LABELS: Record<string, string> = {
+  ...RENEWAL_LEVEL_LABELS,
   company: '全公司',
-  org: '机构',
-  team: '团队',
-  salesman: '业务员',
-  coverage: '险别组合',
 };
 
 export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
@@ -48,6 +58,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
     canDrillDown,
     drillDown,
     navigateTo,
+    reset,
     canGoToTop,
   } = useRenewalDrilldown({
     targetYear,
@@ -61,17 +72,19 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
     <div className="space-y-4">
       {/* 面包屑导航 */}
       <div className="bg-white p-3 rounded-xl shadow-sm mb-4">
-        <RBACBreadcrumb
-          drillPath={breadcrumb.slice(1).map(b => ({ label: String(b.label) }))}
-          currentGroupBy={null}
-          onDrillUp={(idx) => {
-            // idx is 0-indexed against the slice(1).
-            // So if idx === -1, go to top (index 0 for navigateTo).
-            // if idx === 0, go to the first drilled level (index 1 for navigateTo)
-            navigateTo(idx + 1);
+        <DrilldownBreadcrumb
+          path={breadcrumb.slice(1).map((b): DrilldownBreadcrumbStep => ({
+            label: String(b.label),
+            dimension: b.level,
+            value: b.value,
+          }))}
+          onNavigate={(toIndex) => {
+            // toIndex=-1 → 回到顶层(index 0)；toIndex=0 → 第1个下钻层(index 1)
+            navigateTo(toIndex + 1);
           }}
           canGoToTop={canGoToTop}
-          topLevelLabel={breadcrumb[0]?.label || '全公司'}
+          topLabel={breadcrumb[0]?.label || '全公司'}
+          dimensionLabels={LEVEL_LABELS}
         />
       </div>
 
@@ -132,6 +145,12 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
         </div>
       )}
 
+      {/* 下钻穷尽提示 */}
+      <DrilldownExhaustedBanner
+        visible={!canDrillDown && rows.length > 0 && !loading}
+        onReset={reset}
+      />
+
       {/* 四象限图 */}
       {!loading && rows.length > 0 && (
         <RenewalQuadrantView
@@ -141,47 +160,37 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
       )}
 
       {/* 数据表格 */}
-      <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className={tableStyles.header}>
-              <th className={tableStyles.headerCell}>名称</th>
-              <th className={`${tableStyles.headerCell} text-right`}>应续件数</th>
-              <th className={`${tableStyles.headerCell} text-right`}>已续件数</th>
-              <th className={`${tableStyles.headerCell} text-right`}>续保率</th>
-              <th className={`${tableStyles.headerCell} text-right`}>有报价件数</th>
-              <th className={`${tableStyles.headerCell} text-right`}>报价率</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={6} className="text-center py-8 text-gray-500">
-                  加载中...
-                </td>
+      <DrilldownLoadingOverlay loading={loading}>
+        <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className={tableStyles.header}>
+                <th className={tableStyles.headerCell}>名称</th>
+                <th className={`${tableStyles.headerCell} text-right`}>应续件数</th>
+                <th className={`${tableStyles.headerCell} text-right`}>已续件数</th>
+                <th className={`${tableStyles.headerCell} text-right`}>续保率</th>
+                <th className={`${tableStyles.headerCell} text-right`}>有报价件数</th>
+                <th className={`${tableStyles.headerCell} text-right`}>报价率</th>
               </tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td colSpan={6} className="text-center py-8 text-gray-500">
-                  暂无数据
-                </td>
-              </tr>
-            )}
-            {!loading &&
-              rows.map((row, idx) => (
-                <tr key={idx} className={tableStyles.row}>
+            </thead>
+            <tbody>
+              {!loading && rows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-8 text-gray-500">
+                    暂无数据
+                  </td>
+                </tr>
+              )}
+              {rows.map((row) => (
+                <tr key={row.group_name} className={tableStyles.row}>
                   <td className={tableStyles.cell}>
-                    {canDrillDown ? (
-                      <button
-                        onClick={() => drillDown(row.group_name)}
-                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                      >
-                        {row.group_name}
-                      </button>
-                    ) : (
-                      <span>{row.group_name}</span>
-                    )}
+                    <DrilldownCell
+                      label={row.group_name}
+                      availableDimensions={nextLevel ? [nextLevel] : []}
+                      dimensionLabels={LEVEL_LABELS}
+                      onSelect={() => drillDown(row.group_name)}
+                      autoOnSingle
+                    />
                   </td>
                   <td className={`${tableStyles.cell} text-right ${textStyles.numeric}`}>
                     {formatCount(row.due_count)}
@@ -200,9 +209,10 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
                   </td>
                 </tr>
               ))}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      </DrilldownLoadingOverlay>
     </div>
   );
 };

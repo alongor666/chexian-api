@@ -11,12 +11,17 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import type { AdvancedFilterState } from '../../../shared/types/data';
-import { apiClient } from '../../../shared/api/client';
-import { isRequestAbortError } from '../../../shared/api/client';
+import { apiClient, isRequestAbortError } from '../../../shared/api/client';
 import { getHolidayDatesInRange } from '../utils/holidayUtils';
 import { createLogger } from '../../../shared/utils/logger';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
-import { TableSkeleton } from '../../../shared/ui/Skeleton';
+import {
+  DrilldownBreadcrumb,
+  DrilldownCell,
+  DrilldownLoadingOverlay,
+} from '../../../shared/ui';
+import type { DrilldownBreadcrumbStep } from '../../../shared/ui';
+import { DIMENSION_LABELS } from '../../../shared/config/drilldown-dimensions';
 import { formatCount, formatRate, formatSalesmanName, formatTeamName } from '../../../shared/utils/formatters';
 import { SalesmanDetailTable } from './SalesmanDetailTable';
 import type { OrganizationReportRow, SalesmanDetailRow, SortState } from '../types/marketingReport';
@@ -28,14 +33,6 @@ interface HolidayDrilldownPanelProps {
   startDate: string;
   endDate: string;
 }
-
-/** 格式化开单率 */
-const fmtRate = (v: number): string =>
-  formatRate(v);
-
-/** 格式化整数 */
-const fmtInt = (v: number): string =>
-  formatCount(v);
 
 export const HolidayDrilldownPanel: React.FC<HolidayDrilldownPanelProps> = ({
   filters,
@@ -108,7 +105,7 @@ export const HolidayDrilldownPanel: React.FC<HolidayDrilldownPanelProps> = ({
           (salesmanResult || []).map((r: Record<string, unknown>) => ({
             salesman_name: formatSalesmanName(String(r.salesman_name || '')),
             org_level_3: String(r.org_level_3 || ''),
-            team_name: formatTeamName(r.team_name as string),
+            team_name: formatTeamName(String(r.team_name || '')),
             假日车险签单天数: Number(r['假日车险签单天数'] || 0),
             假日天数: Number(r['假日天数'] || 0),
             假日车险签单比例: Number(r['假日车险签单比例'] || 0),
@@ -150,10 +147,6 @@ export const HolidayDrilldownPanel: React.FC<HolidayDrilldownPanelProps> = ({
     });
   }, [salesmanData, selectedOrg, salesmanSort]);
 
-  if (isLoading) {
-    return <TableSkeleton rows={8} columns={5} />;
-  }
-
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
@@ -166,117 +159,107 @@ export const HolidayDrilldownPanel: React.FC<HolidayDrilldownPanelProps> = ({
   return (
     <div className="space-y-4">
       {/* 面包屑 */}
-      <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 flex items-center gap-2 text-sm">
-        <button
-          onClick={() => setSelectedOrg(null)}
-          className={
-            selectedOrg
-              ? 'text-blue-600 hover:text-blue-800 hover:underline'
-              : 'text-gray-700 font-medium'
+      <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
+        <DrilldownBreadcrumb
+          path={selectedOrg
+            ? [{ label: selectedOrg, dimension: 'org_level_3', value: selectedOrg } as DrilldownBreadcrumbStep]
+            : []
           }
-        >
-          分公司整体
-        </button>
-        {selectedOrg && (
-          <>
-            <span className="text-gray-400 mx-1">/</span>
-            <span className="text-gray-700 font-medium">{selectedOrg}</span>
-          </>
-        )}
+          onNavigate={() => setSelectedOrg(null)}
+          topLabel="分公司整体"
+          dimensionLabels={DIMENSION_LABELS}
+        />
       </div>
 
-      {/* 机构级汇总 */}
-      {!selectedOrg && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800">各机构假日营销表现</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              点击机构名称下钻查看该机构业务员明细
-            </p>
-          </div>
-          <div className="p-4">
-            {orgData.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 text-sm">
-                {startDate && endDate ? '所选日期范围内暂无节假日数据' : '暂无数据'}
-              </div>
-            ) : (
-              <div className={TABLE_CSS_CLASSES.container}>
-                <table className={TABLE_CSS_CLASSES.table}>
-                  <thead className={TABLE_CSS_CLASSES.thead}>
-                    <tr>
-                      <th className={TABLE_CSS_CLASSES.headerCell}>机构名称</th>
-                      <th className={TABLE_CSS_CLASSES.headerCellRight}>业务员数</th>
-                      <th className={TABLE_CSS_CLASSES.headerCellRight}>车险出单人数</th>
-                      <th className={TABLE_CSS_CLASSES.headerCellRight}>车险开单率</th>
-                      <th className={TABLE_CSS_CLASSES.headerCellRight}>商业险出单人数</th>
-                      <th className={TABLE_CSS_CLASSES.headerCellRight}>商业险开单率</th>
-                    </tr>
-                  </thead>
-                  <tbody className={TABLE_CSS_CLASSES.tbody}>
-                    {orgData.map((row, i) => (
-                      <tr key={row.org_level_3 || String(i)} className={TABLE_CSS_CLASSES.row}>
-                        <td className={TABLE_CSS_CLASSES.cell}>
-                          <button
-                            onClick={() => setSelectedOrg(row.org_level_3)}
-                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                          >
-                            {row.org_level_3}
-                          </button>
-                        </td>
-                        <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
-                          {fmtInt(row.总业务员数)}
-                        </td>
-                        <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
-                          {fmtInt(row.车险出单人数)}
-                        </td>
-                        <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
-                          {fmtRate(row.车险开单率)}
-                        </td>
-                        <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
-                          {fmtInt(row.商业险出单人数)}
-                        </td>
-                        <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
-                          {fmtRate(row.商业险开单率)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 业务员明细（下钻后） */}
-      {selectedOrg && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800">
-                {selectedOrg} — 业务员假日明细
-              </h3>
+      <DrilldownLoadingOverlay loading={isLoading}>
+        {/* 机构级汇总 */}
+        {!selectedOrg && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-4 py-3 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-800">各机构假日营销表现</h3>
               <p className="text-sm text-gray-500 mt-1">
-                共 {formatCount(filteredSalesmanData.length)} 名业务员
+                点击机构名称下钻查看该机构业务员明细
               </p>
             </div>
-            <button
-              onClick={() => setSelectedOrg(null)}
-              className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-            >
-              返回机构列表
-            </button>
+            <div className="p-4">
+              {orgData.length === 0 && !isLoading ? (
+                <div className="text-center py-8 text-gray-500 text-sm">
+                  {startDate && endDate ? '所选日期范围内暂无节假日数据' : '暂无数据'}
+                </div>
+              ) : (
+                <div className={TABLE_CSS_CLASSES.container}>
+                  <table className={TABLE_CSS_CLASSES.table}>
+                    <thead className={TABLE_CSS_CLASSES.thead}>
+                      <tr>
+                        <th className={TABLE_CSS_CLASSES.headerCell}>机构名称</th>
+                        <th className={TABLE_CSS_CLASSES.headerCellRight}>业务员数</th>
+                        <th className={TABLE_CSS_CLASSES.headerCellRight}>车险出单人数</th>
+                        <th className={TABLE_CSS_CLASSES.headerCellRight}>车险开单率</th>
+                        <th className={TABLE_CSS_CLASSES.headerCellRight}>商业险出单人数</th>
+                        <th className={TABLE_CSS_CLASSES.headerCellRight}>商业险开单率</th>
+                      </tr>
+                    </thead>
+                    <tbody className={TABLE_CSS_CLASSES.tbody}>
+                      {orgData.map((row, i) => (
+                        <tr key={row.org_level_3 || String(i)} className={TABLE_CSS_CLASSES.row}>
+                          <td className={TABLE_CSS_CLASSES.cell}>
+                            <DrilldownCell
+                              label={row.org_level_3}
+                              availableDimensions={['salesman']}
+                              dimensionLabels={{ ...DIMENSION_LABELS, salesman: '业务员' }}
+                              onSelect={() => setSelectedOrg(row.org_level_3)}
+                              autoOnSingle
+                            />
+                          </td>
+                          <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
+                            {formatCount(row.总业务员数)}
+                          </td>
+                          <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
+                            {formatCount(row.车险出单人数)}
+                          </td>
+                          <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
+                            {formatRate(row.车险开单率)}
+                          </td>
+                          <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
+                            {formatCount(row.商业险出单人数)}
+                          </td>
+                          <td className={`${TABLE_CSS_CLASSES.cellRight} font-tabular`}>
+                            {formatRate(row.商业险开单率)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="p-4">
-            <SalesmanDetailTable
-              data={filteredSalesmanData}
-              sortState={salesmanSort}
-              onSortChange={setSalesmanSort}
-              loading={false}
-            />
+        )}
+
+        {/* 业务员明细（下钻后） */}
+        {selectedOrg && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  {selectedOrg} — 业务员假日明细
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  共 {formatCount(filteredSalesmanData.length)} 名业务员
+                </p>
+              </div>
+            </div>
+            <div className="p-4">
+              <SalesmanDetailTable
+                data={filteredSalesmanData}
+                sortState={salesmanSort}
+                onSortChange={setSalesmanSort}
+                loading={false}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </DrilldownLoadingOverlay>
     </div>
   );
 };

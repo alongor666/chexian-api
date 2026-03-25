@@ -9,10 +9,40 @@ test.describe('Organization Permission Verification', () => {
 
   async function loginAsOrgUser(page: import('@playwright/test').Page) {
     await page.goto('/#/login');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Wait for login form to be ready
+    await expect(page.getByPlaceholder('请输入用户名')).toBeVisible({ timeout: 10000 });
     await page.getByPlaceholder('请输入用户名').fill(username);
     await page.getByPlaceholder('请输入密码').fill(password);
-    await page.getByRole('button', { name: '登录', exact: true }).click();
-    await page.waitForURL((url) => !url.hash.startsWith('#/login'), { timeout: 10000 });
+
+    // Click login and wait for API response (retry on 429 rate limit)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        await page.waitForTimeout(3000);
+        await page.getByPlaceholder('请输入用户名').fill(username);
+        await page.getByPlaceholder('请输入密码').fill(password);
+      }
+
+      const [loginResponse] = await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' && response.url().includes('/api/auth/login'),
+          { timeout: 30000 }
+        ),
+        page.getByRole('button', { name: '登录', exact: true }).click(),
+      ]);
+
+      if (loginResponse.status() === 200) break;
+      if (loginResponse.status() !== 429) {
+        expect(loginResponse.status()).toBe(200);
+      }
+    }
+
+    await page.waitForURL(
+      (url) => !url.hash.startsWith('#/login'),
+      { waitUntil: 'domcontentloaded', timeout: 30000 }
+    );
   }
 
   test('Verify visible and hidden pages for single org user', async ({ page }) => {
@@ -51,7 +81,7 @@ test.describe('Organization Permission Verification', () => {
 
     // Try manual navigation to forbidden page
     await page.goto('/#/cost');
-    await page.waitForURL((url) => url.hash.includes('performance-analysis'));
+    await page.waitForURL((url) => url.hash.includes('performance-analysis'), { timeout: 10000 });
     expect(page.url()).toContain('performance-analysis');
   });
 
@@ -62,7 +92,7 @@ test.describe('Organization Permission Verification', () => {
     await page.waitForLoadState('networkidle');
 
     // The org user should see their org name (乐山) in the scope label or page title
-    await expect(page.getByText('乐山')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('乐山')).toBeVisible({ timeout: 15000 });
 
     // Try to find an unauthorized org name like '天府'
     await expect(page.getByText('天府')).not.toBeVisible();

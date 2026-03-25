@@ -3,8 +3,14 @@ import type { EChartsOption } from 'echarts';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { Tabs } from '@/shared/ui/Tabs';
 import type { TabItem } from '@/shared/ui/Tabs';
-import { RBACBreadcrumb } from '@/shared/ui/RBACBreadcrumb';
-import { StickyTableFrame } from '@/shared/ui';
+import {
+  StickyTableFrame,
+  DrilldownBreadcrumb,
+  DrilldownCell,
+  DrilldownLoadingOverlay,
+  DrilldownExhaustedBanner,
+} from '@/shared/ui';
+import type { DrilldownBreadcrumbStep } from '@/shared/ui';
 import { SectionTitle, SectionBlock } from '@/shared/ui/SectionTitle';
 import { useDataStatus } from '@/shared/contexts/DataContext';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
@@ -51,9 +57,9 @@ import {
   type HeatmapDrillStep,
 } from './hooks/usePerformanceOrgHeatmap';
 import {
-  resolvePerformanceDrillSource,
   type PerformanceHeatmapSelection,
 } from './utils/performanceHeatmapSelection';
+import { getConditionalDimensions } from '@/shared/config/drilldown-dimensions';
 
 interface PerformanceAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -1044,7 +1050,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const [expandedCoverage, setExpandedCoverage] = useState<Record<string, boolean>>({});
 
   const [showPicker, setShowPicker] = useState(false);
-  const [pendingRowValue, setPendingRowValue] = useState<string | null>(null);
+
 
   const [groupSortKey, setGroupSortKey] = useState<GroupSortKey>('premium');
   const [groupSortOrder, setGroupSortOrder] = useState<SortOrder>('desc');
@@ -1171,7 +1177,6 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   useEffect(() => {
     setHasDrillInteraction(false);
-    setPendingRowValue(null);
     setShowPicker(false);
     setHeatmapSelection(null);
     drilldownQuery.reset();
@@ -1259,33 +1264,28 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   };
 
   const handleInitialDimensionPick = () => {
-    setPendingRowValue(null);
     setShowPicker(true);
   };
 
-  const handleRowClick = (rowValue: string) => {
-    if (drilldownQuery.availableDimensions.length === 0) return;
-    setPendingRowValue(rowValue);
-    setShowPicker(true);
+  /** DrilldownCell 行内选择维度 → 直接下钻 */
+  const handleCellDrillDown = (rowValue: string, dimension: string) => {
+    setHasDrillInteraction(true);
+    drilldownQuery.drillDown(rowValue, dimension as PerformanceDimension);
   };
 
+  /** DimensionPicker（仅初始选维度 + 热力图入口） */
   const handleDimensionSelect = (dimension: PerformanceDimension) => {
     setHasDrillInteraction(true);
-    const drillSource = resolvePerformanceDrillSource(pendingRowValue, heatmapSelection);
-    if (drillSource === 'row' && pendingRowValue !== null) {
-      drilldownQuery.drillDown(pendingRowValue, dimension);
-    } else if (drillSource === 'heatmap' && heatmapSelection) {
+    if (heatmapSelection) {
       drilldownQuery.drillFromRoot(heatmapSelection.org, dimension, 'org_level_3');
     } else {
       drilldownQuery.selectDimension(dimension);
     }
-    setPendingRowValue(null);
     setShowPicker(false);
   };
 
   const handleHeatmapCellClick = ({ org, date }: { org: string; date: string }) => {
     setHasDrillInteraction(false);
-    setPendingRowValue(null);
     setHeatmapSelection({ org, date });
     drilldownQuery.reset();
     setShowPicker(true);
@@ -1293,7 +1293,6 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   const handleDrillReset = () => {
     setHasDrillInteraction(false);
-    setPendingRowValue(null);
     setShowPicker(false);
     setHeatmapSelection(null);
     drilldownQuery.reset();
@@ -1564,12 +1563,16 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
       <section className={cn(cardStyles.standard, 'space-y-3')}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <RBACBreadcrumb
-            drillPath={drilldownQuery.drillPath}
-            currentGroupBy={drilldownQuery.currentGroupBy}
-            onDrillUp={drilldownQuery.drillUp}
+          <DrilldownBreadcrumb
+            path={drilldownQuery.drillPath.map((s): DrilldownBreadcrumbStep => ({
+              label: s.label,
+              dimension: s.dimension,
+              value: s.value,
+            }))}
+            onNavigate={drilldownQuery.drillUp}
             canGoToTop={drilldownQuery.canGoToTop}
             dimensionLabels={PERFORMANCE_DIMENSION_LABELS}
+            currentGroupBy={drilldownQuery.currentGroupBy}
           />
           <div className="flex items-center gap-2">
             <button
@@ -1620,9 +1623,15 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           </div>
         )}
 
+        <DrilldownExhaustedBanner
+          visible={!isDrillClickable && sortedGroupRows.length > 0 && !drilldownLoading}
+          onReset={handleDrillReset}
+        />
+
         {drilldownError ? (
           <p className={cn(textStyles.body, colorClasses.text.danger)}>加载失败: {drilldownError}</p>
         ) : (
+          <DrilldownLoadingOverlay loading={drilldownLoading}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 border-b border-neutral-200">
@@ -1653,26 +1662,27 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                 </tr>
               </thead>
               <tbody>
-                {drilldownLoading && (
-                  <tr>
-                    <td colSpan={11} className="px-3 py-8 text-center text-neutral-400">数据加载中...</td>
-                  </tr>
-                )}
                 {!drilldownLoading && sortedGroupRows.length === 0 && (
                   <tr>
                     <td colSpan={11} className="px-3 py-8 text-center text-neutral-400">暂无下钻数据</td>
                   </tr>
                 )}
-                {!drilldownLoading && sortedGroupRows.map((row, index) => (
+                {sortedGroupRows.map((row) => {
+                  const displayName = drilldownQuery.currentGroupBy === 'team' ? formatTeamName(row.group_name) : drilldownQuery.currentGroupBy === 'salesman' ? formatSalesmanName(row.group_name) : row.group_name;
+                  return (
                   <tr
-                    key={`${row.group_name}-${index}`}
-                    className={cn(
-                      'border-b border-neutral-100 last:border-b-0',
-                      isDrillClickable && 'cursor-pointer hover:bg-neutral-50'
-                    )}
-                    onClick={() => handleRowClick(row.group_name)}
+                    key={row.group_name}
+                    className="border-b border-neutral-100 last:border-b-0"
                   >
-                    <td className={cn('px-3 py-2', colorClasses.text.neutralDark, 'font-medium')}>{drilldownQuery.currentGroupBy === 'team' ? formatTeamName(row.group_name) : drilldownQuery.currentGroupBy === 'salesman' ? formatSalesmanName(row.group_name) : row.group_name}</td>
+                    <td className={cn('px-3 py-2', colorClasses.text.neutralDark, 'font-medium')}>
+                      <DrilldownCell
+                        label={displayName}
+                        availableDimensions={drilldownQuery.availableDimensions}
+                        dimensionLabels={PERFORMANCE_DIMENSION_LABELS}
+                        onSelect={(dim) => handleCellDrillDown(row.group_name, dim)}
+                        conditionalDimensions={getConditionalDimensions(drilldownQuery.drillPath)}
+                      />
+                    </td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.plan_premium)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>
@@ -1688,10 +1698,12 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPercent(row.new_car_rate)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPercent(row.transfer_rate)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          </DrilldownLoadingOverlay>
         )}
       </section>
       </SectionBlock>
@@ -1775,14 +1787,11 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         <DimensionPicker
           available={drilldownQuery.availableDimensions}
           onSelect={handleDimensionSelect}
-          onCancel={() => {
-            setPendingRowValue(null);
-            setShowPicker(false);
-          }}
+          onCancel={() => setShowPicker(false)}
           title={
             heatmapSelection
               ? `热力图下钻：${heatmapSelection.org}（${heatmapSelection.date}）`
-              : (pendingRowValue === null ? '选择分组维度' : `继续下钻：${pendingRowValue}`)
+              : '选择分组维度'
           }
         />
       )}

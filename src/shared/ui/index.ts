@@ -223,6 +223,26 @@ export type { ErrorStateProps } from './ErrorState'
 export { PageWithRightFilter } from './PageWithRightFilter'
 
 // ============================================================================
+// 下钻分析组件
+// ============================================================================
+
+// DrilldownCell 下钻单元格（核心组件）
+export { DrilldownCell } from './DrilldownCell'
+export type { DrilldownCellProps } from './DrilldownCell'
+
+// DrilldownBreadcrumb 下钻面包屑
+export { DrilldownBreadcrumb } from './DrilldownBreadcrumb'
+export type { DrilldownBreadcrumbProps, DrilldownBreadcrumbStep } from './DrilldownBreadcrumb'
+
+// DrilldownLoadingOverlay 下钻加载遮罩
+export { DrilldownLoadingOverlay } from './DrilldownLoadingOverlay'
+export type { DrilldownLoadingOverlayProps } from './DrilldownLoadingOverlay'
+
+// DrilldownExhaustedBanner 下钻穷尽提示
+export { DrilldownExhaustedBanner } from './DrilldownExhaustedBanner'
+export type { DrilldownExhaustedBannerProps } from './DrilldownExhaustedBanner'
+
+// ============================================================================
 // 续保分析组件
 // ============================================================================
 
