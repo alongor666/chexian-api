@@ -71,29 +71,13 @@ router.get(
       FROM PolicyFact
       WHERE ${permissionWhere}
     `;
-    // 8. 查询车险分等级选项
+    // 8. 查询车险风险等级选项
     const insuranceGradeSql = `
       SELECT insurance_grade AS value, COUNT(*) AS count
       FROM PolicyFact
       WHERE ${permissionWhere} AND insurance_grade IS NOT NULL
       GROUP BY insurance_grade
       ORDER BY insurance_grade
-    `;
-    // 9. 查询小货车评分选项
-    const smallTruckScoreSql = `
-      SELECT small_truck_score AS value, COUNT(*) AS count
-      FROM PolicyFact
-      WHERE ${permissionWhere} AND small_truck_score IS NOT NULL
-      GROUP BY small_truck_score
-      ORDER BY small_truck_score
-    `;
-    // 10. 查询大货车评分选项
-    const largeTruckScoreSql = `
-      SELECT large_truck_score AS value, COUNT(*) AS count
-      FROM PolicyFact
-      WHERE ${permissionWhere} AND large_truck_score IS NOT NULL
-      GROUP BY large_truck_score
-      ORDER BY large_truck_score
     `;
     // 11. 查询实际可用年份（签单日期维度）
     const availableYearsSql = `
@@ -119,8 +103,6 @@ router.get(
       insuranceResult,
       dateRangeResult,
       insuranceGradeResult,
-      smallTruckScoreResult,
-      largeTruckScoreResult,
       availableYearsResult,
       salesmanTeamResult,
     ] = await Promise.all([
@@ -130,8 +112,6 @@ router.get(
       duckdbService.query<{ coverage_combination: string }>(insuranceSql, FILTER_CACHE_TTL),
       duckdbService.query<{ min_date: string; max_date: string }>(dateRangeSql, FILTER_CACHE_TTL),
       duckdbService.query<{ value: string; count: number }>(insuranceGradeSql, FILTER_CACHE_TTL),
-      duckdbService.query<{ value: string; count: number }>(smallTruckScoreSql, FILTER_CACHE_TTL),
-      duckdbService.query<{ value: string; count: number }>(largeTruckScoreSql, FILTER_CACHE_TTL),
       duckdbService.query<{ year: number }>(availableYearsSql, FILTER_CACHE_TTL),
       duckdbService.query<{ salesman_name: string; team_name: string; org_name: string }>(salesmanTeamSql, FILTER_CACHE_TTL).catch(() => [] as { salesman_name: string; team_name: string; org_name: string }[]),
     ]);
@@ -152,8 +132,6 @@ router.get(
         dateRange: dateRangeResult[0] || { min_date: null, max_date: null },
         availableYears: availableYearsResult.map((r) => Number(r.year)),
         insuranceGrades: insuranceGradeResult.map((r) => ({ value: String(r.value), count: Number(r.count) })),
-        smallTruckScores: smallTruckScoreResult.map((r) => ({ value: String(r.value), count: Number(r.count) })),
-        largeTruckScores: largeTruckScoreResult.map((r) => ({ value: String(r.value), count: Number(r.count) })),
       },
     });
   })

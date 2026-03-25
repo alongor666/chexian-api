@@ -809,7 +809,7 @@ class DuckDBService {
           CAST(policy_date AS DATE) AS policy_date,
           CAST(insurance_start_date AS DATE) AS insurance_start_date,
           org_level_3, salesman_name, customer_category, coverage_combination,
-          renewal_mode, tonnage_segment, insurance_grade, small_truck_score, large_truck_score,
+          renewal_mode, tonnage_segment, insurance_grade,
           COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
           COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
           (TRY_CAST(is_transfer AS BOOLEAN) = true
@@ -839,7 +839,7 @@ class DuckDBService {
 
     const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
         customer_category, coverage_combination, renewal_mode, tonnage_segment,
-        insurance_grade, small_truck_score, large_truck_score, is_commercial_insure,
+        insurance_grade, is_commercial_insure,
         is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,
         is_renewable, is_cross_sell, driver_coverage, passenger_coverage`;
 
@@ -892,7 +892,81 @@ class DuckDBService {
   }
 
   /**
-   * 加载团队映射 JSON 到 SalesmanTeamMapping 表
+   * 从 Parquet 维度表加载业务员主数据和计划数据
+   *
+   * 数据源：
+   *   - warehouse/dim/salesman/latest.parquet（业务员主数据：编号/姓名/团队/机构/状态/入职/离职）
+   *   - warehouse/dim/plan/latest.parquet（计划数据：2025+2026 业务员级 + 2026 机构级）
+   *
+   * 生成的表/视图（向后兼容）：
+   *   - SalesmanDim 表：完整业务员主数据
+   *   - PlanFact 表：多年多层级计划数据
+   *   - SalesmanTeamMapping 表：兼容旧 JOIN（business_no/full_name/team_name/organization/car_insurance_plan_2026）
+   *   - SalesmanPlanFact 视图：兼容旧查询（salesman_name/team_name/org_name/plan_year/plan_vehicle/plan_total）
+   */
+  async loadDimParquet(salesmanPath: string, planPath: string): Promise<void> {
+    const sf = salesmanPath.replace(/\\/g, '/');
+    const pf = planPath.replace(/\\/g, '/');
+
+    // 1. 创建 SalesmanDim 表（完整业务员主数据）
+    await this.query(`
+      CREATE OR REPLACE TABLE SalesmanDim AS
+      SELECT * FROM read_parquet('${sf}')
+    `);
+    const smCount = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM SalesmanDim');
+    console.log(`[DuckDB] SalesmanDim loaded: ${smCount[0]?.cnt ?? 0} records from Parquet`);
+
+    // 2. 创建 PlanFact 表（多年多级计划）
+    await this.query(`
+      CREATE OR REPLACE TABLE PlanFact AS
+      SELECT * FROM read_parquet('${pf}')
+    `);
+    const pfCount = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM PlanFact');
+    console.log(`[DuckDB] PlanFact loaded: ${pfCount[0]?.cnt ?? 0} records from Parquet`);
+
+    // 3. 创建兼容表 SalesmanTeamMapping（所有下游 SQL 都引用此表）
+    //    从 SalesmanDim LEFT JOIN PlanFact(2026, salesman) 获取 car_insurance_plan_2026
+    await this.query(`
+      CREATE OR REPLACE TABLE SalesmanTeamMapping AS
+      SELECT
+        s.business_no,
+        s.salesman_name,
+        s.full_name,
+        COALESCE(s.team, '未分配') AS team_name,
+        COALESCE(s.organization, '未分配机构') AS organization,
+        COALESCE(p.plan_vehicle, 0.0) AS car_insurance_plan_2026
+      FROM SalesmanDim s
+      LEFT JOIN (
+        SELECT business_no, plan_vehicle
+        FROM PlanFact
+        WHERE plan_year = 2026 AND level = 'salesman'
+      ) p ON s.business_no = p.business_no
+    `);
+    const tmCount = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM SalesmanTeamMapping');
+    console.log(`[DuckDB] SalesmanTeamMapping (compat) built: ${tmCount[0]?.cnt ?? 0} records`);
+
+    // 4. 创建兼容视图 SalesmanPlanFact（多年计划视图）
+    await this.query(`
+      CREATE OR REPLACE VIEW SalesmanPlanFact AS
+      SELECT
+        p.full_name AS salesman_name,
+        COALESCE(s.team, '未分配') AS team_name,
+        COALESCE(s.organization, '未分配机构') AS org_name,
+        p.plan_year,
+        p.plan_vehicle,
+        p.plan_total
+      FROM PlanFact p
+      LEFT JOIN SalesmanDim s ON p.business_no = s.business_no
+      WHERE p.level = 'salesman'
+    `);
+    console.log('[DuckDB] SalesmanPlanFact (compat) view created — multi-year support');
+
+    // 5. 预构建达成分析缓存表
+    await this.buildAchievementView(2026);
+  }
+
+  /**
+   * 加载团队映射 JSON 到 SalesmanTeamMapping 表（回退方式）
    *
    * 数据源：数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json
    * 字段：business_no, salesman_name, full_name, team_name, organization, car_insurance_plan_2026

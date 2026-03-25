@@ -29,7 +29,7 @@ is_transfer, is_nev, is_telemarketing, tonnage_segment,
 is_renewable, is_commercial_insure, terminal_source,
 commercial_pricing_factor, vehicle_frame_no, is_quote,
 claim_cases, reported_claims, fee_amount, renewal_mode,
-insurance_grade, small_truck_score, large_truck_score,
+insurance_grade,
 is_cross_sell, cross_sell_premium_driver,
 third_party_coverage, driver_coverage, passenger_coverage,
 plate_no, seat_count
@@ -59,9 +59,7 @@ plate_no, seat_count
 | `renewal_policy_no` | STRING | 续保单号 | 同上，36.4%有值（空值=非续保） |
 | `endorsement_no` | STRING | 批单号 | 保单号-序号，如 `xxx-001`，1.8%有值 |
 | `vehicle_frame_no` | STRING | 车架号(VIN) | 17位，28万+唯一值 |
-| `insurance_grade` | STRING | 车险分等级 | A/B/C/D/E/F/G/X，46.9%有值 |
-| `small_truck_score` | STRING | 小货车评分 | A/B/C/D/E/X，4.8%有值 |
-| `large_truck_score` | STRING | 大货车评分 | A/B/C/D/E/X，1.0%有值 |
+| `insurance_grade` | STRING | 车险风险等级 | A/B/C/D/E/F/G/X，~57%有值（合并原车险分等级/小货车评分/大货车评分） |
 
 ### 1.2 日期字段
 
@@ -219,9 +217,9 @@ plate_no, seat_count
 
 ### 2.9 续保模式 (renewal_mode)
 
-> 注：§2.10 车险分等级 和 §2.11 货车评分 见下方
+### 2.10 车险风险等级 (insurance_grade)
 
-### 2.10 车险分等级 (insurance_grade)
+由原三个互斥字段合并而来：车险分等级（非营业客车）、小货车评分（2吨以下货车）、大货车评分（2吨以上营业货车）。
 
 | 值 | 说明 |
 |----|------|
@@ -234,21 +232,7 @@ plate_no, seat_count
 | `G` | 最差 |
 | `X` | 未评定/不适用 |
 
-**空值率**: ~46.9%（无等级数据）
-
-### 2.11 货车评分 (small_truck_score / large_truck_score)
-
-| 值 | 说明 |
-|----|------|
-| `A` | 优 |
-| `B` | 良 |
-| `C` | 中 |
-| `D` | 差 |
-| `E` | 极差 |
-| `X` | 未评定/不适用 |
-
-- `small_truck_score` 空值率 ~95.2%（仅小货车有值）
-- `large_truck_score` 空值率 ~99.0%（仅大货车有值）
+**空值率**: ~43%（主要是摩托车等无评级车型）
 
 | 值 | 占比 | 说明 |
 |----|------|------|
@@ -312,9 +296,8 @@ plate_no, seat_count
 | 统保、套单 | `is_commercial_insure = '套单'` |
 | 退保 | `endorsement_type = '16退保'` |
 | 交叉销售、驾意 | `is_cross_sell = TRUE` |
-| 车险等级A、优质车险 | `insurance_grade = 'A'` |
-| 小货车评分 | `small_truck_score IS NOT NULL` |
-| 大货车评分 | `large_truck_score IS NOT NULL` |
+| 车险等级A、优质车险、风险A级 | `insurance_grade = 'A'` |
+| 有风险等级 | `insurance_grade IS NOT NULL` |
 | 交叉销售保费 | `SUM(cross_sell_premium_driver)` |
 
 ---
@@ -499,6 +482,6 @@ ORDER BY "达成率%" DESC
 |------|------|------|
 | v1.4 | 2026-02-27 | 新增2个字段：plate_no（车牌号码）、seat_count（座位数）；字段总数34→36；用于费用分析规则匹配 |
 | v1.3 | 2026-02-26 | 新增4个字段：underwriting_date, third_party_coverage, driver_coverage, passenger_coverage；前后端统一"签单日期"命名；支持多 Parquet 文件 UNION ALL 加载 |
-| v1.2 | 2026-02-12 | 新增5个字段：insurance_grade, small_truck_score, large_truck_score, is_cross_sell, cross_sell_premium_driver |
+| v1.2 | 2026-02-12 | 新增5个字段：insurance_grade, is_cross_sell, cross_sell_premium_driver |
 | v1.1 | 2026-02-01 | 添加 SalesmanPlanFact 视图说明；明确 PolicyFact 可用字段 |
 | v1.0 | 2026-01-31 | 初始版本，整合业务规则字典与 AI SQL 需求 |

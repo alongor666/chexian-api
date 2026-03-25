@@ -60,12 +60,6 @@ export function buildFilterParams(
   if (filters.insurance_grade && filters.insurance_grade.length > 0) {
     params.insuranceGrades = filters.insurance_grade.join(',');
   }
-  if (filters.small_truck_score && filters.small_truck_score.length > 0) {
-    params.smallTruckScores = filters.small_truck_score.join(',');
-  }
-  if (filters.large_truck_score && filters.large_truck_score.length > 0) {
-    params.largeTruckScores = filters.large_truck_score.join(',');
-  }
 
   // 三态布尔字段（true/false/null=全部）
   if (filters.is_renewal !== undefined && filters.is_renewal !== null) {

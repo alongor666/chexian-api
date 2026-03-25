@@ -57,6 +57,16 @@ export function generateColumnMappingSQL(
       } else if (standardName.includes('date')) {
         // 日期字段：转换为DATE类型
         mappings.push(`TRY_CAST("${actualColumn}" AS DATE) as ${standardName}`);
+      } else if (standardName === 'insurance_grade') {
+        // 向后兼容：旧 parquet 有 车险分等级/小货车评分/大货车评分 三个独立列
+        // 新 parquet 合并为 车险风险等级。用 COALESCE 确保两种格式都能正确加载。
+        const legacyCols = ['小货车评分', '大货车评分'].filter(c => actualColumns.includes(c));
+        if (legacyCols.length > 0) {
+          const parts = [`"${actualColumn}"`, ...legacyCols.map(c => `"${c}"`)];
+          mappings.push(`COALESCE(${parts.join(', ')}) as insurance_grade`);
+        } else {
+          mappings.push(`"${actualColumn}" as ${standardName}`);
+        }
       } else {
         // 普通字段：直接映射
         mappings.push(`"${actualColumn}" as ${standardName}`);

@@ -55,8 +55,6 @@ export const commonFilterSchema = z.object({
   renewalModes: z.string().optional(),
   tonnageSegments: z.string().optional(),
   insuranceGrades: z.string().optional(),
-  smallTruckScores: z.string().optional(),
-  largeTruckScores: z.string().optional(),
 
   // 兼容旧参数名（单值）
   orgLevel3: z.string().optional(),
@@ -167,14 +165,6 @@ export function buildConditionsFromFilterParams(
   const insuranceGrades = csvToArray(params.insuranceGrades);
   if (insuranceGrades) {
     conditions.push(buildInCondition('insurance_grade', insuranceGrades));
-  }
-  const smallTruckScores = csvToArray(params.smallTruckScores);
-  if (smallTruckScores) {
-    conditions.push(buildInCondition('small_truck_score', smallTruckScores));
-  }
-  const largeTruckScores = csvToArray(params.largeTruckScores);
-  if (largeTruckScores) {
-    conditions.push(buildInCondition('large_truck_score', largeTruckScores));
   }
 
   // 三态布尔字段

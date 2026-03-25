@@ -33,8 +33,6 @@ interface AdvancedFilterPanelProps {
     coverage_combination?: Array<{ value: string; count: number }>;
     renewal_mode?: Array<{ value: string; count: number }>;
     insurance_grade?: Array<{ value: string; count: number }>;
-    small_truck_score?: Array<{ value: string; count: number }>;
-    large_truck_score?: Array<{ value: string; count: number }>;
     availableSalesmen?: string[];
   };
   /** 预设配置名称（优先级低于 visibleFields） */
@@ -299,30 +297,6 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
     // },
   ];
 
-  // 评分字段条件联动：根据客户类别决定哪些评分字段可用
-  const PASSENGER_CAR_CATEGORIES = ['非营业个人客车', '非营业企业客车', '非营业机关客车'];
-  const TRUCK_CATEGORIES = ['营业货车', '非营业货车'];
-
-  const selectedCategories = filters.customer_category ?? [];
-  // 空选 = 未限制 → 全部评分可用
-  const insuranceGradeEnabled = !selectedCategories.length ||
-    selectedCategories.some(c => PASSENGER_CAR_CATEGORIES.includes(c));
-  const truckScoreEnabled = !selectedCategories.length ||
-    selectedCategories.some(c => TRUCK_CATEGORIES.includes(c));
-
-  // 当评分字段被禁用时自动清空已选值
-  React.useEffect(() => {
-    const updates: Partial<AdvancedFilterState> = {};
-    if (!insuranceGradeEnabled && filters.insurance_grade?.length) {
-      updates.insurance_grade = undefined;
-    }
-    if (!truckScoreEnabled) {
-      if (filters.small_truck_score?.length) updates.small_truck_score = undefined;
-      if (filters.large_truck_score?.length) updates.large_truck_score = undefined;
-    }
-    if (Object.keys(updates).length) onChange({ ...filters, ...updates });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [insuranceGradeEnabled, truckScoreEnabled]);
 
   // 快捷组合按钮（供标准模式和紧凑模式共用，通过 quickCombosSlot 注入 FilterLayoutV2）
   const quickCombosContent = showQuickCombos ? (
@@ -537,25 +511,10 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             {showBasicOptions && (
               <div className="space-y-3">
                 <TagSelector
-                  title="车险分等级"
+                  title="车险风险等级"
                   options={(options.insurance_grade || []).map(o => o.value)}
                   selectedValues={filters.insurance_grade || []}
                   onChange={(values) => handleMultiSelectChange('insurance_grade', values)}
-                  disabled={!insuranceGradeEnabled}
-                />
-                <TagSelector
-                  title="小货车评分"
-                  options={(options.small_truck_score || []).map(o => o.value)}
-                  selectedValues={filters.small_truck_score || []}
-                  onChange={(values) => handleMultiSelectChange('small_truck_score', values)}
-                  disabled={!truckScoreEnabled}
-                />
-                <TagSelector
-                  title="大货车评分"
-                  options={(options.large_truck_score || []).map(o => o.value)}
-                  selectedValues={filters.large_truck_score || []}
-                  onChange={(values) => handleMultiSelectChange('large_truck_score', values)}
-                  disabled={!truckScoreEnabled}
                 />
               </div>
             )}
@@ -752,25 +711,10 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                   <CollapsibleFilterSection id="grade-score-filters" title="等级评分（受客户类别限制）">
                     <div className="space-y-3">
                       <TagSelector
-                        title="车险分等级"
+                        title="车险风险等级"
                         options={(options.insurance_grade || []).map(o => o.value)}
                         selectedValues={filters.insurance_grade || []}
                         onChange={(values) => handleMultiSelectChange('insurance_grade', values)}
-                        disabled={!insuranceGradeEnabled}
-                      />
-                      <TagSelector
-                        title="小货车评分"
-                        options={(options.small_truck_score || []).map(o => o.value)}
-                        selectedValues={filters.small_truck_score || []}
-                        onChange={(values) => handleMultiSelectChange('small_truck_score', values)}
-                        disabled={!truckScoreEnabled}
-                      />
-                      <TagSelector
-                        title="大货车评分"
-                        options={(options.large_truck_score || []).map(o => o.value)}
-                        selectedValues={filters.large_truck_score || []}
-                        onChange={(values) => handleMultiSelectChange('large_truck_score', values)}
-                        disabled={!truckScoreEnabled}
                       />
                     </div>
                   </CollapsibleFilterSection>

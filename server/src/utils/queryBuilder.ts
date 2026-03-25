@@ -148,22 +148,10 @@ export function buildWhereClauseFromFilters(
     conditions.push(`is_cross_sell = ${filters.is_cross_sell}`);
   }
 
-  // Multi-select filter - 车险分等级
+  // Multi-select filter - 车险风险等级
   if (filters.insurance_grade && filters.insurance_grade.length > 0) {
     const values = filters.insurance_grade.map(v => `'${sanitizeString(v)}'`).join(', ');
     conditions.push(`insurance_grade IN (${values})`);
-  }
-
-  // Multi-select filter - 小货车评分
-  if (filters.small_truck_score && filters.small_truck_score.length > 0) {
-    const values = filters.small_truck_score.map(v => `'${sanitizeString(v)}'`).join(', ');
-    conditions.push(`small_truck_score IN (${values})`);
-  }
-
-  // Multi-select filter - 大货车评分
-  if (filters.large_truck_score && filters.large_truck_score.length > 0) {
-    const values = filters.large_truck_score.map(v => `'${sanitizeString(v)}'`).join(', ');
-    conditions.push(`large_truck_score IN (${values})`);
   }
 
   return conditions.join(' AND ');

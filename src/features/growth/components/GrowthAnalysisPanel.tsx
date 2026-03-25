@@ -85,8 +85,6 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
       is_cross_sell: filters.is_cross_sell,
       // 保留新增评分字段
       insurance_grade: filters.insurance_grade,
-      small_truck_score: filters.small_truck_score,
-      large_truck_score: filters.large_truck_score,
       // 不传入日期相关字段（增长分析有独立的日期逻辑）
       // 不传入机构/业务员（在各函数中单独处理）
     };
@@ -105,8 +103,6 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
     filters.is_renewable,
     filters.is_cross_sell,
     filters.insurance_grade,
-    filters.small_truck_score,
-    filters.large_truck_score,
   ]);
 
   /**

@@ -38,9 +38,7 @@ export type DomainField =
   | 'reported_claims'   // 新增：已报告赔款
   | 'fee_amount'        // 新增：费用金额
   | 'renewal_mode'              // 新增：续保模式
-  | 'insurance_grade'           // 车险分等级
-  | 'small_truck_score'         // 小货车评分
-  | 'large_truck_score'         // 大货车评分
+  | 'insurance_grade'           // 车险风险等级
   | 'is_cross_sell'             // 交叉销售标识
   | 'cross_sell_premium_driver' // 交叉销售保费-驾意
   | 'underwriting_date'        // 提核日期（原"签单日期"重命名）
@@ -139,9 +137,7 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   reported_claims: ['已报告赔款', 'reported_claims', 'reportedClaims', '赔款合计', 'total_claims'],
   fee_amount: ['费用金额', 'fee_amount', 'feeAmount', '总费用金额', 'total_fees', '费用合计'],
   renewal_mode: ['续保模式', 'renewal_mode', 'renewalMode', '续保业务类型', 'renewal_type'],
-  insurance_grade: ['车险分等级', 'insurance_grade', 'insuranceGrade'],
-  small_truck_score: ['小货车评分', 'small_truck_score', 'smallTruckScore'],
-  large_truck_score: ['大货车评分', 'large_truck_score', 'largeTruckScore'],
+  insurance_grade: ['车险风险等级', '车险分等级', 'insurance_grade', 'insuranceGrade'],
   is_cross_sell: ['交叉销售标识', 'is_cross_sell', 'isCrossSell'],
   cross_sell_premium_driver: ['交叉销售保费_驾意', 'cross_sell_premium_driver', 'crossSellPremiumDriver'],
   underwriting_date: ['underwriting_date', '提核日期', 'review_date'],
@@ -175,8 +171,6 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'fee_amount',
   'renewal_mode',
   'insurance_grade',
-  'small_truck_score',
-  'large_truck_score',
   'is_cross_sell',
   'cross_sell_premium_driver',
   'underwriting_date',
@@ -222,9 +216,7 @@ export interface ColumnMapping {
   reported_claims?: string; // Optional field
   fee_amount?: string; // Optional field
   renewal_mode?: string; // Optional field
-  insurance_grade?: string; // Optional field
-  small_truck_score?: string; // Optional field
-  large_truck_score?: string; // Optional field
+  insurance_grade?: string; // Optional field - 车险风险等级
   is_cross_sell?: string; // Optional field
   cross_sell_premium_driver?: string; // Optional field
   underwriting_date?: string; // Optional field - 提核日期
@@ -342,8 +334,6 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   fee_amount: 'fee_amount',
   renewal_mode: 'renewal_mode',
   insurance_grade: 'insurance_grade',
-  small_truck_score: 'small_truck_score',
-  large_truck_score: 'large_truck_score',
   is_cross_sell: 'is_cross_sell',
   cross_sell_premium_driver: 'cross_sell_premium_driver',
   underwriting_date: 'underwriting_date',

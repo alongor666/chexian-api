@@ -67,8 +67,6 @@ export function countActiveFilters(
     'coverage_combination',
     'renewal_mode',
     'insurance_grade',
-    'small_truck_score',
-    'large_truck_score',
   ];
 
   arrayKeys.forEach((key) => {
@@ -245,8 +243,6 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
               coverage_combination: filterOptions.coverage_combination,
               renewal_mode: filterOptions.renewal_mode,
               insurance_grade: filterOptions.insurance_grade,
-              small_truck_score: filterOptions.small_truck_score,
-              large_truck_score: filterOptions.large_truck_score,
               availableSalesmen,
             }}
           />

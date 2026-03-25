@@ -455,8 +455,6 @@ router.get(
       !filterData.renewalModes &&
       !filterData.tonnageSegments &&
       !filterData.insuranceGrades &&
-      !filterData.smallTruckScores &&
-      !filterData.largeTruckScores &&
       !filterData.isRenewal &&
       !filterData.isNewCar &&
       !filterData.isTransfer &&

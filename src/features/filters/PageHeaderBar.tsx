@@ -102,15 +102,9 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
     if (filters.is_commercial_insure === true) chips.push({ key: 'commercial', label: '交商同保' });
     if (filters.is_renewal === true) chips.push({ key: 'renewal_bool', label: '续保' });
 
-    // 等级评分
+    // 风险等级
     if (filters.insurance_grade && filters.insurance_grade.length > 0) {
-      chips.push({ key: 'grade', label: filters.insurance_grade.join('/') + '级' });
-    }
-    if (filters.small_truck_score && filters.small_truck_score.length > 0) {
-      chips.push({ key: 'small_truck', label: `小${filters.small_truck_score.join('/')}` });
-    }
-    if (filters.large_truck_score && filters.large_truck_score.length > 0) {
-      chips.push({ key: 'large_truck', label: `大${filters.large_truck_score.join('/')}` });
+      chips.push({ key: 'grade', label: `风险${filters.insurance_grade.join('/')}级` });
     }
 
     // 日期范围（非全年时显示）

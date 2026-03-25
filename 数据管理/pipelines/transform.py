@@ -558,27 +558,19 @@ def process_new_fields(df):
         for mode, count in mode_counts.items():
             print(f"         {mode}: {count:,} ({count/len(df)*100:.2f}%)")
 
-    # 7. 处理车险分等级（字符串等级：A-G/X，保留原值）
-    if '车险分等级' in df.columns:
-        print(f"\n   处理车险分等级:")
-        print(f"      原始值分布: {df['车险分等级'].value_counts(dropna=False).head(10).to_dict()}")
-        df['车险分等级'] = df['车险分等级'].where(df['车险分等级'].notna(), None)
-        grade_count = df['车险分等级'].notna().sum()
-        print(f"      ✅ 车险分等级: {grade_count:,} 条有值 ({grade_count/len(df)*100:.2f}%)")
-
-    # 8. 处理小货车评分（字符串等级：A-E/X）
-    if '小货车评分' in df.columns:
-        print(f"\n   处理小货车评分:")
-        df['小货车评分'] = df['小货车评分'].where(df['小货车评分'].notna(), None)
-        score_count = df['小货车评分'].notna().sum()
-        print(f"      ✅ 小货车评分: {score_count:,} 条有值 ({score_count/len(df)*100:.2f}%)")
-
-    # 9. 处理大货车评分（字符串等级：A-E/X）
-    if '大货车评分' in df.columns:
-        print(f"\n   处理大货车评分:")
-        df['大货车评分'] = df['大货车评分'].where(df['大货车评分'].notna(), None)
-        score_count = df['大货车评分'].notna().sum()
-        print(f"      ✅ 大货车评分: {score_count:,} 条有值 ({score_count/len(df)*100:.2f}%)")
+    # 7. 合并车险风险等级（三字段互斥：车险分等级/小货车评分/大货车评分 → 车险风险等级）
+    grade_sources = ['车险分等级', '小货车评分', '大货车评分']
+    for col in grade_sources:
+        if col not in df.columns:
+            df[col] = None
+        else:
+            df[col] = df[col].where(df[col].notna(), None)
+    print(f"\n   合并车险风险等级（COALESCE: 车险分等级 > 小货车评分 > 大货车评分）:")
+    df['车险风险等级'] = df['车险分等级'].fillna(df['小货车评分']).fillna(df['大货车评分'])
+    grade_count = df['车险风险等级'].notna().sum()
+    print(f"      ✅ 车险风险等级: {grade_count:,} 条有值 ({grade_count/len(df)*100:.2f}%)")
+    print(f"      值分布: {df['车险风险等级'].value_counts(dropna=False).head(10).to_dict()}")
+    df.drop(columns=grade_sources, inplace=True, errors='ignore')
 
     # 10. 处理交叉销售标识（布尔值：是→True，否→False）
     cross_sell_col = None
@@ -848,9 +840,7 @@ def finalize_schema(df):
         '已报告赔款',
         '费用金额',
         '续保模式',
-        '车险分等级',
-        '小货车评分',
-        '大货车评分',
+        '车险风险等级',
         '交叉销售标识',
         '交叉销售保费_驾意',
         '三者保额',
