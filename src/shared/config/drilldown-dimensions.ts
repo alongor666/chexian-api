@@ -31,8 +31,20 @@ export type CrossSellDrillDimension =
   | 'is_telemarketing'
   | 'is_renewal';
 
-/** 续保分析层级（线性，顺序固定） */
+/** 续保分析层级（线性，顺序固定 — V1 兼容） */
 export type RenewalDrillLevel = 'company' | 'org' | 'team' | 'salesman' | 'coverage';
+
+/** 续保分析自由维度（V2） */
+export type RenewalDrillDimension =
+  | 'org_level_3'
+  | 'team'
+  | 'salesman'
+  | 'coverage_combination'
+  | 'customer_category'
+  | 'is_new_car'
+  | 'is_transfer'
+  | 'is_nev'
+  | 'is_telemarketing';
 
 // ─── 维度中文标签 ────────────────────────────────────────────────────────────
 
@@ -98,7 +110,7 @@ export const CROSS_SELL_DIMENSIONS: CrossSellDrillDimension[] = [
   'is_renewal',
 ];
 
-/** 续保分析 — 线性5层下钻，每层只有1个下一维度 */
+/** 续保分析 — 线性5层下钻（V1 兼容） */
 export const RENEWAL_LEVEL_ORDER: RenewalDrillLevel[] = [
   'company',
   'org',
@@ -114,6 +126,19 @@ export const RENEWAL_LEVEL_LABELS: Record<RenewalDrillLevel, string> = {
   salesman: '业务员',
   coverage: '险别组合',
 };
+
+/** 续保分析 — 自由维度下钻（V2） */
+export const RENEWAL_DIMENSIONS: RenewalDrillDimension[] = [
+  'org_level_3',
+  'team',
+  'salesman',
+  'coverage_combination',
+  'customer_category',
+  'is_new_car',
+  'is_transfer',
+  'is_nev',
+  'is_telemarketing',
+];
 
 /** 假日营销 — 2层线性 */
 export const HOLIDAY_LEVEL_ORDER = ['org', 'salesman'] as const;

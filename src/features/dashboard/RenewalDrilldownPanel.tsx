@@ -10,7 +10,7 @@ import {
   DrilldownLoadingOverlay,
   DrilldownExhaustedBanner,
 } from '../../shared/ui';
-import { RENEWAL_LEVEL_LABELS } from '../../shared/config/drilldown-dimensions';
+import { DIMENSION_LABELS, isConditionalDimension } from '../../shared/config/drilldown-dimensions';
 import type { DrilldownBreadcrumbStep } from '../../shared/ui';
 
 interface RenewalDrilldownPanelProps {
@@ -27,17 +27,6 @@ interface RenewalDrilldownPanelProps {
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-/**
- * 续保层级中文标签。
- * RENEWAL_LEVEL_LABELS.company = '四川分公司'（维度选择器用），
- * 此处覆盖为 '全公司' 仅影响 dimensionLabels tooltip，
- * 面包屑顶部显示由 topLabel prop 独立控制。
- */
-const LEVEL_LABELS: Record<string, string> = {
-  ...RENEWAL_LEVEL_LABELS,
-  company: '全公司',
-};
-
 export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
   targetYear,
   cutoffDate,
@@ -53,13 +42,14 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
     loading,
     error,
     breadcrumb,
-    currentLevel,
-    nextLevel,
+    currentGroupBy,
+    availableDimensions,
     canDrillDown,
     drillDown,
     navigateTo,
     reset,
     canGoToTop,
+    dimensionLabels,
   } = useRenewalDrilldown({
     targetYear,
     cutoffDate,
@@ -68,23 +58,26 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
     selectedDueMonth,
   });
 
+  // 条件维度列表（琥珀色标记）
+  const conditionalDims = availableDimensions.filter(isConditionalDimension);
+
+  // 当前分组维度的中文标签
+  const currentDimLabel = dimensionLabels[currentGroupBy] || currentGroupBy;
+
   return (
     <div className="space-y-4">
       {/* 面包屑导航 */}
       <div className="bg-white p-3 rounded-xl shadow-sm mb-4">
         <DrilldownBreadcrumb
-          path={breadcrumb.slice(1).map((b): DrilldownBreadcrumbStep => ({
+          path={breadcrumb.map((b): DrilldownBreadcrumbStep => ({
             label: String(b.label),
-            dimension: b.level,
+            dimension: b.dimension,
             value: b.value,
           }))}
-          onNavigate={(toIndex) => {
-            // toIndex=-1 → 回到顶层(index 0)；toIndex=0 → 第1个下钻层(index 1)
-            navigateTo(toIndex + 1);
-          }}
+          onNavigate={navigateTo}
           canGoToTop={canGoToTop}
-          topLabel={breadcrumb[0]?.label || '全公司'}
-          dimensionLabels={LEVEL_LABELS}
+          topLabel="四川分公司"
+          dimensionLabels={dimensionLabels}
         />
       </div>
 
@@ -155,7 +148,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
       {!loading && rows.length > 0 && (
         <RenewalQuadrantView
           rows={rows}
-          currentDimensionLabel={LEVEL_LABELS[nextLevel || currentLevel] || '维度'}
+          currentDimensionLabel={currentDimLabel}
         />
       )}
 
@@ -165,7 +158,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
           <table className="w-full text-sm">
             <thead>
               <tr className={tableStyles.header}>
-                <th className={tableStyles.headerCell}>名称</th>
+                <th className={tableStyles.headerCell}>{currentDimLabel}</th>
                 <th className={`${tableStyles.headerCell} text-right`}>应续件数</th>
                 <th className={`${tableStyles.headerCell} text-right`}>已续件数</th>
                 <th className={`${tableStyles.headerCell} text-right`}>续保率</th>
@@ -186,10 +179,10 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
                   <td className={tableStyles.cell}>
                     <DrilldownCell
                       label={row.group_name}
-                      availableDimensions={nextLevel ? [nextLevel] : []}
-                      dimensionLabels={LEVEL_LABELS}
-                      onSelect={() => drillDown(row.group_name)}
-                      autoOnSingle
+                      availableDimensions={availableDimensions}
+                      dimensionLabels={dimensionLabels}
+                      onSelect={(nextDim) => drillDown(row.group_name, nextDim as any)}
+                      conditionalDimensions={conditionalDims}
                     />
                   </td>
                   <td className={`${tableStyles.cell} text-right ${textStyles.numeric}`}>

@@ -1,30 +1,30 @@
 /**
- * 续保下钻分析 Hook
+ * 续保下钻分析 Hook (V2 — 自由维度)
  *
- * 支持五层下钻：公司 → 机构 → 团队 → 业务员 → 险别组合
- * 通过面包屑导航回退到任意层级
+ * 支持任意维度组合下钻，用户可选择下一个分组维度。
+ * 通过 drillPath + groupBy 向后端传参，DrilldownCell 弹窗选择维度。
  *
- * 数据请求由 React Query 管理，breadcrumb 变化自动触发重新查询。
+ * 向后兼容：RBAC 机构用户自动注入 org_level_3 到 drillPath。
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { useDataStatus } from '../../../shared/contexts/DataContext';
 import { formatSalesmanName, formatTeamName } from '../../../shared/utils/formatters';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
 import { queryKeys } from '../../../shared/api/query-keys';
+import {
+  RENEWAL_DIMENSIONS,
+  DIMENSION_LABELS,
+  getConditionalDimensions,
+  type RenewalDrillDimension,
+} from '../../../shared/config/drilldown-dimensions';
 
-/** 下钻层级顺序 */
-const LEVEL_ORDER = ['company', 'org', 'team', 'salesman', 'coverage'] as const;
-type DrilldownLevel = typeof LEVEL_ORDER[number];
-
-/** 面包屑项 */
-export interface BreadcrumbItem {
-  level: DrilldownLevel;
-  label: string;
-  /** 该层选中的值（用于向后端传递筛选参数） */
-  value?: string;
+/** 下钻路径步骤 */
+export interface DrillStep {
+  dimension: RenewalDrillDimension;
+  value: string;
 }
 
 /** 下钻行数据 */
@@ -56,153 +56,143 @@ interface UseRenewalDrilldownOptions {
   sortOrder?: 'asc' | 'desc';
 }
 
-/** 从面包屑中提取筛选参数 */
-function getFiltersFromBreadcrumb(bc: BreadcrumbItem[]): Record<string, string | undefined> {
-  const filters: Record<string, string | undefined> = {};
-  for (const item of bc) {
-    if (!item.value) continue;
-    switch (item.level) {
-      case 'company':
-        break; // 公司级无筛选
-      case 'org':
-        filters.orgFilter = item.value;
-        break;
-      case 'team':
-        filters.teamFilter = item.value;
-        break;
-      case 'salesman':
-        filters.salesmanFilter = item.value;
-        break;
-    }
-  }
-  return filters;
+/** 映射 API 行数据：清理姓名格式 */
+function mapDrilldownRows(result: unknown, groupBy: string): DrilldownRow[] {
+  return (Array.isArray(result) ? result : []).map((row: Record<string, unknown>) => {
+    const groupName = String(row.group_name ?? '');
+    return {
+      ...row,
+      group_name:
+        groupBy === 'team' ? formatTeamName(groupName) :
+        groupBy === 'salesman' ? formatSalesmanName(groupName) :
+        groupName,
+    } as DrilldownRow;
+  });
 }
 
-/** 构建 API 请求参数 */
-function buildDrilldownParams(
-  bc: BreadcrumbItem[],
-  options: UseRenewalDrilldownOptions,
-): Record<string, unknown> {
-  const { targetYear, cutoffDate, bundleOnly, selfRenewalOnly, selectedDueMonth, sortField = 'renewal_rate', sortOrder = 'desc' } = options;
-  const currentItem = bc[bc.length - 1];
-  const levelIndex = LEVEL_ORDER.indexOf(currentItem.level);
-  const queryLevel = levelIndex < LEVEL_ORDER.length - 1
-    ? LEVEL_ORDER[levelIndex + 1]
-    : currentItem.level;
+/** 根据 drillPath 计算剩余可选维度 */
+function computeAvailableDimensions(
+  drillPath: DrillStep[],
+  currentGroupBy: RenewalDrillDimension | null,
+): RenewalDrillDimension[] {
+  const usedDimensions = new Set<string>(drillPath.map((s) => s.dimension));
+  if (currentGroupBy) usedDimensions.add(currentGroupBy);
 
-  const pathFilters = getFiltersFromBreadcrumb(bc);
+  // 条件维度（如 insurance_grade）
+  const conditionalExtras = getConditionalDimensions(drillPath);
 
-  return {
+  const base = RENEWAL_DIMENSIONS.filter((d) => !usedDimensions.has(d));
+  const extras = conditionalExtras.filter(
+    (d) => !usedDimensions.has(d) && !base.includes(d as RenewalDrillDimension),
+  );
+
+  return [...base, ...extras] as RenewalDrillDimension[];
+}
+
+export function useRenewalDrilldown(options: UseRenewalDrilldownOptions) {
+  const {
+    targetYear, cutoffDate, bundleOnly, selfRenewalOnly,
+    selectedDueMonth, sortField = 'renewal_rate', sortOrder = 'desc',
+  } = options;
+  const { isDataLoaded } = useDataStatus();
+  const { isOrgUser, userOrg } = useRBAC();
+
+  // ── 状态：drillPath + 当前分组维度 ──
+  const [drillPath, setDrillPath] = useState<DrillStep[]>(() => {
+    // 机构用户自动锚定到其机构
+    if (isOrgUser && userOrg) {
+      return [{ dimension: 'org_level_3' as RenewalDrillDimension, value: userOrg }];
+    }
+    return [];
+  });
+
+  const [currentGroupBy, setCurrentGroupBy] = useState<RenewalDrillDimension>('org_level_3');
+
+  // 可选维度（排除已用维度）
+  const availableDimensions = useMemo(
+    () => computeAvailableDimensions(drillPath, currentGroupBy),
+    [drillPath, currentGroupBy],
+  );
+
+  // ── 构建面包屑（用于 DrilldownBreadcrumb 展示） ──
+  const breadcrumb = useMemo(() => {
+    return drillPath.map((step) => ({
+      label: step.value,
+      dimension: step.dimension,
+      value: step.value,
+    }));
+  }, [drillPath]);
+
+  // ── API 请求参数 ──
+  const apiParams = useMemo(() => ({
     targetYear,
-    level: queryLevel,
-    ...pathFilters,
+    groupBy: currentGroupBy,
+    drillPath: JSON.stringify(drillPath),
     selfRenewalOnly: selfRenewalOnly ? 'true' : undefined,
     bundleOnly: bundleOnly ? 'true' : undefined,
     dueMonth: selectedDueMonth || undefined,
     cutoffDate,
     sortField,
     sortOrder,
-  };
-}
+  }), [targetYear, currentGroupBy, drillPath, selfRenewalOnly, bundleOnly, selectedDueMonth, cutoffDate, sortField, sortOrder]);
 
-/** 映射 API 行数据 */
-function mapDrilldownRows(result: unknown, queryLevel: string): DrilldownRow[] {
-  return (Array.isArray(result) ? result : []).map((row: Record<string, unknown>) => {
-    const groupName = String(row.group_name ?? '');
-    const parentName = String(row.parent_name ?? '');
-
-    return {
-      ...row,
-      group_name: queryLevel === 'team' ? formatTeamName(groupName) : queryLevel === 'salesman' ? formatSalesmanName(groupName) : groupName,
-      parent_name: queryLevel === 'coverage' ? formatSalesmanName(parentName) : parentName,
-    } as DrilldownRow;
-  });
-}
-
-export function useRenewalDrilldown(options: UseRenewalDrilldownOptions) {
-  const { targetYear, cutoffDate, bundleOnly, selfRenewalOnly, selectedDueMonth, sortField = 'renewal_rate', sortOrder = 'desc' } = options;
-  const { isDataLoaded } = useDataStatus();
-  const { isOrgUser, userOrg, getMinDrillUpIndex } = useRBAC();
-
-  const initialBreadcrumb: BreadcrumbItem[] = useMemo(() => {
-    if (isOrgUser && userOrg) {
-      return [
-        { level: 'company', label: '全公司' },
-        { level: 'org', label: userOrg, value: userOrg }
-      ];
-    }
-    return [{ level: 'company', label: '全公司' }];
-  }, [isOrgUser, userOrg]);
-
-  // UI 导航状态：面包屑（保留 useState，不属于服务端缓存数据）
-  const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>(initialBreadcrumb);
-
-  // 当用户身份变化时，重置
-  useEffect(() => {
-    setBreadcrumb(initialBreadcrumb);
-  }, [initialBreadcrumb]);
-
-  /** 当前层级 */
-  const currentLevel = breadcrumb[breadcrumb.length - 1].level;
-  /** 当前层级索引 */
-  const currentLevelIndex = LEVEL_ORDER.indexOf(currentLevel);
-  /** 下一层级（如果存在） */
-  const nextLevel: DrilldownLevel | null =
-    currentLevelIndex < LEVEL_ORDER.length - 1
-      ? LEVEL_ORDER[currentLevelIndex + 1]
-      : null;
-
-  // 构建请求参数（breadcrumb + options 变化时 query key 自动失效）
-  const apiParams = useMemo(
-    () => buildDrilldownParams(breadcrumb, options),
-    [breadcrumb, targetYear, cutoffDate, bundleOnly, selfRenewalOnly, selectedDueMonth, sortField, sortOrder],
-  );
-
-  // 当前查询层级（用于行数据映射）
-  const queryLevel = useMemo(() => {
-    const levelIndex = LEVEL_ORDER.indexOf(currentLevel);
-    return levelIndex < LEVEL_ORDER.length - 1
-      ? LEVEL_ORDER[levelIndex + 1]
-      : currentLevel;
-  }, [currentLevel]);
-
-  // useQuery 替代手动 fetchData + prevOptionsRef，自动处理竞态和缓存
+  // ── 查询 ──
   const { data: rows = [], isLoading, error: queryError } = useQuery({
     queryKey: queryKeys.renewalDrilldown(apiParams),
     queryFn: () => apiClient.getRenewalDrilldown(apiParams as Record<string, any>),
     enabled: isDataLoaded,
-    select: (result) => mapDrilldownRows(result, queryLevel),
+    select: (result) => mapDrilldownRows(result, currentGroupBy),
   });
 
-  /** 下钻到下一层级 */
-  const drillDown = useCallback((value: string) => {
-    if (!nextLevel) return;
-    setBreadcrumb(prev => [...prev, { level: nextLevel, label: value, value }]);
-  }, [nextLevel]);
+  /** 下钻：选择某行的值 + 下一个分组维度 */
+  const drillDown = useCallback((value: string, nextDimension: RenewalDrillDimension) => {
+    setDrillPath((prev) => [...prev, { dimension: currentGroupBy, value }]);
+    setCurrentGroupBy(nextDimension);
+  }, [currentGroupBy]);
 
-  /** 导航到面包屑的某个位置 */
+  /** 面包屑导航：回到某一步 */
   const navigateTo = useCallback((index: number) => {
-    const safeMinIndex = getMinDrillUpIndex(0);
-    if (index < safeMinIndex) return;
-    setBreadcrumb(prev => prev.slice(0, index + 1));
-  }, [getMinDrillUpIndex]);
+    if (index < 0) {
+      // 回到最顶层
+      const initialPath = isOrgUser && userOrg
+        ? [{ dimension: 'org_level_3' as RenewalDrillDimension, value: userOrg }]
+        : [];
+      setDrillPath(initialPath);
+      setCurrentGroupBy('org_level_3');
+      return;
+    }
+    // 保留 [0..index] 的路径，当前 groupBy 设为 index+1 步的维度（如果存在）
+    const newPath = drillPath.slice(0, index + 1);
+    // 回退到 index 位置后，恢复该步之后的分组维度
+    const nextGroupBy = index + 1 < drillPath.length
+      ? drillPath[index + 1].dimension
+      : currentGroupBy;
+    setDrillPath(newPath);
+    setCurrentGroupBy(nextGroupBy);
+  }, [drillPath, currentGroupBy, isOrgUser, userOrg]);
 
-  /** 重置到公司层级 */
+  /** 重置到初始状态 */
   const reset = useCallback(() => {
-    setBreadcrumb(initialBreadcrumb);
-  }, [initialBreadcrumb]);
+    const initialPath = isOrgUser && userOrg
+      ? [{ dimension: 'org_level_3' as RenewalDrillDimension, value: userOrg }]
+      : [];
+    setDrillPath(initialPath);
+    setCurrentGroupBy('org_level_3');
+  }, [isOrgUser, userOrg]);
 
   return {
     rows,
     loading: isLoading,
     error: queryError ? (queryError instanceof Error ? queryError.message : String(queryError)) : null,
     breadcrumb,
-    currentLevel,
-    nextLevel,
-    canDrillDown: nextLevel !== null,
+    drillPath,
+    currentGroupBy,
+    availableDimensions,
+    canDrillDown: availableDimensions.length > 0,
     drillDown,
     navigateTo,
     reset,
     canGoToTop: !isOrgUser,
+    dimensionLabels: DIMENSION_LABELS,
   };
 }

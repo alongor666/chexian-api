@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { asyncHandler, AppError, duckdbService, commonFilterSchema, isValidDateFormat } from './shared.js';
 import type { AdvancedFilterState } from './shared.js';
 import { generateRenewalRateQuery, generateRenewalDetailTableQuery } from '../../sql/renewal.js';
-import { generateRenewalDrilldownQuery, type DrilldownDimension, type DrilldownLevel, type SortField, type SortOrder } from '../../sql/renewal-drilldown.js';
+import { generateRenewalDrilldownQuery, generateRenewalFreeDrilldownQuery, type DrilldownDimension, type DrilldownLevel, type SortField, type SortOrder, type RenewalDrillDimension, type RenewalDrillStep, type RenewalFreeDrilldownParams } from '../../sql/renewal-drilldown.js';
 
 const router = Router();
 
@@ -106,14 +106,24 @@ router.get(
 );
 
 /**
- * 续保下钻分析请求验证Schema
+ * 续保下钻分析请求验证Schema（V1 线性模式 + V2 自由维度兼容）
  */
+const RENEWAL_DRILL_DIMENSIONS = [
+  'org_level_3', 'team', 'salesman', 'coverage_combination',
+  'customer_category', 'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing',
+] as const;
+
 const renewalDrilldownSchema = z.object({
   targetYear: z.coerce.number().default(new Date().getFullYear()),
-  level: z.enum(['company', 'org', 'team', 'salesman', 'coverage']).default('company'),
+  // V1 参数（线性下钻）
+  level: z.enum(['company', 'org', 'team', 'salesman', 'coverage']).optional(),
   orgFilter: z.string().max(255).optional(),
   teamFilter: z.string().max(255).optional(),
   salesmanFilter: z.string().max(255).optional(),
+  // V2 参数（自由维度下钻）
+  groupBy: z.enum(RENEWAL_DRILL_DIMENSIONS).optional(),
+  drillPath: z.string().max(2000).optional(), // JSON 字符串
+  // 通用参数
   selfRenewalOnly: z.string().max(10).optional(),
   bundleOnly: z.string().max(10).optional(),
   dueMonth: z.coerce.number().optional(),
@@ -124,7 +134,9 @@ const renewalDrilldownSchema = z.object({
 
 /**
  * GET /api/query/renewal-drilldown
- * 续保下钻分析（五层下钻：公司→机构→团队→业务员→险别组合）
+ * 续保下钻分析
+ * - V2 自由维度：groupBy + drillPath（优先）
+ * - V1 线性：level + orgFilter/teamFilter/salesmanFilter（向后兼容）
  */
 router.get(
   '/renewal-drilldown',
@@ -136,6 +148,7 @@ router.get(
 
     const {
       targetYear, level, orgFilter, teamFilter, salesmanFilter,
+      groupBy, drillPath: drillPathStr,
       selfRenewalOnly, bundleOnly, dueMonth, cutoffDate,
       sortField, sortOrder,
     } = parseResult.data;
@@ -144,9 +157,68 @@ router.get(
       throw new AppError(400, `Invalid cutoffDate format: ${cutoffDate}. Expected YYYY-MM-DD`);
     }
 
-    // 构建下钻维度
+    // 构建权限筛选
+    const filters: AdvancedFilterState = {};
+    const permissionFilter = req.permissionFilter || '1=1';
+    let permissionOrg: string | undefined;
+    if (permissionFilter !== '1=1') {
+      const orgMatch = permissionFilter.match(/org_level_3\s*(?:LIKE|=)\s*'%?([^%']+)%?'/i);
+      if (orgMatch) permissionOrg = orgMatch[1];
+
+      const tmMatch = permissionFilter.match(/is_telemarketing\s*=\s*(true|false)/i);
+      if (tmMatch) {
+        filters.is_telemarketing = tmMatch[1].toLowerCase() === 'true';
+      }
+    }
+
+    // ── V2 自由维度模式（groupBy 存在时优先走此路径） ──
+    if (groupBy) {
+      let drillPath: RenewalDrillStep[] = [];
+      if (drillPathStr) {
+        try {
+          const parsed = JSON.parse(drillPathStr);
+          if (Array.isArray(parsed)) {
+            drillPath = parsed.map((s: any) => ({
+              dimension: String(s.dimension) as RenewalDrillDimension,
+              value: String(s.value),
+            }));
+          }
+        } catch {
+          throw new AppError(400, 'Invalid drillPath JSON');
+        }
+      }
+
+      // 注入权限：如果用户有机构限制且 drillPath 中没有 org_level_3
+      if (permissionOrg && !drillPath.some((s) => s.dimension === 'org_level_3')) {
+        drillPath = [{ dimension: 'org_level_3', value: permissionOrg }, ...drillPath];
+      }
+
+      const params: RenewalFreeDrilldownParams = {
+        targetYear,
+        groupBy: groupBy as RenewalDrillDimension,
+        drillPath,
+        selfRenewalOnly: selfRenewalOnly === 'true',
+        bundleOnly: bundleOnly === 'true',
+        dueMonth,
+        cutoffDate,
+        sortField: sortField as SortField,
+        sortOrder: sortOrder as SortOrder,
+      };
+
+      const sql = generateRenewalFreeDrilldownQuery(filters, params);
+      const result = await duckdbService.query(sql);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+      return;
+    }
+
+    // ── V1 线性模式（向后兼容） ──
+    const effectiveLevel = level || 'company';
     const dimension: DrilldownDimension = {
-      level: level as DrilldownLevel,
+      level: effectiveLevel as DrilldownLevel,
       selfRenewalOnly: selfRenewalOnly === 'true',
       bundleOnly: bundleOnly === 'true',
       dueMonth: dueMonth,
@@ -157,19 +229,8 @@ router.get(
       },
     };
 
-    // 构建筛选条件
-    const filters: AdvancedFilterState = {};
-    const permissionFilter = req.permissionFilter || '1=1';
-    if (permissionFilter !== '1=1') {
-      const orgMatch = permissionFilter.match(/org_level_3\s*(?:LIKE|=)\s*'%?([^%']+)%?'/i);
-      if (orgMatch && !orgFilter) {
-        dimension.filters = { ...dimension.filters, org: orgMatch[1] };
-      }
-
-      const tmMatch = permissionFilter.match(/is_telemarketing\s*=\s*(true|false)/i);
-      if (tmMatch) {
-        filters.is_telemarketing = tmMatch[1].toLowerCase() === 'true';
-      }
+    if (permissionOrg && !orgFilter) {
+      dimension.filters = { ...dimension.filters, org: permissionOrg };
     }
 
     const sql = generateRenewalDrilldownQuery(
