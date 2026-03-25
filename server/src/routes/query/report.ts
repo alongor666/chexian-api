@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, QUERY_CACHE } from './shared.js';
-import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery } from '../../sql/marketing-report.js';
+import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery, generateHolidayFreeDrilldownQuery, type HolidayDrillDimension, type HolidayDrillStep } from '../../sql/marketing-report.js';
 import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../../sql/premium-report.js';
 
 const router = Router();
@@ -32,6 +32,63 @@ router.get(
     } else {
       sql = generateSalesmanHolidayDetailQuery(finalWhereClause, dates, dateField);
     }
+
+    const result = await duckdbService.query(sql);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  })
+);
+
+// ── 假日营销自由维度下钻 ──
+
+const HOLIDAY_DRILL_DIMENSIONS = [
+  'org_level_3', 'team', 'salesman',
+  'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing',
+] as const;
+
+const holidayDrilldownSchema = z.object({
+  groupBy: z.enum(HOLIDAY_DRILL_DIMENSIONS),
+  drillPath: z.string().max(2000).default('[]'),
+  holidayDates: z.string().default(''),
+});
+
+router.get(
+  '/holiday-drilldown',
+  asyncHandler(async (req, res) => {
+    const parseResult = holidayDrilldownSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+
+    const { groupBy, drillPath: drillPathStr, holidayDates: datesStr } = parseResult.data;
+    const dates = datesStr.split(',').filter(d => d && isValidDateFormat(d));
+
+    let drillPath: HolidayDrillStep[] = [];
+    try {
+      const parsed = JSON.parse(drillPathStr);
+      if (Array.isArray(parsed)) {
+        drillPath = parsed.map((s: any) => ({
+          dimension: String(s.dimension) as HolidayDrillDimension,
+          value: String(s.value),
+        }));
+      }
+    } catch {
+      throw new AppError(400, 'Invalid drillPath JSON');
+    }
+
+    const { filterData, whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
+    const dateField = filterData.dateField || 'policy_date';
+
+    const sql = generateHolidayFreeDrilldownQuery(
+      finalWhereClause,
+      dates,
+      groupBy as HolidayDrillDimension,
+      drillPath,
+      dateField,
+    );
 
     const result = await duckdbService.query(sql);
 

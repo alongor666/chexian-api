@@ -762,6 +762,10 @@ class ApiClient {
     return this.request(`/query/marketing-report${query ? `?${query}` : ''}`);
   }
 
+  async getHolidayDrilldown(params?: Record<string, any>): Promise<any[]> {
+    return this.queryGet('holiday-drilldown', params);
+  }
+
   /**
    * 获取保费报表数据（机构汇总 / 业务员明细）
    */

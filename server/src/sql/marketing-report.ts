@@ -7,6 +7,7 @@
  */
 
 import { createLogger } from '../utils/logger.js';
+import { escapeSqlValue } from '../utils/security.js';
 
 const logger = createLogger('MarketingReportSQL');
 
@@ -153,5 +154,187 @@ export function generateSalesmanHolidayDetailQuery(
       假日商业险签单天数 * 1.0 / ${totalHolidayDays} AS 假日商业险签单比例
     FROM salesman_stats
     ORDER BY 假日车险签单天数 DESC
+  `;
+}
+
+// ============================================================================
+// 自由维度下钻 — groupBy + drillPath 动态查询模式
+// ============================================================================
+
+/** 假日营销支持的自由下钻维度 */
+export type HolidayDrillDimension =
+  | 'org_level_3'
+  | 'team'
+  | 'salesman'
+  | 'is_new_car'
+  | 'is_transfer'
+  | 'is_nev'
+  | 'is_telemarketing';
+
+/** 下钻路径步骤 */
+export interface HolidayDrillStep {
+  dimension: HolidayDrillDimension;
+  value: string;
+}
+
+/** 布尔维度映射 */
+const HOLIDAY_BOOLEAN_MAP: Record<string, { field: string; trueLabel: string; falseLabel: string }> = {
+  is_new_car: { field: 'is_new_car', trueLabel: '新车', falseLabel: '旧车' },
+  is_transfer: { field: 'is_transfer', trueLabel: '过户车', falseLabel: '非过户' },
+  is_nev: { field: 'is_nev', trueLabel: '新能源', falseLabel: '传统燃油' },
+  is_telemarketing: { field: 'is_telemarketing', trueLabel: '电销', falseLabel: '非电销' },
+};
+
+/** 维度 → GROUP BY 配置 */
+function getHolidayGroupByConfig(dimension: HolidayDrillDimension): {
+  selectExpr: string;
+  groupByExpr: string;
+  needsTeamJoin: boolean;
+} {
+  const boolDef = HOLIDAY_BOOLEAN_MAP[dimension];
+  if (boolDef) {
+    return {
+      selectExpr: `CASE WHEN p.${boolDef.field} = 'true' OR p.${boolDef.field} = '1' THEN '${boolDef.trueLabel}' ELSE '${boolDef.falseLabel}' END AS group_name`,
+      groupByExpr: `CASE WHEN p.${boolDef.field} = 'true' OR p.${boolDef.field} = '1' THEN '${boolDef.trueLabel}' ELSE '${boolDef.falseLabel}' END`,
+      needsTeamJoin: false,
+    };
+  }
+
+  switch (dimension) {
+    case 'org_level_3':
+      return {
+        selectExpr: "p.org_level_3 AS group_name",
+        groupByExpr: "p.org_level_3",
+        needsTeamJoin: false,
+      };
+    case 'team':
+      return {
+        selectExpr: "COALESCE(tm.team_name, p.org_level_3 || '未归属团队') AS group_name",
+        groupByExpr: "COALESCE(tm.team_name, p.org_level_3 || '未归属团队')",
+        needsTeamJoin: true,
+      };
+    case 'salesman':
+      return {
+        selectExpr: "REGEXP_REPLACE(p.salesman_name, '^[0-9]+', '') AS group_name",
+        groupByExpr: "REGEXP_REPLACE(p.salesman_name, '^[0-9]+', '')",
+        needsTeamJoin: false,
+      };
+    default:
+      return {
+        selectExpr: "p.org_level_3 AS group_name",
+        groupByExpr: "p.org_level_3",
+        needsTeamJoin: false,
+      };
+  }
+}
+
+/** drillPath 步骤 → WHERE 条件 */
+function holidayDrillStepToWhere(step: HolidayDrillStep): string {
+  const esc = escapeSqlValue;
+  const boolDef = HOLIDAY_BOOLEAN_MAP[step.dimension];
+  if (boolDef) {
+    const boolVal = step.value === boolDef.trueLabel ? 'true' : 'false';
+    return `(p.${boolDef.field} = '${boolVal}' OR p.${boolDef.field} = '${boolVal === 'true' ? '1' : '0'}')`;
+  }
+
+  switch (step.dimension) {
+    case 'org_level_3':
+      return `p.org_level_3 = '${esc(step.value)}'`;
+    case 'team':
+      return `COALESCE(tm.team_name, p.org_level_3 || '未归属团队') = '${esc(step.value)}'`;
+    case 'salesman':
+      return `REGEXP_REPLACE(p.salesman_name, '^[0-9]+', '') = '${esc(step.value)}'`;
+    default:
+      return '1=1';
+  }
+}
+
+/**
+ * 假日营销自由维度下钻查询
+ *
+ * 统一指标：车险保费（万元）、商业险保费（万元）、车险出单人数、总业务员数、车险开单率、商业险开单率
+ */
+export function generateHolidayFreeDrilldownQuery(
+  whereClause: string,
+  holidayDates: string[],
+  groupBy: HolidayDrillDimension,
+  drillPath: HolidayDrillStep[],
+  dateField: string = 'policy_date',
+): string {
+  const holidayValues = buildHolidayDateValues(holidayDates);
+  const groupConfig = getHolidayGroupByConfig(groupBy);
+  const needsTeamJoin = groupConfig.needsTeamJoin || drillPath.some((s) => s.dimension === 'team');
+
+  // drillPath → WHERE
+  const drillWhere = drillPath.map(holidayDrillStepToWhere).join(' AND ');
+  const fullWhere = drillWhere ? `${whereClause} AND ${drillWhere}` : whereClause;
+
+  logger.debug('Generating holiday free drilldown SQL', { groupBy, drillPath: drillPath.length });
+
+  const teamJoinCte = needsTeamJoin
+    ? `
+    team_mapping AS (
+      SELECT DISTINCT full_name AS salesman_name, team_name
+      FROM SalesmanTeamMapping
+    ),`
+    : '';
+
+  const teamJoinClause = needsTeamJoin
+    ? 'LEFT JOIN team_mapping tm ON p.salesman_name = tm.salesman_name'
+    : '';
+
+  return `
+    WITH holiday_dates AS (
+      SELECT CAST(col0 AS DATE) AS holiday_date
+      FROM (VALUES ${holidayValues}) AS t(col0)
+    ),
+    ${teamJoinCte}
+    holiday_policies AS (
+      SELECT p.*${needsTeamJoin ? ", COALESCE(tm.team_name, p.org_level_3 || '未归属团队') AS team_name" : ''}
+      FROM PolicyFact p
+      ${teamJoinClause}
+      WHERE ${fullWhere}
+        AND CAST(p.${dateField} AS DATE) IN (SELECT holiday_date FROM holiday_dates)
+    ),
+    -- 总业务员基数（全量，不限于假日）
+    all_salesman AS (
+      SELECT p.*${needsTeamJoin ? ", COALESCE(tm.team_name, p.org_level_3 || '未归属团队') AS team_name" : ''}
+      FROM PolicyFact p
+      ${teamJoinClause}
+      WHERE ${fullWhere}
+    ),
+    total_by_group AS (
+      SELECT
+        ${groupConfig.groupByExpr.replaceAll('p.', 'a.').replaceAll('tm.', 'a.')} AS group_key,
+        COUNT(DISTINCT a.salesman_name) AS total_salesman
+      FROM all_salesman a
+      GROUP BY ${groupConfig.groupByExpr.replaceAll('p.', 'a.').replaceAll('tm.', 'a.')}
+    ),
+    holiday_stats AS (
+      SELECT
+        ${groupConfig.selectExpr.replaceAll('p.', 'hp.')},
+        COALESCE(SUM(hp.premium), 0) / 10000.0 AS premium_wan,
+        COALESCE(SUM(CASE WHEN hp.is_commercial_insure = '套单' OR hp.is_commercial_insure = '是' THEN hp.premium ELSE 0 END), 0) / 10000.0 AS commercial_premium_wan,
+        COUNT(DISTINCT hp.salesman_name) AS active_salesman,
+        COUNT(DISTINCT CASE WHEN hp.is_commercial_insure = '套单' OR hp.is_commercial_insure = '是' THEN hp.salesman_name END) AS commercial_active_salesman
+      FROM holiday_policies hp
+      GROUP BY ${groupConfig.groupByExpr.replaceAll('p.', 'hp.')}
+    )
+    SELECT
+      h.group_name,
+      h.premium_wan,
+      h.commercial_premium_wan,
+      COALESCE(t.total_salesman, 0) AS total_salesman,
+      h.active_salesman,
+      h.commercial_active_salesman,
+      CASE WHEN COALESCE(t.total_salesman, 0) = 0 THEN 0
+        ELSE h.active_salesman * 1.0 / t.total_salesman
+      END AS auto_active_rate,
+      CASE WHEN COALESCE(t.total_salesman, 0) = 0 THEN 0
+        ELSE h.commercial_active_salesman * 1.0 / t.total_salesman
+      END AS commercial_active_rate
+    FROM holiday_stats h
+    LEFT JOIN total_by_group t ON h.group_name = t.group_key
+    ORDER BY h.premium_wan DESC
   `;
 }

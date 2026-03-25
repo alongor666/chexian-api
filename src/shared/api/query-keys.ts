@@ -58,6 +58,10 @@ export const queryKeys = {
   renewalDrilldown: (params: Record<string, unknown>) =>
     ['renewal-drilldown', params] as const,
 
+  // ── 假日营销 ──
+  holidayDrilldown: (params: Record<string, unknown>) =>
+    ['holiday-drilldown', params] as const,
+
   // ── 货车 ──
   truckAnalysis: (params: Record<string, unknown>) =>
     ['truck-analysis', params] as const,
