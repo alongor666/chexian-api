@@ -19,13 +19,20 @@ module.exports = {
       exec_mode: 'fork',
       node_args: '--max-old-space-size=2048', // 2GB 内存限制
 
-      // 环境变量
+      // 环境变量（默认 = 生产环境，pm2 restart 不带 --env 时使用此块）
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3000,
+        VPS_MODE: 'true',
+        CORS_ORIGIN: 'https://chexian.cretvalu.com',
+        DUCKDB_MAX_MEMORY: '1536MB',
+        DUCKDB_THREADS: '2',
+      },
       env_production: {
         NODE_ENV: 'production',
         PORT: 3000,
-        // VPS 运行模式：实时查询
         VPS_MODE: 'true',
-        // DuckDB 内存限制（VPS 2核4G，预留 2G 给 OS+Node.js）
+        CORS_ORIGIN: 'https://chexian.cretvalu.com',
         DUCKDB_MAX_MEMORY: '1536MB',
         DUCKDB_THREADS: '2',
       },

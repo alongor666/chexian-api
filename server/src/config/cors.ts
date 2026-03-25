@@ -33,15 +33,20 @@ const envOrigins = (process.env.CORS_ORIGIN || '')
  * - 生产环境：严格使用环境变量（如有）
  * - 开发环境：在环境变量基础上补充本地常用端口，避免 Vite 端口漂移导致请求被拦截
  */
+/** 生产环境默认允许的 Origin（兜底，避免 CORS_ORIGIN 未设置时服务完全不可用） */
+const prodDefaultOrigin = 'https://chexian.cretvalu.com';
+
 const allowedOrigins = (() => {
   if (process.env.NODE_ENV === 'development') {
     return Array.from(new Set([...envOrigins, ...devOrigins]));
   }
-  // 生产环境：必须显式配置 CORS_ORIGIN，禁止回退到开发端口
+  // 生产环境：优先使用环境变量，未设置时回退到默认值并警告
   if (envOrigins.length === 0) {
-    throw new Error(
-      '[CORS] 生产环境必须设置 CORS_ORIGIN 环境变量（如: CORS_ORIGIN=https://chexian.cretvalu.com）'
+    console.warn(
+      '[CORS] WARNING: CORS_ORIGIN 环境变量未设置，使用默认值:',
+      prodDefaultOrigin
     );
+    return [prodDefaultOrigin];
   }
   return envOrigins;
 })();
