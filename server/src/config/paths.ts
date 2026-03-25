@@ -58,6 +58,22 @@ export function getKpiPlanConfigPath(): string {
   return path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/kpi_plan_config.json');
 }
 
+// ── 维度表 Parquet 路径（本地优先，VPS 回退）──
+
+export function getSalesmanDimPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/salesman/latest.parquet'),
+    path.resolve(getDataDir(), 'dim/salesman/latest.parquet'),
+  ];
+}
+
+export function getPlanDimPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/plan/latest.parquet'),
+    path.resolve(getDataDir(), 'dim/plan/latest.parquet'),
+  ];
+}
+
 /**
  * 获取业务员机构映射 JSON 的候选路径（按优先级）。
  * 1) 本地开发优先使用 warehouse 最新文件

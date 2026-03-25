@@ -235,7 +235,7 @@ function getMonthKey(dateText: string): string {
   return dateText.slice(5, 7);
 }
 
-const BRANCH_SUMMARY_ROW_LABEL = '分公司';
+const BRANCH_SUMMARY_ROW_LABEL = '整体';
 
 function buildPerformanceBranchSummaryRow(
   date: string,
@@ -283,6 +283,7 @@ function PerformanceOrgHeatmap({
   growthMode,
   timePeriod,
   dimensionLabel = '三级机构',
+  groupByDimension = 'org_level_3',
   defaultHeatmapMetric,
   onCellClick,
   onRowClick,
@@ -293,10 +294,18 @@ function PerformanceOrgHeatmap({
   growthMode: PerformanceGrowthMode;
   timePeriod: PerformanceTimePeriod;
   dimensionLabel?: string;
+  groupByDimension?: HeatmapDimension;
   defaultHeatmapMetric?: HeatmapMetric;
   onCellClick?: (payload: { org: string; date: string }) => void;
   onRowClick?: (org: string) => void;
 }) {
+  const formatDimensionLabel = (value: string): string => {
+    if (value === BRANCH_SUMMARY_ROW_LABEL) return value;
+    if (groupByDimension === 'salesman') return formatSalesmanName(value);
+    if (groupByDimension === 'team') return formatTeamName(value);
+    return value;
+  };
+
   const [metric, setMetric] = useState<HeatmapMetric>(defaultHeatmapMetric ?? 'growth');
   const [activeCell, setActiveCell] = useState<{ org: string; date: string } | null>(null);
   const [hoverCell, setHoverCell] = useState<{ org: string; date: string } | null>(null);
@@ -313,7 +322,16 @@ function PerformanceOrgHeatmap({
       orgMap.set(row.orgLevel3, orgLine);
     });
 
-    const dates = [...dateSet].sort((a, b) => a.localeCompare(b));
+    const allDates = [...dateSet].sort((a, b) => a.localeCompare(b));
+    // 季/年视图：过滤掉所有机构都无数据的日期
+    const dates = (timePeriod === 'quarter' || timePeriod === 'year')
+      ? allDates.filter(date =>
+          [...orgMap.values()].some(orgLine => {
+            const row = orgLine.get(date);
+            return row && row.premium > 0;
+          })
+        )
+      : allDates;
     const latestDate = dates.length > 0 ? dates[dates.length - 1] : '';
 
     // 按当前指标的最新一列值降序排序，空值排最后
@@ -350,7 +368,7 @@ function PerformanceOrgHeatmap({
       organizations,
       matrix: orgMap,
     };
-  }, [rows, metric, growthMode]);
+  }, [rows, metric, growthMode, timePeriod]);
 
   // 数据变化时自动滚动到最右（最新日期）
   useEffect(() => {
@@ -407,6 +425,7 @@ function PerformanceOrgHeatmap({
     }
 
     if (metric === 'premium') {
+      const state = classifyAchievementState(row.achievementRate);
       return (
         <button
           type="button"
@@ -432,7 +451,7 @@ function PerformanceOrgHeatmap({
             ringClass
           )}
           style={{
-            backgroundColor: colors.neutral[100],
+            backgroundColor: getHeatmapStateColor(state),
             borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
             boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
           }}
@@ -542,7 +561,9 @@ function PerformanceOrgHeatmap({
                 <th className={cn('px-2 py-2 text-left', stickyTableStyles.firstColumnHeader, colorClasses.text.neutralDark)}>{dimensionLabel}</th>
                 {orgRows.dates.map((date) => {
                   let headerLabel: string;
-                  if (timePeriod === 'month') {
+                  if (timePeriod === 'year') {
+                    headerLabel = date.slice(0, 4); // YYYY
+                  } else if (timePeriod === 'month') {
                     headerLabel = date.slice(0, 7); // YYYY-MM
                   } else if (timePeriod === 'quarter') {
                     const month = parseInt(date.slice(5, 7), 10);
@@ -589,8 +610,8 @@ function PerformanceOrgHeatmap({
                         canRowClick ? 'cursor-pointer hover:text-primary hover:underline' : ''
                       )}
                       onClick={canRowClick ? () => onRowClick?.(org) : undefined}
-                      title={canRowClick ? `点击下钻 ${org}` : undefined}
-                    >{org}</td>
+                      title={canRowClick ? `点击下钻 ${org}` : org}
+                    >{formatDimensionLabel(org)}</td>
                     {orgRows.dates.map((date) => (
                       <td key={`${org}-${date}`} className="p-0.5 min-w-[84px]">
                         {renderCell(org, date, orgLine?.get(date), isBranchSummaryRow)}
@@ -1383,6 +1404,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           growthMode={growthMode}
           timePeriod={timePeriod}
           dimensionLabel={HEATMAP_DIMENSION_LABELS[activeHeatmapGroupBy]}
+          groupByDimension={activeHeatmapGroupBy}
           defaultHeatmapMetric={defaultHeatmapMetric}
           onCellClick={handleHeatmapCellClick}
           onRowClick={handlePerfHeatmapRowClick}

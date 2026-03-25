@@ -13,7 +13,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
-import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getPolicyDailyDirs, getClaimsDomainPaths, getQuotesDomainPaths } from './config/paths.js';
+import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getPolicyDailyDirs, getClaimsDomainPaths, getQuotesDomainPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
@@ -150,8 +150,12 @@ async function startServer() {
     // 启动期健康检查：数据目录与映射路径可见性
     const candidateDirs = getCandidateDataDirs();
     const mappingCandidates = getSalesmanMappingPaths();
+    const dimSalesmanCandidates = getSalesmanDimPaths();
+    const dimPlanCandidates = getPlanDimPaths();
     console.log('[Server] Startup health check:');
     console.log('  - Parquet dirs:', candidateDirs.map(d => `${d}${fs.existsSync(d) ? ' [ok]' : ' [missing]'}`).join(' | '));
+    console.log('  - Dim salesman:', dimSalesmanCandidates.map(p => `${p}${fs.existsSync(p) ? ' [ok]' : ' [missing]'}`).join(' | '));
+    console.log('  - Dim plan:', dimPlanCandidates.map(p => `${p}${fs.existsSync(p) ? ' [ok]' : ' [missing]'}`).join(' | '));
     console.log('  - Team mapping paths:', mappingCandidates.map(p => `${p}${fs.existsSync(p) ? ' [ok]' : ' [missing]'}`).join(' | '));
 
     // 优先扫描 current/ 子目录，加载活跃 Parquet 文件
@@ -292,24 +296,42 @@ async function startServer() {
       const rowCount = countResult[0]?.count || 0;
       console.log(`[Server] PolicyFact row count: ${rowCount}`);
 
-      // 加载团队映射表（业务员 → 团队归属）
-      // 本地开发路径优先，VPS 部署 fallback 到 server/data/
-      const teamMappingCandidates = getSalesmanMappingPaths();
-      let teamMappingLoaded = false;
-      for (const mappingPath of teamMappingCandidates) {
-        if (!fs.existsSync(mappingPath)) continue;
+      // 加载维度数据（业务员主数据 + 计划数据）
+      // 优先使用 Parquet 维度表，回退到旧 JSON 映射
+      let dimLoaded = false;
+
+      // 策略 1：Parquet 维度表（新架构）
+      const salesmanDimPath = getSalesmanDimPaths().find(p => fs.existsSync(p));
+      const planDimPath = getPlanDimPaths().find(p => fs.existsSync(p));
+      if (salesmanDimPath && planDimPath) {
         try {
-          await duckdbService.loadTeamMapping(mappingPath);
-          console.log('[Server] Team mapping loaded from:', mappingPath);
-          teamMappingLoaded = true;
-          break;
+          await duckdbService.loadDimParquet(salesmanDimPath, planDimPath);
+          console.log('[Server] Dim tables loaded from Parquet:', salesmanDimPath, planDimPath);
+          dimLoaded = true;
         } catch (err) {
-          console.warn('[Server] Team mapping load failed:', mappingPath);
+          console.warn('[Server] Dim Parquet load failed, falling back to JSON:', err);
         }
       }
-      if (!teamMappingLoaded) {
-        console.warn('[Server] Warning: Team mapping unavailable. Checked paths:', teamMappingCandidates.join(' , '));
-        console.warn('[Server] Hint: ensure salesman_organization_mapping.json exists in warehouse dim or server/data.');
+
+      // 策略 2：JSON 映射文件（回退）
+      if (!dimLoaded) {
+        const teamMappingCandidates = getSalesmanMappingPaths();
+        for (const mappingPath of teamMappingCandidates) {
+          if (!fs.existsSync(mappingPath)) continue;
+          try {
+            await duckdbService.loadTeamMapping(mappingPath);
+            console.log('[Server] Team mapping loaded from JSON (fallback):', mappingPath);
+            dimLoaded = true;
+            break;
+          } catch (err) {
+            console.warn('[Server] Team mapping load failed:', mappingPath);
+          }
+        }
+      }
+
+      if (!dimLoaded) {
+        console.warn('[Server] Warning: Dim data unavailable. Checked Parquet + JSON paths.');
+        console.warn('[Server] Hint: run "python3 数据管理/warehouse/dim/generate_dim_tables.py" to generate dim Parquet files.');
       }
 
       // 注册当前数据文件（使 /api/data/files 返回 isCurrent: true）

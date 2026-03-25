@@ -44,7 +44,14 @@ export const useSidebar = () => useContext(SidebarContext);
  * └──────┴─────────────────────────────────────────────┘
  */
 export const SidebarLayout: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sidebar-collapsed');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -64,6 +71,12 @@ export const SidebarLayout: React.FC = () => {
       localStorage.setItem('sidebar-width', sidebarWidth.toString());
     } catch { }
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sidebar-collapsed', collapsed.toString());
+    } catch { }
+  }, [collapsed]);
 
   const toggle = () => setCollapsed((prev) => !prev);
 

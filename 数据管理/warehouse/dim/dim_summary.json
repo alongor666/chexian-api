@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-03-24T17:37:30.011374",
+  "salesman": {
+    "total": 296,
+    "active": 243,
+    "resigned": 50,
+    "unknown": 3,
+    "path": "salesman/latest.parquet"
+  },
+  "plan": {
+    "total_rows": 484,
+    "years": [
+      2025,
+      2026
+    ],
+    "levels": [
+      "organization",
+      "salesman"
+    ],
+    "plan_2025_vehicle_total": 38920.5,
+    "plan_2026_vehicle_total": 45116.0,
+    "plan_2026_org_vehicle_total": 45470.0,
+    "path": "plan/latest.parquet"
+  }
+}

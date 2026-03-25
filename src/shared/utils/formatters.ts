@@ -243,18 +243,31 @@ export function formatSalesmanName(name: string | null | undefined): string {
 
 // ==================== 团队名简称 ====================
 
-const TEAM_SHORT_NAMES: Record<string, string> = {
-  '温江业务团队': '温江',
-  '龙泉业务团队': '龙泉',
-  '都江堰业务团队': '都江堰',
-  '天府业务二部': '天府二部',
-};
-
+/**
+ * 团队名称缩写（通用规则）
+ * - "XX业务N部" → "XXN部"（如 "天府业务二部" → "天府二部"）
+ * - "XX业务团队" → "XX"（如 "温江业务团队" → "温江"）
+ * - "非车险业务部" → "非车险"
+ * - 其他原样返回
+ */
 export function formatTeamName(name: string | null | undefined): string {
   if (name == null) return '-';
   const raw = String(name).trim();
   if (!raw) return '-';
-  return TEAM_SHORT_NAMES[raw] ?? raw;
+
+  // "XX业务N部" → "XXN部"
+  const deptMatch = raw.match(/^(.+?)业务([一二三四五六七八九十\d]+部)$/);
+  if (deptMatch) return `${deptMatch[1]}${deptMatch[2]}`;
+
+  // "XX业务团队" → "XX"
+  const teamMatch = raw.match(/^(.+?)业务团队$/);
+  if (teamMatch) return teamMatch[1];
+
+  // "XX业务部" → "XX"
+  const buMatch = raw.match(/^(.+?)业务部$/);
+  if (buMatch) return buMatch[1];
+
+  return raw;
 }
 
 // ==================== 走势图 X 轴日期格式化 ====================

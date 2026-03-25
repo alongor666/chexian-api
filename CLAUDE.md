@@ -63,7 +63,7 @@ warehouse/fact/
 - 关键方法：`duckdb.ts:loadDomainParquet()` — 创建 3 路 LEFT JOIN 的 `raw_parquet` 视图
 - PolicyFact 视图接口不变 — 24 个 SQL 生成器零改动
 
-**VPS 数据目录**：`server/data/fact/policy/daily/`、`server/data/fact/claims/`、`server/data/fact/quotes/`
+**VPS 数据目录**：`server/data/fact/policy/daily/`、`server/data/fact/claims/`、`server/data/fact/quotes/`、`server/data/dim/salesman/`、`server/data/dim/plan/`
 
 **报价数据口径**（待修正）：当前 `是否报价` 字段不可靠，正确逻辑应以「续保单号非空」判定已报价。用户待办，AI 不得擅自修改。
 
@@ -165,9 +165,9 @@ bun run governance                 # 治理校验
 
 **生产环境**：腾讯云 2核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist`
 
-**数据 ETL**：`node 数据管理/etl.mjs`（智能检测）· `node 数据管理/etl.mjs premium|claims|quotes|all`（强制）· 迁移脚本：`python3 数据管理/pipelines/split_existing.py`
+**数据 ETL**：`node 数据管理/etl.mjs`（智能检测）· `node 数据管理/etl.mjs premium|claims|quotes|all`（强制）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py` · 迁移脚本：`python3 数据管理/pipelines/split_existing.py`
 
-**数据同步**：`rsync -azv 数据管理/warehouse/fact/{policy/daily,claims,quotes}/ chexian-vps-deploy:/var/www/chexian/server/data/fact/...`
+**数据同步**：事实表 `rsync -azv 数据管理/warehouse/fact/{policy/daily,claims,quotes}/ chexian-vps-deploy:/var/www/chexian/server/data/fact/...` · 维度表 `rsync -azv 数据管理/warehouse/dim/{salesman,plan}/ chexian-vps-deploy:/var/www/chexian/server/data/dim/...`
 
 **CI/CD**：`deploy.yml`（push main → 构建→部署→健康检查）· `claude-code.yml`（@claude 触发）· `governance-check.yml`（PR 治理）
 

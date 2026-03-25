@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { usePermission } from '../../shared/contexts/PermissionContext';
 import { PageFilterPanel } from '../../components/layout/PageFilterPanel';
 import { PerformanceAnalysisPanel, PerformanceHeaderActions } from '../dashboard/PerformanceAnalysisPanel';
 import type {
@@ -19,7 +18,6 @@ const PERFORMANCE_ANCHORS = [
 
 export const PerformanceAnalysisPage: React.FC = () => {
   const { filters } = useGlobalFilters();
-  const { isOrgUser } = usePermission();
   const [segmentTag, setSegmentTag] = useState<PerformanceSegmentTag>('all');
   const [timePeriod, setTimePeriod] = useState<PerformanceTimePeriod>('day');
   const [growthMode, setGrowthMode] = useState<PerformanceGrowthMode>('mom');
@@ -47,7 +45,7 @@ export const PerformanceAnalysisPage: React.FC = () => {
         growthMode={growthMode}
         onTimePeriodChange={setTimePeriod}
         onGrowthModeChange={setGrowthMode}
-        defaultHeatmapMetric={isOrgUser ? 'achievement' : 'growth'}
+        defaultHeatmapMetric="achievement"
       />
     </PageFilterPanel>
   );
