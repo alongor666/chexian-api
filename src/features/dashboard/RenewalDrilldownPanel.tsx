@@ -10,7 +10,7 @@ import {
   DrilldownLoadingOverlay,
   DrilldownExhaustedBanner,
 } from '../../shared/ui';
-import { DIMENSION_LABELS, isConditionalDimension } from '../../shared/config/drilldown-dimensions';
+import { isConditionalDimension } from '../../shared/config/drilldown-dimensions';
 import type { DrilldownBreadcrumbStep } from '../../shared/ui';
 
 interface RenewalDrilldownPanelProps {

@@ -44,6 +44,7 @@ export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
   is_nev: '是否新能源',
   is_telemarketing: '是否电销',
   is_renewal: '是否续保',
+  insurance_grade: '车险风险等级',
 };
 
 /** 所有可用维度（insurance_grade 在驾意险口径下直接可用，无需条件规则） */
