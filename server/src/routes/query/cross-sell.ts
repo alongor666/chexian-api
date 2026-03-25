@@ -15,6 +15,7 @@ import { generateCrossSellTopSalesmanQuery, type TopSalesmanCoverage } from '../
 export const CROSS_SELL_DIMENSIONS = [
   'org_level_3', 'team', 'salesman',
   'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
+  'insurance_grade',
 ] as const;
 
 export const CROSS_SELL_SEAT_COVERAGE_LEVELS = ['eq_1w', 'gte_2w', 'lt_1w'] as const;

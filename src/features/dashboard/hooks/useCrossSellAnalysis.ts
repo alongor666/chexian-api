@@ -31,7 +31,8 @@ export type CrossSellDimension =
   | 'is_transfer'
   | 'is_nev'
   | 'is_telemarketing'
-  | 'is_renewal';
+  | 'is_renewal'
+  | 'insurance_grade';
 
 /** 维度中文标签 */
 export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
@@ -45,10 +46,11 @@ export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
   is_renewal: '是否续保',
 };
 
-/** 所有可用维度 */
+/** 所有可用维度（insurance_grade 在驾意险口径下直接可用，无需条件规则） */
 export const ALL_DIMENSIONS: CrossSellDimension[] = [
   'org_level_3', 'team', 'salesman',
   'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
+  'insurance_grade',
 ];
 
 /** 下钻路径中的一步 */

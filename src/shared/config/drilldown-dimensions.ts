@@ -20,7 +20,7 @@ export type PerformanceDrillDimension =
   | 'is_renewal'
   | 'insurance_grade';
 
-/** 驾意险支持的维度（insurance_grade 待后端 SQL 支持后添加） */
+/** 驾意险支持的维度（含条件维度 insurance_grade） */
 export type CrossSellDrillDimension =
   | 'org_level_3'
   | 'team'
@@ -29,7 +29,8 @@ export type CrossSellDrillDimension =
   | 'is_transfer'
   | 'is_nev'
   | 'is_telemarketing'
-  | 'is_renewal';
+  | 'is_renewal'
+  | 'insurance_grade';
 
 /** 续保分析层级（线性，顺序固定 — V1 兼容） */
 export type RenewalDrillLevel = 'company' | 'org' | 'team' | 'salesman' | 'coverage';
@@ -98,7 +99,7 @@ export const PERFORMANCE_DIMENSIONS: PerformanceDrillDimension[] = [
   // insurance_grade 为条件维度，由规则动态注入
 ];
 
-/** 驾意险 — 自由维度下钻（口径为非营业客车） */
+/** 驾意险 — 自由维度下钻（口径为非营业客车，insurance_grade 直接可用） */
 export const CROSS_SELL_DIMENSIONS: CrossSellDrillDimension[] = [
   'org_level_3',
   'team',
@@ -108,6 +109,7 @@ export const CROSS_SELL_DIMENSIONS: CrossSellDrillDimension[] = [
   'is_nev',
   'is_telemarketing',
   'is_renewal',
+  'insurance_grade',
 ];
 
 /** 续保分析 — 线性5层下钻（V1 兼容） */

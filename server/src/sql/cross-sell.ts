@@ -26,7 +26,8 @@ export type CrossSellDimension =
   | 'is_transfer'       // 是否过户
   | 'is_nev'            // 是否新能源
   | 'is_telemarketing'  // 是否电销
-  | 'is_renewal';       // 是否续保
+  | 'is_renewal'        // 是否续保
+  | 'insurance_grade';  // 车险风险等级（条件维度：仅非营业客车可用）
 
 /**
  * 下钻路径中的一步
@@ -48,6 +49,7 @@ export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
   is_nev: '是否新能源',
   is_telemarketing: '是否电销',
   is_renewal: '是否续保',
+  insurance_grade: '车险风险等级',
 };
 
 // ============================================================
@@ -87,6 +89,8 @@ function drillStepToWhere(step: DrilldownStep, colPrefix: string): string {
     case 'salesman':
       // salesman 的 group_name 是去掉工号的名字，所以用 LIKE 匹配
       return `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') = '${esc(step.value)}'`;
+    case 'insurance_grade':
+      return `COALESCE(${colPrefix}insurance_grade, 'X') = '${esc(step.value)}'`;
     default:
       return '1=1';
   }
@@ -122,6 +126,11 @@ function getGroupByConfig(dimension: CrossSellDimension, colPrefix: string): {
       return {
         selectExpr: `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') AS group_name`,
         groupByExpr: `${colPrefix}salesman_name`,
+      };
+    case 'insurance_grade':
+      return {
+        selectExpr: `COALESCE(${colPrefix}insurance_grade, 'X') AS group_name`,
+        groupByExpr: `COALESCE(${colPrefix}insurance_grade, 'X')`,
       };
     default:
       return {
