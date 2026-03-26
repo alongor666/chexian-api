@@ -29,6 +29,8 @@
     "test:all": "bun run typecheck && bun run build && bun run test --run && bun run test:e2e tests/e2e/04-subpage-no-refresh.spec.ts",
     "governance": "node scripts/check-governance.mjs",
     "governance:hotfiles": "node scripts/check-hotfile-contracts.mjs",
+    "deploy:check": "node scripts/check-deploy-readiness.mjs",
+    "deploy:check:health": "node scripts/check-deploy-readiness.mjs --require-health",
     "plans:manage": "node scripts/manage-plans.mjs",
     "hooks:install": "bash scripts/install-git-hooks.sh"
   },
