@@ -36,7 +36,7 @@ describe('DuckDB 派生表管理', () => {
     await service.query('CREATE VIEW PolicyFact AS SELECT 1 AS x');
     await service.dropAllDerivedTables();
 
-    const remaining = await service.query<{ table_name: string }>(`
+    const remaining: { table_name: string }[] = await service.query(`
       SELECT table_name FROM information_schema.tables
       WHERE table_name = 'PolicyFact' AND table_schema = 'main'
     `);
@@ -48,7 +48,7 @@ describe('DuckDB 派生表管理', () => {
     await service.query('CREATE TABLE PolicyFactRealtime AS SELECT 1 AS x');
     await service.dropAllDerivedTables();
 
-    const remaining = await service.query<{ table_name: string }>(`
+    const remaining: { table_name: string }[] = await service.query(`
       SELECT table_name FROM information_schema.tables
       WHERE table_name = 'PolicyFactRealtime' AND table_schema = 'main'
     `);
@@ -61,7 +61,7 @@ describe('DuckDB 派生表管理', () => {
     await service.query('CREATE TABLE raw_parquet_0 AS SELECT 2 AS x');
     await service.dropAllDerivedTables();
 
-    const remaining = await service.query<{ table_name: string }>(`
+    const remaining: { table_name: string }[] = await service.query(`
       SELECT table_name FROM information_schema.tables
       WHERE table_name LIKE 'raw_parquet%' AND table_schema = 'main'
     `);
@@ -75,7 +75,7 @@ describe('DuckDB 派生表管理', () => {
     await service.query('CREATE VIEW CrossSellDailyAgg AS SELECT 1 AS x');
     await service.dropAllDerivedTables();
 
-    const remaining = await service.query<{ table_name: string }>(`
+    const remaining: { table_name: string }[] = await service.query(`
       SELECT table_name FROM information_schema.tables
       WHERE table_name IN ('PolicyFact', 'PolicyFactRealtime', 'CrossSellDailyAgg')
         AND table_schema = 'main'

@@ -25,7 +25,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   });
 
   function mockQuery(monthList: string[], failAtSql?: string) {
-    querySpy = vi.spyOn(service, 'query').mockImplementation(async (sql: string) => {
+    querySpy = vi.spyOn(service, 'query').mockImplementation(async (...args: unknown[]) => {
+      const sql = args[0] as string;
       sqlCalls.push(sql);
 
       if (failAtSql && sql.includes(failAtSql)) {
