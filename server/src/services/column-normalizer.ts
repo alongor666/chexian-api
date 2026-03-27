@@ -22,6 +22,27 @@ const BOOLEAN_FIELDS = [
   'is_cross_sell',
 ];
 
+function resolveActualColumn(
+  standardName: string,
+  actualColumns: string[]
+): string | undefined {
+  const aliases = (COLUMN_ALIASES as Record<string, string[]>)[standardName] ?? [];
+  let actualColumn = actualColumns.find((col) =>
+    aliases.some((alias) => col === alias || col.includes(alias))
+  );
+
+  if (standardName === 'is_renewal') {
+    const renewalPolicyNoColumn = actualColumns.find((col) =>
+      (COLUMN_ALIASES as Record<string, string[]>).renewal_policy_no?.some((alias) => col === alias || col.includes(alias))
+    );
+    if (actualColumn && renewalPolicyNoColumn && actualColumn === renewalPolicyNoColumn) {
+      actualColumn = undefined;
+    }
+  }
+
+  return actualColumn;
+}
+
 /**
  * 生成列名映射SQL
  * 根据COLUMN_ALIASES配置，将中文列名映射为英文列名
@@ -31,23 +52,15 @@ export function generateColumnMappingSQL(
   actualColumns: string[]
 ): string {
   const mappings: string[] = [];
+  const consumedColumns = new Set<string>();
 
   // 遍历标准字段定义
-  for (const [standardName, aliases] of Object.entries(COLUMN_ALIASES)) {
+  for (const [standardName] of Object.entries(COLUMN_ALIASES)) {
     // 查找实际列名
-    let actualColumn = actualColumns.find((col) =>
-      aliases.some((alias) => col === alias || col.includes(alias))
-    );
-    if (standardName === 'is_renewal') {
-      const renewalPolicyNoColumn = actualColumns.find((col) =>
-        (COLUMN_ALIASES as Record<string, string[]>).renewal_policy_no?.some((alias) => col === alias || col.includes(alias))
-      );
-      if (actualColumn && renewalPolicyNoColumn && actualColumn === renewalPolicyNoColumn) {
-        actualColumn = undefined;
-      }
-    }
+    const actualColumn = resolveActualColumn(standardName, actualColumns);
 
     if (actualColumn) {
+      consumedColumns.add(actualColumn);
       // 检查是否需要类型转换
       if (BOOLEAN_FIELDS.includes(standardName)) {
         // 布尔字段：将字符串转换为布尔值，增加 LOWER 和 TRIM 处理，放宽判断条件
@@ -92,6 +105,11 @@ export function generateColumnMappingSQL(
     }
   }
 
+  for (const rawColumn of actualColumns) {
+    if (consumedColumns.has(rawColumn)) continue;
+    mappings.push(`"${rawColumn}" as "${rawColumn}"`);
+  }
+
   return `
     CREATE OR REPLACE VIEW PolicyFact AS
     SELECT
@@ -106,10 +124,8 @@ export function generateColumnMappingSQL(
 export function getColumnMapping(actualColumns: string[]): Record<string, string | null> {
   const mapping: Record<string, string | null> = {};
 
-  for (const [standardName, aliases] of Object.entries(COLUMN_ALIASES)) {
-    const actualColumn = actualColumns.find((col) =>
-      aliases.some((alias) => col === alias || col.includes(alias))
-    );
+  for (const [standardName] of Object.entries(COLUMN_ALIASES)) {
+    const actualColumn = resolveActualColumn(standardName, actualColumns);
     mapping[standardName] = actualColumn || null;
   }
 

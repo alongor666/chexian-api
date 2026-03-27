@@ -1,0 +1,211 @@
+{
+  "report_name": "quality_check_20260325",
+  "checked_at": "2026-03-25T13:06:52.152389+08:00",
+  "based_on_status_report": "数据分析报告/pipeline_status_20260325.json",
+  "source_statuses": {
+    "pipeline_status_summary": {
+      "active_source": "数据管理/warehouse/fact/policy/daily",
+      "active_daily_coverage": {
+        "start": "2023-12-01",
+        "end": "2026-03-24"
+      },
+      "legacy_snapshot_status": {
+        "current_snapshot_file": "数据管理/warehouse/fact/policy/current/每日数据_20231201-20260322.parquet",
+        "coverage_date_range": {
+          "start": "2023-12-01",
+          "end": "2026-03-22"
+        },
+        "modified_at": "2026-03-24T18:03:52",
+        "status": "lagging_behind_daily"
+      },
+      "comparison": {
+        "latest_excel_date": "2026-03-24",
+        "active_parquet_end_date": "2026-03-24",
+        "date_aligned": true,
+        "days_behind": 0,
+        "needs_update": false
+      }
+    },
+    "policy_daily_latest": {
+      "file_name": "2026-03-24.parquet",
+      "file_path": "数据管理/warehouse/fact/policy/daily/2026-03-24.parquet",
+      "size_bytes": 130405,
+      "modified_at": "2026-03-25T08:59:18.947987",
+      "status": "healthy"
+    },
+    "server_data": {
+      "directory": "server/data",
+      "file_count": 5,
+      "latest_sign_date_end": "2026-02-26",
+      "active_daily_end_date": "2026-03-24",
+      "max_days_behind_vs_active_daily_end": 448,
+      "overall_status": "stale"
+    }
+  },
+  "data_quality_metrics": {
+    "policy_daily_latest": {
+      "row_count": 1976,
+      "column_count": 38,
+      "key_field_null_rates": {
+        "保单号": {
+          "null_count": 0,
+          "null_rate": 0.0
+        },
+        "业务员": {
+          "null_count": 0,
+          "null_rate": 0.0
+        },
+        "保费": {
+          "null_count": 0,
+          "null_rate": 0.0
+        },
+        "签单日期": {
+          "null_count": 0,
+          "null_rate": 0.0
+        },
+        "三级机构": {
+          "null_count": 0,
+          "null_rate": 0.0
+        },
+        "险类": {
+          "null_count": 0,
+          "null_rate": 0.0
+        },
+        "保险起期": {
+          "null_count": 0,
+          "null_rate": 0.0
+        }
+      },
+      "date_ranges": {
+        "签单日期": {
+          "min": "2026-03-24T00:00:00",
+          "max": "2026-03-24T00:00:00",
+          "all_null": false
+        },
+        "提核日期": {
+          "min": "2025-03-27T00:00:00",
+          "max": "2026-03-24T00:00:00",
+          "all_null": false
+        },
+        "保险起期": {
+          "min": "2025-03-28T00:00:00",
+          "max": "2026-06-21T00:00:00",
+          "all_null": false
+        }
+      },
+      "sign_date_expected": "2026-03-24",
+      "sign_date_matches_expected": true,
+      "premium_metrics": {
+        "min": -3609.71,
+        "max": 10581.22,
+        "sum": 1496251.13,
+        "non_positive_count": 47
+      }
+    },
+    "server_data_files": [
+      {
+        "file_name": "2d67016d-e3a6-4aa0-b286-08b9f4c2ef2c_______2526_________0226.parquet",
+        "file_path": "server/data/2d67016d-e3a6-4aa0-b286-08b9f4c2ef2c_______2526_________0226.parquet",
+        "size_bytes": 27688110,
+        "modified_at": "2026-02-27T13:27:10.566571",
+        "row_count": 647575,
+        "column_count": 39,
+        "has_sign_date": true,
+        "sign_date_range": {
+          "min": "2025-01-01T00:00:00",
+          "max": "2026-02-26T00:00:00",
+          "all_null": false
+        },
+        "days_behind_vs_active_daily_end": 26,
+        "status": "stale"
+      },
+      {
+        "file_name": "3c8a168a-bb4f-4c81-ab1b-e93bd81dae78_______2024_________0226.parquet",
+        "file_path": "server/data/3c8a168a-bb4f-4c81-ab1b-e93bd81dae78_______2024_________0226.parquet",
+        "size_bytes": 20614628,
+        "modified_at": "2026-02-27T13:27:18.865481",
+        "row_count": 467645,
+        "column_count": 39,
+        "has_sign_date": true,
+        "sign_date_range": {
+          "min": "2023-12-01T00:00:00",
+          "max": "2024-12-31T00:00:00",
+          "all_null": false
+        },
+        "days_behind_vs_active_daily_end": 448,
+        "status": "stale"
+      },
+      {
+        "file_name": "aeec9757-f81c-4f9e-8f47-e86c755d4d2f____________________________0225.parquet",
+        "file_path": "server/data/aeec9757-f81c-4f9e-8f47-e86c755d4d2f____________________________0225.parquet",
+        "size_bytes": 28211162,
+        "modified_at": "2026-02-26T17:22:36.568001",
+        "row_count": 690353,
+        "column_count": 35,
+        "has_sign_date": true,
+        "sign_date_range": {
+          "min": "2023-11-27T00:00:00",
+          "max": "2026-02-25T00:00:00",
+          "all_null": false
+        },
+        "days_behind_vs_active_daily_end": 27,
+        "status": "stale"
+      },
+      {
+        "file_name": "d773b338-f68b-41bf-ab71-d37e323c0efd____________________________0224.parquet",
+        "file_path": "server/data/d773b338-f68b-41bf-ab71-d37e323c0efd____________________________0224.parquet",
+        "size_bytes": 28056390,
+        "modified_at": "2026-02-25T11:18:54.677566",
+        "row_count": 687260,
+        "column_count": 35,
+        "has_sign_date": true,
+        "sign_date_range": {
+          "min": "2023-11-27T00:00:00",
+          "max": "2026-02-24T00:00:00",
+          "all_null": false
+        },
+        "days_behind_vs_active_daily_end": 28,
+        "status": "stale"
+      },
+      {
+        "file_name": "车险保单综合明细表0223.parquet",
+        "file_path": "server/data/车险保单综合明细表0223.parquet",
+        "size_bytes": 27907299,
+        "modified_at": "2026-02-24T16:57:33.776777",
+        "row_count": 683497,
+        "column_count": 35,
+        "has_sign_date": true,
+        "sign_date_range": {
+          "min": "2023-11-27T00:00:00",
+          "max": "2026-02-23T00:00:00",
+          "all_null": false
+        },
+        "days_behind_vs_active_daily_end": 29,
+        "status": "stale"
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "medium",
+      "source": "policy_daily_latest",
+      "message": "字段 保费 存在 47 条小于等于 0 的记录。"
+    },
+    {
+      "severity": "medium",
+      "source": "server_data",
+      "message": "server/data 下 parquet 最晚仅覆盖到 2026-02-26，比 active daily 落后 26 天。"
+    },
+    {
+      "severity": "medium",
+      "source": "legacy_snapshot",
+      "message": "policy/current 旧快照覆盖到 2026-03-22，比 active daily 落后 2 天。"
+    }
+  ],
+  "recommended_actions": [
+    "如线上或回退链路仍依赖 server/data 根目录 parquet，需同步最新分域或 current 快照，避免读取到 2026-02-26 的旧数据。",
+    "补生成覆盖到 2026-03-24 的 policy/current 快照，确保非分域回退路径与 active daily 一致。",
+    "policy/daily 当前最新分区质量整体可用；继续按新 Excel 到达节奏执行 `node 数据管理/etl.mjs premium` 即可。",
+    "抽样核对保费小于等于 0 的记录，确认是否为批改冲减、退保或 ETL 处理异常。"
+  ]
+}
