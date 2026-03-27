@@ -65,6 +65,10 @@ node 数据管理/etl.mjs all        # 全部重跑
 | `数据管理/pipelines/split_existing.py` | 一次性迁移脚本 |
 | `数据管理/pipelines/merge_parquet.py` | Parquet 合并工具 |
 
+## 指标注册表
+
+新增/修改指标必须先改 `server/src/config/metric-registry/categories/*.ts`，再改 SQL 生成器。禁止硬编码新指标公式。详见 `metric-registry/types.ts`。
+
 ## 红线规则
 
 1. **业务口径只追加不删改**: `duckdb.ts` 和 `query.ts` 已有逻辑禁止修改/删除
@@ -90,6 +94,14 @@ bun run governance                 # 治理校验（push 前必跑）
 - `/api/ai/*` — NL2SQL/需求识别
 - `/api/auth/*` — 登录认证
 - `/api/filters/*` — 筛选器选项
+
+## 指标开发协议
+
+指标注册表：`server/src/config/metric-registry/`（L1-L3 原子指标的唯一事实源）
+
+新增指标：先 `grep -r "id: '${NEW_ID}'" server/src/config/metric-registry/` 确认不存在，然后在 `categories/*.ts` 中添加 MetricDefinition。L4 复杂查询留在 SQL 生成器中，但引用注册表中的原子指标。
+
+禁止事项：禁止在 SQL 生成器中硬编码已注册指标 SQL · 禁止在前端硬编码新指标标签 · 修改公式必须更新 version 和 changelog。
 
 ## 生产环境
 

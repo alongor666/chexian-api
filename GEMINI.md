@@ -84,6 +84,10 @@ chexian-api/
 └── tests/                        # 单元+E2E 测试
 ```
 
+## 指标注册表
+
+新增/修改指标必须先改 `server/src/config/metric-registry/categories/*.ts`，再改 SQL 生成器。禁止硬编码新指标公式。
+
 ## 红线规则（必须遵守）
 
 1. **业务口径只追加不删改** — `duckdb.ts` 和 `query.ts` 已有 SQL 逻辑禁止修改/删除
@@ -121,6 +125,12 @@ bun run governance                 # 治理校验（push 前必跑）
 - **前端**: Nginx 静态文件 `/var/www/chexian/frontend/dist`
 - **数据路径**: `/var/www/chexian/server/data/fact/{policy/daily,claims,quotes}`
 - **CI/CD**: push main → GitHub Actions 自动构建部署
+
+## 指标开发协议
+
+指标注册表：`server/src/config/metric-registry/`（L1-L3 原子指标的唯一事实源）
+
+新增指标：先搜索注册表确认不存在，然后在 `categories/*.ts` 中添加 MetricDefinition。L4 复杂查询留在 SQL 生成器中。禁止在 SQL 生成器中硬编码已注册指标 SQL，禁止在前端硬编码新指标标签。修改公式必须更新 version 和 changelog。
 
 ## 关键约束
 
