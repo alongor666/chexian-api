@@ -267,12 +267,17 @@ class DuckDBService {
   /**
    * 使缓存失效（数据文件变更时调用）
    */
-  invalidateCache(): void {
+  invalidateCache(options?: { silent?: boolean }): void {
     const size = this.queryCache.size;
     this.queryCache.invalidateAll();
-    if (size > 0) {
+    if (size > 0 && !options?.silent) {
       console.log(`[DuckDB] Cache invalidated (${size} entries cleared)`);
     }
+  }
+
+  /** @internal 测试用：获取缓存条目数 */
+  get cacheSize(): number {
+    return this.queryCache.size;
   }
 
   /**
@@ -676,7 +681,7 @@ class DuckDBService {
    * @param indexes    物化后创建的索引列表 [{name, column}]
    * @returns 'table' | 'view' 表示最终状态
    */
-  private async materializeInBatches(
+  /** @internal */ async materializeInBatches(
     tableName: string,
     cteSql: string,
     aggregateSql: string,
@@ -768,7 +773,7 @@ class DuckDBService {
   // ============================================
 
   /** 所有启动时创建的派生 TABLE/VIEW，卸载数据时统一清理 */
-  private static readonly DERIVED_RELATIONS = [
+  static readonly DERIVED_RELATIONS = [
     'CrossSellDailyAgg',
     'PolicyFactRenewal',
     'PolicyFact',
@@ -1171,3 +1176,6 @@ class DuckDBService {
 
 // 导出单例实例
 export const duckdbService = new DuckDBService();
+
+/** @internal 测试用：派生表名列表 */
+export const DERIVED_RELATIONS = DuckDBService.DERIVED_RELATIONS;

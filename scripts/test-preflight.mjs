@@ -66,11 +66,13 @@ function info(message) {
 
 function hasExecutable(relativePath) {
   const fullPath = path.join(ROOT_DIR, relativePath);
+  if (!fs.existsSync(fullPath)) return false;
   try {
     fs.accessSync(fullPath, fs.constants.X_OK);
     return true;
   } catch {
-    return false;
+    warning(`${relativePath} exists but lacks +x (bun may still execute it)`);
+    return true;
   }
 }
 
