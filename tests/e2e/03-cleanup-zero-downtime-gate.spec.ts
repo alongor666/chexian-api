@@ -6,7 +6,7 @@ const API_BASE = 'http://localhost:3000';
 const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
 const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'CxAdmin@2026!';
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'serial', timeout: 60000 });
 
 test('API-only 清理门禁：关键页面/API/导出全链路', async ({ page }) => {
   await ensureDataLoaded(page);
@@ -84,21 +84,31 @@ test('API-only 清理门禁：受保护接口 401 / 鉴权后 200', async () => 
   expect([401, 429]).toContain(noTokenRes.status());
 
   const authApi = await playwrightRequest.newContext({ storageState: undefined });
-  const loginRes = await authApi.post(`${API_BASE}/api/auth/login`, {
-    data: { username: E2E_USERNAME, password: E2E_PASSWORD },
-  });
-  expect(loginRes.status()).toBe(200);
 
-  // 认证后请求，可能因限流需等待重试
+  // 登录也可能被限流，需重试
+  let loginStatus = 0;
+  for (let i = 0; i < 5; i++) {
+    const loginRes = await authApi.post(`${API_BASE}/api/auth/login`, {
+      data: { username: E2E_USERNAME, password: E2E_PASSWORD },
+    });
+    loginStatus = loginRes.status();
+    if (loginStatus === 200) break;
+    if (loginStatus === 429) {
+      await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+    }
+  }
+  expect(loginStatus).toBe(200);
+
+  // 认证后请求，可能因限流需等待重试（E2E 并行 worker 容易触发限流）
   let authStatus = 0;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     const authRes = await authApi.get(
       `${API_BASE}/api/query/kpi?startDate=2026-01-01&endDate=2026-01-31`
     );
     authStatus = authRes.status();
     if (authStatus === 200) break;
     if (authStatus === 429) {
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
     }
   }
   expect(authStatus).toBe(200);

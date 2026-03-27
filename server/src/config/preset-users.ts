@@ -49,7 +49,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   leshan: {
     username: 'leshan',
-    passwordHash: '$2b$10$p/GSVbpB/9gsDwS1piCrPeee1oI8DaNc1tZQGUwk259NCAPrPZYxu',
+    passwordHash: '$2b$10$CeX2KL/WI2MWZ63xF7enqO2yQSLP.xvGk0QfnuS23UT4lrn8F6gmS', // leshan123
     displayName: '乐山机构',
     role: 'org_user',
     organization: '乐山',

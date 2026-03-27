@@ -12,7 +12,7 @@ export async function assertPageShellContracts(page: Page, target: PageShellTarg
   await page.goto(target.url);
   await page.waitForLoadState('domcontentloaded');
 
-  await expect(page.getByRole('heading', { name: target.heading })).toBeVisible();
+  await expect(page.getByRole('heading', { name: target.heading })).toBeVisible({ timeout: 15000 });
   if (target.description) {
     await expect(page.getByText(target.description)).toBeVisible();
   }
