@@ -30,6 +30,10 @@ jobs:
       - name: Build backend
         run: cd server && npm install && npm run build
 
+      # 部署前一致性校验
+      - name: Deploy readiness check
+        run: node scripts/check-deploy-readiness.mjs
+
       # 打包部署产物
       - name: Create deploy bundle
         run: |

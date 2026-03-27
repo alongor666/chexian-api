@@ -32,6 +32,8 @@
     "deploy:check": "node scripts/check-deploy-readiness.mjs",
     "deploy:check:health": "node scripts/check-deploy-readiness.mjs --require-health",
     "plans:manage": "node scripts/manage-plans.mjs",
+    "verify:quick": "node scripts/test-preflight.mjs && bun run governance && bun run typecheck",
+    "verify:full": "bun run verify:quick && bun run test --run",
     "hooks:install": "bash scripts/install-git-hooks.sh"
   },
   "dependencies": {

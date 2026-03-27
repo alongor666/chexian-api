@@ -23,6 +23,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { parseEcosystemEnvKeys } from './lib/ecosystem-parser.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,50 +74,6 @@ function parseArgs(argv) {
     }
   }
   return args;
-}
-
-/**
- * 从 ecosystem.config.cjs 纯文本中提取第一个 env: { ... } 块的键名
- */
-function parseEcosystemEnvKeys(content) {
-  // 找到第一个 env: { ... } 块（非 env_production）
-  // 使用简单状态机解析嵌套大括号
-  const envStart = content.indexOf('env:');
-  if (envStart === -1) return { keys: [], corsOrigin: '' };
-
-  // 确保不是 env_production
-  const before = content.slice(Math.max(0, envStart - 20), envStart);
-  const startIdx = before.includes('_') ? content.indexOf('env:', envStart + 4) : envStart;
-  const actualStart = content.indexOf('env:');
-
-  // 找到 { 开始
-  const braceStart = content.indexOf('{', actualStart);
-  if (braceStart === -1) return { keys: [], corsOrigin: '' };
-
-  // 匹配对应的 }
-  let depth = 0;
-  let braceEnd = -1;
-  for (let i = braceStart; i < content.length; i++) {
-    if (content[i] === '{') depth++;
-    if (content[i] === '}') { depth--; if (depth === 0) { braceEnd = i; break; } }
-  }
-  if (braceEnd === -1) return { keys: [], corsOrigin: '' };
-
-  const block = content.slice(braceStart + 1, braceEnd);
-  const keys = [];
-  let corsOrigin = '';
-
-  // 提取 KEY: value 对
-  const keyPattern = /^\s*(\w+)\s*:\s*(.+?)(?:,\s*)?$/gm;
-  let match;
-  while ((match = keyPattern.exec(block)) !== null) {
-    keys.push(match[1]);
-    if (match[1] === 'CORS_ORIGIN') {
-      corsOrigin = match[2].trim().replace(/^['"]|['"]$/g, '');
-    }
-  }
-
-  return { keys, corsOrigin };
 }
 
 // ─── Check 1: env 注入一致性 ─────────────────────────────────
@@ -175,7 +132,8 @@ function checkCorsWhitelist() {
 
   const hasLocalhost = origins.some(o => o.includes('localhost') || o.includes('127.0.0.1'));
   if (hasLocalhost) {
-    warn('CORS_ORIGIN 包含 localhost（生产环境应移除）');
+    fail('CORS_ORIGIN 包含 localhost（生产环境必须移除）');
+    errors.push('CORS_ORIGIN 包含 localhost');
   }
 
   if (errors.length > 0) {
@@ -183,7 +141,7 @@ function checkCorsWhitelist() {
     return false;
   }
 
-  success(`CORS 白名单: ${origins.length} 个 origin, 生产域名已包含${hasLocalhost ? ', ⚠ 含 localhost' : ''}`);
+  success(`CORS 白名单: ${origins.length} 个 origin, 生产域名已包含`);
   return true;
 }
 

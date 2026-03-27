@@ -44,8 +44,8 @@ describe('DuckDB QueryCache — 缓存行为测试', () => {
     const sql = "SELECT random() AS r";
     const result1 = await duckdbService.query<{ r: number }>(sql, 60000);
 
-    // 清空缓存
-    (duckdbService as any).queryCache.invalidateAll();
+    // 清空缓存（silent 模式避免日志噪音）
+    duckdbService.invalidateCache({ silent: true });
 
     const result2 = await duckdbService.query<{ r: number }>(sql, 60000);
     // 缓存清空后 random() 重新执行，值不同
@@ -54,8 +54,7 @@ describe('DuckDB QueryCache — 缓存行为测试', () => {
 
   // QC-04: 缓存 size 属性可访问
   it('QC-04: 缓存 size 返回当前条目数', () => {
-    const cache = (duckdbService as any).queryCache;
-    const sizeBefore = cache.size;
+    const sizeBefore = duckdbService.cacheSize;
     expect(typeof sizeBefore).toBe('number');
     expect(sizeBefore).toBeGreaterThanOrEqual(0);
   });
