@@ -1,3 +1,5 @@
+import { getMetricSql } from '../config/metric-registry/index.js';
+
 /**
  * 优质业务定义条件SQL片段
  *
@@ -17,20 +19,21 @@ export const QUALITY_BUSINESS_CONDITION = `
   )
 `;
 
+/** @deprecated 使用 getMetricSql() 替代 */
 export const KPI_SQL = {
-  total_premium: 'SUM(premium) as total_premium',
-  policy_count: 'COUNT(DISTINCT policy_no) as policy_count',
-  org_count: 'COUNT(DISTINCT org_level_3) as org_count',
-  salesman_count: 'COUNT(DISTINCT salesman_name) as salesman_count',
-  transfer_rate: 'COUNT(CASE WHEN is_transfer THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as transfer_rate',
-  telesales_rate: 'COUNT(CASE WHEN is_telemarketing THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as telesales_rate',
-  per_capita_premium: 'SUM(premium) / NULLIF(COUNT(DISTINCT salesman_name), 0) as per_capita_premium',
-  renewal_rate: 'COUNT(CASE WHEN is_renewal THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as renewal_rate',
-  commercial_rate: "SUM(CASE WHEN insurance_type = '商业保险' THEN premium ELSE 0 END) * 1.0 / NULLIF(SUM(premium), 0) as commercial_rate",
-  nev_rate: 'COUNT(CASE WHEN is_nev THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as nev_rate',
-  new_car_rate: 'COUNT(CASE WHEN is_new_car THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as new_car_rate',
-  quality_business_rate: `COUNT(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as quality_business_rate`,
-  commercial_insurance_rate: 'COUNT(CASE WHEN insurance_type LIKE \'%商业%\' THEN 1 END) * 1.0 / NULLIF(COUNT(CASE WHEN insurance_type = \'交强险\' THEN 1 END), 0) as commercial_insurance_rate',
+  total_premium: getMetricSql('total_premium'),
+  policy_count: getMetricSql('policy_count'),
+  org_count: getMetricSql('org_count'),
+  salesman_count: getMetricSql('salesman_count'),
+  transfer_rate: getMetricSql('transfer_rate'),
+  telesales_rate: getMetricSql('telesales_rate'),
+  per_capita_premium: getMetricSql('per_capita_premium'),
+  renewal_rate: getMetricSql('renewal_rate'),
+  commercial_rate: getMetricSql('commercial_rate'),
+  nev_rate: getMetricSql('nev_rate'),
+  new_car_rate: getMetricSql('new_car_rate'),
+  quality_business_rate: getMetricSql('quality_business_rate'),
+  commercial_insurance_rate: getMetricSql('commercial_insurance_rate'),
 };
 
 interface KpiQueryOptions {

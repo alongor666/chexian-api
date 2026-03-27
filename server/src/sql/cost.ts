@@ -24,6 +24,7 @@ import {
   generateEarnedPremiumPeriodQuery,
   type EarnedPremiumPeriodConfig,
 } from './sql-builder.js';
+import { getMetricSql } from '../config/metric-registry/index.js';
 
 // ==================== 类型定义 ====================
 
@@ -122,14 +123,10 @@ SELECT
   ROUND(SUM(reported_claims), 2) AS total_reported_claims,
 
   -- 案均赔款 = 已报告赔款 / 赔案件数
-  CASE
-    WHEN SUM(claim_cases) > 0
-    THEN ROUND(SUM(reported_claims) / CAST(SUM(claim_cases) AS DOUBLE), 2)
-    ELSE NULL
-  END AS avg_claim_amount,
+  ${getMetricSql('avg_claim_amount')},
 
   -- 满期保费 = SUM(保费 / 365 * 满期天数)
-  ROUND(SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2) AS earned_premium,
+  ${getMetricSql('earned_premium')},
 
   -- 满期天数合计
   CAST(SUM(exposure_days) AS INTEGER) AS total_exposure_days,
@@ -138,19 +135,11 @@ SELECT
   ROUND(AVG(CAST(exposure_days AS DOUBLE)), 1) AS avg_exposure_days,
 
   -- 满期赔付率 = 已报告赔款 / 满期保费
-  CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0
-    THEN ROUND(SUM(reported_claims) * 100.0 / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2)
-    ELSE NULL
-  END AS earned_claim_ratio,
+  ${getMetricSql('earned_claim_ratio')},
 
   -- 满期出险率（年化）= 赔案件数 * 365 / 满期天数合计 * 100
   -- 公式来源：(赔案件数/保单件数) / (满期天数/365) = 赔案件数 * 365 / (保单件数 * 平均满期天数)
-  CASE
-    WHEN SUM(exposure_days) > 0
-    THEN ROUND(CAST(SUM(claim_cases) AS DOUBLE) * 365.0 * 100.0 / CAST(SUM(exposure_days) AS DOUBLE), 2)
-    ELSE NULL
-  END AS earned_loss_frequency
+  ${getMetricSql('earned_loss_frequency')}
 
 FROM policy_exposure
 GROUP BY ${groupByClause}
@@ -185,11 +174,7 @@ SELECT
   ROUND(SUM(COALESCE(fee_amount, 0)), 2) AS total_fee,
 
   -- 费用率 = 费用金额 / 保费 * 100%
-  CASE
-    WHEN SUM(premium) > 0
-    THEN ROUND(SUM(COALESCE(fee_amount, 0)) * 100.0 / SUM(premium), 2)
-    ELSE NULL
-  END AS expense_ratio
+  ${getMetricSql('expense_ratio')}
 
 FROM PolicyFact
 WHERE ${whereClause}
@@ -246,16 +231,13 @@ SELECT
   ROUND(SUM(premium), 2) AS total_premium,
   ROUND(SUM(reported_claims), 2) AS total_reported_claims,
   ROUND(SUM(fee_amount), 2) AS total_fee,
-  ROUND(SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2) AS earned_premium,
+  -- 满期保费（CTE 中 fee_amount 已 COALESCE，exposure_days 已预算）
+  ${getMetricSql('earned_premium')},
 
   -- 满期赔付率
-  CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0
-    THEN ROUND(SUM(reported_claims) * 100.0 / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2)
-    ELSE NULL
-  END AS earned_claim_ratio,
+  ${getMetricSql('earned_claim_ratio')},
 
-  -- 费用率
+  -- 费用率（注意：CTE 中 fee_amount 已 COALESCE(fee_amount,0)，字面上不含 COALESCE，保持原样）
   CASE
     WHEN SUM(premium) > 0
     THEN ROUND(SUM(fee_amount) * 100.0 / SUM(premium), 2)
@@ -316,25 +298,22 @@ SELECT
   ${dimKeyExpression} AS dim_key,
   CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
   ROUND(SUM(premium), 2) AS total_premium,
-  ROUND(SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2) AS earned_premium,
+  -- 满期保费（CTE 中 fee_amount/reported_claims 已 COALESCE）
+  ${getMetricSql('earned_premium')},
   ROUND(SUM(reported_claims), 2) AS total_reported_claims,
   ROUND(SUM(fee_amount), 2) AS total_fee,
 
   -- 满期赔付率
-  CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0
-    THEN ROUND(SUM(reported_claims) * 100.0 / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2)
-    ELSE NULL
-  END AS earned_claim_ratio,
+  ${getMetricSql('earned_claim_ratio')},
 
-  -- 费用率
+  -- 费用率（注意：CTE 中 fee_amount 已 COALESCE(fee_amount,0)，字面上不含 COALESCE，保持原样）
   CASE
     WHEN SUM(premium) > 0
     THEN ROUND(SUM(fee_amount) * 100.0 / SUM(premium), 2)
     ELSE NULL
   END AS expense_ratio,
 
-  -- 变动成本率 = 赔付率 + 费用率
+  -- 变动成本率 = 赔付率 + 费用率（注意：fee_amount 已 COALESCE，保持原样）
   CASE
     WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
     THEN ROUND(
