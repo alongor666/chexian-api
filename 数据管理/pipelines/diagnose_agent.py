@@ -337,6 +337,30 @@ class DiagnosticsEngine:
         """
         return {"title": "经代 vs 机构整体", "data": self.db.query_df(sql)}
 
+    def dim_cross_sell(self) -> dict:
+        """维度10: 驾乘险（推介率/渗透率/保费/件均）
+        口径：
+          推介率 = 交叉销售为是的商业险保单数 / 商业险保单数
+          渗透率 = 驾乘保费 / 车险签单保费
+        """
+        sql = """
+            SELECT YEAR(签单日期) AS 年份,
+                COUNT(DISTINCT CASE WHEN 险类='商业保险' THEN 保单号 END) AS 商业险保单数,
+                COUNT(DISTINCT CASE WHEN 险类='商业保险' AND 交叉销售标识 THEN 保单号 END) AS 驾乘推介保单数,
+                ROUND(COUNT(DISTINCT CASE WHEN 险类='商业保险' AND 交叉销售标识 THEN 保单号 END) * 100.0
+                      / NULLIF(COUNT(DISTINCT CASE WHEN 险类='商业保险' THEN 保单号 END), 0), 1) AS 驾乘推介率,
+                ROUND(SUM(COALESCE(交叉销售保费_驾意, 0)), 0) AS 驾乘保费,
+                ROUND(SUM(保费), 0) AS 车险签单保费,
+                ROUND(SUM(COALESCE(交叉销售保费_驾意, 0)) * 100.0
+                      / NULLIF(SUM(保费), 0), 1) AS 驾乘渗透率,
+                ROUND(SUM(COALESCE(交叉销售保费_驾意, 0))
+                      / NULLIF(COUNT(DISTINCT CASE WHEN 险类='商业保险' AND 交叉销售标识 THEN 保单号 END), 0), 0) AS 驾乘件均
+            FROM v_agent
+            GROUP BY YEAR(签单日期)
+            ORDER BY 年份
+        """
+        return {"title": "驾乘险", "data": self.db.query_df(sql)}
+
     def dim_loss_exposure(self) -> dict:
         """维度9: 损失暴露（出险率 + 案均赔款）"""
         sql = """
@@ -366,6 +390,7 @@ class DiagnosticsEngine:
             self.dim_pricing_factor(),
             self.dim_benchmark(),
             self.dim_loss_exposure(),
+            self.dim_cross_sell(),
         ]
 
 
@@ -657,6 +682,7 @@ def main():
     writer.write_table_section(7, dimensions[6])  # 商车系数
     writer.write_benchmark(dimensions[7])          # 对比
     writer.write_table_section(9, dimensions[8])  # 损失暴露
+    writer.write_table_section(10, dimensions[9])  # 驾乘险
     writer.write_summary(dimensions)
 
     # 6. 保存
