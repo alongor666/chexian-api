@@ -13,7 +13,70 @@ import sys
 import time
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pyarrow.types as patypes
 from pathlib import Path
+
+
+def resolve_target_type(name, types):
+    non_null_types = [t for t in types if not patypes.is_null(t)]
+    if not non_null_types:
+        return pa.null()
+
+    first = non_null_types[0]
+    if all(t.equals(first) for t in non_null_types[1:]):
+        return first
+
+    if all(patypes.is_string(t) or patypes.is_large_string(t) for t in non_null_types):
+        return pa.large_string()
+
+    if all(patypes.is_boolean(t) for t in non_null_types):
+        return pa.bool_()
+
+    if all(patypes.is_integer(t) or patypes.is_floating(t) or patypes.is_boolean(t) for t in non_null_types):
+        if any(patypes.is_floating(t) for t in non_null_types):
+            return pa.float64()
+        return pa.int64()
+
+    if all(patypes.is_timestamp(t) for t in non_null_types):
+        units = {t.unit for t in non_null_types}
+        timezones = {t.tz for t in non_null_types}
+        if len(units) == 1 and len(timezones) == 1:
+            return first
+
+    raise TypeError(
+        f"列 {name} 存在无法自动统一的类型: "
+        + ", ".join(str(t) for t in non_null_types)
+    )
+
+
+def build_target_schema(tables):
+    ordered_names = []
+    for table in tables:
+        for name in table.column_names:
+            if name not in ordered_names:
+                ordered_names.append(name)
+
+    fields = []
+    for name in ordered_names:
+        types = []
+        for table in tables:
+            if name in table.column_names:
+                types.append(table.schema.field(name).type)
+        fields.append(pa.field(name, resolve_target_type(name, types)))
+    return pa.schema(fields)
+
+
+def align_table(table, target_schema):
+    arrays = []
+    for field in target_schema:
+        if field.name in table.column_names:
+            column = table[field.name]
+            if not column.type.equals(field.type):
+                column = column.cast(field.type)
+        else:
+            column = pa.nulls(table.num_rows, type=field.type)
+        arrays.append(column)
+    return pa.table(arrays, schema=target_schema)
 
 
 def main():
@@ -38,8 +101,9 @@ def main():
         print(f"   读取: {p.name}  {t.num_rows:,} 行 × {t.num_columns} 列")
         tables.append(t)
 
-    # promote_options='default' 允许类型兼容提升（如 int32 → int64）
-    merged = pa.concat_tables(tables, promote_options='default')
+    target_schema = build_target_schema(tables)
+    aligned_tables = [align_table(table, target_schema) for table in tables]
+    merged = pa.concat_tables(aligned_tables, promote_options='default')
     pq.write_table(merged, output_path, compression='snappy')
 
     elapsed = time.perf_counter() - start_ts

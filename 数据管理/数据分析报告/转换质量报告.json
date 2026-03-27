@@ -1,8 +1,8 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-03-25T09:03:04.232682",
+  "timestamp": "2026-03-27T11:00:36.190827",
   "basic_stats": {
-    "rows": 710740,
+    "rows": 1758,
     "columns": 39,
     "column_names": [
       "三级机构",
@@ -31,7 +31,6 @@
       "签单/批改保费",
       "商车自主定价系数",
       "批改类型",
-      "是否报价",
       "车架号",
       "案件数",
       "赔款合计",
@@ -43,29 +42,30 @@
       "交叉销售保费-驾意",
       "三者保额",
       "司机保额",
-      "乘客险保额"
+      "乘客险保额",
+      "续保业务类型"
     ]
   },
   "field_quality": {
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 696246
+      "unique_count": 1755
     },
     "业务员": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 328
+      "unique_count": 168
     },
     "三级机构": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 13
+      "unique_count": 12
     },
     "保险起期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 864
+      "unique_count": 99
     },
     "险类": {
       "null_count": 0,

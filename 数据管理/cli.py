@@ -107,6 +107,17 @@ TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "author": "@claude",
     },
 
+    # ============ 诊断工具 (diagnosis-tools) ============
+    "diagnose_agent": {
+        "module": "pipelines.diagnose_agent",
+        "function": "main",
+        "category": "diagnosis-tools",
+        "description": "经代/代理公司经营KPI诊断（满期赔付率/变动成本率/费用率/出险率，分年对比）",
+        "tags": ["diagnosis", "agent", "kpi", "intermediary", "earned-premium"],
+        "version": "1.0.0",
+        "author": "@claude",
+    },
+
     # ============ 业务计算工具 (business-tools) ============
     "earned_premium": {
         "module": "business_tools.earned_premium.calculate",

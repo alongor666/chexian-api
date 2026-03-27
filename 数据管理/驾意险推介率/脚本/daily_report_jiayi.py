@@ -76,7 +76,8 @@ def query_data(parquet_path, days=14):
             quote_col = col
             break
     if quote_col is not None:
-        df = df[df[quote_col] == False]
+        # 排除报价记录（True 为报价，False/None 为非报价）
+        df = df[df[quote_col] != True]
 
     insurance_col = None
     for col in ['险类', 'insurance_type']:
@@ -145,6 +146,10 @@ def query_data(parquet_path, days=14):
         'driver_premium',
         'auto_premium'
     ]
+
+    # 确保数值列为正确的数据类型
+    for col in ['auto_count', 'driver_count', 'driver_policy_count', 'driver_premium', 'auto_premium']:
+        daily_stats[col] = pd.to_numeric(daily_stats[col], errors='coerce').fillna(0)
 
     daily_stats['推介率'] = (daily_stats['driver_count'] / daily_stats['auto_count'] * 100).round(2)
     daily_stats['驾意险件均保费'] = (daily_stats['driver_premium'] / daily_stats['driver_policy_count']).round(2)

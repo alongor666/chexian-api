@@ -1,0 +1,48 @@
+{
+  "report_name": "pipeline_status_20260325",
+  "generated_at": "2026-03-25T13:01:39+08:00",
+  "latest_data_file": {
+    "file_name": "每日数据_20260324-20260324.xlsx",
+    "file_path": "数据管理/每日数据_20260324-20260324.xlsx",
+    "date_start": "2026-03-24",
+    "date_end": "2026-03-24",
+    "modified_at": "2026-03-25T08:53:50",
+    "size_bytes": 505959
+  },
+  "policy_parquet_status": {
+    "active_source": "数据管理/warehouse/fact/policy/daily",
+    "coverage_date_range": {
+      "start": "2023-12-01",
+      "end": "2026-03-24"
+    },
+    "daily_file_count": 845,
+    "missing_partition_count": 0,
+    "missing_partition_samples": [],
+    "status": "healthy"
+  },
+  "legacy_snapshot_status": {
+    "current_snapshot_file": "数据管理/warehouse/fact/policy/current/每日数据_20231201-20260322.parquet",
+    "coverage_date_range": {
+      "start": "2023-12-01",
+      "end": "2026-03-22"
+    },
+    "modified_at": "2026-03-24T18:03:52",
+    "status": "lagging_behind_daily"
+  },
+  "comparison": {
+    "latest_excel_date": "2026-03-24",
+    "active_parquet_end_date": "2026-03-24",
+    "date_aligned": true,
+    "days_behind": 0,
+    "needs_update": false
+  },
+  "recommended_next_steps": [
+    "当前 active daily parquet 已覆盖到 2026-03-24，暂不需要执行 policy 域增量更新。",
+    "下一个每日 Excel 到达后，再执行 `node 数据管理/etl.mjs premium` 进行保单+保费增量追加。",
+    "如仍有流程依赖 `policy/current` 旧快照，建议补生成覆盖到 2026-03-24 的 current 快照，避免旧模式读取到 2 天前的数据。"
+  ],
+  "notes": [
+    "本次是否需要更新的判断基于分域架构实际使用的 `policy/daily/` 分区目录。",
+    "`policy/current` 快照较 active daily 分区落后 2 天，但不影响当前分域模式下的主路径加载。"
+  ]
+}
