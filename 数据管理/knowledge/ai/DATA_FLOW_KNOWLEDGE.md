@@ -15,6 +15,8 @@
 > **CRITICAL #3**: Parquet 是唯一事实源。所有维度表的关联字段必须以 Parquet 实际数据为准。
 >
 > **CRITICAL #4**: UI 永远只展示中文名（通过 `formatSalesmanName()` 提取），但底层数据全程保持 `{工号}{中文名}` 格式。
+>
+> **CRITICAL #5**: `organization='未分配'` 不是真实机构，而是**按单归属控制标记**。`achievement_cache` 对这些人按 `PolicyFact.org_level_3` 拆分为多行（每个机构一行），人数统计必须用 `COUNT(DISTINCT full_name)`。
 
 ---
 

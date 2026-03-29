@@ -583,7 +583,7 @@ export function generatePerformanceSummaryQuery(
         CASE WHEN ${truthyExpr('is_transfer')} THEN true ELSE false END AS is_transfer_bool,
         COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
       FROM PolicyFact
-      LEFT JOIN achievement_cache ac ON PolicyFact.salesman_name = ac.full_name
+      LEFT JOIN (SELECT full_name, SUM(plan_vehicle) AS plan_vehicle FROM achievement_cache GROUP BY full_name) ac ON PolicyFact.salesman_name = ac.full_name
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
     ),
@@ -910,7 +910,7 @@ export function generatePerformanceDrilldownQuery(
         COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
       FROM PolicyFact p
       LEFT JOIN SalesmanTeamMapping tm ON p.salesman_name = tm.full_name
-      LEFT JOIN achievement_cache ac ON p.salesman_name = ac.full_name
+      LEFT JOIN (SELECT full_name, SUM(plan_vehicle) AS plan_vehicle FROM achievement_cache GROUP BY full_name) ac ON p.salesman_name = ac.full_name
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
         ${drillWhere}
@@ -1053,7 +1053,7 @@ export function generatePerformanceTopSalesmanQuery(
         CASE WHEN ${truthyExpr('p.is_transfer')} THEN true ELSE false END AS is_transfer,
         COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
       FROM PolicyFact p
-      LEFT JOIN achievement_cache ac ON p.salesman_name = ac.full_name
+      LEFT JOIN (SELECT full_name, SUM(plan_vehicle) AS plan_vehicle FROM achievement_cache GROUP BY full_name) ac ON p.salesman_name = ac.full_name
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
         AND p.salesman_name IS NOT NULL

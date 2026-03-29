@@ -1088,9 +1088,35 @@ class DuckDBService {
         FROM PolicyFact
         WHERE policy_date BETWEEN DATE '${prevYear}-01-01' AND DATE '${prevYear}-12-31'
         GROUP BY salesman_name
+      ),
+      -- 5-7. 跨机构业务员（organization='未分配'）按 org_level_3 拆分的聚合
+      cross_org_names AS (
+        SELECT full_name FROM SalesmanTeamMapping WHERE organization = '未分配'
+      ),
+      ytd_by_org AS (
+        SELECT salesman_name, org_level_3, SUM(premium) / 10000 AS actual_vehicle
+        FROM PolicyFact
+        WHERE policy_date >= DATE '${planYear}-01-01'
+          AND salesman_name IN (SELECT full_name FROM cross_org_names)
+        GROUP BY salesman_name, org_level_3
+      ),
+      prev_ytd_by_org AS (
+        SELECT salesman_name, org_level_3, SUM(premium) / 10000 AS prev_actual
+        FROM PolicyFact
+        WHERE policy_date >= DATE '${prevYear}-01-01'
+          AND policy_date <= (SELECT max_date - INTERVAL 1 YEAR FROM time_prog)
+          AND salesman_name IN (SELECT full_name FROM cross_org_names)
+        GROUP BY salesman_name, org_level_3
+      ),
+      prev_full_by_org AS (
+        SELECT salesman_name, org_level_3, SUM(premium) / 10000 AS prev_full_year
+        FROM PolicyFact
+        WHERE policy_date BETWEEN DATE '${prevYear}-01-01' AND DATE '${prevYear}-12-31'
+          AND salesman_name IN (SELECT full_name FROM cross_org_names)
+        GROUP BY salesman_name, org_level_3
       )
 
-      -- Part A：SalesmanTeamMapping 中所有业务员（含 plan=0 的无计划人员）
+      -- Part A1：正常映射业务员（organization != '未分配'）
       SELECT
         m.full_name                                                AS full_name,
         m.salesman_name                                            AS salesman_name_short,
@@ -1122,6 +1148,35 @@ class DuckDBService {
       LEFT JOIN prev_ytd    pv ON m.full_name = pv.salesman_name
       LEFT JOIN prev_full   pf ON m.full_name = pf.salesman_name
       CROSS JOIN time_prog  tp
+      WHERE m.organization != '未分配'
+
+      UNION ALL
+
+      -- Part A2：跨机构业务员（organization='未分配' → 按保单 org_level_3 拆分，每个机构一行）
+      SELECT
+        m.full_name                                                AS full_name,
+        m.salesman_name                                            AS salesman_name_short,
+        m.team_name,
+        ao.org_level_3                                             AS org_name,
+        ${planYear}                                                AS plan_year,
+        0.0                                                        AS plan_vehicle,
+        COALESCE(ao.actual_vehicle, 0)                             AS actual_vehicle,
+        COALESCE(po.prev_actual, 0)                                AS prev_year_actual,
+        COALESCE(pfo.prev_full_year, 0)                            AS prev_year_full,
+        tp.progress                                                AS time_progress,
+        NULL                                                       AS achievement_rate,
+        CASE
+          WHEN COALESCE(po.prev_actual, 0) > 0
+          THEN ROUND(((COALESCE(ao.actual_vehicle, 0) - po.prev_actual) / po.prev_actual) * 100.0, 2)
+          ELSE NULL
+        END AS yoy_rate,
+        NULL                                                       AS plan_growth_rate
+      FROM SalesmanTeamMapping m
+      JOIN ytd_by_org ao ON m.full_name = ao.salesman_name
+      LEFT JOIN prev_ytd_by_org  po  ON m.full_name = po.salesman_name  AND ao.org_level_3 = po.org_level_3
+      LEFT JOIN prev_full_by_org pfo ON m.full_name = pfo.salesman_name AND ao.org_level_3 = pfo.org_level_3
+      CROSS JOIN time_prog tp
+      WHERE m.organization = '未分配'
 
       UNION ALL
 
@@ -1154,7 +1209,32 @@ class DuckDBService {
     const countResult = await this.query<{ cnt: number }>(
       'SELECT COUNT(*) AS cnt FROM achievement_cache'
     );
-    console.log(`[DuckDB] achievement_cache built: ${countResult[0]?.cnt ?? 0} salespeople, year=${planYear}`);
+    const distinctCount = (await this.query<{ cnt: number }>(
+      'SELECT COUNT(DISTINCT full_name) AS cnt FROM achievement_cache'
+    ))[0]?.cnt ?? 0;
+    console.log(`[DuckDB] achievement_cache built: ${countResult[0]?.cnt ?? 0} rows (${distinctCount} unique salespeople), year=${planYear}`);
+  }
+
+  /**
+   * 加载续保漏斗 Parquet → RenewalFunnel 视图
+   * 独立于 PolicyFact，3.5万行 < 2MB
+   * maturity / days_since_expiry 在视图层动态计算（取当前日期）
+   */
+  async loadRenewalFunnel(parquetPath: string): Promise<void> {
+    const safePath = parquetPath.replace(/\\/g, '/');
+    await this.query(`
+      CREATE OR REPLACE VIEW RenewalFunnel AS
+      SELECT *,
+        CURRENT_DATE - CAST(insurance_end_date AS DATE) AS days_since_expiry,
+        CASE
+          WHEN CURRENT_DATE - CAST(insurance_end_date AS DATE) > 30 THEN 'mature'
+          WHEN CURRENT_DATE - CAST(insurance_end_date AS DATE) >= 0 THEN 'pending'
+          ELSE 'future'
+        END AS maturity
+      FROM read_parquet('${safePath}')
+    `);
+    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalFunnel');
+    console.log(`[DuckDB] RenewalFunnel view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
   }
 
   /**

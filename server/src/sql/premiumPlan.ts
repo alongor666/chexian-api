@@ -2,7 +2,9 @@
  * 保费达成下钻分析 SQL 生成器 v2
  *
  * 架构升级（v2）：
- * - 所有查询从 achievement_cache 预聚合表读取（业务员粒度，启动时预计算）
+ * - 所有查询从 achievement_cache 预聚合表读取（启动时预计算）
+ * - 粒度：普通业务员 1 行/人；跨机构业务员（organization='未分配'）按 org_level_3 拆分为多行
+ * - 人数统计必须用 COUNT(DISTINCT full_name)，不能用 COUNT(*)
  * - 每次下钻只需简单 GROUP BY，无需重新扫描 PolicyFact（10-40x 性能提升）
  * - customer_category / coverage 层级仍直接查询 PolicyFact（无计划数据）
  *
@@ -115,7 +117,7 @@ function buildAggSelect(groupField: string, extraFields: string = ''): string {
       ELSE NULL
     END                                                      AS rate_vehicle,
     NULL                                                     AS rate_total,
-    COUNT(*)                                                 AS salesman_count,
+    COUNT(DISTINCT full_name)                                 AS salesman_count,
     SUM(prev_year_actual)                                    AS prev_year_premium,
     CASE
       WHEN SUM(prev_year_actual) > 0
@@ -233,7 +235,7 @@ export function generateKPICardQuery(
         ELSE NULL
       END                                                    AS avg_rate_vehicle,
       NULL                                                   AS avg_rate_total,
-      COUNT(*)                                               AS total_salesman_count
+      COUNT(DISTINCT full_name)                               AS total_salesman_count
     FROM achievement_cache
     ${where}
   `;
@@ -257,8 +259,8 @@ export function generateRateDistributionQuery(
         WHEN achievement_rate < 120   THEN '100%-120%'
         ELSE '≥120%'
       END                                                    AS rate_range,
-      COUNT(*)                                               AS count,
-      ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2)    AS percentage
+      COUNT(DISTINCT full_name)                               AS count,
+      ROUND(COUNT(DISTINCT full_name) * 100.0 / SUM(COUNT(DISTINCT full_name)) OVER (), 2) AS percentage
     FROM achievement_cache
     ${where}
     GROUP BY rate_range
