@@ -76,7 +76,6 @@ export const ORG_USER_DEFAULT_ROUTE = '/performance-analysis';
 
 const ROUTE_ALIAS_MAP: Record<string, string> = {
   '/premium-report': '/reports',
-  '/marketing-report': '/reports',
   '/truck': '/specialty',
   '/renewal': '/specialty',
   '/cross-sell': '/specialty',

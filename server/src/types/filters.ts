@@ -79,7 +79,6 @@ export type FilterPresetName =
   | 'renewalDetail'
   | 'coefficient'
   | 'report'
-  | 'marketingReport'
   | 'cost'
   | 'costEarned';
 
@@ -217,30 +216,6 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
   report: {
     dateCriteria: true,
     allowedYears: 'currentAndPrevious',
-    analysisYear: true,
-    dateRange: true,
-    organization: true,
-    salesman: false, // 报表不支持业务员筛选
-    customerCategory: false, // 报表不支持
-    coverageCombination: false, // 报表不支持
-    renewalMode: false,
-    basicOptions: false,
-    quickCombos: false,
-    organizationMode: 'multi',
-    salesmanMode: 'multi',
-  },
-
-  /**
-   * 营销战报预设
-   * - 日期口径：锁定为签单日期（policy_date）
-   * - 分析年度：仅当年
-   * - 业务员：不显示（报表不支持）
-   * - 客户类别/险别组合：不显示（报表不支持）
-   */
-  marketingReport: {
-    dateCriteria: true, // 显示但锁定
-    lockedDateCriteria: 'policy_date', // 锁定为签单日期
-    allowedYears: 'currentOnly', // 仅当年
     analysisYear: true,
     dateRange: true,
     organization: true,

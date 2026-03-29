@@ -4,8 +4,7 @@ import { ensureDataLoaded } from './helpers/session';
 const sidebarTargets: Array<{ label: string; hashPath: string }> = [
   { label: '仪表盘', hashPath: '/dashboard' },
   { label: '业绩分析', hashPath: '/performance-analysis' },
-  { label: '保费报表', hashPath: '/premium-report' },
-  { label: '营销战报', hashPath: '/marketing-report' },
+  { label: '保费达成', hashPath: '/reports' },
   { label: '营业货车', hashPath: '/truck' },
   { label: '续保分析', hashPath: '/renewal' },
   { label: '驾意险推介率', hashPath: '/cross-sell' },

@@ -61,19 +61,7 @@ export const capabilities: Capability[] = [
       '保费报表',
     ],
   },
-  {
-    id: 'marketing-report',
-    route: '/reports?tab=marketing',
-    name: '营销战报',
-    icon: 'Target',
-    description: '营销战报，汇总当期签单战绩、机构对比',
-    keywords: ['营销', '战报', '签单', '战绩'],
-    exampleQueries: [
-      '今天的营销战报',
-      '签单战绩',
-      '营销情况汇总',
-    ],
-  },
+  // marketing-report 已合并到 premium-report（保费达成）页面
   {
     id: 'truck',
     route: '/specialty?tab=truck',

@@ -45,7 +45,7 @@ const navItems: NavItem[] = [
 const dataNavItems: NavItem[] = [
   { path: '/dashboard', icon: Gauge, label: '仪表盘', shortLabel: '仪表' },
   { path: '/performance-analysis', icon: TrendingUp, label: '业绩分析', shortLabel: '业绩' },
-  { path: '/reports', icon: DollarSign, label: '业务报表', shortLabel: '报表' },
+  { path: '/reports', icon: DollarSign, label: '保费达成', shortLabel: '保费' },
   { path: '/specialty', icon: Gift, label: '专项分析', shortLabel: '专项' },
   { path: '/growth', icon: BarChart3, label: '增长与对比', shortLabel: '增长' },
   { path: '/cost', icon: Calculator, label: '成本综合', shortLabel: '成本' },
