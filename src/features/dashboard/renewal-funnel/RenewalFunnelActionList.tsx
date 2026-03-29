@@ -26,10 +26,22 @@ const PRIORITY_TABS: { value: PriorityTab; label: string; desc: string; style: s
   { value: 'all', label: '全部', desc: '', style: badgeStyles.default },
 ];
 
+const PAGE_SIZE = 100;
+
 export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
   const [priorityTab, setPriorityTab] = useState<PriorityTab>('P1');
+  const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useRenewalFunnelActionList(filters);
+  // 切换筛选时重置页码
+  const prevFiltersRef = React.useRef(filters);
+  const prevTabRef = React.useRef(priorityTab);
+  if (prevFiltersRef.current !== filters || prevTabRef.current !== priorityTab) {
+    prevFiltersRef.current = filters;
+    prevTabRef.current = priorityTab;
+    if (page !== 1) setPage(1);
+  }
+
+  const { data, isLoading } = useRenewalFunnelActionList(filters, { page, pageSize: PAGE_SIZE });
 
   const filteredData = useMemo(() => {
     if (!data?.length) return [];
@@ -47,6 +59,10 @@ export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
     }
     return c;
   }, [data]);
+
+  const totalItems = filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const pagedData = filteredData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleExport = () => {
     if (!filteredData.length) return;
@@ -129,7 +145,7 @@ export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
               </tr>
             </thead>
             <tbody>
-              {filteredData.slice(0, 200).map((row) => (
+              {pagedData.map((row) => (
                 <tr key={row.policy_no} className={tableStyles.row}>
                   <td className={tableStyles.cell}>
                     <PriorityBadge priority={row.action_priority ?? 'P4'} />
@@ -158,11 +174,28 @@ export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
               ))}
             </tbody>
           </table>
-          {filteredData.length > 200 && (
-            <p className={cn(textStyles.caption, 'text-center py-2')}>
-              仅显示前 200 条，完整数据请导出 CSV
-            </p>
-          )}
+          {/* 分页控制 */}
+          <div className="flex items-center justify-between py-2 px-1">
+            <span className={cn(textStyles.caption, fontStyles.tabular)}>
+              第 {page} 页 / 共 {totalPages} 页（{formatCount(totalItems)} 条）
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className={cn(buttonStyles.base, buttonStyles.sizeSmall, buttonStyles.secondary)}
+              >
+                上一页
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className={cn(buttonStyles.base, buttonStyles.sizeSmall, buttonStyles.secondary)}
+              >
+                下一页
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

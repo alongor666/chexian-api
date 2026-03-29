@@ -15,6 +15,10 @@ export interface RenewalFunnelFilters {
   daysRange?: number;
   insuranceGrade?: string;
   actionPriority?: 'P1' | 'P2' | 'P3' | 'P4';
+  expiryDateStart?: string;
+  expiryDateEnd?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 function buildWhere(filters: RenewalFunnelFilters): string {
@@ -37,6 +41,12 @@ function buildWhere(filters: RenewalFunnelFilters): string {
   }
   if (filters.insuranceGrade) {
     conditions.push(`insurance_grade = '${filters.insuranceGrade.replace(/'/g, "''")}'`);
+  }
+  if (filters.expiryDateStart) {
+    conditions.push(`CAST(insurance_end_date AS DATE) >= '${filters.expiryDateStart.replace(/'/g, "''")}'`);
+  }
+  if (filters.expiryDateEnd) {
+    conditions.push(`CAST(insurance_end_date AS DATE) <= '${filters.expiryDateEnd.replace(/'/g, "''")}'`);
   }
 
   return conditions.join(' AND ');
@@ -155,7 +165,7 @@ export function generateFunnelSalesmanQuery(filters: RenewalFunnelFilters = {}):
  * P3: 已报价、已到期 15-30 天 → 紧急挽回
  * P4: 其他未续保 → 大概率流失
  */
-export function generateFunnelActionListQuery(filters: RenewalFunnelFilters = {}): string {
+function buildActionListConditions(filters: RenewalFunnelFilters): string[] {
   const conditions: string[] = ['NOT is_renewed'];
 
   if (filters.orgName) {
@@ -170,10 +180,24 @@ export function generateFunnelActionListQuery(filters: RenewalFunnelFilters = {}
   if (filters.daysRange !== undefined) {
     conditions.push(`days_since_expiry <= ${filters.daysRange}`);
   }
-
   if (filters.actionPriority) {
     conditions.push(`action_priority = '${filters.actionPriority}'`);
   }
+  if (filters.expiryDateStart) {
+    conditions.push(`CAST(insurance_end_date AS DATE) >= '${filters.expiryDateStart.replace(/'/g, "''")}'`);
+  }
+  if (filters.expiryDateEnd) {
+    conditions.push(`CAST(insurance_end_date AS DATE) <= '${filters.expiryDateEnd.replace(/'/g, "''")}'`);
+  }
+
+  return conditions;
+}
+
+export function generateFunnelActionListQuery(filters: RenewalFunnelFilters = {}): string {
+  const conditions = buildActionListConditions(filters);
+  const page = filters.page ?? 1;
+  const pageSize = filters.pageSize ?? 200;
+  const offset = (page - 1) * pageSize;
 
   return `
     SELECT
@@ -198,6 +222,17 @@ export function generateFunnelActionListQuery(filters: RenewalFunnelFilters = {}
     FROM RenewalFunnel
     WHERE ${conditions.join(' AND ')}
     ORDER BY action_priority ASC, days_since_expiry DESC
+    LIMIT ${pageSize} OFFSET ${offset}
+  `;
+}
+
+export function generateFunnelActionListCountQuery(filters: RenewalFunnelFilters = {}): string {
+  const conditions = buildActionListConditions(filters);
+
+  return `
+    SELECT COUNT(*) AS total
+    FROM RenewalFunnel
+    WHERE ${conditions.join(' AND ')}
   `;
 }
 

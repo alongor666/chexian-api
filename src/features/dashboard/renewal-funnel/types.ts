@@ -87,4 +87,6 @@ export interface FunnelFilters {
   month?: string;
   maturityFilter?: 'mature' | 'pending' | 'all';
   daysRange?: number;
+  expiryDateStart?: string;
+  expiryDateEnd?: string;
 }

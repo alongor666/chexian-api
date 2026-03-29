@@ -77,8 +77,11 @@ def main():
     # ── 类型转换 ──
 
     # 保单号：去除 .0 后缀
-    df['policy_no'] = df['policy_no'].astype(str).str.replace(r'\.0$', '', regex=True)
-    df['vehicle_frame_no'] = df['vehicle_frame_no'].astype(str).str.replace(r'\.0$', '', regex=True)
+    import sys
+    sys.path.insert(0, str(PROJECT_ROOT / '数据管理' / 'pipelines'))
+    from utils import normalize_policy_no
+    df['policy_no'] = normalize_policy_no(df['policy_no'])
+    df['vehicle_frame_no'] = normalize_policy_no(df['vehicle_frame_no'])
 
     # 布尔字段
     df['is_quoted'] = df['is_quoted'].map({'是': True, '否': False}).fillna(False)
