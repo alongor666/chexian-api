@@ -86,15 +86,14 @@ const TRANSFORM_SCRIPT = join(SCRIPT_DIR, 'pipelines/transform.py');
  * - claims/quotes 用最大的全量文件（赔付/报价会回溯更新历史）
  */
 function findCurrentXlsx(preferLargest = false) {
-  const files = ls('每日数据_*.xlsx', SCRIPT_DIR)
-    .filter(f => !/20241231\.xlsx$/i.test(f.name));
+  const files = ls('每日数据_*.xlsx', SCRIPT_DIR);
   if (files.length === 0) return null;
 
   if (preferLargest) {
     // claims/quotes：选文件最大的（全量数据）
     return files.sort((a, b) => statSync(b.path).size - statSync(a.path).size)[0];
   }
-  // premium：选文件名最新的（可能是增量）
+  // 选文件名最新的（结束日期最大）
   return files[0];
 }
 
@@ -118,7 +117,7 @@ function getLatestDailyDate() {
 
 /** 从 xlsx 文件名提取结束日期 → "YYYY-MM-DD" */
 function xlsxEndDate(filename) {
-  const m = filename.match(/每日数据_\d{8}-(\d{8})/);
+  const m = filename.match(/每日数据_\d{8}[_-](\d{8})/);
   if (!m) return null;
   const d = m[1];
   return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
@@ -136,41 +135,9 @@ function archiveFile(filePath) {
 
 // ── 子命令实现 ──
 
-function runPremium(python) {
-  log('cyan', '\n═══ Premium 域：保单+保费（增量追加）═══\n');
-
-  const xlsx = findCurrentXlsx();
-  if (!xlsx) { log('red', '未找到当前数据 xlsx'); process.exit(1); }
-  log('green', `源文件: ${xlsx.name}`);
-
-  ensureDir(POLICY_DAILY_DIR);
-
-  const latestDate = getLatestDailyDate();
-  const endDate = xlsxEndDate(xlsx.name);
-
-  if (latestDate && endDate && latestDate >= endDate) {
-    log('yellow', `daily/ 已有数据截至 ${latestDate}，xlsx 截至 ${endDate}，无需更新`);
-    return;
-  }
-
-  const outputFile = join(POLICY_DAILY_DIR, (endDate || 'output') + '.parquet');
-  const args = ['-i', `"${xlsx.path}"`, '-o', `"${outputFile}"`, '--domain', 'policy'];
-
-  if (latestDate) {
-    args.push('--after-date', latestDate);
-    log('green', `增量模式: 只提取签单日期 > ${latestDate}`);
-  } else {
-    log('green', '全量模式: 首次生成');
-  }
-
-  const renewalSource = findRenewalSource();
-  if (renewalSource) {
-    args.push('-r', `"${renewalSource}"`);
-    log('green', `续保源: ${basename(renewalSource)}`);
-  }
-
-  runPython(python, TRANSFORM_SCRIPT, args);
-  log('green', 'Premium 域完成');
+function runPremium(_python) {
+  log('yellow', '\n═══ Premium 域已由 daily.mjs 负责，跳过 ═══');
+  log('yellow', '请使用: cd 数据管理 && node daily.mjs\n');
 }
 
 function runClaims(python) {

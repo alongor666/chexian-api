@@ -221,11 +221,16 @@ async function main() {
       }
 
       if (!opts.output) {
-        const dateMatch = basename(opts.target).match(/(\d{8})/g);
-        const fileDate = dateMatch && dateMatch.length > 0
-          ? dateMatch[dateMatch.length - 1]
-          : new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        opts.output = join(scriptDir, 'warehouse/fact/policy/current', `每日数据_20231101_${fileDate}.parquet`);
+        const rangeMatch = basename(opts.target).match(/每日数据_(\d{8})[_-](\d{8})/);
+        if (rangeMatch) {
+          opts.output = join(scriptDir, 'warehouse/fact/policy/current', `每日数据_${rangeMatch[1]}_${rangeMatch[2]}.parquet`);
+        } else {
+          const dateMatch = basename(opts.target).match(/(\d{8})/g);
+          const fileDate = dateMatch && dateMatch.length > 0
+            ? dateMatch[dateMatch.length - 1]
+            : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          opts.output = join(scriptDir, 'warehouse/fact/policy/current', `每日数据_${fileDate}.parquet`);
+        }
       }
       
       if (opts.source) {
