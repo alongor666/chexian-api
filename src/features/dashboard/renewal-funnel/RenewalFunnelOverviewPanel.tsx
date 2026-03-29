@@ -16,9 +16,11 @@ import type { FunnelFilters } from './types';
 interface Props {
   filters: FunnelFilters;
   onOrgClick: (orgName: string) => void;
+  onCategoryClick?: (category: string) => void;
 }
 
-export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClick }) => {
+export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClick, onCategoryClick }) => {
+  const isCategoryView = filters.groupBy === 'category';
   const { data: overviewData, isLoading: overviewLoading } = useRenewalFunnelOverview(filters);
   const { data: matrixData, isLoading: matrixLoading } = useRenewalFunnelMatrix(filters);
 
@@ -93,10 +95,12 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
         )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-        {/* 机构排名表 (3/5) */}
-        <div className={cn(cardStyles.standard, 'xl:col-span-3')}>
-          <h3 className={cn(textStyles.titleSmall, 'mb-3')}>机构续保率排名</h3>
+      <div className={cn('grid gap-4', isCategoryView ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-5')}>
+        {/* 排名表 */}
+        <div className={cn(cardStyles.standard, isCategoryView ? '' : 'xl:col-span-3')}>
+          <h3 className={cn(textStyles.titleSmall, 'mb-3')}>
+            {isCategoryView ? '客户类别续保率排名' : '机构续保率排名'}
+          </h3>
           {overviewLoading ? (
             <div className="animate-pulse space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -108,7 +112,9 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
               <table className="w-full">
                 <thead className={tableStyles.header}>
                   <tr>
-                    <th className={tableStyles.headerCell}>机构</th>
+                    <th className={tableStyles.headerCell}>
+                      {isCategoryView ? '客户类别' : '机构'}
+                    </th>
                     <th className={cn(tableStyles.headerCell, 'text-right')}>应续</th>
                     <th className={cn(tableStyles.headerCell, 'text-right')}>已报价</th>
                     <th className={cn(tableStyles.headerCell, 'text-right')}>已续保</th>
@@ -122,93 +128,104 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
                 <tbody>
                   {(overviewData ?? [])
                     .sort((a, b) => (b.renewal_rate ?? 0) - (a.renewal_rate ?? 0))
-                    .map((row) => (
-                      <tr key={row.org_level_3} className={tableStyles.row}>
-                        <td className={tableStyles.cell}>
-                          <button onClick={() => onOrgClick(row.org_level_3)} className={textStyles.link}>
-                            {row.org_level_3}
-                          </button>
-                        </td>
-                        <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
-                          {formatCount(row.total_due ?? 0)}
-                        </td>
-                        <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
-                          {formatCount(row.total_quoted ?? 0)}
-                        </td>
-                        <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
-                          {formatCount(row.total_renewed ?? 0)}
-                        </td>
-                        <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
-                          <RateCell value={row.renewal_rate ?? 0} />
-                        </td>
-                        <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
-                          {(row.quote_to_renewal_rate ?? 0).toFixed(1)}%
-                        </td>
-                        <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
-                          {(row.self_retention_rate ?? 0).toFixed(1)}%
-                        </td>
-                        <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
-                          {(row.p1_count ?? 0) > 0 && (
-                            <span className={colorClasses.text.danger}>{row.p1_count}</span>
-                          )}
-                        </td>
-                        <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
-                          {(row.p2_count ?? 0) > 0 && (
-                            <span className={colorClasses.text.warning}>{row.p2_count}</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    .map((row) => {
+                      const label = row.org_level_3 ?? '';
+                      return (
+                        <tr key={label} className={tableStyles.row}>
+                          <td className={tableStyles.cell}>
+                            <button
+                              onClick={() => isCategoryView
+                                ? onCategoryClick?.(label)
+                                : onOrgClick(label)
+                              }
+                              className={textStyles.link}
+                            >
+                              {label || '—'}
+                            </button>
+                          </td>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                            {formatCount(row.total_due ?? 0)}
+                          </td>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                            {formatCount(row.total_quoted ?? 0)}
+                          </td>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                            {formatCount(row.total_renewed ?? 0)}
+                          </td>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                            <RateCell value={row.renewal_rate ?? 0} />
+                          </td>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                            {(row.quote_to_renewal_rate ?? 0).toFixed(1)}%
+                          </td>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                            {(row.self_retention_rate ?? 0).toFixed(1)}%
+                          </td>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                            {(row.p1_count ?? 0) > 0 && (
+                              <span className={colorClasses.text.danger}>{row.p1_count}</span>
+                            )}
+                          </td>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                            {(row.p2_count ?? 0) > 0 && (
+                              <span className={colorClasses.text.warning}>{row.p2_count}</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
           )}
         </div>
 
-        {/* 机构×等级 续保率矩阵 (2/5) */}
-        <div className={cn(cardStyles.standard, 'xl:col-span-2')}>
-          <h3 className={cn(textStyles.titleSmall, 'mb-3')}>机构×等级 续保率矩阵</h3>
-          {matrixLoading ? (
-            <div className="animate-pulse h-48 bg-neutral-100 rounded" />
-          ) : grades.length > 0 ? (
-            <div className="overflow-auto max-h-[500px]">
-              <table className="w-full text-xs">
-                <thead className={tableStyles.header}>
-                  <tr>
-                    <th className={cn(tableStyles.headerCell, 'text-xs')}>机构</th>
-                    {grades.map(g => (
-                      <th key={g} className={cn(tableStyles.headerCell, 'text-xs text-center')}>{g || '—'}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {orgs.map(org => (
-                    <tr key={org} className={tableStyles.row}>
-                      <td className={cn(tableStyles.cell, 'text-xs font-medium')}>{org}</td>
-                      {grades.map(g => {
-                        const rate = matrix.get(`${org}|${g}`);
-                        return (
-                          <td key={g} className="px-1 py-1.5 text-center">
-                            {rate !== undefined ? (
-                              <HeatCell value={rate} />
-                            ) : (
-                              <span className="text-neutral-300">—</span>
-                            )}
-                          </td>
-                        );
-                      })}
+        {/* 机构×等级 续保率矩阵（客户类别视图下不显示） */}
+        {!isCategoryView && (
+          <div className={cn(cardStyles.standard, 'xl:col-span-2')}>
+            <h3 className={cn(textStyles.titleSmall, 'mb-3')}>机构×等级 续保率矩阵</h3>
+            {matrixLoading ? (
+              <div className="animate-pulse h-48 bg-neutral-100 rounded" />
+            ) : grades.length > 0 ? (
+              <div className="overflow-auto max-h-[500px]">
+                <table className="w-full text-xs">
+                  <thead className={tableStyles.header}>
+                    <tr>
+                      <th className={cn(tableStyles.headerCell, 'text-xs')}>机构</th>
+                      {grades.map(g => (
+                        <th key={g} className={cn(tableStyles.headerCell, 'text-xs text-center')}>{g || '—'}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className={cn(textStyles.caption, 'mt-2')}>
-                颜色越深续保率越高，红色区域为需重点关注的洼地
-              </p>
-            </div>
-          ) : (
-            <p className={textStyles.caption}>暂无数据</p>
-          )}
-        </div>
+                  </thead>
+                  <tbody>
+                    {orgs.map(org => (
+                      <tr key={org} className={tableStyles.row}>
+                        <td className={cn(tableStyles.cell, 'text-xs font-medium')}>{org}</td>
+                        {grades.map(g => {
+                          const rate = matrix.get(`${org}|${g}`);
+                          return (
+                            <td key={g} className="px-1 py-1.5 text-center">
+                              {rate !== undefined ? (
+                                <HeatCell value={rate} />
+                              ) : (
+                                <span className="text-neutral-300">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className={cn(textStyles.caption, 'mt-2')}>
+                  颜色越深续保率越高，红色区域为需重点关注的洼地
+                </p>
+              </div>
+            ) : (
+              <p className={textStyles.caption}>暂无数据</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

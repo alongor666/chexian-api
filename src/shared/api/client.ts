@@ -955,6 +955,10 @@ class ApiClient {
     return this.request<any[]>(`/query/renewal-funnel/risk${query ? `?${query}` : ''}`);
   }
 
+  async getRenewalFunnelMetadata() {
+    return this.request<{ minExpiryDate: string; maxExpiryDate: string; categories: string[]; availableMonths?: string[] }>('/query/renewal-funnel/metadata');
+  }
+
   /**
    * 获取能力注册表
    */

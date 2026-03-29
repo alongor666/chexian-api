@@ -89,4 +89,14 @@ export interface FunnelFilters {
   daysRange?: number;
   expiryDateStart?: string;
   expiryDateEnd?: string;
+  viewMode?: 'year' | 'month';
+  groupBy?: 'org' | 'category';
+  category?: string;
+}
+
+export interface FunnelMetadata {
+  minExpiryDate: string;
+  maxExpiryDate: string;
+  categories: string[];
+  availableMonths?: string[];
 }

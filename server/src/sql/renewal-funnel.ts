@@ -19,6 +19,9 @@ export interface RenewalFunnelFilters {
   expiryDateEnd?: string;
   page?: number;
   pageSize?: number;
+  viewMode?: 'year' | 'month';
+  customerCategory?: string;
+  groupBy?: 'org' | 'category';
 }
 
 function buildWhere(filters: RenewalFunnelFilters): string {
@@ -48,6 +51,9 @@ function buildWhere(filters: RenewalFunnelFilters): string {
   if (filters.expiryDateEnd) {
     conditions.push(`CAST(insurance_end_date AS DATE) <= '${filters.expiryDateEnd.replace(/'/g, "''")}'`);
   }
+  if (filters.customerCategory) {
+    conditions.push(`customer_category = '${filters.customerCategory.replace(/'/g, "''")}'`);
+  }
 
   return conditions.join(' AND ');
 }
@@ -60,10 +66,31 @@ function buildWhere(filters: RenewalFunnelFilters): string {
  */
 export function generateFunnelOverviewQuery(filters: RenewalFunnelFilters = {}): string {
   const where = buildWhere(filters);
+  const viewMode = filters.viewMode ?? 'year';
+  const groupBy = filters.groupBy ?? 'org';
+
+  // 决定分组字段
+  let groupCol: string;
+  let groupAlias: string;
+  let orderBy: string;
+
+  if (viewMode === 'month') {
+    groupCol = `STRFTIME('%Y-%m', CAST(insurance_end_date AS DATE))`;
+    groupAlias = 'expiry_month';
+    orderBy = 'expiry_month';
+  } else if (groupBy === 'category') {
+    groupCol = 'customer_category';
+    groupAlias = 'customer_category';
+    orderBy = 'total_due DESC';
+  } else {
+    groupCol = 'org_level_3';
+    groupAlias = 'org_level_3';
+    orderBy = 'total_due DESC';
+  }
 
   return `
     SELECT
-      org_level_3,
+      ${groupCol} AS ${groupAlias},
       COUNT(*) AS total_due,
       SUM(CASE WHEN in_quote_window THEN 1 ELSE 0 END) AS in_window_count,
       SUM(CASE WHEN is_quoted THEN 1 ELSE 0 END) AS total_quoted,
@@ -78,8 +105,8 @@ export function generateFunnelOverviewQuery(filters: RenewalFunnelFilters = {}):
       SUM(CASE WHEN action_priority = 'P2' THEN 1 ELSE 0 END) AS p2_count
     FROM RenewalFunnel
     WHERE ${where}
-    GROUP BY org_level_3
-    ORDER BY total_due DESC
+    GROUP BY ${groupCol}
+    ORDER BY ${orderBy}
   `;
 }
 
@@ -253,6 +280,29 @@ export function generateFunnelMatrixQuery(filters: RenewalFunnelFilters = {}): s
     WHERE ${where}
     GROUP BY org_level_3, insurance_grade
     ORDER BY org_level_3, insurance_grade
+  `;
+}
+
+/**
+ * 数据边界元信息（到期日范围 + 客户类别列表）
+ */
+export function generateFunnelMetadataBoundsQuery(): string {
+  return `
+    SELECT
+      CAST(MIN(CAST(insurance_end_date AS DATE)) AS VARCHAR) AS min_expiry_date,
+      CAST(MAX(CAST(insurance_end_date AS DATE)) AS VARCHAR) AS max_expiry_date,
+      COUNT(DISTINCT customer_category) AS category_count
+    FROM RenewalFunnel
+    WHERE customer_category != ''
+  `;
+}
+
+export function generateFunnelMetadataCategoriesQuery(): string {
+  return `
+    SELECT DISTINCT customer_category
+    FROM RenewalFunnel
+    WHERE customer_category != ''
+    ORDER BY customer_category
   `;
 }
 

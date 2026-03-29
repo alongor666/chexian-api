@@ -96,6 +96,9 @@ export const queryKeys = {
   renewalFunnelRisk: (params: Record<string, string>) =>
     ['renewal-funnel-risk', params] as const,
 
+  renewalFunnelMetadata: () =>
+    ['renewal-funnel-metadata'] as const,
+
   // ── 筛选器 ──
   filterOptions: () => ['filter-options'] as const,
 } as const;

@@ -1,28 +1,100 @@
 /**
  * 续保漏斗分析 — 主面板
  *
- * 集成 Overview、Team、ActionList 三大 P0 组件
- * 交互：点击机构→展开团队，面包屑导航
+ * 集成 Overview、Team、ActionList、Salesman 四大组件
+ * 交互：点击机构→展开团队→展开业务员，面包屑导航
+ * 支持：年视图/月视图、客户类别视图
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { RenewalFunnelOverviewPanel } from './RenewalFunnelOverviewPanel';
 import { RenewalFunnelTeamPanel } from './RenewalFunnelTeamPanel';
 import { RenewalFunnelActionList } from './RenewalFunnelActionList';
-import { textStyles, cn, buttonStyles, inputStyles } from '../../../shared/styles';
+import { useRenewalFunnelMetadata, useRenewalFunnelSalesman } from './hooks/useRenewalFunnel';
+import { textStyles, cn, buttonStyles, inputStyles, cardStyles, tableStyles, fontStyles, colorClasses } from '../../../shared/styles';
+import { formatCount } from '../../../shared/utils/formatters';
 import type { FunnelFilters } from './types';
 
 const DEFAULT_EXPIRY_START = '2026-01-01';
-const DEFAULT_EXPIRY_END = '2026-05-31';
 
 export const RenewalFunnelPanel: React.FC = () => {
+  const { data: metadata } = useRenewalFunnelMetadata();
+
+  const [viewMode, setViewMode] = useState<'year' | 'month'>('year');
+  const [selectedMonth, setSelectedMonth] = useState<string | undefined>();
+  const [groupBy, setGroupBy] = useState<'org' | 'category'>('org');
+  const [selectedCategory, setSelectedCategory] = useState<string | undefined>();
+
+  // 计算到期日范围
+  const expiryDateEnd = metadata?.maxExpiryDate ?? '2026-05-31';
+
   const [filters, setFilters] = useState<FunnelFilters>({
     expiryDateStart: DEFAULT_EXPIRY_START,
-    expiryDateEnd: DEFAULT_EXPIRY_END,
+    expiryDateEnd,
   });
+
+  // metadata 加载后更新 expiryDateEnd 默认值
+  useEffect(() => {
+    if (metadata?.maxExpiryDate) {
+      setFilters(prev => {
+        // 仅当还是初始默认值时更新
+        if (prev.expiryDateEnd === '2026-05-31' || !prev.expiryDateEnd) {
+          return { ...prev, expiryDateEnd: metadata.maxExpiryDate };
+        }
+        return prev;
+      });
+    }
+  }, [metadata?.maxExpiryDate]);
+
+  // 月视图：选中月份时覆盖日期范围
+  useEffect(() => {
+    if (viewMode === 'month' && selectedMonth) {
+      const [y, m] = selectedMonth.split('-').map(Number);
+      const start = `${y}-${String(m).padStart(2, '0')}-01`;
+      const lastDay = new Date(y, m, 0).getDate();
+      const end = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      setFilters(prev => ({ ...prev, expiryDateStart: start, expiryDateEnd: end }));
+    } else if (viewMode === 'year') {
+      setFilters(prev => ({
+        ...prev,
+        expiryDateStart: DEFAULT_EXPIRY_START,
+        expiryDateEnd: metadata?.maxExpiryDate ?? '2026-05-31',
+      }));
+    }
+  }, [viewMode, selectedMonth, metadata?.maxExpiryDate]);
+
+  // groupBy 同步到 filters
+  const effectiveFilters = useMemo<FunnelFilters>(() => ({
+    ...filters,
+    groupBy: groupBy === 'category' ? 'category' : undefined,
+    category: groupBy === 'category' ? selectedCategory : undefined,
+  }), [filters, groupBy, selectedCategory]);
+
+  // 可用月份列表
+  const availableMonths = useMemo(() => {
+    if (metadata?.availableMonths?.length) return metadata.availableMonths;
+    // fallback: 从起止日期生成
+    const start = DEFAULT_EXPIRY_START;
+    const end = metadata?.maxExpiryDate ?? '2026-05-31';
+    const months: string[] = [];
+    const [sy, sm] = start.split('-').map(Number);
+    const [ey, em] = end.split('-').map(Number);
+    let cy = sy, cm = sm;
+    while (cy < ey || (cy === ey && cm <= em)) {
+      months.push(`${cy}-${String(cm).padStart(2, '0')}`);
+      cm++;
+      if (cm > 12) { cm = 1; cy++; }
+    }
+    return months;
+  }, [metadata]);
 
   const handleOrgClick = useCallback((orgName: string) => {
     setFilters(prev => ({ ...prev, orgName, teamName: undefined, salesmanName: undefined }));
+    setGroupBy('org');
+  }, []);
+
+  const handleCategoryClick = useCallback((category: string) => {
+    setSelectedCategory(category);
   }, []);
 
   const handleTeamClick = useCallback((teamName: string) => {
@@ -30,7 +102,12 @@ export const RenewalFunnelPanel: React.FC = () => {
   }, []);
 
   const handleReset = useCallback(() => {
-    setFilters({ expiryDateStart: DEFAULT_EXPIRY_START, expiryDateEnd: DEFAULT_EXPIRY_END });
+    setFilters(prev => ({
+      expiryDateStart: prev.expiryDateStart,
+      expiryDateEnd: prev.expiryDateEnd,
+    }));
+    setGroupBy('org');
+    setSelectedCategory(undefined);
   }, []);
 
   const handleBreadcrumbOrg = useCallback(() => {
@@ -39,7 +116,7 @@ export const RenewalFunnelPanel: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* 到期日范围筛选 */}
+      {/* 筛选器行 */}
       <div className="flex items-center gap-3 flex-wrap">
         <label className={textStyles.caption}>到期日范围</label>
         <input
@@ -55,14 +132,108 @@ export const RenewalFunnelPanel: React.FC = () => {
           onChange={e => setFilters(prev => ({ ...prev, expiryDateEnd: e.target.value }))}
           className={cn(inputStyles.base, inputStyles.default, 'w-auto')}
         />
+
+        {/* 分隔线 */}
+        <span className="w-px h-6 bg-neutral-200" />
+
+        {/* 视图模式切换 */}
+        <button
+          onClick={() => { setViewMode('year'); setSelectedMonth(undefined); }}
+          className={cn(
+            buttonStyles.base, buttonStyles.sizeSmall,
+            viewMode === 'year' ? buttonStyles.primary : buttonStyles.secondary
+          )}
+        >
+          年视图
+        </button>
+        <button
+          onClick={() => setViewMode('month')}
+          className={cn(
+            buttonStyles.base, buttonStyles.sizeSmall,
+            viewMode === 'month' ? buttonStyles.primary : buttonStyles.secondary
+          )}
+        >
+          月视图
+        </button>
+
+        {/* 分隔线 */}
+        <span className="w-px h-6 bg-neutral-200" />
+
+        {/* 客户类别视图 */}
+        <button
+          onClick={() => {
+            const next = groupBy === 'category' ? 'org' : 'category';
+            setGroupBy(next);
+            if (next === 'org') setSelectedCategory(undefined);
+          }}
+          className={cn(
+            buttonStyles.base, buttonStyles.sizeSmall,
+            groupBy === 'category' ? buttonStyles.primary : buttonStyles.secondary
+          )}
+        >
+          客户类别
+        </button>
       </div>
 
+      {/* 月视图 — 月份按钮组 */}
+      {viewMode === 'month' && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={textStyles.caption}>到期月份</span>
+          {availableMonths.map(m => (
+            <button
+              key={m}
+              onClick={() => setSelectedMonth(m)}
+              className={cn(
+                buttonStyles.base, buttonStyles.sizeSmall,
+                selectedMonth === m ? buttonStyles.primary : buttonStyles.secondary
+              )}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 客户类别 — 类别按钮组 */}
+      {groupBy === 'category' && metadata?.categories && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={textStyles.caption}>客户类别</span>
+          <button
+            onClick={() => setSelectedCategory(undefined)}
+            className={cn(
+              buttonStyles.base, buttonStyles.sizeSmall,
+              !selectedCategory ? buttonStyles.primary : buttonStyles.secondary
+            )}
+          >
+            全部
+          </button>
+          {metadata.categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={cn(
+                buttonStyles.base, buttonStyles.sizeSmall,
+                selectedCategory === cat ? buttonStyles.primary : buttonStyles.secondary
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 面包屑导航 */}
-      {(filters.orgName || filters.teamName) && (
+      {(filters.orgName || filters.teamName || (groupBy === 'category' && selectedCategory)) && (
         <nav className="flex items-center gap-1 text-sm">
           <button onClick={handleReset} className={textStyles.link}>
-            全部机构
+            {groupBy === 'category' ? '全部类别' : '全部机构'}
           </button>
+          {groupBy === 'category' && selectedCategory && (
+            <>
+              <span className="text-neutral-400">/</span>
+              <span className="font-medium text-neutral-700">{selectedCategory}</span>
+            </>
+          )}
           {filters.orgName && (
             <>
               <span className="text-neutral-400">/</span>
@@ -92,18 +263,109 @@ export const RenewalFunnelPanel: React.FC = () => {
 
       {/* 漏斗总览 */}
       <RenewalFunnelOverviewPanel
-        filters={filters}
+        filters={effectiveFilters}
         onOrgClick={handleOrgClick}
+        onCategoryClick={handleCategoryClick}
       />
 
       {/* 团队排行（选中机构时显示） */}
       <RenewalFunnelTeamPanel
-        filters={filters}
+        filters={effectiveFilters}
         onTeamClick={handleTeamClick}
       />
 
+      {/* 业务员排行（选中团队时显示） */}
+      {effectiveFilters.teamName && (
+        <SalesmanRankPanel filters={effectiveFilters} />
+      )}
+
       {/* 待跟进清单 */}
-      <RenewalFunnelActionList filters={filters} />
+      <RenewalFunnelActionList filters={effectiveFilters} />
     </div>
   );
+};
+
+/** 业务员排行面板（内联简单组件） */
+const SalesmanRankPanel: React.FC<{ filters: FunnelFilters }> = ({ filters }) => {
+  const { data, isLoading } = useRenewalFunnelSalesman(filters);
+
+  return (
+    <div className={cardStyles.standard}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className={textStyles.titleSmall}>
+          {filters.teamName} — 业务员续保排行
+        </h3>
+        <span className={textStyles.caption}>
+          {(data ?? []).length} 位业务员
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="animate-pulse space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-8 bg-neutral-100 rounded" />
+          ))}
+        </div>
+      ) : (data ?? []).length === 0 ? (
+        <p className={textStyles.caption}>暂无数据</p>
+      ) : (
+        <div className="overflow-auto max-h-[500px]">
+          <table className="w-full">
+            <thead className={tableStyles.header}>
+              <tr>
+                <th className={tableStyles.headerCell}>业务员</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>应续</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>已报价</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>已续保</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>续保率</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>自留</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>自留率</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>竞争单</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data ?? [])
+                .sort((a, b) => (b.renewal_rate ?? 0) - (a.renewal_rate ?? 0))
+                .map(row => (
+                  <tr key={row.salesman_name} className={tableStyles.row}>
+                    <td className={tableStyles.cell}>{row.salesman_name || '未分配'}</td>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                      {formatCount(row.total_due ?? 0)}
+                    </td>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                      {formatCount(row.total_quoted ?? 0)}
+                    </td>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                      {formatCount(row.total_renewed ?? 0)}
+                    </td>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                      <RateCell value={row.renewal_rate ?? 0} />
+                    </td>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                      {formatCount(row.self_retained_count ?? 0)}
+                    </td>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                      {(row.self_retention_rate ?? 0).toFixed(1)}%
+                    </td>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                      {(row.competitive_count ?? 0) > 0 && (
+                        <span className={colorClasses.text.warning}>{row.competitive_count}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const RateCell: React.FC<{ value: number }> = ({ value }) => {
+  const colorClass =
+    value >= 60 ? colorClasses.text.success
+    : value >= 45 ? colorClasses.text.warning
+    : colorClasses.text.danger;
+  return <span className={cn(colorClass, 'font-semibold')}>{value.toFixed(1)}%</span>;
 };
