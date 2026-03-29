@@ -1,7 +1,6 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CrossSellAnalysisPanel, CrossSellHeaderControls } from '../dashboard/CrossSellAnalysisPanel';
-import { RenewalAnalysisPanel } from '../dashboard/RenewalAnalysisPanel';
 import { TruckAnalysisPanel } from '../dashboard/TruckAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
@@ -47,10 +46,6 @@ export const SpecialtyPage: React.FC = () => {
 
   // Cross-sell state
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
-
-  // Renewal state
-  const [renewalTab, setRenewalTab] = useState<'funnel' | 'detail'>('funnel');
-  const [perspective, setPerspective] = useState<ViewPerspective>('premium');
 
   // Truck state
   const [truckPerspective, setTruckPerspective] = useState<ViewPerspective>('premium');
@@ -157,42 +152,9 @@ export const SpecialtyPage: React.FC = () => {
         )}
 
         {activeTab === 'renewal' && (
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setRenewalTab('funnel')}
-                className={cn(
-                  buttonStyles.base, buttonStyles.sizeSmall,
-                  renewalTab === 'funnel' ? buttonStyles.primary : buttonStyles.secondary
-                )}
-              >
-                续保漏斗
-              </button>
-              <button
-                onClick={() => setRenewalTab('detail')}
-                className={cn(
-                  buttonStyles.base, buttonStyles.sizeSmall,
-                  renewalTab === 'detail' ? buttonStyles.primary : buttonStyles.secondary
-                )}
-              >
-                续保明细表
-              </button>
-            </div>
-
-            {renewalTab === 'funnel' && (
-              <Suspense fallback={<div className="animate-pulse h-64 bg-neutral-100 rounded" />}>
-                <RenewalFunnelPanel />
-              </Suspense>
-            )}
-
-            {renewalTab === 'detail' && (
-              <RenewalAnalysisPanel
-                filters={{ ...filters, analysis_year: 2026 }}
-                perspective={perspective}
-                setPerspective={setPerspective}
-              />
-            )}
-          </div>
+          <Suspense fallback={<div className="animate-pulse h-64 bg-neutral-100 rounded" />}>
+            <RenewalFunnelPanel />
+          </Suspense>
         )}
 
         {activeTab === 'truck' && (

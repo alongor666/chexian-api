@@ -17,6 +17,8 @@ import {
   generateFunnelActionListCountQuery,
   generateFunnelRiskQuery,
   generateFunnelMatrixQuery,
+  generateFunnelMetadataBoundsQuery,
+  generateFunnelMetadataCategoriesQuery,
   type RenewalFunnelFilters,
 } from '../../sql/renewal-funnel.js';
 
@@ -50,6 +52,9 @@ const funnelFilterSchema = z.object({
   expiryDateEnd: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(1000).default(200),
+  viewMode: z.enum(['year', 'month']).default('year'),
+  customerCategory: z.string().optional(),
+  groupBy: z.enum(['org', 'category']).default('org'),
 });
 
 function parseFilters(query: Record<string, unknown>): RenewalFunnelFilters {
@@ -153,6 +158,33 @@ router.get(
     const sql = generateFunnelMatrixQuery(filters);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
+  })
+);
+
+/**
+ * GET /api/query/renewal-funnel/metadata
+ * 数据边界元信息（到期日范围 + 客户类别列表）
+ */
+router.get(
+  '/renewal-funnel/metadata',
+  asyncHandler(async (_req, res) => {
+    const [boundsResult, categoriesResult] = await Promise.all([
+      duckdbService.query(generateFunnelMetadataBoundsQuery()),
+      duckdbService.query(generateFunnelMetadataCategoriesQuery()),
+    ]);
+    const bounds = boundsResult[0] as Record<string, unknown> | undefined;
+    const categories = (categoriesResult as Record<string, unknown>[]).map(
+      (r) => r.customer_category as string
+    );
+    res.json({
+      success: true,
+      data: {
+        minExpiryDate: bounds?.min_expiry_date ?? null,
+        maxExpiryDate: bounds?.max_expiry_date ?? null,
+        categoryCount: Number(bounds?.category_count ?? 0),
+        categories,
+      },
+    });
   })
 );
 

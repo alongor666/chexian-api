@@ -5,7 +5,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../../../shared/api/client';
 import { queryKeys } from '../../../../shared/api/query-keys';
-import type { FunnelFilters, FunnelOverviewRow, FunnelTrendRow, FunnelTeamRow, FunnelSalesmanRow, FunnelActionRow, FunnelMatrixRow } from '../types';
+import type { FunnelFilters, FunnelOverviewRow, FunnelTrendRow, FunnelTeamRow, FunnelSalesmanRow, FunnelActionRow, FunnelMatrixRow, FunnelMetadata } from '../types';
 
 function toParams(filters: FunnelFilters): Record<string, string> {
   const params: Record<string, string> = {};
@@ -17,6 +17,8 @@ function toParams(filters: FunnelFilters): Record<string, string> {
   if (filters.daysRange !== undefined) params.daysRange = String(filters.daysRange);
   if (filters.expiryDateStart) params.expiryDateStart = filters.expiryDateStart;
   if (filters.expiryDateEnd) params.expiryDateEnd = filters.expiryDateEnd;
+  if (filters.groupBy) params.groupBy = filters.groupBy;
+  if (filters.category) params.category = filters.category;
   return params;
 }
 
@@ -86,5 +88,14 @@ export function useRenewalFunnelMatrix(filters: FunnelFilters = {}) {
     queryFn: () => apiClient.getRenewalFunnelMatrix(params),
     select: (data) => data as FunnelMatrixRow[],
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useRenewalFunnelMetadata() {
+  return useQuery({
+    queryKey: queryKeys.renewalFunnelMetadata(),
+    queryFn: () => apiClient.getRenewalFunnelMetadata(),
+    select: (data) => data as FunnelMetadata,
+    staleTime: 30 * 60 * 1000,
   });
 }
