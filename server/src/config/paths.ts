@@ -83,6 +83,15 @@ export function getUserStorePath(): string {
   return path.resolve(getDataDir(), 'user_store.json');
 }
 
+// ── 续保漏斗 Parquet 路径（本地优先，VPS 回退）──
+
+export function getRenewalFunnelPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/renewal/renewal_funnel_2026q1.parquet'),
+    path.resolve(getDataDir(), 'fact/renewal/renewal_funnel_2026q1.parquet'),
+  ];
+}
+
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,

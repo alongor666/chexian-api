@@ -74,6 +74,28 @@ export const queryKeys = {
   comprehensiveBundle: (params: Record<string, unknown>) =>
     ['comprehensive-bundle', params] as const,
 
+  // ── 续保漏斗 ──
+  renewalFunnelOverview: (params: Record<string, string>) =>
+    ['renewal-funnel-overview', params] as const,
+
+  renewalFunnelTrend: (params: Record<string, string>) =>
+    ['renewal-funnel-trend', params] as const,
+
+  renewalFunnelTeam: (params: Record<string, string>) =>
+    ['renewal-funnel-team', params] as const,
+
+  renewalFunnelSalesman: (params: Record<string, string>) =>
+    ['renewal-funnel-salesman', params] as const,
+
+  renewalFunnelActionList: (params: Record<string, string>) =>
+    ['renewal-funnel-action-list', params] as const,
+
+  renewalFunnelMatrix: (params: Record<string, string>) =>
+    ['renewal-funnel-matrix', params] as const,
+
+  renewalFunnelRisk: (params: Record<string, string>) =>
+    ['renewal-funnel-risk', params] as const,
+
   // ── 筛选器 ──
   filterOptions: () => ['filter-options'] as const,
 } as const;

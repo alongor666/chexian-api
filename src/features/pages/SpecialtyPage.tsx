@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CrossSellAnalysisPanel, CrossSellHeaderControls } from '../dashboard/CrossSellAnalysisPanel';
 import { RenewalAnalysisPanel } from '../dashboard/RenewalAnalysisPanel';
-import { RenewalDrilldownPanel } from '../dashboard/RenewalDrilldownPanel';
 import { TruckAnalysisPanel } from '../dashboard/TruckAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
@@ -11,6 +10,10 @@ import { buttonStyles, cn } from '../../shared/styles';
 import type { ViewPerspective } from '../../shared/types';
 import type { FilterPresetName } from '../../shared/types/filters';
 import type { TrendGranularity } from '../dashboard/hooks/useCrossSellTrend';
+
+const RenewalFunnelPanel = lazy(() =>
+  import('../dashboard/renewal-funnel/RenewalFunnelPanel').then(m => ({ default: m.RenewalFunnelPanel }))
+);
 
 type SpecialtyTab = 'cross-sell' | 'renewal' | 'truck';
 
@@ -46,14 +49,8 @@ export const SpecialtyPage: React.FC = () => {
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
 
   // Renewal state
-  const [renewalTab, setRenewalTab] = useState<'drilldown' | 'detail'>('drilldown');
+  const [renewalTab, setRenewalTab] = useState<'funnel' | 'detail'>('funnel');
   const [perspective, setPerspective] = useState<ViewPerspective>('premium');
-  const [cutoffDate, setCutoffDate] = useState<string>(
-    maxDataDate || new Date().toISOString().split('T')[0]
-  );
-  const [bundleOnly, setBundleOnly] = useState(false);
-  const [selfRenewalOnly, setSelfRenewalOnly] = useState(false);
-  const [selectedDueMonth, setSelectedDueMonth] = useState<number | null>(null);
 
   // Truck state
   const [truckPerspective, setTruckPerspective] = useState<ViewPerspective>('premium');
@@ -163,13 +160,13 @@ export const SpecialtyPage: React.FC = () => {
           <div className="space-y-4">
             <div className="flex gap-2">
               <button
-                onClick={() => setRenewalTab('drilldown')}
+                onClick={() => setRenewalTab('funnel')}
                 className={cn(
                   buttonStyles.base, buttonStyles.sizeSmall,
-                  renewalTab === 'drilldown' ? buttonStyles.primary : buttonStyles.secondary
+                  renewalTab === 'funnel' ? buttonStyles.primary : buttonStyles.secondary
                 )}
               >
-                续保下钻分析
+                续保漏斗
               </button>
               <button
                 onClick={() => setRenewalTab('detail')}
@@ -182,38 +179,10 @@ export const SpecialtyPage: React.FC = () => {
               </button>
             </div>
 
-            {renewalTab === 'drilldown' && (
-              <div className="space-y-4">
-                <div className="bg-primary-bg border border-primary-border rounded-lg p-4">
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium text-primary-dark">
-                      统计截止日期：
-                    </label>
-                    <input
-                      type="date"
-                      value={cutoffDate}
-                      onChange={(e) => setCutoffDate(e.target.value)}
-                      min="2026-01-01"
-                      max={maxDataDate || '2026-12-31'}
-                      className="px-3 py-2 border border-primary-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                    <span className="text-xs text-primary-dark">
-                      起始日期固定为 2026-01-01
-                    </span>
-                  </div>
-                </div>
-                <RenewalDrilldownPanel
-                  filters={filters}
-                  targetYear={filters.analysis_year || new Date().getFullYear()}
-                  cutoffDate={cutoffDate}
-                  bundleOnly={bundleOnly}
-                  setBundleOnly={setBundleOnly}
-                  selfRenewalOnly={selfRenewalOnly}
-                  setSelfRenewalOnly={setSelfRenewalOnly}
-                  selectedDueMonth={selectedDueMonth}
-                  setSelectedDueMonth={setSelectedDueMonth}
-                />
-              </div>
+            {renewalTab === 'funnel' && (
+              <Suspense fallback={<div className="animate-pulse h-64 bg-neutral-100 rounded" />}>
+                <RenewalFunnelPanel />
+              </Suspense>
             )}
 
             {renewalTab === 'detail' && (

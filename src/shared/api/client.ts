@@ -918,6 +918,43 @@ class ApiClient {
     });
   }
 
+  // ── 续保漏斗 ──
+
+  async getRenewalFunnelOverview(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/renewal-funnel/overview${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalFunnelTrend(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/renewal-funnel/trend${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalFunnelTeam(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/renewal-funnel/team${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalFunnelSalesman(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/renewal-funnel/salesman${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalFunnelActionList(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/renewal-funnel/action-list${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalFunnelMatrix(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/renewal-funnel/matrix${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalFunnelRisk(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/renewal-funnel/risk${query ? `?${query}` : ''}`);
+  }
+
   /**
    * 获取能力注册表
    */

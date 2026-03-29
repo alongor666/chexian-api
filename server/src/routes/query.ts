@@ -24,6 +24,7 @@ import reportRoutes from './query/report.js';
 import premiumPlanRoutes from './query/premium-plan.js';
 import performanceRoutes from './query/performance.js';
 import bundleRoutes from './query/bundles.js';
+import renewalFunnelRoutes from './query/renewal-funnel.js';
 
 export { buildRouteCacheKey } from './query/shared.js';
 export { fetchDashboardBundleData } from './query/bundles.js';
@@ -47,5 +48,6 @@ router.use(reportRoutes);
 router.use(premiumPlanRoutes);
 router.use(performanceRoutes);
 router.use(bundleRoutes);
+router.use(renewalFunnelRoutes);
 
 export default router;
