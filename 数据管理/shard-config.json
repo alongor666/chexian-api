@@ -1,0 +1,6 @@
+{
+  "static_cutoff": "2024-11-30",
+  "weekly_start": "2024-12-01",
+  "renewal_source_pattern": "续保业务类型匹配*.xlsx",
+  "renewal_apply_to": "weekly"
+}
