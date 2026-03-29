@@ -48,6 +48,25 @@ bun run dev:full  # 自动加载 Parquet + JSON
 ./deploy/sync-data.sh [文件路径]
 ```
 
+## VPS 数据加载路径（domain-split 模式）
+
+> **关键约束**：VPS 后端启动时**优先**从 `fact/policy/daily/*.parquet` 加载（domain-split 模式），
+> `current/` 目录下的整合 parquet 文件**不会被使用**。
+
+| 场景 | 正确做法 |
+|------|---------|
+| 新增日期数据（如新的 xlsx） | ETL 拆分到 `fact/policy/daily/YYYY-MM-DD.parquet` → 重启 PM2 |
+| 补充历史年份（如 2021/2022） | 从 `current/` 按签单日期拆分到 `daily/` → 重启 PM2 |
+| 验证数据是否可见 | `curl /api/filters/options` 检查 `availableYears` 和 `dateRange.max_date` |
+
+**加载优先级**（`server/src/app.ts`）：
+1. `fact/policy/daily/*.parquet`（domain-split，存在即用）
+2. `current/*.parquet`（多文件兼容路径）
+3. `server/data/*.parquet`（单文件回退路径）
+
+**前端年份筛选器**：由后端 `GET /api/filters/options` 的 `availableYears`（`SELECT DISTINCT YEAR(policy_date)`）驱动，
+不再硬编码。`daily/` 目录覆盖的年份 = 前端可选的年份。
+
 ## 数据知识协议
 
 数据处理任务必读: [.claude/data-knowledge-protocol.md](../.claude/data-knowledge-protocol.md)

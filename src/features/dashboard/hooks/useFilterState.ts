@@ -56,17 +56,31 @@ export const useFilterState = (): UseFilterStateResult => {
       const today = new Date().toISOString().split('T')[0];
       const currentYear = new Date().getFullYear();
 
+      // 从后端获取真实的可用年份和日期范围
+      let availableYearsFromApi: number[] = [currentYear - 1, currentYear];
+      let maxDateFromApi: string = today;
+      try {
+        const opts = await apiClient.getFilterOptions();
+        if (opts.availableYears && opts.availableYears.length > 0) {
+          availableYearsFromApi = opts.availableYears.sort((a, b) => b - a);
+        }
+        if (opts.dateRange?.max_date) {
+          maxDateFromApi = opts.dateRange.max_date;
+        }
+        logger.info('双口径元数据：从后端获取', {
+          maxDate: maxDateFromApi,
+          years: availableYearsFromApi,
+        });
+      } catch {
+        logger.warn('双口径元数据：后端获取失败，使用默认值');
+      }
+
       const apiMetadata: DualDateMetadata = {
-        policy: { maxDate: today, availableYears: [currentYear - 1, currentYear] },
-        insurance: { maxDate: today, availableYears: [currentYear - 1, currentYear] },
+        policy: { maxDate: maxDateFromApi, availableYears: availableYearsFromApi },
+        insurance: { maxDate: maxDateFromApi, availableYears: availableYearsFromApi },
       };
 
       setDualDateMetadata(apiMetadata);
-
-      logger.info('双口径元数据：API 模式使用默认值', {
-        maxDate: today,
-        years: [currentYear - 1, currentYear],
-      });
       return apiMetadata;
     } catch (err) {
       logger.error('双口径元数据：加载失败', err);
