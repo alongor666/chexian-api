@@ -654,6 +654,36 @@ def process_new_fields(df):
 
     return df
 
+def split_admin_account(df):
+    """拆分 adminadmin 系统账号为按三级机构的虚拟业务员。
+
+    adminadmin 是各机构共用的系统账号，出单时挂在不同三级机构下。
+    将 业务员='adminadmin' 的记录按 三级机构 拆分为 'admin{三级机构}直接个代'。
+    例：admin乐山直接个代、admin天府直接个代。
+    """
+    if '业务员' not in df.columns or '三级机构' not in df.columns:
+        return df
+
+    mask = df['业务员'].astype(str).str.strip() == 'adminadmin'
+    count = mask.sum()
+    if count == 0:
+        return df
+
+    print(f"\n{'='*80}")
+    print(f"👤 拆分 adminadmin 系统账号")
+    print(f"{'='*80}")
+    print(f"   匹配记录: {count:,} 条")
+
+    orgs = df.loc[mask, '三级机构'].value_counts()
+    print(f"   涉及机构: {len(orgs)} 个")
+    for org, cnt in orgs.items():
+        print(f"      {org}: {cnt:,} 条 → admin{org}直接个代")
+
+    df.loc[mask, '业务员'] = 'admin' + df.loc[mask, '三级机构'].astype(str) + '直接个代'
+
+    print(f"   ✅ 拆分完成")
+    return df
+
 def process_dates(df):
     """处理日期字段：转换为标准的 datetime64 格式
 
@@ -952,6 +982,9 @@ def main():
 
     # 9.5. 处理新增字段
     df = process_new_fields(df)
+
+    # 9.8 拆分 adminadmin 系统账号为虚拟业务员
+    df = split_admin_account(df)
 
     # 10. 处理日期字段
     df = process_dates(df)
