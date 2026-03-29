@@ -39,6 +39,16 @@
 
 ---
 
+## 🔄 数据流文档
+
+| 文档 | 用途 |
+|------|------|
+| [DATA_FLOW_KNOWLEDGE.md](../../数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md) | 字段在 Excel→Parquet→PolicyFact→预聚合→API→前端 各节点的变换规则、JOIN 关系、关键陷阱 |
+| [PARQUET_SCHEMA_KNOWLEDGE.md](../../数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md) | 表结构、字段类型、值域范围 |
+| [车险数据业务规则字典.md](../../数据管理/knowledge/rules/车险数据业务规则字典.md) | 字段业务语义定义 |
+
+---
+
 ## 📊 按分析维度查找
 
 ### 业绩分析 (Performance Analysis)

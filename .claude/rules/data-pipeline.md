@@ -70,3 +70,5 @@ bun run dev:full  # 自动加载 Parquet + JSON
 ## 数据知识协议
 
 数据处理任务必读: [.claude/data-knowledge-protocol.md](../.claude/data-knowledge-protocol.md)
+
+数据流字段变换规则: [数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md](../../数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md)

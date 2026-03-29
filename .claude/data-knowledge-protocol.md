@@ -36,6 +36,12 @@
 - 自然语言关键词 → SQL 字段映射表
 - **用途**: NL2SQL 语义理解、用户意图识别
 
+### ⭐ 数据流字段变换规则
+**[数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md](../数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md)**
+- 9 个节点的字段名/值格式/JOIN 关系变换全景图
+- 关键陷阱：工号前缀、双机构体系、achievement_cache 双来源
+- **用途**: 维护映射文件、调试 JOIN 失败、理解数据流向
+
 ### 快速参考
 **[数据管理/knowledge/QUICK_REFERENCE.md](../数据管理/knowledge/QUICK_REFERENCE.md)** (~200 tokens)
 
