@@ -11,5 +11,5 @@ export { CostPage } from './CostPage';
 export { ComprehensiveAnalysisPage } from './ComprehensiveAnalysisPage';
 export { ComparisonPage } from './ComparisonPage';
 export { CoefficientPage } from './CoefficientPage';
-export { MarketingReportPage } from './MarketingReportPage';
+export { ReportsPage } from './ReportsPage';
 export { PerformanceAnalysisPage } from './PerformanceAnalysisPage';

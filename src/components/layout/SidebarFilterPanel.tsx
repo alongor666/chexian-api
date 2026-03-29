@@ -15,8 +15,7 @@ const ROUTE_PRESET_MAP: Record<string, FilterPresetName | null> = {
   '/': null,                    // 首页 - 无筛选器
   '/dashboard': 'full',         // 仪表盘 - 完整筛选
   '/performance-analysis': 'performance', // 业绩分析
-  '/premium-report': 'report',  // 保费报表
-  '/marketing-report': 'marketingReport', // 营销战报
+  '/premium-report': 'report',  // 旧路由兼容
   '/truck': 'full',             // 营业货车
   '/renewal': 'renewalDetail',  // 续保分析
   '/cross-sell': 'full',        // 车驾意推介率

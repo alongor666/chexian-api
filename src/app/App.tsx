@@ -230,7 +230,7 @@ function App() {
                     }
                   />
 
-                  {/* 合并页面：业务报表（保费报表 + 营销战报）*/}
+                  {/* 保费达成（计划达成 + 保费报表）*/}
                   <Route
                     path="reports"
                     element={
@@ -255,8 +255,8 @@ function App() {
                   />
 
                   {/* 旧路由重定向到合并页面 */}
-                  <Route path="premium-report" element={<Navigate to="/reports?tab=premium" replace />} />
-                  <Route path="marketing-report" element={<Navigate to="/reports?tab=marketing" replace />} />
+                  <Route path="premium-report" element={<Navigate to="/reports" replace />} />
+                  <Route path="marketing-report" element={<Navigate to="/reports" replace />} />
                   <Route path="truck" element={<Navigate to="/specialty?tab=truck" replace />} />
                   <Route path="renewal" element={<Navigate to="/specialty?tab=renewal" replace />} />
                   <Route path="cross-sell" element={<Navigate to="/specialty?tab=cross-sell" replace />} />

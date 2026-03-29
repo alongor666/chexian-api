@@ -113,8 +113,7 @@ describe('Organizations Config', () => {
 
       expect(canAccessRoute(orgUser, '/dashboard')).toBe(false);
       expect(canAccessRoute(orgUser, '/reports')).toBe(false);
-      expect(canAccessRoute(orgUser, '/premium-report')).toBe(false);
-      expect(canAccessRoute(orgUser, '/marketing-report')).toBe(false);
+      expect(canAccessRoute(orgUser, '/reports')).toBe(false);
       expect(canAccessRoute(orgUser, '/cost')).toBe(false);
     });
 

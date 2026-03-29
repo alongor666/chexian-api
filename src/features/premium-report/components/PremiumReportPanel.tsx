@@ -10,10 +10,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PremiumSummaryCard } from './PremiumSummaryCard';
 import { PremiumPlanPanel } from './PremiumPlanPanel';
-import { SortableTable } from '../../marketing-report/components/SortableTable';
+import { SortableTable } from './SortableTable';
 import { usePremiumReport } from '../hooks/usePremiumReport';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
-import type { TableColumn } from '../../marketing-report/types/marketingReport';
+import type { TableColumn } from '../types/tableTypes';
 import type { OrgPremiumReportRow, SalesmanPremiumReportRow } from '../types/premiumReport';
 import { formatWanDirect, formatRate, formatCount, formatTeamName } from '../../../shared/utils/formatters';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
@@ -145,7 +145,7 @@ const salesmanReportColumns: TableColumn<SalesmanPremiumReportRow>[] = [
  * 保费报表主面板组件
  */
 export const PremiumReportPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<PremiumTab>('report');
+  const [activeTab, setActiveTab] = useState<PremiumTab>('plan');
   const { filters } = useGlobalFilters();
 
   const {
@@ -186,8 +186,8 @@ export const PremiumReportPanel: React.FC = () => {
   }, [reportFilters, loadData, activeTab]);
 
   const tabs: { key: PremiumTab; label: string }[] = [
+    { key: 'plan', label: '计划达成' },
     { key: 'report', label: '保费报表' },
-    { key: 'plan', label: '保费达成' },
   ];
 
   return (

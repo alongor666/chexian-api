@@ -10,7 +10,7 @@
 
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
-import type { SortState } from '../types/marketingReport';
+import type { SortState } from '../types/tableTypes';
 
 interface Column<T> {
   /** 列键名 */

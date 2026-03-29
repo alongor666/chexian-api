@@ -11,7 +11,7 @@ test('筛选器交互与报表展示', async ({ page }: { page: Page }) => {
   await ensureDataLoaded(page);
 
   await page.evaluate(() => localStorage.setItem('page-filter-collapsed', 'false'));
-  await page.goto('/#/premium-report');
+  await page.goto('/#/reports');
   await expect(page.getByRole('heading', { name: /保费/ }).first()).toBeVisible();
 
   const expandButton = page.getByTitle('展开筛选器').first();
