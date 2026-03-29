@@ -22,8 +22,9 @@ export const RenewalFunnelPanel: React.FC = () => {
 
   const [viewMode, setViewMode] = useState<'year' | 'month'>('year');
   const [selectedMonth, setSelectedMonth] = useState<string | undefined>();
-  const [groupBy, setGroupBy] = useState<'org' | 'category'>('org');
+  const [groupBy, setGroupBy] = useState<'org' | 'category' | 'renewalMode'>('org');
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>();
+  const [selectedRenewalMode, setSelectedRenewalMode] = useState<string | undefined>();
 
   // 计算到期日范围
   const expiryDateEnd = metadata?.maxExpiryDate ?? '2026-05-31';
@@ -66,9 +67,10 @@ export const RenewalFunnelPanel: React.FC = () => {
   // groupBy 同步到 filters
   const effectiveFilters = useMemo<FunnelFilters>(() => ({
     ...filters,
-    groupBy: groupBy === 'category' ? 'category' : undefined,
+    groupBy: groupBy === 'org' ? undefined : groupBy,
     category: groupBy === 'category' ? selectedCategory : undefined,
-  }), [filters, groupBy, selectedCategory]);
+    renewalMode: selectedRenewalMode,
+  }), [filters, groupBy, selectedCategory, selectedRenewalMode]);
 
   // 可用月份列表
   const availableMonths = useMemo(() => {
@@ -101,6 +103,10 @@ export const RenewalFunnelPanel: React.FC = () => {
     setFilters(prev => ({ ...prev, teamName, salesmanName: undefined }));
   }, []);
 
+  const handleRenewalModeClick = useCallback((mode: string) => {
+    setSelectedRenewalMode(mode);
+  }, []);
+
   const handleReset = useCallback(() => {
     setFilters(prev => ({
       expiryDateStart: prev.expiryDateStart,
@@ -108,6 +114,7 @@ export const RenewalFunnelPanel: React.FC = () => {
     }));
     setGroupBy('org');
     setSelectedCategory(undefined);
+    setSelectedRenewalMode(undefined);
   }, []);
 
   const handleBreadcrumbOrg = useCallback(() => {
@@ -159,19 +166,65 @@ export const RenewalFunnelPanel: React.FC = () => {
         {/* 分隔线 */}
         <span className="w-px h-6 bg-neutral-200" />
 
-        {/* 客户类别视图 */}
+        {/* 分组视角 */}
         <button
-          onClick={() => {
-            const next = groupBy === 'category' ? 'org' : 'category';
-            setGroupBy(next);
-            if (next === 'org') setSelectedCategory(undefined);
-          }}
+          onClick={() => { setGroupBy('org'); setSelectedCategory(undefined); }}
+          className={cn(
+            buttonStyles.base, buttonStyles.sizeSmall,
+            groupBy === 'org' ? buttonStyles.primary : buttonStyles.secondary
+          )}
+        >
+          机构
+        </button>
+        <button
+          onClick={() => { setGroupBy('category'); }}
           className={cn(
             buttonStyles.base, buttonStyles.sizeSmall,
             groupBy === 'category' ? buttonStyles.primary : buttonStyles.secondary
           )}
         >
           客户类别
+        </button>
+        <button
+          onClick={() => { setGroupBy('renewalMode'); }}
+          className={cn(
+            buttonStyles.base, buttonStyles.sizeSmall,
+            groupBy === 'renewalMode' ? buttonStyles.primary : buttonStyles.secondary
+          )}
+        >
+          续保模式
+        </button>
+
+        {/* 分隔线 */}
+        <span className="w-px h-6 bg-neutral-200" />
+
+        {/* 续保模式筛选 */}
+        <button
+          onClick={() => setSelectedRenewalMode(undefined)}
+          className={cn(
+            buttonStyles.base, buttonStyles.sizeSmall,
+            !selectedRenewalMode ? buttonStyles.primary : buttonStyles.secondary
+          )}
+        >
+          全部
+        </button>
+        <button
+          onClick={() => setSelectedRenewalMode('自留')}
+          className={cn(
+            buttonStyles.base, buttonStyles.sizeSmall,
+            selectedRenewalMode === '自留' ? buttonStyles.primary : buttonStyles.secondary
+          )}
+        >
+          自留
+        </button>
+        <button
+          onClick={() => setSelectedRenewalMode('兜底')}
+          className={cn(
+            buttonStyles.base, buttonStyles.sizeSmall,
+            selectedRenewalMode === '兜底' ? buttonStyles.primary : buttonStyles.secondary
+          )}
+        >
+          兜底
         </button>
       </div>
 
@@ -223,10 +276,10 @@ export const RenewalFunnelPanel: React.FC = () => {
       )}
 
       {/* 面包屑导航 */}
-      {(filters.orgName || filters.teamName || (groupBy === 'category' && selectedCategory)) && (
+      {(filters.orgName || filters.teamName || (groupBy === 'category' && selectedCategory) || (groupBy === 'renewalMode')) && (
         <nav className="flex items-center gap-1 text-sm">
           <button onClick={handleReset} className={textStyles.link}>
-            {groupBy === 'category' ? '全部类别' : '全部机构'}
+            {groupBy === 'category' ? '全部类别' : groupBy === 'renewalMode' ? '全部模式' : '全部机构'}
           </button>
           {groupBy === 'category' && selectedCategory && (
             <>
@@ -266,6 +319,7 @@ export const RenewalFunnelPanel: React.FC = () => {
         filters={effectiveFilters}
         onOrgClick={handleOrgClick}
         onCategoryClick={handleCategoryClick}
+        onRenewalModeClick={handleRenewalModeClick}
       />
 
       {/* 团队排行（选中机构时显示） */}

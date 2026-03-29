@@ -66,11 +66,11 @@ export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
 
   const handleExport = () => {
     if (!filteredData.length) return;
-    const headers = ['优先级', '保单号', '机构', '团队', '业务员', '车架号', '风险等级', '到期日', '到期天数', '是否报价', '报价人数', '竞争强度'];
+    const headers = ['优先级', '保单号', '机构', '团队', '业务员', '车架号', '风险等级', '续保模式', '到期日', '到期天数', '是否报价', '报价人数', '竞争强度'];
     const rows = filteredData.map(r => [
       r.action_priority ?? '', r.policy_no ?? '', r.org_level_3 ?? '', r.team_name ?? '',
       r.salesman_name ?? '', r.vehicle_frame_no ?? '', r.insurance_grade ?? '',
-      r.insurance_end_date ?? '', r.days_since_expiry ?? '',
+      r.renewal_mode ?? '', r.insurance_end_date ?? '', r.days_since_expiry ?? '',
       r.is_quoted ? '是' : '否', r.quote_salesman_count ?? 0, r.competition_level ?? '',
     ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
@@ -140,6 +140,7 @@ export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
                 <th className={tableStyles.headerCell}>团队</th>
                 <th className={tableStyles.headerCell}>业务员</th>
                 <th className={tableStyles.headerCell}>等级</th>
+                <th className={tableStyles.headerCell}>模式</th>
                 <th className={tableStyles.headerCell}>报价</th>
                 <th className={tableStyles.headerCell}>竞争</th>
               </tr>
@@ -160,6 +161,9 @@ export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
                   <td className={tableStyles.cell}>{row.team_name ?? ''}</td>
                   <td className={tableStyles.cell}>{row.salesman_name ?? ''}</td>
                   <td className={tableStyles.cell}>{row.insurance_grade ?? ''}</td>
+                  <td className={tableStyles.cell}>
+                    <RenewalModeBadge mode={row.renewal_mode ?? ''} />
+                  </td>
                   <td className={tableStyles.cell}>
                     {row.is_quoted ? '是' : <span className={colorClasses.text.danger}>未报价</span>}
                   </td>
@@ -209,6 +213,14 @@ const PriorityBadge: React.FC<{ priority: string }> = ({ priority }) => {
     : priority === 'P3' ? badgeStyles.primary
     : badgeStyles.default;
   return <span className={cn(badgeStyles.base, style)}>{priority}</span>;
+};
+
+const RenewalModeBadge: React.FC<{ mode: string }> = ({ mode }) => {
+  const style =
+    mode === '自留' ? badgeStyles.primary
+    : mode === '兜底' ? badgeStyles.warning
+    : badgeStyles.default;
+  return mode ? <span className={cn(badgeStyles.base, style)}>{mode}</span> : null;
 };
 
 const DaysLabel: React.FC<{ days: number }> = ({ days }) => {
