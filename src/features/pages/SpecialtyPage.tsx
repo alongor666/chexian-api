@@ -43,7 +43,7 @@ export const SpecialtyPage: React.FC = () => {
   const initialTab = (searchParams.get('tab') as SpecialtyTab) || 'cross-sell';
   const [activeTab, setActiveTab] = useState<SpecialtyTab>(initialTab);
 
-  const { filters, setFilters, maxDataDate } = useGlobalFilters();
+  const { filters, setFilters } = useGlobalFilters();
 
   // Cross-sell state
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
