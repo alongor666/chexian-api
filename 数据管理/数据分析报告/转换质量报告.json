@@ -1,9 +1,9 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-03-29T13:53:13.201268",
+  "timestamp": "2026-03-30T06:51:56.899994",
   "basic_stats": {
-    "rows": 721288,
-    "columns": 39,
+    "rows": 446332,
+    "columns": 38,
     "column_names": [
       "三级机构",
       "保单号",
@@ -42,30 +42,29 @@
       "交叉销售保费-驾意",
       "三者保额",
       "司机保额",
-      "乘客险保额",
-      "续保业务类型"
+      "乘客险保额"
     ]
   },
   "field_quality": {
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 706481
+      "unique_count": 436393
     },
     "业务员": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 329
+      "unique_count": 296
     },
     "三级机构": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 13
+      "unique_count": 14
     },
     "保险起期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 870
+      "unique_count": 750
     },
     "险类": {
       "null_count": 0,
