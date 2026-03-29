@@ -70,6 +70,7 @@ export interface FunnelActionRow {
   competition_level: string;
   quoted_insurance_grade: string;
   action_priority: string;
+  renewal_mode: string;
 }
 
 export interface FunnelMatrixRow {
@@ -90,13 +91,15 @@ export interface FunnelFilters {
   expiryDateStart?: string;
   expiryDateEnd?: string;
   viewMode?: 'year' | 'month';
-  groupBy?: 'org' | 'category';
+  groupBy?: 'org' | 'category' | 'renewalMode';
   category?: string;
+  renewalMode?: string;
 }
 
 export interface FunnelMetadata {
   minExpiryDate: string;
   maxExpiryDate: string;
   categories: string[];
+  renewalModes: string[];
   availableMonths?: string[];
 }

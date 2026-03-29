@@ -21,7 +21,8 @@ export interface RenewalFunnelFilters {
   pageSize?: number;
   viewMode?: 'year' | 'month';
   customerCategory?: string;
-  groupBy?: 'org' | 'category';
+  groupBy?: 'org' | 'category' | 'renewalMode';
+  renewalMode?: string;
 }
 
 function buildWhere(filters: RenewalFunnelFilters): string {
@@ -54,6 +55,9 @@ function buildWhere(filters: RenewalFunnelFilters): string {
   if (filters.customerCategory) {
     conditions.push(`customer_category = '${filters.customerCategory.replace(/'/g, "''")}'`);
   }
+  if (filters.renewalMode) {
+    conditions.push(`renewal_mode = '${filters.renewalMode.replace(/'/g, "''")}'`);
+  }
 
   return conditions.join(' AND ');
 }
@@ -78,6 +82,10 @@ export function generateFunnelOverviewQuery(filters: RenewalFunnelFilters = {}):
     groupCol = `STRFTIME('%Y-%m', CAST(insurance_end_date AS DATE))`;
     groupAlias = 'expiry_month';
     orderBy = 'expiry_month';
+  } else if (groupBy === 'renewalMode') {
+    groupCol = 'renewal_mode';
+    groupAlias = 'renewal_mode';
+    orderBy = 'total_due DESC';
   } else if (groupBy === 'category') {
     groupCol = 'customer_category';
     groupAlias = 'customer_category';
@@ -245,7 +253,8 @@ export function generateFunnelActionListQuery(filters: RenewalFunnelFilters = {}
       quote_salesman_count,
       competition_level,
       quoted_insurance_grade,
-      action_priority
+      action_priority,
+      renewal_mode
     FROM RenewalFunnel
     WHERE ${conditions.join(' AND ')}
     ORDER BY action_priority ASC, days_since_expiry DESC
@@ -303,6 +312,15 @@ export function generateFunnelMetadataCategoriesQuery(): string {
     FROM RenewalFunnel
     WHERE customer_category != ''
     ORDER BY customer_category
+  `;
+}
+
+export function generateFunnelMetadataRenewalModesQuery(): string {
+  return `
+    SELECT DISTINCT renewal_mode
+    FROM RenewalFunnel
+    WHERE renewal_mode != ''
+    ORDER BY renewal_mode
   `;
 }
 

@@ -116,6 +116,19 @@ def main():
         lambda x: 'none' if x == 0 else ('exclusive' if x == 1 else 'competitive')
     )
 
+    # 续保模式（自留/兜底）
+    renewal_type_file = PROJECT_ROOT / '数据管理' / '续保业务类型匹配更新至2026年5月.xlsx'
+    if renewal_type_file.exists():
+        rt = pd.read_excel(renewal_type_file, sheet_name=0)
+        rt['保单号'] = rt['保单号'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+        rt = rt.drop_duplicates(subset='保单号', keep='first')
+        df = df.merge(rt[['保单号', '续保业务类型']].rename(columns={'保单号': 'policy_no', '续保业务类型': 'renewal_mode'}), on='policy_no', how='left')
+        df['renewal_mode'] = df['renewal_mode'].fillna('未分类')
+        print(f'   续保模式匹配: {(df["renewal_mode"] != "未分类").sum()}/{len(df)} ({(df["renewal_mode"] != "未分类").sum()/len(df)*100:.1f}%)')
+    else:
+        df['renewal_mode'] = '未分类'
+        print(f'   ⚠️ 续保类型文件不存在: {renewal_type_file}')
+
     # ── 输出 ──
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -144,6 +157,14 @@ def main():
         renewed=('is_renewed', 'sum')
     ).assign(rate=lambda x: (x['renewed'] / x['total'] * 100).round(1))
     for _, row in org_stats.sort_values('rate', ascending=False).iterrows():
+        print(f'   {row.name}: {row["total"]}单, 续保率{row["rate"]}%')
+
+    print(f'\n📊 续保模式分布:')
+    mode_stats = df.groupby('renewal_mode').agg(
+        total=('policy_no', 'count'),
+        renewed=('is_renewed', 'sum')
+    ).assign(rate=lambda x: (x['renewed'] / x['total'] * 100).round(1))
+    for _, row in mode_stats.iterrows():
         print(f'   {row.name}: {row["total"]}单, 续保率{row["rate"]}%')
 
     print(f'\n📊 竞争强度分布:')

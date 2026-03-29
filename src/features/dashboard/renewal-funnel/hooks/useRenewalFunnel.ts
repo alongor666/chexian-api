@@ -19,6 +19,7 @@ function toParams(filters: FunnelFilters): Record<string, string> {
   if (filters.expiryDateEnd) params.expiryDateEnd = filters.expiryDateEnd;
   if (filters.groupBy) params.groupBy = filters.groupBy;
   if (filters.category) params.category = filters.category;
+  if (filters.renewalMode) params.renewalMode = filters.renewalMode;
   return params;
 }
 

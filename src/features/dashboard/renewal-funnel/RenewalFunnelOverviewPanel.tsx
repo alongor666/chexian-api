@@ -17,10 +17,12 @@ interface Props {
   filters: FunnelFilters;
   onOrgClick: (orgName: string) => void;
   onCategoryClick?: (category: string) => void;
+  onRenewalModeClick?: (mode: string) => void;
 }
 
-export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClick, onCategoryClick }) => {
+export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClick, onCategoryClick, onRenewalModeClick }) => {
   const isCategoryView = filters.groupBy === 'category';
+  const isRenewalModeView = filters.groupBy === 'renewalMode';
   const { data: overviewData, isLoading: overviewLoading } = useRenewalFunnelOverview(filters);
   const { data: matrixData, isLoading: matrixLoading } = useRenewalFunnelMatrix(filters);
 
@@ -95,11 +97,11 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
         )}
       </div>
 
-      <div className={cn('grid gap-4', isCategoryView ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-5')}>
+      <div className={cn('grid gap-4', (isCategoryView || isRenewalModeView) ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-5')}>
         {/* 排名表 */}
-        <div className={cn(cardStyles.standard, isCategoryView ? '' : 'xl:col-span-3')}>
+        <div className={cn(cardStyles.standard, (isCategoryView || isRenewalModeView) ? '' : 'xl:col-span-3')}>
           <h3 className={cn(textStyles.titleSmall, 'mb-3')}>
-            {isCategoryView ? '客户类别续保率排名' : '机构续保率排名'}
+            {isCategoryView ? '客户类别续保率排名' : isRenewalModeView ? '续保模式续保率排名' : '机构续保率排名'}
           </h3>
           {overviewLoading ? (
             <div className="animate-pulse space-y-2">
@@ -113,7 +115,7 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
                 <thead className={tableStyles.header}>
                   <tr>
                     <th className={tableStyles.headerCell}>
-                      {isCategoryView ? '客户类别' : '机构'}
+                      {isCategoryView ? '客户类别' : isRenewalModeView ? '续保模式' : '机构'}
                     </th>
                     <th className={cn(tableStyles.headerCell, 'text-right')}>应续</th>
                     <th className={cn(tableStyles.headerCell, 'text-right')}>已报价</th>
@@ -136,7 +138,9 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
                             <button
                               onClick={() => isCategoryView
                                 ? onCategoryClick?.(label)
-                                : onOrgClick(label)
+                                : isRenewalModeView
+                                  ? onRenewalModeClick?.(label)
+                                  : onOrgClick(label)
                               }
                               className={textStyles.link}
                             >
@@ -180,8 +184,8 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
           )}
         </div>
 
-        {/* 机构×等级 续保率矩阵（客户类别视图下不显示） */}
-        {!isCategoryView && (
+        {/* 机构×等级 续保率矩阵（客户类别/续保模式视图下不显示） */}
+        {!isCategoryView && !isRenewalModeView && (
           <div className={cn(cardStyles.standard, 'xl:col-span-2')}>
             <h3 className={cn(textStyles.titleSmall, 'mb-3')}>机构×等级 续保率矩阵</h3>
             {matrixLoading ? (
