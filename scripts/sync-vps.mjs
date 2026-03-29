@@ -532,6 +532,25 @@ async function runExportMode(config, runConfig) {
     log('green', `  ✓ ${file} 上传完成`);
   }
 
+  // ── 续保漏斗数据 ──
+  const renewalDir = join(ROOT_DIR, '数据管理/warehouse/fact/renewal');
+  if (existsSync(renewalDir)) {
+    const renewalFiles = readdirSync(renewalDir).filter((f) => f.endsWith('.parquet'));
+    if (renewalFiles.length > 0) {
+      const remoteRenewalDir = `${runConfig.remoteDir}/fact/renewal`;
+      await execRemote(config, `mkdir -p ${quoteForSingle(remoteRenewalDir)}`);
+      for (const file of renewalFiles) {
+        const localPath = join(renewalDir, file);
+        const size = formatSize(localPath);
+        const remotePath = `${remoteRenewalDir}/${file}`;
+        log('yellow', `  上传续保漏斗 ${file} (${size})...`);
+        await uploadFile(config, localPath, remotePath);
+        await execRemote(config, `chmod 600 ${quoteForSingle(remotePath)}`);
+        log('green', `  ✓ ${file} 上传完成`);
+      }
+    }
+  }
+
   await maybeRestart(config, runConfig.noRestart, runConfig.healthUrl);
 }
 

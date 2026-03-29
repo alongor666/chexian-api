@@ -15,6 +15,8 @@ function toParams(filters: FunnelFilters): Record<string, string> {
   if (filters.month) params.month = filters.month;
   if (filters.maturityFilter) params.maturityFilter = filters.maturityFilter;
   if (filters.daysRange !== undefined) params.daysRange = String(filters.daysRange);
+  if (filters.expiryDateStart) params.expiryDateStart = filters.expiryDateStart;
+  if (filters.expiryDateEnd) params.expiryDateEnd = filters.expiryDateEnd;
   return params;
 }
 
@@ -60,8 +62,15 @@ export function useRenewalFunnelSalesman(filters: FunnelFilters = {}) {
   });
 }
 
-export function useRenewalFunnelActionList(filters: FunnelFilters = {}) {
+export function useRenewalFunnelActionList(
+  filters: FunnelFilters = {},
+  pagination?: { page: number; pageSize: number },
+) {
   const params = toParams(filters);
+  if (pagination) {
+    params.page = String(pagination.page);
+    params.pageSize = String(pagination.pageSize);
+  }
   return useQuery({
     queryKey: queryKeys.renewalFunnelActionList(params),
     queryFn: () => apiClient.getRenewalFunnelActionList(params),

@@ -7,13 +7,14 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService } from './shared.js';
+import { asyncHandler, AppError, duckdbService, isValidDateFormat } from './shared.js';
 import {
   generateFunnelOverviewQuery,
   generateFunnelTrendQuery,
   generateFunnelTeamQuery,
   generateFunnelSalesmanQuery,
   generateFunnelActionListQuery,
+  generateFunnelActionListCountQuery,
   generateFunnelRiskQuery,
   generateFunnelMatrixQuery,
   type RenewalFunnelFilters,
@@ -45,6 +46,10 @@ const funnelFilterSchema = z.object({
   insuranceGrade: z.string().optional(),
   daysRange: z.coerce.number().optional(),
   actionPriority: z.enum(['P1', 'P2', 'P3', 'P4']).optional(),
+  expiryDateStart: z.string().optional(),
+  expiryDateEnd: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(1000).default(200),
 });
 
 function parseFilters(query: Record<string, unknown>): RenewalFunnelFilters {
@@ -52,7 +57,14 @@ function parseFilters(query: Record<string, unknown>): RenewalFunnelFilters {
   if (!result.success) {
     throw new AppError(400, result.error.issues[0].message);
   }
-  return result.data;
+  const filters = result.data;
+  if (filters.expiryDateStart && !isValidDateFormat(filters.expiryDateStart)) {
+    throw new AppError(400, 'expiryDateStart 格式无效，需 YYYY-MM-DD');
+  }
+  if (filters.expiryDateEnd && !isValidDateFormat(filters.expiryDateEnd)) {
+    throw new AppError(400, 'expiryDateEnd 格式无效，需 YYYY-MM-DD');
+  }
+  return filters;
 }
 
 /**
@@ -119,9 +131,14 @@ router.get(
   '/renewal-funnel/action-list',
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateFunnelActionListQuery(filters);
-    const data = await duckdbService.query(sql);
-    res.json({ success: true, data });
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 200;
+    const [data, countResult] = await Promise.all([
+      duckdbService.query(generateFunnelActionListQuery(filters)),
+      duckdbService.query(generateFunnelActionListCountQuery(filters)),
+    ]);
+    const total = Number((countResult[0] as Record<string, unknown>)?.total ?? 0);
+    res.json({ success: true, data, total, page, pageSize });
   })
 );
 
