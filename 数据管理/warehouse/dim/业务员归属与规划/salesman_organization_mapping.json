@@ -1913,12 +1913,180 @@
       "team": "未分配",
       "organization": "资阳",
       "car_insurance_plan_2026": 450.0
+    },
+    {
+      "business_no": null,
+      "salesman_name": "刘黎霞",
+      "full_name": "刘黎霞",
+      "team": "未分配",
+      "organization": "宜宾"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "直接个代",
+      "full_name": "直接个代",
+      "team": "未分配",
+      "organization": "乐山"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "王晓渝",
+      "full_name": "王晓渝",
+      "team": "未分配",
+      "organization": "泸州"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "沙万发",
+      "full_name": "沙万发",
+      "team": "未分配",
+      "organization": "重客"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "杨洪",
+      "full_name": "杨洪",
+      "team": "未分配",
+      "organization": "重客"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "曾飞",
+      "full_name": "曾飞",
+      "team": "未分配",
+      "organization": "重客"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "周凡丁",
+      "full_name": "周凡丁",
+      "team": "未分配",
+      "organization": "德阳"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "刘大洪",
+      "full_name": "刘大洪",
+      "team": "未分配",
+      "organization": "资阳"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "张彩云",
+      "full_name": "张彩云",
+      "team": "未分配",
+      "organization": "乐山"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "何谦",
+      "full_name": "何谦",
+      "team": "未分配",
+      "organization": "高新"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "徐在红",
+      "full_name": "徐在红",
+      "team": "未分配",
+      "organization": "达州"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "罗利娟",
+      "full_name": "罗利娟",
+      "team": "未分配",
+      "organization": "自贡"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "胡含竹",
+      "full_name": "胡含竹",
+      "team": "未分配",
+      "organization": "高新"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "罗飞",
+      "full_name": "罗飞",
+      "team": "未分配",
+      "organization": "乐山"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "王时凤",
+      "full_name": "王时凤",
+      "team": "未分配",
+      "organization": "重客"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "李玲娟",
+      "full_name": "李玲娟",
+      "team": "未分配",
+      "organization": "资阳"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "覃雨琪",
+      "full_name": "覃雨琪",
+      "team": "未分配",
+      "organization": "资阳"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "赵文会",
+      "full_name": "赵文会",
+      "team": "未分配",
+      "organization": "乐山"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "梅祝虹",
+      "full_name": "梅祝虹",
+      "team": "未分配",
+      "organization": "青羊"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "王文杰",
+      "full_name": "王文杰",
+      "team": "未分配",
+      "organization": "重客"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "殷萍",
+      "full_name": "殷萍",
+      "team": "未分配",
+      "organization": "新都"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "李娟",
+      "full_name": "李娟",
+      "team": "未分配",
+      "organization": "青羊"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "卯平",
+      "full_name": "卯平",
+      "team": "未分配",
+      "organization": "自贡"
+    },
+    {
+      "business_no": null,
+      "salesman_name": "罗家利",
+      "full_name": "罗家利",
+      "team": "未分配",
+      "organization": "青羊"
     }
   ],
   "statistics": {
-    "total_salesmen": 240,
+    "total_salesmen": 264,
     "total_teams": 48,
-    "total_organizations": 12,
+    "total_organizations": 13,
     "organizations": [
       "乐山",
       "天府",
@@ -1930,6 +2098,7 @@
       "自贡",
       "资阳",
       "达州",
+      "重客",
       "青羊",
       "高新"
     ],
@@ -1986,7 +2155,7 @@
     "sources": {
       "2026_plan_count": 246,
       "2025_actual_count": 232,
-      "unique_count": 240
+      "unique_count": 264
     }
   }
 }
