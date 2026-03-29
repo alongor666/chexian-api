@@ -273,6 +273,25 @@ async function main() {
       break;
     }
     
+    case 'renewal-funnel': {
+      printHeader('续保漏斗 Excel → Parquet 转换');
+      checkDeps(python);
+
+      const opts = parseArgs(args.slice(1));
+      const rfScript = join(dirname(scriptDir), 'scripts/convert_renewal_funnel.py');
+      if (!existsSync(rfScript)) {
+        log('red', `❌ 脚本不存在: ${rfScript}`);
+        process.exit(1);
+      }
+
+      const rfArgs = [];
+      if (opts.source || opts.input) rfArgs.push(`--input "${opts.source || opts.input}"`);
+      if (opts.output) rfArgs.push(`--output "${opts.output}"`);
+
+      runPython(python, rfScript, rfArgs);
+      break;
+    }
+
     case 'help':
     case '--help':
     case '-h':

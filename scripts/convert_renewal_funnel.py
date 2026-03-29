@@ -1,19 +1,23 @@
 """
 Excel → Parquet 转换：续保漏斗数据
-输入: 数据管理/交商同保续保_26单1-4月20260328.xlsx
-输出: 数据管理/warehouse/fact/renewal/renewal_funnel_2026q1.parquet
+
+用法:
+  python3 scripts/convert_renewal_funnel.py
+  python3 scripts/convert_renewal_funnel.py --input 数据管理/xxx.xlsx --output 数据管理/warehouse/fact/renewal/xxx.parquet
 """
 
+import argparse
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from pathlib import Path
 
-# ── 路径 ──
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-INPUT_FILE = PROJECT_ROOT / '数据管理' / '交商同保续保_26单1-4月20260328.xlsx'
-OUTPUT_DIR = PROJECT_ROOT / '数据管理' / 'warehouse' / 'fact' / 'renewal'
-OUTPUT_FILE = OUTPUT_DIR / 'renewal_funnel_2026q1.parquet'
+
+# 默认路径（无参数时使用）
+DEFAULT_INPUT = PROJECT_ROOT / '数据管理' / '交商同保续保_26单1-4月20260328.xlsx'
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / '数据管理' / 'warehouse' / 'fact' / 'renewal'
+DEFAULT_OUTPUT = DEFAULT_OUTPUT_DIR / 'renewal_funnel_2026q1.parquet'
 
 # ── Excel 列名 → Parquet 列名 映射 ──
 COLUMN_MAP = {
@@ -38,6 +42,19 @@ COLUMN_MAP = {
 
 
 def main():
+    parser = argparse.ArgumentParser(description='续保漏斗 Excel → Parquet 转换')
+    parser.add_argument('--input', '-i', type=str, default=str(DEFAULT_INPUT), help='输入 Excel 文件路径')
+    parser.add_argument('--output', '-o', type=str, default=str(DEFAULT_OUTPUT), help='输出 Parquet 文件路径')
+    args = parser.parse_args()
+
+    INPUT_FILE = Path(args.input)
+    OUTPUT_FILE = Path(args.output)
+    OUTPUT_DIR = OUTPUT_FILE.parent
+
+    if not INPUT_FILE.exists():
+        print(f'❌ 输入文件不存在: {INPUT_FILE}')
+        return
+
     print(f'📖 读取 Excel: {INPUT_FILE}')
     df = pd.read_excel(INPUT_FILE, sheet_name=0)
     print(f'   原始行数: {len(df)}, 列数: {len(df.columns)}')
@@ -130,6 +147,25 @@ def main():
     comp = df['competition_level'].value_counts()
     for level, count in comp.items():
         print(f'   {level}: {count} ({count/len(df)*100:.1f}%)')
+
+    # ── 机构一致性校验（与 PolicyFact 交叉检查）──
+    policy_dir = PROJECT_ROOT / '数据管理' / 'warehouse' / 'fact' / 'policy' / 'current'
+    if policy_dir.exists():
+        try:
+            import pyarrow.dataset as ds
+            pf_table = ds.dataset(str(policy_dir), format='parquet').to_table(columns=['三级机构'])
+            pf_orgs = set(pf_table.column('三级机构').to_pylist())
+            rf_orgs = set(df['org_level_3'].unique()) - {''}
+            only_in_rf = rf_orgs - pf_orgs
+            only_in_pf = pf_orgs - rf_orgs
+            if only_in_rf:
+                print(f'\n⚠️  续保漏斗独有机构（PolicyFact 中不存在）: {only_in_rf}')
+            if only_in_pf:
+                print(f'\n📋 PolicyFact 独有机构（续保漏斗中不存在）: {only_in_pf}')
+            if not only_in_rf and not only_in_pf:
+                print(f'\n✅ 机构名称一致性: 通过（{len(rf_orgs)} 个机构完全匹配）')
+        except Exception as e:
+            print(f'\n⚠️  机构一致性校验跳过: {e}')
 
 
 if __name__ == '__main__':

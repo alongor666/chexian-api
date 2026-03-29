@@ -21,6 +21,21 @@ import {
 
 const router = Router();
 
+/**
+ * 中间件：确保 RenewalFunnel 视图已加载
+ * 如果 Parquet 文件缺失或加载失败，返回 503 而非空数据
+ */
+router.use(
+  asyncHandler(async (_req, _res, next) => {
+    try {
+      await duckdbService.query('SELECT 1 FROM RenewalFunnel LIMIT 1');
+      next();
+    } catch {
+      throw new AppError(503, '续保漏斗数据未加载，请确认 renewal_funnel_*.parquet 文件存在并重启服务');
+    }
+  })
+);
+
 const funnelFilterSchema = z.object({
   orgName: z.string().optional(),
   teamName: z.string().optional(),
