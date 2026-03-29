@@ -2,6 +2,9 @@
 # Claude Code worktrees（本地临时目录，禁止提交为 gitlink）
 .claude/worktrees/
 
+# Server temp files
+server/.tmp/
+
 # 业务数据文件（默认禁止提交）
 *.xlsx
 *.xls
