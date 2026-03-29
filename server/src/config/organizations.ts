@@ -208,19 +208,19 @@ export const DEFAULT_USER_PERMISSIONS: UserPermission[] = [
  * 用户凭证配置（内网认证）
  *
  * 密码规则：
- * - 管理员：CxAdmin@2026!（可修改）
+ * - 管理员：通过环境变量 USER_PASSWORD_ADMIN 设置
  * - 机构用户：机构拼音+123（如leshan123）
  *
  * 密码哈希使用SHA-256生成
  * 生成方式: await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password))
  */
 export const USER_CREDENTIALS: UserCredential[] = [
-  // 分公司管理员 - 密码: CxAdmin@2026!
+  // 分公司管理员
   {
     username: 'admin',
     displayName: '系统管理员',
     role: UserRole.BRANCH_ADMIN,
-    passwordHash: '786f0a34c2150bd34d23e081cbafc0b08cf9aedbeffb02b7c96d11140c1aff1a', // CxAdmin@2026!
+    passwordHash: '786f0a34c2150bd34d23e081cbafc0b08cf9aedbeffb02b7c96d11140c1aff1a',
   },
   // 乐山机构 - 密码: leshan123
   {
@@ -339,7 +339,7 @@ function getPasswordFromEnv(username: string): string | null {
   // 开发环境默认密码（生产环境必须设置环境变量）
   if (process.env.NODE_ENV !== 'production') {
     const devPasswords: Record<string, string> = {
-      'admin': 'CxAdmin@2026!',
+      'admin': 'dev',
       'leshan': 'leshan123',
       'tianfu': 'tianfu123',
       'yibin': 'yibin123',

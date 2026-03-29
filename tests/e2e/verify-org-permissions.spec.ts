@@ -7,7 +7,7 @@ test.describe.configure({ timeout: 60000 });
 
 test.describe('Permission Verification', () => {
   const username = 'admin';
-  const password = 'CxAdmin@2026!';
+  const password = process.env.E2E_PASSWORD ?? 'dev';
 
   async function loginAsUser(page: import('@playwright/test').Page) {
     await page.goto('/#/login');

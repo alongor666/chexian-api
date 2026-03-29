@@ -5,7 +5,7 @@ import { waitForBackendReady } from './helpers/session';
 
 const AUTH_FILE = path.resolve('output/playwright/.auth/user.json');
 const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
-const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'CxAdmin@2026!';
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'dev';
 
 setup('缓存已登录会话供后续 E2E 复用', async ({ page }) => {
   await fs.mkdir(path.dirname(AUTH_FILE), { recursive: true });

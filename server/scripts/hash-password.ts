@@ -4,7 +4,7 @@
 import bcrypt from 'bcrypt';
 
 const passwords = {
-  'CxAdmin@2026!': '',
+  'dev': '',
   leshan123: '',
   tianfu123: '',
 };

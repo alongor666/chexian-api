@@ -22,7 +22,7 @@ function parseArgs(argv) {
   const result = {
     baseUrl: process.env.VPS_BASE_URL || 'https://chexian.cretvalu.com',
     username: process.env.E2E_USERNAME || 'admin',
-    password: process.env.E2E_PASSWORD || 'CxAdmin@2026!',
+    password: process.env.E2E_PASSWORD || 'dev',
     outputDir: 'output/playwright',
     timeoutMs: 45000,
   };

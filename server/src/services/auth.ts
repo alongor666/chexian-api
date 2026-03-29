@@ -215,6 +215,10 @@ class AuthService {
     plainPassword: string,
     hashedPassword: string
   ): Promise<boolean> {
+    // 开发环境：设置 DEV_SKIP_AUTH=1 跳过密码验证，生产环境永不生效
+    if (process.env.NODE_ENV !== 'production' && process.env.DEV_SKIP_AUTH === '1') {
+      return true;
+    }
     try {
       return await bcrypt.compare(plainPassword, hashedPassword);
     } catch (error) {
@@ -332,6 +336,11 @@ class AuthService {
       // token invalid/expired: nothing to revoke
     }
   }
+}
+
+// DEV_SKIP_AUTH 启动警告
+if (process.env.NODE_ENV !== 'production' && process.env.DEV_SKIP_AUTH === '1') {
+  console.warn('[Auth] ⚠ DEV_SKIP_AUTH 已启用，所有用户密码验证已跳过');
 }
 
 // 导出单例实例
