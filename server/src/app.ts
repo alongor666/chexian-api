@@ -13,7 +13,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
-import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getPolicyDailyDirs, getClaimsDomainPaths, getQuotesDomainPaths } from './config/paths.js';
+import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getPolicyDailyDirs, getClaimsDomainPaths, getQuotesDomainPaths, getRenewalFunnelPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
@@ -332,6 +332,16 @@ async function startServer() {
       if (!dimLoaded) {
         console.warn('[Server] Warning: Dim data unavailable. Checked Parquet + JSON paths.');
         console.warn('[Server] Hint: run "python3 数据管理/warehouse/dim/generate_dim_tables.py" to generate dim Parquet files.');
+      }
+
+      // 加载续保漏斗数据（独立于 PolicyFact）
+      const renewalFunnelPath = getRenewalFunnelPaths().find(p => fs.existsSync(p));
+      if (renewalFunnelPath) {
+        try {
+          await duckdbService.loadRenewalFunnel(renewalFunnelPath);
+        } catch (err) {
+          console.warn('[Server] RenewalFunnel load failed (non-blocking):', err);
+        }
       }
 
       // 注册当前数据文件（使 /api/data/files 返回 isCurrent: true）

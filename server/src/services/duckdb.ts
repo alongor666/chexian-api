@@ -1218,7 +1218,13 @@ class DuckDBService {
   /**
    * 加载续保漏斗 Parquet → RenewalFunnel 视图
    * 独立于 PolicyFact，3.5万行 < 2MB
-   * maturity / days_since_expiry 在视图层动态计算（取当前日期）
+   *
+   * 动态计算字段（基于当前日期）：
+   * - days_since_expiry: 到期后天数（正=已到期，负=未到期）
+   * - days_to_expiry: 距到期天数（正=未到期，负=已到期）
+   * - in_quote_window: 是否已进入报价窗口（到期前30天内，含到期日当天及之后）
+   * - maturity: 成熟度分级
+   * - action_priority: 行动优先级（P1/P2/P3/P4）
    */
   async loadRenewalFunnel(parquetPath: string): Promise<void> {
     const safePath = parquetPath.replace(/\\/g, '/');
@@ -1226,11 +1232,24 @@ class DuckDBService {
       CREATE OR REPLACE VIEW RenewalFunnel AS
       SELECT *,
         CURRENT_DATE - CAST(insurance_end_date AS DATE) AS days_since_expiry,
+        CAST(insurance_end_date AS DATE) - CURRENT_DATE AS days_to_expiry,
+        (CAST(insurance_end_date AS DATE) - CURRENT_DATE) <= 30 AS in_quote_window,
         CASE
           WHEN CURRENT_DATE - CAST(insurance_end_date AS DATE) > 30 THEN 'mature'
           WHEN CURRENT_DATE - CAST(insurance_end_date AS DATE) >= 0 THEN 'pending'
           ELSE 'future'
-        END AS maturity
+        END AS maturity,
+        CASE
+          WHEN NOT is_renewed AND (CAST(insurance_end_date AS DATE) - CURRENT_DATE) <= 30 AND NOT is_quoted
+            THEN 'P1'
+          WHEN NOT is_renewed AND is_quoted AND CURRENT_DATE - CAST(insurance_end_date AS DATE) BETWEEN 0 AND 14
+            THEN 'P2'
+          WHEN NOT is_renewed AND is_quoted AND CURRENT_DATE - CAST(insurance_end_date AS DATE) BETWEEN 15 AND 30
+            THEN 'P3'
+          WHEN NOT is_renewed
+            THEN 'P4'
+          ELSE NULL
+        END AS action_priority
       FROM read_parquet('${safePath}')
     `);
     const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalFunnel');

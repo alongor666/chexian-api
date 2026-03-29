@@ -8,6 +8,10 @@
 
 > 36 个会话、319 条消息的 Insights 分析。每条规则对应至少 2 次返工事件。
 
+### 沟通风格
+
+- 用户是全栈工程师，不需要过度解释基础概念（简洁/不总结/不过度工程等通用规则见全局 CLAUDE.md，不再重复）
+
 ### 执行纪律
 
 | 红线 | 反面教训 | 正确做法 |
@@ -125,6 +129,16 @@ git merge-base main HEAD || echo "WARNING: no common ancestor"
 bun run dev:full    # 一键启动前后端（推荐）
 # 禁止只运行 bun run dev（仅前端，后端不可用）
 ```
+
+### 开发环境测试登录
+
+开发环境（`NODE_ENV!=production`）配置了万能测试密码，所有预设用户均可用此密码登录：
+
+- **启用方式**：`server/.env` 中设置 `DEV_SKIP_AUTH=1`（已 gitignore）
+- **效果**：所有预设用户名 + 任意密码均可登录，无需知道真实密码
+- **登录示例**：`curl -X POST localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"x"}'`
+- **安全保障**：双重防护——`NODE_ENV !== 'production'` && `DEV_SKIP_AUTH === '1'`，生产环境永不生效
+- **新终端首次配置**：复制 `cp server/.env.example server/.env` 后取消 `DEV_SKIP_AUTH=1` 的注释即可
 
 ### 关键文件
 

@@ -4,7 +4,7 @@ import { ensureDataLoaded } from './helpers/session';
 
 const API_BASE = 'http://localhost:3000';
 const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
-const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'CxAdmin@2026!';
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'dev';
 
 test.describe.configure({ mode: 'serial', timeout: 60000 });
 

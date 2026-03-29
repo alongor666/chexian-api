@@ -18,12 +18,12 @@ echo ""
 echo "=== Testing Login API (admin) ==="
 curl -s -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"CxAdmin@2026!"}' | jq .
+  -d '{"username":"admin","password":"dev"}' | jq .
 
 # 保存Token
 TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"CxAdmin@2026!"}' | jq -r '.data.token')
+  -d '{"username":"admin","password":"dev"}' | jq -r '.data.token')
 
 echo ""
 echo "=== Testing KPI Query API (with auth) ==="

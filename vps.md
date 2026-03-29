@@ -351,7 +351,7 @@ ss -tlnp                         # 查看监听端口
 
 | 用户名 | 密码 | 角色 | 数据范围 |
 |--------|------|------|---------|
-| `admin` | `CxAdmin@2026!` | branch_admin | 乐山全局（所有机构） |
+| `admin` | (见服务器环境变量) | branch_admin | 乐山全局（所有机构） |
 | `leshan` | `CxLeshan@2026!` | org_user | 乐山 |
 | `tianfu` | `CxTianfu@2026!` | org_user | 天府 |
 | `yibin` | `CxYibin@2026!` | org_user | 宜宾 |
@@ -376,7 +376,7 @@ ss -tlnp                         # 查看监听端口
 | **HTTP→HTTPS 重定向** | ✅ 正常 | 301 Moved Permanently |
 | **Nginx IP 白名单** | ✅ 已移除 | 改为强密码认证，全网可访问登录页 |
 | **审计日志** | ✅ 记录中 | `/var/www/chexian/logs/audit.log` |
-| **API 登录** | ✅ 正常 | admin/CxAdmin@2026! → JWT Token |
+| **API 登录** | ✅ 正常 | admin/(见环境变量) → JWT Token |
 | **KPI 查询** | ✅ 正常 | 总保费 5.17亿, 675,423件, 13机构, 332人 |
 | **数据文件列表** | ✅ 正常 | `/api/data/files` 返回中文 Parquet 文件 |
 | **端口 3000 外网** | ✅ 不可达 | 安全组已阻止外网直连 |
