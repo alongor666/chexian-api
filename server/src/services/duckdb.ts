@@ -510,50 +510,6 @@ class DuckDBService {
   }
 
   /**
-   * 分域 Lakehouse 加载：从 3 个域目录创建 JOIN 视图作为 raw_parquet。
-   * Policy(daily/*.parquet) LEFT JOIN Claims LEFT JOIN Quotes
-   */
-  async loadDomainParquet(
-    policyDailyDir: string,
-    claimsFile: string | null,
-    quotesFile: string | null
-  ): Promise<{ totalRows: number }> {
-    const policyGlob = policyDailyDir.replace(/\\/g, '/') + '/*.parquet';
-
-    let claimsJoin = '';
-    let claimsCols = 'CAST(0 AS INTEGER) AS "赔案件数", CAST(0.0 AS DOUBLE) AS "已报告赔款", CAST(0.0 AS DOUBLE) AS "费用金额"';
-    let quotesJoin = '';
-    let quoteCol = 'false AS "是否报价"';
-
-    if (claimsFile) {
-      const cf = claimsFile.replace(/\\/g, '/');
-      claimsJoin = `LEFT JOIN read_parquet('${cf}') c ON p."保单号" = c."保单号"`;
-      claimsCols = 'COALESCE(c."赔案件数", 0) AS "赔案件数", COALESCE(c."已报告赔款", 0.0) AS "已报告赔款", COALESCE(c."费用金额", 0.0) AS "费用金额"';
-    }
-    if (quotesFile) {
-      const qf = quotesFile.replace(/\\/g, '/');
-      quotesJoin = `LEFT JOIN read_parquet('${qf}') q ON p."保单号" = q."续保单号"`;
-      quoteCol = 'CASE WHEN q."续保单号" IS NOT NULL THEN true ELSE false END AS "是否报价"';
-    }
-
-    const sql = `
-      CREATE OR REPLACE VIEW raw_parquet AS
-      SELECT p.*, ${claimsCols}, ${quoteCol}
-      FROM read_parquet('${policyGlob}', union_by_name=true) p
-      ${claimsJoin}
-      ${quotesJoin}
-    `;
-    console.log('[DuckDB] Domain-split: creating JOIN view as raw_parquet');
-    await this.query(sql);
-
-    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
-    const totalRows = countResult[0]?.cnt ?? 0;
-    console.log(`[DuckDB] Domain-split loaded: ${totalRows} total rows (policy daily + claims JOIN + quotes JOIN)`);
-
-    return { totalRows };
-  }
-
-  /**
    * 创建PolicyFact视图（带列名映射和去重）
    *
    * @param sourceTable 源表名

@@ -295,15 +295,8 @@ async function main() {
 
   console.log('');
 
-  // 6. 运行本地预聚合
-  log('green', '▶ 运行预聚合数据导出...');
+  // 6. 预聚合（TODO: 重建 scripts/export-for-vps.mjs 后启用）
   const projectRoot = dirname(scriptDir);
-  const exportScript = join(projectRoot, 'scripts/export-for-vps.mjs');
-  if (existsSync(exportScript)) {
-    execSync(`node "${exportScript}"`, { stdio: 'inherit', cwd: projectRoot });
-  } else {
-    log('yellow', '⚠ 未找到 scripts/export-for-vps.mjs，跳过预聚合导出');
-  }
 
   console.log('');
 
