@@ -1,0 +1,11 @@
+# deployer 用户 PM2 操作权限 (最小权限原则)
+# 安装: sudo cp deployer-pm2.sudoers /etc/sudoers.d/deployer-pm2
+# 验证: sudo visudo -cf /etc/sudoers.d/deployer-pm2
+#
+# 只允许 deployer 通过 wrapper 脚本操作 PM2，
+# wrapper 脚本内部实现子命令白名单，防止任意命令执行。
+
+# 显式重置环境变量，不依赖全局 env_reset 配置
+Defaults!/usr/local/bin/deploy-chexian-api env_reset
+
+deployer ALL=(root) NOPASSWD: /usr/local/bin/deploy-chexian-api
