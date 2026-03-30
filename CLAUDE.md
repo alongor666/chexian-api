@@ -79,7 +79,7 @@ warehouse/fact/
 - 服务器只走 `policy/current/` 模式（无 daily/ 检测，无旧模式回退）
 - ETL 入口：`node 数据管理/daily.mjs`（智能检测，无参数自动判断需更新的域）
 - 强制子命令：`node 数据管理/daily.mjs premium|claims|quotes|all`
-- 关键方法：`duckdb.ts:loadDomainParquet()` — 创建 3 路 LEFT JOIN 的 `raw_parquet` 视图
+- 关键方法：`duckdb.ts:loadMultipleParquet()` — 加载 `current/` 下多个分片并合并为 `raw_parquet` 视图
 - PolicyFact 视图接口不变 — 24 个 SQL 生成器零改动
 
 **VPS 数据目录**：`server/data/fact/policy/current/`、`server/data/fact/claims/`、`server/data/fact/quotes/`、`server/data/dim/salesman/`、`server/data/dim/plan/`
@@ -116,7 +116,7 @@ warehouse/fact/
 
 **启动**：`bun run dev:full`（禁止只运行 `bun run dev`）
 
-**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行 + `loadDomainParquet()`）· `server/src/config/paths.ts`（域路径函数）· `server/src/routes/query.ts`（路由）· `server/src/sql/`（24 个 SQL 生成器）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
+**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由）· `server/src/sql/`（24 个 SQL 生成器）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
 
 **API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录）· `/api/filters/*`（筛选器）
 
