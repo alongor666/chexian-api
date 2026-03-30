@@ -3,8 +3,6 @@ name: Governance Check
 on:
   pull_request:
     branches: [ main, master ]
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -19,15 +17,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.1"
+          bun-version: "1.3"
 
       - name: Run governance check
-        run: |
-          bun run scripts/check-governance.mjs
-        shell: bash
-
-      - name: Upload result
-        if: always()
-        run: |
-          echo "✅ Governance check passed!" || echo "❌ Governance check failed!"
-        shell: bash
+        run: bun run governance
