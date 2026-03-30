@@ -16,6 +16,7 @@ const logger = createLogger('useKpiData');
  */
 export interface KpiData {
   latest_policy_date?: string | null;
+  vehicle_plan_wan?: number | null;
   vehicle_premium?: number | bigint;
   vehicle_achievement_rate?: number | null;
   vehicle_growth_rate?: number | null;
@@ -81,6 +82,7 @@ export const useKpiData = ({
 
       const kpi: KpiData = {
         latest_policy_date: kpiResponse.latest_policy_date,
+        vehicle_plan_wan: kpiResponse.vehicle_plan_wan,
         vehicle_premium: kpiResponse.vehicle_premium,
         vehicle_achievement_rate: kpiResponse.vehicle_achievement_rate,
         vehicle_growth_rate: kpiResponse.vehicle_growth_rate,

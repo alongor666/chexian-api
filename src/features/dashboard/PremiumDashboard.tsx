@@ -122,9 +122,11 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
   });
 
   // 趋势数据获取
+  const planTotal = typeof kpis.vehicle_plan_wan === 'number' ? kpis.vehicle_plan_wan : undefined;
   const {
     trendData,
     qualityBusinessData,
+    barChartData,
     loading: trendLoading,
     qualityBusinessLoading,
     error: trendError,
@@ -135,6 +137,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     prefetched: trendPrefetched,
     enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
     perspective,
+    planTotal,
   });
 
   // Refresh all data
@@ -249,6 +252,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
         <TrendSection
           trendData={trendData}
           qualityBusinessData={qualityBusinessData}
+          barChartData={barChartData}
           trendLoading={trendLoading}
           qualityBusinessLoading={qualityBusinessLoading}
           isInitialized={isInitialized}
@@ -259,6 +263,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
           perspective={perspective}
           setPerspective={setPerspective}
           perspectiveConfig={perspectiveConfig}
+          analysisYear={filters.analysis_year}
         />
       </div>
     ),

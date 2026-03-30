@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { LineChart } from '../../../widgets/charts/LineChart';
 import { QualityBusinessChart } from '../../../widgets/charts/QualityBusinessChart';
 import type { TimeView } from '../../../widgets/charts/LineChart';
-import { TrendDataPoint, QualityBusinessDataPoint } from '../hooks/useTrendData';
+import { TrendDataPoint, QualityBusinessDataPoint, PremiumTrendBarData } from '../hooks/useTrendData';
 import { PerspectiveSwitcher } from '../../../widgets/filters/PerspectiveSwitcher';
 import type { ViewPerspective, PerspectiveConfig } from '../../../shared/types/view-perspective';
 import { cardStyles, textStyles, cn } from '../../../shared/styles';
@@ -10,6 +10,8 @@ import { cardStyles, textStyles, cn } from '../../../shared/styles';
 interface TrendSectionProps {
   trendData: TrendDataPoint[];
   qualityBusinessData: QualityBusinessDataPoint[];
+  /** V3.0: 双Y轴柱+折线组合图数据 */
+  barChartData: PremiumTrendBarData[];
   trendLoading: boolean;
   qualityBusinessLoading: boolean;
   isInitialized: boolean;
@@ -21,6 +23,8 @@ interface TrendSectionProps {
   perspective: ViewPerspective;
   setPerspective: (perspective: ViewPerspective) => void;
   perspectiveConfig: PerspectiveConfig;
+  /** 当前分析年份 */
+  analysisYear?: number;
 }
 
 /**
@@ -35,6 +39,7 @@ interface TrendSectionProps {
 export const TrendSection = memo<TrendSectionProps>(function TrendSection({
   trendData,
   qualityBusinessData,
+  barChartData,
   trendLoading,
   qualityBusinessLoading,
   isInitialized,
@@ -45,6 +50,7 @@ export const TrendSection = memo<TrendSectionProps>(function TrendSection({
   perspective,
   setPerspective,
   perspectiveConfig,
+  analysisYear,
 }) {
   const timeViewLabel =
     timeView === 'daily' ? '按日' : timeView === 'weekly' ? '按周' : '按月';
@@ -96,6 +102,8 @@ export const TrendSection = memo<TrendSectionProps>(function TrendSection({
             startDate={startDate}
             endDate={endDate}
             yAxisLabel={perspectiveConfig.yAxisLabel}
+            barChartData={perspective === 'premium' ? barChartData : undefined}
+            analysisYear={analysisYear}
           />
         </div>
       )}

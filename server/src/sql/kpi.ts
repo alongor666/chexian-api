@@ -243,6 +243,7 @@ export const generateKpiQuery = (
     )
     SELECT
       lc.latest_policy_date AS latest_policy_date,
+      vpl.vehicle_plan_wan AS vehicle_plan_wan,
       vp.vehicle_ytd_premium AS vehicle_premium,
       CASE
         WHEN vpl.vehicle_plan_wan > 0 AND lc.natural_day_progress > 0
