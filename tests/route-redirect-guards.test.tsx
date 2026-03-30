@@ -59,13 +59,13 @@ describe('route redirect guards', () => {
       <MemoryRouter initialEntries={['/cross-sell?tab=1']}>
         <Routes>
           <Route path="/cross-sell" element={<DataGuard><div>protected</div></DataGuard>} />
-          <Route path="/" element={<StateEcho />} />
+          <Route path="/data-import" element={<StateEcho />} />
         </Routes>
       </MemoryRouter>
     );
 
     expect(screen.getByTestId('state-echo').textContent).toContain('"fromPath":"/cross-sell?tab=1"');
-    expect(debugSpy).toHaveBeenCalledWith('Redirect to home because no data is loaded', { fromPath: '/cross-sell' });
+    expect(debugSpy).toHaveBeenCalledWith('Redirect to data-import because no data is loaded', { fromPath: '/cross-sell' });
   });
 
   it('RouteAccessGuard logs sanitized fromPath while preserving redirect state', () => {
