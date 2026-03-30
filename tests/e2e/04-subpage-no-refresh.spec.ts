@@ -18,13 +18,12 @@ test('首页侧边栏逐个进入子页面无需刷新', async ({ page }) => {
   const hasData = await ensureDataLoaded(page);
 
   if (!hasData) {
-    // CI environment without data: verify login + homepage renders correctly
+    // CI environment without data: verify login works and app redirects to data-import
     await page.goto('/#/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Sidebar should be visible (homepage redirects to dashboard)
-    const nav = page.getByRole('navigation', { name: '主导航' });
-    await expect(nav).toBeVisible({ timeout: 10000 });
+    // DataGuard should redirect to /data-import (not loop via dashboard)
+    await page.waitForURL(/#\/data-import/, { timeout: 10000 });
 
     // Skip data-dependent sidebar navigation — no data loaded in CI
     test.info().annotations.push({
