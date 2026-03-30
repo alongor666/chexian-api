@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 主 ETL 脚本：3层分片架构（cold/warm/hot）
+ * 主 ETL 脚本：3层分片架构（cold/warm/hot）+ 分域支持
  *
  * 分片类型（由 shard-config.json 配置边界）：
  *   static  — 签单日期 <= static_cutoff，已满期1年+，永不重新转换
@@ -8,12 +8,17 @@
  *   daily   — 日增量小文件，转到 staging/（不进 current/）
  *
  * 输出目录结构：
- *   warehouse/fact/policy/current/   ← DuckDB 加载（4个文件）
+ *   warehouse/fact/policy/current/   ← 保单+保费（4个分片文件）
  *   warehouse/fact/policy/staging/   ← 日增量暂存（周更时清空）
+ *   warehouse/fact/claims/latest.parquet  ← 赔付+费用（每周全量替换）
+ *   warehouse/fact/quotes/latest.parquet  ← 报价状态（每日全量替换）
  *
  * 用法：
- *   node daily.mjs           # 自动处理所有分片
- *   node daily.mjs --no-sync # 跳过 VPS 同步
+ *   node daily.mjs                # 自动处理 premium 分片
+ *   node daily.mjs claims         # 全量替换赔付+费用域
+ *   node daily.mjs quotes         # 全量替换报价状态域
+ *   node daily.mjs all            # premium + claims + quotes
+ *   node daily.mjs --no-sync      # 跳过 VPS 同步
  */
 
 import { execSync } from 'child_process';
@@ -135,11 +140,113 @@ function cleanStaging(stagingDir) {
 
 // ── 主流程 ──
 
+// ── 分域处理 ──
+
+const WAREHOUSE = join(__dirname, 'warehouse/fact');
+const CLAIMS_DIR = join(WAREHOUSE, 'claims');
+const CLAIMS_PATH = join(CLAIMS_DIR, 'latest.parquet');
+const QUOTES_DIR = join(WAREHOUSE, 'quotes');
+const QUOTES_PATH = join(QUOTES_DIR, 'latest.parquet');
+
+async function syncToVps(scriptDir) {
+  log('cyan', '[ETL] 自动同步到 VPS...');
+  const projectRoot = dirname(scriptDir);
+  const syncScript = join(projectRoot, 'scripts/sync-vps.mjs');
+  try {
+    execSync(`node "${syncScript}"`, { stdio: 'inherit', env: { ...process.env, RUN_MAIN: '1' } });
+    log('green', '✅ VPS 同步完成');
+  } catch (e) {
+    console.warn(`[ETL] VPS 同步失败（数据已写入本地）: ${e.message}`);
+    console.warn('[ETL] 可手动重试: node scripts/sync-vps.mjs');
+  }
+}
+
+/** 找最大的全量 xlsx（claims/quotes 需要完整历史） */
+function findLargestXlsx(dir) {
+  const files = ls('每日数据_*.xlsx', dir);
+  if (files.length === 0) return null;
+  return files.sort((a, b) => statSync(b.path).size - statSync(a.path).size)[0];
+}
+
+function runClaims(python, scriptDir) {
+  log('cyan', '\n═══ Claims 域：赔付+费用（全量替换）═══\n');
+  const xlsx = findLargestXlsx(scriptDir);
+  if (!xlsx) { log('red', '未找到 每日数据_*.xlsx'); return; }
+  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
+
+  ensureDir(CLAIMS_DIR);
+  // 归档旧文件
+  if (existsSync(CLAIMS_PATH)) {
+    const archiveDir = join(homedir(), 'chexian-archive');
+    ensureDir(archiveDir);
+    const ts = formatDate();
+    renameSync(CLAIMS_PATH, join(archiveDir, `claims_latest_${ts}.parquet`));
+    log('yellow', `  归档旧 claims → claims_latest_${ts}.parquet`);
+  }
+
+  runPythonScript(python, join(scriptDir, 'pipelines/transform.py'), [
+    '-i', `"${xlsx.path}"`, '-o', `"${CLAIMS_PATH}"`, '--domain', 'claims'
+  ]);
+  log('green', '✅ Claims 域完成');
+}
+
+function runQuotes(python, scriptDir) {
+  log('cyan', '\n═══ Quotes 域：报价状态（全量替换）═══\n');
+
+  // 优先使用独立报价 Excel（商业险续转保报价*.xlsx）
+  const quoteFiles = ls('商业险续转保报价*.xlsx', scriptDir);
+  const xlsx = quoteFiles.length > 0
+    ? quoteFiles[0]  // 独立报价文件（按文件名倒序，取最新）
+    : findLargestXlsx(scriptDir);  // 回退到主数据 Excel
+
+  if (!xlsx) { log('red', '未找到报价数据 xlsx'); return; }
+  const isStandalone = quoteFiles.length > 0;
+  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)${isStandalone ? ' [独立报价文件]' : ''}`);
+
+  ensureDir(QUOTES_DIR);
+  if (existsSync(QUOTES_PATH)) {
+    const archiveDir = join(homedir(), 'chexian-archive');
+    ensureDir(archiveDir);
+    const ts = formatDate();
+    renameSync(QUOTES_PATH, join(archiveDir, `quotes_latest_${ts}.parquet`));
+    log('yellow', `  归档旧 quotes → quotes_latest_${ts}.parquet`);
+  }
+
+  if (isStandalone) {
+    // 独立报价文件：用 convert_quotes.py 处理
+    runPythonScript(python, join(scriptDir, 'pipelines/convert_quotes.py'), [
+      '-i', `"${xlsx.path}"`, '-o', `"${QUOTES_PATH}"`
+    ]);
+  } else {
+    // 回退：从主数据 Excel 提取报价域
+    runPythonScript(python, join(scriptDir, 'pipelines/transform.py'), [
+      '-i', `"${xlsx.path}"`, '-o', `"${QUOTES_PATH}"`, '--domain', 'quotes'
+    ]);
+  }
+  log('green', '✅ Quotes 域完成');
+}
+
+// ── 主流程 ──
+
 async function main() {
   const scriptDir = __dirname;
   process.chdir(scriptDir);
 
   const noSync = process.argv.includes('--no-sync');
+  const subcommand = process.argv.find(a => ['premium', 'claims', 'quotes', 'all'].includes(a));
+
+  // 子命令模式：claims / quotes / all
+  if (subcommand === 'claims' || subcommand === 'quotes') {
+    const python = findPython();
+    if (subcommand === 'claims') runClaims(python, scriptDir);
+    if (subcommand === 'quotes') runQuotes(python, scriptDir);
+    if (!noSync) await syncToVps(scriptDir);
+    return;
+  }
+  if (subcommand === 'all') {
+    // all = premium（下面的分片流程）+ claims + quotes
+    // premium 继续走下面的分片逻辑，claims/quotes 在分片完成后执行
+  }
 
   // 路径定义
   const currentDir = join(scriptDir, 'warehouse/fact/policy/current');
@@ -295,24 +402,20 @@ async function main() {
 
   console.log('');
 
-  // 6. 预聚合（TODO: 重建 scripts/export-for-vps.mjs 后启用）
-  const projectRoot = dirname(scriptDir);
-
   console.log('');
+
+  // 6. all 模式下追加 claims + quotes
+  if (subcommand === 'all') {
+    const python = findPython();
+    runClaims(python, scriptDir);
+    runQuotes(python, scriptDir);
+  }
 
   // 7. VPS 同步
   if (noSync) {
     log('yellow', '已跳过 VPS 同步（--no-sync）');
   } else {
-    log('cyan', '[ETL] 自动同步到 VPS...');
-    const syncScript = join(projectRoot, 'scripts/sync-vps.mjs');
-    try {
-      execSync(`node "${syncScript}"`, { stdio: 'inherit', env: { ...process.env, RUN_MAIN: '1' } });
-      log('green', '✅ VPS 同步完成');
-    } catch (e) {
-      console.warn(`[ETL] VPS 同步失败（数据已写入本地）: ${e.message}`);
-      console.warn('[ETL] 可手动重试: node scripts/sync-vps.mjs');
-    }
+    await syncToVps(scriptDir);
   }
 
   console.log('');
