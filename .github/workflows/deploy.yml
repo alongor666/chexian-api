@@ -71,9 +71,10 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          retry 5 5 ssh-keyscan -T 10 -t ed25519,rsa,ecdsa 162.14.113.44 >> ~/.ssh/known_hosts 2>/dev/null
+          VPS_IP="${{ vars.VPS_IP || '162.14.113.44' }}"
+          retry 5 5 ssh-keyscan -T 10 -t ed25519,rsa,ecdsa "$VPS_IP" >> ~/.ssh/known_hosts 2>/dev/null
 
-          VPS="deployer@162.14.113.44"
+          VPS="deployer@${VPS_IP}"
           SSH_OPTS=(
             -o StrictHostKeyChecking=accept-new
             -o ConnectTimeout=20

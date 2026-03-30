@@ -28,14 +28,6 @@ module.exports = {
         DUCKDB_MAX_MEMORY: '1536MB',
         DUCKDB_THREADS: '2',
       },
-      env_production: {
-        NODE_ENV: 'production',
-        PORT: 3000,
-        VPS_MODE: 'true',
-        CORS_ORIGIN: 'https://chexian.cretvalu.com',
-        DUCKDB_MAX_MEMORY: '1536MB',
-        DUCKDB_THREADS: '2',
-      },
 
       // 日志配置
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
