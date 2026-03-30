@@ -160,7 +160,7 @@ export function generatePremiumPlanDrilldownQuery(
 
   if (level === 'company') {
     selectBody = buildAggSelect("'分公司整体'");
-    groupBy = '';
+    groupBy = 'GROUP BY plan_year';
   } else if (level === 'org') {
     selectBody = buildAggSelect('org_name');
     groupBy = 'GROUP BY org_name, plan_year';
