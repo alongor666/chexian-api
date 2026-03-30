@@ -14,7 +14,23 @@ setup('缓存已登录会话供后续 E2E 复用', async ({ page }) => {
   await page.goto('/#/login');
   await page.getByPlaceholder('请输入用户名').fill(E2E_USERNAME);
   await page.getByPlaceholder('请输入密码').fill(E2E_PASSWORD);
-  await page.getByRole('button', { name: '登录', exact: true }).click();
+
+  // Intercept login response for diagnostics
+  const [loginResponse] = await Promise.all([
+    page.waitForResponse(
+      (resp) => resp.url().includes('/api/auth/login') && resp.request().method() === 'POST',
+      { timeout: 30000 },
+    ),
+    page.getByRole('button', { name: '登录', exact: true }).click(),
+  ]);
+
+  if (!loginResponse.ok()) {
+    const body = await loginResponse.text().catch(() => '(no body)');
+    throw new Error(
+      `Login failed: ${loginResponse.status()} — user=${E2E_USERNAME} — ${body}`
+    );
+  }
+
   await page.waitForURL((url) => !url.hash.startsWith('#/login'), {
     waitUntil: 'domcontentloaded',
     timeout: 30000,
