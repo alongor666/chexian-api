@@ -10,8 +10,18 @@ describe('cross-sell SQL 兼容交叉销售字段格式', () => {
     const sql = generateCrossSellQuery('1=1', [], null);
 
     expect(sql).toContain('FROM CrossSellDailyAgg');
-    expect(sql).toContain('SUM(auto_count)');
-    expect(sql).toContain('SUM(driver_count)');
+    // total 汇总用 CASE WHEN 过滤商业险（主全+交三）
+    expect(sql).toContain('THEN auto_count ELSE 0 END');
+    expect(sql).toContain('THEN driver_count ELSE 0 END');
+  });
+
+  it('cross-sell 整体推介率分母应仅含商业险（排除单交）', () => {
+    const sql = generateCrossSellQuery('1=1', [], null);
+
+    // total_auto_count/total_driver_count 应排除单交
+    expect(sql).toContain("coverage_combination IN ('主全', '交三')");
+    // 单交行仍单独统计
+    expect(sql).toContain("coverage_combination = '单交'");
   });
 
   it('cross-sell 时间维度 SQL 应基于预聚合表计算', () => {
@@ -47,6 +57,15 @@ describe('cross-sell SQL 兼容交叉销售字段格式', () => {
     expect(sql).toContain('time_period');
   });
 
+  it('cross-sell 走势整体线应排除纯交强', () => {
+    const sql = generateCrossSellTrendQuery('1=1', 'passenger', 'monthly');
+
+    // total_trend CTE 应过滤 coverage_combination
+    const totalTrendMatch = sql.match(/total_trend[\s\S]*?GROUP BY 1/);
+    expect(totalTrendMatch).toBeTruthy();
+    expect(totalTrendMatch![0]).toContain("coverage_combination IN ('主全', '交三')");
+  });
+
   it('cross-sell 机构趋势 SQL 的车险件数应按去重保单口径', () => {
     const sql = generateCrossSellOrgTrendQuery('1=1', 'passenger', '主全', 14);
 
@@ -54,6 +73,13 @@ describe('cross-sell SQL 兼容交叉销售字段格式', () => {
     expect(sql).toContain("NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')");
     expect(sql).toContain("NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')");
     expect(sql).not.toContain("COUNT(DISTINCT CASE WHEN insurance_type LIKE '%商业%' THEN dedup_key END) AS auto_count");
+  });
+
+  it('cross-sell 机构趋势整体应排除单交', () => {
+    const sql = generateCrossSellOrgTrendQuery('1=1', 'passenger', '整体', 14);
+
+    expect(sql).toContain("coverage_combination IN ('主全', '交三')");
+    expect(sql).not.toContain("AND coverage_combination = '整体'");
   });
 
   it('cross-sell 热力图 SQL 在 PolicyFact 分支应按 VIN/保单去重并输出渗透率', () => {

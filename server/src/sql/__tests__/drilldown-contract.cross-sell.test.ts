@@ -93,4 +93,16 @@ describe('驾意险推介率下钻 — SQL 语义不变式', () => {
     expect(sql).toContain("'新车'");
     expect(sql).toContain("'旧车'");
   });
+
+  // C-11: 整体推介率分母排除纯交强
+  it('C-11: total_auto_count 仅含主全+交三（排除单交）', () => {
+    const sql = gen('org_level_3');
+    // total 汇总用 CASE WHEN 过滤商业险
+    expect(sql).toContain("coverage_combination IN ('主全', '交三') THEN");
+    expect(sql).toContain('AS total_auto_count');
+
+    // 汇总模式同理
+    const summarySQL = gen(null);
+    expect(summarySQL).toContain("coverage_combination IN ('主全', '交三') THEN");
+  });
 });
