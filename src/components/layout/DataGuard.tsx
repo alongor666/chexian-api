@@ -36,11 +36,11 @@ export const DataGuard: React.FC<DataGuardProps> = ({ children }) => {
   }
 
   if (!isDataLoaded) {
-    // 保存原始路径，以便导入数据后可以返回
-    logger.debug('Redirect to home because no data is loaded', { fromPath: sanitizePathForLog(fromPath) });
+    // 重定向到数据导入页（不能重定向到 /，否则 index route 会再推向 /dashboard，形成无限循环）
+    logger.debug('Redirect to data-import because no data is loaded', { fromPath: sanitizePathForLog(fromPath) });
     return (
       <Navigate
-        to="/"
+        to="/data-import"
         state={buildRedirectState(fromPath)}
         replace
       />

@@ -21,7 +21,6 @@ afterEach(() => {
 describe('sync-vps script config helpers', () => {
   it('parses cli args including dry-run and overrides', () => {
     const parsed = parseArgs([
-      '--export',
       '--no-restart',
       '--dry-run',
       '--alias',
@@ -38,11 +37,9 @@ describe('sync-vps script config helpers', () => {
       '/var/data',
       '--health-url',
       'http://localhost:3000/health',
-      'custom.parquet',
     ]);
 
     expect(parsed).toMatchObject({
-      exportMode: true,
       noRestart: true,
       dryRun: true,
       alias: 'vps-alias',
@@ -52,7 +49,6 @@ describe('sync-vps script config helpers', () => {
       keyPath: '/tmp/key',
       remoteDir: '/var/data',
       healthUrl: 'http://localhost:3000/health',
-      targetFile: 'custom.parquet',
     });
   });
 
