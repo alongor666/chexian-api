@@ -43,7 +43,25 @@
 
 ---
 
-## 2. 护栏（RED LINE）
+## 2. 指标注册表（RED LINE）
+
+**唯一事实源**：`server/src/config/metric-registry/`（20 个指标，含类型、SQL、展示、测试）
+
+**新增/修改指标流程**（必须按顺序）：
+1. 先改 `metric-registry/categories/*.ts` 中的指标定义
+2. 再改 SQL 生成器（`server/src/sql/*.ts`）引用注册表
+3. 最后改前端展示
+
+**禁止**：
+- ❌ 在 SQL 生成器中硬编码新指标公式而不在注册表注册
+- ❌ 在前端硬编码指标标签/阈值而不从注册表派生
+- ❌ 新增与已有指标公式重复的指标（先 `grep` 注册表确认不存在）
+
+**跨项目对齐**：作战地图 `00_规范与协议/指标字典_v2.0.md` 是业务层权威定义，本注册表是代码层实现。两者公式必须一致。
+
+---
+
+## 3. 护栏（RED LINE）
 
 **业务口径**：`server/src/services/duckdb.ts` 和 `server/src/routes/query.ts` — 不得修改/删除已有逻辑，只能追加。**废弃路由退出条件**：满足以下全部条件时允许清理——① 用户明确确认 ② 生产日志证明 ≥30 天零流量 ③ 前端无调用方（grep 验证）。见 BACKLOG B237。
 
@@ -232,6 +250,21 @@ bun run governance                 # 治理校验
 2. **逻辑一致性**：检查边界条件和矛盾，不只看表面结构
 3. **诚实评分**：浅层审查浪费时间，宁可花多一轮也不输出低质量结论
 4. **业务逻辑标注**：涉及保险/分析内容，所有假设的业务逻辑都标注 `⚠️ 待用户确认`
+
+---
+
+## 14. 指标开发协议（Metric Development Protocol）
+
+**唯一事实源**：`server/src/config/metric-registry/`（L1-L3 原子指标）· 指标字典：`开发文档/指标字典.md`（自动生成，禁止手动编辑）
+
+**新增指标流程**：
+1. `grep -r "id: '${NEW_ID}'" server/src/config/metric-registry/` — 确认不存在
+2. 判断复杂度：L1-L3（单行 SQL 表达式）→ 添加到 `categories/*.ts`；L4（CTE/窗口函数/多表 JOIN）→ SQL 生成器中实现，引用注册表原子指标
+3. 必须包含：id + name + formula + sql.expression + display + 至少 1 个 testCase + changelog
+4. `npx tsx scripts/metric-registry/validate.ts` 校验通过
+5. `npx tsx scripts/metric-registry/generate-frontend-map.ts` 更新前端映射
+
+**禁止事项**：禁止在 SQL 生成器中硬编码已注册的 L1-L3 指标 SQL · 禁止在前端组件中硬编码新指标的标签/格式化 · 禁止修改已发布指标公式而不更新 version 和 changelog
 
 ---
 
