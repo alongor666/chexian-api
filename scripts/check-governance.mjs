@@ -282,59 +282,7 @@ function checkBacklogEvidence() {
   }
 }
 
-// ============================================================
-// 4. GEMINI.md 引用正确性检查（新增）
-// ============================================================
-
-function checkGeminiMdReferences() {
-  info('检查 GEMINI.md 引用正确性...');
-
-  const geminiPath = path.join(ROOT_DIR, 'GEMINI.md');
-
-  if (!fs.existsSync(geminiPath)) {
-    warning('GEMINI.md 不存在，跳过引用检查');
-    return true;
-  }
-
-  const content = fs.readFileSync(geminiPath, 'utf-8');
-  const errors = [];
-
-  // 检查是否引用废弃文件
-  if (content.includes('DEVELOPMENT_PROGRESS.md')) {
-    errors.push('GEMINI.md 引用了已废弃的 DEVELOPMENT_PROGRESS.md（应引用 BACKLOG.md + PROGRESS.md）');
-  }
-
-  // 检查是否引用三大索引
-  const requiredRefs = [
-    'DOC_INDEX',
-    'CODE_INDEX',
-    'PROGRESS_INDEX',
-  ];
-
-  for (const ref of requiredRefs) {
-    if (!content.includes(ref)) {
-      errors.push(`GEMINI.md 缺少对 ${ref} 的引用`);
-    }
-  }
-
-  // 检查是否引用两本账
-  if (!content.includes('BACKLOG.md') && !content.includes('BACKLOG]')) {
-    errors.push('GEMINI.md 缺少对 BACKLOG.md 的引用');
-  }
-
-  if (!content.includes('PROGRESS.md') && !content.includes('PROGRESS]')) {
-    errors.push('GEMINI.md 缺少对 PROGRESS.md 的引用');
-  }
-
-  if (errors.length > 0) {
-    error(`GEMINI.md 引用检查失败：`);
-    errors.forEach(err => console.log(`    - ${err}`));
-    return false;
-  } else {
-    success('GEMINI.md 引用检查通过');
-    return true;
-  }
-}
+// (已移除) GEMINI.md 引用检查 — GEMINI.md 不再维护
 
 // ============================================================
 // 5. CLAUDE.md 关键章节检查（新增）
@@ -1066,7 +1014,6 @@ function main() {
     { name: '必需文件', fn: checkRequiredFiles },
     { name: '核心层索引', fn: checkCoreLayerIndices },
     { name: 'BACKLOG证据链', fn: checkBacklogEvidence },
-    { name: 'GEMINI引用', fn: checkGeminiMdReferences },
     { name: 'CLAUDE章节', fn: checkClaudeMdSections },
     { name: 'DC-002合规', fn: checkDC002Compliance },
     { name: '任务ID分配', fn: checkTaskIdAllocation },

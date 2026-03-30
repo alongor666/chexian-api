@@ -36,7 +36,7 @@ except ImportError:
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-POLICY_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/daily/*.parquet")
+POLICY_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
 CLAIMS_FILE = str(PROJECT_ROOT / "数据管理/warehouse/fact/claims/latest.parquet")
 DEFAULT_OUTPUT_DIR = str(PROJECT_ROOT / "数据分析报告")
 

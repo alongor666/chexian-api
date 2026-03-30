@@ -48,7 +48,7 @@ node scripts/sync-vps.mjs
 
 ## VPS 数据加载路径
 
-**服务器加载逻辑**（`server/src/services/duckdb.ts:loadDomainParquet()`）：
+**服务器加载逻辑**（`server/src/services/duckdb.ts:loadMultipleParquet()`）：
 - 固定读取 `policy/current/*.parquet`（3层分片架构产出的 4 个分片文件）
 - 无 daily/ 检测，无旧模式回退
 - 创建 3 路 LEFT JOIN 的 `raw_parquet` 视图（policy JOIN claims JOIN quotes）

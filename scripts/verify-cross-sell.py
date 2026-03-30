@@ -23,20 +23,15 @@ def query_parquet(date: str) -> dict:
     """直查 Parquet 源数据"""
     con = duckdb.connect()
 
-    # 优先查 daily 分区，回退 current
-    daily_path = f"数据管理/warehouse/fact/policy/daily/{date}.parquet"
+    # 从 current/ 分片目录加载
     current_path = "数据管理/warehouse/fact/policy/current/"
 
-    if os.path.exists(daily_path):
-        path = daily_path
-        date_filter = ""
-    else:
-        parquets = [f for f in os.listdir(current_path) if f.endswith(".parquet")]
-        if not parquets:
-            print(f"ERROR: 找不到 {date} 的 Parquet 文件", file=sys.stderr)
-            sys.exit(1)
-        path = os.path.join(current_path, parquets[0])
-        date_filter = f'AND CAST("签单日期" AS DATE) = \'{date}\''
+    parquets = [f for f in os.listdir(current_path) if f.endswith(".parquet")]
+    if not parquets:
+        print(f"ERROR: 找不到 {current_path} 下的 Parquet 文件", file=sys.stderr)
+        sys.exit(1)
+    path = os.path.join(current_path, parquets[0])
+    date_filter = f'AND CAST("签单日期" AS DATE) = \'{date}\''
 
     passenger_filter = """\"客户类别\" IN ('非营业个人客车', '非营业企业客车', '非营业机关客车')"""
 

@@ -35,3 +35,9 @@ jobs:
 
       - name: Unit & Integration Tests
         run: bun run test --run
+
+      - name: Backend Typecheck
+        run: cd server && bun install --frozen-lockfile && bun run build
+
+      - name: Governance Check
+        run: bun run governance

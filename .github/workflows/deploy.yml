@@ -75,7 +75,7 @@ jobs:
 
           VPS="deployer@162.14.113.44"
           SSH_OPTS=(
-            -o StrictHostKeyChecking=no
+            -o StrictHostKeyChecking=accept-new
             -o ConnectTimeout=20
             -o ConnectionAttempts=3
             -o ServerAliveInterval=30
