@@ -221,6 +221,7 @@ export function generateCrossSellTimePeriodQuery(
         ${aggColumns},
         ${prevAggColumns}
       FROM filtered_data
+      WHERE coverage_combination IN ('主全', '交三')
     ),
     combined AS (
       SELECT * FROM total_row

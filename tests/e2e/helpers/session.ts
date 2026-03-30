@@ -4,16 +4,27 @@ const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
 const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'dev';
 
 export const waitForBackendReady = async (page: Page) => {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  // CI cold start is slower — allow up to 60s (40 attempts × 1.5s)
+  const maxAttempts = process.env.CI ? 40 : 20;
+  const delay = process.env.CI ? 1500 : 500;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const response = await page.request
-      .get('http://localhost:3000/health', { timeout: 3000 })
+      .get('http://localhost:3000/health', { timeout: 5000 })
       .catch(() => null);
     if (response?.ok()) {
-      return;
+      // Also verify login endpoint is reachable
+      const loginCheck = await page.request
+        .post('http://localhost:3000/api/auth/login', {
+          data: { username: 'probe', password: 'probe' },
+          timeout: 5000,
+        })
+        .catch(() => null);
+      if (loginCheck) return; // 401 is fine — endpoint is reachable
     }
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(delay);
   }
-  throw new Error('Backend not ready for login requests');
+  throw new Error('Backend not ready after ' + maxAttempts + ' attempts');
 };
 
 export const login = async (page: Page) => {

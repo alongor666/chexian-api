@@ -73,7 +73,12 @@ export function useTruckAnalysis({
       rosePremiumData: result?.rosePremium ?? [],
       roseCountData: result?.roseCount ?? [],
       tonnageByOrgData: result?.tonnageByOrg ?? [],
-      orgPremiumData: result?.orgPremium ?? [],
+      orgPremiumData: (result?.orgPremium ?? []).map(
+        (row: { org_level_3?: string; premium?: number }) => ({
+          name: row.org_level_3 ?? '未知',
+          value: row.premium ?? 0,
+        })
+      ),
     }),
   });
 
