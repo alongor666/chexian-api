@@ -47,7 +47,7 @@
 
 ### 数据概况
 ```yaml
-数据源: 数据管理/warehouse/fact/policy/车险保单综合明细表0127.parquet
+数据源: 数据管理/warehouse/fact/policy/current/*.parquet
 记录数: ~440,000 条
 字段数: 30 个
 核心维度: 业绩、续保、产品、渠道、客户、批改、成本

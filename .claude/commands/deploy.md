@@ -10,7 +10,7 @@
 
 ## 数据同步（如有变更）
 5. 同步到 VPS：`node scripts/sync-vps.mjs`
-   （rsync 事实表 policy/daily + claims + quotes + 维度表 salesman + plan）
+   （rsync 事实表 policy/current + claims + quotes + 维度表 salesman + plan）
 
 ## 部署执行
 7. SSH 到 VPS：`ssh chexian-vps-deploy`

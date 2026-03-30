@@ -75,7 +75,7 @@
 
 | 项目 | 值 |
 |------|-----|
-| **数据位置** | `数据管理/warehouse/fact/policy/daily/*.parquet` 或 `current/*.parquet` |
+| **数据位置** | `数据管理/warehouse/fact/policy/current/*.parquet` |
 | **业务员字段** | 列名仍为中文 `"业务员"`, 值格式 `"110030888王时凤"` |
 | **机构字段** | 列名 `"三级机构"`, 值格式 `"本部"` |
 | **下游** | DuckDB 加载 → PolicyFact |

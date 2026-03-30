@@ -576,10 +576,17 @@ cat /var/www/chexian/logs/audit.log | jq 'select(.username == "admin")'
 ├── server/
 │   ├── dist/               # 后端编译代码 (ES Module)
 │   ├── data/               # 数据文件
-│   │   ├── 车险保单综合明细表0212.parquet  (24MB, 权限 600)
-│   │   ├── salesman_organization_mapping.json  (54KB, 权限 600)
-│   │   ├── chexian.duckdb              (78MB, 权限 600 ✅)
-│   │   └── chexian.duckdb.wal          (7.4KB, 权限 600 ✅)
+│   │   ├── fact/
+│   │   │   ├── policy/current/         # 保单保费（全量替换，权限 600）
+│   │   │   ├── claims/latest.parquet   # 赔付费用（权限 600）
+│   │   │   └── quotes/latest.parquet   # 报价状态（权限 600）
+│   │   ├── dim/
+│   │   │   ├── salesman/latest.parquet # 业务员主数据（权限 600）
+│   │   │   └── plan/latest.parquet     # 计划数据（权限 600）
+│   │   ├── renewal/                    # 续保数据（权限 600）
+│   │   ├── salesman_organization_mapping.json  (54KB, 权限 600, 回退用)
+│   │   ├── chexian.duckdb              (权限 600 ✅)
+│   │   └── chexian.duckdb.wal          (权限 600 ✅)
 │   ├── node_modules/       # 生产依赖
 │   ├── .env                # 环境变量 (权限 600)
 │   └── ecosystem.config.cjs  # PM2 配置
@@ -631,9 +638,14 @@ curl -sI https://chexian.cretvalu.com/  # HTTPS 状态
 /root/backup-chexian.sh       # 需先创建（见安全修复命令）
 ls -lh /var/backups/chexian/
 
-# === 一键同步数据（从本地 Mac 的 chexian-api 目录执行）===
-# 自动找到最新 .parquet → 上传 → 设权限 600 → 重启 PM2 → 健康检查
-./scripts/sync-vps.mjs
+# === 同步数据（从本地 Mac 的 chexian-api 目录执行）===
+# rsync 同步三个事实域 + 两个维度表 + 续保数据
+rsync -azv 数据管理/warehouse/fact/policy/current/ chexian-vps-deploy:/var/www/chexian/server/data/fact/policy/current/
+rsync -azv 数据管理/warehouse/fact/claims/         chexian-vps-deploy:/var/www/chexian/server/data/fact/claims/
+rsync -azv 数据管理/warehouse/fact/quotes/         chexian-vps-deploy:/var/www/chexian/server/data/fact/quotes/
+rsync -azv 数据管理/warehouse/dim/salesman/        chexian-vps-deploy:/var/www/chexian/server/data/dim/salesman/
+rsync -azv 数据管理/warehouse/dim/plan/            chexian-vps-deploy:/var/www/chexian/server/data/dim/plan/
+# 旧模式回退（保留兼容）：./scripts/sync-vps.mjs
 
 # === 更新代码（从本地 Mac 执行）===
 # 1. 本地构建

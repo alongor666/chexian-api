@@ -2,17 +2,17 @@
 
 车险数据分析平台。React + TypeScript + Vite 前端，Express + DuckDB 后端。
 
-## 分域 Lakehouse 数据架构
+## 数据架构
 
-数据拆分为 3 个独立域，DuckDB 启动时用 LEFT JOIN 合并为 PolicyFact 视图：
+数据统一存放于 `policy/current/`（4 个分片），服务器直接加载：
 
-- `warehouse/fact/policy/daily/*.parquet` — 保单+保费，按日分区，每日增量追加
+- `warehouse/fact/policy/current/*.parquet` — 保单+保费，3层分片（static/weekly/daily）
 - `warehouse/fact/claims/latest.parquet` — 赔付+费用，每周全量替换
 - `warehouse/fact/quotes/latest.parquet` — 报价状态，每日全量替换
 
-服务器检测 `policy/daily/` 存在 → `duckdb.ts:loadDomainParquet()` 3路 JOIN；不存在 → 回退旧模式。
+服务器启动直接加载 `policy/current/` 分片，无 daily/ 检测逻辑。
 
-ETL 入口：`node 数据管理/daily.mjs`（智能检测，无参数自动判断）。
+ETL 唯一入口：`node 数据管理/daily.mjs`（3层分片架构，无参数自动检测）。
 
 ## 红线
 

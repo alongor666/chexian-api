@@ -1,5 +1,5 @@
 ---
-paths: ["数据管理/**", "scripts/export-for-vps.mjs", "scripts/**"]
+paths: ["数据管理/**", "scripts/sync-vps.mjs", "scripts/**"]
 ---
 
 # 数据管道与 VPS 规则
@@ -24,39 +24,45 @@ paths: ["数据管理/**", "scripts/export-for-vps.mjs", "scripts/**"]
 
 | 文件 | 路径 | 用途 |
 |------|------|------|
-| 保单明细 | `数据管理/warehouse/fact/policy/车险保单综合明细表0214.parquet` | 主数据源 |
-| 团队映射 | `数据管理/warehouse/dim/salesman_organization_mapping.json` | 业务员-团队-机构映射 |
+| 保单分片 | `数据管理/warehouse/fact/policy/current/*.parquet` | 主数据源（4 个分片） |
+| 赔付明细 | `数据管理/warehouse/fact/claims/latest.parquet` | 赔付+费用 |
+| 报价状态 | `数据管理/warehouse/fact/quotes/latest.parquet` | 报价数据 |
+| 团队映射 | `数据管理/warehouse/dim/salesman_organization_mapping.json` | 业务员-团队-机构映射（回退） |
 | 续保明细 | `数据管理/warehouse/fact/renewal/` | 续保数据 |
 
 ## 数据加载流程
 
 ```bash
 # 本地开发
-bun run dev:full  # 自动加载 Parquet + JSON
+bun run dev:full  # 自动加载 policy/current/ + claims + quotes + dim
 
-# 生产同步（完整一键链路）
-./数据管理/run.sh full \
-  --source 历史数据.xlsx \
-  --target 最新数据.xlsx \
-  --output 数据管理/warehouse/fact/policy/车险保单综合明细表MMDD.parquet
-# 自动执行：续保匹配 → Parquet 转换 → scp 上传 → PM2 重启 → 健康检查
+# ETL 入口（智能检测，无参数自动判断需更新的域）
+node 数据管理/daily.mjs
 
-# 仅本地转换，不同步 VPS
-./数据管理/run.sh full ... --no-sync
+# 强制指定域
+node 数据管理/daily.mjs premium|claims|quotes|all
 
-# 单独同步已有 Parquet（不重新转换）
-./deploy/sync-data.sh [文件路径]
+# 同步到 VPS（rsync policy/current/ + claims/ + quotes/ + dim/）
+node scripts/sync-vps.mjs
 ```
 
 ## VPS 数据加载路径
 
-**加载优先级**（`server/src/app.ts`）：
-1. `current/*.parquet`（多文件，3层分片架构输出）
-2. `server/data/*.parquet`（单文件回退路径）
+**服务器加载逻辑**（`server/src/services/duckdb.ts:loadDomainParquet()`）：
+- 固定读取 `policy/current/*.parquet`（3层分片架构产出的 4 个分片文件）
+- 无 daily/ 检测，无旧模式回退
+- 创建 3 路 LEFT JOIN 的 `raw_parquet` 视图（policy JOIN claims JOIN quotes）
+
+**VPS 运行时目录**：
+- `server/data/fact/policy/current/` — 保单分片
+- `server/data/fact/claims/` — 赔付
+- `server/data/fact/quotes/` — 报价
+- `server/data/dim/salesman/` — 业务员维度
+- `server/data/dim/plan/` — 计划维度
 
 | 场景 | 正确做法 |
 |------|---------|
-| 新增日期数据（如新的 xlsx） | `node daily.mjs` 转换 → `sync-vps.mjs` 推送 → PM2 重启 |
+| 新增日期数据（如新的 xlsx） | `node 数据管理/daily.mjs` 转换 → `node scripts/sync-vps.mjs` 推送 → PM2 重启 |
 | 验证数据是否可见 | `curl /api/filters/options` 检查 `availableYears` 和 `dateRange.max_date` |
 
 **前端年份筛选器**：由后端 `GET /api/filters/options` 的 `availableYears`（`SELECT DISTINCT YEAR(policy_date)`）驱动，

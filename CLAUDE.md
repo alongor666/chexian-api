@@ -67,28 +67,28 @@
 
 **架构协议**：Bun 包管理器（禁止 npm/yarn）· 智谱 API `glm-4.7-flash` · 三级限流（禁止降低）· JWT 认证（禁止绕过）· `security.ts` 危险字符黑名单支持中文
 
-**分域 Lakehouse 架构**（RED LINE）：数据拆分为 3 个独立域，禁止合回单体 parquet：
+**分片 current/ 架构**（RED LINE）：policy 数据拆分为 3层分片产出的 4 个分片文件，禁止合回单体 parquet：
 
 ```
 warehouse/fact/
-├── policy/daily/YYYY-MM-DD.parquet   ← 保单+保费（每日增量追加，~100KB/天）
+├── policy/current/*.parquet          ← 保单+保费（4 个分片文件，由 daily.mjs 产出）
 ├── claims/latest.parquet             ← 赔付+费用（每周全量替换，~10MB）
 └── quotes/latest.parquet             ← 报价状态（每日全量替换，~3MB）
 ```
 
-- 服务器启动自动检测 `policy/daily/` → 走 JOIN 加载；不存在 → 回退旧 `current/` 模式
+- 服务器只走 `policy/current/` 模式（无 daily/ 检测，无旧模式回退）
 - ETL 入口：`node 数据管理/daily.mjs`（智能检测，无参数自动判断需更新的域）
 - 强制子命令：`node 数据管理/daily.mjs premium|claims|quotes|all`
 - 关键方法：`duckdb.ts:loadDomainParquet()` — 创建 3 路 LEFT JOIN 的 `raw_parquet` 视图
 - PolicyFact 视图接口不变 — 24 个 SQL 生成器零改动
 
-**VPS 数据目录**：`server/data/fact/policy/daily/`、`server/data/fact/claims/`、`server/data/fact/quotes/`、`server/data/dim/salesman/`、`server/data/dim/plan/`
+**VPS 数据目录**：`server/data/fact/policy/current/`、`server/data/fact/claims/`、`server/data/fact/quotes/`、`server/data/dim/salesman/`、`server/data/dim/plan/`
 
 **报价数据口径**（待修正）：当前 `是否报价` 字段不可靠，正确逻辑应以「续保单号非空」判定已报价。用户待办，AI 不得擅自修改。
 
 **VPS 分层查询**（RED LINE）：❌ 禁止在 VPS 上查询原始 `PolicyFact`（续保除外）。新功能只能查 `DailyAggregated`/`PeriodAggregated`/`CrossSellDailyAgg`。续保 PolicyFact 最小字段集不可扩展：`policy_no, premium, salesman_name, org_level_3, customer_category, insurance_type, insurance_start_date, renewal_policy_no`
 
-**数据同步护栏**（RED LINE）：VPS 同步使用 `rsync` 直接同步 3 个域目录。旧的 `current/` 保留作为回退。`node scripts/sync-vps.mjs` 仍可用于旧模式。
+**数据同步护栏**（RED LINE）：VPS 同步使用 `node scripts/sync-vps.mjs`，rsync `policy/current/` + `claims/` + `quotes/` 事实表以及 `dim/` 维度表。`policy/current/` 是唯一目录，无旧模式回退。
 
 ---
 
@@ -188,7 +188,7 @@ bun run governance                 # 治理校验
 
 **数据 ETL**：`node 数据管理/daily.mjs`（智能检测）· `node 数据管理/daily.mjs premium|claims|quotes|all`（强制）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py` · 迁移脚本：~~`python3 数据管理/pipelines/split_existing.py`~~（已废弃，一次性迁移已完成）
 
-**数据同步**：事实表 `rsync -azv 数据管理/warehouse/fact/{policy/daily,claims,quotes}/ chexian-vps-deploy:/var/www/chexian/server/data/fact/...` · 维度表 `rsync -azv 数据管理/warehouse/dim/{salesman,plan}/ chexian-vps-deploy:/var/www/chexian/server/data/dim/...`
+**数据同步**：`node scripts/sync-vps.mjs`（rsync `policy/current/` + `claims/` + `quotes/` + 维度表 `salesman/` + `plan/`）
 
 **CI/CD**：`deploy.yml`（push main → 构建→部署→健康检查）· `claude-code.yml`（@claude 触发）· `governance-check.yml`（PR 治理）
 

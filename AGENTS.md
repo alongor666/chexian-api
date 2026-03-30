@@ -15,13 +15,13 @@ React + TypeScript + Vite 前端，Express + DuckDB 后端。生产环境 `https
 - **ETL**: Python 3 (pandas + pyarrow) + Node.js (daily.mjs)
 - **部署**: GitHub Actions → VPS (PM2 + Nginx)
 
-## 分域 Lakehouse 数据架构
+## 数据架构
 
-数据拆分为 3 个独立域，DuckDB 启动时用 LEFT JOIN 视图合并：
+数据统一存放于 `policy/current/`（4 个分片文件），服务器直接加载：
 
 ```
 warehouse/fact/
-├── policy/daily/YYYY-MM-DD.parquet   # 保单+保费（844+文件，按签单日期分区）
+├── policy/current/*.parquet          # 保单+保费（3层分片：static/weekly/daily）
 ├── claims/latest.parquet             # 赔付+费用（按保单号聚合去重）
 └── quotes/latest.parquet             # 报价状态（续保单号去重）
 ```
@@ -30,9 +30,7 @@ warehouse/fact/
 
 ```
 app.ts 启动
-  ↓ 检测 policy/daily/ 是否存在
-  ↓ [是] → duckdb.ts:loadDomainParquet() → 3路 LEFT JOIN → raw_parquet VIEW
-  ↓ [否] → 旧模式：加载 current/ 单体 parquet
+  ↓ 加载 policy/current/*.parquet → raw_parquet VIEW
   ↓
 createPolicyFactView('raw_parquet') → 列名映射（中→英）→ PolicyFact VIEW
   ↓
@@ -56,8 +54,8 @@ node 数据管理/daily.mjs all        # 全部重跑
 | 文件 | 职责 |
 |------|------|
 | `server/src/app.ts` | 服务器入口，域拆分检测 |
-| `server/src/services/duckdb.ts` | DuckDB 服务，`loadDomainParquet()` |
-| `server/src/config/paths.ts` | 路径配置，`getPolicyDailyDirs()` 等 |
+| `server/src/services/duckdb.ts` | DuckDB 服务，加载 `policy/current/` 分片 |
+| `server/src/config/paths.ts` | 路径配置，`getPolicyCurrentDir()` 等 |
 | `server/src/normalize/mapping.ts` | 中文→英文列名映射 |
 | `server/src/sql/*.ts` | 24 个 SQL 生成器 |
 | `数据管理/daily.mjs` | 分域 ETL 入口（智能检测） |
@@ -72,7 +70,7 @@ node 数据管理/daily.mjs all        # 全部重跑
 ## 红线规则
 
 1. **业务口径只追加不删改**: `duckdb.ts` 和 `query.ts` 已有逻辑禁止修改/删除
-2. **分域架构不可合回单体**: 3 个域独立更新，禁止合回一个大 parquet
+2. **current/ 分片架构不可合回单体**: policy 域用 3层分片（static/weekly/daily），禁止合回一个大 parquet
 3. **报价数据口径待修正**: `是否报价` 字段不可靠，正确逻辑应以「续保单号非空」判定。用户待办，AI 不得擅自修改
 4. **VPS 禁止查询原始 PolicyFact**（续保除外），只能查预聚合表
 5. **安全**: JWT 禁止绕过，三级限流禁止降低，`security.ts` 黑名单支持中文

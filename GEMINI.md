@@ -8,28 +8,26 @@
 
 - **前端**: React + TypeScript + Vite + ECharts
 - **后端**: Express + DuckDB (内存数据库) + JWT
-- **数据层**: 分域 Lakehouse 架构（Python + Node.js ETL）
+- **数据层**: 3层分片架构（Python + Node.js ETL），数据统一存放于 `policy/current/`
 - **部署**: GitHub Actions → 腾讯云 VPS (PM2)
 - **生产地址**: https://chexian.cretvalu.com
 
 ## 数据架构（核心）
 
-### 分域 Lakehouse
+### 数据架构
 
-数据拆分为 3 个独立域，各自独立更新频率：
+数据统一存放于 `policy/current/`（3层分片架构），各域独立更新频率：
 
 | 域 | 路径 | 更新频率 | 内容 |
 |---|---|---|---|
-| Policy | `warehouse/fact/policy/daily/*.parquet` | 每日增量 | 保单+保费，按签单日期分区 |
+| Policy | `warehouse/fact/policy/current/*.parquet` | daily.mjs 3层分片 | 保单+保费（static/weekly/daily 分片） |
 | Claims | `warehouse/fact/claims/latest.parquet` | 每周全量 | 赔付+费用（按保单号聚合） |
 | Quotes | `warehouse/fact/quotes/latest.parquet` | 每日全量 | 报价状态（续保单号→上年保单） |
 
 ### 服务器加载链
 
 ```
-启动 → 检测 policy/daily/ 存在?
-  [是] → loadDomainParquet() → 3路 LEFT JOIN → raw_parquet VIEW
-  [否] → 旧模式：加载 current/ 单体 parquet（回退兼容）
+启动 → 直接加载 policy/current/*.parquet → raw_parquet VIEW
 → createPolicyFactView() → 中文列名映射为英文 → PolicyFact VIEW
 → 物化为 PolicyFactRealtime TABLE（3索引）
 → 物化 CrossSellDailyAgg（按月分批，防 OOM）
@@ -91,7 +89,7 @@ chexian-api/
 ## 红线规则（必须遵守）
 
 1. **业务口径只追加不删改** — `duckdb.ts` 和 `query.ts` 已有 SQL 逻辑禁止修改/删除
-2. **分域架构不可合回单体** — 3 个域独立更新，禁止合回一个大 parquet
+2. **current/ 分片架构不可合回单体** — policy 域用 3层分片（static/weekly/daily），禁止合回一个大 parquet
 3. **报价数据口径待修正** — 当前 `是否报价` 字段不可靠，正确应以「续保单号非空」判定。**用户待办，AI 不得修改**
 4. **VPS 禁止查询原始 PolicyFact**（续保除外）— 只能查预聚合表
 5. **包管理用 Bun** — 禁止 npm/yarn
@@ -123,7 +121,7 @@ bun run governance                 # 治理校验（push 前必跑）
 - **域名**: https://chexian.cretvalu.com
 - **进程管理**: PM2 `chexian-api` 端口 3000
 - **前端**: Nginx 静态文件 `/var/www/chexian/frontend/dist`
-- **数据路径**: `/var/www/chexian/server/data/fact/{policy/daily,claims,quotes}`
+- **数据路径**: `/var/www/chexian/server/data/fact/{policy/current,claims,quotes}`
 - **CI/CD**: push main → GitHub Actions 自动构建部署
 
 ## 指标开发协议

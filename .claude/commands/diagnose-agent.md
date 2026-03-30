@@ -11,7 +11,7 @@ requires:
   - duckdb (pip)
 dependencies:
   - 数据管理/pipelines/diagnose_agent.py
-  - 数据管理/warehouse/fact/policy/daily/*.parquet
+  - 数据管理/warehouse/fact/policy/current/*.parquet
   - 数据管理/warehouse/fact/claims/latest.parquet
 last_updated: "2026-03-27"
 ---
@@ -47,7 +47,7 @@ last_updated: "2026-03-27"
 python3 -c "
 import duckdb
 con = duckdb.connect()
-r = con.execute(\"SELECT DISTINCT 三级机构, COUNT(*) FROM read_parquet('数据管理/warehouse/fact/policy/daily/*.parquet', union_by_name=true) GROUP BY 三级机构 ORDER BY COUNT(*) DESC\").fetchall()
+r = con.execute(\"SELECT DISTINCT 三级机构, COUNT(*) FROM read_parquet('数据管理/warehouse/fact/policy/current/*.parquet', union_by_name=true) GROUP BY 三级机构 ORDER BY COUNT(*) DESC\").fetchall()
 for x in r: print(f'  {x[0]} ({x[1]:,d}件)')
 "
 ```
@@ -55,7 +55,7 @@ for x in r: print(f'  {x[0]} ({x[1]:,d}件)')
 ### Step 2: 验证数据文件
 
 ```bash
-ls 数据管理/warehouse/fact/policy/daily/ | tail -3
+ls 数据管理/warehouse/fact/policy/current/ | tail -3
 ls 数据管理/warehouse/fact/claims/latest.parquet
 ```
 
