@@ -4,7 +4,7 @@ import {
   asyncHandler, AppError, duckdbService,
   commonFilterSchema, buildWhereFromFilterParamsWithoutDate,
 } from './shared.js';
-import { generateCoefficientByOrgQuery, generateFullCoefficientQuery } from '../../sql/coefficient.js';
+import { generateCoefficientByOrgQuery, generateFullCoefficientQuery, generateWeekBatchQuery, getMonthPeriods } from '../../sql/coefficient.js';
 
 const router = Router();
 
@@ -47,23 +47,73 @@ router.get(
       permissionFilter
     );
 
-    // queryType=batch: 返回结构化数据（成都/全省/各机构三层）
+    // queryType=batch: 返回结构化数据（成都/全省/各机构三层，按月内4个周期分组）
     if (queryType === 'batch') {
-      const dateRange = {
-        start: new Date(startDate),
-        end: new Date(endDate),
-      };
-
-      const sql = generateFullCoefficientQuery(dateField, dateRange, finalWhereClauseWithoutDate);
+      const cutoffDateObj = new Date(endDate);
+      const sql = generateWeekBatchQuery(dateField, cutoffDateObj, finalWhereClauseWithoutDate);
       const rawData = await duckdbService.query(sql);
 
-      const data = rawData.filter((r: Record<string, any>) => r.region_group !== 'chengdu' && r.region_group !== 'province');
-      const provinceTop = rawData.filter((r: Record<string, any>) => r.org_level_3 === '全省');
-      const chengduTop = rawData.filter((r: Record<string, any>) => r.org_level_3 === '成都');
+      // snake_case → camelCase 映射，补齐 CoefficientRow 所需的所有字段
+      const mapRow = (r: Record<string, any>) => ({
+        orgLevel3: r.org_level_3 ?? '',
+        regionGroup: r.region_group ?? 'other',
+        isNev: Boolean(r.is_nev),
+        customerCategoryGroup: r.customer_category_group ?? 'all',
+        isNewCar: r.is_new_car ?? null,
+        scenario: 'normal' as const,
+        // 本查询仅含当周数据，其余周期置 null
+        dayFactor: null,
+        weekFactor: r.week_factor ?? null,
+        monthFactor: null,
+        yearFactor: null,
+        threshold: null,
+        thresholdDirection: null,
+        thresholdDisplay: '待定',
+        weekThresholdRatio: null,
+        gapPremium: null,
+        isCompliant: null,
+        periodType: 'general' as const,
+        periodName: r.period_name ?? '',
+        dayPremium: 0,
+        weekPremium: r.week_premium ?? 0,
+        monthPremium: 0,
+        yearPremium: 0,
+        dayCount: 0,
+        weekCount: r.week_count ?? 0,
+        monthCount: 0,
+        yearCount: 0,
+        sortKey: r.org_level_3 === '成都' ? 1 : r.org_level_3 === '全省' ? 2 : 3,
+      });
+
+      const mappedRows = rawData.map(mapRow);
+
+      // 按 periodName 分组构建 periodGroups
+      const year = cutoffDateObj.getFullYear();
+      const month = cutoffDateObj.getMonth();
+      const periodDefs = getMonthPeriods(year, month);
+
+      const periodGroups = periodDefs.map((pd) => {
+        const rows = mappedRows.filter((r) => r.periodName === pd.name);
+        const startDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(pd.start).padStart(2, '0')}`;
+        const endDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(pd.end).padStart(2, '0')}`;
+        return {
+          periodName: pd.name,
+          startDate: startDateStr,
+          endDate: endDateStr,
+          hasData: rows.length > 0,
+          rows,
+        };
+      });
+
+      // 全省/成都置顶行（所有周期合并，取最后一个周期或首周期数据作为汇总展示）
+      const allRows = mappedRows;
+      const provinceTop = allRows.filter((r) => r.orgLevel3 === '全省');
+      const chengduTop = allRows.filter((r) => r.orgLevel3 === '成都');
+      const data = allRows.filter((r) => r.orgLevel3 !== '全省' && r.orgLevel3 !== '成都');
 
       res.json({
         success: true,
-        data: { data, periodGroups: [], provinceTop, chengduTop },
+        data: { data, periodGroups, provinceTop, chengduTop },
       });
       return;
     }
