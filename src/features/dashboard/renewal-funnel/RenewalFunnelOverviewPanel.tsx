@@ -131,7 +131,11 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
                   {(overviewData ?? [])
                     .sort((a, b) => (b.renewal_rate ?? 0) - (a.renewal_rate ?? 0))
                     .map((row) => {
-                      const label = row.org_level_3 ?? '';
+                      const label = isCategoryView
+                        ? row.customer_category ?? ''
+                        : isRenewalModeView
+                          ? row.renewal_mode ?? ''
+                          : row.org_level_3 ?? '';
                       return (
                         <tr key={label} className={tableStyles.row}>
                           <td className={tableStyles.cell}>

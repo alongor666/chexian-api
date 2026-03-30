@@ -2,6 +2,8 @@
 
 export interface FunnelOverviewRow {
   org_level_3: string;
+  customer_category?: string;
+  renewal_mode?: string;
   total_due: number;
   in_window_count: number;
   total_quoted: number;
