@@ -39,17 +39,17 @@
 
 ```bash
 # 智能模式（推荐）：自动检测哪些域需要更新
-node 数据管理/etl.mjs
+node 数据管理/daily.mjs
 
 # 强制指定域
-node 数据管理/etl.mjs premium    # 保费增量（秒级）
-node 数据管理/etl.mjs claims     # 赔付费用（选最大xlsx）
-node 数据管理/etl.mjs quotes     # 报价状态（选最大xlsx）
-node 数据管理/etl.mjs all        # 全部重跑
+node 数据管理/daily.mjs premium    # 保费增量（秒级）
+node 数据管理/daily.mjs claims     # 赔付费用（选最大xlsx）
+node 数据管理/daily.mjs quotes     # 报价状态（选最大xlsx）
+node 数据管理/daily.mjs all        # 全部重跑
 
 # 底层工具
 python3 数据管理/pipelines/transform.py -i input.xlsx -o output.parquet --domain policy --after-date 2026-03-22
-python3 数据管理/pipelines/split_existing.py  # 一次性迁移：拆分单体parquet为3域
+# python3 数据管理/pipelines/split_existing.py  # 已废弃：一次性迁移已完成
 ```
 
 ## 索引与文档
@@ -77,7 +77,7 @@ chexian-api/
 │       ├── normalize/mapping.ts  #   中→英列名映射
 │       └── routes/               #   API 路由
 ├── 数据管理/                      # ETL + 数据仓库
-│   ├── etl.mjs                   #   分域 ETL 入口
+│   ├── daily.mjs                 #   分域 ETL 入口
 │   ├── pipelines/                #   transform.py, split_existing.py
 │   └── warehouse/fact/           #   3域 parquet 存储
 ├── scripts/                      # 部署/同步脚本

@@ -1,8 +1,12 @@
 #!/usr/bin/env node
+console.warn('⚠️  run.mjs 已废弃，请使用 daily.mjs 作为 ETL 入口');
+console.warn('   用法: node 数据管理/daily.mjs');
+console.warn('');
+
 /**
  * 数据管理中心 - 统一执行脚本（跨平台版本）
  * 用法: node run.mjs [command] [args...]
- * 
+ *
  * 命令:
  *   transform   Excel → Parquet 转换
  *   enrich      续保类型匹配增强

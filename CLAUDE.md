@@ -77,8 +77,8 @@ warehouse/fact/
 ```
 
 - 服务器启动自动检测 `policy/daily/` → 走 JOIN 加载；不存在 → 回退旧 `current/` 模式
-- ETL 入口：`node 数据管理/etl.mjs`（智能检测，无参数自动判断需更新的域）
-- 强制子命令：`node 数据管理/etl.mjs premium|claims|quotes|all`
+- ETL 入口：`node 数据管理/daily.mjs`（智能检测，无参数自动判断需更新的域）
+- 强制子命令：`node 数据管理/daily.mjs premium|claims|quotes|all`
 - 关键方法：`duckdb.ts:loadDomainParquet()` — 创建 3 路 LEFT JOIN 的 `raw_parquet` 视图
 - PolicyFact 视图接口不变 — 24 个 SQL 生成器零改动
 
@@ -186,7 +186,7 @@ bun run governance                 # 治理校验
 
 **生产环境**：腾讯云 2核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist` · **PM2 重启**：deployer 无法直接调 pm2，须 `sudo /usr/local/bin/deploy-chexian-api reload`（或 `restart`/`install`）
 
-**数据 ETL**：`node 数据管理/etl.mjs`（智能检测）· `node 数据管理/etl.mjs premium|claims|quotes|all`（强制）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py` · 迁移脚本：`python3 数据管理/pipelines/split_existing.py`
+**数据 ETL**：`node 数据管理/daily.mjs`（智能检测）· `node 数据管理/daily.mjs premium|claims|quotes|all`（强制）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py` · 迁移脚本：~~`python3 数据管理/pipelines/split_existing.py`~~（已废弃，一次性迁移已完成）
 
 **数据同步**：事实表 `rsync -azv 数据管理/warehouse/fact/{policy/daily,claims,quotes}/ chexian-vps-deploy:/var/www/chexian/server/data/fact/...` · 维度表 `rsync -azv 数据管理/warehouse/dim/{salesman,plan}/ chexian-vps-deploy:/var/www/chexian/server/data/dim/...`
 

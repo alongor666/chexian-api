@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 /**
- * 跨平台 VPS 数据同步脚本
- * 支持 Windows / macOS / Linux
+ * VPS 数据同步脚本（rsync 全目录版）
+ * 支持 macOS / Linux
  *
  * 使用方法:
- *   node scripts/sync-vps.mjs                    # 同步最新数据（默认清理 current/，防重复）
+ *   node scripts/sync-vps.mjs                    # rsync 同步所有数据目录
  *   node scripts/sync-vps.mjs --check            # 仅预检 SSH 与本地待同步文件
- *   node scripts/sync-vps.mjs --export           # 预聚合模式（推荐）
- *   node scripts/sync-vps.mjs 文件路径            # 指定文件
- *   node scripts/sync-vps.mjs --keep-old         # 保留 current/ 旧文件（谨慎使用，会导致重复数据）
  *   node scripts/sync-vps.mjs --no-restart       # 同步但不重启
  *   node scripts/sync-vps.mjs --dry-run          # 仅打印执行计划，不连接 VPS
+ *
+ * 同步目录（本地 → VPS）:
+ *   数据管理/warehouse/fact/policy/current/  →  data/current/
+ *   数据管理/warehouse/dim/salesman/         →  data/dim/salesman/
+ *   数据管理/warehouse/dim/plan/             →  data/dim/plan/
+ *   数据管理/warehouse/fact/renewal/         →  data/fact/renewal/  （目录存在时）
  *
  * 可选环境变量:
  *   SYNC_VPS_SSH_ALIAS, SYNC_VPS_HOST, SYNC_VPS_USER, SYNC_VPS_PORT,
@@ -35,8 +38,10 @@ const DEFAULTS = {
   healthUrl: process.env.SYNC_VPS_HEALTH_URL || 'http://localhost:3000/health',
 };
 
-const LOCAL_DATA_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/policy/current');
-const VPS_EXPORT_DIR = join(ROOT_DIR, '数据管理/warehouse/vps-export');
+const LOCAL_CURRENT_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/policy/current');
+const LOCAL_SALESMAN_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/salesman');
+const LOCAL_PLAN_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plan');
+const LOCAL_RENEWAL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal');
 
 const colors = {
   green: '\x1b[32m',
@@ -60,13 +65,10 @@ function quoteForSingle(value) {
 
 function parseArgs(argv = process.argv.slice(2)) {
   const parsed = {
-    exportMode: false,
     noRestart: false,
     dryRun: false,
     checkMode: false,
-    keepOld: false,
     helpMode: false,
-    targetFile: null,
     alias: undefined,
     host: undefined,
     username: undefined,
@@ -80,15 +82,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     const token = argv[i];
     const next = argv[i + 1];
 
-    if (!token.startsWith('-')) {
-      parsed.targetFile = token;
-      continue;
-    }
-
     switch (token) {
-      case '--export':
-        parsed.exportMode = true;
-        break;
       case '--no-restart':
         parsed.noRestart = true;
         break;
@@ -97,9 +91,6 @@ function parseArgs(argv = process.argv.slice(2)) {
         break;
       case '--check':
         parsed.checkMode = true;
-        break;
-      case '--keep-old':
-        parsed.keepOld = true;
         break;
       case '--help':
       case '-h':
@@ -249,13 +240,10 @@ function resolveRunConfig(parsedArgs) {
   return {
     remoteDir: parsedArgs.remoteDir || DEFAULTS.remoteDir,
     healthUrl: parsedArgs.healthUrl || DEFAULTS.healthUrl,
-    exportMode: parsedArgs.exportMode,
     noRestart: parsedArgs.noRestart,
     dryRun: parsedArgs.dryRun,
     checkMode: parsedArgs.checkMode,
-    keepOld: parsedArgs.keepOld,
     helpMode: parsedArgs.helpMode,
-    targetFile: parsedArgs.targetFile,
   };
 }
 
@@ -306,25 +294,34 @@ function buildSshArgs(config, remoteCommand) {
   ];
 }
 
-function buildScpArgs(config, localPath, remotePath) {
-  return [
-    '-o',
-    'StrictHostKeyChecking=no',
-    '-P',
-    String(config.port),
-    '-i',
-    config.privateKeyPath,
-    localPath,
-    `${config.username}@${config.host}:${remotePath}`,
-  ];
-}
-
 async function execRemote(config, remoteCommand, options = {}) {
   return runLocal('ssh', buildSshArgs(config, remoteCommand), options);
 }
 
-async function uploadFile(config, localPath, remotePath) {
-  await runLocal('scp', buildScpArgs(config, localPath, remotePath));
+/**
+ * rsync 单目录：localDir/ → alias:remoteDir/
+ * 使用 SSH host alias，不硬编码 IP/端口/密钥。
+ * 错误时打印错误信息但不抛出，让后续步骤继续。
+ */
+async function rsyncDir(alias, localDir, remoteDir, label) {
+  // 确保 localDir 以 / 结尾（rsync 语义：同步目录内容而非目录本身）
+  const src = localDir.endsWith('/') ? localDir : `${localDir}/`;
+  const dst = remoteDir.endsWith('/') ? remoteDir : `${remoteDir}/`;
+
+  log('yellow', `  rsync ${label}: ${src} → ${alias}:${dst}`);
+
+  try {
+    await runLocal('rsync', [
+      '-azv',
+      '--delete',
+      '-e', 'ssh',
+      src,
+      `${alias}:${dst}`,
+    ]);
+    log('green', `  ✓ ${label} 同步完成`);
+  } catch (err) {
+    log('red', `  ✗ ${label} rsync 失败: ${err.message}`);
+  }
 }
 
 async function ensureSshReady(config) {
@@ -355,21 +352,6 @@ async function healthCheck(config, healthUrl, maxAttempts = 8) {
   return false;
 }
 
-function getLatestParquet(dir) {
-  if (!existsSync(dir)) return null;
-
-  const files = readdirSync(dir)
-    .filter((f) => f.endsWith('.parquet'))
-    .map((f) => ({
-      name: f,
-      path: join(dir, f),
-      mtime: statSync(join(dir, f)).mtimeMs,
-    }))
-    .sort((a, b) => b.mtime - a.mtime);
-
-  return files[0] || null;
-}
-
 function formatSize(path) {
   const bytes = statSync(path).size;
   if (bytes < 1024) return `${bytes} B`;
@@ -378,102 +360,72 @@ function formatSize(path) {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function collectCheckFiles() {
-  const currentFiles = existsSync(LOCAL_DATA_DIR)
-    ? readdirSync(LOCAL_DATA_DIR)
+function collectCheckDirs() {
+  const dirs = [
+    { label: 'policy/current', path: LOCAL_CURRENT_DIR },
+    { label: 'dim/salesman',   path: LOCAL_SALESMAN_DIR },
+    { label: 'dim/plan',       path: LOCAL_PLAN_DIR },
+    { label: 'fact/renewal',   path: LOCAL_RENEWAL_DIR },
+  ];
+
+  return dirs.map(({ label, path }) => {
+    if (!existsSync(path)) return { label, path, files: [], exists: false };
+    const files = readdirSync(path)
       .filter((f) => f.endsWith('.parquet'))
-      .map((f) => join(LOCAL_DATA_DIR, f))
-    : [];
-
-  const exportFiles = existsSync(VPS_EXPORT_DIR)
-    ? readdirSync(VPS_EXPORT_DIR)
-      .filter((f) => f.endsWith('.parquet'))
-      .map((f) => join(VPS_EXPORT_DIR, f))
-    : [];
-
-  return [...currentFiles, ...exportFiles];
-}
-
-function resolveTargetFile(inputTarget) {
-  if (!inputTarget) {
-    const latest = getLatestParquet(LOCAL_DATA_DIR);
-    if (!latest) {
-      throw new Error(`未找到 Parquet 文件: ${LOCAL_DATA_DIR}`);
-    }
-    return latest.path;
-  }
-
-  if (existsSync(inputTarget)) return inputTarget;
-
-  const tryPath = join(LOCAL_DATA_DIR, inputTarget);
-  if (existsSync(tryPath)) return tryPath;
-
-  throw new Error(`文件不存在: ${inputTarget}`);
+      .map((f) => join(path, f));
+    return { label, path, files, exists: true };
+  });
 }
 
 function printHelp() {
   console.log(`用法:
-  node scripts/sync-vps.mjs [文件路径] [--no-restart]
-  node scripts/sync-vps.mjs --check
-  node scripts/sync-vps.mjs --export [--dry-run]
+  node scripts/sync-vps.mjs              # rsync 同步所有数据目录
+  node scripts/sync-vps.mjs --check     # 预检 SSH + 列出本地待同步文件
+  node scripts/sync-vps.mjs --dry-run   # 仅打印执行计划，不连接 VPS
+  node scripts/sync-vps.mjs --no-restart  # 同步但不重启 PM2
 
-⚠️  默认行为：上传前自动清理 current/ 旧文件（归档到 archive/），防止重复数据。
+同步目录（使用 rsync --delete，VPS 多余文件会被清理）:
+  数据管理/warehouse/fact/policy/current/  →  data/current/
+  数据管理/warehouse/dim/salesman/         →  data/dim/salesman/
+  数据管理/warehouse/dim/plan/             →  data/dim/plan/
+  数据管理/warehouse/fact/renewal/         →  data/fact/renewal/  (存在时)
 
 可选参数:
-  --keep-old           保留 current/ 旧文件（谨慎：会导致多文件叠加，数据翻倍）
-  --alias <name>       覆盖 SSH alias
+  --alias <name>       覆盖 SSH alias（默认 chexian-vps-deploy）
   --host <host>        覆盖远端主机
   --user <user>        覆盖远端用户名
   --port <port>        覆盖远端端口
   --key <path>         覆盖私钥路径
-  --remote-dir <path>  覆盖远端数据目录
+  --remote-dir <path>  覆盖远端数据根目录
   --health-url <url>   覆盖健康检查地址
 `);
 }
 
 function printDryRun(sshConfig, runConfig) {
   log('blue', '================================================================================');
-  log('blue', 'DRY RUN - VPS 同步执行计划');
+  log('blue', 'DRY RUN - VPS rsync 同步执行计划');
   log('blue', '================================================================================');
-  console.log(`模式: ${runConfig.exportMode ? 'export' : 'standard'}`);
-  console.log(`SSH: ${sshConfig.username}@${sshConfig.host}:${sshConfig.port} (alias=${sshConfig.alias})`);
+  console.log(`SSH alias: ${sshConfig.alias}`);
+  console.log(`SSH: ${sshConfig.username}@${sshConfig.host}:${sshConfig.port}`);
   console.log(`Key: ${sshConfig.privateKeyPath}`);
-  console.log(`Remote dir: ${runConfig.remoteDir}`);
+  console.log(`Remote data root: ${runConfig.remoteDir}`);
   console.log(`Restart: ${runConfig.noRestart ? 'no' : 'yes'}`);
   console.log(`Health URL: ${runConfig.healthUrl}`);
-  console.log(`Check only: ${runConfig.checkMode ? 'yes' : 'no'}`);
-  console.log(`清理旧文件: ${runConfig.keepOld ? '跳过（--keep-old）' : '是（默认，防重复数据）'}`);
-  if (!runConfig.exportMode) {
-    console.log(`Target file: ${runConfig.targetFile || '(auto latest parquet)'}`);
+  console.log('');
+  console.log('将执行以下 rsync（含 --delete）:');
+
+  const syncTasks = [
+    { label: 'policy/current', local: LOCAL_CURRENT_DIR, remote: `${runConfig.remoteDir}/current` },
+    { label: 'dim/salesman',   local: LOCAL_SALESMAN_DIR, remote: `${runConfig.remoteDir}/dim/salesman` },
+    { label: 'dim/plan',       local: LOCAL_PLAN_DIR,     remote: `${runConfig.remoteDir}/dim/plan` },
+    { label: 'fact/renewal',   local: LOCAL_RENEWAL_DIR,  remote: `${runConfig.remoteDir}/fact/renewal` },
+  ];
+
+  for (const task of syncTasks) {
+    const exists = existsSync(task.local);
+    const suffix = exists ? '' : '  （本地目录不存在，跳过）';
+    console.log(`  rsync -azv --delete -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
   }
-}
-
-async function ensureRemoteDirs(config, remoteDir) {
-  await execRemote(
-    config,
-    `mkdir -p ${quoteForSingle(`${remoteDir}/current`)} ${quoteForSingle(`${remoteDir}/archive`)}`,
-  );
-}
-
-async function cleanVpsCurrent(config, remoteDir) {
-  const now = new Date();
-  const ts = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-  ].join('') + `_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-
-  const backupDir = `${remoteDir}/archive/backup_${ts}`;
-  await execRemote(
-    config,
-    `mkdir -p ${quoteForSingle(backupDir)} && mv ${remoteDir}/current/*.parquet ${quoteForSingle(`${backupDir}/`)} 2>/dev/null || true`,
-    { allowFailure: true },
-  );
-  await execRemote(
-    config,
-    `find ${quoteForSingle(`${remoteDir}/archive`)} -type d -name 'backup_*' -mtime +15 -exec rm -rf {} + 2>/dev/null || true`,
-    { allowFailure: true },
-  );
 }
 
 async function maybeRestart(config, noRestart, healthUrl) {
@@ -496,92 +448,31 @@ async function maybeRestart(config, noRestart, healthUrl) {
   }
 }
 
-async function runExportMode(config, runConfig) {
-  log('green', '▶ 步骤 1: 运行预聚合导出...');
-  const exportScript = join(ROOT_DIR, 'scripts/export-for-vps.mjs');
-  if (!existsSync(exportScript)) {
-    throw new Error(`导出脚本不存在: ${exportScript}`);
-  }
-
-  await runLocal('node', [exportScript]);
-
-  log('green', '▶ 步骤 2: 上传预聚合文件...');
-  await ensureRemoteDirs(config, runConfig.remoteDir);
-
-  if (!runConfig.keepOld) {
-    log('yellow', '  清理 VPS 的 current 目录（默认行为，防止重复数据）...');
-    await cleanVpsCurrent(config, runConfig.remoteDir);
-  } else {
-    log('yellow', '  跳过清理（--keep-old）');
-  }
-
-  const exportFiles = ['aggregated.parquet', 'cross_sell_agg.parquet', 'renewal_agg.parquet'];
-
-  for (const file of exportFiles) {
-    const localPath = join(VPS_EXPORT_DIR, file);
-    if (!existsSync(localPath)) {
-      log('yellow', `  跳过 ${file}（文件不存在）`);
-      continue;
-    }
-
-    const size = formatSize(localPath);
-    const remotePath = `${runConfig.remoteDir}/current/${file}`;
-    log('yellow', `  上传 ${file} (${size})...`);
-    await uploadFile(config, localPath, remotePath);
-    await execRemote(config, `chmod 600 ${quoteForSingle(remotePath)}`);
-    log('green', `  ✓ ${file} 上传完成`);
-  }
-
-  await syncRenewalFunnel(config, runConfig);
-  await maybeRestart(config, runConfig.noRestart, runConfig.healthUrl);
-}
-
 /**
- * 同步续保漏斗 Parquet（标准模式和导出模式共用）
+ * rsync 全目录同步模式
+ * 同步 4 个域目录到 VPS，使用 SSH host alias。
  */
-async function syncRenewalFunnel(config, runConfig) {
-  const renewalDir = join(ROOT_DIR, '数据管理/warehouse/fact/renewal');
-  if (!existsSync(renewalDir)) return;
+async function runStandardMode(sshConfig, runConfig) {
+  const alias = sshConfig.alias;
+  const remote = runConfig.remoteDir;
 
-  const renewalFiles = readdirSync(renewalDir).filter((f) => f.endsWith('.parquet'));
-  if (renewalFiles.length === 0) return;
+  log('green', '▶ 步骤 1: 同步 policy/current...');
+  await rsyncDir(alias, LOCAL_CURRENT_DIR, `${remote}/current`, 'policy/current');
 
-  const remoteRenewalDir = `${runConfig.remoteDir}/fact/renewal`;
-  await execRemote(config, `mkdir -p ${quoteForSingle(remoteRenewalDir)}`);
-  for (const file of renewalFiles) {
-    const localPath = join(renewalDir, file);
-    const size = formatSize(localPath);
-    const remotePath = `${remoteRenewalDir}/${file}`;
-    log('yellow', `  上传续保漏斗 ${file} (${size})...`);
-    await uploadFile(config, localPath, remotePath);
-    await execRemote(config, `chmod 600 ${quoteForSingle(remotePath)}`);
-    log('green', `  ✓ ${file} 上传完成`);
-  }
-}
+  log('green', '▶ 步骤 2: 同步 dim/salesman...');
+  await rsyncDir(alias, LOCAL_SALESMAN_DIR, `${remote}/dim/salesman`, 'dim/salesman');
 
-async function runStandardMode(config, runConfig) {
-  const targetFile = resolveTargetFile(runConfig.targetFile);
-  const fileName = basename(targetFile);
-  const size = formatSize(targetFile);
-  const remotePath = `${runConfig.remoteDir}/current/${fileName}`;
+  log('green', '▶ 步骤 3: 同步 dim/plan...');
+  await rsyncDir(alias, LOCAL_PLAN_DIR, `${remote}/dim/plan`, 'dim/plan');
 
-  log('green', `[同步] ${fileName} (${size})`);
-
-  await ensureRemoteDirs(config, runConfig.remoteDir);
-  if (!runConfig.keepOld) {
-    log('yellow', '  清理 VPS 的 current 目录（默认行为，防止重复数据）...');
-    await cleanVpsCurrent(config, runConfig.remoteDir);
+  if (existsSync(LOCAL_RENEWAL_DIR)) {
+    log('green', '▶ 步骤 4: 同步 fact/renewal...');
+    await rsyncDir(alias, LOCAL_RENEWAL_DIR, `${remote}/fact/renewal`, 'fact/renewal');
   } else {
-    log('yellow', '  跳过清理（--keep-old）');
+    log('yellow', '  跳过 fact/renewal（本地目录不存在）');
   }
 
-  log('yellow', '  上传中...');
-  await uploadFile(config, targetFile, remotePath);
-  await execRemote(config, `chmod 600 ${quoteForSingle(remotePath)}`);
-  log('green', '  ✓ 上传完成');
-
-  await syncRenewalFunnel(config, runConfig);
-  await maybeRestart(config, runConfig.noRestart, runConfig.healthUrl);
+  await maybeRestart(sshConfig, runConfig.noRestart, runConfig.healthUrl);
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -616,16 +507,18 @@ async function main(argv = process.argv.slice(2)) {
   }
 
   if (runConfig.checkMode) {
-    const files = collectCheckFiles();
-    log('green', `✓ 本地待同步文件数: ${files.length}`);
-    files.forEach((file) => {
-      console.log(`  - ${basename(file)} (${formatSize(file)})`);
-    });
-    return;
-  }
-
-  if (runConfig.exportMode) {
-    await runExportMode(sshConfig, runConfig);
+    const dirs = collectCheckDirs();
+    let totalFiles = 0;
+    for (const dir of dirs) {
+      if (!dir.exists) {
+        log('yellow', `  [${dir.label}] 目录不存在: ${dir.path}`);
+        continue;
+      }
+      log('green', `  [${dir.label}] ${dir.files.length} 个 parquet 文件`);
+      dir.files.forEach((f) => console.log(`    - ${basename(f)} (${formatSize(f)})`));
+      totalFiles += dir.files.length;
+    }
+    log('green', `✓ 本地待同步文件总数: ${totalFiles}`);
     return;
   }
 
@@ -640,7 +533,6 @@ export {
   parseSSHConfig,
   resolveSSHConfig,
   resolveRunConfig,
-  resolveTargetFile,
 };
 
 const isMain = process.env.RUN_MAIN || (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]));

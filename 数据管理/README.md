@@ -75,7 +75,7 @@
 |------|------|------|
 | **Windows** | `daily.mjs` / `run.mjs` | `node daily.mjs` 或 `node run.mjs full ...` |
 | **macOS/Linux** | `daily.mjs` / `run.mjs` | `./daily.mjs` 或 `./run.mjs full ...` |
-| **智能启动** | `etl.mjs` | `node etl.mjs`（自动检测平台） |
+| **智能启动** | `daily.mjs` | `node daily.mjs`（自动检测平台） |
 
 ### 数据更新（推荐：一键命令）
 
@@ -83,8 +83,8 @@
 ```powershell
 cd 数据管理
 
-# 智能启动（自动检测平台）
-node etl.mjs
+# ETL 入口（推荐）
+node daily.mjs
 
 # 或直接运行
 node daily.mjs
@@ -94,10 +94,10 @@ node daily.mjs
 ```bash
 cd 数据管理
 
-# 智能启动（自动检测平台）
-node etl.mjs
+# ETL 入口（推荐）
+node daily.mjs
 
-# 或原生 Bash 脚本（支持 VPS 同步）
+# 或直接运行
 ./daily.mjs
 ```
 

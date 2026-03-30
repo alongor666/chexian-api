@@ -12,7 +12,7 @@ React + TypeScript + Vite 前端，Express + DuckDB 后端。生产环境 `https
 - **后端**: Express + DuckDB (in-memory) + JWT 认证
 - **运行时**: Node.js (tsx) — 后端不用 Bun 运行
 - **包管理**: Bun（禁止 npm/yarn）
-- **ETL**: Python 3 (pandas + pyarrow) + Node.js (etl.mjs)
+- **ETL**: Python 3 (pandas + pyarrow) + Node.js (daily.mjs)
 - **部署**: GitHub Actions → VPS (PM2 + Nginx)
 
 ## 分域 Lakehouse 数据架构
@@ -44,11 +44,11 @@ createCrossSellRealtimeView() → CrossSellDailyAgg（按月分批物化）
 ### ETL 命令
 
 ```bash
-node 数据管理/etl.mjs            # 智能检测，自动判断需更新的域
-node 数据管理/etl.mjs premium    # 保单+保费增量追加
-node 数据管理/etl.mjs claims     # 赔付+费用全量替换
-node 数据管理/etl.mjs quotes     # 报价状态全量替换
-node 数据管理/etl.mjs all        # 全部重跑
+node 数据管理/daily.mjs            # 智能检测，自动判断需更新的域
+node 数据管理/daily.mjs premium    # 保单+保费增量追加
+node 数据管理/daily.mjs claims     # 赔付+费用全量替换
+node 数据管理/daily.mjs quotes     # 报价状态全量替换
+node 数据管理/daily.mjs all        # 全部重跑
 ```
 
 ## 关键文件
@@ -60,9 +60,9 @@ node 数据管理/etl.mjs all        # 全部重跑
 | `server/src/config/paths.ts` | 路径配置，`getPolicyDailyDirs()` 等 |
 | `server/src/normalize/mapping.ts` | 中文→英文列名映射 |
 | `server/src/sql/*.ts` | 24 个 SQL 生成器 |
-| `数据管理/etl.mjs` | 分域 ETL 入口（智能检测） |
+| `数据管理/daily.mjs` | 分域 ETL 入口（智能检测） |
 | `数据管理/pipelines/transform.py` | Excel→Parquet 转换（`--domain`/`--after-date`） |
-| `数据管理/pipelines/split_existing.py` | 一次性迁移脚本 |
+| `数据管理/pipelines/split_existing.py` | ~~一次性迁移脚本~~（已废弃，迁移已完成） |
 | `数据管理/pipelines/merge_parquet.py` | Parquet 合并工具 |
 
 ## 指标注册表

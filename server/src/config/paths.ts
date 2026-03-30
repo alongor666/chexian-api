@@ -31,6 +31,7 @@ export function getCandidateDataDirs(): string[] {
   return [warehouseCurrent, serverDataCurrent];
 }
 
+
 export function getKpiPlanConfigPath(): string {
   return path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/kpi_plan_config.json');
 }

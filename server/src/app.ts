@@ -158,8 +158,8 @@ async function startServer() {
     console.log('  - Dim plan:', dimPlanCandidates.map(p => `${p}${fs.existsSync(p) ? ' [ok]' : ' [missing]'}`).join(' | '));
     console.log('  - Team mapping paths:', mappingCandidates.map(p => `${p}${fs.existsSync(p) ? ' [ok]' : ' [missing]'}`).join(' | '));
 
-    // 优先扫描 current/ 子目录，加载活跃 Parquet 文件
-    const parquetFiles = candidateDirs
+    // 扫描 current/ 子目录
+    const parquetFiles: { name: string; path: string; size: number; mtimeMs: number }[] = candidateDirs
       .flatMap(dir => {
         if (!fs.existsSync(dir)) return [];
         return fs.readdirSync(dir)
@@ -171,8 +171,7 @@ async function startServer() {
             mtimeMs: fs.statSync(path.join(dir, f)).mtimeMs,
           }));
       });
-
-    console.log('[Server] Parquet search dirs:', candidateDirs.filter(d => fs.existsSync(d)));
+    console.log('[Server] Parquet search dirs (current/):', candidateDirs.filter(d => fs.existsSync(d)));
 
     // 若 current/ 为空，回退到 server/data 根目录，选最新 parquet（兼容历史上传路径）
     let filesToLoad = parquetFiles;

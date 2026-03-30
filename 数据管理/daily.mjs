@@ -303,57 +303,15 @@ async function main() {
   // 7. VPS 同步
   if (noSync) {
     log('yellow', '已跳过 VPS 同步（--no-sync）');
-  } else if (!isWindows() || true) {
+  } else {
+    log('cyan', '[ETL] 自动同步到 VPS...');
     const syncScript = join(projectRoot, 'scripts/sync-vps.mjs');
-    const vpsExportDir = join(scriptDir, 'warehouse/vps-export');
-
-    if (!checkVpsConnectivity()) {
-      log('red', '❌ 无法连接 VPS（chexian-vps-deploy），终止同步');
-      console.log('建议先执行：bash scripts/setup-local-env.sh');
-      console.log('验证命令：ssh chexian-vps-deploy echo ok');
-      process.exit(1);
-    }
-
-    const currentFiles = readdirSync(currentDir)
-      .filter(f => f.endsWith('.parquet'))
-      .map(f => join(currentDir, f));
-
-    const exportFiles = existsSync(vpsExportDir)
-      ? readdirSync(vpsExportDir)
-        .filter(f => f.endsWith('.parquet'))
-        .map(f => join(vpsExportDir, f))
-      : [];
-
-    const allFiles = [...currentFiles, ...exportFiles];
-
-    if (allFiles.length === 0) {
-      log('red', '❌ 未找到可同步的 Parquet 文件，终止同步');
-      process.exit(1);
-    }
-
-    log('green', `📦 同步 ${allFiles.length} 个文件到 VPS`);
-    for (const f of allFiles) {
-      console.log(`   ${basename(f)}`);
-    }
-    console.log('');
-
-    if (existsSync(syncScript)) {
-      for (let i = 0; i < allFiles.length; i++) {
-        const cleanFlag = i === 0 ? '' : '--keep-old';
-        const restartFlag = i < allFiles.length - 1 ? '--no-restart' : '';
-
-        execSync(`node "${syncScript}" "${allFiles[i]}" ${cleanFlag} ${restartFlag}`, {
-          stdio: 'inherit',
-          env: { ...process.env, RUN_MAIN: '1' }
-        });
-      }
-      console.log('');
-      log('green', '✅ 全部同步完成，服务器已重启并仅加载了最新的文件');
-    } else {
-      log('yellow', '⚠ 未找到 scripts/sync-vps.mjs，请手动同步');
-      for (const f of allFiles) {
-        console.log(`  ./scripts/sync-vps.mjs ${f}`);
-      }
+    try {
+      execSync(`node "${syncScript}"`, { stdio: 'inherit', env: { ...process.env, RUN_MAIN: '1' } });
+      log('green', '✅ VPS 同步完成');
+    } catch (e) {
+      console.warn(`[ETL] VPS 同步失败（数据已写入本地）: ${e.message}`);
+      console.warn('[ETL] 可手动重试: node scripts/sync-vps.mjs');
     }
   }
 
