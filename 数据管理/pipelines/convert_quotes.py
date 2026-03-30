@@ -45,8 +45,33 @@ def main():
             df.loc[mask, '业务员'] = 'admin' + df.loc[mask, '三级机构'].astype(str) + '直接个代'
             print(f"   拆分 adminadmin: {mask.sum():,} 条")
 
+    # 字段标准化（对齐 policy Parquet 列名）
+    rename_map = {
+        '车牌号': '车牌号码',
+        '货车吨位分段': '吨位分段',
+        '是否新能源车': '是否新能源',
+        '自主定价系数': '商车自主定价系数',
+    }
+    df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
+    renamed = [f'{k}→{v}' for k, v in rename_map.items() if v in df.columns]
+    if renamed:
+        print(f"   字段标准化: {', '.join(renamed)}")
+
+    # 风险等级 COALESCE 合并（对齐 transform.py 逻辑）
+    grade_cols = ['车险分等级', '小货车评分', '大货车评分']
+    existing_grades = [c for c in grade_cols if c in df.columns]
+    if existing_grades:
+        df['车险风险等级'] = df[existing_grades[0]]
+        for c in existing_grades[1:]:
+            df['车险风险等级'] = df['车险风险等级'].fillna(df[c])
+        drop_grades = [c for c in existing_grades if c != '车险风险等级']
+        if drop_grades:
+            df.drop(columns=drop_grades, inplace=True)
+        valid_grades = df['车险风险等级'].notna().sum()
+        print(f"   风险等级合并: {valid_grades:,}/{len(df):,} ({valid_grades/len(df)*100:.1f}%)")
+
     # 标准化数值字段
-    for col in ['折前保费', '折后保费', 'NCD基数', 'NCD系数', '自主定价系数']:
+    for col in ['折前保费', '折后保费', 'NCD基数', 'NCD系数', '商车自主定价系数']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
 
