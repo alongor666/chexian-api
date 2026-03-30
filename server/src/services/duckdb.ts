@@ -324,9 +324,14 @@ class DuckDBService {
       const message = err instanceof Error ? err.message : String(err);
       const duration = Date.now() - startTime;
       recordQueryMetric(sql, duration, false);
-      console.error(`[DuckDB] Query error (${duration}ms):`, message);
-      // 不向客户端暴露内部 SQL 错误细节
-      throw new AppError(400, '查询执行失败，请检查参数后重试');
+      const errorId = Math.random().toString(36).slice(2, 10);
+      console.error(`[DuckDB] [${errorId}] Query error (${duration}ms):`, message);
+      console.error(`[DuckDB] [${errorId}] SQL:`, sql.slice(0, 500));
+      throw new AppError(400,
+        process.env.NODE_ENV === 'production'
+          ? `查询执行失败 [${errorId}]`
+          : `查询执行失败: ${message}`
+      );
     } finally {
       this.releaseConnection(conn);
     }
@@ -1169,6 +1174,10 @@ class DuckDBService {
       'SELECT COUNT(DISTINCT full_name) AS cnt FROM achievement_cache'
     ))[0]?.cnt ?? 0;
     console.log(`[DuckDB] achievement_cache built: ${countResult[0]?.cnt ?? 0} rows (${distinctCount} unique salespeople), year=${planYear}`);
+
+    // Smoke test: 验证核心聚合查询可执行（启动时发现 schema 问题而非运行时 400）
+    await this.query(`SELECT plan_year, SUM(plan_vehicle) AS total FROM achievement_cache GROUP BY plan_year LIMIT 1`);
+    console.log(`[DuckDB] achievement_cache smoke test passed`);
   }
 
   /**

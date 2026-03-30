@@ -163,7 +163,7 @@ bun run governance                 # 治理校验
 
 **并行规则**：3+ 独立模块/任务必须并行 sub-agents。PR 前：`git fetch origin main && git rebase origin/main && bun run governance`
 
-**生产环境**：腾讯云 2核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist`
+**生产环境**：腾讯云 2核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist` · **PM2 重启**：deployer 无法直接调 pm2，须 `sudo /usr/local/bin/deploy-chexian-api reload`（或 `restart`/`install`）
 
 **数据 ETL**：`node 数据管理/etl.mjs`（智能检测）· `node 数据管理/etl.mjs premium|claims|quotes|all`（强制）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py` · 迁移脚本：`python3 数据管理/pipelines/split_existing.py`
 
@@ -200,8 +200,8 @@ bun run governance                 # 治理校验
 
 1. `bun run build` — 零 TS 报错
 2. `bun run governance` — 治理通过
-3. PM2 状态检查 — `pm2 describe chexian-api`，若 errored 则 `pm2 delete chexian-api && pm2 start ecosystem.config.js`（禁止只 restart/reload）
-4. 环境变量 — 确认 `ecosystem.config.js` 中所有 env 变量在 VPS 上有值
+3. PM2 状态检查 — `sudo /usr/local/bin/deploy-chexian-api describe`，若 errored 则 `sudo /usr/local/bin/deploy-chexian-api reload`（禁止只 restart）
+4. 环境变量 — 确认 `ecosystem.config.cjs` 中所有 env 变量在 VPS 上有值
 5. CORS 配置 — 确认不会因 env 缺失抛异常
 6. DuckDB/Parquet 兼容 — `union_by_name` schema 一致性
 7. 健康检查 — `curl -s https://chexian.cretvalu.com/health` 返回 200

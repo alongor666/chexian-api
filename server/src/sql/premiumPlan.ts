@@ -101,9 +101,11 @@ function buildCacheWhere(
 
 /**
  * 聚合公共指标（SUM/CASE）——用于 org/team/company 层级
+ * 返回 { select, groupBy } 对，确保非聚合列始终在 GROUP BY 中
  */
-function buildAggSelect(groupField: string, extraFields: string = ''): string {
-  return `
+function buildAggSelect(groupField: string, extraFields: string = ''): { select: string; groupBy: string } {
+  const nonAggCols = [groupField, extraFields, 'plan_year'].filter(Boolean);
+  const select = `
     ${groupField}                                            AS group_name,
     ${extraFields}
     plan_year,
@@ -131,6 +133,7 @@ function buildAggSelect(groupField: string, extraFields: string = ''): string {
       ELSE NULL
     END                                                      AS plan_growth_rate
   `;
+  return { select, groupBy: `GROUP BY ${nonAggCols.join(', ')}` };
 }
 
 // ─── 主要导出函数（签名与 v1 完全相同） ────────────────────────────────────
@@ -159,14 +162,17 @@ export function generatePremiumPlanDrilldownQuery(
   let groupBy: string;
 
   if (level === 'company') {
-    selectBody = buildAggSelect("'分公司整体'");
-    groupBy = 'GROUP BY plan_year';
+    const agg = buildAggSelect("'分公司整体'");
+    selectBody = agg.select;
+    groupBy = agg.groupBy;
   } else if (level === 'org') {
-    selectBody = buildAggSelect('org_name');
-    groupBy = 'GROUP BY org_name, plan_year';
+    const agg = buildAggSelect('org_name');
+    selectBody = agg.select;
+    groupBy = agg.groupBy;
   } else if (level === 'team') {
-    selectBody = buildAggSelect('team_name', 'org_name AS parent_name,');
-    groupBy = 'GROUP BY team_name, org_name, plan_year';
+    const agg = buildAggSelect('team_name', 'org_name AS parent_name,');
+    selectBody = agg.select;
+    groupBy = agg.groupBy;
   } else {
     // salesman — 直接读行，不聚合
     selectBody = `
