@@ -61,17 +61,20 @@ module.exports = {
     },
   ],
 
-  // 部署配置（可选，用于远程部署）
+  // 部署配置 — 未使用，CI/CD 走 deploy.yml + deploy-chexian-api wrapper
+  // 保留仅作参考，实际部署命令:
+  //   sudo /usr/local/bin/deploy-chexian-api install
+  //   sudo /usr/local/bin/deploy-chexian-api reload
   deploy: {
     production: {
       user: 'root',
-      host: ['YOUR_SERVER_IP'], // 替换为实际服务器 IP
+      host: ['YOUR_SERVER_IP'],
       ref: 'origin/main',
-      repo: 'git@github.com:YOUR_REPO.git', // 替换为实际仓库
+      repo: 'git@github.com:YOUR_REPO.git',
       path: '/var/www/chexian',
       'pre-deploy-local': '',
       'post-deploy':
-        'cd server && npm install && npm run build && pm2 reload ecosystem.config.cjs --env production',
+        'sudo /usr/local/bin/deploy-chexian-api install && sudo /usr/local/bin/deploy-chexian-api reload',
       'pre-setup': '',
     },
   },
