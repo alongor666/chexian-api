@@ -73,7 +73,7 @@ export function useTruckAnalysis({
       rosePremiumData: result?.rosePremium ?? [],
       roseCountData: result?.roseCount ?? [],
       tonnageByOrgData: result?.tonnageByOrg ?? [],
-      orgPremiumData: Object.values(
+      orgPremiumData: (Object.values(
         (result?.orgPremium ?? []).reduce(
           (acc: Record<string, { name: string; value: number }>, row: { org_level_3?: string; premium?: number }) => {
             const name = row.org_level_3 ?? '未知';
@@ -83,7 +83,7 @@ export function useTruckAnalysis({
           },
           {} as Record<string, { name: string; value: number }>
         )
-      ).sort((a, b) => b.value - a.value),
+      ) as Array<{ name: string; value: number }>).sort((a, b) => b.value - a.value),
     }),
   });
 

@@ -83,6 +83,7 @@ export interface DetectRequirementResponse {
 /** KPI 数据 */
 export interface KpiData {
   latest_policy_date: string | null;
+  vehicle_plan_wan: number | null;
   vehicle_premium: number;
   vehicle_achievement_rate: number | null;
   vehicle_growth_rate: number | null;
