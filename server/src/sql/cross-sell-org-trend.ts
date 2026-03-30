@@ -45,9 +45,9 @@ export function generateCrossSellOrgTrendQuery(
   const safedays = Math.max(1, Math.min(90, days));
 
   const coverageFilter =
-    coverageCombination !== '整体'
-      ? `AND coverage_combination = '${coverageCombination}'`
-      : '';
+    coverageCombination === '整体'
+      ? `AND coverage_combination IN ('主全', '交三')`
+      : `AND coverage_combination = '${coverageCombination}'`;
 
   const sql = `
     WITH latest AS (

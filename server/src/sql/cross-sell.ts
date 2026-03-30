@@ -193,8 +193,8 @@ export function generateCrossSellQuery(
     WITH cross_sell_base AS (
       SELECT
         ${config.selectExpr},
-        COALESCE(SUM(${colPrefix}auto_count), 0) AS total_auto_count,
-        COALESCE(SUM(${colPrefix}driver_count), 0) AS total_driver_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination IN ('主全', '交三') THEN ${colPrefix}auto_count ELSE 0 END), 0) AS total_auto_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination IN ('主全', '交三') THEN ${colPrefix}driver_count ELSE 0 END), 0) AS total_driver_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS danjiao_auto_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}driver_count ELSE 0 END), 0) AS danjiao_driver_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS jiaosan_auto_count,
@@ -250,8 +250,8 @@ function generateSummaryOnly(
     WITH summary AS (
       SELECT
         '四川分公司' AS group_name,
-        COALESCE(SUM(${colPrefix}auto_count), 0) AS total_auto_count,
-        COALESCE(SUM(${colPrefix}driver_count), 0) AS total_driver_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination IN ('主全', '交三') THEN ${colPrefix}auto_count ELSE 0 END), 0) AS total_auto_count,
+        COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination IN ('主全', '交三') THEN ${colPrefix}driver_count ELSE 0 END), 0) AS total_driver_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS danjiao_auto_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}driver_count ELSE 0 END), 0) AS danjiao_driver_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '交三' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS jiaosan_auto_count,

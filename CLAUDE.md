@@ -16,6 +16,7 @@
 | 并行不串行 | 3+ 独立任务必须并行 sub-agents |
 | Edit > Write | 改动少用 Edit，新建/大改用 Write |
 | 执行不规划 | `commit/push/PR` 直接执行，零分析 |
+| 源数据验证 | 修改 SQL 生成器后，必须用 Parquet 直查与 API 返回对比验证 |
 
 **Pre-flight（每次任务前）**：1) `grep -r` 搜索已有实现 2) 涉及数据时 `find 数据管理/` 3) 声称完成前 `curl` 验证 4) 删除前列影响清单等用户确认 5) push 前检查大文件 6) push 前 `grep -rn '<<<<<<'` 扫描冲突标记 7) push 前 `bun run governance`
 
@@ -136,6 +137,8 @@ bun run governance                 # 治理校验
 | 场景 | 验证命令 |
 |------|----------|
 | 修改 SQL | `curl -s localhost:3000/api/query/kpi \| jq '.data \| length'` |
+| 修改交叉销售 SQL | `python3 scripts/verify-cross-sell.py --date <YYYY-MM-DD>` |
+| 源数据口径验证 | DuckDB 直查 Parquet → 与 API 返回对比 |
 | 修改路由 | `curl -s -o /dev/null -w '%{http_code}' localhost:3000/api/[路由]` |
 | 修改前端 | `bun run build` 零 TS 报错 |
 | 声称完成 | 至少一个 API 200 + 非空 JSON |
@@ -185,8 +188,9 @@ bun run governance                 # 治理校验
 | 终端来源 ≠ 渠道 | `terminal_source`(出单终端) 和 `channel`(业务渠道) 是不同维度，禁止混用 |
 | 定价系数 ≠ 赔付因果 | `商车自主定价系数` 不直接导致出险率变化，禁止假设因果链 |
 | 出险率分母 | 用已赚暴露(earned exposure)，不是签单件数(written count) |
-| 驾乘推介率 | = 驾意险推介件数 / 商业险出单件数（非保费比） |
+| 驾乘推介率 | = 驾意险推介件数 / 商业险出单件数（非保费比）。分母仅含主全+交三，排除纯交强/单交 |
 | 驾乘渗透率 | = 驾意险承保件数 / 商业险承保件数 |
+| 推介率分母 | 商业险出单件数（去重车架号），不含纯交强/单交。整体行 = 主全 + 交三 |
 | 赔付率分子 | 已决赔款 + 未决赔款（满期赔付率用满期保费做分母） |
 | 客户类别 | 11 类，按车辆使用性质分，详见业务规则字典 |
 
