@@ -62,6 +62,35 @@ ssh -i ~/.ssh/chexian_deploy deployer@162.14.113.44
 |------|-----|------|
 | `root` | 0 | 主操作用户 |
 | `lighthouse` | 1000 | 腾讯云默认用户 (未使用) |
+| `deployer` | - | CI/CD 自动化用户 (配合 sudo wrapper 管理 PM2) |
+
+### deployer PM2 Sudo Wrapper
+
+PM2 以 root 运行（God Daemon 在 `/root/.pm2`），deployer 通过受限 wrapper 脚本操作：
+
+| 组件 | VPS 路径 | 源码 (仓库) |
+|------|---------|-------------|
+| Wrapper 脚本 | `/usr/local/bin/deploy-chexian-api` | `deploy/vps-wrapper/deploy-chexian-api.sh` |
+| Sudoers 配置 | `/etc/sudoers.d/deployer-pm2` | `deploy/vps-wrapper/deployer-pm2.sudoers` |
+| 安装脚本 | - | `deploy/vps-wrapper/install.sh` |
+
+**可用子命令**：`install` `start` `restart` `reload` `stop` `status` `describe` `logs [N]` `save`
+
+**使用方式**：
+```bash
+ssh chexian-vps-deploy "sudo /usr/local/bin/deploy-chexian-api status"
+ssh chexian-vps-deploy "sudo /usr/local/bin/deploy-chexian-api logs 20"
+ssh chexian-vps-deploy "sudo /usr/local/bin/deploy-chexian-api reload"
+```
+
+**安装/更新**：
+```bash
+ssh chexian-vps-deploy "sudo mkdir -p /root/deploy-tmp && sudo chmod 700 /root/deploy-tmp"
+scp deploy/vps-wrapper/* chexian-vps-deploy:/root/deploy-tmp/
+ssh chexian-vps-deploy "sudo bash /root/deploy-tmp/install.sh && sudo rm -rf /root/deploy-tmp"
+```
+
+**安全设计**：最小权限 + 子命令白名单 + 绝对路径 + NOPASSWD 仅限单一 wrapper 脚本
 
 ---
 
