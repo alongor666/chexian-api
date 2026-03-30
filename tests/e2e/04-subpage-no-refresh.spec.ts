@@ -22,18 +22,11 @@ test('首页侧边栏逐个进入子页面无需刷新', async ({ page }) => {
     await page.goto('/#/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Sidebar should be visible (AI homepage uses SidebarLayout)
+    // Sidebar should be visible (homepage redirects to dashboard)
     const nav = page.getByRole('navigation', { name: '主导航' });
     await expect(nav).toBeVisible({ timeout: 10000 });
 
-    // AI assistant page should be visible
-    const aiInput = page.getByPlaceholder(/描述.*数据|分析/);
-    const aiHeading = page.getByText('车险数据分析平台');
-    const hasAI = await aiInput.isVisible().catch(() => false)
-      || await aiHeading.isVisible().catch(() => false);
-    expect(hasAI).toBe(true);
-
-    // Skip data-dependent sidebar navigation — no data loaded
+    // Skip data-dependent sidebar navigation — no data loaded in CI
     test.info().annotations.push({
       type: 'skip-reason',
       description: 'No Parquet data available — skipped data-dependent sidebar navigation',

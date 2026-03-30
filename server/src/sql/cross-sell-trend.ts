@@ -82,6 +82,7 @@ export function generateCrossSellTrendQuery(
         COALESCE(SUM(driver_policy_count), 0) AS driver_policy_count,
         COALESCE(SUM(driver_premium), 0) AS premium
       FROM filtered
+      WHERE coverage_combination IN ('主全', '交三')
       GROUP BY 1
     ),
     combined AS (
