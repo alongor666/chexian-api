@@ -210,8 +210,9 @@ export const costMetrics: readonly MetricDefinition[] = [
       expression: `CASE
     WHEN COUNT(DISTINCT policy_no) > 0 AND SUM(earned_days) > 0
     THEN ROUND(
-      CAST(SUM(CAST(claim_cases AS DOUBLE) * CAST(policy_term AS DOUBLE) / NULLIF(CAST(earned_days AS DOUBLE), 0)) AS DOUBLE)
-      / CAST(COUNT(DISTINCT policy_no) AS DOUBLE) * 100.0, 2
+      SUM(claim_cases * 1.0 * policy_term / NULLIF(earned_days, 0))
+      / COUNT(DISTINCT policy_no) * 100.0,
+      2
     )
     ELSE NULL
   END AS earned_loss_frequency`,
