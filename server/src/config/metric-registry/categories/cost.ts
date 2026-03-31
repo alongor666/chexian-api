@@ -124,19 +124,19 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'earned_premium',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '满期保费',
     category: 'cost',
     tags: ['cost'],
     formula: {
-      description: '保费按满期天数折算',
-      numerator: 'SUM(premium * exposure_days / 365)',
+      description: '保费 × 满期天数 / 保险期限天数（闰年感知）',
+      numerator: 'SUM(premium * earned_days / policy_term)',
       unit: '元',
     },
     sql: {
-      expression: 'ROUND(SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2) AS earned_premium',
-      requiredColumns: ['premium', 'exposure_days'],
-      notes: '需在 CTE 中预算 exposure_days',
+      expression: 'ROUND(SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS earned_premium',
+      requiredColumns: ['premium', 'earned_days', 'policy_term'],
+      notes: '闰年感知：policy_term = DATEDIFF(起期, 起期+1年) = 365或366天。CTE 中预算 policy_term 和 earned_days',
     },
     display: {
       formatter: 'premiumWan',
@@ -196,30 +196,34 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'earned_loss_frequency',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '满期出险率',
     category: 'cost',
     tags: ['cost'],
     formula: {
-      description: '赔案件数 * 365 / 满期天数合计（年化）',
-      numerator: 'SUM(claim_cases) * 365',
-      denominator: 'SUM(exposure_days)',
+      description: '(赔案件数/保单件数) × (保险期限天数/满期天数)。满期后=赔案/保单，未满期年化放大',
+      numerator: 'SUM(claim_cases × policy_term / earned_days)',
+      denominator: 'COUNT(DISTINCT policy_no)',
       unit: '%',
     },
     sql: {
       expression: `CASE
-    WHEN SUM(exposure_days) > 0
-    THEN ROUND(CAST(SUM(claim_cases) AS DOUBLE) * 365.0 * 100.0 / CAST(SUM(exposure_days) AS DOUBLE), 2)
+    WHEN COUNT(DISTINCT policy_no) > 0 AND SUM(earned_days) > 0
+    THEN ROUND(
+      CAST(SUM(CAST(claim_cases AS DOUBLE) * CAST(policy_term AS DOUBLE) / NULLIF(CAST(earned_days AS DOUBLE), 0)) AS DOUBLE)
+      / CAST(COUNT(DISTINCT policy_no) AS DOUBLE) * 100.0, 2
+    )
     ELSE NULL
   END AS earned_loss_frequency`,
-      requiredColumns: ['claim_cases', 'exposure_days'],
-      notes: '年化出险率，需在 CTE 中预算 exposure_days',
+      requiredColumns: ['claim_cases', 'policy_term', 'earned_days', 'policy_no'],
+      notes: '闰年感知：policy_term = DATEDIFF(起期, 起期+1年) = 365或366天。earned_days = MIN(已过天数, policy_term)。满期后 ratio=1，未满期 ratio>1',
     },
     display: {
       formatter: 'percent',
       label: '出险率',
       unit: '%',
       decimals: 2,
+      tooltip: '满期出险率 = (赔案件数/保单数) × (保险期限/满期天数)。闰年自动365/366天',
     },
     testCases: [
       {
@@ -228,7 +232,10 @@ export const costMetrics: readonly MetricDefinition[] = [
         assertions: { earned_loss_frequency: { op: 'gte', value: 0 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' }],
+    changelog: [
+      { version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' },
+      { version: '2.0.0', date: '2026-03-31', changes: '口径修正：保单级→年化公式，闰年感知(365/366)' },
+    ],
   },
 
   {

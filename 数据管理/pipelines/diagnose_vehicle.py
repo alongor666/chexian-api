@@ -11,7 +11,7 @@
     python3 数据管理/pipelines/diagnose_vehicle.py --filter "客户类别 = '营业货车'" --title 营业货车
     python3 数据管理/pipelines/diagnose_vehicle.py --filter "三级机构 = '天府'" --title 天府机构
 
-版本: 3.0.0
+版本: 4.0.0
 作者: @claude
 日期: 2026-03-31
 """
@@ -19,22 +19,22 @@
 import argparse, sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 try:
     import duckdb
 except ImportError:
     print("错误: pip3 install duckdb"); sys.exit(1)
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent.parent
-GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
-OUT_DIR = str(PROJECT_ROOT / "数据分析报告")
-
-# 闰年感知：保险期限 = 起期+1年-起期（365或366天），满期天数不超过期限
-POLICY_TERM = "DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR)"  # 365 or 366
-EARNED_DAYS = f"LEAST(DATE_DIFF('day', 保险起期, CURRENT_DATE), {POLICY_TERM})"
-EARNED = f"保费 * CAST({EARNED_DAYS} AS DOUBLE) / CAST({POLICY_TERM} AS DOUBLE)"
+# 公共模块
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from diagnose_common import (  # noqa: E402
+    GLOB, OUT_DIR, POLICY_TERM, EARNED_DAYS, EARNED,
+    fw, fp, fi, fc, light, escape_sql,
+    TH_VC, TH_MR, TH_LR, TH_IR, TH_AC_CARGO,
+    kpi_select, query_kpi, detect_risk_field,
+    kpi_rows, sum_kpi_dicts, trend_text,
+    METRIC_KEYS, get_metric_value,
+)
 
 # ============================================================================
 # 格式化 + 亮灯
@@ -450,7 +450,10 @@ class Report:
         wp = total["written_premium"]
         total["loss_ratio"] = round(total["reported_claims"] / ep * 100, 1) if ep else None
         total["expense_ratio"] = round(total["fee_amount"] / wp * 100, 1) if wp else None
-        total["incident_rate"] = round(total["claim_policies"] / total["policy_count"] * 100, 1) if total["policy_count"] else None
+        # 满期出险率：用加权平均（各维度 incident_rate × policy_count 的加权）保持与 kpi_select 口径一致
+        weighted_ir = sum((d.get("incident_rate") or 0) * (d.get("policy_count") or 0) for d in dicts)
+        total_pc = total["policy_count"]
+        total["incident_rate"] = round(weighted_ir / total_pc, 1) if total_pc else None
         total["avg_claim"] = round(total["reported_claims"] * 10000 / total["claim_cases"]) if total["claim_cases"] else None
         total["avg_premium"] = round(wp * 10000 / total["policy_count"]) if total["policy_count"] else None
         lr = total["loss_ratio"] or 0; fr = total["expense_ratio"] or 0
@@ -531,6 +534,9 @@ def main():
 
     # YTD 口径检测
     from datetime import date as _date
+    if max_sign is None:
+        print(f"\n❌ 筛选条件未命中任何保单，无法生成诊断报告。")
+        sys.exit(1)
     _ms = datetime.strptime(str(max_sign), "%Y-%m-%d").date() if isinstance(max_sign, str) else max_sign
     ytd_month, ytd_day = _ms.month, _ms.day
     latest_year_incomplete = not (ytd_month == 12 and ytd_day >= 25)
@@ -618,14 +624,14 @@ def main():
     vt_data = {}
     vt_rows = con.execute(f"""
     SELECT 车辆类型, {kpi_select(EARNED, '车辆类型')}
-    FROM (SELECT *, {vehicle_type_expr} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where}) sub
+    FROM (SELECT *, {vehicle_type_expr} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where} AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}) sub
     GROUP BY 车辆类型
     """).fetchall()
     vt_cols = ["车辆类型"] + [d[0] for d in con.execute("SELECT 1 AS x").description]  # placeholder
     # Re-query properly
     vt_result = con.execute(f"""
     SELECT {kpi_select(EARNED, '车辆类型')}
-    FROM (SELECT *, {vehicle_type_expr} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where}) sub
+    FROM (SELECT *, {vehicle_type_expr} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where} AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}) sub
     GROUP BY 车辆类型
     """)
     vt_col_names = [d[0] for d in vt_result.description]
@@ -665,7 +671,7 @@ def main():
     en_data = {}
     en_result = con.execute(f"""
     SELECT {kpi_select(EARNED, '能源类型')}
-    FROM (SELECT *, {energy_expr} AS 能源类型 FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where}) sub
+    FROM (SELECT *, {energy_expr} AS 能源类型 FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where} AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}) sub
     GROUP BY 能源类型
     """)
     en_cols = [d[0] for d in en_result.description]
@@ -702,7 +708,7 @@ def main():
         gr_result = con.execute(f"""
         SELECT {kpi_select(EARNED)}
         FROM read_parquet('{GLOB}', union_by_name=true)
-        WHERE {base_where} AND {risk_expr} = '{grade}'
+        WHERE {base_where} AND {risk_expr} = '{grade}' AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
         """)
         gr_cols = [d[0] for d in gr_result.description]
         for row in gr_result.fetchall():
@@ -711,7 +717,7 @@ def main():
     gr_null = con.execute(f"""
     SELECT {kpi_select(EARNED)}
     FROM read_parquet('{GLOB}', union_by_name=true)
-    WHERE {base_where} AND {risk_expr} IS NULL
+    WHERE {base_where} AND {risk_expr} IS NULL AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
     """)
     gr_null_cols = [d[0] for d in gr_null.description]
     for row in gr_null.fetchall():

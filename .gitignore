@@ -75,6 +75,7 @@ coverage/
 .env
 .env.local
 .env.production
+.env.health-check
 server/.env
 
 # 密码文档（禁止提交）

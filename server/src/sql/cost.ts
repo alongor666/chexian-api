@@ -100,7 +100,17 @@ WITH policy_exposure AS (
     ${groupByFields.map((f) => `${f}`).join(', ')},
     premium,
     insurance_start_date AS start_date,
-    -- 满期天数：MIN(统计截止日 - 保险起期, 365)，最小为0
+    -- 保险期限天数（闰年感知：365或366）
+    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    -- 满期天数：MIN(统计截止日 - 保险起期, policy_term)，最小为0
+    LEAST(
+      GREATEST(
+        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        0
+      ),
+      DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+    ) AS earned_days,
+    -- 兼容旧引用
     LEAST(
       GREATEST(
         DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
@@ -125,14 +135,14 @@ SELECT
   -- 案均赔款 = 已报告赔款 / 赔案件数
   ${getMetricSql('avg_claim_amount')},
 
-  -- 满期保费 = SUM(保费 / 365 * 满期天数)
+  -- 满期保费（闰年感知）
   ${getMetricSql('earned_premium')},
 
   -- 满期天数合计
-  CAST(SUM(exposure_days) AS INTEGER) AS total_exposure_days,
+  CAST(SUM(earned_days) AS INTEGER) AS total_exposure_days,
 
   -- 平均满期天数
-  ROUND(AVG(CAST(exposure_days AS DOUBLE)), 1) AS avg_exposure_days,
+  ROUND(AVG(CAST(earned_days AS DOUBLE)), 1) AS avg_exposure_days,
 
   -- 满期赔付率 = 已报告赔款 / 满期保费
   ${getMetricSql('earned_claim_ratio')},
@@ -211,6 +221,14 @@ WITH policy_exposure AS (
     ${groupByFields.map((f) => `${f}`).join(', ')},
     premium,
     insurance_start_date AS start_date,
+    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    LEAST(
+      GREATEST(
+        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        0
+      ),
+      DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+    ) AS earned_days,
     LEAST(
       GREATEST(
         DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
@@ -231,7 +249,7 @@ SELECT
   ROUND(SUM(premium), 2) AS total_premium,
   ROUND(SUM(reported_claims), 2) AS total_reported_claims,
   ROUND(SUM(fee_amount), 2) AS total_fee,
-  -- 满期保费（CTE 中 fee_amount 已 COALESCE，exposure_days 已预算）
+  -- 满期保费（闰年感知）
   ${getMetricSql('earned_premium')},
 
   -- 满期赔付率
@@ -246,8 +264,8 @@ SELECT
 
   -- 综合费用率 = (赔款 + 费用) / 满期保费 * 100%
   CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0
-    THEN ROUND((SUM(reported_claims) + SUM(fee_amount)) * 100.0 / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2)
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
+    THEN ROUND((SUM(reported_claims) + SUM(fee_amount)) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2)
     ELSE NULL
   END AS comprehensive_cost_ratio
 
@@ -281,6 +299,14 @@ WITH policy_exposure AS (
     policy_no,
     ${groupByFields.map((f) => `${f}`).join(', ')},
     premium,
+    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    LEAST(
+      GREATEST(
+        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        0
+      ),
+      DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+    ) AS earned_days,
     LEAST(
       GREATEST(
         DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
@@ -298,7 +324,7 @@ SELECT
   ${dimKeyExpression} AS dim_key,
   CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
   ROUND(SUM(premium), 2) AS total_premium,
-  -- 满期保费（CTE 中 fee_amount/reported_claims 已 COALESCE）
+  -- 满期保费（闰年感知）
   ${getMetricSql('earned_premium')},
   ROUND(SUM(reported_claims), 2) AS total_reported_claims,
   ROUND(SUM(fee_amount), 2) AS total_fee,
@@ -315,9 +341,9 @@ SELECT
 
   -- 变动成本率 = 赔付率 + 费用率（注意：fee_amount 已 COALESCE，保持原样）
   CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0 AND SUM(premium) > 0
     THEN ROUND(
-      SUM(reported_claims) * 100.0 / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) +
+      SUM(reported_claims) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) +
       SUM(fee_amount) * 100.0 / SUM(premium),
       2
     )

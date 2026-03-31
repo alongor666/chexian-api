@@ -41,6 +41,14 @@ WITH policy_exposure AS (
     COALESCE(reported_claims, 0) AS reported_claims,
     COALESCE(fee_amount, 0) AS fee_amount,
     COALESCE(claim_cases, 0) AS claim_cases,
+    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    LEAST(
+      GREATEST(
+        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        0
+      ),
+      DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+    ) AS earned_days,
     LEAST(
       GREATEST(
         DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
@@ -74,7 +82,7 @@ dim_agg AS (
     ROUND(SUM(reported_claims), 2) AS reported_claims,
     ROUND(SUM(fee_amount), 2) AS fee_amount,
     CAST(SUM(claim_cases) AS INTEGER) AS claim_cases,
-    ROUND(SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2) AS earned_premium
+    ROUND(SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS earned_premium
   FROM policy_exposure
   GROUP BY COALESCE(${dimField}, '未知')
 ),
@@ -157,7 +165,7 @@ SELECT
   ROUND(SUM(premium), 2) AS signed_premium,
   ROUND(SUM(reported_claims), 2) AS reported_claims,
   ROUND(SUM(fee_amount), 2) AS fee_amount,
-  ROUND(SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2) AS earned_premium,
+  ROUND(SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS earned_premium,
   CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
   CAST(SUM(claim_cases) AS INTEGER) AS claim_cases,
   CASE
@@ -212,7 +220,7 @@ period_agg AS (
   SELECT
     ${timePeriodExpr} AS time_period,
     ROUND(SUM(reported_claims), 2) AS reported_claims,
-    ROUND(SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2) AS earned_premium
+    ROUND(SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS earned_premium
   FROM policy_exposure
   GROUP BY ${timePeriodExpr}
 ),
