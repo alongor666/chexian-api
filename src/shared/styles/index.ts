@@ -584,6 +584,50 @@ export const colorClasses = {
   },
 } as const
 
+// ============================================================================
+// 报价转化分析专用颜色（DC-003 合规）
+// ============================================================================
+
+/** ECharts 图表色值（hex，用于 ECharts option） */
+export const quoteChartColors = {
+  /** 报价量柱 - 中性灰 */
+  quoteBar: '#94a3b8',
+  /** 报价量柱 - 浅灰（时间趋势） */
+  quoteBarLight: '#e2e8f0',
+  /** 承保量柱 - 蓝色 */
+  insuredBar: '#3b82f6',
+  /** 转化率线 - 绿色 */
+  conversionLine: '#10b981',
+  /** 续保转化率线 - 蓝色 */
+  renewalLine: '#3b82f6',
+  /** 转保转化率线 - 琥珀色 */
+  switchLine: '#f59e0b',
+} as const
+
+/** 漏斗层级背景色（L1→L4 渐进） */
+export const funnelLevelColors = [
+  'bg-blue-500',
+  'bg-blue-400',
+  'bg-emerald-400',
+  'bg-emerald-500',
+] as const
+
+/** 热力图转化率→背景色映射 */
+export function getHeatmapColor(rate: number): string {
+  if (rate >= 15) return 'bg-emerald-500 text-white'
+  if (rate >= 10) return 'bg-emerald-300 text-neutral-900'
+  if (rate >= 7) return 'bg-emerald-100 text-neutral-800'
+  if (rate >= 4) return 'bg-amber-100 text-neutral-800'
+  if (rate >= 1) return 'bg-red-100 text-neutral-800'
+  return 'bg-red-200 text-neutral-800'
+}
+
+/** 维度/粒度切换按钮样式（选中/未选中） */
+export const toggleButtonStyles = {
+  active: 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900',
+  inactive: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-400',
+} as const
+
 /**
  * 获取年份图表颜色（替代硬编码年份颜色）
  */

@@ -1191,6 +1191,16 @@ class DuckDBService {
    * - maturity: 成熟度分级
    * - action_priority: 行动优先级（P1/P2/P3/P4）
    */
+  async loadQuoteConversion(parquetPath: string): Promise<void> {
+    const safePath = parquetPath.replace(/\\/g, '/');
+    await this.query(`
+      CREATE OR REPLACE VIEW QuoteConversion AS
+      SELECT * FROM read_parquet('${safePath}')
+    `);
+    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM QuoteConversion');
+    console.log(`[DuckDB] QuoteConversion view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+  }
+
   async loadRenewalFunnel(parquetPath: string): Promise<void> {
     const safePath = parquetPath.replace(/\\/g, '/');
     await this.query(`

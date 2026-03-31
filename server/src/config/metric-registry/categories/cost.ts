@@ -230,4 +230,88 @@ export const costMetrics: readonly MetricDefinition[] = [
     ],
     changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' }],
   },
+
+  {
+    id: 'earned_margin_amount',
+    version: '1.0.0',
+    name: '满期边际贡献额',
+    category: 'cost',
+    tags: ['core', 'kpi', 'cost', 'margin'],
+    formula: {
+      description: '满期保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
+      numerator: 'earned_premium × (1 - earned_claim_ratio - expense_ratio)',
+      unit: '元',
+    },
+    sql: {
+      expression: `CASE
+    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
+    THEN ROUND(
+      SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) * (
+        1.0
+        - SUM(reported_claims) / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0)
+        - SUM(COALESCE(fee_amount, 0)) / SUM(premium)
+      ), 2
+    )
+    ELSE NULL
+  END AS earned_margin_amount`,
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days'],
+      notes: '基于已赚保费的实际边际贡献，随满期天数增长而变化。已满期保单与 projected_margin_amount 相等',
+    },
+    display: {
+      formatter: 'premiumWan',
+      label: '满期边际贡献额',
+      unit: '万元',
+      tooltip: '满期边际贡献额 = 满期保费 × (1 - 满期赔付率 - 费用率)。跨日期对比可判断赔付恶化/改善',
+    },
+    testCases: [
+      {
+        name: '满期边际贡献额可为负（亏损）',
+        input: { whereClause: '1=1' },
+        assertions: { earned_margin_amount: { op: 'type', value: 'number' } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-03-31', changes: '新增：时序对比核心指标，诊断脚本同步使用' }],
+  },
+
+  {
+    id: 'projected_margin_amount',
+    version: '1.0.0',
+    name: '预估边际贡献额',
+    category: 'cost',
+    tags: ['core', 'kpi', 'cost', 'margin'],
+    formula: {
+      description: '签单保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
+      numerator: 'premium × (1 - earned_claim_ratio - expense_ratio)',
+      unit: '元',
+    },
+    sql: {
+      expression: `CASE
+    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
+    THEN ROUND(
+      SUM(premium) * (
+        1.0
+        - SUM(reported_claims) / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0)
+        - SUM(COALESCE(fee_amount, 0)) / SUM(premium)
+      ), 2
+    )
+    ELSE NULL
+  END AS projected_margin_amount`,
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days'],
+      notes: '假设全部保费赚完后的预估边际贡献，用于预判最终盈亏。与 earned_margin_amount 共享变动成本率，仅保费基数不同',
+    },
+    display: {
+      formatter: 'premiumWan',
+      label: '预估边际贡献额',
+      unit: '万元',
+      tooltip: '预估边际贡献额 = 签单保费 × (1 - 满期赔付率 - 费用率)。未满期保单差异越大说明待赚保费越多',
+    },
+    testCases: [
+      {
+        name: '预估边际贡献额可为负（亏损）',
+        input: { whereClause: '1=1' },
+        assertions: { projected_margin_amount: { op: 'type', value: 'number' } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-03-31', changes: '新增：时序对比核心指标，诊断脚本同步使用' }],
+  },
 ];

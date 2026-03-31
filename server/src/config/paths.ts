@@ -70,6 +70,15 @@ export function getRenewalFunnelPaths(): string[] {
   ];
 }
 
+// ── 报价转化 Parquet 路径（本地优先，VPS 回退）──
+
+export function getQuoteConversionPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/quotes_conversion/latest.parquet'),
+    path.resolve(getDataDir(), 'fact/quotes_conversion/latest.parquet'),
+  ];
+}
+
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,

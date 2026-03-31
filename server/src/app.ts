@@ -13,7 +13,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
-import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getRenewalFunnelPaths } from './config/paths.js';
+import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getRenewalFunnelPaths, getQuoteConversionPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
@@ -323,6 +323,16 @@ async function startServer() {
           await duckdbService.loadRenewalFunnel(renewalFunnelPath);
         } catch (err) {
           console.warn('[Server] RenewalFunnel load failed (non-blocking):', err);
+        }
+      }
+
+      // 加载报价转化数据（独立于 PolicyFact）
+      const quoteConversionPath = getQuoteConversionPaths().find(p => fs.existsSync(p));
+      if (quoteConversionPath) {
+        try {
+          await duckdbService.loadQuoteConversion(quoteConversionPath);
+        } catch (err) {
+          console.warn('[Server] QuoteConversion load failed (non-blocking):', err);
         }
       }
 

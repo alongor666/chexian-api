@@ -86,6 +86,9 @@ const MotoCostPage = lazy(() =>
 const AccessControlPage = lazy(() =>
   import('../features/admin/AccessControlPage').then((m) => ({ default: m.AccessControlPage }))
 );
+const QuoteConversionPage = lazy(() =>
+  import('../features/quote-conversion').then((m) => ({ default: m.QuoteConversionPage }))
+);
 
 // Loading fallback — content-aware skeleton screen
 const PageLoader = () => (
@@ -277,6 +280,13 @@ function App() {
                     }
                   />
 
+                  {/* 报价转化分析 - 独立数据源，不需要 DataGuard */}
+                  <Route
+                    path="quote-conversion"
+                    element={
+                      <LazyRoute><QuoteConversionPage /></LazyRoute>
+                    }
+                  />
 
                 </Route>
 

@@ -25,6 +25,7 @@ import premiumPlanRoutes from './query/premium-plan.js';
 import performanceRoutes from './query/performance.js';
 import bundleRoutes from './query/bundles.js';
 import renewalFunnelRoutes from './query/renewal-funnel.js';
+import quoteConversionRoutes from './query/quote-conversion.js';
 
 export { buildRouteCacheKey } from './query/shared.js';
 export { fetchDashboardBundleData } from './query/bundles.js';
@@ -49,5 +50,6 @@ router.use(premiumPlanRoutes);
 router.use(performanceRoutes);
 router.use(bundleRoutes);
 router.use(renewalFunnelRoutes);
+router.use(quoteConversionRoutes);
 
 export default router;

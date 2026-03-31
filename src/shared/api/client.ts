@@ -972,6 +972,45 @@ class ApiClient {
   async getQuickSuggestions(): Promise<{ success: boolean; data: Array<{ text: string; capabilityId: string }> }> {
     return this.request('/ai/quick-suggestions');
   }
+
+  // ============================================
+  // 报价转化分析 API
+  // ============================================
+
+  async getQuoteConversionKpi(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any>(`/query/quote-conversion/kpi${query ? `?${query}` : ''}`);
+  }
+
+  async getQuoteConversionFunnel(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/quote-conversion/funnel${query ? `?${query}` : ''}`);
+  }
+
+  async getQuoteConversionDrilldown(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/quote-conversion/drilldown${query ? `?${query}` : ''}`);
+  }
+
+  async getQuoteConversionHeatmap(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/quote-conversion/heatmap${query ? `?${query}` : ''}`);
+  }
+
+  async getQuoteConversionPrice(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/quote-conversion/price${query ? `?${query}` : ''}`);
+  }
+
+  async getQuoteConversionTrend(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/quote-conversion/trend${query ? `?${query}` : ''}`);
+  }
+
+  async getQuoteConversionRanking(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/quote-conversion/ranking${query ? `?${query}` : ''}`);
+  }
 }
 
 // 导出单例

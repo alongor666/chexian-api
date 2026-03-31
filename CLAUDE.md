@@ -2,6 +2,8 @@
 
 > **chexian-api** — 车险数据分析平台（API 版）。React + TypeScript + Vite + ECharts，后端 Express + DuckDB。生产环境 `https://chexian.cretvalu.com`。
 
+> **共享记忆**：项目记忆存储在 `.claude/shared-memory/`（git 跟踪）+ `~/.claude/shared-memory/chexian/`（本地运行时）。clone 后执行 `bash .claude/shared-memory/sync-memory.sh --pull` 拉取记忆到本地。多项目共享（私董会/作战地图/chexian-api），详见 `reference_shared_memory.md`。
+
 ---
 
 ## 0. 红线规则
