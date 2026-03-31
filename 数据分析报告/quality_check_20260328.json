@@ -1,0 +1,175 @@
+{
+  "report_name": "quality_check_20260328",
+  "generated_at": "2026-03-28T13:25:10+08:00",
+  "based_on_reports": [
+    "数据分析报告/stage2_quality_analysis_20260328.md",
+    "数据分析报告/pipeline_status_20260328.json"
+  ],
+  "script_status": {
+    "calculate_renewal_rate.py": {
+      "status": "failed_default_input_missing",
+      "message": "默认输入文件不存在，已在不改业务代码的前提下使用当前主数据 parquet 做等价口径分析。"
+    },
+    "analyze_parquet_schema.py": {
+      "status": "success",
+      "message": "显式传入当前主数据 parquet 后执行成功。"
+    }
+  },
+  "current_snapshot": {
+    "file_path": "数据管理/warehouse/fact/policy/current/每日数据_20231201-20260326.parquet",
+    "row_count": 480647,
+    "column_count": 45,
+    "sign_date_range": {
+      "min": "2023-12-01",
+      "max": "2026-03-26"
+    },
+    "insurance_start_range": {
+      "min": "2022-12-16",
+      "max": "2026-06-22"
+    },
+    "premium_stats": {
+      "sum": 432619567.85,
+      "min": -19816.11,
+      "max": 28485.62,
+      "mean": 900.0775,
+      "non_positive_count": 13873,
+      "non_positive_rate": 0.028863,
+      "zero_premium_count": 7168,
+      "negative_premium_count": 6705,
+      "non_positive_sum": -5696414.45
+    },
+    "null_rates": {
+      "保单号": {
+        "null_count": 0,
+        "null_rate": 0.0
+      },
+      "签单日期": {
+        "null_count": 0,
+        "null_rate": 0.0
+      },
+      "保险起期": {
+        "null_count": 0,
+        "null_rate": 0.0
+      },
+      "保费": {
+        "null_count": 0,
+        "null_rate": 0.0
+      },
+      "业务员": {
+        "null_count": 0,
+        "null_rate": 0.0
+      },
+      "三级机构": {
+        "null_count": 0,
+        "null_rate": 0.0
+      },
+      "车架号": {
+        "null_count": 0,
+        "null_rate": 0.0
+      },
+      "经代名": {
+        "null_count": 2923,
+        "null_rate": 0.006081
+      },
+      "是否报价": {
+        "null_count": 1758,
+        "null_rate": 0.003658
+      },
+      "客户源": {
+        "null_count": 142098,
+        "null_rate": 0.295639
+      },
+      "续保单号": {
+        "null_count": 267336,
+        "null_rate": 0.5562
+      }
+    },
+    "high_null_fields": [
+      {
+        "field": "续保业务类型",
+        "null_count": 480643,
+        "null_rate": 1.0
+      },
+      {
+        "field": "续保模式",
+        "null_count": 480643,
+        "null_rate": 1.0
+      },
+      {
+        "field": "车险风险等级",
+        "null_count": 479777,
+        "null_rate": 0.9982
+      },
+      {
+        "field": "大货车评分",
+        "null_count": 469349,
+        "null_rate": 0.9765
+      },
+      {
+        "field": "批单号",
+        "null_count": 466180,
+        "null_rate": 0.9699
+      },
+      {
+        "field": "批改类型",
+        "null_count": 466180,
+        "null_rate": 0.9699
+      },
+      {
+        "field": "小货车评分",
+        "null_count": 452981,
+        "null_rate": 0.9424
+      },
+      {
+        "field": "商车自主定价系数",
+        "null_count": 341071,
+        "null_rate": 0.7096
+      },
+      {
+        "field": "续保单号",
+        "null_count": 267336,
+        "null_rate": 0.5562
+      },
+      {
+        "field": "车险分等级",
+        "null_count": 252980,
+        "null_rate": 0.5263
+      }
+    ]
+  },
+  "renewal_analysis": {
+    "analysis_mode": "equivalent_logic_using_current_snapshot",
+    "denominator_2025_policy_count": 12128,
+    "deduplicated_2025_policy_count": 12098,
+    "policies_2026_start_count": 1731,
+    "policies_2026_non_empty_renewal_ref_count": 0,
+    "unique_renewal_ref_count": 0,
+    "renewed_policy_count": 0,
+    "not_renewed_policy_count": 12128,
+    "renewal_rate": 0.0,
+    "status": "broken_linkage",
+    "blocker_reason": "2026 年起保记录虽然存在 1731 条，但续保单号非空数为 0，无法形成 2025 保单号到 2026 续保单号的匹配链路。"
+  },
+  "data_quality_issues": [
+    {
+      "severity": "high",
+      "field": "续保单号",
+      "message": "2026 年起保记录的续保单号非空数为 0，导致等价口径续保率为 0.00%，续保链路当前不可用于经营分析。"
+    },
+    {
+      "severity": "medium",
+      "field": "保费",
+      "message": "发现 13873 条保费小于等于 0 的记录，占比 2.8863%，需区分退保、批改冲减与 ETL 异常。"
+    },
+    {
+      "severity": "medium",
+      "field": "客户源",
+      "message": "客户源空值 142098 条，占比 29.5639%，会影响来源结构分析和渠道归因。"
+    },
+    {
+      "severity": "low",
+      "field": "是否报价",
+      "message": "是否报价空值 1758 条，占比 0.3658%；按项目既有红线，本报告不调整其业务判定口径。"
+    }
+  ]
+}
