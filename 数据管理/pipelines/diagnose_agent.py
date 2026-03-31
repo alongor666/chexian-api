@@ -37,7 +37,7 @@ except ImportError:
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 POLICY_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
-CLAIMS_FILE = str(PROJECT_ROOT / "数据管理/warehouse/fact/claims/latest.parquet")
+# claims/latest.parquet 已废弃，赔付字段内嵌在 policy 分片中
 DEFAULT_OUTPUT_DIR = str(PROJECT_ROOT / "数据分析报告")
 
 # 阈值（来自 开发文档/01_指标体系.md）
@@ -64,35 +64,39 @@ class DataLoader:
     def __init__(self):
         self.con = duckdb.connect()
 
-    def build_views(self, org: str, agent: str, years: list[int]):
-        """创建经代筛选视图和机构基准视图"""
+    def build_views(self, org: str, agent: str, years: list[int], ytd_filter: str = ""):
+        """创建经代筛选视图和机构基准视图
+        ytd_filter: 可选的 YTD 日期过滤 SQL 片段，如 "AND (MONTH(签单日期) < 3 OR ...)"
+        """
         years_csv = ", ".join(str(y) for y in years)
+        org_esc = org.replace("'", "''")
+        agent_esc = agent.replace("'", "''")
 
-        # 经代视图（LEFT JOIN claims）
+        # 经代视图（赔付字段已内嵌在 policy 分片中，无需 JOIN claims）
         self.con.execute(f"""
             CREATE OR REPLACE VIEW v_agent AS
-            SELECT p.*,
-                   COALESCE(c.赔案件数, 0) AS 赔案件数,
-                   COALESCE(c.已报告赔款, 0) AS 已报告赔款,
-                   COALESCE(c.费用金额, 0) AS 费用金额
-            FROM read_parquet('{POLICY_GLOB}', union_by_name=true) p
-            LEFT JOIN read_parquet('{CLAIMS_FILE}') c ON p.保单号 = c.保单号
-            WHERE p.三级机构 = '{org}'
-              AND p.经代名 LIKE '%{agent}%'
-              AND YEAR(p.签单日期) IN ({years_csv})
+            SELECT *,
+                   COALESCE(赔案件数, 0) AS _赔案件数,
+                   COALESCE(已报告赔款, 0) AS _已报告赔款,
+                   COALESCE(费用金额, 0) AS _费用金额
+            FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
+            WHERE 三级机构 = '{org_esc}'
+              AND 经代名 LIKE '%{agent_esc}%'
+              AND YEAR(签单日期) IN ({years_csv})
+              {ytd_filter}
         """)
 
         # 机构整体视图（用于对比）
         self.con.execute(f"""
             CREATE OR REPLACE VIEW v_org AS
-            SELECT p.*,
-                   COALESCE(c.赔案件数, 0) AS 赔案件数,
-                   COALESCE(c.已报告赔款, 0) AS 已报告赔款,
-                   COALESCE(c.费用金额, 0) AS 费用金额
-            FROM read_parquet('{POLICY_GLOB}', union_by_name=true) p
-            LEFT JOIN read_parquet('{CLAIMS_FILE}') c ON p.保单号 = c.保单号
-            WHERE p.三级机构 = '{org}'
-              AND YEAR(p.签单日期) IN ({years_csv})
+            SELECT *,
+                   COALESCE(赔案件数, 0) AS _赔案件数,
+                   COALESCE(已报告赔款, 0) AS _已报告赔款,
+                   COALESCE(费用金额, 0) AS _费用金额
+            FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
+            WHERE 三级机构 = '{org_esc}'
+              AND YEAR(签单日期) IN ({years_csv})
+              {ytd_filter}
         """)
 
     def resolve_agent_name(self, org: str, agent: str) -> Optional[str]:
@@ -154,18 +158,18 @@ class DiagnosticsEngine:
                      start_col: str = "保险起期",
                      fee_col: str = "费用金额",
                      type_col: str = "险类") -> str:
-        """满期保费 SQL 表达式"""
+        """满期保费 SQL 表达式（闰年感知：policy_term=365或366天）"""
+        pt = f"DATE_DIFF('day', {start_col}, {start_col} + INTERVAL 1 YEAR)"
+        ed = f"LEAST(DATE_DIFF('day', {start_col}, CURRENT_DATE), {pt})"
         if self.precise:
-            # 精确版：含费用率 + 险类系数
             return f"""
                 ({premium_col} * (COALESCE({fee_col}, 0) / NULLIF({premium_col}, 0))
                  * CASE WHEN {type_col} = '交强险' THEN 0.82 ELSE 0.94 END)
                 +
                 ({premium_col} * (1 - COALESCE({fee_col}, 0) / NULLIF({premium_col}, 0))
-                 * LEAST(DATE_DIFF('day', {start_col}, CURRENT_DATE), 365) / 365.0)
+                 * CAST({ed} AS DOUBLE) / CAST({pt} AS DOUBLE))
             """
-        # 简化版
-        return f"{premium_col} * LEAST(DATE_DIFF('day', {start_col}, CURRENT_DATE), 365) / 365.0"
+        return f"{premium_col} * CAST({ed} AS DOUBLE) / CAST({pt} AS DOUBLE)"
 
     def dim_core_kpi(self) -> dict:
         """维度1: 核心 KPI（分年）"""
@@ -183,7 +187,8 @@ class DiagnosticsEngine:
                 ROUND(SUM(保费) / NULLIF(COUNT(DISTINCT 签单日期::DATE), 0), 0) AS 日均保费,
                 -- 满期
                 ROUND(SUM({earned}), 0) AS 满期保费,
-                ROUND(AVG(LEAST(DATE_DIFF('day', 保险起期, CURRENT_DATE), 365) / 365.0) * 100, 1) AS 平均满期率,
+                ROUND(AVG(CAST(LEAST(DATE_DIFF('day', 保险起期, CURRENT_DATE), DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR)) AS DOUBLE)
+                      / CAST(DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR) AS DOUBLE)) * 100, 1) AS 平均满期率,
                 -- 赔付
                 ROUND(SUM(已报告赔款), 0) AS 已报告赔款,
                 SUM(赔案件数) AS 赔案件数,
@@ -198,8 +203,11 @@ class DiagnosticsEngine:
                 ROUND(SUM(CASE WHEN 是否续保 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS 续保率,
                 -- 交叉销售
                 ROUND(SUM(COALESCE(交叉销售保费_驾意, 0)), 0) AS 驾意交叉销售保费,
-                -- 满期出险率
-                COUNT(DISTINCT CASE WHEN 赔案件数 > 0 THEN 保单号 END) AS 有赔案保单数
+                -- 满期出险率：(赔案/保单) × (保险期限/满期天数)
+                COUNT(DISTINCT CASE WHEN _赔案件数 > 0 THEN 保单号 END) AS 有赔案保单数,
+                ROUND(SUM(_赔案件数 * CAST(DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR) AS DOUBLE)
+                      / NULLIF(CAST(LEAST(DATE_DIFF('day', 保险起期, CURRENT_DATE), DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR)) AS DOUBLE), 0))
+                      / NULLIF(COUNT(DISTINCT 保单号), 0) * 100, 2) AS 满期出险率
             FROM v_agent
             GROUP BY YEAR(签单日期)
             ORDER BY 年份
@@ -634,6 +642,8 @@ def main():
     parser.add_argument("--years", nargs="+", type=int, default=[2025, 2026],
                         help="分析年份（默认: 2025 2026）")
     parser.add_argument("--output", default=DEFAULT_OUTPUT_DIR, help="输出目录")
+    parser.add_argument("--compare", choices=["ytd", "full"], default=None,
+                        help="YoY 对比口径: ytd=同期对比, full=全年对比. 不指定时自动检测并提示选择")
     parser.add_argument("--precise-earned", action="store_true",
                         help="使用精确满期保费（含费用率+险类系数）")
     parser.add_argument("--verbose", action="store_true", help="打印调试信息")
@@ -655,9 +665,49 @@ def main():
         sys.exit(1)
     print(f"   匹配: {agent_full}")
 
+    # 2.5 YTD 口径检测（查所有指定年份中的最新签单日期）
+    max_yr = max(args.years)
+    years_csv = ", ".join(str(y) for y in args.years)
+    max_sign_row = loader.query(f"""
+        SELECT MAX(签单日期)::DATE
+        FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
+        WHERE 三级机构 = '{args.org}' AND 经代名 LIKE '%{args.agent}%'
+          AND YEAR(签单日期) IN ({years_csv})
+    """)
+    max_sign = max_sign_row[0][0] if max_sign_row else None
+    ytd_filter = ""
+    ytd_label = "全年"
+
+    if max_sign:
+        if isinstance(max_sign, str):
+            _ms = datetime.strptime(max_sign, "%Y-%m-%d").date()
+        else:
+            _ms = max_sign
+        ytd_month, ytd_day = _ms.month, _ms.day
+        latest_incomplete = not (ytd_month == 12 and ytd_day >= 25)
+
+        compare_mode = args.compare
+        if compare_mode is None and latest_incomplete:
+            print(f"\n⚠️  最新签单日期 {max_sign}，{max_yr}年数据不完整。")
+            print(f"   YoY 对比口径选择：")
+            print(f"     [1] 同期对比 — 各年均取 1月1日-{ytd_month}月{ytd_day}日（推荐，增长率可比）")
+            print(f"     [2] 全年对比 — 历史年用全年，{max_yr}年用已有数据（绝对值更完整）")
+            try:
+                choice = input("   请选择 [1/2]（默认1）: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                choice = "1"
+            compare_mode = "full" if choice == "2" else "ytd"
+        elif compare_mode is None:
+            compare_mode = "full"
+
+        if compare_mode == "ytd" and latest_incomplete:
+            ytd_filter = f"AND (MONTH(签单日期) < {ytd_month} OR (MONTH(签单日期) = {ytd_month} AND DAY(签单日期) <= {ytd_day}))"
+            ytd_label = f"1月1日-{ytd_month}月{ytd_day}日"
+
     # 3. 建视图
     print("📊 加载数据...")
-    loader.build_views(args.org, args.agent, args.years)
+    loader.build_views(args.org, args.agent, args.years, ytd_filter)
+    print(f"   📊 YoY 口径: {ytd_label}")
 
     # 验证数据量
     count = loader.query("SELECT COUNT(*) FROM v_agent")[0][0]
