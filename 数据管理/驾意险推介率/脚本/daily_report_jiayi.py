@@ -243,12 +243,14 @@ def generate_analysis(data, org_data):
     # 治理规则：基于绝对值（驾意件数/车险件数）重算，禁止对子项率值做算术平均
     avg_rates = {}
     for org in orgs:
-        total_driver = sum(org_data[org].get('driver_count_by_date', {}).values())
-        total_auto = sum(org_data[org].get('auto_count_by_date', {}).values())
+        if 'driver_count_by_date' not in org_data[org]:
+            raise KeyError(f"org_data['{org}'] 缺少 driver_count_by_date，请确保 organize_by_org() 已更新")
+        total_driver = sum(org_data[org]['driver_count_by_date'].values())
+        total_auto = sum(org_data[org]['auto_count_by_date'].values())
         avg_rates[org] = (total_driver / total_auto * 100) if total_auto else 0
 
-    all_driver = sum(sum(org_data[org].get('driver_count_by_date', {}).values()) for org in orgs)
-    all_auto = sum(sum(org_data[org].get('auto_count_by_date', {}).values()) for org in orgs)
+    all_driver = sum(sum(org_data[org]['driver_count_by_date'].values()) for org in orgs)
+    all_auto = sum(sum(org_data[org]['auto_count_by_date'].values()) for org in orgs)
     overall_avg = (all_driver / all_auto * 100) if all_auto else 0
     problem_orgs = sorted(
         [(org, rate) for org, rate in avg_rates.items() if rate < overall_avg * 0.8],
