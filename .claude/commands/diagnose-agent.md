@@ -47,10 +47,10 @@ last_updated: "2026-03-31"
 python3 数据管理/pipelines/diagnose_vehicle.py --filter "三级机构 = '天府'" --title 天府机构
 
 # 指定年份 + 同期对比（推荐）
-python3 数据管理/pipelines/diagnose_vehicle.py --filter "三级机构 = '天府'" --title 天府 --years 2022-2026 --compare ytd
+python3 数据管理/pipelines/diagnose_vehicle.py --filter "三级机构 = '天府'" --title 天府 --years 2022 2023 2024 2025 2026 --compare ytd
 
 # 全年对比
-python3 数据管理/pipelines/diagnose_vehicle.py --filter "三级机构 = '天府'" --title 天府 --years 2022-2026 --compare full
+python3 数据管理/pipelines/diagnose_vehicle.py --filter "三级机构 = '天府'" --title 天府 --years 2022 2023 2024 2025 2026 --compare full
 
 # 交互模式（不指定 --compare，脚本自动检测最新年是否不完整并提示选择）
 python3 数据管理/pipelines/diagnose_vehicle.py --filter "三级机构 = '天府'" --title 天府

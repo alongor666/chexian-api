@@ -668,10 +668,12 @@ def main():
     # 2.5 YTD 口径检测（查所有指定年份中的最新签单日期）
     max_yr = max(args.years)
     years_csv = ", ".join(str(y) for y in args.years)
+    org_esc = args.org.replace("'", "''")
+    agent_esc = args.agent.replace("'", "''")
     max_sign_row = loader.query(f"""
         SELECT MAX(签单日期)::DATE
         FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
-        WHERE 三级机构 = '{args.org}' AND 经代名 LIKE '%{args.agent}%'
+        WHERE 三级机构 = '{org_esc}' AND 经代名 LIKE '%{agent_esc}%'
           AND YEAR(签单日期) IN ({years_csv})
     """)
     max_sign = max_sign_row[0][0] if max_sign_row else None

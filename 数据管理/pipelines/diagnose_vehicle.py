@@ -37,90 +37,7 @@ from diagnose_common import (  # noqa: E402
 )
 
 # ============================================================================
-# 格式化 + 亮灯
-# ============================================================================
-
-def fw(v):
-    """万元"""
-    return "-" if v is None else f"{v:,.1f}"
-def fp(v):
-    """百分比"""
-    return "-" if v is None else f"{v:.1f}%"
-def fi(v):
-    """整数"""
-    if v is None: return "-"
-    v = int(v) if isinstance(v, float) else v
-    return str(v) if 2000 <= v <= 2099 else f"{v:,d}"
-def fc(v):
-    """系数"""
-    return "-" if v is None else f"{v:.4f}"
-
-def light(v, thresholds, higher_worse=True):
-    """四级亮灯：🔴⛔危险 🟡⚠️预警 🔵关注 🟢✅正常
-    thresholds = (关注, 预警, 危险) 三档阈值"""
-    if v is None: return ""
-    notice, warn, danger = thresholds
-    if higher_worse:
-        if v > danger: return " 🔴"
-        if v > warn: return " 🟡"
-        if v > notice: return " 🔵"
-        return " 🟢"
-    else:
-        if v < danger: return " 🔴"
-        if v < warn: return " 🟡"
-        if v < notice: return " 🔵"
-        return " 🟢"
-
-# 阈值配置 (关注, 预警, 危险)
-TH_VC = (85, 91, 94)         # 变动成本率
-TH_MR = (15, 9, 6)           # 边际贡献率（越低越差）
-TH_LR = (60, 70, 75)         # 满期赔付率
-TH_IR = (8, 10, 12)          # 满期出险率（非摩托）
-TH_AC_CARGO = (8000, 10000, 12000)  # 案均赔款-货车
-
-# ============================================================================
-# SQL 构建器
-# ============================================================================
-
-def kpi_select(earned_expr: str, group_col: str = None) -> str:
-    """构建标准 KPI SELECT 子句
-
-    口径修正（v3.1）：
-    - 满期保费/赔付率：闰年感知（policy_term=365或366天）
-    - 满期出险率：(赔案件数/保单数) × (保险期限/满期天数)
-      满期后 ratio=1，未满期 ratio>1 年化放大
-    - 商车定价系数：仅限险类='商业保险'
-    """
-    g = f"{group_col}," if group_col else ""
-    return f"""
-        {g}
-        COUNT(DISTINCT 保单号)::INT AS policy_count,
-        ROUND(SUM(保费)/10000, 1) AS written_premium,
-        ROUND(AVG(CASE WHEN 保费>0 THEN 保费 END), 0)::INT AS avg_premium,
-        ROUND(SUM({earned_expr})/10000, 1) AS earned_premium,
-        ROUND(SUM(COALESCE(已报告赔款,0))/10000, 1) AS reported_claims,
-        SUM(COALESCE(赔案件数,0))::INT AS claim_cases,
-        ROUND(SUM(COALESCE(已报告赔款,0))/NULLIF(SUM(COALESCE(赔案件数,0)),0), 0)::INT AS avg_claim,
-        COUNT(DISTINCT CASE WHEN COALESCE(赔案件数,0)>0 THEN 保单号 END)::INT AS claim_policies,
-        ROUND(SUM(COALESCE(费用金额,0))/10000, 1) AS fee_amount,
-        ROUND(SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({earned_expr}),0)*100, 1) AS loss_ratio,
-        ROUND(SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0)*100, 1) AS expense_ratio,
-        -- 满期出险率：(赔案/保单) × (保险期限/满期天数)，闰年感知
-        ROUND(SUM(COALESCE(赔案件数,0) * CAST({POLICY_TERM} AS DOUBLE)
-                  / NULLIF(CAST({EARNED_DAYS} AS DOUBLE), 0))
-              / NULLIF(COUNT(DISTINCT 保单号), 0) * 100, 2) AS incident_rate,
-        ROUND(SUM({earned_expr})*(1-SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({earned_expr}),0)
-              -SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0))/10000, 1) AS earned_margin,
-        ROUND(SUM(保费)*(1-SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({earned_expr}),0)
-              -SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0))/10000, 1) AS projected_margin,
-        -- 商车定价系数：仅商业险
-        ROUND(AVG(CASE WHEN 险类 = '商业保险' AND 商车自主定价系数 IS NOT NULL AND 商车自主定价系数 > 0
-              THEN 商车自主定价系数 END), 4) AS pricing_coeff
-    """
-
-
-# ============================================================================
-# 报告写入器
+# 报告写入器（使用 diagnose_common 导入的公共函数）
 # ============================================================================
 
 class Report:
@@ -465,39 +382,7 @@ class Report:
         return total
 
 
-# ============================================================================
-# 数据加载
-# ============================================================================
-
-def query_kpi(con, where: str, group_col: str = None) -> list:
-    """执行标准 KPI 查询，返回 [dict, ...]"""
-    sel = kpi_select(EARNED, group_col)
-    gb = f"GROUP BY {group_col}" if group_col else ""
-    ob = f"ORDER BY {group_col}" if group_col else ""
-    sql = f"SELECT {sel} FROM read_parquet('{GLOB}', union_by_name=true) WHERE {where} {gb} {ob}"
-    result = con.execute(sql)
-    cols = [d[0] for d in result.description]
-    return [dict(zip(cols, row)) for row in result.fetchall()]
-
-def detect_risk_field(con, where: str) -> str:
-    """智能检测风险评分字段：根据客户类别自动选择"""
-    # 检查各字段覆盖率
-    sql = f"""
-    SELECT
-        SUM(CASE WHEN 车险风险等级 IS NOT NULL THEN 1 ELSE 0 END) AS f1,
-        SUM(CASE WHEN 大货车评分 IS NOT NULL THEN 1 ELSE 0 END) AS f2,
-        SUM(CASE WHEN 小货车评分 IS NOT NULL THEN 1 ELSE 0 END) AS f3
-    FROM read_parquet('{GLOB}', union_by_name=true) WHERE {where}
-    """
-    r = con.execute(sql).fetchone()
-    # 合并：优先用覆盖最广的，然后 COALESCE
-    fields = [("车险风险等级", r[0] or 0), ("大货车评分", r[1] or 0), ("小货车评分", r[2] or 0)]
-    fields.sort(key=lambda x: -x[1])
-    # 返回 COALESCE 表达式
-    non_zero = [f[0] for f in fields if f[1] > 0]
-    if not non_zero:
-        return "车险风险等级"  # fallback
-    return f"COALESCE({', '.join(non_zero)})"
+# query_kpi / detect_risk_field 已迁移到 diagnose_common.py
 
 
 # ============================================================================
@@ -623,14 +508,14 @@ def main():
     rpt.add("### 2.0 各年汇总\n")
     vt_data = {}
     vt_rows = con.execute(f"""
-    SELECT 车辆类型, {kpi_select(EARNED, '车辆类型')}
+    SELECT 车辆类型, {kpi_select('车辆类型')}
     FROM (SELECT *, {vehicle_type_expr} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where} AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}) sub
     GROUP BY 车辆类型
     """).fetchall()
     vt_cols = ["车辆类型"] + [d[0] for d in con.execute("SELECT 1 AS x").description]  # placeholder
     # Re-query properly
     vt_result = con.execute(f"""
-    SELECT {kpi_select(EARNED, '车辆类型')}
+    SELECT {kpi_select('车辆类型')}
     FROM (SELECT *, {vehicle_type_expr} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where} AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}) sub
     GROUP BY 车辆类型
     """)
@@ -647,7 +532,7 @@ def main():
         vt_yr_data = {}
         for yr in years:
             rows = con.execute(f"""
-            SELECT {kpi_select(EARNED)}
+            SELECT {kpi_select()}
             FROM (SELECT *, {vehicle_type_expr} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true)
                   WHERE {base_where} AND {yr_where(yr)}) sub
             WHERE 车辆类型 = '{vt_name}'
@@ -670,7 +555,7 @@ def main():
     rpt.add("### 3.0 能源类型汇总\n")
     en_data = {}
     en_result = con.execute(f"""
-    SELECT {kpi_select(EARNED, '能源类型')}
+    SELECT {kpi_select('能源类型')}
     FROM (SELECT *, {energy_expr} AS 能源类型 FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where} AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}) sub
     GROUP BY 能源类型
     """)
@@ -706,7 +591,7 @@ def main():
     # 有评分的
     for grade in grade_list:
         gr_result = con.execute(f"""
-        SELECT {kpi_select(EARNED)}
+        SELECT {kpi_select()}
         FROM read_parquet('{GLOB}', union_by_name=true)
         WHERE {base_where} AND {risk_expr} = '{grade}' AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
         """)
@@ -715,7 +600,7 @@ def main():
             gr_data[grade] = dict(zip(gr_cols, row))
     # 无评分的
     gr_null = con.execute(f"""
-    SELECT {kpi_select(EARNED)}
+    SELECT {kpi_select()}
     FROM read_parquet('{GLOB}', union_by_name=true)
     WHERE {base_where} AND {risk_expr} IS NULL AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
     """)
@@ -731,7 +616,7 @@ def main():
         g_yr_data = {}
         for yr in years:
             g_result = con.execute(f"""
-            SELECT {kpi_select(EARNED)}
+            SELECT {kpi_select()}
             FROM read_parquet('{GLOB}', union_by_name=true)
             WHERE {base_where} AND {risk_expr} = '{grade}' AND {yr_where(yr)}
             """)
@@ -749,7 +634,7 @@ def main():
     SELECT
         YEAR(签单日期)::INT * 10 + QUARTER(签单日期)::INT AS q_sort,
         SUBSTR(CAST(YEAR(签单日期) AS VARCHAR), 3, 2) || 'Q' || CAST(QUARTER(签单日期) AS VARCHAR) AS quarter_label,
-        {kpi_select(EARNED)}
+        {kpi_select()}
     FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where}
     GROUP BY q_sort, quarter_label
     ORDER BY q_sort DESC LIMIT 24
@@ -806,7 +691,7 @@ def main():
     ins_data = {}
     for itype in ins_types:
         i_result = con.execute(f"""
-        SELECT {kpi_select(EARNED)}
+        SELECT {kpi_select()}
         FROM read_parquet('{GLOB}', union_by_name=true)
         WHERE {base_where} AND 险类 = '{itype}'
         """)
@@ -820,7 +705,7 @@ def main():
         ins_yr = {}
         for yr in years:
             i_result = con.execute(f"""
-            SELECT {kpi_select(EARNED)}
+            SELECT {kpi_select()}
             FROM read_parquet('{GLOB}', union_by_name=true)
             WHERE {base_where} AND 险类 = '{itype}' AND {yr_where(yr)}
             """)
@@ -848,7 +733,7 @@ def main():
     combo_data = {}
     for combo in combo_names:
         c_result = con.execute(f"""
-        SELECT {kpi_select(EARNED)}
+        SELECT {kpi_select()}
         FROM read_parquet('{GLOB}', union_by_name=true)
         WHERE {base_where} AND 险别组合 = '{combo}' AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
         """)
@@ -862,7 +747,7 @@ def main():
         combo_yr = {}
         for yr in years:
             c_result = con.execute(f"""
-            SELECT {kpi_select(EARNED)}
+            SELECT {kpi_select()}
             FROM read_parquet('{GLOB}', union_by_name=true)
             WHERE {base_where} AND 险别组合 = '{combo}' AND {yr_where(yr)}
             """)
@@ -891,7 +776,7 @@ def main():
     cat_data = {}
     for cat in cat_names:
         c_result = con.execute(f"""
-        SELECT {kpi_select(EARNED)}
+        SELECT {kpi_select()}
         FROM read_parquet('{GLOB}', union_by_name=true)
         WHERE {base_where} AND 客户类别 = '{cat}' AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
         """)
@@ -907,7 +792,7 @@ def main():
         cat_yr = {}
         for yr in years:
             c_result = con.execute(f"""
-            SELECT {kpi_select(EARNED)}
+            SELECT {kpi_select()}
             FROM read_parquet('{GLOB}', union_by_name=true)
             WHERE {base_where} AND 客户类别 = '{cat}' AND {yr_where(yr)}
             """)
@@ -932,7 +817,7 @@ def main():
             ton_data = {}
             for tn in ton_names:
                 t_result = con.execute(f"""
-                SELECT {kpi_select(EARNED)}
+                SELECT {kpi_select()}
                 FROM read_parquet('{GLOB}', union_by_name=true)
                 WHERE {base_where} AND 客户类别 = '{cat}' AND 吨位分段 = '{tn}'
                   AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
@@ -948,7 +833,7 @@ def main():
                 ton_yr = {}
                 for yr in years:
                     t_result = con.execute(f"""
-                    SELECT {kpi_select(EARNED)}
+                    SELECT {kpi_select()}
                     FROM read_parquet('{GLOB}', union_by_name=true)
                     WHERE {base_where} AND 客户类别 = '{cat}' AND 吨位分段 = '{tn}' AND {yr_where(yr)}
                     """)
@@ -983,7 +868,7 @@ def main():
             for vt in vt_names:
                 vt_d = {}
                 for row_d in con.execute(f"""
-                SELECT {kpi_select(EARNED)}
+                SELECT {kpi_select()}
                 FROM (SELECT *, {vehicle_type_expr} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true)
                       WHERE {base_where} AND {yr_where(yr)}) sub
                 WHERE 车辆类型 = '{vt}'
