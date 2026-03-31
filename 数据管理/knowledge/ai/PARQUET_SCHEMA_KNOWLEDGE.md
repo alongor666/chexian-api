@@ -265,8 +265,9 @@ plate_no, seat_count
 | 均保费、单均、件均 | `SUM(premium) / COUNT(DISTINCT policy_no)` |
 | 续保率 | `COUNT(CASE WHEN is_renewal THEN 1 END) / COUNT(*)` |
 | 新能源占比 | `COUNT(CASE WHEN is_nev THEN 1 END) / COUNT(*)` |
-| 赔付率 | `SUM(reported_claims) / SUM(premium)` |
+| 满期赔付率 | `SUM(reported_claims) / SUM(earned_premium)` |
 | 费用率 | `SUM(fee_amount) / SUM(premium)` |
+| 出险率 | `SUM(claim_policies) / COUNT(DISTINCT policy_no)` |
 
 ### 3.3 维度表达
 

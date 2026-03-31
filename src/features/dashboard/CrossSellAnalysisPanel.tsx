@@ -271,6 +271,8 @@ export function buildInsightSummary(
     (best, current) => (current.avg_premium < best.avg_premium ? current : best),
     overallRows[0]
   );
+  // TODO: 应改为 SUM(driver_count)/SUM(auto_count)，但当前趋势 API 不返回件数字段
+  // 此处为描述性统计（AI 解读文字），暂用简单平均，待后端补充字段后修正
   const avgRate = overallRows.reduce((sum, row) => sum + row.rate, 0) / overallRows.length;
   const avgPremium = overallRows.reduce((sum, row) => sum + row.avg_premium, 0) / overallRows.length;
   const momentum = previous ? latest.rate - previous.rate : 0;

@@ -482,7 +482,7 @@ class ReportWriter:
             margin_rate = 100 - variable_cost if variable_cost else None
             claim_policies = d["有赔案保单数"]
             total_policies = d["总保单数"]
-            incident_rate = (claim_policies / total_policies * 100) if total_policies else 0
+            incident_rate = d.get("满期出险率") or 0  # 直接使用 SQL 层年化公式，禁止 Python 层重算
 
             self._add(f"### {yr}年\n")
             self._add(f"| 指标 | 数值 | 状态 |")

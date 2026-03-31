@@ -62,7 +62,7 @@ export function generateQuoteKpiQuery(filters: QuoteConversionFilters = {}): str
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN 是否承保 = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN 是否承保 = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
-      ROUND(AVG(CASE WHEN 折前保费 > 0 THEN 折后保费 / 折前保费 END), 3) AS avg_discount_rate,
+      ROUND(SUM(CASE WHEN 折前保费 > 0 THEN 折后保费 END) / NULLIF(SUM(CASE WHEN 折前保费 > 0 THEN 折前保费 END), 0), 3) AS avg_discount_rate,
       ROUND(SUM(CASE WHEN 是否承保 = '承保' THEN 折后保费 ELSE 0 END), 0) AS insured_premium,
       COUNT(DISTINCT 业务员编号) AS salesman_count,
       -- 续保/转保分拆
@@ -130,7 +130,7 @@ export function generateQuoteDrilldownQuery(
       ROUND(100.0 * COUNT(CASE WHEN 续保情况 = '转保' AND 是否承保 = '承保' THEN 1 END)
         / NULLIF(COUNT(CASE WHEN 续保情况 = '转保' THEN 1 END), 0), 1) AS switch_rate,
       -- 平均折扣率
-      ROUND(AVG(CASE WHEN 折前保费 > 0 THEN 折后保费 / 折前保费 END), 3) AS avg_discount
+      ROUND(SUM(CASE WHEN 折前保费 > 0 THEN 折后保费 END) / NULLIF(SUM(CASE WHEN 折前保费 > 0 THEN 折前保费 END), 0), 3) AS avg_discount
     FROM QuoteConversion
     WHERE ${where}
     GROUP BY ${groupCol}${level === 'salesman' ? '' : `, ${nameCol}`}
@@ -182,7 +182,7 @@ export function generateQuotePriceQuery(filters: QuoteConversionFilters = {}): s
       COUNT(CASE WHEN 是否承保 = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN 是否承保 = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
       ROUND(AVG(折后保费), 0) AS avg_premium,
-      ROUND(AVG(自主定价系数), 3) AS avg_pricing_coef
+      ROUND(SUM(自主定价系数 * 折后保费) / NULLIF(SUM(CASE WHEN 自主定价系数 IS NOT NULL AND 自主定价系数 > 0 THEN 折后保费 END), 0), 3) AS avg_pricing_coef
     FROM QuoteConversion
     WHERE ${where} AND 折前保费 > 0
     GROUP BY discount_bin
@@ -214,7 +214,7 @@ export function generateQuoteRankingQuery(
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN 是否承保 = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN 是否承保 = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
-      ROUND(AVG(CASE WHEN 折前保费 > 0 THEN 折后保费 / 折前保费 END), 3) AS avg_discount
+      ROUND(SUM(CASE WHEN 折前保费 > 0 THEN 折后保费 END) / NULLIF(SUM(CASE WHEN 折前保费 > 0 THEN 折前保费 END), 0), 3) AS avg_discount
     FROM QuoteConversion
     WHERE ${where}
     GROUP BY ${dimExpr}

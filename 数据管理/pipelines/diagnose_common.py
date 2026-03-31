@@ -114,6 +114,9 @@ def kpi_select(group_col: str = None) -> str:
         ROUND(SUM(COALESCE(费用金额,0))/10000, 1) AS fee_amount,
         ROUND(SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0)*100, 1) AS loss_ratio,
         ROUND(SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0)*100, 1) AS expense_ratio,
+        -- annualized_cases: 年化赔案件数（可加绝对值，用于跨分组汇总时重算 incident_rate）
+        ROUND(SUM(COALESCE(赔案件数,0) * CAST({POLICY_TERM} AS DOUBLE)
+                  / NULLIF(CAST({EARNED_DAYS} AS DOUBLE), 0)), 2) AS annualized_cases,
         -- earned_loss_frequency: (赔案/保单) × (保险期限/满期天数)
         ROUND(SUM(COALESCE(赔案件数,0) * CAST({POLICY_TERM} AS DOUBLE)
                   / NULLIF(CAST({EARNED_DAYS} AS DOUBLE), 0))
@@ -124,9 +127,11 @@ def kpi_select(group_col: str = None) -> str:
         -- projected_margin_amount
         ROUND(SUM(保费)*(1-SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0)
               -SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0))/10000, 1) AS projected_margin,
-        -- pricing_coeff: 仅商业险
-        ROUND(AVG(CASE WHEN 险类 = '商业保险' AND 商车自主定价系数 IS NOT NULL AND 商车自主定价系数 > 0
-              THEN 商车自主定价系数 END), 4) AS pricing_coeff
+        -- pricing_coeff: 仅商业险，保费加权
+        ROUND(SUM(CASE WHEN 险类 = '商业保险' AND 商车自主定价系数 > 0
+              THEN 商车自主定价系数 * 保费 END)
+              / NULLIF(SUM(CASE WHEN 险类 = '商业保险' AND 商车自主定价系数 > 0
+              THEN 保费 END), 0), 4) AS pricing_coeff
     """
 
 
@@ -194,12 +199,15 @@ def kpi_rows(d: dict) -> list:
 
 
 def sum_kpi_dicts(dicts: list) -> dict:
-    """合并多个 KPI dict 为汇总（率指标重算）"""
+    """合并多个 KPI dict 为汇总（率值指标基于绝对值重算，禁止对子项率值做平均）
+    治理规则：所有率值 = 聚合后分子 / 聚合后分母，详见 CLAUDE.md §率值指标治理
+    """
     if not dicts:
         return {}
     total = {}
     sum_keys = ["policy_count", "written_premium", "earned_premium",
-                "reported_claims", "claim_cases", "claim_policies", "fee_amount"]
+                "reported_claims", "claim_cases", "claim_policies", "fee_amount",
+                "annualized_cases"]
     for k in sum_keys:
         total[k] = sum(d.get(k) or 0 for d in dicts)
 
@@ -207,7 +215,10 @@ def sum_kpi_dicts(dicts: list) -> dict:
     wp = total["written_premium"]
     total["loss_ratio"] = round(total["reported_claims"] / ep * 100, 1) if ep else None
     total["expense_ratio"] = round(total["fee_amount"] / wp * 100, 1) if wp else None
-    total["incident_rate"] = round(total["claim_policies"] / total["policy_count"] * 100, 1) if total["policy_count"] else None
+    # 年化出险率：基于可加绝对值 annualized_cases（B类率值，禁止用 claim_policies/policy_count 简化）
+    total["incident_rate"] = round(
+        total["annualized_cases"] / total["policy_count"] * 100, 1
+    ) if total["policy_count"] and total.get("annualized_cases") else None
     total["avg_claim"] = round(total["reported_claims"] * 10000 / total["claim_cases"]) if total["claim_cases"] else None
     total["avg_premium"] = round(wp * 10000 / total["policy_count"]) if total["policy_count"] else None
 
@@ -216,8 +227,12 @@ def sum_kpi_dicts(dicts: list) -> dict:
     total["earned_margin"] = round(ep * (1 - lr / 100 - fr / 100), 1) if ep else None
     total["projected_margin"] = round(wp * (1 - lr / 100 - fr / 100), 1) if wp else None
 
-    coeffs = [d.get("pricing_coeff") for d in dicts if d.get("pricing_coeff")]
-    total["pricing_coeff"] = round(sum(coeffs) / len(coeffs), 4) if coeffs else None
+    # 定价系数：保费加权平均
+    coeff_weighted = sum((d.get("pricing_coeff") or 0) * (d.get("written_premium") or 0)
+                         for d in dicts if d.get("pricing_coeff"))
+    coeff_premium = sum((d.get("written_premium") or 0)
+                        for d in dicts if d.get("pricing_coeff"))
+    total["pricing_coeff"] = round(coeff_weighted / coeff_premium, 4) if coeff_premium else None
     return total
 
 

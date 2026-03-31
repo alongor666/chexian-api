@@ -175,15 +175,19 @@ def organize_by_org(data):
                 'dates': [],
                 '推介率': {},
                 '驾意险件均保费': {},
-                'driver_policy_count': {}
+                'driver_policy_count': {},
+                'driver_count_by_date': {},   # 绝对值：驾意险件数（用于正确计算期间汇总推介率）
+                'auto_count_by_date': {},     # 绝对值：车险件数（推介率分母）
             }
-        
+
         if date not in org_data[org]['dates']:
             org_data[org]['dates'].append(date)
-        
+
         org_data[org]['推介率'][date] = row['推介率'] or 0
         org_data[org]['驾意险件均保费'][date] = row['驾意险件均保费'] or 0
         org_data[org]['driver_policy_count'][date] = int(row['driver_policy_count'] or 0)
+        org_data[org]['driver_count_by_date'][date] = int(row.get('driver_count') or 0)
+        org_data[org]['auto_count_by_date'][date] = int(row.get('auto_count') or 0)
     
     # 排序日期
     for org in org_data:
@@ -236,12 +240,16 @@ def generate_analysis(data, org_data):
                 })
     
     # 2. 识别问题机构（推介率低于平均水平）
+    # 治理规则：基于绝对值（驾意件数/车险件数）重算，禁止对子项率值做算术平均
     avg_rates = {}
     for org in orgs:
-        rates = list(org_data[org]['推介率'].values())
-        avg_rates[org] = sum(rates) / len(rates) if rates else 0
-    
-    overall_avg = sum(avg_rates.values()) / len(avg_rates) if avg_rates else 0
+        total_driver = sum(org_data[org].get('driver_count_by_date', {}).values())
+        total_auto = sum(org_data[org].get('auto_count_by_date', {}).values())
+        avg_rates[org] = (total_driver / total_auto * 100) if total_auto else 0
+
+    all_driver = sum(sum(org_data[org].get('driver_count_by_date', {}).values()) for org in orgs)
+    all_auto = sum(sum(org_data[org].get('auto_count_by_date', {}).values()) for org in orgs)
+    overall_avg = (all_driver / all_auto * 100) if all_auto else 0
     problem_orgs = sorted(
         [(org, rate) for org, rate in avg_rates.items() if rate < overall_avg * 0.8],
         key=lambda x: x[1]

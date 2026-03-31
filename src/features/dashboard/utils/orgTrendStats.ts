@@ -46,7 +46,9 @@ function linearSlope(ys: number[]): number {
   return denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
 }
 
-/** 计算数组均值（忽略 NaN） */
+/** 计算数组均值（忽略 NaN）
+ * TODO: 对率值指标应使用 SUM(分子)/SUM(分母)，但当前 API 不返回件数字段，
+ * 此处仅用于趋势描述性统计，待后端补充绝对值字段后修正 */
 function mean(arr: number[]): number {
   const valid = arr.filter(v => !isNaN(v));
   if (valid.length === 0) return 0;
