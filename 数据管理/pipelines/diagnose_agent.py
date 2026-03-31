@@ -101,10 +101,12 @@ class DataLoader:
 
     def resolve_agent_name(self, org: str, agent: str) -> Optional[str]:
         """模糊匹配经代名，返回精确名称或 None"""
+        org_esc = org.replace("'", "''")
+        agent_esc = agent.replace("'", "''")
         result = self.con.execute(f"""
             SELECT DISTINCT 经代名, COUNT(*) as cnt
             FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
-            WHERE 三级机构 = '{org}' AND 经代名 LIKE '%{agent}%'
+            WHERE 三级机构 = '{org_esc}' AND 经代名 LIKE '%{agent_esc}%'
             GROUP BY 经代名
             ORDER BY cnt DESC
         """).fetchall()
