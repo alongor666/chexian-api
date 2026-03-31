@@ -37,7 +37,7 @@ export function TimeTrend({ filters }: Props) {
       return data.filter(r => r.time_bucket === t).reduce((sum, r) => sum + (r.total_quotes ?? 0), 0);
     });
 
-    const option: echarts.EChartsOption = {
+    const option: echarts.EChartsCoreOption = {
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
       legend: { data: ['报价量', '续保转化率', '转保转化率'], top: 0, textStyle: { fontSize: 11 } },
       grid: { left: 50, right: 50, top: 40, bottom: 30 },

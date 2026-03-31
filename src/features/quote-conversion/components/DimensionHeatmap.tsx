@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { cardStyles, colorClasses, fontStyles, getHeatmapColor, toggleButtonStyles } from '../../../shared/styles';
+import { cardStyles, fontStyles, getHeatmapColor, toggleButtonStyles } from '../../../shared/styles';
 import { formatCount } from '../../../shared/utils/formatters';
 import { useQuoteHeatmap } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';

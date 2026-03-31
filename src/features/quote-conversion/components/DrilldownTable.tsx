@@ -93,46 +93,46 @@ export function DrilldownTable({ filters }: Props) {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className={tableStyles.base}>
+          <table className={tableStyles.container}>
             <thead>
               <tr>
-                <th className={tableStyles.th}>
+                <th className={tableStyles.headerCell}>
                   {currentLevel.level === 'org' ? '机构' : currentLevel.level === 'team' ? '团队' : '业务员'}
                 </th>
-                <th className={`${tableStyles.th} text-right`}>报价量</th>
-                <th className={`${tableStyles.th} text-right`}>承保量</th>
-                <th className={`${tableStyles.th} text-right`}>转化率</th>
-                <th className={`${tableStyles.th} text-right`}>续保率</th>
-                <th className={`${tableStyles.th} text-right`}>转保率</th>
-                <th className={`${tableStyles.th} text-right`}>折扣率</th>
+                <th className={`${tableStyles.headerCell} text-right`}>报价量</th>
+                <th className={`${tableStyles.headerCell} text-right`}>承保量</th>
+                <th className={`${tableStyles.headerCell} text-right`}>转化率</th>
+                <th className={`${tableStyles.headerCell} text-right`}>续保率</th>
+                <th className={`${tableStyles.headerCell} text-right`}>转保率</th>
+                <th className={`${tableStyles.headerCell} text-right`}>折扣率</th>
               </tr>
             </thead>
             <tbody>
               {(data ?? []).map((row) => (
                 <tr
                   key={row.group_key}
-                  className={`${tableStyles.tr} ${currentLevel.level !== 'salesman' ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800' : ''}`}
+                  className={`${tableStyles.row} ${currentLevel.level !== 'salesman' ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800' : ''}`}
                   onClick={() => currentLevel.level !== 'salesman' && handleDrill(row.group_key, row.group_name)}
                 >
-                  <td className={tableStyles.td}>
+                  <td className={tableStyles.cell}>
                     <span className={currentLevel.level !== 'salesman' ? `${colorClasses.text.primary} font-medium` : ''}>
                       {row.group_name ?? row.group_key}
                     </span>
                   </td>
-                  <td className={`${tableStyles.td} text-right ${fontStyles.tabular}`}>{formatCount(row.total_quotes)}</td>
-                  <td className={`${tableStyles.td} text-right ${fontStyles.tabular}`}>{formatCount(row.total_insured)}</td>
-                  <td className={`${tableStyles.td} text-right ${fontStyles.tabular} font-medium ${
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>{formatCount(row.total_quotes)}</td>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>{formatCount(row.total_insured)}</td>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular} font-medium ${
                     row.conversion_rate < avgConversionRate ? colorClasses.text.danger : ''
                   }`}>
                     {formatPercent(row.conversion_rate)}
                   </td>
-                  <td className={`${tableStyles.td} text-right ${fontStyles.tabular}`}>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>
                     {row.renewal_rate != null ? formatPercent(row.renewal_rate) : '-'}
                   </td>
-                  <td className={`${tableStyles.td} text-right ${fontStyles.tabular}`}>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>
                     {row.switch_rate != null ? formatPercent(row.switch_rate) : '-'}
                   </td>
-                  <td className={`${tableStyles.td} text-right ${fontStyles.tabular}`}>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>
                     {row.avg_discount != null ? `${(row.avg_discount * 100).toFixed(1)}%` : '-'}
                   </td>
                 </tr>

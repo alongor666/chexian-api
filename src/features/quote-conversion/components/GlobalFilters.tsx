@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { cardStyles, colorClasses, inputStyles, buttonStyles, cn } from '../../../shared/styles';
+import { colorClasses, inputStyles, cn } from '../../../shared/styles';
 import { CollapsibleFilterSection } from '../../filters/CollapsibleFilterSection';
 import type { QuoteFilters } from '../types';
 

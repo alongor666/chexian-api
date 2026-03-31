@@ -24,7 +24,7 @@ export function PriceSensitivity({ filters }: Props) {
     const chart = echarts.init(chartRef.current);
     const filtered = data.filter(r => r.discount_bin >= 0.3 && r.discount_bin <= 1.0);
 
-    const option: echarts.EChartsOption = {
+    const option: echarts.EChartsCoreOption = {
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'cross' },

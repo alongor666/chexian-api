@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { cardStyles, colorClasses, fontStyles, tableStyles, toggleButtonStyles } from '../../../shared/styles';
+import { cardStyles, fontStyles, tableStyles, toggleButtonStyles } from '../../../shared/styles';
 import { formatCount, formatPercent } from '../../../shared/utils/formatters';
 import { useQuoteRanking } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';
@@ -48,15 +48,15 @@ export function RankingTable({ filters }: Props) {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className={tableStyles.base}>
+          <table className={tableStyles.container}>
             <thead>
               <tr>
-                <th className={tableStyles.th}>{dimension}</th>
-                <th className={`${tableStyles.th} text-right`}>报价量</th>
-                <th className={`${tableStyles.th} text-right`}>承保量</th>
-                <th className={`${tableStyles.th} text-right`}>转化率</th>
-                <th className={`${tableStyles.th} text-right`}>折扣率</th>
-                <th className={tableStyles.th}>转化条</th>
+                <th className={tableStyles.headerCell}>{dimension}</th>
+                <th className={`${tableStyles.headerCell} text-right`}>报价量</th>
+                <th className={`${tableStyles.headerCell} text-right`}>承保量</th>
+                <th className={`${tableStyles.headerCell} text-right`}>转化率</th>
+                <th className={`${tableStyles.headerCell} text-right`}>折扣率</th>
+                <th className={tableStyles.headerCell}>转化条</th>
               </tr>
             </thead>
             <tbody>
@@ -66,17 +66,17 @@ export function RankingTable({ filters }: Props) {
                 const insuredWidth = row.total_quotes > 0 ? (row.total_insured / row.total_quotes) * barWidth : 0;
 
                 return (
-                  <tr key={row.dim_value} className={tableStyles.tr}>
-                    <td className={`${tableStyles.td} font-medium`}>{row.dim_value ?? '-'}</td>
-                    <td className={`${tableStyles.td} text-right ${fontStyles.tabular}`}>{formatCount(row.total_quotes)}</td>
-                    <td className={`${tableStyles.td} text-right ${fontStyles.tabular}`}>{formatCount(row.total_insured)}</td>
-                    <td className={`${tableStyles.td} text-right ${fontStyles.tabular} font-semibold`}>
+                  <tr key={row.dim_value} className={tableStyles.row}>
+                    <td className={`${tableStyles.cell} font-medium`}>{row.dim_value ?? '-'}</td>
+                    <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>{formatCount(row.total_quotes)}</td>
+                    <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>{formatCount(row.total_insured)}</td>
+                    <td className={`${tableStyles.cell} text-right ${fontStyles.tabular} font-semibold`}>
                       {formatPercent(row.conversion_rate)}
                     </td>
-                    <td className={`${tableStyles.td} text-right ${fontStyles.tabular}`}>
+                    <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>
                       {row.avg_discount != null ? `${(row.avg_discount * 100).toFixed(1)}%` : '-'}
                     </td>
-                    <td className={tableStyles.td}>
+                    <td className={tableStyles.cell}>
                       <div className="h-4 bg-neutral-100 dark:bg-neutral-800 rounded overflow-hidden relative" style={{ width: '120px' }}>
                         <div className="h-full bg-neutral-300 rounded" style={{ width: `${barWidth}%` }} />
                         <div className="h-full bg-primary rounded absolute top-0 left-0" style={{ width: `${insuredWidth}%` }} />
