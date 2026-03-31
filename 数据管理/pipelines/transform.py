@@ -929,6 +929,28 @@ def save_to_parquet(df, output_path):
     df_verify = pd.read_parquet(output_path)
     print(f"   ✅ 验证成功: {len(df_verify):,} 条记录")
 
+def update_quick_reference(row_count, col_count):
+    """同步更新 QUICK_REFERENCE.md 的数据规模行"""
+    import re
+    qr_path = Path(__file__).resolve().parent.parent / "knowledge" / "QUICK_REFERENCE.md"
+    if not qr_path.exists():
+        return
+    try:
+        text = qr_path.read_text(encoding='utf-8')
+        row_k = f"~{round(row_count / 10000)} 万条"
+        new_line = f"**更新**: {datetime.now().strftime('%Y-%m-%d')} | **数据规模**: {row_k} / {col_count} 字段 | **分片**: 4 个 Parquet（policy/current/）"
+        text = re.sub(
+            r'\*\*更新\*\*:.*?\*\*分片\*\*:.*',
+            new_line,
+            text,
+            count=1
+        )
+        qr_path.write_text(text, encoding='utf-8')
+        print(f"   📝 QUICK_REFERENCE.md 已同步: {row_k} / {col_count} 字段")
+    except Exception as e:
+        print(f"   ⚠️ QUICK_REFERENCE.md 同步失败: {e}")
+
+
 def main():
     """主函数"""
     print("="*80)
@@ -1014,6 +1036,10 @@ def main():
 
     # 14. 保存为 Parquet
     save_to_parquet(df, OUTPUT_FILE)
+
+    # 15. 同步更新 QUICK_REFERENCE.md 的数据规模（仅 policy 域）
+    if DOMAIN in ('policy', 'all'):
+        update_quick_reference(len(df), len(df.columns))
 
     print(f"\n{'='*80}")
     print("✅ 转换完成！")

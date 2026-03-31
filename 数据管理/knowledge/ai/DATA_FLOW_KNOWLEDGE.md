@@ -281,4 +281,81 @@ WHERE salesman_name LIKE '%目标姓名%'
 
 ---
 
+## 8. 新增数据流节点（2026-03）
+
+### 8.1 维度表 Parquet 化
+
+```
+generate_dim_tables.py（手动执行）
+    ├─→ dim/salesman/latest.parquet (SalesmanDim: 296 人)
+    └─→ dim/plan/latest.parquet     (PlanFact: 484 行, 2025+2026)
+              │
+              ▼ duckdb.ts:loadDimParquet()
+    SalesmanDim (TABLE)
+    PlanFact (TABLE)
+    SalesmanTeamMapping (TABLE ← SalesmanDim LEFT JOIN PlanFact 2026)
+    SalesmanPlanFact (VIEW ← PlanFact LEFT JOIN SalesmanDim, 多年)
+```
+
+### 8.2 achievement_cache 三部分聚合
+
+`buildAchievementView(planYear=2026)` 构建 `achievement_cache` 表：
+
+```
+Part A1: 正常映射业务员 (organization != '未分配')
+    → SalesmanTeamMapping JOIN PolicyFact YTD
+    → 字段: plan_vehicle, actual_vehicle, achievement_rate, yoy_rate
+
+Part A2: 跨机构业务员 (organization = '未分配')
+    → 按 PolicyFact.org_level_3 拆分，每机构一行
+    → plan_vehicle = 0（无计划），只计 yoy_rate
+
+Part B:  未映射业务员（有保单但不在 mapping 中）
+    → team_name = '未归属团队', org_name = '未归属机构'
+    → plan_vehicle = 0
+
+⚠️ CRITICAL: 人数统计必须用 COUNT(DISTINCT full_name)，不能 COUNT(*)
+```
+
+### 8.3 RenewalFunnel 视图
+
+```
+renewal/renewal_funnel_2026q1.parquet
+    ↓ duckdb.ts:loadRenewalFunnel()
+RenewalFunnel VIEW
+    → 动态计算:
+        days_since_expiry = CURRENT_DATE - insurance_end_date
+        days_to_expiry = insurance_end_date - CURRENT_DATE
+        in_quote_window = days_to_expiry <= 30
+        maturity = mature | pending | future
+        action_priority = P1(未报价即将到期) | P2(已报价近期到期) | P3(已报价中期到期) | P4(远期)
+```
+
+### 8.4 QuoteConversion 视图
+
+```
+quotes_conversion/latest.parquet
+    ↓ duckdb.ts:loadQuoteConversion()
+QuoteConversion VIEW（透传，含团队字段）
+```
+
+### 8.5 诊断工具数据连接
+
+```
+diagnose_vehicle.py / diagnose_agent.py
+    → 内存 DuckDB，直读 policy/current/*.parquet
+    → 绕过 PolicyFact 视图（原因：经代名等字段未进视图）
+    → 使用中文列名直接查询（如 "签单日期"、"客户类别"、"经代名"）
+```
+
+---
+
+## Gotcha 补充
+
+> **CRITICAL #6**: `经代名` 字段仅在原始 Parquet 中存在，未映射进 PolicyFact 视图。诊断工具（diagnose_agent.py）因此直接读取分片文件，不经服务端链路。
+>
+> **CRITICAL #7**: `CrossSellDailyAgg` 中的 `org_level_3` 来自原始 PolicyFact（Parquet 原始值），不经 `SalesmanTeamMapping.organization` 覆盖。推介率按机构统计时，跨机构业务员的数据归入保单所在机构。
+
+---
+
 *最后更新: 2026-03-31*

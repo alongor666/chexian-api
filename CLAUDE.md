@@ -37,7 +37,7 @@
 | 数据索引 | `开发文档/00_index/DATA_INDEX.md` |
 | 进展索引 | `开发文档/00_index/PROGRESS_INDEX.md` |
 
-**必读文档**：`ARCHITECTURE.md`（模块层级）· `开发文档/TECH_STACK.md`（技术栈）· `开发文档/DEVELOPER_CONVENTIONS.md`（DC-001 三要素）· `数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md`（30 字段定义）· `开发文档/缺口清单.md`（信息缺口追踪）
+**必读文档**：`ARCHITECTURE.md`（模块层级）· `开发文档/TECH_STACK.md`（技术栈）· `开发文档/DEVELOPER_CONVENTIONS.md`（DC-001 三要素）· `数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md`（38 字段定义）· `开发文档/缺口清单.md`（信息缺口追踪）
 
 **两本账**：[BACKLOG.md](./BACKLOG.md)（需求）· [PROGRESS.md](./PROGRESS.md)（进展）
 

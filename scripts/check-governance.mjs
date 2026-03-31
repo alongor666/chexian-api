@@ -1004,6 +1004,57 @@ function checkPrSizeLimit() {
 }
 
 // ============================================================
+// 15. 知识库数据规模一致性检查
+// ============================================================
+
+function checkKnowledgeDataConsistency() {
+  info('检查知识库数据规模一致性...');
+
+  const reportPath = path.join(ROOT_DIR, '数据管理', '数据分析报告', '转换质量报告.json');
+  const qrPath = path.join(ROOT_DIR, '数据管理', 'knowledge', 'QUICK_REFERENCE.md');
+
+  if (!fs.existsSync(reportPath)) {
+    warning('转换质量报告不存在，跳过知识库一致性检查');
+    return true;
+  }
+  if (!fs.existsSync(qrPath)) {
+    warning('QUICK_REFERENCE.md 不存在，跳过知识库一致性检查');
+    return true;
+  }
+
+  try {
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
+    const qrText = fs.readFileSync(qrPath, 'utf-8');
+
+    const reportCols = report.basic_stats?.columns;
+    if (!reportCols) {
+      warning('转换质量报告缺少 basic_stats.columns，跳过');
+      return true;
+    }
+
+    // 从 QUICK_REFERENCE.md 提取声称的字段数
+    const colMatch = qrText.match(/(\d+)\s*字段/);
+    if (!colMatch) {
+      warning('QUICK_REFERENCE.md 未找到字段数声明，跳过');
+      return true;
+    }
+    const qrCols = parseInt(colMatch[1], 10);
+
+    if (Math.abs(reportCols - qrCols) > 3) {
+      error(`知识库数据规模不一致: 转换质量报告 ${reportCols} 字段 vs QUICK_REFERENCE.md ${qrCols} 字段（差 ${Math.abs(reportCols - qrCols)}）`);
+      console.log(`    修复: 运行 node 数据管理/daily.mjs（transform.py 会自动同步 QUICK_REFERENCE.md）`);
+      return false;
+    }
+
+    success(`知识库数据规模一致（${reportCols} 字段）`);
+    return true;
+  } catch (e) {
+    warning(`知识库一致性检查异常: ${e.message}`);
+    return true;
+  }
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -1025,6 +1076,7 @@ function main() {
     { name: 'Parquet重叠', fn: checkParquetOverlapInCurrent },
     { name: '凭据扫描', fn: checkStagedCredentials },
     { name: 'PR体量门禁', fn: checkPrSizeLimit },
+    { name: '知识库一致性', fn: checkKnowledgeDataConsistency },
   ];
 
   let passedCount = 0;

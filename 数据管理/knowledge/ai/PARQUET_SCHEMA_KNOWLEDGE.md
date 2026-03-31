@@ -1,8 +1,8 @@
 # Parquet 表结构与字段值域知识库
 
 **文档性质**: AI 必读知识源（NL2SQL 语义理解基础）
-**更新时间**: 2026-02-26
-**数据规模**: ~44万条记录 / 36个字段
+**更新时间**: 2026-03-31
+**数据规模**: ~62万条记录 / 38个字段（4 个分片 Parquet，`warehouse/fact/policy/current/`）
 
 ---
 
@@ -20,7 +20,7 @@
 
 > 本文档描述的是**原始 Parquet 数据**的完整字段。但 AI SQL 生成器查询的是 **PolicyFact 视图**，该视图**不包含所有字段**。
 
-**PolicyFact 视图可用字段** (34个)：
+**PolicyFact 视图可用字段** (38个)：
 ```
 policy_no, premium, policy_date, insurance_start_date,
 underwriting_date, salesman_name, org_level_3, customer_category,
@@ -65,9 +65,9 @@ plate_no, seat_count
 
 | 字段名 | 类型 | 说明 | 值域 |
 |--------|------|------|------|
-| `policy_date` | DATE/STRING | 签单日期（transform.py 将源数据"缴费日期"重命名为"签单日期"，前后端统一使用"签单日期"） | 2023-12-05 ~ 2026-01-27 |
-| `underwriting_date` | DATE/STRING | 提核日期（源数据原"签单日期"重命名为"提核日期"） | 2023-12-05 ~ 2026-01-27 |
-| `insurance_start_date` | DATE/STRING | 保险起期 | 2023-12-29 ~ 2026-01-27 |
+| `policy_date` | DATE/STRING | 签单日期（transform.py 将源数据"缴费日期"重命名为"签单日期"，前后端统一使用"签单日期"） | 2020-01-01 ~ 2026-03-28 |
+| `underwriting_date` | DATE/STRING | 提核日期（源数据原"签单日期"重命名为"提核日期"） | 2020-01-01 ~ 2026-03-28 |
+| `insurance_start_date` | DATE/STRING | 保险起期 | 2020-01-01 ~ 2026-03-28 |
 
 **日期使用规则**:
 - 业绩统计 → 用 `policy_date`（签单日期）
@@ -265,9 +265,16 @@ plate_no, seat_count
 | 均保费、单均、件均 | `SUM(premium) / COUNT(DISTINCT policy_no)` |
 | 续保率 | `COUNT(CASE WHEN is_renewal THEN 1 END) / COUNT(*)` |
 | 新能源占比 | `COUNT(CASE WHEN is_nev THEN 1 END) / COUNT(*)` |
-| 满期赔付率 | `SUM(reported_claims) / SUM(earned_premium)` |
+| 满期赔付率 | `SUM(reported_claims) / SUM(premium * earned_days / policy_term)` |
 | 费用率 | `SUM(fee_amount) / SUM(premium)` |
-| 出险率 | `SUM(claim_policies) / COUNT(DISTINCT policy_no)` |
+| 满期出险率 | `SUM(claim_cases * policy_term / earned_days) / COUNT(DISTINCT policy_no)`（年化，闰年感知） |
+| 变动成本率 | `满期赔付率 + 费用率`（两个分母不同：满期 vs 签单） |
+| 案均赔款 | `SUM(reported_claims) / SUM(claim_cases)` |
+| 边际贡献额（满期） | `满期保费 × (1 - 赔付率/100 - 费用率/100)` |
+| 边际贡献额（预估） | `签单保费 × (1 - 赔付率/100 - 费用率/100)` |
+| 推介率、驾乘推介率 | `SUM(driver_count) / SUM(auto_count)`（仅交三+主全，排除单交）→ 查 CrossSellDailyAgg |
+| 渗透率、驾乘渗透率 | 驾意险承保件数 / 商业险承保件数 |
+| 满期保费 | `SUM(premium * LEAST(DATEDIFF(day,起保日,截止日), policy_term) / policy_term)`（闰年感知） |
 
 ### 3.3 维度表达
 
@@ -477,10 +484,52 @@ ORDER BY "达成率%" DESC
 
 ---
 
+## 8. DuckDB 预聚合视图（非 PolicyFact 查询场景）
+
+以下视图/表不在 PolicyFact 中，需直接查询：
+
+### 8.1 CrossSellDailyAgg — 交叉销售预聚合
+
+| 字段 | 说明 |
+|------|------|
+| `policy_date`, `org_level_3`, `salesman_name`, `customer_category`, `coverage_combination` | 维度字段（共 19 个 GROUP BY 列） |
+| `auto_count` | 车险件数（去重车架号） |
+| `driver_count` | 驾意险件数（去重车架号，is_cross_sell=true） |
+| `driver_premium` | 驾意险保费 |
+| `commercial_premium`, `compulsory_premium`, `auto_premium` | 商业/交强/车险保费 |
+
+**使用场景**: 推介率查询（`SUM(driver_count)/SUM(auto_count)`）。注意 org_level_3 是原始值，不经映射表覆盖。
+
+### 8.2 achievement_cache — 业绩达成缓存
+
+| 字段 | 说明 |
+|------|------|
+| `full_name` | 业务员全名（含工号前缀） |
+| `salesman_name_short` | 业务员中文名 |
+| `team_name`, `org_name` | 团队/机构 |
+| `plan_vehicle` | 车险计划（万元） |
+| `actual_vehicle` | 当年 YTD 实际（万元） |
+| `achievement_rate` | 达成率（已考虑时间进度） |
+| `yoy_rate` | 同比增长率 |
+| `prev_year_actual`, `prev_year_full` | 上年同期/全年 |
+
+**使用场景**: 业务员/团队/机构业绩排名。
+
+### 8.3 RenewalFunnel — 续保漏斗
+
+动态计算 `days_since_expiry`、`days_to_expiry`、`in_quote_window`、`maturity`（mature/pending/future）、`action_priority`（P1-P4）。
+
+### 8.4 QuoteConversion — 报价转化
+
+透传 `quotes_conversion/latest.parquet`，含业务员维度表 JOIN 后的团队字段。
+
+---
+
 ## 版本历史
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| v2.0 | 2026-03-31 | 数据规模更新至 62 万+；新增 §8 DuckDB 预聚合视图；补充成本/推介率/边际贡献额指标映射；日期值域扩展至 2020-2026 |
 | v1.4 | 2026-02-27 | 新增2个字段：plate_no（车牌号码）、seat_count（座位数）；字段总数34→36；用于费用分析规则匹配 |
 | v1.3 | 2026-02-26 | 新增4个字段：underwriting_date, third_party_coverage, driver_coverage, passenger_coverage；前后端统一"签单日期"命名；支持多 Parquet 文件 UNION ALL 加载 |
 | v1.2 | 2026-02-12 | 新增5个字段：insurance_grade, is_cross_sell, cross_sell_premium_driver |

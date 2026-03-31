@@ -51,7 +51,7 @@
 - "实收保费 = SUM(保费) (正负抵消)"
 
 存储位置:
-  - 签单清洗/车险数据业务规则字典.md (业务规则章节)
+  - 数据管理/knowledge/rules/车险数据业务规则字典.md (业务规则章节)
   - 开发文档/00_index/DATA_INDEX.md (快速查找)
 ```
 
@@ -107,7 +107,7 @@
 - "批改类型为'16退保'时,保费必须为负值"
 
 存储位置:
-  - 签单清洗/字段关联分析报告.md (异常模式)
+  - 数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md (异常模式)
   - 开发文档/00_index/DATA_INDEX.md (常见陷阱)
 ```
 
@@ -266,7 +266,7 @@
 2. ❓ [疑问2]
 
 **建议分类**: A类业务规则
-**建议存储位置**: 签单清洗/车险数据业务规则字典.md § "保费字段"
+**建议存储位置**: 数据管理/knowledge/rules/车险数据业务规则字典.md § "保费字段"
 
 请确认:
 - ✅ 理解正确,可以归档
@@ -319,11 +319,11 @@
 
 | 知识类型 | 主存储位置 | 索引位置 | 关联位置 |
 |---------|-----------|---------|---------|
-| 业务规则 | `签单清洗/车险数据业务规则字典.md` | `开发文档/00_index/DATA_INDEX.md` | `签单清洗/QUICK_REFERENCE.md` |
+| 业务规则 | `数据管理/knowledge/rules/车险数据业务规则字典.md` | `开发文档/00_index/DATA_INDEX.md` | `数据管理/knowledge/QUICK_REFERENCE.md` |
 | 技术约束 | `CLAUDE.md § 2 护栏` | `开发文档/TECH_STACK.md` | `开发文档/00_index/CODE_INDEX.md` |
 | 开发规范 | `CLAUDE.md § 6 验证协议` | `开发文档/00_index/CODE_INDEX.md` | `.claude/workflow-*.md` |
 | 历史决策 | `PROGRESS.md § 决策记录` | `BACKLOG.md` | `开发文档/00_index/PROGRESS_INDEX.md` |
-| 例外情况 | `签单清洗/字段关联分析报告.md` | `开发文档/00_index/DATA_INDEX.md § 陷阱` | `签单清洗/QUICK_REFERENCE.md` |
+| 例外情况 | `数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md` | `开发文档/00_index/DATA_INDEX.md § 陷阱` | `数据管理/knowledge/QUICK_REFERENCE.md` |
 | 待确认问题 | `BACKLOG.md` (状态=PROPOSED) | `开发文档/00_index/PROGRESS_INDEX.md` | - |
 
 **归档格式**:
@@ -360,9 +360,9 @@
 
 请执行以下步骤:
 1. 扫描现有知识库,查找相关知识:
-   - 签单清洗/车险数据业务规则字典.md
+   - 数据管理/knowledge/rules/车险数据业务规则字典.md
    - 开发文档/00_index/DATA_INDEX.md
-   - 签单清洗/QUICK_REFERENCE.md
+   - 数据管理/knowledge/QUICK_REFERENCE.md
    - CLAUDE.md § 护栏 + 验证协议
 
 2. 输出已找到的相关规则:
