@@ -472,8 +472,8 @@ SELECT
   CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
   ROUND(SUM(premium), 2) AS total_premium,
   ROUND(SUM(fee_amount), 2) AS total_fee,
-  -- 平均费用率（%）
-  ROUND(AVG(fee_rate) * 100, 2) AS fee_rate,
+  -- 平均费用率（%）= SUM(费用)/SUM(保费)
+  ROUND(SUM(fee_amount) / NULLIF(SUM(premium), 0) * 100, 2) AS fee_rate,
   -- 险类系数
   ROUND(AVG(line_factor), 2) AS line_factor,
   -- 平均窗口内在保天数
@@ -550,7 +550,7 @@ aggregated AS (
     CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
     SUM(premium) AS total_premium,
     SUM(fee_amount) AS total_fee,
-    AVG(fee_rate) AS avg_fee_rate,
+    SUM(fee_amount) / NULLIF(SUM(premium), 0) AS avg_fee_rate,
     -- 首日费用部分 = SUM(P × F × α × I)
     SUM(premium * fee_rate * line_factor * start_in_window) AS total_first_day_part,
     -- 时间分摊部分 = SUM(P × (1-F) × (窗口内天数/365))
@@ -566,7 +566,7 @@ with_totals AS (
     SUM(policy_count) AS policy_count,
     SUM(total_premium) AS total_premium,
     SUM(total_fee) AS total_fee,
-    SUM(avg_fee_rate * policy_count) / NULLIF(SUM(policy_count), 0) AS avg_fee_rate,
+    SUM(total_fee) / NULLIF(SUM(total_premium), 0) AS avg_fee_rate,
     SUM(total_first_day_part) AS total_first_day_part,
     SUM(total_time_part) AS total_time_part
   FROM aggregated

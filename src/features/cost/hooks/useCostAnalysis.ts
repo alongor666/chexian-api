@@ -282,14 +282,15 @@ export function useCostAnalysis() {
 
         const result = Array.isArray(response) ? response as ClaimRatioData[] : [];
 
+        const totalClaims = result.reduce((sum, r) => sum + (r.total_reported_claims || 0), 0);
+        const totalEarnedPremium = result.reduce((sum, r) => sum + (r.earned_premium || 0), 0);
         const summary: CostSummary = {
           totalPremium: result.reduce((sum, r) => sum + (r.total_premium || 0), 0),
-          totalClaims: result.reduce((sum, r) => sum + (r.total_reported_claims || 0), 0),
+          totalClaims,
           totalFee: 0,
           policyCount: result.reduce((sum, r) => sum + (r.policy_count || 0), 0),
-          avgClaimRatio: result.length > 0
-            ? result.reduce((sum, r) => sum + (r.earned_claim_ratio || 0), 0) /
-              result.filter((r) => r.earned_claim_ratio !== null).length
+          avgClaimRatio: totalEarnedPremium > 0
+            ? totalClaims / totalEarnedPremium * 100
             : null,
           avgExpenseRatio: null,
         };
@@ -335,17 +336,17 @@ export function useCostAnalysis() {
 
         const result = Array.isArray(response) ? response as ExpenseRatioData[] : [];
 
+        const totalPremium = result.reduce((sum, r) => sum + (r.total_premium || 0), 0);
+        const totalFee = result.reduce((sum, r) => sum + (r.total_fee || 0), 0);
         const summary: CostSummary = {
-          totalPremium: result.reduce((sum, r) => sum + (r.total_premium || 0), 0),
+          totalPremium,
           totalClaims: 0,
-          totalFee: result.reduce((sum, r) => sum + (r.total_fee || 0), 0),
+          totalFee,
           policyCount: result.reduce((sum, r) => sum + (r.policy_count || 0), 0),
           avgClaimRatio: null,
-          avgExpenseRatio:
-            result.length > 0
-              ? result.reduce((sum, r) => sum + (r.expense_ratio || 0), 0) /
-                result.filter((r) => r.expense_ratio !== null).length
-              : null,
+          avgExpenseRatio: totalPremium > 0
+            ? totalFee / totalPremium * 100
+            : null,
         };
 
         setExpenseRatioState({
@@ -398,24 +399,21 @@ export function useCostAnalysis() {
 
         const result = Array.isArray(response) ? response as ComprehensiveCostData[] : [];
 
+        const totalPremium = result.reduce((sum, r) => sum + (r.total_premium || 0), 0);
+        const totalClaims = result.reduce((sum, r) => sum + (r.total_reported_claims || 0), 0);
+        const totalFee = result.reduce((sum, r) => sum + (r.total_fee || 0), 0);
+        const totalEarnedPremium = result.reduce((sum, r) => sum + (r.earned_premium || 0), 0);
         const summary: CostSummary = {
-          totalPremium: result.reduce((sum, r) => sum + (r.total_premium || 0), 0),
-          totalClaims: result.reduce(
-            (sum, r) => sum + (r.total_reported_claims || 0),
-            0
-          ),
-          totalFee: result.reduce((sum, r) => sum + (r.total_fee || 0), 0),
+          totalPremium,
+          totalClaims,
+          totalFee,
           policyCount: result.reduce((sum, r) => sum + (r.policy_count || 0), 0),
-          avgClaimRatio:
-            result.length > 0
-              ? result.reduce((sum, r) => sum + (r.earned_claim_ratio || 0), 0) /
-                result.filter((r) => r.earned_claim_ratio !== null).length
-              : null,
-          avgExpenseRatio:
-            result.length > 0
-              ? result.reduce((sum, r) => sum + (r.expense_ratio || 0), 0) /
-                result.filter((r) => r.expense_ratio !== null).length
-              : null,
+          avgClaimRatio: totalEarnedPremium > 0
+            ? totalClaims / totalEarnedPremium * 100
+            : null,
+          avgExpenseRatio: totalPremium > 0
+            ? totalFee / totalPremium * 100
+            : null,
         };
 
         setComprehensiveCostState({
@@ -464,24 +462,21 @@ export function useCostAnalysis() {
 
         const result = Array.isArray(response) ? response as VariableCostData[] : [];
 
+        const totalPremium = result.reduce((sum, r) => sum + (r.total_premium || 0), 0);
+        const totalClaims = result.reduce((sum, r) => sum + (r.total_reported_claims || 0), 0);
+        const totalFee = result.reduce((sum, r) => sum + (r.total_fee || 0), 0);
+        const totalEarnedPremium = result.reduce((sum, r) => sum + (r.earned_premium || 0), 0);
         const summary: CostSummary = {
-          totalPremium: result.reduce((sum, r) => sum + (r.total_premium || 0), 0),
-          totalClaims: result.reduce(
-            (sum, r) => sum + (r.total_reported_claims || 0),
-            0
-          ),
-          totalFee: result.reduce((sum, r) => sum + (r.total_fee || 0), 0),
+          totalPremium,
+          totalClaims,
+          totalFee,
           policyCount: result.reduce((sum, r) => sum + (r.policy_count || 0), 0),
-          avgClaimRatio:
-            result.length > 0
-              ? result.reduce((sum, r) => sum + (r.earned_claim_ratio || 0), 0) /
-                result.filter((r) => r.earned_claim_ratio !== null).length
-              : null,
-          avgExpenseRatio:
-            result.length > 0
-              ? result.reduce((sum, r) => sum + (r.expense_ratio || 0), 0) /
-                result.filter((r) => r.expense_ratio !== null).length
-              : null,
+          avgClaimRatio: totalEarnedPremium > 0
+            ? totalClaims / totalEarnedPremium * 100
+            : null,
+          avgExpenseRatio: totalPremium > 0
+            ? totalFee / totalPremium * 100
+            : null,
         };
 
         setVariableCostState({
@@ -529,24 +524,21 @@ export function useCostAnalysis() {
 
         const result = Array.isArray(response) ? response as VariableCostData[] : [];
 
+        const totalPremium = result.reduce((sum, r) => sum + (r.total_premium || 0), 0);
+        const totalClaims = result.reduce((sum, r) => sum + (r.total_reported_claims || 0), 0);
+        const totalFee = result.reduce((sum, r) => sum + (r.total_fee || 0), 0);
+        const totalEarnedPremium = result.reduce((sum, r) => sum + (r.earned_premium || 0), 0);
         const summary: CostSummary = {
-          totalPremium: result.reduce((sum, r) => sum + (r.total_premium || 0), 0),
-          totalClaims: result.reduce(
-            (sum, r) => sum + (r.total_reported_claims || 0),
-            0
-          ),
-          totalFee: result.reduce((sum, r) => sum + (r.total_fee || 0), 0),
+          totalPremium,
+          totalClaims,
+          totalFee,
           policyCount: result.reduce((sum, r) => sum + (r.policy_count || 0), 0),
-          avgClaimRatio:
-            result.length > 0
-              ? result.reduce((sum, r) => sum + (r.earned_claim_ratio || 0), 0) /
-                result.filter((r) => r.earned_claim_ratio !== null).length
-              : null,
-          avgExpenseRatio:
-            result.length > 0
-              ? result.reduce((sum, r) => sum + (r.expense_ratio || 0), 0) /
-                result.filter((r) => r.expense_ratio !== null).length
-              : null,
+          avgClaimRatio: totalEarnedPremium > 0
+            ? totalClaims / totalEarnedPremium * 100
+            : null,
+          avgExpenseRatio: totalPremium > 0
+            ? totalFee / totalPremium * 100
+            : null,
         };
 
         setVariableCostKpiState({
