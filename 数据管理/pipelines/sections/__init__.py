@@ -16,6 +16,8 @@ from sections import (
     s07_combo,
     s08_customer,
     s09_summary,
+    s11_brand,
+    s12_price,
 )
 
 SECTION_REGISTRY = {
@@ -28,6 +30,8 @@ SECTION_REGISTRY = {
     7: s07_combo,
     8: s08_customer,
     9: s09_summary,
+    11: s11_brand,
+    12: s12_price,
 }
 
 SECTION_NAMES = {
@@ -40,6 +44,8 @@ SECTION_NAMES = {
     7: "险别组合",
     8: "客户类别",
     9: "诊断总结",
+    11: "品牌维度",
+    12: "新车购置价分段",
 }
 
 ALL_SECTION_IDS = sorted(SECTION_REGISTRY.keys())

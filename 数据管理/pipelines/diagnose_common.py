@@ -147,21 +147,17 @@ def query_kpi(con, where: str, group_col: str = None) -> list:
 
 
 def detect_risk_field(con, where: str) -> str:
-    """智能检测风险评分字段：按客户类别 COALESCE 覆盖率最高的字段"""
+    """智能检测风险评分字段：三字段已合并为统一的 车险风险等级"""
+    # 2026-03-24: insurance_grade/小货车评分/大货车评分 已合并为 车险风险等级
+    # 直接检测该字段是否有数据
     sql = f"""
-    SELECT
-        SUM(CASE WHEN 车险风险等级 IS NOT NULL THEN 1 ELSE 0 END) AS f1,
-        SUM(CASE WHEN 大货车评分 IS NOT NULL THEN 1 ELSE 0 END) AS f2,
-        SUM(CASE WHEN 小货车评分 IS NOT NULL THEN 1 ELSE 0 END) AS f3
+    SELECT SUM(CASE WHEN 车险风险等级 IS NOT NULL THEN 1 ELSE 0 END) AS f1
     FROM read_parquet('{GLOB}', union_by_name=true) WHERE {where}
     """
     r = con.execute(sql).fetchone()
-    fields = [("车险风险等级", r[0] or 0), ("大货车评分", r[1] or 0), ("小货车评分", r[2] or 0)]
-    fields.sort(key=lambda x: -x[1])
-    non_zero = [f[0] for f in fields if f[1] > 0]
-    if not non_zero:
+    if (r[0] or 0) > 0:
         return "车险风险等级"
-    return f"COALESCE({', '.join(non_zero)})"
+    return "车险风险等级"
 
 
 # ============================================================================

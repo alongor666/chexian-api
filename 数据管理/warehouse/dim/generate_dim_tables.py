@@ -440,6 +440,15 @@ def main():
         json.dump(summary, f, ensure_ascii=False, indent=2)
     print(f"\n  ✅ 摘要: {summary_path.name}")
 
+    # 品牌维度表（从 Parquet 保单数据提取，不依赖 Excel）
+    print(f"\n{'='*60}")
+    print("品牌维度表")
+    try:
+        from brand.generate_brand_dim import generate as generate_brand
+        generate_brand()
+    except Exception as e:
+        print(f"  ⚠️ 品牌维度表生成失败: {e}")
+
     print(f"\n{'='*60}")
     print("✅ 维度表生成完成")
     print("=" * 60)

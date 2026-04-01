@@ -652,6 +652,35 @@ def process_new_fields(df):
         value_counts = df['客户源'].value_counts().head(10).to_dict()
         print(f"      ✅ 客户源分布 (TOP10): {value_counts}")
 
+    # 19. 处理被保险人年龄分组（字符串，保留原值）
+    if '被保险人年龄分组' in df.columns:
+        print(f"\n   处理被保险人年龄分组:")
+        print(f"      原始数据类型: {df['被保险人年龄分组'].dtype}")
+        print(f"      空值数: {df['被保险人年龄分组'].isna().sum():,}")
+        df['被保险人年龄分组'] = df['被保险人年龄分组'].astype(str).where(df['被保险人年龄分组'].notna(), None)
+        value_counts = df['被保险人年龄分组'].value_counts().head(10).to_dict()
+        print(f"      ✅ 被保险人年龄分组分布 (TOP10): {value_counts}")
+
+    # 20. 处理燃料种类（字符串，保留原值；旧数据有，新数据无此字段）
+    if '燃料种类' in df.columns:
+        print(f"\n   处理燃料种类:")
+        print(f"      原始数据类型: {df['燃料种类'].dtype}")
+        print(f"      空值数: {df['燃料种类'].isna().sum():,}")
+        df['燃料种类'] = df['燃料种类'].astype(str).where(df['燃料种类'].notna(), None)
+        value_counts = df['燃料种类'].value_counts().head(10).to_dict()
+        print(f"      ✅ 燃料种类分布 (TOP10): {value_counts}")
+    else:
+        print(f"\n   ⚠️ 源数据无 '燃料种类' 字段，跳过")
+
+    # 21. 处理初次登记年月（字符串，保留原值或 可计算车龄）
+    if '初次登记年月' in df.columns:
+        print(f"\n   处理初次登记年月:")
+        print(f"      原始数据类型: {df['初次登记年月'].dtype}")
+        print(f"      空值数: {df['初次登记年月'].isna().sum():,}")
+        df['初次登记年月'] = df['初次登记年月'].astype(str).where(df['初次登记年月'].notna(), None)
+        value_counts = df['初次登记年月'].value_counts().head(10).to_dict()
+        print(f"      ✅ 初次登记年月分布 (TOP10): {value_counts}")
+
     return df
 
 def split_admin_account(df):
@@ -877,7 +906,11 @@ def finalize_schema(df):
         '司机保额',
         '乘客险保额',
         '车牌号码',
-        '座位数'
+        '座位数',
+        # 新增字段
+        '被保险人年龄分组',
+        '初次登记年月',
+        '燃料种类',
     ]
 
     final_fields = [f for f in core_fields if f in df.columns and f not in policy_exclude]
