@@ -10,11 +10,12 @@
  *   node scripts/sync-vps.mjs --dry-run          # 仅打印执行计划，不连接 VPS
  *
  * 同步目录（本地 → VPS）:
- *   数据管理/warehouse/fact/policy/current/  →  data/current/
- *   数据管理/warehouse/dim/salesman/         →  data/dim/salesman/
- *   数据管理/warehouse/dim/plan/             →  data/dim/plan/
- *   数据管理/warehouse/dim/brand/            →  data/dim/brand/
- *   数据管理/warehouse/fact/renewal/         →  data/fact/renewal/  （目录存在时）
+ *   数据管理/warehouse/fact/policy/current/       →  data/current/
+ *   数据管理/warehouse/dim/salesman/              →  data/dim/salesman/
+ *   数据管理/warehouse/dim/plan/                  →  data/dim/plan/
+ *   数据管理/warehouse/dim/brand/                 →  data/dim/brand/
+ *   数据管理/warehouse/fact/renewal/              →  data/fact/renewal/  （目录存在时）
+ *   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/  （目录存在时）
  *
  * 可选环境变量:
  *   SYNC_VPS_SSH_ALIAS, SYNC_VPS_HOST, SYNC_VPS_USER, SYNC_VPS_PORT,
@@ -44,6 +45,7 @@ const LOCAL_SALESMAN_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/salesman')
 const LOCAL_PLAN_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plan');
 const LOCAL_BRAND_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/brand');
 const LOCAL_RENEWAL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal');
+const LOCAL_QUOTES_CONVERSION_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/quotes_conversion');
 
 const colors = {
   green: '\x1b[32m',
@@ -368,7 +370,8 @@ function collectCheckDirs() {
     { label: 'dim/salesman',   path: LOCAL_SALESMAN_DIR },
     { label: 'dim/plan',       path: LOCAL_PLAN_DIR },
     { label: 'dim/brand',     path: LOCAL_BRAND_DIR },
-    { label: 'fact/renewal',   path: LOCAL_RENEWAL_DIR },
+    { label: 'fact/renewal',            path: LOCAL_RENEWAL_DIR },
+    { label: 'fact/quotes_conversion', path: LOCAL_QUOTES_CONVERSION_DIR },
   ];
 
   return dirs.map(({ label, path }) => {
@@ -388,11 +391,12 @@ function printHelp() {
   node scripts/sync-vps.mjs --no-restart  # 同步但不重启 PM2
 
 同步目录（使用 rsync --delete，VPS 多余文件会被清理）:
-  数据管理/warehouse/fact/policy/current/  →  data/current/
-  数据管理/warehouse/dim/salesman/         →  data/dim/salesman/
-  数据管理/warehouse/dim/plan/             →  data/dim/plan/
-  数据管理/warehouse/dim/brand/            →  data/dim/brand/
-  数据管理/warehouse/fact/renewal/         →  data/fact/renewal/  (存在时)
+  数据管理/warehouse/fact/policy/current/       →  data/current/
+  数据管理/warehouse/dim/salesman/              →  data/dim/salesman/
+  数据管理/warehouse/dim/plan/                  →  data/dim/plan/
+  数据管理/warehouse/dim/brand/                 →  data/dim/brand/
+  数据管理/warehouse/fact/renewal/              →  data/fact/renewal/  (存在时)
+  数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/  (存在时)
 
 可选参数:
   --alias <name>       覆盖 SSH alias（默认 chexian-vps-deploy）
@@ -423,7 +427,8 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'dim/salesman',   local: LOCAL_SALESMAN_DIR, remote: `${runConfig.remoteDir}/dim/salesman` },
     { label: 'dim/plan',       local: LOCAL_PLAN_DIR,     remote: `${runConfig.remoteDir}/dim/plan` },
     { label: 'dim/brand',     local: LOCAL_BRAND_DIR,    remote: `${runConfig.remoteDir}/dim/brand` },
-    { label: 'fact/renewal',   local: LOCAL_RENEWAL_DIR,  remote: `${runConfig.remoteDir}/fact/renewal` },
+    { label: 'fact/renewal',            local: LOCAL_RENEWAL_DIR,            remote: `${runConfig.remoteDir}/fact/renewal` },
+    { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${runConfig.remoteDir}/fact/quotes_conversion` },
   ];
 
   for (const task of syncTasks) {
@@ -475,6 +480,13 @@ async function runStandardMode(sshConfig, runConfig) {
     await rsyncDir(alias, LOCAL_RENEWAL_DIR, `${remote}/fact/renewal`, 'fact/renewal');
   } else {
     log('yellow', '  跳过 fact/renewal（本地目录不存在）');
+  }
+
+  if (existsSync(LOCAL_QUOTES_CONVERSION_DIR)) {
+    log('green', '▶ 步骤 5: 同步 fact/quotes_conversion...');
+    await rsyncDir(alias, LOCAL_QUOTES_CONVERSION_DIR, `${remote}/fact/quotes_conversion`, 'fact/quotes_conversion');
+  } else {
+    log('yellow', '  跳过 fact/quotes_conversion（本地目录不存在）');
   }
 
   await maybeRestart(sshConfig, runConfig.noRestart, runConfig.healthUrl);
