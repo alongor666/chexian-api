@@ -39,7 +39,7 @@
 | [ai/PARQUET_SCHEMA_KNOWLEDGE.md](./ai/PARQUET_SCHEMA_KNOWLEDGE.md) | 完整字段值域 + NL2SQL 映射 | AI SQL 生成器 |
 | [ai/DATA_FLOW_KNOWLEDGE.md](./ai/DATA_FLOW_KNOWLEDGE.md) | 数据流字段变换 + JOIN 关系 + Gotcha | 开发者 / AI |
 | [ai/ETL_PIPELINE_KNOWLEDGE.md](./ai/ETL_PIPELINE_KNOWLEDGE.md) | ETL 管道规则：分片架构 + 字段变换 + 源数据差异 | 开发者 / AI |
-| [ai/BRAND_KNOWLEDGE.md](./ai/BRAND_KNOWLEDGE.md) | 品牌维度表：厂牌车型→品牌+用途映射 | AI 诊断工具 |
+| [ai/BRAND_KNOWLEDGE.md](./ai/BRAND_KNOWLEDGE.md) | 品牌维度表：厂牌车型→品牌_用途复合维度映射（如"长安_客车"） | AI 诊断工具 |
 | [rules/车险数据业务规则字典.md](./rules/车险数据业务规则字典.md) | 唯一事实源：字段定义 + 业务规则 | 全员必读 |
 | [schema/schema-analysis.json](./schema/schema-analysis.json) | Parquet 字段统计（自动生成） | 工具 |
 

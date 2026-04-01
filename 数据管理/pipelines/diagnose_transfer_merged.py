@@ -194,7 +194,7 @@ def section_02_brand(ctx, rpt, silent=False):
     else:
         brand_sql = f"""
             SELECT
-                b.品牌 as brand,
+                b.品牌_用途 as brand,
                 COUNT(DISTINCT p.保单号) as policy_count,
                 SUM(p.保费)/10000 as written_premium,
                 SUM({EARNED})/10000 as earned_premium,
@@ -204,7 +204,7 @@ def section_02_brand(ctx, rpt, silent=False):
             FROM read_parquet('{GLOB_CURRENT}', union_by_name=true) p
             JOIN read_parquet('{BRAND_DIM}') b ON p.厂牌车型 = b.厂牌车型
             WHERE {BASE_FILTER}
-            GROUP BY b.品牌
+            GROUP BY b.品牌_用途
             HAVING COUNT(DISTINCT p.保单号) >= 100
             ORDER BY written_premium DESC
         """
@@ -234,8 +234,8 @@ def section_02_brand(ctx, rpt, silent=False):
         data["brands"].append(brand_data)
 
     if not silent:
-        rpt.add("## 2. 品牌维度（保单≥100）\n")
-        rpt.add("| 品牌 | 保单数 | 保费(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
+        rpt.add("## 2. 品牌×用途维度（保单≥100）\n")
+        rpt.add("| 品牌_用途 | 保单数 | 保费(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
         rpt.add("|:---|---:|---:|---:|---:|---:|")
         for b in data["brands"][:20]:
             rpt.add(
@@ -558,7 +558,7 @@ def section_07_brand_org(ctx, rpt, silent=False):
     if not Path(BRAND_DIM).exists():
         brand_field = r"REGEXP_EXTRACT(厂牌车型, '^([\u4e00-\u9fff][\u4e00-\u9fff\\-]*)', 1)"
     else:
-        brand_field = "b.品牌"
+        brand_field = "b.品牌_用途"
 
     join_clause = f"JOIN read_parquet('{BRAND_DIM}') b ON p.厂牌车型 = b.厂牌车型" if Path(BRAND_DIM).exists() else ""
 
@@ -602,10 +602,10 @@ def section_07_brand_org(ctx, rpt, silent=False):
         data["cross"].append(cross_data)
 
     if not silent:
-        rpt.add("## 7. 品牌×机构交叉分析（保单≥50）\n")
+        rpt.add("## 7. 品牌_用途×机构交叉分析（保单≥50）\n")
         rpt.add("> **发现风险组合**: 关注高赔付率 + 高案均赔款的组合\n")
         rpt.add()
-        rpt.add("| 品牌 | 机构 | 保单数 | 保费(万) | 赔付率 | 案均赔款† |")
+        rpt.add("| 品牌_用途 | 机构 | 保单数 | 保费(万) | 赔付率 | 案均赔款† |")
         rpt.add("|:---|:---|---:|---:|---:|---:|")
         for c in data["cross"]:
             rpt.add(

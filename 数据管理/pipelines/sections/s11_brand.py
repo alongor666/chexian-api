@@ -24,7 +24,7 @@ DETAIL_TOP_N = 10
 
 def _write_brand_table(rpt, brand_data, brand_names):
     """纵向品牌汇总表：品牌作为行，核心指标作为列"""
-    rpt.add("| 品牌 | 保单数 | 签单保费 | 满期保费 | 赔款 | 赔付率 | 出险率 | 案均赔款† | 费用率 | 变动成本率 | 边际贡献额 | 系数 |")
+    rpt.add("| 品牌_用途 | 保单数 | 签单保费 | 满期保费 | 赔款 | 赔付率 | 出险率 | 案均赔款† | 费用率 | 变动成本率 | 边际贡献额 | 系数 |")
     rpt.add("|:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for brand in brand_names:
         d = brand_data.get(brand, {})
@@ -64,20 +64,20 @@ def run(ctx, rpt, collected, silent=False):
 
     # 11.0 品牌汇总 Top N（一次性 GROUP BY 查询，避免 N+1）
     brand_result = con.execute(f"""
-    SELECT b.品牌,
+    SELECT b.品牌_用途,
         {kpi_select()}
     FROM read_parquet('{GLOB}', union_by_name=true) p
     JOIN read_parquet('{BRAND_DIM}') b ON p.厂牌车型 = b.厂牌车型
     WHERE {base_where} AND YEAR(p.签单日期) BETWEEN {min_yr} AND {max_yr}
-    GROUP BY b.品牌
+    GROUP BY b.品牌_用途
     HAVING COUNT(DISTINCT p.保单号) >= {MIN_POLICIES}
     ORDER BY SUM(p.保费) DESC
     """)
     b_cols = [d[0] for d in brand_result.description]
     brand_rows = [dict(zip(b_cols, row)) for row in brand_result.fetchall()]
 
-    brand_names = [r["品牌"] for r in brand_rows]
-    brand_data = {r["品牌"]: r for r in brand_rows}
+    brand_names = [r["品牌_用途"] for r in brand_rows]
+    brand_data = {r["品牌_用途"]: r for r in brand_rows}
 
     result = {"brand_data": brand_data, "brand_names": brand_names}
     collected[11] = result
@@ -86,7 +86,7 @@ def run(ctx, rpt, collected, silent=False):
         return result
 
     rpt.add("## 11. 品牌维度\n")
-    rpt.add(f"### 11.0 品牌汇总（保单≥{MIN_POLICIES}，共 {len(brand_names)} 个品牌，按保费降序）\n")
+    rpt.add(f"### 11.0 品牌×用途汇总（保单≥{MIN_POLICIES}，共 {len(brand_names)} 个品牌_用途组合，按保费降序）\n")
     _write_brand_table(rpt, brand_data, brand_names)
 
     # 11.1+ 各品牌年度明细（仅 Top N）
@@ -98,7 +98,7 @@ def run(ctx, rpt, collected, silent=False):
             SELECT {kpi_select()}
             FROM read_parquet('{GLOB}', union_by_name=true) p
             JOIN read_parquet('{BRAND_DIM}') b ON p.厂牌车型 = b.厂牌车型
-            WHERE {base_where} AND b.品牌 = '{escape_sql(brand)}' AND {ctx.yr_where(yr)}
+            WHERE {base_where} AND b.品牌_用途 = '{escape_sql(brand)}' AND {ctx.yr_where(yr)}
             """)
             b_cols2 = [d[0] for d in b_result.description]
             for row in b_result.fetchall():
