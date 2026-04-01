@@ -1,0 +1,244 @@
+{
+  "meta": {
+    "title": "乐山机构",
+    "filter": "三级机构 = '乐山'",
+    "years": [
+      2022,
+      2023,
+      2024,
+      2025,
+      2026
+    ],
+    "compare": "full",
+    "max_sign_date": "2026-03-31",
+    "total_policies": 76752,
+    "generated_at": "2026-04-01T16:25:02.679881"
+  },
+  "L0_identity": {
+    "total_premium_wan": 4718.3,
+    "total_policies": 76752,
+    "years_covered": 5,
+    "dominant_vehicle_type": "旧车转保",
+    "dominant_vehicle_type_pct": 58.8
+  },
+  "L1_health": {
+    "latest_year": {
+      "year": 2026,
+      "variable_cost_rate": 70.7,
+      "variable_cost_light": "🟢",
+      "margin_rate": 29.3,
+      "loss_ratio": 51.4,
+      "incident_rate": 6.4,
+      "expense_ratio": 19.3,
+      "earned_margin_wan": 9.2,
+      "projected_margin_wan": 88.1,
+      "policy_count": 3021,
+      "avg_premium_yuan": 1045
+    },
+    "trend": {
+      "margin_direction": "rising",
+      "loss_ratio_direction": "rising",
+      "worst_year": 2022,
+      "worst_year_loss_ratio": 94.4
+    },
+    "alerts": [
+      "🔴 2022年危险：变动成本率110.2%",
+      "🔴 2024年危险：变动成本率108.4%"
+    ]
+  },
+  "L2_deep": {
+    "by_vehicle_type": {
+      "旧车过户": {
+        "variable_cost_rate": 107.7,
+        "margin_wan": -35.5,
+        "policy_count": 4606,
+        "loss_ratio": 78.7,
+        "expense_ratio": 29.0,
+        "written_premium_wan": 553.1
+      },
+      "新车": {
+        "variable_cost_rate": 125.2,
+        "margin_wan": -80.2,
+        "policy_count": 5207,
+        "loss_ratio": 110.6,
+        "expense_ratio": 14.6,
+        "written_premium_wan": 343.0
+      },
+      "旧车续保": {
+        "variable_cost_rate": 72.1,
+        "margin_wan": 437.6,
+        "policy_count": 11884,
+        "loss_ratio": 49.5,
+        "expense_ratio": 22.6,
+        "written_premium_wan": 1569.5
+      },
+      "旧车转保": {
+        "variable_cost_rate": 108.1,
+        "margin_wan": -136.9,
+        "policy_count": 30991,
+        "loss_ratio": 87.9,
+        "expense_ratio": 20.2,
+        "written_premium_wan": 2252.7
+      }
+    },
+    "by_risk_grade": {
+      "A": {
+        "variable_cost_rate": 97.4,
+        "margin_wan": 12.3,
+        "policy_count": 3946,
+        "loss_ratio": 72.0,
+        "expense_ratio": 25.4,
+        "written_premium_wan": 602.0
+      },
+      "B": {
+        "variable_cost_rate": 73.1,
+        "margin_wan": 210.4,
+        "policy_count": 5567,
+        "loss_ratio": 47.3,
+        "expense_ratio": 25.8,
+        "written_premium_wan": 927.6
+      },
+      "C": {
+        "variable_cost_rate": 97.6,
+        "margin_wan": 10.3,
+        "policy_count": 2548,
+        "loss_ratio": 70.2,
+        "expense_ratio": 27.4,
+        "written_premium_wan": 506.6
+      },
+      "D": {
+        "variable_cost_rate": 100.9,
+        "margin_wan": -2.7,
+        "policy_count": 2250,
+        "loss_ratio": 76.8,
+        "expense_ratio": 24.1,
+        "written_premium_wan": 392.7
+      },
+      "E": {
+        "variable_cost_rate": 136.1,
+        "margin_wan": -71.9,
+        "policy_count": 1138,
+        "loss_ratio": 110.4,
+        "expense_ratio": 25.7,
+        "written_premium_wan": 253.5
+      },
+      "F": {
+        "variable_cost_rate": 17.5,
+        "margin_wan": 6.9,
+        "policy_count": 112,
+        "loss_ratio": 13.9,
+        "expense_ratio": 3.6,
+        "written_premium_wan": 17.2
+      },
+      "X": {
+        "variable_cost_rate": 74.1,
+        "margin_wan": 5.5,
+        "policy_count": 136,
+        "loss_ratio": 52.8,
+        "expense_ratio": 21.3,
+        "written_premium_wan": 26.0
+      },
+      "无评分": {
+        "variable_cost_rate": 98.6,
+        "margin_wan": 25.7,
+        "policy_count": 36533,
+        "loss_ratio": 82.4,
+        "expense_ratio": 16.2,
+        "written_premium_wan": 1992.6
+      }
+    },
+    "by_energy": {
+      "非新-燃": {
+        "variable_cost_rate": 92.9,
+        "margin_wan": 273.0,
+        "policy_count": 51267,
+        "loss_ratio": 70.6,
+        "expense_ratio": 22.3,
+        "written_premium_wan": 4504.7
+      },
+      "新能源": {
+        "variable_cost_rate": 146.6,
+        "margin_wan": -85.3,
+        "policy_count": 961,
+        "loss_ratio": 139.9,
+        "expense_ratio": 6.7,
+        "written_premium_wan": 213.6
+      },
+      "非新-天": {
+        "variable_cost_rate": 0,
+        "margin_wan": 0,
+        "policy_count": 0,
+        "loss_ratio": 0,
+        "expense_ratio": 0,
+        "written_premium_wan": 0
+      }
+    },
+    "by_year": {
+      "2022": {
+        "variable_cost_rate": 110.2,
+        "margin_wan": -113.1,
+        "policy_count": 21130,
+        "loss_ratio": 94.4
+      },
+      "2023": {
+        "variable_cost_rate": 82.0,
+        "margin_wan": 184.4,
+        "policy_count": 13567,
+        "loss_ratio": 60.5
+      },
+      "2024": {
+        "variable_cost_rate": 108.4,
+        "margin_wan": -90.3,
+        "policy_count": 6548,
+        "loss_ratio": 82.9
+      },
+      "2025": {
+        "variable_cost_rate": 75.4,
+        "margin_wan": 201.2,
+        "policy_count": 8378,
+        "loss_ratio": 51.3
+      },
+      "2026": {
+        "variable_cost_rate": 70.7,
+        "margin_wan": 9.2,
+        "policy_count": 3021,
+        "loss_ratio": 51.4
+      }
+    }
+  },
+  "findings": [
+    {
+      "level": "🔴",
+      "tag": "转保占比过高",
+      "text": "30,991单（59%），赔付率87.9%——逆选择风险高"
+    },
+    {
+      "level": "🔴",
+      "tag": "新车业务亏损",
+      "text": "赔付率110.6%，满期边际-80.2万"
+    },
+    {
+      "level": "🟡",
+      "tag": "风险评分覆盖不足",
+      "text": "36,533单（70%）无评分，精准定价受限"
+    },
+    {
+      "level": "🟡",
+      "tag": "新能源车亏损",
+      "text": "961单，赔付率139.9%，出险率远高于燃油车"
+    },
+    {
+      "level": "🟡",
+      "tag": "费用率波动大",
+      "text": "15.8%~25.5%（波幅9.7pp），管控不稳定"
+    }
+  ],
+  "next_steps": [
+    "按经代/渠道拆分转保来源，识别高赔付经代",
+    "提升风险评分覆盖率，优先对转保业务做风险分级",
+    "单独出新能源诊断（按品牌/车型细分），制定差异化定价",
+    "按渠道/经代拆分费用率，定位费用失控环节",
+    "按经代公司（82个）拆分对比变动成本率",
+    "Top 业务员（26人）产能和质量排名"
+  ]
+}
