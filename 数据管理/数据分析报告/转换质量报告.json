@@ -1,9 +1,9 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-03-30T06:51:56.899994",
+  "timestamp": "2026-04-01T10:59:04.202802",
   "basic_stats": {
-    "rows": 446332,
-    "columns": 38,
+    "rows": 1169235,
+    "columns": 42,
     "column_names": [
       "三级机构",
       "保单号",
@@ -14,14 +14,17 @@
       "提核日期",
       "保险起期",
       "客户类别",
+      "被保险人年龄分组",
       "新车购置价",
+      "座位数",
+      "初次登记年月",
       "是否过户车",
       "是否新车",
       "是否新能源",
       "是否交商统保",
       "险别",
       "厂牌车型",
-      "座位数",
+      "座位数.1",
       "车牌号码",
       "业务员",
       "代理人/经纪人",
@@ -42,29 +45,30 @@
       "交叉销售保费-驾意",
       "三者保额",
       "司机保额",
-      "乘客险保额"
+      "乘客险保额",
+      "续保业务类型"
     ]
   },
   "field_quality": {
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 436393
+      "unique_count": 1139234
     },
     "业务员": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 296
+      "unique_count": 386
     },
     "三级机构": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 14
+      "unique_count": 13
     },
     "保险起期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 750
+      "unique_count": 1230
     },
     "险类": {
       "null_count": 0,

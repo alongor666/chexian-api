@@ -55,6 +55,9 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   passenger_coverage: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER', 'BIGINT'],
   plate_no: ['VARCHAR', 'TEXT', 'STRING'],
   seat_count: ['INTEGER', 'BIGINT', 'DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT'],
+  driver_age_group: ['VARCHAR', 'TEXT', 'STRING'],
+  first_registration_date: ['VARCHAR', 'TEXT', 'STRING', 'DATE', 'TIMESTAMP'],
+  fuel_type: ['VARCHAR', 'TEXT', 'STRING'],
 };
 
 /**

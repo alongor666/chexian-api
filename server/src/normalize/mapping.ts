@@ -46,7 +46,10 @@ export type DomainField =
   | 'driver_coverage'          // 司机保额
   | 'passenger_coverage'       // 乘客险保额
   | 'plate_no'                 // 车牌号码
-  | 'seat_count';              // 座位数
+  | 'seat_count'              // 座位数
+  | 'driver_age_group'         // 被保险人年龄分组
+  | 'first_registration_date'  // 初次登记年月
+  | 'fuel_type';               // 燃料种类
 
 /**
  * Column Alias Configuration
@@ -147,6 +150,11 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   passenger_coverage: ['passenger_coverage', '乘客险保额', '乘客座位保额'],
   plate_no: ['plate_no', '车牌号码', '车牌号', '车牌', 'license_plate', 'plateNo', 'plate_number'],
   seat_count: ['seat_count', '座位数', 'seats', 'seatCount', 'seat_number'],
+
+  // 新增字段 - 躺在Excel中但之前Parquet没有
+  driver_age_group: ['被保险人年龄分组', 'driver_age_group', 'driverAgeGroup', '年龄分组', '被保人年龄'],
+  first_registration_date: ['初次登记年月', 'first_registration_date', 'firstRegistrationDate', '初始登记日期', '车辆登记日期'],
+  fuel_type: ['燃料种类', 'fuel_type', 'fuelType', '燃料类型', 'fuel_kind'],
 };
 
 /**
@@ -180,6 +188,7 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'passenger_coverage',
   'plate_no',
   'seat_count',
+  'fuel_type',
 ]);
 
 /**
@@ -226,6 +235,9 @@ export interface ColumnMapping {
   passenger_coverage?: string; // Optional field - 乘客险保额
   plate_no?: string; // Optional field - 车牌号码
   seat_count?: string; // Optional field - 座位数
+  driver_age_group?: string; // Optional field - 被保险人年龄分组
+  first_registration_date?: string; // Optional field - 初次登记年月
+  fuel_type?: string; // Optional field - 燃料种类
 }
 
 /**
@@ -343,4 +355,5 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   passenger_coverage: 'passenger_coverage',
   plate_no: 'plate_no',
   seat_count: 'seat_count',
+  fuel_type: 'fuel_type',
 };

@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-03-24T17:37:30.011374",
+  "generated_at": "2026-04-01T09:23:05.051385",
   "salesman": {
-    "total": 296,
+    "total": 603,
     "active": 243,
     "resigned": 50,
-    "unknown": 3,
+    "unknown": 310,
     "path": "salesman/latest.parquet"
   },
   "plan": {
-    "total_rows": 484,
+    "total_rows": 855,
     "years": [
       2025,
       2026
@@ -21,5 +21,10 @@
     "plan_2026_vehicle_total": 45116.0,
     "plan_2026_org_vehicle_total": 45470.0,
     "path": "plan/latest.parquet"
+  },
+  "brand": {
+    "total_models": 37788,
+    "generated_at": "2026-04-01T09:23:05.051380",
+    "path": "brand/latest.parquet"
   }
 }

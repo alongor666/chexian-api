@@ -1,8 +1,8 @@
 # Parquet 表结构与字段值域知识库
 
 **文档性质**: AI 必读知识源（NL2SQL 语义理解基础）
-**更新时间**: 2026-03-31
-**数据规模**: ~62万条记录 / 38个字段（4 个分片 Parquet，`warehouse/fact/policy/current/`）
+**更新时间**: 2026-04-01
+**数据规模**: ~250万条记录 / 41个字段（2 个分片 Parquet，`warehouse/fact/policy/current/`）
 
 ---
 
@@ -20,7 +20,7 @@
 
 > 本文档描述的是**原始 Parquet 数据**的完整字段。但 AI SQL 生成器查询的是 **PolicyFact 视图**，该视图**不包含所有字段**。
 
-**PolicyFact 视图可用字段** (38个)：
+**PolicyFact 视图可用字段** (42个)：
 ```
 policy_no, premium, policy_date, insurance_start_date,
 underwriting_date, salesman_name, org_level_3, customer_category,
@@ -32,7 +32,9 @@ claim_cases, reported_claims, fee_amount, renewal_mode,
 insurance_grade,
 is_cross_sell, cross_sell_premium_driver,
 third_party_coverage, driver_coverage, passenger_coverage,
-plate_no, seat_count
+plate_no, seat_count,
+driver_age_group, first_registration_date,
+fuel_type,
 ```
 
 **❌ 以下字段在 PolicyFact 视图中不可用**：
@@ -92,6 +94,9 @@ plate_no, seat_count
 | `passenger_coverage` | FLOAT64 | 乘客险保额（元） | 0 ~ 高值 | AVG/MAX |
 | `plate_no` | STRING | 车牌号码 | 川A12345 格式 | — |
 | `seat_count` | INT64 | 座位数 | 2 ~ 9（乘用车通常5座） | — |
+| `driver_age_group` | STRING | 被保险人年龄分组 | `46岁≤年龄＜61岁` / `36岁≤年龄＜46岁` / `28岁≤年龄＜36岁` / `24岁≤年龄＜28岁` / `年龄≥61岁` / `年龄＜24岁` | — |
+| `first_registration_date` | STRING | 初次登记年月 | `YYYY-MM-DD` 格式，可用于计算车龄 | — |
+| `fuel_type` | STRING | 燃料种类 | 汽油/柴油/纯电动(精友)/两用燃料/天然气(NG/CNG/LNG)/其它混合动力/纯电动(行业)/插电式混合动力(精友)/其它/插电式混合动力(行业)/甲醇 | — |
 
 **保费特殊规则**:
 - `保费 > 0` = 正常承保
@@ -295,6 +300,11 @@ plate_no, seat_count
 | 新保、新客户 | `is_renewal = FALSE` |
 | 新车 | `is_new_car = TRUE` |
 | 新能源、电车 | `is_nev = TRUE` |
+| 纯电动 | `fuel_type LIKE '纯电动%'` |
+| 混合动力、插电 | `fuel_type LIKE '%混合动力%' OR fuel_type LIKE '插电%'` |
+| 柴油车 | `fuel_type = '柴油'` |
+| 天然气、CNG、LNG | `fuel_type LIKE '天然气%'` |
+| 燃料类型分布 | `GROUP BY fuel_type`（注：仅2020-2023数据有值，2024+为NULL） |
 | 电销 | `is_telemarketing = TRUE` |
 | 私家车 | `customer_category = '非营业个人客车'` |
 | 货车 | `customer_category LIKE '%货车%'` |
