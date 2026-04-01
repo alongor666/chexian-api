@@ -5,7 +5,7 @@
 # Server temp files
 server/.tmp/
 
-# 业务数据文件（默认禁止提交）
+# 业务数据文件（禁止提交，含客户敏感信息）
 *.xlsx
 *.xls
 *.csv
@@ -13,15 +13,8 @@ server/.tmp/
 *.tar.gz
 *.parquet
 
-# Parquet 仅保留项目运行必须 + 最新版本
-!deploy/data/data.parquet
-!deploy/data/业务数据.parquet
-
 # 临时数据文件
 parquet_data.json
-compare_data.py
-read_parquet.py
-test_data.parquet
 
 # 工作流模板
 CC工作流复制/
@@ -32,18 +25,10 @@ __pycache__/
 *.pyc
 *.pyo
 
-# 临时分析脚本
-*_analysis.py
-*_data.py
-verify_*.py
-analyze_*.py
-final_*.py
-scripts/generate-*.ts
-scripts/generate-*.mjs
-scripts/generate_*.py
-scripts/*续保*.sql
-scripts/*续保*.md
-scripts/check_renewal_*.sql
+# 临时/一次性脚本（限定根目录，避免误杀 scripts/ 和 pipelines/ 下的正式脚本）
+/compare_data.py
+/read_parquet.py
+/test_data.parquet
 
 # 系统文件
 .DS_Store
@@ -71,6 +56,7 @@ coverage/
 2025年复盘/2025fupan/
 2025年复盘/dashboard-project/
 .obsidian/
+
 # 环境变量（含密钥，禁止提交）
 .env
 .env.local
@@ -94,10 +80,14 @@ server/data/user_store.json
 # 数据管理大文件（staging中间文件）
 数据管理/staging/*.xlsx
 
-# 数据管理生成报告（对比输出，不追踪）
+# 数据管理生成报告（一次性产出，按需重新生成）
 数据管理/output/
 logs/
-scripts/verify-catchup-logic.*
+
+# 续保临时 SQL/分析（限定 scripts/ 目录）
+scripts/*续保*.sql
+scripts/*续保*.md
+scripts/check_renewal_*.sql
 
 # Playwright/调试产物（禁止提交）
 .playwright-cli/
@@ -109,4 +99,3 @@ dev_log.txt
 test_err.txt
 output/playwright/
 .gstack/
-

@@ -60,7 +60,6 @@
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
 | `analyze-parquet-schema.py` | 分析Parquet文件的schema结构和字段类型 | `python3 scripts/analyze-parquet-schema.py <file>` |
-| `analyze_renewal.py` | 分析续保数据质量和匹配情况 | `python3 scripts/analyze_renewal.py` |
 | `calculate-renewal-rate.py` | 计算续保率（按机构/时间段） | `python3 scripts/calculate-renewal-rate.py` |
 | `compare-schema-mapping.py` | 对比Excel列名与mapping.ts定义的差异 | `python3 scripts/compare-schema-mapping.py` |
 | `diagnose-renewal.py` | 诊断续保匹配失败的原因 | `python3 scripts/diagnose-renewal.py` |
@@ -160,7 +159,6 @@ python3 scripts/compare-schema-mapping.py
 
 ### 场景5：续保分析全流程
 ```bash
-python3 scripts/analyze_renewal.py          # 数据质量分析
 python3 scripts/calculate-renewal-rate.py   # 计算续保率
 python3 scripts/generate-renewal-analysis.py # 生成报告
 ```

@@ -146,9 +146,16 @@ warehouse/fact/
 bun install && bun run dev:full    # 安装+启动
 bun run build                      # 类型检查+构建
 bun run test                       # 单元测试（⚠️ 不是 bun test）
+bun run test:integration           # 集成测试（需 DuckDB 原生二进制，仅本地）
 bun run test:e2e                   # E2E（需先 dev:full，凭据 admin/CxAdmin@2026!）
 bun run governance                 # 治理校验
 ```
+
+**CI 测试分层协议**（RED LINE）：
+- **单元测试** (`bun run test`): 72 文件 / 892 测试 — CI + 本地
+- **集成测试** (`bun run test:integration`): 4 文件 — 仅本地（需 DuckDB 原生二进制）
+- CI 环境无法解析 `.node` 原生模块（vitest/jsdm 限制），相关测试必须在 `vite.config.ts` exclude 中排除
+- 新增原生模块依赖时，必须检查是否有对应测试需排除
 
 ---
 

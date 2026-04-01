@@ -1,5 +1,9 @@
 # 车险业务分析系统 - 内网部署指南
 
+> **⚠️ 本文档为旧版纯前端部署指南，已不适用于当前架构。**
+> 当前生产部署请参考 [DEPLOY_FULLSTACK.md](./DEPLOY_FULLSTACK.md)。
+> 数据同步使用 `node scripts/sync-vps.mjs`，数据目录为 `server/data/fact/policy/current/`。
+
 ## 快速开始（3步完成）
 
 ### 方式一：本地预览（最快体验）
