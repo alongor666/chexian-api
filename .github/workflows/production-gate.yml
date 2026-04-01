@@ -33,8 +33,11 @@ jobs:
       - name: Frontend Build
         run: bun run build
 
-      - name: Unit & Integration Tests
+      - name: Unit Tests
         run: bun run test --run
+        # Note: DuckDB 集成测试（duckdb-*.test.ts, parquet-processing.test.ts）
+        # 已在 vite.config.ts exclude 中排除（需要原生二进制运行时）
+        # 本地运行: bun run test:integration
 
       - name: Backend Typecheck
         run: cd server && bun install --frozen-lockfile && bun run build

@@ -13,6 +13,7 @@
  *   数据管理/warehouse/fact/policy/current/  →  data/current/
  *   数据管理/warehouse/dim/salesman/         →  data/dim/salesman/
  *   数据管理/warehouse/dim/plan/             →  data/dim/plan/
+ *   数据管理/warehouse/dim/brand/            →  data/dim/brand/
  *   数据管理/warehouse/fact/renewal/         →  data/fact/renewal/  （目录存在时）
  *
  * 可选环境变量:
@@ -41,6 +42,7 @@ const DEFAULTS = {
 const LOCAL_CURRENT_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/policy/current');
 const LOCAL_SALESMAN_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/salesman');
 const LOCAL_PLAN_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plan');
+const LOCAL_BRAND_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/brand');
 const LOCAL_RENEWAL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal');
 
 const colors = {
@@ -365,6 +367,7 @@ function collectCheckDirs() {
     { label: 'policy/current', path: LOCAL_CURRENT_DIR },
     { label: 'dim/salesman',   path: LOCAL_SALESMAN_DIR },
     { label: 'dim/plan',       path: LOCAL_PLAN_DIR },
+    { label: 'dim/brand',     path: LOCAL_BRAND_DIR },
     { label: 'fact/renewal',   path: LOCAL_RENEWAL_DIR },
   ];
 
@@ -388,6 +391,7 @@ function printHelp() {
   数据管理/warehouse/fact/policy/current/  →  data/current/
   数据管理/warehouse/dim/salesman/         →  data/dim/salesman/
   数据管理/warehouse/dim/plan/             →  data/dim/plan/
+  数据管理/warehouse/dim/brand/            →  data/dim/brand/
   数据管理/warehouse/fact/renewal/         →  data/fact/renewal/  (存在时)
 
 可选参数:
@@ -418,6 +422,7 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'policy/current', local: LOCAL_CURRENT_DIR, remote: `${runConfig.remoteDir}/current` },
     { label: 'dim/salesman',   local: LOCAL_SALESMAN_DIR, remote: `${runConfig.remoteDir}/dim/salesman` },
     { label: 'dim/plan',       local: LOCAL_PLAN_DIR,     remote: `${runConfig.remoteDir}/dim/plan` },
+    { label: 'dim/brand',     local: LOCAL_BRAND_DIR,    remote: `${runConfig.remoteDir}/dim/brand` },
     { label: 'fact/renewal',   local: LOCAL_RENEWAL_DIR,  remote: `${runConfig.remoteDir}/fact/renewal` },
   ];
 

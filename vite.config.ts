@@ -73,6 +73,9 @@ export default defineConfig({
       '.claude/**',
       '**/.claude/**',
       'tests/e2e/**',
+      // DuckDB 集成测试 — 需要原生二进制运行时，CI 中跳过
+      'server/src/services/__tests__/duckdb-*.test.ts',
+      'tests/parquet-processing.test.ts',
     ],
     browser: {
       enabled: false,
