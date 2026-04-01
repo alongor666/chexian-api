@@ -340,7 +340,16 @@ async function main() {
     const outputPath = join(currentDir, outputName);
 
     if (existsSync(outputPath)) {
-      log('green', `✓ 静态分片已存在，跳过: ${outputName}`);
+      // staleness 检测：transform.py 比 parquet 新 → 告警
+      const scriptMtime = statSync(transformScript).mtimeMs;
+      const parquetMtime = statSync(outputPath).mtimeMs;
+      if (scriptMtime > parquetMtime) {
+        log('yellow', `⚠️  静态分片已过时: ${outputName}`);
+        log('yellow', `   transform.py 修改时间晚于 parquet，schema 可能已变更`);
+        log('yellow', `   → 删除 ${outputPath} 后重新运行以更新`);
+      } else {
+        log('green', `✓ 静态分片已存在，跳过: ${outputName}`);
+      }
       continue;
     }
 
