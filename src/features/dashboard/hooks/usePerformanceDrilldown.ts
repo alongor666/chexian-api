@@ -4,6 +4,7 @@ import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
+import { isTruckCategory } from '@/shared/config/customer-categories';
 import {
   applyPerformanceHeatmapSelectionToParams,
   type PerformanceHeatmapSelection,
@@ -89,7 +90,7 @@ function computeAvailableDimensions(
   }
 
   const selectedCustomerCategory = [...drillPath].reverse().find((step) => step.dimension === 'customer_category')?.value;
-  const canUseTonnage = selectedCustomerCategory === '营业货车' || selectedCustomerCategory === '非营业货车';
+  const canUseTonnage = selectedCustomerCategory != null && isTruckCategory(selectedCustomerCategory);
 
   return ALL_DIMENSIONS.filter((dim) => {
     if (usedDimensions.has(dim)) return false;

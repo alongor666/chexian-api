@@ -13,6 +13,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
+import { serverEnv } from './config/env.js';
 import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getRenewalFunnelPaths, getQuoteConversionPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
@@ -21,7 +22,7 @@ import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarn
 import { isValidParquetFile } from './utils/security.js';
 
 const app: Application = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = serverEnv.PORT;
 
 /** 数据加载完成标志 — 健康检查依赖此状态 */
 let dataReady = false;
@@ -357,7 +358,7 @@ async function startServer() {
     console.log('[Server] Data loading complete, marking server as ready');
 
     // 启动HTTP服务器（仅监听本地回环，禁止 0.0.0.0 暴露）
-    const BIND_HOST = process.env.BIND_HOST || '127.0.0.1';
+    const BIND_HOST = serverEnv.BIND_HOST;
     app.listen(PORT, BIND_HOST, () => {
       console.log(`[Server] 🚀 Server is running on http://${BIND_HOST}:${PORT}`);
       console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);

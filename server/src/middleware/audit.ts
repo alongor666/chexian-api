@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildRequestContext, getRequestContext, runWithRequestContext } from '../utils/request-context.js';
+import { opsEnv } from '../config/env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,7 +19,7 @@ const __dirname = path.dirname(__filename);
  * 审计日志路径配置
  * 优先级：环境变量 > 默认路径
  */
-const AUDIT_LOG_PATH = process.env.AUDIT_LOG_PATH || path.resolve(__dirname, '../../../logs/audit.log');
+const AUDIT_LOG_PATH = opsEnv.AUDIT_LOG_PATH || path.resolve(__dirname, '../../../logs/audit.log');
 
 /**
  * 审计日志条目接口

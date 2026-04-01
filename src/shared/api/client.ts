@@ -24,6 +24,14 @@ import type {
   FileInfo, LoadResult,
 } from './types';
 
+import {
+  QUERY_ROUTES,
+  DATA_ROUTES,
+  AUTH_ROUTES,
+  AI_ROUTES,
+  FILTER_ROUTES,
+} from './routes';
+
 /** API 基础地址（从环境变量获取，默认本地开发地址） */
 export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api';
 export const ENABLE_BUNDLE_ROUTES = import.meta.env.VITE_ENABLE_BUNDLE_ROUTES !== 'false';
@@ -279,7 +287,7 @@ class ApiClient {
    * 登录
    */
   async login(username: string, password: string): Promise<AuthData> {
-    const result = await this.request<AuthData>('/auth/login', {
+    const result = await this.request<AuthData>(`/${AUTH_ROUTES.LOGIN}`, {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
@@ -292,13 +300,13 @@ class ApiClient {
   }
 
   async getCurrentUser(): Promise<AuthData['user']> {
-    const user = await this.request<AuthData['user']>('/auth/me');
+    const user = await this.request<AuthData['user']>(`/${AUTH_ROUTES.ME}`);
     this.setSessionCookieHint(true);
     return user;
   }
 
   async listUsers(): Promise<AccessUser[]> {
-    return this.request<AccessUser[]>('/auth/users');
+    return this.request<AccessUser[]>(`/${AUTH_ROUTES.USERS}`);
   }
 
   async createUser(payload: {
@@ -313,7 +321,7 @@ class ApiClient {
     specialFeatures?: string[];
     active?: boolean;
   }): Promise<AccessUser> {
-    return this.request<AccessUser>('/auth/users', {
+    return this.request<AccessUser>(`/${AUTH_ROUTES.USERS}`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -333,20 +341,20 @@ class ApiClient {
       active?: boolean;
     }
   ): Promise<AccessUser> {
-    return this.request<AccessUser>(`/auth/users/${encodeURIComponent(id)}`, {
+    return this.request<AccessUser>(`/${AUTH_ROUTES.USER_BY_ID}/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
   }
 
   async deleteUser(id: string): Promise<void> {
-    await this.request(`/auth/users/${encodeURIComponent(id)}`, {
+    await this.request(`/${AUTH_ROUTES.USER_BY_ID}/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
   }
 
   async listRoles(): Promise<AccessRole[]> {
-    return this.request<AccessRole[]>('/auth/roles');
+    return this.request<AccessRole[]>(`/${AUTH_ROUTES.ROLES}`);
   }
 
   async createRole(payload: {
@@ -356,7 +364,7 @@ class ApiClient {
     allowedRoutes?: string[];
     defaultRoute?: string;
   }): Promise<AccessRole> {
-    return this.request<AccessRole>('/auth/roles', {
+    return this.request<AccessRole>(`/${AUTH_ROUTES.ROLES}`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -371,14 +379,14 @@ class ApiClient {
       defaultRoute?: string;
     }
   ): Promise<AccessRole> {
-    return this.request<AccessRole>(`/auth/roles/${encodeURIComponent(role)}`, {
+    return this.request<AccessRole>(`/${AUTH_ROUTES.ROLE_BY_ID}/${encodeURIComponent(role)}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
   }
 
   async deleteRole(role: string): Promise<void> {
-    await this.request(`/auth/roles/${encodeURIComponent(role)}`, {
+    await this.request(`/${AUTH_ROUTES.ROLE_BY_ID}/${encodeURIComponent(role)}`, {
       method: 'DELETE',
     });
   }
@@ -387,14 +395,14 @@ class ApiClient {
    * 获取企微登录配置
    */
   async getWeComConfig(): Promise<{ corpId: string; agentId: string; callbackUrl: string }> {
-    return this.request('/auth/wecom/config');
+    return this.request(`/${AUTH_ROUTES.WECOM_CONFIG}`);
   }
 
   /**
    * 登出
    */
   logout(): void {
-    void Promise.resolve(fetch(`${API_BASE}/auth/logout`, {
+    void Promise.resolve(fetch(`${API_BASE}/${AUTH_ROUTES.LOGOUT}`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -408,7 +416,7 @@ class ApiClient {
 
   private async tryRefreshSession(): Promise<boolean> {
     try {
-      const refreshed = await fetch(`${API_BASE}/auth/refresh`, {
+      const refreshed = await fetch(`${API_BASE}/${AUTH_ROUTES.REFRESH}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -443,14 +451,14 @@ class ApiClient {
    * 获取文件列表
    */
   async getFiles(): Promise<FileInfo[]> {
-    return this.request<FileInfo[]>('/data/files');
+    return this.request<FileInfo[]>(`/data/${DATA_ROUTES.FILES}`);
   }
 
   /**
    * 加载数据文件
    */
   async loadFile(filename: string): Promise<LoadResult> {
-    return this.request<LoadResult>(`/data/load/${encodeURIComponent(filename)}`, {
+    return this.request<LoadResult>(`/data/${DATA_ROUTES.LOAD}/${encodeURIComponent(filename)}`, {
       method: 'POST',
     });
   }
@@ -462,7 +470,7 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
 
-    const url = `${API_BASE}/data/upload`;
+    const url = `${API_BASE}/data/${DATA_ROUTES.UPLOAD}`;
     const token = this.getToken();
     const headers: Record<string, string> = {};
     if (token) {
@@ -516,17 +524,17 @@ class ApiClient {
     return this.request<T>(`/query/${path}${query ? `?${query}` : ''}`);
   }
 
-  async getKpi(filters?: Record<string, any>): Promise<KpiData> { return this.queryGet<KpiData>('kpi', filters); }
-  async getKpiDetail(filters?: Record<string, any>): Promise<KpiDetailData> { return this.queryGet<KpiDetailData>('kpi-detail', filters); }
-  async getTrend(granularity: 'day' | 'week' | 'month' = 'day', filters?: Record<string, any>): Promise<TrendData[]> { return this.queryGet<TrendData[]>('trend', filters, { granularity }); }
-  async getQualityBusinessTrend(granularity: 'day' | 'week' | 'month' = 'day', filters?: Record<string, any>): Promise<QualityBusinessTrendData[]> { return this.queryGet<QualityBusinessTrendData[]>('quality-business-trend', filters, { granularity }); }
-  async getTruckAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet('truck', filters); }
-  async getGrowthAnalysis(startDate: string, endDate: string, baselineStart: string, baselineEnd: string, filters?: Record<string, any>): Promise<any> { return this.queryGet('growth', filters, { startDate, endDate, baselineStart, baselineEnd }); }
-  async getCoefficientData(filters?: Record<string, any>): Promise<any> { return this.queryGet('coefficient', filters); }
-  async getCostAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet('cost', filters); }
-  async getComprehensiveBundle(params?: ComprehensiveFilterParams): Promise<ComprehensiveBundleResponse> { return this.queryGet<ComprehensiveBundleResponse>('comprehensive-bundle', params as Record<string, unknown>); }
-  async getRenewalAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet('renewal', filters); }
-  async getRenewalDrilldown(params?: Record<string, any>): Promise<any[]> { return this.queryGet('renewal-drilldown', params); }
+  async getKpi(filters?: Record<string, any>): Promise<KpiData> { return this.queryGet<KpiData>(QUERY_ROUTES.KPI, filters); }
+  async getKpiDetail(filters?: Record<string, any>): Promise<KpiDetailData> { return this.queryGet<KpiDetailData>(QUERY_ROUTES.KPI_DETAIL, filters); }
+  async getTrend(granularity: 'day' | 'week' | 'month' = 'day', filters?: Record<string, any>): Promise<TrendData[]> { return this.queryGet<TrendData[]>(QUERY_ROUTES.TREND, filters, { granularity }); }
+  async getQualityBusinessTrend(granularity: 'day' | 'week' | 'month' = 'day', filters?: Record<string, any>): Promise<QualityBusinessTrendData[]> { return this.queryGet<QualityBusinessTrendData[]>(QUERY_ROUTES.QUALITY_BUSINESS_TREND, filters, { granularity }); }
+  async getTruckAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.TRUCK, filters); }
+  async getGrowthAnalysis(startDate: string, endDate: string, baselineStart: string, baselineEnd: string, filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.GROWTH, filters, { startDate, endDate, baselineStart, baselineEnd }); }
+  async getCoefficientData(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COEFFICIENT, filters); }
+  async getCostAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COST, filters); }
+  async getComprehensiveBundle(params?: ComprehensiveFilterParams): Promise<ComprehensiveBundleResponse> { return this.queryGet<ComprehensiveBundleResponse>(QUERY_ROUTES.COMPREHENSIVE_BUNDLE, params as Record<string, unknown>); }
+  async getRenewalAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.RENEWAL, filters); }
+  async getRenewalDrilldown(params?: Record<string, any>): Promise<any[]> { return this.queryGet(QUERY_ROUTES.RENEWAL_DRILLDOWN, params); }
 
   /**
    * 获取车驾意推介率数据
@@ -536,7 +544,7 @@ class ApiClient {
     groupBy?: string;
     [key: string]: any;
   }): Promise<any> {
-    return this.drilldownGet('cross-sell', params);
+    return this.drilldownGet(QUERY_ROUTES.CROSS_SELL, params);
   }
 
   /**
@@ -574,7 +582,7 @@ class ApiClient {
     }>;
   }> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/cross-sell-summary${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_SUMMARY}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -590,7 +598,7 @@ class ApiClient {
     }>;
   }> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/cross-sell-trend${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_TREND}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -601,7 +609,7 @@ class ApiClient {
     filters?: Record<string, any>
   ): Promise<any[]> {
     const query = this.buildQueryString(filters, { limit: String(limit) });
-    return this.request(`/query/salesman-ranking?${query}`);
+    return this.request(`/query/${QUERY_ROUTES.SALESMAN_RANKING}?${query}`);
   }
 
   /**
@@ -618,7 +626,7 @@ class ApiClient {
     }>;
   }> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/cross-sell-top-salesman${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_TOP_SALESMAN}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -629,7 +637,7 @@ class ApiClient {
     groupBy?: string;
     [key: string]: any;
   }): Promise<CrossSellBundleResponse> {
-    return this.drilldownGet<CrossSellBundleResponse>('cross-sell-bundle', params);
+    return this.drilldownGet<CrossSellBundleResponse>(QUERY_ROUTES.CROSS_SELL_BUNDLE, params);
   }
 
   /**
@@ -655,7 +663,7 @@ class ApiClient {
     }>;
   }> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/performance-summary${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.PERFORMANCE_SUMMARY}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -672,7 +680,7 @@ class ApiClient {
     }>;
   }> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/performance-trend${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.PERFORMANCE_TREND}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -688,7 +696,7 @@ class ApiClient {
     drillPath: Array<{ dimension: string; value: string }>;
     groupBy: string | null;
   }> {
-    return this.drilldownGet('performance-drilldown', params);
+    return this.drilldownGet(QUERY_ROUTES.PERFORMANCE_DRILLDOWN, params);
   }
 
   /**
@@ -708,7 +716,7 @@ class ApiClient {
     }>;
   }> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/performance-org-heatmap${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.PERFORMANCE_ORG_HEATMAP}${query ? `?${query}` : ''}`);
   }
 
 
@@ -732,7 +740,7 @@ class ApiClient {
     }>;
   }> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/performance-top-salesman${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.PERFORMANCE_TOP_SALESMAN}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -743,7 +751,7 @@ class ApiClient {
     groupBy?: string;
     [key: string]: any;
   }): Promise<PerformanceBundleResponse> {
-    return this.drilldownGet<PerformanceBundleResponse>('performance-bundle', params);
+    return this.drilldownGet<PerformanceBundleResponse>(QUERY_ROUTES.PERFORMANCE_BUNDLE, params);
   }
 
   /**
@@ -751,7 +759,7 @@ class ApiClient {
    */
   async getDashboardBundle(params?: Record<string, any>): Promise<DashboardBundleResponse> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/dashboard-bundle${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.DASHBOARD_BUNDLE}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -759,11 +767,11 @@ class ApiClient {
    */
   async getMarketingReport(params?: Record<string, any>): Promise<any[]> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/marketing-report${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.MARKETING_REPORT}${query ? `?${query}` : ''}`);
   }
 
   async getHolidayDrilldown(params?: Record<string, any>): Promise<any[]> {
-    return this.queryGet('holiday-drilldown', params);
+    return this.queryGet(QUERY_ROUTES.HOLIDAY_DRILLDOWN, params);
   }
 
   /**
@@ -771,7 +779,7 @@ class ApiClient {
    */
   async getPremiumReport(params?: Record<string, any>): Promise<any[]> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/premium-report${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.PREMIUM_REPORT}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -779,7 +787,7 @@ class ApiClient {
    */
   async getPremiumPlan(params?: Record<string, any>): Promise<any> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/premium-plan${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.PREMIUM_PLAN}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -815,7 +823,7 @@ class ApiClient {
         distribution: any[];
         meta: { plan_year: number; level: string };
       };
-    }>(`/query/plan-achievement${query ? `?${query}` : ''}`);
+    }>(`/query/${QUERY_ROUTES.PLAN_ACHIEVEMENT}${query ? `?${query}` : ''}`);
     return resp.data ?? resp;
   }
 
@@ -824,7 +832,7 @@ class ApiClient {
    */
   async getFeeAnalysis(filters?: Record<string, any>): Promise<any[]> {
     const query = this.buildQueryString(filters);
-    return this.request(`/query/fee-analysis${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.FEE_ANALYSIS}${query ? `?${query}` : ''}`);
   }
 
   // ============================================
@@ -846,7 +854,7 @@ class ApiClient {
     availableYears?: number[];
     insuranceGrades: Array<{ value: string; count: number }>;
   }> {
-    return this.request('/filters/options');
+    return this.request(`/${FILTER_ROUTES.OPTIONS}`);
   }
 
   /**
@@ -862,7 +870,7 @@ class ApiClient {
     }>;
   }> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/cross-sell-org-trend${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_ORG_TREND}${query ? `?${query}` : ''}`);
   }
 
   /**
@@ -884,7 +892,7 @@ class ApiClient {
     }>;
   }> {
     const query = this.buildQueryString(params);
-    return this.request(`/query/cross-sell-heatmap${query ? `?${query}` : ''}`);
+    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_HEATMAP}${query ? `?${query}` : ''}`);
   }
 
   // ============================================
@@ -899,7 +907,7 @@ class ApiClient {
     org: string;
     coverage: string;
   }): Promise<{ success: boolean; analysis: string; error?: string }> {
-    return this.request('/ai/trend-analysis', {
+    return this.request(`/${AI_ROUTES.TREND_ANALYSIS}`, {
       method: 'POST',
       body: JSON.stringify(params),
     });
@@ -912,7 +920,7 @@ class ApiClient {
     message: string;
     conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
   }): Promise<DetectRequirementResponse> {
-    return this.request('/ai/detect-requirement', {
+    return this.request(`/${AI_ROUTES.DETECT_REQUIREMENT}`, {
       method: 'POST',
       body: JSON.stringify(params),
     });
@@ -922,55 +930,55 @@ class ApiClient {
 
   async getRenewalFunnelOverview(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/renewal-funnel/overview${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.OVERVIEW}${query ? `?${query}` : ''}`);
   }
 
   async getRenewalFunnelTrend(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/renewal-funnel/trend${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.TREND}${query ? `?${query}` : ''}`);
   }
 
   async getRenewalFunnelTeam(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/renewal-funnel/team${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.TEAM}${query ? `?${query}` : ''}`);
   }
 
   async getRenewalFunnelSalesman(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/renewal-funnel/salesman${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.SALESMAN}${query ? `?${query}` : ''}`);
   }
 
   async getRenewalFunnelActionList(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/renewal-funnel/action-list${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.ACTION_LIST}${query ? `?${query}` : ''}`);
   }
 
   async getRenewalFunnelMatrix(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/renewal-funnel/matrix${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.MATRIX}${query ? `?${query}` : ''}`);
   }
 
   async getRenewalFunnelRisk(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/renewal-funnel/risk${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.RISK}${query ? `?${query}` : ''}`);
   }
 
   async getRenewalFunnelMetadata() {
-    return this.request<{ minExpiryDate: string; maxExpiryDate: string; categories: string[]; availableMonths?: string[] }>('/query/renewal-funnel/metadata');
+    return this.request<{ minExpiryDate: string; maxExpiryDate: string; categories: string[]; availableMonths?: string[] }>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.METADATA}`);
   }
 
   /**
    * 获取能力注册表
    */
   async getCapabilities(): Promise<{ success: boolean; data: CapabilityInfo[] }> {
-    return this.request('/ai/capabilities');
+    return this.request(`/${AI_ROUTES.CAPABILITIES}`);
   }
 
   /**
    * 获取首页快捷建议
    */
   async getQuickSuggestions(): Promise<{ success: boolean; data: Array<{ text: string; capabilityId: string }> }> {
-    return this.request('/ai/quick-suggestions');
+    return this.request(`/${AI_ROUTES.QUICK_SUGGESTIONS}`);
   }
 
   // ============================================
@@ -979,37 +987,37 @@ class ApiClient {
 
   async getQuoteConversionKpi(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any>(`/query/quote-conversion/kpi${query ? `?${query}` : ''}`);
+    return this.request<any>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.KPI}${query ? `?${query}` : ''}`);
   }
 
   async getQuoteConversionFunnel(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/quote-conversion/funnel${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.FUNNEL}${query ? `?${query}` : ''}`);
   }
 
   async getQuoteConversionDrilldown(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/quote-conversion/drilldown${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.DRILLDOWN}${query ? `?${query}` : ''}`);
   }
 
   async getQuoteConversionHeatmap(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/quote-conversion/heatmap${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.HEATMAP}${query ? `?${query}` : ''}`);
   }
 
   async getQuoteConversionPrice(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/quote-conversion/price${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.PRICE}${query ? `?${query}` : ''}`);
   }
 
   async getQuoteConversionTrend(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/quote-conversion/trend${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.TREND}${query ? `?${query}` : ''}`);
   }
 
   async getQuoteConversionRanking(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/quote-conversion/ranking${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.RANKING}${query ? `?${query}` : ''}`);
   }
 }
 

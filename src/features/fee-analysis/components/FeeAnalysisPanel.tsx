@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { cardStyles, colorClasses, fontStyles } from '@/shared/styles';
 import { formatCount, formatPremiumWan, formatPercent } from '@/shared/utils/formatters';
 import { useFeeAnalysis } from '../hooks/useFeeAnalysis';
+import { CAT_NON_COMMERCIAL_PERSONAL } from '@/shared/config/customer-categories';
 import { FeeRuleTierTable } from './FeeRuleTierTable';
 import { FeeDistributionChart } from './FeeDistributionChart';
 import type { FeeInsuranceTypeTab } from '../types/feeAnalysisTypes';
@@ -52,7 +53,7 @@ export const FeeAnalysisPanel: React.FC<Props> = ({ filters }) => {
       <div className="px-4 py-2.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700 text-xs text-neutral-500 dark:text-neutral-400 flex flex-wrap gap-x-4 gap-y-1">
         <span>📍 适用范围：成都同城机构（武侯/天府/新都/青羊/高新）</span>
         <span>·</span>
-        <span>非营业个人客车</span>
+        <span>{CAT_NON_COMMERCIAL_PERSONAL}</span>
         <span>·</span>
         <span>非新能源</span>
         <span>·</span>

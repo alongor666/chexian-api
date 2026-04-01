@@ -9,8 +9,9 @@
  */
 
 import { safeLog } from '../utils/security.js';
+import { aiEnv } from '../config/env.js';
 
-const WEBHOOK_URL = process.env.UNMATCHED_NOTIFY_WEBHOOK || '';
+const WEBHOOK_URL = aiEnv.UNMATCHED_NOTIFY_WEBHOOK;
 
 export interface UnmatchedNotifyPayload {
   /** 用户原始输入 */

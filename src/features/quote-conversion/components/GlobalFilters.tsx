@@ -2,6 +2,14 @@ import { useState } from 'react';
 import { colorClasses, inputStyles, cn } from '../../../shared/styles';
 import { CollapsibleFilterSection } from '../../filters/CollapsibleFilterSection';
 import type { QuoteFilters } from '../types';
+import {
+  CAT_NON_COMMERCIAL_PERSONAL,
+  CAT_NON_COMMERCIAL_TRUCK,
+  CAT_COMMERCIAL_TRUCK,
+  CAT_NON_COMMERCIAL_ENTERPRISE,
+  CAT_RENTAL,
+  CAT_SPECIAL,
+} from '../../../shared/config/customer-categories';
 
 interface Props {
   filters: QuoteFilters;
@@ -10,7 +18,7 @@ interface Props {
 
 const FILTER_OPTIONS = {
   orgs: ['天府','高新','青羊','宜宾','新都','德阳','武侯','资阳','泸州','乐山','自贡','达州','本部'],
-  customerCategories: ['非营业个人客车','非营业货车','营业货车','非营业企业客车','营业出租租赁','特种车'],
+  customerCategories: [CAT_NON_COMMERCIAL_PERSONAL, CAT_NON_COMMERCIAL_TRUCK, CAT_COMMERCIAL_TRUCK, CAT_NON_COMMERCIAL_ENTERPRISE, CAT_RENTAL, CAT_SPECIAL],
   insuranceCombos: ['主全', '交三'] as const,
 } as const;
 

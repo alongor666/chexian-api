@@ -1,3 +1,5 @@
+import { CAT_NON_COMMERCIAL_PERSONAL } from './customer-categories';
+
 /**
  * 商车自主定价系数监管阈值配置
  *
@@ -300,6 +302,6 @@ export function calculateGapPremium(
  * 客户类别显示名称映射
  */
 export const CUSTOMER_CATEGORY_LABELS: Record<string, string> = {
-  non_commercial_personal: '非营业个人客车',
+  non_commercial_personal: CAT_NON_COMMERCIAL_PERSONAL,
   all: '全部',
 };

@@ -9,12 +9,13 @@
 import type { CSSProperties } from 'react';
 import type { CoefficientRow } from '../hooks/useCoefficientMonitor';
 import { formatCoefficient, formatCurrency } from '../../../shared/utils/formatters';
+import { CAT_NON_COMMERCIAL_PERSONAL } from '../../../shared/config/customer-categories';
 
 /**
  * 客户类别显示名称映射
  */
 export const CUSTOMER_CATEGORY_LABELS: Record<string, string> = {
-  non_commercial_personal: '非营业个人客车',
+  non_commercial_personal: CAT_NON_COMMERCIAL_PERSONAL,
   all: '全部',
 };
 

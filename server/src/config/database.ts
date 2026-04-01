@@ -3,6 +3,8 @@
  * Database Configuration
  */
 
+import { dbEnv } from './env.js';
+
 export interface DatabaseConfig {
   /** 数据库文件路径（:memory: 表示内存数据库） */
   path: string;
@@ -15,8 +17,8 @@ export interface DatabaseConfig {
 }
 
 export const databaseConfig: DatabaseConfig = {
-  path: process.env.DUCKDB_PATH || ':memory:',
-  dataPath: process.env.DATA_PATH || './data',
+  path: dbEnv.DUCKDB_PATH,
+  dataPath: dbEnv.DATA_PATH,
   readOnly: false,
   maxConnections: 10,
 };
@@ -30,6 +32,6 @@ export const databaseConfig: DatabaseConfig = {
  */
 export const DUCKDB_INIT_OPTIONS = {
   allow_unsigned_extensions: false,
-  max_memory: process.env.DUCKDB_MAX_MEMORY || '4GB',
-  threads: process.env.DUCKDB_THREADS ? parseInt(process.env.DUCKDB_THREADS, 10) : 4,
+  max_memory: dbEnv.DUCKDB_MAX_MEMORY,
+  threads: dbEnv.DUCKDB_THREADS,
 };

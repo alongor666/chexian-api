@@ -19,6 +19,7 @@ import { analyzeOrgTrendWithOpenRouter } from '../services/openrouter.js';
 import { detectRequirement } from '../services/requirement-detector.js';
 import { capabilities, getQuickSuggestions } from '../config/capability-registry.js';
 import { notifyUnmatchedIntent } from '../services/notify.js';
+import { aiEnv } from '../config/env.js';
 
 const router = Router();
 
@@ -129,14 +130,12 @@ router.post(
     }
 
     const { rows, org, coverage } = parseResult.data;
-    const timeoutMs = parsePositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS, 4500);
-    const cacheTtlMs = parsePositiveInt(process.env.AI_TREND_CACHE_TTL_MS, 180000);
+    const timeoutMs = parsePositiveInt(String(aiEnv.AI_PROVIDER_TIMEOUT_MS), 4500);
+    const cacheTtlMs = parsePositiveInt(String(aiEnv.AI_TREND_CACHE_TTL_MS), 180000);
 
     // 主路由：OpenRouter（支持逗号分隔模型顺序降级）
-    const openRouterApiKey = process.env.OPENROUTER_API_KEY || '';
-    const openRouterModels = parseModelList(
-      process.env.AI_PRIMARY_MODEL || process.env.OPENROUTER_MODELS
-    );
+    const openRouterApiKey = aiEnv.OPENROUTER_API_KEY;
+    const openRouterModels = parseModelList(aiEnv.AI_PRIMARY_MODEL);
     const cacheKey = getTrendCacheKey(rows, org, coverage, openRouterModels);
     const cached = trendAnalysisCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -182,7 +181,7 @@ router.post(
     }
 
     // 免费兜底：保持当前智谱配置
-    const zhipuApiKey = process.env.ZHIPU_API_KEY || process.env.VITE_ZHIPU_API_KEY || '';
+    const zhipuApiKey = aiEnv.ZHIPU_API_KEY;
     if (!zhipuApiKey) {
       throw new AppError(503, '服务端未配置可用 AI Key（OpenRouter/Zhipu），无法使用 AI 分析');
     }

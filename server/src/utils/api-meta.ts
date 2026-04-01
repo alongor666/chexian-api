@@ -1,5 +1,6 @@
 import type { Response } from 'express';
 import { getRequestContext, getServerTimingValue } from './request-context.js';
+import { dbEnv } from '../config/env.js';
 
 export interface ApiResponseMeta {
   requestId: string;
@@ -19,6 +20,6 @@ export function buildResponseMeta(res?: Response): ApiResponseMeta {
     requestId: ctx?.requestId || 'unknown',
     cacheHit: Boolean(ctx?.cacheHit),
     serverTiming,
-    dataVersion: process.env.DATA_VERSION || 'v1',
+    dataVersion: dbEnv.DATA_VERSION,
   };
 }

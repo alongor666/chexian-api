@@ -8,6 +8,7 @@
 import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
+import { authEnv } from '../config/env.js';
 import { PRESET_USERS } from '../config/preset-users.js';
 import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
@@ -35,7 +36,7 @@ export interface UserCredential {
  * {"admin":"$2b$10$...","leshan":"$2b$10$..."}
  */
 function loadPasswordOverrides(): Record<string, string> {
-  const raw = process.env.USER_PASSWORDS;
+  const raw = authEnv.USER_PASSWORDS;
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -56,7 +57,7 @@ const PASSWORD_OVERRIDES = loadPasswordOverrides();
 const ALLOWED_IP_OVERRIDES = loadAllowedIpOverrides();
 
 function loadAllowedIpOverrides(): Record<string, string[]> {
-  const raw = process.env.USER_ALLOWED_IPS;
+  const raw = authEnv.USER_ALLOWED_IPS;
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -221,7 +222,7 @@ class AuthService {
     hashedPassword: string
   ): Promise<boolean> {
     // 开发环境：设置 DEV_SKIP_AUTH=1 跳过密码验证，生产环境永不生效
-    if (process.env.NODE_ENV !== 'production' && process.env.DEV_SKIP_AUTH === '1') {
+    if (process.env.NODE_ENV !== 'production' && authEnv.DEV_SKIP_AUTH === '1') {
       return true;
     }
     try {
@@ -344,7 +345,7 @@ class AuthService {
 }
 
 // DEV_SKIP_AUTH 启动警告
-if (process.env.NODE_ENV !== 'production' && process.env.DEV_SKIP_AUTH === '1') {
+if (process.env.NODE_ENV !== 'production' && authEnv.DEV_SKIP_AUTH === '1') {
   console.warn('[Auth] ⚠ DEV_SKIP_AUTH 已启用，所有用户密码验证已跳过');
 }
 

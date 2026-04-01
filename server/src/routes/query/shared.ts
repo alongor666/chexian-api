@@ -7,6 +7,7 @@ import { getRouteCache, setRouteCache, computeEtag, sendWithEtag } from '../../s
 import { markRequestCacheHit } from '../../utils/request-context.js';
 import { buildResponseMeta } from '../../utils/api-meta.js';
 import { DEFAULT_COMPREHENSIVE_THRESHOLDS } from '../../config/comprehensive-thresholds.js';
+import { dbEnv } from '../../config/env.js';
 
 // Re-export commonly used items for convenience
 export type { Request, Response } from 'express';
@@ -40,7 +41,7 @@ export function buildRouteCacheKey(req: Request, routeName: string): string {
 }
 
 export function isBundleRoutesEnabled(): boolean {
-  return process.env.ENABLE_QUERY_BUNDLES !== 'false';
+  return dbEnv.ENABLE_QUERY_BUNDLES !== 'false';
 }
 
 export function resolveCutoffDate(

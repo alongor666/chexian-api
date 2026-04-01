@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { wecomService } from '../services/wecom.js';
 import { authService } from '../services/auth.js';
+import { authEnv } from '../config/env.js';
 
 const router = Router();
 
@@ -73,8 +74,8 @@ router.get('/callback', async (req: Request, res: Response) => {
 
         // 3. 签发 cookie 会话（access+refresh）
         const secure = process.env.NODE_ENV === 'production';
-        const accessMaxAge = parseDurationToMs(process.env.JWT_EXPIRES_IN || '4h', 4 * 60 * 60 * 1000);
-        const refreshMaxAge = parseDurationToMs(process.env.JWT_REFRESH_EXPIRES_IN || '7d', 7 * 24 * 60 * 60 * 1000);
+        const accessMaxAge = parseDurationToMs(authEnv.JWT_EXPIRES_IN, 4 * 60 * 60 * 1000);
+        const refreshMaxAge = parseDurationToMs(authEnv.JWT_REFRESH_EXPIRES_IN, 7 * 24 * 60 * 60 * 1000);
         const session = authService.issueCookieSession(userCredential);
 
         res.cookie(ACCESS_COOKIE, session.accessToken, {

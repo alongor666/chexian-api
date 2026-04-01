@@ -4,6 +4,7 @@
  */
 
 import { CorsOptions } from 'cors';
+import { corsEnv } from './env.js';
 
 /**
  * 开发环境允许的本地端口列表
@@ -23,7 +24,7 @@ const devOrigins = [
 /**
  * 环境变量配置的 Origin 列表（逗号分隔）
  */
-const envOrigins = (process.env.CORS_ORIGIN || '')
+const envOrigins = corsEnv.CORS_ORIGIN
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);

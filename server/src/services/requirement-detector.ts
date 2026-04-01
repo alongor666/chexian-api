@@ -7,6 +7,7 @@
 
 import { safeLog } from '../utils/security.js';
 import { getCapabilitySummaryForAI, capabilities, type Capability } from '../config/capability-registry.js';
+import { aiEnv } from '../config/env.js';
 
 const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
 const ZHIPU_API_BASE = 'https://open.bigmodel.cn/api/paas/v4';
@@ -217,11 +218,11 @@ export async function detectRequirement(
 
   messages.push({ role: 'user', content: request.message });
 
-  const timeoutMs = Number(process.env.AI_PROVIDER_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
+  const timeoutMs = aiEnv.AI_PROVIDER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS;
 
   // 1. 尝试 OpenRouter
-  const openRouterApiKey = process.env.OPENROUTER_API_KEY || '';
-  const openRouterModels = (process.env.AI_PRIMARY_MODEL || process.env.OPENROUTER_MODELS || '')
+  const openRouterApiKey = aiEnv.OPENROUTER_API_KEY;
+  const openRouterModels = aiEnv.AI_PRIMARY_MODEL
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
@@ -236,7 +237,7 @@ export async function detectRequirement(
   }
 
   // 2. 兜底 Zhipu
-  const zhipuApiKey = process.env.ZHIPU_API_KEY || process.env.VITE_ZHIPU_API_KEY || '';
+  const zhipuApiKey = aiEnv.ZHIPU_API_KEY;
   if (zhipuApiKey) {
     const result = await callZhipu(messages, zhipuApiKey, timeoutMs);
     if (result.success && result.content) {

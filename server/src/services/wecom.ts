@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import { UserCredential } from './auth.js';
 import { getSalesmanMappingPaths } from '../config/paths.js';
+import { wecomEnv } from '../config/env.js';
 
 export interface WeComConfig {
     corpId: string;
@@ -22,9 +23,9 @@ class WeComService {
 
     constructor() {
         this.config = {
-            corpId: process.env.WECOM_CORP_ID || '',
-            agentId: process.env.WECOM_AGENT_ID || '',
-            secret: process.env.WECOM_SECRET || '',
+            corpId: wecomEnv.WECOM_CORP_ID,
+            agentId: wecomEnv.WECOM_AGENT_ID,
+            secret: wecomEnv.WECOM_SECRET,
         };
     }
 
@@ -96,7 +97,7 @@ class WeComService {
      */
     async resolvePermission(userId: string, name?: string): Promise<Omit<UserCredential, 'passwordHash'> | null> {
         // 1. 检查超级管理员白名单
-        const adminUserIds = (process.env.WECOM_ADMIN_USERIDS || '').split(',').map(id => id.trim());
+        const adminUserIds = wecomEnv.WECOM_ADMIN_USERIDS.split(',').map(id => id.trim());
         if (adminUserIds.includes(userId)) {
             return {
                 username: userId,
