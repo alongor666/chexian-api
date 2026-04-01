@@ -40,7 +40,12 @@ function loadPasswordOverrides(): Record<string, string> {
   try {
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return {};
-    return parsed as Record<string, string>;
+    const overrides = parsed as Record<string, string>;
+    const usernames = Object.keys(overrides);
+    if (usernames.length > 0) {
+      console.log(`[Auth] USER_PASSWORDS loaded: ${usernames.length} users overridden (${usernames.join(',')})`);
+    }
+    return overrides;
   } catch {
     console.warn('[Auth] USER_PASSWORDS 格式无效，使用默认配置');
     return {};

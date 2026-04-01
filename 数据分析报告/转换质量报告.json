@@ -1,9 +1,9 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-04-01T08:28:54.729979",
+  "timestamp": "2026-04-01T12:22:18.446784",
   "basic_stats": {
-    "rows": 1169235,
-    "columns": 41,
+    "rows": 1337120,
+    "columns": 42,
     "column_names": [
       "三级机构",
       "保单号",
@@ -20,6 +20,7 @@
       "初次登记年月",
       "是否过户车",
       "是否新车",
+      "燃料种类",
       "是否新能源",
       "是否交商统保",
       "险别",
@@ -52,22 +53,22 @@
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 1139234
+      "unique_count": 1303470
     },
     "业务员": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 386
+      "unique_count": 455
     },
     "三级机构": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 13
+      "unique_count": 14
     },
     "保险起期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 1230
+      "unique_count": 1482
     },
     "险类": {
       "null_count": 0,
