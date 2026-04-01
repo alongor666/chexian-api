@@ -61,6 +61,31 @@
 
 **跨项目对齐**：作战地图 `00_规范与协议/指标字典_v2.0.md` 是业务层权威定义，本注册表是代码层实现。两者公式必须一致。
 
+### 字段注册表（RED LINE）
+
+**唯一事实源**：`server/src/config/field-registry/fields.json`（42 个字段）
+
+**新增/修改字段流程**（必须按顺序）：
+1. 修改 `fields.json` 中的字段定义
+2. 运行 `node scripts/field-registry/generate.mjs` → 自动更新 mapping.ts + validator.ts + etl_fields.json
+3. `bun run governance` 验证一致性（#17 检查）
+
+**禁止**：
+- ❌ 手动编辑 `mapping.ts` / `validator.ts`（由 codegen 生成，标注 `DO NOT EDIT MANUALLY`）
+- ❌ 在 `transform.py` 中硬编码字段列表（从 `etl_fields.json` 读取）
+- ❌ 新增 ETL 源字段不在 `shard-config.json:explicitly_ignored_fields` 或 `fields.json` 中声明（Schema 契约会 `sys.exit(1)` 阻断）
+
+### 注册表体系总览
+
+| 注册表 | 路径 | 覆盖范围 | codegen |
+|--------|------|---------|---------|
+| 指标注册表 | `server/src/config/metric-registry/` | 25 个指标 | `generate-frontend-map.ts` |
+| 字段注册表 | `server/src/config/field-registry/fields.json` | 42 个字段 | `field-registry/generate.mjs` |
+| 客户类别 | `src/shared/config/customer-categories.ts` + `server/src/config/` | 11 类枚举 | — |
+| 环境变量 | `server/src/config/env.ts` | 20+ 变量（6 分组） | — |
+| API 路由 | `server/src/config/api-routes.ts` + `src/shared/api/routes.ts` | 50+ 路由 | — |
+| ETL 配置 | `数据管理/shard-config.json` | 分片边界 + 显式忽略字段 | — |
+
 ---
 
 ## 3. 护栏（RED LINE）

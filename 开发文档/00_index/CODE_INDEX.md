@@ -81,8 +81,20 @@ src/features/*                                    # 功能模块 UI 渲染
 
 | 文件 | 职责 |
 |------|------|
-| `mapping.ts` | 列名别名定义（36 个业务字段 → 多别名映射） |
-| `validator.ts` | 数据类型校验、数据质量检查 SQL 生成 |
+| `mapping.ts` | 列名别名定义（42 个业务字段 → 多别名映射）⚠️ 由 codegen 生成，勿手动编辑 |
+| `validator.ts` | 数据类型校验（EXPECTED_TYPES）⚠️ 由 codegen 生成，勿手动编辑 |
+
+#### 配置注册表 (`server/src/config/`)
+
+| 文件 | 职责 |
+|------|------|
+| `field-registry/fields.json` | **字段唯一事实源**（42 字段），codegen: `node scripts/field-registry/generate.mjs` |
+| `metric-registry/` | 指标注册表（25 个指标） |
+| `customer-categories.ts` | 客户类别枚举（11 类）+ 分组常量 + 辅助函数 |
+| `env.ts` | 环境变量集中管理（6 分组，启动时校验） |
+| `api-routes.ts` | API 路由路径常量（5 组，前后端一致） |
+| `paths.ts` | 文件路径配置 |
+| `preset-users.ts` | 预设用户凭据 |
 
 #### 中间件 (`server/src/middleware/`)
 

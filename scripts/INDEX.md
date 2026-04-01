@@ -27,6 +27,8 @@
 | 提取业务员计划数据 | `extract_salesman_plan.py` | `python3 scripts/extract_salesman_plan.py` |
 | 测试 DuckDB SQL 语法 | `test-duckdb-sql.py` | `python3 scripts/test-duckdb-sql.py` |
 | 执行关键路由 15 分钟并发稳定性压测 | `benchmark-key-routes-soak.mjs` | `bun run benchmark:key-routes:soak` |
+| 从字段注册表生成 mapping/validator/etl 文件 | `field-registry/generate.mjs` | `node scripts/field-registry/generate.mjs` |
+| 校验 codegen 产物是否与注册表同步 | `field-registry/generate.mjs --check` | `node scripts/field-registry/generate.mjs --check` |
 
 ---
 
