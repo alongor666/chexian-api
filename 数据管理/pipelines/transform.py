@@ -919,6 +919,35 @@ def finalize_schema(df):
             final_fields.append(field)
             print(f"   ✅ 保留可选字段: {field}")
 
+    # ── Schema 契约：检测未处理字段 ──
+    # 已知的"显式忽略"字段（源 xlsx 中存在但无需进入 Parquet 的字段）
+    explicitly_ignored = {
+        '座位数_1',           # 与座位数完全重复的冗余列
+        '座位数.1',           # pandas 读取时的变体名（同上）
+        '代理人/经纪人',      # 已重命名为 经代名
+        '缴费日期',           # 已重命名为 签单日期
+        '签单/批改保费',      # 已重命名为 保费（含税版本同理）
+        '签单/批改保费含税',  # 同上
+        '险别',               # 已重命名为 险别组合
+        '案件数',             # 已重命名为 赔案件数
+        '赔款合计',           # 已重命名为 已报告赔款
+        '总费用金额',         # 已重命名为 费用金额
+        '车险分等级',         # 已合并为 车险风险等级
+        '小货车评分',         # 已合并为 车险风险等级
+        '大货车评分',         # 已合并为 车险风险等级
+        '交叉销售标识-驾意',  # 已重命名为 交叉销售标识
+        '交叉销售保费-驾意',  # 已重命名为 交叉销售保费_驾意
+        '是否报价',           # 口径不可靠，待用户修正
+    }
+    all_known = set(final_fields) | set(core_fields) | set(optional_fields) | explicitly_ignored
+    unknown_cols = [c for c in df.columns if c not in all_known]
+    if unknown_cols:
+        print(f"\n   ⚠️  Schema 契约告警：以下 {len(unknown_cols)} 个源字段未被处理也未被显式忽略：")
+        for col in unknown_cols:
+            sample = df[col].dropna().head(3).tolist()
+            print(f"      ❓ '{col}' (非空率 {df[col].notna().mean():.1%}, 示例: {sample})")
+        print(f"      → 请在 finalize_schema() 的 optional_fields 或 explicitly_ignored 中声明")
+
     df_final = df[final_fields]
 
     print(f"\n   最终字段数: {len(df_final.columns)}")

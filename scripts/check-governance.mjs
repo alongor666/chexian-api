@@ -1054,6 +1054,78 @@ function checkKnowledgeDataConsistency() {
   }
 }
 
+// 16. .gitignore 审计：检测已索引的脚本是否被忽略规则误杀
+function checkGitignoreShadow() {
+  info('检查 .gitignore 是否误杀已跟踪文件...');
+  try {
+    // 获取所有已被 git 跟踪的文件
+    const tracked = execSync('git ls-files', { cwd: ROOT_DIR, encoding: 'utf-8' }).trim().split('\n');
+    // 检查每个已跟踪文件是否会被当前 .gitignore 忽略
+    // 用 git check-ignore 批量检查
+    const scriptFiles = tracked.filter(f => f.endsWith('.py') || f.endsWith('.ts') || f.endsWith('.mjs'));
+    let shadowedCount = 0;
+    for (const f of scriptFiles) {
+      try {
+        execSync(`git check-ignore -q "${f}"`, { cwd: ROOT_DIR, encoding: 'utf-8' });
+        // 如果没报错，说明文件会被忽略
+        warning(`.gitignore 会忽略已跟踪文件: ${f}（修改后将无法提交新变更）`);
+        shadowedCount++;
+      } catch {
+        // check-ignore 返回非0 = 不会被忽略，正常
+      }
+    }
+    if (shadowedCount > 0) {
+      warning(`${shadowedCount} 个已跟踪脚本被 .gitignore 规则覆盖，修改后无法 git add`);
+    } else {
+      success('无已跟踪文件被 .gitignore 误覆盖');
+    }
+    return true; // 降级为 warning，不阻断
+  } catch (e) {
+    warning(`.gitignore 审计异常: ${e.message}`);
+    return true;
+  }
+}
+
+// 17. 字段定义一致性：mapping.ts DomainField ↔ validator.ts EXPECTED_TYPES
+function checkFieldDefinitionConsistency() {
+  info('检查字段定义一致性（mapping.ts ↔ validator.ts）...');
+  try {
+    const mappingPath = path.join(ROOT_DIR, 'server/src/normalize/mapping.ts');
+    const validatorPath = path.join(ROOT_DIR, 'server/src/normalize/validator.ts');
+    const mappingSrc = fs.readFileSync(mappingPath, 'utf-8');
+    const validatorSrc = fs.readFileSync(validatorPath, 'utf-8');
+
+    // 提取 DomainField 类型联合体中的字段名
+    const domainMatch = mappingSrc.match(/type DomainField\s*=\s*([\s\S]*?);/);
+    if (!domainMatch) { warning('无法解析 DomainField 类型'); return true; }
+    const domainFields = [...domainMatch[1].matchAll(/'(\w+)'/g)].map(m => m[1]);
+
+    // 提取 EXPECTED_TYPES 的键
+    const expectedMatch = validatorSrc.match(/EXPECTED_TYPES[^{]*\{([\s\S]*?)\};/);
+    if (!expectedMatch) { warning('无法解析 EXPECTED_TYPES'); return true; }
+    const expectedKeys = [...expectedMatch[1].matchAll(/(\w+)\s*:/g)].map(m => m[1]);
+
+    const domainSet = new Set(domainFields);
+    const expectedSet = new Set(expectedKeys);
+
+    const missingInValidator = domainFields.filter(f => !expectedSet.has(f));
+    const extraInValidator = expectedKeys.filter(f => !domainSet.has(f));
+
+    if (missingInValidator.length > 0) {
+      error(`mapping.ts 有但 validator.ts EXPECTED_TYPES 缺失: ${missingInValidator.join(', ')}`);
+      return false;
+    }
+    if (extraInValidator.length > 0) {
+      warning(`validator.ts 有但 mapping.ts DomainField 无: ${extraInValidator.join(', ')}`);
+    }
+    success(`字段定义一致（${domainFields.length} 个 DomainField 全覆盖）`);
+    return true;
+  } catch (e) {
+    warning(`字段一致性检查异常: ${e.message}`);
+    return true;
+  }
+}
+
 // ============================================================
 // 主函数
 // ============================================================
@@ -1077,6 +1149,8 @@ function main() {
     { name: '凭据扫描', fn: checkStagedCredentials },
     { name: 'PR体量门禁', fn: checkPrSizeLimit },
     { name: '知识库一致性', fn: checkKnowledgeDataConsistency },
+    { name: 'gitignore审计', fn: checkGitignoreShadow },
+    { name: '字段定义一致', fn: checkFieldDefinitionConsistency },
   ];
 
   let passedCount = 0;
