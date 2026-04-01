@@ -19,6 +19,7 @@
 | Edit > Write | 改动少用 Edit，新建/大改用 Write |
 | 执行不规划 | `commit/push/PR` 直接执行，零分析 |
 | 源数据验证 | 修改 SQL 生成器后，必须用 Parquet 直查与 API 返回对比验证 |
+| 文档同步 | 涉及 3+ 文件变更的重构完成后，扫描并更新受影响的索引和知识库（CODE_INDEX / scripts/INDEX / PARQUET_SCHEMA_KNOWLEDGE / DATA_FLOW_KNOWLEDGE / CLAUDE.md 注册表章节） |
 
 **Pre-flight（每次任务前）**：1) `grep -r` 搜索已有实现 2) 涉及数据时 `find 数据管理/` 3) 声称完成前 `curl` 验证 4) 删除前列影响清单等用户确认 5) push 前检查大文件 6) push 前 `grep -rn '<<<<<<'` 扫描冲突标记 7) push 前 `bun run governance`
 

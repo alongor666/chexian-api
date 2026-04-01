@@ -3,6 +3,17 @@
     "allow": []
   },
   "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | wc -l | tr -d ' '); if [ \"$changed\" -gt 3 ]; then echo '⚠️ 文档同步提醒：本次变更 '$changed' 个文件，请确认 CODE_INDEX / scripts/INDEX / PARQUET_SCHEMA_KNOWLEDGE / CLAUDE.md 注册表章节是否需要同步更新'; fi"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
