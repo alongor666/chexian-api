@@ -863,57 +863,17 @@ def finalize_schema(df):
     # ── 域模式：policy（排除赔付/费用/报价）或 all（全量兼容）──
     policy_exclude = {'是否报价', '赔案件数', '已报告赔款', '费用金额'} if DOMAIN == 'policy' else set()
 
-    core_fields = [
-        '保单号',
-        '续保单号',
-        '业务员',
-        '三级机构',
-        '签单日期',
-        '提核日期',
-        '保险起期',
-        '险类',
-        '险别组合',
-        '保费',
-        '是否续保',
-        '是否可续',
-        '是否新车',
-        '是否新能源',
-        '是否过户车',
-        '是否电销',
-        '终端来源',
-        '客户类别',
-        '厂牌车型',
-        '吨位分段',
-        '新车购置价',
-        '经代名',
-        '客户源'
-    ]
-
-    optional_fields = [
-        '续保业务类型',
-        '批单号',
-        '批改类型',
-        '商车自主定价系数',
-        '是否交商统保',
-        '车架号',
-        '是否报价',
-        '赔案件数',
-        '已报告赔款',
-        '费用金额',
-        '续保模式',
-        '车险风险等级',
-        '交叉销售标识',
-        '交叉销售保费_驾意',
-        '三者保额',
-        '司机保额',
-        '乘客险保额',
-        '车牌号码',
-        '座位数',
-        # 新增字段
-        '被保险人年龄分组',
-        '初次登记年月',
-        '燃料种类',
-    ]
+    # ── 字段列表从 etl_fields.json 读取（由 field-registry codegen 生成）──
+    etl_fields_path = Path(__file__).resolve().parent / 'etl_fields.json'
+    try:
+        with open(etl_fields_path) as f:
+            etl_fields = json.load(f)
+        core_fields = etl_fields['core_fields']
+        optional_fields = etl_fields['optional_fields']
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+        print(f"   ❌ etl_fields.json 读取失败: {e}")
+        print(f"      → 运行 node scripts/field-registry/generate.mjs 重新生成")
+        sys.exit(1)
 
     final_fields = [f for f in core_fields if f in df.columns and f not in policy_exclude]
     for field in optional_fields:

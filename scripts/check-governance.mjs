@@ -1086,43 +1086,26 @@ function checkGitignoreShadow() {
   }
 }
 
-// 17. 字段定义一致性：mapping.ts DomainField ↔ validator.ts EXPECTED_TYPES
+// 17. 字段注册表同步：field-registry codegen 产物一致性
 function checkFieldDefinitionConsistency() {
-  info('检查字段定义一致性（mapping.ts ↔ validator.ts）...');
+  info('检查字段注册表同步（field-registry → mapping.ts / validator.ts / etl_fields.json）...');
   try {
-    const mappingPath = path.join(ROOT_DIR, 'server/src/normalize/mapping.ts');
-    const validatorPath = path.join(ROOT_DIR, 'server/src/normalize/validator.ts');
-    const mappingSrc = fs.readFileSync(mappingPath, 'utf-8');
-    const validatorSrc = fs.readFileSync(validatorPath, 'utf-8');
-
-    // 提取 DomainField 类型联合体中的字段名
-    const domainMatch = mappingSrc.match(/type DomainField\s*=\s*([\s\S]*?);/);
-    if (!domainMatch) { warning('无法解析 DomainField 类型'); return true; }
-    const domainFields = [...domainMatch[1].matchAll(/'(\w+)'/g)].map(m => m[1]);
-
-    // 提取 EXPECTED_TYPES 的键
-    const expectedMatch = validatorSrc.match(/EXPECTED_TYPES[^{]*\{([\s\S]*?)\};/);
-    if (!expectedMatch) { warning('无法解析 EXPECTED_TYPES'); return true; }
-    const expectedKeys = [...expectedMatch[1].matchAll(/(\w+)\s*:/g)].map(m => m[1]);
-
-    const domainSet = new Set(domainFields);
-    const expectedSet = new Set(expectedKeys);
-
-    const missingInValidator = domainFields.filter(f => !expectedSet.has(f));
-    const extraInValidator = expectedKeys.filter(f => !domainSet.has(f));
-
-    if (missingInValidator.length > 0) {
-      error(`mapping.ts 有但 validator.ts EXPECTED_TYPES 缺失: ${missingInValidator.join(', ')}`);
-      return false;
-    }
-    if (extraInValidator.length > 0) {
-      warning(`validator.ts 有但 mapping.ts DomainField 无: ${extraInValidator.join(', ')}`);
-    }
-    success(`字段定义一致（${domainFields.length} 个 DomainField 全覆盖）`);
+    const result = execSync('node scripts/field-registry/generate.mjs --check', {
+      cwd: ROOT_DIR, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe']
+    });
+    // 从输出中提取字段数
+    const countMatch = result.match(/(\d+) 个字段/);
+    const count = countMatch ? countMatch[1] : '?';
+    success(`字段注册表同步（${count} 个字段，3 个下游文件均一致）`);
     return true;
   } catch (e) {
-    warning(`字段一致性检查异常: ${e.message}`);
-    return true;
+    const output = (e.stdout || '') + (e.stderr || '');
+    error(`字段注册表不同步 — 运行 node scripts/field-registry/generate.mjs 重新生成`);
+    if (output) {
+      const lines = output.split('\n').filter(l => l.includes('❌'));
+      lines.forEach(l => console.log(`    ${l.trim()}`));
+    }
+    return false;
   }
 }
 

@@ -1,0 +1,398 @@
+{
+  "$schema": "./schema.json",
+  "_doc": "字段注册表 — 唯一事实源。新增/修改字段只改此文件，然后运行 codegen。",
+  "fields": [
+    {
+      "id": "policy_no",
+      "label": "保单号",
+      "parquetColumn": "保单号",
+      "required": true,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["policy_no", "policyNo", "保单号", "保险单号", "policy_number"],
+      "description": "保单号（主键），22位数字"
+    },
+    {
+      "id": "premium",
+      "label": "保费",
+      "parquetColumn": "保费",
+      "required": true,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
+      "aliases": ["premium", "signed_premium", "signedPremium", "保费", "签单保费", "保险费", "签单/批改保费含税"],
+      "description": "签单/批改保费（含税），正值=承保，负值=退费"
+    },
+    {
+      "id": "policy_date",
+      "label": "签单日期",
+      "parquetColumn": "签单日期",
+      "required": true,
+      "dataTypes": ["DATE", "TIMESTAMP", "VARCHAR", "TEXT"],
+      "aliases": ["policy_date", "policyDate", "保单日期", "签单日期", "sign_date", "signed_date"],
+      "description": "业绩统计日期（源xlsx缴费日期重命名）"
+    },
+    {
+      "id": "insurance_start_date",
+      "label": "保险起期",
+      "parquetColumn": "保险起期",
+      "required": true,
+      "dataTypes": ["DATE", "TIMESTAMP", "VARCHAR", "TEXT"],
+      "aliases": ["insurance_start_date", "insuranceStartDate", "保险起期", "起保日期", "start_date", "effective_date"],
+      "description": "保险责任开始日期"
+    },
+    {
+      "id": "salesman_name",
+      "label": "业务员",
+      "parquetColumn": "业务员",
+      "required": true,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["salesman_name", "salesmanName", "业务员", "业务员姓名", "salesman", "sales_person"],
+      "description": "业务员姓名"
+    },
+    {
+      "id": "org_level_3",
+      "label": "三级机构",
+      "parquetColumn": "三级机构",
+      "required": true,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["org_level_3", "orgLevel3", "三级机构", "机构", "organization", "org_name"],
+      "description": "三级机构归属"
+    },
+    {
+      "id": "customer_category",
+      "label": "客户类别",
+      "parquetColumn": "客户类别",
+      "required": true,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["customer_category", "customerCategory", "客户类别", "客户类别3", "customer_type", "client_category"],
+      "description": "车辆使用性质分类（11类）"
+    },
+    {
+      "id": "insurance_type",
+      "label": "险类",
+      "parquetColumn": "险类",
+      "required": true,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["insurance_type", "insuranceType", "险类", "险种类", "insurance_class", "product_type"],
+      "description": "交强险/商业险"
+    },
+    {
+      "id": "coverage_combination",
+      "label": "险别组合",
+      "parquetColumn": "险别组合",
+      "required": true,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["coverage_combination", "coverageCombination", "险别组合", "coverage_type", "product_combination"],
+      "description": "险别组合（主全/交三/单交/其他）"
+    },
+    {
+      "id": "is_renewal",
+      "label": "是否续保",
+      "parquetColumn": "是否续保",
+      "required": true,
+      "dataTypes": ["BOOLEAN", "BOOL", "INTEGER", "TINYINT", "VARCHAR"],
+      "aliases": ["is_renewal", "isRenewal", "是否续保", "续保", "renewal"],
+      "description": "续保单号非空=True"
+    },
+    {
+      "id": "is_renewable",
+      "label": "是否可续",
+      "parquetColumn": "是否可续",
+      "required": false,
+      "dataTypes": ["BOOLEAN", "BOOL", "INTEGER", "TINYINT", "VARCHAR"],
+      "aliases": ["is_renewable", "isRenewable", "是否可续", "可续", "renewable"],
+      "description": "根据批改类型判断（退保=不可续）"
+    },
+    {
+      "id": "is_new_car",
+      "label": "是否新车",
+      "parquetColumn": "是否新车",
+      "required": true,
+      "dataTypes": ["BOOLEAN", "BOOL", "INTEGER", "TINYINT", "VARCHAR"],
+      "aliases": ["is_new_car", "isNewCar", "是否新车", "新车", "new_car", "new_vehicle"],
+      "description": "N新车=True"
+    },
+    {
+      "id": "is_transfer",
+      "label": "是否过户车",
+      "parquetColumn": "是否过户车",
+      "required": true,
+      "dataTypes": ["BOOLEAN", "BOOL", "INTEGER", "TINYINT", "VARCHAR"],
+      "aliases": ["is_transfer", "isTransfer", "是否过户", "是否过户车", "过户", "transfer", "ownership_transfer"],
+      "description": "过户车辆标识"
+    },
+    {
+      "id": "is_nev",
+      "label": "是否新能源",
+      "parquetColumn": "是否新能源",
+      "required": true,
+      "dataTypes": ["BOOLEAN", "BOOL", "INTEGER", "TINYINT", "VARCHAR"],
+      "aliases": ["is_nev", "isNev", "是否新能源", "是否新能源车", "是否新能源车1", "新能源", "new_energy_vehicle", "nev"],
+      "description": "新能源车辆标识"
+    },
+    {
+      "id": "is_telemarketing",
+      "label": "是否电销",
+      "parquetColumn": "是否电销",
+      "required": true,
+      "dataTypes": ["BOOLEAN", "BOOL", "INTEGER", "TINYINT", "VARCHAR"],
+      "aliases": ["is_telemarketing", "isTelemarketing", "是否电销", "电销", "telemarketing", "telesales"],
+      "description": "终端来源含0110=电销"
+    },
+    {
+      "id": "tonnage_segment",
+      "label": "吨位分段",
+      "parquetColumn": "吨位分段",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["tonnage_segment", "tonnageSegment", "吨位分段", "货车吨位分段", "tonnage", "weight_segment"],
+      "description": "货车吨位分段"
+    },
+    {
+      "id": "renewal_policy_no",
+      "label": "续保单号",
+      "parquetColumn": "续保单号",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["续保单号", "renewal_policy_no", "renewalPolicyNo", "old_policy_no", "renewal_no"],
+      "description": "续保单号（源xlsx是否续保列实际存储）"
+    },
+    {
+      "id": "is_commercial_insure",
+      "label": "是否交商统保",
+      "parquetColumn": "是否交商统保",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["是否交商统保", "is_commercial_insure", "isCommercialInsure", "交商统保", "commercial_insure"],
+      "description": "交商统保/套单标识"
+    },
+    {
+      "id": "vehicle_model",
+      "label": "厂牌车型",
+      "parquetColumn": "厂牌车型",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["vehicle_model", "vehicleModel", "厂牌车型", "车辆型号", "car_model", "model"],
+      "description": "车辆厂牌车型名称"
+    },
+    {
+      "id": "new_vehicle_price",
+      "label": "新车购置价",
+      "parquetColumn": "新车购置价",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
+      "aliases": ["new_vehicle_price", "newVehiclePrice", "新车购置价", "购置价", "purchase_price", "car_price"],
+      "description": "新车购置价（元）"
+    },
+    {
+      "id": "endorsement_no",
+      "label": "批单号",
+      "parquetColumn": "批单号",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["endorsement_no", "endorsementNo", "批单号", "批改单号", "endorsement_number", "batch_no"],
+      "description": "批改单号"
+    },
+    {
+      "id": "endorsement_type",
+      "label": "批改类型",
+      "parquetColumn": "批改类型",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["endorsement_type", "endorsementType", "批改类型", "批改类型名称", "endorsement_type_name", "batch_type"],
+      "description": "批改类型（退保/过户/变更等）"
+    },
+    {
+      "id": "commercial_pricing_factor",
+      "label": "商车自主定价系数",
+      "parquetColumn": "商车自主定价系数",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
+      "aliases": ["商车自主定价系数", "commercial_pricing_factor", "commercialPricingFactor", "自主定价系数", "商业险自主系数", "pricing_factor", "coefficient"],
+      "description": "商业险自主定价系数"
+    },
+    {
+      "id": "terminal_source",
+      "label": "终端来源",
+      "parquetColumn": "终端来源",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["terminal_source", "terminalSource", "终端来源", "terminal", "channel_source"],
+      "description": "出单终端来源代码"
+    },
+    {
+      "id": "vehicle_frame_no",
+      "label": "车架号",
+      "parquetColumn": "车架号",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["车架号", "vehicle_frame_no", "VIN", "vehicle_identification"],
+      "description": "车架号VIN（17位）"
+    },
+    {
+      "id": "is_quote",
+      "label": "是否报价",
+      "parquetColumn": "是否报价",
+      "required": false,
+      "dataTypes": ["BOOLEAN", "BOOL", "INTEGER", "TINYINT", "VARCHAR"],
+      "aliases": ["是否报价", "is_quote", "isQuote", "报价标志", "quote_flag"],
+      "description": "报价标志（口径不可靠，待修正）"
+    },
+    {
+      "id": "claim_cases",
+      "label": "赔案件数",
+      "parquetColumn": "赔案件数",
+      "required": false,
+      "dataTypes": ["INTEGER", "BIGINT", "DOUBLE", "DECIMAL", "NUMERIC"],
+      "aliases": ["赔案件数", "claim_cases", "claimCases", "案件数", "claim_count"],
+      "description": "赔案件数（整数）"
+    },
+    {
+      "id": "reported_claims",
+      "label": "已报告赔款",
+      "parquetColumn": "已报告赔款",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
+      "aliases": ["已报告赔款", "reported_claims", "reportedClaims", "赔款合计", "total_claims"],
+      "description": "已报告赔款金额（元）"
+    },
+    {
+      "id": "fee_amount",
+      "label": "费用金额",
+      "parquetColumn": "费用金额",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
+      "aliases": ["费用金额", "fee_amount", "feeAmount", "总费用金额", "total_fees", "费用合计"],
+      "description": "费用金额（元）"
+    },
+    {
+      "id": "renewal_mode",
+      "label": "续保模式",
+      "parquetColumn": "续保模式",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["续保模式", "renewal_mode", "renewalMode", "续保业务类型", "renewal_type"],
+      "description": "续保模式（自留/兜底/电续）"
+    },
+    {
+      "id": "insurance_grade",
+      "label": "车险风险等级",
+      "parquetColumn": "车险风险等级",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["车险风险等级", "车险分等级", "上年-风险等级", "insurance_grade", "insuranceGrade"],
+      "description": "车险风险等级（A-G/X，三字段合并）"
+    },
+    {
+      "id": "is_cross_sell",
+      "label": "交叉销售标识",
+      "parquetColumn": "交叉销售标识",
+      "required": false,
+      "dataTypes": ["BOOLEAN", "BOOL", "INTEGER", "TINYINT", "VARCHAR"],
+      "aliases": ["交叉销售标识", "is_cross_sell", "isCrossSell"],
+      "description": "驾意险交叉销售标识"
+    },
+    {
+      "id": "cross_sell_premium_driver",
+      "label": "交叉销售保费_驾意",
+      "parquetColumn": "交叉销售保费_驾意",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
+      "aliases": ["交叉销售保费_驾意", "cross_sell_premium_driver", "crossSellPremiumDriver"],
+      "description": "驾意险交叉销售保费（元）"
+    },
+    {
+      "id": "underwriting_date",
+      "label": "提核日期",
+      "parquetColumn": "提核日期",
+      "required": false,
+      "dataTypes": ["DATE", "TIMESTAMP", "VARCHAR", "TEXT"],
+      "aliases": ["underwriting_date", "提核日期", "review_date"],
+      "description": "提核日期（源xlsx原签单日期重命名）"
+    },
+    {
+      "id": "third_party_coverage",
+      "label": "三者保额",
+      "parquetColumn": "三者保额",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
+      "aliases": ["third_party_coverage", "三者保额", "第三者保额"],
+      "description": "第三者责任保险保额（元）"
+    },
+    {
+      "id": "driver_coverage",
+      "label": "司机保额",
+      "parquetColumn": "司机保额",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
+      "aliases": ["driver_coverage", "司机保额", "司机座位保额"],
+      "description": "司机座位保额（元）"
+    },
+    {
+      "id": "passenger_coverage",
+      "label": "乘客险保额",
+      "parquetColumn": "乘客险保额",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
+      "aliases": ["passenger_coverage", "乘客险保额", "乘客座位保额"],
+      "description": "乘客座位保额（元）"
+    },
+    {
+      "id": "plate_no",
+      "label": "车牌号码",
+      "parquetColumn": "车牌号码",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["plate_no", "车牌号码", "车牌号", "车牌", "license_plate", "plateNo", "plate_number"],
+      "description": "车牌号码（仅保留前2位）"
+    },
+    {
+      "id": "seat_count",
+      "label": "座位数",
+      "parquetColumn": "座位数",
+      "required": false,
+      "dataTypes": ["INTEGER", "BIGINT", "DOUBLE", "DECIMAL", "NUMERIC", "FLOAT"],
+      "aliases": ["seat_count", "座位数", "seats", "seatCount", "seat_number"],
+      "description": "座位数（整数）"
+    },
+    {
+      "id": "driver_age_group",
+      "label": "被保险人年龄分组",
+      "parquetColumn": "被保险人年龄分组",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["被保险人年龄分组", "driver_age_group", "driverAgeGroup", "年龄分组", "被保人年龄"],
+      "description": "被保险人年龄分段"
+    },
+    {
+      "id": "first_registration_date",
+      "label": "初次登记年月",
+      "parquetColumn": "初次登记年月",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING", "DATE", "TIMESTAMP"],
+      "aliases": ["初次登记年月", "first_registration_date", "firstRegistrationDate", "初始登记日期", "车辆登记日期"],
+      "description": "车辆初次登记年月"
+    },
+    {
+      "id": "fuel_type",
+      "label": "燃料种类",
+      "parquetColumn": "燃料种类",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["燃料种类", "fuel_type", "fuelType", "燃料类型", "fuel_kind"],
+      "description": "燃料种类（仅2020-2023有值，11种枚举）"
+    }
+  ],
+  "etl": {
+    "coreParquetColumns": [
+      "保单号", "续保单号", "业务员", "三级机构", "签单日期", "提核日期", "保险起期",
+      "险类", "险别组合", "保费", "是否续保", "是否可续", "是否新车", "是否新能源",
+      "是否过户车", "是否电销", "终端来源", "客户类别", "厂牌车型", "吨位分段",
+      "新车购置价", "经代名", "客户源"
+    ],
+    "optionalParquetColumns": [
+      "续保业务类型", "批单号", "批改类型", "商车自主定价系数", "是否交商统保",
+      "车架号", "是否报价", "赔案件数", "已报告赔款", "费用金额", "续保模式",
+      "车险风险等级", "交叉销售标识", "交叉销售保费_驾意", "三者保额", "司机保额",
+      "乘客险保额", "车牌号码", "座位数", "被保险人年龄分组", "初次登记年月", "燃料种类"
+    ]
+  }
+}
