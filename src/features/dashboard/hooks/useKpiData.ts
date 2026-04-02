@@ -30,6 +30,7 @@ export interface KpiData {
   transfer_rate?: number;
   telesales_rate?: number;
   per_capita_premium?: number | bigint;
+  per_vehicle_premium?: number | bigint;
   renewal_rate?: number;
   commercial_rate?: number;
   nev_rate?: number;
@@ -96,6 +97,7 @@ export const useKpiData = ({
         transfer_rate: kpiResponse.transfer_rate,
         telesales_rate: kpiResponse.telesales_rate,
         per_capita_premium: kpiResponse.per_capita_premium,
+        per_vehicle_premium: kpiResponse.per_vehicle_premium,
         renewal_rate: kpiResponse.renewal_rate,
         commercial_rate: kpiResponse.commercial_rate,
         nev_rate: kpiResponse.nev_rate,

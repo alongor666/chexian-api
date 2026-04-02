@@ -34,6 +34,7 @@ export const KPI_SQL = {
   new_car_rate: getMetricSql('new_car_rate'),
   quality_business_rate: getMetricSql('quality_business_rate'),
   commercial_insurance_rate: getMetricSql('commercial_insurance_rate'),
+  per_vehicle_premium: getMetricSql('per_vehicle_premium'),
 };
 
 interface KpiQueryOptions {
@@ -106,7 +107,8 @@ export const generateKpiQuery = (
         ${KPI_SQL.nev_rate},
         ${KPI_SQL.new_car_rate},
         ${KPI_SQL.quality_business_rate},
-        ${KPI_SQL.commercial_insurance_rate}
+        ${KPI_SQL.commercial_insurance_rate},
+        ${KPI_SQL.per_vehicle_premium}
       FROM filtered
     ),
     vehicle_periods AS (
@@ -282,7 +284,8 @@ export const generateKpiQuery = (
       fm.nev_rate,
       fm.new_car_rate,
       fm.quality_business_rate,
-      fm.commercial_insurance_rate
+      fm.commercial_insurance_rate,
+      fm.per_vehicle_premium
     FROM latest_context lc
     CROSS JOIN focus_metrics fm
     CROSS JOIN vehicle_periods vp

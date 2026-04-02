@@ -2,8 +2,8 @@
  * 指标展示映射 — 从注册表自动生成
  *
  * 生成命令：npx tsx scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-03-27T09:35:09.057Z
- * 指标数量：25
+ * 生成时间：2026-04-02T03:33:38.952Z
+ * 指标数量：28
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成
  */
@@ -15,6 +15,7 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   'org_count': '机构数',
   'salesman_count': '业务员数',
   'per_capita_premium': '人均保费',
+  'per_vehicle_premium': '车均保费',
   'transfer_rate': '过户占比',
   'telesales_rate': '电销占比',
   'renewal_rate': '续保占比',
@@ -29,6 +30,8 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   'earned_premium': '满期保费',
   'variable_cost_ratio': '变动成本率',
   'earned_loss_frequency': '出险率',
+  'earned_margin_amount': '满期边际贡献额',
+  'projected_margin_amount': '预估边际贡献额',
   'cross_sell_total_rate': '推介率',
   'cross_sell_danjiao_rate': '单交推介率',
   'cross_sell_jiaosan_rate': '交三推介率',
@@ -48,6 +51,7 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   'org_count': { formatter: 'count', unit: '个' },
   'salesman_count': { formatter: 'count', unit: '人' },
   'per_capita_premium': { formatter: 'premiumWan', unit: '万元' },
+  'per_vehicle_premium': { formatter: 'average', unit: '元', decimals: 0 },
   'transfer_rate': { formatter: 'percent', unit: '%' },
   'telesales_rate': { formatter: 'percent', unit: '%' },
   'renewal_rate': { formatter: 'percent', unit: '%' },
@@ -62,6 +66,8 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   'earned_premium': { formatter: 'premiumWan', unit: '万元' },
   'variable_cost_ratio': { formatter: 'percent', unit: '%', decimals: 2 },
   'earned_loss_frequency': { formatter: 'percent', unit: '%', decimals: 2 },
+  'earned_margin_amount': { formatter: 'premiumWan', unit: '万元' },
+  'projected_margin_amount': { formatter: 'premiumWan', unit: '万元' },
   'cross_sell_total_rate': { formatter: 'percent', unit: '%', decimals: 2 },
   'cross_sell_danjiao_rate': { formatter: 'percent', unit: '%', decimals: 2 },
   'cross_sell_jiaosan_rate': { formatter: 'percent', unit: '%', decimals: 2 },
@@ -77,6 +83,7 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   'org_count': '去重三级机构计数',
   'salesman_count': '去重业务员计数',
   'per_capita_premium': '保费总额 / 业务员数',
+  'per_vehicle_premium': '保费总额 / 去重车架号数（含商业险+交强险）',
   'transfer_rate': '过户保单数 / 总保单数',
   'telesales_rate': '电销保单数 / 总保单数',
   'renewal_rate': '续保保单数 / 总保单数',
@@ -88,9 +95,11 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   'earned_claim_ratio': '已报告赔款 / 满期保费',
   'expense_ratio': '费用金额 / 保费',
   'avg_claim_amount': '已报告赔款 / 赔案件数',
-  'earned_premium': '保费按满期天数折算',
+  'earned_premium': '保费 × 满期天数 / 保险期限天数（闰年感知）',
   'variable_cost_ratio': '满期赔付率 + 费用率（注意：两个分母不同）',
-  'earned_loss_frequency': '赔案件数 * 365 / 满期天数合计（年化）',
+  'earned_loss_frequency': '(赔案件数/保单件数) × (保险期限天数/满期天数)。满期后=赔案/保单，未满期年化放大',
+  'earned_margin_amount': '满期保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
+  'projected_margin_amount': '签单保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
   'cross_sell_total_rate': '驾意险件数 / 车险件数',
   'cross_sell_danjiao_rate': '单交下驾意险件数 / 单交车险件数',
   'cross_sell_jiaosan_rate': '交三下驾意险件数 / 交三车险件数',

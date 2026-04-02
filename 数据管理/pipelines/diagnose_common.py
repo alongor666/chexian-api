@@ -106,6 +106,8 @@ def kpi_select(group_col: str = None) -> str:
         COUNT(DISTINCT 保单号)::INT AS policy_count,
         ROUND(SUM(保费)/10000, 1) AS written_premium,
         ROUND(AVG(CASE WHEN 保费>0 THEN 保费 END), 0)::INT AS avg_premium,
+        COUNT(DISTINCT COALESCE(NULLIF(TRIM(CAST(车架号 AS VARCHAR)), ''), 保单号))::INT AS vehicle_count,
+        ROUND(SUM(保费) / NULLIF(COUNT(DISTINCT COALESCE(NULLIF(TRIM(CAST(车架号 AS VARCHAR)), ''), 保单号)), 0), 0)::INT AS per_vehicle_premium,
         ROUND(SUM({EARNED})/10000, 1) AS earned_premium,
         ROUND(SUM(COALESCE(已报告赔款,0))/10000, 1) AS reported_claims,
         SUM(COALESCE(赔案件数,0))::INT AS claim_cases,
@@ -189,6 +191,7 @@ def kpi_rows(d: dict) -> list:
         ("签单保费", fw(d.get("written_premium"))),
         ("满期保费", fw(d.get("earned_premium"))),
         ("件均保费 †", fi(d.get("avg_premium"))),
+        ("车均保费 †", fi(d.get("per_vehicle_premium"))),
         ("── 系数 ──", ""),
         ("商车定价系数", fc(d.get("pricing_coeff"))),
     ]
@@ -203,7 +206,7 @@ def sum_kpi_dicts(dicts: list) -> dict:
     total = {}
     sum_keys = ["policy_count", "written_premium", "earned_premium",
                 "reported_claims", "claim_cases", "claim_policies", "fee_amount",
-                "annualized_cases"]
+                "annualized_cases", "vehicle_count"]
     for k in sum_keys:
         total[k] = sum(d.get(k) or 0 for d in dicts)
 
@@ -217,6 +220,7 @@ def sum_kpi_dicts(dicts: list) -> dict:
     ) if total["policy_count"] and total.get("annualized_cases") else None
     total["avg_claim"] = round(total["reported_claims"] * 10000 / total["claim_cases"]) if total["claim_cases"] else None
     total["avg_premium"] = round(wp * 10000 / total["policy_count"]) if total["policy_count"] else None
+    total["per_vehicle_premium"] = round(wp * 10000 / total["vehicle_count"]) if total.get("vehicle_count") else None
 
     lr = total["loss_ratio"] or 0
     fr = total["expense_ratio"] or 0
@@ -296,6 +300,7 @@ METRIC_KEYS = [
     ("written_premium", "保费"),
     ("earned_premium", "满期保费"),
     ("avg_premium", "件均"),
+    ("per_vehicle_premium", "车均"),
     None,
     ("pricing_coeff", "系数"),
 ]

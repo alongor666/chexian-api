@@ -189,6 +189,8 @@ export const KpiSection = memo<KpiSectionProps>(({
         return { title, value: kpis.policy_count, formatter: formatCount, loading, type: 'value' };
       case 'per_capita_premium':
         return { title, value: kpis.per_capita_premium, formatter: formatPremiumWan, loading, type: 'value' };
+      case 'per_vehicle_premium':
+        return { title, value: kpis.per_vehicle_premium, formatter: formatCount, loading, type: 'value' };
       case 'non_transfer_rate':
         return {
           title,

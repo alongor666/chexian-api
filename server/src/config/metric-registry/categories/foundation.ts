@@ -158,4 +158,38 @@ export const foundationMetrics: readonly MetricDefinition[] = [
     ],
     changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' }],
   },
+
+  {
+    id: 'per_vehicle_premium',
+    version: '1.0.0',
+    name: '车均保费',
+    category: 'foundation',
+    tags: ['core', 'kpi', 'foundation'],
+    formula: {
+      description: '保费总额 / 去重车架号数（含商业险+交强险）',
+      numerator: 'SUM(premium)',
+      denominator: 'COUNT(DISTINCT vehicle_frame_no)',
+      unit: '元',
+    },
+    sql: {
+      expression: "SUM(premium) / NULLIF(COUNT(DISTINCT COALESCE(NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''), policy_no)), 0) AS per_vehicle_premium",
+      requiredColumns: ['premium', 'vehicle_frame_no', 'policy_no'],
+      notes: '分母为去重车架号数，车架号为空时回退至保单号。一台车可能有交强险+商业险两张保单，故车均保费 > 件均保费',
+    },
+    display: {
+      formatter: 'average',
+      label: '车均保费',
+      unit: '元',
+      decimals: 0,
+      tooltip: '车均保费 = 总保费 / 去重车辆数。分母按车架号去重，一台车计一辆；件均保费分母是保单件数',
+    },
+    testCases: [
+      {
+        name: '车均保费大于零',
+        input: { whereClause: '1=1' },
+        assertions: { per_vehicle_premium: { op: 'gt', value: 0 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增车均保费指标，分母为去重车架号数' }],
+  },
 ];

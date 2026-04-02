@@ -25,6 +25,7 @@ export type KpiCardId =
   | 'total_premium'
   | 'policy_count'
   | 'per_capita_premium'
+  | 'per_vehicle_premium'
   | 'non_transfer_rate'
   | 'renewal_rate'
   | 'commercial_rate'
@@ -48,6 +49,7 @@ export const KPI_CARD_META: Array<{ id: KpiCardId; label: string; group: KpiGrou
   { id: 'total_premium', label: '总保费', group: 'focus' },
   { id: 'policy_count', label: '保单件数', group: 'focus' },
   { id: 'per_capita_premium', label: '人均保费', group: 'focus' },
+  { id: 'per_vehicle_premium', label: '车均保费', group: 'focus' },
   { id: 'non_transfer_rate', label: '非过户占比', group: 'focus' },
   { id: 'renewal_rate', label: '续保占比', group: 'focus' },
   { id: 'commercial_rate', label: '商业险占比', group: 'focus' },
