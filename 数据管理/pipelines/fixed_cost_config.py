@@ -55,14 +55,21 @@ def load(as_of: date = None) -> dict | None:
     }
 
 
-def build_fixed_cost_sql(params: dict) -> dict:
+def build_fixed_cost_sql(params: dict, earned_factor: str = None) -> dict:
     """从参数生成 DuckDB SQL 片段（per-record 计算列）
 
+    固定成本按满期比例分摊：未到期保单的固定成本不会提前全额计入，
+    与满期保费/满期赔付率的口径对齐。
+
+    参数:
+        params: load() 返回的参数字典
+        earned_factor: 满期因子 SQL 表达式（默认使用 diagnose_common 中的公式）
+
     返回 dict:
-      - tax: 附加税费 per record
-      - promo: 推动费 per record
-      - mgmt: 管理费 per record
-      - fixed_total: 固定成本合计 per record
+      - tax: 附加税费 per record（满期分摊）
+      - promo: 推动费 per record（满期分摊）
+      - mgmt: 管理费 per record（满期分摊）
+      - fixed_total: 固定成本合计 per record（满期分摊）
     """
     surcharge = params["surcharge"]
     promo_cq = params["promotion"]["交强险"]
@@ -70,9 +77,16 @@ def build_fixed_cost_sql(params: dict) -> dict:
     mgmt_rates = params["mgmt_rates"]
     mgmt_default = params["mgmt_default"]
 
-    tax_sql = f"保费 * {surcharge}"
+    # 满期因子：与 diagnose_common.EARNED 的分摊比例一致
+    if earned_factor is None:
+        pt = "DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR)"
+        ed = f"LEAST(DATE_DIFF('day', 保险起期, CURRENT_DATE), {pt})"
+        earned_factor = f"CAST({ed} AS DOUBLE) / CAST({pt} AS DOUBLE)"
 
-    promo_sql = (
+    # 签单口径的固定成本（未分摊）
+    tax_raw = f"保费 * {surcharge}"
+
+    promo_raw = (
         f"CASE WHEN 险类 = '交强险' THEN 保费 * {promo_cq} "
         f"WHEN 险类 = '商业保险' THEN 保费 * {promo_sy} "
         f"ELSE 0 END"
@@ -82,7 +96,13 @@ def build_fixed_cost_sql(params: dict) -> dict:
         f"WHEN '{org}' THEN 保费 * {rate}"
         for org, rate in mgmt_rates.items()
     )
-    mgmt_sql = f"CASE 三级机构 {mgmt_cases} ELSE 保费 * {mgmt_default} END"
+    mgmt_raw = f"CASE 三级机构 {mgmt_cases} ELSE 保费 * {mgmt_default} END"
+
+    # 乘以满期因子 → 按满期比例分摊
+    ef = earned_factor
+    tax_sql = f"({tax_raw}) * {ef}"
+    promo_sql = f"({promo_raw}) * {ef}"
+    mgmt_sql = f"({mgmt_raw}) * {ef}"
 
     fixed_total = f"(({tax_sql}) + ({promo_sql}) + ({mgmt_sql}))"
 
