@@ -97,6 +97,7 @@ export interface KpiData {
   salesman_count: number;
   org_count: number;
   per_capita_premium: number;
+  per_vehicle_premium: number;
   renewal_rate: number;
   new_car_rate: number;
   nev_rate: number;
