@@ -1,0 +1,34 @@
+{
+  "drilldown_by": "吨位分段",
+  "filter": "客户类别 = '营业货车' AND 吨位分段 IN ('1吨以下','1-2吨')",
+  "years": "2021-2025",
+  "total_rows": 2,
+  "data": [
+    {
+      "dim_value": "1-2吨",
+      "policy_count": 51647,
+      "written_premium_wan": 9622.2,
+      "loss_ratio": 72.0,
+      "expense_ratio": 17.5,
+      "variable_cost_rate": 89.5,
+      "margin_wan": 978.6,
+      "incident_rate": 22.47,
+      "avg_premium_yuan": 1911,
+      "avg_claim_yuan": 5982,
+      "pricing_coeff": 1.0921
+    },
+    {
+      "dim_value": "1吨以下",
+      "policy_count": 9218,
+      "written_premium_wan": 1411.2,
+      "loss_ratio": 49.6,
+      "expense_ratio": 18.2,
+      "variable_cost_rate": 67.8,
+      "margin_wan": 442.1,
+      "incident_rate": 11.72,
+      "avg_premium_yuan": 1562,
+      "avg_claim_yuan": 6573,
+      "pricing_coeff": 1.0163
+    }
+  ]
+}
