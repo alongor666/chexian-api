@@ -28,3 +28,4 @@ class RunContext:
     total_rec: int = 0               # 总记录数
     is_ytd: bool = False             # 是否同期对比
     ytd_label: str = "全年"          # YTD 标签文字
+    fixed_cost_sql: dict = None      # fixed_cost_config.build_fixed_cost_sql() 返回值

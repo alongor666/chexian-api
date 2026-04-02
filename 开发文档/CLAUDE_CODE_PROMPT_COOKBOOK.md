@@ -36,13 +36,13 @@
 
 ### 黄金法则
 
-| 规则 | 说明 |
-|------|------|
-| **给路径** | `server/src/sql/kpi-sql.ts` 比 "KPI 模块" 好 10 倍 |
-| **给根因** | "因为 X 导致 Y" 比 "修复 Y" 好——Claude 不会修错方向 |
-| **给边界** | "只改这个文件/不要改 XX" 防止 Claude 越界 |
-| **给验证** | "改完跑 `bun run test`" 让 Claude 自我校验 |
-| **一个 prompt 一个任务** | 拆分 > 堆叠，Claude 在 Actions 中没有持续对话能力 |
+| 规则                           | 说明                                                  |
+| ------------------------------ | ----------------------------------------------------- |
+| **给路径**               | `server/src/sql/kpi-sql.ts` 比 "KPI 模块" 好 10 倍  |
+| **给根因**               | "因为 X 导致 Y" 比 "修复 Y" 好——Claude 不会修错方向 |
+| **给边界**               | "只改这个文件/不要改 XX" 防止 Claude 越界             |
+| **给验证**               | "改完跑 `bun run test`" 让 Claude 自我校验          |
+| **一个 prompt 一个任务** | 拆分 > 堆叠，Claude 在 Actions 中没有持续对话能力     |
 
 ---
 
@@ -108,6 +108,7 @@ SUM(claim_amount) / NULLIF(SUM(earned_premium), 0) AS loss_ratio
 **扫描范围**：`server/src/sql/*.ts` 所有 SQL 生成器
 **验证**：修复后 `bun run test --run` + `bun run governance` 全通过
 **约束**：只改率值指标的聚合方式，不改其他逻辑
+
 ```
 
 ---
@@ -121,8 +122,10 @@ SUM(claim_amount) / NULLIF(SUM(earned_premium), 0) AS loss_ratio
 
 **错误信息**：
 ```
+
 src/features/dashboard/types.ts - Property 'vehicle_plan_wan' does not exist on type 'KpiData'
 src/hooks/useTruckAnalysis.ts - Parameter 'data' implicitly has an 'any' type
+
 ```
 
 **修复要求**：
@@ -211,7 +214,7 @@ src/hooks/useTruckAnalysis.ts - Parameter 'data' implicitly has an 'any' type
 ```markdown
 @claude 修复 `server/src/services/duckdb.ts` 中 CrossSellDailyAgg 物化时的 OOM 问题。
 
-**环境**：VPS 2核4G，DuckDB 默认可能占用过多内存。
+**环境**：VPS 4核4G，DuckDB 默认可能占用过多内存。
 
 **根因**：一次性物化全量 CrossSellDailyAgg 表时，DuckDB 内存峰值超过 4G 导致进程被 kill。
 
@@ -378,6 +381,7 @@ const sql = `SUM(commission) / NULLIF(SUM(premium), 0) AS commission_rate`
 ```
 
 **目标**：
+
 ```typescript
 // ✅ 从注册表获取 SQL expression
 import { getMetric } from '../config/metric-registry'
@@ -387,6 +391,7 @@ const sql = `${metric.sql.expression} AS ${metric.id}`
 
 **范围**：仅改 `cost-sql.ts`，其他 SQL 生成器后续 PR 再处理。
 **验证**：改前改后 API 返回数据一致（用 `curl` 对比 `/api/query/cost` 的输出）。
+
 ```
 
 ---
@@ -514,8 +519,10 @@ const sql = `${metric.sql.expression} AS ${metric.id}`
 
 **错误日志**：
 ```
+
 Error: Process completed with exit code 255.
 ssh: connect to host 162.14.113.44 port 22: Connection timed out
+
 ```
 
 **修复方向**：
@@ -663,11 +670,13 @@ ssh: connect to host 162.14.113.44 port 22: Connection timed out
 1. 编辑 `server/src/config/field-registry/fields.json`：
    ```json
    { "id": "renewal_mode", "name": "续保模式", "type": "VARCHAR", "source": "续保业务类型", "category": "renewal" }
-   ```
+```
+
 2. 运行 `node scripts/field-registry/generate.mjs` → 自动更新 mapping.ts + validator.ts + etl_fields.json
 3. 运行 `bun run governance` 验证 #17 检查通过
 
 **禁止**：不要手动编辑 `mapping.ts` 或 `validator.ts`（codegen 自动生成）。
+
 ```
 
 ---
@@ -768,18 +777,18 @@ ssh: connect to host 162.14.113.44 port 22: Connection timed out
 
 ## 附录：3 月高频场景速查表
 
-| 场景（3月出现次数） | 推荐 Prompt 模板 | 章节 |
-|---------------------|-------------------|------|
-| SQL 口径错误（8次） | §2.1 | Bug 修复 |
-| TS 类型错误（5次） | §2.2 | Bug 修复 |
-| E2E 超时/失败（6次） | §2.3 | Bug 修复 |
-| 热力图/饼图渲染（4次） | §2.4 | Bug 修复 |
-| VPS OOM（3次） | §2.6 | Bug 修复 |
-| 新增 API 端点（5次） | §3.1 | 功能实现 |
-| 维度下钻（6次） | §3.2 | 功能实现 |
-| 新增指标（3次） | §3.3 | 功能实现 |
-| 模块拆分（3次） | §4.1 | 重构 |
-| 消除重复（4次） | §4.4 | 重构 |
-| CI workflow 修复（7次） | §6.1 | CI/CD |
-| 安全漏洞（2次） | §7 | 安全 |
-| 字段注册表（2次） | §9.2 | 数据/ETL |
+| 场景（3月出现次数）     | 推荐 Prompt 模板 | 章节     |
+| ----------------------- | ---------------- | -------- |
+| SQL 口径错误（8次）     | §2.1            | Bug 修复 |
+| TS 类型错误（5次）      | §2.2            | Bug 修复 |
+| E2E 超时/失败（6次）    | §2.3            | Bug 修复 |
+| 热力图/饼图渲染（4次）  | §2.4            | Bug 修复 |
+| VPS OOM（3次）          | §2.6            | Bug 修复 |
+| 新增 API 端点（5次）    | §3.1            | 功能实现 |
+| 维度下钻（6次）         | §3.2            | 功能实现 |
+| 新增指标（3次）         | §3.3            | 功能实现 |
+| 模块拆分（3次）         | §4.1            | 重构     |
+| 消除重复（4次）         | §4.4            | 重构     |
+| CI workflow 修复（7次） | §6.1            | CI/CD    |
+| 安全漏洞（2次）         | §7              | 安全     |
+| 字段注册表（2次）       | §9.2            | 数据/ETL |

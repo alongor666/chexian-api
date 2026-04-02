@@ -19,6 +19,14 @@ GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet"
 OUT_DIR = str(PROJECT_ROOT / "数据分析报告")
 
 # 闰年感知：保险期限 = 起期+1年-起期（365 或 366 天）
+# 模块级固定成本 SQL 片段（由 set_fixed_cost_sql() 设置，kpi_select 自动使用）
+_FIXED_COST_SQL: dict | None = None
+
+def set_fixed_cost_sql(sql_dict: dict | None):
+    """设置模块级固定成本 SQL 片段，供 kpi_select() 默认使用"""
+    global _FIXED_COST_SQL
+    _FIXED_COST_SQL = sql_dict
+
 POLICY_TERM = "DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR)"
 EARNED_DAYS = f"LEAST(DATE_DIFF('day', 保险起期, CURRENT_DATE), {POLICY_TERM})"
 EARNED = f"保费 * CAST({EARNED_DAYS} AS DOUBLE) / CAST({POLICY_TERM} AS DOUBLE)"
@@ -86,21 +94,52 @@ TH_MR = (15, 9, 6)                  # 边际贡献率（越低越差）
 TH_LR = (60, 70, 75)                # 满期赔付率 — earned_claim_ratio
 TH_IR = (8, 10, 12)                 # 满期出险率 — earned_loss_frequency
 TH_AC_CARGO = (8000, 10000, 12000)  # 案均赔款-货车 — avg_claim_amount
+TH_CC = (99, 101, 105)              # 综合成本率 — combined_cost_ratio
 
 
 # ============================================================================
 # SQL 构建器
 # ============================================================================
 
-def kpi_select(group_col: str = None) -> str:
+def kpi_select(group_col: str = None, fixed_cost_sql: dict = None) -> str:
     """构建标准 KPI SELECT 子句
 
-    口径（v4.0）：
+    口径（v5.0）：
     - earned_premium: 闰年感知（policy_term=365/366）
     - incident_rate: (赔案/保单) × (保险期限/满期天数)
     - pricing_coeff: 仅险类='商业保险'
+    - fixed_cost / combined_cost / profit: 需传入 fixed_cost_sql（来自 fixed_cost_config）
+
+    参数:
+        group_col: GROUP BY 列名
+        fixed_cost_sql: fixed_cost_config.build_fixed_cost_sql() 的返回值，为 None 时不输出固定成本列
     """
     g = f"{group_col}," if group_col else ""
+
+    # 固定成本 SQL：优先用显式参数，其次用模块级默认值
+    if fixed_cost_sql is None:
+        fixed_cost_sql = _FIXED_COST_SQL
+
+    # 固定成本相关列（配置存在时追加，否则输出 NULL — 优雅降级）
+    if fixed_cost_sql:
+        fc = fixed_cost_sql["fixed_total"]
+        fixed_cols = f""",
+        -- 固定成本（绝对值，万元）
+        ROUND(SUM({fc})/10000, 1) AS fixed_cost_amount,
+        -- 综合成本额（绝对值，万元）= 变动成本 + 固定成本
+        ROUND((SUM(COALESCE(已报告赔款,0)) + SUM(COALESCE(费用金额,0)) + SUM({fc}))/10000, 1) AS combined_cost_amount,
+        -- 综合成本率 = 综合成本额 / 满期保费（绝对值除法，非率值相加）
+        ROUND((SUM(COALESCE(已报告赔款,0)) + SUM(COALESCE(费用金额,0)) + SUM({fc}))
+              / NULLIF(SUM({EARNED}), 0) * 100, 1) AS combined_cost_ratio,
+        -- 利润额 = 满期保费 - 综合成本额
+        ROUND((SUM({EARNED}) - SUM(COALESCE(已报告赔款,0)) - SUM(COALESCE(费用金额,0)) - SUM({fc}))/10000, 1) AS profit_amount"""
+    else:
+        fixed_cols = """,
+        NULL AS fixed_cost_amount,
+        NULL AS combined_cost_amount,
+        NULL AS combined_cost_ratio,
+        NULL AS profit_amount"""
+
     return f"""
         {g}
         COUNT(DISTINCT 保单号)::INT AS policy_count,
@@ -133,13 +172,17 @@ def kpi_select(group_col: str = None) -> str:
         ROUND(SUM(CASE WHEN 险类 = '商业保险' AND 商车自主定价系数 > 0
               THEN 商车自主定价系数 * 保费 END)
               / NULLIF(SUM(CASE WHEN 险类 = '商业保险' AND 商车自主定价系数 > 0
-              THEN 保费 END), 0), 4) AS pricing_coeff
+              THEN 保费 END), 0), 4) AS pricing_coeff{fixed_cols}
     """
 
 
-def query_kpi(con, where: str, group_col: str = None) -> list:
-    """执行标准 KPI 查询，返回 [dict, ...]"""
-    sel = kpi_select(group_col)
+def query_kpi(con, where: str, group_col: str = None, fixed_cost_sql: dict = None) -> list:
+    """执行标准 KPI 查询，返回 [dict, ...]
+
+    参数:
+        fixed_cost_sql: fixed_cost_config.build_fixed_cost_sql() 返回值，为 None 时固定成本列输出 NULL
+    """
+    sel = kpi_select(group_col, fixed_cost_sql)
     gb = f"GROUP BY {group_col}" if group_col else ""
     ob = f"ORDER BY {group_col}" if group_col else ""
     sql = f"SELECT {sel} FROM read_parquet('{GLOB}', union_by_name=true) WHERE {where} {gb} {ob}"
@@ -170,11 +213,20 @@ def kpi_rows(d: dict) -> list:
     """从标准 KPI dict 生成 [(label, value_str), ...]"""
     vc = (d.get("loss_ratio") or 0) + (d.get("expense_ratio") or 0)
     mr = 100 - vc
-    return [
+    cc = d.get("combined_cost_ratio")
+    rows = [
         ("**满期边际贡献额**", f"**{fw(d.get('earned_margin'))}**"),
         ("**预估边际贡献额**", f"**{fw(d.get('projected_margin'))}**"),
         ("**变动成本率**", f"**{fp(vc)}**{light(vc, TH_VC)}"),
         ("**边际贡献率**", f"**{fp(mr)}**{light(mr, TH_MR, False)}"),
+    ]
+    # 综合成本率/利润额（配置存在时输出）
+    if cc is not None:
+        rows.extend([
+            ("**综合成本率**", f"**{fp(cc)}**{light(cc, TH_CC)}"),
+            ("**利润额**", f"**{fw(d.get('profit_amount'))}**"),
+        ])
+    rows.extend([
         ("── 赔付 ──", ""),
         ("满期赔付率", f"{fp(d.get('loss_ratio'))}{light(d.get('loss_ratio'), TH_LR)}"),
         ("已报告赔款", fw(d.get("reported_claims"))),
@@ -194,7 +246,8 @@ def kpi_rows(d: dict) -> list:
         ("车均保费 †", fi(d.get("per_vehicle_premium"))),
         ("── 系数 ──", ""),
         ("商车定价系数", fc(d.get("pricing_coeff"))),
-    ]
+    ])
+    return rows
 
 
 def sum_kpi_dicts(dicts: list) -> dict:
@@ -206,7 +259,8 @@ def sum_kpi_dicts(dicts: list) -> dict:
     total = {}
     sum_keys = ["policy_count", "written_premium", "earned_premium",
                 "reported_claims", "claim_cases", "claim_policies", "fee_amount",
-                "annualized_cases", "vehicle_count"]
+                "annualized_cases", "vehicle_count",
+                "fixed_cost_amount", "combined_cost_amount"]
     for k in sum_keys:
         total[k] = sum(d.get(k) or 0 for d in dicts)
 
@@ -233,6 +287,17 @@ def sum_kpi_dicts(dicts: list) -> dict:
     coeff_premium = sum((d.get("written_premium") or 0)
                         for d in dicts if d.get("pricing_coeff"))
     total["pricing_coeff"] = round(coeff_weighted / coeff_premium, 4) if coeff_premium else None
+
+    # 综合成本率/利润额（绝对值除法，非率值相加）
+    fca = total.get("fixed_cost_amount") or 0
+    cca = total.get("combined_cost_amount") or 0
+    if fca and ep:
+        total["combined_cost_ratio"] = round(cca * 10000 / (ep * 10000) * 100, 1) if ep else None
+        total["profit_amount"] = round(ep - cca, 1) if ep else None
+    else:
+        total["combined_cost_ratio"] = None
+        total["profit_amount"] = None
+
     return total
 
 
@@ -284,6 +349,8 @@ METRIC_KEYS = [
     ("projected_margin", "预估边际"),
     ("_vc", "变动成本率"),
     ("_mr", "边际贡献率"),
+    ("combined_cost_ratio", "综合成本率"),
+    ("profit_amount", "利润额"),
     None,
     ("loss_ratio", "赔付率"),
     ("reported_claims", "赔款"),

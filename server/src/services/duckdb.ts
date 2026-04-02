@@ -932,6 +932,23 @@ class DuckDBService {
   }
 
   /**
+   * 加载车牌归属地映射维度表
+   *
+   * 数据源：warehouse/dim/plate_region/latest.parquet（411 行）
+   * 字段：plate_prefix(VARCHAR), province(VARCHAR), city(VARCHAR)
+   * JOIN：SUBSTRING(plate_no, 1, 2) = PlateRegionMap.plate_prefix
+   */
+  async loadPlateRegionDim(parquetPath: string): Promise<void> {
+    const pf = parquetPath.replace(/\\/g, '/');
+    await this.query(`
+      CREATE OR REPLACE TABLE PlateRegionMap AS
+      SELECT * FROM read_parquet('${pf}')
+    `);
+    const result = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM PlateRegionMap');
+    console.log(`[DuckDB] PlateRegionMap loaded: ${result[0]?.cnt ?? 0} records`);
+  }
+
+  /**
    * 加载团队映射 JSON 到 SalesmanTeamMapping 表（回退方式）
    *
    * 数据源：数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json

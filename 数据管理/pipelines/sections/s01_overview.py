@@ -8,7 +8,7 @@ from diagnose_common import query_kpi
 def run(ctx, rpt, collected, silent=False):
     yr_data = {}
     for yr in ctx.years:
-        rows = query_kpi(ctx.con, f"{ctx.base_where} AND {ctx.yr_where(yr)}")
+        rows = query_kpi(ctx.con, f"{ctx.base_where} AND {ctx.yr_where(yr)}", fixed_cost_sql=ctx.fixed_cost_sql)
         if rows:
             yr_data[yr] = rows[0]
 

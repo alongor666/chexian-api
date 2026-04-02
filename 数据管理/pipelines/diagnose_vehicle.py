@@ -30,10 +30,11 @@ except ImportError:
     print("错误: pip3 install duckdb"); sys.exit(1)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from diagnose_common import GLOB, OUT_DIR, detect_risk_field, query_kpi  # noqa: E402
+from diagnose_common import GLOB, OUT_DIR, detect_risk_field, query_kpi, set_fixed_cost_sql  # noqa: E402
 from diagnose_context import RunContext  # noqa: E402
 from diagnose_report import Report  # noqa: E402
 from sections import SECTION_REGISTRY, SECTION_NAMES, ALL_SECTION_IDS  # noqa: E402
+import fixed_cost_config  # noqa: E402
 
 
 def _parse_ids(s: str) -> set:
@@ -112,6 +113,8 @@ def _build_json_output(ctx, collected):
             "expense_ratio": round(fr, 1),
             "earned_margin_wan": round(latest_d.get("earned_margin") or 0, 1),
             "projected_margin_wan": round(latest_d.get("projected_margin") or 0, 1),
+            "combined_cost_ratio": round(latest_d.get("combined_cost_ratio") or 0, 1) if latest_d.get("combined_cost_ratio") is not None else None,
+            "profit_amount_wan": round(latest_d.get("profit_amount") or 0, 1) if latest_d.get("profit_amount") is not None else None,
             "policy_count": latest_d.get("policy_count") or 0,
             "avg_premium_yuan": latest_d.get("avg_premium") or 0,
         },
@@ -336,6 +339,11 @@ def main():
         names = [f"{sid}.{SECTION_NAMES[sid]}" for sid in sorted(requested)]
         print(f"   📋 板块: {', '.join(names)}")
 
+    # 加载固定成本配置（优雅降级：配置不存在则 fc_sql=None）
+    fc_params = fixed_cost_config.load()
+    fc_sql = fixed_cost_config.build_fixed_cost_sql(fc_params) if fc_params else None
+    set_fixed_cost_sql(fc_sql)
+
     # 构建上下文
     ctx = RunContext(
         con=con, base_where=base_where, years=years,
@@ -344,6 +352,7 @@ def main():
         max_sign=str(max_sign), max_start=str(max_start),
         total_pol=total_pol, total_rec=total_rec,
         is_ytd=is_ytd, ytd_label=ytd_label,
+        fixed_cost_sql=fc_sql,
     )
 
     rpt = Report()

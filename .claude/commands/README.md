@@ -19,6 +19,7 @@
 | 数据导出 | `/data-export` | [data-export.md](./data-export.md) |
 | Python 数据工具 | `/data-tools` | [data-tools.md](./data-tools.md) |
 | 成本分析 | `/cost-analysis` | [cost-analysis.md](./cost-analysis.md) |
+| 定价红线 | `/pricing-redline` | [pricing-redline.md](./pricing-redline.md) |
 | 生成周报 | `/weekly-report` | [weekly-report.md](./weekly-report.md) |
 | 周报子命令 | `/report-weekly` | [report-weekly.md](./report-weekly.md) |
 | 月报子命令 | `/report-monthly` | [report-monthly.md](./report-monthly.md) |
@@ -48,7 +49,7 @@
 | 类别 | 主命令 | 子命令 |
 |------|--------|--------|
 | **Git 工作流** | `commit-push-pr`, `sync-and-rebase` | — |
-| **数据分析** | `data-analysis`, `data-tools`, `cost-analysis` | `data-profile`, `data-kpi`, `data-trends`, `data-export` |
+| **数据分析** | `data-analysis`, `data-tools`, `cost-analysis`, `pricing-redline` | `data-profile`, `data-kpi`, `data-trends`, `data-export` |
 | **报告生成** | `weekly-report` | `report-weekly`, `report-monthly`, `report-custom` |
 | **安全审查** | `security-review` | `security-sql`, `security-xss`, `security-cors`, `security-all` |
 | **开发工具** | `performance-audit`, `ui-review`, `test-coverage` | — |

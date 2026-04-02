@@ -79,6 +79,13 @@ export function getQuoteConversionPaths(): string[] {
   ];
 }
 
+export function getPlateRegionDimPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/plate_region/latest.parquet'),
+    path.resolve(getDataDir(), 'dim/plate_region/latest.parquet'),
+  ];
+}
+
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,

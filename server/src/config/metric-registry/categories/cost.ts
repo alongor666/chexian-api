@@ -322,4 +322,172 @@ export const costMetrics: readonly MetricDefinition[] = [
     ],
     changelog: [{ version: '1.0.0', date: '2026-03-31', changes: '新增：时序对比核心指标，诊断脚本同步使用' }],
   },
+
+  // ============================================================================
+  // 综合成本指标（L4 — 依赖外部固定成本参数）
+  // ============================================================================
+
+  {
+    id: 'fixed_cost_amount',
+    version: '1.0.0',
+    name: '固定成本额',
+    category: 'cost',
+    tags: ['cost', 'fixed-cost'],
+    formula: {
+      description: '附加税费额 + 推动费额 + 管理费额（均为绝对值聚合）',
+      numerator: 'SUM(保费×1.5%) + SUM(交强保费×0.15% + 商业保费×0.4%) + Σ(各机构保费×管理成本比例)',
+      unit: '元',
+    },
+    sql: {
+      expression: '-- L4 计算，由诊断脚本 diagnose_vehicle.py 通过 fixed_cost_config.py 动态生成 SQL',
+      requiredColumns: ['premium', '险类', '三级机构'],
+      notes: 'L4 计算。固定成本参数来自 数据管理/config/fixed-cost-params.json。聚合时必须先算绝对值分子分母再除，禁止率值相加',
+    },
+    display: {
+      formatter: 'premiumWan',
+      label: '固定成本额',
+      unit: '万元',
+      tooltip: '固定成本额 = 附加税费(1.5%) + 销售推动费(交强0.15%/商业0.4%) + 管理费(逐机构)',
+    },
+    testCases: [
+      {
+        name: '固定成本额非负',
+        input: { whereClause: '1=1' },
+        assertions: { fixed_cost_amount: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增：固定成本三分项绝对值，参数来自 fixed-cost-params.json' }],
+  },
+
+  {
+    id: 'fixed_cost_ratio',
+    version: '1.0.0',
+    name: '固定成本率',
+    category: 'cost',
+    tags: ['cost', 'fixed-cost'],
+    formula: {
+      description: '固定成本额 / 满期保费',
+      numerator: 'SUM(fixed_cost_amount)',
+      denominator: 'SUM(earned_premium)',
+      unit: '%',
+    },
+    sql: {
+      expression: '-- L4 计算，fixed_cost_amount / earned_premium',
+      requiredColumns: ['premium', 'exposure_days', '险类', '三级机构'],
+      notes: 'L4 计算。由诊断脚本 diagnose_vehicle.py 自动输出。率值必须从绝对值计算，禁止率值相加',
+    },
+    display: {
+      formatter: 'percent',
+      label: '固定成本率',
+      unit: '%',
+      decimals: 1,
+      tooltip: '固定成本率 = (附加税费+推动费+管理费) / 满期保费',
+    },
+    testCases: [
+      {
+        name: '固定成本率非负',
+        input: { whereClause: '1=1' },
+        assertions: { fixed_cost_ratio: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增：固定成本占比' }],
+  },
+
+  {
+    id: 'combined_cost_amount',
+    version: '1.0.0',
+    name: '综合成本额',
+    category: 'cost',
+    tags: ['core', 'kpi', 'cost'],
+    formula: {
+      description: '变动成本额 + 固定成本额 = 已报告赔款 + 费用金额 + 固定成本额',
+      numerator: 'SUM(reported_claims) + SUM(fee_amount) + SUM(fixed_cost)',
+      unit: '元',
+    },
+    sql: {
+      expression: '-- L4 计算',
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days', '险类', '三级机构'],
+      notes: 'L4 计算。绝对值相加，诊断脚本自动输出',
+    },
+    display: {
+      formatter: 'premiumWan',
+      label: '综合成本额',
+      unit: '万元',
+      tooltip: '综合成本额 = 已报告赔款 + 费用金额 + 固定成本额',
+    },
+    testCases: [
+      {
+        name: '综合成本额非负',
+        input: { whereClause: '1=1' },
+        assertions: { combined_cost_amount: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增：全口径成本绝对值' }],
+  },
+
+  {
+    id: 'combined_cost_ratio',
+    version: '1.0.0',
+    name: '综合成本率',
+    category: 'cost',
+    tags: ['core', 'kpi', 'cost'],
+    formula: {
+      description: '综合成本额 / 满期保费（绝对值除法，非率值相加）',
+      numerator: 'SUM(combined_cost_amount)',
+      denominator: 'SUM(earned_premium)',
+      unit: '%',
+    },
+    sql: {
+      expression: '-- L4 计算，combined_cost_amount / earned_premium',
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days', '险类', '三级机构'],
+      notes: 'L4 计算。≤100% 盈利，>100% 亏损。亮灯：≤99% 🟢 / 99-101% 🔵 / 101-105% 🟡 / >105% 🔴',
+    },
+    display: {
+      formatter: 'percent',
+      label: '综合成本率',
+      unit: '%',
+      decimals: 1,
+      tooltip: '综合成本率 = (赔付+费用+附加税费+推动费+管理费) / 满期保费。≤100% 盈利',
+    },
+    testCases: [
+      {
+        name: '综合成本率非负',
+        input: { whereClause: '1=1' },
+        assertions: { combined_cost_ratio: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增：全口径成本率，含固定成本三分项（附加税费+推动费+管理费）' }],
+  },
+
+  {
+    id: 'earned_profit_amount',
+    version: '1.0.0',
+    name: '利润额',
+    category: 'cost',
+    tags: ['core', 'kpi', 'cost', 'profit'],
+    formula: {
+      description: '满期保费 - 综合成本额 = 边际贡献额 - 固定成本额',
+      numerator: 'SUM(earned_premium) - SUM(combined_cost_amount)',
+      unit: '元',
+    },
+    sql: {
+      expression: '-- L4 计算，earned_premium - combined_cost_amount',
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days', '险类', '三级机构'],
+      notes: 'L4 计算。真实盈亏 = 边际贡献额 - 固定成本额。与边际贡献额并存：边际贡献额反映承保品质，利润额反映真实盈亏',
+    },
+    display: {
+      formatter: 'premiumWan',
+      label: '利润额',
+      unit: '万元',
+      tooltip: '利润额 = 满期保费 - 综合成本额。正值盈利，负值亏损',
+    },
+    testCases: [
+      {
+        name: '利润额可为负（亏损）',
+        input: { whereClause: '1=1' },
+        assertions: { earned_profit_amount: { op: 'type', value: 'number' } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增：全口径利润，含固定成本（管理费+推动费+附加税费）' }],
+  },
 ];

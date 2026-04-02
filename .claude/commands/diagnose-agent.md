@@ -106,9 +106,17 @@ python3 数据管理/pipelines/diagnose_vehicle.py \
 
 ### Step 1: 定性判断（读 L0 + L1）
 用一句话回答"赚不赚？"
+
+**承保品质（变动成本率）：**
 - L1.latest_year.variable_cost_rate < 85% → 健康盈利
 - 85-94% → 微利，需关注
 - > 94% → 亏损
+
+**真实盈亏（综合成本率，含固定成本）：**
+- L1.latest_year.combined_cost_ratio ≤ 99% → 盈利
+- 99-105% → 微亏
+- > 105% → 严重亏损
+- L1.latest_year.profit_amount_wan → 利润额绝对值（万元）
 
 ### Step 2: 归因排序（读 L2 + findings）
 找到亏损/异常的 top 2-3 个维度：

@@ -14,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
 import { serverEnv } from './config/env.js';
-import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getRenewalFunnelPaths, getQuoteConversionPaths } from './config/paths.js';
+import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getRenewalFunnelPaths, getQuoteConversionPaths, getPlateRegionDimPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
@@ -315,6 +315,16 @@ async function startServer() {
       if (!dimLoaded) {
         console.warn('[Server] Warning: Dim data unavailable. Checked Parquet + JSON paths.');
         console.warn('[Server] Hint: run "python3 数据管理/warehouse/dim/generate_dim_tables.py" to generate dim Parquet files.');
+      }
+
+      // 加载车牌归属地映射（独立于 PolicyFact）
+      const plateRegionPath = getPlateRegionDimPaths().find(p => fs.existsSync(p));
+      if (plateRegionPath) {
+        try {
+          await duckdbService.loadPlateRegionDim(plateRegionPath);
+        } catch (err) {
+          console.warn('[Server] PlateRegionMap load failed (non-blocking):', err);
+        }
       }
 
       // 加载续保漏斗数据（独立于 PolicyFact）
