@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const AUTH_FILE = 'output/playwright/.auth/user.json';
+const LOCAL_CORS_ORIGINS = 'http://localhost:5173,http://127.0.0.1:5173';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -33,6 +34,11 @@ export default defineConfig({
   ],
   webServer: {
     command: 'bun run dev:full',
+    env: {
+      ...process.env,
+      NODE_ENV: process.env.NODE_ENV ?? 'development',
+      CORS_ORIGIN: process.env.CORS_ORIGIN ?? LOCAL_CORS_ORIGINS,
+    },
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,

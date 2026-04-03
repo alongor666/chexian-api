@@ -17,6 +17,12 @@ export interface QuoteConversionFilters {
   salesmanNo?: string;       // 业务员编号
   customerCategory?: string; // 客户类别
   insuranceCombo?: string;   // 险别组合：主全 | 交三
+  isTelemarketing?: '电销' | '非电销';
+  isNewEnergy?: '是' | '否';
+  isTransferred?: '是' | '否';
+  riskGrade?: 'A' | 'B' | 'C' | 'D';
+  ncdMin?: number;
+  ncdMax?: number;
 }
 
 function esc(val: string): string {
@@ -50,6 +56,24 @@ function buildWhere(filters: QuoteConversionFilters): string {
   if (filters.insuranceCombo) {
     conds.push(`险别组合 = '${esc(filters.insuranceCombo)}'`);
   }
+  if (filters.isTelemarketing) {
+    conds.push(`是否电销 = '${esc(filters.isTelemarketing)}'`);
+  }
+  if (filters.isNewEnergy) {
+    conds.push(`是否新能源车 = '${esc(filters.isNewEnergy)}'`);
+  }
+  if (filters.isTransferred) {
+    conds.push(`是否过户车 = '${esc(filters.isTransferred)}'`);
+  }
+  if (filters.riskGrade) {
+    conds.push(`车险分等级 = '${esc(filters.riskGrade)}'`);
+  }
+  if (typeof filters.ncdMin === 'number') {
+    conds.push(`NCD系数 >= ${filters.ncdMin}`);
+  }
+  if (typeof filters.ncdMax === 'number') {
+    conds.push(`NCD系数 <= ${filters.ncdMax}`);
+  }
 
   return conds.join(' AND ');
 }
@@ -68,8 +92,10 @@ export function generateQuoteKpiQuery(filters: QuoteConversionFilters = {}): str
       -- 续保/转保分拆
       COUNT(CASE WHEN 续保情况 = '续保' THEN 1 END) AS renewal_quotes,
       COUNT(CASE WHEN 续保情况 = '续保' AND 是否承保 = '承保' THEN 1 END) AS renewal_insured,
+      ROUND(SUM(CASE WHEN 续保情况 = '续保' AND 是否承保 = '承保' THEN 折后保费 ELSE 0 END), 0) AS renewal_insured_premium,
       COUNT(CASE WHEN 续保情况 = '转保' THEN 1 END) AS switch_quotes,
-      COUNT(CASE WHEN 续保情况 = '转保' AND 是否承保 = '承保' THEN 1 END) AS switch_insured
+      COUNT(CASE WHEN 续保情况 = '转保' AND 是否承保 = '承保' THEN 1 END) AS switch_insured,
+      ROUND(SUM(CASE WHEN 续保情况 = '转保' AND 是否承保 = '承保' THEN 折后保费 ELSE 0 END), 0) AS switch_insured_premium
     FROM QuoteConversion
     WHERE ${where}
   `;

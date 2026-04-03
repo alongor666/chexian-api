@@ -18,6 +18,12 @@ function filtersToParams(f: QuoteFilters): Record<string, string> {
   if (f.salesmanNo) p.salesmanNo = f.salesmanNo;
   if (f.customerCategory) p.customerCategory = f.customerCategory;
   if (f.insuranceCombo) p.insuranceCombo = f.insuranceCombo;
+  if (f.isTelemarketing) p.isTelemarketing = f.isTelemarketing;
+  if (f.isNewEnergy) p.isNewEnergy = f.isNewEnergy;
+  if (f.isTransferred) p.isTransferred = f.isTransferred;
+  if (f.riskGrade) p.riskGrade = f.riskGrade;
+  if (f.ncdMin) p.ncdMin = f.ncdMin;
+  if (f.ncdMax) p.ncdMax = f.ncdMax;
   return p;
 }
 
@@ -62,6 +68,8 @@ export function useQuoteTrend(filters: QuoteFilters, granularity: 'day' | 'week'
     queryFn: () => apiClient.getQuoteConversionTrend({ ...filtersToParams(filters), granularity }) as Promise<TrendRow[]>,
   });
 }
+
+export { filtersToParams };
 
 export function useQuoteRanking(filters: QuoteFilters, dimension: string) {
   return useQuery({

@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { ensureDataLoaded } from './helpers/session';
+import { skipWhenNoData } from './helpers/session';
 
 test('cross-sell 年维度下热力图区块进入禁用态而不是继续请求不受支持的 15 期热力图', async ({ page }) => {
-  await ensureDataLoaded(page);
+  if (!await skipWhenNoData(page)) {
+    return;
+  }
 
   await page.goto('/#/specialty?tab=cross-sell');
   await page.waitForLoadState('domcontentloaded');

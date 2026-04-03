@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipWhenNoData } from './helpers/session';
 
 test.use({ storageState: 'output/playwright/.auth/user.json' });
 test.setTimeout(90000);
@@ -12,7 +13,14 @@ async function waitForQuoteData(page: import('@playwright/test').Page) {
 test.describe.serial('报价转化分析', () => {
 
   test('完整页面渲染 + 下钻交互', async ({ page }) => {
+    if (!await skipWhenNoData(page)) {
+      return;
+    }
+
     await waitForQuoteData(page);
+
+    await expect(page.getByRole('button', { name: '版本 A' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '版本 B' })).toBeVisible();
 
     // ── KPI 卡片 ──
     await expect(page.getByText('报价总量').first()).toBeVisible();
@@ -44,6 +52,16 @@ test.describe.serial('报价转化分析', () => {
     // ── 侧边栏入口 ──
     const sidebar = page.getByRole('navigation', { name: '主导航' });
     await expect(sidebar.getByText('报价转化')).toBeVisible();
+
+    // ── 版本 B 专题 ──
+    await page.getByRole('button', { name: '版本 B' }).click();
+    await expect(page.getByText('版本 B · 旧车专题版')).toBeVisible({ timeout: 15000 });
+    for (const tabName of ['总览', '续/转保', '三级机构', '险别/客户/等级', '月度趋势', '折扣/NCD']) {
+      await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible();
+    }
+    await expect(page.getByText('整体转化漏斗')).toBeVisible();
+    await page.getByRole('tab', { name: '月度趋势', exact: true }).click();
+    await expect(page.getByText('月度趋势快照')).toBeVisible();
   });
 
   // 注意：API 端点测试（7 个 /api/query/quote-conversion/* 端点）

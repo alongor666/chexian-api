@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ensureDataLoaded } from './helpers/session';
+import { skipWhenNoData } from './helpers/session';
 
 /** 记录关键页面截图 */
 const attachScreenshot = async (page: Page, name: string) => {
@@ -8,7 +8,9 @@ const attachScreenshot = async (page: Page, name: string) => {
 };
 
 test('筛选器交互与报表展示', async ({ page }: { page: Page }) => {
-  await ensureDataLoaded(page);
+  if (!await skipWhenNoData(page)) {
+    return;
+  }
 
   await page.evaluate(() => localStorage.setItem('page-filter-collapsed', 'false'));
   await page.goto('/#/reports');

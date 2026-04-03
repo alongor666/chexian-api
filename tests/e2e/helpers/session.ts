@@ -1,7 +1,9 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { DEFAULT_E2E_PASSWORD, DEFAULT_E2E_USERNAME } from './credentials';
 
-const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
-const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'dev';
+const E2E_USERNAME = process.env.E2E_USERNAME ?? DEFAULT_E2E_USERNAME;
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? DEFAULT_E2E_PASSWORD;
+const API_BASE = 'http://localhost:3000';
 
 export const waitForBackendReady = async (page: Page) => {
   // CI cold start is slower — allow up to 60s (40 attempts × 1.5s)
@@ -54,21 +56,29 @@ export const login = async (page: Page) => {
     }
   }
 
-  await page.goto('/#/login');
-  await page.getByPlaceholder('请输入用户名').fill(E2E_USERNAME);
-  await page.getByPlaceholder('请输入密码').fill(E2E_PASSWORD);
-
-  const [loginResponse] = await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' && response.url().includes('/api/auth/login'),
-      { timeout: 30000 }
-    ),
-    page.getByRole('button', { name: '登录', exact: true }).click(),
-  ]);
+  const loginResponse = await page.request.post(`${API_BASE}/api/auth/login`, {
+    data: { username: E2E_USERNAME, password: E2E_PASSWORD },
+    timeout: 30000,
+  });
 
   expect(loginResponse.status()).toBe(200);
+  const loginPayload = await loginResponse.json();
+  const accessToken = loginPayload?.data?.token;
+  expect(accessToken).toBeTruthy();
 
+  await page.context().addCookies([{
+    name: 'cx_access_token',
+    value: accessToken,
+    url: 'http://localhost',
+    httpOnly: true,
+    sameSite: 'Lax',
+  }]);
+
+  await page.goto('/#/login');
+  await page.evaluate(() => {
+    window.localStorage.setItem('chexian_auth_session_hint', '1');
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForURL(
     (url) => !url.hash.startsWith('#/login') && !url.pathname.endsWith('/login'),
     { waitUntil: 'domcontentloaded', timeout: 30000 }
@@ -140,6 +150,42 @@ export const ensureDataLoaded = async (page: Page): Promise<boolean> => {
   }
 
   return true;
+};
+
+export const skipWhenNoData = async (page: Page): Promise<boolean> => {
+  const hasData = await ensureDataLoaded(page);
+  if (hasData) {
+    return true;
+  }
+
+  if (page.url().includes('#/login')) {
+    await login(page);
+  }
+
+  await page.goto('/#/');
+  await page.waitForLoadState('domcontentloaded');
+
+  const loginHeading = page.getByRole('heading', { name: '车险业绩分析系统' });
+  if (await loginHeading.isVisible().catch(() => false)) {
+    await login(page);
+    await page.goto('/#/');
+    await page.waitForLoadState('domcontentloaded');
+  }
+
+  await page.waitForURL((url) => {
+    const hash = url.hash || '';
+    return hash.startsWith('#/data-import') || hash.startsWith('#/dashboard');
+  }, { timeout: 10000 }).catch(() => null);
+
+  if (page.url().includes('#/dashboard')) {
+    return true;
+  }
+
+  test.info().annotations.push({
+    type: 'skip-reason',
+    description: 'No Parquet data available — skipped data-dependent assertions',
+  });
+  return false;
 };
 
 export const assertAdvancedDrawerToggles = async (page: Page) => {

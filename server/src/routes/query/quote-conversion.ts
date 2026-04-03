@@ -21,6 +21,14 @@ import {
 
 const router = Router();
 
+function preprocessBlankToUndefined(value: unknown): unknown {
+  return typeof value === 'string' && value.trim() === '' ? undefined : value;
+}
+
+const optionalTextSchema = z.preprocess(preprocessBlankToUndefined, z.string().optional());
+const optionalEnumSchema = <T extends [string, ...string[]]>(values: T) =>
+  z.preprocess(preprocessBlankToUndefined, z.enum(values).optional());
+
 /**
  * 中间件：确保 QuoteConversion 视图已加载
  */
@@ -36,14 +44,20 @@ router.use(
 );
 
 const quoteFilterSchema = z.object({
-  dateStart: z.string().optional(),
-  dateEnd: z.string().optional(),
-  renewalType: z.enum(['续保', '转保']).optional(),
-  orgName: z.string().optional(),
-  teamName: z.string().optional(),
-  salesmanNo: z.string().optional(),
-  customerCategory: z.string().optional(),
-  insuranceCombo: z.enum(['主全', '交三']).optional(),
+  dateStart: optionalTextSchema,
+  dateEnd: optionalTextSchema,
+  renewalType: optionalEnumSchema(['续保', '转保']),
+  orgName: optionalTextSchema,
+  teamName: optionalTextSchema,
+  salesmanNo: optionalTextSchema,
+  customerCategory: optionalTextSchema,
+  insuranceCombo: optionalEnumSchema(['主全', '交三']),
+  isTelemarketing: optionalEnumSchema(['电销', '非电销']),
+  isNewEnergy: optionalEnumSchema(['是', '否']),
+  isTransferred: optionalEnumSchema(['是', '否']),
+  riskGrade: optionalEnumSchema(['A', 'B', 'C', 'D']),
+  ncdMin: z.preprocess(preprocessBlankToUndefined, z.coerce.number().optional()),
+  ncdMax: z.preprocess(preprocessBlankToUndefined, z.coerce.number().optional()),
 });
 
 function parseFilters(query: Record<string, unknown>): QuoteConversionFilters {
@@ -58,7 +72,29 @@ function parseFilters(query: Record<string, unknown>): QuoteConversionFilters {
   if (filters.dateEnd && !isValidDateFormat(filters.dateEnd)) {
     throw new AppError(400, 'dateEnd 格式无效，需 YYYY-MM-DD');
   }
+  if (filters.ncdMin !== undefined && filters.ncdMax !== undefined && filters.ncdMin > filters.ncdMax) {
+    throw new AppError(400, 'ncdMin 不能大于 ncdMax');
+  }
   return filters;
+}
+
+function parseEnumParam<T extends [string, ...string[]]>(
+  value: unknown,
+  values: T,
+  fieldName: string,
+  defaultValue?: T[number],
+): T[number] {
+  if (value === undefined) {
+    if (defaultValue !== undefined) {
+      return defaultValue;
+    }
+    throw new AppError(400, `${fieldName} 参数不能为空`);
+  }
+  const result = z.enum(values).safeParse(value);
+  if (!result.success) {
+    throw new AppError(400, `${fieldName} 参数无效，需 ${values.join('/')}`);
+  }
+  return result.data;
 }
 
 /**
@@ -96,8 +132,7 @@ router.get(
 router.get(
   '/quote-conversion/drilldown',
   asyncHandler(async (req, res) => {
-    const levelSchema = z.enum(['org', 'team', 'salesman']).default('org');
-    const level = levelSchema.parse(req.query.level ?? 'org');
+    const level = parseEnumParam(req.query.level, ['org', 'team', 'salesman'], 'level', 'org');
     const filters = parseFilters(req.query);
     const sql = generateQuoteDrilldownQuery(filters, level);
     const data = await duckdbService.query(sql);
@@ -157,8 +192,7 @@ router.get(
   '/quote-conversion/trend',
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const granSchema = z.enum(['day', 'week', 'month']).default('week');
-    const granularity = granSchema.parse(req.query.granularity ?? 'week');
+    const granularity = parseEnumParam(req.query.granularity, ['day', 'week', 'month'], 'granularity', 'week');
     const sql = generateQuoteTrendQuery(filters, granularity);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data, granularity });

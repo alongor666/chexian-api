@@ -5,9 +5,25 @@ import type { QuoteKpi } from '../types';
 interface Props {
   data: QuoteKpi | undefined;
   isLoading: boolean;
+  variant?: 'default' | 'oldCar';
 }
 
-export function KpiCards({ data, isLoading }: Props) {
+function formatPercent(numerator: number, denominator: number): string {
+  if (!denominator) return '0.0';
+  return ((numerator / denominator) * 100).toFixed(1);
+}
+
+function formatRatio(left: number, right: number): string {
+  if (!right) return '0.00';
+  return (left / right).toFixed(2);
+}
+
+function formatAveragePremium(totalPremium: number, totalCount: number): string {
+  if (!totalCount) return '0.00';
+  return (totalPremium / totalCount / 10000).toFixed(2);
+}
+
+export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
   if (isLoading || !data) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -21,28 +37,88 @@ export function KpiCards({ data, isLoading }: Props) {
     );
   }
 
-  const renewalRate = data.renewal_quotes > 0
-    ? (data.renewal_insured / data.renewal_quotes * 100).toFixed(1)
-    : '0';
-  const switchRate = data.switch_quotes > 0
-    ? (data.switch_insured / data.switch_quotes * 100).toFixed(1)
-    : '0';
-
+  const renewalRate = formatPercent(data.renewal_insured, data.renewal_quotes);
+  const switchRate = formatPercent(data.switch_insured, data.switch_quotes);
   const conversionRate = data.conversion_rate ?? 0;
   const renewalPct = parseFloat(renewalRate);
   const switchPct = parseFloat(switchRate);
   const maxBarPct = Math.max(renewalPct, switchPct, 1);
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      {/* Hero 大卡 — 转化率 */}
-      <div className={cn(cardStyles.base, 'lg:col-span-2 p-5')}>
-        <div className={`text-xs ${colorClasses.text.neutralMuted} mb-2`}>整体转化率</div>
-        <div className={cn(numericStyles.kpiPrimary, 'text-4xl mb-4')}>
-          {conversionRate}%
+  if (variant === 'oldCar') {
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className={cn(cardStyles.base, 'xl:col-span-2 p-5')}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className={`text-xs ${colorClasses.text.neutralMuted} mb-2`}>续转承保率</div>
+              <div className={cn(numericStyles.kpiPrimary, 'text-4xl mb-2')}>{conversionRate}%</div>
+              <div className={`text-xs ${colorClasses.text.neutralMuted}`}>
+                总报价件数 {formatCount(data.total_quotes)}，承保件数 {formatCount(data.total_insured)}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 min-w-[260px]">
+              <div className="rounded-lg bg-neutral-50 dark:bg-neutral-800/60 p-3">
+                <div className={`text-xs ${colorClasses.text.neutralMuted} mb-1`}>续保承保率</div>
+                <div className={cn(numericStyles.kpiSecondary)}>{renewalRate}%</div>
+              </div>
+              <div className="rounded-lg bg-neutral-50 dark:bg-neutral-800/60 p-3">
+                <div className={`text-xs ${colorClasses.text.neutralMuted} mb-1`}>转保承保率</div>
+                <div className={cn(numericStyles.kpiSecondary)}>{switchRate}%</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 mt-4">
+            <div className="flex items-center gap-3">
+              <span className={`text-xs w-8 ${colorClasses.text.neutralMuted}`}>续保</span>
+              <div className="flex-1 h-5 bg-neutral-100 dark:bg-neutral-800 rounded overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded transition-all duration-500"
+                  style={{ width: `${(renewalPct / maxBarPct) * 100}%` }}
+                />
+              </div>
+              <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>{renewalRate}%</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={`text-xs w-8 ${colorClasses.text.neutralMuted}`}>转保</span>
+              <div className="flex-1 h-5 bg-neutral-100 dark:bg-neutral-800 rounded overflow-hidden">
+                <div
+                  className="h-full bg-warning rounded transition-all duration-500"
+                  style={{ width: `${(switchPct / maxBarPct) * 100}%` }}
+                />
+              </div>
+              <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>{switchRate}%</span>
+            </div>
+          </div>
         </div>
 
-        {/* 续保 vs 转保对比条 */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-1 gap-4">
+          <div className={cn(cardStyles.base, 'p-4')}>
+            <div className={`text-xs ${colorClasses.text.neutralMuted} mb-1`}>续/转承保率比</div>
+            <div className={cn(numericStyles.kpiSecondary)}>{formatRatio(renewalPct, switchPct)}</div>
+          </div>
+          <div className={cn(cardStyles.base, 'p-4')}>
+            <div className={`text-xs ${colorClasses.text.neutralMuted} mb-1`}>续保件均保费</div>
+            <div className={cn(numericStyles.kpiSecondary)}>
+              {formatAveragePremium(data.renewal_insured_premium ?? 0, data.renewal_insured)}万
+            </div>
+          </div>
+          <div className={cn(cardStyles.base, 'p-4')}>
+            <div className={`text-xs ${colorClasses.text.neutralMuted} mb-1`}>承保保费</div>
+            <div className={cn(numericStyles.kpiSecondary)}>{formatPremiumWan(data.insured_premium)}万</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className={cn(cardStyles.base, 'lg:col-span-2 p-5')}>
+        <div className={`text-xs ${colorClasses.text.neutralMuted} mb-2`}>整体转化率</div>
+        <div className={cn(numericStyles.kpiPrimary, 'text-4xl mb-4')}>{conversionRate}%</div>
+
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <span className={`text-xs w-8 ${colorClasses.text.neutralMuted}`}>续保</span>
@@ -52,9 +128,7 @@ export function KpiCards({ data, isLoading }: Props) {
                 style={{ width: `${(renewalPct / maxBarPct) * 100}%` }}
               />
             </div>
-            <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>
-              {renewalRate}%
-            </span>
+            <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>{renewalRate}%</span>
           </div>
           <div className="flex items-center gap-3">
             <span className={`text-xs w-8 ${colorClasses.text.neutralMuted}`}>转保</span>
@@ -64,9 +138,7 @@ export function KpiCards({ data, isLoading }: Props) {
                 style={{ width: `${(switchPct / maxBarPct) * 100}%` }}
               />
             </div>
-            <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>
-              {switchRate}%
-            </span>
+            <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>{switchRate}%</span>
           </div>
         </div>
 
@@ -75,14 +147,11 @@ export function KpiCards({ data, isLoading }: Props) {
         </div>
       </div>
 
-      {/* 辅助 KPI 小卡 */}
       <div className="grid grid-cols-3 lg:grid-cols-1 gap-4">
         <div className={cn(cardStyles.base, 'p-4')}>
           <div className={`text-xs ${colorClasses.text.neutralMuted} mb-1`}>报价总量</div>
           <div className={cn(numericStyles.kpiSecondary)}>{formatCount(data.total_quotes)}</div>
-          <div className={`text-xs ${colorClasses.text.neutralMuted} mt-1`}>
-            承保 {formatCount(data.total_insured)}
-          </div>
+          <div className={`text-xs ${colorClasses.text.neutralMuted} mt-1`}>承保 {formatCount(data.total_insured)}</div>
         </div>
         <div className={cn(cardStyles.base, 'p-4')}>
           <div className={`text-xs ${colorClasses.text.neutralMuted} mb-1`}>承保保费</div>

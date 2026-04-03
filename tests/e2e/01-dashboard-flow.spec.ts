@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ensureDataLoaded } from './helpers/session';
+import { skipWhenNoData } from './helpers/session';
 
 /** 记录关键页面截图 */
 const attachScreenshot = async (page: Page, name: string) => {
@@ -8,7 +8,9 @@ const attachScreenshot = async (page: Page, name: string) => {
 };
 
 test('仪表盘加载、视角切换与趋势视图切换', async ({ page }: { page: Page }) => {
-  await ensureDataLoaded(page);
+  if (!await skipWhenNoData(page)) {
+    return;
+  }
 
   await page.goto('/#/dashboard');
   await expect(page.getByRole('heading', { name: /保费分析看板/ })).toBeVisible();

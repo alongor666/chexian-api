@@ -11,12 +11,17 @@ echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendCompone
 
 interface Props {
   filters: QuoteFilters;
+  defaultGranularity?: 'day' | 'week' | 'month';
 }
 
-export function TimeTrend({ filters }: Props) {
+export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>('week');
+  const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>(defaultGranularity);
   const { data, isLoading } = useQuoteTrend(filters, granularity);
+
+  useEffect(() => {
+    setGranularity(defaultGranularity);
+  }, [defaultGranularity]);
 
   useEffect(() => {
     if (!chartRef.current || !data || data.length === 0) return;
