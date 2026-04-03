@@ -75,12 +75,12 @@ describe('quote-conversion SQL contract', () => {
 
     expect(duckdbQuery).toHaveBeenCalledTimes(1);
     const sql = duckdbQuery.mock.calls[0]?.[0] as string;
-    expect(sql).toContain("是否电销 = '电销'");
-    expect(sql).toContain("是否新能源车 = '是'");
-    expect(sql).toContain("是否过户车 = '否'");
-    expect(sql).toContain("车险分等级 = 'B'");
-    expect(sql).toContain('NCD系数 >= 0.9');
-    expect(sql).toContain('NCD系数 <= 1.2');
+    expect(sql).toContain("is_telemarketing = '电销'");
+    expect(sql).toContain("is_nev = '是'");
+    expect(sql).toContain("is_transfer = '否'");
+    expect(sql).toContain("insurance_grade = 'B'");
+    expect(sql).toContain('ncd_coefficient >= 0.9');
+    expect(sql).toContain('ncd_coefficient <= 1.2');
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
