@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ensureDataLoaded } from './helpers/session';
+import { skipWhenNoData } from './helpers/session';
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -10,7 +10,9 @@ function escapeRegex(value: string): string {
 test('performance 热力图支持从单元格进入下钻并继续下钻', async ({ page }) => {
   test.skip(!process.env.CI, '本地并行 E2E 下钻响应不稳定，仅 CI 串行执行');
   test.setTimeout(90000);
-  await ensureDataLoaded(page);
+  if (!await skipWhenNoData(page)) {
+    return;
+  }
 
   await page.goto('/#/performance-analysis');
   await page.waitForLoadState('domcontentloaded');

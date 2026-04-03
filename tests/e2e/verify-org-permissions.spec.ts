@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { DEFAULT_E2E_PASSWORD, DEFAULT_E2E_USERNAME } from './helpers/credentials';
 
 // These tests use independent login (not the shared admin session)
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -6,39 +7,40 @@ test.use({ storageState: { cookies: [], origins: [] } });
 test.describe.configure({ timeout: 60000 });
 
 test.describe('Permission Verification', () => {
-  const username = 'admin';
-  const password = process.env.E2E_PASSWORD ?? 'dev';
+  const username = process.env.E2E_USERNAME ?? DEFAULT_E2E_USERNAME;
+  const password = process.env.E2E_PASSWORD ?? DEFAULT_E2E_PASSWORD;
 
   async function loginAsUser(page: import('@playwright/test').Page) {
-    await page.goto('/#/login');
-    await page.waitForLoadState('domcontentloaded');
-
-    await expect(page.getByPlaceholder('请输入用户名')).toBeVisible({ timeout: 10000 });
-    await page.getByPlaceholder('请输入用户名').fill(username);
-    await page.getByPlaceholder('请输入密码').fill(password);
-
     for (let attempt = 0; attempt < 5; attempt++) {
-      if (attempt > 0) {
-        await page.waitForTimeout(2000 * attempt);
-        await page.getByPlaceholder('请输入用户名').fill(username);
-        await page.getByPlaceholder('请输入密码').fill(password);
+      if (attempt > 0) await page.waitForTimeout(2000 * attempt);
+      const loginResponse = await page.request.post('http://localhost:3000/api/auth/login', {
+        data: { username, password },
+        timeout: 30000,
+      });
+
+      if (loginResponse.status() === 200) {
+        const loginPayload = await loginResponse.json();
+        const accessToken = loginPayload?.data?.token;
+        expect(accessToken).toBeTruthy();
+        await page.context().addCookies([{
+          name: 'cx_access_token',
+          value: accessToken,
+          url: 'http://localhost',
+          httpOnly: true,
+          sameSite: 'Lax',
+        }]);
+        break;
       }
-
-      const [loginResponse] = await Promise.all([
-        page.waitForResponse(
-          (response) =>
-            response.request().method() === 'POST' && response.url().includes('/api/auth/login'),
-          { timeout: 30000 }
-        ),
-        page.getByRole('button', { name: '登录', exact: true }).click(),
-      ]);
-
-      if (loginResponse.status() === 200) break;
       if (loginResponse.status() !== 429) {
         expect(loginResponse.status()).toBe(200);
       }
     }
 
+    await page.goto('/#/login');
+    await page.evaluate(() => {
+      window.localStorage.setItem('chexian_auth_session_hint', '1');
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForURL(
       (url) => !url.hash.startsWith('#/login'),
       { waitUntil: 'domcontentloaded', timeout: 30000 }

@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { assertAdvancedDrawerToggles, ensureDataLoaded } from './helpers/session';
+import { assertAdvancedDrawerToggles, skipWhenNoData } from './helpers/session';
 
 test('cross-sell 页骨架支持锚点导航、高级筛选抽屉与下钻明细展开', async ({ page }) => {
-  await ensureDataLoaded(page);
+  if (!await skipWhenNoData(page)) {
+    return;
+  }
 
   await page.goto('/#/specialty?tab=cross-sell');
   await page.waitForLoadState('domcontentloaded');

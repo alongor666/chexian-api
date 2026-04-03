@@ -28,7 +28,7 @@ function parseArgs(argv) {
     remoteRoot: process.env.VPS_REMOTE_ROOT || '/var/www/chexian',
     baseUrl: process.env.VPS_BASE_URL || 'https://chexian.cretvalu.com',
     username: process.env.E2E_USERNAME || 'admin',
-    password: process.env.E2E_PASSWORD || 'dev',
+    password: process.env.E2E_PASSWORD || 'CxAdmin@2026!',
     skipVerify: false,
   };
 

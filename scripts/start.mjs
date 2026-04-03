@@ -124,11 +124,16 @@ function detectPackageManager() {
  * 跨平台 spawn 封装
  */
 function runCommand(command, args, options = {}) {
+  const mergedEnv = { ...process.env, ...options.env };
+  if (!mergedEnv.NODE_ENV) {
+    mergedEnv.NODE_ENV = 'development';
+  }
+
   const spawnOptions = {
     stdio: 'inherit',
     shell: isWindows,
     cwd: options.cwd || ROOT_DIR,
-    env: { ...process.env, ...options.env },
+    env: mergedEnv,
   };
 
   // Windows 下需要使用 .cmd 后缀

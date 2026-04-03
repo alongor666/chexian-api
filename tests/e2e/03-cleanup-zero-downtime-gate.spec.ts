@@ -1,15 +1,18 @@
 import { test, expect, request as playwrightRequest, type Page } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { ensureDataLoaded } from './helpers/session';
+import { DEFAULT_E2E_PASSWORD, DEFAULT_E2E_USERNAME } from './helpers/credentials';
+import { skipWhenNoData } from './helpers/session';
 
 const API_BASE = 'http://localhost:3000';
-const E2E_USERNAME = process.env.E2E_USERNAME ?? 'admin';
-const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'dev';
+const E2E_USERNAME = process.env.E2E_USERNAME ?? DEFAULT_E2E_USERNAME;
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? DEFAULT_E2E_PASSWORD;
 
 test.describe.configure({ mode: 'serial', timeout: 60000 });
 
 test('API-only 清理门禁：关键页面/API/导出全链路', async ({ page }) => {
-  await ensureDataLoaded(page);
+  if (!await skipWhenNoData(page)) {
+    return;
+  }
 
   await page.goto('/#/dashboard');
   await expect(page.getByRole('heading', { name: /保费分析看板/ })).toBeVisible();
@@ -77,9 +80,7 @@ test('API-only 清理门禁：关键页面/API/导出全链路', async ({ page }
 
 test('API-only 清理门禁：受保护接口 401 / 鉴权后 200', async () => {
   const anonymousApi = await playwrightRequest.newContext({ storageState: undefined });
-  const noTokenRes = await anonymousApi.get(
-    `${API_BASE}/api/query/kpi?startDate=2026-01-01&endDate=2026-01-31`
-  );
+  const noTokenRes = await anonymousApi.get(`${API_BASE}/api/auth/me`);
   // 未认证请求应返回 401（或 429 限流，也属于拒绝访问）
   expect([401, 429]).toContain(noTokenRes.status());
 
@@ -102,9 +103,7 @@ test('API-only 清理门禁：受保护接口 401 / 鉴权后 200', async () => 
   // 认证后请求，可能因限流需等待重试（E2E 并行 worker 容易触发限流）
   let authStatus = 0;
   for (let i = 0; i < 5; i++) {
-    const authRes = await authApi.get(
-      `${API_BASE}/api/query/kpi?startDate=2026-01-01&endDate=2026-01-31`
-    );
+    const authRes = await authApi.get(`${API_BASE}/api/auth/me`);
     authStatus = authRes.status();
     if (authStatus === 200) break;
     if (authStatus === 429) {

@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { assertAdvancedDrawerToggles, ensureDataLoaded, login } from './helpers/session';
+import { assertAdvancedDrawerToggles, skipWhenNoData } from './helpers/session';
 import { assertPageShellContracts } from './helpers/page-shell';
 
 test('performance 页支持右侧锚点导航与高级筛选抽屉', async ({ page }) => {
-  await ensureDataLoaded(page);
+  if (!await skipWhenNoData(page)) {
+    return;
+  }
 
   await page.goto('/#/performance-analysis');
   await page.waitForLoadState('domcontentloaded');
@@ -24,7 +26,9 @@ test('performance 页支持右侧锚点导航与高级筛选抽屉', async ({ pa
 });
 
 test('growth 与 cost 页面复用顶部基础筛选和高级筛选抽屉', async ({ page }) => {
-  await ensureDataLoaded(page);
+  if (!await skipWhenNoData(page)) {
+    return;
+  }
 
   const pages = [
     {

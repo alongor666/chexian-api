@@ -9,6 +9,14 @@ export interface QuoteFilters {
   salesmanNo?: string;
   customerCategory?: string;
   insuranceCombo?: '主全' | '交三';
+  isTelemarketing?: '电销' | '非电销';
+  isNewEnergy?: '是' | '否';
+  isTransferred?: '是' | '否';
+  riskGrade?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'X';
+  /** 字符串形式，服务端 zod coerce 为 number */
+  ncdMin?: string;
+  /** 字符串形式，服务端 zod coerce 为 number */
+  ncdMax?: string;
 }
 
 export interface QuoteKpi {
@@ -20,8 +28,10 @@ export interface QuoteKpi {
   salesman_count: number;
   renewal_quotes: number;
   renewal_insured: number;
+  renewal_insured_premium: number;
   switch_quotes: number;
   switch_insured: number;
+  switch_insured_premium: number;
 }
 
 export interface FunnelRow {
@@ -77,3 +87,5 @@ export interface RankingRow {
 }
 
 export type DrillLevel = 'org' | 'team' | 'salesman';
+
+export type QuoteConversionVersion = 'A' | 'B';

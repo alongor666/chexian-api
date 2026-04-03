@@ -6,6 +6,9 @@ import type { QuoteFilters } from '../types';
 
 interface Props {
   filters: QuoteFilters;
+  title?: string;
+  defaultDimension?: string;
+  dimensions?: readonly { key: string; label: string }[];
 }
 
 const TABS = [
@@ -19,16 +22,21 @@ const TABS = [
   { key: '是否过户车', label: '过户车' },
 ] as const;
 
-export function RankingTable({ filters }: Props) {
-  const [dimension, setDimension] = useState<string>('客户类别');
+export function RankingTable({
+  filters,
+  title = '多维度转化排行',
+  defaultDimension = '客户类别',
+  dimensions = TABS,
+}: Props) {
+  const [dimension, setDimension] = useState<string>(defaultDimension);
   const { data, isLoading } = useQuoteRanking(filters, dimension);
 
   return (
     <div className={cardStyles.base}>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">多维度转化排行</h3>
+        <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">{title}</h3>
         <div className="flex gap-1 flex-wrap">
-          {TABS.map(t => (
+          {dimensions.map(t => (
             <button
               key={t.key}
               onClick={() => setDimension(t.key)}

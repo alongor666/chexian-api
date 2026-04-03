@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { colorClasses, inputStyles, cn } from '../../../shared/styles';
 import { CollapsibleFilterSection } from '../../filters/CollapsibleFilterSection';
-import type { QuoteFilters } from '../types';
+import type { QuoteConversionVersion, QuoteFilters } from '../types';
 import {
   CAT_NON_COMMERCIAL_PERSONAL,
   CAT_NON_COMMERCIAL_TRUCK,
@@ -12,17 +12,27 @@ import {
 } from '../../../shared/config/customer-categories';
 
 interface Props {
+  version: QuoteConversionVersion;
   filters: QuoteFilters;
   onChange: (filters: QuoteFilters) => void;
 }
 
 const FILTER_OPTIONS = {
-  orgs: ['天府','高新','青羊','宜宾','新都','德阳','武侯','资阳','泸州','乐山','自贡','达州','本部'],
-  customerCategories: [CAT_NON_COMMERCIAL_PERSONAL, CAT_NON_COMMERCIAL_TRUCK, CAT_COMMERCIAL_TRUCK, CAT_NON_COMMERCIAL_ENTERPRISE, CAT_RENTAL, CAT_SPECIAL],
+  orgs: ['天府', '高新', '青羊', '宜宾', '新都', '德阳', '武侯', '资阳', '泸州', '乐山', '自贡', '达州', '本部'],
+  customerCategories: [
+    CAT_NON_COMMERCIAL_PERSONAL,
+    CAT_NON_COMMERCIAL_TRUCK,
+    CAT_COMMERCIAL_TRUCK,
+    CAT_NON_COMMERCIAL_ENTERPRISE,
+    CAT_RENTAL,
+    CAT_SPECIAL,
+  ],
   insuranceCombos: ['主全', '交三'] as const,
+  yesNo: ['是', '否'] as const,
+  telemarketingOptions: ['电销', '非电销'] as const,
+  riskGrades: ['A', 'B', 'C', 'D'],
 } as const;
 
-/** 快捷日期区间 */
 function getQuickDateRange(key: 'month' | 'quarter' | 'year'): { dateStart: string; dateEnd: string } {
   const now = new Date();
   const y = now.getFullYear();
@@ -40,7 +50,36 @@ function getQuickDateRange(key: 'month' | 'quarter' | 'year'): { dateStart: stri
 
 const selectCls = cn('text-xs px-2 py-1.5', inputStyles.base, inputStyles.default, inputStyles.dark);
 
-export function GlobalFilters({ filters, onChange }: Props) {
+interface SelectFieldProps<T extends string> {
+  label: string;
+  value: T | '';
+  placeholder: string;
+  options: readonly T[];
+  onChange: (value: T | undefined) => void;
+}
+
+function SelectField<T extends string>({ label, value, placeholder, options, onChange }: SelectFieldProps<T>) {
+  return (
+    <label className="flex items-center gap-1">
+      <span className={`text-xs whitespace-nowrap ${colorClasses.text.neutralMuted}`}>{label}</span>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange((e.target.value || undefined) as T | undefined)}
+        className={selectCls}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export function GlobalFilters({ version, filters, onChange }: Props) {
   const [quickKey, setQuickKey] = useState<string | null>(null);
   const update = (patch: Partial<QuoteFilters>) => {
     setQuickKey(null);
@@ -49,46 +88,68 @@ export function GlobalFilters({ filters, onChange }: Props) {
 
   const applyQuick = (key: 'month' | 'quarter' | 'year') => {
     setQuickKey(key);
-    const range = getQuickDateRange(key);
-    onChange({ ...filters, ...range });
+    onChange({ ...filters, ...getQuickDateRange(key) });
   };
 
-  const hasFilters = Object.values(filters).some(v => v !== undefined);
+  const hasFilters = Object.values(filters).some((value) => value !== undefined && value !== '');
+  const topicFilterSummaries = [
+    filters.isTelemarketing ? `电销: ${filters.isTelemarketing}` : null,
+    filters.isNewEnergy ? `新能源: ${filters.isNewEnergy}` : null,
+    filters.isTransferred ? `过户车: ${filters.isTransferred}` : null,
+    filters.riskGrade ? `车险分等级: ${filters.riskGrade}` : null,
+    filters.ncdMin ? `NCD 最小值: ${filters.ncdMin}` : null,
+    filters.ncdMax ? `NCD 最大值: ${filters.ncdMax}` : null,
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <CollapsibleFilterSection id="quote-conversion-filters" title="筛选条件" defaultExpanded={true}>
-      <div className="flex flex-wrap items-center gap-3">
-        {/* 时间区间 */}
+      <div className="space-y-3">
+        {version === 'A' && topicFilterSummaries.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`text-xs font-medium ${colorClasses.text.neutralMuted}`}>专题筛选已生效</span>
+            {topicFilterSummaries.map((summary) => (
+              <span
+                key={summary}
+                className="inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+              >
+                {summary}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-1">
           <span className={`text-xs ${colorClasses.text.neutralMuted}`}>起始</span>
           <input
+            aria-label="起始"
             type="date"
             value={filters.dateStart ?? ''}
-            onChange={e => update({ dateStart: e.target.value || undefined })}
+            onChange={(e) => update({ dateStart: e.target.value || undefined })}
             className={selectCls}
           />
         </label>
         <label className="flex items-center gap-1">
           <span className={`text-xs ${colorClasses.text.neutralMuted}`}>截止</span>
           <input
+            aria-label="截止"
             type="date"
             value={filters.dateEnd ?? ''}
-            onChange={e => update({ dateEnd: e.target.value || undefined })}
+            onChange={(e) => update({ dateEnd: e.target.value || undefined })}
             className={selectCls}
           />
         </label>
 
-        {/* 快捷日期 */}
         <div className="flex gap-1">
-          {([['month', '本月'], ['quarter', '本季'], ['year', '本年']] as const).map(([k, label]) => (
+          {([['month', '本月'], ['quarter', '本季'], ['year', '本年']] as const).map(([key, label]) => (
             <button
-              key={k}
-              onClick={() => applyQuick(k)}
+              key={key}
+              onClick={() => applyQuick(key)}
               className={cn(
                 'text-xs px-2 py-1 rounded-md transition-colors',
-                quickKey === k
+                quickKey === key
                   ? 'bg-primary text-white'
-                  : `${colorClasses.text.primary} hover:bg-blue-50 dark:hover:bg-blue-900/20`,
+                  : `${colorClasses.text.primary} hover:bg-blue-50 dark:hover:bg-blue-900/20`
               )}
             >
               {label}
@@ -98,49 +159,107 @@ export function GlobalFilters({ filters, onChange }: Props) {
 
         <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-700 hidden sm:block" />
 
-        {/* 业务维度筛选 */}
-        <select
+        <SelectField
+          label="续转保"
           value={filters.renewalType ?? ''}
-          onChange={e => update({ renewalType: (e.target.value || undefined) as QuoteFilters['renewalType'] })}
-          className={selectCls}
-        >
-          <option value="">全部续转保</option>
-          <option value="续保">续保</option>
-          <option value="转保">转保</option>
-        </select>
-        <select
+          placeholder="全部续转保"
+          options={['续保', '转保']}
+          onChange={(renewalType) => update({ renewalType })}
+        />
+        <SelectField
+          label="机构"
           value={filters.orgName ?? ''}
-          onChange={e => update({ orgName: e.target.value || undefined })}
-          className={selectCls}
-        >
-          <option value="">全部机构</option>
-          {FILTER_OPTIONS.orgs.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <select
+          placeholder="全部机构"
+          options={FILTER_OPTIONS.orgs}
+          onChange={(orgName) => update({ orgName })}
+        />
+        <SelectField
+          label="客户类别"
           value={filters.customerCategory ?? ''}
-          onChange={e => update({ customerCategory: e.target.value || undefined })}
-          className={selectCls}
-        >
-          <option value="">全部类别</option>
-          {FILTER_OPTIONS.customerCategories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select
+          placeholder="全部类别"
+          options={FILTER_OPTIONS.customerCategories}
+          onChange={(customerCategory) => update({ customerCategory })}
+        />
+        <SelectField
+          label="险别组合"
           value={filters.insuranceCombo ?? ''}
-          onChange={e => update({ insuranceCombo: (e.target.value || undefined) as QuoteFilters['insuranceCombo'] })}
-          className={selectCls}
-        >
-          <option value="">全部险别</option>
-          {FILTER_OPTIONS.insuranceCombos.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+          placeholder="全部险别"
+          options={FILTER_OPTIONS.insuranceCombos}
+          onChange={(insuranceCombo) => update({ insuranceCombo })}
+        />
+
+        {version === 'B' && (
+          <>
+            <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-700 hidden sm:block" />
+            <SelectField
+              label="电销"
+              value={filters.isTelemarketing ?? ''}
+              placeholder="全部电销"
+              options={FILTER_OPTIONS.telemarketingOptions}
+              onChange={(isTelemarketing) => update({ isTelemarketing })}
+            />
+            <SelectField
+              label="新能源"
+              value={filters.isNewEnergy ?? ''}
+              placeholder="全部新能源"
+              options={FILTER_OPTIONS.yesNo}
+              onChange={(isNewEnergy) => update({ isNewEnergy })}
+            />
+            <SelectField
+              label="过户车"
+              value={filters.isTransferred ?? ''}
+              placeholder="全部过户车"
+              options={FILTER_OPTIONS.yesNo}
+              onChange={(isTransferred) => update({ isTransferred })}
+            />
+            <SelectField
+              label="车险分等级"
+              value={filters.riskGrade ?? ''}
+              placeholder="全部等级"
+              options={FILTER_OPTIONS.riskGrades}
+              onChange={(riskGrade) => update({ riskGrade })}
+            />
+            <label className="flex items-center gap-1">
+              <span className={`text-xs whitespace-nowrap ${colorClasses.text.neutralMuted}`}>NCD 最小值</span>
+              <input
+                aria-label="NCD 最小值"
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={filters.ncdMin ?? ''}
+                onChange={(e) => update({ ncdMin: e.target.value || undefined })}
+                className={selectCls}
+              />
+            </label>
+            <label className="flex items-center gap-1">
+              <span className={`text-xs whitespace-nowrap ${colorClasses.text.neutralMuted}`}>NCD 最大值</span>
+              <input
+                aria-label="NCD 最大值"
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={filters.ncdMax ?? ''}
+                onChange={(e) => update({ ncdMax: e.target.value || undefined })}
+                className={selectCls}
+              />
+            </label>
+          </>
+        )}
 
         {hasFilters && (
           <button
-            onClick={() => { onChange({}); setQuickKey(null); }}
+            onClick={() => {
+              onChange({});
+              setQuickKey(null);
+            }}
             className={`text-xs px-2 py-1.5 rounded-md ${colorClasses.text.primary} hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors`}
           >
             重置
           </button>
         )}
+        </div>
       </div>
     </CollapsibleFilterSection>
   );
