@@ -174,7 +174,7 @@ describe('quote-conversion SQL contract', () => {
     const sql = duckdbQuery.mock.calls[0]?.[0] as string;
     expect(sql).not.toContain('CAST(报价时间 AS DATE) >=');
     expect(sql).not.toContain('CAST(报价时间 AS DATE) <=');
-    expect(sql).toContain("三级机构 = '北京'");
+    expect(sql).toContain("org_level_3 = '北京'");
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
@@ -196,9 +196,9 @@ describe('quote-conversion SQL contract', () => {
 
     expect(duckdbQuery).toHaveBeenCalledTimes(1);
     const sql = duckdbQuery.mock.calls[0]?.[0] as string;
-    expect(sql).not.toContain("WHERE 1=1 AND 续保情况 =");
-    expect(sql).not.toContain("WHERE 1=1 AND 险别组合 =");
-    expect(sql).not.toContain("WHERE 1=1 AND 三级机构 =");
+    expect(sql).not.toContain("WHERE 1=1 AND renewal_status =");
+    expect(sql).not.toContain("WHERE 1=1 AND coverage_combination =");
+    expect(sql).not.toContain("WHERE 1=1 AND org_level_3 =");
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
