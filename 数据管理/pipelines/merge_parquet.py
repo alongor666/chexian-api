@@ -104,7 +104,14 @@ def main():
     target_schema = build_target_schema(tables)
     aligned_tables = [align_table(table, target_schema) for table in tables]
     merged = pa.concat_tables(aligned_tables, promote_options='default')
-    pq.write_table(merged, output_path, compression='snappy')
+    from pipelines.parquet_utils import write_parquet_with_metadata
+    source_names = ", ".join(p.name for p in input_paths)
+    write_parquet_with_metadata(
+        merged, output_path,
+        source_file=source_names,
+        processing_mode="merge",
+        extra_metadata={"etl_input_count": str(len(input_paths))},
+    )
 
     elapsed = time.perf_counter() - start_ts
     total_rows = sum(t.num_rows for t in tables)

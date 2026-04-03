@@ -75,9 +75,13 @@ def main():
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
 
-    # 保存
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(output_file, index=False)
+    # 保存（统一 L1 metadata）
+    from pipelines.parquet_utils import write_parquet_with_metadata
+    write_parquet_with_metadata(
+        df, output_file,
+        source_file=str(args.input),
+        processing_mode="convert_quotes",
+    )
 
     size_mb = output_file.stat().st_size / 1024 / 1024
     print(f"   输出: {output_file} ({size_mb:.1f} MB)")

@@ -928,18 +928,13 @@ def save_to_parquet(df, output_path):
     # 确保输出目录存在（防止 clone 后目录缺失）
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-    # 写入 schema metadata，确保加载端能识别 row-level/full 与 merged 产物
-    table = pa.Table.from_pandas(df, preserve_index=False)
-    schema_metadata = dict(table.schema.metadata or {})
-    schema_metadata.update({
-        b'processing_mode': str(OUTPUT_MODE).encode('utf-8'),
-        b'generated_at': datetime.now().isoformat().encode('utf-8'),
-        b'source_file': str(INPUT_FILE.name).encode('utf-8'),
-    })
-    table = table.replace_schema_metadata(schema_metadata)
-
-    # 保存
-    pq.write_table(table, output_path)
+    # 统一 L1 metadata 写出
+    from pipelines.parquet_utils import write_parquet_with_metadata
+    write_parquet_with_metadata(
+        df, output_path,
+        source_file=str(INPUT_FILE.name),
+        processing_mode=str(OUTPUT_MODE),
+    )
     print(f"\n   ✅ 成功保存到: {output_path}")
 
     # 验证
@@ -1057,6 +1052,15 @@ def main():
     # 15. 同步更新 QUICK_REFERENCE.md 的数据规模（仅 policy 域）
     if DOMAIN in ('policy', 'all'):
         update_quick_reference(len(df), len(df.columns))
+
+    # 16. 更新 data-sources.json（非 policy 域，policy 由 daily.mjs 汇总更新）
+    if DOMAIN in ('claims', 'quotes'):
+        try:
+            from pipelines.data_sources_updater import update_data_sources
+            domain_map = {'claims': 'claims', 'quotes': 'quotes_status'}
+            update_data_sources(domain_map[DOMAIN], row_count=len(df), field_count=len(df.columns))
+        except Exception as e:
+            print(f"  ⚠️ data-sources.json 更新跳过: {e}")
 
     print(f"\n{'='*80}")
     print("✅ 转换完成！")

@@ -86,6 +86,7 @@
 | 环境变量 | `server/src/config/env.ts` | 20+ 变量（6 分组） | — |
 | API 路由 | `server/src/config/api-routes.ts` + `src/shared/api/routes.ts` | 50+ 路由 | — |
 | ETL 配置 | `数据管理/shard-config.json` | 分片边界 + 显式忽略字段 | — |
+| 数据域注册表 | `数据管理/data-sources.json` | 9 域元数据 | ETL 自动更新 |
 
 ---
 

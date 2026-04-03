@@ -1,0 +1,202 @@
+{
+  "_comment": "数据域元数据注册表 — 唯一事实源。ETL 脚本运行后自动更新 last_updated。",
+  "domains": [
+    {
+      "id": "premium",
+      "name": "保费",
+      "type": "fact",
+      "source_pattern": "每日数据_*.xlsx",
+      "etl_entry": "node 数据管理/daily.mjs",
+      "etl_script": "pipelines/transform.py",
+      "output": "warehouse/fact/policy/current/*.parquet",
+      "update_cadence": "daily_incremental",
+      "shard_strategy": "3层分片(static/weekly/daily)",
+      "last_updated": "2026-04-03",
+      "data_range": "2020-01-01 ~ 2026-04-02",
+      "row_count": 2510036,
+      "field_count": 44,
+      "key_fields": [
+        "保单号",
+        "签单日期",
+        "保费",
+        "业务员",
+        "三级机构",
+        "险类",
+        "险别组合",
+        "客户类别"
+      ],
+      "notes": "daily增量先进staging/，需拷贝到current/或等周更合并。续保匹配仅应用于weekly分片"
+    },
+    {
+      "id": "claims",
+      "name": "赔付",
+      "type": "fact",
+      "source_pattern": "所有 每日数据_*.xlsx（合并，--after-date 2020-12-31 过滤）",
+      "etl_entry": "node 数据管理/daily.mjs claims",
+      "etl_script": "pipelines/transform.py --domain claims（逐文件提取后 DuckDB 合并）",
+      "output": "warehouse/fact/claims/latest.parquet",
+      "update_cadence": "with_source_xlsx",
+      "last_updated": "2026-04-03",
+      "data_range": "2024-01-01 ~ 2026-03-31",
+      "row_count": 815274,
+      "field_count": 5,
+      "key_fields": [
+        "保单号",
+        "赔案件数",
+        "已报告赔款",
+        "费用金额",
+        "车架号"
+      ],
+      "notes": "全量替换，取最大的每日数据xlsx"
+    },
+    {
+      "id": "quotes_conversion",
+      "name": "报价转化(旧车商业险)",
+      "type": "fact",
+      "source_pattern": "旧车商业险报价*.xlsx",
+      "etl_entry": "python3 数据管理/pipelines/quote_etl.py -i <xlsx>",
+      "etl_script": "pipelines/quote_etl.py",
+      "output": "warehouse/fact/quotes_conversion/latest.parquet",
+      "update_cadence": "with_quote_data",
+      "last_updated": "2026-04-03",
+      "data_range": "2025-12-01 ~ 2026-04-02",
+      "row_count": 484215,
+      "field_count": 26,
+      "key_fields": [
+        "报价时间",
+        "三级机构",
+        "业务员",
+        "续保情况",
+        "是否承保",
+        "折前保费",
+        "折后保费",
+        "自主定价系数"
+      ],
+      "notes": "JOIN salesman dim补团队字段。与quotes/latest.parquet(2字段报价状态)是不同的表"
+    },
+    {
+      "id": "renewal_funnel",
+      "name": "续保转化漏斗",
+      "type": "fact",
+      "source_pattern": "交商同保续保_*.xlsx",
+      "etl_entry": "诊断脚本产出（无独立ETL）",
+      "etl_script": "pipelines/diagnose_vehicle.py等",
+      "output": "warehouse/fact/renewal/renewal_funnel_*.parquet",
+      "update_cadence": "with_quote_date",
+      "last_updated": "2026-03-30",
+      "data_range": "2025-01-01 ~ 2026-03-30",
+      "row_count": 35011,
+      "field_count": 20,
+      "key_fields": [
+        "org_level_3",
+        "policy_no",
+        "is_quoted",
+        "is_renewed",
+        "customer_category",
+        "insurance_grade"
+      ],
+      "notes": "按报价日期更新，诊断时自动覆盖"
+    },
+    {
+      "id": "quotes_status",
+      "name": "报价状态(保单域)",
+      "type": "fact",
+      "source_pattern": "每日数据_*.xlsx (回退) 或 商业险续转保报价*.xlsx",
+      "etl_entry": "node 数据管理/daily.mjs quotes",
+      "etl_script": "pipelines/transform.py --domain quotes 或 pipelines/convert_quotes.py",
+      "output": "warehouse/fact/quotes/latest.parquet",
+      "update_cadence": "with_source_xlsx",
+      "last_updated": "2026-04-03",
+      "data_range": "2024-01-01 ~ 2026-03-31",
+      "row_count": 230165,
+      "field_count": 2,
+      "key_fields": [
+        "续保单号",
+        "签单日期"
+      ],
+      "notes": "仅2字段，用于保单域LEFT JOIN判断是否已报价"
+    },
+    {
+      "id": "plate_region",
+      "name": "车牌归属地",
+      "type": "dim",
+      "source_pattern": "预定义映射表（无源xlsx）",
+      "etl_entry": "手动维护",
+      "etl_script": "无",
+      "output": "warehouse/dim/plate_region/latest.parquet",
+      "update_cadence": "irregular",
+      "last_updated": "2026-03-01",
+      "row_count": 435,
+      "field_count": 3,
+      "key_fields": [
+        "plate_prefix",
+        "province",
+        "city"
+      ],
+      "notes": "发现未归入的新车牌前缀时才更新"
+    },
+    {
+      "id": "brand",
+      "name": "品牌车型",
+      "type": "dim",
+      "source_pattern": "从保单parquet的厂牌车型字段提取",
+      "etl_entry": "python3 数据管理/warehouse/dim/brand/generate_brand_dim.py",
+      "etl_script": "warehouse/dim/brand/generate_brand_dim.py",
+      "output": "warehouse/dim/brand/latest.parquet",
+      "update_cadence": "with_premium",
+      "last_updated": "2026-04-03",
+      "row_count": 37810,
+      "field_count": 5,
+      "key_fields": [
+        "厂牌车型",
+        "品牌",
+        "车辆用途",
+        "用途大类"
+      ],
+      "notes": "每次有新保单数据时重跑，避免新车型缺少品牌映射"
+    },
+    {
+      "id": "salesman",
+      "name": "业务员",
+      "type": "dim",
+      "source_pattern": "川分销售人员名单*.xlsx + salesman_organization_mapping.json",
+      "etl_entry": "python3 数据管理/warehouse/dim/generate_dim_tables.py",
+      "etl_script": "warehouse/dim/generate_dim_tables.py",
+      "output": "warehouse/dim/salesman/latest.parquet",
+      "update_cadence": "annual_or_semiannual",
+      "last_updated": "2026-03-25",
+      "row_count": 603,
+      "field_count": 10,
+      "key_fields": [
+        "business_no",
+        "salesman_name",
+        "team",
+        "organization",
+        "status"
+      ],
+      "notes": "一般一年或半年调整一次"
+    },
+    {
+      "id": "plan",
+      "name": "保费计划",
+      "type": "dim",
+      "source_pattern": "2025计划.xlsx + 机构业务日报.xlsx + salesman_organization_mapping.json",
+      "etl_entry": "python3 数据管理/warehouse/dim/generate_dim_tables.py",
+      "etl_script": "warehouse/dim/generate_dim_tables.py",
+      "output": "warehouse/dim/plan/latest.parquet",
+      "update_cadence": "annual_or_semiannual",
+      "last_updated": "2026-03-25",
+      "row_count": 855,
+      "field_count": 16,
+      "key_fields": [
+        "plan_year",
+        "level",
+        "business_no",
+        "organization",
+        "plan_vehicle",
+        "plan_total"
+      ],
+      "notes": "分salesman/organization两级，2025含实际值，2026仅计划值"
+    }
+  ]
+}

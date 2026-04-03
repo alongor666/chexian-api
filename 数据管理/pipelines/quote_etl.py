@@ -111,10 +111,15 @@ def main():
         df["团队"] = "未分配团队"
         result = df
 
-    # 5. 输出 Parquet
+    # 5. 输出 Parquet（统一 L1 metadata）
     output_file = output_dir / "latest.parquet"
     print(f"💾 写入 Parquet: {output_file}")
-    result.to_parquet(str(output_file), index=False)
+    from pipelines.parquet_utils import write_parquet_with_metadata
+    write_parquet_with_metadata(
+        result, output_file,
+        source_file=str(input_file.name),
+        processing_mode="quotes_conversion",
+    )
 
     # 6. 验证
     verify = con.execute(
@@ -132,6 +137,13 @@ def main():
     print(f"   总量: {verify[0]:,d} | 承保: {verify[1]:,d} | 转化率: {verify[1]/verify[0]*100:.1f}%")
     print(f"   机构: {verify[2]} | 团队: {verify[3]} | 业务员: {verify[4]}")
     print(f"   列数: {len(result.columns)} → {list(result.columns[-3:])}")
+
+    # 7. 更新 data-sources.json
+    try:
+        from pipelines.data_sources_updater import update_data_sources
+        update_data_sources('quotes_conversion', row_count=verify[0], field_count=len(result.columns))
+    except Exception as e:
+        print(f"  ⚠️ data-sources.json 更新跳过: {e}")
 
 
 if __name__ == "__main__":

@@ -42,6 +42,7 @@
 | [ai/BRAND_KNOWLEDGE.md](./ai/BRAND_KNOWLEDGE.md) | 品牌维度表：厂牌车型→品牌_用途复合维度映射（如"长安_客车"） | AI 诊断工具 |
 | [rules/车险数据业务规则字典.md](./rules/车险数据业务规则字典.md) | 唯一事实源：字段定义 + 业务规则 | 全员必读 |
 | [schema/schema-analysis.json](./schema/schema-analysis.json) | Parquet 字段统计（自动生成） | 工具 |
+| [../data-sources.json](../data-sources.json) | 数据域元数据注册表（9 域，ETL 自动更新 last_updated/row_count） | ETL / AI |
 
 ---
 

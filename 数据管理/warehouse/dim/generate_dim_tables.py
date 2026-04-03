@@ -364,9 +364,16 @@ def build_salesman_table(
 
 # ── 6. 输出 Parquet ─────────────────────────────────────────
 def write_parquet(df: pd.DataFrame, path: Path, description: str):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    table = pa.Table.from_pandas(df, preserve_index=False)
-    pq.write_table(table, str(path), compression="snappy")
+    # 统一 L1 metadata 写出
+    import sys as _sys
+    _pipelines = str(Path(__file__).resolve().parent.parent.parent / "pipelines")
+    if _pipelines not in _sys.path:
+        _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+    from pipelines.parquet_utils import write_parquet_with_metadata
+    write_parquet_with_metadata(
+        df, path,
+        processing_mode=f"dim_{description}",
+    )
     size_kb = path.stat().st_size / 1024
     print(f"\n  ✅ {description}: {path.name} ({len(df)} 行, {size_kb:.1f} KB)")
     print(f"     → {path}")
@@ -448,6 +455,14 @@ def main():
         generate_brand()
     except Exception as e:
         print(f"  ⚠️ 品牌维度表生成失败: {e}")
+
+    # 更新 data-sources.json
+    try:
+        from pipelines.data_sources_updater import update_data_sources
+        update_data_sources('salesman', row_count=len(salesman_master), field_count=len(salesman_master.columns))
+        update_data_sources('plan', row_count=len(plan_all), field_count=len(plan_all.columns))
+    except Exception as e:
+        print(f"  ⚠️ data-sources.json 更新跳过: {e}")
 
     print(f"\n{'='*60}")
     print("✅ 维度表生成完成")

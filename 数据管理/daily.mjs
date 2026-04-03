@@ -22,7 +22,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 import { platform, homedir } from 'os';
 import { fileURLToPath } from 'url';
@@ -85,9 +85,13 @@ function runPythonScript(python, scriptPath, args) {
   const cmd = `"${python}" "${scriptPath}" ${args.join(' ')}`;
   log('blue', `执行: ${cmd}`);
   const env = { ...process.env };
+  // 确保 pipelines 包可被 import（from pipelines.xxx import ...）
+  const existingPath = env.PYTHONPATH || '';
+  env.PYTHONPATH = existingPath ? `${__dirname}:${existingPath}` : __dirname;
   if (isWindows()) {
     env.PYTHONIOENCODING = 'utf-8';
     env.PYTHONUTF8 = '1';
+    env.PYTHONPATH = existingPath ? `${__dirname};${existingPath}` : __dirname;
   }
   execSync(cmd, { stdio: 'inherit', cwd: __dirname, env });
 }
@@ -138,7 +142,39 @@ function cleanStaging(stagingDir) {
   }
 }
 
-// ── 主流程 ──
+// ── data-sources.json 自动更新 ──
+
+const DATA_SOURCES_PATH = join(__dirname, 'data-sources.json');
+
+function updateDataSources(domainId, { rowCount, fieldCount, dataRange } = {}) {
+  try {
+    if (!existsSync(DATA_SOURCES_PATH)) return;
+    const config = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'));
+    const domain = config.domains?.find(d => d.id === domainId);
+    if (!domain) { log('yellow', `  ⚠️ data-sources.json 中未找到域 '${domainId}'`); return; }
+
+    domain.last_updated = new Date().toISOString().slice(0, 10);
+    if (rowCount != null) domain.row_count = rowCount;
+    if (fieldCount != null) domain.field_count = fieldCount;
+    if (dataRange != null) domain.data_range = dataRange;
+
+    writeFileSync(DATA_SOURCES_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+    log('green', `  📋 data-sources.json 已更新: ${domainId} (rows=${rowCount?.toLocaleString() ?? '-'})`);
+  } catch (e) {
+    log('yellow', `  ⚠️ data-sources.json 更新失败: ${e.message}`);
+  }
+}
+
+/** 用 Python+DuckDB 快速获取 parquet 行数 */
+function getParquetRowCount(python, parquetPath) {
+  try {
+    const result = execSync(
+      `"${python}" -c "import pyarrow.parquet as pq; print(pq.read_metadata('${parquetPath.replace(/\\/g, '/')}').num_rows)"`,
+      { encoding: 'utf-8', cwd: __dirname }
+    );
+    return parseInt(result.trim(), 10);
+  } catch { return null; }
+}
 
 // ── 分域处理 ──
 
@@ -161,18 +197,22 @@ async function syncToVps(scriptDir) {
   }
 }
 
-/** 找最大的全量 xlsx（claims/quotes 需要完整历史） */
+/** 找最大的全量 xlsx（quotes 需要完整历史） */
 function findLargestXlsx(dir) {
   const files = ls('每日数据_*.xlsx', dir);
   if (files.length === 0) return null;
   return files.sort((a, b) => statSync(b.path).size - statSync(a.path).size)[0];
 }
 
+/** 找所有 每日数据_*.xlsx，按文件名倒序 */
+function findAllXlsx(dir) {
+  return ls('每日数据_*.xlsx', dir);
+}
+
 function runClaims(python, scriptDir) {
-  log('cyan', '\n═══ Claims 域：赔付+费用（全量替换）═══\n');
-  const xlsx = findLargestXlsx(scriptDir);
-  if (!xlsx) { log('red', '未找到 每日数据_*.xlsx'); return; }
-  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
+  log('cyan', '\n═══ Claims 域：赔付+费用（全量替换，所有 xlsx 合并）═══\n');
+  const allFiles = findAllXlsx(scriptDir);
+  if (allFiles.length === 0) { log('red', '未找到 每日数据_*.xlsx'); return; }
 
   ensureDir(CLAIMS_DIR);
   // 归档旧文件
@@ -184,9 +224,73 @@ function runClaims(python, scriptDir) {
     log('yellow', `  归档旧 claims → claims_latest_${ts}.parquet`);
   }
 
-  runPythonScript(python, join(scriptDir, 'pipelines/transform.py'), [
-    '-i', `"${xlsx.path}"`, '-o', `"${CLAIMS_PATH}"`, '--domain', 'claims'
-  ]);
+  const transformScript = join(scriptDir, 'pipelines/transform.py');
+  const tmpDir = join(scriptDir, 'warehouse/fact/claims/_tmp');
+  ensureDir(tmpDir);
+  const tmpFiles = [];
+
+  // 逐个 xlsx 提取 claims 域
+  for (const file of allFiles) {
+    const range = extractDateRange(file.name);
+    const tmpName = range ? `claims_${range.start}_${range.end}.parquet` : `claims_${file.name}.parquet`;
+    const tmpPath = join(tmpDir, tmpName);
+    log('green', `▶ 提取 claims: ${file.name} (${(statSync(file.path).size / 1024 / 1024).toFixed(1)} MB)`);
+    try {
+      runPythonScript(python, transformScript, [
+        '-i', `"${file.path}"`, '-o', `"${tmpPath}"`, '--domain', 'claims',
+        '--after-date', '2020-12-31'
+      ]);
+    } catch (e) {
+      log('yellow', `⚠ 提取 claims 失败: ${file.name} — ${e.message?.slice(0, 100)}`);
+    }
+    if (existsSync(tmpPath)) tmpFiles.push(tmpPath);
+  }
+
+  // 用 Python+DuckDB 合并所有临时 claims parquet（按保单号去重聚合）
+  if (tmpFiles.length === 0) {
+    log('red', '❌ 未生成任何 claims parquet');
+    return;
+  }
+  if (tmpFiles.length === 1) {
+    // 单文件直接移动
+    renameSync(tmpFiles[0], CLAIMS_PATH);
+  } else {
+    // 多文件合并：写临时 Python 脚本避免 shell 转义问题
+    const mergeScriptPath = join(tmpDir, '_merge_claims.py');
+    const outputPath = CLAIMS_PATH.replace(/\\/g, '/');
+    const fileListStr = tmpFiles.map(f => `"${f.replace(/\\/g, '/')}"`).join(', ');
+    const mergeContent = [
+      'import duckdb',
+      `files = [${fileListStr}]`,
+      'duckdb.sql("""',
+      '  COPY (',
+      '    SELECT 保单号,',
+      '           FIRST(车架号) AS 车架号,',
+      '           SUM(赔案件数) AS 赔案件数,',
+      '           SUM(已报告赔款) AS 已报告赔款,',
+      '           SUM(费用金额) AS 费用金额',
+      `    FROM read_parquet(""" + str(files) + """)`,
+      '    GROUP BY 保单号',
+      '    HAVING 赔案件数 != 0 OR 已报告赔款 != 0 OR 费用金额 != 0',
+      `  ) TO '${outputPath}' (FORMAT PARQUET)`,
+      '""")',
+      `cnt = duckdb.sql("SELECT COUNT(*) FROM read_parquet('${outputPath}')").fetchone()[0]`,
+      'print(f"   ✅ 合并完成: {cnt:,} 条")',
+    ].join('\n');
+    writeFileSync(mergeScriptPath, mergeContent, 'utf-8');
+    log('green', '▶ 合并所有 claims 分片...');
+    runPythonScript(python, mergeScriptPath, []);
+    try { unlinkSync(mergeScriptPath); } catch(e) {}
+  }
+
+  // 清理临时目录
+  for (const f of tmpFiles) { try { unlinkSync(f); } catch(e) {} }
+  try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch(e) {}
+
+  // 更新 data-sources.json
+  const claimsRowCount = getParquetRowCount(python, CLAIMS_PATH);
+  updateDataSources('claims', { rowCount: claimsRowCount, fieldCount: 5 });
+
   log('green', '✅ Claims 域完成');
 }
 
@@ -223,6 +327,10 @@ function runQuotes(python, scriptDir) {
       '-i', `"${xlsx.path}"`, '-o', `"${QUOTES_PATH}"`, '--domain', 'quotes'
     ]);
   }
+  // 更新 data-sources.json
+  const quotesRowCount = getParquetRowCount(python, QUOTES_PATH);
+  updateDataSources('quotes_status', { rowCount: quotesRowCount, fieldCount: 2 });
+
   log('green', '✅ Quotes 域完成');
 }
 
@@ -409,7 +517,17 @@ async function main() {
     ]);
   }
 
-  console.log('');
+  // 更新 premium 域的 data-sources.json（汇总所有 current/ 分片行数）
+  const currentDir = join(WAREHOUSE, 'policy/current');
+  if (existsSync(currentDir)) {
+    const shardFiles = readdirSync(currentDir).filter(f => f.endsWith('.parquet'));
+    let totalRows = 0;
+    for (const f of shardFiles) {
+      const cnt = getParquetRowCount(python, join(currentDir, f));
+      if (cnt != null) totalRows += cnt;
+    }
+    if (totalRows > 0) updateDataSources('premium', { rowCount: totalRows });
+  }
 
   console.log('');
 
