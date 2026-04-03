@@ -12,8 +12,10 @@ export interface QuoteFilters {
   isTelemarketing?: '电销' | '非电销';
   isNewEnergy?: '是' | '否';
   isTransferred?: '是' | '否';
-  riskGrade?: string;
+  riskGrade?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'X';
+  /** 字符串形式，服务端 zod coerce 为 number */
   ncdMin?: string;
+  /** 字符串形式，服务端 zod coerce 为 number */
   ncdMax?: string;
 }
 

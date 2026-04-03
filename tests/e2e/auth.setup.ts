@@ -1,12 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { test as setup, expect } from '@playwright/test';
-import { DEFAULT_E2E_PASSWORD, DEFAULT_E2E_USERNAME } from './helpers/credentials';
+import { DEFAULT_E2E_USERNAME, DEFAULT_E2E_PASSWORD } from './helpers/credentials';
 import { waitForBackendReady } from './helpers/session';
 
 const AUTH_FILE = path.resolve('output/playwright/.auth/user.json');
-const E2E_USERNAME = process.env.E2E_USERNAME ?? DEFAULT_E2E_USERNAME;
-const E2E_PASSWORD = process.env.E2E_PASSWORD ?? DEFAULT_E2E_PASSWORD;
+const E2E_USERNAME = DEFAULT_E2E_USERNAME;
+const E2E_PASSWORD = DEFAULT_E2E_PASSWORD;
 
 setup('缓存已登录会话供后续 E2E 复用', async ({ page }) => {
   await fs.mkdir(path.dirname(AUTH_FILE), { recursive: true });
@@ -39,6 +39,8 @@ setup('缓存已登录会话供后续 E2E 复用', async ({ page }) => {
   }]);
 
   await page.goto('/#/login');
+  // 'chexian_auth_session_hint' is the localStorage key the frontend checks to determine
+  // if a session exists. If the frontend changes this key, this E2E setup must be updated.
   await page.evaluate(() => {
     window.localStorage.setItem('chexian_auth_session_hint', '1');
   });

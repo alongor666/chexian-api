@@ -8,17 +8,17 @@ interface Props {
   variant?: 'default' | 'oldCar';
 }
 
-function formatPercent(numerator: number, denominator: number): string {
+function computePercent(numerator: number, denominator: number): string {
   if (!denominator) return '0.0';
   return ((numerator / denominator) * 100).toFixed(1);
 }
 
-function formatRatio(left: number, right: number): string {
+function computeRatio(left: number, right: number): string {
   if (!right) return '0.00';
   return (left / right).toFixed(2);
 }
 
-function formatAveragePremium(totalPremium: number, totalCount: number): string {
+function computeAveragePremiumWan(totalPremium: number, totalCount: number): string {
   if (!totalCount) return '0.00';
   return (totalPremium / totalCount / 10000).toFixed(2);
 }
@@ -37,8 +37,8 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
     );
   }
 
-  const renewalRate = formatPercent(data.renewal_insured, data.renewal_quotes);
-  const switchRate = formatPercent(data.switch_insured, data.switch_quotes);
+  const renewalRate = computePercent(data.renewal_insured, data.renewal_quotes);
+  const switchRate = computePercent(data.switch_insured, data.switch_quotes);
   const conversionRate = data.conversion_rate ?? 0;
   const renewalPct = parseFloat(renewalRate);
   const switchPct = parseFloat(switchRate);
@@ -96,12 +96,12 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-1 gap-4">
           <div className={cn(cardStyles.base, 'p-4')}>
             <div className={`text-xs ${colorClasses.text.neutralMuted} mb-1`}>续/转承保率比</div>
-            <div className={cn(numericStyles.kpiSecondary)}>{formatRatio(renewalPct, switchPct)}</div>
+            <div className={cn(numericStyles.kpiSecondary)}>{computeRatio(renewalPct, switchPct)}</div>
           </div>
           <div className={cn(cardStyles.base, 'p-4')}>
             <div className={`text-xs ${colorClasses.text.neutralMuted} mb-1`}>续保件均保费</div>
             <div className={cn(numericStyles.kpiSecondary)}>
-              {formatAveragePremium(data.renewal_insured_premium ?? 0, data.renewal_insured)}万
+              {computeAveragePremiumWan(data.renewal_insured_premium ?? 0, data.renewal_insured)}万
             </div>
           </div>
           <div className={cn(cardStyles.base, 'p-4')}>

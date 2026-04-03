@@ -84,7 +84,8 @@ describe('quote conversion version switch', () => {
 
     expect(screen.getByRole('tab', { name: '版本 A' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: '版本 B' }).getAttribute('aria-selected')).toBe('false');
-    expect(screen.getByTestId('location-search').textContent).toBe('?version=A');
+    // URL 为单一真实源：默认版本 A 时无需显式写入 URL，空参数即为 A
+    expect(screen.getByTestId('location-search').textContent).toBe('');
   });
 
   it('?version=B 时激活版本 B', () => {

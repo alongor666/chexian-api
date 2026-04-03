@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { cardStyles, fontStyles, tableStyles, toggleButtonStyles } from '../../../shared/styles';
 import { formatCount, formatPercent } from '../../../shared/utils/formatters';
 import { useQuoteRanking } from '../hooks/useQuoteConversion';
@@ -30,10 +30,6 @@ export function RankingTable({
 }: Props) {
   const [dimension, setDimension] = useState<string>(defaultDimension);
   const { data, isLoading } = useQuoteRanking(filters, dimension);
-
-  useEffect(() => {
-    setDimension(defaultDimension);
-  }, [defaultDimension]);
 
   return (
     <div className={cardStyles.base}>

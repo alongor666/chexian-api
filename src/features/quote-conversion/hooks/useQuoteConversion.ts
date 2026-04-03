@@ -22,8 +22,8 @@ function filtersToParams(f: QuoteFilters): Record<string, string> {
   if (f.isNewEnergy) p.isNewEnergy = f.isNewEnergy;
   if (f.isTransferred) p.isTransferred = f.isTransferred;
   if (f.riskGrade) p.riskGrade = f.riskGrade;
-  if (f.ncdMin) p.ncdMin = f.ncdMin;
-  if (f.ncdMax) p.ncdMax = f.ncdMax;
+  if (f.ncdMin !== undefined && f.ncdMin !== '') p.ncdMin = f.ncdMin;
+  if (f.ncdMax !== undefined && f.ncdMax !== '') p.ncdMax = f.ncdMax;
   return p;
 }
 

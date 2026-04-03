@@ -9,8 +9,8 @@ const VERSION_B_SECTIONS = [
   { tab: '续/转保', title: '续保 vs 转保 多维分析' },
   { tab: '三级机构', title: '三级机构分析' },
   { tab: '险别/客户/等级', title: '险别/客户/等级' },
-  { tab: '月度趋势', title: '月度趋势快照' },
-  { tab: '折扣/NCD', title: 'NCD系数分布' },
+  { tab: '月度趋势', title: '月度趋势' },
+  { tab: '折扣/NCD', title: '折扣分析' },
 ] as const;
 
 test.describe.serial('报价转化版本 B 专题冒烟', () => {

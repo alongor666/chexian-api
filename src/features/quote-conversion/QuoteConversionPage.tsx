@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { GlobalFilters } from './components/GlobalFilters';
 import { VersionSwitcher } from './components/VersionSwitcher';
@@ -13,24 +13,22 @@ function parseVersion(raw: string | null): QuoteConversionVersion {
 export function QuoteConversionPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [filters, setFilters] = useState<QuoteFilters>({});
-  const versionFromUrl = useMemo(
+
+  const version = useMemo(
     () => parseVersion(searchParams.get('version')),
     [searchParams]
   );
-  const [version, setVersion] = useState<QuoteConversionVersion>(versionFromUrl);
 
-  useEffect(() => {
-    setVersion(versionFromUrl);
-  }, [versionFromUrl]);
-
-  useEffect(() => {
-    const currentVersion = searchParams.get('version');
-    if (currentVersion === version) return;
-
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set('version', version);
-    setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams, version]);
+  const setVersion = useCallback(
+    (next: QuoteConversionVersion) => {
+      setSearchParams((prev) => {
+        const nextParams = new URLSearchParams(prev);
+        nextParams.set('version', next);
+        return nextParams;
+      }, { replace: true });
+    },
+    [setSearchParams]
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-[1400px] mx-auto">

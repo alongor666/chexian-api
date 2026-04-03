@@ -20,10 +20,6 @@ export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
   const { data, isLoading } = useQuoteTrend(filters, granularity);
 
   useEffect(() => {
-    setGranularity(defaultGranularity);
-  }, [defaultGranularity]);
-
-  useEffect(() => {
     if (!chartRef.current || !data || data.length === 0) return;
 
     const chart = echarts.init(chartRef.current);
