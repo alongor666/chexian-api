@@ -47,7 +47,9 @@ export type DomainField =
   | 'seat_count'
   | 'driver_age_group'
   | 'first_registration_date'
-  | 'fuel_type';
+  | 'fuel_type'
+  | 'agent_name'
+  | 'customer_source';
 
 export interface ColumnAliasConfig {
   [key: string]: string[];
@@ -96,6 +98,8 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   driver_age_group: ['被保险人年龄分组', 'driver_age_group', 'driverAgeGroup', '年龄分组', '被保人年龄'],
   first_registration_date: ['初次登记年月', 'first_registration_date', 'firstRegistrationDate', '初始登记日期', '车辆登记日期'],
   fuel_type: ['燃料种类', 'fuel_type', 'fuelType', '燃料类型', 'fuel_kind'],
+  agent_name: ['经代名', 'agent_name', 'agentName', '代理人/经纪人', '经纪代理人'],
+  customer_source: ['客户源', 'customer_source', 'customerSource', '客户来源'],
 };
 
 export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
@@ -127,6 +131,8 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'driver_age_group',
   'first_registration_date',
   'fuel_type',
+  'agent_name',
+  'customer_source',
 ]);
 
 export interface ColumnMapping {
@@ -172,6 +178,8 @@ export interface ColumnMapping {
   driver_age_group?: string; // 被保险人年龄分组
   first_registration_date?: string; // 初次登记年月
   fuel_type?: string; // 燃料种类
+  agent_name?: string; // 经代名
+  customer_source?: string; // 客户源
 }
 
 export interface ValidationResult {
@@ -270,4 +278,6 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   driver_age_group: 'driver_age_group',
   first_registration_date: 'first_registration_date',
   fuel_type: 'fuel_type',
+  agent_name: 'agent_name',
+  customer_source: 'customer_source',
 };

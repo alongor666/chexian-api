@@ -91,6 +91,8 @@
     "座位数": "seat_count",
     "被保险人年龄分组": "driver_age_group",
     "初次登记年月": "first_registration_date",
-    "燃料种类": "fuel_type"
+    "燃料种类": "fuel_type",
+    "经代名": "agent_name",
+    "客户源": "customer_source"
   }
 }

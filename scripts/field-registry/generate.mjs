@@ -246,7 +246,9 @@ export function validateDataQuality(
 
 // ── 3. 生成 etl_fields.json（供 transform.py 读取）──
 function generateEtlFields() {
-  // cn_to_en_mapping: parquetColumn(中文) → id(英文 snake_case)
+  // cn_to_en_mapping: parquetColumn(中文) → id(英文 snake_case) 的一对一映射
+  // 注意：只用 parquetColumn，不用 aliases，避免 DataFrame 出现重名列
+  // （aliases 是给 column-normalizer 运行时识别输入用的，不是 ETL rename 用的）
   const cnToEn = {};
   for (const f of fields) {
     cnToEn[f.parquetColumn] = f.id;

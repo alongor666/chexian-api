@@ -551,9 +551,10 @@ def process_new_fields(df):
         print(f"\n   处理续保模式:")
         print(f"      原始值分布: {df['续保业务类型'].value_counts().to_dict()}")
         
-        # 重命名并保留原值（电续、自留、兜底）
+        # 派生续保模式并删除源列（避免 rename 后残留中文列名）
         df['续保模式'] = df['续保业务类型'].astype(str)
-        
+        df.drop(columns=['续保业务类型'], inplace=True)
+
         # 统计各种模式
         mode_counts = df['续保模式'].value_counts()
         print(f"      ✅ 续保模式分布:")

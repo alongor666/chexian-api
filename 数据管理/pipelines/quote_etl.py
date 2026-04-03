@@ -82,6 +82,19 @@ def main():
     df["salesman_no"] = splits.apply(lambda x: x[0])
     df["salesman_name_display"] = splits.apply(lambda x: x[1])
 
+    # 3b. 风险等级 COALESCE 合并（对齐 convert_quotes.py / transform.py 逻辑）
+    grade_cols = ['车险分等级', '小货车评分', '大货车评分']
+    existing_grades = [c for c in grade_cols if c in df.columns]
+    if existing_grades:
+        df['车险风险等级'] = df[existing_grades[0]]
+        for c in existing_grades[1:]:
+            df['车险风险等级'] = df['车险风险等级'].fillna(df[c])
+        drop_grades = [c for c in existing_grades if c != '车险风险等级']
+        if drop_grades:
+            df.drop(columns=drop_grades, inplace=True)
+        valid_grades = df['车险风险等级'].notna().sum()
+        print(f"   风险等级合并: {valid_grades:,}/{len(df):,} ({valid_grades/len(df)*100:.1f}%)")
+
     # 4. JOIN salesman dim 获取团队
     print("🔗 JOIN salesman dim 表...")
     dim_paths = [
@@ -119,7 +132,7 @@ def main():
             cn_to_en = json.load(f).get('cn_to_en_mapping', {})
     except (FileNotFoundError, json.JSONDecodeError):
         cn_to_en = {}
-    # 报价域专有映射
+    # 报价域专有映射（不在 field-registry 中的字段）
     quote_cn_to_en = {
         '报价时间': 'quote_time',
         '续保情况': 'renewal_status',
@@ -129,6 +142,11 @@ def main():
         'NCD基数': 'ncd_base',
         'NCD系数': 'ncd_coefficient',
         '交通风险评分等级': 'traffic_risk_grade',
+        '车牌号': 'plate_no',
+        '是否新能源车': 'is_nev',
+        '车险风险等级': 'insurance_grade',
+        '货车吨位分段': 'tonnage_segment',
+        '自主定价系数': 'commercial_pricing_factor',
     }
     full_mapping = {**cn_to_en, **quote_cn_to_en}
     rename_en = {k: v for k, v in full_mapping.items() if k in result.columns}

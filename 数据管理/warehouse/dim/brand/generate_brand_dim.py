@@ -129,10 +129,17 @@ def generate():
     con = duckdb.connect()
 
     print("📊 读取保单数据...")
+    # 兼容中英文列名：优先英文 vehicle_model，回退中文 厂牌车型
+    parquet_cols = [c[0] for c in con.execute(f"SELECT name FROM parquet_schema('{GLOB}')").fetchall()]
+    model_col = 'vehicle_model' if 'vehicle_model' in parquet_cols else '厂牌车型'
+    policy_no_col = 'policy_no' if 'policy_no' in parquet_cols else '保单号'
+    premium_col = 'premium' if 'premium' in parquet_cols else '保费'
+    if model_col != 'vehicle_model':
+        print(f"   ⚠️ Parquet 仍为中文列名，使用回退: {model_col}")
     rows = con.execute(f"""
-        SELECT DISTINCT 厂牌车型
+        SELECT DISTINCT "{model_col}"
         FROM read_parquet('{GLOB}', union_by_name=true)
-        WHERE 厂牌车型 IS NOT NULL AND 厂牌车型 != ''
+        WHERE "{model_col}" IS NOT NULL AND "{model_col}" != ''
     """).fetchall()
 
     print(f"   唯一厂牌车型: {len(rows):,d}")
@@ -145,15 +152,15 @@ def generate():
         brand_usage = f"{brand}_{usage}"
         records.append((raw, brand, usage, usage_cat, brand_usage))
 
-    # 写入 Parquet
+    # 写入 Parquet（英文列名）
     con.execute("DROP TABLE IF EXISTS brand_dim_tmp")
     con.execute("""
         CREATE TABLE brand_dim_tmp (
-            厂牌车型 VARCHAR,
-            品牌 VARCHAR,
-            车辆用途 VARCHAR,
-            用途大类 VARCHAR,
-            品牌_用途 VARCHAR
+            vehicle_model VARCHAR,
+            brand VARCHAR,
+            vehicle_usage VARCHAR,
+            usage_category VARCHAR,
+            brand_usage VARCHAR
         )
     """)
     con.executemany(
@@ -170,36 +177,36 @@ def generate():
     print("📊 统计品牌分布...")
     brand_stats = con.execute(f"""
         SELECT
-            b.品牌_用途,
-            b.品牌,
-            b.用途大类,
-            COUNT(DISTINCT p.保单号) AS policy_count,
-            ROUND(SUM(p.保费)/10000, 0)::INT AS premium_wan,
-            COUNT(DISTINCT b.厂牌车型) AS model_count
+            b.brand_usage,
+            b.brand,
+            b.usage_category,
+            COUNT(DISTINCT p."{policy_no_col}") AS policy_count,
+            ROUND(SUM(p."{premium_col}")/10000, 0)::INT AS premium_wan,
+            COUNT(DISTINCT b.vehicle_model) AS model_count
         FROM read_parquet('{GLOB}', union_by_name=true) p
-        JOIN brand_dim_tmp b ON p.厂牌车型 = b.厂牌车型
-        GROUP BY b.品牌_用途, b.品牌, b.用途大类
-        HAVING COUNT(DISTINCT p.保单号) >= 100
-        ORDER BY COUNT(DISTINCT p.保单号) DESC
+        JOIN brand_dim_tmp b ON p."{model_col}" = b.vehicle_model
+        GROUP BY b.brand_usage, b.brand, b.usage_category
+        HAVING COUNT(DISTINCT p."{policy_no_col}") >= 100
+        ORDER BY COUNT(DISTINCT p."{policy_no_col}") DESC
     """).fetchall()
 
     usage_stats = con.execute(f"""
         SELECT
-            b.车辆用途,
-            b.用途大类,
-            COUNT(DISTINCT p.保单号) AS policy_count,
-            ROUND(SUM(p.保费)/10000, 0)::INT AS premium_wan
+            b.vehicle_usage,
+            b.usage_category,
+            COUNT(DISTINCT p."{policy_no_col}") AS policy_count,
+            ROUND(SUM(p."{premium_col}")/10000, 0)::INT AS premium_wan
         FROM read_parquet('{GLOB}', union_by_name=true) p
-        JOIN brand_dim_tmp b ON p.厂牌车型 = b.厂牌车型
-        GROUP BY b.车辆用途, b.用途大类
-        ORDER BY COUNT(DISTINCT p.保单号) DESC
+        JOIN brand_dim_tmp b ON p."{model_col}" = b.vehicle_model
+        GROUP BY b.vehicle_usage, b.usage_category
+        ORDER BY COUNT(DISTINCT p."{policy_no_col}") DESC
     """).fetchall()
 
     # 生成 AI 知识文件
     _write_knowledge(brand_stats, usage_stats, count)
 
     # 统计唯一品牌_用途组合数
-    combo_count = con.execute("SELECT COUNT(DISTINCT 品牌_用途) FROM brand_dim_tmp").fetchone()[0]
+    combo_count = con.execute("SELECT COUNT(DISTINCT brand_usage) FROM brand_dim_tmp").fetchone()[0]
     print(f"   唯一品牌_用途组合: {combo_count:,d}")
 
     # 更新 dim_summary.json
@@ -243,13 +250,13 @@ def _write_knowledge(brand_stats, usage_stats, total_models):
     lines.append("")
     lines.append("```sql")
     lines.append("-- 方法 A: JOIN 维度表（推荐，已预计算）")
-    lines.append("SELECT b.品牌_用途, SUM(p.保费)")
+    lines.append("SELECT b.brand_usage, SUM(p.premium)")
     lines.append("FROM read_parquet('policy/current/*.parquet') p")
-    lines.append("JOIN read_parquet('dim/brand/latest.parquet') b ON p.厂牌车型 = b.厂牌车型")
-    lines.append("GROUP BY b.品牌_用途")
+    lines.append("JOIN read_parquet('dim/brand/latest.parquet') b ON p.vehicle_model = b.vehicle_model")
+    lines.append("GROUP BY b.brand_usage")
     lines.append("")
     lines.append("-- 方法 B: 运行时提取（无维度表时的回退）")
-    lines.append("SELECT REGEXP_EXTRACT(厂牌车型, '^([\\u4e00-\\u9fff][\\u4e00-\\u9fff\\-]*)', 1) AS 品牌")
+    lines.append("SELECT REGEXP_EXTRACT(vehicle_model, '^([\\u4e00-\\u9fff][\\u4e00-\\u9fff\\-]*)', 1) AS brand")
     lines.append("```")
     lines.append("")
     lines.append("---")
@@ -285,7 +292,7 @@ def _update_summary(total_models, total_combos):
     summary["brand"] = {
         "total_models": total_models,
         "total_brand_usage_combos": total_combos,
-        "composite_key": "品牌_用途",
+        "composite_key": "brand_usage",
         "generated_at": datetime.now().isoformat(),
         "path": "brand/latest.parquet",
     }

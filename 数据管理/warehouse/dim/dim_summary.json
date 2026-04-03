@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-03T15:29:09.454387",
+  "generated_at": "2026-04-03T19:16:52.438768",
   "salesman": {
     "total": 603,
     "active": 243,
@@ -23,10 +23,10 @@
     "path": "plan/latest.parquet"
   },
   "brand": {
-    "total_models": 37810,
-    "total_brand_usage_combos": 2938,
-    "composite_key": "品牌_用途",
-    "generated_at": "2026-04-03T15:29:09.454380",
+    "total_models": 37788,
+    "total_brand_usage_combos": 2936,
+    "composite_key": "brand_usage",
+    "generated_at": "2026-04-03T19:16:52.438762",
     "path": "brand/latest.parquet"
   }
 }

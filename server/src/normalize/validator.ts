@@ -54,6 +54,8 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   driver_age_group: ['VARCHAR', 'TEXT', 'STRING'], // 被保险人年龄分组
   first_registration_date: ['VARCHAR', 'TEXT', 'STRING', 'DATE', 'TIMESTAMP'], // 初次登记年月
   fuel_type: ['VARCHAR', 'TEXT', 'STRING'], // 燃料种类
+  agent_name: ['VARCHAR', 'TEXT', 'STRING'], // 经代名
+  customer_source: ['VARCHAR', 'TEXT', 'STRING'], // 客户源
 };
 
 export interface SchemaColumn {

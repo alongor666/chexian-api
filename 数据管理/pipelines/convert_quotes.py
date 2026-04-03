@@ -97,6 +97,11 @@ def main():
         '交通风险评分等级': 'traffic_risk_grade',
         '业务员编号': 'salesman_no',
         '业务员姓名': 'salesman_name_display',
+        '车牌号': 'plate_no',
+        '是否新能源车': 'is_nev',
+        '车险风险等级': 'insurance_grade',
+        '货车吨位分段': 'tonnage_segment',
+        '自主定价系数': 'commercial_pricing_factor',
     }
     full_mapping = {**cn_to_en, **quote_cn_to_en}
     rename_en = {k: v for k, v in full_mapping.items() if k in df.columns}
@@ -120,10 +125,10 @@ def main():
     print(f"   验证: {len(verify):,} 行 ✅")
 
     # 统计
-    if '续保情况' in df.columns:
-        print(f"   续保情况: {df['续保情况'].value_counts().to_dict()}")
-    if '是否承保' in df.columns:
-        print(f"   是否承保: {df['是否承保'].value_counts().to_dict()}")
+    if 'renewal_status' in df.columns:
+        print(f"   续保情况: {df['renewal_status'].value_counts().to_dict()}")
+    if 'is_underwritten' in df.columns:
+        print(f"   是否承保: {df['is_underwritten'].value_counts().to_dict()}")
 
     print(f"{'='*80}")
     print(f"✅ 完成")

@@ -379,6 +379,24 @@
       "dataTypes": ["VARCHAR", "TEXT", "STRING"],
       "aliases": ["燃料种类", "fuel_type", "fuelType", "燃料类型", "fuel_kind"],
       "description": "燃料种类（仅2020-2023有值，11种枚举）"
+    },
+    {
+      "id": "agent_name",
+      "label": "经代名",
+      "parquetColumn": "经代名",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["经代名", "agent_name", "agentName", "代理人/经纪人", "经纪代理人"],
+      "description": "经纪代理人/经纪公司名称"
+    },
+    {
+      "id": "customer_source",
+      "label": "客户源",
+      "parquetColumn": "客户源",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["客户源", "customer_source", "customerSource", "客户来源"],
+      "description": "客户来源渠道"
     }
   ],
   "etl": {
