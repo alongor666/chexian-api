@@ -21,6 +21,7 @@ describe('column-normalizer', () => {
       '代理人/经纪人',
     ]);
 
-    expect(sql).toContain('"代理人/经纪人" as "代理人/经纪人"');
+    // 代理人/经纪人 现在是 agent_name 的别名，会被映射而非透传
+    expect(sql).toContain('agent_name');
   });
 });
