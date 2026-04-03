@@ -10,7 +10,7 @@ import { COLUMN_ALIASES } from '../normalize/mapping.js';
 /**
  * 布尔字段列表（需要类型转换）
  */
-const BOOLEAN_FIELDS = [
+export const BOOLEAN_FIELDS = [
   'is_renewal',
   'is_renewable',
   'is_new_car',

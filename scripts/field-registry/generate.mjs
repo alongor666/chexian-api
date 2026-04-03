@@ -246,10 +246,17 @@ export function validateDataQuality(
 
 // ── 3. 生成 etl_fields.json（供 transform.py 读取）──
 function generateEtlFields() {
+  // cn_to_en_mapping: parquetColumn(中文) → id(英文 snake_case)
+  const cnToEn = {};
+  for (const f of fields) {
+    cnToEn[f.parquetColumn] = f.id;
+  }
+
   return JSON.stringify({
     _doc: "⚠️ AUTO-GENERATED from field-registry/fields.json — DO NOT EDIT",
     core_fields: registry.etl.coreParquetColumns,
     optional_fields: registry.etl.optionalParquetColumns,
+    cn_to_en_mapping: cnToEn,
   }, null, 2) + '\n';
 }
 

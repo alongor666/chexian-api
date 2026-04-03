@@ -10,23 +10,23 @@ interface Props {
 
 /** 全部 10 个维度，前 5 直接显示，后 5 在「更多」中 */
 const ALL_DIMENSIONS = [
-  { key: '续保情况', label: '续保/转保' },
-  { key: '车险分等级', label: '风险等级' },
-  { key: 'NCD系数', label: 'NCD系数' },
-  { key: '客户类别', label: '客户类别' },
-  { key: '交通风险评分等级', label: '交通评分' },
+  { key: 'renewal_status', label: '续保/转保' },
+  { key: 'insurance_grade', label: '风险等级' },
+  { key: 'ncd_coefficient', label: 'NCD系数' },
+  { key: 'customer_category', label: '客户类别' },
+  { key: 'traffic_risk_grade', label: '交通评分' },
   // ── 更多 ──
-  { key: '险别组合', label: '险别组合' },
-  { key: '是否新能源车', label: '新能源' },
-  { key: '是否电销', label: '电销' },
-  { key: '是否过户车', label: '过户车' },
-  { key: '货车吨位分段', label: '货车吨位' },
+  { key: 'coverage_combination', label: '险别组合' },
+  { key: 'is_nev', label: '新能源' },
+  { key: 'is_telemarketing', label: '电销' },
+  { key: 'is_transfer', label: '过户车' },
+  { key: 'tonnage_segment', label: '货车吨位' },
 ] as const;
 
 const PRIMARY_COUNT = 5;
 
 export function DimensionMatrix({ filters }: Props) {
-  const [selectedDim, setSelectedDim] = useState<string>('续保情况');
+  const [selectedDim, setSelectedDim] = useState<string>('renewal_status');
   const [showMore, setShowMore] = useState(false);
   const { data: heatData, isLoading: heatLoading } = useQuoteHeatmap(filters, selectedDim);
   const { data: rankData, isLoading: rankLoading } = useQuoteRanking(filters, selectedDim);

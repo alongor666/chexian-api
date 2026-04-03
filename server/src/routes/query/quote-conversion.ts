@@ -75,7 +75,7 @@ function parseFilters(query: Record<string, unknown>): QuoteConversionFilters {
   if (filters.ncdMin !== undefined && filters.ncdMax !== undefined && filters.ncdMin > filters.ncdMax) {
     throw new AppError(400, 'ncdMin 不能大于 ncdMax');
   }
-  return filters;
+  return filters as QuoteConversionFilters;
 }
 
 function parseEnumParam<T extends [string, ...string[]]>(
@@ -132,7 +132,7 @@ router.get(
 router.get(
   '/quote-conversion/drilldown',
   asyncHandler(async (req, res) => {
-    const level = parseEnumParam(req.query.level, ['org', 'team', 'salesman'], 'level', 'org');
+    const level = parseEnumParam(req.query.level, ['org', 'team', 'salesman'], 'level', 'org') as 'org' | 'team' | 'salesman';
     const filters = parseFilters(req.query);
     const sql = generateQuoteDrilldownQuery(filters, level);
     const data = await duckdbService.query(sql);
@@ -192,7 +192,7 @@ router.get(
   '/quote-conversion/trend',
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const granularity = parseEnumParam(req.query.granularity, ['day', 'week', 'month'], 'granularity', 'week');
+    const granularity = parseEnumParam(req.query.granularity, ['day', 'week', 'month'], 'granularity', 'week') as 'day' | 'week' | 'month';
     const sql = generateQuoteTrendQuery(filters, granularity);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data, granularity });

@@ -12,20 +12,20 @@ interface Props {
 }
 
 const TABS = [
-  { key: '客户类别', label: '客户类别' },
-  { key: 'NCD系数', label: 'NCD系数' },
-  { key: '车险分等级', label: '风险等级' },
-  { key: '是否新能源车', label: '新能源' },
-  { key: '交通风险评分等级', label: '交通评分' },
-  { key: '货车吨位分段', label: '货车吨位' },
-  { key: '是否电销', label: '电销' },
-  { key: '是否过户车', label: '过户车' },
+  { key: 'customer_category', label: '客户类别' },
+  { key: 'ncd_coefficient', label: 'NCD系数' },
+  { key: 'insurance_grade', label: '风险等级' },
+  { key: 'is_nev', label: '新能源' },
+  { key: 'traffic_risk_grade', label: '交通评分' },
+  { key: 'tonnage_segment', label: '货车吨位' },
+  { key: 'is_telemarketing', label: '电销' },
+  { key: 'is_transfer', label: '过户车' },
 ] as const;
 
 export function RankingTable({
   filters,
   title = '多维度转化排行',
-  defaultDimension = '客户类别',
+  defaultDimension = 'customer_category',
   dimensions = TABS,
 }: Props) {
   const [dimension, setDimension] = useState<string>(defaultDimension);

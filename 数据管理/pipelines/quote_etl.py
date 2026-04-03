@@ -79,8 +79,8 @@ def main():
     # 3. 拆分业务员字段
     print("🔧 拆分业务员字段...")
     splits = df["业务员"].apply(split_salesman)
-    df["业务员编号"] = splits.apply(lambda x: x[0])
-    df["业务员姓名"] = splits.apply(lambda x: x[1])
+    df["salesman_no"] = splits.apply(lambda x: x[0])
+    df["salesman_name_display"] = splits.apply(lambda x: x[1])
 
     # 4. JOIN salesman dim 获取团队
     print("🔗 JOIN salesman dim 表...")
@@ -98,18 +98,43 @@ def main():
         result = con.execute(
             f"""
             SELECT q.*,
-                   COALESCE(s.team, '未分配团队') AS 团队
+                   COALESCE(s.team, '未分配团队') AS team
             FROM quotes q
             LEFT JOIN read_parquet('{dim_path}') s
-              ON q.业务员编号 = s.business_no
+              ON q.salesman_no = s.business_no
             """
         ).df()
-        matched = (result["团队"] != "未分配团队").sum()
+        matched = (result["team"] != "未分配团队").sum()
         print(f"   匹配: {matched:,d}/{len(result):,d} ({matched/len(result)*100:.0f}%)")
     else:
         print("   ⚠️ salesman dim 表不存在，团队字段全部为'未分配团队'")
-        df["团队"] = "未分配团队"
+        df["team"] = "未分配团队"
         result = df
+
+    # ── 列名英文化：中文 → 英文 snake_case ──
+    import json
+    etl_fields_path = Path(__file__).resolve().parent / 'etl_fields.json'
+    try:
+        with open(etl_fields_path) as f:
+            cn_to_en = json.load(f).get('cn_to_en_mapping', {})
+    except (FileNotFoundError, json.JSONDecodeError):
+        cn_to_en = {}
+    # 报价域专有映射
+    quote_cn_to_en = {
+        '报价时间': 'quote_time',
+        '续保情况': 'renewal_status',
+        '是否承保': 'is_underwritten',
+        '折前保费': 'pre_discount_premium',
+        '折后保费': 'post_discount_premium',
+        'NCD基数': 'ncd_base',
+        'NCD系数': 'ncd_coefficient',
+        '交通风险评分等级': 'traffic_risk_grade',
+    }
+    full_mapping = {**cn_to_en, **quote_cn_to_en}
+    rename_en = {k: v for k, v in full_mapping.items() if k in result.columns}
+    if rename_en:
+        result = result.rename(columns=rename_en)
+        print(f"   列名英文化: {len(rename_en)}/{len(result.columns)} 列已重命名")
 
     # 5. 输出 Parquet（统一 L1 metadata）
     output_file = output_dir / "latest.parquet"
@@ -117,7 +142,7 @@ def main():
     from pipelines.parquet_utils import write_parquet_with_metadata
     write_parquet_with_metadata(
         result, output_file,
-        source_file=str(input_file.name),
+        source_file=str(input_path.name),
         processing_mode="quotes_conversion",
     )
 
@@ -126,10 +151,10 @@ def main():
         f"""
         SELECT
             COUNT(*) AS total,
-            COUNT(CASE WHEN 是否承保='承保' THEN 1 END) AS insured,
-            COUNT(DISTINCT 三级机构) AS orgs,
-            COUNT(DISTINCT 团队) AS teams,
-            COUNT(DISTINCT 业务员编号) AS salesmen
+            COUNT(CASE WHEN is_underwritten='承保' THEN 1 END) AS insured,
+            COUNT(DISTINCT org_level_3) AS orgs,
+            COUNT(DISTINCT team) AS teams,
+            COUNT(DISTINCT salesman_no) AS salesmen
         FROM read_parquet('{output_file}')
         """
     ).fetchone()

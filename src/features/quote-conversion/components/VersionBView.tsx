@@ -73,13 +73,13 @@ function RenewalSwitchSection({ filters }: { filters: QuoteFilters }) {
           title="续保 · 风险等级承保率"
           subtitle="观察续保报价在各车险分等级上的承保效率。"
           filters={mergeFilters(filters, { renewalType: '续保' })}
-          dimension="车险分等级"
+          dimension="insurance_grade"
         />
         <RankingHighlightsCard
           title="转保 · 风险等级承保率"
           subtitle="对比转保报价在各车险分等级上的承保效率。"
           filters={mergeFilters(filters, { renewalType: '转保' })}
-          dimension="车险分等级"
+          dimension="insurance_grade"
         />
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
@@ -87,13 +87,13 @@ function RenewalSwitchSection({ filters }: { filters: QuoteFilters }) {
           title="续保 · 客户类别"
           subtitle="看续保客户结构中的高转化类别。"
           filters={mergeFilters(filters, { renewalType: '续保' })}
-          dimension="客户类别"
+          dimension="customer_category"
         />
         <RankingHighlightsCard
           title="转保 · 客户类别"
           subtitle="看转保客户结构中的高转化类别。"
           filters={mergeFilters(filters, { renewalType: '转保' })}
-          dimension="客户类别"
+          dimension="customer_category"
         />
       </div>
     </div>
@@ -129,13 +129,13 @@ function ProfileSection({ filters }: { filters: QuoteFilters }) {
           title="新能源车承保率对比"
           subtitle={'对应旧 HTML 的\u201c特殊车辆\u201d子图之一。'}
           filters={filters}
-          dimension="是否新能源车"
+          dimension="is_nev"
         />
         <RankingHighlightsCard
           title="过户车承保率对比"
           subtitle={'对应旧 HTML 的\u201c特殊车辆\u201d子图之一。'}
           filters={filters}
-          dimension="是否过户车"
+          dimension="is_transfer"
         />
       </div>
       <RankingTable filters={filters} />
@@ -176,7 +176,7 @@ function DiscountSection({ filters }: { filters: QuoteFilters }) {
           title="NCD系数分布"
           subtitle="对应旧 HTML 的 NCD 系数分布专题。"
           filters={filters}
-          dimension="NCD系数"
+          dimension="ncd_coefficient"
         />
         <DiscountSummary filters={filters} />
       </div>

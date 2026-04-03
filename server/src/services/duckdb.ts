@@ -12,7 +12,7 @@ import type { DuckDBConnection } from '@duckdb/node-api';
 import { databaseConfig, DUCKDB_INIT_OPTIONS } from '../config/database.js';
 import { getKpiPlanConfigPath } from '../config/paths.js';
 import { AppError } from '../middleware/error.js';
-import { generateColumnMappingSQL, getColumnMapping } from './column-normalizer.js';
+import { generateColumnMappingSQL, getColumnMapping, BOOLEAN_FIELDS } from './column-normalizer.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
 import { recordQueryMetric } from '../utils/request-context.js';
 
@@ -437,79 +437,43 @@ class DuckDBService {
   }
 
   /**
-   * 加载多个 Parquet 文件并合并为 raw_parquet 视图
+   * 加载多个 Parquet 文件并合并为 raw_parquet 表
    *
-   * 策略：
-   * - 单文件时走快速路径（直接 CREATE TABLE，保持原行为）
-   * - 多文件时：每个文件加载到独立表，UNION ALL 合并为视图
-   * - 兼容 schema 差异：缺失列填 NULL
+   * 使用 DuckDB 原生 read_parquet([], union_by_name=true)：
+   * - 单文件/多文件统一路径，无中间表
+   * - union_by_name 自动处理 schema 差异（缺失列填 NULL）
+   * - 峰值内存 = 1 份数据（无需中间 raw_parquet_0/1 表叠加）
    */
   async loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number }> {
     if (filePaths.length === 0) {
       throw new AppError(400, 'No parquet files provided');
     }
 
-    // 单文件快速路径
-    if (filePaths.length === 1) {
-      await this.loadParquet(filePaths[0], 'raw_parquet');
-      const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
-      return { totalRows: countResult[0]?.cnt ?? 0 };
-    }
+    const t0 = Date.now();
 
-    // 多文件：逐个加载到独立表
-    const tableNames: string[] = [];
-    const allColumns = new Map<string, string>(); // column_name -> column_type
+    // 统一路径：单文件和多文件都用 read_parquet([])
+    const escapedPaths = filePaths.map((p) => `'${escapeSqlValue(p)}'`).join(', ');
 
-    for (let i = 0; i < filePaths.length; i++) {
-      const tableName = `raw_parquet_${i}`;
-      const safeTableName = sanitizeTableName(tableName);
-      const escapedPath = escapeSqlValue(filePaths[i]);
-
-      await this.query(`
-        CREATE OR REPLACE TABLE ${safeTableName} AS
-        SELECT * FROM read_parquet('${escapedPath}')
-      `);
-      tableNames.push(safeTableName);
-
-      // 收集列信息
-      const schema = await this.getTableSchema(safeTableName);
-      for (const col of schema) {
-        if (!allColumns.has(col.column_name)) {
-          allColumns.set(col.column_name, col.column_type);
-        }
-      }
-
-      const countResult = await this.query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM ${safeTableName}`);
-      console.log(`[DuckDB] Loaded parquet[${i}]: ${filePaths[i]} → ${safeTableName} (${countResult[0]?.cnt ?? 0} rows)`);
-    }
-
-    // 构建 UNION ALL 视图，缺失列填 NULL
-    const allColumnNames = Array.from(allColumns.keys());
-    const selectParts = tableNames.map((table) => {
-      return this.query<{ column_name: string }>(`SELECT column_name FROM (DESCRIBE ${table})`).then((schema) => {
-        const existingCols = new Set(schema.map((c) => c.column_name));
-        const cols = allColumnNames.map((col) =>
-          existingCols.has(col) ? `"${col}"` : `NULL AS "${col}"`
-        );
-        return `SELECT ${cols.join(', ')} FROM ${table}`;
-      });
-    });
-
-    const selects = await Promise.all(selectParts);
-    // raw_parquet 在单文件路径下可能是 TABLE，多文件路径需要 VIEW。
     await this.dropRelationIfExists('raw_parquet');
 
-    const unionSQL = `
-      CREATE OR REPLACE VIEW raw_parquet AS
-      ${selects.join('\n      UNION ALL\n      ')}
-    `;
-    await this.query(unionSQL);
+    try {
+      await this.query(`
+        CREATE TABLE raw_parquet AS
+        SELECT * FROM read_parquet([${escapedPaths}], union_by_name=true)
+      `);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Schema 冲突或文件损坏时给出清晰报错
+      console.error(`[DuckDB] ⚠️ read_parquet failed: ${msg}`);
+      console.error(`[DuckDB] Files: ${filePaths.join(', ')}`);
+      throw new AppError(500, `Parquet loading failed (schema incompatible or file corrupted): ${msg}`);
+    }
 
     this.invalidateCache();
 
     const totalResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
     const totalRows = totalResult[0]?.cnt ?? 0;
-    console.log(`[DuckDB] Multi-parquet loaded: ${filePaths.length} files, ${totalRows} total rows`);
+    console.log(`[DuckDB] read_parquet loaded: ${filePaths.length} file(s), ${totalRows} rows in ${Date.now() - t0}ms`);
 
     return { totalRows };
   }
@@ -579,11 +543,27 @@ class DuckDBService {
     await this.query('DROP TABLE IF EXISTS PolicyFactRealtime');
     console.log('[DuckDB] Materializing PolicyFactRealtime...');
     const t0 = Date.now();
+
+    // 检测源表中实际存在的布尔字段（union_by_name 可能填 NULL 给缺失列）
+    const schema = await this.getTableSchema('PolicyFactRenewal');
+    const existingCols = new Set(schema.map((c: any) => c.column_name));
+    const boolFieldsInSchema = BOOLEAN_FIELDS.filter((f) => existingCols.has(f));
+
+    // 布尔标准化：SELECT * REPLACE 将 VARCHAR/'是'/'1'/'true' 统一为 BOOLEAN
+    // P1 后 PolicyFactRealtime 的布尔字段全部为原生 BOOLEAN 类型
+    const replaceClauses = boolFieldsInSchema.map((field) =>
+      `(CASE WHEN LOWER(TRIM(CAST("${field}" AS VARCHAR))) IN ('是', '1', 'true', 't', 'y', 'yes', '有', '有驾意险交叉销售') THEN true ELSE false END) AS "${field}"`
+    );
+
+    const selectExpr = replaceClauses.length > 0
+      ? `SELECT * REPLACE (${replaceClauses.join(', ')})`
+      : 'SELECT *';
+
     await this.query(`
       CREATE TABLE PolicyFactRealtime AS
-      SELECT * FROM PolicyFactRenewal
+      ${selectExpr} FROM PolicyFactRenewal
     `);
-    console.log(`[DuckDB] PolicyFactRealtime table created in ${Date.now() - t0}ms`);
+    console.log(`[DuckDB] PolicyFactRealtime created in ${Date.now() - t0}ms (${boolFieldsInSchema.length} boolean fields standardized)`);
 
     // 重建视图指向物化表，然后释放原始 raw_parquet 表以回收内存
     // （raw_parquet 是 Parquet 文件的全量副本，物化后不再需要）
@@ -652,50 +632,56 @@ class DuckDBService {
     await this.dropRelationIfExists(tableName);
 
     const t0 = Date.now();
-    console.log(`[DuckDB] Materializing ${tableName} (batched by month)...`);
+    // VPS（threads<=2）：逐月分批降低峰值内存；本地（threads>2）：直接物化更快
+    const useBatching = DUCKDB_INIT_OPTIONS.threads <= 2;
+    console.log(`[DuckDB] Materializing ${tableName} (${useBatching ? 'batched by month' : 'direct'})...`);
 
     try {
-      // 降低内存峰值
-      await this.query('SET threads=1');
-      await this.query('SET preserve_insertion_order=false');
-
-      // 获取年月范围
-      const monthsResult = await this.query<{ ym: string }>(`
-        SELECT DISTINCT strftime(CAST(policy_date AS DATE), '%Y-%m') AS ym
-        FROM PolicyFact WHERE policy_date IS NOT NULL ORDER BY ym
-      `);
-      const months = monthsResult.map((r) => r.ym);
-
-      if (months.length === 0) {
+      if (!useBatching) {
+        // 本地开发：直接 CREATE TABLE，跳过分批
         await this.query(`
           CREATE TABLE ${tableName} AS
           WITH normalized AS (${cteSql}) ${aggregateSql}
         `);
       } else {
-        // 首批：建表
-        await this.query(`
-          CREATE TABLE ${tableName} AS
-          WITH normalized AS (${cteSql}
-            AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[0]}'
-          ) ${aggregateSql}
-        `);
-        console.log(`[DuckDB] ${tableName} batch 1/${months.length}: ${months[0]}`);
+        // VPS：降低内存峰值，逐月分批
+        await this.query('SET threads=1');
+        await this.query('SET preserve_insertion_order=false');
 
-        // 后续批次：追加
-        for (let i = 1; i < months.length; i++) {
+        const monthsResult = await this.query<{ ym: string }>(`
+          SELECT DISTINCT strftime(CAST(policy_date AS DATE), '%Y-%m') AS ym
+          FROM PolicyFact WHERE policy_date IS NOT NULL ORDER BY ym
+        `);
+        const months = monthsResult.map((r) => r.ym);
+
+        if (months.length === 0) {
           await this.query(`
-            INSERT INTO ${tableName}
+            CREATE TABLE ${tableName} AS
+            WITH normalized AS (${cteSql}) ${aggregateSql}
+          `);
+        } else {
+          await this.query(`
+            CREATE TABLE ${tableName} AS
             WITH normalized AS (${cteSql}
-              AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[i]}'
+              AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[0]}'
             ) ${aggregateSql}
           `);
-          console.log(`[DuckDB] ${tableName} batch ${i + 1}/${months.length}: ${months[i]}`);
-        }
-      }
+          console.log(`[DuckDB] ${tableName} batch 1/${months.length}: ${months[0]}`);
 
-      // 恢复线程数
-      await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
-      await this.query('SET preserve_insertion_order=true');
+          for (let i = 1; i < months.length; i++) {
+            await this.query(`
+              INSERT INTO ${tableName}
+              WITH normalized AS (${cteSql}
+                AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[i]}'
+              ) ${aggregateSql}
+            `);
+            console.log(`[DuckDB] ${tableName} batch ${i + 1}/${months.length}: ${months[i]}`);
+          }
+        }
+
+        await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
+        await this.query('SET preserve_insertion_order=true');
+      }
 
       // 创建索引
       if (indexes.length > 0) {
@@ -713,11 +699,13 @@ class DuckDBService {
       console.error(`[DuckDB] ⚠️ ${tableName} materialization failed (${Date.now() - t0}ms): ${msg}`);
       console.warn(`[DuckDB] Falling back to VIEW for ${tableName} — queries will be slower`);
 
-      // 恢复线程数（可能在异常前未执行）
-      try {
-        await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
-        await this.query('SET preserve_insertion_order=true');
-      } catch { /* ignore */ }
+      // 分批模式下恢复线程数（可能在异常前未执行）
+      if (useBatching) {
+        try {
+          await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
+          await this.query('SET preserve_insertion_order=true');
+        } catch { /* ignore */ }
+      }
 
       // 清理失败的半成品表
       await this.dropRelationIfExists(tableName);
@@ -778,20 +766,14 @@ class DuckDBService {
           renewal_mode, tonnage_segment, insurance_grade,
           COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
           COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
-          (TRY_CAST(is_transfer AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_transfer AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_transfer,
-          (TRY_CAST(is_telemarketing AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_telemarketing AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_telemarketing,
-          (TRY_CAST(is_renewal AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_renewal AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_renewal,
-          (TRY_CAST(is_nev AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_nev AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_nev,
-          (TRY_CAST(is_new_car AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_new_car AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_new_car,
-          (TRY_CAST(is_renewable AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_renewable AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_renewable,
-          (TRY_CAST(is_cross_sell AS BOOLEAN) = true
-            OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')) AS is_cross_sell,
+          -- 布尔字段已在 PolicyFactRealtime 物化阶段标准化为 BOOLEAN（P1），直接引用
+          COALESCE(is_transfer, false) AS is_transfer,
+          COALESCE(is_telemarketing, false) AS is_telemarketing,
+          COALESCE(is_renewal, false) AS is_renewal,
+          COALESCE(is_nev, false) AS is_nev,
+          COALESCE(is_new_car, false) AS is_new_car,
+          COALESCE(is_renewable, false) AS is_renewable,
+          COALESCE(is_cross_sell, false) AS is_cross_sell,
           COALESCE(driver_coverage, 0) AS driver_coverage,
           COALESCE(passenger_coverage, 0) AS passenger_coverage,
           COALESCE(cross_sell_premium_driver, 0) AS cross_sell_premium_driver,

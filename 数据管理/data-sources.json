@@ -13,7 +13,7 @@
       "shard_strategy": "3层分片(static/weekly/daily)",
       "last_updated": "2026-04-03",
       "data_range": "2020-01-01 ~ 2026-04-02",
-      "row_count": 2510036,
+      "row_count": 2506355,
       "field_count": 44,
       "key_fields": [
         "保单号",
@@ -38,7 +38,7 @@
       "update_cadence": "with_source_xlsx",
       "last_updated": "2026-04-03",
       "data_range": "2024-01-01 ~ 2026-03-31",
-      "row_count": 815274,
+      "row_count": 1740586,
       "field_count": 5,
       "key_fields": [
         "保单号",

@@ -7,7 +7,10 @@ set -e
 echo "🔍 [pre-push] 运行单元测试..."
 bun run test --run
 
-echo "🔍 [pre-push] 运行类型检查..."
+echo "🔍 [pre-push] 运行前端类型检查..."
 bun run typecheck
+
+echo "🔍 [pre-push] 运行 server 类型检查..."
+npx tsc --noEmit --project server/tsconfig.json
 
 echo "✅ [pre-push] 全部通过，允许推送"

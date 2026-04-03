@@ -916,6 +916,18 @@ def save_to_parquet(df, output_path):
     print(f"💾 保存为 Parquet 格式")
     print(f"{'='*80}")
 
+    # ── 列名英文化：中文 → 英文 snake_case（从 codegen 产物读取映射）──
+    etl_fields_path = Path(__file__).resolve().parent / 'etl_fields.json'
+    try:
+        with open(etl_fields_path) as f:
+            cn_to_en = json.load(f).get('cn_to_en_mapping', {})
+        rename_map = {k: v for k, v in cn_to_en.items() if k in df.columns}
+        if rename_map:
+            df = df.rename(columns=rename_map)
+            print(f"   列名英文化: {len(rename_map)}/{len(df.columns)} 列已重命名")
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"   ⚠️ cn_to_en_mapping 读取失败，保留中文列名: {e}")
+
     print(f"   输出文件: {output_path}")
     print(f"   记录数: {len(df):,}")
     print(f"   字段数: {len(df.columns)}")

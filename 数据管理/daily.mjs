@@ -264,14 +264,14 @@ function runClaims(python, scriptDir) {
       `files = [${fileListStr}]`,
       'duckdb.sql("""',
       '  COPY (',
-      '    SELECT 保单号,',
-      '           FIRST(车架号) AS 车架号,',
-      '           SUM(赔案件数) AS 赔案件数,',
-      '           SUM(已报告赔款) AS 已报告赔款,',
-      '           SUM(费用金额) AS 费用金额',
+      '    SELECT policy_no,',
+      '           FIRST(vehicle_frame_no) AS vehicle_frame_no,',
+      '           SUM(claim_cases) AS claim_cases,',
+      '           SUM(reported_claims) AS reported_claims,',
+      '           SUM(fee_amount) AS fee_amount',
       `    FROM read_parquet(""" + str(files) + """)`,
-      '    GROUP BY 保单号',
-      '    HAVING 赔案件数 != 0 OR 已报告赔款 != 0 OR 费用金额 != 0',
+      '    GROUP BY policy_no',
+      '    HAVING claim_cases != 0 OR reported_claims != 0 OR fee_amount != 0',
       `  ) TO '${outputPath}' (FORMAT PARQUET)`,
       '""")',
       `cnt = duckdb.sql("SELECT COUNT(*) FROM read_parquet('${outputPath}')").fetchone()[0]`,
@@ -518,8 +518,8 @@ async function main() {
   }
 
   // 更新 premium 域的 data-sources.json（汇总所有 current/ 分片行数）
-  const currentDir = join(WAREHOUSE, 'policy/current');
-  if (existsSync(currentDir)) {
+  const policyCurrentDir = join(WAREHOUSE, 'policy/current');
+  if (existsSync(policyCurrentDir)) {
     const shardFiles = readdirSync(currentDir).filter(f => f.endsWith('.parquet'));
     let totalRows = 0;
     for (const f of shardFiles) {

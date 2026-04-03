@@ -9,19 +9,19 @@ interface Props {
 }
 
 const DIMENSIONS = [
-  { key: '续保情况', label: '续保/转保' },
-  { key: '车险分等级', label: '风险等级' },
-  { key: 'NCD系数', label: 'NCD系数' },
-  { key: '险别组合', label: '险别组合' },
-  { key: '客户类别', label: '客户类别' },
-  { key: '是否新能源车', label: '新能源' },
-  { key: '交通风险评分等级', label: '交通评分' },
+  { key: 'renewal_status', label: '续保/转保' },
+  { key: 'insurance_grade', label: '风险等级' },
+  { key: 'ncd_coefficient', label: 'NCD系数' },
+  { key: 'coverage_combination', label: '险别组合' },
+  { key: 'customer_category', label: '客户类别' },
+  { key: 'is_nev', label: '新能源' },
+  { key: 'traffic_risk_grade', label: '交通评分' },
 ] as const;
 
 // 热力色映射已迁移到 src/shared/styles/index.ts → getHeatmapColor()
 
 export function DimensionHeatmap({ filters }: Props) {
-  const [selectedDim, setSelectedDim] = useState<string>('续保情况');
+  const [selectedDim, setSelectedDim] = useState<string>('renewal_status');
   const { data, isLoading } = useQuoteHeatmap(filters, selectedDim);
 
   const { orgs, dimValues, matrix } = useMemo(() => {

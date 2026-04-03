@@ -75,6 +75,35 @@ def main():
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
 
+    # ── 列名英文化：中文 → 英文 snake_case ──
+    # 报价域专有字段（不在 field-registry 中）+ 从 etl_fields.json 继承的通用映射
+    import json
+    etl_fields_path = Path(__file__).resolve().parent / 'etl_fields.json'
+    try:
+        with open(etl_fields_path) as f:
+            cn_to_en = json.load(f).get('cn_to_en_mapping', {})
+    except (FileNotFoundError, json.JSONDecodeError):
+        cn_to_en = {}
+
+    # 报价域专有映射（不在 field-registry 中的字段）
+    quote_cn_to_en = {
+        '报价时间': 'quote_time',
+        '续保情况': 'renewal_status',
+        '是否承保': 'is_underwritten',
+        '折前保费': 'pre_discount_premium',
+        '折后保费': 'post_discount_premium',
+        'NCD基数': 'ncd_base',
+        'NCD系数': 'ncd_coefficient',
+        '交通风险评分等级': 'traffic_risk_grade',
+        '业务员编号': 'salesman_no',
+        '业务员姓名': 'salesman_name_display',
+    }
+    full_mapping = {**cn_to_en, **quote_cn_to_en}
+    rename_en = {k: v for k, v in full_mapping.items() if k in df.columns}
+    if rename_en:
+        df = df.rename(columns=rename_en)
+        print(f"   列名英文化: {len(rename_en)}/{len(df.columns)} 列已重命名")
+
     # 保存（统一 L1 metadata）
     from pipelines.parquet_utils import write_parquet_with_metadata
     write_parquet_with_metadata(
