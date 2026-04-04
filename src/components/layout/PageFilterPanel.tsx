@@ -353,20 +353,14 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div id={contentScrollId} className="h-full flex-1 overflow-y-auto">
-          <div
-            className={cn(
-              'mx-auto grid max-w-[1680px] gap-5 p-4 lg:p-5',
-              anchorSections.length > 0 ? 'lg:grid-cols-[minmax(0,1fr)_13rem]' : 'grid-cols-1'
-            )}
-          >
-            <div className="min-w-0">{children}</div>
-            {anchorSections.length > 0 && (
-              <div className="hidden lg:block">
-                <DashboardAnchorNav sections={anchorSections} containerId={contentScrollId} />
-              </div>
-            )}
+          <div className="mx-auto max-w-[1680px] p-4 lg:p-5">
+            {children}
           </div>
         </div>
+
+        {anchorSections.length > 0 && (
+          <DashboardAnchorNav sections={anchorSections} containerId={contentScrollId} />
+        )}
 
         <button
           type="button"

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { List, X } from 'lucide-react';
 import { cardStyles, colorClasses, textStyles, cn } from '../../shared/styles';
 
 export interface DashboardAnchorSection {
@@ -15,6 +16,12 @@ interface DashboardAnchorNavProps {
   scrollOffset?: number;
 }
 
+/**
+ * 页面锚点导航（浮动球形态）
+ *
+ * 右上角浮动球，点击展开导航面板。
+ * 不占据页面布局宽度。
+ */
 export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
   sections,
   containerId,
@@ -22,9 +29,12 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
   scrollOffset = 96,
 }) => {
   const [activeId, setActiveId] = useState<string>(sections[0]?.id ?? '');
+  const [isOpen, setIsOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const sectionIds = useMemo(() => sections.map((section) => section.id), [sections]);
 
+  // IntersectionObserver 跟踪当前可见 section
   useEffect(() => {
     if (sectionIds.length === 0) return;
 
@@ -56,7 +66,21 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
     return () => observer.disconnect();
   }, [containerId, sectionIds]);
 
+  // 点击外部关闭
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
   if (sections.length === 0) return null;
+
+  const activeIndex = sectionIds.indexOf(activeId);
 
   const handleScrollToSection = (section: DashboardAnchorSection) => {
     const target = document.getElementById(section.id);
@@ -71,8 +95,6 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
       const nextTop = root.scrollTop + targetRect.top - rootRect.top - offset;
       const resolvedTop = Math.max(0, nextTop);
 
-      // Write scrollTop first to guarantee anchor jumps in nested overflow containers.
-      // Then re-issue smooth scroll so supported browsers still get a softer transition.
       root.scrollTop = resolvedTop;
       root.scrollTo({
         top: resolvedTop,
@@ -87,51 +109,88 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
     }
 
     setActiveId(section.id);
+    setIsOpen(false);
   };
 
   return (
-    <aside className="sticky top-4">
-      <div className={cn(cardStyles.standard, 'space-y-3')}>
-        <div className="flex items-center gap-2">
-          <span className={cn('h-2 w-2 rounded-full', colorClasses.bg.primarySolid)} />
-          <h3 className={textStyles.titleSmall}>{title}</h3>
-        </div>
-        <nav aria-label={title}>
-          <ol className="space-y-1.5">
-            {sections.map((section, index) => {
-              const isActive = activeId === section.id;
-              return (
-                <li key={section.id}>
-                  <button
-                    type="button"
-                    onClick={() => handleScrollToSection(section)}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
-                      isActive
-                        ? 'bg-primary-bg text-primary-dark border border-primary-border'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-neutral-100'
-                    )}
-                    aria-current={isActive ? 'location' : undefined}
-                  >
-                    <span
+    <div ref={panelRef} className="fixed top-20 right-6 z-30 print:hidden">
+      {/* 展开面板 */}
+      {isOpen && (
+        <div className={cn(cardStyles.standard, 'w-56 space-y-3 shadow-lg')}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={cn('h-2 w-2 rounded-full', colorClasses.bg.primarySolid)} />
+              <h3 className={textStyles.titleSmall}>{title}</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="p-1 rounded text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
+              aria-label="关闭导航"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <nav aria-label={title}>
+            <ol className="space-y-1.5">
+              {sections.map((section, index) => {
+                const isActive = activeId === section.id;
+                return (
+                  <li key={section.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleScrollToSection(section)}
                       className={cn(
-                        'inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
+                        'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
                         isActive
-                          ? 'bg-white dark:bg-neutral-700 text-primary'
-                          : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
+                          ? 'bg-primary-bg text-primary-dark border border-primary-border'
+                          : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-neutral-100'
                       )}
+                      aria-current={isActive ? 'location' : undefined}
                     >
-                      {index + 1}
-                    </span>
-                    <span className="leading-tight">{section.shortLabel ?? section.label}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-        </nav>
-      </div>
-    </aside>
+                      <span
+                        className={cn(
+                          'inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
+                          isActive
+                            ? 'bg-white dark:bg-neutral-700 text-primary'
+                            : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
+                        )}
+                      >
+                        {index + 1}
+                      </span>
+                      <span className="leading-tight">{section.shortLabel ?? section.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+        </div>
+      )}
+
+      {/* 浮动球 — 收起时显示 */}
+      {!isOpen && (
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className={cn(
+            'flex items-center gap-2 rounded-full px-3 py-2',
+            'bg-white dark:bg-neutral-800 shadow-md',
+            'border border-neutral-200 dark:border-neutral-700',
+            'text-neutral-600 dark:text-neutral-300',
+            'hover:shadow-lg hover:scale-105 active:scale-95',
+            'transition-all duration-200'
+          )}
+          aria-label="打开页面导航"
+          title="页面导航"
+        >
+          <List size={16} className="text-primary" />
+          <span className="text-xs font-medium">
+            {activeIndex >= 0 ? `${activeIndex + 1}/${sections.length}` : title}
+          </span>
+        </button>
+      )}
+    </div>
   );
 };
 
