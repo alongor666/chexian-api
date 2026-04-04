@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { CHART_TEXT_STYLES } from '../../shared/config/chartStyles';
+import { colorClasses } from '../../shared/styles';
 import { echarts } from '../../shared/utils/echarts';
 import { formatPremiumWan } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
@@ -92,7 +93,7 @@ export const OrgPremiumPieChart: React.FC<OrgPremiumPieChartProps> = ({
 
   if (loading) {
     return (
-      <div className={`${showContainer ? 'bg-white p-4 rounded shadow' : ''} h-64 flex items-center justify-center bg-gray-50`}>
+      <div className={`${showContainer ? 'bg-white p-4 rounded shadow' : ''} h-64 flex items-center justify-center ${colorClasses.bg.neutral}`}>
         Loading Chart...
       </div>
     );

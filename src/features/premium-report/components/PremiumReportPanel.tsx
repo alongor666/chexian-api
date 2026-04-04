@@ -17,6 +17,7 @@ import type { TableColumn } from '../types/tableTypes';
 import type { OrgPremiumReportRow, SalesmanPremiumReportRow } from '../types/premiumReport';
 import { formatWanDirect, formatRate, formatCount, formatTeamName } from '../../../shared/utils/formatters';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
+import { colorClasses } from '../../../shared/styles';
 
 type PremiumTab = 'report' | 'plan';
 
@@ -193,7 +194,7 @@ export const PremiumReportPanel: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Tab 切换 */}
-      <div className="border-b border-gray-200">
+      <div className={`border-b ${colorClasses.border.neutral}`}>
         <nav className="flex -mb-px">
           {tabs.map((tab) => (
             <button
@@ -201,8 +202,8 @@ export const PremiumReportPanel: React.FC = () => {
               onClick={() => setActiveTab(tab.key)}
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? `border-blue-500 ${colorClasses.text.primary}`
+                  : `border-transparent ${colorClasses.text.neutralMuted} hover:text-neutral-700 hover:border-neutral-300`
               }`}
             >
               {tab.label}
@@ -216,7 +217,7 @@ export const PremiumReportPanel: React.FC = () => {
         <>
           {/* 错误提示 */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+            <div className={`${colorClasses.bg.danger} border ${colorClasses.border.danger} rounded-lg p-4 ${colorClasses.text.danger}`}>
               <p className="font-medium">加载失败</p>
               <p className="text-sm">{error}</p>
             </div>
@@ -233,12 +234,12 @@ export const PremiumReportPanel: React.FC = () => {
 
           {/* 表一：机构保费报表 */}
           <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+            <div className={`px-4 py-3 border-b ${colorClasses.border.neutral}`}>
+              <h3 className={`text-lg font-semibold flex items-center ${colorClasses.text.neutralBlack}`}>
                 <span className="mr-2">🏢</span>
                 机构保费报表
               </h3>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className={`text-sm mt-1 ${colorClasses.text.neutralMuted}`}>
                 各机构保费数据汇总（包含车险、商业险、交强险保费及件数统计）
               </p>
             </div>
@@ -252,19 +253,19 @@ export const PremiumReportPanel: React.FC = () => {
                 loading={isLoading}
               />
             </div>
-            <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
+            <div className={`px-4 py-3 border-t ${colorClasses.bg.neutral} ${colorClasses.border.neutral} text-sm ${colorClasses.text.neutralMuted}`}>
               共 <span className="font-tabular">{formatCount(sortedOrgReport.length)}</span> 个机构
             </div>
           </div>
 
           {/* 表二：业务员保费报表 */}
           <div className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+            <div className={`px-4 py-3 border-b ${colorClasses.border.neutral}`}>
+              <h3 className={`text-lg font-semibold flex items-center ${colorClasses.text.neutralBlack}`}>
                 <span className="mr-2">👤</span>
                 业务员保费报表
               </h3>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className={`text-sm mt-1 ${colorClasses.text.neutralMuted}`}>
                 业务员保费明细（包含保费、件数、续保率、非过户率等指标）
               </p>
             </div>
@@ -278,7 +279,7 @@ export const PremiumReportPanel: React.FC = () => {
                 loading={isLoading}
               />
             </div>
-            <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
+            <div className={`px-4 py-3 border-t ${colorClasses.bg.neutral} ${colorClasses.border.neutral} text-sm ${colorClasses.text.neutralMuted}`}>
               共 <span className="font-tabular">{formatCount(sortedSalesmanReport.length)}</span> 名业务员
             </div>
           </div>

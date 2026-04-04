@@ -11,6 +11,7 @@
 import React from 'react';
 import type { CostSubTab, CostAnalysisControlPanelProps, CostDimension } from '../types/costTypes';
 import { COST_SUB_TAB_CONFIG, MONTH_END_OPTIONS, DIMENSION_LABELS } from '../types/costTypes';
+import { colorClasses, cn } from '../../../shared/styles';
 
 /** 维度选项配置 */
 const DIMENSION_OPTIONS: {
@@ -51,11 +52,12 @@ export const CostAnalysisControlPanel: React.FC<
           <button
             key={key}
             onClick={() => onSubTabChange(key as CostSubTab)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={cn(
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
               activeSubTab === key
                 ? 'bg-blue-500 text-white shadow-md'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+                : cn(colorClasses.bg.neutralLight, colorClasses.text.neutral, 'hover:bg-neutral-200')
+            )}
           >
             {config.label}
           </button>
@@ -67,11 +69,11 @@ export const CostAnalysisControlPanel: React.FC<
         {/* 维度选择器（已赚保费/新口径已赚保费时隐藏） */}
         {activeSubTab !== 'earned' && activeSubTab !== 'earned-new' && (
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600 font-medium">分析维度:</label>
+            <label className={cn('text-sm font-medium', colorClasses.text.neutral)}>分析维度:</label>
             <select
               value={dimension}
               onChange={(e) => onDimensionChange(e.target.value as CostDimension)}
-              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={cn('px-3 py-1.5 rounded-md text-sm border focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent', colorClasses.border.neutral)}
             >
               {DIMENSION_OPTIONS.filter((opt) => opt.enabled).map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -85,7 +87,7 @@ export const CostAnalysisControlPanel: React.FC<
         {/* 截止日期选择器（新口径已赚保费时隐藏，使用固定年度） */}
         {activeSubTab !== 'earned-new' && (
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600 font-medium">
+            <label className={cn('text-sm font-medium', colorClasses.text.neutral)}>
               统计截止日:
             </label>
             {activeSubTab === 'earned' ? (
@@ -93,7 +95,7 @@ export const CostAnalysisControlPanel: React.FC<
               <select
                 value={cutoffDate}
                 onChange={(e) => onCutoffDateChange(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={cn('px-3 py-1.5 rounded-md text-sm border focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent', colorClasses.border.neutral)}
               >
                 {(monthEndOptions ?? MONTH_END_OPTIONS).map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -107,16 +109,16 @@ export const CostAnalysisControlPanel: React.FC<
                 type="date"
                 value={cutoffDate}
                 onChange={(e) => onCutoffDateChange(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={cn('px-3 py-1.5 rounded-md text-sm border focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent', colorClasses.border.neutral)}
               />
             )}
           </div>
         )}
 
         {/* 当前维度标签 */}
-        <div className="ml-auto text-sm text-gray-500">
+        <div className={cn('ml-auto text-sm', colorClasses.text.neutralLight)}>
           当前视图:{' '}
-          <span className="font-medium text-gray-700">
+          <span className={cn('font-medium', colorClasses.text.neutralDark)}>
             {activeSubTab === 'earned'
               ? '三级机构×险类×起保年月'
               : activeSubTab === 'earned-new'

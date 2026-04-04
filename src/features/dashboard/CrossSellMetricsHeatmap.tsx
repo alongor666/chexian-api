@@ -72,10 +72,10 @@ function getStatusBgClass(status: RateStatus): string {
 
 function getStatusTextClass(status: RateStatus): string {
   const classes: Record<RateStatus, string> = {
-    excellent: 'text-green-800 dark:text-green-200',
-    healthy: 'text-blue-800 dark:text-blue-200',
-    abnormal: 'text-orange-800 dark:text-orange-200',
-    danger: 'text-red-800 dark:text-red-200',
+    excellent: colorClasses.text.successDark,
+    healthy: colorClasses.text.primaryDark,
+    abnormal: colorClasses.text.orange,
+    danger: colorClasses.text.dangerDark,
   };
   return classes[status];
 }

@@ -215,7 +215,7 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                 'px-3 py-1.5 text-sm rounded-lg border transition-colors',
                 metric === opt.key
                   ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-transparent border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-neutral-600 dark:text-gray-300 dark:hover:bg-neutral-700'
+                  : `bg-transparent ${colorClasses.border.neutral} ${colorClasses.text.neutral} hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-700`
               )}
             >
               {opt.label}
@@ -234,12 +234,12 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
             <table className="w-full text-xs border-collapse" style={{ fontFamily: 'var(--mono, ui-monospace, monospace)' }}>
               <thead>
                 <tr>
-                  <th className="text-left px-2 py-1.5 sticky left-0 bg-white dark:bg-neutral-800 z-10 border-b border-gray-200 dark:border-neutral-700" />
+                  <th className={`text-left px-2 py-1.5 sticky left-0 bg-white dark:bg-neutral-800 z-10 border-b ${colorClasses.border.neutral}`} />
                   {Array.from({ length: MAX_DEV }, (_, i) => (
                     <th
                       key={i}
                       className={cn(
-                        'text-right px-2 py-1.5 border-b border-gray-200 dark:border-neutral-700 min-w-[52px]',
+                        `text-right px-2 py-1.5 border-b ${colorClasses.border.neutral} min-w-[52px]`,
                         colorClasses.text.neutralMuted,
                       )}
                     >
@@ -252,7 +252,7 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                 {activeYears.map(yr => {
                   const c = cohorts[yr];
                   return (
-                    <tr key={yr} className="border-b border-gray-100 dark:border-neutral-700/50">
+                    <tr key={yr} className={`border-b ${colorClasses.border.neutral} dark:border-neutral-700/50`}>
                       <td className="px-2 py-1.5 sticky left-0 bg-white dark:bg-neutral-800 z-10 whitespace-nowrap">
                         <span
                           className="inline-block w-2 h-2 rounded-sm mr-1.5 align-middle"

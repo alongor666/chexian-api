@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Check,
 } from 'lucide-react';
+import { colorClasses } from '../../shared/styles';
 
 /**
  * @deprecated 用户身份已迁移到侧边栏底部 SidebarUserPanel 组件。
@@ -69,9 +70,9 @@ export const UserLoginPanel: React.FC = () => {
 
   // 获取角色显示样式
   const getRoleBadgeClass = () => {
-    if (isBranchAdmin) return 'bg-purple-100 text-purple-700';
-    if (isOrgUser) return 'bg-blue-100 text-blue-700';
-    return 'bg-gray-100 text-gray-700';
+    if (isBranchAdmin) return `${colorClasses.bg.purple} ${colorClasses.text.purple}`;
+    if (isOrgUser) return `${colorClasses.bg.primary} ${colorClasses.text.primary}`;
+    return `${colorClasses.bg.neutral} ${colorClasses.text.neutral}`;
   };
 
   return (
@@ -88,7 +89,7 @@ export const UserLoginPanel: React.FC = () => {
           <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
             <div className="flex items-center">
               {isBranchAdmin ? (
-                <Shield size={24} className="text-purple-500 dark:text-purple-400 mr-3" aria-hidden="true" />
+                <Shield size={24} className={`${colorClasses.text.purple} mr-3`} aria-hidden="true" />
               ) : (
                 <Building size={24} className="text-primary dark:text-primary-light mr-3" aria-hidden="true" />
               )}
@@ -154,7 +155,7 @@ export const UserLoginPanel: React.FC = () => {
                         <Icon
                           size={16}
                           className={`mr-2 ${quickUser.role === UserRole.BRANCH_ADMIN
-                              ? 'text-purple-500 dark:text-purple-400'
+                              ? colorClasses.text.purple
                               : 'text-primary dark:text-primary-light'
                             }`}
                           aria-hidden="true"
@@ -180,13 +181,13 @@ export const UserLoginPanel: React.FC = () => {
             {/* 管理员快捷登录 */}
             <button
               onClick={() => handleLogin('admin')}
-              className="w-full flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-lg border border-purple-200 dark:border-purple-800 transition-colors"
+              className={`w-full flex items-center justify-between p-3 ${colorClasses.bg.purple} hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-lg border ${colorClasses.border.purple} transition-colors`}
             >
               <div className="flex items-center">
-                <Shield size={20} className="text-purple-500 dark:text-purple-400 mr-3" aria-hidden="true" />
+                <Shield size={20} className={`${colorClasses.text.purple} mr-3`} aria-hidden="true" />
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-purple-800 dark:text-purple-300">系统管理员</p>
-                  <p className="text-xs text-purple-600 dark:text-purple-400">可查看所有机构数据</p>
+                  <p className={`text-sm font-semibold ${colorClasses.text.purple} dark:text-purple-300`}>系统管理员</p>
+                  <p className={`text-xs ${colorClasses.text.purple}`}>可查看所有机构数据</p>
                 </div>
               </div>
             </button>

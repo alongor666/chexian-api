@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '../../shared/utils/echarts';
+import { colorClasses } from '../../shared/styles';
 import type { EChartsParam } from '../../shared/types/echarts';
 import { CHART_TEXT_STYLES } from '../../shared/config/chartStyles';
 
@@ -104,7 +105,7 @@ export const GroupedBarChart: React.FC<GroupedBarChartProps> = ({
     };
   }, [data, seriesConfigs, title, valueFormatter]);
 
-  if (loading) return <div className="flex items-center justify-center bg-gray-50 rounded" style={{ height }}>Loading Chart...</div>;
+  if (loading) return <div className={`flex items-center justify-center ${colorClasses.bg.neutral} rounded`} style={{ height }}>Loading Chart...</div>;
 
   return (
     <div className="bg-white p-4 rounded shadow">

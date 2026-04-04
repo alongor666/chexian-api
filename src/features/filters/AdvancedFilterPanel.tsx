@@ -9,7 +9,7 @@ import { FILTER_PRESETS } from '../../shared/types/filters';
 import { FilterLayoutV2 } from './FilterLayoutV2';
 import { CollapsibleFilterSection } from './CollapsibleFilterSection';
 import { ChevronRight } from 'lucide-react';
-import { cn } from '../../shared/styles';
+import { cn, colorClasses } from '../../shared/styles';
 
 const logger = createLogger('AdvancedFilterPanel');
 
@@ -312,7 +312,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             onClick={scenario.apply}
             className={`px-2 py-1 text-xs font-medium rounded border transition-colors ${scenario.isActive
                 ? 'bg-primary text-white border-primary'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                : `bg-white ${colorClasses.text.neutral} ${colorClasses.border.neutral} hover:bg-neutral-50`
               }`}
             title={scenario.description}
             aria-pressed={scenario.isActive}
@@ -350,13 +350,13 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
         role="region"
       >
         <div className="flex items-center justify-between mb-1">
-          <h2 id="filter-panel-title" className="text-sm font-semibold tracking-tight text-slate-800">
+          <h2 id="filter-panel-title" className={`text-sm font-semibold tracking-tight ${colorClasses.text.neutralBlack}`}>
             筛选条件
           </h2>
           <button
             type="button"
             onClick={handleReset}
-            className="px-3 py-1 text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200 rounded hover:bg-slate-100 transition-colors shadow-sm"
+            className={`px-3 py-1 text-xs font-medium ${colorClasses.bg.neutral} ${colorClasses.text.neutral} ${colorClasses.border.neutral} border rounded hover:bg-neutral-100 transition-colors shadow-sm`}
             aria-label="重置筛选条件"
           >
             重置
@@ -398,7 +398,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                     )
                   )
                 }
-                className="text-[10px] font-medium px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded hover:bg-indigo-100 transition-colors"
+                className={`text-[10px] font-medium px-1.5 py-0.5 border rounded hover:bg-indigo-100 transition-colors ${colorClasses.bg.indigo} ${colorClasses.text.indigo} ${colorClasses.border.indigo}`}
                 aria-label="筛选异地机构"
               >
                 异地
@@ -414,7 +414,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                     )
                   )
                 }
-                className="text-[10px] font-medium px-1.5 py-0.5 bg-sky-50 text-sky-600 border border-sky-100 rounded hover:bg-sky-100 transition-colors"
+                className={`text-[10px] font-medium px-1.5 py-0.5 border rounded hover:bg-sky-100 transition-colors ${colorClasses.bg.sky} ${colorClasses.text.sky} ${colorClasses.border.sky}`}
                 aria-label="筛选同城机构"
               >
                 同城
@@ -462,14 +462,14 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                         role="radiogroup"
                         aria-label={config.label}
                       >
-                        <span className="text-[11px] text-slate-600">{config.label}</span>
-                        <div className="inline-flex bg-slate-50 rounded-md p-0.5 items-center border border-slate-200">
+                        <span className={`text-[11px] ${colorClasses.text.neutral}`}>{config.label}</span>
+                        <div className={`inline-flex rounded-md p-0.5 items-center border ${colorClasses.bg.neutral} ${colorClasses.border.neutral}`}>
                           <button
                             type="button"
                             onClick={() => handleBooleanChange(config.key, null)}
                             className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${value === null || value === undefined
                               ? 'bg-white text-primary font-medium shadow-sm'
-                              : 'text-slate-500 hover:text-slate-700'
+                              : `${colorClasses.text.neutralMuted} hover:text-neutral-700`
                               }`}
                             role="radio"
                             aria-checked={value === null || value === undefined}
@@ -481,7 +481,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                             onClick={() => handleBooleanChange(config.key, true)}
                             className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${value === true
                               ? 'bg-white text-primary font-medium shadow-sm'
-                              : 'text-slate-500 hover:text-slate-700'
+                              : `${colorClasses.text.neutralMuted} hover:text-neutral-700`
                               }`}
                             role="radio"
                             aria-checked={value === true}
@@ -493,7 +493,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                             onClick={() => handleBooleanChange(config.key, false)}
                             className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${value === false
                               ? 'bg-white text-primary font-medium shadow-sm'
-                              : 'text-slate-500 hover:text-slate-700'
+                              : `${colorClasses.text.neutralMuted} hover:text-neutral-700`
                               }`}
                             role="radio"
                             aria-checked={value === false}
@@ -531,14 +531,14 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
       role="region"
     >
       <header
-        className={`flex items-center p-4 border-b border-slate-100 gap-[5px] ${fullCollapsible ? 'cursor-pointer hover:bg-slate-50 transition-colors' : ''
+        className={`flex items-center p-4 border-b gap-[5px] ${colorClasses.border.neutral} ${fullCollapsible ? 'cursor-pointer hover:bg-neutral-50 transition-colors' : ''
           }`}
         onClick={fullCollapsible ? onToggleCollapse : undefined}
       >
-        <h2 id="filter-panel-title" className="text-base font-semibold tracking-tight text-slate-800 whitespace-nowrap flex items-center gap-2">
+        <h2 id="filter-panel-title" className={`text-base font-semibold tracking-tight whitespace-nowrap flex items-center gap-2 ${colorClasses.text.neutralBlack}`}>
           筛选条件
           {fullCollapsible && (
-            <ChevronRight className={cn('h-4 w-4 text-slate-400 transition-transform', !collapsed && 'rotate-90')} aria-hidden="true" />
+            <ChevronRight className={cn(`h-4 w-4 transition-transform ${colorClasses.text.neutralMuted}`, !collapsed && 'rotate-90')} aria-hidden="true" />
           )}
         </h2>
         <div
@@ -550,7 +550,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
           <button
             type="button"
             onClick={handleReset}
-            className="px-4 py-1.5 text-sm font-medium bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors whitespace-nowrap shadow-sm"
+            className={`px-4 py-1.5 text-sm font-medium rounded-md hover:bg-neutral-200 transition-colors whitespace-nowrap shadow-sm ${colorClasses.bg.neutral} ${colorClasses.text.neutral}`}
             aria-label="重置筛选条件并刷新数据"
           >
             刷新数据
@@ -606,7 +606,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                       )
                     )
                   }
-                  className="text-xs font-medium px-2.5 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md hover:bg-indigo-100 transition-colors"
+                  className={`text-xs font-medium px-2.5 py-1.5 border rounded-md hover:bg-indigo-100 transition-colors ${colorClasses.bg.indigo} ${colorClasses.text.indigo} ${colorClasses.border.indigo}`}
                   aria-label="筛选异地机构"
                 >
                   异地
@@ -622,7 +622,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                       )
                     )
                   }
-                  className="text-xs font-medium px-2.5 py-1.5 bg-sky-50 text-sky-600 border border-sky-100 rounded-md hover:bg-sky-100 transition-colors"
+                  className={`text-xs font-medium px-2.5 py-1.5 border rounded-md hover:bg-sky-100 transition-colors ${colorClasses.bg.sky} ${colorClasses.text.sky} ${colorClasses.border.sky}`}
                   aria-label="筛选同城机构"
                 >
                   同城
@@ -657,18 +657,18 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                         return (
                           <div
                             key={String(config.key)}
-                            className="inline-flex bg-slate-50/80 rounded-lg p-1 items-center border border-slate-200/60 shadow-inner"
+                            className={`inline-flex rounded-lg p-1 items-center border shadow-inner ${colorClasses.bg.neutral} ${colorClasses.border.neutral}`}
                             role="radiogroup"
                             aria-label={config.label}
                           >
-                            <span className="text-sm text-slate-500 px-2 mr-1 select-none font-medium">{config.label}:</span>
+                            <span className={`text-sm px-2 mr-1 select-none font-medium ${colorClasses.text.neutralMuted}`}>{config.label}:</span>
                             <div className="flex space-x-1">
                               <button
                                 type="button"
                                 onClick={() => handleBooleanChange(config.key, null)}
                                 className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ease-in-out ${value === null || value === undefined
                                   ? 'bg-white shadow-sm text-primary font-semibold ring-1 ring-slate-200/60'
-                                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                                  : `${colorClasses.text.neutralMuted} hover:text-neutral-800 hover:bg-neutral-200/50`
                                   }`}
                                 role="radio"
                                 aria-checked={value === null || value === undefined}
@@ -680,7 +680,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                                 onClick={() => handleBooleanChange(config.key, true)}
                                 className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ease-in-out ${value === true
                                   ? 'bg-white shadow-sm text-primary font-semibold ring-1 ring-slate-200/60'
-                                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                                  : `${colorClasses.text.neutralMuted} hover:text-neutral-800 hover:bg-neutral-200/50`
                                   }`}
                                 role="radio"
                                 aria-checked={value === true}
@@ -692,7 +692,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                                 onClick={() => handleBooleanChange(config.key, false)}
                                 className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ease-in-out ${value === false
                                   ? 'bg-white shadow-sm text-primary font-semibold ring-1 ring-slate-200/60'
-                                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                                  : `${colorClasses.text.neutralMuted} hover:text-neutral-800 hover:bg-neutral-200/50`
                                   }`}
                                 role="radio"
                                 aria-checked={value === false}

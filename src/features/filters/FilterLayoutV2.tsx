@@ -7,6 +7,7 @@ import type { AdvancedFilterState, DateCriteria } from '../../shared/types/data'
 import type { FilterFieldsConfig, FilterSelectionModeConfig, DateCriteriaType, AllowedYearsRange } from '../../shared/types/filters';
 import { useVisibleOrganizations } from '../../shared/contexts/PermissionContext';
 import { Lock } from 'lucide-react';
+import { colorClasses } from '../../shared/styles';
 
 type DimensionOption = {
   value: string;
@@ -294,7 +295,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); onMultiSelectChange('org_level_3', []); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('org_level_3', []); } }}
-                      className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-blue-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                     >
                       全选
                     </span>
@@ -315,7 +316,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                           onMultiSelectChange('org_level_3', allValues.filter(v => !selected.includes(v)));
                         }
                       }}
-                      className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-200 transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                     >
                       反选
                     </span>
@@ -356,7 +357,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                     tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); onMultiSelectChange('customer_category', []); }}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('customer_category', []); } }}
-                    className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-blue-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                   >
                     全选
                   </span>
@@ -379,7 +380,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                         onMultiSelectChange('customer_category', allValues.filter(v => !selected.includes(v)));
                       }
                     }}
-                    className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-200 transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                   >
                     反选
                   </span>
@@ -415,7 +416,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); onMultiSelectChange('coverage_combination', []); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('coverage_combination', []); } }}
-                      className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-blue-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                     >
                       全选
                     </span>
@@ -438,7 +439,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                           onMultiSelectChange('coverage_combination', allValues.filter(v => !selected.includes(v)));
                         }
                       }}
-                      className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-200 transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                     >
                       反选
                     </span>
@@ -472,7 +473,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                     tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); onMultiSelectChange('renewal_mode', []); }}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('renewal_mode', []); } }}
-                    className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-blue-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                   >
                     全选
                   </span>
@@ -493,7 +494,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                         onMultiSelectChange('renewal_mode', allValues.filter(v => !selected.includes(v)));
                       }
                     }}
-                    className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-200 transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                   >
                     反选
                   </span>

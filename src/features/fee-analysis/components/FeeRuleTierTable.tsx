@@ -15,14 +15,14 @@ interface Props {
 function getInsuranceBadge(label: string) {
   if (label === '交强险') {
     return (
-      <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 ${colorClasses.text.primary} dark:bg-blue-900/30 dark:text-blue-300`}>
         交强
       </span>
     );
   }
   if (label === '商业险') {
     return (
-      <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 ${colorClasses.text.warning} dark:bg-amber-900/30 dark:text-amber-300`}>
         商业
       </span>
     );

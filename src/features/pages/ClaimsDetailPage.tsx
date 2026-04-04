@@ -9,7 +9,7 @@
  */
 import React, { useState, useMemo } from 'react';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
-import { cn } from '@/shared/styles';
+import { cn, colorClasses } from '@/shared/styles';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFilterPanel';
 import { useClaimsDetail } from '../claims-detail/hooks/useClaimsDetail';
@@ -97,8 +97,8 @@ export const ClaimsDetailPage: React.FC = () => {
             className={cn(
               'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
               activeTab === tab.key
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? `border-blue-600 ${colorClasses.text.primary}`
+                : `border-transparent ${colorClasses.text.neutralMuted} hover:text-neutral-600`
             )}
           >
             {tab.label}

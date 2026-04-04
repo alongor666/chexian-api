@@ -14,7 +14,7 @@ import { TableSection } from './components/TableSection';
 import { DashboardCustomizerPanel } from './components/DashboardCustomizerPanel';
 import type { DashboardSectionId, KpiCardId, KpiGroup } from './dashboardLayoutConfig';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { cardStyles, cn } from '../../shared/styles';
+import { cardStyles, cn, colorClasses } from '../../shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '../../shared/api/client';
 
 type TimeView = 'daily' | 'weekly' | 'monthly';
@@ -302,7 +302,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
       className="p-2 sm:p-3 md:p-4 max-w-[1600px] mx-auto space-y-3 sm:space-y-4"
     >
       {(kpiError || trendError || dashboardBundle.error) && (
-        <div className="bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded text-sm">
+        <div className={`${colorClasses.bg.amber} border border-amber-300 ${colorClasses.text.amber} px-4 py-3 rounded text-sm`}>
           {kpiError && <p>KPI 数据加载失败: {kpiError.message}</p>}
           {trendError && <p>趋势数据加载失败: {trendError.message}</p>}
           {dashboardBundle.error && <p>聚合接口加载失败: {dashboardBundle.error}</p>}

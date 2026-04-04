@@ -11,6 +11,7 @@ import { apiClient } from '../../shared/api/client';
 import { Download, X, FolderOpen, Loader2, AlertTriangle } from 'lucide-react';
 import { useFocusTrap } from '../../shared/hooks';
 import { Logger } from '@/shared/utils/logger';
+import { colorClasses } from '../../shared/styles';
 
 const logger = new Logger('DataImportModal');
 
@@ -131,21 +132,21 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
           role="dialog"
           aria-modal="true"
           aria-labelledby="import-modal-title"
-          className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+          className="bg-white dark:bg-neutral-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
-          <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 id="import-modal-title" className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+          <header className={`flex items-center justify-between p-4 border-b ${colorClasses.border.neutral}`}>
+            <h2 id="import-modal-title" className={`text-lg font-semibold ${colorClasses.text.neutralBlack} dark:text-white flex items-center`}>
               <Download size={20} className="mr-2 text-primary" aria-hidden="true" />
               导入数据
             </h2>
             <button
               type="button"
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+              className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors"
               aria-label="关闭导入弹窗"
             >
-              <X size={20} className="text-gray-500" aria-hidden="true" />
+              <X size={20} className={colorClasses.text.neutralMuted} aria-hidden="true" />
             </button>
           </header>
 
@@ -157,8 +158,8 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
               onClick={handleClick}
               className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
                 isDragging
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                  ? `border-blue-500 ${colorClasses.bg.primary} dark:bg-blue-900/20`
+                  : `${colorClasses.border.neutral} dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500`
               } ${isLoading ? 'pointer-events-none opacity-50' : ''}`}
             >
               <input
@@ -172,18 +173,18 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
               {isLoading ? (
                 <div className="flex flex-col items-center">
                   <Loader2 size={40} className="animate-spin text-blue-500 mb-3" aria-hidden="true" />
-                  <p className="text-gray-600 dark:text-gray-400">正在上传数据...</p>
+                  <p className={colorClasses.text.neutral}>正在上传数据...</p>
                 </div>
               ) : (
                 <>
-                  <FolderOpen size={40} className="mx-auto mb-3 text-gray-400" aria-hidden="true" />
-                  <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
+                  <FolderOpen size={40} className={`mx-auto mb-3 ${colorClasses.text.neutralMuted}`} aria-hidden="true" />
+                  <p className={`${colorClasses.text.neutral} dark:text-neutral-300 font-medium mb-1`}>
                     拖拽文件到此处
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className={`text-sm ${colorClasses.text.neutralMuted}`}>
                     或点击选择文件
                   </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+                  <p className={`text-xs ${colorClasses.text.neutralMuted} dark:text-neutral-500 mt-3`}>
                     支持 .parquet 格式
                   </p>
                 </>
@@ -191,20 +192,20 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
             </div>
 
             {error && (
-              <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg" role="alert">
+              <div className={`mt-4 p-3 ${colorClasses.bg.danger} dark:bg-red-900/20 ${colorClasses.border.danger} dark:border-red-800 border rounded-lg`} role="alert">
                 <div className="flex items-start">
-                  <AlertTriangle size={16} className="text-red-500 mr-2 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                  <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                  <AlertTriangle size={16} className={`${colorClasses.text.danger} mr-2 flex-shrink-0 mt-0.5`} aria-hidden="true" />
+                  <p className={`text-sm ${colorClasses.text.danger} dark:text-red-300`}>{error}</p>
                 </div>
               </div>
             )}
 
-            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <p className="text-xs text-blue-700 dark:text-blue-300">
+            <div className={`mt-4 p-3 ${colorClasses.bg.primary} dark:bg-blue-900/20 ${colorClasses.border.primary} dark:border-blue-800 border rounded-lg`}>
+              <p className={`text-xs ${colorClasses.text.primary} dark:text-blue-300`}>
                 <span className="font-semibold">提示：</span>
                 导入成功后将自动跳转到仪表盘页面进行数据分析。
               </p>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+              <p className={`text-xs ${colorClasses.text.primary} dark:text-blue-300 mt-2`}>
                 <span className="font-semibold">文件要求：</span>
                 支持标准 Parquet 格式，建议使用 Snappy 或未压缩格式。
                 如果遇到 Snappy 解压失败，请检查文件是否损坏或尝试使用其他压缩格式。

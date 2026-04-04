@@ -1,4 +1,5 @@
 import React from 'react';
+import { cn, colorClasses } from '../styles';
 
 interface PageWithRightFilterProps {
   /** 主内容区域 */
@@ -35,10 +36,12 @@ export const PageWithRightFilter: React.FC<PageWithRightFilterProps> = ({
 
       {/* 右侧筛选器面板 */}
       <div
-        className={`
-          flex-shrink-0 border-l border-gray-200 bg-gray-50 transition-all duration-300
-          ${isFilterCollapsed ? 'w-12' : ''}
-        `}
+        className={cn(
+          'flex-shrink-0 border-l transition-all duration-300',
+          colorClasses.border.neutral,
+          colorClasses.bg.neutral,
+          isFilterCollapsed ? 'w-12' : ''
+        )}
         style={{ width: isFilterCollapsed ? undefined : filterWidth }}
       >
         {isFilterCollapsed ? (
@@ -46,11 +49,11 @@ export const PageWithRightFilter: React.FC<PageWithRightFilterProps> = ({
           <div className="h-full flex flex-col items-center pt-4">
             <button
               onClick={onToggleCollapse}
-              className="p-2 rounded-lg bg-white shadow-sm border border-gray-200 hover:bg-gray-100 transition-colors"
+              className={cn('p-2 rounded-lg bg-white shadow-sm border transition-colors', colorClasses.border.neutral, colorClasses.bg.neutralLight)}
               title="展开筛选器"
             >
               <svg
-                className="w-5 h-5 text-gray-600"
+                className={`w-5 h-5 ${colorClasses.text.neutral}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -64,7 +67,7 @@ export const PageWithRightFilter: React.FC<PageWithRightFilterProps> = ({
               </svg>
             </button>
             <span
-              className="mt-2 text-xs text-gray-500 writing-mode-vertical"
+              className={`mt-2 text-xs writing-mode-vertical ${colorClasses.text.neutralLight}`}
               style={{ writingMode: 'vertical-rl' }}
             >
               筛选条件
@@ -74,10 +77,10 @@ export const PageWithRightFilter: React.FC<PageWithRightFilterProps> = ({
           /* 展开状态：显示筛选器内容 */
           <div className="h-full overflow-auto">
             {/* 折叠按钮 */}
-            <div className="sticky top-0 bg-gray-50 p-2 border-b border-gray-200 flex justify-end z-10">
+            <div className={cn('sticky top-0 p-2 border-b flex justify-end z-10', colorClasses.bg.neutral, colorClasses.border.neutral)}>
               <button
                 onClick={onToggleCollapse}
-                className="p-1.5 rounded hover:bg-gray-200 transition-colors text-gray-500"
+                className={cn('p-1.5 rounded transition-colors', colorClasses.text.neutralLight, colorClasses.bg.neutralLight)}
                 title="折叠筛选器"
               >
                 <svg

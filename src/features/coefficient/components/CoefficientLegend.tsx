@@ -3,6 +3,7 @@
  */
 
 import { memo } from 'react';
+import { colorClasses } from '../../../shared/styles';
 
 /**
  * 系数监控图例
@@ -27,19 +28,19 @@ export const CoefficientLegend = memo(function CoefficientLegend() {
         <span>全省聚合</span>
       </div>
       <div className="flex items-center">
-        <span className="text-green-600 font-bold mr-1" aria-hidden="true">
+        <span className={`${colorClasses.text.success} font-bold mr-1`} aria-hidden="true">
           ●
         </span>
         <span>合规</span>
       </div>
       <div className="flex items-center">
-        <span className="text-red-600 font-bold mr-1" aria-hidden="true">
+        <span className={`${colorClasses.text.danger} font-bold mr-1`} aria-hidden="true">
           ●
         </span>
         <span>超限</span>
       </div>
       <div className="flex items-center">
-        <span className="text-gray-400 italic mr-1" aria-hidden="true">
+        <span className={`${colorClasses.text.neutralMuted} italic mr-1`} aria-hidden="true">
           -
         </span>
         <span>待定</span>

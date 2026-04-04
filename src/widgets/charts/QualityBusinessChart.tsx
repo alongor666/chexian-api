@@ -101,7 +101,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
     if (timeView === 'daily') {
       const monthlyStats: Record<string, { min: { val: number; idx: number }; max: { val: number; idx: number } }> = {};
       data.forEach((d, idx) => {
-        const month = d.time_period.substring(0, 7);
+        const month = (d.time_period ?? '').substring(0, 7);
         const ratio = d.quality_ratio * 100;
         if (!monthlyStats[month]) {
           monthlyStats[month] = { min: { val: ratio, idx }, max: { val: ratio, idx } };

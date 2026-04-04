@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { colorClasses } from '../../shared/styles';
 import { GlobalFilters } from './components/GlobalFilters';
 import { VersionSwitcher } from './components/VersionSwitcher';
 import { VersionAView } from './components/VersionAView';
@@ -35,10 +36,10 @@ export function QuoteConversionPage() {
       <div className="space-y-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
+            <h1 className={`text-lg font-bold ${colorClasses.text.neutralBlack}`}>
               旧车商业险报价转化分析
             </h1>
-            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+            <span className={`inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium ${colorClasses.text.warning} dark:bg-amber-900/30 dark:text-amber-200`}>
               开发阶段
             </span>
           </div>

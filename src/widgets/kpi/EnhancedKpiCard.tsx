@@ -10,7 +10,7 @@
  * - 数值字体：Avenir Next / Century Gothic（Futura/Avenir 风格）
  */
 import React, { memo } from 'react';
-import { colors } from '../../shared/styles';
+import { colors, fontStyles, numericStyles, cn } from '../../shared/styles';
 import { formatCount, formatPercent, formatRate } from '../../shared/utils/formatters';
 
 /**
@@ -157,7 +157,7 @@ const MiniDonutChart: React.FC<{
         fontSize="14"
         fontWeight="600"
         fill="#1f2937"
-        className="font-chart-number"
+        className={fontStyles.numeric}
       >
         {mainPercentage}
       </text>
@@ -212,7 +212,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
             return (
               <div
                 key={index}
-                className="flex items-center justify-center text-xs font-bold text-white font-chart-number"
+                className={cn('flex items-center justify-center text-xs font-bold text-white', fontStyles.numeric)}
                 style={{
                   width: `${rate}%`,
                   backgroundColor: color,
@@ -251,7 +251,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
     <div className="w-full">
       <div className="flex h-12 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700">
         <div
-          className="flex items-center justify-center text-sm font-semibold text-white font-chart-number"
+          className={cn('flex items-center justify-center text-sm font-semibold text-white', fontStyles.numeric)}
           style={{
             width: `${primaryRate}%`,
             backgroundColor: normalizedData[0]?.color || DEFAULT_COLORS[0],
@@ -261,7 +261,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
           {primaryRate > 0 ? formatPercent(primaryRate) : ''}
         </div>
         <div
-          className="flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700 font-chart-number"
+          className={cn('flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700', fontStyles.numeric)}
           style={{
             width: `${secondaryRate}%`,
             minWidth: secondaryRate > 0 ? '36px' : 0,
@@ -335,7 +335,7 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
     return (
       <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm hover:shadow-md transition-shadow">
         <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-2">{title}</div>
-        <div className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white font-kpi leading-none mt-1">
+        <div className={cn(numericStyles.kpiPrimary, 'text-neutral-900 dark:text-white mt-1')}>
           {formattedValue}
         </div>
       </div>
@@ -358,7 +358,7 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
       <div className="flex items-center justify-between mb-3 mt-1">
         <div className="flex flex-col">
           <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1.5">{normalizedRatioData[1]?.label || '其他'}</div>
-          <div className="text-2xl tracking-tight font-bold text-neutral-800 dark:text-neutral-200 font-kpi leading-none">
+          <div className={cn(numericStyles.kpiSecondary, 'text-neutral-800 dark:text-neutral-200')}>
             {secondaryRate}
           </div>
         </div>

@@ -9,7 +9,7 @@
  * - 数值字体：Avenir Next / Century Gothic（Futura/Avenir 风格）
  */
 import { memo } from 'react';
-// font-kpi 类已在 CSS 中定义，无需 inline style
+import { numericStyles, cn } from '../../shared/styles';
 
 interface KpiCardProps {
   /** 指标标题 */
@@ -49,7 +49,7 @@ export const KpiCard = memo(function KpiCard({
     <div className={`bg-white p-5 rounded-xl shadow-sm border border-neutral-200 dark:bg-neutral-900 dark:border-neutral-800 transition-shadow hover:shadow-md ${className}`}>
       <h3 className="text-sm text-neutral-500 dark:text-neutral-400 font-medium mb-2">{title}</h3>
       <div
-        className="text-3xl tracking-tight font-bold text-neutral-900 dark:text-white mt-1 leading-none font-kpi"
+        className={cn(numericStyles.kpiPrimary, 'text-neutral-900 dark:text-white mt-1')}
       >
         {String(displayValue)}
       </div>

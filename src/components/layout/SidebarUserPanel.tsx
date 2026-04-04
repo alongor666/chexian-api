@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { usePermission } from '../../shared/contexts/PermissionContext';
 import { UserRole } from '../../shared/config/organizations';
 import { useSidebar } from './SidebarLayout';
+import { colorClasses } from '../../shared/styles';
 import {
   LogOut,
   Shield,
@@ -82,22 +83,22 @@ export const SidebarUserPanel: React.FC = () => {
   };
 
   const getRoleBadgeClass = () => {
-    if (isBranchAdmin) return 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border border-purple-100 dark:border-purple-800';
-    if (isOrgUser) return 'bg-primary-bg text-primary-dark dark:bg-blue-900/30 dark:text-blue-400 border border-primary-200 dark:border-blue-800';
+    if (isBranchAdmin) return `${colorClasses.bg.purple} ${colorClasses.text.purple} border ${colorClasses.border.purple}`;
+    if (isOrgUser) return `bg-primary-bg text-primary-dark dark:bg-blue-900/30 dark:text-blue-400 border border-primary-200 dark:border-blue-800`;
     return 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700';
   };
 
   const RoleIcon = isBranchAdmin ? Shield : isOrgUser ? Building : User;
-  const iconColor = isBranchAdmin ? 'text-purple-500 dark:text-purple-400' : isOrgUser ? 'text-primary dark:text-primary-light' : 'text-neutral-400 dark:text-neutral-500';
+  const iconColor = isBranchAdmin ? colorClasses.text.purple : isOrgUser ? 'text-primary dark:text-primary-light' : 'text-neutral-400 dark:text-neutral-500';
 
   // 弹出面板内容（共用于向上和向右弹出）
   const popoverContent = (
-    <div className="bg-white rounded-lg shadow-lg border border-gray-200 w-56 overflow-hidden">
+    <div className="bg-white rounded-lg shadow-lg border border-neutral-200 w-56 overflow-hidden">
       {/* 权限信息 */}
       {isAuthenticated && userPermission && (
-        <div className="px-3 py-2.5 bg-gray-50 border-b border-gray-200">
-          <p className="text-xs text-gray-500">数据访问权限</p>
-          <p className="text-xs text-gray-700 mt-0.5">
+        <div className={`px-3 py-2.5 border-b border-neutral-200 ${colorClasses.bg.neutral}`}>
+          <p className={`text-xs ${colorClasses.text.neutralMuted}`}>数据访问权限</p>
+          <p className={`text-xs ${colorClasses.text.neutral} mt-0.5`}>
             {isBranchAdmin
               ? '可查看所有机构数据'
               : `仅可查看 ${userPermission.organization} 及整体数据`}
@@ -115,19 +116,19 @@ export const SidebarUserPanel: React.FC = () => {
               key={u.username}
               onClick={() => handleLogin(u.username)}
               disabled={isCurrent}
-              className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-gray-50 transition-colors ${isCurrent ? 'bg-gray-100 cursor-default' : ''
+              className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-neutral-50 transition-colors ${isCurrent ? 'bg-neutral-100 cursor-default' : ''
                 }`}
             >
               <div className="flex items-center">
                 <Icon
                   size={14}
-                  className={`mr-2 flex-shrink-0 ${u.role === UserRole.BRANCH_ADMIN ? 'text-purple-500' : 'text-blue-500'
+                  className={`mr-2 flex-shrink-0 ${u.role === UserRole.BRANCH_ADMIN ? colorClasses.text.purple : colorClasses.text.primary
                     }`}
                   aria-hidden="true"
                 />
-                <span className="text-gray-700 truncate">{u.displayName}</span>
+                <span className={colorClasses.text.neutral + ' truncate'}>{u.displayName}</span>
               </div>
-              {isCurrent && <Check size={14} className="text-green-500 flex-shrink-0" aria-hidden="true" />}
+              {isCurrent && <Check size={14} className={colorClasses.text.success + ' flex-shrink-0'} aria-hidden="true" />}
             </button>
           );
         })}

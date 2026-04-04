@@ -26,6 +26,7 @@ import {
   formatPercent,
   formatPremiumWan,
 } from '../../../shared/utils/formatters';
+import { colorClasses, cn } from '../../../shared/styles';
 
 interface EarnedPremiumTableProps {
   data: EarnedPremiumData[];
@@ -268,7 +269,7 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
   // 空状态
   if (!loading && data.length === 0 && summaryData.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+      <div className={cn('bg-white rounded-lg shadow-sm p-8 text-center', colorClasses.text.neutralLight)}>
         暂无数据
       </div>
     );
@@ -292,12 +293,12 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
 
       {/* 汇总表 */}
       <div className="bg-white rounded-lg shadow-sm">
-        <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-          <h3 className="text-base font-medium text-gray-800">
+        <div className={cn('px-4 py-3 border-b flex justify-between items-center', colorClasses.border.neutral)}>
+          <h3 className={cn('text-base font-medium', colorClasses.text.neutralBlack)}>
             已赚保费汇总（按机构）
           </h3>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">共 {summaryData.length} 条记录</span>
+            <span className={cn('text-sm', colorClasses.text.neutralLight)}>共 {summaryData.length} 条记录</span>
             {(onExportCSV || onExportExcel) && (
               <div className="flex gap-2">
                 {onExportCSV && (
@@ -333,22 +334,22 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
 
       {/* 明细表 */}
       <div className="bg-white rounded-lg shadow-sm">
-        <div className="px-4 py-3 border-b border-gray-200">
+        <div className={cn('px-4 py-3 border-b', colorClasses.border.neutral)}>
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-base font-medium text-gray-800">
+            <h3 className={cn('text-base font-medium', colorClasses.text.neutralBlack)}>
               已赚保费明细（按机构×险类×起保年月）
             </h3>
-            <span className="text-sm text-gray-500">共 {data.length} 条记录</span>
+            <span className={cn('text-sm', colorClasses.text.neutralLight)}>共 {data.length} 条记录</span>
           </div>
 
           {/* 筛选器 */}
           <div className="flex gap-4 text-sm">
             <div className="flex items-center gap-2">
-              <label className="text-gray-600 font-medium">起保年月：</label>
+              <label className={cn('font-medium', colorClasses.text.neutral)}>起保年月：</label>
               <select
                 value={detailFilter.policyMonth}
                 onChange={(e) => handleFilterChange('policyMonth', e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className={cn('px-3 py-1 rounded border focus:ring-2 focus:ring-primary-500 focus:border-primary-500', colorClasses.border.neutral)}
               >
                 {policyMonthOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -359,11 +360,11 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-gray-600 font-medium">三级机构：</label>
+              <label className={cn('font-medium', colorClasses.text.neutral)}>三级机构：</label>
               <select
                 value={detailFilter.orgLevel3}
                 onChange={(e) => handleFilterChange('orgLevel3', e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className={cn('px-3 py-1 rounded border focus:ring-2 focus:ring-primary-500 focus:border-primary-500', colorClasses.border.neutral)}
               >
                 <option value="all">全部机构合计</option>
                 {orgOptions

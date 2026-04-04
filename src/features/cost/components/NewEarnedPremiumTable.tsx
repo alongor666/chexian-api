@@ -23,6 +23,7 @@ import {
   buttonStyles,
   cardStyles,
   badgeStyles,
+  colorClasses,
   cn,
 } from '../../../shared/styles';
 import type {
@@ -222,7 +223,7 @@ function merge2026PolicyData(
 
 function transformSummaryData(data: NewEarnedPremiumSummaryData[]): DisplaySummaryData[] {
   return data.map((row) => {
-    const [year, month] = row.stat_month.split('-');
+    const [year, month] = (row.stat_month ?? '').split('-');
     const shortYear = year.slice(-2);
     const monthLabel = `${month.replace(/^0/, '')}月`;
     return {
@@ -246,11 +247,11 @@ function transformToRolling12MonthCompare(
 ): Rolling12MonthCompareData[] {
   return data
     .filter((row) => {
-      const year = parseInt(row.stat_month.split('-')[0]);
+      const year = parseInt((row.stat_month ?? '').split('-')[0]);
       return year === selectedYear;
     })
     .map((row) => {
-      const [yearStr, monthStr] = row.stat_month.split('-');
+      const [yearStr, monthStr] = (row.stat_month ?? '').split('-');
       const year = parseInt(yearStr);
       const month = parseInt(monthStr);
       const shortYear = yearStr.slice(-2);
@@ -294,7 +295,7 @@ function transformToRolling12MonthCompare(
 function getAvailableYears(data: NewEarnedPremiumSummaryData[]): number[] {
   const years = new Set<number>();
   data.forEach((row) => {
-    const year = parseInt(row.stat_month.split('-')[0]);
+    const year = parseInt((row.stat_month ?? '').split('-')[0]);
     years.add(year);
   });
   return Array.from(years).sort();
@@ -400,7 +401,7 @@ const Policy2025TriangleTable: React.FC<{
   loading?: boolean;
 }> = ({ data, loading }) => {
   if (loading) {
-    return <div className="p-8 text-center text-gray-400">加载中...</div>;
+    return <div className={cn('p-8 text-center', colorClasses.text.neutralMuted)}>加载中...</div>;
   }
 
   // 表头：起保月、保费、首日费用、25-1~25-12、26-1~26-12、最终已赚
@@ -419,12 +420,12 @@ const Policy2025TriangleTable: React.FC<{
     <div className="overflow-x-auto">
       <table className="text-xs border-collapse" style={{ minWidth: '1400px' }}>
         <thead>
-          <tr className="bg-gray-50 border-b border-gray-200">
+          <tr className={cn(colorClasses.bg.neutral, 'border-b', colorClasses.border.neutral)}>
             {headers.map((h) => (
               <th
                 key={h.key}
                 style={{ width: h.width, minWidth: h.width }}
-                className="px-1 py-2 text-center font-medium text-gray-600 whitespace-nowrap"
+                className={cn('px-1 py-2 text-center font-medium whitespace-nowrap', colorClasses.text.neutral)}
               >
                 {h.label}
               </th>
@@ -435,17 +436,17 @@ const Policy2025TriangleTable: React.FC<{
           {data.map((row) => {
             const policyMonth = row.policy_month;
             return (
-              <tr key={policyMonth} className="border-b border-gray-100 hover:bg-blue-50/30">
+              <tr key={policyMonth} className="border-b border-neutral-100 hover:bg-blue-50/30">
                 {/* 起保月 */}
-                <td className="px-1 py-1.5 text-center font-medium text-gray-700">
+                <td className={cn('px-1 py-1.5 text-center font-medium', colorClasses.text.neutralDark)}>
                   {MONTH_LABELS[policyMonth]}
                 </td>
                 {/* 保费 */}
-                <td className="px-1 py-1.5 text-right font-tabular text-gray-900">
+                <td className={cn('px-1 py-1.5 text-right font-tabular', colorClasses.text.neutralBlack)}>
                   {formatPremiumWan(row.premium)}
                 </td>
                 {/* 首日费用 */}
-                <td className="px-1 py-1.5 text-right font-tabular text-blue-600">
+                <td className={cn('px-1 py-1.5 text-right font-tabular', colorClasses.text.primary)}>
                   {formatPremiumWan(row.first_day_fee)}
                 </td>
                 {/* 25年各月 */}
@@ -462,7 +463,7 @@ const Policy2025TriangleTable: React.FC<{
                       key={key}
                       className={cn(
                         'px-1 py-1.5 text-right font-tabular',
-                        isZero ? 'text-gray-300' : 'text-gray-800',
+                        isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack,
                         isStartMonth && !isZero && 'bg-emerald-50 font-medium text-emerald-700'
                       )}
                     >
@@ -481,7 +482,7 @@ const Policy2025TriangleTable: React.FC<{
                       key={key}
                       className={cn(
                         'px-1 py-1.5 text-right font-tabular',
-                        isZero ? 'text-gray-300' : 'text-gray-800'
+                        isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack
                       )}
                     >
                       {isZero ? '0' : formatPremiumWan(value)}
@@ -507,7 +508,7 @@ const Policy2026TriangleTable: React.FC<{
   loading?: boolean;
 }> = ({ data, loading }) => {
   if (loading) {
-    return <div className="p-8 text-center text-gray-400">加载中...</div>;
+    return <div className={cn('p-8 text-center', colorClasses.text.neutralMuted)}>加载中...</div>;
   }
 
   // 表头：起保月、保费、首日费用、26-1~26-12、27-1~27-12、最终已赚
@@ -526,12 +527,12 @@ const Policy2026TriangleTable: React.FC<{
     <div className="overflow-x-auto">
       <table className="text-xs border-collapse" style={{ minWidth: '1400px' }}>
         <thead>
-          <tr className="bg-gray-50 border-b border-gray-200">
+          <tr className={cn(colorClasses.bg.neutral, 'border-b', colorClasses.border.neutral)}>
             {headers.map((h) => (
               <th
                 key={h.key}
                 style={{ width: h.width, minWidth: h.width }}
-                className="px-1 py-2 text-center font-medium text-gray-600 whitespace-nowrap"
+                className={cn('px-1 py-2 text-center font-medium whitespace-nowrap', colorClasses.text.neutral)}
               >
                 {h.label}
               </th>
@@ -542,17 +543,17 @@ const Policy2026TriangleTable: React.FC<{
           {data.map((row) => {
             const policyMonth = row.policy_month;
             return (
-              <tr key={policyMonth} className="border-b border-gray-100 hover:bg-blue-50/30">
+              <tr key={policyMonth} className="border-b border-neutral-100 hover:bg-blue-50/30">
                 {/* 起保月 */}
-                <td className="px-1 py-1.5 text-center font-medium text-gray-700">
+                <td className={cn('px-1 py-1.5 text-center font-medium', colorClasses.text.neutralDark)}>
                   {MONTH_LABELS[policyMonth]}
                 </td>
                 {/* 保费 */}
-                <td className="px-1 py-1.5 text-right font-tabular text-gray-900">
+                <td className={cn('px-1 py-1.5 text-right font-tabular', colorClasses.text.neutralBlack)}>
                   {formatPremiumWan(row.premium)}
                 </td>
                 {/* 首日费用 */}
-                <td className="px-1 py-1.5 text-right font-tabular text-blue-600">
+                <td className={cn('px-1 py-1.5 text-right font-tabular', colorClasses.text.primary)}>
                   {formatPremiumWan(row.first_day_fee)}
                 </td>
                 {/* 26年各月 */}
@@ -569,7 +570,7 @@ const Policy2026TriangleTable: React.FC<{
                       key={key}
                       className={cn(
                         'px-1 py-1.5 text-right font-tabular',
-                        isZero ? 'text-gray-300' : 'text-gray-800',
+                        isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack,
                         isStartMonth && !isZero && 'bg-emerald-50 font-medium text-emerald-700'
                       )}
                     >
@@ -588,7 +589,7 @@ const Policy2026TriangleTable: React.FC<{
                       key={key}
                       className={cn(
                         'px-1 py-1.5 text-right font-tabular',
-                        isZero ? 'text-gray-300' : 'text-gray-800'
+                        isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack
                       )}
                     >
                       {isZero ? '0' : formatPremiumWan(value)}
@@ -745,7 +746,7 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
               <p className={cn(textStyles.caption, 'mt-1')}>
                 <span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-200 mr-1 align-middle"></span>
                 <span className="text-emerald-700 font-medium">起保月</span> 含首日费用 |
-                <span className="text-gray-400 ml-2">灰色0</span> = 三角区域外
+                <span className={cn(colorClasses.text.neutralMuted, 'ml-2')}>灰色0</span> = 三角区域外
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -785,7 +786,7 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
               <p className={cn(textStyles.caption, 'mt-1')}>
                 <span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-200 mr-1 align-middle"></span>
                 <span className="text-emerald-700 font-medium">起保月</span> 含首日费用 |
-                <span className="text-gray-400 ml-2">灰色0</span> = 三角区域外
+                <span className={cn(colorClasses.text.neutralMuted, 'ml-2')}>灰色0</span> = 三角区域外
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -859,7 +860,8 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                 className={cn(
-                  'px-3 py-1.5 text-sm border border-gray-300 rounded-md',
+                  'px-3 py-1.5 text-sm rounded-md border',
+                  colorClasses.border.neutral,
                   'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500'
                 )}
               >
@@ -967,7 +969,7 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
             滚动12个月统计时，窗口内的首日费用<strong className={textStyles.emphasis}>自动计入</strong>已赚保费，窗口外则自动排除
           </li>
           <li>
-            精算三角：行=起保月(1-12月)，列=统计月(25-1到26-12)，<span className="text-gray-400">灰色0</span>=起保前（三角外）
+            精算三角：行=起保月(1-12月)，列=统计月(25-1到26-12)，<span className={colorClasses.text.neutralMuted}>灰色0</span>=起保前（三角外）
           </li>
           <li>
             <strong className={textStyles.emphasis}>最终已赚</strong> = 首日费用 + 全部时间分摊 ≈ 保费 × (1 - F×(1-α))

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import type { EChartsOption } from 'echarts';
 import { AXIS_SPLIT_LINE, CHART_TEXT_STYLES, GRID_CONFIG, X_AXIS_CONFIG } from '../../shared/config/chartStyles';
+import { colorClasses } from '../../shared/styles';
 import { echarts } from '../../shared/utils/echarts';
 import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
@@ -179,18 +180,18 @@ export const OrgByTonnageDualYChart: React.FC<OrgByTonnageDualYChartProps> = ({
   }, [filteredData, title, selectedOrg]);
 
   if (loading) {
-    return <div className="h-96 flex items-center justify-center bg-gray-50">加载中...</div>;
+    return <div className={`h-96 flex items-center justify-center ${colorClasses.bg.neutral}`}>加载中...</div>;
   }
 
   return (
     <div className="bg-white p-4 rounded shadow">
       {/* 机构选择器 */}
       <div className="flex justify-center items-center space-x-4 mb-4">
-        <span className="font-semibold text-sm text-gray-700">选择三级机构：</span>
+        <span className={`font-semibold text-sm ${colorClasses.text.neutral}`}>选择三级机构：</span>
         <select
           value={selectedOrg}
           onChange={(e) => setSelectedOrg(e.target.value)}
-          className="px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={`px-3 py-1 text-sm border ${colorClasses.border.neutral} rounded focus:outline-none focus:ring-2 focus:ring-blue-500`}
         >
           {orgList.map(org => (
             <option key={org} value={org}>{org}</option>

@@ -40,7 +40,7 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
           dateStr = `${year}-${month}-${day}`;
         }
       } else if (typeof item.time_period === 'string') {
-        dateStr = item.time_period.split('T')[0];
+        dateStr = (item.time_period ?? '').split('T')[0];
       }
       return dateStr === cutoffDate;
     });

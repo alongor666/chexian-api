@@ -12,6 +12,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Upload, X, FileText, BarChart3, ClipboardList, Check, Loader2 } from 'lucide-react';
 import { useFocusTrap } from '../../shared/hooks';
 import { Logger } from '@/shared/utils/logger';
+import { colorClasses } from '../../shared/styles';
 
 const logger = new Logger('ExportModal');
 
@@ -124,28 +125,28 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
           role="dialog"
           aria-modal="true"
           aria-labelledby="export-modal-title"
-          className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+          className="bg-white dark:bg-neutral-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* 头部 */}
-          <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 id="export-modal-title" className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+          <header className={`flex items-center justify-between p-4 border-b ${colorClasses.border.neutral}`}>
+            <h2 id="export-modal-title" className={`text-lg font-semibold ${colorClasses.text.neutralBlack} dark:text-white flex items-center`}>
               <Upload size={20} className="mr-2 text-primary" aria-hidden="true" />
               导出数据
             </h2>
             <button
               type="button"
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+              className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors"
               aria-label="关闭导出弹窗"
             >
-              <X size={20} className="text-gray-500" aria-hidden="true" />
+              <X size={20} className={colorClasses.text.neutralMuted} aria-hidden="true" />
             </button>
           </header>
 
           {/* 内容 */}
           <div className="p-6">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className={`text-sm ${colorClasses.text.neutral} mb-4`}>
               选择导出格式：
             </p>
 
@@ -160,32 +161,32 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
                     disabled={!option.available}
                     className={`w-full flex items-center p-4 rounded-lg border-2 transition-all ${
                       !option.available
-                        ? 'opacity-50 cursor-not-allowed border-gray-200 dark:border-gray-700'
+                        ? `opacity-50 cursor-not-allowed ${colorClasses.border.neutral}`
                         : selectedOption === option.id
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        ? `border-blue-500 ${colorClasses.bg.primary} dark:bg-blue-900/20`
+                        : `${colorClasses.border.neutral} hover:border-neutral-300 dark:hover:border-neutral-600`
                     }`}
                     role="radio"
                     aria-checked={selectedOption === option.id}
                   >
-                    <OptionIcon size={24} className="mr-3 text-gray-500" aria-hidden="true" />
+                    <OptionIcon size={24} className={`mr-3 ${colorClasses.text.neutralMuted}`} aria-hidden="true" />
                     <div className="flex-1 text-left">
                       <div className="flex items-center">
-                        <span className="font-medium text-gray-900 dark:text-white">
+                        <span className={`font-medium ${colorClasses.text.neutralBlack} dark:text-white`}>
                           {option.label}
                         </span>
                         {!option.available && (
-                          <span className="ml-2 text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-full">
+                          <span className={`ml-2 text-xs px-2 py-0.5 ${colorClasses.bg.neutral} dark:bg-neutral-800 ${colorClasses.text.neutralMuted} rounded-full`}>
                             开发中
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                      <p className={`text-sm ${colorClasses.text.neutralMuted} mt-0.5`}>
                         {option.description}
                       </p>
                     </div>
                     {option.available && selectedOption === option.id && (
-                      <Check size={20} className="text-blue-500" aria-hidden="true" />
+                      <Check size={20} className={colorClasses.text.primary} aria-hidden="true" />
                     )}
                   </button>
                 );
@@ -194,10 +195,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
           </div>
 
           {/* 底部按钮 */}
-          <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          <div className={`flex items-center justify-end gap-3 p-4 border-t ${colorClasses.border.neutral} ${colorClasses.bg.neutral} dark:bg-neutral-800`}>
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className={`px-4 py-2 text-sm font-medium ${colorClasses.text.neutral} hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors`}
             >
               取消
             </button>
@@ -206,7 +207,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
               disabled={isExporting}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center ${
                 isExporting
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  ? `${colorClasses.bg.neutral} ${colorClasses.text.neutralMuted} cursor-not-allowed`
                   : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
               aria-busy={isExporting}

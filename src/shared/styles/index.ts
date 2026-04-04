@@ -192,17 +192,15 @@ export const transition = {
  */
 export const cardStyles = {
   /** 基础卡片 */
-  base: 'bg-white rounded-lg border border-neutral-200 shadow-sm',
+  base: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm',
   /** 可交互卡片（带hover效果） */
-  interactive: 'bg-white rounded-lg border border-neutral-200 shadow-sm hover:shadow-md transition-shadow',
+  interactive: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm hover:shadow-md transition-shadow',
   /** 紧凑卡片 */
-  compact: 'bg-white rounded-lg border border-neutral-200 shadow-sm p-3',
+  compact: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-3',
   /** 标准卡片 */
-  standard: 'bg-white rounded-lg border border-neutral-200 shadow-sm p-4',
+  standard: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-4',
   /** 宽松卡片 */
-  spacious: 'bg-white rounded-lg border border-neutral-200 shadow-sm p-6',
-  /** 深色模式卡片 */
-  dark: 'dark:bg-neutral-800 dark:border-neutral-700',
+  spacious: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-6',
 } as const
 
 /**
@@ -238,7 +236,7 @@ export const badgeStyles = {
   /** 基础徽章 */
   base: 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
   /** 状态 - 默认 */
-  default: 'bg-neutral-100 text-neutral-700',
+  default: 'bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300',
   /** 状态 - 主要 */
   primary: 'bg-primary-bg text-primary-dark',
   /** 状态 - 成功 */
@@ -260,13 +258,11 @@ export const inputStyles = {
   /** 基础输入框 */
   base: 'w-full px-3 py-2 text-sm border rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary',
   /** 默认状态 */
-  default: 'border-neutral-300 bg-white text-neutral-900 placeholder-neutral-400',
+  default: 'border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500',
   /** 错误状态 */
   error: 'border-danger text-danger focus:ring-danger-400 focus:border-danger',
   /** 禁用状态 */
-  disabled: 'bg-neutral-100 text-neutral-500 cursor-not-allowed',
-  /** 深色模式 */
-  dark: 'dark:bg-neutral-800 dark:border-neutral-600 dark:text-neutral-100 dark:placeholder-neutral-500',
+  disabled: 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 cursor-not-allowed',
 } as const
 
 /**
@@ -274,19 +270,17 @@ export const inputStyles = {
  */
 export const tableStyles = {
   /** 表格容器 */
-  container: 'bg-white rounded-lg border border-neutral-200 shadow-sm overflow-hidden',
+  container: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm overflow-hidden',
   /** 表头 */
-  header: 'bg-neutral-50 border-b border-neutral-200',
+  header: 'bg-neutral-50 dark:bg-neutral-700 border-b border-neutral-200 dark:border-neutral-600',
   /** 表头单元格 */
-  headerCell: 'px-3 py-2 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider',
+  headerCell: 'px-3 py-2 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider',
   /** 表体行 */
-  row: 'border-b border-neutral-100 hover:bg-neutral-50 transition-colors',
+  row: 'border-b border-neutral-100 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors',
   /** 表体单元格 */
-  cell: 'px-3 py-2 text-sm text-neutral-700',
+  cell: 'px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300',
   /** 数值单元格（右对齐） */
-  cellNumeric: 'px-3 py-2 text-sm text-neutral-700 text-right font-tabular',
-  /** 深色模式 */
-  dark: 'dark:bg-neutral-800 dark:border-neutral-700',
+  cellNumeric: 'px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 text-right font-tabular',
 } as const
 
 /**
@@ -354,9 +348,9 @@ export const numericStyles = {
   /** KPI 次级数字 (24px — 对齐 text-2xl 阶梯) */
   kpiSecondary: 'font-kpi text-2xl tracking-tight font-bold leading-none',
   /** 表格数字单元格 */
-  tableValue: 'font-tabular tabular-nums text-sm text-neutral-900',
+  tableValue: 'font-tabular tabular-nums text-sm text-neutral-900 dark:text-neutral-100',
   /** 表格次要数字 */
-  tableSecondary: 'font-tabular tabular-nums text-sm text-neutral-500',
+  tableSecondary: 'font-tabular tabular-nums text-sm text-neutral-500 dark:text-neutral-400',
   /** 小号数字（标签/统计） */
   captionValue: 'font-tabular tabular-nums text-xs',
 } as const
@@ -538,6 +532,12 @@ export const colorClasses = {
     // 增长率专用
     growthPositive: 'text-emerald-600 dark:text-emerald-400',
     growthNegative: 'text-red-500 dark:text-red-400',
+    // 扩展语义颜色
+    purple: 'text-purple-600 dark:text-purple-400',   // 角色/身份标识
+    indigo: 'text-indigo-600 dark:text-indigo-400',   // 高级功能/特殊标识
+    sky: 'text-sky-600 dark:text-sky-400',             // 信息/提示
+    orange: 'text-orange-600 dark:text-orange-400',   // 费用/成本
+    amber: 'text-amber-600 dark:text-amber-400',      // 次级警告
   },
   /** 背景颜色 */
   bg: {
@@ -559,6 +559,12 @@ export const colorClasses = {
     neutral: 'bg-neutral-50 dark:bg-neutral-800',
     neutralLight: 'bg-neutral-100 dark:bg-neutral-700',
     neutralMuted: 'bg-gray-50 dark:bg-neutral-800',
+    // 扩展语义颜色
+    purple: 'bg-purple-50 dark:bg-purple-900/20',
+    indigo: 'bg-indigo-50 dark:bg-indigo-900/20',
+    sky: 'bg-sky-50 dark:bg-sky-900/20',
+    orange: 'bg-orange-50 dark:bg-orange-900/20',
+    amber: 'bg-amber-50 dark:bg-amber-900/20',
   },
   /** 边框颜色 */
   border: {
@@ -567,6 +573,11 @@ export const colorClasses = {
     warning: 'border-yellow-200 dark:border-yellow-800',
     primary: 'border-blue-200 dark:border-blue-800',
     neutral: 'border-neutral-200 dark:border-neutral-700',
+    // 扩展语义颜色
+    purple: 'border-purple-200 dark:border-purple-800',
+    indigo: 'border-indigo-200 dark:border-indigo-800',
+    orange: 'border-orange-200 dark:border-orange-800',
+    sky: 'border-sky-200 dark:border-sky-800',
   },
 } as const
 

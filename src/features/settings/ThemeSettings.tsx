@@ -11,6 +11,7 @@ import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Sun, Moon, Monitor, Check } from 'lucide-react';
 import { useTheme, type ThemeMode } from '../../shared/theme';
+import { colorClasses } from '../../shared/styles';
 
 interface ThemeOption {
   mode: ThemeMode;
@@ -50,8 +51,8 @@ export const ThemeSettings: React.FC = () => {
     <div className="space-y-6">
       {/* 标题 */}
       <div>
-        <h3 className="text-base font-semibold text-gray-900 dark:text-white">外观设置</h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h3 className={`text-base font-semibold ${colorClasses.text.neutralBlack} dark:text-white`}>外观设置</h3>
+        <p className={`mt-1 text-sm ${colorClasses.text.neutralMuted}`}>
           选择您喜欢的界面主题
         </p>
       </div>
@@ -66,30 +67,30 @@ export const ThemeSettings: React.FC = () => {
               onClick={() => setMode(option.mode)}
               className={`w-full flex items-center p-4 rounded-lg border-2 transition-all ${
                 mode === option.mode
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  ? `border-blue-500 ${colorClasses.bg.primary} dark:bg-blue-900/20`
+                  : `${colorClasses.border.neutral} hover:border-neutral-300 dark:hover:border-neutral-600`
               }`}
               role="radio"
               aria-checked={mode === option.mode}
             >
-              <OptionIcon size={24} className="mr-4 text-gray-600 dark:text-gray-400" aria-hidden="true" />
+              <OptionIcon size={24} className={`mr-4 ${colorClasses.text.neutral}`} aria-hidden="true" />
               <div className="flex-1 text-left">
                 <div className="flex items-center">
-                  <span className="font-medium text-gray-900 dark:text-white">
+                  <span className={`font-medium ${colorClasses.text.neutralBlack} dark:text-white`}>
                     {option.label}
                   </span>
                   {mode === option.mode && (
-                    <span className="ml-2 text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 rounded-full">
+                    <span className={`ml-2 text-xs px-2 py-0.5 ${colorClasses.bg.primary} dark:bg-blue-800 ${colorClasses.text.primary} dark:text-blue-200 rounded-full`}>
                       当前
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                <p className={`text-sm ${colorClasses.text.neutralMuted} mt-0.5`}>
                   {option.description}
                 </p>
               </div>
               {mode === option.mode && (
-                <Check size={20} className="text-blue-500" aria-hidden="true" />
+                <Check size={20} className={colorClasses.text.primary} aria-hidden="true" />
               )}
             </button>
           );
@@ -97,14 +98,14 @@ export const ThemeSettings: React.FC = () => {
       </div>
 
       {/* 当前状态提示 */}
-      <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+      <div className={`p-4 ${colorClasses.bg.neutral} dark:bg-neutral-800 rounded-lg`}>
         <div className="flex items-center">
           {resolvedTheme === 'dark' ? (
-            <Moon size={18} className="mr-2 text-gray-600 dark:text-gray-400" aria-hidden="true" />
+            <Moon size={18} className={`mr-2 ${colorClasses.text.neutral}`} aria-hidden="true" />
           ) : (
-            <Sun size={18} className="mr-2 text-yellow-500" aria-hidden="true" />
+            <Sun size={18} className={`mr-2 ${colorClasses.text.warning}`} aria-hidden="true" />
           )}
-          <span className="text-sm text-gray-600 dark:text-gray-300">
+          <span className={`text-sm ${colorClasses.text.neutral} dark:text-neutral-300`}>
             当前应用主题：<strong>{resolvedTheme === 'dark' ? '深色' : '浅色'}</strong>
             {mode === 'system' && ' (跟随系统)'}
           </span>
@@ -112,8 +113,8 @@ export const ThemeSettings: React.FC = () => {
       </div>
 
       {/* 提示信息 */}
-      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-        <p className="text-xs text-blue-700 dark:text-blue-300">
+      <div className={`p-3 ${colorClasses.bg.primary} dark:bg-blue-900/20 border ${colorClasses.border.primary} dark:border-blue-800 rounded-lg`}>
+        <p className={`text-xs ${colorClasses.text.primary} dark:text-blue-300`}>
           <span className="font-semibold">提示：</span>
           深色模式可以在低光环境下减少眼睛疲劳，并节省OLED屏幕的电量。
         </p>

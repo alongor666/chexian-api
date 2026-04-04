@@ -19,6 +19,7 @@ import {
   buttonStyles,
   cardStyles,
   badgeStyles,
+  colorClasses,
   cn,
 } from '../../../shared/styles';
 import type { ExpenseRatioForecastData } from '../types/costTypes';
@@ -54,7 +55,7 @@ interface DisplayForecastData {
 
 function transformForecastData(data: ExpenseRatioForecastData[]): DisplayForecastData[] {
   return data.map((row) => {
-    const [, month] = row.stat_month.split('-');
+    const [, month] = (row.stat_month ?? '').split('-');
     return {
       stat_month: `2026年${month}月`,
       total_earned_premium: formatPremiumWan(row.total_earned_premium),
@@ -163,7 +164,7 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={cn('w-full px-3 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary-500', colorClasses.border.neutral)}
               >
                 {monthOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -184,7 +185,7 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
                   step="0.1"
                   value={inputOperatingCostRate}
                   onChange={(e) => setInputOperatingCostRate(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={cn('flex-1 px-3 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary-500', colorClasses.border.neutral)}
                 />
                 <button
                   onClick={handleOperatingCostRateSubmit}
@@ -206,17 +207,17 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
           </h3>
           <div className="grid grid-cols-4 gap-4">
             {/* 已赚保费 */}
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <div className={cn(textStyles.caption, 'text-blue-600')}>已赚保费(万)</div>
-              <div className={cn(textStyles.numeric, 'text-2xl font-semibold text-blue-700 mt-1')}>
+            <div className={cn(colorClasses.bg.primary, 'rounded-lg p-4 border', colorClasses.border.primary)}>
+              <div className={cn(textStyles.caption, colorClasses.text.primary)}>已赚保费(万)</div>
+              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1', colorClasses.text.primaryDark)}>
                 {formatPremiumWan(selectedForecastData.total_earned_premium)}
               </div>
             </div>
 
             {/* 总费用 */}
-            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-              <div className={cn(textStyles.caption, 'text-orange-600')}>总费用(万)</div>
-              <div className={cn(textStyles.numeric, 'text-2xl font-semibold text-orange-700 mt-1')}>
+            <div className={cn(colorClasses.bg.orange, 'rounded-lg p-4 border border-orange-200')}>
+              <div className={cn(textStyles.caption, colorClasses.text.orange)}>总费用(万)</div>
+              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1 text-orange-700')}>
                 {formatPremiumWan(selectedForecastData.total_expense)}
               </div>
               <div className={cn(textStyles.caption, 'text-orange-500 mt-1')}>
@@ -226,9 +227,9 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
             </div>
 
             {/* 运营成本 */}
-            <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-              <div className={cn(textStyles.caption, 'text-purple-600')}>运营成本(万)</div>
-              <div className={cn(textStyles.numeric, 'text-2xl font-semibold text-purple-700 mt-1')}>
+            <div className={cn(colorClasses.bg.purple, 'rounded-lg p-4 border', colorClasses.border.purple)}>
+              <div className={cn(textStyles.caption, colorClasses.text.purple)}>运营成本(万)</div>
+              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1 text-purple-700')}>
                 {formatPremiumWan(selectedForecastData.operating_cost)}
               </div>
               <div className={cn(textStyles.caption, 'text-purple-500 mt-1')}>
@@ -237,9 +238,9 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
             </div>
 
             {/* 综合费用率 */}
-            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-              <div className={cn(textStyles.caption, 'text-red-600')}>综合费用率</div>
-              <div className={cn(textStyles.numeric, 'text-2xl font-semibold text-red-700 mt-1')}>
+            <div className={cn(colorClasses.bg.danger, 'rounded-lg p-4 border', colorClasses.border.danger)}>
+              <div className={cn(textStyles.caption, colorClasses.text.danger)}>综合费用率</div>
+              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1 text-red-700')}>
                 {formatPercent(selectedForecastData.comprehensive_expense_ratio, 1)}
               </div>
               <div className={cn(textStyles.caption, 'text-red-500 mt-1')}>
@@ -277,7 +278,7 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
       {/* 错误提示 */}
       {error && (
         <div
-          className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700"
+          className={cn(colorClasses.bg.danger, 'border rounded-lg p-4', colorClasses.border.danger, colorClasses.text.danger)}
           role="alert"
         >
           <strong>错误：</strong> {error}

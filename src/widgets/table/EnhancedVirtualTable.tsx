@@ -13,6 +13,7 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import { VariableSizeList as List } from 'react-window';
 import { TABLE_CSS_CLASSES } from '../../shared/config/chartStyles';
+import { colorClasses } from '../../shared/styles';
 
 type TableCellValue = React.ReactNode | string | number | bigint | null | undefined;
 type TableRow = Record<string, TableCellValue>;
@@ -152,14 +153,14 @@ export function EnhancedVirtualTable<T extends TableRow>({
                 width: col.width ?? 120,
                 minWidth: col.minWidth ?? 80,
               }}
-              className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider truncate ${
+              className={`px-4 py-3 text-xs font-medium uppercase tracking-wider truncate ${colorClasses.text.neutralLight} ${
                 col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
-              } ${isSortable ? 'cursor-pointer hover:bg-gray-100 select-none' : ''}`}
+              } ${isSortable ? `cursor-pointer hover:bg-neutral-100 select-none` : ''}`}
               onClick={() => isSortable && handleSort(String(col.key))}
             >
               <div className="flex items-center gap-1">
                 <span className="truncate">{col.header}</span>
-                {sortIcon && <span className="text-blue-500">{sortIcon}</span>}
+                {sortIcon && <span className={colorClasses.text.primary}>{sortIcon}</span>}
               </div>
             </div>
           );
@@ -201,7 +202,7 @@ export function EnhancedVirtualTable<T extends TableRow>({
                   width: col.width ?? 120,
                   minWidth: col.minWidth ?? 80,
                 }}
-                className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${
+                className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm ${colorClasses.text.neutralBlack} ${
                   col.align === 'right' ? 'text-right font-mono' : col.align === 'center' ? 'text-center' : 'text-left'
                 }`}
               >
@@ -222,9 +223,9 @@ export function EnhancedVirtualTable<T extends TableRow>({
         className={`${TABLE_CSS_CLASSES.container} bg-white ${className}`}
         style={{ height }}
       >
-        <div className="h-full flex items-center justify-center text-gray-500">
+        <div className={`h-full flex items-center justify-center ${colorClasses.text.neutralLight}`}>
           <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
             <span className="text-sm">加载中...</span>
           </div>
         </div>
@@ -255,7 +256,7 @@ export function EnhancedVirtualTable<T extends TableRow>({
   return (
     <div className={`${TABLE_CSS_CLASSES.container} bg-white ${className}`}>
       {/* 数据统计栏 */}
-      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-500 flex justify-between items-center">
+      <div className={`px-4 py-2 border-b text-xs flex justify-between items-center ${colorClasses.bg.neutral} ${colorClasses.border.neutral} ${colorClasses.text.neutralLight}`}>
         <span>
           显示 {displayCount} / {totalCount} 条
           {maxVisibleRows && totalCount > maxVisibleRows && ` （最多显示 ${maxVisibleRows} 条）`}

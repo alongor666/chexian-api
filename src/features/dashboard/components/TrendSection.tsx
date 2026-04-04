@@ -80,14 +80,14 @@ export const TrendSection = memo<TrendSectionProps>(function TrendSection({
               <button
                 onClick={() => onExportTrend('csv')}
                 disabled={trendData.length === 0}
-                className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-neutral-300 disabled:cursor-not-allowed"
               >
                 导出 CSV
               </button>
               <button
                 onClick={() => onExportTrend('excel')}
                 disabled={trendData.length === 0}
-                className="px-2 py-1 text-xs bg-emerald-500 text-white rounded hover:bg-emerald-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="px-2 py-1 text-xs bg-emerald-500 text-white rounded hover:bg-emerald-600 disabled:bg-neutral-300 disabled:cursor-not-allowed"
               >
                 导出 Excel
               </button>

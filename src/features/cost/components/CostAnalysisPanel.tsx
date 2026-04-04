@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { colorClasses, cn } from '../../../shared/styles';
 import { CostAnalysisControlPanel } from './CostAnalysisControlPanel';
 import { ClaimRatioTable } from './ClaimRatioTable';
 import { CostTable } from './CostTable';
@@ -461,7 +462,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
       {/* 错误提示 */}
       {error && (
         <div
-          className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700"
+          className={cn(colorClasses.bg.danger, 'border rounded-lg p-4', colorClasses.border.danger, colorClasses.text.danger)}
           role="alert"
         >
           <strong>错误：</strong> {error}

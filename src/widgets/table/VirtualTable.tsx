@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { TableSkeleton } from '../../shared/ui/Skeleton';
 import { TABLE_CSS_CLASSES } from '../../shared/config/chartStyles';
+import { colorClasses } from '../../shared/styles';
 
 export type TableCellValue = React.ReactNode | string | number | bigint | null | undefined;
 
@@ -54,7 +55,7 @@ const VirtualRow = ({
           <div
             key={col.key}
             style={{ width: col.width }}
-            className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${alignClass} ${numberClass}`}
+            className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm ${colorClasses.text.neutralBlack} ${alignClass} ${numberClass}`}
           >
             {col.render
               ? col.render(rawValue, item)
@@ -114,7 +115,7 @@ export const VirtualTable = <T extends object>({
               <div
                 key={col.key}
                 style={{ width: col.width }}
-                className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider truncate min-w-0 ${getAlignClass(col.align)}`}
+                className={`px-4 py-3 text-xs font-medium uppercase tracking-wider truncate min-w-0 ${colorClasses.text.neutralLight} ${getAlignClass(col.align)}`}
               >
                 {col.header}
               </div>
@@ -123,12 +124,12 @@ export const VirtualTable = <T extends object>({
           {/* Body */}
           <div className={TABLE_CSS_CLASSES.tbody}>
             {data.map((item, index) => (
-              <div key={index} className={`flex ${TABLE_CSS_CLASSES.row} border-b border-gray-200`}>
+              <div key={index} className={`flex ${TABLE_CSS_CLASSES.row} border-b ${colorClasses.border.neutral}`}>
                 {columns.map(col => (
                   <div
                     key={col.key}
                     style={{ width: col.width }}
-                    className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm text-gray-900 ${getAlignClass(col.align)} ${getNumberClass(col.align)}`}
+                    className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm ${colorClasses.text.neutralBlack} ${getAlignClass(col.align)} ${getNumberClass(col.align)}`}
                   >
                     {(() => {
                       const rawValue = (item as any)?.[col.key] as TableCellValue;
@@ -156,7 +157,7 @@ export const VirtualTable = <T extends object>({
             <div
               key={col.key}
               style={{ width: col.width }}
-              className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider truncate min-w-0 ${getAlignClass(col.align)}`}
+              className={`px-4 py-3 text-xs font-medium uppercase tracking-wider truncate min-w-0 ${colorClasses.text.neutralLight} ${getAlignClass(col.align)}`}
             >
               {col.header}
             </div>

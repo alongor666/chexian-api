@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import { format, parseISO, isValid } from 'date-fns';
 import { Logger } from '@/shared/utils/logger';
-import { colors } from '@/shared/styles';
+import { colors, colorClasses } from '@/shared/styles';
 import { formatWanDirect, formatPercent } from '@/shared/utils/formatters';
 
 const logger = new Logger('ScissorsTrendChart');
@@ -157,16 +157,16 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
       const gapPercent = lastYear !== 0 ? formatPercent((gap / lastYear) * 100) : '0.0%';
 
       return (
-        <div className="bg-white p-3 border border-gray-200 shadow-lg rounded-lg text-sm min-w-[200px]">
-          <p className="font-bold text-gray-700 mb-2">{label}</p>
+        <div className={`bg-white p-3 border shadow-lg rounded-lg text-sm min-w-[200px] ${colorClasses.border.neutral}`}>
+          <p className={`font-bold mb-2 ${colorClasses.text.neutralDark}`}>{label}</p>
           <div className="space-y-1">
-            <p className="text-blue-600 font-medium">
+            <p className={`font-medium ${colorClasses.text.primary}`}>
               当年累计: <span className="font-bold">{formatWanDirect(current)}</span> 万元
             </p>
-            <p className="text-gray-500">
+            <p className={colorClasses.text.neutralMuted}>
               上年累计: {formatWanDirect(lastYear)} 万元
             </p>
-            <div className={`mt-2 pt-2 border-t border-gray-100 flex justify-between items-center ${gap >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+            <div className={`mt-2 pt-2 border-t flex justify-between items-center ${colorClasses.border.neutral} ${gap >= 0 ? colorClasses.text.danger : colorClasses.text.success}`}>
               <span>差额及增长率:</span>
               <span className="font-bold">
                 {gap > 0 ? '+' : ''}{formatWanDirect(gap)} ({gap > 0 ? '+' : ''}{gapPercent})
@@ -174,8 +174,8 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
             </div>
 
             {showTargetLines && targetLines && (
-              <div className="mt-3 pt-2 border-t border-gray-200">
-                <p className="text-xs text-gray-400 mb-1">剩余天数: {targetLines.remainingDays}天</p>
+              <div className={`mt-3 pt-2 border-t ${colorClasses.border.neutral}`}>
+                <p className={`text-xs mb-1 ${colorClasses.text.neutralMuted}`}>剩余天数: {targetLines.remainingDays}天</p>
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between" style={{ color: TARGET_COLORS.zero }}>
                     <span>0%持平 日均需:</span>
@@ -215,30 +215,30 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
   return (
     <div className={`w-full bg-white p-4 rounded-xl shadow-sm ${className}`}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-        <h3 className="text-lg font-bold text-gray-800">年度业绩追赶曲线</h3>
+        <h3 className={`text-lg font-bold ${colorClasses.text.neutralBlack}`}>年度业绩追赶曲线</h3>
         <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
           <div className="flex items-center">
             <span className="w-4 h-1 bg-blue-500 mr-1 rounded"></span>
-            <span className="text-gray-600">当年累计</span>
+            <span className={colorClasses.text.neutral}>当年累计</span>
           </div>
           <div className="flex items-center">
-            <span className="w-4 h-0 border-t-2 border-gray-400 border-dashed mr-1"></span>
-            <span className="text-gray-600">上年累计</span>
+            <span className="w-4 h-0 border-t-2 border-dashed mr-1" style={{ borderColor: colors.neutral[400] }}></span>
+            <span className={colorClasses.text.neutral}>上年累计</span>
           </div>
           {showTargetLines && (
             <>
-              <span className="text-gray-300">|</span>
+              <span className={colorClasses.text.neutralMuted}>|</span>
               <div className="flex items-center">
                 <span className="w-3 h-0 border-t-[1.5px] border-dotted mr-1" style={{ borderColor: TARGET_COLORS.zero }}></span>
-                <span className="text-gray-600">0%持平</span>
+                <span className={colorClasses.text.neutral}>0%持平</span>
               </div>
               <div className="flex items-center">
                 <span className="w-3 h-0 border-t-2 border-dashed mr-1" style={{ borderColor: TARGET_COLORS.five }}></span>
-                <span className="text-gray-600">5%目标</span>
+                <span className={colorClasses.text.neutral}>5%目标</span>
               </div>
               <div className="flex items-center">
                 <span className="w-3 h-0 border-t-2 border-dashed mr-1" style={{ borderColor: TARGET_COLORS.ten, borderStyle: 'dashed' }}></span>
-                <span className="text-gray-600">10%目标</span>
+                <span className={colorClasses.text.neutral}>10%目标</span>
               </div>
             </>
           )}

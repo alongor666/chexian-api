@@ -1,4 +1,5 @@
 import React from 'react';
+import { colorClasses } from '../../shared/styles';
 
 /**
  * DC-001: 分析年度选择器组件
@@ -49,17 +50,17 @@ export const AnalysisYearSelector: React.FC<AnalysisYearSelectorProps> = ({
     if (compact) {
       return (
         <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-gray-600">分析年度</label>
-          <span className="text-xs text-yellow-600">无可用年份</span>
+          <label className={`text-xs font-medium ${colorClasses.text.neutral}`}>分析年度</label>
+          <span className={`text-xs ${colorClasses.text.warning}`}>无可用年份</span>
         </div>
       );
     }
     return (
       <div className="flex items-center space-x-2">
-        <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+        <label className={`text-sm font-medium flex-shrink-0 ${colorClasses.text.neutral}`}>
           分析年度：
         </label>
-        <div className="text-sm text-yellow-600 bg-yellow-50 px-3 py-2 rounded border border-yellow-200">
+        <div className={`text-sm px-3 py-2 rounded border ${colorClasses.text.warning} ${colorClasses.bg.warning} ${colorClasses.border.warning}`}>
           ⚠️ 无可用年份（请先加载数据）
         </div>
       </div>
@@ -75,13 +76,13 @@ export const AnalysisYearSelector: React.FC<AnalysisYearSelectorProps> = ({
   if (compact) {
     return (
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-gray-600">分析年度</label>
+        <label className={`text-xs font-medium ${colorClasses.text.neutral}`}>分析年度</label>
         <select
           value={selectedYear}
           onChange={handleYearChange}
           disabled={disabled}
-          className={`px-2 py-1 text-xs border border-gray-200 rounded ${
-            disabled ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'bg-white cursor-pointer'
+          className={`px-2 py-1 text-xs border rounded ${colorClasses.border.neutral} ${
+            disabled ? 'opacity-50 cursor-not-allowed bg-neutral-100' : 'bg-white cursor-pointer'
           }`}
           aria-label="选择分析年度"
         >
@@ -99,7 +100,7 @@ export const AnalysisYearSelector: React.FC<AnalysisYearSelectorProps> = ({
     <div className="flex items-center space-x-3">
       <label
         htmlFor="analysis-year-select"
-        className="text-sm font-medium text-gray-700 flex-shrink-0 whitespace-nowrap"
+        className={`text-sm font-medium flex-shrink-0 whitespace-nowrap ${colorClasses.text.neutral}`}
       >
         分析年度：
       </label>
@@ -110,12 +111,12 @@ export const AnalysisYearSelector: React.FC<AnalysisYearSelectorProps> = ({
         disabled={disabled}
         className={`
           block w-32 px-3 py-2 text-sm
-          border border-gray-300 rounded-md
+          border border-neutral-300 rounded-md
           shadow-sm focus:outline-none
           focus:ring-2 focus:ring-blue-500 focus:border-blue-500
           transition-colors duration-200
           whitespace-nowrap
-          ${disabled ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'bg-white cursor-pointer'}
+          ${disabled ? 'opacity-50 cursor-not-allowed bg-neutral-100' : 'bg-white cursor-pointer'}
         `}
         aria-label="选择分析年度"
       >

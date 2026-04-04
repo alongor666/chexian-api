@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { colorClasses } from '../../../shared/styles';
 import { useGrowthAnalysis, type DualMetricComparisonData } from '../hooks/useGrowthAnalysis';
 import { exportArrayToCSV } from '../../../shared/utils/export';
 import { BarChart } from '../../../widgets/charts/BarChart';
@@ -360,7 +361,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
 
       {/* 筛选条件提示 */}
       {filterDescription && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-4 text-sm text-blue-800">
+        <div className={`${colorClasses.bg.primary} ${colorClasses.border.primary} border rounded-lg px-4 py-2 mb-4 text-sm ${colorClasses.text.primary}`}>
           <span className="font-medium">当前筛选：</span>{filterDescription}
         </div>
       )}

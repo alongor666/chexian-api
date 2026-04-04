@@ -123,13 +123,13 @@ function DimensionPicker({
         className="bg-white rounded-xl shadow-xl p-6 min-w-[320px] max-w-[90vw]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-gray-800 mb-4">{title}</h3>
+        <h3 className={`text-base font-semibold ${colorClasses.text.neutralBlack} mb-4`}>{title}</h3>
         <div className="grid grid-cols-2 gap-2">
           {available.map((dim) => (
             <button
               key={dim}
               onClick={() => onSelect(dim)}
-              className="px-4 py-3 text-sm rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors text-left"
+              className={`px-4 py-3 text-sm rounded-lg border ${colorClasses.border.neutral} hover:border-blue-400 hover:bg-blue-50 transition-colors text-left`}
             >
               {DIMENSION_LABELS[dim]}
             </button>
@@ -137,7 +137,7 @@ function DimensionPicker({
         </div>
         <button
           onClick={onCancel}
-          className="mt-4 w-full px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          className={`mt-4 w-full px-4 py-2 text-sm ${colorClasses.text.neutralMuted} hover:text-gray-700 transition-colors`}
         >
           取消
         </button>
@@ -595,7 +595,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
         }
       >
         {showHeatmapPicker && (
-          <div className={cn(cardStyles.base, 'border border-blue-200 bg-blue-50 p-3')}>
+          <div className={cn(cardStyles.base, `border ${colorClasses.border.primary} ${colorClasses.bg.primary} p-3`)}>
             <p className="mb-2 text-xs text-neutral-600">
               选择 <strong>{pendingHeatmapRow}</strong> 的下钻维度：
             </p>
@@ -603,7 +603,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
               {availableHeatmapDrillDimensions.map((d) => (
                 <button
                   key={d.key}
-                  className="cursor-pointer rounded-full border border-blue-300 bg-white px-3 py-1 text-xs hover:bg-blue-100"
+                  className={`cursor-pointer rounded-full border ${colorClasses.border.primary} bg-white px-3 py-1 text-xs hover:bg-blue-100`}
                   onClick={() => handleHeatmapDimSelect(d.key)}
                 >
                   {d.label}
@@ -721,7 +721,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
           <>
             {!currentGroupBy && summary && !loading && (
               <div className={cn(cardStyles.spacious, 'text-center')}>
-                <p className="mb-4 text-gray-500">默认仅展示核心指标。选择维度后可继续下钻到团队、业务员等明细层级。</p>
+                <p className={`mb-4 ${colorClasses.text.neutralMuted}`}>默认仅展示核心指标。选择维度后可继续下钻到团队、业务员等明细层级。</p>
                 <button
                   onClick={handleInitialDrill}
                   className="rounded-lg bg-primary px-6 py-3 font-medium text-white transition-colors hover:bg-primary-dark"
@@ -738,8 +738,8 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                   currentDimensionLabel={DIMENSION_LABELS[currentGroupBy]}
                 />
                 <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-                  <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                    <span className="text-sm text-gray-600">
+                  <div className={`flex items-center justify-between border-b border-neutral-100 px-4 py-3`}>
+                    <span className={`text-sm ${colorClasses.text.neutral}`}>
                       按<strong>{DIMENSION_LABELS[currentGroupBy]}</strong>分组
                       {` (${sortedRows.length} 条)`}
                     </span>
@@ -773,7 +773,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                         {sortedRows.map((row) => (
                           <tr
                             key={row.group_name}
-                            className="border-b border-gray-50 transition-colors hover:bg-gray-50/60"
+                            className="border-b border-neutral-50 transition-colors hover:bg-gray-50/60"
                           >
                             {tableColumns.map((col) => {
                               const numericValue = Number(row[col.key] ?? 0);

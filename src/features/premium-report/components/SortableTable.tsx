@@ -10,6 +10,7 @@
 
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
+import { colorClasses } from '../../../shared/styles';
 import type { SortState } from '../types/tableTypes';
 
 interface Column<T> {
@@ -85,14 +86,14 @@ export function SortableTable<T extends Record<string, unknown>>({
     const columnKey = String(column.key);
     if (sortState.column !== columnKey) {
       return (
-        <span className="ml-1 text-gray-300 group-hover:text-gray-400">
+        <span className={`ml-1 ${colorClasses.text.neutralMuted} group-hover:text-neutral-400`}>
           ⇅
         </span>
       );
     }
 
     return (
-      <span className="ml-1 text-blue-500">
+      <span className={`ml-1 ${colorClasses.text.primary}`}>
         {sortState.direction === 'desc' ? '↓' : '↑'}
       </span>
     );
@@ -123,7 +124,7 @@ export function SortableTable<T extends Record<string, unknown>>({
             {columns.map((column) => (
               <th
                 key={String(column.key)}
-                className={`${getHeaderCellClass(column.align)} ${column.sortable !== false ? 'cursor-pointer hover:bg-gray-100 select-none group' : ''}`}
+                className={`${getHeaderCellClass(column.align)} ${column.sortable !== false ? 'cursor-pointer hover:bg-neutral-100 select-none group' : ''}`}
                 style={{ width: column.width ? `${column.width}px` : undefined }}
                 onClick={() => handleHeaderClick(column)}
               >

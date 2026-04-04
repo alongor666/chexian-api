@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '../../shared/utils/echarts';
+import { colorClasses } from '../../shared/styles';
 import type { EChartsParam } from '../../shared/types/echarts';
 import {
   CHART_TEXT_STYLES,
@@ -87,7 +88,7 @@ export const BarChart: React.FC<BarChartProps> = ({
     }
   }), [onBarClick]);
 
-  if (loading) return <div className="h-64 flex items-center justify-center bg-gray-50">Loading Chart...</div>;
+  if (loading) return <div className={`h-64 flex items-center justify-center ${colorClasses.bg.neutral}`}>Loading Chart...</div>;
 
   return (
     <div className="bg-white p-4 rounded shadow h-full">

@@ -14,6 +14,7 @@ import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import type { EChartsOption } from 'echarts';
 import { AXIS_SPLIT_LINE, CHART_TEXT_STYLES, GRID_CONFIG, X_AXIS_CONFIG } from '../../shared/config/chartStyles';
+import { colorClasses } from '../../shared/styles';
 import { echarts } from '../../shared/utils/echarts';
 import { formatPremiumWan, formatCount } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
@@ -249,10 +250,10 @@ export const DualYAxisComparisonChart: React.FC<DualYAxisComparisonChartProps> =
   if (loading) {
     return (
       <div
-        className="flex items-center justify-center bg-gray-50 rounded"
+        className={`flex items-center justify-center ${colorClasses.bg.neutral} rounded`}
         style={{ height: typeof height === 'number' ? `${height}px` : height }}
       >
-        <div className="text-gray-500">加载中...</div>
+        <div className={colorClasses.text.neutralMuted}>加载中...</div>
       </div>
     );
   }

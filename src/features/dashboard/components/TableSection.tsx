@@ -40,14 +40,14 @@ export const TableSection = memo<TableSectionProps>(function TableSection({
       <button
         onClick={() => onExport('csv')}
         disabled={disabled}
-        className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-neutral-300 disabled:cursor-not-allowed"
       >
         导出 CSV
       </button>
       <button
         onClick={() => onExport('excel')}
         disabled={disabled}
-        className="px-2 py-1 text-xs bg-emerald-500 text-white rounded hover:bg-emerald-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        className="px-2 py-1 text-xs bg-emerald-500 text-white rounded hover:bg-emerald-600 disabled:bg-neutral-300 disabled:cursor-not-allowed"
       >
         导出 Excel
       </button>

@@ -14,6 +14,7 @@ import {
   setStorageBoolean,
 } from '../../shared/utils/storage';
 import { Logger } from '@/shared/utils/logger';
+import { colorClasses, cn } from '@/shared/styles';
 
 const logger = new Logger('SystemSettings');
 
@@ -79,28 +80,28 @@ export const SystemSettings: React.FC = () => {
     <div className="space-y-6">
       {/* 标题 */}
       <div>
-        <h3 className="text-base font-semibold text-gray-900 dark:text-white">系统设置</h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <h3 className={cn("text-base font-semibold", colorClasses.text.neutralBlack)}>系统设置</h3>
+        <p className={cn("mt-1 text-sm", colorClasses.text.neutralMuted)}>
           管理应用程序的系统级设置
         </p>
       </div>
 
       {/* 开关设置 */}
       <div className="space-y-4">
-        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">常规设置</h4>
+        <h4 className={cn("text-sm font-medium", colorClasses.text.neutral)}>常规设置</h4>
 
         {/* 自动保存 */}
-        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className={cn("flex items-center justify-between p-4 rounded-lg", colorClasses.bg.neutral)}>
           <div>
-            <div className="font-medium text-gray-900 dark:text-white">自动保存筛选器</div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <div className={cn("font-medium", colorClasses.text.neutralBlack)}>自动保存筛选器</div>
+            <p className={cn("text-sm", colorClasses.text.neutralMuted)}>
               自动记住您的筛选条件选择
             </p>
           </div>
           <button
             onClick={() => handleToggleAutoSave(!autoSave)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              autoSave ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              autoSave ? 'bg-blue-600' : 'bg-neutral-300 dark:bg-neutral-600'
             }`}
           >
             <span
@@ -112,17 +113,17 @@ export const SystemSettings: React.FC = () => {
         </div>
 
         {/* 调试模式 */}
-        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className={cn("flex items-center justify-between p-4 rounded-lg", colorClasses.bg.neutral)}>
           <div>
-            <div className="font-medium text-gray-900 dark:text-white">开发者模式</div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <div className={cn("font-medium", colorClasses.text.neutralBlack)}>开发者模式</div>
+            <p className={cn("text-sm", colorClasses.text.neutralMuted)}>
               显示调试信息和性能指标
             </p>
           </div>
           <button
             onClick={() => handleToggleDebug(!showDebug)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              showDebug ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              showDebug ? 'bg-blue-600' : 'bg-neutral-300 dark:bg-neutral-600'
             }`}
           >
             <span
@@ -136,25 +137,24 @@ export const SystemSettings: React.FC = () => {
 
       {/* 数据管理 */}
       <div className="space-y-4">
-        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">数据管理</h4>
+        <h4 className={cn("text-sm font-medium", colorClasses.text.neutral)}>数据管理</h4>
 
         {/* 清除缓存 */}
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className={cn("p-4 rounded-lg", colorClasses.bg.neutral)}>
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900 dark:text-white">清除缓存</div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <div className={cn("font-medium", colorClasses.text.neutralBlack)}>清除缓存</div>
+              <p className={cn("text-sm", colorClasses.text.neutralMuted)}>
                 清除本地存储的临时数据
               </p>
             </div>
             <button
               onClick={handleClearCache}
               disabled={isClearing}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                isClearing
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30'
-              }`}
+              className={cn("px-4 py-2 text-sm font-medium rounded-lg transition-colors", isClearing
+                  ? cn(colorClasses.bg.neutralLight, colorClasses.text.neutralMuted, 'cursor-not-allowed')
+                  : cn(colorClasses.bg.danger, colorClasses.text.danger, colorClasses.bg.dangerHover)
+              )}
             >
               {isClearing ? '清除中...' : '清除'}
             </button>
@@ -162,17 +162,17 @@ export const SystemSettings: React.FC = () => {
         </div>
 
         {/* 导出设置 */}
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className={cn("p-4 rounded-lg", colorClasses.bg.neutral)}>
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900 dark:text-white">导出设置</div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <div className={cn("font-medium", colorClasses.text.neutralBlack)}>导出设置</div>
+              <p className={cn("text-sm", colorClasses.text.neutralMuted)}>
                 导出当前设置为 JSON 文件
               </p>
             </div>
             <button
               onClick={handleExportSettings}
-              className="px-4 py-2 text-sm font-medium bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors"
+              className={cn("px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30", colorClasses.bg.primary, colorClasses.text.primary)}
             >
               导出
             </button>
@@ -182,20 +182,20 @@ export const SystemSettings: React.FC = () => {
 
       {/* 系统信息 */}
       <div className="space-y-4">
-        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">系统信息</h4>
+        <h4 className={cn("text-sm font-medium", colorClasses.text.neutral)}>系统信息</h4>
 
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-2">
+        <div className={cn("p-4 rounded-lg space-y-2", colorClasses.bg.neutral)}>
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500 dark:text-gray-400">版本</span>
-            <span className="font-mono text-gray-900 dark:text-white">v2.0</span>
+            <span className={colorClasses.text.neutralMuted}>版本</span>
+            <span className={cn("font-mono", colorClasses.text.neutralBlack)}>v2.0</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500 dark:text-gray-400">数据库引擎</span>
-            <span className="font-mono text-gray-900 dark:text-white">DuckDB (Server API)</span>
+            <span className={colorClasses.text.neutralMuted}>数据库引擎</span>
+            <span className={cn("font-mono", colorClasses.text.neutralBlack)}>DuckDB (Server API)</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500 dark:text-gray-400">构建环境</span>
-            <span className="font-mono text-gray-900 dark:text-white">Vite + React</span>
+            <span className={colorClasses.text.neutralMuted}>构建环境</span>
+            <span className={cn("font-mono", colorClasses.text.neutralBlack)}>Vite + React</span>
           </div>
         </div>
       </div>

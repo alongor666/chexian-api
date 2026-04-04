@@ -7,7 +7,7 @@ import { getPerspectiveConfig } from '../../shared/types';
 import { PerspectiveSwitcher } from '../../widgets/filters/PerspectiveSwitcher';
 import { useRenewalAnalysis } from './hooks/useRenewalAnalysis';
 import { useDataStatus } from '../../shared/contexts/DataContext';
-import { cardStyles, textStyles, cn } from '../../shared/styles';
+import { cardStyles, textStyles, colorClasses, cn } from '../../shared/styles';
 
 interface RenewalAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -55,12 +55,12 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
   return (
     <div className="space-y-6">
       {/* 口径提示 */}
-      <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+      <div className={cn(colorClasses.bg.primary, "border-l-4", colorClasses.border.primary, "p-4 rounded")}>
         <div className="flex items-start">
-          <span className="text-blue-600 text-xl mr-3">ℹ️</span>
+          <span className={cn(colorClasses.text.primary, "text-xl mr-3")}>ℹ️</span>
           <div>
-            <p className="text-blue-800 font-semibold text-sm">续保率分析固定使用起保日期口径</p>
-            <p className="text-blue-700 text-xs mt-1">
+            <p className={cn(colorClasses.text.primary, "font-semibold text-sm")}>续保率分析固定使用起保日期口径</p>
+            <p className={cn(colorClasses.text.primary, "text-xs mt-1")}>
               不受页面顶部"数据口径"选择器（签单日期/起保日期切换）的影响。续保率统计必须基于起保日期才能准确反映业务续保情况。
             </p>
           </div>
@@ -68,9 +68,9 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
       </div>
 
       {/* 续保率计算说明 */}
-      <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
-        <h4 className="text-blue-800 font-semibold text-sm mb-2">📖 续保率计算说明</h4>
-        <ul className="text-blue-700 text-xs space-y-1">
+      <div className={cn(colorClasses.bg.primary, colorClasses.border.primary, "border rounded p-3 mb-4")}>
+        <h4 className={cn(colorClasses.text.primary, "font-semibold text-sm mb-2")}>📖 续保率计算说明</h4>
+        <ul className={cn(colorClasses.text.primary, "text-xs space-y-1")}>
           <li>• <strong>当前视角</strong>：{perspectiveConfig.label}</li>
           <li>• <strong>到期日定义</strong>：起保日期 + 1年 - 1天（例：2025-01-02起保 → 2026-01-01到期）</li>
           <li>• <strong>应续保单</strong>：{targetYear - 1}年起保的保单（分母）</li>
@@ -90,13 +90,13 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
             label="分析视角"
             showDescription={false}
           />
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className={cn("flex items-center gap-2 text-sm", colorClasses.text.neutral)}>
             <label className="font-medium" htmlFor="renewal-month">
               月份
             </label>
             <select
               id="renewal-month"
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
+              className={cn("rounded border px-2 py-1 text-sm", colorClasses.border.neutral)}
               value={selectedMonth}
               onChange={(event) => setSelectedMonth(Number(event.target.value))}
             >
@@ -111,7 +111,7 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
               })}
             </select>
             {availableMonths.length > 0 && (
-              <span className="text-xs text-gray-500">
+              <span className={cn("text-xs", colorClasses.text.neutralMuted)}>
                 有数据的月份：{availableMonths.join(', ')}
               </span>
             )}
@@ -121,10 +121,10 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
 
       {/* 错误提示 */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded p-4 mb-4">
-          <p className="text-red-800 font-semibold">❌ 续保明细表格查询失败</p>
-          <p className="text-red-700 text-sm mt-1">{error}</p>
-          <p className="text-red-600 text-xs mt-2">
+        <div className={cn(colorClasses.bg.danger, colorClasses.border.danger, "border rounded p-4 mb-4")}>
+          <p className={cn(colorClasses.text.danger, "font-semibold")}>❌ 续保明细表格查询失败</p>
+          <p className={cn(colorClasses.text.danger, "text-sm mt-1")}>{error}</p>
+          <p className={cn(colorClasses.text.danger, "text-xs mt-2")}>
             💡 请打开浏览器开发者工具（F12）查看详细日志
           </p>
         </div>
@@ -136,21 +136,21 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
           续保明细表格（{targetYear}年{selectedMonth}月，{perspectiveConfig.label}视角）
         </h3>
         {loading ? (
-          <div className="text-center text-gray-400 py-12">数据加载中...</div>
+          <div className={cn("text-center py-12", colorClasses.text.neutralMuted)}>数据加载中...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className={cn(colorClasses.bg.neutral, colorClasses.text.neutral)}>
                 <tr>
-                  <th className="px-3 py-2 text-left border-r border-gray-200">到期日</th>
-                  <th className="px-3 py-2 text-right border-r border-gray-200">当日应续{valueLabel}</th>
-                  <th className="px-3 py-2 text-right border-r border-gray-200">当日已续{valueLabel}</th>
-                  <th className="px-3 py-2 text-right border-r-2 border-gray-300">当日续保率</th>
-                  <th className="px-3 py-2 text-right border-r border-gray-200">截至当日当月应续{valueLabel}</th>
-                  <th className="px-3 py-2 text-right border-r border-gray-200">截至当日当月已续{valueLabel}</th>
-                  <th className="px-3 py-2 text-right border-r-2 border-gray-300">当月续保率</th>
-                  <th className="px-3 py-2 text-right border-r border-gray-200">截至当日当年应续{valueLabel}</th>
-                  <th className="px-3 py-2 text-right border-r border-gray-200">截至当日当年已续{valueLabel}</th>
+                  <th className={cn("px-3 py-2 text-left border-r", colorClasses.border.neutral)}>到期日</th>
+                  <th className={cn("px-3 py-2 text-right border-r", colorClasses.border.neutral)}>当日应续{valueLabel}</th>
+                  <th className={cn("px-3 py-2 text-right border-r", colorClasses.border.neutral)}>当日已续{valueLabel}</th>
+                  <th className={cn("px-3 py-2 text-right border-r-2", colorClasses.border.neutral)}>当日续保率</th>
+                  <th className={cn("px-3 py-2 text-right border-r", colorClasses.border.neutral)}>截至当日当月应续{valueLabel}</th>
+                  <th className={cn("px-3 py-2 text-right border-r", colorClasses.border.neutral)}>截至当日当月已续{valueLabel}</th>
+                  <th className={cn("px-3 py-2 text-right border-r-2", colorClasses.border.neutral)}>当月续保率</th>
+                  <th className={cn("px-3 py-2 text-right border-r", colorClasses.border.neutral)}>截至当日当年应续{valueLabel}</th>
+                  <th className={cn("px-3 py-2 text-right border-r", colorClasses.border.neutral)}>截至当日当年已续{valueLabel}</th>
                   <th className="px-3 py-2 text-right">当年续保率</th>
                 </tr>
               </thead>
@@ -160,26 +160,25 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
                   return (
                     <tr
                       key={idx}
-                      className={`border-t hover:bg-gray-50 ${isLatestDate ? 'bg-yellow-100 font-semibold' : ''
-                        }`}
+                      className={cn("border-t hover:bg-neutral-50", isLatestDate ? 'bg-yellow-100 font-semibold' : '')}
                       title={isLatestDate ? '最新签单日期对应的到期日' : ''}
                     >
-                      <td className="px-3 py-2 border-r border-gray-200">
+                      <td className={cn("px-3 py-2 border-r", colorClasses.border.neutral)}>
                         {row.month_day}
-                        {isLatestDate && <span className="ml-2 text-yellow-600">★</span>}
+                        {isLatestDate && <span className={cn("ml-2", colorClasses.text.warning)}>★</span>}
                       </td>
-                      <td className="px-3 py-2 text-right border-r border-gray-200">{valueFormatter(row.daily_due_count)}</td>
-                      <td className="px-3 py-2 text-right border-r border-gray-200">{valueFormatter(row.daily_renewed_count)}</td>
-                      <td className="px-3 py-2 border-r-2 border-gray-300 text-center">
+                      <td className={cn("px-3 py-2 text-right border-r", colorClasses.border.neutral)}>{valueFormatter(row.daily_due_count)}</td>
+                      <td className={cn("px-3 py-2 text-right border-r", colorClasses.border.neutral)}>{valueFormatter(row.daily_renewed_count)}</td>
+                      <td className={cn("px-3 py-2 border-r-2 text-center", colorClasses.border.neutral)}>
                         <RenewalStatusBadge rate={row.daily_renewal_rate} mode="dot" size="small" />
                       </td>
-                      <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.month_to_date_due_count)}</td>
-                      <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.month_to_date_renewed_count)}</td>
-                      <td className="px-3 py-2 border-r-2 border-gray-300 text-center">
+                      <td className={cn("px-3 py-2 text-right border-r font-tabular", colorClasses.border.neutral)}>{valueFormatter(row.month_to_date_due_count)}</td>
+                      <td className={cn("px-3 py-2 text-right border-r font-tabular", colorClasses.border.neutral)}>{valueFormatter(row.month_to_date_renewed_count)}</td>
+                      <td className={cn("px-3 py-2 border-r-2 text-center", colorClasses.border.neutral)}>
                         <RenewalStatusBadge rate={row.monthly_renewal_rate} mode="dot" size="small" />
                       </td>
-                      <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.year_to_date_due_count)}</td>
-                      <td className="px-3 py-2 text-right border-r border-gray-200 font-tabular">{valueFormatter(row.year_to_date_renewed_count)}</td>
+                      <td className={cn("px-3 py-2 text-right border-r font-tabular", colorClasses.border.neutral)}>{valueFormatter(row.year_to_date_due_count)}</td>
+                      <td className={cn("px-3 py-2 text-right border-r font-tabular", colorClasses.border.neutral)}>{valueFormatter(row.year_to_date_renewed_count)}</td>
                       <td className="px-3 py-2 text-center">
                         <RenewalStatusBadge rate={row.yearly_renewal_rate} mode="dot" size="small" />
                       </td>
@@ -189,16 +188,16 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
                 {!loading && detailData.length === 0 && (
                   <tr>
                     <td className="px-3 py-6 text-center" colSpan={10}>
-                      <div className="text-gray-400">
+                      <div className={colorClasses.text.neutralMuted}>
                         <p className="mb-2">📭 {selectedMonth} 月暂无续保数据</p>
                         {availableMonths.length > 0 && !availableMonths.includes(selectedMonth) && (
-                          <p className="text-sm text-blue-600">
+                          <p className={cn("text-sm", colorClasses.text.primary)}>
                             💡 提示：{targetYear - 1}年{selectedMonth}月没有起保的保单，
                             请尝试切换到其他月份（有数据的月份：{availableMonths.join(', ')}）
                           </p>
                         )}
                         {availableMonths.length === 0 && (
-                          <p className="text-sm text-orange-600">
+                          <p className={cn("text-sm", colorClasses.text.orange)}>
                             ⚠️ {targetYear - 1}年全年都没有符合筛选条件的起保数据，
                             请检查筛选条件（机构、业务员等）或更换数据文件
                           </p>

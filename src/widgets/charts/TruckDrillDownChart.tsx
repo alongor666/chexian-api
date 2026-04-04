@@ -13,7 +13,7 @@ import { formatCount, formatPremiumWan, formatRate } from '../../shared/utils/fo
 import type { EChartsParam } from '../../shared/types/echarts';
 import type { ViewPerspective } from '../../shared/types';
 import { getPerspectiveConfig } from '../../shared/types';
-import { cardStyles, cn } from '../../shared/styles';
+import { cardStyles, cn, colorClasses } from '../../shared/styles';
 
 interface TruckDrillDownData {
   org_level_3: string;
@@ -355,15 +355,15 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
   };
 
   if (loading) {
-    return <div className="h-96 flex items-center justify-center bg-gray-50">加载中...</div>;
+    return <div className={`h-96 flex items-center justify-center ${colorClasses.bg.neutral}`}>加载中...</div>;
   }
 
   const content = (
     <>
       {showTitle && (
         <div className="mb-4 text-center">
-          <h3 className="text-lg font-bold text-gray-800">{title}</h3>
-          {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
+          <h3 className={`text-lg font-bold ${colorClasses.text.neutralBlack}`}>{title}</h3>
+          {subtitle && <p className={`text-sm ${colorClasses.text.neutralMuted}`}>{subtitle}</p>}
         </div>
       )}
 
@@ -380,7 +380,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
       )}
 
       {drillDownLevel === 'org' && (
-        <div className="text-center text-sm text-gray-500 mb-2">
+        <div className={`text-center text-sm ${colorClasses.text.neutralMuted} mb-2`}>
           点击柱子看机构各吨位分段占比
         </div>
       )}

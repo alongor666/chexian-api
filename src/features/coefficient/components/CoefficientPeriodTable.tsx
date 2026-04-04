@@ -16,6 +16,7 @@ import { type CoefficientRow } from '../hooks/useCoefficientMonitor';
 import { CUSTOMER_CATEGORY_LABELS } from '../../../shared/config/coefficient-thresholds';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
 import { formatCoefficient, formatCurrency, formatPremiumWan } from '../../../shared/utils/formatters';
+import { colorClasses } from '../../../shared/styles';
 
 /**
  * 格式化系数值（4位小数）
@@ -207,13 +208,13 @@ const CoefficientPeriodTableInner: React.FC<CoefficientPeriodTableProps> = ({
   // 无数据提示
   if (rows.length === 0) {
     return (
-      <div className="mb-6 p-4 bg-gray-50 rounded border border-gray-200">
+      <div className={`mb-6 p-4 rounded border ${colorClasses.bg.neutral} ${colorClasses.border.neutral}`}>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-gray-500">
+          <h3 className={`font-semibold ${colorClasses.text.neutral}`}>
             {periodName}（{formatDateStr(startDate)} - {formatDateStr(endDate)}）
           </h3>
         </div>
-        <div className="text-center text-gray-400 py-4">
+        <div className={`text-center ${colorClasses.text.neutralMuted} py-4`}>
           该周期暂无数据
         </div>
       </div>
@@ -221,15 +222,15 @@ const CoefficientPeriodTableInner: React.FC<CoefficientPeriodTableProps> = ({
   }
 
   return (
-    <div className="mb-6 bg-white rounded border border-gray-300">
+    <div className={`mb-6 bg-white rounded border ${colorClasses.border.neutral}`}>
       {/* 周期标题 */}
-      <div className="bg-blue-50 px-4 py-2 border-b border-gray-300 flex justify-between items-center">
-        <h3 className="font-semibold text-gray-700">
+      <div className={`${colorClasses.bg.primary} px-4 py-2 border-b ${colorClasses.border.neutral} flex justify-between items-center`}>
+        <h3 className={`font-semibold ${colorClasses.text.neutral}`}>
           {periodName}（{formatDateStr(startDate)} - {formatDateStr(endDate)}）
-          <span className="ml-2 text-sm font-normal text-gray-500">
+          <span className={`ml-2 text-sm font-normal ${colorClasses.text.neutralMuted}`}>
             {expanded ? `共 ${rows.length} 条` : `聚合 ${aggregateRows.length} 条`}
             {!expanded && detailRows.length > 0 && (
-              <span className="text-gray-400">（明细 {detailRows.length} 条）</span>
+              <span className={colorClasses.text.neutralMuted}>（明细 {detailRows.length} 条）</span>
             )}
           </span>
         </h3>
@@ -237,7 +238,7 @@ const CoefficientPeriodTableInner: React.FC<CoefficientPeriodTableProps> = ({
         {detailRows.length > 0 && (
           <button
             onClick={toggleExpanded}
-            className="px-3 py-1 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+            className={`px-3 py-1 text-sm bg-white border ${colorClasses.border.neutral} rounded hover:bg-neutral-50 transition-colors`}
           >
             {expanded ? '收起明细 ▲' : '查看明细 ▼'}
           </button>
@@ -270,7 +271,7 @@ const CoefficientPeriodTableInner: React.FC<CoefficientPeriodTableProps> = ({
       </div>
 
       {/* 周期统计 */}
-      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex justify-between">
+      <div className={`px-4 py-2 ${colorClasses.bg.neutral} border-t ${colorClasses.border.neutral} text-xs ${colorClasses.text.neutralMuted} flex justify-between`}>
         <div>
           {expanded ? (
             <>
@@ -285,7 +286,7 @@ const CoefficientPeriodTableInner: React.FC<CoefficientPeriodTableProps> = ({
         {!expanded && detailRows.length > 0 && (
           <button
             onClick={toggleExpanded}
-            className="text-blue-600 hover:text-blue-800 hover:underline"
+            className={`${colorClasses.text.primary} hover:underline`}
           >
             点击查看 {detailRows.length} 条机构明细 →
           </button>

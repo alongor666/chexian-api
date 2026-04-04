@@ -262,7 +262,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
                 onClick={() => setMapLevel('china')}
                 className={cn(
                   'px-2 py-0.5 text-xs rounded border transition-colors',
-                  'border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+                  `${colorClasses.border.primary} ${colorClasses.text.primary} hover:bg-blue-50 dark:hover:bg-blue-900/30`
                 )}
               >
                 ← 返回全国
@@ -283,7 +283,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
                   'px-3 py-1 text-xs rounded-full transition-colors',
                   mapMetric === opt.key
                     ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-700 dark:text-gray-300'
+                    : `${colorClasses.bg.neutral} ${colorClasses.text.neutral} hover:bg-neutral-200 dark:bg-neutral-700 dark:text-neutral-300`
                 )}
               >
                 {opt.label}

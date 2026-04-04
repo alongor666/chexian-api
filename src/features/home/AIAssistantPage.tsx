@@ -5,7 +5,7 @@ import { apiClient, type CapabilityInfo } from '../../shared/api/client';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { cn } from '../../shared/styles';
+import { cn, colorClasses } from '../../shared/styles';
 import { parseIntent } from './intentParser/intentParser';
 import type { ExtractedFilters } from './intentParser/types';
 import type { QuickLink } from './intentParser/types';
@@ -235,7 +235,7 @@ export const AIAssistantPage: React.FC = () => {
           /* 空状态：居中的欢迎界面 */
           <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
             <div className="flex items-center gap-2 mb-3">
-              <Sparkles size={28} className="text-blue-500" />
+              <Sparkles size={28} className={colorClasses.text.primary} />
               <h1 className="text-2xl font-semibold text-neutral-800 dark:text-neutral-200">
                 车险数据分析平台
               </h1>
@@ -353,7 +353,7 @@ const MessageBubble: React.FC<{
   if (message.type === 'error') {
     return (
       <div className="flex justify-start">
-        <div className="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-tl-sm bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+        <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl rounded-tl-sm ${colorClasses.bg.danger} dark:bg-red-900/20 ${colorClasses.text.danger} dark:text-red-400 text-sm`}>
           {message.content}
         </div>
       </div>
@@ -367,7 +367,7 @@ const MessageBubble: React.FC<{
         <div className="max-w-[85%] space-y-3">
           <div className="px-4 py-2.5 rounded-2xl rounded-tl-sm bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-sm">
             <div className="flex items-start gap-2">
-              <Zap size={14} className="mt-0.5 text-amber-500 flex-shrink-0" />
+              <Zap size={14} className={`mt-0.5 ${colorClasses.text.amber} flex-shrink-0`} />
               <span>{message.content}</span>
             </div>
           </div>
@@ -381,7 +381,7 @@ const MessageBubble: React.FC<{
                 className={cn(
                   'w-full text-left p-3 rounded-xl border transition-all group',
                   link.isPrimary
-                    ? 'border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 hover:border-blue-400 hover:shadow-md'
+                    ? `border-blue-300 dark:border-blue-600 ${colorClasses.bg.primary} dark:bg-blue-900/20 hover:border-blue-400 hover:shadow-md`
                     : 'border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 hover:border-blue-300 hover:shadow-sm'
                 )}
               >
@@ -394,7 +394,7 @@ const MessageBubble: React.FC<{
                   </div>
                   <ExternalLink
                     size={14}
-                    className="text-neutral-400 group-hover:text-blue-500 transition-colors"
+                    className={`text-neutral-400 group-hover:${colorClasses.text.primary} transition-colors`}
                   />
                 </div>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2">
@@ -403,7 +403,7 @@ const MessageBubble: React.FC<{
                 {/* 筛选参数标签 */}
                 <FilterChips filters={link.filters} />
                 {idx === 0 && link.isPrimary && (
-                  <p className="text-[11px] text-blue-500 dark:text-blue-400 mt-1.5">
+                  <p className={`text-[11px] ${colorClasses.text.primary} mt-1.5`}>
                     ⭐ 最佳匹配 — 点击直接跳转
                   </p>
                 )}
@@ -434,7 +434,7 @@ const MessageBubble: React.FC<{
         {/* 文本内容 */}
         <div className="px-4 py-2.5 rounded-2xl rounded-tl-sm bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-sm">
           <div className="flex items-start gap-2">
-            <MessageSquare size={14} className="mt-0.5 text-blue-500 flex-shrink-0" />
+            <MessageSquare size={14} className={`mt-0.5 ${colorClasses.text.primary} flex-shrink-0`} />
             <span>{message.content}</span>
           </div>
         </div>
@@ -454,7 +454,7 @@ const MessageBubble: React.FC<{
                   </span>
                   <ExternalLink
                     size={14}
-                    className="text-neutral-400 group-hover:text-blue-500 transition-colors"
+                    className="text-neutral-400 group-hover:text-blue-600 transition-colors"
                   />
                 </div>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2">
@@ -477,7 +477,7 @@ const MessageBubble: React.FC<{
               <button
                 key={i}
                 onClick={() => onOptionClick(opt)}
-                className="px-3 py-1.5 text-sm rounded-full border border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                className={`px-3 py-1.5 text-sm rounded-full border ${colorClasses.border.primary} dark:border-blue-700 ${colorClasses.text.primary} hover:${colorClasses.bg.primary} dark:hover:bg-blue-900/20 transition-colors`}
               >
                 {opt}
               </button>
@@ -531,7 +531,7 @@ const FilterChips: React.FC<{ filters: ExtractedFilters }> = ({ filters }) => {
       {chips.map((chip, i) => (
         <span
           key={i}
-          className="inline-flex items-center px-2 py-0.5 text-[11px] rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+          className={`inline-flex items-center px-2 py-0.5 text-[11px] rounded-full ${colorClasses.bg.primary} dark:bg-blue-900/30 ${colorClasses.text.primary} dark:text-blue-300`}
         >
           {chip}
         </span>

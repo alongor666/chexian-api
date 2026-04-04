@@ -1,4 +1,5 @@
 import React from 'react';
+import { colorClasses } from '../../shared/styles';
 
 export const formatDateToISO = (date: Date): string => {
   return date.toISOString().split('T')[0];
@@ -68,15 +69,15 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-gray-600">起止日期</label>
-          <span className="text-[10px] text-gray-400">{summaryText}</span>
+          <label className={`text-xs font-medium ${colorClasses.text.neutral}`}>起止日期</label>
+          <span className={`text-[10px] ${colorClasses.text.neutralMuted}`}>{summaryText}</span>
         </div>
         <div className="space-y-1.5">
           <input
             type="date"
             value={startValue}
             onChange={(e) => handleStartChange(e.target.value)}
-            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+            className={`w-full px-2 py-1.5 text-xs border rounded ${colorClasses.border.neutral}`}
             aria-label="起始日"
           />
           <input
@@ -85,7 +86,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             min={startValue || undefined}
             disabled={!startValue}
             onChange={(e) => handleEndChange(e.target.value)}
-            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded disabled:bg-gray-100"
+            className={`w-full px-2 py-1.5 text-xs border rounded disabled:bg-neutral-100 ${colorClasses.border.neutral}`}
             aria-label="截止日"
           />
         </div>
@@ -94,32 +95,32 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   }
 
   return (
-    <details className="group rounded-lg border border-gray-200 bg-white">
+    <details className={`group rounded-lg border bg-white ${colorClasses.border.neutral}`}>
       <summary className="list-none cursor-pointer px-3 py-2 flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-gray-700 whitespace-nowrap">起止日期</span>
-        <span className="text-sm text-gray-500 truncate">{summaryText}</span>
+        <span className={`text-sm font-medium whitespace-nowrap ${colorClasses.text.neutral}`}>起止日期</span>
+        <span className={`text-sm truncate ${colorClasses.text.neutralMuted}`}>{summaryText}</span>
       </summary>
       <div className="px-3 pb-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <div className="text-xs text-gray-500 whitespace-nowrap">起始日</div>
+            <div className={`text-xs whitespace-nowrap ${colorClasses.text.neutralMuted}`}>起始日</div>
             <input
               type="date"
               value={startValue}
               onChange={(e) => handleStartChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+              className={`w-full px-3 py-2 border rounded text-sm ${colorClasses.border.neutral}`}
               aria-label="起始日"
             />
           </div>
           <div className="space-y-1">
-            <div className="text-xs text-gray-500 whitespace-nowrap">截止日</div>
+            <div className={`text-xs whitespace-nowrap ${colorClasses.text.neutralMuted}`}>截止日</div>
             <input
               type="date"
               value={endValue}
               min={startValue || undefined}
               disabled={!startValue}
               onChange={(e) => handleEndChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm disabled:bg-gray-100"
+              className={`w-full px-3 py-2 border rounded text-sm disabled:bg-neutral-100 ${colorClasses.border.neutral}`}
               aria-label="截止日"
             />
           </div>

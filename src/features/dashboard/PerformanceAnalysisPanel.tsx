@@ -1373,7 +1373,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           }
         />
         {showHeatmapPicker && (
-          <div className={cn(cardStyles.base, 'p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800')}>
+          <div className={cn(cardStyles.base, `p-3 ${colorClasses.bg.primary} border ${colorClasses.border.primary}`)}>
             <p className="text-xs text-neutral-600 dark:text-neutral-300 mb-2">
               选择 <strong>{pendingHeatmapRow}</strong> 的下钻维度：
             </p>
@@ -1381,7 +1381,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
               {PERF_HEATMAP_DRILL_DIMENSIONS.filter((d) => d.key !== activeHeatmapGroupBy).map((d) => (
                 <button
                   key={d.key}
-                  className="px-3 py-1 text-xs rounded-full bg-white dark:bg-neutral-800 border border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer"
+                  className={`px-3 py-1 text-xs rounded-full bg-white dark:bg-neutral-800 border ${colorClasses.border.primary} hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer`}
                   onClick={() => handlePerfHeatmapDimSelect(d.key)}
                 >
                   {d.label}

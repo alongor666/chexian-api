@@ -279,11 +279,11 @@ const RateCell: React.FC<{ value: number }> = ({ value }) => {
 const HeatCell: React.FC<{ value: number }> = ({ value }) => {
   // 续保率 → 背景色深度
   const bg =
-    value >= 65 ? 'bg-green-100 text-green-800'
-    : value >= 55 ? 'bg-green-50 text-green-700'
-    : value >= 45 ? 'bg-yellow-50 text-yellow-700'
-    : value >= 35 ? 'bg-orange-50 text-orange-700'
-    : 'bg-red-50 text-red-700';
+    value >= 65 ? `${colorClasses.bg.successSolid} ${colorClasses.text.successDark}`
+    : value >= 55 ? `${colorClasses.bg.success} ${colorClasses.text.successDark}`
+    : value >= 45 ? `${colorClasses.bg.warning} ${colorClasses.text.warningDark}`
+    : value >= 35 ? `${colorClasses.bg.orange} ${colorClasses.text.orange}`
+    : `${colorClasses.bg.danger} ${colorClasses.text.dangerLight}`;
 
   return (
     <span className={cn('inline-block rounded px-1 py-0.5 text-[11px] font-mono tabular-nums font-medium', bg)}>

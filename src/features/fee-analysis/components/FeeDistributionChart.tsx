@@ -45,7 +45,7 @@ export const FeeDistributionChart: React.FC<Props> = ({ data, activeTab }) => {
     }
 
     const yLabels = filtered.map((r) =>
-      r.fee_rate !== null ? `${formatPercent(r.fee_rate)} ${r.fee_rule_name.split('-').slice(-1)[0]}` : r.fee_rule_name
+      r.fee_rate !== null ? `${formatPercent(r.fee_rate)} ${(r.fee_rule_name ?? '').split('-').slice(-1)[0]}` : r.fee_rule_name
     );
     const premiumValues = filtered.map((r) => parseFloat((r.total_premium / 10000).toFixed(2)));
     const feeValues = filtered.map((r) =>

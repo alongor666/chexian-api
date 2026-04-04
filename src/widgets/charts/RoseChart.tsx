@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
+import { colorClasses } from '../../shared/styles';
 import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
 import { CHART_TEXT_STYLES, TONNAGE_COLORS } from '../../shared/config/chartStyles';
 import { echarts } from '../../shared/utils/echarts';
@@ -247,7 +248,7 @@ export const RoseChart: React.FC<RoseChartProps> = ({
 
   if (loading) {
     return (
-      <div className={`${withContainer ? 'bg-white p-4 rounded shadow' : ''} h-64 flex items-center justify-center bg-gray-50`}>
+      <div className={`${withContainer ? 'bg-white p-4 rounded shadow' : ''} h-64 flex items-center justify-center ${colorClasses.bg.neutral}`}>
         Loading Chart...
       </div>
     );

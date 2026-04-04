@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '../../shared/utils/echarts';
 import { CHART_TEXT_STYLES, GRID_CONFIG, AXIS_SPLIT_LINE } from '../../shared/config/chartStyles';
+import { colorClasses } from '../../shared/styles';
 
 interface WaterfallDataPoint {
   label: string;
@@ -149,7 +150,7 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
     };
   }, [data, title, valueFormatter]);
 
-  if (loading) return <div className="h-full flex items-center justify-center text-gray-400">Loading...</div>;
+  if (loading) return <div className={`h-full flex items-center justify-center ${colorClasses.text.neutralMuted}`}>Loading...</div>;
 
   return (
     <div className="bg-white p-4 rounded shadow h-full">

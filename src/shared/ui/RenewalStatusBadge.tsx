@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { cn } from '../styles';
+import { cn, colorClasses } from '../styles';
 
 // ============================================================================
 // 类型定义
@@ -50,25 +50,25 @@ export const DEFAULT_RENEWAL_THRESHOLDS: RenewalThresholds = {
 /** 状态配色 */
 const STATUS_COLORS = {
   success: {
-    bg: 'bg-green-50',
-    border: 'border-green-200',
-    text: 'text-green-700',
+    bg: colorClasses.bg.success,
+    border: colorClasses.border.success,
+    text: colorClasses.text.successDark,
     dot: 'bg-green-500',
     progressBg: 'bg-green-500',
     label: '健康',
   },
   warning: {
-    bg: 'bg-yellow-50',
-    border: 'border-yellow-200',
-    text: 'text-yellow-700',
+    bg: colorClasses.bg.warning,
+    border: colorClasses.border.warning,
+    text: colorClasses.text.warningDark,
     dot: 'bg-yellow-500',
     progressBg: 'bg-yellow-500',
     label: '异常',
   },
   danger: {
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    text: 'text-red-700',
+    bg: colorClasses.bg.danger,
+    border: colorClasses.border.danger,
+    text: colorClasses.text.dangerDark,
     dot: 'bg-red-500',
     progressBg: 'bg-red-500',
     label: '危险',
@@ -105,11 +105,11 @@ export function getRenewalRowBgClass(
   const status = getRenewalStatus(rate, thresholds);
   switch (status) {
     case 'success':
-      return 'bg-green-50/50';
+      return 'bg-success-bg/50';
     case 'warning':
-      return 'bg-yellow-50/50';
+      return 'bg-warning-bg/50';
     case 'danger':
-      return 'bg-red-50/50';
+      return 'bg-danger-bg/50';
     default:
       return '';
   }

@@ -1,5 +1,6 @@
 import React from 'react';
 import Select, { components, type MultiValue, type OptionProps } from 'react-select';
+import { colorClasses } from '../../shared/styles';
 
 export type MultiSelectOption = {
   value: string;
@@ -32,7 +33,7 @@ const Option: React.FC<OptionProps<MultiSelectOption, true>> = (props) => {
           <span className="text-sm">{data.label}</span>
         </span>
         {data.count !== undefined && (
-          <span className="text-xs text-gray-500">{data.count}</span>
+          <span className={`text-xs ${colorClasses.text.neutralMuted}`}>{data.count}</span>
         )}
       </div>
     </components.Option>
@@ -77,7 +78,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
     <div className="space-y-2">
       {showButtons && (
         <div className="flex items-center justify-between gap-2">
-          <label className={variant === 'compact' ? 'sr-only' : 'text-sm font-medium text-gray-700'}>
+          <label className={variant === 'compact' ? 'sr-only' : `text-sm font-medium ${colorClasses.text.neutral}`}>
             {title}{singleSelect && '（单选）'}
           </label>
           <div className="flex items-center gap-1 ml-auto">
@@ -87,7 +88,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                 <button
                   type="button"
                   onClick={handleSelectAll}
-                  className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                  className={`text-xs px-2 py-1 rounded hover:bg-blue-200 ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                   disabled={isAllSelected}
                 >
                   全选
@@ -95,7 +96,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                 <button
                   type="button"
                   onClick={handleInvertSelection}
-                  className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+                  className={`text-xs px-2 py-1 rounded hover:bg-purple-200 ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                 >
                   反选
                 </button>

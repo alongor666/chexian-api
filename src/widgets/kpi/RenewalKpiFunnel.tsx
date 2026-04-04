@@ -14,7 +14,7 @@
  */
 
 import React from 'react';
-import { cn } from '../../shared/styles';
+import { cn, colorClasses } from '../../shared/styles';
 import { formatCount } from '../../shared/utils/formatters';
 import {
   RenewalStatusBadge,
@@ -59,7 +59,7 @@ const FunnelNode: React.FC<{
     <span
       className={cn(
         'text-xl font-bold font-mono tabular-nums',
-        highlight ? color || 'text-green-600' : 'text-neutral-800'
+        highlight ? color || colorClasses.text.successDark : colorClasses.text.neutralBlack
       )}
     >
       {formatCount(value)}
@@ -114,9 +114,9 @@ export const RenewalKpiFunnel: React.FC<RenewalKpiFunnelProps> = ({
 
   // 状态颜色映射
   const statusColors = {
-    success: 'text-green-600',
-    warning: 'text-yellow-600',
-    danger: 'text-red-600',
+    success: colorClasses.text.successDark,
+    warning: colorClasses.text.warningDark,
+    danger: colorClasses.text.dangerDark,
   };
 
   if (loading) {
@@ -164,16 +164,16 @@ export const RenewalKpiFunnel: React.FC<RenewalKpiFunnelProps> = ({
         <FunnelNode label="应续件数" value={dueCount} />
 
         {/* 报价率箭头 */}
-        <FunnelArrow rate={quoteRate} label="报价率" color="text-orange-500" />
+        <FunnelArrow rate={quoteRate} label="报价率" color={colorClasses.text.orange} />
 
         {/* 报价件数 */}
-        <FunnelNode label="报价件数" value={quotedCount} color="text-orange-600" />
+        <FunnelNode label="报价件数" value={quotedCount} color={colorClasses.text.orange} />
 
         {/* 转化率箭头 */}
-        <FunnelArrow rate={conversionRate} label="转化率" color="text-blue-500" />
+        <FunnelArrow rate={conversionRate} label="转化率" color={colorClasses.text.primary} />
 
         {/* 已续件数 */}
-        <FunnelNode label="已续件数" value={renewedCount} highlight color="text-green-600" />
+        <FunnelNode label="已续件数" value={renewedCount} highlight color={colorClasses.text.successDark} />
       </div>
 
       {/* 最终续保率 */}
@@ -188,9 +188,9 @@ export const RenewalKpiFunnel: React.FC<RenewalKpiFunnelProps> = ({
           </span>
           <span className={cn(
             'px-2 py-0.5 rounded text-xs font-medium',
-            status === 'success' && 'bg-green-100 text-green-700',
-            status === 'warning' && 'bg-yellow-100 text-yellow-700',
-            status === 'danger' && 'bg-red-100 text-red-700'
+            status === 'success' && `${colorClasses.bg.successSolid} ${colorClasses.text.successDark}`,
+            status === 'warning' && `${colorClasses.bg.warningSolid} ${colorClasses.text.warningDark}`,
+            status === 'danger' && `${colorClasses.bg.dangerSolid} ${colorClasses.text.dangerDark}`
           )}>
             {statusLabel}
           </span>

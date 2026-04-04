@@ -6,6 +6,7 @@ import { formatAverage, formatCount } from '../../shared/utils/formatters';
 import { RefreshCw, Upload, X, ChevronRight, FileUp, Database, FileText, ShieldCheck } from 'lucide-react';
 import { resolveRedirectPath } from '../../shared/utils/redirect-state';
 import { Logger } from '../../shared/utils/logger';
+import { colorClasses, cardStyles, buttonStyles, cn } from '../../shared/styles';
 
 const logger = new Logger('DataImportPage');
 
@@ -145,21 +146,21 @@ export const DataImportPage: React.FC = () => {
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">数据导入</h1>
-            <p className="text-sm text-gray-500 mt-1">上传 Parquet 文件后自动进入分析看板</p>
+            <h1 className={cn('text-2xl font-semibold', colorClasses.text.neutralBlack)}>数据导入</h1>
+            <p className={cn('text-sm mt-1', colorClasses.text.neutral)}>上传 Parquet 文件后自动进入分析看板</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => refreshFiles()}
               disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 bg-white border border-gray-200"
+              className={cn(buttonStyles.secondary, buttonStyles.sizeSmall, 'flex items-center gap-1.5 transition-colors disabled:opacity-50')}
             >
               <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} aria-hidden="true" />
               刷新
             </button>
             <button
               onClick={() => setShowUpload(!showUpload)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+              className={cn(buttonStyles.primary, buttonStyles.sizeSmall, 'flex items-center gap-1.5 transition-colors')}
             >
               <Upload size={14} aria-hidden="true" />
               {showUpload ? '收起上传' : '上传新文件'}
@@ -168,37 +169,37 @@ export const DataImportPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
-            <div className="flex items-center gap-2 text-gray-500 text-xs">
+          <div className={cn(cardStyles.base, 'px-4 py-3')}>
+            <div className={cn('flex items-center gap-2 text-xs', colorClasses.text.neutral)}>
               <Database size={14} />
               服务器文件
             </div>
-            <div className="mt-1 text-lg font-semibold text-gray-900">{formatCount(files.length)}</div>
+            <div className={cn('mt-1 text-lg font-semibold', colorClasses.text.neutralBlack)}>{formatCount(files.length)}</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
-            <div className="flex items-center gap-2 text-gray-500 text-xs">
+          <div className={cn(cardStyles.base, 'px-4 py-3')}>
+            <div className={cn('flex items-center gap-2 text-xs', colorClasses.text.neutral)}>
               <FileText size={14} />
               当前加载
             </div>
-            <div className="mt-1 text-sm font-medium text-gray-900 truncate">
+            <div className={cn('mt-1 text-sm font-medium truncate', colorClasses.text.neutralBlack)}>
               {currentFile ? currentFile.filename : '未加载'}
             </div>
             {currentFile && (
-              <div className="text-xs text-gray-400 mt-0.5">
+              <div className={cn('text-xs mt-0.5', colorClasses.text.neutralMuted)}>
                 {formatCount(currentFile.rowCount)} 条
               </div>
             )}
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
-            <div className="flex items-center gap-2 text-gray-500 text-xs">
+          <div className={cn(cardStyles.base, 'px-4 py-3')}>
+            <div className={cn('flex items-center gap-2 text-xs', colorClasses.text.neutral)}>
               <ShieldCheck size={14} />
               最近更新
             </div>
-            <div className="mt-1 text-sm font-medium text-gray-900">
+            <div className={cn('mt-1 text-sm font-medium', colorClasses.text.neutralBlack)}>
               {latestFile ? formatTime(latestFile.modifiedTime) : '暂无'}
             </div>
             {latestFile && (
-              <div className="text-xs text-gray-400 mt-0.5 truncate">
+              <div className={cn('text-xs mt-0.5 truncate', colorClasses.text.neutralMuted)}>
                 {latestFile.filename}
               </div>
             )}
@@ -206,13 +207,13 @@ export const DataImportPage: React.FC = () => {
         </div>
 
         {isDataLoaded && currentFile && (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+          <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg px-4 py-3 border', colorClasses.bg.success, colorClasses.border.success)}>
             <div className="flex items-center gap-3">
-              <span className="text-green-500 text-lg">✓</span>
+              <span className={cn('text-lg', colorClasses.text.success)}>✓</span>
             <div className="flex-1 min-w-0">
-              <p className="text-green-800 text-sm font-medium">
+              <p className={cn('text-sm font-medium', colorClasses.text.success)}>
                 数据已加载: {currentFile.filename}
-                <span className="text-green-600 font-normal ml-1">
+                <span className={cn('font-normal ml-1', colorClasses.text.success)}>
                   ({formatCount(currentFile.rowCount)} 条)
                 </span>
               </p>
@@ -220,7 +221,7 @@ export const DataImportPage: React.FC = () => {
             </div>
             <button
               onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-1 text-sm text-green-700 hover:text-green-900 font-medium whitespace-nowrap"
+              className={cn('flex items-center gap-1 text-sm font-medium whitespace-nowrap', colorClasses.text.success)}
             >
               进入仪表盘
               <ChevronRight size={14} aria-hidden="true" />
@@ -230,22 +231,22 @@ export const DataImportPage: React.FC = () => {
 
         {/* 错误提示 */}
         {error && (
-          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-            <span className="text-red-500">!</span>
-            <p className="text-red-700 text-sm flex-1">{error}</p>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
+          <div className={cn('flex items-center gap-3 rounded-lg px-4 py-3 border', colorClasses.bg.danger, colorClasses.border.danger)}>
+            <span className={colorClasses.text.danger}>!</span>
+            <p className={cn('text-sm flex-1', colorClasses.text.danger)}>{error}</p>
+            <button onClick={() => setError(null)} className={colorClasses.text.danger}>
               <X size={14} aria-hidden="true" />
             </button>
           </div>
         )}
 
         {showUpload && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
-              <span className="text-sm font-medium text-gray-700">上传文件</span>
+          <div className={cn(cardStyles.base, 'overflow-hidden')}>
+            <div className={cn('flex items-center justify-between px-4 py-2.5 border-b', colorClasses.border.neutral)}>
+              <span className={cn('text-sm font-medium', colorClasses.text.neutral)}>上传文件</span>
               <button
                 onClick={() => setShowUpload(false)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+                className={cn('p-1 rounded transition-colors', colorClasses.text.neutralMuted)}
               >
                 <X size={14} aria-hidden="true" />
               </button>
@@ -254,9 +255,11 @@ export const DataImportPage: React.FC = () => {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`relative p-8 text-center transition-colors border-2 border-dashed ${
-                isDragging ? 'bg-blue-50 border-blue-300' : 'border-gray-200'
-              } ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}
+              className={cn(
+                'relative p-8 text-center transition-colors border-2 border-dashed',
+                isDragging ? cn(colorClasses.bg.primary, colorClasses.border.primary) : colorClasses.border.neutral,
+                isLoading && 'opacity-50 pointer-events-none'
+              )}
             >
               <input
                 type="file"
@@ -266,65 +269,65 @@ export const DataImportPage: React.FC = () => {
                 disabled={isLoading}
               />
               <div className="space-y-3">
-                <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
-                  <FileUp size={20} className="text-blue-600" aria-hidden="true" />
+                <div className={cn('mx-auto w-12 h-12 rounded-full flex items-center justify-center', colorClasses.bg.primary)}>
+                  <FileUp size={20} className={colorClasses.text.primary} aria-hidden="true" />
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className={cn('text-sm', colorClasses.text.neutral)}>
                   {isUploading ? '正在上传...' : dataLoading ? '正在加载...' : '拖拽文件到此处或点击选择'}
                 </p>
                 <div className="flex items-center justify-center">
-                  <span className="inline-flex items-center px-3 py-1.5 text-xs rounded-full bg-blue-600 text-white">
+                  <span className={cn(buttonStyles.primary, buttonStyles.sizeSmall, 'inline-flex items-center rounded-full text-xs')}>
                     点击上传
                   </span>
                 </div>
-                <p className="text-xs text-gray-400">.parquet 格式，最大 500MB</p>
-                <p className="text-xs text-gray-400">必需字段: policy_no, premium, org_name, salesman_name</p>
+                <p className={cn('text-xs', colorClasses.text.neutralMuted)}>.parquet 格式，最大 500MB</p>
+                <p className={cn('text-xs', colorClasses.text.neutralMuted)}>必需字段: policy_no, premium, org_name, salesman_name</p>
               </div>
             </div>
           </div>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
-              <FileText size={16} className="text-blue-500" />
+          <div className={cn(cardStyles.base, 'p-4')}>
+            <div className={cn('flex items-center gap-2 text-sm font-medium', colorClasses.text.neutralBlack)}>
+              <FileText size={16} className={colorClasses.text.primary} />
               文件格式
             </div>
-            <p className="text-xs text-gray-500 mt-2">仅支持 Parquet，建议上传最近一个月的数据</p>
+            <p className={cn('text-xs mt-2', colorClasses.text.neutral)}>仅支持 Parquet，建议上传最近一个月的数据</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
-              <Database size={16} className="text-green-500" />
+          <div className={cn(cardStyles.base, 'p-4')}>
+            <div className={cn('flex items-center gap-2 text-sm font-medium', colorClasses.text.neutralBlack)}>
+              <Database size={16} className={colorClasses.text.success} />
               数据字段
             </div>
-            <p className="text-xs text-gray-500 mt-2">核心字段需完整，缺失会影响图表展示</p>
+            <p className={cn('text-xs mt-2', colorClasses.text.neutral)}>核心字段需完整，缺失会影响图表展示</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
-              <ShieldCheck size={16} className="text-purple-500" />
+          <div className={cn(cardStyles.base, 'p-4')}>
+            <div className={cn('flex items-center gap-2 text-sm font-medium', colorClasses.text.neutralBlack)}>
+              <ShieldCheck size={16} className={colorClasses.text.purple} />
               安全提示
             </div>
-            <p className="text-xs text-gray-500 mt-2">数据仅在内网使用，不会上传至外部</p>
+            <p className={cn('text-xs mt-2', colorClasses.text.neutral)}>数据仅在内网使用，不会上传至外部</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="text-sm font-medium text-gray-700">
+        <div className={cardStyles.base}>
+          <div className={cn('px-4 py-3 border-b', colorClasses.border.neutral)}>
+            <h2 className={cn('text-sm font-medium', colorClasses.text.neutral)}>
               服务器数据文件
               {files.length > 0 && (
-                <span className="ml-1.5 text-gray-400 font-normal">({files.length})</span>
+                <span className={cn('ml-1.5 font-normal', colorClasses.text.neutralMuted)}>({files.length})</span>
               )}
             </h2>
           </div>
 
           {files.length === 0 ? (
             <div className="px-4 py-10 text-center">
-              <div className="text-sm text-gray-400">{dataLoading ? '加载中...' : '暂无数据文件，请上传'}</div>
+              <div className={cn('text-sm', colorClasses.text.neutralMuted)}>{dataLoading ? '加载中...' : '暂无数据文件，请上传'}</div>
               {!dataLoading && (
                 <button
                   onClick={() => setShowUpload(true)}
-                  className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700"
+                  className={cn('mt-3 inline-flex items-center gap-1.5 text-sm', colorClasses.text.primary)}
                 >
                   <Upload size={14} />
                   打开上传区域
@@ -332,31 +335,33 @@ export const DataImportPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className={cn('divide-y', colorClasses.border.neutral)}>
               {files.map((file: FileInfo) => (
                 <li
                   key={file.filename}
-                  className={`flex flex-col gap-2 px-4 py-3 hover:bg-gray-50 transition-colors sm:flex-row sm:items-center sm:justify-between ${
+                  className={cn(
+                    'flex flex-col gap-2 px-4 py-3 transition-colors sm:flex-row sm:items-center sm:justify-between',
+                    colorClasses.bg.neutral.replace('bg-', 'hover:bg-'),
                     file.isCurrent ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'
-                  }`}
+                  )}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-700 truncate">{file.filename}</span>
+                      <span className={cn('text-sm font-medium truncate', colorClasses.text.neutral)}>{file.filename}</span>
                       {file.isCurrent && (
-                        <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded flex-shrink-0">
+                        <span className={cn('px-1.5 py-0.5 text-[10px] font-medium rounded flex-shrink-0', colorClasses.bg.primary, colorClasses.text.primary)}>
                           当前加载
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className={cn('text-xs mt-0.5', colorClasses.text.neutralMuted)}>
                       {formatFileSize(file.sizeMB)} · {formatTime(file.modifiedTime)}
                     </p>
                   </div>
                   <button
                     onClick={() => handleLoadFile(file.filename)}
                     disabled={isLoading}
-                    className="ml-3 px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white text-xs font-medium rounded transition-colors flex-shrink-0"
+                    className={cn(buttonStyles.primary, 'ml-3 px-3 py-1 text-xs font-medium rounded transition-colors flex-shrink-0 disabled:opacity-50')}
                   >
                     {isLoading ? '加载中...' : '加载'}
                   </button>

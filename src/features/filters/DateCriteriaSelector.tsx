@@ -1,5 +1,6 @@
 import React from 'react';
 import { DateCriteria } from '../../shared/types/data';
+import { colorClasses } from '../../shared/styles';
 
 /**
  * DC-001: 日期口径选择器组件
@@ -51,7 +52,7 @@ export const DateCriteriaSelector: React.FC<DateCriteriaSelectorProps> = ({
   if (compact) {
     return (
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-gray-600">统计口径</label>
+        <label className={`text-xs font-medium ${colorClasses.text.neutral}`}>统计口径</label>
         <div className="flex gap-1" role="group" aria-label="日期口径选择">
           {options.map((option) => {
             const isSelected = value === option.value;
@@ -64,7 +65,7 @@ export const DateCriteriaSelector: React.FC<DateCriteriaSelectorProps> = ({
                 className={`px-2 py-1 text-xs rounded transition-colors ${
                   isSelected
                     ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : `${colorClasses.bg.neutral} ${colorClasses.text.neutral} hover:bg-neutral-200`
                 } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 aria-pressed={isSelected}
                 title={option.description}
@@ -80,7 +81,7 @@ export const DateCriteriaSelector: React.FC<DateCriteriaSelectorProps> = ({
 
   return (
     <div className="flex items-center space-x-3">
-      <label className="text-sm font-medium text-gray-700 flex-shrink-0 whitespace-nowrap">
+      <label className={`text-sm font-medium flex-shrink-0 whitespace-nowrap ${colorClasses.text.neutral}`}>
         统计口径：
       </label>
       <div
@@ -108,7 +109,7 @@ export const DateCriteriaSelector: React.FC<DateCriteriaSelectorProps> = ({
 
           const stateClasses = isSelected
             ? 'bg-blue-500 text-white border-blue-500 hover:bg-blue-600'
-            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50';
+            : `bg-white ${colorClasses.text.neutral} border-neutral-300 hover:bg-neutral-50`;
 
           const disabledClasses = disabled
             ? 'opacity-50 cursor-not-allowed'

@@ -6,6 +6,7 @@
 
 import { memo, ReactNode } from 'react';
 import { VirtualTable, Column } from '../../../widgets/table/VirtualTable';
+import { colorClasses, cn } from '../../../shared/styles';
 
 interface CostTableProps<T extends Record<string, unknown>> {
   /** 表格标题 */
@@ -46,10 +47,10 @@ function CostTableInner<T extends Record<string, unknown>>({
 
   return (
     <div className="bg-white rounded-lg shadow-sm">
-      <div className="px-4 py-3 border-b border-gray-200 flex flex-wrap justify-between items-center gap-2">
-        <h3 className="text-base font-medium text-gray-800">{title}</h3>
+      <div className={cn('px-4 py-3 border-b flex flex-wrap justify-between items-center gap-2', colorClasses.border.neutral)}>
+        <h3 className={cn('text-base font-medium', colorClasses.text.neutralBlack)}>{title}</h3>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">共 {data.length} 条记录</span>
+          <span className={cn('text-sm', colorClasses.text.neutralLight)}>共 {data.length} 条记录</span>
           <div className="flex gap-2">
             {actions}
             <button

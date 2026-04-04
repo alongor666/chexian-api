@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ViewPerspective } from '../../shared/types';
 import { PERSPECTIVE_OPTIONS, getPerspectiveConfig } from '../../shared/types';
+import { colorClasses } from '../../shared/styles';
 
 /**
  * 视角切换器组件
@@ -53,7 +54,7 @@ export const PerspectiveSwitcher: React.FC<PerspectiveSwitcherProps> = ({
 
   return (
     <div className="flex items-center space-x-3">
-      <label className="text-sm font-medium text-gray-700 flex-shrink-0">
+      <label className={`text-sm font-medium flex-shrink-0 ${colorClasses.text.neutralDark}`}>
         {label}：
       </label>
       <div
@@ -85,19 +86,19 @@ export const PerspectiveSwitcher: React.FC<PerspectiveSwitcherProps> = ({
 
           // 边框样式
           if (isFirst) {
-            baseClasses.push('border border-gray-300');
+            baseClasses.push('border border-neutral-300');
           } else {
-            baseClasses.push('border border-l-0 border-gray-300');
+            baseClasses.push('border border-l-0 border-neutral-300');
           }
 
           // 选中状态样式
           if (isSelected) {
             baseClasses.push(
-              'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
+              'bg-primary text-white border-primary hover:bg-primary-dark'
             );
           } else {
             baseClasses.push(
-              'bg-white text-gray-700 hover:bg-gray-50'
+              `bg-white ${colorClasses.text.neutralDark} hover:bg-neutral-50`
             );
           }
 
@@ -124,7 +125,7 @@ export const PerspectiveSwitcher: React.FC<PerspectiveSwitcherProps> = ({
         })}
       </div>
       {showDescription && (
-        <span className="text-xs text-gray-500 ml-2">
+        <span className={`text-xs ml-2 ${colorClasses.text.neutralLight}`}>
           {getPerspectiveConfig(value).description}
         </span>
       )}

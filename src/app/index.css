@@ -13,6 +13,16 @@
   --font-numeric: "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", -apple-system, system-ui, sans-serif;
 }
 
+/* Dark 模式全局背景 */
+html.dark {
+  color-scheme: dark;
+  background-color: #1f1f1f;
+}
+html.dark body {
+  background-color: #1f1f1f;
+  color: #f5f5f5;
+}
+
 /* KPI 数字样式类 */
 .font-kpi {
   font-family: var(--font-kpi);

@@ -1,4 +1,5 @@
 import React from 'react';
+import { colorClasses } from '../../../shared/styles';
 
 interface ReportTemplate {
   id: string;
@@ -78,8 +79,8 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({
   return (
     <div className="bg-white p-4 sm:p-6 rounded shadow">
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-2">📋 报表模板</h2>
-        <p className="text-sm text-gray-600">选择预设模板快速生成常用分析报告</p>
+        <h2 className={`text-xl font-bold ${colorClasses.text.neutralBlack} mb-2`}>📋 报表模板</h2>
+        <p className={`text-sm ${colorClasses.text.neutral}`}>选择预设模板快速生成常用分析报告</p>
       </div>
 
       {/* Category Filter */}
@@ -92,7 +93,7 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({
               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                 selectedCategory === category
                   ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : `${colorClasses.bg.neutral} ${colorClasses.text.neutral} hover:bg-neutral-200`
               }`}
             >
               {category}
@@ -106,38 +107,38 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({
         {filteredTemplates.map(template => (
           <div
             key={template.id}
-            className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
+            className={`border ${colorClasses.border.neutral} rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group`}
             onClick={() => onSelectTemplate(template)}
           >
             <div className="flex items-start gap-3 mb-3">
               <span className="text-2xl">{template.icon}</span>
               <div className="flex-1">
-                <h3 className="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
+                <h3 className={`font-semibold ${colorClasses.text.neutralBlack} group-hover:text-blue-600 transition-colors`}>
                   {template.name}
                 </h3>
-                <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                <span className={`text-xs ${colorClasses.text.primary} ${colorClasses.bg.primary} px-2 py-1 rounded-full`}>
                   {template.category}
                 </span>
               </div>
             </div>
 
-            <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+            <p className={`text-sm ${colorClasses.text.neutral} mb-3 line-clamp-2`}>
               {template.description}
             </p>
 
             <div className="space-y-1">
-              <p className="text-xs font-medium text-gray-700">包含功能：</p>
+              <p className={`text-xs font-medium ${colorClasses.text.neutral}`}>包含功能：</p>
               <div className="flex flex-wrap gap-1">
                 {template.features.slice(0, 3).map(feature => (
                   <span
                     key={feature}
-                    className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded"
+                    className={`text-xs ${colorClasses.bg.neutral} ${colorClasses.text.neutral} px-2 py-1 rounded`}
                   >
                     {feature}
                   </span>
                 ))}
                 {template.features.length > 3 && (
-                  <span className="text-xs text-gray-500">
+                  <span className={`text-xs ${colorClasses.text.neutralMuted}`}>
                     +{template.features.length - 3}个功能
                   </span>
                 )}
@@ -152,7 +153,7 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({
       </div>
 
       {filteredTemplates.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
+        <div className={`text-center py-8 ${colorClasses.text.neutralMuted}`}>
           <p>该分类下暂无模板</p>
         </div>
       )}

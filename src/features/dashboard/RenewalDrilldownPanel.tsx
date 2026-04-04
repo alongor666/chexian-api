@@ -1,7 +1,7 @@
 import React from 'react';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import { useRenewalDrilldown } from './hooks/useRenewalDrilldown';
-import { tableStyles, textStyles } from '../../shared/styles';
+import { tableStyles, textStyles, colorClasses } from '../../shared/styles';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { RenewalQuadrantView } from './RenewalQuadrantView';
 import {
@@ -88,7 +88,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
             type="checkbox"
             checked={bundleOnly}
             onChange={(e) => setBundleOnly(e.target.checked)}
-            className="rounded border-gray-300"
+            className="rounded border-neutral-300"
           />
           <span>仅套单</span>
         </label>
@@ -97,20 +97,20 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
             type="checkbox"
             checked={selfRenewalOnly}
             onChange={(e) => setSelfRenewalOnly(e.target.checked)}
-            className="rounded border-gray-300"
+            className="rounded border-neutral-300"
           />
           <span>仅自留续保</span>
         </label>
 
         {/* 到期月份选择 */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">到期月份:</span>
+          <span className={`text-sm ${colorClasses.text.neutral}`}>到期月份:</span>
           <div className="flex gap-1">
             <button
               onClick={() => setSelectedDueMonth(null)}
               className={`px-2.5 py-1 text-xs rounded-full transition-colors ${selectedDueMonth === null
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                : `bg-neutral-100 ${colorClasses.text.neutral} hover:bg-neutral-200`
                 }`}
             >
               全部
@@ -121,7 +121,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
                 onClick={() => setSelectedDueMonth(m)}
                 className={`px-2.5 py-1 text-xs rounded-full transition-colors ${selectedDueMonth === m
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : `bg-neutral-100 ${colorClasses.text.neutral} hover:bg-neutral-200`
                   }`}
               >
                 {m}月
@@ -133,7 +133,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
 
       {/* 错误提示 */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+        <div className={`${colorClasses.bg.danger} border ${colorClasses.border.danger} rounded-lg p-3 text-sm ${colorClasses.text.danger}`}>
           {error}
         </div>
       )}
@@ -169,7 +169,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
             <tbody>
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-gray-500">
+                  <td colSpan={6} className={`text-center py-8 ${colorClasses.text.neutralMuted}`}>
                     暂无数据
                   </td>
                 </tr>

@@ -12,6 +12,7 @@ import { Palette, Settings, X } from 'lucide-react';
 import { ThemeSettings } from './ThemeSettings';
 import { SystemSettings } from './SystemSettings';
 import { useFocusTrap } from '../../shared/hooks';
+import { colorClasses } from '../../shared/styles';
 
 interface SettingsPanelProps {
   /** 是否打开 */
@@ -70,28 +71,28 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-panel-title"
-        className={`fixed right-0 top-0 h-full w-full sm:w-[400px] bg-white dark:bg-gray-900 shadow-2xl z-50 transform transition-transform duration-300 ${
+        className={`fixed right-0 top-0 h-full w-full sm:w-[400px] bg-white dark:bg-neutral-900 shadow-2xl z-50 transform transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* 头部 */}
-        <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 id="settings-panel-title" className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-            <Settings size={20} className="mr-2 text-gray-600" aria-hidden="true" />
+        <header className={`flex items-center justify-between p-4 border-b ${colorClasses.border.neutral}`}>
+          <h2 id="settings-panel-title" className={`text-lg font-semibold ${colorClasses.text.neutralBlack} dark:text-white flex items-center`}>
+            <Settings size={20} className={`mr-2 ${colorClasses.text.neutral}`} aria-hidden="true" />
             设置
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+            className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors"
             aria-label="关闭设置面板"
           >
-            <X size={20} className="text-gray-500" aria-hidden="true" />
+            <X size={20} className={colorClasses.text.neutralMuted} aria-hidden="true" />
           </button>
         </header>
 
         {/* 标签切换 */}
-        <nav className="flex border-b border-gray-200 dark:border-gray-700" role="tablist" aria-label="设置选项卡">
+        <nav className={`flex border-b ${colorClasses.border.neutral}`} role="tablist" aria-label="设置选项卡">
           {tabs.map((tab) => {
             const TabIcon = tab.icon;
             return (
@@ -102,8 +103,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
                   activeTab === tab.key
-                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    ? `${colorClasses.text.primary} border-b-2 border-blue-600 ${colorClasses.bg.primary} dark:bg-blue-900/20`
+                    : `${colorClasses.text.neutral} hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800`
                 }`}
                 role="tab"
                 aria-selected={activeTab === tab.key}

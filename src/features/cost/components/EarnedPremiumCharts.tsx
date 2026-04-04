@@ -15,6 +15,7 @@ import { echarts } from '../../../shared/utils/echarts';
 import { formatCurrency, formatPercent } from '../../../shared/utils/formatters';
 import { EnhancedKpiCard } from '../../../widgets/kpi/EnhancedKpiCard';
 import { CHART_TEXT_STYLES, GRID_CONFIG } from '../../../shared/config/chartStyles';
+import { colorClasses, cn } from '../../../shared/styles';
 import type { EarnedPremiumData, EarnedPremiumSummaryData } from '../types/costTypes';
 
 // ==================== 类型定义 ====================
@@ -225,15 +226,15 @@ const InsuranceTypePie: React.FC<InsuranceTypePieProps> = ({ data, loading }) =>
 
   if (loading) {
     return (
-      <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-        <span className="text-gray-400">加载中...</span>
+      <div className={cn('h-64 flex items-center justify-center rounded-lg', colorClasses.bg.neutral)}>
+        <span className={colorClasses.text.neutralMuted}>加载中...</span>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h4 className="text-sm font-medium text-gray-700 mb-2">险类已赚保费构成</h4>
+    <div className={cn('bg-white rounded-lg p-4 border', colorClasses.border.neutral)}>
+      <h4 className={cn('text-sm font-medium mb-2', colorClasses.text.neutralDark)}>险类已赚保费构成</h4>
       <ReactEChartsCore
         echarts={echarts}
         option={option}
@@ -330,15 +331,15 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ summaryData, loading 
 
   if (loading) {
     return (
-      <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-        <span className="text-gray-400">加载中...</span>
+      <div className={cn('h-64 flex items-center justify-center rounded-lg', colorClasses.bg.neutral)}>
+        <span className={colorClasses.text.neutralMuted}>加载中...</span>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h4 className="text-sm font-medium text-gray-700 mb-2">已赚保费构成分解（按机构）</h4>
+    <div className={cn('bg-white rounded-lg p-4 border', colorClasses.border.neutral)}>
+      <h4 className={cn('text-sm font-medium mb-2', colorClasses.text.neutralDark)}>已赚保费构成分解（按机构）</h4>
       <ReactEChartsCore
         echarts={echarts}
         option={option}
@@ -458,15 +459,15 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
 
   if (loading) {
     return (
-      <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-        <span className="text-gray-400">加载中...</span>
+      <div className={cn('h-64 flex items-center justify-center rounded-lg', colorClasses.bg.neutral)}>
+        <span className={colorClasses.text.neutralMuted}>加载中...</span>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h4 className="text-sm font-medium text-gray-700 mb-2">机构已赚保费对比</h4>
+    <div className={cn('bg-white rounded-lg p-4 border', colorClasses.border.neutral)}>
+      <h4 className={cn('text-sm font-medium mb-2', colorClasses.text.neutralDark)}>机构已赚保费对比</h4>
       <ReactEChartsCore
         echarts={echarts}
         option={option}

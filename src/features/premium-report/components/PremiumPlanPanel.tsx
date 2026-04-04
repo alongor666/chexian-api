@@ -13,7 +13,7 @@ import { usePremiumPlan } from '../hooks/usePremiumPlan';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
-import { cn, numericStyles } from '../../../shared/styles';
+import { cn, numericStyles, colorClasses } from '../../../shared/styles';
 import { formatCount, formatPercent, formatSalesmanName, formatWanDirect } from '../../../shared/utils/formatters';
 import type { PlanDrilldownRow, PlanKpiData, PlanDistributionRow, SortState } from '../types/premiumReport';
 
@@ -24,11 +24,11 @@ const formatRateValue = (value: number | null): string => {
 
 /** 达成率颜色 */
 const getRateColor = (rate: number | null): string => {
-  if (rate === null) return 'text-gray-400';
-  if (rate >= 100) return 'text-emerald-600';
-  if (rate >= 80) return 'text-blue-600';
-  if (rate >= 50) return 'text-amber-600';
-  return 'text-red-600';
+  if (rate === null) return colorClasses.text.neutralMuted;
+  if (rate >= 100) return colorClasses.text.success;
+  if (rate >= 80) return colorClasses.text.primary;
+  if (rate >= 50) return colorClasses.text.warning;
+  return colorClasses.text.danger;
 };
 
 /** 分布柱状图颜色 */
@@ -48,7 +48,7 @@ const KpiCard: React.FC<{
   value: string;
   subtitle?: string;
   colorClass?: string;
-}> = ({ title, value, subtitle, colorClass = 'text-gray-900' }) => (
+}> = ({ title, value, subtitle, colorClass = colorClasses.text.neutralBlack }) => (
   <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm">
     <p className="text-sm text-neutral-500 font-medium mb-2">{title}</p>
     <p className={cn(numericStyles.kpiPrimary, colorClass)}>{value}</p>
@@ -91,15 +91,15 @@ const DistributionChart: React.FC<{ data: PlanDistributionRow[] }> = ({ data }) 
   const maxCount = Math.max(...data.map((d) => d.count), 1);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h4 className="text-sm font-semibold text-gray-700 mb-3">达成率分布</h4>
+    <div className={`bg-white rounded-lg border p-4 ${colorClasses.border.neutral}`}>
+      <h4 className={`text-sm font-semibold mb-3 ${colorClasses.text.neutral}`}>达成率分布</h4>
       <div className="space-y-2">
         {data.map((row) => (
           <div key={row.rate_range} className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 w-20 text-right shrink-0">
+            <span className={`text-xs w-20 text-right shrink-0 ${colorClasses.text.neutralMuted}`}>
               {row.rate_range}
             </span>
-            <div className="flex-1 h-5 bg-gray-100 rounded overflow-hidden">
+            <div className={`flex-1 h-5 rounded overflow-hidden ${colorClasses.bg.neutral}`}>
               <div
                 className={`h-full rounded ${getDistBarColor(row.rate_range)} transition-all`}
                 style={{ width: `${(row.count / maxCount) * 100}%` }}
@@ -128,13 +128,13 @@ const Breadcrumb: React.FC<{
       const isLast = idx === path.length - 1;
       return (
         <span key={idx} className="flex items-center">
-          {idx > 0 && <span className="text-gray-400 mx-1">/</span>}
+          {idx > 0 && <span className={`${colorClasses.text.neutralMuted} mx-1`}>/</span>}
           {isLast ? (
-            <span className="text-gray-700 font-medium">{step.label}</span>
+            <span className={`${colorClasses.text.neutral} font-medium`}>{step.label}</span>
           ) : (
             <button
               onClick={() => onNavigate(idx)}
-              className="text-blue-600 hover:text-blue-800 hover:underline"
+              className={`${colorClasses.text.primary} hover:underline`}
             >
               {step.label}
             </button>
@@ -193,10 +193,10 @@ const DrilldownTable: React.FC<{
 
   const getSortIcon = (key: string) => {
     if (sortState.column !== key) {
-      return <span className="ml-1 text-gray-300">⇅</span>;
+      return <span className={`ml-1 ${colorClasses.text.neutralMuted}`}>⇅</span>;
     }
     return (
-      <span className="ml-1 text-blue-500">
+      <span className={`ml-1 ${colorClasses.text.primary}`}>
         {sortState.direction === 'desc' ? '↓' : '↑'}
       </span>
     );
@@ -210,7 +210,7 @@ const DrilldownTable: React.FC<{
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={`${col.align === 'right' ? TABLE_CSS_CLASSES.headerCellRight : TABLE_CSS_CLASSES.headerCell} ${col.sortable ? 'cursor-pointer hover:bg-gray-100 select-none group' : ''}`}
+                className={`${col.align === 'right' ? TABLE_CSS_CLASSES.headerCellRight : TABLE_CSS_CLASSES.headerCell} ${col.sortable ? 'cursor-pointer hover:bg-neutral-100 select-none group' : ''}`}
                 onClick={() => col.sortable && handleHeaderClick(col.key)}
               >
                 <span className="inline-flex items-center">
@@ -241,7 +241,7 @@ const DrilldownTable: React.FC<{
                       {isNameCol && canDrill ? (
                         <button
                           onClick={() => onRowClick(row.group_name)}
-                          className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                          className={`${colorClasses.text.primary} hover:underline font-medium`}
                         >
                           {col.format(row)}
                         </button>
@@ -313,19 +313,19 @@ export const PremiumPlanPanel: React.FC = () => {
     <div className="space-y-4">
       {/* 错误提示 */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+        <div className={`${colorClasses.bg.danger} border rounded-lg p-4 ${colorClasses.text.danger} ${colorClasses.border.danger}`}>
           <p className="font-medium">加载失败</p>
           <p className="text-sm">{error}</p>
         </div>
       )}
 
       {/* 面包屑 */}
-      <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 flex items-center justify-between">
+      <div className={`bg-white rounded-lg border px-4 py-3 flex items-center justify-between ${colorClasses.border.neutral}`}>
         <Breadcrumb path={drillPath} onNavigate={handleBreadcrumbNavigate} />
         {drillPath.length > 1 && (
           <button
             onClick={drillUp}
-            className="text-sm text-blue-600 hover:text-blue-800 hover:underline ml-4 shrink-0"
+            className={`text-sm ${colorClasses.text.primary} hover:underline ml-4 shrink-0`}
           >
             返回上级
           </button>
@@ -340,11 +340,11 @@ export const PremiumPlanPanel: React.FC = () => {
 
       {/* 下钻表格 */}
       <div className="bg-white rounded-lg shadow">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800">
+        <div className={`px-4 py-3 border-b ${colorClasses.border.neutral}`}>
+          <h3 className={`text-lg font-semibold ${colorClasses.text.neutralBlack}`}>
             保费达成明细
           </h3>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className={`text-sm mt-1 ${colorClasses.text.neutralMuted}`}>
             {canDrill ? '点击名称可下钻到下一层级' : '已到最底层'}
             {' '}| 共 {drilldownData.length} 条记录
           </p>

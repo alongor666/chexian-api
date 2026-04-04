@@ -7,7 +7,7 @@
 import { memo, useState } from 'react';
 import type { Insight } from '../types';
 import { InsightCard } from './InsightCard';
-import { cn } from '../../styles';
+import { cn, colorClasses } from '../../styles';
 
 interface InsightPanelProps {
   /** 洞察列表 */
@@ -120,12 +120,12 @@ export const InsightPanel = memo(function InsightPanel({
 
           {/* 错误提示 */}
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+            <div className={cn('rounded-lg border p-3', colorClasses.bg.danger, colorClasses.border.danger)}>
               <div className="flex items-start gap-2">
-                <span className="text-red-500">❌</span>
+                <span className={colorClasses.text.danger}>❌</span>
                 <div>
-                  <p className="text-sm font-medium text-red-700 dark:text-red-300">分析失败</p>
-                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>
+                  <p className={cn('text-sm font-medium', colorClasses.text.dangerDark)}>分析失败</p>
+                  <p className={cn('text-xs mt-1', colorClasses.text.danger)}>{error}</p>
                 </div>
               </div>
             </div>
@@ -133,12 +133,12 @@ export const InsightPanel = memo(function InsightPanel({
 
           {/* 未配置提示 */}
           {!isConfigured && !loading && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+            <div className={cn('rounded-lg border p-3', colorClasses.bg.warning, colorClasses.border.warning)}>
               <div className="flex items-start gap-2">
-                <span className="text-yellow-500">⚙️</span>
+                <span className={colorClasses.text.warning}>⚙️</span>
                 <div>
-                  <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">需要配置 API</p>
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                  <p className={cn('text-sm font-medium', colorClasses.text.warningDark)}>需要配置 API</p>
+                  <p className={cn('text-xs mt-1', colorClasses.text.warning)}>
                     请先在系统 AI 设置中配置智谱 API Key
                   </p>
                 </div>

@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { cn } from '../styles';
+import { cn, colorClasses } from '../styles';
 import { formatCount } from '../utils/formatters';
 
 // ============================================================================
@@ -83,7 +83,7 @@ export const FunnelIndicator: React.FC<FunnelIndicatorProps> = ({
           {/* 未报价部分（灰色，由背景色体现） */}
         </div>
         {/* 续保率数值 */}
-        <span className="text-xs font-mono tabular-nums text-neutral-600 whitespace-nowrap">
+        <span className={`text-xs font-mono tabular-nums whitespace-nowrap ${colorClasses.text.neutral}`}>
           {renewalPercent}%
         </span>
       </div>
@@ -95,13 +95,13 @@ export const FunnelIndicator: React.FC<FunnelIndicatorProps> = ({
     <div className={cn('space-y-1.5', className)}>
       {/* 漏斗流程 */}
       <div className="flex items-center gap-1 text-xs">
-        <span className="text-neutral-600">{formatCount(dueCount)}</span>
-        <span className="text-neutral-400">→</span>
-        <span className="text-orange-600">{formatCount(quotedCount)}</span>
-        <span className="text-orange-400 text-[10px]">({quotePercent}%)</span>
-        <span className="text-neutral-400">→</span>
-        <span className="text-green-600 font-semibold">{formatCount(renewedCount)}</span>
-        <span className="text-green-500 text-[10px]">({renewalPercent}%)</span>
+        <span className={colorClasses.text.neutral}>{formatCount(dueCount)}</span>
+        <span className={colorClasses.text.neutralMuted}>→</span>
+        <span className={colorClasses.text.orange}>{formatCount(quotedCount)}</span>
+        <span className={`text-[10px] ${colorClasses.text.amber}`}>({quotePercent}%)</span>
+        <span className={colorClasses.text.neutralMuted}>→</span>
+        <span className={`font-semibold ${colorClasses.text.successDark}`}>{formatCount(renewedCount)}</span>
+        <span className={`text-[10px] ${colorClasses.text.success}`}>({renewalPercent}%)</span>
       </div>
 
       {/* 进度条 */}
@@ -119,7 +119,7 @@ export const FunnelIndicator: React.FC<FunnelIndicatorProps> = ({
       </div>
 
       {/* 图例 */}
-      <div className="flex items-center gap-3 text-[10px] text-neutral-500">
+      <div className={`flex items-center gap-3 text-[10px] ${colorClasses.text.neutralLight}`}>
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 bg-green-500 rounded-sm" />
           已续 {renewalPercent}%

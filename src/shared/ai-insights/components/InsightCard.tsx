@@ -20,27 +20,27 @@ const typeConfig: Record<InsightType, { icon: string; label: string; colorClass:
   warning: {
     icon: '⚠️',
     label: '告警',
-    colorClass: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300',
+    colorClass: `${colorClasses.bg.danger} ${colorClasses.border.danger} ${colorClasses.text.dangerDark}`,
   },
   opportunity: {
     icon: '💡',
     label: '机会',
-    colorClass: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300',
+    colorClass: `${colorClasses.bg.primary} ${colorClasses.border.primary} ${colorClasses.text.primaryDark}`,
   },
   highlight: {
     icon: '⭐',
     label: '亮点',
-    colorClass: 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300',
+    colorClass: `${colorClasses.bg.success} ${colorClasses.border.success} ${colorClasses.text.successDark}`,
   },
   trend: {
     icon: '📈',
     label: '趋势',
-    colorClass: 'bg-purple-50 border-purple-200 text-purple-800 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-300',
+    colorClass: `${colorClasses.bg.purple} ${colorClasses.border.purple} ${colorClasses.text.purple}`,
   },
   action: {
     icon: '🎯',
     label: '行动',
-    colorClass: 'bg-orange-50 border-orange-200 text-orange-800 dark:bg-orange-900/20 dark:border-orange-800 dark:text-orange-300',
+    colorClass: `${colorClasses.bg.orange} ${colorClasses.border.orange} ${colorClasses.text.orange}`,
   },
 };
 
@@ -50,15 +50,15 @@ const typeConfig: Record<InsightType, { icon: string; label: string; colorClass:
 const priorityConfig: Record<'high' | 'medium' | 'low', { label: string; colorClass: string }> = {
   high: {
     label: '高',
-    colorClass: 'bg-red-500 text-white',
+    colorClass: 'bg-danger text-white',
   },
   medium: {
     label: '中',
-    colorClass: 'bg-yellow-500 text-white',
+    colorClass: 'bg-warning text-white',
   },
   low: {
     label: '低',
-    colorClass: 'bg-gray-400 text-white',
+    colorClass: 'bg-neutral-400 text-white',
   },
 };
 

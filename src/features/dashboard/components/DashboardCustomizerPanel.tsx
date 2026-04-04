@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DashboardSectionId, KpiCardId, KpiGroup } from '../dashboardLayoutConfig';
+import { colorClasses } from '../../../shared/styles';
 
 interface DashboardCustomizerPanelProps {
   sectionItems: Array<{ id: DashboardSectionId; label: string; visible: boolean }>;
@@ -27,17 +28,17 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
 
   return (
     <details className="bg-white p-3 sm:p-4 rounded shadow">
-      <summary className="cursor-pointer text-sm font-semibold text-gray-700 flex items-center gap-2">
+      <summary className={`cursor-pointer text-sm font-semibold ${colorClasses.text.neutral} flex items-center gap-2`}>
         <span>🎨</span>
         <span>自定义看板</span>
       </summary>
       <div className="mt-4 space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-sm font-semibold text-gray-800">模块布局</h3>
+          <h3 className={`text-sm font-semibold ${colorClasses.text.neutralBlack}`}>模块布局</h3>
           <button
             type="button"
             onClick={onReset}
-            className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+            className={`text-xs ${colorClasses.text.primary} hover:text-blue-700 px-2 py-1 border ${colorClasses.border.primary} rounded hover:bg-blue-50 transition-colors`}
           >
             恢复默认
           </button>
@@ -46,14 +47,14 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
           {sectionItems.map((item, index) => (
             <div
               key={item.id}
-              className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border border-gray-200 rounded px-3 py-3 sm:py-2"
+              className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border ${colorClasses.border.neutral} rounded px-3 py-3 sm:py-2`}
             >
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <label className={`flex items-center gap-2 text-sm ${colorClasses.text.neutral} cursor-pointer`}>
                 <input
                   type="checkbox"
                   checked={item.visible}
                   onChange={() => onToggleSection(item.id)}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  className={`w-4 h-4 ${colorClasses.text.primary} bg-neutral-100 border-neutral-300 rounded focus:ring-blue-500`}
                 />
                 {item.label}
               </label>
@@ -80,25 +81,25 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-gray-800 mb-2">KPI 指标</h3>
+          <h3 className={`text-sm font-semibold ${colorClasses.text.neutralBlack} mb-2`}>KPI 指标</h3>
           <div className="space-y-4">
             {kpiGroupMeta.map((groupMeta) => {
               const items = kpiItemsByGroup[groupMeta.key];
               return (
                 <div key={groupMeta.key}>
-                  <h4 className="text-xs font-semibold text-gray-600 mb-2">{groupMeta.label}</h4>
+                  <h4 className={`text-xs font-semibold ${colorClasses.text.neutral} mb-2`}>{groupMeta.label}</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {items.map((item, index) => (
                       <div
                         key={item.id}
-                        className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border border-gray-200 rounded px-3 py-3 sm:py-2"
+                        className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border ${colorClasses.border.neutral} rounded px-3 py-3 sm:py-2`}
                       >
-                        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <label className={`flex items-center gap-2 text-sm ${colorClasses.text.neutral} cursor-pointer`}>
                           <input
                             type="checkbox"
                             checked={item.visible}
                             onChange={() => onToggleKpi(groupMeta.key, item.id)}
-                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                            className={`w-4 h-4 ${colorClasses.text.primary} bg-neutral-100 border-neutral-300 rounded focus:ring-blue-500`}
                           />
                           {item.label}
                         </label>

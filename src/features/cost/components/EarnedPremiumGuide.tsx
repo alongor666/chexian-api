@@ -12,6 +12,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { formatCount, formatPercent } from '../../../shared/utils/formatters';
+import { colorClasses, cn } from '../../../shared/styles';
 
 /**
  * 计算滚动12个月窗口的起始日期
@@ -44,8 +45,8 @@ const TimelineVisualization: React.FC<{ cutoffDate: string }> = ({ cutoffDate })
   }, [cutoffDate]);
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
-      <h4 className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
+    <div className={cn("bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border", colorClasses.border.primary)}>
+      <h4 className={cn("text-sm font-semibold mb-3 flex items-center gap-2", colorClasses.text.primary)}>
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
@@ -55,17 +56,17 @@ const TimelineVisualization: React.FC<{ cutoffDate: string }> = ({ cutoffDate })
       {/* 时间轴图示 */}
       <div className="relative py-6">
         {/* 主轴线 */}
-        <div className="absolute left-0 right-0 top-1/2 h-1 bg-gray-300 rounded" />
+        <div className={cn("absolute left-0 right-0 top-1/2 h-1 rounded", colorClasses.bg.neutral)} />
 
         {/* 统计窗口高亮区域 */}
-        <div className="absolute left-[10%] right-[10%] top-1/2 h-2 bg-blue-400 rounded -translate-y-1/2" />
+        <div className="absolute left-[10%] right-[10%] top-1/2 h-2 bg-primary rounded -translate-y-1/2" />
 
         {/* 窗口开始标记 */}
         <div className="absolute left-[10%] top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-          <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow" />
+          <div className="w-4 h-4 bg-primary-dark rounded-full border-2 border-white shadow" />
           <div className="mt-6 text-xs text-center">
-            <div className="font-medium text-blue-700">窗口开始</div>
-            <div className="text-gray-500">{windowInfo.windowStart}</div>
+            <div className={cn("font-medium", colorClasses.text.primary)}>窗口开始</div>
+            <div className={colorClasses.text.neutral}>{windowInfo.windowStart}</div>
           </div>
         </div>
 
@@ -74,20 +75,20 @@ const TimelineVisualization: React.FC<{ cutoffDate: string }> = ({ cutoffDate })
           <div className="w-4 h-4 bg-indigo-600 rounded-full border-2 border-white shadow" />
           <div className="mt-6 text-xs text-center">
             <div className="font-medium text-indigo-700">统计日</div>
-            <div className="text-gray-500">{windowInfo.cutoff}</div>
+            <div className={colorClasses.text.neutral}>{windowInfo.cutoff}</div>
           </div>
         </div>
 
         {/* 365天标注 */}
-        <div className="absolute left-1/2 -translate-x-1/2 -top-2 text-xs text-blue-600 font-medium">
+        <div className={cn("absolute left-1/2 -translate-x-1/2 -top-2 text-xs font-medium", colorClasses.text.primary)}>
           ← 365天 →
         </div>
       </div>
 
       {/* 公式说明 */}
       <div className="mt-4 p-3 bg-white/70 rounded text-sm">
-        <code className="text-blue-700">窗口开始日 = 统计日 - 365天 + 1天</code>
-        <p className="text-gray-600 mt-1 text-xs">
+        <code className={colorClasses.text.primary}>窗口开始日 = 统计日 - 365天 + 1天</code>
+        <p className={cn("mt-1 text-xs", colorClasses.text.neutral)}>
           只有在此窗口内有"在保期间"的保单，才会计入本期已赚保费
         </p>
       </div>
@@ -110,32 +111,32 @@ const PolicyScenarioCard: React.FC<{
 }> = ({ scenario, title, description, firstDayIncluded, timeDays, svgContent, isActive, onClick }) => {
   return (
     <div
-      className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-        isActive
-          ? 'border-blue-500 bg-blue-50 shadow-md'
-          : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow'
-      }`}
+      className={cn(`p-3 rounded-lg border-2 cursor-pointer transition-all`, isActive
+        ? `border-blue-500 ${colorClasses.bg.primary} shadow-md`
+        : `${colorClasses.border.neutral} bg-white hover:border-blue-300 hover:shadow`
+      )}
       onClick={onClick}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-          isActive ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'
-        }`}>
+        <span className={cn(`text-xs font-bold px-2 py-0.5 rounded`, isActive
+          ? 'bg-blue-500 text-white'
+          : `${colorClasses.bg.neutralLight} ${colorClasses.text.neutral}`
+        )}>
           情形{scenario}
         </span>
-        <span className={`text-xs ${firstDayIncluded ? 'text-green-600' : 'text-red-500'}`}>
+        <span className={cn('text-xs', firstDayIncluded ? colorClasses.text.success : colorClasses.text.danger)}>
           首日费用{firstDayIncluded ? '✓' : '✗'}
         </span>
       </div>
-      <h5 className="text-sm font-medium text-gray-800 mb-1">{title}</h5>
-      <p className="text-xs text-gray-500 mb-2">{description}</p>
+      <h5 className={cn("text-sm font-medium mb-1", colorClasses.text.neutralBlack)}>{title}</h5>
+      <p className={cn("text-xs mb-2", colorClasses.text.neutral)}>{description}</p>
 
       {/* SVG图示 */}
-      <div className="h-12 flex items-center justify-center bg-gray-50 rounded mb-2">
+      <div className={cn("h-12 flex items-center justify-center rounded mb-2", colorClasses.bg.neutral)}>
         {svgContent}
       </div>
 
-      <div className="text-xs text-gray-600">
+      <div className={cn("text-xs", colorClasses.text.neutral)}>
         <span className="font-medium">时间分摊天数：</span>{timeDays}
       </div>
     </div>
@@ -262,8 +263,8 @@ const PolicyScenariosSection: React.FC<{
   ];
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+    <div className={cn("bg-white rounded-lg border p-4", colorClasses.border.neutral)}>
+      <h4 className={cn("text-sm font-semibold mb-3 flex items-center gap-2", colorClasses.text.neutralBlack)}>
         <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
@@ -283,21 +284,21 @@ const PolicyScenariosSection: React.FC<{
       </div>
 
       {/* 图例说明 */}
-      <div className="mt-4 p-3 bg-gray-50 rounded flex flex-wrap gap-4 text-xs">
+      <div className={cn("mt-4 p-3 rounded flex flex-wrap gap-4 text-xs", colorClasses.bg.neutral)}>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 bg-blue-500 rounded" /> 窗口内在保
+          <span className="w-3 h-3 bg-primary rounded" /> 窗口内在保
         </span>
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 bg-yellow-300 rounded" /> 窗口外部分
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 bg-gray-400 rounded" /> 不计入期间
+          <span className="w-3 h-3 bg-neutral-400 rounded" /> 不计入期间
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full bg-green-500" /> 起保日
+          <span className="w-3 h-3 rounded-full bg-success" /> 起保日
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full bg-red-500" /> 止期
+          <span className="w-3 h-3 rounded-full bg-danger" /> 止期
         </span>
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded-full bg-indigo-500" /> 统计日/窗口边界
@@ -312,8 +313,8 @@ const PolicyScenariosSection: React.FC<{
  */
 const FormulaSection: React.FC = () => {
   return (
-    <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
-      <h4 className="text-sm font-semibold text-green-800 mb-3 flex items-center gap-2">
+    <div className={cn("bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border", colorClasses.border.success)}>
+      <h4 className={cn("text-sm font-semibold mb-3 flex items-center gap-2", colorClasses.text.success)}>
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
         </svg>
@@ -323,11 +324,11 @@ const FormulaSection: React.FC = () => {
       {/* 主公式 */}
       <div className="bg-white/80 rounded-lg p-4 mb-3">
         <div className="text-center mb-3">
-          <span className="text-lg font-semibold text-gray-800">期间已赚保费</span>
-          <span className="mx-3 text-gray-400">=</span>
+          <span className={cn("text-lg font-semibold", colorClasses.text.neutralBlack)}>期间已赚保费</span>
+          <span className={cn("mx-3", colorClasses.text.neutralMuted)}>=</span>
           <span className="text-indigo-600 font-medium">首日费用部分</span>
-          <span className="mx-2 text-gray-400">+</span>
-          <span className="text-green-600 font-medium">时间分摊部分</span>
+          <span className={cn("mx-2", colorClasses.text.neutralMuted)}>+</span>
+          <span className={cn("font-medium", colorClasses.text.success)}>时间分摊部分</span>
         </div>
       </div>
 
@@ -338,18 +339,18 @@ const FormulaSection: React.FC = () => {
           <div className="bg-indigo-50 rounded px-3 py-2 text-center font-mono">
             P × F × α × <span className="text-indigo-600 font-bold">I</span>
           </div>
-          <div className="mt-2 text-xs text-gray-600">
+          <div className={cn("mt-2 text-xs", colorClasses.text.neutral)}>
             <span className="text-indigo-600 font-bold">I</span> = 起保日在窗口内时为1，否则为0
           </div>
         </div>
 
         <div className="bg-white/80 rounded-lg p-3">
-          <div className="text-sm font-medium text-green-700 mb-2">时间分摊部分</div>
-          <div className="bg-green-50 rounded px-3 py-2 text-center font-mono">
+          <div className={cn("text-sm font-medium mb-2", colorClasses.text.success)}>时间分摊部分</div>
+          <div className={cn("rounded px-3 py-2 text-center font-mono", colorClasses.bg.success)}>
             P × (1-F) × (D / 365)
           </div>
-          <div className="mt-2 text-xs text-gray-600">
-            <span className="text-green-600 font-bold">D</span> = 窗口内在保天数
+          <div className={cn("mt-2 text-xs", colorClasses.text.neutral)}>
+            <span className={cn("font-bold", colorClasses.text.success)}>D</span> = 窗口内在保天数
           </div>
         </div>
       </div>
@@ -357,30 +358,30 @@ const FormulaSection: React.FC = () => {
       {/* 参数说明 */}
       <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
         <div className="bg-white/60 rounded px-2 py-1.5">
-          <code className="font-bold text-gray-700">P</code>
-          <span className="text-gray-500 ml-1">保费金额</span>
+          <code className={cn("font-bold", colorClasses.text.neutral)}>P</code>
+          <span className={cn("ml-1", colorClasses.text.neutralMuted)}>保费金额</span>
         </div>
         <div className="bg-white/60 rounded px-2 py-1.5">
-          <code className="font-bold text-gray-700">F</code>
-          <span className="text-gray-500 ml-1">费用率 (费用/保费)</span>
+          <code className={cn("font-bold", colorClasses.text.neutral)}>F</code>
+          <span className={cn("ml-1", colorClasses.text.neutralMuted)}>费用率 (费用/保费)</span>
         </div>
         <div className="bg-white/60 rounded px-2 py-1.5">
-          <code className="font-bold text-gray-700">α</code>
-          <span className="text-gray-500 ml-1">险类系数</span>
+          <code className={cn("font-bold", colorClasses.text.neutral)}>α</code>
+          <span className={cn("ml-1", colorClasses.text.neutralMuted)}>险类系数</span>
         </div>
         <div className="bg-white/60 rounded px-2 py-1.5">
-          <code className="font-bold text-gray-700">D</code>
-          <span className="text-gray-500 ml-1">窗口内天数</span>
+          <code className={cn("font-bold", colorClasses.text.neutral)}>D</code>
+          <span className={cn("ml-1", colorClasses.text.neutralMuted)}>窗口内天数</span>
         </div>
       </div>
 
       {/* 险类系数说明 */}
       <div className="mt-3 flex gap-4 text-xs">
         <span className="bg-white/60 rounded px-2 py-1">
-          <span className="font-medium">交强险</span>: α = <span className="text-blue-600 font-bold">0.82</span>
+          <span className="font-medium">交强险</span>: α = <span className={cn("font-bold", colorClasses.text.primary)}>0.82</span>
         </span>
         <span className="bg-white/60 rounded px-2 py-1">
-          <span className="font-medium">商业险</span>: α = <span className="text-blue-600 font-bold">0.94</span>
+          <span className="font-medium">商业险</span>: α = <span className={cn("font-bold", colorClasses.text.primary)}>0.94</span>
         </span>
       </div>
     </div>
@@ -467,8 +468,8 @@ const CalculationExample: React.FC<{ cutoffDate: string; activeScenario: number 
   const totalEarned = firstDayPart + timePart;
 
   return (
-    <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-4 border border-amber-200">
-      <h4 className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-2">
+    <div className={cn("bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-4 border", colorClasses.border.warning)}>
+      <h4 className={cn("text-sm font-semibold mb-3 flex items-center gap-2", colorClasses.text.warning)}>
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
@@ -478,38 +479,38 @@ const CalculationExample: React.FC<{ cutoffDate: string; activeScenario: number 
       <div className="grid md:grid-cols-2 gap-4">
         {/* 输入参数 */}
         <div className="bg-white/80 rounded-lg p-3">
-          <div className="text-xs font-medium text-gray-600 mb-2">输入参数</div>
+          <div className={cn("text-xs font-medium mb-2", colorClasses.text.neutral)}>输入参数</div>
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-500">起保日</span>
+              <span className={colorClasses.text.neutral}>起保日</span>
               <span className="font-mono">{example.effectiveDate}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">止期</span>
+              <span className={colorClasses.text.neutral}>止期</span>
               <span className="font-mono">{example.expiryDate}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">保费 P</span>
+              <span className={colorClasses.text.neutral}>保费 P</span>
               <span className="font-mono">{formatCount(example.premium)}元</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">费用率 F</span>
+              <span className={colorClasses.text.neutral}>费用率 F</span>
               <span className="font-mono">{formatPercent(example.feeRate * 100, 0)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">险类系数 α</span>
+              <span className={colorClasses.text.neutral}>险类系数 α</span>
               <span className="font-mono">{example.alpha}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">窗口内天数 D</span>
-              <span className="font-mono font-bold text-blue-600">{example.windowDays}天</span>
+              <span className={colorClasses.text.neutral}>窗口内天数 D</span>
+              <span className={cn("font-mono font-bold", colorClasses.text.primary)}>{example.windowDays}天</span>
             </div>
           </div>
         </div>
 
         {/* 计算过程 */}
         <div className="bg-white/80 rounded-lg p-3">
-          <div className="text-xs font-medium text-gray-600 mb-2">计算过程</div>
+          <div className={cn("text-xs font-medium mb-2", colorClasses.text.neutral)}>计算过程</div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center">
               <span className="text-indigo-600">首日费用</span>
@@ -521,15 +522,15 @@ const CalculationExample: React.FC<{ cutoffDate: string; activeScenario: number 
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-green-600">时间分摊</span>
+              <span className={colorClasses.text.success}>时间分摊</span>
               <span className="font-mono">
                 {example.premium} × {1 - example.feeRate} × ({example.windowDays}/365) ={' '}
                 <span className="font-bold">{formatCount(timePart)}元</span>
               </span>
             </div>
-            <div className="border-t border-amber-200 pt-2 flex justify-between items-center">
-              <span className="font-medium text-amber-800">期间已赚保费</span>
-              <span className="font-mono text-lg font-bold text-amber-700">
+            <div className={cn("border-t pt-2 flex justify-between items-center", colorClasses.border.warning)}>
+              <span className={cn("font-medium", colorClasses.text.warning)}>期间已赚保费</span>
+              <span className={cn("font-mono text-lg font-bold", colorClasses.text.warning)}>
                 {formatCount(totalEarned)}元
               </span>
             </div>
@@ -537,7 +538,7 @@ const CalculationExample: React.FC<{ cutoffDate: string; activeScenario: number 
         </div>
       </div>
 
-      <div className="mt-3 text-xs text-gray-500">
+      <div className={cn("mt-3 text-xs", colorClasses.text.neutralMuted)}>
         统计日：{cutoffDate}　｜　窗口：{cutoffDate} 往前365天
       </div>
     </div>
@@ -549,9 +550,9 @@ const CalculationExample: React.FC<{ cutoffDate: string; activeScenario: number 
  */
 const RulesSummary: React.FC = () => {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
-        <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className={cn("bg-white rounded-lg border p-4", colorClasses.border.neutral)}>
+      <h4 className={cn("text-sm font-semibold mb-3 flex items-center gap-2", colorClasses.text.neutralBlack)}>
+        <svg className={cn("w-4 h-4", colorClasses.text.danger)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         核心规则速记
@@ -562,19 +563,19 @@ const RulesSummary: React.FC = () => {
           <div className="font-medium text-indigo-800 text-sm mb-2">首日费用归属</div>
           <ul className="text-xs text-indigo-700 space-y-1">
             <li className="flex items-start gap-1">
-              <span className="text-green-500">✓</span>
+              <span className={colorClasses.text.success}>✓</span>
               起保日在统计窗口内 → 首日费用<strong>计入</strong>本期
             </li>
             <li className="flex items-start gap-1">
-              <span className="text-red-500">✗</span>
+              <span className={colorClasses.text.danger}>✗</span>
               起保日在统计窗口前 → 首日费用<strong>不计入</strong>（已确认）
             </li>
           </ul>
         </div>
 
-        <div className="bg-green-50 rounded-lg p-3">
-          <div className="font-medium text-green-800 text-sm mb-2">时间分摊计算</div>
-          <ul className="text-xs text-green-700 space-y-1">
+        <div className={cn("rounded-lg p-3", colorClasses.bg.success)}>
+          <div className={cn("font-medium text-sm mb-2", colorClasses.text.success)}>时间分摊计算</div>
+          <ul className={cn("text-xs space-y-1", colorClasses.text.success)}>
             <li className="flex items-start gap-1">
               <span>📅</span>
               取保单在保期间与统计窗口的<strong>交集</strong>
@@ -587,10 +588,10 @@ const RulesSummary: React.FC = () => {
         </div>
       </div>
 
-      <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-        <div className="text-xs text-gray-600">
-          <strong className="text-gray-800">窗口内在保天数计算</strong>：
-          <code className="ml-2 bg-white px-2 py-0.5 rounded text-gray-700">
+      <div className={cn("mt-3 p-3 rounded-lg", colorClasses.bg.neutral)}>
+        <div className={cn("text-xs", colorClasses.text.neutral)}>
+          <strong className={colorClasses.text.neutralBlack}>窗口内在保天数计算</strong>：
+          <code className={cn("ml-2 bg-white px-2 py-0.5 rounded", colorClasses.text.neutral)}>
             D = MIN(统计日, 止期) - MAX(窗口开始, 起保日)
           </code>
         </div>
@@ -635,7 +636,7 @@ export const EarnedPremiumGuide: React.FC<EarnedPremiumGuideProps> = ({
 
       {/* 展开的内容 */}
       {isExpanded && (
-        <div className="mt-3 space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className={cn("mt-3 space-y-4 p-4 rounded-lg border", colorClasses.bg.neutral, colorClasses.border.neutral)}>
           {/* 时间轴可视化 */}
           <TimelineVisualization cutoffDate={cutoffDate} />
 

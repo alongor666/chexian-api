@@ -14,7 +14,7 @@ import {
   type KpiGroup,
   type KpiCardId,
 } from '../dashboardLayoutConfig';
-import { cardStyles, cn } from '../../../shared/styles';
+import { cardStyles, cn, colorClasses } from '../../../shared/styles';
 
 const calculateRate = (part: number, total: number): number => {
   if (total === 0 || total === null || total === undefined) {
@@ -328,7 +328,7 @@ export const KpiSection = memo<KpiSectionProps>(({
   if (cardEntries.length === 0 && !loading) {
     return (
       <div className={cn(cardStyles.standard, "space-y-4")}>
-        <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
+        <div className={`flex items-center gap-2 border-b ${colorClasses.border.neutral} pb-3`}>
           {(['core', 'focus'] as KpiGroup[]).map((group) => (
             <button
               key={group}
@@ -343,7 +343,7 @@ export const KpiSection = memo<KpiSectionProps>(({
             </button>
           ))}
         </div>
-        <div className="p-2 text-center text-gray-500">暂无可用KPI指标</div>
+        <div className={`p-2 text-center ${colorClasses.text.neutralMuted}`}>暂无可用KPI指标</div>
       </div>
     );
   }
