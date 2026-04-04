@@ -66,7 +66,7 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
       {/* 四级漏斗 KPI */}
       <div className={cardStyles.standard}>
         {overviewLoading ? (
-          <div className="animate-pulse h-20 bg-neutral-100 rounded" />
+          <div className="animate-pulse h-20 bg-neutral-100 dark:bg-white/8 rounded" />
         ) : (
           <div>
             <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -106,7 +106,7 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
           {overviewLoading ? (
             <div className="animate-pulse space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-8 bg-neutral-100 rounded" />
+                <div key={i} className="h-8 bg-neutral-100 dark:bg-white/8 rounded" />
               ))}
             </div>
           ) : (
@@ -193,7 +193,7 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
           <div className={cn(cardStyles.standard, 'xl:col-span-2')}>
             <h3 className={cn(textStyles.titleSmall, 'mb-3')}>机构×等级 续保率矩阵</h3>
             {matrixLoading ? (
-              <div className="animate-pulse h-48 bg-neutral-100 rounded" />
+              <div className="animate-pulse h-48 bg-neutral-100 dark:bg-white/8 rounded" />
             ) : grades.length > 0 ? (
               <div className="overflow-auto max-h-[500px]">
                 <table className="w-full text-xs">
@@ -244,7 +244,7 @@ const FunnelStage: React.FC<{ label: string; count: number; highlight?: boolean 
   <div className="flex flex-col items-center">
     <span className="text-xs text-neutral-500 mb-0.5">{label}</span>
     <span className={cn(
-      'text-xl font-bold font-mono tabular-nums',
+      fontStyles.kpi, 'text-xl font-bold',
       highlight ? colorClasses.text.success : 'text-neutral-800'
     )}>
       {formatCount(count)}
@@ -286,7 +286,7 @@ const HeatCell: React.FC<{ value: number }> = ({ value }) => {
     : `${colorClasses.bg.danger} ${colorClasses.text.dangerLight}`;
 
   return (
-    <span className={cn('inline-block rounded px-1 py-0.5 text-[11px] font-mono tabular-nums font-medium', bg)}>
+    <span className={cn('inline-block rounded px-1 py-0.5 text-[11px] font-medium', fontStyles.numeric, bg)}>
       {value.toFixed(0)}
     </span>
   );

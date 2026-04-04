@@ -122,13 +122,14 @@ export const semanticColors = {
     bg: '#DBEAFE',           // blue-100
     text: '#1E40AF',         // blue-800
   },
-  /** 图表专用年份颜色（避免硬编码） */
+  /** 图表专用年份颜色（dark/light 双模式高对比） */
   chart: {
-    year2024: '#FF6B6B',
-    year2025: '#4ECDC4',
-    year2026: '#95E1D3',
-    year2027: '#F38181',
-    year2028: '#AA96DA',
+    year2023: '#6366F1',  // indigo-500 — 深蓝紫
+    year2024: '#F97316',  // orange-500 — 暖橙
+    year2025: '#10B981',  // emerald-500 — 翠绿
+    year2026: '#3B82F6',  // blue-500 — 亮蓝
+    year2027: '#EC4899',  // pink-500 — 玫红
+    year2028: '#A855F7',  // purple-500 — 紫色
   },
 } as const
 
@@ -234,15 +235,15 @@ export const transition = {
  */
 export const cardStyles = {
   /** 基础卡片 */
-  base: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm',
+  base: 'bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none',
   /** 可交互卡片（带hover效果） */
-  interactive: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm hover:shadow-md transition-shadow',
+  interactive: 'bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none hover:shadow-md dark:hover:bg-surface-2 transition-all',
   /** 紧凑卡片 */
-  compact: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-3',
+  compact: 'bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none p-3',
   /** 标准卡片 */
-  standard: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-4',
+  standard: 'bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none p-4',
   /** 宽松卡片 */
-  spacious: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-6',
+  spacious: 'bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none p-6',
 } as const
 
 /**
@@ -254,9 +255,9 @@ export const buttonStyles = {
   /** 主要按钮 */
   primary: 'bg-primary text-white hover:bg-primary-light active:bg-primary-dark focus:ring-primary-400',
   /** 次要按钮 */
-  secondary: 'bg-neutral-100 text-neutral-700 border border-neutral-300 hover:bg-neutral-200 active:bg-neutral-300 focus:ring-neutral-400',
+  secondary: 'bg-neutral-100 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 border border-neutral-300 dark:border-subtle hover:bg-neutral-200 dark:hover:bg-white/15 active:bg-neutral-300 focus:ring-neutral-400',
   /** 幽灵按钮 */
-  ghost: 'text-neutral-700 hover:bg-neutral-100 active:bg-neutral-200 focus:ring-neutral-400',
+  ghost: 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/8 active:bg-neutral-200 focus:ring-neutral-400',
   /** 危险按钮 */
   danger: 'bg-danger text-white hover:bg-danger-light active:bg-danger-dark focus:ring-danger-400',
   /** 成功按钮 */
@@ -278,7 +279,7 @@ export const badgeStyles = {
   /** 基础徽章 */
   base: 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
   /** 状态 - 默认 */
-  default: 'bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300',
+  default: 'bg-neutral-100 dark:bg-white/10 text-neutral-700 dark:text-neutral-300',
   /** 状态 - 主要 */
   primary: 'bg-primary-bg text-primary-dark',
   /** 状态 - 成功 */
@@ -300,11 +301,11 @@ export const inputStyles = {
   /** 基础输入框 */
   base: 'w-full px-3 py-2 text-sm border rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary',
   /** 默认状态 */
-  default: 'border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500',
+  default: 'border-neutral-300 dark:border-subtle bg-white dark:bg-surface-2 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500',
   /** 错误状态 */
   error: 'border-danger text-danger focus:ring-danger-400 focus:border-danger',
   /** 禁用状态 */
-  disabled: 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 cursor-not-allowed',
+  disabled: 'bg-neutral-100 dark:bg-surface-2 text-neutral-500 dark:text-neutral-400 cursor-not-allowed',
 } as const
 
 /**
@@ -312,13 +313,13 @@ export const inputStyles = {
  */
 export const tableStyles = {
   /** 表格容器 */
-  container: 'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm overflow-hidden',
+  container: 'bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none overflow-hidden',
   /** 表头 */
-  header: 'bg-neutral-50 dark:bg-neutral-700 border-b border-neutral-200 dark:border-neutral-600',
+  header: 'bg-neutral-50 dark:bg-surface-2 border-b border-neutral-200 dark:border-subtle',
   /** 表头单元格 */
   headerCell: 'px-3 py-2 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider',
   /** 表体行 */
-  row: 'border-b border-neutral-100 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors',
+  row: 'border-b border-neutral-100 dark:border-subtle hover:bg-neutral-50 dark:hover:bg-surface-3 transition-colors',
   /** 表体单元格 */
   cell: 'px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300',
   /** 数值单元格（右对齐） */
@@ -331,16 +332,16 @@ export const tableStyles = {
 export const stickyTableStyles = {
   /** 滚动容器 */
   scrollFrame:
-    'overflow-auto overscroll-contain rounded-lg border border-neutral-100 bg-white/80 dark:bg-neutral-900/40 dark:border-neutral-800',
+    'overflow-auto overscroll-contain rounded-lg border border-neutral-100 bg-white/80 dark:bg-surface-1/80 dark:border-subtle',
   /** 吸顶表头 */
   header:
-    'sticky top-0 z-20 bg-white dark:bg-neutral-800 shadow-[inset_0_-1px_0_0_rgba(229,231,235,1)] dark:shadow-[inset_0_-1px_0_0_rgba(64,64,64,1)]',
+    'sticky top-0 z-20 bg-white dark:bg-surface-1 shadow-[inset_0_-1px_0_0_rgba(229,231,235,1)] dark:shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.06)]',
   /** 首列冻结 */
   firstColumn:
-    'sticky left-0 bg-white dark:bg-neutral-800 shadow-[inset_-1px_0_0_0_rgba(229,231,235,1)] dark:shadow-[inset_-1px_0_0_0_rgba(64,64,64,1)]',
+    'sticky left-0 bg-white dark:bg-surface-1 shadow-[inset_-1px_0_0_0_rgba(229,231,235,1)] dark:shadow-[inset_-1px_0_0_0_rgba(255,255,255,0.06)]',
   /** 首列表头交叉单元格 */
   firstColumnHeader:
-    'sticky left-0 top-0 z-30 bg-white dark:bg-neutral-800 shadow-[inset_-1px_0_0_0_rgba(229,231,235,1),inset_0_-1px_0_0_rgba(229,231,235,1)] dark:shadow-[inset_-1px_0_0_0_rgba(64,64,64,1),inset_0_-1px_0_0_rgba(64,64,64,1)]',
+    'sticky left-0 top-0 z-30 bg-white dark:bg-surface-1 shadow-[inset_-1px_0_0_0_rgba(229,231,235,1),inset_0_-1px_0_0_rgba(229,231,235,1)] dark:shadow-[inset_-1px_0_0_0_rgba(255,255,255,0.06),inset_0_-1px_0_0_rgba(255,255,255,0.06)]',
 } as const
 
 /**
@@ -426,7 +427,7 @@ export const layoutStyles = {
  */
 export const stateStyles = {
   /** 加载中覆盖层 */
-  loadingOverlay: 'absolute inset-0 bg-white/80 dark:bg-neutral-900/80 flex items-center justify-center z-10',
+  loadingOverlay: 'absolute inset-0 bg-white/80 dark:bg-surface-0/80 flex items-center justify-center z-10',
   /** 禁用遮罩 */
   disabledMask: 'opacity-50 pointer-events-none',
   /** 错误边框 */
@@ -601,9 +602,9 @@ export const colorClasses = {
     orange: 'bg-orange-bg',
     amber: 'bg-amber-bg',
     // 中性色 — 静态色阶，需 dark: 前缀
-    neutral: 'bg-neutral-50 dark:bg-neutral-800',
-    neutralLight: 'bg-neutral-100 dark:bg-neutral-700',
-    neutralMuted: 'bg-neutral-50 dark:bg-neutral-800',
+    neutral: 'bg-neutral-50 dark:bg-surface-2',
+    neutralLight: 'bg-neutral-100 dark:bg-surface-3',
+    neutralMuted: 'bg-neutral-50 dark:bg-surface-2',
   },
   /**
    * 边框颜色
@@ -621,7 +622,7 @@ export const colorClasses = {
     sky: 'border-sky-border',
     amber: 'border-amber-border',
     // 中性色 — 静态色阶，需 dark: 前缀
-    neutral: 'border-neutral-200 dark:border-neutral-700',
+    neutral: 'border-neutral-200 dark:border-subtle',
   },
 } as const
 
@@ -665,8 +666,8 @@ export function getHeatmapColor(rate: number): string {
 
 /** 维度/粒度切换按钮样式（选中/未选中） */
 export const toggleButtonStyles = {
-  active: 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900',
-  inactive: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-400',
+  active: 'bg-neutral-800 text-white dark:bg-white/15 dark:text-neutral-100',
+  inactive: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-transparent dark:text-neutral-400 dark:hover:bg-white/8',
 } as const
 
 /**
@@ -675,6 +676,7 @@ export const toggleButtonStyles = {
 export function getYearChartColor(year: string | number): string {
   const yearStr = String(year)
   const yearMap: Record<string, string> = {
+    '2023': semanticColors.chart.year2023,
     '2024': semanticColors.chart.year2024,
     '2025': semanticColors.chart.year2025,
     '2026': semanticColors.chart.year2026,

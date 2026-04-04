@@ -109,6 +109,18 @@ export default {
           800: '#262626',
           900: '#1f1f1f',
         },
+        // Dark mode 表面层级（走 CSS 变量，仅 dark 模式有效）
+        surface: {
+          0: 'var(--surface-0, #ffffff)',
+          1: 'var(--surface-1, #ffffff)',
+          2: 'var(--surface-2, #fafafa)',
+          3: 'var(--surface-3, #f5f5f5)',
+        },
+      },
+      // Dark mode 边框（走 CSS 变量）
+      borderColor: {
+        'subtle': 'var(--border-subtle, rgba(0, 0, 0, 0.06))',
+        'default-var': 'var(--border-default, rgba(0, 0, 0, 0.10))',
       },
       // 间距系统
       spacing: {

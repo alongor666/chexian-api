@@ -544,7 +544,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                 {insightSummary.summary}
               </p>
             </div>
-            <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+            <div className="space-y-2 rounded-xl border border-neutral-200 dark:border-subtle bg-neutral-50 dark:bg-surface-2 p-4">
               {insightSummary.bullets.map((bullet) => (
                 <div key={bullet} className="flex items-start gap-2">
                   <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
@@ -689,7 +689,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
               <button
                 type="button"
                 onClick={() => setShowDetailedColumns((prev) => !prev)}
-                className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
+                className="rounded-md border border-neutral-200 dark:border-subtle bg-neutral-50 dark:bg-surface-2 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-100 dark:hover:bg-white/8"
               >
                 {showDetailedColumns ? '收起险种明细' : '展开险种明细'}
               </button>
@@ -738,7 +738,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                   currentDimensionLabel={DIMENSION_LABELS[currentGroupBy]}
                 />
                 <div className="overflow-hidden rounded-xl bg-white dark:bg-neutral-800 shadow-sm">
-                  <div className={`flex items-center justify-between border-b border-neutral-100 px-4 py-3`}>
+                  <div className={`flex items-center justify-between border-b border-neutral-100 dark:border-subtle px-4 py-3`}>
                     <span className={`text-sm ${colorClasses.text.neutral}`}>
                       按<strong>{DIMENSION_LABELS[currentGroupBy]}</strong>分组
                       {` (${sortedRows.length} 条)`}
@@ -754,9 +754,9 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                               onClick={() => handleSort(col.key)}
                               className={cn(
                                 tableStyles.headerCell,
-                                'whitespace-nowrap cursor-pointer select-none border-b border-neutral-200 transition-colors hover:bg-neutral-100',
+                                'whitespace-nowrap cursor-pointer select-none border-b border-neutral-200 dark:border-subtle transition-colors hover:bg-neutral-100 dark:hover:bg-white/8',
                                 col.key === 'group_name'
-                                  ? cn(stickyTableStyles.firstColumnHeader, 'min-w-[180px] bg-neutral-50')
+                                  ? cn(stickyTableStyles.firstColumnHeader, 'min-w-[180px] bg-neutral-50 dark:bg-surface-2')
                                   : ''
                               )}
                               style={{ textAlign: col.type === 'text' ? 'left' : 'right' }}
@@ -773,7 +773,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                         {sortedRows.map((row) => (
                           <tr
                             key={row.group_name}
-                            className="border-b border-neutral-50 transition-colors hover:bg-neutral-50/60"
+                            className="border-b border-neutral-50 dark:border-subtle transition-colors hover:bg-neutral-50/60 dark:hover:bg-white/8"
                           >
                             {tableColumns.map((col) => {
                               const numericValue = Number(row[col.key] ?? 0);
@@ -850,7 +850,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                     </table>
                   </StickyTableFrame>
                   {!showDetailedColumns && (
-                    <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-2 text-xs text-neutral-500">
+                    <div className="border-t border-neutral-100 dark:border-subtle bg-neutral-50 dark:bg-surface-2 px-4 py-2 text-xs text-neutral-500">
                       当前默认只显示核心列，点击“展开险种明细”查看单交 / 交三 / 主全明细。
                     </div>
                   )}

@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { cn, colorClasses } from '../styles';
+import { cn, colorClasses, fontStyles } from '../styles';
 
 // ============================================================================
 // 类型定义
@@ -160,7 +160,7 @@ export const RenewalStatusBadge: React.FC<RenewalStatusBadgeProps> = ({
         />
         {showValue && (
           <span className={cn(
-            'font-mono tabular-nums',
+            fontStyles.numeric,
             colors.text,
             size === 'small' ? 'text-xs' : 'text-sm'
           )}>
@@ -193,7 +193,7 @@ export const RenewalStatusBadge: React.FC<RenewalStatusBadgeProps> = ({
           </span>
         </div>
         <div className={cn(
-          'w-full bg-neutral-200 rounded-full overflow-hidden',
+          'w-full bg-neutral-200 dark:bg-white/10 rounded-full overflow-hidden',
           size === 'small' ? 'h-1.5' : 'h-2'
         )}>
           <div
@@ -228,7 +228,7 @@ export const RenewalStatusBadge: React.FC<RenewalStatusBadgeProps> = ({
         )}
       />
       {showValue ? (
-        <span className="font-mono tabular-nums">{percentage}%</span>
+        <span className={fontStyles.numeric}>{percentage}%</span>
       ) : (
         <span>{colors.label}</span>
       )}

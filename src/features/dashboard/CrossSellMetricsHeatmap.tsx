@@ -60,6 +60,7 @@ interface CrossSellMetricsHeatmapProps {
   onRowClick?: (rowLabel: string) => void;
 }
 
+/** 热力图单元格背景 — 使用 data-status 属性，dark 下由 CSS 覆盖为半透明 */
 function getStatusBgClass(status: RateStatus): string {
   const classes: Record<RateStatus, string> = {
     excellent: colorClasses.bg.successSolid,
@@ -301,7 +302,10 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
     }
 
     const value = getCellValue(activeMetric, row);
-    if (value == null) {
+    // 率值指标：当分母(auto_count)为 0 时，0% 不是"差"而是"无活动"
+    const isRateMetric = activeMetric === 'rate' || activeMetric === 'penetration' || activeMetric === 'achievement';
+    const isInactive = isRateMetric && row.auto_count === 0;
+    if (value == null || isInactive) {
       return (
         <div
           key={`${org}-${date}`}
@@ -310,7 +314,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
             'border border-neutral-100 dark:border-neutral-700',
             'bg-neutral-50 dark:bg-neutral-800 text-neutral-400',
           )}
-          title={`${org} | ${formatDateFull(date)}\n${METRIC_LABELS[activeMetric]}: 无数据`}
+          title={`${org} | ${formatDateFull(date)}\n${METRIC_LABELS[activeMetric]}: ${isInactive ? '无出单' : '无数据'}`}
         >
           -
         </div>
@@ -328,6 +332,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
     return (
       <div
         key={`${org}-${date}`}
+        data-heatmap-status={status}
         className={cn(
           'h-9 flex items-center justify-center text-[11px] font-medium',
           'border border-neutral-100 dark:border-neutral-700',

@@ -356,7 +356,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
           <button
             type="button"
             onClick={handleReset}
-            className={`px-3 py-1 text-xs font-medium ${colorClasses.bg.neutral} ${colorClasses.text.neutral} ${colorClasses.border.neutral} border rounded hover:bg-neutral-100 transition-colors shadow-sm`}
+            className={`px-3 py-1 text-xs font-medium ${colorClasses.bg.neutral} ${colorClasses.text.neutral} ${colorClasses.border.neutral} border rounded hover:bg-neutral-100 dark:hover:bg-white/8 transition-colors shadow-sm`}
             aria-label="重置筛选条件"
           >
             重置

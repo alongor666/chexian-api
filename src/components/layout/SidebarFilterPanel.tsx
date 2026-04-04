@@ -94,11 +94,11 @@ export const SidebarFilterPanel: React.FC = () => {
   }
 
   return (
-    <div className="border-t border-neutral-200">
+    <div className="border-t border-neutral-200 dark:border-subtle">
       {/* 折叠/展开头部 */}
       <button
         onClick={toggleCollapsed}
-        className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold text-neutral-500 uppercase tracking-wider hover:bg-neutral-50 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold text-neutral-500 uppercase tracking-wider hover:bg-neutral-50 dark:hover:bg-white/8 transition-colors"
       >
         <span className="flex items-center gap-1.5">
           <Filter size={14} aria-hidden="true" />

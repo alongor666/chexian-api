@@ -14,6 +14,7 @@ import {
   getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
 } from './shared.js';
+import { buildWhereFromFilterParams } from '../../utils/filter-params.js';
 import {
   CROSS_SELL_DIMENSIONS,
   getSeatCoverageClause,
@@ -486,10 +487,28 @@ router.get(
       }
     }
 
+    // 构建上年趋势 WHERE（日期平移一年，保留其他筛选条件）
+    const prevYearFilterData = { ...filterData };
+    if (prevYearFilterData.startDate) {
+      prevYearFilterData.startDate = prevYearFilterData.startDate.replace(
+        /^\d{4}/, String(parseInt(prevYearFilterData.startDate.slice(0, 4)) - 1)
+      );
+    }
+    if (prevYearFilterData.endDate) {
+      prevYearFilterData.endDate = prevYearFilterData.endDate.replace(
+        /^\d{4}/, String(parseInt(prevYearFilterData.endDate.slice(0, 4)) - 1)
+      );
+    }
+    const prevYearWhereWithDate = buildWhereFromFilterParams(
+      prevYearFilterData,
+      req.permissionFilter || '1=1'
+    );
+
     // Tier 3: 动态执行 Fallback
     const bundleData = await fetchDashboardBundleData({
       whereWithDate,
       whereWithoutDate,
+      prevYearWhereWithDate,
       orgNames,
       salesmanNames,
       rankingLimit,
@@ -512,6 +531,7 @@ router.get(
 export async function fetchDashboardBundleData({
   whereWithDate,
   whereWithoutDate,
+  prevYearWhereWithDate,
   orgNames,
   salesmanNames,
   rankingLimit,
@@ -522,6 +542,7 @@ export async function fetchDashboardBundleData({
 }: {
   whereWithDate: string;
   whereWithoutDate: string;
+  prevYearWhereWithDate?: string;
   orgNames: string[];
   salesmanNames: string[];
   rankingLimit: number;
@@ -539,6 +560,16 @@ export async function fetchDashboardBundleData({
     perspective,
     groupDim || undefined
   );
+  // 上年同期趋势（用于同比对照柱状图）
+  const trendPrevSql = prevYearWhereWithDate
+    ? generatePremiumTrendQuery(
+        timeView,
+        prevYearWhereWithDate,
+        dateField,
+        perspective,
+        groupDim || undefined
+      )
+    : null;
   const qualityTrendSql = generateQualityBusinessTrendQuery(
     timeView,
     whereWithDate,
@@ -572,10 +603,11 @@ export async function fetchDashboardBundleData({
       ORDER BY value DESC
     `;
 
-  const [kpiRows, kpiDetailRows, trendRows, qualityTrendRows, allRankingRows, qualityRankingRows, customerRoseRows, coverageRoseRows, terminalRoseRows] = await Promise.all([
+  const [kpiRows, kpiDetailRows, trendRows, trendPrevRows, qualityTrendRows, allRankingRows, qualityRankingRows, customerRoseRows, coverageRoseRows, terminalRoseRows] = await Promise.all([
     duckdbService.query(kpiSql, QUERY_CACHE.hotspotLong),
     duckdbService.query(kpiDetailSql, QUERY_CACHE.hotspotLong),
     duckdbService.query(trendSql, QUERY_CACHE.hotspotLong),
+    trendPrevSql ? duckdbService.query(trendPrevSql, QUERY_CACHE.hotspotLong) : Promise.resolve([]),
     duckdbService.query(qualityTrendSql, QUERY_CACHE.hotspotLong),
     duckdbService.query(allRankingSql, QUERY_CACHE.hotspotMedium),
     duckdbService.query(qualityRankingSql, QUERY_CACHE.hotspotMedium),
@@ -587,7 +619,7 @@ export async function fetchDashboardBundleData({
   return {
     kpi: kpiRows[0] || {},
     kpiDetail: kpiDetailRows[0] || {},
-    trend: trendRows,
+    trend: [...trendPrevRows, ...trendRows],
     qualityTrend: qualityTrendRows,
     ranking: {
       allBusinessTop: allRankingRows,

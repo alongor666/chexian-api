@@ -201,7 +201,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
       legend: { data: ['出险频度(‰)', '人伤占比(%)'] },
       xAxis: { type: 'category' as const, data: labels, axisLabel: { rotate: 45 } },
       yAxis: [
-        { type: 'value' as const, name: '频度(‰)' },
+        { type: 'value' as const, name: '频度(‰)', splitLine: { show: false } },
         { type: 'value' as const, name: '人伤占比(%)', splitLine: { show: false } },
       ],
       series: [

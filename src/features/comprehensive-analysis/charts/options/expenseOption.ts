@@ -29,6 +29,7 @@ export function buildExpenseOption(
       {
         type: 'value',
         name: '费用率(%)',
+        splitLine: { show: false },
         min: 0,
       },
     ],

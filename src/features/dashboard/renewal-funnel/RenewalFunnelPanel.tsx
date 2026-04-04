@@ -357,7 +357,7 @@ const SalesmanRankPanel: React.FC<{ filters: FunnelFilters }> = ({ filters }) =>
       {isLoading ? (
         <div className="animate-pulse space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-8 bg-neutral-100 rounded" />
+            <div key={i} className="h-8 bg-neutral-100 dark:bg-white/8 rounded" />
           ))}
         </div>
       ) : (data ?? []).length === 0 ? (

@@ -255,7 +255,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
   );
 
   return (
-    <div className="flex h-full w-full flex-col bg-neutral-50/60">
+    <div className="flex h-full w-full flex-col bg-neutral-50/60 dark:bg-transparent">
       {(title || showBasicFilterBar) && (
         <div className="sticky top-0 z-30 border-b border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-sm">
           {title && (

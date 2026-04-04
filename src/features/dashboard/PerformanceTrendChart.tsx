@@ -3,6 +3,7 @@ import type { EChartsOption } from 'echarts';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatWanAdaptive, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '@/shared/utils/formatters';
 import { cardStyles, colors, textStyles, colorClasses, cn } from '@/shared/styles';
+import { useTheme } from '@/shared/theme';
 import { TONNAGE_COLORS } from '@/shared/config/chartStyles';
 import type { PerformanceTrendSeries } from './hooks/usePerformanceTrend';
 
@@ -40,6 +41,8 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
   loading,
   error,
 }: PerformanceTrendChartProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
@@ -110,6 +113,7 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
       legend: {
         top: 0,
         type: 'scroll',
+        textStyle: { color: isDark ? '#a3a3a3' : '#595959' },
       },
       grid: { left: '4%', right: '4%', top: 52, bottom: 36, containLabel: true },
       xAxis: {
@@ -144,7 +148,7 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [lineSeries, loading, metric, title, xData]);
+  }, [lineSeries, loading, metric, title, xData, isDark]);
 
   useEffect(() => {
     return () => {

@@ -124,7 +124,7 @@ export function SortableTable<T extends Record<string, unknown>>({
             {columns.map((column) => (
               <th
                 key={String(column.key)}
-                className={`${getHeaderCellClass(column.align)} ${column.sortable !== false ? 'cursor-pointer hover:bg-neutral-100 select-none group' : ''}`}
+                className={`${getHeaderCellClass(column.align)} ${column.sortable !== false ? 'cursor-pointer hover:bg-neutral-100 dark:hover:bg-white/8 select-none group' : ''}`}
                 style={{ width: column.width ? `${column.width}px` : undefined }}
                 onClick={() => handleHeaderClick(column)}
               >

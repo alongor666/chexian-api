@@ -44,7 +44,7 @@ export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
     tooltip: { trigger: 'axis' as const },
     xAxis: { type: 'category' as const, data: pendingAging.data.map((r: any) => r.aging_bucket ?? '') },
     yAxis: [
-      { type: 'value' as const, name: '件数' },
+      { type: 'value' as const, name: '件数', splitLine: { show: false } },
       { type: 'value' as const, name: '立案金额(万)', splitLine: { show: false } },
     ],
     series: [

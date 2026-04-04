@@ -312,6 +312,7 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ summaryData, loading 
       },
       yAxis: {
         type: 'value',
+        splitLine: { show: false },
         axisLabel: {
           formatter: (value: number) => formatYuan(value),
           ...theme.chartTextStyles.axisLabel,
@@ -407,6 +408,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
         {
           type: 'value',
           position: 'bottom',
+          splitLine: { show: false },
           axisLabel: {
             formatter: (value: number) => formatYuan(value),
             ...theme.chartTextStyles.axisLabel,

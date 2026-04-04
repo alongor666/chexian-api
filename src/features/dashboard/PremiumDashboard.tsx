@@ -123,6 +123,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
 
   // 趋势数据获取
   const planTotal = typeof kpis.vehicle_plan_wan === 'number' ? kpis.vehicle_plan_wan : undefined;
+  const latestPolicyDate = typeof kpis.latest_policy_date === 'string' ? kpis.latest_policy_date : undefined;
   const {
     trendData,
     qualityBusinessData,
@@ -138,6 +139,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
     perspective,
     planTotal,
+    latestPolicyDate,
   });
 
   // Refresh all data

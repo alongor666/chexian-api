@@ -95,7 +95,15 @@
 
 html.dark {
   color-scheme: dark;
-  background-color: #1f1f1f;
+  background-color: #0f0f10;
+
+  /* ---- 表面层级（页面→卡片→嵌套，递进抬升） ---- */
+  --surface-0: #0f0f10;   /* 页面底色 */
+  --surface-1: #161618;   /* 卡片/面板 */
+  --surface-2: #1c1c1f;   /* 嵌套容器/表头 */
+  --surface-3: #232326;   /* hover/交替行 */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
 
   /* ---- Primary ---- */
   --c-primary: #40a9ff;
@@ -172,6 +180,70 @@ html.dark {
   --c-amber-bg: rgba(217, 119, 6, 0.15);
   --c-amber-border: rgba(245, 158, 11, 0.35);
 }
+
+/* ============================================================================
+ * Dark Mode 全局覆盖
+ * 大量组件直接使用 dark:bg-neutral-800/900 而非 cardStyles，
+ * 在此统一将背景色映射到 surface 层级，让所有页面自动生效。
+ * 仅覆盖 bg/border，不影响 text-neutral-* 文字色。
+ * ============================================================================ */
+
+/* 背景：neutral → surface 映射 */
+html.dark .dark\:bg-neutral-900 { background-color: var(--surface-0) !important; }
+html.dark .dark\:bg-neutral-800 { background-color: var(--surface-1) !important; }
+html.dark .dark\:bg-neutral-700 { background-color: var(--surface-2) !important; }
+html.dark .dark\:bg-neutral-700\/50 { background-color: rgba(28, 28, 31, 0.5) !important; }
+html.dark .dark\:bg-neutral-900\/40 { background-color: rgba(15, 15, 16, 0.4) !important; }
+html.dark .dark\:bg-neutral-900\/50 { background-color: rgba(15, 15, 16, 0.5) !important; }
+html.dark .dark\:bg-neutral-900\/80 { background-color: rgba(15, 15, 16, 0.8) !important; }
+
+/* hover 背景 */
+html.dark .dark\:hover\:bg-neutral-700:hover { background-color: var(--surface-3) !important; }
+html.dark .dark\:hover\:bg-neutral-700\/50:hover { background-color: rgba(28, 28, 31, 0.5) !important; }
+html.dark .dark\:hover\:bg-neutral-800:hover { background-color: var(--surface-2) !important; }
+
+/* 边框 */
+html.dark .dark\:border-neutral-700 { border-color: var(--border-subtle) !important; }
+html.dark .dark\:border-neutral-600 { border-color: var(--border-default) !important; }
+html.dark .dark\:border-neutral-800 { border-color: var(--border-subtle) !important; }
+
+/* 分割线 */
+html.dark .dark\:divide-neutral-700 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border-subtle) !important;
+}
+
+/* bg-white 在 dark 模式下映射到 surface-1（卡片/面板层） */
+html.dark .dark\:bg-surface-1 { background-color: var(--surface-1) !important; }
+html.dark .dark\:bg-surface-2 { background-color: var(--surface-2) !important; }
+html.dark .dark\:bg-surface-3 { background-color: var(--surface-3) !important; }
+html.dark .dark\:bg-surface-0 { background-color: var(--surface-0) !important; }
+html.dark .dark\:border-subtle { border-color: var(--border-subtle) !important; }
+
+/* 浅色半透明背景在 dark 模式下翻转 */
+html.dark .bg-neutral-50\/50 { background-color: rgba(255, 255, 255, 0.03) !important; }
+html.dark .bg-neutral-50\/60 { background-color: transparent !important; }
+html.dark .bg-neutral-100 { background-color: rgba(255, 255, 255, 0.06); }
+html.dark .bg-neutral-50 { background-color: var(--surface-2); }
+html.dark .border-neutral-100 { border-color: var(--border-subtle); }
+html.dark .border-neutral-200 { border-color: var(--border-subtle); }
+html.dark .divide-neutral-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border-subtle); }
+html.dark .divide-neutral-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border-subtle); }
+
+/* 文字颜色：dark 模式下自动翻转中性色（无 !important，不覆盖显式 dark:text-* 类） */
+html.dark .text-neutral-900 { color: #f0f0f0; }
+html.dark .text-neutral-800 { color: #e0e0e0; }
+html.dark .text-neutral-700 { color: #d0d0d0; }
+html.dark .text-neutral-600 { color: #a3a3a3; }
+
+/* 热力图：dark 模式下实色 → 半透明（减少刺眼感） */
+html.dark [data-heatmap-status="excellent"] { background-color: rgba(52, 211, 153, 0.25) !important; color: #6ee7b7 !important; }
+html.dark [data-heatmap-status="healthy"]   { background-color: rgba(96, 165, 250, 0.25) !important; color: #93c5fd !important; }
+html.dark [data-heatmap-status="abnormal"]  { background-color: rgba(251, 191, 36, 0.20) !important; color: #fcd34d !important; }
+html.dark [data-heatmap-status="danger"]    { background-color: rgba(248, 113, 113, 0.20) !important; color: #fca5a5 !important; }
+
+/* shadow 在深色下用边框替代 */
+html.dark .shadow-sm { box-shadow: none; }
+html.dark .shadow-card { box-shadow: none; }
 
 html.dark body {
   background-color: #1f1f1f;

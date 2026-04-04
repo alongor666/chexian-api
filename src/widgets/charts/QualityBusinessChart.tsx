@@ -154,7 +154,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
           return result;
         },
       },
-      legend: { data: ['优质业务', '其他业务', '优质业务占比'], top: 30 },
+      legend: { data: ['优质业务', '其他业务', '优质业务占比'], top: 30, textStyle: { color: theme.chartTextStyles.legend.color } },
       grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
       xAxis: {
         type: 'category',

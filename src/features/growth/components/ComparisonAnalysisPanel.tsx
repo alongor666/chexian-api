@@ -265,15 +265,15 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
             <h3 className="text-lg font-semibold mb-4 text-neutral-800 dark:text-neutral-200">详细数据对比（双指标）</h3>
             <StickyTableFrame maxHeight={400}>
               <table className="min-w-full divide-y divide-neutral-200">
-                <thead className="bg-neutral-50">
+                <thead className="bg-neutral-50 dark:bg-surface-2">
                   <tr>
-                    <th className={cn('px-3 py-2 text-left text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.firstColumnHeader)}>维度</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>当期保费</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>基期保费</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>保费增长率</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>当期件数</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>基期件数</th>
-                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50', stickyTableStyles.header)}>件数增长率</th>
+                    <th className={cn('px-3 py-2 text-left text-xs font-medium text-neutral-500 uppercase bg-neutral-50 dark:bg-surface-2', stickyTableStyles.firstColumnHeader)}>维度</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>当期保费</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>基期保费</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>保费增长率</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>当期件数</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>基期件数</th>
+                    <th className={cn('px-3 py-2 text-right text-xs font-medium text-neutral-500 uppercase bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>件数增长率</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-700">
@@ -348,13 +348,13 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
                 <h3 className="text-lg font-semibold mb-4 text-neutral-800 dark:text-neutral-200">详细数据对比</h3>
                 <StickyTableFrame className="flex-1" maxHeight={420}>
                   <table className="min-w-full divide-y divide-neutral-200">
-                      <thead className="bg-neutral-50">
+                      <thead className="bg-neutral-50 dark:bg-surface-2">
                           <tr>
-                              <th className={cn('px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.firstColumnHeader)}>维度</th>
-                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.header)}>当前期间</th>
-                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.header)}>对比期间</th>
-                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.header)}>变化量</th>
-                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50', stickyTableStyles.header)}>增长率</th>
+                              <th className={cn('px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50 dark:bg-surface-2', stickyTableStyles.firstColumnHeader)}>维度</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>当前期间</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>对比期间</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>变化量</th>
+                              <th className={cn('px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50 dark:bg-surface-2', stickyTableStyles.header)}>增长率</th>
                           </tr>
                       </thead>
                       <tbody className="bg-white dark:bg-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-700">

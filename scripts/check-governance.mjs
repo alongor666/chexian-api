@@ -1110,6 +1110,154 @@ function checkFieldDefinitionConsistency() {
 }
 
 // ============================================================
+// 18. Dark Mode 质量门禁
+// ============================================================
+
+function checkDarkModeQuality() {
+  info('检查 Dark Mode 质量门禁...');
+
+  const srcDir = path.join(ROOT_DIR, 'src');
+  const violations = [];
+
+  // 递归扫描 .tsx 文件
+  function walkTsx(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walkTsx(full);
+      } else if (entry.name.endsWith('.tsx')) {
+        const content = fs.readFileSync(full, 'utf8');
+        const lines = content.split('\n');
+        const relPath = path.relative(ROOT_DIR, full);
+
+        lines.forEach((line, idx) => {
+          // 规则 1: bg-white 无 dark: 变体（排除已有 dark:bg- 的行）
+          if (/\bbg-white\b/.test(line) && !/dark:bg-/.test(line) && !/className.*dark:/.test(line)) {
+            // 排除注释行和 style={{ 行
+            if (!line.trim().startsWith('//') && !line.trim().startsWith('*') && !line.includes('style={{')) {
+              violations.push({ file: relPath, line: idx + 1, rule: 'bg-white 缺 dark: 变体', code: line.trim().substring(0, 80) });
+            }
+          }
+
+          // 规则 2: style={{ color/background 硬编码（仅限组件渲染区域）
+          if (/style=\{\{/.test(line) && /(?:color|background(?:Color)?)\s*:\s*['"]#[0-9a-fA-F]{3,8}['"]/.test(line)) {
+            if (!line.trim().startsWith('//')) {
+              violations.push({ file: relPath, line: idx + 1, rule: 'style 硬编码颜色', code: line.trim().substring(0, 80) });
+            }
+          }
+        });
+      }
+    }
+  }
+
+  walkTsx(srcDir);
+
+  // 阈值：允许一定数量的遗留问题，但增长趋势必须下降
+  const MAX_BG_WHITE_VIOLATIONS = 30; // 当前遗留量，逐步降低
+  const bgWhiteCount = violations.filter(v => v.rule === 'bg-white 缺 dark: 变体').length;
+  const styleCount = violations.filter(v => v.rule === 'style 硬编码颜色').length;
+
+  if (bgWhiteCount > MAX_BG_WHITE_VIOLATIONS) {
+    error(`bg-white 缺 dark: 变体 = ${bgWhiteCount} 处（阈值 ${MAX_BG_WHITE_VIOLATIONS}）`);
+    violations.filter(v => v.rule === 'bg-white 缺 dark: 变体').slice(0, 5).forEach(v => {
+      console.log(`    ${v.file}:${v.line} → ${v.code}`);
+    });
+    if (bgWhiteCount > 5) console.log(`    ... 及其他 ${bgWhiteCount - 5} 处`);
+    return false;
+  }
+
+  if (styleCount > 0) {
+    warning(`style 硬编码颜色 = ${styleCount} 处（建议迁移到 Tailwind + dark: 变体）`);
+    violations.filter(v => v.rule === 'style 硬编码颜色').slice(0, 3).forEach(v => {
+      console.log(`    ${v.file}:${v.line} → ${v.code}`);
+    });
+  }
+
+  success(`Dark Mode 质量门禁通过（bg-white 遗留 ${bgWhiteCount}/${MAX_BG_WHITE_VIOLATIONS}）`);
+  return true;
+}
+
+// ============================================================
+// 18. ECharts splitLine 合规检查（DC-003 设计令牌）
+// ============================================================
+
+function checkEchartsSplitLine() {
+  info('检查 ECharts splitLine 合规（value 轴必须 show:false）...');
+
+  const srcDir = path.join(ROOT_DIR, 'src');
+  const violations = [];
+
+  // 安全模式列表：使用 theme.yAxisConfig / AXIS_SPLIT_LINE 的文件天然合规
+  const SAFE_PATTERNS = [
+    'theme.yAxisConfig',
+    'theme.xAxisConfig',
+    'AXIS_SPLIT_LINE',
+    'Y_AXIS_CONFIG',
+  ];
+
+  function walkFiles(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walkFiles(full);
+      } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) {
+        scanFile(full);
+      }
+    }
+  }
+
+  function scanFile(filePath) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    // 只扫描包含 ECharts 轴配置的文件
+    if (!content.includes('yAxis') && !content.includes('xAxis')) return;
+    // 跳过配置定义文件本身
+    const relPath = path.relative(ROOT_DIR, filePath);
+    if (relPath.includes('chartStyles.ts')) return;
+
+    const lines = content.split('\n');
+
+    // 简单的块级扫描：找 type: 'value' 的轴定义，检查附近是否有 splitLine.*show.*false
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // 匹配 yAxis 或 xAxis 中包含 type: 'value' 的行
+      if (/type:\s*['"]value['"]/.test(line)) {
+        // 检查上下文（前3行到后10行）是否有 splitLine show false 或安全模式
+        const contextStart = Math.max(0, i - 3);
+        const contextEnd = Math.min(lines.length - 1, i + 10);
+        const context = lines.slice(contextStart, contextEnd + 1).join('\n');
+
+        const hasSplitLineOff = /splitLine.*show.*false/s.test(context);
+        const hasSafePattern = SAFE_PATTERNS.some(p => context.includes(p));
+
+        if (!hasSplitLineOff && !hasSafePattern) {
+          violations.push({
+            file: relPath,
+            line: i + 1,
+            code: line.trim().substring(0, 80),
+          });
+        }
+      }
+    }
+  }
+
+  walkFiles(srcDir);
+
+  if (violations.length > 0) {
+    error(`ECharts value 轴缺少 splitLine: { show: false } = ${violations.length} 处`);
+    violations.slice(0, 8).forEach(v => {
+      console.log(`    ${v.file}:${v.line} → ${v.code}`);
+    });
+    if (violations.length > 8) console.log(`    ... 及其他 ${violations.length - 8} 处`);
+    return false;
+  }
+
+  success('ECharts splitLine 合规检查通过');
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -1134,6 +1282,8 @@ function main() {
     { name: '知识库一致性', fn: checkKnowledgeDataConsistency },
     { name: 'gitignore审计', fn: checkGitignoreShadow },
     { name: '字段定义一致', fn: checkFieldDefinitionConsistency },
+    { name: 'DarkMode质量', fn: checkDarkModeQuality },
+    { name: 'ECharts网格线', fn: checkEchartsSplitLine },
   ];
 
   let passedCount = 0;

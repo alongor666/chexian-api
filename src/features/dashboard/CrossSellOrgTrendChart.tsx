@@ -12,6 +12,7 @@ import type { EChartsOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
 import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import { buttonStyles, cardStyles, colors, cn, tableStyles, textStyles } from '../../shared/styles';
+import { useTheme } from '../../shared/theme';
 import { ORG_GROUPS } from '../../shared/config/coefficient-thresholds';
 import { useCrossSellOrgTrend, type CoverageCombinationFilter, type OrgTrendPoint } from './hooks/useCrossSellOrgTrend';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
@@ -195,6 +196,8 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   granularity,
   filters,
 }: CrossSellOrgTrendChartProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
@@ -281,7 +284,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         top: 8,
         itemWidth: 12,
         itemHeight: 12,
-        textStyle: { fontSize: 12, color: colors.neutral[600] },
+        textStyle: { fontSize: 12, color: isDark ? '#a3a3a3' : colors.neutral[600] },
         data: [
           { name: '驾意件数', icon: 'rect' },
           { name: '非驾意件数', icon: 'rect' },
@@ -442,7 +445,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         },
       ],
     };
-  }, [rows]);
+  }, [rows, isDark]);
 
   // ── ECharts 初始化与更新 ──────────────────────────────────────────────────
   useEffect(() => {

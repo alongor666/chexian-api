@@ -28,6 +28,7 @@ export function buildPremiumOption(rows: ComprehensiveMetricRow[]): EChartsOptio
         type: 'value',
         name: '达成率(%)',
         axisLine: { lineStyle: { color: comprehensiveTheme.palette.success } },
+        splitLine: { show: false },
         min: 0,
       },
     ],

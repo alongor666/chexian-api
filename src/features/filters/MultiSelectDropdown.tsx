@@ -1,6 +1,7 @@
 import React from 'react';
 import Select, { components, type MultiValue, type OptionProps } from 'react-select';
 import { colorClasses } from '../../shared/styles';
+import { useTheme } from '../../shared/theme';
 
 export type MultiSelectOption = {
   value: string;
@@ -52,6 +53,8 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
   singleSelect = false,
   showButtons = true,
 }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const allValues = options.map((option) => option.value);
   const isAllSelected = selectedValues.length === 0;
   const selectedOptions = options.filter((option) => selectedValues.includes(option.value));
@@ -118,25 +121,51 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
           control: (base) => ({
             ...base,
             minHeight: '38px',
-            borderColor: '#d1d5db',
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#d1d5db',
+            backgroundColor: isDark ? '#1c1c1f' : base.backgroundColor,
             boxShadow: 'none',
+          }),
+          menu: (base) => ({
+            ...base,
+            backgroundColor: isDark ? '#1c1c1f' : base.backgroundColor,
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : undefined,
           }),
           option: (base, state) => ({
             ...base,
-            backgroundColor: state.isFocused ? '#f3f4f6' : state.isSelected ? '#eff6ff' : base.backgroundColor,
-            color: '#111827',
+            backgroundColor: state.isFocused
+              ? (isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6')
+              : state.isSelected
+                ? (isDark ? 'rgba(24,144,255,0.15)' : '#eff6ff')
+                : (isDark ? 'transparent' : base.backgroundColor),
+            color: isDark ? '#f0f0f0' : '#111827',
           }),
           multiValue: (base) => ({
             ...base,
-            backgroundColor: '#eff6ff',
+            backgroundColor: isDark ? 'rgba(24,144,255,0.2)' : '#eff6ff',
           }),
           multiValueLabel: (base) => ({
             ...base,
-            color: '#1d4ed8',
+            color: isDark ? '#69c0ff' : '#1d4ed8',
+          }),
+          multiValueRemove: (base) => ({
+            ...base,
+            color: isDark ? '#69c0ff' : undefined,
+            ':hover': {
+              backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : undefined,
+              color: isDark ? '#ff7875' : undefined,
+            },
           }),
           placeholder: (base) => ({
             ...base,
-            color: '#9ca3af',
+            color: isDark ? '#737373' : '#9ca3af',
+          }),
+          singleValue: (base) => ({
+            ...base,
+            color: isDark ? '#f0f0f0' : base.color,
+          }),
+          input: (base) => ({
+            ...base,
+            color: isDark ? '#f0f0f0' : base.color,
           }),
         }}
         noOptionsMessage={() => '暂无数据'}

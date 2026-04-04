@@ -153,6 +153,7 @@ function renderBarLineCombo(
       type: 'scroll',
       bottom: 0,
       data: series.map((s) => s.name) as string[],
+      textStyle: { color: theme.chartTextStyles.legend.color },
     },
     grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true, show: false },
     xAxis: {
@@ -345,7 +346,7 @@ function renderLegacyLineChart(
         return result;
       },
     },
-    legend: { type: 'scroll', bottom: 0, data: [...premiumSeries.map(s => s.name), ...ratioSeries.map(s => s.name)] as any },
+    legend: { type: 'scroll', bottom: 0, data: [...premiumSeries.map(s => s.name), ...ratioSeries.map(s => s.name)] as any, textStyle: { color: theme.chartTextStyles.legend.color } },
     grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true, show: false },
     xAxis: {
       type: 'category',

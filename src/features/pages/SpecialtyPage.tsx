@@ -152,7 +152,7 @@ export const SpecialtyPage: React.FC = () => {
         )}
 
         {activeTab === 'renewal' && (
-          <Suspense fallback={<div className="animate-pulse h-64 bg-neutral-100 rounded" />}>
+          <Suspense fallback={<div className="animate-pulse h-64 bg-neutral-100 dark:bg-white/8 rounded" />}>
             <RenewalFunnelPanel />
           </Suspense>
         )}

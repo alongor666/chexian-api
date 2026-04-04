@@ -28,6 +28,7 @@ export function buildOverviewOption(rows: ComprehensiveMetricRow[]): EChartsOpti
         type: 'value',
         name: '变动成本率(%)',
         axisLine: { lineStyle: { color: comprehensiveTheme.palette.cost } },
+        splitLine: { show: false },
         min: 0,
       },
     ],

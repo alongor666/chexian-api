@@ -61,6 +61,8 @@ export interface UseTrendDataOptions {
   perspective?: ViewPerspective;
   /** 年度保费计划总额（万元），用于计算达成率折线。0 或 undefined 表示无计划 */
   planTotal?: number;
+  /** 最新保单日期（ISO 字符串），用于最后一个数据点的准确时间进度计算 */
+  latestPolicyDate?: string | null;
 }
 
 /**
@@ -148,6 +150,7 @@ function buildBarChartData(
   analysisYear: number,
   timeView: TimeView,
   planTotal?: number,
+  latestPolicyDate?: string | null,
 ): PremiumTrendBarData[] {
   if (trendData.length === 0) return [];
 
@@ -173,11 +176,14 @@ function buildBarChartData(
   // 2. 合并所有 key 并排序
   const allKeys = Array.from(new Set([...currentMap.keys(), ...prevMap.keys()])).sort();
 
-  // 3. 构建结果，逐步累计当年保费
+  // 3. 只保留当年有数据的 key（上年多余 key 不作为独立数据点）
+  const currentKeys = allKeys.filter((key) => currentMap.has(key));
+
+  // 4. 构建结果，逐步累计当年保费
   let cumulativePremium = 0;
   const hasPlan = planTotal != null && planTotal > 0;
 
-  return allKeys.map((key) => {
+  return currentKeys.map((key, index) => {
     const currentPremium = currentMap.get(key) ?? 0;
     const prevPremium = prevMap.get(key) ?? 0;
     cumulativePremium += currentPremium;
@@ -188,7 +194,11 @@ function buildBarChartData(
 
     let achievementRate: number | null = null;
     if (hasPlan) {
-      const dateStr = alignKeyToDate(key, currentYear);
+      // 最后一个数据点使用实际的最新保单日期计算时间进度（与 KPI 对齐）
+      const isLastPoint = index === currentKeys.length - 1;
+      const dateStr = (isLastPoint && latestPolicyDate)
+        ? latestPolicyDate
+        : alignKeyToDate(key, currentYear);
       const progress = calcTimeProgress(dateStr);
       if (progress > 0) {
         const cumulativeWan = cumulativePremium / 10000;
@@ -234,6 +244,7 @@ export const useTrendData = ({
   enabled = true,
   perspective = 'premium',
   planTotal,
+  latestPolicyDate,
 }: UseTrendDataOptions): UseTrendDataResult => {
   const { isOrgUser, userOrg } = useRBAC();
   const granularity = timeViewToGranularity(timeView);
@@ -313,8 +324,8 @@ export const useTrendData = ({
 
   const analysisYear = filters.analysis_year ?? new Date().getFullYear();
   const barChartData = useMemo(
-    () => buildBarChartData(trendData, analysisYear, timeView, planTotal),
-    [trendData, analysisYear, timeView, planTotal],
+    () => buildBarChartData(trendData, analysisYear, timeView, planTotal, latestPolicyDate),
+    [trendData, analysisYear, timeView, planTotal, latestPolicyDate],
   );
 
   return {

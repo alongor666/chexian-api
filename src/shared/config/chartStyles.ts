@@ -262,23 +262,23 @@ export const TOOLTIP_CONFIG = {
  */
 export const TABLE_CSS_CLASSES = {
   /** 表格容器 - 无独立滚动条 */
-  container: 'border rounded border-neutral-200 dark:border-neutral-700',
+  container: 'border rounded border-neutral-200 dark:border-subtle',
   /** 表格本身 */
-  table: 'min-w-full divide-y divide-neutral-200 dark:divide-neutral-700',
+  table: 'min-w-full divide-y divide-neutral-200 dark:divide-subtle',
   /** 表头容器 */
-  thead: 'bg-neutral-50 dark:bg-neutral-700',
+  thead: 'bg-neutral-50 dark:bg-surface-2',
   /** 表头行 */
   headerRow: '',
   /** 表头单元格（左对齐） */
-  headerCell: 'px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider bg-neutral-50 dark:bg-neutral-700',
+  headerCell: 'px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider bg-neutral-50 dark:bg-surface-2',
   /** 表头单元格（右对齐，用于数字列） */
-  headerCellRight: 'px-4 py-3 text-right text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider bg-neutral-50 dark:bg-neutral-700',
+  headerCellRight: 'px-4 py-3 text-right text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider bg-neutral-50 dark:bg-surface-2',
   /** 表体容器 */
-  tbody: 'bg-white dark:bg-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-700',
+  tbody: 'bg-white dark:bg-surface-1 divide-y divide-neutral-200 dark:divide-subtle',
   /** 数据行 */
   row: 'hover:bg-primary-bg transition-colors',
   /** 数据行（交替色，可选） */
-  rowAlt: 'bg-neutral-50 dark:bg-neutral-700/50 hover:bg-primary-bg transition-colors',
+  rowAlt: 'bg-neutral-50 dark:bg-surface-2/50 hover:bg-primary-bg transition-colors',
   /** 单元格（左对齐） */
   cell: 'px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100',
   /** 单元格（右对齐，用于数字） */
@@ -315,11 +315,11 @@ export function getGrowthColor(value: number | null | undefined, isDark = false)
 
 // ==================== Dark 模式图表主题 ====================
 
-/** Dark 模式文字颜色 */
+/** Dark 模式文字颜色（匹配 surface 系统更深底色） */
 const DARK_TEXT_COLORS = {
-  primary: '#e8e8e8',     // neutral-200
-  secondary: '#bfbfbf',   // neutral-400
-  tertiary: '#8c8c8c',    // neutral-500
+  primary: '#f0f0f0',     // 提亮主文字对比度
+  secondary: '#a3a3a3',   // 次要文字
+  tertiary: '#737373',    // 辅助文字
   white: '#ffffff',
 } as const;
 
@@ -333,10 +333,10 @@ const DARK_TEXT_COLORS = {
  */
 export function getChartTheme(isDark: boolean) {
   const text = isDark ? DARK_TEXT_COLORS : TEXT_COLORS;
-  const axisLineColor = isDark ? '#434343' : colors.neutral[200];
-  const splitLineColor = isDark ? '#303030' : colors.neutral[100];
-  const tooltipBg = isDark ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-  const tooltipBorder = isDark ? colors.neutral[700] : colors.neutral[200];
+  const axisLineColor = isDark ? 'rgba(255,255,255,0.08)' : colors.neutral[200];
+  const splitLineColor = isDark ? 'rgba(255,255,255,0.04)' : colors.neutral[100];
+  const tooltipBg = isDark ? 'rgba(22, 22, 24, 0.96)' : 'rgba(255, 255, 255, 0.95)';
+  const tooltipBorder = isDark ? 'rgba(255,255,255,0.1)' : colors.neutral[200];
 
   return {
     textColors: text,
@@ -349,7 +349,7 @@ export function getChartTheme(isDark: boolean) {
     yAxisConfig: {
       ...Y_AXIS_CONFIG,
       axisLabel: { ...Y_AXIS_CONFIG.axisLabel, color: text.secondary },
-      splitLine: { lineStyle: { color: splitLineColor, type: 'dashed' as const } },
+      splitLine: { show: false, lineStyle: { color: splitLineColor, type: 'dashed' as const } },
     },
     tooltipConfig: {
       trigger: 'axis' as const,

@@ -1447,7 +1447,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         ) : (
           <StickyTableFrame maxHeight={620}>
             <table className="w-full text-sm">
-              <thead className={cn('bg-neutral-50 border-b border-neutral-200', stickyTableStyles.header)}>
+              <thead className={cn('bg-neutral-50 dark:bg-surface-2 border-b border-neutral-200 dark:border-subtle', stickyTableStyles.header)}>
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-neutral-600">险别组合</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">车险保费(万元)</th>
@@ -1634,7 +1634,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           <DrilldownLoadingOverlay loading={drilldownLoading}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
+              <thead className="bg-neutral-50 dark:bg-surface-2 border-b border-neutral-200 dark:border-subtle">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium text-neutral-600 cursor-pointer" onClick={() => handleGroupSort('group_name')}>
                     维度（{currentDimensionLabel}） {groupSortKey === 'group_name' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
@@ -1719,7 +1719,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
+              <thead className="bg-neutral-50 dark:bg-surface-2 border-b border-neutral-200 dark:border-subtle">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium text-neutral-600 cursor-pointer" onClick={() => handleTopSort('dimension_name')}>
                     维度 {topSortKey === 'dimension_name' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}

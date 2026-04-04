@@ -44,8 +44,8 @@ export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
       grid: { left: 50, right: 50, top: 40, bottom: 30 },
       xAxis: { type: 'category', data: timeBuckets, axisLabel: { fontSize: 10 } },
       yAxis: [
-        { type: 'value', name: '报价量', axisLabel: { fontSize: 10 } },
-        { type: 'value', name: '转化率%', axisLabel: { fontSize: 10, formatter: '{value}%' } },
+        { type: 'value', name: '报价量', axisLabel: { fontSize: 10 }, splitLine: { show: false } },
+        { type: 'value', name: '转化率%', axisLabel: { fontSize: 10, formatter: '{value}%' }, splitLine: { show: false } },
       ],
       series: [
         {

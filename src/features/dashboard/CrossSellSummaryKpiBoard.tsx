@@ -377,7 +377,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                 key={row.key}
                 className={cn(
                   'border-b border-neutral-100 last:border-b-0',
-                  idx % 2 === 0 ? 'bg-white dark:bg-neutral-800' : 'bg-neutral-50/50 dark:bg-neutral-750'
+                  idx % 2 === 0 ? 'bg-white dark:bg-neutral-800' : 'bg-neutral-50/50 dark:bg-white/[0.03]'
                 )}
               >
                 <td className="py-4 px-4">

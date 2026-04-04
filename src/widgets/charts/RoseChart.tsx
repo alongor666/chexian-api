@@ -168,16 +168,18 @@ export const RoseChart: React.FC<RoseChartProps> = ({
     };
 
     return {
-      title: showTitle && title ? { text: title, left: 'center', textStyle: { fontSize: isSmallScreen ? 14 : 16, color: '#1F2937', fontWeight: 600 } } : undefined,
+      title: showTitle && title ? { text: title, left: 'center', textStyle: { fontSize: isSmallScreen ? 14 : 16, color: isDark ? '#f0f0f0' : '#1F2937', fontWeight: 600 } } : undefined,
       tooltip: {
         trigger: 'item',
         formatter: tooltipFormatter,
-        backgroundColor: 'rgba(255, 255, 255, 0.96)',
-        borderColor: '#E5E7EB',
+        backgroundColor: isDark ? 'rgba(22, 22, 24, 0.96)' : 'rgba(255, 255, 255, 0.96)',
+        borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
         borderWidth: 1,
-        textStyle: { color: '#374151', fontSize: 13 },
+        textStyle: { color: isDark ? '#f0f0f0' : '#374151', fontSize: 13 },
         padding: [12, 16],
-        extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); border-radius: 8px;'
+        extraCssText: isDark
+          ? 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4); border-radius: 8px;'
+          : 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); border-radius: 8px;'
       },
       legend: {
         bottom: 0,
@@ -205,13 +207,13 @@ export const RoseChart: React.FC<RoseChartProps> = ({
             rich: {
               name: {
                 fontSize: Math.max(10, responsiveFontSize - 1),
-                color: '#6B7280',
+                color: isDark ? '#a3a3a3' : '#6B7280',
                 padding: [0, 0, 4, 0],
               },
               percent: {
                 fontSize: responsiveFontSize + 1,
                 fontWeight: 'bold',
-                color: '#111827',
+                color: isDark ? '#f0f0f0' : '#111827',
               },
             },
             // 防重叠布局
@@ -227,7 +229,7 @@ export const RoseChart: React.FC<RoseChartProps> = ({
             smooth: 0.2,
             lineStyle: {
               width: 1.5,
-              color: '#D1D5DB',
+              color: isDark ? 'rgba(255,255,255,0.15)' : '#D1D5DB',
             },
           },
           // 小扇区标签布局优化
@@ -240,7 +242,7 @@ export const RoseChart: React.FC<RoseChartProps> = ({
             itemStyle: {
               // "其他"项使用更柔和的边界处理
               color: item.name?.startsWith('其他') ? '#D1D5DB' : (TONNAGE_COLORS[item.name] || undefined),
-              borderColor: '#ffffff',
+              borderColor: isDark ? '#161618' : '#ffffff',
               borderWidth: 1.5,
               borderType: 'solid',
             },

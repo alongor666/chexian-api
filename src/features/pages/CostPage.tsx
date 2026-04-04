@@ -27,7 +27,7 @@ export const CostPage: React.FC = () => {
 
   if (view === 'comprehensive' && enableComprehensiveAnalysis) {
     return (
-      <Suspense fallback={<div className="p-6 animate-pulse"><div className="h-64 bg-neutral-100 rounded-xl" /></div>}>
+      <Suspense fallback={<div className="p-6 animate-pulse"><div className="h-64 bg-neutral-100 dark:bg-white/8 rounded-xl" /></div>}>
         <ComprehensiveAnalysisPage onBack={() => setView('basic')} />
       </Suspense>
     );

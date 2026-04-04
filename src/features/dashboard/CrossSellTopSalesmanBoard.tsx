@@ -390,7 +390,7 @@ const SalesmanPanel = memo(function SalesmanPanel({
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 {sortedData.map((row, idx) => (
-                  <tr key={`${row.salesman_name}-${idx}`} className="transition-colors hover:bg-neutral-50/50">
+                  <tr key={`${row.salesman_name}-${idx}`} className="transition-colors hover:bg-neutral-50/50 dark:hover:bg-white/[0.04]">
                     <td className="whitespace-nowrap px-3 py-2 font-medium text-neutral-900">{row.salesman_name}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-neutral-600">{row.org_level_3}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right text-neutral-900">

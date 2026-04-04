@@ -28,6 +28,7 @@ export function buildExpenseSurplusOption(rows: ComprehensiveExpenseSurplusRow[]
       {
         type: 'value',
         name: '费用率超支(百分点)',
+        splitLine: { show: false },
       },
     ],
     series: [

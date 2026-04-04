@@ -64,14 +64,14 @@ export const ComparisonQuickPresets: React.FC<ComparisonQuickPresetsProps> = ({
       : 'px-3 py-1.5 text-sm rounded-md';
 
     if (disabled) {
-      return `${baseClasses} bg-neutral-100 text-neutral-400 cursor-not-allowed`;
+      return `${baseClasses} bg-neutral-100 dark:bg-white/5 text-neutral-400 cursor-not-allowed`;
     }
 
     if (isActive) {
       return `${baseClasses} bg-primary text-white font-medium shadow-sm`;
     }
 
-    return `${baseClasses} bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors`;
+    return `${baseClasses} bg-neutral-100 dark:bg-white/8 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-white/12 transition-colors`;
   };
 
   /** 获取当前预设的期间显示 */

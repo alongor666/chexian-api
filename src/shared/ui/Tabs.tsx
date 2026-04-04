@@ -37,7 +37,7 @@ export const Tabs = memo(function Tabs({
     <div
       className={cn(
         'flex gap-1',
-        isUnderline && 'border-b border-neutral-200 gap-0',
+        isUnderline && 'border-b border-neutral-200 dark:border-subtle gap-0',
         className
       )}
       role="tablist"
@@ -61,12 +61,12 @@ export const Tabs = memo(function Tabs({
               !isUnderline && 'rounded-lg',
               !isUnderline && (isActive
                 ? 'bg-primary text-white shadow-sm'
-                : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800'),
+                : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-white/8 hover:text-neutral-800 dark:hover:text-neutral-200'),
               // Underline variant
               isUnderline && '-mb-px border-b-2',
               isUnderline && (isActive
                 ? 'border-primary text-primary'
-                : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'),
+                : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 hover:border-neutral-300 dark:hover:border-neutral-600'),
             )}
           >
             {item.label}

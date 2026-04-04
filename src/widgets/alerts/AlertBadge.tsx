@@ -51,7 +51,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
     <button
       onClick={onClick}
       className={`relative inline-flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${
-        hasAlerts ? 'hover:bg-neutral-100' : 'opacity-60'
+        hasAlerts ? 'hover:bg-neutral-100 dark:hover:bg-white/8' : 'opacity-60'
       } ${className}`}
       title={`${summary.total} 条预警，${summary.unread} 条未读`}
     >

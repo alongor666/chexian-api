@@ -36,6 +36,8 @@ import {
 } from '../styles'
 import type { MetricPolarity } from '../styles'
 import { formatPercent, formatCount, formatPremiumWan } from '../utils/formatters'
+import { useTheme } from '../theme'
+import { getChartTheme } from '../config/chartStyles'
 
 // 注册 ECharts 组件
 echarts.use([
@@ -48,6 +50,12 @@ echarts.use([
   TitleComponent,
   CanvasRenderer,
 ])
+
+/** 获取图表 dark 主题（供 json-render 图表组件复用） */
+function useChartDarkTheme() {
+  const { resolvedTheme } = useTheme()
+  return getChartTheme(resolvedTheme === 'dark')
+}
 
 // ============================================================================
 // 类型定义
@@ -214,7 +222,7 @@ export const componentRegistry: ComponentRegistry = {
       return (
         <div className={tableStyles.container}>
           {title && (
-            <div className="px-4 py-3 border-b border-neutral-200">
+            <div className="px-4 py-3 border-b border-neutral-200 dark:border-subtle">
               <h3 className={textStyles.titleSmall}>{title}</h3>
             </div>
           )}
@@ -238,7 +246,7 @@ export const componentRegistry: ComponentRegistry = {
     return (
       <div className={tableStyles.container}>
         {title && (
-          <div className="px-4 py-3 border-b border-neutral-200">
+          <div className="px-4 py-3 border-b border-neutral-200 dark:border-subtle">
             <h3 className={textStyles.titleSmall}>{title}</h3>
           </div>
         )}
@@ -282,7 +290,7 @@ export const componentRegistry: ComponentRegistry = {
           </table>
         </div>
         {data.length > pageSize && (
-          <div className="px-4 py-2 text-sm text-neutral-500 border-t border-neutral-200">
+          <div className="px-4 py-2 text-sm text-neutral-500 border-t border-neutral-200 dark:border-subtle">
             显示 {pageSize} / {data.length} 条
           </div>
         )}
@@ -331,20 +339,25 @@ export const componentRegistry: ComponentRegistry = {
           data: data.map(d => d.value),
         }]
 
+    const theme = useChartDarkTheme()
+
     const option = {
-      title: title ? { text: title, left: 'center', textStyle: { fontSize: 14 } } : undefined,
-      tooltip: { trigger: 'axis' as const },
-      legend: showLegend && hasGroups ? { bottom: 0 } : undefined,
+      title: title ? { text: title, left: 'center', textStyle: { ...theme.chartTextStyles.title, fontSize: 14 } } : undefined,
+      tooltip: { ...theme.tooltipConfig, trigger: 'axis' as const },
+      legend: showLegend && hasGroups ? { bottom: 0, textStyle: { color: theme.textColors.secondary } } : undefined,
       grid: { left: '3%', right: '4%', bottom: showLegend ? '15%' : '3%', containLabel: true },
       xAxis: {
         type: (horizontal ? 'value' : 'category') as 'value' | 'category',
         data: horizontal ? undefined : categories,
         name: xAxisLabel,
+        ...theme.xAxisConfig,
       },
       yAxis: {
         type: (horizontal ? 'category' : 'value') as 'value' | 'category',
         data: horizontal ? categories : undefined,
         name: yAxisLabel,
+        ...theme.yAxisConfig,
+        splitLine: { show: false },
       },
       series,
     }
@@ -395,13 +408,15 @@ export const componentRegistry: ComponentRegistry = {
           data: data.map(d => d.y),
         }]
 
+    const theme = useChartDarkTheme()
+
     const option = {
-      title: title ? { text: title, left: 'center', textStyle: { fontSize: 14 } } : undefined,
-      tooltip: { trigger: 'axis' as const },
-      legend: showLegend && hasMultipleSeries ? { bottom: 0 } : undefined,
+      title: title ? { text: title, left: 'center', textStyle: { ...theme.chartTextStyles.title, fontSize: 14 } } : undefined,
+      tooltip: { ...theme.tooltipConfig, trigger: 'axis' as const },
+      legend: showLegend && hasMultipleSeries ? { bottom: 0, textStyle: { color: theme.textColors.secondary } } : undefined,
       grid: { left: '3%', right: '4%', bottom: showLegend ? '15%' : '3%', containLabel: true },
-      xAxis: { type: 'category' as const, data: xData, name: xAxisLabel },
-      yAxis: { type: 'value' as const, name: yAxisLabel },
+      xAxis: { type: 'category' as const, data: xData, name: xAxisLabel, ...theme.xAxisConfig },
+      yAxis: { type: 'value' as const, name: yAxisLabel, ...theme.yAxisConfig, splitLine: { show: false } },
       series,
     }
 
@@ -427,10 +442,12 @@ export const componentRegistry: ComponentRegistry = {
       )
     }
 
+    const theme = useChartDarkTheme()
+
     const option = {
-      title: title ? { text: title, left: 'center', textStyle: { fontSize: 14 } } : undefined,
-      tooltip: { trigger: 'item' as const, formatter: '{b}: {c} ({d}%)' },
-      legend: showLegend ? { bottom: 0 } : undefined,
+      title: title ? { text: title, left: 'center', textStyle: { ...theme.chartTextStyles.title, fontSize: 14 } } : undefined,
+      tooltip: { ...theme.tooltipConfig, trigger: 'item' as const, formatter: '{b}: {c} ({d}%)' },
+      legend: showLegend ? { bottom: 0, textStyle: { color: theme.textColors.secondary } } : undefined,
       series: [{
         type: 'pie' as const,
         radius: donut ? ['40%', '70%'] : '70%',
@@ -586,7 +603,7 @@ export const componentRegistry: ComponentRegistry = {
             )}
           </div>
         )}
-        <div className={cn('w-full bg-neutral-200 rounded-full', heightClass[size] || heightClass.md)}>
+        <div className={cn('w-full bg-neutral-200 dark:bg-white/10 rounded-full', heightClass[size] || heightClass.md)}>
           <div
             className={cn(colorClass[variant] || colorClass.primary, 'rounded-full transition-all', heightClass[size] || heightClass.md)}
             style={{ width: `${percentage}%` }}

@@ -118,7 +118,7 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
             <span className="text-neutral-500">当月累计增速</span>
             <TrendIndicator value={todayData.period_growth_rate} />
           </div>
-          <div className="w-full bg-neutral-100 rounded-full h-1.5">
+          <div className="w-full bg-neutral-100 dark:bg-white/8 rounded-full h-1.5">
             {/* 这里的进度条如果没目标，就没法画准确百分比。
                 暂且用 (今年/去年) 的比例来示意，最大100%，超过变色 */}
             <div

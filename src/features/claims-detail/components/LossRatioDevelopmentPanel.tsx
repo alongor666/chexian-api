@@ -7,7 +7,9 @@
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '@/shared/utils/echarts';
-import { cardStyles, colorClasses, cn, fontStyles, tableStyles } from '@/shared/styles';
+import { cardStyles, colorClasses, cn, fontStyles, tableStyles, getYearChartColor } from '@/shared/styles';
+import { useTheme } from '@/shared/theme';
+import { getChartTheme } from '@/shared/config/chartStyles';
 
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
 
@@ -18,12 +20,8 @@ interface Props {
 
 const COHORT_YEARS = [2023, 2024, 2025, 2026];
 const MAX_DEV = 24;
-const COHORT_COLORS: Record<number, string> = {
-  2023: '#38bdf8',
-  2024: '#34d399',
-  2025: '#fb923c',
-  2026: '#f472b6',
-};
+/** 从设计令牌获取年份颜色 */
+const getCohortColor = (year: number): string => getYearChartColor(year);
 
 type Metric = 'loss_ratio_pct' | 'incident_rate_pct' | 'avg_claim';
 
@@ -43,6 +41,9 @@ interface CohortData {
 export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => {
   const { lossRatioDev } = hook;
   const [metric, setMetric] = useState<Metric>('loss_ratio_pct');
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const chartTheme = getChartTheme(isDark);
 
   const loadData = useCallback(() => {
     hook.fetchLossRatioDev({
@@ -99,11 +100,12 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
         symbol: 'circle',
         symbolSize: 4,
         lineStyle: { width: 2.5 },
-        itemStyle: { color: COHORT_COLORS[yr] },
+        itemStyle: { color: getCohortColor(yr) },
       }));
 
     return {
       tooltip: {
+        ...chartTheme.tooltipConfig,
         trigger: 'axis' as const,
         formatter: (params: any[]) => {
           const idx = params[0]?.dataIndex ?? 0;
@@ -116,28 +118,34 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
             const cov = getVal(yr, devM, 'coverage_pct');
             const partial = cov != null && cov < 99.9 ? ` <span style="color:#f59e0b">(${cov.toFixed(0)}%覆盖)</span>` : '';
             const vStr = m.decimals > 0 ? v.toFixed(m.decimals) + m.unit : Math.round(v).toLocaleString() + m.unit;
-            html += `<span style="color:${COHORT_COLORS[yr]}">●</span> ${yr}: ${vStr}${partial}<br/>`;
+            html += `<span style="color:${getCohortColor(yr)}">●</span> ${yr}: ${vStr}${partial}<br/>`;
           });
           return html;
         },
       },
       legend: {
         data: COHORT_YEARS.filter(yr => cohorts[yr]?.maxDev > 0).map(String),
+        textStyle: { color: chartTheme.textColors.secondary },
       },
       grid: { left: 55, right: 20, top: 40, bottom: 30 },
       xAxis: {
         type: 'category' as const,
         data: Array.from({ length: MAX_DEV }, (_, i) => `M${i + 1}`),
+        ...chartTheme.xAxisConfig,
       },
       yAxis: {
         type: 'value' as const,
         name: m.label,
         min: (value: any) => Math.floor(value.min * 0.9 / 10) * 10,
-        axisLabel: { formatter: (v: number) => m.unit === '%' ? `${v}%` : v.toLocaleString() },
+        axisLabel: { ...chartTheme.yAxisConfig.axisLabel, formatter: (v: number) => m.unit === '%' ? `${v}%` : v.toLocaleString() },
+        axisLine: chartTheme.yAxisConfig.axisLine,
+        axisTick: chartTheme.yAxisConfig.axisTick,
+        splitLine: { show: false },
+        nameTextStyle: { color: chartTheme.textColors.secondary },
       },
       series,
     };
-  }, [metric, cohorts]);
+  }, [metric, cohorts, chartTheme]);
 
   const isLoading = lossRatioDev.loading;
   const error = lossRatioDev.error;
@@ -179,7 +187,7 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                       <td className={tableStyles.cell}>
                         <span
                           className="inline-block w-2.5 h-2.5 rounded-sm mr-2 align-middle"
-                          style={{ background: COHORT_COLORS[yr] }}
+                          style={{ background: getCohortColor(yr) }}
                         />
                         {yr}
                       </td>
@@ -215,7 +223,7 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                 'px-3 py-1.5 text-sm rounded-lg border transition-colors',
                 metric === opt.key
                   ? 'bg-primary-solid text-white border-primary'
-                  : `bg-transparent ${colorClasses.border.neutral} ${colorClasses.text.neutral} hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-700`
+                  : `bg-transparent ${colorClasses.border.neutral} ${colorClasses.text.neutral} hover:bg-neutral-100 dark:hover:bg-white/8`
               )}
             >
               {opt.label}
@@ -231,10 +239,10 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
         {/* 横向数据表：年份行 × M1~M24 列 */}
         {!isLoading && (
           <div className="overflow-x-auto mt-4">
-            <table className="w-full text-xs border-collapse" style={{ fontFamily: 'var(--mono, ui-monospace, monospace)' }}>
+            <table className={cn('w-full text-xs border-collapse', fontStyles.numeric)}>
               <thead>
                 <tr>
-                  <th className={`text-left px-2 py-1.5 sticky left-0 bg-white dark:bg-neutral-800 z-10 border-b ${colorClasses.border.neutral}`} />
+                  <th className={`text-left px-2 py-1.5 sticky left-0 bg-white dark:bg-surface-1 z-10 border-b ${colorClasses.border.neutral}`} />
                   {Array.from({ length: MAX_DEV }, (_, i) => (
                     <th
                       key={i}
@@ -252,13 +260,13 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                 {activeYears.map(yr => {
                   const c = cohorts[yr];
                   return (
-                    <tr key={yr} className={`border-b ${colorClasses.border.neutral} dark:border-neutral-700/50`}>
-                      <td className="px-2 py-1.5 sticky left-0 bg-white dark:bg-neutral-800 z-10 whitespace-nowrap">
+                    <tr key={yr} className={`border-b ${colorClasses.border.neutral}`}>
+                      <td className="px-2 py-1.5 sticky left-0 bg-white dark:bg-surface-1 z-10 whitespace-nowrap">
                         <span
                           className="inline-block w-2 h-2 rounded-sm mr-1.5 align-middle"
-                          style={{ background: COHORT_COLORS[yr] }}
+                          style={{ background: getCohortColor(yr) }}
                         />
-                        <span style={{ color: COHORT_COLORS[yr] }}>{yr}</span>
+                        <span style={{ color: getCohortColor(yr) }}>{yr}</span>
                       </td>
                       {Array.from({ length: MAX_DEV }, (_, i) => {
                         const devM = i + 1;
@@ -274,7 +282,7 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                               'text-right px-2 py-1.5',
                               isLastMonth && 'font-bold',
                             )}
-                            style={isLastMonth ? { color: COHORT_COLORS[yr] } : undefined}
+                            style={isLastMonth ? { color: getCohortColor(yr) } : undefined}
                           >
                             {vStr}
                           </td>

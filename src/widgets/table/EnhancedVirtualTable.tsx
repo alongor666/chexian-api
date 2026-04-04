@@ -155,7 +155,7 @@ export function EnhancedVirtualTable<T extends TableRow>({
               }}
               className={`px-4 py-3 text-xs font-medium uppercase tracking-wider truncate ${colorClasses.text.neutralLight} ${
                 col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
-              } ${isSortable ? `cursor-pointer hover:bg-neutral-100 select-none` : ''}`}
+              } ${isSortable ? `cursor-pointer hover:bg-neutral-100 dark:hover:bg-white/8 select-none` : ''}`}
               onClick={() => isSortable && handleSort(String(col.key))}
             >
               <div className="flex items-center gap-1">
