@@ -157,7 +157,7 @@ warehouse/fact/
 
 所有 UI 必须使用 `src/shared/styles/index.ts`，禁止手写 Tailwind 颜色。
 
-- **数字**：`fontStyles.kpi`/`fontStyles.chart`/`fontStyles.tabular`，禁止虚构类名如 `font-kpi`
+- **数字**：`fontStyles.kpi`/`fontStyles.numeric`（已合并原 chart+tabular），禁止虚构类名
 - **颜色**：`colorClasses.text.success`(绿) / `colorClasses.text.danger`(红) / `getTrendColorClass(value)`
 - **组件**：`cardStyles.base` / `buttonStyles.primary`，或 `src/shared/ui/Card.tsx` / `Button.tsx`
 

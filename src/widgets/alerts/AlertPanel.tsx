@@ -100,7 +100,7 @@ const SummaryCard: React.FC<{
   const config = ALERT_LEVEL_CONFIG[level];
   return (
     <div className={`px-3 py-2.5 rounded-lg border border-transparent hover:border-current transition-colors ${config.bgColor} text-center`}>
-      <div className="text-[22px] mb-1">{config.icon}</div>
+      <div className="text-xl mb-1">{config.icon}</div>
       <div className={`text-2xl font-bold tracking-tight font-sans ${config.color}`}>{count}</div>
       <div className={`text-[11px] font-medium mt-0.5 ${config.color} opacity-80`}>{config.label}</div>
     </div>

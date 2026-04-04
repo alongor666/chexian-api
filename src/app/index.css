@@ -9,11 +9,8 @@
   /* KPI 数字字体 (Futura/Avenir 风格) - 用于大数字展示 */
   --font-kpi: "Avenir Next", Avenir, "Century Gothic", "SF Pro Display", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", system-ui, sans-serif;
 
-  /* 图表数字字体 (Helvetica Neue/SF Pro 风格) - 用于图表标签、轴数字 */
-  --font-chart-number: "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", -apple-system, system-ui, sans-serif;
-
-  /* 等宽数字字体 - 用于表格数字对齐 */
-  --font-tabular: "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", -apple-system, system-ui, sans-serif;
+  /* 统一数字字体 - 用于图表标签、轴数字、表格数字对齐 */
+  --font-numeric: "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", -apple-system, system-ui, sans-serif;
 }
 
 /* KPI 数字样式类 */
@@ -21,13 +18,12 @@
   font-family: var(--font-kpi);
 }
 
-/* 图表数字样式类 */
-.font-chart-number {
-  font-family: var(--font-chart-number);
-}
-
-/* 等宽数字样式类 */
-.font-tabular {
-  font-family: var(--font-tabular);
+/* 统一数字样式类（合并原 font-chart-number + font-tabular） */
+.font-numeric {
+  font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
 }
+
+/* 兼容旧类名（过渡期） */
+.font-chart-number { font-family: var(--font-numeric); }
+.font-tabular { font-family: var(--font-numeric); font-variant-numeric: tabular-nums; }

@@ -72,22 +72,6 @@ export const colors = {
 // ============================================================================
 
 export const semanticColors = {
-  /** 状态 - 成功/增长 */
-  positive: {
-    DEFAULT: '#10B981',      // emerald-500
-    light: '#34D399',        // emerald-400
-    dark: '#059669',         // emerald-600
-    bg: '#D1FAE5',           // emerald-100
-    text: '#065F46',         // emerald-800
-  },
-  /** 状态 - 负面/下降 */
-  negative: {
-    DEFAULT: '#EF4444',      // red-500
-    light: '#F87171',        // red-400
-    dark: '#DC2626',         // red-600
-    bg: '#FEE2E2',           // red-100
-    text: '#991B1B',         // red-800
-  },
   /** 状态 - 信息/主要 */
   info: {
     DEFAULT: '#3B82F6',      // blue-500
@@ -352,21 +336,23 @@ export const textStyles = {
  */
 export const fontStyles = {
   /** KPI 大数字（使用 Avenir/Century Gothic 风格） */
-  kpi: 'font-sans tabular-nums',
-  /** 图表数字 */
-  chart: 'font-sans tabular-nums',
-  /** 等宽数字（表格对齐） */
-  tabular: 'font-tabular tabular-nums',
+  kpi: 'font-kpi tabular-nums',
+  /** 统一数字字体（图表+表格共用） */
+  numeric: 'font-numeric tabular-nums',
+  /** @deprecated 用 fontStyles.numeric 替代 */
+  chart: 'font-numeric tabular-nums',
+  /** @deprecated 用 fontStyles.numeric 替代 */
+  tabular: 'font-numeric tabular-nums',
 } as const
 
 /**
  * 数字分层样式（对齐仪表盘视觉规范）
  */
 export const numericStyles = {
-  /** KPI 主数字 */
-  kpiPrimary: 'font-kpi text-[28px] tracking-tight font-bold leading-none',
-  /** KPI 次级数字 */
-  kpiSecondary: 'font-kpi text-[22px] tracking-tight font-bold leading-none',
+  /** KPI 主数字 (30px — 对齐 text-3xl 阶梯) */
+  kpiPrimary: 'font-kpi text-3xl tracking-tight font-bold leading-none',
+  /** KPI 次级数字 (24px — 对齐 text-2xl 阶梯) */
+  kpiSecondary: 'font-kpi text-2xl tracking-tight font-bold leading-none',
   /** 表格数字单元格 */
   tableValue: 'font-tabular tabular-nums text-sm text-neutral-900',
   /** 表格次要数字 */
@@ -606,10 +592,10 @@ export const quoteChartColors = {
 
 /** 漏斗层级背景色（L1→L4 渐进） */
 export const funnelLevelColors = [
-  'bg-blue-500',
-  'bg-blue-400',
-  'bg-emerald-400',
-  'bg-emerald-500',
+  'bg-primary-600',
+  'bg-primary-400',
+  'bg-success-light',
+  'bg-success',
 ] as const
 
 /** 热力图转化率→背景色映射 */

@@ -12,8 +12,7 @@ paths: ["src/**/*.tsx", "src/**/*.ts"]
 
 **数字与数据展示**：
 - **KPI 大数字**：强制使用 `className={fontStyles.kpi}` (通过 `import { fontStyles } from '@/shared/styles'`)
-- **图表数字**：强制使用 `className={fontStyles.chart}`
-- **表格数字**：强制使用 `className={fontStyles.tabular}`（以保障数字等宽对齐和易读性）
+- **图表/表格数字**：强制使用 `className={fontStyles.numeric}`（已合并原 chart+tabular，保障数字等宽对齐）
 
 **禁用虚构类名**：不要使用诸如 `<span className="font-kpi text-xl">` 这种原生的字符串注入，因为 tailwind.config 并没有将其注册为标准原子类，这会导致样式静默失效。
 

@@ -335,7 +335,7 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
     return (
       <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm hover:shadow-md transition-shadow">
         <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-2">{title}</div>
-        <div className="text-[28px] font-bold tracking-tight text-neutral-900 dark:text-white font-kpi leading-none mt-1">
+        <div className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white font-kpi leading-none mt-1">
           {formattedValue}
         </div>
       </div>
@@ -358,7 +358,7 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
       <div className="flex items-center justify-between mb-3 mt-1">
         <div className="flex flex-col">
           <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1.5">{normalizedRatioData[1]?.label || '其他'}</div>
-          <div className="text-[22px] tracking-tight font-bold text-neutral-800 dark:text-neutral-200 font-kpi leading-none">
+          <div className="text-2xl tracking-tight font-bold text-neutral-800 dark:text-neutral-200 font-kpi leading-none">
             {secondaryRate}
           </div>
         </div>
