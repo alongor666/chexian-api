@@ -1,0 +1,12 @@
+#!/bin/bash
+# pre-commit hook：提交前跑类型检查，拦截 TS 错误
+# 安装方式：bun run hooks:install
+set -e
+
+echo "🔍 [pre-commit] 运行前端类型检查..."
+bun run typecheck
+
+echo "🔍 [pre-commit] 运行 server 类型检查..."
+npx tsc --noEmit --project server/tsconfig.json
+
+echo "✅ [pre-commit] 类型检查通过，允许提交"

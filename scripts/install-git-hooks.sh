@@ -20,8 +20,10 @@ install_hook() {
   echo "✅ 已安装 $name"
 }
 
+install_hook "pre-commit"
 install_hook "pre-push"
 
 echo ""
 echo "Git hooks 安装完成。"
+echo "下次 git commit 前会自动执行类型检查。"
 echo "下次 git push 前会自动执行 bun run test --run + bun run typecheck。"
