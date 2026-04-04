@@ -124,8 +124,8 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
   const mapOption = useMemo(() => {
     const isChina = mapLevel === 'china';
     const data = isChina
-      ? provinceData.map(p => ({ name: p.name, value: p[mapMetric], ...p }))
-      : sichuanCityData.map(c => ({ name: c.name, value: c[mapMetric], ...c }));
+      ? provinceData.map(p => ({ ...p, name: p.name, value: p[mapMetric] }))
+      : sichuanCityData.map(c => ({ ...c, name: c.name, value: c[mapMetric] }));
 
     const values = data.map(d => d.value).filter(v => v > 0);
     const maxVal = values.length > 0 ? Math.max(...values) : 100;
@@ -310,26 +310,26 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
           <h3 className="font-medium mb-3">按出险地点（风险发生地）</h3>
           {geoAccident.loading ? <div>加载中...</div> : (
             <div className="overflow-x-auto max-h-96 overflow-y-auto">
-              <table className={tableStyles.base}>
+              <table className={tableStyles.container}>
                 <thead className="sticky top-0 bg-white dark:bg-neutral-800">
                   <tr>
-                    <th className={tableStyles.th}>城市</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>件数</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>立案金额(万)</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>案均</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>人伤占比</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>理赔周期</th>
+                    <th className={tableStyles.headerCell}>城市</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>件数</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>立案金额(万)</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>案均</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>人伤占比</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>理赔周期</th>
                   </tr>
                 </thead>
                 <tbody>
                   {geoAccident.data.slice(0, 25).map((r: any, i: number) => (
-                    <tr key={i} className={tableStyles.tr}>
-                      <td className={tableStyles.td}>{extractCityName(r.city ?? '')}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatPercent(r.injury_pct ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{r.avg_cycle_days ?? '-'}天</td>
+                    <tr key={i} className={tableStyles.row}>
+                      <td className={tableStyles.cell}>{extractCityName(r.city ?? '')}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatPercent(r.injury_pct ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_cycle_days ?? '-'}天</td>
                     </tr>
                   ))}
                 </tbody>
@@ -343,24 +343,24 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
           <h3 className="font-medium mb-3">按车牌归属地（风险来源）</h3>
           {geoPlate.loading ? <div>加载中...</div> : (
             <div className="overflow-x-auto max-h-96 overflow-y-auto">
-              <table className={tableStyles.base}>
+              <table className={tableStyles.container}>
                 <thead className="sticky top-0 bg-white dark:bg-neutral-800">
                   <tr>
-                    <th className={tableStyles.th}>城市</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>件数</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>立案金额(万)</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>案均</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>人伤占比</th>
+                    <th className={tableStyles.headerCell}>城市</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>件数</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>立案金额(万)</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>案均</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>人伤占比</th>
                   </tr>
                 </thead>
                 <tbody>
                   {geoPlate.data.map((r: any, i: number) => (
-                    <tr key={i} className={tableStyles.tr}>
-                      <td className={tableStyles.td}>{r.plate_city ?? ''}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatPercent(r.injury_pct ?? 0)}</td>
+                    <tr key={i} className={tableStyles.row}>
+                      <td className={tableStyles.cell}>{r.plate_city ?? ''}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatPercent(r.injury_pct ?? 0)}</td>
                     </tr>
                   ))}
                 </tbody>

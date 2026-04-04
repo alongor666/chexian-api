@@ -103,28 +103,28 @@ export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
           <div>加载中...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className={tableStyles.base}>
+            <table className={tableStyles.container}>
               <thead>
                 <tr>
-                  <th className={tableStyles.th}>机构</th>
-                  <th className={cn(tableStyles.th, 'text-right')}>赔案数</th>
-                  <th className={cn(tableStyles.th, 'text-right')}>立案金额(万)</th>
-                  <th className={cn(tableStyles.th, 'text-right')}>案均</th>
-                  <th className={cn(tableStyles.th, 'text-right')}>人伤件</th>
-                  <th className={cn(tableStyles.th, 'text-right')}>平均滞留天</th>
-                  <th className={cn(tableStyles.th, 'text-right')}>最长滞留天</th>
+                  <th className={tableStyles.headerCell}>机构</th>
+                  <th className={cn(tableStyles.headerCell, 'text-right')}>赔案数</th>
+                  <th className={cn(tableStyles.headerCell, 'text-right')}>立案金额(万)</th>
+                  <th className={cn(tableStyles.headerCell, 'text-right')}>案均</th>
+                  <th className={cn(tableStyles.headerCell, 'text-right')}>人伤件</th>
+                  <th className={cn(tableStyles.headerCell, 'text-right')}>平均滞留天</th>
+                  <th className={cn(tableStyles.headerCell, 'text-right')}>最长滞留天</th>
                 </tr>
               </thead>
               <tbody>
                 {pendingByOrg.data.map((r: any, i: number) => (
-                  <tr key={i} className={tableStyles.tr}>
-                    <td className={tableStyles.td}>{r.org ?? ''}</td>
-                    <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                    <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
-                    <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
-                    <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.injury_cases ?? 0)}</td>
-                    <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{r.avg_pending_days ?? '-'}</td>
-                    <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular, r.max_pending_days > 365 ? colorClasses.text.danger : '')}>{r.max_pending_days ?? '-'}</td>
+                  <tr key={i} className={tableStyles.row}>
+                    <td className={tableStyles.cell}>{r.org ?? ''}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.injury_cases ?? 0)}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_pending_days ?? '-'}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular, r.max_pending_days > 365 ? colorClasses.text.danger : '')}>{r.max_pending_days ?? '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -142,24 +142,24 @@ export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
             <div>加载中...</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className={tableStyles.base}>
+              <table className={tableStyles.container}>
                 <thead>
                   <tr>
-                    <th className={tableStyles.th}>原因</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>件数</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>立案金额(万)</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>案均</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>人伤占比</th>
+                    <th className={tableStyles.headerCell}>原因</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>件数</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>立案金额(万)</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>案均</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>人伤占比</th>
                   </tr>
                 </thead>
                 <tbody>
                   {causeAnalysis.data.slice(0, 10).map((r: any, i: number) => (
-                    <tr key={i} className={tableStyles.tr}>
-                      <td className={tableStyles.td}>{r.accident_cause ?? ''}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatPercent(r.injury_pct ?? 0)}</td>
+                    <tr key={i} className={tableStyles.row}>
+                      <td className={tableStyles.cell}>{r.accident_cause ?? ''}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatPercent(r.injury_pct ?? 0)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -175,30 +175,30 @@ export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
             <div>加载中...</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className={tableStyles.base}>
+              <table className={tableStyles.container}>
                 <thead>
                   <tr>
-                    <th className={tableStyles.th}>类型</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>件数</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>报案</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>立案</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>结案</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>支付</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>全流程</th>
-                    <th className={cn(tableStyles.th, 'text-right')}>中位数</th>
+                    <th className={tableStyles.headerCell}>类型</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>件数</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>报案</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>立案</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>结案</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>支付</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>全流程</th>
+                    <th className={cn(tableStyles.headerCell, 'text-right')}>中位数</th>
                   </tr>
                 </thead>
                 <tbody>
                   {claimCycle.data.map((r: any, i: number) => (
-                    <tr key={i} className={tableStyles.tr}>
-                      <td className={tableStyles.td}>{r.type ?? ''}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{r.avg_report_days ?? '-'}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{r.avg_open_days ?? '-'}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{r.avg_settle_days ?? '-'}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{r.avg_pay_days ?? '-'}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{r.avg_total_days ?? '-'}</td>
-                      <td className={cn(tableStyles.td, 'text-right', fontStyles.tabular)}>{r.median_total_days ?? '-'}</td>
+                    <tr key={i} className={tableStyles.row}>
+                      <td className={tableStyles.cell}>{r.type ?? ''}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_report_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_open_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_settle_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_pay_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_total_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.median_total_days ?? '-'}</td>
                     </tr>
                   ))}
                 </tbody>
