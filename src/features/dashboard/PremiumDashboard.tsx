@@ -240,7 +240,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
                   <button
                     key={value}
                     onClick={() => setTimeView(value)}
-                    className={`px-4 py-2 rounded ${timeView === value ? 'bg-primary text-white' : 'bg-neutral-200 hover:bg-neutral-300'
+                    className={`px-4 py-2 rounded ${timeView === value ? 'bg-primary text-white' : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300 dark:bg-white/10 dark:text-neutral-300 dark:hover:bg-white/15'
                       }`}
                   >
                     {label}

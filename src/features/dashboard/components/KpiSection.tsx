@@ -336,7 +336,7 @@ export const KpiSection = memo<KpiSectionProps>(({
               onClick={() => setActiveGroup(group)}
               className={`px-3 py-1.5 text-sm rounded ${activeGroup === group
                   ? 'bg-primary text-white'
-                  : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
+                  : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300 dark:bg-white/10 dark:text-neutral-300 dark:hover:bg-white/15'
                 }`}
             >
               {groupLabel[group]}
@@ -358,7 +358,7 @@ export const KpiSection = memo<KpiSectionProps>(({
             onClick={() => setActiveGroup(group)}
             className={`px-3 py-1.5 text-sm rounded ${activeGroup === group
                 ? 'bg-primary text-white'
-                : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
+                : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300 dark:bg-white/10 dark:text-neutral-300 dark:hover:bg-white/15'
               }`}
           >
             {groupLabel[group]}

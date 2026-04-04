@@ -17,6 +17,7 @@ import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { useScopeLabel } from '@/shared/hooks/useScopeLabel';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatWanAdaptive, formatTeamName, formatSalesmanName } from '@/shared/utils/formatters';
+import { useTheme } from '@/shared/theme';
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { buttonStyles, cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles } from '@/shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
@@ -51,7 +52,6 @@ import { usePerformanceTopSalesman, type PerformanceTopSalesmanRow } from './hoo
 import { usePerformanceBundle } from './hooks/usePerformanceBundle';
 import {
   usePerformanceOrgHeatmap,
-  type PerformanceOrgHeatmapRow,
   type HeatmapDimension,
   HEATMAP_DIMENSION_LABELS,
   type HeatmapDrillStep,
@@ -60,6 +60,8 @@ import {
   type PerformanceHeatmapSelection,
 } from './utils/performanceHeatmapSelection';
 import { getConditionalDimensions } from '@/shared/config/drilldown-dimensions';
+import { PerformanceOrgHeatmapV2, HeatmapFocusPanel } from './performance/PerformanceOrgHeatmapV2';
+import type { HeatmapMetric } from './performance/PerformanceOrgHeatmapV2';
 
 interface PerformanceAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -192,464 +194,6 @@ const EXPAND_DIMS_TABS: TabItem[] = [
 ];
 
 
-const getHeatmapMetricTabs = (growthMode: PerformanceGrowthMode): TabItem[] => [
-  { key: 'growth', label: growthMode === 'mom' ? '周环比增长率' : '年同比增长率' },
-  { key: 'achievement', label: '计划达成率' },
-  { key: 'premium', label: '保费规模' },
-];
-
-type HeatmapMetric = 'growth' | 'achievement' | 'premium';
-type HeatmapState = 'excellent' | 'healthy' | 'abnormal' | 'danger' | 'unknown';
-
-function getHeatmapStateColor(state: HeatmapState): string {
-  switch (state) {
-    case 'excellent':
-      return colors.success.bg;
-    case 'healthy':
-      return colors.primary.bg;
-    case 'abnormal':
-      return colors.warning.bg;
-    case 'danger':
-      return colors.danger.bg;
-    default:
-      return colors.neutral[100];
-  }
-}
-
-function classifyAchievementState(rate: number | null): HeatmapState {
-  if (rate === null || Number.isNaN(rate)) return 'unknown';
-  if (rate >= 105) return 'excellent';
-  if (rate >= 100) return 'healthy';
-  if (rate >= 95) return 'abnormal';
-  return 'danger';
-}
-
-function classifyGrowthState(rate: number | null): HeatmapState {
-  if (rate === null || Number.isNaN(rate)) return 'unknown';
-  if (rate >= 15) return 'excellent';
-  if (rate >= 10) return 'healthy';
-  if (rate >= 5) return 'abnormal';
-  return 'danger';
-}
-
-function getWeekdayKey(dateText: string): number {
-  const date = new Date(`${dateText}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? -1 : date.getDay();
-}
-
-function getMonthKey(dateText: string): string {
-  return dateText.slice(5, 7);
-}
-
-const BRANCH_SUMMARY_ROW_LABEL = '整体';
-
-function buildPerformanceBranchSummaryRow(
-  date: string,
-  dateRows: PerformanceOrgHeatmapRow[]
-): PerformanceOrgHeatmapRow | null {
-  if (dateRows.length === 0) {
-    return null;
-  }
-
-  const premium = dateRows.reduce((sum, row) => sum + row.premium, 0);
-  const planRows = dateRows.filter((row) => row.planPremium !== null);
-  const planPremium = planRows.length > 0
-    ? planRows.reduce((sum, row) => sum + (row.planPremium ?? 0), 0)
-    : null;
-  const achievementRate = planPremium !== null && planPremium > 0
-    ? (premium / planPremium) * 100
-    : null;
-
-  const prevMomPremium = dateRows.reduce((sum, row) => sum + row.prevMomPremium, 0);
-  const prevYoyPremium = dateRows.reduce((sum, row) => sum + row.prevYoyPremium, 0);
-  const momGrowthRate = prevMomPremium > 0
-    ? ((premium - prevMomPremium) / prevMomPremium) * 100
-    : null;
-  const yoyGrowthRate = prevYoyPremium > 0
-    ? ((premium - prevYoyPremium) / prevYoyPremium) * 100
-    : null;
-
-  return {
-    orgLevel3: BRANCH_SUMMARY_ROW_LABEL,
-    policyDate: date,
-    premium,
-    planPremium,
-    prevMomPremium,
-    prevYoyPremium,
-    achievementRate,
-    momGrowthRate,
-    yoyGrowthRate,
-  };
-}
-
-function PerformanceOrgHeatmap({
-  rows,
-  loading,
-  error,
-  growthMode,
-  timePeriod,
-  dimensionLabel = '三级机构',
-  groupByDimension = 'org_level_3',
-  defaultHeatmapMetric,
-  onCellClick,
-  onRowClick,
-}: {
-  rows: PerformanceOrgHeatmapRow[];
-  loading: boolean;
-  error: string | null;
-  growthMode: PerformanceGrowthMode;
-  timePeriod: PerformanceTimePeriod;
-  dimensionLabel?: string;
-  groupByDimension?: HeatmapDimension;
-  defaultHeatmapMetric?: HeatmapMetric;
-  onCellClick?: (payload: { org: string; date: string }) => void;
-  onRowClick?: (org: string) => void;
-}) {
-  const formatDimensionLabel = (value: string): string => {
-    if (value === BRANCH_SUMMARY_ROW_LABEL) return value;
-    if (groupByDimension === 'salesman') return formatSalesmanName(value);
-    if (groupByDimension === 'team') return formatTeamName(value);
-    return value;
-  };
-
-  const [metric, setMetric] = useState<HeatmapMetric>(defaultHeatmapMetric ?? 'growth');
-  const [activeCell, setActiveCell] = useState<{ org: string; date: string } | null>(null);
-  const [hoverCell, setHoverCell] = useState<{ org: string; date: string } | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const orgRows = useMemo(() => {
-    const dateSet = new Set<string>();
-    const orgMap = new Map<string, Map<string, PerformanceOrgHeatmapRow>>();
-
-    rows.forEach((row) => {
-      dateSet.add(row.policyDate);
-      const orgLine = orgMap.get(row.orgLevel3) || new Map<string, PerformanceOrgHeatmapRow>();
-      orgLine.set(row.policyDate, row);
-      orgMap.set(row.orgLevel3, orgLine);
-    });
-
-    const allDates = [...dateSet].sort((a, b) => a.localeCompare(b));
-    // 季/年视图：过滤掉所有机构都无数据的日期
-    const dates = (timePeriod === 'quarter' || timePeriod === 'year')
-      ? allDates.filter(date =>
-          [...orgMap.values()].some(orgLine => {
-            const row = orgLine.get(date);
-            return row && row.premium > 0;
-          })
-        )
-      : allDates;
-    const latestDate = dates.length > 0 ? dates[dates.length - 1] : '';
-
-    // 按当前指标的最新一列值降序排序，空值排最后
-    const getOrgSortValue = (org: string): number => {
-      const latestRow = orgMap.get(org)?.get(latestDate);
-      if (!latestRow) return -Infinity;
-      if (metric === 'premium') return latestRow.premium ?? -Infinity;
-      if (metric === 'achievement') return latestRow.achievementRate ?? -Infinity;
-      // growth
-      const rate = growthMode === 'mom' ? latestRow.momGrowthRate : latestRow.yoyGrowthRate;
-      return rate ?? -Infinity;
-    };
-    const baseOrganizations = [...orgMap.keys()].sort((a, b) => getOrgSortValue(b) - getOrgSortValue(a));
-    const branchSummaryLine = new Map<string, PerformanceOrgHeatmapRow>();
-    dates.forEach((date) => {
-      const dateRows = baseOrganizations
-        .map((org) => orgMap.get(org)?.get(date))
-        .filter((row): row is PerformanceOrgHeatmapRow => Boolean(row));
-      const summary = buildPerformanceBranchSummaryRow(date, dateRows);
-      if (summary) {
-        branchSummaryLine.set(date, summary);
-      }
-    });
-
-    if (branchSummaryLine.size > 0) {
-      orgMap.set(BRANCH_SUMMARY_ROW_LABEL, branchSummaryLine);
-    }
-    const organizations = branchSummaryLine.size > 0
-      ? [BRANCH_SUMMARY_ROW_LABEL, ...baseOrganizations]
-      : baseOrganizations;
-
-    return {
-      dates,
-      organizations,
-      matrix: orgMap,
-    };
-  }, [rows, metric, growthMode, timePeriod]);
-
-  // 数据变化时自动滚动到最右（最新日期）
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollLeft = el.scrollWidth - el.clientWidth;
-  }, [orgRows.dates.length, timePeriod]);
-
-  const focusDate = activeCell?.date ?? hoverCell?.date ?? null;
-  const focusWeekday = focusDate && timePeriod === 'day' ? getWeekdayKey(focusDate) : null;
-  const focusMonth = focusDate && timePeriod === 'month' ? getMonthKey(focusDate) : null;
-
-  const renderCell = (
-    org: string,
-    date: string,
-    row: PerformanceOrgHeatmapRow | undefined,
-    isBranchSummaryRow = false
-  ) => {
-    const canInteract = !isBranchSummaryRow;
-    const isSelected = canInteract && activeCell?.org === org && activeCell?.date === date;
-    const isSameWeekday = focusWeekday !== null && focusWeekday >= 0 && getWeekdayKey(date) === focusWeekday;
-    const isSameMonth = focusMonth !== null && getMonthKey(date) === focusMonth;
-    const isFocusRelated = isSelected || (timePeriod === 'day' ? isSameWeekday : false) || (timePeriod === 'month' ? isSameMonth : false);
-    const degradeOpacity = (activeCell || hoverCell) && !isFocusRelated ? 'opacity-40' : '';
-    const ringClass = isSelected ? 'ring-2 border' : '';
-
-    if (!row) {
-      return (
-        <button
-          type="button"
-          onClick={() => {
-            if (!canInteract) return;
-            setActiveCell({ org, date });
-            onCellClick?.({ org, date });
-          }}
-          onMouseEnter={() => {
-            if (!canInteract) return;
-            setHoverCell({ org, date });
-          }}
-          onMouseLeave={() => {
-            if (!canInteract) return;
-            setHoverCell(null);
-          }}
-          className={cn(
-            'w-full rounded px-1 py-1 text-center text-xs transition-all',
-            colorClasses.text.neutralMuted,
-            isBranchSummaryRow ? 'font-semibold cursor-default' : '',
-            degradeOpacity,
-            ringClass
-          )}
-        >
-          -
-        </button>
-      );
-    }
-
-    if (metric === 'premium') {
-      const state = classifyAchievementState(row.achievementRate);
-      return (
-        <button
-          type="button"
-          onClick={() => {
-            if (!canInteract) return;
-            setActiveCell({ org, date });
-            onCellClick?.({ org, date });
-          }}
-          onMouseEnter={() => {
-            if (!canInteract) return;
-            setHoverCell({ org, date });
-          }}
-          onMouseLeave={() => {
-            if (!canInteract) return;
-            setHoverCell(null);
-          }}
-          className={cn(
-            'w-full rounded px-1 py-1 text-center transition-all',
-            textStyles.numeric,
-            colorClasses.text.neutralDark,
-            isBranchSummaryRow ? 'font-semibold cursor-default' : '',
-            degradeOpacity,
-            ringClass
-          )}
-          style={{
-            backgroundColor: getHeatmapStateColor(state),
-            borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
-            boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
-          }}
-        >
-          {formatPremiumWanDisplay(row.premium)}
-        </button>
-      );
-    }
-
-    if (metric === 'achievement') {
-      const state = classifyAchievementState(row.achievementRate);
-      return (
-        <button
-          type="button"
-          onClick={() => {
-            if (!canInteract) return;
-            setActiveCell({ org, date });
-            onCellClick?.({ org, date });
-          }}
-          onMouseEnter={() => {
-            if (!canInteract) return;
-            setHoverCell({ org, date });
-          }}
-          onMouseLeave={() => {
-            if (!canInteract) return;
-            setHoverCell(null);
-          }}
-          className={cn(
-            'w-full rounded px-1 py-1 text-center transition-all',
-            textStyles.numeric,
-            colorClasses.text.neutralDark,
-            isBranchSummaryRow ? 'font-semibold cursor-default' : '',
-            degradeOpacity,
-            ringClass
-          )}
-          style={{
-            backgroundColor: getHeatmapStateColor(state),
-            borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
-            boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
-          }}
-        >
-          {row.achievementRate === null ? '-' : formatPercent(row.achievementRate)}
-        </button>
-      );
-    }
-
-    const majorRate = growthMode === 'mom' ? row.momGrowthRate : row.yoyGrowthRate;
-    const state = classifyGrowthState(majorRate);
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          if (!canInteract) return;
-          setActiveCell({ org, date });
-          onCellClick?.({ org, date });
-        }}
-        onMouseEnter={() => {
-          if (!canInteract) return;
-          setHoverCell({ org, date });
-        }}
-        onMouseLeave={() => {
-          if (!canInteract) return;
-          setHoverCell(null);
-        }}
-        className={cn(
-          'w-full rounded px-1 py-1 text-center transition-all',
-          textStyles.numeric,
-          colorClasses.text.neutralDark,
-          isBranchSummaryRow ? 'font-semibold cursor-default' : '',
-          degradeOpacity,
-          ringClass
-        )}
-        style={{
-          backgroundColor: getHeatmapStateColor(state),
-          borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
-          boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
-        }}
-      >
-        <div>{majorRate === null ? '-' : formatPercent(majorRate)}</div>
-      </button>
-    );
-  };
-
-  return (
-    <section className={cn(cardStyles.standard, 'space-y-3')}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Tabs
-          items={getHeatmapMetricTabs(growthMode)}
-          activeKey={metric}
-          onChange={(key) => setMetric(key as HeatmapMetric)}
-          variant="pills"
-          size="small"
-        />
-        <p className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
-          {timePeriod === 'day' && '增长率环比按同星期几对比（周环比），同比按上年同日对比；点选单元格后将高亮同星期几列。'}
-          {timePeriod === 'week' && '每列为一个自然周的汇总保费，环比按上一周对比，同比按上年同周对比。'}
-          {timePeriod === 'month' && '每列为一个自然月的汇总保费，环比按上一月对比，同比按上年同月对比；点选后高亮同月列。'}
-          {timePeriod === 'quarter' && '每列为一个季度的汇总保费，环比按上一季度对比，同比按上年同季对比。'}
-        </p>
-      </div>
-      {error && <p className={cn(textStyles.body, colorClasses.text.danger)}>加载失败: {error}</p>}
-      {!error && (
-        <StickyTableFrame ref={scrollRef} maxHeight={560}>
-          <table className="w-full text-xs border-separate border-spacing-1" style={{ minWidth: `${100 + orgRows.dates.length * 72}px` }}>
-            <thead>
-              <tr>
-                <th className={cn('px-2 py-2 text-left', stickyTableStyles.firstColumnHeader, colorClasses.text.neutralDark)}>{dimensionLabel}</th>
-                {orgRows.dates.map((date) => {
-                  let headerLabel: string;
-                  if (timePeriod === 'year') {
-                    headerLabel = date.slice(0, 4); // YYYY
-                  } else if (timePeriod === 'month') {
-                    headerLabel = date.slice(0, 7); // YYYY-MM
-                  } else if (timePeriod === 'quarter') {
-                    const month = parseInt(date.slice(5, 7), 10);
-                    const q = Math.ceil(month / 3);
-                    headerLabel = `${date.slice(0, 4)}-Q${q}`;
-                  } else if (timePeriod === 'week') {
-                    headerLabel = `${date.slice(5)}周`; // MM-DD周
-                  } else {
-                    headerLabel = date.slice(5); // MM-DD
-                  }
-                  return (
-                    <th key={date} className={cn('px-2 py-2 text-center', stickyTableStyles.header, colorClasses.text.neutralMuted)}>{headerLabel}</th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={orgRows.dates.length + 1} className={cn('px-3 py-6 text-center', colorClasses.text.neutralMuted)}>
-                    数据加载中...
-                  </td>
-                </tr>
-              )}
-              {!loading && orgRows.organizations.length === 0 && (
-                <tr>
-                  <td colSpan={orgRows.dates.length + 1} className={cn('px-3 py-6 text-center', colorClasses.text.neutralMuted)}>
-                    暂无热力图数据
-                  </td>
-                </tr>
-              )}
-              {!loading && orgRows.organizations.map((org) => {
-                const orgLine = orgRows.matrix.get(org);
-                const isBranchSummaryRow = org === BRANCH_SUMMARY_ROW_LABEL;
-                const canRowClick = Boolean(onRowClick) && !isBranchSummaryRow;
-                return (
-                  <tr key={org}>
-                    <td
-                      className={cn(
-                        stickyTableStyles.firstColumn,
-                        'px-2 py-1 z-10 whitespace-nowrap',
-                        colorClasses.text.neutralDark,
-                        isBranchSummaryRow ? 'font-semibold' : '',
-                        canRowClick ? 'cursor-pointer hover:text-primary hover:underline' : ''
-                      )}
-                      onClick={canRowClick ? () => onRowClick?.(org) : undefined}
-                      title={canRowClick ? `点击下钻 ${org}` : org}
-                    >{formatDimensionLabel(org)}</td>
-                    {orgRows.dates.map((date) => (
-                      <td key={`${org}-${date}`} className="p-0.5 min-w-[84px]">
-                        {renderCell(org, date, orgLine?.get(date), isBranchSummaryRow)}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </StickyTableFrame>
-      )}
-      <div className="flex flex-wrap gap-2">
-        {[
-          { key: 'excellent', label: '优秀', color: getHeatmapStateColor('excellent') },
-          { key: 'healthy', label: '健康', color: getHeatmapStateColor('healthy') },
-          { key: 'abnormal', label: '异常', color: getHeatmapStateColor('abnormal') },
-          { key: 'danger', label: '危险', color: getHeatmapStateColor('danger') },
-        ].map((item) => (
-          <span
-            key={item.key}
-            className={cn('inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs', colorClasses.text.neutralDark)}
-            style={{ backgroundColor: item.color }}
-          >
-            {item.label}
-          </span>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 const SUMMARY_ORDER = ['整体', '主全', '交三', '单交'];
 
 function mapTimePeriodToTrendGranularity(timePeriod: PerformanceTimePeriod): 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' {
@@ -711,6 +255,7 @@ function DistributionChart({
 }) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
+  const { resolvedTheme } = useTheme();
 
   const points = useMemo(() => {
     const filtered = rows.filter((row) => row.achievement_rate !== null && row.growth_rate !== null);
@@ -809,7 +354,12 @@ function DistributionChart({
       return 16;
     };
 
+    const isDark = resolvedTheme === 'dark';
+    const textColor = isDark ? '#f0f0f0' : '#333';
+    const subTextColor = isDark ? '#a3a3a3' : '#666';
+
     const option: EChartsOption = {
+      textStyle: { color: textColor },
       tooltip: {
         trigger: 'item',
         formatter: (params: any) => {
@@ -833,6 +383,7 @@ function DistributionChart({
       legend: {
         top: 0,
         type: 'scroll',
+        textStyle: { color: subTextColor },
         data: ['高增长高达成（优秀）', '高增长低达成（异常）', '低增长高达成（预警）', '低增长低达成（危险）'],
       },
       grid: {
@@ -845,17 +396,19 @@ function DistributionChart({
       xAxis: {
         type: 'value',
         name: '达成率',
+        nameTextStyle: { color: subTextColor },
         min: axisRange.xMin,
         max: axisRange.xMax,
-        axisLabel: { formatter: '{value}%' },
+        axisLabel: { formatter: '{value}%', color: subTextColor },
         splitLine: { show: false },
       },
       yAxis: {
         type: 'value',
         name: '增长率',
+        nameTextStyle: { color: subTextColor },
         min: axisRange.yMin,
         max: axisRange.yMax,
-        axisLabel: { formatter: '{value}%' },
+        axisLabel: { formatter: '{value}%', color: subTextColor },
         splitLine: { show: false },
       },
       series: [
@@ -938,7 +491,7 @@ function DistributionChart({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [axisRange, error, loading, points]);
+  }, [axisRange, error, loading, points, resolvedTheme]);
 
   useEffect(() => {
     return () => {
@@ -1396,7 +949,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
             </div>
           </div>
         )}
-        <PerformanceOrgHeatmap
+        <PerformanceOrgHeatmapV2
           rows={heatmapQuery.rows}
           loading={heatmapQuery.loading}
           error={heatmapQuery.error}
@@ -1410,25 +963,16 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         />
       </SectionBlock>
 
-      {heatmapSelection && (
-        <section className={cn(cardStyles.standard, 'space-y-3')}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className={cn(textStyles.body, colorClasses.text.neutralDark)}>
-              已选择：<span className={cn(textStyles.numeric, 'font-semibold')}>{heatmapSelection.org}</span>
-              <span className={cn(colorClasses.text.neutralMuted, 'ml-2')}>（{heatmapSelection.date}）</span>
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPicker(true)}
-                className={cn('px-3 py-1.5 text-sm rounded-lg border transition-colors', colorClasses.border.primary, colorClasses.text.primary)}
-              >
-                选择下钻维度
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
+      <HeatmapFocusPanel
+        activeCell={heatmapSelection}
+        row={heatmapSelection ? heatmapQuery.rows.find(
+          (r) => r.orgLevel3 === heatmapSelection.org && r.policyDate === heatmapSelection.date
+        ) : undefined}
+        metric={defaultHeatmapMetric ?? 'growth'}
+        growthMode={growthMode}
+        onDrillClick={() => setShowPicker(true)}
+        onClear={() => setHeatmapSelection(null)}
+      />
 
       <SectionBlock id="performance-summary">
       <SectionTitle title={summaryTitle} />

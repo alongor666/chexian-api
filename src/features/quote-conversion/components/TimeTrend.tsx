@@ -4,6 +4,7 @@ import { BarChart, LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { cardStyles, colorClasses, quoteChartColors, toggleButtonStyles, cn } from '../../../shared/styles';
+import { useTheme } from '../../../shared/theme';
 import { useQuoteTrend } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';
 
@@ -18,6 +19,8 @@ export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
   const chartRef = useRef<HTMLDivElement>(null);
   const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>(defaultGranularity);
   const { data, isLoading } = useQuoteTrend(filters, granularity);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   useEffect(() => {
     if (!chartRef.current || !data || data.length === 0) return;
@@ -38,14 +41,15 @@ export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
       return data.filter(r => r.time_bucket === t).reduce((sum, r) => sum + (r.total_quotes ?? 0), 0);
     });
 
+    const textColor = isDark ? '#a3a3a3' : '#666';
     const option: echarts.EChartsCoreOption = {
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-      legend: { data: ['报价量', '续保转化率', '转保转化率'], top: 0, textStyle: { fontSize: 11 } },
+      legend: { data: ['报价量', '续保转化率', '转保转化率'], top: 0, textStyle: { fontSize: 11, color: textColor } },
       grid: { left: 50, right: 50, top: 40, bottom: 30 },
-      xAxis: { type: 'category', data: timeBuckets, axisLabel: { fontSize: 10 } },
+      xAxis: { type: 'category', data: timeBuckets, axisLabel: { fontSize: 10, color: textColor } },
       yAxis: [
-        { type: 'value', name: '报价量', axisLabel: { fontSize: 10 }, splitLine: { show: false } },
-        { type: 'value', name: '转化率%', axisLabel: { fontSize: 10, formatter: '{value}%' }, splitLine: { show: false } },
+        { type: 'value', name: '报价量', nameTextStyle: { color: textColor }, axisLabel: { fontSize: 10, color: textColor }, splitLine: { show: false } },
+        { type: 'value', name: '转化率%', nameTextStyle: { color: textColor }, axisLabel: { fontSize: 10, color: textColor, formatter: '{value}%' }, splitLine: { show: false } },
       ],
       series: [
         {

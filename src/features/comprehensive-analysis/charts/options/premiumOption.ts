@@ -2,7 +2,7 @@ import type { EChartsOption } from 'echarts';
 import { comprehensiveTheme } from '@/shared/styles';
 import type { ComprehensiveMetricRow } from '../../types';
 
-export function buildPremiumOption(rows: ComprehensiveMetricRow[]): EChartsOption {
+export function buildPremiumOption(rows: ComprehensiveMetricRow[], isDark = false): EChartsOption {
   const displayRows = rows.slice(0, 15);
   const categories = displayRows.map((row) => row.dimKey);
   const premiumData = displayRows.map((row) => Number((row.signedPremium / 10000).toFixed(2)));
@@ -11,7 +11,7 @@ export function buildPremiumOption(rows: ComprehensiveMetricRow[]): EChartsOptio
   return {
     grid: { left: '4%', right: '4%', top: 42, bottom: 30, containLabel: true },
     tooltip: { trigger: 'axis' },
-    legend: { data: ['签单保费(万)', '年计划达成率'], top: 0 },
+    legend: { data: ['签单保费(万)', '年计划达成率'], top: 0, textStyle: { color: isDark ? '#a3a3a3' : '#595959' } },
     xAxis: {
       type: 'category',
       data: categories,

@@ -323,7 +323,7 @@ export const tableStyles = {
   /** 表体单元格 */
   cell: 'px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300',
   /** 数值单元格（右对齐） */
-  cellNumeric: 'px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 text-right font-tabular',
+  cellNumeric: 'px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 text-right font-numeric tabular-nums',
 } as const
 
 /**
@@ -332,7 +332,7 @@ export const tableStyles = {
 export const stickyTableStyles = {
   /** 滚动容器 */
   scrollFrame:
-    'overflow-auto overscroll-contain rounded-lg border border-neutral-100 bg-white/80 dark:bg-surface-1/80 dark:border-subtle',
+    'overflow-auto overscroll-contain rounded-lg border border-neutral-100 bg-white dark:bg-surface-1 dark:border-subtle',
   /** 吸顶表头 */
   header:
     'sticky top-0 z-20 bg-white dark:bg-surface-1 shadow-[inset_0_-1px_0_0_rgba(229,231,235,1)] dark:shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.06)]',
@@ -365,7 +365,7 @@ export const textStyles = {
   /** 强调 */
   emphasis: 'font-semibold',
   /** 数值（等宽字体） */
-  numeric: 'font-tabular tabular-nums',
+  numeric: 'font-numeric tabular-nums',
 } as const
 
 /**
@@ -391,11 +391,11 @@ export const numericStyles = {
   /** KPI 次级数字 (24px — 对齐 text-2xl 阶梯) */
   kpiSecondary: 'font-kpi text-2xl tracking-tight font-bold leading-none',
   /** 表格数字单元格 */
-  tableValue: 'font-tabular tabular-nums text-sm text-neutral-900 dark:text-neutral-100',
+  tableValue: 'font-numeric tabular-nums text-sm text-neutral-900 dark:text-neutral-100',
   /** 表格次要数字 */
-  tableSecondary: 'font-tabular tabular-nums text-sm text-neutral-500 dark:text-neutral-400',
+  tableSecondary: 'font-numeric tabular-nums text-sm text-neutral-500 dark:text-neutral-400',
   /** 小号数字（标签/统计） */
-  captionValue: 'font-tabular tabular-nums text-xs',
+  captionValue: 'font-numeric tabular-nums text-xs',
 } as const
 
 /**
@@ -657,17 +657,17 @@ export const funnelLevelColors = [
 /** 热力图转化率→背景色映射（使用语义色，自动适配 dark mode） */
 export function getHeatmapColor(rate: number): string {
   if (rate >= 15) return 'bg-success-solid text-white'
-  if (rate >= 10) return 'bg-success-border text-neutral-900'
-  if (rate >= 7) return 'bg-success-bg text-neutral-800'
-  if (rate >= 4) return 'bg-amber-bg text-neutral-800'
-  if (rate >= 1) return 'bg-danger-bg text-neutral-800'
-  return 'bg-danger-border text-neutral-800'
+  if (rate >= 10) return 'bg-success-border text-neutral-900 dark:text-neutral-100'
+  if (rate >= 7) return 'bg-success-bg text-neutral-800 dark:text-neutral-100'
+  if (rate >= 4) return 'bg-amber-bg text-neutral-800 dark:text-neutral-100'
+  if (rate >= 1) return 'bg-danger-bg text-neutral-800 dark:text-neutral-100'
+  return 'bg-danger-border text-neutral-800 dark:text-neutral-100'
 }
 
 /** 维度/粒度切换按钮样式（选中/未选中） */
 export const toggleButtonStyles = {
   active: 'bg-neutral-800 text-white dark:bg-white/15 dark:text-neutral-100',
-  inactive: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-transparent dark:text-neutral-400 dark:hover:bg-white/8',
+  inactive: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-white/6 dark:text-neutral-300 dark:hover:bg-white/12',
 } as const
 
 /**

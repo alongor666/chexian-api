@@ -235,11 +235,11 @@ html.dark .text-neutral-800 { color: #e0e0e0; }
 html.dark .text-neutral-700 { color: #d0d0d0; }
 html.dark .text-neutral-600 { color: #a3a3a3; }
 
-/* 热力图：dark 模式下实色 → 半透明（减少刺眼感） */
-html.dark [data-heatmap-status="excellent"] { background-color: rgba(52, 211, 153, 0.25) !important; color: #6ee7b7 !important; }
-html.dark [data-heatmap-status="healthy"]   { background-color: rgba(96, 165, 250, 0.25) !important; color: #93c5fd !important; }
-html.dark [data-heatmap-status="abnormal"]  { background-color: rgba(251, 191, 36, 0.20) !important; color: #fcd34d !important; }
-html.dark [data-heatmap-status="danger"]    { background-color: rgba(248, 113, 113, 0.20) !important; color: #fca5a5 !important; }
+/* 热力图：dark 模式半透明底 + 高对比度文字 */
+html.dark [data-heatmap-status="excellent"] { background-color: rgba(52, 211, 153, 0.22) !important; color: #ecfdf5 !important; }
+html.dark [data-heatmap-status="healthy"]   { background-color: rgba(96, 165, 250, 0.22) !important; color: #eff6ff !important; }
+html.dark [data-heatmap-status="abnormal"]  { background-color: rgba(251, 191, 36, 0.22) !important; color: #fefce8 !important; }
+html.dark [data-heatmap-status="danger"]    { background-color: rgba(248, 113, 113, 0.22) !important; color: #fef2f2 !important; }
 
 /* shadow 在深色下用边框替代 */
 html.dark .shadow-sm { box-shadow: none; }

@@ -4,7 +4,8 @@ import type { ComprehensiveMetricRow } from '../../types';
 
 export function buildExpenseOption(
   rows: ComprehensiveMetricRow[],
-  expenseBudget: number
+  expenseBudget: number,
+  isDark = false
 ): EChartsOption {
   const displayRows = rows.slice(0, 15);
   const categories = displayRows.map((row) => row.dimKey);
@@ -14,7 +15,7 @@ export function buildExpenseOption(
   return {
     grid: { left: '4%', right: '4%', top: 42, bottom: 30, containLabel: true },
     tooltip: { trigger: 'axis' },
-    legend: { data: ['费用金额(万)', '费用率'], top: 0 },
+    legend: { data: ['费用金额(万)', '费用率'], top: 0, textStyle: { color: isDark ? '#a3a3a3' : '#595959' } },
     xAxis: {
       type: 'category',
       data: categories,

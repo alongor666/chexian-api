@@ -4,6 +4,7 @@ import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFil
 import { Tabs, Button } from '@/shared/ui';
 import { cardStyles, cn, colorClasses, textStyles, buttonStyles } from '@/shared/styles';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
+import { useTheme } from '@/shared/theme';
 import { formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
 import { useComprehensiveBundle } from '@/features/comprehensive-analysis/hooks/useComprehensiveBundle';
 import type {
@@ -54,6 +55,8 @@ interface ComprehensiveAnalysisPageProps {
 }
 
 export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps> = ({ onBack }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const { filters, maxDataDate } = useGlobalFilters();
   const { data, loading, error } = useComprehensiveBundle(filters, maxDataDate);
 
@@ -180,33 +183,34 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
 
     switch (activeTab) {
       case 'overview':
-        return buildOverviewOption(selectedMetricRows);
+        return buildOverviewOption(selectedMetricRows, isDark);
       case 'premium':
-        return buildPremiumOption(selectedMetricRows);
+        return buildPremiumOption(selectedMetricRows, isDark);
       case 'cost':
         return buildCostOption(selectedMetricRows);
       case 'loss':
         if (lossView === 'trend') {
-          return buildLossTrendOption(data.loss.trendRows);
+          return buildLossTrendOption(data.loss.trendRows, isDark);
         }
         return buildLossQuadrantOption(
           selectedMetricRows,
           data.meta.thresholds.lossRateWarn
         );
       case 'expense':
-        return buildExpenseOption(selectedMetricRows, data.meta.thresholds.expenseBudget);
+        return buildExpenseOption(selectedMetricRows, data.meta.thresholds.expenseBudget, isDark);
       case 'roi':
       default:
         return buildRoiOption(roiRows);
     }
-  }, [activeTab, data, lossView, roiRows, selectedMetricRows]);
+  }, [activeTab, data, isDark, lossView, roiRows, selectedMetricRows]);
 
   const secondaryChartOption = useMemo(() => {
     if (!data || activeTab !== 'expense') return null;
     return buildExpenseSurplusOption(
-      data.expense.surplusRows.filter((row) => row.dimType === currentDimension)
+      data.expense.surplusRows.filter((row) => row.dimType === currentDimension),
+      isDark
     );
-  }, [activeTab, currentDimension, data]);
+  }, [activeTab, currentDimension, data, isDark]);
 
   const isDimensionVisible = activeTab !== 'loss' || lossView === 'quadrant';
 

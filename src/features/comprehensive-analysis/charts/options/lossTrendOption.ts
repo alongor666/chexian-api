@@ -2,7 +2,7 @@ import type { EChartsOption } from 'echarts';
 import { comprehensiveTheme } from '@/shared/styles';
 import type { ComprehensiveLossTrendRow } from '../../types';
 
-export function buildLossTrendOption(rows: ComprehensiveLossTrendRow[]): EChartsOption {
+export function buildLossTrendOption(rows: ComprehensiveLossTrendRow[], isDark = false): EChartsOption {
   const categories = rows.map((row) => row.timePeriod);
   const claimRatioSeries = rows.map((row) => row.earnedClaimRatio ?? 0);
   const claimShareSeries = rows.map((row) => row.claimShare);
@@ -10,7 +10,7 @@ export function buildLossTrendOption(rows: ComprehensiveLossTrendRow[]): ECharts
   return {
     grid: { left: '4%', right: '4%', top: 42, bottom: 30, containLabel: true },
     tooltip: { trigger: 'axis' },
-    legend: { data: ['满期赔付率', '赔款贡献度'], top: 0 },
+    legend: { data: ['满期赔付率', '赔款贡献度'], top: 0, textStyle: { color: isDark ? '#a3a3a3' : '#595959' } },
     xAxis: {
       type: 'category',
       data: categories,

@@ -1,6 +1,7 @@
 /**
- * Performance Org Heatmap - extracted from PerformanceAnalysisPanel.tsx
- * Renders the heatmap grid with metric tabs, date columns, and interactive cells.
+ * @deprecated Use PerformanceOrgHeatmapV2 instead.
+ * This file is kept for backward compatibility during transition.
+ * Original: Performance Org Heatmap - extracted from PerformanceAnalysisPanel.tsx
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';

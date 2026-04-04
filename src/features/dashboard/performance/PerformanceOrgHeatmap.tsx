@@ -1,6 +1,7 @@
 /**
- * Performance Org Heatmap — extracted from PerformanceAnalysisPanel.tsx
- * Displays a heatmap grid of orgs × dates with growth/achievement/premium metrics.
+ * @deprecated Use PerformanceOrgHeatmapV2 instead.
+ * This file is kept for backward compatibility during transition.
+ * Original: Performance Org Heatmap — extracted from PerformanceAnalysisPanel.tsx
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -9,6 +10,7 @@ import { Tabs } from '@/shared/ui/Tabs';
 import type { TabItem } from '@/shared/ui/Tabs';
 import { formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
 import { cn, colorClasses, colors, stickyTableStyles, textStyles } from '@/shared/styles';
+import { useTheme } from '@/shared/theme';
 import type { PerformanceGrowthMode, PerformanceTimePeriod } from '../hooks/usePerformanceSummary';
 import type { PerformanceOrgHeatmapRow } from '../hooks/usePerformanceOrgHeatmap';
 
@@ -30,7 +32,16 @@ export interface PerformanceOrgHeatmapProps {
 
 // ==================== Helpers ====================
 
-function getHeatmapStateColor(state: HeatmapState): string {
+const DARK_HEATMAP_COLORS: Record<string, string> = {
+  excellent: 'rgba(52, 211, 153, 0.22)',
+  healthy: 'rgba(96, 165, 250, 0.22)',
+  abnormal: 'rgba(251, 191, 36, 0.22)',
+  danger: 'rgba(248, 113, 113, 0.22)',
+  unknown: 'rgba(255, 255, 255, 0.06)',
+};
+
+function getHeatmapStateColor(state: HeatmapState, isDark = false): string {
+  if (isDark) return DARK_HEATMAP_COLORS[state] ?? DARK_HEATMAP_COLORS.unknown;
   switch (state) {
     case 'excellent':
       return colors.success.bg;
@@ -142,6 +153,8 @@ export function PerformanceOrgHeatmap({
   onCellClick,
   onRowClick,
 }: PerformanceOrgHeatmapProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [metric, setMetric] = useState<HeatmapMetric>('growth');
   const [activeCell, setActiveCell] = useState<{ org: string; date: string } | null>(null);
   const [hoverCell, setHoverCell] = useState<{ org: string; date: string } | null>(null);
@@ -295,7 +308,7 @@ export function PerformanceOrgHeatmap({
             ringClass
           )}
           style={{
-            backgroundColor: getHeatmapStateColor(state),
+            backgroundColor: getHeatmapStateColor(state, isDark),
             borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
             boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
           }}
@@ -322,7 +335,7 @@ export function PerformanceOrgHeatmap({
           ringClass
         )}
         style={{
-          backgroundColor: getHeatmapStateColor(state),
+          backgroundColor: getHeatmapStateColor(state, isDark),
           borderColor: isSelected ? colors.primary.DEFAULT : 'transparent',
           boxShadow: isSelected ? `0 0 0 2px ${colors.primary.bg}` : 'none',
         }}
@@ -424,7 +437,7 @@ export function PerformanceOrgHeatmap({
           <span
             key={item.key}
             className={cn('inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs', colorClasses.text.neutralDark)}
-            style={{ backgroundColor: getHeatmapStateColor(item.key) }}
+            style={{ backgroundColor: getHeatmapStateColor(item.key, isDark) }}
           >
             {item.label}
           </span>
