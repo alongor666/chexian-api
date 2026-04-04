@@ -68,7 +68,8 @@ export const GroupedBarChart: React.FC<GroupedBarChartProps> = ({
         bottom: 0,
         icon: 'circle',
         itemWidth: 8,
-        itemHeight: 8
+        itemHeight: 8,
+        textStyle: { color: theme.chartTextStyles.legend.color },
       },
       grid: {
         top: 60,

@@ -2,7 +2,7 @@ import type { EChartsOption } from 'echarts';
 import { comprehensiveTheme } from '@/shared/styles';
 import type { ComprehensiveExpenseSurplusRow } from '../../types';
 
-export function buildExpenseSurplusOption(rows: ComprehensiveExpenseSurplusRow[]): EChartsOption {
+export function buildExpenseSurplusOption(rows: ComprehensiveExpenseSurplusRow[], isDark = false): EChartsOption {
   const displayRows = rows.slice(0, 15);
   const categories = displayRows.map((row) => row.dimKey);
   const surplusData = displayRows.map((row) =>
@@ -13,7 +13,7 @@ export function buildExpenseSurplusOption(rows: ComprehensiveExpenseSurplusRow[]
   return {
     grid: { left: '4%', right: '4%', top: 42, bottom: 30, containLabel: true },
     tooltip: { trigger: 'axis' },
-    legend: { data: ['费用结余额(万)', '费用率超支(百分点)'], top: 0 },
+    legend: { data: ['费用结余额(万)', '费用率超支(百分点)'], top: 0, textStyle: { color: isDark ? '#a3a3a3' : '#595959' } },
     xAxis: {
       type: 'category',
       data: categories,

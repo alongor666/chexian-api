@@ -178,7 +178,7 @@ export const RenewalStatusBadge: React.FC<RenewalStatusBadgeProps> = ({
         <div className="flex items-center justify-between mb-1">
           {showValue && (
             <span className={cn(
-              'font-mono tabular-nums font-semibold',
+              fontStyles.numeric, 'font-semibold',
               colors.text,
               size === 'small' ? 'text-xs' : 'text-sm'
             )}>

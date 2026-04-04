@@ -7,6 +7,7 @@ import React, { useEffect, useCallback } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '@/shared/utils/echarts';
 import { cardStyles, colorClasses, cn, fontStyles, tableStyles } from '@/shared/styles';
+import { useTheme } from '@/shared/theme';
 import { formatCount, formatPremiumWan, formatPercent } from '@/shared/utils/formatters';
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
 
@@ -26,6 +27,8 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
 }
 
 export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const { pendingOverview, pendingByOrg, pendingAging, causeAnalysis, claimCycle } = hook;
 
   const loadData = useCallback(() => {
@@ -51,7 +54,7 @@ export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
       { name: '赔案件数', type: 'bar' as const, data: pendingAging.data.map((r: any) => r.cases ?? 0), itemStyle: { color: '#5470c6' } },
       { name: '立案金额(万)', type: 'bar' as const, yAxisIndex: 1, data: pendingAging.data.map((r: any) => r.reserve_wan ?? 0), itemStyle: { color: '#ee6666' } },
     ],
-    legend: { data: ['赔案件数', '立案金额(万)'] },
+    legend: { data: ['赔案件数', '立案金额(万)'], textStyle: { color: isDark ? '#a3a3a3' : '#595959' } },
     grid: { left: 60, right: 60, bottom: 30 },
   };
 

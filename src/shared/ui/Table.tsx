@@ -4,7 +4,7 @@
  */
 import { memo, forwardRef, useState } from 'react'
 import type { HTMLAttributes, ReactNode, CSSProperties } from 'react'
-import { cn, getTrendColorClassByPolarity, getTrendDirection } from '../styles'
+import { cn, fontStyles, getTrendColorClassByPolarity, getTrendDirection } from '../styles'
 import type { MetricPolarity } from '../styles'
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 
@@ -389,7 +389,7 @@ export const NumericCell = memo(function NumericCell({
   className?: string
 }) {
   return (
-    <span className={cn('font-tabular tabular-nums', className)}>
+    <span className={cn(fontStyles.numeric, className)}>
       {value ?? '-'}
     </span>
   )
@@ -423,7 +423,7 @@ export const TrendCell = memo(function TrendCell({
   const displayValue = formatter ? formatter(value) : value.toString()
 
   return (
-    <span className={cn('font-tabular tabular-nums', colorClass, className)}>
+    <span className={cn(fontStyles.numeric, colorClass, className)}>
       {prefix}{displayValue}
     </span>
   )

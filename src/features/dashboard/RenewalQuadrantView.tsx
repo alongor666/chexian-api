@@ -3,6 +3,7 @@ import type { EChartsOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { cardStyles, textStyles, cn } from '../../shared/styles';
+import { useTheme } from '../../shared/theme';
 import type { DrilldownRow } from './hooks/useRenewalDrilldown';
 
 type QuadrantId = 'benchmark' | 'risk' | 'focus' | 'observe';
@@ -99,7 +100,7 @@ function normalizeRate(value: number): number {
     return value;
 }
 
-function buildChartOption(points: QuadrantPoint[]): EChartsOption {
+function buildChartOption(points: QuadrantPoint[], isDark: boolean): EChartsOption {
     const maxWeight = Math.max(...points.map((p) => p.weight_value), 1);
     const minWeight = Math.min(...points.map((p) => p.weight_value), 0);
 
@@ -133,6 +134,7 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
             top: 0,
             type: 'scroll',
             data: Object.values(QUADRANT_META).map((m) => m.label),
+            textStyle: { color: isDark ? '#a3a3a3' : '#595959' },
         },
         grid: {
             left: '7%',
@@ -222,6 +224,8 @@ export const RenewalQuadrantView = memo(function RenewalQuadrantView({
     rows,
     currentDimensionLabel,
 }: RenewalQuadrantViewProps) {
+    const { resolvedTheme } = useTheme();
+    const isDark = resolvedTheme === 'dark';
     const chartRef = useRef<HTMLDivElement>(null);
     const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
@@ -301,7 +305,7 @@ export const RenewalQuadrantView = memo(function RenewalQuadrantView({
             return;
         }
 
-        chart.setOption(buildChartOption(points), true);
+        chart.setOption(buildChartOption(points, isDark), true);
 
         const resizeObserver = new ResizeObserver(() => {
             chart.resize();
@@ -312,7 +316,7 @@ export const RenewalQuadrantView = memo(function RenewalQuadrantView({
         return () => {
             resizeObserver.disconnect();
         };
-    }, [points]);
+    }, [points, isDark]);
 
     useEffect(() => {
         return () => {

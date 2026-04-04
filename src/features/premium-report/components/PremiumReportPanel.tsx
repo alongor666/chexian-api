@@ -17,7 +17,7 @@ import type { TableColumn } from '../types/tableTypes';
 import type { OrgPremiumReportRow, SalesmanPremiumReportRow } from '../types/premiumReport';
 import { formatWanDirect, formatRate, formatCount, formatTeamName } from '../../../shared/utils/formatters';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
-import { colorClasses } from '../../../shared/styles';
+import { colorClasses, fontStyles } from '../../../shared/styles';
 
 type PremiumTab = 'report' | 'plan';
 
@@ -254,7 +254,7 @@ export const PremiumReportPanel: React.FC = () => {
               />
             </div>
             <div className={`px-4 py-3 border-t ${colorClasses.bg.neutral} ${colorClasses.border.neutral} text-sm ${colorClasses.text.neutralMuted}`}>
-              共 <span className="font-tabular">{formatCount(sortedOrgReport.length)}</span> 个机构
+              共 <span className={fontStyles.numeric}>{formatCount(sortedOrgReport.length)}</span> 个机构
             </div>
           </div>
 
@@ -280,7 +280,7 @@ export const PremiumReportPanel: React.FC = () => {
               />
             </div>
             <div className={`px-4 py-3 border-t ${colorClasses.bg.neutral} ${colorClasses.border.neutral} text-sm ${colorClasses.text.neutralMuted}`}>
-              共 <span className="font-tabular">{formatCount(sortedSalesmanReport.length)}</span> 名业务员
+              共 <span className={fontStyles.numeric}>{formatCount(sortedSalesmanReport.length)}</span> 名业务员
             </div>
           </div>
         </>

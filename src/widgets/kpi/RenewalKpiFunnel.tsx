@@ -14,7 +14,7 @@
  */
 
 import React from 'react';
-import { cn, colorClasses } from '../../shared/styles';
+import { cn, colorClasses, fontStyles } from '../../shared/styles';
 import { formatCount } from '../../shared/utils/formatters';
 import {
   RenewalStatusBadge,
@@ -58,7 +58,7 @@ const FunnelNode: React.FC<{
     <span className="text-xs text-neutral-500 mb-1">{label}</span>
     <span
       className={cn(
-        'text-xl font-bold font-mono tabular-nums',
+        fontStyles.kpi, 'text-xl font-bold',
         highlight ? color || colorClasses.text.successDark : colorClasses.text.neutralBlack
       )}
     >
@@ -79,7 +79,7 @@ const FunnelArrow: React.FC<{
       <span className="text-[10px] text-neutral-400 mb-0.5">{label || '转化率'}</span>
       <div className="flex items-center gap-1">
         <span className="text-neutral-300">─</span>
-        <span className={cn('text-xs font-semibold font-mono tabular-nums', color)}>
+        <span className={cn('text-xs font-semibold', fontStyles.numeric, color)}>
           {percent}%
         </span>
         <span className="text-neutral-300">→</span>
@@ -181,7 +181,7 @@ export const RenewalKpiFunnel: React.FC<RenewalKpiFunnelProps> = ({
         <div className="flex items-center justify-center gap-3">
           <span className="text-sm text-neutral-500">最终续保率</span>
           <span className={cn(
-            'text-2xl font-bold font-mono tabular-nums',
+            fontStyles.kpi, 'text-2xl font-bold',
             statusColors[status]
           )}>
             {Math.round(renewalRate * 1000) / 10}%

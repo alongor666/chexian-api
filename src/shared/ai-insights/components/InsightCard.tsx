@@ -6,7 +6,7 @@
 
 import { memo } from 'react';
 import type { Insight, InsightType } from '../types';
-import { cn, getTrendColorClassByPolarity, getTrendDirection, colorClasses } from '../../styles';
+import { cn, getTrendColorClassByPolarity, getTrendDirection, colorClasses, fontStyles } from '../../styles';
 
 interface InsightCardProps {
   insight: Insight;
@@ -117,9 +117,9 @@ export const InsightCard = memo(function InsightCard({ insight, className }: Ins
         <div className="mt-2 pt-2 border-t border-current/10">
           <div className="flex items-center gap-4 text-xs">
             <span className="font-medium">{insight.metric.name}:</span>
-            <span className="font-mono font-semibold">{insight.metric.value}</span>
+            <span className={cn(fontStyles.numeric, 'font-semibold')}>{insight.metric.value}</span>
             {metricDelta !== undefined && (
-              <span className={cn('font-mono font-semibold', deltaTextClass)}>
+              <span className={cn(fontStyles.numeric, 'font-semibold', deltaTextClass)}>
                 {deltaArrow} {deltaPrefix}{metricDelta}
               </span>
             )}

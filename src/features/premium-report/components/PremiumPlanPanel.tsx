@@ -13,7 +13,7 @@ import { usePremiumPlan } from '../hooks/usePremiumPlan';
 import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
 import { TableSkeleton } from '../../../shared/ui/Skeleton';
-import { cn, numericStyles, colorClasses } from '../../../shared/styles';
+import { cn, numericStyles, colorClasses, fontStyles } from '../../../shared/styles';
 import { formatCount, formatPercent, formatSalesmanName, formatWanDirect } from '../../../shared/utils/formatters';
 import type { PlanDrilldownRow, PlanKpiData, PlanDistributionRow, SortState } from '../types/premiumReport';
 
@@ -246,7 +246,7 @@ const DrilldownTable: React.FC<{
                           {col.format(row)}
                         </button>
                       ) : (
-                        <span className={`font-tabular ${isRateCol ? getRateColor(row[col.key] as number | null) : ''}`}>
+                        <span className={cn(fontStyles.numeric, isRateCol ? getRateColor(row[col.key] as number | null) : '')}>
                           {col.format(row)}
                         </span>
                       )}

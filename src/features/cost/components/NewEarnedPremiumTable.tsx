@@ -24,6 +24,7 @@ import {
   cardStyles,
   badgeStyles,
   colorClasses,
+  fontStyles,
   cn,
 } from '../../../shared/styles';
 import type {
@@ -442,11 +443,11 @@ const Policy2025TriangleTable: React.FC<{
                   {MONTH_LABELS[policyMonth]}
                 </td>
                 {/* 保费 */}
-                <td className={cn('px-1 py-1.5 text-right font-tabular', colorClasses.text.neutralBlack)}>
+                <td className={cn('px-1 py-1.5 text-right', fontStyles.numeric, colorClasses.text.neutralBlack)}>
                   {formatPremiumWan(row.premium)}
                 </td>
                 {/* 首日费用 */}
-                <td className={cn('px-1 py-1.5 text-right font-tabular', colorClasses.text.primary)}>
+                <td className={cn('px-1 py-1.5 text-right', fontStyles.numeric, colorClasses.text.primary)}>
                   {formatPremiumWan(row.first_day_fee)}
                 </td>
                 {/* 25年各月 */}
@@ -462,7 +463,7 @@ const Policy2025TriangleTable: React.FC<{
                     <td
                       key={key}
                       className={cn(
-                        'px-1 py-1.5 text-right font-tabular',
+                        'px-1 py-1.5 text-right', fontStyles.numeric,
                         isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack,
                         isStartMonth && !isZero && `${colorClasses.bg.success} font-medium ${colorClasses.text.success}`
                       )}
@@ -481,7 +482,7 @@ const Policy2025TriangleTable: React.FC<{
                     <td
                       key={key}
                       className={cn(
-                        'px-1 py-1.5 text-right font-tabular',
+                        'px-1 py-1.5 text-right', fontStyles.numeric,
                         isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack
                       )}
                     >
@@ -490,7 +491,7 @@ const Policy2025TriangleTable: React.FC<{
                   );
                 })}
                 {/* 最终已赚 */}
-                <td className={`px-1 py-1.5 text-right font-tabular font-semibold ${colorClasses.text.indigo} bg-indigo-bg`}>
+                <td className={cn('px-1 py-1.5 text-right font-semibold bg-indigo-bg', fontStyles.numeric, colorClasses.text.indigo)}>
                   {formatPremiumWan(row.earned_total)}
                 </td>
               </tr>
@@ -549,11 +550,11 @@ const Policy2026TriangleTable: React.FC<{
                   {MONTH_LABELS[policyMonth]}
                 </td>
                 {/* 保费 */}
-                <td className={cn('px-1 py-1.5 text-right font-tabular', colorClasses.text.neutralBlack)}>
+                <td className={cn('px-1 py-1.5 text-right', fontStyles.numeric, colorClasses.text.neutralBlack)}>
                   {formatPremiumWan(row.premium)}
                 </td>
                 {/* 首日费用 */}
-                <td className={cn('px-1 py-1.5 text-right font-tabular', colorClasses.text.primary)}>
+                <td className={cn('px-1 py-1.5 text-right', fontStyles.numeric, colorClasses.text.primary)}>
                   {formatPremiumWan(row.first_day_fee)}
                 </td>
                 {/* 26年各月 */}
@@ -569,7 +570,7 @@ const Policy2026TriangleTable: React.FC<{
                     <td
                       key={key}
                       className={cn(
-                        'px-1 py-1.5 text-right font-tabular',
+                        'px-1 py-1.5 text-right', fontStyles.numeric,
                         isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack,
                         isStartMonth && !isZero && `${colorClasses.bg.success} font-medium ${colorClasses.text.success}`
                       )}
@@ -588,7 +589,7 @@ const Policy2026TriangleTable: React.FC<{
                     <td
                       key={key}
                       className={cn(
-                        'px-1 py-1.5 text-right font-tabular',
+                        'px-1 py-1.5 text-right', fontStyles.numeric,
                         isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack
                       )}
                     >
@@ -597,7 +598,7 @@ const Policy2026TriangleTable: React.FC<{
                   );
                 })}
                 {/* 最终已赚 */}
-                <td className={`px-1 py-1.5 text-right font-tabular font-semibold ${colorClasses.text.indigo} bg-indigo-bg`}>
+                <td className={cn('px-1 py-1.5 text-right font-semibold bg-indigo-bg', fontStyles.numeric, colorClasses.text.indigo)}>
                   {formatPremiumWan(row.earned_total)}
                 </td>
               </tr>

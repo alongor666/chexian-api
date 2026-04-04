@@ -8,6 +8,7 @@ import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '@/shared/utils/echarts';
 import { cardStyles, colorClasses, cn, fontStyles, tableStyles } from '@/shared/styles';
+import { useTheme } from '@/shared/theme';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
 import chinaGeoJson from '@/shared/assets/china.json';
@@ -68,6 +69,8 @@ const MAP_METRIC_OPTIONS: { key: MapMetric; label: string }[] = [
 ];
 
 export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const { geoAccident, geoPlate, geoComparison, frequencyYoy } = hook;
   const [mapMetric, setMapMetric] = useState<MapMetric>('cases');
   const [mapLevel, setMapLevel] = useState<MapLevel>('china');
@@ -198,7 +201,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
     const labels = data.map((r: any) => `${r.year}Q${r.quarter}`);
     return {
       tooltip: { trigger: 'axis' as const },
-      legend: { data: ['出险频度(‰)', '人伤占比(%)'] },
+      legend: { data: ['出险频度(‰)', '人伤占比(%)'], textStyle: { color: isDark ? '#a3a3a3' : '#595959' } },
       xAxis: { type: 'category' as const, data: labels, axisLabel: { rotate: 45 } },
       yAxis: [
         { type: 'value' as const, name: '频度(‰)', splitLine: { show: false } },
@@ -218,7 +221,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
       ],
       grid: { left: 60, right: 60, bottom: 60 },
     };
-  }, [frequencyYoy.data]);
+  }, [frequencyYoy.data, isDark]);
 
   const isLoading = geoAccident.loading || geoPlate.loading;
   const error = geoAccident.error || geoPlate.error;

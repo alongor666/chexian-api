@@ -8,6 +8,7 @@ import type { EChartsOption } from 'echarts';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import { cardStyles, cn, colorClasses, colors, textStyles } from '@/shared/styles';
+import { useTheme } from '@/shared/theme';
 import {
   classifyPerformanceQuadrant,
   getQuadrantLabel,
@@ -35,6 +36,8 @@ export function PerformanceDistributionChart({
   loading,
   error,
 }: PerformanceDistributionChartProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
@@ -160,6 +163,7 @@ export function PerformanceDistributionChart({
         top: 0,
         type: 'scroll',
         data: ['高增长高达成（优秀）', '高增长低达成（异常）', '低增长高达成（预警）', '低增长低达成（危险）'],
+        textStyle: { color: isDark ? '#a3a3a3' : '#595959' },
       },
       grid: {
         left: '7%',
@@ -264,7 +268,7 @@ export function PerformanceDistributionChart({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [axisRange, error, loading, points]);
+  }, [axisRange, error, loading, points, isDark]);
 
   useEffect(() => {
     return () => {

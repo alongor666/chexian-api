@@ -258,7 +258,7 @@ const FunnelArrow: React.FC<{ rate: number; label: string }> = ({ rate, label })
     <span className="text-[10px] text-neutral-400">{label}</span>
     <div className="flex items-center gap-0.5">
       <span className="text-neutral-300">─</span>
-      <span className="text-xs font-semibold font-mono tabular-nums text-neutral-500">
+      <span className={cn('text-xs font-semibold', fontStyles.numeric, colorClasses.text.neutral)}>
         {(rate * 100).toFixed(1)}%
       </span>
       <span className="text-neutral-300">→</span>

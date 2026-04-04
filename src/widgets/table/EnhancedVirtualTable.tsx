@@ -13,7 +13,7 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import { VariableSizeList as List } from 'react-window';
 import { TABLE_CSS_CLASSES } from '../../shared/config/chartStyles';
-import { colorClasses } from '../../shared/styles';
+import { colorClasses, fontStyles } from '../../shared/styles';
 
 type TableCellValue = React.ReactNode | string | number | bigint | null | undefined;
 type TableRow = Record<string, TableCellValue>;
@@ -203,7 +203,7 @@ export function EnhancedVirtualTable<T extends TableRow>({
                   minWidth: col.minWidth ?? 80,
                 }}
                 className={`truncate px-4 py-3 min-w-0 flex-shrink-0 text-sm ${colorClasses.text.neutralBlack} ${
-                  col.align === 'right' ? 'text-right font-mono' : col.align === 'center' ? 'text-center' : 'text-left'
+                  col.align === 'right' ? `text-right ${fontStyles.numeric}` : col.align === 'center' ? 'text-center' : 'text-left'
                 }`}
               >
                 {formattedValue}

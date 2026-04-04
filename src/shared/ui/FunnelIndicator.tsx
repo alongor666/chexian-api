@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { cn, colorClasses } from '../styles';
+import { cn, colorClasses, fontStyles } from '../styles';
 import { formatCount } from '../utils/formatters';
 
 // ============================================================================
@@ -83,7 +83,7 @@ export const FunnelIndicator: React.FC<FunnelIndicatorProps> = ({
           {/* 未报价部分（灰色，由背景色体现） */}
         </div>
         {/* 续保率数值 */}
-        <span className={`text-xs font-mono tabular-nums whitespace-nowrap ${colorClasses.text.neutral}`}>
+        <span className={cn('text-xs whitespace-nowrap', fontStyles.numeric, colorClasses.text.neutral)}>
           {renewalPercent}%
         </span>
       </div>

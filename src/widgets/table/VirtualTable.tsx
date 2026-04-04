@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { TableSkeleton } from '../../shared/ui/Skeleton';
 import { TABLE_CSS_CLASSES } from '../../shared/config/chartStyles';
-import { colorClasses } from '../../shared/styles';
+import { colorClasses, fontStyles } from '../../shared/styles';
 
 export type TableCellValue = React.ReactNode | string | number | bigint | null | undefined;
 
@@ -49,7 +49,7 @@ const VirtualRow = ({
       {itemData.cols.map(col => {
         const alignClass =
           col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left';
-        const numberClass = col.align === 'right' ? 'font-tabular' : '';
+        const numberClass = col.align === 'right' ? fontStyles.numeric : '';
         const rawValue = item?.[col.key] as TableCellValue;
         return (
           <div
@@ -101,7 +101,7 @@ export const VirtualTable = <T extends object>({
   };
 
   const getNumberClass = (align?: 'left' | 'right' | 'center'): string => {
-    return align === 'right' ? 'font-tabular' : '';
+    return align === 'right' ? fontStyles.numeric : '';
   };
 
   // 非虚拟化模式（小数据量）

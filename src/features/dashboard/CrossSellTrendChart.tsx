@@ -11,6 +11,7 @@ import type { EChartsOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
 import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import { cardStyles, textStyles, colors, cn } from '../../shared/styles';
+import { useTheme } from '../../shared/theme';
 import { useCrossSellTrend, type TrendGranularity } from './hooks/useCrossSellTrend';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import type { VehicleCategory, SeatCoverageLevel } from './hooks/useCrossSellTimePeriod';
@@ -112,6 +113,8 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
   annotations,
   rowsOverride,
 }: CrossSellTrendChartProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
@@ -206,7 +209,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
       legend: {
         top: 0,
         data: SERIES_ORDER,
-        textStyle: { fontSize: 12 },
+        textStyle: { fontSize: 12, color: isDark ? '#a3a3a3' : '#595959' },
       },
       grid: { left: '4%', right: '4%', top: 44, bottom: 36, containLabel: true },
       xAxis: {
@@ -271,7 +274,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [timePeriods, seriesData, loading, metric, overallExtremes, annotations]);
+  }, [timePeriods, seriesData, loading, metric, overallExtremes, annotations, isDark]);
 
   useEffect(() => {
     return () => {

@@ -14,6 +14,7 @@ import {
 } from '../../shared/export';
 import { Logger } from '@/shared/utils/logger';
 import { formatAverage, formatPercent } from '../../shared/utils/formatters';
+import { fontStyles } from '../../shared/styles';
 
 const logger = new Logger('ExportDialog');
 
@@ -240,7 +241,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             <div className="bg-primary-bg border border-primary-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-primary-dark">{getProgressText()}</span>
-                <span className="text-sm font-mono text-primary">{formatPercent(progress.percentage, 0)}</span>
+                <span className={`text-sm text-primary ${fontStyles.numeric}`}>{formatPercent(progress.percentage, 0)}</span>
               </div>
               <div className="w-full bg-primary-100 rounded-full h-1.5">
                 <div

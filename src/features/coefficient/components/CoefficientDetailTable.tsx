@@ -21,6 +21,7 @@ import {
   formatPeriodType,
 } from '../utils/formatters';
 import { TABLE_CSS_CLASSES } from '../../../shared/config/chartStyles';
+import { fontStyles } from '../../../shared/styles';
 
 interface CoefficientDetailTableProps {
   /** 数据行 */
@@ -95,30 +96,30 @@ const VirtualRow = memo<VirtualRowProps>(({ index, style, data }) => {
       <div style={{ width: COLUMN_WIDTHS.carAge, padding: '0 8px', textAlign: 'center' }}>
         {getCarAgeLabel(row)}
       </div>
-      <div style={{ width: COLUMN_WIDTHS.dayFactor, padding: '0 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+      <div className={fontStyles.numeric} style={{ width: COLUMN_WIDTHS.dayFactor, padding: '0 8px', textAlign: 'right' }}>
         {formatFactor(row.dayFactor)}
       </div>
-      <div style={{ width: COLUMN_WIDTHS.weekFactor, padding: '0 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+      <div className={fontStyles.numeric} style={{ width: COLUMN_WIDTHS.weekFactor, padding: '0 8px', textAlign: 'right' }}>
         {formatFactor(row.weekFactor)}
       </div>
-      <div style={{ width: COLUMN_WIDTHS.monthFactor, padding: '0 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+      <div className={fontStyles.numeric} style={{ width: COLUMN_WIDTHS.monthFactor, padding: '0 8px', textAlign: 'right' }}>
         {formatFactor(row.monthFactor)}
       </div>
-      <div style={{ width: COLUMN_WIDTHS.yearFactor, padding: '0 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+      <div className={fontStyles.numeric} style={{ width: COLUMN_WIDTHS.yearFactor, padding: '0 8px', textAlign: 'right' }}>
         {formatFactor(row.yearFactor)}
       </div>
       <div style={{ width: COLUMN_WIDTHS.threshold, padding: '0 8px', textAlign: 'center' }}>
         {row.thresholdDisplay}
       </div>
-      <div style={{ width: COLUMN_WIDTHS.ratio, padding: '0 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+      <div className={fontStyles.numeric} style={{ width: COLUMN_WIDTHS.ratio, padding: '0 8px', textAlign: 'right' }}>
         {formatRatio(row.weekThresholdRatio)}
       </div>
       <div
+        className={fontStyles.numeric}
         style={{
           width: COLUMN_WIDTHS.gap,
           padding: '0 8px',
           textAlign: 'right',
-          fontFamily: 'monospace',
           ...getGapPremiumStyle(row.gapPremium),
         }}
       >
