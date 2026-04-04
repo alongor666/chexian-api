@@ -5,6 +5,8 @@
  * 端点：/api/query/claims-detail/*
  */
 
+import { escapeSqlValue } from '../utils/security.js';
+
 // ── 类型 ──
 
 export interface ClaimsDetailFilters {
@@ -16,6 +18,9 @@ export interface ClaimsDetailFilters {
   accidentCause?: string;  // 出险原因
   accidentCity?: string;   // 出险城市
   customerCategory?: string; // 客户类别
+  isNev?: string;              // 新能源标识：1=新能源, 0=传统燃油
+  coverageCombination?: string; // 险别组合：主全/交三/单交
+  isTransfer?: string;         // 是否过户车：true/false
 }
 
 function buildWhere(filters: ClaimsDetailFilters, tableAlias = 'c'): string {
@@ -33,8 +38,13 @@ function buildWhere(filters: ClaimsDetailFilters, tableAlias = 'c'): string {
 
 function buildPolicyWhere(filters: ClaimsDetailFilters): string {
   const conditions: string[] = [];
-  if (filters.orgName) conditions.push(`p.org_level_3 = '${filters.orgName}'`);
-  if (filters.customerCategory) conditions.push(`p.customer_category = '${filters.customerCategory}'`);
+  if (filters.orgName) conditions.push(`p.org_level_3 = '${escapeSqlValue(filters.orgName)}'`);
+  if (filters.customerCategory) conditions.push(`p.customer_category = '${escapeSqlValue(filters.customerCategory)}'`);
+  if (filters.isNev === '1') conditions.push(`p.is_nev = true`);
+  if (filters.isNev === '0') conditions.push(`p.is_nev = false`);
+  if (filters.coverageCombination) conditions.push(`p.coverage_combination = '${escapeSqlValue(filters.coverageCombination)}'`);
+  if (filters.isTransfer === 'true') conditions.push(`p.is_transfer = true`);
+  if (filters.isTransfer === 'false') conditions.push(`p.is_transfer = false`);
   return conditions.length > 0 ? ' AND ' + conditions.join(' AND ') : '';
 }
 
@@ -324,7 +334,6 @@ export function generateLossRatioDevelopmentQuery(
       FROM PolicyFact p
       WHERE YEAR(p.insurance_start_date) IN (${yearsIn})
         AND p.premium > 0
-        ${filters.customerCategory ? '' : " AND p.customer_category = '摩托车'"}
         ${policyWhere}
     ),
     policy_totals AS (

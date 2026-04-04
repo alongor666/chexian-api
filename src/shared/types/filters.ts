@@ -81,6 +81,7 @@ export type FilterPresetName =
   | 'coefficient'
   | 'report'
   | 'cost'
+  | 'claimsDetail'
   | 'costEarned';
 
 /**
@@ -269,6 +270,26 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
     coverageCombination: true,
     renewalMode: false,
     basicOptions: true,
+    quickCombos: false,
+    organizationMode: 'multi',
+    salesmanMode: 'multi',
+  },
+
+  /**
+   * 赔案明细预设
+   * - 常驻筛选区全部隐藏（由页面内快捷组合接管）
+   * - 保留高级筛选抽屉
+   */
+  claimsDetail: {
+    dateCriteria: false,
+    analysisYear: false,
+    dateRange: false,
+    organization: false,
+    salesman: false,
+    customerCategory: false,
+    coverageCombination: false,
+    renewalMode: false,
+    basicOptions: false,
     quickCombos: false,
     organizationMode: 'multi',
     salesmanMode: 'multi',

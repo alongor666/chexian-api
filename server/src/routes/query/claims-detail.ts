@@ -56,6 +56,9 @@ function parseFilters(query: Record<string, unknown>): ClaimsDetailFilters {
   if (query.accidentCause && typeof query.accidentCause === 'string') filters.accidentCause = query.accidentCause;
   if (query.accidentCity && typeof query.accidentCity === 'string') filters.accidentCity = query.accidentCity;
   if (query.customerCategory && typeof query.customerCategory === 'string') filters.customerCategory = query.customerCategory;
+  if (query.isNev && typeof query.isNev === 'string') filters.isNev = query.isNev;
+  if (query.coverageCombination && typeof query.coverageCombination === 'string') filters.coverageCombination = query.coverageCombination;
+  if (query.isTransfer && typeof query.isTransfer === 'string') filters.isTransfer = query.isTransfer;
   return filters;
 }
 
