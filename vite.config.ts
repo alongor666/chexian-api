@@ -73,16 +73,12 @@ export default defineConfig({
       '.claude/**',
       '**/.claude/**',
       'tests/e2e/**',
-      // ─────────────────────────────────────────────────────────────
-      // DuckDB 集成测试 — 原生二进制模块，CI 无法解析
-      // @duckdb/node-api 是 .node 原生 addon，vitest/jsdom 无法处理
-      // 本地运行: bun run test:integration
-      // 详见: memory/feedback_native_module_ci.md
-      // ─────────────────────────────────────────────────────────────
+      // 集成测试（需 DuckDB 原生二进制）— 用 bun run test:integration 单独跑
       'server/src/services/__tests__/duckdb-*.test.ts',
-      'tests/parquet-processing.test.ts',
-      'tests/duckdb-perf-optimization.test.ts',
-      'server/src/sql/__tests__/quote-conversion.test.ts',
+      'tests/parquet-*.test.ts',
+      // CI 环境无法解析原生模块（@duckdb/node-api、express 等 .node addon）
+      // 自动排除所有 server/ 下的测试，无需逐文件维护
+      ...(process.env.CI ? ['server/**/*.test.ts', 'tests/duckdb-*.test.ts'] : []),
     ],
     browser: {
       enabled: false,
