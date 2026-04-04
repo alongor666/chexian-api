@@ -1019,6 +1019,53 @@ class ApiClient {
     const query = this.buildQueryString(params);
     return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.RANKING}${query ? `?${query}` : ''}`);
   }
+
+  // ── 赔案明细 ──
+
+  async getClaimsDetailPendingOverview(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.PENDING_OVERVIEW}${query ? `?${query}` : ''}`);
+  }
+
+  async getClaimsDetailPendingByOrg(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.PENDING_BY_ORG}${query ? `?${query}` : ''}`);
+  }
+
+  async getClaimsDetailPendingAging(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.PENDING_AGING}${query ? `?${query}` : ''}`);
+  }
+
+  async getClaimsDetailCauseAnalysis(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.CAUSE_ANALYSIS}${query ? `?${query}` : ''}`);
+  }
+
+  async getClaimsDetailGeoAccident(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.GEO_ACCIDENT}${query ? `?${query}` : ''}`);
+  }
+
+  async getClaimsDetailGeoPlate(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.GEO_PLATE}${query ? `?${query}` : ''}`);
+  }
+
+  async getClaimsDetailGeoComparison(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.GEO_COMPARISON}${query ? `?${query}` : ''}`);
+  }
+
+  async getClaimsDetailClaimCycle(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.CLAIM_CYCLE}${query ? `?${query}` : ''}`);
+  }
+
+  async getClaimsDetailFrequencyYoy(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.FREQUENCY_YOY}${query ? `?${query}` : ''}`);
+  }
 }
 
 // 导出单例

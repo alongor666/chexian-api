@@ -16,8 +16,9 @@
  * 用法：
  *   node daily.mjs                # 自动处理 premium 分片
  *   node daily.mjs claims         # 全量替换赔付+费用域
+ *   node daily.mjs claims_detail  # 全量替换赔案明细域
  *   node daily.mjs quotes         # 全量替换报价状态域
- *   node daily.mjs all            # premium + claims + quotes
+ *   node daily.mjs all            # premium + claims + claims_detail + quotes
  *   node daily.mjs --no-sync      # 跳过 VPS 同步
  */
 
@@ -183,6 +184,8 @@ const CLAIMS_DIR = join(WAREHOUSE, 'claims');
 const CLAIMS_PATH = join(CLAIMS_DIR, 'latest.parquet');
 const QUOTES_DIR = join(WAREHOUSE, 'quotes');
 const QUOTES_PATH = join(QUOTES_DIR, 'latest.parquet');
+const CLAIMS_DETAIL_DIR = join(WAREHOUSE, 'claims_detail');
+const CLAIMS_DETAIL_PATH = join(CLAIMS_DETAIL_DIR, 'latest.parquet');
 
 async function syncToVps(scriptDir) {
   log('cyan', '[ETL] 自动同步到 VPS...');
@@ -294,6 +297,40 @@ function runClaims(python, scriptDir) {
   log('green', '✅ Claims 域完成');
 }
 
+function runClaimsDetail(python, scriptDir) {
+  log('cyan', '\n═══ ClaimsDetail 域：赔案明细（全量替换）═══\n');
+
+  // 查找 车险报立结案清单_*.xlsx（取文件名最大的）
+  const sourceFiles = ls('车险报立结案清单_*.xlsx', scriptDir);
+  if (sourceFiles.length === 0) {
+    log('yellow', '⚠ 未找到 车险报立结案清单_*.xlsx，跳过');
+    return;
+  }
+  const xlsx = sourceFiles[0]; // ls 返回按文件名倒序
+  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
+
+  ensureDir(CLAIMS_DETAIL_DIR);
+  // 归档旧文件
+  if (existsSync(CLAIMS_DETAIL_PATH)) {
+    const archiveDir = join(homedir(), 'chexian-archive');
+    ensureDir(archiveDir);
+    const ts = formatDate();
+    renameSync(CLAIMS_DETAIL_PATH, join(archiveDir, `claims_detail_latest_${ts}.parquet`));
+    log('yellow', `  归档旧 claims_detail → claims_detail_latest_${ts}.parquet`);
+  }
+
+  const convertScript = join(scriptDir, 'pipelines/convert_claims_detail.py');
+  runPythonScript(python, convertScript, [
+    '-i', `"${xlsx.path}"`, '-o', `"${CLAIMS_DETAIL_PATH}"`
+  ]);
+
+  // 更新 data-sources.json
+  const rowCount = getParquetRowCount(python, CLAIMS_DETAIL_PATH);
+  updateDataSources('claims_detail', { rowCount, fieldCount: 27 });
+
+  log('green', '✅ ClaimsDetail 域完成');
+}
+
 function runQuotes(python, scriptDir) {
   log('cyan', '\n═══ Quotes 域：报价状态（全量替换）═══\n');
 
@@ -341,12 +378,13 @@ async function main() {
   process.chdir(scriptDir);
 
   const noSync = process.argv.includes('--no-sync');
-  const subcommand = process.argv.find(a => ['premium', 'claims', 'quotes', 'all'].includes(a));
+  const subcommand = process.argv.find(a => ['premium', 'claims', 'claims_detail', 'quotes', 'all'].includes(a));
 
-  // 子命令模式：claims / quotes / all
-  if (subcommand === 'claims' || subcommand === 'quotes') {
+  // 子命令模式：claims / claims_detail / quotes / all
+  if (subcommand === 'claims' || subcommand === 'claims_detail' || subcommand === 'quotes') {
     const python = findPython();
     if (subcommand === 'claims') runClaims(python, scriptDir);
+    if (subcommand === 'claims_detail') runClaimsDetail(python, scriptDir);
     if (subcommand === 'quotes') runQuotes(python, scriptDir);
     if (!noSync) await syncToVps(scriptDir);
     return;
@@ -535,6 +573,7 @@ async function main() {
   if (subcommand === 'all') {
     const python = findPython();
     runClaims(python, scriptDir);
+    runClaimsDetail(python, scriptDir);
     runQuotes(python, scriptDir);
   }
 

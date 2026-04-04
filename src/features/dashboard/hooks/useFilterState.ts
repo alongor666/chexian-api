@@ -65,7 +65,7 @@ export const useFilterState = (): UseFilterStateResult => {
           availableYearsFromApi = opts.availableYears.sort((a, b) => b - a);
         }
         if (opts.dateRange?.max_date) {
-          maxDateFromApi = opts.dateRange.max_date;
+          maxDateFromApi = opts.dateRange.max_date.slice(0, 10);
         }
         logger.info('双口径元数据：从后端获取', {
           maxDate: maxDateFromApi,

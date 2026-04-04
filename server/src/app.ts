@@ -14,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
 import { serverEnv } from './config/env.js';
-import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getRenewalFunnelPaths, getQuoteConversionPaths, getPlateRegionDimPaths } from './config/paths.js';
+import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getRenewalFunnelPaths, getQuoteConversionPaths, getPlateRegionDimPaths, getClaimsDetailPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
@@ -344,6 +344,16 @@ async function startServer() {
           await duckdbService.loadQuoteConversion(quoteConversionPath);
         } catch (err) {
           console.warn('[Server] QuoteConversion load failed (non-blocking):', err);
+        }
+      }
+
+      // 加载赔案明细数据（独立于 PolicyFact）
+      const claimsDetailPath = getClaimsDetailPaths().find(p => fs.existsSync(p));
+      if (claimsDetailPath) {
+        try {
+          await duckdbService.loadClaimsDetail(claimsDetailPath);
+        } catch (err) {
+          console.warn('[Server] ClaimsDetail load failed (non-blocking):', err);
         }
       }
 

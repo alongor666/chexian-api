@@ -97,6 +97,18 @@ export const QUERY_ROUTES = {
     RANKING: 'quote-conversion/ranking',
     TREND: 'quote-conversion/trend',
   },
+  // 赔案明细
+  CLAIMS_DETAIL: {
+    PENDING_OVERVIEW: 'claims-detail/pending-overview',
+    PENDING_BY_ORG: 'claims-detail/pending-by-org',
+    PENDING_AGING: 'claims-detail/pending-aging',
+    CAUSE_ANALYSIS: 'claims-detail/cause-analysis',
+    GEO_ACCIDENT: 'claims-detail/geo-accident',
+    GEO_PLATE: 'claims-detail/geo-plate',
+    GEO_COMPARISON: 'claims-detail/geo-comparison',
+    CLAIM_CYCLE: 'claims-detail/claim-cycle',
+    FREQUENCY_YOY: 'claims-detail/frequency-yoy',
+  },
 } as const;
 
 // ─────────────────────────────────────────────

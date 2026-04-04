@@ -50,6 +50,30 @@
       "notes": "全量替换，取最大的每日数据xlsx"
     },
     {
+      "id": "claims_detail",
+      "name": "赔案明细",
+      "type": "fact",
+      "source_pattern": "车险报立结案清单_*.xlsx",
+      "etl_entry": "node 数据管理/daily.mjs claims_detail",
+      "etl_script": "pipelines/convert_claims_detail.py",
+      "output": "warehouse/fact/claims_detail/latest.parquet",
+      "update_cadence": "with_source_xlsx",
+      "last_updated": "2026-04-03",
+      "data_range": "2021-01-01 ~ 2026-04-02",
+      "row_count": 254338,
+      "field_count": 27,
+      "key_fields": [
+        "claim_no",
+        "policy_no",
+        "accident_time",
+        "claim_status",
+        "is_bodily_injury",
+        "accident_cause",
+        "reserve_amount"
+      ],
+      "notes": "赔案级明细（非保单级聚合），JOIN PolicyFact via policy_no。与 claims/latest.parquet 互补"
+    },
+    {
       "id": "quotes_conversion",
       "name": "报价转化(旧车商业险)",
       "type": "fact",

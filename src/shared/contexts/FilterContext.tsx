@@ -121,7 +121,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
 
       // Update max date from API
       const today = new Date().toISOString().split('T')[0];
-      const maxDate = (apiOptions.dateRange && apiOptions.dateRange.max_date) ? apiOptions.dateRange.max_date.split(' ')[0] : today;
+      const maxDate = (apiOptions.dateRange && apiOptions.dateRange.max_date) ? apiOptions.dateRange.max_date.slice(0, 10) : today;
       const dataYear = new Date(maxDate).getFullYear();
 
       // 优先使用 API 返回的实际可用年份（从数据中动态查询），回退到 [dataYear-1, dataYear]

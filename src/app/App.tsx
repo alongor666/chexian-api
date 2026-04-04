@@ -89,6 +89,9 @@ const AccessControlPage = lazy(() =>
 const QuoteConversionPage = lazy(() =>
   import('../features/quote-conversion').then((m) => ({ default: m.QuoteConversionPage }))
 );
+const ClaimsDetailPage = lazy(() =>
+  import('../features/pages/ClaimsDetailPage').then((m) => ({ default: m.ClaimsDetailPage }))
+);
 
 // Loading fallback — content-aware skeleton screen
 const PageLoader = () => (
@@ -285,6 +288,14 @@ function App() {
                     path="quote-conversion"
                     element={
                       <LazyRoute><QuoteConversionPage /></LazyRoute>
+                    }
+                  />
+
+                  {/* 赔案明细分析 - 独立数据源 ClaimsDetail */}
+                  <Route
+                    path="claims-detail"
+                    element={
+                      <LazyRoute><ClaimsDetailPage /></LazyRoute>
                     }
                   />
 

@@ -46,6 +46,7 @@ const LOCAL_PLAN_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plan');
 const LOCAL_BRAND_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/brand');
 const LOCAL_RENEWAL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal');
 const LOCAL_QUOTES_CONVERSION_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/quotes_conversion');
+const LOCAL_CLAIMS_DETAIL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims_detail');
 
 const colors = {
   green: '\x1b[32m',
@@ -429,6 +430,7 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'dim/brand',     local: LOCAL_BRAND_DIR,    remote: `${runConfig.remoteDir}/dim/brand` },
     { label: 'fact/renewal',            local: LOCAL_RENEWAL_DIR,            remote: `${runConfig.remoteDir}/fact/renewal` },
     { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${runConfig.remoteDir}/fact/quotes_conversion` },
+    { label: 'fact/claims_detail',    local: LOCAL_CLAIMS_DETAIL_DIR,     remote: `${runConfig.remoteDir}/fact/claims_detail` },
   ];
 
   for (const task of syncTasks) {

@@ -723,6 +723,7 @@ class DuckDBService {
 
   /** 所有启动时创建的派生 TABLE/VIEW，卸载数据时统一清理 */
   static readonly DERIVED_RELATIONS = [
+    'ClaimsDetail',
     'CrossSellDailyAgg',
     'PolicyFactRenewal',
     'PolicyFact',
@@ -1228,6 +1229,20 @@ class DuckDBService {
     `);
     const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalFunnel');
     console.log(`[DuckDB] RenewalFunnel view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+  }
+
+  /**
+   * 加载赔案明细 Parquet → ClaimsDetail VIEW
+   * 赔案级数据（每行=一个赔案），通过 policy_no JOIN PolicyFact
+   */
+  async loadClaimsDetail(parquetPath: string): Promise<void> {
+    const safePath = parquetPath.replace(/\\/g, '/');
+    await this.query(`
+      CREATE OR REPLACE VIEW ClaimsDetail AS
+      SELECT * FROM read_parquet('${safePath}')
+    `);
+    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsDetail');
+    console.log(`[DuckDB] ClaimsDetail view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
   }
 
   /**
