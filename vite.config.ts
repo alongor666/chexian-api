@@ -34,6 +34,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       'size-sensor': path.resolve(__dirname, './src/shared/utils/size-sensor.ts'),
     },
+    // server 端依赖装在 server/node_modules/，vitest 需要搜索两处
+    modules: ['node_modules', 'server/node_modules'],
   },
   server: {
     proxy: {
