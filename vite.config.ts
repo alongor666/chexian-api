@@ -73,12 +73,14 @@ export default defineConfig({
       '.claude/**',
       '**/.claude/**',
       'tests/e2e/**',
-      // 集成测试（需 DuckDB 原生二进制）— 用 bun run test:integration 单独跑
+      // 集成测试（需 DuckDB 原生二进制 .node addon）— 用 bun run test:integration 单独跑
       'server/src/services/__tests__/duckdb-*.test.ts',
       'tests/parquet-*.test.ts',
-      // CI 环境无法解析原生模块（@duckdb/node-api、express 等 .node addon）
-      // 自动排除所有 server/ 下的测试，无需逐文件维护
-      ...(process.env.CI ? ['server/**/*.test.ts', 'tests/duckdb-*.test.ts'] : []),
+      'tests/duckdb-*.test.ts',
+    ],
+    // server 端测试走 node 环境（解析 express/@duckdb/node-api），前端测试走 jsdom
+    environmentMatchGlobs: [
+      ['server/**/*.test.ts', 'node'],
     ],
     browser: {
       enabled: false,
