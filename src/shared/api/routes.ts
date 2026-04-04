@@ -108,6 +108,7 @@ export const QUERY_ROUTES = {
     GEO_COMPARISON: 'claims-detail/geo-comparison',
     CLAIM_CYCLE: 'claims-detail/claim-cycle',
     FREQUENCY_YOY: 'claims-detail/frequency-yoy',
+    LOSS_RATIO_DEV: 'claims-detail/loss-ratio-development',
   },
 } as const;
 

@@ -24,43 +24,59 @@ if _DATA_ROOT not in sys.path:
 # ── 字段映射：中文 → 英文 snake_case ──
 
 CN_TO_EN = {
+    # ── 标识字段 ──
     '保单号': 'policy_no',
     '车架号': 'vehicle_frame_no',
+    '标的车牌': 'subject_plate_no',
     '车系': 'vehicle_series',
-    '保险起期': 'insurance_start_date',
     '报案号': 'report_no',
     '赔案号': 'claim_no',
+    # ── 分类字段 ──
+    '报案损失类别': 'loss_category',
+    '诊疗类型': 'treatment_type',
+    '案件类型': 'case_type',
+    '出险原因': 'accident_cause',
+    '现场类型': 'scene_type',
+    '三者汽修厂': 'third_party_repair',
+    '是否追偿': 'is_recovery',
+    # ── 时间链字段 ──
     '出险时间': 'accident_time',
-    '赔案类型': 'claim_status',
-    '是否人伤': 'is_bodily_injury',
-    '责任系数': 'liability_ratio',
     '报案时间': 'report_time',
     '立案时间': 'case_open_time',
+    '查勘时间': 'survey_time',
     '已决时间': 'settlement_time',
     '支付时间': 'payment_time',
+    # ── 地理字段 ──
     '出险地点省份': 'accident_province',
     '出险地点城市': 'accident_city',
     '出险地区': 'accident_district',
     '出险地点': 'accident_address',
     '出险经过': 'accident_description',
-    '出险原因': 'accident_cause',
-    '现场类型': 'scene_type',
-    '立案金额rmb': 'reserve_amount',
+    # ── 金额字段：立案 ──
+    '立案金额': 'reserve_amount',
     '立案金额-人': 'reserve_bodily_amount',
-    '最近人伤立案金额': 'reserve_bodily_latest',
     '立案金额-车物': 'reserve_vehicle_amount',
     '立案金额-物': 'reserve_property_amount',
-    '立案金额-费用': 'reserve_fee_amount',
+    # ── 金额字段：结案 ──
+    '业务结案赔款-车物': 'settled_vehicle_amount',
+    '业务结案赔款-人': 'settled_bodily_amount',
+    '已决费用': 'settled_fee',
+    '已决金额': 'settled_amount',
+    '未决金额': 'pending_amount',
+    # ── 系数 ──
+    '责任系数': 'liability_ratio',
 }
 
-REQUIRED_COLUMNS = ['保单号', '赔案号', '立案金额rmb']
+REQUIRED_COLUMNS = ['保单号', '赔案号', '立案金额']
 
-TIMESTAMP_COLS = ['accident_time', 'report_time', 'case_open_time', 'settlement_time', 'payment_time']
+TIMESTAMP_COLS = ['accident_time', 'report_time', 'case_open_time', 'survey_time', 'settlement_time', 'payment_time']
 AMOUNT_COLS = [
-    'reserve_amount', 'reserve_bodily_amount', 'reserve_bodily_latest',
-    'reserve_vehicle_amount', 'reserve_property_amount', 'reserve_fee_amount',
+    'reserve_amount', 'reserve_bodily_amount',
+    'reserve_vehicle_amount', 'reserve_property_amount',
+    'settled_vehicle_amount', 'settled_bodily_amount', 'settled_fee',
+    'settled_amount', 'pending_amount',
 ]
-STR_FORCE_COLS = {'保单号': str, '报案号': str, '赔案号': str, '车架号': str}
+STR_FORCE_COLS = {'保单号': str, '报案号': str, '赔案号': str, '车架号': str, '标的车牌': str}
 
 
 def parse_args():
@@ -112,15 +128,9 @@ def main():
         valid_ts = df['accident_time'].notna().sum()
         print(f"   出险时间: {df['accident_time'].min()} ~ {df['accident_time'].max()} ({valid_ts:,} 有值)")
 
-    # 保险起期 → DATE
-    if 'insurance_start_date' in df.columns:
-        df['insurance_start_date'] = pd.to_datetime(df['insurance_start_date'], errors='coerce')
-
-    # 是否人伤 → BOOLEAN
-    if 'is_bodily_injury' in df.columns:
-        df['is_bodily_injury'] = df['is_bodily_injury'].map({'是': True, '否': False})
-        injury_count = df['is_bodily_injury'].sum()
-        print(f"   人伤案件: {injury_count:,}/{len(df):,} ({injury_count/len(df)*100:.1f}%)")
+    # 是否追偿 → BOOLEAN
+    if 'is_recovery' in df.columns:
+        df['is_recovery'] = df['is_recovery'].map({'是': True, '否': False}).astype('boolean')
 
     # 责任系数 → DOUBLE
     if 'liability_ratio' in df.columns:
@@ -148,9 +158,25 @@ def main():
         )
 
     # 字符串字段标准化
-    for col in ['policy_no', 'claim_no', 'report_no', 'vehicle_frame_no']:
+    for col in ['policy_no', 'claim_no', 'report_no', 'vehicle_frame_no', 'subject_plate_no']:
         if col in df.columns:
             df[col] = df[col].str.strip().replace(_PLACEHOLDER_STRS, None)
+
+    # ── 派生字段 ──
+
+    # claim_status：根据已决时间判断（⚠️ 近似口径：以 settlement_time 非空作为业务结案标志，非来自原始状态字段）
+    if 'settlement_time' in df.columns:
+        df['claim_status'] = df['settlement_time'].notna().map({True: '已业务结案', False: '未业务结案'})
+    else:
+        df['claim_status'] = '未业务结案'
+
+    # is_bodily_injury：立案金额-人 > 0 OR 业务结案赔款-人 > 0
+    _zero = pd.Series(False, index=df.index)
+    bodily_reserve = (df['reserve_bodily_amount'].fillna(0) > 0) if 'reserve_bodily_amount' in df.columns else _zero
+    bodily_settled = (df['settled_bodily_amount'].fillna(0) > 0) if 'settled_bodily_amount' in df.columns else _zero
+    df['is_bodily_injury'] = bodily_reserve | bodily_settled
+    injury_count = df['is_bodily_injury'].sum()
+    print(f"   人伤案件: {injury_count:,}/{len(df):,} ({injury_count/len(df)*100:.1f}%)")
 
     # ── 过滤无效行 ──
     before = len(df)

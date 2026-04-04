@@ -19,6 +19,7 @@ import {
   generateGeoComparisonQuery,
   generateClaimCycleQuery,
   generateFrequencyYoyQuery,
+  generateLossRatioDevelopmentQuery,
   type ClaimsDetailFilters,
 } from '../../sql/claims-detail.js';
 
@@ -179,6 +180,24 @@ router.get(
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateFrequencyYoyQuery(filters);
+    const data = await duckdbService.query(sql);
+    res.json({ success: true, data });
+  })
+);
+
+/**
+ * GET /api/query/claims-detail/loss-ratio-development
+ * 赔付率发展三角形（按起保年份 × 发展月 1~24）
+ */
+router.get(
+  '/claims-detail/loss-ratio-development',
+  asyncHandler(async (req, res) => {
+    const filters = parseFilters(req.query);
+    const cohortYearsStr = req.query.cohortYears;
+    const cohortYears = typeof cohortYearsStr === 'string'
+      ? cohortYearsStr.split(',').map(Number).filter(n => !isNaN(n) && n >= 2020 && n <= 2030)
+      : [2023, 2024, 2025];
+    const sql = generateLossRatioDevelopmentQuery(filters, cohortYears);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })

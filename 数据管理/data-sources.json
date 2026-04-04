@@ -58,10 +58,10 @@
       "etl_script": "pipelines/convert_claims_detail.py",
       "output": "warehouse/fact/claims_detail/latest.parquet",
       "update_cadence": "with_source_xlsx",
-      "last_updated": "2026-04-03",
-      "data_range": "2021-01-01 ~ 2026-04-02",
-      "row_count": 254338,
-      "field_count": 27,
+      "last_updated": "2026-04-04",
+      "data_range": "2021-01-01 ~ 2026-04-03",
+      "row_count": 254492,
+      "field_count": 36,
       "key_fields": [
         "claim_no",
         "policy_no",
@@ -69,9 +69,12 @@
         "claim_status",
         "is_bodily_injury",
         "accident_cause",
-        "reserve_amount"
+        "reserve_amount",
+        "settled_amount",
+        "pending_amount",
+        "subject_plate_no"
       ],
-      "notes": "赔案级明细（非保单级聚合），JOIN PolicyFact via policy_no。与 claims/latest.parquet 互补"
+      "notes": "赔案级明细（非保单级聚合），JOIN PolicyFact via policy_no。与 claims/latest.parquet 互补。claim_status/is_bodily_injury 由 ETL 派生"
     },
     {
       "id": "quotes_conversion",

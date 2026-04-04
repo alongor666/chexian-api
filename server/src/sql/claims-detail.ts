@@ -301,6 +301,112 @@ export function generateClaimCycleQuery(filters: ClaimsDetailFilters): string {
 
 // ── 9. 出险频度同比 ──
 
+// ── 10. 赔付率发展三角形（日历发展口径：M_N=[年初, 年初+N月)）──
+//
+// M1: 起保+出险都在1月 → M2: 都在1-2月 → M12: 全年
+// M13~M24: 保单固定为全年，出险窗口继续向次年扩展
+
+export function generateLossRatioDevelopmentQuery(
+  filters: ClaimsDetailFilters,
+  cohortYears: number[] = [2023, 2024, 2025],
+  maxDevMonth: number = 24
+): string {
+  const policyWhere = buildPolicyWhere(filters);
+  const yearsIn = cohortYears.join(',');
+
+  return `
+    WITH policies AS (
+      SELECT
+        YEAR(p.insurance_start_date) AS cohort_year,
+        p.policy_no, p.insurance_start_date, p.premium,
+        DATE_DIFF('day', p.insurance_start_date,
+                  p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term_days
+      FROM PolicyFact p
+      WHERE YEAR(p.insurance_start_date) IN (${yearsIn})
+        AND p.premium > 0
+        ${filters.customerCategory ? '' : " AND p.customer_category = '摩托车'"}
+        ${policyWhere}
+    ),
+    policy_totals AS (
+      SELECT cohort_year,
+        COUNT(DISTINCT policy_no) AS total_policies,
+        ROUND(SUM(premium) / 1e4, 1) AS total_premium_wan
+      FROM policies GROUP BY cohort_year
+    ),
+    dev_months AS (SELECT UNNEST(RANGE(1, ${maxDevMonth + 1})) AS dev_month),
+    calendar_window AS (
+      SELECT
+        pt.cohort_year,
+        m.dev_month,
+        MAKE_DATE(pt.cohort_year, 1, 1) AS year_start,
+        MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month) AS observation_end
+      FROM policy_totals pt
+      CROSS JOIN dev_months m
+      WHERE MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month) <= CURRENT_DATE
+    ),
+    earned AS (
+      SELECT
+        cw.cohort_year, cw.dev_month,
+        COUNT(DISTINCT p.policy_no) AS dev_policies,
+        SUM(p.premium
+            * LEAST(
+                DATE_DIFF('day', p.insurance_start_date, cw.observation_end),
+                p.policy_term_days
+              )::DOUBLE
+            / p.policy_term_days
+        ) AS earned_premium,
+        SUM(
+            LEAST(
+                DATE_DIFF('day', p.insurance_start_date, cw.observation_end),
+                p.policy_term_days
+            )::DOUBLE
+            / p.policy_term_days
+        ) AS earned_exposure
+      FROM calendar_window cw
+      JOIN policies p
+        ON p.cohort_year = cw.cohort_year
+       AND p.insurance_start_date >= cw.year_start
+       AND p.insurance_start_date <  cw.observation_end
+      GROUP BY cw.cohort_year, cw.dev_month
+    ),
+    claimed AS (
+      SELECT
+        cw.cohort_year, cw.dev_month,
+        COUNT(DISTINCT c.claim_no) AS claim_count,
+        SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) AS total_reserve
+      FROM calendar_window cw
+      JOIN policies p
+        ON p.cohort_year = cw.cohort_year
+       AND p.insurance_start_date >= cw.year_start
+       AND p.insurance_start_date <  cw.observation_end
+      LEFT JOIN ClaimsDetail c
+        ON c.policy_no = p.policy_no
+       AND c.accident_time >= cw.year_start
+       AND c.accident_time <  cw.observation_end
+      GROUP BY cw.cohort_year, cw.dev_month
+    )
+    SELECT
+      e.cohort_year,
+      e.dev_month,
+      pt.total_policies,
+      pt.total_premium_wan,
+      e.dev_policies,
+      ROUND(e.earned_premium, 2) AS earned_premium,
+      cl.claim_count,
+      ROUND(cl.total_reserve, 2) AS total_reserve,
+      ROUND(cl.total_reserve / NULLIF(e.earned_premium, 0) * 100, 2) AS loss_ratio_pct,
+      ROUND(cl.claim_count * 100.0 / NULLIF(e.earned_exposure, 0), 4) AS incident_rate_pct,
+      CASE WHEN cl.claim_count > 0
+           THEN ROUND(cl.total_reserve / cl.claim_count, 0)
+           ELSE NULL END AS avg_claim,
+      ROUND(e.dev_policies * 100.0 / pt.total_policies, 1) AS coverage_pct
+    FROM earned e
+    JOIN claimed cl ON e.cohort_year = cl.cohort_year AND e.dev_month = cl.dev_month
+    JOIN policy_totals pt ON e.cohort_year = pt.cohort_year
+    ORDER BY e.cohort_year, e.dev_month
+  `;
+}
+
 export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string {
   const policyWhere = buildPolicyWhere(filters);
   // 取最近3个完整年份的Q1-Q4数据

@@ -14,10 +14,12 @@ import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFil
 import { useClaimsDetail } from '../claims-detail/hooks/useClaimsDetail';
 import { PendingClaimsPanel } from '../claims-detail/components/PendingClaimsPanel';
 import { GeoRiskPanel } from '../claims-detail/components/GeoRiskPanel';
+import { LossRatioDevelopmentPanel } from '../claims-detail/components/LossRatioDevelopmentPanel';
 
 const TABS = [
   { key: 'pending', label: '未决赔案监控' },
   { key: 'geo', label: '地理风险热力图' },
+  { key: 'development', label: '赔付率发展' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -75,6 +77,7 @@ export const ClaimsDetailPage: React.FC = () => {
       {/* Tab 内容 */}
       {activeTab === 'pending' && <PendingClaimsPanel hook={hook} params={params} />}
       {activeTab === 'geo' && <GeoRiskPanel hook={hook} params={params} />}
+      {activeTab === 'development' && <LossRatioDevelopmentPanel hook={hook} params={params} />}
     </PageFilterPanel>
   );
 };
