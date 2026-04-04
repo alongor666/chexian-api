@@ -10,6 +10,7 @@ import { GridComponent, TooltipComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { FeeRuleTierData, FeeInsuranceTypeTab } from '../types/feeAnalysisTypes';
 import { formatPremiumWan, formatPercent } from '@/shared/utils/formatters';
+import { useTheme } from '@/shared/theme';
 
 echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
@@ -21,6 +22,8 @@ interface Props {
 export const FeeDistributionChart: React.FC<Props> = ({ data, activeTab }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   const filtered = data
     .filter((r) => {
@@ -71,14 +74,14 @@ export const FeeDistributionChart: React.FC<Props> = ({ data, activeTab }) => {
       xAxis: {
         type: 'value',
         name: '万元',
-        nameTextStyle: { color: '#9ca3af', fontSize: 11 },
-        axisLabel: { color: '#9ca3af', fontSize: 11 },
+        nameTextStyle: { color: isDark ? '#a3a3a3' : '#9ca3af', fontSize: 11 },
+        axisLabel: { color: isDark ? '#a3a3a3' : '#9ca3af', fontSize: 11 },
         splitLine: { show: false },
       },
       yAxis: {
         type: 'category',
         data: yLabels,
-        axisLabel: { color: '#374151', fontSize: 11, width: 160, overflow: 'truncate' },
+        axisLabel: { color: isDark ? '#d1d5db' : '#374151', fontSize: 11, width: 160, overflow: 'truncate' },
         axisTick: { show: false },
         axisLine: { show: false },
       },
@@ -94,7 +97,7 @@ export const FeeDistributionChart: React.FC<Props> = ({ data, activeTab }) => {
             position: 'right',
             formatter: (p: any) => `${p.value}万`,
             fontSize: 11,
-            color: '#374151',
+            color: isDark ? '#d1d5db' : '#374151',
           },
         },
         {
@@ -108,7 +111,7 @@ export const FeeDistributionChart: React.FC<Props> = ({ data, activeTab }) => {
     };
 
     chart.setOption(option, { notMerge: true });
-  }, [filtered]);
+  }, [filtered, isDark]);
 
   useEffect(() => {
     const handleResize = () => chartRef.current?.resize();

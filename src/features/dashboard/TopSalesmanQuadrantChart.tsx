@@ -8,6 +8,7 @@ import type { EChartsOption } from 'echarts';
 import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { colors } from '@/shared/styles';
+import { useTheme } from '@/shared/theme';
 import type { TopSalesmanRow } from './hooks/useCrossSellTopSalesman';
 import type { QuadrantCategory } from './CrossSellAIAnalysisPanel';
 
@@ -32,6 +33,8 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
 }: TopSalesmanQuadrantChartProps) {
     const chartRef = useRef<HTMLDivElement>(null);
     const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
+    const { resolvedTheme } = useTheme();
+    const isDark = resolvedTheme === 'dark';
 
     // 基于固定阈值统计四象限
     const { quadrantStats } = useMemo(() => {
@@ -140,38 +143,40 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             <div>驾意保费: <span style="font-weight:600">${formatDriverPremiumWan(val[5])} 万</span></div>
           `;
                 },
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                borderColor: colors.neutral[200],
+                backgroundColor: isDark ? 'rgba(22, 22, 24, 0.96)' : 'rgba(255, 255, 255, 0.95)',
+                borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.neutral[200],
                 borderWidth: 1,
-                textStyle: { color: colors.neutral[800] },
+                textStyle: { color: isDark ? '#f0f0f0' : colors.neutral[800] },
             },
             xAxis: {
                 type: 'value',
                 name: '推介率',
                 nameLocation: 'middle',
                 nameGap: 30,
+                nameTextStyle: { color: isDark ? '#a3a3a3' : colors.neutral[500] },
                 min: minRate,
                 max: maxRate,
                 axisLabel: {
                     formatter: '{value}%',
-                    color: colors.neutral[500],
+                    color: isDark ? '#a3a3a3' : colors.neutral[500],
                 },
                 splitLine: { show: false },
-                axisLine: { show: true, lineStyle: { color: colors.neutral[200] } },
+                axisLine: { show: true, lineStyle: { color: isDark ? 'rgba(255,255,255,0.08)' : colors.neutral[200] } },
             },
             yAxis: {
                 type: 'value',
                 name: '驾意件均',
                 nameLocation: 'middle',
                 nameGap: 50,
+                nameTextStyle: { color: isDark ? '#a3a3a3' : colors.neutral[500] },
                 min: minPremium,
                 max: maxPremium,
                 axisLabel: {
                     formatter: '{value}',
-                    color: colors.neutral[500],
+                    color: isDark ? '#a3a3a3' : colors.neutral[500],
                 },
                 splitLine: { show: false },
-                axisLine: { show: true, lineStyle: { color: colors.neutral[200] } },
+                axisLine: { show: true, lineStyle: { color: isDark ? 'rgba(255,255,255,0.08)' : colors.neutral[200] } },
             },
             series: [
                 {
@@ -185,7 +190,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                         silent: true,
                         lineStyle: {
                             type: 'dashed',
-                            color: colors.neutral[400],
+                            color: isDark ? 'rgba(255,255,255,0.2)' : colors.neutral[400],
                             width: 1,
                         },
                         data: [
@@ -216,7 +221,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                             formatter: (params: any) => {
                                 return params.name;
                             },
-                            color: '#666',
+                            color: isDark ? '#a3a3a3' : '#666',
                             fontSize: 10,
                         },
                         data: [
@@ -253,7 +258,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
         return () => {
             resizeObserver.disconnect();
         };
-    }, [data, coverage, quadrantStats, rateThreshold, avgPremiumThreshold]);
+    }, [data, coverage, quadrantStats, rateThreshold, avgPremiumThreshold, isDark]);
 
     useEffect(() => {
         return () => {

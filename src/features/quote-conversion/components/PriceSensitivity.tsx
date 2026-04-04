@@ -4,6 +4,7 @@ import { BarChart, LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { cardStyles, colorClasses, quoteChartColors, cn } from '../../../shared/styles';
+import { useTheme } from '../../../shared/theme';
 import { formatCount } from '../../../shared/utils/formatters';
 import { useQuotePrice } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';
@@ -17,6 +18,8 @@ interface Props {
 export function PriceSensitivity({ filters }: Props) {
   const chartRef = useRef<HTMLDivElement>(null);
   const { data, isLoading } = useQuotePrice(filters);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   useEffect(() => {
     if (!chartRef.current || !data || data.length === 0) return;
@@ -24,6 +27,7 @@ export function PriceSensitivity({ filters }: Props) {
     const chart = echarts.init(chartRef.current);
     const filtered = data.filter(r => r.discount_bin >= 0.3 && r.discount_bin <= 1.0);
 
+    const textColor = isDark ? '#a3a3a3' : '#666';
     const option: echarts.EChartsCoreOption = {
       tooltip: {
         trigger: 'axis',
@@ -39,16 +43,16 @@ export function PriceSensitivity({ filters }: Props) {
           return html + '</div>';
         },
       },
-      legend: { data: ['报价量', '承保量', '转化率'], top: 0, textStyle: { fontSize: 11 } },
+      legend: { data: ['报价量', '承保量', '转化率'], top: 0, textStyle: { fontSize: 11, color: textColor } },
       grid: { left: 50, right: 50, top: 40, bottom: 30 },
       xAxis: {
         type: 'category',
         data: filtered.map(r => `${(r.discount_bin * 100).toFixed(0)}%`),
-        axisLabel: { fontSize: 10 },
+        axisLabel: { fontSize: 10, color: textColor },
       },
       yAxis: [
-        { type: 'value', name: '数量', axisLabel: { fontSize: 10 }, splitLine: { show: false } },
-        { type: 'value', name: '转化率%', axisLabel: { fontSize: 10, formatter: '{value}%' }, splitLine: { show: false } },
+        { type: 'value', name: '数量', nameTextStyle: { color: textColor }, axisLabel: { fontSize: 10, color: textColor }, splitLine: { show: false } },
+        { type: 'value', name: '转化率%', nameTextStyle: { color: textColor }, axisLabel: { fontSize: 10, color: textColor, formatter: '{value}%' }, splitLine: { show: false } },
       ],
       series: [
         {
@@ -86,7 +90,7 @@ export function PriceSensitivity({ filters }: Props) {
       resizeOb.disconnect();
       chart.dispose();
     };
-  }, [data]);
+  }, [data, isDark]);
 
   return (
     <div className={cardStyles.base}>

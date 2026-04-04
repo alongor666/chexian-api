@@ -90,7 +90,7 @@ export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
       resizeOb.disconnect();
       chart.dispose();
     };
-  }, [data]);
+  }, [data, isDark]);
 
   const granOptions = [
     { key: 'day' as const, label: '日' },

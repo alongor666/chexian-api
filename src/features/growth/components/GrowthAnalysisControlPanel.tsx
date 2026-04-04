@@ -1,5 +1,6 @@
 import React from 'react';
 import { PerspectiveSwitcher } from '../../../widgets/filters/PerspectiveSwitcher';
+import { cardStyles } from '../../../shared/styles';
 import type { ViewPerspective } from '../../../shared/types';
 
 export type GrowthAnalysisType = 'org' | 'salesman' | 'kpi' | 'comparison';
@@ -20,41 +21,34 @@ interface GrowthAnalysisControlPanelProps {
   onPerspectiveChange: (next: ViewPerspective) => void;
 }
 
+const selectClass = 'px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100';
+const labelClass = 'block mb-1 font-medium text-sm text-neutral-700 dark:text-neutral-300';
+
 export function GrowthAnalysisControlPanel(props: GrowthAnalysisControlPanelProps): React.ReactElement {
   return (
-    <div
-      className="control-panel"
-      style={{
-        display: 'flex',
-        gap: '16px',
-        marginBottom: '24px',
-        padding: '16px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '8px',
-      }}
-    >
+    <div className={`${cardStyles.base} flex gap-4 mb-6 p-4`}>
       <div>
-        <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>分析类型</label>
+        <label className={labelClass}>分析类型</label>
         <select
           value={props.analysisType}
           onChange={e => props.onAnalysisTypeChange(e.target.value as GrowthAnalysisType)}
-          style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
+          className={selectClass}
         >
           <option value="org">机构分析</option>
           <option value="salesman">业务员分析</option>
           <option value="kpi">KPI分析</option>
-          <option value="comparison">📊 对比分析</option>
+          <option value="comparison">对比分析</option>
         </select>
       </div>
 
       {props.analysisType !== 'comparison' && (
         <>
           <div>
-            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>增长率类型</label>
+            <label className={labelClass}>增长率类型</label>
             <select
               value={props.growthType}
               onChange={e => props.onGrowthTypeChange(e.target.value as GrowthRateType)}
-              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
+              className={selectClass}
             >
               <option value="yoy">同比增长</option>
               <option value="mom">环比增长</option>
@@ -63,11 +57,11 @@ export function GrowthAnalysisControlPanel(props: GrowthAnalysisControlPanelProp
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>时间维度</label>
+            <label className={labelClass}>时间维度</label>
             <select
               value={props.timeView}
               onChange={e => props.onTimeViewChange(e.target.value as GrowthTimeView)}
-              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
+              className={selectClass}
             >
               <option value="monthly">月度</option>
               <option value="quarterly">季度</option>
@@ -78,11 +72,11 @@ export function GrowthAnalysisControlPanel(props: GrowthAnalysisControlPanelProp
 
       {props.analysisType === 'comparison' && (
         <div>
-          <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>分组维度</label>
+          <label className={labelClass}>分组维度</label>
           <select
             value={props.comparisonGroupBy}
             onChange={e => props.onComparisonGroupByChange(e.target.value as GrowthComparisonGroupBy)}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
+            className={selectClass}
           >
             <option value="org_level_3">按机构</option>
             <option value="salesman_name">按业务员</option>
@@ -90,7 +84,7 @@ export function GrowthAnalysisControlPanel(props: GrowthAnalysisControlPanelProp
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'end' }}>
+      <div className="flex items-end">
         <PerspectiveSwitcher
           value={props.perspective}
           onChange={props.onPerspectiveChange}
