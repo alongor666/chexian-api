@@ -5,6 +5,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { ThemeProvider } from '../../src/shared/theme';
 
 // LineChart uses echarts.init via useRef, so mock the echarts module
 const mockShowLoading = vi.fn();
@@ -50,29 +51,29 @@ describe('LineChart', () => {
 
   it('renders a div container', () => {
     const { container } = render(
-      <LineChart title="保费趋势" data={sampleData} timeView="monthly" />
+      <ThemeProvider><LineChart title="保费趋势" data={sampleData} timeView="monthly" /></ThemeProvider>
     );
     expect(container.querySelector('div')).toBeTruthy();
   });
 
   it('calls echarts.init on mount', async () => {
     const { echarts } = await import('../../src/shared/utils/echarts');
-    render(<LineChart title="保费趋势" data={sampleData} timeView="monthly" />);
+    render(<ThemeProvider><LineChart title="保费趋势" data={sampleData} timeView="monthly" /></ThemeProvider>);
     expect(echarts.init).toHaveBeenCalled();
   });
 
   it('calls showLoading when loading=true', async () => {
-    render(<LineChart title="保费趋势" data={sampleData} loading={true} timeView="monthly" />);
+    render(<ThemeProvider><LineChart title="保费趋势" data={sampleData} loading={true} timeView="monthly" /></ThemeProvider>);
     expect(mockShowLoading).toHaveBeenCalled();
   });
 
   it('calls setOption with data when loading=false', () => {
-    render(<LineChart title="保费趋势" data={sampleData} timeView="monthly" />);
+    render(<ThemeProvider><LineChart title="保费趋势" data={sampleData} timeView="monthly" /></ThemeProvider>);
     expect(mockSetOption).toHaveBeenCalled();
   });
 
   it('renders empty state when data is empty', () => {
-    render(<LineChart title="暂无数据测试" data={[]} timeView="monthly" />);
+    render(<ThemeProvider><LineChart title="暂无数据测试" data={[]} timeView="monthly" /></ThemeProvider>);
     // setOption called with empty state
     expect(mockSetOption).toHaveBeenCalled();
     const callArg = mockSetOption.mock.calls[0]?.[0];
@@ -81,7 +82,7 @@ describe('LineChart', () => {
 
   it('applies custom height', () => {
     const { container } = render(
-      <LineChart title="趋势" data={sampleData} height={600} timeView="weekly" />
+      <ThemeProvider><LineChart title="趋势" data={sampleData} height={600} timeView="weekly" /></ThemeProvider>
     );
     const chartDiv = container.querySelector('[style*="height"]');
     expect(chartDiv).toBeTruthy();
@@ -89,12 +90,14 @@ describe('LineChart', () => {
 
   it('passes yAxisLabel to chart options', () => {
     render(
-      <LineChart
-        title="商业险件数"
-        data={sampleData}
-        timeView="monthly"
-        yAxisLabel="商业险件数"
-      />
+      <ThemeProvider>
+        <LineChart
+          title="商业险件数"
+          data={sampleData}
+          timeView="monthly"
+          yAxisLabel="商业险件数"
+        />
+      </ThemeProvider>
     );
     expect(mockSetOption).toHaveBeenCalled();
     const callArg = mockSetOption.mock.calls[0]?.[0];
@@ -104,7 +107,7 @@ describe('LineChart', () => {
   });
 
   it('groups data by org_level_3 into series', () => {
-    render(<LineChart title="趋势" data={sampleData} timeView="monthly" />);
+    render(<ThemeProvider><LineChart title="趋势" data={sampleData} timeView="monthly" /></ThemeProvider>);
     const callArg = mockSetOption.mock.calls[0]?.[0];
     // Should have series for both 乐山 and 天府
     const seriesNames = (callArg?.series ?? []).map((s: any) => s.name as string);
