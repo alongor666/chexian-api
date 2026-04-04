@@ -156,9 +156,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                     formatter: '{value}%',
                     color: colors.neutral[500],
                 },
-                splitLine: {
-                    lineStyle: { type: 'dashed', color: colors.neutral[100] },
-                },
+                splitLine: { show: false },
                 axisLine: { show: true, lineStyle: { color: colors.neutral[200] } },
             },
             yAxis: {
@@ -172,9 +170,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                     formatter: '{value}',
                     color: colors.neutral[500],
                 },
-                splitLine: {
-                    lineStyle: { type: 'dashed', color: colors.neutral[100] },
-                },
+                splitLine: { show: false },
                 axisLine: { show: true, lineStyle: { color: colors.neutral[200] } },
             },
             series: [

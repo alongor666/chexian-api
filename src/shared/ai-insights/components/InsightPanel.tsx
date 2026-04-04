@@ -7,7 +7,7 @@
 import { memo, useState } from 'react';
 import type { Insight } from '../types';
 import { InsightCard } from './InsightCard';
-import { cn, colorClasses } from '../../styles';
+import { buttonStyles, cn, colorClasses } from '../../styles';
 
 interface InsightPanelProps {
   /** 洞察列表 */
@@ -56,7 +56,7 @@ export const InsightPanel = memo(function InsightPanel({
     <div
       className={cn(
         'bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20',
-        'rounded-lg border border-indigo-200 dark:border-indigo-800',
+        'rounded-lg border border-indigo-200',
         className
       )}
     >
@@ -110,7 +110,7 @@ export const InsightPanel = memo(function InsightPanel({
           {loading && (
             <div className="flex items-center justify-center py-8">
               <div className="flex items-center gap-3">
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-500 border-t-transparent" />
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo border-t-transparent" />
                 <span className="text-sm text-neutral-600 dark:text-neutral-400">
                   AI 正在分析数据，请稍候...
                 </span>
@@ -157,7 +157,7 @@ export const InsightPanel = memo(function InsightPanel({
 
           {/* 操作按钮 */}
           {!loading && (
-            <div className="flex items-center justify-between pt-2 border-t border-indigo-200/50 dark:border-indigo-700/50">
+            <div className="flex items-center justify-between pt-2 border-t border-indigo-200/50">
               <div className="text-xs text-neutral-500 dark:text-neutral-400">
                 {hasInsights
                   ? '基于当前页面数据生成'
@@ -184,12 +184,7 @@ export const InsightPanel = memo(function InsightPanel({
                       onGenerate();
                     }}
                     disabled={!isConfigured}
-                    className={cn(
-                      'px-4 py-1.5 text-sm font-medium rounded-lg transition-colors',
-                      isConfigured
-                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                        : 'bg-neutral-300 dark:bg-neutral-700 text-neutral-500 cursor-not-allowed'
-                    )}
+                    className={cn(buttonStyles.base, buttonStyles.primary, 'px-4 py-1.5 text-sm')}
                   >
                     生成洞察
                   </button>
@@ -201,7 +196,7 @@ export const InsightPanel = memo(function InsightPanel({
                       e.stopPropagation();
                       onGenerate();
                     }}
-                    className="px-4 py-1.5 text-sm font-medium rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+                    className={cn(buttonStyles.base, buttonStyles.primary, 'px-4 py-1.5 text-sm')}
                   >
                     重新生成
                   </button>

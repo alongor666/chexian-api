@@ -848,7 +848,7 @@ function DistributionChart({
         min: axisRange.xMin,
         max: axisRange.xMax,
         axisLabel: { formatter: '{value}%' },
-        splitLine: { lineStyle: { color: colors.neutral[200] } },
+        splitLine: { show: false },
       },
       yAxis: {
         type: 'value',
@@ -856,7 +856,7 @@ function DistributionChart({
         min: axisRange.yMin,
         max: axisRange.yMax,
         axisLabel: { formatter: '{value}%' },
-        splitLine: { lineStyle: { color: colors.neutral[200] } },
+        splitLine: { show: false },
       },
       series: [
         {
@@ -1381,7 +1381,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
               {PERF_HEATMAP_DRILL_DIMENSIONS.filter((d) => d.key !== activeHeatmapGroupBy).map((d) => (
                 <button
                   key={d.key}
-                  className={`px-3 py-1 text-xs rounded-full bg-white dark:bg-neutral-800 border ${colorClasses.border.primary} hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer`}
+                  className={`px-3 py-1 text-xs rounded-full bg-white dark:bg-neutral-800 border ${colorClasses.border.primary} hover:bg-primary-100 dark:hover:bg-blue-900 cursor-pointer`}
                   onClick={() => handlePerfHeatmapDimSelect(d.key)}
                 >
                   {d.label}

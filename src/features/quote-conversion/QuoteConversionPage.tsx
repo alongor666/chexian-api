@@ -39,7 +39,7 @@ export function QuoteConversionPage() {
             <h1 className={`text-lg font-bold ${colorClasses.text.neutralBlack}`}>
               旧车商业险报价转化分析
             </h1>
-            <span className={`inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium ${colorClasses.text.warning} dark:bg-amber-900/30 dark:text-amber-200`}>
+            <span className={`inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium ${colorClasses.text.warning}`}>
               开发阶段
             </span>
           </div>

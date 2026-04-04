@@ -109,7 +109,7 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
                       'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
                       isActive
                         ? 'bg-primary-bg text-primary-dark border border-primary-border'
-                        : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                        : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-neutral-100'
                     )}
                     aria-current={isActive ? 'location' : undefined}
                   >
@@ -117,8 +117,8 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
                       className={cn(
                         'inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
                         isActive
-                          ? 'bg-white text-primary'
-                          : 'bg-neutral-100 text-neutral-500'
+                          ? 'bg-white dark:bg-neutral-700 text-primary'
+                          : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
                       )}
                     >
                       {index + 1}

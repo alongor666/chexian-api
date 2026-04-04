@@ -23,7 +23,7 @@ export function buildExpenseSurplusOption(rows: ComprehensiveExpenseSurplusRow[]
       {
         type: 'value',
         name: '费用结余额(万)',
-        splitLine: { lineStyle: { color: comprehensiveTheme.palette.splitLine } },
+        splitLine: { show: false },
       },
       {
         type: 'value',

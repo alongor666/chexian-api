@@ -185,13 +185,15 @@ const CoefficientPeriodTableInner: React.FC<CoefficientPeriodTableProps> = ({
       }
     }
 
-    return { aggregateRows: aggregate, detailRows: detail };
+    // 明细行按当周系数从小到大排序（系数低=差，排前面）
+    const sortedDetail = detail.slice().sort((a, b) => (a.weekFactor ?? 0) - (b.weekFactor ?? 0));
+    return { aggregateRows: aggregate, detailRows: sortedDetail };
   }, [rows]);
 
-  // 当前显示的行
+  // 当前显示的行（展开时：聚合行在前 + 明细行已排序；折叠时：仅聚合行）
   const displayRows = useMemo(() => {
-    return expanded ? rows : aggregateRows;
-  }, [expanded, rows, aggregateRows]);
+    return expanded ? [...aggregateRows, ...detailRows] : aggregateRows;
+  }, [expanded, aggregateRows, detailRows]);
 
   // 使用 useMemo 缓存统计计算
   const stats = useMemo(() => ({
@@ -222,7 +224,7 @@ const CoefficientPeriodTableInner: React.FC<CoefficientPeriodTableProps> = ({
   }
 
   return (
-    <div className={`mb-6 bg-white rounded border ${colorClasses.border.neutral}`}>
+    <div className={`mb-6 bg-white dark:bg-neutral-800 rounded border ${colorClasses.border.neutral}`}>
       {/* 周期标题 */}
       <div className={`${colorClasses.bg.primary} px-4 py-2 border-b ${colorClasses.border.neutral} flex justify-between items-center`}>
         <h3 className={`font-semibold ${colorClasses.text.neutral}`}>
@@ -238,7 +240,7 @@ const CoefficientPeriodTableInner: React.FC<CoefficientPeriodTableProps> = ({
         {detailRows.length > 0 && (
           <button
             onClick={toggleExpanded}
-            className={`px-3 py-1 text-sm bg-white border ${colorClasses.border.neutral} rounded hover:bg-neutral-50 transition-colors`}
+            className={`px-3 py-1 text-sm bg-white dark:bg-neutral-700 border ${colorClasses.border.neutral} rounded hover:bg-neutral-50 dark:hover:bg-neutral-600 dark:text-neutral-300 transition-colors`}
           >
             {expanded ? '收起明细 ▲' : '查看明细 ▼'}
           </button>

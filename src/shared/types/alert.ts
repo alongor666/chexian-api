@@ -164,20 +164,20 @@ export const ALERT_LEVEL_CONFIG: Record<AlertLevel, {
 }> = {
   info: {
     label: '提示',
-    color: 'text-primary dark:text-primary-light',
-    bgColor: 'bg-primary-bg dark:bg-blue-900/20',
+    color: 'text-primary',
+    bgColor: 'bg-primary-bg',
     icon: '💡',
   },
   warning: {
     label: '警告',
-    color: 'text-warning dark:text-warning-light',
-    bgColor: 'bg-warning-bg dark:bg-yellow-900/20',
+    color: 'text-warning',
+    bgColor: 'bg-warning-bg',
     icon: '⚠️',
   },
   critical: {
     label: '严重',
-    color: 'text-danger dark:text-danger-light',
-    bgColor: 'bg-danger-bg dark:bg-red-900/20',
+    color: 'text-danger',
+    bgColor: 'bg-danger-bg',
     icon: '🚨',
   },
 };

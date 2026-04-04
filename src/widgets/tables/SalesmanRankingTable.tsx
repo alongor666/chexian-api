@@ -25,7 +25,7 @@ export const SalesmanRankingTable: React.FC<SalesmanRankingTableProps> = ({
   actions,
 }) => {
   return (
-    <div className="bg-white rounded shadow p-4">
+    <div className="bg-white dark:bg-neutral-800 rounded shadow p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
         <h3 className="text-base font-semibold">{title}</h3>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}

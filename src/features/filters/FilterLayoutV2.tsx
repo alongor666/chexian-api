@@ -217,7 +217,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
           lockedDateCriteria ? (
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-neutral-600">统计口径</label>
-              <div className="flex items-center gap-1 px-2 py-1 bg-neutral-100 border border-neutral-200 rounded text-xs text-neutral-500">
+              <div className="flex items-center gap-1 px-2 py-1 bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-xs text-neutral-500 dark:text-neutral-400">
                 <Lock className="w-3 h-3 text-neutral-400" />
                 <span>{getDateCriteriaLabel(lockedDateCriteria)}</span>
               </div>
@@ -274,7 +274,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
 
         {/* 分隔线 */}
         {showFirstRow && showSecondRow && (
-          <div className="border-t border-neutral-200 my-2" />
+          <div className="border-t border-neutral-200 dark:border-neutral-700 my-2" />
         )}
 
         {/* 快捷组合插槽 */}
@@ -295,7 +295,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); onMultiSelectChange('org_level_3', []); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('org_level_3', []); } }}
-                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-blue-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-primary-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                     >
                       全选
                     </span>
@@ -316,7 +316,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                           onMultiSelectChange('org_level_3', allValues.filter(v => !selected.includes(v)));
                         }
                       }}
-                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-200 transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-border transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                     >
                       反选
                     </span>
@@ -357,7 +357,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                     tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); onMultiSelectChange('customer_category', []); }}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('customer_category', []); } }}
-                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-blue-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
+                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-primary-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                   >
                     全选
                   </span>
@@ -380,7 +380,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                         onMultiSelectChange('customer_category', allValues.filter(v => !selected.includes(v)));
                       }
                     }}
-                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-200 transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
+                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-border transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                   >
                     反选
                   </span>
@@ -416,7 +416,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); onMultiSelectChange('coverage_combination', []); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('coverage_combination', []); } }}
-                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-blue-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-primary-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                     >
                       全选
                     </span>
@@ -439,7 +439,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                           onMultiSelectChange('coverage_combination', allValues.filter(v => !selected.includes(v)));
                         }
                       }}
-                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-200 transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-border transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                     >
                       反选
                     </span>
@@ -473,7 +473,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                     tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); onMultiSelectChange('renewal_mode', []); }}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onMultiSelectChange('renewal_mode', []); } }}
-                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-blue-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
+                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-primary-200 transition-colors ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                   >
                     全选
                   </span>
@@ -494,7 +494,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
                         onMultiSelectChange('renewal_mode', allValues.filter(v => !selected.includes(v)));
                       }
                     }}
-                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-200 transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
+                    className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-purple-border transition-colors ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                   >
                     反选
                   </span>
@@ -527,10 +527,10 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
             lockedDateCriteria ? (
               // 锁定状态：显示只读标签
               <div className="flex items-center space-x-3">
-                <label className="text-sm font-medium text-neutral-700 flex-shrink-0 whitespace-nowrap">
+                <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300 flex-shrink-0 whitespace-nowrap">
                   统计口径：
                 </label>
-                <div className="flex items-center gap-2 px-3 py-2 bg-neutral-100 border border-neutral-300 rounded-md text-sm text-neutral-600">
+                <div className="flex items-center gap-2 px-3 py-2 bg-neutral-100 dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 rounded-md text-sm text-neutral-600 dark:text-neutral-400">
                   <Lock className="w-3.5 h-3.5 text-neutral-400" />
                   <span>{getDateCriteriaLabel(lockedDateCriteria)}</span>
                 </div>
@@ -573,12 +573,12 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
       {showSecondRow && (
         <div className={`grid ${secondRowGridClass} gap-3`}>
           {showOrganization && (
-            <details className="group rounded-lg border border-neutral-200 bg-white">
+            <details className="group rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800">
               <summary className="list-none cursor-pointer px-3 py-2 flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-neutral-700 whitespace-nowrap">
+                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 whitespace-nowrap">
                   三级机构{orgMode === 'single' ? '（单选）' : ''}
                 </span>
-                <span className="text-sm text-neutral-500 truncate">
+                <span className="text-sm text-neutral-500 dark:text-neutral-400 truncate">
                   {getMultiSelectSummary(effectiveOrgSelection)}
                 </span>
               </summary>
@@ -604,10 +604,10 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
           )}
 
           {showCustomerCategory && (
-            <details className="group rounded-lg border border-neutral-200 bg-white">
+            <details className="group rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800">
               <summary className="list-none cursor-pointer px-3 py-2 flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-neutral-700 whitespace-nowrap">客户类别</span>
-                <span className="text-sm text-neutral-500 truncate">
+                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 whitespace-nowrap">客户类别</span>
+                <span className="text-sm text-neutral-500 dark:text-neutral-400 truncate">
                   {getMultiSelectSummary(filters.customer_category)}
                 </span>
               </summary>
@@ -624,10 +624,10 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
           )}
 
           {showCoverageCombination && (
-            <details className="group rounded-lg border border-neutral-200 bg-white">
+            <details className="group rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800">
               <summary className="list-none cursor-pointer px-3 py-2 flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-neutral-700 whitespace-nowrap">险别组合</span>
-                <span className="text-sm text-neutral-500 truncate">
+                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 whitespace-nowrap">险别组合</span>
+                <span className="text-sm text-neutral-500 dark:text-neutral-400 truncate">
                   {getMultiSelectSummary(filters.coverage_combination)}
                 </span>
               </summary>
@@ -644,10 +644,10 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
           )}
 
           {showRenewalMode && (
-            <details className="group rounded-lg border border-neutral-200 bg-white">
+            <details className="group rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800">
               <summary className="list-none cursor-pointer px-3 py-2 flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-neutral-700 whitespace-nowrap">续保模式</span>
-                <span className="text-sm text-neutral-500 truncate">
+                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 whitespace-nowrap">续保模式</span>
+<span className="text-sm text-neutral-500 dark:text-neutral-400 truncate">
                   {getRenewalModeSummary(filters.renewal_mode)}
                 </span>
               </summary>

@@ -88,7 +88,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                 <button
                   type="button"
                   onClick={handleSelectAll}
-                  className={`text-xs px-2 py-1 rounded hover:bg-blue-200 ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
+                  className={`text-xs px-2 py-1 rounded hover:bg-primary-200 ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
                   disabled={isAllSelected}
                 >
                   全选
@@ -96,7 +96,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                 <button
                   type="button"
                   onClick={handleInvertSelection}
-                  className={`text-xs px-2 py-1 rounded hover:bg-purple-200 ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
+                  className={`text-xs px-2 py-1 rounded hover:bg-purple-border ${colorClasses.bg.purple} ${colorClasses.text.purple}`}
                 >
                   反选
                 </button>

@@ -14,8 +14,9 @@ import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '../../../shared/utils/echarts';
 import { formatCurrency, formatPercent } from '../../../shared/utils/formatters';
 import { EnhancedKpiCard } from '../../../widgets/kpi/EnhancedKpiCard';
-import { CHART_TEXT_STYLES, GRID_CONFIG } from '../../../shared/config/chartStyles';
+import { GRID_CONFIG, getChartTheme } from '../../../shared/config/chartStyles';
 import { colorClasses, cn } from '../../../shared/styles';
+import { useTheme } from '../../../shared/theme';
 import type { EarnedPremiumData, EarnedPremiumSummaryData } from '../types/costTypes';
 
 // ==================== 类型定义 ====================
@@ -176,7 +177,11 @@ interface InsuranceTypePieProps {
 }
 
 const InsuranceTypePie: React.FC<InsuranceTypePieProps> = ({ data, loading }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo(() => {
+    const theme = getChartTheme(isDark);
     const pieData = data.map((item) => ({
       name: item.name,
       value: item.earnedPremium,
@@ -195,7 +200,7 @@ const InsuranceTypePie: React.FC<InsuranceTypePieProps> = ({ data, loading }) =>
       },
       legend: {
         bottom: 0,
-        textStyle: CHART_TEXT_STYLES.legend,
+        textStyle: theme.chartTextStyles.legend,
       },
       series: [
         {
@@ -211,7 +216,7 @@ const InsuranceTypePie: React.FC<InsuranceTypePieProps> = ({ data, loading }) =>
           label: {
             show: true,
             formatter: '{b}\n{d}%',
-            ...CHART_TEXT_STYLES.dynamicLabel,
+            ...theme.chartTextStyles.dynamicLabel,
           },
           labelLine: {
             show: true,
@@ -222,7 +227,7 @@ const InsuranceTypePie: React.FC<InsuranceTypePieProps> = ({ data, loading }) =>
         },
       ],
     };
-  }, [data]);
+  }, [data, isDark]);
 
   if (loading) {
     return (
@@ -233,7 +238,7 @@ const InsuranceTypePie: React.FC<InsuranceTypePieProps> = ({ data, loading }) =>
   }
 
   return (
-    <div className={cn('bg-white rounded-lg p-4 border', colorClasses.border.neutral)}>
+    <div className={cn('bg-white dark:bg-neutral-800 rounded-lg p-4 border', colorClasses.border.neutral)}>
       <h4 className={cn('text-sm font-medium mb-2', colorClasses.text.neutralDark)}>险类已赚保费构成</h4>
       <ReactEChartsCore
         echarts={echarts}
@@ -253,7 +258,11 @@ interface StackedBarChartProps {
 }
 
 const StackedBarChart: React.FC<StackedBarChartProps> = ({ summaryData, loading }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo(() => {
+    const theme = getChartTheme(isDark);
     // 过滤掉合计行，只显示机构数据
     const orgData = summaryData.filter((row) => row.org_level_3 !== '合计');
 
@@ -289,7 +298,7 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ summaryData, loading 
       },
       legend: {
         bottom: 0,
-        textStyle: CHART_TEXT_STYLES.legend,
+        textStyle: theme.chartTextStyles.legend,
       },
       grid: GRID_CONFIG,
       xAxis: {
@@ -298,14 +307,14 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ summaryData, loading 
         axisLabel: {
           rotate: 0,
           interval: 0,
-          ...CHART_TEXT_STYLES.axisLabel,
+          ...theme.chartTextStyles.axisLabel,
         },
       },
       yAxis: {
         type: 'value',
         axisLabel: {
           formatter: (value: number) => formatYuan(value),
-          ...CHART_TEXT_STYLES.axisLabel,
+          ...theme.chartTextStyles.axisLabel,
         },
       },
       series: [
@@ -327,7 +336,7 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ summaryData, loading 
         },
       ],
     };
-  }, [summaryData]);
+  }, [summaryData, isDark]);
 
   if (loading) {
     return (
@@ -338,7 +347,7 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ summaryData, loading 
   }
 
   return (
-    <div className={cn('bg-white rounded-lg p-4 border', colorClasses.border.neutral)}>
+    <div className={cn('bg-white dark:bg-neutral-800 rounded-lg p-4 border', colorClasses.border.neutral)}>
       <h4 className={cn('text-sm font-medium mb-2', colorClasses.text.neutralDark)}>已赚保费构成分解（按机构）</h4>
       <ReactEChartsCore
         echarts={echarts}
@@ -358,7 +367,11 @@ interface OrgComparisonBarProps {
 }
 
 const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loading }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo(() => {
+    const theme = getChartTheme(isDark);
     // 过滤掉合计行，按已赚保费降序排序
     const orgData = summaryData
       .filter((row) => row.org_level_3 !== '合计')
@@ -384,7 +397,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
       },
       legend: {
         bottom: 0,
-        textStyle: CHART_TEXT_STYLES.legend,
+        textStyle: theme.chartTextStyles.legend,
       },
       grid: {
         ...GRID_CONFIG,
@@ -396,7 +409,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
           position: 'bottom',
           axisLabel: {
             formatter: (value: number) => formatYuan(value),
-            ...CHART_TEXT_STYLES.axisLabel,
+            ...theme.chartTextStyles.axisLabel,
           },
         },
         {
@@ -405,7 +418,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
           max: 100,
           axisLabel: {
             formatter: '{value}%',
-            ...CHART_TEXT_STYLES.axisLabel,
+            ...theme.chartTextStyles.axisLabel,
           },
           splitLine: { show: false },
         },
@@ -413,7 +426,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
       yAxis: {
         type: 'category',
         data: categories,
-        axisLabel: CHART_TEXT_STYLES.axisLabel,
+        axisLabel: theme.chartTextStyles.axisLabel,
         inverse: true,
       },
       series: [
@@ -440,7 +453,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
             show: true,
             position: 'right',
             formatter: (params: any) => formatYuan(params.value),
-            ...CHART_TEXT_STYLES.dynamicLabel,
+            ...theme.chartTextStyles.dynamicLabel,
           },
         },
         {
@@ -455,7 +468,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
         },
       ],
     };
-  }, [summaryData]);
+  }, [summaryData, isDark]);
 
   if (loading) {
     return (
@@ -466,7 +479,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
   }
 
   return (
-    <div className={cn('bg-white rounded-lg p-4 border', colorClasses.border.neutral)}>
+    <div className={cn('bg-white dark:bg-neutral-800 rounded-lg p-4 border', colorClasses.border.neutral)}>
       <h4 className={cn('text-sm font-medium mb-2', colorClasses.text.neutralDark)}>机构已赚保费对比</h4>
       <ReactEChartsCore
         echarts={echarts}

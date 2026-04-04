@@ -240,8 +240,23 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
   virtualScrollThreshold = 50,
   virtualListHeight = 400,
 }) => {
+  // 默认排序：超限行在前（缺口保费大→问题严重），合规行在后，按缺口保费从大到小
+  const sortedData = useMemo(() =>
+    data.slice().sort((a, b) => {
+      const isAgg = (r: CoefficientRow) => /成都|全省|异地/.test(r.orgLevel3 ?? '');
+      if (isAgg(a) && !isAgg(b)) return -1;
+      if (!isAgg(a) && isAgg(b)) return 1;
+      // 超限（false）排在合规（true）前，待定（null）最后
+      const complianceOrder = (v: boolean | null) => v === false ? 0 : v === true ? 1 : 2;
+      const cmp = complianceOrder(a.isCompliant) - complianceOrder(b.isCompliant);
+      if (cmp !== 0) return cmp;
+      return (b.gapPremium ?? 0) - (a.gapPremium ?? 0);
+    }),
+    [data]
+  );
+
   // 判断是否使用虚拟滚动
-  const useVirtualScroll = data.length > virtualScrollThreshold;
+  const useVirtualScroll = sortedData.length > virtualScrollThreshold;
 
   // 计算表格总宽度
   const totalWidth = useMemo(() =>
@@ -252,9 +267,9 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
   // 虚拟行渲染函数
   const renderVirtualRow = useCallback(
     ({ index, style }: { index: number; style: React.CSSProperties }) => (
-      <VirtualRow index={index} style={style} data={data} />
+      <VirtualRow index={index} style={style} data={sortedData} />
     ),
-    [data]
+    [sortedData]
   );
 
   return (
@@ -266,10 +281,10 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
             <VirtualTableHeader />
             <List
               height={virtualListHeight}
-              itemCount={data.length}
+              itemCount={sortedData.length}
               itemSize={ROW_HEIGHT}
               width="100%"
-              itemData={data}
+              itemData={sortedData}
             >
               {renderVirtualRow}
             </List>
@@ -300,7 +315,7 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
               </tr>
             </thead>
             <tbody className={TABLE_CSS_CLASSES.tbody}>
-              {data.map((row, index) => (
+              {sortedData.map((row, index) => (
                 <DetailTableRow
                   key={`${row.orgLevel3}-${row.isNev}-${row.customerCategoryGroup}-${row.isNewCar}-${index}`}
                   row={row}

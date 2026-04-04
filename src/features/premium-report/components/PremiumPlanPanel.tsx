@@ -33,10 +33,10 @@ const getRateColor = (rate: number | null): string => {
 
 /** 分布柱状图颜色 */
 const getDistBarColor = (range: string): string => {
-  if (range.includes('≥100') || range.includes('100-')) return 'bg-emerald-500';
-  if (range.includes('80-')) return 'bg-blue-500';
-  if (range.includes('50-')) return 'bg-amber-500';
-  return 'bg-red-500';
+  if (range.includes('≥100') || range.includes('100-')) return 'bg-success';
+  if (range.includes('80-')) return 'bg-primary';
+  if (range.includes('50-')) return 'bg-warning';
+  return 'bg-danger';
 };
 
 // ============================================
@@ -49,10 +49,10 @@ const KpiCard: React.FC<{
   subtitle?: string;
   colorClass?: string;
 }> = ({ title, value, subtitle, colorClass = colorClasses.text.neutralBlack }) => (
-  <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm">
-    <p className="text-sm text-neutral-500 font-medium mb-2">{title}</p>
+  <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-5 shadow-sm">
+    <p className="text-sm text-neutral-500 dark:text-neutral-400 font-medium mb-2">{title}</p>
     <p className={cn(numericStyles.kpiPrimary, colorClass)}>{value}</p>
-    {subtitle && <p className="text-xs text-neutral-400 mt-1">{subtitle}</p>}
+    {subtitle && <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">{subtitle}</p>}
   </div>
 );
 
@@ -91,7 +91,7 @@ const DistributionChart: React.FC<{ data: PlanDistributionRow[] }> = ({ data }) 
   const maxCount = Math.max(...data.map((d) => d.count), 1);
 
   return (
-    <div className={`bg-white rounded-lg border p-4 ${colorClasses.border.neutral}`}>
+    <div className={`bg-white dark:bg-neutral-800 rounded-lg border p-4 ${colorClasses.border.neutral}`}>
       <h4 className={`text-sm font-semibold mb-3 ${colorClasses.text.neutral}`}>达成率分布</h4>
       <div className="space-y-2">
         {data.map((row) => (
@@ -210,7 +210,7 @@ const DrilldownTable: React.FC<{
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={`${col.align === 'right' ? TABLE_CSS_CLASSES.headerCellRight : TABLE_CSS_CLASSES.headerCell} ${col.sortable ? 'cursor-pointer hover:bg-neutral-100 select-none group' : ''}`}
+                className={`${col.align === 'right' ? TABLE_CSS_CLASSES.headerCellRight : TABLE_CSS_CLASSES.headerCell} ${col.sortable ? 'cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 select-none group' : ''}`}
                 onClick={() => col.sortable && handleHeaderClick(col.key)}
               >
                 <span className="inline-flex items-center">
@@ -320,7 +320,7 @@ export const PremiumPlanPanel: React.FC = () => {
       )}
 
       {/* 面包屑 */}
-      <div className={`bg-white rounded-lg border px-4 py-3 flex items-center justify-between ${colorClasses.border.neutral}`}>
+      <div className={`bg-white dark:bg-neutral-800 rounded-lg border px-4 py-3 flex items-center justify-between ${colorClasses.border.neutral}`}>
         <Breadcrumb path={drillPath} onNavigate={handleBreadcrumbNavigate} />
         {drillPath.length > 1 && (
           <button
@@ -339,7 +339,7 @@ export const PremiumPlanPanel: React.FC = () => {
       <DistributionChart data={distributionData} />
 
       {/* 下钻表格 */}
-      <div className="bg-white rounded-lg shadow">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
         <div className={`px-4 py-3 border-b ${colorClasses.border.neutral}`}>
           <h3 className={`text-lg font-semibold ${colorClasses.text.neutralBlack}`}>
             保费达成明细

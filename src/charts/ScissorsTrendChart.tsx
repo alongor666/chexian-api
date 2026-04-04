@@ -157,7 +157,7 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
       const gapPercent = lastYear !== 0 ? formatPercent((gap / lastYear) * 100) : '0.0%';
 
       return (
-        <div className={`bg-white p-3 border shadow-lg rounded-lg text-sm min-w-[200px] ${colorClasses.border.neutral}`}>
+        <div className={`bg-white dark:bg-neutral-800 p-3 border shadow-lg rounded-lg text-sm min-w-[200px] ${colorClasses.border.neutral}`}>
           <p className={`font-bold mb-2 ${colorClasses.text.neutralDark}`}>{label}</p>
           <div className="space-y-1">
             <p className={`font-medium ${colorClasses.text.primary}`}>
@@ -213,12 +213,12 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
   }, [selectedDate]);
 
   return (
-    <div className={`w-full bg-white p-4 rounded-xl shadow-sm ${className}`}>
+    <div className={`w-full bg-white dark:bg-neutral-800 p-4 rounded-xl shadow-sm ${className}`}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
         <h3 className={`text-lg font-bold ${colorClasses.text.neutralBlack}`}>年度业绩追赶曲线</h3>
         <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
           <div className="flex items-center">
-            <span className="w-4 h-1 bg-blue-500 mr-1 rounded"></span>
+            <span className="w-4 h-1 bg-primary mr-1 rounded"></span>
             <span className={colorClasses.text.neutral}>当年累计</span>
           </div>
           <div className="flex items-center">

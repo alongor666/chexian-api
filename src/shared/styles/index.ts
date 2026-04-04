@@ -15,6 +15,7 @@ export const colors = {
     DEFAULT: '#1890ff',
     light: '#40a9ff',
     dark: '#096dd9',
+    solid: '#096dd9',
     bg: '#e6f7ff',
     border: '#91d5ff',
     50: '#e6f7ff',
@@ -33,6 +34,7 @@ export const colors = {
     DEFAULT: '#52c41a',
     light: '#73d13d',
     dark: '#389e0d',
+    solid: '#389e0d',
     bg: '#f6ffed',
     border: '#b7eb8f',
   },
@@ -41,6 +43,7 @@ export const colors = {
     DEFAULT: '#faad14',
     light: '#ffc53d',
     dark: '#d48806',
+    solid: '#d48806',
     bg: '#fffbe6',
     border: '#ffe58f',
   },
@@ -49,6 +52,7 @@ export const colors = {
     DEFAULT: '#ff4d4f',
     light: '#ff7875',
     dark: '#d9363e',
+    solid: '#d9363e',
     bg: '#fff1f0',
     border: '#ffccc7',
   },
@@ -64,6 +68,44 @@ export const colors = {
     700: '#434343',
     800: '#262626',
     900: '#1f1f1f',
+  },
+  // 紫色系
+  purple: {
+    DEFAULT: '#722ed1',
+    light: '#9254de',
+    solid: '#531dab',
+    bg: '#f9f0ff',
+    border: '#d3adf7',
+  },
+  // 靛蓝色系
+  indigo: {
+    DEFAULT: '#4f46e5',
+    light: '#6366f1',
+    solid: '#4338ca',
+    bg: '#eef2ff',
+    border: '#a5b4fc',
+  },
+  // 天蓝色系
+  sky: {
+    DEFAULT: '#0284c7',
+    light: '#38bdf8',
+    bg: '#f0f9ff',
+    border: '#7dd3fc',
+  },
+  // 橙色系（与 warning 区分：用于业务标签，非警告）
+  orange: {
+    DEFAULT: '#ea580c',
+    light: '#f97316',
+    solid: '#c2410c',
+    bg: '#fff7ed',
+    border: '#fdba74',
+  },
+  // 琥珀色系
+  amber: {
+    DEFAULT: '#d97706',
+    light: '#f59e0b',
+    bg: '#fffbeb',
+    border: '#fcd34d',
   },
 } as const
 
@@ -507,77 +549,79 @@ export function getStatusBgClass(
  *   新代码：className={colorClasses.text.danger}
  */
 export const colorClasses = {
-  /** 文本颜色 */
+  /**
+   * 文本颜色
+   * 语义色走 CSS 变量（自动适配 dark mode），无需 dark: 前缀
+   * 中性色仍需手动 dark: 前缀（静态色阶）
+   */
   text: {
-    // 危险/错误/负面
-    danger: 'text-danger dark:text-danger-light',
-    dangerDark: 'text-danger-dark dark:text-danger',
-    dangerLight: 'text-red-500 dark:text-red-400',
-    // 成功/增长/正面
-    success: 'text-success dark:text-success-light',
-    successDark: 'text-success-dark dark:text-success',
-    positive: 'text-emerald-600 dark:text-emerald-400',
-    // 警告
-    warning: 'text-warning dark:text-warning-light',
-    warningDark: 'text-warning-dark dark:text-warning',
-    // 主色
-    primary: 'text-primary dark:text-primary-light',
-    primaryDark: 'text-primary-dark dark:text-primary',
-    // 中性色
+    // 语义色 — CSS 变量自动 dark mode
+    danger: 'text-danger',
+    dangerDark: 'text-danger-dark',
+    dangerLight: 'text-danger-light',
+    success: 'text-success',
+    successDark: 'text-success-dark',
+    positive: 'text-success',
+    warning: 'text-warning',
+    warningDark: 'text-warning-dark',
+    primary: 'text-primary',
+    primaryDark: 'text-primary-dark',
+    purple: 'text-purple',
+    indigo: 'text-indigo',
+    sky: 'text-sky',
+    orange: 'text-orange',
+    amber: 'text-amber',
+    // 增长率专用（映射到语义色）
+    growthPositive: 'text-success',
+    growthNegative: 'text-danger-light',
+    // 中性色 — 静态色阶，需 dark: 前缀
     neutralBlack: 'text-neutral-900 dark:text-neutral-100',
     neutral: 'text-neutral-600 dark:text-neutral-400',
     neutralDark: 'text-neutral-700 dark:text-neutral-300',
     neutralLight: 'text-neutral-500 dark:text-neutral-400',
     neutralMuted: 'text-neutral-400 dark:text-neutral-500',
-    // 增长率专用
-    growthPositive: 'text-emerald-600 dark:text-emerald-400',
-    growthNegative: 'text-red-500 dark:text-red-400',
-    // 扩展语义颜色
-    purple: 'text-purple-600 dark:text-purple-400',   // 角色/身份标识
-    indigo: 'text-indigo-600 dark:text-indigo-400',   // 高级功能/特殊标识
-    sky: 'text-sky-600 dark:text-sky-400',             // 信息/提示
-    orange: 'text-orange-600 dark:text-orange-400',   // 费用/成本
-    amber: 'text-amber-600 dark:text-amber-400',      // 次级警告
   },
-  /** 背景颜色 */
+  /**
+   * 背景颜色
+   * 语义色走 CSS 变量（自动适配 dark mode）
+   */
   bg: {
-    // 危险/错误
-    danger: 'bg-danger-bg dark:bg-red-900/30',
-    dangerHover: 'hover:bg-red-100 dark:hover:bg-red-900/40',
-    dangerSolid: 'bg-red-100 dark:bg-red-900/20',
-    // 成功/正面
-    success: 'bg-success-bg dark:bg-green-900/30',
-    successHover: 'hover:bg-green-100 dark:hover:bg-green-900/40',
-    successSolid: 'bg-green-100 dark:bg-green-900/20',
-    // 警告
-    warning: 'bg-warning-bg dark:bg-yellow-900/30',
-    warningSolid: 'bg-yellow-100 dark:bg-yellow-900/20',
-    // 主色
-    primary: 'bg-primary-bg dark:bg-blue-900/30',
-    primarySolid: 'bg-blue-100 dark:bg-blue-900/20',
-    // 中性色
+    // 语义色 — CSS 变量自动 dark mode
+    danger: 'bg-danger-bg',
+    dangerSolid: 'bg-danger-solid',
+    success: 'bg-success-bg',
+    successSolid: 'bg-success-solid',
+    warning: 'bg-warning-bg',
+    warningSolid: 'bg-warning-solid',
+    primary: 'bg-primary-bg',
+    primarySolid: 'bg-primary-solid',
+    purple: 'bg-purple-bg',
+    indigo: 'bg-indigo-bg',
+    sky: 'bg-sky-bg',
+    orange: 'bg-orange-bg',
+    amber: 'bg-amber-bg',
+    // 中性色 — 静态色阶，需 dark: 前缀
     neutral: 'bg-neutral-50 dark:bg-neutral-800',
     neutralLight: 'bg-neutral-100 dark:bg-neutral-700',
-    neutralMuted: 'bg-gray-50 dark:bg-neutral-800',
-    // 扩展语义颜色
-    purple: 'bg-purple-50 dark:bg-purple-900/20',
-    indigo: 'bg-indigo-50 dark:bg-indigo-900/20',
-    sky: 'bg-sky-50 dark:bg-sky-900/20',
-    orange: 'bg-orange-50 dark:bg-orange-900/20',
-    amber: 'bg-amber-50 dark:bg-amber-900/20',
+    neutralMuted: 'bg-neutral-50 dark:bg-neutral-800',
   },
-  /** 边框颜色 */
+  /**
+   * 边框颜色
+   * 语义色走 CSS 变量（自动适配 dark mode）
+   */
   border: {
-    danger: 'border-red-200 dark:border-red-800',
-    success: 'border-green-200 dark:border-green-800',
-    warning: 'border-yellow-200 dark:border-yellow-800',
-    primary: 'border-blue-200 dark:border-blue-800',
+    // 语义色 — CSS 变量自动 dark mode
+    danger: 'border-danger-border',
+    success: 'border-success-border',
+    warning: 'border-warning-border',
+    primary: 'border-primary-border',
+    purple: 'border-purple-border',
+    indigo: 'border-indigo-border',
+    orange: 'border-orange-border',
+    sky: 'border-sky-border',
+    amber: 'border-amber-border',
+    // 中性色 — 静态色阶，需 dark: 前缀
     neutral: 'border-neutral-200 dark:border-neutral-700',
-    // 扩展语义颜色
-    purple: 'border-purple-200 dark:border-purple-800',
-    indigo: 'border-indigo-200 dark:border-indigo-800',
-    orange: 'border-orange-200 dark:border-orange-800',
-    sky: 'border-sky-200 dark:border-sky-800',
   },
 } as const
 
@@ -609,14 +653,14 @@ export const funnelLevelColors = [
   'bg-success',
 ] as const
 
-/** 热力图转化率→背景色映射 */
+/** 热力图转化率→背景色映射（使用语义色，自动适配 dark mode） */
 export function getHeatmapColor(rate: number): string {
-  if (rate >= 15) return 'bg-emerald-500 text-white'
-  if (rate >= 10) return 'bg-emerald-300 text-neutral-900'
-  if (rate >= 7) return 'bg-emerald-100 text-neutral-800'
-  if (rate >= 4) return 'bg-amber-100 text-neutral-800'
-  if (rate >= 1) return 'bg-red-100 text-neutral-800'
-  return 'bg-red-200 text-neutral-800'
+  if (rate >= 15) return 'bg-success-solid text-white'
+  if (rate >= 10) return 'bg-success-border text-neutral-900'
+  if (rate >= 7) return 'bg-success-bg text-neutral-800'
+  if (rate >= 4) return 'bg-amber-bg text-neutral-800'
+  if (rate >= 1) return 'bg-danger-bg text-neutral-800'
+  return 'bg-danger-border text-neutral-800'
 }
 
 /** 维度/粒度切换按钮样式（选中/未选中） */

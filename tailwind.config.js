@@ -7,51 +7,96 @@ export default {
   ],
   theme: {
     extend: {
-      // 颜色系统
+      // ================================================================
+      // 颜色系统 — 语义色走 CSS 变量（自动适配 dark mode）
+      //           中性色保持静态值（手动 dark: 前缀）
+      // ================================================================
       colors: {
         // 主色调 - 蓝色系
         primary: {
-          DEFAULT: '#1890ff',
-          light: '#40a9ff',
-          dark: '#096dd9',
-          bg: '#e6f7ff',
-          border: '#91d5ff',
-          50: '#e6f7ff',
-          100: '#bae7ff',
-          200: '#91d5ff',
-          300: '#69c0ff',
-          400: '#40a9ff',
-          500: '#1890ff',
-          600: '#096dd9',
-          700: '#0050b3',
-          800: '#003a8c',
-          900: '#002766',
+          DEFAULT: 'var(--c-primary)',
+          light: 'var(--c-primary-light)',
+          dark: 'var(--c-primary-dark)',
+          bg: 'var(--c-primary-bg)',
+          border: 'var(--c-primary-border)',
+          solid: 'var(--c-primary-solid)',
+          50: 'var(--c-primary-50)',
+          100: 'var(--c-primary-100)',
+          200: 'var(--c-primary-200)',
+          300: 'var(--c-primary-300)',
+          400: 'var(--c-primary-400)',
+          500: 'var(--c-primary-500)',
+          600: 'var(--c-primary-600)',
+          700: 'var(--c-primary-700)',
+          800: 'var(--c-primary-800)',
+          900: 'var(--c-primary-900)',
         },
         // 成功色 - 绿色系
         success: {
-          DEFAULT: '#52c41a',
-          light: '#73d13d',
-          dark: '#389e0d',
-          bg: '#f6ffed',
-          border: '#b7eb8f',
+          DEFAULT: 'var(--c-success)',
+          light: 'var(--c-success-light)',
+          dark: 'var(--c-success-dark)',
+          bg: 'var(--c-success-bg)',
+          border: 'var(--c-success-border)',
+          solid: 'var(--c-success-solid)',
         },
         // 警告色 - 橙色系
         warning: {
-          DEFAULT: '#faad14',
-          light: '#ffc53d',
-          dark: '#d48806',
-          bg: '#fffbe6',
-          border: '#ffe58f',
+          DEFAULT: 'var(--c-warning)',
+          light: 'var(--c-warning-light)',
+          dark: 'var(--c-warning-dark)',
+          bg: 'var(--c-warning-bg)',
+          border: 'var(--c-warning-border)',
+          solid: 'var(--c-warning-solid)',
         },
         // 危险色 - 红色系
         danger: {
-          DEFAULT: '#ff4d4f',
-          light: '#ff7875',
-          dark: '#d9363e',
-          bg: '#fff1f0',
-          border: '#ffccc7',
+          DEFAULT: 'var(--c-danger)',
+          light: 'var(--c-danger-light)',
+          dark: 'var(--c-danger-dark)',
+          bg: 'var(--c-danger-bg)',
+          border: 'var(--c-danger-border)',
+          solid: 'var(--c-danger-solid)',
         },
-        // 中性色 - 灰色系
+        // 紫色系 - 角色/身份
+        purple: {
+          DEFAULT: 'var(--c-purple)',
+          light: 'var(--c-purple-light)',
+          bg: 'var(--c-purple-bg)',
+          border: 'var(--c-purple-border)',
+          solid: 'var(--c-purple-solid)',
+        },
+        // 靛蓝色系 - 高级功��
+        indigo: {
+          DEFAULT: 'var(--c-indigo)',
+          light: 'var(--c-indigo-light)',
+          bg: 'var(--c-indigo-bg)',
+          border: 'var(--c-indigo-border)',
+          solid: 'var(--c-indigo-solid)',
+        },
+        // 天蓝色系 - 信息/提示
+        sky: {
+          DEFAULT: 'var(--c-sky)',
+          light: 'var(--c-sky-light)',
+          bg: 'var(--c-sky-bg)',
+          border: 'var(--c-sky-border)',
+        },
+        // 橙色系 - 费用/成本
+        orange: {
+          DEFAULT: 'var(--c-orange)',
+          light: 'var(--c-orange-light)',
+          bg: 'var(--c-orange-bg)',
+          border: 'var(--c-orange-border)',
+          solid: 'var(--c-orange-solid)',
+        },
+        // 琥珀色系 - 次级警告
+        amber: {
+          DEFAULT: 'var(--c-amber)',
+          light: 'var(--c-amber-light)',
+          bg: 'var(--c-amber-bg)',
+          border: 'var(--c-amber-border)',
+        },
+        // 中性色 - 灰色系（静态值，dark mode 手动 dark: 前缀）
         neutral: {
           50: '#fafafa',
           100: '#f5f5f5',
@@ -138,7 +183,7 @@ export default {
       screens: {
         'xs': '375px',   // 小屏手机
         'sm': '640px',   // 手机
-        'md': '768px',   // 平板
+        'md': '768px',   // 平���
         'lg': '1024px',  // 桌面
         'xl': '1280px',  // 大桌面
         '2xl': '1536px', // 超大屏

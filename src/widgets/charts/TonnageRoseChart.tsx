@@ -63,7 +63,7 @@ export const TonnageRoseChart: React.FC<TonnageRoseChartProps> = ({
           <button
             onClick={() => setMetric('premium')}
             className={`px-3 py-1 text-sm rounded transition-colors ${metric === 'premium'
-                ? 'bg-blue-500 text-white shadow-sm'
+                ? 'bg-primary text-white shadow-sm'
                 : `bg-neutral-200 ${colorClasses.text.neutral} hover:bg-neutral-300`
               }`}
           >
@@ -72,7 +72,7 @@ export const TonnageRoseChart: React.FC<TonnageRoseChartProps> = ({
           <button
             onClick={() => setMetric('count')}
             className={`px-3 py-1 text-sm rounded transition-colors ${metric === 'count'
-                ? 'bg-blue-500 text-white shadow-sm'
+                ? 'bg-primary text-white shadow-sm'
                 : `bg-neutral-200 ${colorClasses.text.neutral} hover:bg-neutral-300`
               }`}
           >

@@ -383,25 +383,25 @@ const SalesmanRankPanel: React.FC<{ filters: FunnelFilters }> = ({ filters }) =>
                 .map(row => (
                   <tr key={row.salesman_name} className={tableStyles.row}>
                     <td className={tableStyles.cell}>{row.salesman_name || '未分配'}</td>
-                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                       {formatCount(row.total_due ?? 0)}
                     </td>
-                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                       {formatCount(row.total_quoted ?? 0)}
                     </td>
-                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                       {formatCount(row.total_renewed ?? 0)}
                     </td>
-                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                       <RateCell value={row.renewal_rate ?? 0} />
                     </td>
-                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                       {formatCount(row.self_retained_count ?? 0)}
                     </td>
-                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                       {(row.self_retention_rate ?? 0).toFixed(1)}%
                     </td>
-                    <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                    <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                       {(row.competitive_count ?? 0) > 0 && (
                         <span className={colorClasses.text.warning}>{row.competitive_count}</span>
                       )}

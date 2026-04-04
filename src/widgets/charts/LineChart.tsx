@@ -6,6 +6,8 @@ import type { EChartsParam } from '../../shared/types/echarts';
 import { getYearChartColor } from '../../shared/styles';
 import { cardStyles, cn } from '../../shared/styles';
 import type { PremiumTrendBarData } from '../../features/dashboard/hooks/useTrendData';
+import { getChartTheme } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 
 /** 时间视图类型（原 shared/sql/trend 导出） */
 export type TimeView = 'daily' | 'weekly' | 'monthly';
@@ -61,7 +63,9 @@ function renderBarLineCombo(
   title: string,
   timeView: TimeView,
   analysisYear: number,
+  isDark: boolean,
 ): void {
+  const theme = getChartTheme(isDark);
   const currentYear = String(analysisYear);
   const prevYear = String(analysisYear - 1);
 
@@ -127,8 +131,9 @@ function renderBarLineCombo(
       },
     } : undefined,
     tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross' },
+      ...theme.tooltipConfig,
+      trigger: 'axis' as const,
+      axisPointer: { type: 'cross' as const },
       formatter: (params: any) => {
         const safeParams = (Array.isArray(params) ? params : []) as EChartsParam[];
         if (safeParams.length === 0) return '';
@@ -157,9 +162,9 @@ function renderBarLineCombo(
       axisTick: { show: true, alignWithLabel: true },
       splitLine: { show: false },
       axisLabel: {
+        ...theme.xAxisConfig.axisLabel,
         rotate: 0,
         interval: 0,
-        fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif',
         formatter: (value: string) => {
           if (timeView === 'daily') {
             return formatTrendDailyXAxis(value);
@@ -178,7 +183,7 @@ function renderBarLineCombo(
         axisTick: { show: false },
         splitLine: { show: false },
         axisLabel: {
-          fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif',
+          ...theme.yAxisConfig.axisLabel,
           formatter: formatPremiumWan,
         },
       },
@@ -190,7 +195,7 @@ function renderBarLineCombo(
         axisTick: { show: false },
         splitLine: { show: false },
         axisLabel: {
-          fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif',
+          ...theme.yAxisConfig.axisLabel,
           formatter: formatRate,
         },
       },
@@ -216,7 +221,9 @@ function renderLegacyLineChart(
   startDate: string | undefined,
   endDate: string | undefined,
   yAxisLabel: string,
+  isDark: boolean,
 ): void {
+  const theme = getChartTheme(isDark);
   if (data.length === 0) {
     chart.setOption({
       title: { text: title, left: 'center' },
@@ -321,6 +328,7 @@ function renderLegacyLineChart(
       }
     },
     tooltip: {
+      ...theme.tooltipConfig,
       trigger: 'axis',
       axisPointer: { type: 'cross' },
       formatter: (params: any) => {
@@ -359,9 +367,9 @@ function renderLegacyLineChart(
       },
       splitLine: { show: false },
       axisLabel: {
+        ...theme.xAxisConfig.axisLabel,
         rotate: 0,
         interval: 0,
-        fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif',
         formatter: (value: string, index: number) => {
           if (!value) return value;
 
@@ -409,7 +417,7 @@ function renderLegacyLineChart(
         axisTick: { show: false },
         splitLine: { show: false },
         axisLabel: {
-          fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif',
+          ...theme.yAxisConfig.axisLabel,
           formatter: yAxisLabel.includes('件数')
             ? (value: number) => formatCount(value)
             : formatPremiumWan
@@ -423,7 +431,7 @@ function renderLegacyLineChart(
         axisTick: { show: false },
         splitLine: { show: false },
         axisLabel: {
-          fontFamily: '"SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", sans-serif',
+          ...theme.yAxisConfig.axisLabel,
           formatter: formatRate
         },
       },
@@ -454,6 +462,9 @@ export const LineChart: React.FC<LineChartProps> = ({
   barChartData,
   analysisYear,
 }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<ReturnType<typeof echarts.init> | null>(null);
 
@@ -477,7 +488,7 @@ export const LineChart: React.FC<LineChartProps> = ({
     // V3.0: 优先走柱+折线组合图
     if (barChartData && barChartData.length > 0) {
       const year = analysisYear ?? new Date().getFullYear();
-      renderBarLineCombo(chart, barChartData, title, timeView, year);
+      renderBarLineCombo(chart, barChartData, title, timeView, year, isDark);
     } else if (data.length === 0) {
       chart.setOption({
         title: { text: title, left: 'center' },
@@ -489,13 +500,13 @@ export const LineChart: React.FC<LineChartProps> = ({
         },
       }, true);
     } else {
-      renderLegacyLineChart(chart, data, title, timeView, startDate, endDate, yAxisLabel);
+      renderLegacyLineChart(chart, data, title, timeView, startDate, endDate, yAxisLabel, isDark);
     }
 
     const handleResize = () => chart.resize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [data, loading, title, timeView, startDate, endDate, yAxisLabel, barChartData, analysisYear]);
+  }, [data, loading, title, timeView, startDate, endDate, yAxisLabel, barChartData, analysisYear, isDark]);
 
   useEffect(() => {
     return () => {

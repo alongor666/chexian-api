@@ -207,12 +207,12 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
       />
       <aside
         className={cn(
-          'fixed inset-y-0 right-0 z-50 flex w-[380px] max-w-[92vw] flex-col bg-white shadow-2xl transition-transform duration-300',
+          'fixed inset-y-0 right-0 z-50 flex w-[380px] max-w-[92vw] flex-col bg-white dark:bg-neutral-800 shadow-2xl transition-transform duration-300',
           advancedOpen ? 'translate-x-0' : 'translate-x-full'
         )}
         aria-label="高级筛选"
       >
-        <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-700 px-4 py-3">
           <div>
             <h2 className={textStyles.titleSmall}>高级筛选</h2>
             <p className={cn(textStyles.caption, 'mt-1')}>保留完整筛选能力，不再占用主内容横向空间。</p>
@@ -247,7 +247,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
             }}
           />
         </div>
-        <div className="border-t border-neutral-200 px-4 py-4">
+        <div className="border-t border-neutral-200 dark:border-neutral-700 px-4 py-4">
           <Footer />
         </div>
       </aside>
@@ -257,7 +257,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
   return (
     <div className="flex h-full w-full flex-col bg-neutral-50/60">
       {(title || showBasicFilterBar) && (
-        <div className="sticky top-0 z-30 border-b border-neutral-200 bg-white shadow-sm">
+        <div className="sticky top-0 z-30 border-b border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-sm">
           {title && (
             <PageHeaderBar
               baseTitle={title}
@@ -280,7 +280,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
           )}
 
           {showBasicFilterBar && (
-            <div className="border-t border-neutral-100 bg-neutral-50/90 px-4 py-3 backdrop-blur">
+            <div className="border-t border-neutral-100 dark:border-neutral-700 bg-neutral-50/90 dark:bg-neutral-800/90 px-4 py-3 backdrop-blur">
               <div className="mb-3 flex flex-wrap items-start gap-3">
                 <div className="min-w-0 flex-1">
                   {filterBarExtraContent ?? (

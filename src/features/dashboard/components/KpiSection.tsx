@@ -350,7 +350,7 @@ export const KpiSection = memo<KpiSectionProps>(({
 
   return (
     <div className={cn(cardStyles.standard, "space-y-4")}>
-      <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
+      <div className={cn('flex items-center gap-2 border-b pb-3', colorClasses.border.neutral)}>
         {(['core', 'focus'] as KpiGroup[]).map((group) => (
           <button
             key={group}

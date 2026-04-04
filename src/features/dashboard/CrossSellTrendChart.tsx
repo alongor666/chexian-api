@@ -226,7 +226,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
           min: 0,
           max: 100,
           axisLabel: { formatter: '{value}%', fontSize: 11 },
-          splitLine: { lineStyle: { color: colors.neutral[200] } },
+          splitLine: { show: false },
         }
         : {
           type: 'value',
@@ -235,7 +235,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
             formatter: (value: number) => formatCount(value),
             fontSize: 11,
           },
-          splitLine: { lineStyle: { color: colors.neutral[200] } },
+          splitLine: { show: false },
         },
       series: SERIES_ORDER.map((name) => ({
         name,

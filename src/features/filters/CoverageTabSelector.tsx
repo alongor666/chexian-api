@@ -32,12 +32,12 @@ export const CoverageTabSelector: React.FC<CoverageTabSelectorProps> = ({
 
   const tabBase = 'flex-1 py-1.5 text-xs font-medium transition-colors text-center';
   const tabActive = 'bg-primary text-white';
-  const tabInactive = 'bg-white text-neutral-600 hover:bg-neutral-50';
+  const tabInactive = 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700';
 
   return (
     <div className="space-y-1">
-      <span className="text-xs font-medium text-neutral-600">险别组合</span>
-      <div className="flex rounded-md border border-neutral-200 overflow-hidden divide-x divide-neutral-200">
+      <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">险别组合</span>
+      <div className="flex rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden divide-x divide-neutral-200 dark:divide-neutral-700">
         <button
           type="button"
           onClick={handleSelectAll}

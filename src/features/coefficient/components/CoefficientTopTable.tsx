@@ -71,7 +71,7 @@ export const CoefficientTopTable = memo<CoefficientTopTableProps>(({
             </tr>
           </thead>
           <tbody className={TABLE_CSS_CLASSES.tbody}>
-            {rows.map((row, index) => (
+            {rows.slice().sort((a, b) => (a.weekFactor ?? 0) - (b.weekFactor ?? 0)).map((row, index) => (
               <tr
                 key={`${regionName}-${row.isNev}-${row.customerCategoryGroup}-${row.isNewCar}-${row.scenario}-${index}`}
                 className={TABLE_CSS_CLASSES.row}

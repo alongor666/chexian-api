@@ -284,7 +284,7 @@ export const AIAssistantPage: React.FC = () => {
         !hasMessages && 'border-t-0'
       )}>
         <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
-          <div className="flex items-end gap-2 bg-neutral-50 dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-600 px-3 py-2 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 transition-all">
+          <div className="flex items-end gap-2 bg-neutral-50 dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-600 px-3 py-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
             <textarea
               ref={inputRef}
               value={input}
@@ -298,7 +298,7 @@ export const AIAssistantPage: React.FC = () => {
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="flex-shrink-0 p-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-neutral-300 dark:disabled:bg-neutral-600 text-white transition-colors"
+              className="flex-shrink-0 p-1.5 rounded-lg bg-primary hover:bg-primary-solid disabled:bg-neutral-300 dark:disabled:bg-neutral-600 text-white transition-colors"
             >
               {isLoading ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -330,7 +330,7 @@ const MessageBubble: React.FC<{
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tr-sm bg-blue-500 text-white text-sm">
+        <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tr-sm bg-primary text-white text-sm">
           {message.content}
         </div>
       </div>
@@ -353,7 +353,7 @@ const MessageBubble: React.FC<{
   if (message.type === 'error') {
     return (
       <div className="flex justify-start">
-        <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl rounded-tl-sm ${colorClasses.bg.danger} dark:bg-red-900/20 ${colorClasses.text.danger} dark:text-red-400 text-sm`}>
+        <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl rounded-tl-sm ${colorClasses.bg.danger} ${colorClasses.text.danger} text-sm`}>
           {message.content}
         </div>
       </div>
@@ -381,13 +381,13 @@ const MessageBubble: React.FC<{
                 className={cn(
                   'w-full text-left p-3 rounded-xl border transition-all group',
                   link.isPrimary
-                    ? `border-blue-300 dark:border-blue-600 ${colorClasses.bg.primary} dark:bg-blue-900/20 hover:border-blue-400 hover:shadow-md`
-                    : 'border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 hover:border-blue-300 hover:shadow-sm'
+                    ? `border-primary-300 ${colorClasses.bg.primary} hover:border-primary hover:shadow-md`
+                    : 'border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 hover:border-primary hover:shadow-sm'
                 )}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {link.isPrimary && <Star size={13} className="text-amber-500" />}
+                    {link.isPrimary && <Star size={13} className={colorClasses.text.amber} />}
                     <span className="font-medium text-sm text-neutral-800 dark:text-neutral-200">
                       {link.label}
                     </span>
@@ -416,7 +416,7 @@ const MessageBubble: React.FC<{
             <div className="pl-2">
               <button
                 onClick={() => onAiFallback(message.originalInput!)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-purple-200 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-purple-border text-purple hover:bg-purple-bg transition-colors`}
               >
                 <Sparkles size={13} />
                 不对？AI 深度分析
@@ -446,7 +446,7 @@ const MessageBubble: React.FC<{
               <button
                 key={cap.id}
                 onClick={() => onNavigate(cap.route)}
-                className="w-full text-left p-3 rounded-xl border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 hover:border-blue-300 hover:shadow-sm transition-all group"
+                className="w-full text-left p-3 rounded-xl border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 hover:border-primary hover:shadow-sm transition-all group"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-sm text-neutral-800 dark:text-neutral-200">
@@ -454,14 +454,14 @@ const MessageBubble: React.FC<{
                   </span>
                   <ExternalLink
                     size={14}
-                    className="text-neutral-400 group-hover:text-blue-600 transition-colors"
+                    className="text-neutral-400 group-hover:text-primary transition-colors"
                   />
                 </div>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2">
                   {cap.description}
                 </p>
                 {!isDataLoaded && (
-                  <p className="text-[11px] text-amber-500 mt-1">
+                  <p className={`text-[11px] ${colorClasses.text.amber} mt-1`}>
                     请先加载数据文件后再查看
                   </p>
                 )}
@@ -477,7 +477,7 @@ const MessageBubble: React.FC<{
               <button
                 key={i}
                 onClick={() => onOptionClick(opt)}
-                className={`px-3 py-1.5 text-sm rounded-full border ${colorClasses.border.primary} dark:border-blue-700 ${colorClasses.text.primary} hover:${colorClasses.bg.primary} dark:hover:bg-blue-900/20 transition-colors`}
+                className={`px-3 py-1.5 text-sm rounded-full border ${colorClasses.border.primary} ${colorClasses.text.primary} hover:${colorClasses.bg.primary} transition-colors`}
               >
                 {opt}
               </button>

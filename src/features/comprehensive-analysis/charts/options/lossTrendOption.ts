@@ -20,7 +20,7 @@ export function buildLossTrendOption(rows: ComprehensiveLossTrendRow[]): ECharts
       {
         type: 'value',
         name: '比率(%)',
-        splitLine: { lineStyle: { color: comprehensiveTheme.palette.splitLine } },
+        splitLine: { show: false },
       },
     ],
     series: [

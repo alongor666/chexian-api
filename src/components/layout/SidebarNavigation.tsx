@@ -132,9 +132,9 @@ export const SidebarNavigation: React.FC = () => {
   const showExpanded = isMobile || !collapsed;
 
   const renderCollapsedTooltip = (label: string, description?: string) => (
-    <div className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-50 -translate-y-1/2 rounded-lg border border-neutral-200 bg-white px-3 py-2 shadow-lg opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-      <div className="whitespace-nowrap text-sm font-medium text-neutral-800">{label}</div>
-      {description ? <div className="mt-0.5 whitespace-nowrap text-xs text-neutral-500">{description}</div> : null}
+    <div className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-50 -translate-y-1/2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 shadow-lg opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+      <div className="whitespace-nowrap text-sm font-medium text-neutral-800 dark:text-neutral-200">{label}</div>
+      {description ? <div className="mt-0.5 whitespace-nowrap text-xs text-neutral-500 dark:text-neutral-400">{description}</div> : null}
     </div>
   );
 
@@ -146,7 +146,7 @@ export const SidebarNavigation: React.FC = () => {
       return (
         <div
           key={item.path}
-          className="group relative flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0 text-neutral-400 bg-neutral-50 cursor-not-allowed opacity-70"
+          className="group relative flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0 text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-800 cursor-not-allowed opacity-70"
           title={!showExpanded ? `${item.label}（无权限）` : undefined}
           aria-disabled="true"
         >
@@ -192,7 +192,7 @@ export const SidebarNavigation: React.FC = () => {
 
   const renderSection = (title: string, items: NavItem[]) => (
     <>
-      <div className="my-3 border-t border-neutral-200" role="separator" />
+      <div className="my-3 border-t border-neutral-200 dark:border-neutral-700" role="separator" />
       {showExpanded ? (
         <div className="px-3 py-2 text-xs font-semibold text-neutral-400 uppercase tracking-[0.16em]">
           {title}
@@ -208,7 +208,7 @@ export const SidebarNavigation: React.FC = () => {
 
   // 计算侧边栏的显示状态和样式
   const getSidebarClasses = () => {
-    const baseClasses = `fixed left-0 top-14 bottom-0 bg-white border-r border-neutral-200 z-40 flex flex-col ${!isDragging ? 'transition-all duration-300' : ''}`;
+    const baseClasses = `fixed left-0 top-14 bottom-0 bg-white dark:bg-neutral-800 border-r border-neutral-200 dark:border-neutral-700 z-40 flex flex-col ${!isDragging ? 'transition-all duration-300' : ''}`;
 
     if (isMobile) {
       // 移动端：抽屉模式，总是宽展开
@@ -229,7 +229,7 @@ export const SidebarNavigation: React.FC = () => {
       {/* 拖拽把手 - 放侧边栏右侧 */}
       {!isMobile && !collapsed && (
         <div
-          className="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-blue-400 z-50 transition-colors"
+          className="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-primary-400 z-50 transition-colors"
           style={{ transform: 'translateX(50%)' }}
           onMouseDown={(e) => {
             e.preventDefault();
@@ -261,11 +261,11 @@ export const SidebarNavigation: React.FC = () => {
       )}
       {/* 移动端：关闭按钮 */}
       {isMobile && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 md:hidden">
-          <span className="text-sm font-semibold text-neutral-700">导航菜单</span>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-700 md:hidden">
+          <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">导航菜单</span>
           <button
             onClick={() => setMobileOpen(false)}
-            className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="p-2 rounded-lg text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="关闭导航菜单"
           >
             <X size={20} aria-hidden="true" />
@@ -306,14 +306,14 @@ export const SidebarNavigation: React.FC = () => {
       </div>
 
       {/* 底部区域：用户面板 + 收起/展开按钮 */}
-      <div className="border-t border-neutral-200 p-3 space-y-2">
+      <div className="border-t border-neutral-200 dark:border-neutral-700 p-3 space-y-2">
         <SidebarUserPanel />
 
         {/* 收起/展开按钮 - 仅桌面端显示 */}
         {!isMobile && (
           <button
             onClick={toggle}
-            className="w-full flex items-center justify-center px-3 py-2 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
+            className="w-full flex items-center justify-center px-3 py-2 rounded-lg text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
             title={collapsed ? '展开侧边栏' : '收起侧边栏'}
             aria-expanded={!collapsed}
             aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}

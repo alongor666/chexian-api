@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatCount, formatPercent, formatPremiumWan } from '../../../shared/utils/formatters';
-import { cardStyles, cn, textStyles } from '../../../shared/styles';
+import { cardStyles, cn, colorClasses, textStyles } from '../../../shared/styles';
 import type {
   VariableCostData,
   VariableCostKpiData,
@@ -67,7 +67,7 @@ function MetricGrid({ item }: { item: VariableCostKpiData }) {
       {metrics.map((metric) => (
         <div
           key={metric.label}
-          className="rounded-lg border border-neutral-200 bg-white p-3"
+          className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-3"
         >
           <div className={textStyles.caption}>{metric.label}</div>
           <div className={cn(textStyles.numeric, 'mt-1 text-base font-semibold text-neutral-800')}>
@@ -131,7 +131,7 @@ export const VariableCostKpiBoard: React.FC<VariableCostKpiBoardProps> = ({
         {drillLevel === 'org' && (
           <button
             type="button"
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+            className="rounded-md border border-neutral-300 dark:border-neutral-600 px-3 py-1.5 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700"
             onClick={() => setDrillLevel('branch')}
           >
             返回分公司整体
@@ -140,7 +140,7 @@ export const VariableCostKpiBoard: React.FC<VariableCostKpiBoardProps> = ({
       </div>
 
       {error && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+        <div className={cn('rounded-md border p-2 text-xs', colorClasses.border.warning, colorClasses.bg.warning, colorClasses.text.warning)}>
           KPI数据加载提示：{error}
         </div>
       )}
@@ -160,7 +160,7 @@ export const VariableCostKpiBoard: React.FC<VariableCostKpiBoardProps> = ({
       ) : (
         <div className="space-y-3">
           {orgSummaries.map((item) => (
-            <div key={item.key} className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+            <div key={item.key} className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 p-4">
               <div className={cn(textStyles.label, 'mb-2')}>{item.key}</div>
               <MetricGrid item={item} />
             </div>

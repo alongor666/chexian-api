@@ -13,7 +13,8 @@
 import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import type { EChartsOption } from 'echarts';
-import { AXIS_SPLIT_LINE, CHART_TEXT_STYLES, GRID_CONFIG, X_AXIS_CONFIG } from '../../shared/config/chartStyles';
+import { AXIS_SPLIT_LINE, GRID_CONFIG, getChartTheme } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 import { colorClasses } from '../../shared/styles';
 import { echarts } from '../../shared/utils/echarts';
 import { formatPremiumWan, formatCount } from '../../shared/utils/formatters';
@@ -71,10 +72,14 @@ export const DualYAxisComparisonChart: React.FC<DualYAxisComparisonChartProps> =
   currentLabel = '当期',
   previousLabel = '基期',
 }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo((): EChartsOption => {
+    const theme = getChartTheme(isDark);
     if (!data || data.length === 0) {
       return {
-        title: { text: title, left: 'center', textStyle: CHART_TEXT_STYLES.title },
+        title: { text: title, left: 'center', textStyle: theme.chartTextStyles.title },
         graphic: {
           type: 'text',
           left: 'center',
@@ -104,7 +109,7 @@ export const DualYAxisComparisonChart: React.FC<DualYAxisComparisonChartProps> =
       title: {
         text: title,
         left: 'center',
-        textStyle: CHART_TEXT_STYLES.title,
+        textStyle: theme.chartTextStyles.title,
       },
       tooltip: {
         trigger: 'axis',
@@ -157,17 +162,17 @@ export const DualYAxisComparisonChart: React.FC<DualYAxisComparisonChartProps> =
           `${currentLabel}件数`,
           `${previousLabel}件数`,
         ],
-        textStyle: CHART_TEXT_STYLES.staticLabel,
+        textStyle: theme.chartTextStyles.staticLabel,
       },
       grid: {
         ...GRID_CONFIG,
         bottom: 60, // 为图例留出空间
       },
       xAxis: {
-        ...X_AXIS_CONFIG,
+        ...theme.xAxisConfig,
         data: xAxisData,
         axisLabel: {
-          ...X_AXIS_CONFIG.axisLabel,
+          ...theme.xAxisConfig.axisLabel,
           rotate: 0,  // 统一水平显示
           interval: 0,
         },
@@ -180,10 +185,10 @@ export const DualYAxisComparisonChart: React.FC<DualYAxisComparisonChartProps> =
           axisLine: { show: false },
           axisTick: { show: false },
           splitLine: AXIS_SPLIT_LINE,
-          nameTextStyle: CHART_TEXT_STYLES.axisName,
+          nameTextStyle: theme.chartTextStyles.axisName,
           axisLabel: {
             formatter: (value: number) => formatPremiumWan(value),
-            ...CHART_TEXT_STYLES.axisLabel,
+            ...theme.chartTextStyles.axisLabel,
           },
         },
         {
@@ -193,10 +198,10 @@ export const DualYAxisComparisonChart: React.FC<DualYAxisComparisonChartProps> =
           axisLine: { show: false },
           axisTick: { show: false },
           splitLine: { show: false },
-          nameTextStyle: CHART_TEXT_STYLES.axisName,
+          nameTextStyle: theme.chartTextStyles.axisName,
           axisLabel: {
             formatter: (value: number) => formatCount(value),
-            ...CHART_TEXT_STYLES.axisLabel,
+            ...theme.chartTextStyles.axisLabel,
           },
         },
       ],
@@ -245,7 +250,7 @@ export const DualYAxisComparisonChart: React.FC<DualYAxisComparisonChartProps> =
         },
       ],
     };
-  }, [data, title, currentLabel, previousLabel]);
+  }, [data, title, currentLabel, previousLabel, isDark]);
 
   if (loading) {
     return (

@@ -5,7 +5,7 @@ import type { TimeView } from '../../../widgets/charts/LineChart';
 import { TrendDataPoint, QualityBusinessDataPoint, PremiumTrendBarData } from '../hooks/useTrendData';
 import { PerspectiveSwitcher } from '../../../widgets/filters/PerspectiveSwitcher';
 import type { ViewPerspective, PerspectiveConfig } from '../../../shared/types/view-perspective';
-import { cardStyles, textStyles, cn } from '../../../shared/styles';
+import { buttonStyles, cardStyles, textStyles, cn } from '../../../shared/styles';
 
 interface TrendSectionProps {
   trendData: TrendDataPoint[];
@@ -80,14 +80,14 @@ export const TrendSection = memo<TrendSectionProps>(function TrendSection({
               <button
                 onClick={() => onExportTrend('csv')}
                 disabled={trendData.length === 0}
-                className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-neutral-300 disabled:cursor-not-allowed"
+                className={cn(buttonStyles.base, buttonStyles.primary, 'px-2 py-1 text-xs')}
               >
                 导出 CSV
               </button>
               <button
                 onClick={() => onExportTrend('excel')}
                 disabled={trendData.length === 0}
-                className="px-2 py-1 text-xs bg-emerald-500 text-white rounded hover:bg-emerald-600 disabled:bg-neutral-300 disabled:cursor-not-allowed"
+                className={cn(buttonStyles.base, buttonStyles.success, 'px-2 py-1 text-xs')}
               >
                 导出 Excel
               </button>

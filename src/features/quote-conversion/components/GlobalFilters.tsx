@@ -48,7 +48,7 @@ function getQuickDateRange(key: 'month' | 'quarter' | 'year'): { dateStart: stri
   return { dateStart: `${y}-01-01`, dateEnd: today };
 }
 
-const selectCls = cn('text-xs px-2 py-1.5', inputStyles.base, inputStyles.default, inputStyles.dark);
+const selectCls = cn('text-xs px-2 py-1.5', inputStyles.base, inputStyles.default);
 
 interface SelectFieldProps<T extends string> {
   label: string;
@@ -110,7 +110,7 @@ export function GlobalFilters({ version, filters, onChange }: Props) {
             {topicFilterSummaries.map((summary) => (
               <span
                 key={summary}
-                className={`inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium ${colorClasses.text.warning} dark:bg-amber-900/30 dark:text-amber-200`}
+                className={`inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium ${colorClasses.text.warning}`}
               >
                 {summary}
               </span>
@@ -149,7 +149,7 @@ export function GlobalFilters({ version, filters, onChange }: Props) {
                 'text-xs px-2 py-1 rounded-md transition-colors',
                 quickKey === key
                   ? 'bg-primary text-white'
-                  : `${colorClasses.text.primary} hover:bg-blue-50 dark:hover:bg-blue-900/20`
+                  : `${colorClasses.text.primary} hover:bg-primary-bg dark:hover:bg-primary-900/20`
               )}
             >
               {label}
@@ -254,7 +254,7 @@ export function GlobalFilters({ version, filters, onChange }: Props) {
               onChange({});
               setQuickKey(null);
             }}
-            className={`text-xs px-2 py-1.5 rounded-md ${colorClasses.text.primary} hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors`}
+            className={`text-xs px-2 py-1.5 rounded-md ${colorClasses.text.primary} hover:bg-primary-bg dark:hover:bg-primary-900/20 transition-colors`}
           >
             重置
           </button>

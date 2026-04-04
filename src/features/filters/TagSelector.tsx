@@ -38,12 +38,12 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
 
   const chipBase = 'px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors cursor-pointer select-none';
   const chipActive = 'bg-primary text-white border-primary';
-  const chipInactive = 'text-neutral-600 border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300';
-  const chipDisabled = 'cursor-not-allowed opacity-40 bg-neutral-100 text-neutral-400 border-neutral-200';
+  const chipInactive = 'text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 hover:border-neutral-300';
+  const chipDisabled = 'cursor-not-allowed opacity-40 bg-neutral-100 dark:bg-neutral-700 text-neutral-400 border-neutral-200 dark:border-neutral-600';
 
   return (
     <div className="space-y-1">
-      <span className="text-[11px] font-medium text-neutral-500">{title}</span>
+      <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">{title}</span>
       <div className="flex flex-wrap gap-1">
         <button
           type="button"

@@ -215,12 +215,12 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
             </div>
 
             {/* 总费用 */}
-            <div className={cn(colorClasses.bg.orange, 'rounded-lg p-4 border border-orange-200')}>
+            <div className={cn(colorClasses.bg.orange, 'rounded-lg p-4 border', colorClasses.border.orange)}>
               <div className={cn(textStyles.caption, colorClasses.text.orange)}>总费用(万)</div>
-              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1 text-orange-700')}>
+              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1', colorClasses.text.orange)}>
                 {formatPremiumWan(selectedForecastData.total_expense)}
               </div>
-              <div className={cn(textStyles.caption, 'text-orange-500 mt-1')}>
+              <div className={cn(textStyles.caption, colorClasses.text.orange, 'mt-1')}>
                 费用{formatPremiumWan(selectedForecastData.total_fee)} + 税金
                 {formatPremiumWan(selectedForecastData.total_tax)}
               </div>
@@ -229,10 +229,10 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
             {/* 运营成本 */}
             <div className={cn(colorClasses.bg.purple, 'rounded-lg p-4 border', colorClasses.border.purple)}>
               <div className={cn(textStyles.caption, colorClasses.text.purple)}>运营成本(万)</div>
-              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1 text-purple-700')}>
+              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1', colorClasses.text.purple)}>
                 {formatPremiumWan(selectedForecastData.operating_cost)}
               </div>
-              <div className={cn(textStyles.caption, 'text-purple-500 mt-1')}>
+              <div className={cn(textStyles.caption, colorClasses.text.purple, 'mt-1')}>
                 已赚保费 × {formatPercent(selectedForecastData.operating_cost_rate, 1)}
               </div>
             </div>
@@ -240,10 +240,10 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
             {/* 综合费用率 */}
             <div className={cn(colorClasses.bg.danger, 'rounded-lg p-4 border', colorClasses.border.danger)}>
               <div className={cn(textStyles.caption, colorClasses.text.danger)}>综合费用率</div>
-              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1 text-red-700')}>
+              <div className={cn(textStyles.numeric, 'text-2xl font-semibold mt-1', colorClasses.text.dangerDark)}>
                 {formatPercent(selectedForecastData.comprehensive_expense_ratio, 1)}
               </div>
-              <div className={cn(textStyles.caption, 'text-red-500 mt-1')}>
+              <div className={cn(textStyles.caption, colorClasses.text.dangerLight, 'mt-1')}>
                 (运营成本 + 总费用) / 已赚保费
               </div>
             </div>

@@ -28,8 +28,8 @@ const COHORT_COLORS: Record<number, string> = {
 type Metric = 'loss_ratio_pct' | 'incident_rate_pct' | 'avg_claim';
 
 const METRIC_OPTIONS: { key: Metric; label: string; unit: string; decimals: number }[] = [
-  { key: 'loss_ratio_pct', label: '满期赔付率(%)', unit: '%', decimals: 2 },
-  { key: 'incident_rate_pct', label: '满期出险率(%)', unit: '%', decimals: 4 },
+  { key: 'loss_ratio_pct', label: '满期赔付率(%)', unit: '%', decimals: 1 },
+  { key: 'incident_rate_pct', label: '满期出险率(%)', unit: '%', decimals: 1 },
   { key: 'avg_claim', label: '案均立案金额(元)', unit: '元', decimals: 0 },
 ];
 
@@ -158,9 +158,9 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
               <thead>
                 <tr>
                   <th className={tableStyles.headerCell}>年度</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>满期赔付率</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>满期出险率</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>案均赔款</th>
+                  <th className={cn(tableStyles.headerCell, 'text-right')}>满期赔付率(%)</th>
+                  <th className={cn(tableStyles.headerCell, 'text-right')}>满期出险率(%)</th>
+                  <th className={cn(tableStyles.headerCell, 'text-right')}>案均赔款(元)</th>
                   <th className={cn(tableStyles.headerCell, 'text-right')}>赔案件数</th>
                 </tr>
               </thead>
@@ -183,16 +183,16 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                         />
                         {yr}
                       </td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>
-                        {lr != null ? `${lr.toFixed(2)}%${suffix}` : '—'}
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
+                        {lr != null ? `${lr.toFixed(1)}${suffix}` : '—'}
                       </td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>
-                        {ir != null ? `${ir.toFixed(4)}%${suffix}` : '—'}
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
+                        {ir != null ? `${ir.toFixed(1)}${suffix}` : '—'}
                       </td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
                         {ac != null ? `${Math.round(ac).toLocaleString()}元${suffix}` : '—'}
                       </td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
                         {cc != null ? `${Math.round(cc).toLocaleString()}${suffix}` : '—'}
                       </td>
                     </tr>
@@ -214,7 +214,7 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
               className={cn(
                 'px-3 py-1.5 text-sm rounded-lg border transition-colors',
                 metric === opt.key
-                  ? 'bg-blue-600 text-white border-blue-600'
+                  ? 'bg-primary-solid text-white border-primary'
                   : `bg-transparent ${colorClasses.border.neutral} ${colorClasses.text.neutral} hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-700`
               )}
             >

@@ -49,8 +49,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {displayError && (
-            <div className="rounded-md bg-danger-bg dark:bg-red-900/20 border border-danger dark:border-red-800 p-4">
-              <div className="text-sm font-medium text-danger dark:text-danger-light">{displayError}</div>
+            <div className="rounded-md bg-danger-bg border border-danger p-4">
+              <div className="text-sm font-medium text-danger">{displayError}</div>
             </div>
           )}
 

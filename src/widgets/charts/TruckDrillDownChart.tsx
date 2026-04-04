@@ -3,17 +3,17 @@ import ReactEChartsCore from 'echarts-for-react/lib/core';
 import type { EChartsOption } from 'echarts';
 import {
   AXIS_SPLIT_LINE,
-  CHART_TEXT_STYLES,
   GRID_CONFIG,
   TONNAGE_COLORS,
-  X_AXIS_CONFIG,
+  getChartTheme,
 } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 import { echarts } from '../../shared/utils/echarts';
 import { formatCount, formatPremiumWan, formatRate } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 import type { ViewPerspective } from '../../shared/types';
 import { getPerspectiveConfig } from '../../shared/types';
-import { cardStyles, cn, colorClasses } from '../../shared/styles';
+import { buttonStyles, cardStyles, cn, colorClasses } from '../../shared/styles';
 
 interface TruckDrillDownData {
   org_level_3: string;
@@ -65,6 +65,9 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
   showContainer = true,
   perspective = 'premium',
 }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const perspectiveConfig = getPerspectiveConfig(perspective);
   const valueFormatter =
     perspectiveConfig.valueFormatter === 'premium' ? formatPremiumWan : formatCount;
@@ -100,6 +103,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
 
   // 第一层配置：机构堆叠柱状图
   const orgStackedOption = useMemo(() => {
+    const theme = getChartTheme(isDark);
     if (!data || data.length === 0) {
       return {
         title: { text: title, left: 'center' },
@@ -150,7 +154,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
           }
           return valueFormatter(rawValue);
         },
-        ...CHART_TEXT_STYLES.dynamicLabel,
+        ...theme.chartTextStyles.dynamicLabel,
       },
     }));
 
@@ -174,7 +178,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
           }
           return valueFormatter(rawValue);
         },
-        ...CHART_TEXT_STYLES.dynamicLabel,
+        ...theme.chartTextStyles.dynamicLabel,
       },
       tooltip: { show: false },
       silent: true,
@@ -219,14 +223,14 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
         bottom: 0,
         data: tonnageSegments,
         type: 'scroll',
-        textStyle: CHART_TEXT_STYLES.staticLabel,
+        textStyle: theme.chartTextStyles.staticLabel,
       },
       grid: GRID_CONFIG,
       xAxis: {
-        ...X_AXIS_CONFIG,
+        ...theme.xAxisConfig,
         data: orgTotalPremiums,
         axisLabel: {
-          ...X_AXIS_CONFIG.axisLabel,
+          ...theme.xAxisConfig.axisLabel,
         },
       },
       yAxis: {
@@ -234,7 +238,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
         name: perspectiveConfig.yAxisLabel,
         axisLabel: {
           formatter: valueFormatter,
-          ...CHART_TEXT_STYLES.axisLabel,
+          ...theme.chartTextStyles.axisLabel,
         },
         splitLine: AXIS_SPLIT_LINE,
       },
@@ -242,10 +246,11 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
     };
 
     return chartOption;
-  }, [data, orgTotalPremiums, perspectiveConfig.yAxisLabel, title, tonnageSegments, valueFormatter, valueLabel]);
+  }, [data, orgTotalPremiums, perspectiveConfig.yAxisLabel, title, tonnageSegments, valueFormatter, valueLabel, isDark]);
 
   // 第二层配置：吨位分段占比详情（饼图）
   const tonnageDetailOption = useMemo(() => {
+    const theme = getChartTheme(isDark);
     if (!selectedOrg) {
       return { title: { text: '请选择机构', left: 'center' } };
     }
@@ -271,9 +276,9 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
       title: {
         text: `${selectedOrg} - 吨位分段分析`,
         left: 'center',
-        textStyle: CHART_TEXT_STYLES.title,
+        textStyle: theme.chartTextStyles.title,
         subtext: '点击返回按钮查看所有机构',
-        subtextStyle: CHART_TEXT_STYLES.subtitle,
+        subtextStyle: theme.chartTextStyles.subtitle,
       },
       tooltip: {
         trigger: 'item',
@@ -292,7 +297,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
         left: 'left',
         top: 'middle',
         data: sortedData.map(row => row.tonnage_segment),
-        textStyle: CHART_TEXT_STYLES.staticLabel,
+        textStyle: theme.chartTextStyles.staticLabel,
       },
       series: [
         {
@@ -314,7 +319,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
               const ratio = formatRate(Number(data?.ratio ?? 0));
               return `${safeParams.name}\n${ratio}`;
             },
-            ...CHART_TEXT_STYLES.dynamicLabel,
+            ...theme.chartTextStyles.dynamicLabel,
           },
           emphasis: {
             label: {
@@ -336,7 +341,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
     };
 
     return chartOption;
-  }, [data, selectedOrg, valueFormatter, valueLabel]);
+  }, [data, selectedOrg, valueFormatter, valueLabel, isDark]);
 
   // 点击事件：下钻到吨位详情
   const onChartClick = (params: any) => {
@@ -372,7 +377,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
         <div className="flex items-center mb-4">
           <button
             onClick={handleBack}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            className={cn(buttonStyles.base, buttonStyles.primary, buttonStyles.sizeMedium)}
           >
             ← 返回机构列表
           </button>

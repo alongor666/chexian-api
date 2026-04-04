@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
-import { CHART_TEXT_STYLES } from '../../shared/config/chartStyles';
+import { getChartTheme } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 import { colorClasses } from '../../shared/styles';
 import { echarts } from '../../shared/utils/echarts';
 import { formatPremiumWan } from '../../shared/utils/formatters';
@@ -29,7 +30,11 @@ export const OrgPremiumPieChart: React.FC<OrgPremiumPieChartProps> = ({
     return data.reduce((sum, item) => sum + item.value, 0);
   }, [data]);
 
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo(() => {
+    const theme = getChartTheme(isDark);
     if (!data || data.length === 0) {
       return {
         graphic: {
@@ -56,7 +61,7 @@ export const OrgPremiumPieChart: React.FC<OrgPremiumPieChartProps> = ({
       legend: {
         bottom: 0,
         type: 'scroll',
-        textStyle: CHART_TEXT_STYLES.staticLabel,
+        textStyle: theme.chartTextStyles.staticLabel,
       },
       graphic: {
         type: 'text',
@@ -83,17 +88,17 @@ export const OrgPremiumPieChart: React.FC<OrgPremiumPieChartProps> = ({
               const rawValue = typeof params.value === 'number' ? params.value : Number(params.value ?? 0);
               return `${params.name}\n${valueFormatter(rawValue)}`;
             },
-            ...CHART_TEXT_STYLES.dynamicLabel,
+            ...theme.chartTextStyles.dynamicLabel,
           },
           data,
         },
       ],
     };
-  }, [centerLabel, data, seriesLabel, totalPremium, valueFormatter]);
+  }, [centerLabel, data, seriesLabel, totalPremium, valueFormatter, isDark]);
 
   if (loading) {
     return (
-      <div className={`${showContainer ? 'bg-white p-4 rounded shadow' : ''} h-64 flex items-center justify-center ${colorClasses.bg.neutral}`}>
+      <div className={`${showContainer ? 'bg-white dark:bg-neutral-800 p-4 rounded shadow' : ''} h-64 flex items-center justify-center ${colorClasses.bg.neutral}`}>
         Loading Chart...
       </div>
     );
@@ -112,5 +117,5 @@ export const OrgPremiumPieChart: React.FC<OrgPremiumPieChartProps> = ({
     return chart;
   }
 
-  return <div className="bg-white p-4 rounded shadow h-full">{chart}</div>;
+  return <div className="bg-white dark:bg-neutral-800 p-4 rounded shadow h-full">{chart}</div>;
 };

@@ -25,7 +25,7 @@ export const DrilldownLoadingOverlay: React.FC<DrilldownLoadingOverlayProps> = (
       {children}
 
       {loading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 rounded-lg transition-opacity duration-200">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-neutral-800/60 rounded-lg transition-opacity duration-200">
           <div className="flex flex-col items-center gap-2">
             <Loader2 className={cn('h-6 w-6 animate-spin', colorClasses.text.primary)} />
             <span className={cn('text-xs', colorClasses.text.neutralMuted)}>数据加载中...</span>

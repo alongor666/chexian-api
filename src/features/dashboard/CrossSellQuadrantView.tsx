@@ -105,7 +105,7 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
       min: 0,
       max: 100,
       axisLabel: { formatter: '{value}%' },
-      splitLine: { lineStyle: { color: colors.neutral[200] } },
+      splitLine: { show: false },
     },
     yAxis: {
       type: 'value',
@@ -113,7 +113,7 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
       min: 0,
       max: 100,
       axisLabel: { formatter: '{value}%' },
-      splitLine: { lineStyle: { color: colors.neutral[200] } },
+      splitLine: { show: false },
     },
     series: [
       ...([

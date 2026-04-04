@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { SalesmanRankingTable } from '../../../widgets/tables/SalesmanRankingTable';
 import type { SalesmanSummaryRow } from '../types';
-import { cardStyles, textStyles, cn } from '../../../shared/styles';
+import { buttonStyles, cardStyles, textStyles, cn } from '../../../shared/styles';
 
 interface TableSectionProps {
   allBusinessData: SalesmanSummaryRow[];
@@ -40,14 +40,14 @@ export const TableSection = memo<TableSectionProps>(function TableSection({
       <button
         onClick={() => onExport('csv')}
         disabled={disabled}
-        className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-neutral-300 disabled:cursor-not-allowed"
+        className={cn(buttonStyles.base, buttonStyles.primary, 'px-2 py-1 text-xs')}
       >
         导出 CSV
       </button>
       <button
         onClick={() => onExport('excel')}
         disabled={disabled}
-        className="px-2 py-1 text-xs bg-emerald-500 text-white rounded hover:bg-emerald-600 disabled:bg-neutral-300 disabled:cursor-not-allowed"
+        className={cn(buttonStyles.base, buttonStyles.success, 'px-2 py-1 text-xs')}
       >
         导出 Excel
       </button>

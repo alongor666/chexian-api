@@ -77,6 +77,7 @@ export const ClaimsDetailPage: React.FC = () => {
     <PageFilterPanel
       preset="claimsDetail"
       title="赔案明细分析"
+      showBasicFilterBar={false}
       headerRightContent={(actions) => (
         <FilterQuickActions {...actions} />
       )}
@@ -97,7 +98,7 @@ export const ClaimsDetailPage: React.FC = () => {
             className={cn(
               'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
               activeTab === tab.key
-                ? `border-blue-600 ${colorClasses.text.primary}`
+                ? `border-primary ${colorClasses.text.primary}`
                 : `border-transparent ${colorClasses.text.neutralMuted} hover:text-neutral-600`
             )}
           >

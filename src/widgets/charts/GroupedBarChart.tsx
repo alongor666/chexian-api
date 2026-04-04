@@ -3,7 +3,8 @@ import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '../../shared/utils/echarts';
 import { colorClasses } from '../../shared/styles';
 import type { EChartsParam } from '../../shared/types/echarts';
-import { CHART_TEXT_STYLES } from '../../shared/config/chartStyles';
+import { getChartTheme } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 
 interface GroupedBarChartProps {
   data: { 
@@ -29,12 +30,16 @@ export const GroupedBarChart: React.FC<GroupedBarChartProps> = ({
   valueFormatter,
   height = '350px'
 }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo(() => {
+    const theme = getChartTheme(isDark);
     return {
-      title: { 
-        text: title, 
+      title: {
+        text: title,
         left: 'left',
-        textStyle: CHART_TEXT_STYLES.title 
+        textStyle: theme.chartTextStyles.title
       },
       tooltip: {
         trigger: 'axis',
@@ -78,8 +83,8 @@ export const GroupedBarChart: React.FC<GroupedBarChartProps> = ({
         axisLabel: {
           rotate: 0,  // 统一水平显示
           interval: 0,
-          color: CHART_TEXT_STYLES.axisLabel.color,
-          fontSize: CHART_TEXT_STYLES.axisLabel.fontSize
+          color: theme.chartTextStyles.axisLabel.color,
+          fontSize: theme.chartTextStyles.axisLabel.fontSize
         },
         axisLine: { show: false },
         axisTick: { show: false }
@@ -88,11 +93,9 @@ export const GroupedBarChart: React.FC<GroupedBarChartProps> = ({
         type: 'value',
         axisLabel: {
           formatter: (value: number) => (valueFormatter ? valueFormatter(value) : value),
-          color: CHART_TEXT_STYLES.axisLabel.color
+          color: theme.chartTextStyles.axisLabel.color
         },
-        splitLine: {
-          lineStyle: { type: 'dashed', color: '#E5E7EB' }
-        }
+        splitLine: { show: false }
       },
       series: seriesConfigs.map(config => ({
         name: config.name,
@@ -103,12 +106,12 @@ export const GroupedBarChart: React.FC<GroupedBarChartProps> = ({
         barGap: '20%' // Gap between bars in same category
       }))
     };
-  }, [data, seriesConfigs, title, valueFormatter]);
+  }, [data, seriesConfigs, title, valueFormatter, isDark]);
 
   if (loading) return <div className={`flex items-center justify-center ${colorClasses.bg.neutral} rounded`} style={{ height }}>Loading Chart...</div>;
 
   return (
-    <div className="bg-white p-4 rounded shadow">
+    <div className="bg-white dark:bg-neutral-800 p-4 rounded shadow">
       <ReactEChartsCore
         echarts={echarts}
         option={option} 

@@ -69,7 +69,7 @@ export const PerspectiveSwitcher: React.FC<PerspectiveSwitcherProps> = ({
 
           const baseClasses = [
             'relative inline-flex items-center px-4 py-2 text-sm font-medium',
-            'focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500',
+            'focus:z-10 focus:outline-none focus:ring-2 focus:ring-primary-400',
             'transition-colors duration-150',
           ];
 
@@ -98,7 +98,7 @@ export const PerspectiveSwitcher: React.FC<PerspectiveSwitcherProps> = ({
             );
           } else {
             baseClasses.push(
-              `bg-white ${colorClasses.text.neutralDark} hover:bg-neutral-50`
+              `bg-white dark:bg-neutral-800 ${colorClasses.text.neutralDark} hover:bg-neutral-50 dark:hover:bg-neutral-700`
             );
           }
 

@@ -27,7 +27,7 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
   ];
 
   return (
-    <details className="bg-white p-3 sm:p-4 rounded shadow">
+    <details className="bg-white dark:bg-neutral-800 p-3 sm:p-4 rounded shadow">
       <summary className={`cursor-pointer text-sm font-semibold ${colorClasses.text.neutral} flex items-center gap-2`}>
         <span>🎨</span>
         <span>自定义看板</span>
@@ -38,7 +38,7 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
           <button
             type="button"
             onClick={onReset}
-            className={`text-xs ${colorClasses.text.primary} hover:text-blue-700 px-2 py-1 border ${colorClasses.border.primary} rounded hover:bg-blue-50 transition-colors`}
+            className={`text-xs ${colorClasses.text.primary} hover:text-primary-dark px-2 py-1 border ${colorClasses.border.primary} rounded hover:bg-primary-bg transition-colors`}
           >
             恢复默认
           </button>
@@ -54,7 +54,7 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
                   type="checkbox"
                   checked={item.visible}
                   onChange={() => onToggleSection(item.id)}
-                  className={`w-4 h-4 ${colorClasses.text.primary} bg-neutral-100 border-neutral-300 rounded focus:ring-blue-500`}
+                  className={`w-4 h-4 ${colorClasses.text.primary} bg-neutral-100 border-neutral-300 rounded focus:ring-primary-400`}
                 />
                 {item.label}
               </label>
@@ -63,7 +63,7 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
                   type="button"
                   onClick={() => onMoveSection(item.id, 'up')}
                   disabled={index === 0}
-                  className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-gray-50 transition-colors flex-1 sm:flex-none"
+                  className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors flex-1 sm:flex-none"
                 >
                   ↑ 上移
                 </button>
@@ -71,7 +71,7 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
                   type="button"
                   onClick={() => onMoveSection(item.id, 'down')}
                   disabled={index === sectionItems.length - 1}
-                  className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-gray-50 transition-colors flex-1 sm:flex-none"
+                  className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors flex-1 sm:flex-none"
                 >
                   ↓ 下移
                 </button>
@@ -99,7 +99,7 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
                             type="checkbox"
                             checked={item.visible}
                             onChange={() => onToggleKpi(groupMeta.key, item.id)}
-                            className={`w-4 h-4 ${colorClasses.text.primary} bg-neutral-100 border-neutral-300 rounded focus:ring-blue-500`}
+                            className={`w-4 h-4 ${colorClasses.text.primary} bg-neutral-100 border-neutral-300 rounded focus:ring-primary-400`}
                           />
                           {item.label}
                         </label>
@@ -108,7 +108,7 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
                             type="button"
                             onClick={() => onMoveKpi(groupMeta.key, item.id, 'up')}
                             disabled={index === 0}
-                            className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-gray-50 transition-colors flex-1 sm:flex-none"
+                            className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors flex-1 sm:flex-none"
                           >
                             ↑ 上移
                           </button>
@@ -116,7 +116,7 @@ export const DashboardCustomizerPanel: React.FC<DashboardCustomizerPanelProps> =
                             type="button"
                             onClick={() => onMoveKpi(groupMeta.key, item.id, 'down')}
                             disabled={index === items.length - 1}
-                            className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-gray-50 transition-colors flex-1 sm:flex-none"
+                            className="px-2 py-1 text-xs border rounded disabled:opacity-40 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors flex-1 sm:flex-none"
                           >
                             ↓ 下移
                           </button>

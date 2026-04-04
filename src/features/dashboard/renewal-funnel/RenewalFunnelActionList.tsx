@@ -109,7 +109,7 @@ export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
             )}
           >
             {tab.label}
-            <span className={cn('ml-1', fontStyles.tabular)}>
+            <span className={cn('ml-1', fontStyles.numeric)}>
               ({formatCount(counts[tab.value as keyof typeof counts] ?? 0)})
             </span>
           </button>
@@ -151,7 +151,7 @@ export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
                   <td className={tableStyles.cell}>
                     <PriorityBadge priority={row.action_priority ?? 'P4'} />
                   </td>
-                  <td className={cn(tableStyles.cell, fontStyles.tabular)}>
+                  <td className={cn(tableStyles.cell, fontStyles.numeric)}>
                     {row.insurance_end_date ?? ''}
                   </td>
                   <td className={tableStyles.cell}>
@@ -180,7 +180,7 @@ export const RenewalFunnelActionList: React.FC<Props> = ({ filters }) => {
           </table>
           {/* 分页控制 */}
           <div className="flex items-center justify-between py-2 px-1">
-            <span className={cn(textStyles.caption, fontStyles.tabular)}>
+            <span className={cn(textStyles.caption, fontStyles.numeric)}>
               第 {page} 页 / 共 {totalPages} 页（{formatCount(totalItems)} 条）
             </span>
             <div className="flex items-center gap-2">

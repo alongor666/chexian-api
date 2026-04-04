@@ -262,7 +262,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
                 onClick={() => setMapLevel('china')}
                 className={cn(
                   'px-2 py-0.5 text-xs rounded border transition-colors',
-                  `${colorClasses.border.primary} ${colorClasses.text.primary} hover:bg-blue-50 dark:hover:bg-blue-900/30`
+                  `${colorClasses.border.primary} ${colorClasses.text.primary} hover:bg-primary-bg dark:hover:bg-primary-900/30`
                 )}
               >
                 ← 返回全国
@@ -282,7 +282,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
                 className={cn(
                   'px-3 py-1 text-xs rounded-full transition-colors',
                   mapMetric === opt.key
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-primary-solid text-white'
                     : `${colorClasses.bg.neutral} ${colorClasses.text.neutral} hover:bg-neutral-200 dark:bg-neutral-700 dark:text-neutral-300`
                 )}
               >
@@ -325,11 +325,11 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
                   {geoAccident.data.slice(0, 25).map((r: any, i: number) => (
                     <tr key={i} className={tableStyles.row}>
                       <td className={tableStyles.cell}>{extractCityName(r.city ?? '')}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatPercent(r.injury_pct ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_cycle_days ?? '-'}天</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.cases ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.reserve_wan ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.avg_reserve ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatPercent(r.injury_pct ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{r.avg_cycle_days ?? '-'}天</td>
                     </tr>
                   ))}
                 </tbody>
@@ -357,10 +357,10 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
                   {geoPlate.data.map((r: any, i: number) => (
                     <tr key={i} className={tableStyles.row}>
                       <td className={tableStyles.cell}>{r.plate_city ?? ''}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatPercent(r.injury_pct ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.cases ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.reserve_wan ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.avg_reserve ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatPercent(r.injury_pct ?? 0)}</td>
                     </tr>
                   ))}
                 </tbody>

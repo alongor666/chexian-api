@@ -15,20 +15,20 @@ interface Props {
 function getInsuranceBadge(label: string) {
   if (label === '交强险') {
     return (
-      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 ${colorClasses.text.primary} dark:bg-blue-900/30 dark:text-blue-300`}>
+      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-primary-bg ${colorClasses.text.primary}`}>
         交强
       </span>
     );
   }
   if (label === '商业险') {
     return (
-      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 ${colorClasses.text.warning} dark:bg-amber-900/30 dark:text-amber-300`}>
+      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 ${colorClasses.text.warning}`}>
         商业
       </span>
     );
   }
   return (
-    <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-neutral-100 text-neutral-500">
+    <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400">
       其他
     </span>
   );
@@ -38,16 +38,25 @@ function getFeeRateColor(rate: number | null): string {
   if (rate === null) return colorClasses.text.neutralMuted;
   if (rate === 0) return colorClasses.text.neutralMuted;
   if (rate >= 0.27) return colorClasses.text.success;
-  if (rate >= 0.19) return colorClasses.text.warning ?? 'text-amber-600 dark:text-amber-400';
+  if (rate >= 0.19) return colorClasses.text.warning;
   return colorClasses.text.neutralMuted;
 }
 
 export const FeeRuleTierTable: React.FC<Props> = ({ data, activeTab }) => {
-  const filtered = data.filter((r) => {
-    if (activeTab === 'cti') return r.insurance_type_label === '交强险';
-    if (activeTab === 'com') return r.insurance_type_label === '商业险';
-    return true;
-  });
+  const filtered = data
+    .filter((r) => {
+      if (activeTab === 'cti') return r.insurance_type_label === '交强险';
+      if (activeTab === 'com') return r.insurance_type_label === '商业险';
+      return true;
+    })
+    .slice()
+    .sort((a, b) => {
+      // OUT_OF_SCOPE（规则外）置底
+      if (a.fee_rule_id === 'OUT_OF_SCOPE') return 1;
+      if (b.fee_rule_id === 'OUT_OF_SCOPE') return -1;
+      // 按保费规模从大到小
+      return (b.total_premium ?? 0) - (a.total_premium ?? 0);
+    });
 
   if (filtered.length === 0) {
     return (
@@ -58,7 +67,7 @@ export const FeeRuleTierTable: React.FC<Props> = ({ data, activeTab }) => {
   }
 
   return (
-    <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
+    <div className="overflow-x-auto bg-white dark:bg-neutral-800 rounded-xl shadow-sm">
       <table className="w-full text-sm">
         <thead>
           <tr className={tableStyles.header}>

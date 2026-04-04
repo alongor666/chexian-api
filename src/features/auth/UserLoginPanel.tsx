@@ -91,7 +91,7 @@ export const UserLoginPanel: React.FC = () => {
               {isBranchAdmin ? (
                 <Shield size={24} className={`${colorClasses.text.purple} mr-3`} aria-hidden="true" />
               ) : (
-                <Building size={24} className="text-primary dark:text-primary-light mr-3" aria-hidden="true" />
+                <Building size={24} className="text-primary mr-3" aria-hidden="true" />
               )}
               <div>
                 <p className="font-semibold tracking-tight text-neutral-800 dark:text-neutral-200">{userPermission?.displayName}</p>
@@ -104,7 +104,7 @@ export const UserLoginPanel: React.FC = () => {
           </div>
 
           {/* 权限说明 */}
-          <div className="text-sm text-primary-dark dark:text-primary-light bg-primary-bg dark:bg-blue-900/20 rounded-lg p-3">
+          <div className="text-sm text-primary-dark bg-primary-bg rounded-lg p-3">
             <p className="font-semibold tracking-tight mb-1">数据访问权限</p>
             <p className="opacity-90">
               {isBranchAdmin
@@ -128,7 +128,7 @@ export const UserLoginPanel: React.FC = () => {
             </button>
             <button
               onClick={handleLogout}
-              className="flex items-center justify-center px-4 py-2 bg-danger-bg dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg text-danger dark:text-danger-light font-medium text-sm transition-colors"
+              className="flex items-center justify-center px-4 py-2 bg-danger-bg hover:bg-danger-light rounded-lg text-danger font-medium text-sm transition-colors"
               title="登出"
             >
               <LogOut size={16} aria-hidden="true" />
@@ -156,14 +156,14 @@ export const UserLoginPanel: React.FC = () => {
                           size={16}
                           className={`mr-2 ${quickUser.role === UserRole.BRANCH_ADMIN
                               ? colorClasses.text.purple
-                              : 'text-primary dark:text-primary-light'
+                              : 'text-primary'
                             }`}
                           aria-hidden="true"
                         />
                         <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{quickUser.displayName}</span>
                       </div>
                       {isCurrentUser && (
-                        <Check size={16} className="text-success dark:text-success-light" aria-hidden="true" />
+                        <Check size={16} className="text-success" aria-hidden="true" />
                       )}
                     </button>
                   );
@@ -181,12 +181,12 @@ export const UserLoginPanel: React.FC = () => {
             {/* 管理员快捷登录 */}
             <button
               onClick={() => handleLogin('admin')}
-              className={`w-full flex items-center justify-between p-3 ${colorClasses.bg.purple} hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-lg border ${colorClasses.border.purple} transition-colors`}
+              className={`w-full flex items-center justify-between p-3 ${colorClasses.bg.purple} hover:bg-purple-bg dark:hover:bg-purple-900/40 rounded-lg border ${colorClasses.border.purple} transition-colors`}
             >
               <div className="flex items-center">
                 <Shield size={20} className={`${colorClasses.text.purple} mr-3`} aria-hidden="true" />
                 <div className="text-left">
-                  <p className={`text-sm font-semibold ${colorClasses.text.purple} dark:text-purple-300`}>系统管理员</p>
+                  <p className={`text-sm font-semibold ${colorClasses.text.purple}`}>系统管理员</p>
                   <p className={`text-xs ${colorClasses.text.purple}`}>可查看所有机构数据</p>
                 </div>
               </div>
@@ -202,10 +202,10 @@ export const UserLoginPanel: React.FC = () => {
                     <button
                       key={quickUser.username}
                       onClick={() => handleLogin(quickUser.username)}
-                      className="flex items-center p-2 bg-primary-bg dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg border border-primary-200 dark:border-blue-800 transition-colors"
+                      className="flex items-center p-2 bg-primary-bg hover:bg-primary-100 rounded-lg border border-primary-200 transition-colors"
                     >
-                      <Icon size={16} className="text-primary dark:text-primary-light mr-2" aria-hidden="true" />
-                      <span className="text-sm font-medium text-primary-dark dark:text-primary-light">{quickUser.displayName}</span>
+                      <Icon size={16} className="text-primary mr-2" aria-hidden="true" />
+                      <span className="text-sm font-medium text-primary-dark">{quickUser.displayName}</span>
                     </button>
                   );
                 })}

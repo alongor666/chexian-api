@@ -84,16 +84,16 @@ export const SidebarUserPanel: React.FC = () => {
 
   const getRoleBadgeClass = () => {
     if (isBranchAdmin) return `${colorClasses.bg.purple} ${colorClasses.text.purple} border ${colorClasses.border.purple}`;
-    if (isOrgUser) return `bg-primary-bg text-primary-dark dark:bg-blue-900/30 dark:text-blue-400 border border-primary-200 dark:border-blue-800`;
+    if (isOrgUser) return `bg-primary-bg text-primary-dark border border-primary-200`;
     return 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700';
   };
 
   const RoleIcon = isBranchAdmin ? Shield : isOrgUser ? Building : User;
-  const iconColor = isBranchAdmin ? colorClasses.text.purple : isOrgUser ? 'text-primary dark:text-primary-light' : 'text-neutral-400 dark:text-neutral-500';
+  const iconColor = isBranchAdmin ? colorClasses.text.purple : isOrgUser ? 'text-primary' : 'text-neutral-400 dark:text-neutral-500';
 
   // 弹出面板内容（共用于向上和向右弹出）
   const popoverContent = (
-    <div className="bg-white rounded-lg shadow-lg border border-neutral-200 w-56 overflow-hidden">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 w-56 overflow-hidden">
       {/* 权限信息 */}
       {isAuthenticated && userPermission && (
         <div className={`px-3 py-2.5 border-b border-neutral-200 ${colorClasses.bg.neutral}`}>
@@ -116,7 +116,7 @@ export const SidebarUserPanel: React.FC = () => {
               key={u.username}
               onClick={() => handleLogin(u.username)}
               disabled={isCurrent}
-              className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-neutral-50 transition-colors ${isCurrent ? 'bg-neutral-100 cursor-default' : ''
+              className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors ${isCurrent ? 'bg-neutral-100 dark:bg-neutral-700 cursor-default' : ''
                 }`}
             >
               <div className="flex items-center">

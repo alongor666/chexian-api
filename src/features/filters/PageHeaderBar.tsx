@@ -123,7 +123,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
   }, [filters, allOrgCount]);
 
   return (
-    <div className="bg-white px-4 py-2.5">
+    <div className="bg-white dark:bg-neutral-800 px-4 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className={cn('text-lg font-semibold', colorClasses.text.neutralBlack)}>{fullTitle}</h1>
         {rightContent && (

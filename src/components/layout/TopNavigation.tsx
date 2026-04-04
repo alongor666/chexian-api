@@ -91,7 +91,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ icon: Icon, label, items })
                     setIsOpen(false);
                   }}
                   className={`w-full flex items-center px-4 py-2 text-sm font-medium transition-colors ${item.active
-                      ? 'text-primary bg-primary-bg dark:text-primary-light dark:bg-blue-900/20'
+                      ? 'text-primary bg-primary-bg'
                       : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
                     }`}
                   role="menuitem"
@@ -177,7 +177,7 @@ export const TopNavigation: React.FC = () => {
           <Car size={24} className="text-primary mr-2" aria-hidden="true" />
           <h1 className="text-lg font-semibold tracking-tight text-neutral-800 dark:text-white hidden sm:block">车险经营管理系统</h1>
           <h1 className="text-lg font-semibold tracking-tight text-neutral-800 dark:text-white sm:hidden">车险系统</h1>
-          <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-primary bg-primary-bg dark:text-primary-light dark:bg-blue-900/30 rounded-full">
+          <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-primary bg-primary-bg rounded-full">
             v2.0
           </span>
         </div>

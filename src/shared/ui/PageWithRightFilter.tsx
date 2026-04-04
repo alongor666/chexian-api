@@ -49,7 +49,7 @@ export const PageWithRightFilter: React.FC<PageWithRightFilterProps> = ({
           <div className="h-full flex flex-col items-center pt-4">
             <button
               onClick={onToggleCollapse}
-              className={cn('p-2 rounded-lg bg-white shadow-sm border transition-colors', colorClasses.border.neutral, colorClasses.bg.neutralLight)}
+              className={cn('p-2 rounded-lg bg-white dark:bg-neutral-800 shadow-sm border transition-colors', colorClasses.border.neutral, colorClasses.bg.neutralLight)}
               title="展开筛选器"
             >
               <svg

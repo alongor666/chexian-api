@@ -101,7 +101,7 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
 
   if (loading) {
     return (
-      <div className="p-4 bg-white rounded-lg shadow">
+      <div className="p-4 bg-white dark:bg-neutral-800 rounded-lg shadow">
         <EmptyState title="加载系数数据中..." size="lg" />
       </div>
     );
@@ -109,7 +109,7 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
 
   if (error) {
     return (
-      <div className="p-4 bg-white rounded-lg shadow">
+      <div className="p-4 bg-white dark:bg-neutral-800 rounded-lg shadow">
         <ErrorState message={error.message} onRetry={refresh} />
       </div>
     );
@@ -117,29 +117,29 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
 
   if (data.length === 0) {
     return (
-      <div className="p-4 bg-white rounded-lg shadow">
+      <div className="p-4 bg-white dark:bg-neutral-800 rounded-lg shadow">
         <EmptyState title="暂无系数数据" description="请上传包含商业险数据的Parquet文件" size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-white rounded-lg shadow">
+    <div className="p-4 bg-white dark:bg-neutral-800 rounded-lg shadow">
       {/* 标题和操作区 */}
       <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
         <h2 className="text-lg font-semibold">商车自主定价系数监控</h2>
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-          <span className="text-sm text-neutral-500">
+          <span className="text-sm text-neutral-500 dark:text-neutral-400">
             截止日期: {cutoffDateStr} | 分析年度: {analysisYear}
           </span>
           {/* 视图切换按钮 */}
-          <div className="flex rounded overflow-hidden border border-neutral-300">
+          <div className="flex rounded overflow-hidden border border-neutral-300 dark:border-neutral-600">
             <button
               onClick={() => handleViewModeChange('periods')}
               className={`px-3 py-1 text-sm ${
                 viewMode === 'periods'
                   ? 'bg-primary text-white'
-                  : 'bg-white text-neutral-600 hover:bg-neutral-100'
+                  : 'bg-white dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-600'
               }`}
             >
               周期分表
@@ -149,7 +149,7 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
               className={`px-3 py-1 text-sm ${
                 viewMode === 'detail'
                   ? 'bg-primary text-white'
-                  : 'bg-white text-neutral-600 hover:bg-neutral-100'
+                  : 'bg-white dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-600'
               }`}
             >
               明细表
@@ -157,7 +157,7 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
           </div>
           <button
             onClick={refresh}
-            className="px-3 py-1 text-sm bg-neutral-100 hover:bg-neutral-200 rounded"
+            className="px-3 py-1 text-sm bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 dark:text-neutral-300 rounded"
           >
             刷新
           </button>

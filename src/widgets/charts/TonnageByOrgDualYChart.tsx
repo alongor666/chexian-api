@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import type { EChartsOption } from 'echarts';
-import { AXIS_SPLIT_LINE, CHART_TEXT_STYLES, GRID_CONFIG, X_AXIS_CONFIG } from '../../shared/config/chartStyles';
+import { AXIS_SPLIT_LINE, GRID_CONFIG, getChartTheme } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 import { colorClasses } from '../../shared/styles';
 import { echarts } from '../../shared/utils/echarts';
 import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
@@ -60,7 +61,11 @@ export const TonnageByOrgDualYChart: React.FC<TonnageByOrgDualYChartProps> = ({
     return data.filter(row => row.tonnage_segment === selectedTonnage);
   }, [data, selectedTonnage]);
 
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo(() => {
+    const theme = getChartTheme(isDark);
     if (!filteredData || filteredData.length === 0) {
       return {
         title: { text: title, left: 'center' },
@@ -87,7 +92,7 @@ export const TonnageByOrgDualYChart: React.FC<TonnageByOrgDualYChartProps> = ({
       title: {
         text: `${title} - ${selectedTonnage}`,
         left: 'center',
-        textStyle: CHART_TEXT_STYLES.title,
+        textStyle: theme.chartTextStyles.title,
       },
       tooltip: {
         trigger: 'axis',
@@ -114,14 +119,14 @@ export const TonnageByOrgDualYChart: React.FC<TonnageByOrgDualYChartProps> = ({
       legend: {
         bottom: 0,
         data: ['保费', '占比'],
-        textStyle: CHART_TEXT_STYLES.staticLabel,
+        textStyle: theme.chartTextStyles.staticLabel,
       },
       grid: GRID_CONFIG,
       xAxis: {
-        ...X_AXIS_CONFIG,
+        ...theme.xAxisConfig,
         data: xAxisData,
         axisLabel: {
-          ...X_AXIS_CONFIG.axisLabel,
+          ...theme.xAxisConfig.axisLabel,
         },
       },
       yAxis: [
@@ -134,7 +139,7 @@ export const TonnageByOrgDualYChart: React.FC<TonnageByOrgDualYChartProps> = ({
           splitLine: AXIS_SPLIT_LINE,
           axisLabel: {
             formatter: formatPremiumWan,
-            ...CHART_TEXT_STYLES.axisLabel,
+            ...theme.chartTextStyles.axisLabel,
           },
         },
         {
@@ -143,11 +148,11 @@ export const TonnageByOrgDualYChart: React.FC<TonnageByOrgDualYChartProps> = ({
           position: 'right',
           axisLine: { show: false },
           axisTick: { show: false },
-          nameTextStyle: CHART_TEXT_STYLES.axisName,
+          nameTextStyle: theme.chartTextStyles.axisName,
           splitLine: { show: false },
           axisLabel: {
             formatter: formatRate,
-            ...CHART_TEXT_STYLES.axisLabel,
+            ...theme.chartTextStyles.axisLabel,
           },
         },
       ],
@@ -177,21 +182,21 @@ export const TonnageByOrgDualYChart: React.FC<TonnageByOrgDualYChartProps> = ({
     };
 
     return chartOption;
-  }, [filteredData, title, selectedTonnage]);
+  }, [filteredData, title, selectedTonnage, isDark]);
 
   if (loading) {
     return <div className={`h-96 flex items-center justify-center ${colorClasses.bg.neutral}`}>加载中...</div>;
   }
 
   return (
-    <div className="bg-white p-4 rounded shadow">
+    <div className="bg-white dark:bg-neutral-800 p-4 rounded shadow">
       {/* 吨位分段选择器 */}
       <div className="flex justify-center items-center space-x-4 mb-4">
         <span className={`font-semibold text-sm ${colorClasses.text.neutral}`}>选择吨位分段：</span>
         <select
           value={selectedTonnage}
           onChange={(e) => setSelectedTonnage(e.target.value)}
-          className={`px-3 py-1 text-sm border ${colorClasses.border.neutral} rounded focus:outline-none focus:ring-2 focus:ring-blue-500`}
+          className={`px-3 py-1 text-sm border ${colorClasses.border.neutral} rounded focus:outline-none focus:ring-2 focus:ring-primary-400`}
         >
           {tonnageList.map(tonnage => (
             <option key={tonnage} value={tonnage}>{tonnage}</option>

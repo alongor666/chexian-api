@@ -312,7 +312,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
             onClick={scenario.apply}
             className={`px-2 py-1 text-xs font-medium rounded border transition-colors ${scenario.isActive
                 ? 'bg-primary text-white border-primary'
-                : `bg-white ${colorClasses.text.neutral} ${colorClasses.border.neutral} hover:bg-neutral-50`
+                : `bg-white dark:bg-neutral-800 ${colorClasses.text.neutral} ${colorClasses.border.neutral} hover:bg-neutral-50 dark:hover:bg-neutral-700`
               }`}
             title={scenario.description}
             aria-pressed={scenario.isActive}
@@ -468,7 +468,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                             type="button"
                             onClick={() => handleBooleanChange(config.key, null)}
                             className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${value === null || value === undefined
-                              ? 'bg-white text-primary font-medium shadow-sm'
+                              ? 'bg-white dark:bg-neutral-700 text-primary font-medium shadow-sm'
                               : `${colorClasses.text.neutralMuted} hover:text-neutral-700`
                               }`}
                             role="radio"
@@ -480,7 +480,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                             type="button"
                             onClick={() => handleBooleanChange(config.key, true)}
                             className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${value === true
-                              ? 'bg-white text-primary font-medium shadow-sm'
+                              ? 'bg-white dark:bg-neutral-700 text-primary font-medium shadow-sm'
                               : `${colorClasses.text.neutralMuted} hover:text-neutral-700`
                               }`}
                             role="radio"
@@ -492,7 +492,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                             type="button"
                             onClick={() => handleBooleanChange(config.key, false)}
                             className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${value === false
-                              ? 'bg-white text-primary font-medium shadow-sm'
+                              ? 'bg-white dark:bg-neutral-700 text-primary font-medium shadow-sm'
                               : `${colorClasses.text.neutralMuted} hover:text-neutral-700`
                               }`}
                             role="radio"
@@ -526,7 +526,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
 
   return (
     <section
-      className="bg-white rounded shadow overflow-hidden"
+      className="bg-white dark:bg-neutral-800 rounded shadow overflow-hidden"
       aria-labelledby="filter-panel-title"
       role="region"
     >
@@ -667,7 +667,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                                 type="button"
                                 onClick={() => handleBooleanChange(config.key, null)}
                                 className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ease-in-out ${value === null || value === undefined
-                                  ? 'bg-white shadow-sm text-primary font-semibold ring-1 ring-slate-200/60'
+                                  ? 'bg-white dark:bg-neutral-700 shadow-sm text-primary font-semibold ring-1 ring-slate-200/60 dark:ring-neutral-600/60'
                                   : `${colorClasses.text.neutralMuted} hover:text-neutral-800 hover:bg-neutral-200/50`
                                   }`}
                                 role="radio"
@@ -679,7 +679,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                                 type="button"
                                 onClick={() => handleBooleanChange(config.key, true)}
                                 className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ease-in-out ${value === true
-                                  ? 'bg-white shadow-sm text-primary font-semibold ring-1 ring-slate-200/60'
+                                  ? 'bg-white dark:bg-neutral-700 shadow-sm text-primary font-semibold ring-1 ring-slate-200/60 dark:ring-neutral-600/60'
                                   : `${colorClasses.text.neutralMuted} hover:text-neutral-800 hover:bg-neutral-200/50`
                                   }`}
                                 role="radio"
@@ -691,7 +691,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                                 type="button"
                                 onClick={() => handleBooleanChange(config.key, false)}
                                 className={`px-3 py-1.5 text-sm rounded-md transition-all duration-200 ease-in-out ${value === false
-                                  ? 'bg-white shadow-sm text-primary font-semibold ring-1 ring-slate-200/60'
+                                  ? 'bg-white dark:bg-neutral-700 shadow-sm text-primary font-semibold ring-1 ring-slate-200/60 dark:ring-neutral-600/60'
                                   : `${colorClasses.text.neutralMuted} hover:text-neutral-800 hover:bg-neutral-200/50`
                                   }`}
                                 role="radio"

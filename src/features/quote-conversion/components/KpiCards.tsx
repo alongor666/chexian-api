@@ -20,7 +20,7 @@ function computeRatio(left: number, right: number): string {
 
 function computeAveragePremiumWan(totalPremium: number, totalCount: number): string {
   if (!totalCount) return '0.00';
-  return (totalPremium / totalCount / 10000).toFixed(2);
+  return formatPremiumWan(totalPremium / totalCount);
 }
 
 export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
@@ -51,7 +51,7 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className={`text-xs ${colorClasses.text.neutralMuted} mb-2`}>续转承保率</div>
-              <div className={cn(numericStyles.kpiPrimary, 'text-4xl mb-2')}>{conversionRate}%</div>
+              <div className={cn(numericStyles.kpiPrimary, 'mb-2')}>{conversionRate}%</div>
               <div className={`text-xs ${colorClasses.text.neutralMuted}`}>
                 总报价件数 {formatCount(data.total_quotes)}，承保件数 {formatCount(data.total_insured)}
               </div>
@@ -78,7 +78,7 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
                   style={{ width: `${(renewalPct / maxBarPct) * 100}%` }}
                 />
               </div>
-              <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>{renewalRate}%</span>
+              <span className={cn(fontStyles.numeric, 'text-sm font-semibold w-14 text-right')}>{renewalRate}%</span>
             </div>
             <div className="flex items-center gap-3">
               <span className={`text-xs w-8 ${colorClasses.text.neutralMuted}`}>转保</span>
@@ -88,7 +88,7 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
                   style={{ width: `${(switchPct / maxBarPct) * 100}%` }}
                 />
               </div>
-              <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>{switchRate}%</span>
+              <span className={cn(fontStyles.numeric, 'text-sm font-semibold w-14 text-right')}>{switchRate}%</span>
             </div>
           </div>
         </div>
@@ -117,7 +117,7 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <div className={cn(cardStyles.base, 'lg:col-span-2 p-5')}>
         <div className={`text-xs ${colorClasses.text.neutralMuted} mb-2`}>整体转化率</div>
-        <div className={cn(numericStyles.kpiPrimary, 'text-4xl mb-4')}>{conversionRate}%</div>
+        <div className={cn(numericStyles.kpiPrimary, 'mb-4')}>{conversionRate}%</div>
 
         <div className="space-y-2">
           <div className="flex items-center gap-3">
@@ -128,7 +128,7 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
                 style={{ width: `${(renewalPct / maxBarPct) * 100}%` }}
               />
             </div>
-            <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>{renewalRate}%</span>
+            <span className={cn(fontStyles.numeric, 'text-sm font-semibold w-14 text-right')}>{renewalRate}%</span>
           </div>
           <div className="flex items-center gap-3">
             <span className={`text-xs w-8 ${colorClasses.text.neutralMuted}`}>转保</span>
@@ -138,7 +138,7 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
                 style={{ width: `${(switchPct / maxBarPct) * 100}%` }}
               />
             </div>
-            <span className={cn(fontStyles.tabular, 'text-sm font-semibold w-14 text-right')}>{switchRate}%</span>
+            <span className={cn(fontStyles.numeric, 'text-sm font-semibold w-14 text-right')}>{switchRate}%</span>
           </div>
         </div>
 

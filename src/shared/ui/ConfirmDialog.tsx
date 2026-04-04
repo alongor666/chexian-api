@@ -101,7 +101,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       {/* 对话框内容 */}
       <div
         className={cn(
-          'relative bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6',
+          'relative bg-white dark:bg-neutral-800 rounded-xl shadow-2xl max-w-md w-full mx-4 p-6',
           'animate-in fade-in zoom-in-95 duration-200',
           className
         )}
@@ -110,7 +110,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         <button
           onClick={onClose}
           disabled={loading}
-          className="absolute top-4 right-4 p-1 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors disabled:opacity-50"
+          className="absolute top-4 right-4 p-1 rounded-lg text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors disabled:opacity-50"
           aria-label="关闭"
         >
           <X size={18} />
@@ -129,7 +129,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             {/* 标题 */}
             <h3
               id="confirm-dialog-title"
-              className="text-lg font-semibold text-neutral-900"
+              className="text-lg font-semibold text-neutral-900 dark:text-neutral-100"
             >
               {title}
             </h3>
@@ -138,7 +138,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             {description && (
               <p
                 id="confirm-dialog-description"
-                className="mt-2 text-sm text-neutral-600"
+                className="mt-2 text-sm text-neutral-600 dark:text-neutral-400"
               >
                 {description}
               </p>

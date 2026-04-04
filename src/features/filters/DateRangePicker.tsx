@@ -86,7 +86,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             min={startValue || undefined}
             disabled={!startValue}
             onChange={(e) => handleEndChange(e.target.value)}
-            className={`w-full px-2 py-1.5 text-xs border rounded disabled:bg-neutral-100 ${colorClasses.border.neutral}`}
+            className={`w-full px-2 py-1.5 text-xs border rounded disabled:bg-neutral-100 dark:disabled:bg-neutral-700 ${colorClasses.border.neutral}`}
             aria-label="截止日"
           />
         </div>
@@ -95,7 +95,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   }
 
   return (
-    <details className={`group rounded-lg border bg-white ${colorClasses.border.neutral}`}>
+    <details className={`group rounded-lg border bg-white dark:bg-neutral-800 ${colorClasses.border.neutral}`}>
       <summary className="list-none cursor-pointer px-3 py-2 flex items-center justify-between gap-3">
         <span className={`text-sm font-medium whitespace-nowrap ${colorClasses.text.neutral}`}>起止日期</span>
         <span className={`text-sm truncate ${colorClasses.text.neutralMuted}`}>{summaryText}</span>
@@ -120,7 +120,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               min={startValue || undefined}
               disabled={!startValue}
               onChange={(e) => handleEndChange(e.target.value)}
-              className={`w-full px-3 py-2 border rounded text-sm disabled:bg-neutral-100 ${colorClasses.border.neutral}`}
+              className={`w-full px-3 py-2 border rounded text-sm disabled:bg-neutral-100 dark:disabled:bg-neutral-700 ${colorClasses.border.neutral}`}
               aria-label="截止日"
             />
           </div>

@@ -269,7 +269,7 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
   // 空状态
   if (!loading && data.length === 0 && summaryData.length === 0) {
     return (
-      <div className={cn('bg-white rounded-lg shadow-sm p-8 text-center', colorClasses.text.neutralLight)}>
+      <div className={cn('bg-white dark:bg-neutral-800 rounded-lg shadow-sm p-8 text-center', colorClasses.text.neutralLight)}>
         暂无数据
       </div>
     );
@@ -292,7 +292,7 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
       />
 
       {/* 汇总表 */}
-      <div className="bg-white rounded-lg shadow-sm">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm">
         <div className={cn('px-4 py-3 border-b flex justify-between items-center', colorClasses.border.neutral)}>
           <h3 className={cn('text-base font-medium', colorClasses.text.neutralBlack)}>
             已赚保费汇总（按机构）
@@ -304,7 +304,7 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
                 {onExportCSV && (
                   <button
                     onClick={onExportCSV}
-                    className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                    className="px-3 py-1 text-sm bg-success-solid text-white rounded hover:bg-success-dark transition-colors"
                     disabled={data.length === 0 && summaryData.length === 0}
                   >
                     导出CSV
@@ -313,7 +313,7 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
                 {onExportExcel && (
                   <button
                     onClick={onExportExcel}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    className="px-3 py-1 text-sm bg-primary-solid text-white rounded hover:bg-primary-dark transition-colors"
                     disabled={data.length === 0 && summaryData.length === 0}
                   >
                     导出Excel
@@ -333,7 +333,7 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
       </div>
 
       {/* 明细表 */}
-      <div className="bg-white rounded-lg shadow-sm">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm">
         <div className={cn('px-4 py-3 border-b', colorClasses.border.neutral)}>
           <div className="flex justify-between items-center mb-3">
             <h3 className={cn('text-base font-medium', colorClasses.text.neutralBlack)}>

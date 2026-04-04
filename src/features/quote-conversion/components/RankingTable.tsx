@@ -68,7 +68,7 @@ export function RankingTable({
               </tr>
             </thead>
             <tbody>
-              {(data ?? []).map(row => {
+              {(data ?? []).slice().sort((a, b) => (a.conversion_rate ?? 0) - (b.conversion_rate ?? 0)).map(row => {
                 const maxQuotes = Math.max(...(data ?? []).map(r => r.total_quotes), 1);
                 const barWidth = (row.total_quotes / maxQuotes) * 100;
                 const insuredWidth = row.total_quotes > 0 ? (row.total_insured / row.total_quotes) * barWidth : 0;
@@ -76,12 +76,12 @@ export function RankingTable({
                 return (
                   <tr key={row.dim_value} className={tableStyles.row}>
                     <td className={`${tableStyles.cell} font-medium`}>{row.dim_value ?? '-'}</td>
-                    <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>{formatCount(row.total_quotes)}</td>
-                    <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>{formatCount(row.total_insured)}</td>
-                    <td className={`${tableStyles.cell} text-right ${fontStyles.tabular} font-semibold`}>
+                    <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_quotes)}</td>
+                    <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_insured)}</td>
+                    <td className={`${tableStyles.cell} text-right ${fontStyles.numeric} font-semibold`}>
                       {formatPercent(row.conversion_rate)}
                     </td>
-                    <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>
+                    <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>
                       {row.avg_discount != null ? `${(row.avg_discount * 100).toFixed(1)}%` : '-'}
                     </td>
                     <td className={tableStyles.cell}>

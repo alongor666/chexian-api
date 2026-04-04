@@ -98,13 +98,13 @@ const RouteCheckboxGroup: React.FC<{
   };
 
   return (
-    <div className="mt-1 p-3 rounded-lg border border-neutral-200 bg-neutral-50">
-      <p className="text-xs text-neutral-400 mb-2">不勾选任何路由 = 允许访问所有路由</p>
+    <div className="mt-1 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
+      <p className="text-xs text-neutral-400 dark:text-neutral-500 mb-2">不勾选任何路由 = 允许访问所有路由</p>
       <div className="grid grid-cols-2 gap-1">
         {ALL_ROUTES.map(route => (
           <label
             key={route.path}
-            className="flex items-center gap-2 cursor-pointer rounded px-2 py-1 hover:bg-white transition-colors"
+            className="flex items-center gap-2 cursor-pointer rounded px-2 py-1 hover:bg-white dark:hover:bg-neutral-700 transition-colors"
           >
             <input
               type="checkbox"
@@ -132,13 +132,13 @@ const SpecialFeaturesCheckboxGroup: React.FC<{
   };
 
   return (
-    <div className="mt-1 p-3 rounded-lg border border-neutral-200 bg-neutral-50">
-      <p className="text-xs text-neutral-400 mb-2">勾选后该用户可访问对应的特殊功能页面</p>
+    <div className="mt-1 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
+      <p className="text-xs text-neutral-400 dark:text-neutral-500 mb-2">勾选后该用户可访问对应的特殊功能页面</p>
       <div className="flex flex-wrap gap-3">
         {ALL_SPECIAL_FEATURES.map(feature => (
           <label
             key={feature.key}
-            className="flex items-center gap-2 cursor-pointer rounded px-3 py-1.5 hover:bg-white transition-colors border border-neutral-200"
+            className="flex items-center gap-2 cursor-pointer rounded px-3 py-1.5 hover:bg-white dark:hover:bg-neutral-700 transition-colors border border-neutral-200 dark:border-neutral-700"
           >
             <input
               type="checkbox"
@@ -392,8 +392,8 @@ export const AccessControlPage: React.FC = () => {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-neutral-900">用户与权限管理</h1>
-          <p className="text-sm text-neutral-500 mt-1">管理员可配置用户、角色、IP/路由权限、特殊功能权限，所有修改实时持久化生效</p>
+          <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">用户与权限管理</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">管理员可配置用户、角色、IP/路由权限、特殊功能权限，所有修改实时持久化生效</p>
         </div>
         <Button variant="secondary" onClick={loadData} loading={loading}>
           刷新

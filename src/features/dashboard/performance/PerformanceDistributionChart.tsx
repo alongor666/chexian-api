@@ -174,7 +174,7 @@ export function PerformanceDistributionChart({
         min: axisRange.xMin,
         max: axisRange.xMax,
         axisLabel: { formatter: '{value}%' },
-        splitLine: { lineStyle: { color: colors.neutral[200] } },
+        splitLine: { show: false },
       },
       yAxis: {
         type: 'value',
@@ -182,7 +182,7 @@ export function PerformanceDistributionChart({
         min: axisRange.yMin,
         max: axisRange.yMax,
         axisLabel: { formatter: '{value}%' },
-        splitLine: { lineStyle: { color: colors.neutral[200] } },
+        splitLine: { show: false },
       },
       series: [
         {

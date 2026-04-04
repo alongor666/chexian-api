@@ -163,7 +163,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
                       !option.available
                         ? `opacity-50 cursor-not-allowed ${colorClasses.border.neutral}`
                         : selectedOption === option.id
-                        ? `border-blue-500 ${colorClasses.bg.primary} dark:bg-blue-900/20`
+                        ? `border-primary ${colorClasses.bg.primary}`
                         : `${colorClasses.border.neutral} hover:border-neutral-300 dark:hover:border-neutral-600`
                     }`}
                     role="radio"
@@ -208,7 +208,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center ${
                 isExporting
                   ? `${colorClasses.bg.neutral} ${colorClasses.text.neutralMuted} cursor-not-allowed`
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-primary-solid text-white hover:bg-primary-dark'
               }`}
               aria-busy={isExporting}
             >

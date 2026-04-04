@@ -187,10 +187,7 @@ export const Y_AXIS_CONFIG = {
     show: false,
   },
   splitLine: {
-    lineStyle: {
-      color: colors.neutral[100],  // #f5f5f5
-      type: 'dashed' as const,
-    },
+    show: false,
   },
 } as const;
 
@@ -265,31 +262,31 @@ export const TOOLTIP_CONFIG = {
  */
 export const TABLE_CSS_CLASSES = {
   /** 表格容器 - 无独立滚动条 */
-  container: 'border rounded border-neutral-200',
+  container: 'border rounded border-neutral-200 dark:border-neutral-700',
   /** 表格本身 */
-  table: 'min-w-full divide-y divide-neutral-200',
+  table: 'min-w-full divide-y divide-neutral-200 dark:divide-neutral-700',
   /** 表头容器 */
-  thead: 'bg-neutral-50',
+  thead: 'bg-neutral-50 dark:bg-neutral-700',
   /** 表头行 */
   headerRow: '',
   /** 表头单元格（左对齐） */
-  headerCell: 'px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50',
+  headerCell: 'px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider bg-neutral-50 dark:bg-neutral-700',
   /** 表头单元格（右对齐，用于数字列） */
-  headerCellRight: 'px-4 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50',
+  headerCellRight: 'px-4 py-3 text-right text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider bg-neutral-50 dark:bg-neutral-700',
   /** 表体容器 */
-  tbody: 'bg-white divide-y divide-neutral-200',
+  tbody: 'bg-white dark:bg-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-700',
   /** 数据行 */
-  row: 'hover:bg-primary-bg transition-colors',
+  row: 'hover:bg-primary-bg dark:hover:bg-blue-900/20 transition-colors',
   /** 数据行（交替色，可选） */
-  rowAlt: 'bg-neutral-50 hover:bg-primary-bg transition-colors',
+  rowAlt: 'bg-neutral-50 dark:bg-neutral-700/50 hover:bg-primary-bg dark:hover:bg-blue-900/20 transition-colors',
   /** 单元格（左对齐） */
-  cell: 'px-4 py-3 text-sm text-neutral-900',
+  cell: 'px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100',
   /** 单元格（右对齐，用于数字） */
-  cellRight: 'px-4 py-3 text-sm text-neutral-900 text-right font-tabular',
+  cellRight: 'px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 text-right font-tabular',
   /** 单元格（次要文字，如基期数据） */
-  cellSecondary: 'px-4 py-3 text-sm text-neutral-500 text-right font-tabular',
+  cellSecondary: 'px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400 text-right font-tabular',
   /** 单元格（强调，如当期数据） */
-  cellPrimary: 'px-4 py-3 text-sm font-medium text-neutral-900',
+  cellPrimary: 'px-4 py-3 text-sm font-medium text-neutral-900 dark:text-neutral-100',
   /** 增长率单元格（正向） */
   cellGrowthPositive: 'px-4 py-3 text-sm text-right font-tabular font-medium text-success-dark',
   /** 增长率单元格（负向） */
@@ -297,9 +294,9 @@ export const TABLE_CSS_CLASSES = {
   /** 汇总行 */
   summaryRow: 'bg-warning-bg font-semibold hover:bg-yellow-100 transition-colors',
   /** 汇总单元格 */
-  summaryCell: 'px-4 py-3 text-sm text-neutral-800 font-semibold',
+  summaryCell: 'px-4 py-3 text-sm text-neutral-800 dark:text-neutral-200 font-semibold',
   /** 空数据提示 */
-  emptyCell: 'px-4 py-8 text-center text-neutral-500',
+  emptyCell: 'px-4 py-8 text-center text-neutral-500 dark:text-neutral-400',
 } as const;
 
 /** 获取增长率单元格样式 */
@@ -308,8 +305,77 @@ export const getGrowthCellClass = (value: number | null | undefined): string => 
   return value >= 0 ? TABLE_CSS_CLASSES.cellGrowthPositive : TABLE_CSS_CLASSES.cellGrowthNegative;
 };
 
-/** 获取增长率颜色 - 使用设计系统 */
-export const getGrowthColor = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return colors.neutral[600];  // #595959
-  return value >= 0 ? colors.success.DEFAULT : colors.danger.DEFAULT;  // #52c41a : #ff4d4f
-};
+/** 获取增长率颜色 - 使用设计系统，支持 dark 模式 */
+export function getGrowthColor(value: number | null | undefined, isDark = false): string {
+  if (value === null || value === undefined) return isDark ? '#bfbfbf' : colors.neutral[600];
+  const successColor = isDark ? '#73d13d' : colors.success.DEFAULT;
+  const dangerColor = isDark ? '#ff7875' : colors.danger.DEFAULT;
+  return value >= 0 ? successColor : dangerColor;
+}
+
+// ==================== Dark 模式图表主题 ====================
+
+/** Dark 模式文字颜色 */
+const DARK_TEXT_COLORS = {
+  primary: '#e8e8e8',     // neutral-200
+  secondary: '#bfbfbf',   // neutral-400
+  tertiary: '#8c8c8c',    // neutral-500
+  white: '#ffffff',
+} as const;
+
+/**
+ * 获取图表主题配置（响应 dark/light 模式）
+ *
+ * 用法：
+ *   const { resolvedTheme } = useTheme();
+ *   const theme = getChartTheme(resolvedTheme === 'dark');
+ *   // 在 ECharts option 中使用 theme.tooltipConfig, theme.xAxisConfig 等
+ */
+export function getChartTheme(isDark: boolean) {
+  const text = isDark ? DARK_TEXT_COLORS : TEXT_COLORS;
+  const axisLineColor = isDark ? '#434343' : colors.neutral[200];
+  const splitLineColor = isDark ? '#303030' : colors.neutral[100];
+  const tooltipBg = isDark ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+  const tooltipBorder = isDark ? colors.neutral[700] : colors.neutral[200];
+
+  return {
+    textColors: text,
+    backgroundColor: 'transparent',
+    xAxisConfig: {
+      ...X_AXIS_CONFIG,
+      axisLabel: { ...X_AXIS_CONFIG.axisLabel, color: text.secondary },
+      axisLine: { lineStyle: { color: axisLineColor } },
+    },
+    yAxisConfig: {
+      ...Y_AXIS_CONFIG,
+      axisLabel: { ...Y_AXIS_CONFIG.axisLabel, color: text.secondary },
+      splitLine: { lineStyle: { color: splitLineColor, type: 'dashed' as const } },
+    },
+    tooltipConfig: {
+      trigger: 'axis' as const,
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder as string,
+      borderWidth: 1,
+      padding: [8, 12] as [number, number],
+      textStyle: {
+        fontSize: TOOLTIP_CONFIG.textStyle.fontSize,
+        color: text.primary as string,
+        fontFamily: TOOLTIP_CONFIG.textStyle.fontFamily,
+      },
+      extraCssText: isDark
+        ? 'box-shadow: 0 2px 8px rgba(0,0,0,0.4);'
+        : 'box-shadow: 0 2px 8px rgba(0,0,0,0.1);',
+    },
+    chartTextStyles: {
+      axisLabel: { ...CHART_TEXT_STYLES.axisLabel, color: text.secondary },
+      axisName: { ...CHART_TEXT_STYLES.axisName, color: text.secondary },
+      dynamicLabel: { ...CHART_TEXT_STYLES.dynamicLabel, color: text.primary },
+      staticLabel: { ...CHART_TEXT_STYLES.staticLabel, color: text.secondary },
+      title: { ...CHART_TEXT_STYLES.title, color: text.primary },
+      subtitle: { ...CHART_TEXT_STYLES.subtitle, color: text.tertiary },
+      legend: { ...CHART_TEXT_STYLES.legend, color: text.secondary },
+      label: { ...CHART_TEXT_STYLES.label, color: text.primary },
+      tooltip: { ...CHART_TEXT_STYLES.tooltip, color: text.primary },
+    },
+  };
+}

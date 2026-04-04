@@ -70,13 +70,13 @@ export const FunnelIndicator: React.FC<FunnelIndicatorProps> = ({
         >
           {/* 已续部分（绿色） */}
           <div
-            className="h-full bg-green-500 transition-all duration-300"
+            className="h-full bg-success transition-all duration-300"
             style={{ width: `${renewalPercent}%` }}
           />
           {/* 仅报价部分（橙色） */}
           {onlyQuotedPercent > 0 && (
             <div
-              className="h-full bg-orange-400 transition-all duration-300"
+              className="h-full bg-orange transition-all duration-300"
               style={{ width: `${onlyQuotedPercent}%` }}
             />
           )}
@@ -107,12 +107,12 @@ export const FunnelIndicator: React.FC<FunnelIndicatorProps> = ({
       {/* 进度条 */}
       <div className="h-2 bg-neutral-200 rounded-sm overflow-hidden flex">
         <div
-          className="h-full bg-green-500"
+          className="h-full bg-success"
           style={{ width: `${renewalPercent}%` }}
         />
         {onlyQuotedPercent > 0 && (
           <div
-            className="h-full bg-orange-400"
+            className="h-full bg-orange"
             style={{ width: `${onlyQuotedPercent}%` }}
           />
         )}
@@ -121,11 +121,11 @@ export const FunnelIndicator: React.FC<FunnelIndicatorProps> = ({
       {/* 图例 */}
       <div className={`flex items-center gap-3 text-[10px] ${colorClasses.text.neutralLight}`}>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 bg-green-500 rounded-sm" />
+          <span className="w-2 h-2 bg-success rounded-sm" />
           已续 {renewalPercent}%
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 bg-orange-400 rounded-sm" />
+          <span className="w-2 h-2 bg-orange rounded-sm" />
           仅报价 {onlyQuotedPercent > 0 ? onlyQuotedPercent : 0}%
         </span>
         <span className="flex items-center gap-1">

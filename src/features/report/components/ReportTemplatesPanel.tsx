@@ -1,5 +1,5 @@
 import React from 'react';
-import { colorClasses } from '../../../shared/styles';
+import { buttonStyles, cn, colorClasses } from '../../../shared/styles';
 
 interface ReportTemplate {
   id: string;
@@ -77,7 +77,7 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({
     : templates.filter(t => t.category === selectedCategory);
 
   return (
-    <div className="bg-white p-4 sm:p-6 rounded shadow">
+    <div className="bg-white dark:bg-neutral-800 p-4 sm:p-6 rounded shadow">
       <div className="mb-6">
         <h2 className={`text-xl font-bold ${colorClasses.text.neutralBlack} mb-2`}>📋 报表模板</h2>
         <p className={`text-sm ${colorClasses.text.neutral}`}>选择预设模板快速生成常用分析报告</p>
@@ -92,7 +92,7 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({
               onClick={() => setSelectedCategory(category)}
               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                 selectedCategory === category
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-primary text-white'
                   : `${colorClasses.bg.neutral} ${colorClasses.text.neutral} hover:bg-neutral-200`
               }`}
             >
@@ -107,13 +107,13 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({
         {filteredTemplates.map(template => (
           <div
             key={template.id}
-            className={`border ${colorClasses.border.neutral} rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group`}
+            className={cn(`border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer group`, colorClasses.border.neutral, 'hover:border-primary-border')}
             onClick={() => onSelectTemplate(template)}
           >
             <div className="flex items-start gap-3 mb-3">
               <span className="text-2xl">{template.icon}</span>
               <div className="flex-1">
-                <h3 className={`font-semibold ${colorClasses.text.neutralBlack} group-hover:text-blue-600 transition-colors`}>
+                <h3 className={`font-semibold ${colorClasses.text.neutralBlack} group-hover:text-primary transition-colors`}>
                   {template.name}
                 </h3>
                 <span className={`text-xs ${colorClasses.text.primary} ${colorClasses.bg.primary} px-2 py-1 rounded-full`}>
@@ -145,7 +145,7 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({
               </div>
             </div>
 
-            <button className="w-full mt-4 px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors group-hover:bg-blue-600">
+            <button className={cn('w-full mt-4', buttonStyles.base, buttonStyles.primary, buttonStyles.sizeSmall)}>
               使用此模板
             </button>
           </div>

@@ -160,7 +160,7 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
                   return (
                     <tr
                       key={idx}
-                      className={cn("border-t hover:bg-neutral-50", isLatestDate ? 'bg-yellow-100 font-semibold' : '')}
+                      className={cn("border-t hover:bg-neutral-50", isLatestDate ? 'bg-warning-bg font-semibold' : '')}
                       title={isLatestDate ? '最新签单日期对应的到期日' : ''}
                     >
                       <td className={cn("px-3 py-2 border-r", colorClasses.border.neutral)}>

@@ -47,9 +47,9 @@ export const FeeDistributionChart: React.FC<Props> = ({ data, activeTab }) => {
     const yLabels = filtered.map((r) =>
       r.fee_rate !== null ? `${formatPercent(r.fee_rate)} ${(r.fee_rule_name ?? '').split('-').slice(-1)[0]}` : r.fee_rule_name
     );
-    const premiumValues = filtered.map((r) => parseFloat((r.total_premium / 10000).toFixed(2)));
+    const premiumValues = filtered.map((r) => parseFloat(formatPremiumWan(r.total_premium)));
     const feeValues = filtered.map((r) =>
-      r.expected_fee !== null ? parseFloat((r.expected_fee / 10000).toFixed(2)) : 0
+      r.expected_fee !== null ? parseFloat(formatPremiumWan(r.expected_fee)) : 0
     );
 
     const option: echarts.EChartsCoreOption = {
@@ -73,7 +73,7 @@ export const FeeDistributionChart: React.FC<Props> = ({ data, activeTab }) => {
         name: '万元',
         nameTextStyle: { color: '#9ca3af', fontSize: 11 },
         axisLabel: { color: '#9ca3af', fontSize: 11 },
-        splitLine: { lineStyle: { color: '#e5e7eb' } },
+        splitLine: { show: false },
       },
       yAxis: {
         type: 'category',

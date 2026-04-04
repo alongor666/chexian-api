@@ -45,7 +45,7 @@ export const CostAnalysisControlPanel: React.FC<
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm p-4 mb-4">
       {/* 子Tab切换 */}
       <div className="flex flex-wrap gap-2 mb-4">
         {subTabs.map(([key, config]) => (
@@ -55,7 +55,7 @@ export const CostAnalysisControlPanel: React.FC<
             className={cn(
               'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
               activeSubTab === key
-                ? 'bg-blue-500 text-white shadow-md'
+                ? 'bg-primary text-white shadow-md'
                 : cn(colorClasses.bg.neutralLight, colorClasses.text.neutral, 'hover:bg-neutral-200')
             )}
           >

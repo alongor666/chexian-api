@@ -83,7 +83,7 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       {/* 1. 今日战况 (Daily) */}
-      <div className="bg-white rounded-lg p-4 shadow-sm border border-neutral-100 flex flex-col justify-between">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 shadow-sm border border-neutral-100 flex flex-col justify-between">
         <div>
           <div className="text-neutral-500 text-sm font-medium mb-1">{formattedDate}战况 (Daily)</div>
           <div className="flex items-baseline gap-2">
@@ -103,7 +103,7 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
       </div>
 
       {/* 2. 本月进度 (MTD) */}
-      <div className="bg-white rounded-lg p-4 shadow-sm border border-neutral-100 flex flex-col justify-between">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 shadow-sm border border-neutral-100 flex flex-col justify-between">
         <div>
           <div className="text-neutral-500 text-sm font-medium mb-1">本月进度 (MTD)</div>
           <div className="flex items-baseline gap-2">
@@ -133,7 +133,7 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
       </div>
 
       {/* 3. 全年累计 (YTD) */}
-      <div className="bg-white rounded-lg p-4 shadow-sm border border-neutral-100 flex flex-col justify-between">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 shadow-sm border border-neutral-100 flex flex-col justify-between">
         <div>
           <div className="text-neutral-500 text-sm font-medium mb-1">全年累计 (YTD)</div>
           <div className="flex items-baseline gap-2">

@@ -65,7 +65,7 @@ export const Skeleton = memo(function Skeleton({
  */
 export const KpiCardSkeleton = memo(function KpiCardSkeleton() {
   return (
-    <div className="bg-white rounded-lg shadow-card p-4 space-y-3">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-card p-4 space-y-3">
       <Skeleton variant="text" width="60%" height={16} />
       <Skeleton variant="text" width="80%" height={28} />
       <div className="flex items-center gap-2">
@@ -100,9 +100,9 @@ export const TableSkeleton = memo(function TableSkeleton({
   columns?: number
 }) {
   return (
-    <div className="bg-white rounded-lg shadow-card overflow-hidden">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-card overflow-hidden">
       {/* 表头 */}
-      <div className="flex border-b border-neutral-200 bg-neutral-50 p-3">
+      <div className="flex border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 p-3">
         {Array.from({ length: columns }).map((_, i) => (
           <div key={i} className="flex-1 px-2">
             <Skeleton variant="text" height={16} />
@@ -110,7 +110,7 @@ export const TableSkeleton = memo(function TableSkeleton({
         ))}
       </div>
       {/* 表体 */}
-      <div className="divide-y divide-neutral-100">
+      <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
         {Array.from({ length: rows }).map((_, rowIndex) => (
           <div key={rowIndex} className="flex p-3">
             {Array.from({ length: columns }).map((_, colIndex) => (
@@ -134,7 +134,7 @@ export const ChartSkeleton = memo(function ChartSkeleton({
   height?: number
 }) {
   return (
-    <div className="bg-white rounded-lg shadow-card p-4">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-card p-4">
       <Skeleton variant="text" width="40%" height={20} className="mb-4" />
       <Skeleton variant="rectangular" width="100%" height={height - 60} />
     </div>
@@ -146,7 +146,7 @@ export const ChartSkeleton = memo(function ChartSkeleton({
  */
 export const FilterSkeleton = memo(function FilterSkeleton() {
   return (
-    <div className="flex flex-wrap gap-3 p-4 bg-white rounded-lg shadow-card">
+    <div className="flex flex-wrap gap-3 p-4 bg-white dark:bg-neutral-800 rounded-lg shadow-card">
       <Skeleton variant="rectangular" width={120} height={36} />
       <Skeleton variant="rectangular" width={150} height={36} />
       <Skeleton variant="rectangular" width={100} height={36} />
@@ -196,7 +196,7 @@ export const ListItemSkeleton = memo(function ListItemSkeleton() {
  */
 export const ListSkeleton = memo(function ListSkeleton({ count = 5 }: { count?: number }) {
   return (
-    <div className="bg-white rounded-lg shadow-card divide-y divide-neutral-100">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-card divide-y divide-neutral-100 dark:divide-neutral-700">
       {Array.from({ length: count }).map((_, i) => (
         <ListItemSkeleton key={i} />
       ))}

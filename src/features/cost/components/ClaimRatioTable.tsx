@@ -96,8 +96,16 @@ export const ClaimRatioTable: React.FC<ClaimRatioTableProps> = ({
     [dimensionLabel]
   );
 
-  // 转换数据
-  const displayData = useMemo(() => transformData(data), [data]);
+  // 转换数据（先排序：赔付率从高到低，汇总行置底）
+  const displayData = useMemo(() => {
+    const sorted = data.slice().sort((a, b) => {
+      const isAgg = (key: string) => /合计|汇总|全部|四川分公司|整体/.test(key ?? '');
+      if (isAgg(a.dim_key)) return 1;
+      if (isAgg(b.dim_key)) return -1;
+      return (b.earned_claim_ratio ?? 0) - (a.earned_claim_ratio ?? 0);
+    });
+    return transformData(sorted);
+  }, [data]);
 
   // 空状态
   if (!loading && data.length === 0) {

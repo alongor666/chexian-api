@@ -101,7 +101,7 @@ export const SystemSettings: React.FC = () => {
           <button
             onClick={() => handleToggleAutoSave(!autoSave)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              autoSave ? 'bg-blue-600' : 'bg-neutral-300 dark:bg-neutral-600'
+              autoSave ? 'bg-primary' : 'bg-neutral-300 dark:bg-neutral-600'
             }`}
           >
             <span
@@ -123,7 +123,7 @@ export const SystemSettings: React.FC = () => {
           <button
             onClick={() => handleToggleDebug(!showDebug)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              showDebug ? 'bg-blue-600' : 'bg-neutral-300 dark:bg-neutral-600'
+              showDebug ? 'bg-primary' : 'bg-neutral-300 dark:bg-neutral-600'
             }`}
           >
             <span
@@ -153,7 +153,7 @@ export const SystemSettings: React.FC = () => {
               disabled={isClearing}
               className={cn("px-4 py-2 text-sm font-medium rounded-lg transition-colors", isClearing
                   ? cn(colorClasses.bg.neutralLight, colorClasses.text.neutralMuted, 'cursor-not-allowed')
-                  : cn(colorClasses.bg.danger, colorClasses.text.danger, colorClasses.bg.dangerHover)
+                  : cn(colorClasses.bg.danger, colorClasses.text.danger, 'hover:bg-danger-solid')
               )}
             >
               {isClearing ? '清除中...' : '清除'}
@@ -172,7 +172,7 @@ export const SystemSettings: React.FC = () => {
             </div>
             <button
               onClick={handleExportSettings}
-              className={cn("px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30", colorClasses.bg.primary, colorClasses.text.primary)}
+              className={cn("px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-primary-100 dark:hover:bg-primary-900/30", colorClasses.bg.primary, colorClasses.text.primary)}
             >
               导出
             </button>

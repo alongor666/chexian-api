@@ -63,7 +63,7 @@ export const FeeAnalysisPanel: React.FC<Props> = ({ filters }) => {
         {summary && summary.out_of_scope_count > 0 && (
           <>
             <span>·</span>
-            <span className={colorClasses.text.warning ?? 'text-amber-500'}>
+            <span className={colorClasses.text.warning}>
               规则外 {formatCount(summary.out_of_scope_count)} 件（{formatPremiumWan(summary.out_of_scope_premium)}万）
             </span>
           </>

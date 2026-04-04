@@ -22,7 +22,7 @@ export function buildOverviewOption(rows: ComprehensiveMetricRow[]): EChartsOpti
         type: 'value',
         name: '签单保费(万)',
         axisLine: { lineStyle: { color: comprehensiveTheme.palette.premium } },
-        splitLine: { lineStyle: { color: comprehensiveTheme.palette.splitLine } },
+        splitLine: { show: false },
       },
       {
         type: 'value',

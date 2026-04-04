@@ -147,11 +147,11 @@ export const LoginPage: React.FC = () => {
   }, [username, password, rememberMe, loginWithPassword, navigate, resolveTargetPath]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo 和标题 */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-solid rounded-2xl mb-4 shadow-lg">
             <Shield size={32} className="text-white" />
           </div>
           <h1 className={cn("text-2xl font-bold", colorClasses.text.neutralBlack)}>车险业绩分析系统</h1>
@@ -159,7 +159,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* 登录表单卡片 */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white dark:bg-neutral-800 rounded-2xl shadow-xl p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 错误提示 */}
             {error && (
@@ -183,7 +183,7 @@ export const LoginPage: React.FC = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className={cn("block w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors", colorClasses.border.neutral)}
+                  className={cn("block w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors", colorClasses.border.neutral)}
                   placeholder="请输入用户名"
                   autoComplete="username"
                   autoFocus
@@ -205,7 +205,7 @@ export const LoginPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={cn("block w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors", colorClasses.border.neutral)}
+                  className={cn("block w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors", colorClasses.border.neutral)}
                   placeholder="请输入密码"
                   autoComplete="current-password"
                 />
@@ -227,7 +227,7 @@ export const LoginPage: React.FC = () => {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-neutral-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-primary border-neutral-300 rounded focus:ring-primary"
                 />
                 <span className={cn("ml-2 text-sm", colorClasses.text.neutral)}>记住登录状态</span>
               </label>
@@ -237,7 +237,7 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex items-center justify-center py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-600/30"
+              className="w-full flex items-center justify-center py-3 px-4 bg-primary-solid hover:bg-primary-dark disabled:bg-primary-400 text-white font-medium rounded-lg transition-colors shadow-lg shadow-primary-600/30"
             >
               {isLoading ? (
                 <>
@@ -252,9 +252,9 @@ export const LoginPage: React.FC = () => {
 
           {/* 企微扫码登录分割线 */}
           <div className="mt-6 flex items-center justify-center space-x-4">
-            <span className="h-px w-full bg-neutral-200"></span>
+            <span className="h-px w-full bg-neutral-200 dark:bg-neutral-700"></span>
             <span className={cn("text-sm whitespace-nowrap", colorClasses.text.neutralMuted)}>或</span>
-            <span className="h-px w-full bg-neutral-200"></span>
+            <span className="h-px w-full bg-neutral-200 dark:bg-neutral-700"></span>
           </div>
 
           {/* 企微扫码登录按钮 */}
@@ -263,7 +263,7 @@ export const LoginPage: React.FC = () => {
               type="button"
               onClick={handleWeComLogin}
               disabled={isWeComLoading}
-              className={cn("w-full flex items-center justify-center py-3 px-4 bg-white border rounded-lg font-medium transition-colors shadow-sm hover:bg-neutral-50 disabled:bg-neutral-100", colorClasses.border.neutral, colorClasses.text.neutral)}
+              className={cn("w-full flex items-center justify-center py-3 px-4 bg-white dark:bg-neutral-700 border rounded-lg font-medium transition-colors shadow-sm hover:bg-neutral-50 dark:hover:bg-neutral-600 disabled:bg-neutral-100 dark:disabled:bg-neutral-800", colorClasses.border.neutral, colorClasses.text.neutral)}
             >
               {isWeComLoading ? (
                 <>
@@ -288,7 +288,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* 用户角色说明 */}
-        <div className={cn("mt-6 p-4 bg-white/80 rounded-xl border", colorClasses.border.neutral)}>
+        <div className={cn("mt-6 p-4 bg-white/80 dark:bg-neutral-800/80 rounded-xl border", colorClasses.border.neutral)}>
           <h3 className={cn("text-sm font-medium mb-3 flex items-center", colorClasses.text.neutral)}>
             <Building size={16} className={cn("mr-2", colorClasses.text.neutralMuted)} />
             用户角色说明

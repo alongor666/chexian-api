@@ -24,7 +24,7 @@ export function buildExpenseOption(
       {
         type: 'value',
         name: '费用金额(万)',
-        splitLine: { lineStyle: { color: comprehensiveTheme.palette.splitLine } },
+        splitLine: { show: false },
       },
       {
         type: 'value',

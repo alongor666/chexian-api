@@ -120,7 +120,7 @@ function DimensionPicker({
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onCancel}>
       <div
-        className="bg-white rounded-xl shadow-xl p-6 min-w-[320px] max-w-[90vw]"
+        className="bg-white dark:bg-neutral-800 rounded-xl shadow-xl p-6 min-w-[320px] max-w-[90vw]"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className={`text-base font-semibold ${colorClasses.text.neutralBlack} mb-4`}>{title}</h3>
@@ -129,7 +129,7 @@ function DimensionPicker({
             <button
               key={dim}
               onClick={() => onSelect(dim)}
-              className={`px-4 py-3 text-sm rounded-lg border ${colorClasses.border.neutral} hover:border-blue-400 hover:bg-blue-50 transition-colors text-left`}
+              className={`px-4 py-3 text-sm rounded-lg border ${colorClasses.border.neutral} hover:border-primary hover:bg-primary-bg transition-colors text-left`}
             >
               {DIMENSION_LABELS[dim]}
             </button>
@@ -603,7 +603,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
               {availableHeatmapDrillDimensions.map((d) => (
                 <button
                   key={d.key}
-                  className={`cursor-pointer rounded-full border ${colorClasses.border.primary} bg-white px-3 py-1 text-xs hover:bg-blue-100`}
+                  className={`cursor-pointer rounded-full border ${colorClasses.border.primary} bg-white dark:bg-neutral-800 px-3 py-1 text-xs hover:bg-primary-100`}
                   onClick={() => handleHeatmapDimSelect(d.key)}
                 >
                   {d.label}
@@ -672,7 +672,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       </SectionBlock>
 
       <SectionBlock id="cross-sell-drilldown" title="下钻分析">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white dark:bg-neutral-800 p-3 shadow-sm">
           <DrilldownBreadcrumb
             path={drillPath.map((s): DrilldownBreadcrumbStep => ({
               label: s.label,
@@ -697,7 +697,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
             {(drillPath.length > 0 || currentGroupBy) && (
               <button
                 onClick={reset}
-                className="rounded-md border border-primary-border bg-primary-bg px-3 py-1.5 text-xs font-medium text-primary-dark transition-colors hover:bg-blue-100"
+                className="rounded-md border border-primary-border bg-primary-bg px-3 py-1.5 text-xs font-medium text-primary-dark transition-colors hover:bg-primary-100"
               >
                 重置分析
               </button>
@@ -737,7 +737,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                   rows={rows}
                   currentDimensionLabel={DIMENSION_LABELS[currentGroupBy]}
                 />
-                <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+                <div className="overflow-hidden rounded-xl bg-white dark:bg-neutral-800 shadow-sm">
                   <div className={`flex items-center justify-between border-b border-neutral-100 px-4 py-3`}>
                     <span className={`text-sm ${colorClasses.text.neutral}`}>
                       按<strong>{DIMENSION_LABELS[currentGroupBy]}</strong>分组
@@ -773,7 +773,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                         {sortedRows.map((row) => (
                           <tr
                             key={row.group_name}
-                            className="border-b border-neutral-50 transition-colors hover:bg-gray-50/60"
+                            className="border-b border-neutral-50 transition-colors hover:bg-neutral-50/60"
                           >
                             {tableColumns.map((col) => {
                               const numericValue = Number(row[col.key] ?? 0);
@@ -793,7 +793,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                                   <td
                                     key={col.key}
                                     className={cn(
-                                      'relative bg-white',
+                                      'relative bg-white dark:bg-neutral-800',
                                       stickyTableStyles.firstColumn, 'z-10 min-w-[180px]'
                                     )}
                                   >
@@ -832,7 +832,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                               return (
                                 <td
                                   key={col.key}
-                                  className="relative bg-white"
+                                  className="relative bg-white dark:bg-neutral-800"
                                 >
                                   {['total_auto_count', 'total_driver_count', 'total_rate'].includes(String(col.key)) ? (
                                     <DataBarCell value={numericValue} maxValue={maxValue}>

@@ -4,12 +4,10 @@ import { echarts } from '../../shared/utils/echarts';
 import { colorClasses } from '../../shared/styles';
 import type { EChartsParam } from '../../shared/types/echarts';
 import {
-  CHART_TEXT_STYLES,
-  X_AXIS_CONFIG,
-  Y_AXIS_CONFIG,
   GRID_CONFIG,
-  TOOLTIP_CONFIG,
+  getChartTheme,
 } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 
 interface BarChartProps {
   data: { dim_key: string; value: number }[];
@@ -26,15 +24,19 @@ export const BarChart: React.FC<BarChartProps> = ({
   loading,
   valueFormatter,
 }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo(() => {
+    const theme = getChartTheme(isDark);
     return {
       title: {
         text: title,
         left: 'center',
-        textStyle: CHART_TEXT_STYLES.title,
+        textStyle: theme.chartTextStyles.title,
       },
       tooltip: {
-        ...TOOLTIP_CONFIG,
+        ...theme.tooltipConfig,
         formatter: (params: any) => {
           const safeParams = (Array.isArray(params) ? params : []) as EChartsParam[];
           if (!Array.isArray(safeParams) || safeParams.length === 0) return '';
@@ -54,13 +56,13 @@ export const BarChart: React.FC<BarChartProps> = ({
       xAxis: {
         type: 'category',
         data: data.map(d => d.dim_key),
-        ...X_AXIS_CONFIG,
+        ...theme.xAxisConfig,
       },
       yAxis: {
         type: 'value',
-        ...Y_AXIS_CONFIG,
+        ...theme.yAxisConfig,
         axisLabel: {
-          ...Y_AXIS_CONFIG.axisLabel,
+          ...theme.yAxisConfig.axisLabel,
           formatter: (value: number) => (valueFormatter ? valueFormatter(value) : value),
         },
       },
@@ -71,13 +73,13 @@ export const BarChart: React.FC<BarChartProps> = ({
           itemStyle: { color: '#5470C6' },
           label: {
             show: false,
-            ...CHART_TEXT_STYLES.label,
+            ...theme.chartTextStyles.label,
           },
         }
       ],
       grid: GRID_CONFIG,
     };
-  }, [data, title, valueFormatter]);
+  }, [data, title, valueFormatter, isDark]);
 
   const onEvents = useMemo(() => ({
     click: (params: any) => {
@@ -91,7 +93,7 @@ export const BarChart: React.FC<BarChartProps> = ({
   if (loading) return <div className={`h-64 flex items-center justify-center ${colorClasses.bg.neutral}`}>Loading Chart...</div>;
 
   return (
-    <div className="bg-white p-4 rounded shadow h-full">
+    <div className="bg-white dark:bg-neutral-800 p-4 rounded shadow h-full">
       <ReactEChartsCore
         echarts={echarts}
         option={option} 

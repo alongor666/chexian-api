@@ -34,7 +34,7 @@ const DefaultErrorFallback: React.FC<{
     <div className="text-center max-w-md">
       {/* 错误图标 */}
       <div className="mb-4">
-        <AlertTriangle size={64} className="mx-auto text-warning dark:text-warning-light" aria-label="错误" />
+        <AlertTriangle size={64} className="mx-auto text-warning" aria-label="错误" />
       </div>
 
       {/* 错误标题 */}
@@ -53,7 +53,7 @@ const DefaultErrorFallback: React.FC<{
           <summary className="cursor-pointer text-sm font-medium text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors">
             查看错误详情
           </summary>
-          <pre className="mt-3 p-4 bg-neutral-100 dark:bg-neutral-800 rounded-lg text-xs font-mono text-danger dark:text-danger-light overflow-auto max-h-40 border border-neutral-200 dark:border-neutral-700">
+          <pre className="mt-3 p-4 bg-neutral-100 dark:bg-neutral-800 rounded-lg text-xs font-mono text-danger overflow-auto max-h-40 border border-neutral-200 dark:border-neutral-700">
             {error.toString()}
             {error.stack && `\n\n${error.stack}`}
           </pre>

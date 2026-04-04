@@ -2,7 +2,8 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { colorClasses } from '../../shared/styles';
 import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
-import { CHART_TEXT_STYLES, TONNAGE_COLORS } from '../../shared/config/chartStyles';
+import { TONNAGE_COLORS, getChartTheme } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 import { echarts } from '../../shared/utils/echarts';
 import type { EChartsParam } from '../../shared/types/echarts';
 
@@ -102,7 +103,11 @@ export const RoseChart: React.FC<RoseChartProps> = ({
     };
   }, [withContainer]);
 
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo(() => {
+    const theme = getChartTheme(isDark);
     const formatValue = valueFormatter || formatPremiumWan;
 
     // 聚合小扇区
@@ -112,7 +117,7 @@ export const RoseChart: React.FC<RoseChartProps> = ({
     const isSmallScreen = containerWidth < 400;
 
     // 1. 响应式字体大小
-    const baseFontSize = CHART_TEXT_STYLES.label.fontSize;
+    const baseFontSize = theme.chartTextStyles.label.fontSize;
     const dataBasedFontSize = aggregatedData.length > 10 ? Math.max(10, baseFontSize - 2) : baseFontSize;
     const responsiveFontSize = isSmallScreen ? Math.max(9, dataBasedFontSize - 1) : dataBasedFontSize;
 
@@ -182,9 +187,8 @@ export const RoseChart: React.FC<RoseChartProps> = ({
         itemHeight: 10,
         itemGap: 16,
         textStyle: {
-          ...CHART_TEXT_STYLES.legend,
+          ...theme.chartTextStyles.legend,
           fontSize: isSmallScreen ? 11 : 12,
-          color: '#4B5563',
           fontWeight: 500,
         },
       },
@@ -244,11 +248,11 @@ export const RoseChart: React.FC<RoseChartProps> = ({
         },
       ],
     };
-  }, [data, title, showValueLabel, showTitle, valueFormatter, containerWidth]);
+  }, [data, title, showValueLabel, showTitle, valueFormatter, containerWidth, isDark]);
 
   if (loading) {
     return (
-      <div className={`${withContainer ? 'bg-white p-4 rounded shadow' : ''} h-64 flex items-center justify-center ${colorClasses.bg.neutral}`}>
+      <div className={`${withContainer ? 'bg-white dark:bg-neutral-800 p-4 rounded shadow' : ''} h-64 flex items-center justify-center ${colorClasses.bg.neutral}`}>
         Loading Chart...
       </div>
     );
@@ -267,5 +271,5 @@ export const RoseChart: React.FC<RoseChartProps> = ({
     return chart;
   }
 
-  return <div ref={containerRef} className="bg-white p-4 rounded shadow h-full">{chart}</div>;
+  return <div ref={containerRef} className="bg-white dark:bg-neutral-800 p-4 rounded shadow h-full">{chart}</div>;
 };

@@ -43,7 +43,7 @@ function FunnelWaterfall({ title, row }: { title: string; row: FunnelRow }) {
               <div className="relative">
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className={colorClasses.text.neutralMuted}>{LEVEL_LABELS[i]}</span>
-                  <span className={fontStyles.tabular}>
+                  <span className={fontStyles.numeric}>
                     {formatCount(val)}
                     <span className={cn('ml-1', colorClasses.text.neutralMuted)}>
                       ({pct.toFixed(1)}%)

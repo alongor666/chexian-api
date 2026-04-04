@@ -88,7 +88,7 @@ export function DimensionHeatmap({ filters }: Props) {
                     return (
                       <td key={dim} className="p-1">
                         <div className={`rounded-md p-2 text-center ${getHeatmapColor(cell.rate)}`}>
-                          <div className={`font-semibold ${fontStyles.tabular}`}>{cell.rate}%</div>
+                          <div className={`font-semibold ${fontStyles.numeric}`}>{cell.rate}%</div>
                           <div className="text-[10px] opacity-75">{formatCount(cell.count)}</div>
                         </div>
                       </td>

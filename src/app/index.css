@@ -2,22 +2,177 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+ * 语义色 CSS 自定义属性
+ * - :root = 浅色模式，.dark = 深色模式
+ * - Tailwind config 引用这些变量，所有变体（hover:/focus:/dark:）自动生效
+ * - 中性色(neutral)不走变量，保持 Tailwind 静态色阶 + 手动 dark: 前缀
+ * ============================================================================ */
+
 :root {
-  /* 基础正文字体 */
+  /* ---- 基础字体 ---- */
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "Helvetica Neue", Arial, sans-serif;
 
-  /* KPI 数字字体 (Futura/Avenir 风格) - 用于大数字展示 */
+  /* ---- 专用字体 ---- */
   --font-kpi: "Avenir Next", Avenir, "Century Gothic", "SF Pro Display", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", system-ui, sans-serif;
-
-  /* 统一数字字体 - 用于图表标签、轴数字、表格数字对齐 */
   --font-numeric: "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", -apple-system, system-ui, sans-serif;
+
+  /* ---- Primary (蓝) ---- */
+  --c-primary: #1890ff;
+  --c-primary-light: #40a9ff;
+  --c-primary-dark: #096dd9;
+  --c-primary-bg: #e6f7ff;
+  --c-primary-border: #91d5ff;
+  --c-primary-solid: #096dd9;
+  --c-primary-50: #e6f7ff;
+  --c-primary-100: #bae7ff;
+  --c-primary-200: #91d5ff;
+  --c-primary-300: #69c0ff;
+  --c-primary-400: #40a9ff;
+  --c-primary-500: #1890ff;
+  --c-primary-600: #096dd9;
+  --c-primary-700: #0050b3;
+  --c-primary-800: #003a8c;
+  --c-primary-900: #002766;
+
+  /* ---- Success (绿) ---- */
+  --c-success: #52c41a;
+  --c-success-light: #73d13d;
+  --c-success-dark: #389e0d;
+  --c-success-bg: #f6ffed;
+  --c-success-border: #b7eb8f;
+  --c-success-solid: #389e0d;
+
+  /* ---- Warning (橙) ---- */
+  --c-warning: #faad14;
+  --c-warning-light: #ffc53d;
+  --c-warning-dark: #d48806;
+  --c-warning-bg: #fffbe6;
+  --c-warning-border: #ffe58f;
+  --c-warning-solid: #d48806;
+
+  /* ---- Danger (红) ---- */
+  --c-danger: #ff4d4f;
+  --c-danger-light: #ff7875;
+  --c-danger-dark: #d9363e;
+  --c-danger-bg: #fff1f0;
+  --c-danger-border: #ffccc7;
+  --c-danger-solid: #d9363e;
+
+  /* ---- Purple (紫) ---- */
+  --c-purple: #722ed1;
+  --c-purple-light: #9254de;
+  --c-purple-bg: #f9f0ff;
+  --c-purple-border: #d3adf7;
+  --c-purple-solid: #531dab;
+
+  /* ---- Indigo (靛蓝) ---- */
+  --c-indigo: #4f46e5;
+  --c-indigo-light: #6366f1;
+  --c-indigo-bg: #eef2ff;
+  --c-indigo-border: #a5b4fc;
+  --c-indigo-solid: #4338ca;
+
+  /* ---- Sky (天蓝) ---- */
+  --c-sky: #0284c7;
+  --c-sky-light: #38bdf8;
+  --c-sky-bg: #f0f9ff;
+  --c-sky-border: #7dd3fc;
+
+  /* ---- Orange (橙) ---- */
+  --c-orange: #ea580c;
+  --c-orange-light: #f97316;
+  --c-orange-bg: #fff7ed;
+  --c-orange-border: #fdba74;
+  --c-orange-solid: #c2410c;
+
+  /* ---- Amber (琥珀) ---- */
+  --c-amber: #d97706;
+  --c-amber-light: #f59e0b;
+  --c-amber-bg: #fffbeb;
+  --c-amber-border: #fcd34d;
 }
 
-/* Dark 模式全局背景 */
 html.dark {
   color-scheme: dark;
   background-color: #1f1f1f;
+
+  /* ---- Primary ---- */
+  --c-primary: #40a9ff;
+  --c-primary-light: #69c0ff;
+  --c-primary-dark: #1890ff;
+  --c-primary-bg: rgba(9, 109, 217, 0.15);
+  --c-primary-border: rgba(24, 144, 255, 0.35);
+  --c-primary-solid: #1890ff;
+  --c-primary-50: rgba(9, 109, 217, 0.08);
+  --c-primary-100: rgba(9, 109, 217, 0.12);
+  --c-primary-200: rgba(24, 144, 255, 0.25);
+  --c-primary-300: #69c0ff;
+  --c-primary-400: #40a9ff;
+  --c-primary-500: #1890ff;
+  --c-primary-600: #096dd9;
+  --c-primary-700: #0050b3;
+  --c-primary-800: #003a8c;
+  --c-primary-900: #002766;
+
+  /* ---- Success ---- */
+  --c-success: #73d13d;
+  --c-success-light: #95de64;
+  --c-success-dark: #52c41a;
+  --c-success-bg: rgba(56, 158, 13, 0.15);
+  --c-success-border: rgba(82, 196, 26, 0.35);
+  --c-success-solid: #52c41a;
+
+  /* ---- Warning ---- */
+  --c-warning: #ffc53d;
+  --c-warning-light: #ffd666;
+  --c-warning-dark: #faad14;
+  --c-warning-bg: rgba(212, 136, 6, 0.15);
+  --c-warning-border: rgba(250, 173, 20, 0.35);
+  --c-warning-solid: #faad14;
+
+  /* ---- Danger ---- */
+  --c-danger: #ff7875;
+  --c-danger-light: #ffa39e;
+  --c-danger-dark: #ff4d4f;
+  --c-danger-bg: rgba(217, 54, 62, 0.15);
+  --c-danger-border: rgba(255, 77, 79, 0.35);
+  --c-danger-solid: #ff4d4f;
+
+  /* ---- Purple ---- */
+  --c-purple: #9254de;
+  --c-purple-light: #b37feb;
+  --c-purple-bg: rgba(114, 46, 209, 0.15);
+  --c-purple-border: rgba(146, 84, 222, 0.35);
+  --c-purple-solid: #722ed1;
+
+  /* ---- Indigo ---- */
+  --c-indigo: #818cf8;
+  --c-indigo-light: #a5b4fc;
+  --c-indigo-bg: rgba(79, 70, 229, 0.15);
+  --c-indigo-border: rgba(99, 102, 241, 0.35);
+  --c-indigo-solid: #6366f1;
+
+  /* ---- Sky ---- */
+  --c-sky: #38bdf8;
+  --c-sky-light: #7dd3fc;
+  --c-sky-bg: rgba(2, 132, 199, 0.15);
+  --c-sky-border: rgba(56, 189, 248, 0.35);
+
+  /* ---- Orange ---- */
+  --c-orange: #f97316;
+  --c-orange-light: #fb923c;
+  --c-orange-bg: rgba(234, 88, 12, 0.15);
+  --c-orange-border: rgba(249, 115, 22, 0.35);
+  --c-orange-solid: #ea580c;
+
+  /* ---- Amber ---- */
+  --c-amber: #f59e0b;
+  --c-amber-light: #fbbf24;
+  --c-amber-bg: rgba(217, 119, 6, 0.15);
+  --c-amber-border: rgba(245, 158, 11, 0.35);
 }
+
 html.dark body {
   background-color: #1f1f1f;
   color: #f5f5f5;

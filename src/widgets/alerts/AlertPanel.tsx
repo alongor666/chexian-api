@@ -80,7 +80,7 @@ const AlertItem: React.FC<{
           {!alert.resolved && onMarkAsResolved && (
             <button
               onClick={() => onMarkAsResolved(alert.id)}
-              className="text-xs font-medium px-2.5 py-1 text-success dark:text-success-light hover:bg-success-bg dark:hover:bg-green-900/20 rounded-md transition-colors"
+              className="text-xs font-medium px-2.5 py-1 text-success hover:bg-success-bg rounded-md transition-colors"
               title="标记已处理"
             >
               处理
@@ -229,7 +229,7 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({
             {summary.unread > 0 && onMarkAllAsRead && (
               <button
                 onClick={onMarkAllAsRead}
-                className="text-xs font-medium text-primary dark:text-primary-light hover:underline underline-offset-2 transition-all"
+                className="text-xs font-medium text-primary hover:underline underline-offset-2 transition-all"
               >
                 全部已读
               </button>

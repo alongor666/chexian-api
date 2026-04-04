@@ -119,12 +119,12 @@ export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
                 {pendingByOrg.data.map((r: any, i: number) => (
                   <tr key={i} className={tableStyles.row}>
                     <td className={tableStyles.cell}>{r.org ?? ''}</td>
-                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
-                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
-                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.injury_cases ?? 0)}</td>
-                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_pending_days ?? '-'}</td>
-                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular, r.max_pending_days > 365 ? colorClasses.text.danger : '')}>{r.max_pending_days ?? '-'}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.cases ?? 0)}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.reserve_wan ?? 0)}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.avg_reserve ?? 0)}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.injury_cases ?? 0)}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{r.avg_pending_days ?? '-'}</td>
+                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric, r.max_pending_days > 365 ? colorClasses.text.danger : '')}>{r.max_pending_days ?? '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -156,10 +156,10 @@ export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
                   {causeAnalysis.data.slice(0, 10).map((r: any, i: number) => (
                     <tr key={i} className={tableStyles.row}>
                       <td className={tableStyles.cell}>{r.accident_cause ?? ''}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.reserve_wan ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.avg_reserve ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatPercent(r.injury_pct ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.cases ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.reserve_wan ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.avg_reserve ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatPercent(r.injury_pct ?? 0)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -192,13 +192,13 @@ export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
                   {claimCycle.data.map((r: any, i: number) => (
                     <tr key={i} className={tableStyles.row}>
                       <td className={tableStyles.cell}>{r.type ?? ''}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{formatCount(r.cases ?? 0)}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_report_days ?? '-'}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_open_days ?? '-'}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_settle_days ?? '-'}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_pay_days ?? '-'}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.avg_total_days ?? '-'}</td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.tabular)}>{r.median_total_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.cases ?? 0)}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{r.avg_report_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{r.avg_open_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{r.avg_settle_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{r.avg_pay_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{r.avg_total_days ?? '-'}</td>
+                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{r.median_total_days ?? '-'}</td>
                     </tr>
                   ))}
                 </tbody>

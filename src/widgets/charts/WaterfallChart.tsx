@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '../../shared/utils/echarts';
-import { CHART_TEXT_STYLES, GRID_CONFIG, AXIS_SPLIT_LINE } from '../../shared/config/chartStyles';
+import { GRID_CONFIG, AXIS_SPLIT_LINE, getChartTheme } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 import { colorClasses } from '../../shared/styles';
 
 interface WaterfallDataPoint {
@@ -24,7 +25,11 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
   valueFormatter = (val) => val.toString(),
   height = 400,
 }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const option = useMemo(() => {
+    const theme = getChartTheme(isDark);
     // 1. Process Data for Waterfall
     // We need to calculate the "invisible" base for each bar
     // Positive value: base is the sum of previous values
@@ -70,7 +75,7 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
       title: title ? {
         text: title,
         left: 'center',
-        textStyle: CHART_TEXT_STYLES.title,
+        textStyle: theme.chartTextStyles.title,
       } : undefined,
       tooltip: {
         trigger: 'axis',
@@ -89,7 +94,7 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
         data: labels,
         splitLine: AXIS_SPLIT_LINE,
         axisLabel: {
-            ...CHART_TEXT_STYLES.axisLabel,
+            ...theme.chartTextStyles.axisLabel,
             interval: 0,
             rotate: 0,  // 统一水平显示
             formatter: (value: string) => {
@@ -103,11 +108,9 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
       },
       yAxis: {
         type: 'value',
-        splitLine: {
-            lineStyle: { type: 'dashed', color: '#E5E7EB' }
-        },
+        splitLine: { show: false },
         axisLabel: {
-            ...CHART_TEXT_STYLES.axisLabel,
+            ...theme.chartTextStyles.axisLabel,
             formatter: (value: number) => valueFormatter(value),
         }
       },
@@ -139,7 +142,7 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
                 const val = params.value;
                 return val > 0 ? `+${valueFormatter(val)}` : valueFormatter(val);
             },
-            ...CHART_TEXT_STYLES.dynamicLabel
+            ...theme.chartTextStyles.dynamicLabel
           },
           data: values.map((val, idx) => ({
              value: val,
@@ -148,12 +151,12 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
         }
       ]
     };
-  }, [data, title, valueFormatter]);
+  }, [data, title, valueFormatter, isDark]);
 
   if (loading) return <div className={`h-full flex items-center justify-center ${colorClasses.text.neutralMuted}`}>Loading...</div>;
 
   return (
-    <div className="bg-white p-4 rounded shadow h-full">
+    <div className="bg-white dark:bg-neutral-800 p-4 rounded shadow h-full">
       <ReactEChartsCore
         echarts={echarts}
         option={option}

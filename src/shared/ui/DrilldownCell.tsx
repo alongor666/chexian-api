@@ -48,7 +48,7 @@ const PILL_NORMAL = [
 const PILL_CONDITIONAL = [
   colorClasses.border.warning,
   'bg-warning-bg text-warning-dark',
-  'hover:bg-yellow-100 hover:border-warning',
+  'hover:bg-warning-bg hover:border-warning',
 ].join(' ');
 
 // ─── Popover (internal) ─────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ function InlinePopover({
       ref={popoverRef}
       style={style}
       className={cn(
-        'overflow-auto rounded-xl bg-white shadow-lg ring-1 ring-black/5',
+        'overflow-auto rounded-xl bg-white dark:bg-neutral-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10',
         'animate-in fade-in-0 zoom-in-95 duration-150',
       )}
     >

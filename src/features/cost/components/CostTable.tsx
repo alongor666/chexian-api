@@ -46,7 +46,7 @@ function CostTableInner<T extends Record<string, unknown>>({
   const isEmpty = data.length === 0;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm">
       <div className={cn('px-4 py-3 border-b flex flex-wrap justify-between items-center gap-2', colorClasses.border.neutral)}>
         <h3 className={cn('text-base font-medium', colorClasses.text.neutralBlack)}>{title}</h3>
         <div className="flex items-center gap-3">
@@ -55,7 +55,7 @@ function CostTableInner<T extends Record<string, unknown>>({
             {actions}
             <button
               onClick={onExportCSV}
-              className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-sm bg-success-solid text-white rounded hover:bg-success-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isEmpty}
               aria-label={`导出${title}为CSV`}
             >
@@ -63,7 +63,7 @@ function CostTableInner<T extends Record<string, unknown>>({
             </button>
             <button
               onClick={onExportExcel}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-sm bg-primary-solid text-white rounded hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isEmpty}
               aria-label={`导出${title}为Excel`}
             >

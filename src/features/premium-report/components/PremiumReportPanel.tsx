@@ -202,8 +202,8 @@ export const PremiumReportPanel: React.FC = () => {
               onClick={() => setActiveTab(tab.key)}
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
-                  ? `border-blue-500 ${colorClasses.text.primary}`
-                  : `border-transparent ${colorClasses.text.neutralMuted} hover:text-neutral-700 hover:border-neutral-300`
+                  ? `border-primary ${colorClasses.text.primary}`
+                  : `border-transparent ${colorClasses.text.neutralMuted} hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600`
               }`}
             >
               {tab.label}
@@ -233,7 +233,7 @@ export const PremiumReportPanel: React.FC = () => {
           />
 
           {/* 表一：机构保费报表 */}
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
             <div className={`px-4 py-3 border-b ${colorClasses.border.neutral}`}>
               <h3 className={`text-lg font-semibold flex items-center ${colorClasses.text.neutralBlack}`}>
                 <span className="mr-2">🏢</span>
@@ -259,7 +259,7 @@ export const PremiumReportPanel: React.FC = () => {
           </div>
 
           {/* 表二：业务员保费报表 */}
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
             <div className={`px-4 py-3 border-b ${colorClasses.border.neutral}`}>
               <h3 className={`text-lg font-semibold flex items-center ${colorClasses.text.neutralBlack}`}>
                 <span className="mr-2">👤</span>

@@ -326,7 +326,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           name: '件数(件)',
           nameTextStyle: { fontSize: 11, color: colors.neutral[500] },
           max: leftMax,
-          splitLine: { lineStyle: { color: colors.neutral[100] } },
+          splitLine: { show: false },
           axisLabel: { fontSize: 11, color: colors.neutral[500] },
         },
         {
@@ -529,7 +529,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
                 'px-2.5 py-0.5 rounded text-xs font-medium transition-colors',
                 coverage === tab
                   ? 'bg-primary text-white'
-                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                  : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-600'
               )}
             >
               {tab}
@@ -548,7 +548,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
                 'px-2.5 py-0.5 rounded text-xs font-medium transition-colors',
                 region === key
                   ? 'bg-primary text-white'
-                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                  : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-600'
               )}
             >
               {label}
@@ -566,7 +566,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
                 'px-2 py-0.5 rounded text-xs transition-colors',
                 selectedOrg === org
                   ? 'bg-success text-white font-medium'
-                  : 'bg-neutral-50 border border-neutral-200 text-neutral-500 hover:border-neutral-400'
+                  : 'bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 text-neutral-500 dark:text-neutral-400 hover:border-neutral-400'
               )}
             >
               {org}
@@ -579,7 +579,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
       {viewMode === 'chart' ? (
         <div className="relative">
           {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10 rounded">
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-neutral-800/70 z-10 rounded">
               <span className="text-xs text-neutral-400">加载中…</span>
             </div>
           )}
@@ -591,7 +591,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           <div ref={chartRef} style={{ height: 300, width: '100%' }} />
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-neutral-200">
+        <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-700">
           {error && !loading && <div className="p-4 text-xs text-danger">{error}</div>}
           <table className={cn(tableStyles.container, 'w-full border-0 shadow-none')}>
             <thead className={tableStyles.header}>
@@ -632,9 +632,9 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
 
       {/* ── 程序解读摘要 ───────────────────────────────────────────────────── */}
       {(rateDigest || premiumDigest) && !loading && (
-        <div className="mt-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3">
+        <div className="mt-3 rounded-lg border border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-neutral-600">
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
               {getCrossSellTrendDigestHeading(effectiveGranularity, rows.length)}
             </span>
             <span className="ml-auto text-[11px] text-neutral-400">AI 主洞察已上移到页面顶部</span>

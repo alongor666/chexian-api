@@ -40,7 +40,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {/* 总保费 */}
-        <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg px-4 py-3 shadow-sm">
           <div className={`text-xs mb-1 ${colorClasses.text.neutralMuted}`}>总保费</div>
           <div className={cn(numericStyles.kpiPrimary, colorClasses.text.primary)}>
             {formatWanDirect(summary.totalPremium)}
@@ -49,7 +49,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         </div>
 
         {/* 总件数 */}
-        <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg px-4 py-3 shadow-sm">
           <div className={`text-xs mb-1 ${colorClasses.text.neutralMuted}`}>总件数</div>
           <div className={cn(numericStyles.kpiPrimary, colorClasses.text.indigo)}>
             {formatCount(summary.totalPolicies)}
@@ -58,7 +58,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         </div>
 
         {/* 机构数量 */}
-        <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg px-4 py-3 shadow-sm">
           <div className={`text-xs mb-1 ${colorClasses.text.neutralMuted}`}>机构数</div>
           <div className={cn(numericStyles.kpiPrimary, colorClasses.text.success)}>
             {formatCount(summary.orgCount)}
@@ -67,7 +67,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         </div>
 
         {/* 业务员数量 */}
-        <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg px-4 py-3 shadow-sm">
           <div className={`text-xs mb-1 ${colorClasses.text.neutralMuted}`}>业务员数</div>
           <div className={cn(numericStyles.kpiPrimary, colorClasses.text.warning)}>
             {formatCount(summary.salesmanCount)}
@@ -76,7 +76,7 @@ export const PremiumSummaryCard: React.FC<PremiumSummaryCardProps> = ({
         </div>
 
         {/* 平均保费 */}
-        <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg px-4 py-3 shadow-sm">
           <div className={`text-xs mb-1 ${colorClasses.text.neutralMuted}`}>机构平均保费</div>
           <div className={cn(numericStyles.kpiPrimary, colorClasses.text.purple)}>
             {formatWanDirect(summary.avgPremium)}

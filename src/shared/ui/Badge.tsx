@@ -26,10 +26,10 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 
 const variantStyles: Record<BadgeVariant, string> = {
   default: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300',
-  primary: 'bg-primary-bg text-primary-dark dark:bg-primary-900/30 dark:text-primary-300',
-  success: 'bg-success-bg text-success-dark dark:bg-green-900/30 dark:text-green-300',
-  warning: 'bg-warning-bg text-warning-dark dark:bg-yellow-900/30 dark:text-yellow-300',
-  danger: 'bg-danger-bg text-danger-dark dark:bg-red-900/30 dark:text-red-300',
+  primary: 'bg-primary-bg text-primary-dark',
+  success: 'bg-success-bg text-success-dark',
+  warning: 'bg-warning-bg text-warning-dark',
+  danger: 'bg-danger-bg text-danger-dark',
   outline: 'bg-transparent border border-current',
 }
 

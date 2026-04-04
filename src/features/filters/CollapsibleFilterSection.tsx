@@ -36,17 +36,17 @@ export const CollapsibleFilterSection: React.FC<CollapsibleFilterSectionProps> =
   };
 
   return (
-    <div className="border border-neutral-200 rounded-lg bg-white">
+    <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-800">
       <button
         type="button"
         onClick={toggleOpen}
-        className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+        className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700"
         aria-expanded={isOpen}
         aria-controls={`${id}-content`}
       >
         <span>{title}</span>
         <svg
-          className={`h-4 w-4 text-neutral-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 text-neutral-400 dark:text-neutral-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           viewBox="0 0 20 20"
           fill="currentColor"
           aria-hidden="true"

@@ -75,7 +75,7 @@ export function DimensionMatrix({ filters }: Props) {
               className={cn(
                 'px-2 py-1 text-xs rounded-md transition-colors',
                 colorClasses.text.primary,
-                'hover:bg-blue-50 dark:hover:bg-blue-900/20',
+                'hover:bg-primary-bg dark:hover:bg-primary-900/20',
               )}
             >
               {showMore ? '收起' : `更多 (${ALL_DIMENSIONS.length - PRIMARY_COUNT})`}
@@ -109,7 +109,7 @@ export function DimensionMatrix({ filters }: Props) {
                       return (
                         <td key={dim} className="p-1">
                           <div className={cn('rounded-md p-2 text-center', getHeatmapColor(cell.rate))}>
-                            <div className={cn('font-semibold', fontStyles.tabular)}>{cell.rate}%</div>
+                            <div className={cn('font-semibold', fontStyles.numeric)}>{cell.rate}%</div>
                             <div className="text-[10px] opacity-75">{formatCount(cell.count)}</div>
                           </div>
                         </td>
@@ -136,7 +136,7 @@ export function DimensionMatrix({ filters }: Props) {
                       <span className="text-neutral-700 dark:text-neutral-300 truncate mr-2">
                         {row.dim_value ?? '-'}
                       </span>
-                      <span className={cn(fontStyles.tabular, 'font-semibold shrink-0')}>
+                      <span className={cn(fontStyles.numeric, 'font-semibold shrink-0')}>
                         {formatPercent(row.conversion_rate)}
                       </span>
                     </div>

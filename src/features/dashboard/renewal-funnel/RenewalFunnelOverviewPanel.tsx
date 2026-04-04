@@ -151,30 +151,30 @@ export const RenewalFunnelOverviewPanel: React.FC<Props> = ({ filters, onOrgClic
                               {label || '—'}
                             </button>
                           </td>
-                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                             {formatCount(row.total_due ?? 0)}
                           </td>
-                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                             {formatCount(row.total_quoted ?? 0)}
                           </td>
-                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                             {formatCount(row.total_renewed ?? 0)}
                           </td>
-                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                             <RateCell value={row.renewal_rate ?? 0} />
                           </td>
-                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                             {(row.quote_to_renewal_rate ?? 0).toFixed(1)}%
                           </td>
-                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                             {(row.self_retention_rate ?? 0).toFixed(1)}%
                           </td>
-                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                             {(row.p1_count ?? 0) > 0 && (
                               <span className={colorClasses.text.danger}>{row.p1_count}</span>
                             )}
                           </td>
-                          <td className={cn(tableStyles.cellNumeric, fontStyles.tabular)}>
+                          <td className={cn(tableStyles.cellNumeric, fontStyles.numeric)}>
                             {(row.p2_count ?? 0) > 0 && (
                               <span className={colorClasses.text.warning}>{row.p2_count}</span>
                             )}

@@ -129,7 +129,7 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
           formatter: (value: number) => (metric === 'premium' ? formatWanAdaptive(value) : formatCount(value)),
           fontSize: 11,
         },
-        splitLine: { lineStyle: { color: colors.neutral[200] } },
+        splitLine: { show: false },
       },
       series: lineSeries,
     };

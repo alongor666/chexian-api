@@ -158,7 +158,7 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
               onClick={handleClick}
               className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
                 isDragging
-                  ? `border-blue-500 ${colorClasses.bg.primary} dark:bg-blue-900/20`
+                  ? `border-primary ${colorClasses.bg.primary}`
                   : `${colorClasses.border.neutral} dark:border-neutral-600 hover:border-neutral-400 dark:hover:border-neutral-500`
               } ${isLoading ? 'pointer-events-none opacity-50' : ''}`}
             >
@@ -172,7 +172,7 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
 
               {isLoading ? (
                 <div className="flex flex-col items-center">
-                  <Loader2 size={40} className="animate-spin text-blue-500 mb-3" aria-hidden="true" />
+                  <Loader2 size={40} className={`animate-spin ${colorClasses.text.primary} mb-3`} aria-hidden="true" />
                   <p className={colorClasses.text.neutral}>正在上传数据...</p>
                 </div>
               ) : (
@@ -192,16 +192,16 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
             </div>
 
             {error && (
-              <div className={`mt-4 p-3 ${colorClasses.bg.danger} dark:bg-red-900/20 ${colorClasses.border.danger} dark:border-red-800 border rounded-lg`} role="alert">
+              <div className={`mt-4 p-3 ${colorClasses.bg.danger} ${colorClasses.border.danger} border rounded-lg`} role="alert">
                 <div className="flex items-start">
                   <AlertTriangle size={16} className={`${colorClasses.text.danger} mr-2 flex-shrink-0 mt-0.5`} aria-hidden="true" />
-                  <p className={`text-sm ${colorClasses.text.danger} dark:text-red-300`}>{error}</p>
+                  <p className={`text-sm ${colorClasses.text.danger}`}>{error}</p>
                 </div>
               </div>
             )}
 
-            <div className={`mt-4 p-3 ${colorClasses.bg.primary} dark:bg-blue-900/20 ${colorClasses.border.primary} dark:border-blue-800 border rounded-lg`}>
-              <p className={`text-xs ${colorClasses.text.primary} dark:text-blue-300`}>
+            <div className={`mt-4 p-3 ${colorClasses.bg.primary} ${colorClasses.border.primary} border rounded-lg`}>
+              <p className={`text-xs ${colorClasses.text.primary} }`}>
                 <span className="font-semibold">提示：</span>
                 导入成功后将自动跳转到仪表盘页面进行数据分析。
               </p>

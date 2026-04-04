@@ -82,7 +82,7 @@ export const AnalysisYearSelector: React.FC<AnalysisYearSelectorProps> = ({
           onChange={handleYearChange}
           disabled={disabled}
           className={`px-2 py-1 text-xs border rounded ${colorClasses.border.neutral} ${
-            disabled ? 'opacity-50 cursor-not-allowed bg-neutral-100' : 'bg-white cursor-pointer'
+            disabled ? 'opacity-50 cursor-not-allowed bg-neutral-100 dark:bg-neutral-700' : 'bg-white dark:bg-neutral-800 cursor-pointer'
           }`}
           aria-label="选择分析年度"
         >
@@ -113,10 +113,10 @@ export const AnalysisYearSelector: React.FC<AnalysisYearSelectorProps> = ({
           block w-32 px-3 py-2 text-sm
           border border-neutral-300 rounded-md
           shadow-sm focus:outline-none
-          focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+          focus:ring-2 focus:ring-primary focus:border-primary
           transition-colors duration-200
           whitespace-nowrap
-          ${disabled ? 'opacity-50 cursor-not-allowed bg-neutral-100' : 'bg-white cursor-pointer'}
+          ${disabled ? 'opacity-50 cursor-not-allowed bg-neutral-100 dark:bg-neutral-700' : 'bg-white dark:bg-neutral-800 cursor-pointer'}
         `}
         aria-label="选择分析年度"
       >

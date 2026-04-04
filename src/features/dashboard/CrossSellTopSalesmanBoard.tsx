@@ -192,7 +192,7 @@ export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center rounded-lg border border-neutral-200 bg-neutral-50 p-1">
+            <div className="inline-flex items-center rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 p-1">
               {(['主全', '交三'] as CoverageType[]).map((coverage) => (
                 <button
                   key={coverage}
@@ -201,7 +201,7 @@ export const CrossSellTopSalesmanBoard = memo(function CrossSellTopSalesmanBoard
                     buttonStyles.base,
                     'h-8 px-3 text-sm',
                     activeCoverage === coverage
-                      ? 'bg-white text-neutral-900 shadow-sm'
+                      ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm'
                       : 'border-transparent bg-transparent text-neutral-500 hover:text-neutral-700'
                   )}
                 >
@@ -290,7 +290,7 @@ const SalesmanPanel = memo(function SalesmanPanel({
     <div className={cn(cardStyles.base, 'overflow-hidden border border-neutral-200')}>
       <div className="flex flex-col gap-3 border-b border-neutral-100 bg-neutral-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <h4 className={cn(textStyles.body, 'font-semibold text-neutral-800')}>{title}</h4>
-        <div className="inline-flex items-center rounded-lg border border-neutral-200 bg-white p-0.5">
+        <div className="inline-flex items-center rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-0.5">
           <button
             onClick={() => setViewMode('chart')}
             className={cn(
@@ -353,7 +353,7 @@ const SalesmanPanel = memo(function SalesmanPanel({
         {!error && data.length > 0 && viewMode === 'table' && (
           <div className="h-full overflow-auto">
             <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 z-10 border-b border-neutral-200 bg-white shadow-[0_1px_2px_-1px_rgba(0,0,0,0.1)]">
+              <thead className="sticky top-0 z-10 border-b border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-[0_1px_2px_-1px_rgba(0,0,0,0.1)]">
                 <tr>
                   <th className="whitespace-nowrap px-3 py-2.5 font-medium text-neutral-500">业务员</th>
                   <th

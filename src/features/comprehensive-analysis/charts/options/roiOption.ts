@@ -18,18 +18,18 @@ export function buildRoiOption(rows: ComprehensiveRoiRow[]): EChartsOption {
       trigger: 'item',
       formatter: (params: any) => {
         const [outputRatio, marginRate, premiumWan] = params.value as [number, number, number];
-        return `${params.name}<br/>费用产出保费比: ${outputRatio.toFixed(2)}<br/>边际贡献率: ${marginRate.toFixed(2)}%<br/>签单保费: ${premiumWan.toFixed(2)}万`;
+        return `${params.name}<br/>费用产出保费比: ${outputRatio.toFixed(1)}<br/>边际贡献率: ${marginRate.toFixed(1)}%<br/>签单保费: ${Math.round(premiumWan)}万`;
       },
     },
     xAxis: {
       type: 'value',
       name: '费用产出保费比',
-      splitLine: { lineStyle: { color: comprehensiveTheme.palette.splitLine } },
+      splitLine: { show: false },
     },
     yAxis: {
       type: 'value',
       name: '边际贡献率(%)',
-      splitLine: { lineStyle: { color: comprehensiveTheme.palette.splitLine } },
+      splitLine: { show: false },
     },
     series: [
       {

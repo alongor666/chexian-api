@@ -324,12 +324,12 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
             <div key={col.key} className={cn(cardStyles.standard, 'space-y-3 border-neutral-200')}>
               <div className="flex items-center justify-between gap-2">
                 <span className={cn(textStyles.caption, colorClasses.text.neutralDark)}>{col.label}</span>
-                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-500">
+                <span className="rounded-full bg-neutral-100 dark:bg-neutral-700 px-2 py-0.5 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
                   整体
                 </span>
               </div>
               <div className="space-y-1">
-                <div className={cn(numericStyles.kpiPrimary, '!text-[24px]', colorClass || colorClasses.text.neutralBlack)}>
+                <div className={cn(numericStyles.kpiSecondary, colorClass || colorClasses.text.neutralBlack)}>
                   {text}
                 </div>
                 {change ? (
@@ -357,7 +357,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
         </div>
         <table className="w-full">
           <thead>
-            <tr className="border-b border-neutral-200 bg-white">
+            <tr className="border-b border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800">
               <th className={cn('py-3 px-4 text-left font-medium w-28', colorClasses.text.neutralLight)}>
                 险别组合/指标
               </th>
@@ -377,7 +377,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                 key={row.key}
                 className={cn(
                   'border-b border-neutral-100 last:border-b-0',
-                  idx % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'
+                  idx % 2 === 0 ? 'bg-white dark:bg-neutral-800' : 'bg-neutral-50/50 dark:bg-neutral-750'
                 )}
               >
                 <td className="py-4 px-4">
@@ -392,8 +392,7 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
                       <div className="flex flex-col gap-1">
                         <span
                           className={cn(
-                            numericStyles.kpiPrimary,
-                            '!text-[15px]',
+                            'font-kpi text-base font-bold',
                             colorClass || colorClasses.text.neutralBlack
                           )}
                         >

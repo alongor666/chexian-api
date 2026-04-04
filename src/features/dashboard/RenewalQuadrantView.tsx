@@ -147,7 +147,7 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
             min: 0,
             max: (value) => Math.max(100, Math.ceil(value.max / 10) * 10), // X轴最大值自适应，但最小为100
             axisLabel: { formatter: '{value}%' },
-            splitLine: { lineStyle: { color: '#E8E8E8' } },
+            splitLine: { show: false },
         },
         yAxis: {
             type: 'value',
@@ -155,7 +155,7 @@ function buildChartOption(points: QuadrantPoint[]): EChartsOption {
             min: 0,
             max: (value) => Math.max(100, Math.ceil(value.max / 10) * 10), // Y轴最大值自适应
             axisLabel: { formatter: '{value}%' },
-            splitLine: { lineStyle: { color: '#E8E8E8' } },
+            splitLine: { show: false },
         },
         series: [
             ...(['benchmark', 'risk', 'focus', 'observe'] as QuadrantId[]).map((quadrant) => {

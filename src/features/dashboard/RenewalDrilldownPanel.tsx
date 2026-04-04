@@ -67,7 +67,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
   return (
     <div className="space-y-4">
       {/* 面包屑导航 */}
-      <div className="bg-white p-3 rounded-xl shadow-sm mb-4">
+      <div className="bg-white dark:bg-neutral-800 p-3 rounded-xl shadow-sm mb-4">
         <DrilldownBreadcrumb
           path={breadcrumb.map((b): DrilldownBreadcrumbStep => ({
             label: String(b.label),
@@ -109,8 +109,8 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
             <button
               onClick={() => setSelectedDueMonth(null)}
               className={`px-2.5 py-1 text-xs rounded-full transition-colors ${selectedDueMonth === null
-                ? 'bg-blue-600 text-white'
-                : `bg-neutral-100 ${colorClasses.text.neutral} hover:bg-neutral-200`
+                ? 'bg-primary-solid text-white'
+                : `bg-neutral-100 dark:bg-neutral-700 ${colorClasses.text.neutral} hover:bg-neutral-200 dark:hover:bg-neutral-600`
                 }`}
             >
               全部
@@ -120,8 +120,8 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
                 key={m}
                 onClick={() => setSelectedDueMonth(m)}
                 className={`px-2.5 py-1 text-xs rounded-full transition-colors ${selectedDueMonth === m
-                  ? 'bg-blue-600 text-white'
-                  : `bg-neutral-100 ${colorClasses.text.neutral} hover:bg-neutral-200`
+                  ? 'bg-primary-solid text-white'
+                  : `bg-neutral-100 dark:bg-neutral-700 ${colorClasses.text.neutral} hover:bg-neutral-200 dark:hover:bg-neutral-600`
                   }`}
               >
                 {m}月
@@ -154,7 +154,7 @@ export const RenewalDrilldownPanel: React.FC<RenewalDrilldownPanelProps> = ({
 
       {/* 数据表格 */}
       <DrilldownLoadingOverlay loading={loading}>
-        <div className="overflow-x-auto bg-white rounded-xl shadow-sm">
+        <div className="overflow-x-auto bg-white dark:bg-neutral-800 rounded-xl shadow-sm">
           <table className="w-full text-sm">
             <thead>
               <tr className={tableStyles.header}>

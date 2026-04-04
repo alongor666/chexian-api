@@ -220,7 +220,7 @@ export function EnhancedVirtualTable<T extends TableRow>({
   if (loading) {
     return (
       <div
-        className={`${TABLE_CSS_CLASSES.container} bg-white ${className}`}
+        className={`${TABLE_CSS_CLASSES.container} bg-white dark:bg-neutral-800 ${className}`}
         style={{ height }}
       >
         <div className={`h-full flex items-center justify-center ${colorClasses.text.neutralLight}`}>
@@ -237,7 +237,7 @@ export function EnhancedVirtualTable<T extends TableRow>({
   if (sortedAndFilteredData.length === 0) {
     return (
       <div
-        className={`${TABLE_CSS_CLASSES.container} bg-white ${className}`}
+        className={`${TABLE_CSS_CLASSES.container} bg-white dark:bg-neutral-800 ${className}`}
         style={{ height }}
       >
         <div className={TABLE_CSS_CLASSES.emptyCell}>
@@ -254,7 +254,7 @@ export function EnhancedVirtualTable<T extends TableRow>({
   const totalCount = data.length;
 
   return (
-    <div className={`${TABLE_CSS_CLASSES.container} bg-white ${className}`}>
+    <div className={`${TABLE_CSS_CLASSES.container} bg-white dark:bg-neutral-800 ${className}`}>
       {/* 数据统计栏 */}
       <div className={`px-4 py-2 border-b text-xs flex justify-between items-center ${colorClasses.bg.neutral} ${colorClasses.border.neutral} ${colorClasses.text.neutralLight}`}>
         <span>

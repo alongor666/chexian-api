@@ -103,7 +103,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
                   activeTab === tab.key
-                    ? `${colorClasses.text.primary} border-b-2 border-blue-600 ${colorClasses.bg.primary} dark:bg-blue-900/20`
+                    ? `${colorClasses.text.primary} border-b-2 border-primary ${colorClasses.bg.primary}`
                     : `${colorClasses.text.neutral} hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800`
                 }`}
                 role="tab"

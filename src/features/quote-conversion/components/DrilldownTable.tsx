@@ -108,7 +108,13 @@ export function DrilldownTable({ filters }: Props) {
               </tr>
             </thead>
             <tbody>
-              {(data ?? []).map((row) => (
+              {(data ?? []).slice().sort((a, b) => {
+                // 汇总行（"全部"/"合计"等）置顶
+                const isAgg = (name: string) => /合计|汇总|全部|四川分公司/.test(name ?? '');
+                if (isAgg(a.group_name)) return -1;
+                if (isAgg(b.group_name)) return 1;
+                return (a.conversion_rate ?? 0) - (b.conversion_rate ?? 0);
+              }).map((row) => (
                 <tr
                   key={row.group_key}
                   className={`${tableStyles.row} ${currentLevel.level !== 'salesman' ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800' : ''}`}
@@ -119,20 +125,20 @@ export function DrilldownTable({ filters }: Props) {
                       {row.group_name ?? row.group_key}
                     </span>
                   </td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>{formatCount(row.total_quotes)}</td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>{formatCount(row.total_insured)}</td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular} font-medium ${
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_quotes)}</td>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_insured)}</td>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric} font-medium ${
                     row.conversion_rate < avgConversionRate ? colorClasses.text.danger : ''
                   }`}>
                     {formatPercent(row.conversion_rate)}
                   </td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>
                     {row.renewal_rate != null ? formatPercent(row.renewal_rate) : '-'}
                   </td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>
                     {row.switch_rate != null ? formatPercent(row.switch_rate) : '-'}
                   </td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.tabular}`}>
+                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>
                     {row.avg_discount != null ? `${(row.avg_discount * 100).toFixed(1)}%` : '-'}
                   </td>
                 </tr>

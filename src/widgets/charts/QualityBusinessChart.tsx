@@ -5,6 +5,8 @@ import { echarts } from '../../shared/utils/echarts';
 import { formatPercent, formatPremiumWan, formatWanDirect } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 import { cardStyles, cn } from '../../shared/styles';
+import { getChartTheme } from '../../shared/config/chartStyles';
+import { useTheme } from '../../shared/theme';
 
 interface QualityBusinessChartProps {
   title: string;
@@ -47,6 +49,9 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
   startDate,
   endDate,
 }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<ReturnType<typeof echarts.init> | null>(null);
 
@@ -89,6 +94,8 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
       return diffDays > 183;
     })();
 
+    const theme = getChartTheme(isDark);
+
     // Extract data
     const timePeriods = data.map(d => d.time_period);
     const qualityPremiums = data.map(d => d.quality_premium);
@@ -125,6 +132,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
     const option: EChartsOption = {
       title: { text: title, left: 'center' },
       tooltip: {
+        ...theme.tooltipConfig,
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
         formatter: (params: any) => {
@@ -152,6 +160,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
         type: 'category',
         data: timePeriods,
         axisLabel: {
+          ...theme.xAxisConfig.axisLabel,
           rotate: 0,
           interval: 0,
           formatter: (value: string, index: number) => {
@@ -224,7 +233,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
           name: '保费（万元）',
           position: 'left',
           splitLine: { show: false },
-          axisLabel: { formatter: (value: number) => formatPremiumWan(value) },
+          axisLabel: { ...theme.yAxisConfig.axisLabel, formatter: (value: number) => formatPremiumWan(value) },
         },
         {
           type: 'value',
@@ -233,7 +242,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
           splitLine: { show: false },
           min: 0,
           max: 100,
-          axisLabel: { formatter: (value: number) => formatPercent(value) },
+          axisLabel: { ...theme.yAxisConfig.axisLabel, formatter: (value: number) => formatPercent(value) },
         },
       ],
       series: [
@@ -301,7 +310,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
     };
 
     chart.setOption(option, true);
-  }, [data, loading, title, height, timeView, startDate, endDate]);
+  }, [data, loading, title, height, timeView, startDate, endDate, isDark]);
 
   useEffect(() => {
     return () => {

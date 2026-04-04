@@ -33,15 +33,15 @@ export const RenewalPage: React.FC = () => {
       headerRightContent={(actions) => <FilterQuickActions {...actions} />}
     >
       <div className="p-4 space-y-4">
-        <div className="bg-white rounded shadow">
-          <div className="border-b border-neutral-200">
+        <div className="bg-white dark:bg-neutral-800 rounded shadow">
+          <div className="border-b border-neutral-200 dark:border-neutral-700">
             <nav className="flex -mb-px">
               <button
                 onClick={() => setActiveTab('drilldown')}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'drilldown'
                     ? 'border-primary text-primary'
-                    : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
+                    : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600'
                 }`}
               >
                 续保下钻分析
@@ -51,7 +51,7 @@ export const RenewalPage: React.FC = () => {
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'detail'
                     ? 'border-primary text-primary'
-                    : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
+                    : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600'
                 }`}
               >
                 续保明细表

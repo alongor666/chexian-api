@@ -67,7 +67,7 @@ export const ThemeSettings: React.FC = () => {
               onClick={() => setMode(option.mode)}
               className={`w-full flex items-center p-4 rounded-lg border-2 transition-all ${
                 mode === option.mode
-                  ? `border-blue-500 ${colorClasses.bg.primary} dark:bg-blue-900/20`
+                  ? `border-primary ${colorClasses.bg.primary}`
                   : `${colorClasses.border.neutral} hover:border-neutral-300 dark:hover:border-neutral-600`
               }`}
               role="radio"
@@ -80,7 +80,7 @@ export const ThemeSettings: React.FC = () => {
                     {option.label}
                   </span>
                   {mode === option.mode && (
-                    <span className={`ml-2 text-xs px-2 py-0.5 ${colorClasses.bg.primary} dark:bg-blue-800 ${colorClasses.text.primary} dark:text-blue-200 rounded-full`}>
+                    <span className={`ml-2 text-xs px-2 py-0.5 ${colorClasses.bg.primary} ${colorClasses.text.primary} rounded-full`}>
                       当前
                     </span>
                   )}
@@ -113,8 +113,8 @@ export const ThemeSettings: React.FC = () => {
       </div>
 
       {/* 提示信息 */}
-      <div className={`p-3 ${colorClasses.bg.primary} dark:bg-blue-900/20 border ${colorClasses.border.primary} dark:border-blue-800 rounded-lg`}>
-        <p className={`text-xs ${colorClasses.text.primary} dark:text-blue-300`}>
+      <div className={`p-3 ${colorClasses.bg.primary} border ${colorClasses.border.primary} rounded-lg`}>
+        <p className={`text-xs ${colorClasses.text.primary}`}>
           <span className="font-semibold">提示：</span>
           深色模式可以在低光环境下减少眼睛疲劳，并节省OLED屏幕的电量。
         </p>

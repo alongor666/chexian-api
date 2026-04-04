@@ -14,6 +14,12 @@ interface ComprehensiveMetricTableProps<T extends object> {
   columns: Array<ComprehensiveColumn<T>>;
   loading: boolean;
   emptyText?: string;
+  /** 默认排序字段。值为数字时按从小到大；sortOrder='desc' 时从大到小 */
+  sortKey?: keyof T;
+  /** 排序方向，默认 'asc' */
+  sortOrder?: 'asc' | 'desc';
+  /** 汇总行名称匹配关键字（含该关键字的行始终置顶） */
+  summaryKeywords?: string[];
 }
 
 export function ComprehensiveMetricTable<T extends object>({
@@ -22,7 +28,28 @@ export function ComprehensiveMetricTable<T extends object>({
   columns,
   loading,
   emptyText = '暂无数据',
+  sortKey,
+  sortOrder = 'asc',
+  summaryKeywords = ['合计', '汇总', '四川分公司', '整体'],
 }: ComprehensiveMetricTableProps<T>) {
+  const sortedRows = React.useMemo(() => {
+    if (!sortKey) return rows;
+    const keywords = summaryKeywords;
+    return rows.slice().sort((a, b) => {
+      // 找第一列（通常是名称列）做汇总行匹配
+      const firstCol = columns[0]?.key;
+      const aName = firstCol ? String(a[firstCol] ?? '') : '';
+      const bName = firstCol ? String(b[firstCol] ?? '') : '';
+      const isSummaryA = keywords.some((kw) => aName.includes(kw));
+      const isSummaryB = keywords.some((kw) => bName.includes(kw));
+      if (isSummaryA) return -1;
+      if (isSummaryB) return 1;
+      const aVal = Number(a[sortKey] ?? 0);
+      const bVal = Number(b[sortKey] ?? 0);
+      return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+    });
+  }, [rows, sortKey, sortOrder, summaryKeywords, columns]);
+
   return (
     <section className={tableStyles.container}>
       <div className={cn('px-4 py-3 border-b', colorClasses.border.neutral)}>
@@ -59,7 +86,7 @@ export function ComprehensiveMetricTable<T extends object>({
                 </td>
               </tr>
             ) : (
-              rows.slice(0, 20).map((row, idx) => (
+              sortedRows.slice(0, 20).map((row, idx) => (
                 <tr key={idx} className={tableStyles.row}>
                   {columns.map((column) => {
                     const value = row[column.key];

@@ -23,18 +23,18 @@ export function buildLossQuadrantOption(
       trigger: 'item',
       formatter: (params: any) => {
         const [premiumShare, claimShare, claimRatio, premiumWan] = params.value as [number, number, number, number];
-        return `${params.name}<br/>保费贡献度: ${premiumShare.toFixed(2)}%<br/>赔款贡献度: ${claimShare.toFixed(2)}%<br/>满期赔付率: ${claimRatio.toFixed(2)}%<br/>签单保费: ${premiumWan.toFixed(2)}万`;
+        return `${params.name}<br/>保费贡献度: ${premiumShare.toFixed(1)}%<br/>赔款贡献度: ${claimShare.toFixed(1)}%<br/>满期赔付率: ${claimRatio.toFixed(1)}%<br/>签单保费: ${Math.round(premiumWan)}万`;
       },
     },
     xAxis: {
       type: 'value',
       name: '保费贡献度(%)',
-      splitLine: { lineStyle: { color: comprehensiveTheme.palette.splitLine } },
+      splitLine: { show: false },
     },
     yAxis: {
       type: 'value',
       name: '赔款贡献度(%)',
-      splitLine: { lineStyle: { color: comprehensiveTheme.palette.splitLine } },
+      splitLine: { show: false },
     },
     series: [
       {

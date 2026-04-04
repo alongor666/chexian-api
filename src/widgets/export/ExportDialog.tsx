@@ -237,12 +237,12 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
           {/* 进度显示 */}
           {isExporting && progress && (
-            <div className="bg-primary-bg dark:bg-blue-900/20 border border-primary-200 dark:border-blue-800/50 rounded-lg p-4">
+            <div className="bg-primary-bg border border-primary-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-primary-dark dark:text-primary-light">{getProgressText()}</span>
+                <span className="text-sm font-medium text-primary-dark">{getProgressText()}</span>
                 <span className="text-sm font-mono text-primary">{formatPercent(progress.percentage, 0)}</span>
               </div>
-              <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-full h-1.5">
+              <div className="w-full bg-primary-100 rounded-full h-1.5">
                 <div
                   className="bg-primary h-1.5 rounded-full transition-all duration-300"
                   style={{ width: `${progress.percentage}%` }}
@@ -253,7 +253,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
           {/* 错误提示 */}
           {error && (
-            <div className="bg-danger-bg dark:bg-red-900/20 border border-danger-200 dark:border-red-800/50 rounded-lg p-4">
+            <div className="bg-danger-bg border border-danger-200 rounded-lg p-4">
               <div className="flex items-center">
                 <svg
                   className="w-5 h-5 text-danger mr-2 shrink-0"
@@ -268,7 +268,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                     d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                <span className="text-sm font-medium text-danger-dark dark:text-danger-light">{error}</span>
+                <span className="text-sm font-medium text-danger-dark">{error}</span>
               </div>
             </div>
           )}

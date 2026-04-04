@@ -1,4 +1,5 @@
 import { cardStyles, colorClasses, cn } from '../../../shared/styles';
+import { formatPremiumWan } from '../../../shared/utils/formatters';
 import type { QuoteFilters } from '../types';
 
 export function mergeFilters(filters: QuoteFilters, overrides: Partial<QuoteFilters>): QuoteFilters {
@@ -7,7 +8,7 @@ export function mergeFilters(filters: QuoteFilters, overrides: Partial<QuoteFilt
 
 export function computeAveragePremiumWan(totalPremium: number | undefined, totalInsured: number | undefined): string {
   if (!totalPremium || !totalInsured) return '0.00';
-  return (totalPremium / totalInsured / 10000).toFixed(2);
+  return formatPremiumWan(totalPremium / totalInsured);
 }
 
 export function SectionHeading({

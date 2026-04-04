@@ -40,17 +40,17 @@ const scopeConfig: Record<DataScopeType, {
 }> = {
   'full-year': {
     icon: Calendar,
-    bgColor: 'bg-primary-bg dark:bg-blue-900/20',
-    borderColor: 'border-primary-200 dark:border-blue-800',
-    textColor: 'text-primary-dark dark:text-primary-light',
-    iconColor: 'text-primary dark:text-primary-light',
+    bgColor: 'bg-primary-bg',
+    borderColor: 'border-primary-200',
+    textColor: 'text-primary-dark',
+    iconColor: 'text-primary',
   },
   'rolling-window': {
     icon: Clock,
-    bgColor: 'bg-warning-bg dark:bg-yellow-900/20',
-    borderColor: 'border-warning-200 dark:border-yellow-800',
-    textColor: 'text-warning-dark dark:text-warning-light',
-    iconColor: 'text-warning dark:text-warning-light',
+    bgColor: 'bg-warning-bg',
+    borderColor: 'border-warning-200',
+    textColor: 'text-warning-dark',
+    iconColor: 'text-warning',
   },
   'custom': {
     icon: Info,
