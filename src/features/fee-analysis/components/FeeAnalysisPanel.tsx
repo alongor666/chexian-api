@@ -72,7 +72,7 @@ export const FeeAnalysisPanel: React.FC<Props> = ({ filters }) => {
 
       {/* KPI 卡片行 */}
       {summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div id="fee-kpi" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className={cardStyles.base}>
             <div className="text-xs text-neutral-500 mb-1">规则内件数</div>
             <div className={fontStyles.kpi}>{formatCount(summary.total_policy_count - summary.out_of_scope_count)}</div>
@@ -117,7 +117,7 @@ export const FeeAnalysisPanel: React.FC<Props> = ({ filters }) => {
           签单日期 2026-02-25 起暂无符合条件的数据
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div id="fee-detail" className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className={cardStyles.base}>
             <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-3">
               费率分档明细

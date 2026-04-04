@@ -224,16 +224,16 @@ export const PremiumReportPanel: React.FC = () => {
           )}
 
           {/* 保费报表汇总 */}
-          <PremiumSummaryCard
+          <div id="report-summary"><PremiumSummaryCard
             summary={summary}
             dateRange={{
               startDate: reportFilters.startDate,
               endDate: reportFilters.endDate,
             }}
-          />
+          /></div>
 
           {/* 表一：机构保费报表 */}
-          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
+          <div id="report-org" className="bg-white dark:bg-neutral-800 rounded-lg shadow">
             <div className={`px-4 py-3 border-b ${colorClasses.border.neutral}`}>
               <h3 className={`text-lg font-semibold flex items-center ${colorClasses.text.neutralBlack}`}>
                 <span className="mr-2">🏢</span>
@@ -259,7 +259,7 @@ export const PremiumReportPanel: React.FC = () => {
           </div>
 
           {/* 表二：业务员保费报表 */}
-          <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
+          <div id="report-salesman" className="bg-white dark:bg-neutral-800 rounded-lg shadow">
             <div className={`px-4 py-3 border-b ${colorClasses.border.neutral}`}>
               <h3 className={`text-lg font-semibold flex items-center ${colorClasses.text.neutralBlack}`}>
                 <span className="mr-2">👤</span>

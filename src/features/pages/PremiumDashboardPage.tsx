@@ -48,6 +48,11 @@ export const PremiumDashboardPage: React.FC = () => {
       preset="full"
       title="保费分析看板"
       showBasicFilterBar={false}
+      anchorSections={[
+        { id: 'dashboard-kpi', label: 'KPI指标' },
+        { id: 'dashboard-trend', label: '趋势分析' },
+        { id: 'dashboard-table', label: '业务员明细' },
+      ]}
       headerRightContent={(actions) => (
         <FilterQuickActions {...actions}>
           <button

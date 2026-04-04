@@ -165,7 +165,7 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
       </div>
 
       {/* 置顶表格 */}
-      <CoefficientTopTable
+      <div id="coefficient-summary"><CoefficientTopTable
         title="全省商车自主定价系数监控表"
         rows={provinceTop}
         backgroundColor="#e0f2fe"
@@ -179,12 +179,13 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
         regionName="成都"
       />
 
+      </div>
       {/* 图例说明 */}
       <CoefficientLegend />
 
       {/* 周期分表视图 */}
       {viewMode === 'periods' && (
-        <div>
+        <div id="coefficient-detail">
           <h3 className="text-base font-semibold mb-4">当月各周期系数监控</h3>
           {periodGroups.map((group) => (
             <CoefficientPeriodTable
@@ -208,11 +209,11 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
 
       {/* 明细表视图 */}
       {viewMode === 'detail' && (
-        <CoefficientDetailTable
+        <div id="coefficient-detail"><CoefficientDetailTable
           data={data}
           stats={dataStats}
           periodLabels={periodLabels}
-        />
+        /></div>
       )}
     </div>
   );

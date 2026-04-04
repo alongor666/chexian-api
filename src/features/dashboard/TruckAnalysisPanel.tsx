@@ -57,7 +57,7 @@ export const TruckAnalysisPanel: React.FC<TruckAnalysisPanelProps> = ({
           showDescription={false}
         />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div id="truck-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className={cn(cardStyles.standard)}>
           <h3 className={cn(textStyles.titleSmall, "mb-4 text-center")}>吨位分段占比</h3>
           <TonnageRoseChart
@@ -83,7 +83,7 @@ export const TruckAnalysisPanel: React.FC<TruckAnalysisPanelProps> = ({
         </div>
       </div>
 
-      <div className={cn(cardStyles.standard)}>
+      <div id="truck-drilldown" className={cn(cardStyles.standard)}>
         <h3 className={cn(textStyles.titleSmall, "mb-1 text-center")}>
           三级机构营业货车堆叠图（{perspectiveConfig.label}）
         </h3>

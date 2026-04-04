@@ -78,16 +78,20 @@ export const ClaimsDetailPage: React.FC = () => {
       preset="claimsDetail"
       title="赔案明细分析"
       showBasicFilterBar={false}
+      anchorSections={[
+        { id: 'claims-filter', label: '快捷筛选' },
+        { id: 'claims-content', label: '分析内容' },
+      ]}
       headerRightContent={(actions) => (
         <FilterQuickActions {...actions} />
       )}
     >
       {/* 快捷筛选栏 */}
-      <QuickFilterBar
+      <div id="claims-filter"><QuickFilterBar
         filters={quickFilters}
         onChange={setQuickFilters}
         summary={summary}
-      />
+      /></div>
 
       {/* Tab 切换 */}
       <div className="flex gap-1 border-b mb-4">
@@ -108,9 +112,11 @@ export const ClaimsDetailPage: React.FC = () => {
       </div>
 
       {/* Tab 内容 */}
-      {activeTab === 'pending' && <PendingClaimsPanel hook={hook} params={params} />}
-      {activeTab === 'geo' && <GeoRiskPanel hook={hook} params={params} />}
-      {activeTab === 'development' && <LossRatioDevelopmentPanel hook={hook} params={params} />}
+      <div id="claims-content">
+        {activeTab === 'pending' && <PendingClaimsPanel hook={hook} params={params} />}
+        {activeTab === 'geo' && <GeoRiskPanel hook={hook} params={params} />}
+        {activeTab === 'development' && <LossRatioDevelopmentPanel hook={hook} params={params} />}
+      </div>
     </PageFilterPanel>
   );
 };

@@ -11,6 +11,10 @@ export const FeeAnalysisPage: React.FC = () => {
       preset="cost"
       title="费用分析"
       showBasicFilterBar={false}
+      anchorSections={[
+        { id: 'fee-kpi', label: 'KPI指标' },
+        { id: 'fee-detail', label: '费率明细' },
+      ]}
       headerRightContent={(actions) => <FilterQuickActions {...actions} />}
     >
       <div className="p-4">

@@ -11,6 +11,11 @@ export const GrowthPage: React.FC = () => {
       preset="growth"
       title="增长分析"
       showBasicFilterBar={false}
+      anchorSections={[
+        { id: 'growth-control', label: '分析配置' },
+        { id: 'growth-charts', label: '趋势图表' },
+        { id: 'growth-detail', label: '明细数据' },
+      ]}
       headerRightContent={(actions) => <FilterQuickActions {...actions} />}
     >
       <GrowthAnalysisPanel filters={filters} />

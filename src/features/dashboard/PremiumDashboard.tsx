@@ -333,7 +333,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
           </div>
         ) : (
           visibleSections.map((sectionId) => (
-            <React.Fragment key={sectionId}>{sectionContent[sectionId]}</React.Fragment>
+            <div key={sectionId} id={`dashboard-${sectionId}`}>{sectionContent[sectionId]}</div>
           ))
         )}
       </div>

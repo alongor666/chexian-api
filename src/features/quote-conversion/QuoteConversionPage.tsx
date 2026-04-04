@@ -5,6 +5,7 @@ import { GlobalFilters } from './components/GlobalFilters';
 import { VersionSwitcher } from './components/VersionSwitcher';
 import { VersionAView } from './components/VersionAView';
 import { VersionBView } from './components/VersionBView';
+import { DashboardAnchorNav } from '../../components/layout/DashboardAnchorNav';
 import type { QuoteConversionVersion, QuoteFilters } from './types';
 
 function parseVersion(raw: string | null): QuoteConversionVersion {
@@ -32,8 +33,14 @@ export function QuoteConversionPage() {
   );
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-[1400px] mx-auto">
-      <div className="space-y-3">
+    <div className="relative p-4 md:p-6 space-y-5 max-w-[1400px] mx-auto">
+      <DashboardAnchorNav
+        sections={[
+          { id: 'quote-filters', label: '筛选配置' },
+          { id: 'quote-content', label: '分析内容' },
+        ]}
+      />
+      <div id="quote-filters" className="space-y-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className={`text-lg font-bold ${colorClasses.text.neutralBlack}`}>
@@ -50,7 +57,9 @@ export function QuoteConversionPage() {
 
       <GlobalFilters version={version} filters={filters} onChange={setFilters} />
 
-      {version === 'A' ? <VersionAView filters={filters} /> : <VersionBView filters={filters} />}
+      <div id="quote-content">
+        {version === 'A' ? <VersionAView filters={filters} /> : <VersionBView filters={filters} />}
+      </div>
     </div>
   );
 }

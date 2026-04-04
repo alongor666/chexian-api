@@ -8,6 +8,11 @@ export const ReportsPage: React.FC = () => {
       preset="report"
       title="保费达成"
       showBasicFilterBar={false}
+      anchorSections={[
+        { id: 'report-summary', label: '汇总' },
+        { id: 'report-org', label: '机构报表' },
+        { id: 'report-salesman', label: '业务员报表' },
+      ]}
       headerRightContent={(actions) => <FilterQuickActions {...actions} />}
     >
       <div className="p-4">

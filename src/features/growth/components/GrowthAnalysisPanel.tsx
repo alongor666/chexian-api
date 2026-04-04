@@ -346,7 +346,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
 
   return (
     <div className="growth-analysis-panel">
-      <GrowthAnalysisControlPanel
+      <div id="growth-control"><GrowthAnalysisControlPanel
         analysisType={analysisType}
         onAnalysisTypeChange={setAnalysisType}
         growthType={growthType}
@@ -357,7 +357,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
         onComparisonGroupByChange={setComparisonGroupBy}
         perspective={perspective}
         onPerspectiveChange={setPerspective}
-      />
+      /></div>
 
       {/* 筛选条件提示 */}
       {filterDescription && (
@@ -394,7 +394,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
 
       {/* 增长率图表 - 仅在非详情模式和非对比模式下显示 */}
       {!isDailyDetailMode && analysisType !== 'comparison' && (
-        <div style={{ marginBottom: '24px' }}>
+        <div id="growth-charts" style={{ marginBottom: '24px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
             <div>
               <h3 style={{ marginBottom: '16px' }}>
@@ -425,7 +425,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
       {/* 月份切换标签页 */}
       {isDailyDetailMode && <GrowthMonthTabs selectedMonth={selectedMonth} onSelectMonth={setSelectedMonth} />}
 
-      <GrowthDetailSection
+      <div id="growth-detail"><GrowthDetailSection
         analysisType={analysisType}
         displayData={displayData}
         data={data}
@@ -437,7 +437,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
         unitLabel={unitLabel}
         formatValueNoUnit={formatValueNoUnit}
         onDownload={handleDownload}
-      />
+      /></div>
 
       {/* 无数据提示 */}
       {!loading && displayData.length === 0 && (

@@ -11,6 +11,10 @@ export const CoefficientPage: React.FC = () => {
       preset="coefficient"
       title="系数监控"
       showBasicFilterBar={false}
+      anchorSections={[
+        { id: 'coefficient-summary', label: '汇总监控' },
+        { id: 'coefficient-detail', label: '分期明细' },
+      ]}
       headerRightContent={(actions) => <FilterQuickActions {...actions} />}
     >
       <div className="p-4">

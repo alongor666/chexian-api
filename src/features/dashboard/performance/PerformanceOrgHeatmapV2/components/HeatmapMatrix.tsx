@@ -105,8 +105,7 @@ export function HeatmapMatrix({
         style={{ background: 'transparent', border: 'none' }}
       >
         <table
-          className="w-full text-xs border-separate border-spacing-1"
-          style={{ minWidth: `${100 + dates.length * 72}px` }}
+          className="w-full text-xs border-separate border-spacing-1 table-fixed"
         >
           <thead>
             <tr>
@@ -116,7 +115,7 @@ export function HeatmapMatrix({
                   stickyTableStyles.firstColumnHeader,
                   colorClasses.text.neutralDark,
                 )}
-                style={{ background: stickyBg }}
+                style={{ background: stickyBg, width: '100px' }}
               >
                 {dimensionLabel}
               </th>
@@ -189,7 +188,7 @@ export function HeatmapMatrix({
                       {formatDimensionLabel(org, groupByDimension)}
                     </td>
                     {dates.map((date) => (
-                      <td key={`${org}-${date}`} className="p-0.5 min-w-[84px]">
+                      <td key={`${org}-${date}`} className="p-0.5">
                         <HeatmapCell
                           org={org}
                           date={date}

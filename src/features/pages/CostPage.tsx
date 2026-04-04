@@ -38,6 +38,10 @@ export const CostPage: React.FC = () => {
       preset="cost"
       title="成本分析"
       showBasicFilterBar={false}
+      anchorSections={[
+        { id: 'cost-control', label: '分析配置' },
+        { id: 'cost-content', label: '分析内容' },
+      ]}
       headerRightContent={(actions) => (
         <FilterQuickActions {...actions}>
           {enableComprehensiveAnalysis && (

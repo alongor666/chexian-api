@@ -113,7 +113,7 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
   };
 
   return (
-    <div ref={panelRef} className="fixed top-20 right-6 z-30 print:hidden">
+    <div ref={panelRef} className="absolute top-4 right-4 z-20 print:hidden">
       {/* 展开面板 */}
       {isOpen && (
         <div className={cn(cardStyles.standard, 'w-56 space-y-3 shadow-lg')}>

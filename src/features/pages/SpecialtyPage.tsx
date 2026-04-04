@@ -37,6 +37,16 @@ const CROSS_SELL_ANCHORS = [
   { id: 'cross-sell-top20', label: 'TOP20', shortLabel: 'TOP20' },
 ] as const;
 
+const RENEWAL_ANCHORS = [
+  { id: 'renewal-guide', label: '口径说明' },
+  { id: 'renewal-table', label: '续保明细' },
+];
+
+const TRUCK_ANCHORS = [
+  { id: 'truck-charts', label: '占比分析' },
+  { id: 'truck-drilldown', label: '堆叠下钻' },
+];
+
 export const SpecialtyPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as SpecialtyTab) || 'cross-sell';
@@ -132,7 +142,11 @@ export const SpecialtyPage: React.FC = () => {
     <PageFilterPanel
       preset={presetMap[activeTab]}
       title={titleMap[activeTab]}
-      anchorSections={activeTab === 'cross-sell' ? [...CROSS_SELL_ANCHORS] : undefined}
+      anchorSections={
+        activeTab === 'cross-sell' ? [...CROSS_SELL_ANCHORS]
+        : activeTab === 'renewal' ? RENEWAL_ANCHORS
+        : TRUCK_ANCHORS
+      }
       showBasicFilterBar={false}
       headerRightContent={renderHeaderControls}
     >

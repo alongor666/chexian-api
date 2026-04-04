@@ -440,7 +440,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
   return (
     <div className="space-y-4">
       {/* 控制面板 */}
-      <CostAnalysisControlPanel
+      <div id="cost-control"><CostAnalysisControlPanel
         activeSubTab={activeSubTab}
         onSubTabChange={handleSubTabChange}
         dimension={dimension}
@@ -448,7 +448,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
         cutoffDate={cutoffDate}
         onCutoffDateChange={setCutoffDate}
         monthEndOptions={monthEndOptions}
-      />
+      /></div>
 
       {/* 已赚保费 tab 的数据范围提示 */}
       {activeSubTab === 'earned' && (
@@ -470,7 +470,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
       )}
 
       {/* 表格内容 */}
-      {renderTableContent()}
+      <div id="cost-content">{renderTableContent()}</div>
     </div>
   );
 };

@@ -55,7 +55,7 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
   return (
     <div className="space-y-6">
       {/* 口径提示 */}
-      <div className={cn(colorClasses.bg.primary, "border-l-4", colorClasses.border.primary, "p-4 rounded")}>
+      <div id="renewal-guide" className={cn(colorClasses.bg.primary, "border-l-4", colorClasses.border.primary, "p-4 rounded")}>
         <div className="flex items-start">
           <span className={cn(colorClasses.text.primary, "text-xl mr-3")}>ℹ️</span>
           <div>
@@ -131,7 +131,7 @@ export const RenewalAnalysisPanel: React.FC<RenewalAnalysisPanelProps> = ({
       )}
 
       {/* 续保明细表格 */}
-      <div className={cn(cardStyles.standard)}>
+      <div id="renewal-table" className={cn(cardStyles.standard)}>
         <h3 className={cn(textStyles.titleMedium, "mb-4")}>
           续保明细表格（{targetYear}年{selectedMonth}月，{perspectiveConfig.label}视角）
         </h3>
