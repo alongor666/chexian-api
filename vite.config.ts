@@ -81,6 +81,8 @@ export default defineConfig({
       // ─────────────────────────────────────────────────────────────
       'server/src/services/__tests__/duckdb-*.test.ts',
       'tests/parquet-processing.test.ts',
+      'tests/duckdb-perf-optimization.test.ts',
+      'server/src/sql/__tests__/quote-conversion.test.ts',
     ],
     browser: {
       enabled: false,
