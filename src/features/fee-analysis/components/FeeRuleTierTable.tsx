@@ -22,7 +22,7 @@ function getInsuranceBadge(label: string) {
   }
   if (label === '商业险') {
     return (
-      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 ${colorClasses.text.warning}`}>
+      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-warning-bg ${colorClasses.text.warning}`}>
         商业
       </span>
     );

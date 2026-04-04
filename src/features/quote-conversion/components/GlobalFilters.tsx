@@ -110,7 +110,7 @@ export function GlobalFilters({ version, filters, onChange }: Props) {
             {topicFilterSummaries.map((summary) => (
               <span
                 key={summary}
-                className={`inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium ${colorClasses.text.warning}`}
+                className={`inline-flex items-center rounded-full bg-warning-bg px-2 py-1 text-[11px] font-medium ${colorClasses.text.warning}`}
               >
                 {summary}
               </span>

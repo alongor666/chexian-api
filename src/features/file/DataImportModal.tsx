@@ -205,7 +205,7 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
                 <span className="font-semibold">提示：</span>
                 导入成功后将自动跳转到仪表盘页面进行数据分析。
               </p>
-              <p className={`text-xs ${colorClasses.text.primary} dark:text-blue-300 mt-2`}>
+              <p className={`text-xs ${colorClasses.text.primary} mt-2`}>
                 <span className="font-semibold">文件要求：</span>
                 支持标准 Parquet 格式，建议使用 Snappy 或未压缩格式。
                 如果遇到 Snappy 解压失败，请检查文件是否损坏或尝试使用其他压缩格式。

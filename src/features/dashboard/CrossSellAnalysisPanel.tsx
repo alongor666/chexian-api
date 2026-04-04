@@ -137,7 +137,7 @@ function DimensionPicker({
         </div>
         <button
           onClick={onCancel}
-          className={`mt-4 w-full px-4 py-2 text-sm ${colorClasses.text.neutralMuted} hover:text-gray-700 transition-colors`}
+          className={`mt-4 w-full px-4 py-2 text-sm ${colorClasses.text.neutralMuted} hover:text-neutral-700 transition-colors`}
         >
           取消
         </button>

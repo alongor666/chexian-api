@@ -276,9 +276,9 @@ export const TABLE_CSS_CLASSES = {
   /** 表体容器 */
   tbody: 'bg-white dark:bg-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-700',
   /** 数据行 */
-  row: 'hover:bg-primary-bg dark:hover:bg-blue-900/20 transition-colors',
+  row: 'hover:bg-primary-bg transition-colors',
   /** 数据行（交替色，可选） */
-  rowAlt: 'bg-neutral-50 dark:bg-neutral-700/50 hover:bg-primary-bg dark:hover:bg-blue-900/20 transition-colors',
+  rowAlt: 'bg-neutral-50 dark:bg-neutral-700/50 hover:bg-primary-bg transition-colors',
   /** 单元格（左对齐） */
   cell: 'px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100',
   /** 单元格（右对齐，用于数字） */
@@ -292,7 +292,7 @@ export const TABLE_CSS_CLASSES = {
   /** 增长率单元格（负向） */
   cellGrowthNegative: 'px-4 py-3 text-sm text-right font-tabular font-medium text-danger',
   /** 汇总行 */
-  summaryRow: 'bg-warning-bg font-semibold hover:bg-yellow-100 transition-colors',
+  summaryRow: 'bg-warning-bg font-semibold hover:bg-warning-bg/80 transition-colors',
   /** 汇总单元格 */
   summaryCell: 'px-4 py-3 text-sm text-neutral-800 dark:text-neutral-200 font-semibold',
   /** 空数据提示 */

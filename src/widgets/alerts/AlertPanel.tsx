@@ -71,7 +71,7 @@ const AlertItem: React.FC<{
           {!alert.read && onMarkAsRead && (
             <button
               onClick={() => onMarkAsRead(alert.id)}
-              className="text-xs font-medium px-2.5 py-1 text-primary hover:bg-primary-bg dark:hover:bg-blue-900/20 rounded-md transition-colors"
+              className="text-xs font-medium px-2.5 py-1 text-primary hover:bg-primary-bg rounded-md transition-colors"
               title="标记已读"
             >
               已读
@@ -166,7 +166,7 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({
                 onRefresh();
               }}
               disabled={loading}
-              className="p-1.5 text-neutral-500 hover:text-primary dark:hover:text-primary-light hover:bg-primary-bg dark:hover:bg-blue-900/20 rounded-md disabled:opacity-50 transition-colors"
+              className="p-1.5 text-neutral-500 hover:text-primary hover:bg-primary-bg rounded-md disabled:opacity-50 transition-colors"
               title="刷新预警"
             >
               <svg

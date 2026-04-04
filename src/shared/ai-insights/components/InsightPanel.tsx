@@ -56,7 +56,7 @@ export const InsightPanel = memo(function InsightPanel({
     <div
       className={cn(
         'bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20',
-        'rounded-lg border border-indigo-200',
+        'rounded-lg border border-indigo-border',
         className
       )}
     >
@@ -157,7 +157,7 @@ export const InsightPanel = memo(function InsightPanel({
 
           {/* 操作按钮 */}
           {!loading && (
-            <div className="flex items-center justify-between pt-2 border-t border-indigo-200/50">
+            <div className="flex items-center justify-between pt-2 border-t border-indigo-border">
               <div className="text-xs text-neutral-500 dark:text-neutral-400">
                 {hasInsights
                   ? '基于当前页面数据生成'

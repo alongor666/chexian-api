@@ -398,7 +398,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                     )
                   )
                 }
-                className={`text-[10px] font-medium px-1.5 py-0.5 border rounded hover:bg-indigo-100 transition-colors ${colorClasses.bg.indigo} ${colorClasses.text.indigo} ${colorClasses.border.indigo}`}
+                className={`text-[10px] font-medium px-1.5 py-0.5 border rounded hover:bg-indigo-bg transition-colors ${colorClasses.bg.indigo} ${colorClasses.text.indigo} ${colorClasses.border.indigo}`}
                 aria-label="筛选异地机构"
               >
                 异地
@@ -414,7 +414,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                     )
                   )
                 }
-                className={`text-[10px] font-medium px-1.5 py-0.5 border rounded hover:bg-sky-100 transition-colors ${colorClasses.bg.sky} ${colorClasses.text.sky} ${colorClasses.border.sky}`}
+                className={`text-[10px] font-medium px-1.5 py-0.5 border rounded hover:bg-sky-bg transition-colors ${colorClasses.bg.sky} ${colorClasses.text.sky} ${colorClasses.border.sky}`}
                 aria-label="筛选同城机构"
               >
                 同城
@@ -606,7 +606,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                       )
                     )
                   }
-                  className={`text-xs font-medium px-2.5 py-1.5 border rounded-md hover:bg-indigo-100 transition-colors ${colorClasses.bg.indigo} ${colorClasses.text.indigo} ${colorClasses.border.indigo}`}
+                  className={`text-xs font-medium px-2.5 py-1.5 border rounded-md hover:bg-indigo-bg transition-colors ${colorClasses.bg.indigo} ${colorClasses.text.indigo} ${colorClasses.border.indigo}`}
                   aria-label="筛选异地机构"
                 >
                   异地
@@ -622,7 +622,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
                       )
                     )
                   }
-                  className={`text-xs font-medium px-2.5 py-1.5 border rounded-md hover:bg-sky-100 transition-colors ${colorClasses.bg.sky} ${colorClasses.text.sky} ${colorClasses.border.sky}`}
+                  className={`text-xs font-medium px-2.5 py-1.5 border rounded-md hover:bg-sky-bg transition-colors ${colorClasses.bg.sky} ${colorClasses.text.sky} ${colorClasses.border.sky}`}
                   aria-label="筛选同城机构"
                 >
                   同城

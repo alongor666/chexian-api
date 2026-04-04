@@ -531,7 +531,7 @@ const FilterChips: React.FC<{ filters: ExtractedFilters }> = ({ filters }) => {
       {chips.map((chip, i) => (
         <span
           key={i}
-          className={`inline-flex items-center px-2 py-0.5 text-[11px] rounded-full ${colorClasses.bg.primary} dark:bg-blue-900/30 ${colorClasses.text.primary} dark:text-blue-300`}
+          className={`inline-flex items-center px-2 py-0.5 text-[11px] rounded-full ${colorClasses.bg.primary} ${colorClasses.text.primary}`}
         >
           {chip}
         </span>

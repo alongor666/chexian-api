@@ -181,7 +181,7 @@ export const UserLoginPanel: React.FC = () => {
             {/* 管理员快捷登录 */}
             <button
               onClick={() => handleLogin('admin')}
-              className={`w-full flex items-center justify-between p-3 ${colorClasses.bg.purple} hover:bg-purple-bg dark:hover:bg-purple-900/40 rounded-lg border ${colorClasses.border.purple} transition-colors`}
+              className={`w-full flex items-center justify-between p-3 ${colorClasses.bg.purple} hover:bg-purple-bg rounded-lg border ${colorClasses.border.purple} transition-colors`}
             >
               <div className="flex items-center">
                 <Shield size={20} className={`${colorClasses.text.purple} mr-3`} aria-hidden="true" />

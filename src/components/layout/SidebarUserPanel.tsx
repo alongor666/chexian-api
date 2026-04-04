@@ -139,7 +139,7 @@ export const SidebarUserPanel: React.FC = () => {
         <div className="border-t border-neutral-200 dark:border-neutral-700 p-1">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger-bg dark:hover:bg-red-900/20 rounded transition-colors"
+            className="w-full flex items-center px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger-bg rounded transition-colors"
           >
             <LogOut size={14} className="mr-2" aria-hidden="true" />
             登出
