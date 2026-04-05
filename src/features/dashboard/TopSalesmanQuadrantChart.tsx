@@ -150,6 +150,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             },
             xAxis: {
                 type: 'value',
+                splitLine: { show: false },
                 name: '推介率',
                 nameLocation: 'middle',
                 nameGap: 30,
@@ -160,11 +161,11 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                     formatter: '{value}%',
                     color: isDark ? '#a3a3a3' : colors.neutral[500],
                 },
-                splitLine: { show: false },
                 axisLine: { show: true, lineStyle: { color: isDark ? 'rgba(255,255,255,0.08)' : colors.neutral[200] } },
             },
             yAxis: {
                 type: 'value',
+                splitLine: { show: false },
                 name: '驾意件均',
                 nameLocation: 'middle',
                 nameGap: 50,
@@ -175,7 +176,6 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                     formatter: '{value}',
                     color: isDark ? '#a3a3a3' : colors.neutral[500],
                 },
-                splitLine: { show: false },
                 axisLine: { show: true, lineStyle: { color: isDark ? 'rgba(255,255,255,0.08)' : colors.neutral[200] } },
             },
             series: [
