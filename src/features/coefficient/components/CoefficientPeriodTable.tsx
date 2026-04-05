@@ -56,15 +56,15 @@ const formatPremium = (val: number | null | undefined): string => {
   return formatPremiumWan(val) + '万';
 };
 
-// 获取行背景色
-const getRowBackground = (row: CoefficientRow): string => {
+// 获取行背景色（Tailwind 类名，支持 dark mode）
+const getRowBackgroundClass = (row: CoefficientRow): string => {
   if (row.orgLevel3 === '成都') {
-    return '#fff3cd';
+    return 'bg-amber-50 dark:bg-amber-900/20';
   }
   if (row.orgLevel3 === '全省') {
-    return '#e0f2fe';
+    return 'bg-sky-50 dark:bg-sky-900/20';
   }
-  return '#ffffff';
+  return 'bg-white dark:bg-neutral-800';
 };
 
 // 获取合规状态样式
@@ -106,8 +106,7 @@ interface TableRowProps {
 const TableRow = memo<TableRowProps>(({ row, index }) => (
   <tr
     key={`${row.orgLevel3}-${row.isNev}-${row.customerCategoryGroup}-${row.isNewCar}-${row.scenario}-${index}`}
-    className={TABLE_CSS_CLASSES.row}
-    style={{ backgroundColor: getRowBackground(row) }}
+    className={`${TABLE_CSS_CLASSES.row} ${getRowBackgroundClass(row)}`}
   >
     <td className={`${TABLE_CSS_CLASSES.cell} font-medium`}>{row.orgLevel3}</td>
     <td className={`${TABLE_CSS_CLASSES.cell} text-center`}>

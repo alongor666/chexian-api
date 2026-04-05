@@ -24,8 +24,8 @@ interface CoefficientTopTableProps {
   title: string;
   /** 数据行 */
   rows: CoefficientRow[];
-  /** 行背景色 */
-  backgroundColor: string;
+  /** 行背景色（Tailwind 类名） */
+  backgroundClass: string;
   /** 地域显示名称 */
   regionName: string;
 }
@@ -36,21 +36,21 @@ interface CoefficientTopTableProps {
 export const CoefficientTopTable = memo<CoefficientTopTableProps>(({
   title,
   rows,
-  backgroundColor,
+  backgroundClass,
   regionName,
 }) => {
   if (rows.length === 0) {
     return (
       <div className="mb-6">
         <h3 className="text-base font-semibold mb-2">{title}</h3>
-        <div className="text-sm text-neutral-500 py-4 text-center">暂无数据</div>
+        <div className="text-sm text-neutral-500 dark:text-neutral-400 py-4 text-center">暂无数据</div>
       </div>
     );
   }
 
   return (
     <div className="mb-6">
-      <h3 className="text-base font-semibold mb-2">{title}</h3>
+      <h3 className="text-base font-semibold mb-2 dark:text-neutral-100">{title}</h3>
       <div className={TABLE_CSS_CLASSES.container}>
         <table className={TABLE_CSS_CLASSES.table}>
           <thead className={TABLE_CSS_CLASSES.thead}>
@@ -74,8 +74,7 @@ export const CoefficientTopTable = memo<CoefficientTopTableProps>(({
             {rows.slice().sort((a, b) => (a.weekFactor ?? 0) - (b.weekFactor ?? 0)).map((row, index) => (
               <tr
                 key={`${regionName}-${row.isNev}-${row.customerCategoryGroup}-${row.isNewCar}-${row.scenario}-${index}`}
-                className={TABLE_CSS_CLASSES.row}
-                style={{ backgroundColor }}
+                className={`${TABLE_CSS_CLASSES.row} ${backgroundClass}`}
               >
                 <td className={`${TABLE_CSS_CLASSES.cell} font-medium`}>{regionName}</td>
                 <td className={`${TABLE_CSS_CLASSES.cell} text-center`}>

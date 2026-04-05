@@ -72,16 +72,16 @@ export const getComplianceStyle = (isCompliant: boolean | null): CSSProperties =
 };
 
 /**
- * 获取行背景色
+ * 获取行背景色（Tailwind 类名，支持 dark mode）
  */
-export const getRowBackground = (row: CoefficientRow): string => {
+export const getRowBackgroundClass = (row: CoefficientRow): string => {
   if (row.orgLevel3 === '成都') {
-    return '#fff3cd'; // 黄色背景
+    return 'bg-amber-50 dark:bg-amber-900/20';
   }
   if (row.orgLevel3 === '全省') {
-    return '#e0f2fe'; // 蓝色背景
+    return 'bg-sky-50 dark:bg-sky-900/20';
   }
-  return 'white';
+  return 'bg-white dark:bg-neutral-800';
 };
 
 /**

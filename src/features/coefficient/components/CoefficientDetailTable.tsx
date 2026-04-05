@@ -16,7 +16,7 @@ import {
   formatGapPremium,
   getGapPremiumStyle,
   getComplianceStyle,
-  getRowBackground,
+  getRowBackgroundClass,
   getCarAgeLabel,
   formatPeriodType,
 } from '../utils/formatters';
@@ -76,12 +76,11 @@ const VirtualRow = memo<VirtualRowProps>(({ index, style, data }) => {
   const row = data[index];
   return (
     <div
+      className={`${getRowBackgroundClass(row)} border-b border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100`}
       style={{
         ...style,
         display: 'flex',
         alignItems: 'center',
-        backgroundColor: getRowBackground(row),
-        borderBottom: '1px solid #e5e7eb',
       }}
     >
       <div style={{ width: COLUMN_WIDTHS.org, padding: '0 8px', fontWeight: 500 }}>
@@ -135,7 +134,7 @@ const VirtualRow = memo<VirtualRowProps>(({ index, style, data }) => {
       >
         {row.isCompliant === null ? '待定' : row.isCompliant ? '合规' : '超限'}
       </div>
-      <div style={{ width: COLUMN_WIDTHS.periodType, padding: '0 8px', textAlign: 'center', fontSize: '12px', color: '#6b7280' }}>
+      <div className="text-neutral-500 dark:text-neutral-400" style={{ width: COLUMN_WIDTHS.periodType, padding: '0 8px', textAlign: 'center', fontSize: '12px' }}>
         {formatPeriodType(row.periodType)}
       </div>
     </div>
@@ -153,8 +152,7 @@ interface DetailTableRowProps {
 const DetailTableRow = memo<DetailTableRowProps>(({ row, index }) => (
   <tr
     key={`${row.orgLevel3}-${row.isNev}-${row.customerCategoryGroup}-${row.isNewCar}-${index}`}
-    className={TABLE_CSS_CLASSES.row}
-    style={{ backgroundColor: getRowBackground(row) }}
+    className={`${TABLE_CSS_CLASSES.row} ${getRowBackgroundClass(row)}`}
   >
     <td className={`${TABLE_CSS_CLASSES.cell} font-medium`}>{row.orgLevel3}</td>
     <td className={`${TABLE_CSS_CLASSES.cell} text-center`}>
@@ -203,12 +201,11 @@ DetailTableRow.displayName = 'DetailTableRow';
 // ========== 表头组件（虚拟滚动版） ==========
 const VirtualTableHeader = memo(() => (
   <div
+    className="bg-neutral-50 dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300"
     style={{
       display: 'flex',
       alignItems: 'center',
       height: HEADER_HEIGHT,
-      backgroundColor: '#f9fafb',
-      borderBottom: '1px solid #e5e7eb',
       fontWeight: 500,
       fontSize: '14px',
     }}
@@ -277,7 +274,7 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
     <div>
       {useVirtualScroll ? (
         // 虚拟滚动表格
-        <div className="border border-neutral-200 rounded-lg overflow-hidden">
+        <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden">
           <div style={{ minWidth: totalWidth, overflowX: 'auto' }}>
             <VirtualTableHeader />
             <List
@@ -290,7 +287,7 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
               {renderVirtualRow}
             </List>
           </div>
-          <div className="px-3 py-2 bg-neutral-50 text-xs text-neutral-500 border-t">
+          <div className="px-3 py-2 bg-neutral-50 dark:bg-neutral-800 text-xs text-neutral-500 dark:text-neutral-400 border-t border-neutral-200 dark:border-neutral-700">
             显示 {Math.min(Math.floor(virtualListHeight / ROW_HEIGHT), data.length)} / {data.length} 行（虚拟滚动）
           </div>
         </div>
@@ -328,7 +325,7 @@ export const CoefficientDetailTable = memo<CoefficientDetailTableProps>(({
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap justify-between gap-2 text-sm text-neutral-500">
+      <div className="mt-4 flex flex-wrap justify-between gap-2 text-sm text-neutral-500 dark:text-neutral-400">
         <div>
           共 {stats.total} 条记录 | 合规 {stats.compliant} 条 | 超限{' '}
           {stats.exceeded} 条 | 待定 {stats.pending} 条

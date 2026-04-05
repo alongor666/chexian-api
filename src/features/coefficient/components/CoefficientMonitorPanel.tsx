@@ -168,14 +168,14 @@ export const CoefficientMonitorPanel: React.FC<CoefficientMonitorPanelProps> = (
       <div id="coefficient-summary"><CoefficientTopTable
         title="全省商车自主定价系数监控表"
         rows={provinceTop}
-        backgroundColor="#e0f2fe"
+        backgroundClass="bg-sky-50 dark:bg-sky-900/20"
         regionName="全省"
       />
 
       <CoefficientTopTable
         title="成都商车自主定价系数监控表"
         rows={chengduTop}
-        backgroundColor="#fff3cd"
+        backgroundClass="bg-amber-50 dark:bg-amber-900/20"
         regionName="成都"
       />
 
