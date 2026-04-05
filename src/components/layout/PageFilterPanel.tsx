@@ -353,7 +353,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div id={contentScrollId} className="h-full flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-[1680px] p-4 lg:p-5">
+          <div className={cn("mx-auto max-w-[1680px] p-4 lg:p-5", anchorSections.length > 0 && "pr-14")}>
             {children}
           </div>
         </div>

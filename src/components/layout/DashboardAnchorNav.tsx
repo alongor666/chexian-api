@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { List, X } from 'lucide-react';
 import { cardStyles, colorClasses, textStyles, cn } from '../../shared/styles';
 
@@ -16,11 +16,36 @@ interface DashboardAnchorNavProps {
   scrollOffset?: number;
 }
 
+const POSITION_STORAGE_KEY = 'anchor-nav-position';
+
+function loadSavedPosition(): { x: number; y: number } | null {
+  try {
+    const raw = localStorage.getItem(POSITION_STORAGE_KEY);
+    if (!raw) return null;
+    const pos = JSON.parse(raw);
+    if (typeof pos.x === 'number' && typeof pos.y === 'number') return pos;
+  } catch { /* ignore */ }
+  return null;
+}
+
+function savePosition(x: number, y: number) {
+  try {
+    localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify({ x, y }));
+  } catch { /* ignore */ }
+}
+
+function clampToViewport(x: number, y: number, elWidth = 80, elHeight = 36) {
+  return {
+    x: Math.min(Math.max(0, x), window.innerWidth - elWidth),
+    y: Math.min(Math.max(0, y), window.innerHeight - elHeight),
+  };
+}
+
 /**
- * 页面锚点导航（浮动球形态）
+ * 页面锚点导航（浮动球形态，可拖拽）
  *
  * 右上角浮动球，点击展开导航面板。
- * 不占据页面布局宽度。
+ * 长按/拖拽可移动到任意位置，位置持久化到 localStorage。
  */
 export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
   sections,
@@ -30,53 +55,109 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
 }) => {
   const [activeId, setActiveId] = useState<string>(sections[0]?.id ?? '');
   const [isOpen, setIsOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
-  const sectionIds = useMemo(() => sections.map((section) => section.id), [sections]);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const dragState = useRef({ active: false, moved: false, mouseX: 0, mouseY: 0, elX: 0, elY: 0 });
 
-  // IntersectionObserver 跟踪当前可见 section
+  // 初始化：读取 localStorage
+  useEffect(() => {
+    const saved = loadSavedPosition();
+    if (saved) {
+      setPosition(clampToViewport(saved.x, saved.y));
+    }
+  }, []);
+
+  const sectionIds = useMemo(() => sections.map((s) => s.id), [sections]);
+
+  // IntersectionObserver
   useEffect(() => {
     if (sectionIds.length === 0) return;
-
     const root = containerId ? document.getElementById(containerId) : null;
     const targets = sectionIds
       .map((id) => document.getElementById(id))
-      .filter((target): target is HTMLElement => Boolean(target));
-
+      .filter((t): t is HTMLElement => Boolean(t));
     if (targets.length === 0) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
-          .filter((entry) => entry.isIntersecting)
+          .filter((e) => e.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-
-        if (visible[0]?.target?.id) {
-          setActiveId(visible[0].target.id);
-        }
+        if (visible[0]?.target?.id) setActiveId(visible[0].target.id);
       },
-      {
-        root,
-        threshold: [0.2, 0.45, 0.7],
-        rootMargin: '-18% 0px -55% 0px',
-      }
+      { root, threshold: [0.2, 0.45, 0.7], rootMargin: '-18% 0px -55% 0px' }
     );
-
-    targets.forEach((target) => observer.observe(target));
+    targets.forEach((t) => observer.observe(t));
     return () => observer.disconnect();
   }, [containerId, sectionIds]);
 
-  // 点击外部关闭
+  // 点击外部关闭面板
   useEffect(() => {
     if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
+    const handler = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [isOpen]);
+
+  // ─── 拖拽：全部通过 document 级事件处理 ───
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (isOpen) return;
+    const el = wrapperRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    dragState.current = {
+      active: true,
+      moved: false,
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      elX: rect.left,
+      elY: rect.top,
+    };
+    // 在 document 上监听后续事件，确保拖出元素也能跟踪
+    document.addEventListener('pointermove', onDocPointerMove);
+    document.addEventListener('pointerup', onDocPointerUp);
+    e.preventDefault();
+  }, [isOpen]);
+
+  const onDocPointerMove = useCallback((e: PointerEvent) => {
+    const ds = dragState.current;
+    if (!ds.active) return;
+    const dx = e.clientX - ds.mouseX;
+    const dy = e.clientY - ds.mouseY;
+    if (!ds.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+    ds.moved = true;
+    setDragging(true);
+    setPosition(clampToViewport(ds.elX + dx, ds.elY + dy));
+  }, []);
+
+  const onDocPointerUp = useCallback(() => {
+    const ds = dragState.current;
+    ds.active = false;
+    document.removeEventListener('pointermove', onDocPointerMove);
+    document.removeEventListener('pointerup', onDocPointerUp);
+    if (ds.moved) {
+      // 保存最终位置
+      const el = wrapperRef.current;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        savePosition(rect.left, rect.top);
+      }
+      // 延迟重置，防止 pointerup 触发 click → 展开面板
+      requestAnimationFrame(() => setDragging(false));
+    }
+  }, [onDocPointerMove]);
+
+  const handleBallClick = useCallback(() => {
+    if (dragState.current.moved) return;
+    setIsOpen(true);
+  }, []);
 
   if (sections.length === 0) return null;
 
@@ -85,38 +166,40 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
   const handleScrollToSection = (section: DashboardAnchorSection) => {
     const target = document.getElementById(section.id);
     if (!target) return;
-
     const root = containerId ? document.getElementById(containerId) : null;
     const offset = section.offsetTop ?? scrollOffset;
 
     if (root instanceof HTMLElement) {
       const rootRect = root.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
-      const nextTop = root.scrollTop + targetRect.top - rootRect.top - offset;
-      const resolvedTop = Math.max(0, nextTop);
-
-      root.scrollTop = resolvedTop;
-      root.scrollTo({
-        top: resolvedTop,
-        behavior: 'smooth',
-      });
+      const resolvedTop = Math.max(0, root.scrollTop + targetRect.top - rootRect.top - offset);
+      root.scrollTo({ top: resolvedTop, behavior: 'smooth' });
     } else {
-      target.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       window.scrollBy({ top: -offset, behavior: 'smooth' });
     }
-
     setActiveId(section.id);
     setIsOpen(false);
   };
 
+  const isFixed = position !== null;
+  const wrapperStyle: React.CSSProperties = isFixed
+    ? { left: position.x, top: position.y }
+    : {};
+
   return (
-    <div ref={panelRef} className="absolute top-4 right-4 z-20 print:hidden">
+    <div
+      ref={wrapperRef}
+      className={cn(
+        'z-20 print:hidden select-none',
+        isFixed ? 'fixed' : 'absolute top-4 right-4'
+      )}
+      style={wrapperStyle}
+      onPointerDown={handlePointerDown}
+    >
       {/* 展开面板 */}
       {isOpen && (
-        <div className={cn(cardStyles.standard, 'w-56 space-y-3 shadow-lg')}>
+        <div ref={panelRef} className={cn(cardStyles.standard, 'w-56 space-y-3 shadow-lg')}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className={cn('h-2 w-2 rounded-full', colorClasses.bg.primarySolid)} />
@@ -172,17 +255,18 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
       {!isOpen && (
         <button
           type="button"
-          onClick={() => setIsOpen(true)}
+          onClick={handleBallClick}
           className={cn(
             'flex items-center gap-2 rounded-full px-3 py-2',
             'bg-white dark:bg-neutral-800 shadow-md',
             'border border-neutral-200 dark:border-neutral-700',
             'text-neutral-600 dark:text-neutral-300',
-            'hover:shadow-lg hover:scale-105 active:scale-95',
-            'transition-all duration-200'
+            'hover:shadow-lg',
+            'transition-shadow duration-200',
+            dragging ? 'cursor-grabbing scale-105 shadow-lg' : 'cursor-grab'
           )}
-          aria-label="打开页面导航"
-          title="页面导航"
+          aria-label="打开页面导航（可拖拽移动）"
+          title="拖拽移动 · 点击展开导航"
         >
           <List size={16} className="text-primary" />
           <span className="text-xs font-medium">

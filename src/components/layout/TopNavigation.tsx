@@ -12,21 +12,18 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   FolderOpen,
-  Settings,
   Download,
   Upload,
   ClipboardList,
   Sun,
   Moon,
-  Monitor,
   ChevronDown,
   Check,
   Car,
   Menu,
 } from 'lucide-react';
 import { useSidebar } from './SidebarLayout';
-import { useTheme, type ThemeMode } from '../../shared/theme';
-import { SettingsPanel } from '../../features/settings';
+import { useTheme } from '../../shared/theme';
 import { DataImportModal, ExportModal, ReportTemplatesModal } from '../../features/file';
 
 interface DropdownItem {
@@ -113,50 +110,18 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ icon: Icon, label, items })
  * 顶部导航栏组件
  */
 export const TopNavigation: React.FC = () => {
-  const { mode, setMode } = useTheme();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const { setMobileOpen, isMobile } = useSidebar();
 
   // 弹窗状态
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
-
-  const handleThemeChange = (theme: ThemeMode) => {
-    setMode(theme);
-  };
 
   const fileMenuItems: DropdownItem[] = [
     { icon: Download, label: '导入数据', onClick: () => setIsImportOpen(true) },
     { icon: Upload, label: '导出数据', onClick: () => setIsExportOpen(true) },
     { icon: ClipboardList, label: '报表模板', onClick: () => setIsTemplatesOpen(true), divider: true },
-  ];
-
-  const settingsMenuItems: DropdownItem[] = [
-    {
-      icon: Sun,
-      label: '浅色模式',
-      onClick: () => handleThemeChange('light'),
-      active: mode === 'light',
-    },
-    {
-      icon: Moon,
-      label: '深色模式',
-      onClick: () => handleThemeChange('dark'),
-      active: mode === 'dark',
-    },
-    {
-      icon: Monitor,
-      label: '随系统',
-      onClick: () => handleThemeChange('system'),
-      active: mode === 'system',
-    },
-    {
-      icon: Settings,
-      label: '更多设置',
-      onClick: () => setIsSettingsOpen(true),
-      divider: true,
-    },
   ];
 
   return (
@@ -182,15 +147,18 @@ export const TopNavigation: React.FC = () => {
           </span>
         </div>
 
-        {/* 右侧：菜单 */}
+        {/* 右侧：主题切换 + 文件菜单 */}
         <nav className="flex items-center space-x-1" aria-label="主菜单">
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors"
+            aria-label={resolvedTheme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+          >
+            {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           <DropdownMenu icon={FolderOpen} label="文件" items={fileMenuItems} />
-          <DropdownMenu icon={Settings} label="设置" items={settingsMenuItems} />
         </nav>
       </header>
-
-      {/* 设置面板 */}
-      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       {/* 导入弹窗 */}
       <DataImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />

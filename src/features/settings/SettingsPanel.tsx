@@ -6,10 +6,8 @@
  * - 系统设置
  */
 
-import React, { useState, useEffect } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import { Palette, Settings, X } from 'lucide-react';
-import { ThemeSettings } from './ThemeSettings';
+import React, { useEffect } from 'react';
+import { Settings, X } from 'lucide-react';
 import { SystemSettings } from './SystemSettings';
 import { useFocusTrap } from '../../shared/hooks';
 import { colorClasses } from '../../shared/styles';
@@ -19,11 +17,7 @@ interface SettingsPanelProps {
   isOpen: boolean;
   /** 关闭回调 */
   onClose: () => void;
-  /** 初始标签 */
-  initialTab?: 'theme' | 'system';
 }
-
-type SettingsTab = 'theme' | 'system';
 
 /**
  * 设置面板
@@ -31,9 +25,7 @@ type SettingsTab = 'theme' | 'system';
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   isOpen,
   onClose,
-  initialTab = 'theme',
 }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const panelRef = useFocusTrap<HTMLDivElement>({ enabled: isOpen });
 
   // 处理 Escape 键关闭
@@ -51,11 +43,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
-
-  const tabs: { key: SettingsTab; label: string; icon: LucideIcon }[] = [
-    { key: 'theme', label: '外观', icon: Palette },
-    { key: 'system', label: '系统', icon: Settings },
-  ];
 
   return (
     <>
@@ -91,44 +78,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </button>
         </header>
 
-        {/* 标签切换 */}
-        <nav className={`flex border-b ${colorClasses.border.neutral}`} role="tablist" aria-label="设置选项卡">
-          {tabs.map((tab) => {
-            const TabIcon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                id={`tab-${tab.key}`}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                  activeTab === tab.key
-                    ? `${colorClasses.text.primary} border-b-2 border-primary ${colorClasses.bg.primary}`
-                    : `${colorClasses.text.neutral} hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800`
-                }`}
-                role="tab"
-                aria-selected={activeTab === tab.key}
-                aria-controls={`tabpanel-${tab.key}`}
-                tabIndex={activeTab === tab.key ? 0 : -1}
-              >
-                <TabIcon size={16} aria-hidden="true" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-
         {/* 内容区 */}
         <div
-          id={`tabpanel-${activeTab}`}
-          role="tabpanel"
-          aria-labelledby={`tab-${activeTab}`}
           className="flex-1 overflow-y-auto p-4"
-          style={{ height: 'calc(100vh - 120px)' }}
-          tabIndex={0}
+          style={{ height: 'calc(100vh - 72px)' }}
         >
-          {activeTab === 'theme' && <ThemeSettings />}
-          {activeTab === 'system' && <SystemSettings />}
+          <SystemSettings />
         </div>
       </div>
     </>
