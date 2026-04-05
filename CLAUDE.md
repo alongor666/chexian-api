@@ -25,8 +25,6 @@
 
 **方法确认协议**：遇到"下钻/层级"→问用户交互模型；"已完成"→curl 验证；"不存在"→先搜索；"安全加固/重构"→列清单等确认；"commit/push"→直接执行；"全部检查"→并行 sub-agents
 
-**生产完成定义**（声称"已部署"前缺一不可）：`GET /` 200 + `GET /health` 200 + `POST /api/auth/login` 200 + 至少一个核心 API 200+非空 JSON + 至少一个浏览器场景通过。发布期间有新 commit 必须基于最终 HEAD 重新发布。发布脚本禁止固定 sleep，必须轮询重试。
-
 ---
 
 ## 1. 索引与文档
@@ -48,17 +46,20 @@
 
 ## 2. 指标注册表（RED LINE）
 
-**唯一事实源**：`server/src/config/metric-registry/`（20 个指标，含类型、SQL、展示、测试）
+**唯一事实源**：`server/src/config/metric-registry/`（L1-L3 原子指标）· 指标字典：`开发文档/指标字典.md`（自动生成，禁止手动编辑）
 
 **新增/修改指标流程**（必须按顺序）：
-1. 先改 `metric-registry/categories/*.ts` 中的指标定义
-2. 再改 SQL 生成器（`server/src/sql/*.ts`）引用注册表
-3. 最后改前端展示
+1. `grep -r "id: '${NEW_ID}'" server/src/config/metric-registry/` — 确认不存在
+2. 判断复杂度：L1-L3（单行 SQL 表达式）→ 添加到 `categories/*.ts`；L4（CTE/窗口函数/多表 JOIN）→ SQL 生成器中实现，引用注册表原子指标
+3. 必须包含：id + name + formula + sql.expression + display + 至少 1 个 testCase + changelog
+4. `npx tsx scripts/metric-registry/validate.ts` 校验通过
+5. `npx tsx scripts/metric-registry/generate-frontend-map.ts` 更新前端映射
 
 **禁止**：
 - ❌ 在 SQL 生成器中硬编码新指标公式而不在注册表注册
 - ❌ 在前端硬编码指标标签/阈值而不从注册表派生
 - ❌ 新增与已有指标公式重复的指标（先 `grep` 注册表确认不存在）
+- ❌ 修改已发布指标公式而不更新 version 和 changelog
 
 **跨项目对齐**：作战地图 `00_规范与协议/指标字典_v2.0.md` 是业务层权威定义，本注册表是代码层实现。两者公式必须一致。
 
@@ -92,48 +93,11 @@
 
 ## 3. 护栏（RED LINE）
 
-**业务口径**：`server/src/services/duckdb.ts` 和 `server/src/routes/query.ts` — 不得修改/删除已有逻辑，只能追加。**废弃路由退出条件**：满足以下全部条件时允许清理——① 用户明确确认 ② 生产日志证明 ≥30 天零流量 ③ 前端无调用方（grep 验证）。见 BACKLOG B237。
-
-**架构协议**：Bun 包管理器（禁止 npm/yarn）· 智谱 API `glm-4.7-flash` · 三级限流（禁止降低）· JWT 认证（禁止绕过）· `security.ts` 危险字符黑名单支持中文
-
-**分片 current/ 架构**（RED LINE）：policy 数据拆分为 3层分片产出的 4 个分片文件，禁止合回单体 parquet：
-
-```
-warehouse/fact/
-├── policy/current/*.parquet          ← 保单+保费（4 个分片文件，由 daily.mjs 产出）
-├── claims/latest.parquet             ← 赔付+费用（每周全量替换，~10MB）
-└── quotes/latest.parquet             ← 报价状态（每日全量替换，~3MB）
-```
-
-- 服务器只走 `policy/current/` 模式（无 daily/ 检测，无旧模式回退）
-- ETL 入口：`node 数据管理/daily.mjs`（智能检测，无参数自动判断需更新的域）
-- 强制子命令：`node 数据管理/daily.mjs premium|claims|quotes|all`
-- 关键方法：`duckdb.ts:loadMultipleParquet()` — 加载 `current/` 下多个分片并合并为 `raw_parquet` 视图
-- PolicyFact 视图接口不变 — 24 个 SQL 生成器零改动
-
-**VPS 数据目录**：`server/data/fact/policy/current/`、`server/data/fact/claims/`、`server/data/fact/quotes/`、`server/data/dim/salesman/`、`server/data/dim/plan/`
+**架构协议**：Bun 包管理器（禁止 npm/yarn）· 智谱 API `glm-4.7-flash` · 三级限流（禁止降低）· `security.ts` 危险字符黑名单支持中文
 
 **报价数据口径**（待修正）：当前 `是否报价` 字段不可靠，正确逻辑应以「续保单号非空」判定已报价。用户待办，AI 不得擅自修改。
 
-**VPS 分层查询**（RED LINE）：❌ 禁止在 VPS 上查询原始 `PolicyFact`（续保除外）。新功能只能查 `DailyAggregated`/`PeriodAggregated`/`CrossSellDailyAgg`。续保 PolicyFact 最小字段集不可扩展：`policy_no, premium, salesman_name, org_level_3, customer_category, insurance_type, insurance_start_date, renewal_policy_no`
-
-**数据同步护栏**（RED LINE）：VPS 同步使用 `node scripts/sync-vps.mjs`，rsync `policy/current/` + `claims/` + `quotes/` 事实表以及 `dim/` 维度表。`policy/current/` 是唯一目录，无旧模式回退。
-
----
-
-## 3. 复用检查
-
-**三问**：已有吗？→ CODE_INDEX.md + `src/widgets/INDEX.md` · 能复用吗？→ `src/shared/` · 有模式吗？→ 查同类实现
-
-| 类别 | 位置 |
-|------|------|
-| UI组件 | `src/widgets/INDEX.md` |
-| 样式系统 | `src/shared/styles/index.ts`（tableStyles/textStyles/colorClasses） |
-| API客户端 | `src/shared/api/client.ts` |
-| 格式化 | `src/shared/utils/formatters.ts`（formatCount/formatPremiumWan/formatPercent/formatCoefficient） |
-| 类型 | `src/shared/types/` |
-
-**样式规范**：使用 `colorClasses`/`tableStyles`/`fontStyles` 等全局样式，禁止硬编码 Tailwind 颜色。新组件须在 INDEX.md 登记。
+> 分片架构、VPS 分层查询、数据同步等详细规则见 `.claude/rules/data-pipeline.md`。业务口径护栏见 `.claude/rules/sql-generators.md`。
 
 ---
 
@@ -149,21 +113,9 @@ warehouse/fact/
 
 **API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录）· `/api/filters/*`（筛选器）
 
-**防御性编码**：`row.time_period` 可能 undefined，必须 `?? ''` 再 `.includes()`。DuckDB 返回字段都需空值防护。
-
 ---
 
-## 5. 设计系统 (DC-003)
-
-所有 UI 必须使用 `src/shared/styles/index.ts`，禁止手写 Tailwind 颜色。
-
-- **数字**：`fontStyles.kpi`/`fontStyles.numeric`（已合并原 chart+tabular），禁止虚构类名
-- **颜色**：`colorClasses.text.success`(绿) / `colorClasses.text.danger`(红) / `getTrendColorClass(value)`
-- **组件**：`cardStyles.base` / `buttonStyles.primary`，或 `src/shared/ui/Card.tsx` / `Button.tsx`
-
----
-
-## 6. 交付与技术栈
+## 5. 交付与技术栈
 
 **DONE 判定**：关联文档 + 关联代码 + 验收证据（至少一项）。核心层改动须更新 INDEX.md。提交前：`bun run governance`
 
@@ -186,7 +138,7 @@ bun run governance                 # 治理校验
 
 ---
 
-## 7. 验证协议
+## 6. 验证协议
 
 | 场景 | 验证命令 |
 |------|----------|
@@ -202,19 +154,17 @@ bun run governance                 # 治理校验
 
 ---
 
-## 8. 异常处理
+## 7. 异常处理
 
 | 情况 | 处理 |
 |------|------|
 | 信息缺口 | 登记缺口清单 → BLOCKED |
 | 业务口径错误 | 禁止直接改 → BACKLOG 登记 |
 | API 失败 | 检查 apiClient 与路由对应，前端新增方法须确认后端路由存在 |
-| DuckDB 日期 | DATE→`{days:N}` TIMESTAMP→`{micros:N}`，duckdb.ts 反序列化为 ISO |
-| ESM 问题 | 无 `__dirname` 用 `fileURLToPath`；Express 用 `req.originalUrl` |
 
 ---
 
-## 9. 协作与部署
+## 8. 协作与部署
 
 **任务 ID**：@user B001-B099 / @claude B100-B199 / @codex B200-B299
 
@@ -222,13 +172,28 @@ bun run governance                 # 治理校验
 
 **生产环境**：腾讯云 2核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist` · **PM2 重启**：deployer 无法直接调 pm2，须 `sudo /usr/local/bin/deploy-chexian-api reload`（或 `restart`/`install`）
 
-**数据 ETL**：`node 数据管理/daily.mjs`（智能检测）· `node 数据管理/daily.mjs premium|claims|quotes|all`（强制）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py` · 迁移脚本：~~`python3 数据管理/pipelines/split_existing.py`~~（已废弃，一次性迁移已完成）
+**数据 ETL**：`node 数据管理/daily.mjs`（智能检测）· `node 数据管理/daily.mjs premium|claims|quotes|all`（强制）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py`
 
 **数据同步**：`node scripts/sync-vps.mjs`（rsync `policy/current/` + `claims/` + `quotes/` + 维度表 `salesman/` + `plan/`）
 
 **CI/CD**：`deploy.yml`（push main → 构建→部署→健康检查）· `claude-code.yml`（@claude 触发）· `governance-check.yml`（PR 治理）
 
 **工具箱**：[.claude/commands/README.md](./.claude/commands/README.md)（30 命令）· `.claude/agents/`（14 agents）· 常用：`/commit-push-pr` `/sync-and-rebase` `/data-analysis` `/security-review` `/verify`
+
+---
+
+## 9. 部署清单
+
+声称"已部署"前，按顺序逐项验证：
+
+1. `bun run build` — 零 TS 报错
+2. `bun run governance` — 治理通过
+3. PM2 状态检查 — `sudo /usr/local/bin/deploy-chexian-api describe`，若 errored 则 `sudo /usr/local/bin/deploy-chexian-api reload`（禁止只 restart）
+4. 环境变量 — 确认 `ecosystem.config.cjs` 中所有 env 变量在 VPS 上有值
+5. CORS 配置 — 确认不会因 env 缺失抛异常
+6. DuckDB/Parquet 兼容 — `union_by_name` schema 一致性
+7. 健康检查 — `curl -s https://chexian.cretvalu.com/health` 返回 200
+8. 核心 API — 至少一个 `/api/query/*` 返回 200 + 非空 JSON
 
 ---
 
@@ -252,22 +217,7 @@ bun run governance                 # 治理校验
 
 ---
 
-## 11. 部署清单
-
-声称"已部署"前，按顺序逐项验证：
-
-1. `bun run build` — 零 TS 报错
-2. `bun run governance` — 治理通过
-3. PM2 状态检查 — `sudo /usr/local/bin/deploy-chexian-api describe`，若 errored 则 `sudo /usr/local/bin/deploy-chexian-api reload`（禁止只 restart）
-4. 环境变量 — 确认 `ecosystem.config.cjs` 中所有 env 变量在 VPS 上有值
-5. CORS 配置 — 确认不会因 env 缺失抛异常
-6. DuckDB/Parquet 兼容 — `union_by_name` schema 一致性
-7. 健康检查 — `curl -s https://chexian.cretvalu.com/health` 返回 200
-8. 核心 API — 至少一个 `/api/query/*` 返回 200 + 非空 JSON
-
----
-
-## 12. 文件与路径规则
+## 11. 文件与路径规则
 
 | 规则 | 说明 |
 |------|------|
@@ -278,7 +228,7 @@ bun run governance                 # 治理校验
 
 ---
 
-## 13. 审查质量
+## 12. 审查质量
 
 审查计划或文档时：
 
@@ -286,32 +236,3 @@ bun run governance                 # 治理校验
 2. **逻辑一致性**：检查边界条件和矛盾，不只看表面结构
 3. **诚实评分**：浅层审查浪费时间，宁可花多一轮也不输出低质量结论
 4. **业务逻辑标注**：涉及保险/分析内容，所有假设的业务逻辑都标注 `⚠️ 待用户确认`
-
----
-
-## 14. 指标开发协议（Metric Development Protocol）
-
-**唯一事实源**：`server/src/config/metric-registry/`（L1-L3 原子指标）· 指标字典：`开发文档/指标字典.md`（自动生成，禁止手动编辑）
-
-**新增指标流程**：
-1. `grep -r "id: '${NEW_ID}'" server/src/config/metric-registry/` — 确认不存在
-2. 判断复杂度：L1-L3（单行 SQL 表达式）→ 添加到 `categories/*.ts`；L4（CTE/窗口函数/多表 JOIN）→ SQL 生成器中实现，引用注册表原子指标
-3. 必须包含：id + name + formula + sql.expression + display + 至少 1 个 testCase + changelog
-4. `npx tsx scripts/metric-registry/validate.ts` 校验通过
-5. `npx tsx scripts/metric-registry/generate-frontend-map.ts` 更新前端映射
-
-**禁止事项**：禁止在 SQL 生成器中硬编码已注册的 L1-L3 指标 SQL · 禁止在前端组件中硬编码新指标的标签/格式化 · 禁止修改已发布指标公式而不更新 version 和 changelog
-
----
-
-## 语言规范
-所有回复必须使用**中文**，除非涉及代码、命令、专有名词或英文引用。
-
----
-
-## gstack
-Use /browse from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
-Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review,
-/design-consultation, /review, /ship, /browse, /qa, /qa-only, /design-review,
-/setup-browser-cookies, /retro, /investigate, /document-release, /codex, /careful,
-/freeze, /guard, /unfreeze, /gstack-upgrade.
