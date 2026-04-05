@@ -21,10 +21,11 @@ import {
   Database,
   Target,
   FileWarning,
+  TrendingDown,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { canAccessRoute, canAccessMotoCost, canAccessFeeAnalysis, canAccessCost, UserRole } from '../../shared/config/organizations';
+import { canAccessRoute, canAccessMotoCost, canAccessFeeAnalysis, canAccessCost, canAccessExpenseDevelopment, UserRole } from '../../shared/config/organizations';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { useRBAC } from '../../shared/hooks/useRBAC';
 import { buildFilterParams } from '../../shared/utils/filterParams';
@@ -57,6 +58,7 @@ const dataNavItems: NavItem[] = [
 
 const toolNavItems: NavItem[] = [
   { path: '/quote-conversion', icon: Target, label: '报价转化', shortLabel: '报价' },
+  { path: '/expense-development', icon: TrendingDown, label: '费用率发展', shortLabel: '费发' },
   { path: '/claims-detail', icon: FileWarning, label: '赔案明细', shortLabel: '赔案' },
   { path: '/data-import', icon: Database, label: '数据导入', shortLabel: '导入' },
   { path: '/moto-cost', icon: Bike, label: '摩意模型', shortLabel: '摩意' },
@@ -293,6 +295,9 @@ export const SidebarNavigation: React.FC = () => {
             toolNavItems.filter(item => {
               if (item.path === '/moto-cost') {
                 return canAccessMotoCost(userPermission?.username, userPermission?.specialFeatures);
+              }
+              if (item.path === '/expense-development') {
+                return canAccessExpenseDevelopment(userPermission?.username, userPermission?.specialFeatures);
               }
               return true;
             })

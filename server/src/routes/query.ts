@@ -27,6 +27,7 @@ import bundleRoutes from './query/bundles.js';
 import renewalFunnelRoutes from './query/renewal-funnel.js';
 import quoteConversionRoutes from './query/quote-conversion.js';
 import claimsDetailRoutes from './query/claims-detail.js';
+import expenseDevRoutes from './query/expense-development.js';
 
 export { buildRouteCacheKey } from './query/shared.js';
 export { fetchDashboardBundleData } from './query/bundles.js';
@@ -53,5 +54,6 @@ router.use(bundleRoutes);
 router.use(renewalFunnelRoutes);
 router.use(quoteConversionRoutes);
 router.use(claimsDetailRoutes);
+router.use(expenseDevRoutes);
 
 export default router;

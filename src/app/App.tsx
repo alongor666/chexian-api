@@ -9,7 +9,7 @@ import { PermissionProvider, usePermission } from '../shared/contexts/Permission
 import { ThemeProvider } from '../shared/theme';
 import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
-import { canAccessFeeAnalysis, canAccessCost } from '../shared/config/organizations';
+import { canAccessFeeAnalysis, canAccessCost, canAccessExpenseDevelopment } from '../shared/config/organizations';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +44,17 @@ const FeeAnalysisGuard: FC<{ children: ReactNode }> = ({ children }) => {
 const CostGuard: FC<{ children: ReactNode }> = ({ children }) => {
   const { userPermission } = usePermission();
   if (!canAccessCost(userPermission?.username, userPermission?.specialFeatures)) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
+
+/**
+ * 费用率发展路由级守卫，开发状态，仅超级用户可访问。
+ */
+const ExpenseDevGuard: FC<{ children: ReactNode }> = ({ children }) => {
+  const { userPermission } = usePermission();
+  if (!canAccessExpenseDevelopment(userPermission?.username, userPermission?.specialFeatures)) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
@@ -91,6 +102,9 @@ const QuoteConversionPage = lazy(() =>
 );
 const ClaimsDetailPage = lazy(() =>
   import('../features/pages/ClaimsDetailPage').then((m) => ({ default: m.ClaimsDetailPage }))
+);
+const ExpenseDevelopmentPage = lazy(() =>
+  import('../features/expense-development').then((m) => ({ default: m.ExpenseDevelopmentPage }))
 );
 
 // Loading fallback — content-aware skeleton screen
@@ -288,6 +302,16 @@ function App() {
                     path="quote-conversion"
                     element={
                       <LazyRoute><QuoteConversionPage /></LazyRoute>
+                    }
+                  />
+
+                  {/* 费用率发展 - 开发状态，仅超级用户 */}
+                  <Route
+                    path="expense-development"
+                    element={
+                      <ExpenseDevGuard>
+                        <LazyRoute><ExpenseDevelopmentPage /></LazyRoute>
+                      </ExpenseDevGuard>
                     }
                   />
 

@@ -97,6 +97,8 @@ export const QUERY_ROUTES = {
     RANKING: 'quote-conversion/ranking',
     TREND: 'quote-conversion/trend',
   },
+  // 费用率发展
+  EXPENSE_DEVELOPMENT: 'expense-development',
   // 赔案明细
   CLAIMS_DETAIL: {
     PENDING_OVERVIEW: 'claims-detail/pending-overview',

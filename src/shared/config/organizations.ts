@@ -374,6 +374,18 @@ export function isSuperUser(username: string | undefined): boolean {
 }
 
 /**
+ * 费用率发展功能白名单用户（开发状态）
+ * 仅超级用户可访问 /expense-development
+ */
+export function canAccessExpenseDevelopment(username: string | undefined, specialFeatures?: string[]): boolean {
+  if (isSuperUser(username)) return true;
+  if (specialFeatures !== undefined) {
+    return specialFeatures.includes('expense_development');
+  }
+  return false;
+}
+
+/**
  * 摩意模型功能白名单用户
  * 仅这些用户可访问 /moto-cost
  */

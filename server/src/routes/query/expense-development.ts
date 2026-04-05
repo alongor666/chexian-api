@@ -1,0 +1,56 @@
+/**
+ * 费用率发展路由
+ *
+ * 数据源：PolicyFact（保单级 fee_amount + premium）
+ * 端点：/api/query/expense-development
+ *
+ * 使用全局筛选参数（parseFiltersAndBuildWhere），支持多选机构/客户类别/险别等。
+ */
+
+import { Router } from 'express';
+import {
+  asyncHandler, parseFiltersAndBuildWhere, duckdbService,
+} from './shared.js';
+import {
+  generateExpenseRatioDevelopmentQuery,
+} from '../../sql/expense-development.js';
+import {
+  buildWhereFromFilterParamsWithoutDate,
+} from '../../utils/filter-params.js';
+import { commonFilterSchema } from '../../utils/filter-params.js';
+import { AppError } from '../../middleware/error.js';
+
+const router = Router();
+
+/**
+ * GET /api/query/expense-development
+ * 费用率发展趋势（按起保年份 × 发展月 M1~M12）
+ *
+ * 接受全局筛选参数（orgNames, customerCategories, isNev, isTransfer 等）
+ * 日期参数被忽略（发展口径由 cohortYears 控制）
+ */
+router.get(
+  '/expense-development',
+  asyncHandler(async (req, res) => {
+    // 解析全局筛选参数，不含日期（发展口径用 cohortYears 代替）
+    const parseResult = commonFilterSchema.safeParse(req.query);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const whereClause = buildWhereFromFilterParamsWithoutDate(
+      parseResult.data,
+      req.permissionFilter || '1=1'
+    );
+
+    const cohortYearsStr = req.query.cohortYears;
+    const cohortYears = typeof cohortYearsStr === 'string'
+      ? cohortYearsStr.split(',').map(Number).filter(n => !isNaN(n) && n >= 2020 && n <= 2030)
+      : [2023, 2024, 2025, 2026];
+
+    const sql = generateExpenseRatioDevelopmentQuery(whereClause, cohortYears);
+    const data = await duckdbService.query(sql);
+    res.json({ success: true, data });
+  })
+);
+
+export default router;

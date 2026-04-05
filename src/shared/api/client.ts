@@ -1071,6 +1071,11 @@ class ApiClient {
     const query = this.buildQueryString(params);
     return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.LOSS_RATIO_DEV}${query ? `?${query}` : ''}`);
   }
+
+  async getExpenseRatioDev(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.EXPENSE_DEVELOPMENT}${query ? `?${query}` : ''}`);
+  }
 }
 
 // 导出单例
