@@ -2,12 +2,13 @@
  * 赔付率发展三角形面板（日历发展口径）
  *
  * 发展月 M_N 的观察窗口 = [年初, 年初+N个月)，累计扩展。
- * KPI 表格（5列4行）+ 折线图 + 横向数据表（年份行 × M1~M24 列）
+ * 规则驱动洞察 + 折线图 + 横向数据表（年份行 × M1~M24 列）
  */
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '@/shared/utils/echarts';
-import { cardStyles, colorClasses, cn, fontStyles, tableStyles, getYearChartColor } from '@/shared/styles';
+import { cardStyles, colorClasses, cn, fontStyles, getYearChartColor } from '@/shared/styles';
+import { generateDevInsights } from '../utils/devInsightRules';
 import { useTheme } from '@/shared/theme';
 import { getChartTheme } from '@/shared/config/chartStyles';
 
@@ -80,12 +81,6 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
     return v != null ? Number(v) : null;
   };
 
-  /** 取每个年份最新可用月的指标值 */
-  const getLatestVal = (yr: number, key: string): number | null => {
-    const maxM = cohorts[yr]?.maxDev ?? 0;
-    return maxM > 0 ? getVal(yr, maxM, key) : null;
-  };
-
   // 图表 option
   const chartOption = useMemo(() => {
     const m = METRIC_OPTIONS.find(o => o.key === metric)!;
@@ -127,11 +122,13 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
         data: COHORT_YEARS.filter(yr => cohorts[yr]?.maxDev > 0).map(String),
         textStyle: { color: chartTheme.textColors.secondary },
       },
-      grid: { left: 55, right: 20, top: 40, bottom: 30 },
+      grid: { left: 48, right: 8, top: 40, bottom: 4 },
       xAxis: {
         type: 'category' as const,
         data: Array.from({ length: MAX_DEV }, (_, i) => `M${i + 1}`),
         ...chartTheme.xAxisConfig,
+        axisLabel: { show: false },
+        axisTick: { show: false },
       },
       yAxis: {
         type: 'value' as const,
@@ -154,65 +151,30 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
   // 有数据的年份
   const activeYears = COHORT_YEARS.filter(yr => cohorts[yr]?.maxDev > 0);
 
+  // 规则驱动洞察（跟随当前选中指标）
+  const insights = useMemo(
+    () => generateDevInsights(cohorts, activeYears, metric),
+    [cohorts, activeYears, metric],
+  );
+
+  /** 洞察类型→文字颜色 */
+  const insightTextClass = (type: string): string => {
+    switch (type) {
+      case 'warning': return colorClasses.text.danger;
+      case 'danger': return colorClasses.text.danger;
+      case 'trend': return colorClasses.text.neutral;
+      case 'anomaly': return colorClasses.text.warning;
+      case 'compare': return colorClasses.text.primary;
+      case 'info':
+      default: return colorClasses.text.neutralMuted;
+    }
+  };
+
   if (error) return <div className={cn(colorClasses.text.danger, 'p-4')}>{error}</div>;
 
   return (
     <div className="space-y-6">
-      {/* KPI 表格：5列4行 — 年度 / 满期赔付率 / 满期出险率 / 案均赔款 / 赔案件数 */}
-      <div className={cn(cardStyles.standard, 'p-4')}>
-        {isLoading ? <div className="py-4 text-center">加载中...</div> : (
-          <div className="overflow-x-auto">
-            <table className={tableStyles.container}>
-              <thead>
-                <tr>
-                  <th className={tableStyles.headerCell}>年度</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>满期赔付率(%)</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>满期出险率(%)</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>案均赔款(元)</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>赔案件数</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeYears.map(yr => {
-                  const c = cohorts[yr];
-                  const maxM = c.maxDev;
-                  const lr = getLatestVal(yr, 'loss_ratio_pct');
-                  const ir = getLatestVal(yr, 'incident_rate_pct');
-                  const ac = getLatestVal(yr, 'avg_claim');
-                  const cc = getLatestVal(yr, 'claim_count');
-                  const suffix = maxM < 12 ? ` (M${maxM})` : '';
-
-                  return (
-                    <tr key={yr} className={tableStyles.row}>
-                      <td className={tableStyles.cell}>
-                        <span
-                          className="inline-block w-2.5 h-2.5 rounded-sm mr-2 align-middle"
-                          style={{ background: getCohortColor(yr) }}
-                        />
-                        {yr}
-                      </td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
-                        {lr != null ? `${lr.toFixed(1)}${suffix}` : '—'}
-                      </td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
-                        {ir != null ? `${ir.toFixed(1)}${suffix}` : '—'}
-                      </td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
-                        {ac != null ? `${Math.round(ac).toLocaleString()}元${suffix}` : '—'}
-                      </td>
-                      <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
-                        {cc != null ? `${Math.round(cc).toLocaleString()}${suffix}` : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* 指标切换 + 图表 */}
+      {/* 指标切换 + 洞察 + 图表（一体） */}
       <div className={cn(cardStyles.standard, 'p-4')}>
         <div className="flex items-center gap-2 mb-3">
           {METRIC_OPTIONS.map(opt => (
@@ -230,28 +192,50 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
             </button>
           ))}
         </div>
+
+        {/* 洞察文字（跟随指标切换） */}
+        {!isLoading && insights.length > 0 && (
+          <div className="mb-3 space-y-1.5">
+            {insights.map((item, idx) => (
+              <div key={idx} className="flex items-start gap-2 text-sm leading-relaxed">
+                <span className="flex-shrink-0 mt-0.5">{item.icon}</span>
+                <div>
+                  <span className={cn('font-semibold', insightTextClass(item.type))}>{item.title}</span>
+                  <span className={cn('ml-1.5', colorClasses.text.neutral)}>{item.description}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {isLoading ? (
           <div className="h-[400px] flex items-center justify-center">加载中...</div>
         ) : (
-          <ReactEChartsCore echarts={echarts} option={chartOption} style={{ height: 400 }} />
+          <ReactEChartsCore echarts={echarts} option={chartOption} style={{ height: 360 }} />
         )}
 
-        {/* 横向数据表：年份行 × M1~M24 列 */}
+        {/* 横向数据表：年份行 × M1~M24 列，紧贴图表 */}
         {!isLoading && (
-          <div className="overflow-x-auto mt-4">
-            <table className={cn('w-full text-xs border-collapse', fontStyles.numeric)}>
+          <div className="-mt-1">
+            <table className={cn('w-full border-collapse', fontStyles.numeric)} style={{ tableLayout: 'fixed', fontSize: '11px' }}>
+              <colgroup>
+                <col style={{ width: 48 }} />
+                {Array.from({ length: MAX_DEV }, () => (
+                  <col />
+                ))}
+              </colgroup>
               <thead>
                 <tr>
-                  <th className={`text-left px-2 py-1.5 sticky left-0 bg-white dark:bg-surface-1 z-10 border-b ${colorClasses.border.neutral}`} />
+                  <th className={`text-left px-1 py-1 border-b ${colorClasses.border.neutral}`} />
                   {Array.from({ length: MAX_DEV }, (_, i) => (
                     <th
                       key={i}
                       className={cn(
-                        `text-right px-2 py-1.5 border-b ${colorClasses.border.neutral} min-w-[52px]`,
+                        `text-center px-0 py-1 border-b ${colorClasses.border.neutral}`,
                         colorClasses.text.neutralMuted,
                       )}
                     >
-                      M{i + 1}
+                      {i + 1}
                     </th>
                   ))}
                 </tr>
@@ -261,9 +245,9 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                   const c = cohorts[yr];
                   return (
                     <tr key={yr} className={`border-b ${colorClasses.border.neutral}`}>
-                      <td className="px-2 py-1.5 sticky left-0 bg-white dark:bg-surface-1 z-10 whitespace-nowrap">
+                      <td className="px-1 py-1 whitespace-nowrap">
                         <span
-                          className="inline-block w-2 h-2 rounded-sm mr-1.5 align-middle"
+                          className="inline-block w-2 h-2 rounded-sm mr-1 align-middle"
                           style={{ background: getCohortColor(yr) }}
                         />
                         <span style={{ color: getCohortColor(yr) }}>{yr}</span>
@@ -279,7 +263,7 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                           <td
                             key={devM}
                             className={cn(
-                              'text-right px-2 py-1.5',
+                              'text-center px-0 py-1',
                               isLastMonth && 'font-bold',
                             )}
                             style={isLastMonth ? { color: getCohortColor(yr) } : undefined}
