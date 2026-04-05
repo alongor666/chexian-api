@@ -150,8 +150,8 @@ const isAggregateRow = (row: CoefficientRow): boolean => {
 interface CoefficientPeriodTableProps {
   periodName: string;
   rows: CoefficientRow[];
-  startDate: Date;
-  endDate: Date;
+  startDate: Date | string;
+  endDate: Date | string;
 }
 
 /**
@@ -167,7 +167,10 @@ const CoefficientPeriodTableInner: React.FC<CoefficientPeriodTableProps> = ({
   startDate,
   endDate,
 }) => {
-  const formatDateStr = (date: Date) => `${date.getMonth() + 1}月${date.getDate()}日`;
+  const formatDateStr = (date: Date | string) => {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
+  };
 
   // 展开状态：false=只显示聚合，true=显示全部明细
   const [expanded, setExpanded] = useState(false);

@@ -36,8 +36,8 @@ export interface CoefficientRow {
 
 export interface PeriodGroupData {
   periodName: string;
-  startDate: Date;
-  endDate: Date;
+  startDate: string;
+  endDate: string;
   hasData: boolean;
   rows: CoefficientRow[];
 }
