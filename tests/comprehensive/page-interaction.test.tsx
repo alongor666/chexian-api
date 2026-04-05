@@ -3,6 +3,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ComprehensiveAnalysisPage } from '../../src/features/pages/ComprehensiveAnalysisPage';
 
+vi.mock('@/shared/theme', () => ({
+  useTheme: () => ({ resolvedTheme: 'light' }),
+}));
+
 vi.mock('@/components/layout/PageFilterPanel', () => ({
   PageFilterPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
