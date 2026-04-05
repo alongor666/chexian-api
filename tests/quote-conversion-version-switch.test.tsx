@@ -7,6 +7,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { apiClient } from '../src/shared/api/client';
 import { filtersToParams, useQuoteFunnel, useQuoteKpi } from '../src/features/quote-conversion/hooks/useQuoteConversion';
 
+// Mock IntersectionObserver for jsdom
+globalThis.IntersectionObserver ??= class IntersectionObserver {
+  constructor() {}
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as any;
+
+vi.mock('@/shared/theme', () => ({
+  useTheme: () => ({ resolvedTheme: 'light' }),
+}));
+
 const mockUseQuoteKpi = vi.fn();
 const mockUseQuoteFunnel = vi.fn();
 const mockUseQuoteTrend = vi.fn();
