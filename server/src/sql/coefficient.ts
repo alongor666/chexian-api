@@ -143,7 +143,7 @@ export function generateChengduAggregateQuery(
     WHERE ${COMMERCIAL_BASE_CONDITION}
       AND ${dateField} >= '${startDate}'
       AND ${dateField} <= '${endDate}'
-      AND region_group = 'chengdu'
+      AND (${generateOrgGroupCase()}) = 'chengdu'
       AND ${additionalWhere}
     GROUP BY
       is_nev,
@@ -305,7 +305,7 @@ export function generateAggregatePeriodCoefficientQuery(
   let regionGroupValue = '';
 
   if (aggregateType === 'chengdu') {
-    orgFilter = `AND region_group = 'chengdu'`;
+    orgFilter = `AND (${generateOrgGroupCase()}) = 'chengdu'`;
     orgLabel = '成都';
     regionGroupValue = 'chengdu';
   } else {
@@ -402,7 +402,7 @@ export function generateWeekBatchQuery(
     let groupByOrg = false;
 
     if (aggregateType === 'chengdu') {
-      orgFilter = `AND region_group = 'chengdu'`;
+      orgFilter = `AND (${generateOrgGroupCase()}) = 'chengdu'`;
       orgLabel = '成都';
       regionGroupValue = 'chengdu';
     } else if (aggregateType === 'province') {
@@ -419,7 +419,7 @@ export function generateWeekBatchQuery(
     const selectClause = aggregateType === 'org'
       ? `
         org_level_3,
-        region_group`
+        ${generateOrgGroupCase()} AS region_group`
       : `
         '${orgLabel}' AS org_level_3,
         '${regionGroupValue}' AS region_group`;
@@ -428,7 +428,7 @@ export function generateWeekBatchQuery(
     const groupByClause = groupByOrg
       ? `GROUP BY
           org_level_3,
-          region_group,
+          ${generateOrgGroupCase()},
           is_nev,
           CASE WHEN ${NON_COMMERCIAL_PERSONAL_CONDITION} THEN 'non_commercial_personal' ELSE 'all' END,
           is_new_car`
