@@ -1,7 +1,6 @@
 #!/bin/bash
-# pre-push hook：推送前跑单测 + 类型检查
+# pre-push hook：推送前单测 + 类型检查 + 治理校验
 # 安装方式：bun run hooks:install
-
 set -e
 
 echo "🔍 [pre-push] 运行单元测试..."
@@ -12,5 +11,17 @@ bun run typecheck
 
 echo "🔍 [pre-push] 运行 server 类型检查..."
 npx tsc --noEmit --project server/tsconfig.json
+
+echo "🔍 [pre-push] 运行治理校验..."
+bun run governance
+
+echo "🔍 [pre-push] 检查冲突标记..."
+CONFLICT_FILES=$(grep -rn '<<<<<<' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.json' --include='*.css' . 2>/dev/null | grep -v node_modules | grep -v '.git/' || true)
+if [ -n "$CONFLICT_FILES" ]; then
+  echo ""
+  echo "❌ [pre-push] 检测到冲突标记："
+  echo "$CONFLICT_FILES"
+  exit 1
+fi
 
 echo "✅ [pre-push] 全部通过，允许推送"
