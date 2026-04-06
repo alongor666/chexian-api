@@ -1,0 +1,38 @@
+#!/bin/bash
+# commit-msg hook：强制语义化提交消息格式
+# 格式：type(scope): description 或 type: description
+# 安装方式：bun run hooks:install
+set -e
+
+MSG_FILE="$1"
+MSG=$(head -1 "$MSG_FILE")
+
+# 允许 merge commit
+if echo "$MSG" | grep -qE "^Merge "; then
+  exit 0
+fi
+
+# 允许 revert commit
+if echo "$MSG" | grep -qE "^Revert "; then
+  exit 0
+fi
+
+# 语义化前缀检查：feat|fix|refactor|style|test|docs|chore|perf|ci|build
+PATTERN="^(feat|fix|refactor|style|test|docs|chore|perf|ci|build)(\(.+\))?: .+"
+if ! echo "$MSG" | grep -qE "$PATTERN"; then
+  echo ""
+  echo "❌ [commit-msg] 提交消息不符合语义化规范"
+  echo ""
+  echo "  格式: type(scope): description"
+  echo "  类型: feat|fix|refactor|style|test|docs|chore|perf|ci|build"
+  echo ""
+  echo "  示例: feat(cost): 新增综合成本率指标"
+  echo "        fix(ci): 修复原生模块测试排除"
+  echo "        docs: 更新诊断报告文档"
+  echo ""
+  echo "  当前消息: $MSG"
+  echo ""
+  exit 1
+fi
+
+echo "✅ [commit-msg] 消息格式规范"

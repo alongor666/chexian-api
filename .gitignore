@@ -85,6 +85,11 @@ server/data/user_store.json
 数据管理/output/
 logs/
 
+# 诊断分析报告产物（AI 生成的 MD/JSON，按需重新生成，保留 .py 工具脚本）
+数据分析报告/**/*.md
+数据分析报告/**/*.json
+!数据分析报告/**/README.md
+
 # 续保临时 SQL/分析（限定 scripts/ 目录）
 scripts/*续保*.sql
 scripts/*续保*.md

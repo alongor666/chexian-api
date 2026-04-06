@@ -1,12 +1,49 @@
 #!/bin/bash
-# pre-commit hook：提交前跑类型检查，拦截 TS 错误
+# pre-commit hook：提交前类型检查 + 大文件拦截 + 生成报告拦截
 # 安装方式：bun run hooks:install
 set -e
 
+# --- 1. 拦截大文件（>500KB）---
+MAX_SIZE=512000
+LARGE_FILES=""
+for file in $(git diff --cached --name-only --diff-filter=ACM); do
+  if [ -f "$file" ]; then
+    size=$(wc -c < "$file")
+    if [ "$size" -gt "$MAX_SIZE" ]; then
+      LARGE_FILES="$LARGE_FILES\n  $file ($(( size / 1024 ))KB)"
+    fi
+  fi
+done
+
+if [ -n "$LARGE_FILES" ]; then
+  echo ""
+  echo "❌ [pre-commit] 检测到大文件（>500KB），疑似生成产物："
+  echo -e "$LARGE_FILES"
+  echo ""
+  echo "  如果是诊断报告，请勿提交（已加入 .gitignore）"
+  echo "  如确需提交，使用: git commit --no-verify"
+  echo ""
+  exit 1
+fi
+
+# --- 2. 拦截 数据分析报告/ 下的 MD/JSON（应被 .gitignore 排除）---
+REPORT_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^数据分析报告/.*\.(md|json)$' || true)
+if [ -n "$REPORT_FILES" ]; then
+  echo ""
+  echo "❌ [pre-commit] 检测到诊断报告文件被暂存："
+  echo "$REPORT_FILES"
+  echo ""
+  echo "  这些文件应被 .gitignore 排除。请执行："
+  echo "  git rm --cached <file> 移除暂存"
+  echo ""
+  exit 1
+fi
+
+# --- 3. 类型检查 ---
 echo "🔍 [pre-commit] 运行前端类型检查..."
 bun run typecheck
 
 echo "🔍 [pre-commit] 运行 server 类型检查..."
 npx tsc --noEmit --project server/tsconfig.json
 
-echo "✅ [pre-commit] 类型检查通过，允许提交"
+echo "✅ [pre-commit] 全部检查通过，允许提交"

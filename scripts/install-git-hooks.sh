@@ -21,9 +21,11 @@ install_hook() {
 }
 
 install_hook "pre-commit"
+install_hook "commit-msg"
 install_hook "pre-push"
 
 echo ""
-echo "Git hooks 安装完成。"
-echo "下次 git commit 前会自动执行类型检查。"
-echo "下次 git push 前会自动执行 bun run test --run + bun run typecheck。"
+echo "Git hooks 安装完成（3 hooks）。"
+echo "  pre-commit : 类型检查 + 大文件拦截 + 生成报告拦截"
+echo "  commit-msg : 语义化提交消息校验（feat|fix|refactor|...）"
+echo "  pre-push   : 单测 + 类型检查 + 治理校验 + 冲突标记扫描"
