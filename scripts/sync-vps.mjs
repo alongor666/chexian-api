@@ -22,10 +22,11 @@
  *   SYNC_VPS_KEY_PATH, SYNC_VPS_DATA_DIR, SYNC_VPS_HEALTH_URL
  */
 
-import { existsSync, statSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, statSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname, basename, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
+import { createHash } from 'crypto';
 import os from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -505,7 +506,48 @@ async function runStandardMode(sshConfig, runConfig) {
     log('yellow', '  跳过 fact/claims_detail（本地目录不存在）');
   }
 
+  // 写同步清单：记录本次同步的文件指纹，governance 用于检测数据漂移
+  writeSyncManifest();
+
   await maybeRestart(sshConfig, runConfig.noRestart, runConfig.healthUrl);
+}
+
+/**
+ * 扫描所有 LOCAL_*_DIR 目录中的 parquet 文件，生成指纹清单。
+ * governance 对比此清单与当前文件状态，不一致则阻断 push。
+ */
+function writeSyncManifest() {
+  const dirs = [
+    { label: 'policy/current', path: LOCAL_CURRENT_DIR },
+    { label: 'dim/salesman', path: LOCAL_SALESMAN_DIR },
+    { label: 'dim/plan', path: LOCAL_PLAN_DIR },
+    { label: 'dim/brand', path: LOCAL_BRAND_DIR },
+    { label: 'fact/renewal', path: LOCAL_RENEWAL_DIR },
+    { label: 'fact/quotes_conversion', path: LOCAL_QUOTES_CONVERSION_DIR },
+    { label: 'fact/claims_detail', path: LOCAL_CLAIMS_DETAIL_DIR },
+  ];
+
+  const files = {};
+  for (const dir of dirs) {
+    if (!existsSync(dir.path)) continue;
+    const parquets = readdirSync(dir.path).filter(f => f.endsWith('.parquet'));
+    for (const f of parquets) {
+      const fullPath = join(dir.path, f);
+      const stat = statSync(fullPath);
+      const key = `${dir.label}/${f}`;
+      files[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
+    }
+  }
+
+  const manifest = {
+    syncedAt: new Date().toISOString(),
+    fileCount: Object.keys(files).length,
+    files,
+  };
+
+  const manifestPath = join(ROOT_DIR, '.last-sync-manifest.json');
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+  log('green', `✓ 同步清单已写入 .last-sync-manifest.json（${manifest.fileCount} 个文件）`);
 }
 
 async function main(argv = process.argv.slice(2)) {

@@ -137,6 +137,48 @@ app.use(errorHandler);
  * 启动服务器
  */
 async function startServer() {
+  /**
+   * 检测时间范围重叠的 parquet 文件（文件名格式：*_YYYYMMDD_YYYYMMDD.parquet）。
+   * 同一起始日期的文件只保留结束日期最新的，避免数据翻倍。
+   */
+  function deduplicateOverlappingParquet(files: { name: string; path: string; size: number; mtimeMs: number }[]) {
+    const datePattern = /(\d{8})_(\d{8})\.parquet$/;
+    const groups = new Map<string, typeof files>();
+
+    for (const f of files) {
+      const m = datePattern.exec(f.name);
+      if (!m) {
+        // 无日期范围的文件直接保留
+        groups.set(f.name, [f]);
+        continue;
+      }
+      const startDate = m[1];
+      const existing = groups.get(startDate) ?? [];
+      existing.push(f);
+      groups.set(startDate, existing);
+    }
+
+    const result: typeof files = [];
+    for (const [key, group] of groups) {
+      if (group.length <= 1) {
+        result.push(...group);
+        continue;
+      }
+      // 同起始日期的多个文件：按结束日期降序，保留最新的
+      group.sort((a, b) => {
+        const aEnd = datePattern.exec(a.name)?.[2] ?? '';
+        const bEnd = datePattern.exec(b.name)?.[2] ?? '';
+        return bEnd.localeCompare(aEnd);
+      });
+      const kept = group[0];
+      const skipped = group.slice(1);
+      console.warn(`[Server] ⚠️ Parquet overlap detected (start=${key}): keeping ${kept.name}, skipping ${skipped.map(f => f.name).join(', ')}`);
+      result.push(kept);
+    }
+
+    return result;
+  }
+
   try {
     // 初始化DuckDB
     console.log('[Server] Initializing DuckDB...');
@@ -203,6 +245,11 @@ async function startServer() {
       // 有 current/ 数据时：筛选非 test-data；若只有测试文件则仅加载一个
       const realDataFiles = parquetFiles.filter(f => !f.name.startsWith('test-data'));
       filesToLoad = realDataFiles.length > 0 ? realDataFiles : parquetFiles.slice(0, 1);
+    }
+
+    // 自愈：检测时间范围重叠的 parquet 文件，只保留覆盖范围最大的
+    if (filesToLoad.length > 1) {
+      filesToLoad = deduplicateOverlappingParquet(filesToLoad);
     }
 
     if (filesToLoad.length === 0) {

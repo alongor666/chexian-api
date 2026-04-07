@@ -1313,6 +1313,94 @@ function checkSyncVpsCoverage() {
 }
 
 // ============================================================
+// 第21项检查：数据漂移检测（本地文件 vs 上次同步清单）
+// ============================================================
+
+/**
+ * 对比本地 parquet 文件与 .last-sync-manifest.json 的差异。
+ * 如果本地文件有新增/删除/大小变化，说明数据修改后还没同步到 VPS。
+ */
+function checkDataDrift() {
+  info('检查数据同步状态（本地 vs VPS 清单）...');
+
+  const manifestPath = path.join(ROOT_DIR, '.last-sync-manifest.json');
+  if (!fs.existsSync(manifestPath)) {
+    warning('未找到 .last-sync-manifest.json（首次同步前正常）— 运行 node scripts/sync-vps.mjs 生成');
+    return true; // 不阻断首次
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch {
+    warning('.last-sync-manifest.json 格式错误，跳过检查');
+    return true;
+  }
+
+  // 扫描当前本地文件
+  const syncVpsPath = path.join(ROOT_DIR, 'scripts/sync-vps.mjs');
+  let syncContent;
+  try {
+    syncContent = fs.readFileSync(syncVpsPath, 'utf8');
+  } catch {
+    return true;
+  }
+
+  // 提取目录映射：从 writeSyncManifest 的 dirs 数组
+  const dirMappings = [
+    { label: 'policy/current', rel: '数据管理/warehouse/fact/policy/current' },
+    { label: 'dim/salesman', rel: '数据管理/warehouse/dim/salesman' },
+    { label: 'dim/plan', rel: '数据管理/warehouse/dim/plan' },
+    { label: 'dim/brand', rel: '数据管理/warehouse/dim/brand' },
+    { label: 'fact/renewal', rel: '数据管理/warehouse/fact/renewal' },
+    { label: 'fact/quotes_conversion', rel: '数据管理/warehouse/fact/quotes_conversion' },
+    { label: 'fact/claims_detail', rel: '数据管理/warehouse/fact/claims_detail' },
+  ];
+
+  const currentFiles = {};
+  for (const dir of dirMappings) {
+    const absPath = path.join(ROOT_DIR, dir.rel);
+    if (!fs.existsSync(absPath)) continue;
+    const parquets = fs.readdirSync(absPath).filter(f => f.endsWith('.parquet'));
+    for (const f of parquets) {
+      const key = `${dir.label}/${f}`;
+      const stat = fs.statSync(path.join(absPath, f));
+      currentFiles[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
+    }
+  }
+
+  const manifestFiles = manifest.files || {};
+  const diffs = [];
+
+  // 检查新增或大小变化的文件
+  for (const [key, cur] of Object.entries(currentFiles)) {
+    if (!manifestFiles[key]) {
+      diffs.push(`+ ${key}（新增，未同步）`);
+    } else if (manifestFiles[key].size !== cur.size) {
+      diffs.push(`~ ${key}（大小变化: ${manifestFiles[key].size} → ${cur.size}）`);
+    }
+  }
+
+  // 检查已删除的文件
+  for (const key of Object.keys(manifestFiles)) {
+    if (!currentFiles[key]) {
+      diffs.push(`- ${key}（已删除，VPS 仍有旧文件）`);
+    }
+  }
+
+  if (diffs.length === 0) {
+    success(`数据同步状态一致（${Object.keys(currentFiles).length} 个文件，清单时间: ${manifest.syncedAt?.slice(0, 16) ?? '未知'}）`);
+    return true;
+  }
+
+  error(
+    `本地数据与 VPS 同步清单不一致（${diffs.length} 处差异）——push 前必须运行 node scripts/sync-vps.mjs\n` +
+    diffs.map(d => `    ${d}`).join('\n')
+  );
+  return false;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -1340,6 +1428,7 @@ function main() {
     { name: 'DarkMode质量', fn: checkDarkModeQuality },
     { name: 'ECharts网格线', fn: checkEchartsSplitLine },
     { name: 'sync-vps覆盖', fn: checkSyncVpsCoverage },
+    { name: '数据漂移检测', fn: checkDataDrift },
   ];
 
   let passedCount = 0;

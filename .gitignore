@@ -72,6 +72,9 @@ PASSWORDS.local.txt
 # 本地设置（不提交）
 .claude/settings.local.json
 
+# sync-vps 同步清单（本地状态，不提交）
+.last-sync-manifest.json
+
 # 用户配置持久化文件（含 bcrypt hash，禁止提交）
 server/data/user_store.json
 
