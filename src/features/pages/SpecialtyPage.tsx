@@ -1,9 +1,11 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CrossSellAnalysisPanel, CrossSellHeaderControls } from '../dashboard/CrossSellAnalysisPanel';
 import { TruckAnalysisPanel } from '../dashboard/TruckAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 import { Tabs } from '../../shared/ui';
 import { buttonStyles, cn } from '../../shared/styles';
 import type { ViewPerspective } from '../../shared/types';
@@ -53,6 +55,11 @@ export const SpecialtyPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SpecialtyTab>(initialTab);
 
   const { filters, setFilters } = useGlobalFilters();
+
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+  const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+    setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+  }, [setFilters]);
 
   // Cross-sell state
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
@@ -138,10 +145,16 @@ export const SpecialtyPage: React.FC = () => {
     'truck': '营业货车分析',
   };
 
+  const dynamicTitle = useMemo(() => {
+    const label = buildFilterLabel(quickFilters);
+    const base = titleMap[activeTab];
+    return label ? `${label} — ${base}` : base;
+  }, [quickFilters, activeTab]);
+
   return (
     <PageFilterPanel
       preset={presetMap[activeTab]}
-      title={titleMap[activeTab]}
+      title={dynamicTitle}
       anchorSections={
         activeTab === 'cross-sell' ? [...CROSS_SELL_ANCHORS]
         : activeTab === 'renewal' ? RENEWAL_ANCHORS
@@ -150,6 +163,11 @@ export const SpecialtyPage: React.FC = () => {
       showBasicFilterBar={false}
       headerRightContent={renderHeaderControls}
     >
+      <QuickFilterBar
+        filters={quickFilters}
+        onChange={handleQuickFilterChange}
+        hideVehicleType={activeTab === 'truck'}
+      />
       <div className="space-y-4">
         <Tabs
           items={tabItems}

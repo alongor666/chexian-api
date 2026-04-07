@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { RenewalAnalysisPanel } from '../dashboard/RenewalAnalysisPanel';
 import { RenewalDrilldownPanel } from '../dashboard/RenewalDrilldownPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 import type { ViewPerspective } from '../../shared/types';
 
 type RenewalTab = 'drilldown' | 'detail';
 
 export const RenewalPage: React.FC = () => {
-  const { filters, maxDataDate } = useGlobalFilters();
+  const { filters, setFilters, maxDataDate } = useGlobalFilters();
 
   const [perspective, setPerspective] = useState<ViewPerspective>('premium');
   const [activeTab, setActiveTab] = useState<RenewalTab>('drilldown');
@@ -20,6 +22,15 @@ export const RenewalPage: React.FC = () => {
   const [selfRenewalOnly, setSelfRenewalOnly] = useState(false);
   const [selectedDueMonth, setSelectedDueMonth] = useState<number | null>(null);
 
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+  const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+    setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+  }, [setFilters]);
+  const dynamicTitle = useMemo(() => {
+    const label = buildFilterLabel(quickFilters);
+    return label ? `${label} — 续保分析` : '续保分析';
+  }, [quickFilters]);
+
   const detailFilters = {
     ...filters,
     analysis_year: 2026,
@@ -28,10 +39,11 @@ export const RenewalPage: React.FC = () => {
   return (
     <PageFilterPanel
       preset="renewalDetail"
-      title="续保分析"
+      title={dynamicTitle}
       showBasicFilterBar={false}
       headerRightContent={(actions) => <FilterQuickActions {...actions} />}
     >
+      <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       <div className="p-4 space-y-4">
         <div className="bg-white dark:bg-neutral-800 rounded shadow">
           <div className="border-b border-neutral-200 dark:border-neutral-700">

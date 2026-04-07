@@ -1,15 +1,26 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { FeeAnalysisPanel } from '../fee-analysis';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 
 export const FeeAnalysisPage: React.FC = () => {
-  const { filters } = useGlobalFilters();
+  const { filters, setFilters } = useGlobalFilters();
+
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+  const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+    setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+  }, [setFilters]);
+  const dynamicTitle = useMemo(() => {
+    const label = buildFilterLabel(quickFilters);
+    return label ? `${label} — 费用分析` : '费用分析';
+  }, [quickFilters]);
 
   return (
     <PageFilterPanel
       preset="cost"
-      title="费用分析"
+      title={dynamicTitle}
       showBasicFilterBar={false}
       anchorSections={[
         { id: 'fee-kpi', label: 'KPI指标' },
@@ -17,6 +28,7 @@ export const FeeAnalysisPage: React.FC = () => {
       ]}
       headerRightContent={(actions) => <FilterQuickActions {...actions} />}
     >
+      <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       <div className="p-4">
         <FeeAnalysisPanel filters={filters} />
       </div>

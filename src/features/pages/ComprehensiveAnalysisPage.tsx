@@ -1,10 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFilterPanel';
 import { Tabs, Button } from '@/shared/ui';
 import { cardStyles, cn, colorClasses, textStyles, buttonStyles } from '@/shared/styles';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { useTheme } from '@/shared/theme';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 import { formatPercent, formatPremiumWan } from '@/shared/utils/formatters';
 import { useComprehensiveBundle } from '@/features/comprehensive-analysis/hooks/useComprehensiveBundle';
 import type {
@@ -57,7 +59,16 @@ interface ComprehensiveAnalysisPageProps {
 export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps> = ({ onBack }) => {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const { filters, maxDataDate } = useGlobalFilters();
+  const { filters, setFilters, maxDataDate } = useGlobalFilters();
+
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+  const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+    setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+  }, [setFilters]);
+  const dynamicTitle = useMemo(() => {
+    const label = buildFilterLabel(quickFilters);
+    return label ? `${label} — 综合分析` : '综合分析';
+  }, [quickFilters]);
   const { data, loading, error } = useComprehensiveBundle(filters, maxDataDate);
 
   const [activeTab, setActiveTab] = useState<ComprehensiveTabKey>('overview');
@@ -217,7 +228,7 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
   return (
     <PageFilterPanel
       preset="cost"
-      title="综合分析"
+      title={dynamicTitle}
       showBasicFilterBar={false}
       headerRightContent={(actions) => (
         <FilterQuickActions {...actions}>
@@ -233,6 +244,7 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
         </FilterQuickActions>
       )}
     >
+      <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       <div className="space-y-4">
         <section className={cn(cardStyles.standard, 'space-y-3')}>
           <Tabs

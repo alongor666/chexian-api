@@ -1,15 +1,26 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { GrowthAnalysisPanel } from '../growth/components/GrowthAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 
 export const GrowthPage: React.FC = () => {
-  const { filters } = useGlobalFilters();
+  const { filters, setFilters } = useGlobalFilters();
+
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+  const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+    setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+  }, [setFilters]);
+  const dynamicTitle = useMemo(() => {
+    const label = buildFilterLabel(quickFilters);
+    return label ? `${label} — 增长分析` : '增长分析';
+  }, [quickFilters]);
 
   return (
     <PageFilterPanel
       preset="growth"
-      title="增长分析"
+      title={dynamicTitle}
       showBasicFilterBar={false}
       anchorSections={[
         { id: 'growth-control', label: '分析配置' },
@@ -18,6 +29,7 @@ export const GrowthPage: React.FC = () => {
       ]}
       headerRightContent={(actions) => <FilterQuickActions {...actions} />}
     >
+      <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       <GrowthAnalysisPanel filters={filters} />
     </PageFilterPanel>
   );

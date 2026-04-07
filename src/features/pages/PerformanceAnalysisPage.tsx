@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { PageFilterPanel } from '../../components/layout/PageFilterPanel';
 import { PerformanceAnalysisPanel, PerformanceHeaderActions } from '../dashboard/PerformanceAnalysisPanel';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 import type {
   PerformanceGrowthMode,
   PerformanceSegmentTag,
@@ -17,15 +19,24 @@ const PERFORMANCE_ANCHORS = [
 ] as const;
 
 export const PerformanceAnalysisPage: React.FC = () => {
-  const { filters } = useGlobalFilters();
+  const { filters, setFilters } = useGlobalFilters();
   const [segmentTag, setSegmentTag] = useState<PerformanceSegmentTag>('all');
   const [timePeriod, setTimePeriod] = useState<PerformanceTimePeriod>('day');
   const [growthMode, setGrowthMode] = useState<PerformanceGrowthMode>('mom');
 
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+  const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+    setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+  }, [setFilters]);
+  const dynamicTitle = useMemo(() => {
+    const label = buildFilterLabel(quickFilters);
+    return label ? `${label} — 业绩分析` : '业绩分析';
+  }, [quickFilters]);
+
   return (
     <PageFilterPanel
       preset="performance"
-      title="业绩分析"
+      title={dynamicTitle}
       anchorSections={[...PERFORMANCE_ANCHORS]}
       showBasicFilterBar={false}
       headerRightContent={(actions) => (
@@ -38,6 +49,7 @@ export const PerformanceAnalysisPage: React.FC = () => {
         />
       )}
     >
+      <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       <PerformanceAnalysisPanel
         filters={filters}
         segmentTag={segmentTag}

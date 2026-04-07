@@ -2,6 +2,7 @@
  * 快捷筛选栏
  *
  * 单行布局：车型芯片（互斥） + 新能源/燃油 + 维度 toggle（循环切换）
+ * 全局共享组件，所有分析页面可用。
  */
 import React from 'react';
 import { cn } from '@/shared/styles';
@@ -25,6 +26,8 @@ export interface QuickFilters {
 interface Props {
   filters: QuickFilters;
   onChange: (filters: QuickFilters) => void;
+  /** 隐藏车型芯片行（如 TruckPage 已服务端固定车型） */
+  hideVehicleType?: boolean;
 }
 
 // ── 车型芯片 ──
@@ -110,7 +113,7 @@ const toggleDefault = 'bg-neutral-50 text-neutral-400 border-neutral-200 hover:b
 
 const Separator = () => <span className="w-px h-4 bg-neutral-300 dark:bg-neutral-600 mx-1" />;
 
-export const QuickFilterBar: React.FC<Props> = ({ filters, onChange }) => {
+export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicleType }) => {
   const toggleVehicle = (type: VehicleType) => {
     onChange({
       ...filters,
@@ -142,7 +145,7 @@ export const QuickFilterBar: React.FC<Props> = ({ filters, onChange }) => {
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-1.5">
         {/* 车型芯片 */}
-        {VEHICLE_CHIPS.map(({ type, label }) => (
+        {!hideVehicleType && VEHICLE_CHIPS.map(({ type, label }) => (
           <button
             key={type}
             type="button"

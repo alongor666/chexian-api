@@ -7,7 +7,7 @@
  *
  * 使用 claimsDetail preset，由 QuickFilterBar 提供快捷组合。
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { cn, colorClasses } from '@/shared/styles';
 import { buildFilterParams } from '@/shared/utils/filterParams';
@@ -16,7 +16,8 @@ import { useClaimsDetail } from '../claims-detail/hooks/useClaimsDetail';
 import { PendingClaimsPanel } from '../claims-detail/components/PendingClaimsPanel';
 import { GeoRiskPanel } from '../claims-detail/components/GeoRiskPanel';
 import { LossRatioDevelopmentPanel } from '../claims-detail/components/LossRatioDevelopmentPanel';
-import { QuickFilterBar, type QuickFilters } from '../claims-detail/components/QuickFilterBar';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 
 const TABS = [
   { key: 'pending', label: '未决赔案监控' },
@@ -32,16 +33,6 @@ const TAB_TITLES: Record<TabKey, string> = {
   development: '赔付率发展',
 };
 
-const VEHICLE_LABELS: Record<string, string> = {
-  home_car: '家自车',
-  truck_1t: '1T货车',
-  truck_2_9t: '2-9T货车',
-  motorcycle: '摩托车',
-  dump: '自卸车',
-  tractor: '牵引车',
-  general: '普货车',
-};
-
 /**
  * 将全局筛选参数适配为 claims-detail API 参数
  */
@@ -55,38 +46,25 @@ function adaptFilterParams(globalParams: Record<string, string>): Record<string,
 
 export const ClaimsDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('pending');
-  const { filters } = useGlobalFilters();
+  const { filters, setFilters } = useGlobalFilters();
   const hook = useClaimsDetail();
 
-  // 快捷筛选状态（页面级，默认全量）
-  const [quickFilters, setQuickFilters] = useState<QuickFilters>({});
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+
+  const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+    setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+  }, [setFilters]);
 
   const globalParams = useMemo(() => buildFilterParams(filters), [filters]);
 
-  // 动态标题：反映筛选状态 + 当前 Tab
   const dynamicTitle = useMemo(() => {
-    const parts: string[] = [];
-    if (quickFilters.vehicleType) {
-      parts.push(VEHICLE_LABELS[quickFilters.vehicleType] ?? quickFilters.vehicleType);
-    }
-    if (quickFilters.isNev === true) parts.push('新能源');
-    else if (quickFilters.isNev === false) parts.push('燃油');
-    if (quickFilters.isNewCar === true) parts.push('新车');
-    else if (quickFilters.isNewCar === false) parts.push('旧车');
-    if (quickFilters.renewalType === 'renewal') parts.push('续保');
-    else if (quickFilters.renewalType === 'transfer') parts.push('转保');
-    if (quickFilters.businessNature === 'commercial') parts.push('营业');
-    else if (quickFilters.businessNature === 'non_commercial') parts.push('非营');
-    if (quickFilters.isTransfer === true) parts.push('过户');
-    else if (quickFilters.isTransfer === false) parts.push('非过户');
-    if (quickFilters.coverageCombination) parts.push(quickFilters.coverageCombination);
+    const label = buildFilterLabel(quickFilters);
     const year = filters.analysis_year ?? new Date().getFullYear();
-    parts.push(`${year}年`);
-    parts.push(TAB_TITLES[activeTab]);
-    return parts.join('');
+    const parts = [label, `${year}年`, TAB_TITLES[activeTab]].filter(Boolean);
+    return parts.join(' ');
   }, [quickFilters, filters.analysis_year, activeTab]);
 
-  // 合并全局筛选 + 快捷筛选
+  // claims-detail API 使用专用参数格式
   const params = useMemo(() => {
     const base = adaptFilterParams(globalParams);
     if (quickFilters.vehicleType) base.vehicleQuickFilter = quickFilters.vehicleType;
@@ -119,7 +97,7 @@ export const ClaimsDetailPage: React.FC = () => {
     >
       {/* 快捷筛选栏 */}
       <div id="claims-filter">
-        <QuickFilterBar filters={quickFilters} onChange={setQuickFilters} />
+        <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       </div>
 
       {/* Tab 切换 */}

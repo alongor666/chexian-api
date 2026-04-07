@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
 import { PremiumDashboard } from '../dashboard/PremiumDashboard';
 import { PdfExportService } from '../../services/PdfExportService';
 import { useDataStatus } from '../../shared/contexts/DataContext';
+import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { Logger } from '../../shared/utils/logger';
 import { buttonStyles, cn, textStyles } from '../../shared/styles';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 
 const logger = new Logger('PremiumDashboardPage');
 
@@ -16,8 +19,18 @@ function waitForNextFrame(): Promise<void> {
 
 export const PremiumDashboardPage: React.FC = () => {
   const { isDataLoaded } = useDataStatus();
+  const { filters, setFilters } = useGlobalFilters();
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showCustomizerPanel, setShowCustomizerPanel] = useState(false);
+
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+  const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+    setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+  }, [setFilters]);
+  const dynamicTitle = useMemo(() => {
+    const label = buildFilterLabel(quickFilters);
+    return label ? `${label} — 保费分析看板` : '保费分析看板';
+  }, [quickFilters]);
 
   const handleExportPdf = async () => {
     if (!isDataLoaded || isExportingPdf) return;
@@ -46,7 +59,7 @@ export const PremiumDashboardPage: React.FC = () => {
   return (
     <PageFilterPanel
       preset="full"
-      title="保费分析看板"
+      title={dynamicTitle}
       showBasicFilterBar={false}
       anchorSections={[
         { id: 'dashboard-kpi', label: 'KPI指标' },
@@ -81,6 +94,7 @@ export const PremiumDashboardPage: React.FC = () => {
         </FilterQuickActions>
       )}
     >
+      <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       <PremiumDashboard showCustomizerPanel={showCustomizerPanel} />
     </PageFilterPanel>
   );

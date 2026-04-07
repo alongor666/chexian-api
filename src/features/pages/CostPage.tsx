@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CostAnalysisPanel } from '../cost/components/CostAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
@@ -6,6 +6,8 @@ import { PageFilterPanel, FilterQuickActions } from '../../components/layout/Pag
 import { buttonStyles, cn } from '@/shared/styles';
 import { usePermission } from '@/shared/contexts/PermissionContext';
 import { canAccessCost } from '@/shared/config/organizations';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 
 const ComprehensiveAnalysisPage = lazy(() =>
   import('./ComprehensiveAnalysisPage').then((m) => ({ default: m.ComprehensiveAnalysisPage }))
@@ -14,11 +16,20 @@ const ComprehensiveAnalysisPage = lazy(() =>
 type CostView = 'basic' | 'comprehensive';
 
 export const CostPage: React.FC = () => {
-  const { filters, maxDataDate } = useGlobalFilters();
+  const { filters, setFilters, maxDataDate } = useGlobalFilters();
   const { userPermission } = usePermission();
   const [searchParams] = useSearchParams();
   const initialView = (searchParams.get('view') as CostView) || 'basic';
   const [view, setView] = useState<CostView>(initialView);
+
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+  const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+    setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+  }, [setFilters]);
+  const dynamicTitle = useMemo(() => {
+    const label = buildFilterLabel(quickFilters);
+    return label ? `${label} — 成本分析` : '成本分析';
+  }, [quickFilters]);
 
   const comprehensiveSwitch = import.meta.env.VITE_ENABLE_COMPREHENSIVE_ANALYSIS;
   const enableComprehensiveAnalysis =
@@ -36,7 +47,7 @@ export const CostPage: React.FC = () => {
   return (
     <PageFilterPanel
       preset="cost"
-      title="成本分析"
+      title={dynamicTitle}
       showBasicFilterBar={false}
       anchorSections={[
         { id: 'cost-control', label: '分析配置' },
@@ -55,6 +66,7 @@ export const CostPage: React.FC = () => {
         </FilterQuickActions>
       )}
     >
+      <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       <CostAnalysisPanel filters={filters} maxDataDate={maxDataDate} />
     </PageFilterPanel>
   );
