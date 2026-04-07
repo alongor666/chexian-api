@@ -1254,6 +1254,65 @@ function checkEchartsSplitLine() {
 }
 
 // ============================================================
+// 第20项检查：sync-vps 数据域覆盖一致性
+// ============================================================
+
+/**
+ * 检查 sync-vps.mjs 中声明的 LOCAL_*_DIR 常量是否全部在 runStandardMode() 中被引用。
+ * 防止新增数据域只声明了常量但忘记添加实际同步步骤。
+ */
+function checkSyncVpsCoverage() {
+  info('检查 sync-vps 数据域同步覆盖...');
+
+  const syncVpsPath = path.join(ROOT_DIR, 'scripts/sync-vps.mjs');
+  let content;
+  try {
+    content = fs.readFileSync(syncVpsPath, 'utf8');
+  } catch {
+    warning('sync-vps.mjs 不存在，跳过检查');
+    return true;
+  }
+
+  // 提取所有 LOCAL_*_DIR 常量名
+  const constRegex = /const\s+(LOCAL_\w+_DIR)\s*=/g;
+  const declaredDirs = [];
+  let match;
+  while ((match = constRegex.exec(content)) !== null) {
+    declaredDirs.push(match[1]);
+  }
+
+  if (declaredDirs.length === 0) {
+    success('sync-vps 数据域覆盖检查跳过（无 LOCAL_*_DIR 常量）');
+    return true;
+  }
+
+  // 提取 runStandardMode 函数体
+  const fnStart = content.indexOf('async function runStandardMode');
+  if (fnStart === -1) {
+    warning('sync-vps.mjs 中未找到 runStandardMode 函数，跳过检查');
+    return true;
+  }
+
+  // 简单提取：从函数声明到下一个 async function 或文件末尾
+  const fnEnd = content.indexOf('\nasync function ', fnStart + 1);
+  const fnBody = fnEnd === -1 ? content.slice(fnStart) : content.slice(fnStart, fnEnd);
+
+  const missing = declaredDirs.filter(name => !fnBody.includes(name));
+
+  if (missing.length > 0) {
+    error(
+      `sync-vps.mjs 数据域同步遗漏：${missing.length} 个 LOCAL_*_DIR 常量未在 runStandardMode() 中引用\n` +
+      missing.map(name => `    - ${name}`).join('\n') + '\n' +
+      '    ▶ 修复：在 runStandardMode() 中添加对应的 rsyncDir 同步步骤'
+    );
+    return false;
+  }
+
+  success(`sync-vps 数据域覆盖一致（${declaredDirs.length} 个目录全部同步）`);
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -1280,6 +1339,7 @@ function main() {
     { name: '字段定义一致', fn: checkFieldDefinitionConsistency },
     { name: 'DarkMode质量', fn: checkDarkModeQuality },
     { name: 'ECharts网格线', fn: checkEchartsSplitLine },
+    { name: 'sync-vps覆盖', fn: checkSyncVpsCoverage },
   ];
 
   let passedCount = 0;
