@@ -277,17 +277,20 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
 
   /**
    * 赔案明细预设
-   * - 常驻筛选区全部隐藏（由页面内快捷组合接管）
+   * - 常驻筛选区：日期口径(锁定起保日期)、年度、日期范围、机构、客户类别、险别
+   * - 页面内 QuickFilterBar 提供特征快捷筛选（能源、过户等）
    * - 保留高级筛选抽屉
    */
   claimsDetail: {
-    dateCriteria: false,
-    analysisYear: false,
-    dateRange: false,
-    organization: false,
+    dateCriteria: true,
+    lockedDateCriteria: 'insurance_start_date',
+    allowedYears: 'allAvailable',
+    analysisYear: true,
+    dateRange: true,
+    organization: true,
     salesman: false,
-    customerCategory: false,
-    coverageCombination: false,
+    customerCategory: true,
+    coverageCombination: true,
     renewalMode: false,
     basicOptions: false,
     quickCombos: false,

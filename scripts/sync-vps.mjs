@@ -491,6 +491,20 @@ async function runStandardMode(sshConfig, runConfig) {
     log('yellow', '  跳过 fact/quotes_conversion（本地目录不存在）');
   }
 
+  if (existsSync(LOCAL_BRAND_DIR)) {
+    log('green', '▶ 步骤 6: 同步 dim/brand...');
+    await rsyncDir(alias, LOCAL_BRAND_DIR, `${remote}/dim/brand`, 'dim/brand');
+  } else {
+    log('yellow', '  跳过 dim/brand（本地目录不存在）');
+  }
+
+  if (existsSync(LOCAL_CLAIMS_DETAIL_DIR)) {
+    log('green', '▶ 步骤 7: 同步 fact/claims_detail...');
+    await rsyncDir(alias, LOCAL_CLAIMS_DETAIL_DIR, `${remote}/fact/claims_detail`, 'fact/claims_detail');
+  } else {
+    log('yellow', '  跳过 fact/claims_detail（本地目录不存在）');
+  }
+
   await maybeRestart(sshConfig, runConfig.noRestart, runConfig.healthUrl);
 }
 

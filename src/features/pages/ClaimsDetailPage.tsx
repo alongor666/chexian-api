@@ -77,7 +77,7 @@ export const ClaimsDetailPage: React.FC = () => {
     <PageFilterPanel
       preset="claimsDetail"
       title="赔案明细分析"
-      showBasicFilterBar={false}
+      showBasicFilterBar={true}
       anchorSections={[
         { id: 'claims-filter', label: '快捷筛选' },
         { id: 'claims-content', label: '分析内容' },
