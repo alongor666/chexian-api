@@ -289,8 +289,8 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
     dateRange: true,
     organization: true,
     salesman: false,
-    customerCategory: true,
-    coverageCombination: true,
+    customerCategory: false,     // 由 QuickFilterBar 车型芯片覆盖
+    coverageCombination: false,  // 由 QuickFilterBar 险别 toggle 覆盖
     renewalMode: false,
     basicOptions: false,
     quickCombos: false,

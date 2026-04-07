@@ -5,7 +5,7 @@
  * Tab 2: 地理风险热力图
  * Tab 3: 赔付率发展
  *
- * 使用 claimsDetail preset 隐藏常驻筛选区，由 QuickFilterBar 提供快捷组合。
+ * 使用 claimsDetail preset，由 QuickFilterBar 提供快捷组合。
  */
 import React, { useState, useMemo } from 'react';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
@@ -26,26 +26,31 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]['key'];
 
+const TAB_TITLES: Record<TabKey, string> = {
+  pending: '未决赔案监控',
+  geo: '地理风险热力图',
+  development: '赔付率发展',
+};
+
+const VEHICLE_LABELS: Record<string, string> = {
+  home_car: '家自车',
+  truck_1t: '1T货车',
+  truck_2_9t: '2-9T货车',
+  motorcycle: '摩托车',
+  dump: '自卸车',
+  tractor: '牵引车',
+  general: '普货车',
+};
+
 /**
  * 将全局筛选参数适配为 claims-detail API 参数
  */
 function adaptFilterParams(globalParams: Record<string, string>): Record<string, string> {
   const p: Record<string, string> = {};
   if (globalParams.orgNames) p.orgName = globalParams.orgNames;
-  if (globalParams.customerCategories) p.customerCategory = globalParams.customerCategories;
   if (globalParams.startDate) p.dateStart = globalParams.startDate;
   if (globalParams.endDate) p.dateEnd = globalParams.endDate;
   return p;
-}
-
-/** 构建筛选摘要文本 */
-function buildSummary(filters: Record<string, any>): string {
-  const year = filters.analysis_year ?? new Date().getFullYear();
-  const start = filters.policy_date_start ?? '';
-  const end = filters.policy_date_end ?? '';
-  const startShort = start ? start.slice(5) : '01-01';
-  const endShort = end ? end.slice(5) : '12-31';
-  return `${year}年 | 起保日期 | ${startShort} ~ ${endShort}`;
 }
 
 export const ClaimsDetailPage: React.FC = () => {
@@ -53,30 +58,56 @@ export const ClaimsDetailPage: React.FC = () => {
   const { filters } = useGlobalFilters();
   const hook = useClaimsDetail();
 
-  // 快捷筛选状态（页面级，默认摩托车选中）
-  const [quickFilters, setQuickFilters] = useState<QuickFilters>({
-    customerCategory: '摩托车',
-  });
+  // 快捷筛选状态（页面级，默认全量）
+  const [quickFilters, setQuickFilters] = useState<QuickFilters>({});
 
   const globalParams = useMemo(() => buildFilterParams(filters), [filters]);
+
+  // 动态标题：反映筛选状态 + 当前 Tab
+  const dynamicTitle = useMemo(() => {
+    const parts: string[] = [];
+    if (quickFilters.vehicleType) {
+      parts.push(VEHICLE_LABELS[quickFilters.vehicleType] ?? quickFilters.vehicleType);
+    }
+    if (quickFilters.isNev === true) parts.push('新能源');
+    else if (quickFilters.isNev === false) parts.push('燃油');
+    if (quickFilters.isNewCar === true) parts.push('新车');
+    else if (quickFilters.isNewCar === false) parts.push('旧车');
+    if (quickFilters.renewalType === 'renewal') parts.push('续保');
+    else if (quickFilters.renewalType === 'transfer') parts.push('转保');
+    if (quickFilters.businessNature === 'commercial') parts.push('营业');
+    else if (quickFilters.businessNature === 'non_commercial') parts.push('非营');
+    if (quickFilters.isTransfer === true) parts.push('过户');
+    else if (quickFilters.isTransfer === false) parts.push('非过户');
+    if (quickFilters.coverageCombination) parts.push(quickFilters.coverageCombination);
+    const year = filters.analysis_year ?? new Date().getFullYear();
+    parts.push(`${year}年`);
+    parts.push(TAB_TITLES[activeTab]);
+    return parts.join('');
+  }, [quickFilters, filters.analysis_year, activeTab]);
 
   // 合并全局筛选 + 快捷筛选
   const params = useMemo(() => {
     const base = adaptFilterParams(globalParams);
-    // 快捷筛选覆盖全局筛选中的同名参数
-    if (quickFilters.customerCategory) base.customerCategory = quickFilters.customerCategory;
-    if (quickFilters.isNev) base.isNev = quickFilters.isNev;
-    if (quickFilters.coverageCombination) base.coverageCombination = quickFilters.coverageCombination;
-    if (quickFilters.isTransfer) base.isTransfer = quickFilters.isTransfer;
+    if (quickFilters.vehicleType) base.vehicleQuickFilter = quickFilters.vehicleType;
+    if (quickFilters.isNev !== undefined) base.isNev = String(quickFilters.isNev);
+    if (quickFilters.isNewCar !== undefined) base.isNewCar = String(quickFilters.isNewCar);
+    if (quickFilters.renewalType === 'renewal') {
+      base.isRenewal = 'true';
+    } else if (quickFilters.renewalType === 'transfer') {
+      base.isRenewal = 'false';
+      base.isNewCar = 'false';
+    }
+    if (quickFilters.businessNature) base.businessNature = quickFilters.businessNature;
+    if (quickFilters.isTransfer !== undefined) base.isTransfer = String(quickFilters.isTransfer);
+    if (quickFilters.coverageCombination) base.coverageCombinations = quickFilters.coverageCombination;
     return base;
   }, [globalParams, quickFilters]);
-
-  const summary = useMemo(() => buildSummary(filters), [filters]);
 
   return (
     <PageFilterPanel
       preset="claimsDetail"
-      title="赔案明细分析"
+      title={dynamicTitle}
       showBasicFilterBar={true}
       anchorSections={[
         { id: 'claims-filter', label: '快捷筛选' },
@@ -87,11 +118,9 @@ export const ClaimsDetailPage: React.FC = () => {
       )}
     >
       {/* 快捷筛选栏 */}
-      <div id="claims-filter"><QuickFilterBar
-        filters={quickFilters}
-        onChange={setQuickFilters}
-        summary={summary}
-      /></div>
+      <div id="claims-filter">
+        <QuickFilterBar filters={quickFilters} onChange={setQuickFilters} />
+      </div>
 
       {/* Tab 切换 */}
       <div className="flex gap-1 border-b mb-4">

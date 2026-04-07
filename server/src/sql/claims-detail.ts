@@ -21,6 +21,10 @@ export interface ClaimsDetailFilters {
   isNev?: string;              // 新能源标识：1=新能源, 0=传统燃油
   coverageCombination?: string; // 险别组合：主全/交三/单交
   isTransfer?: string;         // 是否过户车：true/false
+  vehicleQuickFilter?: string; // 车型快捷筛选
+  businessNature?: string;     // 营业/非营业性质
+  isNewCar?: string;           // 是否新车：true/false
+  isRenewal?: string;          // 是否续保：true/false
 }
 
 function buildWhere(filters: ClaimsDetailFilters, tableAlias = 'c'): string {
@@ -40,11 +44,63 @@ function buildPolicyWhere(filters: ClaimsDetailFilters): string {
   const conditions: string[] = [];
   if (filters.orgName) conditions.push(`p.org_level_3 = '${escapeSqlValue(filters.orgName)}'`);
   if (filters.customerCategory) conditions.push(`p.customer_category = '${escapeSqlValue(filters.customerCategory)}'`);
-  if (filters.isNev === '1') conditions.push(`p.is_nev = true`);
-  if (filters.isNev === '0') conditions.push(`p.is_nev = false`);
+  if (filters.isNev === '1' || filters.isNev === 'true') conditions.push(`p.is_nev = true`);
+  if (filters.isNev === '0' || filters.isNev === 'false') conditions.push(`p.is_nev = false`);
   if (filters.coverageCombination) conditions.push(`p.coverage_combination = '${escapeSqlValue(filters.coverageCombination)}'`);
   if (filters.isTransfer === 'true') conditions.push(`p.is_transfer = true`);
   if (filters.isTransfer === 'false') conditions.push(`p.is_transfer = false`);
+
+  // 车型快捷筛选
+  if (filters.vehicleQuickFilter) {
+    switch (filters.vehicleQuickFilter) {
+      case 'home_car':
+        conditions.push("p.customer_category = '非营业个人客车'");
+        break;
+      case 'truck_1t':
+        conditions.push("p.customer_category IN ('营业货车', '非营业货车')");
+        conditions.push("p.tonnage_segment = '1吨以下'");
+        break;
+      case 'truck_2_9t':
+        conditions.push("p.customer_category IN ('营业货车', '非营业货车')");
+        conditions.push("p.tonnage_segment = '2-9吨'");
+        break;
+      case 'motorcycle':
+        conditions.push("p.customer_category = '摩托车'");
+        break;
+      case 'dump':
+        conditions.push("p.customer_category = '营业货车'");
+        conditions.push("p.tonnage_segment = '10吨以上'");
+        conditions.push("p.vehicle_model LIKE '%自卸%'");
+        break;
+      case 'tractor':
+        conditions.push("p.customer_category = '营业货车'");
+        conditions.push("p.tonnage_segment = '10吨以上'");
+        conditions.push("p.vehicle_model LIKE '%牵引%'");
+        break;
+      case 'general':
+        conditions.push("p.customer_category = '营业货车'");
+        conditions.push("p.tonnage_segment = '10吨以上'");
+        conditions.push("p.vehicle_model NOT LIKE '%自卸%'");
+        conditions.push("p.vehicle_model NOT LIKE '%牵引%'");
+        break;
+    }
+  }
+
+  // 营业/非营业性质
+  if (filters.businessNature === 'commercial') {
+    conditions.push("p.customer_category LIKE '营业%'");
+  } else if (filters.businessNature === 'non_commercial') {
+    conditions.push("p.customer_category LIKE '非营业%'");
+  }
+
+  // 新车/旧车
+  if (filters.isNewCar === 'true') conditions.push(`p.is_new_car = true`);
+  if (filters.isNewCar === 'false') conditions.push(`p.is_new_car = false`);
+
+  // 续保/非续保
+  if (filters.isRenewal === 'true') conditions.push(`p.is_renewal = true`);
+  if (filters.isRenewal === 'false') conditions.push(`p.is_renewal = false`);
+
   return conditions.length > 0 ? ' AND ' + conditions.join(' AND ') : '';
 }
 

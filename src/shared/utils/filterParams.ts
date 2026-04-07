@@ -90,5 +90,14 @@ export function buildFilterParams(
     params.isCrossSell = String(filters.is_cross_sell);
   }
 
+  // 车型快捷筛选
+  if (filters.vehicle_quick_filter) {
+    params.vehicleQuickFilter = filters.vehicle_quick_filter;
+  }
+  // 营业/非营业性质
+  if (filters.business_nature) {
+    params.businessNature = filters.business_nature;
+  }
+
   return params;
 }

@@ -59,6 +59,11 @@ function parseFilters(query: Record<string, unknown>): ClaimsDetailFilters {
   if (query.isNev && typeof query.isNev === 'string') filters.isNev = query.isNev;
   if (query.coverageCombination && typeof query.coverageCombination === 'string') filters.coverageCombination = query.coverageCombination;
   if (query.isTransfer && typeof query.isTransfer === 'string') filters.isTransfer = query.isTransfer;
+  if (query.vehicleQuickFilter && typeof query.vehicleQuickFilter === 'string') filters.vehicleQuickFilter = query.vehicleQuickFilter;
+  if (query.businessNature && typeof query.businessNature === 'string') filters.businessNature = query.businessNature;
+  if (query.coverageCombinations && typeof query.coverageCombinations === 'string') filters.coverageCombination = query.coverageCombinations;
+  if (query.isNewCar && typeof query.isNewCar === 'string') filters.isNewCar = query.isNewCar;
+  if (query.isRenewal && typeof query.isRenewal === 'string') filters.isRenewal = query.isRenewal;
   return filters;
 }
 

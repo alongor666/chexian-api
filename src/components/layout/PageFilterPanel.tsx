@@ -1,17 +1,15 @@
 import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Filter, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { AdvancedFilterPanel } from '../../features/filters/AdvancedFilterPanel';
-import { FilterLayoutV2 } from '../../features/filters/FilterLayoutV2';
 import { PageHeaderBar } from '../../features/filters/PageHeaderBar';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import type {
   FilterFieldsConfig,
   FilterPresetName,
-  FilterSelectionModeConfig,
 } from '../../shared/types/filters';
 import { FILTER_PRESETS } from '../../shared/types/filters';
 import type { AdvancedFilterState } from '../../shared/types/data';
-import { buttonStyles, cardStyles, colorClasses, textStyles, cn } from '../../shared/styles';
+import { buttonStyles, textStyles, cn } from '../../shared/styles';
 import { DashboardAnchorNav, type DashboardAnchorSection } from './DashboardAnchorNav';
 import { Footer } from './Footer';
 
@@ -29,11 +27,6 @@ interface PageFilterPanelProps {
   anchorSections?: DashboardAnchorSection[];
   contentScrollId?: string;
   basicFilterVisibleFields?: FilterFieldsConfig;
-  basicFilterSelectionModes?: FilterSelectionModeConfig;
-  filterBarExtraContent?: ReactNode;
-  filterBarQuickCombosSlot?: ReactNode;
-  filterBarCoverageCombinationSlot?: ReactNode;
-  filterBarOrgActions?: ReactNode;
   showBasicFilterBar?: boolean;
 }
 
@@ -94,6 +87,8 @@ export function countActiveFilters(
   if ((filters.analysis_year ?? resetYear) !== resetYear) count += 1;
   if (filters.policy_date_start && filters.policy_date_start !== expectedStart) count += 1;
   if (filters.policy_date_end && filters.policy_date_end !== expectedEnd) count += 1;
+  if (filters.vehicle_quick_filter) count += 1;
+  if (filters.business_nature) count += 1;
 
   return count;
 }
@@ -108,11 +103,6 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
   anchorSections = [],
   contentScrollId = DEFAULT_SCROLL_ID,
   basicFilterVisibleFields,
-  basicFilterSelectionModes,
-  filterBarExtraContent,
-  filterBarQuickCombosSlot,
-  filterBarCoverageCombinationSlot,
-  filterBarOrgActions,
   showBasicFilterBar = true,
 }) => {
   const {
@@ -165,20 +155,6 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
       ...basicFilterVisibleFields,
     }),
     [basicFilterVisibleFields, defaultBasicFields]
-  );
-
-  const mergedBasicSelectionModes = useMemo<FilterSelectionModeConfig>(
-    () => ({
-      organizationMode:
-        basicFilterSelectionModes?.organizationMode ??
-        presetConfig.organizationMode ??
-        'multi',
-      salesmanMode:
-        basicFilterSelectionModes?.salesmanMode ??
-        presetConfig.salesmanMode ??
-        'multi',
-    }),
-    [basicFilterSelectionModes, presetConfig.organizationMode, presetConfig.salesmanMode]
   );
 
   const activeFilterCount = useMemo(
@@ -279,75 +255,6 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
             />
           )}
 
-          {showBasicFilterBar && (
-            <div className="border-t border-neutral-100 dark:border-neutral-700 bg-neutral-50/90 dark:bg-neutral-800/90 px-4 py-3 backdrop-blur">
-              <div className="mb-3 flex flex-wrap items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  {filterBarExtraContent ?? (
-                    <div className={cn(cardStyles.compact, 'border-dashed')}>
-                      <p className={cn(textStyles.caption, colorClasses.text.neutralDark)}>
-                        常用筛选常驻显示，其他筛选进入高级抽屉。
-                      </p>
-                    </div>
-                  )}
-                </div>
-                <div className="ml-auto flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleResetFilters}
-                    className={cn(buttonStyles.base, buttonStyles.secondary, 'px-3 py-2 text-xs')}
-                  >
-                    <RotateCcw size={14} className="mr-1.5" />
-                    重置
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAdvancedOpen(true)}
-                    className={cn(buttonStyles.base, buttonStyles.primary, 'px-3 py-2 text-xs shadow-sm')}
-                  >
-                    <SlidersHorizontal size={14} className="mr-1.5" />
-                    高级筛选
-                    {activeFilterCount > 0 && (
-                      <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold">
-                        {activeFilterCount}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <FilterLayoutV2
-                filters={filters}
-                onChange={setFilters}
-                availableYears={availableYears ?? []}
-                currentYear={new Date().getFullYear()}
-                defaultDateCriteria={mergedBasicVisibleFields.lockedDateCriteria ?? filters.date_criteria ?? 'policy_date'}
-                defaultDateRange={{
-                  start: `${resolveResetYear(availableYears)}-01-01`,
-                  end: getDefaultDateEnd(maxDataDate),
-                }}
-                defaultYear={filters.analysis_year ?? resolveResetYear(availableYears)}
-                maxDataDate={maxDataDate}
-                options={{
-                  org_level_3: filterOptions.org_level_3,
-                  customer_category: filterOptions.customer_category,
-                  coverage_combination: filterOptions.coverage_combination,
-                  renewal_mode: filterOptions.renewal_mode,
-                }}
-                onMultiSelectChange={(key, values) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    [key]: values.length > 0 ? values : undefined,
-                  }))
-                }
-                visibleFields={mergedBasicVisibleFields}
-                selectionModes={mergedBasicSelectionModes}
-                quickCombosSlot={filterBarQuickCombosSlot}
-                coverageCombinationSlot={filterBarCoverageCombinationSlot}
-                orgActions={filterBarOrgActions}
-              />
-            </div>
-          )}
         </div>
       )}
 
@@ -365,7 +272,7 @@ export const PageFilterPanel: React.FC<PageFilterPanelProps> = ({
         <button
           type="button"
           onClick={() => setAdvancedOpen(true)}
-          className="fixed bottom-4 right-4 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-colors hover:bg-primary-dark lg:hidden"
+          className="fixed bottom-4 right-4 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-all hover:bg-primary-dark lg:hidden opacity-30 hover:opacity-100 duration-300"
           aria-label="打开高级筛选"
         >
           <Filter size={20} />

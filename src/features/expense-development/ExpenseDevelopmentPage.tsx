@@ -16,15 +16,6 @@ import { useExpenseDevelopment } from './hooks/useExpenseDevelopment';
 import { ExpenseRatioDevelopmentPanel } from './components/ExpenseRatioDevelopmentPanel';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 
-function buildSummary(filters: Record<string, any>): string {
-  const year = filters.analysis_year ?? new Date().getFullYear();
-  const start = filters.policy_date_start ?? '';
-  const end = filters.policy_date_end ?? '';
-  const startShort = start ? start.slice(5) : '01-01';
-  const endShort = end ? end.slice(5) : '12-31';
-  return `${year}年 | 起保日期 | ${startShort} ~ ${endShort}`;
-}
-
 export const ExpenseDevelopmentPage: React.FC = () => {
   const { filters, setFilters } = useGlobalFilters();
   const hook = useExpenseDevelopment();
@@ -32,20 +23,25 @@ export const ExpenseDevelopmentPage: React.FC = () => {
 
   // 从全局筛选器派生快捷筛选状态（全局→快捷同步）
   const quickFilters = useMemo<QuickFilters>(() => ({
-    customerCategory: filters.customer_category?.[0],
-    isNev: filters.is_nev === true ? '1' : filters.is_nev === false ? '0' : undefined,
+    vehicleType: filters.vehicle_quick_filter,
+    isNev: filters.is_nev ?? undefined,
+    isNewCar: filters.is_new_car ?? undefined,
+    businessNature: filters.business_nature,
+    isTransfer: filters.is_transfer ?? undefined,
     coverageCombination: filters.coverage_combination?.[0],
-    isTransfer: filters.is_transfer === true ? 'true' : undefined,
-  }), [filters.customer_category, filters.is_nev, filters.coverage_combination, filters.is_transfer]);
+  }), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
 
   // 快捷筛选变更 → 写入全局筛选器（快捷→全局同步）
   const handleQuickFilterChange = (newQuick: QuickFilters) => {
     setFilters(prev => ({
       ...prev,
-      customer_category: newQuick.customerCategory ? [newQuick.customerCategory] : undefined,
-      is_nev: newQuick.isNev === '1' ? true : newQuick.isNev === '0' ? false : undefined,
+      vehicle_quick_filter: newQuick.vehicleType,
+      is_nev: newQuick.isNev,
+      is_new_car: newQuick.isNewCar,
+      is_renewal: newQuick.renewalType === 'renewal' ? true : newQuick.renewalType === 'transfer' ? false : undefined,
+      business_nature: newQuick.businessNature,
+      is_transfer: newQuick.isTransfer,
       coverage_combination: newQuick.coverageCombination ? [newQuick.coverageCombination] : undefined,
-      is_transfer: newQuick.isTransfer === 'true' ? true : undefined,
     }));
   };
 
@@ -53,8 +49,6 @@ export const ExpenseDevelopmentPage: React.FC = () => {
   const params = useMemo(() => {
     return buildFilterParams(filters, { isOrgUser, userOrg });
   }, [filters, isOrgUser, userOrg]);
-
-  const summary = useMemo(() => buildSummary(filters), [filters]);
 
   return (
     <PageFilterPanel
@@ -75,11 +69,7 @@ export const ExpenseDevelopmentPage: React.FC = () => {
 
       {/* 快捷筛选 */}
       <div id="expense-dev-filter">
-        <QuickFilterBar
-          filters={quickFilters}
-          onChange={handleQuickFilterChange}
-          summary={summary}
-        />
+        <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       </div>
 
       {/* 发展趋势面板 */}

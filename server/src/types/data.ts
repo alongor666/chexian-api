@@ -311,4 +311,9 @@ export interface AdvancedFilterState {
   // 新增字段筛选
   insurance_grade?: string[];            // 车险风险等级（多选：A/B/C/D/E/F/G/X）
   is_cross_sell?: boolean | null;        // 交叉销售标识（三态开关）
+
+  // 车型快捷筛选（互斥单选）
+  vehicle_quick_filter?: 'home_car' | 'truck_1t' | 'truck_2_9t' | 'motorcycle' | 'dump' | 'tractor' | 'general';
+  // 营业/非营业性质
+  business_nature?: 'commercial' | 'non_commercial';
 }

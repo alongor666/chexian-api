@@ -70,6 +70,11 @@ export const commonFilterSchema = z.object({
   isCommercialInsure: z.string().optional(),
   isRenewable: z.string().optional(),
   isCrossSell: z.string().optional(),
+
+  // 车型快捷筛选（互斥单选）
+  vehicleQuickFilter: z.enum(['home_car', 'truck_1t', 'truck_2_9t', 'motorcycle', 'dump', 'tractor', 'general']).optional(),
+  // 营业/非营业性质
+  businessNature: z.enum(['commercial', 'non_commercial']).optional(),
 });
 
 export type CommonFilterParams = z.infer<typeof commonFilterSchema>;
@@ -188,6 +193,51 @@ export function buildConditionsFromFilterParams(
       } else {
         conditions.push(`${sqlField} = ${val}`);
       }
+    }
+  }
+
+  // 车型快捷筛选
+  if (params.vehicleQuickFilter) {
+    switch (params.vehicleQuickFilter) {
+      case 'home_car':
+        conditions.push("customer_category = '非营业个人客车'");
+        break;
+      case 'truck_1t':
+        conditions.push("customer_category IN ('营业货车', '非营业货车')");
+        conditions.push("tonnage_segment = '1吨以下'");
+        break;
+      case 'truck_2_9t':
+        conditions.push("customer_category IN ('营业货车', '非营业货车')");
+        conditions.push("tonnage_segment = '2-9吨'");
+        break;
+      case 'motorcycle':
+        conditions.push("customer_category = '摩托车'");
+        break;
+      case 'dump':
+        conditions.push("customer_category = '营业货车'");
+        conditions.push("tonnage_segment = '10吨以上'");
+        conditions.push("vehicle_model LIKE '%自卸%'");
+        break;
+      case 'tractor':
+        conditions.push("customer_category = '营业货车'");
+        conditions.push("tonnage_segment = '10吨以上'");
+        conditions.push("vehicle_model LIKE '%牵引%'");
+        break;
+      case 'general':
+        conditions.push("customer_category = '营业货车'");
+        conditions.push("tonnage_segment = '10吨以上'");
+        conditions.push("vehicle_model NOT LIKE '%自卸%'");
+        conditions.push("vehicle_model NOT LIKE '%牵引%'");
+        break;
+    }
+  }
+
+  // 营业/非营业性质
+  if (params.businessNature) {
+    if (params.businessNature === 'commercial') {
+      conditions.push("customer_category LIKE '营业%'");
+    } else {
+      conditions.push("customer_category LIKE '非营业%'");
     }
   }
 

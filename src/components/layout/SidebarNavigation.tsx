@@ -213,12 +213,12 @@ export const SidebarNavigation: React.FC = () => {
     const baseClasses = `fixed left-0 top-14 bottom-0 bg-white dark:bg-neutral-800 border-r border-neutral-200 dark:border-neutral-700 z-40 flex flex-col ${!isDragging ? 'transition-all duration-300' : ''}`;
 
     if (isMobile) {
-      // 移动端：抽屉模式，总是宽展开
+      // 移动端：抽屉模式，不淡化
       return `${baseClasses} w-72 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`;
     }
 
-    // 桌面端：根据 collapsed 状态
-    return baseClasses;
+    // 桌面端：默认淡化，hover 显现
+    return `${baseClasses} opacity-30 hover:opacity-100 transition-opacity duration-300`;
   };
 
   return (

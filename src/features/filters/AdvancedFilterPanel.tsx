@@ -229,10 +229,9 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
     onState: string;
     offState: string;
   }> = [
+      // 注：is_nev/is_transfer/coverage_combination/customer_category 已由 QuickFilterBar 覆盖
       { key: 'is_telemarketing', label: '是否电销', onState: '电销', offState: '非电销' },
-      { key: 'is_nev', label: '是否新能源', onState: '新能源', offState: '燃油' },
       { key: 'is_new_car', label: '是否新车', onState: '新车', offState: '旧车' },
-      { key: 'is_transfer', label: '是否过户', onState: '过户', offState: '非过户' },
       { key: 'is_cross_sell', label: '是否交叉销售', onState: '交叉销售', offState: '非交叉销售' },
       { key: 'is_commercial_insure', label: '是否交商同保', onState: '同保', offState: '非同保' },
       { key: 'is_renewal', label: '是否续保', onState: '续保', offState: '非续保' },
@@ -340,7 +339,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
   // 紧凑模式下使用简化的布局
   if (compact) {
     const compactToggleConfigs = basicToggleConfigs.filter((config) =>
-      ['is_telemarketing', 'is_nev', 'is_new_car', 'is_transfer', 'is_cross_sell', 'is_commercial_insure'].includes(String(config.key))
+      ['is_telemarketing', 'is_new_car', 'is_cross_sell', 'is_commercial_insure'].includes(String(config.key))
     );
 
     return (

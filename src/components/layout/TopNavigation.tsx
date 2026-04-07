@@ -126,7 +126,7 @@ export const TopNavigation: React.FC = () => {
 
   return (
     <>
-      <header className="h-14 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between px-4 fixed top-0 left-0 right-0 z-50">
+      <header className="h-14 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between px-4 fixed top-0 left-0 right-0 z-50 opacity-30 hover:opacity-100 transition-opacity duration-300">
         {/* 左侧：移动端菜单按钮 + 项目名称 */}
         <div className="flex items-center">
           {/* 移动端汉堡菜单按钮 */}
