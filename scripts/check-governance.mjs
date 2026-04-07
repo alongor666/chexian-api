@@ -896,7 +896,40 @@ function checkPrSizeLimit() {
 
   const pendingChanges = getTrackedChanges();
   const untrackedFiles = listUntrackedFiles();
-  const hasPendingChanges = pendingChanges.length > 0 || untrackedFiles.length > 0;
+
+  // 检查是否有已暂存或工作区修改（不含未跟踪文件）
+  const hasStagedOrModified = pendingChanges.length > 0;
+
+  // 优先使用 origin/main..HEAD 来判断已提交的 diff（pre-push 场景）
+  const getCommittedChanges = () => {
+    try {
+      const output = execSync('git diff --numstat --find-renames=90% origin/main..HEAD --', {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      if (!output) return [];
+      return output
+        .split('\n')
+        .map((line) => {
+          const [addedRaw, deletedRaw, ...pathParts] = line.split('\t');
+          const file = pathParts.join('\t');
+          return {
+            file,
+            added: addedRaw === '-' ? 0 : Number(addedRaw || 0),
+            deleted: deletedRaw === '-' ? 0 : Number(deletedRaw || 0),
+          };
+        })
+        .filter((entry) => entry.file);
+    } catch {
+      return null; // origin/main 不存在时回退
+    }
+  };
+
+  const committedChanges = getCommittedChanges();
+
+  // 如果有已提交的 diff（pre-push 场景），优先用它；否则用工作区变更 + 未跟踪文件
+  const useCommittedDiff = committedChanges !== null && !hasStagedOrModified;
 
   const archivedLegacyFiles = new Map();
   for (const file of untrackedFiles) {
@@ -911,69 +944,32 @@ function checkPrSizeLimit() {
   const ignoredChanges = [];
   const countedChanges = [];
 
-  if (hasPendingChanges) {
-    for (const change of pendingChanges) {
-      if (change.file.startsWith('archive/legacy-code/')) {
-        ignoredChanges.push({ ...change, reason: 'archive-only' });
-        continue;
-      }
+  const changesToAnalyze = useCommittedDiff ? committedChanges : pendingChanges;
 
-      // Pure deletions (cleanup) — don't count toward PR size limit
-      if (change.added === 0 && change.deleted > 0) {
-        ignoredChanges.push({ ...change, reason: 'pure-deletion' });
-        continue;
-      }
-
-      countedChanges.push(change);
+  for (const change of changesToAnalyze) {
+    if (change.file.startsWith('archive/legacy-code/')) {
+      ignoredChanges.push({ ...change, reason: 'archive-only' });
+      continue;
     }
 
-    for (const file of untrackedFiles) {
-      if (file.startsWith('archive/legacy-code/')) {
-        ignoredChanges.push({ file, added: 0, deleted: 0, reason: 'archive-only-untracked' });
-        continue;
-      }
-      const content = readText(path.join(ROOT_DIR, file));
-      if (content === null) continue;
-      const lines = content === '' ? 0 : content.split('\n').length;
-      countedChanges.push({ file, added: lines, deleted: 0 });
+    // Pure deletions (cleanup) — don't count toward PR size limit
+    if (change.added === 0 && change.deleted > 0) {
+      ignoredChanges.push({ ...change, reason: 'pure-deletion' });
+      continue;
     }
+
+    countedChanges.push(change);
+  }
+
+  // 未跟踪文件不计入 PR 体量（未 git add，不会进入 commit/PR）
+  if (untrackedFiles.length > 0) {
+    info(`${untrackedFiles.length} 个未跟踪文件不计入 PR 体量（未 git add）`);
   }
 
   let totalLines = countedChanges.reduce((sum, change) => sum + change.added + change.deleted, 0);
 
-  if (!hasPendingChanges) {
-    let statOutput = '';
-
-    for (const args of [
-      ['diff', 'HEAD~1', '--stat'],
-      ['diff', '--cached', '--stat'],
-    ]) {
-      try {
-        statOutput = execSync(`git ${args.join(' ')}`, {
-          cwd: ROOT_DIR,
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'ignore'],
-        });
-        if (statOutput.trim()) break;
-      } catch {
-        // 继续尝试下一种
-      }
-    }
-
-    if (statOutput.trim()) {
-      const summaryMatch = statOutput.match(/(\d+)\s+insertion|(\d+)\s+deletion/g);
-      if (summaryMatch) {
-        totalLines = 0;
-        for (const seg of summaryMatch) {
-          const n = parseInt(seg, 10);
-          if (!isNaN(n)) totalLines += n;
-        }
-      }
-    }
-  }
-
-  if (!hasPendingChanges && totalLines === 0) {
-    success('PR 体量检查跳过（无法获取 git diff，非 git 上下文）');
+  if (changesToAnalyze.length === 0 && !useCommittedDiff && untrackedFiles.length === 0) {
+    success('PR 体量检查跳过（无变更）');
     return true;
   }
 
