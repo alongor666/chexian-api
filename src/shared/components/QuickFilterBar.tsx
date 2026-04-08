@@ -8,7 +8,7 @@ import React from 'react';
 import { cn } from '@/shared/styles';
 
 /** 车型快捷筛选值 */
-export type VehicleType = 'home_car' | 'truck_1t' | 'truck_2_9t' | 'motorcycle' | 'dump' | 'tractor' | 'general';
+export type VehicleType = 'home_car' | 'truck_1t' | 'truck_2_9t' | 'motorcycle' | 'truck_1_2t' | 'rental' | 'dump' | 'tractor' | 'general';
 
 /** 续/转 */
 export type RenewalType = 'renewal' | 'transfer';
@@ -36,6 +36,8 @@ const VEHICLE_CHIPS: { type: VehicleType; label: string }[] = [
   { type: 'truck_1t', label: '1T货' },
   { type: 'truck_2_9t', label: '2-9T货' },
   { type: 'motorcycle', label: '摩托车' },
+  { type: 'truck_1_2t', label: '1-2T货' },
+  { type: 'rental', label: '租/网' },
   { type: 'dump', label: 'X自卸' },
   { type: 'tractor', label: 'X牵引' },
   { type: 'general', label: 'X普货' },
@@ -52,8 +54,8 @@ const TOGGLE_CONFIGS: CycleToggleConfig[] = [
     key: 'isNev',
     states: [
       { value: undefined, label: '油/电' },
-      { value: true, label: '电' },
-      { value: false, label: '油' },
+      { value: true, label: '电动' },
+      { value: false, label: '燃油' },
     ],
   },
   // separator injected in render
@@ -77,8 +79,8 @@ const TOGGLE_CONFIGS: CycleToggleConfig[] = [
     key: 'businessNature',
     states: [
       { value: undefined, label: '营/非' },
-      { value: 'commercial', label: '营' },
-      { value: 'non_commercial', label: '非' },
+      { value: 'commercial', label: '营业' },
+      { value: 'non_commercial', label: '非营' },
     ],
   },
   {
@@ -114,10 +116,20 @@ const toggleDefault = 'bg-neutral-50 text-neutral-400 border-neutral-200 hover:b
 const Separator = () => <span className="w-px h-4 bg-neutral-300 dark:bg-neutral-600 mx-1" />;
 
 export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicleType }) => {
+  // 2吨以上货车和出租租赁必定是营业
+  const COMMERCIAL_VEHICLE_TYPES: VehicleType[] = ['truck_2_9t', 'dump', 'tractor', 'general', 'rental'];
+
   const toggleVehicle = (type: VehicleType) => {
+    const isDeselecting = filters.vehicleType === type;
+    const nextVehicle = isDeselecting ? undefined : type;
+    const isCommercialLinked = COMMERCIAL_VEHICLE_TYPES.includes(type);
+
     onChange({
       ...filters,
-      vehicleType: filters.vehicleType === type ? undefined : type,
+      vehicleType: nextVehicle,
+      ...(isCommercialLinked
+        ? { businessNature: isDeselecting ? undefined : 'commercial' as const }
+        : {}),
     });
   };
 

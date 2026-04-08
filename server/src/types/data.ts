@@ -313,7 +313,7 @@ export interface AdvancedFilterState {
   is_cross_sell?: boolean | null;        // 交叉销售标识（三态开关）
 
   // 车型快捷筛选（互斥单选）
-  vehicle_quick_filter?: 'home_car' | 'truck_1t' | 'truck_2_9t' | 'motorcycle' | 'dump' | 'tractor' | 'general';
+  vehicle_quick_filter?: 'home_car' | 'truck_1t' | 'truck_2_9t' | 'motorcycle' | 'truck_1_2t' | 'rental' | 'dump' | 'tractor' | 'general';
   // 营业/非营业性质
   business_nature?: 'commercial' | 'non_commercial';
 }

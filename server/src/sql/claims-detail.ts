@@ -67,6 +67,13 @@ function buildPolicyWhere(filters: ClaimsDetailFilters): string {
       case 'motorcycle':
         conditions.push("p.customer_category = '摩托车'");
         break;
+      case 'truck_1_2t':
+        conditions.push("p.customer_category IN ('营业货车', '非营业货车')");
+        conditions.push("p.tonnage_segment = '1-2吨'");
+        break;
+      case 'rental':
+        conditions.push("p.customer_category = '营业出租租赁'");
+        break;
       case 'dump':
         conditions.push("p.customer_category = '营业货车'");
         conditions.push("p.tonnage_segment = '10吨以上'");

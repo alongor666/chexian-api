@@ -72,7 +72,7 @@ export const commonFilterSchema = z.object({
   isCrossSell: z.string().optional(),
 
   // 车型快捷筛选（互斥单选）
-  vehicleQuickFilter: z.enum(['home_car', 'truck_1t', 'truck_2_9t', 'motorcycle', 'dump', 'tractor', 'general']).optional(),
+  vehicleQuickFilter: z.enum(['home_car', 'truck_1t', 'truck_2_9t', 'motorcycle', 'truck_1_2t', 'rental', 'dump', 'tractor', 'general']).optional(),
   // 营业/非营业性质
   businessNature: z.enum(['commercial', 'non_commercial']).optional(),
 });
@@ -212,6 +212,13 @@ export function buildConditionsFromFilterParams(
         break;
       case 'motorcycle':
         conditions.push("customer_category = '摩托车'");
+        break;
+      case 'truck_1_2t':
+        conditions.push("customer_category IN ('营业货车', '非营业货车')");
+        conditions.push("tonnage_segment = '1-2吨'");
+        break;
+      case 'rental':
+        conditions.push("customer_category = '营业出租租赁'");
         break;
       case 'dump':
         conditions.push("customer_category = '营业货车'");

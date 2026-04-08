@@ -12,6 +12,8 @@ const VEHICLE_LABELS: Record<string, string> = {
   truck_1t: '1T货车',
   truck_2_9t: '2-9T货车',
   motorcycle: '摩托车',
+  truck_1_2t: '1-2T货车',
+  rental: '出租租赁',
   dump: '自卸车',
   tractor: '牵引车',
   general: '普货车',
@@ -66,7 +68,7 @@ export function buildFilterLabel(quickFilters: QuickFilters): string {
   if (quickFilters.vehicleType) {
     parts.push(VEHICLE_LABELS[quickFilters.vehicleType] ?? quickFilters.vehicleType);
   }
-  if (quickFilters.isNev === true) parts.push('新能源');
+  if (quickFilters.isNev === true) parts.push('电动');
   else if (quickFilters.isNev === false) parts.push('燃油');
   if (quickFilters.isNewCar === true) parts.push('新车');
   else if (quickFilters.isNewCar === false) parts.push('旧车');
