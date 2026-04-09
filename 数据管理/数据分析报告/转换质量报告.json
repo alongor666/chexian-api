@@ -1,59 +1,47 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-04-09T11:10:52.649748",
+  "timestamp": "2026-04-09T17:50:32.189798",
   "basic_stats": {
-    "rows": 1178707,
-    "columns": 37,
+    "rows": 302421,
+    "columns": 25,
     "column_names": [
       "保单号",
+      "批单号",
+      "续保单号",
       "车架号",
       "车牌号码",
-      "客户类别",
-      "车险分分数",
-      "高速风险等级",
       "险类",
-      "是否交商统保",
-      "续保单号",
+      "客户类别",
       "签单日期",
       "保险起期",
       "保险止期",
       "三级机构",
       "业务员",
       "经代名",
-      "客户源",
       "被保险人性别",
       "被保险人年龄分组",
       "厂牌车型",
       "是否新车",
       "是否过户车",
-      "货车类型",
-      "吨位数",
-      "吨位分段",
-      "座位数",
       "是否新能源",
-      "燃料种类",
       "初次登记年月",
       "新车购置价",
       "交强险NCD",
-      "大货车评分",
-      "小货车评分",
-      "商车自主定价系数",
       "商业险NCD",
       "保费",
-      "总费用金额",
-      "续保业务类型"
+      "总费用金额"
     ]
   },
   "field_quality": {
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 1148439
+      "unique_count": 300509
     },
     "业务员": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 389
+      "unique_count": 197
     },
     "三级机构": {
       "null_count": 0,
@@ -63,22 +51,22 @@
     "签单日期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 828
+      "unique_count": 925
     },
     "保险起期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 1235
+      "unique_count": 1007
     },
     "险类": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 2
+      "unique_count": 1
     },
     "保费": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 108014
+      "unique_count": 40
     }
   }
 }

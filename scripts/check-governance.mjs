@@ -1362,6 +1362,10 @@ function checkDataDrift() {
     { label: 'fact/renewal', rel: '数据管理/warehouse/fact/renewal' },
     { label: 'fact/quotes_conversion', rel: '数据管理/warehouse/fact/quotes_conversion' },
     { label: 'fact/claims_detail', rel: '数据管理/warehouse/fact/claims_detail' },
+    { label: 'fact/cross_sell', rel: '数据管理/warehouse/fact/cross_sell' },
+    { label: 'fact/claims', rel: '数据管理/warehouse/fact/claims' },
+    { label: 'fact/customer_flow', rel: '数据管理/warehouse/fact/customer_flow' },
+    { label: 'dim/repair', rel: '数据管理/warehouse/dim/repair' },
   ];
 
   const currentFiles = {};
