@@ -1,29 +1,30 @@
 # 车险数据快速参考 (~300 tokens)
 
-**更新**: 2026-04-09 | **数据规模**: ~88 万条 / 41 字段 | **分片**: 4 个 Parquet（policy/current/）
+**更新**: 2026-04-09 | **14 活跃域** | **分片**: 4 个 Parquet（policy/current/）
 
-## 核心字段
+## 数据规模（三层口径）
 
-| 字段 | 说明 | 聚合 |
+| 口径 | 数值 | 说明 |
 |------|------|------|
-| `policy_no` | 保单号 | COUNT DISTINCT |
-| `premium` | 保费(元，可负) | SUM |
-| `org_level_3` | 机构 | GROUP BY |
-| `salesman_name` | 业务员(含工号前缀) | GROUP BY |
-| `policy_date` | 签单日期(业绩归属) | 筛选 |
-| `insurance_start_date` | 起保日期(保险责任) | 满期计算 |
-| `underwriting_date` | 提核日期 | 审批时间 |
+| 原始记录 | ~354 万行 | UNION ALL 含交强商业分行 |
+| 唯一保单 | ~150 万 | COUNT DISTINCT policy_no |
+| 2024+ 活跃 | ~88 万 | policy_date >= 2024-01-01 |
 
-## 赔付/费用/交叉销售字段
+## 域全景速览
 
-| 字段 | 说明 | 聚合 |
-|------|------|------|
-| `claim_cases` | 赔案件数 | SUM |
-| `reported_claims` | 已报告赔款(元) | SUM |
-| `fee_amount` | 费用金额(元) | SUM |
-| `is_cross_sell` | 交叉销售标识(驾意险) | COUNT |
-| `cross_sell_premium_driver` | 驾意险保费(元) | SUM |
-| `insurance_grade` | 车险风险等级(A-G/X) | GROUP BY |
+| 域 | DuckDB 关系 | 用途 |
+|----|-------------|------|
+| premium | PolicyFact(Realtime) | 保费/KPI/趋势/业绩/成本（主数据） |
+| claims_detail | ClaimsDetail + ClaimsAgg | 赔案明细 + 保单级赔付聚合 |
+| cross_sell | CrossSellFact → CrossSellDailyAgg | 驾意险推介率 |
+| quotes_v2 | QuoteConversion | 报价转化分析 |
+| renewal_v2 | PolicyFactRenewal | 续保跟踪 |
+| customer_flow | CustomerFlow | 转入/流失分析 |
+| repair_resource | RepairDim | 维修厂合作 |
+| brand | BrandDim | 品牌维度（诊断工具用，无前端） |
+| salesman/plan | SalesmanDim/PlanFact | 业务员+计划维度 |
+
+> 完整域全景 + JOIN 条件: [ai/DOMAIN_OVERVIEW.md](./ai/DOMAIN_OVERVIEW.md)
 
 ## 主要枚举值
 
@@ -32,34 +33,26 @@
 **机构Top5**: 天府40% | 宜宾18% | 高新11% | 青羊8% | 泸州5%
 **终端来源**: App68% | 融合销售17% | 门店9%
 
-## 布尔字段
+## 核心 JOIN 键
 
-| 字段 | True占比 | 含义 |
-|------|----------|------|
-| `is_renewal` | 36% | 续保 |
-| `is_new_car` | 5% | 新车 |
-| `is_nev` | 3% | 新能源 |
-| `is_telemarketing` | 8% | 电销 |
-| `is_transfer` | ~2% | 过户 |
-| `is_cross_sell` | ~15% | 有驾意险交叉销售 |
-
-## 保额字段
-
-| 字段 | 说明 |
-|------|------|
-| `third_party_coverage` | 三者保额 |
-| `driver_coverage` | 司机保额 |
-| `passenger_coverage` | 乘客险保额 |
+| JOIN | 键 | 方向 |
+|------|----|------|
+| PolicyFact ↔ ClaimsAgg | policy_no | LEFT |
+| ClaimsDetail ↔ PolicyFact | policy_no | INNER |
+| CrossSellFact ↔ PolicyFact | policy_no | LEFT (CrossSell 为主表) |
+| *TeamMapping ↔ PolicyFact | full_name = salesman_name | LEFT (含工号前缀!) |
 
 ## 隐私规则
 
 - OK: `COUNT(DISTINCT policy_no)`
 - NO: `SELECT policy_no` / `GROUP BY policy_no`
 
-## 常用诊断命令
+## 常用命令
 
 ```bash
+node 数据管理/daily.mjs              # ETL（自动检测）
+node 数据管理/daily.mjs all          # 全部 8 域
+node scripts/sync-vps.mjs           # 同步 VPS
 python3 数据管理/pipelines/diagnose_vehicle.py --filter "客户类别 = '营业货车'"
 python3 数据管理/pipelines/diagnose_agent.py --org 青羊 --agent "中升"
-node 数据管理/daily.mjs all && node scripts/sync-vps.mjs
 ```

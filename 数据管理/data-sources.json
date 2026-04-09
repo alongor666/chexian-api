@@ -25,6 +25,9 @@
         "险别组合",
         "客户类别"
       ],
+      "duckdb_relation": "PolicyFact → PolicyFactRealtime (TABLE)",
+      "api_routes": ["/api/query/kpi", "/api/query/trend", "/api/query/cost", "/api/query/growth", "/api/query/coefficient", "/api/query/performance-*"],
+      "frontend_page": "dashboard, cost, growth, coefficient, performance-analysis, reports",
       "notes": "21-23使用01_签单清单_21-23年.xlsx（39列新格式）；24-26使用每日数据_*.xlsx。新格式含保险止期/被保险人性别等9个新字段。续保匹配仅应用于weekly分片"
     },
     {
@@ -75,6 +78,9 @@
         "pending_amount",
         "subject_plate_no"
       ],
+      "duckdb_relation": "ClaimsDetail (VIEW) + ClaimsAgg (TABLE)",
+      "api_routes": ["/api/query/claims-detail/pending-overview", "/api/query/claims-detail/pending-by-org", "/api/query/claims-detail/cause-analysis", "/api/query/claims-detail/geo-*", "/api/query/claims-detail/loss-ratio-development"],
+      "frontend_page": "claims-detail",
       "notes": "赔案级明细（非保单级聚合），JOIN PolicyFact via policy_no。与 claims/latest.parquet 互补。claim_status/is_bodily_injury 由 ETL 派生"
     },
     {
@@ -100,6 +106,9 @@
         "折后保费",
         "自主定价系数"
       ],
+      "duckdb_relation": "QuoteConversion (VIEW)",
+      "api_routes": ["/api/query/quote-conversion/kpi", "/api/query/quote-conversion/funnel", "/api/query/quote-conversion/drilldown", "/api/query/quote-conversion/heatmap"],
+      "frontend_page": "quote-conversion",
       "notes": "JOIN salesman dim补团队字段。与quotes/latest.parquet(2字段报价状态)是不同的表"
     },
     {
@@ -181,7 +190,10 @@
         "车辆用途",
         "用途大类"
       ],
-      "notes": "每次有新保单数据时重跑，避免新车型缺少品牌映射"
+      "duckdb_relation": "BrandDim (TABLE)",
+      "api_routes": [],
+      "frontend_page": null,
+      "notes": "每次有新保单数据时重跑，避免新车型缺少品牌映射。无前端页面，仅诊断工具使用"
     },
     {
       "id": "salesman",
@@ -242,6 +254,9 @@
         "salesman_name",
         "org_level_3"
       ],
+      "duckdb_relation": "CrossSellFact (TABLE) → CrossSellDailyAgg (TABLE)",
+      "api_routes": ["/api/query/cross-sell", "/api/query/cross-sell-trend", "/api/query/cross-sell-summary", "/api/query/cross-sell-heatmap"],
+      "frontend_page": "specialty (tab=cross-sell)",
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重"
     },
     {
@@ -262,6 +277,9 @@
         "commercial_pricing_factor",
         "final_quote_premium"
       ],
+      "duckdb_relation": "QuoteConversion (VIEW，共用)",
+      "api_routes": ["/api/query/quote-conversion/*"],
+      "frontend_page": "quote-conversion",
       "notes": "25列全新格式报价清单，替换旧版2列quotes_status和quotes_conversion"
     },
     {
@@ -280,6 +298,9 @@
         "expiry_month",
         "org_level_3"
       ],
+      "duckdb_relation": "PolicyFactRenewal (VIEW)",
+      "api_routes": ["/api/query/renewal", "/api/query/renewal-drilldown"],
+      "frontend_page": "specialty (tab=renewal)",
       "notes": "续保跟踪清单，9列+1派生(is_renewed)，替换旧版renewal_funnel"
     },
     {
@@ -298,6 +319,9 @@
         "damage_assessment_amount",
         "parts_discount_rate"
       ],
+      "duckdb_relation": "RepairDim (TABLE)",
+      "api_routes": ["/api/query/repair/overview", "/api/query/repair/detail", "/api/query/repair/status"],
+      "frontend_page": "repair",
       "notes": "维修厂合作数据，12列，含核损金额/换件折扣率/合作状态"
     },
     {
@@ -315,6 +339,9 @@
         "next_insurer",
         "insurance_start_date"
       ],
+      "duckdb_relation": "CustomerFlow (VIEW)",
+      "api_routes": ["/api/query/customer-flow/summary", "/api/query/customer-flow/inflow", "/api/query/customer-flow/outflow", "/api/query/customer-flow/trend"],
+      "frontend_page": "customer-flow",
       "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知"
     }
   ]

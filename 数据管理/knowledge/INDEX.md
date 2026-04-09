@@ -1,6 +1,6 @@
-# 数据管理知识库 & 工具体系索引 (v2.0)
+# 数据管理知识库 & 工具体系索引 (v3.0)
 
-**最后更新**: 2026-03-31
+**最后更新**: 2026-04-09
 **维护者**: @claude
 
 ---
@@ -35,14 +35,15 @@
 
 | 文件 | 用途 | 读者 |
 |------|------|------|
-| [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) | 核心字段速查（~200 tokens） | AI / 开发者 |
+| [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) | 域全景速览 + 高频命令（~300 tokens） | AI / 开发者 |
+| [ai/DOMAIN_OVERVIEW.md](./ai/DOMAIN_OVERVIEW.md) | **14 域全景 + 跨域 JOIN 速查 + 血缘链路** | AI SQL 生成器 / 开发者 |
 | [ai/PARQUET_SCHEMA_KNOWLEDGE.md](./ai/PARQUET_SCHEMA_KNOWLEDGE.md) | 完整字段值域 + NL2SQL 映射 | AI SQL 生成器 |
-| [ai/DATA_FLOW_KNOWLEDGE.md](./ai/DATA_FLOW_KNOWLEDGE.md) | 数据流字段变换 + JOIN 关系 + Gotcha | 开发者 / AI |
+| [ai/DATA_FLOW_KNOWLEDGE.md](./ai/DATA_FLOW_KNOWLEDGE.md) | 数据流字段变换 + 跨域 JOIN 条件 + Gotcha | 开发者 / AI |
 | [ai/ETL_PIPELINE_KNOWLEDGE.md](./ai/ETL_PIPELINE_KNOWLEDGE.md) | ETL 管道规则：分片架构 + 字段变换 + 源数据差异 | 开发者 / AI |
 | [ai/BRAND_KNOWLEDGE.md](./ai/BRAND_KNOWLEDGE.md) | 品牌维度表：厂牌车型→品牌_用途复合维度映射（如"长安_客车"） | AI 诊断工具 |
 | [rules/车险数据业务规则字典.md](./rules/车险数据业务规则字典.md) | 唯一事实源：字段定义 + 业务规则 | 全员必读 |
 | [schema/schema-analysis.json](./schema/schema-analysis.json) | Parquet 字段统计（自动生成） | 工具 |
-| [../data-sources.json](../data-sources.json) | 数据域元数据注册表（9 域，ETL 自动更新 last_updated/row_count） | ETL / AI |
+| [../data-sources.json](../data-sources.json) | 数据域元数据注册表（14 活跃域 + 1 废弃，ETL 自动更新 last_updated/row_count） | ETL / AI |
 
 ---
 
@@ -415,10 +416,12 @@ cd 数据管理 && python3 warehouse/dim/generate_dim_tables.py
 | `archive/legacy-scripts/sync-data.sh` | bash 版同步 | `scripts/sync-vps.mjs` |
 | 旧 CLI 工具目录（data_tools/ 等） | 已删除，INDEX.md v1.0 遗留引用 | `pipelines/` 下实际脚本 |
 | `cli.py` TOOL_REGISTRY | 注册表指向不存在的模块 | 直接调用 pipelines/ 下脚本 |
+| `claims` 域 (data-sources.json) | 保单级赔付聚合已被赔案明细替代 | `claims_detail` 域 + `ClaimsAgg` 派生表 |
+| `quotes_status` 域 | 2列简化版已被完整报价清单替代 | `quotes_v2` 域（25列） |
 
 ---
 
-## 9. 服务端 DuckDB 视图/表全景
+## 9. 服务端 DuckDB 视图/表全景（14 活跃域）
 
 ```
 raw_parquet (VIEW)
@@ -438,7 +441,17 @@ SalesmanTeamMapping (TABLE ← SalesmanDim LEFT JOIN PlanFact)
 SalesmanPlanFact (VIEW ← PlanFact LEFT JOIN SalesmanDim，多年计划)
 RenewalFunnel (VIEW ← renewal/*.parquet，动态计算到期天数+优先级 P1-P4)
 QuoteConversion (VIEW ← quotes_conversion/*.parquet，透传)
+
+── 8 域分域架构新增（2026-04） ──
+ClaimsDetail (VIEW ← claims_detail/latest.parquet，赔案级明细)
+ClaimsAgg (TABLE ← claims_agg/latest.parquet 或从 ClaimsDetail 回退生成)
+CrossSellFact (TABLE ← cross_sell/latest.parquet，独立交叉销售清单)
+RepairDim (TABLE ← dim/repair/latest.parquet，维修资源维度)
+BrandDim (TABLE ← dim/brand/latest.parquet，品牌车型维度)
+CustomerFlow (VIEW ← customer_flow/latest.parquet，客户来源去向)
 ```
+
+> 完整域全景 + JOIN 关系: [ai/DOMAIN_OVERVIEW.md](./ai/DOMAIN_OVERVIEW.md)
 
 ---
 
@@ -446,5 +459,6 @@ QuoteConversion (VIEW ← quotes_conversion/*.parquet，透传)
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| 3.0 | 2026-04-09 | 8域分域架构：新增 DOMAIN_OVERVIEW.md，更新域数量(9→14)，补充废弃域/DuckDB全景 |
 | 2.0 | 2026-03-31 | 全面重写：工具索引→知识库+工具体系索引，覆盖 ETL/诊断/维度表/分析报告 |
 | 1.0 | 2026-01-16 | 初始版本（8 个 CLI 工具索引，已废弃） |

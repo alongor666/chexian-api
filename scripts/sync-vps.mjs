@@ -316,7 +316,7 @@ async function execRemote(config, remoteCommand, options = {}) {
 /**
  * rsync 单目录：localDir/ → alias:remoteDir/
  * 使用 SSH host alias，不硬编码 IP/端口/密钥。
- * 错误时打印错误信息但不抛出，让后续步骤继续。
+ * 返回 { ok, label, error? } 供调用方判断是否中止。
  */
 async function rsyncDir(alias, localDir, remoteDir, label) {
   // 确保 localDir 以 / 结尾（rsync 语义：同步目录内容而非目录本身）
@@ -334,8 +334,10 @@ async function rsyncDir(alias, localDir, remoteDir, label) {
       `${alias}:${dst}`,
     ]);
     log('green', `  ✓ ${label} 同步完成`);
+    return { ok: true, label };
   } catch (err) {
     log('red', `  ✗ ${label} rsync 失败: ${err.message}`);
+    return { ok: false, label, error: err.message };
   }
 }
 
@@ -434,19 +436,24 @@ function printDryRun(sshConfig, runConfig) {
   console.log('将执行以下 rsync（含 --delete）:');
 
   const syncTasks = [
-    { label: 'policy/current', local: LOCAL_CURRENT_DIR, remote: `${runConfig.remoteDir}/current` },
-    { label: 'dim/salesman',   local: LOCAL_SALESMAN_DIR, remote: `${runConfig.remoteDir}/dim/salesman` },
-    { label: 'dim/plan',       local: LOCAL_PLAN_DIR,     remote: `${runConfig.remoteDir}/dim/plan` },
-    { label: 'dim/brand',     local: LOCAL_BRAND_DIR,    remote: `${runConfig.remoteDir}/dim/brand` },
-    { label: 'fact/renewal',            local: LOCAL_RENEWAL_DIR,            remote: `${runConfig.remoteDir}/fact/renewal` },
-    { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${runConfig.remoteDir}/fact/quotes_conversion` },
-    { label: 'fact/claims_detail',    local: LOCAL_CLAIMS_DETAIL_DIR,     remote: `${runConfig.remoteDir}/fact/claims_detail` },
+    { label: 'policy/current',       local: LOCAL_CURRENT_DIR,            remote: `${runConfig.remoteDir}/current`,               critical: true },
+    { label: 'dim/salesman',         local: LOCAL_SALESMAN_DIR,           remote: `${runConfig.remoteDir}/dim/salesman`,          critical: true },
+    { label: 'dim/plan',             local: LOCAL_PLAN_DIR,               remote: `${runConfig.remoteDir}/dim/plan`,              critical: true },
+    { label: 'fact/renewal',         local: LOCAL_RENEWAL_DIR,            remote: `${runConfig.remoteDir}/fact/renewal`,          critical: false },
+    { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${runConfig.remoteDir}/fact/quotes_conversion`, critical: false },
+    { label: 'dim/brand',            local: LOCAL_BRAND_DIR,              remote: `${runConfig.remoteDir}/dim/brand`,             critical: false },
+    { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${runConfig.remoteDir}/fact/claims_detail`,    critical: true },
+    { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${runConfig.remoteDir}/fact/cross_sell`,       critical: false },
+    { label: 'fact/claims',          local: LOCAL_CLAIMS_AGG_DIR,         remote: `${runConfig.remoteDir}/fact/claims`,           critical: true },
+    { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${runConfig.remoteDir}/fact/customer_flow`,    critical: false },
+    { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${runConfig.remoteDir}/dim/repair`,            critical: false },
   ];
 
   for (const task of syncTasks) {
     const exists = existsSync(task.local);
+    const tag = task.critical ? '[CRITICAL]' : '[optional]';
     const suffix = exists ? '' : '  （本地目录不存在，跳过）';
-    console.log(`  rsync -azv --delete -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
+    console.log(`  ${tag} rsync -azv --delete -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
   }
 }
 
@@ -471,76 +478,79 @@ async function maybeRestart(config, noRestart, healthUrl) {
 }
 
 /**
- * rsync 全目录同步模式
- * 同步 4 个域目录到 VPS，使用 SSH host alias。
+ * rsync 全目录同步模式（并行）
+ * 所有目录并行 rsync，按 critical/optional 分级：
+ * - critical 目录失败 → 中止重启 + process.exit(1)
+ * - optional 目录失败 → 打印警告，继续重启
  */
 async function runStandardMode(sshConfig, runConfig) {
   const alias = sshConfig.alias;
   const remote = runConfig.remoteDir;
 
-  log('green', '▶ 步骤 1: 同步 policy/current...');
-  await rsyncDir(alias, LOCAL_CURRENT_DIR, `${remote}/current`, 'policy/current');
+  // 声明式任务列表：critical=true 的目录失败会阻断重启
+  const syncTasks = [
+    { label: 'policy/current',       local: LOCAL_CURRENT_DIR,            remote: `${remote}/current`,               critical: true },
+    { label: 'dim/salesman',         local: LOCAL_SALESMAN_DIR,           remote: `${remote}/dim/salesman`,          critical: true },
+    { label: 'dim/plan',             local: LOCAL_PLAN_DIR,               remote: `${remote}/dim/plan`,              critical: true },
+    { label: 'fact/renewal',         local: LOCAL_RENEWAL_DIR,            remote: `${remote}/fact/renewal`,          critical: false },
+    { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${remote}/fact/quotes_conversion`, critical: false },
+    { label: 'dim/brand',            local: LOCAL_BRAND_DIR,              remote: `${remote}/dim/brand`,             critical: false },
+    { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${remote}/fact/claims_detail`,    critical: true },
+    { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${remote}/fact/cross_sell`,       critical: false },
+    { label: 'fact/claims',          local: LOCAL_CLAIMS_AGG_DIR,         remote: `${remote}/fact/claims`,           critical: true },
+    { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
+    { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
+  ];
 
-  log('green', '▶ 步骤 2: 同步 dim/salesman...');
-  await rsyncDir(alias, LOCAL_SALESMAN_DIR, `${remote}/dim/salesman`, 'dim/salesman');
-
-  log('green', '▶ 步骤 3: 同步 dim/plan...');
-  await rsyncDir(alias, LOCAL_PLAN_DIR, `${remote}/dim/plan`, 'dim/plan');
-
-  if (existsSync(LOCAL_RENEWAL_DIR)) {
-    log('green', '▶ 步骤 4: 同步 fact/renewal...');
-    await rsyncDir(alias, LOCAL_RENEWAL_DIR, `${remote}/fact/renewal`, 'fact/renewal');
-  } else {
-    log('yellow', '  跳过 fact/renewal（本地目录不存在）');
+  // 过滤不存在的目录
+  const activeTasks = [];
+  for (const task of syncTasks) {
+    if (existsSync(task.local)) {
+      activeTasks.push(task);
+    } else {
+      log('yellow', `  跳过 ${task.label}（本地目录不存在）`);
+    }
   }
 
-  if (existsSync(LOCAL_QUOTES_CONVERSION_DIR)) {
-    log('green', '▶ 步骤 5: 同步 fact/quotes_conversion...');
-    await rsyncDir(alias, LOCAL_QUOTES_CONVERSION_DIR, `${remote}/fact/quotes_conversion`, 'fact/quotes_conversion');
-  } else {
-    log('yellow', '  跳过 fact/quotes_conversion（本地目录不存在）');
+  log('green', `▶ 并行同步 ${activeTasks.length} 个目录...`);
+
+  // 并行 rsync 所有目录
+  const results = await Promise.allSettled(
+    activeTasks.map(task => rsyncDir(alias, task.local, task.remote, task.label))
+  );
+
+  // 收集失败结果
+  const failures = [];
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    const task = activeTasks[i];
+    // Promise.allSettled rejected（不应发生，rsyncDir 内部已 catch）或 rsyncDir 返回 ok:false
+    const rsyncResult = result.status === 'fulfilled' ? result.value : { ok: false, label: task.label, error: result.reason?.message };
+    if (!rsyncResult.ok) {
+      failures.push({ ...rsyncResult, critical: task.critical });
+    }
   }
 
-  if (existsSync(LOCAL_BRAND_DIR)) {
-    log('green', '▶ 步骤 6: 同步 dim/brand...');
-    await rsyncDir(alias, LOCAL_BRAND_DIR, `${remote}/dim/brand`, 'dim/brand');
-  } else {
-    log('yellow', '  跳过 dim/brand（本地目录不存在）');
+  // 报告失败
+  if (failures.length > 0) {
+    console.log('');
+    log('red', `⚠ ${failures.length} 个目录同步失败：`);
+    for (const f of failures) {
+      log('red', `  ${f.critical ? '🔴 CRITICAL' : '🟡 OPTIONAL'} ${f.label}: ${f.error}`);
+    }
   }
 
-  if (existsSync(LOCAL_CLAIMS_DETAIL_DIR)) {
-    log('green', '▶ 步骤 7: 同步 fact/claims_detail...');
-    await rsyncDir(alias, LOCAL_CLAIMS_DETAIL_DIR, `${remote}/fact/claims_detail`, 'fact/claims_detail');
-  } else {
-    log('yellow', '  跳过 fact/claims_detail（本地目录不存在）');
+  // critical 目录失败 → 中止重启，防止上线不完整数据
+  const criticalFailures = failures.filter(f => f.critical);
+  if (criticalFailures.length > 0) {
+    log('red', `\n❌ ${criticalFailures.length} 个关键目录同步失败，中止重启！`);
+    log('red', '  修复网络/SSH 问题后重新运行 sync-vps.mjs');
+    process.exit(1);
   }
 
-  if (existsSync(LOCAL_CROSS_SELL_DIR)) {
-    log('green', '▶ 步骤 8: 同步 fact/cross_sell...');
-    await rsyncDir(alias, LOCAL_CROSS_SELL_DIR, `${remote}/fact/cross_sell`, 'fact/cross_sell');
-  } else {
-    log('yellow', '  跳过 fact/cross_sell（本地目录不存在）');
-  }
-
-  if (existsSync(LOCAL_CLAIMS_AGG_DIR)) {
-    log('green', '▶ 步骤 9: 同步 fact/claims...');
-    await rsyncDir(alias, LOCAL_CLAIMS_AGG_DIR, `${remote}/fact/claims`, 'fact/claims');
-  } else {
-    log('yellow', '  跳过 fact/claims（本地目录不存在）');
-  }
-
-  if (existsSync(LOCAL_CUSTOMER_FLOW_DIR)) {
-    log('green', '▶ 步骤 10: 同步 fact/customer_flow...');
-    await rsyncDir(alias, LOCAL_CUSTOMER_FLOW_DIR, `${remote}/fact/customer_flow`, 'fact/customer_flow');
-  } else {
-    log('yellow', '  跳过 fact/customer_flow（本地目录不存在）');
-  }
-
-  if (existsSync(LOCAL_REPAIR_DIR)) {
-    log('green', '▶ 步骤 11: 同步 dim/repair...');
-    await rsyncDir(alias, LOCAL_REPAIR_DIR, `${remote}/dim/repair`, 'dim/repair');
-  } else {
-    log('yellow', '  跳过 dim/repair（本地目录不存在）');
+  // optional 目录失败 → 警告但继续
+  if (failures.length > 0) {
+    log('yellow', '\n⚠ 非关键目录同步失败，继续重启（数据不完整但核心功能可用）');
   }
 
   // 写同步清单：记录本次同步的文件指纹，governance 用于检测数据漂移

@@ -99,7 +99,7 @@ function runPythonScript(python, scriptPath, args) {
     env.PYTHONUTF8 = '1';
     env.PYTHONPATH = existingPath ? `${__dirname};${existingPath}` : __dirname;
   }
-  execSync(cmd, { stdio: 'inherit', cwd: __dirname, env });
+  execSync(cmd, { stdio: 'inherit', cwd: __dirname, env, timeout: 30 * 60 * 1000 });
 }
 
 function checkVpsConnectivity() {
@@ -573,7 +573,10 @@ async function main() {
   if (subcommand && subcommand !== 'premium' && subcommand !== 'all') {
     const python = findPython();
     switch (subcommand) {
-      case 'claims': runClaims(python, scriptDir); break;
+      case 'claims':
+        log('red', '❌ claims 域已废弃，请使用: node 数据管理/daily.mjs claims_detail');
+        process.exit(1);
+        break;
       case 'claims_detail':
         runClaimsDetail(python, scriptDir);
         runClaimsAggregate(python, scriptDir);

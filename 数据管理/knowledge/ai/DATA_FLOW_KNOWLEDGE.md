@@ -357,12 +357,59 @@ diagnose_vehicle.py / diagnose_agent.py
 
 ---
 
+## 9. 跨域 JOIN 条件速查（CRITICAL — 2026-04-09 新增）
+
+> 8 域分域架构下，SQL 生成器频繁跨域 JOIN。错误的 JOIN 键或方向会导致空结果集或分母错误。
+
+### 9.1 JOIN 条件总表
+
+| # | 主表 | → | 被 JOIN 表 | JOIN 类型 | ON 条件 | 使用文件 |
+|---|------|---|-----------|-----------|---------|---------|
+| J1 | PolicyFact (p) | → | ClaimsAgg (c) | LEFT JOIN | `p.policy_no = c.policy_no` | cost.ts (3函数) |
+| J2 | ClaimsDetail (c) | → | PolicyFact (p) | INNER JOIN | `c.policy_no = p.policy_no` | claims-detail.ts (9函数) |
+| J2' | ClaimsDetail (c) | → | PolicyFact (p) | LEFT JOIN | `c.policy_no = p.policy_no` | claims-detail.ts (loss-ratio, frequency) |
+| J3 | CrossSellFact (cs) | → | PolicyFact (p) | LEFT JOIN | `cs.policy_no = p.policy_no` | duckdb.ts (CrossSellDailyAgg 创建) |
+| J4 | CrossSellDailyAgg | → | SalesmanTeamMapping (tm) | LEFT JOIN | `salesman_name = tm.full_name` | cross-sell.ts |
+| J5 | PolicyFactRenewal (r) | → | SalesmanPlanFact (s) | LEFT JOIN | `r.salesman_name = s.salesman_name` | renewal-drilldown.ts |
+| J6 | SalesmanDim (s) | → | PlanFact (p) | LEFT JOIN | `s.business_no = p.business_no` | duckdb.ts (系统初始化) |
+| J7 | CustomerFlow | — | (独立查询) | — | 按 policy_no 去重 | customer-flow.ts |
+
+### 9.2 JOIN 陷阱
+
+| 陷阱 | 现象 | 根因 | 正确做法 |
+|------|------|------|---------|
+| J1 改 INNER | 无赔付保单被排除，保费统计偏低 | ClaimsAgg 只含有赔付的保单 | 必须 LEFT JOIN |
+| J3 主表搞反 | 推介率分母=保单数而非交叉销售数 | 8域模式 CrossSellFact 是主表 | `CrossSellFact LEFT JOIN PolicyFact` |
+| J4 full_name 缺工号 | JOIN 返回 0 行 | SalesmanTeamMapping.full_name 格式为 `"110030888王时凤"` | 从 Parquet 查完整值 |
+| J5 无条件 JOIN | 笛卡尔积 | SalesmanPlanFact 需附加 `plan_year` 条件 | J6 创建时已限定 `plan_year=2026 AND level='salesman'` |
+
+### 9.3 各域血缘链路
+
+```
+域                Excel 源              → ETL 脚本               → Parquet                      → DuckDB                  → SQL 生成器           → 前端页面
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+premium           01_签单清单_*.xlsx       transform.py              policy/current/*.parquet        PolicyFact(Realtime)      kpi/cost/trend/...      几乎所有
+claims_detail     车险报立结案清单*.xlsx   convert_claims_detail.py  claims_detail/latest.parquet    ClaimsDetail+ClaimsAgg    claims-detail.ts        /#/claims-detail
+cross_sell        03_交叉销售_*.xlsx       convert_cross_sell.py     cross_sell/latest.parquet       CrossSellFact→DailyAgg    cross-sell*.ts          /#/specialty
+quotes_v2         04_报价清单_*.xlsx       convert_quotes_v2.py      quotes/latest.parquet          QuoteConversion           quote-conversion.ts     /#/quote-conversion
+renewal_v2        05_续保清单_*.xlsx       convert_renewal.py        renewal/latest.parquet         PolicyFactRenewal         renewal*.ts             /#/specialty
+customer_flow     08_客户来源去向*.xlsx    convert_customer_flow.py  customer_flow/latest.parquet   CustomerFlow              customer-flow.ts        /#/customer-flow
+repair_resource   07_维修资源*.xlsx        convert_repair.py         dim/repair/latest.parquet      RepairDim                 repair.ts               /#/repair
+brand             保单 parquet 提取        generate_brand_dim.py     dim/brand/latest.parquet       BrandDim                  (诊断工具直用)          无
+salesman          川分销售人员名单*.xlsx   generate_dim_tables.py    dim/salesman/latest.parquet    SalesmanDim               间接(via mapping)       间接
+plan              计划 xlsx + mapping      generate_dim_tables.py    dim/plan/latest.parquet        PlanFact                  间接(via cache)         间接
+```
+
+---
+
 ## Gotcha 补充
 
 > **CRITICAL #6**: `经代名` 字段仅在原始 Parquet 中存在，未映射进 PolicyFact 视图。诊断工具（diagnose_agent.py）因此直接读取分片文件，不经服务端链路。
 >
 > **CRITICAL #7**: `CrossSellDailyAgg` 中的 `org_level_3` 来自原始 PolicyFact（Parquet 原始值），不经 `SalesmanTeamMapping.organization` 覆盖。推介率按机构统计时，跨机构业务员的数据归入保单所在机构。
+>
+> **CRITICAL #8**: `ClaimsAgg` 是从 `ClaimsDetail` 按 `policy_no` 聚合的派生表（SUM settled_amount + pending_amount → reported_claims），不是独立 ETL 产出。聚合脚本: `generate_claims_aggregate.py`，加载回退: `duckdb.ts:createClaimsAggFromDetail()`。
 
 ---
 
-*最后更新: 2026-03-31*
+*最后更新: 2026-04-09*

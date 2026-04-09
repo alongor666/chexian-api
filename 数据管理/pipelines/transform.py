@@ -1040,9 +1040,10 @@ def save_to_parquet(df, output_path):
     )
     print(f"\n   ✅ 成功保存到: {output_path}")
 
-    # 验证
-    df_verify = pd.read_parquet(output_path)
-    print(f"   ✅ 验证成功: {len(df_verify):,} 条记录")
+    # 验证（仅读元数据，不回载全量数据）
+    import pyarrow.parquet as pq
+    row_count = pq.read_metadata(output_path).num_rows
+    print(f"   ✅ 验证成功: {row_count:,} 条记录")
 
 def update_quick_reference(row_count, col_count):
     """同步更新 QUICK_REFERENCE.md 的数据规模行"""
