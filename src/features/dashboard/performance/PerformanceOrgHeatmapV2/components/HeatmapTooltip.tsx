@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
+import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
 import type { HeatmapTooltipContent } from '../types';
 import { HEATMAP_COLOR_SCALE } from '../config';
 import { useTheme } from '@/shared/theme';
@@ -90,7 +90,7 @@ export function HeatmapTooltip({ content, anchorRect }: HeatmapTooltipProps) {
             isActive={content.metric === 'growth'}
           />
           <TooltipRow
-            label="达成率"
+            label="进度"
             value={content.achievementRate !== null ? formatPercent(content.achievementRate) : '-'}
             isDark={isDark}
             isActive={content.metric === 'achievement'}
@@ -100,6 +100,24 @@ export function HeatmapTooltip({ content, anchorRect }: HeatmapTooltipProps) {
             value={content.premium !== null ? formatWanAdaptive(content.premium) : '-'}
             isDark={isDark}
             isActive={content.metric === 'premium'}
+          />
+          <TooltipRow
+            label="系数均值"
+            value={content.avgPricingCoefficient !== null ? content.avgPricingCoefficient.toFixed(4) : '-'}
+            isDark={isDark}
+            isActive={content.metric === 'coefficient'}
+          />
+          <TooltipRow
+            label="占比"
+            value={content.premiumShare !== null ? formatPercent(content.premiumShare) : '-'}
+            isDark={isDark}
+            isActive={content.metric === 'share'}
+          />
+          <TooltipRow
+            label="件均(元)"
+            value={content.perPolicyPremium !== null ? formatCount(Math.round(content.perPolicyPremium * 10000)) : '-'}
+            isDark={isDark}
+            isActive={content.metric === 'per_policy'}
           />
         </div>
 

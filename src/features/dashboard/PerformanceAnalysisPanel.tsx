@@ -639,6 +639,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     { key: 'coverage_combination', label: '险别组合' },
     { key: 'energy_type', label: '能源类型' },
     { key: 'business_nature', label: '新转续' },
+    { key: 'insurance_grade', label: '风险评分' },
   ];
 
   const handlePerfHeatmapRowClick = (org: string) => {

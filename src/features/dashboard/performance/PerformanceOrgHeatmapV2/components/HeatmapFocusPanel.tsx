@@ -6,15 +6,16 @@
  */
 
 import { useTheme } from '@/shared/theme';
-import { formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
+import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
 import { cardStyles, cn, colorClasses, textStyles } from '@/shared/styles';
 import type { HeatmapFocusPanelProps } from '../types';
 import { getWeekdayLabel, TIER_LABELS, TIER_BUSINESS_NOTES, THRESHOLD_MAP, HEATMAP_COLOR_SCALE } from '../config';
 import type { HeatmapTier } from '../types';
 
-function resolveTier(value: number | null, metric: 'growth' | 'achievement'): HeatmapTier {
+function resolveTier(value: number | null, metric: keyof typeof THRESHOLD_MAP): HeatmapTier {
   if (value === null || Number.isNaN(value)) return 'unknown';
   const config = THRESHOLD_MAP[metric];
+  if (!config) return 'unknown';
   for (const { tier, min } of config.tiers) {
     if (min === undefined || value >= min) return tier;
   }
@@ -35,13 +36,20 @@ export function HeatmapFocusPanel({
   if (!activeCell) return null;
 
   const growthRate = row ? (growthMode === 'mom' ? row.momGrowthRate : row.yoyGrowthRate) : null;
-  const primaryValue = metric === 'premium' ? row?.premium ?? null
-    : metric === 'achievement' ? row?.achievementRate ?? null
-    : growthRate;
+  const primaryValue = (() => {
+    switch (metric) {
+      case 'premium': return row?.premium ?? null;
+      case 'achievement': return row?.achievementRate ?? null;
+      case 'coefficient': return row?.avgPricingCoefficient ?? null;
+      case 'share': return row?.premiumShare ?? null;
+      case 'per_policy': return row?.perPolicyPremium ?? null;
+      default: return growthRate;
+    }
+  })();
 
   const tier: HeatmapTier = metric === 'premium'
     ? 'normal'
-    : resolveTier(primaryValue, metric);
+    : resolveTier(primaryValue, metric as keyof typeof THRESHOLD_MAP);
 
   const tierColor = isDark ? HEATMAP_COLOR_SCALE.dark[tier] : HEATMAP_COLOR_SCALE.light[tier];
 
@@ -92,19 +100,34 @@ export function HeatmapFocusPanel({
       {row && (
         <div className="flex flex-wrap gap-4">
           <MetricChip
-            label={growthMode === 'mom' ? '周环比增长率' : '年同比增长率'}
+            label={growthMode === 'mom' ? '环比' : '同比'}
             value={growthRate !== null ? formatPercent(growthRate) : '-'}
             isActive={metric === 'growth'}
           />
           <MetricChip
-            label="计划达成率"
+            label="进度"
             value={row.achievementRate !== null ? formatPercent(row.achievementRate) : '-'}
             isActive={metric === 'achievement'}
           />
           <MetricChip
-            label="保费(万元)"
+            label="保费(万)"
             value={formatWanAdaptive(row.premium)}
             isActive={metric === 'premium'}
+          />
+          <MetricChip
+            label="系数均值"
+            value={row.avgPricingCoefficient !== null ? row.avgPricingCoefficient.toFixed(4) : '-'}
+            isActive={metric === 'coefficient'}
+          />
+          <MetricChip
+            label="占比"
+            value={row.premiumShare !== null ? formatPercent(row.premiumShare) : '-'}
+            isActive={metric === 'share'}
+          />
+          <MetricChip
+            label="件均(元)"
+            value={row.perPolicyPremium !== null ? formatCount(Math.round(row.perPolicyPremium * 10000)) : '-'}
+            isActive={metric === 'per_policy'}
           />
         </div>
       )}

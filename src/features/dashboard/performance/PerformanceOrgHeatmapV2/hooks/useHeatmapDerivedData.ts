@@ -36,6 +36,23 @@ function buildBranchSummaryRow(
   const yoyGrowthRate =
     prevYoyPremium > 0 ? ((premium - prevYoyPremium) / prevYoyPremium) * 100 : null;
 
+  const policyCount = dateRows.reduce((sum, r) => sum + r.policyCount, 0);
+  const perPolicyPremium = policyCount > 0 ? premium / policyCount : null;
+
+  // 系数均值：加权平均（按保费权重）
+  const coefRows = dateRows.filter((r) => r.avgPricingCoefficient !== null && r.avgPricingCoefficient > 0);
+  let avgPricingCoefficient: number | null = null;
+  if (coefRows.length > 0) {
+    const totalCoefPremium = coefRows.reduce((sum, r) => sum + r.premium, 0);
+    if (totalCoefPremium > 0) {
+      const weightedSum = coefRows.reduce(
+        (sum, r) => sum + r.premium / (r.avgPricingCoefficient ?? 1),
+        0,
+      );
+      avgPricingCoefficient = totalCoefPremium / weightedSum;
+    }
+  }
+
   return {
     orgLevel3: BRANCH_SUMMARY_ROW_LABEL,
     policyDate: date,
@@ -46,6 +63,10 @@ function buildBranchSummaryRow(
     achievementRate,
     momGrowthRate,
     yoyGrowthRate,
+    policyCount,
+    avgPricingCoefficient,
+    premiumShare: 100, // 汇总行 = 100%
+    perPolicyPremium,
   };
 }
 
@@ -166,10 +187,17 @@ export function useHeatmapDerivedData({
     const getOrgSortValue = (org: string): number => {
       const latestRow = orgMap.get(org)?.get(latestDate);
       if (!latestRow) return -Infinity;
-      if (metric === 'premium') return latestRow.premium ?? -Infinity;
-      if (metric === 'achievement') return latestRow.achievementRate ?? -Infinity;
-      const rate = growthMode === 'mom' ? latestRow.momGrowthRate : latestRow.yoyGrowthRate;
-      return rate ?? -Infinity;
+      switch (metric) {
+        case 'premium': return latestRow.premium ?? -Infinity;
+        case 'achievement': return latestRow.achievementRate ?? -Infinity;
+        case 'coefficient': return latestRow.avgPricingCoefficient ?? -Infinity;
+        case 'share': return latestRow.premiumShare ?? -Infinity;
+        case 'per_policy': return latestRow.perPolicyPremium ?? -Infinity;
+        default: {
+          const rate = growthMode === 'mom' ? latestRow.momGrowthRate : latestRow.yoyGrowthRate;
+          return rate ?? -Infinity;
+        }
+      }
     };
 
     const baseOrganizations = [...orgMap.keys()].sort(

@@ -6,7 +6,7 @@
 
 import { useCallback, useRef } from 'react';
 import { cn, textStyles } from '@/shared/styles';
-import { formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
+import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
 import type { PerformanceOrgHeatmapRow } from '../../../hooks/usePerformanceOrgHeatmap';
 import type { PerformanceGrowthMode } from '../../../hooks/usePerformanceSummary';
 import type { HeatmapCellCoord, HeatmapMetric, HeatmapTooltipContent } from '../types';
@@ -70,6 +70,9 @@ export function HeatmapCell({
       growthRate,
       achievementRate: row?.achievementRate ?? null,
       premium: row?.premium ?? null,
+      avgPricingCoefficient: row?.avgPricingCoefficient ?? null,
+      premiumShare: row?.premiumShare ?? null,
+      perPolicyPremium: row?.perPolicyPremium ?? null,
     };
     onHoverStart({ org, date }, rect, content);
   }, [canInteract, org, date, row, metric, growthMode, resolved.tier, onHoverStart]);
@@ -111,12 +114,22 @@ function getDisplayValue(
   growthMode: PerformanceGrowthMode,
 ): string {
   if (!row) return '-';
-  if (metric === 'premium') return formatWanAdaptive(row.premium);
-  if (metric === 'achievement') {
-    return row.achievementRate === null ? '-' : formatPercent(row.achievementRate);
+  switch (metric) {
+    case 'premium':
+      return formatWanAdaptive(row.premium);
+    case 'achievement':
+      return row.achievementRate === null ? '-' : formatPercent(row.achievementRate);
+    case 'coefficient':
+      return row.avgPricingCoefficient === null ? '-' : row.avgPricingCoefficient.toFixed(4);
+    case 'share':
+      return row.premiumShare === null ? '-' : formatPercent(row.premiumShare);
+    case 'per_policy':
+      return row.perPolicyPremium === null ? '-' : formatCount(Math.round(row.perPolicyPremium * 10000));
+    default: {
+      const rate = growthMode === 'mom' ? row.momGrowthRate : row.yoyGrowthRate;
+      return rate === null ? '-' : formatPercent(rate);
+    }
   }
-  const rate = growthMode === 'mom' ? row.momGrowthRate : row.yoyGrowthRate;
-  return rate === null ? '-' : formatPercent(rate);
 }
 
 function getColorValue(
@@ -125,7 +138,12 @@ function getColorValue(
   growthMode: PerformanceGrowthMode,
 ): number | null {
   if (!row) return null;
-  if (metric === 'premium') return row.premium;
-  if (metric === 'achievement') return row.achievementRate;
-  return growthMode === 'mom' ? row.momGrowthRate : row.yoyGrowthRate;
+  switch (metric) {
+    case 'premium': return row.premium;
+    case 'achievement': return row.achievementRate;
+    case 'coefficient': return row.avgPricingCoefficient;
+    case 'share': return row.premiumShare;
+    case 'per_policy': return row.perPolicyPremium;
+    default: return growthMode === 'mom' ? row.momGrowthRate : row.yoyGrowthRate;
+  }
 }

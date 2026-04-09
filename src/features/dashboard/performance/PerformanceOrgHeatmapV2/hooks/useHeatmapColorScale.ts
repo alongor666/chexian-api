@@ -23,7 +23,7 @@ export interface ResolvedColor extends HeatmapColorEntry {
 }
 
 /** 根据阈值配置将数值分到7级 */
-function resolveTier(value: number | null, metric: 'growth' | 'achievement'): HeatmapTier {
+function resolveTier(value: number | null, metric: 'growth' | 'achievement' | 'coefficient' | 'share' | 'per_policy'): HeatmapTier {
   if (value === null || Number.isNaN(value)) return 'unknown';
   const config = THRESHOLD_MAP[metric];
   for (const { tier, min } of config.tiers) {
@@ -94,7 +94,12 @@ export function useHeatmapColorScale(premiumValues?: readonly number[]) {
         };
       }
 
-      const tier = resolveTier(value, metric);
+      // 防御性检查：确保 metric 在 THRESHOLD_MAP 中存在
+      if (!(metric in THRESHOLD_MAP)) {
+        const color = resolveColor('unknown', isDark);
+        return { bg: color.bg, text: color.text, tier: 'unknown' as const, tierLabel: TIER_LABELS.unknown, businessNote: TIER_BUSINESS_NOTES.unknown };
+      }
+      const tier = resolveTier(value, metric as keyof typeof THRESHOLD_MAP);
       const color = resolveColor(tier, isDark);
       return {
         bg: color.bg,

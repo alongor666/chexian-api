@@ -19,7 +19,7 @@ export function HeatmapHeader({ metric, onMetricChange, growthMode, timePeriod }
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <Tabs
-        items={getHeatmapMetricTabs(growthMode)}
+        items={getHeatmapMetricTabs(growthMode, timePeriod)}
         activeKey={metric}
         onChange={(key) => onMetricChange(key as HeatmapMetric)}
         variant="pills"

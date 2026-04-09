@@ -8,7 +8,7 @@ import type { PerformanceGrowthMode, PerformanceTimePeriod } from '../../hooks/u
 
 // ==================== Metric & Tier ====================
 
-export type HeatmapMetric = 'growth' | 'achievement' | 'premium';
+export type HeatmapMetric = 'growth' | 'achievement' | 'premium' | 'coefficient' | 'share' | 'per_policy';
 
 /** 7级发散分段 + unknown */
 export type HeatmapTier =
@@ -91,6 +91,9 @@ export interface HeatmapTooltipContent {
   readonly growthRate: number | null;
   readonly achievementRate: number | null;
   readonly premium: number | null;
+  readonly avgPricingCoefficient: number | null;
+  readonly premiumShare: number | null;
+  readonly perPolicyPremium: number | null;
 }
 
 // ==================== Component Props ====================

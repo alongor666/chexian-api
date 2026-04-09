@@ -5,7 +5,7 @@ import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import type { PerformanceGrowthMode, PerformanceSegmentTag, PerformanceTimePeriod } from './usePerformanceSummary';
 
-export type HeatmapDimension = 'org_level_3' | 'team' | 'salesman' | 'customer_category' | 'coverage_combination' | 'energy_type' | 'business_nature';
+export type HeatmapDimension = 'org_level_3' | 'team' | 'salesman' | 'customer_category' | 'coverage_combination' | 'energy_type' | 'business_nature' | 'insurance_grade';
 
 export const HEATMAP_DIMENSION_LABELS: Record<HeatmapDimension, string> = {
   org_level_3: '三级机构',
@@ -15,6 +15,7 @@ export const HEATMAP_DIMENSION_LABELS: Record<HeatmapDimension, string> = {
   coverage_combination: '险别组合',
   energy_type: '能源类型',
   business_nature: '新转续',
+  insurance_grade: '风险评分',
 };
 
 export interface HeatmapDrillStep {
@@ -32,6 +33,10 @@ export interface PerformanceOrgHeatmapRow {
   achievementRate: number | null;
   momGrowthRate: number | null;
   yoyGrowthRate: number | null;
+  policyCount: number;
+  avgPricingCoefficient: number | null;
+  premiumShare: number | null;
+  perPolicyPremium: number | null;
 }
 
 interface UsePerformanceOrgHeatmapProps {
@@ -61,6 +66,10 @@ function mapHeatmapRow(row: Record<string, unknown>): PerformanceOrgHeatmapRow {
     achievementRate: row.achievement_rate == null ? null : Number(row.achievement_rate),
     momGrowthRate: row.mom_growth_rate == null ? null : Number(row.mom_growth_rate),
     yoyGrowthRate: row.yoy_growth_rate == null ? null : Number(row.yoy_growth_rate),
+    policyCount: Number(row.policy_count ?? 0),
+    avgPricingCoefficient: row.avg_pricing_coefficient == null ? null : Number(row.avg_pricing_coefficient),
+    premiumShare: row.premium_share == null ? null : Number(row.premium_share),
+    perPolicyPremium: row.per_policy_premium == null ? null : Number(row.per_policy_premium),
   };
 }
 

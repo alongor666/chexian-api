@@ -1168,7 +1168,8 @@ export type HeatmapGroupDimension =
   | 'customer_category'
   | 'coverage_combination'
   | 'energy_type'
-  | 'business_nature';
+  | 'business_nature'
+  | 'insurance_grade';
 
 export const HEATMAP_DIMENSION_LABELS: Record<HeatmapGroupDimension, string> = {
   org_level_3: '三级机构',
@@ -1178,6 +1179,7 @@ export const HEATMAP_DIMENSION_LABELS: Record<HeatmapGroupDimension, string> = {
   coverage_combination: '险别组合',
   energy_type: '能源类型',
   business_nature: '新转续',
+  insurance_grade: '风险评分',
 };
 
 /** 热力图下钻步骤 */
@@ -1208,6 +1210,8 @@ function heatmapDrillToWhere(steps: HeatmapDrillStep[]): string {
         return step.value === '新能源'
           ? truthyExpr('p.is_nev')
           : `NOT ${truthyExpr('p.is_nev')}`;
+      case 'insurance_grade':
+        return `COALESCE(p.insurance_grade, 'X') = ${v}`;
       case 'business_nature': {
         const renewalBaseWhere = truthyExpr('p.is_renewal');
         const newCarWhere = truthyExpr('p.is_new_car');
@@ -1287,6 +1291,12 @@ function getHeatmapGroupByExpr(
         END`,
         alias: 'dimension_value',
         label: '新转续',
+      };
+    case 'insurance_grade':
+      return {
+        selectExpr: `COALESCE(${prefix}insurance_grade, 'X')`,
+        alias: 'dimension_value',
+        label: '风险评分',
       };
     default: // org_level_3
       return {
@@ -1449,7 +1459,8 @@ export function generatePerformanceOrgHeatmapQuery(
         CAST(p.policy_date AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         COALESCE(NULLIF(TRIM(CAST(p.salesman_name AS VARCHAR)), ''), '__unknown__') AS salesman_name,
-        p.premium / 10000.0 AS premium_wan
+        p.premium / 10000.0 AS premium_wan,
+        p.commercial_pricing_factor AS cpf
       FROM PolicyFact p
       ${needsTeamJoin ? "LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))" : ''}
       WHERE ${whereWithoutDate}
@@ -1473,7 +1484,12 @@ export function generatePerformanceOrgHeatmapQuery(
       SELECT
         wr.${dimConfig.alias},
         wr.period_key,
-        ROUND(SUM(wr.premium_wan), 4) AS premium
+        ROUND(SUM(wr.premium_wan), 4) AS premium,
+        COUNT(*) AS policy_count,
+        ROUND(
+          SUM(CASE WHEN wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan END)
+          / NULLIF(SUM(CASE WHEN wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan / wr.cpf END), 0),
+        4) AS avg_pricing_coefficient
       FROM window_rows wr
       GROUP BY wr.${dimConfig.alias}, wr.period_key
     ),
@@ -1536,7 +1552,14 @@ export function generatePerformanceOrgHeatmapQuery(
       CASE
         WHEN COALESCE(prev_yoy.premium, 0) = 0 THEN NULL
         ELSE ROUND((COALESCE(cur.premium, 0) - prev_yoy.premium) * 100.0 / prev_yoy.premium, 2)
-      END AS yoy_growth_rate
+      END AS yoy_growth_rate,
+      COALESCE(cur.policy_count, 0) AS policy_count,
+      cur.avg_pricing_coefficient AS avg_pricing_coefficient,
+      ROUND(COALESCE(cur.premium, 0) * 100.0 / NULLIF(SUM(COALESCE(cur.premium, 0)) OVER (PARTITION BY bg.period_key), 0), 2) AS premium_share,
+      CASE
+        WHEN COALESCE(cur.policy_count, 0) = 0 THEN NULL
+        ELSE ROUND(COALESCE(cur.premium, 0) / cur.policy_count, 4)
+      END AS per_policy_premium
     FROM base_grid bg
     LEFT JOIN dim_period cur ON cur.${dimConfig.alias} = bg.${dimConfig.alias} AND cur.period_key = bg.period_key
     LEFT JOIN period_progress pr ON pr.period_key = bg.period_key

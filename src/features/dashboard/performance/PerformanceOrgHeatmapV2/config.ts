@@ -86,9 +86,54 @@ export const ACHIEVEMENT_THRESHOLDS: HeatmapThresholdConfig = {
   ],
 };
 
-export const THRESHOLD_MAP: Record<'growth' | 'achievement', HeatmapThresholdConfig> = {
+/** 系数均值阈值（商业险自主定价系数，中心 ~1.0） */
+export const COEFFICIENT_THRESHOLDS: HeatmapThresholdConfig = {
+  metric: 'coefficient',
+  tiers: [
+    { tier: 'excellent', min: 1.15 },
+    { tier: 'strong',    min: 1.05 },
+    { tier: 'above',     min: 0.95 },
+    { tier: 'normal',    min: 0.85 },
+    { tier: 'below',     min: 0.75 },
+    { tier: 'weak',      min: 0.65 },
+    { tier: 'critical' },
+  ],
+};
+
+/** 占比阈值 */
+export const SHARE_THRESHOLDS: HeatmapThresholdConfig = {
+  metric: 'share',
+  tiers: [
+    { tier: 'excellent', min: 25 },
+    { tier: 'strong',    min: 18 },
+    { tier: 'above',     min: 12 },
+    { tier: 'normal',    min: 7  },
+    { tier: 'below',     min: 3  },
+    { tier: 'weak',      min: 1  },
+    { tier: 'critical' },
+  ],
+};
+
+/** 件均保费阈值（万元） */
+export const PER_POLICY_THRESHOLDS: HeatmapThresholdConfig = {
+  metric: 'per_policy',
+  tiers: [
+    { tier: 'excellent', min: 0.8  },
+    { tier: 'strong',    min: 0.5  },
+    { tier: 'above',     min: 0.3  },
+    { tier: 'normal',    min: 0.15 },
+    { tier: 'below',     min: 0.08 },
+    { tier: 'weak',      min: 0.03 },
+    { tier: 'critical' },
+  ],
+};
+
+export const THRESHOLD_MAP: Record<'growth' | 'achievement' | 'coefficient' | 'share' | 'per_policy', HeatmapThresholdConfig> = {
   growth: GROWTH_THRESHOLDS,
   achievement: ACHIEVEMENT_THRESHOLDS,
+  coefficient: COEFFICIENT_THRESHOLDS,
+  share: SHARE_THRESHOLDS,
+  per_policy: PER_POLICY_THRESHOLDS,
 };
 
 // ==================== 标签配置 ====================
@@ -152,11 +197,29 @@ export function getMonthKey(dateText: string): string {
 
 // ==================== 指标Tab配置 ====================
 
-export function getHeatmapMetricTabs(growthMode: 'mom' | 'yoy') {
+/** 根据时间视图返回环比前缀 */
+function getMomPeriodLabel(timePeriod: string): string {
+  switch (timePeriod) {
+    case 'day': return '周';    // 日视图环比=上周同天
+    case 'week': return '周';
+    case 'month': return '月';
+    case 'quarter': return '季';
+    case 'year': return '年';
+    default: return '周';
+  }
+}
+
+export function getHeatmapMetricTabs(growthMode: 'mom' | 'yoy', timePeriod = 'day') {
+  const growthLabel = growthMode === 'mom'
+    ? `${getMomPeriodLabel(timePeriod)}环比`
+    : '同比';
   return [
-    { key: 'growth' as const, label: growthMode === 'mom' ? '周环比增长率' : '年同比增长率' },
-    { key: 'achievement' as const, label: '计划达成率' },
-    { key: 'premium' as const, label: '保费规模' },
+    { key: 'growth' as const, label: growthLabel },
+    { key: 'achievement' as const, label: '进度' },
+    { key: 'premium' as const, label: '保费' },
+    { key: 'coefficient' as const, label: '系数均值' },
+    { key: 'share' as const, label: '占比' },
+    { key: 'per_policy' as const, label: '件均' },
   ];
 }
 
