@@ -21,6 +21,8 @@ import {
   Database,
   Target,
   FileWarning,
+  Wrench,
+  ArrowLeftRight,
   TrendingDown,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
@@ -60,6 +62,8 @@ const toolNavItems: NavItem[] = [
   { path: '/quote-conversion', icon: Target, label: '报价转化', shortLabel: '报价' },
   { path: '/expense-development', icon: TrendingDown, label: '费用率发展', shortLabel: '费发' },
   { path: '/claims-detail', icon: FileWarning, label: '赔案明细', shortLabel: '赔案' },
+  { path: '/repair', icon: Wrench, label: '维修资源', shortLabel: '维修' },
+  { path: '/customer-flow', icon: ArrowLeftRight, label: '客户来源', shortLabel: '来源' },
   { path: '/data-import', icon: Database, label: '数据导入', shortLabel: '导入' },
   { path: '/moto-cost', icon: Bike, label: '摩意模型', shortLabel: '摩意' },
 ];

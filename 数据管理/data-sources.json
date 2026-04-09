@@ -13,7 +13,7 @@
       "shard_strategy": "3层分片(static/weekly/daily)",
       "last_updated": "2026-04-09",
       "data_range": "2021-01-01 ~ 2026-04-07",
-      "row_count": 3850049,
+      "row_count": 3546505,
       "field_count": 53,
       "key_fields": [
         "保单号",
@@ -235,7 +235,13 @@
       "etl_script": "pipelines/convert_cross_sell.py",
       "output": "warehouse/fact/cross_sell/latest.parquet",
       "update_cadence": "with_source_xlsx",
-      "key_fields": ["policy_no", "is_cross_sell", "cross_sell_premium_driver", "salesman_name", "org_level_3"],
+      "key_fields": [
+        "policy_no",
+        "is_cross_sell",
+        "cross_sell_premium_driver",
+        "salesman_name",
+        "org_level_3"
+      ],
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重"
     },
     {
@@ -247,7 +253,15 @@
       "etl_script": "pipelines/convert_quotes_v2.py",
       "output": "warehouse/fact/quotes/latest.parquet",
       "update_cadence": "with_source_xlsx",
-      "key_fields": ["vehicle_frame_no", "quote_time", "insurance_grade", "renewal_status", "is_underwritten", "commercial_pricing_factor", "final_quote_premium"],
+      "key_fields": [
+        "vehicle_frame_no",
+        "quote_time",
+        "insurance_grade",
+        "renewal_status",
+        "is_underwritten",
+        "commercial_pricing_factor",
+        "final_quote_premium"
+      ],
       "notes": "25列全新格式报价清单，替换旧版2列quotes_status和quotes_conversion"
     },
     {
@@ -259,7 +273,13 @@
       "etl_script": "pipelines/convert_renewal.py",
       "output": "warehouse/fact/renewal/latest.parquet",
       "update_cadence": "with_source_xlsx",
-      "key_fields": ["source_policy_no", "renewed_policy_no", "is_renewed", "expiry_month", "org_level_3"],
+      "key_fields": [
+        "source_policy_no",
+        "renewed_policy_no",
+        "is_renewed",
+        "expiry_month",
+        "org_level_3"
+      ],
       "notes": "续保跟踪清单，9列+1派生(is_renewed)，替换旧版renewal_funnel"
     },
     {
@@ -271,7 +291,13 @@
       "etl_script": "pipelines/convert_repair.py",
       "output": "warehouse/dim/repair/latest.parquet",
       "update_cadence": "irregular",
-      "key_fields": ["repair_shop_name", "is_4s_shop", "cooperation_status", "damage_assessment_amount", "parts_discount_rate"],
+      "key_fields": [
+        "repair_shop_name",
+        "is_4s_shop",
+        "cooperation_status",
+        "damage_assessment_amount",
+        "parts_discount_rate"
+      ],
       "notes": "维修厂合作数据，12列，含核损金额/换件折扣率/合作状态"
     },
     {
@@ -283,7 +309,12 @@
       "etl_script": "pipelines/convert_customer_flow.py",
       "output": "warehouse/fact/customer_flow/latest.parquet",
       "update_cadence": "with_source_xlsx",
-      "key_fields": ["policy_no", "previous_insurer", "next_insurer", "insurance_start_date"],
+      "key_fields": [
+        "policy_no",
+        "previous_insurer",
+        "next_insurer",
+        "insurance_start_date"
+      ],
       "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知"
     }
   ]

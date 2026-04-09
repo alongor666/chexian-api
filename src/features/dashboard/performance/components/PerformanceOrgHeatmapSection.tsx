@@ -107,6 +107,10 @@ function buildPerformanceBranchSummaryRow(
     achievementRate,
     momGrowthRate,
     yoyGrowthRate,
+    policyCount: 0,
+    avgPricingCoefficient: 0,
+    premiumShare: 0,
+    perPolicyPremium: 0,
   };
 }
 

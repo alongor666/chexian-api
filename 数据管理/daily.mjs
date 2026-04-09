@@ -714,26 +714,46 @@ async function main() {
   }
 
   // 4. 处理周更分片（每次重新转换）
+  // 新格式（01_签单清单_*）：每个文件独立命名，多文件共存（剔摩+限摩）
+  // 旧格式（每日数据_*）：按日期范围命名，归档旧版本
+  const weeklyStart = config.weekly_start.replace(/-/g, '');
+  let weeklyArchiveDone = false;  // 旧格式归档只做一次
+
   for (const file of shards.weekly) {
     const range = extractDateRange(file.name);
-    const outputName = `每日数据_${range.start}_${range.end}.parquet`;
+    const isNewFormat = file.name.startsWith('01_签单清单_');
+
+    // 新格式：保留原始名称（如 01_签单清单_剔摩_24年至.parquet），支持多文件共存
+    // 旧格式：使用日期范围命名（如 每日数据_20240101_20260409.parquet）
+    const outputName = isNewFormat
+      ? file.name.replace(/\.xlsx$/i, '.parquet')
+      : `每日数据_${range.start}_${range.end}.parquet`;
     const outputPath = join(currentDir, outputName);
 
-    // 归档旧的周更 parquet（不同结束日期的）
-    const weeklyStart = config.weekly_start.replace(/-/g, '');
-    const existingWeekly = readdirSync(currentDir)
-      .filter(f => f.endsWith('.parquet') && f !== outputName && extractDateRange(f)?.start === weeklyStart);
-    for (const old of existingWeekly) {
-      const archivedName = `${old.replace('.parquet', '')}_${formatDate()}.parquet`;
-      renameSync(join(currentDir, old), join(archiveDir, archivedName));
-      log('yellow', `📦 归档旧周更: ${old} → ${archivedName}`);
+    // 新格式用缓存检测（xlsx 没变就跳过），旧格式每次重新转换
+    if (isNewFormat && !isCacheStale(file.path, outputPath)) {
+      log('green', `✓ 周更分片缓存命中: ${outputName}`);
+      continue;
+    }
+
+    // 旧格式归档旧的周更 parquet（仅限同为旧格式的文件，不归档新格式）
+    if (!isNewFormat && !weeklyArchiveDone) {
+      const existingOldWeekly = readdirSync(currentDir)
+        .filter(f => f.endsWith('.parquet') && f.startsWith('每日数据_') && f !== outputName
+                && extractDateRange(f)?.start === weeklyStart);
+      for (const old of existingOldWeekly) {
+        const archivedName = `${old.replace('.parquet', '')}_${formatDate()}.parquet`;
+        renameSync(join(currentDir, old), join(archiveDir, archivedName));
+        log('yellow', `📦 归档旧周更: ${old} → ${archivedName}`);
+      }
+      weeklyArchiveDone = true;
     }
 
     log('green', `▶ 转换周更分片: ${file.name} → ${outputName}`);
     const args = ['-i', `"${file.path}"`, '-o', `"${outputPath}"`];
 
-    // 续保匹配只应用于周更分片
-    if (renewalSource && config.renewal_apply_to === 'weekly') {
+    // 续保匹配只应用于旧格式周更分片（新格式数据自带续保字段）
+    if (!isNewFormat && renewalSource && config.renewal_apply_to === 'weekly') {
       args.push('-r', `"${renewalSource}"`);
       log('green', `  续保匹配: ${basename(renewalSource)}`);
     }
@@ -741,7 +761,7 @@ async function main() {
     runPythonScript(python, transformScript, args);
 
     // 清空 staging（日增量已合入周更 xlsx）
-    cleanStaging(stagingDir);
+    if (!isNewFormat) cleanStaging(stagingDir);
   }
 
   // 5. 处理日增量（转到 staging/）

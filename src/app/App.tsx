@@ -94,6 +94,12 @@ const ReportTemplatesPanel = lazy(() =>
 const MotoCostPage = lazy(() =>
   import('../features/moto-cost').then((m) => ({ default: m.MotoCostPage }))
 );
+const RepairPage = lazy(() =>
+  import('../features/repair/RepairPage').then((m) => ({ default: m.RepairPage }))
+);
+const CustomerFlowPage = lazy(() =>
+  import('../features/customer-flow/CustomerFlowPage').then((m) => ({ default: m.CustomerFlowPage }))
+);
 const AccessControlPage = lazy(() =>
   import('../features/admin/AccessControlPage').then((m) => ({ default: m.AccessControlPage }))
 );
@@ -312,6 +318,22 @@ function App() {
                       <ExpenseDevGuard>
                         <LazyRoute><ExpenseDevelopmentPage /></LazyRoute>
                       </ExpenseDevGuard>
+                    }
+                  />
+
+                  {/* 维修资源分析 - 独立数据源 RepairDim */}
+                  <Route
+                    path="repair"
+                    element={
+                      <LazyRoute><RepairPage /></LazyRoute>
+                    }
+                  />
+
+                  {/* 客户来源去向分析 - 独立数据源 CustomerFlow */}
+                  <Route
+                    path="customer-flow"
+                    element={
+                      <LazyRoute><CustomerFlowPage /></LazyRoute>
                     }
                   />
 

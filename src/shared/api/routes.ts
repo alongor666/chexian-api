@@ -99,6 +99,21 @@ export const QUERY_ROUTES = {
   },
   // 费用率发展
   EXPENSE_DEVELOPMENT: 'expense-development',
+  // 维修资源
+  REPAIR: {
+    OVERVIEW: 'repair/overview',
+    DETAIL: 'repair/detail',
+    STATUS: 'repair/status',
+    METADATA: 'repair/metadata',
+  },
+  // 客户来源去向
+  CUSTOMER_FLOW: {
+    SUMMARY: 'customer-flow/summary',
+    INFLOW: 'customer-flow/inflow',
+    OUTFLOW: 'customer-flow/outflow',
+    TREND: 'customer-flow/trend',
+    METADATA: 'customer-flow/metadata',
+  },
   // 赔案明细
   CLAIMS_DETAIL: {
     PENDING_OVERVIEW: 'claims-detail/pending-overview',

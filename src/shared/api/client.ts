@@ -967,6 +967,46 @@ class ApiClient {
     return this.request<{ minExpiryDate: string; maxExpiryDate: string; categories: string[]; availableMonths?: string[] }>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.METADATA}`);
   }
 
+  // ── 维修资源 ──
+
+  async getRepairOverview(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.OVERVIEW}${query ? `?${query}` : ''}`);
+  }
+  async getRepairDetail(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.DETAIL}${query ? `?${query}` : ''}`);
+  }
+  async getRepairStatus(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.STATUS}${query ? `?${query}` : ''}`);
+  }
+  async getRepairMetadata() {
+    return this.request<any>(`/query/${QUERY_ROUTES.REPAIR.METADATA}`);
+  }
+
+  // ── 客户来源去向 ──
+
+  async getCustomerFlowSummary(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.SUMMARY}${query ? `?${query}` : ''}`);
+  }
+  async getCustomerFlowInflow(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.INFLOW}${query ? `?${query}` : ''}`);
+  }
+  async getCustomerFlowOutflow(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.OUTFLOW}${query ? `?${query}` : ''}`);
+  }
+  async getCustomerFlowTrend(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.TREND}${query ? `?${query}` : ''}`);
+  }
+  async getCustomerFlowMetadata() {
+    return this.request<any>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.METADATA}`);
+  }
+
   /**
    * 获取能力注册表
    */

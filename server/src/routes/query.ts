@@ -28,6 +28,8 @@ import renewalFunnelRoutes from './query/renewal-funnel.js';
 import quoteConversionRoutes from './query/quote-conversion.js';
 import claimsDetailRoutes from './query/claims-detail.js';
 import expenseDevRoutes from './query/expense-development.js';
+import repairRoutes from './query/repair.js';
+import customerFlowRoutes from './query/customer-flow.js';
 
 export { buildRouteCacheKey } from './query/shared.js';
 export { fetchDashboardBundleData } from './query/bundles.js';
@@ -55,5 +57,7 @@ router.use(renewalFunnelRoutes);
 router.use(quoteConversionRoutes);
 router.use(claimsDetailRoutes);
 router.use(expenseDevRoutes);
+router.use(repairRoutes);
+router.use(customerFlowRoutes);
 
 export default router;

@@ -14,8 +14,13 @@
  *   数据管理/warehouse/dim/salesman/              →  data/dim/salesman/
  *   数据管理/warehouse/dim/plan/                  →  data/dim/plan/
  *   数据管理/warehouse/dim/brand/                 →  data/dim/brand/
- *   数据管理/warehouse/fact/renewal/              →  data/fact/renewal/  （目录存在时）
- *   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/  （目录存在时）
+ *   数据管理/warehouse/dim/repair/                →  data/dim/repair/
+ *   数据管理/warehouse/fact/renewal/              →  data/fact/renewal/
+ *   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/
+ *   数据管理/warehouse/fact/claims_detail/        →  data/fact/claims_detail/
+ *   数据管理/warehouse/fact/cross_sell/           →  data/fact/cross_sell/
+ *   数据管理/warehouse/fact/claims/               →  data/fact/claims/
+ *   数据管理/warehouse/fact/customer_flow/        →  data/fact/customer_flow/
  *
  * 可选环境变量:
  *   SYNC_VPS_SSH_ALIAS, SYNC_VPS_HOST, SYNC_VPS_USER, SYNC_VPS_PORT,
@@ -48,6 +53,10 @@ const LOCAL_BRAND_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/brand');
 const LOCAL_RENEWAL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal');
 const LOCAL_QUOTES_CONVERSION_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/quotes_conversion');
 const LOCAL_CLAIMS_DETAIL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims_detail');
+const LOCAL_CROSS_SELL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/cross_sell');
+const LOCAL_CLAIMS_AGG_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims');
+const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
+const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 
 const colors = {
   green: '\x1b[32m',
@@ -506,6 +515,34 @@ async function runStandardMode(sshConfig, runConfig) {
     log('yellow', '  跳过 fact/claims_detail（本地目录不存在）');
   }
 
+  if (existsSync(LOCAL_CROSS_SELL_DIR)) {
+    log('green', '▶ 步骤 8: 同步 fact/cross_sell...');
+    await rsyncDir(alias, LOCAL_CROSS_SELL_DIR, `${remote}/fact/cross_sell`, 'fact/cross_sell');
+  } else {
+    log('yellow', '  跳过 fact/cross_sell（本地目录不存在）');
+  }
+
+  if (existsSync(LOCAL_CLAIMS_AGG_DIR)) {
+    log('green', '▶ 步骤 9: 同步 fact/claims...');
+    await rsyncDir(alias, LOCAL_CLAIMS_AGG_DIR, `${remote}/fact/claims`, 'fact/claims');
+  } else {
+    log('yellow', '  跳过 fact/claims（本地目录不存在）');
+  }
+
+  if (existsSync(LOCAL_CUSTOMER_FLOW_DIR)) {
+    log('green', '▶ 步骤 10: 同步 fact/customer_flow...');
+    await rsyncDir(alias, LOCAL_CUSTOMER_FLOW_DIR, `${remote}/fact/customer_flow`, 'fact/customer_flow');
+  } else {
+    log('yellow', '  跳过 fact/customer_flow（本地目录不存在）');
+  }
+
+  if (existsSync(LOCAL_REPAIR_DIR)) {
+    log('green', '▶ 步骤 11: 同步 dim/repair...');
+    await rsyncDir(alias, LOCAL_REPAIR_DIR, `${remote}/dim/repair`, 'dim/repair');
+  } else {
+    log('yellow', '  跳过 dim/repair（本地目录不存在）');
+  }
+
   // 写同步清单：记录本次同步的文件指纹，governance 用于检测数据漂移
   writeSyncManifest();
 
@@ -525,6 +562,10 @@ function writeSyncManifest() {
     { label: 'fact/renewal', path: LOCAL_RENEWAL_DIR },
     { label: 'fact/quotes_conversion', path: LOCAL_QUOTES_CONVERSION_DIR },
     { label: 'fact/claims_detail', path: LOCAL_CLAIMS_DETAIL_DIR },
+    { label: 'fact/cross_sell', path: LOCAL_CROSS_SELL_DIR },
+    { label: 'fact/claims', path: LOCAL_CLAIMS_AGG_DIR },
+    { label: 'fact/customer_flow', path: LOCAL_CUSTOMER_FLOW_DIR },
+    { label: 'dim/repair', path: LOCAL_REPAIR_DIR },
   ];
 
   const files = {};
