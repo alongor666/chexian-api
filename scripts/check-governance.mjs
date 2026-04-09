@@ -978,12 +978,19 @@ function checkPrSizeLimit() {
   }
 
   if (totalLines > 2000) {
-    error(
-      `PR 体量超过 2000 行（实际: ${totalLines} 行）——必须拆分或在 PR 描述中注明例外原因。\n` +
-      '    ▶ 工具/文档批量导入 vs 业务逻辑变更请拆成独立 PR\n' +
-      '    ▶ 若确为合法大包（如技能库更新），请在 PR body 中写明原因后重试'
-    );
-    return false;
+    if (process.env.GOVERNANCE_LARGE_PR_OK) {
+      warning(
+        `PR 体量超过 2000 行（实际: ${totalLines} 行）——已通过 GOVERNANCE_LARGE_PR_OK 环境变量豁免。\n` +
+        `    ▶ 豁免原因: ${process.env.GOVERNANCE_LARGE_PR_OK}`
+      );
+    } else {
+      error(
+        `PR 体量超过 2000 行（实际: ${totalLines} 行）——必须拆分或在 PR 描述中注明例外原因。\n` +
+        '    ▶ 工具/文档批量导入 vs 业务逻辑变更请拆成独立 PR\n' +
+        '    ▶ 若确为合法大包，设置 GOVERNANCE_LARGE_PR_OK="原因" 后重试'
+      );
+      return false;
+    }
   }
 
   if (totalLines > 800) {
