@@ -49,7 +49,16 @@ export type DomainField =
   | 'first_registration_date'
   | 'fuel_type'
   | 'agent_name'
-  | 'customer_source';
+  | 'customer_source'
+  | 'insurance_end_date'
+  | 'insured_gender'
+  | 'truck_type'
+  | 'tonnage_value'
+  | 'no_claim_bonus'
+  | 'compulsory_ncd'
+  | 'commercial_ncd'
+  | 'highway_risk_level'
+  | 'insurance_score';
 
 export interface ColumnAliasConfig {
   [key: string]: string[];
@@ -73,8 +82,8 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   is_telemarketing: ['is_telemarketing', 'isTelemarketing', '是否电销', '电销', 'telemarketing', 'telesales'],
   tonnage_segment: ['tonnage_segment', 'tonnageSegment', '吨位分段', '货车吨位分段', 'tonnage', 'weight_segment'],
   renewal_policy_no: ['续保单号', 'renewal_policy_no', 'renewalPolicyNo', 'old_policy_no', 'renewal_no'],
-  is_commercial_insure: ['是否交商统保', 'is_commercial_insure', 'isCommercialInsure', '交商统保', 'commercial_insure'],
-  vehicle_model: ['vehicle_model', 'vehicleModel', '厂牌车型', '车辆型号', 'car_model', 'model'],
+  is_commercial_insure: ['是否交商统保', 'is_commercial_insure', 'isCommercialInsure', '交商统保', '交商同保', 'commercial_insure'],
+  vehicle_model: ['vehicle_model', 'vehicleModel', '厂牌车型', '厂牌车型名称', '车辆型号', 'car_model', 'model'],
   new_vehicle_price: ['new_vehicle_price', 'newVehiclePrice', '新车购置价', '购置价', 'purchase_price', 'car_price'],
   endorsement_no: ['endorsement_no', 'endorsementNo', '批单号', '批改单号', 'endorsement_number', 'batch_no'],
   endorsement_type: ['endorsement_type', 'endorsementType', '批改类型', '批改类型名称', 'endorsement_type_name', 'batch_type'],
@@ -99,7 +108,16 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   first_registration_date: ['初次登记年月', 'first_registration_date', 'firstRegistrationDate', '初始登记日期', '车辆登记日期'],
   fuel_type: ['燃料种类', 'fuel_type', 'fuelType', '燃料类型', 'fuel_kind'],
   agent_name: ['经代名', 'agent_name', 'agentName', '代理人/经纪人', '经纪代理人'],
-  customer_source: ['客户源', 'customer_source', 'customerSource', '客户来源'],
+  customer_source: ['客户源', '客户源类型', 'customer_source', 'customerSource', '客户来源'],
+  insurance_end_date: ['insurance_end_date', 'insuranceEndDate', '保险止期', '保险终止日期', 'end_date', 'expiry_date'],
+  insured_gender: ['insured_gender', 'insuredGender', '被保险人性别', '性别', 'gender'],
+  truck_type: ['truck_type', 'truckType', '货车类型', '货车分类'],
+  tonnage_value: ['tonnage_value', 'tonnageValue', '吨位数', '实际吨位'],
+  no_claim_bonus: ['no_claim_bonus', 'noClaimBonus', '无赔款优待记录', 'NCD记录'],
+  compulsory_ncd: ['compulsory_ncd', 'compulsoryNcd', '交强险NCD', '交强险NCD分组', '交强险无赔款系数'],
+  commercial_ncd: ['commercial_ncd', 'commercialNcd', '商业险NCD', '商业险无赔款系数'],
+  highway_risk_level: ['highway_risk_level', 'highwayRiskLevel', '高速风险等级'],
+  insurance_score: ['insurance_score', 'insuranceScore', '车险分分数', '车险评分'],
 };
 
 export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
@@ -133,6 +151,15 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'fuel_type',
   'agent_name',
   'customer_source',
+  'insurance_end_date',
+  'insured_gender',
+  'truck_type',
+  'tonnage_value',
+  'no_claim_bonus',
+  'compulsory_ncd',
+  'commercial_ncd',
+  'highway_risk_level',
+  'insurance_score',
 ]);
 
 export interface ColumnMapping {
@@ -180,6 +207,15 @@ export interface ColumnMapping {
   fuel_type?: string; // 燃料种类
   agent_name?: string; // 经代名
   customer_source?: string; // 客户源
+  insurance_end_date?: string; // 保险止期
+  insured_gender?: string; // 被保险人性别
+  truck_type?: string; // 货车类型
+  tonnage_value?: string; // 吨位数
+  no_claim_bonus?: string; // 无赔款优待记录
+  compulsory_ncd?: string; // 交强险NCD
+  commercial_ncd?: string; // 商业险NCD
+  highway_risk_level?: string; // 高速风险等级
+  insurance_score?: string; // 车险分分数
 }
 
 export interface ValidationResult {
@@ -280,4 +316,13 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   fuel_type: 'fuel_type',
   agent_name: 'agent_name',
   customer_source: 'customer_source',
+  insurance_end_date: 'insurance_end_date',
+  insured_gender: 'insured_gender',
+  truck_type: 'truck_type',
+  tonnage_value: 'tonnage_value',
+  no_claim_bonus: 'no_claim_bonus',
+  compulsory_ncd: 'compulsory_ncd',
+  commercial_ncd: 'commercial_ncd',
+  highway_risk_level: 'highway_risk_level',
+  insurance_score: 'insurance_score',
 };

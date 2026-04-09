@@ -14,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { corsConfig } from './config/cors.js';
 import { serverEnv } from './config/env.js';
-import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getRenewalFunnelPaths, getQuoteConversionPaths, getPlateRegionDimPaths, getClaimsDetailPaths } from './config/paths.js';
+import { getDataDir, getCandidateDataDirs, getSalesmanMappingPaths, getSalesmanDimPaths, getPlanDimPaths, getRenewalFunnelPaths, getQuoteConversionPaths, getPlateRegionDimPaths, getClaimsDetailPaths, getCrossSellPaths, getClaimsAggPaths, getRepairDimPaths, getBrandDimPaths, getCustomerFlowPaths } from './config/paths.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
@@ -314,6 +314,16 @@ async function startServer() {
         console.log('[Server] Data loaded successfully:', path.basename(filesToLoad[0].path));
       }
 
+      // 先加载 CrossSellFact（供 createCrossSellRealtimeView 使用 8 域模式）
+      const crossSellPath = getCrossSellPaths().find(p => fs.existsSync(p));
+      if (crossSellPath) {
+        try {
+          await duckdbService.loadCrossSell(crossSellPath);
+        } catch (err) {
+          console.warn('[Server] CrossSellFact pre-load failed (non-blocking):', err);
+        }
+      }
+
       // 创建PolicyFact视图（去重逻辑）
       console.log('[Server] Creating PolicyFact view...');
       await duckdbService.createPolicyFactView('raw_parquet');
@@ -401,6 +411,56 @@ async function startServer() {
           await duckdbService.loadClaimsDetail(claimsDetailPath);
         } catch (err) {
           console.warn('[Server] ClaimsDetail load failed (non-blocking):', err);
+        }
+      }
+
+      // ── 8 域分域加载（非阻塞，缺失时静默跳过）──
+
+      // Claims 聚合（保单级赔付，供 cost.ts LEFT JOIN）
+      const claimsAggPath = getClaimsAggPaths().find(p => fs.existsSync(p));
+      if (claimsAggPath) {
+        try {
+          await duckdbService.loadClaimsAgg(claimsAggPath);
+        } catch (err) {
+          console.warn('[Server] ClaimsAgg load failed (non-blocking):', err);
+        }
+      }
+      // 回退：如果 ClaimsAgg parquet 不存在但 ClaimsDetail 已加载，从 ClaimsDetail 创建
+      if (!claimsAggPath && claimsDetailPath) {
+        try {
+          await duckdbService.createClaimsAggFromDetail();
+        } catch (err) {
+          console.warn('[Server] ClaimsAgg creation from ClaimsDetail failed (non-blocking):', err);
+        }
+      }
+
+      // 维修资源
+      const repairDimPath = getRepairDimPaths().find(p => fs.existsSync(p));
+      if (repairDimPath) {
+        try {
+          await duckdbService.loadRepairDim(repairDimPath);
+        } catch (err) {
+          console.warn('[Server] RepairDim load failed (non-blocking):', err);
+        }
+      }
+
+      // 品牌维度
+      const brandDimPath = getBrandDimPaths().find(p => fs.existsSync(p));
+      if (brandDimPath) {
+        try {
+          await duckdbService.loadBrandDim(brandDimPath);
+        } catch (err) {
+          console.warn('[Server] BrandDim load failed (non-blocking):', err);
+        }
+      }
+
+      // 客户来源去向
+      const customerFlowPath = getCustomerFlowPaths().find(p => fs.existsSync(p));
+      if (customerFlowPath) {
+        try {
+          await duckdbService.loadCustomerFlow(customerFlowPath);
+        } catch (err) {
+          console.warn('[Server] CustomerFlow load failed (non-blocking):', err);
         }
       }
 

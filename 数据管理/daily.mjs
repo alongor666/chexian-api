@@ -15,10 +15,15 @@
  *
  * 用法：
  *   node daily.mjs                # 自动处理 premium 分片
- *   node daily.mjs claims         # 全量替换赔付+费用域
- *   node daily.mjs claims_detail  # 全量替换赔案明细域
- *   node daily.mjs quotes         # 全量替换报价状态域
- *   node daily.mjs all            # premium + claims + claims_detail + quotes
+ *   node daily.mjs claims         # 全量替换赔付+费用域（已废弃）
+ *   node daily.mjs claims_detail  # 全量替换赔案明细域 + claims 聚合
+ *   node daily.mjs quotes         # 全量替换报价清单域
+ *   node daily.mjs cross_sell     # 全量替换交叉销售域
+ *   node daily.mjs renewal        # 全量替换续保清单域
+ *   node daily.mjs brand          # 全量替换厂牌维度表
+ *   node daily.mjs repair         # 全量替换维修资源域
+ *   node daily.mjs customer_flow  # 全量替换客户来源去向域
+ *   node daily.mjs all            # 全部 8 域
  *   node daily.mjs --no-sync      # 跳过 VPS 同步
  */
 
@@ -110,6 +115,17 @@ function checkVpsConnectivity() {
 
 /** 从文件名提取日期范围，支持下划线和连字符 */
 function extractDateRange(filename) {
+  // 新格式：01_签单清单_21-23年.xlsx → { start: '20210101', end: '20231231' }
+  const newFmt = filename.match(/(\d{2})-(\d{2})年/);
+  if (newFmt) {
+    return { start: `20${newFmt[1]}0101`, end: `20${newFmt[2]}1231` };
+  }
+  // 开放结束格式：01_签单清单_剔摩_24年至.xlsx → { start: '20240101', end: 今天 }
+  const openEnd = filename.match(/(\d{2})年至/);
+  if (openEnd) {
+    return { start: `20${openEnd[1]}0101`, end: formatDate() };
+  }
+  // 旧格式：每日数据_20240101_20260407.xlsx
   const m = filename.match(/每日数据_(\d{8})[_-](\d{8})/);
   return m ? { start: m[1], end: m[2] } : null;
 }
@@ -186,6 +202,16 @@ const QUOTES_DIR = join(WAREHOUSE, 'quotes');
 const QUOTES_PATH = join(QUOTES_DIR, 'latest.parquet');
 const CLAIMS_DETAIL_DIR = join(WAREHOUSE, 'claims_detail');
 const CLAIMS_DETAIL_PATH = join(CLAIMS_DETAIL_DIR, 'latest.parquet');
+const CROSS_SELL_DIR = join(WAREHOUSE, 'cross_sell');
+const CROSS_SELL_PATH = join(CROSS_SELL_DIR, 'latest.parquet');
+const RENEWAL_DIR = join(WAREHOUSE, 'renewal');
+const RENEWAL_PATH = join(RENEWAL_DIR, 'latest.parquet');
+const CUSTOMER_FLOW_DIR = join(WAREHOUSE, 'customer_flow');
+const CUSTOMER_FLOW_PATH = join(CUSTOMER_FLOW_DIR, 'latest.parquet');
+const BRAND_DIM_DIR = join(__dirname, 'warehouse/dim/brand');
+const BRAND_DIM_PATH = join(BRAND_DIM_DIR, 'latest.parquet');
+const REPAIR_DIM_DIR = join(__dirname, 'warehouse/dim/repair');
+const REPAIR_DIM_PATH = join(REPAIR_DIM_DIR, 'latest.parquet');
 
 async function syncToVps(scriptDir) {
   log('cyan', '[ETL] 自动同步到 VPS...');
@@ -213,7 +239,9 @@ function findAllXlsx(dir) {
 }
 
 function runClaims(python, scriptDir) {
-  log('cyan', '\n═══ Claims 域：赔付+费用（全量替换，所有 xlsx 合并）═══\n');
+  log('yellow', '\n═══ ⚠️  Claims 域已废弃 — 赔付数据以 claims_detail（理赔明细）为准 ═══');
+  log('yellow', '    建议使用: node 数据管理/daily.mjs claims_detail\n');
+  log('cyan', '═══ Claims 域：赔付+费用（全量替换，所有 xlsx 合并）═══\n');
   const allFiles = findAllXlsx(scriptDir);
   if (allFiles.length === 0) { log('red', '未找到 每日数据_*.xlsx'); return; }
 
@@ -371,6 +399,166 @@ function runQuotes(python, scriptDir) {
   log('green', '✅ Quotes 域完成');
 }
 
+// ── 安全域转换（先写 tmp，成功后再归档旧文件+原子替换）──
+
+function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePrefix) {
+  const tmpPath = outputPath + '.tmp';
+  ensureDir(dirname(outputPath));
+
+  // 先转换到临时文件
+  runPythonScript(python, scriptPath, [
+    '-i', `"${inputPath}"`, '-o', `"${tmpPath}"`
+  ]);
+
+  // 转换成功后才归档旧文件
+  if (existsSync(outputPath)) {
+    const archiveDir = join(homedir(), 'chexian-archive');
+    ensureDir(archiveDir);
+    renameSync(outputPath, join(archiveDir, `${archivePrefix}_${formatDate()}.parquet`));
+  }
+
+  // 原子替换
+  renameSync(tmpPath, outputPath);
+}
+
+// ── 新域处理函数 ──
+
+function runCrossSell(python, scriptDir) {
+  log('cyan', '\n═══ CrossSell 域：交叉销售（全量替换）═══\n');
+  const config = JSON.parse(readFileSync(join(scriptDir, 'shard-config.json'), 'utf-8'));
+  const pattern = config.source_patterns?.['03_cross_sell'] || '03_交叉销售_*.xlsx';
+  const sourceFiles = ls(pattern, scriptDir);
+  if (sourceFiles.length === 0) {
+    log('yellow', `⚠ 未找到 ${pattern}，跳过`);
+    return;
+  }
+  const xlsx = sourceFiles[0];
+  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
+
+  safeConvertDomain(python, join(scriptDir, 'pipelines/convert_cross_sell.py'),
+    xlsx.path, CROSS_SELL_PATH, 'cross_sell_latest');
+
+  const rowCount = getParquetRowCount(python, CROSS_SELL_PATH);
+  updateDataSources('cross_sell', { rowCount, fieldCount: 9 });
+  log('green', '✅ CrossSell 域完成');
+}
+
+function runQuotesV2(python, scriptDir) {
+  log('cyan', '\n═══ Quotes 域：报价清单（v2 全量替换）═══\n');
+  const config = JSON.parse(readFileSync(join(scriptDir, 'shard-config.json'), 'utf-8'));
+  const pattern = config.source_patterns?.['04_quotes'] || '04_报价清单_*.xlsx';
+  const sourceFiles = ls(pattern, scriptDir);
+
+  if (sourceFiles.length > 0) {
+    const xlsx = sourceFiles[0];
+    log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB) [v2 格式]`);
+
+    safeConvertDomain(python, join(scriptDir, 'pipelines/convert_quotes_v2.py'),
+      xlsx.path, QUOTES_PATH, 'quotes_latest');
+
+    const rowCount = getParquetRowCount(python, QUOTES_PATH);
+    updateDataSources('quotes_status', { rowCount, fieldCount: 25 });
+    log('green', '✅ Quotes 域完成 (v2)');
+  } else {
+    // 回退到旧版 quotes 处理
+    log('yellow', `⚠ 未找到 ${pattern}，回退到旧版 quotes 处理`);
+    runQuotes(python, scriptDir);
+  }
+}
+
+function runRenewal(python, scriptDir) {
+  log('cyan', '\n═══ Renewal 域：续保清单（全量替换）═══\n');
+  const config = JSON.parse(readFileSync(join(scriptDir, 'shard-config.json'), 'utf-8'));
+  const pattern = config.source_patterns?.['05_renewal'] || '05_续保清单_*.xlsx';
+  const sourceFiles = ls(pattern, scriptDir);
+  if (sourceFiles.length === 0) {
+    log('yellow', `⚠ 未找到 ${pattern}，跳过`);
+    return;
+  }
+  const xlsx = sourceFiles[0];
+  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
+
+  safeConvertDomain(python, join(scriptDir, 'pipelines/convert_renewal.py'),
+    xlsx.path, RENEWAL_PATH, 'renewal_latest');
+
+  const rowCount = getParquetRowCount(python, RENEWAL_PATH);
+  updateDataSources('renewal_funnel', { rowCount, fieldCount: 10 });
+  log('green', '✅ Renewal 域完成');
+}
+
+function runBrand(python, scriptDir) {
+  log('cyan', '\n═══ Brand 域：厂牌维度表（全量替换）═══\n');
+  const config = JSON.parse(readFileSync(join(scriptDir, 'shard-config.json'), 'utf-8'));
+  const pattern = config.source_patterns?.['06_brand'] || '06_厂牌明细*.xlsx';
+  const sourceFiles = ls(pattern, scriptDir);
+  if (sourceFiles.length === 0) {
+    log('yellow', `⚠ 未找到 ${pattern}，跳过`);
+    return;
+  }
+  const xlsx = sourceFiles[0];
+  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
+
+  safeConvertDomain(python, join(scriptDir, 'pipelines/convert_brand_dim.py'),
+    xlsx.path, BRAND_DIM_PATH, 'brand_latest');
+
+  const rowCount = getParquetRowCount(python, BRAND_DIM_PATH);
+  updateDataSources('brand', { rowCount, fieldCount: 15 });
+  log('green', '✅ Brand 域完成');
+}
+
+function runRepair(python, scriptDir) {
+  log('cyan', '\n═══ Repair 域：维修资源（全量替换）═══\n');
+  const config = JSON.parse(readFileSync(join(scriptDir, 'shard-config.json'), 'utf-8'));
+  const pattern = config.source_patterns?.['07_repair'] || '07_维修资源*.xlsx';
+  const sourceFiles = ls(pattern, scriptDir);
+  if (sourceFiles.length === 0) {
+    log('yellow', `⚠ 未找到 ${pattern}，跳过`);
+    return;
+  }
+  const xlsx = sourceFiles[0];
+  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
+
+  safeConvertDomain(python, join(scriptDir, 'pipelines/convert_repair.py'),
+    xlsx.path, REPAIR_DIM_PATH, 'repair_latest');
+
+  const rowCount = getParquetRowCount(python, REPAIR_DIM_PATH);
+  updateDataSources('repair_resource', { rowCount, fieldCount: 12 });
+  log('green', '✅ Repair 域完成');
+}
+
+function runCustomerFlow(python, scriptDir) {
+  log('cyan', '\n═══ CustomerFlow 域：客户来源去向（全量替换）═══\n');
+  const sourceFiles = ls('08_客户来源去向*.xlsx', scriptDir);
+  if (sourceFiles.length === 0) {
+    log('yellow', '⚠ 未找到 08_客户来源去向*.xlsx，跳过');
+    return;
+  }
+  const xlsx = sourceFiles[0];
+  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
+
+  safeConvertDomain(python, join(scriptDir, 'pipelines/convert_customer_flow.py'),
+    xlsx.path, CUSTOMER_FLOW_PATH, 'customer_flow_latest');
+
+  const rowCount = getParquetRowCount(python, CUSTOMER_FLOW_PATH);
+  updateDataSources('customer_flow', { rowCount, fieldCount: 7 });
+  log('green', '✅ CustomerFlow 域完成');
+}
+
+function runClaimsAggregate(python, scriptDir) {
+  log('cyan', '\n═══ Claims 聚合：ClaimsDetail → 保单级 ═══\n');
+  if (!existsSync(CLAIMS_DETAIL_PATH)) {
+    log('yellow', '⚠ ClaimsDetail 不存在，跳过聚合');
+    return;
+  }
+
+  safeConvertDomain(python, join(scriptDir, 'pipelines/generate_claims_aggregate.py'),
+    CLAIMS_DETAIL_PATH, CLAIMS_PATH, 'claims_latest');
+
+  const rowCount = getParquetRowCount(python, CLAIMS_PATH);
+  updateDataSources('claims', { rowCount, fieldCount: 3 });
+  log('green', '✅ Claims 聚合完成');
+}
+
 // ── 主流程 ──
 
 async function main() {
@@ -378,20 +566,31 @@ async function main() {
   process.chdir(scriptDir);
 
   const noSync = process.argv.includes('--no-sync');
-  const subcommand = process.argv.find(a => ['premium', 'claims', 'claims_detail', 'quotes', 'all'].includes(a));
+  const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'renewal', 'brand', 'repair', 'customer_flow', 'all'];
+  const subcommand = process.argv.find(a => ALL_DOMAINS.includes(a));
 
-  // 子命令模式：claims / claims_detail / quotes / all
-  if (subcommand === 'claims' || subcommand === 'claims_detail' || subcommand === 'quotes') {
+  // 子命令模式：单域处理
+  if (subcommand && subcommand !== 'premium' && subcommand !== 'all') {
     const python = findPython();
-    if (subcommand === 'claims') runClaims(python, scriptDir);
-    if (subcommand === 'claims_detail') runClaimsDetail(python, scriptDir);
-    if (subcommand === 'quotes') runQuotes(python, scriptDir);
+    switch (subcommand) {
+      case 'claims': runClaims(python, scriptDir); break;
+      case 'claims_detail':
+        runClaimsDetail(python, scriptDir);
+        runClaimsAggregate(python, scriptDir);
+        break;
+      case 'quotes': runQuotesV2(python, scriptDir); break;
+      case 'cross_sell': runCrossSell(python, scriptDir); break;
+      case 'renewal': runRenewal(python, scriptDir); break;
+      case 'brand': runBrand(python, scriptDir); break;
+      case 'repair': runRepair(python, scriptDir); break;
+      case 'customer_flow': runCustomerFlow(python, scriptDir); break;
+    }
     if (!noSync) await syncToVps(scriptDir);
     return;
   }
   if (subcommand === 'all') {
-    // all = premium（下面的分片流程）+ claims + quotes
-    // premium 继续走下面的分片逻辑，claims/quotes 在分片完成后执行
+    // all = premium（下面的分片流程）+ 全部 7 个域
+    // premium 继续走下面的分片逻辑，其他域在分片完成后执行
   }
 
   // 路径定义
@@ -448,11 +647,16 @@ async function main() {
     log('yellow', '⚠ 未找到续保源文件，将跳过续保业务类型匹配');
   }
 
-  // 2. 识别所有 xlsx 分片
-  const allXlsx = ls('每日数据_*.xlsx', scriptDir);
+  // 2. 识别所有 xlsx 分片（新格式 + 旧格式 + 剔摩/限摩）
+  const legacyXlsx = ls('每日数据_*.xlsx', scriptDir);
+  const newFormatXlsx = ls('01_签单清单_*.xlsx', scriptDir);
+  const allXlsx = [...legacyXlsx, ...newFormatXlsx];
   if (allXlsx.length === 0) {
-    log('red', '❌ 未找到任何 每日数据_*.xlsx 文件');
+    log('red', '❌ 未找到任何签单清单 xlsx 文件（每日数据_*.xlsx 或 01_签单清单_*.xlsx）');
     process.exit(1);
+  }
+  if (newFormatXlsx.length > 0) {
+    log('green', `新格式文件: ${newFormatXlsx.map(f => f.name).join(', ')}`);
   }
 
   const shards = { static: [], weekly: [], daily: [] };
@@ -482,7 +686,10 @@ async function main() {
   // 3. 处理静态分片（存在就跳过）
   for (const file of shards.static) {
     const range = extractDateRange(file.name);
-    const outputName = `每日数据_${range.start}_${range.end}.parquet`;
+    // 新格式文件保留原始名称，旧格式使用日期范围命名
+    const outputName = file.name.startsWith('每日数据_')
+      ? `每日数据_${range.start}_${range.end}.parquet`
+      : file.name.replace(/\.xlsx$/i, '.parquet');
     const outputPath = join(currentDir, outputName);
 
     if (existsSync(outputPath)) {
@@ -569,12 +776,16 @@ async function main() {
 
   console.log('');
 
-  // 6. all 模式下追加 claims + quotes
+  // 6. all 模式下追加全部域
   if (subcommand === 'all') {
-    const python = findPython();
-    runClaims(python, scriptDir);
     runClaimsDetail(python, scriptDir);
-    runQuotes(python, scriptDir);
+    runClaimsAggregate(python, scriptDir);
+    runCrossSell(python, scriptDir);
+    runQuotesV2(python, scriptDir);
+    runRenewal(python, scriptDir);
+    runBrand(python, scriptDir);
+    runRepair(python, scriptDir);
+    runCustomerFlow(python, scriptDir);
   }
 
   // 7. VPS 同步

@@ -96,33 +96,34 @@ export function generateClaimRatioQuery(config: CostAnalysisConfig): string {
   return `
 WITH policy_exposure AS (
   SELECT
-    policy_no,
-    ${groupByFields.map((f) => `${f}`).join(', ')},
-    premium,
-    insurance_start_date AS start_date,
+    p.policy_no,
+    ${groupByFields.map((f) => `p.${f}`).join(', ')},
+    p.premium,
+    p.insurance_start_date AS start_date,
     -- 保险期限天数（闰年感知：365或366）
-    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
     -- 满期天数：MIN(统计截止日 - 保险起期, policy_term)，最小为0
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
         0
       ),
-      DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+      DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
     ) AS earned_days,
     -- 兼容旧引用
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
         0
       ),
       365
     ) AS exposure_days,
-    COALESCE(claim_cases, 0) AS claim_cases,
-    COALESCE(reported_claims, 0) AS reported_claims
-  FROM PolicyFact
+    COALESCE(c.claim_cases, 0) AS claim_cases,
+    COALESCE(c.reported_claims, 0) AS reported_claims
+  FROM PolicyFact p
+  LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
   WHERE ${whereClause}
-    AND insurance_start_date IS NOT NULL
+    AND p.insurance_start_date IS NOT NULL
 )
 SELECT
   ${dimKeyExpression} AS dim_key,
@@ -236,12 +237,13 @@ WITH policy_exposure AS (
       ),
       365
     ) AS exposure_days,
-    COALESCE(claim_cases, 0) AS claim_cases,
-    COALESCE(reported_claims, 0) AS reported_claims,
-    COALESCE(fee_amount, 0) AS fee_amount
-  FROM PolicyFact
+    COALESCE(c.claim_cases, 0) AS claim_cases,
+    COALESCE(c.reported_claims, 0) AS reported_claims,
+    COALESCE(p.fee_amount, 0) AS fee_amount
+  FROM PolicyFact p
+  LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
   WHERE ${whereClause}
-    AND insurance_start_date IS NOT NULL
+    AND p.insurance_start_date IS NOT NULL
 )
 SELECT
   ${dimKeyExpression} AS dim_key,
@@ -296,29 +298,30 @@ export function generateVariableCostQuery(config: CostAnalysisConfig): string {
   return `
 WITH policy_exposure AS (
   SELECT
-    policy_no,
-    ${groupByFields.map((f) => `${f}`).join(', ')},
-    premium,
-    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    p.policy_no,
+    ${groupByFields.map((f) => `p.${f}`).join(', ')},
+    p.premium,
+    DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
         0
       ),
-      DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+      DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
     ) AS earned_days,
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
         0
       ),
       365
     ) AS exposure_days,
-    COALESCE(reported_claims, 0) AS reported_claims,
-    COALESCE(fee_amount, 0) AS fee_amount
-  FROM PolicyFact
+    COALESCE(c.reported_claims, 0) AS reported_claims,
+    COALESCE(p.fee_amount, 0) AS fee_amount
+  FROM PolicyFact p
+  LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
   WHERE ${whereClause}
-    AND insurance_start_date IS NOT NULL
+    AND p.insurance_start_date IS NOT NULL
 )
 SELECT
   ${dimKeyExpression} AS dim_key,

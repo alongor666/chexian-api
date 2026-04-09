@@ -56,6 +56,15 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   fuel_type: ['VARCHAR', 'TEXT', 'STRING'], // 燃料种类
   agent_name: ['VARCHAR', 'TEXT', 'STRING'], // 经代名
   customer_source: ['VARCHAR', 'TEXT', 'STRING'], // 客户源
+  insurance_end_date: ['DATE', 'TIMESTAMP', 'VARCHAR', 'TEXT'], // 保险止期
+  insured_gender: ['VARCHAR', 'TEXT', 'STRING'], // 被保险人性别
+  truck_type: ['VARCHAR', 'TEXT', 'STRING'], // 货车类型
+  tonnage_value: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER'], // 吨位数
+  no_claim_bonus: ['VARCHAR', 'TEXT', 'STRING'], // 无赔款优待记录
+  compulsory_ncd: ['VARCHAR', 'TEXT', 'STRING'], // 交强险NCD
+  commercial_ncd: ['VARCHAR', 'TEXT', 'STRING'], // 商业险NCD
+  highway_risk_level: ['VARCHAR', 'TEXT', 'STRING'], // 高速风险等级
+  insurance_score: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'VARCHAR'], // 车险分分数
 };
 
 export interface SchemaColumn {

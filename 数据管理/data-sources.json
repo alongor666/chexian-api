@@ -5,16 +5,16 @@
       "id": "premium",
       "name": "保费",
       "type": "fact",
-      "source_pattern": "每日数据_*.xlsx",
+      "source_pattern": "01_签单清单_*.xlsx 或 每日数据_*.xlsx",
       "etl_entry": "node 数据管理/daily.mjs",
       "etl_script": "pipelines/transform.py",
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-04-03",
-      "data_range": "2020-01-01 ~ 2026-04-02",
-      "row_count": 2506355,
-      "field_count": 44,
+      "last_updated": "2026-04-09",
+      "data_range": "2021-01-01 ~ 2026-04-07",
+      "row_count": 3850049,
+      "field_count": 53,
       "key_fields": [
         "保单号",
         "签单日期",
@@ -25,15 +25,15 @@
         "险别组合",
         "客户类别"
       ],
-      "notes": "daily增量先进staging/，需拷贝到current/或等周更合并。续保匹配仅应用于weekly分片"
+      "notes": "21-23使用01_签单清单_21-23年.xlsx（39列新格式）；24-26使用每日数据_*.xlsx。新格式含保险止期/被保险人性别等9个新字段。续保匹配仅应用于weekly分片"
     },
     {
       "id": "claims",
       "name": "赔付",
       "type": "fact",
-      "source_pattern": "所有 每日数据_*.xlsx（合并，--after-date 2020-12-31 过滤）",
-      "etl_entry": "node 数据管理/daily.mjs claims",
-      "etl_script": "pipelines/transform.py --domain claims（逐文件提取后 DuckDB 合并）",
+      "source_pattern": "已废弃：原从每日数据_*.xlsx提取",
+      "etl_entry": "node 数据管理/daily.mjs claims（已废弃，请用 claims_detail）",
+      "etl_script": "pipelines/transform.py --domain claims",
       "output": "warehouse/fact/claims/latest.parquet",
       "update_cadence": "with_source_xlsx",
       "last_updated": "2026-04-03",
@@ -47,7 +47,8 @@
         "费用金额",
         "车架号"
       ],
-      "notes": "全量替换，取最大的每日数据xlsx"
+      "deprecated": true,
+      "notes": "⚠️ DEPRECATED — 赔付数据改以 claims_detail（车险报立结案清单）为准。此域保留以防旧查询引用"
     },
     {
       "id": "claims_detail",
@@ -224,6 +225,66 @@
         "plan_total"
       ],
       "notes": "分salesman/organization两级，2025含实际值，2026仅计划值"
+    },
+    {
+      "id": "cross_sell",
+      "name": "交叉销售",
+      "type": "fact",
+      "source_pattern": "03_交叉销售_*.xlsx",
+      "etl_entry": "node 数据管理/daily.mjs cross_sell",
+      "etl_script": "pipelines/convert_cross_sell.py",
+      "output": "warehouse/fact/cross_sell/latest.parquet",
+      "update_cadence": "with_source_xlsx",
+      "key_fields": ["policy_no", "is_cross_sell", "cross_sell_premium_driver", "salesman_name", "org_level_3"],
+      "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重"
+    },
+    {
+      "id": "quotes_v2",
+      "name": "报价清单(商业险v2)",
+      "type": "fact",
+      "source_pattern": "04_报价清单_*.xlsx",
+      "etl_entry": "node 数据管理/daily.mjs quotes",
+      "etl_script": "pipelines/convert_quotes_v2.py",
+      "output": "warehouse/fact/quotes/latest.parquet",
+      "update_cadence": "with_source_xlsx",
+      "key_fields": ["vehicle_frame_no", "quote_time", "insurance_grade", "renewal_status", "is_underwritten", "commercial_pricing_factor", "final_quote_premium"],
+      "notes": "25列全新格式报价清单，替换旧版2列quotes_status和quotes_conversion"
+    },
+    {
+      "id": "renewal_v2",
+      "name": "续保清单(套单)",
+      "type": "fact",
+      "source_pattern": "05_续保清单_*.xlsx",
+      "etl_entry": "node 数据管理/daily.mjs renewal",
+      "etl_script": "pipelines/convert_renewal.py",
+      "output": "warehouse/fact/renewal/latest.parquet",
+      "update_cadence": "with_source_xlsx",
+      "key_fields": ["source_policy_no", "renewed_policy_no", "is_renewed", "expiry_month", "org_level_3"],
+      "notes": "续保跟踪清单，9列+1派生(is_renewed)，替换旧版renewal_funnel"
+    },
+    {
+      "id": "repair_resource",
+      "name": "维修资源",
+      "type": "dim",
+      "source_pattern": "07_维修资源*.xlsx",
+      "etl_entry": "node 数据管理/daily.mjs repair",
+      "etl_script": "pipelines/convert_repair.py",
+      "output": "warehouse/dim/repair/latest.parquet",
+      "update_cadence": "irregular",
+      "key_fields": ["repair_shop_name", "is_4s_shop", "cooperation_status", "damage_assessment_amount", "parts_discount_rate"],
+      "notes": "维修厂合作数据，12列，含核损金额/换件折扣率/合作状态"
+    },
+    {
+      "id": "customer_flow",
+      "name": "客户来源去向",
+      "type": "fact",
+      "source_pattern": "08_客户来源去向*.xlsx",
+      "etl_entry": "node 数据管理/daily.mjs customer_flow",
+      "etl_script": "pipelines/convert_customer_flow.py",
+      "output": "warehouse/fact/customer_flow/latest.parquet",
+      "update_cadence": "with_source_xlsx",
+      "key_fields": ["policy_no", "previous_insurer", "next_insurer", "insurance_start_date"],
+      "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知"
     }
   ]
 }

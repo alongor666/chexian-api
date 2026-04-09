@@ -161,7 +161,7 @@
       "parquetColumn": "是否交商统保",
       "required": false,
       "dataTypes": ["VARCHAR", "TEXT", "STRING"],
-      "aliases": ["是否交商统保", "is_commercial_insure", "isCommercialInsure", "交商统保", "commercial_insure"],
+      "aliases": ["是否交商统保", "is_commercial_insure", "isCommercialInsure", "交商统保", "交商同保", "commercial_insure"],
       "description": "交商统保/套单标识"
     },
     {
@@ -170,7 +170,7 @@
       "parquetColumn": "厂牌车型",
       "required": false,
       "dataTypes": ["VARCHAR", "TEXT", "STRING"],
-      "aliases": ["vehicle_model", "vehicleModel", "厂牌车型", "车辆型号", "car_model", "model"],
+      "aliases": ["vehicle_model", "vehicleModel", "厂牌车型", "厂牌车型名称", "车辆型号", "car_model", "model"],
       "description": "车辆厂牌车型名称"
     },
     {
@@ -395,8 +395,89 @@
       "parquetColumn": "客户源",
       "required": false,
       "dataTypes": ["VARCHAR", "TEXT", "STRING"],
-      "aliases": ["客户源", "customer_source", "customerSource", "客户来源"],
+      "aliases": ["客户源", "客户源类型", "customer_source", "customerSource", "客户来源"],
       "description": "客户来源渠道"
+    },
+    {
+      "id": "insurance_end_date",
+      "label": "保险止期",
+      "parquetColumn": "保险止期",
+      "required": false,
+      "dataTypes": ["DATE", "TIMESTAMP", "VARCHAR", "TEXT"],
+      "aliases": ["insurance_end_date", "insuranceEndDate", "保险止期", "保险终止日期", "end_date", "expiry_date"],
+      "description": "保险责任终止日期"
+    },
+    {
+      "id": "insured_gender",
+      "label": "被保险人性别",
+      "parquetColumn": "被保险人性别",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["insured_gender", "insuredGender", "被保险人性别", "性别", "gender"],
+      "description": "被保险人性别（男/女）"
+    },
+    {
+      "id": "truck_type",
+      "label": "货车类型",
+      "parquetColumn": "货车类型",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["truck_type", "truckType", "货车类型", "货车分类"],
+      "description": "货车类型分类"
+    },
+    {
+      "id": "tonnage_value",
+      "label": "吨位数",
+      "parquetColumn": "吨位数",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER"],
+      "aliases": ["tonnage_value", "tonnageValue", "吨位数", "实际吨位"],
+      "description": "货车实际吨位数值（与吨位分段互补）"
+    },
+    {
+      "id": "no_claim_bonus",
+      "label": "无赔款优待记录",
+      "parquetColumn": "无赔款优待记录",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["no_claim_bonus", "noClaimBonus", "无赔款优待记录", "NCD记录"],
+      "description": "无赔款优待历史记录"
+    },
+    {
+      "id": "compulsory_ncd",
+      "label": "交强险NCD",
+      "parquetColumn": "交强险NCD",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["compulsory_ncd", "compulsoryNcd", "交强险NCD", "交强险NCD分组", "交强险无赔款系数"],
+      "description": "交强险NCD分组描述"
+    },
+    {
+      "id": "commercial_ncd",
+      "label": "商业险NCD",
+      "parquetColumn": "商业险NCD",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["commercial_ncd", "commercialNcd", "商业险NCD", "商业险无赔款系数"],
+      "description": "商业险NCD系数"
+    },
+    {
+      "id": "highway_risk_level",
+      "label": "高速风险等级",
+      "parquetColumn": "高速风险等级",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["highway_risk_level", "highwayRiskLevel", "高速风险等级"],
+      "description": "高速公路风险等级评估"
+    },
+    {
+      "id": "insurance_score",
+      "label": "车险分分数",
+      "parquetColumn": "车险分分数",
+      "required": false,
+      "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "VARCHAR"],
+      "aliases": ["insurance_score", "insuranceScore", "车险分分数", "车险评分"],
+      "description": "车险评分数值（24-26新格式用，替代旧车险分等级字母）"
     }
   ],
   "etl": {
@@ -410,7 +491,9 @@
       "续保业务类型", "批单号", "批改类型", "商车自主定价系数", "是否交商统保",
       "车架号", "是否报价", "赔案件数", "已报告赔款", "费用金额", "续保模式",
       "车险风险等级", "交叉销售标识", "交叉销售保费_驾意", "三者保额", "司机保额",
-      "乘客险保额", "车牌号码", "座位数", "被保险人年龄分组", "初次登记年月", "燃料种类"
+      "乘客险保额", "车牌号码", "座位数", "被保险人年龄分组", "初次登记年月", "燃料种类",
+      "保险止期", "被保险人性别", "货车类型", "吨位数", "无赔款优待记录",
+      "交强险NCD", "商业险NCD", "高速风险等级", "车险分分数"
     ]
   }
 }

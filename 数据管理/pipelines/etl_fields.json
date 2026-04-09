@@ -47,7 +47,16 @@
     "座位数",
     "被保险人年龄分组",
     "初次登记年月",
-    "燃料种类"
+    "燃料种类",
+    "保险止期",
+    "被保险人性别",
+    "货车类型",
+    "吨位数",
+    "无赔款优待记录",
+    "交强险NCD",
+    "商业险NCD",
+    "高速风险等级",
+    "车险分分数"
   ],
   "cn_to_en_mapping": {
     "保单号": "policy_no",
@@ -93,6 +102,15 @@
     "初次登记年月": "first_registration_date",
     "燃料种类": "fuel_type",
     "经代名": "agent_name",
-    "客户源": "customer_source"
+    "客户源": "customer_source",
+    "保险止期": "insurance_end_date",
+    "被保险人性别": "insured_gender",
+    "货车类型": "truck_type",
+    "吨位数": "tonnage_value",
+    "无赔款优待记录": "no_claim_bonus",
+    "交强险NCD": "compulsory_ncd",
+    "商业险NCD": "commercial_ncd",
+    "高速风险等级": "highway_risk_level",
+    "车险分分数": "insurance_score"
   }
 }

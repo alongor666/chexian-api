@@ -410,6 +410,21 @@ class DuckDBService {
   }
 
   /**
+   * 检查某个 TABLE/VIEW 是否存在
+   */
+  async hasRelation(relationName: string): Promise<boolean> {
+    const safeRelationName = sanitizeTableName(relationName);
+    const escapedRelationName = escapeSqlValue(safeRelationName);
+    const rows = await this.query<{ cnt: number }>(`
+      SELECT COUNT(*) AS cnt
+      FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_name = '${escapedRelationName}'
+    `);
+    return (rows[0]?.cnt ?? 0) > 0;
+  }
+
+  /**
    * 加载Parquet文件
    *
    * 安全修复：
@@ -724,10 +739,15 @@ class DuckDBService {
   /** 所有启动时创建的派生 TABLE/VIEW，卸载数据时统一清理 */
   static readonly DERIVED_RELATIONS = [
     'ClaimsDetail',
+    'ClaimsAgg',
+    'CrossSellFact',
     'CrossSellDailyAgg',
     'PolicyFactRenewal',
     'PolicyFact',
     'PolicyFactRealtime',
+    'RepairDim',
+    'BrandDim',
+    'CustomerFlow',
   ] as const;
 
   /**
@@ -759,67 +779,140 @@ class DuckDBService {
    * 失败时：VIEW 回退，查询实时聚合（慢但可用）
    */
   async createCrossSellRealtimeView(): Promise<void> {
-    const cteSql = `
-        SELECT
-          CAST(policy_date AS DATE) AS policy_date,
-          CAST(insurance_start_date AS DATE) AS insurance_start_date,
-          org_level_3, salesman_name, customer_category, coverage_combination,
-          renewal_mode, tonnage_segment, insurance_grade,
-          COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
-          COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
-          -- 布尔字段已在 PolicyFactRealtime 物化阶段标准化为 BOOLEAN（P1），直接引用
-          COALESCE(is_transfer, false) AS is_transfer,
-          COALESCE(is_telemarketing, false) AS is_telemarketing,
-          COALESCE(is_renewal, false) AS is_renewal,
-          COALESCE(is_nev, false) AS is_nev,
-          COALESCE(is_new_car, false) AS is_new_car,
-          COALESCE(is_renewable, false) AS is_renewable,
-          COALESCE(is_cross_sell, false) AS is_cross_sell,
-          COALESCE(driver_coverage, 0) AS driver_coverage,
-          COALESCE(passenger_coverage, 0) AS passenger_coverage,
-          COALESCE(cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
-          COALESCE(premium, 0) AS premium,
-          COALESCE(
-            NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
-            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')) AS dedup_key,
-          NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '') AS raw_policy_no
-        FROM PolicyFact
-        WHERE policy_date IS NOT NULL`;
+    // 检测是否有独立 CrossSellFact（8域模式），否则回退到旧 PolicyFact 模式
+    const hasCrossSellFact = await this.hasRelation('CrossSellFact');
 
-    const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
-        customer_category, coverage_combination, renewal_mode, tonnage_segment,
-        insurance_grade, is_commercial_insure,
-        is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,
-        is_renewable, is_cross_sell, driver_coverage, passenger_coverage`;
+    if (hasCrossSellFact) {
+      // ── 8域模式：从 CrossSellFact（40万行）+ JOIN PolicyFact 构建 ──
+      // 比旧模式（380万行 PolicyFact 全扫描）快 10x
+      console.log('[DuckDB] Building CrossSellDailyAgg from CrossSellFact (8-domain mode)...');
 
-    const aggregateSql = `
-      SELECT ${groupByColumns},
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
-        COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
-        COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
-        COALESCE(SUM(CASE WHEN insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN premium ELSE 0 END), 0) AS commercial_premium,
-        COALESCE(SUM(CASE WHEN insurance_type = '交强险' THEN premium ELSE 0 END), 0) AS compulsory_premium,
-        COALESCE(SUM(premium), 0) AS auto_premium
-      FROM normalized WHERE dedup_key IS NOT NULL
-      GROUP BY ${groupByColumns}`;
+      const cteSql = `
+          SELECT
+            CAST(cs.policy_date AS DATE) AS policy_date,
+            COALESCE(CAST(p.insurance_start_date AS DATE), CAST(cs.policy_date AS DATE)) AS insurance_start_date,
+            cs.org_level_3, cs.salesman_name, cs.customer_category, cs.coverage_combination,
+            COALESCE(CAST(p.renewal_mode AS VARCHAR), '') AS renewal_mode,
+            COALESCE(CAST(p.tonnage_segment AS VARCHAR), '') AS tonnage_segment,
+            COALESCE(CAST(p.insurance_grade AS VARCHAR), '') AS insurance_grade,
+            COALESCE(CAST(p.is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
+            COALESCE(CAST(p.insurance_type AS VARCHAR), '') AS insurance_type,
+            COALESCE(p.is_transfer, false) AS is_transfer,
+            COALESCE(p.is_telemarketing, false) AS is_telemarketing,
+            COALESCE(p.is_renewal, false) AS is_renewal,
+            COALESCE(p.is_nev, false) AS is_nev,
+            COALESCE(p.is_new_car, false) AS is_new_car,
+            COALESCE(p.is_renewable, false) AS is_renewable,
+            cs.is_cross_sell,
+            COALESCE(p.driver_coverage, 0) AS driver_coverage,
+            COALESCE(p.passenger_coverage, 0) AS passenger_coverage,
+            COALESCE(cs.cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
+            COALESCE(p.premium, 0) AS premium,
+            COALESCE(
+              NULLIF(TRIM(CAST(cs.vehicle_frame_no AS VARCHAR)), ''),
+              NULLIF(TRIM(CAST(cs.policy_no AS VARCHAR)), '')) AS dedup_key,
+            NULLIF(TRIM(CAST(cs.policy_no AS VARCHAR)), '') AS raw_policy_no
+          FROM CrossSellFact cs
+          LEFT JOIN PolicyFact p ON cs.policy_no = p.policy_no
+          WHERE cs.policy_date IS NOT NULL`;
 
-    // VIEW 回退：物化失败时用实时聚合保底
-    const viewFallbackSql = `
-      CREATE OR REPLACE VIEW CrossSellDailyAgg AS
-      WITH normalized AS (${cteSql})
-      ${aggregateSql}`;
+      const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
+          customer_category, coverage_combination, renewal_mode, tonnage_segment,
+          insurance_grade, is_commercial_insure,
+          is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,
+          is_renewable, is_cross_sell, driver_coverage, passenger_coverage`;
 
-    await this.materializeInBatches(
-      'CrossSellDailyAgg',
-      cteSql,
-      aggregateSql,
-      viewFallbackSql,
-      [
-        { name: 'idx_cross_sell_agg_date', column: 'policy_date' },
-        { name: 'idx_cross_sell_agg_category', column: 'customer_category' },
-      ],
-    );
+      const aggregateSql = `
+        SELECT ${groupByColumns},
+          COUNT(DISTINCT dedup_key) AS auto_count,
+          COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
+          COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
+          COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
+          COALESCE(SUM(CASE WHEN insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN premium ELSE 0 END), 0) AS commercial_premium,
+          COALESCE(SUM(CASE WHEN insurance_type = '交强险' THEN premium ELSE 0 END), 0) AS compulsory_premium,
+          COALESCE(SUM(premium), 0) AS auto_premium
+        FROM normalized WHERE dedup_key IS NOT NULL
+        GROUP BY ${groupByColumns}`;
+
+      const viewFallbackSql = `
+        CREATE OR REPLACE VIEW CrossSellDailyAgg AS
+        WITH normalized AS (${cteSql})
+        ${aggregateSql}`;
+
+      await this.materializeInBatches(
+        'CrossSellDailyAgg',
+        cteSql,
+        aggregateSql,
+        viewFallbackSql,
+        [
+          { name: 'idx_cross_sell_agg_date', column: 'policy_date' },
+          { name: 'idx_cross_sell_agg_category', column: 'customer_category' },
+        ],
+      );
+    } else {
+      // ── 旧模式：从 PolicyFact 全扫描构建（向后兼容）──
+      console.log('[DuckDB] Building CrossSellDailyAgg from PolicyFact (legacy mode)...');
+
+      const cteSql = `
+          SELECT
+            CAST(policy_date AS DATE) AS policy_date,
+            CAST(insurance_start_date AS DATE) AS insurance_start_date,
+            org_level_3, salesman_name, customer_category, coverage_combination,
+            renewal_mode, tonnage_segment, insurance_grade,
+            COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
+            COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
+            COALESCE(is_transfer, false) AS is_transfer,
+            COALESCE(is_telemarketing, false) AS is_telemarketing,
+            COALESCE(is_renewal, false) AS is_renewal,
+            COALESCE(is_nev, false) AS is_nev,
+            COALESCE(is_new_car, false) AS is_new_car,
+            COALESCE(is_renewable, false) AS is_renewable,
+            COALESCE(is_cross_sell, false) AS is_cross_sell,
+            COALESCE(driver_coverage, 0) AS driver_coverage,
+            COALESCE(passenger_coverage, 0) AS passenger_coverage,
+            COALESCE(cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
+            COALESCE(premium, 0) AS premium,
+            COALESCE(
+              NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
+              NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')) AS dedup_key,
+            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '') AS raw_policy_no
+          FROM PolicyFact
+          WHERE policy_date IS NOT NULL`;
+
+      const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
+          customer_category, coverage_combination, renewal_mode, tonnage_segment,
+          insurance_grade, is_commercial_insure,
+          is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,
+          is_renewable, is_cross_sell, driver_coverage, passenger_coverage`;
+
+      const aggregateSql = `
+        SELECT ${groupByColumns},
+          COUNT(DISTINCT dedup_key) AS auto_count,
+          COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
+          COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
+          COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
+          COALESCE(SUM(CASE WHEN insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN premium ELSE 0 END), 0) AS commercial_premium,
+          COALESCE(SUM(CASE WHEN insurance_type = '交强险' THEN premium ELSE 0 END), 0) AS compulsory_premium,
+          COALESCE(SUM(premium), 0) AS auto_premium
+        FROM normalized WHERE dedup_key IS NOT NULL
+        GROUP BY ${groupByColumns}`;
+
+      const viewFallbackSql = `
+        CREATE OR REPLACE VIEW CrossSellDailyAgg AS
+        WITH normalized AS (${cteSql})
+        ${aggregateSql}`;
+
+      await this.materializeInBatches(
+        'CrossSellDailyAgg',
+        cteSql,
+        aggregateSql,
+        viewFallbackSql,
+        [
+          { name: 'idx_cross_sell_agg_date', column: 'policy_date' },
+          { name: 'idx_cross_sell_agg_category', column: 'customer_category' },
+        ],
+      );
+    }
   }
 
   /**
@@ -1243,6 +1336,91 @@ class DuckDBService {
     `);
     const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsDetail');
     console.log(`[DuckDB] ClaimsDetail view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+  }
+
+  /**
+   * 加载保单级赔付聚合 Parquet → ClaimsAgg TABLE
+   * 3列：policy_no, claim_cases, reported_claims
+   * 供 cost.ts LEFT JOIN 计算赔付率/综合成本率
+   */
+  async loadClaimsAgg(parquetPath: string): Promise<void> {
+    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+    await this.query(`
+      CREATE OR REPLACE TABLE ClaimsAgg AS
+      SELECT * FROM read_parquet('${safePath}')
+    `);
+    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsAgg');
+    console.log(`[DuckDB] ClaimsAgg loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+  }
+
+  /**
+   * 回退：当 ClaimsAgg Parquet 不存在时，从 ClaimsDetail VIEW 聚合创建
+   */
+  async createClaimsAggFromDetail(): Promise<void> {
+    await this.query(`
+      CREATE OR REPLACE TABLE ClaimsAgg AS
+      SELECT policy_no,
+             COUNT(DISTINCT claim_no) AS claim_cases,
+             SUM(COALESCE(settled_amount, 0) + COALESCE(pending_amount, 0)) AS reported_claims
+      FROM ClaimsDetail
+      WHERE policy_no IS NOT NULL
+      GROUP BY policy_no
+    `);
+    const cnt = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsAgg');
+    console.log(`[DuckDB] ClaimsAgg created from ClaimsDetail: ${cnt[0]?.cnt ?? 0} rows`);
+  }
+
+  /**
+   * 加载交叉销售 Parquet → CrossSellFact VIEW
+   * 独立交叉销售清单（从 PolicyFact 中移出）
+   */
+  async loadCrossSell(parquetPath: string): Promise<void> {
+    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+    await this.query(`
+      CREATE OR REPLACE VIEW CrossSellFact AS
+      SELECT * FROM read_parquet('${safePath}')
+    `);
+    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CrossSellFact');
+    console.log(`[DuckDB] CrossSellFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+  }
+
+  /**
+   * 加载维修资源 Parquet → RepairDim TABLE
+   */
+  async loadRepairDim(parquetPath: string): Promise<void> {
+    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+    await this.query(`
+      CREATE OR REPLACE TABLE RepairDim AS
+      SELECT * FROM read_parquet('${safePath}')
+    `);
+    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RepairDim');
+    console.log(`[DuckDB] RepairDim loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+  }
+
+  /**
+   * 加载品牌维度 Parquet → BrandDim TABLE
+   */
+  async loadBrandDim(parquetPath: string): Promise<void> {
+    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+    await this.query(`
+      CREATE OR REPLACE TABLE BrandDim AS
+      SELECT * FROM read_parquet('${safePath}')
+    `);
+    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM BrandDim');
+    console.log(`[DuckDB] BrandDim loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+  }
+
+  /**
+   * 加载客户来源去向 Parquet → CustomerFlow VIEW
+   */
+  async loadCustomerFlow(parquetPath: string): Promise<void> {
+    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+    await this.query(`
+      CREATE OR REPLACE VIEW CustomerFlow AS
+      SELECT * FROM read_parquet('${safePath}')
+    `);
+    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CustomerFlow');
+    console.log(`[DuckDB] CustomerFlow view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
   }
 
   /**

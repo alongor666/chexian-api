@@ -74,6 +74,34 @@ DOMAIN = args.domain          # 输出域: policy/claims/quotes/all
 AFTER_DATE = args.after_date  # 增量截止日期
 
 POLICY_KEY_ALIASES = ['保单号', '保单号码', '保单编号', '保单']
+
+# ── 新格式列名 → 标准内部列名映射 ──
+# transform.py 全程使用标准名处理，新格式输入在管道最前端统一重命名
+NEW_FORMAT_RENAMES = {
+    '签单保费': '保费',
+    '交商同保': '是否交商统保',
+    '客户源类型': '客户源',
+    '是否新能源车': '是否新能源',
+    '自主定价系数': '商车自主定价系数',
+    '厂牌车型名称': '厂牌车型',
+    '客户类别3': '客户类别',
+    '是否过户': '是否过户车',
+    '交强险NCD分组': '交强险NCD',
+}
+
+def normalize_input_columns(df):
+    """将新格式列名映射为标准内部列名，使下游处理函数无需修改"""
+    rename_map = {k: v for k, v in NEW_FORMAT_RENAMES.items() if k in df.columns and v not in df.columns}
+    if rename_map:
+        df = df.rename(columns=rename_map)
+        print(f"\n   🔄 新格式列名标准化: {len(rename_map)} 列")
+        for old_name, new_name in rename_map.items():
+            print(f"      {old_name} → {new_name}")
+    # 24-26 重复列去重：高速风险等级出现两次，pandas 自动后缀 .1
+    if '高速风险等级.1' in df.columns:
+        df = df.drop(columns=['高速风险等级.1'])
+        print(f"      去除重复列: 高速风险等级.1")
+    return df
 RENEWAL_TYPE_ALIASES = ['续保业务类型', '续保类型', '业务类型', '续保分类']
 
 def first_existing_column(columns, candidates):
@@ -358,6 +386,10 @@ def process_coverage_combination(df):
     print(f"📦 重命名险别字段为险别组合")
     print(f"{'='*80}")
 
+    if '险别组合' in df.columns:
+        print("   ✅ '险别组合' 字段已存在（新格式）")
+        return df
+
     if '险别' not in df.columns:
         print("   ⚠️  未找到 '险别' 字段")
         df['险别组合'] = '未知'
@@ -382,8 +414,8 @@ def process_renewable_status(df):
     print(f"{'='*80}")
 
     if '批改类型' not in df.columns:
-        print("   ⚠️  未找到 '批改类型' 字段，默认全部为可续")
-        df['是否可续'] = True
+        print("   ⚠️  未找到 '批改类型' 字段（新格式无此字段），是否可续设为 NULL")
+        df['是否可续'] = None
         return df
 
     print(f"   批改类型分布:")
@@ -684,6 +716,64 @@ def process_new_fields(df):
         value_counts = df['初次登记年月'].value_counts().head(10).to_dict()
         print(f"      ✅ 初次登记年月分布 (TOP10): {value_counts}")
 
+    # ── 新格式字段（21-23/24-26）──
+
+    # 22. 被保险人性别（字符串）
+    if '被保险人性别' in df.columns:
+        print(f"\n   处理被保险人性别:")
+        df['被保险人性别'] = df['被保险人性别'].astype(str).where(df['被保险人性别'].notna(), None)
+        dist = df['被保险人性别'].value_counts().to_dict()
+        print(f"      ✅ 性别分布: {dist}")
+
+    # 23. 货车类型（字符串）
+    if '货车类型' in df.columns:
+        print(f"\n   处理货车类型:")
+        df['货车类型'] = df['货车类型'].astype(str).where(df['货车类型'].notna(), None)
+        non_null = df['货车类型'].notna().sum()
+        print(f"      ✅ 货车类型: {non_null:,} 条有值")
+
+    # 24. 吨位数（数值）
+    if '吨位数' in df.columns:
+        print(f"\n   处理吨位数:")
+        df['吨位数'] = pd.to_numeric(df['吨位数'], errors='coerce')
+        non_null = df['吨位数'].notna().sum()
+        print(f"      ✅ 吨位数: {non_null:,} 条有值")
+
+    # 25. 无赔款优待记录（字符串）
+    if '无赔款优待记录' in df.columns:
+        print(f"\n   处理无赔款优待记录:")
+        df['无赔款优待记录'] = df['无赔款优待记录'].astype(str).where(df['无赔款优待记录'].notna(), None)
+        non_null = df['无赔款优待记录'].notna().sum()
+        print(f"      ✅ 无赔款优待记录: {non_null:,} 条有值")
+
+    # 26. 交强险NCD（字符串）
+    if '交强险NCD' in df.columns:
+        print(f"\n   处理交强险NCD:")
+        df['交强险NCD'] = df['交强险NCD'].astype(str).where(df['交强险NCD'].notna(), None)
+        non_null = df['交强险NCD'].notna().sum()
+        print(f"      ✅ 交强险NCD: {non_null:,} 条有值")
+
+    # 27. 商业险NCD（字符串）
+    if '商业险NCD' in df.columns:
+        print(f"\n   处理商业险NCD:")
+        df['商业险NCD'] = df['商业险NCD'].astype(str).where(df['商业险NCD'].notna(), None)
+        non_null = df['商业险NCD'].notna().sum()
+        print(f"      ✅ 商业险NCD: {non_null:,} 条有值")
+
+    # 28. 高速风险等级（字符串）
+    if '高速风险等级' in df.columns:
+        print(f"\n   处理高速风险等级:")
+        df['高速风险等级'] = df['高速风险等级'].astype(str).where(df['高速风险等级'].notna(), None)
+        non_null = df['高速风险等级'].notna().sum()
+        print(f"      ✅ 高速风险等级: {non_null:,} 条有值")
+
+    # 29. 车险分分数（数值，24-26用）
+    if '车险分分数' in df.columns:
+        print(f"\n   处理车险分分数:")
+        df['车险分分数'] = pd.to_numeric(df['车险分分数'], errors='coerce')
+        non_null = df['车险分分数'].notna().sum()
+        print(f"      ✅ 车险分分数: {non_null:,} 条有值")
+
     return df
 
 def split_admin_account(df):
@@ -736,7 +826,7 @@ def process_dates(df):
         df['签单日期'] = df['缴费日期']
         print("   ✅ '缴费日期' → '签单日期'（供 policy_date 映射使用）")
 
-    date_fields = ['签单日期', '保险起期', '提核日期']
+    date_fields = ['签单日期', '保险起期', '提核日期', '保险止期']
 
     for field in date_fields:
         if field not in df.columns:
@@ -1000,6 +1090,7 @@ def main():
     str_columns = ['保单号', '是否续保', '续保单号', '车架号', '批单号']
     dtype_map = {col: str for col in str_columns}
     df = load_target_excel(INPUT_FILE, dtype_map)
+    df = normalize_input_columns(df)
     df = merge_renewal_type_from_source(df, RENEWAL_SOURCE_FILE)
     df = normalize_identifier_columns(df)
 

@@ -95,6 +95,51 @@ export function getPlateRegionDimPaths(): string[] {
   ];
 }
 
+// ── 交叉销售 Parquet 路径 ──
+
+export function getCrossSellPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/cross_sell/latest.parquet'),
+    path.resolve(getDataDir(), 'fact/cross_sell/latest.parquet'),
+  ];
+}
+
+// ── Claims 聚合 Parquet 路径 ──
+
+export function getClaimsAggPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/claims/latest.parquet'),
+    path.resolve(getDataDir(), 'fact/claims/latest.parquet'),
+  ];
+}
+
+// ── 维修资源 Parquet 路径 ──
+
+export function getRepairDimPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/repair/latest.parquet'),
+    path.resolve(getDataDir(), 'dim/repair/latest.parquet'),
+  ];
+}
+
+// ── 品牌维度 Parquet 路径 ──
+
+export function getBrandDimPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/brand/latest.parquet'),
+    path.resolve(getDataDir(), 'dim/brand/latest.parquet'),
+  ];
+}
+
+// ── 客户来源去向 Parquet 路径 ──
+
+export function getCustomerFlowPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/customer_flow/latest.parquet'),
+    path.resolve(getDataDir(), 'fact/customer_flow/latest.parquet'),
+  ];
+}
+
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,

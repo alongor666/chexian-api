@@ -119,3 +119,4 @@ output/playwright/
 
 # sage-wiki（独立子目录，含 API Key 和运行时数据）
 .sage-wiki/
+sage-wiki
