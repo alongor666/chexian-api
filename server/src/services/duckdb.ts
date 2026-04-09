@@ -537,6 +537,30 @@ class DuckDBService {
       console.log('[DuckDB] PolicyFact view created (pass-through mode)');
     }
 
+    // 补齐 8 域迁移后 PolicyFact 中可能缺失的向后兼容字段
+    // 这些字段已移至独立域（CrossSellFact/ClaimsAgg），但旧 SQL 生成器仍引用它们
+    const pfSchema = await this.getTableSchema('raw_parquet');
+    const existingCols = new Set(pfSchema.map((c: any) => c.column_name));
+    const compatFields: Array<[string, string, string]> = [
+      ['renewal_mode', 'VARCHAR', "''"],
+      ['is_cross_sell', 'BOOLEAN', 'false'],
+      ['cross_sell_premium_driver', 'DOUBLE', '0'],
+      ['claim_cases', 'INTEGER', '0'],
+      ['reported_claims', 'DOUBLE', '0'],
+      ['driver_coverage', 'DOUBLE', '0'],
+      ['passenger_coverage', 'DOUBLE', '0'],
+    ];
+    const missingFields = compatFields.filter(([name]) => !existingCols.has(name));
+    if (missingFields.length > 0) {
+      // raw_parquet 是 TABLE，可以 ALTER ADD COLUMN
+      for (const [name, type, defaultVal] of missingFields) {
+        await this.query(`ALTER TABLE raw_parquet ADD COLUMN IF NOT EXISTS "${name}" ${type} DEFAULT ${defaultVal}`);
+      }
+      // 重建 PolicyFact 视图
+      await this.query(`CREATE OR REPLACE VIEW PolicyFact AS SELECT * FROM raw_parquet`);
+      console.log(`[DuckDB] Added ${missingFields.length} compat columns to raw_parquet: ${missingFields.map(f => f[0]).join(', ')}`);
+    }
+
     // 创建 PolicyFactRenewal 视图（续保下钻模块使用）
     // 与 PolicyFact 结构相同，WHERE 条件由 renewal-drilldown.ts 动态生成
     await this.query(`
@@ -784,30 +808,37 @@ class DuckDBService {
 
     if (hasCrossSellFact) {
       // ── 8域模式：从 CrossSellFact（40万行）+ JOIN PolicyFact 构建 ──
-      // 比旧模式（380万行 PolicyFact 全扫描）快 10x
       console.log('[DuckDB] Building CrossSellDailyAgg from CrossSellFact (8-domain mode)...');
+
+      // 检测 PolicyFact 实际存在的列（新数据源可能缺少 renewal_mode/driver_coverage 等）
+      const pfSchema = await this.getTableSchema('PolicyFact');
+      const pfCols = new Set(pfSchema.map((c: any) => c.column_name));
+      const col = (name: string, fallback: string) => pfCols.has(name) ? `p.${name}` : fallback;
+      const colStr = (name: string) => pfCols.has(name) ? `COALESCE(CAST(p.${name} AS VARCHAR), '')` : `''`;
+      const colBool = (name: string) => pfCols.has(name) ? `COALESCE(p.${name}, false)` : `false`;
+      const colNum = (name: string) => pfCols.has(name) ? `COALESCE(p.${name}, 0)` : `0`;
 
       const cteSql = `
           SELECT
             CAST(cs.policy_date AS DATE) AS policy_date,
-            COALESCE(CAST(p.insurance_start_date AS DATE), CAST(cs.policy_date AS DATE)) AS insurance_start_date,
+            COALESCE(CAST(${col('insurance_start_date', 'cs.policy_date')} AS DATE), CAST(cs.policy_date AS DATE)) AS insurance_start_date,
             cs.org_level_3, cs.salesman_name, cs.customer_category, cs.coverage_combination,
-            COALESCE(CAST(p.renewal_mode AS VARCHAR), '') AS renewal_mode,
-            COALESCE(CAST(p.tonnage_segment AS VARCHAR), '') AS tonnage_segment,
-            COALESCE(CAST(p.insurance_grade AS VARCHAR), '') AS insurance_grade,
-            COALESCE(CAST(p.is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
-            COALESCE(CAST(p.insurance_type AS VARCHAR), '') AS insurance_type,
-            COALESCE(p.is_transfer, false) AS is_transfer,
-            COALESCE(p.is_telemarketing, false) AS is_telemarketing,
-            COALESCE(p.is_renewal, false) AS is_renewal,
-            COALESCE(p.is_nev, false) AS is_nev,
-            COALESCE(p.is_new_car, false) AS is_new_car,
-            COALESCE(p.is_renewable, false) AS is_renewable,
+            ${colStr('renewal_mode')} AS renewal_mode,
+            ${colStr('tonnage_segment')} AS tonnage_segment,
+            ${colStr('insurance_grade')} AS insurance_grade,
+            ${colStr('is_commercial_insure')} AS is_commercial_insure,
+            ${colStr('insurance_type')} AS insurance_type,
+            ${colBool('is_transfer')} AS is_transfer,
+            ${colBool('is_telemarketing')} AS is_telemarketing,
+            ${colBool('is_renewal')} AS is_renewal,
+            ${colBool('is_nev')} AS is_nev,
+            ${colBool('is_new_car')} AS is_new_car,
+            ${colBool('is_renewable')} AS is_renewable,
             cs.is_cross_sell,
-            COALESCE(p.driver_coverage, 0) AS driver_coverage,
-            COALESCE(p.passenger_coverage, 0) AS passenger_coverage,
+            ${colNum('driver_coverage')} AS driver_coverage,
+            ${colNum('passenger_coverage')} AS passenger_coverage,
             COALESCE(cs.cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
-            COALESCE(p.premium, 0) AS premium,
+            ${colNum('premium')} AS premium,
             COALESCE(
               NULLIF(TRIM(CAST(cs.vehicle_frame_no AS VARCHAR)), ''),
               NULLIF(TRIM(CAST(cs.policy_no AS VARCHAR)), '')) AS dedup_key,
@@ -853,25 +884,34 @@ class DuckDBService {
       // ── 旧模式：从 PolicyFact 全扫描构建（向后兼容）──
       console.log('[DuckDB] Building CrossSellDailyAgg from PolicyFact (legacy mode)...');
 
+      // 检测 PolicyFact 实际列（8域后部分字段已移出）
+      const legacySchema = await this.getTableSchema('PolicyFact');
+      const legacyCols = new Set(legacySchema.map((c: any) => c.column_name));
+      const lColStr = (name: string) => legacyCols.has(name) ? `COALESCE(CAST(${name} AS VARCHAR), '')` : `''`;
+      const lColBool = (name: string) => legacyCols.has(name) ? `COALESCE(${name}, false)` : `false`;
+      const lColNum = (name: string) => legacyCols.has(name) ? `COALESCE(${name}, 0)` : `0`;
+
       const cteSql = `
           SELECT
             CAST(policy_date AS DATE) AS policy_date,
             CAST(insurance_start_date AS DATE) AS insurance_start_date,
             org_level_3, salesman_name, customer_category, coverage_combination,
-            renewal_mode, tonnage_segment, insurance_grade,
-            COALESCE(CAST(is_commercial_insure AS VARCHAR), '') AS is_commercial_insure,
-            COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
-            COALESCE(is_transfer, false) AS is_transfer,
-            COALESCE(is_telemarketing, false) AS is_telemarketing,
-            COALESCE(is_renewal, false) AS is_renewal,
-            COALESCE(is_nev, false) AS is_nev,
-            COALESCE(is_new_car, false) AS is_new_car,
-            COALESCE(is_renewable, false) AS is_renewable,
-            COALESCE(is_cross_sell, false) AS is_cross_sell,
-            COALESCE(driver_coverage, 0) AS driver_coverage,
-            COALESCE(passenger_coverage, 0) AS passenger_coverage,
-            COALESCE(cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
-            COALESCE(premium, 0) AS premium,
+            ${lColStr('renewal_mode')} AS renewal_mode,
+            ${lColStr('tonnage_segment')} AS tonnage_segment,
+            ${lColStr('insurance_grade')} AS insurance_grade,
+            ${lColStr('is_commercial_insure')} AS is_commercial_insure,
+            ${lColStr('insurance_type')} AS insurance_type,
+            ${lColBool('is_transfer')} AS is_transfer,
+            ${lColBool('is_telemarketing')} AS is_telemarketing,
+            ${lColBool('is_renewal')} AS is_renewal,
+            ${lColBool('is_nev')} AS is_nev,
+            ${lColBool('is_new_car')} AS is_new_car,
+            ${lColBool('is_renewable')} AS is_renewable,
+            ${lColBool('is_cross_sell')} AS is_cross_sell,
+            ${lColNum('driver_coverage')} AS driver_coverage,
+            ${lColNum('passenger_coverage')} AS passenger_coverage,
+            ${lColNum('cross_sell_premium_driver')} AS cross_sell_premium_driver,
+            ${lColNum('premium')} AS premium,
             COALESCE(
               NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
               NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')) AS dedup_key,
