@@ -75,8 +75,8 @@ PASSWORDS.local.txt
 # sync-vps 同步清单（本地状态，不提交）
 .last-sync-manifest.json
 
-# 用户配置持久化文件（含 bcrypt hash，禁止提交）
-server/data/user_store.json
+# 服务端运行时数据（Parquet 大文件 + 用户配置，禁止提交）
+server/data/
 
 # 数据管理日志
 数据管理/logs/*.log
