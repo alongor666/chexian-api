@@ -17,25 +17,24 @@ This module provides centralized SQL query generation for KPIs, charts, and tabl
 
 **Key Exports**:
 
-#### 1. KPI Constants (`KPI_SQL`)
+#### 1. Metric Registry (`getMetricSql()`)
 
-Reusable SQL fragments for metrics:
+All KPI SQL fragments are defined in the **metric registry** (`server/src/config/metric-registry/`), the single source of truth for metric definitions:
 
 ```typescript
-export const KPI_SQL = {
-  total_premium: 'SUM(premium) as total_premium',
-  org_count: 'COUNT(DISTINCT org_level_3) as org_count',
-  salesman_count: 'COUNT(DISTINCT salesman_name) as salesman_count',
-  per_capita_premium: 'SUM(premium) / NULLIF(COUNT(DISTINCT salesman_name), 0) as per_capita_premium',
-  renewal_rate: 'COUNT(CASE WHEN is_renewal THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as renewal_rate',
-  nev_rate: 'COUNT(CASE WHEN is_nev THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as nev_rate',
-};
+import { getMetricSql } from '../config/metric-registry/index.js';
+
+// Returns SQL expression like 'SUM(premium) as total_premium'
+getMetricSql('total_premium');
+getMetricSql('renewal_rate');
+getMetricSql('per_capita_premium');
 ```
 
 **Design Notes**:
+- Each metric has `id`, `name`, `formula`, `sql.expression`, `display`, `testCase`, and `changelog`
 - `NULLIF(..., 0)` prevents division by zero
 - `* 1.0` ensures floating-point division for rates
-- `CASE WHEN` for conditional counting
+- Never hardcode metric SQL — always use `getMetricSql(id)`
 
 #### 2. KPI Query Generator
 
@@ -301,25 +300,26 @@ const salesmanSql = generateTopNQuery('salesman_name', 'SUM(premium)', 20, where
 
 To add a new KPI:
 
-1. Add to `KPI_SQL`:
+1. Register in metric registry (`server/src/config/metric-registry/categories/*.ts`):
 ```typescript
-export const KPI_SQL = {
-  // existing...
-  avg_policy_value: 'AVG(premium) as avg_policy_value',
-};
+{ id: 'avg_policy_value', name: '件均保费', formula: 'AVG(premium)', sql: { expression: 'AVG(premium) as avg_policy_value' }, ... }
 ```
 
-2. Add to `generateKpiQuery()`:
+2. Validate: `npx tsx scripts/metric-registry/validate.ts`
+
+3. Add to `generateKpiQuery()`:
 ```typescript
 SELECT
-  ${KPI_SQL.total_premium},
-  ${KPI_SQL.avg_policy_value},  // Add here
+  ${getMetricSql('total_premium')},
+  ${getMetricSql('avg_policy_value')},  // Add here
   ...
 ```
 
-3. Update Dashboard component to display it:
+4. Update frontend map: `npx tsx scripts/metric-registry/generate-frontend-map.ts`
+
+5. Update Dashboard component to display it:
 ```typescript
-<KpiCard title="Average Policy" value={kpis.avg_policy_value} formatter={fmtMoney} />
+<KpiCard title="件均保费" value={kpis.avg_policy_value} formatter={fmtMoney} />
 ```
 
-4. Update tests in `tests/kpi.test.ts`
+6. Update tests in `tests/kpi.test.ts`

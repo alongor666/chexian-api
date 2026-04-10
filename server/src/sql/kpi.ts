@@ -19,23 +19,6 @@ export const QUALITY_BUSINESS_CONDITION = `
   )
 `;
 
-/** @deprecated 使用 getMetricSql() 替代 */
-export const KPI_SQL = {
-  total_premium: getMetricSql('total_premium'),
-  policy_count: getMetricSql('policy_count'),
-  org_count: getMetricSql('org_count'),
-  salesman_count: getMetricSql('salesman_count'),
-  transfer_rate: getMetricSql('transfer_rate'),
-  telesales_rate: getMetricSql('telesales_rate'),
-  per_capita_premium: getMetricSql('per_capita_premium'),
-  renewal_rate: getMetricSql('renewal_rate'),
-  commercial_rate: getMetricSql('commercial_rate'),
-  nev_rate: getMetricSql('nev_rate'),
-  new_car_rate: getMetricSql('new_car_rate'),
-  quality_business_rate: getMetricSql('quality_business_rate'),
-  commercial_insurance_rate: getMetricSql('commercial_insurance_rate'),
-  per_vehicle_premium: getMetricSql('per_vehicle_premium'),
-};
 
 interface KpiQueryOptions {
   orgNames?: string[];
@@ -95,20 +78,20 @@ export const generateKpiQuery = (
     ),
     focus_metrics AS (
       SELECT
-        ${KPI_SQL.total_premium},
-        ${KPI_SQL.policy_count},
-        ${KPI_SQL.org_count},
-        ${KPI_SQL.salesman_count},
-        ${KPI_SQL.transfer_rate},
-        ${KPI_SQL.telesales_rate},
-        ${KPI_SQL.per_capita_premium},
-        ${KPI_SQL.renewal_rate},
-        ${KPI_SQL.commercial_rate},
-        ${KPI_SQL.nev_rate},
-        ${KPI_SQL.new_car_rate},
-        ${KPI_SQL.quality_business_rate},
-        ${KPI_SQL.commercial_insurance_rate},
-        ${KPI_SQL.per_vehicle_premium}
+        ${getMetricSql('total_premium')},
+        ${getMetricSql('policy_count')},
+        ${getMetricSql('org_count')},
+        ${getMetricSql('salesman_count')},
+        ${getMetricSql('transfer_rate')},
+        ${getMetricSql('telesales_rate')},
+        ${getMetricSql('per_capita_premium')},
+        ${getMetricSql('renewal_rate')},
+        ${getMetricSql('commercial_rate')},
+        ${getMetricSql('nev_rate')},
+        ${getMetricSql('new_car_rate')},
+        ${getMetricSql('quality_business_rate')},
+        ${getMetricSql('commercial_insurance_rate')},
+        ${getMetricSql('per_vehicle_premium')}
       FROM filtered
     ),
     vehicle_periods AS (
