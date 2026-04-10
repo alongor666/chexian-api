@@ -25,18 +25,41 @@ import * as domainLoaders from './duckdb-domain-loaders.js';
 const SLOW_QUERY_THRESHOLD_MS = 3000;
 
 /**
- * DuckDB服务类（单例）
+ * DuckDB 服务构造参数
+ *
+ * 省略的字段从全局 databaseConfig / DUCKDB_INIT_OPTIONS 回退。
+ * 测试场景传 `{ path: ':memory:' }` 即可获得隔离实例。
+ */
+export interface DuckDBServiceConfig {
+  /** 数据库路径（默认 databaseConfig.path，测试用 ':memory:'） */
+  path?: string;
+  /** 最大连接数（默认 databaseConfig.maxConnections） */
+  maxConnections?: number;
+  /** 内存限制（默认 DUCKDB_INIT_OPTIONS.max_memory） */
+  maxMemory?: string;
+  /** 线程数（默认 DUCKDB_INIT_OPTIONS.threads） */
+  threads?: number;
+}
+
+/**
+ * DuckDB 服务类
  *
  * 增强功能：
  * - 连接池（复用连接，默认最大 10 个）
  * - 查询结果缓存（可选 TTL）
  * - 慢查询监控（>3s 告警）
+ *
+ * 使用方式：
+ * - 生产：`duckdbService`（预创建单例）
+ * - 测试：`createDuckDBService({ path: ':memory:' })`
  */
-class DuckDBService implements DuckDBQueryable {
+export class DuckDBService implements DuckDBQueryable {
   private instance: DuckDBInstance | null = null;
   private isInitialized = false;
   private connectionPool: ConnectionPool | null = null;
   private queryCache = new QueryCache();
+
+  constructor(private readonly config?: DuckDBServiceConfig) {}
 
   /**
    * 初始化数据库连接
@@ -47,26 +70,31 @@ class DuckDBService implements DuckDBQueryable {
     }
 
     try {
-      this.instance = await DuckDBInstance.create(databaseConfig.path, {
-        max_memory: DUCKDB_INIT_OPTIONS.max_memory,
-        threads: String(DUCKDB_INIT_OPTIONS.threads),
+      const dbPath = this.config?.path ?? databaseConfig.path;
+      const maxConn = this.config?.maxConnections ?? databaseConfig.maxConnections ?? 10;
+      const maxMem = this.config?.maxMemory ?? DUCKDB_INIT_OPTIONS.max_memory;
+      const threads = this.config?.threads ?? DUCKDB_INIT_OPTIONS.threads;
+
+      this.instance = await DuckDBInstance.create(dbPath, {
+        max_memory: maxMem,
+        threads: String(threads),
       });
-      this.connectionPool = new ConnectionPool(this.instance, databaseConfig.maxConnections ?? 10);
+      this.connectionPool = new ConnectionPool(this.instance, maxConn);
 
       // 显式 SET 确保内存/线程配置生效（DuckDBInstance.create options 可能被忽略）
       const conn = await this.connectionPool.acquire();
       try {
-        await conn.run(`SET memory_limit='${DUCKDB_INIT_OPTIONS.max_memory}'`);
-        await conn.run(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
+        await conn.run(`SET memory_limit='${maxMem}'`);
+        await conn.run(`SET threads=${threads}`);
       } finally {
         this.connectionPool.release(conn);
       }
 
       console.log(
-        '[DuckDB] Database initialized:', databaseConfig.path,
-        `(pool max: ${databaseConfig.maxConnections ?? 10},`,
-        `max_memory: ${DUCKDB_INIT_OPTIONS.max_memory},`,
-        `threads: ${DUCKDB_INIT_OPTIONS.threads})`
+        '[DuckDB] Database initialized:', dbPath,
+        `(pool max: ${maxConn},`,
+        `max_memory: ${maxMem},`,
+        `threads: ${threads})`
       );
       this.isInitialized = true;
 
@@ -491,7 +519,24 @@ class DuckDBService implements DuckDBQueryable {
   }
 }
 
-// 导出单例实例
+/**
+ * 创建 DuckDB 服务实例
+ *
+ * 生产代码应直接使用下方 `duckdbService` 单例。
+ * 此工厂函数供测试和特殊场景使用：
+ *
+ * ```ts
+ * const db = createDuckDBService({ path: ':memory:' });
+ * await db.init();
+ * // ... run tests ...
+ * await db.close();
+ * ```
+ */
+export function createDuckDBService(config?: DuckDBServiceConfig): DuckDBService {
+  return new DuckDBService(config);
+}
+
+/** 全局单例（生产用） */
 export const duckdbService = new DuckDBService();
 
 /** @internal 测试用：派生表名列表 */
