@@ -1,244 +1,280 @@
 # 车险数据分析平台（chexian-api）
 
-`chexian-api` 是一个面向车险经营分析的前后端分离平台，采用 **纯 API 架构**：前端只通过 REST API 调用后端 DuckDB，不再使用 DuckDB-WASM 本地查询模式。
+> 面向车险经营分析的全栈数据平台，采用纯 API 架构：React 前端 + Express/DuckDB 后端。
+> 519+ commits | 97 API 端点 | 15 数据域 | 35 SQL 生成器 | 77 测试文件
 
-## 1) 项目概述和用途
+## 1) 项目概述
 
-项目聚焦车险业务数据的经营分析、管理与决策支持，核心用途包括：
+项目聚焦车险业务数据的经营分析、管理与决策支持，核心能力包括：
 
-- 统一接入 Parquet 数据并构建标准分析视图
-- 提供经营看板（KPI、趋势、结构、排名）
-- 提供专题分析（增长、成本、续保、交叉销售、营销战报、保费计划等）
-- 提供认证、权限与行级数据过滤能力
-- 支持 AI 趋势解读能力（OpenRouter 主路由 + 智谱兜底）
+- **经营看板**：KPI 总览、保费趋势、结构分析、机构排名
+- **专题分析**：增长分析、成本分析、续保漏斗、交叉销售、报价转化、费用发展趋势、赔案明细、客户流向、维修资源
+- **保费管理**：保费计划达成、保费报表、营销战报
+- **数据治理**：15 域 ETL 管道、分片架构、字段/指标注册表、21 项治理检查
+- **权限与安全**：RBAC + 行级数据过滤、企业微信 SSO、三级限流
+- **AI 能力**：趋势解读（OpenRouter 主路由 + 智谱兜底）
 
-核心代码入口：
+### 前端页面
 
-- 前端入口：`src/app/main.tsx`、`src/app/App.tsx`
-- API 客户端：`src/shared/api/client.ts`
-- 后端入口：`server/src/app.ts`
-- 查询路由：`server/src/routes/query.ts`
-- 数据引擎：`server/src/services/duckdb.ts`
+| 页面 | 路由 | 说明 |
+|------|------|------|
+| 经营仪表盘 | `/dashboard` | KPI + 趋势 + 排名 + 结构 |
+| 业绩分析 | `/performance-analysis` | 业务员/机构绩效 + 热力图 |
+| 增长分析 | `/growth` | 同比/环比 + 机构对比 |
+| 成本分析 | `/cost` | 综合成本率 + 赔付 + 费用（含综合分析视图） |
+| 费用分析 | `/fee-analysis` | 费用率 + 手续费 + 费用发展趋势 |
+| 系数分析 | `/coefficient` | 自主定价系数分布 + 趋势 |
+| 保费达成 | `/reports` | 保费计划达成 + 保费报表 + 营销战报 |
+| 专项分析 | `/specialty` | 驾意险交叉销售 + 续保 + 货车（Tab 合并） |
+| 赔案明细 | `/claims-detail` | 赔案下钻 + 品牌车型 |
+| 数据导入 | `/data-import` | Parquet 文件上传与管理 |
+| 权限管理 | `/admin/access-control` | 用户/角色/权限配置 |
 
 ## 2) 技术栈
 
 ### 前端
 
-- React 19 + TypeScript 5
-- Vite 5
-- Tailwind CSS 3（配合 `src/shared/styles` 语义样式层）
-- ECharts / Recharts
-- Zod（类型与参数校验）
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| React | 19 | UI 框架 |
+| TypeScript | 5.9 | 类型安全 |
+| Vite | 5.4 | 构建工具 |
+| ECharts | 5.6 | 图表可视化 |
+| TanStack Query | 5 | 数据请求与缓存 |
+| Tailwind CSS | 3.4 | 样式系统（配合语义设计令牌） |
+| Zod | 4.3 | 类型与参数校验 |
+| React Router | 7 | 路由管理 |
 
 ### 后端
 
-- Express 4 + TypeScript
-- DuckDB（`@duckdb/node-api`，服务端执行 SQL）
-- 认证与安全：`jsonwebtoken`、`bcrypt`、`helmet`、`express-rate-limit`、`cors`
-- 文件上传：`multer`
+| 技术 | 用途 |
+|------|------|
+| Express 4 + TypeScript | API 服务框架 |
+| DuckDB (`@duckdb/node-api`) | 列式分析引擎 |
+| jsonwebtoken + bcrypt | JWT 认证 |
+| helmet + express-rate-limit + cors | 安全中间件 |
+| multer | 文件上传 |
 
-### 测试与工程化
+### 工程化
 
-- Vitest（单元/集成）
-- Playwright（E2E）
-- 治理检查：`scripts/check-governance.mjs`
-- 默认包管理与执行器：**Bun**
+| 工具 | 用途 |
+|------|------|
+| Bun | 包管理与运行时 |
+| Vitest | 单元/集成测试 |
+| Playwright 1.58 | E2E 测试 |
+| GitHub Actions | CI/CD（6 条 pipeline） |
+| 治理检查 | 21 项自动校验 |
 
-## 3) 目录结构说明
+## 3) 目录结构
 
 ```text
 chexian-api/
-├── src/                            # 前端应用
-│   ├── app/                        # 应用入口与路由挂载
-│   ├── features/                   # 业务功能模块
-│   ├── widgets/                    # 图表/表格/KPI 等复用组件
-│   ├── shared/                     # API、上下文、样式、工具、类型
-│   └── services/                   # 前端服务（导出等）
-├── server/                         # 后端 API 服务
-│   ├── src/app.ts                  # 后端启动入口
-│   ├── src/routes/                 # auth/data/query/filters/ai/wecom-auth
-│   ├── src/services/               # duckdb/auth/permission/wecom 等
-│   ├── src/sql/                    # SQL 生成器
-│   ├── src/middleware/             # 认证、权限、限流、审计、异常
-│   ├── src/config/                 # 配置与环境变量映射
-│   ├── src/normalize/              # 列映射与字段标准化
-│   └── data/                       # 本地数据目录（含 current）
-├── tests/                          # API/组件/集成/E2E 测试
-├── scripts/                        # 启动、治理、导出、压测等脚本
-├── deploy/                         # VPS 部署与数据同步脚本
-├── 数据管理/                        # 数据处理链路与知识库
-├── 开发文档/                        # 架构、规范、索引、进展
-└── README.md
+├── src/                             # 前端应用
+│   ├── app/                         #   应用入口、路由、布局
+│   ├── features/                    #   22 个业务功能模块
+│   │   ├── dashboard/               #     经营仪表盘
+│   │   ├── cost/                    #     成本分析 + 综合分析
+│   │   ├── growth/                  #     增长分析 + 机构对比
+│   │   ├── claims-detail/           #     赔案明细
+│   │   ├── quote-conversion/        #     报价转化
+│   │   └── ...                      #     （共 22 个模块）
+│   ├── widgets/                     #   图表/表格/KPI 复用组件
+│   ├── shared/                      #   API 客户端、上下文、样式、工具、类型
+│   │   ├── api/                     #     API 路由定义 + HTTP 客户端
+│   │   ├── styles/                  #     设计令牌系统（颜色/字体/间距/组件预设）
+│   │   └── config/                  #     客户类别等前端配置
+│   └── services/                    #   前端服务（导出等）
+│
+├── server/                          # 后端 API 服务
+│   ├── src/
+│   │   ├── app.ts                   #   启动入口（198 行，已拆分）
+│   │   ├── routes/                  #   路由层
+│   │   │   ├── query.ts             #     查询路由注册器
+│   │   │   ├── query/               #     17 个查询子路由模块
+│   │   │   ├── auth.ts              #     认证路由
+│   │   │   ├── data.ts              #     数据管理路由
+│   │   │   ├── ai.ts                #     AI 路由
+│   │   │   ├── filters.ts           #     筛选器路由
+│   │   │   └── wecom-auth.ts        #     企业微信路由
+│   │   ├── services/                #   服务层（模块化拆分）
+│   │   │   ├── duckdb.ts            #     查询执行（498 行）
+│   │   │   ├── duckdb-infra.ts      #     连接与基础设施
+│   │   │   ├── duckdb-domain-loaders.ts  # 分域数据加载
+│   │   │   ├── duckdb-materialization.ts # 预聚合物化
+│   │   │   ├── data-bootstrapper.ts #     数据启动流水线
+│   │   │   ├── access-control.ts    #     权限控制
+│   │   │   ├── route-cache.ts       #     路由级缓存
+│   │   │   └── ...                  #     auth/wecom/openrouter/zhipu
+│   │   ├── sql/                     #   35 个 SQL 生成器
+│   │   ├── middleware/              #   认证、权限、限流、审计、异常
+│   │   ├── config/                  #   配置中心
+│   │   │   ├── metric-registry/     #     指标注册表（25 个指标）
+│   │   │   ├── field-registry/      #     字段注册表（42 个字段）
+│   │   │   ├── env.ts               #     环境变量（20+ 变量）
+│   │   │   └── api-routes.ts        #     路由常量
+│   │   └── normalize/               #   列映射与字段标准化（codegen 生成）
+│   └── data/                        #   运行时数据目录
+│
+├── 数据管理/                         # 数据 ETL 管道
+│   ├── daily.mjs                    #   智能增量 ETL 入口
+│   ├── data-sources.json            #   15 域元数据注册表
+│   ├── shard-config.json            #   分片配置
+│   ├── pipelines/                   #   ETL 转换脚本（Python）
+│   ├── warehouse/                   #   本地数据仓库
+│   │   ├── fact/                    #     8 个事实域（policy/claims/quotes/...）
+│   │   └── dim/                     #     7 个维度表（salesman/plan/brand/...）
+│   └── knowledge/                   #   数据知识库
+│
+├── tests/                           # 测试（77 个文件）
+│   ├── api/                         #   API 测试
+│   ├── components/                  #   组件测试
+│   ├── comprehensive/               #   综合分析测试
+│   ├── e2e/                         #   E2E 测试（Playwright）
+│   ├── integration/                 #   集成测试（需 DuckDB 原生）
+│   └── shared/                      #   共享工具测试
+│
+├── scripts/                         # 37 个工程脚本
+├── deploy/                          # VPS 部署（Nginx + PM2 + Docker）
+├── .github/workflows/               # 6 条 CI/CD pipeline
+├── 开发文档/                         # 架构、规范、索引
+└── 数据管理/knowledge/               # 数据知识库
 ```
 
 ## 4) 主要 API 端点
 
-后端默认端口 `3000`，统一前缀为 `/api/*`。`/api/query`、`/api/data`、`/api/filters`、`/api/ai` 默认需要认证与权限中间件。
+后端默认端口 `3000`，统一前缀 `/api/*`。查询/数据/筛选/AI 端点默认需要认证与权限中间件。
 
 ### 健康检查
 
-- `GET /health`：服务健康状态
+- `GET /health` — 服务健康状态
 
-### 认证与账号管理（`/api/auth`）
+### 认证与账号（`/api/auth`）
 
-- `POST /api/auth/login`
-- `POST /api/auth/refresh`
-- `POST /api/auth/logout`
-- `GET /api/auth/users`
-- `POST /api/auth/users`
-- `PUT /api/auth/users/:id`
-- `DELETE /api/auth/users/:id`
-- `GET /api/auth/roles`
-- `POST /api/auth/roles`
-- `PUT /api/auth/roles/:role`
-- `DELETE /api/auth/roles/:role`
-- `GET /api/auth/me`
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/auth/login` | 登录 |
+| POST | `/api/auth/refresh` | 刷新 Token |
+| POST | `/api/auth/logout` | 登出 |
+| GET/POST/PUT/DELETE | `/api/auth/users[/:id]` | 用户 CRUD |
+| GET/POST/PUT/DELETE | `/api/auth/roles[/:role]` | 角色 CRUD |
+| GET | `/api/auth/me` | 当前用户信息 |
 
-### 企业微信登录（`/api/auth/wecom`）
+### 企业微信（`/api/auth/wecom`）
 
-- `GET /api/auth/wecom/config`
-- `GET /api/auth/wecom/callback`
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/auth/wecom/config` | OAuth 配置 |
+| GET | `/api/auth/wecom/callback` | OAuth 回调 |
 
 ### 数据管理（`/api/data`）
 
-- `POST /api/data/upload`
-- `GET /api/data/metadata`
-- `DELETE /api/data/clear`
-- `GET /api/data/files`
-- `POST /api/data/load/:filename`
-- `GET /api/data/download/:filename`
-- `GET /api/data/kpi-plan-config`
-- `PUT /api/data/kpi-plan-config`
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/data/upload` | 上传 Parquet |
+| GET | `/api/data/metadata` | 数据元信息 |
+| GET | `/api/data/files` | 文件列表 |
+| POST | `/api/data/load/:filename` | 加载文件 |
+| GET | `/api/data/download/:filename` | 下载文件 |
+| DELETE | `/api/data/clear` | 清空数据 |
+| GET/PUT | `/api/data/kpi-plan-config` | 计划值配置 |
+
+### 业务查询（`/api/query`）— 17 个子路由模块
+
+| 模块 | 主要端点 | 路由文件 |
+|------|----------|----------|
+| KPI | `kpi`, `kpi-detail` | `query/kpi.ts` |
+| 趋势 | `trend`, `quality-business-trend` | `query/trend.ts` |
+| 增长 | `growth` | `query/growth.ts` |
+| 系数 | `coefficient` | `query/coefficient.ts` |
+| 成本 | `cost` | `query/cost.ts` |
+| 综合分析 | `comprehensive-bundle`, `comprehensive-analysis-bundle` | `query/comprehensive.ts` |
+| 续保 | `renewal`, `renewal-drilldown` | `query/renewal.ts` |
+| 续保漏斗 | `renewal-funnel-*` | `query/renewal-funnel.ts` |
+| 交叉销售 | `cross-sell`, `cross-sell-trend/summary/bundle/...` | `query/cross-sell.ts` |
+| 业绩 | `performance-summary/trend/drilldown/bundle/...` | `query/performance.ts` |
+| 报价转化 | `quote-conversion-*` | `query/quote-conversion.ts` |
+| 赔案明细 | `claims-detail-*` | `query/claims-detail.ts` |
+| 客户流向 | `customer-flow-*` | `query/customer-flow.ts` |
+| 费用发展 | `expense-development` | `query/expense-development.ts` |
+| 维修资源 | `repair-*` | `query/repair.ts` |
+| 货车 | `truck` | `query/truck.ts` |
+| 报表 | `marketing-report`, `premium-report/plan`, `dashboard-bundle` 等 | `query/report.ts` |
 
 ### 筛选器（`/api/filters`）
 
-- `GET /api/filters/options`
+- `GET /api/filters/options` — 筛选器选项
 
 ### AI（`/api/ai`）
 
-- `POST /api/ai/nl2sql`（当前返回 410，功能关闭）
-- `POST /api/ai/validate-key`
-- `POST /api/ai/trend-analysis`
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/ai/trend-analysis` | 趋势解读 |
+| POST | `/api/ai/validate-key` | API Key 校验 |
+| POST | `/api/ai/nl2sql` | NL2SQL（当前 410 关闭） |
 
-### 业务查询（`/api/query`）
+## 5) 数据架构
 
-- `GET /api/query/kpi`
-- `GET /api/query/kpi-detail`
-- `GET /api/query/trend`
-- `GET /api/query/quality-business-trend`
-- `GET /api/query/truck`
-- `GET /api/query/growth`
-- `GET /api/query/coefficient`
-- `GET /api/query/cost`
-- `GET /api/query/comprehensive-bundle`
-- `GET /api/query/comprehensive-analysis-bundle`
-- `GET /api/query/renewal`
-- `GET /api/query/renewal-drilldown`
-- `GET /api/query/cross-sell`
-- `GET /api/query/cross-sell-trend`
-- `GET /api/query/cross-sell-summary`
-- `GET /api/query/cross-sell-top-salesman`
-- `GET /api/query/cross-sell-bundle`
-- `GET /api/query/cross-sell-org-trend`
-- `GET /api/query/performance-summary`
-- `GET /api/query/performance-trend`
-- `GET /api/query/performance-drilldown`
-- `GET /api/query/performance-top-salesman`
-- `GET /api/query/performance-bundle`
-- `GET /api/query/salesman-ranking`
-- `GET /api/query/marketing-report`
-- `GET /api/query/premium-report`
-- `GET /api/query/premium-plan`
-- `GET /api/query/plan-achievement`
-- `GET /api/query/dashboard-bundle`
-- `GET /api/query/fee-analysis`
-- `POST /api/query/custom`
+### 数据域注册表（15 域）
 
-## 5) 配置和环境变量
+| 域 ID | 名称 | 类型 | 状态 |
+|--------|------|------|------|
+| premium | 保费 | fact | 活跃 — 350 万+ 行 |
+| claims_detail | 赔案明细 | fact | 活跃 |
+| cross_sell | 交叉销售 | fact | 活跃 |
+| quotes_conversion | 报价转化(旧车商业险) | fact | 活跃 |
+| quotes_v2 | 报价清单(商业险v2) | fact | 活跃 |
+| renewal_v2 | 续保清单(套单) | fact | 活跃 |
+| renewal_funnel | 续保转化漏斗 | fact | 活跃 |
+| customer_flow | 客户来源去向 | fact | 活跃 |
+| quotes_status | 报价状态(保单域) | fact | 活跃 |
+| salesman | 业务员 | dim | 活跃 |
+| plan | 保费计划 | dim | 活跃 |
+| brand | 品牌车型 | dim | 活跃 |
+| plate_region | 车牌归属地 | dim | 活跃 |
+| repair_resource | 维修资源 | dim | 活跃 |
+| claims | 赔付 | fact | **已废弃** — 迁移到 claims_detail |
+
+### DuckDB 数据模型（4 层）
+
+| 层级 | 表/视图 | 说明 |
+|------|---------|------|
+| **L1 原始层** | `raw_parquet` | 由上传文件或启动扫描加载 |
+| **L2 事实视图** | `PolicyFact`, `PolicyFactRenewal` | 统一字段口径，列映射由 `mapping.ts` 生成 |
+| **L3 预聚合** | `DailyAggregated`, `PeriodAggregated`, `CrossSellDailyAgg`, `KpiDailySummary`, `RenewalDailyAgg` | 性能核心，VPS 优先加载 |
+| **L4 维度/权限** | `UserAccount`, `RoleConfig`, `KpiPlanConfig`, `SalesmanTeamMapping`, `achievement_cache` | 配置与权限 |
+
+### VPS 模式
+
+`VPS_MODE=true` 时，服务优先加载预聚合文件（`aggregated.parquet`、`cross_sell_agg.parquet`、`renewal_agg.parquet`），避免在 2C4G VPS 上全量扫描导致 OOM。
+
+## 6) 配置与环境变量
 
 ### 环境文件
 
-- 前端/根配置：`.env.example` → `.env.local`
-- 后端配置：`server/.env.example` → `server/.env`
+- 前端：`.env.example` → `.env.local`
+- 后端：`server/.env.example` → `server/.env`
 
-### 核心变量（后端）
+### 核心变量
 
 | 变量 | 说明 | 默认值 |
-|---|---|---|
+|------|------|--------|
 | `PORT` | 后端端口 | `3000` |
 | `NODE_ENV` | 运行环境 | `development` |
-| `BIND_HOST` | 监听地址 | `127.0.0.1` |
 | `JWT_SECRET` | JWT 密钥 | `change-me-in-production` |
-| `JWT_EXPIRES_IN` | Access Token 有效期 | `4h` |
-| `JWT_REFRESH_EXPIRES_IN` | Refresh Token 有效期 | `7d` |
-| `CORS_ORIGIN` | 允许的前端域名（逗号分隔） | 开发环境附带 localhost 白名单 |
-
-### DuckDB/数据相关变量
-
-| 变量 | 说明 | 默认值 |
-|---|---|---|
+| `CORS_ORIGIN` | 允许的前端域名 | 开发环境 localhost 白名单 |
 | `DUCKDB_PATH` | DuckDB 数据库路径 | `:memory:` |
 | `DATA_PATH` | 数据目录 | `./data` |
 | `DUCKDB_MAX_MEMORY` | DuckDB 内存上限 | `4GB` |
-| `DUCKDB_THREADS` | DuckDB 线程数 | `4` |
-| `VPS_MODE` | VPS 预聚合模式开关 | `false` |
+| `VPS_MODE` | VPS 预聚合模式 | `false` |
+| `OPENROUTER_API_KEY` | AI 主路由 Key | — |
+| `ZHIPU_API_KEY` | 智谱兜底 Key | — |
+| `WECOM_CORP_ID` | 企业微信 ID（可选） | — |
 
-### AI 相关变量
+完整变量列表见 `server/src/config/env.ts`（20+ 变量，6 个分组）。
 
-| 变量 | 说明 |
-|---|---|
-| `OPENROUTER_API_KEY` | OpenRouter Key（主路由） |
-| `AI_PRIMARY_MODEL` / `OPENROUTER_MODELS` | 模型降级链（逗号分隔） |
-| `AI_PROVIDER_TIMEOUT_MS` | 单模型超时 |
-| `AI_TREND_CACHE_TTL_MS` | 趋势解读缓存 TTL |
-| `ZHIPU_API_KEY` / `VITE_ZHIPU_API_KEY` | 智谱兜底 Key |
+## 7) 运行与部署
 
-### 企业微信变量（可选）
-
-| 变量 | 说明 |
-|---|---|
-| `WECOM_CORP_ID` | 企业 ID |
-| `WECOM_AGENT_ID` | 应用 ID |
-| `WECOM_SECRET` | 应用 Secret |
-| `WECOM_ADMIN_USERIDS` | 超级管理员白名单 |
-
-## 6) 数据库模型（DuckDB）
-
-本项目不使用 ORM，采用 DuckDB + SQL 生成器模式。数据模型分为 4 层：
-
-### L1 原始层
-
-- `raw_parquet`：由上传文件或启动扫描加载
-
-### L2 事实视图层
-
-- `PolicyFact`：统一字段口径后的主事实视图（由 `mapping.ts` 做中英文列映射）
-- `PolicyFactRenewal`：续保下钻使用视图
-
-`PolicyFact` 可用字段以业务规则文档为准，当前主用字段覆盖保单标识、日期、机构、业务员、险类、保费、续保/新能源/过户/电销标记、交叉销售、赔付和费用相关指标等（详见 `数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md`）。
-
-### L3 预聚合层（性能核心）
-
-- `DailyAggregated`：日粒度聚合
-- `PeriodAggregated`：月粒度聚合
-- `CrossSellDailyAgg`：交叉销售聚合
-- `KpiDailySummary`：KPI 轻量聚合
-- `RenewalDailyAgg`：续保聚合（VPS 导入）
-
-### L4 维度与权限层
-
-- `UserAccount`、`RoleConfig`：账号与角色配置表
-- `KpiPlanConfig`：计划值配置
-- `SalesmanTeamMapping`、`SalesmanPlanFact`：业务员团队与计划映射
-- `achievement_cache`：计划达成缓存表
-
-### VPS 模式约束
-
-`VPS_MODE=true` 时，服务优先加载预聚合文件（`aggregated.parquet`、`cross_sell_agg.parquet`、`renewal_agg.parquet`），避免在 2C4G VPS 上全量扫描原始明细导致内存风险。
-
-## 7) 运行和部署方式
-
-### 本地开发运行
+### 本地开发
 
 ```bash
 # 安装依赖
@@ -249,7 +285,7 @@ cd server && bun install && cd ..
 cp .env.example .env.local
 cp server/.env.example server/.env
 
-# 推荐：同时启动前后端
+# 同时启动前后端（推荐）
 bun run dev:full
 ```
 
@@ -262,36 +298,64 @@ bun run dev:full
 ### 常用命令
 
 ```bash
-bun run test
-bun run test:coverage
-bun run governance
-bun run build
-bun run preview
+bun run dev:full          # 前后端联调
+bun run build             # 生产构建
+bun run test              # 单元测试（Vitest）
+bun run test:integration  # 集成测试（需本地 DuckDB 原生二进制）
+bun run test:e2e          # E2E 测试（Playwright，需先 dev:full）
+bun run test:coverage     # 覆盖率报告
+bun run governance        # 21 项治理检查
+bun run typecheck         # TypeScript 类型检查
+bun run verify:quick      # 快速验证（preflight + governance + typecheck）
+bun run verify:full       # 完整验证（quick + test）
 ```
 
-### 数据处理与同步（本地 → VPS）
+### 数据处理与同步
 
 ```bash
-# 完整数据处理链（含可选同步）
-./数据管理/run.sh full --source 历史数据.xlsx --target 最新数据.xlsx --output 数据管理/warehouse/fact/policy/xxx.parquet
+# 智能增量 ETL
+node 数据管理/daily.mjs
 
-# 仅同步最新 parquet
-./scripts/sync-vps.mjs
+# 指定域强制处理
+node 数据管理/daily.mjs premium|claims|quotes|all
 
-# 预聚合导出并同步（推荐）
-./scripts/sync-vps.mjs --export
+# 维度表生成
+python3 数据管理/warehouse/dim/generate_dim_tables.py
+
+# 数据同步到 VPS
+node scripts/sync-vps.mjs
+
+# 预聚合导出并同步
+node scripts/sync-vps.mjs --export
 ```
 
 ### 生产部署
 
-- 全量部署脚本：`deploy/vps-deploy.mjs`
-- 详细步骤：`DEPLOYMENT_GUIDE.md`
-- 运维说明：`vps.md`
+- **VPS**：腾讯云 2C4G，PM2 进程管理 + Nginx 反向代理
+- **部署脚本**：`deploy/vps-deploy.mjs`
+- **PM2 操作**：`sudo /usr/local/bin/deploy-chexian-api reload|restart|install`
+- **详细指南**：`deploy/DEPLOY_FULLSTACK.md`
+
+### CI/CD Pipeline
+
+| Workflow | 触发条件 | 说明 |
+|----------|----------|------|
+| `deploy.yml` | push main | 构建 → 部署 → 健康检查 |
+| `governance-check.yml` | PR | 治理校验 |
+| `production-gate.yml` | PR to main | 生产准入门禁 |
+| `claude-code.yml` | @claude 评论 | Claude Code 自动处理 |
+| `claude-code-review.yml` | PR 打开 | Claude 自动代码审查 |
+| `claude.yml` | — | Claude 辅助 workflow |
 
 ## 参考文档
 
-- 架构：`ARCHITECTURE.md`
-- 技术栈：`开发文档/TECH_STACK.md`
-- 开发约定：`开发文档/DEVELOPER_CONVENTIONS.md`
-- 后端说明：`server/README.md`
-- 测试说明：`TESTING_GUIDE.md`
+| 文档 | 路径 |
+|------|------|
+| 架构规范 | `ARCHITECTURE.md` |
+| 技术栈详情 | `开发文档/TECH_STACK.md` |
+| 开发约定 | `开发文档/DEVELOPER_CONVENTIONS.md` |
+| 数据知识库 | `数据管理/knowledge/` |
+| 业务规则字典 | `数据管理/knowledge/rules/车险数据业务规则字典.md` |
+| 指标字典 | `开发文档/指标字典.md` |
+| 部署指南 | `deploy/DEPLOY_FULLSTACK.md` |
+| 工程脚本索引 | `scripts/INDEX.md` |
