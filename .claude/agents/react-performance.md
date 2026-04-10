@@ -142,7 +142,7 @@ import { FixedSizeList } from 'react-window'
 
 ## Project-Specific Files
 
-- `src/widgets/table/EnhancedVirtualTable.tsx` - Virtual scroll table
+- `src/widgets/table/VirtualTable.tsx` - Virtual scroll table
 - `src/widgets/charts/*.tsx` - Chart components
 - `src/features/dashboard/hooks/` - Custom hooks
 - `src/shared/cache/` - Cache system
