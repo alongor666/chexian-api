@@ -1,7 +1,9 @@
 /**
  * Renewal Drilldown SQL Generator
  *
- * 续保下钻分析 SQL 生成器
+ * 续保下钻分析 SQL 生成器 — 7 个核心查询生成器。
+ * 共享类型与辅助函数在 renewal-drilldown-shared.ts，
+ * V2 自由维度下钻在 renewal-free-drilldown.ts。
  *
  * ============================================================================
  * 【重要业务知识】续保分析的核心规则
@@ -21,301 +23,59 @@
  * | 2025-02-02  | 2026-02-01  | **2月**     |
  * | 2025-03-01  | 2026-02-28  | **2月**     |
  *
- * **闰年影响**：2024-02-29起保 → 2025-02-28到期（闰年到非闰年）
+ * ### 两种统计模式（互斥）
+ * - **模式一**：dueMonth 参数 → 按到期月份统计，不用 cutoffDate
+ * - **模式二**：cutoffDate 参数（无 dueMonth）→ 按到期日范围统计
  *
- * **正确的SQL**：按到期日月份筛选，而非按起保月份！
- * ```sql
- * MONTH(DATE_ADD(insurance_start_date, INTERVAL '1 year') - INTERVAL '1 day') = 2
- * ```
- *
- * ============================================================================
- * 【重要业务知识】续保分析的两种统计模式
- * ============================================================================
- *
- * 实际业务中，续保分析存在两种不同的统计需求：
- *
- * ### 模式一：按到期月份统计（dueMonth 参数）
- * - **场景**：追踪"2月到期的保单续保率"，包括提前续保
- * - **应续件数**：上一年该月起保的【所有】保单（不管当前是否已到期）
- * - **已续件数**：这些保单中已经续保的数量（含提前续保）
- * - **cutoffDate**：❌ 不应用，因为要看完整月份的数据
- * - **使用场景**：
- *   - 当月到期保单追踪：现在是1月，看1月到期的续保率
- *   - 次月到期保单预警：现在是1月，提前看2月到期的续保率（提前续保情况）
- *   - 历史月份回顾：看去年某月的最终续保率
- *
- * ### 模式二：按到期日范围统计（cutoffDate 参数，无 dueMonth）
- * - **场景**：追踪"截止今日已到期保单的续保率"
- * - **应续件数**：到期日在 [年初, cutoffDate] 范围内的保单
- * - **已续件数**：这些保单中已经续保的数量
- * - **cutoffDate**：✅ 应用，限制到期日范围
- * - **使用场景**：
- *   - 年度累计续保率：从年初到今天的整体续保情况
- *   - 特定时间段统计：某个日期范围内的续保率
- *
- * ### 技术实现
- * - 当 dueMonth 有值时：只按月份筛选，不应用 cutoffDate 的日期范围过滤
- * - 当 dueMonth 无值时：应用 cutoffDate 的日期范围过滤
- * - 这两种模式互斥，不会同时生效
- *
- * ============================================================================
- *
- * 功能：
- * - 五层下钻：公司整体 → 三级机构 → 销售团队 → 业务员 → 险别组合
- * - 续保率：已续保单数 / 应续保单数
- * - 报价率：有报价记录的保单数 / 应续保单数
- * - Top10/Last10 展示（公司/机构/团队层级）
- * - 全量展示（业务员/险别层级）
- *
- * 数据来源：
- * - PolicyFactRenewal（续保视图）
- * - 筛选条件：是否交商统保 = '套单'、续保模式、客户类别等
+ * @see P1#9 架构优化计划
  */
 
-import { buildWhereClauseFromFilters } from '../utils/queryBuilder.js';
-import { createLogger } from '../utils/logger.js';
 import type { AdvancedFilterState } from '../types/data.js';
-import type { DateCriteria } from '../types/data.js';
+import { createLogger } from '../utils/logger.js';
+import {
+  validateYear,
+  escapeSQL,
+  IS_QUOTE_TRUE_CONDITION,
+  EXPIRY_DATE_EXPR,
+  buildDrilldownWhereClause,
+  getGroupByField,
+  getAdditionalFields,
+  validateSortParams,
+  type DrilldownDimension,
+  type DrilldownLevel,
+  type DistributionType,
+  type SortField,
+  type SortOrder,
+  type RankingConfig,
+} from './renewal-drilldown-shared.js';
 
 const logger = createLogger('RenewalDrilldownSQL');
 
 // ============================================================================
-// 辅助函数
+// Barrel re-exports — 调用方无需修改 import
 // ============================================================================
 
-/**
- * 验证年份参数，防止非法值导致 SQL 异常
- * @param year - 年份
- * @returns 验证后的年份
- * @throws 如果年份非法
- */
-function validateYear(year: number): number {
-  const currentYear = new Date().getFullYear();
-  if (!Number.isInteger(year) || Number.isNaN(year) || year < 2000 || year > currentYear + 5) {
-    logger.error('Invalid year parameter', { year, currentYear });
-    throw new Error(`Invalid year: ${year}. Expected integer between 2000 and ${currentYear + 5}`);
-  }
-  return year;
-}
+export type {
+  DrilldownLevel,
+  DrilldownDimension,
+  DistributionType,
+  SortField,
+  SortOrder,
+  RankingConfig,
+} from './renewal-drilldown-shared.js';
 
-/**
- * 转义 SQL 字符串中的特殊字符，防止 SQL 注入
- * @param str - 原始字符串
- * @returns 转义后的字符串
- */
-function escapeSQL(str: string): string {
-  if (str == null) return '';
-  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "''");
-}
+export type {
+  RenewalDrillDimension,
+  RenewalDrillStep,
+  RenewalFreeDrilldownParams,
+} from './renewal-free-drilldown.js';
 
-/**
- * is_quote 字段的布尔值检查 SQL 条件
- * 统一处理各种布尔值格式：'true', '1', 'TRUE', true
- */
-const IS_QUOTE_TRUE_CONDITION = `(is_quote = 'true' OR is_quote = '1' OR is_quote = 'TRUE' OR CAST(is_quote AS VARCHAR) = 'true')`;
+export { generateRenewalFreeDrilldownQuery } from './renewal-free-drilldown.js';
 
-/**
- * 到期日计算表达式（起保日 + 1年 - 1天）
- * 重要：2025-02-01起保 → 2026-01-31到期（1月！）
- */
-const EXPIRY_DATE_EXPR = `(DATE_ADD(CAST(insurance_start_date AS DATE), INTERVAL '1 year') - INTERVAL '1 day')`;
+// ============================================================================
+// 核心查询生成器
+// ============================================================================
 
-/**
- * 下钻层级类型
- * 五层结构：公司 → 三级机构 → 销售团队 → 业务员 → 险别组合
- */
-export type DrilldownLevel = 'company' | 'org' | 'team' | 'salesman' | 'coverage';
-
-/**
- * 下钻维度配置
- */
-export interface DrilldownDimension {
-  /** 当前层级 */
-  level: DrilldownLevel;
-  /** 上级筛选值（如机构名、团队名） */
-  parentValue?: string;
-  /** 是否只看自留续保 */
-  selfRenewalOnly?: boolean;
-  /** 是否只看套单（是否交商统保='套单'） */
-  bundleOnly?: boolean;
-  /** 客户类别筛选 */
-  customerCategory?: string;
-  /** 到期月份筛选（1-12），筛选去年该月起保的保单 */
-  dueMonth?: number;
-  /** 完整的过滤路径（用于多层下钻） */
-  filters?: {
-    org?: string;
-    team?: string;
-    salesman?: string;
-  };
-}
-
-/**
- * 分布类型
- */
-export type DistributionType = 'coverage' | 'new_car' | 'nev' | 'transfer';
-
-/**
- * 排序方式
- */
-export type SortField = 'renewal_rate' | 'quote_rate' | 'due_count' | 'renewed_count';
-export type SortOrder = 'asc' | 'desc';
-
-/**
- * 排名筛选配置
- */
-export interface RankingConfig {
-  /** 是否启用Top/Last筛选 */
-  enabled: boolean;
-  /** Top N */
-  topN?: number;
-  /** Last N */
-  lastN?: number;
-  /** 最小应续件数 */
-  minDueCount?: number;
-}
-
-/**
- * 构建续保下钻的WHERE子句
- * 固定使用起保日期口径
- *
- * @param cutoffDate - 统计截止日期（YYYY-MM-DD格式），用于过滤到期日范围
- *                     起始日固定为 targetYear-01-01
- */
-function buildDrilldownWhereClause(
-  filters: AdvancedFilterState,
-  dimension: DrilldownDimension,
-  targetYear: number,
-  cutoffDate?: string
-): string {
-  // 验证年份参数
-  const validYear = validateYear(targetYear);
-  const conditions: string[] = [];
-
-  // 1. 按到期月份筛选（精确计算到期日所在月份）
-  if (dimension.dueMonth && dimension.dueMonth >= 1 && dimension.dueMonth <= 12) {
-    // 到期年份 = targetYear，到期月份 = dueMonth
-    conditions.push(`YEAR(${EXPIRY_DATE_EXPR}) = ${validYear}`);
-    conditions.push(`MONTH(${EXPIRY_DATE_EXPR}) = ${dimension.dueMonth}`);
-  } else {
-    // 2. 无特定月份时，按起保年份筛选（上一年起保的保单）
-    const baseYear = validYear - 1;
-    conditions.push(`YEAR(CAST(insurance_start_date AS DATE)) = ${baseYear}`);
-  }
-
-  // 3. 到期日范围过滤（如果提供了cutoffDate）
-  // 注意：当用户选择了特定到期月份时，不应用cutoffDate过滤，否则会导致数据为空
-  if (cutoffDate && !dimension.dueMonth) {
-    const startDate = `${validYear}-01-01`;
-    conditions.push(
-      `${EXPIRY_DATE_EXPR} BETWEEN CAST('${startDate}' AS DATE) AND CAST('${escapeSQL(cutoffDate)}' AS DATE)`
-    );
-  }
-
-  // 4. 套单筛选
-  if (dimension.bundleOnly) {
-    conditions.push(`is_commercial_insure = '套单'`);
-  }
-
-  // 5. 自留续保筛选
-  if (dimension.selfRenewalOnly) {
-    conditions.push(`renewal_mode = '自留'`);
-  }
-
-  // 6. 客户类别筛选（使用 escapeSQL 防止注入）
-  if (dimension.customerCategory) {
-    conditions.push(`customer_category = '${escapeSQL(dimension.customerCategory)}'`);
-  }
-
-  // 7. 上级筛选（支持五层下钻路径，使用 escapeSQL 防止注入）
-  if (dimension.filters?.org) {
-    conditions.push(`org_level_3 = '${escapeSQL(dimension.filters.org)}'`);
-  }
-  if (dimension.filters?.salesman) {
-    conditions.push(`salesman_name LIKE '%${escapeSQL(dimension.filters.salesman)}%'`);
-  }
-  // 兼容旧版 parentValue 逻辑
-  if (!dimension.filters && dimension.parentValue) {
-    const escapedValue = escapeSQL(dimension.parentValue);
-    if (dimension.level === 'salesman') {
-      conditions.push(`org_level_3 = '${escapedValue}'`);
-    } else if (dimension.level === 'team') {
-      conditions.push(`org_level_3 = '${escapedValue}'`);
-    } else if (dimension.level === 'coverage') {
-      conditions.push(`salesman_name LIKE '%${escapedValue}%'`);
-    }
-  }
-
-  // 8. 其他筛选条件（机构、业务员等）
-  const additionalFilters: AdvancedFilterState = {
-    ...filters,
-    policy_date_start: undefined,
-    policy_date_end: undefined,
-  };
-  const additionalWhere = buildWhereClauseFromFilters(
-    additionalFilters,
-    'insurance_start_date' as DateCriteria
-  );
-  if (additionalWhere && additionalWhere !== '1=1') {
-    conditions.push(additionalWhere);
-  }
-
-  return conditions.join(' AND ');
-}
-
-/**
- * 获取分组字段
- */
-function getGroupByField(level: DrilldownLevel): string {
-  switch (level) {
-    case 'company':
-      return "'公司整体' AS group_name";
-    case 'org':
-      return 'org_level_3 AS group_name';
-    case 'team':
-      return 'team_name AS group_name';
-    case 'salesman':
-      // 清理业务员名称：移除开头的数字ID（如"200052588李珊" → "李珊"）
-      return `REGEXP_REPLACE(salesman_name, '^[0-9]+', '') AS group_name`;
-    case 'coverage':
-      return 'coverage_combination AS group_name';
-    default:
-      throw new Error(`Unknown drilldown level: ${level}`);
-  }
-}
-
-/**
- * 获取附加字段
- */
-function getAdditionalFields(level: DrilldownLevel, dimension: DrilldownDimension): string {
-  switch (level) {
-    case 'company':
-      return "NULL AS parent_name, 'company' AS level_type";
-    case 'org':
-      return "'公司整体' AS parent_name, 'org' AS level_type";
-    case 'team':
-      return `'${dimension.filters?.org || ''}' AS parent_name, 'team' AS level_type`;
-    case 'salesman':
-      return `'${dimension.filters?.team || dimension.parentValue || ''}' AS parent_name, 'salesman' AS level_type`;
-    case 'coverage':
-      return `'${dimension.filters?.salesman || dimension.parentValue || ''}' AS parent_name, 'coverage' AS level_type`;
-    default:
-      throw new Error(`Unknown drilldown level: ${level}`);
-  }
-}
-
-/**
- * 生成续保下钻汇总查询
- *
- * @param filters - 筛选条件
- * @param targetYear - 目标年份
- * @param dimension - 下钻维度配置
- * @param ranking - 排名筛选配置
- * @param sortField - 排序字段
- * @param sortOrder - 排序方向
- * @param cutoffDate - 统计截止日期（YYYY-MM-DD格式），起始日固定为 targetYear-01-01
- * @returns SQL 查询字符串
- */
 export function generateRenewalDrilldownQuery(
   filters: AdvancedFilterState,
   targetYear: number,
@@ -325,8 +85,8 @@ export function generateRenewalDrilldownQuery(
   sortOrder: SortOrder = 'desc',
   cutoffDate?: string
 ): string {
-  // 验证年份参数
   const validYear = validateYear(targetYear);
+  validateSortParams(sortField, sortOrder);
   const whereClause = buildDrilldownWhereClause(filters, dimension, validYear, cutoffDate);
   const groupByField = getGroupByField(dimension.level);
   const additionalFields = getAdditionalFields(dimension.level, dimension);
@@ -340,10 +100,8 @@ export function generateRenewalDrilldownQuery(
     sortOrder,
   });
 
-  // 团队层级需要通过 SalesmanPlanFact 获取团队信息
   const needsTeamJoin = dimension.level === 'team' || dimension.level === 'salesman' || dimension.level === 'coverage';
 
-  // 构建 GROUP BY 子句
   let groupByClause: string;
   switch (dimension.level) {
     case 'company':
@@ -365,16 +123,13 @@ export function generateRenewalDrilldownQuery(
       groupByClause = '1';
   }
 
-  // 基础聚合查询
-  let baseQuery: string;
-
-  // 团队筛选条件（只在有 team JOIN 时添加）
   const teamFilterClause = dimension.filters?.team
     ? ` AND team_name = '${escapeSQL(dimension.filters.team)}'`
     : '';
 
+  let baseQuery: string;
+
   if (needsTeamJoin) {
-    // 团队/业务员/险别组合层级需要 JOIN SalesmanPlanFact 获取团队信息
     baseQuery = `
     WITH team_mapping AS (
       SELECT DISTINCT salesman_name, team_name, org_name
@@ -392,26 +147,20 @@ export function generateRenewalDrilldownQuery(
       SELECT
         ${groupByField.replace('salesman_name', 'r.salesman_name')},
         ${additionalFields},
-        -- 应续件数
         COUNT(DISTINCT policy_no) AS due_count,
-        -- 已续件数
         COUNT(DISTINCT CASE
           WHEN renewal_policy_no IS NOT NULL AND renewal_policy_no <> ''
           THEN policy_no
         END) AS renewed_count,
-        -- 有报价件数
         COUNT(DISTINCT CASE
           WHEN ${IS_QUOTE_TRUE_CONDITION}
           THEN policy_no
         END) AS quoted_count,
-        -- 应续保费
         COALESCE(SUM(premium), 0) AS due_premium,
-        -- 已续保费
         COALESCE(SUM(CASE
           WHEN renewal_policy_no IS NOT NULL AND renewal_policy_no <> ''
           THEN premium ELSE 0
         END), 0) AS renewed_premium,
-        -- 有报价保费
         COALESCE(SUM(CASE
           WHEN ${IS_QUOTE_TRUE_CONDITION}
           THEN premium ELSE 0
@@ -432,23 +181,18 @@ export function generateRenewalDrilldownQuery(
         due_premium,
         renewed_premium,
         quoted_premium,
-        -- 续保率（件数）
         CASE WHEN due_count = 0 THEN 0
           ELSE renewed_count * 1.0 / due_count
         END AS renewal_rate,
-        -- 报价率（件数）
         CASE WHEN due_count = 0 THEN 0
           ELSE quoted_count * 1.0 / due_count
         END AS quote_rate,
-        -- 续保率（保费）
         CASE WHEN due_premium = 0 THEN 0
           ELSE renewed_premium * 1.0 / due_premium
         END AS renewal_premium_rate,
-        -- 报价率（保费）
         CASE WHEN due_premium = 0 THEN 0
           ELSE quoted_premium * 1.0 / due_premium
         END AS quote_premium_rate,
-        -- 排名
         ROW_NUMBER() OVER (ORDER BY ${sortField} ${sortOrder}) AS rank_asc,
         ROW_NUMBER() OVER (ORDER BY ${sortField} ${sortOrder === 'asc' ? 'desc' : 'asc'}) AS rank_desc
       FROM drilldown_base
@@ -460,26 +204,20 @@ export function generateRenewalDrilldownQuery(
       SELECT
         ${groupByField},
         ${additionalFields},
-        -- 应续件数
         COUNT(DISTINCT policy_no) AS due_count,
-        -- 已续件数
         COUNT(DISTINCT CASE
           WHEN renewal_policy_no IS NOT NULL AND renewal_policy_no <> ''
           THEN policy_no
         END) AS renewed_count,
-        -- 有报价件数
         COUNT(DISTINCT CASE
           WHEN ${IS_QUOTE_TRUE_CONDITION}
           THEN policy_no
         END) AS quoted_count,
-        -- 应续保费
         COALESCE(SUM(premium), 0) AS due_premium,
-        -- 已续保费
         COALESCE(SUM(CASE
           WHEN renewal_policy_no IS NOT NULL AND renewal_policy_no <> ''
           THEN premium ELSE 0
         END), 0) AS renewed_premium,
-        -- 有报价保费
         COALESCE(SUM(CASE
           WHEN ${IS_QUOTE_TRUE_CONDITION}
           THEN premium ELSE 0
@@ -500,23 +238,18 @@ export function generateRenewalDrilldownQuery(
         due_premium,
         renewed_premium,
         quoted_premium,
-        -- 续保率（件数）
         CASE WHEN due_count = 0 THEN 0
           ELSE renewed_count * 1.0 / due_count
         END AS renewal_rate,
-        -- 报价率（件数）
         CASE WHEN due_count = 0 THEN 0
           ELSE quoted_count * 1.0 / due_count
         END AS quote_rate,
-        -- 续保率（保费）
         CASE WHEN due_premium = 0 THEN 0
           ELSE renewed_premium * 1.0 / due_premium
         END AS renewal_premium_rate,
-        -- 报价率（保费）
         CASE WHEN due_premium = 0 THEN 0
           ELSE quoted_premium * 1.0 / due_premium
         END AS quote_premium_rate,
-        -- 排名
         ROW_NUMBER() OVER (ORDER BY ${sortField} ${sortOrder}) AS rank_asc,
         ROW_NUMBER() OVER (ORDER BY ${sortField} ${sortOrder === 'asc' ? 'desc' : 'asc'}) AS rank_desc
       FROM drilldown_base
@@ -524,7 +257,6 @@ export function generateRenewalDrilldownQuery(
   `;
   }
 
-  // 根据ranking配置生成最终查询
   if (ranking.enabled && (ranking.topN || ranking.lastN)) {
     const topN = ranking.topN || 0;
     const lastN = ranking.lastN || 0;
@@ -544,23 +276,15 @@ export function generateRenewalDrilldownQuery(
   `;
 }
 
-/**
- * 生成客户类别分布查询
- * 按客户类别统计续保率和报价率
- *
- * @param cutoffDate - 统计截止日期（YYYY-MM-DD格式），起始日固定为 targetYear-01-01
- */
 export function generateCustomerCategoryQuery(
   _filters: AdvancedFilterState,
   targetYear: number,
   dimension: DrilldownDimension,
   cutoffDate?: string
 ): string {
-  // 验证年份参数
   const validYear = validateYear(targetYear);
   const conditions: string[] = [];
 
-  // 按到期月份筛选（精确计算到期日所在月份）
   if (dimension.dueMonth && dimension.dueMonth >= 1 && dimension.dueMonth <= 12) {
     conditions.push(`YEAR(${EXPIRY_DATE_EXPR}) = ${validYear}`);
     conditions.push(`MONTH(${EXPIRY_DATE_EXPR}) = ${dimension.dueMonth}`);
@@ -569,8 +293,6 @@ export function generateCustomerCategoryQuery(
     conditions.push(`YEAR(CAST(insurance_start_date AS DATE)) = ${baseYear}`);
   }
 
-  // 到期日范围过滤（如果提供了cutoffDate）
-  // 注意：当用户选择了特定到期月份时，不应用cutoffDate过滤
   if (cutoffDate && !dimension.dueMonth) {
     const startDate = `${validYear}-01-01`;
     conditions.push(
@@ -582,7 +304,6 @@ export function generateCustomerCategoryQuery(
     conditions.push(`renewal_mode = '自留'`);
   }
 
-  // 添加路径筛选（org 和 salesman）
   if (dimension.filters?.org) {
     conditions.push(`org_level_3 = '${escapeSQL(dimension.filters.org)}'`);
   }
@@ -590,7 +311,6 @@ export function generateCustomerCategoryQuery(
     conditions.push(`salesman_name LIKE '%${escapeSQL(dimension.filters.salesman)}%'`);
   }
 
-  // 兼容旧版层级筛选
   if (!dimension.filters) {
     if (dimension.level === 'org' && dimension.parentValue) {
       conditions.push(`org_level_3 = '${escapeSQL(dimension.parentValue)}'`);
@@ -601,7 +321,6 @@ export function generateCustomerCategoryQuery(
 
   const whereClause = conditions.join(' AND ');
 
-  // 如果有团队筛选，需要 JOIN SalesmanPlanFact 获取团队信息
   const needsTeamJoin = !!dimension.filters?.team;
   const teamFilterClause = dimension.filters?.team
     ? ` AND team_name = '${escapeSQL(dimension.filters.team)}'`
@@ -694,23 +413,15 @@ export function generateCustomerCategoryQuery(
   `;
 }
 
-/**
- * 生成续保模式分布查询
- * 按续保模式（自留/流转等）统计
- *
- * @param cutoffDate - 统计截止日期（YYYY-MM-DD格式），起始日固定为 targetYear-01-01
- */
 export function generateRenewalModeQuery(
   _filters: AdvancedFilterState,
   targetYear: number,
   dimension: DrilldownDimension,
   cutoffDate?: string
 ): string {
-  // 验证年份参数
   const validYear = validateYear(targetYear);
   const conditions: string[] = [];
 
-  // 按到期月份筛选（精确计算到期日所在月份）
   if (dimension.dueMonth && dimension.dueMonth >= 1 && dimension.dueMonth <= 12) {
     conditions.push(`YEAR(${EXPIRY_DATE_EXPR}) = ${validYear}`);
     conditions.push(`MONTH(${EXPIRY_DATE_EXPR}) = ${dimension.dueMonth}`);
@@ -719,8 +430,6 @@ export function generateRenewalModeQuery(
     conditions.push(`YEAR(CAST(insurance_start_date AS DATE)) = ${baseYear}`);
   }
 
-  // 到期日范围过滤（如果提供了cutoffDate）
-  // 注意：当用户选择了特定到期月份时，不应用cutoffDate过滤
   if (cutoffDate && !dimension.dueMonth) {
     const startDate = `${validYear}-01-01`;
     conditions.push(
@@ -728,7 +437,6 @@ export function generateRenewalModeQuery(
     );
   }
 
-  // 添加路径筛选（org 和 salesman）
   if (dimension.filters?.org) {
     conditions.push(`org_level_3 = '${escapeSQL(dimension.filters.org)}'`);
   }
@@ -736,7 +444,6 @@ export function generateRenewalModeQuery(
     conditions.push(`salesman_name LIKE '%${escapeSQL(dimension.filters.salesman)}%'`);
   }
 
-  // 兼容旧版层级筛选
   if (!dimension.filters) {
     if (dimension.level === 'org' && dimension.parentValue) {
       conditions.push(`org_level_3 = '${escapeSQL(dimension.parentValue)}'`);
@@ -747,7 +454,6 @@ export function generateRenewalModeQuery(
 
   const whereClause = conditions.join(' AND ');
 
-  // 如果有团队筛选，需要 JOIN SalesmanPlanFact 获取团队信息
   const needsTeamJoin = !!dimension.filters?.team;
   const teamFilterClause = dimension.filters?.team
     ? ` AND team_name = '${escapeSQL(dimension.filters.team)}'`
@@ -840,23 +546,15 @@ export function generateRenewalModeQuery(
   `;
 }
 
-/**
- * 生成 KPI 卡片查询
- * 汇总当前层级的关键指标
- *
- * @param cutoffDate - 统计截止日期（YYYY-MM-DD格式），起始日固定为 targetYear-01-01
- */
 export function generateKPICardQuery(
   filters: AdvancedFilterState,
   targetYear: number,
   dimension: DrilldownDimension,
   cutoffDate?: string
 ): string {
-  // 验证年份参数
   const validYear = validateYear(targetYear);
   const whereClause = buildDrilldownWhereClause(filters, dimension, validYear, cutoffDate);
 
-  // 如果有团队筛选，需要 JOIN SalesmanPlanFact 获取团队信息
   const needsTeamJoin = !!dimension.filters?.team;
   const teamFilterClause = dimension.filters?.team
     ? ` AND team_name = '${escapeSQL(dimension.filters.team)}'`
@@ -895,21 +593,18 @@ export function generateKPICardQuery(
           WHEN ${IS_QUOTE_TRUE_CONDITION}
           THEN premium ELSE 0
         END), 0) AS quoted_premium,
-        -- 续保率
         CASE WHEN COUNT(DISTINCT policy_no) = 0 THEN 0
           ELSE COUNT(DISTINCT CASE
             WHEN renewal_policy_no IS NOT NULL AND renewal_policy_no <> ''
             THEN policy_no
           END) * 1.0 / COUNT(DISTINCT policy_no)
         END AS renewal_rate,
-        -- 报价率
         CASE WHEN COUNT(DISTINCT policy_no) = 0 THEN 0
           ELSE COUNT(DISTINCT CASE
             WHEN ${IS_QUOTE_TRUE_CONDITION}
             THEN policy_no
           END) * 1.0 / COUNT(DISTINCT policy_no)
         END AS quote_rate,
-        -- 报价转化率 = 已续保 / 有报价
         CASE WHEN COUNT(DISTINCT CASE
             WHEN ${IS_QUOTE_TRUE_CONDITION}
             THEN policy_no
@@ -947,21 +642,18 @@ export function generateKPICardQuery(
         WHEN ${IS_QUOTE_TRUE_CONDITION}
         THEN premium ELSE 0
       END), 0) AS quoted_premium,
-      -- 续保率
       CASE WHEN COUNT(DISTINCT policy_no) = 0 THEN 0
         ELSE COUNT(DISTINCT CASE
           WHEN renewal_policy_no IS NOT NULL AND renewal_policy_no <> ''
           THEN policy_no
         END) * 1.0 / COUNT(DISTINCT policy_no)
       END AS renewal_rate,
-      -- 报价率
       CASE WHEN COUNT(DISTINCT policy_no) = 0 THEN 0
         ELSE COUNT(DISTINCT CASE
           WHEN ${IS_QUOTE_TRUE_CONDITION}
           THEN policy_no
         END) * 1.0 / COUNT(DISTINCT policy_no)
       END AS quote_rate,
-      -- 报价转化率 = 已续保 / 有报价
       CASE WHEN COUNT(DISTINCT CASE
           WHEN ${IS_QUOTE_TRUE_CONDITION}
           THEN policy_no
@@ -979,24 +671,18 @@ export function generateKPICardQuery(
   `;
 }
 
-/**
- * 生成下钻导航查询
- * 获取下一层级的可选值列表
- */
 export function generateDrilldownNavigationQuery(
   _filters: AdvancedFilterState,
   targetYear: number,
   currentLevel: DrilldownLevel,
   parentValue?: string
 ): string {
-  // 验证年份参数
   const validYear = validateYear(targetYear);
   const baseYear = validYear - 1;
   const conditions: string[] = [];
 
   conditions.push(`YEAR(CAST(insurance_start_date AS DATE)) = ${baseYear}`);
 
-  // 根据当前层级确定要查询的下一层级字段
   let nextLevelField: string;
   switch (currentLevel) {
     case 'company':
@@ -1011,7 +697,6 @@ export function generateDrilldownNavigationQuery(
     case 'team':
       nextLevelField = 'salesman_name';
       if (parentValue) {
-        // 团队层级需要通过 SalesmanPlanFact 筛选
         return `
           SELECT DISTINCT s.salesman_name AS next_level_value
           FROM PolicyFactRenewal r
@@ -1031,7 +716,6 @@ export function generateDrilldownNavigationQuery(
       }
       break;
     default:
-      // coverage 是最后一层，没有下一层
       return 'SELECT NULL AS next_level_value WHERE 1=0';
   }
 
@@ -1047,16 +731,6 @@ export function generateDrilldownNavigationQuery(
   `;
 }
 
-/**
- * 生成统一分布查询
- * 支持四种分布类型：险别组合、新旧车、能源类型、过户状态
- *
- * @param filters - 筛选条件
- * @param targetYear - 目标年份
- * @param dimension - 下钻维度配置
- * @param distributionType - 分布类型
- * @param cutoffDate - 统计截止日期
- */
 export function generateDistributionQuery(
   _filters: AdvancedFilterState,
   targetYear: number,
@@ -1064,11 +738,9 @@ export function generateDistributionQuery(
   distributionType: DistributionType,
   cutoffDate?: string
 ): string {
-  // 验证年份参数
   const validYear = validateYear(targetYear);
   const conditions: string[] = [];
 
-  // 按到期月份筛选（精确计算到期日所在月份）
   if (dimension.dueMonth && dimension.dueMonth >= 1 && dimension.dueMonth <= 12) {
     conditions.push(`YEAR(${EXPIRY_DATE_EXPR}) = ${validYear}`);
     conditions.push(`MONTH(${EXPIRY_DATE_EXPR}) = ${dimension.dueMonth}`);
@@ -1077,8 +749,6 @@ export function generateDistributionQuery(
     conditions.push(`YEAR(CAST(insurance_start_date AS DATE)) = ${baseYear}`);
   }
 
-  // 到期日范围过滤
-  // 注意：当用户选择了特定到期月份时，不应用cutoffDate过滤
   if (cutoffDate && !dimension.dueMonth) {
     const startDate = `${validYear}-01-01`;
     conditions.push(
@@ -1090,7 +760,6 @@ export function generateDistributionQuery(
     conditions.push(`renewal_mode = '自留'`);
   }
 
-  // 添加路径筛选
   if (dimension.filters?.org) {
     conditions.push(`org_level_3 = '${escapeSQL(dimension.filters.org)}'`);
   }
@@ -1098,7 +767,6 @@ export function generateDistributionQuery(
     conditions.push(`salesman_name LIKE '%${escapeSQL(dimension.filters.salesman)}%'`);
   }
 
-  // 兼容旧版层级筛选
   if (!dimension.filters) {
     if (dimension.level === 'org' && dimension.parentValue) {
       conditions.push(`org_level_3 = '${escapeSQL(dimension.parentValue)}'`);
@@ -1109,9 +777,6 @@ export function generateDistributionQuery(
 
   const whereClause = conditions.join(' AND ');
 
-  // 根据分布类型确定分组字段和显示名称
-  // 注意：布尔字段可能是 true/false/'true'/'false'/'是'/'否' 等多种格式
-  // 统一转换为 VARCHAR 后比较，避免类型转换错误
   let groupField: string;
   let displayField: string;
   switch (distributionType) {
@@ -1136,7 +801,6 @@ export function generateDistributionQuery(
       displayField = 'coverage_combination';
   }
 
-  // 如果有团队筛选，需要 JOIN SalesmanPlanFact 获取团队信息
   const needsTeamJoin = !!dimension.filters?.team;
   const teamFilterClause = dimension.filters?.team
     ? ` AND team_name = '${escapeSQL(dimension.filters.team)}'`
@@ -1229,23 +893,14 @@ export function generateDistributionQuery(
   `;
 }
 
-/**
- * 生成应续件数Top20业务员查询
- * 固定按应续件数降序排列，取Top 20
- *
- * @param filters - 筛选条件
- * @param targetYear - 目标年份
- * @param dimension - 下钻维度配置
- * @param cutoffDate - 统计截止日期（YYYY-MM-DD格式），起始日固定为 targetYear-01-01
- * @returns SQL 查询字符串
- */
 export function generateTop20SalesmanQuery(
   filters: AdvancedFilterState,
   targetYear: number,
   dimension: DrilldownDimension,
   cutoffDate?: string
 ): string {
-  const whereClause = buildDrilldownWhereClause(filters, dimension, targetYear, cutoffDate);
+  const validYear = validateYear(targetYear);
+  const whereClause = buildDrilldownWhereClause(filters, dimension, validYear, cutoffDate);
 
   return `
     WITH salesman_stats AS (
@@ -1290,283 +945,5 @@ export function generateTop20SalesmanQuery(
     FROM salesman_stats
     ORDER BY due_count DESC
     LIMIT 20
-  `;
-}
-
-// ============================================================================
-// 自由维度下钻 (V2) — groupBy + drillPath 动态查询模式
-// ============================================================================
-
-/** 续保分析支持的自由下钻维度 */
-export type RenewalDrillDimension =
-  | 'org_level_3'
-  | 'team'
-  | 'salesman'
-  | 'coverage_combination'
-  | 'customer_category'
-  | 'is_new_car'
-  | 'is_transfer'
-  | 'is_nev'
-  | 'is_telemarketing';
-
-/** 下钻路径步骤 */
-export interface RenewalDrillStep {
-  dimension: RenewalDrillDimension;
-  value: string;
-}
-
-/** 自由维度下钻请求参数 */
-export interface RenewalFreeDrilldownParams {
-  targetYear: number;
-  groupBy: RenewalDrillDimension;
-  drillPath: RenewalDrillStep[];
-  selfRenewalOnly?: boolean;
-  bundleOnly?: boolean;
-  dueMonth?: number;
-  cutoffDate?: string;
-  sortField?: SortField;
-  sortOrder?: SortOrder;
-}
-
-/** 维度 → GROUP BY 配置 */
-function getRenewalGroupByConfig(dimension: RenewalDrillDimension): {
-  selectExpr: string;
-  groupByExpr: string;
-  needsTeamJoin: boolean;
-} {
-  switch (dimension) {
-    case 'org_level_3':
-      return {
-        selectExpr: "COALESCE(r.org_level_3, '未知') AS group_name",
-        groupByExpr: "COALESCE(r.org_level_3, '未知')",
-        needsTeamJoin: false,
-      };
-    case 'team':
-      return {
-        selectExpr: "COALESCE(team_name, r.org_level_3 || '未归属团队') AS group_name",
-        groupByExpr: "COALESCE(team_name, r.org_level_3 || '未归属团队')",
-        needsTeamJoin: true,
-      };
-    case 'salesman':
-      return {
-        selectExpr: "REGEXP_REPLACE(r.salesman_name, '^[0-9]+', '') AS group_name",
-        groupByExpr: "REGEXP_REPLACE(r.salesman_name, '^[0-9]+', '')",
-        needsTeamJoin: false,
-      };
-    case 'coverage_combination':
-      return {
-        selectExpr: "COALESCE(r.coverage_combination, '未知') AS group_name",
-        groupByExpr: "COALESCE(r.coverage_combination, '未知')",
-        needsTeamJoin: false,
-      };
-    case 'customer_category':
-      return {
-        selectExpr: "COALESCE(r.customer_category, '未知') AS group_name",
-        groupByExpr: "COALESCE(r.customer_category, '未知')",
-        needsTeamJoin: false,
-      };
-    case 'is_new_car':
-      return {
-        selectExpr: "CASE WHEN r.is_new_car = 'true' OR r.is_new_car = '1' THEN '新车' ELSE '旧车' END AS group_name",
-        groupByExpr: "CASE WHEN r.is_new_car = 'true' OR r.is_new_car = '1' THEN '新车' ELSE '旧车' END",
-        needsTeamJoin: false,
-      };
-    case 'is_transfer':
-      return {
-        selectExpr: "CASE WHEN r.is_transfer = 'true' OR r.is_transfer = '1' THEN '过户车' ELSE '非过户' END AS group_name",
-        groupByExpr: "CASE WHEN r.is_transfer = 'true' OR r.is_transfer = '1' THEN '过户车' ELSE '非过户' END",
-        needsTeamJoin: false,
-      };
-    case 'is_nev':
-      return {
-        selectExpr: "CASE WHEN r.is_nev = 'true' OR r.is_nev = '1' THEN '新能源' ELSE '传统燃油' END AS group_name",
-        groupByExpr: "CASE WHEN r.is_nev = 'true' OR r.is_nev = '1' THEN '新能源' ELSE '传统燃油' END",
-        needsTeamJoin: false,
-      };
-    case 'is_telemarketing':
-      return {
-        selectExpr: "CASE WHEN r.is_telemarketing = 'true' OR r.is_telemarketing = '1' THEN '电销' ELSE '非电销' END AS group_name",
-        groupByExpr: "CASE WHEN r.is_telemarketing = 'true' OR r.is_telemarketing = '1' THEN '电销' ELSE '非电销' END",
-        needsTeamJoin: false,
-      };
-  }
-}
-
-/** 下钻路径步骤 → WHERE 条件 */
-function renewalDrillStepToWhere(step: RenewalDrillStep): string {
-  const val = escapeSQL(step.value);
-  switch (step.dimension) {
-    case 'org_level_3':
-      return `r.org_level_3 = '${val}'`;
-    case 'team':
-      // team_name 来自 JOIN，别名在 renewal_with_team CTE 中
-      return `team_name = '${val}'`;
-    case 'salesman':
-      return `REGEXP_REPLACE(r.salesman_name, '^[0-9]+', '') = '${val}'`;
-    case 'coverage_combination':
-      return `r.coverage_combination = '${val}'`;
-    case 'customer_category':
-      return `r.customer_category = '${val}'`;
-    case 'is_new_car':
-      return step.value === '新车'
-        ? "(r.is_new_car = 'true' OR r.is_new_car = '1')"
-        : "NOT (r.is_new_car = 'true' OR r.is_new_car = '1')";
-    case 'is_transfer':
-      return step.value === '过户车'
-        ? "(r.is_transfer = 'true' OR r.is_transfer = '1')"
-        : "NOT (r.is_transfer = 'true' OR r.is_transfer = '1')";
-    case 'is_nev':
-      return step.value === '新能源'
-        ? "(r.is_nev = 'true' OR r.is_nev = '1')"
-        : "NOT (r.is_nev = 'true' OR r.is_nev = '1')";
-    case 'is_telemarketing':
-      return step.value === '电销'
-        ? "(r.is_telemarketing = 'true' OR r.is_telemarketing = '1')"
-        : "NOT (r.is_telemarketing = 'true' OR r.is_telemarketing = '1')";
-  }
-}
-
-/**
- * 自由维度续保下钻查询 (V2)
- *
- * 替代旧版固定5层线性下钻，支持任意维度组合：
- * - groupBy: 当前分组维度
- * - drillPath: 已选维度路径（生成 WHERE 条件）
- */
-export function generateRenewalFreeDrilldownQuery(
-  filters: AdvancedFilterState,
-  params: RenewalFreeDrilldownParams,
-): string {
-  const {
-    targetYear,
-    groupBy,
-    drillPath,
-    selfRenewalOnly,
-    bundleOnly,
-    dueMonth,
-    cutoffDate,
-    sortField = 'renewal_rate',
-    sortOrder = 'desc',
-  } = params;
-
-  const validYear = validateYear(targetYear);
-  const groupConfig = getRenewalGroupByConfig(groupBy);
-
-  // ── 构建 WHERE 条件 ──
-  const conditions: string[] = [];
-
-  // 时间口径
-  if (dueMonth && dueMonth >= 1 && dueMonth <= 12) {
-    conditions.push(`YEAR(${EXPIRY_DATE_EXPR}) = ${validYear}`);
-    conditions.push(`MONTH(${EXPIRY_DATE_EXPR}) = ${dueMonth}`);
-  } else {
-    conditions.push(`YEAR(CAST(r.insurance_start_date AS DATE)) = ${validYear - 1}`);
-  }
-
-  if (cutoffDate && !dueMonth) {
-    conditions.push(
-      `${EXPIRY_DATE_EXPR} BETWEEN CAST('${validYear}-01-01' AS DATE) AND CAST('${escapeSQL(cutoffDate)}' AS DATE)`
-    );
-  }
-
-  if (bundleOnly) conditions.push(`r.is_commercial_insure = '套单'`);
-  if (selfRenewalOnly) conditions.push(`r.renewal_mode = '自留'`);
-
-  // drillPath → WHERE
-  for (const step of drillPath) {
-    conditions.push(renewalDrillStepToWhere(step));
-  }
-
-  // 其他筛选（权限等）
-  const additionalFilters: AdvancedFilterState = {
-    ...filters,
-    policy_date_start: undefined,
-    policy_date_end: undefined,
-  };
-  const additionalWhere = buildWhereClauseFromFilters(
-    additionalFilters,
-    'insurance_start_date' as DateCriteria,
-  );
-  if (additionalWhere && additionalWhere !== '1=1') {
-    conditions.push(additionalWhere);
-  }
-
-  const whereClause = conditions.length > 0 ? conditions.join(' AND ') : '1=1';
-
-  // ── 判断是否需要 team JOIN ──
-  const needsTeamJoin = groupConfig.needsTeamJoin ||
-    drillPath.some((s) => s.dimension === 'team');
-
-  // ── 构建 SQL ──
-  const teamCte = needsTeamJoin
-    ? `
-    team_mapping AS (
-      SELECT DISTINCT salesman_name, team_name, org_name
-      FROM SalesmanPlanFact
-      WHERE plan_year = ${validYear}
-    ),
-    renewal_with_team AS (
-      SELECT
-        r.*,
-        COALESCE(t.team_name, r.org_level_3 || '未归属团队') AS team_name
-      FROM PolicyFactRenewal r
-      LEFT JOIN team_mapping t ON r.salesman_name = t.salesman_name
-    ),`
-    : '';
-
-  const sourceTable = needsTeamJoin ? 'renewal_with_team r' : 'PolicyFactRenewal r';
-
-  logger.debug('生成续保自由维度下钻查询', { groupBy, drillPath, targetYear: validYear });
-
-  return `
-    WITH ${teamCte}
-    drilldown_base AS (
-      SELECT
-        ${groupConfig.selectExpr},
-        '${escapeSQL(groupBy)}' AS level_type,
-        COUNT(DISTINCT r.policy_no) AS due_count,
-        COUNT(DISTINCT CASE
-          WHEN r.renewal_policy_no IS NOT NULL AND r.renewal_policy_no <> ''
-          THEN r.policy_no
-        END) AS renewed_count,
-        COUNT(DISTINCT CASE
-          WHEN ${IS_QUOTE_TRUE_CONDITION.replace(/is_quote/g, 'r.is_quote')}
-          THEN r.policy_no
-        END) AS quoted_count,
-        COALESCE(SUM(r.premium), 0) AS due_premium,
-        COALESCE(SUM(CASE
-          WHEN r.renewal_policy_no IS NOT NULL AND r.renewal_policy_no <> ''
-          THEN r.premium ELSE 0
-        END), 0) AS renewed_premium,
-        COALESCE(SUM(CASE
-          WHEN ${IS_QUOTE_TRUE_CONDITION.replace(/is_quote/g, 'r.is_quote')}
-          THEN r.premium ELSE 0
-        END), 0) AS quoted_premium
-      FROM ${sourceTable}
-      WHERE ${whereClause}
-      GROUP BY ${groupConfig.groupByExpr}
-      HAVING COUNT(DISTINCT r.policy_no) >= 1
-    ),
-    drilldown_calc AS (
-      SELECT
-        group_name,
-        '' AS parent_name,
-        level_type,
-        due_count,
-        renewed_count,
-        quoted_count,
-        due_premium,
-        renewed_premium,
-        quoted_premium,
-        CASE WHEN due_count = 0 THEN 0 ELSE renewed_count * 1.0 / due_count END AS renewal_rate,
-        CASE WHEN due_count = 0 THEN 0 ELSE quoted_count * 1.0 / due_count END AS quote_rate,
-        CASE WHEN due_premium = 0 THEN 0 ELSE renewed_premium * 1.0 / due_premium END AS renewal_premium_rate,
-        CASE WHEN due_premium = 0 THEN 0 ELSE quoted_premium * 1.0 / due_premium END AS quote_premium_rate,
-        ROW_NUMBER() OVER (ORDER BY ${sortField} ${sortOrder}) AS rank_asc,
-        ROW_NUMBER() OVER (ORDER BY ${sortField} ${sortOrder === 'asc' ? 'desc' : 'asc'}) AS rank_desc
-      FROM drilldown_base
-    )
-    SELECT * FROM drilldown_calc
-    ORDER BY ${sortField} ${sortOrder}
   `;
 }
