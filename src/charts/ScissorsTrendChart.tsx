@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
-import type { EChartsOption } from 'echarts';
+import type { EChartsOption, SeriesOption, YAXisComponentOption } from 'echarts';
 import { format, parseISO, isValid } from 'date-fns';
 import { colors } from '@/shared/styles';
 import { echarts } from '@/shared/utils/echarts';
@@ -11,6 +11,61 @@ import { formatWanDirect, formatPercent } from '@/shared/utils/formatters';
 /** HTML 转义 — 防止 ECharts innerHTML tooltip 中的 XSS */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** ECharts tooltip axis-trigger 回调参数（官方类型缺 axisValue） */
+interface AxisTooltipParam {
+  axisValue?: string;
+  seriesName?: string;
+  value?: unknown;
+}
+
+interface ScissorsTooltipOptions {
+  isDark: boolean;
+  showTargetLines: boolean;
+  targetLines: { target0: number; target5: number; target10: number; remainingDays: number } | null;
+  textColors: { primary: string; tertiary: string };
+}
+
+/** ECharts tooltip formatter — 剪刀差趋势图 */
+function formatScissorsTooltip(
+  params: AxisTooltipParam | AxisTooltipParam[],
+  opts: ScissorsTooltipOptions,
+): string {
+  const paramList = Array.isArray(params) ? params : [params];
+  if (paramList.length === 0) return '';
+
+  const { isDark, showTargetLines, targetLines, textColors } = opts;
+  const label = paramList[0].axisValue;
+  const currentParam = paramList.find((p) => p.seriesName === '当年累计');
+  const lastYearParam = paramList.find((p) => p.seriesName === '上年累计');
+  const current = (currentParam?.value as number) ?? 0;
+  const lastYear = (lastYearParam?.value as number) ?? 0;
+  const gap = current - lastYear;
+  const gapPct = lastYear !== 0 ? formatPercent((gap / lastYear) * 100) : '0.0%';
+  const gapColor = gap >= 0 ? colors.danger.DEFAULT : colors.success.DEFAULT;
+  const borderColor = isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb';
+
+  let html = `<div style="min-width:200px">`;
+  html += `<div style="font-weight:bold;margin-bottom:6px;color:${textColors.primary}">${escapeHtml(String(label))}</div>`;
+  html += `<div style="margin-bottom:2px;color:${SERIES_COLORS.currentYear};font-weight:500">当年累计: <b>${formatWanDirect(current)}</b> 万元</div>`;
+  html += `<div style="color:${textColors.tertiary}">上年累计: ${formatWanDirect(lastYear)} 万元</div>`;
+  html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid ${borderColor};color:${gapColor};display:flex;justify-content:space-between">`;
+  html += `<span>差额及增长率:</span>`;
+  html += `<b>${gap > 0 ? '+' : ''}${formatWanDirect(gap)} (${gap > 0 ? '+' : ''}${gapPct})</b>`;
+  html += `</div>`;
+
+  if (showTargetLines && targetLines) {
+    html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid ${borderColor}">`;
+    html += `<div style="font-size:11px;color:${textColors.tertiary};margin-bottom:4px">剩余天数: ${targetLines.remainingDays}天</div>`;
+    html += `<div style="font-size:11px;display:flex;justify-content:space-between;color:${TARGET_COLORS.zero}"><span>0%持平 日均需:</span><b>${formatWanDirect(targetLines.target0)} 万/天</b></div>`;
+    html += `<div style="font-size:11px;display:flex;justify-content:space-between;color:${TARGET_COLORS.five}"><span>5%目标 日均需:</span><b>${formatWanDirect(targetLines.target5)} 万/天</b></div>`;
+    html += `<div style="font-size:11px;display:flex;justify-content:space-between;color:${TARGET_COLORS.ten}"><span>10%目标 日均需:</span><b>${formatWanDirect(targetLines.target10)} 万/天</b></div>`;
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  return html;
 }
 
 const SERIES_COLORS = {
@@ -148,7 +203,7 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
     const lastYearYtdValues = chartData.map(d => d.last_year_ytd);
 
     // 当年累计 markLine：选中日期
-    const currentMarkLines: any[] = [];
+    const currentMarkLines: Record<string, unknown>[] = [];
     if (selectedDateLabel) {
       currentMarkLines.push({
         xAxis: selectedDateLabel,
@@ -157,7 +212,7 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
       });
     }
 
-    const series: any[] = [
+    const series: SeriesOption[] = [
       // 上年累计（虚线）
       {
         name: '上年累计',
@@ -199,7 +254,7 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
     ];
 
     // 目标参考线系列（用 markLine 放在一个隐藏 series 上）
-    const yAxisList: any[] = [
+    const yAxisList: YAXisComponentOption[] = [
       {
         type: 'value',
         ...theme.yAxisConfig,
@@ -265,38 +320,13 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
       tooltip: {
         ...theme.tooltipConfig,
         trigger: 'axis',
-        formatter: (params: any) => {
-          if (!Array.isArray(params) || params.length === 0) return '';
-          const label = params[0].axisValue;
-          const currentParam = params.find((p: any) => p.seriesName === '当年累计');
-          const lastYearParam = params.find((p: any) => p.seriesName === '上年累计');
-          const current = currentParam?.value ?? 0;
-          const lastYear = lastYearParam?.value ?? 0;
-          const gap = current - lastYear;
-          const gapPct = lastYear !== 0 ? formatPercent((gap / lastYear) * 100) : '0.0%';
-          const gapColor = gap >= 0 ? colors.danger.DEFAULT : colors.success.DEFAULT;
-
-          let html = `<div style="min-width:200px">`;
-          html += `<div style="font-weight:bold;margin-bottom:6px;color:${theme.textColors.primary}">${escapeHtml(String(label))}</div>`;
-          html += `<div style="margin-bottom:2px;color:${SERIES_COLORS.currentYear};font-weight:500">当年累计: <b>${formatWanDirect(current)}</b> 万元</div>`;
-          html += `<div style="color:${theme.textColors.tertiary}">上年累计: ${formatWanDirect(lastYear)} 万元</div>`;
-          html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};color:${gapColor};display:flex;justify-content:space-between">`;
-          html += `<span>差额及增长率:</span>`;
-          html += `<b>${gap > 0 ? '+' : ''}${formatWanDirect(gap)} (${gap > 0 ? '+' : ''}${gapPct})</b>`;
-          html += `</div>`;
-
-          if (showTargetLines && targetLines) {
-            html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}">`;
-            html += `<div style="font-size:11px;color:${theme.textColors.tertiary};margin-bottom:4px">剩余天数: ${targetLines.remainingDays}天</div>`;
-            html += `<div style="font-size:11px;display:flex;justify-content:space-between;color:${TARGET_COLORS.zero}"><span>0%持平 日均需:</span><b>${formatWanDirect(targetLines.target0)} 万/天</b></div>`;
-            html += `<div style="font-size:11px;display:flex;justify-content:space-between;color:${TARGET_COLORS.five}"><span>5%目标 日均需:</span><b>${formatWanDirect(targetLines.target5)} 万/天</b></div>`;
-            html += `<div style="font-size:11px;display:flex;justify-content:space-between;color:${TARGET_COLORS.ten}"><span>10%目标 日均需:</span><b>${formatWanDirect(targetLines.target10)} 万/天</b></div>`;
-            html += `</div>`;
-          }
-
-          html += `</div>`;
-          return html;
-        },
+        formatter: (params: AxisTooltipParam | AxisTooltipParam[]) =>
+          formatScissorsTooltip(params, {
+            isDark,
+            showTargetLines,
+            targetLines,
+            textColors: theme.textColors,
+          }),
       },
       series,
     };

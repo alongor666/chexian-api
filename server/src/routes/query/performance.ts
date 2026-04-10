@@ -69,7 +69,7 @@ export function mapPerformanceTimeToGranularity(timePeriod: PerformanceTimePerio
   }
 }
 
-const PERFORMANCE_HEATMAP_DIMENSIONS = ['org_level_3', 'team', 'salesman', 'customer_category', 'coverage_combination', 'energy_type', 'business_nature'] as const;
+const PERFORMANCE_HEATMAP_DIMENSIONS = ['org_level_3', 'team', 'salesman', 'customer_category', 'coverage_combination', 'energy_type', 'business_nature', 'insurance_grade'] as const;
 
 const performanceSummarySchema = z.object({
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
