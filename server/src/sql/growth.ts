@@ -502,7 +502,7 @@ export function generateDailyGrowthWithContextQuery(
 /**
  * 预定义的常用增长率查询配置
  */
-import { KPI_SQL } from './kpi.js';
+import { getMetricSql } from '../config/metric-registry/index.js';
 
 /**
  * 预定义的常用增长率查询配置
@@ -513,7 +513,7 @@ export const COMMON_GROWTH_QUERIES = {
   premiumByOrgMonthlyYoY: {
     growthType: 'yoy' as GrowthType,
     timeView: 'monthly' as TimeView,
-    metric: KPI_SQL.total_premium,
+    metric: getMetricSql('total_premium'),
     groupBy: ['org_level_3'],
     whereClause: '1=1'
   },
@@ -522,7 +522,7 @@ export const COMMON_GROWTH_QUERIES = {
   premiumBySalesmanQuarterlyMoM: {
     growthType: 'mom' as GrowthType,
     timeView: 'quarterly' as TimeView,
-    metric: KPI_SQL.total_premium,
+    metric: getMetricSql('total_premium'),
     groupBy: ['salesman_name'],
     whereClause: '1=1'
   },
@@ -531,7 +531,7 @@ export const COMMON_GROWTH_QUERIES = {
   kpiByOrgYearlyYoY: {
     growthType: 'yoy' as GrowthType,
     timeView: 'yearly' as TimeView,
-    metric: `${KPI_SQL.total_premium}, ${KPI_SQL.policy_count}, ${KPI_SQL.per_capita_premium}, ${KPI_SQL.renewal_rate}`,
+    metric: `${getMetricSql('total_premium')}, ${getMetricSql('policy_count')}, ${getMetricSql('per_capita_premium')}, ${getMetricSql('renewal_rate')}`,
     groupBy: ['org_level_3'],
     whereClause: '1=1'
   },
@@ -540,7 +540,7 @@ export const COMMON_GROWTH_QUERIES = {
   premiumYTDGrowth: {
     growthType: 'ytd' as GrowthType,
     timeView: 'monthly' as TimeView,
-    metric: KPI_SQL.total_premium,
+    metric: getMetricSql('total_premium'),
     groupBy: ['org_level_3'],
     whereClause: '1=1'
   },
@@ -549,7 +549,7 @@ export const COMMON_GROWTH_QUERIES = {
   renewalRateBySalesmanMoM: {
     growthType: 'mom' as GrowthType,
     timeView: 'monthly' as TimeView,
-    metric: KPI_SQL.renewal_rate,
+    metric: getMetricSql('renewal_rate'),
     groupBy: ['salesman_name'],
     whereClause: '1=1'
   }
