@@ -35,4 +35,12 @@ if ! echo "$MSG" | grep -qE "$PATTERN"; then
   exit 1
 fi
 
-echo "✅ [commit-msg] 消息格式规范"
+# Co-Authored-By trailer 检查（AI 协作归属）
+if ! grep -q "^Co-Authored-By:" "$MSG_FILE"; then
+  echo ""
+  echo "⚠️  [commit-msg] 缺少 Co-Authored-By trailer，自动追加"
+  echo "" >> "$MSG_FILE"
+  echo "Co-Authored-By: Claude <noreply@anthropic.com>" >> "$MSG_FILE"
+fi
+
+echo "✅ [commit-msg] 消息格式规范 + attribution 已确认"
