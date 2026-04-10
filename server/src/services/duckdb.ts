@@ -1,10 +1,10 @@
 /**
- * DuckDB 服务 (@duckdb/node-api)
+ * DuckDB 服务 (@duckdb/node-api) — 瘦主类
  *
- * 从 legacy duckdb 包迁移到 @duckdb/node-api (Neo)：
- * - NAPI 预编译二进制，不依赖 Node.js 版本（18/20/22/25+ 均可）
- * - Promise 原生支持，无需回调包装
- * - 已移除 queryArrow（死代码）和 apache-arrow 依赖
+ * 核心职责：初始化、连接管理、查询执行、类型转换。
+ * 物化逻辑委托 → duckdb-materialization.ts
+ * 域数据加载委托 → duckdb-domain-loaders.ts
+ * 基础设施 → duckdb-infra.ts（QueryCache + ConnectionPool）
  */
 
 import { DuckDBInstance } from '@duckdb/node-api';
@@ -12,103 +12,12 @@ import type { DuckDBConnection } from '@duckdb/node-api';
 import { databaseConfig, DUCKDB_INIT_OPTIONS } from '../config/database.js';
 import { getKpiPlanConfigPath } from '../config/paths.js';
 import { AppError } from '../middleware/error.js';
-import { generateColumnMappingSQL, getColumnMapping, BOOLEAN_FIELDS } from './column-normalizer.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
 import { recordQueryMetric } from '../utils/request-context.js';
-
-// ============================================
-// 查询缓存
-// ============================================
-
-interface CacheEntry<T = any> {
-  data: T;
-  expiry: number;
-}
-
-class QueryCache {
-  private cache = new Map<string, CacheEntry>();
-  private maxSize = 500;
-
-  get<T = any>(key: string): T | null {
-    const entry = this.cache.get(key);
-    if (!entry || Date.now() > entry.expiry) {
-      this.cache.delete(key);
-      return null;
-    }
-    return entry.data as T;
-  }
-
-  set(key: string, data: any, ttlMs: number): void {
-    // 超过最大缓存条目数时清理最旧的
-    if (this.cache.size >= this.maxSize) {
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey) this.cache.delete(firstKey);
-    }
-    this.cache.set(key, { data, expiry: Date.now() + ttlMs });
-  }
-
-  invalidateAll(): void {
-    this.cache.clear();
-  }
-
-  get size(): number {
-    return this.cache.size;
-  }
-}
-
-// ============================================
-// 连接池
-// ============================================
-
-class ConnectionPool {
-  private pool: DuckDBConnection[] = [];
-  private activeCount = 0;
-  private maxSize: number;
-  private waitQueue: Array<(conn: DuckDBConnection) => void> = [];
-  private instance: DuckDBInstance;
-
-  constructor(instance: DuckDBInstance, maxSize: number = 10) {
-    this.instance = instance;
-    this.maxSize = maxSize;
-  }
-
-  async acquire(): Promise<DuckDBConnection> {
-    // 优先从池中取
-    if (this.pool.length > 0) {
-      this.activeCount++;
-      return this.pool.pop()!;
-    }
-    // 未达上限则新建
-    if (this.activeCount < this.maxSize) {
-      this.activeCount++;
-      return await this.instance.connect();
-    }
-    // 达上限，排队等待
-    return new Promise<DuckDBConnection>((resolve) => {
-      this.waitQueue.push(resolve);
-    });
-  }
-
-  release(conn: DuckDBConnection): void {
-    if (this.waitQueue.length > 0) {
-      // 直接交给等待者
-      const resolve = this.waitQueue.shift()!;
-      resolve(conn);
-    } else {
-      // 归还到池中
-      this.activeCount--;
-      this.pool.push(conn);
-    }
-  }
-
-  async closeAll(): Promise<void> {
-    for (const conn of this.pool) {
-      try { conn.closeSync(); } catch { /* ignore */ }
-    }
-    this.pool = [];
-    this.activeCount = 0;
-  }
-}
+import { QueryCache, ConnectionPool } from './duckdb-infra.js';
+import type { DuckDBQueryable } from './duckdb-types.js';
+import * as materialization from './duckdb-materialization.js';
+import * as domainLoaders from './duckdb-domain-loaders.js';
 
 // ============================================
 // 慢查询监控阈值（毫秒）
@@ -123,7 +32,7 @@ const SLOW_QUERY_THRESHOLD_MS = 3000;
  * - 查询结果缓存（可选 TTL）
  * - 慢查询监控（>3s 告警）
  */
-class DuckDBService {
+class DuckDBService implements DuckDBQueryable {
   private instance: DuckDBInstance | null = null;
   private isInitialized = false;
   private connectionPool: ConnectionPool | null = null;
@@ -242,20 +151,17 @@ class DuckDBService {
     }
   }
 
-  /**
-   * 获取数据库连接（从连接池获取）
-   */
+  // ============================================
+  // 连接管理
+  // ============================================
+
   private async getConnection(): Promise<DuckDBConnection> {
     if (!this.connectionPool) {
       throw new AppError(500, 'DuckDB not initialized');
     }
-
     return await this.connectionPool.acquire();
   }
 
-  /**
-   * 归还连接到连接池
-   */
   private releaseConnection(conn: DuckDBConnection): void {
     if (this.connectionPool) {
       this.connectionPool.release(conn);
@@ -264,9 +170,10 @@ class DuckDBService {
     }
   }
 
-  /**
-   * 使缓存失效（数据文件变更时调用）
-   */
+  // ============================================
+  // 缓存
+  // ============================================
+
   invalidateCache(options?: { silent?: boolean }): void {
     const size = this.queryCache.size;
     this.queryCache.invalidateAll();
@@ -279,6 +186,10 @@ class DuckDBService {
   get cacheSize(): number {
     return this.queryCache.size;
   }
+
+  // ============================================
+  // 查询执行
+  // ============================================
 
   /**
    * 执行SQL查询（返回JSON格式）
@@ -381,12 +292,14 @@ class DuckDBService {
     return data;
   }
 
+  // ============================================
+  // 表/视图工具方法
+  // ============================================
+
   /**
    * 按真实对象类型清理同名 relation（TABLE / VIEW）。
-   * DuckDB 的 `DROP VIEW IF EXISTS table_name` 在对象为 TABLE 时仍会报错，
-   * 因此需要先查类型，再执行对应 DROP。
    */
-  private async dropRelationIfExists(relationName: string): Promise<void> {
+  async dropRelationIfExists(relationName: string): Promise<void> {
     const safeRelationName = sanitizeTableName(relationName);
     const escapedRelationName = escapeSqlValue(safeRelationName);
 
@@ -409,9 +322,6 @@ class DuckDBService {
     }
   }
 
-  /**
-   * 检查某个 TABLE/VIEW 是否存在
-   */
   async hasRelation(relationName: string): Promise<boolean> {
     const safeRelationName = sanitizeTableName(relationName);
     const escapedRelationName = escapeSqlValue(safeRelationName);
@@ -424,21 +334,20 @@ class DuckDBService {
     return (rows[0]?.cnt ?? 0) > 0;
   }
 
-  /**
-   * 加载Parquet文件
-   *
-   * 安全修复：
-   * 1. 表名验证（防止 SQL 注入）
-   * 2. 文件路径转义（防止单引号注入）
-   */
-  async loadParquet(filePath: string, tableName: string = 'raw_parquet'): Promise<void> {
-    // 1. 验证表名（防止 SQL 注入）
+  async getTableSchema(tableName: string): Promise<any[]> {
     const safeTableName = sanitizeTableName(tableName);
+    const sql = `DESCRIBE ${safeTableName}`;
+    return this.query(sql);
+  }
 
-    // 2. 转义文件路径中的单引号
+  // ============================================
+  // Parquet 加载（核心，保留在主类）
+  // ============================================
+
+  async loadParquet(filePath: string, tableName: string = 'raw_parquet'): Promise<void> {
+    const safeTableName = sanitizeTableName(tableName);
     const escapedPath = escapeSqlValue(filePath);
 
-    // 兼容同名对象类型切换（VIEW ↔ TABLE）
     await this.dropRelationIfExists(safeTableName);
 
     const sql = `
@@ -451,22 +360,12 @@ class DuckDBService {
     console.log(`[DuckDB] Loaded Parquet file: ${filePath} -> ${safeTableName}`);
   }
 
-  /**
-   * 加载多个 Parquet 文件并合并为 raw_parquet 表
-   *
-   * 使用 DuckDB 原生 read_parquet([], union_by_name=true)：
-   * - 单文件/多文件统一路径，无中间表
-   * - union_by_name 自动处理 schema 差异（缺失列填 NULL）
-   * - 峰值内存 = 1 份数据（无需中间 raw_parquet_0/1 表叠加）
-   */
   async loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number }> {
     if (filePaths.length === 0) {
       throw new AppError(400, 'No parquet files provided');
     }
 
     const t0 = Date.now();
-
-    // 统一路径：单文件和多文件都用 read_parquet([])
     const escapedPaths = filePaths.map((p) => `'${escapeSqlValue(p)}'`).join(', ');
 
     await this.dropRelationIfExists('raw_parquet');
@@ -478,7 +377,6 @@ class DuckDBService {
       `);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      // Schema 冲突或文件损坏时给出清晰报错
       console.error(`[DuckDB] ⚠️ read_parquet failed: ${msg}`);
       console.error(`[DuckDB] Files: ${filePaths.join(', ')}`);
       throw new AppError(500, `Parquet loading failed (schema incompatible or file corrupted): ${msg}`);
@@ -493,174 +391,14 @@ class DuckDBService {
     return { totalRows };
   }
 
-  /**
-   * 创建PolicyFact视图（带列名映射和去重）
-   *
-   * @param sourceTable 源表名
-   *
-   * 安全修复：表名验证（防止 SQL 注入）
-   */
+  // ============================================
+  // 物化引擎代理 → duckdb-materialization.ts
+  // ============================================
+
   async createPolicyFactView(sourceTable: string = 'raw_parquet'): Promise<void> {
-    // 全环境统一实时模式：从原始 Parquet 构建标准化 PolicyFact 行级数据。
-
-    // 1. 验证表名（防止 SQL 注入）
-    const safeSourceTable = sanitizeTableName(sourceTable);
-
-    // 获取表结构
-    const schema = await this.getTableSchema(safeSourceTable);
-    const actualColumns = schema.map((col: any) => col.column_name);
-
-    console.log('[DuckDB] Actual columns:', actualColumns.slice(0, 5).join(', '), '...');
-
-    // 检查是否需要列名映射（如果第一列是中文）
-    const needsMapping = /[\u4e00-\u9fa5]/.test(actualColumns[0] || '');
-
-    if (needsMapping) {
-      console.log('[DuckDB] Chinese column names detected, creating normalized view...');
-
-      // 获取列名映射
-      const mapping = getColumnMapping(actualColumns);
-      console.log('[DuckDB] Column mapping created:', Object.keys(mapping).length, 'fields');
-
-      // 生成列名映射SQL（使用验证后的表名）
-      const mappingSQL = generateColumnMappingSQL(safeSourceTable, actualColumns);
-      await this.query(mappingSQL);
-
-      console.log('[DuckDB] PolicyFact view created with column mapping');
-    } else {
-      // 英文列名，直接创建视图（使用验证后的表名）
-      const sql = `
-        CREATE OR REPLACE VIEW PolicyFact AS
-        SELECT * FROM ${safeSourceTable}
-      `;
-      await this.query(sql);
-      console.log('[DuckDB] PolicyFact view created (pass-through mode)');
-    }
-
-    // 补齐 8 域迁移后 PolicyFact 中可能缺失的向后兼容字段
-    // 这些字段已移至独立域（CrossSellFact/ClaimsAgg），但旧 SQL 生成器仍引用它们
-    const pfSchema = await this.getTableSchema('raw_parquet');
-    const existingCols = new Set(pfSchema.map((c: any) => c.column_name));
-    const compatFields: Array<[string, string, string]> = [
-      ['renewal_mode', 'VARCHAR', "''"],
-      ['is_cross_sell', 'BOOLEAN', 'false'],
-      ['cross_sell_premium_driver', 'DOUBLE', '0'],
-      ['claim_cases', 'INTEGER', '0'],
-      ['reported_claims', 'DOUBLE', '0'],
-      ['driver_coverage', 'DOUBLE', '0'],
-      ['passenger_coverage', 'DOUBLE', '0'],
-    ];
-    const missingFields = compatFields.filter(([name]) => !existingCols.has(name));
-    if (missingFields.length > 0) {
-      // raw_parquet 是 TABLE，可以 ALTER ADD COLUMN
-      for (const [name, type, defaultVal] of missingFields) {
-        await this.query(`ALTER TABLE raw_parquet ADD COLUMN IF NOT EXISTS "${name}" ${type} DEFAULT ${defaultVal}`);
-      }
-      // 重建 PolicyFact 视图
-      await this.query(`CREATE OR REPLACE VIEW PolicyFact AS SELECT * FROM raw_parquet`);
-      console.log(`[DuckDB] Added ${missingFields.length} compat columns to raw_parquet: ${missingFields.map(f => f[0]).join(', ')}`);
-    }
-
-    // 创建 PolicyFactRenewal 视图（续保下钻模块使用）
-    // 与 PolicyFact 结构相同，WHERE 条件由 renewal-drilldown.ts 动态生成
-    await this.query(`
-      CREATE OR REPLACE VIEW PolicyFactRenewal AS
-      SELECT * FROM PolicyFact
-    `);
-    console.log('[DuckDB] PolicyFactRenewal view created');
-
-    await this.materializePolicyFactWorkingSet();
-    await this.createCrossSellRealtimeView();
-    console.log('[DuckDB] Realtime mode enabled: using PolicyFact realtime aggregation (no pre-aggregated tables)');
+    return materialization.createPolicyFactView(this, sourceTable);
   }
 
-  /**
-   * 将标准化视图物化为行级实时工作表，并建立查询友好索引。
-   * 不改变业务口径，仅提升实时查询吞吐与过滤性能。
-   */
-  private async materializePolicyFactWorkingSet(): Promise<void> {
-    await this.query('DROP TABLE IF EXISTS PolicyFactRealtime');
-    console.log('[DuckDB] Materializing PolicyFactRealtime...');
-    const t0 = Date.now();
-
-    // 检测源表中实际存在的布尔字段（union_by_name 可能填 NULL 给缺失列）
-    const schema = await this.getTableSchema('PolicyFactRenewal');
-    const existingCols = new Set(schema.map((c: any) => c.column_name));
-    const boolFieldsInSchema = BOOLEAN_FIELDS.filter((f) => existingCols.has(f));
-
-    // 布尔标准化：SELECT * REPLACE 将 VARCHAR/'是'/'1'/'true' 统一为 BOOLEAN
-    // P1 后 PolicyFactRealtime 的布尔字段全部为原生 BOOLEAN 类型
-    const replaceClauses = boolFieldsInSchema.map((field) =>
-      `(CASE WHEN LOWER(TRIM(CAST("${field}" AS VARCHAR))) IN ('是', '1', 'true', 't', 'y', 'yes', '有', '有驾意险交叉销售') THEN true ELSE false END) AS "${field}"`
-    );
-
-    const selectExpr = replaceClauses.length > 0
-      ? `SELECT * REPLACE (${replaceClauses.join(', ')})`
-      : 'SELECT *';
-
-    await this.query(`
-      CREATE TABLE PolicyFactRealtime AS
-      ${selectExpr} FROM PolicyFactRenewal
-    `);
-    console.log(`[DuckDB] PolicyFactRealtime created in ${Date.now() - t0}ms (${boolFieldsInSchema.length} boolean fields standardized)`);
-
-    // 重建视图指向物化表，然后释放原始 raw_parquet 表以回收内存
-    // （raw_parquet 是 Parquet 文件的全量副本，物化后不再需要）
-    await this.query(`
-      CREATE OR REPLACE VIEW PolicyFact AS
-      SELECT * FROM PolicyFactRealtime
-    `);
-    await this.query(`
-      CREATE OR REPLACE VIEW PolicyFactRenewal AS
-      SELECT * FROM PolicyFact
-    `);
-
-    // 释放原始表 — 此时所有视图已指向 PolicyFactRealtime，raw_parquet 无引用
-    // 多文件加载时还有 raw_parquet_0, raw_parquet_1... 子表
-    const rawTables = await this.query<{ table_name: string }>(
-      `SELECT table_name FROM information_schema.tables
-       WHERE table_name LIKE 'raw_parquet%' AND table_schema = 'main'`
-    );
-    for (const { table_name } of rawTables) {
-      await this.dropRelationIfExists(table_name);
-    }
-    if (rawTables.length > 0) {
-      console.log(`[DuckDB] Dropped ${rawTables.length} raw_parquet table(s) to free memory`);
-    }
-
-    // 创建高频查询索引（仅保留最高收益的 3 个，减少内存和启动时间）
-    const t1 = Date.now();
-    await Promise.all([
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_policy_date ON PolicyFactRealtime(policy_date)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_org ON PolicyFactRealtime(org_level_3)'),
-      this.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_salesman ON PolicyFactRealtime(salesman_name)'),
-    ]);
-    console.log(`[DuckDB] 3 indexes created in ${Date.now() - t1}ms`);
-    console.log('[DuckDB] PolicyFactRealtime materialized with realtime indexes');
-  }
-
-  // ============================================
-  // 通用分批物化引擎
-  // ============================================
-
-  /**
-   * 分批物化查询为 TABLE，降低峰值内存。
-   *
-   * 流程：
-   * 1. 查询源表的年月范围
-   * 2. 第一个月 CREATE TABLE AS ... WHERE month = ?
-   * 3. 后续月份 INSERT INTO ... WHERE month = ?
-   * 4. 创建索引
-   *
-   * 失败时自动回退到 VIEW（降级模式：慢但不挂）。
-   *
-   * @param tableName  目标表名
-   * @param cteSql     CTE 内的 SELECT（不含 WITH/FROM 外层），必须包含 policy_date
-   * @param aggregateSql  聚合 SELECT + GROUP BY（引用 CTE 别名 normalized）
-   * @param viewFallbackSql  回退 VIEW 的完整 SQL（物化失败时使用）
-   * @param indexes    物化后创建的索引列表 [{name, column}]
-   * @returns 'table' | 'view' 表示最终状态
-   */
   /** @internal */ async materializeInBatches(
     tableName: string,
     cteSql: string,
@@ -668,804 +406,77 @@ class DuckDBService {
     viewFallbackSql: string,
     indexes: Array<{ name: string; column: string }> = [],
   ): Promise<'table' | 'view'> {
-    await this.dropRelationIfExists(tableName);
-
-    const t0 = Date.now();
-    // VPS（threads<=2）：逐月分批降低峰值内存；本地（threads>2）：直接物化更快
-    const useBatching = DUCKDB_INIT_OPTIONS.threads <= 2;
-    console.log(`[DuckDB] Materializing ${tableName} (${useBatching ? 'batched by month' : 'direct'})...`);
-
-    try {
-      if (!useBatching) {
-        // 本地开发：直接 CREATE TABLE，跳过分批
-        await this.query(`
-          CREATE TABLE ${tableName} AS
-          WITH normalized AS (${cteSql}) ${aggregateSql}
-        `);
-      } else {
-        // VPS：降低内存峰值，逐月分批
-        await this.query('SET threads=1');
-        await this.query('SET preserve_insertion_order=false');
-
-        const monthsResult = await this.query<{ ym: string }>(`
-          SELECT DISTINCT strftime(CAST(policy_date AS DATE), '%Y-%m') AS ym
-          FROM PolicyFact WHERE policy_date IS NOT NULL ORDER BY ym
-        `);
-        const months = monthsResult.map((r) => r.ym);
-
-        if (months.length === 0) {
-          await this.query(`
-            CREATE TABLE ${tableName} AS
-            WITH normalized AS (${cteSql}) ${aggregateSql}
-          `);
-        } else {
-          await this.query(`
-            CREATE TABLE ${tableName} AS
-            WITH normalized AS (${cteSql}
-              AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[0]}'
-            ) ${aggregateSql}
-          `);
-          console.log(`[DuckDB] ${tableName} batch 1/${months.length}: ${months[0]}`);
-
-          for (let i = 1; i < months.length; i++) {
-            await this.query(`
-              INSERT INTO ${tableName}
-              WITH normalized AS (${cteSql}
-                AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[i]}'
-              ) ${aggregateSql}
-            `);
-            console.log(`[DuckDB] ${tableName} batch ${i + 1}/${months.length}: ${months[i]}`);
-          }
-        }
-
-        await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
-        await this.query('SET preserve_insertion_order=true');
-      }
-
-      // 创建索引
-      if (indexes.length > 0) {
-        await Promise.all(
-          indexes.map(({ name, column }) =>
-            this.query(`CREATE INDEX IF NOT EXISTS ${name} ON ${tableName}(${column})`)
-          )
-        );
-      }
-
-      console.log(`[DuckDB] ${tableName} materialized as TABLE in ${Date.now() - t0}ms`);
-      return 'table';
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[DuckDB] ⚠️ ${tableName} materialization failed (${Date.now() - t0}ms): ${msg}`);
-      console.warn(`[DuckDB] Falling back to VIEW for ${tableName} — queries will be slower`);
-
-      // 分批模式下恢复线程数（可能在异常前未执行）
-      if (useBatching) {
-        try {
-          await this.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
-          await this.query('SET preserve_insertion_order=true');
-        } catch { /* ignore */ }
-      }
-
-      // 清理失败的半成品表
-      await this.dropRelationIfExists(tableName);
-
-      // 创建回退 VIEW
-      await this.query(viewFallbackSql);
-      console.warn(`[DuckDB] ${tableName} running as VIEW (degraded mode)`);
-      return 'view';
-    }
+    return materialization.materializeInBatches(this, tableName, cteSql, aggregateSql, viewFallbackSql, indexes);
   }
 
-  // ============================================
-  // 派生表注册表（集中管理清理）
-  // ============================================
-
-  /** 所有启动时创建的派生 TABLE/VIEW，卸载数据时统一清理 */
-  static readonly DERIVED_RELATIONS = [
-    'ClaimsDetail',
-    'ClaimsAgg',
-    'CrossSellFact',
-    'CrossSellDailyAgg',
-    'PolicyFactRenewal',
-    'PolicyFact',
-    'PolicyFactRealtime',
-    'RepairDim',
-    'BrandDim',
-    'CustomerFlow',
-  ] as const;
-
-  /**
-   * 清理所有派生表/视图 + raw_parquet 系列表。
-   * data.ts 卸载数据时调用，避免硬编码 DROP 列表不同步。
-   */
   async dropAllDerivedTables(): Promise<void> {
-    for (const name of DuckDBService.DERIVED_RELATIONS) {
-      await this.dropRelationIfExists(name);
-    }
-    // raw_parquet 系列
-    const rawTables = await this.query<{ table_name: string }>(
-      `SELECT table_name FROM information_schema.tables
-       WHERE table_name LIKE 'raw_parquet%' AND table_schema = 'main'`
-    );
-    for (const { table_name } of rawTables) {
-      await this.dropRelationIfExists(table_name);
-    }
+    return materialization.dropAllDerivedTables(this);
   }
 
-  // ============================================
-  // CrossSellDailyAgg 物化
-  // ============================================
-
-  /**
-   * 物化 CrossSellDailyAgg 预聚合表（分批 + 自动回退 VIEW）
-   *
-   * 成功时：TABLE + 索引，查询走预聚合数据
-   * 失败时：VIEW 回退，查询实时聚合（慢但可用）
-   */
-  async createCrossSellRealtimeView(): Promise<void> {
-    // 检测是否有独立 CrossSellFact（8域模式），否则回退到旧 PolicyFact 模式
-    const hasCrossSellFact = await this.hasRelation('CrossSellFact');
-
-    if (hasCrossSellFact) {
-      // ── 8域模式：从 CrossSellFact（40万行）+ JOIN PolicyFact 构建 ──
-      console.log('[DuckDB] Building CrossSellDailyAgg from CrossSellFact (8-domain mode)...');
-
-      // 检测 PolicyFact 实际存在的列（新数据源可能缺少 renewal_mode/driver_coverage 等）
-      const pfSchema = await this.getTableSchema('PolicyFact');
-      const pfCols = new Set(pfSchema.map((c: any) => c.column_name));
-      const col = (name: string, fallback: string) => pfCols.has(name) ? `p.${name}` : fallback;
-      const colStr = (name: string) => pfCols.has(name) ? `COALESCE(CAST(p.${name} AS VARCHAR), '')` : `''`;
-      const colBool = (name: string) => pfCols.has(name) ? `COALESCE(p.${name}, false)` : `false`;
-      const colNum = (name: string) => pfCols.has(name) ? `COALESCE(p.${name}, 0)` : `0`;
-
-      const cteSql = `
-          SELECT
-            CAST(cs.policy_date AS DATE) AS policy_date,
-            COALESCE(CAST(${col('insurance_start_date', 'cs.policy_date')} AS DATE), CAST(cs.policy_date AS DATE)) AS insurance_start_date,
-            cs.org_level_3, cs.salesman_name, cs.customer_category, cs.coverage_combination,
-            ${colStr('renewal_mode')} AS renewal_mode,
-            ${colStr('tonnage_segment')} AS tonnage_segment,
-            ${colStr('insurance_grade')} AS insurance_grade,
-            ${colStr('is_commercial_insure')} AS is_commercial_insure,
-            ${colStr('insurance_type')} AS insurance_type,
-            ${colBool('is_transfer')} AS is_transfer,
-            ${colBool('is_telemarketing')} AS is_telemarketing,
-            ${colBool('is_renewal')} AS is_renewal,
-            ${colBool('is_nev')} AS is_nev,
-            ${colBool('is_new_car')} AS is_new_car,
-            ${colBool('is_renewable')} AS is_renewable,
-            cs.is_cross_sell,
-            ${colNum('driver_coverage')} AS driver_coverage,
-            ${colNum('passenger_coverage')} AS passenger_coverage,
-            COALESCE(cs.cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
-            ${colNum('premium')} AS premium,
-            COALESCE(
-              NULLIF(TRIM(CAST(cs.vehicle_frame_no AS VARCHAR)), ''),
-              NULLIF(TRIM(CAST(cs.policy_no AS VARCHAR)), '')) AS dedup_key,
-            NULLIF(TRIM(CAST(cs.policy_no AS VARCHAR)), '') AS raw_policy_no
-          FROM CrossSellFact cs
-          LEFT JOIN PolicyFact p ON cs.policy_no = p.policy_no
-          WHERE cs.policy_date IS NOT NULL`;
-
-      const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
-          customer_category, coverage_combination, renewal_mode, tonnage_segment,
-          insurance_grade, is_commercial_insure,
-          is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,
-          is_renewable, is_cross_sell, driver_coverage, passenger_coverage`;
-
-      const aggregateSql = `
-        SELECT ${groupByColumns},
-          COUNT(DISTINCT dedup_key) AS auto_count,
-          COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
-          COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
-          COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
-          COALESCE(SUM(CASE WHEN insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN premium ELSE 0 END), 0) AS commercial_premium,
-          COALESCE(SUM(CASE WHEN insurance_type = '交强险' THEN premium ELSE 0 END), 0) AS compulsory_premium,
-          COALESCE(SUM(premium), 0) AS auto_premium
-        FROM normalized WHERE dedup_key IS NOT NULL
-        GROUP BY ${groupByColumns}`;
-
-      const viewFallbackSql = `
-        CREATE OR REPLACE VIEW CrossSellDailyAgg AS
-        WITH normalized AS (${cteSql})
-        ${aggregateSql}`;
-
-      await this.materializeInBatches(
-        'CrossSellDailyAgg',
-        cteSql,
-        aggregateSql,
-        viewFallbackSql,
-        [
-          { name: 'idx_cross_sell_agg_date', column: 'policy_date' },
-          { name: 'idx_cross_sell_agg_category', column: 'customer_category' },
-        ],
-      );
-    } else {
-      // ── 旧模式：从 PolicyFact 全扫描构建（向后兼容）──
-      console.log('[DuckDB] Building CrossSellDailyAgg from PolicyFact (legacy mode)...');
-
-      // 检测 PolicyFact 实际列（8域后部分字段已移出）
-      const legacySchema = await this.getTableSchema('PolicyFact');
-      const legacyCols = new Set(legacySchema.map((c: any) => c.column_name));
-      const lColStr = (name: string) => legacyCols.has(name) ? `COALESCE(CAST(${name} AS VARCHAR), '')` : `''`;
-      const lColBool = (name: string) => legacyCols.has(name) ? `COALESCE(${name}, false)` : `false`;
-      const lColNum = (name: string) => legacyCols.has(name) ? `COALESCE(${name}, 0)` : `0`;
-
-      const cteSql = `
-          SELECT
-            CAST(policy_date AS DATE) AS policy_date,
-            CAST(insurance_start_date AS DATE) AS insurance_start_date,
-            org_level_3, salesman_name, customer_category, coverage_combination,
-            ${lColStr('renewal_mode')} AS renewal_mode,
-            ${lColStr('tonnage_segment')} AS tonnage_segment,
-            ${lColStr('insurance_grade')} AS insurance_grade,
-            ${lColStr('is_commercial_insure')} AS is_commercial_insure,
-            ${lColStr('insurance_type')} AS insurance_type,
-            ${lColBool('is_transfer')} AS is_transfer,
-            ${lColBool('is_telemarketing')} AS is_telemarketing,
-            ${lColBool('is_renewal')} AS is_renewal,
-            ${lColBool('is_nev')} AS is_nev,
-            ${lColBool('is_new_car')} AS is_new_car,
-            ${lColBool('is_renewable')} AS is_renewable,
-            ${lColBool('is_cross_sell')} AS is_cross_sell,
-            ${lColNum('driver_coverage')} AS driver_coverage,
-            ${lColNum('passenger_coverage')} AS passenger_coverage,
-            ${lColNum('cross_sell_premium_driver')} AS cross_sell_premium_driver,
-            ${lColNum('premium')} AS premium,
-            COALESCE(
-              NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
-              NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')) AS dedup_key,
-            NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '') AS raw_policy_no
-          FROM PolicyFact
-          WHERE policy_date IS NOT NULL`;
-
-      const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
-          customer_category, coverage_combination, renewal_mode, tonnage_segment,
-          insurance_grade, is_commercial_insure,
-          is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,
-          is_renewable, is_cross_sell, driver_coverage, passenger_coverage`;
-
-      const aggregateSql = `
-        SELECT ${groupByColumns},
-          COUNT(DISTINCT dedup_key) AS auto_count,
-          COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
-          COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
-          COALESCE(SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END), 0) AS driver_premium,
-          COALESCE(SUM(CASE WHEN insurance_type IN ('商业险', '商业保险', '商车统保', '商业险+交强险') THEN premium ELSE 0 END), 0) AS commercial_premium,
-          COALESCE(SUM(CASE WHEN insurance_type = '交强险' THEN premium ELSE 0 END), 0) AS compulsory_premium,
-          COALESCE(SUM(premium), 0) AS auto_premium
-        FROM normalized WHERE dedup_key IS NOT NULL
-        GROUP BY ${groupByColumns}`;
-
-      const viewFallbackSql = `
-        CREATE OR REPLACE VIEW CrossSellDailyAgg AS
-        WITH normalized AS (${cteSql})
-        ${aggregateSql}`;
-
-      await this.materializeInBatches(
-        'CrossSellDailyAgg',
-        cteSql,
-        aggregateSql,
-        viewFallbackSql,
-        [
-          { name: 'idx_cross_sell_agg_date', column: 'policy_date' },
-          { name: 'idx_cross_sell_agg_category', column: 'customer_category' },
-        ],
-      );
-    }
-  }
-
-  /**
-   * 兼容历史调用点。系统已固定实时聚合，不再存在预聚合自愈流程。
-   */
   async ensureAggregatesReady(): Promise<void> {
     return;
   }
 
-  /**
-   * 获取表结构
-   *
-   * 安全修复：表名验证
-   */
-  async getTableSchema(tableName: string): Promise<any[]> {
-    const safeTableName = sanitizeTableName(tableName);
-    const sql = `DESCRIBE ${safeTableName}`;
-    return this.query(sql);
-  }
+  // ============================================
+  // 域数据加载代理 → duckdb-domain-loaders.ts
+  // ============================================
 
-  /**
-   * 从 Parquet 维度表加载业务员主数据和计划数据
-   *
-   * 数据源：
-   *   - warehouse/dim/salesman/latest.parquet（业务员主数据：编号/姓名/团队/机构/状态/入职/离职）
-   *   - warehouse/dim/plan/latest.parquet（计划数据：2025+2026 业务员级 + 2026 机构级）
-   *
-   * 生成的表/视图（向后兼容）：
-   *   - SalesmanDim 表：完整业务员主数据
-   *   - PlanFact 表：多年多层级计划数据
-   *   - SalesmanTeamMapping 表：兼容旧 JOIN（business_no/full_name/team_name/organization/car_insurance_plan_2026）
-   *   - SalesmanPlanFact 视图：兼容旧查询（salesman_name/team_name/org_name/plan_year/plan_vehicle/plan_total）
-   */
   async loadDimParquet(salesmanPath: string, planPath: string): Promise<void> {
-    const sf = salesmanPath.replace(/\\/g, '/');
-    const pf = planPath.replace(/\\/g, '/');
-
-    // 1. 创建 SalesmanDim 表（完整业务员主数据）
-    await this.query(`
-      CREATE OR REPLACE TABLE SalesmanDim AS
-      SELECT * FROM read_parquet('${sf}')
-    `);
-    const smCount = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM SalesmanDim');
-    console.log(`[DuckDB] SalesmanDim loaded: ${smCount[0]?.cnt ?? 0} records from Parquet`);
-
-    // 2. 创建 PlanFact 表（多年多级计划）
-    await this.query(`
-      CREATE OR REPLACE TABLE PlanFact AS
-      SELECT * FROM read_parquet('${pf}')
-    `);
-    const pfCount = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM PlanFact');
-    console.log(`[DuckDB] PlanFact loaded: ${pfCount[0]?.cnt ?? 0} records from Parquet`);
-
-    // 3. 创建兼容表 SalesmanTeamMapping（所有下游 SQL 都引用此表）
-    //    从 SalesmanDim LEFT JOIN PlanFact(2026, salesman) 获取 car_insurance_plan_2026
-    await this.query(`
-      CREATE OR REPLACE TABLE SalesmanTeamMapping AS
-      SELECT
-        s.business_no,
-        s.salesman_name,
-        s.full_name,
-        COALESCE(s.team, '未分配') AS team_name,
-        COALESCE(s.organization, '未分配机构') AS organization,
-        COALESCE(p.plan_vehicle, 0.0) AS car_insurance_plan_2026
-      FROM SalesmanDim s
-      LEFT JOIN (
-        SELECT business_no, plan_vehicle
-        FROM PlanFact
-        WHERE plan_year = 2026 AND level = 'salesman'
-      ) p ON s.business_no = p.business_no
-    `);
-    const tmCount = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM SalesmanTeamMapping');
-    console.log(`[DuckDB] SalesmanTeamMapping (compat) built: ${tmCount[0]?.cnt ?? 0} records`);
-
-    // 4. 创建兼容视图 SalesmanPlanFact（多年计划视图）
-    await this.query(`
-      CREATE OR REPLACE VIEW SalesmanPlanFact AS
-      SELECT
-        p.full_name AS salesman_name,
-        COALESCE(s.team, '未分配') AS team_name,
-        COALESCE(s.organization, '未分配机构') AS org_name,
-        p.plan_year,
-        p.plan_vehicle,
-        p.plan_total
-      FROM PlanFact p
-      LEFT JOIN SalesmanDim s ON p.business_no = s.business_no
-      WHERE p.level = 'salesman'
-    `);
-    console.log('[DuckDB] SalesmanPlanFact (compat) view created — multi-year support');
-
-    // 5. 预构建达成分析缓存表
-    await this.buildAchievementView(2026);
+    return domainLoaders.loadDimParquet(this, salesmanPath, planPath);
   }
 
-  /**
-   * 加载车牌归属地映射维度表
-   *
-   * 数据源：warehouse/dim/plate_region/latest.parquet（411 行）
-   * 字段：plate_prefix(VARCHAR), province(VARCHAR), city(VARCHAR)
-   * JOIN：SUBSTRING(plate_no, 1, 2) = PlateRegionMap.plate_prefix
-   */
   async loadPlateRegionDim(parquetPath: string): Promise<void> {
-    const pf = parquetPath.replace(/\\/g, '/');
-    await this.query(`
-      CREATE OR REPLACE TABLE PlateRegionMap AS
-      SELECT * FROM read_parquet('${pf}')
-    `);
-    const result = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM PlateRegionMap');
-    console.log(`[DuckDB] PlateRegionMap loaded: ${result[0]?.cnt ?? 0} records`);
+    return domainLoaders.loadPlateRegionDim(this, parquetPath);
   }
 
-  /**
-   * 加载团队映射 JSON 到 SalesmanTeamMapping 表（回退方式）
-   *
-   * 数据源：数据管理/warehouse/dim/业务员归属与规划/salesman_organization_mapping.json
-   * 字段：business_no, salesman_name, full_name, team_name, organization, car_insurance_plan_2026
-   * JOIN 键：full_name = PolicyFact.salesman_name（含工号前缀）
-   */
   async loadTeamMapping(jsonFilePath: string): Promise<void> {
-    const fs = (await import('fs')).default;
-
-    let data: any;
-    try {
-      // JSON 中可能有 NaN（Python 生成），替换为 null 后解析
-      const raw = fs.readFileSync(jsonFilePath, 'utf-8').replace(/\bNaN\b/g, 'null');
-      data = JSON.parse(raw);
-    } catch (err: any) {
-      console.warn(`[DuckDB] Failed to read team mapping: ${err.message}`);
-      return;
-    }
-
-    const rows: any[] = data.salesman_mapping || [];
-    if (rows.length === 0) {
-      console.warn('[DuckDB] No team mapping data found');
-      return;
-    }
-
-    // 创建表
-    await this.query(`
-      CREATE OR REPLACE TABLE SalesmanTeamMapping (
-        business_no VARCHAR,
-        salesman_name VARCHAR,
-        full_name VARCHAR,
-        team_name VARCHAR,
-        organization VARCHAR,
-        car_insurance_plan_2026 DOUBLE
-      )
-    `);
-
-    // 批量 INSERT（单条 SQL，234 行足够安全）
-    const values = rows.map(r => {
-      const esc = (s: any) => String(s ?? '').replace(/'/g, "''");
-      return `('${esc(r.business_no)}', '${esc(r.salesman_name)}', '${esc(r.full_name)}', '${esc(r.team)}', '${esc(r.organization)}', ${Number(r.car_insurance_plan_2026) || 0})`;
-    }).join(',\n      ');
-
-    await this.query(`INSERT INTO SalesmanTeamMapping VALUES\n      ${values}`);
-
-    // 创建 SalesmanPlanFact 视图（供 premiumPlan.ts / renewal-drilldown.ts 使用）
-    await this.query(`
-      CREATE OR REPLACE VIEW SalesmanPlanFact AS
-      SELECT
-        full_name AS salesman_name,
-        team_name,
-        organization AS org_name,
-        2026 AS plan_year,
-        car_insurance_plan_2026 AS plan_vehicle,
-        car_insurance_plan_2026 AS plan_total
-      FROM SalesmanTeamMapping
-    `);
-
-    console.log(`[DuckDB] Team mapping loaded: ${rows.length} records, from ${jsonFilePath}`);
-    console.log(`[DuckDB] SalesmanPlanFact view created`);
-
-    // 预构建达成分析缓存表（数据加载完成后立即计算，后续查询直接读缓存）
-    await this.buildAchievementView(2026);
+    return domainLoaders.loadTeamMapping(this, jsonFilePath);
   }
 
-  /**
-   * 预构建保费达成分析缓存表 achievement_cache（业务员粒度）
-   *
-   * 规则（用户确认）：
-   * - JOIN 键：full_name（含工号前缀，如 "106014762刘刚"）
-   * - 时间进度：自然日历天数 / 365（使用最新签单日期）
-   * - 上年同期：精确日期匹配（max_date - INTERVAL 1 YEAR）
-   * - 无计划业务员：出现（mapping 中 plan=0 的 + mapping 外有保单的均出现）
-   *
-   * 调用时机：loadTeamMapping() 完成后自动调用
-   * 上游视图：SalesmanTeamMapping（含归属）+ PolicyFact（实际保费）
-   * 下游：server/src/sql/premiumPlan.ts 所有查询从本表读取
-   */
   async buildAchievementView(planYear: number = 2026): Promise<void> {
-    const prevYear = planYear - 1;
-
-    await this.query(`
-      CREATE OR REPLACE TABLE achievement_cache AS
-      WITH
-      -- 1. 时间进度：当年最新签单日到 1月1日 的自然天数 / 365
-      time_prog AS (
-        SELECT
-          GREATEST(
-            CAST(DATEDIFF('day', DATE '${planYear}-01-01', LEAST(CAST(CURRENT_DATE AS DATE), DATE '${planYear}-12-31')) + 1 AS DOUBLE) / 
-            CAST(DATEDIFF('day', DATE '${planYear}-01-01', DATE '${planYear}-12-31') + 1 AS DOUBLE),
-            1.0 / 365.0
-          ) AS progress,
-          MAX(policy_date) AS max_date
-        FROM PolicyFact
-        WHERE policy_date >= DATE '${planYear}-01-01'
-      ),
-      -- 2. 今年 YTD 实际（JOIN 键：PolicyFact.salesman_name = SalesmanTeamMapping.full_name）
-      ytd_actual AS (
-        SELECT salesman_name, SUM(premium) / 10000 AS actual_vehicle
-        FROM PolicyFact
-        WHERE policy_date >= DATE '${planYear}-01-01'
-        GROUP BY salesman_name
-      ),
-      -- 3. 上年同期（精确日期：去年 1月1日 到 max_date-1年）
-      prev_ytd AS (
-        SELECT salesman_name, SUM(premium) / 10000 AS prev_actual
-        FROM PolicyFact
-        WHERE policy_date >= DATE '${prevYear}-01-01'
-          AND policy_date <= (SELECT max_date - INTERVAL 1 YEAR FROM time_prog)
-        GROUP BY salesman_name
-      ),
-      -- 4. 上年全年（用于计划增长率：今年计划 / 上年全年 - 1）
-      prev_full AS (
-        SELECT salesman_name, SUM(premium) / 10000 AS prev_full_year
-        FROM PolicyFact
-        WHERE policy_date BETWEEN DATE '${prevYear}-01-01' AND DATE '${prevYear}-12-31'
-        GROUP BY salesman_name
-      ),
-      -- 5-7. 跨机构业务员（organization='未分配'）按 org_level_3 拆分的聚合
-      cross_org_names AS (
-        SELECT full_name FROM SalesmanTeamMapping WHERE organization = '未分配'
-      ),
-      ytd_by_org AS (
-        SELECT salesman_name, org_level_3, SUM(premium) / 10000 AS actual_vehicle
-        FROM PolicyFact
-        WHERE policy_date >= DATE '${planYear}-01-01'
-          AND salesman_name IN (SELECT full_name FROM cross_org_names)
-        GROUP BY salesman_name, org_level_3
-      ),
-      prev_ytd_by_org AS (
-        SELECT salesman_name, org_level_3, SUM(premium) / 10000 AS prev_actual
-        FROM PolicyFact
-        WHERE policy_date >= DATE '${prevYear}-01-01'
-          AND policy_date <= (SELECT max_date - INTERVAL 1 YEAR FROM time_prog)
-          AND salesman_name IN (SELECT full_name FROM cross_org_names)
-        GROUP BY salesman_name, org_level_3
-      ),
-      prev_full_by_org AS (
-        SELECT salesman_name, org_level_3, SUM(premium) / 10000 AS prev_full_year
-        FROM PolicyFact
-        WHERE policy_date BETWEEN DATE '${prevYear}-01-01' AND DATE '${prevYear}-12-31'
-          AND salesman_name IN (SELECT full_name FROM cross_org_names)
-        GROUP BY salesman_name, org_level_3
-      )
-
-      -- Part A1：正常映射业务员（organization != '未分配'）
-      SELECT
-        m.full_name                                                AS full_name,
-        m.salesman_name                                            AS salesman_name_short,
-        m.team_name,
-        m.organization                                             AS org_name,
-        ${planYear}                                                AS plan_year,
-        COALESCE(m.car_insurance_plan_2026, 0)                     AS plan_vehicle,
-        COALESCE(a.actual_vehicle, 0)                              AS actual_vehicle,
-        COALESCE(pv.prev_actual, 0)                                AS prev_year_actual,
-        COALESCE(pf.prev_full_year, 0)                             AS prev_year_full,
-        tp.progress                                                AS time_progress,
-        CASE
-          WHEN COALESCE(m.car_insurance_plan_2026, 0) > 0 AND tp.progress > 0
-          THEN ROUND((COALESCE(a.actual_vehicle, 0) / (m.car_insurance_plan_2026 * tp.progress)) * 100.0, 2)
-          ELSE NULL
-        END AS achievement_rate,
-        CASE
-          WHEN COALESCE(pv.prev_actual, 0) > 0
-          THEN ROUND(((COALESCE(a.actual_vehicle, 0) - pv.prev_actual) / pv.prev_actual) * 100.0, 2)
-          ELSE NULL
-        END AS yoy_rate,
-        CASE
-          WHEN COALESCE(pf.prev_full_year, 0) > 0
-          THEN ROUND((COALESCE(m.car_insurance_plan_2026, 0) / pf.prev_full_year - 1) * 100.0, 2)
-          ELSE NULL
-        END AS plan_growth_rate
-      FROM SalesmanTeamMapping m
-      LEFT JOIN ytd_actual  a  ON m.full_name = a.salesman_name
-      LEFT JOIN prev_ytd    pv ON m.full_name = pv.salesman_name
-      LEFT JOIN prev_full   pf ON m.full_name = pf.salesman_name
-      CROSS JOIN time_prog  tp
-      WHERE m.organization != '未分配'
-
-      UNION ALL
-
-      -- Part A2：跨机构业务员（organization='未分配' → 按保单 org_level_3 拆分，每个机构一行）
-      SELECT
-        m.full_name                                                AS full_name,
-        m.salesman_name                                            AS salesman_name_short,
-        m.team_name,
-        ao.org_level_3                                             AS org_name,
-        ${planYear}                                                AS plan_year,
-        0.0                                                        AS plan_vehicle,
-        COALESCE(ao.actual_vehicle, 0)                             AS actual_vehicle,
-        COALESCE(po.prev_actual, 0)                                AS prev_year_actual,
-        COALESCE(pfo.prev_full_year, 0)                            AS prev_year_full,
-        tp.progress                                                AS time_progress,
-        NULL                                                       AS achievement_rate,
-        CASE
-          WHEN COALESCE(po.prev_actual, 0) > 0
-          THEN ROUND(((COALESCE(ao.actual_vehicle, 0) - po.prev_actual) / po.prev_actual) * 100.0, 2)
-          ELSE NULL
-        END AS yoy_rate,
-        NULL                                                       AS plan_growth_rate
-      FROM SalesmanTeamMapping m
-      JOIN ytd_by_org ao ON m.full_name = ao.salesman_name
-      LEFT JOIN prev_ytd_by_org  po  ON m.full_name = po.salesman_name  AND ao.org_level_3 = po.org_level_3
-      LEFT JOIN prev_full_by_org pfo ON m.full_name = pfo.salesman_name AND ao.org_level_3 = pfo.org_level_3
-      CROSS JOIN time_prog tp
-      WHERE m.organization = '未分配'
-
-      UNION ALL
-
-      -- Part B：有保单但不在 mapping 中的业务员（无归属、无计划，但必须出现）
-      SELECT
-        a.salesman_name                                            AS full_name,
-        a.salesman_name                                            AS salesman_name_short,
-        '未归属团队'                                               AS team_name,
-        '未归属机构'                                               AS org_name,
-        ${planYear}                                                AS plan_year,
-        0.0                                                        AS plan_vehicle,
-        COALESCE(a.actual_vehicle, 0)                              AS actual_vehicle,
-        COALESCE(pv.prev_actual, 0)                                AS prev_year_actual,
-        COALESCE(pf.prev_full_year, 0)                             AS prev_year_full,
-        tp.progress                                                AS time_progress,
-        NULL                                                       AS achievement_rate,
-        CASE
-          WHEN COALESCE(pv.prev_actual, 0) > 0
-          THEN ROUND(((COALESCE(a.actual_vehicle, 0) - pv.prev_actual) / pv.prev_actual) * 100.0, 2)
-          ELSE NULL
-        END AS yoy_rate,
-        NULL                                                       AS plan_growth_rate
-      FROM ytd_actual a
-      LEFT JOIN prev_ytd  pv ON a.salesman_name = pv.salesman_name
-      LEFT JOIN prev_full pf ON a.salesman_name = pf.salesman_name
-      CROSS JOIN time_prog tp
-      WHERE a.salesman_name NOT IN (SELECT full_name FROM SalesmanTeamMapping)
-    `);
-
-    const countResult = await this.query<{ cnt: number }>(
-      'SELECT COUNT(*) AS cnt FROM achievement_cache'
-    );
-    const distinctCount = (await this.query<{ cnt: number }>(
-      'SELECT COUNT(DISTINCT full_name) AS cnt FROM achievement_cache'
-    ))[0]?.cnt ?? 0;
-    console.log(`[DuckDB] achievement_cache built: ${countResult[0]?.cnt ?? 0} rows (${distinctCount} unique salespeople), year=${planYear}`);
-
-    // Smoke test: 验证核心聚合查询可执行（启动时发现 schema 问题而非运行时 400）
-    await this.query(`SELECT plan_year, SUM(plan_vehicle) AS total FROM achievement_cache GROUP BY plan_year LIMIT 1`);
-    console.log(`[DuckDB] achievement_cache smoke test passed`);
+    return domainLoaders.buildAchievementView(this, planYear);
   }
 
-  /**
-   * 加载续保漏斗 Parquet → RenewalFunnel 视图
-   * 独立于 PolicyFact，3.5万行 < 2MB
-   *
-   * 动态计算字段（基于当前日期）：
-   * - days_since_expiry: 到期后天数（正=已到期，负=未到期）
-   * - days_to_expiry: 距到期天数（正=未到期，负=已到期）
-   * - in_quote_window: 是否已进入报价窗口（到期前30天内，含到期日当天及之后）
-   * - maturity: 成熟度分级
-   * - action_priority: 行动优先级（P1/P2/P3/P4）
-   */
   async loadQuoteConversion(parquetPath: string): Promise<void> {
-    const safePath = parquetPath.replace(/\\/g, '/');
-    await this.query(`
-      CREATE OR REPLACE VIEW QuoteConversion AS
-      SELECT * FROM read_parquet('${safePath}')
-    `);
-    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM QuoteConversion');
-    console.log(`[DuckDB] QuoteConversion view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+    return domainLoaders.loadQuoteConversion(this, parquetPath);
   }
 
   async loadRenewalFunnel(parquetPath: string): Promise<void> {
-    const safePath = parquetPath.replace(/\\/g, '/');
-    await this.query(`
-      CREATE OR REPLACE VIEW RenewalFunnel AS
-      SELECT *,
-        CURRENT_DATE - CAST(insurance_end_date AS DATE) AS days_since_expiry,
-        CAST(insurance_end_date AS DATE) - CURRENT_DATE AS days_to_expiry,
-        (CAST(insurance_end_date AS DATE) - CURRENT_DATE) <= 30 AS in_quote_window,
-        CASE
-          WHEN CURRENT_DATE - CAST(insurance_end_date AS DATE) > 30 THEN 'mature'
-          WHEN CURRENT_DATE - CAST(insurance_end_date AS DATE) >= 0 THEN 'pending'
-          ELSE 'future'
-        END AS maturity,
-        CASE
-          WHEN NOT is_renewed AND (CAST(insurance_end_date AS DATE) - CURRENT_DATE) <= 30 AND NOT is_quoted
-            THEN 'P1'
-          WHEN NOT is_renewed AND is_quoted AND CURRENT_DATE - CAST(insurance_end_date AS DATE) BETWEEN 0 AND 14
-            THEN 'P2'
-          WHEN NOT is_renewed AND is_quoted AND CURRENT_DATE - CAST(insurance_end_date AS DATE) BETWEEN 15 AND 30
-            THEN 'P3'
-          WHEN NOT is_renewed
-            THEN 'P4'
-          ELSE NULL
-        END AS action_priority
-      FROM read_parquet('${safePath}')
-    `);
-    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalFunnel');
-    console.log(`[DuckDB] RenewalFunnel view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+    return domainLoaders.loadRenewalFunnel(this, parquetPath);
   }
 
-  /**
-   * 加载赔案明细 Parquet → ClaimsDetail VIEW
-   * 赔案级数据（每行=一个赔案），通过 policy_no JOIN PolicyFact
-   */
   async loadClaimsDetail(parquetPath: string): Promise<void> {
-    const safePath = parquetPath.replace(/\\/g, '/');
-    await this.query(`
-      CREATE OR REPLACE VIEW ClaimsDetail AS
-      SELECT * FROM read_parquet('${safePath}')
-    `);
-    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsDetail');
-    console.log(`[DuckDB] ClaimsDetail view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+    return domainLoaders.loadClaimsDetail(this, parquetPath);
   }
 
-  /**
-   * 加载保单级赔付聚合 Parquet → ClaimsAgg TABLE
-   * 3列：policy_no, claim_cases, reported_claims
-   * 供 cost.ts LEFT JOIN 计算赔付率/综合成本率
-   */
   async loadClaimsAgg(parquetPath: string): Promise<void> {
-    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
-    await this.query(`
-      CREATE OR REPLACE TABLE ClaimsAgg AS
-      SELECT * FROM read_parquet('${safePath}')
-    `);
-    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsAgg');
-    console.log(`[DuckDB] ClaimsAgg loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+    return domainLoaders.loadClaimsAgg(this, parquetPath);
   }
 
-  /**
-   * 回退：当 ClaimsAgg Parquet 不存在时，从 ClaimsDetail VIEW 聚合创建
-   */
   async createClaimsAggFromDetail(): Promise<void> {
-    await this.query(`
-      CREATE OR REPLACE TABLE ClaimsAgg AS
-      SELECT policy_no,
-             COUNT(DISTINCT claim_no) AS claim_cases,
-             SUM(COALESCE(settled_amount, 0) + COALESCE(pending_amount, 0)) AS reported_claims
-      FROM ClaimsDetail
-      WHERE policy_no IS NOT NULL
-      GROUP BY policy_no
-    `);
-    const cnt = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsAgg');
-    console.log(`[DuckDB] ClaimsAgg created from ClaimsDetail: ${cnt[0]?.cnt ?? 0} rows`);
+    return domainLoaders.createClaimsAggFromDetail(this);
   }
 
-  /**
-   * 加载交叉销售 Parquet → CrossSellFact VIEW
-   * 独立交叉销售清单（从 PolicyFact 中移出）
-   */
   async loadCrossSell(parquetPath: string): Promise<void> {
-    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
-    await this.query(`
-      CREATE OR REPLACE VIEW CrossSellFact AS
-      SELECT * FROM read_parquet('${safePath}')
-    `);
-    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CrossSellFact');
-    console.log(`[DuckDB] CrossSellFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+    return domainLoaders.loadCrossSell(this, parquetPath);
   }
 
-  /**
-   * 加载维修资源 Parquet → RepairDim TABLE
-   */
   async loadRepairDim(parquetPath: string): Promise<void> {
-    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
-    await this.query(`
-      CREATE OR REPLACE TABLE RepairDim AS
-      SELECT * FROM read_parquet('${safePath}')
-    `);
-    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RepairDim');
-    console.log(`[DuckDB] RepairDim loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+    return domainLoaders.loadRepairDim(this, parquetPath);
   }
 
-  /**
-   * 加载品牌维度 Parquet → BrandDim TABLE
-   */
   async loadBrandDim(parquetPath: string): Promise<void> {
-    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
-    await this.query(`
-      CREATE OR REPLACE TABLE BrandDim AS
-      SELECT * FROM read_parquet('${safePath}')
-    `);
-    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM BrandDim');
-    console.log(`[DuckDB] BrandDim loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+    return domainLoaders.loadBrandDim(this, parquetPath);
   }
 
-  /**
-   * 加载客户来源去向 Parquet → CustomerFlow VIEW
-   */
   async loadCustomerFlow(parquetPath: string): Promise<void> {
-    const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
-    await this.query(`
-      CREATE OR REPLACE VIEW CustomerFlow AS
-      SELECT * FROM read_parquet('${safePath}')
-    `);
-    const countResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CustomerFlow');
-    console.log(`[DuckDB] CustomerFlow view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+    return domainLoaders.loadCustomerFlow(this, parquetPath);
   }
 
-  /**
-   * 关闭数据库连接
-   */
+  // ============================================
+  // 生命周期
+  // ============================================
+
   async close(): Promise<void> {
     if (this.connectionPool) {
       await this.connectionPool.closeAll();
@@ -1484,4 +495,4 @@ class DuckDBService {
 export const duckdbService = new DuckDBService();
 
 /** @internal 测试用：派生表名列表 */
-export const DERIVED_RELATIONS = DuckDBService.DERIVED_RELATIONS;
+export { DERIVED_RELATIONS } from './duckdb-materialization.js';
