@@ -8,6 +8,7 @@
 
 import { buildWhereClauseFromFilters } from '../utils/queryBuilder.js';
 import { createLogger } from '../utils/logger.js';
+import { escapeSqlValue } from '../utils/security.js';
 import type { AdvancedFilterState } from '../types/data.js';
 import type { DateCriteria } from '../types/data.js';
 
@@ -29,7 +30,7 @@ export function validateYear(year: number): number {
 
 export function escapeSQL(str: string): string {
   if (str == null) return '';
-  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "''");
+  return escapeSqlValue(String(str));
 }
 
 // ============================================================================
