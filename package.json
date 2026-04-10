@@ -34,7 +34,7 @@
     "verify:quick": "node scripts/test-preflight.mjs && bun run governance && bun run typecheck",
     "verify:full": "bun run verify:quick && bun run test --run",
     "hooks:install": "bash scripts/install-git-hooks.sh",
-    "test:integration": "CI= vitest --run server/src/services/__tests__/duckdb-*.test.ts tests/parquet-processing.test.ts"
+    "test:integration": "vitest --run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@json-render/core": "^0.2.0",
