@@ -11,26 +11,22 @@ import { cardStyles, colorClasses, cn, fontStyles, tableStyles } from '@/shared/
 import { useTheme } from '@/shared/theme';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
-import chinaGeoJson from '@/shared/assets/china.json';
-import sichuanGeoJson from '@/shared/assets/sichuan.json';
-
 interface Props {
   hook: ReturnType<typeof useClaimsDetail>;
   params?: Record<string, string>;
 }
 
-// 注册地图（各执行一次）
-let chinaRegistered = false;
-let sichuanRegistered = false;
-function ensureMapsRegistered() {
-  if (!chinaRegistered) {
-    echarts.registerMap('china', chinaGeoJson as any);
-    chinaRegistered = true;
-  }
-  if (!sichuanRegistered) {
-    echarts.registerMap('sichuan', sichuanGeoJson as any);
-    sichuanRegistered = true;
-  }
+// 注册地图（各执行一次，动态导入避免 ~500KB 打入主 chunk）
+let mapsRegistered = false;
+async function ensureMapsRegistered() {
+  if (mapsRegistered) return;
+  const [chinaModule, sichuanModule] = await Promise.all([
+    import('@/shared/assets/china.json'),
+    import('@/shared/assets/sichuan.json'),
+  ]);
+  echarts.registerMap('china', chinaModule.default as any);
+  echarts.registerMap('sichuan', sichuanModule.default as any);
+  mapsRegistered = true;
 }
 
 /** 从 "510000四川省" 提取省份名称 */
@@ -75,14 +71,18 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
   const [mapMetric, setMapMetric] = useState<MapMetric>('cases');
   const [mapLevel, setMapLevel] = useState<MapLevel>('china');
 
+  const [mapsReady, setMapsReady] = useState(false);
+
+  useEffect(() => {
+    ensureMapsRegistered().then(() => setMapsReady(true));
+  }, []);
+
   const loadData = useCallback(() => {
     hook.fetchGeoData(params);
     hook.fetchFrequencyYoy(params);
   }, [hook.fetchGeoData, hook.fetchFrequencyYoy, params]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  ensureMapsRegistered();
 
   const comp = geoComparison.data;
 
@@ -294,7 +294,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
             ))}
           </div>
         </div>
-        {isLoading ? (
+        {isLoading || !mapsReady ? (
           <div className="h-[500px] flex items-center justify-center">加载中...</div>
         ) : (
           <ReactEChartsCore

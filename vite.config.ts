@@ -53,7 +53,7 @@ export default defineConfig({
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-echarts': ['echarts', 'echarts-for-react'],
-          'vendor-monaco': ['@monaco-editor/react'],
+
           'vendor-data': ['date-fns', 'exceljs'],
           'vendor-export': ['jspdf', 'html2canvas'],
           'vendor-ui': ['lucide-react', 'clsx', 'tailwind-merge'],

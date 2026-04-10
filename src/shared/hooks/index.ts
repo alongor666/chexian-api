@@ -5,9 +5,6 @@
 export { useLoadingStates } from './useLoadingStates';
 export type { LoadingStates, UseLoadingStatesReturn } from './useLoadingStates';
 
-export { useDataFetch, useMultipleDataFetch } from './useDataFetch';
-export type { UseDataFetchOptions, UseDataFetchReturn } from './useDataFetch';
-
 export { usePagination, useServerPagination } from './usePagination';
 export type {
   PaginationConfig,

@@ -25,36 +25,15 @@ const queryClient = new QueryClient({
 export { queryClient };
 
 /**
- * 费用分析路由级守卫，仅对超级用户（SUPER_USERS）开放。
- * 注：此组件始终在 AuthGuard 内渲染，AuthGuard 已处理 isLoading，
- * 因此 userPermission 求值时会话已完全恢复，不存在误重定向风险。
+ * 通用功能守卫 — 根据权限检查函数决定是否放行。
+ * 始终在 AuthGuard 内渲染，会话已完全恢复，不存在误重定向风险。
  */
-const FeeAnalysisGuard: FC<{ children: ReactNode }> = ({ children }) => {
+const FeatureGuard: FC<{
+  check: (username?: string, specialFeatures?: string[]) => boolean;
+  children: ReactNode;
+}> = ({ check, children }) => {
   const { userPermission } = usePermission();
-  if (!canAccessFeeAnalysis(userPermission?.username, userPermission?.specialFeatures)) {
-    return <Navigate to="/" replace />;
-  }
-  return <>{children}</>;
-};
-
-/**
- * 成本分析路由级守卫，仅对 COST_ALLOWED_USERS 白名单开放。
- * 同 FeeAnalysisGuard，依赖 AuthGuard 的 isLoading 保护，无需额外处理。
- */
-const CostGuard: FC<{ children: ReactNode }> = ({ children }) => {
-  const { userPermission } = usePermission();
-  if (!canAccessCost(userPermission?.username, userPermission?.specialFeatures)) {
-    return <Navigate to="/" replace />;
-  }
-  return <>{children}</>;
-};
-
-/**
- * 费用率发展路由级守卫，开发状态，仅超级用户可访问。
- */
-const ExpenseDevGuard: FC<{ children: ReactNode }> = ({ children }) => {
-  const { userPermission } = usePermission();
-  if (!canAccessExpenseDevelopment(userPermission?.username, userPermission?.specialFeatures)) {
+  if (!check(userPermission?.username, userPermission?.specialFeatures)) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
@@ -215,11 +194,11 @@ function App() {
                     path="cost"
                     element={
                       <RouteAccessGuard routePath="/cost">
-                        <CostGuard>
+                        <FeatureGuard check={canAccessCost}>
                           <DataGuard>
                             <LazyRoute><CostPage /></LazyRoute>
                           </DataGuard>
-                        </CostGuard>
+                        </FeatureGuard>
                       </RouteAccessGuard>
                     }
                   />
@@ -228,11 +207,11 @@ function App() {
                     path="fee-analysis"
                     element={
                       <RouteAccessGuard routePath="/fee-analysis">
-                        <FeeAnalysisGuard>
+                        <FeatureGuard check={canAccessFeeAnalysis}>
                           <DataGuard>
                             <LazyRoute><FeeAnalysisPage /></LazyRoute>
                           </DataGuard>
-                        </FeeAnalysisGuard>
+                        </FeatureGuard>
                       </RouteAccessGuard>
                     }
                   />
@@ -315,9 +294,9 @@ function App() {
                   <Route
                     path="expense-development"
                     element={
-                      <ExpenseDevGuard>
+                      <FeatureGuard check={canAccessExpenseDevelopment}>
                         <LazyRoute><ExpenseDevelopmentPage /></LazyRoute>
-                      </ExpenseDevGuard>
+                      </FeatureGuard>
                     }
                   />
 
