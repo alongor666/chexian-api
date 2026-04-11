@@ -4,35 +4,6 @@
  * 提供 AI 生成 UI 的能力，通过 Zod schema 定义组件目录，
  * 确保 AI 只能生成预定义的、安全的 UI 结构。
  *
- * @example
- * ```tsx
- * import {
- *   componentRegistry,
- *   useUIGeneration,
- *   systemPrompt,
- *   catalog,
- *   catalogPrompt
- * } from '@/shared/json-render'
- * import { Renderer, JSONUIProvider } from '@json-render/react'
- *
- * function AIGeneratedDashboard() {
- *   const { state, generate } = useUIGeneration()
- *
- *   return (
- *     <JSONUIProvider registry={componentRegistry}>
- *       <input
- *         placeholder="输入需求..."
- *         onKeyDown={(e) => e.key === 'Enter' && generate(e.currentTarget.value)}
- *       />
- *       {state.isGenerating && <div>生成中...</div>}
- *       {state.uiTree && (
- *         <Renderer tree={state.uiTree} registry={componentRegistry} />
- *       )}
- *     </JSONUIProvider>
- *   )
- * }
- * ```
- *
  * @packageDocumentation
  */
 
@@ -44,9 +15,7 @@ export type { Catalog } from './catalog'
 export { componentRegistry } from './components'
 export type { RenderChildren } from './components'
 
-// Hooks
-export { useUIGeneration, systemPrompt } from './hooks'
-export type { UIGenerationState } from './hooks'
+// Hooks (useUIGeneration removed — zero callers, mock-only dead code)
 
 // 从 @json-render/react 重新导出核心组件
 export {

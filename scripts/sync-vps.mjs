@@ -21,6 +21,7 @@
  *   数据管理/warehouse/fact/cross_sell/           →  data/fact/cross_sell/
  *   数据管理/warehouse/fact/claims/               →  data/fact/claims/
  *   数据管理/warehouse/fact/customer_flow/        →  data/fact/customer_flow/
+ *   数据管理/patrol_reports/                      →  data/patrol_reports/
  *
  * 可选环境变量:
  *   SYNC_VPS_SSH_ALIAS, SYNC_VPS_HOST, SYNC_VPS_USER, SYNC_VPS_PORT,
@@ -58,6 +59,7 @@ const LOCAL_CLAIMS_AGG_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims'
 const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_RENEWAL_UNIVERSE_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_universe');
+const LOCAL_PATROL_REPORTS_DIR = join(ROOT_DIR, '数据管理/patrol_reports');
 
 const colors = {
   green: '\x1b[32m',
@@ -448,6 +450,7 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'fact/claims',          local: LOCAL_CLAIMS_AGG_DIR,         remote: `${runConfig.remoteDir}/fact/claims`,           critical: true },
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${runConfig.remoteDir}/fact/customer_flow`,    critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${runConfig.remoteDir}/dim/repair`,            critical: false },
+    { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${runConfig.remoteDir}/patrol_reports`,         critical: false },
   ];
 
   for (const task of syncTasks) {
@@ -502,6 +505,7 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
     { label: 'fact/renewal_universe', local: LOCAL_RENEWAL_UNIVERSE_DIR, remote: `${remote}/fact/renewal_universe`, critical: false },
+    { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,   remote: `${remote}/patrol_reports`,         critical: false },
   ];
 
   // 过滤不存在的目录
@@ -578,6 +582,7 @@ function writeSyncManifest() {
     { label: 'fact/claims', path: LOCAL_CLAIMS_AGG_DIR },
     { label: 'fact/customer_flow', path: LOCAL_CUSTOMER_FLOW_DIR },
     { label: 'dim/repair', path: LOCAL_REPAIR_DIR },
+    { label: 'patrol_reports', path: LOCAL_PATROL_REPORTS_DIR },
   ];
 
   const files = {};

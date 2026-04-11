@@ -7,6 +7,7 @@ import { DataProvider } from '../shared/contexts/DataContext';
 import { FilterProvider } from '../shared/contexts/FilterContext';
 import { PermissionProvider, usePermission } from '../shared/contexts/PermissionContext';
 import { ThemeProvider } from '../shared/theme';
+import { ExportProvider } from '../shared/export/ExportContext';
 import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
 import { canAccessFeeAnalysis, canAccessCost, canAccessExpenseDevelopment } from '../shared/config/organizations';
@@ -125,6 +126,7 @@ function App() {
         <HashRouter>
           <DataProvider>
             <PermissionProvider>
+              <ExportProvider>
               <FilterProvider>
               <Routes>
                 {/* 登录页面 - 不需要认证 */}
@@ -341,6 +343,7 @@ function App() {
                 <Route path="/old-dashboard" element={<Navigate to="/dashboard" replace />} />
               </Routes>
               </FilterProvider>
+              </ExportProvider>
             </PermissionProvider>
           </DataProvider>
         </HashRouter>

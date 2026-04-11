@@ -13,6 +13,7 @@ import { Upload, X, FileText, BarChart3, ClipboardList, Check, Loader2 } from 'l
 import { useFocusTrap } from '../../shared/hooks';
 import { Logger } from '@/shared/utils/logger';
 import { colorClasses } from '../../shared/styles';
+import { useExportContext } from '../../shared/export/ExportContext';
 
 const logger = new Logger('ExportModal');
 
@@ -81,6 +82,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, isExporting, onClose]);
 
+  const { currentExport } = useExportContext();
+
   const handleExport = useCallback(async () => {
     const option = exportOptions.find((o) => o.id === selectedOption);
     if (!option || !option.available) {
@@ -88,19 +91,16 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
       return;
     }
 
+    if (!currentExport) {
+      alert('当前页面暂不支持导出');
+      return;
+    }
+
     setIsExporting(true);
 
     try {
-      // 触发全局导出事件
-      window.dispatchEvent(
-        new CustomEvent('export-data', {
-          detail: { format: option.format },
-        })
-      );
-
-      // 模拟导出延迟
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
+      const format = option.format === 'xlsx' ? 'xlsx' : 'csv';
+      await currentExport.handler(format);
       onClose();
     } catch (error) {
       logger.error('Export failed:', error);
@@ -108,7 +108,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
     } finally {
       setIsExporting(false);
     }
-  }, [selectedOption, onClose]);
+  }, [selectedOption, onClose, currentExport]);
 
   if (!isOpen) return null;
 

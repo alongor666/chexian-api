@@ -54,6 +54,5 @@ if (action === 'deploy-full') {
   try { chmodSync(join(PROJECT_ROOT, 'server/data'), 0o700); chmodSync(join(PROJECT_ROOT, 'logs'), 0o700); } catch(e){}
   log('green', "✓ 目录创建完成\n");
 
-  // TODO: Add more deployment steps here later, similar to the original bash script, if needed.
   log('green', "此 Node.js 版本的 Vps-deploy 主要为了统一管理入口。全量部署指令已执行架构初始化。");
 }

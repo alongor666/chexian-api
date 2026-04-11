@@ -14,6 +14,24 @@
 
 // ── 筛选器 ──
 
+/** 支持的分组维度 */
+export type RenewalGroupDimension =
+  | 'org'
+  | 'salesman'
+  | 'category'
+  | 'grade'
+  | 'coverage'
+  | 'is_new_car'
+  | 'is_transfer'
+  | 'is_nev'
+  | 'is_telemarketing';
+
+/** 下钻路径节点 — 依次应用为 WHERE 过滤条件 */
+export interface DrillStep {
+  dimension: RenewalGroupDimension;
+  value: string;
+}
+
 export interface RenewalUniverseFilters {
   orgName?: string;
   salesmanName?: string;
@@ -28,12 +46,27 @@ export interface RenewalUniverseFilters {
   insuranceGrade?: string;
   page?: number;
   pageSize?: number;
-  groupBy?: 'org' | 'salesman' | 'category' | 'grade';
+  groupBy?: RenewalGroupDimension;
+  /** 下钻路径：每步 {dimension, value} 作为 WHERE 过滤 */
+  drillPath?: DrillStep[];
 }
 
 function esc(val: string): string {
   return val.replace(/'/g, "''");
 }
+
+/** 维度 → SQL 列映射 */
+const DIMENSION_COL: Record<RenewalGroupDimension, string> = {
+  org: 'org_level_3',
+  salesman: 'salesman_name',
+  category: 'customer_category',
+  grade: 'insurance_grade',
+  coverage: 'coverage_combination',
+  is_new_car: 'is_new_car',
+  is_transfer: 'is_transfer',
+  is_nev: 'is_nev',
+  is_telemarketing: 'is_telemarketing',
+};
 
 const VALID_FUNNEL_STAGES = new Set(['renewed', 'quoted_not_renewed', 'not_quoted']);
 const VALID_PRIORITIES = new Set(['P1', 'P2', 'P3', 'P4']);
@@ -81,6 +114,16 @@ function buildWhere(filters: RenewalUniverseFilters, permissionFilter = '1=1'): 
     conditions.push(`insurance_grade = '${esc(filters.insuranceGrade)}'`);
   }
 
+  // drillPath：链式过滤
+  if (filters.drillPath && Array.isArray(filters.drillPath)) {
+    for (const step of filters.drillPath) {
+      const col = DIMENSION_COL[step.dimension];
+      if (col) {
+        conditions.push(`${col} = '${esc(step.value)}'`);
+      }
+    }
+  }
+
   if (permissionFilter && permissionFilter !== '1=1') {
     conditions.push(`(${permissionFilter})`);
   }
@@ -97,11 +140,7 @@ function buildWhere(filters: RenewalUniverseFilters, permissionFilter = '1=1'): 
 export function generateOverviewQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
   const where = buildWhere(filters, permissionFilter);
   const groupBy = filters.groupBy ?? 'org';
-
-  const groupCol = groupBy === 'salesman' ? 'salesman_name'
-    : groupBy === 'category' ? 'customer_category'
-    : groupBy === 'grade' ? 'insurance_grade'
-    : 'org_level_3';
+  const groupCol = DIMENSION_COL[groupBy] ?? 'org_level_3';
 
   return `
     SELECT
@@ -211,10 +250,7 @@ export function generateFunnelQuery(filters: RenewalUniverseFilters = {}, permis
 export function generateLossReasonQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
   const where = buildWhere(filters, permissionFilter);
   const groupBy = filters.groupBy ?? 'org';
-
-  const groupCol = groupBy === 'category' ? 'customer_category'
-    : groupBy === 'grade' ? 'insurance_grade'
-    : 'org_level_3';
+  const groupCol = DIMENSION_COL[groupBy] ?? 'org_level_3';
 
   return `
     SELECT
@@ -331,4 +367,30 @@ export function generateActionListQuery(filters: RenewalUniverseFilters = {}, pe
 export function generateActionListCountQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
   const where = buildWhere(filters, permissionFilter);
   return `SELECT COUNT(*) AS total_count FROM RenewalUniverse WHERE ${where}`;
+}
+
+// ── 元数据 ──
+
+/**
+ * 续保宇宙元数据：数据截止日 + 应续年份 + 统计摘要
+ * latest_data_date 取 PolicyFact 当年最新 policy_date（代表数据完整性边界）
+ */
+export function generateMetadataQuery(permissionFilter = '1=1'): string {
+  return `
+    WITH data_bounds AS (
+      SELECT CAST(MAX(CAST(policy_date AS DATE)) AS VARCHAR) AS latest_policy_date
+      FROM PolicyFact
+      WHERE YEAR(policy_date) = YEAR(CURRENT_DATE)
+    )
+    SELECT
+      (SELECT latest_policy_date FROM data_bounds) AS latest_data_date,
+      CAST(MIN(expiry_date) AS VARCHAR) AS earliest_expiry_date,
+      CAST(MAX(expiry_date) AS VARCHAR) AS latest_expiry_date,
+      COUNT(*) AS total_records,
+      SUM(CASE WHEN is_renewed THEN 1 ELSE 0 END) AS renewed_count,
+      SUM(CASE WHEN is_quoted THEN 1 ELSE 0 END) AS quoted_count,
+      YEAR(MIN(insurance_start_date)) AS due_year
+    FROM RenewalUniverse
+    WHERE ${permissionFilter}
+  `;
 }

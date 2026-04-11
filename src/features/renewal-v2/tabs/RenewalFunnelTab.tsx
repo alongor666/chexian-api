@@ -3,7 +3,7 @@
  */
 
 import { cardStyles, colorClasses, numericStyles, tableStyles, textStyles } from '../../../shared/styles';
-import { formatCurrency, formatPercent } from '../../../shared/utils/formatters';
+import { formatCount, formatCurrency, formatPercent } from '../../../shared/utils/formatters';
 import { useRenewalV2Funnel, type RenewalV2Filters } from '../hooks/useRenewalV2';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -44,7 +44,7 @@ export function RenewalFunnelTab({ filters }: Props) {
             <div key={stage} className={cardStyles.compact}>
               <div className={textStyles.caption}>{STAGE_LABELS[stage] ?? stage}</div>
               <div className={`${numericStyles.kpiSecondary} ${STAGE_COLORS[stage] ?? ''}`}>
-                {formatCurrency(row.count)}
+                {formatCount(row.count)}
               </div>
               <div className={textStyles.caption}>
                 {formatPercent(pct)} | {formatCurrency(row.premium_wan)}万
@@ -99,15 +99,15 @@ export function RenewalFunnelTab({ filters }: Props) {
                 {lossReason.map((row: any) => (
                   <tr key={row.group_name} className="border-b border-neutral-100">
                     <td className={tableStyles.cell}>{row.group_name ?? '-'}</td>
-                    <td className={tableStyles.cellNumeric}>{formatCurrency(row.due_count)}</td>
+                    <td className={tableStyles.cellNumeric}>{formatCount(row.due_count)}</td>
                     <td className={`${tableStyles.cellNumeric} ${colorClasses.text.danger}`}>
-                      {formatCurrency(row.not_quoted_count)}
+                      {formatCount(row.not_quoted_count)}
                     </td>
                     <td className={`${tableStyles.cellNumeric} ${colorClasses.text.warning}`}>
-                      {formatCurrency(row.quoted_not_renewed_count)}
+                      {formatCount(row.quoted_not_renewed_count)}
                     </td>
                     <td className={`${tableStyles.cellNumeric} ${colorClasses.text.success}`}>
-                      {formatCurrency(row.renewed_count)}
+                      {formatCount(row.renewed_count)}
                     </td>
                     <td className={tableStyles.cellNumeric}>{row.renewal_rate ?? '-'}</td>
                   </tr>

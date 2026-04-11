@@ -6,6 +6,11 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { queryKeys } from '../../../shared/api/query-keys';
 
+export interface DrillStep {
+  dimension: string;
+  value: string;
+}
+
 export interface RenewalV2Filters {
   orgName?: string;
   salesmanName?: string;
@@ -16,6 +21,10 @@ export interface RenewalV2Filters {
   funnelStage?: string;
   actionPriority?: string;
   groupBy?: string;
+  isNev?: boolean;
+  isNewCar?: boolean;
+  /** 下钻路径：[{dimension, value}, ...] → 序列化为 JSON 传给后端 */
+  drillPath?: DrillStep[];
   page?: number;
   pageSize?: number;
 }
@@ -31,6 +40,9 @@ function toParams(filters: RenewalV2Filters): Record<string, string> {
   if (filters.funnelStage) params.funnelStage = filters.funnelStage;
   if (filters.actionPriority) params.actionPriority = filters.actionPriority;
   if (filters.groupBy) params.groupBy = filters.groupBy;
+  if (filters.drillPath && filters.drillPath.length > 0) {
+    params.drillPath = JSON.stringify(filters.drillPath);
+  }
   if (filters.page != null) params.page = String(filters.page);
   if (filters.pageSize != null) params.pageSize = String(filters.pageSize);
   return params;
@@ -83,10 +95,27 @@ export function useRenewalV2Action(filters: RenewalV2Filters = {}) {
   });
 }
 
+export function useRenewalV2Metadata() {
+  return useQuery({
+    queryKey: queryKeys.renewalV2Metadata(),
+    queryFn: () => apiClient.getRenewalV2Metadata(),
+    staleTime: 10 * 60 * 1000, // metadata 更少变化，10 分钟缓存
+  });
+}
+
 export function usePatrolReport(domain: string) {
   return useQuery({
     queryKey: queryKeys.patrolReport(domain),
     queryFn: () => apiClient.getPatrolReport(domain),
     staleTime: STALE_5M,
+  });
+}
+
+export function usePatrolNarrative(domain: string) {
+  return useQuery({
+    queryKey: ['patrol-narrative', domain] as const,
+    queryFn: () => apiClient.getPatrolNarrative(domain),
+    staleTime: STALE_5M,
+    retry: false, // 报告可能不存在，404 不重试
   });
 }
