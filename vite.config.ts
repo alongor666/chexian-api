@@ -23,8 +23,6 @@ export default defineConfig({
       'echarts-for-react',
       'date-fns',
       'lucide-react',
-      'clsx',
-      'tailwind-merge',
       'zod',
     ],
   },
@@ -56,7 +54,7 @@ export default defineConfig({
 
           'vendor-data': ['date-fns', 'exceljs'],
           'vendor-export': ['jspdf', 'html2canvas'],
-          'vendor-ui': ['lucide-react', 'clsx', 'tailwind-merge'],
+          'vendor-ui': ['lucide-react'],
         },
       },
     },
