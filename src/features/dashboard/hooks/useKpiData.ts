@@ -20,7 +20,7 @@ export interface KpiData {
   vehicle_premium?: number | bigint;
   vehicle_achievement_rate?: number | null;
   vehicle_growth_rate?: number | null;
-  variable_cost_rate?: number | null;
+  variable_cost_ratio?: number | null;
   bundle_renewal_rate?: number | null;
   driver_premium?: number | bigint;
   driver_achievement_rate?: number | null;
@@ -87,7 +87,7 @@ export const useKpiData = ({
         vehicle_premium: kpiResponse.vehicle_premium,
         vehicle_achievement_rate: kpiResponse.vehicle_achievement_rate,
         vehicle_growth_rate: kpiResponse.vehicle_growth_rate,
-        variable_cost_rate: kpiResponse.variable_cost_rate,
+        variable_cost_ratio: kpiResponse.variable_cost_ratio,
         bundle_renewal_rate: kpiResponse.bundle_renewal_rate,
         driver_premium: kpiResponse.driver_premium,
         driver_achievement_rate: kpiResponse.driver_achievement_rate,
