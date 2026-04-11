@@ -24,6 +24,7 @@ import {
   getRepairDimPaths,
   getBrandDimPaths,
   getCustomerFlowPaths,
+  getRenewalUniversePaths,
 } from '../config/paths.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 import { isValidParquetFile } from '../utils/security.js';
@@ -70,6 +71,7 @@ export interface BootstrapDuckDB {
   loadRepairDim(parquetPath: string): Promise<void>;
   loadBrandDim(parquetPath: string): Promise<void>;
   loadCustomerFlow(parquetPath: string): Promise<void>;
+  loadRenewalUniverse(parquetPath: string): Promise<void>;
 }
 
 // ============================================
@@ -367,6 +369,7 @@ export class DataBootstrapper {
       { name: 'RepairDim', pathFn: getRepairDimPaths, loadFn: p => this.db.loadRepairDim(p) },
       { name: 'BrandDim', pathFn: getBrandDimPaths, loadFn: p => this.db.loadBrandDim(p) },
       { name: 'CustomerFlow', pathFn: getCustomerFlowPaths, loadFn: p => this.db.loadCustomerFlow(p) },
+      { name: 'RenewalUniverse', pathFn: getRenewalUniversePaths, loadFn: p => this.db.loadRenewalUniverse(p) },
     ];
 
     // 记录 ClaimsDetail 是否加载成功，供 ClaimsAgg 回退判断

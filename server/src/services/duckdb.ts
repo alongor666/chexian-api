@@ -501,6 +501,10 @@ export class DuckDBService implements DuckDBQueryable {
     return domainLoaders.loadCustomerFlow(this, parquetPath);
   }
 
+  async loadRenewalUniverse(parquetPath: string): Promise<void> {
+    return domainLoaders.loadRenewalUniverse(this, parquetPath);
+  }
+
   // ============================================
   // 生命周期
   // ============================================

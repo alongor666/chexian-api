@@ -476,6 +476,20 @@ export async function loadBrandDim(db: DuckDBQueryable, parquetPath: string): Pr
 }
 
 /**
+ * 加载续保宇宙 Parquet → RenewalUniverse VIEW
+ * ETL 预计算的扁平表（PolicyFact + Quotes + CustomerFlow JOIN 产物）
+ */
+export async function loadRenewalUniverse(db: DuckDBQueryable, parquetPath: string): Promise<void> {
+  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+  await db.query(`
+    CREATE OR REPLACE VIEW RenewalUniverse AS
+    SELECT * FROM read_parquet('${safePath}')
+  `);
+  const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalUniverse');
+  console.log(`[DuckDB] RenewalUniverse view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+}
+
+/**
  * 加载客户来源去向 Parquet → CustomerFlow VIEW
  */
 export async function loadCustomerFlow(db: DuckDBQueryable, parquetPath: string): Promise<void> {

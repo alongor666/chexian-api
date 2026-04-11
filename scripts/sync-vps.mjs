@@ -57,6 +57,7 @@ const LOCAL_CROSS_SELL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/cross_s
 const LOCAL_CLAIMS_AGG_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims');
 const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
+const LOCAL_RENEWAL_UNIVERSE_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_universe');
 
 const colors = {
   green: '\x1b[32m',
@@ -500,6 +501,7 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'fact/claims',          local: LOCAL_CLAIMS_AGG_DIR,         remote: `${remote}/fact/claims`,           critical: true },
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
+    { label: 'fact/renewal_universe', local: LOCAL_RENEWAL_UNIVERSE_DIR, remote: `${remote}/fact/renewal_universe`, critical: false },
   ];
 
   // 过滤不存在的目录
