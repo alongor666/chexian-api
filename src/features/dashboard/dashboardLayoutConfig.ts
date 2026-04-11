@@ -16,7 +16,7 @@ export type KpiCardId =
   | 'vehicle_premium'
   | 'vehicle_achievement_rate'
   | 'vehicle_growth_rate'
-  | 'variable_cost_rate'
+  | 'variable_cost_ratio'
   | 'bundle_renewal_rate'
   | 'driver_premium'
   | 'driver_achievement_rate'
@@ -40,7 +40,7 @@ export const KPI_CARD_META: Array<{ id: KpiCardId; label: string; group: KpiGrou
   { id: 'vehicle_premium', label: '车险保费', group: 'core' },
   { id: 'vehicle_achievement_rate', label: '车险达成率', group: 'core' },
   { id: 'vehicle_growth_rate', label: '车险增长率', group: 'core' },
-  { id: 'variable_cost_rate', label: '变动成本率', group: 'core' },
+  { id: 'variable_cost_ratio', label: '变动成本率', group: 'core' },
   { id: 'bundle_renewal_rate', label: '套单续保率', group: 'core' },
   { id: 'driver_premium', label: '车驾意保费', group: 'core' },
   { id: 'driver_achievement_rate', label: '车驾意达成率', group: 'core' },
@@ -70,5 +70,5 @@ export const DEFAULT_KPI_ORDER: Record<KpiGroup, KpiCardId[]> = {
 export const HERO_KPI_IDS: KpiCardId[] = [
   'vehicle_premium',
   'vehicle_achievement_rate',
-  'variable_cost_rate',
+  'variable_cost_ratio',
 ];

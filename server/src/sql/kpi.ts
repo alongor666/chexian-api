@@ -186,7 +186,7 @@ export const generateKpiQuery = (
     variable_cost_base AS (
       SELECT
         f.premium,
-        COALESCE(f.reported_claims, 0) AS reported_claims,
+        COALESCE(ca.reported_claims, 0) AS reported_claims,
         COALESCE(f.fee_amount, 0) AS fee_amount,
         LEAST(
           GREATEST(
@@ -197,6 +197,7 @@ export const generateKpiQuery = (
         ) AS exposure_days
       FROM filtered f
       CROSS JOIN latest_context lc
+      LEFT JOIN ClaimsAgg ca ON f.policy_no = ca.policy_no
       WHERE f.insurance_start_date IS NOT NULL
     ),
     variable_cost AS (
@@ -208,7 +209,7 @@ export const generateKpiQuery = (
             SUM(fee_amount) / SUM(premium)
           )
           ELSE NULL
-        END AS variable_cost_rate
+        END AS variable_cost_ratio
       FROM variable_cost_base
     ),
     vehicle_plan AS (
@@ -240,7 +241,7 @@ export const generateKpiQuery = (
         THEN (vp.vehicle_ytd_premium - vp.vehicle_prev_ytd_premium) / vp.vehicle_prev_ytd_premium
         ELSE NULL
       END AS vehicle_growth_rate,
-      vc.variable_cost_rate AS variable_cost_rate,
+      vc.variable_cost_ratio AS variable_cost_ratio,
       br.bundle_renewal_rate AS bundle_renewal_rate,
       dp.driver_ytd_premium AS driver_premium,
       CASE

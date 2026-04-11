@@ -87,7 +87,7 @@ export interface KpiData {
   vehicle_premium: number;
   vehicle_achievement_rate: number | null;
   vehicle_growth_rate: number | null;
-  variable_cost_rate: number | null;
+  variable_cost_ratio: number | null;
   bundle_renewal_rate: number | null;
   driver_premium: number;
   driver_achievement_rate: number | null;

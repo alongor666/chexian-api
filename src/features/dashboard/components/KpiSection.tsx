@@ -150,10 +150,10 @@ export const KpiSection = memo<KpiSectionProps>(({
           loading,
           type: 'value',
         };
-      case 'variable_cost_rate':
+      case 'variable_cost_ratio':
         return {
           title,
-          value: kpis.variable_cost_rate,
+          value: kpis.variable_cost_ratio,
           formatter: formatAchievementRate,
           loading,
           type: 'value',
