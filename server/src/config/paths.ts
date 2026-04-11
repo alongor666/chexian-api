@@ -140,6 +140,15 @@ export function getCustomerFlowPaths(): string[] {
   ];
 }
 
+// ── 巡检报告 JSON 路径 ──
+
+export function getPatrolReportPaths(domain: string): string[] {
+  return [
+    path.resolve(SERVER_ROOT, `../数据管理/patrol_reports/${domain}/latest.json`),
+    path.resolve(getDataDir(), `patrol_reports/${domain}/latest.json`),
+  ];
+}
+
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,

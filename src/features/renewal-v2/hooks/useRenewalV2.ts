@@ -82,3 +82,11 @@ export function useRenewalV2Action(filters: RenewalV2Filters = {}) {
     staleTime: STALE_5M,
   });
 }
+
+export function usePatrolReport(domain: string) {
+  return useQuery({
+    queryKey: queryKeys.patrolReport(domain),
+    queryFn: () => apiClient.getPatrolReport(domain),
+    staleTime: STALE_5M,
+  });
+}

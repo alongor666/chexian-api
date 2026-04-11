@@ -952,6 +952,12 @@ class ApiClient {
     return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.ACTION}${query ? `?${query}` : ''}`);
   }
 
+  // ── 巡检报告 ──
+
+  async getPatrolReport(domain: string) {
+    return this.request<{ report: any; domain: string; source: string }>(`/query/${QUERY_ROUTES.PATROL}/${domain}`);
+  }
+
   // ── 维修资源 ──
 
   async getRepairOverview(params?: Record<string, string>) {

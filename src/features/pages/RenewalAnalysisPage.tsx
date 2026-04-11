@@ -1,10 +1,11 @@
 /**
- * 续保分析页面（V2）— 4 Tab 宿主
+ * 续保分析页面（V2）— 5 Tab 宿主
  *
  * Tab 1: 续保总览 (KPI + 月度走势 + 排名)
  * Tab 2: 转化漏斗 (三级漏斗 + 流失归因)
  * Tab 3: 竞争格局 (流失去向 + 转入来源)
  * Tab 4: 行动看板 (待办清单 + 分页)
+ * Tab 5: 巡检报告 (四级亮灯 + 维度分析 + 盲点发现)
  */
 
 import { useState, useMemo, lazy, Suspense } from 'react';
@@ -23,12 +24,16 @@ const RenewalCompetitionTab = lazy(() =>
 const RenewalActionTab = lazy(() =>
   import('../renewal-v2/tabs/RenewalActionTab').then(m => ({ default: m.RenewalActionTab }))
 );
+const RenewalPatrolTab = lazy(() =>
+  import('../renewal-v2/tabs/RenewalPatrolTab').then(m => ({ default: m.RenewalPatrolTab }))
+);
 
 const TABS = [
   { key: 'overview', label: '续保总览' },
   { key: 'funnel', label: '转化漏斗' },
   { key: 'competition', label: '竞争格局' },
   { key: 'action', label: '行动看板' },
+  { key: 'patrol', label: '巡检报告' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -80,6 +85,7 @@ export function RenewalAnalysisPage() {
         {activeTab === 'funnel' && <RenewalFunnelTab filters={filters} />}
         {activeTab === 'competition' && <RenewalCompetitionTab filters={filters} />}
         {activeTab === 'action' && <RenewalActionTab filters={filters} />}
+        {activeTab === 'patrol' && <RenewalPatrolTab onNavigateToAction={() => setActiveTab('action')} />}
       </Suspense>
     </div>
   );

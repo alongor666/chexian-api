@@ -107,6 +107,9 @@ export const QUERY_ROUTES = {
     TREND: 'customer-flow/trend',
     METADATA: 'customer-flow/metadata',
   },
+  // 巡检报告
+  PATROL: 'patrol',
+
   // 赔案明细
   CLAIMS_DETAIL: {
     PENDING_OVERVIEW: 'claims-detail/pending-overview',

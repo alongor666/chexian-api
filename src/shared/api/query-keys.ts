@@ -79,6 +79,10 @@ export const queryKeys = {
   renewalV2Action: (params: Record<string, string>) =>
     ['renewal-v2-action', params] as const,
 
+  // ── 巡检报告 ──
+  patrolReport: (domain: string) =>
+    ['patrol-report', domain] as const,
+
   // ── 筛选器 ──
   filterOptions: () => ['filter-options'] as const,
 } as const;
