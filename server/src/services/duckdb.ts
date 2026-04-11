@@ -28,23 +28,32 @@ import * as domainLoaders from './duckdb-domain-loaders.js';
 interface ParquetCacheEntry {
   fingerprint: string;
   fileSet: Set<string>;
+  fileMtimes: Map<string, number>;
+}
+
+interface FingerprintResult {
+  fingerprint: string;
+  mtimes: Map<string, number>;
 }
 
 const parquetFingerprintCache = new Map<string, ParquetCacheEntry>();
 
 /**
  * 计算文件路径列表的指纹：hash(排序后路径 + 各文件 mtime)
+ * 同时返回每个文件的 mtimeMs 用于增量路径的精确比对
  * 若任何文件 stat 失败，返回 null（触发全量重建）
  */
-function computeParquetFingerprint(filePaths: string[]): string | null {
+function computeParquetFingerprint(filePaths: string[]): FingerprintResult | null {
   try {
     const sorted = [...filePaths].sort();
     const hash = createHash('sha256');
+    const mtimes = new Map<string, number>();
     for (const p of sorted) {
       const mtime = statSync(p).mtimeMs;
+      mtimes.set(p, mtime);
       hash.update(`${p}:${mtime}\n`);
     }
-    return hash.digest('hex');
+    return { fingerprint: hash.digest('hex'), mtimes };
   } catch {
     return null;
   }
@@ -428,10 +437,10 @@ export class DuckDBService implements DuckDBQueryable {
     const t0 = Date.now();
 
     // ── 指纹计算（失败则 fallback 到全量重建）──
-    const newFingerprint = computeParquetFingerprint(filePaths);
+    const fpResult = computeParquetFingerprint(filePaths);
     const cached = parquetFingerprintCache.get(TABLE_NAME);
 
-    if (newFingerprint !== null && cached !== undefined && cached.fingerprint === newFingerprint) {
+    if (fpResult !== null && cached !== undefined && cached.fingerprint === fpResult.fingerprint) {
       // 缓存命中：文件集合和 mtime 完全一致，验证表存在后复用
       if (await this.hasRelation(TABLE_NAME)) {
         const totalResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
@@ -445,7 +454,7 @@ export class DuckDBService implements DuckDBQueryable {
 
     // ── 判断是否可增量追加 ──
     const canIncremental =
-      newFingerprint !== null &&
+      fpResult !== null &&
       cached !== undefined &&
       (await this.hasRelation(TABLE_NAME));
 
@@ -454,8 +463,13 @@ export class DuckDBService implements DuckDBQueryable {
       const newFiles = filePaths.filter((p) => !cached!.fileSet.has(p));
       const removedFiles = [...cached!.fileSet].filter((p) => !filePathSet.has(p));
 
-      if (removedFiles.length === 0 && newFiles.length > 0) {
-        // 仅新增文件：INSERT INTO 增量加载
+      // 检查已有文件是否被修改（mtime 变化）
+      const existingModified = [...cached!.fileSet]
+        .filter((p) => filePathSet.has(p))
+        .some((p) => cached!.fileMtimes.get(p) !== fpResult!.mtimes.get(p));
+
+      if (removedFiles.length === 0 && newFiles.length > 0 && !existingModified) {
+        // 仅新增文件且已有文件未变：INSERT INTO 增量加载
         const escapedNew = newFiles.map((p) => `'${escapeSqlValue(p)}'`).join(', ');
         try {
           await this.query(`
@@ -464,8 +478,9 @@ export class DuckDBService implements DuckDBQueryable {
           `);
           this.invalidateCache();
           parquetFingerprintCache.set(TABLE_NAME, {
-            fingerprint: newFingerprint!,
+            fingerprint: fpResult!.fingerprint,
             fileSet: new Set(filePaths),
+            fileMtimes: fpResult!.mtimes,
           });
           const totalResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
           const totalRows = totalResult[0]?.cnt ?? 0;
@@ -499,11 +514,12 @@ export class DuckDBService implements DuckDBQueryable {
 
     this.invalidateCache();
 
-    // 更新指纹缓存（fingerprint 为 null 时跳过缓存写入，保持下次仍走全量）
-    if (newFingerprint !== null) {
+    // 更新指纹缓存（fpResult 为 null 时跳过缓存写入，保持下次仍走全量）
+    if (fpResult !== null) {
       parquetFingerprintCache.set(TABLE_NAME, {
-        fingerprint: newFingerprint,
+        fingerprint: fpResult.fingerprint,
         fileSet: new Set(filePaths),
+        fileMtimes: fpResult.mtimes,
       });
     }
 
