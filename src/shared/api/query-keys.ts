@@ -51,13 +51,6 @@ export const queryKeys = {
   crossSellHeatmap: (params: Record<string, string>) =>
     ['cross-sell-heatmap', params] as const,
 
-  // ── 续保 ──
-  renewalAnalysis: (params: Record<string, unknown>) =>
-    ['renewal-analysis', params] as const,
-
-  renewalDrilldown: (params: Record<string, unknown>) =>
-    ['renewal-drilldown', params] as const,
-
   // ── 假日营销 ──
   holidayDrilldown: (params: Record<string, unknown>) =>
     ['holiday-drilldown', params] as const,
@@ -74,30 +67,17 @@ export const queryKeys = {
   comprehensiveBundle: (params: Record<string, unknown>) =>
     ['comprehensive-bundle', params] as const,
 
-  // ── 续保漏斗 ──
-  renewalFunnelOverview: (params: Record<string, string>) =>
-    ['renewal-funnel-overview', params] as const,
-
-  renewalFunnelTrend: (params: Record<string, string>) =>
-    ['renewal-funnel-trend', params] as const,
-
-  renewalFunnelTeam: (params: Record<string, string>) =>
-    ['renewal-funnel-team', params] as const,
-
-  renewalFunnelSalesman: (params: Record<string, string>) =>
-    ['renewal-funnel-salesman', params] as const,
-
-  renewalFunnelActionList: (params: Record<string, string>) =>
-    ['renewal-funnel-action-list', params] as const,
-
-  renewalFunnelMatrix: (params: Record<string, string>) =>
-    ['renewal-funnel-matrix', params] as const,
-
-  renewalFunnelRisk: (params: Record<string, string>) =>
-    ['renewal-funnel-risk', params] as const,
-
-  renewalFunnelMetadata: () =>
-    ['renewal-funnel-metadata'] as const,
+  // ── 续保宇宙 V2 ──
+  renewalV2Overview: (params: Record<string, string>) =>
+    ['renewal-v2-overview', params] as const,
+  renewalV2Trend: (params: Record<string, string>) =>
+    ['renewal-v2-trend', params] as const,
+  renewalV2Funnel: (params: Record<string, string>) =>
+    ['renewal-v2-funnel', params] as const,
+  renewalV2Competition: (params: Record<string, string>) =>
+    ['renewal-v2-competition', params] as const,
+  renewalV2Action: (params: Record<string, string>) =>
+    ['renewal-v2-action', params] as const,
 
   // ── 筛选器 ──
   filterOptions: () => ['filter-options'] as const,

@@ -5,7 +5,7 @@
  * 使用全局筛选器状态（FilterContext）。
  */
 export { TruckPage } from './TruckPage';
-export { RenewalPage } from './RenewalPage';
+export { RenewalAnalysisPage } from './RenewalAnalysisPage';
 export { GrowthPage } from './GrowthPage';
 export { CostPage } from './CostPage';
 export { ComprehensiveAnalysisPage } from './ComprehensiveAnalysisPage';

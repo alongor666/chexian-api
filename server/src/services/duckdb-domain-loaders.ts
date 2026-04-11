@@ -347,38 +347,7 @@ export async function buildAchievementView(db: DuckDBQueryable, planYear: number
 // 独立数据域加载
 // ============================================
 
-/**
- * 加载续保漏斗 Parquet → RenewalFunnel 视图
- */
-export async function loadRenewalFunnel(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
-  await db.query(`
-    CREATE OR REPLACE VIEW RenewalFunnel AS
-    SELECT *,
-      CURRENT_DATE - CAST(insurance_end_date AS DATE) AS days_since_expiry,
-      CAST(insurance_end_date AS DATE) - CURRENT_DATE AS days_to_expiry,
-      (CAST(insurance_end_date AS DATE) - CURRENT_DATE) <= 30 AS in_quote_window,
-      CASE
-        WHEN CURRENT_DATE - CAST(insurance_end_date AS DATE) > 30 THEN 'mature'
-        WHEN CURRENT_DATE - CAST(insurance_end_date AS DATE) >= 0 THEN 'pending'
-        ELSE 'future'
-      END AS maturity,
-      CASE
-        WHEN NOT is_renewed AND (CAST(insurance_end_date AS DATE) - CURRENT_DATE) <= 30 AND NOT is_quoted
-          THEN 'P1'
-        WHEN NOT is_renewed AND is_quoted AND CURRENT_DATE - CAST(insurance_end_date AS DATE) BETWEEN 0 AND 14
-          THEN 'P2'
-        WHEN NOT is_renewed AND is_quoted AND CURRENT_DATE - CAST(insurance_end_date AS DATE) BETWEEN 15 AND 30
-          THEN 'P3'
-        WHEN NOT is_renewed
-          THEN 'P4'
-        ELSE NULL
-      END AS action_priority
-    FROM read_parquet('${safePath}')
-  `);
-  const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalFunnel');
-  console.log(`[DuckDB] RenewalFunnel view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
-}
+// loadRenewalFunnel removed — replaced by loadRenewalUniverse
 
 /**
  * 加载报价转化 Parquet → QuoteConversion 视图
@@ -473,6 +442,20 @@ export async function loadBrandDim(db: DuckDBQueryable, parquetPath: string): Pr
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM BrandDim');
   console.log(`[DuckDB] BrandDim loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+}
+
+/**
+ * 加载续保宇宙 Parquet → RenewalUniverse VIEW
+ * ETL 预计算的扁平表（PolicyFact + Quotes + CustomerFlow JOIN 产物）
+ */
+export async function loadRenewalUniverse(db: DuckDBQueryable, parquetPath: string): Promise<void> {
+  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+  await db.query(`
+    CREATE OR REPLACE VIEW RenewalUniverse AS
+    SELECT * FROM read_parquet('${safePath}')
+  `);
+  const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalUniverse');
+  console.log(`[DuckDB] RenewalUniverse view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
 }
 
 /**

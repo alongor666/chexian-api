@@ -38,22 +38,6 @@ export const QUERY_ROUTES = {
   COMPREHENSIVE_BUNDLE: '/comprehensive-bundle',
   COMPREHENSIVE_ANALYSIS_BUNDLE: '/comprehensive-analysis-bundle',
 
-  // 续保
-  RENEWAL: '/renewal',
-  RENEWAL_DRILLDOWN: '/renewal-drilldown',
-
-  // 续保漏斗
-  RENEWAL_FUNNEL: {
-    OVERVIEW: '/renewal-funnel/overview',
-    TREND: '/renewal-funnel/trend',
-    TEAM: '/renewal-funnel/team',
-    SALESMAN: '/renewal-funnel/salesman',
-    ACTION_LIST: '/renewal-funnel/action-list',
-    MATRIX: '/renewal-funnel/matrix',
-    METADATA: '/renewal-funnel/metadata',
-    RISK: '/renewal-funnel/risk',
-  },
-
   // 交叉销售（车驾意推介率）
   CROSS_SELL: '/cross-sell',
   CROSS_SELL_TREND: '/cross-sell-trend',
@@ -86,6 +70,15 @@ export const QUERY_ROUTES = {
 
   // 仪表盘聚合
   DASHBOARD_BUNDLE: '/dashboard-bundle',
+
+  // 续保宇宙 V2
+  RENEWAL_V2: {
+    OVERVIEW: '/renewal-v2/overview',
+    TREND: '/renewal-v2/trend',
+    FUNNEL: '/renewal-v2/funnel',
+    COMPETITION: '/renewal-v2/competition',
+    ACTION: '/renewal-v2/action',
+  },
 
   // 报价转化
   QUOTE_CONVERSION: {

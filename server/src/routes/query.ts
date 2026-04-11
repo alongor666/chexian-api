@@ -17,19 +17,20 @@ import growthRoutes from './query/growth.js';
 import coefficientRoutes from './query/coefficient.js';
 import costRoutes from './query/cost.js';
 import comprehensiveRoutes from './query/comprehensive.js';
-import renewalRoutes from './query/renewal.js';
+// renewalRoutes removed — replaced by renewal-v2
 import crossSellRoutes from './query/cross-sell.js';
 import salesmanRoutes from './query/salesman.js';
 import reportRoutes from './query/report.js';
 import premiumPlanRoutes from './query/premium-plan.js';
 import performanceRoutes from './query/performance.js';
 import bundleRoutes from './query/bundles.js';
-import renewalFunnelRoutes from './query/renewal-funnel.js';
+// renewalFunnelRoutes removed — replaced by renewal-v2
 import quoteConversionRoutes from './query/quote-conversion.js';
 import claimsDetailRoutes from './query/claims-detail.js';
 import expenseDevRoutes from './query/expense-development.js';
 import repairRoutes from './query/repair.js';
 import customerFlowRoutes from './query/customer-flow.js';
+import renewalV2Routes from './query/renewal-v2.js';
 
 export { buildRouteCacheKey } from './query/shared.js';
 export { fetchDashboardBundleData } from './query/bundles.js';
@@ -46,18 +47,19 @@ router.use(growthRoutes);
 router.use(coefficientRoutes);
 router.use(costRoutes);
 router.use(comprehensiveRoutes);
-router.use(renewalRoutes);
+// renewalRoutes removed — replaced by renewal-v2
 router.use(crossSellRoutes);
 router.use(salesmanRoutes);
 router.use(reportRoutes);
 router.use(premiumPlanRoutes);
 router.use(performanceRoutes);
 router.use(bundleRoutes);
-router.use(renewalFunnelRoutes);
+// renewalFunnelRoutes removed — replaced by renewal-v2
 router.use(quoteConversionRoutes);
 router.use(claimsDetailRoutes);
 router.use(expenseDevRoutes);
 router.use(repairRoutes);
 router.use(customerFlowRoutes);
+router.use(renewalV2Routes);
 
 export default router;

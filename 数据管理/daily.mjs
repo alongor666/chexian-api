@@ -200,6 +200,8 @@ const CLAIMS_DIR = join(WAREHOUSE, 'claims');
 const CLAIMS_PATH = join(CLAIMS_DIR, 'latest.parquet');
 const QUOTES_DIR = join(WAREHOUSE, 'quotes');
 const QUOTES_PATH = join(QUOTES_DIR, 'latest.parquet');
+const QUOTES_CONVERSION_DIR = join(WAREHOUSE, 'quotes_conversion');
+const QUOTES_CONVERSION_PATH = join(QUOTES_CONVERSION_DIR, 'latest.parquet');
 const CLAIMS_DETAIL_DIR = join(WAREHOUSE, 'claims_detail');
 const CLAIMS_DETAIL_PATH = join(CLAIMS_DETAIL_DIR, 'latest.parquet');
 const CROSS_SELL_DIR = join(WAREHOUSE, 'cross_sell');
@@ -212,6 +214,8 @@ const BRAND_DIM_DIR = join(__dirname, 'warehouse/dim/brand');
 const BRAND_DIM_PATH = join(BRAND_DIM_DIR, 'latest.parquet');
 const REPAIR_DIM_DIR = join(__dirname, 'warehouse/dim/repair');
 const REPAIR_DIM_PATH = join(REPAIR_DIM_DIR, 'latest.parquet');
+const RENEWAL_UNIVERSE_DIR = join(WAREHOUSE, 'renewal_universe');
+const RENEWAL_UNIVERSE_PATH = join(RENEWAL_UNIVERSE_DIR, 'latest.parquet');
 
 async function syncToVps(scriptDir) {
   log('cyan', '[ETL] 自动同步到 VPS...');
@@ -444,26 +448,40 @@ function runCrossSell(python, scriptDir) {
 }
 
 function runQuotesV2(python, scriptDir) {
-  log('cyan', '\n═══ Quotes 域：报价清单（v2 全量替换）═══\n');
+  log('cyan', '\n═══ Quotes 域：报价转化（quote_etl 多文件合并）═══\n');
   const config = JSON.parse(readFileSync(join(scriptDir, 'shard-config.json'), 'utf-8'));
   const pattern = config.source_patterns?.['04_quotes'] || '04_报价清单_*.xlsx';
   const sourceFiles = ls(pattern, scriptDir);
 
-  if (sourceFiles.length > 0) {
-    const xlsx = sourceFiles[0];
-    log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB) [v2 格式]`);
-
-    safeConvertDomain(python, join(scriptDir, 'pipelines/convert_quotes_v2.py'),
-      xlsx.path, QUOTES_PATH, 'quotes_latest');
-
-    const rowCount = getParquetRowCount(python, QUOTES_PATH);
-    updateDataSources('quotes_status', { rowCount, fieldCount: 25 });
-    log('green', '✅ Quotes 域完成 (v2)');
-  } else {
-    // 回退到旧版 quotes 处理
-    log('yellow', `⚠ 未找到 ${pattern}，回退到旧版 quotes 处理`);
-    runQuotes(python, scriptDir);
+  if (sourceFiles.length === 0) {
+    log('yellow', `⚠ 未找到 ${pattern}，跳过`);
+    return;
   }
+
+  // 列出所有匹配文件
+  for (const f of sourceFiles) {
+    log('green', `源文件: ${f.name} (${(statSync(f.path).size / 1024 / 1024).toFixed(1)} MB)`);
+  }
+
+  // 归档旧文件
+  ensureDir(QUOTES_CONVERSION_DIR);
+  if (existsSync(QUOTES_CONVERSION_PATH)) {
+    const archiveDir = join(homedir(), 'chexian-archive');
+    ensureDir(archiveDir);
+    const ts = formatDate();
+    renameSync(QUOTES_CONVERSION_PATH, join(archiveDir, `quotes_conversion_latest_${ts}.parquet`));
+    log('yellow', `  归档旧 quotes_conversion → quotes_conversion_latest_${ts}.parquet`);
+  }
+
+  // 多文件输入：-i file1 file2 (nargs='+' 要求单个 -i 后跟所有文件)
+  const inputArgs = ['-i', ...sourceFiles.map(f => `"${f.path}"`)];
+  runPythonScript(python, join(scriptDir, 'pipelines/quote_etl.py'), [
+    ...inputArgs, '-o', `"${QUOTES_CONVERSION_DIR}"`
+  ]);
+
+  const rowCount = getParquetRowCount(python, QUOTES_CONVERSION_PATH);
+  updateDataSources('quotes_conversion', { rowCount, fieldCount: 33 });
+  log('green', '✅ Quotes 域完成 (quote_etl 多文件合并)');
 }
 
 function runRenewal(python, scriptDir) {
@@ -544,6 +562,28 @@ function runCustomerFlow(python, scriptDir) {
   log('green', '✅ CustomerFlow 域完成');
 }
 
+function runRenewalUniverse(python, scriptDir) {
+  log('cyan', '\n═══ RenewalUniverse 域：续保宇宙预计算（多源 JOIN）═══\n');
+
+  // 依赖：policy/current/ + quotes + customer_flow
+  const policyGlob = join(scriptDir, 'warehouse/fact/policy/current/*.parquet');
+  const quotesPath = QUOTES_PATH;
+  const customerFlowPath = CUSTOMER_FLOW_PATH;
+
+  const args = [
+    '--policy-glob', `"${policyGlob}"`,
+    '-o', `"${RENEWAL_UNIVERSE_PATH}"`,
+  ];
+  if (existsSync(quotesPath)) args.push('--quotes', `"${quotesPath}"`);
+  if (existsSync(customerFlowPath)) args.push('--customer-flow', `"${customerFlowPath}"`);
+
+  runPythonScript(python, join(scriptDir, 'pipelines/generate_renewal_universe.py'), args);
+
+  const rowCount = getParquetRowCount(python, RENEWAL_UNIVERSE_PATH);
+  updateDataSources('renewal_universe', { rowCount, fieldCount: 31 });
+  log('green', '✅ RenewalUniverse 域完成');
+}
+
 function runClaimsAggregate(python, scriptDir) {
   log('cyan', '\n═══ Claims 聚合：ClaimsDetail → 保单级 ═══\n');
   if (!existsSync(CLAIMS_DETAIL_PATH)) {
@@ -566,7 +606,7 @@ async function main() {
   process.chdir(scriptDir);
 
   const noSync = process.argv.includes('--no-sync');
-  const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'renewal', 'brand', 'repair', 'customer_flow', 'all'];
+  const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'renewal', 'renewal_universe', 'brand', 'repair', 'customer_flow', 'all'];
   const subcommand = process.argv.find(a => ALL_DOMAINS.includes(a));
 
   // 子命令模式：单域处理
@@ -587,6 +627,7 @@ async function main() {
       case 'brand': runBrand(python, scriptDir); break;
       case 'repair': runRepair(python, scriptDir); break;
       case 'customer_flow': runCustomerFlow(python, scriptDir); break;
+      case 'renewal_universe': runRenewalUniverse(python, scriptDir); break;
     }
     if (!noSync) await syncToVps(scriptDir);
     return;

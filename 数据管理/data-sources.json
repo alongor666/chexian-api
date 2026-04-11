@@ -26,7 +26,14 @@
         "客户类别"
       ],
       "duckdb_relation": "PolicyFact → PolicyFactRealtime (TABLE)",
-      "api_routes": ["/api/query/kpi", "/api/query/trend", "/api/query/cost", "/api/query/growth", "/api/query/coefficient", "/api/query/performance-*"],
+      "api_routes": [
+        "/api/query/kpi",
+        "/api/query/trend",
+        "/api/query/cost",
+        "/api/query/growth",
+        "/api/query/coefficient",
+        "/api/query/performance-*"
+      ],
       "frontend_page": "dashboard, cost, growth, coefficient, performance-analysis, reports",
       "notes": "21-23使用01_签单清单_21-23年.xlsx（39列新格式）；24-26使用每日数据_*.xlsx。新格式含保险止期/被保险人性别等9个新字段。续保匹配仅应用于weekly分片"
     },
@@ -79,37 +86,52 @@
         "subject_plate_no"
       ],
       "duckdb_relation": "ClaimsDetail (VIEW) + ClaimsAgg (TABLE)",
-      "api_routes": ["/api/query/claims-detail/pending-overview", "/api/query/claims-detail/pending-by-org", "/api/query/claims-detail/cause-analysis", "/api/query/claims-detail/geo-*", "/api/query/claims-detail/loss-ratio-development"],
+      "api_routes": [
+        "/api/query/claims-detail/pending-overview",
+        "/api/query/claims-detail/pending-by-org",
+        "/api/query/claims-detail/cause-analysis",
+        "/api/query/claims-detail/geo-*",
+        "/api/query/claims-detail/loss-ratio-development"
+      ],
       "frontend_page": "claims-detail",
       "notes": "赔案级明细（非保单级聚合），JOIN PolicyFact via policy_no。与 claims/latest.parquet 互补。claim_status/is_bodily_injury 由 ETL 派生"
     },
     {
       "id": "quotes_conversion",
-      "name": "报价转化(旧车商业险)",
+      "name": "报价转化(04_报价清单)",
       "type": "fact",
-      "source_pattern": "旧车商业险报价*.xlsx",
-      "etl_entry": "python3 数据管理/pipelines/quote_etl.py -i <xlsx>",
+      "source_pattern": "04_报价清单*.xlsx",
+      "etl_entry": "python3 数据管理/pipelines/quote_etl.py -i <xlsx1> <xlsx2> ...",
       "etl_script": "pipelines/quote_etl.py",
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
-      "last_updated": "2026-04-03",
-      "data_range": "2025-12-01 ~ 2026-04-02",
-      "row_count": 484215,
-      "field_count": 26,
+      "last_updated": "2026-04-10",
+      "data_range": "2025-12-02 ~ 2026-04-09",
+      "row_count": 1035833,
+      "field_count": 33,
       "key_fields": [
-        "报价时间",
-        "三级机构",
-        "业务员",
-        "续保情况",
-        "是否承保",
-        "折前保费",
-        "折后保费",
-        "自主定价系数"
+        "quote_time",
+        "org_level_3",
+        "salesman_no",
+        "renewal_status",
+        "is_underwritten",
+        "pure_risk_premium",
+        "final_quote_premium",
+        "commercial_ncd",
+        "commercial_pricing_factor"
       ],
       "duckdb_relation": "QuoteConversion (VIEW)",
-      "api_routes": ["/api/query/quote-conversion/kpi", "/api/query/quote-conversion/funnel", "/api/query/quote-conversion/drilldown", "/api/query/quote-conversion/heatmap"],
+      "api_routes": [
+        "/api/query/quote-conversion/kpi",
+        "/api/query/quote-conversion/funnel",
+        "/api/query/quote-conversion/drilldown",
+        "/api/query/quote-conversion/heatmap",
+        "/api/query/quote-conversion/price",
+        "/api/query/quote-conversion/ranking",
+        "/api/query/quote-conversion/trend"
+      ],
       "frontend_page": "quote-conversion",
-      "notes": "JOIN salesman dim补团队字段。与quotes/latest.parquet(2字段报价状态)是不同的表"
+      "notes": "支持多文件输入合并。JOIN salesman dim补团队字段。33列含 insurance_type/brand_model_category/fuel_type/vehicle_age 等新维度"
     },
     {
       "id": "renewal_funnel",
@@ -136,22 +158,19 @@
     },
     {
       "id": "quotes_status",
-      "name": "报价状态(保单域)",
+      "name": "⚠ 已废弃 — 报价状态(保单域)",
       "type": "fact",
-      "source_pattern": "每日数据_*.xlsx (回退) 或 商业险续转保报价*.xlsx",
-      "etl_entry": "node 数据管理/daily.mjs quotes",
-      "etl_script": "pipelines/transform.py --domain quotes 或 pipelines/convert_quotes.py",
+      "deprecated": true,
+      "deprecated_reason": "服务端不再加载 quotes/latest.parquet。报价数据统一由 quotes_conversion 域处理。",
+      "source_pattern": "N/A",
+      "etl_entry": "N/A",
+      "etl_script": "pipelines/convert_quotes_v2.py (已废弃)",
       "output": "warehouse/fact/quotes/latest.parquet",
-      "update_cadence": "with_source_xlsx",
+      "update_cadence": "N/A",
       "last_updated": "2026-04-03",
-      "data_range": "2024-01-01 ~ 2026-03-31",
       "row_count": 230165,
       "field_count": 2,
-      "key_fields": [
-        "续保单号",
-        "签单日期"
-      ],
-      "notes": "仅2字段，用于保单域LEFT JOIN判断是否已报价"
+      "notes": "旧架构遗留。服务端不加载、不同步VPS。quotes_conversion 已完全替代。"
     },
     {
       "id": "plate_region",
@@ -255,32 +274,25 @@
         "org_level_3"
       ],
       "duckdb_relation": "CrossSellFact (TABLE) → CrossSellDailyAgg (TABLE)",
-      "api_routes": ["/api/query/cross-sell", "/api/query/cross-sell-trend", "/api/query/cross-sell-summary", "/api/query/cross-sell-heatmap"],
+      "api_routes": [
+        "/api/query/cross-sell",
+        "/api/query/cross-sell-trend",
+        "/api/query/cross-sell-summary",
+        "/api/query/cross-sell-heatmap"
+      ],
       "frontend_page": "specialty (tab=cross-sell)",
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重"
     },
     {
       "id": "quotes_v2",
-      "name": "报价清单(商业险v2)",
+      "name": "⚠ 已废弃 — 报价清单(商业险v2)",
       "type": "fact",
-      "source_pattern": "04_报价清单_*.xlsx",
-      "etl_entry": "node 数据管理/daily.mjs quotes",
-      "etl_script": "pipelines/convert_quotes_v2.py",
-      "output": "warehouse/fact/quotes/latest.parquet",
-      "update_cadence": "with_source_xlsx",
-      "key_fields": [
-        "vehicle_frame_no",
-        "quote_time",
-        "insurance_grade",
-        "renewal_status",
-        "is_underwritten",
-        "commercial_pricing_factor",
-        "final_quote_premium"
-      ],
-      "duckdb_relation": "QuoteConversion (VIEW，共用)",
-      "api_routes": ["/api/query/quote-conversion/*"],
-      "frontend_page": "quote-conversion",
-      "notes": "25列全新格式报价清单，替换旧版2列quotes_status和quotes_conversion"
+      "deprecated": true,
+      "deprecated_reason": "已合并入 quotes_conversion 域。quote_etl.py 统一处理 04_报价清单，输出到 quotes_conversion/latest.parquet",
+      "source_pattern": "N/A",
+      "etl_script": "pipelines/convert_quotes_v2.py (已废弃)",
+      "output": "warehouse/fact/quotes/latest.parquet (不再使用)",
+      "notes": "2026-04-10 起由 quotes_conversion 完全替代。见 quote_etl.py"
     },
     {
       "id": "renewal_v2",
@@ -299,7 +311,10 @@
         "org_level_3"
       ],
       "duckdb_relation": "PolicyFactRenewal (VIEW)",
-      "api_routes": ["/api/query/renewal", "/api/query/renewal-drilldown"],
+      "api_routes": [
+        "/api/query/renewal",
+        "/api/query/renewal-drilldown"
+      ],
       "frontend_page": "specialty (tab=renewal)",
       "notes": "续保跟踪清单，9列+1派生(is_renewed)，替换旧版renewal_funnel"
     },
@@ -320,7 +335,11 @@
         "parts_discount_rate"
       ],
       "duckdb_relation": "RepairDim (TABLE)",
-      "api_routes": ["/api/query/repair/overview", "/api/query/repair/detail", "/api/query/repair/status"],
+      "api_routes": [
+        "/api/query/repair/overview",
+        "/api/query/repair/detail",
+        "/api/query/repair/status"
+      ],
       "frontend_page": "repair",
       "notes": "维修厂合作数据，12列，含核损金额/换件折扣率/合作状态"
     },
@@ -340,7 +359,12 @@
         "insurance_start_date"
       ],
       "duckdb_relation": "CustomerFlow (VIEW)",
-      "api_routes": ["/api/query/customer-flow/summary", "/api/query/customer-flow/inflow", "/api/query/customer-flow/outflow", "/api/query/customer-flow/trend"],
+      "api_routes": [
+        "/api/query/customer-flow/summary",
+        "/api/query/customer-flow/inflow",
+        "/api/query/customer-flow/outflow",
+        "/api/query/customer-flow/trend"
+      ],
       "frontend_page": "customer-flow",
       "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知"
     }

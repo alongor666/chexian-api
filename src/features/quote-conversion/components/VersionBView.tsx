@@ -176,7 +176,7 @@ function DiscountSection({ filters }: { filters: QuoteFilters }) {
           title="NCD系数分布"
           subtitle="对应旧 HTML 的 NCD 系数分布专题。"
           filters={filters}
-          dimension="ncd_coefficient"
+          dimension="commercial_ncd"
         />
         <DiscountSummary filters={filters} />
       </div>

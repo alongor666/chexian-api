@@ -533,8 +533,7 @@ class ApiClient {
   async getCoefficientData(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COEFFICIENT, filters); }
   async getCostAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COST, filters); }
   async getComprehensiveBundle(params?: ComprehensiveFilterParams): Promise<ComprehensiveBundleResponse> { return this.queryGet<ComprehensiveBundleResponse>(QUERY_ROUTES.COMPREHENSIVE_BUNDLE, params as Record<string, unknown>); }
-  async getRenewalAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.RENEWAL, filters); }
-  async getRenewalDrilldown(params?: Record<string, any>): Promise<any[]> { return this.queryGet(QUERY_ROUTES.RENEWAL_DRILLDOWN, params); }
+  // getRenewalAnalysis/getRenewalDrilldown removed — replaced by getRenewalV2*
 
   /**
    * 获取车驾意推介率数据
@@ -926,45 +925,31 @@ class ApiClient {
     });
   }
 
-  // ── 续保漏斗 ──
+  // ── 续保宇宙 V2 ──
 
-  async getRenewalFunnelOverview(params?: Record<string, string>) {
+  async getRenewalV2Overview(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.OVERVIEW}${query ? `?${query}` : ''}`);
+    return this.request<{ total: Record<string, any>; grouped: Record<string, any>[] }>(`/query/${QUERY_ROUTES.RENEWAL_V2.OVERVIEW}${query ? `?${query}` : ''}`);
   }
 
-  async getRenewalFunnelTrend(params?: Record<string, string>) {
+  async getRenewalV2Trend(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.TREND}${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.TREND}${query ? `?${query}` : ''}`);
   }
 
-  async getRenewalFunnelTeam(params?: Record<string, string>) {
+  async getRenewalV2Funnel(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.TEAM}${query ? `?${query}` : ''}`);
+    return this.request<{ funnel: Record<string, any>[]; lossReason: Record<string, any>[] }>(`/query/${QUERY_ROUTES.RENEWAL_V2.FUNNEL}${query ? `?${query}` : ''}`);
   }
 
-  async getRenewalFunnelSalesman(params?: Record<string, string>) {
+  async getRenewalV2Competition(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.SALESMAN}${query ? `?${query}` : ''}`);
+    return this.request<{ loss: Record<string, any>[]; gain: Record<string, any>[] }>(`/query/${QUERY_ROUTES.RENEWAL_V2.COMPETITION}${query ? `?${query}` : ''}`);
   }
 
-  async getRenewalFunnelActionList(params?: Record<string, string>) {
+  async getRenewalV2Action(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.ACTION_LIST}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelMatrix(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.MATRIX}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelRisk(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.RISK}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelMetadata() {
-    return this.request<{ minExpiryDate: string; maxExpiryDate: string; categories: string[]; availableMonths?: string[] }>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.METADATA}`);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.ACTION}${query ? `?${query}` : ''}`);
   }
 
   // ── 维修资源 ──

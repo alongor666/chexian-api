@@ -12,7 +12,7 @@ interface Props {
 const ALL_DIMENSIONS = [
   { key: 'renewal_status', label: '续保/转保' },
   { key: 'insurance_grade', label: '风险等级' },
-  { key: 'ncd_coefficient', label: 'NCD系数' },
+  { key: 'commercial_ncd', label: '商业险NCD' },
   { key: 'customer_category', label: '客户类别' },
   { key: 'traffic_risk_grade', label: '交通评分' },
   // ── 更多 ──

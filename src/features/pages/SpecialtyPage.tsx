@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CrossSellAnalysisPanel, CrossSellHeaderControls } from '../dashboard/CrossSellAnalysisPanel';
 import { TruckAnalysisPanel } from '../dashboard/TruckAnalysisPanel';
@@ -12,21 +12,15 @@ import type { ViewPerspective } from '../../shared/types';
 import type { FilterPresetName } from '../../shared/types/filters';
 import type { TrendGranularity } from '../dashboard/hooks/useCrossSellTrend';
 
-const RenewalFunnelPanel = lazy(() =>
-  import('../dashboard/renewal-funnel/RenewalFunnelPanel').then(m => ({ default: m.RenewalFunnelPanel }))
-);
-
-type SpecialtyTab = 'cross-sell' | 'renewal' | 'truck';
+type SpecialtyTab = 'cross-sell' | 'truck';
 
 const tabItems = [
   { key: 'cross-sell', label: '驾意险推介率' },
-  { key: 'renewal', label: '续保分析' },
   { key: 'truck', label: '营业货车' },
 ];
 
 const presetMap: Record<SpecialtyTab, FilterPresetName> = {
   'cross-sell': 'full',
-  'renewal': 'renewalDetail',
   'truck': 'full',
 };
 
@@ -38,11 +32,6 @@ const CROSS_SELL_ANCHORS = [
   { id: 'cross-sell-drilldown', label: '下钻分析', shortLabel: '下钻分析' },
   { id: 'cross-sell-top20', label: 'TOP20', shortLabel: 'TOP20' },
 ] as const;
-
-const RENEWAL_ANCHORS = [
-  { id: 'renewal-guide', label: '口径说明' },
-  { id: 'renewal-table', label: '续保明细' },
-];
 
 const TRUCK_ANCHORS = [
   { id: 'truck-charts', label: '占比分析' },
@@ -141,7 +130,6 @@ export const SpecialtyPage: React.FC = () => {
 
   const titleMap: Record<SpecialtyTab, string> = {
     'cross-sell': '交叉销售分析',
-    'renewal': '续保分析',
     'truck': '营业货车分析',
   };
 
@@ -157,7 +145,6 @@ export const SpecialtyPage: React.FC = () => {
       title={dynamicTitle}
       anchorSections={
         activeTab === 'cross-sell' ? [...CROSS_SELL_ANCHORS]
-        : activeTab === 'renewal' ? RENEWAL_ANCHORS
         : TRUCK_ANCHORS
       }
       showBasicFilterBar={false}
@@ -181,12 +168,6 @@ export const SpecialtyPage: React.FC = () => {
             filters={filters}
             trendGranularity={trendGranularity}
           />
-        )}
-
-        {activeTab === 'renewal' && (
-          <Suspense fallback={<div className="animate-pulse h-64 bg-neutral-100 dark:bg-white/8 rounded" />}>
-            <RenewalFunnelPanel />
-          </Suspense>
         )}
 
         {activeTab === 'truck' && (

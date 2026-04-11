@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
+⚠ 已废弃 (2026-04-10) — 由 quote_etl.py 统一替代。
+
+本脚本产出的 quotes/latest.parquet 已不再被服务端加载。
+报价数据统一走 quote_etl.py → quotes_conversion/latest.parquet 路径。
+
+保留仅供参考，不再维护。
+
+--- 原始说明 ---
 报价清单（商业险）Excel → quotes/latest.parquet
-
 全新格式 25 列报价清单，替换旧版 convert_quotes.py（旧版处理 商业险续转保报价*.xlsx）。
-
-用法：
-  python3 convert_quotes_v2.py -i 04_报价清单_商业险.xlsx -o warehouse/fact/quotes/latest.parquet
 """
 
 import argparse

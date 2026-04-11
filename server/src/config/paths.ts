@@ -70,15 +70,6 @@ export function getUserStorePath(): string {
   return path.resolve(getDataDir(), 'user_store.json');
 }
 
-// ── 续保漏斗 Parquet 路径（本地优先，VPS 回退）──
-
-export function getRenewalFunnelPaths(): string[] {
-  return [
-    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/renewal/renewal_funnel_2026q1.parquet'),
-    path.resolve(getDataDir(), 'fact/renewal/renewal_funnel_2026q1.parquet'),
-  ];
-}
-
 // ── 报价转化 Parquet 路径（本地优先，VPS 回退）──
 
 export function getQuoteConversionPaths(): string[] {
@@ -128,6 +119,15 @@ export function getBrandDimPaths(): string[] {
   return [
     path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/brand/latest.parquet'),
     path.resolve(getDataDir(), 'dim/brand/latest.parquet'),
+  ];
+}
+
+// ── 续保宇宙 Parquet 路径（ETL 预计算扁平表）──
+
+export function getRenewalUniversePaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/renewal_universe/latest.parquet'),
+    path.resolve(getDataDir(), 'fact/renewal_universe/latest.parquet'),
   ];
 }
 
