@@ -17,6 +17,11 @@ server/.tmp/
 # 临时数据文件
 parquet_data.json
 
+# 巡检报告 JSON（生成数据，通过 rsync 同步到 VPS）
+数据管理/patrol_reports/*/latest.json
+数据管理/patrol_reports/*/*.json
+!数据管理/patrol_reports/*/report.md
+
 # 工作流模板
 CC工作流复制/
 签子流程复制/

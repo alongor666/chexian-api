@@ -40,7 +40,7 @@ const exportOptions: ExportOption[] = [
     description: '导出当前视图为 PDF 格式报告',
     icon: FileText,
     format: 'pdf',
-    available: false, // 待实现
+    available: false, // PDF 由 ExportDialog 单独处理
   },
   {
     id: 'excel',

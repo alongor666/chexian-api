@@ -1,0 +1,98 @@
+{
+  "domain": "renewal",
+  "display_name": "续保巡检",
+  "data_source": "warehouse/fact/renewal_universe/latest.parquet",
+  "base_filter": null,
+  "dimensions": [
+    {
+      "id": "org_level_3",
+      "display_name": "三级机构",
+      "sql_column": "org_level_3",
+      "min_sample": 50
+    },
+    {
+      "id": "customer_category",
+      "display_name": "客户类别",
+      "sql_column": "customer_category",
+      "min_sample": 30
+    },
+    {
+      "id": "insurance_grade",
+      "display_name": "风险等级",
+      "sql_column": "insurance_grade",
+      "min_sample": 30
+    },
+    {
+      "id": "action_priority",
+      "display_name": "行动优先级",
+      "sql_column": "action_priority",
+      "min_sample": 30
+    },
+    {
+      "id": "is_nev",
+      "display_name": "新能源",
+      "sql_column": "CASE WHEN is_nev THEN '新能源' ELSE '传统燃油' END",
+      "min_sample": 50
+    },
+    {
+      "id": "expiry_month",
+      "display_name": "到期月份",
+      "sql_column": "expiry_month",
+      "min_sample": 30
+    }
+  ],
+  "metrics": [
+    {
+      "id": "renewal_rate",
+      "display_name": "续保率",
+      "sql": "ROUND(SUM(is_renewed::INT) * 1.0 / COUNT(*), 4)",
+      "format": "percent",
+      "direction": "higher_is_better",
+      "thresholds": { "red": 0.10, "orange": 0.15, "yellow": 0.20 }
+    },
+    {
+      "id": "quote_coverage_rate",
+      "display_name": "报价覆盖率",
+      "sql": "ROUND(SUM(is_quoted::INT) * 1.0 / COUNT(*), 4)",
+      "format": "percent",
+      "direction": "higher_is_better",
+      "thresholds": { "red": 0.18, "orange": 0.24, "yellow": 0.30 }
+    },
+    {
+      "id": "quote_conversion_rate",
+      "display_name": "报价转化率",
+      "sql": "ROUND(SUM(CASE WHEN is_renewed AND is_quoted THEN 1 ELSE 0 END) * 1.0 / NULLIF(SUM(is_quoted::INT), 0), 4)",
+      "format": "percent",
+      "direction": "higher_is_better",
+      "thresholds": { "red": 0.35, "orange": 0.42, "yellow": 0.50 }
+    },
+    {
+      "id": "premium_at_risk",
+      "display_name": "流失保费(万)",
+      "sql": "ROUND(SUM(CASE WHEN NOT is_renewed THEN total_premium ELSE 0 END) / 10000, 2)",
+      "format": "number",
+      "direction": "lower_is_better",
+      "thresholds": { "red": 5000, "orange": 3000, "yellow": 1500 }
+    },
+    {
+      "id": "policy_count",
+      "display_name": "应续件数",
+      "sql": "COUNT(*)",
+      "format": "integer",
+      "direction": "neutral",
+      "thresholds": null
+    }
+  ],
+  "cross_analysis": {
+    "enabled": true,
+    "max_dimensions": 2,
+    "deviation_threshold": 0.20,
+    "min_sample": 20
+  },
+  "comparison": {
+    "enabled": true,
+    "dimension": "expiry_month",
+    "periods": ["mom"]
+  },
+  "output_dir": "patrol_reports/renewal"
+}
