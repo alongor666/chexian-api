@@ -25,6 +25,12 @@
 - **修复**: 手动推送后补建了 PR
 - **预防**: 新增 PreToolUse hook，拦截在 main 分支上的 `git push`（exit 2 阻断）
 
+### 2026-04-11 — CI 监控 API 不可用
+- **症状**: `gh pr checks` 返回 403 `Resource not accessible by personal access token`
+- **根因**: Token 缺 `checks:read`；步骤 6 写了 `gh pr checks --watch` 但未验证能否执行
+- **修复**: 改用 `gh api .../actions/runs`（已验证可用）
+- **预防**: 步骤 6 改为 actions/runs API；标注"禁止用 `gh pr checks`"
+
 ### 2026-04-11 — 服务端依赖遗漏（两次 commit）
 - **症状**: pre-commit tsc 报错 `getPatrolReportPaths` 不存在；query.ts 未注册路由
 - **根因**: 改前端没完整梳理后端依赖链（paths.ts / query.ts / api-routes.ts）

@@ -70,7 +70,8 @@ def query_data(parquet_files, days=14):
         df = df.merge(cs, on='policy_no', how='left')
         df['is_cross_sell'] = df['is_cross_sell'].fillna(False)
         df['cross_sell_premium_driver'] = df['cross_sell_premium_driver'].fillna(0)
-        df['_is_driver'] = df['cross_sell_premium_driver'] > 0
+        # 口径对齐 server getCrossSellCondition()：用 is_cross_sell 布尔标识，非保费金额
+        df['_is_driver'] = df['is_cross_sell'] == True
         driver_premium_col = 'cross_sell_premium_driver'
     else:
         raise FileNotFoundError(f'交叉销售数据不存在: {cs_path}')

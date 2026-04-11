@@ -40,7 +40,8 @@ const TRUCK_ANCHORS = [
 
 export const SpecialtyPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = (searchParams.get('tab') as SpecialtyTab) || 'cross-sell';
+  const rawTab = searchParams.get('tab');
+  const initialTab: SpecialtyTab = rawTab === 'cross-sell' || rawTab === 'truck' ? rawTab : 'cross-sell';
   const [activeTab, setActiveTab] = useState<SpecialtyTab>(initialTab);
 
   const { filters, setFilters } = useGlobalFilters();

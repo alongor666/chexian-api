@@ -441,8 +441,8 @@ export const stateStyles = {
  */
 export const alertStyles: Record<string, { bg: string; text: string; emoji: string }> = {
   red:    { bg: 'bg-red-50 dark:bg-red-950',       text: 'text-red-700 dark:text-red-400',       emoji: '🔴' },
-  orange: { bg: 'bg-orange-50 dark:bg-orange-950',  text: 'text-orange-700 dark:text-orange-400', emoji: '🟡' },
-  yellow: { bg: 'bg-amber-50 dark:bg-amber-950',    text: 'text-amber-700 dark:text-amber-400',   emoji: '🔵' },
+  orange: { bg: 'bg-yellow-50 dark:bg-yellow-950',  text: 'text-yellow-700 dark:text-yellow-400', emoji: '🟡' },
+  yellow: { bg: 'bg-blue-50 dark:bg-blue-950',      text: 'text-blue-700 dark:text-blue-400',     emoji: '🔵' },
   green:  { bg: 'bg-emerald-50 dark:bg-emerald-950', text: 'text-emerald-700 dark:text-emerald-400', emoji: '🟢' },
 }
 

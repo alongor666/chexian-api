@@ -80,9 +80,10 @@ router.get(
   '/renewal-v2/overview',
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
+    const perm = req.permissionFilter || '1=1';
     const [totalRows, groupedRows] = await Promise.all([
-      duckdbService.query(generateOverviewTotalQuery(filters)),
-      duckdbService.query(generateOverviewQuery(filters)),
+      duckdbService.query(generateOverviewTotalQuery(filters, perm)),
+      duckdbService.query(generateOverviewQuery(filters, perm)),
     ]);
     res.json({
       success: true,
@@ -102,7 +103,8 @@ router.get(
   '/renewal-v2/trend',
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const data = await duckdbService.query(generateTrendQuery(filters));
+    const perm = req.permissionFilter || '1=1';
+    const data = await duckdbService.query(generateTrendQuery(filters, perm));
     res.json({ success: true, data });
   })
 );
@@ -117,9 +119,10 @@ router.get(
   '/renewal-v2/funnel',
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
+    const perm = req.permissionFilter || '1=1';
     const [funnelRows, lossRows] = await Promise.all([
-      duckdbService.query(generateFunnelQuery(filters)),
-      duckdbService.query(generateLossReasonQuery(filters)),
+      duckdbService.query(generateFunnelQuery(filters, perm)),
+      duckdbService.query(generateLossReasonQuery(filters, perm)),
     ]);
     res.json({
       success: true,
@@ -141,9 +144,10 @@ router.get(
   '/renewal-v2/competition',
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
+    const perm = req.permissionFilter || '1=1';
     const [lossRows, gainRows] = await Promise.all([
-      duckdbService.query(generateCompetitionLossQuery(filters)),
-      duckdbService.query(generateCompetitionGainQuery(filters)),
+      duckdbService.query(generateCompetitionLossQuery(filters, perm)),
+      duckdbService.query(generateCompetitionGainQuery(filters, perm)),
     ]);
     res.json({
       success: true,
@@ -165,9 +169,10 @@ router.get(
   '/renewal-v2/action',
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
+    const perm = req.permissionFilter || '1=1';
     const [dataRows, countRows] = await Promise.all([
-      duckdbService.query(generateActionListQuery(filters)),
-      duckdbService.query<{ total_count: number }>(generateActionListCountQuery(filters)),
+      duckdbService.query(generateActionListQuery(filters, perm)),
+      duckdbService.query<{ total_count: number }>(generateActionListCountQuery(filters, perm)),
     ]);
     const totalCount = countRows[0]?.total_count ?? 0;
     res.json({

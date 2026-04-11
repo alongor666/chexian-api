@@ -224,21 +224,32 @@ Closes #[issue编号]
 
 ### 6. Post-PR 验证（自进化触发点）
 
-PR 创建后，立即检查 CI 状态：
+PR 创建后，检查 CI 和 merge 状态。
+
+**注意**：Token 无 `checks:read` 权限，禁止用 `gh pr checks`（会 403）。改用 `actions/runs` API：
+
 ```bash
-gh pr checks <PR_URL> --watch --fail-fast 2>&1 | tail -20
+# 1. mergeable 状态
+gh pr view <PR_NUMBER> --json mergeable --jq '.mergeable'
+
+# 2. CI workflow 结果（等 ~30s 让 CI 启动）
+BRANCH=$(git branch --show-current)
+gh api "repos/{owner}/{repo}/actions/runs?branch=$BRANCH&per_page=5" \
+  --jq '.workflow_runs[] | "\(.name) | \(.status) | \(.conclusion)"'
 ```
 
-**如果 CI 通过**：报告 PR URL，流程结束。
+**判定**：
+- `MERGEABLE` + 全部 `success/skipped` → 报告 PR URL，结束
+- `CONFLICTING` → rebase 后重推
+- 任一 `failure` → 读日志、修代码、追加 commit
 
-**如果 CI 失败或无法 merge**：
-1. 读取失败日志：`gh pr checks <PR_URL>` + `gh pr view <PR_URL> --json mergeable`
-2. 分析根因（缺依赖？类型错误？测试失败？冲突？）
-3. 修复代码，追加 commit 到同一分支
-4. **记录到进化日志**：按格式追加到 `.claude/workflow/pr-evolution.md`
-5. 如果根因是流程缺陷（而非代码 bug），同时更新本文件（commit-push-pr.md）的前置检查步骤
+**如果失败**：
+1. 分析根因
+2. 修复 + 追加 commit
+3. **记录到 `.claude/workflow/pr-evolution.md`**
+4. 流程缺陷 → 同步更新本文件前置检查
 
-**进化规则**：同一类失败出现 2 次 → 必须转化为自动检查（hook 或 governance 规则），不再依赖 prompt 提醒。
+**进化规则**：同类失败 2 次 → 必须转为自动检查（hook 或 governance），不再依赖 prompt。
 
 ---
 
