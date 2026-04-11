@@ -1,12 +1,15 @@
 /**
  * 报价转化分析 SQL 生成器
  *
- * 数据源：QuoteConversion 视图（报价 Parquet + salesman dim JOIN）
+ * 数据源：QuoteConversion 视图（04_报价清单 Parquet + salesman dim JOIN）
  * 字段：quote_time, org_level_3, customer_category, renewal_status, is_underwritten,
- *       coverage_combination, insurance_grade, ncd_coefficient,
- *       pre_discount_premium, post_discount_premium, commercial_pricing_factor,
+ *       coverage_combination, insurance_grade, commercial_ncd,
+ *       pure_risk_premium, final_quote_premium, ncd_premium, commercial_pricing_factor,
  *       is_telemarketing, is_transfer, is_nev, traffic_risk_grade,
- *       tonnage_segment, salesman_no, salesman_name_display, team
+ *       highway_risk_grade, tonnage_segment, insurance_type,
+ *       brand_model_category, fuel_type, purchase_price, vehicle_age,
+ *       ncd_yoy_change, pricing_factor_yoy_change,
+ *       salesman_no, salesman_name_display, team
  */
 
 export interface QuoteConversionFilters {
@@ -70,10 +73,10 @@ function buildWhere(filters: QuoteConversionFilters): string {
     conds.push(`insurance_grade = '${esc(filters.riskGrade)}'`);
   }
   if (typeof filters.ncdMin === 'number') {
-    conds.push(`ncd_coefficient >= ${filters.ncdMin}`);
+    conds.push(`commercial_ncd >= ${filters.ncdMin}`);
   }
   if (typeof filters.ncdMax === 'number') {
-    conds.push(`ncd_coefficient <= ${filters.ncdMax}`);
+    conds.push(`commercial_ncd <= ${filters.ncdMax}`);
   }
 
   return conds.join(' AND ');
@@ -87,16 +90,16 @@ export function generateQuoteKpiQuery(filters: QuoteConversionFilters = {}): str
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
-      ROUND(SUM(CASE WHEN pre_discount_premium > 0 THEN post_discount_premium END) / NULLIF(SUM(CASE WHEN pre_discount_premium > 0 THEN pre_discount_premium END), 0), 3) AS avg_discount_rate,
-      ROUND(SUM(CASE WHEN is_underwritten = '承保' THEN post_discount_premium ELSE 0 END), 0) AS insured_premium,
+      ROUND(SUM(CASE WHEN pure_risk_premium > 0 THEN final_quote_premium END) / NULLIF(SUM(CASE WHEN pure_risk_premium > 0 THEN pure_risk_premium END), 0), 3) AS avg_discount_rate,
+      ROUND(SUM(CASE WHEN is_underwritten = '承保' THEN final_quote_premium ELSE 0 END), 0) AS insured_premium,
       COUNT(DISTINCT salesman_no) AS salesman_count,
       -- 续保/转保分拆
       COUNT(CASE WHEN renewal_status = '续保' THEN 1 END) AS renewal_quotes,
       COUNT(CASE WHEN renewal_status = '续保' AND is_underwritten = '承保' THEN 1 END) AS renewal_insured,
-      ROUND(SUM(CASE WHEN renewal_status = '续保' AND is_underwritten = '承保' THEN post_discount_premium ELSE 0 END), 0) AS renewal_insured_premium,
+      ROUND(SUM(CASE WHEN renewal_status = '续保' AND is_underwritten = '承保' THEN final_quote_premium ELSE 0 END), 0) AS renewal_insured_premium,
       COUNT(CASE WHEN renewal_status = '转保' THEN 1 END) AS switch_quotes,
       COUNT(CASE WHEN renewal_status = '转保' AND is_underwritten = '承保' THEN 1 END) AS switch_insured,
-      ROUND(SUM(CASE WHEN renewal_status = '转保' AND is_underwritten = '承保' THEN post_discount_premium ELSE 0 END), 0) AS switch_insured_premium
+      ROUND(SUM(CASE WHEN renewal_status = '转保' AND is_underwritten = '承保' THEN final_quote_premium ELSE 0 END), 0) AS switch_insured_premium
     FROM QuoteConversion
     WHERE ${where}
   `;
@@ -109,8 +112,8 @@ export function generateQuoteFunnelQuery(filters: QuoteConversionFilters = {}): 
     SELECT
       renewal_status AS renewal_type,
       COUNT(*) AS l1_total,
-      COUNT(CASE WHEN post_discount_premium > 0 THEN 1 END) AS l2_valid,
-      COUNT(CASE WHEN post_discount_premium > 0 AND insurance_grade IN ('A','B','C','D') AND ncd_coefficient <= 1.0 THEN 1 END) AS l3_quality,
+      COUNT(CASE WHEN final_quote_premium > 0 THEN 1 END) AS l2_valid,
+      COUNT(CASE WHEN final_quote_premium > 0 AND insurance_grade IN ('A','B','C','D') AND commercial_ncd <= 1.0 THEN 1 END) AS l3_quality,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS l4_insured
     FROM QuoteConversion
     WHERE ${where}
@@ -157,7 +160,7 @@ export function generateQuoteDrilldownQuery(
       ROUND(100.0 * COUNT(CASE WHEN renewal_status = '转保' AND is_underwritten = '承保' THEN 1 END)
         / NULLIF(COUNT(CASE WHEN renewal_status = '转保' THEN 1 END), 0), 1) AS switch_rate,
       -- 平均折扣率
-      ROUND(SUM(CASE WHEN pre_discount_premium > 0 THEN post_discount_premium END) / NULLIF(SUM(CASE WHEN pre_discount_premium > 0 THEN pre_discount_premium END), 0), 3) AS avg_discount
+      ROUND(SUM(CASE WHEN pure_risk_premium > 0 THEN final_quote_premium END) / NULLIF(SUM(CASE WHEN pure_risk_premium > 0 THEN pure_risk_premium END), 0), 3) AS avg_discount
     FROM QuoteConversion
     WHERE ${where}
     GROUP BY ${groupCol}${level === 'salesman' ? '' : `, ${nameCol}`}
@@ -176,7 +179,7 @@ export function generateQuoteHeatmapQuery(
   const allowedCols: Record<string, string> = {
     'renewal_status': 'renewal_status',
     'insurance_grade': 'insurance_grade',
-    'ncd_coefficient': "CAST(ncd_coefficient AS VARCHAR)",
+    'commercial_ncd': "CAST(commercial_ncd AS VARCHAR)",
     'coverage_combination': 'coverage_combination',
     'customer_category': 'customer_category',
     'is_telemarketing': 'is_telemarketing',
@@ -204,14 +207,14 @@ export function generateQuotePriceQuery(filters: QuoteConversionFilters = {}): s
   const where = buildWhere(filters);
   return `
     SELECT
-      ROUND(CASE WHEN pre_discount_premium > 0 THEN post_discount_premium / pre_discount_premium END * 20) / 20.0 AS discount_bin,
+      ROUND(CASE WHEN pure_risk_premium > 0 THEN final_quote_premium / pure_risk_premium END * 20) / 20.0 AS discount_bin,
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
-      ROUND(AVG(post_discount_premium), 0) AS avg_premium,
-      ROUND(SUM(commercial_pricing_factor * post_discount_premium) / NULLIF(SUM(CASE WHEN commercial_pricing_factor IS NOT NULL AND commercial_pricing_factor > 0 THEN post_discount_premium END), 0), 3) AS avg_pricing_coef
+      ROUND(AVG(final_quote_premium), 0) AS avg_premium,
+      ROUND(SUM(commercial_pricing_factor * final_quote_premium) / NULLIF(SUM(CASE WHEN commercial_pricing_factor IS NOT NULL AND commercial_pricing_factor > 0 THEN final_quote_premium END), 0), 3) AS avg_pricing_coef
     FROM QuoteConversion
-    WHERE ${where} AND pre_discount_premium > 0
+    WHERE ${where} AND pure_risk_premium > 0
     GROUP BY discount_bin
     ORDER BY discount_bin
   `;
@@ -225,7 +228,7 @@ export function generateQuoteRankingQuery(
   const where = buildWhere(filters);
   const allowedDims: Record<string, string> = {
     'customer_category': 'customer_category',
-    'ncd_coefficient': "CAST(ncd_coefficient AS VARCHAR)",
+    'commercial_ncd': "CAST(commercial_ncd AS VARCHAR)",
     'insurance_grade': 'insurance_grade',
     'is_nev': 'is_nev',
     'tonnage_segment': 'tonnage_segment',
@@ -241,7 +244,7 @@ export function generateQuoteRankingQuery(
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
-      ROUND(SUM(CASE WHEN pre_discount_premium > 0 THEN post_discount_premium END) / NULLIF(SUM(CASE WHEN pre_discount_premium > 0 THEN pre_discount_premium END), 0), 3) AS avg_discount
+      ROUND(SUM(CASE WHEN pure_risk_premium > 0 THEN final_quote_premium END) / NULLIF(SUM(CASE WHEN pure_risk_premium > 0 THEN pure_risk_premium END), 0), 3) AS avg_discount
     FROM QuoteConversion
     WHERE ${where}
     GROUP BY ${dimExpr}

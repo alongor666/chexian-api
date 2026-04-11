@@ -13,7 +13,7 @@ interface Props {
 
 const TABS = [
   { key: 'customer_category', label: '客户类别' },
-  { key: 'ncd_coefficient', label: 'NCD系数' },
+  { key: 'commercial_ncd', label: '商业险NCD' },
   { key: 'insurance_grade', label: '风险等级' },
   { key: 'is_nev', label: '新能源' },
   { key: 'traffic_risk_grade', label: '交通评分' },

@@ -79,8 +79,8 @@ describe('quote-conversion SQL contract', () => {
     expect(sql).toContain("is_nev = '是'");
     expect(sql).toContain("is_transfer = '否'");
     expect(sql).toContain("insurance_grade = 'B'");
-    expect(sql).toContain('ncd_coefficient >= 0.9');
-    expect(sql).toContain('ncd_coefficient <= 1.2');
+    expect(sql).toContain('commercial_ncd >= 0.9');
+    expect(sql).toContain('commercial_ncd <= 1.2');
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
