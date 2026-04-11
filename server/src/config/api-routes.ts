@@ -91,6 +91,9 @@ export const QUERY_ROUTES = {
     TREND: '/quote-conversion/trend',
   },
 
+  // 巡检报告
+  PATROL: '/patrol',
+
   // 测试（仅开发环境）
   TEST: '/test',
 } as const;

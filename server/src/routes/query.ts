@@ -31,6 +31,7 @@ import expenseDevRoutes from './query/expense-development.js';
 import repairRoutes from './query/repair.js';
 import customerFlowRoutes from './query/customer-flow.js';
 import renewalV2Routes from './query/renewal-v2.js';
+import patrolRoutes from './query/patrol.js';
 
 export { buildRouteCacheKey } from './query/shared.js';
 export { fetchDashboardBundleData } from './query/bundles.js';
@@ -61,5 +62,6 @@ router.use(expenseDevRoutes);
 router.use(repairRoutes);
 router.use(customerFlowRoutes);
 router.use(renewalV2Routes);
+router.use(patrolRoutes);
 
 export default router;
