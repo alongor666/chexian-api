@@ -1412,6 +1412,57 @@ function checkDataDrift() {
 }
 
 // ============================================================
+// 第22项检查：SQL 模块数与 CODE_INDEX 一致性
+// ============================================================
+
+/**
+ * 校验 server/src/sql/*.ts 文件数量与 CODE_INDEX.md SQL 表格中声明的数量一致。
+ * 根因：CODE_INDEX 曾漂移至 14/24（实际 31），误导 agent 架构决策。
+ */
+function checkSqlModuleCountConsistency() {
+  info('检查 SQL 模块数与 CODE_INDEX 一致性...');
+
+  const sqlDir = path.join(ROOT_DIR, 'server/src/sql');
+  const codeIndexPath = path.join(ROOT_DIR, '开发文档/00_index/CODE_INDEX.md');
+
+  if (!fs.existsSync(sqlDir)) {
+    warning('server/src/sql/ 目录不存在，跳过');
+    return true;
+  }
+
+  // 计算实际 SQL 文件数
+  const sqlFiles = fs.readdirSync(sqlDir).filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+  const actualCount = sqlFiles.length;
+
+  if (!fs.existsSync(codeIndexPath)) {
+    warning('CODE_INDEX.md 不存在，跳过');
+    return true;
+  }
+
+  // 从 CODE_INDEX.md 提取声明的文件数（匹配 "31 个文件" 或 "31 个模块" 等模式）
+  const indexContent = fs.readFileSync(codeIndexPath, 'utf8');
+  const countMatch = indexContent.match(/server\/src\/sql\/.*?(\d+)\s*个/);
+
+  if (!countMatch) {
+    warning('CODE_INDEX.md 中未找到 SQL 模块数量声明，跳过');
+    return true;
+  }
+
+  const declaredCount = parseInt(countMatch[1], 10);
+
+  if (actualCount !== declaredCount) {
+    error(
+      `SQL 模块数不一致：CODE_INDEX.md 声明 ${declaredCount} 个，实际 ${actualCount} 个\n` +
+      `    ▶ 修复：更新 CODE_INDEX.md SQL 生成器表格（新增或删除文件后必须同步）`
+    );
+    return false;
+  }
+
+  success(`SQL 模块数一致（${actualCount} 个文件 = CODE_INDEX 声明 ${declaredCount} 个）`);
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -1440,6 +1491,7 @@ function main() {
     { name: 'ECharts网格线', fn: checkEchartsSplitLine },
     { name: 'sync-vps覆盖', fn: checkSyncVpsCoverage },
     { name: '数据漂移检测', fn: checkDataDrift },
+    { name: 'SQL模块数一致', fn: checkSqlModuleCountConsistency },
   ];
 
   let passedCount = 0;

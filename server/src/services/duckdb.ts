@@ -9,6 +9,8 @@
 
 import { DuckDBInstance } from '@duckdb/node-api';
 import type { DuckDBConnection } from '@duckdb/node-api';
+import { createHash } from 'crypto';
+import { statSync } from 'fs';
 import { databaseConfig, DUCKDB_INIT_OPTIONS } from '../config/database.js';
 import { getKpiPlanConfigPath } from '../config/paths.js';
 import { AppError } from '../middleware/error.js';
@@ -18,6 +20,35 @@ import { QueryCache, ConnectionPool } from './duckdb-infra.js';
 import type { DuckDBQueryable } from './duckdb-types.js';
 import * as materialization from './duckdb-materialization.js';
 import * as domainLoaders from './duckdb-domain-loaders.js';
+
+// ============================================
+// Parquet 指纹缓存（按表名存储）
+// ============================================
+
+interface ParquetCacheEntry {
+  fingerprint: string;
+  fileSet: Set<string>;
+}
+
+const parquetFingerprintCache = new Map<string, ParquetCacheEntry>();
+
+/**
+ * 计算文件路径列表的指纹：hash(排序后路径 + 各文件 mtime)
+ * 若任何文件 stat 失败，返回 null（触发全量重建）
+ */
+function computeParquetFingerprint(filePaths: string[]): string | null {
+  try {
+    const sorted = [...filePaths].sort();
+    const hash = createHash('sha256');
+    for (const p of sorted) {
+      const mtime = statSync(p).mtimeMs;
+      hash.update(`${p}:${mtime}\n`);
+    }
+    return hash.digest('hex');
+  } catch {
+    return null;
+  }
+}
 
 // ============================================
 // 慢查询监控阈值（毫秒）
@@ -393,28 +424,93 @@ export class DuckDBService implements DuckDBQueryable {
       throw new AppError(400, 'No parquet files provided');
     }
 
+    const TABLE_NAME = 'raw_parquet';
     const t0 = Date.now();
+
+    // ── 指纹计算（失败则 fallback 到全量重建）──
+    const newFingerprint = computeParquetFingerprint(filePaths);
+    const cached = parquetFingerprintCache.get(TABLE_NAME);
+
+    if (newFingerprint !== null && cached !== undefined && cached.fingerprint === newFingerprint) {
+      // 缓存命中：文件集合和 mtime 完全一致，验证表存在后复用
+      if (await this.hasRelation(TABLE_NAME)) {
+        const totalResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
+        const totalRows = totalResult[0]?.cnt ?? 0;
+        console.log(`[DuckDB] loadMultipleParquet cache HIT — skipping rebuild, ${totalRows} rows (${Date.now() - t0}ms)`);
+        return { totalRows };
+      }
+      // 表不存在（内部状态异常），清除缓存 fallthrough 到全量重建
+      parquetFingerprintCache.delete(TABLE_NAME);
+    }
+
+    // ── 判断是否可增量追加 ──
+    const canIncremental =
+      newFingerprint !== null &&
+      cached !== undefined &&
+      (await this.hasRelation(TABLE_NAME));
+
+    if (canIncremental) {
+      const filePathSet = new Set(filePaths);
+      const newFiles = filePaths.filter((p) => !cached!.fileSet.has(p));
+      const removedFiles = [...cached!.fileSet].filter((p) => !filePathSet.has(p));
+
+      if (removedFiles.length === 0 && newFiles.length > 0) {
+        // 仅新增文件：INSERT INTO 增量加载
+        const escapedNew = newFiles.map((p) => `'${escapeSqlValue(p)}'`).join(', ');
+        try {
+          await this.query(`
+            INSERT INTO ${TABLE_NAME}
+            SELECT * FROM read_parquet([${escapedNew}], union_by_name=true)
+          `);
+          this.invalidateCache();
+          parquetFingerprintCache.set(TABLE_NAME, {
+            fingerprint: newFingerprint!,
+            fileSet: new Set(filePaths),
+          });
+          const totalResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
+          const totalRows = totalResult[0]?.cnt ?? 0;
+          console.log(`[DuckDB] loadMultipleParquet incremental INSERT — +${newFiles.length} file(s), ${totalRows} rows (${Date.now() - t0}ms)`);
+          return { totalRows };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(`[DuckDB] Incremental INSERT failed (${msg}), falling back to full rebuild`);
+          // fall through to full rebuild below
+        }
+      }
+    }
+
+    // ── 全量重建（DROP + CREATE）──
     const escapedPaths = filePaths.map((p) => `'${escapeSqlValue(p)}'`).join(', ');
 
     await this.dropRelationIfExists('raw_parquet');
 
     try {
       await this.query(`
-        CREATE TABLE raw_parquet AS
+        CREATE TABLE ${TABLE_NAME} AS
         SELECT * FROM read_parquet([${escapedPaths}], union_by_name=true)
       `);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[DuckDB] ⚠️ read_parquet failed: ${msg}`);
       console.error(`[DuckDB] Files: ${filePaths.join(', ')}`);
+      parquetFingerprintCache.delete(TABLE_NAME);
       throw new AppError(500, `Parquet loading failed (schema incompatible or file corrupted): ${msg}`);
     }
 
     this.invalidateCache();
 
+    // 更新指纹缓存（fingerprint 为 null 时跳过缓存写入，保持下次仍走全量）
+    if (newFingerprint !== null) {
+      parquetFingerprintCache.set(TABLE_NAME, {
+        fingerprint: newFingerprint,
+        fileSet: new Set(filePaths),
+      });
+    }
+
     const totalResult = await this.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
     const totalRows = totalResult[0]?.cnt ?? 0;
-    console.log(`[DuckDB] read_parquet loaded: ${filePaths.length} file(s), ${totalRows} rows in ${Date.now() - t0}ms`);
+    const rebuildReason = cached === undefined ? 'cold start' : 'fingerprint changed';
+    console.log(`[DuckDB] loadMultipleParquet full rebuild (${rebuildReason}) — ${filePaths.length} file(s), ${totalRows} rows (${Date.now() - t0}ms)`);
 
     return { totalRows };
   }

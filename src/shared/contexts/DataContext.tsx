@@ -108,14 +108,16 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         const current = fileList.find((f) => f.isCurrent);
         if (current) {
           setIsDataLoaded(true);
-          if (!currentFile) {
-            setCurrentFile({
+          setCurrentFile(prev => {
+            if (prev) return prev; // 已有文件信息，保持不变
+            return {
               filename: current.filename,
               rowCount: 0,
               fileSizeMB: current.sizeMB,
-            });
-            logger.info('[DataContext] 检测到后端已加载文件:', current.filename);
-          }
+            };
+          });
+          // 日志放在 setState 外部，避免 Strict Mode 双调用副作用
+          logger.info('[DataContext] 检测到后端已加载文件:', current.filename);
         }
       } catch (err) {
         if (!isRequestAbortError(err)) {
@@ -129,7 +131,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
     refreshFilesPromiseRef.current = task;
     return task;
-  }, [beginLoading, currentFile, endLoading]);
+  }, [beginLoading, endLoading]);
 
   // 加载文件
   const loadFile = useCallback(async (filename: string) => {
