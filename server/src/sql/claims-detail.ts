@@ -414,7 +414,7 @@ export function generateLossRatioDevelopmentQuery(
         MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month) AS observation_end
       FROM policy_totals pt
       CROSS JOIN dev_months m
-      WHERE MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month) <= CURRENT_DATE
+      WHERE MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month - 1) <= CURRENT_DATE
     ),
     earned AS (
       SELECT
