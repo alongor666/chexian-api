@@ -208,3 +208,21 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
   },
 };
+
+/**
+ * 获取所有唯一的权限域列表（快照构建 + org-parquet 切分共用）。
+ * 返回值示例: ['all', '乐山', '天府', '宜宾', ..., 'telemarketing']
+ */
+export function getAllPermissionScopes(): string[] {
+  const scopes = new Set<string>();
+  for (const user of Object.values(PRESET_USERS)) {
+    if (user.role === 'branch_admin') {
+      scopes.add('all');
+    } else if (user.role === 'org_user' && user.organization) {
+      scopes.add(user.organization);
+    } else if (user.role === 'telemarketing_user') {
+      scopes.add('telemarketing');
+    }
+  }
+  return Array.from(scopes);
+}

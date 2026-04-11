@@ -34,7 +34,9 @@
     "verify:quick": "node scripts/test-preflight.mjs && bun run governance && bun run typecheck",
     "verify:full": "bun run verify:quick && bun run test --run",
     "hooks:install": "bash scripts/install-git-hooks.sh",
-    "test:integration": "vitest --run --config vitest.integration.config.ts"
+    "test:integration": "vitest --run --config vitest.integration.config.ts",
+    "snapshot:build": "node scripts/build-snapshots.mjs",
+    "snapshot:verify": "node scripts/build-snapshots.mjs --dry-run && curl -s -w '\\nTime: %{time_total}s\\n' -H 'Authorization: Bearer dummy' http://localhost:3000/api/data/snapshot-health | head -c 500"
   },
   "dependencies": {
     "@json-render/core": "^0.2.0",
