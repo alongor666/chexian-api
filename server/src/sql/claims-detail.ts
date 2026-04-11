@@ -389,7 +389,7 @@ export function generateLossRatioDevelopmentQuery(
 
   return `
     WITH claims_cutoff_cte AS (
-      SELECT CAST(MAX(report_time) AS DATE) AS claims_cutoff FROM ClaimsDetail
+      SELECT COALESCE(CAST(MAX(report_time) AS DATE), CURRENT_DATE) AS claims_cutoff FROM ClaimsDetail
     ),
     raw_policies AS (
       SELECT

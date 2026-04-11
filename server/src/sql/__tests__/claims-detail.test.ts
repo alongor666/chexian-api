@@ -518,10 +518,11 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).toContain('c.reserve_amount');
   });
 
-  it('全局截止时间用 MAX(report_time)，非 CURRENT_DATE', () => {
+  it('全局截止时间用 COALESCE(MAX(report_time), CURRENT_DATE) 防空值', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
     expect(sql).toContain('MAX(report_time)');
-    expect(sql).not.toContain('CURRENT_DATE');
+    expect(sql).toContain('COALESCE(');
+    expect(sql).toContain('claims_cutoff FROM claims_cutoff_cte');
   });
 
   it('NULLIF 防除以零（已赚保费 + 已赚暴露）', () => {

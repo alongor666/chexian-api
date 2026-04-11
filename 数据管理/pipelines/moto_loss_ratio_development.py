@@ -41,7 +41,7 @@ def run_triangle_query(con: duckdb.DuckDBPyConnection) -> list[dict]:
     """
     sql = f"""
     WITH claims_cutoff_cte AS (
-        SELECT CAST(MAX(report_time) AS DATE) AS claims_cutoff FROM read_parquet('{CLAIMS_PATH}')
+        SELECT COALESCE(CAST(MAX(report_time) AS DATE), CURRENT_DATE) AS claims_cutoff FROM read_parquet('{CLAIMS_PATH}')
     ),
     raw_policies AS (
         SELECT
