@@ -53,10 +53,19 @@ $(git diff --stat main)
 
 请执行以下操作：
 
+### 0. 读取进化日志（自进化机制）
+
+```bash
+cat .claude/workflow/pr-evolution.md 2>/dev/null | tail -40
+```
+
+**逐条检查「预防」措施是否已满足**。如果本次变更命中已记录的失败模式，必须在步骤 3 之前先修复。
+
 ### 1. 分析变更
 - 查看所有变更的文件
 - 理解改动的目的和范围
 - 识别变更类型（feat/fix/refactor/docs/test）
+- **依赖链完整性**：如果修改了前端 API 调用（client.ts / routes.ts / query-keys.ts），必须 `grep` 确认后端对应的路由文件、paths.ts、api-routes.ts 均已同步
 
 ### 2. 生成 Commit Message
 使用以下格式：
@@ -212,6 +221,24 @@ gh pr create \
 ## 相关 Issue
 Closes #[issue编号]
 ```
+
+### 6. Post-PR 验证（自进化触发点）
+
+PR 创建后，立即检查 CI 状态：
+```bash
+gh pr checks <PR_URL> --watch --fail-fast 2>&1 | tail -20
+```
+
+**如果 CI 通过**：报告 PR URL，流程结束。
+
+**如果 CI 失败或无法 merge**：
+1. 读取失败日志：`gh pr checks <PR_URL>` + `gh pr view <PR_URL> --json mergeable`
+2. 分析根因（缺依赖？类型错误？测试失败？冲突？）
+3. 修复代码，追加 commit 到同一分支
+4. **记录到进化日志**：按格式追加到 `.claude/workflow/pr-evolution.md`
+5. 如果根因是流程缺陷（而非代码 bug），同时更新本文件（commit-push-pr.md）的前置检查步骤
+
+**进化规则**：同一类失败出现 2 次 → 必须转化为自动检查（hook 或 governance 规则），不再依赖 prompt 提醒。
 
 ---
 
