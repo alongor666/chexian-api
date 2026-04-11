@@ -279,6 +279,45 @@ class ApiClient {
     return requestPromise;
   }
 
+  /**
+   * 带分页元数据的请求方法（仅用于分页端点）
+   * 返回 { data, meta } 而非仅 data，保留服务端分页信息
+   */
+  private async requestWithMeta<T>(
+    endpoint: string,
+  ): Promise<{ data: T; meta: { total: number; page: number; pageSize: number } }> {
+    const url = `${API_BASE}${endpoint}`;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = this.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+    try {
+      const response = await fetch(url, { headers, credentials: 'include', signal: controller.signal });
+      const body: ApiResponse<T> = await response.json();
+      if (!body.success) {
+        const error = new Error(body.error?.message || '请求失败');
+        (error as any).statusCode = body.error?.statusCode || response.status;
+        throw error;
+      }
+      return {
+        data: body.data as T,
+        meta: (body as any).meta ?? { total: 0, page: 1, pageSize: 20 },
+      };
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new RequestAbortError();
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   // ============================================
   // 认证 API
   // ============================================
@@ -949,7 +988,7 @@ class ApiClient {
 
   async getRenewalV2Action(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.ACTION}${query ? `?${query}` : ''}`);
+    return this.requestWithMeta<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.ACTION}${query ? `?${query}` : ''}`);
   }
 
   // ── 巡检报告 ──

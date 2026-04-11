@@ -16,6 +16,7 @@ import { usePatrolReport } from '../hooks/useRenewalV2';
 import type {
   PatrolReport, PatrolSection, PatrolBlindspot,
   PatrolComparison, PatrolAlertLevel,
+  AIFinding, AIPatrolMeta,
 } from '../../../shared/types/patrol';
 
 const ALERT_STYLES = alertStyles;
@@ -375,6 +376,81 @@ function ComparisonTable({ comparisons }: { comparisons: PatrolComparison[] }) {
   );
 }
 
+// ── AI 深度研判 ──
+
+const DISCOVERY_LABELS: Record<AIFinding['discovered_via'], string> = {
+  config_drill: '维度分析',
+  cross_drill: '交叉盲点',
+  exploration: 'AI 探索',
+};
+
+function AIFindingsCard({ findings, meta }: { findings: AIFinding[]; meta?: AIPatrolMeta }) {
+  if (findings.length === 0) return null;
+
+  return (
+    <div className={cardStyles.base}>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className={textStyles.titleSmall}>
+          AI 深度研判
+          <span className={`ml-2 text-xs ${colorClasses.text.neutralMuted}`}>
+            ({findings.length} 条发现)
+          </span>
+        </h3>
+        {meta && (
+          <span className={`text-xs ${colorClasses.text.neutralMuted}`}>
+            {meta.queries_executed} 次查询 · {meta.duration_seconds}s
+          </span>
+        )}
+      </div>
+      <div className="mt-3 space-y-3">
+        {findings.map((finding, i) => {
+          const style = ALERT_STYLES[finding.severity];
+          return (
+            <div key={i} className={`${style.bg} rounded-lg p-3`}>
+              <div className="flex items-start gap-2">
+                <span className="text-base leading-5">{style.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-sm font-semibold ${style.text}`}>{finding.title}</span>
+                    <span className={`px-1.5 py-0.5 text-xs rounded ${colorClasses.bg.neutralLight} ${colorClasses.text.neutralMuted}`}>
+                      {DISCOVERY_LABELS[finding.discovered_via]}
+                    </span>
+                  </div>
+                  <div className={`mt-1 flex items-center gap-3 text-xs ${colorClasses.text.neutral}`}>
+                    <span>指标值: <strong className={style.text}>{finding.metric_value}</strong></span>
+                    <span>整体: <strong>{finding.overall_value}</strong></span>
+                  </div>
+                  <p className={`mt-1.5 text-sm ${colorClasses.text.neutralDark}`}>{finding.narrative}</p>
+                  {finding.evidence && finding.evidence.length > 0 && (
+                    <details className="mt-2">
+                      <summary className={`text-xs ${colorClasses.text.neutralMuted} cursor-pointer hover:underline`}>
+                        查看证据 ({finding.evidence.length})
+                      </summary>
+                      <div className="mt-1 space-y-1">
+                        {finding.evidence.map((ev, j) => (
+                          <div key={j} className={`text-xs ${colorClasses.bg.neutral} rounded p-2`}>
+                            <code className={colorClasses.text.neutralMuted}>{ev.query}</code>
+                            <div className={`mt-0.5 ${colorClasses.text.neutralDark}`}>{ev.result}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {meta?.extra_dimensions_explored && meta.extra_dimensions_explored.length > 0 && (
+        <div className={`mt-3 text-xs ${colorClasses.text.neutralMuted}`}>
+          额外探索维度: {meta.extra_dimensions_explored.join('、')}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 主组件 ──
 
 interface RenewalPatrolTabProps {
@@ -455,6 +531,11 @@ export function RenewalPatrolTab({ onNavigateToAction }: RenewalPatrolTabProps) 
       {/* 盲点发现 */}
       <BlindspotsList blindspots={report.blindspots} />
 
+      {/* AI 深度研判 */}
+      {report.ai_findings && report.ai_findings.length > 0 && (
+        <AIFindingsCard findings={report.ai_findings} meta={report.ai_meta} />
+      )}
+
       {/* 环比变化 */}
       <ComparisonTable comparisons={report.comparisons} />
 
@@ -475,6 +556,9 @@ export function RenewalPatrolTab({ onNavigateToAction }: RenewalPatrolTabProps) 
         生成于 {new Date(report.generated_at).toLocaleString('zh-CN')} ·
         {report.summary.total_records?.toLocaleString()} 条数据 ·
         耗时 {report.summary.elapsed_seconds}s
+        {report.ai_meta && (
+          <> · AI {report.ai_meta.queries_executed} 次查询 / {report.ai_meta.duration_seconds}s</>
+        )}
       </div>
     </div>
   );

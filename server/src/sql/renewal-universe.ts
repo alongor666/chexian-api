@@ -38,7 +38,10 @@ function esc(val: string): string {
 const VALID_FUNNEL_STAGES = new Set(['renewed', 'quoted_not_renewed', 'not_quoted']);
 const VALID_PRIORITIES = new Set(['P1', 'P2', 'P3', 'P4']);
 
-function buildWhere(filters: RenewalUniverseFilters): string {
+/**
+ * @param permissionFilter 服务端权限 WHERE 片段（由 access-control.ts 构造），禁止接受用户输入
+ */
+function buildWhere(filters: RenewalUniverseFilters, permissionFilter = '1=1'): string {
   const conditions: string[] = ['1=1'];
 
   if (filters.orgName) {
@@ -78,6 +81,10 @@ function buildWhere(filters: RenewalUniverseFilters): string {
     conditions.push(`insurance_grade = '${esc(filters.insuranceGrade)}'`);
   }
 
+  if (permissionFilter && permissionFilter !== '1=1') {
+    conditions.push(`(${permissionFilter})`);
+  }
+
   return conditions.join(' AND ');
 }
 
@@ -87,8 +94,8 @@ function buildWhere(filters: RenewalUniverseFilters): string {
  * 总览 KPI + 按维度分组统计
  * 用途：Tab 1 上半部分 KPI 卡片 + 下半部分排名表
  */
-export function generateOverviewQuery(filters: RenewalUniverseFilters = {}): string {
-  const where = buildWhere(filters);
+export function generateOverviewQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
+  const where = buildWhere(filters, permissionFilter);
   const groupBy = filters.groupBy ?? 'org';
 
   const groupCol = groupBy === 'salesman' ? 'salesman_name'
@@ -123,8 +130,8 @@ export function generateOverviewQuery(filters: RenewalUniverseFilters = {}): str
 /**
  * 总览 KPI 汇总行（不分组，返回单行）
  */
-export function generateOverviewTotalQuery(filters: RenewalUniverseFilters = {}): string {
-  const where = buildWhere(filters);
+export function generateOverviewTotalQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
+  const where = buildWhere(filters, permissionFilter);
   return `
     SELECT
       COUNT(*) AS due_count,
@@ -152,8 +159,8 @@ export function generateOverviewTotalQuery(filters: RenewalUniverseFilters = {})
 /**
  * 月度到期走势（按 expiry_month 分组）
  */
-export function generateTrendQuery(filters: RenewalUniverseFilters = {}): string {
-  const where = buildWhere(filters);
+export function generateTrendQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
+  const where = buildWhere(filters, permissionFilter);
   return `
     SELECT
       expiry_month,
@@ -178,8 +185,8 @@ export function generateTrendQuery(filters: RenewalUniverseFilters = {}): string
  * 漏斗汇总（三级：应续→已报价→已续保）
  * 返回每个漏斗阶段的件数和转化率
  */
-export function generateFunnelQuery(filters: RenewalUniverseFilters = {}): string {
-  const where = buildWhere(filters);
+export function generateFunnelQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
+  const where = buildWhere(filters, permissionFilter);
   return `
     SELECT
       funnel_stage,
@@ -201,8 +208,8 @@ export function generateFunnelQuery(filters: RenewalUniverseFilters = {}): strin
  * 流失归因分析（未续保原因拆解）
  * 按维度分组，显示各阶段流失情况
  */
-export function generateLossReasonQuery(filters: RenewalUniverseFilters = {}): string {
-  const where = buildWhere(filters);
+export function generateLossReasonQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
+  const where = buildWhere(filters, permissionFilter);
   const groupBy = filters.groupBy ?? 'org';
 
   const groupCol = groupBy === 'category' ? 'customer_category'
@@ -235,8 +242,8 @@ export function generateLossReasonQuery(filters: RenewalUniverseFilters = {}): s
  * 竞争流失去向（流失到哪家保险公司）
  * 仅统计有 lost_to_insurer 非空且未续保的 VIN
  */
-export function generateCompetitionLossQuery(filters: RenewalUniverseFilters = {}): string {
-  const where = buildWhere(filters);
+export function generateCompetitionLossQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
+  const where = buildWhere(filters, permissionFilter);
   return `
     SELECT
       lost_to_insurer,
@@ -258,8 +265,8 @@ export function generateCompetitionLossQuery(filters: RenewalUniverseFilters = {
  * 基于 PolicyFact 2026 的 renewal_mode = '转保' 数据
  * 注意：此查询暂时用 RenewalUniverse 中已续保的记录
  */
-export function generateCompetitionGainQuery(filters: RenewalUniverseFilters = {}): string {
-  const where = buildWhere(filters);
+export function generateCompetitionGainQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
+  const where = buildWhere(filters, permissionFilter);
   return `
     SELECT
       lost_to_insurer AS source_insurer,
@@ -282,8 +289,8 @@ export function generateCompetitionGainQuery(filters: RenewalUniverseFilters = {
  * 待办清单（保单级明细，分页）
  * 按 action_priority ASC + days_since_expiry DESC 排序（紧急的在前）
  */
-export function generateActionListQuery(filters: RenewalUniverseFilters = {}): string {
-  const where = buildWhere(filters);
+export function generateActionListQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
+  const where = buildWhere(filters, permissionFilter);
   const page = Math.max(1, filters.page ?? 1);
   const pageSize = Math.min(100, Math.max(10, filters.pageSize ?? 20));
   const offset = (page - 1) * pageSize;
@@ -321,7 +328,7 @@ export function generateActionListQuery(filters: RenewalUniverseFilters = {}): s
 /**
  * 待办清单总数（独立查询，路由层与 actionList 并行执行）
  */
-export function generateActionListCountQuery(filters: RenewalUniverseFilters = {}): string {
-  const where = buildWhere(filters);
+export function generateActionListCountQuery(filters: RenewalUniverseFilters = {}, permissionFilter?: string): string {
+  const where = buildWhere(filters, permissionFilter);
   return `SELECT COUNT(*) AS total_count FROM RenewalUniverse WHERE ${where}`;
 }

@@ -77,7 +77,7 @@ export const capabilities: Capability[] = [
   },
   {
     id: 'renewal',
-    route: '/specialty?tab=renewal',
+    route: '/renewal-analysis',
     name: '续保分析',
     icon: 'RefreshCw',
     description: '续保率分析，含机构/团队/业务员维度续保率、续保明细下钻',
