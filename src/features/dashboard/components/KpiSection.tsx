@@ -11,6 +11,7 @@ import type { KpiDetailResult } from '../../../shared/types/kpi';
 import {
   DEFAULT_KPI_ORDER,
   KPI_CARD_META,
+  HERO_KPI_IDS,
   type KpiGroup,
   type KpiCardId,
 } from '../dashboardLayoutConfig';
@@ -365,11 +366,34 @@ export const KpiSection = memo<KpiSectionProps>(({
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {cardEntries.map((entry) => (
-          <EnhancedKpiCard key={entry.id} {...entry.props} />
-        ))}
-      </div>
+      {activeGroup === 'core' ? (() => {
+        const heroEntries = cardEntries.filter((e) => HERO_KPI_IDS.includes(e.id));
+        const secondaryEntries = cardEntries.filter((e) => !HERO_KPI_IDS.includes(e.id));
+        return (
+          <div className="space-y-3">
+            {heroEntries.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {heroEntries.map((entry) => (
+                  <EnhancedKpiCard key={entry.id} {...entry.props} />
+                ))}
+              </div>
+            )}
+            {secondaryEntries.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {secondaryEntries.map((entry) => (
+                  <EnhancedKpiCard key={entry.id} {...entry.props} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })() : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {cardEntries.map((entry) => (
+            <EnhancedKpiCard key={entry.id} {...entry.props} />
+          ))}
+        </div>
+      )}
     </div>
   );
 });

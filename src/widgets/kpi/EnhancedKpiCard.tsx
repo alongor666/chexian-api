@@ -2,15 +2,11 @@
  * EnhancedKpiCard 组件
  * 增强型 KPI 指标卡片，支持数值展示、环形图、占比条等多种展示形式
  *
- * 使用统一设计系统：
- * - 卡片样式：bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 shadow-sm
- * - 支持深色模式：dark:bg-neutral-800 dark:border-neutral-700
- * - 标题样式：text-sm font-medium text-neutral-600
- * - 数值样式：text-2xl font-bold text-neutral-900
- * - 数值字体：Avenir Next / Century Gothic（Futura/Avenir 风格）
+ * 使用统一设计系统（cardStyles / colorClasses / textStyles / numericStyles）
+ * 深色模式通过 CSS 变量自动适配
  */
 import React, { memo } from 'react';
-import { colors, fontStyles, numericStyles, cn } from '../../shared/styles';
+import { colors, fontStyles, numericStyles, cn, cardStyles, colorClasses, textStyles } from '../../shared/styles';
 import { formatCount, formatPercent, formatRate } from '../../shared/utils/formatters';
 
 /**
@@ -92,8 +88,9 @@ const MiniDonutChart: React.FC<{
           cy={size / 2}
           r={size / 2 - 4}
           fill="none"
-          stroke="#e5e7eb"
+          stroke={colors.neutral[200]}
           strokeWidth="8"
+          className="dark:[stroke:var(--border-default)]"
         />
         <text
           x={size / 2}
@@ -101,7 +98,8 @@ const MiniDonutChart: React.FC<{
           textAnchor="middle"
           dominantBaseline="middle"
           fontSize="12"
-          fill="#9ca3af"
+          fill={colors.neutral[400]}
+          className="dark:[fill:#bfbfbf]"
         >
           0%
         </text>
@@ -156,8 +154,8 @@ const MiniDonutChart: React.FC<{
         dominantBaseline="middle"
         fontSize="14"
         fontWeight="600"
-        fill="#1f2937"
-        className={fontStyles.numeric}
+        fill={colors.neutral[900]}
+        className={cn(fontStyles.numeric, 'dark:[fill:#f5f5f5]')}
       >
         {mainPercentage}
       </text>
@@ -177,7 +175,7 @@ const ChartLegend: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
             className="w-2.5 h-2.5 rounded-full"
             style={{ backgroundColor: item.color || DEFAULT_COLORS[index] }}
           />
-          <span className="text-xs text-neutral-600 dark:text-neutral-400">{item.label}</span>
+          <span className={textStyles.caption}>{item.label}</span>
         </div>
       ))}
     </div>
@@ -194,7 +192,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
   if (total === 0) {
     return (
       <div className="w-full">
-        <div className="flex h-12 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 items-center justify-center text-sm font-semibold text-neutral-400 dark:text-neutral-500">
+        <div className={cn('flex h-12 rounded-lg overflow-hidden items-center justify-center text-sm font-semibold border', colorClasses.border.neutral, colorClasses.bg.neutral, colorClasses.text.neutralMuted)}>
           暂无数据
         </div>
       </div>
@@ -205,7 +203,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
   if (normalizedData.length >= 3) {
     return (
       <div className="w-full">
-        <div className="flex h-10 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700">
+        <div className={cn('flex h-10 rounded-lg overflow-hidden border', colorClasses.border.neutral)}>
           {normalizedData.map((item, index) => {
             const rate = (item.value / total) * 100;
             const color = item.color || SEGMENT_COLORS[index] || SEGMENT_COLORS[SEGMENT_COLORS.length - 1];
@@ -231,7 +229,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
             return (
               <div key={index} className="flex items-center gap-1">
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+                <span className={cn(textStyles.caption, 'whitespace-nowrap')}>
                   {item.label} {Math.round(rate)}%
                 </span>
               </div>
@@ -249,7 +247,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
   const secondaryRate = (secondaryValue / total) * 100;
   return (
     <div className="w-full">
-      <div className="flex h-12 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700">
+      <div className={cn('flex h-12 rounded-lg overflow-hidden border', colorClasses.border.neutral)}>
         <div
           className={cn('flex items-center justify-center text-sm font-semibold text-white', fontStyles.numeric)}
           style={{
@@ -261,7 +259,7 @@ const RatioBar: React.FC<{ data: DonutDataItem[] }> = ({ data }) => {
           {primaryRate > 0 ? formatPercent(primaryRate) : ''}
         </div>
         <div
-          className={cn('flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700', fontStyles.numeric)}
+          className={cn('flex items-center justify-center text-sm font-semibold', colorClasses.text.neutral, colorClasses.bg.neutralLight, fontStyles.numeric)}
           style={{
             width: `${secondaryRate}%`,
             minWidth: secondaryRate > 0 ? '36px' : 0,
@@ -321,10 +319,10 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm">
+      <div className={cn(cardStyles.base, 'p-5')}>
         <div className="animate-pulse">
-          <div className="h-4 bg-neutral-200 dark:bg-neutral-800 rounded w-24 mb-3"></div>
-          <div className="h-8 bg-neutral-200 dark:bg-neutral-800 rounded w-32"></div>
+          <div className={cn('h-4 rounded w-24 mb-3', colorClasses.bg.neutral)}></div>
+          <div className={cn('h-8 rounded w-32', colorClasses.bg.neutral)}></div>
         </div>
       </div>
     );
@@ -333,9 +331,9 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
   // 数值类型卡片
   if (type === 'value') {
     return (
-      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm hover:shadow-md transition-shadow">
-        <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-2">{title}</div>
-        <div className={cn(numericStyles.kpiPrimary, 'text-neutral-900 dark:text-white mt-1')}>
+      <div className={cn(cardStyles.interactive, 'p-5')}>
+        <div className={cn(textStyles.label, 'mb-2')}>{title}</div>
+        <div className={cn(numericStyles.kpiPrimary, colorClasses.text.neutralBlack, 'mt-1')}>
           {formattedValue}
         </div>
       </div>
@@ -344,21 +342,21 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
 
   if (type === 'bar') {
     return (
-      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm hover:shadow-md transition-shadow">
-        <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-4">{title}</div>
+      <div className={cn(cardStyles.interactive, 'p-5')}>
+        <div className={cn(textStyles.label, 'mb-4')}>{title}</div>
         <RatioBar data={normalizedRatioData} />
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 shadow-sm hover:shadow-md transition-shadow">
-      <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-3">{title}</div>
+    <div className={cn(cardStyles.interactive, 'p-5')}>
+      <div className={cn(textStyles.label, 'mb-3')}>{title}</div>
 
       <div className="flex items-center justify-between mb-3 mt-1">
         <div className="flex flex-col">
-          <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1.5">{normalizedRatioData[1]?.label || '其他'}</div>
-          <div className={cn(numericStyles.kpiSecondary, 'text-neutral-800 dark:text-neutral-200')}>
+          <div className={cn(textStyles.caption, 'font-medium mb-1.5')}>{normalizedRatioData[1]?.label || '其他'}</div>
+          <div className={cn(numericStyles.kpiSecondary, colorClasses.text.neutralBlack)}>
             {secondaryRate}
           </div>
         </div>

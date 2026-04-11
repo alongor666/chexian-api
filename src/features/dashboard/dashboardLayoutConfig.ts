@@ -65,3 +65,10 @@ export const DEFAULT_KPI_ORDER: Record<KpiGroup, KpiCardId[]> = {
   core: KPI_CARD_META.filter((item) => item.group === 'core').map((item) => item.id),
   focus: KPI_CARD_META.filter((item) => item.group === 'focus').map((item) => item.id),
 };
+
+/** 核心指标中的"主角"卡片 — 在 3+N 分层布局中用大卡片展示 */
+export const HERO_KPI_IDS: KpiCardId[] = [
+  'vehicle_premium',
+  'vehicle_achievement_rate',
+  'variable_cost_rate',
+];
