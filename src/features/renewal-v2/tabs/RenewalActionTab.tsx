@@ -32,10 +32,8 @@ export function RenewalActionTab({ filters }: Props) {
   const queryFilters = { ...filters, actionPriority: priority, page, pageSize };
   const { data: rows, isLoading } = useRenewalV2Action(queryFilters);
 
-  // 从 API meta 获取 total（action endpoint 返回 PaginatedResponse）
-  const apiResponse = rows as any;
-  const totalCount: number = apiResponse?.meta?.total ?? 0;
-  const dataRows: any[] = Array.isArray(apiResponse) ? apiResponse : (apiResponse?.data ?? apiResponse ?? []);
+  const totalCount: number = rows?.meta?.total ?? 0;
+  const dataRows: any[] = rows?.data ?? [];
   const totalPages = Math.ceil(totalCount / pageSize);
 
   return (
