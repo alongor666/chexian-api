@@ -54,6 +54,15 @@ export const QUERY_ROUTES = {
     RISK: 'renewal-funnel/risk',
   },
 
+  // 续保宇宙 V2
+  RENEWAL_V2: {
+    OVERVIEW: 'renewal-v2/overview',
+    TREND: 'renewal-v2/trend',
+    FUNNEL: 'renewal-v2/funnel',
+    COMPETITION: 'renewal-v2/competition',
+    ACTION: 'renewal-v2/action',
+  },
+
   // 交叉销售（车驾意推介率）
   CROSS_SELL: 'cross-sell',
   CROSS_SELL_TREND: 'cross-sell-trend',

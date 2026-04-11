@@ -87,6 +87,15 @@ export const QUERY_ROUTES = {
   // 仪表盘聚合
   DASHBOARD_BUNDLE: '/dashboard-bundle',
 
+  // 续保宇宙 V2
+  RENEWAL_V2: {
+    OVERVIEW: '/renewal-v2/overview',
+    TREND: '/renewal-v2/trend',
+    FUNNEL: '/renewal-v2/funnel',
+    COMPETITION: '/renewal-v2/competition',
+    ACTION: '/renewal-v2/action',
+  },
+
   // 报价转化
   QUOTE_CONVERSION: {
     KPI: '/quote-conversion/kpi',
