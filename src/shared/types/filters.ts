@@ -82,7 +82,8 @@ export type FilterPresetName =
   | 'report'
   | 'cost'
   | 'claimsDetail'
-  | 'costEarned';
+  | 'costEarned'
+  | 'renewalAnalysis';
 
 /**
  * 预设配置对象
@@ -314,6 +315,27 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
     basicOptions: false,
     quickCombos: false,
     organizationMode: 'multi',
+    salesmanMode: 'multi',
+  },
+
+  /**
+   * 续保分析预设
+   * - 机构筛选（单选，SQL buildWhere 用 = 匹配）
+   * - 其他维度由 QuickFilterBar 覆盖（能源、新旧车等）
+   * - 日期/年度不展示（数据口径由 metadata API 驱动）
+   */
+  renewalAnalysis: {
+    dateCriteria: false,
+    analysisYear: false,
+    dateRange: false,
+    organization: true,
+    salesman: false,
+    customerCategory: false,
+    coverageCombination: false,
+    renewalMode: false,
+    basicOptions: false,
+    quickCombos: false,
+    organizationMode: 'single',
     salesmanMode: 'multi',
   },
 };

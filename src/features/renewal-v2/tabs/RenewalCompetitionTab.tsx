@@ -3,7 +3,7 @@
  */
 
 import { cardStyles, colorClasses, tableStyles, textStyles } from '../../../shared/styles';
-import { formatCurrency } from '../../../shared/utils/formatters';
+import { formatCount, formatCurrency } from '../../../shared/utils/formatters';
 import { useRenewalV2Competition, type RenewalV2Filters } from '../hooks/useRenewalV2';
 
 interface Props {
@@ -53,7 +53,7 @@ export function RenewalCompetitionTab({ filters }: Props) {
                     {shortenInsurer(row.lost_to_insurer ?? '')}
                   </td>
                   <td className={`${tableStyles.cellNumeric} ${colorClasses.text.danger}`}>
-                    {formatCurrency(row.loss_count)}
+                    {formatCount(row.loss_count)}
                   </td>
                   <td className={tableStyles.cellNumeric}>{formatCurrency(row.loss_premium_wan)}</td>
                 </tr>
@@ -88,7 +88,7 @@ export function RenewalCompetitionTab({ filters }: Props) {
                     {shortenInsurer(row.source_insurer ?? '')}
                   </td>
                   <td className={`${tableStyles.cellNumeric} ${colorClasses.text.success}`}>
-                    {formatCurrency(row.gain_count)}
+                    {formatCount(row.gain_count)}
                   </td>
                   <td className={tableStyles.cellNumeric}>{formatCurrency(row.gain_premium_wan)}</td>
                 </tr>

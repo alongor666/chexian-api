@@ -46,13 +46,18 @@ function linearSlope(ys: number[]): number {
   return denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
 }
 
-/** 计算数组均值（忽略 NaN）
- * TODO: 对率值指标应使用 SUM(分子)/SUM(分母)，但当前 API 不返回件数字段，
- * 此处仅用于趋势描述性统计，待后端补充绝对值字段后修正 */
-function mean(arr: number[]): number {
+/** 加权推介率等统计辅助：计算数组均值（忽略 NaN） */
+export function mean(arr: number[]): number {
   const valid = arr.filter(v => !isNaN(v));
   if (valid.length === 0) return 0;
   return valid.reduce((s, v) => s + v, 0) / valid.length;
+}
+
+/** 加权推介率：SUM(driver_count) / SUM(auto_count) * 100 */
+function weightedRate(rows: OrgTrendPoint[]): number {
+  const totalDriver = rows.reduce((s, r) => s + (r.driver_count ?? 0), 0);
+  const totalAuto = rows.reduce((s, r) => s + (r.auto_count ?? 0), 0);
+  return totalAuto > 0 ? (totalDriver / totalAuto) * 100 : 0;
 }
 
 /**
@@ -65,14 +70,14 @@ export function calcTrendStats(rows: OrgTrendPoint[]): TrendStats | null {
   const rates = rows.map(r => r.rate);
   const n = rates.length;
 
-  // 均值
-  const avgRate = mean(rates);
+  // 加权均值（SUM(分子)/SUM(分母)）
+  const avgRate = weightedRate(rows);
 
-  // 近3天 vs 前期
-  const recent3 = rates.slice(-3);
-  const prev = rates.slice(0, Math.max(n - 3, 1));
-  const recent3Avg = mean(recent3);
-  const prev11Avg = mean(prev);
+  // 近3天 vs 前期（加权）
+  const recent3Rows = rows.slice(-3);
+  const prevRows = rows.slice(0, Math.max(n - 3, 1));
+  const recent3Avg = weightedRate(recent3Rows);
+  const prev11Avg = weightedRate(prevRows);
   const changeVsPrev = recent3Avg - prev11Avg;
 
   // 线性回归

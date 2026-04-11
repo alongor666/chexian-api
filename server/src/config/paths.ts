@@ -149,6 +149,13 @@ export function getPatrolReportPaths(domain: string): string[] {
   ];
 }
 
+export function getPatrolNarrativePaths(domain: string): string[] {
+  return [
+    path.resolve(SERVER_ROOT, `../数据管理/patrol_reports/${domain}/report.md`),
+    path.resolve(getDataDir(), `patrol_reports/${domain}/report.md`),
+  ];
+}
+
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,

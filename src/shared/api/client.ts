@@ -1003,10 +1003,26 @@ class ApiClient {
     return this.requestWithMeta<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.ACTION}${query ? `?${query}` : ''}`);
   }
 
+  async getRenewalV2Metadata() {
+    return this.request<{
+      latest_data_date: string | null;
+      earliest_expiry_date: string | null;
+      latest_expiry_date: string | null;
+      total_records: number;
+      renewed_count: number;
+      quoted_count: number;
+      due_year: number;
+    }>(`/query/${QUERY_ROUTES.RENEWAL_V2.METADATA}`);
+  }
+
   // ── 巡检报告 ──
 
   async getPatrolReport(domain: string) {
     return this.request<{ report: any; domain: string; source: string }>(`/query/${QUERY_ROUTES.PATROL}/${domain}`);
+  }
+
+  async getPatrolNarrative(domain: string) {
+    return this.request<{ content: string; generatedAt: string | null; domain: string }>(`/query/${QUERY_ROUTES.PATROL}/${domain}/narrative`);
   }
 
   // ── 维修资源 ──

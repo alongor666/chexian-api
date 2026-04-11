@@ -250,7 +250,7 @@ function formatCell(col: ColumnDef, row: CrossSellRow, currentDimension?: string
 }
 
 export function buildInsightSummary(
-  trendRows: Array<{ time_period: string; coverage_combination: string; rate: number; avg_premium: number }>,
+  trendRows: Array<{ time_period: string; coverage_combination: string; rate: number; avg_premium: number; driver_count?: number; auto_count?: number }>,
   trendGranularity: TrendGranularity
 ): InsightSummary | null {
   const overallRows = trendRows
@@ -271,9 +271,9 @@ export function buildInsightSummary(
     (best, current) => (current.avg_premium < best.avg_premium ? current : best),
     overallRows[0]
   );
-  // TODO: 应改为 SUM(driver_count)/SUM(auto_count)，但当前趋势 API 不返回件数字段
-  // 此处为描述性统计（AI 解读文字），暂用简单平均，待后端补充字段后修正
-  const avgRate = overallRows.reduce((sum, row) => sum + row.rate, 0) / overallRows.length;
+  const totalDriverCount = overallRows.reduce((sum, row) => sum + (row.driver_count ?? 0), 0);
+  const totalAutoCount = overallRows.reduce((sum, row) => sum + (row.auto_count ?? 0), 0);
+  const avgRate = totalAutoCount > 0 ? (totalDriverCount / totalAutoCount) * 100 : 0;
   const avgPremium = overallRows.reduce((sum, row) => sum + row.avg_premium, 0) / overallRows.length;
   const momentum = previous ? latest.rate - previous.rate : 0;
 

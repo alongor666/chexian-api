@@ -45,6 +45,7 @@ export const QUERY_ROUTES = {
     FUNNEL: 'renewal-v2/funnel',
     COMPETITION: 'renewal-v2/competition',
     ACTION: 'renewal-v2/action',
+    METADATA: 'renewal-v2/metadata',
   },
 
   // 交叉销售（车驾意推介率）

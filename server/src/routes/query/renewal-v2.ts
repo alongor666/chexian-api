@@ -18,7 +18,9 @@ import {
   generateCompetitionGainQuery,
   generateActionListQuery,
   generateActionListCountQuery,
+  generateMetadataQuery,
   type RenewalUniverseFilters,
+  type DrillStep,
 } from '../../sql/renewal-universe.js';
 
 const router = Router();
@@ -52,8 +54,25 @@ const renewalV2Schema = z.object({
   insuranceGrade: z.string().max(10).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(10).max(100).default(20),
-  groupBy: z.enum(['org', 'salesman', 'category', 'grade']).default('org'),
+  groupBy: z.enum(['org', 'salesman', 'category', 'grade', 'coverage', 'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing']).default('org'),
+  /** 下钻路径 JSON 字符串，格式 [{"dimension":"org","value":"乐山"}] */
+  drillPath: z.string().optional(),
 });
+
+const VALID_DRILL_DIMENSIONS = new Set(['org', 'salesman', 'category', 'grade', 'coverage', 'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing']);
+
+function parseDrillPath(raw: string | undefined): DrillStep[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return undefined;
+    return parsed
+      .filter((s: any) => s && typeof s.dimension === 'string' && typeof s.value === 'string' && VALID_DRILL_DIMENSIONS.has(s.dimension))
+      .slice(0, 10) as DrillStep[]; // 最多 10 层防滥用
+  } catch {
+    return undefined;
+  }
+}
 
 function parseFilters(query: Record<string, unknown>): RenewalUniverseFilters {
   const result = renewalV2Schema.safeParse(query);
@@ -67,7 +86,8 @@ function parseFilters(query: Record<string, unknown>): RenewalUniverseFilters {
   if (filters.expiryDateEnd && !isValidDateFormat(filters.expiryDateEnd)) {
     throw new AppError(400, 'expiryDateEnd 格式无效，需 YYYY-MM-DD');
   }
-  return filters;
+  const drillPath = parseDrillPath(filters.drillPath as unknown as string | undefined);
+  return { ...filters, drillPath } as RenewalUniverseFilters;
 }
 
 // ── Tab 1: 续保总览 ──
@@ -184,6 +204,21 @@ router.get(
         pageSize: filters.pageSize ?? 20,
       },
     });
+  })
+);
+
+// ── 元数据 ──
+
+/**
+ * GET /api/query/renewal-v2/metadata
+ * 返回续保宇宙元数据：数据截止日、应续年份、统计摘要
+ */
+router.get(
+  '/renewal-v2/metadata',
+  asyncHandler(async (req, res) => {
+    const perm = req.permissionFilter || '1=1';
+    const rows = await duckdbService.query(generateMetadataQuery(perm));
+    res.json({ success: true, data: rows[0] ?? null });
   })
 );
 

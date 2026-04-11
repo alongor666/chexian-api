@@ -11,8 +11,9 @@
  */
 
 import { useState, useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { cardStyles, tableStyles, textStyles, colorClasses, alertStyles, buttonStyles } from '../../../shared/styles';
-import { usePatrolReport } from '../hooks/useRenewalV2';
+import { usePatrolReport, usePatrolNarrative } from '../hooks/useRenewalV2';
 import type {
   PatrolReport, PatrolSection, PatrolBlindspot,
   PatrolComparison, PatrolAlertLevel,
@@ -459,15 +460,20 @@ interface RenewalPatrolTabProps {
 
 export function RenewalPatrolTab({ onNavigateToAction }: RenewalPatrolTabProps) {
   const { data, isLoading, error, refetch } = usePatrolReport('renewal');
+  const { data: narrativeData, isLoading: narrativeLoading } = usePatrolNarrative('renewal');
+  const [showDataDetail, setShowDataDetail] = useState(false);
 
-  if (isLoading) {
+  if (isLoading && narrativeLoading) {
     return <div className="p-8 text-center text-neutral-400">加载巡检报告中...</div>;
   }
 
-  // 拆分空态和错误态
-  if (error || !data?.report) {
+  // 拆分空态：富文本和数据都不存在
+  const hasNarrative = !!narrativeData?.content;
+  const hasReport = !!data?.report;
+
+  if (!hasNarrative && !hasReport && !isLoading && !narrativeLoading) {
     const is404 = error && typeof error === 'object' && 'status' in error && (error as any).status === 404;
-    const isNotGenerated = is404 || (!error && !data?.report);
+    const isNotGenerated = is404 || !error;
 
     if (isNotGenerated) {
       return (
@@ -476,7 +482,7 @@ export function RenewalPatrolTab({ onNavigateToAction }: RenewalPatrolTabProps) 
             还没有巡检报告
           </p>
           <p className={`text-sm mt-1 ${colorClasses.text.neutralMuted}`}>
-            请管理员运行 <code className="bg-neutral-100 dark:bg-neutral-800 px-1 rounded">python3 数据管理/patrol/patrol_engine.py --domain renewal</code> 生成报告
+            请运行 /patrol 命令生成巡检报告
           </p>
         </div>
       );
@@ -500,66 +506,112 @@ export function RenewalPatrolTab({ onNavigateToAction }: RenewalPatrolTabProps) 
     );
   }
 
-  const report: PatrolReport = data.report;
+  const report: PatrolReport | null = data?.report ?? null;
 
   // 找出红灯最多的维度，作为默认展开项
-  const mostRedSectionId = report.sections.reduce<string | null>((bestId, section) => {
+  const mostRedSectionId = report?.sections.reduce<string | null>((bestId, section) => {
     if (!bestId) return section.dimension_id;
     const bestSection = report.sections.find(s => s.dimension_id === bestId);
     const bestRedCount = bestSection?.findings.filter(f => f.worst_alert === 'red').length ?? 0;
     const currRedCount = section.findings.filter(f => f.worst_alert === 'red').length;
     return currRedCount > bestRedCount ? section.dimension_id : bestId;
-  }, null);
+  }, null) ?? null;
 
   return (
     <div className="space-y-4">
-      {/* 摘要卡片 */}
-      <AlertSummaryCards report={report} />
-
-      {/* 重点关注 */}
-      <FocusAlerts report={report} />
-
-      {/* 维度分析 */}
-      {report.sections.map(section => (
-        <DimensionSection
-          key={section.dimension_id}
-          section={section}
-          defaultExpanded={section.dimension_id === mostRedSectionId}
-        />
-      ))}
-
-      {/* 盲点发现 */}
-      <BlindspotsList blindspots={report.blindspots} />
-
-      {/* AI 深度研判 */}
-      {report.ai_findings && report.ai_findings.length > 0 && (
-        <AIFindingsCard findings={report.ai_findings} meta={report.ai_meta} />
+      {/* 第一部分：富文本分析报告 */}
+      {narrativeLoading && (
+        <div className={`${cardStyles.base} py-4 text-center ${colorClasses.text.neutralMuted}`}>
+          加载分析报告中...
+        </div>
       )}
-
-      {/* 环比变化 */}
-      <ComparisonTable comparisons={report.comparisons} />
-
-      {/* 行动跳转 */}
-      {onNavigateToAction && (
-        <div className="text-center">
-          <button
-            onClick={onNavigateToAction}
-            className={`${buttonStyles.base} ${buttonStyles.primary} ${buttonStyles.sizeMedium}`}
-          >
-            查看行动看板
-          </button>
+      {hasNarrative && (
+        <div className={cardStyles.base}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className={textStyles.titleSmall}>分析报告</h3>
+            {narrativeData.generatedAt && (
+              <span className={`text-xs ${colorClasses.text.neutralMuted}`}>
+                撰写于 {new Date(narrativeData.generatedAt).toLocaleString('zh-CN')}
+              </span>
+            )}
+          </div>
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            <ReactMarkdown>{narrativeData.content}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+      {!hasNarrative && !narrativeLoading && (
+        <div className={`${cardStyles.base} text-center py-4`}>
+          <p className={colorClasses.text.neutralMuted}>分析报告尚未生成，运行 /patrol 生成</p>
         </div>
       )}
 
-      {/* 元信息 */}
-      <div className={`text-xs ${colorClasses.text.neutralMuted} text-right`}>
-        生成于 {new Date(report.generated_at).toLocaleString('zh-CN')} ·
-        {report.summary.total_records?.toLocaleString()} 条数据 ·
-        耗时 {report.summary.elapsed_seconds}s
-        {report.ai_meta && (
-          <> · AI {report.ai_meta.queries_executed} 次查询 / {report.ai_meta.duration_seconds}s</>
-        )}
-      </div>
+      {/* 第二部分：巡检数据（可展开） */}
+      {report && (
+        <>
+          {/* 摘要卡片（始终展示） */}
+          <AlertSummaryCards report={report} />
+
+          {/* 重点关注（始终展示） */}
+          <FocusAlerts report={report} />
+
+          {/* 数据详情折叠控制 */}
+          <div className="text-center">
+            <button
+              onClick={() => setShowDataDetail(!showDataDetail)}
+              className={`text-sm ${colorClasses.text.primary} hover:underline`}
+            >
+              {showDataDetail ? '收起数据详情 ▲' : '展开数据详情 ▼'}
+            </button>
+          </div>
+
+          {showDataDetail && (
+            <>
+              {/* 维度分析 */}
+              {report.sections.map(section => (
+                <DimensionSection
+                  key={section.dimension_id}
+                  section={section}
+                  defaultExpanded={section.dimension_id === mostRedSectionId}
+                />
+              ))}
+
+              {/* 盲点发现 */}
+              <BlindspotsList blindspots={report.blindspots} />
+
+              {/* 环比变化 */}
+              <ComparisonTable comparisons={report.comparisons} />
+
+              {/* AI 深度研判 */}
+              {report.ai_findings && report.ai_findings.length > 0 && (
+                <AIFindingsCard findings={report.ai_findings} meta={report.ai_meta} />
+              )}
+            </>
+          )}
+
+          {/* 行动跳转 */}
+          {onNavigateToAction && (
+            <div className="text-center">
+              <button
+                onClick={onNavigateToAction}
+                className={`${buttonStyles.base} ${buttonStyles.primary} ${buttonStyles.sizeMedium}`}
+              >
+                查看行动看板
+              </button>
+            </div>
+          )}
+
+          {/* 元信息 */}
+          <div className={`text-xs ${colorClasses.text.neutralMuted} text-right`}>
+            数据生成于 {new Date(report.generated_at).toLocaleString('zh-CN')} ·
+            {report.summary.total_records?.toLocaleString()} 条数据 ·
+            耗时 {report.summary.elapsed_seconds}s
+            {report.ai_meta && (
+              <> · AI {report.ai_meta.queries_executed} 次查询 / {report.ai_meta.duration_seconds}s</>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

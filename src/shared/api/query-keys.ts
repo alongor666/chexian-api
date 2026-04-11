@@ -78,6 +78,8 @@ export const queryKeys = {
     ['renewal-v2-competition', params] as const,
   renewalV2Action: (params: Record<string, string>) =>
     ['renewal-v2-action', params] as const,
+  renewalV2Metadata: () =>
+    ['renewal-v2-metadata'] as const,
 
   // ── 巡检报告 ──
   patrolReport: (domain: string) =>

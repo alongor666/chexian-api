@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { cardStyles, colorClasses, tableStyles, textStyles } from '../../../shared/styles';
-import { formatCurrency } from '../../../shared/utils/formatters';
+import { formatCount, formatCurrency } from '../../../shared/utils/formatters';
 import { useRenewalV2Action, type RenewalV2Filters } from '../hooks/useRenewalV2';
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -51,7 +51,7 @@ export function RenewalActionTab({ filters }: Props) {
             }`}
           >
             {style.label}
-            {priority === key && totalCount > 0 ? ` (${formatCurrency(totalCount)})` : ''}
+            {priority === key && totalCount > 0 ? ` (${formatCount(totalCount)})` : ''}
           </button>
         ))}
       </div>
@@ -104,7 +104,7 @@ export function RenewalActionTab({ filters }: Props) {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4 pt-3 border-t border-neutral-100">
                 <span className={textStyles.caption}>
-                  共 {formatCurrency(totalCount)} 条，第 {page}/{totalPages} 页
+                  共 {formatCount(totalCount)} 条，第 {page}/{totalPages} 页
                 </span>
                 <div className="flex gap-2">
                   <button

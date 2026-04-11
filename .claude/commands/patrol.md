@@ -6,16 +6,56 @@
 - `/patrol --dry-run` — 只打印 SQL 不执行
 - `/patrol --sync` — 执行巡检后同步到 VPS
 
+## 必读
+
+**撰写报告前必须读取规范框架**：`数据管理/knowledge/ai/RENEWAL_PATROL_REPORT_FRAMEWORK.md`
+该框架定义了三口径体系、客户类别优先级、指标命名（流失保费）、报告结构、撰写规则。
+
 ## 步骤
+
+### Phase 1: 数据采集
 
 1. 执行巡检引擎：`python3 数据管理/patrol/patrol_engine.py --domain renewal`
 2. 读取产出 JSON：`数据管理/patrol_reports/renewal/latest.json`
-3. 分析巡检结果，给出文本摘要：
-   - 严重警报（红灯）：哪些维度值异常，可能的原因
-   - 盲点发现：偏离整体最大的交叉组合
-   - 环比变化：哪些月份出现显著趋势变化
-   - 行动建议：优先关注哪些方向
-4. 如果指定 `--sync`：`node scripts/sync-vps.mjs`
+3. 读取报告规范：`数据管理/knowledge/ai/RENEWAL_PATROL_REPORT_FRAMEWORK.md`
+
+### Phase 2: 三口径分析
+
+确定 `latest_data_date`（PolicyFact 当年最新 policy_date），然后对 5 个优先类别各跑三口径：
+
+```python
+# 口径定义
+已到期: expiry_date <= latest_data_date - 1天
+30天内: expiry_date ∈ (latest_data_date - 1天, latest_data_date + 29天]
+全年:   无日期限制
+```
+
+优先类别（按此顺序）：
+1. 非营业个人客车
+2. 非营业货车（个人货车）
+3. 非营业企业客车
+4. 营业货车（企业货车）
+5. 营业公路客运
+
+每个类别 × 三口径 → 续保率、报价覆盖率、报价转化率、流失保费。
+再对每个类别做机构下钻（已到期口径）。
+
+### Phase 3: AI 深度研判
+
+1. **识别 Top N 异常**：从 latest.json 的 sections + blindspots 提取
+2. **下钻查询**：每个 Top 异常做 2-3 次 DuckDB 交叉下钻
+3. **探索配置外维度**：is_new_car、is_transfer、coverage_combination 等
+4. **写回 JSON**：幂等覆盖 ai_findings + ai_meta
+
+### Phase 4: 撰写报告
+
+**按 RENEWAL_PATROL_REPORT_FRAMEWORK.md 规范撰写**，输出两个文件：
+- `数据管理/patrol_reports/renewal/report.md`（前端展示，文件头 `<!-- generated: ISO_DATE -->`）
+- `数据管理/数据分析报告/renewal_patrol_YYYYMMDD.md`（存档副本）
+
+### Phase 5: 同步（可选）
+
+如果指定 `--sync`：`node scripts/sync-vps.mjs`
 
 ## 交互追问
 
@@ -24,95 +64,45 @@
 - "XX 类别的盲点详情" → 从 JSON 中提取并展示
 - "与上月对比" → 使用环比数据说明变化
 
-## AI 研判协议（Phase 2）
+## ai_findings 结构
 
-在完成步骤 1-4 的基础巡检后，执行以下 AI 深度研判：
-
-### 5. 识别 Top N 异常
-
-从 latest.json 中提取最严重的异常：
-- 读取 `sections` 中所有 findings，按 `worst_alert` 排序（red > orange > yellow）
-- 读取 `blindspots` 中偏离最大的交叉组合
-- 合并排序，取 Top 5 异常
-
-### 6. 下钻查询
-
-对每个 Top 异常，用 DuckDB 做 2-3 次交叉下钻：
-
-```bash
-duckdb -c "
-  SELECT <交叉维度>, COUNT(*) AS cnt,
-    ROUND(SUM(is_renewed::INT)*1.0/COUNT(*), 4) AS renewal_rate,
-    ROUND(SUM(is_quoted::INT)*1.0/COUNT(*), 4) AS quote_coverage_rate
-  FROM read_parquet('数据管理/warehouse/fact/renewal_universe/latest.parquet')
-  WHERE <异常条件>
-  GROUP BY <交叉维度>
-  HAVING COUNT(*) >= 30
-  ORDER BY renewal_rate ASC
-"
-```
-
-下钻方向：
-- 异常维度值 × 客户类别（结构分解）
-- 异常维度值 × 到期月份（时间趋势）
-- 异常维度值 × 新旧车/能源类型（属性交叉）
-
-### 7. 探索配置外维度
-
-renewal.json 配置了 6 个维度，但 RenewalUniverse 还有更多：
-- `coverage_combination`（险别组合：主全/交三/单交）
-- `is_new_car`（新旧车）
-- `is_transfer`（过户车）
-- `salesman_name`（业务员）
-- `tonnage_segment`（吨位段，仅货车）
-
-选择 2-3 个做 GROUP BY，标注偏离整体 >20% 的发现。
-标注这些发现为 `discovered_via: 'exploration'`。
-
-### 8. 写回 JSON + Markdown
-
-**幂等性保护**：
-1. 读取 `数据管理/patrol_reports/renewal/latest.json`
-2. 删除已有的 `ai_findings` 和 `ai_meta` 字段（如果存在）
-3. 追加新的研判数据
-4. 写回同一文件
-
-**ai_findings 结构**：
 ```json
 {
   "ai_findings": [
     {
-      "severity": "red",
-      "title": "简短标题（如：天府×营业货车 续保率严重偏低）",
+      "severity": "red|orange|yellow",
+      "title": "简短中文标题",
       "metric_value": "8.1%",
       "overall_value": "20.2%",
-      "narrative": "2-3句分析文字，描述现象和可能原因。禁止假设因果。",
-      "dimensions": [{"id": "org_level_3", "value": "天府"}, {"id": "customer_category", "value": "营业货车"}],
-      "evidence": [{"query": "GROUP BY customer_category WHERE org_level_3='天府'", "result": "营业货车 8.1%, 非营业个人客车 22.5%"}],
-      "discovered_via": "config_drill"
+      "narrative": "2-3句分析文字。禁止假设因果。",
+      "dimensions": [{"id": "维度id", "value": "维度值"}],
+      "evidence": [{"query": "查询描述", "result": "结果摘要"}],
+      "discovered_via": "config_drill|cross_drill|exploration"
     }
   ],
   "ai_meta": {
-    "generated_at": "2026-04-11T16:00:00.000Z",
-    "queries_executed": 28,
-    "extra_dimensions_explored": ["coverage_combination", "is_new_car"],
-    "duration_seconds": 180
+    "generated_at": "ISO时间",
+    "queries_executed": 12,
+    "extra_dimensions_explored": ["is_new_car", "is_transfer"],
+    "duration_seconds": 15
   }
 }
 ```
-
-**Markdown 报告**：同时写入 `数据管理/数据分析报告/renewal_patrol_YYYYMMDD.md`
 
 ## 护栏
 
 - **禁止假设因果关系**：所有业务假设标注 `⚠️ 待用户确认`
 - **率值禁止加权平均**：汇总时基于绝对值（分子/分母）重算
-- **探索性发现必须标注**：`discovered_via: 'exploration'` 区分于配置内发现
+- **探索性发现必须标注**：`discovered_via: 'exploration'`
+- **"流失保费"不叫"风险保费"**：面向用户统一使用"流失保费"
+- **三口径必须同时展示**：禁止只展示一个口径
 - **DuckDB 语法**：查询失败时查 DuckDB 文档，不猜测
+- **<30 件不做结论**：统计不显著
 
 ## 数据源
 
-- 输入：`数据管理/warehouse/fact/renewal_universe/latest.parquet`（118,886 条应续保单）
+- 输入：`数据管理/warehouse/fact/renewal_universe/latest.parquet`
 - 配置：`数据管理/patrol/domain_configs/renewal.json`（6 维度 × 5 指标）
-- 产出：`数据管理/patrol_reports/renewal/latest.json`（含 ai_findings）
-- 报告：`数据管理/数据分析报告/renewal_patrol_YYYYMMDD.md`
+- 规范：`数据管理/knowledge/ai/RENEWAL_PATROL_REPORT_FRAMEWORK.md`
+- 产出 JSON：`数据管理/patrol_reports/renewal/latest.json`（含 ai_findings）
+- 产出报告：`数据管理/patrol_reports/renewal/report.md` + `数据管理/数据分析报告/renewal_patrol_YYYYMMDD.md`
