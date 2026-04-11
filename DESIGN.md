@@ -47,10 +47,10 @@
 | 色名 | 色值 | 用途 |
 |------|------|------|
 | Purple | `#722ed1` | 成本相关（综合分析） |
-| Indigo | `#4f46e5` | 2023 年份标识 |
+| Indigo | `#4f46e5` | 通用强调色 |
 | Sky | `#0284c7` | 辅助信息色 |
 | Orange | `#ea580c` | 业务标签（非警告） |
-| Amber | `#d97706` | 转保转化率线 |
+| Amber | `#d97706` | 警示/注意色 |
 
 ### 综合分析专用色板（9 色）
 
@@ -135,7 +135,7 @@ import { colorClasses } from '@/shared/styles'
 | `text-green-600` | `colorClasses.text.success` | 成功/增长 |
 | `bg-red-50` | `colorClasses.bg.danger` | 错误背景 |
 | `bg-gray-50` | `colorClasses.bg.neutral` | 中性背景 |
-| `border-red-200` | `colorClasses.border.danger` | 错误边框 |
+| `border-red-*` | `colorClasses.border.danger` | 错误边框 |
 | `text-gray-900` | `colorClasses.text.neutralBlack` | 主文本 |
 | `text-gray-600` | `colorClasses.text.neutral` | 次要文本 |
 | `text-gray-400` | `colorClasses.text.neutralMuted` | 辅助/标签 |
@@ -602,6 +602,7 @@ import {
 
 | 断点 | 宽度 | 用途 |
 |------|------|------|
+| `xs` | 375px | 小屏手机 |
 | `sm` | 640px | 手机 |
 | `md` | 768px | 平板 |
 | `lg` | 1024px | 桌面 |
