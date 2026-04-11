@@ -104,12 +104,12 @@
 ## 4. API 架构
 
 ```
-前端 Hook → apiClient → GET /api/query/* → server/src/routes/query.ts → server/src/sql/*.ts → duckdb.ts → JSON
+前端 Hook → apiClient → GET /api/query/* → server/src/routes/query.ts（聚合器）→ query/*.ts（19 子路由）→ server/src/sql/*.ts（30 模块）→ duckdb.ts → JSON
 ```
 
 **启动**：`bun run dev:full`（禁止只运行 `bun run dev`）
 
-**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由）· `server/src/sql/`（24 个 SQL 生成器）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
+**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器，65 行）+ `query/*.ts`（19 子路由）· `server/src/sql/`（30 个 SQL 模块：27 生成器 + 3 共享）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
 
 **API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录）· `/api/filters/*`（筛选器）
 
