@@ -51,13 +51,6 @@ export const queryKeys = {
   crossSellHeatmap: (params: Record<string, string>) =>
     ['cross-sell-heatmap', params] as const,
 
-  // ── 续保 ──
-  renewalAnalysis: (params: Record<string, unknown>) =>
-    ['renewal-analysis', params] as const,
-
-  renewalDrilldown: (params: Record<string, unknown>) =>
-    ['renewal-drilldown', params] as const,
-
   // ── 假日营销 ──
   holidayDrilldown: (params: Record<string, unknown>) =>
     ['holiday-drilldown', params] as const,

@@ -533,8 +533,7 @@ class ApiClient {
   async getCoefficientData(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COEFFICIENT, filters); }
   async getCostAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COST, filters); }
   async getComprehensiveBundle(params?: ComprehensiveFilterParams): Promise<ComprehensiveBundleResponse> { return this.queryGet<ComprehensiveBundleResponse>(QUERY_ROUTES.COMPREHENSIVE_BUNDLE, params as Record<string, unknown>); }
-  async getRenewalAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.RENEWAL, filters); }
-  async getRenewalDrilldown(params?: Record<string, any>): Promise<any[]> { return this.queryGet(QUERY_ROUTES.RENEWAL_DRILLDOWN, params); }
+  // getRenewalAnalysis/getRenewalDrilldown removed — replaced by getRenewalV2*
 
   /**
    * 获取车驾意推介率数据

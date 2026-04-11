@@ -38,10 +38,6 @@ export const QUERY_ROUTES = {
   COMPREHENSIVE_BUNDLE: '/comprehensive-bundle',
   COMPREHENSIVE_ANALYSIS_BUNDLE: '/comprehensive-analysis-bundle',
 
-  // 续保
-  RENEWAL: '/renewal',
-  RENEWAL_DRILLDOWN: '/renewal-drilldown',
-
   // 交叉销售（车驾意推介率）
   CROSS_SELL: '/cross-sell',
   CROSS_SELL_TREND: '/cross-sell-trend',

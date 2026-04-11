@@ -38,10 +38,6 @@ export const QUERY_ROUTES = {
   COMPREHENSIVE_BUNDLE: 'comprehensive-bundle',
   COMPREHENSIVE_ANALYSIS_BUNDLE: 'comprehensive-analysis-bundle',
 
-  // 续保
-  RENEWAL: 'renewal',
-  RENEWAL_DRILLDOWN: 'renewal-drilldown',
-
   // 续保宇宙 V2
   RENEWAL_V2: {
     OVERVIEW: 'renewal-v2/overview',

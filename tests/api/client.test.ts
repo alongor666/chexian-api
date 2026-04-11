@@ -293,26 +293,7 @@ describe('API Client', () => {
       expect(calledUrl).toContain('endDate=2026-01-31');
     });
 
-    it('should preserve renewal full query contract fields', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          data: { detailData: [] }
-        }),
-      });
-
-      const { apiClient } = await import('../../src/shared/api/client');
-      await apiClient.getRenewalAnalysis({
-        queryType: 'full',
-        targetMonth: '2026-02',
-      });
-
-      const calledUrl = mockFetch.mock.calls[0][0] as string;
-      expect(calledUrl).toContain('/query/renewal?');
-      expect(calledUrl).toContain('queryType=full');
-      expect(calledUrl).toContain('targetMonth=2026-02');
-    });
+    // renewal full query test removed — replaced by renewal-v2 endpoints
   });
 
   describe('Session Operations', () => {
