@@ -24,7 +24,7 @@ import reportRoutes from './query/report.js';
 import premiumPlanRoutes from './query/premium-plan.js';
 import performanceRoutes from './query/performance.js';
 import bundleRoutes from './query/bundles.js';
-import renewalFunnelRoutes from './query/renewal-funnel.js';
+// renewalFunnelRoutes removed — replaced by renewal-v2
 import quoteConversionRoutes from './query/quote-conversion.js';
 import claimsDetailRoutes from './query/claims-detail.js';
 import expenseDevRoutes from './query/expense-development.js';
@@ -54,7 +54,7 @@ router.use(reportRoutes);
 router.use(premiumPlanRoutes);
 router.use(performanceRoutes);
 router.use(bundleRoutes);
-router.use(renewalFunnelRoutes);
+// renewalFunnelRoutes removed — replaced by renewal-v2
 router.use(quoteConversionRoutes);
 router.use(claimsDetailRoutes);
 router.use(expenseDevRoutes);

@@ -926,47 +926,6 @@ class ApiClient {
     });
   }
 
-  // ── 续保漏斗 ──
-
-  async getRenewalFunnelOverview(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.OVERVIEW}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelTrend(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.TREND}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelTeam(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.TEAM}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelSalesman(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.SALESMAN}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelActionList(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.ACTION_LIST}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelMatrix(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.MATRIX}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelRisk(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.RISK}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalFunnelMetadata() {
-    return this.request<{ minExpiryDate: string; maxExpiryDate: string; categories: string[]; availableMonths?: string[] }>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.METADATA}`);
-  }
-
   // ── 续保宇宙 V2 ──
 
   async getRenewalV2Overview(params?: Record<string, string>) {

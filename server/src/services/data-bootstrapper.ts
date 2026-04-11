@@ -15,7 +15,6 @@ import {
   getSalesmanMappingPaths,
   getSalesmanDimPaths,
   getPlanDimPaths,
-  getRenewalFunnelPaths,
   getQuoteConversionPaths,
   getPlateRegionDimPaths,
   getClaimsDetailPaths,
@@ -62,7 +61,6 @@ export interface BootstrapDuckDB {
   loadTeamMapping(jsonFilePath: string): Promise<void>;
   // 辅助域加载
   loadPlateRegionDim(parquetPath: string): Promise<void>;
-  loadRenewalFunnel(parquetPath: string): Promise<void>;
   loadQuoteConversion(parquetPath: string): Promise<void>;
   loadClaimsDetail(parquetPath: string): Promise<void>;
   loadClaimsAgg(parquetPath: string): Promise<void>;
@@ -363,7 +361,6 @@ export class DataBootstrapper {
   private async loadAuxiliaryDomains(): Promise<void> {
     const loaders: Array<{ name: string; pathFn: () => string[]; loadFn: (p: string) => Promise<void> }> = [
       { name: 'PlateRegionDim', pathFn: getPlateRegionDimPaths, loadFn: p => this.db.loadPlateRegionDim(p) },
-      { name: 'RenewalFunnel', pathFn: getRenewalFunnelPaths, loadFn: p => this.db.loadRenewalFunnel(p) },
       { name: 'QuoteConversion', pathFn: getQuoteConversionPaths, loadFn: p => this.db.loadQuoteConversion(p) },
       { name: 'ClaimsDetail', pathFn: getClaimsDetailPaths, loadFn: p => this.db.loadClaimsDetail(p) },
       { name: 'RepairDim', pathFn: getRepairDimPaths, loadFn: p => this.db.loadRepairDim(p) },

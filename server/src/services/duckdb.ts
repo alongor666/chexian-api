@@ -469,9 +469,7 @@ export class DuckDBService implements DuckDBQueryable {
     return domainLoaders.loadQuoteConversion(this, parquetPath);
   }
 
-  async loadRenewalFunnel(parquetPath: string): Promise<void> {
-    return domainLoaders.loadRenewalFunnel(this, parquetPath);
-  }
+  // loadRenewalFunnel removed — replaced by loadRenewalUniverse
 
   async loadClaimsDetail(parquetPath: string): Promise<void> {
     return domainLoaders.loadClaimsDetail(this, parquetPath);

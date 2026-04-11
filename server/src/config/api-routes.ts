@@ -42,18 +42,6 @@ export const QUERY_ROUTES = {
   RENEWAL: '/renewal',
   RENEWAL_DRILLDOWN: '/renewal-drilldown',
 
-  // 续保漏斗
-  RENEWAL_FUNNEL: {
-    OVERVIEW: '/renewal-funnel/overview',
-    TREND: '/renewal-funnel/trend',
-    TEAM: '/renewal-funnel/team',
-    SALESMAN: '/renewal-funnel/salesman',
-    ACTION_LIST: '/renewal-funnel/action-list',
-    MATRIX: '/renewal-funnel/matrix',
-    METADATA: '/renewal-funnel/metadata',
-    RISK: '/renewal-funnel/risk',
-  },
-
   // 交叉销售（车驾意推介率）
   CROSS_SELL: '/cross-sell',
   CROSS_SELL_TREND: '/cross-sell-trend',

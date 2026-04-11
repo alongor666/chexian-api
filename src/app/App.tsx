@@ -258,7 +258,7 @@ function App() {
                   <Route path="premium-report" element={<Navigate to="/reports" replace />} />
                   <Route path="marketing-report" element={<Navigate to="/reports" replace />} />
                   <Route path="truck" element={<Navigate to="/specialty?tab=truck" replace />} />
-                  <Route path="renewal" element={<Navigate to="/specialty?tab=renewal" replace />} />
+                  <Route path="renewal" element={<Navigate to="/renewal-analysis" replace />} />
                   <Route path="cross-sell" element={<Navigate to="/specialty?tab=cross-sell" replace />} />
                   <Route path="comparison" element={<Navigate to="/growth" replace />} />
                   <Route path="comprehensive-analysis" element={<Navigate to="/cost?view=comprehensive" replace />} />
