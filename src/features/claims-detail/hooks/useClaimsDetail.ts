@@ -21,7 +21,9 @@ export function useClaimsDetail() {
   const [geoPlate, setGeoPlate] = useState<FetchState<any[]>>(createFetchState([]));
   const [geoComparison, setGeoComparison] = useState<FetchState<any>>(createFetchState(null));
   const [frequencyYoy, setFrequencyYoy] = useState<FetchState<any[]>>(createFetchState([]));
-  const [lossRatioDev, setLossRatioDev] = useState<FetchState<any[]>>(createFetchState([]));
+  const [lossRatioDev, setLossRatioDev] = useState<FetchState<any[]> & { claimsCutoff: string | null }>(
+    { ...createFetchState([]), claimsCutoff: null }
+  );
 
   const fetchPendingData = useCallback(async (params?: Record<string, string>) => {
     setPendingOverview(prev => ({ ...prev, loading: true, error: null }));
@@ -97,7 +99,8 @@ export function useClaimsDetail() {
     setLossRatioDev(prev => ({ ...prev, loading: true, error: null }));
     try {
       const data = await apiClient.getClaimsDetailLossRatioDev(params);
-      setLossRatioDev({ data, loading: false, error: null });
+      const claimsCutoff = data.length > 0 ? (data[0]?.claims_cutoff ?? null) : null;
+      setLossRatioDev({ data, claimsCutoff, loading: false, error: null });
     } catch (err) {
       const msg = err instanceof Error ? err.message : '查询失败';
       setLossRatioDev(prev => ({ ...prev, loading: false, error: msg }));

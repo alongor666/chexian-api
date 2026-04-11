@@ -40,7 +40,10 @@ def run_triangle_query(con: duckdb.DuckDBPyConnection) -> list[dict]:
     M13~M24: 保单仍是全年的，出险窗口继续向次年扩展。
     """
     sql = f"""
-    WITH policies AS (
+    WITH claims_cutoff_cte AS (
+        SELECT COALESCE(CAST(MAX(report_time) AS DATE), CURRENT_DATE) AS claims_cutoff FROM read_parquet('{CLAIMS_PATH}')
+    ),
+    raw_policies AS (
         SELECT
             YEAR(insurance_start_date) AS cohort_year,
             policy_no,
@@ -51,7 +54,14 @@ def run_triangle_query(con: duckdb.DuckDBPyConnection) -> list[dict]:
         FROM read_parquet('{POLICY_GLOB}', union_by_name := true)
         WHERE customer_category = '摩托车'
           AND YEAR(insurance_start_date) IN ({','.join(str(y) for y in COHORT_YEARS)})
-          AND premium > 0
+    ),
+    policies AS (
+        SELECT cohort_year, policy_no, insurance_start_date,
+               SUM(premium) AS premium,
+               MAX(policy_term_days) AS policy_term_days
+        FROM raw_policies
+        GROUP BY cohort_year, policy_no, insurance_start_date
+        HAVING SUM(premium) > 0
     ),
     policy_totals AS (
         SELECT cohort_year,
@@ -69,7 +79,8 @@ def run_triangle_query(con: duckdb.DuckDBPyConnection) -> list[dict]:
             MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month) AS observation_end
         FROM policy_totals pt
         CROSS JOIN dev_months m
-        WHERE MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month) <= CURRENT_DATE
+        WHERE MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month)
+              <= (SELECT claims_cutoff FROM claims_cutoff_cte)
     ),
     -- 已赚保费：只含起保日 < observation_end 的保单
     earned AS (
@@ -97,12 +108,20 @@ def run_triangle_query(con: duckdb.DuckDBPyConnection) -> list[dict]:
            AND p.insurance_start_date <  cw.observation_end
         GROUP BY cw.cohort_year, cw.dev_month
     ),
-    -- 赔案：出险时间 < observation_end，且保单在窗口内
+    -- 赔案：报案时间 < observation_end（IBNR 发展口径），且保单在窗口内
+    -- 已决/未决按 settlement_time 分类：已结案取 settled_amount，未结案取 reserve_amount
     claimed AS (
         SELECT
             cw.cohort_year, cw.dev_month,
             COUNT(DISTINCT c.claim_no) AS claim_count,
-            SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) AS total_reserve
+            SUM(
+                CASE
+                    WHEN c.settlement_time IS NOT NULL
+                         AND c.settlement_time < cw.observation_end
+                    THEN COALESCE(c.settled_amount, 0)
+                    ELSE COALESCE(c.reserve_amount, 0)
+                END
+            ) AS total_reserve
         FROM calendar_window cw
         JOIN policies p
             ON p.cohort_year = cw.cohort_year
@@ -110,8 +129,7 @@ def run_triangle_query(con: duckdb.DuckDBPyConnection) -> list[dict]:
            AND p.insurance_start_date <  cw.observation_end
         LEFT JOIN read_parquet('{CLAIMS_PATH}') c
             ON c.policy_no = p.policy_no
-           AND c.accident_time >= cw.year_start
-           AND c.accident_time <  cw.observation_end
+           AND c.report_time < cw.observation_end
         GROUP BY cw.cohort_year, cw.dev_month
     )
     SELECT

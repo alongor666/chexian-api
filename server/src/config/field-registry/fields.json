@@ -17,8 +17,8 @@
       "parquetColumn": "保费",
       "required": true,
       "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "INTEGER", "BIGINT"],
-      "aliases": ["premium", "signed_premium", "signedPremium", "保费", "签单保费", "保险费", "签单/批改保费含税"],
-      "description": "签单/批改保费（含税），正值=承保，负值=退费"
+      "aliases": ["premium", "signed_premium", "signedPremium", "保费", "签单保费", "保险费"],
+      "description": "签单/批改保费（不含税），正值=承保，负值=退费/批改"
     },
     {
       "id": "policy_date",

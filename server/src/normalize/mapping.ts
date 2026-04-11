@@ -66,7 +66,7 @@ export interface ColumnAliasConfig {
 
 export const COLUMN_ALIASES: ColumnAliasConfig = {
   policy_no: ['policy_no', 'policyNo', '保单号', '保险单号', 'policy_number'],
-  premium: ['premium', 'signed_premium', 'signedPremium', '保费', '签单保费', '保险费', '签单/批改保费含税'],
+  premium: ['premium', 'signed_premium', 'signedPremium', '保费', '签单保费', '保险费'],
   policy_date: ['policy_date', 'policyDate', '保单日期', '签单日期', 'sign_date', 'signed_date'],
   insurance_start_date: ['insurance_start_date', 'insuranceStartDate', '保险起期', '起保日期', 'start_date', 'effective_date'],
   salesman_name: ['salesman_name', 'salesmanName', '业务员', '业务员姓名', 'salesman', 'sales_person'],
