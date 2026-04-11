@@ -99,6 +99,18 @@ export const queryKeys = {
   renewalFunnelMetadata: () =>
     ['renewal-funnel-metadata'] as const,
 
+  // ── 续保宇宙 V2 ──
+  renewalV2Overview: (params: Record<string, string>) =>
+    ['renewal-v2-overview', params] as const,
+  renewalV2Trend: (params: Record<string, string>) =>
+    ['renewal-v2-trend', params] as const,
+  renewalV2Funnel: (params: Record<string, string>) =>
+    ['renewal-v2-funnel', params] as const,
+  renewalV2Competition: (params: Record<string, string>) =>
+    ['renewal-v2-competition', params] as const,
+  renewalV2Action: (params: Record<string, string>) =>
+    ['renewal-v2-action', params] as const,
+
   // ── 筛选器 ──
   filterOptions: () => ['filter-options'] as const,
 } as const;

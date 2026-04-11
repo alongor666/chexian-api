@@ -967,6 +967,33 @@ class ApiClient {
     return this.request<{ minExpiryDate: string; maxExpiryDate: string; categories: string[]; availableMonths?: string[] }>(`/query/${QUERY_ROUTES.RENEWAL_FUNNEL.METADATA}`);
   }
 
+  // ── 续保宇宙 V2 ──
+
+  async getRenewalV2Overview(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<{ total: Record<string, any>; grouped: Record<string, any>[] }>(`/query/${QUERY_ROUTES.RENEWAL_V2.OVERVIEW}${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalV2Trend(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.TREND}${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalV2Funnel(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<{ funnel: Record<string, any>[]; lossReason: Record<string, any>[] }>(`/query/${QUERY_ROUTES.RENEWAL_V2.FUNNEL}${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalV2Competition(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<{ loss: Record<string, any>[]; gain: Record<string, any>[] }>(`/query/${QUERY_ROUTES.RENEWAL_V2.COMPETITION}${query ? `?${query}` : ''}`);
+  }
+
+  async getRenewalV2Action(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.ACTION}${query ? `?${query}` : ''}`);
+  }
+
   // ── 维修资源 ──
 
   async getRepairOverview(params?: Record<string, string>) {
