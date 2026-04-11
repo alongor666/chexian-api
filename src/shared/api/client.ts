@@ -285,6 +285,7 @@ class ApiClient {
    */
   private async requestWithMeta<T>(
     endpoint: string,
+    hasRetriedAfterRefresh = false,
   ): Promise<{ data: T; meta: { total: number; page: number; pageSize: number } }> {
     const url = `${API_BASE}${endpoint}`;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -298,6 +299,17 @@ class ApiClient {
 
     try {
       const response = await fetch(url, { headers, credentials: 'include', signal: controller.signal });
+
+      // 401 自动刷新 token 并重试（与 request() 逻辑对齐）
+      const canTryRefresh = !endpoint.startsWith('/auth/')
+        && (Boolean(token) || this.hasSessionCookieHint);
+      if (response.status === 401 && !hasRetriedAfterRefresh && canTryRefresh) {
+        const refreshed = await this.tryRefreshSession();
+        if (refreshed) {
+          return this.requestWithMeta<T>(endpoint, true);
+        }
+      }
+
       const body: ApiResponse<T> = await response.json();
       if (!body.success) {
         const error = new Error(body.error?.message || '请求失败');
