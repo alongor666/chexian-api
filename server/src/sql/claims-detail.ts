@@ -388,7 +388,10 @@ export function generateLossRatioDevelopmentQuery(
   const yearsIn = cohortYears.join(',');
 
   return `
-    WITH policies AS (
+    WITH claims_cutoff_cte AS (
+      SELECT CAST(MAX(report_time) AS DATE) AS claims_cutoff FROM ClaimsDetail
+    ),
+    raw_policies AS (
       SELECT
         YEAR(p.insurance_start_date) AS cohort_year,
         p.policy_no, p.insurance_start_date, p.premium,
@@ -396,8 +399,15 @@ export function generateLossRatioDevelopmentQuery(
                   p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term_days
       FROM PolicyFact p
       WHERE YEAR(p.insurance_start_date) IN (${yearsIn})
-        AND p.premium > 0
         ${policyWhere}
+    ),
+    policies AS (
+      SELECT cohort_year, policy_no, insurance_start_date,
+             SUM(premium) AS premium,
+             MAX(policy_term_days) AS policy_term_days
+      FROM raw_policies
+      GROUP BY cohort_year, policy_no, insurance_start_date
+      HAVING SUM(premium) > 0
     ),
     policy_totals AS (
       SELECT cohort_year,
@@ -414,7 +424,8 @@ export function generateLossRatioDevelopmentQuery(
         MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month) AS observation_end
       FROM policy_totals pt
       CROSS JOIN dev_months m
-      WHERE MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month - 1) <= CURRENT_DATE
+      WHERE MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month - 1)
+            <= (SELECT claims_cutoff FROM claims_cutoff_cte)
     ),
     earned AS (
       SELECT
@@ -445,7 +456,14 @@ export function generateLossRatioDevelopmentQuery(
       SELECT
         cw.cohort_year, cw.dev_month,
         COUNT(DISTINCT c.claim_no) AS claim_count,
-        SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) AS total_reserve
+        SUM(
+          CASE
+            WHEN c.settlement_time IS NOT NULL
+                 AND c.settlement_time < cw.observation_end
+            THEN COALESCE(c.settled_amount, 0)
+            ELSE COALESCE(c.reserve_amount, 0)
+          END
+        ) AS total_reserve
       FROM calendar_window cw
       JOIN policies p
         ON p.cohort_year = cw.cohort_year
@@ -453,8 +471,7 @@ export function generateLossRatioDevelopmentQuery(
        AND p.insurance_start_date <  cw.observation_end
       LEFT JOIN ClaimsDetail c
         ON c.policy_no = p.policy_no
-       AND c.accident_time >= cw.year_start
-       AND c.accident_time <  cw.observation_end
+       AND c.report_time < cw.observation_end
       GROUP BY cw.cohort_year, cw.dev_month
     )
     SELECT
@@ -471,7 +488,8 @@ export function generateLossRatioDevelopmentQuery(
       CASE WHEN cl.claim_count > 0
            THEN ROUND(cl.total_reserve / cl.claim_count, 0)
            ELSE NULL END AS avg_claim,
-      ROUND(e.dev_policies * 100.0 / pt.total_policies, 1) AS coverage_pct
+      ROUND(e.dev_policies * 100.0 / pt.total_policies, 1) AS coverage_pct,
+      (SELECT claims_cutoff FROM claims_cutoff_cte) AS claims_cutoff
     FROM earned e
     JOIN claimed cl ON e.cohort_year = cl.cohort_year AND e.dev_month = cl.dev_month
     JOIN policy_totals pt ON e.cohort_year = pt.cohort_year

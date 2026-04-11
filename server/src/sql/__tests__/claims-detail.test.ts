@@ -471,8 +471,10 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).toContain('RANGE(1, 13)');
   });
 
-  it('包含 5 个 CTE：policies + policy_totals + dev_months + calendar_window + earned + claimed', () => {
+  it('包含 CTE：claims_cutoff_cte + raw_policies + policies + policy_totals + dev_months + calendar_window + earned + claimed', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    expect(sql).toContain('claims_cutoff_cte AS (');
+    expect(sql).toContain('raw_policies AS (');
     expect(sql).toContain('policies AS (');
     expect(sql).toContain('policy_totals AS (');
     expect(sql).toContain('dev_months AS (');
@@ -481,12 +483,13 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).toContain('claimed AS (');
   });
 
-  it('输出关键指标：loss_ratio_pct + incident_rate_pct + avg_claim', () => {
+  it('输出关键指标：loss_ratio_pct + incident_rate_pct + avg_claim + claims_cutoff', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
     expect(sql).toContain('loss_ratio_pct');
     expect(sql).toContain('incident_rate_pct');
     expect(sql).toContain('avg_claim');
     expect(sql).toContain('coverage_pct');
+    expect(sql).toContain('claims_cutoff');
   });
 
   it('日历发展口径：MAKE_DATE + year_start + observation_end', () => {
@@ -497,9 +500,28 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).toContain('to_months(m.dev_month)');
   });
 
-  it('premium > 0 防护', () => {
+  it('保单净额聚合：HAVING SUM(premium) > 0', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
-    expect(sql).toContain('p.premium > 0');
+    expect(sql).toContain('HAVING SUM(premium) > 0');
+  });
+
+  it('赔案按报案时间过滤：report_time < observation_end', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    expect(sql).toContain('c.report_time < cw.observation_end');
+  });
+
+  it('已决/未决按 settlement_time 分类取值', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    expect(sql).toContain('c.settlement_time IS NOT NULL');
+    expect(sql).toContain('c.settlement_time < cw.observation_end');
+    expect(sql).toContain('c.settled_amount');
+    expect(sql).toContain('c.reserve_amount');
+  });
+
+  it('全局截止时间用 MAX(report_time)，非 CURRENT_DATE', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    expect(sql).toContain('MAX(report_time)');
+    expect(sql).not.toContain('CURRENT_DATE');
   });
 
   it('NULLIF 防除以零（已赚保费 + 已赚暴露）', () => {

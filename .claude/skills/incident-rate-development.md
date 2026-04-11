@@ -26,8 +26,9 @@ version: 1.0.0
 - M1: 起保+出险都在1月 → M2: 都在1-2月 → M12: 全年
 - M13~M24: 保单固定为全年，出险窗口继续向次年扩展
 - 保单范围：起保日在窗口内（M≤12逐月扩大，M>12为全年保单）
-- 赔案范围：出险时间在窗口内 & 保单在窗口内
+- 赔案范围：报案时间(report_time)在观察窗口截止点之前 & 保单在窗口内。已结案(settlement_time<观察点)取已决赔款(settled_amount)，未结案取立案金额(reserve_amount)
 - 已赚保费 = 保费 × min(起保日到窗口末端天数, 保险期间) / 保险期间
+- 全局截止：以理赔最新报案日期 MAX(report_time) 为截止，分子分母同口径
 
 参考实现：`moto_loss_ratio_development.py`、`server/src/sql/claims-detail.ts:generateLossRatioDevelopmentQuery()`
 

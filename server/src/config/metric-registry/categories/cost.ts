@@ -32,7 +32,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     ELSE NULL
   END AS earned_claim_ratio`,
       requiredColumns: ['premium', 'reported_claims', 'exposure_days'],
-      notes: '需在 CTE 中预算 exposure_days = LEAST(GREATEST(DATEDIFF(day, 起保日, 截止日), 0), 365)',
+      notes: '赔案口径：report_time < 观察截止（MAX(report_time)），已结案(settlement_time<观察点)取settled_amount，否则取reserve_amount。保单口径：按policy_no聚合净保费>0。exposure_days = LEAST(GREATEST(DATEDIFF(day, 起保日, 截止日), 0), 365)',
     },
     display: {
       formatter: 'percent',
@@ -48,7 +48,10 @@ export const costMetrics: readonly MetricDefinition[] = [
         assertions: { earned_claim_ratio: { op: 'gte', value: 0 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' }],
+    changelog: [
+      { version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' },
+      { version: '1.1.0', date: '2026-04-11', changes: '口径修正：赔案锚点改为 report_time，已决/未决按 settlement_time 分类取值，保单净保费聚合排除完全退保，截止日期改为 MAX(report_time)' },
+    ],
   },
 
   {

@@ -41,6 +41,7 @@ interface CohortData {
 
 export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => {
   const { lossRatioDev } = hook;
+  const claimsCutoff = lossRatioDev.claimsCutoff ?? null;
   const [metric, setMetric] = useState<Metric>('loss_ratio_pct');
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
@@ -191,6 +192,11 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
               {opt.label}
             </button>
           ))}
+          {claimsCutoff && (
+            <span className={cn('ml-auto text-xs whitespace-nowrap', colorClasses.text.neutralMuted)}>
+              数据截止至 {claimsCutoff}
+            </span>
+          )}
         </div>
 
         {/* 洞察文字（跟随指标切换） */}
@@ -286,10 +292,12 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
         <b>方法论说明（日历发展口径）</b><br />
         1. 发展月 M 的观察窗口 = [年初, 年初+M个月)。M1=1月, M2=1-2月, ..., M12=全年, M18=至次年6月。<br />
         2. 保单范围：起保日在窗口内的保单（M ≤ 12 时逐月扩大，M {'>'} 12 时为全年保单）。<br />
-        3. 赔案范围：出险时间在窗口内 & 保单在窗口内。<br />
-        4. 已赚保费 = 保费 × min(起保日到窗口末端天数, 保险期间) / 保险期间。<br />
-        5. 满期出险率 = 赔案数 / 已赚暴露。已赚暴露 = Σ min(观察天数, 保险期间) / 保险期间，年化可比。<br />
-        6. 覆盖率 = 窗口内保单数 / 该年全部保单数。M12 时 ≈ 100%。
+        3. 赔案范围：报案时间在观察窗口截止点之前（report_time {'<'} 观察点）& 保单在窗口内。<br />
+        4. 赔款取值：已决时间在观察点前→取已决赔款；否则→取立案金额（准备金估计）。<br />
+        5. 已赚保费 = 保费 × min(起保日到窗口末端天数, 保险期间) / 保险期间。<br />
+        6. 满期出险率 = 赔案数 / 已赚暴露。已赚暴露 = Σ min(观察天数, 保险期间) / 保险期间，年化可比。<br />
+        7. 覆盖率 = 窗口内保单数 / 该年全部保单数。M12 时 ≈ 100%。<br />
+        8. 数据截止：以理赔最新报案日期为全局截止点，分子分母同口径。
       </div>
     </div>
   );

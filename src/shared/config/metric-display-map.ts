@@ -2,8 +2,8 @@
  * 指标展示映射 — 从注册表自动生成
  *
  * 生成命令：npx tsx scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-04-02T03:33:38.952Z
- * 指标数量：28
+ * 生成时间：2026-04-11T14:25:28.401Z
+ * 指标数量：35
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成
  */
@@ -24,6 +24,8 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   'new_car_rate': '新车占比',
   'quality_business_rate': '优质业务占比',
   'commercial_insurance_rate': '商业险投保率',
+  'quote_coverage_rate': '报价覆盖率',
+  'quote_to_renewal_rate': '报价转化率',
   'earned_claim_ratio': '赔付率',
   'expense_ratio': '费用率',
   'avg_claim_amount': '案均赔款',
@@ -32,6 +34,11 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   'earned_loss_frequency': '出险率',
   'earned_margin_amount': '满期边际贡献额',
   'projected_margin_amount': '预估边际贡献额',
+  'fixed_cost_amount': '固定成本额',
+  'fixed_cost_ratio': '固定成本率',
+  'combined_cost_amount': '综合成本额',
+  'combined_cost_ratio': '综合成本率',
+  'earned_profit_amount': '利润额',
   'cross_sell_total_rate': '推介率',
   'cross_sell_danjiao_rate': '单交推介率',
   'cross_sell_jiaosan_rate': '交三推介率',
@@ -60,6 +67,8 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   'new_car_rate': { formatter: 'percent', unit: '%' },
   'quality_business_rate': { formatter: 'percent', unit: '%' },
   'commercial_insurance_rate': { formatter: 'percent', unit: '%' },
+  'quote_coverage_rate': { formatter: 'percent', unit: '%' },
+  'quote_to_renewal_rate': { formatter: 'percent', unit: '%' },
   'earned_claim_ratio': { formatter: 'percent', unit: '%', decimals: 2 },
   'expense_ratio': { formatter: 'percent', unit: '%', decimals: 2 },
   'avg_claim_amount': { formatter: 'premiumWan', unit: '万元' },
@@ -68,6 +77,11 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   'earned_loss_frequency': { formatter: 'percent', unit: '%', decimals: 2 },
   'earned_margin_amount': { formatter: 'premiumWan', unit: '万元' },
   'projected_margin_amount': { formatter: 'premiumWan', unit: '万元' },
+  'fixed_cost_amount': { formatter: 'premiumWan', unit: '万元' },
+  'fixed_cost_ratio': { formatter: 'percent', unit: '%', decimals: 1 },
+  'combined_cost_amount': { formatter: 'premiumWan', unit: '万元' },
+  'combined_cost_ratio': { formatter: 'percent', unit: '%', decimals: 1 },
+  'earned_profit_amount': { formatter: 'premiumWan', unit: '万元' },
   'cross_sell_total_rate': { formatter: 'percent', unit: '%', decimals: 2 },
   'cross_sell_danjiao_rate': { formatter: 'percent', unit: '%', decimals: 2 },
   'cross_sell_jiaosan_rate': { formatter: 'percent', unit: '%', decimals: 2 },
@@ -92,6 +106,8 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   'new_car_rate': '新车保单数 / 总保单数',
   'quality_business_rate': '优质业务保单数 / 总保单数',
   'commercial_insurance_rate': '商业险件数 / 交强险件数',
+  'quote_coverage_rate': '已报价 VIN 数 / 应续 VIN 数',
+  'quote_to_renewal_rate': '已续保 VIN 数 / 已报价 VIN 数',
   'earned_claim_ratio': '已报告赔款 / 满期保费',
   'expense_ratio': '费用金额 / 保费',
   'avg_claim_amount': '已报告赔款 / 赔案件数',
@@ -100,6 +116,11 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   'earned_loss_frequency': '(赔案件数/保单件数) × (保险期限天数/满期天数)。满期后=赔案/保单，未满期年化放大',
   'earned_margin_amount': '满期保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
   'projected_margin_amount': '签单保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
+  'fixed_cost_amount': '附加税费额 + 推动费额 + 管理费额（均为绝对值聚合）',
+  'fixed_cost_ratio': '固定成本额 / 满期保费',
+  'combined_cost_amount': '变动成本额 + 固定成本额 = 已报告赔款 + 费用金额 + 固定成本额',
+  'combined_cost_ratio': '综合成本额 / 满期保费（绝对值除法，非率值相加）',
+  'earned_profit_amount': '满期保费 - 综合成本额 = 边际贡献额 - 固定成本额',
   'cross_sell_total_rate': '驾意险件数 / 车险件数',
   'cross_sell_danjiao_rate': '单交下驾意险件数 / 单交车险件数',
   'cross_sell_jiaosan_rate': '交三下驾意险件数 / 交三车险件数',
