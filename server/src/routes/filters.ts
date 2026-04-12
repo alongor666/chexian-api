@@ -8,6 +8,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { permissionMiddleware } from '../middleware/permission.js';
+import { snapshotServe } from '../middleware/snapshot-serve.js';
 import { asyncHandler } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
 import { permissionService } from '../services/permission.js';
@@ -15,10 +16,11 @@ import { permissionService } from '../services/permission.js';
 const router = Router();
 
 /**
- * 应用认证和权限中间件
+ * 应用认证、权限和快照中间件
  */
 router.use(authMiddleware);
 router.use(permissionMiddleware);
+router.use(snapshotServe);
 
 /**
  * GET /api/filters/options

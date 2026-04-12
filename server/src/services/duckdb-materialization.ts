@@ -211,14 +211,15 @@ export async function materializePolicyFactWorkingSet(db: DuckDBQueryable): Prom
     console.log(`[DuckDB] Dropped ${rawTables.length} raw_parquet table(s) to free memory`);
   }
 
-  // 创建高频查询索引（仅保留最高收益的 3 个，减少内存和启动时间）
+  // 创建高频查询索引（4 个：3 个过滤 + 1 个 JOIN）
   const t1 = Date.now();
   await Promise.all([
     db.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_policy_date ON PolicyFactRealtime(policy_date)'),
     db.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_org ON PolicyFactRealtime(org_level_3)'),
     db.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_salesman ON PolicyFactRealtime(salesman_name)'),
+    db.query('CREATE INDEX IF NOT EXISTS idx_policy_fact_policy_no ON PolicyFactRealtime(policy_no)'),
   ]);
-  console.log(`[DuckDB] 3 indexes created in ${Date.now() - t1}ms`);
+  console.log(`[DuckDB] 4 indexes created in ${Date.now() - t1}ms`);
   console.log('[DuckDB] PolicyFactRealtime materialized with realtime indexes');
 }
 

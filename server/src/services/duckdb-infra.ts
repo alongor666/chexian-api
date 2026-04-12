@@ -25,11 +25,17 @@ export class QueryCache {
       this.cache.delete(key);
       return null;
     }
+    // LRU: 访问时 delete→set 将 key 移到 Map 末尾（最近访问）
+    this.cache.delete(key);
+    this.cache.set(key, entry);
     return entry.data as T;
   }
 
   set(key: string, data: any, ttlMs: number): void {
+    // 已存在则先删除（保证 set 后在末尾）
+    this.cache.delete(key);
     if (this.cache.size >= this.maxSize) {
+      // 驱逐 Map 首元素（最久未访问）
       const firstKey = this.cache.keys().next().value;
       if (firstKey) this.cache.delete(firstKey);
     }
@@ -49,11 +55,18 @@ export class QueryCache {
 // 连接池
 // ============================================
 
+const ACQUIRE_TIMEOUT_MS = 5_000;
+const MAX_WAIT_QUEUE = 20;
+
 export class ConnectionPool {
   private pool: DuckDBConnection[] = [];
   private activeCount = 0;
   private maxSize: number;
-  private waitQueue: Array<(conn: DuckDBConnection) => void> = [];
+  private waitQueue: Array<{
+    resolve: (conn: DuckDBConnection) => void;
+    reject: (err: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }> = [];
   private instance: DuckDBInstance;
 
   constructor(instance: DuckDBInstance, maxSize: number = 10) {
@@ -72,17 +85,27 @@ export class ConnectionPool {
       this.activeCount++;
       return await this.instance.connect();
     }
-    // 达上限，排队等待
-    return new Promise<DuckDBConnection>((resolve) => {
-      this.waitQueue.push(resolve);
+    // 队列已满 → fast-fail
+    if (this.waitQueue.length >= MAX_WAIT_QUEUE) {
+      throw new Error('ConnectionPool: queue full, server too busy');
+    }
+    // 达上限，排队等待（带超时）
+    return new Promise<DuckDBConnection>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const idx = this.waitQueue.findIndex((w) => w.resolve === resolve);
+        if (idx !== -1) this.waitQueue.splice(idx, 1);
+        reject(new Error(`ConnectionPool: acquire timeout after ${ACQUIRE_TIMEOUT_MS}ms`));
+      }, ACQUIRE_TIMEOUT_MS);
+      this.waitQueue.push({ resolve, reject, timer });
     });
   }
 
   release(conn: DuckDBConnection): void {
     if (this.waitQueue.length > 0) {
       // 直接交给等待者
-      const resolve = this.waitQueue.shift()!;
-      resolve(conn);
+      const waiter = this.waitQueue.shift()!;
+      clearTimeout(waiter.timer);
+      waiter.resolve(conn);
     } else {
       // 归还到池中
       this.activeCount--;
@@ -91,6 +114,12 @@ export class ConnectionPool {
   }
 
   async closeAll(): Promise<void> {
+    // 清理所有等待者
+    for (const waiter of this.waitQueue) {
+      clearTimeout(waiter.timer);
+      waiter.reject(new Error('ConnectionPool: closing'));
+    }
+    this.waitQueue = [];
     for (const conn of this.pool) {
       try { conn.closeSync(); } catch { /* ignore */ }
     }
