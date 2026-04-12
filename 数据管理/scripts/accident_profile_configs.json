@@ -1,0 +1,82 @@
+[
+  {
+    "id": "摩托车",
+    "name": "摩托车",
+    "filter": "p.customer_category = '摩托车'"
+  },
+  {
+    "id": "个人客车_单交",
+    "name": "非营业个人客车 — 单交强",
+    "filter": "p.customer_category = '非营业个人客车' AND p.coverage_combination = '单交'"
+  },
+  {
+    "id": "个人客车_交三_燃油",
+    "name": "非营业个人客车 — 交三 — 燃油车",
+    "filter": "p.customer_category = '非营业个人客车' AND p.coverage_combination = '交三' AND p.is_nev = false"
+  },
+  {
+    "id": "个人客车_交三_新能源",
+    "name": "非营业个人客车 — 交三 — 新能源",
+    "filter": "p.customer_category = '非营业个人客车' AND p.coverage_combination = '交三' AND p.is_nev = true"
+  },
+  {
+    "id": "个人客车_主全_燃油",
+    "name": "非营业个人客车 — 主全 — 燃油车",
+    "filter": "p.customer_category = '非营业个人客车' AND p.coverage_combination = '主全' AND p.is_nev = false"
+  },
+  {
+    "id": "个人客车_主全_新能源",
+    "name": "非营业个人客车 — 主全 — 新能源",
+    "filter": "p.customer_category = '非营业个人客车' AND p.coverage_combination = '主全' AND p.is_nev = true"
+  },
+  {
+    "id": "出租租赁_燃油",
+    "name": "营业出租租赁 — 燃油车",
+    "filter": "p.customer_category = '营业出租租赁' AND p.is_nev = false"
+  },
+  {
+    "id": "出租租赁_新能源",
+    "name": "营业出租租赁 — 新能源",
+    "filter": "p.customer_category = '营业出租租赁' AND p.is_nev = true"
+  },
+  {
+    "id": "牵引车",
+    "name": "营业货车 — 牵引车",
+    "filter": "p.customer_category = '营业货车' AND p.truck_type = '牵引'"
+  },
+  {
+    "id": "非营业货车_1_2吨",
+    "name": "非营业货车 — 1-2吨",
+    "filter": "p.customer_category = '非营业货车' AND p.tonnage_segment = '1-2吨'"
+  },
+  {
+    "id": "货车_1吨以下",
+    "name": "货车 — 1吨以下（营业+非营业）",
+    "filter": "(p.customer_category IN ('营业货车','非营业货车')) AND p.tonnage_segment = '1吨以下'"
+  },
+  {
+    "id": "营业货车_2_9吨",
+    "name": "营业货车 — 2-9吨",
+    "filter": "p.customer_category = '营业货车' AND p.tonnage_segment = '2-9吨'"
+  },
+  {
+    "id": "营业货车_9吨以上_自卸",
+    "name": "营业货车 — 9吨以上 — 自卸车",
+    "filter": "p.customer_category = '营业货车' AND p.tonnage_segment IN ('9-10吨','10吨以上') AND p.truck_type LIKE '%自卸%'"
+  },
+  {
+    "id": "营业货车_9吨以上_其他",
+    "name": "营业货车 — 9吨以上 — 除牵引自卸外",
+    "filter": "p.customer_category = '营业货车' AND p.tonnage_segment IN ('9-10吨','10吨以上') AND (p.truck_type IS NULL OR (p.truck_type NOT LIKE '%牵引%' AND p.truck_type NOT LIKE '%自卸%'))"
+  },
+  {
+    "id": "营业货车_1_2吨_燃油",
+    "name": "营业货车 — 1-2吨 — 燃油车",
+    "filter": "p.customer_category = '营业货车' AND p.tonnage_segment = '1-2吨' AND p.is_nev = false"
+  },
+  {
+    "id": "营业货车_1_2吨_新能源",
+    "name": "营业货车 — 1-2吨 — 新能源",
+    "filter": "p.customer_category = '营业货车' AND p.tonnage_segment = '1-2吨' AND p.is_nev = true"
+  }
+]

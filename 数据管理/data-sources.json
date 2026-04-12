@@ -11,9 +11,9 @@
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-04-09",
+      "last_updated": "2026-04-12",
       "data_range": "2021-01-01 ~ 2026-04-07",
-      "row_count": 3546505,
+      "row_count": 2518232,
       "field_count": 53,
       "key_fields": [
         "保单号",
@@ -281,7 +281,10 @@
         "/api/query/cross-sell-heatmap"
       ],
       "frontend_page": "specialty (tab=cross-sell)",
-      "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重"
+      "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重",
+      "last_updated": "2026-04-12",
+      "row_count": 402777,
+      "field_count": 9
     },
     {
       "id": "quotes_v2",
@@ -341,7 +344,10 @@
         "/api/query/repair/status"
       ],
       "frontend_page": "repair",
-      "notes": "维修厂合作数据，12列，含核损金额/换件折扣率/合作状态"
+      "notes": "维修厂合作数据，12列，含核损金额/换件折扣率/合作状态",
+      "last_updated": "2026-04-12",
+      "row_count": 6326,
+      "field_count": 12
     },
     {
       "id": "customer_flow",
