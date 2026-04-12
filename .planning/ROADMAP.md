@@ -7,7 +7,7 @@
 ## Phases
 
 - [ ] **Phase 1: 安全基线** - 修复快照 scope 碰撞漏洞，建立权限隔离自动化验证
-- [ ] **Phase 2: SQL 查询优化** - 建立黄金快照基线，重写 coefficient.ts 消灭 2-5s 慢查询
+- [ ] **Phase 2: SQL 查询优化** - 建立黄金快照基线，删除系数监控功能（用户产品决策）
 - [ ] **Phase 3: 代码结构整理** - SQL 生成器拆分 + 前端包体优化，可与 Phase 2 并行
 - [ ] **Phase 4: 物化优化** - 次要表惰性物化 + duckdb.ts 关注点拆分
 - [ ] **Phase 5: 持久化与快照精细化** - PM2 暖启动 <10s + 静态/动态 Parquet 独立失效
@@ -28,15 +28,19 @@ Plans:
 - [x] 01-02-PLAN.md — SEC-02 权限隔离 E2E 测试（多角色快照隔离验证 + 人工端到端确认）
 
 ### Phase 2: SQL 查询优化
-**Goal**: 所有核心 API 端点查询时间降至 <500ms，且 SQL 重构不引入任何结果回归
+**Goal**: 建立全接口黄金快照回归基线，删除系数监控板块（前后端全链路），SQL-03 搁置有书面结论
 **Depends on**: Phase 1
 **Requirements**: SQL-01, SQL-02, SQL-03
-**Success Criteria** (what must be TRUE):
-  1. 黄金快照基线建立完成：所有核心端点的 JSON 返回值已快照存档，可作为回归对比基准
-  2. /api/query/coefficient 端点响应时间从 2-5s 降至 <500ms（benchmark 脚本可验证）
-  3. coefficient.ts 重构后，与黄金快照对比无数值差异（每个字段误差 0）
-  4. earned-premium-detail.ts 经 EXPLAIN ANALYZE 决策：若可合并则合并，若不可则有书面结论存档
-**Plans**: TBD
+**Success Criteria** (what must be TRUE，已根据用户决策 D-03/D-08 更新):
+  1. 黄金快照基线建立完成：所有 66 个 API 端点的 JSON 返回值已快照存档，可作为回归对比基准
+  2. /api/query/coefficient 路由不存在（返回 404）
+  3. 前后端系数监控代码全量清除：bun run build + test + governance 三项全部通过
+  4. SQL-03 满期保费明细决策：书面结论已存档（02-03-PLAN.md），搁置至后续阶段
+**Plans:** 3 plans
+Plans:
+- [ ] 02-01-PLAN.md — SQL-01 黄金快照基线（golden-baseline.mjs + 66 端点存档）
+- [ ] 02-02-PLAN.md — SQL-02 后端系数删除（formatDate 迁移 + 5 个文件删除 + query.ts 清理）
+- [ ] 02-03-PLAN.md — SQL-02 前端系数删除 + SQL-03 书面结论（ORG_GROUPS 迁移 + 全链路清理）
 
 ### Phase 3: 代码结构整理
 **Goal**: SQL 生成器大文件拆分完成，前端包体基线明确且压缩插件现代化，首屏不加载图表库
@@ -82,7 +86,7 @@ Phase 3 可与 Phase 2 并行（独立代码路径，无共享修改文件）
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 安全基线 | 0/2 | Planning complete | - |
-| 2. SQL 查询优化 | 0/TBD | Not started | - |
+| 2. SQL 查询优化 | 0/3 | Planning complete | - |
 | 3. 代码结构整理 | 0/TBD | Not started | - |
 | 4. 物化优化 | 0/TBD | Not started | - |
 | 5. 持久化与快照精细化 | 0/TBD | Not started | - |
