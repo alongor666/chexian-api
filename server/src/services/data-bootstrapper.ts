@@ -19,6 +19,7 @@ import {
   getPlateRegionDimPaths,
   getClaimsDetailPaths,
   getCrossSellPaths,
+  getClaimsBulkPaths,
   getClaimsAggPaths,
   getRepairDimPaths,
   getBrandDimPaths,
@@ -63,6 +64,7 @@ export interface BootstrapDuckDB {
   loadPlateRegionDim(parquetPath: string): Promise<void>;
   loadQuoteConversion(parquetPath: string): Promise<void>;
   loadClaimsDetail(parquetPath: string): Promise<void>;
+  loadClaimsBulk(parquetPath: string): Promise<void>;
   loadClaimsAgg(parquetPath: string): Promise<void>;
   createClaimsAggFromDetail(): Promise<void>;
   loadCrossSell(parquetPath: string): Promise<void>;
@@ -383,9 +385,25 @@ export class DataBootstrapper {
       }
     }
 
-    // ClaimsAgg：独立 parquet 优先，否则从 ClaimsDetail 创建
+    // ClaimsAgg：claims_bulk 优先 → 旧 ClaimsAgg parquet 回退 → ClaimsDetail 聚合兜底
+    const claimsBulkPath = getClaimsBulkPaths().find(p => fs.existsSync(p));
     const claimsAggPath = getClaimsAggPaths().find(p => fs.existsSync(p));
-    if (claimsAggPath) {
+    if (claimsBulkPath) {
+      try {
+        await this.db.loadClaimsBulk(claimsBulkPath);
+      } catch (err) {
+        console.warn('[Bootstrap] ClaimsBulk load failed, trying fallbacks:', err);
+        if (claimsAggPath) {
+          try { await this.db.loadClaimsAgg(claimsAggPath); } catch (e) {
+            console.warn('[Bootstrap] ClaimsAgg fallback also failed:', e);
+          }
+        } else if (claimsDetailLoaded) {
+          try { await this.db.createClaimsAggFromDetail(); } catch (e) {
+            console.warn('[Bootstrap] ClaimsAgg from ClaimsDetail fallback failed:', e);
+          }
+        }
+      }
+    } else if (claimsAggPath) {
       try {
         await this.db.loadClaimsAgg(claimsAggPath);
       } catch (err) {

@@ -592,6 +592,10 @@ export class DuckDBService implements DuckDBQueryable {
     return domainLoaders.loadClaimsDetail(this, parquetPath);
   }
 
+  async loadClaimsBulk(parquetPath: string): Promise<void> {
+    return domainLoaders.loadClaimsBulk(this, parquetPath);
+  }
+
   async loadClaimsAgg(parquetPath: string): Promise<void> {
     return domainLoaders.loadClaimsAgg(this, parquetPath);
   }
