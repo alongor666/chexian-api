@@ -12,16 +12,28 @@ import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
 import { canAccessFeeAnalysis, canAccessCost, canAccessExpenseDevelopment } from '../shared/config/organizations';
 
+// SW 活跃时让 SW 管理新鲜度（避免双重缓存），否则保持 5min staleTime
+const swActive = typeof navigator !== 'undefined'
+  && 'serviceWorker' in navigator
+  && navigator.serviceWorker.controller !== null;
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,      // 5 分钟内数据视为 fresh，不重新请求
+      staleTime: swActive ? Infinity : 5 * 60 * 1000,
       gcTime: 30 * 60 * 1000,         // 30 分钟后垃圾回收
       refetchOnWindowFocus: false,     // 车险数据非实时，关闭窗口聚焦刷新
       retry: 1,                        // 失败重试 1 次
     },
   },
 });
+
+// SW 通知 ETL 数据更新时，清空 React Query 缓存让 UI 刷新
+if (typeof window !== 'undefined') {
+  window.addEventListener('sw-etl-updated', () => {
+    queryClient.invalidateQueries();
+  });
+}
 
 export { queryClient };
 

@@ -811,4 +811,97 @@ router.put(
   })
 );
 
+// ============================================
+// Phase 1: 快照预计算 — version + snapshot-health
+// ============================================
+
+import {
+  getSnapshotStats,
+  getLatestEtlDate,
+  setLatestEtlDate,
+  SNAPSHOT_BUNDLES,
+  permissionToScope,
+} from '../middleware/snapshot-serve.js';
+import { getSnapshotDirs } from '../config/paths.js';
+import { getAllPermissionScopes } from '../config/preset-users.js';
+
+/**
+ * GET /api/data/version
+ * 返回当前 ETL 日期和构建时间（Phase 2 SW 版本轮询依赖此接口）
+ */
+router.get(
+  '/version',
+  asyncHandler(async (req: Request, res: Response) => {
+    // 尝试从 PolicyFact 获取最新数据日期
+    let etlDate = getLatestEtlDate();
+    if (!etlDate) {
+      try {
+        const result = await duckdbService.query<{ max_date: string }>(
+          `SELECT MAX(CAST(policy_date AS DATE))::VARCHAR AS max_date FROM PolicyFact`
+        );
+        etlDate = result[0]?.max_date || new Date().toISOString().slice(0, 10);
+        setLatestEtlDate(etlDate);
+      } catch {
+        etlDate = new Date().toISOString().slice(0, 10);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        etlDate,
+        buildTime: new Date().toISOString(),
+        serverStartTime: serverStartTime,
+      },
+    });
+  })
+);
+
+const serverStartTime = new Date().toISOString();
+
+/**
+ * GET /api/data/snapshot-health
+ * 返回每个 bundle 的快照状态 + 命中率计数器
+ */
+router.get(
+  '/snapshot-health',
+  asyncHandler(async (req: Request, res: Response) => {
+    const stats = getSnapshotStats();
+    const scopes = getAllPermissionScopes();
+    const snapshotDirs = getSnapshotDirs();
+
+    const bundles: Record<string, { scopes: Record<string, { exists: boolean; fileCount: number }> }> = {};
+
+    for (const bundle of SNAPSHOT_BUNDLES) {
+      const scopeStatus: Record<string, { exists: boolean; fileCount: number }> = {};
+      for (const scope of scopes) {
+        let found = false;
+        let fileCount = 0;
+        for (const dir of snapshotDirs) {
+          const bundleScopePath = path.join(dir, bundle, scope);
+          if (fs.existsSync(bundleScopePath)) {
+            found = true;
+            try {
+              const files = fs.readdirSync(bundleScopePath).filter((f: string) => f.endsWith('.json'));
+              fileCount = files.length;
+            } catch { /* ignore */ }
+            break;
+          }
+        }
+        scopeStatus[scope] = { exists: found, fileCount };
+      }
+      bundles[bundle] = { scopes: scopeStatus };
+    }
+
+    res.json({
+      success: true,
+      data: {
+        etlDate: getLatestEtlDate(),
+        counters: stats,
+        bundles,
+      },
+    });
+  })
+);
+
 export default router;

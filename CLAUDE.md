@@ -104,8 +104,18 @@
 ## 4. API 架构
 
 ```
-前端 Hook → apiClient → GET /api/query/* → server/src/routes/query.ts（聚合器）→ query/*.ts（19 子路由）→ server/src/sql/*.ts（30 模块）→ duckdb.ts → JSON
+前端 Hook → apiClient → GET /api/query/*
+  → [Phase 2] Service Worker (stale-while-revalidate, 0ms 二次访问)
+  → server/src/routes/query.ts（聚合器）
+    → authMiddleware → permissionMiddleware
+    → [Phase 1] snapshotServe（检查 JSON 快照, <5ms）
+      ├→ 命中: fs.readFile → X-Snapshot:hit → respond
+      └→ 未命中: next() → query/*.ts → sql/*.ts → duckdb.ts → JSON
 ```
+
+**快照层**（Phase 1）：`server/src/middleware/snapshot-serve.ts` · 响应头 `X-Snapshot: hit|miss|stale|error` · 快照目录 `数据管理/warehouse/snapshots/{bundle}/{scope}/{paramHash}.json`
+
+**Service Worker**（Phase 2）：`public/sw.js` · 仅生产环境 + 仅 `/api/query/*` GET · 每日轮询 `/api/data/version` 检测 ETL 更新 · SW 活跃时 React Query staleTime=Infinity
 
 **启动**：`bun run dev:full`（禁止只运行 `bun run dev`）
 
@@ -128,6 +138,8 @@ bun run test                       # 单元测试（⚠️ 不是 bun test）
 bun run test:integration           # 集成测试（需 DuckDB 原生二进制，仅本地）
 bun run test:e2e                   # E2E（需先 dev:full，凭据 admin/CxAdmin@2026!）
 bun run governance                 # 治理校验
+bun run snapshot:build             # 快照构建（需先 dev:full）
+bun run snapshot:verify            # 快照 dry-run + 健康检查
 ```
 
 **CI 测试分层协议**（RED LINE）：
@@ -148,6 +160,7 @@ bun run governance                 # 治理校验
 | 修改路由 | `curl -s -o /dev/null -w '%{http_code}' localhost:3000/api/[路由]` |
 | 修改前端 | `bun run build` 零 TS 报错 |
 | 声称完成 | 至少一个 API 200 + 非空 JSON |
+| 修改快照 | `bun run snapshot:build --bundle <name>` 重建 + `curl -I` 检查 `X-Snapshot: hit` |
 | Git 推送 | `bun run governance && git diff --check` |
 
 验证结果必须出现在输出中。SQL 报错查 [DuckDB 文档](https://duckdb.org/docs/)，禁止猜测。
@@ -193,6 +206,7 @@ bun run governance                 # 治理校验
 5. CORS 配置 — 确认不会因 env 缺失抛异常
 6. DuckDB/Parquet 兼容 — `union_by_name` schema 一致性
 7. 健康检查 — `curl -s https://chexian.cretvalu.com/health` 返回 200
+8. 快照文件 — `curl -s https://chexian.cretvalu.com/api/data/snapshot-health` 返回快照状态（首次部署无快照时全部 miss，正常）
 8. 核心 API — 至少一个 `/api/query/*` 返回 200 + 非空 JSON
 
 ---

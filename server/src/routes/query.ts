@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { permissionMiddleware } from '../middleware/permission.js';
+import { snapshotServe } from '../middleware/snapshot-serve.js';
 
 import kpiRoutes from './query/kpi.js';
 import trendRoutes from './query/trend.js';
@@ -40,6 +41,7 @@ const router = Router();
 
 router.use(authMiddleware);
 router.use(permissionMiddleware);
+router.use(snapshotServe);
 
 router.use(kpiRoutes);
 router.use(trendRoutes);
