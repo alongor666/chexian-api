@@ -22,7 +22,10 @@
   1. admin 用户和 leshan 用户请求同一端点（如 /api/query/kpi），响应头中 X-Snapshot 命中不同文件路径
   2. unknown/未认证权限请求不命中任何快照，正确回退到实时查询
   3. E2E 测试自动验证不同角色用户在同一端点返回不同数据集，且无法通过 scope 碰撞访问他人数据
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — SEC-01 scope 碰撞修复（permissionToScope 返回 null + snapshotServe null 短路 + 单元测试）
+- [ ] 01-02-PLAN.md — SEC-02 权限隔离 E2E 测试（多角色快照隔离验证 + 人工端到端确认）
 
 ### Phase 2: SQL 查询优化
 **Goal**: 所有核心 API 端点查询时间降至 <500ms，且 SQL 重构不引入任何结果回归
@@ -78,7 +81,7 @@ Phase 3 可与 Phase 2 并行（独立代码路径，无共享修改文件）
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 安全基线 | 0/TBD | Not started | - |
+| 1. 安全基线 | 0/2 | Planning complete | - |
 | 2. SQL 查询优化 | 0/TBD | Not started | - |
 | 3. 代码结构整理 | 0/TBD | Not started | - |
 | 4. 物化优化 | 0/TBD | Not started | - |
