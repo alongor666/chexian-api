@@ -462,6 +462,8 @@ router.get(
       !filterData.isNev &&
       !filterData.isTelemarketing &&
       !filterData.isCommercialInsure &&
+      !filterData.vehicleQuickFilter &&
+      !filterData.businessNature &&
       filterData.dateField === 'policy_date' &&
       timeView === 'daily' &&
       perspective === 'premium';

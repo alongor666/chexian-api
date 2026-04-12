@@ -4,17 +4,20 @@
  * 规则版本：2026-02-25 起
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { cardStyles, colorClasses, fontStyles } from '@/shared/styles';
 import { formatCount, formatPremiumWan, formatPercent } from '@/shared/utils/formatters';
 import { useFeeAnalysis } from '../hooks/useFeeAnalysis';
 import { CAT_NON_COMMERCIAL_PERSONAL } from '@/shared/config/customer-categories';
 import { FeeRuleTierTable } from './FeeRuleTierTable';
 import { FeeDistributionChart } from './FeeDistributionChart';
+import { buildFilterParams } from '@/shared/utils/filterParams';
+import { useRBAC } from '@/shared/hooks/useRBAC';
+import type { AdvancedFilterState } from '@/shared/types';
 import type { FeeInsuranceTypeTab } from '../types/feeAnalysisTypes';
 
 interface Props {
-  filters: Record<string, any>;
+  filters: AdvancedFilterState;
 }
 
 const TAB_OPTIONS: { key: FeeInsuranceTypeTab; label: string }[] = [
@@ -24,12 +27,18 @@ const TAB_OPTIONS: { key: FeeInsuranceTypeTab; label: string }[] = [
 ];
 
 export const FeeAnalysisPanel: React.FC<Props> = ({ filters }) => {
+  const { isOrgUser, userOrg } = useRBAC();
   const { data, summary, loading, error, fetchFeeAnalysis } = useFeeAnalysis();
   const [activeTab, setActiveTab] = useState<FeeInsuranceTypeTab>('all');
 
+  const normalizedParams = useMemo(
+    () => buildFilterParams(filters, { isOrgUser, userOrg }),
+    [filters, isOrgUser, userOrg],
+  );
+
   useEffect(() => {
-    fetchFeeAnalysis(filters);
-  }, [fetchFeeAnalysis, filters]);
+    fetchFeeAnalysis(normalizedParams);
+  }, [fetchFeeAnalysis, normalizedParams]);
 
   if (loading) {
     return (

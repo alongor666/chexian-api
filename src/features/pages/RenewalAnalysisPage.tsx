@@ -16,7 +16,7 @@ import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { cn, colorClasses } from '@/shared/styles';
 import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFilterPanel';
-import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { QuickFilterBar, type QuickFilters } from '@/shared/components/QuickFilterBar';
 import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 import { useRenewalV2Metadata, type RenewalV2Filters, type DrillStep } from '../renewal-v2/hooks/useRenewalV2';
 
@@ -76,13 +76,18 @@ const TAB_TITLES: Record<TabKey, string> = {
  */
 function adaptRenewalFilters(
   globalOrgName: string | undefined,
-  quickFilters: { isNev?: boolean; isNewCar?: boolean },
+  quickFilters: QuickFilters,
   defaultDateRange: { expiryDateStart?: string; expiryDateEnd?: string },
 ): RenewalV2Filters {
   const params: RenewalV2Filters = {};
   if (globalOrgName) params.orgName = globalOrgName;
   if (quickFilters.isNev !== undefined) params.isNev = quickFilters.isNev;
   if (quickFilters.isNewCar !== undefined) params.isNewCar = quickFilters.isNewCar;
+  if (quickFilters.isTransfer !== undefined) params.isTransfer = quickFilters.isTransfer;
+  if (quickFilters.vehicleType) params.vehicleQuickFilter = quickFilters.vehicleType;
+  if (quickFilters.businessNature) params.businessNature = quickFilters.businessNature;
+  if (quickFilters.coverageCombination) params.coverageCombination = quickFilters.coverageCombination;
+  // renewalType 不映射 — RenewalUniverse 是应续档案，无 is_renewal 字段
   if (defaultDateRange.expiryDateStart) params.expiryDateStart = defaultDateRange.expiryDateStart;
   if (defaultDateRange.expiryDateEnd) params.expiryDateEnd = defaultDateRange.expiryDateEnd;
   return params;
@@ -175,7 +180,7 @@ export function RenewalAnalysisPage() {
       groupBy,
       drillPath: drillPath.length > 0 ? drillPath : undefined,
     }),
-    [orgName, quickFilters.isNev, quickFilters.isNewCar, defaultDateRange, groupBy, drillPath],
+    [orgName, quickFilters, defaultDateRange, groupBy, drillPath],
   );
 
   return (

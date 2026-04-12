@@ -27,6 +27,11 @@ export interface RenewalV2Filters {
   drillPath?: DrillStep[];
   page?: number;
   pageSize?: number;
+  // 快捷筛选字段
+  isTransfer?: boolean;
+  vehicleQuickFilter?: string;
+  businessNature?: 'commercial' | 'non_commercial';
+  coverageCombination?: string;
 }
 
 function toParams(filters: RenewalV2Filters): Record<string, string> {
@@ -40,6 +45,14 @@ function toParams(filters: RenewalV2Filters): Record<string, string> {
   if (filters.funnelStage) params.funnelStage = filters.funnelStage;
   if (filters.actionPriority) params.actionPriority = filters.actionPriority;
   if (filters.groupBy) params.groupBy = filters.groupBy;
+  // 快捷筛选布尔字段 — 用 !== undefined 判断（false 是有效值）
+  if (filters.isNev !== undefined) params.isNev = String(filters.isNev);
+  if (filters.isNewCar !== undefined) params.isNewCar = String(filters.isNewCar);
+  if (filters.isTransfer !== undefined) params.isTransfer = String(filters.isTransfer);
+  // 快捷筛选字符串字段
+  if (filters.vehicleQuickFilter) params.vehicleQuickFilter = filters.vehicleQuickFilter;
+  if (filters.businessNature) params.businessNature = filters.businessNature;
+  if (filters.coverageCombination) params.coverageCombination = filters.coverageCombination;
   if (filters.drillPath && filters.drillPath.length > 0) {
     params.drillPath = JSON.stringify(filters.drillPath);
   }
