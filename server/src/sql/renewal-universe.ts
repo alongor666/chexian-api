@@ -49,6 +49,11 @@ export interface RenewalUniverseFilters {
   groupBy?: RenewalGroupDimension;
   /** 下钻路径：每步 {dimension, value} 作为 WHERE 过滤 */
   drillPath?: DrillStep[];
+  // 快捷筛选字段
+  isTransfer?: boolean;
+  vehicleQuickFilter?: string;
+  businessNature?: 'commercial' | 'non_commercial';
+  coverageCombination?: string;
 }
 
 function esc(val: string): string {
@@ -112,6 +117,45 @@ function buildWhere(filters: RenewalUniverseFilters, permissionFilter = '1=1'): 
   }
   if (filters.insuranceGrade) {
     conditions.push(`insurance_grade = '${esc(filters.insuranceGrade)}'`);
+  }
+  if (filters.isTransfer != null) {
+    conditions.push(`is_transfer = ${filters.isTransfer}`);
+  }
+  if (filters.coverageCombination) {
+    conditions.push(`coverage_combination = '${esc(filters.coverageCombination)}'`);
+  }
+  if (filters.businessNature) {
+    conditions.push(
+      filters.businessNature === 'commercial'
+        ? "customer_category LIKE '营业%'"
+        : "customer_category LIKE '非营业%'"
+    );
+  }
+  if (filters.vehicleQuickFilter) {
+    switch (filters.vehicleQuickFilter) {
+      case 'home_car':
+        conditions.push("customer_category = '非营业个人客车'");
+        break;
+      case 'truck_1t':
+        conditions.push("customer_category IN ('营业货车', '非营业货车')");
+        conditions.push("tonnage_segment = '1吨以下'");
+        break;
+      case 'truck_2_9t':
+        conditions.push("customer_category IN ('营业货车', '非营业货车')");
+        conditions.push("tonnage_segment = '2-9吨'");
+        break;
+      case 'motorcycle':
+        conditions.push("customer_category = '摩托车'");
+        break;
+      case 'truck_1_2t':
+        conditions.push("customer_category IN ('营业货车', '非营业货车')");
+        conditions.push("tonnage_segment = '1-2吨'");
+        break;
+      case 'rental':
+        conditions.push("customer_category = '营业出租租赁'");
+        break;
+      // dump/tractor/general: RenewalUniverse 无 vehicle_model 字段，静默跳过
+    }
   }
 
   // drillPath：链式过滤
