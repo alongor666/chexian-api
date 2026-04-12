@@ -31,18 +31,17 @@ export const SNAPSHOT_BUNDLES: readonly string[] = [
   'customer-flow-metadata',
 ] as const;
 
+// 使用全路径（baseUrl + path）匹配，防止跨 router 误命中
 const ROUTE_BUNDLE_MAP: Record<string, string> = {
-  '/dashboard-bundle': 'dashboard-bundle',
-  '/performance-bundle': 'performance-bundle',
-  '/cross-sell-bundle': 'cross-sell-bundle',
-  // filters router: req.path = '/options' (mounted at /api/filters)
-  '/options': 'filters-options',
-  // customer-flow: req.path = '/customer-flow/*' (mounted at /api/query)
-  '/customer-flow/summary': 'customer-flow-summary',
-  '/customer-flow/inflow': 'customer-flow-inflow',
-  '/customer-flow/outflow': 'customer-flow-outflow',
-  '/customer-flow/trend': 'customer-flow-trend',
-  '/customer-flow/metadata': 'customer-flow-metadata',
+  '/api/query/dashboard-bundle': 'dashboard-bundle',
+  '/api/query/performance-bundle': 'performance-bundle',
+  '/api/query/cross-sell-bundle': 'cross-sell-bundle',
+  '/api/filters/options': 'filters-options',
+  '/api/query/customer-flow/summary': 'customer-flow-summary',
+  '/api/query/customer-flow/inflow': 'customer-flow-inflow',
+  '/api/query/customer-flow/outflow': 'customer-flow-outflow',
+  '/api/query/customer-flow/trend': 'customer-flow-trend',
+  '/api/query/customer-flow/metadata': 'customer-flow-metadata',
 };
 
 // ── 内存计数器（snapshot-health 端点使用）──────
@@ -145,7 +144,8 @@ async function resolveSnapshotPath(bundleName: string, scope: string, paramHash:
 // ── 中间件 ─────────────────────────────────────
 
 export function snapshotServe(req: Request, res: Response, next: NextFunction): void {
-  const bundleName = ROUTE_BUNDLE_MAP[req.path];
+  const fullPath = req.baseUrl + req.path;
+  const bundleName = ROUTE_BUNDLE_MAP[fullPath];
   if (!bundleName) {
     next();
     return;
