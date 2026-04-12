@@ -47,9 +47,9 @@ export const SidebarLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(() => {
     try {
       const saved = localStorage.getItem('sidebar-collapsed');
-      return saved !== null ? saved === 'true' : true;
+      return saved !== null ? saved === 'true' : false;
     } catch {
-      return true;
+      return false;
     }
   });
   const [mobileOpen, setMobileOpen] = useState(false);

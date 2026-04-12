@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSidebar } from './SidebarLayout';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Sparkles,
   Gauge,
   DollarSign,
   TrendingUp,
@@ -34,6 +33,7 @@ import { useRBAC } from '../../shared/hooks/useRBAC';
 import { buildFilterParams } from '../../shared/utils/filterParams';
 import { apiClient } from '../../shared/api/client';
 import { queryKeys } from '../../shared/api/query-keys';
+import { useSidebarResize } from '../../shared/hooks/useSidebarResize';
 
 
 interface NavItem {
@@ -43,10 +43,6 @@ interface NavItem {
   shortLabel?: string;
   tooltipLabel?: string;
 }
-
-const navItems: NavItem[] = [
-  { path: '/', icon: Sparkles, label: 'AI 助手', shortLabel: 'AI' },
-];
 
 const dataNavItems: NavItem[] = [
   { path: '/dashboard', icon: Gauge, label: '仪表盘', shortLabel: '仪表' },
@@ -86,25 +82,19 @@ const adminNavItems: NavItem[] = [
  */
 export const SidebarNavigation: React.FC = () => {
   const { collapsed, toggle, mobileOpen, setMobileOpen, isMobile, sidebarWidth, setSidebarWidth, isDragging, setIsDragging } = useSidebar();
+  const { handleMouseDown: handleResizeMouseDown } = useSidebarResize({ sidebarWidth, setSidebarWidth, setIsDragging });
   const location = useLocation();
   const { userPermission } = usePermission();
   const queryClient = useQueryClient();
   const { filters } = useGlobalFilters();
   const { isOrgUser, userOrg } = useRBAC();
 
-  const isActive = (path: string) => {
-    if (path === '/') {
-      return location.pathname === '/';
-    }
-    return location.pathname.startsWith(path);
-  };
+  const isActive = (path: string) => location.pathname.startsWith(path);
 
-  /** hover 时预取对应页面的 bundle 数据（利用 150-300ms hover 时间差） */
   /** hover 时预取对应页面的 bundle 数据（利用 150-300ms hover 时间差） */
   const handlePrefetch = useCallback((path: string) => {
     const params = buildFilterParams(filters, { isOrgUser, userOrg });
 
-    // staleTime 继承全局 QueryClient 配置（5min），无需重复指定
     switch (path) {
       case '/dashboard':
         queryClient.prefetchQuery({
@@ -119,7 +109,6 @@ export const SidebarNavigation: React.FC = () => {
         });
         break;
       case '/specialty':
-        // 预取专项分析默认 tab（驾意险推介率）
         queryClient.prefetchQuery({
           queryKey: queryKeys.crossSellBundle(params),
           queryFn: () => apiClient.getCrossSellBundle(params),
@@ -131,8 +120,13 @@ export const SidebarNavigation: React.FC = () => {
           queryFn: () => apiClient.getCoefficientData(params),
         });
         break;
-      // growth/cost/fee-analysis/marketing-report/premium-report/comprehensive-analysis
-      // 采用命令式加载模式或需要额外参数，不适合简单 prefetch
+      case '/growth':
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.comprehensiveBundle(params),
+          queryFn: () => apiClient.getComprehensiveBundle(params),
+        });
+        break;
+      // cost/reports/renewal/claims/repair/customer-flow 需要页面内部参数（analysisType/planYear/groupBy 等），不适合简单 prefetch
     }
   }, [filters, isOrgUser, userOrg, queryClient]);
 
@@ -239,32 +233,7 @@ export const SidebarNavigation: React.FC = () => {
         <div
           className="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-primary-400 z-50 transition-colors"
           style={{ transform: 'translateX(50%)' }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            setIsDragging(true);
-            const startX = e.clientX;
-            const startWidth = sidebarWidth;
-
-            const handleMouseMove = (moveEvent: MouseEvent) => {
-              let newWidth = startWidth + (moveEvent.clientX - startX); // 向右拉增加宽度
-              if (newWidth < 200) newWidth = 200;
-              if (newWidth > 400) newWidth = 400;
-              setSidebarWidth(newWidth);
-            };
-
-            const handleMouseUp = () => {
-              document.removeEventListener('mousemove', handleMouseMove);
-              document.removeEventListener('mouseup', handleMouseUp);
-              document.body.style.cursor = '';
-              document.body.style.userSelect = '';
-              setIsDragging(false);
-            };
-
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-            document.body.style.cursor = 'col-resize';
-            document.body.style.userSelect = 'none';
-          }}
+          onMouseDown={handleResizeMouseDown}
         />
       )}
       {/* 移动端：关闭按钮 */}
@@ -284,9 +253,6 @@ export const SidebarNavigation: React.FC = () => {
       {/* 导航菜单 */}
       <div className="flex-1 overflow-y-auto overflow-x-visible">
         <nav className="px-3 py-4 space-y-1">
-          {/* 首页入口 */}
-          {navItems.map(renderNavItem)}
-
           {renderSection(
             '数据分析',
             dataNavItems.filter(item => {
