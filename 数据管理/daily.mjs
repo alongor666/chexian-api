@@ -224,9 +224,34 @@ async function syncToVps(scriptDir) {
   try {
     execSync(`node "${syncScript}"`, { stdio: 'inherit', env: { ...process.env, RUN_MAIN: '1' } });
     log('green', '✅ VPS 同步完成');
+    return true;
   } catch (e) {
     console.warn(`[ETL] VPS 同步失败（数据已写入本地）: ${e.message}`);
     console.warn('[ETL] 可手动重试: node scripts/sync-vps.mjs');
+    return false;
+  }
+}
+
+async function rebuildSnapshots(scriptDir) {
+  log('cyan', '[ETL] 重建静态快照（从 VPS 拉取新数据）...');
+  const projectRoot = dirname(scriptDir);
+  const buildScript = join(projectRoot, 'scripts/build-snapshots.mjs');
+  const syncScript = join(projectRoot, 'scripts/sync-vps.mjs');
+  try {
+    execSync(`node "${buildScript}"`, {
+      stdio: 'inherit',
+      env: { ...process.env, SNAPSHOT_SERVER_URL: 'https://chexian.cretvalu.com' },
+    });
+    log('green', '✅ 快照重建完成');
+    // 增量推送快照到 VPS（不重启，rsync 只传变更文件）
+    execSync(`node "${syncScript}" --no-restart`, {
+      stdio: 'inherit',
+      env: { ...process.env, RUN_MAIN: '1' },
+    });
+    log('green', '✅ 快照已同步到 VPS');
+  } catch (e) {
+    console.warn(`[ETL] 快照重建失败（不影响数据同步）: ${e.message}`);
+    console.warn('[ETL] 可手动重试: SNAPSHOT_SERVER_URL=https://chexian.cretvalu.com bun run snapshot:build');
   }
 }
 
@@ -629,7 +654,10 @@ async function main() {
       case 'customer_flow': runCustomerFlow(python, scriptDir); break;
       case 'renewal_universe': runRenewalUniverse(python, scriptDir); break;
     }
-    if (!noSync) await syncToVps(scriptDir);
+    if (!noSync) {
+      const synced = await syncToVps(scriptDir);
+      if (synced) await rebuildSnapshots(scriptDir);
+    }
     return;
   }
   if (subcommand === 'all') {
@@ -852,11 +880,12 @@ async function main() {
     runCustomerFlow(python, scriptDir);
   }
 
-  // 7. VPS 同步
+  // 7. VPS 同步 + 快照重建
   if (noSync) {
     log('yellow', '已跳过 VPS 同步（--no-sync）');
   } else {
-    await syncToVps(scriptDir);
+    const synced = await syncToVps(scriptDir);
+    if (synced) await rebuildSnapshots(scriptDir);
   }
 
   console.log('');

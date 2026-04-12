@@ -11,7 +11,6 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
-import { existsSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { getSnapshotDirs } from '../config/paths.js';
@@ -24,12 +23,26 @@ export const SNAPSHOT_BUNDLES: readonly string[] = [
   'dashboard-bundle',
   'performance-bundle',
   'cross-sell-bundle',
+  'filters-options',
+  'customer-flow-summary',
+  'customer-flow-inflow',
+  'customer-flow-outflow',
+  'customer-flow-trend',
+  'customer-flow-metadata',
 ] as const;
 
 const ROUTE_BUNDLE_MAP: Record<string, string> = {
   '/dashboard-bundle': 'dashboard-bundle',
   '/performance-bundle': 'performance-bundle',
   '/cross-sell-bundle': 'cross-sell-bundle',
+  // filters router: req.path = '/options' (mounted at /api/filters)
+  '/options': 'filters-options',
+  // customer-flow: req.path = '/customer-flow/*' (mounted at /api/query)
+  '/customer-flow/summary': 'customer-flow-summary',
+  '/customer-flow/inflow': 'customer-flow-inflow',
+  '/customer-flow/outflow': 'customer-flow-outflow',
+  '/customer-flow/trend': 'customer-flow-trend',
+  '/customer-flow/metadata': 'customer-flow-metadata',
 };
 
 // ── 内存计数器（snapshot-health 端点使用）──────
@@ -87,14 +100,45 @@ export function permissionToScope(permissionFilter: string | undefined): string 
   return 'unknown';
 }
 
+// ── 快照路径缓存（避免反复 stat，数据日更新一次即可） ──
+
+const snapshotPathCache = new Map<string, string | null>();
+const SNAPSHOT_CACHE_TTL = 5 * 60 * 1000; // 5 分钟后重新探测
+let snapshotCacheExpiry = 0;
+
+/** 清空快照路径缓存（数据更新后调用） */
+export function invalidateSnapshotPathCache(): void {
+  snapshotPathCache.clear();
+  snapshotCacheExpiry = 0;
+}
+
 /**
- * 在候选快照目录中查找文件
+ * 在候选快照目录中异步查找文件（带内存缓存）
  */
-function resolveSnapshotPath(bundleName: string, scope: string, paramHash: string): string | null {
+async function resolveSnapshotPath(bundleName: string, scope: string, paramHash: string): Promise<string | null> {
+  // TTL 过期后清空缓存（数据可能已更新）
+  if (Date.now() > snapshotCacheExpiry) {
+    snapshotPathCache.clear();
+    snapshotCacheExpiry = Date.now() + SNAPSHOT_CACHE_TTL;
+  }
+
+  const cacheKey = `${bundleName}/${scope}/${paramHash}`;
+  if (snapshotPathCache.has(cacheKey)) {
+    return snapshotPathCache.get(cacheKey)!;
+  }
+
   for (const dir of getSnapshotDirs()) {
     const filePath = path.join(dir, bundleName, scope, `${paramHash}.json`);
-    if (existsSync(filePath)) return filePath;
+    try {
+      await fs.access(filePath);
+      snapshotPathCache.set(cacheKey, filePath);
+      return filePath;
+    } catch {
+      // 文件不存在，继续下一个目录
+    }
   }
+
+  snapshotPathCache.set(cacheKey, null);
   return null;
 }
 
@@ -109,48 +153,48 @@ export function snapshotServe(req: Request, res: Response, next: NextFunction): 
 
   const scope = permissionToScope(req.permissionFilter);
   const paramHash = computeParamHash(req.query as Record<string, unknown>);
-  const snapshotPath = resolveSnapshotPath(bundleName, scope, paramHash);
 
-  if (!snapshotPath) {
-    missCount++;
-    res.setHeader('X-Snapshot', 'miss');
-    next();
-    return;
-  }
-
-  // 异步读取快照文件
-  fs.readFile(snapshotPath, 'utf-8')
-    .then((content) => {
-      const parsed = JSON.parse(content);
-      const meta = parsed._meta;
-      const data = parsed.data;
-
-      // stale 检测：快照 ETL 日期 vs 服务端最新 ETL 日期
-      const isStale = meta?.etlDate && latestEtlDate && meta.etlDate < latestEtlDate;
-
-      if (isStale) {
-        staleCount++;
-        res.setHeader('X-Snapshot', 'stale');
-      } else {
-        hitCount++;
-        res.setHeader('X-Snapshot', 'hit');
+  resolveSnapshotPath(bundleName, scope, paramHash)
+    .then((snapshotPath) => {
+      if (!snapshotPath) {
+        missCount++;
+        res.setHeader('X-Snapshot', 'miss');
+        next();
+        return;
       }
 
-      res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=60');
-      res.json({
-        success: true,
-        data,
-        meta: {
-          snapshot: true,
-          etlDate: meta?.etlDate || null,
-          buildTime: meta?.buildTime || null,
-          stale: !!isStale,
-        },
+      return fs.readFile(snapshotPath, 'utf-8').then((content) => {
+        const parsed = JSON.parse(content);
+        const meta = parsed._meta;
+        const data = parsed.data;
+
+        // stale 检测：快照 ETL 日期 vs 服务端最新 ETL 日期
+        const isStale = meta?.etlDate && latestEtlDate && meta.etlDate < latestEtlDate;
+
+        if (isStale) {
+          staleCount++;
+          res.setHeader('X-Snapshot', 'stale');
+        } else {
+          hitCount++;
+          res.setHeader('X-Snapshot', 'hit');
+        }
+
+        res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=60');
+        res.json({
+          success: true,
+          data,
+          meta: {
+            snapshot: true,
+            etlDate: meta?.etlDate || null,
+            buildTime: meta?.buildTime || null,
+            stale: !!isStale,
+          },
+        });
       });
     })
     .catch((err) => {
       errorCount++;
-      logger.warn(`[snapshot-serve] Failed to read snapshot: ${snapshotPath}`, err);
+      logger.warn(`[snapshot-serve] Failed to serve snapshot`, err);
       res.setHeader('X-Snapshot', 'error');
       next();
     });

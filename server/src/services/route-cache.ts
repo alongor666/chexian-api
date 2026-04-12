@@ -20,15 +20,20 @@ export function getRouteCache<T>(key: string): T | null {
         routeResponseCache.delete(key);
         return null;
     }
+    // LRU: 访问时 delete→set 移到 Map 末尾
+    routeResponseCache.delete(key);
+    routeResponseCache.set(key, entry);
     return entry.data as T;
 }
 
 export function setRouteCache<T>(key: string, data: T, ttlMs: number): void {
-    // 限制最大缓存条目数防止内存泄漏
+    // 已存在则先删除（保证 set 后在末尾）
+    routeResponseCache.delete(key);
+    // LRU 驱逐：移除 Map 首元素（最久未访问）
     if (routeResponseCache.size >= 2000) {
-        const oldestKey = routeResponseCache.keys().next().value;
-        if (oldestKey) {
-            routeResponseCache.delete(oldestKey);
+        const lruKey = routeResponseCache.keys().next().value;
+        if (lruKey) {
+            routeResponseCache.delete(lruKey);
         }
     }
     routeResponseCache.set(key, {

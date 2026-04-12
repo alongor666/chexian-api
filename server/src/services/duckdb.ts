@@ -20,6 +20,8 @@ import { QueryCache, ConnectionPool } from './duckdb-infra.js';
 import type { DuckDBQueryable } from './duckdb-types.js';
 import * as materialization from './duckdb-materialization.js';
 import * as domainLoaders from './duckdb-domain-loaders.js';
+import { clearRouteCache } from './route-cache.js';
+import { invalidateSnapshotPathCache } from '../middleware/snapshot-serve.js';
 
 // ============================================
 // Parquet 指纹缓存（按表名存储）
@@ -245,8 +247,11 @@ export class DuckDBService implements DuckDBQueryable {
   invalidateCache(options?: { silent?: boolean }): void {
     const size = this.queryCache.size;
     this.queryCache.invalidateAll();
+    // 联动清除所有缓存层
+    clearRouteCache();
+    invalidateSnapshotPathCache();
     if (size > 0 && !options?.silent) {
-      console.log(`[DuckDB] Cache invalidated (${size} entries cleared)`);
+      console.log(`[DuckDB] All caches invalidated (query: ${size}, route + snapshot path cleared)`);
     }
   }
 

@@ -70,6 +70,32 @@ const BUNDLE_DEFINITIONS = {
       { vehicleCategory: 'passenger', granularity: 'monthly', timePeriod: 'monthly' },
     ],
   },
+  // ── 新增：筛选器选项（每次页面加载必调）──────────
+  'filters-options': {
+    path: '/api/filters/options',
+    paramSets: [{}],
+  },
+  // ── 新增：客户来源去向（参数完全可枚举）──────────
+  'customer-flow-summary': {
+    path: '/api/query/customer-flow/summary',
+    paramSets: [{ year: '2025' }, { year: '2026' }],
+  },
+  'customer-flow-inflow': {
+    path: '/api/query/customer-flow/inflow',
+    paramSets: [{ year: '2025' }, { year: '2026' }],
+  },
+  'customer-flow-outflow': {
+    path: '/api/query/customer-flow/outflow',
+    paramSets: [{ year: '2025' }, { year: '2026' }],
+  },
+  'customer-flow-trend': {
+    path: '/api/query/customer-flow/trend',
+    paramSets: [{ year: '2025' }, { year: '2026' }],
+  },
+  'customer-flow-metadata': {
+    path: '/api/query/customer-flow/metadata',
+    paramSets: [{}],
+  },
 };
 
 // ── 工具函数 ─────────────────────────────────
@@ -97,13 +123,14 @@ function computeParamHash(params) {
 }
 
 function parseArgs(argv = process.argv.slice(2)) {
-  const parsed = { bundle: null, scope: null, dryRun: false, help: false };
+  const parsed = { bundle: null, scope: null, dryRun: false, help: false, clean: false };
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     switch (token) {
       case '--bundle': parsed.bundle = argv[++i]; break;
       case '--scope': parsed.scope = argv[++i]; break;
       case '--dry-run': parsed.dryRun = true; break;
+      case '--clean': parsed.clean = true; break;
       case '--help': case '-h': parsed.help = true; break;
       default: throw new Error(`未知参数: ${token}`);
     }
@@ -164,6 +191,7 @@ async function main() {
   node scripts/build-snapshots.mjs --bundle dashboard-bundle  # 单 bundle
   node scripts/build-snapshots.mjs --scope 乐山              # 单权限域
   node scripts/build-snapshots.mjs --dry-run                 # 仅列出组合
+  node scripts/build-snapshots.mjs --clean                   # 构建前清除旧快照
 `);
     return;
   }
@@ -214,6 +242,18 @@ async function main() {
       console.log(`  ${t.bundleName} / ${t.scope} / ${t.paramHash}  (${paramsStr})`);
     }
     return;
+  }
+
+  // 2.5 清理旧快照（--clean 模式）
+  if (args.clean && existsSync(SNAPSHOT_DIR)) {
+    const { rmSync } = await import('fs');
+    for (const [bundleName] of Object.entries(bundles)) {
+      const bundleDir = join(SNAPSHOT_DIR, bundleName);
+      if (existsSync(bundleDir)) {
+        rmSync(bundleDir, { recursive: true });
+        log('yellow', `  🗑 清除旧快照: ${bundleName}/`);
+      }
+    }
   }
 
   // 3. 检查 server 是否可用
