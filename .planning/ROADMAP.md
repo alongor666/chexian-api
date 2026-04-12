@@ -24,8 +24,8 @@
   3. E2E 测试自动验证不同角色用户在同一端点返回不同数据集，且无法通过 scope 碰撞访问他人数据
 **Plans:** 2 plans
 Plans:
-- [ ] 01-01-PLAN.md — SEC-01 scope 碰撞修复（permissionToScope 返回 null + snapshotServe null 短路 + 单元测试）
-- [ ] 01-02-PLAN.md — SEC-02 权限隔离 E2E 测试（多角色快照隔离验证 + 人工端到端确认）
+- [x] 01-01-PLAN.md — SEC-01 scope 碰撞修复（permissionToScope 返回 null + snapshotServe null 短路 + 单元测试）
+- [x] 01-02-PLAN.md — SEC-02 权限隔离 E2E 测试（多角色快照隔离验证 + 人工端到端确认）
 
 ### Phase 2: SQL 查询优化
 **Goal**: 所有核心 API 端点查询时间降至 <500ms，且 SQL 重构不引入任何结果回归
