@@ -15,7 +15,6 @@ import kpiRoutes from './query/kpi.js';
 import trendRoutes from './query/trend.js';
 import truckRoutes from './query/truck.js';
 import growthRoutes from './query/growth.js';
-import coefficientRoutes from './query/coefficient.js';
 import costRoutes from './query/cost.js';
 import comprehensiveRoutes from './query/comprehensive.js';
 // renewalRoutes removed — replaced by renewal-v2
@@ -47,7 +46,6 @@ router.use(kpiRoutes);
 router.use(trendRoutes);
 router.use(truckRoutes);
 router.use(growthRoutes);
-router.use(coefficientRoutes);
 router.use(costRoutes);
 router.use(comprehensiveRoutes);
 // renewalRoutes removed — replaced by renewal-v2
