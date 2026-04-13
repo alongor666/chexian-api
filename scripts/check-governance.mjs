@@ -1464,6 +1464,74 @@ function checkSqlModuleCountConsistency() {
 }
 
 // ============================================================
+// 23. CLAUDE.md 体积预算检查
+// ============================================================
+
+function checkClaudeMdBudget() {
+  info('检查 CLAUDE.md 体积预算...');
+
+  const claudePath = path.join(ROOT_DIR, 'CLAUDE.md');
+  if (!fs.existsSync(claudePath)) {
+    error('CLAUDE.md 不存在');
+    return false;
+  }
+
+  const content = fs.readFileSync(claudePath, 'utf-8');
+  const sizeBytes = Buffer.byteLength(content, 'utf-8');
+  const sizeKB = (sizeBytes / 1024).toFixed(1);
+
+  // 检查 GSD 区块是否被内联（非墓碑状态）
+  const bloatedSections = [];
+  for (const name of ['stack', 'conventions', 'architecture', 'skills']) {
+    const startMarker = `<!-- GSD:${name}-start`;
+    const endMarker = `<!-- GSD:${name}-end -->`;
+    const startIdx = content.indexOf(startMarker);
+    const endIdx = content.indexOf(endMarker);
+    if (startIdx !== -1 && endIdx !== -1) {
+      const sectionContent = content.substring(startIdx, endIdx);
+      const lines = sectionContent.split('\n').length;
+      if (lines > 5) {
+        bloatedSections.push(`${name}(${lines}行)`);
+      }
+    }
+  }
+
+  const errors = [];
+  const warnings = [];
+
+  if (bloatedSections.length > 0) {
+    errors.push(
+      `GSD 区块被内联：${bloatedSections.join(', ')}\n` +
+      `    ▶ 这些内容已存在于 ARCHITECTURE.md / .claude/rules/ / system-reminder\n` +
+      `    ▶ 修复：将区块内容替换为单行墓碑注释`
+    );
+  }
+
+  if (sizeBytes > 20480) {
+    errors.push(
+      `CLAUDE.md 超出 20KB 预算：当前 ${sizeKB}KB\n` +
+      `    ▶ 每次对话完整加载，膨胀直接降低性能\n` +
+      `    ▶ 修复：删除冗余 GSD 区块内容，保留墓碑 marker`
+    );
+  } else if (sizeBytes > 15360) {
+    warnings.push(`CLAUDE.md 接近预算上限：${sizeKB}KB / 20KB`);
+  }
+
+  if (warnings.length > 0) {
+    warnings.forEach(w => warning(w));
+  }
+
+  if (errors.length > 0) {
+    error('CLAUDE.md 体积检查失败：');
+    errors.forEach(err => console.log(`    - ${err}`));
+    return false;
+  }
+
+  success(`CLAUDE.md 体积合规（${sizeKB}KB / 20KB）`);
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -1493,6 +1561,7 @@ function main() {
     { name: 'sync-vps覆盖', fn: checkSyncVpsCoverage },
     { name: '数据漂移检测', fn: checkDataDrift },
     { name: 'SQL模块数一致', fn: checkSqlModuleCountConsistency },
+    { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
   ];
 
   let passedCount = 0;
