@@ -51,7 +51,7 @@ export interface InsightAnalysisResult {
  * 数据上下文（传给AI的数据摘要）
  */
 export interface DataContext {
-  type: 'renewal' | 'premium' | 'cost' | 'coefficient' | 'growth';
+  type: 'renewal' | 'premium' | 'cost' | 'growth';
   title: string;
   metrics: Record<string, number | string>;
   tableData?: Array<Record<string, unknown>>;

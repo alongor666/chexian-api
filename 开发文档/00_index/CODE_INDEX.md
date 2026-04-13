@@ -177,7 +177,6 @@ src/features/*                                    # 功能模块 UI 渲染
 | Filters | `filters/` | 筛选面板（日期/机构/业务员/险别） |
 | Growth | `growth/` | 增长率分析（同比/环比/年累计） |
 | SQL Query | `sql-query/` | 交互式SQL查询（只读+聚合，NL2SQL） |
-| Coefficient | `coefficient/` | 商车自主定价系数监控 |
 | Cost | `cost/` | 成本分析（赔付率/费用率/综合费用率/变动成本率） |
 | Premium Report | `premium-report/` | 保费报表（机构保费+业务员明细） |
 | Marketing Report | `marketing-report/` | 营销战报（假日营销分析） |

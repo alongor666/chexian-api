@@ -26,7 +26,6 @@ const ALL_ROUTES = [
   { path: '/cross-sell', label: '驾意险推介率' },
   { path: '/growth', label: '增长分析' },
   { path: '/comparison', label: '数据对比' },
-  { path: '/coefficient', label: '系数监控' },
   { path: '/templates', label: '报表模板' },
 ];
 

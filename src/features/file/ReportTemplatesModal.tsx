@@ -75,14 +75,6 @@ const templates: ReportTemplate[] = [
     category: '专项',
     route: '/cost',
   },
-  {
-    id: 'coefficient-monitor',
-    name: '系数合规监控',
-    description: '商车自主定价系数监控和预警',
-    icon: Search,
-    category: '专项',
-    route: '/coefficient',
-  },
 ];
 
 const categories = ['全部', '日报', '周报', '月报', '专项'];
