@@ -4,7 +4,7 @@
  * 从 trend.ts 提取的类型定义与共享常量，供各子模块使用。
  */
 
-import { DateCriteria } from '../../types/data.js';
+import type { DateCriteria } from '../../types/data.js';
 import type { ViewPerspective } from '../../types/index.js';
 import { generatePerspectiveWhere } from '../perspective-adapter.js';
 
@@ -31,5 +31,5 @@ export const QUALITY_BUSINESS_CONDITION = `
 `;
 
 // Re-export shared dependencies for submodule use
-export { DateCriteria, generatePerspectiveWhere };
-export type { ViewPerspective };
+export { generatePerspectiveWhere };
+export type { DateCriteria, ViewPerspective };
