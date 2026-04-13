@@ -315,14 +315,12 @@ async function runBuild() {
     process.exit(1);
   }
 
-  // 3. 串行抓取所有端点（避免触发限流 429）
+  // 3. 并行抓取所有端点
   log('yellow', `\n▶ 抓取 ${ENDPOINT_DEFINITIONS.length} 个端点...`);
   const buildTime = new Date().toISOString();
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  const fetchResults = [];
-  for (const ep of ENDPOINT_DEFINITIONS) {
-    try {
+  const fetchResults = await Promise.allSettled(
+    ENDPOINT_DEFINITIONS.map(async (ep) => {
       const paramHash = computeParamHash(ep.params);
       const data = await fetchEndpoint(ep.path, ep.params, token);
 
@@ -339,12 +337,9 @@ async function runBuild() {
 
       const filePath = join(BASELINE_DIR, ep.slug, `${paramHash}.json`);
       atomicWrite(filePath, JSON.stringify(snapshot, null, 2));
-      fetchResults.push({ status: 'fulfilled', value: { ep, filePath, paramHash } });
-    } catch (err) {
-      fetchResults.push({ status: 'rejected', reason: err });
-    }
-    await sleep(900); // 900ms 间隔避免 429（限流 100次/分钟）
-  }
+      return { ep, filePath, paramHash };
+    })
+  );
 
   // 4. 统计结果
   let successCount = 0;
@@ -440,50 +435,26 @@ async function runCompare() {
     process.exit(1);
   }
 
-  // 4. 串行对比（避免 429 限流）
-  log('yellow', `\n▶ 比对 ${activeEndpoints.length} 个端点（D-02 严格精确匹配，浮点 10 位精度）...`);
+  // 4. 并行对比
+  log('yellow', `\n▶ 比对 ${activeEndpoints.length} 个端点（D-02 严格精确匹配）...`);
   console.log('');
 
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-  // 浮点归一化：DuckDB 并行聚合固有精度波动（~1e-10），
-  // 将所有浮点数四舍五入到 10 位有效数字后再比对
-  function normalizeFloats(obj) {
-    if (obj === null || obj === undefined) return obj;
-    if (typeof obj === 'number' && !Number.isInteger(obj)) {
-      return parseFloat(obj.toPrecision(10));
-    }
-    if (Array.isArray(obj)) return obj.map(normalizeFloats);
-    if (typeof obj === 'object') {
-      const result = {};
-      for (const [k, v] of Object.entries(obj)) {
-        result[k] = normalizeFloats(v);
-      }
-      return result;
-    }
-    return obj;
-  }
-
-  const compareResults = [];
-  for (const ep of activeEndpoints) {
-    try {
+  const compareResults = await Promise.allSettled(
+    activeEndpoints.map(async (ep) => {
       const baselinePath = join(BASELINE_DIR, ep.slug, `${ep.paramHash}.json`);
       if (!existsSync(baselinePath)) {
         throw new Error(`基线文件不存在: ${ep.slug}/${ep.paramHash}.json`);
       }
 
       const baselineSnapshot = JSON.parse(readFileSync(baselinePath, 'utf-8'));
-      const baseline = normalizeFloats(baselineSnapshot.data);
+      const baseline = baselineSnapshot.data;
 
-      const current = normalizeFloats(await fetchEndpoint(ep.path, ep.params, token));
+      const current = await fetchEndpoint(ep.path, ep.params, token);
 
       assert.deepStrictEqual(current, baseline);
-      compareResults.push({ status: 'fulfilled', value: { ep } });
-    } catch (err) {
-      compareResults.push({ status: 'rejected', reason: err });
-    }
-    await sleep(100);
-  }
+      return { ep };
+    })
+  );
 
   // 5. 输出结果
   let passCount = 0;
