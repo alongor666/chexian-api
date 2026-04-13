@@ -7,6 +7,7 @@ import { apiClient } from '../../shared/api/client';
 import { maskUsernameForLog, resolveRedirectPath, sanitizePathForLog } from '../../shared/utils/redirect-state';
 import { Logger } from '../../shared/utils/logger';
 import { colorClasses, cn } from '../../shared/styles';
+import { MaintenanceBanner } from '../../components/layout/MaintenanceBanner';
 
 const logger = new Logger('LoginPage');
 
@@ -147,7 +148,9 @@ export const LoginPage: React.FC = () => {
   }, [username, password, rememberMe, loginWithPassword, navigate, resolveTargetPath]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-800 flex flex-col">
+      <MaintenanceBanner />
+      <div className="flex-1 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo 和标题 */}
         <div className="text-center mb-8">
@@ -309,6 +312,7 @@ export const LoginPage: React.FC = () => {
         <p className={cn("text-center text-xs mt-6", colorClasses.text.neutralMuted)}>
           &copy; 2026 车险业绩分析系统 · 内网专用
         </p>
+      </div>
       </div>
     </div>
   );

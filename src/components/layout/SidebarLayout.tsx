@@ -2,6 +2,7 @@ import React, { useState, createContext, useContext, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { SidebarNavigation } from './SidebarNavigation';
 import { TopNavigation } from './TopNavigation';
+import { MaintenanceBanner } from './MaintenanceBanner';
 import { Watermark } from './Watermark';
 
 interface SidebarContextValue {
@@ -116,8 +117,13 @@ export const SidebarLayout: React.FC = () => {
         {/* 顶部导航栏 */}
         <TopNavigation />
 
-        {/* 主体区域：侧边栏 + 内容，pt-14 为固定顶部导航栏留出空间 */}
-        <div className="flex flex-1 overflow-hidden pt-14">
+        {/* VPS 维护通知 */}
+        <div className="pt-14">
+          <MaintenanceBanner />
+        </div>
+
+        {/* 主体区域：侧边栏 + 内容 */}
+        <div className="flex flex-1 overflow-hidden">
           {/* 移动端遮罩层 */}
           {isMobile && mobileOpen && (
             <div
