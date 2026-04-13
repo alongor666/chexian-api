@@ -52,7 +52,6 @@ const dataNavItems: NavItem[] = [
   { path: '/growth', icon: BarChart3, label: '增长与对比', shortLabel: '增长' },
   { path: '/cost', icon: Calculator, label: '成本综合', shortLabel: '成本' },
   { path: '/fee-analysis', icon: Percent, label: '费用分析', shortLabel: '费用' },
-  { path: '/coefficient', icon: Search, label: '系数监控', shortLabel: '系数' },
 ];
 
 const toolNavItems: NavItem[] = [
@@ -112,12 +111,6 @@ export const SidebarNavigation: React.FC = () => {
         queryClient.prefetchQuery({
           queryKey: queryKeys.crossSellBundle(params),
           queryFn: () => apiClient.getCrossSellBundle(params),
-        });
-        break;
-      case '/coefficient':
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.coefficient(params),
-          queryFn: () => apiClient.getCoefficientData(params),
         });
         break;
       case '/growth':

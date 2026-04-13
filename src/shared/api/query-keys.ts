@@ -59,10 +59,6 @@ export const queryKeys = {
   truckAnalysis: (params: Record<string, unknown>) =>
     ['truck-analysis', params] as const,
 
-  // ── 系数监控 ──
-  coefficient: (params: Record<string, unknown>) =>
-    ['coefficient', params] as const,
-
   // ── 综合分析 ──
   comprehensiveBundle: (params: Record<string, unknown>) =>
     ['comprehensive-bundle', params] as const,

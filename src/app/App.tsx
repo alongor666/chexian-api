@@ -71,9 +71,6 @@ const CostPage = lazy(() =>
 const FeeAnalysisPage = lazy(() =>
   import('../features/pages/FeeAnalysisPage').then((m) => ({ default: m.FeeAnalysisPage }))
 );
-const CoefficientPage = lazy(() =>
-  import('../features/pages/CoefficientPage').then((m) => ({ default: m.CoefficientPage }))
-);
 const ReportsPage = lazy(() =>
   import('../features/pages/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
@@ -232,18 +229,6 @@ function App() {
                       </RouteAccessGuard>
                     }
                   />
-                  {/* comparison 已合并到 /growth，见上方重定向 */}
-                  <Route
-                    path="coefficient"
-                    element={
-                      <RouteAccessGuard routePath="/coefficient">
-                        <DataGuard>
-                          <LazyRoute><CoefficientPage /></LazyRoute>
-                        </DataGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
-
                   {/* 保费达成（计划达成 + 保费报表）*/}
                   <Route
                     path="reports"
