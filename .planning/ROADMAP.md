@@ -52,7 +52,11 @@ Plans:
   3. vite-plugin-compression2 替换成功，bun run build 零警告，产物 brotli/gzip 压缩正常
   4. ECharts 确认按需加载：首屏网络瀑布中图表库 chunk 不在关键路径
   5. FilterContext 拆分后，筛选条件变更不触发用户信息/权限相关组件重渲染（React DevTools 可验证）
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 03-01-PLAN.md — SQL-04 SQL 生成器拆分（trend.ts → trend/ 子目录 + performance-analysis-shared.ts → performance-analysis/shared.ts）
+- [ ] 03-02-PLAN.md — FE-01/FE-02/FE-03 前端构建优化（visualizer 基线 + compression2 替换 + ECharts 懒加载验证）
+- [ ] 03-03-PLAN.md — FE-04 FilterContext 拆分（StableContext + FilterContext 双 Context 模式）
 **UI hint**: yes
 
 ### Phase 4: 物化优化
@@ -87,6 +91,6 @@ Phase 3 可与 Phase 2 并行（独立代码路径，无共享修改文件）
 |-------|----------------|--------|-----------|
 | 1. 安全基线 | 0/2 | Planning complete | - |
 | 2. SQL 查询优化 | 0/3 | Planning complete | - |
-| 3. 代码结构整理 | 0/TBD | Not started | - |
+| 3. 代码结构整理 | 0/3 | Planning complete | - |
 | 4. 物化优化 | 0/TBD | Not started | - |
 | 5. 持久化与快照精细化 | 0/TBD | Not started | - |
