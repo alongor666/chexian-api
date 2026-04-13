@@ -29,14 +29,14 @@ export type {
   PerformanceDrilldownStep,
   PerformancePeriodBounds,
   GroupByConfig,
-} from './performance-analysis-shared.js';
+} from './performance-analysis/shared.js';
 
 export {
   getPlanDenominator,
   mapLegacyVehicleCategoryToSegmentTag,
   getPerformanceSegmentFilter,
   getPerformanceVehicleCategoryFilter,
-} from './performance-analysis-shared.js';
+} from './performance-analysis/shared.js';
 
 export type {
   HeatmapGroupDimension,
