@@ -22,7 +22,6 @@ const ROUTE_PRESET_MAP: Record<string, FilterPresetName | null> = {
   '/growth': 'full',            // 增长分析
   '/cost': 'cost',              // 成本分析
   '/comparison': 'full',        // 数据对比
-  '/coefficient': 'coefficient', // 系数监控
   '/templates': null,           // 报表模板 - 无筛选器
   '/login': null,               // 登录 - 无筛选器
 };

@@ -1,0 +1,546 @@
+/**
+ * 业绩分析 SQL 生成器 — 共享类型与辅助函数
+ *
+ * 从 performance-analysis.ts 提取，供核心生成器和热力图模块共用。
+ * 原位于 performance-analysis-shared.ts（545行），已移入本子目录。
+ *
+ * @see P1#9 架构优化计划
+ */
+
+import { escapeSqlValue } from '../../utils/security.js';
+
+// ============================================================================
+// 类型定义
+// ============================================================================
+
+export type PerformanceVehicleCategory = 'passenger' | 'business_passenger' | 'truck' | 'motorcycle';
+export type PerformanceSegmentTag =
+  | 'all'
+  | 'non_business_passenger'
+  | 'business_passenger'
+  | 'business_truck'
+  | 'non_business_truck'
+  | 'motorcycle'
+  // 兼容旧参数
+  | 'truck';
+export type PerformanceGrowthMode = 'mom' | 'yoy';
+export type PerformanceTimePeriod = 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+export function getPlanDenominator(timePeriod: PerformanceTimePeriod): number {
+  switch (timePeriod) {
+    case 'day': return 365;
+    case 'week': return 52;
+    case 'month': return 12;
+    case 'quarter': return 4;
+    case 'year': return 1;
+    default: return 365;
+  }
+}
+
+export type PerformanceTrendGranularity = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+export type PerformanceSummaryExpandDims = 'none' | 'energy' | 'business_nature' | 'energy_business_nature';
+
+export type PerformanceDimension =
+  | 'org_level_3'
+  | 'team'
+  | 'salesman'
+  | 'customer_category'
+  | 'tonnage_segment'
+  | 'is_new_car'
+  | 'is_transfer'
+  | 'is_nev'
+  | 'is_telemarketing'
+  | 'is_renewal';
+
+export interface PerformanceDrilldownStep {
+  dimension: PerformanceDimension;
+  value: string;
+}
+
+export interface PerformancePeriodBounds {
+  refDate: string;
+  currentStart: string;
+  currentEnd: string;
+  prevStart: string;
+  prevEnd: string;
+}
+
+export type GroupByConfig = {
+  selectExpr: string;
+  groupByExpr: string;
+};
+
+type ExpandDimensionConfig = {
+  labelExpr: string;
+  keyExpr: string;
+  orderExpr: string;
+};
+
+// ============================================================================
+// 基础 SQL 表达式构造
+// ============================================================================
+
+const BOOL_DIMENSIONS: Record<string, { field: string; trueLabel: string; falseLabel: string }> = {
+  is_new_car: { field: 'is_new_car', trueLabel: '新车', falseLabel: '旧车' },
+  is_transfer: { field: 'is_transfer', trueLabel: '过户车', falseLabel: '非过户车' },
+  is_nev: { field: 'is_nev', trueLabel: '新能源', falseLabel: '非新能源' },
+  is_telemarketing: { field: 'is_telemarketing', trueLabel: '电销', falseLabel: '非电销' },
+  is_renewal: { field: 'is_renewal', trueLabel: '续保', falseLabel: '非续保' },
+};
+
+export function truthyExpr(fieldExpr: string): string {
+  return `(
+    TRY_CAST(${fieldExpr} AS BOOLEAN) = true
+    OR LOWER(TRIM(CAST(${fieldExpr} AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
+  )`;
+}
+
+export function coverageOrderExpr(expr = 'coverage_combination'): string {
+  return `CASE ${expr}
+    WHEN '整体' THEN 1
+    WHEN '主全' THEN 2
+    WHEN '交三' THEN 3
+    WHEN '单交' THEN 4
+    ELSE 99
+  END`;
+}
+
+export function mapLegacyVehicleCategoryToSegmentTag(
+  category: PerformanceVehicleCategory
+): PerformanceSegmentTag {
+  switch (category) {
+    case 'passenger':
+      return 'non_business_passenger';
+    case 'business_passenger':
+      return 'business_passenger';
+    case 'truck':
+      return 'truck';
+    case 'motorcycle':
+      return 'motorcycle';
+  }
+}
+
+export function segmentCaseExpr(colPrefix = ''): string {
+  const categoryExpr = `COALESCE(TRIM(CAST(${colPrefix}customer_category AS VARCHAR)), '')`;
+  return `
+    CASE
+      WHEN ${categoryExpr} IN ('非营业个人客车', '非营业企业客车', '非营业机关客车')
+        THEN 'non_business_passenger'
+      WHEN ${categoryExpr} = '营业货车'
+        THEN 'business_truck'
+      WHEN ${categoryExpr} = '非营业货车'
+        THEN 'non_business_truck'
+      WHEN ${categoryExpr} = '摩托车'
+        THEN 'motorcycle'
+      WHEN ${categoryExpr} IN ('营业出租租赁', '营业公路客运', '营业城市公交')
+        THEN 'business_passenger'
+      WHEN ${categoryExpr} LIKE '%营业%' AND (
+        ${categoryExpr} LIKE '%客车%'
+        OR ${categoryExpr} LIKE '%出租%'
+        OR ${categoryExpr} LIKE '%租赁%'
+        OR ${categoryExpr} LIKE '%网约%'
+        OR ${categoryExpr} LIKE '%客运%'
+        OR ${categoryExpr} LIKE '%公交%'
+      )
+        THEN 'business_passenger'
+      WHEN ${categoryExpr} LIKE '%营业%' AND ${categoryExpr} LIKE '%货车%'
+        THEN 'business_truck'
+      WHEN ${categoryExpr} LIKE '%货车%'
+        THEN 'non_business_truck'
+      WHEN ${categoryExpr} LIKE '%非营业%' AND ${categoryExpr} LIKE '%客车%'
+        THEN 'non_business_passenger'
+      ELSE 'other'
+    END
+  `;
+}
+
+export function getPerformanceSegmentFilter(
+  segmentTag: PerformanceSegmentTag,
+  colPrefix = ''
+): string {
+  if (segmentTag === 'all') return '1=1';
+  if (segmentTag === 'truck') {
+    return `(${segmentCaseExpr(colPrefix)} IN ('business_truck', 'non_business_truck'))`;
+  }
+  return `(${segmentCaseExpr(colPrefix)} = '${segmentTag}')`;
+}
+
+// 兼容旧逻辑（保留给旧测试/调用方）
+export function getPerformanceVehicleCategoryFilter(
+  category: PerformanceVehicleCategory,
+  colPrefix = ''
+): string {
+  switch (category) {
+    case 'passenger':
+      return `${colPrefix}customer_category IN ('非营业个人客车', '非营业企业客车', '非营业机关客车')`;
+    case 'business_passenger':
+      return `(
+        ${colPrefix}customer_category LIKE '%营业%'
+        AND (
+          ${colPrefix}customer_category LIKE '%客车%'
+          OR ${colPrefix}customer_category LIKE '%出租%'
+          OR ${colPrefix}customer_category LIKE '%租赁%'
+          OR ${colPrefix}customer_category LIKE '%网约%'
+          OR ${colPrefix}customer_category LIKE '%客运%'
+          OR ${colPrefix}customer_category LIKE '%公交%'
+        )
+      )`;
+    case 'truck':
+      return `${colPrefix}customer_category LIKE '%货车%'`;
+    case 'motorcycle':
+      return `${colPrefix}customer_category = '摩托车'`;
+  }
+}
+
+// ============================================================================
+// 时间周期与 CTE 构造
+// ============================================================================
+
+export function getPeriodExpressions(
+  timePeriod: PerformanceTimePeriod,
+  growthMode: PerformanceGrowthMode
+): { currentStart: string; currentEnd: string; prevStart: string; prevEnd: string } {
+  let currentStart = 'ref_date';
+  let currentEnd = 'ref_date';
+
+  switch (timePeriod) {
+    case 'day':
+      break;
+    case 'week':
+      currentStart = `DATE_TRUNC('week', ref_date)`;
+      break;
+    case 'month':
+      currentStart = `DATE_TRUNC('month', ref_date)`;
+      break;
+    case 'quarter':
+      currentStart = `DATE_TRUNC('quarter', ref_date)`;
+      break;
+    case 'year':
+      currentStart = `DATE_TRUNC('year', ref_date)`;
+      break;
+  }
+
+  let prevStart: string;
+  let prevEnd: string;
+  if (growthMode === 'yoy' || timePeriod === 'year') {
+    prevStart = `(${currentStart}) - INTERVAL 1 YEAR`;
+    prevEnd = `(${currentEnd}) - INTERVAL 1 YEAR`;
+  } else {
+    switch (timePeriod) {
+      case 'day':
+        prevStart = `(${currentStart}) - INTERVAL 1 DAY`;
+        prevEnd = `(${currentEnd}) - INTERVAL 1 DAY`;
+        break;
+      case 'week':
+        prevStart = `(${currentStart}) - INTERVAL 7 DAY`;
+        prevEnd = `(${currentStart}) - INTERVAL 1 DAY`;
+        break;
+      case 'month':
+        prevStart = `(${currentStart}) - INTERVAL 1 MONTH`;
+        prevEnd = `(${currentStart}) - INTERVAL 1 DAY`;
+        break;
+      case 'quarter':
+        prevStart = `(${currentStart}) - INTERVAL 3 MONTH`;
+        prevEnd = `(${currentStart}) - INTERVAL 1 DAY`;
+        break;
+      default:
+        prevStart = `(${currentStart}) - INTERVAL 1 YEAR`;
+        prevEnd = `(${currentEnd}) - INTERVAL 1 YEAR`;
+        break;
+    }
+  }
+
+  return { currentStart, currentEnd, prevStart, prevEnd };
+}
+
+export function buildPeriodBoundsCte(
+  whereWithDate: string,
+  segmentFilter: string,
+  timePeriod: PerformanceTimePeriod,
+  growthMode: PerformanceGrowthMode
+): string {
+  const { currentStart, currentEnd, prevStart, prevEnd } = getPeriodExpressions(timePeriod, growthMode);
+  return `
+    reference_date AS (
+      SELECT COALESCE(MAX(CAST(policy_date AS DATE)), CURRENT_DATE) AS ref_date
+      FROM PolicyFact
+      WHERE ${whereWithDate}
+        AND ${segmentFilter}
+    ),
+    period_bounds AS (
+      SELECT
+        ref_date,
+        CAST(${currentStart} AS DATE) AS current_start,
+        CAST(${currentEnd} AS DATE) AS current_end,
+        CAST(${prevStart} AS DATE) AS prev_start,
+        CAST(${prevEnd} AS DATE) AS prev_end
+      FROM reference_date
+    )
+  `;
+}
+
+export function buildStaticPeriodBoundsCte(bounds: PerformancePeriodBounds): string {
+  const esc = escapeSqlValue;
+  return `
+    reference_date AS (
+      SELECT CAST('${esc(bounds.refDate)}' AS DATE) AS ref_date
+    ),
+    period_bounds AS (
+      SELECT
+        ref_date,
+        CAST('${esc(bounds.currentStart)}' AS DATE) AS current_start,
+        CAST('${esc(bounds.currentEnd)}' AS DATE) AS current_end,
+        CAST('${esc(bounds.prevStart)}' AS DATE) AS prev_start,
+        CAST('${esc(bounds.prevEnd)}' AS DATE) AS prev_end
+      FROM reference_date
+    )
+  `;
+}
+
+export function buildPeriodProgressCte(): string {
+  return `
+    period_years AS (
+      SELECT
+        pb.current_start,
+        pb.current_end,
+        gs.year_num AS year_num,
+        GREATEST(pb.current_start, MAKE_DATE(gs.year_num, 1, 1)) AS seg_start,
+        LEAST(pb.current_end, MAKE_DATE(gs.year_num, 12, 31)) AS seg_end
+      FROM period_bounds pb
+      CROSS JOIN generate_series(
+        CAST(EXTRACT(YEAR FROM pb.current_start) AS INTEGER),
+        CAST(EXTRACT(YEAR FROM pb.current_end) AS INTEGER)
+      ) AS gs(year_num)
+    ),
+    period_progress AS (
+      SELECT
+        MAX(
+          CASE
+            WHEN pb.current_end < pb.current_start THEN 0
+            ELSE DATE_DIFF('day', pb.current_start, pb.current_end) + 1
+          END
+        ) AS total_days,
+        MAX(
+          CASE
+            -- DC-002 Exception: 时间进度达成率必须用自然日"已过天数"
+            WHEN LEAST(CAST(CURRENT_DATE AS DATE), pb.current_end) < pb.current_start THEN 0
+            ELSE DATE_DIFF('day', pb.current_start, LEAST(CAST(CURRENT_DATE AS DATE), pb.current_end)) + 1
+          END
+        ) AS elapsed_days,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN py.seg_end < py.seg_start THEN 0
+              ELSE
+                (DATE_DIFF('day', py.seg_start, py.seg_end) + 1) * 1.0
+                / CASE
+                    WHEN (py.year_num % 400 = 0) OR (py.year_num % 4 = 0 AND py.year_num % 100 <> 0)
+                      THEN 366
+                    ELSE 365
+                  END
+            END
+          ),
+          0
+        ) AS period_plan_ratio
+      FROM period_bounds pb
+      LEFT JOIN period_years py ON 1 = 1
+    )
+  `;
+}
+
+export function trendTimeGroupExpr(granularity: PerformanceTrendGranularity): string {
+  switch (granularity) {
+    case 'daily':
+      return `STRFTIME(pd, '%Y-%m-%d')`;
+    case 'weekly':
+      return `STRFTIME(DATE_TRUNC('week', pd), '%Y-%m-%d')`;
+    case 'monthly':
+      return `STRFTIME(DATE_TRUNC('month', pd), '%Y-%m')`;
+    case 'quarterly':
+      return `CAST(EXTRACT(YEAR FROM pd) AS VARCHAR) || '-Q' || CAST(EXTRACT(QUARTER FROM pd) AS VARCHAR)`;
+    case 'yearly':
+      return `STRFTIME(DATE_TRUNC('year', pd), '%Y')`;
+  }
+}
+
+// ============================================================================
+// 维度与分组配置
+// ============================================================================
+
+export function normalizeSqlTableAliasPrefix(tableAlias = ''): string {
+  const normalizedAlias = tableAlias.trim().replace(/\.+$/, '');
+  return normalizedAlias ? `${normalizedAlias}.` : '';
+}
+
+export function getExpandDimensionConfig(expandDims: PerformanceSummaryExpandDims): ExpandDimensionConfig {
+  const energyLabelExpr = `CASE WHEN is_nev_bool THEN '电' ELSE '油' END`;
+  const energyKeyExpr = `CASE WHEN is_nev_bool THEN 'electric' ELSE 'oil' END`;
+  const energyOrderExpr = `CASE WHEN is_nev_bool THEN 2 ELSE 1 END`;
+
+  const natureLabelExpr = `CASE WHEN is_renewal_bool THEN '续保' WHEN is_new_car_bool THEN '新保' ELSE '转保' END`;
+  const natureKeyExpr = `CASE WHEN is_renewal_bool THEN 'renewal' WHEN is_new_car_bool THEN 'new_business' ELSE 'transfer_business' END`;
+  const natureOrderExpr = `CASE WHEN is_new_car_bool THEN 1 WHEN is_renewal_bool THEN 3 ELSE 2 END`;
+
+  if (expandDims === 'energy') {
+    return {
+      labelExpr: energyLabelExpr,
+      keyExpr: energyKeyExpr,
+      orderExpr: energyOrderExpr,
+    };
+  }
+
+  if (expandDims === 'business_nature') {
+    return {
+      labelExpr: natureLabelExpr,
+      keyExpr: natureKeyExpr,
+      orderExpr: natureOrderExpr,
+    };
+  }
+
+  return {
+    labelExpr: `(${energyLabelExpr}) || '+' || (${natureLabelExpr})`,
+    keyExpr: `(${energyKeyExpr}) || '_' || (${natureKeyExpr})`,
+    orderExpr: `(CASE WHEN is_nev_bool THEN 3 ELSE 0 END) + (${natureOrderExpr})`,
+  };
+}
+
+export function drillStepToWhere(step: PerformanceDrilldownStep, colPrefix: string): string {
+  const esc = escapeSqlValue;
+  const boolDef = BOOL_DIMENSIONS[step.dimension];
+  if (boolDef) {
+    if (step.value === boolDef.trueLabel) {
+      return truthyExpr(`${colPrefix}${boolDef.field}`);
+    }
+    return `NOT ${truthyExpr(`${colPrefix}${boolDef.field}`)}`;
+  }
+
+  switch (step.dimension) {
+    case 'org_level_3':
+      return `${colPrefix}org_level_3 = '${esc(step.value)}'`;
+    case 'team':
+      return `COALESCE(tm.team_name, '未归属团队') = '${esc(step.value)}'`;
+    case 'salesman':
+      return `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') = '${esc(step.value)}'`;
+    case 'customer_category':
+      return `COALESCE(${colPrefix}customer_category, '未知') = '${esc(step.value)}'`;
+    case 'tonnage_segment':
+      return `COALESCE(${colPrefix}tonnage_segment, '未分段') = '${esc(step.value)}'`;
+    default:
+      return '1=1';
+  }
+}
+
+export function getGroupByConfig(dimension: PerformanceDimension | null, colPrefix: string): GroupByConfig {
+  if (!dimension) {
+    return {
+      selectExpr: `'分公司整体' AS group_name`,
+      groupByExpr: `'分公司整体'`,
+    };
+  }
+
+  const boolDef = BOOL_DIMENSIONS[dimension];
+  if (boolDef) {
+    return {
+      selectExpr: `CASE WHEN ${truthyExpr(`${colPrefix}${boolDef.field}`)} THEN '${boolDef.trueLabel}' ELSE '${boolDef.falseLabel}' END AS group_name`,
+      groupByExpr: `CASE WHEN ${truthyExpr(`${colPrefix}${boolDef.field}`)} THEN '${boolDef.trueLabel}' ELSE '${boolDef.falseLabel}' END`,
+    };
+  }
+
+  switch (dimension) {
+    case 'org_level_3':
+      return {
+        selectExpr: `COALESCE(${colPrefix}org_level_3, '未知') AS group_name`,
+        groupByExpr: `COALESCE(${colPrefix}org_level_3, '未知')`,
+      };
+    case 'team':
+      return {
+        selectExpr: `COALESCE(tm.team_name, '未归属团队') AS group_name`,
+        groupByExpr: `COALESCE(tm.team_name, '未归属团队')`,
+      };
+    case 'salesman':
+      return {
+        selectExpr: `REGEXP_REPLACE(COALESCE(${colPrefix}salesman_name, '未知'), '^[0-9]+', '') AS group_name`,
+        groupByExpr: `REGEXP_REPLACE(COALESCE(${colPrefix}salesman_name, '未知'), '^[0-9]+', '')`,
+      };
+    case 'customer_category':
+      return {
+        selectExpr: `COALESCE(${colPrefix}customer_category, '未知') AS group_name`,
+        groupByExpr: `COALESCE(${colPrefix}customer_category, '未知')`,
+      };
+    case 'tonnage_segment':
+      return {
+        selectExpr: `COALESCE(${colPrefix}tonnage_segment, '未分段') AS group_name`,
+        groupByExpr: `COALESCE(${colPrefix}tonnage_segment, '未分段')`,
+      };
+    default:
+      return {
+        selectExpr: `'分公司整体' AS group_name`,
+        groupByExpr: `'分公司整体'`,
+      };
+  }
+}
+
+export function supportsAnnualPlanByDimension(dimension: PerformanceDimension | null): boolean {
+  return (
+    dimension === null
+    || dimension === 'org_level_3'
+    || dimension === 'team'
+    || dimension === 'salesman'
+  );
+}
+
+export function getTrendLineSourceSql(segmentTag: PerformanceSegmentTag): string {
+  if (segmentTag === 'all') {
+    return `
+      SELECT 'overall' AS line_key, '整体' AS line_label, 1 AS line_order, pd, dedup_key, premium_wan FROM selected_rows
+      UNION ALL
+      SELECT 'non_business_passenger', '非营客', 2, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'non_business_passenger'
+      UNION ALL
+      SELECT 'business_passenger', '营客', 3, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'business_passenger'
+      UNION ALL
+      SELECT 'business_truck', '营货', 4, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'business_truck'
+      UNION ALL
+      SELECT 'non_business_truck', '非营货', 5, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'non_business_truck'
+      UNION ALL
+      SELECT 'motorcycle', '摩托车', 6, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'motorcycle'
+    `;
+  }
+
+  if (segmentTag === 'non_business_passenger') {
+    return `
+      SELECT 'overall' AS line_key, '非营客整体' AS line_label, 1 AS line_order, pd, dedup_key, premium_wan FROM selected_rows
+      UNION ALL
+      SELECT 'non_business_personal', '非营业个人客车', 2, pd, dedup_key, premium_wan FROM selected_rows WHERE customer_category = '非营业个人客车'
+      UNION ALL
+      SELECT 'non_business_enterprise', '非营业企业客车', 3, pd, dedup_key, premium_wan FROM selected_rows WHERE customer_category = '非营业企业客车'
+      UNION ALL
+      SELECT 'non_business_agency', '非营业机关客车', 4, pd, dedup_key, premium_wan FROM selected_rows WHERE customer_category = '非营业机关客车'
+    `;
+  }
+
+  if (segmentTag === 'business_truck' || segmentTag === 'non_business_truck' || segmentTag === 'truck') {
+    return `
+      SELECT 'overall' AS line_key, '整体' AS line_label, 1 AS line_order, pd, dedup_key, premium_wan FROM selected_rows
+      UNION ALL
+      SELECT
+        'tonnage_' || REPLACE(REPLACE(norm_tonnage, '-', '_'), '吨', '') AS line_key,
+        norm_tonnage AS line_label,
+        1 + CASE norm_tonnage
+          WHEN '1吨以下' THEN 1
+          WHEN '1-2吨' THEN 2
+          WHEN '2-9吨' THEN 3
+          WHEN '9-10吨' THEN 4
+          WHEN '10吨以上' THEN 5
+          ELSE 99
+        END AS line_order,
+        pd,
+        dedup_key,
+        premium_wan
+      FROM selected_rows
+    `;
+  }
+
+  return `
+    SELECT 'overall' AS line_key, '整体' AS line_label, 1 AS line_order, pd, dedup_key, premium_wan FROM selected_rows
+  `;
+}

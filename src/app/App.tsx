@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { SidebarLayout, DataGuard, ErrorBoundary } from '../components/layout';
 import { DataProvider } from '../shared/contexts/DataContext';
 import { FilterProvider } from '../shared/contexts/FilterContext';
+import { StableProvider } from '../shared/contexts/StableContext';
 import { PermissionProvider, usePermission } from '../shared/contexts/PermissionContext';
 import { ThemeProvider } from '../shared/theme';
 import { ExportProvider } from '../shared/export/ExportContext';
@@ -71,9 +72,6 @@ const CostPage = lazy(() =>
 const FeeAnalysisPage = lazy(() =>
   import('../features/pages/FeeAnalysisPage').then((m) => ({ default: m.FeeAnalysisPage }))
 );
-const CoefficientPage = lazy(() =>
-  import('../features/pages/CoefficientPage').then((m) => ({ default: m.CoefficientPage }))
-);
 const ReportsPage = lazy(() =>
   import('../features/pages/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
@@ -139,6 +137,7 @@ function App() {
           <DataProvider>
             <PermissionProvider>
               <ExportProvider>
+              <StableProvider>
               <FilterProvider>
               <Routes>
                 {/* 登录页面 - 不需要认证 */}
@@ -232,18 +231,6 @@ function App() {
                       </RouteAccessGuard>
                     }
                   />
-                  {/* comparison 已合并到 /growth，见上方重定向 */}
-                  <Route
-                    path="coefficient"
-                    element={
-                      <RouteAccessGuard routePath="/coefficient">
-                        <DataGuard>
-                          <LazyRoute><CoefficientPage /></LazyRoute>
-                        </DataGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
-
                   {/* 保费达成（计划达成 + 保费报表）*/}
                   <Route
                     path="reports"
@@ -355,6 +342,7 @@ function App() {
                 <Route path="/old-dashboard" element={<Navigate to="/dashboard" replace />} />
               </Routes>
               </FilterProvider>
+              </StableProvider>
               </ExportProvider>
             </PermissionProvider>
           </DataProvider>

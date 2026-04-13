@@ -21,7 +21,7 @@ import {
   type PerformanceGrowthMode,
   type PerformanceSummaryExpandDims,
   type PerformancePeriodBounds,
-} from '../performance-analysis-shared.js';
+} from './shared.js';
 
 export function generatePerformanceSummaryQuery(
   whereWithDate: string,

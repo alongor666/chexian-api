@@ -8,7 +8,7 @@
  * - V3 期间已赚保费包装器（委托 sql-builder.ts）
  */
 
-import { formatDate } from '../../utils/coefficient-period.js';
+import { formatDate } from '../../utils/date.js';
 import { generateEarnedPremiumPeriodQuery } from '../sql-builder.js';
 import type { EarnedPremiumConfig, NewEarnedPremiumConfig } from './shared.js';
 

@@ -77,7 +77,6 @@ export type FilterPresetName =
   | 'growth'
   | 'renewal'
   | 'renewalDetail'
-  | 'coefficient'
   | 'report'
   | 'cost'
   | 'costEarned';
@@ -189,23 +188,6 @@ export const FILTER_PRESETS: Record<FilterPresetName, FilterConfig> = {
    * - 机构/业务员：不显示（完全忽略）
    * 注意：截止日期使用独立选择器
    */
-  coefficient: {
-    dateCriteria: true, // 显示但锁定
-    lockedDateCriteria: 'policy_date', // 锁定为签单日期
-    allowedYears: 'currentOnly', // 仅当年
-    analysisYear: true,
-    dateRange: false, // 使用独立的截止日期选择器
-    organization: false, // 代码忽略
-    salesman: false, // 代码忽略
-    customerCategory: false,
-    coverageCombination: false,
-    renewalMode: false,
-    basicOptions: false,
-    quickCombos: false,
-    organizationMode: 'multi',
-    salesmanMode: 'multi',
-  },
-
   /**
    * 保费报表预设
    * - 日期口径：可选（签单日期/起保日期）

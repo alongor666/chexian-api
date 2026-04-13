@@ -159,20 +159,6 @@ export const capabilities: Capability[] = [
     ],
   },
   {
-    id: 'coefficient',
-    route: '/coefficient',
-    name: '系数监控',
-    icon: 'Search',
-    description: '商车自主定价系数监控：阈值合规、周期分布、缺口保费',
-    keywords: ['系数', '定价系数', '自主系数', '合规', '阈值'],
-    exampleQueries: [
-      '系数监控',
-      '定价系数情况',
-      '系数合规情况',
-      '自主系数分布',
-    ],
-  },
-  {
     id: 'templates',
     route: '/templates',
     name: '报表模板',

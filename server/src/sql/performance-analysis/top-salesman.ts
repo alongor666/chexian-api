@@ -17,7 +17,7 @@ import {
   type PerformanceTimePeriod,
   type PerformanceGrowthMode,
   type PerformancePeriodBounds,
-} from '../performance-analysis-shared.js';
+} from './shared.js';
 
 export function generatePerformanceTopSalesmanQuery(
   whereWithDate: string,

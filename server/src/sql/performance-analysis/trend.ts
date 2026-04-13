@@ -13,7 +13,7 @@ import {
   getTrendLineSourceSql,
   type PerformanceSegmentTag,
   type PerformanceTrendGranularity,
-} from '../performance-analysis-shared.js';
+} from './shared.js';
 
 export function generatePerformanceTrendQuery(
   whereWithDate: string,

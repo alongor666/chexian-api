@@ -28,9 +28,6 @@ export const QUERY_ROUTES = {
   // 增长分析
   GROWTH: '/growth',
 
-  // 定价系数
-  COEFFICIENT: '/coefficient',
-
   // 成本分析
   COST: '/cost',
 

@@ -13,7 +13,7 @@
       "shard_strategy": "3层分片(static/weekly/daily)",
       "last_updated": "2026-04-12",
       "data_range": "2021-01-01 ~ 2026-04-07",
-      "row_count": 2518232,
+      "row_count": 2518836,
       "field_count": 53,
       "key_fields": [
         "保单号",
@@ -283,7 +283,7 @@
       "frontend_page": "specialty (tab=cross-sell)",
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重",
       "last_updated": "2026-04-12",
-      "row_count": 402777,
+      "row_count": 402888,
       "field_count": 9
     },
     {
@@ -372,7 +372,10 @@
         "/api/query/customer-flow/trend"
       ],
       "frontend_page": "customer-flow",
-      "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知"
+      "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知",
+      "last_updated": "2026-04-13",
+      "row_count": 954351,
+      "field_count": 7
     }
   ]
 }

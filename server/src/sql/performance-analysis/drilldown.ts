@@ -22,7 +22,7 @@ import {
   type PerformanceDimension,
   type PerformanceDrilldownStep,
   type PerformancePeriodBounds,
-} from '../performance-analysis-shared.js';
+} from './shared.js';
 
 export function generatePerformanceDrilldownQuery(
   whereWithDate: string,

@@ -13,7 +13,7 @@ import { echarts } from '../../shared/utils/echarts';
 import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import { buttonStyles, cardStyles, colors, cn, tableStyles, textStyles } from '../../shared/styles';
 import { useTheme } from '../../shared/theme';
-import { ORG_GROUPS } from '../../shared/config/coefficient-thresholds';
+import { ORG_GROUPS } from '../../shared/config/org-groups';
 import { useCrossSellOrgTrend, type CoverageCombinationFilter, type OrgTrendPoint } from './hooks/useCrossSellOrgTrend';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import type { AdvancedFilterState } from '../../shared/types/data';

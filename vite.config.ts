@@ -2,16 +2,24 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
-import viteCompression from 'vite-plugin-compression'
+import { compression } from 'vite-plugin-compression2'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     // Pre-compress assets — Nginx serves .gz files directly (gzip_static on)
-    viteCompression({ algorithm: 'gzip', ext: '.gz', threshold: 1024 }),
+    compression({ algorithm: 'gzip', ext: '.gz', threshold: 1024 }),
     // Brotli for browsers that support it (typically 15-25% smaller than gzip)
-    viteCompression({ algorithm: 'brotliCompress', ext: '.br', threshold: 1024 }),
+    compression({ algorithm: 'brotliCompress', ext: '.br', threshold: 1024 }),
+    // Bundle analyzer — generates baseline report for chunk size observability
+    visualizer({
+      filename: '.planning/phases/03-code-structure/bundle-baseline.html',
+      open: false,
+      gzipSize: true,
+      brotliSize: true,
+    }),
   ],
 
   optimizeDeps: {

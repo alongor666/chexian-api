@@ -270,29 +270,6 @@ describe('API Client', () => {
       expect(calledUrl).toContain('operatingCostRate=9');
     });
 
-    it('should preserve coefficient batch query contract fields', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          data: { summary: [] }
-        }),
-      });
-
-      const { apiClient } = await import('../../src/shared/api/client');
-      await apiClient.getCoefficientData({
-        queryType: 'batch',
-        startDate: '2026-01-01',
-        endDate: '2026-01-31',
-      });
-
-      const calledUrl = mockFetch.mock.calls[0][0] as string;
-      expect(calledUrl).toContain('/query/coefficient?');
-      expect(calledUrl).toContain('queryType=batch');
-      expect(calledUrl).toContain('startDate=2026-01-01');
-      expect(calledUrl).toContain('endDate=2026-01-31');
-    });
-
     // renewal full query test removed — replaced by renewal-v2 endpoints
   });
 

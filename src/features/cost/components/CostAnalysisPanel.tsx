@@ -26,7 +26,7 @@ import type { CostSubTab, EarnedPremiumDetailFilter, CostDimension } from '../ty
 import { DIMENSION_LABELS } from '../types/costTypes';
 import type { AdvancedFilterState } from '../../../shared/types';
 import type { Column } from '../../../widgets/table/VirtualTable';
-import { formatDate, getLastDayOfMonth } from '../../../shared/utils/coefficient-period';
+import { formatDate, getLastDayOfMonth } from '../../../shared/utils/date';
 import { DataScopeAlert } from '../../../widgets/alerts';
 import {
   transformExpenseData,
