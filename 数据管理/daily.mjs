@@ -125,6 +125,11 @@ function extractDateRange(filename) {
   if (openEnd) {
     return { start: `20${openEnd[1]}0101`, end: formatDate() };
   }
+  // 增量格式：01_签单清单_增量_20260411.xlsx → single-day（归入 weekly 处理）
+  const incr = filename.match(/增量_(\d{8})/);
+  if (incr) {
+    return { start: incr[1], end: incr[1] };
+  }
   // 旧格式：每日数据_20240101_20260407.xlsx
   const m = filename.match(/每日数据_(\d{8})[_-](\d{8})/);
   return m ? { start: m[1], end: m[2] } : null;
@@ -134,6 +139,8 @@ function extractDateRange(filename) {
 function getShardType(filename, config) {
   const range = extractDateRange(filename);
   if (!range) return null;
+  // 增量文件强制归入 weekly（以新格式处理，输出到 current/）
+  if (filename.match(/增量_\d{8}/)) return 'weekly';
 
   const cutoff = parseInt(config.static_cutoff.replace(/-/g, ''));
   const weeklyStart = config.weekly_start.replace(/-/g, '');
@@ -453,7 +460,7 @@ function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePre
 // ── 新域处理函数 ──
 
 function runCrossSell(python, scriptDir) {
-  log('cyan', '\n═══ CrossSell 域：交叉销售（全量替换）═══\n');
+  log('cyan', '\n═══ CrossSell 域：交叉销售（多文件合并）═══\n');
   const config = JSON.parse(readFileSync(join(scriptDir, 'shard-config.json'), 'utf-8'));
   const pattern = config.source_patterns?.['03_cross_sell'] || '03_交叉销售_*.xlsx';
   const sourceFiles = ls(pattern, scriptDir);
@@ -461,11 +468,76 @@ function runCrossSell(python, scriptDir) {
     log('yellow', `⚠ 未找到 ${pattern}，跳过`);
     return;
   }
-  const xlsx = sourceFiles[0];
-  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
 
-  safeConvertDomain(python, join(scriptDir, 'pipelines/convert_cross_sell.py'),
-    xlsx.path, CROSS_SELL_PATH, 'cross_sell_latest');
+  for (const f of sourceFiles) {
+    log('green', `源文件: ${f.name} (${(statSync(f.path).size / 1024 / 1024).toFixed(1)} MB)`);
+  }
+
+  if (sourceFiles.length === 1) {
+    // 单文件：直接转换
+    safeConvertDomain(python, join(scriptDir, 'pipelines/convert_cross_sell.py'),
+      sourceFiles[0].path, CROSS_SELL_PATH, 'cross_sell_latest');
+  } else {
+    // 多文件：逐个转换 → DuckDB 合并去重
+    const tmpDir = join(CROSS_SELL_DIR, '_tmp');
+    ensureDir(tmpDir);
+    const tmpFiles = [];
+
+    for (const file of sourceFiles) {
+      const tmpPath = join(tmpDir, file.name.replace(/\.xlsx$/i, '.parquet'));
+      log('green', `▶ 转换: ${file.name}`);
+      try {
+        runPythonScript(python, join(scriptDir, 'pipelines/convert_cross_sell.py'), [
+          '-i', `"${file.path}"`, '-o', `"${tmpPath}"`
+        ]);
+      } catch (e) {
+        log('yellow', `⚠ 转换失败: ${file.name} — ${e.message?.slice(0, 100)}`);
+      }
+      if (existsSync(tmpPath)) tmpFiles.push(tmpPath);
+    }
+
+    if (tmpFiles.length === 0) {
+      log('red', '❌ 未生成任何 cross_sell parquet');
+      return;
+    }
+
+    // 合并：UNION ALL + 按 policy_no 去重（保留最新 policy_date）
+    const tmpOutputPath = (CROSS_SELL_PATH + '.tmp').replace(/\\/g, '/');
+    const fileListStr = tmpFiles.map(f => `"${f.replace(/\\/g, '/')}"`).join(', ');
+    const mergeScriptPath = join(tmpDir, '_merge_cross_sell.py');
+    const mergeContent = [
+      'import duckdb',
+      `files = [${fileListStr}]`,
+      `output = "${tmpOutputPath}"`,
+      'duckdb.sql(f"""',
+      '  COPY (',
+      '    SELECT * EXCLUDE (_rn) FROM (',
+      '      SELECT *, ROW_NUMBER() OVER (PARTITION BY policy_no ORDER BY policy_date DESC NULLS LAST) AS _rn',
+      '      FROM read_parquet({files}, union_by_name=true)',
+      '    )',
+      '    WHERE _rn = 1',
+      "  ) TO '{output}' (FORMAT PARQUET)",
+      '""")',
+      'cnt = duckdb.sql(f"SELECT COUNT(*) FROM read_parquet(\'{output}\')").fetchone()[0]',
+      'print(f"   ✅ 合并完成: {cnt:,} 条")',
+    ].join('\n');
+    writeFileSync(mergeScriptPath, mergeContent, 'utf-8');
+    log('green', `▶ 合并 ${tmpFiles.length} 个分片（按 policy_no 去重）...`);
+    runPythonScript(python, mergeScriptPath, []);
+
+    // 归档旧文件 + 原子替换
+    if (existsSync(CROSS_SELL_PATH)) {
+      const archiveDir = join(homedir(), 'chexian-archive');
+      ensureDir(archiveDir);
+      renameSync(CROSS_SELL_PATH, join(archiveDir, `cross_sell_latest_${formatDate()}.parquet`));
+    }
+    renameSync(CROSS_SELL_PATH + '.tmp', CROSS_SELL_PATH);
+
+    // 清理临时文件
+    try { unlinkSync(mergeScriptPath); } catch(e) {}
+    for (const f of tmpFiles) { try { unlinkSync(f); } catch(e) {} }
+    try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch(e) {}
+  }
 
   const rowCount = getParquetRowCount(python, CROSS_SELL_PATH);
   updateDataSources('cross_sell', { rowCount, fieldCount: 9 });
@@ -550,7 +622,7 @@ function runBrand(python, scriptDir) {
 }
 
 function runRepair(python, scriptDir) {
-  log('cyan', '\n═══ Repair 域：维修资源（全量替换）═══\n');
+  log('cyan', '\n═══ Repair 域：维修资源（多文件合并）═══\n');
   const config = JSON.parse(readFileSync(join(scriptDir, 'shard-config.json'), 'utf-8'));
   const pattern = config.source_patterns?.['07_repair'] || '07_维修资源*.xlsx';
   const sourceFiles = ls(pattern, scriptDir);
@@ -558,11 +630,75 @@ function runRepair(python, scriptDir) {
     log('yellow', `⚠ 未找到 ${pattern}，跳过`);
     return;
   }
-  const xlsx = sourceFiles[0];
-  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
 
-  safeConvertDomain(python, join(scriptDir, 'pipelines/convert_repair.py'),
-    xlsx.path, REPAIR_DIM_PATH, 'repair_latest');
+  for (const f of sourceFiles) {
+    log('green', `源文件: ${f.name} (${(statSync(f.path).size / 1024 / 1024).toFixed(1)} MB)`);
+  }
+
+  if (sourceFiles.length === 1) {
+    safeConvertDomain(python, join(scriptDir, 'pipelines/convert_repair.py'),
+      sourceFiles[0].path, REPAIR_DIM_PATH, 'repair_latest');
+  } else {
+    // 多文件：逐个转换 → DuckDB 合并去重
+    const tmpDir = join(REPAIR_DIM_DIR, '_tmp');
+    ensureDir(tmpDir);
+    const tmpFiles = [];
+
+    for (const file of sourceFiles) {
+      const tmpPath = join(tmpDir, file.name.replace(/\.xlsx$/i, '.parquet'));
+      log('green', `▶ 转换: ${file.name}`);
+      try {
+        runPythonScript(python, join(scriptDir, 'pipelines/convert_repair.py'), [
+          '-i', `"${file.path}"`, '-o', `"${tmpPath}"`
+        ]);
+      } catch (e) {
+        log('yellow', `⚠ 转换失败: ${file.name} — ${e.message?.slice(0, 100)}`);
+      }
+      if (existsSync(tmpPath)) tmpFiles.push(tmpPath);
+    }
+
+    if (tmpFiles.length === 0) {
+      log('red', '❌ 未生成任何 repair parquet');
+      return;
+    }
+
+    // 合并：UNION ALL + 按 repair_shop_name 去重（保留最新 report_date）
+    const tmpOutputPath = (REPAIR_DIM_PATH + '.tmp').replace(/\\/g, '/');
+    const fileListStr = tmpFiles.map(f => `"${f.replace(/\\/g, '/')}"`).join(', ');
+    const mergeScriptPath = join(tmpDir, '_merge_repair.py');
+    const mergeContent = [
+      'import duckdb',
+      `files = [${fileListStr}]`,
+      `output = "${tmpOutputPath}"`,
+      'duckdb.sql(f"""',
+      '  COPY (',
+      '    SELECT * EXCLUDE (_rn) FROM (',
+      '      SELECT *, ROW_NUMBER() OVER (PARTITION BY repair_shop_name ORDER BY report_date DESC NULLS LAST) AS _rn',
+      '      FROM read_parquet({files}, union_by_name=true)',
+      '    )',
+      '    WHERE _rn = 1',
+      "  ) TO '{output}' (FORMAT PARQUET)",
+      '""")',
+      'cnt = duckdb.sql(f"SELECT COUNT(*) FROM read_parquet(\'{output}\')").fetchone()[0]',
+      'print(f"   ✅ 合并完成: {cnt:,} 条")',
+    ].join('\n');
+    writeFileSync(mergeScriptPath, mergeContent, 'utf-8');
+    log('green', `▶ 合并 ${tmpFiles.length} 个分片（按 repair_shop_name 去重）...`);
+    runPythonScript(python, mergeScriptPath, []);
+
+    // 归档旧文件 + 原子替换
+    if (existsSync(REPAIR_DIM_PATH)) {
+      const archiveDir = join(homedir(), 'chexian-archive');
+      ensureDir(archiveDir);
+      renameSync(REPAIR_DIM_PATH, join(archiveDir, `repair_latest_${formatDate()}.parquet`));
+    }
+    renameSync(REPAIR_DIM_PATH + '.tmp', REPAIR_DIM_PATH);
+
+    // 清理临时文件
+    try { unlinkSync(mergeScriptPath); } catch(e) {}
+    for (const f of tmpFiles) { try { unlinkSync(f); } catch(e) {} }
+    try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch(e) {}
+  }
 
   const rowCount = getParquetRowCount(python, REPAIR_DIM_PATH);
   updateDataSources('repair_resource', { rowCount, fieldCount: 12 });

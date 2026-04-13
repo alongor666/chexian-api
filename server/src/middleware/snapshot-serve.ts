@@ -91,12 +91,12 @@ export function computeParamHash(query: Record<string, unknown>): string {
 /**
  * 从权限过滤 SQL 反向解析权限域名称
  */
-export function permissionToScope(permissionFilter: string | undefined): string {
+export function permissionToScope(permissionFilter: string | undefined): string | null {
   if (!permissionFilter || permissionFilter === '1=1') return 'all';
   const orgMatch = permissionFilter.match(/org_level_3\s*=\s*'(.+?)'/);
   if (orgMatch) return orgMatch[1];
   if (permissionFilter.includes('is_telemarketing')) return 'telemarketing';
-  return 'unknown';
+  return null;  // 未知权限：不查快照，直接穿透到 DuckDB
 }
 
 // ── 快照路径缓存（避免反复 stat，数据日更新一次即可） ──
@@ -152,6 +152,10 @@ export function snapshotServe(req: Request, res: Response, next: NextFunction): 
   }
 
   const scope = permissionToScope(req.permissionFilter);
+  if (scope === null) {
+    next();
+    return;
+  }
   const paramHash = computeParamHash(req.query as Record<string, unknown>);
 
   resolveSnapshotPath(bundleName, scope, paramHash)

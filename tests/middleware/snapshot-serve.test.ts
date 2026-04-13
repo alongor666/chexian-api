@@ -10,6 +10,7 @@ import {
   permissionToScope,
   getSnapshotStats,
   resetSnapshotStats,
+  snapshotServe,
 } from '../../server/src/middleware/snapshot-serve';
 
 describe('computeParamHash', () => {
@@ -58,8 +59,12 @@ describe('permissionToScope', () => {
     expect(permissionToScope('is_telemarketing = true')).toBe('telemarketing');
   });
 
-  it('should return "unknown" for unrecognized filter', () => {
-    expect(permissionToScope('some_other_filter = 1')).toBe('unknown');
+  it('should return null for unrecognized filter', () => {
+    expect(permissionToScope('some_other_filter = 1')).toBe(null);
+  });
+
+  it('should return "all" for empty string filter', () => {
+    expect(permissionToScope('')).toBe('all');
   });
 });
 
@@ -77,5 +82,27 @@ describe('snapshot stats', () => {
     // Stats are module-internal; we can only test the exported interface
     resetSnapshotStats();
     expect(getSnapshotStats().hit).toBe(0);
+  });
+});
+
+describe('snapshotServe null scope bypass', () => {
+  it('should call next() without resolving snapshot when scope is null', () => {
+    const req = {
+      baseUrl: '/api',
+      path: '/query/dashboard-bundle',
+      permissionFilter: 'xxx_unknown_filter = 1',
+      query: {},
+    } as any;
+    const res = {
+      setHeader: vi.fn(),
+      json: vi.fn(),
+    } as any;
+    const next = vi.fn();
+
+    snapshotServe(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.setHeader).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
   });
 });
