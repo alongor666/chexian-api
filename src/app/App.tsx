@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { SidebarLayout, DataGuard, ErrorBoundary } from '../components/layout';
 import { DataProvider } from '../shared/contexts/DataContext';
 import { FilterProvider } from '../shared/contexts/FilterContext';
+import { StableProvider } from '../shared/contexts/StableContext';
 import { PermissionProvider, usePermission } from '../shared/contexts/PermissionContext';
 import { ThemeProvider } from '../shared/theme';
 import { ExportProvider } from '../shared/export/ExportContext';
@@ -136,6 +137,7 @@ function App() {
           <DataProvider>
             <PermissionProvider>
               <ExportProvider>
+              <StableProvider>
               <FilterProvider>
               <Routes>
                 {/* 登录页面 - 不需要认证 */}
@@ -340,6 +342,7 @@ function App() {
                 <Route path="/old-dashboard" element={<Navigate to="/dashboard" replace />} />
               </Routes>
               </FilterProvider>
+              </StableProvider>
               </ExportProvider>
             </PermissionProvider>
           </DataProvider>

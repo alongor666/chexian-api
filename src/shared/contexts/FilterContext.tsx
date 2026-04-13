@@ -1,14 +1,29 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from 'react';
+/**
+ * FilterContext — 易变筛选状态 Context
+ *
+ * 仅持有会随用户交互频繁变更的状态：筛选条件、折叠状态、可用业务员列表。
+ * 稳定状态（筛选选项、团队映射、日期元数据）已迁移至 StableContext。
+ *
+ * `useGlobalFilters()` 合并两个 Context 的值，保持原有 11 字段接口不变，
+ * 确保 48 个现有消费者无需修改。
+ */
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  ReactNode,
+} from 'react';
 import { createLogger } from '../utils/logger';
 import { getAvailableSalesmen, type OrgSalesmanCache } from '../../features/dashboard/orgSalesman';
-import type { AdvancedFilterState, FilterOptions, DateMetadata, DualDateMetadata } from '../types/data';
-import { getMetadataByCriteria } from '../types/data';
-import { formatSalesmanName } from '../utils/formatters';
-import { useDataStatus } from './DataContext';
-import { apiClient } from '../api/client';
+import type { AdvancedFilterState, FilterOptions } from '../types/data';
+import { useStableContext } from './StableContext';
 
 const logger = createLogger('FilterContext');
 
+/** 向后兼容接口：保持原有 11 个字段，所有消费者无需修改 */
 interface FilterContextValue {
   /** 当前筛选器状态 */
   filters: AdvancedFilterState;
@@ -34,14 +49,38 @@ interface FilterContextValue {
   initializeFilters: () => Promise<void>;
 }
 
-const FilterContext = createContext<FilterContextValue | null>(null);
+/** 仅包含 FilterContext 自身持有的易变字段 */
+interface FilterContextOwnValue {
+  filters: AdvancedFilterState;
+  setFilters: React.Dispatch<React.SetStateAction<AdvancedFilterState>>;
+  isFilterCollapsed: boolean;
+  toggleFilterCollapsed: () => void;
+  availableSalesmen: string[];
+}
 
+const FilterContext = createContext<FilterContextOwnValue | null>(null);
+
+/**
+ * 向后兼容 hook：返回原有 11 字段接口（合并 FilterContext + StableContext）。
+ * 所有 48 个现有消费者无需修改。
+ */
 export const useGlobalFilters = (): FilterContextValue => {
-  const context = useContext(FilterContext);
-  if (!context) {
+  const filterCtx = useContext(FilterContext);
+  const stableCtx = useStableContext();
+
+  if (!filterCtx) {
     throw new Error('useGlobalFilters must be used within a FilterProvider');
   }
-  return context;
+
+  return {
+    ...filterCtx,
+    filterOptions: stableCtx.filterOptions,
+    salesmanTeamMap: stableCtx.salesmanTeamMap,
+    maxDataDate: stableCtx.maxDataDate,
+    availableYears: stableCtx.availableYears,
+    isLoading: stableCtx.isLoading,
+    initializeFilters: stableCtx.initializeFilters,
+  };
 };
 
 interface FilterProviderProps {
@@ -49,169 +88,52 @@ interface FilterProviderProps {
 }
 
 export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
-  const { isDataLoaded } = useDataStatus();
+  const stableCtx = useStableContext();
+  const { filterOptions, _internal } = stableCtx;
 
   const [filters, setFilters] = useState<AdvancedFilterState>({
     date_criteria: 'policy_date',
     analysis_year: new Date().getFullYear(),
   });
   const [isFilterCollapsed, setIsFilterCollapsed] = useState(false);
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({});
   const [orgSalesmanCache] = useState<OrgSalesmanCache>({});
-  const [salesmanTeamMap, setSalesmanTeamMap] = useState<Map<string, string>>(new Map());
-  const [dualDateMetadata, setDualDateMetadata] = useState<DualDateMetadata>();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+  // 追踪是否已根据初始化结果同步过日期范围
+  const [isFilterSynced, setIsFilterSynced] = useState(false);
 
   const toggleFilterCollapsed = useCallback(() => {
     setIsFilterCollapsed((prev) => !prev);
   }, []);
 
-  const getCurrentMetadata = useCallback((): DateMetadata | undefined => {
-    if (!dualDateMetadata) return undefined;
-    const criteria = filters.date_criteria ?? 'policy_date';
-    return getMetadataByCriteria(dualDateMetadata, criteria);
-  }, [dualDateMetadata, filters.date_criteria]);
-
-  const maxDataDate = getCurrentMetadata()?.maxDate;
-  const availableYears = getCurrentMetadata()?.availableYears;
-
-
-
-  // API 模式：从后端获取筛选选项
-  const loadFilterOptions = useCallback(async () => {
-    try {
-      logger.info('Filter options: loading from API');
-      const apiOptions = await apiClient.getFilterOptions();
-
-      const options: FilterOptions = {
-        org_level_3: (apiOptions.orgs || []).map((value: string) => ({
-          value,
-          count: 0,
-        })),
-        salesman_name: (apiOptions.salesmen || []).map((value: string) => ({
-          value,
-          label: formatSalesmanName(value), // add label to FilterOption if not exists or override display
-          count: 0,
-        })),
-        customer_category: (apiOptions.customerCategories || []).map((value: string) => ({
-          value,
-          count: 0,
-        })),
-        coverage_combination: (apiOptions.coverageCombinations || []).map((value: string) => ({
-          value,
-          count: 0,
-        })),
-        insurance_grade: (apiOptions.insuranceGrades || []).map((item) => ({
-          value: item.value,
-          count: item.count,
-        })),
-      };
-
-      setFilterOptions(options);
-
-      // 构建业务员→团队映射（用于动态标题）
-      const teamMap = new Map<string, string>();
-      (apiOptions.salesmenWithTeam || []).forEach((item) => {
-        if (item.salesman_name && item.team_name && item.team_name !== '未归属团队') {
-          teamMap.set(item.salesman_name, item.team_name);
-        }
-      });
-      setSalesmanTeamMap(teamMap);
-
-      // Update max date from API
-      const today = new Date().toISOString().split('T')[0];
-      const maxDate = (apiOptions.dateRange && apiOptions.dateRange.max_date) ? apiOptions.dateRange.max_date.slice(0, 10) : today;
-      const dataYear = new Date(maxDate).getFullYear();
-
-      // 优先使用 API 返回的实际可用年份（从数据中动态查询），回退到 [dataYear-1, dataYear]
-      const yearsFromApi = (apiOptions.availableYears && apiOptions.availableYears.length > 0)
-        ? apiOptions.availableYears
-        : [dataYear - 1, dataYear];
-
-      const apiMetadata: DualDateMetadata = {
-        policy: { maxDate: maxDate, availableYears: yearsFromApi },
-        insurance: { maxDate: maxDate, availableYears: yearsFromApi },
-      };
-      setDualDateMetadata(apiMetadata);
-
-      logger.info('Filter options: loaded from API, maxDate=', maxDate);
-      return { options, maxDate, dataYear };
-    } catch (err) {
-      logger.error('Filter options: load failed', err);
-      return null;
-    }
-  }, []);
-
-  // 初始化筛选器
-  const initializeFilters = useCallback(async () => {
-    if (isInitialized) return;
-    if (!isDataLoaded) {
-      logger.debug('筛选器初始化跳过：数据未加载');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const result = await loadFilterOptions();
-
-      if (result) {
-        setFilters(prev => ({
-          ...prev,
-          date_criteria: 'policy_date',
-          analysis_year: result.dataYear,
-          policy_date_start: `${result.dataYear}-01-01`,
-          policy_date_end: result.maxDate,
-        }));
-      }
-
-      setIsInitialized(true);
-      logger.info('筛选器初始化完成（API 模式）');
-    } catch (err) {
-      logger.error('筛选器初始化失败', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isInitialized, isDataLoaded, loadFilterOptions]);
-
+  // 监听 StableContext 初始化结果，同步初始日期范围到 filters
   useEffect(() => {
-    if (isDataLoaded && !isInitialized && !isLoading) {
-      initializeFilters();
+    if (_internal.latestInitResult && !isFilterSynced) {
+      const { maxDate, dataYear } = _internal.latestInitResult;
+      setFilters((prev) => ({
+        ...prev,
+        date_criteria: 'policy_date',
+        analysis_year: dataYear,
+        policy_date_start: `${dataYear}-01-01`,
+        policy_date_end: maxDate,
+      }));
+      setIsFilterSynced(true);
+      logger.info('FilterContext: 已同步初始日期范围, dataYear=', dataYear, 'maxDate=', maxDate);
     }
-  }, [isDataLoaded, isInitialized, isLoading, initializeFilters]);
+  }, [_internal.latestInitResult, isFilterSynced]);
 
   const availableSalesmen = useMemo(() => {
     const allSalesmen = (filterOptions.salesman_name || []).map((option) => option.value);
     return getAvailableSalesmen(filters.org_level_3, orgSalesmanCache, allSalesmen);
   }, [filterOptions.salesman_name, filters.org_level_3, orgSalesmanCache]);
 
-  const value = useMemo<FilterContextValue>(
+  const value = useMemo<FilterContextOwnValue>(
     () => ({
       filters,
       setFilters,
-      filterOptions,
       isFilterCollapsed,
       toggleFilterCollapsed,
       availableSalesmen,
-      salesmanTeamMap,
-      maxDataDate,
-      availableYears,
-      isLoading,
-      initializeFilters,
     }),
-    [
-      filters,
-      setFilters,
-      filterOptions,
-      isFilterCollapsed,
-      toggleFilterCollapsed,
-      availableSalesmen,
-      salesmanTeamMap,
-      maxDataDate,
-      availableYears,
-      isLoading,
-      initializeFilters,
-    ]
+    [filters, setFilters, isFilterCollapsed, toggleFilterCollapsed, availableSalesmen]
   );
 
   return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
