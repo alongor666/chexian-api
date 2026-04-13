@@ -9,7 +9,6 @@ import {
   TrendingUp,
   BarChart3,
   Calculator,
-  Search,
   Gift,
   Percent,
   ChevronLeft,
