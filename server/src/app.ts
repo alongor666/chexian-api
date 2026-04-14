@@ -15,6 +15,7 @@ import { serverEnv } from './config/env.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { DataBootstrapper } from './services/data-bootstrapper.js';
+import { registerBootstrapper } from './services/bootstrapper-registry.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 const app: Application = express();
@@ -142,6 +143,7 @@ async function startServer() {
 
     // 2. 数据启动（发现→去重→验证→加载→维度）
     const bootstrapper = new DataBootstrapper(duckdbService);
+    registerBootstrapper(bootstrapper); // 注册到全局注册中心，供路由中间件使用
     try {
       const result = await bootstrapper.bootstrap();
       if (result) {

@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, isValidDateFormat } from './shared.js';
+import { asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware } from './shared.js';
 import {
   generateOverviewQuery,
   generateOverviewTotalQuery,
@@ -25,18 +25,8 @@ import {
 
 const router = Router();
 
-// ── VIEW 存在性中间件 ──
-
-router.use(
-  asyncHandler(async (_req, _res, next) => {
-    try {
-      await duckdbService.query('SELECT 1 FROM RenewalUniverse LIMIT 1');
-      next();
-    } catch {
-      throw new AppError(503, '续保宇宙数据未加载，请确认 renewal_universe/latest.parquet 文件存在并重启服务');
-    }
-  })
-);
+// 集中式惰性域加载中间件（per MAT-01）：RenewalUniverse
+router.use(createDomainMiddleware('RenewalUniverse'));
 
 // ── Zod Schema ──
 

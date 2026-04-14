@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService } from './shared.js';
+import { asyncHandler, AppError, duckdbService, createDomainMiddleware } from './shared.js';
 import {
   generateRepairOverviewQuery,
   generateRepairDetailQuery,
@@ -18,16 +18,8 @@ import {
 
 const router = Router();
 
-router.use(
-  asyncHandler(async (_req, _res, next) => {
-    try {
-      await duckdbService.query('SELECT 1 FROM RepairDim LIMIT 1');
-      next();
-    } catch {
-      throw new AppError(503, '维修资源数据未加载');
-    }
-  })
-);
+// 集中式惰性域加载中间件（per MAT-01）：RepairDim
+router.use(createDomainMiddleware('RepairDim'));
 
 const filterSchema = z.object({
   orgName: z.string().optional(),

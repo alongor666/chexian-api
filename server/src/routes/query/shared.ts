@@ -123,6 +123,41 @@ export function buildComprehensiveAlerts(
   return alerts;
 }
 
+// ============================================
+// 惰性域加载中间件工厂（per MAT-01 / 04-02-PLAN.md）
+// ============================================
+
+import type { NextFunction } from 'express';
+import { getBootstrapper } from '../../services/bootstrapper-registry.js';
+
+/**
+ * 集中式惰性域加载中间件工厂
+ *
+ * 用法：router.use(createDomainMiddleware('ClaimsDetail', 'ClaimsAgg'));
+ *
+ * 超时（15s）：返回 503 Service Unavailable
+ * 加载失败：返回 500 Internal Server Error
+ * 未注册（bootstrapper 未初始化）：直接 next()，不阻塞
+ */
+export function createDomainMiddleware(...domains: string[]) {
+  return async (_req: Request, _res: Response, next: NextFunction): Promise<void> => {
+    const bootstrapper = getBootstrapper();
+    if (!bootstrapper) {
+      // 测试环境或 bootstrapper 未初始化时，跳过惰性加载
+      next();
+      return;
+    }
+    try {
+      for (const domain of domains) {
+        await bootstrapper.ensureDomainLoaded(domain);
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
 export function withRankByDimType(rows: ComprehensiveMetricRow[]): Array<ComprehensiveMetricRow & { rank: number }> {
   const grouped = new Map<string, ComprehensiveMetricRow[]>();
   for (const row of rows) {
