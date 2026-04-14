@@ -48,4 +48,54 @@ describe('LazyDomainRegistry', () => {
     expect(reg.getState('SlowDomain')).toBe('loading');  // state 不变为 failed
     vi.useRealTimers();
   });
+
+  // TC-05: 域依赖链 —— ClaimsAgg → ClaimsDetail 模式验证
+  // 验证计划 04-02-PLAN.md 中 ClaimsAgg 三路回退最终分支的显式依赖声明
+  it('TC-05: 域 B 的 loader 内调用 ensureLoaded(A)，两个域均成功加载', async () => {
+    const reg = new LazyDomainRegistry();
+    const loadOrder: string[] = [];
+
+    // Domain A：叶子节点，独立加载
+    reg.register('ClaimsDetail', async () => {
+      loadOrder.push('ClaimsDetail');
+    });
+
+    // Domain B：依赖 A，loader 内部显式先调用 ensureLoaded('ClaimsDetail')
+    reg.register('ClaimsAgg', async () => {
+      await reg.ensureLoaded('ClaimsDetail'); // 显式依赖声明
+      loadOrder.push('ClaimsAgg');
+    });
+
+    await reg.ensureLoaded('ClaimsAgg');
+
+    // 两个域均已加载
+    expect(reg.isLoaded('ClaimsDetail')).toBe(true);
+    expect(reg.isLoaded('ClaimsAgg')).toBe(true);
+
+    // ClaimsDetail 先于 ClaimsAgg 加载
+    expect(loadOrder).toEqual(['ClaimsDetail', 'ClaimsAgg']);
+  });
+
+  // TC-06: 域 A 已加载时，域 B 触发的 ensureLoaded(A) 不重复执行 A 的 loader
+  it('TC-06: 依赖域已加载时，依赖链不触发重复加载', async () => {
+    const reg = new LazyDomainRegistry();
+    let detailLoadCount = 0;
+
+    reg.register('ClaimsDetail', async () => {
+      detailLoadCount++;
+    });
+
+    reg.register('ClaimsAgg', async () => {
+      await reg.ensureLoaded('ClaimsDetail');
+    });
+
+    // 先独立加载 ClaimsDetail
+    await reg.ensureLoaded('ClaimsDetail');
+    expect(detailLoadCount).toBe(1);
+
+    // 再加载 ClaimsAgg（内部再次 ensureLoaded ClaimsDetail）
+    await reg.ensureLoaded('ClaimsAgg');
+    // ClaimsDetail loader 只执行了一次
+    expect(detailLoadCount).toBe(1);
+  });
 });

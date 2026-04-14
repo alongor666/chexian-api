@@ -23,8 +23,6 @@ import {
   getPlateRegionDimPaths,
   getClaimsDetailPaths,
   getCrossSellPaths,
-  getClaimsBulkPaths,
-  getClaimsAggPaths,
   getRepairDimPaths,
   getBrandDimPaths,
   getCustomerFlowPaths,
@@ -63,8 +61,10 @@ export interface BootstrapDuckDB {
   loadParquet(filePath: string, tableName: string): Promise<void>;
   loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number }>;
   query<T = any>(sql: string, cacheTtlMs?: number): Promise<T[]>;
+  getTableSchema(tableName: string): Promise<any[]>;
   hasRelation(relationName: string): Promise<boolean>;
   dropRelationIfExists(relationName: string): Promise<void>;
+  invalidateCache(options?: { silent?: boolean }): void;
 }
 
 // ============================================
@@ -370,32 +370,12 @@ export class DataBootstrapper {
       console.timeEnd('[Bootstrap:Lazy] ClaimsDetail');
     });
 
-    // ClaimsAgg：三路回退，最终回退必须先确保 ClaimsDetail 已加载（per OpenCode HIGH 修订）
+    // ClaimsAgg：唯一来源 = ClaimsDetail 动态聚合
     this.lazyRegistry.register('ClaimsAgg', async () => {
-      const bulkPath = getClaimsBulkPaths().find(p => fs.existsSync(p));
-      const aggPath  = getClaimsAggPaths().find(p => fs.existsSync(p));
-      if (bulkPath) {
-        try {
-          console.time('[Bootstrap:Lazy] ClaimsAgg via bulk');
-          await domainLoaders.loadClaimsBulk(db, bulkPath);
-          console.timeEnd('[Bootstrap:Lazy] ClaimsAgg via bulk');
-          return;
-        } catch (err) {
-          console.warn('[Bootstrap:Lazy] ClaimsBulk failed, trying next fallback:', err);
-        }
-      }
-      if (aggPath) {
-        console.time('[Bootstrap:Lazy] ClaimsAgg via parquet');
-        await domainLoaders.loadClaimsAgg(db, aggPath);
-        console.timeEnd('[Bootstrap:Lazy] ClaimsAgg via parquet');
-        return;
-      }
-      // 最终回退：必须先确保 ClaimsDetail VIEW 已加载，再从 ClaimsDetail 聚合
-      console.log('[Bootstrap:Lazy] ClaimsAgg fallback: ensuring ClaimsDetail is loaded first...');
       await this.lazyRegistry.ensureLoaded('ClaimsDetail');
-      console.time('[Bootstrap:Lazy] ClaimsAgg from detail');
+      console.time('[Bootstrap:Lazy] ClaimsAgg from ClaimsDetail');
       await domainLoaders.createClaimsAggFromDetail(db);
-      console.timeEnd('[Bootstrap:Lazy] ClaimsAgg from detail');
+      console.timeEnd('[Bootstrap:Lazy] ClaimsAgg from ClaimsDetail');
     });
 
     // CrossSell（含 CrossSellDailyAgg 物化，per D-09 解耦）
