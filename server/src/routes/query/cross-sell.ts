@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere,
-  logger, QUERY_CACHE,
+  logger, QUERY_CACHE, createDomainMiddleware,
 } from './shared.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../../sql/cross-sell.js';
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../../sql/cross-sell-summary.js';
@@ -62,6 +62,9 @@ export async function ensureCrossSellAggregateTablesReady(): Promise<void> {
 }
 
 const router = Router();
+
+// 集中式惰性域加载中间件（per MAT-01）：CrossSell + ClaimsAgg
+router.use(createDomainMiddleware('CrossSell', 'ClaimsAgg'));
 
 const crossSellExtraSchema = z.object({
   drillPath: z.string().max(2000).optional().default('[]'),

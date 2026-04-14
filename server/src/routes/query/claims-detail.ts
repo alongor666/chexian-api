@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import {
-  asyncHandler, AppError, duckdbService, isValidDateFormat,
+  asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware,
 } from './shared.js';
 import {
   generatePendingOverviewQuery,
@@ -25,20 +25,8 @@ import {
 
 const router = Router();
 
-/**
- * 中间件：确保 ClaimsDetail 视图已加载
- */
-router.use(
-  '/claims-detail',
-  asyncHandler(async (_req, _res, next) => {
-    try {
-      await duckdbService.query('SELECT 1 FROM ClaimsDetail LIMIT 1');
-      next();
-    } catch {
-      throw new AppError(503, '赔案明细数据未加载，请确认 claims_detail/latest.parquet 文件存在并重启服务');
-    }
-  })
-);
+// 集中式惰性域加载中间件（per MAT-01）：ClaimsDetail + ClaimsAgg
+router.use(createDomainMiddleware('ClaimsDetail', 'ClaimsAgg'));
 
 function parseFilters(query: Record<string, unknown>): ClaimsDetailFilters {
   const filters: ClaimsDetailFilters = {};

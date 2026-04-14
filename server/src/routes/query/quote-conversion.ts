@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, isValidDateFormat } from './shared.js';
+import { asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware } from './shared.js';
 import {
   generateQuoteKpiQuery,
   generateQuoteFunnelQuery,
@@ -29,19 +29,8 @@ const optionalTextSchema = z.preprocess(preprocessBlankToUndefined, z.string().o
 const optionalEnumSchema = <T extends [string, ...string[]]>(values: T) =>
   z.preprocess(preprocessBlankToUndefined, z.enum(values).optional());
 
-/**
- * 中间件：确保 QuoteConversion 视图已加载
- */
-router.use(
-  asyncHandler(async (_req, _res, next) => {
-    try {
-      await duckdbService.query('SELECT 1 FROM QuoteConversion LIMIT 1');
-      next();
-    } catch {
-      throw new AppError(503, '报价转化数据未加载，请确认 quotes_conversion/*.parquet 文件存在并重启服务');
-    }
-  })
-);
+// 集中式惰性域加载中间件（per MAT-01）：QuoteConversion
+router.use(createDomainMiddleware('QuoteConversion'));
 
 const quoteFilterSchema = z.object({
   dateStart: optionalTextSchema,
