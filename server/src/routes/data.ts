@@ -24,6 +24,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
+import { createPolicyFactView, dropAllDerivedTables } from '../services/duckdb-materialization.js';
 import {
   escapeSqlValue,
   sanitizeFilename,
@@ -409,7 +410,7 @@ router.post(
           }
 
           // 5. 创建 PolicyFact 视图
-          await duckdbService.createPolicyFactView('raw_parquet');
+          await createPolicyFactView(duckdbService, 'raw_parquet');
 
           // 6. 获取数据统计
           const countResult = await duckdbService.query<{ count: number }>(
@@ -583,7 +584,7 @@ router.delete(
 
     try {
       // 删除 DuckDB 中所有派生表和视图（集中管理，避免遗漏）
-      await duckdbService.dropAllDerivedTables();
+      await dropAllDerivedTables(duckdbService);
 
       // 删除文件（兼容 current/ 与根目录）
       const filePath = resolveManagedParquetPath(currentDataFile.filename);
@@ -677,7 +678,7 @@ router.post(
       await duckdbService.loadParquet(filePath, 'raw_parquet');
 
       // 7. 创建 PolicyFact 视图
-      await duckdbService.createPolicyFactView('raw_parquet');
+      await createPolicyFactView(duckdbService, 'raw_parquet');
 
       // 8. 获取数据统计
       const countResult = await duckdbService.query<{ count: number }>(
