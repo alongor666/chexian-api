@@ -119,18 +119,17 @@ def main():
         size_mb = p.stat().st_size / 1024 / 1024
         print(f"     - {p.name} ({size_mb:.1f} MB)")
 
-    from pipelines.etl_validation import validate_output_path, verify_non_empty, safe_pct, to_bool, PLACEHOLDER_STRS
+    from pipelines.etl_validation import validate_output_path, verify_non_empty, safe_pct, to_bool, PLACEHOLDER_STRS, load_excel_all_sheets
 
-    # 2. 读取并合并 Excel
+    # 2. 读取并合并 Excel（每个文件自动合并多 sheet）
     print('\n📊 读取 Excel...')
     frames = []
     for p in input_paths:
-        df = pd.read_excel(p, dtype=STR_FORCE_COLS)
-        print(f"   {p.name}: {len(df):,} 行 × {len(df.columns)} 列")
+        df = load_excel_all_sheets(p, dtype=STR_FORCE_COLS, required_columns=REQUIRED_COLUMNS)
         frames.append(df)
 
     df = pd.concat(frames, ignore_index=True)
-    print(f"   合并: {len(df):,} 行 × {len(df.columns)} 列")
+    print(f"   文件合并: {len(df):,} 行 × {len(df.columns)} 列")
 
     # 3. Schema 契约
     df.columns = df.columns.str.strip()

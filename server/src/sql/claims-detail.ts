@@ -381,7 +381,7 @@ export function generateClaimCycleQuery(filters: ClaimsDetailFilters): string {
 
 export function generateLossRatioDevelopmentQuery(
   filters: ClaimsDetailFilters,
-  cohortYears: number[] = [2023, 2024, 2025],
+  cohortYears: number[] = [2023, 2024, 2025, 2026],
   maxDevMonth: number = 24
 ): string {
   const policyWhere = buildPolicyWhere(filters);
@@ -460,8 +460,8 @@ export function generateLossRatioDevelopmentQuery(
           CASE
             WHEN c.settlement_time IS NOT NULL
                  AND c.settlement_time < cw.observation_end
-            THEN COALESCE(c.settled_amount, 0)
-            ELSE COALESCE(c.reserve_amount, 0)
+            THEN COALESCE(c.settled_amount, 0) + COALESCE(c.settled_fee, 0)
+            ELSE COALESCE(c.pending_amount, 0)
           END
         ) AS total_reserve
       FROM calendar_window cw

@@ -30,8 +30,8 @@ def main():
     print(f"{'='*80}")
     print(f"   输入: {input_file.name}")
 
-    df = pd.read_excel(input_file)
-    print(f"   加载: {len(df):,} 行 × {len(df.columns)} 列")
+    from pipelines.etl_validation import load_excel_all_sheets
+    df = load_excel_all_sheets(input_file, required_columns=['报价时间'])
 
     # 标准化报价时间
     if '报价时间' in df.columns:

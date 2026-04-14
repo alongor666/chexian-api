@@ -192,7 +192,7 @@ router.get(
     const cohortYearsStr = req.query.cohortYears;
     const cohortYears = typeof cohortYearsStr === 'string'
       ? cohortYearsStr.split(',').map(Number).filter(n => !isNaN(n) && n >= 2020 && n <= 2030)
-      : [2023, 2024, 2025];
+      : [2023, 2024, 2025, 2026];
     const sql = generateLossRatioDevelopmentQuery(filters, cohortYears);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });

@@ -95,24 +95,6 @@ export function getCrossSellPaths(): string[] {
   ];
 }
 
-// ── Claims 全量快照 Parquet 路径（每周更新，优先级高于 ClaimsAgg）──
-
-export function getClaimsBulkPaths(): string[] {
-  return [
-    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/claims_bulk/latest.parquet'),
-    path.resolve(getDataDir(), 'fact/claims_bulk/latest.parquet'),
-  ];
-}
-
-// ── Claims 聚合 Parquet 路径（回退）──
-
-export function getClaimsAggPaths(): string[] {
-  return [
-    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/claims/latest.parquet'),
-    path.resolve(getDataDir(), 'fact/claims/latest.parquet'),
-  ];
-}
-
 // ── 维修资源 Parquet 路径 ──
 
 export function getRepairDimPaths(): string[] {

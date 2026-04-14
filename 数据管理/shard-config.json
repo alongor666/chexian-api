@@ -35,7 +35,8 @@
   "source_patterns": {
     "01_premium": "01_签单清单_*.xlsx",
     "01_premium_legacy": "每日数据_*.xlsx",
-    "02_claims_detail": "车险报立结案清单_*.xlsx",
+    "02_claims_detail": "02_理赔明细_*.xlsx",
+    "02_claims_detail_legacy": "车险报立结案清单_*.xlsx",
     "03_cross_sell": "03_交叉销售_*.xlsx",
     "04_quotes": "04_报价清单*.xlsx",
     "05_renewal": "05_续保清单_*.xlsx",

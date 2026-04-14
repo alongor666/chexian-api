@@ -146,14 +146,25 @@ def load_target_excel(input_file, dtype_map):
     if base_columns is not None and headerless_sheets:
         for sheet_name in headerless_sheets:
             raw_sheet = pd.read_excel(input_file, sheet_name=sheet_name, header=None)
-            if raw_sheet.empty or raw_sheet.shape[1] != len(base_columns):
+            if raw_sheet.empty:
                 continue
+            n_cols = raw_sheet.shape[1]
+            n_base = len(base_columns)
+            if n_cols > n_base:
+                print(f"   ⚠ 跳过续表 {sheet_name}：列数 {n_cols} > 基准 {n_base}")
+                continue
+            if n_cols < n_base:
+                # 续表列数少于基准（源系统导出续表时末尾列缺失）→ NaN 填充
+                for i in range(n_cols, n_base):
+                    raw_sheet[i] = np.nan
+                print(f"   读取续表: {sheet_name}，行数: {len(raw_sheet):,}（补 {n_base - n_cols} 列 NaN）")
+            else:
+                print(f"   读取续表: {sheet_name}，行数: {len(raw_sheet):,}")
             raw_sheet.columns = base_columns
             key_column = first_existing_column(raw_sheet.columns, POLICY_KEY_ALIASES)
             if key_column is None:
                 continue
             valid_frames.append(raw_sheet)
-            print(f"   读取续表: {sheet_name}，行数: {len(raw_sheet):,}")
 
     if not valid_frames:
         raise ValueError("未找到包含保单号字段的工作表")

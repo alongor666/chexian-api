@@ -19,8 +19,6 @@
  *   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/
  *   数据管理/warehouse/fact/claims_detail/        →  data/fact/claims_detail/
  *   数据管理/warehouse/fact/cross_sell/           →  data/fact/cross_sell/
- *   数据管理/warehouse/fact/claims/               →  data/fact/claims/
- *   数据管理/warehouse/fact/claims_bulk/          →  data/fact/claims_bulk/
  *   数据管理/warehouse/fact/customer_flow/        →  data/fact/customer_flow/
  *   数据管理/patrol_reports/                      →  data/patrol_reports/
  *
@@ -56,8 +54,6 @@ const LOCAL_RENEWAL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal');
 const LOCAL_QUOTES_CONVERSION_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/quotes_conversion');
 const LOCAL_CLAIMS_DETAIL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims_detail');
 const LOCAL_CROSS_SELL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/cross_sell');
-const LOCAL_CLAIMS_AGG_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims');
-const LOCAL_CLAIMS_BULK_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims_bulk');
 const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_RENEWAL_UNIVERSE_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_universe');
@@ -450,8 +446,6 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'dim/brand',            local: LOCAL_BRAND_DIR,              remote: `${runConfig.remoteDir}/dim/brand`,             critical: false },
     { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${runConfig.remoteDir}/fact/claims_detail`,    critical: true },
     { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${runConfig.remoteDir}/fact/cross_sell`,       critical: false },
-    { label: 'fact/claims',          local: LOCAL_CLAIMS_AGG_DIR,         remote: `${runConfig.remoteDir}/fact/claims`,           critical: true },
-    { label: 'fact/claims_bulk',    local: LOCAL_CLAIMS_BULK_DIR,        remote: `${runConfig.remoteDir}/fact/claims_bulk`,      critical: true },
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${runConfig.remoteDir}/fact/customer_flow`,    critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${runConfig.remoteDir}/dim/repair`,            critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${runConfig.remoteDir}/patrol_reports`,         critical: false },
@@ -506,8 +500,6 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'dim/brand',            local: LOCAL_BRAND_DIR,              remote: `${remote}/dim/brand`,             critical: false },
     { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${remote}/fact/claims_detail`,    critical: true },
     { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${remote}/fact/cross_sell`,       critical: false },
-    { label: 'fact/claims',          local: LOCAL_CLAIMS_AGG_DIR,         remote: `${remote}/fact/claims`,           critical: true },
-    { label: 'fact/claims_bulk',    local: LOCAL_CLAIMS_BULK_DIR,        remote: `${remote}/fact/claims_bulk`,      critical: true },
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
     { label: 'fact/renewal_universe', local: LOCAL_RENEWAL_UNIVERSE_DIR, remote: `${remote}/fact/renewal_universe`, critical: false },
@@ -586,8 +578,6 @@ function writeSyncManifest() {
     { label: 'fact/quotes_conversion', path: LOCAL_QUOTES_CONVERSION_DIR },
     { label: 'fact/claims_detail', path: LOCAL_CLAIMS_DETAIL_DIR },
     { label: 'fact/cross_sell', path: LOCAL_CROSS_SELL_DIR },
-    { label: 'fact/claims', path: LOCAL_CLAIMS_AGG_DIR },
-    { label: 'fact/claims_bulk', path: LOCAL_CLAIMS_BULK_DIR },
     { label: 'fact/customer_flow', path: LOCAL_CUSTOMER_FLOW_DIR },
     { label: 'dim/repair', path: LOCAL_REPAIR_DIR },
     { label: 'patrol_reports', path: LOCAL_PATROL_REPORTS_DIR },

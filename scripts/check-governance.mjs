@@ -29,6 +29,9 @@
  * 11. TypeScript 检查范围护栏（API-only 清理批次）：
  *    - tsconfig.json 不得再排除活跃源码目录（src/charts/src/components/src/services/src/types/src/core）
  *    - 防止通过扩大 exclude 隐藏真实类型问题
+ * 24. ETL 多 sheet 加载规范：
+ *    - pipelines/convert_*.py 和 quote_etl.py 禁止裸 pd.read_excel()
+ *    - 必须使用 load_excel_all_sheets() 自动合并续表，防止 Excel 拆分后静默丢数据
  *
  * 退出码：
  * - 0: 所有检查通过
@@ -1363,8 +1366,6 @@ function checkDataDrift() {
     { label: 'fact/quotes_conversion', rel: '数据管理/warehouse/fact/quotes_conversion' },
     { label: 'fact/claims_detail', rel: '数据管理/warehouse/fact/claims_detail' },
     { label: 'fact/cross_sell', rel: '数据管理/warehouse/fact/cross_sell' },
-    { label: 'fact/claims', rel: '数据管理/warehouse/fact/claims' },
-    { label: 'fact/claims_bulk', rel: '数据管理/warehouse/fact/claims_bulk' },
     { label: 'fact/customer_flow', rel: '数据管理/warehouse/fact/customer_flow' },
     { label: 'dim/repair', rel: '数据管理/warehouse/dim/repair' },
   ];
@@ -1532,6 +1533,54 @@ function checkClaudeMdBudget() {
 }
 
 // ============================================================
+// #24 ETL 管道多 sheet 加载规范
+// ============================================================
+
+function checkEtlMultiSheetCompliance() {
+  info('检查 ETL 管道是否使用 load_excel_all_sheets...');
+
+  const pipelineDir = path.join('数据管理', 'pipelines');
+  if (!fs.existsSync(pipelineDir)) {
+    warning('数据管理/pipelines 目录不存在，跳过检查');
+    return true;
+  }
+
+  const pyFiles = fs.readdirSync(pipelineDir)
+    .filter(f => f.startsWith('convert_') || f === 'quote_etl.py')
+    .map(f => path.join(pipelineDir, f));
+
+  const errors = [];
+  const ALLOWED_BARE_READ = new Set([
+    // transform.py 使用自己的 load_target_excel，不在 convert_* 命名范围内
+    // compare_excel.py 是对比工具，不在扫描范围内
+  ]);
+
+  for (const filePath of pyFiles) {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    const fileName = path.basename(filePath);
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // 检测裸 pd.read_excel 调用（排除注释行和 load_excel_all_sheets 内部）
+      if (line.match(/pd\.read_excel\s*\(/) && !line.trim().startsWith('#')) {
+        errors.push(`${fileName}:${i + 1}: 使用了裸 pd.read_excel()，应改用 load_excel_all_sheets()`);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    error('ETL 多 sheet 加载规范检查失败：');
+    errors.forEach(e => console.log(`    - ${e}`));
+    console.log('    修复：将 pd.read_excel() 替换为 from pipelines.etl_validation import load_excel_all_sheets');
+    return false;
+  }
+
+  success(`ETL 多 sheet 加载规范通过（扫描 ${pyFiles.length} 个管道文件）`);
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -1562,6 +1611,7 @@ function main() {
     { name: '数据漂移检测', fn: checkDataDrift },
     { name: 'SQL模块数一致', fn: checkSqlModuleCountConsistency },
     { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
+    { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
   ];
 
   let passedCount = 0;

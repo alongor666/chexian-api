@@ -32,33 +32,34 @@ function exposureBaseSql(whereClause: string, cutoffDate: string): string {
   return `
 WITH policy_exposure AS (
   SELECT
-    policy_no,
-    org_level_3,
-    customer_category,
-    coverage_combination,
-    CAST(insurance_start_date AS DATE) AS insurance_start_date,
-    premium,
-    COALESCE(reported_claims, 0) AS reported_claims,
-    COALESCE(fee_amount, 0) AS fee_amount,
-    COALESCE(claim_cases, 0) AS claim_cases,
-    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    p.policy_no,
+    p.org_level_3,
+    p.customer_category,
+    p.coverage_combination,
+    CAST(p.insurance_start_date AS DATE) AS insurance_start_date,
+    p.premium,
+    COALESCE(c.reported_claims, 0) AS reported_claims,
+    COALESCE(p.fee_amount, 0) AS fee_amount,
+    COALESCE(c.claim_cases, 0) AS claim_cases,
+    DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
         0
       ),
-      DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+      DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
     ) AS earned_days,
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
         0
       ),
       365
     ) AS exposure_days
-  FROM PolicyFact
+  FROM PolicyFact p
+  LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
   WHERE ${whereClause}
-    AND insurance_start_date IS NOT NULL
+    AND p.insurance_start_date IS NOT NULL
 )
   `.trim();
 }

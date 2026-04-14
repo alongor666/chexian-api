@@ -168,22 +168,23 @@ export function buildPolicyExposureCTE(
   return `
 WITH policy_exposure AS (
   SELECT
-    policy_no,
-    ${groupByFields.map((f) => `${f}`).join(', ')},
-    premium,
-    insurance_start_date AS start_date,
+    p.policy_no,
+    ${groupByFields.map((f) => `p.${f}`).join(', ')},
+    p.premium,
+    p.insurance_start_date AS start_date,
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
         0
       ),
       365
     ) AS exposure_days,
-    COALESCE(claim_cases, 0) AS claim_cases,
-    COALESCE(reported_claims, 0) AS reported_claims${extraFieldsClause}
-  FROM PolicyFact
+    COALESCE(c.claim_cases, 0) AS claim_cases,
+    COALESCE(c.reported_claims, 0) AS reported_claims${extraFieldsClause}
+  FROM PolicyFact p
+  LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
   WHERE ${whereClause}
-    AND insurance_start_date IS NOT NULL
+    AND p.insurance_start_date IS NOT NULL
 )`;
 }
 

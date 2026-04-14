@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat } from './shared.js';
+import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, createDomainMiddleware } from './shared.js';
 import {
   generateClaimRatioQuery,
   generateExpenseRatioQuery,
@@ -17,6 +17,9 @@ import {
 } from '../../sql/cost.js';
 
 const router = Router();
+
+// 确保 ClaimsAgg 惰性域在首次访问 cost API 时已加载
+router.use(createDomainMiddleware('ClaimsAgg'));
 
 /**
  * 成本分析请求验证Schema（特有参数）

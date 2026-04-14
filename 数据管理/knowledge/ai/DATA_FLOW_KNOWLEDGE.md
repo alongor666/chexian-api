@@ -408,7 +408,7 @@ plan              计划 xlsx + mapping      generate_dim_tables.py    dim/plan/
 >
 > **CRITICAL #7**: `CrossSellDailyAgg` 中的 `org_level_3` 来自原始 PolicyFact（Parquet 原始值），不经 `SalesmanTeamMapping.organization` 覆盖。推介率按机构统计时，跨机构业务员的数据归入保单所在机构。
 >
-> **CRITICAL #8**: `ClaimsAgg` 是从 `ClaimsDetail` 按 `policy_no` 聚合的派生表（SUM settled_amount + pending_amount → reported_claims），不是独立 ETL 产出。聚合脚本: `generate_claims_aggregate.py`，加载回退: `duckdb.ts:createClaimsAggFromDetail()`。
+> **CRITICAL #8**: `ClaimsAgg` 是从 `ClaimsDetail` 按 `policy_no` 动态聚合的派生表（SUM settled_amount + pending_amount → reported_claims）。唯一生成路径: `duckdb-domain-loaders.ts:createClaimsAggFromDetail()`，服务端惰性加载时自动创建。旧的 `claims_bulk`、`claims` 预计算文件和 `generate_claims_aggregate.py` 已于 2026-04-14 删除。
 
 ---
 

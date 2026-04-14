@@ -203,8 +203,6 @@ function getParquetRowCount(python, parquetPath) {
 // ── 分域处理 ──
 
 const WAREHOUSE = join(__dirname, 'warehouse/fact');
-const CLAIMS_DIR = join(WAREHOUSE, 'claims');
-const CLAIMS_PATH = join(CLAIMS_DIR, 'latest.parquet');
 const QUOTES_DIR = join(WAREHOUSE, 'quotes');
 const QUOTES_PATH = join(QUOTES_DIR, 'latest.parquet');
 const QUOTES_CONVERSION_DIR = join(WAREHOUSE, 'quotes_conversion');
@@ -274,104 +272,20 @@ function findAllXlsx(dir) {
   return ls('每日数据_*.xlsx', dir);
 }
 
-function runClaims(python, scriptDir) {
-  log('yellow', '\n═══ ⚠️  Claims 域已废弃 — 赔付数据以 claims_detail（理赔明细）为准 ═══');
-  log('yellow', '    建议使用: node 数据管理/daily.mjs claims_detail\n');
-  log('cyan', '═══ Claims 域：赔付+费用（全量替换，所有 xlsx 合并）═══\n');
-  const allFiles = findAllXlsx(scriptDir);
-  if (allFiles.length === 0) { log('red', '未找到 每日数据_*.xlsx'); return; }
-
-  ensureDir(CLAIMS_DIR);
-  // 归档旧文件
-  if (existsSync(CLAIMS_PATH)) {
-    const archiveDir = join(homedir(), 'chexian-archive');
-    ensureDir(archiveDir);
-    const ts = formatDate();
-    renameSync(CLAIMS_PATH, join(archiveDir, `claims_latest_${ts}.parquet`));
-    log('yellow', `  归档旧 claims → claims_latest_${ts}.parquet`);
-  }
-
-  const transformScript = join(scriptDir, 'pipelines/transform.py');
-  const tmpDir = join(scriptDir, 'warehouse/fact/claims/_tmp');
-  ensureDir(tmpDir);
-  const tmpFiles = [];
-
-  // 逐个 xlsx 提取 claims 域
-  for (const file of allFiles) {
-    const range = extractDateRange(file.name);
-    const tmpName = range ? `claims_${range.start}_${range.end}.parquet` : `claims_${file.name}.parquet`;
-    const tmpPath = join(tmpDir, tmpName);
-    log('green', `▶ 提取 claims: ${file.name} (${(statSync(file.path).size / 1024 / 1024).toFixed(1)} MB)`);
-    try {
-      runPythonScript(python, transformScript, [
-        '-i', `"${file.path}"`, '-o', `"${tmpPath}"`, '--domain', 'claims',
-        '--after-date', '2020-12-31'
-      ]);
-    } catch (e) {
-      log('yellow', `⚠ 提取 claims 失败: ${file.name} — ${e.message?.slice(0, 100)}`);
-    }
-    if (existsSync(tmpPath)) tmpFiles.push(tmpPath);
-  }
-
-  // 用 Python+DuckDB 合并所有临时 claims parquet（按保单号去重聚合）
-  if (tmpFiles.length === 0) {
-    log('red', '❌ 未生成任何 claims parquet');
-    return;
-  }
-  if (tmpFiles.length === 1) {
-    // 单文件直接移动
-    renameSync(tmpFiles[0], CLAIMS_PATH);
-  } else {
-    // 多文件合并：写临时 Python 脚本避免 shell 转义问题
-    const mergeScriptPath = join(tmpDir, '_merge_claims.py');
-    const outputPath = CLAIMS_PATH.replace(/\\/g, '/');
-    const fileListStr = tmpFiles.map(f => `"${f.replace(/\\/g, '/')}"`).join(', ');
-    const mergeContent = [
-      'import duckdb',
-      `files = [${fileListStr}]`,
-      'duckdb.sql("""',
-      '  COPY (',
-      '    SELECT policy_no,',
-      '           FIRST(vehicle_frame_no) AS vehicle_frame_no,',
-      '           SUM(claim_cases) AS claim_cases,',
-      '           SUM(reported_claims) AS reported_claims,',
-      '           SUM(fee_amount) AS fee_amount',
-      `    FROM read_parquet(""" + str(files) + """)`,
-      '    GROUP BY policy_no',
-      '    HAVING claim_cases != 0 OR reported_claims != 0 OR fee_amount != 0',
-      `  ) TO '${outputPath}' (FORMAT PARQUET)`,
-      '""")',
-      `cnt = duckdb.sql("SELECT COUNT(*) FROM read_parquet('${outputPath}')").fetchone()[0]`,
-      'print(f"   ✅ 合并完成: {cnt:,} 条")',
-    ].join('\n');
-    writeFileSync(mergeScriptPath, mergeContent, 'utf-8');
-    log('green', '▶ 合并所有 claims 分片...');
-    runPythonScript(python, mergeScriptPath, []);
-    try { unlinkSync(mergeScriptPath); } catch(e) {}
-  }
-
-  // 清理临时目录
-  for (const f of tmpFiles) { try { unlinkSync(f); } catch(e) {} }
-  try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch(e) {}
-
-  // 更新 data-sources.json
-  const claimsRowCount = getParquetRowCount(python, CLAIMS_PATH);
-  updateDataSources('claims', { rowCount: claimsRowCount, fieldCount: 5 });
-
-  log('green', '✅ Claims 域完成');
-}
-
 function runClaimsDetail(python, scriptDir) {
   log('cyan', '\n═══ ClaimsDetail 域：赔案明细（全量替换）═══\n');
 
-  // 查找 车险报立结案清单_*.xlsx（取文件名最大的）
-  const sourceFiles = ls('车险报立结案清单_*.xlsx', scriptDir);
+  // 查找赔案明细 xlsx（支持多文件合并，新命名优先）
+  const newFiles = ls('02_理赔明细_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
+  const legacyFiles = ls('车险报立结案清单_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
+  const sourceFiles = [...newFiles, ...legacyFiles];
   if (sourceFiles.length === 0) {
-    log('yellow', '⚠ 未找到 车险报立结案清单_*.xlsx，跳过');
+    log('yellow', '⚠ 未找到 02_理赔明细_*.xlsx 或 车险报立结案清单_*.xlsx，跳过');
     return;
   }
-  const xlsx = sourceFiles[0]; // ls 返回按文件名倒序
-  log('green', `源文件: ${xlsx.name} (${(statSync(xlsx.path).size / 1024 / 1024).toFixed(1)} MB)`);
+  for (const f of sourceFiles) {
+    log('green', `源文件: ${f.name} (${(statSync(f.path).size / 1024 / 1024).toFixed(1)} MB)`);
+  }
 
   ensureDir(CLAIMS_DETAIL_DIR);
   // 归档旧文件
@@ -384,13 +298,14 @@ function runClaimsDetail(python, scriptDir) {
   }
 
   const convertScript = join(scriptDir, 'pipelines/convert_claims_detail.py');
+  const inputPaths = sourceFiles.map(f => `"${f.path}"`);
   runPythonScript(python, convertScript, [
-    '-i', `"${xlsx.path}"`, '-o', `"${CLAIMS_DETAIL_PATH}"`
+    '-i', ...inputPaths, '-o', `"${CLAIMS_DETAIL_PATH}"`
   ]);
 
   // 更新 data-sources.json
   const rowCount = getParquetRowCount(python, CLAIMS_DETAIL_PATH);
-  updateDataSources('claims_detail', { rowCount, fieldCount: 27 });
+  updateDataSources('claims_detail', { rowCount, fieldCount: 36 });
 
   log('green', '✅ ClaimsDetail 域完成');
 }
@@ -745,21 +660,6 @@ function runRenewalUniverse(python, scriptDir) {
   log('green', '✅ RenewalUniverse 域完成');
 }
 
-function runClaimsAggregate(python, scriptDir) {
-  log('cyan', '\n═══ Claims 聚合：ClaimsDetail → 保单级 ═══\n');
-  if (!existsSync(CLAIMS_DETAIL_PATH)) {
-    log('yellow', '⚠ ClaimsDetail 不存在，跳过聚合');
-    return;
-  }
-
-  safeConvertDomain(python, join(scriptDir, 'pipelines/generate_claims_aggregate.py'),
-    CLAIMS_DETAIL_PATH, CLAIMS_PATH, 'claims_latest');
-
-  const rowCount = getParquetRowCount(python, CLAIMS_PATH);
-  updateDataSources('claims', { rowCount, fieldCount: 3 });
-  log('green', '✅ Claims 聚合完成');
-}
-
 // ── 主流程 ──
 
 async function main() {
@@ -775,12 +675,11 @@ async function main() {
     const python = findPython();
     switch (subcommand) {
       case 'claims':
-        log('red', '❌ claims 域已废弃，请使用: node 数据管理/daily.mjs claims_detail');
+        log('red', '❌ claims 域已删除，赔付数据统一由 claims_detail 提供。请使用: node 数据管理/daily.mjs claims_detail');
         process.exit(1);
         break;
       case 'claims_detail':
         runClaimsDetail(python, scriptDir);
-        runClaimsAggregate(python, scriptDir);
         break;
       case 'quotes': runQuotesV2(python, scriptDir); break;
       case 'cross_sell': runCrossSell(python, scriptDir); break;
@@ -1007,7 +906,6 @@ async function main() {
   // 6. all 模式下追加全部域
   if (subcommand === 'all') {
     runClaimsDetail(python, scriptDir);
-    runClaimsAggregate(python, scriptDir);
     runCrossSell(python, scriptDir);
     runQuotesV2(python, scriptDir);
     runRenewal(python, scriptDir);
