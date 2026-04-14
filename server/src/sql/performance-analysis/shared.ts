@@ -257,12 +257,13 @@ export function buildPeriodBoundsCte(
   whereWithDate: string,
   segmentFilter: string,
   timePeriod: PerformanceTimePeriod,
-  growthMode: PerformanceGrowthMode
+  growthMode: PerformanceGrowthMode,
+  dateField: string = 'policy_date'
 ): string {
   const { currentStart, currentEnd, prevStart, prevEnd } = getPeriodExpressions(timePeriod, growthMode);
   return `
     reference_date AS (
-      SELECT COALESCE(MAX(CAST(policy_date AS DATE)), CURRENT_DATE) AS ref_date
+      SELECT COALESCE(MAX(CAST(${dateField} AS DATE)), CURRENT_DATE) AS ref_date
       FROM PolicyFact
       WHERE ${whereWithDate}
         AND ${segmentFilter}

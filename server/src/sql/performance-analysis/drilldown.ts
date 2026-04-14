@@ -32,13 +32,14 @@ export function generatePerformanceDrilldownQuery(
   growthMode: PerformanceGrowthMode,
   drillPath: PerformanceDrilldownStep[] = [],
   groupBy: PerformanceDimension | null = null,
-  periodBoundsOverride?: PerformancePeriodBounds
+  periodBoundsOverride?: PerformancePeriodBounds,
+  dateField: string = 'policy_date'
 ): string {
   const segmentFilterNoAlias = getPerformanceSegmentFilter(segmentTag);
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
   const periodBounds = periodBoundsOverride
     ? buildStaticPeriodBoundsCte(periodBoundsOverride)
-    : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode);
+    : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode, dateField);
   const periodProgress = buildPeriodProgressCte();
   const groupCfg = getGroupByConfig(groupBy, 'p.');
   const hasAnnualPlanSql = supportsAnnualPlanByDimension(groupBy) ? 'TRUE' : 'FALSE';
@@ -53,7 +54,7 @@ export function generatePerformanceDrilldownQuery(
     all_rows AS (
       SELECT
         ${groupCfg.selectExpr},
-        CAST(p.policy_date AS DATE) AS pd,
+        CAST(p.${dateField} AS DATE) AS pd,
         p.salesman_name,
         COALESCE(
           NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), ''),

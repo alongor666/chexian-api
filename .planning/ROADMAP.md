@@ -54,9 +54,9 @@ Plans:
   5. FilterContext 拆分后，筛选条件变更不触发用户信息/权限相关组件重渲染（React DevTools 可验证）
 **Plans:** 3 plans
 Plans:
-- [ ] 03-01-PLAN.md — SQL-04 SQL 生成器拆分（trend.ts → trend/ 子目录 + performance-analysis-shared.ts → performance-analysis/shared.ts）
-- [ ] 03-02-PLAN.md — FE-01/FE-02/FE-03 前端构建优化（visualizer 基线 + compression2 替换 + ECharts 懒加载验证）
-- [ ] 03-03-PLAN.md — FE-04 FilterContext 拆分（StableContext + FilterContext 双 Context 模式）
+- [x] 03-01-PLAN.md — SQL-04 SQL 生成器拆分（trend.ts → trend/ 子目录 + performance-analysis-shared.ts → performance-analysis/shared.ts）
+- [x] 03-02-PLAN.md — FE-01/FE-02/FE-03 前端构建优化（visualizer 基线 + compression2 替换 + ECharts 懒加载验证）
+- [x] 03-03-PLAN.md — FE-04 FilterContext 拆分（StableContext + FilterContext 双 Context 模式）
 **UI hint**: yes
 
 ### Phase 4: 物化优化
@@ -68,7 +68,10 @@ Plans:
   2. 次要表首次请求触发物化时，API 正常返回（含合理加载提示），不出现连接池耗尽错误
   3. duckdb.ts 拆分为至少 ConnectionPool、QueryCache、DomainLoader、TypeConverter 四个独立模块，原文件不超过 100 行（仅做导出聚合）
   4. 内存占用监控：pm2 monit 显示稳态内存从 ~70% 降至 ~50%
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [x] 04-01-PLAN.md — MAT-02 duckdb.ts 拆分瘦身（3 新文件 + infra 扩展 + 代理方法全删 + 测试修复）
+- [x] 04-02-PLAN.md — MAT-01 惰性加载（LazyDomainRegistry + bootstrapper 重构 + CrossSell 解耦 + 路由注入）
 
 ### Phase 5: 持久化与快照精细化
 **Goal**: PM2 重启后 <10s 完成 PolicyFact 可用，ETL 增量更新后只失效动态分区快照而非全量重算
@@ -92,5 +95,5 @@ Phase 3 可与 Phase 2 并行（独立代码路径，无共享修改文件）
 | 1. 安全基线 | 0/2 | Planning complete | - |
 | 2. SQL 查询优化 | 0/3 | Planning complete | - |
 | 3. 代码结构整理 | 0/3 | Planning complete | - |
-| 4. 物化优化 | 0/TBD | Not started | - |
+| 4. 物化优化 | 0/2 | Planning complete | - |
 | 5. 持久化与快照精细化 | 0/TBD | Not started | - |

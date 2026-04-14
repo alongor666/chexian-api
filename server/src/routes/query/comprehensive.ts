@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere, extractOrgNames,
-  isValidDateFormat, logger,
+  isValidDateFormat, logger, createDomainMiddleware,
   QUERY_CACHE,
   buildRouteCacheKey, getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
@@ -22,6 +22,9 @@ import {
 } from '../../sql/comprehensive-analysis.js';
 
 const router = Router();
+
+// 确保 ClaimsAgg 惰性域在首次访问综合分析 API 时已加载
+router.use(createDomainMiddleware('ClaimsAgg'));
 
 const comprehensiveExtraSchema = z.object({
   cutoffDate: z.string().optional(),

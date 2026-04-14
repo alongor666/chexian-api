@@ -466,7 +466,8 @@ export async function createPolicyFactView(db: DuckDBQueryable, sourceTable: str
   console.log('[DuckDB] PolicyFactRenewal view created');
 
   await materializePolicyFactWorkingSet(db);
-  await createCrossSellRealtimeView(db);
+  // createCrossSellRealtimeView 已从此处移除（per D-09 解耦）
+  // CrossSell lazy-loader（data-bootstrapper.ts registerLazyDomains）加载后调用此函数
   console.log('[DuckDB] Realtime mode enabled: using PolicyFact realtime aggregation (no pre-aggregated tables)');
 }
 

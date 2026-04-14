@@ -11,9 +11,9 @@
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-04-12",
+      "last_updated": "2026-04-14",
       "data_range": "2021-01-01 ~ 2026-04-07",
-      "row_count": 2518836,
+      "row_count": 2519148,
       "field_count": 53,
       "key_fields": [
         "保单号",
@@ -38,40 +38,17 @@
       "notes": "21-23使用01_签单清单_21-23年.xlsx（39列新格式）；24-26使用每日数据_*.xlsx。新格式含保险止期/被保险人性别等9个新字段。续保匹配仅应用于weekly分片"
     },
     {
-      "id": "claims",
-      "name": "赔付",
-      "type": "fact",
-      "source_pattern": "已废弃：原从每日数据_*.xlsx提取",
-      "etl_entry": "node 数据管理/daily.mjs claims（已废弃，请用 claims_detail）",
-      "etl_script": "pipelines/transform.py --domain claims",
-      "output": "warehouse/fact/claims/latest.parquet",
-      "update_cadence": "with_source_xlsx",
-      "last_updated": "2026-04-03",
-      "data_range": "2024-01-01 ~ 2026-03-31",
-      "row_count": 1740586,
-      "field_count": 5,
-      "key_fields": [
-        "保单号",
-        "赔案件数",
-        "已报告赔款",
-        "费用金额",
-        "车架号"
-      ],
-      "deprecated": true,
-      "notes": "⚠️ DEPRECATED — 赔付数据改以 claims_detail（车险报立结案清单）为准。此域保留以防旧查询引用"
-    },
-    {
       "id": "claims_detail",
       "name": "赔案明细",
       "type": "fact",
-      "source_pattern": "车险报立结案清单_*.xlsx",
+      "source_pattern": "02_理赔明细_*.xlsx（支持多文件合并）",
       "etl_entry": "node 数据管理/daily.mjs claims_detail",
       "etl_script": "pipelines/convert_claims_detail.py",
       "output": "warehouse/fact/claims_detail/latest.parquet",
-      "update_cadence": "with_source_xlsx",
-      "last_updated": "2026-04-04",
+      "update_cadence": "daily_full_replace",
+      "last_updated": "2026-04-14",
       "data_range": "2021-01-01 ~ 2026-04-03",
-      "row_count": 254492,
+      "row_count": 279823,
       "field_count": 36,
       "key_fields": [
         "claim_no",
@@ -94,7 +71,7 @@
         "/api/query/claims-detail/loss-ratio-development"
       ],
       "frontend_page": "claims-detail",
-      "notes": "赔案级明细（非保单级聚合），JOIN PolicyFact via policy_no。与 claims/latest.parquet 互补。claim_status/is_bodily_injury 由 ETL 派生"
+      "notes": "唯一赔付数据源。赔案级明细，JOIN PolicyFact via policy_no。ClaimsAgg TABLE 由服务端从本域动态聚合生成，不依赖预计算文件。claim_status/is_bodily_injury 由 ETL 派生"
     },
     {
       "id": "quotes_conversion",
@@ -105,9 +82,9 @@
       "etl_script": "pipelines/quote_etl.py",
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
-      "last_updated": "2026-04-10",
+      "last_updated": "2026-04-14",
       "data_range": "2025-12-02 ~ 2026-04-09",
-      "row_count": 1035833,
+      "row_count": 1054064,
       "field_count": 33,
       "key_fields": [
         "quote_time",
@@ -142,10 +119,10 @@
       "etl_script": "pipelines/diagnose_vehicle.py等",
       "output": "warehouse/fact/renewal/renewal_funnel_*.parquet",
       "update_cadence": "with_quote_date",
-      "last_updated": "2026-03-30",
+      "last_updated": "2026-04-14",
       "data_range": "2025-01-01 ~ 2026-03-30",
-      "row_count": 35011,
-      "field_count": 20,
+      "row_count": 119636,
+      "field_count": 10,
       "key_fields": [
         "org_level_3",
         "policy_no",
@@ -282,8 +259,8 @@
       ],
       "frontend_page": "specialty (tab=cross-sell)",
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重",
-      "last_updated": "2026-04-12",
-      "row_count": 402888,
+      "last_updated": "2026-04-14",
+      "row_count": 403709,
       "field_count": 9
     },
     {
@@ -345,8 +322,8 @@
       ],
       "frontend_page": "repair",
       "notes": "维修厂合作数据，12列，含核损金额/换件折扣率/合作状态",
-      "last_updated": "2026-04-12",
-      "row_count": 6326,
+      "last_updated": "2026-04-14",
+      "row_count": 191556,
       "field_count": 12
     },
     {
@@ -373,8 +350,8 @@
       ],
       "frontend_page": "customer-flow",
       "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知",
-      "last_updated": "2026-04-13",
-      "row_count": 954351,
+      "last_updated": "2026-04-14",
+      "row_count": 981475,
       "field_count": 7
     }
   ]

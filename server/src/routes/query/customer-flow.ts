@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService } from './shared.js';
+import { asyncHandler, AppError, duckdbService, createDomainMiddleware } from './shared.js';
 import {
   generateInflowQuery,
   generateOutflowQuery,
@@ -19,16 +19,8 @@ import {
 
 const router = Router();
 
-router.use(
-  asyncHandler(async (_req, _res, next) => {
-    try {
-      await duckdbService.query('SELECT 1 FROM CustomerFlow LIMIT 1');
-      next();
-    } catch {
-      throw new AppError(503, '客户来源去向数据未加载');
-    }
-  })
-);
+// 集中式惰性域加载中间件（per MAT-01）：CustomerFlow
+router.use(createDomainMiddleware('CustomerFlow'));
 
 const filterSchema = z.object({
   year: z.coerce.number().int().min(2020).max(2030).optional(),

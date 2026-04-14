@@ -6,6 +6,7 @@
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { duckdbService, DERIVED_RELATIONS } from '../duckdb.js';
+import { dropAllDerivedTables } from '../duckdb-materialization.js';
 
 describe('DuckDB 派生表管理', () => {
   beforeEach(async () => {
@@ -25,13 +26,13 @@ describe('DuckDB 派生表管理', () => {
 
   // DD-02: dropAllDerivedTables 在干净状态不抛异常
   it('DD-02: 无派生表时 dropAllDerivedTables 安全返回', async () => {
-    await expect(duckdbService.dropAllDerivedTables()).resolves.not.toThrow();
+    await expect(dropAllDerivedTables(duckdbService)).resolves.not.toThrow();
   });
 
   // DD-03: dropAllDerivedTables 清理 VIEW
   it('DD-03: 创建 VIEW 后 dropAllDerivedTables 成功清理', async () => {
     await duckdbService.query('CREATE VIEW PolicyFact AS SELECT 1 AS x');
-    await duckdbService.dropAllDerivedTables();
+    await dropAllDerivedTables(duckdbService);
 
     const remaining: { table_name: string }[] = await duckdbService.query(`
       SELECT table_name FROM information_schema.tables
@@ -43,7 +44,7 @@ describe('DuckDB 派生表管理', () => {
   // DD-04: dropAllDerivedTables 清理 TABLE
   it('DD-04: 创建 TABLE 后 dropAllDerivedTables 成功清理', async () => {
     await duckdbService.query('CREATE TABLE PolicyFactRealtime AS SELECT 1 AS x');
-    await duckdbService.dropAllDerivedTables();
+    await dropAllDerivedTables(duckdbService);
 
     const remaining: { table_name: string }[] = await duckdbService.query(`
       SELECT table_name FROM information_schema.tables
@@ -56,7 +57,7 @@ describe('DuckDB 派生表管理', () => {
   it('DD-05: raw_parquet 系列表被一并清理', async () => {
     await duckdbService.query('CREATE TABLE raw_parquet AS SELECT 1 AS x');
     await duckdbService.query('CREATE TABLE raw_parquet_0 AS SELECT 2 AS x');
-    await duckdbService.dropAllDerivedTables();
+    await dropAllDerivedTables(duckdbService);
 
     const remaining: { table_name: string }[] = await duckdbService.query(`
       SELECT table_name FROM information_schema.tables
@@ -70,7 +71,7 @@ describe('DuckDB 派生表管理', () => {
     await duckdbService.query('CREATE VIEW PolicyFact AS SELECT 1 AS x');
     await duckdbService.query('CREATE TABLE PolicyFactRealtime AS SELECT 1 AS x');
     await duckdbService.query('CREATE VIEW CrossSellDailyAgg AS SELECT 1 AS x');
-    await duckdbService.dropAllDerivedTables();
+    await dropAllDerivedTables(duckdbService);
 
     const remaining: { table_name: string }[] = await duckdbService.query(`
       SELECT table_name FROM information_schema.tables

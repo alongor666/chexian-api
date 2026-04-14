@@ -451,9 +451,9 @@ describe('generateClaimCycleQuery', () => {
 // ═══════════════════════════════════════════════════
 
 describe('generateLossRatioDevelopmentQuery', () => {
-  it('默认 cohortYears=[2023,2024,2025] 注入 IN 子句', () => {
+  it('默认 cohortYears=[2023,2024,2025,2026] 注入 IN 子句', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
-    expect(sql).toContain('IN (2023,2024,2025)');
+    expect(sql).toContain('IN (2023,2024,2025,2026)');
   });
 
   it('自定义 cohortYears 正确注入', () => {
@@ -510,12 +510,11 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).toContain('c.report_time < cw.observation_end');
   });
 
-  it('已决/未决按 settlement_time 分类取值', () => {
+  it('赔付金额统一口径：settled_amount + settled_fee + pending_amount', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
-    expect(sql).toContain('c.settlement_time IS NOT NULL');
-    expect(sql).toContain('c.settlement_time < cw.observation_end');
     expect(sql).toContain('c.settled_amount');
-    expect(sql).toContain('c.reserve_amount');
+    expect(sql).toContain('c.settled_fee');
+    expect(sql).toContain('c.pending_amount');
   });
 
   it('全局截止时间用 COALESCE(MAX(report_time), CURRENT_DATE) 防空值', () => {

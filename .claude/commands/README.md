@@ -41,6 +41,7 @@
 | 多层验证 | `/verify` | [verify.md](./verify.md) |
 | 多 Agent 编排 | `/orchestrate` | [orchestrate.md](./orchestrate.md) |
 | 配置演进 | `/evolve` | [evolve.md](./evolve.md) |
+| 过户车出险地点 | `/diagnose-transfer-location` | [diagnose-transfer-location.md](./diagnose-transfer-location.md) |
 
 ---
 
@@ -50,6 +51,7 @@
 |------|--------|--------|
 | **Git 工作流** | `commit-push-pr`, `sync-and-rebase` | — |
 | **数据分析** | `data-analysis`, `data-tools`, `cost-analysis`, `pricing-redline` | `data-profile`, `data-kpi`, `data-trends`, `data-export` |
+| **经营诊断** | `diagnose-agent`, `diagnose-motorcycle`, `diagnose-transfer-location` | — |
 | **报告生成** | `weekly-report` | `report-weekly`, `report-monthly`, `report-custom` |
 | **安全审查** | `security-review` | `security-sql`, `security-xss`, `security-cors`, `security-all` |
 | **开发工具** | `performance-audit`, `ui-review`, `test-coverage` | — |

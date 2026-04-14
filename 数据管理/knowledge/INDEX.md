@@ -416,7 +416,7 @@ cd 数据管理 && python3 warehouse/dim/generate_dim_tables.py
 | `archive/legacy-scripts/sync-data.sh` | bash 版同步 | `scripts/sync-vps.mjs` |
 | 旧 CLI 工具目录（data_tools/ 等） | 已删除，INDEX.md v1.0 遗留引用 | `pipelines/` 下实际脚本 |
 | `cli.py` TOOL_REGISTRY | 注册表指向不存在的模块 | 直接调用 pipelines/ 下脚本 |
-| `claims` 域 (data-sources.json) | 保单级赔付聚合已被赔案明细替代 | `claims_detail` 域 + `ClaimsAgg` 派生表 |
+| `claims` 域 + `claims_bulk` 域 | 已物理删除（2026-04-14）。赔付数据统一由 `claims_detail` 提供 | `claims_detail` 域 + `ClaimsAgg` 动态聚合 |
 | `quotes_status` 域 | 2列简化版已被完整报价清单替代 | `quotes_v2` 域（25列） |
 
 ---
@@ -444,7 +444,7 @@ QuoteConversion (VIEW ← quotes_conversion/*.parquet，透传)
 
 ── 8 域分域架构新增（2026-04） ──
 ClaimsDetail (VIEW ← claims_detail/latest.parquet，赔案级明细)
-ClaimsAgg (TABLE ← claims_agg/latest.parquet 或从 ClaimsDetail 回退生成)
+ClaimsAgg (TABLE ← 从 ClaimsDetail 动态聚合，唯一来源)
 CrossSellFact (TABLE ← cross_sell/latest.parquet，独立交叉销售清单)
 RepairDim (TABLE ← dim/repair/latest.parquet，维修资源维度)
 BrandDim (TABLE ← dim/brand/latest.parquet，品牌车型维度)

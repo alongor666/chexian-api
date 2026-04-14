@@ -56,9 +56,9 @@ def main():
     input_file = validate_input_path(str(input_file))
     output_file = validate_output_path(str(output_file))
 
-    # ── 加载 ──
-    df = pd.read_excel(input_file, dtype=STR_FORCE_COLS)
-    print(f"   加载: {len(df):,} 行 × {len(df.columns)} 列")
+    # ── 加载（自动合并多 sheet）──
+    from pipelines.etl_validation import load_excel_all_sheets
+    df = load_excel_all_sheets(input_file, dtype=STR_FORCE_COLS, required_columns=REQUIRED_COLUMNS)
 
     # ── Schema 契约 ──
     df.columns = df.columns.str.strip()

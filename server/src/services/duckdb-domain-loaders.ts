@@ -376,38 +376,7 @@ export async function loadClaimsDetail(db: DuckDBQueryable, parquetPath: string)
 }
 
 /**
- * 从全量赔付快照（claims_bulk）加载 → ClaimsAgg TABLE（字段重命名适配）
- * claims_bulk 是每周快照，字段为 policy_no/total_case_count/total_claims
- * 铁律：claims_bulk 只能用于聚合指标，绝对不能用于赔款明细板块
- */
-export async function loadClaimsBulk(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
-  await db.query(`
-    CREATE OR REPLACE TABLE ClaimsAgg AS
-    SELECT policy_no,
-           total_case_count AS claim_cases,
-           total_claims AS reported_claims
-    FROM read_parquet('${safePath}')
-  `);
-  const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsAgg');
-  console.log(`[DuckDB] ClaimsAgg loaded from claims_bulk: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
-}
-
-/**
- * 从旧版 ClaimsAgg Parquet 加载（回退）
- */
-export async function loadClaimsAgg(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
-  await db.query(`
-    CREATE OR REPLACE TABLE ClaimsAgg AS
-    SELECT * FROM read_parquet('${safePath}')
-  `);
-  const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsAgg');
-  console.log(`[DuckDB] ClaimsAgg loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
-}
-
-/**
- * 回退：当 ClaimsAgg Parquet 不存在时，从 ClaimsDetail VIEW 聚合创建
+ * 从 ClaimsDetail VIEW 聚合创建 ClaimsAgg TABLE（唯一来源）
  */
 export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<void> {
   await db.query(`

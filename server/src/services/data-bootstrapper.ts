@@ -4,7 +4,11 @@
  * 封装服务器启动时的 Parquet 发现→去重→验证→加载→维度加载 全流程。
  * 从 app.ts startServer() 提取，使入口文件只关注 Express 中间件与 HTTP 生命周期。
  *
+ * Stage 11 变更（MAT-01）：辅助域改为惰性注册模式（LazyDomainRegistry），
+ * 不在启动时加载，而是在路由首次被访问时按需加载。
+ *
  * @see P1#7 架构优化计划
+ * @see 04-02-PLAN.md — MAT-01 惰性域架构
  */
 
 import fs from 'fs';
@@ -19,8 +23,6 @@ import {
   getPlateRegionDimPaths,
   getClaimsDetailPaths,
   getCrossSellPaths,
-  getClaimsBulkPaths,
-  getClaimsAggPaths,
   getRepairDimPaths,
   getBrandDimPaths,
   getCustomerFlowPaths,
@@ -28,6 +30,9 @@ import {
 } from '../config/paths.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 import { isValidParquetFile } from '../utils/security.js';
+import * as materialization from './duckdb-materialization.js';
+import * as domainLoaders from './duckdb-domain-loaders.js';
+import { LazyDomainRegistry } from './lazy-domain-registry.js';
 
 // ============================================
 // Types
@@ -49,29 +54,17 @@ export interface BootstrapResult {
 }
 
 /**
- * DataBootstrapper 依赖的 DuckDB 服务接口。
- * 当前由 DuckDBService 单例实现；未来 P2#13 DI 改造时可替换为 mock。
+ * DataBootstrapper 依赖的 DuckDB 服务接口（精简版）。
+ * 代理方法已删除，bootstrapper 内部直接 import duckdb-materialization / duckdb-domain-loaders。
  */
 export interface BootstrapDuckDB {
   loadParquet(filePath: string, tableName: string): Promise<void>;
   loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number }>;
-  createPolicyFactView(sourceTable?: string): Promise<void>;
   query<T = any>(sql: string, cacheTtlMs?: number): Promise<T[]>;
-  // 维度加载
-  loadDimParquet(salesmanPath: string, planPath: string): Promise<void>;
-  loadTeamMapping(jsonFilePath: string): Promise<void>;
-  // 辅助域加载
-  loadPlateRegionDim(parquetPath: string): Promise<void>;
-  loadQuoteConversion(parquetPath: string): Promise<void>;
-  loadClaimsDetail(parquetPath: string): Promise<void>;
-  loadClaimsBulk(parquetPath: string): Promise<void>;
-  loadClaimsAgg(parquetPath: string): Promise<void>;
-  createClaimsAggFromDetail(): Promise<void>;
-  loadCrossSell(parquetPath: string): Promise<void>;
-  loadRepairDim(parquetPath: string): Promise<void>;
-  loadBrandDim(parquetPath: string): Promise<void>;
-  loadCustomerFlow(parquetPath: string): Promise<void>;
-  loadRenewalUniverse(parquetPath: string): Promise<void>;
+  getTableSchema(tableName: string): Promise<any[]>;
+  hasRelation(relationName: string): Promise<boolean>;
+  dropRelationIfExists(relationName: string): Promise<void>;
+  invalidateCache(options?: { silent?: boolean }): void;
 }
 
 // ============================================
@@ -79,6 +72,9 @@ export interface BootstrapDuckDB {
 // ============================================
 
 export class DataBootstrapper {
+  /** 惰性域注册表 — 辅助域按需加载，启动时不占内存 */
+  private readonly lazyRegistry = new LazyDomainRegistry();
+
   constructor(private readonly db: BootstrapDuckDB) {}
 
   /**
@@ -102,12 +98,14 @@ export class DataBootstrapper {
       return null;
     }
 
-    // Stage 6-9: 加载核心数据 → CrossSell → PolicyFact 视图 → 验证行数
+    // Stage 6-9: 加载核心数据 → PolicyFact 视图 → 验证行数（Stage 7 CrossSell 预加载已移除）
     const rowCount = await this.loadCoreData(files);
 
-    // Stage 10-11: 维度表 + 辅助域
+    // Stage 10: 维度表（仍为 eager 模式：SalesmanDim + PlanFact + PlateRegionDim）
     await this.loadDimTables();
-    await this.loadAuxiliaryDomains();
+
+    // Stage 11: 注册惰性域（仅注册 loader 闭包，不加载数据）
+    this.registerLazyDomains();
 
     return {
       rowCount,
@@ -280,7 +278,7 @@ export class DataBootstrapper {
   }
 
   // ============================================
-  // Stage 6-9: 核心数据加载
+  // Stage 6-9: 核心数据加载（Stage 7 CrossSell 已移除）
   // ============================================
 
   private async loadCoreData(files: ParquetFileInfo[]): Promise<number> {
@@ -293,19 +291,9 @@ export class DataBootstrapper {
       console.log('[Bootstrap] Data loaded:', path.basename(files[0].path));
     }
 
-    // Stage 7: 预加载 CrossSellFact（供 PolicyFact 视图 8 域模式使用）
-    const crossSellPath = getCrossSellPaths().find(p => fs.existsSync(p));
-    if (crossSellPath) {
-      try {
-        await this.db.loadCrossSell(crossSellPath);
-      } catch (err) {
-        console.warn('[Bootstrap] CrossSellFact pre-load failed (non-blocking):', err);
-      }
-    }
-
-    // Stage 8: 创建 PolicyFact 视图
+    // Stage 8: 创建 PolicyFact 视图（不再依赖 CrossSellFact，per D-09 解耦）
     console.log('[Bootstrap] Creating PolicyFact view...');
-    await this.db.createPolicyFactView('raw_parquet');
+    await materialization.createPolicyFactView(this.db, 'raw_parquet');
     console.log('[Bootstrap] PolicyFact view created');
 
     // Stage 9: 验证行数
@@ -316,7 +304,7 @@ export class DataBootstrapper {
   }
 
   // ============================================
-  // Stage 10: 维度表加载（Parquet 优先，JSON 回退）
+  // Stage 10: 维度表加载（Parquet 优先，JSON 回退）— 保持 eager
   // ============================================
 
   private async loadDimTables(): Promise<void> {
@@ -327,7 +315,7 @@ export class DataBootstrapper {
     const planDimPath = getPlanDimPaths().find(p => fs.existsSync(p));
     if (salesmanDimPath && planDimPath) {
       try {
-        await this.db.loadDimParquet(salesmanDimPath, planDimPath);
+        await domainLoaders.loadDimParquet(this.db, salesmanDimPath, planDimPath);
         console.log('[Bootstrap] Dim tables loaded (Parquet):', salesmanDimPath, planDimPath);
         dimLoaded = true;
       } catch (err) {
@@ -341,7 +329,7 @@ export class DataBootstrapper {
       for (const mappingPath of teamMappingCandidates) {
         if (!fs.existsSync(mappingPath)) continue;
         try {
-          await this.db.loadTeamMapping(mappingPath);
+          await domainLoaders.loadTeamMapping(this.db, mappingPath);
           console.log('[Bootstrap] Team mapping loaded (JSON fallback):', mappingPath);
           dimLoaded = true;
           break;
@@ -351,70 +339,114 @@ export class DataBootstrapper {
       }
     }
 
+    // PlateRegionDim：加入 eager 加载（7.8KB，微小，保持启动时加载）
+    const plateRegionPath = getPlateRegionDimPaths().find(p => fs.existsSync(p));
+    if (plateRegionPath) {
+      try {
+        await domainLoaders.loadPlateRegionDim(this.db, plateRegionPath);
+      } catch (err) {
+        console.warn('[Bootstrap] PlateRegionDim load failed (non-blocking):', err);
+      }
+    }
+
     if (!dimLoaded) {
       console.warn('[Bootstrap] Dim data unavailable. Run "python3 数据管理/warehouse/dim/generate_dim_tables.py" to generate.');
     }
   }
 
   // ============================================
-  // Stage 11: 辅助域加载（全部非阻塞）
+  // Stage 11: 惰性域注册（仅注册 loader 闭包，不触发加载）
   // ============================================
 
-  private async loadAuxiliaryDomains(): Promise<void> {
-    const loaders: Array<{ name: string; pathFn: () => string[]; loadFn: (p: string) => Promise<void> }> = [
-      { name: 'PlateRegionDim', pathFn: getPlateRegionDimPaths, loadFn: p => this.db.loadPlateRegionDim(p) },
-      { name: 'QuoteConversion', pathFn: getQuoteConversionPaths, loadFn: p => this.db.loadQuoteConversion(p) },
-      { name: 'ClaimsDetail', pathFn: getClaimsDetailPaths, loadFn: p => this.db.loadClaimsDetail(p) },
-      { name: 'RepairDim', pathFn: getRepairDimPaths, loadFn: p => this.db.loadRepairDim(p) },
-      { name: 'BrandDim', pathFn: getBrandDimPaths, loadFn: p => this.db.loadBrandDim(p) },
-      { name: 'CustomerFlow', pathFn: getCustomerFlowPaths, loadFn: p => this.db.loadCustomerFlow(p) },
-      { name: 'RenewalUniverse', pathFn: getRenewalUniversePaths, loadFn: p => this.db.loadRenewalUniverse(p) },
-    ];
+  private registerLazyDomains(): void {
+    const db = this.db;
 
-    // 记录 ClaimsDetail 是否加载成功，供 ClaimsAgg 回退判断
-    let claimsDetailLoaded = false;
+    // ClaimsDetail（254k 行，必须惰性）
+    this.lazyRegistry.register('ClaimsDetail', async () => {
+      const p = getClaimsDetailPaths().find(p => fs.existsSync(p));
+      if (!p) { console.warn('[Bootstrap:Lazy] ClaimsDetail: no file found'); return; }
+      console.time('[Bootstrap:Lazy] ClaimsDetail');
+      await domainLoaders.loadClaimsDetail(db, p);
+      console.timeEnd('[Bootstrap:Lazy] ClaimsDetail');
+    });
 
-    for (const { name, pathFn, loadFn } of loaders) {
-      const filePath = pathFn().find(p => fs.existsSync(p));
-      if (!filePath) continue;
-      try {
-        await loadFn(filePath);
-        if (name === 'ClaimsDetail') claimsDetailLoaded = true;
-      } catch (err) {
-        console.warn(`[Bootstrap] ${name} load failed (non-blocking):`, err);
-      }
-    }
+    // ClaimsAgg：唯一来源 = ClaimsDetail 动态聚合
+    this.lazyRegistry.register('ClaimsAgg', async () => {
+      await this.lazyRegistry.ensureLoaded('ClaimsDetail');
+      console.time('[Bootstrap:Lazy] ClaimsAgg from ClaimsDetail');
+      await domainLoaders.createClaimsAggFromDetail(db);
+      console.timeEnd('[Bootstrap:Lazy] ClaimsAgg from ClaimsDetail');
+    });
 
-    // ClaimsAgg：claims_bulk 优先 → 旧 ClaimsAgg parquet 回退 → ClaimsDetail 聚合兜底
-    const claimsBulkPath = getClaimsBulkPaths().find(p => fs.existsSync(p));
-    const claimsAggPath = getClaimsAggPaths().find(p => fs.existsSync(p));
-    if (claimsBulkPath) {
-      try {
-        await this.db.loadClaimsBulk(claimsBulkPath);
-      } catch (err) {
-        console.warn('[Bootstrap] ClaimsBulk load failed, trying fallbacks:', err);
-        if (claimsAggPath) {
-          try { await this.db.loadClaimsAgg(claimsAggPath); } catch (e) {
-            console.warn('[Bootstrap] ClaimsAgg fallback also failed:', e);
-          }
-        } else if (claimsDetailLoaded) {
-          try { await this.db.createClaimsAggFromDetail(); } catch (e) {
-            console.warn('[Bootstrap] ClaimsAgg from ClaimsDetail fallback failed:', e);
-          }
-        }
-      }
-    } else if (claimsAggPath) {
-      try {
-        await this.db.loadClaimsAgg(claimsAggPath);
-      } catch (err) {
-        console.warn('[Bootstrap] ClaimsAgg load failed (non-blocking):', err);
-      }
-    } else if (claimsDetailLoaded) {
-      try {
-        await this.db.createClaimsAggFromDetail();
-      } catch (err) {
-        console.warn('[Bootstrap] ClaimsAgg from ClaimsDetail failed (non-blocking):', err);
-      }
-    }
+    // CrossSell（含 CrossSellDailyAgg 物化，per D-09 解耦）
+    this.lazyRegistry.register('CrossSell', async () => {
+      const p = getCrossSellPaths().find(p => fs.existsSync(p));
+      if (!p) { console.warn('[Bootstrap:Lazy] CrossSell: no file found'); return; }
+      console.time('[Bootstrap:Lazy] CrossSell');
+      await domainLoaders.loadCrossSell(db, p);
+      await materialization.createCrossSellRealtimeView(db);
+      console.timeEnd('[Bootstrap:Lazy] CrossSell');
+    });
+
+    // RepairDim（1.3MB，仅维修页）
+    this.lazyRegistry.register('RepairDim', async () => {
+      const p = getRepairDimPaths().find(p => fs.existsSync(p));
+      if (!p) return;
+      await domainLoaders.loadRepairDim(db, p);
+    });
+
+    // BrandDim（13MB，必须惰性）
+    this.lazyRegistry.register('BrandDim', async () => {
+      const p = getBrandDimPaths().find(p => fs.existsSync(p));
+      if (!p) return;
+      console.time('[Bootstrap:Lazy] BrandDim');
+      await domainLoaders.loadBrandDim(db, p);
+      console.timeEnd('[Bootstrap:Lazy] BrandDim');
+    });
+
+    // CustomerFlow（仅客户来源页）
+    this.lazyRegistry.register('CustomerFlow', async () => {
+      const p = getCustomerFlowPaths().find(p => fs.existsSync(p));
+      if (!p) return;
+      await domainLoaders.loadCustomerFlow(db, p);
+    });
+
+    // RenewalUniverse（续保分析，数据量大）
+    this.lazyRegistry.register('RenewalUniverse', async () => {
+      const p = getRenewalUniversePaths().find(p => fs.existsSync(p));
+      if (!p) return;
+      console.time('[Bootstrap:Lazy] RenewalUniverse');
+      await domainLoaders.loadRenewalUniverse(db, p);
+      console.timeEnd('[Bootstrap:Lazy] RenewalUniverse');
+    });
+
+    // QuoteConversion（仅报价转化页）
+    this.lazyRegistry.register('QuoteConversion', async () => {
+      const p = getQuoteConversionPaths().find(p => fs.existsSync(p));
+      if (!p) return;
+      await domainLoaders.loadQuoteConversion(db, p);
+    });
+
+    console.log('[Bootstrap] Lazy domains registered: ClaimsDetail, ClaimsAgg, CrossSell, RepairDim, BrandDim, CustomerFlow, RenewalUniverse, QuoteConversion');
+  }
+
+  // ============================================
+  // 公共 API：供路由中间件使用
+  // ============================================
+
+  /**
+   * 供路由中间件调用：确保指定域已加载（首次触发加载，含 15s 超时保护）。
+   * 超时返回 503，失败返回 500，并发安全（Promise 锁）。
+   */
+  async ensureDomainLoaded(domain: string): Promise<void> {
+    return this.lazyRegistry.ensureLoaded(domain);
+  }
+
+  /**
+   * 供监控/健康检查：获取域当前加载状态
+   * ('unloaded' | 'loading' | 'loaded' | 'failed' | 'unknown')
+   */
+  getDomainState(domain: string): string {
+    return this.lazyRegistry.getState(domain);
   }
 }

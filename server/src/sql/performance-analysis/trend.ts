@@ -18,7 +18,8 @@ import {
 export function generatePerformanceTrendQuery(
   whereWithDate: string,
   segmentTag: PerformanceSegmentTag,
-  granularity: PerformanceTrendGranularity
+  granularity: PerformanceTrendGranularity,
+  dateField: string = 'policy_date'
 ): string {
   const selectedFilter = getPerformanceSegmentFilter(segmentTag);
   const timeExpr = trendTimeGroupExpr(granularity);
@@ -27,7 +28,7 @@ export function generatePerformanceTrendQuery(
   const sql = `
     WITH base_rows AS (
       SELECT
-        CAST(policy_date AS DATE) AS pd,
+        CAST(${dateField} AS DATE) AS pd,
         COALESCE(
           NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
           NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
