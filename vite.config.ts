@@ -85,6 +85,8 @@ export default defineConfig({
       'server/src/services/__tests__/duckdb-*.test.ts',
       'tests/parquet-*.test.ts',
       'tests/duckdb-*.test.ts',
+      // 领域断言集成测试（需 DuckDB 原生二进制）— 用 bun run test:integration 单独跑
+      'server/src/config/metric-registry/__tests__/integration/**',
     ],
     // server 端测试走 node 环境（解析 express/@duckdb/node-api），前端测试走 jsdom
     environmentMatchGlobs: [
