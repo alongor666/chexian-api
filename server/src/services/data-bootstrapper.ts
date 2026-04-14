@@ -28,6 +28,8 @@ import {
 } from '../config/paths.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 import { isValidParquetFile } from '../utils/security.js';
+import * as materialization from './duckdb-materialization.js';
+import * as domainLoaders from './duckdb-domain-loaders.js';
 
 // ============================================
 // Types
@@ -49,29 +51,15 @@ export interface BootstrapResult {
 }
 
 /**
- * DataBootstrapper 依赖的 DuckDB 服务接口。
- * 当前由 DuckDBService 单例实现；未来 P2#13 DI 改造时可替换为 mock。
+ * DataBootstrapper 依赖的 DuckDB 服务接口（精简版）。
+ * 代理方法已删除，bootstrapper 内部直接 import duckdb-materialization / duckdb-domain-loaders。
  */
 export interface BootstrapDuckDB {
   loadParquet(filePath: string, tableName: string): Promise<void>;
   loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number }>;
-  createPolicyFactView(sourceTable?: string): Promise<void>;
   query<T = any>(sql: string, cacheTtlMs?: number): Promise<T[]>;
-  // 维度加载
-  loadDimParquet(salesmanPath: string, planPath: string): Promise<void>;
-  loadTeamMapping(jsonFilePath: string): Promise<void>;
-  // 辅助域加载
-  loadPlateRegionDim(parquetPath: string): Promise<void>;
-  loadQuoteConversion(parquetPath: string): Promise<void>;
-  loadClaimsDetail(parquetPath: string): Promise<void>;
-  loadClaimsBulk(parquetPath: string): Promise<void>;
-  loadClaimsAgg(parquetPath: string): Promise<void>;
-  createClaimsAggFromDetail(): Promise<void>;
-  loadCrossSell(parquetPath: string): Promise<void>;
-  loadRepairDim(parquetPath: string): Promise<void>;
-  loadBrandDim(parquetPath: string): Promise<void>;
-  loadCustomerFlow(parquetPath: string): Promise<void>;
-  loadRenewalUniverse(parquetPath: string): Promise<void>;
+  hasRelation(relationName: string): Promise<boolean>;
+  dropRelationIfExists(relationName: string): Promise<void>;
 }
 
 // ============================================

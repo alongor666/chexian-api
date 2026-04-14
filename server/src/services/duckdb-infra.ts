@@ -1,10 +1,12 @@
 /**
- * DuckDB 基础设施 — 查询缓存 + 连接池
+ * DuckDB 基础设施 — 查询缓存 + 连接池 + 表/视图工具方法
  *
  * 纯基础设施代码，零业务逻辑。从 duckdb.ts 拆出以降低 God File 行数。
  */
 
 import type { DuckDBInstance, DuckDBConnection } from '@duckdb/node-api';
+import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
+import type { DuckDBQueryable } from './duckdb-types.js';
 
 // ============================================
 // 查询缓存
@@ -126,4 +128,52 @@ export class ConnectionPool {
     this.pool = [];
     this.activeCount = 0;
   }
+}
+
+// ============================================
+// 表/视图工具方法（从 duckdb.ts 迁移）
+// ============================================
+
+/**
+ * 按真实对象类型清理同名 relation（TABLE / VIEW）。
+ */
+export async function dropRelationIfExists(db: DuckDBQueryable, relationName: string): Promise<void> {
+  const safeRelationName = sanitizeTableName(relationName);
+  const escapedRelationName = escapeSqlValue(safeRelationName);
+
+  const rows = await db.query<{ table_type: string }>(`
+    SELECT table_type
+    FROM information_schema.tables
+    WHERE table_schema = current_schema()
+      AND table_name = '${escapedRelationName}'
+    LIMIT 1
+  `);
+
+  const tableType = (rows[0]?.table_type || '').toUpperCase();
+  if (tableType === 'VIEW') {
+    await db.query(`DROP VIEW IF EXISTS ${safeRelationName}`);
+    return;
+  }
+
+  if (tableType) {
+    await db.query(`DROP TABLE IF EXISTS ${safeRelationName}`);
+  }
+}
+
+export async function hasRelation(db: DuckDBQueryable, relationName: string): Promise<boolean> {
+  const safeRelationName = sanitizeTableName(relationName);
+  const escapedRelationName = escapeSqlValue(safeRelationName);
+  const rows = await db.query<{ cnt: number }>(`
+    SELECT COUNT(*) AS cnt
+    FROM information_schema.tables
+    WHERE table_schema = current_schema()
+      AND table_name = '${escapedRelationName}'
+  `);
+  return (rows[0]?.cnt ?? 0) > 0;
+}
+
+export async function getTableSchema(db: DuckDBQueryable, tableName: string): Promise<any[]> {
+  const safeTableName = sanitizeTableName(tableName);
+  const sql = `DESCRIBE ${safeTableName}`;
+  return db.query(sql);
 }
