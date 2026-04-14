@@ -241,8 +241,8 @@ router.get('/cross-sell-org-trend', asyncHandler(async (req, res) => {
   const normalizedVehicleCategory: VehicleCategory = 'passenger';
   const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
 
-  const { whereClause } = parseFiltersAndBuildWhere(req);
-  let finalWhereClause = whereClause;
+  const { whereWithDate, dateField } = parseFiltersAndBuildBothWhere(req);
+  let finalWhereClause = whereWithDate;
   const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
   if (seatCoverageClause) {
     finalWhereClause += ` AND ${seatCoverageClause}`;
@@ -256,7 +256,8 @@ router.get('/cross-sell-org-trend', asyncHandler(async (req, res) => {
     finalWhereClause,
     normalizedVehicleCategory,
     coverageCombination as CoverageCombinationFilter,
-    days
+    days,
+    dateField
   );
 
   logger.debug('[cross-sell-org-trend] Generated SQL', { sqlLength: sql.length });
@@ -288,7 +289,7 @@ router.get('/cross-sell-heatmap', asyncHandler(async (req, res) => {
   const normalizedVehicleCategory: VehicleCategory = 'passenger';
   const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
 
-  const { whereClause } = parseFiltersAndBuildWhere(req);
+  const { whereWithDate: whereClause, dateField } = parseFiltersAndBuildBothWhere(req);
   const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
 
   let crossSellDrillFilter: CrossSellHeatmapDrillStep[] = [];
@@ -326,7 +327,8 @@ router.get('/cross-sell-heatmap', asyncHandler(async (req, res) => {
     seatCoverageClause,
     timePeriod as 'day' | 'week' | 'month' | 'quarter',
     groupByDimension as CrossSellHeatmapGroupDimension,
-    crossSellDrillFilter
+    crossSellDrillFilter,
+    dateField
   );
 
   logger.debug('[cross-sell-heatmap] Generated SQL', { sqlLength: sql.length });

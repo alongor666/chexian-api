@@ -215,7 +215,8 @@ export function generateCrossSellHeatmapQuery(
   seatCoverageClause?: string,
   timePeriod: CrossSellHeatmapTimePeriod = 'day',
   groupByDimension: CrossSellHeatmapGroupDimension = 'org_level_3',
-  drillFilter: CrossSellHeatmapDrillStep[] = []
+  drillFilter: CrossSellHeatmapDrillStep[] = [],
+  dateField: string = 'policy_date'
 ): string {
   logger.debug('Generating cross-sell heatmap query', { vehicleCategory, hasSeatClause: !!seatCoverageClause, timePeriod, groupByDimension, drillFilterCount: drillFilter.length });
 
@@ -270,7 +271,7 @@ export function generateCrossSellHeatmapQuery(
   const filteredCte = usePF ? `
     WITH normalized AS (
       SELECT
-        CAST(p.policy_date AS DATE) AS pd,
+        CAST(p.${dateField} AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         COALESCE(
           NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), ''),

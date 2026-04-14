@@ -36,7 +36,8 @@ export function generateCrossSellOrgTrendQuery(
   baseWhereClause: string,
   vehicleCategory: VehicleCategory,
   coverageCombination: CoverageCombinationFilter = '整体',
-  days: number = 14
+  days: number = 14,
+  dateField: string = 'policy_date'
 ): string {
   logger.debug('Generating cross-sell org trend query', { vehicleCategory, coverageCombination, days });
 
@@ -52,7 +53,7 @@ export function generateCrossSellOrgTrendQuery(
   const sql = `
     WITH latest AS (
       -- 以数据中实际最新签单日期为基准，而非 CURRENT_DATE
-      SELECT MAX(CAST(policy_date AS DATE)) AS latest_date
+      SELECT MAX(CAST(${dateField} AS DATE)) AS latest_date
       FROM PolicyFact
       WHERE ${baseWhereClause}
         AND ${vehicleFilter}
@@ -73,12 +74,12 @@ export function generateCrossSellOrgTrendQuery(
         cross_sell_premium_driver,
         COALESCE(CAST(insurance_type AS VARCHAR), '') AS insurance_type,
         COALESCE(premium, 0) AS premium,
-        CAST(policy_date AS DATE) AS pd
+        CAST(${dateField} AS DATE) AS pd
       FROM PolicyFact
       WHERE ${baseWhereClause}
         AND ${vehicleFilter}
-        AND CAST(policy_date AS DATE) >= (SELECT latest_date FROM latest) - INTERVAL '${safedays - 1} days'
-        AND CAST(policy_date AS DATE) <= (SELECT latest_date FROM latest)
+        AND CAST(${dateField} AS DATE) >= (SELECT latest_date FROM latest) - INTERVAL '${safedays - 1} days'
+        AND CAST(${dateField} AS DATE) <= (SELECT latest_date FROM latest)
         ${coverageFilter}
     ),
     daily AS (
