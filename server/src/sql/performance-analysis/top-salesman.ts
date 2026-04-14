@@ -26,13 +26,14 @@ export function generatePerformanceTopSalesmanQuery(
   timePeriod: PerformanceTimePeriod,
   growthMode: PerformanceGrowthMode,
   limit = 20,
-  periodBoundsOverride?: PerformancePeriodBounds
+  periodBoundsOverride?: PerformancePeriodBounds,
+  dateField: string = 'policy_date'
 ): string {
   const segmentFilterNoAlias = getPerformanceSegmentFilter(segmentTag);
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
   const periodBounds = periodBoundsOverride
     ? buildStaticPeriodBoundsCte(periodBoundsOverride)
-    : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode);
+    : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode, dateField);
   const periodProgress = buildPeriodProgressCte();
 
   const sql = `
@@ -42,7 +43,7 @@ export function generatePerformanceTopSalesmanQuery(
     all_rows AS (
       SELECT
         REGEXP_REPLACE(COALESCE(p.salesman_name, '未知'), '^[0-9]+', '') AS dimension_name,
-        CAST(p.policy_date AS DATE) AS pd,
+        CAST(p.${dateField} AS DATE) AS pd,
         p.salesman_name,
         COALESCE(
           NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), ''),

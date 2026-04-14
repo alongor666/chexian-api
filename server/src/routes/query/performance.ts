@@ -89,7 +89,7 @@ router.get(
     const { timePeriod, growthMode, expandDims } = extraResult.data;
     const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
-    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const { whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
 
     const sql = generatePerformanceSummaryQuery(
       whereWithDate,
@@ -97,7 +97,9 @@ router.get(
       segmentTag as PerformanceSegmentTag,
       timePeriod as PerformanceTimePeriod,
       growthMode as PerformanceGrowthMode,
-      expandDims as PerformanceSummaryExpandDims
+      expandDims as PerformanceSummaryExpandDims,
+      undefined,
+      dateField
     );
 
     const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
@@ -126,12 +128,13 @@ router.get(
     const { granularity } = extraResult.data;
     const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
-    const { whereWithDate } = parseFiltersAndBuildBothWhere(req);
+    const { whereWithDate, dateField } = parseFiltersAndBuildBothWhere(req);
 
     const sql = generatePerformanceTrendQuery(
       whereWithDate,
       segmentTag as PerformanceSegmentTag,
-      granularity as PerformanceTrendGranularity
+      granularity as PerformanceTrendGranularity,
+      dateField
     );
 
     const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
@@ -177,7 +180,7 @@ router.get(
 
     const groupBy = extraResult.data.groupBy as PerformanceDimension | undefined;
 
-    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const { whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
 
     const [summaryRows, drilldownRows] = await Promise.all([
       duckdbService.query(
@@ -186,7 +189,8 @@ router.get(
           segmentTag as PerformanceSegmentTag,
           timePeriod as PerformanceTimePeriod,
           growthMode as PerformanceGrowthMode,
-          drillPath, null
+          drillPath, null,
+          undefined, dateField
         ),
         QUERY_CACHE.hotspotShort
       ),
@@ -197,7 +201,8 @@ router.get(
             segmentTag as PerformanceSegmentTag,
             timePeriod as PerformanceTimePeriod,
             growthMode as PerformanceGrowthMode,
-            drillPath, groupBy
+            drillPath, groupBy,
+            undefined, dateField
           ),
           QUERY_CACHE.hotspotShort
         )
@@ -234,7 +239,7 @@ router.get(
 
     const { timePeriod, groupByDimension, drillFilter: drillFilterStr } = parseResult.data;
     const segmentTag = resolvePerformanceSegmentTag(parseResult.data);
-    const { whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const { whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
 
     let drillFilter: HeatmapDrillStep[] = [];
     try {
@@ -250,7 +255,8 @@ router.get(
       timePeriod as PerformanceTimePeriod,
       15,
       groupByDimension as HeatmapGroupDimension,
-      drillFilter
+      drillFilter,
+      dateField
     );
 
     const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
@@ -280,7 +286,7 @@ router.get(
     const { timePeriod, growthMode, limit } = extraResult.data;
     const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
-    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const { whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
 
     const sql = generatePerformanceTopSalesmanQuery(
       whereWithDate,
@@ -288,7 +294,9 @@ router.get(
       segmentTag as PerformanceSegmentTag,
       timePeriod as PerformanceTimePeriod,
       growthMode as PerformanceGrowthMode,
-      limit
+      limit,
+      undefined,
+      dateField
     );
 
     const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);

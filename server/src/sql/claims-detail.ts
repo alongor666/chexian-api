@@ -389,7 +389,7 @@ export function generateLossRatioDevelopmentQuery(
 
   return `
     WITH claims_cutoff_cte AS (
-      SELECT COALESCE(CAST(MAX(report_time) AS DATE), CURRENT_DATE) AS claims_cutoff FROM ClaimsDetail
+      SELECT COALESCE(CAST(MAX(report_time) AS DATE), CURRENT_DATE) - INTERVAL 1 DAY AS claims_cutoff FROM ClaimsDetail
     ),
     raw_policies AS (
       SELECT
@@ -433,14 +433,16 @@ export function generateLossRatioDevelopmentQuery(
         COUNT(DISTINCT p.policy_no) AS dev_policies,
         SUM(p.premium
             * LEAST(
-                DATE_DIFF('day', p.insurance_start_date, cw.observation_end),
+                DATE_DIFF('day', p.insurance_start_date,
+                  LEAST(cw.observation_end, (SELECT claims_cutoff FROM claims_cutoff_cte) + INTERVAL 1 DAY)),
                 p.policy_term_days
               )::DOUBLE
             / p.policy_term_days
         ) AS earned_premium,
         SUM(
             LEAST(
-                DATE_DIFF('day', p.insurance_start_date, cw.observation_end),
+                DATE_DIFF('day', p.insurance_start_date,
+                  LEAST(cw.observation_end, (SELECT claims_cutoff FROM claims_cutoff_cte) + INTERVAL 1 DAY)),
                 p.policy_term_days
             )::DOUBLE
             / p.policy_term_days
@@ -449,7 +451,7 @@ export function generateLossRatioDevelopmentQuery(
       JOIN policies p
         ON p.cohort_year = cw.cohort_year
        AND p.insurance_start_date >= cw.year_start
-       AND p.insurance_start_date <  cw.observation_end
+       AND p.insurance_start_date <  LEAST(cw.observation_end, (SELECT claims_cutoff FROM claims_cutoff_cte) + INTERVAL 1 DAY)
       GROUP BY cw.cohort_year, cw.dev_month
     ),
     claimed AS (
@@ -457,12 +459,7 @@ export function generateLossRatioDevelopmentQuery(
         cw.cohort_year, cw.dev_month,
         COUNT(DISTINCT c.claim_no) AS claim_count,
         SUM(
-          CASE
-            WHEN c.settlement_time IS NOT NULL
-                 AND c.settlement_time < cw.observation_end
-            THEN COALESCE(c.settled_amount, 0) + COALESCE(c.settled_fee, 0)
-            ELSE COALESCE(c.pending_amount, 0)
-          END
+          COALESCE(c.settled_amount, 0) + COALESCE(c.settled_fee, 0) + COALESCE(c.pending_amount, 0)
         ) AS total_reserve
       FROM calendar_window cw
       JOIN policies p

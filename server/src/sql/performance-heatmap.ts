@@ -228,7 +228,8 @@ export function generatePerformanceOrgHeatmapQuery(
   timePeriod: PerformanceTimePeriod = 'day',
   periods = 15,
   groupByDimension: HeatmapGroupDimension = 'org_level_3',
-  drillFilter: HeatmapDrillStep[] = []
+  drillFilter: HeatmapDrillStep[] = [],
+  dateField: string = 'policy_date'
 ): string {
   const tableAlias = 'p.';
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, tableAlias);
@@ -336,7 +337,7 @@ export function generatePerformanceOrgHeatmapQuery(
   const sql = `
     WITH filtered AS (
       SELECT
-        CAST(p.policy_date AS DATE) AS pd,
+        CAST(p.${dateField} AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         COALESCE(NULLIF(TRIM(CAST(p.salesman_name AS VARCHAR)), ''), '__unknown__') AS salesman_name,
         p.premium / 10000.0 AS premium_wan,

@@ -30,12 +30,13 @@ export function generatePerformanceSummaryQuery(
   timePeriod: PerformanceTimePeriod,
   growthMode: PerformanceGrowthMode,
   expandDims: PerformanceSummaryExpandDims = 'none',
-  periodBoundsOverride?: PerformancePeriodBounds
+  periodBoundsOverride?: PerformancePeriodBounds,
+  dateField: string = 'policy_date'
 ): string {
   const segmentFilter = getPerformanceSegmentFilter(segmentTag);
   const periodBounds = periodBoundsOverride
     ? buildStaticPeriodBoundsCte(periodBoundsOverride)
-    : buildPeriodBoundsCte(whereWithDate, segmentFilter, timePeriod, growthMode);
+    : buildPeriodBoundsCte(whereWithDate, segmentFilter, timePeriod, growthMode, dateField);
   const periodProgress = buildPeriodProgressCte();
   const useExpandRows = expandDims !== 'none';
   const expandConfig = useExpandRows ? getExpandDimensionConfig(expandDims) : null;
@@ -68,7 +69,7 @@ export function generatePerformanceSummaryQuery(
           WHEN coverage_combination IN ('主全', '交三', '单交') THEN coverage_combination
           ELSE '其他'
         END AS coverage_combination,
-        CAST(policy_date AS DATE) AS pd,
+        CAST(${dateField} AS DATE) AS pd,
         COALESCE(
           NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
           NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')

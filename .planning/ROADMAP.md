@@ -70,8 +70,8 @@ Plans:
   4. 内存占用监控：pm2 monit 显示稳态内存从 ~70% 降至 ~50%
 **Plans:** 2 plans
 Plans:
-- [ ] 04-01-PLAN.md — MAT-02 duckdb.ts 拆分瘦身（3 新文件 + infra 扩展 + 代理方法全删 + 测试修复）
-- [ ] 04-02-PLAN.md — MAT-01 惰性加载（LazyDomainRegistry + bootstrapper 重构 + CrossSell 解耦 + 路由注入）
+- [x] 04-01-PLAN.md — MAT-02 duckdb.ts 拆分瘦身（3 新文件 + infra 扩展 + 代理方法全删 + 测试修复）
+- [x] 04-02-PLAN.md — MAT-01 惰性加载（LazyDomainRegistry + bootstrapper 重构 + CrossSell 解耦 + 路由注入）
 
 ### Phase 5: 持久化与快照精细化
 **Goal**: PM2 重启后 <10s 完成 PolicyFact 可用，ETL 增量更新后只失效动态分区快照而非全量重算

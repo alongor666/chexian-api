@@ -49,10 +49,13 @@ export function parseFiltersAndBuildWhere(req: Request): {
  *
  * 用于需要同时使用两种 WHERE 子句的路由（如 KPI、performance-summary 等）
  */
+export type DateFieldType = 'policy_date' | 'insurance_start_date';
+
 export function parseFiltersAndBuildBothWhere(req: Request): {
   filterData: CommonFilterParams;
   whereWithDate: string;
   whereWithoutDate: string;
+  dateField: DateFieldType;
 } {
   const parseResult = commonFilterSchema.safeParse(req.query);
   if (!parseResult.success) {
@@ -60,6 +63,7 @@ export function parseFiltersAndBuildBothWhere(req: Request): {
   }
 
   const permissionFilter = req.permissionFilter || '1=1';
+  const dateField: DateFieldType = parseResult.data.dateField || 'policy_date';
 
   const whereWithDate = buildWhereFromFilterParams(
     parseResult.data,
@@ -70,7 +74,7 @@ export function parseFiltersAndBuildBothWhere(req: Request): {
     permissionFilter
   );
 
-  return { filterData: parseResult.data, whereWithDate, whereWithoutDate };
+  return { filterData: parseResult.data, whereWithDate, whereWithoutDate, dateField };
 }
 
 /**
