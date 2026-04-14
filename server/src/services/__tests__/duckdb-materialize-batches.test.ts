@@ -6,6 +6,7 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { duckdbService } from '../duckdb.js';
+import { materializeInBatches } from '../duckdb-materialization.js';
 import { DUCKDB_INIT_OPTIONS } from '../../config/database.js';
 
 describe('materializeInBatches — 批次物化逻辑', () => {
@@ -44,7 +45,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   // MB-01: 无数据（月份为空）
   it('MB-01: 月份列表为空时直接 CREATE TABLE（无 INSERT）', async () => {
     mockQuery([]);
-    const result = await duckdbService.materializeInBatches(
+    const result = await materializeInBatches(
+      duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
@@ -56,7 +58,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   // MB-02: 单月数据
   it('MB-02: 单月数据生成1次 CREATE，0次 INSERT', async () => {
     mockQuery(['2024-01']);
-    const result = await duckdbService.materializeInBatches(
+    const result = await materializeInBatches(
+      duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
@@ -70,7 +73,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   // MB-03: 三个月数据
   it('MB-03: 三月数据生成1次 CREATE + 2次 INSERT', async () => {
     mockQuery(['2024-01', '2024-02', '2024-03']);
-    const result = await duckdbService.materializeInBatches(
+    const result = await materializeInBatches(
+      duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
@@ -84,7 +88,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   // MB-04: SET threads=1 在首批前执行
   it('MB-04: 物化开始时降线程到1', async () => {
     mockQuery(['2024-01']);
-    await duckdbService.materializeInBatches(
+    await materializeInBatches(
+      duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
@@ -97,7 +102,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   // MB-05: 线程恢复在成功路径
   it('MB-05: 正常完成后恢复线程数', async () => {
     mockQuery(['2024-01']);
-    await duckdbService.materializeInBatches(
+    await materializeInBatches(
+      duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
@@ -108,7 +114,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   // MB-06: 索引创建
   it('MB-06: 提供 indexes 参数时创建索引', async () => {
     mockQuery(['2024-01']);
-    await duckdbService.materializeInBatches(
+    await materializeInBatches(
+      duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1',
       [{ name: 'idx_date', column: 'policy_date' }],
@@ -119,7 +126,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   // MB-07: 首批 CREATE 异常 → VIEW 回退
   it('MB-07: 首批 CREATE 失败后回退到 VIEW', async () => {
     mockQuery(['2024-01'], 'CREATE TABLE TestTable');
-    const result = await duckdbService.materializeInBatches(
+    const result = await materializeInBatches(
+      duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
@@ -131,7 +139,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   // MB-08: 中间批次 INSERT 异常 → VIEW 回退
   it('MB-08: 第二月 INSERT 失败后回退到 VIEW', async () => {
     mockQuery(['2024-01', '2024-02'], 'INSERT INTO TestTable');
-    const result = await duckdbService.materializeInBatches(
+    const result = await materializeInBatches(
+      duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
@@ -141,7 +150,8 @@ describe('materializeInBatches — 批次物化逻辑', () => {
   // MB-09: 异常路径仍恢复线程数
   it('MB-09: 异常后 catch 块恢复线程数', async () => {
     mockQuery(['2024-01'], 'CREATE TABLE TestTable');
-    await duckdbService.materializeInBatches(
+    await materializeInBatches(
+      duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
