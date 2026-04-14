@@ -13,7 +13,7 @@ const router = Router();
 router.get(
   '/kpi',
   asyncHandler(async (req, res) => {
-    const { filterData, whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const { filterData, whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
 
     const orgNames = extractOrgNames(filterData, req.permissionFilter);
     const salesmanNames = extractSalesmanNames(filterData, req.permissionFilter);
@@ -21,7 +21,8 @@ router.get(
     const sql = generateKpiQuery(
       whereWithDate,
       { orgNames, salesmanNames },
-      whereWithoutDate
+      whereWithoutDate,
+      dateField
     );
     // KPI 高频查询，缓存 120 秒
     const result = await duckdbService.query(sql, 120_000);

@@ -46,7 +46,8 @@ const buildAchievementCacheWhere = (options: KpiQueryOptions = {}): string => {
 export const generateKpiQuery = (
   whereClause: string = '1=1',
   options: KpiQueryOptions = {},
-  baseWhereClause?: string
+  baseWhereClause?: string,
+  dateField: string = 'policy_date'
 ) => {
   const achievementCacheWhere = buildAchievementCacheWhere(options);
   const finalBaseWhereClause = baseWhereClause ?? whereClause;
@@ -63,7 +64,7 @@ export const generateKpiQuery = (
       WHERE ${finalBaseWhereClause}
     ),
     latest_policy AS (
-      SELECT MAX(CAST(policy_date AS DATE)) AS latest_policy_date
+      SELECT MAX(CAST(${dateField} AS DATE)) AS latest_policy_date
       FROM filtered
     ),
     latest_context AS (
@@ -99,8 +100,8 @@ export const generateKpiQuery = (
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date)
-                AND CAST(f.policy_date AS DATE) <= lc.latest_policy_date
+              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date)
+                AND CAST(f.${dateField} AS DATE) <= lc.latest_policy_date
               THEN f.premium
               ELSE 0
             END
@@ -110,8 +111,8 @@ export const generateKpiQuery = (
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
-                AND CAST(f.policy_date AS DATE) <= lc.latest_policy_date - INTERVAL 1 YEAR
+              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND CAST(f.${dateField} AS DATE) <= lc.latest_policy_date - INTERVAL 1 YEAR
               THEN f.premium
               ELSE 0
             END
@@ -126,8 +127,8 @@ export const generateKpiQuery = (
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date)
-                AND CAST(f.policy_date AS DATE) <= lc.latest_policy_date
+              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date)
+                AND CAST(f.${dateField} AS DATE) <= lc.latest_policy_date
                 AND f.customer_category != '摩托车'
               THEN COALESCE(f.cross_sell_premium_driver, 0)
               ELSE 0
@@ -138,8 +139,8 @@ export const generateKpiQuery = (
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
-                AND CAST(f.policy_date AS DATE) <= lc.latest_policy_date - INTERVAL 1 YEAR
+              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND CAST(f.${dateField} AS DATE) <= lc.latest_policy_date - INTERVAL 1 YEAR
                 AND f.customer_category != '摩托车'
               THEN COALESCE(f.cross_sell_premium_driver, 0)
               ELSE 0
@@ -150,8 +151,8 @@ export const generateKpiQuery = (
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.policy_date AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
-                AND CAST(f.policy_date AS DATE) < DATE_TRUNC('year', lc.latest_policy_date)
+              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND CAST(f.${dateField} AS DATE) < DATE_TRUNC('year', lc.latest_policy_date)
                 AND f.customer_category != '摩托车'
               THEN COALESCE(f.cross_sell_premium_driver, 0)
               ELSE 0
