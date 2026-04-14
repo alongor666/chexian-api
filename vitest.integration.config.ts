@@ -23,6 +23,7 @@ export default defineConfig({
       'server/src/services/__tests__/duckdb-*.test.ts',
       'tests/parquet-*.test.ts',
       'tests/duckdb-*.test.ts',
+      'server/src/config/metric-registry/__tests__/integration/*.test.ts',
     ],
     exclude: ['**/node_modules/**', '**/dist/**'],
     testTimeout: 30000,
