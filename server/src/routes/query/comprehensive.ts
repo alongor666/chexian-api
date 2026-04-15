@@ -4,7 +4,7 @@ import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere, extractOrgNames,
   isValidDateFormat, logger, createDomainMiddleware,
-  QUERY_CACHE,
+  QUERY_CACHE, HTTP_MAX_AGE,
   buildRouteCacheKey, getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
   resolveCutoffDate, computeTimeProgress, toFiniteNumber,
@@ -46,7 +46,7 @@ async function handleComprehensiveBundle(req: any, res: any): Promise<void> {
       success: true,
       data: cachedBundleData,
       meta: buildResponseMeta(res),
-    }, 60);
+    }, HTTP_MAX_AGE.bundle);
     return;
   }
 
@@ -270,7 +270,7 @@ async function handleComprehensiveBundle(req: any, res: any): Promise<void> {
     success: true,
     data: bundleData,
     meta: buildResponseMeta(res),
-  }, 60);
+  }, HTTP_MAX_AGE.bundle);
 }
 
 router.get(

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, duckdbService, sendWithEtag, parseFiltersAndBuildWhere, resolveGroupDim } from './shared.js';
+import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, resolveGroupDim } from './shared.js';
 import { generatePremiumTrendQuery, generateQualityBusinessTrendQuery, TimeView } from '../../sql/trend.js';
 import type { ViewPerspective } from '../../types/view-perspective.js';
 
@@ -45,13 +45,12 @@ router.get(
       perspective,
       groupDim
     );
-    // 趋势查询缓存 180 秒
-    const result = await duckdbService.query(sql, 180_000);
+    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
 
     sendWithEtag(req, res, {
       success: true,
       data: result,
-    }, 60);
+    }, HTTP_MAX_AGE.query);
   })
 );
 
@@ -78,12 +77,12 @@ router.get(
       perspective,
       groupDim
     );
-    const result = await duckdbService.query(sql, 180_000);
+    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
 
     sendWithEtag(req, res, {
       success: true,
       data: result,
-    }, 60);
+    }, HTTP_MAX_AGE.query);
   })
 );
 

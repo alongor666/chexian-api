@@ -102,7 +102,7 @@ export function permissionToScope(permissionFilter: string | undefined): string 
 // ── 快照路径缓存（避免反复 stat，数据日更新一次即可） ──
 
 const snapshotPathCache = new Map<string, string | null>();
-const SNAPSHOT_CACHE_TTL = 5 * 60 * 1000; // 5 分钟后重新探测
+const SNAPSHOT_CACHE_TTL = 60 * 60 * 1000; // 1 小时后重新探测（数据日更，invalidateSnapshotPathCache() 在 ETL 时清空）
 let snapshotCacheExpiry = 0;
 
 /** 清空快照路径缓存（数据更新后调用） */
@@ -183,7 +183,7 @@ export function snapshotServe(req: Request, res: Response, next: NextFunction): 
           res.setHeader('X-Snapshot', 'hit');
         }
 
-        res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=60');
+        res.setHeader('Cache-Control', 'private, max-age=3600, stale-while-revalidate=86400');
         res.json({
           success: true,
           data,

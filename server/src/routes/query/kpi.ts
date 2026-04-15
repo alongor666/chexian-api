@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { asyncHandler, duckdbService, sendWithEtag, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames } from './shared.js';
+import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames } from './shared.js';
 import { generateKpiQuery } from '../../sql/kpi.js';
 import { generateKpiDetailQuery } from '../../sql/kpi-detail.js';
 
@@ -24,13 +24,12 @@ router.get(
       whereWithoutDate,
       dateField
     );
-    // KPI 高频查询，缓存 120 秒
-    const result = await duckdbService.query(sql, 120_000);
+    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
     sendWithEtag(req, res, {
       success: true,
       data: result[0] || {},
-    }, 30);
+    }, HTTP_MAX_AGE.query);
   })
 );
 
@@ -44,13 +43,12 @@ router.get(
     const { whereClause } = parseFiltersAndBuildWhere(req);
 
     const sql = generateKpiDetailQuery(whereClause, false);
-    // KPI 详情高频查询，缓存 120 秒
-    const result = await duckdbService.query(sql, 120_000);
+    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
     sendWithEtag(req, res, {
       success: true,
       data: result[0] || {},
-    }, 30);
+    }, HTTP_MAX_AGE.query);
   })
 );
 

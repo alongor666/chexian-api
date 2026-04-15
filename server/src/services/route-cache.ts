@@ -50,7 +50,7 @@ export function setRouteCache<T>(key: string, data: T, ttlMs: number): void {
 export function sendWithEtag(req: any, res: any, body: unknown, maxAgeSec: number): void {
     const etag = computeEtag(body);
     res.set('ETag', etag);
-    res.set('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=60`);
+    res.set('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=3600`);
     if (req.headers['if-none-match'] === etag) {
         res.status(304).end();
         return;

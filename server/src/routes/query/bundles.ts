@@ -9,7 +9,7 @@ import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere,
   extractOrgNames, extractSalesmanNames, resolveGroupDim,
-  logger, QUERY_CACHE,
+  logger, QUERY_CACHE, HTTP_MAX_AGE,
   isBundleRoutesEnabled, buildRouteCacheKey,
   getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
@@ -105,7 +105,7 @@ router.get(
         success: true,
         data: cachedBundleData,
         meta: buildResponseMeta(res),
-      }, 60);
+      }, HTTP_MAX_AGE.bundle);
       return;
     }
     await ensureCrossSellAggregateTablesReady();
@@ -229,7 +229,7 @@ router.get(
       success: true,
       data: bundleData,
       meta: buildResponseMeta(res),
-    }, 60);
+    }, HTTP_MAX_AGE.bundle);
   })
 );
 
@@ -272,7 +272,7 @@ router.get(
         success: true,
         data: cachedBundleData,
         meta: buildResponseMeta(res),
-      }, 60);
+      }, HTTP_MAX_AGE.bundle);
       return;
     }
     const {
@@ -393,7 +393,7 @@ router.get(
       success: true,
       data: bundleData,
       meta: buildResponseMeta(res),
-    }, 60);
+    }, HTTP_MAX_AGE.bundle);
   })
 );
 
@@ -431,7 +431,7 @@ router.get(
         success: true,
         data: cachedBundleData,
         meta: buildResponseMeta(res),
-      }, 30);
+      }, HTTP_MAX_AGE.bundle);
       return;
     }
     const { perspective = 'premium', rankingLimit } = parseResult.data;
@@ -481,7 +481,7 @@ router.get(
             success: true,
             data: bundleData,
             meta: buildResponseMeta(res),
-          }, 60); // 暂存更久一点
+          }, HTTP_MAX_AGE.bundle);
           return;
         }
       } catch (e) {
@@ -526,7 +526,7 @@ router.get(
       success: true,
       data: bundleData,
       meta: buildResponseMeta(res),
-    }, 30);
+    }, HTTP_MAX_AGE.bundle);
   })
 );
 
