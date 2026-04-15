@@ -1,11 +1,12 @@
 /**
- * 理赔热力图面板
+ * 理赔热力图面板（双时间轴）
  *
  * 维度（行）× 时间（列）交叉矩阵。
  * - 行维度：三级机构/团队/业务员/客户类别/险别组合/能源类型/新转续/风险评分
  * - 列维度：月度（早期折叠）+ 周度（近 2 月）
  * - 指标：满期赔付率/案均赔款/已报告赔款/已报告件数/满期出险率
  * - 模式：原始值/环比值/环比幅度/同比值/同比幅度
+ * - 赔案时间轴：报案时间（默认）/ 出险时间，独立于保费时间轴
  */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { cardStyles, colorClasses, cn, fontStyles, getTrendColorClass } from '@/shared/styles';
@@ -34,8 +35,17 @@ const DIMENSION_OPTIONS: { key: DimensionKey; label: string }[] = [
 ];
 
 type MetricKey = 'loss_ratio_pct' | 'avg_claim' | 'total_claims_wan' | 'claim_count' | 'incident_rate_pct';
+type YoyMetricKey = 'yoy_loss_ratio_pct' | 'yoy_avg_claim' | 'yoy_total_claims_wan' | 'yoy_claim_count' | 'yoy_incident_rate_pct';
 
-const METRIC_OPTIONS: { key: MetricKey; label: string; yoyKey: string; unit: string; formatter: (v: number) => string }[] = [
+interface MetricOption {
+  key: MetricKey;
+  label: string;
+  yoyKey: YoyMetricKey;
+  unit: string;
+  formatter: (v: number) => string;
+}
+
+const METRIC_OPTIONS: MetricOption[] = [
   { key: 'loss_ratio_pct', label: '满期赔付率', yoyKey: 'yoy_loss_ratio_pct', unit: '%', formatter: (v) => v.toFixed(1) + '%' },
   { key: 'avg_claim', label: '案均赔款', yoyKey: 'yoy_avg_claim', unit: '元', formatter: (v) => Math.round(v).toLocaleString() },
   { key: 'total_claims_wan', label: '已报告赔款', yoyKey: 'yoy_total_claims_wan', unit: '万', formatter: (v) => v.toFixed(1) },
@@ -53,6 +63,13 @@ const COMPARE_OPTIONS: { key: CompareMode; label: string }[] = [
   { key: 'yoy_rate', label: '同比幅度' },
 ];
 
+type ClaimsDateFieldOption = 'report_time' | 'accident_time';
+
+const CLAIMS_DATE_OPTIONS: { key: ClaimsDateFieldOption; label: string }[] = [
+  { key: 'report_time', label: '报案时间' },
+  { key: 'accident_time', label: '出险时间' },
+];
+
 // ── 数据行类型 ──
 
 interface HeatmapRow {
@@ -60,7 +77,10 @@ interface HeatmapRow {
   period_idx: number;
   period_label: string;
   period_type: string;
-  // 当年
+  // 保费侧
+  earned_premium_wan: number;
+  earned_exposure: number;
+  // 当年指标
   loss_ratio_pct: number | null;
   avg_claim: number | null;
   total_claims_wan: number;
@@ -72,6 +92,8 @@ interface HeatmapRow {
   yoy_total_claims_wan: number;
   yoy_claim_count: number;
   yoy_incident_rate_pct: number | null;
+  yoy_earned_premium_wan: number;
+  yoy_earned_exposure: number;
   // 引用
   ref_max_date: string;
 }
@@ -111,17 +133,22 @@ function buildMatrix(data: HeatmapRow[]): {
   return { dimensions, periods, matrix, refMaxDate };
 }
 
+/** 类型安全地从 HeatmapRow 读取指标值 */
+function getMetricValue(row: HeatmapRow, key: MetricKey | YoyMetricKey): number | null {
+  return row[key] ?? null;
+}
+
 /** 获取单元格显示值 */
 function getCellValue(
   row: HeatmapRow | undefined,
   prevRow: HeatmapRow | undefined,
   metricKey: MetricKey,
-  yoyKey: string,
+  yoyKey: YoyMetricKey,
   mode: CompareMode,
 ): number | null {
   if (!row) return null;
 
-  const curVal = (row as any)[metricKey] as number | null;
+  const curVal = getMetricValue(row, metricKey);
   if (curVal == null && mode === 'raw') return null;
 
   switch (mode) {
@@ -129,25 +156,25 @@ function getCellValue(
       return curVal;
 
     case 'wow_delta': {
-      const prevVal = prevRow ? (prevRow as any)[metricKey] as number | null : null;
+      const prevVal = prevRow ? getMetricValue(prevRow, metricKey) : null;
       if (curVal == null || prevVal == null) return null;
       return curVal - prevVal;
     }
 
     case 'wow_rate': {
-      const prevVal = prevRow ? (prevRow as any)[metricKey] as number | null : null;
+      const prevVal = prevRow ? getMetricValue(prevRow, metricKey) : null;
       if (curVal == null || prevVal == null || prevVal === 0) return null;
       return ((curVal - prevVal) / Math.abs(prevVal)) * 100;
     }
 
     case 'yoy_delta': {
-      const yoyVal = (row as any)[yoyKey] as number | null;
+      const yoyVal = getMetricValue(row, yoyKey);
       if (curVal == null || yoyVal == null) return null;
       return curVal - yoyVal;
     }
 
     case 'yoy_rate': {
-      const yoyVal = (row as any)[yoyKey] as number | null;
+      const yoyVal = getMetricValue(row, yoyKey);
       if (curVal == null || yoyVal == null || yoyVal === 0) return null;
       return ((curVal - yoyVal) / Math.abs(yoyVal)) * 100;
     }
@@ -160,7 +187,6 @@ function getCellValue(
 /** 格式化单元格显示 */
 function formatCellDisplay(
   value: number | null,
-  metricKey: MetricKey,
   mode: CompareMode,
   metricFormatter: (v: number) => string,
 ): string {
@@ -170,48 +196,34 @@ function formatCellDisplay(
     return metricFormatter(value);
   }
 
-  // 差值/幅度模式
   if (mode === 'wow_rate' || mode === 'yoy_rate') {
-    // 显示为百分比
     const sign = value > 0 ? '+' : '';
     return `${sign}${value.toFixed(1)}%`;
   }
 
-  // 差值模式：用指标自身格式
   const sign = value > 0 ? '+' : '';
   return `${sign}${metricFormatter(value)}`;
 }
 
-/** 赔付率反转极性：赔付率/出险率/赔款上升是负面信号 */
-function isInverseMetric(metricKey: MetricKey): boolean {
-  return metricKey === 'loss_ratio_pct' || metricKey === 'incident_rate_pct'
-    || metricKey === 'avg_claim' || metricKey === 'total_claims_wan' || metricKey === 'claim_count';
-}
-
-/** 获取单元格颜色 class */
+/** 获取单元格文字颜色 — 理赔指标全部为反转极性（上升=负面） */
 function getCellColorClass(
   value: number | null,
-  metricKey: MetricKey,
   mode: CompareMode,
 ): string {
   if (value == null || mode === 'raw') return '';
-
-  // 赔付类指标：上升（正值）是危险，下降（负值）是好的 → inverse
-  const inverse = isInverseMetric(metricKey);
-  return getTrendColorClass(value, inverse);
+  // 理赔热力图所有 5 个指标（赔付率/出险率/赔款/件数/案均）上升均为负面信号
+  return getTrendColorClass(value, true);
 }
 
 /** 获取单元格背景色 */
 function getCellBgClass(
   value: number | null,
-  metricKey: MetricKey,
   mode: CompareMode,
 ): string {
   if (value == null || mode === 'raw') return '';
 
-  const inverse = isInverseMetric(metricKey);
-  const isGood = inverse ? value < 0 : value > 0;
-  const isBad = inverse ? value > 0 : value < 0;
+  // 反转极性：正值=恶化=红，负值=改善=绿
+  const isBad = value > 0;
   const absVal = Math.abs(value);
 
   if (mode === 'wow_rate' || mode === 'yoy_rate') {
@@ -228,14 +240,16 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
   const [dimension, setDimension] = useState<DimensionKey>('org_level_3');
   const [metric, setMetric] = useState<MetricKey>('loss_ratio_pct');
   const [compareMode, setCompareMode] = useState<CompareMode>('raw');
+  const [claimsDateField, setClaimsDateField] = useState<ClaimsDateFieldOption>('report_time');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(() => {
     hook.fetchClaimsHeatmap({
       ...params,
       dimension,
+      claimsDateField,
     });
-  }, [hook.fetchClaimsHeatmap, params, dimension]);
+  }, [hook.fetchClaimsHeatmap, params, dimension, claimsDateField]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -247,7 +261,7 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
 
   const metricConfig = METRIC_OPTIONS.find(m => m.key === metric)!;
 
-  // 整体汇总行
+  // 整体汇总行：从绝对值聚合重算率值指标（禁止加权平均）
   const summaryByPeriod = useMemo(() => {
     const map = new Map<number, HeatmapRow>();
     if (!claimsHeatmap.data.length) return map;
@@ -265,15 +279,14 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
       for (const dim of dimensions) {
         const row = matrix.get(dim)?.get(period.idx);
         if (!row) continue;
-        const raw = row as any;
-        totalEarnedPremium += raw.earned_premium_wan ?? 0;
-        totalClaims += raw.total_claims_wan ?? 0;
-        totalClaimCount += raw.claim_count ?? 0;
-        totalEarnedExposure += raw.earned_exposure ?? 0;
-        yoyTotalEarnedPremium += raw.yoy_earned_premium_wan ?? 0;
-        yoyTotalClaims += raw.yoy_total_claims_wan ?? 0;
-        yoyTotalClaimCount += raw.yoy_claim_count ?? 0;
-        yoyTotalEarnedExposure += raw.yoy_earned_exposure ?? 0;
+        totalEarnedPremium += row.earned_premium_wan ?? 0;
+        totalClaims += row.total_claims_wan ?? 0;
+        totalClaimCount += row.claim_count ?? 0;
+        totalEarnedExposure += row.earned_exposure ?? 0;
+        yoyTotalEarnedPremium += row.yoy_earned_premium_wan ?? 0;
+        yoyTotalClaims += row.yoy_total_claims_wan ?? 0;
+        yoyTotalClaimCount += row.yoy_claim_count ?? 0;
+        yoyTotalEarnedExposure += row.yoy_earned_exposure ?? 0;
       }
 
       map.set(period.idx, {
@@ -281,11 +294,15 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
         period_idx: period.idx,
         period_label: period.label,
         period_type: period.type,
+        earned_premium_wan: totalEarnedPremium,
+        earned_exposure: totalEarnedExposure,
         loss_ratio_pct: totalEarnedPremium > 0 ? (totalClaims / totalEarnedPremium) * 100 : null,
         avg_claim: totalClaimCount > 0 ? (totalClaims * 10000 / totalClaimCount) : null,
         total_claims_wan: totalClaims,
         claim_count: totalClaimCount,
         incident_rate_pct: totalEarnedExposure > 0 ? (totalClaimCount / totalEarnedExposure) * 100 : null,
+        yoy_earned_premium_wan: yoyTotalEarnedPremium,
+        yoy_earned_exposure: yoyTotalEarnedExposure,
         yoy_loss_ratio_pct: yoyTotalEarnedPremium > 0 ? (yoyTotalClaims / yoyTotalEarnedPremium) * 100 : null,
         yoy_avg_claim: yoyTotalClaimCount > 0 ? (yoyTotalClaims * 10000 / yoyTotalClaimCount) : null,
         yoy_total_claims_wan: yoyTotalClaims,
@@ -301,6 +318,8 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
   const error = claimsHeatmap.error;
 
   if (error) return <div className={cn(colorClasses.text.danger, 'p-4')}>{error}</div>;
+
+  const claimsDateLabel = CLAIMS_DATE_OPTIONS.find(o => o.key === claimsDateField)?.label ?? '报案时间';
 
   return (
     <div className="space-y-4">
@@ -322,6 +341,25 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
             >
               {DIMENSION_OPTIONS.map(d => (
                 <option key={d.key} value={d.key}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 赔案时间轴选择 */}
+          <div className="flex items-center gap-1.5">
+            <span className={cn('text-xs whitespace-nowrap', colorClasses.text.neutralMuted)}>赔案归期</span>
+            <select
+              value={claimsDateField}
+              onChange={e => setClaimsDateField(e.target.value as ClaimsDateFieldOption)}
+              className={cn(
+                'text-sm px-2 py-1 rounded border',
+                colorClasses.border.neutral,
+                'bg-white dark:bg-surface-1',
+                colorClasses.text.neutral,
+              )}
+            >
+              {CLAIMS_DATE_OPTIONS.map(o => (
+                <option key={o.key} value={o.key}>{o.label}</option>
               ))}
             </select>
           </div>
@@ -428,9 +466,9 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
                     const row = summaryByPeriod.get(p.idx);
                     const prevRow = colIdx > 0 ? summaryByPeriod.get(periods[colIdx - 1].idx) : undefined;
                     const val = getCellValue(row, prevRow, metric, metricConfig.yoyKey, compareMode);
-                    const display = formatCellDisplay(val, metric, compareMode, metricConfig.formatter);
-                    const textColor = getCellColorClass(val, metric, compareMode);
-                    const bgColor = getCellBgClass(val, metric, compareMode);
+                    const display = formatCellDisplay(val, compareMode, metricConfig.formatter);
+                    const textColor = getCellColorClass(val, compareMode);
+                    const bgColor = getCellBgClass(val, compareMode);
 
                     return (
                       <td
@@ -465,9 +503,9 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
                       const row = matrix.get(dim)?.get(p.idx);
                       const prevRow = colIdx > 0 ? matrix.get(dim)?.get(periods[colIdx - 1].idx) : undefined;
                       const val = getCellValue(row, prevRow, metric, metricConfig.yoyKey, compareMode);
-                      const display = formatCellDisplay(val, metric, compareMode, metricConfig.formatter);
-                      const textColor = getCellColorClass(val, metric, compareMode);
-                      const bgColor = getCellBgClass(val, metric, compareMode);
+                      const display = formatCellDisplay(val, compareMode, metricConfig.formatter);
+                      const textColor = getCellColorClass(val, compareMode);
+                      const bgColor = getCellBgClass(val, compareMode);
 
                       return (
                         <td
@@ -489,11 +527,13 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
           </div>
         )}
 
-        {/* 说明 */}
+        {/* 口径说明 */}
         <div className={cn('text-xs leading-relaxed', colorClasses.text.neutralMuted)}>
-          <b>口径说明</b>：保费收入口径（起保日期 ≤ 签单最新日期），列按周六截止（当周按最新日期）。
-          满期赔付率 = 已报告赔款 / 满期保费，满期出险率 = 赔案件数 / 已赚暴露。
-          环比按当周比上周，同比按当年截止日比去年同截止日。
+          <b>双时间轴口径</b>：保费按起保日期分期，赔案按<b>{claimsDateLabel}</b>独立分期。
+          列按周六截止（当周按最新日期）。
+          满期赔付率 = 该期{claimsDateLabel}报案赔款 / 该期起保满期保费，
+          满期出险率 = 该期赔案件数 / 该期已赚暴露。
+          环比按当期比上期，同比按当年截止日比去年同截止日。
         </div>
       </div>
     </div>

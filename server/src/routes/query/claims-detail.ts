@@ -25,6 +25,7 @@ import {
 import {
   generateClaimsHeatmapQuery,
   type ClaimsHeatmapFilters,
+  type ClaimsDateField,
   type HeatmapGroupDimension,
 } from '../../sql/claims-heatmap.js';
 
@@ -222,6 +223,7 @@ router.get(
     if (q.customerCategory && typeof q.customerCategory === 'string') heatmapFilters.customerCategory = q.customerCategory;
     if (q.isNev && typeof q.isNev === 'string') heatmapFilters.isNev = q.isNev;
     if (q.coverageCombination && typeof q.coverageCombination === 'string') heatmapFilters.coverageCombination = q.coverageCombination;
+    // 兼容前端部分页面发送复数形式 coverageCombinations
     if (q.coverageCombinations && typeof q.coverageCombinations === 'string') heatmapFilters.coverageCombination = q.coverageCombinations;
     if (q.isTransfer && typeof q.isTransfer === 'string') heatmapFilters.isTransfer = q.isTransfer;
     if (q.vehicleQuickFilter && typeof q.vehicleQuickFilter === 'string') heatmapFilters.vehicleQuickFilter = q.vehicleQuickFilter;
@@ -235,7 +237,12 @@ router.get(
     }
     const dimension = dimStr as HeatmapGroupDimension;
 
-    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension);
+    // dateField: 保费时间轴（默认 insurance_start_date）
+    const dateField = typeof q.dateField === 'string' ? q.dateField : 'insurance_start_date';
+    // claimsDateField: 赔案时间轴（默认 report_time 报案时间）
+    const claimsDateField = (typeof q.claimsDateField === 'string' ? q.claimsDateField : 'report_time') as ClaimsDateField;
+
+    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
