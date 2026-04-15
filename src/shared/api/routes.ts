@@ -120,6 +120,7 @@ export const QUERY_ROUTES = {
     CLAIM_CYCLE: 'claims-detail/claim-cycle',
     FREQUENCY_YOY: 'claims-detail/frequency-yoy',
     LOSS_RATIO_DEV: 'claims-detail/loss-ratio-development',
+    HEATMAP: 'claims-detail/heatmap',
   },
 } as const;
 

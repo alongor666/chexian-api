@@ -16,6 +16,7 @@ import { useClaimsDetail } from '../claims-detail/hooks/useClaimsDetail';
 import { PendingClaimsPanel } from '../claims-detail/components/PendingClaimsPanel';
 import { GeoRiskPanel } from '../claims-detail/components/GeoRiskPanel';
 import { LossRatioDevelopmentPanel } from '../claims-detail/components/LossRatioDevelopmentPanel';
+import { ClaimsHeatmapPanel } from '../claims-detail/components/ClaimsHeatmapPanel';
 import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
 import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 
@@ -23,6 +24,7 @@ const TABS = [
   { key: 'pending', label: '未决赔案监控' },
   { key: 'geo', label: '地理风险热力图' },
   { key: 'development', label: '赔付率发展' },
+  { key: 'claims-heatmap', label: '理赔热力图' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -31,6 +33,7 @@ const TAB_TITLES: Record<TabKey, string> = {
   pending: '未决赔案监控',
   geo: '地理风险热力图',
   development: '赔付率发展',
+  'claims-heatmap': '理赔热力图',
 };
 
 /**
@@ -123,6 +126,7 @@ export const ClaimsDetailPage: React.FC = () => {
         {activeTab === 'pending' && <PendingClaimsPanel hook={hook} params={params} />}
         {activeTab === 'geo' && <GeoRiskPanel hook={hook} params={params} />}
         {activeTab === 'development' && <LossRatioDevelopmentPanel hook={hook} params={params} />}
+        {activeTab === 'claims-heatmap' && <ClaimsHeatmapPanel hook={hook} params={params} />}
       </div>
     </PageFilterPanel>
   );

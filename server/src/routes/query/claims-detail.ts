@@ -22,6 +22,12 @@ import {
   generateLossRatioDevelopmentQuery,
   type ClaimsDetailFilters,
 } from '../../sql/claims-detail.js';
+import {
+  generateClaimsHeatmapQuery,
+  type ClaimsHeatmapFilters,
+  type ClaimsDateField,
+  type HeatmapGroupDimension,
+} from '../../sql/claims-heatmap.js';
 
 const router = Router();
 
@@ -194,6 +200,49 @@ router.get(
       ? cohortYearsStr.split(',').map(Number).filter(n => !isNaN(n) && n >= 2020 && n <= 2030)
       : [2023, 2024, 2025, 2026];
     const sql = generateLossRatioDevelopmentQuery(filters, cohortYears);
+    const data = await duckdbService.query(sql);
+    res.json({ success: true, data });
+  })
+);
+
+/**
+ * GET /api/query/claims-detail/heatmap
+ * 理赔热力图（维度 × 周/月 矩阵，含同比数据）
+ */
+const VALID_HEATMAP_DIMENSIONS = new Set<string>([
+  'org_level_3', 'team', 'salesman', 'customer_category',
+  'coverage_combination', 'energy_type', 'business_nature', 'insurance_grade',
+]);
+
+router.get(
+  '/claims-detail/heatmap',
+  asyncHandler(async (req, res) => {
+    const heatmapFilters: ClaimsHeatmapFilters = {};
+    const q = req.query;
+    if (q.orgName && typeof q.orgName === 'string') heatmapFilters.orgName = q.orgName;
+    if (q.customerCategory && typeof q.customerCategory === 'string') heatmapFilters.customerCategory = q.customerCategory;
+    if (q.isNev && typeof q.isNev === 'string') heatmapFilters.isNev = q.isNev;
+    if (q.coverageCombination && typeof q.coverageCombination === 'string') heatmapFilters.coverageCombination = q.coverageCombination;
+    // 兼容前端部分页面发送复数形式 coverageCombinations
+    if (q.coverageCombinations && typeof q.coverageCombinations === 'string') heatmapFilters.coverageCombination = q.coverageCombinations;
+    if (q.isTransfer && typeof q.isTransfer === 'string') heatmapFilters.isTransfer = q.isTransfer;
+    if (q.vehicleQuickFilter && typeof q.vehicleQuickFilter === 'string') heatmapFilters.vehicleQuickFilter = q.vehicleQuickFilter;
+    if (q.businessNature && typeof q.businessNature === 'string') heatmapFilters.businessNature = q.businessNature;
+    if (q.isNewCar && typeof q.isNewCar === 'string') heatmapFilters.isNewCar = q.isNewCar;
+    if (q.isRenewal && typeof q.isRenewal === 'string') heatmapFilters.isRenewal = q.isRenewal;
+
+    const dimStr = typeof q.dimension === 'string' ? q.dimension : 'org_level_3';
+    if (!VALID_HEATMAP_DIMENSIONS.has(dimStr)) {
+      throw new AppError(400, `无效维度: ${dimStr}`);
+    }
+    const dimension = dimStr as HeatmapGroupDimension;
+
+    // dateField: 保费时间轴（默认 insurance_start_date）
+    const dateField = typeof q.dateField === 'string' ? q.dateField : 'insurance_start_date';
+    // claimsDateField: 赔案时间轴（默认 report_time 报案时间）
+    const claimsDateField = (typeof q.claimsDateField === 'string' ? q.claimsDateField : 'report_time') as ClaimsDateField;
+
+    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
