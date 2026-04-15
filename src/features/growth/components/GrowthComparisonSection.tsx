@@ -23,15 +23,7 @@ interface GrowthComparisonSectionProps {
 export function GrowthComparisonSection(props: GrowthComparisonSectionProps): React.ReactElement {
   return (
     <div style={{ marginBottom: '24px' }}>
-      <div
-        style={{
-          marginBottom: '24px',
-          padding: '16px',
-          backgroundColor: '#f0f9ff',
-          borderRadius: '8px',
-          border: '1px solid #bae6fd',
-        }}
-      >
+      <div className="mb-6 p-4 bg-primary-bg border border-primary-border rounded-lg">
         <ComparisonQuickPresets
           activePreset={props.comparisonPreset}
           onPresetChange={props.onPresetChange}
@@ -39,9 +31,9 @@ export function GrowthComparisonSection(props: GrowthComparisonSectionProps): Re
           disabled={props.loading}
         />
         {props.comparisonPeriods && (
-          <div style={{ marginTop: '12px', fontSize: '13px', color: '#0369a1' }}>
+          <div className="mt-3 text-xs text-primary">
             <strong>当前对比：</strong>
-            <span style={{ marginLeft: '8px' }}>
+            <span className="ml-2">
               当期 {formatPeriodDisplay(props.comparisonPeriods.current)} vs 基期 {formatPeriodDisplay(props.comparisonPeriods.previous)}
             </span>
           </div>
@@ -63,17 +55,7 @@ export function GrowthComparisonSection(props: GrowthComparisonSectionProps): Re
             <h3 style={{ margin: 0 }}>对比详细数据 (Top 15)</h3>
             <button
               onClick={props.onDownload}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: '#fff',
-                border: '1px solid #d9d9d9',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
+              className="px-3 py-1.5 bg-white dark:bg-surface-1 border border-neutral-300 dark:border-subtle rounded cursor-pointer text-sm flex items-center gap-1 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-surface-2 transition-colors"
             >
               📥 下载数据
             </button>
@@ -81,21 +63,21 @@ export function GrowthComparisonSection(props: GrowthComparisonSectionProps): Re
           <StickyTableFrame maxHeight={520}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f8f9fa' }}>
-                  <th className={cn(stickyTableStyles.firstColumnHeader)} style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
+                <tr className="bg-neutral-50 dark:bg-surface-2">
+                  <th className={cn(stickyTableStyles.firstColumnHeader)} style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-default, #ddd)' }}>
                     {props.comparisonGroupBy === 'org_level_3' ? '机构' : '业务员'}
                   </th>
-                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>当期保费</th>
-                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>基期保费</th>
-                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>保费增长率</th>
-                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>当期件数</th>
-                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>基期件数</th>
-                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>件数增长率</th>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--border-default, #ddd)' }}>当期保费</th>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--border-default, #ddd)' }}>基期保费</th>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--border-default, #ddd)' }}>保费增长率</th>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--border-default, #ddd)' }}>当期件数</th>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--border-default, #ddd)' }}>基期件数</th>
+                  <th className={cn(stickyTableStyles.header)} style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--border-default, #ddd)' }}>件数增长率</th>
                 </tr>
               </thead>
               <tbody>
                 {props.comparisonData.slice(0, 15).map((item, index) => (
-                  <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
+                  <tr key={index} style={{ borderBottom: '1px solid var(--border-subtle, #eee)' }}>
                     <td className={cn(stickyTableStyles.firstColumn)} style={{ padding: '12px', fontWeight: '500' }}>{item.dim_key}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>{formatPremiumWan(item.current_premium)}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>{formatPremiumWan(item.previous_premium)}</td>
