@@ -373,13 +373,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
 
       {/* 错误显示 */}
       {error && (
-        <div style={{
-          padding: '12px',
-          backgroundColor: '#fee',
-          border: '1px solid #fcc',
-          borderRadius: '6px',
-          marginBottom: '16px'
-        }}>
+        <div className={`${colorClasses.bg.danger} border ${colorClasses.border.danger} rounded-md mb-4 p-3 text-sm ${colorClasses.text.danger}`}>
           <strong>错误：</strong> {error}
         </div>
       )}
@@ -446,7 +440,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
 
       {/* 无数据提示 */}
       {!loading && displayData.length === 0 && (
-        <div style={{ padding: '32px', textAlign: 'center', color: '#6c757d', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
+        <div className="p-8 text-center text-neutral-500 dark:text-neutral-400 bg-neutral-50 dark:bg-surface-2 rounded-md">
           暂无数据 (当前月份: {selectedMonth}月)
         </div>
       )}
@@ -454,15 +448,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
       <div style={{ marginTop: '24px', textAlign: 'center' }}>
         <button
           onClick={reset}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '14px',
-          }}
+          className="px-5 py-2.5 bg-neutral-500 dark:bg-neutral-600 text-white border-none rounded-md cursor-pointer text-sm hover:bg-neutral-600 dark:hover:bg-neutral-500 transition-colors"
         >
           重置分析
         </button>
