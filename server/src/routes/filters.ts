@@ -42,8 +42,8 @@ router.get(
       WHERE ${permissionWhere}
       ORDER BY org_level_3
     `;
-    // 筛选器选项缓存 300 秒（数据不常变动）
-    const FILTER_CACHE_TTL = 300_000;
+    // 筛选器选项每天 ETL 后才变化，延长缓存至 4 小时（invalidateCache 在数据更新时清空）
+    const FILTER_CACHE_TTL = 14_400_000;
     // 4. 查询业务员列表
     const salesmanSql = `
       SELECT DISTINCT salesman_name, org_level_3

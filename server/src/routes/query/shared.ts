@@ -25,10 +25,28 @@ export { buildResponseMeta } from '../../utils/api-meta.js';
 export { DEFAULT_COMPREHENSIVE_THRESHOLDS } from '../../config/comprehensive-thresholds.js';
 export type { AdvancedFilterState, DateCriteria } from '../../types/data.js';
 
+/**
+ * 查询缓存 TTL（毫秒）
+ *
+ * 数据每天仅更新一次（ETL daily），invalidateCache() 在数据加载时清空所有缓存。
+ * 因此 TTL 只是"安全上限"，实际失效由 ETL 触发。
+ * 旧值 2-5 分钟导致同一查询每天重复执行数百次，白白消耗 DuckDB 资源。
+ */
 export const QUERY_CACHE = {
-  hotspotShort: 120_000,
-  hotspotMedium: 180_000,
-  hotspotLong: 300_000,
+  hotspotShort: 3_600_000,   // 1 小时（旧: 2 分钟）— KPI、下钻等高频查询
+  hotspotMedium: 7_200_000,  // 2 小时（旧: 3 分钟）— 趋势、排名等中频查询
+  hotspotLong: 14_400_000,   // 4 小时（旧: 5 分钟）— Dashboard bundle 等低频重查询
+} as const;
+
+/**
+ * HTTP Cache-Control max-age（秒）
+ *
+ * 数据日更，浏览器无需每次都问服务器。配合 stale-while-revalidate=3600，
+ * 即使过期也先返回旧数据、后台静默刷新，用户几乎零等待。
+ */
+export const HTTP_MAX_AGE = {
+  bundle: 300,    // 5 分钟（旧: 30-60 秒）— 聚合 bundle 端点
+  query: 300,     // 5 分钟（旧: 30-60 秒）— 独立查询端点
 } as const;
 
 export function buildRouteCacheKey(req: Request, routeName: string): string {
