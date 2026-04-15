@@ -24,6 +24,7 @@ export function useClaimsDetail() {
   const [lossRatioDev, setLossRatioDev] = useState<FetchState<any[]> & { claimsCutoff: string | null }>(
     { ...createFetchState([]), claimsCutoff: null }
   );
+  const [claimsHeatmap, setClaimsHeatmap] = useState<FetchState<any[]>>(createFetchState([]));
 
   const fetchPendingData = useCallback(async (params?: Record<string, string>) => {
     setPendingOverview(prev => ({ ...prev, loading: true, error: null }));
@@ -95,6 +96,17 @@ export function useClaimsDetail() {
     }
   }, []);
 
+  const fetchClaimsHeatmap = useCallback(async (params?: Record<string, string>) => {
+    setClaimsHeatmap(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const data = await apiClient.getClaimsDetailHeatmap(params);
+      setClaimsHeatmap({ data, loading: false, error: null });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '查询失败';
+      setClaimsHeatmap(prev => ({ ...prev, loading: false, error: msg }));
+    }
+  }, []);
+
   const fetchLossRatioDev = useCallback(async (params?: Record<string, string>) => {
     setLossRatioDev(prev => ({ ...prev, loading: true, error: null }));
     try {
@@ -118,10 +130,12 @@ export function useClaimsDetail() {
     geoComparison,
     frequencyYoy,
     lossRatioDev,
+    claimsHeatmap,
     fetchPendingData,
     fetchCauseAndCycle,
     fetchGeoData,
     fetchFrequencyYoy,
     fetchLossRatioDev,
+    fetchClaimsHeatmap,
   };
 }
