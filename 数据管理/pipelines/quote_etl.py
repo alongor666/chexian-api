@@ -46,10 +46,10 @@ CN_TO_EN = {
     '车险分等级': '_grade_1',
     '小货车评分': '_grade_2',
     '大货车评分': '_grade_3',
-    '高速风险等级': 'highway_risk_grade',
+    '高速风险等级': 'highway_risk_level',       # 对齐保单 highway_risk_level
     '交通风险评分等级': 'traffic_risk_grade',
     '业务员': 'salesman_raw',
-    '新车购置价': 'purchase_price',
+    '新车购置价': 'new_vehicle_price',          # 对齐保单 new_vehicle_price
     '车龄': 'vehicle_age',
     '纯风险保费': 'pure_risk_premium',
     '商业险NCD': 'commercial_ncd',
@@ -189,7 +189,7 @@ def main():
 
     # 数值字段
     for col in ['pure_risk_premium', 'ncd_premium', 'commercial_pricing_factor',
-                'final_quote_premium', 'commercial_ncd', 'purchase_price', 'vehicle_age']:
+                'final_quote_premium', 'commercial_ncd', 'new_vehicle_price', 'vehicle_age']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
@@ -204,12 +204,13 @@ def main():
     if len(df) < before:
         print(f"   过滤无车架号: {before - len(df):,} 行")
 
-    # 9. 拆分业务员字段（110031100周凡丁 → salesman_no + salesman_name_display）
-    print('🔧 拆分业务员字段...')
+    # 9. 业务员字段：保留原始拼接格式（对齐保单 salesman_name = "工号+姓名"）
+    #    同时拆出 salesman_no 用于 JOIN dim 表
+    print('🔧 处理业务员字段...')
     if 'salesman_raw' in df.columns:
         splits = df['salesman_raw'].apply(split_salesman)
         df['salesman_no'] = splits.apply(lambda x: x[0])
-        df['salesman_name_display'] = splits.apply(lambda x: x[1])
+        df['salesman_name'] = df['salesman_raw'].str.strip()  # 对齐保单命名
         df = df.drop(columns=['salesman_raw'])
 
     # 10. JOIN salesman dim 获取团队
@@ -277,7 +278,7 @@ def main():
             COUNT(CASE WHEN is_underwritten='承保' THEN 1 END) AS insured,
             COUNT(DISTINCT org_level_3) AS orgs,
             COUNT(DISTINCT team) AS teams,
-            COUNT(DISTINCT salesman_no) AS salesmen
+            COUNT(DISTINCT salesman_name) AS salesmen
         FROM read_parquet('{output_file}')
         """
     ).fetchone()

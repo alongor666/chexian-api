@@ -273,7 +273,7 @@ function findAllXlsx(dir) {
 }
 
 function runClaimsDetail(python, scriptDir) {
-  log('cyan', '\n═══ ClaimsDetail 域：赔案明细（全量替换）═══\n');
+  log('cyan', '\n═══ ClaimsDetail 域：赔案明细（分区 + CDC）═══\n');
 
   // 查找赔案明细 xlsx（支持多文件合并，新命名优先）
   const newFiles = ls('02_理赔明细_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
@@ -288,26 +288,73 @@ function runClaimsDetail(python, scriptDir) {
   }
 
   ensureDir(CLAIMS_DETAIL_DIR);
-  // 归档旧文件
+
+  const policyDir = join(scriptDir, 'warehouse/fact/policy/current');
+  const convertScript = join(scriptDir, 'pipelines/convert_claims_detail.py');
+  const tmpOutput = join(CLAIMS_DETAIL_DIR, '_incoming.parquet');
+  const inputPaths = sourceFiles.map(f => `"${f.path}"`);
+
+  // Step 1: xlsx → 临时 parquet（含 insurance_start_date enrichment）
+  log('green', '▶ Step 1: 转换 xlsx → parquet (含 insurance_start_date)');
+  runPythonScript(python, convertScript, [
+    '-i', ...inputPaths,
+    '-o', `"${tmpOutput}"`,
+    '--policy-dir', `"${policyDir}"`
+  ]);
+
+  // Step 2: 检查是否已有分区文件
+  const hasPartitions = readdirSync(CLAIMS_DETAIL_DIR)
+    .some(f => f.startsWith('claims_') && f.endsWith('.parquet'));
+
+  const partitionManager = join(scriptDir, 'pipelines/claims_partition_manager.py');
+
+  if (hasPartitions) {
+    // CDC 模式：增量合入已有分区
+    log('green', '▶ Step 2: CDC 更新（合入已有分区）');
+    runPythonScript(python, partitionManager, [
+      'update', '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`
+    ]);
+  } else {
+    // 首次迁移：初始分区
+    log('green', '▶ Step 2: 初始迁移（创建年度分区）');
+    runPythonScript(python, partitionManager, [
+      'migrate', '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`
+    ]);
+  }
+
+  // Step 3: 清理临时文件
+  if (existsSync(tmpOutput)) unlinkSync(tmpOutput);
+
+  // Step 4: 清理旧 latest.parquet（兼容迁移）
   if (existsSync(CLAIMS_DETAIL_PATH)) {
     const archiveDir = join(homedir(), 'chexian-archive');
     ensureDir(archiveDir);
-    const ts = formatDate();
-    renameSync(CLAIMS_DETAIL_PATH, join(archiveDir, `claims_detail_latest_${ts}.parquet`));
-    log('yellow', `  归档旧 claims_detail → claims_detail_latest_${ts}.parquet`);
+    renameSync(CLAIMS_DETAIL_PATH, join(archiveDir, `claims_detail_latest_${formatDate()}.parquet`));
+    log('yellow', '  归档旧 latest.parquet → archive/');
   }
 
-  const convertScript = join(scriptDir, 'pipelines/convert_claims_detail.py');
-  const inputPaths = sourceFiles.map(f => `"${f.path}"`);
-  runPythonScript(python, convertScript, [
-    '-i', ...inputPaths, '-o', `"${CLAIMS_DETAIL_PATH}"`
-  ]);
+  // Step 5: 统计总行数
+  const totalRows = getPartitionedRowCount(python, CLAIMS_DETAIL_DIR);
+  updateDataSources('claims_detail', { rowCount: totalRows, fieldCount: 38 });
 
-  // 更新 data-sources.json
-  const rowCount = getParquetRowCount(python, CLAIMS_DETAIL_PATH);
-  updateDataSources('claims_detail', { rowCount, fieldCount: 36 });
+  // Step 6: 显示分区状态
+  try {
+    runPythonScript(python, partitionManager, ['status', '-o', `"${CLAIMS_DETAIL_DIR}"`]);
+  } catch { /* non-fatal */ }
 
-  log('green', '✅ ClaimsDetail 域完成');
+  log('green', '✅ ClaimsDetail 域完成（分区模式）');
+}
+
+/** 统计分区目录中所有 claims_*.parquet 的总行数 */
+function getPartitionedRowCount(python, dir) {
+  try {
+    const globPath = join(dir, 'claims_*.parquet').replace(/\\/g, '/');
+    const result = execSync(
+      `"${python}" -c "import duckdb; print(duckdb.sql(\\"SELECT COUNT(*) FROM read_parquet('${globPath}')\\").fetchone()[0])"`,
+      { encoding: 'utf-8', cwd: __dirname }
+    );
+    return parseInt(result.trim(), 10);
+  } catch { return null; }
 }
 
 function runQuotes(python, scriptDir) {
