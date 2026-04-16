@@ -7,7 +7,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { duckdbService } from '../duckdb.js';
 import { materializeInBatches } from '../duckdb-materialization.js';
-import { DUCKDB_INIT_OPTIONS } from '../../config/database.js';
 
 describe('materializeInBatches — 批次物化逻辑', () => {
   const sqlCalls: string[] = [];
@@ -85,30 +84,16 @@ describe('materializeInBatches — 批次物化逻辑', () => {
     expect(inserts.length).toBe(2);
   });
 
-  // MB-04: SET threads=1 在首批前执行
-  it('MB-04: 物化开始时降线程到1', async () => {
+  // MB-04: 物化不修改全局 threads（避免影响并发查询）
+  it('MB-04: 物化过程不修改全局 threads 设置', async () => {
     mockQuery(['2024-01']);
     await materializeInBatches(
       duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
-    const threadIdx = sqlCalls.findIndex(s => s === 'SET threads=1');
-    const createIdx = sqlCalls.findIndex(s => s.includes('CREATE TABLE TestTable'));
-    expect(threadIdx).toBeGreaterThanOrEqual(0);
-    expect(threadIdx).toBeLessThan(createIdx);
-  });
-
-  // MB-05: 线程恢复在成功路径
-  it('MB-05: 正常完成后恢复线程数', async () => {
-    mockQuery(['2024-01']);
-    await materializeInBatches(
-      duckdbService,
-      'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
-      'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
-    );
-    expect(sqlCalls.some(s => s === `SET threads=${DUCKDB_INIT_OPTIONS.threads}`)).toBe(true);
-    expect(sqlCalls.some(s => s === 'SET preserve_insertion_order=true')).toBe(true);
+    expect(sqlCalls.some(s => s === 'SET threads=1')).toBe(false);
+    expect(sqlCalls.some(s => s.includes('SET preserve_insertion_order'))).toBe(false);
   });
 
   // MB-06: 索引创建
@@ -147,16 +132,15 @@ describe('materializeInBatches — 批次物化逻辑', () => {
     expect(result).toBe('view');
   });
 
-  // MB-09: 异常路径仍恢复线程数
-  it('MB-09: 异常后 catch 块恢复线程数', async () => {
+  // MB-09: 异常路径不操作全局 threads
+  it('MB-09: 异常后 catch 块不操作全局 threads', async () => {
     mockQuery(['2024-01'], 'CREATE TABLE TestTable');
     await materializeInBatches(
       duckdbService,
       'TestTable', 'SELECT 1 FROM PolicyFact WHERE 1=1', 'SELECT * FROM normalized',
       'CREATE OR REPLACE VIEW TestTable AS SELECT 1', [],
     );
-    // 在异常后的调用中应有线程恢复
-    const afterFail = sqlCalls.slice(sqlCalls.findIndex(s => s.includes('CREATE TABLE TestTable')) + 1);
-    expect(afterFail.some(s => s.includes(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`))).toBe(true);
+    expect(sqlCalls.some(s => s.includes('SET threads'))).toBe(false);
+    expect(sqlCalls.some(s => s.includes('SET preserve_insertion_order'))).toBe(false);
   });
 });

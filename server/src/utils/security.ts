@@ -222,22 +222,24 @@ export function sanitizeTableName(name: string): string {
 }
 
 /**
- * 转义 SQL 字符串值（用于无法使用参数化查询的场景）
- *
- * 测试用例：
- * - 正常字符串: "hello" → "hello"
- * - 单引号: "it's" → "it''s"
- * - 反斜杠: "path\\to" → "path\\\\to"
- * - 多重引号: "'test'" → "''test''"
+ * DuckDB 标准字符串字面量转义。
+ * DuckDB 普通字符串 '...' 中反斜杠无特殊含义（仅 E'...' escape string 才启用），
+ * 因此只需转义单引号 ' → ''。
+ * 参考: https://duckdb.org/docs/current/sql/data_types/literal_types.html
  */
-export function escapeSqlValue(value: string): string {
+export function escapeSqlLiteral(value: string): string {
   if (typeof value !== 'string') {
     throw new AppError(400, '只能转义字符串值');
   }
+  return value.replace(/'/g, "''");
+}
 
-  return value
-    .replace(/\\/g, '\\\\')  // 先转义反斜杠
-    .replace(/'/g, "''");    // 再转义单引号
+/**
+ * @deprecated 原实现错误地转义反斜杠（已修复），现为 escapeSqlLiteral 的别名。
+ * 新代码请直接使用 escapeSqlLiteral。
+ */
+export function escapeSqlValue(value: string): string {
+  return escapeSqlLiteral(value);
 }
 
 // ============================================

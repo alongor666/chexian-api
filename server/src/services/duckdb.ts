@@ -3,7 +3,7 @@ import { DuckDBInstance } from '@duckdb/node-api';
 import { databaseConfig, DUCKDB_INIT_OPTIONS } from '../config/database.js';
 import { AppError } from '../middleware/error.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
-import { recordQueryMetric } from '../utils/request-context.js';
+import { recordQueryMetric, getRequestContext } from '../utils/request-context.js';
 import { QueryCache, ConnectionPool, dropRelationIfExists, hasRelation, getTableSchema } from './duckdb-infra.js';
 import type { DuckDBQueryable } from './duckdb-types.js';
 import { initDuckDBTables } from './duckdb-init-tables.js';
@@ -61,13 +61,17 @@ export class DuckDBService implements DuckDBQueryable {
       if (cached) { recordQueryMetric(sql, 0, true); return cached; }
     }
     if (!this.connectionPool) throw new AppError(500, 'DuckDB not initialized');
-    const conn = await this.connectionPool.acquire();
+    const pool = this.connectionPool; // 捕获引用，防止 close() 期间置 null 导致 finally 空引用
+    const conn = await pool.acquire();
     const startTime = Date.now();
     try {
       const reader = await conn.runAndReadAll(sql);
       const result = reader.getRowObjects();
       const duration = Date.now() - startTime;
-      if (duration > SLOW_QUERY_THRESHOLD_MS) console.warn(`[DuckDB] ⚠️ Slow query (${duration}ms): ${sql.substring(0, 200)}${sql.length > 200 ? '...' : ''}`);
+      if (duration > SLOW_QUERY_THRESHOLD_MS) {
+        const ctx = getRequestContext();
+        console.warn(`[DuckDB] ⚠️ Slow query (${duration}ms) route=${ctx?.routeKey ?? 'unknown'} reqId=${ctx?.requestId ?? '-'}`);
+      }
       const converted = convertBigIntToNumber(result) as T[];
       if (cacheTtlMs > 0) this.queryCache.set(sql, converted, cacheTtlMs);
       recordQueryMetric(sql, duration, false);
@@ -76,11 +80,12 @@ export class DuckDBService implements DuckDBQueryable {
       const message = err instanceof Error ? err.message : String(err);
       const duration = Date.now() - startTime;
       recordQueryMetric(sql, duration, false);
-      const errorId = Math.random().toString(36).slice(2, 10);
-      console.error(`[DuckDB] [${errorId}] Query error (${duration}ms):`, message, '| SQL:', sql.slice(0, 500));
+      const ctx = getRequestContext();
+      const errorId = ctx?.requestId ?? Math.random().toString(36).slice(2, 10);
+      console.error(`[DuckDB] [${errorId}] Query error (${duration}ms):`, message);
       throw new AppError(400, process.env.NODE_ENV === 'production' ? `查询执行失败 [${errorId}]` : `查询执行失败: ${message}`);
     } finally {
-      this.connectionPool.release(conn);
+      pool.release(conn);
     }
   }
 

@@ -18,11 +18,15 @@ import { DataBootstrapper } from './services/data-bootstrapper.js';
 import { registerBootstrapper } from './services/bootstrapper-registry.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
+import type { Server } from 'http';
+
 const app: Application = express();
 const PORT = serverEnv.PORT;
 
 /** 数据加载完成标志 — 健康检查依赖此状态 */
 let dataReady = false;
+/** HTTP server 引用，优雅关闭时先停止接收新请求 */
+let httpServer: Server | null = null;
 
 /**
  * 1. 安全中间件
@@ -104,6 +108,30 @@ app.get('/health', (req, res) => {
 });
 
 /**
+ * 5.1 内部状态详情（需认证，供运维监控）
+ */
+import { getRouteCacheStats } from './services/route-cache.js';
+import { authMiddleware } from './middleware/auth.js';
+app.get('/api/health/detail', authMiddleware, (req, res) => {
+  const memUsage = process.memoryUsage();
+  res.json({
+    success: true,
+    dataReady,
+    cache: {
+      queryCache: { size: duckdbService.cacheSize },
+      routeCache: getRouteCacheStats(),
+    },
+    memory: {
+      heapUsedMB: Math.round(memUsage.heapUsed / 1024 / 1024),
+      heapTotalMB: Math.round(memUsage.heapTotal / 1024 / 1024),
+      rssMB: Math.round(memUsage.rss / 1024 / 1024),
+    },
+    uptime: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
  * 6. API路由
  */
 import authRoutes from './routes/auth.js';
@@ -162,7 +190,7 @@ async function startServer() {
     // 3. 标记就绪 + 启动 HTTP
     dataReady = true;
     const BIND_HOST = serverEnv.BIND_HOST;
-    app.listen(PORT, BIND_HOST, () => {
+    httpServer = app.listen(PORT, BIND_HOST, () => {
       console.log(`[Server] 🚀 Server is running on http://${BIND_HOST}:${PORT}`);
       console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`[Server] Health check: http://${BIND_HOST}:${PORT}/health`);
@@ -180,18 +208,36 @@ async function startServer() {
 }
 
 /**
- * 优雅关闭
+ * 优雅关闭：先停止接收新请求 → 等待活跃查询完成 → 关闭 DuckDB
  */
-process.on('SIGTERM', async () => {
-  console.log('[Server] SIGTERM received, shutting down gracefully...');
-  await duckdbService.close();
-  process.exit(0);
-});
+async function gracefulShutdown(signal: string): Promise<void> {
+  console.log(`[Server] ${signal} received, shutting down gracefully...`);
+  dataReady = false; // 健康检查立即返回 503，通知负载均衡器摘除节点
 
-process.on('SIGINT', async () => {
-  console.log('[Server] SIGINT received, shutting down gracefully...');
+  // 1. 停止接收新的 TCP 连接
+  if (httpServer) {
+    await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
+    console.log('[Server] HTTP server closed, no new connections accepted');
+  }
+
+  // 2. 关闭 DuckDB（内部会 drain 活跃查询 + 关闭连接池）
   await duckdbService.close();
+  console.log('[Server] DuckDB closed');
+
   process.exit(0);
+}
+
+process.on('SIGTERM', () => {
+  gracefulShutdown('SIGTERM').catch((err) => {
+    console.error('[Server] Graceful shutdown failed:', err);
+    process.exit(1);
+  });
+});
+process.on('SIGINT', () => {
+  gracefulShutdown('SIGINT').catch((err) => {
+    console.error('[Server] Graceful shutdown failed:', err);
+    process.exit(1);
+  });
 });
 
 // 启动服务器
