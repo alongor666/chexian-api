@@ -44,12 +44,12 @@ OUT_DIR = str(Path(__file__).resolve().parent.parent / "数据分析报告")
 # ============================================================================
 # 车龄计算 SQL
 # ============================================================================
-# 车龄 = 签单日期年份 - 初次登记年份
+# 车龄 = policy_date年份 - 初次登记年份
 VEHICLE_AGE_EXPR = """
     CASE
-        WHEN 初次登记年月 IS NULL OR 初次登记年月 = '' THEN NULL
+        WHEN first_registration_date IS NULL OR first_registration_date = '' THEN NULL
         ELSE
-            YEAR(签单日期) - CAST(SUBSTRING(初次登记年月, 1, 4) AS INT)
+            YEAR(policy_date) - CAST(SUBSTRING(first_registration_date, 1, 4) AS INT)
     END
 """
 
@@ -67,9 +67,9 @@ VEHICLE_AGE_BUCKET = """
 # 车价分段
 PRICE_BUCKET = """
     CASE
-        WHEN 新车购置价 < 100000 THEN '10万以下'
-        WHEN 新车购置价 < 200000 THEN '10-20万'
-        WHEN 新车购置价 < 500000 THEN '20-50万'
+        WHEN new_vehicle_price < 100000 THEN '10万以下'
+        WHEN new_vehicle_price < 200000 THEN '10-20万'
+        WHEN new_vehicle_price < 500000 THEN '20-50万'
         ELSE '50万以上'
     END
 """
@@ -78,7 +78,7 @@ PRICE_BUCKET = """
 # ============================================================================
 # 基础筛选条件
 # ============================================================================
-BASE_FILTER = "客户类别 = '非营业个人客车' AND 是否过户车 = true"
+BASE_FILTER = "customer_category = '非营业个人客车' AND is_transfer = true"
 
 
 def parse_ids(s: str) -> set:
@@ -93,16 +93,16 @@ def section_01_overview(ctx, rpt, silent=False):
     result = con.execute(f"""
     SELECT
             COUNT(*) as total_records,
-            COUNT(DISTINCT 保单号) as policy_count,
-            SUM(保费)/10000 as total_premium_wan,
-            SUM(保费 * {POLICY_TERM})/10000/365 as avg_daily_premium,
-            SUM(已报告赔款)/10000 as total_claims_wan,
-            SUM(赔案件数) as total_claim_cases,
+            COUNT(DISTINCT policy_no) as policy_count,
+            SUM(premium)/10000 as total_premium_wan,
+            SUM(premium * {POLICY_TERM})/10000/365 as avg_daily_premium,
+            SUM(reported_claims)/10000 as total_claims_wan,
+            SUM(claim_cases) as total_claim_cases,
             SUM({EARNED})/10000 as total_earned_premium_wan,
-            SUM(费用金额)/10000 as total_fee_wan,
-            AVG(商车自主定价系数) as avg_pricing_coeff,
-            MIN(签单日期)::DATE as min_date,
-            MAX(签单日期)::DATE as max_date
+            SUM(fee_amount)/10000 as total_fee_wan,
+            AVG(commercial_pricing_factor) as avg_pricing_coeff,
+            MIN(policy_date)::DATE as min_date,
+            MAX(policy_date)::DATE as max_date
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
         WHERE {BASE_FILTER}
     """).fetchone()
@@ -137,7 +137,7 @@ def section_01_overview(ctx, rpt, silent=False):
 
     if result[1] and result[1] > 0:
         data["incident_rate"] = con.execute(f"""
-            SELECT SUM(赔案件数 * {POLICY_TERM} / NULLIF({EARNED_DAYS}, 0)) / COUNT(DISTINCT 保单号) * 100
+            SELECT SUM(claim_cases * {POLICY_TERM} / NULLIF({EARNED_DAYS}, 0)) / COUNT(DISTINCT policy_no) * 100
             FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
             WHERE {BASE_FILTER}
         """).fetchone()[0] or 0
@@ -147,12 +147,12 @@ def section_01_overview(ctx, rpt, silent=False):
     if not silent:
         rpt.add("## 1. 整体经营概况（5年合并）\n")
         rpt.add(f"> **数据范围**: {data['min_date']} ~ {data['max_date']}\n")
-        rpt.add(f"> **保单数**: {data['policy_count']:,} | **总保费**: {data['total_premium_wan']:.1f}万元\n")
+        rpt.add(f"> **保单数**: {data['policy_count']:,} | **总premium**: {data['total_premium_wan']:.1f}万元\n")
         rpt.add()
         rpt.add("| 指标 | 值 | 亮灯 |")
         rpt.add("|:---|---:|:---:|")
-        rpt.add(f"| 总保费(万元) | {fw(data['total_premium_wan'])} | - |")
-        rpt.add(f"| 满期保费(万元) | {fw(data['total_earned_premium_wan'])} | - |")
+        rpt.add(f"| 总premium(万元) | {fw(data['total_premium_wan'])} | - |")
+        rpt.add(f"| 满期premium(万元) | {fw(data['total_earned_premium_wan'])} | - |")
         rpt.add(f"| 满期赔付率 | {fp(data['loss_ratio'])} | {light(data['loss_ratio'], TH_LR)} |")
         rpt.add(f"| 费用率 | {fp(data['expense_ratio'])} | - |")
         rpt.add(f"| 变动成本率 | {fp(data['vc_ratio'])} | {light(data['vc_ratio'], TH_VC)} |")
@@ -161,7 +161,7 @@ def section_01_overview(ctx, rpt, silent=False):
         rpt.add(f"| 满期出险率 | {fp(data['incident_rate'])} | {light(data['incident_rate'], TH_IR)} |")
         rpt.add(f"| 商车定价系数 | {fc(data['avg_pricing_coeff'])} | - |")
         rpt.add()
-        rpt.add("> † 案均赔款 = 已报告赔款 / 赔案件数\n")
+        rpt.add("> † 案均赔款 = reported_claims / claim_cases\n")
 
     return data
 
@@ -174,38 +174,38 @@ def section_02_brand(ctx, rpt, silent=False):
     if not Path(BRAND_DIM).exists():
         if not silent:
             rpt.add("## 2. 品牌维度\n")
-            rpt.add("> ⚠️ 品牌维度表不存在，使用厂牌车型前缀提取品牌\n")
-        # 使用厂牌车型前缀提取品牌（修复转义序列）
+            rpt.add("> ⚠️ 品牌维度表不存在，使用vehicle_model前缀提取品牌\n")
+        # 使用vehicle_model前缀提取品牌（修复转义序列）
         brand_sql = f"""
             SELECT
-                REGEXP_EXTRACT(厂牌车型, '^([\u4e00-\u9fff][\u4e00-\u9fff\\-]*)', 1) as brand,
-                COUNT(DISTINCT 保单号) as policy_count,
-                SUM(保费)/10000 as written_premium,
+                REGEXP_EXTRACT(vehicle_model, '^([\u4e00-\u9fff][\u4e00-\u9fff\\-]*)', 1) as brand,
+                COUNT(DISTINCT policy_no) as policy_count,
+                SUM(premium)/10000 as written_premium,
                 SUM({EARNED})/10000 as earned_premium,
-                SUM(已报告赔款)/10000 as reported_claims,
-                SUM(赔案件数) as claim_cases,
-                SUM({EARNED}) * (1 - SUM(已报告赔款)/NULLIF(SUM({EARNED}), 0) - SUM(费用金额)/NULLIF(SUM(保费), 0))/10000 as earned_margin
+                SUM(reported_claims)/10000 as reported_claims,
+                SUM(claim_cases) as claim_cases,
+                SUM({EARNED}) * (1 - SUM(reported_claims)/NULLIF(SUM({EARNED}), 0) - SUM(fee_amount)/NULLIF(SUM(premium), 0))/10000 as earned_margin
             FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
-            WHERE {BASE_FILTER} AND 厂牌车型 IS NOT NULL
+            WHERE {BASE_FILTER} AND vehicle_model IS NOT NULL
             GROUP BY brand
-            HAVING COUNT(DISTINCT 保单号) >= 100
+            HAVING COUNT(DISTINCT policy_no) >= 100
             ORDER BY written_premium DESC
         """
     else:
         brand_sql = f"""
             SELECT
                 b.品牌_用途 as brand,
-                COUNT(DISTINCT p.保单号) as policy_count,
-                SUM(p.保费)/10000 as written_premium,
+                COUNT(DISTINCT p.policy_no) as policy_count,
+                SUM(p.premium)/10000 as written_premium,
                 SUM({EARNED})/10000 as earned_premium,
-                SUM(p.已报告赔款)/10000 as reported_claims,
-                SUM(p.赔案件数) as claim_cases,
-                SUM({EARNED}) * (1 - SUM(p.已报告赔款)/NULLIF(SUM({EARNED}), 0) - SUM(p.费用金额)/NULLIF(SUM(p.保费), 0))/10000 as earned_margin
+                SUM(p.reported_claims)/10000 as reported_claims,
+                SUM(p.claim_cases) as claim_cases,
+                SUM({EARNED}) * (1 - SUM(p.reported_claims)/NULLIF(SUM({EARNED}), 0) - SUM(p.fee_amount)/NULLIF(SUM(p.premium), 0))/10000 as earned_margin
             FROM read_parquet('{GLOB_CURRENT}', union_by_name=true) p
-            JOIN read_parquet('{BRAND_DIM}') b ON p.厂牌车型 = b.厂牌车型
+            JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model
             WHERE {BASE_FILTER}
             GROUP BY b.品牌_用途
-            HAVING COUNT(DISTINCT p.保单号) >= 100
+            HAVING COUNT(DISTINCT p.policy_no) >= 100
             ORDER BY written_premium DESC
         """
 
@@ -235,7 +235,7 @@ def section_02_brand(ctx, rpt, silent=False):
 
     if not silent:
         rpt.add("## 2. 品牌×用途维度（保单≥100）\n")
-        rpt.add("| 品牌_用途 | 保单数 | 保费(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
+        rpt.add("| 品牌_用途 | 保单数 | premium(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
         rpt.add("|:---|---:|---:|---:|---:|---:|")
         for b in data["brands"][:20]:
             rpt.add(
@@ -261,12 +261,12 @@ def section_03_vehicle_age(ctx, rpt, silent=False):
     result = con.execute(f"""
         SELECT
             {VEHICLE_AGE_BUCKET.format(vehicle_age=VEHICLE_AGE_EXPR)} as age_bucket,
-            COUNT(DISTINCT 保单号) as policy_count,
-            SUM(保费)/10000 as written_premium,
+            COUNT(DISTINCT policy_no) as policy_count,
+            SUM(premium)/10000 as written_premium,
             SUM({EARNED})/10000 as earned_premium,
-            SUM(已报告赔款)/10000 as reported_claims,
-            SUM(赔案件数) as claim_cases,
-            SUM({EARNED}) * (1 - SUM(已报告赔款)/NULLIF(SUM({EARNED}), 0) - SUM(费用金额)/NULLIF(SUM(保费), 0))/10000 as earned_margin
+            SUM(reported_claims)/10000 as reported_claims,
+            SUM(claim_cases) as claim_cases,
+            SUM({EARNED}) * (1 - SUM(reported_claims)/NULLIF(SUM({EARNED}), 0) - SUM(fee_amount)/NULLIF(SUM(premium), 0))/10000 as earned_margin
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
         WHERE {BASE_FILTER}
         GROUP BY age_bucket
@@ -303,7 +303,7 @@ def section_03_vehicle_age(ctx, rpt, silent=False):
 
     if not silent:
         rpt.add("## 3. 车龄维度\n")
-        rpt.add("| 车龄分段 | 保单数 | 保费(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
+        rpt.add("| 车龄分段 | 保单数 | premium(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
         rpt.add("|:---|---:|---:|---:|---:|---:|")
         for a in data["ages"]:
             rpt.add(
@@ -326,15 +326,15 @@ def section_04_price(ctx, rpt, silent=False):
     result = con.execute(f"""
         SELECT
             {PRICE_BUCKET} as price_bucket,
-            COUNT(DISTINCT 保单号) as policy_count,
-            SUM(保费)/10000 as written_premium,
+            COUNT(DISTINCT policy_no) as policy_count,
+            SUM(premium)/10000 as written_premium,
             SUM({EARNED})/10000 as earned_premium,
-            SUM(已报告赔款)/10000 as reported_claims,
-            SUM(赔案件数) as claim_cases,
-            AVG(新车购置价)/10000 as avg_price,
-            SUM({EARNED}) * (1 - SUM(已报告赔款)/NULLIF(SUM({EARNED}), 0) - SUM(费用金额)/NULLIF(SUM(保费), 0))/10000 as earned_margin
+            SUM(reported_claims)/10000 as reported_claims,
+            SUM(claim_cases) as claim_cases,
+            AVG(new_vehicle_price)/10000 as avg_price,
+            SUM({EARNED}) * (1 - SUM(reported_claims)/NULLIF(SUM({EARNED}), 0) - SUM(fee_amount)/NULLIF(SUM(premium), 0))/10000 as earned_margin
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
-        WHERE {BASE_FILTER} AND 新车购置价 > 0
+        WHERE {BASE_FILTER} AND new_vehicle_price > 0
         GROUP BY price_bucket
         ORDER BY
             CASE price_bucket
@@ -369,7 +369,7 @@ def section_04_price(ctx, rpt, silent=False):
 
     if not silent:
         rpt.add("## 4. 车价维度\n")
-        rpt.add("| 车价分段 | 保单数 | 均价(万) | 保费(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
+        rpt.add("| 车价分段 | 保单数 | 均价(万) | premium(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
         rpt.add("|:---|---:|---:|---:|---:|---:|---:|")
         for p in data["prices"]:
             rpt.add(
@@ -387,21 +387,21 @@ def section_04_price(ctx, rpt, silent=False):
 
 
 def section_05_org(ctx, rpt, silent=False):
-    """板块 5: 三级机构维度"""
+    """板块 5: org_level_3维度"""
     con = ctx.con
 
     result = con.execute(f"""
         SELECT
-            三级机构 as org,
-            COUNT(DISTINCT 保单号) as policy_count,
-            SUM(保费)/10000 as written_premium,
+            org_level_3 as org,
+            COUNT(DISTINCT policy_no) as policy_count,
+            SUM(premium)/10000 as written_premium,
             SUM({EARNED})/10000 as earned_premium,
-            SUM(已报告赔款)/10000 as reported_claims,
-            SUM(赔案件数) as claim_cases,
-            SUM({EARNED}) * (1 - SUM(已报告赔款)/NULLIF(SUM({EARNED}), 0) - SUM(费用金额)/NULLIF(SUM(保费), 0))/10000 as earned_margin
+            SUM(reported_claims)/10000 as reported_claims,
+            SUM(claim_cases) as claim_cases,
+            SUM({EARNED}) * (1 - SUM(reported_claims)/NULLIF(SUM({EARNED}), 0) - SUM(fee_amount)/NULLIF(SUM(premium), 0))/10000 as earned_margin
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
         WHERE {BASE_FILTER}
-        GROUP BY 三级机构
+        GROUP BY org_level_3
         ORDER BY written_premium DESC
     """).fetchall()
 
@@ -427,8 +427,8 @@ def section_05_org(ctx, rpt, silent=False):
         data["orgs"].append(org_data)
 
     if not silent:
-        rpt.add("## 5. 三级机构维度\n")
-        rpt.add("| 机构 | 保单数 | 保费(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
+        rpt.add("## 5. org_level_3维度\n")
+        rpt.add("| 机构 | 保单数 | premium(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
         rpt.add("|:---|---:|---:|---:|---:|---:|")
         for o in data["orgs"]:
             rpt.add(
@@ -445,36 +445,36 @@ def section_05_org(ctx, rpt, silent=False):
 
 
 def section_06_insurance(ctx, rpt, silent=False):
-    """板块 6: 险类/险别组合维度"""
+    """板块 6: insurance_type/coverage_combination维度"""
     con = ctx.con
 
-    # 险类分布
+    # insurance_type分布
     insurance_result = con.execute(f"""
         SELECT
-            险类 as insurance_type,
-            COUNT(DISTINCT 保单号) as policy_count,
-            SUM(保费)/10000 as written_premium,
+            insurance_type as insurance_type,
+            COUNT(DISTINCT policy_no) as policy_count,
+            SUM(premium)/10000 as written_premium,
             SUM({EARNED})/10000 as earned_premium,
-            SUM(已报告赔款)/10000 as reported_claims,
-            SUM(赔案件数) as claim_cases
+            SUM(reported_claims)/10000 as reported_claims,
+            SUM(claim_cases) as claim_cases
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
         WHERE {BASE_FILTER}
-        GROUP BY 险类
+        GROUP BY insurance_type
         ORDER BY written_premium DESC
     """).fetchall()
 
-    # 险别组合分布
+    # coverage_combination分布
     combo_result = con.execute(f"""
         SELECT
-            险别组合 as combo,
-            COUNT(DISTINCT 保单号) as policy_count,
-            SUM(保费)/10000 as written_premium,
+            coverage_combination as combo,
+            COUNT(DISTINCT policy_no) as policy_count,
+            SUM(premium)/10000 as written_premium,
             SUM({EARNED})/10000 as earned_premium,
-            SUM(已报告赔款)/10000 as reported_claims,
-            SUM(赔案件数) as claim_cases
+            SUM(reported_claims)/10000 as reported_claims,
+            SUM(claim_cases) as claim_cases
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
         WHERE {BASE_FILTER}
-        GROUP BY 险别组合
+        GROUP BY coverage_combination
         ORDER BY written_premium DESC
     """).fetchall()
 
@@ -519,10 +519,10 @@ def section_06_insurance(ctx, rpt, silent=False):
         data["combos"].append(combo_data)
 
     if not silent:
-        rpt.add("## 6. 险类/险别组合维度\n")
+        rpt.add("## 6. insurance_type/coverage_combination维度\n")
 
-        rpt.add("### 6.1 险类分布\n")
-        rpt.add("| 险类 | 保单数 | 保费(万) | 赔付率 | 案均赔款† |")
+        rpt.add("### 6.1 insurance_type分布\n")
+        rpt.add("| insurance_type | 保单数 | premium(万) | 赔付率 | 案均赔款† |")
         rpt.add("|:---|---:|---:|---:|---:|")
         for ins in data["insurance_types"]:
             rpt.add(
@@ -534,8 +534,8 @@ def section_06_insurance(ctx, rpt, silent=False):
             )
         rpt.add()
 
-        rpt.add("### 6.2 险别组合分布\n")
-        rpt.add("| 险别组合 | 保单数 | 保费(万) | 赔付率 | 案均赔款† |")
+        rpt.add("### 6.2 coverage_combination分布\n")
+        rpt.add("| coverage_combination | 保单数 | premium(万) | 赔付率 | 案均赔款† |")
         rpt.add("|:---|---:|---:|---:|---:|")
         for c in data["combos"]:
             rpt.add(
@@ -556,26 +556,26 @@ def section_07_brand_org(ctx, rpt, silent=False):
 
     # 品牌 Top 10 × 机构
     if not Path(BRAND_DIM).exists():
-        brand_field = r"REGEXP_EXTRACT(厂牌车型, '^([\u4e00-\u9fff][\u4e00-\u9fff\\-]*)', 1)"
+        brand_field = r"REGEXP_EXTRACT(vehicle_model, '^([\u4e00-\u9fff][\u4e00-\u9fff\\-]*)', 1)"
     else:
         brand_field = "b.品牌_用途"
 
-    join_clause = f"JOIN read_parquet('{BRAND_DIM}') b ON p.厂牌车型 = b.厂牌车型" if Path(BRAND_DIM).exists() else ""
+    join_clause = f"JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model" if Path(BRAND_DIM).exists() else ""
 
     result = con.execute(f"""
         SELECT
             {brand_field} as brand,
-            三级机构 as org,
-            COUNT(DISTINCT 保单号) as policy_count,
-            SUM(保费)/10000 as written_premium,
+            org_level_3 as org,
+            COUNT(DISTINCT policy_no) as policy_count,
+            SUM(premium)/10000 as written_premium,
             SUM({EARNED})/10000 as earned_premium,
-            SUM(已报告赔款)/10000 as reported_claims,
-            SUM(赔案件数) as claim_cases
+            SUM(reported_claims)/10000 as reported_claims,
+            SUM(claim_cases) as claim_cases
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true) p
         {join_clause}
         WHERE {BASE_FILTER}
-        GROUP BY brand, 三级机构
-        HAVING COUNT(DISTINCT 保单号) >= 50
+        GROUP BY brand, org_level_3
+        HAVING COUNT(DISTINCT policy_no) >= 50
         ORDER BY written_premium DESC
         LIMIT 30
     """).fetchall()
@@ -605,7 +605,7 @@ def section_07_brand_org(ctx, rpt, silent=False):
         rpt.add("## 7. 品牌_用途×机构交叉分析（保单≥50）\n")
         rpt.add("> **发现风险组合**: 关注高赔付率 + 高案均赔款的组合\n")
         rpt.add()
-        rpt.add("| 品牌_用途 | 机构 | 保单数 | 保费(万) | 赔付率 | 案均赔款† |")
+        rpt.add("| 品牌_用途 | 机构 | 保单数 | premium(万) | 赔付率 | 案均赔款† |")
         rpt.add("|:---|:---|---:|---:|---:|---:|")
         for c in data["cross"]:
             rpt.add(
@@ -622,22 +622,22 @@ def section_07_brand_org(ctx, rpt, silent=False):
 
 
 def section_08_price_combo(ctx, rpt, silent=False):
-    """板块 8: 车价×险别组合交叉分析（多维度）"""
+    """板块 8: 车价×coverage_combination交叉分析（多维度）"""
     con = ctx.con
 
     result = con.execute(f"""
         SELECT
             {PRICE_BUCKET} as price_bucket,
-            险别组合 as combo,
-            COUNT(DISTINCT 保单号) as policy_count,
-            SUM(保费)/10000 as written_premium,
+            coverage_combination as combo,
+            COUNT(DISTINCT policy_no) as policy_count,
+            SUM(premium)/10000 as written_premium,
             SUM({EARNED})/10000 as earned_premium,
-            SUM(已报告赔款)/10000 as reported_claims,
-            SUM(赔案件数) as claim_cases
+            SUM(reported_claims)/10000 as reported_claims,
+            SUM(claim_cases) as claim_cases
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
-        WHERE {BASE_FILTER} AND 新车购置价 > 0
-        GROUP BY price_bucket, 险别组合
-        HAVING COUNT(DISTINCT 保单号) >= 50
+        WHERE {BASE_FILTER} AND new_vehicle_price > 0
+        GROUP BY price_bucket, coverage_combination
+        HAVING COUNT(DISTINCT policy_no) >= 50
         ORDER BY written_premium DESC
     """).fetchall()
 
@@ -663,10 +663,10 @@ def section_08_price_combo(ctx, rpt, silent=False):
         data["cross"].append(cross_data)
 
     if not silent:
-        rpt.add("## 8. 车价×险别组合交叉分析（保单≥50）\n")
+        rpt.add("## 8. 车价×coverage_combination交叉分析（保单≥50）\n")
         rpt.add("> **风险发现**: 高车价+全险组合的赔付情况\n")
         rpt.add()
-        rpt.add("| 车价分段 | 险别组合 | 保单数 | 保费(万) | 赔付率 | 案均赔款† |")
+        rpt.add("| 车价分段 | coverage_combination | 保单数 | premium(万) | 赔付率 | 案均赔款† |")
         rpt.add("|:---|:---|---:|---:|---:|---:|")
         for c in data["cross"]:
             rpt.add(
@@ -683,22 +683,22 @@ def section_08_price_combo(ctx, rpt, silent=False):
 
 
 def section_09_age_insurance(ctx, rpt, silent=False):
-    """板块 9: 车龄×险类交叉分析（多维度）"""
+    """板块 9: 车龄×insurance_type交叉分析（多维度）"""
     con = ctx.con
 
     result = con.execute(f"""
         SELECT
             {VEHICLE_AGE_BUCKET.format(vehicle_age=VEHICLE_AGE_EXPR)} as age_bucket,
-            险类 as insurance_type,
-            COUNT(DISTINCT 保单号) as policy_count,
-            SUM(保费)/10000 as written_premium,
+            insurance_type as insurance_type,
+            COUNT(DISTINCT policy_no) as policy_count,
+            SUM(premium)/10000 as written_premium,
             SUM({EARNED})/10000 as earned_premium,
-            SUM(已报告赔款)/10000 as reported_claims,
-            SUM(赔案件数) as claim_cases
+            SUM(reported_claims)/10000 as reported_claims,
+            SUM(claim_cases) as claim_cases
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
         WHERE {BASE_FILTER}
-        GROUP BY age_bucket, 险类
-        HAVING COUNT(DISTINCT 保单号) >= 50
+        GROUP BY age_bucket, insurance_type
+        HAVING COUNT(DISTINCT policy_no) >= 50
         ORDER BY written_premium DESC
     """).fetchall()
 
@@ -724,10 +724,10 @@ def section_09_age_insurance(ctx, rpt, silent=False):
         data["cross"].append(cross_data)
 
     if not silent:
-        rpt.add("## 9. 车龄×险类交叉分析（保单≥50）\n")
+        rpt.add("## 9. 车龄×insurance_type交叉分析（保单≥50）\n")
         rpt.add("> **风险发现**: 老旧车+商业险的赔付特征\n")
         rpt.add()
-        rpt.add("| 车龄分段 | 险类 | 保单数 | 保费(万) | 赔付率 | 案均赔款† |")
+        rpt.add("| 车龄分段 | insurance_type | 保单数 | premium(万) | 赔付率 | 案均赔款† |")
         rpt.add("|:---|:---|---:|---:|---:|---:|")
         for c in data["cross"]:
             rpt.add(
@@ -811,7 +811,7 @@ def section_10_summary(ctx, rpt, collected, silent=False):
 
     rpt.add()
     rpt.add("### 建议下一步\n")
-    rpt.add("1. **风险下钻**: 对高风险维度进行更细粒度分析（如品牌→车型→业务员）\n")
+    rpt.add("1. **风险下钻**: 对高风险维度进行更细粒度分析（如品牌→车型→salesman_name）\n")
     rpt.add("2. **定价策略**: 考虑对高风险组合调整定价系数\n")
     rpt.add("3. **承保政策**: 优化核保规则，限制高风险业务\n")
     rpt.add("4. **续保策略**: 关注高价值低风险客户的续保留存\n")
@@ -840,11 +840,11 @@ SECTION_NAMES = {
     2: "品牌维度",
     3: "车龄维度",
     4: "车价维度",
-    5: "三级机构",
-    6: "险类/险别组合",
+    5: "org_level_3",
+    6: "insurance_type/coverage_combination",
     7: "品牌×机构交叉",
     8: "车价×险别交叉",
-    9: "车龄×险类交叉",
+    9: "车龄×insurance_type交叉",
     10: "诊断总结",
 }
 
@@ -885,7 +885,7 @@ def main():
 
     # 获取元数据
     meta = con.execute(f"""
-        SELECT MAX(签单日期)::DATE, COUNT(DISTINCT 保单号)::INT, COUNT(*)::INT
+        SELECT MAX(policy_date)::DATE, COUNT(DISTINCT policy_no)::INT, COUNT(*)::INT
         FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
         WHERE {BASE_FILTER}
     """).fetchone()
@@ -895,7 +895,7 @@ def main():
         print(f"\n❌ 筛选条件未命中任何保单，无法生成诊断报告。"); sys.exit(1)
 
     print(f"\n🔍 诊断: 非营业个人客车过户车（5年合并）")
-    print(f"   {total_pol:,} 保单 | {total_rec:,} 记录 | 最新签单日期 {max_date}")
+    print(f"   {total_pol:,} 保单 | {total_rec:,} 记录 | 最新policy_date {max_date}")
     if requested != set(ALL_SECTION_IDS):
         names = [f"{sid}.{SECTION_NAMES[sid]}" for sid in sorted(requested)]
         print(f"   📋 板块: {', '.join(names)}")

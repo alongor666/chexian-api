@@ -1,20 +1,20 @@
-"""板块10：业务员维度（三级机构专属）
+"""板块10：salesman_name维度（org_level_3专属）
 
-条件触发：仅当 --filter 含三级机构时自动加入
-内容：人数趋势、人均产能、Top/Bottom 排名、客户类别集中度、增长率
+条件触发：仅当 --filter 含org_level_3时自动加入
+内容：人数趋势、人均产能、Top/Bottom 排名、customer_category集中度、增长率
 """
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from diagnose_common import (
     GLOB, EARNED, POLICY_TERM, EARNED_DAYS,
-    fw, fp, fi, fc, light, kpi_select, query_kpi,
+    fw, fp, fi, fc, light, kpi_select, query_kpi, joined_source,
     TH_VC, TH_LR, TH_IR, TH_AC_CARGO,
 )
 
 
 def run(ctx, rpt, collected, silent=False):
-    """板块10：业务员维度分析"""
+    """板块10：salesman_name维度分析"""
     con = ctx.con
     base_where = ctx.base_where
     years = ctx.years
@@ -23,27 +23,28 @@ def run(ctx, rpt, collected, silent=False):
     # ================================================================
     # 10.1 人数与人均产能趋势
     # ================================================================
+    src = joined_source(con)
     yr_staff = []
     for yr in years:
         r = con.execute(f"""
         SELECT
-            COUNT(DISTINCT 业务员)::INT AS 人数,
-            COUNT(DISTINCT 保单号)::INT AS 保单数,
-            ROUND(SUM(保费)/10000, 1) AS 保费万,
-            ROUND(SUM(保费)/10000/NULLIF(COUNT(DISTINCT 业务员),0), 1) AS 人均保费万,
-            ROUND(COUNT(DISTINCT 保单号)*1.0/NULLIF(COUNT(DISTINCT 业务员),0), 0)::INT AS 人均件数,
-            ROUND(SUM({EARNED})/10000, 1) AS 满期保费万,
-            ROUND(SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0)*100, 1) AS 满期赔付率,
-            ROUND(SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0)*100, 1) AS 费用率
-        FROM read_parquet('{GLOB}', union_by_name=true)
+            COUNT(DISTINCT salesman_name)::INT AS 人数,
+            COUNT(DISTINCT policy_no)::INT AS 保单数,
+            ROUND(SUM(premium)/10000, 1) AS premium万,
+            ROUND(SUM(premium)/10000/NULLIF(COUNT(DISTINCT salesman_name),0), 1) AS 人均premium万,
+            ROUND(COUNT(DISTINCT policy_no)*1.0/NULLIF(COUNT(DISTINCT salesman_name),0), 0)::INT AS 人均件数,
+            ROUND(SUM({EARNED})/10000, 1) AS 满期premium万,
+            ROUND(SUM(COALESCE(reported_claims,0))/NULLIF(SUM({EARNED}),0)*100, 1) AS 满期赔付率,
+            ROUND(SUM(COALESCE(fee_amount,0))/NULLIF(SUM(premium),0)*100, 1) AS 费用率
+        FROM {src}
         WHERE {base_where} AND {yr_where(yr)}
         """).fetchone()
         yr_staff.append((yr,) + r)
 
     if not silent:
-        rpt.add("## 10. 业务员维度\n")
+        rpt.add("## 10. salesman_name维度\n")
         rpt.add("### 10.1 人数与人均产能趋势\n")
-        rpt.add("| 年份 | 人数 | 保单数 | 保费 | 人均保费 | 人均件数 | 满期赔付率 | 费用率 | 变动成本率 |")
+        rpt.add("| 年份 | 人数 | 保单数 | premium | 人均premium | 人均件数 | 满期赔付率 | 费用率 | 变动成本率 |")
         rpt.add("| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
         for row in yr_staff:
             yr, cnt, pols, prem, avg_p, avg_n, _ep, lr, fr = row
@@ -58,36 +59,36 @@ def run(ctx, rpt, collected, silent=False):
                 staff_g = (last[1] - first[1]) / first[1] * 100
                 prem_g = ((last[3] or 0) - (first[3] or 0)) / (first[3] or 1) * 100
                 prod_g = ((last[4] or 0) - (first[4] or 0)) / (first[4] or 1) * 100
-                rpt.add(f"> {years[0]}→{years[-1]} 增长率：人数 {staff_g:+.1f}%，保费 {prem_g:+.1f}%，人均产能 {prod_g:+.1f}%\n")
+                rpt.add(f"> {years[0]}→{years[-1]} 增长率：人数 {staff_g:+.1f}%，premium {prem_g:+.1f}%，人均产能 {prod_g:+.1f}%\n")
 
     # ================================================================
-    # 10.2 Top 15 业务员（最新年 or 全年份汇总）
+    # 10.2 Top 15 salesman_name（最新年 or 全年份汇总）
     # ================================================================
     top_n = 15
     top_rows = con.execute(f"""
     SELECT
-        业务员,
-        COUNT(DISTINCT 保单号)::INT AS 保单数,
-        ROUND(SUM(保费)/10000, 1) AS 保费万,
-        ROUND(AVG(CASE WHEN 保费>0 THEN 保费 END), 0)::INT AS 件均保费,
-        ROUND(SUM({EARNED})/10000, 1) AS 满期保费万,
-        ROUND(SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0)*100, 1) AS 满期赔付率,
-        ROUND(SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0)*100, 1) AS 费用率,
-        ROUND(SUM(COALESCE(赔案件数,0) * CAST({POLICY_TERM} AS DOUBLE)
+        salesman_name,
+        COUNT(DISTINCT policy_no)::INT AS 保单数,
+        ROUND(SUM(premium)/10000, 1) AS premium万,
+        ROUND(AVG(CASE WHEN premium>0 THEN premium END), 0)::INT AS 件均premium,
+        ROUND(SUM({EARNED})/10000, 1) AS 满期premium万,
+        ROUND(SUM(COALESCE(reported_claims,0))/NULLIF(SUM({EARNED}),0)*100, 1) AS 满期赔付率,
+        ROUND(SUM(COALESCE(fee_amount,0))/NULLIF(SUM(premium),0)*100, 1) AS 费用率,
+        ROUND(SUM(COALESCE(claim_cases,0) * CAST({POLICY_TERM} AS DOUBLE)
               / NULLIF(CAST({EARNED_DAYS} AS DOUBLE), 0))
-              / NULLIF(COUNT(DISTINCT 保单号), 0) * 100, 2) AS 满期出险率,
-        COUNT(DISTINCT 客户类别)::INT AS 客户类别数,
-        ROUND(SUM(COALESCE(已报告赔款,0))/NULLIF(SUM(COALESCE(赔案件数,0)),0), 0)::INT AS 案均赔款
-    FROM read_parquet('{GLOB}', union_by_name=true)
-    WHERE {base_where} AND YEAR(签单日期) = {years[-1]}
-    GROUP BY 业务员
-    ORDER BY SUM(保费) DESC
+              / NULLIF(COUNT(DISTINCT policy_no), 0) * 100, 2) AS 满期出险率,
+        COUNT(DISTINCT customer_category)::INT AS customer_category数,
+        ROUND(SUM(COALESCE(reported_claims,0))/NULLIF(SUM(COALESCE(claim_cases,0)),0), 0)::INT AS 案均赔款
+    FROM {src}
+    WHERE {base_where} AND YEAR(insurance_start_date) = {years[-1]}
+    GROUP BY salesman_name
+    ORDER BY SUM(premium) DESC
     LIMIT {top_n}
     """).fetchall()
 
     if not silent:
-        rpt.add(f"### 10.2 Top {top_n} 业务员（{years[-1]}年）\n")
-        rpt.add("| 排名 | 业务员 | 保单数 | 保费 | 件均保费 † | 赔付率 | 费用率 | 出险率 | 案均 † | 客类数 |")
+        rpt.add(f"### 10.2 Top {top_n} salesman_name（{years[-1]}年）\n")
+        rpt.add("| 排名 | salesman_name | 保单数 | premium | 件均premium † | 赔付率 | 费用率 | 出险率 | 案均 † | 客类数 |")
         rpt.add("| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
         for i, row in enumerate(top_rows, 1):
             name, pols, prem, avg_p, ep, lr, fr, ir, cat_n, avg_c = row
@@ -101,31 +102,31 @@ def run(ctx, rpt, collected, silent=False):
         rpt.add()
 
     # ================================================================
-    # 10.3 Bottom 10 业务员（赔付率最高，保费>10万）
+    # 10.3 Bottom 10 salesman_name（赔付率最高，premium>10万）
     # ================================================================
     bottom_rows = con.execute(f"""
     SELECT
-        业务员,
-        COUNT(DISTINCT 保单号)::INT AS 保单数,
-        ROUND(SUM(保费)/10000, 1) AS 保费万,
-        ROUND(SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0)*100, 1) AS 满期赔付率,
-        ROUND(SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0)*100, 1) AS 费用率,
-        ROUND(SUM(COALESCE(赔案件数,0) * CAST({POLICY_TERM} AS DOUBLE)
+        salesman_name,
+        COUNT(DISTINCT policy_no)::INT AS 保单数,
+        ROUND(SUM(premium)/10000, 1) AS premium万,
+        ROUND(SUM(COALESCE(reported_claims,0))/NULLIF(SUM({EARNED}),0)*100, 1) AS 满期赔付率,
+        ROUND(SUM(COALESCE(fee_amount,0))/NULLIF(SUM(premium),0)*100, 1) AS 费用率,
+        ROUND(SUM(COALESCE(claim_cases,0) * CAST({POLICY_TERM} AS DOUBLE)
               / NULLIF(CAST({EARNED_DAYS} AS DOUBLE), 0))
-              / NULLIF(COUNT(DISTINCT 保单号), 0) * 100, 2) AS 满期出险率,
-        ROUND(SUM({EARNED})*(1-SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0)
-              -SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0))/10000, 1) AS 满期边际贡献额
-    FROM read_parquet('{GLOB}', union_by_name=true)
-    WHERE {base_where} AND YEAR(签单日期) = {years[-1]}
-    GROUP BY 业务员
-    HAVING SUM(保费) > 100000
-    ORDER BY SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0) DESC
+              / NULLIF(COUNT(DISTINCT policy_no), 0) * 100, 2) AS 满期出险率,
+        ROUND(SUM({EARNED})*(1-SUM(COALESCE(reported_claims,0))/NULLIF(SUM({EARNED}),0)
+              -SUM(COALESCE(fee_amount,0))/NULLIF(SUM(premium),0))/10000, 1) AS 满期边际贡献额
+    FROM {src}
+    WHERE {base_where} AND YEAR(insurance_start_date) = {years[-1]}
+    GROUP BY salesman_name
+    HAVING SUM(premium) > 100000
+    ORDER BY SUM(COALESCE(reported_claims,0))/NULLIF(SUM({EARNED}),0) DESC
     LIMIT 10
     """).fetchall()
 
     if not silent:
-        rpt.add(f"### 10.3 赔付率最高 Top 10（{years[-1]}年，保费>10万）\n")
-        rpt.add("| 业务员 | 保单数 | 保费 | 赔付率 | 费用率 | 出险率 | 边际贡献额 |")
+        rpt.add(f"### 10.3 赔付率最高 Top 10（{years[-1]}年，premium>10万）\n")
+        rpt.add("| salesman_name | 保单数 | premium | 赔付率 | 费用率 | 出险率 | 边际贡献额 |")
         rpt.add("| :--- | ---: | ---: | ---: | ---: | ---: | ---: |")
         for row in bottom_rows:
             name, pols, prem, lr, fr, ir, em = row
@@ -136,40 +137,40 @@ def run(ctx, rpt, collected, silent=False):
         rpt.add()
 
     # ================================================================
-    # 10.4 客户类别集中度（按业务员×客户类别）
+    # 10.4 customer_category集中度（按salesman_name×customer_category）
     # ================================================================
     conc_rows = con.execute(f"""
     WITH salesman_cat AS (
-        SELECT 业务员, 客户类别,
-            ROUND(SUM(保费)/10000, 1) AS 保费万,
-            COUNT(DISTINCT 保单号)::INT AS 保单数
+        SELECT salesman_name, customer_category,
+            ROUND(SUM(premium)/10000, 1) AS premium万,
+            COUNT(DISTINCT policy_no)::INT AS 保单数
         FROM read_parquet('{GLOB}', union_by_name=true)
-        WHERE {base_where} AND YEAR(签单日期) = {years[-1]}
-        GROUP BY 业务员, 客户类别
+        WHERE {base_where} AND YEAR(insurance_start_date) = {years[-1]}
+        GROUP BY salesman_name, customer_category
     ),
     salesman_total AS (
-        SELECT 业务员, SUM(保费万) AS 总保费万
-        FROM salesman_cat GROUP BY 业务员
+        SELECT salesman_name, SUM(premium万) AS 总premium万
+        FROM salesman_cat GROUP BY salesman_name
     ),
     top_cat AS (
-        SELECT sc.业务员, sc.客户类别, sc.保费万, sc.保单数,
-            ROUND(sc.保费万 / NULLIF(st.总保费万, 0) * 100, 1) AS 占比,
-            ROW_NUMBER() OVER (PARTITION BY sc.业务员 ORDER BY sc.保费万 DESC) AS rn
-        FROM salesman_cat sc JOIN salesman_total st ON sc.业务员 = st.业务员
-        WHERE st.总保费万 > 10
+        SELECT sc.salesman_name, sc.customer_category, sc.premium万, sc.保单数,
+            ROUND(sc.premium万 / NULLIF(st.总premium万, 0) * 100, 1) AS 占比,
+            ROW_NUMBER() OVER (PARTITION BY sc.salesman_name ORDER BY sc.premium万 DESC) AS rn
+        FROM salesman_cat sc JOIN salesman_total st ON sc.salesman_name = st.salesman_name
+        WHERE st.总premium万 > 10
     )
-    SELECT 客户类别,
-        COUNT(DISTINCT 业务员)::INT AS 涉及人数,
-        ROUND(SUM(保费万), 1) AS 保费万,
+    SELECT customer_category,
+        COUNT(DISTINCT salesman_name)::INT AS 涉及人数,
+        ROUND(SUM(premium万), 1) AS premium万,
         ROUND(AVG(占比), 1) AS 平均占比
     FROM top_cat WHERE rn <= 3
-    GROUP BY 客户类别
-    ORDER BY SUM(保费万) DESC
+    GROUP BY customer_category
+    ORDER BY SUM(premium万) DESC
     """).fetchall()
 
     if not silent:
-        rpt.add(f"### 10.4 客户类别集中度（{years[-1]}年，Top3 客户类别/人）\n")
-        rpt.add("| 客户类别 | 涉及人数 | 保费 | 平均占比 |")
+        rpt.add(f"### 10.4 customer_category集中度（{years[-1]}年，Top3 customer_category/人）\n")
+        rpt.add("| customer_category | 涉及人数 | premium | 平均占比 |")
         rpt.add("| :--- | ---: | ---: | ---: |")
         for row in conc_rows:
             cat, cnt, prem, pct = row
@@ -177,35 +178,35 @@ def run(ctx, rpt, collected, silent=False):
         rpt.add()
 
     # ================================================================
-    # 10.5 业务员增长率（YoY，保费>5万筛选）
+    # 10.5 salesman_name增长率（YoY，premium>5万筛选）
     # ================================================================
     if len(years) >= 2:
         prev_yr, curr_yr = years[-2], years[-1]
         growth_rows = con.execute(f"""
         WITH prev AS (
-            SELECT 业务员, SUM(保费) AS prem
+            SELECT salesman_name, SUM(premium) AS prem
             FROM read_parquet('{GLOB}', union_by_name=true)
             WHERE {base_where} AND {yr_where(prev_yr)}
-            GROUP BY 业务员 HAVING SUM(保费) > 50000
+            GROUP BY salesman_name HAVING SUM(premium) > 50000
         ),
         curr AS (
-            SELECT 业务员, SUM(保费) AS prem
+            SELECT salesman_name, SUM(premium) AS prem
             FROM read_parquet('{GLOB}', union_by_name=true)
             WHERE {base_where} AND {yr_where(curr_yr)}
-            GROUP BY 业务员 HAVING SUM(保费) > 50000
+            GROUP BY salesman_name HAVING SUM(premium) > 50000
         )
-        SELECT COALESCE(c.业务员, p.业务员) AS 业务员,
-            ROUND(COALESCE(p.prem,0)/10000, 1) AS 上年保费万,
-            ROUND(COALESCE(c.prem,0)/10000, 1) AS 本年保费万,
+        SELECT COALESCE(c.salesman_name, p.salesman_name) AS salesman_name,
+            ROUND(COALESCE(p.prem,0)/10000, 1) AS 上年premium万,
+            ROUND(COALESCE(c.prem,0)/10000, 1) AS 本年premium万,
             ROUND((COALESCE(c.prem,0) - COALESCE(p.prem,0)) / NULLIF(p.prem,0) * 100, 1) AS 增长率
-        FROM curr c FULL OUTER JOIN prev p ON c.业务员 = p.业务员
+        FROM curr c FULL OUTER JOIN prev p ON c.salesman_name = p.salesman_name
         ORDER BY COALESCE(c.prem,0) - COALESCE(p.prem,0) DESC
         LIMIT 10
         """).fetchall()
 
         if not silent:
-            rpt.add(f"### 10.5 业务员保费增长 Top 10（{prev_yr}→{curr_yr}，保费>5万）\n")
-            rpt.add(f"| 业务员 | {prev_yr}年 | {curr_yr}年 | 增长率 |")
+            rpt.add(f"### 10.5 salesman_namepremium增长 Top 10（{prev_yr}→{curr_yr}，premium>5万）\n")
+            rpt.add(f"| salesman_name | {prev_yr}年 | {curr_yr}年 | 增长率 |")
             rpt.add("| :--- | ---: | ---: | ---: |")
             for row in growth_rows:
                 name, prev_p, curr_p, g = row

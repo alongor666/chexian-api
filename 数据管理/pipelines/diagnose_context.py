@@ -19,10 +19,10 @@ class RunContext:
     years: List[int] = field(default_factory=list)  # 年份列表
     min_yr: int = 0
     max_yr: int = 0
-    yr_where: Callable = None        # lambda yr: "YEAR(签单日期)=yr AND ytd_filter"
-    risk_expr: str = "车险风险等级"   # detect_risk_field() 结果
+    yr_where: Callable = None        # lambda yr: "YEAR(policy_date)=yr AND ytd_filter"
+    risk_expr: str = "insurance_grade"   # detect_risk_field() 结果
     title: str = ""
-    max_sign: str = ""               # 最新签单日期
+    max_sign: str = ""               # 最新policy_date
     max_start: str = ""              # 最新起保日期
     total_pol: int = 0               # 总保单数
     total_rec: int = 0               # 总记录数

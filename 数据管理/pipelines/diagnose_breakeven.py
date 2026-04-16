@@ -24,9 +24,9 @@ from diagnose_common import (
 
 # 新转续过户表达式（与 sections/s02_vehicle_type.py 一致）
 VEHICLE_TYPE_EXPR = """CASE
-    WHEN 是否新车 THEN '新车'
-    WHEN 是否过户车 THEN '旧车过户'
-    WHEN 是否续保 THEN '旧车续保'
+    WHEN is_new_car THEN '新车'
+    WHEN is_transfer THEN '旧车过户'
+    WHEN is_renewal THEN '旧车续保'
     ELSE '旧车转保'
 END"""
 
@@ -80,7 +80,7 @@ def fmt_gap(v):
 
 def render_table(lines: list, rows: list, dim_name: str):
     """渲染一个维度的盈亏平衡表"""
-    lines.append(f"| {dim_name} | 保单数 | 保费(万) | 赔付率 | 费用率 | 当前系数 | 平衡系数 | 差距 | 状态 |")
+    lines.append(f"| {dim_name} | 保单数 | premium(万) | 赔付率 | 费用率 | 当前系数 | 平衡系数 | 差距 | 状态 |")
     lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---|")
     for r in rows:
         if (r.get("policy_count") or 0) < MIN_POLICIES:
@@ -116,7 +116,7 @@ def query_dim(con, base_where: str, year_filter: str, dim_expr: str, dim_alias: 
         WHERE {base_where} AND {year_filter}
     ) sub
     GROUP BY {dim_alias}
-    ORDER BY SUM(保费) DESC
+    ORDER BY SUM(premium) DESC
     """
     result = con.execute(sql)
     cols = [d[0] for d in result.description]
@@ -138,8 +138,8 @@ def main():
 
     # 年份范围
     meta = con.execute(f"""
-    SELECT MIN(YEAR(签单日期))::INT, MAX(YEAR(签单日期))::INT,
-           MAX(签单日期)::DATE, COUNT(DISTINCT 保单号)::INT
+    SELECT MIN(YEAR(policy_date))::INT, MAX(YEAR(policy_date))::INT,
+           MAX(policy_date)::DATE, COUNT(DISTINCT policy_no)::INT
     FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where}
     """).fetchone()
     min_yr, max_yr, max_sign, total_pol = meta
@@ -155,11 +155,11 @@ def main():
     is_ytd = (args.compare == "ytd") and latest_incomplete
 
     if is_ytd:
-        ytd_filter = f"AND (MONTH(签单日期) < {ytd_month} OR (MONTH(签单日期) = {ytd_month} AND DAY(签单日期) <= {ytd_day}))"
+        ytd_filter = f"AND (MONTH(policy_date) < {ytd_month} OR (MONTH(policy_date) = {ytd_month} AND DAY(policy_date) <= {ytd_day}))"
     else:
         ytd_filter = ""
 
-    year_filter = f"YEAR(签单日期) BETWEEN {min_yr} AND {max_yr} {ytd_filter}"
+    year_filter = f"YEAR(policy_date) BETWEEN {min_yr} AND {max_yr} {ytd_filter}"
     years = list(range(min_yr, max_yr + 1))
 
     # 风险等级字段
@@ -186,7 +186,7 @@ def main():
         lines.append(f"| 指标 | 值 |")
         lines.append(f"|------|---:|")
         lines.append(f"| 保单数 | {fi(o.get('policy_count'))} |")
-        lines.append(f"| 签单保费 | {fw(o.get('written_premium'))}万 |")
+        lines.append(f"| 签单premium | {fw(o.get('written_premium'))}万 |")
         lines.append(f"| 满期赔付率 | {fp(o.get('loss_ratio'))} |")
         lines.append(f"| 费用率 | {fp(o.get('expense_ratio'))} |")
         lines.append(f"| 当前加权系数 | {fc(o.get('pricing_coeff'))} |")
@@ -202,7 +202,7 @@ def main():
     lines.append("## 1. 年度趋势\n")
     yr_rows = []
     for yr in years:
-        yr_data = query_kpi(con, f"{base_where} AND YEAR(签单日期) = {yr} {ytd_filter}")
+        yr_data = query_kpi(con, f"{base_where} AND YEAR(policy_date) = {yr} {ytd_filter}")
         if yr_data:
             yr_data[0]["dim_label"] = str(yr)
             yr_rows.append(yr_data[0])
@@ -212,18 +212,18 @@ def main():
         if be["gap"] is not None:
             all_be_results.append({"dim": "年度", "value": r["dim_label"], **be, "coeff": r.get("pricing_coeff")})
 
-    # ========== 2. 吨位分段 ==========
-    lines.append("## 2. 吨位分段\n")
-    ton_rows = query_dim(con, base_where, year_filter, "吨位分段")
+    # ========== 2. tonnage_segment ==========
+    lines.append("## 2. tonnage_segment\n")
+    ton_rows = query_dim(con, base_where, year_filter, "tonnage_segment")
     render_table(lines, ton_rows, "吨位")
     for r in ton_rows:
         be = compute_breakeven(r)
         if be["gap"] is not None and (r.get("policy_count") or 0) >= MIN_POLICIES:
             all_be_results.append({"dim": "吨位", "value": r["dim_label"], **be, "coeff": r.get("pricing_coeff")})
 
-    # ========== 3. 三级机构 ==========
-    lines.append("## 3. 三级机构\n")
-    org_rows = query_dim(con, base_where, year_filter, "三级机构")
+    # ========== 3. org_level_3 ==========
+    lines.append("## 3. org_level_3\n")
+    org_rows = query_dim(con, base_where, year_filter, "org_level_3")
     render_table(lines, org_rows, "机构")
     for r in org_rows:
         be = compute_breakeven(r)
@@ -248,9 +248,9 @@ def main():
         if be["gap"] is not None and (r.get("policy_count") or 0) >= MIN_POLICIES:
             all_be_results.append({"dim": "新转续过户", "value": r["dim_label"], **be, "coeff": r.get("pricing_coeff")})
 
-    # ========== 6. 经代名 Top 20 ==========
-    lines.append("## 6. 经代名（Top 20 by 保费）\n")
-    agent_rows = query_dim(con, base_where, year_filter, "COALESCE(经代名, '(直销)')")
+    # ========== 6. agent_name Top 20 ==========
+    lines.append("## 6. agent_name（Top 20 by premium）\n")
+    agent_rows = query_dim(con, base_where, year_filter, "COALESCE(agent_name, '(直销)')")
     agent_top = [r for r in agent_rows if (r.get("policy_count") or 0) >= MIN_POLICIES][:20]
     render_table(lines, agent_top, "经代")
     for r in agent_top:
@@ -258,9 +258,9 @@ def main():
         if be["gap"] is not None:
             all_be_results.append({"dim": "经代", "value": r["dim_label"], **be, "coeff": r.get("pricing_coeff")})
 
-    # ========== 7. 险别组合 ==========
-    lines.append("## 7. 险别组合\n")
-    cov_rows = query_dim(con, base_where, year_filter, "险别组合")
+    # ========== 7. coverage_combination ==========
+    lines.append("## 7. coverage_combination\n")
+    cov_rows = query_dim(con, base_where, year_filter, "coverage_combination")
     render_table(lines, cov_rows, "险别")
     for r in cov_rows:
         be = compute_breakeven(r)

@@ -6,7 +6,7 @@
 产出结构化 findings/next_steps/year_summary 供 --output-json 使用。
 """
 
-from diagnose_common import GLOB, kpi_select, fw, fp
+from diagnose_common import GLOB, joined_source, kpi_select, fw, fp
 
 
 def _ensure_dep(ctx, rpt, collected, section_id):
@@ -26,6 +26,7 @@ def run(ctx, rpt, collected, silent=False):
     con = ctx.con
     base_where = ctx.base_where
     years = ctx.years
+    src = joined_source(con)
 
     # 确保依赖
     _ensure_dep(ctx, rpt, collected, 1)
@@ -76,7 +77,7 @@ def run(ctx, rpt, collected, silent=False):
             _add_finding(result, findings, "🟡", "边际贡献萎缩",
                          f"从{years[0]}年{first_em:,.1f}万降至{years[-1]}年{last_em:,.1f}万")
 
-    # ---- 件均保费下降 ----
+    # ---- 件均premium下降 ----
     if len(years) >= 2:
         first_d = yr_data.get(years[0], {})
         last_d = yr_data.get(years[-1], {})
@@ -85,10 +86,10 @@ def run(ctx, rpt, collected, silent=False):
         if first_ap > 0 and last_ap > 0:
             drop_pct = (last_ap - first_ap) / first_ap * 100
             if drop_pct < -15:
-                _add_finding(result, findings, "🔴", "件均保费持续下滑",
+                _add_finding(result, findings, "🔴", "件均premium持续下滑",
                              f"{first_ap:,d}元→{last_ap:,d}元（{drop_pct:+.1f}%），定价空间被压缩")
             elif drop_pct < -5:
-                _add_finding(result, findings, "🟡", "件均保费下降",
+                _add_finding(result, findings, "🟡", "件均premium下降",
                              f"{first_ap:,d}元→{last_ap:,d}元（{drop_pct:+.1f}%）")
 
         # ---- 赔付率恶化 ----
@@ -159,13 +160,13 @@ def run(ctx, rpt, collected, silent=False):
             next_steps.append("按渠道/经代拆分费用率，定位费用失控环节")
 
     suggestions = con.execute(f"""
-    SELECT COUNT(DISTINCT 三级机构), COUNT(DISTINCT 业务员), COUNT(DISTINCT 经代名)
-    FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where}
+    SELECT COUNT(DISTINCT org_level_3), COUNT(DISTINCT salesman_name), COUNT(DISTINCT agent_name)
+    FROM {src} WHERE {base_where}
     """).fetchone()
     if suggestions[2] > 3:
         next_steps.append(f"按经代公司（{suggestions[2]}个）拆分对比变动成本率")
     if suggestions[1] > 10:
-        next_steps.append(f"Top 业务员（{suggestions[1]}人）产能和质量排名")
+        next_steps.append(f"Top salesman_name（{suggestions[1]}人）产能和质量排名")
     if not next_steps:
         next_steps.append("各项指标稳定，可按季度持续监控")
 
@@ -201,7 +202,7 @@ def run(ctx, rpt, collected, silent=False):
         lr = d.get("loss_ratio") or 0
         em = d.get("earned_margin") or 0
         vc = (d.get("loss_ratio") or 0) + (d.get("expense_ratio") or 0)
-        rpt.add(f"- {vt}：保费 {p:,.1f} 万，赔付率 {lr:.1f}%，变动成本率 {vc:.1f}%，边际 {em:,.1f} 万")
+        rpt.add(f"- {vt}：premium {p:,.1f} 万，赔付率 {lr:.1f}%，变动成本率 {vc:.1f}%，边际 {em:,.1f} 万")
     rpt.add()
 
     rpt.add("**风险评分**：")
@@ -211,7 +212,7 @@ def run(ctx, rpt, collected, silent=False):
         if p > 0:
             lr = d.get("loss_ratio") or 0
             vc = (d.get("loss_ratio") or 0) + (d.get("expense_ratio") or 0)
-            rpt.add(f"- 等级{g}：保费 {p:,.1f} 万，赔付率 {lr:.1f}%，变动成本率 {vc:.1f}%")
+            rpt.add(f"- 等级{g}：premium {p:,.1f} 万，赔付率 {lr:.1f}%，变动成本率 {vc:.1f}%")
     rpt.add()
 
     rpt.add("### 建议下一步\n")

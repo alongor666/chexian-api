@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-车型/客户类别 全维度经营诊断脚本 v5.0（两阶段诊断支持）
+车型/customer_category 全维度经营诊断脚本 v5.0（两阶段诊断支持）
 
 11 板块可插拔架构 + --output-json（结构化 JSON 产出）+ --drilldown（追加聚合）。
 板块定义见 sections/ 目录，注册表见 sections/__init__.py。
 
 使用:
     # 标准诊断（Markdown + JSON）
-    python3 数据管理/pipelines/diagnose_vehicle.py --filter "客户类别 = '营业货车'" --title 营业货车 --output-json
+    python3 数据管理/pipelines/diagnose_vehicle.py --filter "customer_category = '营业货车'" --title 营业货车 --output-json
 
     # 追加下钻（仅 JSON，不跑板块）
-    python3 数据管理/pipelines/diagnose_vehicle.py --filter "客户类别 = '营业货车'" --drilldown "厂牌车型" --output-json
+    python3 数据管理/pipelines/diagnose_vehicle.py --filter "customer_category = '营业货车'" --drilldown "vehicle_model" --output-json
 
     # 传统模式（仅 Markdown，向后兼容）
-    python3 数据管理/pipelines/diagnose_vehicle.py --filter "客户类别 = '营业货车'" --title 营业货车
+    python3 数据管理/pipelines/diagnose_vehicle.py --filter "customer_category = '营业货车'" --title 营业货车
 
 版本: 5.0.0
 日期: 2026-04-01
@@ -190,7 +190,7 @@ def _run_drilldown(args):
         yr_parts = args.years.split("-")
         min_yr = int(yr_parts[0])
         max_yr = int(yr_parts[1]) if len(yr_parts) > 1 else int(yr_parts[0])
-        yr_clause = f" AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}"
+        yr_clause = f" AND YEAR(insurance_start_date) BETWEEN {min_yr} AND {max_yr}"
 
     full_where = f"{base_where}{yr_clause}"
     rows = query_kpi(con, full_where, group_col=group_col)
@@ -213,7 +213,7 @@ def _run_drilldown(args):
         entry["pricing_coeff"] = row.get("pricing_coeff") or 0
         data.append(entry)
 
-    # 按保费降序
+    # 按premium降序
     data.sort(key=lambda x: x.get("written_premium_wan", 0), reverse=True)
 
     output = {
@@ -234,7 +234,7 @@ def _run_drilldown(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="车型/客户类别全维度经营诊断 v5.0")
+    parser = argparse.ArgumentParser(description="车型/customer_category全维度经营诊断 v5.0")
     parser.add_argument("--filter", required=True, help="SQL WHERE 条件")
     parser.add_argument("--title", default=None, help="报告标题")
     parser.add_argument("--years", default=None, help="年份范围，如: 2022-2026")
@@ -288,8 +288,8 @@ def main():
     title = args.title or args.filter
 
     meta = con.execute(f"""
-    SELECT MAX(签单日期)::DATE, MAX(保险起期)::DATE, COUNT(DISTINCT 保单号)::INT, COUNT(*)::INT,
-           MIN(YEAR(签单日期))::INT, MAX(YEAR(签单日期))::INT
+    SELECT MAX(policy_date)::DATE, MAX(insurance_start_date)::DATE, COUNT(DISTINCT policy_no)::INT, COUNT(*)::INT,
+           MIN(YEAR(policy_date))::INT, MAX(YEAR(policy_date))::INT
     FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where}
     """).fetchone()
     max_sign, max_start, total_pol, total_rec, min_yr, max_yr = meta
@@ -302,16 +302,35 @@ def main():
     # YTD 口径检测
     if max_sign is None:
         print(f"\n❌ 筛选条件未命中任何保单，无法生成诊断报告。"); sys.exit(1)
+
+    # ── 数据量预扫（按年分布 + 费用率检测）──
+    yr_scan = con.execute(f"""
+    SELECT YEAR(insurance_start_date) AS yr, COUNT(DISTINCT policy_no) AS cnt,
+           ROUND(SUM(premium), 0) AS prem,
+           ROUND(SUM(COALESCE(fee_amount,0))/NULLIF(SUM(premium),0)*100, 1) AS fee_pct
+    FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where}
+      AND YEAR(insurance_start_date) BETWEEN {min_yr} AND {max_yr}
+    GROUP BY yr ORDER BY yr
+    """).fetchall()
+    for yr_row in yr_scan:
+        yr_v, cnt_v, _, _ = yr_row
+        if cnt_v < 30:
+            print(f"   ⚠️  {yr_v}年仅 {cnt_v} 单，样本量不足，诊断结论参考价值有限")
+    # 费用为零检测（兼业代理/银行渠道常见）
+    total_fee_pct = sum((r[3] or 0) * (r[2] or 0) for r in yr_scan) / max(sum((r[2] or 0) for r in yr_scan), 1)
+    if total_fee_pct < 0.5:
+        print(f"   ℹ️  费用率接近零（{total_fee_pct:.1f}%），可能为兼业代理/银行渠道，变动成本率 ≈ 赔付率")
+
     _ms = datetime.strptime(str(max_sign), "%Y-%m-%d").date() if isinstance(max_sign, str) else max_sign
     ytd_month, ytd_day = _ms.month, _ms.day
     latest_year_incomplete = not (ytd_month == 12 and ytd_day >= 25)
 
     compare_mode = args.compare
     if compare_mode is None and latest_year_incomplete:
-        print(f"\n⚠️  最新签单日期 {max_sign}，{max_yr}年数据不完整。")
+        print(f"\n⚠️  最新policy_date {max_sign}，{max_yr}年数据不完整。")
         print(f"   YoY 对比口径选择：")
         print(f"     [1] 同期对比 — 各年均取 1月1日-{ytd_month}月{ytd_day}日（推荐，增长率可比）")
-        print(f"     [2] 全年对比 — 历史年用全年，{max_yr}年用已有数据（保费/赔款等绝对值更完整）")
+        print(f"     [2] 全年对比 — 历史年用全年，{max_yr}年用已有数据（premium/赔款等绝对值更完整）")
         try:
             choice = input("   请选择 [1/2]（默认1）: ").strip()
         except (EOFError, KeyboardInterrupt):
@@ -322,19 +341,19 @@ def main():
 
     is_ytd = (compare_mode == "ytd") and latest_year_incomplete
     if is_ytd:
-        ytd_filter = f"AND (MONTH(签单日期) < {ytd_month} OR (MONTH(签单日期) = {ytd_month} AND DAY(签单日期) <= {ytd_day}))"
+        ytd_filter = f"AND (MONTH(insurance_start_date) < {ytd_month} OR (MONTH(insurance_start_date) = {ytd_month} AND DAY(insurance_start_date) <= {ytd_day}))"
         ytd_label = f"1月1日-{ytd_month}月{ytd_day}日"
     else:
         ytd_filter = ""
         ytd_label = "全年"
 
     def yr_where(yr: int) -> str:
-        return f"YEAR(签单日期) = {yr} {ytd_filter}"
+        return f"YEAR(insurance_start_date) = {yr} {ytd_filter}"
 
     risk_expr = detect_risk_field(con, base_where)
     print(f"\n🔍 诊断: {title}")
     print(f"   {total_pol:,d} 保单 | {min_yr}-{max_yr} | 风险字段: {risk_expr}")
-    print(f"   📊 YoY 口径: {ytd_label}" + (f"（最新签单日期 {max_sign}，同期对齐）" if is_ytd else ""))
+    print(f"   📊 YoY 口径: {ytd_label}" + (f"（最新policy_date {max_sign}，同期对齐）" if is_ytd else ""))
     if requested != set(ALL_SECTION_IDS):
         names = [f"{sid}.{SECTION_NAMES[sid]}" for sid in sorted(requested)]
         print(f"   📋 板块: {', '.join(names)}")
@@ -360,7 +379,7 @@ def main():
     # Header
     rpt.add(f"# {title} 经营诊断报告（{min_yr}-{max_yr}）")
     rpt.add()
-    rpt.add(f"> **最新签单日期**: {max_sign} | **最新起保日期**: {max_start}")
+    rpt.add(f"> **最新policy_date**: {max_sign} | **最新起保日期**: {max_start}")
     rpt.add(f"> **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')} | **数据来源**: policy/current/ 分片")
     rpt.add(f"> **筛选条件**: {base_where} | 总计 {total_pol:,d} 保单 / {total_rec:,d} 条记录")
     rpt.add(f"> **金额单位**: 万元（† 标注项为元） | **亮灯**: 🟢正常 🔵关注 🟡预警 🔴危险")

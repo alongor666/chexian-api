@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 """板块 2: 新转续过户维度 — 汇总 + 分项分年"""
 
-from diagnose_common import GLOB, kpi_select
+from diagnose_common import GLOB, joined_source, kpi_select
 
 VEHICLE_TYPE_EXPR = """CASE
-    WHEN 是否新车 THEN '新车'
-    WHEN 是否过户车 THEN '旧车过户'
-    WHEN 是否续保 THEN '旧车续保'
+    WHEN is_new_car THEN '新车'
+    WHEN is_transfer THEN '旧车过户'
+    WHEN is_renewal THEN '旧车续保'
     ELSE '旧车转保'
 END"""
 
@@ -19,13 +19,14 @@ def run(ctx, rpt, collected, silent=False):
     base_where = ctx.base_where
     years = ctx.years
     min_yr, max_yr = ctx.min_yr, ctx.max_yr
+    src = joined_source(con)
 
     # 2.0 汇总
     vt_data = {}
     vt_result = con.execute(f"""
     SELECT {kpi_select('车辆类型')}
-    FROM (SELECT *, {VEHICLE_TYPE_EXPR} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true)
-          WHERE {base_where} AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}) sub
+    FROM (SELECT *, {VEHICLE_TYPE_EXPR} AS 车辆类型 FROM {src}
+          WHERE {base_where} AND YEAR(insurance_start_date) BETWEEN {min_yr} AND {max_yr}) sub
     GROUP BY 车辆类型
     """)
     vt_col_names = [d[0] for d in vt_result.description]
@@ -51,7 +52,7 @@ def run(ctx, rpt, collected, silent=False):
         for yr in years:
             rows = con.execute(f"""
             SELECT {kpi_select()}
-            FROM (SELECT *, {VEHICLE_TYPE_EXPR} AS 车辆类型 FROM read_parquet('{GLOB}', union_by_name=true)
+            FROM (SELECT *, {VEHICLE_TYPE_EXPR} AS 车辆类型 FROM {src}
                   WHERE {base_where} AND {ctx.yr_where(yr)}) sub
             WHERE 车辆类型 = '{vt_name}'
             """)

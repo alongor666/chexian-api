@@ -22,7 +22,7 @@ import duckdb
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 POLICY_GLOB = str(REPO_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
-CLAIMS_PATH = str(REPO_ROOT / "数据管理/warehouse/fact/claims_detail/latest.parquet")
+CLAIMS_PATH = str(REPO_ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 OUTPUT_DIR = REPO_ROOT / "数据管理/数据分析报告"
 ECHARTS_LOCAL = Path(__file__).resolve().parent / "assets" / "echarts.min.js"
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""板块 7: 险别组合"""
+"""板块 7: coverage_combination"""
 
-from diagnose_common import GLOB, kpi_select
+from diagnose_common import GLOB, joined_source, kpi_select
 
 
 def run(ctx, rpt, collected, silent=False):
@@ -10,13 +10,14 @@ def run(ctx, rpt, collected, silent=False):
     base_where = ctx.base_where
     years = ctx.years
     min_yr, max_yr = ctx.min_yr, ctx.max_yr
+    src = joined_source(con)
 
     combo_result = con.execute(f"""
-    SELECT DISTINCT 险别组合
-    FROM read_parquet('{GLOB}', union_by_name=true)
-    WHERE {base_where} AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
-      AND 险别组合 IS NOT NULL
-    ORDER BY 险别组合
+    SELECT DISTINCT coverage_combination
+    FROM {src}
+    WHERE {base_where} AND YEAR(insurance_start_date) BETWEEN {min_yr} AND {max_yr}
+      AND coverage_combination IS NOT NULL
+    ORDER BY coverage_combination
     """)
     combo_names = [r[0] for r in combo_result.fetchall()]
 
@@ -24,8 +25,8 @@ def run(ctx, rpt, collected, silent=False):
     for combo in combo_names:
         c_result = con.execute(f"""
         SELECT {kpi_select()}
-        FROM read_parquet('{GLOB}', union_by_name=true)
-        WHERE {base_where} AND 险别组合 = '{combo}' AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
+        FROM {src}
+        WHERE {base_where} AND coverage_combination = '{combo}' AND YEAR(insurance_start_date) BETWEEN {min_yr} AND {max_yr}
         """)
         c_cols = [d[0] for d in c_result.description]
         for row in c_result.fetchall():
@@ -37,8 +38,8 @@ def run(ctx, rpt, collected, silent=False):
     if silent:
         return result
 
-    rpt.add("## 7. 险别组合\n")
-    rpt.add("### 7.0 险别组合汇总\n")
+    rpt.add("## 7. coverage_combination\n")
+    rpt.add("### 7.0 coverage_combination汇总\n")
     rpt.write_dim_summary_table(combo_data, combo_names, "险别分析")
 
     for ci, combo in enumerate(combo_names):
@@ -47,8 +48,8 @@ def run(ctx, rpt, collected, silent=False):
         for yr in years:
             c_result = con.execute(f"""
             SELECT {kpi_select()}
-            FROM read_parquet('{GLOB}', union_by_name=true)
-            WHERE {base_where} AND 险别组合 = '{combo}' AND {ctx.yr_where(yr)}
+            FROM {src}
+            WHERE {base_where} AND coverage_combination = '{combo}' AND {ctx.yr_where(yr)}
             """)
             c_cols = [d[0] for d in c_result.description]
             for row in c_result.fetchall():

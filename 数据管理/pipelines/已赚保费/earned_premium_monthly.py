@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-已赚保费按月末计算脚本（聚合版）
+已赚premium按月末计算脚本（聚合版）
 
-功能: 基于车险保单明细，计算2026年各月末的累计已赚保费
-输出: 按三级机构×险类×月末聚合的数据（适合前端展示）
+功能: 基于车险保单明细，计算2026年各月末的累计已赚premium
+输出: 按org_level_3×insurance_type×月末聚合的数据（适合前端展示）
 口径: 监管 1/365 口径下的一年封顶规则
 版本: v2.2（聚合输出）
 日期: 2026-01-17
 
 字段映射说明:
-    - 保单号 (policy_no) → 实际列名: "保单号"
-    - 险类 (line_type) → 实际列名: "险类"（交强险/商业保险）
-    - 保费 (premium) → 实际列名: "保费"
-    - 费用金额 (fee_amount) → 实际列名: "费用金额"
-    - 保险起期 (effective_date) → 实际列名: "保险起期"
+    - policy_no (policy_no) → 实际列名: "policy_no"
+    - insurance_type (line_type) → 实际列名: "insurance_type"（交强险/商业保险）
+    - premium (premium) → 实际列名: "premium"
+    - fee_amount (fee_amount) → 实际列名: "fee_amount"
+    - insurance_start_date (effective_date) → 实际列名: "insurance_start_date"
 """
 
 import pandas as pd
@@ -47,18 +47,18 @@ def compute_elapsed_days_vectorized(effective_dates: pd.Series,
 
 def compute_earned_premium_vectorized(df: pd.DataFrame) -> pd.DataFrame:
     """
-    【向量化版本】计算已赚保费各组成部分
+    【向量化版本】计算已赚premium各组成部分
 
     公式分解（严格按三段公式实现）：
         1. 首日费用部分: first_day_part = P × F × α
         2. 时间分摊部分: time_part = P × (1 - F) × (E / 365)
-        3. 累计已赚保费: earned_premium_cum = first_day_part + time_part
+        3. 累计已赚premium: earned_premium_cum = first_day_part + time_part
     """
-    # 费用率 F = 费用金额 / 保费
+    # 费用率 F = fee_amount / premium
     df['fee_rate'] = df['fee_amount'] / df['premium']
     df.loc[df['premium'] == 0, 'fee_rate'] = 0
 
-    # 险类系数 α（固定映射）
+    # insurance_type系数 α（固定映射）
     df['line_factor'] = df['line_type'].map({
         '交强险': 0.82,
         '商业保险': 0.94
@@ -73,7 +73,7 @@ def compute_earned_premium_vectorized(df: pd.DataFrame) -> pd.DataFrame:
     # 时间分摊部分 = P × (1 - F) × (E / 365)
     df['time_part'] = df['premium'] * (1 - df['fee_rate']) * (df['elapsed_days'] / term_days)
 
-    # 累计已赚保费
+    # 累计已赚premium
     df['earned_premium_cum'] = df['first_day_part'] + df['time_part']
 
     return df
@@ -101,11 +101,11 @@ def main():
     主流程（聚合版）：
     1. 读取 parquet 文件
     2. 按月末分批计算
-    3. 按三级机构×险类×月末聚合
+    3. 按org_level_3×insurance_type×月末聚合
     4. 输出精简的聚合结果
     """
     print("=" * 80)
-    print("已赚保费按月末计算程序 v2.2（聚合输出版）")
+    print("已赚premium按月末计算程序 v2.2（聚合输出版）")
     print("口径: 监管 1/365 口径，一年封顶规则")
     print("=" * 80)
 
@@ -126,7 +126,7 @@ def main():
     print("\n[Step 2/5] 字段映射与数据清洗...")
 
     df_clean = df[[
-        '保单号', '险类', '保费', '费用金额', '保险起期', '三级机构'
+        'policy_no', 'insurance_type', 'premium', 'fee_amount', 'insurance_start_date', 'org_level_3'
     ]].copy()
 
     df_clean.columns = [
@@ -143,7 +143,7 @@ def main():
     print(f"  ✓ 清洗后记录数: {len(df_clean):,}")
 
     # ---- Step 3: 分批计算并聚合 ----
-    print("\n[Step 3/5] 分批计算已赚保费...")
+    print("\n[Step 3/5] 分批计算已赚premium...")
 
     month_ends = generate_month_end_dates(2026)
     agg_results = []
@@ -159,18 +159,18 @@ def main():
             df_month['effective_date'], month_end
         )
 
-        # 计算已赚保费
+        # 计算已赚premium
         df_month = compute_earned_premium_vectorized(df_month)
 
-        # 按三级机构×险类聚合
+        # 按org_level_3×insurance_type聚合
         agg = df_month.groupby(['org_name', 'line_type']).agg({
             'policy_no': 'count',                    # 保单数量
-            'premium': 'sum',                        # 原始保费合计
-            'fee_amount': 'sum',                     # 费用金额合计
+            'premium': 'sum',                        # 原始premium合计
+            'fee_amount': 'sum',                     # fee_amount合计
             'first_day_part': 'sum',                 # 首日费用部分合计
             'time_part': 'sum',                      # 时间分摊部分合计
-            'earned_premium_cum': 'sum',             # 累计已赚保费合计
-            'line_factor': 'first'                   # 险类系数（取第一个，都一样）
+            'earned_premium_cum': 'sum',             # 累计已赚premium合计
+            'line_factor': 'first'                   # insurance_type系数（取第一个，都一样）
         }).reset_index()
 
         agg['as_of_date'] = month_end
@@ -192,26 +192,26 @@ def main():
 
     # 调整列顺序
     output_columns = [
-        'org_name',              # 三级机构
-        'line_type',             # 险类
+        'org_name',              # org_level_3
+        'line_type',             # insurance_type
         'as_of_date',            # 统计月末
         'policy_count',          # 保单数量
-        'premium',               # 原始保费
-        'fee_amount',            # 费用金额
+        'premium',               # 原始premium
+        'fee_amount',            # fee_amount
         'fee_rate_avg',          # 平均费用率
-        'line_factor',           # 险类系数
+        'line_factor',           # insurance_type系数
         'first_day_part',        # 首日费用部分
         'time_part',             # 时间分摊部分
-        'earned_premium_cum'     # 累计已赚保费
+        'earned_premium_cum'     # 累计已赚premium
     ]
 
     df_output = df_agg[output_columns].copy()
 
-    # 按机构、险类、月末排序
+    # 按机构、insurance_type、月末排序
     df_output = df_output.sort_values(['org_name', 'line_type', 'as_of_date'])
 
     # 输出CSV
-    output_path = script_dir / "已赚保费按月末计算结果_聚合.csv"
+    output_path = script_dir / "已赚premium按月末计算结果_聚合.csv"
     df_output.to_csv(output_path, index=False, encoding='utf-8-sig')
     print(f"  ✓ 输出文件: {output_path}")
     print(f"  ✓ 输出记录数: {len(df_output):,}")
@@ -231,7 +231,7 @@ def main():
         'policy_count': 'sum'
     }).reset_index()
 
-    print(f"\n  {'月末日期':<12} {'累计已赚保费':>18} {'原始保费':>18} {'保单数':>10}")
+    print(f"\n  {'月末日期':<12} {'累计已赚premium':>18} {'原始premium':>18} {'保单数':>10}")
     print("  " + "-" * 60)
     for _, row in monthly_summary.iterrows():
         print(f"  {row['as_of_date'].strftime('%Y-%m-%d'):<12} "
@@ -240,14 +240,14 @@ def main():
               f"{int(row['policy_count']):>10,}")
 
     # 按机构汇总（取12月末数据）
-    print("\n  按三级机构统计（2026-12-31）:")
+    print("\n  按org_level_3统计（2026-12-31）:")
     dec_data = df_output[df_output['as_of_date'] == '2026-12-31']
     org_summary = dec_data.groupby('org_name')['earned_premium_cum'].sum().sort_values(ascending=False)
     for org, earned in org_summary.items():
         print(f"    {org}: {earned:,.2f} 元")
 
-    # 按险类汇总
-    print("\n  按险类统计（2026-12-31）:")
+    # 按insurance_type汇总
+    print("\n  按insurance_type统计（2026-12-31）:")
     for line_type in ['交强险', '商业保险']:
         line_data = dec_data[dec_data['line_type'] == line_type]
         print(f"    {line_type}: {line_data['earned_premium_cum'].sum():,.2f} 元")

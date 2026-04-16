@@ -25,7 +25,7 @@ paths: ["数据管理/**", "scripts/sync-vps.mjs", "scripts/**"]
 | 文件 | 路径 | 用途 |
 |------|------|------|
 | 保单分片 | `数据管理/warehouse/fact/policy/current/*.parquet` | 主数据源（4 个分片） |
-| 赔案明细 | `数据管理/warehouse/fact/claims_detail/latest.parquet` | 唯一赔付数据源（ClaimsAgg 由服务端动态聚合） |
+| 赔案明细 | `数据管理/warehouse/fact/claims_detail/claims_*.parquet` | 年度分区赔付数据源（ClaimsAgg 由服务端动态聚合） |
 | 报价状态 | `数据管理/warehouse/fact/quotes/latest.parquet` | 报价数据 |
 | 团队映射 | `数据管理/warehouse/dim/salesman_organization_mapping.json` | 业务员-团队-机构映射（回退） |
 | 续保明细 | `数据管理/warehouse/fact/renewal/` | 续保数据 |
