@@ -22,6 +22,7 @@ import {
   getQuoteConversionPaths,
   getPlateRegionDimPaths,
   getClaimsDetailPaths,
+  getClaimsDetailDirs,
   getCrossSellPaths,
   getRepairDimPaths,
   getBrandDimPaths,
@@ -361,8 +362,20 @@ export class DataBootstrapper {
   private registerLazyDomains(): void {
     const db = this.db;
 
-    // ClaimsDetail（254k 行，必须惰性）
+    // ClaimsDetail（280k 行，按年度分区，必须惰性）
     this.lazyRegistry.register('ClaimsDetail', async () => {
+      // 优先：分区目录（claims_*.parquet glob）
+      const dir = getClaimsDetailDirs().find(d =>
+        fs.existsSync(d) && fs.readdirSync(d).some(f => f.startsWith('claims_') && f.endsWith('.parquet'))
+      );
+      if (dir) {
+        const globPath = `${dir.replace(/\\/g, '/')}/claims_*.parquet`;
+        console.time('[Bootstrap:Lazy] ClaimsDetail (partitioned)');
+        await domainLoaders.loadClaimsDetail(db, globPath);
+        console.timeEnd('[Bootstrap:Lazy] ClaimsDetail (partitioned)');
+        return;
+      }
+      // 回退：单文件 latest.parquet（旧架构兼容）
       const p = getClaimsDetailPaths().find(p => fs.existsSync(p));
       if (!p) { console.warn('[Bootstrap:Lazy] ClaimsDetail: no file found'); return; }
       console.time('[Bootstrap:Lazy] ClaimsDetail');

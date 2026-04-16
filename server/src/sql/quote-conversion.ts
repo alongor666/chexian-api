@@ -6,10 +6,12 @@
  *       coverage_combination, insurance_grade, commercial_ncd,
  *       pure_risk_premium, final_quote_premium, ncd_premium, commercial_pricing_factor,
  *       is_telemarketing, is_transfer, is_nev, traffic_risk_grade,
- *       highway_risk_grade, tonnage_segment, insurance_type,
- *       brand_model_category, fuel_type, purchase_price, vehicle_age,
+ *       highway_risk_level, tonnage_segment, insurance_type,
+ *       brand_model_category, fuel_type, new_vehicle_price, vehicle_age,
  *       ncd_yoy_change, pricing_factor_yoy_change,
- *       salesman_no, salesman_name_display, team
+ *       salesman_name, salesman_no, team
+ *
+ * L2 历史快照额外字段：quote_count, salesman_count, org_count, first_quote_time, last_quote_time
  */
 
 export interface QuoteConversionFilters {
@@ -142,7 +144,7 @@ export function generateQuoteDrilldownQuery(
       break;
     case 'salesman':
       groupCol = 'salesman_no';
-      nameCol = 'salesman_name_display';
+      nameCol = 'salesman_name';
       break;
   }
 

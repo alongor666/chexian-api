@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-理赔明细 Excel → claims_detail/latest.parquet
+理赔明细 Excel → claims_detail parquet（支持分区架构）
 
 赔案级明细数据（每行 = 一个赔案），包含出险原因/人伤/地点/时效链/金额细分。
-与 claims_bulk/latest.parquet（保单级聚合）互补，不替换。
+支持 --policy-dir 参数，JOIN PolicyFact 获取 insurance_start_date 并派生 insurance_year。
 
 用法：
-  python3 convert_claims_detail.py -i 02_理赔明细_*.xlsx -o warehouse/fact/claims_detail/latest.parquet
+  python3 convert_claims_detail.py -i 02_理赔明细_*.xlsx -o warehouse/fact/claims_detail/_incoming.parquet --policy-dir warehouse/fact/policy/current/
 """
 
 import argparse
@@ -73,10 +73,69 @@ AMOUNT_COLS = [
 STR_FORCE_COLS = {'保单号': str, '报案号': str, '赔案号': str, '车架号': str, '标的车牌': str}
 
 
+def _enrich_insurance_start_date(df: pd.DataFrame, policy_dir: str | None) -> pd.DataFrame:
+    """从 PolicyFact JOIN 获取 insurance_start_date，未匹配的用 policy_no 位置 12-15 推导年份。"""
+    import duckdb
+
+    # Step 1: 从 policy_no 提取年份作为 fallback（SUBSTRING 位置 12-15 = 保险起期年份，98.2% 一致率）
+    def extract_year(pno):
+        if pd.isna(pno) or len(str(pno)) < 15:
+            return None
+        y = str(pno)[11:15]
+        return int(y) if y.isdigit() and 2018 <= int(y) <= 2030 else None
+
+    df['_pn_year'] = df['policy_no'].apply(extract_year)
+
+    # Step 2: 尝试 JOIN PolicyFact 获取精确日期
+    joined_count = 0
+    if policy_dir:
+        policy_path = Path(policy_dir)
+        if policy_path.exists() and any(policy_path.glob('*.parquet')):
+            glob_pattern = str(policy_path / '*.parquet')
+            print(f"   JOIN PolicyFact: {glob_pattern}")
+            try:
+                result = duckdb.sql(f"""
+                    SELECT DISTINCT policy_no, insurance_start_date
+                    FROM read_parquet('{glob_pattern}')
+                    WHERE policy_no IS NOT NULL AND insurance_start_date IS NOT NULL
+                """).df()
+                result.columns = ['policy_no', '_pf_insurance_start_date']
+                df = df.merge(result, on='policy_no', how='left')
+                joined_count = df['_pf_insurance_start_date'].notna().sum()
+                print(f"   PolicyFact 匹配: {joined_count:,}/{len(df):,} ({joined_count/len(df)*100:.1f}%)")
+            except Exception as e:
+                print(f"   ⚠ PolicyFact JOIN 失败（使用 policy_no 回退）: {e}")
+
+    # Step 3: 合并——优先用 JOIN 结果，回退到 policy_no 年份
+    if '_pf_insurance_start_date' in df.columns:
+        df['insurance_start_date'] = df['_pf_insurance_start_date']
+        # 未匹配的用 policy_no 年份构造 YYYY-01-01
+        mask = df['insurance_start_date'].isna() & df['_pn_year'].notna()
+        df.loc[mask, 'insurance_start_date'] = df.loc[mask, '_pn_year'].apply(
+            lambda y: pd.Timestamp(year=int(y), month=1, day=1)
+        )
+        df.drop(columns=['_pf_insurance_start_date'], inplace=True)
+    else:
+        df['insurance_start_date'] = df['_pn_year'].apply(
+            lambda y: pd.Timestamp(year=int(y), month=1, day=1) if pd.notna(y) else pd.NaT
+        )
+
+    # Step 4: 派生 insurance_year（分区键）
+    df['insurance_year'] = df['insurance_start_date'].dt.year.astype('Int64')
+    fallback_count = len(df) - joined_count
+    null_year = df['insurance_year'].isna().sum()
+    print(f"   insurance_year: JOIN={joined_count:,}, fallback={fallback_count:,}, NULL={null_year:,}")
+
+    df.drop(columns=['_pn_year'], inplace=True)
+    return df
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='理赔明细 → Parquet')
     parser.add_argument('-i', '--input', nargs='+', required=True, help='输入 Excel 文件（支持多个）')
     parser.add_argument('-o', '--output', required=True, help='输出 Parquet 文件')
+    parser.add_argument('--policy-dir', default=None,
+                        help='PolicyFact parquet 目录，用于 JOIN 获取 insurance_start_date（可选，回退到 policy_no 提取）')
     return parser.parse_args()
 
 
@@ -183,6 +242,9 @@ def main():
     df = df[df['claim_no'].notna()].copy()
     if len(df) < before:
         print(f"   过滤无赔案号: {before - len(df):,} 行")
+
+    # ── insurance_start_date enrichment ──
+    df = _enrich_insurance_start_date(df, args.policy_dir)
 
     # ── 统计 ──
     print(f"\n   === 数据概览 ===")

@@ -36,8 +36,16 @@ export function getKpiPlanConfigPath(): string {
   return path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/kpi_plan_config.json');
 }
 
-// ── 赔案明细 Parquet 路径（本地优先，VPS 回退）──
+// ── 赔案明细 Parquet 路径（分区目录 glob，本地优先，VPS 回退）──
 
+export function getClaimsDetailDirs(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/claims_detail'),
+    path.resolve(getDataDir(), 'fact/claims_detail'),
+  ];
+}
+
+/** @deprecated 兼容旧代码，优先使用 getClaimsDetailDirs() */
 export function getClaimsDetailPaths(): string[] {
   return [
     path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/claims_detail/latest.parquet'),

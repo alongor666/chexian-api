@@ -83,10 +83,8 @@ export async function materializeInBatches(
         WITH normalized AS (${cteSql}) ${aggregateSql}
       `);
     } else {
-      // VPS：降低内存峰值，逐月分批
-      await db.query('SET threads=1');
-      await db.query('SET preserve_insertion_order=false');
-
+      // VPS：逐月分批降低峰值内存（不修改全局 threads/preserve_insertion_order，
+      // 因为它们是 DuckDB GLOBAL scope 设置，会影响所有并发查询连接）
       const monthsResult = await db.query<{ ym: string }>(`
         SELECT DISTINCT strftime(CAST(policy_date AS DATE), '%Y-%m') AS ym
         FROM PolicyFact WHERE policy_date IS NOT NULL ORDER BY ym
@@ -117,9 +115,6 @@ export async function materializeInBatches(
           console.log(`[DuckDB] ${tableName} batch ${i + 1}/${months.length}: ${months[i]}`);
         }
       }
-
-      await db.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
-      await db.query('SET preserve_insertion_order=true');
     }
 
     // 创建索引
@@ -137,14 +132,6 @@ export async function materializeInBatches(
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[DuckDB] ⚠️ ${tableName} materialization failed (${Date.now() - t0}ms): ${msg}`);
     console.warn(`[DuckDB] Falling back to VIEW for ${tableName} — queries will be slower`);
-
-    // 分批模式下恢复线程数（可能在异常前未执行）
-    if (useBatching) {
-      try {
-        await db.query(`SET threads=${DUCKDB_INIT_OPTIONS.threads}`);
-        await db.query('SET preserve_insertion_order=true');
-      } catch { /* ignore */ }
-    }
 
     // 清理失败的半成品表
     await db.dropRelationIfExists(tableName);
@@ -238,22 +225,21 @@ export async function createCrossSellRealtimeView(db: DuckDBQueryable): Promise<
   const hasCrossSellFact = await db.hasRelation('CrossSellFact');
 
   if (hasCrossSellFact) {
-    // ── 8域模式：从 CrossSellFact（40万行）+ JOIN PolicyFact 构建 ──
-    console.log('[DuckDB] Building CrossSellDailyAgg from CrossSellFact (8-domain mode)...');
+    // ── 8域模式：PolicyFact 做分母 + LEFT JOIN 精简 CrossSellFact（仅 is_cross_sell=true）做分子 ──
+    console.log('[DuckDB] Building CrossSellDailyAgg from PolicyFact + slim CrossSellFact...');
 
     // 检测 PolicyFact 实际存在的列（新数据源可能缺少 renewal_mode/driver_coverage 等）
     const pfSchema = await db.getTableSchema('PolicyFact');
     const pfCols = new Set(pfSchema.map((c: any) => c.column_name));
-    const col = (name: string, fallback: string) => pfCols.has(name) ? `p.${name}` : fallback;
     const colStr = (name: string) => pfCols.has(name) ? `COALESCE(CAST(p.${name} AS VARCHAR), '')` : `''`;
     const colBool = (name: string) => pfCols.has(name) ? `COALESCE(p.${name}, false)` : `false`;
     const colNum = (name: string) => pfCols.has(name) ? `COALESCE(p.${name}, 0)` : `0`;
 
     const cteSql = `
         SELECT
-          CAST(cs.policy_date AS DATE) AS policy_date,
-          COALESCE(CAST(${col('insurance_start_date', 'cs.policy_date')} AS DATE), CAST(cs.policy_date AS DATE)) AS insurance_start_date,
-          cs.org_level_3, cs.salesman_name, cs.customer_category, cs.coverage_combination,
+          CAST(p.policy_date AS DATE) AS policy_date,
+          COALESCE(CAST(p.insurance_start_date AS DATE), CAST(p.policy_date AS DATE)) AS insurance_start_date,
+          p.org_level_3, p.salesman_name, p.customer_category, p.coverage_combination,
           ${colStr('renewal_mode')} AS renewal_mode,
           ${colStr('tonnage_segment')} AS tonnage_segment,
           ${colStr('insurance_grade')} AS insurance_grade,
@@ -265,18 +251,18 @@ export async function createCrossSellRealtimeView(db: DuckDBQueryable): Promise<
           ${colBool('is_nev')} AS is_nev,
           ${colBool('is_new_car')} AS is_new_car,
           ${colBool('is_renewable')} AS is_renewable,
-          cs.is_cross_sell,
+          COALESCE(cs.is_cross_sell, false) AS is_cross_sell,
           ${colNum('driver_coverage')} AS driver_coverage,
           ${colNum('passenger_coverage')} AS passenger_coverage,
           COALESCE(cs.cross_sell_premium_driver, 0) AS cross_sell_premium_driver,
           ${colNum('premium')} AS premium,
           COALESCE(
-            NULLIF(TRIM(CAST(cs.vehicle_frame_no AS VARCHAR)), ''),
-            NULLIF(TRIM(CAST(cs.policy_no AS VARCHAR)), '')) AS dedup_key,
-          NULLIF(TRIM(CAST(cs.policy_no AS VARCHAR)), '') AS raw_policy_no
-        FROM CrossSellFact cs
-        LEFT JOIN PolicyFact p ON cs.policy_no = p.policy_no
-        WHERE cs.policy_date IS NOT NULL`;
+            NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), ''),
+            NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), '')) AS dedup_key,
+          NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), '') AS raw_policy_no
+        FROM PolicyFact p
+        LEFT JOIN CrossSellFact cs ON p.policy_no = cs.policy_no
+        WHERE p.policy_date IS NOT NULL`;
 
     const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
         customer_category, coverage_combination, renewal_mode, tonnage_segment,
