@@ -94,9 +94,17 @@ export function buildFilterParams(
   if (filters.vehicle_quick_filter) {
     params.vehicleQuickFilter = filters.vehicle_quick_filter;
   }
+  // 企客（非营业企业客车）
+  if (filters.enterprise_car) {
+    params.enterpriseCar = 'true';
+  }
   // 营业/非营业性质
   if (filters.business_nature) {
     params.businessNature = filters.business_nature;
+  }
+  // 燃料分类（油/气/电）
+  if (filters.fuel_category) {
+    params.fuelCategory = filters.fuel_category;
   }
 
   return params;

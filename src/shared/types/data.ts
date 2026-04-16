@@ -317,6 +317,9 @@ export interface AdvancedFilterState {
 
   // 车型快捷筛选（互斥单选）
   vehicle_quick_filter?: 'home_car' | 'truck_1t' | 'truck_2_9t' | 'motorcycle' | 'truck_1_2t' | 'rental' | 'dump' | 'tractor' | 'general';
+  enterprise_car?: boolean;              // 企客（非营业企业客车），与家自车可同时选
   // 营业/非营业性质
   business_nature?: 'commercial' | 'non_commercial';
+  // 燃料分类（油/气/电，组合 is_nev + fuel_type）
+  fuel_category?: 'oil' | 'gas' | 'electric';
 }

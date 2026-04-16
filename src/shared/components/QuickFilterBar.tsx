@@ -1,7 +1,7 @@
 /**
  * 快捷筛选栏
  *
- * 单行布局：车型芯片（互斥） + 新能源/燃油 + 维度 toggle（循环切换）
+ * 布局顺序：险类(交/商) → 主全/交三/单交 → 车型芯片(分组多选) → 油/气/电 → 其他 toggle
  * 全局共享组件，所有分析页面可用。
  */
 import React from 'react';
@@ -13,14 +13,23 @@ export type VehicleType = 'home_car' | 'truck_1t' | 'truck_2_9t' | 'motorcycle' 
 /** 续/转 */
 export type RenewalType = 'renewal' | 'transfer';
 
+/** 燃料分类：油/气/电 */
+export type FuelCategory = 'oil' | 'gas' | 'electric';
+
+/** 险类筛选 */
+export type InsuranceTypeFilter = 'compulsory' | 'commercial';
+
 export interface QuickFilters {
   vehicleType?: VehicleType;
-  isNev?: boolean;
+  enterpriseCar?: boolean;              // 企客（非营业企业客车），与家自车可同时选
+  fuelCategory?: FuelCategory;          // 油/气/电（替代旧 isNev）
+  isNev?: boolean;                      // 保留向后兼容，由 fuelCategory 派生
   isNewCar?: boolean;
-  renewalType?: RenewalType;          // 续保 / 转保(非续非新)
+  renewalType?: RenewalType;            // 续保 / 转保(非续非新)
   businessNature?: 'commercial' | 'non_commercial';
-  isTransfer?: boolean;               // 过户/非过户
-  coverageCombination?: string;       // '主全' | '交三' | '单交'
+  isTransfer?: boolean;                 // 过户/非过户
+  coverageCombination?: string;         // '主全' | '交三' | '单交'
+  insuranceType?: InsuranceTypeFilter;  // 交强/商业
 }
 
 interface Props {
@@ -30,18 +39,33 @@ interface Props {
   hideVehicleType?: boolean;
 }
 
-// ── 车型芯片 ──
-const VEHICLE_CHIPS: { type: VehicleType; label: string }[] = [
+// ── 车型分组 ──
+// 非营业客车组（组内可多选）
+const CAR_GROUP_CHIPS: { type: VehicleType; label: string }[] = [
   { type: 'home_car', label: '家自车' },
+];
+// 企客独立标记（与家自车可同时选）
+const ENTERPRISE_CAR_LABEL = '企客';
+
+// 货车组（组内可多选）— 暂保持互斥，预留分组
+const TRUCK_GROUP_CHIPS: { type: VehicleType; label: string }[] = [
   { type: 'truck_1t', label: '1T货' },
   { type: 'truck_2_9t', label: '2-9T货' },
-  { type: 'motorcycle', label: '摩托车' },
   { type: 'truck_1_2t', label: '1-2T货' },
-  { type: 'rental', label: '租/网' },
   { type: 'dump', label: 'X自卸' },
   { type: 'tractor', label: 'X牵引' },
   { type: 'general', label: 'X普货' },
 ];
+
+// 独立互斥类型
+const STANDALONE_CHIPS: { type: VehicleType; label: string }[] = [
+  { type: 'motorcycle', label: '摩托车' },
+  { type: 'rental', label: '租/网' },
+];
+
+// 货车类型集合（用于互斥判断）
+const TRUCK_TYPES = new Set<VehicleType>(TRUCK_GROUP_CHIPS.map(c => c.type));
+const CAR_TYPES = new Set<VehicleType>(CAR_GROUP_CHIPS.map(c => c.type));
 
 // ── 循环 toggle ──
 interface CycleToggleConfig {
@@ -49,16 +73,40 @@ interface CycleToggleConfig {
   key: keyof QuickFilters;
 }
 
-const TOGGLE_CONFIGS: CycleToggleConfig[] = [
-  {
-    key: 'isNev',
-    states: [
-      { value: undefined, label: '油/电' },
-      { value: true, label: '电动' },
-      { value: false, label: '燃油' },
-    ],
-  },
-  // separator injected in render
+// 险类 toggle（交/商）
+const INSURANCE_TYPE_TOGGLE: CycleToggleConfig = {
+  key: 'insuranceType',
+  states: [
+    { value: undefined, label: '交/商' },
+    { value: 'compulsory', label: '交强' },
+    { value: 'commercial', label: '商业' },
+  ],
+};
+
+// 险别组合 toggle（主全/交三/单交）
+const COVERAGE_TOGGLE: CycleToggleConfig = {
+  key: 'coverageCombination',
+  states: [
+    { value: undefined, label: '主全/交三/单交' },
+    { value: '主全', label: '主全' },
+    { value: '交三', label: '交三' },
+    { value: '单交', label: '单交' },
+  ],
+};
+
+// 油/气/电 toggle
+const FUEL_CATEGORY_TOGGLE: CycleToggleConfig = {
+  key: 'fuelCategory',
+  states: [
+    { value: undefined, label: '油/气/电' },
+    { value: 'electric', label: '电' },
+    { value: 'gas', label: '气' },
+    { value: 'oil', label: '油' },
+  ],
+};
+
+// 其他维度 toggle
+const OTHER_TOGGLES: CycleToggleConfig[] = [
   {
     key: 'isNewCar',
     states: [
@@ -91,19 +139,7 @@ const TOGGLE_CONFIGS: CycleToggleConfig[] = [
       { value: false, label: '非' },
     ],
   },
-  {
-    key: 'coverageCombination',
-    states: [
-      { value: undefined, label: '主全/交三/单交' },
-      { value: '主全', label: '主全' },
-      { value: '交三', label: '交三' },
-      { value: '单交', label: '单交' },
-    ],
-  },
 ];
-
-// 在 isNev 和 isNewCar 之间插入分隔符的索引
-const SEPARATOR_AFTER_INDEX = 0;
 
 const chipBase = 'px-2.5 py-1 text-xs rounded-full cursor-pointer transition-colors select-none';
 const chipActive = 'bg-primary text-white';
@@ -115,22 +151,72 @@ const toggleDefault = 'bg-neutral-50 text-neutral-400 border-neutral-200 hover:b
 
 const Separator = () => <span className="w-px h-4 bg-neutral-300 dark:bg-neutral-600 mx-1" />;
 
-export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicleType }) => {
-  // 2吨以上货车和出租租赁必定是营业
-  const COMMERCIAL_VEHICLE_TYPES: VehicleType[] = ['truck_2_9t', 'dump', 'tractor', 'general', 'rental'];
+// 2吨以上货车和出租租赁必定是营业
+const COMMERCIAL_VEHICLE_TYPES: VehicleType[] = ['truck_2_9t', 'dump', 'tractor', 'general', 'rental'];
 
+export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicleType }) => {
+  /**
+   * 车型芯片点击逻辑：
+   * - 非营业客车组（家自车）+ 企客：组内可多选，选中时清除其他大类
+   * - 货车组：组内互斥（保持原行为），选中时清除客车组
+   * - 独立类型（摩托车、租/网）：互斥，清除所有其他
+   */
   const toggleVehicle = (type: VehicleType) => {
     const isDeselecting = filters.vehicleType === type;
-    const nextVehicle = isDeselecting ? undefined : type;
     const isCommercialLinked = COMMERCIAL_VEHICLE_TYPES.includes(type);
 
-    onChange({
-      ...filters,
-      vehicleType: nextVehicle,
-      ...(isCommercialLinked
-        ? { businessNature: isDeselecting ? undefined : 'commercial' as const }
-        : {}),
-    });
+    if (isDeselecting) {
+      // 取消选中
+      onChange({
+        ...filters,
+        vehicleType: undefined,
+        ...(isCommercialLinked ? { businessNature: undefined } : {}),
+      });
+      return;
+    }
+
+    // 选中新类型
+    if (CAR_TYPES.has(type)) {
+      // 选客车组：保留企客，清除货车
+      onChange({
+        ...filters,
+        vehicleType: type,
+        // enterpriseCar 保留（同组可共存）
+      });
+    } else if (TRUCK_TYPES.has(type)) {
+      // 选货车组：清除客车组+企客
+      onChange({
+        ...filters,
+        vehicleType: type,
+        enterpriseCar: undefined,
+        ...(isCommercialLinked ? { businessNature: 'commercial' as const } : {}),
+      });
+    } else {
+      // 独立类型（摩托车、租/网）：清除所有
+      onChange({
+        ...filters,
+        vehicleType: type,
+        enterpriseCar: undefined,
+        ...(isCommercialLinked ? { businessNature: 'commercial' as const } : {}),
+      });
+    }
+  };
+
+  const toggleEnterpriseCar = () => {
+    const isDeselecting = filters.enterpriseCar;
+    if (isDeselecting) {
+      onChange({ ...filters, enterpriseCar: undefined });
+    } else {
+      // 选中企客：如果当前选了非客车类型，清除它
+      const currentIsCarGroup = filters.vehicleType && CAR_TYPES.has(filters.vehicleType);
+      const currentIsNone = !filters.vehicleType;
+      onChange({
+        ...filters,
+        enterpriseCar: true,
+        // 如果当前是货车/摩托/租赁，清除
+        ...(!currentIsCarGroup && !currentIsNone ? { vehicleType: undefined } : {}),
+      });
+    }
   };
 
   const cycleToggle = (config: CycleToggleConfig) => {
@@ -153,37 +239,89 @@ export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicle
     return filters[config.key] !== undefined;
   };
 
+  const renderToggle = (config: CycleToggleConfig) => (
+    <button
+      key={config.key}
+      type="button"
+      onClick={() => cycleToggle(config)}
+      className={cn(toggleBase, isToggleActive(config) ? toggleActive : toggleDefault)}
+      title={`点击切换: ${config.states.map((s) => s.label).join(' → ')}`}
+    >
+      {getToggleLabel(config)}
+    </button>
+  );
+
   return (
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-1.5">
-        {/* 车型芯片 */}
-        {!hideVehicleType && VEHICLE_CHIPS.map(({ type, label }) => (
-          <button
-            key={type}
-            type="button"
-            onClick={() => toggleVehicle(type)}
-            className={cn(chipBase, filters.vehicleType === type ? chipActive : chipInactive)}
-            aria-pressed={filters.vehicleType === type}
-          >
-            {label}
-          </button>
-        ))}
+        {/* 1. 险类 toggle：交/商 */}
+        {renderToggle(INSURANCE_TYPE_TOGGLE)}
 
-        {/* 维度 toggle */}
-        {TOGGLE_CONFIGS.map((config, i) => (
-          <React.Fragment key={config.key}>
-            {i === 0 && <Separator />}
-            {i === SEPARATOR_AFTER_INDEX + 1 && <Separator />}
+        {/* 2. 险别组合：主全/交三/单交 */}
+        {renderToggle(COVERAGE_TOGGLE)}
+
+        <Separator />
+
+        {/* 3. 车型芯片 */}
+        {!hideVehicleType && (
+          <>
+            {/* 非营业客车组 */}
+            {CAR_GROUP_CHIPS.map(({ type, label }) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => toggleVehicle(type)}
+                className={cn(chipBase, filters.vehicleType === type ? chipActive : chipInactive)}
+                aria-pressed={filters.vehicleType === type}
+              >
+                {label}
+              </button>
+            ))}
+            {/* 企客（与家自车可同时选） */}
             <button
               type="button"
-              onClick={() => cycleToggle(config)}
-              className={cn(toggleBase, isToggleActive(config) ? toggleActive : toggleDefault)}
-              title={`点击切换: ${config.states.map((s) => s.label).join(' → ')}`}
+              onClick={toggleEnterpriseCar}
+              className={cn(chipBase, filters.enterpriseCar ? chipActive : chipInactive)}
+              aria-pressed={!!filters.enterpriseCar}
             >
-              {getToggleLabel(config)}
+              {ENTERPRISE_CAR_LABEL}
             </button>
-          </React.Fragment>
-        ))}
+
+            {/* 货车组 */}
+            {TRUCK_GROUP_CHIPS.map(({ type, label }) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => toggleVehicle(type)}
+                className={cn(chipBase, filters.vehicleType === type ? chipActive : chipInactive)}
+                aria-pressed={filters.vehicleType === type}
+              >
+                {label}
+              </button>
+            ))}
+
+            {/* 独立类型 */}
+            {STANDALONE_CHIPS.map(({ type, label }) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => toggleVehicle(type)}
+                className={cn(chipBase, filters.vehicleType === type ? chipActive : chipInactive)}
+                aria-pressed={filters.vehicleType === type}
+              >
+                {label}
+              </button>
+            ))}
+          </>
+        )}
+
+        <Separator />
+
+        {/* 4. 油/气/电 */}
+        {renderToggle(FUEL_CATEGORY_TOGGLE)}
+
+        {/* 5. 其他维度 toggle */}
+        {OTHER_TOGGLES.map((config) => renderToggle(config))}
       </div>
     </div>
   );

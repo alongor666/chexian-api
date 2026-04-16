@@ -73,8 +73,14 @@ export const commonFilterSchema = z.object({
 
   // 车型快捷筛选（互斥单选）
   vehicleQuickFilter: z.enum(['home_car', 'truck_1t', 'truck_2_9t', 'motorcycle', 'truck_1_2t', 'rental', 'dump', 'tractor', 'general']).optional(),
+  // 企客（非营业企业客车，可与家自车同时选）
+  enterpriseCar: z.string().optional(),
   // 营业/非营业性质
   businessNature: z.enum(['commercial', 'non_commercial']).optional(),
+  // 燃料分类（油/气/电）
+  fuelCategory: z.enum(['oil', 'gas', 'electric']).optional(),
+  // 险类（交强/商业）
+  insuranceType: z.string().optional(),
 });
 
 export type CommonFilterParams = z.infer<typeof commonFilterSchema>;
@@ -196,11 +202,38 @@ export function buildConditionsFromFilterParams(
     }
   }
 
+  // 险类筛选（交强/商业）
+  if (params.insuranceType === 'true') {
+    conditions.push("insurance_type = '交强险'");
+  } else if (params.insuranceType === 'false') {
+    conditions.push("insurance_type = '商业保险'");
+  }
+
+  // 燃料分类（油/气/电）
+  if (params.fuelCategory) {
+    switch (params.fuelCategory) {
+      case 'electric':
+        conditions.push('is_nev = true');
+        break;
+      case 'gas':
+        conditions.push("is_nev = false AND fuel_type LIKE '天然气%'");
+        break;
+      case 'oil':
+        conditions.push("is_nev = false AND (fuel_type IS NULL OR fuel_type NOT LIKE '天然气%')");
+        break;
+    }
+  }
+
   // 车型快捷筛选
   if (params.vehicleQuickFilter) {
     switch (params.vehicleQuickFilter) {
       case 'home_car':
-        conditions.push("customer_category = '非营业个人客车'");
+        if (params.enterpriseCar === 'true') {
+          // 家自车 + 企客同时选中
+          conditions.push("customer_category IN ('非营业个人客车', '非营业企业客车')");
+        } else {
+          conditions.push("customer_category = '非营业个人客车'");
+        }
         break;
       case 'truck_1t':
         conditions.push("customer_category IN ('营业货车', '非营业货车')");
@@ -237,6 +270,11 @@ export function buildConditionsFromFilterParams(
         conditions.push("vehicle_model NOT LIKE '%牵引%'");
         break;
     }
+  }
+
+  // 企客单独选中（无 vehicleQuickFilter 时）
+  if (params.enterpriseCar === 'true' && !params.vehicleQuickFilter) {
+    conditions.push("customer_category = '非营业企业客车'");
   }
 
   // 营业/非营业性质
