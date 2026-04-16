@@ -85,6 +85,8 @@ function adaptRenewalFilters(
   if (quickFilters.isNewCar !== undefined) params.isNewCar = quickFilters.isNewCar;
   if (quickFilters.isTransfer !== undefined) params.isTransfer = quickFilters.isTransfer;
   if (quickFilters.vehicleType) params.vehicleQuickFilter = quickFilters.vehicleType;
+  if (quickFilters.enterpriseCar) params.enterpriseCar = true;
+  if (quickFilters.fuelCategory) params.fuelCategory = quickFilters.fuelCategory;
   if (quickFilters.businessNature) params.businessNature = quickFilters.businessNature;
   if (quickFilters.coverageCombination) params.coverageCombination = quickFilters.coverageCombination;
   // renewalType 不映射 — RenewalUniverse 是应续档案，无 is_renewal 字段
@@ -137,7 +139,7 @@ export function RenewalAnalysisPage() {
   // ── 快捷筛选 ──
   const quickFilters = useMemo(
     () => deriveQuickFilters(filters),
-    [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination],
+    [filters.vehicle_quick_filter, filters.enterprise_car, filters.is_nev, filters.fuel_category, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination, filters.insurance_type],
   );
 
   const handleQuickFilterChange = useCallback(

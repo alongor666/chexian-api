@@ -30,6 +30,8 @@ export interface RenewalV2Filters {
   // 快捷筛选字段
   isTransfer?: boolean;
   vehicleQuickFilter?: string;
+  enterpriseCar?: boolean;
+  fuelCategory?: 'oil' | 'gas' | 'electric';
   businessNature?: 'commercial' | 'non_commercial';
   coverageCombination?: string;
 }

@@ -52,7 +52,7 @@ export const ClaimsDetailPage: React.FC = () => {
   const { filters, setFilters } = useGlobalFilters();
   const hook = useClaimsDetail();
 
-  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.is_nev, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination]);
+  const quickFilters = useMemo(() => deriveQuickFilters(filters), [filters.vehicle_quick_filter, filters.enterprise_car, filters.is_nev, filters.fuel_category, filters.is_new_car, filters.is_renewal, filters.business_nature, filters.is_transfer, filters.coverage_combination, filters.insurance_type]);
 
   const handleQuickFilterChange = useCallback((newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
     setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
@@ -71,6 +71,8 @@ export const ClaimsDetailPage: React.FC = () => {
   const params = useMemo(() => {
     const base = adaptFilterParams(globalParams);
     if (quickFilters.vehicleType) base.vehicleQuickFilter = quickFilters.vehicleType;
+    if (quickFilters.enterpriseCar) base.enterpriseCar = 'true';
+    if (quickFilters.fuelCategory) base.fuelCategory = quickFilters.fuelCategory;
     if (quickFilters.isNev !== undefined) base.isNev = String(quickFilters.isNev);
     if (quickFilters.isNewCar !== undefined) base.isNewCar = String(quickFilters.isNewCar);
     if (quickFilters.renewalType === 'renewal') {
@@ -82,6 +84,7 @@ export const ClaimsDetailPage: React.FC = () => {
     if (quickFilters.businessNature) base.businessNature = quickFilters.businessNature;
     if (quickFilters.isTransfer !== undefined) base.isTransfer = String(quickFilters.isTransfer);
     if (quickFilters.coverageCombination) base.coverageCombinations = quickFilters.coverageCombination;
+    if (quickFilters.insuranceType) base.insuranceType = String(quickFilters.insuranceType === 'compulsory');
     return base;
   }, [globalParams, quickFilters]);
 
