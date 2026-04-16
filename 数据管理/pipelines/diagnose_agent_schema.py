@@ -37,9 +37,9 @@ class IdentityBlock(TypedDict):
     agent: str                  # 精确全名
     years: list[int]
     latest_year: int
-    scale_wan: float            # 最新年签单保费（万元）
+    scale_wan: float            # 最新年签单premium（万元）
     policy_count: int           # 最新年保单数
-    benchmark_ratio: float      # 最新年 经代保费/机构保费
+    benchmark_ratio: float      # 最新年 经代premium/机构premium
     sample_size: int            # 总记录数
     small_sample: bool          # sample_size < 200
 
@@ -144,8 +144,8 @@ def build_summary(
     loss_ratio = float(latest_kpi.get("满期赔付率") or 0)
     expense_ratio = float(latest_kpi.get("费用率") or 0)
     vc = loss_ratio + expense_ratio
-    earned_premium = float(latest_kpi.get("满期保费") or 0)
-    premium = float(latest_kpi.get("签单保费") or 0)
+    earned_premium = float(latest_kpi.get("满期premium") or 0)
+    premium = float(latest_kpi.get("签单premium") or 0)
     margin_wan = round(earned_premium * (1 - vc / 100) / 10000, 1)
     sample_size = int(latest_kpi.get("总记录数") or 0)
     policy_count = int(latest_kpi.get("总保单数") or 0)
@@ -171,7 +171,7 @@ def build_summary(
             agent_kpi_by_year[yr] = d
 
     org_latest = org_kpi_by_year.get(latest_year, {})
-    org_premium = float(org_latest.get("签单保费") or 1)
+    org_premium = float(org_latest.get("签单premium") or 1)
     benchmark_ratio = round(premium / org_premium * 100, 1) if org_premium else 0
     org_loss_ratio = float(org_latest.get("满期赔付率") or 0)
     org_expense_ratio = float(org_latest.get("费用率") or 0)
@@ -196,16 +196,16 @@ def build_summary(
     if sev:
         _add_anomaly("核心 KPI", "变动成本率", latest_year, vc, TH_VC[0], sev)
         if sev in ("danger", "warn"):
-            _suggest_drilldown("险类×客户类别",
-                               f"变动成本率 {vc:.1f}% 超标，需按险类和客户类别定位", 1)
+            _suggest_drilldown("insurance_type×customer_category",
+                               f"变动成本率 {vc:.1f}% 超标，需按insurance_type和customer_category定位", 1)
 
     # R02: 满期赔付率（复用 TH_LR）
     sev = _severity_from_thresholds(loss_ratio, TH_LR)
     if sev:
         _add_anomaly("核心 KPI", "满期赔付率", latest_year, loss_ratio, TH_LR[0], sev)
         if sev == "danger":
-            _suggest_drilldown("险类×客户类别",
-                               f"赔付率 {loss_ratio:.1f}% 达危险线，需按客户类别拆分", 1)
+            _suggest_drilldown("insurance_type×customer_category",
+                               f"赔付率 {loss_ratio:.1f}% 达危险线，需按customer_category拆分", 1)
 
     # R03: 费用率 vs 机构同期（动态基准）
     fee_dev = expense_ratio - org_expense_ratio
@@ -213,7 +213,7 @@ def build_summary(
     if sev:
         _add_anomaly("核心 KPI", "费用率", latest_year, expense_ratio, org_expense_ratio, sev)
         if sev in ("danger", "warn"):
-            _suggest_drilldown("险别组合×年份",
+            _suggest_drilldown("coverage_combination×年份",
                                f"费用率 {expense_ratio:.1f}% 偏离机构 {org_expense_ratio:.1f}%", 2)
 
     # R04: 经代 vs 机构赔付率（动态基准）
@@ -223,29 +223,29 @@ def build_summary(
         _add_anomaly("经代 vs 机构整体", "赔付率偏离", latest_year, loss_ratio, org_loss_ratio, sev)
 
     # R05: 商业险赔付率
-    ins_cols, ins_rows = dimensions["险类分拆"]["data"]
+    ins_cols, ins_rows = dimensions["insurance_type分拆"]["data"]
     for row in ins_rows:
         d = dict(zip(ins_cols, row))
-        if int(d["年份"]) == latest_year and d["险类"] == "商业保险":
+        if int(d["年份"]) == latest_year and d["insurance_type"] == "商业保险":
             comm_lr = float(d.get("满期赔付率") or 0)
             sev = _severity_from_thresholds(comm_lr, TH_LR)
             if sev:
-                _add_anomaly("险类分拆", "商业险赔付率", latest_year, comm_lr, TH_LR[0], sev)
+                _add_anomaly("insurance_type分拆", "商业险赔付率", latest_year, comm_lr, TH_LR[0], sev)
                 if sev in ("danger", "warn"):
-                    _suggest_drilldown("客户类别×年份",
+                    _suggest_drilldown("customer_category×年份",
                                        f"商业险赔付率 {comm_lr:.1f}% 异常", 1)
 
-    # R06: 件均保费 YoY
+    # R06: 件均premium YoY
     prev_year = latest_year - 1
     if prev_year in kpi_by_year and latest_year in kpi_by_year:
-        prev_prem_per = float(kpi_by_year[prev_year].get("日均保费") or 0)
-        curr_prem_per = float(kpi_by_year[latest_year].get("日均保费") or 0)
+        prev_prem_per = float(kpi_by_year[prev_year].get("日均premium") or 0)
+        curr_prem_per = float(kpi_by_year[latest_year].get("日均premium") or 0)
         if prev_prem_per > 0:
             change_pct = (curr_prem_per - prev_prem_per) / prev_prem_per * 100
             if change_pct < -15:
-                _add_anomaly("核心 KPI", "件均保费YoY", latest_year, change_pct, 0, "warn")
+                _add_anomaly("核心 KPI", "件均premiumYoY", latest_year, change_pct, 0, "warn")
             elif change_pct < -10:
-                _add_anomaly("核心 KPI", "件均保费YoY", latest_year, change_pct, 0, "notice")
+                _add_anomaly("核心 KPI", "件均premiumYoY", latest_year, change_pct, 0, "notice")
 
     # R07: 续保率 YoY（反事实检查指标）
     if prev_year in kpi_by_year and latest_year in kpi_by_year:
@@ -255,13 +255,13 @@ def build_summary(
         if renewal_drop > 10:
             _add_anomaly("核心 KPI", "续保率下降", latest_year, curr_renewal, prev_renewal, "notice")
 
-    # R08: 保费规模暴增（反事实检查指标）
+    # R08: premium规模暴增（反事实检查指标）
     if prev_year in kpi_by_year and latest_year in kpi_by_year:
-        prev_premium = float(kpi_by_year[prev_year].get("签单保费") or 0)
-        curr_premium = float(kpi_by_year[latest_year].get("签单保费") or 0)
+        prev_premium = float(kpi_by_year[prev_year].get("签单premium") or 0)
+        curr_premium = float(kpi_by_year[latest_year].get("签单premium") or 0)
         if prev_premium > 0 and curr_premium / prev_premium > 3.0:
             growth_pct = round((curr_premium / prev_premium - 1) * 100, 0)
-            _add_anomaly("核心 KPI", "保费暴增", latest_year, growth_pct, 100, "notice")
+            _add_anomaly("核心 KPI", "premium暴增", latest_year, growth_pct, 100, "notice")
 
     # -- anomalies 按 abs(deviation) 降序排列 --
     anomalies.sort(key=lambda a: abs(a["deviation"]), reverse=True)

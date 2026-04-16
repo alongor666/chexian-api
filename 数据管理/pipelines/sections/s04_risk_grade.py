@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """板块 4: 风险评分 — 智能检测字段 + 无评分列"""
 
-from diagnose_common import GLOB, kpi_select
+from diagnose_common import GLOB, joined_source, kpi_select
 
 
 def run(ctx, rpt, collected, silent=False):
@@ -11,11 +11,12 @@ def run(ctx, rpt, collected, silent=False):
     risk_expr = ctx.risk_expr
     years = ctx.years
     min_yr, max_yr = ctx.min_yr, ctx.max_yr
+    src = joined_source(con)
 
     # 获取实际等级值
     grades = con.execute(f"""
     SELECT DISTINCT {risk_expr} AS grade
-    FROM read_parquet('{GLOB}', union_by_name=true)
+    FROM {src}
     WHERE {base_where} AND {risk_expr} IS NOT NULL
     ORDER BY grade
     """).fetchall()
@@ -27,8 +28,8 @@ def run(ctx, rpt, collected, silent=False):
     for grade in grade_list:
         gr_result = con.execute(f"""
         SELECT {kpi_select()}
-        FROM read_parquet('{GLOB}', union_by_name=true)
-        WHERE {base_where} AND {risk_expr} = '{grade}' AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
+        FROM {src}
+        WHERE {base_where} AND {risk_expr} = '{grade}' AND YEAR(insurance_start_date) BETWEEN {min_yr} AND {max_yr}
         """)
         gr_cols = [d[0] for d in gr_result.description]
         for row in gr_result.fetchall():
@@ -37,8 +38,8 @@ def run(ctx, rpt, collected, silent=False):
     # 无评分的
     gr_null = con.execute(f"""
     SELECT {kpi_select()}
-    FROM read_parquet('{GLOB}', union_by_name=true)
-    WHERE {base_where} AND {risk_expr} IS NULL AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}
+    FROM {src}
+    WHERE {base_where} AND {risk_expr} IS NULL AND YEAR(insurance_start_date) BETWEEN {min_yr} AND {max_yr}
     """)
     gr_null_cols = [d[0] for d in gr_null.description]
     for row in gr_null.fetchall():
@@ -61,7 +62,7 @@ def run(ctx, rpt, collected, silent=False):
         for yr in years:
             g_result = con.execute(f"""
             SELECT {kpi_select()}
-            FROM read_parquet('{GLOB}', union_by_name=true)
+            FROM {src}
             WHERE {base_where} AND {risk_expr} = '{grade}' AND {ctx.yr_where(yr)}
             """)
             g_cols = [d[0] for d in g_result.description]

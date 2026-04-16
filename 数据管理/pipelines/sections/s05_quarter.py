@@ -2,19 +2,20 @@
 # -*- coding: utf-8 -*-
 """板块 5: 季度趋势 — 汇总表 + 7 个 ASCII 条形图"""
 
-from diagnose_common import GLOB, kpi_select, get_metric_value
+from diagnose_common import GLOB, joined_source, kpi_select, get_metric_value
 
 
 def run(ctx, rpt, collected, silent=False):
     con = ctx.con
     base_where = ctx.base_where
+    src = joined_source(con)
 
     q_result = con.execute(f"""
     SELECT
-        YEAR(签单日期)::INT * 10 + QUARTER(签单日期)::INT AS q_sort,
-        SUBSTR(CAST(YEAR(签单日期) AS VARCHAR), 3, 2) || 'Q' || CAST(QUARTER(签单日期) AS VARCHAR) AS quarter_label,
+        YEAR(policy_date)::INT * 10 + QUARTER(policy_date)::INT AS q_sort,
+        SUBSTR(CAST(YEAR(policy_date) AS VARCHAR), 3, 2) || 'Q' || CAST(QUARTER(policy_date) AS VARCHAR) AS quarter_label,
         {kpi_select()}
-    FROM read_parquet('{GLOB}', union_by_name=true) WHERE {base_where}
+    FROM {src} WHERE {base_where}
     GROUP BY q_sort, quarter_label
     ORDER BY q_sort DESC LIMIT 24
     """)
@@ -46,13 +47,13 @@ def run(ctx, rpt, collected, silent=False):
             d.get("avg_claim"),
         ])
     rpt.write_quarter_table(q_table_rows,
-        ["季度", "边际贡献额", "签单保费", "变动成本率", "费用率", "满期赔付率", "满期出险率", "案均赔款 †"])
+        ["季度", "边际贡献额", "签单premium", "变动成本率", "费用率", "满期赔付率", "满期出险率", "案均赔款 †"])
 
     # 5.1-5.7 条形图
     q_labels = [d["quarter_label"] for d in q_rows_raw]
     chart_items = [
         ("5.1 满期边际贡献额", "earned_margin", "万"),
-        ("5.2 签单保费", "written_premium", "万"),
+        ("5.2 签单premium", "written_premium", "万"),
         ("5.3 变动成本率", "_vc", "%"),
         ("5.4 费用率", "expense_ratio", "%"),
         ("5.5 满期赔付率", "loss_ratio", "%"),

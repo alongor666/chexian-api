@@ -133,7 +133,7 @@ def get_project_root():
 def build_base_query(segment_filter: str) -> str:
     """构建基础 FROM + WHERE 子句"""
     return f"""
-    FROM read_parquet('{get_project_root()}/数据管理/warehouse/fact/claims_detail/latest.parquet') cd
+    FROM read_parquet('{get_project_root()}/数据管理/warehouse/fact/claims_detail/claims_*.parquet') cd
     JOIN read_parquet('{get_project_root()}/数据管理/warehouse/fact/policy/current/*.parquet') p
         ON cd.policy_no = p.policy_no
     WHERE {AMT} > 0

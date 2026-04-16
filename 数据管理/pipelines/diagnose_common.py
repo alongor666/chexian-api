@@ -16,6 +16,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
+CLAIMS_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 OUT_DIR = str(PROJECT_ROOT / "数据分析报告")
 
 # 闰年感知：保险期限 = 起期+1年-起期（365 或 366 天）
@@ -27,9 +28,9 @@ def set_fixed_cost_sql(sql_dict: dict | None):
     global _FIXED_COST_SQL
     _FIXED_COST_SQL = sql_dict
 
-POLICY_TERM = "DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR)"
-EARNED_DAYS = f"LEAST(DATE_DIFF('day', 保险起期, CURRENT_DATE), {POLICY_TERM})"
-EARNED = f"保费 * CAST({EARNED_DAYS} AS DOUBLE) / CAST({POLICY_TERM} AS DOUBLE)"
+POLICY_TERM = "DATE_DIFF('day', insurance_start_date, insurance_start_date + INTERVAL 1 YEAR)"
+EARNED_DAYS = f"LEAST(DATE_DIFF('day', insurance_start_date, CURRENT_DATE), {POLICY_TERM})"
+EARNED = f"premium * CAST({EARNED_DAYS} AS DOUBLE) / CAST({POLICY_TERM} AS DOUBLE)"
 
 
 # ============================================================================
@@ -107,7 +108,7 @@ def kpi_select(group_col: str = None, fixed_cost_sql: dict = None) -> str:
     口径（v5.0）：
     - earned_premium: 闰年感知（policy_term=365/366）
     - incident_rate: (赔案/保单) × (保险期限/满期天数)
-    - pricing_coeff: 仅险类='商业保险'
+    - pricing_coeff: 仅insurance_type='商业保险'
     - fixed_cost / combined_cost / profit: 需传入 fixed_cost_sql（来自 fixed_cost_config）
 
     参数:
@@ -127,12 +128,12 @@ def kpi_select(group_col: str = None, fixed_cost_sql: dict = None) -> str:
         -- 固定成本（绝对值，万元）
         ROUND(SUM({fc})/10000, 1) AS fixed_cost_amount,
         -- 综合成本额（绝对值，万元）= 变动成本 + 固定成本
-        ROUND((SUM(COALESCE(已报告赔款,0)) + SUM(COALESCE(费用金额,0)) + SUM({fc}))/10000, 1) AS combined_cost_amount,
-        -- 综合成本率 = 综合成本额 / 满期保费（绝对值除法，非率值相加）
-        ROUND((SUM(COALESCE(已报告赔款,0)) + SUM(COALESCE(费用金额,0)) + SUM({fc}))
+        ROUND((SUM(COALESCE(reported_claims,0)) + SUM(COALESCE(fee_amount,0)) + SUM({fc}))/10000, 1) AS combined_cost_amount,
+        -- 综合成本率 = 综合成本额 / 满期premium（绝对值除法，非率值相加）
+        ROUND((SUM(COALESCE(reported_claims,0)) + SUM(COALESCE(fee_amount,0)) + SUM({fc}))
               / NULLIF(SUM({EARNED}), 0) * 100, 1) AS combined_cost_ratio,
-        -- 利润额 = 满期保费 - 综合成本额
-        ROUND((SUM({EARNED}) - SUM(COALESCE(已报告赔款,0)) - SUM(COALESCE(费用金额,0)) - SUM({fc}))/10000, 1) AS profit_amount"""
+        -- 利润额 = 满期premium - 综合成本额
+        ROUND((SUM({EARNED}) - SUM(COALESCE(reported_claims,0)) - SUM(COALESCE(fee_amount,0)) - SUM({fc}))/10000, 1) AS profit_amount"""
     else:
         fixed_cols = """,
         NULL AS fixed_cost_amount,
@@ -142,42 +143,70 @@ def kpi_select(group_col: str = None, fixed_cost_sql: dict = None) -> str:
 
     return f"""
         {g}
-        COUNT(DISTINCT 保单号)::INT AS policy_count,
-        ROUND(SUM(保费)/10000, 1) AS written_premium,
-        ROUND(AVG(CASE WHEN 保费>0 THEN 保费 END), 0)::INT AS avg_premium,
-        COUNT(DISTINCT COALESCE(NULLIF(TRIM(CAST(车架号 AS VARCHAR)), ''), 保单号))::INT AS vehicle_count,
-        ROUND(SUM(保费) / NULLIF(COUNT(DISTINCT COALESCE(NULLIF(TRIM(CAST(车架号 AS VARCHAR)), ''), 保单号)), 0), 0)::INT AS per_vehicle_premium,
+        COUNT(DISTINCT policy_no)::INT AS policy_count,
+        ROUND(SUM(premium)/10000, 1) AS written_premium,
+        ROUND(AVG(CASE WHEN premium>0 THEN premium END), 0)::INT AS avg_premium,
+        COUNT(DISTINCT COALESCE(NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''), policy_no))::INT AS vehicle_count,
+        ROUND(SUM(premium) / NULLIF(COUNT(DISTINCT COALESCE(NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''), policy_no)), 0), 0)::INT AS per_vehicle_premium,
         ROUND(SUM({EARNED})/10000, 1) AS earned_premium,
-        ROUND(SUM(COALESCE(已报告赔款,0))/10000, 1) AS reported_claims,
-        SUM(COALESCE(赔案件数,0))::INT AS claim_cases,
-        ROUND(SUM(COALESCE(已报告赔款,0))/NULLIF(SUM(COALESCE(赔案件数,0)),0), 0)::INT AS avg_claim,
-        COUNT(DISTINCT CASE WHEN COALESCE(赔案件数,0)>0 THEN 保单号 END)::INT AS claim_policies,
-        ROUND(SUM(COALESCE(费用金额,0))/10000, 1) AS fee_amount,
-        ROUND(SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0)*100, 1) AS loss_ratio,
-        ROUND(SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0)*100, 1) AS expense_ratio,
-        -- annualized_cases: 年化赔案件数（可加绝对值，用于跨分组汇总时重算 incident_rate）
-        ROUND(SUM(COALESCE(赔案件数,0) * CAST({POLICY_TERM} AS DOUBLE)
+        ROUND(SUM(COALESCE(reported_claims,0))/10000, 1) AS reported_claims,
+        SUM(COALESCE(claim_cases,0))::INT AS claim_cases,
+        ROUND(SUM(COALESCE(reported_claims,0))/NULLIF(SUM(COALESCE(claim_cases,0)),0), 0)::INT AS avg_claim,
+        COUNT(DISTINCT CASE WHEN COALESCE(claim_cases,0)>0 THEN policy_no END)::INT AS claim_policies,
+        ROUND(SUM(COALESCE(fee_amount,0))/10000, 1) AS fee_amount,
+        ROUND(SUM(COALESCE(reported_claims,0))/NULLIF(SUM({EARNED}),0)*100, 1) AS loss_ratio,
+        ROUND(SUM(COALESCE(fee_amount,0))/NULLIF(SUM(premium),0)*100, 1) AS expense_ratio,
+        -- annualized_cases: 年化claim_cases（可加绝对值，用于跨分组汇总时重算 incident_rate）
+        ROUND(SUM(COALESCE(claim_cases,0) * CAST({POLICY_TERM} AS DOUBLE)
                   / NULLIF(CAST({EARNED_DAYS} AS DOUBLE), 0)), 2) AS annualized_cases,
         -- earned_loss_frequency: (赔案/保单) × (保险期限/满期天数)
-        ROUND(SUM(COALESCE(赔案件数,0) * CAST({POLICY_TERM} AS DOUBLE)
+        ROUND(SUM(COALESCE(claim_cases,0) * CAST({POLICY_TERM} AS DOUBLE)
                   / NULLIF(CAST({EARNED_DAYS} AS DOUBLE), 0))
-              / NULLIF(COUNT(DISTINCT 保单号), 0) * 100, 2) AS incident_rate,
+              / NULLIF(COUNT(DISTINCT policy_no), 0) * 100, 2) AS incident_rate,
         -- earned_margin_amount
-        ROUND(SUM({EARNED})*(1-SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0)
-              -SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0))/10000, 1) AS earned_margin,
+        ROUND(SUM({EARNED})*(1-SUM(COALESCE(reported_claims,0))/NULLIF(SUM({EARNED}),0)
+              -SUM(COALESCE(fee_amount,0))/NULLIF(SUM(premium),0))/10000, 1) AS earned_margin,
         -- projected_margin_amount
-        ROUND(SUM(保费)*(1-SUM(COALESCE(已报告赔款,0))/NULLIF(SUM({EARNED}),0)
-              -SUM(COALESCE(费用金额,0))/NULLIF(SUM(保费),0))/10000, 1) AS projected_margin,
-        -- pricing_coeff: 仅商业险，保费加权
-        ROUND(SUM(CASE WHEN 险类 = '商业保险' AND 商车自主定价系数 > 0
-              THEN 商车自主定价系数 * 保费 END)
-              / NULLIF(SUM(CASE WHEN 险类 = '商业保险' AND 商车自主定价系数 > 0
-              THEN 保费 END), 0), 4) AS pricing_coeff{fixed_cols}
+        ROUND(SUM(premium)*(1-SUM(COALESCE(reported_claims,0))/NULLIF(SUM({EARNED}),0)
+              -SUM(COALESCE(fee_amount,0))/NULLIF(SUM(premium),0))/10000, 1) AS projected_margin,
+        -- pricing_coeff: 仅商业险，premium加权
+        ROUND(SUM(CASE WHEN insurance_type = '商业保险' AND commercial_pricing_factor > 0
+              THEN commercial_pricing_factor * premium END)
+              / NULLIF(SUM(CASE WHEN insurance_type = '商业保险' AND commercial_pricing_factor > 0
+              THEN premium END), 0), 4) AS pricing_coeff{fixed_cols}
     """
+
+
+def _ensure_claims_view(con):
+    """确保 claims 聚合视图存在（惰性创建，去重 claim_no 防跨分区重复）"""
+    try:
+        con.execute("SELECT 1 FROM _claims_agg LIMIT 0")
+    except Exception:
+        con.execute(f"""
+            CREATE OR REPLACE VIEW _claims_agg AS
+            SELECT policy_no,
+                   COUNT(DISTINCT claim_no) AS claim_cases,
+                   SUM(COALESCE(settled_amount, 0) + COALESCE(pending_amount, 0)) AS reported_claims
+            FROM (SELECT DISTINCT ON (claim_no) * FROM read_parquet('{CLAIMS_GLOB}', union_by_name=true) ORDER BY claim_no)
+            GROUP BY policy_no
+        """)
+
+
+def joined_source(con) -> str:
+    """返回 policy LEFT JOIN claims 的 FROM 子句（公开接口，供 sections 使用）"""
+    _ensure_claims_view(con)
+    return f"""(
+        SELECT p.*, COALESCE(c.claim_cases, 0) AS claim_cases,
+               COALESCE(c.reported_claims, 0) AS reported_claims
+        FROM read_parquet('{GLOB}', union_by_name=true) p
+        LEFT JOIN _claims_agg c ON p.policy_no = c.policy_no
+    )"""
 
 
 def query_kpi(con, where: str, group_col: str = None, fixed_cost_sql: dict = None) -> list:
     """执行标准 KPI 查询，返回 [dict, ...]
+
+    自动 LEFT JOIN claims_detail 聚合赔案数据（claim_cases, reported_claims）。
 
     参数:
         fixed_cost_sql: fixed_cost_config.build_fixed_cost_sql() 返回值，为 None 时固定成本列输出 NULL
@@ -185,24 +214,25 @@ def query_kpi(con, where: str, group_col: str = None, fixed_cost_sql: dict = Non
     sel = kpi_select(group_col, fixed_cost_sql)
     gb = f"GROUP BY {group_col}" if group_col else ""
     ob = f"ORDER BY {group_col}" if group_col else ""
-    sql = f"SELECT {sel} FROM read_parquet('{GLOB}', union_by_name=true) WHERE {where} {gb} {ob}"
+    source = joined_source(con)
+    sql = f"SELECT {sel} FROM {source} WHERE {where} {gb} {ob}"
     result = con.execute(sql)
     cols = [d[0] for d in result.description]
     return [dict(zip(cols, row)) for row in result.fetchall()]
 
 
 def detect_risk_field(con, where: str) -> str:
-    """智能检测风险评分字段：三字段已合并为统一的 车险风险等级"""
-    # 2026-03-24: insurance_grade/小货车评分/大货车评分 已合并为 车险风险等级
+    """智能检测风险评分字段：三字段已合并为统一的 insurance_grade"""
+    # 2026-03-24: insurance_grade/小货车评分/大货车评分 已合并为 insurance_grade
     # 直接检测该字段是否有数据
     sql = f"""
-    SELECT SUM(CASE WHEN 车险风险等级 IS NOT NULL THEN 1 ELSE 0 END) AS f1
+    SELECT SUM(CASE WHEN insurance_grade IS NOT NULL THEN 1 ELSE 0 END) AS f1
     FROM read_parquet('{GLOB}', union_by_name=true) WHERE {where}
     """
     r = con.execute(sql).fetchone()
     if (r[0] or 0) > 0:
-        return "车险风险等级"
-    return "车险风险等级"
+        return "insurance_grade"
+    return "insurance_grade"
 
 
 # ============================================================================
@@ -229,21 +259,21 @@ def kpi_rows(d: dict) -> list:
     rows.extend([
         ("── 赔付 ──", ""),
         ("满期赔付率", f"{fp(d.get('loss_ratio'))}{light(d.get('loss_ratio'), TH_LR)}"),
-        ("已报告赔款", fw(d.get("reported_claims"))),
-        ("赔案件数", fi(d.get("claim_cases"))),
+        ("reported_claims", fw(d.get("reported_claims"))),
+        ("claim_cases", fi(d.get("claim_cases"))),
         ("案均赔款 †", f"{fi(d.get('avg_claim'))}{light(d.get('avg_claim'), TH_AC_CARGO)}"),
         ("── 出险 ──", ""),
         ("满期出险率", f"{fp(d.get('incident_rate'))}{light(d.get('incident_rate'), TH_IR)}"),
         ("有赔案保单数", fi(d.get("claim_policies"))),
         ("── 费用 ──", ""),
         ("费用率", fp(d.get("expense_ratio"))),
-        ("费用金额", fw(d.get("fee_amount"))),
-        ("── 保费 ──", ""),
+        ("fee_amount", fw(d.get("fee_amount"))),
+        ("── premium ──", ""),
         ("保单数", fi(d.get("policy_count"))),
-        ("签单保费", fw(d.get("written_premium"))),
-        ("满期保费", fw(d.get("earned_premium"))),
-        ("件均保费 †", fi(d.get("avg_premium"))),
-        ("车均保费 †", fi(d.get("per_vehicle_premium"))),
+        ("签单premium", fw(d.get("written_premium"))),
+        ("满期premium", fw(d.get("earned_premium"))),
+        ("件均premium †", fi(d.get("avg_premium"))),
+        ("车均premium †", fi(d.get("per_vehicle_premium"))),
         ("── 系数 ──", ""),
         ("商车定价系数", fc(d.get("pricing_coeff"))),
     ])
@@ -281,7 +311,7 @@ def sum_kpi_dicts(dicts: list) -> dict:
     total["earned_margin"] = round(ep * (1 - lr / 100 - fr / 100), 1) if ep else None
     total["projected_margin"] = round(wp * (1 - lr / 100 - fr / 100), 1) if wp else None
 
-    # 定价系数：保费加权平均
+    # 定价系数：premium加权平均
     coeff_weighted = sum((d.get("pricing_coeff") or 0) * (d.get("written_premium") or 0)
                          for d in dicts if d.get("pricing_coeff"))
     coeff_premium = sum((d.get("written_premium") or 0)
@@ -364,8 +394,8 @@ METRIC_KEYS = [
     ("fee_amount", "费用额"),
     None,
     ("policy_count", "保单数"),
-    ("written_premium", "保费"),
-    ("earned_premium", "满期保费"),
+    ("written_premium", "premium"),
+    ("earned_premium", "满期premium"),
     ("avg_premium", "件均"),
     ("per_vehicle_premium", "车均"),
     None,

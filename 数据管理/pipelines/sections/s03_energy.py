@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """板块 3: 能源类型 — 非新-燃/非新-天/新能源"""
 
-from diagnose_common import GLOB, kpi_select
+from diagnose_common import GLOB, joined_source, kpi_select
 
 ENERGY_EXPR = """CASE
-    WHEN 是否新能源 THEN '新能源'
+    WHEN is_nev THEN '新能源'
     ELSE '非新-燃'
 END"""
 
@@ -16,12 +16,13 @@ def run(ctx, rpt, collected, silent=False):
     con = ctx.con
     base_where = ctx.base_where
     min_yr, max_yr = ctx.min_yr, ctx.max_yr
+    src = joined_source(con)
 
     en_data = {}
     en_result = con.execute(f"""
     SELECT {kpi_select('能源类型')}
-    FROM (SELECT *, {ENERGY_EXPR} AS 能源类型 FROM read_parquet('{GLOB}', union_by_name=true)
-          WHERE {base_where} AND YEAR(签单日期) BETWEEN {min_yr} AND {max_yr}) sub
+    FROM (SELECT *, {ENERGY_EXPR} AS 能源类型 FROM {src}
+          WHERE {base_where} AND YEAR(insurance_start_date) BETWEEN {min_yr} AND {max_yr}) sub
     GROUP BY 能源类型
     """)
     en_cols = [d[0] for d in en_result.description]

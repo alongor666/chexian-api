@@ -3,9 +3,9 @@
 """
 经代/代理公司经营 KPI 诊断脚本
 
-功能: 对指定三级机构下的经代公司进行全维度经营诊断（分年对比）
-口径: 对齐 开发文档/01_指标体系.md + 监管 1/365 满期保费口径
-数据: 直接读原始 parquet（经代名字段未进 PolicyFact 视图）
+功能: 对指定（或全部）org_level_3下的经代公司进行全维度经营诊断（分年对比）
+口径: 对齐 开发文档/01_指标体系.md + 监管 1/365 满期premium口径
+数据: 直接读原始 parquet（agent_name字段未进 PolicyFact 视图）
 
 使用:
     python3 数据管理/pipelines/diagnose_agent.py --org 青羊 --agent "中升"
@@ -37,7 +37,7 @@ except ImportError:
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 POLICY_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
-# claims/latest.parquet 已废弃，赔付字段内嵌在 policy 分片中
+CLAIMS_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 DEFAULT_OUTPUT_DIR = str(PROJECT_ROOT / "数据分析报告")
 
 # 阈值（来自 开发文档/01_指标体系.md）
@@ -64,50 +64,80 @@ class DataLoader:
     def __init__(self):
         self.con = duckdb.connect()
 
-    def build_views(self, org: str, agent: str, years: list[int], ytd_filter: str = ""):
-        """创建经代筛选视图和机构基准视图
-        ytd_filter: 可选的 YTD 日期过滤 SQL 片段，如 "AND (MONTH(签单日期) < 3 OR ...)"
+    def build_views(self, org: str | None, agent: str, years: list[int], ytd_filter: str = ""):
+        """创建经代筛选视图和机构基准视图（LEFT JOIN claims_detail 聚合赔案）
+        ytd_filter: 可选的 YTD 日期过滤 SQL 片段，如 "AND (MONTH(policy_date) < 3 OR ...)"
+        org: org_level_3 名称，None 时不限机构（跨机构分析）
         """
         years_csv = ", ".join(str(y) for y in years)
-        org_esc = org.replace("'", "''")
         agent_esc = agent.replace("'", "''")
+        org_clause = f"AND org_level_3 = '{org.replace(chr(39), chr(39)*2)}'" if org else ""
 
-        # 经代视图（赔付字段已内嵌在 policy 分片中，无需 JOIN claims）
+        # 赔案聚合视图（按 policy_no 去重聚合，claim_no 去重防跨分区重复）
+        self.con.execute(f"""
+            CREATE OR REPLACE VIEW v_claims_agg AS
+            SELECT policy_no,
+                   COUNT(DISTINCT claim_no) AS claim_cases,
+                   SUM(COALESCE(settled_amount, 0) + COALESCE(pending_amount, 0)) AS reported_claims
+            FROM (SELECT DISTINCT ON (claim_no) * FROM read_parquet('{CLAIMS_GLOB}', union_by_name=true) ORDER BY claim_no)
+            GROUP BY policy_no
+        """)
+
+        # 检测可选字段（cross_sell 字段可能不存在于某些分片）
+        all_cols = [r[0] for r in self.con.execute(
+            f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{POLICY_GLOB}', union_by_name=true))"
+        ).fetchall()]
+        cs_prem = "p.cross_sell_premium_driver" if "cross_sell_premium_driver" in all_cols else "0"
+        cs_flag = "p.is_cross_sell" if "is_cross_sell" in all_cols else "FALSE"
+
+        # 经代视图（LEFT JOIN 赔案聚合）
+        # claim_cases/reported_claims 同时暴露原名和 _ 前缀（兼容旧代码）
         self.con.execute(f"""
             CREATE OR REPLACE VIEW v_agent AS
-            SELECT *,
-                   COALESCE(赔案件数, 0) AS _赔案件数,
-                   COALESCE(已报告赔款, 0) AS _已报告赔款,
-                   COALESCE(费用金额, 0) AS _费用金额
-            FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
-            WHERE 三级机构 = '{org_esc}'
-              AND 经代名 LIKE '%{agent_esc}%'
-              AND YEAR(签单日期) IN ({years_csv})
+            SELECT p.*,
+                   COALESCE(c.claim_cases, 0) AS claim_cases,
+                   COALESCE(c.reported_claims, 0) AS reported_claims,
+                   COALESCE(c.claim_cases, 0) AS _claim_cases,
+                   COALESCE(c.reported_claims, 0) AS _reported_claims,
+                   COALESCE(p.fee_amount, 0) AS _fee_amount,
+                   {cs_prem} AS cross_sell_premium_driver,
+                   {cs_flag} AS is_cross_sell
+            FROM read_parquet('{POLICY_GLOB}', union_by_name=true) p
+            LEFT JOIN v_claims_agg c ON p.policy_no = c.policy_no
+            WHERE p.agent_name LIKE '%{agent_esc}%'
+              {org_clause}
+              AND YEAR(p.policy_date) IN ({years_csv})
               {ytd_filter}
         """)
 
-        # 机构整体视图（用于对比）
+        # 机构/全盘基准视图（用于对比）
         self.con.execute(f"""
             CREATE OR REPLACE VIEW v_org AS
-            SELECT *,
-                   COALESCE(赔案件数, 0) AS _赔案件数,
-                   COALESCE(已报告赔款, 0) AS _已报告赔款,
-                   COALESCE(费用金额, 0) AS _费用金额
-            FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
-            WHERE 三级机构 = '{org_esc}'
-              AND YEAR(签单日期) IN ({years_csv})
+            SELECT p.*,
+                   COALESCE(c.claim_cases, 0) AS claim_cases,
+                   COALESCE(c.reported_claims, 0) AS reported_claims,
+                   COALESCE(c.claim_cases, 0) AS _claim_cases,
+                   COALESCE(c.reported_claims, 0) AS _reported_claims,
+                   COALESCE(p.fee_amount, 0) AS _fee_amount,
+                   {cs_prem} AS cross_sell_premium_driver,
+                   {cs_flag} AS is_cross_sell
+            FROM read_parquet('{POLICY_GLOB}', union_by_name=true) p
+            LEFT JOIN v_claims_agg c ON p.policy_no = c.policy_no
+            WHERE 1=1
+              {org_clause}
+              AND YEAR(p.policy_date) IN ({years_csv})
               {ytd_filter}
         """)
 
-    def resolve_agent_name(self, org: str, agent: str) -> Optional[str]:
-        """模糊匹配经代名，返回精确名称或 None"""
-        org_esc = org.replace("'", "''")
+    def resolve_agent_name(self, org: str | None, agent: str) -> Optional[str]:
+        """模糊匹配agent_name，返回精确名称或 None"""
         agent_esc = agent.replace("'", "''")
+        org_clause = f"AND org_level_3 = '{org.replace(chr(39), chr(39)*2)}'" if org else ""
         result = self.con.execute(f"""
-            SELECT DISTINCT 经代名, COUNT(*) as cnt
+            SELECT DISTINCT agent_name, COUNT(*) as cnt
             FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
-            WHERE 三级机构 = '{org_esc}' AND 经代名 LIKE '%{agent_esc}%'
-            GROUP BY 经代名
+            WHERE agent_name LIKE '%{agent_esc}%' {org_clause}
+            GROUP BY agent_name
             ORDER BY cnt DESC
         """).fetchall()
 
@@ -121,17 +151,25 @@ class DataLoader:
         for i, (name, cnt) in enumerate(result, 1):
             print(f"  [{i}] {name} ({cnt:,d} 条记录)")
 
-        while True:
-            choice = input("\n请输入序号选择（或 q 退出）: ").strip()
-            if choice.lower() == 'q':
-                return None
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(result):
-                    return result[idx][0]
-            except ValueError:
-                pass
-            print("无效输入，请重试。")
+        try:
+            while True:
+                choice = input("\n请输入序号选择（a=全部, q=退出）: ").strip()
+                if choice.lower() == 'q':
+                    return None
+                if choice.lower() == 'a':
+                    # 返回模糊匹配模式本身（保留 LIKE 语义，覆盖所有匹配）
+                    return agent
+                try:
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(result):
+                        return result[idx][0]
+                except ValueError:
+                    pass
+                print("无效输入，请重试。")
+        except (EOFError, KeyboardInterrupt):
+            # 非交互模式（如 Claude 调用）：自动选择全部
+            print(f"\n   自动选择全部 {len(result)} 个匹配")
+            return agent
 
     def query(self, sql: str):
         """执行 SQL 并返回结果"""
@@ -156,11 +194,11 @@ class DiagnosticsEngine:
         self.db = loader
         self.precise = precise_earned
 
-    def _earned_expr(self, premium_col: str = "保费",
-                     start_col: str = "保险起期",
-                     fee_col: str = "费用金额",
-                     type_col: str = "险类") -> str:
-        """满期保费 SQL 表达式（闰年感知：policy_term=365或366天）"""
+    def _earned_expr(self, premium_col: str = "premium",
+                     start_col: str = "insurance_start_date",
+                     fee_col: str = "fee_amount",
+                     type_col: str = "insurance_type") -> str:
+        """满期premium SQL 表达式（闰年感知：policy_term=365或366天）"""
         pt = f"DATE_DIFF('day', {start_col}, {start_col} + INTERVAL 1 YEAR)"
         ed = f"LEAST(DATE_DIFF('day', {start_col}, CURRENT_DATE), {pt})"
         if self.precise:
@@ -178,136 +216,136 @@ class DiagnosticsEngine:
         earned = self._earned_expr()
         sql = f"""
             SELECT
-                YEAR(签单日期) AS 年份,
+                YEAR(policy_date) AS 年份,
                 COUNT(*) AS 总记录数,
-                COUNT(DISTINCT 保单号) AS 总保单数,
-                COUNT(DISTINCT CASE WHEN 险类='商业保险' THEN 保单号 END) AS 商业险保单数,
-                ROUND(SUM(保费), 0) AS 签单保费,
-                ROUND(SUM(CASE WHEN 保费 > 0 THEN 保费 ELSE 0 END), 0) AS 毛保费,
-                ROUND(SUM(CASE WHEN 保费 < 0 THEN 保费 ELSE 0 END), 0) AS 退费,
-                ROUND(SUM(保费) / NULLIF(COUNT(DISTINCT DATE_TRUNC('month', 签单日期)), 0), 0) AS 月均保费,
-                ROUND(SUM(保费) / NULLIF(COUNT(DISTINCT 签单日期::DATE), 0), 0) AS 日均保费,
+                COUNT(DISTINCT policy_no) AS 总保单数,
+                COUNT(DISTINCT CASE WHEN insurance_type='商业保险' THEN policy_no END) AS 商业险保单数,
+                ROUND(SUM(premium), 0) AS 签单premium,
+                ROUND(SUM(CASE WHEN premium > 0 THEN premium ELSE 0 END), 0) AS 毛premium,
+                ROUND(SUM(CASE WHEN premium < 0 THEN premium ELSE 0 END), 0) AS 退费,
+                ROUND(SUM(premium) / NULLIF(COUNT(DISTINCT DATE_TRUNC('month', policy_date)), 0), 0) AS 月均premium,
+                ROUND(SUM(premium) / NULLIF(COUNT(DISTINCT policy_date::DATE), 0), 0) AS 日均premium,
                 -- 满期
-                ROUND(SUM({earned}), 0) AS 满期保费,
-                ROUND(AVG(CAST(LEAST(DATE_DIFF('day', 保险起期, CURRENT_DATE), DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR)) AS DOUBLE)
-                      / CAST(DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR) AS DOUBLE)) * 100, 1) AS 平均满期率,
+                ROUND(SUM({earned}), 0) AS 满期premium,
+                ROUND(AVG(CAST(LEAST(DATE_DIFF('day', insurance_start_date, CURRENT_DATE), DATE_DIFF('day', insurance_start_date, insurance_start_date + INTERVAL 1 YEAR)) AS DOUBLE)
+                      / CAST(DATE_DIFF('day', insurance_start_date, insurance_start_date + INTERVAL 1 YEAR) AS DOUBLE)) * 100, 1) AS 平均满期率,
                 -- 赔付
-                ROUND(SUM(已报告赔款), 0) AS 已报告赔款,
-                SUM(赔案件数) AS 赔案件数,
-                ROUND(SUM(已报告赔款) / NULLIF(SUM(赔案件数), 0), 0) AS 案均赔款,
+                ROUND(SUM(reported_claims), 0) AS reported_claims,
+                SUM(claim_cases) AS claim_cases,
+                ROUND(SUM(reported_claims) / NULLIF(SUM(claim_cases), 0), 0) AS 案均赔款,
                 -- 费用
-                ROUND(SUM(费用金额), 0) AS 费用金额,
+                ROUND(SUM(fee_amount), 0) AS fee_amount,
                 -- 率指标
-                ROUND(SUM(已报告赔款) / NULLIF(SUM({earned}), 0) * 100, 1) AS 满期赔付率,
-                ROUND(SUM(费用金额) / NULLIF(SUM(保费), 0) * 100, 1) AS 费用率,
+                ROUND(SUM(reported_claims) / NULLIF(SUM({earned}), 0) * 100, 1) AS 满期赔付率,
+                ROUND(SUM(fee_amount) / NULLIF(SUM(premium), 0) * 100, 1) AS 费用率,
                 -- 续保
-                SUM(CASE WHEN 是否续保 THEN 1 ELSE 0 END) AS 续保件数,
-                ROUND(SUM(CASE WHEN 是否续保 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS 续保率,
+                SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS 续保件数,
+                ROUND(SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS 续保率,
                 -- 交叉销售
-                ROUND(SUM(COALESCE(交叉销售保费_驾意, 0)), 0) AS 驾意交叉销售保费,
+                ROUND(SUM(COALESCE(cross_sell_premium_driver, 0)), 0) AS 驾意交叉销售premium,
                 -- 满期出险率：(赔案/保单) × (保险期限/满期天数)
-                COUNT(DISTINCT CASE WHEN _赔案件数 > 0 THEN 保单号 END) AS 有赔案保单数,
-                ROUND(SUM(_赔案件数 * CAST(DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR) AS DOUBLE)
-                      / NULLIF(CAST(LEAST(DATE_DIFF('day', 保险起期, CURRENT_DATE), DATE_DIFF('day', 保险起期, 保险起期 + INTERVAL 1 YEAR)) AS DOUBLE), 0))
-                      / NULLIF(COUNT(DISTINCT 保单号), 0) * 100, 2) AS 满期出险率
+                COUNT(DISTINCT CASE WHEN _claim_cases > 0 THEN policy_no END) AS 有赔案保单数,
+                ROUND(SUM(_claim_cases * CAST(DATE_DIFF('day', insurance_start_date, insurance_start_date + INTERVAL 1 YEAR) AS DOUBLE)
+                      / NULLIF(CAST(LEAST(DATE_DIFF('day', insurance_start_date, CURRENT_DATE), DATE_DIFF('day', insurance_start_date, insurance_start_date + INTERVAL 1 YEAR)) AS DOUBLE), 0))
+                      / NULLIF(COUNT(DISTINCT policy_no), 0) * 100, 2) AS 满期出险率
             FROM v_agent
-            GROUP BY YEAR(签单日期)
+            GROUP BY YEAR(policy_date)
             ORDER BY 年份
         """
         return {"title": "核心 KPI", "data": self.db.query_df(sql)}
 
     def dim_insurance_type(self) -> dict:
-        """维度2: 险类分拆"""
+        """维度2: insurance_type分拆"""
         earned = self._earned_expr()
         sql = f"""
-            SELECT YEAR(签单日期) AS 年份, 险类,
+            SELECT YEAR(policy_date) AS 年份, insurance_type,
                 COUNT(*) AS 件数,
-                COUNT(DISTINCT 保单号) AS 保单数,
-                ROUND(SUM(保费), 0) AS 签单保费,
-                ROUND(AVG(CASE WHEN 保费 > 0 THEN 保费 END), 0) AS 件均保费,
-                ROUND(SUM(已报告赔款) / NULLIF(SUM({earned}), 0) * 100, 1) AS 满期赔付率,
-                ROUND(SUM(费用金额) / NULLIF(SUM(保费), 0) * 100, 1) AS 费用率
+                COUNT(DISTINCT policy_no) AS 保单数,
+                ROUND(SUM(premium), 0) AS 签单premium,
+                ROUND(AVG(CASE WHEN premium > 0 THEN premium END), 0) AS 件均premium,
+                ROUND(SUM(reported_claims) / NULLIF(SUM({earned}), 0) * 100, 1) AS 满期赔付率,
+                ROUND(SUM(fee_amount) / NULLIF(SUM(premium), 0) * 100, 1) AS 费用率
             FROM v_agent
-            GROUP BY YEAR(签单日期), 险类
-            ORDER BY 年份, 签单保费 DESC
+            GROUP BY YEAR(policy_date), insurance_type
+            ORDER BY 年份, 签单premium DESC
         """
-        return {"title": "险类分拆", "data": self.db.query_df(sql)}
+        return {"title": "insurance_type分拆", "data": self.db.query_df(sql)}
 
     def dim_customer_category(self) -> dict:
-        """维度3: 客户类别"""
+        """维度3: customer_category"""
         sql = """
-            SELECT YEAR(签单日期) AS 年份, 客户类别,
+            SELECT YEAR(policy_date) AS 年份, customer_category,
                 COUNT(*) AS 件数,
-                ROUND(SUM(保费), 0) AS 签单保费,
-                ROUND(SUM(CASE WHEN 是否续保 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS 续保率
+                ROUND(SUM(premium), 0) AS 签单premium,
+                ROUND(SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS 续保率
             FROM v_agent
-            GROUP BY YEAR(签单日期), 客户类别
-            ORDER BY 年份, 签单保费 DESC
+            GROUP BY YEAR(policy_date), customer_category
+            ORDER BY 年份, 签单premium DESC
         """
-        return {"title": "客户类别", "data": self.db.query_df(sql)}
+        return {"title": "customer_category", "data": self.db.query_df(sql)}
 
     def dim_coverage_combination(self) -> dict:
-        """维度4: 险别组合"""
+        """维度4: coverage_combination"""
         sql = """
-            SELECT YEAR(签单日期) AS 年份, 险别组合,
+            SELECT YEAR(policy_date) AS 年份, coverage_combination,
                 COUNT(*) AS 件数,
-                ROUND(SUM(保费), 0) AS 签单保费,
-                ROUND(SUM(保费) * 100.0 / NULLIF(SUM(SUM(保费)) OVER (PARTITION BY YEAR(签单日期)), 0), 1) AS 保费占比
+                ROUND(SUM(premium), 0) AS 签单premium,
+                ROUND(SUM(premium) * 100.0 / NULLIF(SUM(SUM(premium)) OVER (PARTITION BY YEAR(policy_date)), 0), 1) AS premium占比
             FROM v_agent
-            GROUP BY YEAR(签单日期), 险别组合
-            ORDER BY 年份, 签单保费 DESC
+            GROUP BY YEAR(policy_date), coverage_combination
+            ORDER BY 年份, 签单premium DESC
         """
-        return {"title": "险别组合", "data": self.db.query_df(sql)}
+        return {"title": "coverage_combination", "data": self.db.query_df(sql)}
 
     def dim_monthly_trend(self) -> dict:
         """维度5: 月度趋势"""
         earned = self._earned_expr()
         sql = f"""
             SELECT
-                DATE_TRUNC('month', 签单日期)::DATE AS 月份,
+                DATE_TRUNC('month', policy_date)::DATE AS 月份,
                 COUNT(*) AS 件数,
-                ROUND(SUM(保费), 0) AS 签单保费,
-                ROUND(SUM({earned}), 0) AS 满期保费,
-                ROUND(SUM(已报告赔款) / NULLIF(SUM({earned}), 0) * 100, 1) AS 满期赔付率,
-                ROUND(SUM(费用金额) / NULLIF(SUM(保费), 0) * 100, 1) AS 费用率,
-                SUM(赔案件数) AS 赔案件数
+                ROUND(SUM(premium), 0) AS 签单premium,
+                ROUND(SUM({earned}), 0) AS 满期premium,
+                ROUND(SUM(reported_claims) / NULLIF(SUM({earned}), 0) * 100, 1) AS 满期赔付率,
+                ROUND(SUM(fee_amount) / NULLIF(SUM(premium), 0) * 100, 1) AS 费用率,
+                SUM(claim_cases) AS claim_cases
             FROM v_agent
-            GROUP BY DATE_TRUNC('month', 签单日期)
+            GROUP BY DATE_TRUNC('month', policy_date)
             ORDER BY 月份
         """
         return {"title": "月度趋势", "data": self.db.query_df(sql)}
 
     def dim_salesman(self) -> dict:
-        """维度6: 业务员维度"""
+        """维度6: salesman_name维度"""
         sql = """
-            SELECT YEAR(签单日期) AS 年份, 业务员,
+            SELECT YEAR(policy_date) AS 年份, salesman_name,
                 COUNT(*) AS 件数,
-                ROUND(SUM(保费), 0) AS 签单保费,
-                ROUND(AVG(CASE WHEN 保费 > 0 THEN 保费 END), 0) AS 件均保费,
-                ROUND(SUM(CASE WHEN 是否续保 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS 续保率,
-                ROUND(SUM(COALESCE(交叉销售保费_驾意, 0)), 0) AS 驾意保费
+                ROUND(SUM(premium), 0) AS 签单premium,
+                ROUND(AVG(CASE WHEN premium > 0 THEN premium END), 0) AS 件均premium,
+                ROUND(SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS 续保率,
+                ROUND(SUM(COALESCE(cross_sell_premium_driver, 0)), 0) AS 驾意premium
             FROM v_agent
-            GROUP BY YEAR(签单日期), 业务员
-            ORDER BY 年份, 签单保费 DESC
+            GROUP BY YEAR(policy_date), salesman_name
+            ORDER BY 年份, 签单premium DESC
         """
-        return {"title": "业务员维度", "data": self.db.query_df(sql)}
+        return {"title": "salesman_name维度", "data": self.db.query_df(sql)}
 
     def dim_pricing_factor(self) -> dict:
         """维度7: 商车系数分布"""
         sql = """
-            SELECT YEAR(签单日期) AS 年份,
-                ROUND(AVG(商车自主定价系数), 4) AS 均值,
-                ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY 商车自主定价系数), 4) AS 中位数,
-                ROUND(MIN(商车自主定价系数), 4) AS 最低,
-                ROUND(MAX(商车自主定价系数), 4) AS 最高,
+            SELECT YEAR(policy_date) AS 年份,
+                ROUND(AVG(commercial_pricing_factor), 4) AS 均值,
+                ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY commercial_pricing_factor), 4) AS 中位数,
+                ROUND(MIN(commercial_pricing_factor), 4) AS 最低,
+                ROUND(MAX(commercial_pricing_factor), 4) AS 最高,
                 COUNT(*) AS 商业险件数,
-                ROUND(SUM(CASE WHEN 商车自主定价系数 < 0.7 THEN 1 ELSE 0 END) * 100.0
+                ROUND(SUM(CASE WHEN commercial_pricing_factor < 0.7 THEN 1 ELSE 0 END) * 100.0
                       / NULLIF(COUNT(*), 0), 1) AS 低系数占比_70,
-                ROUND(SUM(CASE WHEN 商车自主定价系数 < 0.85 THEN 1 ELSE 0 END) * 100.0
+                ROUND(SUM(CASE WHEN commercial_pricing_factor < 0.85 THEN 1 ELSE 0 END) * 100.0
                       / NULLIF(COUNT(*), 0), 1) AS 低系数占比_85
             FROM v_agent
-            WHERE 险类 = '商业保险' AND 商车自主定价系数 IS NOT NULL
-            GROUP BY YEAR(签单日期)
+            WHERE insurance_type = '商业保险' AND commercial_pricing_factor IS NOT NULL
+            GROUP BY YEAR(policy_date)
             ORDER BY 年份
         """
         return {"title": "商车系数分布", "data": self.db.query_df(sql)}
@@ -316,57 +354,57 @@ class DiagnosticsEngine:
         """维度8: 经代 vs 机构整体对比"""
         earned = self._earned_expr()
         sql = f"""
-            SELECT 年份, 维度, 签单保费, 满期保费, 已报告赔款, 费用金额,
+            SELECT 年份, 维度, 签单premium, 满期premium, reported_claims, fee_amount,
                    满期赔付率, 费用率,
                    ROUND(满期赔付率 + 费用率, 1) AS 变动成本率,
-                   保单数, 赔案件数
+                   保单数, claim_cases
             FROM (
-                SELECT YEAR(签单日期) AS 年份, '经代公司' AS 维度,
-                    ROUND(SUM(保费), 0) AS 签单保费,
-                    ROUND(SUM({earned}), 0) AS 满期保费,
-                    ROUND(SUM(已报告赔款), 0) AS 已报告赔款,
-                    ROUND(SUM(费用金额), 0) AS 费用金额,
-                    ROUND(SUM(已报告赔款) / NULLIF(SUM({earned}), 0) * 100, 1) AS 满期赔付率,
-                    ROUND(SUM(费用金额) / NULLIF(SUM(保费), 0) * 100, 1) AS 费用率,
-                    COUNT(DISTINCT 保单号) AS 保单数,
-                    SUM(赔案件数) AS 赔案件数
-                FROM v_agent GROUP BY YEAR(签单日期)
+                SELECT YEAR(policy_date) AS 年份, '经代公司' AS 维度,
+                    ROUND(SUM(premium), 0) AS 签单premium,
+                    ROUND(SUM({earned}), 0) AS 满期premium,
+                    ROUND(SUM(reported_claims), 0) AS reported_claims,
+                    ROUND(SUM(fee_amount), 0) AS fee_amount,
+                    ROUND(SUM(reported_claims) / NULLIF(SUM({earned}), 0) * 100, 1) AS 满期赔付率,
+                    ROUND(SUM(fee_amount) / NULLIF(SUM(premium), 0) * 100, 1) AS 费用率,
+                    COUNT(DISTINCT policy_no) AS 保单数,
+                    SUM(claim_cases) AS claim_cases
+                FROM v_agent GROUP BY YEAR(policy_date)
                 UNION ALL
-                SELECT YEAR(签单日期), '机构整体',
-                    ROUND(SUM(保费), 0),
+                SELECT YEAR(policy_date), '机构整体',
+                    ROUND(SUM(premium), 0),
                     ROUND(SUM({earned}), 0),
-                    ROUND(SUM(已报告赔款), 0),
-                    ROUND(SUM(费用金额), 0),
-                    ROUND(SUM(已报告赔款) / NULLIF(SUM({earned}), 0) * 100, 1),
-                    ROUND(SUM(费用金额) / NULLIF(SUM(保费), 0) * 100, 1),
-                    COUNT(DISTINCT 保单号),
-                    SUM(赔案件数)
-                FROM v_org GROUP BY YEAR(签单日期)
+                    ROUND(SUM(reported_claims), 0),
+                    ROUND(SUM(fee_amount), 0),
+                    ROUND(SUM(reported_claims) / NULLIF(SUM({earned}), 0) * 100, 1),
+                    ROUND(SUM(fee_amount) / NULLIF(SUM(premium), 0) * 100, 1),
+                    COUNT(DISTINCT policy_no),
+                    SUM(claim_cases)
+                FROM v_org GROUP BY YEAR(policy_date)
             ) t
             ORDER BY 年份, 维度
         """
         return {"title": "经代 vs 机构整体", "data": self.db.query_df(sql)}
 
     def dim_cross_sell(self) -> dict:
-        """维度10: 驾乘险（推介率/渗透率/保费/件均）
+        """维度10: 驾乘险（推介率/渗透率/premium/件均）
         口径：
           推介率 = 交叉销售为是的商业险保单数 / 商业险保单数
-          渗透率 = 驾乘保费 / 车险签单保费
+          渗透率 = 驾乘premium / 车险签单premium
         """
         sql = """
-            SELECT YEAR(签单日期) AS 年份,
-                COUNT(DISTINCT CASE WHEN 险类='商业保险' THEN 保单号 END) AS 商业险保单数,
-                COUNT(DISTINCT CASE WHEN 险类='商业保险' AND 交叉销售标识 THEN 保单号 END) AS 驾乘推介保单数,
-                ROUND(COUNT(DISTINCT CASE WHEN 险类='商业保险' AND 交叉销售标识 THEN 保单号 END) * 100.0
-                      / NULLIF(COUNT(DISTINCT CASE WHEN 险类='商业保险' THEN 保单号 END), 0), 1) AS 驾乘推介率,
-                ROUND(SUM(COALESCE(交叉销售保费_驾意, 0)), 0) AS 驾乘保费,
-                ROUND(SUM(保费), 0) AS 车险签单保费,
-                ROUND(SUM(COALESCE(交叉销售保费_驾意, 0)) * 100.0
-                      / NULLIF(SUM(保费), 0), 1) AS 驾乘渗透率,
-                ROUND(SUM(COALESCE(交叉销售保费_驾意, 0))
-                      / NULLIF(COUNT(DISTINCT CASE WHEN 险类='商业保险' AND 交叉销售标识 THEN 保单号 END), 0), 0) AS 驾乘件均
+            SELECT YEAR(policy_date) AS 年份,
+                COUNT(DISTINCT CASE WHEN insurance_type='商业保险' THEN policy_no END) AS 商业险保单数,
+                COUNT(DISTINCT CASE WHEN insurance_type='商业保险' AND is_cross_sell THEN policy_no END) AS 驾乘推介保单数,
+                ROUND(COUNT(DISTINCT CASE WHEN insurance_type='商业保险' AND is_cross_sell THEN policy_no END) * 100.0
+                      / NULLIF(COUNT(DISTINCT CASE WHEN insurance_type='商业保险' THEN policy_no END), 0), 1) AS 驾乘推介率,
+                ROUND(SUM(COALESCE(cross_sell_premium_driver, 0)), 0) AS 驾乘premium,
+                ROUND(SUM(premium), 0) AS 车险签单premium,
+                ROUND(SUM(COALESCE(cross_sell_premium_driver, 0)) * 100.0
+                      / NULLIF(SUM(premium), 0), 1) AS 驾乘渗透率,
+                ROUND(SUM(COALESCE(cross_sell_premium_driver, 0))
+                      / NULLIF(COUNT(DISTINCT CASE WHEN insurance_type='商业保险' AND is_cross_sell THEN policy_no END), 0), 0) AS 驾乘件均
             FROM v_agent
-            GROUP BY YEAR(签单日期)
+            GROUP BY YEAR(policy_date)
             ORDER BY 年份
         """
         return {"title": "驾乘险", "data": self.db.query_df(sql)}
@@ -374,16 +412,16 @@ class DiagnosticsEngine:
     def dim_loss_exposure(self) -> dict:
         """维度9: 损失暴露（出险率 + 案均赔款）"""
         sql = """
-            SELECT YEAR(签单日期) AS 年份,
-                COUNT(DISTINCT 保单号) AS 保单数,
-                COUNT(DISTINCT CASE WHEN 赔案件数 > 0 THEN 保单号 END) AS 有赔案保单数,
-                ROUND(COUNT(DISTINCT CASE WHEN 赔案件数 > 0 THEN 保单号 END) * 100.0
-                      / NULLIF(COUNT(DISTINCT 保单号), 0), 1) AS 出险率,
-                SUM(赔案件数) AS 赔案总件数,
-                ROUND(SUM(已报告赔款) / NULLIF(SUM(赔案件数), 0), 0) AS 案均赔款,
-                ROUND(SUM(已报告赔款), 0) AS 已报告赔款
+            SELECT YEAR(policy_date) AS 年份,
+                COUNT(DISTINCT policy_no) AS 保单数,
+                COUNT(DISTINCT CASE WHEN claim_cases > 0 THEN policy_no END) AS 有赔案保单数,
+                ROUND(COUNT(DISTINCT CASE WHEN claim_cases > 0 THEN policy_no END) * 100.0
+                      / NULLIF(COUNT(DISTINCT policy_no), 0), 1) AS 出险率,
+                SUM(claim_cases) AS 赔案总件数,
+                ROUND(SUM(reported_claims) / NULLIF(SUM(claim_cases), 0), 0) AS 案均赔款,
+                ROUND(SUM(reported_claims), 0) AS reported_claims
             FROM v_agent
-            GROUP BY YEAR(签单日期)
+            GROUP BY YEAR(policy_date)
             ORDER BY 年份
         """
         return {"title": "损失暴露", "data": self.db.query_df(sql)}
@@ -459,11 +497,11 @@ class ReportWriter:
     def write_header(self):
         self._add(f"# 经代公司经营诊断报告")
         self._add()
-        self._add(f"- **三级机构**: {self.org}")
+        self._add(f"- **org_level_3**: {self.org}")
         self._add(f"- **经代公司**: {self.agent_full}")
         self._add(f"- **分析年份**: {', '.join(str(y) for y in self.years)}")
         self._add(f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        self._add(f"- **满期保费口径**: 监管 1/365 封顶规则")
+        self._add(f"- **满期premium口径**: 监管 1/365 封顶规则")
         self._add()
 
     def write_core_kpi(self, data: dict):
@@ -476,8 +514,8 @@ class ReportWriter:
         for row in rows:
             d = dict(zip(cols, row))
             yr = d["年份"]
-            premium = d["签单保费"]
-            earned = d["满期保费"]
+            premium = d["签单premium"]
+            earned = d["满期premium"]
             claims_rate = d["满期赔付率"] or 0
             fee_rate = d["费用率"] or 0
             variable_cost = claims_rate + fee_rate
@@ -489,22 +527,22 @@ class ReportWriter:
             self._add(f"### {yr}年\n")
             self._add(f"| 指标 | 数值 | 状态 |")
             self._add(f"| --- | --- | --- |")
-            self._add(f"| 签单保费 | {premium:,.0f}元 ({premium/10000:,.1f}万) | |")
-            self._add(f"| 毛保费 | {d['毛保费']:,.0f}元 | 退费: {d['退费']:,.0f}元 |")
-            self._add(f"| 月均保费 | {d['月均保费']:,.0f}元 | |")
-            self._add(f"| 日均保费 | {d['日均保费']:,.0f}元 | |")
+            self._add(f"| 签单premium | {premium:,.0f}元 ({premium/10000:,.1f}万) | |")
+            self._add(f"| 毛premium | {d['毛premium']:,.0f}元 | 退费: {d['退费']:,.0f}元 |")
+            self._add(f"| 月均premium | {d['月均premium']:,.0f}元 | |")
+            self._add(f"| 日均premium | {d['日均premium']:,.0f}元 | |")
             self._add(f"| 商业险保单数 | {d['商业险保单数']:,d} | |")
-            self._add(f"| 满期保费 | {earned:,.0f}元 | 满期率: {d['平均满期率']:.1f}% |")
-            self._add(f"| 已报告赔款 | {d['已报告赔款']:,.0f}元 | 赔案: {d['赔案件数']:,d}件 |")
+            self._add(f"| 满期premium | {earned:,.0f}元 | 满期率: {d['平均满期率']:.1f}% |")
+            self._add(f"| reported_claims | {d['reported_claims']:,.0f}元 | 赔案: {d['claim_cases']:,d}件 |")
             self._add(f"| 案均赔款 | {d['案均赔款']:,.0f}元 | |" if d['案均赔款'] else "| 案均赔款 | - | |")
-            self._add(f"| 费用金额 | {d['费用金额']:,.0f}元 | |")
+            self._add(f"| fee_amount | {d['fee_amount']:,.0f}元 | |")
             self._add(f"| **满期赔付率** | **{claims_rate:.1f}%** |{self._status(claims_rate, 75, 75)} |")
             self._add(f"| **费用率** | **{fee_rate:.1f}%** |{self._status(fee_rate, 17, 14)} |")
             self._add(f"| **变动成本率** | **{variable_cost:.1f}%** |{self._status(variable_cost, 91, 94)} |")
             self._add(f"| **边际贡献率** | **{margin_rate:.1f}%** | |" if margin_rate else "| 边际贡献率 | - | |")
             self._add(f"| 满期出险率 | {incident_rate:.1f}% | |")
             self._add(f"| 续保率 | {d['续保率']:.1f}% | {d['续保件数']:,d}件 |")
-            self._add(f"| 驾意交叉销售保费 | {d['驾意交叉销售保费']:,.0f}元 | |")
+            self._add(f"| 驾意交叉销售premium | {d['驾意交叉销售premium']:,.0f}元 | |")
             self._add()
 
     def write_table_section(self, num: int, data: dict):
@@ -529,7 +567,7 @@ class ReportWriter:
         # ASCII 柱状图
         max_premium = max((r[2] for r in rows if r[2]), default=1)
         self._add("```")
-        self._add("月度保费趋势：")
+        self._add("月度premium趋势：")
         for row in rows:
             month_str = str(row[0])[:7]
             premium = row[2] or 0
@@ -560,9 +598,9 @@ class ReportWriter:
             if "经代公司" in dims and "机构整体" in dims:
                 a = dims["经代公司"]
                 o = dims["机构整体"]
-                prem_pct = a["签单保费"] / o["签单保费"] * 100 if o["签单保费"] else 0
+                prem_pct = a["签单premium"] / o["签单premium"] * 100 if o["签单premium"] else 0
                 pol_pct = a["保单数"] / o["保单数"] * 100 if o["保单数"] else 0
-                self._add(f"**{yr}年占比**: 保费 {prem_pct:.1f}% | 保单 {pol_pct:.1f}%\n")
+                self._add(f"**{yr}年占比**: premium {prem_pct:.1f}% | 保单 {pol_pct:.1f}%\n")
 
     def write_summary(self, dimensions: list[dict]):
         """诊断总结"""
@@ -636,10 +674,11 @@ def main():
 示例:
   python3 数据管理/pipelines/diagnose_agent.py --org 青羊 --agent "中升"
   python3 数据管理/pipelines/diagnose_agent.py --org 青羊 --agent "中升" --years 2025 2026
+  python3 数据管理/pipelines/diagnose_agent.py --agent "农业银行" --years 2024 2025 2026   # 跨机构
   python3 数据管理/pipelines/diagnose_agent.py --org 天府 --agent "诚安达" --precise-earned
         """,
     )
-    parser.add_argument("--org", required=True, help="三级机构名称（如：青羊、天府、宜宾）")
+    parser.add_argument("--org", default=None, help="org_level_3名称（如：青羊、天府、宜宾）。省略时分析全部机构")
     parser.add_argument("--agent", required=True, help="经代公司名称（支持模糊匹配，如：中升、升华）")
     parser.add_argument("--years", nargs="+", type=int, default=[2025, 2026],
                         help="分析年份（默认: 2025 2026）")
@@ -647,36 +686,37 @@ def main():
     parser.add_argument("--compare", choices=["ytd", "full"], default=None,
                         help="YoY 对比口径: ytd=同期对比, full=全年对比. 不指定时自动检测并提示选择")
     parser.add_argument("--precise-earned", action="store_true",
-                        help="使用精确满期保费（含费用率+险类系数）")
+                        help="使用精确满期premium（含费用率+insurance_type系数）")
     parser.add_argument("--verbose", action="store_true", help="打印调试信息")
 
     args = parser.parse_args()
 
+    org_label = args.org or "全部机构"
     print(f"🔍 经代公司经营诊断")
-    print(f"   机构: {args.org} | 经代: {args.agent} | 年份: {args.years}")
+    print(f"   机构: {org_label} | 经代: {args.agent} | 年份: {args.years}")
     print()
 
     # 1. 初始化
     loader = DataLoader()
 
-    # 2. 解析经代名
-    print("📂 解析经代名...")
+    # 2. 解析agent_name
+    print("📂 解析agent_name...")
     agent_full = loader.resolve_agent_name(args.org, args.agent)
     if not agent_full:
-        print(f"❌ 未找到匹配「{args.agent}」的经代公司（机构: {args.org}）")
+        print(f"❌ 未找到匹配「{args.agent}」的经代公司（机构: {org_label}）")
         sys.exit(1)
     print(f"   匹配: {agent_full}")
 
-    # 2.5 YTD 口径检测（查所有指定年份中的最新签单日期）
+    # 2.5 YTD 口径检测（查所有指定年份中的最新policy_date）
     max_yr = max(args.years)
     years_csv = ", ".join(str(y) for y in args.years)
-    org_esc = args.org.replace("'", "''")
     agent_esc = args.agent.replace("'", "''")
+    org_clause = f"AND org_level_3 = '{args.org.replace(chr(39), chr(39)*2)}'" if args.org else ""
     max_sign_row = loader.query(f"""
-        SELECT MAX(签单日期)::DATE
+        SELECT MAX(policy_date)::DATE
         FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
-        WHERE 三级机构 = '{org_esc}' AND 经代名 LIKE '%{agent_esc}%'
-          AND YEAR(签单日期) IN ({years_csv})
+        WHERE agent_name LIKE '%{agent_esc}%' {org_clause}
+          AND YEAR(policy_date) IN ({years_csv})
     """)
     max_sign = max_sign_row[0][0] if max_sign_row else None
     ytd_filter = ""
@@ -692,7 +732,7 @@ def main():
 
         compare_mode = args.compare
         if compare_mode is None and latest_incomplete:
-            print(f"\n⚠️  最新签单日期 {max_sign}，{max_yr}年数据不完整。")
+            print(f"\n⚠️  最新policy_date {max_sign}，{max_yr}年数据不完整。")
             print(f"   YoY 对比口径选择：")
             print(f"     [1] 同期对比 — 各年均取 1月1日-{ytd_month}月{ytd_day}日（推荐，增长率可比）")
             print(f"     [2] 全年对比 — 历史年用全年，{max_yr}年用已有数据（绝对值更完整）")
@@ -705,7 +745,7 @@ def main():
             compare_mode = "full"
 
         if compare_mode == "ytd" and latest_incomplete:
-            ytd_filter = f"AND (MONTH(签单日期) < {ytd_month} OR (MONTH(签单日期) = {ytd_month} AND DAY(签单日期) <= {ytd_day}))"
+            ytd_filter = f"AND (MONTH(policy_date) < {ytd_month} OR (MONTH(policy_date) = {ytd_month} AND DAY(policy_date) <= {ytd_day}))"
             ytd_label = f"1月1日-{ytd_month}月{ytd_day}日"
 
     # 3. 建视图
@@ -716,7 +756,7 @@ def main():
     # 验证数据量
     count = loader.query("SELECT COUNT(*) FROM v_agent")[0][0]
     if count == 0:
-        print(f"❌ 筛选后无数据（机构={args.org}, 经代≈{args.agent}, 年份={args.years}）")
+        print(f"❌ 筛选后无数据（机构={org_label}, 经代≈{args.agent}, 年份={args.years}）")
         sys.exit(1)
     print(f"   经代数据: {count:,d} 条 | 开始诊断...\n")
 
@@ -725,14 +765,14 @@ def main():
     dimensions = engine.run_all()
 
     # 5. 生成报告
-    writer = ReportWriter(args.org, agent_full, args.years)
+    writer = ReportWriter(org_label, agent_full, args.years)
     writer.write_header()
     writer.write_core_kpi(dimensions[0])
-    writer.write_table_section(2, dimensions[1])  # 险类
-    writer.write_table_section(3, dimensions[2])  # 客户类别
-    writer.write_table_section(4, dimensions[3])  # 险别组合
+    writer.write_table_section(2, dimensions[1])  # insurance_type
+    writer.write_table_section(3, dimensions[2])  # customer_category
+    writer.write_table_section(4, dimensions[3])  # coverage_combination
     writer.write_monthly_trend(dimensions[4])      # 月度趋势
-    writer.write_table_section(6, dimensions[5])  # 业务员
+    writer.write_table_section(6, dimensions[5])  # salesman_name
     writer.write_table_section(7, dimensions[6])  # 商车系数
     writer.write_benchmark(dimensions[7])          # 对比
     writer.write_table_section(9, dimensions[8])  # 损失暴露
