@@ -12,6 +12,7 @@ import {
   sanitizeTableName,
   maskApiKey,
   escapeSqlValue,
+  escapeSqlLiteral,
   TEST_CASES,
 } from '../security.js';
 
@@ -213,23 +214,46 @@ describe('maskApiKey - API Key 脱敏', () => {
   });
 });
 
-describe('escapeSqlValue - SQL 值转义', () => {
+describe('escapeSqlValue - SQL 值转义（DuckDB 标准字符串）', () => {
   it('应该转义单引号', () => {
     expect(escapeSqlValue("it's")).toBe("it''s");
     expect(escapeSqlValue("test''value")).toBe("test''''value");
   });
 
-  it('应该转义反斜杠', () => {
-    expect(escapeSqlValue('path\\to\\file')).toBe('path\\\\to\\\\file');
+  it('不应转义反斜杠（DuckDB 普通字符串中反斜杠无特殊含义）', () => {
+    expect(escapeSqlValue('path\\to\\file')).toBe('path\\to\\file');
   });
 
-  it('应该处理混合情况', () => {
-    expect(escapeSqlValue("it's a\\test")).toBe("it''s a\\\\test");
+  it('应该只转义单引号，保留反斜杠', () => {
+    expect(escapeSqlValue("it's a\\test")).toBe("it''s a\\test");
   });
 
   it('应该保持普通字符串不变', () => {
     expect(escapeSqlValue('normal string')).toBe('normal string');
     expect(escapeSqlValue('123')).toBe('123');
+  });
+});
+
+describe('escapeSqlLiteral - DuckDB 标准字符串转义', () => {
+  it('转义单引号', () => {
+    expect(escapeSqlLiteral("it's")).toBe("it''s");
+    expect(escapeSqlLiteral("O'Brien")).toBe("O''Brien");
+  });
+
+  it('不转义反斜杠（DuckDB 标准字符串中无特殊含义）', () => {
+    expect(escapeSqlLiteral('C:\\Users\\test')).toBe('C:\\Users\\test');
+    expect(escapeSqlLiteral('path\\to\\file')).toBe('path\\to\\file');
+  });
+
+  it('与 escapeSqlValue 行为一致（escapeSqlValue 现为别名）', () => {
+    const testCases = ["it's", 'path\\to', "mixed\\it's", 'normal', ''];
+    for (const tc of testCases) {
+      expect(escapeSqlLiteral(tc)).toBe(escapeSqlValue(tc));
+    }
+  });
+
+  it('非字符串输入抛异常', () => {
+    expect(() => escapeSqlLiteral(123 as any)).toThrow();
   });
 });
 

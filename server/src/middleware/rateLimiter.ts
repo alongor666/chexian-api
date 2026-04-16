@@ -172,9 +172,22 @@ export function createDynamicLimiter(
 interface LockRecord {
   failCount: number;
   lockedUntil?: number;
+  updatedAt: number;
 }
 
 const loginAttempts = new Map<string, LockRecord>();
+/** 30 分钟未更新的记录自动清理 */
+const STALE_RECORD_MS = 30 * 60 * 1000;
+
+/** 定期清理过期/陈旧的 loginAttempts 记录，防止长期运行内存泄漏 */
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of loginAttempts) {
+    const isExpiredLock = record.lockedUntil && now >= record.lockedUntil;
+    const isStale = now - record.updatedAt > STALE_RECORD_MS;
+    if (isExpiredLock || isStale) loginAttempts.delete(key);
+  }
+}, 5 * 60 * 1000).unref(); // 5 分钟一次，unref 不阻止进程退出
 
 const LOCK_CONFIG = {
   MAX_ATTEMPTS: 10,                    // 连续失败超过10次触发锁定
@@ -186,7 +199,13 @@ const LOCK_CONFIG = {
  */
 function _checkKeyLock(key: string): void {
   const record = loginAttempts.get(key);
-  if (record?.lockedUntil && Date.now() < record.lockedUntil) {
+  if (!record) return;
+  if (record.lockedUntil && Date.now() >= record.lockedUntil) {
+    // 锁定已过期，清理记录
+    loginAttempts.delete(key);
+    return;
+  }
+  if (record.lockedUntil && Date.now() < record.lockedUntil) {
     const remaining = Math.ceil((record.lockedUntil - Date.now()) / 1000 / 60);
     throw new AppError(429, `登录失败次数过多，请 ${remaining} 分钟后再试`);
   }
@@ -196,18 +215,23 @@ function _checkKeyLock(key: string): void {
  * 内部：记录单个 key 的失败次数
  */
 function _recordKeyFailure(key: string): void {
+  const now = Date.now();
   const existing = loginAttempts.get(key);
   // 若已解锁（锁定期已过），重置计数
-  if (existing?.lockedUntil && Date.now() >= existing.lockedUntil) {
-    loginAttempts.set(key, { failCount: 1 });
+  if (existing?.lockedUntil && now >= existing.lockedUntil) {
+    loginAttempts.set(key, { failCount: 1, updatedAt: now });
     return;
   }
-  const record = existing ?? { failCount: 0 };
-  record.failCount += 1;
-  if (record.failCount >= LOCK_CONFIG.MAX_ATTEMPTS) {
-    record.lockedUntil = Date.now() + LOCK_CONFIG.LOCK_DURATION_MS;
+  const base = existing ?? { failCount: 0, updatedAt: now };
+  const updated: LockRecord = {
+    ...base,
+    failCount: base.failCount + 1,
+    updatedAt: now,
+  };
+  if (updated.failCount >= LOCK_CONFIG.MAX_ATTEMPTS) {
+    updated.lockedUntil = now + LOCK_CONFIG.LOCK_DURATION_MS;
   }
-  loginAttempts.set(key, record);
+  loginAttempts.set(key, updated);
 }
 
 /**

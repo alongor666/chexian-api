@@ -4,6 +4,8 @@
  * 防止 SQL 注入攻击，提供安全的参数构建方法
  */
 
+import { escapeSqlLiteral } from './security.js';
+
 /**
  * 验证日期格式是否为 YYYY-MM-DD
  */
@@ -19,14 +21,13 @@ export function isValidDateTimeFormat(value: string): boolean {
 }
 
 /**
- * 转义 SQL 字符串（防止 SQL 注入）
- * 将单引号转义为两个单引号
+ * @deprecated 使用 security.ts 的 escapeSqlLiteral 替代。保留仅为向后兼容。
  */
 export function escapeSqlString(value: string): string {
   if (typeof value !== 'string') {
     throw new Error('escapeSqlString expects a string');
   }
-  return value.replace(/'/g, "''");
+  return escapeSqlLiteral(value);
 }
 
 /**
