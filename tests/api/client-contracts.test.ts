@@ -186,6 +186,33 @@ describe('API client contract coverage', () => {
     expect(calledUrl).toContain('/filters/options');
   });
 
+  it('policy-geo province endpoint preserves filter params', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: [] }),
+    });
+    await apiClient.getPolicyGeoProvince({ startDate: '2026-01-01', endDate: '2026-01-31' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/policy-geo/province?');
+    expect(calledUrl).toContain('startDate=2026-01-01');
+    expect(calledUrl).toContain('endDate=2026-01-31');
+  });
+
+  it('policy-geo city endpoint preserves province drill param', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: [] }),
+    });
+    await apiClient.getPolicyGeoCity({ province: '四川' });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/policy-geo/city?');
+    expect(calledUrl).toContain('province=%E5%9B%9B%E5%B7%9D');
+  });
+
   it('comprehensive bundle endpoint preserves granularity and cutoffDate', async () => {
     const { apiClient } = await importClient();
     mockFetch.mockResolvedValueOnce({

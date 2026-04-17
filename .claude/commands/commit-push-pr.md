@@ -222,7 +222,18 @@ gh pr create \
 Closes #[issue编号]
 ```
 
-### 6. Post-PR 验证（自进化触发点）
+### 6. 回到 main 分支（防止后续任务在旧分支操作）
+
+PR 创建后立即回到 main 并同步最新代码：
+
+```bash
+CURRENT_BRANCH=$(git branch --show-current)
+git checkout main && git pull --rebase origin main
+```
+
+**注意**：如果后续需要修改 PR（review 反馈、CI 失败），可随时 `git checkout $CURRENT_BRANCH` 回去。
+
+### 7. Post-PR 验证（自进化触发点）
 
 PR 创建后，检查 CI 和 merge 状态。
 

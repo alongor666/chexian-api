@@ -11,6 +11,7 @@ import { useDashboardBundle } from './hooks/useDashboardBundle';
 import { KpiSection } from './components/KpiSection';
 import { TrendSection } from './components/TrendSection';
 import { TableSection } from './components/TableSection';
+import { GeoSection } from './components/GeoSection';
 import { DashboardCustomizerPanel } from './components/DashboardCustomizerPanel';
 import type { DashboardSectionId, KpiCardId, KpiGroup } from './dashboardLayoutConfig';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
@@ -268,6 +269,9 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
           analysisYear={filters.analysis_year}
         />
       </div>
+    ),
+    geo: (
+      <GeoSection />
     ),
     table: (
       <TableSection
