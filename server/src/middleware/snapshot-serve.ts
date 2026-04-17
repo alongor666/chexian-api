@@ -23,12 +23,17 @@ export const SNAPSHOT_BUNDLES: readonly string[] = [
   'dashboard-bundle',
   'performance-bundle',
   'cross-sell-bundle',
+  'comprehensive-bundle',
   'filters-options',
   'customer-flow-summary',
   'customer-flow-inflow',
   'customer-flow-outflow',
   'customer-flow-trend',
   'customer-flow-metadata',
+  'renewal-metadata',
+  'renewal-overview',
+  'renewal-trend',
+  'renewal-funnel',
 ] as const;
 
 // 使用全路径（baseUrl + path）匹配，防止跨 router 误命中
@@ -36,12 +41,19 @@ const ROUTE_BUNDLE_MAP: Record<string, string> = {
   '/api/query/dashboard-bundle': 'dashboard-bundle',
   '/api/query/performance-bundle': 'performance-bundle',
   '/api/query/cross-sell-bundle': 'cross-sell-bundle',
+  '/api/query/comprehensive-bundle': 'comprehensive-bundle',
+  '/api/query/comprehensive-analysis-bundle': 'comprehensive-bundle',
   '/api/filters/options': 'filters-options',
   '/api/query/customer-flow/summary': 'customer-flow-summary',
   '/api/query/customer-flow/inflow': 'customer-flow-inflow',
   '/api/query/customer-flow/outflow': 'customer-flow-outflow',
   '/api/query/customer-flow/trend': 'customer-flow-trend',
   '/api/query/customer-flow/metadata': 'customer-flow-metadata',
+  // Phase 3: 续保宇宙核心端点（默认参数命中率高）
+  '/api/query/renewal-v2/metadata': 'renewal-metadata',
+  '/api/query/renewal-v2/overview': 'renewal-overview',
+  '/api/query/renewal-v2/trend': 'renewal-trend',
+  '/api/query/renewal-v2/funnel': 'renewal-funnel',
 };
 
 // ── 内存计数器（snapshot-health 端点使用）──────
