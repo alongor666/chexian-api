@@ -142,9 +142,10 @@ function getGroupByConfig(dimension: CrossSellDimension, colPrefix: string): {
 
 /**
  * 判断是否需要 JOIN SalesmanTeamMapping
+ * Phase 2b: 业务员下钻附带 team_name 元数据，故 groupBy=salesman 时也需 JOIN
  */
 function needsTeamJoin(drillPath: DrilldownStep[], groupBy: CrossSellDimension | null): boolean {
-  if (groupBy === 'team') return true;
+  if (groupBy === 'team' || groupBy === 'salesman') return true;
   return drillPath.some(s => s.dimension === 'team');
 }
 
@@ -189,10 +190,25 @@ export function generateCrossSellQuery(
   // 分组查询
   const config = getGroupByConfig(groupBy, colPrefix);
 
+  // Phase 2b: 业务员下钻附带 org_level_3 + team_name 元数据列
+  const includeHierarchy = groupBy === 'salesman';
+  const hierarchySelect = includeHierarchy
+    ? `${colPrefix}org_level_3 AS org_level_3,
+        COALESCE(tm.team_name, '未归属团队') AS team_name,`
+    : '';
+  const hierarchyGroupBy = includeHierarchy
+    ? `, ${colPrefix}org_level_3, COALESCE(tm.team_name, '未归属团队')`
+    : '';
+  const hierarchyFinal = includeHierarchy
+    ? `org_level_3,
+      team_name,`
+    : '';
+
   const sql = `
     WITH cross_sell_base AS (
       SELECT
         ${config.selectExpr},
+        ${hierarchySelect}
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination IN ('主全', '交三') THEN ${colPrefix}auto_count ELSE 0 END), 0) AS total_auto_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination IN ('主全', '交三') THEN ${colPrefix}driver_count ELSE 0 END), 0) AS total_driver_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS danjiao_auto_count,
@@ -204,11 +220,12 @@ export function generateCrossSellQuery(
       FROM ${tableRef}
       ${teamJoin}
       WHERE ${fullWhere}
-      GROUP BY ${config.groupByExpr}
+      GROUP BY ${config.groupByExpr}${hierarchyGroupBy}
       HAVING COALESCE(SUM(${colPrefix}auto_count), 0) > 0
     )
     SELECT
       group_name,
+      ${hierarchyFinal}
       total_auto_count,
       total_driver_count,
       danjiao_auto_count,

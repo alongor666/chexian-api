@@ -186,9 +186,23 @@ export function generateOverviewQuery(filters: RenewalUniverseFilters = {}, perm
   const groupBy = filters.groupBy ?? 'org';
   const groupCol = DIMENSION_COL[groupBy] ?? 'org_level_3';
 
+  // Phase 2b: 业务员下钻附带 org_level_3 + team_name 元数据，供前端折叠树
+  const includeHierarchy = groupBy === 'salesman';
+  const teamJoin = includeHierarchy
+    ? 'LEFT JOIN SalesmanTeamMapping tm ON salesman_name = tm.full_name'
+    : '';
+  const hierarchySelect = includeHierarchy
+    ? `org_level_3,
+      COALESCE(tm.team_name, '未归属团队') AS team_name,`
+    : '';
+  const hierarchyGroupBy = includeHierarchy
+    ? `, org_level_3, COALESCE(tm.team_name, '未归属团队')`
+    : '';
+
   return `
     SELECT
       ${groupCol} AS group_name,
+      ${hierarchySelect}
       COUNT(*) AS due_count,
       SUM(CASE WHEN is_renewed THEN 1 ELSE 0 END) AS renewed_count,
       SUM(CASE WHEN is_quoted THEN 1 ELSE 0 END) AS quoted_count,
@@ -204,8 +218,9 @@ export function generateOverviewQuery(filters: RenewalUniverseFilters = {}, perm
       SUM(CASE WHEN action_priority = 'P1' THEN 1 ELSE 0 END) AS p1_count,
       SUM(CASE WHEN action_priority = 'P2' THEN 1 ELSE 0 END) AS p2_count
     FROM RenewalUniverse
+    ${teamJoin}
     WHERE ${where}
-    GROUP BY ${groupCol}
+    GROUP BY ${groupCol}${hierarchyGroupBy}
     ORDER BY due_count DESC
   `;
 }
@@ -296,9 +311,23 @@ export function generateLossReasonQuery(filters: RenewalUniverseFilters = {}, pe
   const groupBy = filters.groupBy ?? 'org';
   const groupCol = DIMENSION_COL[groupBy] ?? 'org_level_3';
 
+  // Phase 2b: 业务员下钻附带 org_level_3 + team_name 元数据
+  const includeHierarchy = groupBy === 'salesman';
+  const teamJoin = includeHierarchy
+    ? 'LEFT JOIN SalesmanTeamMapping tm ON salesman_name = tm.full_name'
+    : '';
+  const hierarchySelect = includeHierarchy
+    ? `org_level_3,
+      COALESCE(tm.team_name, '未归属团队') AS team_name,`
+    : '';
+  const hierarchyGroupBy = includeHierarchy
+    ? `, org_level_3, COALESCE(tm.team_name, '未归属团队')`
+    : '';
+
   return `
     SELECT
       ${groupCol} AS group_name,
+      ${hierarchySelect}
       COUNT(*) AS due_count,
       SUM(CASE WHEN funnel_stage = 'not_quoted' THEN 1 ELSE 0 END) AS not_quoted_count,
       SUM(CASE WHEN funnel_stage = 'quoted_not_renewed' THEN 1 ELSE 0 END) AS quoted_not_renewed_count,
@@ -310,8 +339,9 @@ export function generateLossReasonQuery(filters: RenewalUniverseFilters = {}, pe
       ROUND(SUM(CASE WHEN funnel_stage = 'renewed' THEN 1 ELSE 0 END) * 100.0
             / NULLIF(COUNT(*), 0), 1) AS renewal_rate
     FROM RenewalUniverse
+    ${teamJoin}
     WHERE ${where}
-    GROUP BY ${groupCol}
+    GROUP BY ${groupCol}${hierarchyGroupBy}
     ORDER BY not_quoted_count DESC
   `;
 }
