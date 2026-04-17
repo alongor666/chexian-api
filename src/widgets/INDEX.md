@@ -68,7 +68,7 @@
 ### Table
 - **虚拟滚动**：使用 react-window 优化性能
 - **排序**：支持多列排序（点击表头）
-- **导出**：（待实现，见 BACKLOG B007）
+- **导出**：通过 `export/ExportDialog.tsx` 支持 CSV/Excel 导出（B007 已完成，见 `开发文档/BACKLOG_ARCHIVE.md` A009）
 
 ## 设计规范
 
@@ -85,8 +85,7 @@
 
 ## 待开发功能
 
-查看 [BACKLOG.md](../../BACKLOG.md) 中板块为 `Feature` 且涉及组件的任务：
-- B008: 图表下钻功能（点击图表触发事件）
+查看 [BACKLOG.md](../../BACKLOG.md) 中板块为 `Feature` 且涉及组件的待办任务。已完成项归档至 `开发文档/BACKLOG_ARCHIVE.md`（如 B007 导出功能、B008 图表下钻）。
 
 ## 链接到全局索引
 
