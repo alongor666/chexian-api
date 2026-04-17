@@ -2,53 +2,47 @@
  * 下钻维度规则中枢 — 集中管理所有板块的维度配置。
  *
  * 各板块只需引用此处配置，不硬编码维度列表。
+ *
+ * ─── 下钻原则（2026-04-17 收敛）───
+ * 下钻维度仅保留"组织层级 + 客户类别"：
+ *   - 业绩分析 / 续保分析：org_level_3 / team / salesman / customer_category
+ *   - 驾意险：org_level_3 / team / salesman（数据已锁客车，无需客户类别）
+ * 业务属性（新车/过户/新能源/电销/续保/风险等级）、险别组合、吨位分段
+ * 统一降级为顶部快捷筛选，不再进入 drillPath。
+ * 团队与业务员合并为同一下钻层，前端树形折叠/展开展示。
  */
 
 // ─── 维度类型定义 ────────────────────────────────────────────────────────────
 
-/** 业绩分析支持的维度（含条件维度 insurance_grade） */
+/** 业绩分析支持的下钻维度 */
 export type PerformanceDrillDimension =
   | 'org_level_3'
   | 'team'
   | 'salesman'
-  | 'customer_category'
-  | 'tonnage_segment'
-  | 'is_new_car'
-  | 'is_transfer'
-  | 'is_nev'
-  | 'is_telemarketing'
-  | 'is_renewal'
-  | 'insurance_grade';
+  | 'customer_category';
 
-/** 驾意险支持的维度（含条件维度 insurance_grade） */
+/** 驾意险支持的下钻维度（数据已锁客车，无客户类别层） */
 export type CrossSellDrillDimension =
   | 'org_level_3'
   | 'team'
-  | 'salesman'
-  | 'is_new_car'
-  | 'is_transfer'
-  | 'is_nev'
-  | 'is_telemarketing'
-  | 'is_renewal'
-  | 'insurance_grade';
+  | 'salesman';
 
 /** 续保分析层级（线性，顺序固定 — V1 兼容） */
-export type RenewalDrillLevel = 'company' | 'org' | 'team' | 'salesman' | 'coverage';
+export type RenewalDrillLevel = 'company' | 'org' | 'team' | 'salesman';
 
 /** 续保分析自由维度（V2） */
 export type RenewalDrillDimension =
   | 'org_level_3'
   | 'team'
   | 'salesman'
-  | 'coverage_combination'
-  | 'customer_category'
-  | 'is_new_car'
-  | 'is_transfer'
-  | 'is_nev'
-  | 'is_telemarketing';
+  | 'customer_category';
 
 // ─── 维度中文标签 ────────────────────────────────────────────────────────────
 
+/**
+ * 维度中文标签（full map — 含非下钻维度，便于快捷筛选/导出/BI 复用）。
+ * 类型上已将非下钻维度移出 drill 联合类型，但标签映射保留向后兼容。
+ */
 export const DIMENSION_LABELS: Record<string, string> = {
   org_level_3: '三级机构',
   team: '销售团队',
@@ -73,14 +67,11 @@ export interface ConditionalDimensionRule {
   addDimensions: string[];
 }
 
-/** 全局条件维度规则 */
-export const CONDITIONAL_DIMENSION_RULES: ConditionalDimensionRule[] = [
-  {
-    when: { dimension: 'customer_category', value: '非营业客车' },
-    addDimensions: ['insurance_grade'],
-  },
-  // 吨位分段由 computeAvailableDimensions 内部逻辑控制（仅货车可用）
-];
+/**
+ * 全局条件维度规则。
+ * 2026-04-17 收敛后置空：风险等级等业务属性已归为筛选，不再作为条件维度。
+ */
+export const CONDITIONAL_DIMENSION_RULES: ConditionalDimensionRule[] = [];
 
 // ─── 板块维度配置 ────────────────────────────────────────────────────────────
 
@@ -90,35 +81,21 @@ export const PERFORMANCE_DIMENSIONS: PerformanceDrillDimension[] = [
   'team',
   'salesman',
   'customer_category',
-  'tonnage_segment',
-  'is_new_car',
-  'is_transfer',
-  'is_nev',
-  'is_telemarketing',
-  'is_renewal',
-  // insurance_grade 为条件维度，由规则动态注入
 ];
 
-/** 驾意险 — 自由维度下钻（口径为非营业客车，insurance_grade 直接可用） */
+/** 驾意险 — 自由维度下钻（数据锁客车，无客户类别层） */
 export const CROSS_SELL_DIMENSIONS: CrossSellDrillDimension[] = [
   'org_level_3',
   'team',
   'salesman',
-  'is_new_car',
-  'is_transfer',
-  'is_nev',
-  'is_telemarketing',
-  'is_renewal',
-  'insurance_grade',
 ];
 
-/** 续保分析 — 线性5层下钻（V1 兼容） */
+/** 续保分析 — 线性层级（V1 兼容，去掉 'coverage' 层） */
 export const RENEWAL_LEVEL_ORDER: RenewalDrillLevel[] = [
   'company',
   'org',
   'team',
   'salesman',
-  'coverage',
 ];
 
 export const RENEWAL_LEVEL_LABELS: Record<RenewalDrillLevel, string> = {
@@ -126,7 +103,6 @@ export const RENEWAL_LEVEL_LABELS: Record<RenewalDrillLevel, string> = {
   org: '三级机构',
   team: '销售团队',
   salesman: '业务员',
-  coverage: '险别组合',
 };
 
 /** 续保分析 — 自由维度下钻（V2） */
@@ -134,22 +110,18 @@ export const RENEWAL_DIMENSIONS: RenewalDrillDimension[] = [
   'org_level_3',
   'team',
   'salesman',
-  'coverage_combination',
   'customer_category',
-  'is_new_car',
-  'is_transfer',
-  'is_nev',
-  'is_telemarketing',
 ];
 
-/** 假日营销 — 2层线性 */
+/** 假日营销 — 2层线性（机构→业务员；暂未合并 team 层，下次迭代） */
 export const HOLIDAY_LEVEL_ORDER = ['org', 'salesman'] as const;
 
 // ─── 工具函数 ────────────────────────────────────────────────────────────────
 
 /**
  * 根据下钻路径，计算当前激活的条件维度。
- * 返回满足条件的额外维度 key 列表。
+ * 2026-04-17 收敛后 CONDITIONAL_DIMENSION_RULES 为空，恒返回空数组；
+ * 保留函数签名避免消费方破坏。
  */
 export function getConditionalDimensions(
   drillPath: { dimension: string; value: string }[],
@@ -171,8 +143,8 @@ export function getConditionalDimensions(
 }
 
 /**
- * 判断某个维度是否属于条件维度（如 insurance_grade）。
- * Phase 2+ 板块改造时使用：传入 DrilldownCell.conditionalDimensions 以琥珀色胶囊标记。
+ * 判断某个维度是否属于条件维度。
+ * 2026-04-17 收敛后恒返回 false；保留以避免消费方破坏。
  */
 export function isConditionalDimension(dimension: string): boolean {
   return CONDITIONAL_DIMENSION_RULES.some((rule) =>
