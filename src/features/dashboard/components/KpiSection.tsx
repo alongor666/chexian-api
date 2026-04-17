@@ -1,5 +1,7 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { EnhancedKpiCard, type EnhancedKpiCardProps } from '../../../widgets/kpi/EnhancedKpiCard';
+import { getKpiDrilldownTarget } from '../kpiDrilldownMap';
 import {
   formatAchievementRate,
   formatCount,
@@ -118,6 +120,19 @@ export const KpiSection = memo<KpiSectionProps>(({
   visibleKpisByGroup,
 }) => {
   const [activeGroup, setActiveGroup] = useState<KpiGroup>('core');
+  const navigate = useNavigate();
+
+  // Phase 2c: KPI 卡片点击跳转对应板块
+  const handleKpiClick = useCallback((id: KpiCardId) => {
+    const target = getKpiDrilldownTarget(id);
+    if (target) navigate(target.path);
+  }, [navigate]);
+
+  const getInteractiveProps = useCallback((id: KpiCardId) => {
+    const target = getKpiDrilldownTarget(id);
+    if (!target) return {};
+    return { onClick: () => handleKpiClick(id), clickHint: target.hint };
+  }, [handleKpiClick]);
 
   const groupLabel: Record<KpiGroup, string> = {
     core: '核心指标',
@@ -374,14 +389,14 @@ export const KpiSection = memo<KpiSectionProps>(({
             {heroEntries.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {heroEntries.map((entry) => (
-                  <EnhancedKpiCard key={entry.id} {...entry.props} />
+                  <EnhancedKpiCard key={entry.id} {...entry.props} {...getInteractiveProps(entry.id)} />
                 ))}
               </div>
             )}
             {secondaryEntries.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {secondaryEntries.map((entry) => (
-                  <EnhancedKpiCard key={entry.id} {...entry.props} />
+                  <EnhancedKpiCard key={entry.id} {...entry.props} {...getInteractiveProps(entry.id)} />
                 ))}
               </div>
             )}
@@ -390,7 +405,7 @@ export const KpiSection = memo<KpiSectionProps>(({
       })() : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {cardEntries.map((entry) => (
-            <EnhancedKpiCard key={entry.id} {...entry.props} />
+            <EnhancedKpiCard key={entry.id} {...entry.props} {...getInteractiveProps(entry.id)} />
           ))}
         </div>
       )}

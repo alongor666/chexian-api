@@ -41,6 +41,10 @@ export interface EnhancedKpiCardProps {
   chartSize?: number;
   /** 自定义类名 */
   className?: string;
+  /** 点击回调 — 提供时卡片变可交互，用于 KPI 跨板块跳转 */
+  onClick?: () => void;
+  /** 点击提示文案（hover tooltip） */
+  clickHint?: string;
 }
 
 /**
@@ -289,7 +293,24 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
   type = 'value',
   ratioData = [],
   chartSize = 60,
+  onClick,
+  clickHint,
 }) {
+  const interactiveProps = onClick
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        title: clickHint,
+        onClick,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick();
+          }
+        },
+        className: 'cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-blue-300 transition-shadow',
+      }
+    : {};
   // 格式化数值
   const formattedValue = React.useMemo(() => {
     if (loading) return '--';
@@ -331,7 +352,10 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
   // 数值类型卡片
   if (type === 'value') {
     return (
-      <div className={cn(cardStyles.interactive, 'p-5')}>
+      <div
+        {...interactiveProps}
+        className={cn(cardStyles.interactive, 'p-5', interactiveProps.className)}
+      >
         <div className={cn(textStyles.label, 'mb-2')}>{title}</div>
         <div className={cn(numericStyles.kpiPrimary, colorClasses.text.neutralBlack, 'mt-1')}>
           {formattedValue}
@@ -342,7 +366,10 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
 
   if (type === 'bar') {
     return (
-      <div className={cn(cardStyles.interactive, 'p-5')}>
+      <div
+        {...interactiveProps}
+        className={cn(cardStyles.interactive, 'p-5', interactiveProps.className)}
+      >
         <div className={cn(textStyles.label, 'mb-4')}>{title}</div>
         <RatioBar data={normalizedRatioData} />
       </div>
@@ -350,7 +377,10 @@ export const EnhancedKpiCard = memo<EnhancedKpiCardProps>(function EnhancedKpiCa
   }
 
   return (
-    <div className={cn(cardStyles.interactive, 'p-5')}>
+    <div
+      {...interactiveProps}
+      className={cn(cardStyles.interactive, 'p-5', interactiveProps.className)}
+    >
       <div className={cn(textStyles.label, 'mb-3')}>{title}</div>
 
       <div className="flex items-center justify-between mb-3 mt-1">
