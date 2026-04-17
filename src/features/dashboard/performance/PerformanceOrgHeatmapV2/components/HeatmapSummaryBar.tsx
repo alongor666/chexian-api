@@ -5,6 +5,7 @@
  */
 
 import { cn } from '@/shared/styles';
+import { formatPercent } from '@/shared/utils/formatters';
 import type { HeatmapSummaryStats } from '../types';
 
 interface HeatmapSummaryBarProps {
@@ -62,7 +63,7 @@ export function HeatmapSummaryBar({ stats, loading }: HeatmapSummaryBarProps) {
       {fastestImprovement && (
         <SummaryChip
           icon="^"
-          label={`改善最快：${fastestImprovement.org}(+${fastestImprovement.delta.toFixed(1)}%)`}
+          label={`改善最快：${fastestImprovement.org}(+${formatPercent(fastestImprovement.delta)})`}
         />
       )}
     </div>

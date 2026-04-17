@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { cardStyles, colorClasses, fontStyles, getHeatmapColor, toggleButtonStyles, cn } from '../../../shared/styles';
+import { cardStyles, colorClasses, getHeatmapColor, toggleButtonStyles, cn } from '../../../shared/styles';
+import { RateCell } from '../../../shared/ui';
 import { formatCount, formatPercent } from '../../../shared/utils/formatters';
 import { useQuoteHeatmap, useQuoteRanking } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';
@@ -55,7 +56,7 @@ export function DimensionMatrix({ filters }: Props) {
     <div className={cardStyles.base}>
       {/* 维度选择器 */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">维度矩阵</h3>
+        <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">维度矩阵 · 报价转化率 (%)</h3>
         <div className="flex gap-1 flex-wrap items-center">
           {visibleDims.map(d => (
             <button
@@ -109,7 +110,9 @@ export function DimensionMatrix({ filters }: Props) {
                       return (
                         <td key={dim} className="p-1">
                           <div className={cn('rounded-md p-2 text-center', getHeatmapColor(cell.rate))}>
-                            <div className={cn('font-semibold', fontStyles.numeric)}>{cell.rate}%</div>
+                            <div className="font-semibold">
+                              <RateCell value={cell.rate} />
+                            </div>
                             <div className="text-[10px] opacity-75">{formatCount(cell.count)}</div>
                           </div>
                         </td>

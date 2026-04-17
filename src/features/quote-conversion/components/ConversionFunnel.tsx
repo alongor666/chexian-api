@@ -42,11 +42,14 @@ function FunnelWaterfall({ title, row }: { title: string; row: FunnelRow }) {
               {/* 漏斗层 */}
               <div className="relative">
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className={colorClasses.text.neutralMuted}>{LEVEL_LABELS[i]}</span>
+                  <span className={colorClasses.text.neutralMuted}>
+                    {LEVEL_LABELS[i]}
+                    <span className="ml-1 opacity-60">(%)</span>
+                  </span>
                   <span className={fontStyles.numeric}>
                     {formatCount(val)}
                     <span className={cn('ml-1', colorClasses.text.neutralMuted)}>
-                      ({pct.toFixed(1)}%)
+                      ({pct.toFixed(1)})
                     </span>
                   </span>
                 </div>
@@ -65,9 +68,9 @@ function FunnelWaterfall({ title, row }: { title: string; row: FunnelRow }) {
       {/* 总转化率 */}
       <div className="mt-3 text-center">
         <span className={cn('text-lg font-bold', colorClasses.text.primary)}>
-          {max > 0 ? ((row.l4_insured ?? 0) / max * 100).toFixed(1) : 0}%
+          {max > 0 ? ((row.l4_insured ?? 0) / max * 100).toFixed(1) : '0'}
         </span>
-        <span className={cn('text-xs ml-1', colorClasses.text.neutralMuted)}>总转化率</span>
+        <span className={cn('text-xs ml-1', colorClasses.text.neutralMuted)}>总转化率 (%)</span>
       </div>
     </div>
   );
