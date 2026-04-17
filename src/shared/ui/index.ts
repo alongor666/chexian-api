@@ -100,6 +100,10 @@ export type {
   SortDirection,
 } from './Table'
 
+// RateCell 率值单元格（纯数字，无 %；单位 (%) 在列头）
+export { RateCell } from './RateCell'
+export type { RateCellProps } from './RateCell'
+
 // StickyTableFrame 长表滚动容器
 export { StickyTableFrame } from './StickyTableFrame'
 export type { StickyTableFrameProps } from './StickyTableFrame'
