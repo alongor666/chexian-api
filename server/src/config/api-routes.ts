@@ -88,6 +88,12 @@ export const QUERY_ROUTES = {
     TREND: '/quote-conversion/trend',
   },
 
+  // 承保地理分布
+  POLICY_GEO: {
+    PROVINCE: '/policy-geo/province',
+    CITY: '/policy-geo/city',
+  },
+
   // 巡检报告
   PATROL: '/patrol',
 

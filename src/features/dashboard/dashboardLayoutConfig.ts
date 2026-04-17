@@ -1,8 +1,9 @@
-export type DashboardSectionId = 'kpi' | 'trend' | 'table';
+export type DashboardSectionId = 'kpi' | 'trend' | 'geo' | 'table';
 
 export const DASHBOARD_SECTION_META: Array<{ id: DashboardSectionId; label: string }> = [
   { id: 'kpi', label: 'KPI指标' },
   { id: 'trend', label: '趋势分析' },
+  { id: 'geo', label: '地理分布' },
   { id: 'table', label: '业务员明细' },
 ];
 

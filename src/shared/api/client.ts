@@ -1178,6 +1178,17 @@ class ApiClient {
     const query = this.buildQueryString(params);
     return this.request<any[]>(`/query/${QUERY_ROUTES.EXPENSE_DEVELOPMENT}${query ? `?${query}` : ''}`);
   }
+  // ── 承保地理分布 ──
+
+  async getPolicyGeoProvince(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.POLICY_GEO.PROVINCE}${query ? `?${query}` : ''}`);
+  }
+
+  async getPolicyGeoCity(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.POLICY_GEO.CITY}${query ? `?${query}` : ''}`);
+  }
 }
 
 // 导出单例

@@ -1,7 +1,7 @@
 /**
  * 地理风险热力图面板
  *
- * 两级地图：全国分省热力图 → 点击四川下钻到省内分城市
+ * 两级地图：全国分省热力图 → 点击任意省下钻到城市级
  * + 异地出险率 KPI + 双表并排 + 出险频度趋势
  */
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
@@ -10,23 +10,18 @@ import { echarts } from '@/shared/utils/echarts';
 import { cardStyles, colorClasses, cn, fontStyles, tableStyles } from '@/shared/styles';
 import { useTheme } from '@/shared/theme';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
+import { ensureMapRegistered, preloadDefaultMaps } from '@/shared/utils/geo-map-loader';
+import { GEOJSON_TO_PROVINCE, PROVINCE_TO_GEOJSON, PROVINCE_ADCODE, getProvinceAbbrev, getCityAbbrev } from '@/shared/utils/province-abbrev';
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
+
+/** HTML 转义（防止 tooltip XSS） */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 interface Props {
   hook: ReturnType<typeof useClaimsDetail>;
   params?: Record<string, string>;
-}
-
-// 注册地图（各执行一次，动态导入避免 ~500KB 打入主 chunk）
-let mapsRegistered = false;
-async function ensureMapsRegistered() {
-  if (mapsRegistered) return;
-  const [chinaModule, sichuanModule] = await Promise.all([
-    import('@/shared/assets/china.json'),
-    import('@/shared/assets/sichuan.json'),
-  ]);
-  echarts.registerMap('china', chinaModule.default as any);
-  echarts.registerMap('sichuan', sichuanModule.default as any);
-  mapsRegistered = true;
 }
 
 /** 从 "510000四川省" 提取省份名称 */
@@ -35,27 +30,14 @@ function extractProvinceName(raw: string): string {
   return raw.replace(/^\d+/, '');
 }
 
-/** 从 "510100成都市" 提取城市名（去掉代码和"市"后缀） */
-function extractCityName(raw: string): string {
+/** 从 "510100成都市" 提取城市名全称（保留"市"后缀以匹配 GeoJSON） */
+function extractCityFullName(raw: string): string {
   if (!raw) return '';
-  const name = raw.replace(/^\d+/, '');
-  return name.replace(/市$/, '');
+  return raw.replace(/^\d+/, '');
 }
 
-/** adcode 到 GeoJSON name 的映射（四川省内城市） */
-const SC_CITY_CODE_TO_NAME: Record<string, string> = {
-  '510100': '成都市', '510300': '自贡市', '510400': '攀枝花市',
-  '510500': '泸州市', '510600': '德阳市', '510700': '绵阳市',
-  '510800': '广元市', '510900': '遂宁市', '511000': '内江市',
-  '511100': '乐山市', '511300': '南充市', '511400': '眉山市',
-  '511500': '宜宾市', '511600': '广安市', '511700': '达州市',
-  '511800': '雅安市', '511900': '巴中市', '512000': '资阳市',
-  '513200': '阿坝藏族羌族自治州', '513300': '甘孜藏族自治州',
-  '513400': '凉山彝族自治州',
-};
-
 type MapMetric = 'cases' | 'reserve_wan' | 'avg_reserve' | 'injury_pct';
-type MapLevel = 'china' | 'sichuan';
+type MapLevel = 'china' | 'province';
 
 const MAP_METRIC_OPTIONS: { key: MapMetric; label: string }[] = [
   { key: 'cases', label: '赔案件数' },
@@ -64,23 +46,37 @@ const MAP_METRIC_OPTIONS: { key: MapMetric; label: string }[] = [
   { key: 'injury_pct', label: '人伤占比' },
 ];
 
+/** 从 PROVINCE_ADCODE 派生 adcode 前两位，消除重复维护 */
+function getProvinceCodePrefix(provinceName: string): string | undefined {
+  return PROVINCE_ADCODE[provinceName]?.slice(0, 2);
+}
+
 export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
   const { geoAccident, geoPlate, geoComparison, frequencyYoy } = hook;
   const [mapMetric, setMapMetric] = useState<MapMetric>('cases');
   const [mapLevel, setMapLevel] = useState<MapLevel>('china');
-
+  const [currentProvince, setCurrentProvince] = useState<string>('');
+  const [currentMapKey, setCurrentMapKey] = useState<string>('china');
   const [mapsReady, setMapsReady] = useState(false);
+  const [mapLoading, setMapLoading] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   useEffect(() => {
-    ensureMapsRegistered().then(() => setMapsReady(true));
+    preloadDefaultMaps()
+      .then(() => {
+        setMapsReady(true);
+        return ensureMapRegistered('china').then(key => setCurrentMapKey(key));
+      })
+      .catch(() => setMapError('地图资源加载失败，请刷新页面重试'));
   }, []);
 
+  const { fetchGeoData, fetchFrequencyYoy } = hook;
   const loadData = useCallback(() => {
-    hook.fetchGeoData(params);
-    hook.fetchFrequencyYoy(params);
-  }, [hook.fetchGeoData, hook.fetchFrequencyYoy, params]);
+    fetchGeoData(params);
+    fetchFrequencyYoy(params);
+  }, [fetchGeoData, fetchFrequencyYoy, params]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -106,29 +102,72 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
     }));
   }, [geoAccident.data]);
 
-  // ── 四川城市级数据 ──
-  const sichuanCityData = useMemo(() => {
+  // ── 某省城市级数据（动态按省筛选）──
+  const provinceCityData = useMemo(() => {
+    if (!currentProvince) return [];
+    const geoJsonFullName = PROVINCE_TO_GEOJSON[currentProvince];
+    const prefix = getProvinceCodePrefix(currentProvince);
+    if (!geoJsonFullName && !prefix) return [];
     return geoAccident.data
-      .filter((r: any) => (r.province ?? '').startsWith('51'))
-      .map((r: any) => {
-        const code = (r.city ?? '').slice(0, 6);
-        return {
-          name: SC_CITY_CODE_TO_NAME[code] ?? extractCityName(r.city ?? ''),
-          cases: r.cases ?? 0,
-          reserve_wan: r.reserve_wan ?? 0,
-          avg_reserve: r.avg_reserve ?? 0,
-          injury_pct: r.injury_pct ?? 0,
-          avg_cycle_days: r.avg_cycle_days ?? 0,
-        };
-      });
-  }, [geoAccident.data]);
+      .filter((r: any) => {
+        const rawProvince = (r.province ?? '').replace(/^\d+/, '');
+        if (geoJsonFullName && rawProvince === geoJsonFullName) return true;
+        if (prefix) {
+          const cityCode = r.city ?? '';
+          if (/^\d{6}/.test(cityCode)) return cityCode.slice(0, 2) === prefix;
+        }
+        return false;
+      })
+      .map((r: any) => ({
+        name: extractCityFullName(r.city ?? ''),
+        cases: r.cases ?? 0,
+        reserve_wan: r.reserve_wan ?? 0,
+        avg_reserve: r.avg_reserve ?? 0,
+        injury_pct: r.injury_pct ?? 0,
+        avg_cycle_days: r.avg_cycle_days ?? 0,
+      }));
+  }, [geoAccident.data, currentProvince]);
+
+  // 下钻到某省
+  const drillToProvince = useCallback(async (provinceName: string) => {
+    setMapLoading(true);
+    setMapError(null);
+    try {
+      const key = await ensureMapRegistered(provinceName);
+      setCurrentMapKey(key);
+      setCurrentProvince(provinceName);
+      setMapLevel('province');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '地图加载失败';
+      setMapError(`加载 ${provinceName} 地图失败: ${msg}`);
+    } finally {
+      setMapLoading(false);
+    }
+  }, []);
+
+  // 返回全国
+  const backToChina = useCallback(async () => {
+    setMapLoading(true);
+    setMapError(null);
+    try {
+      const key = await ensureMapRegistered('china');
+      setCurrentMapKey(key);
+      setMapLevel('china');
+      setCurrentProvince('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '地图加载失败';
+      setMapError(msg);
+    } finally {
+      setMapLoading(false);
+    }
+  }, []);
 
   // ── 地图 option 生成 ──
   const mapOption = useMemo(() => {
     const isChina = mapLevel === 'china';
     const data = isChina
       ? provinceData.map(p => ({ ...p, name: p.name, value: p[mapMetric] }))
-      : sichuanCityData.map(c => ({ ...c, name: c.name, value: c[mapMetric] }));
+      : provinceCityData.map(c => ({ ...c, name: c.name, value: c[mapMetric] }));
 
     const values = data.map(d => d.value).filter(v => v > 0);
     const maxVal = values.length > 0 ? Math.max(...values) : 100;
@@ -138,9 +177,10 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
       tooltip: {
         trigger: 'item' as const,
         formatter: (p: any) => {
-          if (!p.data) return p.name;
+          if (!p.data) return escapeHtml(p.name ?? '');
           const d = p.data;
-          return `<b>${p.name}</b><br/>
+          const name = isChina ? getProvinceAbbrev(p.name) : getCityAbbrev(p.name);
+          return `<b>${escapeHtml(name)}</b><br/>
             赔案: ${formatCount(d.cases)}件<br/>
             立案金额: ${formatCount(d.reserve_wan)}万<br/>
             案均: ${formatCount(d.avg_reserve)}元<br/>
@@ -160,17 +200,12 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
       series: [{
         name: metricLabel,
         type: 'map' as const,
-        map: isChina ? 'china' : 'sichuan',
+        map: currentMapKey,
         roam: true,
         label: {
           show: !isChina,
           fontSize: 10,
-          formatter: (p: any) => {
-            const short = (p.name ?? '')
-              .replace(/(藏族羌族|彝族|藏族)自治州/, '')
-              .replace(/(市|省|自治区|壮族自治区|维吾尔自治区|回族自治区)$/, '');
-            return short;
-          },
+          formatter: (p: any) => getCityAbbrev(p.name ?? ''),
         },
         emphasis: {
           label: { show: true, fontSize: 13, fontWeight: 'bold' as const },
@@ -183,16 +218,18 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
         data,
       }],
     };
-  }, [mapLevel, mapMetric, provinceData, sichuanCityData]);
+  }, [mapLevel, mapMetric, provinceData, provinceCityData, currentMapKey]);
 
   // ── 地图点击下钻 ──
   const onMapEvents = useMemo(() => ({
     click: (p: any) => {
-      if (mapLevel === 'china' && p.name === '四川省') {
-        setMapLevel('sichuan');
+      if (mapLevel !== 'china') return;
+      const provinceName = GEOJSON_TO_PROVINCE[p.name];
+      if (provinceName) {
+        void drillToProvince(provinceName);
       }
     },
-  }), [mapLevel]);
+  }), [mapLevel, drillToProvince]);
 
   // ── 出险频度同比图 ──
   const yoyChartOption = useMemo(() => {
@@ -230,6 +267,13 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
 
   return (
     <div className="space-y-6">
+      {/* 地图加载错误提示 */}
+      {mapError && (
+        <div className={cn(colorClasses.text.danger, 'text-sm px-4 py-2 rounded', colorClasses.bg.danger)}>
+          {mapError}
+        </div>
+      )}
+
       {/* 异地出险概览 KPI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className={cn(cardStyles.standard, 'p-4 text-center')}>
@@ -258,11 +302,13 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <h3 className="font-medium">
-              {mapLevel === 'china' ? '全国出险地分省热力图' : '四川省出险地分城市热力图'}
+              {mapLevel === 'china'
+                ? '全国出险地分省热力图'
+                : `${currentProvince}出险地分城市热力图`}
             </h3>
-            {mapLevel === 'sichuan' && (
+            {mapLevel === 'province' && (
               <button
-                onClick={() => setMapLevel('china')}
+                onClick={() => void backToChina()}
                 className={cn(
                   'px-2 py-0.5 text-xs rounded border transition-colors',
                   `${colorClasses.border.primary} ${colorClasses.text.primary} hover:bg-primary-bg dark:hover:bg-primary-900/30`
@@ -273,7 +319,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
             )}
             {mapLevel === 'china' && (
               <span className={cn(colorClasses.text.neutralMuted, 'text-xs')}>
-                点击四川省可下钻查看城市分布
+                点击任意省份可下钻查看城市分布
               </span>
             )}
           </div>
@@ -294,8 +340,10 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
             ))}
           </div>
         </div>
-        {isLoading || !mapsReady ? (
-          <div className="h-[500px] flex items-center justify-center">加载中...</div>
+        {isLoading || !mapsReady || mapLoading ? (
+          <div className="h-[500px] flex items-center justify-center">
+            {mapLoading ? '地图加载中...' : '加载中...'}
+          </div>
         ) : (
           <ReactEChartsCore
             echarts={echarts}
@@ -325,9 +373,9 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {geoAccident.data.slice(0, 25).map((r: any, i: number) => (
-                    <tr key={i} className={tableStyles.row}>
-                      <td className={tableStyles.cell}>{extractCityName(r.city ?? '')}</td>
+                  {geoAccident.data.slice(0, 25).map((r: any) => (
+                    <tr key={`acc-${r.province ?? ''}-${r.city ?? ''}`} className={tableStyles.row}>
+                      <td className={tableStyles.cell}>{getCityAbbrev(extractCityFullName(r.city ?? ''))}</td>
                       <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.cases ?? 0)}</td>
                       <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.reserve_wan ?? 0)}</td>
                       <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.avg_reserve ?? 0)}</td>
@@ -357,8 +405,8 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {geoPlate.data.map((r: any, i: number) => (
-                    <tr key={i} className={tableStyles.row}>
+                  {geoPlate.data.map((r: any) => (
+                    <tr key={`plate-${r.plate_city ?? ''}`} className={tableStyles.row}>
                       <td className={tableStyles.cell}>{r.plate_city ?? ''}</td>
                       <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.cases ?? 0)}</td>
                       <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>{formatCount(r.reserve_wan ?? 0)}</td>
