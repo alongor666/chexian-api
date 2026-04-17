@@ -228,8 +228,8 @@ function getCellBgClass(
   const absVal = Math.abs(value);
 
   if (mode === 'wow_rate' || mode === 'yoy_rate') {
-    if (absVal > 20) return isBad ? 'bg-red-50 dark:bg-red-500/10' : 'bg-green-50 dark:bg-green-500/10';
-    if (absVal > 10) return isBad ? 'bg-red-50/60 dark:bg-red-500/5' : 'bg-green-50/60 dark:bg-green-500/5';
+    if (absVal > 20) return isBad ? colorClasses.bg.danger : colorClasses.bg.success;
+    if (absVal > 10) return isBad ? cn(colorClasses.bg.danger, 'opacity-60') : cn(colorClasses.bg.success, 'opacity-60');
   }
   return '';
 }
@@ -392,7 +392,7 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
                 className={cn(
                   'px-2 py-1 text-xs rounded-md border transition-colors',
                   compareMode === c.key
-                    ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
+                    ? cn(colorClasses.bg.primarySolid, 'text-white', colorClasses.border.primary)
                     : `bg-transparent ${colorClasses.border.neutral} ${colorClasses.text.neutralMuted} hover:bg-neutral-100 dark:hover:bg-white/8`
                 )}
               >
