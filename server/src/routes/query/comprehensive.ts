@@ -132,6 +132,12 @@ async function handleComprehensiveBundle(req: any, res: any): Promise<void> {
           row.variable_cost_ratio === null ? null : toFiniteNumber(row.variable_cost_ratio, NaN),
         avg_claim_amount: row.avg_claim_amount === null ? null : toFiniteNumber(row.avg_claim_amount, NaN),
         claim_frequency: row.claim_frequency === null ? null : toFiniteNumber(row.claim_frequency, NaN),
+        comprehensive_expense_ratio:
+          row.comprehensive_expense_ratio === null
+            ? null
+            : toFiniteNumber(row.comprehensive_expense_ratio, NaN),
+        per_vehicle_premium:
+          row.per_vehicle_premium === null ? null : toFiniteNumber(row.per_vehicle_premium, NaN),
         premium_share: toFiniteNumber(row.premium_share),
         claim_share: toFiniteNumber(row.claim_share),
         expense_share: toFiniteNumber(row.expense_share),
@@ -146,6 +152,12 @@ async function handleComprehensiveBundle(req: any, res: any): Promise<void> {
     variable_cost_ratio: Number.isFinite(row.variable_cost_ratio ?? NaN) ? row.variable_cost_ratio : null,
     avg_claim_amount: Number.isFinite(row.avg_claim_amount ?? NaN) ? row.avg_claim_amount : null,
     claim_frequency: Number.isFinite(row.claim_frequency ?? NaN) ? row.claim_frequency : null,
+    comprehensive_expense_ratio: Number.isFinite(row.comprehensive_expense_ratio ?? NaN)
+      ? row.comprehensive_expense_ratio
+      : null,
+    per_vehicle_premium: Number.isFinite(row.per_vehicle_premium ?? NaN)
+      ? row.per_vehicle_premium
+      : null,
   }));
 
   const rankedRows = withRankByDimType(normalizedRows);
@@ -153,11 +165,17 @@ async function handleComprehensiveBundle(req: any, res: any): Promise<void> {
   const orgScope = orgRows.map((row) => row.dim_key);
 
   const summaryRow = (summaryRows[0] || {}) as Record<string, unknown>;
-  const totalPlanPremium = orgRows.reduce((sum, row) => sum + (row.plan_premium || 0), 0);
   const totalSignedPremium = toFiniteNumber(summaryRow.signed_premium);
+  // 达成率口径对齐：分子/分母必须同 scope（均来自 orgRows 计划覆盖范围），
+  // 否则分子用全量签单 / 分母用计划机构 会让比率虚高。
+  const totalPlanPremium = orgRows.reduce((sum, row) => sum + (row.plan_premium || 0), 0);
+  const totalSignedPremiumForPlan = orgRows.reduce(
+    (sum, row) => sum + (toFiniteNumber(row.signed_premium) || 0),
+    0
+  );
   const summaryAchievementRate =
     totalPlanPremium > 0 && timeProgress && timeProgress > 0
-      ? Number(((totalSignedPremium / totalPlanPremium) / timeProgress * 100).toFixed(2))
+      ? Number(((totalSignedPremiumForPlan / totalPlanPremium) / timeProgress * 100).toFixed(2))
       : null;
 
   const lossTrendRows = await duckdbService.query(
@@ -240,6 +258,18 @@ async function handleComprehensiveBundle(req: any, res: any): Promise<void> {
         expenseRatio: summaryRow.expense_ratio === null ? null : toFiniteNumber(summaryRow.expense_ratio, NaN),
         variableCostRatio:
           summaryRow.variable_cost_ratio === null ? null : toFiniteNumber(summaryRow.variable_cost_ratio, NaN),
+        comprehensiveExpenseRatio:
+          summaryRow.comprehensive_expense_ratio === null
+            ? null
+            : toFiniteNumber(summaryRow.comprehensive_expense_ratio, NaN),
+        perVehiclePremium:
+          summaryRow.per_vehicle_premium === null
+            ? null
+            : toFiniteNumber(summaryRow.per_vehicle_premium, NaN),
+        claimFrequency:
+          summaryRow.claim_frequency === null
+            ? null
+            : toFiniteNumber(summaryRow.claim_frequency, NaN),
         achievementRate: summaryAchievementRate,
       },
       rows: overviewRows,
