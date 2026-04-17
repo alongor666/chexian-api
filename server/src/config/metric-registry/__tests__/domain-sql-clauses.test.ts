@@ -26,12 +26,17 @@ describe('赔付率 (earned_claim_ratio) SQL 关键词', () => {
     expect(sql).not.toMatch(/SUM\s*\(\s*settled_amount\s*\)/i);
   });
 
-  it('分母含 exposure_days（CTE 预计算满期天数）', () => {
-    expect(sql).toContain('exposure_days');
+  it('分母含 earned_days + policy_term（CTE 预计算闰年感知满期因子）', () => {
+    expect(sql).toContain('earned_days');
+    expect(sql).toContain('policy_term');
+  });
+
+  it('分母不硬编码 / 365（闰年感知：必须用 policy_term）', () => {
+    expect(sql).not.toMatch(/\/\s*365(?:\.0)?/);
   });
 
   it('分母非裸 SUM(premium) 独立做除数', () => {
-    // 正确：SUM(premium * exposure_days / 365.0)
+    // 正确：SUM(premium * earned_days / policy_term)
     // 错误：SUM(reported_claims) / SUM(premium) — 缺少满期因子
     expect(sql).not.toMatch(
       /SUM\s*\(\s*reported_claims\s*\)\s*\*?\s*100\.?0?\s*\/\s*SUM\s*\(\s*premium\s*\)\s/i,

@@ -4,7 +4,7 @@
  * 来源：server/src/sql/cost.ts
  *
  * 注意：这些 SQL 片段是"指标表达式"级别，
- * 需要在 CTE（policy_exposure）已计算 exposure_days 后使用。
+ * 需要在 CTE（policy_exposure）已计算 earned_days + policy_term 后使用。
  * cost.ts 中的完整查询（含 CTE）属于 L4 组合查询，不在此注册。
  *
  * 这里注册的是各指标的 SELECT 表达式片段。
@@ -434,7 +434,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     },
     sql: {
       expression: '-- L4 计算，fixed_cost_amount / earned_premium',
-      requiredColumns: ['premium', 'exposure_days', '险类', '三级机构'],
+      requiredColumns: ['premium', 'earned_days', 'policy_term', '险类', '三级机构'],
       notes: 'L4 计算。由诊断脚本 diagnose_vehicle.py 自动输出。率值必须从绝对值计算，禁止率值相加',
     },
     display: {
@@ -467,7 +467,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     },
     sql: {
       expression: '-- L4 计算',
-      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days', '险类', '三级机构'],
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term', '险类', '三级机构'],
       notes: 'L4 计算。绝对值相加，诊断脚本自动输出',
     },
     display: {
@@ -500,7 +500,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     },
     sql: {
       expression: '-- L4 计算，combined_cost_amount / earned_premium',
-      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days', '险类', '三级机构'],
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term', '险类', '三级机构'],
       notes: 'L4 计算。≤100% 盈利，>100% 亏损。亮灯：≤99% 🟢 / 99-101% 🔵 / 101-105% 🟡 / >105% 🔴',
     },
     display: {
@@ -536,7 +536,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     },
     sql: {
       expression: '-- L4 计算，earned_premium - combined_cost_amount',
-      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days', '险类', '三级机构'],
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term', '险类', '三级机构'],
       notes: 'L4 计算。真实盈亏 = 边际贡献额 - 固定成本额。与边际贡献额并存：边际贡献额反映承保品质，利润额反映真实盈亏',
     },
     display: {

@@ -52,14 +52,6 @@ WITH policy_exposure AS (
       ),
       DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
     ) AS earned_days,
-    -- 兼容旧引用
-    LEAST(
-      GREATEST(
-        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
-        0
-      ),
-      365
-    ) AS exposure_days,
     COALESCE(c.claim_cases, 0) AS claim_cases,
     COALESCE(c.reported_claims, 0) AS reported_claims
   FROM PolicyFact p
@@ -160,13 +152,6 @@ WITH policy_exposure AS (
       ),
       DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
     ) AS earned_days,
-    LEAST(
-      GREATEST(
-        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
-        0
-      ),
-      365
-    ) AS exposure_days,
     COALESCE(c.claim_cases, 0) AS claim_cases,
     COALESCE(c.reported_claims, 0) AS reported_claims,
     COALESCE(p.fee_amount, 0) AS fee_amount
@@ -234,13 +219,6 @@ WITH policy_exposure AS (
       ),
       DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
     ) AS earned_days,
-    LEAST(
-      GREATEST(
-        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
-        0
-      ),
-      365
-    ) AS exposure_days,
     COALESCE(c.reported_claims, 0) AS reported_claims,
     COALESCE(p.fee_amount, 0) AS fee_amount
   FROM PolicyFact p
