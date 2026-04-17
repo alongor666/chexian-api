@@ -1368,6 +1368,7 @@ function checkDataDrift() {
     { label: 'fact/cross_sell', rel: '数据管理/warehouse/fact/cross_sell' },
     { label: 'fact/customer_flow', rel: '数据管理/warehouse/fact/customer_flow' },
     { label: 'dim/repair', rel: '数据管理/warehouse/dim/repair' },
+    { label: 'dim/plate_region', rel: '数据管理/warehouse/dim/plate_region' },
   ];
 
   const currentFiles = {};
