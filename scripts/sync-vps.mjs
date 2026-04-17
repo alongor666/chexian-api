@@ -15,6 +15,7 @@
  *   数据管理/warehouse/dim/plan/                  →  data/dim/plan/
  *   数据管理/warehouse/dim/brand/                 →  data/dim/brand/
  *   数据管理/warehouse/dim/repair/                →  data/dim/repair/
+ *   数据管理/warehouse/dim/plate_region/          →  data/dim/plate_region/
  *   数据管理/warehouse/fact/renewal/              →  data/fact/renewal/
  *   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/
  *   数据管理/warehouse/fact/claims_detail/        →  data/fact/claims_detail/
@@ -56,6 +57,7 @@ const LOCAL_CLAIMS_DETAIL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/clai
 const LOCAL_CROSS_SELL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/cross_sell');
 const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
+const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_region');
 const LOCAL_RENEWAL_UNIVERSE_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_universe');
 const LOCAL_PATROL_REPORTS_DIR = join(ROOT_DIR, '数据管理/patrol_reports');
 const LOCAL_SNAPSHOTS_DIR = join(ROOT_DIR, '数据管理/warehouse/snapshots');
@@ -448,6 +450,7 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${runConfig.remoteDir}/fact/cross_sell`,       critical: false },
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${runConfig.remoteDir}/fact/customer_flow`,    critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${runConfig.remoteDir}/dim/repair`,            critical: false },
+    { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${runConfig.remoteDir}/dim/plate_region`,       critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${runConfig.remoteDir}/patrol_reports`,         critical: false },
     { label: 'snapshots',           local: LOCAL_SNAPSHOTS_DIR,          remote: `${runConfig.remoteDir}/snapshots`,              critical: false },
   ];
@@ -502,6 +505,7 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${remote}/fact/cross_sell`,       critical: false },
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
+    { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
     { label: 'fact/renewal_universe', local: LOCAL_RENEWAL_UNIVERSE_DIR, remote: `${remote}/fact/renewal_universe`, critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,   remote: `${remote}/patrol_reports`,         critical: false },
     { label: 'snapshots',            local: LOCAL_SNAPSHOTS_DIR,        remote: `${remote}/snapshots`,              critical: false },
@@ -580,6 +584,7 @@ function writeSyncManifest() {
     { label: 'fact/cross_sell', path: LOCAL_CROSS_SELL_DIR },
     { label: 'fact/customer_flow', path: LOCAL_CUSTOMER_FLOW_DIR },
     { label: 'dim/repair', path: LOCAL_REPAIR_DIR },
+    { label: 'dim/plate_region', path: LOCAL_PLATE_REGION_DIR },
     { label: 'patrol_reports', path: LOCAL_PATROL_REPORTS_DIR },
   ];
 
