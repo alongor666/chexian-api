@@ -54,7 +54,7 @@ export const RepairShopDrawer: React.FC<Props> = ({ shop, timeWindow, onClose })
       apiClient.getRepairLocalResource({
         shopCode,
         timeWindow,
-      }) as Promise<{ success: boolean; data: LocalResourceRow[] }>,
+      }) as Promise<LocalResourceRow[]>,
     enabled: Boolean(shopCode) && shop?.coop_tier !== 'none_shadow',
   });
 
@@ -64,15 +64,15 @@ export const RepairShopDrawer: React.FC<Props> = ({ shop, timeWindow, onClose })
       apiClient.getRepairToPremium({
         shopCode,
         timeWindow,
-      }) as Promise<{ success: boolean; data: ToPremiumRow[] }>,
+      }) as Promise<ToPremiumRow[]>,
     enabled: Boolean(shopCode) && shop?.coop_tier !== 'none_shadow',
   });
 
   if (!shop) return null;
 
   const tier = TIER_BADGE[shop.coop_tier] ?? TIER_BADGE.none;
-  const localRow = (localRes?.data ?? []).find(r => r.shop_code === shopCode);
-  const toPRow = (toPremium?.data ?? []).find(r => r.shop_code === shopCode);
+  const localRow = (localRes ?? []).find(r => r.shop_code === shopCode);
+  const toPRow = (toPremium ?? []).find(r => r.shop_code === shopCode);
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">

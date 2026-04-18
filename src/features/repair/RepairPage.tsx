@@ -57,39 +57,33 @@ export const RepairPage: React.FC = () => {
 
   const { data: metadata } = useQuery({
     queryKey: ['repair-metadata'],
-    queryFn: () => apiClient.getRepairMetadata() as Promise<{ success: boolean; data: RepairMetadata }>,
+    queryFn: () => apiClient.getRepairMetadata() as Promise<RepairMetadata>,
   });
 
   const { data: coopTierData } = useQuery({
     queryKey: ['repair-coop-tier', params],
-    queryFn: () =>
-      apiClient.getRepairCoopTier(params) as Promise<{ success: boolean; data: CoopTierRow[] }>,
+    queryFn: () => apiClient.getRepairCoopTier(params) as Promise<CoopTierRow[]>,
   });
 
   const { data: scatterData, isLoading: scatterLoading } = useQuery({
     queryKey: ['repair-scatter', params],
-    queryFn: () =>
-      apiClient.getRepairScatter(params) as Promise<{
-        success: boolean;
-        data: ScatterShopPoint[];
-      }>,
+    queryFn: () => apiClient.getRepairScatter(params) as Promise<ScatterShopPoint[]>,
   });
 
   const { data: toPremiumAll } = useQuery({
     queryKey: ['repair-to-premium-all', params],
     queryFn: () =>
-      apiClient.getRepairToPremium(params) as Promise<{
-        success: boolean;
-        data: Array<{
+      apiClient.getRepairToPremium(params) as Promise<
+        Array<{
           damage_amount: number;
           net_premium: number;
           repair_to_premium_ratio: number | null;
-        }>;
-      }>,
+        }>
+      >,
   });
 
   // KPI 计算
-  const tierRows = coopTierData?.data ?? [];
+  const tierRows = coopTierData ?? [];
   const findTier = (t: string) => tierRows.find(r => r.coop_tier === t) ?? {
     shop_count: 0,
     damage_amount: 0,
@@ -100,12 +94,12 @@ export const RepairPage: React.FC = () => {
   const noneRow = findTier('none');
   const shadowRow = findTier('none_shadow');
 
-  const toPRows = toPremiumAll?.data ?? [];
+  const toPRows = toPremiumAll ?? [];
   const totalDamage = toPRows.reduce((s, r) => s + (r.damage_amount ?? 0), 0);
   const totalPremium = toPRows.reduce((s, r) => s + (r.net_premium ?? 0), 0);
   const overallRatio = totalPremium > 0 ? totalDamage / totalPremium : null;
 
-  const orgs = metadata?.data?.orgs ?? [];
+  const orgs = metadata?.orgs ?? [];
 
   return (
     <div className="space-y-4">
@@ -202,7 +196,7 @@ export const RepairPage: React.FC = () => {
 
       {/* 区县×机构散点 */}
       <RepairScatter
-        data={scatterData?.data ?? []}
+        data={scatterData ?? []}
         loading={scatterLoading}
         onPointClick={shop => setSelectedShop(shop)}
       />
