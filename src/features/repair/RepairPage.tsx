@@ -1,147 +1,237 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
-import { cardStyles, textStyles, tableStyles } from '@/shared/styles';
-import { formatPremiumWan, formatPercent, formatCount } from '@/shared/utils/formatters';
-import { cn } from '@/shared/styles';
+import {
+  cardStyles,
+  textStyles,
+  buttonStyles,
+  colorClasses,
+  cn,
+} from '@/shared/styles';
+import { formatPremiumWan, formatCount } from '@/shared/utils/formatters';
+import { RepairScatter, type ScatterShopPoint } from './components/RepairScatter';
+import { RepairShopDrawer } from './components/RepairShopDrawer';
+import { RepairDiversionList } from './components/RepairDiversionList';
 
-interface RepairOverview {
-  org_level_3: string;
+type TimeWindow = 'ytd' | 'rolling12' | 'all';
+type CoopTierFilter = '' | 'active' | 'past' | 'none';
+
+interface CoopTierRow {
+  coop_tier: 'active' | 'past' | 'none' | 'none_shadow';
   shop_count: number;
-  shop_4s_count: number;
-  active_count: number;
-  total_damage_amount: number;
-  avg_discount_rate: number;
-  total_net_premium: number;
+  damage_amount: number;
+  net_premium: number;
 }
 
-interface RepairStatus {
-  cooperation_status: string;
-  shop_count: number;
-  total_net_premium: number;
+interface RepairMetadata {
+  orgs: string[];
+  statuses: string[];
+  total_shops: number;
 }
+
+const TIME_OPTIONS: { value: TimeWindow; label: string }[] = [
+  { value: 'ytd', label: '本年度' },
+  { value: 'rolling12', label: '滚动12月' },
+  { value: 'all', label: '全部' },
+];
+
+const TIER_TAB: { value: CoopTierFilter; label: string }[] = [
+  { value: '', label: '全部状态' },
+  { value: 'active', label: '已合作' },
+  { value: 'past', label: '曾合作' },
+  { value: 'none', label: '未合作' },
+];
 
 export const RepairPage: React.FC = () => {
   const [orgFilter, setOrgFilter] = useState<string>('');
-  const [is4sFilter, setIs4sFilter] = useState<string>('');
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>('ytd');
+  const [coopTier, setCoopTier] = useState<CoopTierFilter>('');
+  const [selectedShop, setSelectedShop] = useState<ScatterShopPoint | null>(null);
 
   const params = useMemo(() => {
-    const p: Record<string, string> = {};
+    const p: Record<string, string> = { timeWindow };
     if (orgFilter) p.orgName = orgFilter;
-    if (is4sFilter) p.is4sShop = is4sFilter;
+    if (coopTier) p.coopTier = coopTier;
     return p;
-  }, [orgFilter, is4sFilter]);
+  }, [orgFilter, timeWindow, coopTier]);
 
-  const { data: overview, isLoading: loadingOverview } = useQuery({
-    queryKey: ['repair-overview', params],
-    queryFn: () => apiClient.getRepairOverview(params) as Promise<RepairOverview[]>,
-  });
-  const { data: statusData } = useQuery({
-    queryKey: ['repair-status', params],
-    queryFn: () => apiClient.getRepairStatus(params) as Promise<RepairStatus[]>,
-  });
   const { data: metadata } = useQuery({
     queryKey: ['repair-metadata'],
-    queryFn: () => apiClient.getRepairMetadata() as Promise<{ orgs: string[]; statuses: string[]; total_shops: number }>,
+    queryFn: () => apiClient.getRepairMetadata() as Promise<{ success: boolean; data: RepairMetadata }>,
   });
 
-  const totalShops = overview?.reduce((s, r) => s + r.shop_count, 0) ?? 0;
-  const total4s = overview?.reduce((s, r) => s + r.shop_4s_count, 0) ?? 0;
-  const totalActive = overview?.reduce((s, r) => s + r.active_count, 0) ?? 0;
-  const totalPremium = overview?.reduce((s, r) => s + r.total_net_premium, 0) ?? 0;
+  const { data: coopTierData } = useQuery({
+    queryKey: ['repair-coop-tier', params],
+    queryFn: () =>
+      apiClient.getRepairCoopTier(params) as Promise<{ success: boolean; data: CoopTierRow[] }>,
+  });
+
+  const { data: scatterData, isLoading: scatterLoading } = useQuery({
+    queryKey: ['repair-scatter', params],
+    queryFn: () =>
+      apiClient.getRepairScatter(params) as Promise<{
+        success: boolean;
+        data: ScatterShopPoint[];
+      }>,
+  });
+
+  const { data: toPremiumAll } = useQuery({
+    queryKey: ['repair-to-premium-all', params],
+    queryFn: () =>
+      apiClient.getRepairToPremium(params) as Promise<{
+        success: boolean;
+        data: Array<{
+          damage_amount: number;
+          net_premium: number;
+          repair_to_premium_ratio: number | null;
+        }>;
+      }>,
+  });
+
+  // KPI 计算
+  const tierRows = coopTierData?.data ?? [];
+  const findTier = (t: string) => tierRows.find(r => r.coop_tier === t) ?? {
+    shop_count: 0,
+    damage_amount: 0,
+    net_premium: 0,
+  };
+  const activeRow = findTier('active');
+  const pastRow = findTier('past');
+  const noneRow = findTier('none');
+  const shadowRow = findTier('none_shadow');
+
+  const toPRows = toPremiumAll?.data ?? [];
+  const totalDamage = toPRows.reduce((s, r) => s + (r.damage_amount ?? 0), 0);
+  const totalPremium = toPRows.reduce((s, r) => s + (r.net_premium ?? 0), 0);
+  const overallRatio = totalPremium > 0 ? totalDamage / totalPremium : null;
+
+  const orgs = metadata?.data?.orgs ?? [];
 
   return (
     <div className="space-y-4">
-      {/* 标题 + 筛选 */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <h2 className={textStyles.titleMedium}>维修资源分析</h2>
-        <select className="border border-neutral-200 rounded px-3 py-1.5 text-sm" value={orgFilter} onChange={e => setOrgFilter(e.target.value)}>
-          <option value="">全部机构</option>
-          {(metadata?.orgs ?? []).map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <select className="border border-neutral-200 rounded px-3 py-1.5 text-sm" value={is4sFilter} onChange={e => setIs4sFilter(e.target.value)}>
-          <option value="">全部类型</option>
-          <option value="true">4S店</option>
-          <option value="false">非4S店</option>
-        </select>
+      {/* 标题栏 */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className={textStyles.titleMedium}>维修资源分析</h2>
+          <p className={cn(textStyles.caption, 'mt-1')}>
+            合作网点分布 · 本地资源占比 · 导流目标识别
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            className="border border-neutral-200 rounded px-3 py-1.5 text-sm"
+            value={orgFilter}
+            onChange={e => setOrgFilter(e.target.value)}
+          >
+            <option value="">全部机构</option>
+            {orgs.map(o => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+          <div className="flex items-center rounded border border-neutral-200 overflow-hidden">
+            {TIME_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setTimeWindow(opt.value)}
+                className={cn(
+                  'px-3 py-1.5 text-xs',
+                  timeWindow === opt.value
+                    ? 'bg-primary text-white'
+                    : 'bg-white text-neutral-700 hover:bg-neutral-50',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* KPI 卡片 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: '合作修理厂', value: formatCount(totalShops) },
-          { label: '4S店', value: formatCount(total4s) },
-          { label: '生效合作', value: formatCount(totalActive) },
-          { label: '签单净保费', value: formatPremiumWan(totalPremium), unit: '万' },
-        ].map(kpi => (
-          <div key={kpi.label} className={cardStyles.compact}>
-            <div className={textStyles.caption}>{kpi.label}</div>
-            <div className={cn(textStyles.titleLarge, 'mt-1')}>{kpi.value}{kpi.unit && <span className={textStyles.caption}> {kpi.unit}</span>}</div>
-          </div>
+      {/* KPI 区（三态网点 + 修保比） */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <KpiCell
+          label="已合作网点"
+          value={formatCount(activeRow.shop_count)}
+          sub={`${formatPremiumWan(activeRow.net_premium)} 万保费`}
+          accent={colorClasses.text.success}
+        />
+        <KpiCell
+          label="曾合作网点"
+          value={formatCount(pastRow.shop_count)}
+          sub={`${formatPremiumWan(pastRow.net_premium)} 万保费`}
+          accent={colorClasses.text.warningDark}
+        />
+        <KpiCell
+          label="未合作网点"
+          value={formatCount(noneRow.shop_count)}
+          sub={`${formatPremiumWan(noneRow.net_premium)} 万保费`}
+          accent={colorClasses.text.neutralMuted}
+        />
+        <KpiCell
+          label="影子网点"
+          value={formatCount(shadowRow.shop_count)}
+          sub="仅理赔可见"
+          accent={colorClasses.text.danger}
+        />
+        <KpiCell
+          label="整体修保比"
+          value={overallRatio != null ? overallRatio.toFixed(3) : '—'}
+          sub={`${formatPremiumWan(totalDamage)} 万 / ${formatPremiumWan(totalPremium)} 万`}
+          accent={colorClasses.text.primaryDark}
+        />
+      </div>
+
+      {/* 三态过滤 Tab */}
+      <div className="flex items-center gap-2">
+        {TIER_TAB.map(t => (
+          <button
+            key={t.value || 'all'}
+            onClick={() => setCoopTier(t.value)}
+            className={cn(
+              buttonStyles.base,
+              buttonStyles.sizeSmall,
+              coopTier === t.value ? buttonStyles.primary : buttonStyles.secondary,
+            )}
+          >
+            {t.label}
+          </button>
         ))}
       </div>
 
-      {/* 机构汇总表 */}
-      <div className={cardStyles.base}>
-        <h3 className={textStyles.titleSmall}>机构维修资源汇总</h3>
-        {loadingOverview ? (
-          <div className={cn(textStyles.caption, 'py-8 text-center')}>加载中...</div>
-        ) : (
-          <div className={tableStyles.container}>
-            <table className="w-full">
-              <thead className={tableStyles.header}>
-                <tr>
-                  <th className={tableStyles.headerCell}>机构</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>修理厂数</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>4S店数</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>生效合作</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>核损金额(万)</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>换件折扣率</th>
-                  <th className={cn(tableStyles.headerCell, 'text-right')}>净保费(万)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(overview ?? []).map(row => (
-                  <tr key={row.org_level_3} className="border-b border-neutral-100">
-                    <td className={tableStyles.cell}>{row.org_level_3 ?? '未知'}</td>
-                    <td className={tableStyles.cellNumeric}>{formatCount(row.shop_count)}</td>
-                    <td className={tableStyles.cellNumeric}>{formatCount(row.shop_4s_count)}</td>
-                    <td className={tableStyles.cellNumeric}>{formatCount(row.active_count)}</td>
-                    <td className={tableStyles.cellNumeric}>{formatPremiumWan(row.total_damage_amount)}</td>
-                    <td className={tableStyles.cellNumeric}>{formatPercent(row.avg_discount_rate * 100)}</td>
-                    <td className={tableStyles.cellNumeric}>{formatPremiumWan(row.total_net_premium)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* 区县×机构散点 */}
+      <RepairScatter
+        data={scatterData?.data ?? []}
+        loading={scatterLoading}
+        onPointClick={shop => setSelectedShop(shop)}
+      />
 
-      {/* 合作状态分布 */}
-      <div className={cardStyles.base}>
-        <h3 className={textStyles.titleSmall}>合作状态分布</h3>
-        <div className={tableStyles.container}>
-          <table className="w-full">
-            <thead className={tableStyles.header}>
-              <tr>
-                <th className={tableStyles.headerCell}>合作状态</th>
-                <th className={cn(tableStyles.headerCell, 'text-right')}>修理厂数</th>
-                <th className={cn(tableStyles.headerCell, 'text-right')}>净保费(万)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(statusData ?? []).map(row => (
-                <tr key={row.cooperation_status} className="border-b border-neutral-100">
-                  <td className={tableStyles.cell}>{row.cooperation_status ?? '未知'}</td>
-                  <td className={tableStyles.cellNumeric}>{formatCount(row.shop_count)}</td>
-                  <td className={tableStyles.cellNumeric}>{formatPremiumWan(row.total_net_premium)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* 导流清单 */}
+      <RepairDiversionList orgName={orgFilter || undefined} timeWindow={timeWindow} />
+
+      {/* 网点详情抽屉 */}
+      <RepairShopDrawer
+        shop={selectedShop}
+        timeWindow={timeWindow}
+        onClose={() => setSelectedShop(null)}
+      />
     </div>
   );
 };
+
+interface KpiCellProps {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: string;
+}
+
+const KpiCell: React.FC<KpiCellProps> = ({ label, value, sub, accent }) => (
+  <div className={cardStyles.compact}>
+    <div className={textStyles.caption}>{label}</div>
+    <div className={cn('text-2xl font-kpi tabular-nums mt-1', accent)}>{value}</div>
+    {sub && <div className={cn(textStyles.caption, 'mt-0.5')}>{sub}</div>}
+  </div>
+);
+

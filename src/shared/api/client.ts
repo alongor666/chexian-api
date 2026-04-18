@@ -943,6 +943,41 @@ class ApiClient {
     return this.request<any>(`/query/${QUERY_ROUTES.REPAIR.METADATA}`);
   }
 
+  // ── 维修资源 v2（2026-04-18 重设计）──
+
+  async getRepairCity(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.CITY}${query ? `?${query}` : ''}`);
+  }
+  async getRepairChannel(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.CHANNEL}${query ? `?${query}` : ''}`);
+  }
+  async getRepairCoopTier(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.COOP_TIER}${query ? `?${query}` : ''}`);
+  }
+  async getRepairScatter(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.SCATTER}${query ? `?${query}` : ''}`);
+  }
+  async getRepairLocalResource(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.LOCAL_RESOURCE}${query ? `?${query}` : ''}`);
+  }
+  async getRepairToPremium(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.TO_PREMIUM}${query ? `?${query}` : ''}`);
+  }
+  async getRepairDiversionList(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.DIVERSION_LIST}${query ? `?${query}` : ''}`);
+  }
+  async getRepairOrphanShops(params?: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.ORPHAN_SHOPS}${query ? `?${query}` : ''}`);
+  }
+
   // ── 客户来源去向 ──
 
   async getCustomerFlowSummary(params?: Record<string, string>) {
