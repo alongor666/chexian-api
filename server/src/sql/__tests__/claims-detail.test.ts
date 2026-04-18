@@ -510,11 +510,11 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).toContain('c.report_time < cw.observation_end');
   });
 
-  it('赔付金额统一口径：settled_amount + settled_fee + pending_amount', () => {
+  it('赔付金额统一口径：settled_amount + pending_amount（settled_fee 已并入 settled_amount，2026-04-18 移除）', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
     expect(sql).toContain('c.settled_amount');
-    expect(sql).toContain('c.settled_fee');
     expect(sql).toContain('c.pending_amount');
+    expect(sql).not.toContain('c.settled_fee');
   });
 
   it('全局截止时间用 COALESCE(MAX(report_time), CURRENT_DATE) 防空值', () => {

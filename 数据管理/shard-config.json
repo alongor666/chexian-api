@@ -41,6 +41,6 @@
     "04_quotes": "04_报价清单*.xlsx",
     "05_renewal": "05_续保清单_*.xlsx",
     "06_brand": "06_厂牌明细_*.xlsx",
-    "07_repair": "07_维修资源_*.xlsx"
+    "07_repair": "07_维修资源*.xlsx"
   }
 }

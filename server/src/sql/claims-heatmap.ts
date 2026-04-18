@@ -322,7 +322,7 @@ export function generateClaimsHeatmapQuery(
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         ap.period_idx,
         c.claim_no,
-        COALESCE(c.settled_amount, 0) + COALESCE(c.settled_fee, 0) + COALESCE(c.pending_amount, 0) AS claim_amount
+        COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0) AS claim_amount
       FROM ClaimsDetail c
       JOIN PolicyFact p ON c.policy_no = p.policy_no
       ${teamJoin}
@@ -392,7 +392,7 @@ export function generateClaimsHeatmapQuery(
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         ap.period_idx,
         c.claim_no,
-        COALESCE(c.settled_amount, 0) + COALESCE(c.settled_fee, 0) + COALESCE(c.pending_amount, 0) AS claim_amount
+        COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0) AS claim_amount
       FROM ClaimsDetail c
       JOIN PolicyFact p ON c.policy_no = p.policy_no
       ${teamJoin}

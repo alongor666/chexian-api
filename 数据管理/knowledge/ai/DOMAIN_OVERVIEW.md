@@ -70,7 +70,7 @@
 域                Excel源              ETL脚本                    Parquet输出                    DuckDB关系               消费的SQL生成器
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 premium           01_签单清单_*.xlsx    transform.py               policy/current/*.parquet       PolicyFact(Realtime)     kpi/cost/trend/growth/...
-claims_detail     车险报立结案清单*.xlsx convert_claims_detail.py   claims_detail/latest.parquet   ClaimsDetail+ClaimsAgg   claims-detail.ts
+claims_detail     02_理赔明细_*.xlsx    convert_claims_detail.py   claims_detail/claims_YYYY.parquet (年度分区) ClaimsDetail+ClaimsAgg   claims-detail.ts
 cross_sell        03_交叉销售_*.xlsx    convert_cross_sell.py      cross_sell/latest.parquet       CrossSellFact→DailyAgg   cross-sell*.ts
 quotes_v2         04_报价清单_*.xlsx    convert_quotes_v2.py       quotes/latest.parquet          QuoteConversion          quote-conversion.ts
 renewal_v2        05_续保清单_*.xlsx    convert_renewal.py         renewal/latest.parquet         PolicyFactRenewal        renewal*.ts

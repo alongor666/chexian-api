@@ -11,9 +11,9 @@
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-04-17",
+      "last_updated": "2026-04-18",
       "data_range": "2021-01-01 ~ 2026-04-07",
-      "row_count": 2524553,
+      "row_count": 2526164,
       "field_count": 53,
       "key_fields": [
         "保单号",
@@ -46,10 +46,10 @@
       "etl_script": "pipelines/convert_claims_detail.py",
       "output": "warehouse/fact/claims_detail/claims_*.parquet",
       "update_cadence": "daily_cdc_partition",
-      "last_updated": "2026-04-16",
+      "last_updated": "2026-04-18",
       "data_range": "2019-01-01 ~ 2026-04-03",
-      "row_count": 279942,
-      "field_count": 36,
+      "row_count": 280241,
+      "field_count": 38,
       "key_fields": [
         "claim_no",
         "policy_no",
@@ -71,7 +71,7 @@
         "/api/query/claims-detail/loss-ratio-development"
       ],
       "frontend_page": "claims-detail",
-      "notes": "唯一赔付数据源。赔案级明细，JOIN PolicyFact via policy_no。ClaimsAgg TABLE 由服务端从本域动态聚合生成，不依赖预计算文件。claim_status/is_bodily_injury 由 ETL 派生"
+      "notes": "唯一赔付数据源。赔案级明细，JOIN PolicyFact via policy_no。ClaimsAgg TABLE 由服务端从本域动态聚合生成，不依赖预计算文件。claim_status/is_bodily_injury 由 ETL 派生。⚠️ 2026-04-18 源 schema 变更：2025+ 新源移除「已决费用」(settled_fee)、新增「标的汽修厂」(subject_repair)；2021-2024 旧源保留原 schema（已存年度分区不动）。ETL 统一补齐两列为 NULL，CDC 合并使用 UNION ALL BY NAME 兼容 schema 漂移。服务端 union_by_name=true 已处理跨年度分区差异。"
     },
     {
       "id": "quotes_conversion",
@@ -82,9 +82,9 @@
       "etl_script": "pipelines/quote_etl.py",
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
-      "last_updated": "2026-04-16",
+      "last_updated": "2026-04-18",
       "data_range": "2025-12-02 ~ 2026-04-09",
-      "row_count": 3629061,
+      "row_count": 3651609,
       "field_count": 33,
       "key_fields": [
         "quote_time",
@@ -322,8 +322,8 @@
       ],
       "frontend_page": "repair",
       "notes": "维修厂合作数据，12列，含核损金额/换件折扣率/合作状态",
-      "last_updated": "2026-04-14",
-      "row_count": 191556,
+      "last_updated": "2026-04-18",
+      "row_count": 1647,
       "field_count": 12
     },
     {

@@ -274,10 +274,11 @@ def do_update(args):
             # 保留 old 中不在 new 中的行（这些行的报案时间不在本次更新范围内）
             old_cnt = duckdb.sql(f"SELECT COUNT(*) FROM read_parquet('{existing_path}')").fetchone()[0]
 
+            # UNION ALL BY NAME 兼容新旧 schema 漂移（2025+ 无 settled_fee，新增 subject_repair）
             duckdb.sql(f"""
                 COPY (
                     SELECT * FROM read_parquet('{input_path}') WHERE insurance_year = {year}
-                    UNION ALL
+                    UNION ALL BY NAME
                     SELECT * FROM read_parquet('{existing_path}')
                     WHERE claim_no NOT IN (
                         SELECT claim_no FROM read_parquet('{input_path}') WHERE insurance_year = {year}

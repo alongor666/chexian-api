@@ -24,7 +24,7 @@ if _DATA_ROOT not in sys.path:
 # ── 字段映射：中文 → 英文 snake_case ──
 
 CN_TO_EN = {
-    # ── 按新源（02_理赔明细）列序排列，共 34 列 ──
+    # ── 前后兼容：2021-2024 旧源含「已决费用」无「标的汽修厂」；2025+ 新源反之 ──
     '报案时间': 'report_time',
     '赔案号': 'claim_no',
     '报案号': 'report_no',
@@ -47,6 +47,7 @@ CN_TO_EN = {
     '支付时间': 'payment_time',
     '案件类型': 'case_type',
     '现场类型': 'scene_type',
+    '标的汽修厂': 'subject_repair',          # 2025+ 新增（标的车维修厂）
     '三者汽修厂': 'third_party_repair',
     '是否追偿': 'is_recovery',
     '立案金额': 'reserve_amount',
@@ -55,7 +56,7 @@ CN_TO_EN = {
     '立案金额-物': 'reserve_property_amount',
     '业务结案赔款-车物': 'settled_vehicle_amount',
     '业务结案赔款-人': 'settled_bodily_amount',
-    '已决费用': 'settled_fee',
+    '已决费用': 'settled_fee',                # 2021-2024 旧源，2025+ 已移除
     '责任系数': 'liability_ratio',
     '已决金额': 'settled_amount',
     '未决金额': 'pending_amount',
@@ -176,6 +177,14 @@ def main():
         print(f"   ⚠ 未映射列（已丢弃）: {extra_cols}")
         df = df[[c for c in df.columns if c in CN_TO_EN.values()]]
     print(f"   列名重命名: {len(rename_cols)}/{len(CN_TO_EN)} 列")
+
+    # ── 前后兼容：确保双 schema 列始终存在（缺失补 NULL） ──
+    # 2021-2024 旧源有 settled_fee 无 subject_repair；2025+ 反之。
+    # 输出 parquet 统一包含两列，避免跨年度分区合并时 schema 漂移。
+    for legacy_col in ('settled_fee', 'subject_repair'):
+        if legacy_col not in df.columns:
+            df[legacy_col] = pd.NA
+            print(f"   补齐缺失列: {legacy_col} = NULL（源文件无此字段）")
 
     # ── 类型转换 ──
 
