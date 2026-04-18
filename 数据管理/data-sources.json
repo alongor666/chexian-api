@@ -14,7 +14,7 @@
       "last_updated": "2026-04-18",
       "data_range": "2021-01-01 ~ 2026-04-07",
       "row_count": 2526164,
-      "field_count": 53,
+      "field_count": 41,
       "key_fields": [
         "保单号",
         "签单日期",
@@ -49,7 +49,7 @@
       "last_updated": "2026-04-18",
       "data_range": "2019-01-01 ~ 2026-04-03",
       "row_count": 280241,
-      "field_count": 38,
+      "field_count": 39,
       "key_fields": [
         "claim_no",
         "policy_no",
@@ -91,7 +91,7 @@
       "last_updated": "2026-04-18",
       "data_range": "2025-12-02 ~ 2026-04-09",
       "row_count": 3651609,
-      "field_count": 33,
+      "field_count": 32,
       "key_fields": [
         "quote_time",
         "org_level_3",
@@ -125,10 +125,10 @@
       "etl_script": "pipelines/diagnose_vehicle.py等",
       "output": "warehouse/fact/renewal/renewal_funnel_*.parquet",
       "update_cadence": "with_quote_date",
-      "last_updated": "2026-04-14",
+      "last_updated": "2026-04-18",
       "data_range": "2025-01-01 ~ 2026-03-30",
-      "row_count": 119636,
-      "field_count": 10,
+      "row_count": 35011,
+      "field_count": 20,
       "key_fields": [
         "org_level_3",
         "policy_no",
@@ -188,9 +188,9 @@
       },
       "output": "warehouse/dim/brand/latest.parquet",
       "update_cadence": "with_premium",
-      "last_updated": "2026-04-03",
-      "row_count": 37810,
-      "field_count": 5,
+      "last_updated": "2026-04-18",
+      "row_count": 371359,
+      "field_count": 15,
       "key_fields": [
         "厂牌车型",
         "品牌",
@@ -257,6 +257,7 @@
         "input_glob": "03_交叉销售_*.xlsx",
         "merge_dedup_key": "policy_no",
         "merge_order_by": "policy_date DESC NULLS LAST",
+        "merge_with_history": true,
         "archive_prefix": "cross_sell_latest"
       },
       "output": "warehouse/fact/cross_sell/latest.parquet",
@@ -277,8 +278,8 @@
       ],
       "frontend_page": "specialty (tab=cross-sell)",
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重",
-      "last_updated": "2026-04-14",
-      "row_count": 403709,
+      "last_updated": "2026-04-18",
+      "row_count": 404651,
       "field_count": 9
     },
     {
@@ -319,7 +320,10 @@
         "/api/query/renewal-drilldown"
       ],
       "frontend_page": "specialty (tab=renewal)",
-      "notes": "续保跟踪清单，9列+1派生(is_renewed)，替换旧版renewal_funnel"
+      "notes": "续保跟踪清单，9列+1派生(is_renewed)，替换旧版renewal_funnel",
+      "last_updated": "2026-04-18",
+      "row_count": 119636,
+      "field_count": 10
     },
     {
       "id": "repair_resource",
@@ -385,7 +389,7 @@
       ],
       "frontend_page": "customer-flow",
       "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知",
-      "last_updated": "2026-04-14",
+      "last_updated": "2026-04-18",
       "row_count": 981475,
       "field_count": 7
     }

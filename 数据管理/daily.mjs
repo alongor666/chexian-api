@@ -288,31 +288,47 @@ function runStandardDomain(python, scriptDir, manifest) {
     runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${outputArg}"`]);
 
   } else if (input_strategy === 'multi_file_merge') {
-    if (sourceFiles.length === 1) {
-      safeConvertDomain(python, scriptPath, sourceFiles[0].path, outputAbs, archive_prefix);
+    const mergeWithHistory = trigger.merge_with_history === true;
+    const hasHistory = mergeWithHistory && existsSync(outputAbs);
+
+    const tmpDir = join(dirname(outputAbs), '_tmp');
+    ensureDir(tmpDir);
+    const tmpFiles = [];
+    for (const file of sourceFiles) {
+      const tmpPath = join(tmpDir, file.name.replace(/\.xlsx$/i, '.parquet'));
+      log('green', `▶ 转换: ${file.name}`);
+      try {
+        runPythonScript(python, scriptPath, ['-i', `"${file.path}"`, '-o', `"${tmpPath}"`]);
+      } catch (e) {
+        log('yellow', `⚠ 转换失败: ${file.name} — ${e.message?.slice(0, 100)}`);
+      }
+      if (existsSync(tmpPath)) tmpFiles.push(tmpPath);
+    }
+    if (tmpFiles.length === 0) {
+      log('red', `❌ 未生成任何 ${id} parquet`);
+      return;
+    }
+
+    // 短路：单文件 + 不合并历史 → 直接替换（避免起 DuckDB 进程）
+    if (tmpFiles.length === 1 && !hasHistory) {
+      if (existsSync(outputAbs)) {
+        const archiveDir = join(homedir(), 'chexian-archive');
+        ensureDir(archiveDir);
+        renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
+      }
+      renameSync(tmpFiles[0], outputAbs);
+      try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch (e) {}
     } else {
-      const tmpDir = join(dirname(outputAbs), '_tmp');
-      ensureDir(tmpDir);
-      const tmpFiles = [];
-      for (const file of sourceFiles) {
-        const tmpPath = join(tmpDir, file.name.replace(/\.xlsx$/i, '.parquet'));
-        log('green', `▶ 转换: ${file.name}`);
-        try {
-          runPythonScript(python, scriptPath, ['-i', `"${file.path}"`, '-o', `"${tmpPath}"`]);
-        } catch (e) {
-          log('yellow', `⚠ 转换失败: ${file.name} — ${e.message?.slice(0, 100)}`);
-        }
-        if (existsSync(tmpPath)) tmpFiles.push(tmpPath);
-      }
-      if (tmpFiles.length === 0) {
-        log('red', `❌ 未生成任何 ${id} parquet`);
-        return;
-      }
+      // merge_parquet.py dedup 合并；若 merge_with_history 则把历史 latest 加入输入
+      const mergeInputs = hasHistory ? [outputAbs, ...tmpFiles] : tmpFiles;
       const tmpOutput = outputAbs + '.tmp';
       const mergeScript = join(scriptDir, 'pipelines/merge_parquet.py');
-      log('green', `▶ 合并 ${tmpFiles.length} 个分片（按 ${merge_dedup_key} 去重）...`);
+      const desc = hasHistory
+        ? `历史 latest + ${tmpFiles.length} 增量`
+        : `${tmpFiles.length} 分片`;
+      log('green', `▶ 合并（${desc}），按 ${merge_dedup_key} 去重...`);
       runPythonScript(python, mergeScript, [
-        '-i', ...tmpFiles.map(f => `"${f}"`),
+        '-i', ...mergeInputs.map(f => `"${f}"`),
         '-o', `"${tmpOutput}"`,
         '--dedup-key', merge_dedup_key,
         '--order-by', `"${merge_order_by}"`,
@@ -450,9 +466,10 @@ function runClaimsDetail(python, scriptDir) {
     log('yellow', '  归档旧 latest.parquet → archive/');
   }
 
-  // Step 5: 统计总行数
+  // Step 5: 统计总行数 + 列数（从 parquet 实读，避免硬编码过时）
   const totalRows = getPartitionedRowCount(python, CLAIMS_DETAIL_DIR);
-  updateDataSources('claims_detail', { rowCount: totalRows, fieldCount: 38 });
+  const fieldCount = getPartitionedColumnCount(python, CLAIMS_DETAIL_DIR);
+  updateDataSources('claims_detail', { rowCount: totalRows, fieldCount });
 
   // Step 6: 显示分区状态
   try {
@@ -468,6 +485,18 @@ function getPartitionedRowCount(python, dir) {
     const globPath = join(dir, 'claims_*.parquet').replace(/\\/g, '/');
     const result = execSync(
       `"${python}" -c "import duckdb; print(duckdb.sql(\\"SELECT COUNT(*) FROM read_parquet('${globPath}')\\").fetchone()[0])"`,
+      { encoding: 'utf-8', cwd: __dirname }
+    );
+    return parseInt(result.trim(), 10);
+  } catch { return null; }
+}
+
+/** 分区 parquet 的列数（union_by_name 取 schema 并集，兼容年度分区 schema 漂移） */
+function getPartitionedColumnCount(python, dir) {
+  try {
+    const globPath = join(dir, 'claims_*.parquet').replace(/\\/g, '/');
+    const result = execSync(
+      `"${python}" -c "import duckdb; r = duckdb.sql(\\"DESCRIBE SELECT * FROM read_parquet('${globPath}', union_by_name=true) LIMIT 0\\").fetchall(); print(len(r))"`,
       { encoding: 'utf-8', cwd: __dirname }
     );
     return parseInt(result.trim(), 10);
