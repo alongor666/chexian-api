@@ -4,7 +4,7 @@
  * 来源：server/src/sql/cost.ts
  *
  * 注意：这些 SQL 片段是"指标表达式"级别，
- * 需要在 CTE（policy_exposure）已计算 exposure_days 后使用。
+ * 需要在 CTE（policy_exposure）已计算 earned_days + policy_term 后使用。
  * cost.ts 中的完整查询（含 CTE）属于 L4 组合查询，不在此注册。
  *
  * 这里注册的是各指标的 SELECT 表达式片段。
@@ -15,30 +15,30 @@ import type { MetricDefinition } from '../types.js';
 export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'earned_claim_ratio',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '满期赔付率',
     category: 'cost',
     tags: ['core', 'kpi', 'cost'],
     formula: {
-      description: '已报告赔款 / 满期保费',
+      description: '已报告赔款 / 满期保费（闰年感知）',
       numerator: 'SUM(reported_claims)',
-      denominator: 'SUM(premium * exposure_days / 365)',
+      denominator: 'SUM(premium * earned_days / policy_term)',
       unit: '%',
     },
     sql: {
       expression: `CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0
-    THEN ROUND(SUM(reported_claims) * 100.0 / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0), 2)
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
+    THEN ROUND(SUM(reported_claims) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2)
     ELSE NULL
   END AS earned_claim_ratio`,
-      requiredColumns: ['premium', 'reported_claims', 'exposure_days'],
-      notes: '赔案口径：report_time < 观察截止（MAX(report_time)），已结案(settlement_time<观察点)取settled_amount，否则取reserve_amount。保单口径：按policy_no聚合净保费>0。exposure_days = LEAST(GREATEST(DATEDIFF(day, 起保日, 截止日), 0), 365)',
+      requiredColumns: ['premium', 'reported_claims', 'earned_days', 'policy_term'],
+      notes: '赔案口径：report_time < 观察截止（MAX(report_time)），已结案(settlement_time<观察点)取settled_amount，否则取reserve_amount。保单口径：按policy_no聚合净保费>0。分母闰年感知：policy_term = DATEDIFF(起期, 起期+1年) = 365或366；earned_days = MIN(已过天数, policy_term)，退保保单截止于退保日',
     },
     display: {
       formatter: 'percent',
       label: '赔付率',
       unit: '%',
-      decimals: 2,
+      decimals: 1,
       tooltip: '满期赔付率 = 已报告赔款 / 满期保费 × 100%',
     },
     testCases: [
@@ -51,17 +51,18 @@ export const costMetrics: readonly MetricDefinition[] = [
     changelog: [
       { version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' },
       { version: '1.1.0', date: '2026-04-11', changes: '口径修正：赔案锚点改为 report_time，已决/未决按 settlement_time 分类取值，保单净保费聚合排除完全退保，截止日期改为 MAX(report_time)' },
+      { version: '2.0.0', date: '2026-04-17', changes: '铁律对齐：分母从 exposure_days/365 改为 earned_days/policy_term（闰年感知）；展示精度 2→1 位小数' },
     ],
   },
 
   {
     id: 'expense_ratio',
-    version: '1.0.0',
+    version: '1.1.0',
     name: '费用率',
     category: 'cost',
     tags: ['kpi', 'cost'],
     formula: {
-      description: '费用金额 / 保费',
+      description: '费用金额 / 签单保费',
       numerator: 'SUM(fee_amount)',
       denominator: 'SUM(premium)',
       unit: '%',
@@ -78,7 +79,7 @@ export const costMetrics: readonly MetricDefinition[] = [
       formatter: 'percent',
       label: '费用率',
       unit: '%',
-      decimals: 2,
+      decimals: 1,
     },
     testCases: [
       {
@@ -87,7 +88,10 @@ export const costMetrics: readonly MetricDefinition[] = [
         assertions: { expense_ratio: { op: 'gte', value: 0 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' }],
+    changelog: [
+      { version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' },
+      { version: '1.1.0', date: '2026-04-17', changes: '铁律对齐：展示精度 2→1 位小数' },
+    ],
   },
 
   {
@@ -158,33 +162,33 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'variable_cost_ratio',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '变动成本率',
     category: 'cost',
     tags: ['core', 'kpi', 'cost'],
     formula: {
-      description: '满期赔付率 + 费用率（注意：两个分母不同）',
+      description: '满期赔付率 + 费用率（两个分母不同；闰年感知）',
       numerator: '已报告赔款/满期保费 + 费用金额/签单保费',
       unit: '%',
     },
     sql: {
       expression: `CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0 AND SUM(premium) > 0
     THEN ROUND(
-      SUM(reported_claims) * 100.0 / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) +
+      SUM(reported_claims) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) +
       SUM(COALESCE(fee_amount, 0)) * 100.0 / SUM(premium),
       2
     )
     ELSE NULL
   END AS variable_cost_ratio`,
-      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days'],
-      notes: '赔付率分母=满期保费，费用率分母=签单保费。可超100%（亏损）',
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term'],
+      notes: '赔付率分母=满期保费（premium × earned_days / policy_term，闰年感知），费用率分母=签单保费。可超100%（亏损）',
     },
     display: {
       formatter: 'percent',
       label: '变动成本率',
       unit: '%',
-      decimals: 2,
+      decimals: 1,
       tooltip: '变动成本率 = 满期赔付率 + 费用率。≤91% 正常，91-94% 预警，>94% 危险',
     },
     testCases: [
@@ -194,12 +198,15 @@ export const costMetrics: readonly MetricDefinition[] = [
         assertions: { variable_cost_ratio: { op: 'gte', value: 0 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '新增，与 cost.ts:generateVariableCostQuery 一致' }],
+    changelog: [
+      { version: '1.0.0', date: '2026-03-27', changes: '新增，与 cost.ts:generateVariableCostQuery 一致' },
+      { version: '2.0.0', date: '2026-04-17', changes: '铁律对齐：赔付分母 exposure_days/365 → earned_days/policy_term；展示精度 2→1 位小数' },
+    ],
   },
 
   {
     id: 'earned_loss_frequency',
-    version: '2.0.0',
+    version: '2.1.0',
     name: '满期出险率',
     category: 'cost',
     tags: ['cost'],
@@ -226,7 +233,7 @@ export const costMetrics: readonly MetricDefinition[] = [
       formatter: 'percent',
       label: '出险率',
       unit: '%',
-      decimals: 2,
+      decimals: 1,
       tooltip: '满期出险率 = (赔案件数/保单数) × (保险期限/满期天数)。闰年自动365/366天',
     },
     testCases: [
@@ -239,34 +246,35 @@ export const costMetrics: readonly MetricDefinition[] = [
     changelog: [
       { version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' },
       { version: '2.0.0', date: '2026-03-31', changes: '口径修正：保单级→年化公式，闰年感知(365/366)' },
+      { version: '2.1.0', date: '2026-04-17', changes: '铁律对齐：展示精度 2→1 位小数' },
     ],
   },
 
   {
     id: 'earned_margin_amount',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '满期边际贡献额',
     category: 'cost',
     tags: ['core', 'kpi', 'cost', 'margin'],
     formula: {
-      description: '满期保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
+      description: '满期保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)（闰年感知）',
       numerator: 'earned_premium × (1 - earned_claim_ratio - expense_ratio)',
       unit: '元',
     },
     sql: {
       expression: `CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0 AND SUM(premium) > 0
     THEN ROUND(
-      SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) * (
+      SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) * (
         1.0
-        - SUM(reported_claims) / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0)
+        - SUM(reported_claims) / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE))
         - SUM(COALESCE(fee_amount, 0)) / SUM(premium)
       ), 2
     )
     ELSE NULL
   END AS earned_margin_amount`,
-      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days'],
-      notes: '基于已赚保费的实际边际贡献，随满期天数增长而变化。已满期保单与 projected_margin_amount 相等',
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term'],
+      notes: '基于已赚保费的实际边际贡献，随满期天数增长而变化。已满期保单与 projected_margin_amount 相等。闰年感知分母',
     },
     display: {
       formatter: 'premiumWan',
@@ -281,34 +289,37 @@ export const costMetrics: readonly MetricDefinition[] = [
         assertions: { earned_margin_amount: { op: 'type', value: 'number' } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-31', changes: '新增：时序对比核心指标，诊断脚本同步使用' }],
+    changelog: [
+      { version: '1.0.0', date: '2026-03-31', changes: '新增：时序对比核心指标，诊断脚本同步使用' },
+      { version: '2.0.0', date: '2026-04-17', changes: '铁律对齐：赔付分母 exposure_days/365 → earned_days/policy_term' },
+    ],
   },
 
   {
     id: 'projected_margin_amount',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '预估边际贡献额',
     category: 'cost',
     tags: ['core', 'kpi', 'cost', 'margin'],
     formula: {
-      description: '签单保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
+      description: '签单保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)（闰年感知）',
       numerator: 'premium × (1 - earned_claim_ratio - expense_ratio)',
       unit: '元',
     },
     sql: {
       expression: `CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0 AND SUM(premium) > 0
     THEN ROUND(
       SUM(premium) * (
         1.0
-        - SUM(reported_claims) / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0)
+        - SUM(reported_claims) / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE))
         - SUM(COALESCE(fee_amount, 0)) / SUM(premium)
       ), 2
     )
     ELSE NULL
   END AS projected_margin_amount`,
-      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days'],
-      notes: '假设全部保费赚完后的预估边际贡献，用于预判最终盈亏。与 earned_margin_amount 共享变动成本率，仅保费基数不同',
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term'],
+      notes: '假设全部保费赚完后的预估边际贡献，用于预判最终盈亏。与 earned_margin_amount 共享变动成本率，仅保费基数不同。闰年感知分母',
     },
     display: {
       formatter: 'premiumWan',
@@ -323,7 +334,54 @@ export const costMetrics: readonly MetricDefinition[] = [
         assertions: { projected_margin_amount: { op: 'type', value: 'number' } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-31', changes: '新增：时序对比核心指标，诊断脚本同步使用' }],
+    changelog: [
+      { version: '1.0.0', date: '2026-03-31', changes: '新增：时序对比核心指标，诊断脚本同步使用' },
+      { version: '2.0.0', date: '2026-04-17', changes: '铁律对齐：赔付分母 exposure_days/365 → earned_days/policy_term' },
+    ],
+  },
+
+  {
+    id: 'comprehensive_expense_ratio',
+    version: '1.0.0',
+    name: '综合费用率',
+    category: 'cost',
+    tags: ['core', 'kpi', 'cost'],
+    formula: {
+      description: '(已报告赔款 + 费用金额) / 满期保费（闰年感知）',
+      numerator: 'SUM(reported_claims) + SUM(fee_amount)',
+      denominator: 'SUM(premium * earned_days / policy_term)',
+      unit: '%',
+    },
+    sql: {
+      expression: `CASE
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
+    THEN ROUND(
+      (SUM(reported_claims) + SUM(COALESCE(fee_amount, 0))) * 100.0
+        / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)),
+      2
+    )
+    ELSE NULL
+  END AS comprehensive_expense_ratio`,
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term'],
+      notes: '与变动成本率的区别：分子费用金额基于已赚口径统一除满期保费，适合综合费用对标。闰年感知分母',
+    },
+    display: {
+      formatter: 'percent',
+      label: '综合费用率',
+      unit: '%',
+      decimals: 1,
+      tooltip: '综合费用率 = (已报告赔款 + 费用金额) / 满期保费。等同"变动成本额/满期保费"',
+    },
+    testCases: [
+      {
+        name: '综合费用率非负',
+        input: { whereClause: '1=1' },
+        assertions: { comprehensive_expense_ratio: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [
+      { version: '1.0.0', date: '2026-04-17', changes: '新增：综合分析补齐，分母闰年感知（earned_days/policy_term）' },
+    ],
   },
 
   // ============================================================================
@@ -376,7 +434,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     },
     sql: {
       expression: '-- L4 计算，fixed_cost_amount / earned_premium',
-      requiredColumns: ['premium', 'exposure_days', '险类', '三级机构'],
+      requiredColumns: ['premium', 'earned_days', 'policy_term', '险类', '三级机构'],
       notes: 'L4 计算。由诊断脚本 diagnose_vehicle.py 自动输出。率值必须从绝对值计算，禁止率值相加',
     },
     display: {
@@ -409,7 +467,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     },
     sql: {
       expression: '-- L4 计算',
-      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days', '险类', '三级机构'],
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term', '险类', '三级机构'],
       notes: 'L4 计算。绝对值相加，诊断脚本自动输出',
     },
     display: {
@@ -430,7 +488,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'combined_cost_ratio',
-    version: '1.0.0',
+    version: '1.1.0',
     name: '综合成本率',
     category: 'cost',
     tags: ['core', 'kpi', 'cost'],
@@ -442,7 +500,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     },
     sql: {
       expression: '-- L4 计算，combined_cost_amount / earned_premium',
-      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days', '险类', '三级机构'],
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term', '险类', '三级机构'],
       notes: 'L4 计算。≤100% 盈利，>100% 亏损。亮灯：≤99% 🟢 / 99-101% 🔵 / 101-105% 🟡 / >105% 🔴',
     },
     display: {
@@ -459,7 +517,10 @@ export const costMetrics: readonly MetricDefinition[] = [
         assertions: { combined_cost_ratio: { op: 'gte', value: 0 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增：全口径成本率，含固定成本三分项（附加税费+推动费+管理费）' }],
+    changelog: [
+      { version: '1.0.0', date: '2026-04-02', changes: '新增：全口径成本率，含固定成本三分项（附加税费+推动费+管理费）' },
+      { version: '1.1.0', date: '2026-04-17', changes: '铁律对齐：分母满期保费统一 earned_days/policy_term 闰年感知（依赖 earned_premium v2.0.0）' },
+    ],
   },
 
   {
@@ -475,7 +536,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     },
     sql: {
       expression: '-- L4 计算，earned_premium - combined_cost_amount',
-      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'exposure_days', '险类', '三级机构'],
+      requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term', '险类', '三级机构'],
       notes: 'L4 计算。真实盈亏 = 边际贡献额 - 固定成本额。与边际贡献额并存：边际贡献额反映承保品质，利润额反映真实盈亏',
     },
     display: {

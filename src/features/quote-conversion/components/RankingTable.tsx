@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { cardStyles, fontStyles, tableStyles, toggleButtonStyles } from '../../../shared/styles';
-import { formatCount, formatPercent } from '../../../shared/utils/formatters';
+import { RateCell } from '../../../shared/ui';
+import { formatCount } from '../../../shared/utils/formatters';
 import { useQuoteRanking } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';
 
@@ -62,8 +63,8 @@ export function RankingTable({
                 <th className={tableStyles.headerCell}>{dimension}</th>
                 <th className={`${tableStyles.headerCell} text-right`}>报价量</th>
                 <th className={`${tableStyles.headerCell} text-right`}>承保量</th>
-                <th className={`${tableStyles.headerCell} text-right`}>转化率</th>
-                <th className={`${tableStyles.headerCell} text-right`}>折扣率</th>
+                <th className={`${tableStyles.headerCell} text-right`}>转化率 (%)</th>
+                <th className={`${tableStyles.headerCell} text-right`}>折扣率 (%)</th>
                 <th className={tableStyles.headerCell}>转化条</th>
               </tr>
             </thead>
@@ -78,11 +79,11 @@ export function RankingTable({
                     <td className={`${tableStyles.cell} font-medium`}>{row.dim_value ?? '-'}</td>
                     <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_quotes)}</td>
                     <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_insured)}</td>
-                    <td className={`${tableStyles.cell} text-right ${fontStyles.numeric} font-semibold`}>
-                      {formatPercent(row.conversion_rate)}
+                    <td className={`${tableStyles.cell} text-right font-semibold`}>
+                      <RateCell value={row.conversion_rate} />
                     </td>
-                    <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>
-                      {row.avg_discount != null ? `${(row.avg_discount * 100).toFixed(1)}%` : '-'}
+                    <td className={`${tableStyles.cell} text-right`}>
+                      <RateCell value={row.avg_discount != null ? row.avg_discount * 100 : null} />
                     </td>
                     <td className={tableStyles.cell}>
                       <div className="h-4 bg-neutral-100 dark:bg-neutral-800 rounded overflow-hidden relative" style={{ width: '120px' }}>

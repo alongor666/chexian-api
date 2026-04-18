@@ -172,13 +172,14 @@ WITH policy_exposure AS (
     ${groupByFields.map((f) => `p.${f}`).join(', ')},
     p.premium,
     p.insurance_start_date AS start_date,
+    DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
     LEAST(
       GREATEST(
         DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
         0
       ),
-      365
-    ) AS exposure_days,
+      DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+    ) AS earned_days,
     COALESCE(c.claim_cases, 0) AS claim_cases,
     COALESCE(c.reported_claims, 0) AS reported_claims${extraFieldsClause}
   FROM PolicyFact p
@@ -220,7 +221,8 @@ export function getMonthEndDate(year: number, month: number): string {
 
 /**
  * 计算某保单在指定统计月末的时间分摊部分
- * 时间分摊 = P × (1-F) × min(有效天数, 365) / 365
+ * 时间分摊 = P × (1-F) × min(有效天数, policy_term) / policy_term
+ * 分母改为 policy_term = DATEDIFF(起期, 起期+1年)，闰年感知（365/366）。
  *
  * @param statMonthEnd - 统计月末日期，格式 YYYY-MM-DD
  */
@@ -233,8 +235,8 @@ export function buildTimePartCase(statMonthEnd: string): string {
           DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1,
           0
         ),
-        365
-      ) / 365.0
+        DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+      ) * 1.0 / DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
       ELSE 0
     END
   `;
@@ -272,7 +274,8 @@ export function buildEarnedMonthlyCase(
 
 /**
  * 计算某保单在指定统计月末的已赚保费（首日费用 + 时间分摊）
- * 已赚保费 = P × F × α + P × (1-F) × min(有效天数, 365) / 365
+ * 已赚保费 = P × F × α + P × (1-F) × min(有效天数, policy_term) / policy_term
+ * 分母改为 policy_term = DATEDIFF(起期, 起期+1年)，闰年感知（365/366）。
  *
  * 与 buildTimePartCase 的区别：本函数包含首日费用部分。
  *
@@ -285,14 +288,14 @@ export function buildEarnedPremiumCase(statMonthEnd: string): string {
       THEN
         -- 首日费用部分 = P × F × α
         premium * fee_rate * line_factor +
-        -- 时间分摊部分 = P × (1-F) × min(有效天数, 365) / 365
+        -- 时间分摊部分 = P × (1-F) × min(有效天数, policy_term) / policy_term
         premium * (1 - fee_rate) * LEAST(
           GREATEST(
             DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1,
             0
           ),
-          365
-        ) / 365.0
+          DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+        ) * 1.0 / DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
       ELSE 0
     END
   `;

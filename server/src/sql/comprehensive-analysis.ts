@@ -48,14 +48,7 @@ WITH policy_exposure AS (
         0
       ),
       DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
-    ) AS earned_days,
-    LEAST(
-      GREATEST(
-        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
-        0
-      ),
-      365
-    ) AS exposure_days
+    ) AS earned_days
   FROM PolicyFact p
   LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
   WHERE ${whereClause}
@@ -83,7 +76,11 @@ dim_agg AS (
     ROUND(SUM(reported_claims), 2) AS reported_claims,
     ROUND(SUM(fee_amount), 2) AS fee_amount,
     CAST(SUM(claim_cases) AS INTEGER) AS claim_cases,
-    ROUND(SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS earned_premium
+    ROUND(SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS earned_premium,
+    SUM(
+      CAST(claim_cases AS DOUBLE) * CAST(policy_term AS DOUBLE)
+      / NULLIF(CAST(earned_days AS DOUBLE), 0)
+    ) AS annualized_claim_cases
   FROM policy_exposure
   GROUP BY COALESCE(${dimField}, '未知')
 ),
@@ -128,10 +125,20 @@ SELECT
     ELSE NULL
   END AS avg_claim_amount,
   CASE
-    WHEN d.policy_count > 0
-    THEN ROUND(CAST(d.claim_cases AS DOUBLE) * 100.0 / CAST(d.policy_count AS DOUBLE), 2)
+    WHEN d.policy_count > 0 AND d.annualized_claim_cases IS NOT NULL
+    THEN ROUND(d.annualized_claim_cases * 100.0 / CAST(d.policy_count AS DOUBLE), 2)
     ELSE NULL
   END AS claim_frequency,
+  CASE
+    WHEN d.earned_premium > 0
+    THEN ROUND((d.reported_claims + d.fee_amount) * 100.0 / d.earned_premium, 2)
+    ELSE NULL
+  END AS comprehensive_expense_ratio,
+  CASE
+    WHEN d.policy_count > 0
+    THEN ROUND(d.signed_premium / CAST(d.policy_count AS DOUBLE), 2)
+    ELSE NULL
+  END AS per_vehicle_premium,
   CASE
     WHEN t.total_signed_premium > 0
     THEN ROUND(d.signed_premium * 100.0 / t.total_signed_premium, 2)
@@ -170,9 +177,10 @@ SELECT
   CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
   CAST(SUM(claim_cases) AS INTEGER) AS claim_cases,
   CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
     THEN ROUND(
-      SUM(reported_claims) * 100.0 / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0),
+      SUM(reported_claims) * 100.0
+      / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)),
       2
     )
     ELSE NULL
@@ -183,14 +191,40 @@ SELECT
     ELSE NULL
   END AS expense_ratio,
   CASE
-    WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0 AND SUM(premium) > 0
     THEN ROUND(
-      SUM(reported_claims) * 100.0 / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0)
+      SUM(reported_claims) * 100.0
+      / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE))
       + SUM(fee_amount) * 100.0 / SUM(premium),
       2
     )
     ELSE NULL
-  END AS variable_cost_ratio
+  END AS variable_cost_ratio,
+  CASE
+    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
+    THEN ROUND(
+      (SUM(reported_claims) + SUM(fee_amount)) * 100.0
+      / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)),
+      2
+    )
+    ELSE NULL
+  END AS comprehensive_expense_ratio,
+  CASE
+    WHEN COUNT(DISTINCT policy_no) > 0
+    THEN ROUND(SUM(premium) / CAST(COUNT(DISTINCT policy_no) AS DOUBLE), 2)
+    ELSE NULL
+  END AS per_vehicle_premium,
+  CASE
+    WHEN COUNT(DISTINCT policy_no) > 0
+    THEN ROUND(
+      SUM(
+        CAST(claim_cases AS DOUBLE) * CAST(policy_term AS DOUBLE)
+        / NULLIF(CAST(earned_days AS DOUBLE), 0)
+      ) * 100.0 / CAST(COUNT(DISTINCT policy_no) AS DOUBLE),
+      2
+    )
+    ELSE NULL
+  END AS claim_frequency
 FROM policy_exposure
   `.trim();
 }

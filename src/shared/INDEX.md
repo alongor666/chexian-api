@@ -173,6 +173,7 @@ features/dashboard/Dashboard.tsx             # 7. UI 渲染
 | NumericCell | `Table.tsx` | 数值单元格（右对齐等宽字体） |
 | TrendCell | `Table.tsx` | 趋势单元格（带颜色指示） |
 | StatusCell | `Table.tsx` | 状态单元格（带圆点） |
+| RateCell | `RateCell.tsx` | 率值单元格（纯数字无 %，单位 (%) 写列头；支持 polarity + baseline 趋势色） |
 | Icon | `Icon.tsx` | 图标组件（基于 lucide-react） |
 | Skeleton | `Skeleton.tsx` | 骨架屏组件 |
 | KpiCardSkeleton | `Skeleton.tsx` | KPI 卡片骨架屏 |

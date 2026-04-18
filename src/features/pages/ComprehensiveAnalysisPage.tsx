@@ -300,12 +300,32 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
                 <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPremiumWan(data.overview.summary.signedPremium)} 万</div>
               </div>
               <div className={cn(cardStyles.base, 'p-3')}>
+                <div className={textStyles.caption}>单均保费 (元)</div>
+                <div className={cn(textStyles.titleMedium, 'mt-1')}>
+                  {data.overview.summary.perVehiclePremium === null
+                    ? '-'
+                    : Math.round(data.overview.summary.perVehiclePremium).toLocaleString()}
+                </div>
+              </div>
+              <div className={cn(cardStyles.base, 'p-3')}>
                 <div className={textStyles.caption}>满期赔付率</div>
                 <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.earnedClaimRatio)}</div>
               </div>
               <div className={cn(cardStyles.base, 'p-3')}>
+                <div className={textStyles.caption}>满期出险率 (年化)</div>
+                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.claimFrequency)}</div>
+              </div>
+              <div className={cn(cardStyles.base, 'p-3')}>
                 <div className={textStyles.caption}>费用率</div>
                 <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.expenseRatio)}</div>
+              </div>
+              <div className={cn(cardStyles.base, 'p-3')}>
+                <div className={textStyles.caption}>综合费用率</div>
+                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.comprehensiveExpenseRatio)}</div>
+              </div>
+              <div className={cn(cardStyles.base, 'p-3')}>
+                <div className={textStyles.caption}>变动成本率</div>
+                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.variableCostRatio)}</div>
               </div>
               <div className={cn(cardStyles.base, 'p-3')}>
                 <div className={textStyles.caption}>年计划达成率</div>

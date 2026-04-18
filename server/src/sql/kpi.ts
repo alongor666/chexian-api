@@ -189,13 +189,22 @@ export const generateKpiQuery = (
         f.premium,
         COALESCE(ca.reported_claims, 0) AS reported_claims,
         COALESCE(f.fee_amount, 0) AS fee_amount,
+        DATEDIFF(
+          'day',
+          CAST(f.insurance_start_date AS DATE),
+          CAST(f.insurance_start_date AS DATE) + INTERVAL 1 YEAR
+        ) AS policy_term,
         LEAST(
           GREATEST(
             DATEDIFF('day', CAST(f.insurance_start_date AS DATE), lc.latest_policy_date),
             0
           ),
-          365
-        ) AS exposure_days
+          DATEDIFF(
+            'day',
+            CAST(f.insurance_start_date AS DATE),
+            CAST(f.insurance_start_date AS DATE) + INTERVAL 1 YEAR
+          )
+        ) AS earned_days
       FROM filtered f
       CROSS JOIN latest_context lc
       LEFT JOIN ClaimsAgg ca ON f.policy_no = ca.policy_no
@@ -204,10 +213,15 @@ export const generateKpiQuery = (
     variable_cost AS (
       SELECT
         CASE
-          WHEN SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) > 0 AND SUM(premium) > 0
-          THEN (
-            SUM(reported_claims) / SUM(premium * CAST(exposure_days AS DOUBLE) / 365.0) +
-            SUM(fee_amount) / SUM(premium)
+          WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
+            AND SUM(premium) > 0
+          THEN ROUND(
+            (
+              SUM(reported_claims) * 100.0
+              / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE))
+              + SUM(fee_amount) * 100.0 / SUM(premium)
+            ),
+            2
           )
           ELSE NULL
         END AS variable_cost_ratio

@@ -172,9 +172,9 @@ function DimensionSection({ section, defaultExpanded }: { section: PatrolSection
           </span>
         </h3>
         <div className="flex items-center gap-1 text-xs">
-          {alertDist.red && <span className="text-red-600 dark:text-red-400">🔴{alertDist.red}</span>}
-          {alertDist.orange && <span className="text-orange-600 dark:text-orange-400">🟠{alertDist.orange}</span>}
-          {alertDist.yellow && <span className="text-yellow-600 dark:text-yellow-400">🟡{alertDist.yellow}</span>}
+          {alertDist.red && <span className={colorClasses.text.danger}>🔴{alertDist.red}</span>}
+          {alertDist.orange && <span className={colorClasses.text.orange}>🟠{alertDist.orange}</span>}
+          {alertDist.yellow && <span className={colorClasses.text.amber}>🟡{alertDist.yellow}</span>}
           <span className="ml-1">{expanded ? '▼' : '▶'}</span>
         </div>
       </button>

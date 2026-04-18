@@ -8,7 +8,7 @@
  */
 import React, { useMemo, useCallback } from 'react';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
-import { cn } from '@/shared/styles';
+import { cn, colorClasses } from '@/shared/styles';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFilterPanel';
 import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
@@ -50,7 +50,7 @@ export const ExpenseDevelopmentPage: React.FC = () => {
       )}
     >
       {/* 开发标识 */}
-      <div className={cn('mb-3 inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium', 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300')}>
+      <div className={cn('mb-3 inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium', colorClasses.bg.amber, colorClasses.text.amber)}>
         开发中 · 仅管理员可见
       </div>
 

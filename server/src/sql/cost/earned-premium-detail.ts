@@ -205,14 +205,20 @@ export function generateNewEarnedPremiumSummaryQuery(config: NewEarnedPremiumCon
             (premium * (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END) *
              (CASE insurance_type WHEN '交强险' THEN 0.82 WHEN '商业保险' THEN 0.94 ELSE 0.90 END) +
              premium * (1 - (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END)) *
-             LEAST(GREATEST(DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1, 0), 365) / 365.0)
+             LEAST(
+               GREATEST(DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1, 0),
+               DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+             ) * 1.0 / DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR))
             -
             -- 减去截至窗口前一天的已赚保费
             (premium * (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END) *
              (CASE insurance_type WHEN '交强险' THEN 0.82 WHEN '商业保险' THEN 0.94 ELSE 0.90 END) *
              (CASE WHEN CAST(insurance_start_date AS DATE) <= DATE '${windowPrevEnd}' THEN 1 ELSE 0 END) +
              premium * (1 - (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END)) *
-             LEAST(GREATEST(DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${windowPrevEnd}') + 1, 0), 365) / 365.0)
+             LEAST(
+               GREATEST(DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${windowPrevEnd}') + 1, 0),
+               DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+             ) * 1.0 / DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR))
           ), 0)
           FROM PolicyFact
           WHERE ${whereClause}
@@ -230,7 +236,10 @@ export function generateNewEarnedPremiumSummaryQuery(config: NewEarnedPremiumCon
                 premium * (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END) *
                 (CASE insurance_type WHEN '交强险' THEN 0.82 WHEN '商业保险' THEN 0.94 ELSE 0.90 END) +
                 premium * (1 - (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END)) *
-                LEAST(GREATEST(DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1, 0), 365) / 365.0
+                LEAST(
+                  GREATEST(DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1, 0),
+                  DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+                ) * 1.0 / DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
               ELSE 0
             END
           ), 0)
