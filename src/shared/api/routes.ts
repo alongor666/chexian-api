@@ -81,10 +81,20 @@ export const QUERY_ROUTES = {
   EXPENSE_DEVELOPMENT: 'expense-development',
   // 维修资源
   REPAIR: {
+    // v1
     OVERVIEW: 'repair/overview',
     DETAIL: 'repair/detail',
     STATUS: 'repair/status',
     METADATA: 'repair/metadata',
+    // v2（2026-04-18 重设计：单页下钻 + 本地资源占比 + 导流清单）
+    CITY: 'repair/city',
+    CHANNEL: 'repair/channel',
+    COOP_TIER: 'repair/coop-tier',
+    SCATTER: 'repair/scatter',
+    LOCAL_RESOURCE: 'repair/local-resource',
+    TO_PREMIUM: 'repair/to-premium',
+    DIVERSION_LIST: 'repair/diversion-list',
+    ORPHAN_SHOPS: 'repair/orphan-shops',
   },
   // 客户来源去向
   CUSTOMER_FLOW: {
