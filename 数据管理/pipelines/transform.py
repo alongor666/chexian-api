@@ -28,6 +28,9 @@ import argparse
 import sys
 import time
 
+# Excel 引擎（calamine 比 openpyxl 快 5-10x；与 etl_validation.EXCEL_ENGINE 保持同步）
+EXCEL_ENGINE = 'calamine'
+
 # 默认配置（可通过命令行参数覆盖）
 DEFAULT_INPUT_FILE = Path("/Users/xuechenglong/Downloads/车险签单报价数据20260127_已匹配.xlsx")
 DEFAULT_OUTPUT_FILE = Path("/Users/xuechenglong/Downloads/01-正开发Git项目/chexianYJFX/数据管理/warehouse/fact/policy/车险保单综合明细表0127.parquet")
@@ -122,7 +125,7 @@ def normalize_policy_series(series):
 def load_target_excel(input_file, dtype_map):
     """加载目标 Excel，自动合并可用工作表"""
     start_ts = time.perf_counter()
-    sheet_data = pd.read_excel(input_file, sheet_name=None, dtype=dtype_map)
+    sheet_data = pd.read_excel(input_file, sheet_name=None, dtype=dtype_map, engine=EXCEL_ENGINE)
     if isinstance(sheet_data, pd.DataFrame):
         elapsed = time.perf_counter() - start_ts
         print(f"✅ 加载成功: {len(sheet_data):,} 行 × {len(sheet_data.columns)} 列（{elapsed:.2f}s）")
@@ -145,7 +148,7 @@ def load_target_excel(input_file, dtype_map):
 
     if base_columns is not None and headerless_sheets:
         for sheet_name in headerless_sheets:
-            raw_sheet = pd.read_excel(input_file, sheet_name=sheet_name, header=None)
+            raw_sheet = pd.read_excel(input_file, sheet_name=sheet_name, header=None, engine=EXCEL_ENGINE)
             if raw_sheet.empty:
                 continue
             n_cols = raw_sheet.shape[1]
@@ -189,7 +192,7 @@ def merge_renewal_type_from_source(df, renewal_source_file):
         return df
 
     print(f"   续保源文件: {renewal_source_file}")
-    source_columns = pd.read_excel(renewal_source_file, nrows=0).columns.tolist()
+    source_columns = pd.read_excel(renewal_source_file, nrows=0, engine=EXCEL_ENGINE).columns.tolist()
     source_key_col = first_existing_column(source_columns, POLICY_KEY_ALIASES)
     source_type_col = first_existing_column(source_columns, RENEWAL_TYPE_ALIASES)
     target_key_col = first_existing_column(df.columns, POLICY_KEY_ALIASES)
@@ -202,7 +205,8 @@ def merge_renewal_type_from_source(df, renewal_source_file):
     source_df = pd.read_excel(
         renewal_source_file,
         usecols=[source_key_col, source_type_col],
-        dtype={source_key_col: str, source_type_col: str}
+        dtype={source_key_col: str, source_type_col: str},
+        engine=EXCEL_ENGINE,
     )
     source_df[source_key_col] = normalize_policy_series(source_df[source_key_col])
     source_df[source_type_col] = source_df[source_type_col].astype(str).str.strip()

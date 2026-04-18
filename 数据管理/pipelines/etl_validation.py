@@ -23,6 +23,10 @@ PLACEHOLDER_STRS = frozenset({'', 'nan', 'None', 'NaN', 'null'})
 # 布尔真值集合
 BOOL_TRUE_VALUES = frozenset({'是', '有', '有驾意险交叉销售', '1', 'true', 'True', 'Y', 'y'})
 
+# Excel 读取引擎（calamine 是 Rust 实现，比 openpyxl 快 5-10x，dtype 行为完全等价）
+# 依赖：pip install python-calamine（pandas >= 2.2 内置 engine 支持）
+EXCEL_ENGINE = 'calamine'
+
 
 def validate_input_path(raw: str, must_exist: bool = True) -> Path:
     """验证输入路径在 ETL 根目录内，且文件存在"""
@@ -79,7 +83,7 @@ def load_excel_all_sheets(
         合并后的 DataFrame
     """
     start_ts = time.perf_counter()
-    kwargs = {'engine': 'openpyxl'}
+    kwargs = {'engine': EXCEL_ENGINE}
     if dtype:
         kwargs['dtype'] = dtype
 
@@ -128,7 +132,7 @@ def load_excel_all_sheets(
     # 处理无表头续表
     if base_columns is not None and headerless_sheets:
         for sheet_name in headerless_sheets:
-            headerless_kwargs = {'engine': 'openpyxl'}
+            headerless_kwargs = {'engine': EXCEL_ENGINE}
             if dtype:
                 # 将列名键转为位置索引键（续表无表头）
                 col_list = list(dtype.keys())
