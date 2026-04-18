@@ -69,6 +69,8 @@ WITH policy_earned AS (
     CAST(insurance_start_date AS DATE) AS start_date,
     -- 终保日 = 起保日 + 364天（一年期保单）
     CAST(insurance_start_date AS DATE) + INTERVAL 364 DAY AS end_date,
+    -- 保险期限天数（闰年感知：365/366），用于时间分摊分母
+    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
     -- 费用率 F
     CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
     -- 险类系数 α
@@ -115,12 +117,12 @@ SELECT
   ROUND(AVG(CAST(days_in_window AS DOUBLE)), 1) AS avg_elapsed_days,
   -- 首日费用部分 = SUM(P × F × α × I)
   ROUND(SUM(premium * fee_rate * line_factor * start_in_window), 2) AS first_day_part,
-  -- 时间分摊部分 = SUM(P × (1-F) × (窗口内天数/365))
-  ROUND(SUM(premium * (1 - fee_rate) * (CAST(days_in_window AS DOUBLE) / 365.0)), 2) AS time_part,
+  -- 时间分摊部分 = SUM(P × (1-F) × (窗口内天数/policy_term))（闰年感知）
+  ROUND(SUM(premium * (1 - fee_rate) * (CAST(days_in_window AS DOUBLE) / CAST(policy_term AS DOUBLE))), 2) AS time_part,
   -- 期间已赚保费
   ROUND(
     SUM(premium * fee_rate * line_factor * start_in_window) +
-    SUM(premium * (1 - fee_rate) * (CAST(days_in_window AS DOUBLE) / 365.0)),
+    SUM(premium * (1 - fee_rate) * (CAST(days_in_window AS DOUBLE) / CAST(policy_term AS DOUBLE))),
     2
   ) AS earned_premium_cum
 FROM policy_earned
@@ -160,6 +162,8 @@ WITH policy_earned AS (
        AND CAST(insurance_start_date AS DATE) <= DATE '${cutoffDate}'
       THEN 1 ELSE 0
     END AS start_in_window,
+    -- 保险期限天数（闰年感知：365/366），用于时间分摊分母
+    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
     -- 窗口内在保天数
     GREATEST(
       0,
@@ -185,8 +189,8 @@ aggregated AS (
     SUM(fee_amount) / NULLIF(SUM(premium), 0) AS avg_fee_rate,
     -- 首日费用部分 = SUM(P × F × α × I)
     SUM(premium * fee_rate * line_factor * start_in_window) AS total_first_day_part,
-    -- 时间分摊部分 = SUM(P × (1-F) × (窗口内天数/365))
-    SUM(premium * (1 - fee_rate) * (CAST(days_in_window AS DOUBLE) / 365.0)) AS total_time_part
+    -- 时间分摊部分 = SUM(P × (1-F) × (窗口内天数/policy_term))（闰年感知）
+    SUM(premium * (1 - fee_rate) * (CAST(days_in_window AS DOUBLE) / CAST(policy_term AS DOUBLE))) AS total_time_part
   FROM policy_earned
   GROUP BY org_level_3
 ),

@@ -86,9 +86,10 @@ describe('赔付率 (earned_claim_ratio) 公式语义', () => {
     expect(m.formula.description).toContain('已报告赔款');
   });
 
-  it('requiredColumns 含 reported_claims 和 exposure_days', () => {
+  it('requiredColumns 含 reported_claims 与闰年感知天数（earned_days + policy_term）', () => {
     expect(m.sql.requiredColumns).toContain('reported_claims');
-    expect(m.sql.requiredColumns).toContain('exposure_days');
+    expect(m.sql.requiredColumns).toContain('earned_days');
+    expect(m.sql.requiredColumns).toContain('policy_term');
   });
 });
 

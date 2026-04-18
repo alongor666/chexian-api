@@ -1,5 +1,5 @@
 import { cardStyles, colorClasses, cn } from '../../../shared/styles';
-import { formatCount, formatPremiumWan } from '../../../shared/utils/formatters';
+import { formatCount, formatPercent, formatPremiumWan } from '../../../shared/utils/formatters';
 import { useQuoteKpi } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';
 import { SectionHeading, InsightCard } from './shared';
@@ -33,7 +33,7 @@ export function DiscountSummary({ filters }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
           <InsightCard
             title="平均折扣率"
-            value={`${((data?.avg_discount_rate ?? 0) * 100).toFixed(1)}%`}
+            value={formatPercent((data?.avg_discount_rate ?? 0) * 100)}
             hint="基于折前/折后保费计算。"
           />
           <InsightCard
@@ -43,7 +43,7 @@ export function DiscountSummary({ filters }: Props) {
           />
           <InsightCard
             title="续/转承保率差"
-            value={`${(renewalRate - switchRate).toFixed(1)}%`}
+            value={formatPercent(renewalRate - switchRate)}
             hint="帮助判断折扣与续转结构是否同步变化。"
           />
         </div>

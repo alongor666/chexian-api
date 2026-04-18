@@ -2,7 +2,7 @@
 
 **状态机思维**：记录里程碑、阻塞点、下一步接力入口。详细任务追踪请查看 [BACKLOG.md](./BACKLOG.md)。
 
-**最后更新时间**: 2026-03-20（B233）
+**最后更新时间**: 2026-04-17（成本分析铁律对齐）
 
 ---
 
@@ -66,6 +66,7 @@
 | 2026-03-20 | Query 路由拆分彻底收口完成 (B231) | `query.ts` 成为唯一查询入口，2789 行 legacy 路由迁出活跃源码目录，补齐 33 端点等价测试，并修复 `shared.ts` 的 ESM 运行时导出错误 | 代码证据：`server/src/routes/query.ts`、`server/src/routes/query/shared.ts`、`server/src/app.ts`、`archive/legacy-code/2026-03-query-route-split/query.legacy.ts`、`tests/query-route-modularization.test.ts`；验证证据：定向路由测试 31/31 通过、`bun run build` 通过、本地 API `health/login/kpi` 三连 200 |
 | 2026-03-20 | 路由拆分后剩余基线与发布链路彻底清零 (B232) | 修复 governance PR 体量误报、恢复全量测试/类型检查/server 构建绿灯，并把 VPS 发布脚本从固定等待改为重试式健康检查，完成线上发布与浏览器/API 双重验收 | 代码证据：`scripts/check-governance.mjs`、`tests/parquet-processing.test.ts`、`src/app/App.tsx`、`src/features/home/AIAssistantPage.tsx`、`src/features/pages/ReportsPage.tsx`、`src/features/pages/SpecialtyPage.tsx`、`src/shared/api/client.ts`、`server/src/sql/kpi-detail.ts`、`server/src/utils/coefficient-period.ts`、`server/src/utils/__tests__/security.test.ts`、`scripts/release-vps-heatmap.mjs`；验证证据：`bun run governance`、`bun run test -- --run`、`bun run typecheck`、`cd server && bun run build` 全部通过；`bun run release:vps:heatmap` 通过；线上 `https://chexian.cretvalu.com/health` 200、登录 200、`/api/query/kpi` 200；Playwright 验收证据 `output/playwright/vps-heatmap-verify-20260320_220410.{json,png,log}` |
 | 2026-03-20 | 生产完成定义与发布门禁文档化完成 (B233) | 将“生产完成定义”“最终 SHA 重新发布”“发布脚本必须重试式健康检查”写入 `AGENTS.md`、`GEMINI.md`、`CLAUDE.md`，把发布验收从原则约束提升为可执行硬门禁 | 代码证据：`AGENTS.md`、`GEMINI.md`、`CLAUDE.md`、`BACKLOG.md`；验证证据：`bun run governance` 通过；文档改动已提交并推送到 GitHub |
+| 2026-04-17 | 成本分析 / 综合分析三铁律对齐完成 | 分母统一 `earned_days/policy_term`（闰年感知），出险率改为年化公式，率值单元格纯数字+列头加 (%) 1 位小数；综合分析新增综合费用率/单均保费/年化出险率；新增 `RateCell` 组件批量替换；颜色硬编码归 `colorClasses`；新增 Parquet 对账脚本；VPS 分层 & hex 图表色 立项为 B246/B247 | 代码证据：`server/src/config/metric-registry/categories/cost.ts`（8 指标升版+新增 comprehensive_expense_ratio）、`server/src/sql/comprehensive-analysis.ts`、`server/src/routes/query/comprehensive.ts`、`server/src/sql/{kpi,cost/cost-ratios,cost/earned-premium,cost/earned-premium-detail,sql-builder}.ts`、`src/shared/ui/RateCell.tsx`（新建）、`src/features/{claims-detail,dashboard,quote-conversion,renewal-v2,expense-development,pages/ComprehensiveAnalysisPage,comprehensive-analysis}`、`scripts/verify-comprehensive.py`（新建）、`BACKLOG.md`（B246/B247） |
 | 2026-03-06 | 今日夜间流水线执行记录补全 | 驾乘险推介率日报、机构拆分汇总与 VPS 热力图线上复验证据已归档 | 证据：`数据管理/驾乘险推荐率/输出/数据分析报告/驾乘险推介率日报_2026-03-06.md`、`数据管理/驾乘险推荐率/机构数据/数据拆分汇总.json`、`开发文档/reviews/2026-03-06-nightly-pipeline-summary.md` |
 | 2026-02-26 | 驾乘险推介率布局优化 (B309) | 将客户类别等标签移到页面标题下方靠左对齐，筛选器条件右置，统一两区域Tabs和小chips块字体样式(@gemini) | `src/features/pages/CrossSellPage.tsx` 布局优化；`Tabs.tsx`增加 `size="mini"` |
 | 2026-02-26 | 驾乘险推介率标签选项扩充 (B310) | 客户类别和车上责任增加“全部”/“不分保额”，支持全量数据查看(@gemini) | 修改 `CrossSellPage` 默认状态，更新前端组件、Zod校验及后端 `cross-sell-summary` SQL逻辑 |

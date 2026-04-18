@@ -14,8 +14,8 @@ function computePercent(numerator: number, denominator: number): string {
 }
 
 function computeRatio(left: number, right: number): string {
-  if (!right) return '0.00';
-  return (left / right).toFixed(2);
+  if (!right) return '0.0';
+  return (left / right).toFixed(1);
 }
 
 function computeAveragePremiumWan(totalPremium: number, totalCount: number): string {

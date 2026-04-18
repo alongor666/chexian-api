@@ -74,6 +74,9 @@ export interface ComprehensiveOverviewSummary {
   expenseRatio: number | null;
   variableCostRatio: number | null;
   achievementRate: number | null;
+  comprehensiveExpenseRatio: number | null;
+  perVehiclePremium: number | null;
+  claimFrequency: number | null;
 }
 
 export interface ComprehensiveViewModel {

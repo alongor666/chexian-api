@@ -5,6 +5,7 @@ import { getKpiDrilldownTarget } from '../kpiDrilldownMap';
 import {
   formatAchievementRate,
   formatCount,
+  formatPercent,
   formatPremiumWan,
   formatRate,
 } from '../../../shared/utils/formatters';
@@ -169,7 +170,7 @@ export const KpiSection = memo<KpiSectionProps>(({
         return {
           title,
           value: kpis.variable_cost_ratio,
-          formatter: formatAchievementRate,
+          formatter: formatPercent,
           loading,
           type: 'value',
         };

@@ -46,11 +46,11 @@ interface MetricOption {
 }
 
 const METRIC_OPTIONS: MetricOption[] = [
-  { key: 'loss_ratio_pct', label: '满期赔付率', yoyKey: 'yoy_loss_ratio_pct', unit: '%', formatter: (v) => v.toFixed(1) + '%' },
+  { key: 'loss_ratio_pct', label: '满期赔付率 (%)', yoyKey: 'yoy_loss_ratio_pct', unit: '%', formatter: (v) => v.toFixed(1) },
   { key: 'avg_claim', label: '案均赔款', yoyKey: 'yoy_avg_claim', unit: '元', formatter: (v) => Math.round(v).toLocaleString() },
   { key: 'total_claims_wan', label: '已报告赔款', yoyKey: 'yoy_total_claims_wan', unit: '万', formatter: (v) => v.toFixed(1) },
   { key: 'claim_count', label: '已报告件数', yoyKey: 'yoy_claim_count', unit: '件', formatter: (v) => Math.round(v).toLocaleString() },
-  { key: 'incident_rate_pct', label: '满期出险率', yoyKey: 'yoy_incident_rate_pct', unit: '%', formatter: (v) => v.toFixed(2) + '%' },
+  { key: 'incident_rate_pct', label: '满期出险率 (%)', yoyKey: 'yoy_incident_rate_pct', unit: '%', formatter: (v) => v.toFixed(1) },
 ];
 
 type CompareMode = 'raw' | 'wow_delta' | 'wow_rate' | 'yoy_delta' | 'yoy_rate';
@@ -198,7 +198,8 @@ function formatCellDisplay(
 
   if (mode === 'wow_rate' || mode === 'yoy_rate') {
     const sign = value > 0 ? '+' : '';
-    return `${sign}${value.toFixed(1)}%`;
+    // 率值单元格不带 %（单位 (%) 在列头/指标标签）
+    return `${sign}${value.toFixed(1)}`;
   }
 
   const sign = value > 0 ? '+' : '';
@@ -227,8 +228,8 @@ function getCellBgClass(
   const absVal = Math.abs(value);
 
   if (mode === 'wow_rate' || mode === 'yoy_rate') {
-    if (absVal > 20) return isBad ? 'bg-red-50 dark:bg-red-500/10' : 'bg-green-50 dark:bg-green-500/10';
-    if (absVal > 10) return isBad ? 'bg-red-50/60 dark:bg-red-500/5' : 'bg-green-50/60 dark:bg-green-500/5';
+    if (absVal > 20) return isBad ? colorClasses.bg.danger : colorClasses.bg.success;
+    if (absVal > 10) return isBad ? cn(colorClasses.bg.danger, 'opacity-60') : cn(colorClasses.bg.success, 'opacity-60');
   }
   return '';
 }
@@ -391,7 +392,7 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
                 className={cn(
                   'px-2 py-1 text-xs rounded-md border transition-colors',
                   compareMode === c.key
-                    ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
+                    ? cn(colorClasses.bg.primarySolid, 'text-white', colorClasses.border.primary)
                     : `bg-transparent ${colorClasses.border.neutral} ${colorClasses.text.neutralMuted} hover:bg-neutral-100 dark:hover:bg-white/8`
                 )}
               >

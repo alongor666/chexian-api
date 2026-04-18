@@ -146,9 +146,7 @@ widgets/table/VirtualTable.tsx
 
 ## 待开发功能
 
-查看 [BACKLOG.md](../../BACKLOG.md) 中板块为 `Feature` 的任务：
-- B007: 添加数据导出功能（CSV/Excel）
-- B008: 实现图表下钻功能（点击图表更新筛选器）
+查看 [BACKLOG.md](../../BACKLOG.md) 中板块为 `Feature` 的任务。已完成项归档至 `开发文档/BACKLOG_ARCHIVE.md`（如 B007 数据导出 CSV/Excel、B008 图表下钻）。
 
 ## 链接到全局索引
 

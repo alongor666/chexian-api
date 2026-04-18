@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { cardStyles, colorClasses, fontStyles, tableStyles } from '../../../shared/styles';
-import { formatCount, formatPercent } from '../../../shared/utils/formatters';
+import { RateCell } from '../../../shared/ui';
+import { formatCount } from '../../../shared/utils/formatters';
 import { useQuoteDrilldown } from '../hooks/useQuoteConversion';
 import type { QuoteFilters, DrillLevel } from '../types';
 
@@ -101,10 +102,10 @@ export function DrilldownTable({ filters }: Props) {
                 </th>
                 <th className={`${tableStyles.headerCell} text-right`}>报价量</th>
                 <th className={`${tableStyles.headerCell} text-right`}>承保量</th>
-                <th className={`${tableStyles.headerCell} text-right`}>转化率</th>
-                <th className={`${tableStyles.headerCell} text-right`}>续保率</th>
-                <th className={`${tableStyles.headerCell} text-right`}>转保率</th>
-                <th className={`${tableStyles.headerCell} text-right`}>折扣率</th>
+                <th className={`${tableStyles.headerCell} text-right`}>转化率 (%)</th>
+                <th className={`${tableStyles.headerCell} text-right`}>续保率 (%)</th>
+                <th className={`${tableStyles.headerCell} text-right`}>转保率 (%)</th>
+                <th className={`${tableStyles.headerCell} text-right`}>折扣率 (%)</th>
               </tr>
             </thead>
             <tbody>
@@ -127,19 +128,19 @@ export function DrilldownTable({ filters }: Props) {
                   </td>
                   <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_quotes)}</td>
                   <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_insured)}</td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric} font-medium ${
+                  <td className={`${tableStyles.cell} text-right font-medium ${
                     row.conversion_rate < avgConversionRate ? colorClasses.text.danger : ''
                   }`}>
-                    {formatPercent(row.conversion_rate)}
+                    <RateCell value={row.conversion_rate} />
                   </td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>
-                    {row.renewal_rate != null ? formatPercent(row.renewal_rate) : '-'}
+                  <td className={`${tableStyles.cell} text-right`}>
+                    <RateCell value={row.renewal_rate} />
                   </td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>
-                    {row.switch_rate != null ? formatPercent(row.switch_rate) : '-'}
+                  <td className={`${tableStyles.cell} text-right`}>
+                    <RateCell value={row.switch_rate} />
                   </td>
-                  <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>
-                    {row.avg_discount != null ? `${(row.avg_discount * 100).toFixed(1)}%` : '-'}
+                  <td className={`${tableStyles.cell} text-right`}>
+                    <RateCell value={row.avg_discount != null ? row.avg_discount * 100 : null} />
                   </td>
                 </tr>
               ))}

@@ -42,9 +42,9 @@ const METRIC_TABS: TabItem[] = [
 ];
 
 const METRIC_LABELS: Record<MetricType, string> = {
-  rate: '推介率',
-  penetration: '渗透率',
-  achievement: '达成率',
+  rate: '推介率 (%)',
+  penetration: '渗透率 (%)',
+  achievement: '达成率 (%)',
   driver_count: '驾意件数',
   auto_count: '车险件数',
   avg_premium: '驾意件均',
@@ -413,7 +413,8 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
     }
 
     const { bg, text, tier } = resolveColor(activeMetric, value);
-    const displayValue = isRateMetric ? `${value.toFixed(0)}%` : `${Math.round(value)}`;
+    // 率值单元格不带 %（单位 (%) 在列头/指标标签）
+    const displayValue = isRateMetric ? value.toFixed(1) : `${Math.round(value)}`;
 
     return (
       <div

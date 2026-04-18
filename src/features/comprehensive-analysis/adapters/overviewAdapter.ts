@@ -13,6 +13,9 @@ export function adaptOverviewSummary(
     expenseRatio: toSummaryNullableNumber(summary.expenseRatio),
     variableCostRatio: toSummaryNullableNumber(summary.variableCostRatio),
     achievementRate: toSummaryNullableNumber(summary.achievementRate),
+    comprehensiveExpenseRatio: toSummaryNullableNumber(summary.comprehensiveExpenseRatio),
+    perVehiclePremium: toSummaryNullableNumber(summary.perVehiclePremium),
+    claimFrequency: toSummaryNullableNumber(summary.claimFrequency),
   };
 }
 
