@@ -22,6 +22,16 @@ const CROSS_SELL_IDS = new Set([
 /** 需要 Growth CTE output schema 的指标 */
 const GROWTH_IDS = new Set(['growth_rate_yoy', 'growth_rate_mom']);
 
+/** 需要 RepairDim schema 的指标 */
+const REPAIR_IDS = new Set([
+  'repair_shop_total_count',
+  'repair_4s_share',
+  'repair_cooperation_active_rate',
+  'repair_to_premium_ratio',
+  'repair_damage_amount_total',
+  'repair_net_premium_total',
+]);
+
 // ═══════════════════════════════════════════════════
 // 断言执行器
 // ═══════════════════════════════════════════════════
@@ -115,6 +125,27 @@ INSERT INTO growth_data VALUES
   (80000, 90000);
 `;
 
+/** RepairDim 合成数据 — 覆盖 repair 分类所有 requiredColumns */
+const SEED_REPAIR_DATA = `
+CREATE TABLE repair_data (
+  repair_shop_name VARCHAR,
+  is_4s_shop BOOLEAN,
+  cooperation_status VARCHAR,
+  damage_assessment_amount DOUBLE,
+  net_premium DOUBLE
+);
+
+INSERT INTO repair_data VALUES
+  ('成都锦江4S汽修店有限公司', true,  '1生效中',  500000,  1200000),
+  ('成都武侯4S汽修店有限公司', true,  '1生效中',  300000,  900000),
+  ('乐山市中综合维修厂',       false, '1生效中',  200000,  600000),
+  ('天府新区金牛汽修厂',       false, '0暂停合作', 150000,  400000),
+  ('成都高新普通汽修厂',       false, '7已撤销',   80000,   200000),
+  ('成都定损中心',             false, '1生效中',  100000,  300000),
+  ('自选维修',                 false, '1生效中',  50000,   100000),
+  ('无',                       false, '1生效中',  0,       0);
+`;
+
 // ═══════════════════════════════════════════════════
 // 测试
 // ═══════════════════════════════════════════════════
@@ -127,7 +158,7 @@ describe('指标 testCase DuckDB 执行', () => {
     await db.init();
 
     // 创建所有合成数据表
-    for (const sql of [SEED_POLICY_DATA, SEED_CROSS_SELL_DATA, SEED_GROWTH_DATA]) {
+    for (const sql of [SEED_POLICY_DATA, SEED_CROSS_SELL_DATA, SEED_GROWTH_DATA, SEED_REPAIR_DATA]) {
       // 拆分为独立语句执行
       const statements = sql.split(';').map((s) => s.trim()).filter(Boolean);
       for (const stmt of statements) {
@@ -144,6 +175,7 @@ describe('指标 testCase DuckDB 执行', () => {
   function getTableName(metricId: string): string {
     if (CROSS_SELL_IDS.has(metricId)) return 'cross_sell_data';
     if (GROWTH_IDS.has(metricId)) return 'growth_data';
+    if (REPAIR_IDS.has(metricId)) return 'repair_data';
     return 'policy_data';
   }
 
