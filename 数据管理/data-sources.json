@@ -80,6 +80,12 @@
       "source_pattern": "04_报价清单*.xlsx",
       "etl_entry": "python3 数据管理/pipelines/quote_etl.py -i <xlsx1> <xlsx2> ...",
       "etl_script": "pipelines/quote_etl.py",
+      "trigger": {
+        "input_strategy": "multi_file_input",
+        "input_glob": "04_报价清单*.xlsx",
+        "output_is_dir": true,
+        "archive_prefix": "quotes_conversion_latest"
+      },
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
       "last_updated": "2026-04-18",
@@ -172,9 +178,14 @@
       "id": "brand",
       "name": "品牌车型",
       "type": "dim",
-      "source_pattern": "从保单parquet的厂牌车型字段提取",
-      "etl_entry": "python3 数据管理/warehouse/dim/brand/generate_brand_dim.py",
-      "etl_script": "warehouse/dim/brand/generate_brand_dim.py",
+      "source_pattern": "06_厂牌明细*.xlsx",
+      "etl_entry": "node 数据管理/daily.mjs brand",
+      "etl_script": "pipelines/convert_brand_dim.py",
+      "trigger": {
+        "input_strategy": "single",
+        "input_glob": "06_厂牌明细*.xlsx",
+        "archive_prefix": "brand_latest"
+      },
       "output": "warehouse/dim/brand/latest.parquet",
       "update_cadence": "with_premium",
       "last_updated": "2026-04-03",
@@ -241,6 +252,13 @@
       "source_pattern": "03_交叉销售_*.xlsx",
       "etl_entry": "node 数据管理/daily.mjs cross_sell",
       "etl_script": "pipelines/convert_cross_sell.py",
+      "trigger": {
+        "input_strategy": "multi_file_merge",
+        "input_glob": "03_交叉销售_*.xlsx",
+        "merge_dedup_key": "policy_no",
+        "merge_order_by": "policy_date DESC NULLS LAST",
+        "archive_prefix": "cross_sell_latest"
+      },
       "output": "warehouse/fact/cross_sell/latest.parquet",
       "update_cadence": "with_source_xlsx",
       "key_fields": [
@@ -281,6 +299,11 @@
       "source_pattern": "05_续保清单_*.xlsx",
       "etl_entry": "node 数据管理/daily.mjs renewal",
       "etl_script": "pipelines/convert_renewal.py",
+      "trigger": {
+        "input_strategy": "single",
+        "input_glob": "05_续保清单_*.xlsx",
+        "archive_prefix": "renewal_latest"
+      },
       "output": "warehouse/fact/renewal/latest.parquet",
       "update_cadence": "with_source_xlsx",
       "key_fields": [
@@ -305,6 +328,13 @@
       "source_pattern": "07_维修资源*.xlsx",
       "etl_entry": "node 数据管理/daily.mjs repair",
       "etl_script": "pipelines/convert_repair.py",
+      "trigger": {
+        "input_strategy": "multi_file_merge",
+        "input_glob": "07_维修资源*.xlsx",
+        "merge_dedup_key": "repair_shop_name",
+        "merge_order_by": "report_date DESC NULLS LAST",
+        "archive_prefix": "repair_latest"
+      },
       "output": "warehouse/dim/repair/latest.parquet",
       "update_cadence": "irregular",
       "key_fields": [
@@ -333,6 +363,11 @@
       "source_pattern": "08_客户来源去向*.xlsx",
       "etl_entry": "node 数据管理/daily.mjs customer_flow",
       "etl_script": "pipelines/convert_customer_flow.py",
+      "trigger": {
+        "input_strategy": "single",
+        "input_glob": "08_客户来源去向*.xlsx",
+        "archive_prefix": "customer_flow_latest"
+      },
       "output": "warehouse/fact/customer_flow/latest.parquet",
       "update_cadence": "with_source_xlsx",
       "key_fields": [
