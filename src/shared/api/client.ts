@@ -279,57 +279,6 @@ class ApiClient {
     return requestPromise;
   }
 
-  /**
-   * 带分页元数据的请求方法（仅用于分页端点）
-   * 返回 { data, meta } 而非仅 data，保留服务端分页信息
-   */
-  private async requestWithMeta<T>(
-    endpoint: string,
-    hasRetriedAfterRefresh = false,
-  ): Promise<{ data: T; meta: { total: number; page: number; pageSize: number } }> {
-    const url = `${API_BASE}${endpoint}`;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const token = this.getToken();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
-
-    try {
-      const response = await fetch(url, { headers, credentials: 'include', signal: controller.signal });
-
-      // 401 自动刷新 token 并重试（与 request() 逻辑对齐）
-      const canTryRefresh = !endpoint.startsWith('/auth/')
-        && (Boolean(token) || this.hasSessionCookieHint);
-      if (response.status === 401 && !hasRetriedAfterRefresh && canTryRefresh) {
-        const refreshed = await this.tryRefreshSession();
-        if (refreshed) {
-          return this.requestWithMeta<T>(endpoint, true);
-        }
-      }
-
-      const body: ApiResponse<T> = await response.json();
-      if (!body.success) {
-        const error = new Error(body.error?.message || '请求失败');
-        (error as any).statusCode = body.error?.statusCode || response.status;
-        throw error;
-      }
-      return {
-        data: body.data as T,
-        meta: (body as any).meta ?? { total: 0, page: 1, pageSize: 20 },
-      };
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new RequestAbortError();
-      }
-      throw err;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
   // ============================================
   // 认证 API
   // ============================================
@@ -583,7 +532,6 @@ class ApiClient {
   async getGrowthAnalysis(startDate: string, endDate: string, baselineStart: string, baselineEnd: string, filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.GROWTH, filters, { startDate, endDate, baselineStart, baselineEnd }); }
   async getCostAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COST, filters); }
   async getComprehensiveBundle(params?: ComprehensiveFilterParams): Promise<ComprehensiveBundleResponse> { return this.queryGet<ComprehensiveBundleResponse>(QUERY_ROUTES.COMPREHENSIVE_BUNDLE, params as Record<string, unknown>); }
-  // getRenewalAnalysis/getRenewalDrilldown removed — replaced by getRenewalV2*
 
   /**
    * 获取车驾意推介率数据
@@ -965,45 +913,6 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(params),
     });
-  }
-
-  // ── 续保宇宙 V2 ──
-
-  async getRenewalV2Overview(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<{ total: Record<string, any>; grouped: Record<string, any>[] }>(`/query/${QUERY_ROUTES.RENEWAL_V2.OVERVIEW}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalV2Trend(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.TREND}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalV2Funnel(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<{ funnel: Record<string, any>[]; lossReason: Record<string, any>[] }>(`/query/${QUERY_ROUTES.RENEWAL_V2.FUNNEL}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalV2Competition(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<{ loss: Record<string, any>[]; gain: Record<string, any>[] }>(`/query/${QUERY_ROUTES.RENEWAL_V2.COMPETITION}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalV2Action(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.requestWithMeta<any[]>(`/query/${QUERY_ROUTES.RENEWAL_V2.ACTION}${query ? `?${query}` : ''}`);
-  }
-
-  async getRenewalV2Metadata() {
-    return this.request<{
-      latest_data_date: string | null;
-      earliest_expiry_date: string | null;
-      latest_expiry_date: string | null;
-      total_records: number;
-      renewed_count: number;
-      quoted_count: number;
-      due_year: number;
-    }>(`/query/${QUERY_ROUTES.RENEWAL_V2.METADATA}`);
   }
 
   // ── 巡检报告 ──

@@ -22,9 +22,6 @@ const CROSS_SELL_IDS = new Set([
 /** 需要 Growth CTE output schema 的指标 */
 const GROWTH_IDS = new Set(['growth_rate_yoy', 'growth_rate_mom']);
 
-/** 需要 RenewalUniverse schema 的指标 */
-const RENEWAL_IDS = new Set(['quote_coverage_rate', 'quote_to_renewal_rate']);
-
 // ═══════════════════════════════════════════════════
 // 断言执行器
 // ═══════════════════════════════════════════════════
@@ -118,21 +115,6 @@ INSERT INTO growth_data VALUES
   (80000, 90000);
 `;
 
-/** RenewalUniverse 合成数据 */
-const SEED_RENEWAL_DATA = `
-CREATE TABLE renewal_data (
-  is_quoted BOOLEAN,
-  is_renewed BOOLEAN
-);
-
-INSERT INTO renewal_data VALUES
-  (true, true),
-  (true, false),
-  (false, false),
-  (true, true),
-  (false, false);
-`;
-
 // ═══════════════════════════════════════════════════
 // 测试
 // ═══════════════════════════════════════════════════
@@ -145,7 +127,7 @@ describe('指标 testCase DuckDB 执行', () => {
     await db.init();
 
     // 创建所有合成数据表
-    for (const sql of [SEED_POLICY_DATA, SEED_CROSS_SELL_DATA, SEED_GROWTH_DATA, SEED_RENEWAL_DATA]) {
+    for (const sql of [SEED_POLICY_DATA, SEED_CROSS_SELL_DATA, SEED_GROWTH_DATA]) {
       // 拆分为独立语句执行
       const statements = sql.split(';').map((s) => s.trim()).filter(Boolean);
       for (const stmt of statements) {
@@ -162,7 +144,6 @@ describe('指标 testCase DuckDB 执行', () => {
   function getTableName(metricId: string): string {
     if (CROSS_SELL_IDS.has(metricId)) return 'cross_sell_data';
     if (GROWTH_IDS.has(metricId)) return 'growth_data';
-    if (RENEWAL_IDS.has(metricId)) return 'renewal_data';
     return 'policy_data';
   }
 

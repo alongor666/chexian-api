@@ -63,20 +63,6 @@ export const queryKeys = {
   comprehensiveBundle: (params: Record<string, unknown>) =>
     ['comprehensive-bundle', params] as const,
 
-  // ── 续保宇宙 V2 ──
-  renewalV2Overview: (params: Record<string, string>) =>
-    ['renewal-v2-overview', params] as const,
-  renewalV2Trend: (params: Record<string, string>) =>
-    ['renewal-v2-trend', params] as const,
-  renewalV2Funnel: (params: Record<string, string>) =>
-    ['renewal-v2-funnel', params] as const,
-  renewalV2Competition: (params: Record<string, string>) =>
-    ['renewal-v2-competition', params] as const,
-  renewalV2Action: (params: Record<string, string>) =>
-    ['renewal-v2-action', params] as const,
-  renewalV2Metadata: () =>
-    ['renewal-v2-metadata'] as const,
-
   // ── 巡检报告 ──
   patrolReport: (domain: string) =>
     ['patrol-report', domain] as const,

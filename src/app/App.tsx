@@ -81,9 +81,6 @@ const ReportTemplatesPanel = lazy(() =>
 const MotoCostPage = lazy(() =>
   import('../features/moto-cost').then((m) => ({ default: m.MotoCostPage }))
 );
-const RenewalAnalysisPage = lazy(() =>
-  import('../features/pages/RenewalAnalysisPage').then((m) => ({ default: m.RenewalAnalysisPage }))
-);
 const RepairPage = lazy(() =>
   import('../features/repair/RepairPage').then((m) => ({ default: m.RepairPage }))
 );
@@ -244,7 +241,6 @@ function App() {
                   <Route path="premium-report" element={<Navigate to="/reports" replace />} />
                   <Route path="marketing-report" element={<Navigate to="/reports" replace />} />
                   <Route path="truck" element={<Navigate to="/specialty?tab=truck" replace />} />
-                  <Route path="renewal" element={<Navigate to="/renewal-analysis" replace />} />
                   <Route path="cross-sell" element={<Navigate to="/specialty?tab=cross-sell" replace />} />
                   <Route path="comparison" element={<Navigate to="/growth" replace />} />
                   <Route path="comprehensive-analysis" element={<Navigate to="/cost?view=comprehensive" replace />} />
@@ -302,14 +298,6 @@ function App() {
                     path="customer-flow"
                     element={
                       <LazyRoute><CustomerFlowPage /></LazyRoute>
-                    }
-                  />
-
-                  {/* 续保分析 V2 - 独立数据源 RenewalUniverse */}
-                  <Route
-                    path="renewal-analysis"
-                    element={
-                      <LazyRoute><RenewalAnalysisPage /></LazyRoute>
                     }
                   />
 

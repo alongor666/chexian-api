@@ -35,16 +35,6 @@ export const QUERY_ROUTES = {
   COMPREHENSIVE_BUNDLE: 'comprehensive-bundle',
   COMPREHENSIVE_ANALYSIS_BUNDLE: 'comprehensive-analysis-bundle',
 
-  // 续保宇宙 V2
-  RENEWAL_V2: {
-    OVERVIEW: 'renewal-v2/overview',
-    TREND: 'renewal-v2/trend',
-    FUNNEL: 'renewal-v2/funnel',
-    COMPETITION: 'renewal-v2/competition',
-    ACTION: 'renewal-v2/action',
-    METADATA: 'renewal-v2/metadata',
-  },
-
   // 交叉销售（车驾意推介率）
   CROSS_SELL: 'cross-sell',
   CROSS_SELL_TREND: 'cross-sell-trend',

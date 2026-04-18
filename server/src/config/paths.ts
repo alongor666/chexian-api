@@ -121,15 +121,6 @@ export function getBrandDimPaths(): string[] {
   ];
 }
 
-// ── 续保宇宙 Parquet 路径（ETL 预计算扁平表）──
-
-export function getRenewalUniversePaths(): string[] {
-  return [
-    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/renewal_universe/latest.parquet'),
-    path.resolve(getDataDir(), 'fact/renewal_universe/latest.parquet'),
-  ];
-}
-
 // ── 客户来源去向 Parquet 路径 ──
 
 export function getCustomerFlowPaths(): string[] {

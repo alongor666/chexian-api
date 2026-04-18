@@ -16,7 +16,6 @@
  *   数据管理/warehouse/dim/brand/                 →  data/dim/brand/
  *   数据管理/warehouse/dim/repair/                →  data/dim/repair/
  *   数据管理/warehouse/dim/plate_region/          →  data/dim/plate_region/
- *   数据管理/warehouse/fact/renewal/              →  data/fact/renewal/
  *   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/
  *   数据管理/warehouse/fact/claims_detail/        →  data/fact/claims_detail/
  *   数据管理/warehouse/fact/cross_sell/           →  data/fact/cross_sell/
@@ -51,14 +50,12 @@ const LOCAL_CURRENT_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/policy/cur
 const LOCAL_SALESMAN_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/salesman');
 const LOCAL_PLAN_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plan');
 const LOCAL_BRAND_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/brand');
-const LOCAL_RENEWAL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal');
 const LOCAL_QUOTES_CONVERSION_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/quotes_conversion');
 const LOCAL_CLAIMS_DETAIL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims_detail');
 const LOCAL_CROSS_SELL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/cross_sell');
 const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_region');
-const LOCAL_RENEWAL_UNIVERSE_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_universe');
 const LOCAL_PATROL_REPORTS_DIR = join(ROOT_DIR, '数据管理/patrol_reports');
 const LOCAL_SNAPSHOTS_DIR = join(ROOT_DIR, '数据管理/warehouse/snapshots');
 
@@ -387,7 +384,6 @@ function collectCheckDirs() {
     { label: 'dim/salesman',   path: LOCAL_SALESMAN_DIR },
     { label: 'dim/plan',       path: LOCAL_PLAN_DIR },
     { label: 'dim/brand',     path: LOCAL_BRAND_DIR },
-    { label: 'fact/renewal',            path: LOCAL_RENEWAL_DIR },
     { label: 'fact/quotes_conversion', path: LOCAL_QUOTES_CONVERSION_DIR },
   ];
 
@@ -412,7 +408,6 @@ function printHelp() {
   数据管理/warehouse/dim/salesman/              →  data/dim/salesman/
   数据管理/warehouse/dim/plan/                  →  data/dim/plan/
   数据管理/warehouse/dim/brand/                 →  data/dim/brand/
-  数据管理/warehouse/fact/renewal/              →  data/fact/renewal/  (存在时)
   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/  (存在时)
 
 可选参数:
@@ -443,7 +438,6 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'policy/current',       local: LOCAL_CURRENT_DIR,            remote: `${runConfig.remoteDir}/current`,               critical: true },
     { label: 'dim/salesman',         local: LOCAL_SALESMAN_DIR,           remote: `${runConfig.remoteDir}/dim/salesman`,          critical: true },
     { label: 'dim/plan',             local: LOCAL_PLAN_DIR,               remote: `${runConfig.remoteDir}/dim/plan`,              critical: true },
-    { label: 'fact/renewal',         local: LOCAL_RENEWAL_DIR,            remote: `${runConfig.remoteDir}/fact/renewal`,          critical: false },
     { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${runConfig.remoteDir}/fact/quotes_conversion`, critical: false },
     { label: 'dim/brand',            local: LOCAL_BRAND_DIR,              remote: `${runConfig.remoteDir}/dim/brand`,             critical: false },
     { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${runConfig.remoteDir}/fact/claims_detail`,    critical: true },
@@ -498,7 +492,6 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'policy/current',       local: LOCAL_CURRENT_DIR,            remote: `${remote}/current`,               critical: true },
     { label: 'dim/salesman',         local: LOCAL_SALESMAN_DIR,           remote: `${remote}/dim/salesman`,          critical: true },
     { label: 'dim/plan',             local: LOCAL_PLAN_DIR,               remote: `${remote}/dim/plan`,              critical: true },
-    { label: 'fact/renewal',         local: LOCAL_RENEWAL_DIR,            remote: `${remote}/fact/renewal`,          critical: false },
     { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${remote}/fact/quotes_conversion`, critical: false },
     { label: 'dim/brand',            local: LOCAL_BRAND_DIR,              remote: `${remote}/dim/brand`,             critical: false },
     { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${remote}/fact/claims_detail`,    critical: true },
@@ -506,7 +499,6 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
-    { label: 'fact/renewal_universe', local: LOCAL_RENEWAL_UNIVERSE_DIR, remote: `${remote}/fact/renewal_universe`, critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,   remote: `${remote}/patrol_reports`,         critical: false },
     { label: 'snapshots',            local: LOCAL_SNAPSHOTS_DIR,        remote: `${remote}/snapshots`,              critical: false },
   ];
@@ -578,7 +570,6 @@ function writeSyncManifest() {
     { label: 'dim/salesman', path: LOCAL_SALESMAN_DIR },
     { label: 'dim/plan', path: LOCAL_PLAN_DIR },
     { label: 'dim/brand', path: LOCAL_BRAND_DIR },
-    { label: 'fact/renewal', path: LOCAL_RENEWAL_DIR },
     { label: 'fact/quotes_conversion', path: LOCAL_QUOTES_CONVERSION_DIR },
     { label: 'fact/claims_detail', path: LOCAL_CLAIMS_DETAIL_DIR },
     { label: 'fact/cross_sell', path: LOCAL_CROSS_SELL_DIR },

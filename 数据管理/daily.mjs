@@ -19,11 +19,10 @@
  *   node daily.mjs claims_detail  # 全量替换赔案明细域 + claims 聚合
  *   node daily.mjs quotes         # 全量替换报价清单域
  *   node daily.mjs cross_sell     # 全量替换交叉销售域
- *   node daily.mjs renewal        # 全量替换续保清单域
  *   node daily.mjs brand          # 全量替换厂牌维度表
  *   node daily.mjs repair         # 全量替换维修资源域
  *   node daily.mjs customer_flow  # 全量替换客户来源去向域
- *   node daily.mjs all            # 全部 8 域
+ *   node daily.mjs all            # 全部 6 域
  *   node daily.mjs --no-sync      # 跳过 VPS 同步
  */
 
@@ -204,12 +203,8 @@ const QUOTES_DIR = join(WAREHOUSE, 'quotes');
 const QUOTES_PATH = join(QUOTES_DIR, 'latest.parquet');
 const CLAIMS_DETAIL_DIR = join(WAREHOUSE, 'claims_detail');
 const CLAIMS_DETAIL_PATH = join(CLAIMS_DETAIL_DIR, 'latest.parquet');
-// 标准域路径（cross_sell/quotes_conversion/renewal_v2/brand/repair_resource/customer_flow）
+// 标准域路径（cross_sell/quotes_conversion/brand/repair_resource/customer_flow）
 // 由 runStandardDomain 从 data-sources.json:domains[*].output 派生，无需在此声明常量。
-// CUSTOMER_FLOW_PATH 仍声明因 runRenewalUniverse 直接引用（见下方）。
-const CUSTOMER_FLOW_PATH = join(WAREHOUSE, 'customer_flow/latest.parquet');
-const RENEWAL_UNIVERSE_DIR = join(WAREHOUSE, 'renewal_universe');
-const RENEWAL_UNIVERSE_PATH = join(RENEWAL_UNIVERSE_DIR, 'latest.parquet');
 
 // ── 通用域执行器（声明式 manifest 驱动） ──
 
@@ -495,29 +490,8 @@ function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePre
   renameSync(tmpPath, outputPath);
 }
 
-// ── 旧 runXxx 已被 runStandardDomain 替代（cross_sell/quotes_conversion/renewal_v2/brand/repair_resource/customer_flow） ──
-
-function runRenewalUniverse(python, scriptDir) {
-  log('cyan', '\n═══ RenewalUniverse 域：续保宇宙预计算（多源 JOIN）═══\n');
-
-  // 依赖：policy/current/ + quotes + customer_flow
-  const policyGlob = join(scriptDir, 'warehouse/fact/policy/current/*.parquet');
-  const quotesPath = QUOTES_PATH;
-  const customerFlowPath = CUSTOMER_FLOW_PATH;
-
-  const args = [
-    '--policy-glob', `"${policyGlob}"`,
-    '-o', `"${RENEWAL_UNIVERSE_PATH}"`,
-  ];
-  if (existsSync(quotesPath)) args.push('--quotes', `"${quotesPath}"`);
-  if (existsSync(customerFlowPath)) args.push('--customer-flow', `"${customerFlowPath}"`);
-
-  runPythonScript(python, join(scriptDir, 'pipelines/generate_renewal_universe.py'), args);
-
-  const rowCount = getParquetRowCount(python, RENEWAL_UNIVERSE_PATH);
-  updateDataSources('renewal_universe', { rowCount, fieldCount: 31 });
-  log('green', '✅ RenewalUniverse 域完成');
-}
+// ── 旧 runXxx 已被 runStandardDomain 替代（cross_sell/quotes_conversion/brand/repair_resource/customer_flow） ──
+// renewal_v2 / renewal_universe 已下线（2026-04-18），convert_renewal.py / generate_renewal_universe.py 已删除
 
 // ── 主流程 ──
 
@@ -526,7 +500,7 @@ async function main() {
   process.chdir(scriptDir);
 
   const noSync = process.argv.includes('--no-sync');
-  const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'renewal', 'renewal_universe', 'brand', 'repair', 'customer_flow', 'all'];
+  const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'all'];
   const subcommand = process.argv.find(a => ALL_DOMAINS.includes(a));
 
   // 子命令模式：单域处理
@@ -542,11 +516,9 @@ async function main() {
         break;
       case 'quotes': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'quotes_conversion')); break;
       case 'cross_sell': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'cross_sell')); break;
-      case 'renewal': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'renewal_v2')); break;
       case 'brand': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'brand')); break;
       case 'repair': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'repair_resource')); break;
       case 'customer_flow': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'customer_flow')); break;
-      case 'renewal_universe': runRenewalUniverse(python, scriptDir); break;
     }
     if (!noSync) {
       const synced = await syncToVps(scriptDir);
@@ -555,7 +527,7 @@ async function main() {
     return;
   }
   if (subcommand === 'all') {
-    // all = premium（下面的分片流程）+ 全部 7 个域
+    // all = premium（下面的分片流程）+ claims_detail + 5 个标准域
     // premium 继续走下面的分片逻辑，其他域在分片完成后执行
   }
 
@@ -765,7 +737,7 @@ async function main() {
   // 6. all 模式下追加全部域
   if (subcommand === 'all') {
     runClaimsDetail(python, scriptDir);
-    for (const id of ['cross_sell', 'quotes_conversion', 'renewal_v2', 'brand', 'repair_resource', 'customer_flow']) {
+    for (const id of ['cross_sell', 'quotes_conversion', 'brand', 'repair_resource', 'customer_flow']) {
       runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, id));
     }
   }
