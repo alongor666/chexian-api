@@ -13,7 +13,8 @@ export type MetricCategory =
   | 'ratio'        // 比率指标：续保率、商业险占比、新能源率
   | 'cost'         // 成本指标：赔付率、费用率、综合费用率
   | 'cross_sell'   // 交叉销售：驾意险推介率
-  | 'growth';      // 增长指标：同比、环比
+  | 'growth'       // 增长指标：同比、环比
+  | 'repair';      // 维修资源：修保比、本地资源占比、合作启用率
 
 /** 格式化函数 ID（与 src/shared/utils/formatters.ts 对应） */
 export type FormatterId =

@@ -2,8 +2,8 @@
  * 指标展示映射 — 从注册表自动生成
  *
  * 生成命令：npx tsx scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-04-17T23:18:15.477Z
- * 指标数量：36
+ * 生成时间：2026-04-18T11:27:55.476Z
+ * 指标数量：41
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成
  */
@@ -34,7 +34,6 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   'earned_loss_frequency': '出险率',
   'earned_margin_amount': '满期边际贡献额',
   'projected_margin_amount': '预估边际贡献额',
-  'comprehensive_expense_ratio': '综合费用率',
   'fixed_cost_amount': '固定成本额',
   'fixed_cost_ratio': '固定成本率',
   'combined_cost_amount': '综合成本额',
@@ -46,6 +45,12 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   'cross_sell_zhuquan_rate': '主全推介率',
   'growth_rate_yoy': '同比增长率',
   'growth_rate_mom': '环比增长率',
+  'repair_shop_total_count': '合作网点数',
+  'repair_4s_share': '4S 占比',
+  'repair_cooperation_active_rate': '合作启用率',
+  'repair_to_premium_ratio': '修保比',
+  'repair_damage_amount_total': '维修产值',
+  'repair_net_premium_total': '网点净保费',
 } as const;
 
 /** 指标 ID → 格式化配置 */
@@ -70,15 +75,14 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   'commercial_insurance_rate': { formatter: 'percent', unit: '%' },
   'quote_coverage_rate': { formatter: 'percent', unit: '%' },
   'quote_to_renewal_rate': { formatter: 'percent', unit: '%' },
-  'earned_claim_ratio': { formatter: 'percent', unit: '%', decimals: 1 },
-  'expense_ratio': { formatter: 'percent', unit: '%', decimals: 1 },
+  'earned_claim_ratio': { formatter: 'percent', unit: '%', decimals: 2 },
+  'expense_ratio': { formatter: 'percent', unit: '%', decimals: 2 },
   'avg_claim_amount': { formatter: 'premiumWan', unit: '万元' },
   'earned_premium': { formatter: 'premiumWan', unit: '万元' },
-  'variable_cost_ratio': { formatter: 'percent', unit: '%', decimals: 1 },
-  'earned_loss_frequency': { formatter: 'percent', unit: '%', decimals: 1 },
+  'variable_cost_ratio': { formatter: 'percent', unit: '%', decimals: 2 },
+  'earned_loss_frequency': { formatter: 'percent', unit: '%', decimals: 2 },
   'earned_margin_amount': { formatter: 'premiumWan', unit: '万元' },
   'projected_margin_amount': { formatter: 'premiumWan', unit: '万元' },
-  'comprehensive_expense_ratio': { formatter: 'percent', unit: '%', decimals: 1 },
   'fixed_cost_amount': { formatter: 'premiumWan', unit: '万元' },
   'fixed_cost_ratio': { formatter: 'percent', unit: '%', decimals: 1 },
   'combined_cost_amount': { formatter: 'premiumWan', unit: '万元' },
@@ -90,6 +94,12 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   'cross_sell_zhuquan_rate': { formatter: 'percent', unit: '%', decimals: 2 },
   'growth_rate_yoy': { formatter: 'percent', unit: '%', decimals: 2 },
   'growth_rate_mom': { formatter: 'percent', unit: '%', decimals: 2 },
+  'repair_shop_total_count': { formatter: 'count', unit: '个' },
+  'repair_4s_share': { formatter: 'percent', unit: '%' },
+  'repair_cooperation_active_rate': { formatter: 'percent', unit: '%' },
+  'repair_to_premium_ratio': { formatter: 'coefficient', unit: '倍', decimals: 3 },
+  'repair_damage_amount_total': { formatter: 'premiumWan', unit: '万元' },
+  'repair_net_premium_total': { formatter: 'premiumWan', unit: '万元' },
 } as const;
 
 /** 指标 ID → 公式描述 */
@@ -110,15 +120,14 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   'commercial_insurance_rate': '商业险件数 / 交强险件数',
   'quote_coverage_rate': '已报价 VIN 数 / 应续 VIN 数',
   'quote_to_renewal_rate': '已续保 VIN 数 / 已报价 VIN 数',
-  'earned_claim_ratio': '已报告赔款 / 满期保费（闰年感知）',
-  'expense_ratio': '费用金额 / 签单保费',
+  'earned_claim_ratio': '已报告赔款 / 满期保费',
+  'expense_ratio': '费用金额 / 保费',
   'avg_claim_amount': '已报告赔款 / 赔案件数',
   'earned_premium': '保费 × 满期天数 / 保险期限天数（闰年感知）',
-  'variable_cost_ratio': '满期赔付率 + 费用率（两个分母不同；闰年感知）',
+  'variable_cost_ratio': '满期赔付率 + 费用率（注意：两个分母不同）',
   'earned_loss_frequency': '(赔案件数/保单件数) × (保险期限天数/满期天数)。满期后=赔案/保单，未满期年化放大',
-  'earned_margin_amount': '满期保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)（闰年感知）',
-  'projected_margin_amount': '签单保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)（闰年感知）',
-  'comprehensive_expense_ratio': '(已报告赔款 + 费用金额) / 满期保费（闰年感知）',
+  'earned_margin_amount': '满期保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
+  'projected_margin_amount': '签单保费 × (1 - 已报告赔款/满期保费 - 费用金额/签单保费)',
   'fixed_cost_amount': '附加税费额 + 推动费额 + 管理费额（均为绝对值聚合）',
   'fixed_cost_ratio': '固定成本额 / 满期保费',
   'combined_cost_amount': '变动成本额 + 固定成本额 = 已报告赔款 + 费用金额 + 固定成本额',
@@ -130,4 +139,10 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   'cross_sell_zhuquan_rate': '主全下驾意险件数 / 主全车险件数',
   'growth_rate_yoy': '(本期 - 去年同期) / 去年同期',
   'growth_rate_mom': '(本期 - 上期) / 上期',
+  'repair_shop_total_count': 'RepairDim 中排除非维修单位后的去重网点数',
+  'repair_4s_share': '4S 店网点数 / 有效合作网点数',
+  'repair_cooperation_active_rate': '已合作（1生效中）网点数 / 有效合作网点数',
+  'repair_to_premium_ratio': '维修产值（核损金额）/ 签单净保费；衡量合作深度',
+  'repair_damage_amount_total': '所有网点核损金额合计（= 维修产值）',
+  'repair_net_premium_total': 'RepairDim 中所有网点签单净保费合计',
 } as const;

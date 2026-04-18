@@ -11,6 +11,7 @@ import { ratioMetrics } from './categories/ratio.js';
 import { costMetrics } from './categories/cost.js';
 import { crossSellMetrics } from './categories/cross-sell.js';
 import { growthMetrics } from './categories/growth.js';
+import { repairMetrics } from './categories/repair.js';
 
 // ==================== 注册表构建 ====================
 
@@ -20,6 +21,7 @@ const ALL_METRICS: readonly MetricDefinition[] = [
   ...costMetrics,
   ...crossSellMetrics,
   ...growthMetrics,
+  ...repairMetrics,
 ];
 
 const METRIC_MAP = new Map<string, MetricDefinition>(
