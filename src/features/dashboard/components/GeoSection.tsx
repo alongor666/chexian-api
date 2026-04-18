@@ -5,11 +5,12 @@
  * Top10 省/城市在地图上显示保费固定标签。
  * 下方明细表展示车辆数、占比、保费、占比、件均保费。
  */
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '@/shared/utils/echarts';
 import { cardStyles, colorClasses, cn, fontStyles, tableStyles } from '@/shared/styles';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
+import { buildFilterParams } from '@/shared/utils/filterParams';
 import { ensureMapRegistered, preloadDefaultMaps } from '@/shared/utils/geo-map-loader';
 import {
   PROVINCE_TO_GEOJSON,
@@ -41,15 +42,8 @@ export const GeoSection: React.FC = () => {
   const [mapLoading, setMapLoading] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
-  // 构建筛选参数
-  const buildParams = useCallback((): Record<string, string> => {
-    const p: Record<string, string> = {};
-    if (filters.policy_date_start) p.startDate = filters.policy_date_start;
-    if (filters.policy_date_end) p.endDate = filters.policy_date_end;
-    if (filters.org_level_3?.length) p.orgName = filters.org_level_3.join(',');
-    if (filters.analysis_year) p.analysisYear = String(filters.analysis_year);
-    return p;
-  }, [filters]);
+  // 构建筛选参数（复用共享函数，与页面筛选状态完整联动）
+  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
 
   // 预加载默认地图
   useEffect(() => {
@@ -60,10 +54,9 @@ export const GeoSection: React.FC = () => {
 
   // 数据获取
   useEffect(() => {
-    const params = buildParams();
-    fetchProvinceData(params);
-    fetchCityData(currentProvince, params);
-  }, [buildParams, fetchProvinceData, fetchCityData, currentProvince]);
+    fetchProvinceData(filterParams);
+    fetchCityData(currentProvince, filterParams);
+  }, [filterParams, fetchProvinceData, fetchCityData, currentProvince]);
 
   // 初始化默认地图
   useEffect(() => {
@@ -81,15 +74,14 @@ export const GeoSection: React.FC = () => {
       setMapKey(key);
       setCurrentProvince(provinceName);
       setMapLevel('province');
-      const params = buildParams();
-      fetchCityData(provinceName, params);
+      fetchCityData(provinceName, filterParams);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '地图加载失败';
       setMapError(`加载 ${provinceName} 地图失败: ${msg}`);
     } finally {
       setMapLoading(false);
     }
-  }, [buildParams, fetchCityData]);
+  }, [filterParams, fetchCityData]);
 
   // 返回全国
   const backToChina = useCallback(async () => {
