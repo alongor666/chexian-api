@@ -76,6 +76,9 @@ class BaseConverter(ABC):
         """业务规则校验，默认 pass-through"""
         return df
 
+    def pre_write_hook(self, df: pd.DataFrame, output_file: Path) -> None:
+        """写 parquet 之前的钩子（如 customer_flow 与旧 latest.parquet 的 diff 对比）"""
+
     def post_write_hook(self, df: pd.DataFrame, output_file: Path) -> None:
         """写完 parquet 后的钩子（如 diff 报告 / 额外统计）"""
 
@@ -156,6 +159,9 @@ class BaseConverter(ABC):
                 df = df[df[col].notna()].copy()
                 if len(df) < before:
                     print(f"   过滤无 {col}: {before - len(df):,} 行")
+
+        # 6c. pre-write 钩子（如 customer_flow 与旧 parquet 做 diff 对比）
+        self.pre_write_hook(df, output_file)
 
         # 7. 写 Parquet
         write_parquet_with_metadata(
