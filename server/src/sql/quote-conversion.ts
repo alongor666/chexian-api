@@ -2,6 +2,8 @@
  * 报价转化分析 SQL 生成器
  *
  * 数据源：QuoteConversion 视图（04_报价清单 Parquet + salesman dim JOIN）
+ * 粒度：单据级（每条报价单一行），用于业务员/机构绩效分析
+ *
  * 字段：quote_time, org_level_3, customer_category, renewal_status, is_underwritten,
  *       coverage_combination, insurance_grade, commercial_ncd,
  *       pure_risk_premium, final_quote_premium, ncd_premium, commercial_pricing_factor,
@@ -12,6 +14,10 @@
  *       salesman_name, salesman_no, team
  *
  * L2 历史快照额外字段：quote_count, salesman_count, org_count, first_quote_time, last_quote_time
+ *
+ * 指标字段命名：
+ *   - underwriting_rate：承保率（注册表 id: underwriting_rate，v1.0.0 起权威名称）
+ *   - conversion_rate：@deprecated v1.1，旧别名，与 underwriting_rate 同值。新前端代码请用 underwriting_rate。
  */
 
 export interface QuoteConversionFilters {
@@ -92,6 +98,7 @@ export function generateQuoteKpiQuery(filters: QuoteConversionFilters = {}): str
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
+      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS underwriting_rate,
       ROUND(SUM(CASE WHEN pure_risk_premium > 0 THEN final_quote_premium END) / NULLIF(SUM(CASE WHEN pure_risk_premium > 0 THEN pure_risk_premium END), 0), 3) AS avg_discount_rate,
       ROUND(SUM(CASE WHEN is_underwritten = '承保' THEN final_quote_premium ELSE 0 END), 0) AS insured_premium,
       COUNT(DISTINCT salesman_no) AS salesman_count,
@@ -155,6 +162,7 @@ export function generateQuoteDrilldownQuery(
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
+      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS underwriting_rate,
       -- 续保转化率
       ROUND(100.0 * COUNT(CASE WHEN renewal_status = '续保' AND is_underwritten = '承保' THEN 1 END)
         / NULLIF(COUNT(CASE WHEN renewal_status = '续保' THEN 1 END), 0), 1) AS renewal_rate,
@@ -196,7 +204,8 @@ export function generateQuoteHeatmapQuery(
       ${colExpr} AS dim_value,
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS total_insured,
-      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate
+      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
+      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS underwriting_rate
     FROM QuoteConversion
     WHERE ${where}
     GROUP BY org_level_3, ${colExpr}
@@ -213,6 +222,7 @@ export function generateQuotePriceQuery(filters: QuoteConversionFilters = {}): s
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
+      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS underwriting_rate,
       ROUND(AVG(final_quote_premium), 0) AS avg_premium,
       ROUND(SUM(commercial_pricing_factor * final_quote_premium) / NULLIF(SUM(CASE WHEN commercial_pricing_factor IS NOT NULL AND commercial_pricing_factor > 0 THEN final_quote_premium END), 0), 3) AS avg_pricing_coef
     FROM QuoteConversion
@@ -246,6 +256,7 @@ export function generateQuoteRankingQuery(
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS total_insured,
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
+      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS underwriting_rate,
       ROUND(SUM(CASE WHEN pure_risk_premium > 0 THEN final_quote_premium END) / NULLIF(SUM(CASE WHEN pure_risk_premium > 0 THEN pure_risk_premium END), 0), 3) AS avg_discount
     FROM QuoteConversion
     WHERE ${where}
@@ -280,7 +291,8 @@ export function generateQuoteTrendQuery(
       renewal_status AS renewal_type,
       COUNT(*) AS total_quotes,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS total_insured,
-      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate
+      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
+      ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS underwriting_rate
     FROM QuoteConversion
     WHERE ${where}
     GROUP BY ${timeBucket}, renewal_status

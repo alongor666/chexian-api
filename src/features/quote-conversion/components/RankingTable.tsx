@@ -69,7 +69,7 @@ export function RankingTable({
               </tr>
             </thead>
             <tbody>
-              {(data ?? []).slice().sort((a, b) => (a.conversion_rate ?? 0) - (b.conversion_rate ?? 0)).map(row => {
+              {(data ?? []).slice().sort((a, b) => (a.underwriting_rate ?? 0) - (b.underwriting_rate ?? 0)).map(row => {
                 const maxQuotes = Math.max(...(data ?? []).map(r => r.total_quotes), 1);
                 const barWidth = (row.total_quotes / maxQuotes) * 100;
                 const insuredWidth = row.total_quotes > 0 ? (row.total_insured / row.total_quotes) * barWidth : 0;
@@ -80,7 +80,7 @@ export function RankingTable({
                     <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_quotes)}</td>
                     <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_insured)}</td>
                     <td className={`${tableStyles.cell} text-right font-semibold`}>
-                      <RateCell value={row.conversion_rate} />
+                      <RateCell value={row.underwriting_rate} />
                     </td>
                     <td className={`${tableStyles.cell} text-right`}>
                       <RateCell value={row.avg_discount != null ? row.avg_discount * 100 : null} />

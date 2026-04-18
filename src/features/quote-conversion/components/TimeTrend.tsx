@@ -31,11 +31,11 @@ export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
     const timeBuckets = [...new Set(data.map(r => r.time_bucket ?? ''))].sort();
     const renewalData = timeBuckets.map(t => {
       const row = data.find(r => r.time_bucket === t && r.renewal_type === '续保');
-      return row?.conversion_rate ?? 0;
+      return row?.underwriting_rate ?? 0;
     });
     const switchData = timeBuckets.map(t => {
       const row = data.find(r => r.time_bucket === t && r.renewal_type === '转保');
-      return row?.conversion_rate ?? 0;
+      return row?.underwriting_rate ?? 0;
     });
     const totalQuotes = timeBuckets.map(t => {
       return data.filter(r => r.time_bucket === t).reduce((sum, r) => sum + (r.total_quotes ?? 0), 0);
