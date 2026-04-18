@@ -14,7 +14,7 @@
       "last_updated": "2026-04-18",
       "data_range": "2021-01-01 ~ 2026-04-07",
       "row_count": 2526164,
-      "field_count": 53,
+      "field_count": 41,
       "key_fields": [
         "保单号",
         "签单日期",
@@ -49,7 +49,7 @@
       "last_updated": "2026-04-18",
       "data_range": "2019-01-01 ~ 2026-04-03",
       "row_count": 280241,
-      "field_count": 38,
+      "field_count": 39,
       "key_fields": [
         "claim_no",
         "policy_no",
@@ -91,7 +91,7 @@
       "last_updated": "2026-04-18",
       "data_range": "2025-12-02 ~ 2026-04-09",
       "row_count": 3651609,
-      "field_count": 33,
+      "field_count": 32,
       "key_fields": [
         "quote_time",
         "org_level_3",
@@ -118,26 +118,19 @@
     },
     {
       "id": "renewal_funnel",
-      "name": "续保转化漏斗",
+      "name": "⚠ 已废弃 — 续保转化漏斗",
       "type": "fact",
-      "source_pattern": "交商同保续保_*.xlsx",
-      "etl_entry": "诊断脚本产出（无独立ETL）",
-      "etl_script": "pipelines/diagnose_vehicle.py等",
+      "deprecated": true,
+      "deprecated_reason": "续保数据源已下线（2026-04-18）。前端续保分析页已删除，数据源将重构。",
+      "source_pattern": "N/A",
+      "etl_entry": "N/A",
+      "etl_script": "N/A",
       "output": "warehouse/fact/renewal/renewal_funnel_*.parquet",
-      "update_cadence": "with_quote_date",
-      "last_updated": "2026-04-14",
-      "data_range": "2025-01-01 ~ 2026-03-30",
-      "row_count": 119636,
-      "field_count": 10,
-      "key_fields": [
-        "org_level_3",
-        "policy_no",
-        "is_quoted",
-        "is_renewed",
-        "customer_category",
-        "insurance_grade"
-      ],
-      "notes": "按报价日期更新，诊断时自动覆盖"
+      "update_cadence": "N/A",
+      "last_updated": "2026-04-18",
+      "row_count": 35011,
+      "field_count": 20,
+      "notes": "历史 parquet 保留供回查；ETL/前端页/查询路由均已删除"
     },
     {
       "id": "quotes_status",
@@ -188,9 +181,9 @@
       },
       "output": "warehouse/dim/brand/latest.parquet",
       "update_cadence": "with_premium",
-      "last_updated": "2026-04-03",
-      "row_count": 37810,
-      "field_count": 5,
+      "last_updated": "2026-04-18",
+      "row_count": 371359,
+      "field_count": 15,
       "key_fields": [
         "厂牌车型",
         "品牌",
@@ -257,6 +250,7 @@
         "input_glob": "03_交叉销售_*.xlsx",
         "merge_dedup_key": "policy_no",
         "merge_order_by": "policy_date DESC NULLS LAST",
+        "merge_with_history": true,
         "archive_prefix": "cross_sell_latest"
       },
       "output": "warehouse/fact/cross_sell/latest.parquet",
@@ -277,8 +271,8 @@
       ],
       "frontend_page": "specialty (tab=cross-sell)",
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重",
-      "last_updated": "2026-04-14",
-      "row_count": 403709,
+      "last_updated": "2026-04-18",
+      "row_count": 404651,
       "field_count": 9
     },
     {
@@ -294,32 +288,19 @@
     },
     {
       "id": "renewal_v2",
-      "name": "续保清单(套单)",
+      "name": "⚠ 已废弃 — 续保清单(套单)",
       "type": "fact",
-      "source_pattern": "05_续保清单_*.xlsx",
-      "etl_entry": "node 数据管理/daily.mjs renewal",
-      "etl_script": "pipelines/convert_renewal.py",
-      "trigger": {
-        "input_strategy": "single",
-        "input_glob": "05_续保清单_*.xlsx",
-        "archive_prefix": "renewal_latest"
-      },
+      "deprecated": true,
+      "deprecated_reason": "续保数据源已下线（2026-04-18）。convert_renewal.py / generate_renewal_universe.py / renewal-v2 路由 / renewal-analysis 前端页均已删除；数据源将重构。",
+      "source_pattern": "N/A",
+      "etl_entry": "N/A",
+      "etl_script": "N/A（原 pipelines/convert_renewal.py 已删除）",
       "output": "warehouse/fact/renewal/latest.parquet",
-      "update_cadence": "with_source_xlsx",
-      "key_fields": [
-        "source_policy_no",
-        "renewed_policy_no",
-        "is_renewed",
-        "expiry_month",
-        "org_level_3"
-      ],
-      "duckdb_relation": "PolicyFactRenewal (VIEW)",
-      "api_routes": [
-        "/api/query/renewal",
-        "/api/query/renewal-drilldown"
-      ],
-      "frontend_page": "specialty (tab=renewal)",
-      "notes": "续保跟踪清单，9列+1派生(is_renewed)，替换旧版renewal_funnel"
+      "update_cadence": "N/A",
+      "notes": "历史 parquet 保留供回查；ETL/前端页/查询路由均已删除",
+      "last_updated": "2026-04-18",
+      "row_count": 119636,
+      "field_count": 10
     },
     {
       "id": "repair_resource",
@@ -385,7 +366,7 @@
       ],
       "frontend_page": "customer-flow",
       "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知",
-      "last_updated": "2026-04-14",
+      "last_updated": "2026-04-18",
       "row_count": 981475,
       "field_count": 7
     }

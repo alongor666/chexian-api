@@ -27,7 +27,6 @@ import {
   getRepairDimPaths,
   getBrandDimPaths,
   getCustomerFlowPaths,
-  getRenewalUniversePaths,
 } from '../config/paths.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 import { isValidParquetFile } from '../utils/security.js';
@@ -424,15 +423,6 @@ export class DataBootstrapper {
       await domainLoaders.loadCustomerFlow(db, p);
     });
 
-    // RenewalUniverse（续保分析，数据量大）
-    this.lazyRegistry.register('RenewalUniverse', async () => {
-      const p = getRenewalUniversePaths().find(p => fs.existsSync(p));
-      if (!p) return;
-      console.time('[Bootstrap:Lazy] RenewalUniverse');
-      await domainLoaders.loadRenewalUniverse(db, p);
-      console.timeEnd('[Bootstrap:Lazy] RenewalUniverse');
-    });
-
     // QuoteConversion（仅报价转化页）
     this.lazyRegistry.register('QuoteConversion', async () => {
       const p = getQuoteConversionPaths().find(p => fs.existsSync(p));
@@ -440,7 +430,7 @@ export class DataBootstrapper {
       await domainLoaders.loadQuoteConversion(db, p);
     });
 
-    console.log('[Bootstrap] Lazy domains registered: ClaimsDetail, ClaimsAgg, CrossSell, RepairDim, BrandDim, CustomerFlow, RenewalUniverse, QuoteConversion');
+    console.log('[Bootstrap] Lazy domains registered: ClaimsDetail, ClaimsAgg, CrossSell, RepairDim, BrandDim, CustomerFlow, QuoteConversion');
   }
 
   // ============================================

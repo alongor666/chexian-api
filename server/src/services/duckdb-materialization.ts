@@ -19,13 +19,11 @@ export const DERIVED_RELATIONS = [
   'ClaimsAgg',
   'CrossSellFact',
   'CrossSellDailyAgg',
-  'PolicyFactRenewal',
   'PolicyFact',
   'PolicyFactRealtime',
   'RepairDim',
   'BrandDim',
   'CustomerFlow',
-  'RenewalUniverse',
 ] as const;
 
 /**
@@ -157,7 +155,7 @@ export async function materializePolicyFactWorkingSet(db: DuckDBQueryable): Prom
   const t0 = Date.now();
 
   // 检测源表中实际存在的布尔字段（union_by_name 可能填 NULL 给缺失列）
-  const schema = await db.getTableSchema('PolicyFactRenewal');
+  const schema = await db.getTableSchema('PolicyFact');
   const existingCols = new Set(schema.map((c: any) => c.column_name));
   const boolFieldsInSchema = BOOLEAN_FIELDS.filter((f) => existingCols.has(f));
 
@@ -174,7 +172,7 @@ export async function materializePolicyFactWorkingSet(db: DuckDBQueryable): Prom
   // 这是分析型查询的关键优化：B-tree 索引对范围扫描作用有限，zonemap 才是 DuckDB 列式剪枝的主力
   await db.query(`
     CREATE TABLE PolicyFactRealtime AS
-    ${selectExpr} FROM PolicyFactRenewal
+    ${selectExpr} FROM PolicyFact
     ORDER BY CAST(policy_date AS DATE) NULLS LAST
   `);
   console.log(`[DuckDB] PolicyFactRealtime created in ${Date.now() - t0}ms (${boolFieldsInSchema.length} boolean fields standardized, ordered by policy_date for zonemap pruning)`);
@@ -183,10 +181,6 @@ export async function materializePolicyFactWorkingSet(db: DuckDBQueryable): Prom
   await db.query(`
     CREATE OR REPLACE VIEW PolicyFact AS
     SELECT * FROM PolicyFactRealtime
-  `);
-  await db.query(`
-    CREATE OR REPLACE VIEW PolicyFactRenewal AS
-    SELECT * FROM PolicyFact
   `);
 
   // 释放原始表 — 此时所有视图已指向 PolicyFactRealtime，raw_parquet 无引用
@@ -446,13 +440,6 @@ export async function createPolicyFactView(db: DuckDBQueryable, sourceTable: str
     await db.query(`CREATE OR REPLACE VIEW PolicyFact AS SELECT * FROM raw_parquet`);
     console.log(`[DuckDB] Added ${missingFields.length} compat columns to raw_parquet: ${missingFields.map(f => f[0]).join(', ')}`);
   }
-
-  // 创建 PolicyFactRenewal 视图（续保下钻模块使用）
-  await db.query(`
-    CREATE OR REPLACE VIEW PolicyFactRenewal AS
-    SELECT * FROM PolicyFact
-  `);
-  console.log('[DuckDB] PolicyFactRenewal view created');
 
   await materializePolicyFactWorkingSet(db);
   // createCrossSellRealtimeView 已从此处移除（per D-09 解耦）

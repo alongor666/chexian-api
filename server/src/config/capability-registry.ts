@@ -76,20 +76,6 @@ export const capabilities: Capability[] = [
     ],
   },
   {
-    id: 'renewal',
-    route: '/renewal-analysis',
-    name: '续保分析',
-    icon: 'RefreshCw',
-    description: '续保率分析，含机构/团队/业务员维度续保率、续保明细下钻',
-    keywords: ['续保', '续保率', '到期续保', '续转率'],
-    exampleQueries: [
-      '续保率是多少',
-      '各机构续保情况',
-      '续保分析',
-      '到期保单续保率',
-    ],
-  },
-  {
     id: 'cross-sell',
     route: '/specialty?tab=cross-sell',
     name: '驾意险推介率',

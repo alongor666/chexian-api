@@ -49,11 +49,6 @@ const ROUTE_BUNDLE_MAP: Record<string, string> = {
   '/api/query/customer-flow/outflow': 'customer-flow-outflow',
   '/api/query/customer-flow/trend': 'customer-flow-trend',
   '/api/query/customer-flow/metadata': 'customer-flow-metadata',
-  // Phase 3: 续保宇宙核心端点（默认参数命中率高）
-  '/api/query/renewal-v2/metadata': 'renewal-metadata',
-  '/api/query/renewal-v2/overview': 'renewal-overview',
-  '/api/query/renewal-v2/trend': 'renewal-trend',
-  '/api/query/renewal-v2/funnel': 'renewal-funnel',
 };
 
 // ── 内存计数器（snapshot-health 端点使用）──────
