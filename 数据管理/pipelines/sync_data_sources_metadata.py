@@ -28,11 +28,14 @@ DATA_SOURCES_PATH = ROOT / "data-sources.json"
 
 
 def scan_parquet(files: list[str], con: duckdb.DuckDBPyConnection) -> tuple[int, int]:
+    # 参数化 read_parquet(?, ...)：list 作为 parameter，彻底隔离 SQL 注入
     cols = con.execute(
-        f"DESCRIBE SELECT * FROM read_parquet({files!r}, union_by_name=true) LIMIT 0"
+        "DESCRIBE SELECT * FROM read_parquet(?, union_by_name=true) LIMIT 0",
+        [files],
     ).fetchall()
     rows = con.execute(
-        f"SELECT COUNT(*) FROM read_parquet({files!r}, union_by_name=true)"
+        "SELECT COUNT(*) FROM read_parquet(?, union_by_name=true)",
+        [files],
     ).fetchone()[0]
     return len(cols), int(rows)
 

@@ -32,6 +32,12 @@ import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, r
 import { basename, dirname, join, resolve } from 'path';
 import { platform, homedir } from 'os';
 import { fileURLToPath } from 'url';
+import {
+  getParquetRowCount,
+  getParquetColumnCount,
+  getPartitionedRowCount,
+  getPartitionedColumnCount,
+} from './pipelines/parquet_stats.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -189,29 +195,9 @@ function updateDataSources(domainId, { rowCount, fieldCount, dataRange } = {}) {
   }
 }
 
-/** 用 pyarrow 快速获取 parquet 行数 */
-function getParquetRowCount(python, parquetPath) {
-  try {
-    const result = execSync(
-      `"${python}" -c "import pyarrow.parquet as pq; print(pq.read_metadata('${parquetPath.replace(/\\/g, '/')}').num_rows)"`,
-      { encoding: 'utf-8', cwd: __dirname }
-    );
-    return parseInt(result.trim(), 10);
-  } catch { return null; }
-}
-
-/** 用 pyarrow 快速获取 parquet 列数（避免依赖 manifest 中可能过时的 field_count） */
-function getParquetColumnCount(python, parquetPath) {
-  try {
-    const result = execSync(
-      `"${python}" -c "import pyarrow.parquet as pq; print(len(pq.read_schema('${parquetPath.replace(/\\/g, '/')}').names))"`,
-      { encoding: 'utf-8', cwd: __dirname }
-    );
-    return parseInt(result.trim(), 10);
-  } catch { return null; }
-}
-
 // ── 分域处理 ──
+// getParquetRowCount / getParquetColumnCount / getPartitionedRowCount /
+// getPartitionedColumnCount 已抽到 pipelines/parquet_stats.mjs
 
 const WAREHOUSE = join(__dirname, 'warehouse/fact');
 const QUOTES_DIR = join(WAREHOUSE, 'quotes');
@@ -253,10 +239,7 @@ function runStandardDomain(python, scriptDir, manifest) {
     return;
   }
   const { id, name, etl_script, output, trigger } = manifest;
-  const {
-    input_strategy, input_glob, archive_prefix,
-    output_is_dir, merge_dedup_key, merge_order_by,
-  } = trigger;
+  const { input_strategy, input_glob } = trigger;
 
   log('cyan', `\n═══ ${id} 域：${name || id}（${input_strategy}）═══\n`);
 
@@ -269,90 +252,101 @@ function runStandardDomain(python, scriptDir, manifest) {
     log('green', `源文件: ${f.name} (${(statSync(f.path).size / 1024 / 1024).toFixed(1)} MB)`);
   }
 
-  const scriptPath = join(scriptDir, etl_script);
-  const outputAbs = join(scriptDir, output);
-  ensureDir(dirname(outputAbs));
+  const ctx = {
+    python, id, scriptDir, sourceFiles, trigger,
+    scriptPath: join(scriptDir, etl_script),
+    outputAbs: join(scriptDir, output),
+  };
+  ensureDir(dirname(ctx.outputAbs));
 
-  if (input_strategy === 'single') {
-    safeConvertDomain(python, scriptPath, sourceFiles[0].path, outputAbs, archive_prefix);
+  const strategyFn = {
+    single: runStrategySingle,
+    multi_file_input: runStrategyMultiInput,
+    multi_file_merge: runStrategyMultiMerge,
+  }[input_strategy];
 
-  } else if (input_strategy === 'multi_file_input') {
-    if (existsSync(outputAbs)) {
-      const archiveDir = join(homedir(), 'chexian-archive');
-      ensureDir(archiveDir);
-      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
-      log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDate()}.parquet`);
-    }
-    const inputArgs = ['-i', ...sourceFiles.map(f => `"${f.path}"`)];
-    const outputArg = output_is_dir ? dirname(outputAbs) : outputAbs;
-    runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${outputArg}"`]);
-
-  } else if (input_strategy === 'multi_file_merge') {
-    const mergeWithHistory = trigger.merge_with_history === true;
-    const hasHistory = mergeWithHistory && existsSync(outputAbs);
-
-    const tmpDir = join(dirname(outputAbs), '_tmp');
-    ensureDir(tmpDir);
-    const tmpFiles = [];
-    for (const file of sourceFiles) {
-      const tmpPath = join(tmpDir, file.name.replace(/\.xlsx$/i, '.parquet'));
-      log('green', `▶ 转换: ${file.name}`);
-      try {
-        runPythonScript(python, scriptPath, ['-i', `"${file.path}"`, '-o', `"${tmpPath}"`]);
-      } catch (e) {
-        log('yellow', `⚠ 转换失败: ${file.name} — ${e.message?.slice(0, 100)}`);
-      }
-      if (existsSync(tmpPath)) tmpFiles.push(tmpPath);
-    }
-    if (tmpFiles.length === 0) {
-      log('red', `❌ 未生成任何 ${id} parquet`);
-      return;
-    }
-
-    // 短路：单文件 + 不合并历史 → 直接替换（避免起 DuckDB 进程）
-    if (tmpFiles.length === 1 && !hasHistory) {
-      if (existsSync(outputAbs)) {
-        const archiveDir = join(homedir(), 'chexian-archive');
-        ensureDir(archiveDir);
-        renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
-      }
-      renameSync(tmpFiles[0], outputAbs);
-      try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch (e) {}
-    } else {
-      // merge_parquet.py dedup 合并；若 merge_with_history 则把历史 latest 加入输入
-      const mergeInputs = hasHistory ? [outputAbs, ...tmpFiles] : tmpFiles;
-      const tmpOutput = outputAbs + '.tmp';
-      const mergeScript = join(scriptDir, 'pipelines/merge_parquet.py');
-      const desc = hasHistory
-        ? `历史 latest + ${tmpFiles.length} 增量`
-        : `${tmpFiles.length} 分片`;
-      log('green', `▶ 合并（${desc}），按 ${merge_dedup_key} 去重...`);
-      runPythonScript(python, mergeScript, [
-        '-i', ...mergeInputs.map(f => `"${f}"`),
-        '-o', `"${tmpOutput}"`,
-        '--dedup-key', merge_dedup_key,
-        '--order-by', `"${merge_order_by}"`,
-      ]);
-      if (existsSync(outputAbs)) {
-        const archiveDir = join(homedir(), 'chexian-archive');
-        ensureDir(archiveDir);
-        renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
-      }
-      renameSync(tmpOutput, outputAbs);
-      for (const f of tmpFiles) { try { unlinkSync(f); } catch (e) {} }
-      try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch (e) {}
-    }
-
-  } else {
+  if (!strategyFn) {
     log('red', `❌ 未知 input_strategy: ${input_strategy}`);
     return;
   }
+  if (strategyFn(ctx) === false) return;
 
   // 行数 + 列数从 parquet 实读（避免 manifest 中可能过时的 field_count）+ data-sources.json 回写
-  const rowCount = getParquetRowCount(python, outputAbs);
-  const fieldCount = getParquetColumnCount(python, outputAbs);
+  const rowCount = getParquetRowCount(python, ctx.outputAbs);
+  const fieldCount = getParquetColumnCount(python, ctx.outputAbs);
   updateDataSources(id, { rowCount, fieldCount });
   log('green', `✅ ${id} 域完成`);
+}
+
+function runStrategySingle({ python, scriptPath, sourceFiles, outputAbs, trigger }) {
+  safeConvertDomain(python, scriptPath, sourceFiles[0].path, outputAbs, trigger.archive_prefix);
+}
+
+function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs, trigger }) {
+  const { archive_prefix, output_is_dir } = trigger;
+  if (existsSync(outputAbs)) {
+    const archiveDir = join(homedir(), 'chexian-archive');
+    ensureDir(archiveDir);
+    renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
+    log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDate()}.parquet`);
+  }
+  const inputArgs = ['-i', ...sourceFiles.map(f => `"${f.path}"`)];
+  const outputArg = output_is_dir ? dirname(outputAbs) : outputAbs;
+  runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${outputArg}"`]);
+}
+
+function runStrategyMultiMerge(ctx) {
+  const { python, id, scriptDir, scriptPath, sourceFiles, outputAbs, trigger } = ctx;
+  const { archive_prefix, merge_dedup_key, merge_order_by } = trigger;
+  const hasHistory = trigger.merge_with_history === true && existsSync(outputAbs);
+
+  const tmpDir = join(dirname(outputAbs), '_tmp');
+  ensureDir(tmpDir);
+  const tmpFiles = [];
+  for (const file of sourceFiles) {
+    const tmpPath = join(tmpDir, file.name.replace(/\.xlsx$/i, '.parquet'));
+    log('green', `▶ 转换: ${file.name}`);
+    try {
+      runPythonScript(python, scriptPath, ['-i', `"${file.path}"`, '-o', `"${tmpPath}"`]);
+    } catch (e) {
+      log('yellow', `⚠ 转换失败: ${file.name} — ${e.message?.slice(0, 100)}`);
+    }
+    if (existsSync(tmpPath)) tmpFiles.push(tmpPath);
+  }
+  if (tmpFiles.length === 0) {
+    log('red', `❌ 未生成任何 ${id} parquet`);
+    return false;
+  }
+
+  const archiveDir = join(homedir(), 'chexian-archive');
+  // 短路：单文件 + 不合并历史 → 直接替换（避免起 DuckDB 进程）
+  if (tmpFiles.length === 1 && !hasHistory) {
+    if (existsSync(outputAbs)) {
+      ensureDir(archiveDir);
+      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
+    }
+    renameSync(tmpFiles[0], outputAbs);
+  } else {
+    // merge_parquet.py dedup 合并；若 merge_with_history 则把历史 latest 加入输入
+    const mergeInputs = hasHistory ? [outputAbs, ...tmpFiles] : tmpFiles;
+    const tmpOutput = outputAbs + '.tmp';
+    const mergeScript = join(scriptDir, 'pipelines/merge_parquet.py');
+    const desc = hasHistory ? `历史 latest + ${tmpFiles.length} 增量` : `${tmpFiles.length} 分片`;
+    log('green', `▶ 合并（${desc}），按 ${merge_dedup_key} 去重...`);
+    runPythonScript(python, mergeScript, [
+      '-i', ...mergeInputs.map(f => `"${f}"`),
+      '-o', `"${tmpOutput}"`,
+      '--dedup-key', merge_dedup_key,
+      '--order-by', `"${merge_order_by}"`,
+    ]);
+    if (existsSync(outputAbs)) {
+      ensureDir(archiveDir);
+      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
+    }
+    renameSync(tmpOutput, outputAbs);
+    for (const f of tmpFiles) { try { unlinkSync(f); } catch (e) {} }
+  }
+  try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch (e) {}
 }
 
 async function syncToVps(scriptDir) {
@@ -477,30 +471,6 @@ function runClaimsDetail(python, scriptDir) {
   } catch { /* non-fatal */ }
 
   log('green', '✅ ClaimsDetail 域完成（分区模式）');
-}
-
-/** 统计分区目录中所有 claims_*.parquet 的总行数 */
-function getPartitionedRowCount(python, dir) {
-  try {
-    const globPath = join(dir, 'claims_*.parquet').replace(/\\/g, '/');
-    const result = execSync(
-      `"${python}" -c "import duckdb; print(duckdb.sql(\\"SELECT COUNT(*) FROM read_parquet('${globPath}')\\").fetchone()[0])"`,
-      { encoding: 'utf-8', cwd: __dirname }
-    );
-    return parseInt(result.trim(), 10);
-  } catch { return null; }
-}
-
-/** 分区 parquet 的列数（union_by_name 取 schema 并集，兼容年度分区 schema 漂移） */
-function getPartitionedColumnCount(python, dir) {
-  try {
-    const globPath = join(dir, 'claims_*.parquet').replace(/\\/g, '/');
-    const result = execSync(
-      `"${python}" -c "import duckdb; r = duckdb.sql(\\"DESCRIBE SELECT * FROM read_parquet('${globPath}', union_by_name=true) LIMIT 0\\").fetchall(); print(len(r))"`,
-      { encoding: 'utf-8', cwd: __dirname }
-    );
-    return parseInt(result.trim(), 10);
-  } catch { return null; }
 }
 
 // ── 安全域转换（先写 tmp，成功后再归档旧文件+原子替换）──
