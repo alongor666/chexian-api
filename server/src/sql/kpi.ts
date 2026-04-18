@@ -53,12 +53,12 @@ export const generateKpiQuery = (
   const finalBaseWhereClause = baseWhereClause ?? whereClause;
 
   return `
-    WITH filtered AS (
+    WITH filtered AS MATERIALIZED (
       SELECT *
       FROM PolicyFact
       WHERE ${whereClause}
     ),
-    filtered_base AS (
+    filtered_base AS MATERIALIZED (
       SELECT *
       FROM PolicyFact
       WHERE ${finalBaseWhereClause}

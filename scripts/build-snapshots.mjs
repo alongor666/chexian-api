@@ -96,6 +96,28 @@ const BUNDLE_DEFINITIONS = {
     path: '/api/query/customer-flow/metadata',
     paramSets: [{}],
   },
+  // ── Phase 3 新增：综合分析（零参数，命中率极高）──────
+  'comprehensive-bundle': {
+    path: '/api/query/comprehensive-bundle',
+    paramSets: [{}],
+  },
+  // ── Phase 3 新增：续保宇宙核心端点（默认视图零/少参数）──
+  'renewal-metadata': {
+    path: '/api/query/renewal-v2/metadata',
+    paramSets: [{}],
+  },
+  'renewal-overview': {
+    path: '/api/query/renewal-v2/overview',
+    paramSets: [{}, { groupBy: 'org' }, { groupBy: 'salesman' }],
+  },
+  'renewal-trend': {
+    path: '/api/query/renewal-v2/trend',
+    paramSets: [{}],
+  },
+  'renewal-funnel': {
+    path: '/api/query/renewal-v2/funnel',
+    paramSets: [{}, { groupBy: 'org' }],
+  },
 };
 
 // ── 工具函数 ─────────────────────────────────

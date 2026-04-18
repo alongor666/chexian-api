@@ -170,11 +170,14 @@ export async function materializePolicyFactWorkingSet(db: DuckDBQueryable): Prom
     ? `SELECT * REPLACE (${replaceClauses.join(', ')})`
     : 'SELECT *';
 
+  // ORDER BY policy_date 让 DuckDB 写入时生成有序 zonemap，date-range 过滤可跳过整块 row group
+  // 这是分析型查询的关键优化：B-tree 索引对范围扫描作用有限，zonemap 才是 DuckDB 列式剪枝的主力
   await db.query(`
     CREATE TABLE PolicyFactRealtime AS
     ${selectExpr} FROM PolicyFactRenewal
+    ORDER BY CAST(policy_date AS DATE) NULLS LAST
   `);
-  console.log(`[DuckDB] PolicyFactRealtime created in ${Date.now() - t0}ms (${boolFieldsInSchema.length} boolean fields standardized)`);
+  console.log(`[DuckDB] PolicyFactRealtime created in ${Date.now() - t0}ms (${boolFieldsInSchema.length} boolean fields standardized, ordered by policy_date for zonemap pruning)`);
 
   // 重建视图指向物化表，然后释放原始 raw_parquet 表以回收内存
   await db.query(`

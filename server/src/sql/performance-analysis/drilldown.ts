@@ -47,6 +47,22 @@ export function generatePerformanceDrilldownQuery(
   const stepWheres = drillPath.map((step) => drillStepToWhere(step, 'p.'));
   const drillWhere = stepWheres.length > 0 ? `AND ${stepWheres.join('\n        AND ')}` : '';
 
+  // Phase 2b: 业务员层下钻附带 org_level_3 + team_name 元数据列，
+  // 供前端按团队折叠/展开（团队与业务员合并为同一下钻层）
+  const includeHierarchy = groupBy === 'salesman';
+  const hierarchySelect = includeHierarchy
+    ? `p.org_level_3 AS org_level_3,
+        COALESCE(tm.team_name, '未归属团队') AS team_name,`
+    : '';
+  const hierarchyAgg = includeHierarchy
+    ? `MAX(cr.org_level_3) AS org_level_3,
+        MAX(cr.team_name) AS team_name,`
+    : '';
+  const hierarchyProject = includeHierarchy
+    ? `c.org_level_3,
+        c.team_name,`
+    : '';
+
   const sql = `
     WITH
     ${periodBounds},
@@ -54,6 +70,7 @@ export function generatePerformanceDrilldownQuery(
     all_rows AS (
       SELECT
         ${groupCfg.selectExpr},
+        ${hierarchySelect}
         CAST(p.${dateField} AS DATE) AS pd,
         p.salesman_name,
         COALESCE(
@@ -95,6 +112,7 @@ export function generatePerformanceDrilldownQuery(
     current_group AS (
       SELECT
         group_name,
+        ${hierarchyAgg}
         SUM(premium_wan) AS premium,
         COUNT(DISTINCT dedup_key) AS auto_count,
         COUNT(*) AS row_count,
@@ -124,6 +142,7 @@ export function generatePerformanceDrilldownQuery(
     metrics AS (
       SELECT
         c.group_name,
+        ${hierarchyProject}
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         CASE
