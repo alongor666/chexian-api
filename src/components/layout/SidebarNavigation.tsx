@@ -10,7 +10,6 @@ import {
   BarChart3,
   Calculator,
   Gift,
-  Percent,
   ChevronLeft,
   ChevronRight,
   X,
@@ -26,7 +25,7 @@ import {
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { canAccessRoute, canAccessMotoCost, canAccessFeeAnalysis, canAccessCost, canAccessExpenseDevelopment, UserRole } from '../../shared/config/organizations';
+import { canAccessRoute, canAccessMotoCost, canAccessCost, canAccessExpenseDevelopment, UserRole } from '../../shared/config/organizations';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { useRBAC } from '../../shared/hooks/useRBAC';
 import { buildFilterParams } from '../../shared/utils/filterParams';
@@ -50,7 +49,6 @@ const dataNavItems: NavItem[] = [
   { path: '/specialty', icon: Gift, label: '专项分析', shortLabel: '专项' },
   { path: '/growth', icon: BarChart3, label: '增长与对比', shortLabel: '增长' },
   { path: '/cost', icon: Calculator, label: '成本综合', shortLabel: '成本' },
-  { path: '/fee-analysis', icon: Percent, label: '费用分析', shortLabel: '费用' },
 ];
 
 const toolNavItems: NavItem[] = [
@@ -248,7 +246,6 @@ export const SidebarNavigation: React.FC = () => {
           {renderSection(
             '数据分析',
             dataNavItems.filter(item => {
-              if (item.path === '/fee-analysis') return canAccessFeeAnalysis(userPermission?.username, userPermission?.specialFeatures);
               if (item.path === '/cost') return canAccessCost(userPermission?.username, userPermission?.specialFeatures);
               return true;
             })

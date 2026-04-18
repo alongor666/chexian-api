@@ -44,7 +44,6 @@
 | 数据处理流程 | `src/shared/normalize/README.md` | 别名-验证模式、错误处理 |
 | SQL 生成策略 | `src/shared/sql/README.md` | 查询模板、性能优化、业务逻辑 |
 | Dashboard 状态管理 | `src/features/dashboard/README.md` | 加载策略、错误处理、并发控制 |
-| 费用管理系统升级方案 | `开发文档/架构设计/费用管理系统升级方案.md` | 费用分析板块升级为独立费用管理系统的角色分层、能力蓝图与分阶段路线图 |
 
 ## 质量保证与审查
 

@@ -876,14 +876,6 @@ class ApiClient {
     return resp.data ?? resp;
   }
 
-  /**
-   * 获取费用分析数据（成都同城机构规则分档）
-   */
-  async getFeeAnalysis(filters?: Record<string, any>): Promise<any[]> {
-    const query = this.buildQueryString(filters);
-    return this.request(`/query/${QUERY_ROUTES.FEE_ANALYSIS}${query ? `?${query}` : ''}`);
-  }
-
   // ============================================
   // 筛选器 API
   // ============================================

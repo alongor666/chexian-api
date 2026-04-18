@@ -540,7 +540,7 @@ ORDER BY "达成率%" DESC
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | v2.0 | 2026-03-31 | 数据规模更新至 62 万+；新增 §8 DuckDB 预聚合视图；补充成本/推介率/边际贡献额指标映射；日期值域扩展至 2020-2026 |
-| v1.4 | 2026-02-27 | 新增2个字段：plate_no（车牌号码）、seat_count（座位数）；字段总数34→36；用于费用分析规则匹配 |
+| v1.4 | 2026-02-27 | 新增2个字段：plate_no（车牌号码）、seat_count（座位数）；字段总数34→36 |
 | v1.3 | 2026-02-26 | 新增4个字段：underwriting_date, third_party_coverage, driver_coverage, passenger_coverage；前后端统一"签单日期"命名；支持多 Parquet 文件 UNION ALL 加载 |
 | v1.2 | 2026-02-12 | 新增5个字段：insurance_grade, is_cross_sell, cross_sell_premium_driver |
 | v1.1 | 2026-02-01 | 添加 SalesmanPlanFact 视图说明；明确 PolicyFact 可用字段 |
