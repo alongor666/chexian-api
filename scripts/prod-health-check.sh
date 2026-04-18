@@ -101,7 +101,6 @@ cross-sell-heatmap
 cross-sell-top-salesman
 premium-plan
 plan-achievement
-fee-analysis
 performance-summary
 performance-trend
 performance-drilldown

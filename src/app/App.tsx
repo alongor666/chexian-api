@@ -11,7 +11,7 @@ import { ThemeProvider } from '../shared/theme';
 import { ExportProvider } from '../shared/export/ExportContext';
 import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
-import { canAccessFeeAnalysis, canAccessCost, canAccessExpenseDevelopment } from '../shared/config/organizations';
+import { canAccessCost, canAccessExpenseDevelopment } from '../shared/config/organizations';
 
 // SW 活跃时让 SW 管理新鲜度（避免双重缓存），否则保持 5min staleTime
 const swActive = typeof navigator !== 'undefined'
@@ -68,9 +68,6 @@ const GrowthPage = lazy(() =>
 );
 const CostPage = lazy(() =>
   import('../features/pages/CostPage').then((m) => ({ default: m.CostPage }))
-);
-const FeeAnalysisPage = lazy(() =>
-  import('../features/pages/FeeAnalysisPage').then((m) => ({ default: m.FeeAnalysisPage }))
 );
 const ReportsPage = lazy(() =>
   import('../features/pages/ReportsPage').then((m) => ({ default: m.ReportsPage }))
@@ -219,18 +216,6 @@ function App() {
                     }
                   />
                   {/* comprehensive-analysis 已合并到 /cost，见上方重定向 */}
-                  <Route
-                    path="fee-analysis"
-                    element={
-                      <RouteAccessGuard routePath="/fee-analysis">
-                        <FeatureGuard check={canAccessFeeAnalysis}>
-                          <DataGuard>
-                            <LazyRoute><FeeAnalysisPage /></LazyRoute>
-                          </DataGuard>
-                        </FeatureGuard>
-                      </RouteAccessGuard>
-                    }
-                  />
                   {/* 保费达成（计划达成 + 保费报表）*/}
                   <Route
                     path="reports"

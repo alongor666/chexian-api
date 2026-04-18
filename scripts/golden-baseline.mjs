@@ -101,7 +101,6 @@ const ENDPOINT_DEFINITIONS = [
   // ── /api/query/premium-plan ───────────────
   { slug: 'premium-plan', path: '/api/query/premium-plan', params: {}, deprecated: false },
   { slug: 'plan-achievement', path: '/api/query/plan-achievement', params: {}, deprecated: false },
-  { slug: 'fee-analysis', path: '/api/query/fee-analysis', params: {}, deprecated: false },
 
   // ── /api/query/performance ────────────────
   { slug: 'performance-summary', path: '/api/query/performance-summary', params: { timePeriod: 'month', growthMode: 'mom', expandDims: 'none', limit: '20' }, deprecated: false },

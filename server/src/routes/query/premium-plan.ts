@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, QUERY_CACHE } from './shared.js';
+import { asyncHandler, AppError, duckdbService } from './shared.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../../sql/premiumPlan.js';
-import { generateFeeAnalysisQuery } from '../../sql/fee-analysis.js';
 
 const router = Router();
 
@@ -146,20 +145,6 @@ router.get(
           level,
         },
       },
-    });
-  })
-);
-
-router.get(
-  '/fee-analysis',
-  asyncHandler(async (req, res) => {
-    const { whereClause } = parseFiltersAndBuildWhere(req);
-    const sql = generateFeeAnalysisQuery(whereClause);
-    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
-
-    res.json({
-      success: true,
-      data: result,
     });
   })
 );

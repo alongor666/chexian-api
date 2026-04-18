@@ -56,7 +56,7 @@ export interface UserPermission {
   allowedRoutes?: string[];
   /** 默认落地路由 */
   defaultRoute?: string;
-  /** 特殊功能权限（如 cost, fee_analysis, moto_cost） */
+  /** 特殊功能权限（如 cost, moto_cost） */
   specialFeatures?: string[];
 }
 
@@ -398,19 +398,6 @@ export const MOTO_COST_ALLOWED_USERS: readonly string[] = SUPER_USERS;
 export function canAccessMotoCost(username: string | undefined, specialFeatures?: string[]): boolean {
   if (specialFeatures !== undefined) {
     return specialFeatures.includes('moto_cost');
-  }
-  return isSuperUser(username);
-}
-
-/**
- * 费用分析功能白名单用户（静态回退）
- * 优先使用动态 specialFeatures
- */
-export const FEE_ANALYSIS_ALLOWED_USERS: readonly string[] = SUPER_USERS;
-
-export function canAccessFeeAnalysis(username: string | undefined, specialFeatures?: string[]): boolean {
-  if (specialFeatures !== undefined) {
-    return specialFeatures.includes('fee_analysis');
   }
   return isSuperUser(username);
 }

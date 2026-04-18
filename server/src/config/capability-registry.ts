@@ -133,19 +133,6 @@ export const capabilities: Capability[] = [
     requiresPermission: 'cost',
   },
   {
-    id: 'fee-analysis',
-    route: '/fee-analysis',
-    name: '费用分析',
-    icon: 'Percent',
-    description: '费用/手续费详细分析',
-    keywords: ['费用', '手续费', '费用分析'],
-    exampleQueries: [
-      '费用分析',
-      '手续费情况',
-    ],
-    requiresPermission: 'feeAnalysis',
-  },
-  {
     id: 'comparison',
     route: '/growth',
     name: '数据对比',

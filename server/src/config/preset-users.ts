@@ -45,7 +45,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     passwordHash: '$2b$10$04CoRcf7Hk9iSiPD6QWRmelsAGNWoqJ3DGB5Mvfjcc/CH6GEJRUC6',
     displayName: '系统管理员',
     role: 'branch_admin',
-    specialFeatures: ['cost', 'fee_analysis', 'moto_cost'],
+    specialFeatures: ['cost', 'moto_cost'],
   },
   leshan: {
     username: 'leshan',
@@ -176,7 +176,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     passwordHash: '$2b$10$NHIOCyjuqXWLXyq5UaP8Y.5p/NNsDMXBrsnk/eHsmq.tVSd0swcwu',
     displayName: '薛成龙',
     role: 'branch_admin',
-    specialFeatures: ['cost', 'fee_analysis', 'moto_cost'],
+    specialFeatures: ['cost', 'moto_cost'],
   },
   linxia: {
     username: 'linxia',

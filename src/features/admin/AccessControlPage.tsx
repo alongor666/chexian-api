@@ -31,7 +31,6 @@ const ALL_ROUTES = [
 
 const ALL_SPECIAL_FEATURES = [
   { key: 'cost', label: '成本分析', path: '/cost' },
-  { key: 'fee_analysis', label: '费用分析', path: '/fee-analysis' },
   { key: 'moto_cost', label: '摩意模型', path: '/moto-cost' },
 ];
 

@@ -73,7 +73,6 @@ export const QUERY_ROUTES = {
   // 保费计划
   PREMIUM_PLAN: 'premium-plan',
   PLAN_ACHIEVEMENT: 'plan-achievement',
-  FEE_ANALYSIS: 'fee-analysis',
 
   // 仪表盘聚合
   DASHBOARD_BUNDLE: 'dashboard-bundle',
