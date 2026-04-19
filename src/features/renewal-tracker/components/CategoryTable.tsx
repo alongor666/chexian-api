@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { cn, cardStyles, colorClasses, fontStyles } from '@/shared/styles';
 import type { RenewalRow, SortField, SortDir } from '../types';
 import { formatNum, formatPct } from '../utils/format';
 
@@ -50,16 +51,18 @@ export default function CategoryTable({
   const title = selectedOrg ? `${selectedOrg} · 客户类别` : '客户类别';
 
   const sortIcon = (f: SortField) => {
-    if (sortField !== f) return <span className="text-muted-foreground/50">↕</span>;
-    return <span className="text-blue-600 dark:text-blue-400">{sortDir === 'desc' ? '↓' : '↑'}</span>;
+    if (sortField !== f) return <span className={colorClasses.text.neutralMuted}>↕</span>;
+    return <span className={colorClasses.text.primary}>{sortDir === 'desc' ? '↓' : '↑'}</span>;
   };
 
+  const numericCellClass = cn('px-4 py-2 text-sm text-right whitespace-nowrap', fontStyles.numeric, colorClasses.text.neutralBlack);
+
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-muted/50 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+    <div className={cn(cardStyles.base, 'overflow-hidden')}>
+      <div className={cn('px-4 py-3 border-b bg-neutral-50 dark:bg-surface-2 flex items-center justify-between', colorClasses.border.neutral)}>
+        <h2 className={cn('text-base font-semibold', colorClasses.text.neutralBlack)}>{title}</h2>
         {selectedOrg && (
-          <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded whitespace-nowrap">
+          <span className={cn('text-xs px-2 py-0.5 rounded whitespace-nowrap', colorClasses.bg.primary, colorClasses.text.primaryDark)}>
             联动: {selectedOrg}
           </span>
         )}
@@ -67,50 +70,43 @@ export default function CategoryTable({
       <div className="overflow-auto max-h-[70vh]">
         <table className="w-full">
           <thead>
-            <tr className="bg-muted/50 border-b-2 border-border">
-              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase whitespace-nowrap">
+            <tr className={cn('bg-neutral-50 dark:bg-surface-2 border-b-2', colorClasses.border.neutral)}>
+              <th className={cn('px-4 py-2 text-left text-xs font-medium uppercase whitespace-nowrap', colorClasses.text.neutralMuted)}>
                 客户类别
               </th>
               {METRIC_COLS.map(col => (
                 <th
                   key={col.key}
-                  onClick={() => onSort(col.key)}
-                  className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 select-none whitespace-nowrap"
+                  className={cn('px-4 py-2 text-right text-xs font-medium uppercase whitespace-nowrap', colorClasses.text.neutralMuted)}
                 >
-                  <span className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onSort(col.key)}
+                    className={cn('inline-flex items-center gap-1 uppercase cursor-pointer select-none', 'hover:text-primary')}
+                  >
                     {col.label}
                     {sortIcon(col.key)}
-                  </span>
+                  </button>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {headerRow && (
-              <tr className="border-b border-border bg-muted/30 font-semibold">
-                <td className="px-4 py-2 text-sm text-foreground whitespace-nowrap">
+              <tr className={cn('border-b font-semibold', colorClasses.border.neutral, 'bg-neutral-50/50 dark:bg-surface-2/50')}>
+                <td className={cn('px-4 py-2 text-sm whitespace-nowrap', colorClasses.text.neutralBlack)}>
                   {selectedOrg ? `${selectedOrg} 小计` : '整体'}
                 </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatNum(headerRow.A)}
-                </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatNum(headerRow.B)}
-                </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatNum(headerRow.C)}
-                </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatPct(headerRow.B, headerRow.A)}
-                </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatPct(headerRow.C, headerRow.A)}
-                </td>
+                <td className={numericCellClass}>{formatNum(headerRow.A)}</td>
+                <td className={numericCellClass}>{formatNum(headerRow.B)}</td>
+                <td className={numericCellClass}>{formatNum(headerRow.C)}</td>
+                <td className={numericCellClass}>{formatPct(headerRow.B, headerRow.A)}</td>
+                <td className={numericCellClass}>{formatPct(headerRow.C, headerRow.A)}</td>
               </tr>
             )}
             {displayRows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={6} className={cn('px-4 py-8 text-center text-sm', colorClasses.text.neutralMuted)}>
                   暂无数据
                 </td>
               </tr>
@@ -118,26 +114,16 @@ export default function CategoryTable({
             {displayRows.map(row => (
               <tr
                 key={`cat-${row.org_level_3 || 'all'}-${row.customer_category}`}
-                className="border-b border-border hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-colors"
+                className={cn('border-b transition-colors', colorClasses.border.neutral, 'hover:bg-primary-bg/50')}
               >
-                <td className="px-4 py-2 text-sm text-foreground whitespace-nowrap">
+                <td className={cn('px-4 py-2 text-sm whitespace-nowrap', colorClasses.text.neutralBlack)}>
                   {row.customer_category || '(未分类)'}
                 </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatNum(row.A)}
-                </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatNum(row.B)}
-                </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatNum(row.C)}
-                </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatPct(row.B, row.A)}
-                </td>
-                <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">
-                  {formatPct(row.C, row.A)}
-                </td>
+                <td className={numericCellClass}>{formatNum(row.A)}</td>
+                <td className={numericCellClass}>{formatNum(row.B)}</td>
+                <td className={numericCellClass}>{formatNum(row.C)}</td>
+                <td className={numericCellClass}>{formatPct(row.B, row.A)}</td>
+                <td className={numericCellClass}>{formatPct(row.C, row.A)}</td>
               </tr>
             ))}
           </tbody>

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { cn, cardStyles, buttonStyles, colorClasses, fontStyles } from '@/shared/styles';
 import type { TimeView, TimeRange, RenewalTrackerMeta } from '../types';
 
 interface Props {
@@ -97,73 +98,97 @@ export default function TimeFilter({ meta, latestDataDate, timeView, onViewChang
     { key: 'mtd_full', label: '当月全月', hint: `${year}-${String(currentMonth).padStart(2, '0')} 全月` },
   ];
 
+  const toggleClass = (active: boolean) =>
+    cn(
+      buttonStyles.base,
+      buttonStyles.sizeSmall,
+      active ? buttonStyles.primary : buttonStyles.secondary,
+    );
+
+  const monthButtonClass = (active: boolean) =>
+    cn(
+      'w-8 h-8 text-xs rounded border transition-colors',
+      active
+        ? cn(colorClasses.bg.primarySolid, 'text-white', colorClasses.border.primary)
+        : cn('bg-white dark:bg-surface-2', colorClasses.text.neutralLight, colorClasses.border.neutral, 'hover:bg-neutral-100 dark:hover:bg-surface-3'),
+    );
+
+  const dateInputClass = cn(
+    'px-2 py-1 text-sm border rounded bg-white dark:bg-surface-2',
+    colorClasses.text.neutralBlack,
+    colorClasses.border.neutral,
+  );
+
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border p-4 mb-4">
+    <div className={cn(cardStyles.base, 'p-4 mb-4')}>
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-sm text-muted-foreground mr-2 shrink-0">时间视图 (按到期日):</span>
+        <span className={cn('text-sm mr-2 shrink-0', colorClasses.text.neutralMuted)}>时间视图 (按到期日):</span>
         {views.map(v => (
           <button
             key={v.key}
             onClick={() => handleViewChange(v.key)}
             title={v.hint}
-            className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
-              timeView === v.key
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-card text-foreground border-border hover:bg-muted'
-            }`}
+            className={toggleClass(timeView === v.key)}
           >
             {v.label}
           </button>
         ))}
-        <span className="text-border mx-1">|</span>
-        <span className="text-sm text-muted-foreground mr-1 shrink-0">按到期月:</span>
+        <span className={cn('mx-1', colorClasses.text.neutralMuted)}>|</span>
+        <span className={cn('text-sm mr-1 shrink-0', colorClasses.text.neutralMuted)}>按到期月:</span>
         {MONTHS.map(m => (
           <button
             key={m}
             onClick={() => handleMonthSelect(m)}
-            className={`w-8 h-8 text-xs rounded border transition-colors ${
-              timeView === 'by_month' && selectedMonth === m
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-card text-muted-foreground border-border hover:bg-muted'
-            }`}
+            className={monthButtonClass(timeView === 'by_month' && selectedMonth === m)}
           >
             {m}
           </button>
         ))}
-        <span className="text-border mx-1">|</span>
+        <span className={cn('mx-1', colorClasses.text.neutralMuted)}>|</span>
         <input
           type="date"
+          aria-label="自选时间范围起始日"
           value={customStart}
           min={yearStart}
           max={yearEnd}
           onChange={e => setCustomStart(e.target.value)}
-          className="px-2 py-1 text-sm border border-border rounded bg-card text-foreground"
+          className={dateInputClass}
         />
-        <span className="text-muted-foreground">—</span>
+        <span className={colorClasses.text.neutralMuted}>—</span>
         <input
           type="date"
+          aria-label="自选时间范围截止日"
           value={customEnd}
           min={yearStart}
           max={yearEnd}
           onChange={e => setCustomEnd(e.target.value)}
-          className="px-2 py-1 text-sm border border-border rounded bg-card text-foreground"
+          className={dateInputClass}
         />
         <button
           onClick={handleCustomApply}
-          className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
-            timeView === 'custom'
-              ? 'bg-blue-600 text-white border-blue-600'
-              : 'bg-card text-foreground border-border hover:bg-muted'
-          }`}
+          className={toggleClass(timeView === 'custom')}
         >
           自选
         </button>
       </div>
       {meta && (
-        <div className="text-xs text-muted-foreground">
-          <span className="mr-3">数据截至 <span className="text-foreground font-medium">{latest}</span></span>
+        <div className={cn('text-xs', colorClasses.text.neutralMuted)}>
           <span className="mr-3">
-            Universe {meta.exposure_row_count?.toLocaleString()} 条暴露 / {meta.distinct_vehicle_count?.toLocaleString()} 辆车
+            数据截至{' '}
+            <span className={cn(colorClasses.text.neutralBlack, 'font-medium', fontStyles.numeric)}>
+              {latest}
+            </span>
+          </span>
+          <span className="mr-3">
+            Universe{' '}
+            <span className={fontStyles.numeric}>
+              {meta.exposure_row_count?.toLocaleString()}
+            </span>{' '}
+            条暴露 /{' '}
+            <span className={fontStyles.numeric}>
+              {meta.distinct_vehicle_count?.toLocaleString()}
+            </span>{' '}
+            辆车
           </span>
         </div>
       )}

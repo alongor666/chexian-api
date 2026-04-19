@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
+import { cn, colorClasses } from '@/shared/styles';
 import { useRenewalTracker } from './hooks/useRenewalTracker';
 import TimeFilter from './components/TimeFilter';
 import OrgTable from './components/OrgTable';
@@ -62,8 +63,8 @@ export default function RenewalTrackerPage() {
   return (
     <div className="max-w-[1600px] mx-auto px-4 py-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">商业险续保追踪</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <h1 className={cn('text-2xl font-bold', colorClasses.text.neutralBlack)}>商业险续保追踪</h1>
+        <p className={cn('text-sm mt-1', colorClasses.text.neutralMuted)}>
           筛选范围：上年度起保的商业险保单，按到期日统计 · 指标以车架号去重
         </p>
       </div>
@@ -77,13 +78,13 @@ export default function RenewalTrackerPage() {
       />
 
       {error && (
-        <div className="bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4 text-sm text-yellow-800 dark:text-yellow-300">
+        <div className={cn(colorClasses.bg.warning, colorClasses.border.warning, colorClasses.text.warningDark, 'border rounded-lg p-3 mb-4 text-sm')}>
           查询错误: {(error as Error).message}
         </div>
       )}
 
       {(isLoading || (isFetching && !data)) && (
-        <div className="text-center py-8 text-sm text-muted-foreground">查询中...</div>
+        <div className={cn('text-center py-8 text-sm', colorClasses.text.neutralMuted)}>查询中...</div>
       )}
 
       {data && (

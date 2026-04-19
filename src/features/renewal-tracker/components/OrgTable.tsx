@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { cn, cardStyles, buttonStyles, colorClasses, fontStyles } from '@/shared/styles';
 import type { RenewalRow, SortField, SortDir } from '../types';
 import { formatNum, formatPct } from '../utils/format';
 
@@ -21,6 +22,9 @@ const METRIC_COLS: { key: SortField; label: string }[] = [
   { key: 'D', label: '报价率' },
   { key: 'E', label: '续保率' },
 ];
+
+const INDENT_BASE = 16;
+const INDENT_STEP = 24;
 
 function getSortValue(row: RenewalRow, field: SortField): number {
   if (field === 'D') return row.A > 0 ? row.B / row.A : 0;
@@ -84,10 +88,21 @@ export default function OrgTable({
     });
   }
 
+  const numericCellClass = cn('px-4 py-2 text-sm text-right whitespace-nowrap', fontStyles.numeric, colorClasses.text.neutralBlack);
+
+  const drillButtonClass = (active: boolean) =>
+    cn(
+      'text-[10px] px-1.5 py-0.5 rounded border transition-colors',
+      active
+        ? cn(colorClasses.bg.primary, colorClasses.border.primary, colorClasses.text.primaryDark)
+        : cn(colorClasses.bg.neutralLight, colorClasses.border.neutral, colorClasses.text.neutralLight, 'hover:bg-neutral-200 dark:hover:bg-surface-3'),
+    );
+
   function renderRow(
     row: RenewalRow,
     indent: number,
     isBold: boolean,
+    rowKey: string,
     onClick?: () => void,
     labelNode?: React.ReactNode,
   ) {
@@ -96,25 +111,29 @@ export default function OrgTable({
     const isSelectedOrg = row.org_level_3 === selectedOrg && row.row_level === 'org';
     return (
       <tr
-        key={`${row.row_level}-${row.org_level_3}-${row.team_name}-${row.salesman_name}-${indent}`}
-        className={`border-b border-border transition-colors ${
-          onClick ? 'cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-950/30' : ''
-        } ${isSelectedOrg ? 'bg-blue-50 dark:bg-blue-950/40' : ''}`}
+        key={rowKey}
+        className={cn(
+          'border-b transition-colors',
+          colorClasses.border.neutral,
+          onClick && cn('cursor-pointer', 'hover:bg-primary-bg/50'),
+          isSelectedOrg && colorClasses.bg.primary,
+        )}
         onClick={onClick}
       >
         <td
-          className={`px-4 py-2 text-sm whitespace-nowrap ${
-            isBold ? 'font-semibold text-foreground' : 'text-foreground'
-          }`}
-          style={{ paddingLeft: `${16 + indent * 24}px` }}
+          className={cn(
+            'px-4 py-2 text-sm whitespace-nowrap',
+            isBold ? cn('font-semibold', colorClasses.text.neutralBlack) : colorClasses.text.neutralBlack,
+          )}
+          style={{ paddingLeft: `${INDENT_BASE + indent * INDENT_STEP}px` }}
         >
           {labelNode || row.org_level_3 || row.team_name || row.salesman_name || '—'}
         </td>
-        <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">{formatNum(row.A)}</td>
-        <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">{formatNum(row.B)}</td>
-        <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">{formatNum(row.C)}</td>
-        <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">{D}</td>
-        <td className="px-4 py-2 text-sm text-right tabular-nums whitespace-nowrap text-foreground">{E}</td>
+        <td className={numericCellClass}>{formatNum(row.A)}</td>
+        <td className={numericCellClass}>{formatNum(row.B)}</td>
+        <td className={numericCellClass}>{formatNum(row.C)}</td>
+        <td className={numericCellClass}>{D}</td>
+        <td className={numericCellClass}>{E}</td>
       </tr>
     );
   }
@@ -145,17 +164,27 @@ export default function OrgTable({
             team,
             1,
             false,
+            `team-${org}-${teamKey}`,
             () => toggleTeam(teamKey),
             <span className="flex items-center gap-1.5">
-              <span className={`text-xs transition-transform inline-block ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+              <span className={cn('text-xs transition-transform inline-block', isExpanded && 'rotate-90')}>▶</span>
               <span>{team.team_name || '(未分团队)'}</span>
-              <span className="text-[10px] text-muted-foreground">({teamSalesmen.length} 人)</span>
+              <span className={cn('text-[10px]', colorClasses.text.neutralMuted)}>({teamSalesmen.length} 人)</span>
             </span>,
           ),
         );
         if (isExpanded) {
-          teamSalesmen.forEach(s => {
-            nodes.push(renderRow(s, 2, false, undefined, s.salesman_name || '(未分配)'));
+          teamSalesmen.forEach((s, idx) => {
+            nodes.push(
+              renderRow(
+                s,
+                2,
+                false,
+                `salesman-${org}-${teamKey}-${s.salesman_name || 'unknown'}-${idx}`,
+                undefined,
+                s.salesman_name || '(未分配)',
+              ),
+            );
           });
         }
       });
@@ -169,21 +198,30 @@ export default function OrgTable({
         const vb = getSortValue(b, sortField);
         return sortDir === 'desc' ? vb - va : va - vb;
       });
-      return sorted.map(s => renderRow(s, 1, false, undefined, s.salesman_name || '(未分配)'));
+      return sorted.map((s, idx) =>
+        renderRow(
+          s,
+          1,
+          false,
+          `salesman-flat-${org}-${s.salesman_name || 'unknown'}-${idx}`,
+          undefined,
+          s.salesman_name || '(未分配)',
+        ),
+      );
     }
 
     return null;
   }
 
   const sortIcon = (f: SortField) => {
-    if (sortField !== f) return <span className="text-muted-foreground/50">↕</span>;
-    return <span className="text-blue-600 dark:text-blue-400">{sortDir === 'desc' ? '↓' : '↑'}</span>;
+    if (sortField !== f) return <span className={colorClasses.text.neutralMuted}>↕</span>;
+    return <span className={colorClasses.text.primary}>{sortDir === 'desc' ? '↓' : '↑'}</span>;
   };
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-muted/50 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-foreground">按三级机构</h2>
+    <div className={cn(cardStyles.base, 'overflow-hidden')}>
+      <div className={cn('px-4 py-3 border-b bg-neutral-50 dark:bg-surface-2 flex items-center justify-between', colorClasses.border.neutral)}>
+        <h2 className={cn('text-base font-semibold', colorClasses.text.neutralBlack)}>按三级机构</h2>
         {selectedOrg && (
           <button
             onClick={() => {
@@ -191,7 +229,7 @@ export default function OrgTable({
               setExpandedTeams(new Set());
               onOrgSelect(null);
             }}
-            className="text-xs text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
+            className={cn(buttonStyles.base, buttonStyles.link, 'text-xs')}
           >
             清除选中
           </button>
@@ -200,20 +238,23 @@ export default function OrgTable({
       <div className="overflow-auto max-h-[70vh]">
         <table className="w-full">
           <thead>
-            <tr className="bg-muted/50 border-b-2 border-border">
-              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase whitespace-nowrap">
+            <tr className={cn('bg-neutral-50 dark:bg-surface-2 border-b-2', colorClasses.border.neutral)}>
+              <th className={cn('px-4 py-2 text-left text-xs font-medium uppercase whitespace-nowrap', colorClasses.text.neutralMuted)}>
                 三级机构
               </th>
               {METRIC_COLS.map(col => (
                 <th
                   key={col.key}
-                  onClick={() => onSort(col.key)}
-                  className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 select-none whitespace-nowrap"
+                  className={cn('px-4 py-2 text-right text-xs font-medium uppercase whitespace-nowrap', colorClasses.text.neutralMuted)}
                 >
-                  <span className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onSort(col.key)}
+                    className={cn('inline-flex items-center gap-1 uppercase cursor-pointer select-none', 'hover:text-primary')}
+                  >
                     {col.label}
                     {sortIcon(col.key)}
-                  </span>
+                  </button>
                 </th>
               ))}
             </tr>
@@ -224,6 +265,7 @@ export default function OrgTable({
                 overall,
                 0,
                 true,
+                'overall-row',
                 () => {
                   setDrillMode(null);
                   setExpandedTeams(new Set());
@@ -239,6 +281,7 @@ export default function OrgTable({
                 org,
                 0,
                 false,
+                `org-row-${org.org_level_3}`,
                 () => handleOrgRowClick(org.org_level_3!),
                 <div className="flex items-center justify-between gap-2 w-full">
                   <span className="truncate">{org.org_level_3}</span>
@@ -248,11 +291,7 @@ export default function OrgTable({
                         e.stopPropagation();
                         handleDrill(org.org_level_3!, 'team');
                       }}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
-                        selectedOrg === org.org_level_3 && drillMode === 'team'
-                          ? 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/50 dark:border-blue-700 dark:text-blue-300'
-                          : 'bg-muted border-border text-muted-foreground hover:bg-muted/70'
-                      }`}
+                      className={drillButtonClass(selectedOrg === org.org_level_3 && drillMode === 'team')}
                     >
                       团队
                     </button>
@@ -261,11 +300,7 @@ export default function OrgTable({
                         e.stopPropagation();
                         handleDrill(org.org_level_3!, 'salesman');
                       }}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
-                        selectedOrg === org.org_level_3 && drillMode === 'salesman'
-                          ? 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/50 dark:border-blue-700 dark:text-blue-300'
-                          : 'bg-muted border-border text-muted-foreground hover:bg-muted/70'
-                      }`}
+                      className={drillButtonClass(selectedOrg === org.org_level_3 && drillMode === 'salesman')}
                     >
                       业务员
                     </button>
