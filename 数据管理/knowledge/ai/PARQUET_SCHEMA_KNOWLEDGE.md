@@ -114,7 +114,7 @@ fuel_type,
 | `is_nev` | 是否新能源 | 3.4% | 新能源车 |
 | `is_transfer` | 是否过户车 | 8.8% | 二手车过户 |
 | `is_telemarketing` | 是否电销 | 8.3% | 电话销售渠道 |
-| `is_quote` | 是否报价 | 17.9% | 报价记录（非正式保单） |
+| `is_quote` | 是否报价 | 17.9% | 报价记录（非正式保单）。⚠️ **数据可靠性差**：源 xlsx 中「是/否」标记不可信，正确口径应以续保单号非空判定，但 04_报价清单 源数据缺失该列。详见 `.claude/shared-memory/project_quote_data_issue.md`。 |
 | `is_cross_sell` | 交叉销售标识 | ~36% | 有驾意险交叉销售 |
 
 ---

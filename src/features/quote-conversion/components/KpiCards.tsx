@@ -39,7 +39,7 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
 
   const renewalRate = computePercent(data.renewal_insured, data.renewal_quotes);
   const switchRate = computePercent(data.switch_insured, data.switch_quotes);
-  const conversionRate = data.conversion_rate ?? 0;
+  const conversionRate = data.underwriting_rate ?? 0;
   const renewalPct = parseFloat(renewalRate);
   const switchPct = parseFloat(switchRate);
   const maxBarPct = Math.max(renewalPct, switchPct, 1);

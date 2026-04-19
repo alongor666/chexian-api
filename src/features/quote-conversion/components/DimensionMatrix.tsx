@@ -45,7 +45,7 @@ export function DimensionMatrix({ filters }: Props) {
       const dim = String(row.dim_value ?? '');
       orgSet.add(org);
       dimSet.add(dim);
-      m.set(`${org}|${dim}`, { rate: row.conversion_rate ?? 0, count: row.total_quotes ?? 0 });
+      m.set(`${org}|${dim}`, { rate: row.underwriting_rate ?? 0, count: row.total_quotes ?? 0 });
     }
     return { orgs: Array.from(orgSet).sort(), dimValues: Array.from(dimSet).sort(), matrix: m };
   }, [heatData]);
@@ -131,8 +131,8 @@ export function DimensionMatrix({ filters }: Props) {
             </div>
             <div className="space-y-2">
               {(rankData ?? []).slice(0, 8).map((row, i) => {
-                const maxRate = Math.max(...(rankData ?? []).map(r => r.conversion_rate), 1);
-                const barPct = (row.conversion_rate / maxRate) * 100;
+                const maxRate = Math.max(...(rankData ?? []).map(r => r.underwriting_rate), 1);
+                const barPct = (row.underwriting_rate / maxRate) * 100;
                 return (
                   <div key={row.dim_value ?? i}>
                     <div className="flex items-center justify-between text-xs mb-0.5">
@@ -140,7 +140,7 @@ export function DimensionMatrix({ filters }: Props) {
                         {row.dim_value ?? '-'}
                       </span>
                       <span className={cn(fontStyles.numeric, 'font-semibold shrink-0')}>
-                        {formatPercent(row.conversion_rate)}
+                        {formatPercent(row.underwriting_rate)}
                       </span>
                     </div>
                     <div className="h-2 bg-neutral-100 dark:bg-neutral-800 rounded overflow-hidden">

@@ -22,7 +22,10 @@ export interface QuoteFilters {
 export interface QuoteKpi {
   total_quotes: number;
   total_insured: number;
-  conversion_rate: number;
+  /** 承保率（单据级：承保件数 / 报价件数）。权威字段。 */
+  underwriting_rate: number;
+  /** @deprecated v1.1 — 与 underwriting_rate 同值，仅为向后兼容保留。新代码请用 underwriting_rate */
+  conversion_rate?: number;
   avg_discount_rate: number;
   insured_premium: number;
   salesman_count: number;
@@ -47,7 +50,10 @@ export interface DrilldownRow {
   group_name: string;
   total_quotes: number;
   total_insured: number;
-  conversion_rate: number;
+  /** 承保率（单据级）。权威字段。 */
+  underwriting_rate: number;
+  /** @deprecated v1.1 — 与 underwriting_rate 同值，向后兼容保留 */
+  conversion_rate?: number;
   renewal_rate: number;
   switch_rate: number;
   avg_discount: number;
@@ -58,14 +64,20 @@ export interface HeatmapRow {
   dim_value: string;
   total_quotes: number;
   total_insured: number;
-  conversion_rate: number;
+  /** 承保率（单据级）。权威字段。 */
+  underwriting_rate: number;
+  /** @deprecated v1.1 — 与 underwriting_rate 同值，向后兼容保留 */
+  conversion_rate?: number;
 }
 
 export interface PriceRow {
   discount_bin: number;
   total_quotes: number;
   total_insured: number;
-  conversion_rate: number;
+  /** 承保率（单据级）。权威字段。 */
+  underwriting_rate: number;
+  /** @deprecated v1.1 — 与 underwriting_rate 同值，向后兼容保留 */
+  conversion_rate?: number;
   avg_premium: number;
   avg_pricing_coef: number;
 }
@@ -75,14 +87,20 @@ export interface TrendRow {
   renewal_type: string;
   total_quotes: number;
   total_insured: number;
-  conversion_rate: number;
+  /** 承保率（单据级）。权威字段。 */
+  underwriting_rate: number;
+  /** @deprecated v1.1 — 与 underwriting_rate 同值，向后兼容保留 */
+  conversion_rate?: number;
 }
 
 export interface RankingRow {
   dim_value: string;
   total_quotes: number;
   total_insured: number;
-  conversion_rate: number;
+  /** 承保率（单据级）。权威字段。 */
+  underwriting_rate: number;
+  /** @deprecated v1.1 — 与 underwriting_rate 同值，向后兼容保留 */
+  conversion_rate?: number;
   avg_discount: number;
 }
 

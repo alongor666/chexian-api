@@ -50,6 +50,9 @@ export function QuoteConversionPage() {
               开发阶段
             </span>
           </div>
+          <p className={`mt-1 text-xs ${colorClasses.text.neutralMuted}`}>
+            基于报价单据的<strong>承保率</strong>分析（单据级，每条报价单一行）。
+          </p>
         </div>
 
         <VersionSwitcher version={version} onChange={setVersion} />

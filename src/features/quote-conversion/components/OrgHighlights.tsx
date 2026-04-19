@@ -16,7 +16,7 @@ export function OrgHighlights({ filters }: Props) {
     if (!data || data.length === 0) return [];
 
     const topByQuotes = [...data].sort((a, b) => b.total_quotes - a.total_quotes)[0];
-    const topByConversion = [...data].sort((a, b) => b.conversion_rate - a.conversion_rate)[0];
+    const topByConversion = [...data].sort((a, b) => b.underwriting_rate - a.underwriting_rate)[0];
     const topByRenewal = [...data].sort(
       (a, b) => (b.renewal_rate - b.switch_rate) - (a.renewal_rate - a.switch_rate)
     )[0];
@@ -30,7 +30,7 @@ export function OrgHighlights({ filters }: Props) {
       {
         title: '承保率最高机构',
         value: topByConversion?.group_name ?? '-',
-        hint: `承保率 ${formatPercent(topByConversion?.conversion_rate ?? 0)}`,
+        hint: `承保率 ${formatPercent(topByConversion?.underwriting_rate ?? 0)}`,
       },
       {
         title: '续保优势最强机构',

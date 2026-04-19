@@ -2,8 +2,8 @@
  * 指标展示映射 — 从注册表自动生成
  *
  * 生成命令：npx tsx scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-04-18T22:39:39.319Z
- * 指标数量：40
+ * 生成时间：2026-04-19T02:45:43.228Z
+ * 指标数量：41
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成
  */
@@ -24,6 +24,7 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   'new_car_rate': '新车占比',
   'quality_business_rate': '优质业务占比',
   'commercial_insurance_rate': '商业险投保率',
+  'underwriting_rate': '承保率',
   'earned_claim_ratio': '赔付率',
   'expense_ratio': '费用率',
   'avg_claim_amount': '案均赔款',
@@ -72,6 +73,7 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   'new_car_rate': { formatter: 'percent', unit: '%' },
   'quality_business_rate': { formatter: 'percent', unit: '%' },
   'commercial_insurance_rate': { formatter: 'percent', unit: '%' },
+  'underwriting_rate': { formatter: 'percent', unit: '%' },
   'earned_claim_ratio': { formatter: 'percent', unit: '%', decimals: 1 },
   'expense_ratio': { formatter: 'percent', unit: '%', decimals: 1 },
   'avg_claim_amount': { formatter: 'premiumWan', unit: '万元' },
@@ -116,6 +118,7 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   'new_car_rate': '新车保单数 / 总保单数',
   'quality_business_rate': '优质业务保单数 / 总保单数',
   'commercial_insurance_rate': '商业险件数 / 交强险件数',
+  'underwriting_rate': '承保件数 / 报价件数（单据级）',
   'earned_claim_ratio': '已报告赔款 / 满期保费（闰年感知）',
   'expense_ratio': '费用金额 / 签单保费',
   'avg_claim_amount': '已报告赔款 / 赔案件数',

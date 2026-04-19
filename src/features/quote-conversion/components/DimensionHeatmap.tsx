@@ -37,7 +37,7 @@ export function DimensionHeatmap({ filters }: Props) {
       const dim = String(row.dim_value ?? '');
       orgSet.add(org);
       dimSet.add(dim);
-      m.set(`${org}|${dim}`, { rate: row.conversion_rate ?? 0, count: row.total_quotes ?? 0 });
+      m.set(`${org}|${dim}`, { rate: row.underwriting_rate ?? 0, count: row.total_quotes ?? 0 });
     }
 
     return {
