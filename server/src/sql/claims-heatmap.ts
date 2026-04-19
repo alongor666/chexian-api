@@ -1,18 +1,27 @@
 /**
- * 理赔热力图 SQL 生成器
+ * 理赔热力图 SQL 生成器（cohort 口径，2026-04-19 修正）
  *
- * 双时间轴架构：
- * - 保费侧：PolicyFact 按 insurance_start_date（或 dateField）分配到期间
- * - 赔案侧：ClaimsDetail 按 report_time（报案时间）或 accident_time（出险时间）独立分配到期间
- * - 两侧在 dimension × period 网格上 LEFT JOIN 合并
+ * ⚠️ 历史 bug：曾按 claimsDateField（report_time/accident_time）将赔案归到期间，
+ * 与按 insurance_start_date 归期的保费侧分子分母错配 —— loss_ratio_pct/incident_rate_pct
+ * 失去业务意义。本版本改为统一 cohort 口径：
+ *
+ * - 行口径：dimension（机构/团队/业务员/客户类别 等）
+ * - 列口径：保单 insurance_start_date 所在 period（月度 + 近 2 月按周）
+ * - 分母（earned_premium / earned_exposure）：该 period 内起保保单截至 max_date 的暴露
+ * - 分子（claim_count / total_claims_wan）：该 period 内起保保单产生的赔案，且赔案
+ *   claimsDateField ≤ max_date（"已报案" 或 "已出险" 截止判定）
+ *
+ * claimsDateField 切换器的新语义（不再决定归期）：
+ * - report_time：仅纳入截至 max_date 已报案的赔案
+ * - accident_time：仅纳入截至 max_date 已出险的赔案
  *
  * 列逻辑：
  * - 最新日期 = MAX(policy_date) from PolicyFact
  * - 仅统计 insurance_start_date <= 最新日期 的保单
  * - 最近 2 个月按周展示（周六截止），更早的折叠为月
- * - 当周用最新日期截止，其他周用周六截止
  *
  * 端点：/api/query/claims-detail/heatmap
+ * @see claims-detail.ts:generateLossRatioDevelopmentQuery — 同 cohort 口径的累计三角形
  * @see performance-heatmap.ts 保费热力图（参考实现）
  */
 
@@ -312,8 +321,9 @@ export function generateClaimsHeatmapQuery(
     ),
 
     -- ═══════════════════════════════════════════════════════════
-    -- 赔案侧：ClaimsDetail 按 ${safeClaimsDateField} 独立分配到期间
-    -- 通过 policy_no JOIN PolicyFact 获取维度属性
+    -- 赔案侧：ClaimsDetail 按保单 ${safeDateField}（cohort 口径）归期
+    -- claimsDateField=${safeClaimsDateField} 仅作"已报案/已出险" 纳入过滤
+    -- 通过 policy_no JOIN PolicyFact 获取维度属性与归期锚点
     -- ═══════════════════════════════════════════════════════════
 
     -- 7. 当年赔案数据
@@ -327,10 +337,11 @@ export function generateClaimsHeatmapQuery(
       JOIN PolicyFact p ON c.policy_no = p.policy_no
       ${teamJoin}
       JOIN all_periods ap
-        ON CAST(c.${safeClaimsDateField} AS DATE) >= ap.period_start
-        AND CAST(c.${safeClaimsDateField} AS DATE) <= ap.period_end
-      WHERE EXTRACT(YEAR FROM CAST(c.${safeClaimsDateField} AS DATE))
+        ON CAST(p.${safeDateField} AS DATE) >= ap.period_start
+        AND CAST(p.${safeDateField} AS DATE) <= ap.period_end
+      WHERE EXTRACT(YEAR FROM CAST(p.${safeDateField} AS DATE))
               = EXTRACT(YEAR FROM (SELECT max_date FROM ref_date))
+        AND CAST(p.${safeDateField} AS DATE) <= (SELECT max_date FROM ref_date)
         AND CAST(c.${safeClaimsDateField} AS DATE) <= (SELECT max_date FROM ref_date)
         AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
@@ -386,7 +397,7 @@ export function generateClaimsHeatmapQuery(
       GROUP BY dimension_value, period_idx
     ),
 
-    -- 10. 去年赔案
+    -- 10. 去年赔案（同 cohort 口径，按保单 ${safeDateField} - 1 年归期）
     prev_claims_data AS (
       SELECT
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
@@ -397,10 +408,11 @@ export function generateClaimsHeatmapQuery(
       JOIN PolicyFact p ON c.policy_no = p.policy_no
       ${teamJoin}
       JOIN all_periods ap
-        ON CAST(c.${safeClaimsDateField} AS DATE) >= (ap.period_start - INTERVAL 1 YEAR)::DATE
-        AND CAST(c.${safeClaimsDateField} AS DATE) <= (ap.period_end - INTERVAL 1 YEAR)::DATE
-      WHERE EXTRACT(YEAR FROM CAST(c.${safeClaimsDateField} AS DATE))
+        ON CAST(p.${safeDateField} AS DATE) >= (ap.period_start - INTERVAL 1 YEAR)::DATE
+        AND CAST(p.${safeDateField} AS DATE) <= (ap.period_end - INTERVAL 1 YEAR)::DATE
+      WHERE EXTRACT(YEAR FROM CAST(p.${safeDateField} AS DATE))
               = EXTRACT(YEAR FROM (SELECT max_date FROM ref_date)) - 1
+        AND CAST(p.${safeDateField} AS DATE) <= (SELECT max_date FROM ref_date) - INTERVAL 1 YEAR
         AND CAST(c.${safeClaimsDateField} AS DATE) <= (SELECT max_date FROM ref_date) - INTERVAL 1 YEAR
         AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
@@ -494,10 +506,10 @@ export function generateClaimsHeatmapQuery(
     ORDER BY bg.dimension_value, ap.period_idx
   `;
 
-  logger.debug('Generated claims heatmap SQL', {
+  logger.debug('Generated claims heatmap SQL (cohort)', {
     dimension,
-    dateField: safeDateField,
-    claimsDateField: safeClaimsDateField,
+    cohortAnchor: safeDateField,
+    claimsInclusion: safeClaimsDateField,
     sqlLength: sql.length,
   });
 
