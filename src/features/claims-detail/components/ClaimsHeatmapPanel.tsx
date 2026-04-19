@@ -1,12 +1,17 @@
 /**
- * 理赔热力图面板（双时间轴）
+ * 理赔热力图面板（cohort 口径，2026-04-19 修正）
  *
- * 维度（行）× 时间（列）交叉矩阵。
+ * 维度（行）× 起保期间（列）交叉矩阵。
  * - 行维度：三级机构/团队/业务员/客户类别/险别组合/能源类型/新转续/风险评分
- * - 列维度：月度（早期折叠）+ 周度（近 2 月）
+ * - 列维度：保单 insurance_start_date 所在月度（早期折叠）+ 近 2 月按周
  * - 指标：满期赔付率/案均赔款/已报告赔款/已报告件数/满期出险率
  * - 模式：原始值/环比值/环比幅度/同比值/同比幅度
- * - 赔案时间轴：报案时间（默认）/ 出险时间，独立于保费时间轴
+ * - 赔案纳入：报案时间（默认）/ 出险时间 — 仅作"是否计入"过滤，不再决定赔案归期
+ *
+ * 与赔付率发展面板的关系：
+ * 同 cohort 口径，分子分母均为同一组（按起保期间归集的）保单。
+ * 跨期对比时，早期 period 的赔案是"该月起保保单截至 max_date 的累计赔付"，
+ * 晚期 period 的赔案是"该周起保新单的初期赔付"，数字上呈现 cohort 三角形特征。
  */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { cardStyles, colorClasses, cn, fontStyles, getTrendColorClass } from '@/shared/styles';
@@ -346,9 +351,9 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
             </select>
           </div>
 
-          {/* 赔案时间轴选择 */}
+          {/* 赔案纳入条件（cohort 口径下不再决定归期，仅作纳入过滤） */}
           <div className="flex items-center gap-1.5">
-            <span className={cn('text-xs whitespace-nowrap', colorClasses.text.neutralMuted)}>赔案归期</span>
+            <span className={cn('text-xs whitespace-nowrap', colorClasses.text.neutralMuted)} title="cohort 口径下，赔案归期已锚定到保单起保期间；此处仅决定哪些赔案被纳入（已报案 / 已出险）">赔案纳入</span>
             <select
               value={claimsDateField}
               onChange={e => setClaimsDateField(e.target.value as ClaimsDateFieldOption)}
@@ -528,13 +533,18 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
           </div>
         )}
 
-        {/* 口径说明 */}
+        {/* 口径说明（cohort 口径，与赔付率发展面板对齐） */}
         <div className={cn('text-xs leading-relaxed', colorClasses.text.neutralMuted)}>
-          <b>双时间轴口径</b>：保费按起保日期分期，赔案按<b>{claimsDateLabel}</b>独立分期。
-          列按周六截止（当周按最新日期）。
-          满期赔付率 = 该期{claimsDateLabel}报案赔款 / 该期起保满期保费，
-          满期出险率 = 该期赔案件数 / 该期已赚暴露。
-          环比按当期比上期，同比按当年截止日比去年同截止日。
+          <b>cohort 口径</b>：保费与赔案均按保单起保日期归到该期间。
+          赔案纳入条件 = <b>{claimsDateLabel}</b> ≤ 数据截止日（仅过滤事件类型，不影响归期）。
+          <br />
+          满期赔付率 = 该期起保保单的累计已报告赔款 / 该期起保保单的已赚保费；
+          满期出险率 = 该期起保保单的累计赔案件数 / 该期起保保单的已赚暴露；
+          案均赔款 = 该期起保保单的累计赔款 / 累计件数。
+          <br />
+          ⚠️ 跨期对比含义：早期 period（按月）展示该月起保保单截至 max_date 的累计发展；
+          晚期 period（按周）展示该周起保新单的初期赔付，数字偏小属正常 cohort 三角形特征。
+          列按周六截止（当周按最新日期）。环比按当期比上期，同比按当年截止日比去年同截止日。
         </div>
       </div>
     </div>
