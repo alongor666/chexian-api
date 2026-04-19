@@ -32,8 +32,8 @@ export function MonthlyTrendSnapshot({ filters }: Props) {
       const updated = {
         quotes: existing.quotes + (row.total_quotes ?? 0),
         insured: existing.insured + (row.total_insured ?? 0),
-        renewalRate: row.renewal_type === '续保' ? (row.conversion_rate ?? 0) : existing.renewalRate,
-        switchRate: row.renewal_type === '转保' ? (row.conversion_rate ?? 0) : existing.switchRate,
+        renewalRate: row.renewal_type === '续保' ? (row.underwriting_rate ?? 0) : existing.renewalRate,
+        switchRate: row.renewal_type === '转保' ? (row.underwriting_rate ?? 0) : existing.switchRate,
       };
       bucketMap.set(row.time_bucket, updated);
     }

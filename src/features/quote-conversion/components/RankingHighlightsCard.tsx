@@ -34,7 +34,7 @@ export function RankingHighlightsCard({ title, subtitle, filters, dimension }: P
                   {row.dim_value ?? '-'}
                 </div>
                 <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                  {formatPercent(row.conversion_rate)}
+                  {formatPercent(row.underwriting_rate)}
                 </div>
               </div>
               <div className={`text-xs mt-1 ${colorClasses.text.neutralMuted}`}>

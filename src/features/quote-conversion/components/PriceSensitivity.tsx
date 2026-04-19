@@ -73,7 +73,7 @@ export function PriceSensitivity({ filters }: Props) {
           name: '转化率',
           type: 'line',
           yAxisIndex: 1,
-          data: filtered.map(r => r.conversion_rate),
+          data: filtered.map(r => r.underwriting_rate),
           lineStyle: { color: quoteChartColors.conversionLine, width: 2 },
           itemStyle: { color: quoteChartColors.conversionLine },
           symbol: 'circle',

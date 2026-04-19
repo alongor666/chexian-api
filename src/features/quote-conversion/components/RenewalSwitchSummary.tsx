@@ -34,7 +34,7 @@ export function RenewalSwitchSummary({
             { label: '转保', data: switched.data, tone: cn(colorClasses.bg.warning) },
           ].map((item) => {
             const data = item.data;
-            const conversionRate = data?.conversion_rate ?? 0;
+            const conversionRate = data?.underwriting_rate ?? 0;
             const totalQuotes = data?.total_quotes ?? 0;
             const totalInsured = data?.total_insured ?? 0;
             const insuredPremium = data?.insured_premium ?? 0;

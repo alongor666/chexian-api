@@ -114,7 +114,7 @@ export function DrilldownTable({ filters }: Props) {
                 const isAgg = (name: string) => /合计|汇总|全部|四川分公司/.test(name ?? '');
                 if (isAgg(a.group_name)) return -1;
                 if (isAgg(b.group_name)) return 1;
-                return (a.conversion_rate ?? 0) - (b.conversion_rate ?? 0);
+                return (a.underwriting_rate ?? 0) - (b.underwriting_rate ?? 0);
               }).map((row) => (
                 <tr
                   key={row.group_key}
@@ -129,9 +129,9 @@ export function DrilldownTable({ filters }: Props) {
                   <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_quotes)}</td>
                   <td className={`${tableStyles.cell} text-right ${fontStyles.numeric}`}>{formatCount(row.total_insured)}</td>
                   <td className={`${tableStyles.cell} text-right font-medium ${
-                    row.conversion_rate < avgConversionRate ? colorClasses.text.danger : ''
+                    row.underwriting_rate < avgConversionRate ? colorClasses.text.danger : ''
                   }`}>
-                    <RateCell value={row.conversion_rate} />
+                    <RateCell value={row.underwriting_rate} />
                   </td>
                   <td className={`${tableStyles.cell} text-right`}>
                     <RateCell value={row.renewal_rate} />

@@ -275,4 +275,39 @@ export const ratioMetrics: readonly MetricDefinition[] = [
     changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' }],
   },
 
+  // ── 报价转化分析指标（QuoteConversion VIEW）──
+
+  {
+    id: 'underwriting_rate',
+    version: '1.0.0',
+    name: '承保率（报价→承保）',
+    category: 'ratio',
+    tags: ['quote-conversion', 'ratio', 'underwriting'],
+    formula: {
+      description: '承保件数 / 报价件数（单据级）',
+      numerator: '已承保报价单数',
+      denominator: '全部报价单数',
+      unit: '%',
+    },
+    sql: {
+      expression: `ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) as underwriting_rate`,
+      requiredColumns: ['is_underwritten'],
+      notes: '仅适用于 QuoteConversion VIEW（04_报价清单 Parquet），单据级统计。',
+    },
+    display: {
+      formatter: 'percent',
+      label: '承保率',
+      unit: '%',
+    },
+    testCases: [
+      {
+        name: '承保率在0-100之间',
+        input: { whereClause: '1=1' },
+        assertions: { underwriting_rate: { op: 'between', min: 0, max: 100 } },
+      },
+    ],
+    changelog: [
+      { version: '1.0.0', date: '2026-04-18', changes: '新增；从 quote-conversion.ts 硬编码公式 conversion_rate 归位到注册表。旧别名 conversion_rate 暂保留用于向后兼容。' },
+    ],
+  },
 ];
