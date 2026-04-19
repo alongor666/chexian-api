@@ -99,6 +99,9 @@ const ClaimsDetailPage = lazy(() =>
 const ExpenseDevelopmentPage = lazy(() =>
   import('../features/expense-development').then((m) => ({ default: m.ExpenseDevelopmentPage }))
 );
+const RenewalTrackerPage = lazy(() =>
+  import('../features/renewal-tracker').then((m) => ({ default: m.RenewalTrackerPage }))
+);
 
 // Loading fallback — content-aware skeleton screen
 const PageLoader = () => (
@@ -306,6 +309,14 @@ function App() {
                     path="claims-detail"
                     element={
                       <LazyRoute><ClaimsDetailPage /></LazyRoute>
+                    }
+                  />
+
+                  {/* 商业险续保追踪 - 独立数据源 RenewalTrackerFact（派生域） */}
+                  <Route
+                    path="renewal-tracker"
+                    element={
+                      <LazyRoute><RenewalTrackerPage /></LazyRoute>
                     }
                   />
 

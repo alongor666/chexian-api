@@ -22,7 +22,8 @@
  *   node daily.mjs brand          # 全量替换厂牌维度表
  *   node daily.mjs repair         # 全量替换维修资源域
  *   node daily.mjs customer_flow  # 全量替换客户来源去向域
- *   node daily.mjs all            # 全部 6 域
+ *   node daily.mjs renewal_tracker # 续保追踪派生域（JOIN policy+quotes+salesman）
+ *   node daily.mjs all            # 全部域（含派生域）
  *   node daily.mjs --no-sync      # 跳过 VPS 同步
  */
 
@@ -493,6 +494,48 @@ function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePre
 // ── 旧 runXxx 已被 runStandardDomain 替代（cross_sell/quotes_conversion/brand/repair_resource/customer_flow） ──
 // renewal_v2 / renewal_universe 已下线（2026-04-18），convert_renewal.py / generate_renewal_universe.py 已删除
 
+// ── 派生域：renewal_tracker（依赖 policy + quotes_conversion + salesman，非 Excel） ──
+
+function runRenewalTracker(python, scriptDir) {
+  log('cyan', '\n═══ renewal_tracker 派生域：续保追踪（JOIN policy + quotes_conversion + salesman）═══\n');
+
+  // 依赖检查
+  const policyDir = join(scriptDir, 'warehouse/fact/policy/current');
+  const quotesPath = join(scriptDir, 'warehouse/fact/quotes_conversion/latest.parquet');
+  const salesmanPath = join(scriptDir, 'warehouse/dim/salesman/latest.parquet');
+  const missing = [];
+  if (!existsSync(policyDir) || readdirSync(policyDir).filter(f => f.endsWith('.parquet')).length === 0) missing.push('policy/current/*.parquet');
+  if (!existsSync(quotesPath)) missing.push('quotes_conversion/latest.parquet');
+  if (!existsSync(salesmanPath)) missing.push('salesman/latest.parquet');
+  if (missing.length > 0) {
+    log('red', `❌ 依赖缺失，跳过 renewal_tracker: ${missing.join(', ')}`);
+    return;
+  }
+
+  const outputDir = join(scriptDir, 'warehouse/fact/renewal_tracker');
+  const outputPath = join(outputDir, 'latest.parquet');
+  const tmpPath = outputPath + '.tmp';
+  ensureDir(outputDir);
+
+  const scriptPath = join(scriptDir, 'pipelines/convert_renewal_tracker.py');
+  runPythonScript(python, scriptPath, ['-o', `"${tmpPath}"`]);
+
+  // 归档旧文件（成功转换后才归档）
+  if (existsSync(outputPath)) {
+    const archiveDir = join(homedir(), 'chexian-archive');
+    ensureDir(archiveDir);
+    renameSync(outputPath, join(archiveDir, `renewal_tracker_latest_${formatDate()}.parquet`));
+    log('yellow', '  归档旧 latest.parquet → archive/');
+  }
+  renameSync(tmpPath, outputPath);
+
+  // 回写 data-sources.json
+  const rowCount = getParquetRowCount(python, outputPath);
+  const fieldCount = getParquetColumnCount(python, outputPath);
+  updateDataSources('renewal_tracker', { rowCount, fieldCount });
+  log('green', '✅ renewal_tracker 派生域完成');
+}
+
 // ── 主流程 ──
 
 async function main() {
@@ -500,7 +543,7 @@ async function main() {
   process.chdir(scriptDir);
 
   const noSync = process.argv.includes('--no-sync');
-  const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'all'];
+  const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'renewal_tracker', 'all'];
   const subcommand = process.argv.find(a => ALL_DOMAINS.includes(a));
 
   // 子命令模式：单域处理
@@ -519,6 +562,7 @@ async function main() {
       case 'brand': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'brand')); break;
       case 'repair': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'repair_resource')); break;
       case 'customer_flow': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'customer_flow')); break;
+      case 'renewal_tracker': runRenewalTracker(python, scriptDir); break;
     }
     if (!noSync) {
       const synced = await syncToVps(scriptDir);
@@ -740,6 +784,8 @@ async function main() {
     for (const id of ['cross_sell', 'quotes_conversion', 'brand', 'repair_resource', 'customer_flow']) {
       runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, id));
     }
+    // 派生域放末尾（依赖 policy + quotes_conversion + salesman 已产出）
+    runRenewalTracker(python, scriptDir);
   }
 
   // 7. VPS 同步 + 快照重建

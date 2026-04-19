@@ -21,6 +21,7 @@ import {
   Wrench,
   ArrowLeftRight,
   TrendingDown,
+  RefreshCw,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
@@ -51,6 +52,7 @@ const dataNavItems: NavItem[] = [
 ];
 
 const toolNavItems: NavItem[] = [
+  { path: '/renewal-tracker', icon: RefreshCw, label: '续保追踪', shortLabel: '续保' },
   { path: '/quote-conversion', icon: Target, label: '报价转化', shortLabel: '报价' },
   { path: '/expense-development', icon: TrendingDown, label: '费用率发展', shortLabel: '费发' },
   { path: '/claims-detail', icon: FileWarning, label: '赔案明细', shortLabel: '赔案' },
