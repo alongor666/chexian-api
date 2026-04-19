@@ -47,8 +47,8 @@ CN_TO_EN = {
     '支付时间': 'payment_time',
     '案件类型': 'case_type',
     '现场类型': 'scene_type',
-    '标的汽修厂': 'subject_repair',          # 2025+ 新增（标的车维修厂）
     '三者汽修厂': 'third_party_repair',
+    '标的汽修厂': 'subject_repair_shop',      # 2025+ 新增（标的车维修厂）
     '是否追偿': 'is_recovery',
     '立案金额': 'reserve_amount',
     '立案金额-人': 'reserve_bodily_amount',
@@ -179,9 +179,9 @@ def main():
     print(f"   列名重命名: {len(rename_cols)}/{len(CN_TO_EN)} 列")
 
     # ── 前后兼容：确保双 schema 列始终存在（缺失补 NULL） ──
-    # 2021-2024 旧源有 settled_fee 无 subject_repair；2025+ 反之。
+    # 2021-2024 旧源有 settled_fee 无 subject_repair_shop；2025+ 反之。
     # 输出 parquet 统一包含两列，避免跨年度分区合并时 schema 漂移。
-    for legacy_col in ('settled_fee', 'subject_repair'):
+    for legacy_col in ('settled_fee', 'subject_repair_shop'):
         if legacy_col not in df.columns:
             df[legacy_col] = pd.NA
             print(f"   补齐缺失列: {legacy_col} = NULL（源文件无此字段）")
@@ -226,9 +226,20 @@ def main():
         )
 
     # 字符串字段标准化
-    for col in ['policy_no', 'claim_no', 'report_no', 'vehicle_frame_no', 'subject_plate_no']:
+    for col in ['policy_no', 'claim_no', 'report_no', 'vehicle_frame_no', 'subject_plate_no',
+                'subject_repair_shop', 'third_party_repair']:
         if col in df.columns:
-            df[col] = df[col].str.strip().replace(_PLACEHOLDER_STRS, None)
+            df[col] = df[col].astype(str).str.strip().replace(_PLACEHOLDER_STRS, None)
+
+    # ── 派生：标的汽修厂前 8 位编码（JOIN RepairDim.shop_code 的稳定 key）──
+    # 维修资源板块使用（.claude/shared-memory/repair_source_field_mapping.md §2.1）
+    if 'subject_repair_shop' in df.columns:
+        df['subject_shop_code'] = df['subject_repair_shop'].apply(
+            lambda s: s[:8] if pd.notna(s) and isinstance(s, str) and len(s) >= 8 else None
+        )
+        shop_non_null = df['subject_shop_code'].notna().sum()
+        shop_unique = df['subject_shop_code'].nunique()
+        print(f"   标的汽修厂: {shop_non_null:,}/{len(df):,} 有值, 去重编码 {shop_unique:,}")
 
     # ── 派生字段 ──
 

@@ -84,6 +84,24 @@ export const QUERY_ROUTES = {
     CITY: '/policy-geo/city',
   },
 
+  // 维修资源（v1 + 2026-04-18 v2 重设计）
+  REPAIR: {
+    // v1
+    OVERVIEW: '/repair/overview',
+    DETAIL: '/repair/detail',
+    STATUS: '/repair/status',
+    METADATA: '/repair/metadata',
+    // v2（单页下钻 + 本地资源占比 + 导流清单）
+    CITY: '/repair/city',
+    CHANNEL: '/repair/channel',
+    COOP_TIER: '/repair/coop-tier',
+    SCATTER: '/repair/scatter',
+    LOCAL_RESOURCE: '/repair/local-resource',
+    TO_PREMIUM: '/repair/to-premium',
+    DIVERSION_LIST: '/repair/diversion-list',
+    ORPHAN_SHOPS: '/repair/orphan-shops',
+  },
+
   // 巡检报告
   PATROL: '/patrol',
 

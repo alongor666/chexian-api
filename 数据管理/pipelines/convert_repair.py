@@ -73,6 +73,14 @@ class RepairConverter(BaseConverter):
                     "province", "city", "district"):
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip().replace(PLACEHOLDER_STRS, None)
+        # 派生：shop_code 前 8 位编码（.claude/shared-memory/repair_source_field_mapping.md §1.1）
+        if "repair_shop_name" in df.columns:
+            df["shop_code"] = df["repair_shop_name"].apply(
+                lambda s: s[:8] if pd.notna(s) and isinstance(s, str) and len(s) >= 8 else None
+            )
+            uniq_shops = df["repair_shop_name"].nunique()
+            uniq_codes = df["shop_code"].nunique()
+            print(f"   shop_code 编码: 网点 {uniq_shops:,} → 编码 {uniq_codes:,}（差异 {uniq_shops - uniq_codes} 表示同编码多名称）")
         return df
 
     def post_write_hook(self, df: pd.DataFrame, output_file: Path) -> None:

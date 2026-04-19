@@ -332,10 +332,10 @@
         "/api/query/repair/status"
       ],
       "frontend_page": "repair",
-      "notes": "维修厂合作数据，12列，含核损金额/换件折扣率/合作状态",
+      "notes": "维修厂合作数据，12列+派生 shop_code（前8位编码），含核损金额/换件折扣率/合作状态。2026-04-18 重设计：引入 coop_tier 三态分类 + shop_code JOIN ClaimsDetail",
       "last_updated": "2026-04-18",
       "row_count": 1647,
-      "field_count": 12
+      "field_count": 13
     },
     {
       "id": "customer_flow",
