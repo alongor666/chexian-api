@@ -32,6 +32,9 @@ const REPAIR_IDS = new Set([
   'repair_net_premium_total',
 ]);
 
+/** 需要 QuoteConversion schema 的指标 */
+const QUOTE_IDS = new Set(['underwriting_rate']);
+
 // ═══════════════════════════════════════════════════
 // 断言执行器
 // ═══════════════════════════════════════════════════
@@ -146,6 +149,17 @@ INSERT INTO repair_data VALUES
   ('无',                       false, '1生效中',  0,       0);
 `;
 
+/** QuoteConversion 合成数据 — 单据级，is_underwritten ∈ {承保, 未承保} */
+const SEED_QUOTE_DATA = `
+CREATE TABLE quote_data (
+  is_underwritten VARCHAR
+);
+
+INSERT INTO quote_data VALUES
+  ('承保'), ('承保'), ('承保'),
+  ('未承保'), ('未承保');
+`;
+
 // ═══════════════════════════════════════════════════
 // 测试
 // ═══════════════════════════════════════════════════
@@ -158,7 +172,7 @@ describe('指标 testCase DuckDB 执行', () => {
     await db.init();
 
     // 创建所有合成数据表
-    for (const sql of [SEED_POLICY_DATA, SEED_CROSS_SELL_DATA, SEED_GROWTH_DATA, SEED_REPAIR_DATA]) {
+    for (const sql of [SEED_POLICY_DATA, SEED_CROSS_SELL_DATA, SEED_GROWTH_DATA, SEED_REPAIR_DATA, SEED_QUOTE_DATA]) {
       // 拆分为独立语句执行
       const statements = sql.split(';').map((s) => s.trim()).filter(Boolean);
       for (const stmt of statements) {
@@ -176,6 +190,7 @@ describe('指标 testCase DuckDB 执行', () => {
     if (CROSS_SELL_IDS.has(metricId)) return 'cross_sell_data';
     if (GROWTH_IDS.has(metricId)) return 'growth_data';
     if (REPAIR_IDS.has(metricId)) return 'repair_data';
+    if (QUOTE_IDS.has(metricId)) return 'quote_data';
     return 'policy_data';
   }
 
