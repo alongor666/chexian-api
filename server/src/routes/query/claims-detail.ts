@@ -237,12 +237,22 @@ router.get(
     }
     const dimension = dimStr as HeatmapGroupDimension;
 
-    // dateField: 保费时间轴（默认 insurance_start_date）
+    // dateField: 保费时间轴（累计口径下恒为 insurance_start_date，保留参数兼容）
     const dateField = typeof q.dateField === 'string' ? q.dateField : 'insurance_start_date';
-    // claimsDateField: 赔案时间轴（默认 report_time 报案时间）
+    // claimsDateField: 赔案纳入字段（默认 report_time 报案时间）
     const claimsDateField = (typeof q.claimsDateField === 'string' ? q.claimsDateField : 'report_time') as ClaimsDateField;
 
-    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField);
+    // policyYear: 保单年度（insurance_start_date 年份）；未提供或非法 → SQL 端取 max_date 所在年
+    let policyYear: number | undefined;
+    if (typeof q.policyYear === 'string' && q.policyYear.length > 0) {
+      const parsed = Number.parseInt(q.policyYear, 10);
+      if (!Number.isInteger(parsed) || parsed < 2020 || parsed > 2030) {
+        throw new AppError(400, `无效 policyYear: ${q.policyYear}`);
+      }
+      policyYear = parsed;
+    }
+
+    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField, policyYear);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })

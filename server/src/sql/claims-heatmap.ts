@@ -1,28 +1,25 @@
 /**
- * 理赔热力图 SQL 生成器（cohort 口径，2026-04-19 修正）
+ * 理赔热力图 SQL 生成器（累计发展口径，2026-04-19 重构）
  *
- * ⚠️ 历史 bug：曾按 claimsDateField（report_time/accident_time）将赔案归到期间，
- * 与按 insurance_start_date 归期的保费侧分子分母错配 —— loss_ratio_pct/incident_rate_pct
- * 失去业务意义。本版本改为统一 cohort 口径：
+ * 口径演进：
+ * - v1: 按 report_time/accident_time 归赔案到期间（与保费分母错配）
+ * - v2 (2026-04-19 am): cohort 切片口径，分子分母同按 insurance_start_date 归到起保期间
+ * - v3 (2026-04-19 pm, 当前): **累计发展口径** — 用户选定保单年度 Y，
+ *   矩阵每列代表一个"累计截止日 cutoff"，每格展示「Y 年起保的保单截至该 cutoff 的累计数据」。
  *
- * - 行口径：dimension（机构/团队/业务员/客户类别 等）
- * - 列口径：保单 insurance_start_date 所在 period（月度 + 近 2 月按周）
- * - 分母（earned_premium / earned_exposure）：该 period 内起保保单截至 max_date 的暴露
- * - 分子（claim_count / total_claims_wan）：该 period 内起保保单产生的赔案，且赔案
- *   claimsDateField ≤ max_date（"已报案" 或 "已出险" 截止判定）
+ * - 行口径：dimension（机构/团队/业务员/客户类别/…）
+ * - 列口径：policyYear 内的一组累计截止日 (cutoffs)
+ *   - 年度早段：逐月末 (1/31、2/28…)，直到 effective_end 前 2 个月
+ *   - 近 2 个月：按周六截止（+ effective_end 本身若非周六）
+ *   - effective_end = min(Y-12-31, max_date)
+ * - 分母：insurance_start_date 年份 = Y 且 ≤ cutoff 的保单，earned_premium/exposure 用 cutoff 结算
+ * - 分子：同 cohort 保单产生的赔案，且 claimsDateField ≤ cutoff
+ * - YoY：Y-1 年度相同 cohort 在 cutoff - 1 年的累计快照
  *
- * claimsDateField 切换器的新语义（不再决定归期）：
- * - report_time：仅纳入截至 max_date 已报案的赔案
- * - accident_time：仅纳入截至 max_date 已出险的赔案
- *
- * 列逻辑：
- * - 最新日期 = MAX(policy_date) from PolicyFact
- * - 仅统计 insurance_start_date <= 最新日期 的保单
- * - 最近 2 个月按周展示（周六截止），更早的折叠为月
+ * 每一列是"累计"快照（单调递增），相邻列差 = 新增。
  *
  * 端点：/api/query/claims-detail/heatmap
- * @see claims-detail.ts:generateLossRatioDevelopmentQuery — 同 cohort 口径的累计三角形
- * @see performance-heatmap.ts 保费热力图（参考实现）
+ * 参数：dimension / policyYear / dateField（保留但固定为 insurance_start_date）/ claimsDateField
  */
 
 import { logger } from '../utils/logger.js';
@@ -59,6 +56,8 @@ export interface ClaimsHeatmapFilters {
 
 const VALID_DATE_FIELDS = new Set(['policy_date', 'insurance_start_date']);
 const VALID_CLAIMS_DATE_FIELDS = new Set<ClaimsDateField>(['report_time', 'accident_time']);
+const MIN_POLICY_YEAR = 2020;
+const MAX_POLICY_YEAR = 2030;
 
 // ============================================================================
 // 筛选器构建
@@ -176,27 +175,35 @@ function getDimensionExpr(
 // ============================================================================
 
 /**
- * 生成理赔热力图查询（双时间轴）
- *
- * 返回 dimension_value × period 矩阵：
- * - 保费侧按 dateField（默认 insurance_start_date）分配到期间
- * - 赔案侧按 claimsDateField（默认 report_time）独立分配到期间
- * - 前端用相邻 period 计算 WoW，用 yoy_ 前缀计算 YoY
+ * 生成理赔热力图查询（累计发展口径）
  *
  * @param filters 筛选条件
  * @param dimension 行维度
- * @param dateField 保费时间轴字段（默认 insurance_start_date）
- * @param claimsDateField 赔案时间轴字段（默认 report_time）
+ * @param dateField 保费时间轴字段（保留参数以兼容，实际固定为 insurance_start_date）
+ * @param claimsDateField 赔案纳入截止字段（决定"已报案" or "已出险"）
+ * @param policyYear 保单年度（insurance_start_date 年份）；undefined 时取 max_date 所在年
  */
 export function generateClaimsHeatmapQuery(
   filters: ClaimsHeatmapFilters,
   dimension: HeatmapGroupDimension = 'org_level_3',
   dateField: string = 'insurance_start_date',
   claimsDateField: ClaimsDateField = 'report_time',
+  policyYear?: number,
 ): string {
   // 白名单校验，防止 SQL 注入
-  const safeDateField = VALID_DATE_FIELDS.has(dateField) ? dateField : 'insurance_start_date';
+  // dateField 参数保留兼容，但累计口径下 cohort 必须锚定 insurance_start_date
+  const _safeDateField = VALID_DATE_FIELDS.has(dateField) ? dateField : 'insurance_start_date';
+  void _safeDateField; // 仅白名单校验，cohort 锚点恒为 insurance_start_date
   const safeClaimsDateField = VALID_CLAIMS_DATE_FIELDS.has(claimsDateField) ? claimsDateField : 'report_time';
+
+  // policyYear 白名单：整数 2020-2030；非法则用 SQL 端 max_date 所在年兜底
+  const safePolicyYear =
+    typeof policyYear === 'number' &&
+    Number.isInteger(policyYear) &&
+    policyYear >= MIN_POLICY_YEAR &&
+    policyYear <= MAX_POLICY_YEAR
+      ? policyYear
+      : null;
 
   const dimConfig = getDimensionExpr(dimension, 'p.');
   const needsTeamJoin = dimension === 'team';
@@ -206,265 +213,217 @@ export function generateClaimsHeatmapQuery(
     ? `LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))`
     : '';
 
+  // policyYearExpr：子查询或字面量 — 供 CTE 反复引用
+  const policyYearExpr = safePolicyYear !== null
+    ? String(safePolicyYear)
+    : `(EXTRACT(YEAR FROM (SELECT max_date FROM ref_date))::INT)`;
+
   const sql = `
     WITH
-    -- 1. 最新签单日期
+    -- 1. 数据截止日
     ref_date AS (
       SELECT MAX(CAST(policy_date AS DATE)) AS max_date FROM PolicyFact
     ),
 
-    -- 2. 周/月边界（近 2 月按周，更早折叠为月）
-    boundary AS (
-      SELECT DATE_TRUNC('month', max_date - INTERVAL 1 MONTH)::DATE AS wb, max_date
-      FROM ref_date
+    -- 2. 所选保单年度的累计区间
+    year_bounds AS (
+      SELECT
+        ${policyYearExpr} AS policy_year,
+        MAKE_DATE(${policyYearExpr}, 1, 1) AS year_start,
+        MAKE_DATE(${policyYearExpr}, 12, 31) AS year_end,
+        LEAST(MAKE_DATE(${policyYearExpr}, 12, 31), (SELECT max_date FROM ref_date)) AS effective_end
     ),
 
-    -- 3a. 月度期间（年初 → boundary 前）
-    monthly_periods AS (
+    -- 3. 近 2 月的起点（再早折叠为月末）
+    weekly_start AS (
       SELECT
-        ms::DATE AS period_start,
-        (ms + INTERVAL 1 MONTH - INTERVAL 1 DAY)::DATE AS period_end,
-        'month' AS period_type,
-        CAST(EXTRACT(MONTH FROM ms) AS INT) AS period_month,
-        ms::DATE AS sort_key
-      FROM boundary b,
+        GREATEST(year_start, (effective_end - INTERVAL 2 MONTH + INTERVAL 1 DAY)::DATE) AS wstart,
+        effective_end,
+        year_start
+      FROM year_bounds
+    ),
+
+    -- 4a. 月末 cutoffs（年初 → weekly_start 前一天）
+    monthly_cutoffs AS (
+      SELECT
+        (DATE_TRUNC('month', d::DATE) + INTERVAL 1 MONTH - INTERVAL 1 DAY)::DATE AS cutoff,
+        'month' AS cutoff_type
+      FROM weekly_start w,
       generate_series(
-        MAKE_DATE(EXTRACT(YEAR FROM b.max_date)::INT, 1, 1)::TIMESTAMP,
-        (b.wb - INTERVAL 1 DAY)::TIMESTAMP,
+        w.year_start::TIMESTAMP,
+        (w.wstart - INTERVAL 1 DAY)::TIMESTAMP,
         INTERVAL 1 MONTH
-      ) AS t(ms)
+      ) AS t(d)
+      WHERE (DATE_TRUNC('month', d::DATE) + INTERVAL 1 MONTH - INTERVAL 1 DAY)::DATE < w.wstart
     ),
 
-    -- 3b. 周六截止点 + 最新日期
-    week_cutoffs_raw AS (
-      SELECT DISTINCT d::DATE AS cutoff
-      FROM boundary b,
-      generate_series(b.wb::TIMESTAMP, b.max_date::TIMESTAMP, INTERVAL 1 DAY) AS t(d)
-      WHERE EXTRACT(DOW FROM d) = 6 AND d::DATE <= b.max_date
+    -- 4b. 近 2 月按周六 + effective_end
+    weekly_cutoffs_raw AS (
+      SELECT d::DATE AS cutoff
+      FROM weekly_start w,
+      generate_series(w.wstart::TIMESTAMP, w.effective_end::TIMESTAMP, INTERVAL 1 DAY) AS t(d)
+      WHERE EXTRACT(DOW FROM d) = 6 AND d::DATE <= w.effective_end
 
       UNION
 
-      SELECT b.max_date FROM boundary b
-      WHERE EXTRACT(DOW FROM b.max_date) != 6
+      SELECT w.effective_end
+      FROM weekly_start w
+      WHERE EXTRACT(DOW FROM w.effective_end) != 6
     ),
 
-    week_cutoffs AS (
-      SELECT cutoff, ROW_NUMBER() OVER (ORDER BY cutoff) AS rn
-      FROM week_cutoffs_raw
+    weekly_cutoffs AS (
+      SELECT cutoff, 'week' AS cutoff_type
+      FROM weekly_cutoffs_raw
     ),
 
-    -- 3c. 周度期间
-    weekly_periods AS (
+    -- 5. 合并 cutoffs（去重，稳定排序）
+    all_cutoffs AS (
       SELECT
-        COALESCE(
-          (SELECT cutoff + INTERVAL 1 DAY FROM week_cutoffs WHERE rn = wc.rn - 1)::DATE,
-          (SELECT wb FROM boundary)
-        ) AS period_start,
-        wc.cutoff AS period_end,
-        'week' AS period_type,
-        0 AS period_month,
-        wc.cutoff AS sort_key
-      FROM week_cutoffs wc
-    ),
-
-    -- 4. 合并所有期间
-    all_periods AS (
-      SELECT
-        period_start, period_end, period_type, period_month,
-        ROW_NUMBER() OVER (ORDER BY sort_key, period_type DESC) AS period_idx
+        cutoff,
+        MIN(cutoff_type) AS cutoff_type, -- 若月末恰为周六，'month' 优先（字母序在前）
+        ROW_NUMBER() OVER (ORDER BY cutoff) AS cutoff_idx
       FROM (
-        SELECT * FROM monthly_periods
+        SELECT cutoff, cutoff_type FROM monthly_cutoffs
         UNION ALL
-        SELECT * FROM weekly_periods
+        SELECT cutoff, cutoff_type FROM weekly_cutoffs
       ) combined
+      GROUP BY cutoff
     ),
 
     -- ═══════════════════════════════════════════════════════════
-    -- 保费侧：PolicyFact 按 ${safeDateField} 分配到期间
-    -- ⚡ 性能热点：PolicyFact 全表扫描，数据量 > 10 万时关注
+    -- 保费侧：所选年度起保保单 × 累计 cutoff
+    -- 每 (dim, cutoff) 的 earned 用该 cutoff 作为结算点
     -- ═══════════════════════════════════════════════════════════
 
-    -- 5. 当年保费数据
-    cur_premium_data AS (
+    cur_premium_cumulative AS (
       SELECT
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
-        ap.period_idx,
-        p.policy_no,
-        p.premium,
-        GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE),
-          CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1) AS policy_term_days,
-        GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE),
-          (SELECT max_date FROM ref_date) + INTERVAL 1 DAY), 0) AS elapsed_days
+        ac.cutoff_idx,
+        COUNT(DISTINCT p.policy_no) AS policy_count,
+        ROUND(SUM(p.premium) / 1e4, 4) AS premium_wan,
+        ROUND(SUM(p.premium * LEAST(
+          GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), ac.cutoff + INTERVAL 1 DAY), 0),
+          GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)
+        )::DOUBLE / GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)) / 1e4, 4) AS earned_premium_wan,
+        ROUND(SUM(LEAST(
+          GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), ac.cutoff + INTERVAL 1 DAY), 0),
+          GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)
+        )::DOUBLE / GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)), 6) AS earned_exposure
       FROM PolicyFact p
       ${teamJoin}
-      JOIN all_periods ap
-        ON CAST(p.${safeDateField} AS DATE) >= ap.period_start
-        AND CAST(p.${safeDateField} AS DATE) <= ap.period_end
-      WHERE EXTRACT(YEAR FROM CAST(p.${safeDateField} AS DATE))
-              = EXTRACT(YEAR FROM (SELECT max_date FROM ref_date))
-        AND CAST(p.${safeDateField} AS DATE) <= (SELECT max_date FROM ref_date)
+      CROSS JOIN all_cutoffs ac
+      WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds)
+        AND CAST(p.insurance_start_date AS DATE) <= ac.cutoff
         AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
-    ),
-
-    -- 6. 当年保费聚合
-    cur_premium_agg AS (
-      SELECT
-        dimension_value,
-        period_idx,
-        COUNT(DISTINCT policy_no) AS policy_count,
-        ROUND(SUM(premium) / 1e4, 4) AS premium_wan,
-        ROUND(SUM(premium * LEAST(elapsed_days, policy_term_days)::DOUBLE / policy_term_days) / 1e4, 4) AS earned_premium_wan,
-        ROUND(SUM(LEAST(elapsed_days, policy_term_days)::DOUBLE / policy_term_days), 6) AS earned_exposure
-      FROM cur_premium_data
-      GROUP BY dimension_value, period_idx
+      GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
     ),
 
     -- ═══════════════════════════════════════════════════════════
-    -- 赔案侧：ClaimsDetail 按保单 ${safeDateField}（cohort 口径）归期
-    -- claimsDateField=${safeClaimsDateField} 仅作"已报案/已出险" 纳入过滤
-    -- 通过 policy_no JOIN PolicyFact 获取维度属性与归期锚点
+    -- 赔案侧：同 cohort × 赔案 claimsDateField ≤ cutoff 的累计
     -- ═══════════════════════════════════════════════════════════
 
-    -- 7. 当年赔案数据
-    cur_claims_data AS (
+    cur_claims_cumulative AS (
       SELECT
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
-        ap.period_idx,
-        c.claim_no,
-        COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0) AS claim_amount
+        ac.cutoff_idx,
+        COUNT(DISTINCT c.claim_no) AS claim_count,
+        ROUND(SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) / 1e4, 4) AS total_claims_wan
       FROM ClaimsDetail c
       JOIN PolicyFact p ON c.policy_no = p.policy_no
       ${teamJoin}
-      JOIN all_periods ap
-        ON CAST(p.${safeDateField} AS DATE) >= ap.period_start
-        AND CAST(p.${safeDateField} AS DATE) <= ap.period_end
-      WHERE EXTRACT(YEAR FROM CAST(p.${safeDateField} AS DATE))
-              = EXTRACT(YEAR FROM (SELECT max_date FROM ref_date))
-        AND CAST(p.${safeDateField} AS DATE) <= (SELECT max_date FROM ref_date)
-        AND CAST(c.${safeClaimsDateField} AS DATE) <= (SELECT max_date FROM ref_date)
+      CROSS JOIN all_cutoffs ac
+      WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds)
+        AND CAST(p.insurance_start_date AS DATE) <= ac.cutoff
+        AND CAST(c.${safeClaimsDateField} AS DATE) <= ac.cutoff
         AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
-    ),
-
-    -- 8. 当年赔案聚合
-    cur_claims_agg AS (
-      SELECT
-        dimension_value,
-        period_idx,
-        COUNT(DISTINCT claim_no) AS claim_count,
-        ROUND(SUM(claim_amount) / 1e4, 4) AS total_claims_wan
-      FROM cur_claims_data
-      GROUP BY dimension_value, period_idx
+      GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
     ),
 
     -- ═══════════════════════════════════════════════════════════
-    -- 去年同期（两侧各自偏移 -1 年）
+    -- YoY：policy_year - 1 年度 cohort；cutoff 偏移 -1 年
     -- ═══════════════════════════════════════════════════════════
 
-    -- 9. 去年保费
-    prev_premium_data AS (
+    prev_premium_cumulative AS (
       SELECT
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
-        ap.period_idx,
-        p.policy_no,
-        p.premium,
-        GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE),
-          CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1) AS policy_term_days,
-        GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE),
-          (SELECT max_date FROM ref_date) - INTERVAL 1 YEAR + INTERVAL 1 DAY), 0) AS elapsed_days
+        ac.cutoff_idx,
+        COUNT(DISTINCT p.policy_no) AS policy_count,
+        ROUND(SUM(p.premium) / 1e4, 4) AS premium_wan,
+        ROUND(SUM(p.premium * LEAST(
+          GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), (ac.cutoff - INTERVAL 1 YEAR)::DATE + INTERVAL 1 DAY), 0),
+          GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)
+        )::DOUBLE / GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)) / 1e4, 4) AS earned_premium_wan,
+        ROUND(SUM(LEAST(
+          GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), (ac.cutoff - INTERVAL 1 YEAR)::DATE + INTERVAL 1 DAY), 0),
+          GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)
+        )::DOUBLE / GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)), 6) AS earned_exposure
       FROM PolicyFact p
       ${teamJoin}
-      JOIN all_periods ap
-        ON CAST(p.${safeDateField} AS DATE) >= (ap.period_start - INTERVAL 1 YEAR)::DATE
-        AND CAST(p.${safeDateField} AS DATE) <= (ap.period_end - INTERVAL 1 YEAR)::DATE
-      WHERE EXTRACT(YEAR FROM CAST(p.${safeDateField} AS DATE))
-              = EXTRACT(YEAR FROM (SELECT max_date FROM ref_date)) - 1
-        AND CAST(p.${safeDateField} AS DATE) <= (SELECT max_date FROM ref_date) - INTERVAL 1 YEAR
+      CROSS JOIN all_cutoffs ac
+      WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds) - 1
+        AND CAST(p.insurance_start_date AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
         AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
+      GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
     ),
 
-    prev_premium_agg AS (
-      SELECT
-        dimension_value,
-        period_idx,
-        COUNT(DISTINCT policy_no) AS policy_count,
-        ROUND(SUM(premium) / 1e4, 4) AS premium_wan,
-        ROUND(SUM(premium * LEAST(elapsed_days, policy_term_days)::DOUBLE / policy_term_days) / 1e4, 4) AS earned_premium_wan,
-        ROUND(SUM(LEAST(elapsed_days, policy_term_days)::DOUBLE / policy_term_days), 6) AS earned_exposure
-      FROM prev_premium_data
-      GROUP BY dimension_value, period_idx
-    ),
-
-    -- 10. 去年赔案（同 cohort 口径，按保单 ${safeDateField} - 1 年归期）
-    prev_claims_data AS (
+    prev_claims_cumulative AS (
       SELECT
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
-        ap.period_idx,
-        c.claim_no,
-        COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0) AS claim_amount
+        ac.cutoff_idx,
+        COUNT(DISTINCT c.claim_no) AS claim_count,
+        ROUND(SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) / 1e4, 4) AS total_claims_wan
       FROM ClaimsDetail c
       JOIN PolicyFact p ON c.policy_no = p.policy_no
       ${teamJoin}
-      JOIN all_periods ap
-        ON CAST(p.${safeDateField} AS DATE) >= (ap.period_start - INTERVAL 1 YEAR)::DATE
-        AND CAST(p.${safeDateField} AS DATE) <= (ap.period_end - INTERVAL 1 YEAR)::DATE
-      WHERE EXTRACT(YEAR FROM CAST(p.${safeDateField} AS DATE))
-              = EXTRACT(YEAR FROM (SELECT max_date FROM ref_date)) - 1
-        AND CAST(p.${safeDateField} AS DATE) <= (SELECT max_date FROM ref_date) - INTERVAL 1 YEAR
-        AND CAST(c.${safeClaimsDateField} AS DATE) <= (SELECT max_date FROM ref_date) - INTERVAL 1 YEAR
+      CROSS JOIN all_cutoffs ac
+      WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds) - 1
+        AND CAST(p.insurance_start_date AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
+        AND CAST(c.${safeClaimsDateField} AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
         AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
+      GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
     ),
 
-    prev_claims_agg AS (
-      SELECT
-        dimension_value,
-        period_idx,
-        COUNT(DISTINCT claim_no) AS claim_count,
-        ROUND(SUM(claim_amount) / 1e4, 4) AS total_claims_wan
-      FROM prev_claims_data
-      GROUP BY dimension_value, period_idx
-    ),
-
-    -- 11. 维度池（保费和赔案的并集）
+    -- 6. 维度池：保费与赔案的并集
     dim_pool AS (
-      SELECT DISTINCT dimension_value FROM cur_premium_data
+      SELECT DISTINCT dimension_value FROM cur_premium_cumulative
       UNION
-      SELECT DISTINCT dimension_value FROM cur_claims_data
+      SELECT DISTINCT dimension_value FROM cur_claims_cumulative
     ),
 
     base_grid AS (
-      SELECT dp.dimension_value, ap.period_idx
-      FROM dim_pool dp CROSS JOIN all_periods ap
+      SELECT dp.dimension_value, ac.cutoff_idx
+      FROM dim_pool dp CROSS JOIN all_cutoffs ac
     )
 
-    -- 12. 最终输出：双轴合并
+    -- 7. 最终输出：累计快照（列命名保持与 cohort 版兼容）
     SELECT
       bg.dimension_value,
-      ap.period_idx,
+      ac.cutoff_idx AS period_idx,
       CASE
-        WHEN ap.period_type = 'month'
-          THEN CAST(ap.period_month AS VARCHAR) || '月'
-        ELSE CAST(EXTRACT(MONTH FROM ap.period_end) AS INT)
-             || '.' || CAST(EXTRACT(DAY FROM ap.period_end) AS INT)
+        WHEN ac.cutoff_type = 'month'
+          THEN CAST(EXTRACT(MONTH FROM ac.cutoff) AS INT) || '月末'
+        ELSE CAST(EXTRACT(MONTH FROM ac.cutoff) AS INT)
+             || '.' || CAST(EXTRACT(DAY FROM ac.cutoff) AS INT)
       END AS period_label,
-      ap.period_type,
-      CAST(ap.period_start AS VARCHAR) AS period_start,
-      CAST(ap.period_end AS VARCHAR) AS period_end,
+      ac.cutoff_type AS period_type,
+      CAST((SELECT year_start FROM year_bounds) AS VARCHAR) AS period_start,
+      CAST(ac.cutoff AS VARCHAR) AS period_end,
 
-      -- 当年保费侧
+      -- 当年保费侧（累计）
       COALESCE(cp.policy_count, 0) AS policy_count,
       COALESCE(cp.premium_wan, 0) AS premium_wan,
       COALESCE(cp.earned_premium_wan, 0) AS earned_premium_wan,
       COALESCE(cp.earned_exposure, 0) AS earned_exposure,
 
-      -- 当年赔案侧（按 ${safeClaimsDateField} 归期）
+      -- 当年赔案侧（累计，按 ${safeClaimsDateField} 截止）
       COALESCE(cc.claim_count, 0) AS claim_count,
       COALESCE(cc.total_claims_wan, 0) AS total_claims_wan,
 
-      -- 计算指标（保费分母来自保费侧，赔案分子来自赔案侧）
+      -- 计算指标（累计口径）
       CASE WHEN COALESCE(cp.earned_premium_wan, 0) > 0
         THEN ROUND(COALESCE(cc.total_claims_wan, 0) * 100.0 / cp.earned_premium_wan, 2)
         ELSE NULL END AS loss_ratio_pct,
@@ -475,16 +434,16 @@ export function generateClaimsHeatmapQuery(
         THEN ROUND(COALESCE(cc.claim_count, 0) * 100.0 / cp.earned_exposure, 4)
         ELSE NULL END AS incident_rate_pct,
 
-      -- 去年同期保费侧
+      -- YoY 保费侧
       COALESCE(pp.policy_count, 0) AS yoy_policy_count,
       COALESCE(pp.earned_premium_wan, 0) AS yoy_earned_premium_wan,
       COALESCE(pp.earned_exposure, 0) AS yoy_earned_exposure,
 
-      -- 去年同期赔案侧
+      -- YoY 赔案侧
       COALESCE(pc.claim_count, 0) AS yoy_claim_count,
       COALESCE(pc.total_claims_wan, 0) AS yoy_total_claims_wan,
 
-      -- 去年同期计算指标
+      -- YoY 计算指标
       CASE WHEN COALESCE(pp.earned_premium_wan, 0) > 0
         THEN ROUND(COALESCE(pc.total_claims_wan, 0) * 100.0 / pp.earned_premium_wan, 2)
         ELSE NULL END AS yoy_loss_ratio_pct,
@@ -495,20 +454,21 @@ export function generateClaimsHeatmapQuery(
         THEN ROUND(COALESCE(pc.claim_count, 0) * 100.0 / pp.earned_exposure, 4)
         ELSE NULL END AS yoy_incident_rate_pct,
 
+      (SELECT policy_year FROM year_bounds) AS policy_year,
       (SELECT CAST(max_date AS VARCHAR) FROM ref_date) AS ref_max_date
 
     FROM base_grid bg
-    JOIN all_periods ap ON ap.period_idx = bg.period_idx
-    LEFT JOIN cur_premium_agg cp ON cp.dimension_value = bg.dimension_value AND cp.period_idx = bg.period_idx
-    LEFT JOIN cur_claims_agg cc ON cc.dimension_value = bg.dimension_value AND cc.period_idx = bg.period_idx
-    LEFT JOIN prev_premium_agg pp ON pp.dimension_value = bg.dimension_value AND pp.period_idx = bg.period_idx
-    LEFT JOIN prev_claims_agg pc ON pc.dimension_value = bg.dimension_value AND pc.period_idx = bg.period_idx
-    ORDER BY bg.dimension_value, ap.period_idx
+    JOIN all_cutoffs ac ON ac.cutoff_idx = bg.cutoff_idx
+    LEFT JOIN cur_premium_cumulative cp ON cp.dimension_value = bg.dimension_value AND cp.cutoff_idx = bg.cutoff_idx
+    LEFT JOIN cur_claims_cumulative cc ON cc.dimension_value = bg.dimension_value AND cc.cutoff_idx = bg.cutoff_idx
+    LEFT JOIN prev_premium_cumulative pp ON pp.dimension_value = bg.dimension_value AND pp.cutoff_idx = bg.cutoff_idx
+    LEFT JOIN prev_claims_cumulative pc ON pc.dimension_value = bg.dimension_value AND pc.cutoff_idx = bg.cutoff_idx
+    ORDER BY bg.dimension_value, ac.cutoff_idx
   `;
 
-  logger.debug('Generated claims heatmap SQL (cohort)', {
+  logger.debug('Generated claims heatmap SQL (cumulative)', {
     dimension,
-    cohortAnchor: safeDateField,
+    policyYear: safePolicyYear ?? 'auto(max_date.year)',
     claimsInclusion: safeClaimsDateField,
     sqlLength: sql.length,
   });
