@@ -81,7 +81,7 @@ const MOCK_FILTER_OPTIONS: FilterOptions = {
   ],
 };
 
-const FIXED_TODAY = new Date('2026-03-15');
+const FIXED_TODAY = new Date(2026, 2, 15); // 2026-03-15 本地时区，避免 ISO 字符串按 UTC 解析导致跨时区偏移
 
 // ────────────────────────────────────────────────────
 // capabilityMatcher
