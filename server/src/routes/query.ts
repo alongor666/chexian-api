@@ -31,6 +31,7 @@ import repairRoutes from './query/repair.js';
 import customerFlowRoutes from './query/customer-flow.js';
 import patrolRoutes from './query/patrol.js';
 import policyGeoRoutes from './query/policy-geo.js';
+import renewalTrackerRoutes from './query/renewal-tracker.js';
 
 export { buildRouteCacheKey } from './query/shared.js';
 export { fetchDashboardBundleData } from './query/bundles.js';
@@ -60,5 +61,6 @@ router.use(repairRoutes);
 router.use(customerFlowRoutes);
 router.use(patrolRoutes);
 router.use(policyGeoRoutes);
+router.use(renewalTrackerRoutes);
 
 export default router;

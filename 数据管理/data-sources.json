@@ -369,6 +369,41 @@
       "last_updated": "2026-04-18",
       "row_count": 981475,
       "field_count": 7
+    },
+    {
+      "id": "renewal_tracker",
+      "name": "续保追踪（派生域）",
+      "type": "fact",
+      "source_pattern": "N/A（派生域：JOIN policy + quotes_conversion + salesman）",
+      "etl_entry": "node 数据管理/daily.mjs renewal_tracker",
+      "etl_script": "pipelines/convert_renewal_tracker.py",
+      "trigger": {
+        "input_strategy": "derived",
+        "input_sources": [
+          "warehouse/fact/policy/current/*.parquet",
+          "warehouse/fact/quotes_conversion/latest.parquet",
+          "warehouse/dim/salesman/latest.parquet"
+        ],
+        "archive_prefix": "renewal_tracker_latest",
+        "quote_window_start": "2025-12-03",
+        "source_year": 2025,
+        "renewal_year": 2026
+      },
+      "output": "warehouse/fact/renewal_tracker/latest.parquet",
+      "update_cadence": "triggered_by_policy_or_quotes",
+      "key_fields": [
+        "source_policy_no",
+        "vehicle_frame_no",
+        "expiry_date",
+        "is_renewed",
+        "is_quoted"
+      ],
+      "duckdb_relation": "RenewalTrackerFact (VIEW)",
+      "api_routes": [
+        "/api/query/renewal-tracker"
+      ],
+      "frontend_page": "renewal-tracker",
+      "notes": "派生域：2025 起保 + 2026 到期商业险宇宙。dual-key 续保匹配 (source_policy_no + VIN)。报价窗口 2025-12-03 起。从 renewal-tracker 子项目迁移（2026-04-19，替代 2026-04-18 下线的 renewal 模块）"
     }
   ]
 }

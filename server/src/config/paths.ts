@@ -130,6 +130,15 @@ export function getCustomerFlowPaths(): string[] {
   ];
 }
 
+// ── 续保追踪派生域 Parquet 路径 ──
+
+export function getRenewalTrackerPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/renewal_tracker/latest.parquet'),
+    path.resolve(getDataDir(), 'fact/renewal_tracker/latest.parquet'),
+  ];
+}
+
 // ── 巡检报告 JSON 路径 ──
 
 export function getPatrolReportPaths(domain: string): string[] {

@@ -1125,6 +1125,18 @@ class ApiClient {
     const query = this.buildQueryString(params);
     return this.request<any[]>(`/query/${QUERY_ROUTES.POLICY_GEO.CITY}${query ? `?${query}` : ''}`);
   }
+
+  // ── 续保追踪 ──
+
+  async getRenewalTracker(params: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<{
+      orgRows: Array<{ row_level: string; org_level_3: string | null; team_name: string | null; salesman_name: string | null; customer_category: string | null; A: number; B: number; C: number }>;
+      categoryRows: Array<{ row_level: string; org_level_3: string | null; team_name: string | null; salesman_name: string | null; customer_category: string | null; A: number; B: number; C: number }>;
+      overall: { row_level: string; A: number; B: number; C: number } | null;
+      meta?: { exposure_row_count: number; distinct_vehicle_count: number; distinct_source_policy_count: number; latest_data_date: string | null } | null;
+    }>(`/query/${QUERY_ROUTES.RENEWAL_TRACKER}${query ? `?${query}` : ''}`);
+  }
 }
 
 // 导出单例

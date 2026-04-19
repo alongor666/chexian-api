@@ -20,6 +20,7 @@
  *   数据管理/warehouse/fact/claims_detail/        →  data/fact/claims_detail/
  *   数据管理/warehouse/fact/cross_sell/           →  data/fact/cross_sell/
  *   数据管理/warehouse/fact/customer_flow/        →  data/fact/customer_flow/
+ *   数据管理/warehouse/fact/renewal_tracker/      →  data/fact/renewal_tracker/
  *   数据管理/patrol_reports/                      →  data/patrol_reports/
  *
  * 可选环境变量:
@@ -54,6 +55,7 @@ const LOCAL_QUOTES_CONVERSION_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/
 const LOCAL_CLAIMS_DETAIL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims_detail');
 const LOCAL_CROSS_SELL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/cross_sell');
 const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
+const LOCAL_RENEWAL_TRACKER_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_tracker');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_region');
 const LOCAL_PATROL_REPORTS_DIR = join(ROOT_DIR, '数据管理/patrol_reports');
@@ -443,6 +445,7 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${runConfig.remoteDir}/fact/claims_detail`,    critical: true },
     { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${runConfig.remoteDir}/fact/cross_sell`,       critical: false },
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${runConfig.remoteDir}/fact/customer_flow`,    critical: false },
+    { label: 'fact/renewal_tracker', local: LOCAL_RENEWAL_TRACKER_DIR,    remote: `${runConfig.remoteDir}/fact/renewal_tracker`,  critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${runConfig.remoteDir}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${runConfig.remoteDir}/dim/plate_region`,       critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${runConfig.remoteDir}/patrol_reports`,         critical: false },
@@ -497,6 +500,7 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${remote}/fact/claims_detail`,    critical: true },
     { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${remote}/fact/cross_sell`,       critical: false },
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
+    { label: 'fact/renewal_tracker', local: LOCAL_RENEWAL_TRACKER_DIR,    remote: `${remote}/fact/renewal_tracker`,  critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,   remote: `${remote}/patrol_reports`,         critical: false },
@@ -574,6 +578,7 @@ function writeSyncManifest() {
     { label: 'fact/claims_detail', path: LOCAL_CLAIMS_DETAIL_DIR },
     { label: 'fact/cross_sell', path: LOCAL_CROSS_SELL_DIR },
     { label: 'fact/customer_flow', path: LOCAL_CUSTOMER_FLOW_DIR },
+    { label: 'fact/renewal_tracker', path: LOCAL_RENEWAL_TRACKER_DIR },
     { label: 'dim/repair', path: LOCAL_REPAIR_DIR },
     { label: 'dim/plate_region', path: LOCAL_PLATE_REGION_DIR },
     { label: 'patrol_reports', path: LOCAL_PATROL_REPORTS_DIR },
