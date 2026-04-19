@@ -1,17 +1,13 @@
 /**
- * 理赔热力图面板（cohort 口径，2026-04-19 修正）
+ * 理赔热力图面板（累计发展口径，2026-04-19 重构）
  *
- * 维度（行）× 起保期间（列）交叉矩阵。
+ * 维度（行）× 累计截止日（列）交叉矩阵。
  * - 行维度：三级机构/团队/业务员/客户类别/险别组合/能源类型/新转续/风险评分
- * - 列维度：保单 insurance_start_date 所在月度（早期折叠）+ 近 2 月按周
+ * - 列维度：所选保单年度内的累计截止日（早段按月末，近 2 月按周六 + 最新日）
+ * - 每格：所选年度起保的保单截至该列 cutoff 的累计数据（单调递增）
  * - 指标：满期赔付率/案均赔款/已报告赔款/已报告件数/满期出险率
- * - 模式：原始值/环比值/环比幅度/同比值/同比幅度
- * - 赔案纳入：报案时间（默认）/ 出险时间 — 仅作"是否计入"过滤，不再决定赔案归期
- *
- * 与赔付率发展面板的关系：
- * 同 cohort 口径，分子分母均为同一组（按起保期间归集的）保单。
- * 跨期对比时，早期 period 的赔案是"该月起保保单截至 max_date 的累计赔付"，
- * 晚期 period 的赔案是"该周起保新单的初期赔付"，数字上呈现 cohort 三角形特征。
+ * - 模式：原始值/环比值/环比幅度/同比值/同比幅度（环比 = 本期累计 − 上期累计 = 新增）
+ * - 赔案纳入：报案时间（默认）/ 出险时间 — 决定"已报案/已出险" 截至该 cutoff 的纳入
  */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { cardStyles, colorClasses, cn, fontStyles, getTrendColorClass } from '@/shared/styles';
@@ -74,6 +70,14 @@ const CLAIMS_DATE_OPTIONS: { key: ClaimsDateFieldOption; label: string }[] = [
   { key: 'report_time', label: '报案时间' },
   { key: 'accident_time', label: '出险时间' },
 ];
+
+// 保单年度候选：当前年向前 4 年 + 下一年（保留下一年以便跨年跑数）
+function getPolicyYearOptions(refDate: string | undefined): number[] {
+  const currentYear = refDate && /^\d{4}/.test(refDate)
+    ? parseInt(refDate.slice(0, 4), 10)
+    : new Date().getFullYear();
+  return [currentYear, currentYear - 1, currentYear - 2, currentYear - 3, currentYear - 4];
+}
 
 // ── 数据行类型 ──
 
@@ -247,15 +251,14 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
   const [metric, setMetric] = useState<MetricKey>('loss_ratio_pct');
   const [compareMode, setCompareMode] = useState<CompareMode>('raw');
   const [claimsDateField, setClaimsDateField] = useState<ClaimsDateFieldOption>('report_time');
+  const [policyYear, setPolicyYear] = useState<number | null>(null); // null → 后端默认 max_date 年份
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(() => {
-    hook.fetchClaimsHeatmap({
-      ...params,
-      dimension,
-      claimsDateField,
-    });
-  }, [hook.fetchClaimsHeatmap, params, dimension, claimsDateField]);
+    const extra: Record<string, string> = { dimension, claimsDateField };
+    if (policyYear !== null) extra.policyYear = String(policyYear);
+    hook.fetchClaimsHeatmap({ ...params, ...extra });
+  }, [hook.fetchClaimsHeatmap, params, dimension, claimsDateField, policyYear]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -351,9 +354,37 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
             </select>
           </div>
 
-          {/* 赔案纳入条件（cohort 口径下不再决定归期，仅作纳入过滤） */}
+          {/* 保单年度（insurance_start_date 年份） */}
           <div className="flex items-center gap-1.5">
-            <span className={cn('text-xs whitespace-nowrap', colorClasses.text.neutralMuted)} title="cohort 口径下，赔案归期已锚定到保单起保期间；此处仅决定哪些赔案被纳入（已报案 / 已出险）">赔案纳入</span>
+            <span
+              className={cn('text-xs whitespace-nowrap', colorClasses.text.neutralMuted)}
+              title="按保单起保日期年份筛选。每格 = 该年起保的保单截至列截止日的累计数据"
+            >
+              保单年度
+            </span>
+            <select
+              value={policyYear ?? ''}
+              onChange={e => {
+                const v = e.target.value;
+                setPolicyYear(v === '' ? null : parseInt(v, 10));
+              }}
+              className={cn(
+                'text-sm px-2 py-1 rounded border',
+                colorClasses.border.neutral,
+                'bg-white dark:bg-surface-1',
+                colorClasses.text.neutral,
+              )}
+            >
+              <option value="">自动（最新年度）</option>
+              {getPolicyYearOptions(refMaxDate).map(y => (
+                <option key={y} value={y}>{y} 年</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 赔案纳入条件 */}
+          <div className="flex items-center gap-1.5">
+            <span className={cn('text-xs whitespace-nowrap', colorClasses.text.neutralMuted)} title="决定哪些赔案计入累计（已报案 / 已出险），截止日 = 列 cutoff">赔案纳入</span>
             <select
               value={claimsDateField}
               onChange={e => setClaimsDateField(e.target.value as ClaimsDateFieldOption)}
@@ -533,18 +564,19 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
           </div>
         )}
 
-        {/* 口径说明（cohort 口径，与赔付率发展面板对齐） */}
+        {/* 口径说明（累计发展口径） */}
         <div className={cn('text-xs leading-relaxed', colorClasses.text.neutralMuted)}>
-          <b>cohort 口径</b>：保费与赔案均按保单起保日期归到该期间。
-          赔案纳入条件 = <b>{claimsDateLabel}</b> ≤ 数据截止日（仅过滤事件类型，不影响归期）。
+          <b>累计发展口径</b>：所选保单年度（insurance_start_date 年份）的保单，
+          在每个列截止日 cutoff 的<b>累计</b>快照。
+          赔案纳入条件 = <b>{claimsDateLabel}</b> ≤ 列 cutoff。
           <br />
-          满期赔付率 = 该期起保保单的累计已报告赔款 / 该期起保保单的已赚保费；
-          满期出险率 = 该期起保保单的累计赔案件数 / 该期起保保单的已赚暴露；
-          案均赔款 = 该期起保保单的累计赔款 / 累计件数。
+          满期赔付率 = 累计已报告赔款 / 累计已赚保费；
+          满期出险率 = 累计赔案件数 / 累计已赚暴露；
+          案均赔款 = 累计赔款 / 累计件数。
           <br />
-          ⚠️ 跨期对比含义：早期 period（按月）展示该月起保保单截至 max_date 的累计发展；
-          晚期 period（按周）展示该周起保新单的初期赔付，数字偏小属正常 cohort 三角形特征。
-          列按周六截止（当周按最新日期）。环比按当期比上期，同比按当年截止日比去年同截止日。
+          列 cutoff 规则：早段为月末（1月末、2月末…），最近 2 月按周六截止（当周按最新日期）；
+          每格数值单调递增（相邻列差 = 新增量）。
+          环比 = 本期累计 − 上期累计 = 该段新增；同比 = 本年截至 cutoff 的累计 vs 去年同月/周累计。
         </div>
       </div>
     </div>
