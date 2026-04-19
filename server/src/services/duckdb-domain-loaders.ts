@@ -444,3 +444,19 @@ export async function loadCustomerFlow(db: DuckDBQueryable, parquetPath: string)
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CustomerFlow');
   console.log(`[DuckDB] CustomerFlow view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
 }
+
+/**
+ * 加载续保追踪派生域 Parquet → RenewalTrackerFact VIEW
+ *
+ * 数据源：warehouse/fact/renewal_tracker/latest.parquet（ETL 预计算产物）
+ * 口径：2025 起保 + 2026 到期商业险 universe，dual-key 续保匹配，VIN 粒度
+ */
+export async function loadRenewalTracker(db: DuckDBQueryable, parquetPath: string): Promise<void> {
+  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+  await db.query(`
+    CREATE OR REPLACE VIEW RenewalTrackerFact AS
+    SELECT * FROM read_parquet('${safePath}')
+  `);
+  const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalTrackerFact');
+  console.log(`[DuckDB] RenewalTrackerFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+}

@@ -27,6 +27,7 @@ import {
   getRepairDimPaths,
   getBrandDimPaths,
   getCustomerFlowPaths,
+  getRenewalTrackerPaths,
 } from '../config/paths.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 import { isValidParquetFile } from '../utils/security.js';
@@ -430,7 +431,16 @@ export class DataBootstrapper {
       await domainLoaders.loadQuoteConversion(db, p);
     });
 
-    console.log('[Bootstrap] Lazy domains registered: ClaimsDetail, ClaimsAgg, CrossSell, RepairDim, BrandDim, CustomerFlow, QuoteConversion');
+    // RenewalTracker（派生域，仅续保追踪页）
+    this.lazyRegistry.register('RenewalTracker', async () => {
+      const p = getRenewalTrackerPaths().find(p => fs.existsSync(p));
+      if (!p) { console.warn('[Bootstrap:Lazy] RenewalTracker: no file found'); return; }
+      console.time('[Bootstrap:Lazy] RenewalTracker');
+      await domainLoaders.loadRenewalTracker(db, p);
+      console.timeEnd('[Bootstrap:Lazy] RenewalTracker');
+    });
+
+    console.log('[Bootstrap] Lazy domains registered: ClaimsDetail, ClaimsAgg, CrossSell, RepairDim, BrandDim, CustomerFlow, QuoteConversion, RenewalTracker');
   }
 
   // ============================================

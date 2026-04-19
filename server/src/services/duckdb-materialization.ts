@@ -24,6 +24,7 @@ export const DERIVED_RELATIONS = [
   'RepairDim',
   'BrandDim',
   'CustomerFlow',
+  'RenewalTrackerFact',
 ] as const;
 
 /**

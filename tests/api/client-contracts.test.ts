@@ -213,6 +213,31 @@ describe('API client contract coverage', () => {
     expect(calledUrl).toContain('province=%E5%9B%9B%E5%B7%9D');
   });
 
+  it('renewal-tracker endpoint preserves date range + cutoff + filter params', async () => {
+    const { apiClient } = await importClient();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: { orgRows: [], categoryRows: [], overall: null },
+        meta: null,
+      }),
+    });
+    await apiClient.getRenewalTracker({
+      start: '2026-01-01',
+      end: '2026-12-31',
+      cutoff: '2026-04-18',
+      orgNames: '乐山',
+    });
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/query/renewal-tracker?');
+    expect(calledUrl).toContain('start=2026-01-01');
+    expect(calledUrl).toContain('end=2026-12-31');
+    expect(calledUrl).toContain('cutoff=2026-04-18');
+    expect(calledUrl).toContain('orgNames=%E4%B9%90%E5%B1%B1');
+  });
+
   it('comprehensive bundle endpoint preserves granularity and cutoffDate', async () => {
     const { apiClient } = await importClient();
     mockFetch.mockResolvedValueOnce({

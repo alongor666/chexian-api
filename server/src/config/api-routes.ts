@@ -105,6 +105,9 @@ export const QUERY_ROUTES = {
   // 巡检报告
   PATROL: '/patrol',
 
+  // 续保追踪
+  RENEWAL_TRACKER: '/renewal-tracker',
+
   // 测试（仅开发环境）
   TEST: '/test',
 } as const;
