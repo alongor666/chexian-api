@@ -321,6 +321,10 @@ async function execRemote(config, remoteCommand, options = {}) {
  * 使用 SSH host alias，不硬编码 IP/端口/密钥。
  * 返回 { ok, label, error? } 供调用方判断是否中止。
  */
+// 防止 ETL 中间态/系统垃圾被推到 VPS（_incoming.parquet 曾导致生产读坏）
+const RSYNC_EXCLUDES = ['_incoming.parquet', '*.tmp', '_tmp/', '.DS_Store'];
+const RSYNC_EXCLUDE_ARGS = RSYNC_EXCLUDES.flatMap((p) => ['--exclude', p]);
+
 async function rsyncDir(alias, localDir, remoteDir, label) {
   // 确保 localDir 以 / 结尾（rsync 语义：同步目录内容而非目录本身）
   const src = localDir.endsWith('/') ? localDir : `${localDir}/`;
@@ -332,6 +336,7 @@ async function rsyncDir(alias, localDir, remoteDir, label) {
     await runLocal('rsync', [
       '-azv',
       '--delete',
+      ...RSYNC_EXCLUDE_ARGS,
       '-e', 'ssh',
       src,
       `${alias}:${dst}`,
@@ -456,7 +461,8 @@ function printDryRun(sshConfig, runConfig) {
     const exists = existsSync(task.local);
     const tag = task.critical ? '[CRITICAL]' : '[optional]';
     const suffix = exists ? '' : '  （本地目录不存在，跳过）';
-    console.log(`  ${tag} rsync -azv --delete -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
+    const excludeStr = RSYNC_EXCLUDES.map((p) => `--exclude '${p}'`).join(' ');
+    console.log(`  ${tag} rsync -azv --delete ${excludeStr} -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
   }
 }
 
