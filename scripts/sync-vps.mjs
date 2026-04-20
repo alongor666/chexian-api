@@ -530,13 +530,17 @@ async function runStandardMode(sshConfig, runConfig) {
     activeTasks.map(task => rsyncDir(alias, task.local, task.remote, task.label))
   );
 
-  // 收集失败结果
+  // 收集失败结果；optional 任务一次性重试（网络抖动/SSH 瞬时失败容错）
   const failures = [];
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
     const task = activeTasks[i];
     // Promise.allSettled rejected（不应发生，rsyncDir 内部已 catch）或 rsyncDir 返回 ok:false
-    const rsyncResult = result.status === 'fulfilled' ? result.value : { ok: false, label: task.label, error: result.reason?.message };
+    let rsyncResult = result.status === 'fulfilled' ? result.value : { ok: false, label: task.label, error: result.reason?.message };
+    if (!rsyncResult.ok && !task.critical) {
+      log('yellow', `  重试 optional ${task.label}（抖动容错）...`);
+      rsyncResult = await rsyncDir(alias, task.local, task.remote, task.label);
+    }
     if (!rsyncResult.ok) {
       failures.push({ ...rsyncResult, critical: task.critical });
     }
