@@ -1,0 +1,34 @@
+{
+  "run_id": "2026-04-19-data-refresh",
+  "run_date": "2026-04-19",
+  "archive_dir": "~/chexian-archive/backup-pre-20260419",
+  "domains": {
+    "premium": {
+      "mode": "incremental_shards",
+      "files": ["数据管理/01_签单清单_增量_20260419.xlsx"],
+      "date_column": "签单日期",
+      "expected_min_date": "2026-04-18",
+      "expected_max_date": "2026-04-19",
+      "overlap_policy": "fail_if_overlaps_existing_parquet"
+    },
+    "claims_detail": {
+      "mode": "replace_range",
+      "files": ["数据管理/02_理赔明细_报案时间20250101-20260419.xlsx"],
+      "date_column": "报案时间",
+      "report_start": "2025-01-01",
+      "report_end": "2026-04-19"
+    },
+    "cross_sell": {
+      "mode": "merge_with_history",
+      "files": ["数据管理/03_交叉销售_增量_20260419.xlsx"],
+      "date_column": "签单日期",
+      "expected_max_date": "2026-04-19"
+    },
+    "customer_flow": {
+      "mode": "full_replace",
+      "file": "数据管理/08_客户来源去向_20250101_20260419.xlsx",
+      "date_column": "保险起期",
+      "expected_max_date": "2026-04-19"
+    }
+  }
+}
