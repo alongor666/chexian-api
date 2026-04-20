@@ -11,9 +11,9 @@
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-04-18",
+      "last_updated": "2026-04-20",
       "data_range": "2021-01-01 ~ 2026-04-07",
-      "row_count": 2526164,
+      "row_count": 2527565,
       "field_count": 41,
       "key_fields": [
         "保单号",
@@ -88,9 +88,9 @@
       },
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
-      "last_updated": "2026-04-18",
+      "last_updated": "2026-04-20",
       "data_range": "2025-12-02 ~ 2026-04-09",
-      "row_count": 3651609,
+      "row_count": 612148,
       "field_count": 32,
       "key_fields": [
         "quote_time",
