@@ -131,7 +131,8 @@ function computeParamHash(params) {
 }
 
 function parseArgs(argv = process.argv.slice(2)) {
-  const parsed = { bundle: null, scope: null, dryRun: false, help: false, clean: false };
+  // loginDelayMs: 登录间隔毫秒；防止生产环境触发登录频控 429（VPS 默认 12s，本地 0 即可）
+  const parsed = { bundle: null, scope: null, dryRun: false, help: false, clean: false, loginDelayMs: 12000 };
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     switch (token) {
@@ -139,11 +140,16 @@ function parseArgs(argv = process.argv.slice(2)) {
       case '--scope': parsed.scope = argv[++i]; break;
       case '--dry-run': parsed.dryRun = true; break;
       case '--clean': parsed.clean = true; break;
+      case '--login-delay-ms': parsed.loginDelayMs = Number(argv[++i] ?? 12000); break;
       case '--help': case '-h': parsed.help = true; break;
       default: throw new Error(`未知参数: ${token}`);
     }
   }
   return parsed;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ── 登录获取 JWT ─────────────────────────────
@@ -275,22 +281,23 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. 获取每个 scope 的 JWT（并行）
-  log('yellow', '\n▶ 登录获取 JWT...');
+  // 4. 获取每个 scope 的 JWT（串行 + 登录间隔）
+  //    并行登录在生产环境触发速率限制 429（多 scope 同时命中 /api/auth/login）。
+  //    串行 + loginDelayMs 间隔可消除该风险；本地无频控时传 --login-delay-ms 0。
+  log('yellow', `\n▶ 登录获取 JWT (串行, 间隔 ${args.loginDelayMs}ms)...`);
   const tokenMap = {};
-  const loginResults = await Promise.allSettled(
-    Object.entries(scopes).map(async ([scope, creds]) => {
+  const scopeEntries = Object.entries(scopes);
+  for (let i = 0; i < scopeEntries.length; i++) {
+    const [scope, creds] = scopeEntries[i];
+    try {
       const token = await login(creds.username, creds.password);
-      return { scope, token };
-    })
-  );
-
-  for (const result of loginResults) {
-    if (result.status === 'fulfilled') {
-      tokenMap[result.value.scope] = result.value.token;
-      log('green', `  ✓ ${result.value.scope}`);
-    } else {
-      log('red', `  ✗ 登录失败: ${result.reason.message}`);
+      tokenMap[scope] = token;
+      log('green', `  ✓ ${scope}`);
+    } catch (err) {
+      log('red', `  ✗ 登录失败 ${scope}: ${err.message}`);
+    }
+    if (i < scopeEntries.length - 1 && args.loginDelayMs > 0) {
+      await sleep(args.loginDelayMs);
     }
   }
 
