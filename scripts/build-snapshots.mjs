@@ -294,6 +294,12 @@ async function main() {
     }
   }
 
+  // 任何 scope 登录失败立即中止，避免后续 task 全 skip 被静默通过
+  if (Object.keys(tokenMap).length !== Object.keys(scopes).length) {
+    log('red', `\n  ✗ 存在 scope 未登录成功 (${Object.keys(tokenMap).length}/${Object.keys(scopes).length})，中止构建`);
+    process.exit(1);
+  }
+
   // 5. 并行抓取所有 bundle 数据
   log('yellow', '\n▶ 构建快照...');
   const etlDate = new Date().toISOString().slice(0, 10);
@@ -351,6 +357,13 @@ async function main() {
   if (failCount > 0) log('red', `  失败: ${failCount}`);
   if (skipCount > 0) log('yellow', `  跳过: ${skipCount}`);
   log('blue', '═══════════════════════════════════════════════');
+
+  // 防静默失败：全部失败或成功数 < 总任务 80% 则退出 1
+  const threshold = Math.max(1, Math.ceil(tasks.length * 0.8));
+  if (successCount < threshold) {
+    log('red', `  ✗ 成功数 ${successCount}/${tasks.length} 低于阈值 ${threshold}，本次构建失败`);
+    process.exit(1);
+  }
 
   // 7. 统计快照目录大小
   if (existsSync(SNAPSHOT_DIR)) {
