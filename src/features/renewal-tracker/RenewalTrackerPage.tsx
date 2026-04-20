@@ -2,29 +2,30 @@
  * 商业险续保追踪页面（主站版）
  *
  * 数据源：/api/query/renewal-tracker（后端 DuckDB 查询 RenewalTrackerFact 派生域）
- * 筛选器：机构/业务员/客户类别 共享主站 FilterProvider（见 useRenewalTracker hook）
- *         时间维度（按到期日）独立本地 state（语义不同于主站 policy_date）
- *
- * 迁移自 数据管理/renewal-tracker（独立 Vite + DuckDB-WASM 项目），
- * 方案 A + Z：吸收合并到主站，成为续保功能并回主站的第一步（2026-04-19）。
+ * 筛选器：
+ *   - 基础维度（机构/业务员/客户类别）共享主站 FilterProvider
+ *   - 快捷筛选（车型/能源/险别/新转续/过户）通过 QuickFilterBar → FilterProvider 双向同步
+ *   - 时间维度（按到期日）独立本地 state（语义不同于主站 policy_date）
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { cn, colorClasses } from '@/shared/styles';
+import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
+import { deriveQuickFilters, applyQuickFiltersToGlobal } from '@/shared/utils/quickFilterHelpers';
 import { useRenewalTracker } from './hooks/useRenewalTracker';
 import TimeFilter from './components/TimeFilter';
 import OrgTable from './components/OrgTable';
 import CategoryTable from './components/CategoryTable';
-import type { TimeView, SortField, SortDir, TimeRange } from './types';
+import type { TimeView, SortField, SortDir, TimeRange, Selection } from './types';
 
 export default function RenewalTrackerPage() {
-  const { maxDataDate } = useGlobalFilters();
+  const { filters, setFilters, maxDataDate } = useGlobalFilters();
   const latestDataDate = maxDataDate || new Date().toISOString().slice(0, 10);
 
   const [timeView, setTimeView] = useState<TimeView>('ytd');
   const [timeRange, setTimeRange] = useState<TimeRange | null>(null);
-  const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>({ kind: 'overall' });
   const [sortField, setSortField] = useState<SortField>('A');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
@@ -42,7 +43,7 @@ export default function RenewalTrackerPage() {
   const { data, isLoading, isFetching, error } = useRenewalTracker(timeRange);
 
   const handleTimeChange = useCallback((range: TimeRange) => {
-    setSelectedOrg(null);
+    setSelection({ kind: 'overall' });
     setTimeRange(range);
   }, []);
 
@@ -55,10 +56,28 @@ export default function RenewalTrackerPage() {
     }
   }, [sortField]);
 
-  const orgOverall = useMemo(() => {
-    if (!selectedOrg || !data) return null;
-    return data.orgRows.find(r => r.row_level === 'org' && r.org_level_3 === selectedOrg) || null;
-  }, [selectedOrg, data]);
+  const quickFilters = useMemo(
+    () => deriveQuickFilters(filters),
+    [
+      filters.vehicle_quick_filter,
+      filters.enterprise_car,
+      filters.is_nev,
+      filters.fuel_category,
+      filters.is_new_car,
+      filters.is_renewal,
+      filters.business_nature,
+      filters.is_transfer,
+      filters.coverage_combination,
+      filters.insurance_type,
+    ]
+  );
+
+  const handleQuickFilterChange = useCallback(
+    (newQuick: Parameters<typeof applyQuickFiltersToGlobal>[1]) => {
+      setFilters(prev => applyQuickFiltersToGlobal(prev, newQuick));
+    },
+    [setFilters]
+  );
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 py-6">
@@ -67,6 +86,10 @@ export default function RenewalTrackerPage() {
         <p className={cn('text-sm mt-1', colorClasses.text.neutralMuted)}>
           筛选范围：上年度起保的商业险保单，按到期日统计 · 指标以车架号去重
         </p>
+      </div>
+
+      <div className="mb-4">
+        <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
       </div>
 
       <TimeFilter
@@ -93,8 +116,8 @@ export default function RenewalTrackerPage() {
             <OrgTable
               rows={data.orgRows}
               overall={data.overall}
-              selectedOrg={selectedOrg}
-              onOrgSelect={setSelectedOrg}
+              selection={selection}
+              onSelectionChange={setSelection}
               sortField={sortField}
               sortDir={sortDir}
               onSort={handleSort}
@@ -102,10 +125,14 @@ export default function RenewalTrackerPage() {
           </div>
           <div className="xl:col-span-2">
             <CategoryTable
-              rows={data.categoryRows}
+              selection={selection}
               overall={data.overall}
-              orgOverall={orgOverall}
-              selectedOrg={selectedOrg}
+              orgRows={data.orgRows}
+              categoryRows={data.categoryRows}
+              coverageRows={data.coverageRows}
+              fuelRows={data.fuelRows}
+              usedTransferRows={data.usedTransferRows}
+              renewalTypeRows={data.renewalTypeRows}
               sortField={sortField}
               sortDir={sortDir}
               onSort={handleSort}

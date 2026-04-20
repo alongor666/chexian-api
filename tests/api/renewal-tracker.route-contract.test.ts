@@ -48,10 +48,14 @@ describe('renewal-tracker route contract', () => {
     expect(content).toContain('HTTP_MAX_AGE.query');
   });
 
-  it('partitions response rows into orgRows / categoryRows / overall', () => {
+  it('partitions response rows into 6 arrays (base + 5 dimensions)', () => {
     const content = readSource('server/src/routes/query/renewal-tracker.ts');
     expect(content).toContain("['overall', 'org', 'team', 'salesman']");
-    expect(content).toContain("['category', 'org_category']");
+    expect(content).toContain("'overall_category'");
+    expect(content).toContain("'overall_coverage'");
+    expect(content).toContain("'overall_fuel'");
+    expect(content).toContain("'overall_used_transfer'");
+    expect(content).toContain("'overall_renewal_type'");
     expect(content).toContain("r.row_level === 'overall'");
   });
 });
