@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Data Release Manifest",
+  "description": "车险数据发布清单：声明每次刷新的源文件、日期范围、写入模式。preflight/daily.mjs 均消费此契约。",
+  "type": "object",
+  "required": ["run_id", "run_date", "archive_dir", "domains"],
+  "properties": {
+    "run_id": { "type": "string", "minLength": 1 },
+    "run_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "archive_dir": { "type": "string", "minLength": 1 },
+    "domains": {
+      "type": "object",
+      "required": ["premium", "claims_detail", "cross_sell", "customer_flow"],
+      "properties": {
+        "premium": { "$ref": "#/$defs/premium" },
+        "claims_detail": { "$ref": "#/$defs/claimsDetail" },
+        "cross_sell": { "$ref": "#/$defs/crossSell" },
+        "customer_flow": { "$ref": "#/$defs/customerFlow" }
+      }
+    }
+  },
+  "$defs": {
+    "premium": {
+      "type": "object",
+      "required": ["mode", "files", "date_column", "expected_min_date", "expected_max_date", "overlap_policy"],
+      "properties": {
+        "mode": { "const": "incremental_shards" },
+        "files": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "date_column": { "type": "string" },
+        "expected_min_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "expected_max_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "overlap_policy": { "enum": ["fail_if_overlaps_existing_parquet", "allow_verified_non_overlap"] }
+      }
+    },
+    "claimsDetail": {
+      "type": "object",
+      "required": ["mode", "files", "date_column", "report_start", "report_end"],
+      "properties": {
+        "mode": { "const": "replace_range" },
+        "files": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "date_column": { "type": "string", "description": "Excel 源的中文日期列名（如 `报案时间`）；parquet 侧固定 `report_time`。" },
+        "report_start": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "report_end": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    },
+    "crossSell": {
+      "type": "object",
+      "required": ["mode", "files", "date_column", "expected_max_date"],
+      "properties": {
+        "mode": { "const": "merge_with_history" },
+        "files": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "date_column": { "type": "string" },
+        "expected_max_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    },
+    "customerFlow": {
+      "type": "object",
+      "required": ["mode", "file", "date_column", "expected_max_date"],
+      "properties": {
+        "mode": { "const": "full_replace" },
+        "file": { "type": "string" },
+        "date_column": { "type": "string" },
+        "expected_max_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    }
+  }
+}

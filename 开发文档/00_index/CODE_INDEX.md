@@ -248,6 +248,22 @@ src/features/*                                    # 功能模块 UI 渲染
 - 新增关键类型：必须在"关键类型定义"表格登记。
 - 修改禁止文件：必须先在 BACKLOG.md 登记需求并提供证据链。
 
+## 2026-04-19 数据发布管道补充（新增）
+
+数据发布 manifest 契约与 preflight/metadata 单点写入：
+
+| 文件 | 用途 |
+|------|------|
+| `数据管理/release-manifest.schema.json` | JSON Schema，约束 run manifest 字段（run_id/run_date/archive_dir/domains） |
+| `数据管理/release-manifests/YYYY-MM-DD.json` | 单次发布的 run manifest（4 域：premium/claims_detail/cross_sell/customer_flow） |
+| `数据管理/pipelines/preflight_refresh.py` | 发布预检：源文件摆放/日期范围/premium 重叠/legacy 残留/tmp 文件 |
+| `数据管理/pipelines/refresh_metadata.py` | 从最终 parquet 单点派生 `data-sources.json`（替代 daily.mjs 4 处散落写入） |
+
+**SOP**（参考 `docs/superpowers/plans/2026-04-19-data-release-pipeline-hardening.md` Task 8）:
+1. `python3 数据管理/pipelines/preflight_refresh.py --manifest 数据管理/release-manifests/YYYY-MM-DD.json`
+2. 备份 + ETL（daily.mjs/replace_range）
+3. `python3 数据管理/pipelines/refresh_metadata.py --domain <id> --parquet <glob> --date-column <col> --run-date YYYY-MM-DD`
+
 ## 2026-02-25 API-only 清理补充（新增）
 
 - `src/features/dashboard/hooks/useDashboardData.ts`、`src/features/dashboard/Dashboard.tsx`、`src/features/filters/FilterPanel.tsx` 已归档，不再作为当前运行链路入口。
