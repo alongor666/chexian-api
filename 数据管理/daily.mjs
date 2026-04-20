@@ -417,36 +417,44 @@ function runClaimsDetail(python, scriptDir) {
   const tmpOutput = join(CLAIMS_DETAIL_DIR, '_incoming.parquet');
   const inputPaths = sourceFiles.map(f => `"${f.path}"`);
 
-  // Step 1: xlsx → 临时 parquet（含 insurance_start_date enrichment）
-  log('green', '▶ Step 1: 转换 xlsx → parquet (含 insurance_start_date)');
-  runPythonScript(python, convertScript, [
-    '-i', ...inputPaths,
-    '-o', `"${tmpOutput}"`,
-    '--policy-dir', `"${policyDir}"`
-  ]);
-
-  // Step 2: 检查是否已有分区文件
-  const hasPartitions = readdirSync(CLAIMS_DETAIL_DIR)
-    .some(f => f.startsWith('claims_') && f.endsWith('.parquet'));
+  // 开头清理：如果上次运行异常残留 _incoming.parquet，先清掉
+  if (existsSync(tmpOutput)) {
+    log('yellow', `  清理上次残留的临时文件: ${tmpOutput}`);
+    unlinkSync(tmpOutput);
+  }
 
   const partitionManager = join(scriptDir, 'pipelines/claims_partition_manager.py');
 
-  if (hasPartitions) {
-    // CDC 模式：增量合入已有分区
-    log('green', '▶ Step 2: CDC 更新（合入已有分区）');
-    runPythonScript(python, partitionManager, [
-      'update', '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`
+  try {
+    // Step 1: xlsx → 临时 parquet（含 insurance_start_date enrichment）
+    log('green', '▶ Step 1: 转换 xlsx → parquet (含 insurance_start_date)');
+    runPythonScript(python, convertScript, [
+      '-i', ...inputPaths,
+      '-o', `"${tmpOutput}"`,
+      '--policy-dir', `"${policyDir}"`
     ]);
-  } else {
-    // 首次迁移：初始分区
-    log('green', '▶ Step 2: 初始迁移（创建年度分区）');
-    runPythonScript(python, partitionManager, [
-      'migrate', '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`
-    ]);
-  }
 
-  // Step 3: 清理临时文件
-  if (existsSync(tmpOutput)) unlinkSync(tmpOutput);
+    // Step 2: 检查是否已有分区文件
+    const hasPartitions = readdirSync(CLAIMS_DETAIL_DIR)
+      .some(f => f.startsWith('claims_') && f.endsWith('.parquet'));
+
+    if (hasPartitions) {
+      // CDC 模式：增量合入已有分区
+      log('green', '▶ Step 2: CDC 更新（合入已有分区）');
+      runPythonScript(python, partitionManager, [
+        'update', '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`
+      ]);
+    } else {
+      // 首次迁移：初始分区
+      log('green', '▶ Step 2: 初始迁移（创建年度分区）');
+      runPythonScript(python, partitionManager, [
+        'migrate', '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`
+      ]);
+    }
+  } finally {
+    // Step 3: 清理临时文件（finally 保证异常路径也清理，避免残留被 rsync 推到 VPS）
+    if (existsSync(tmpOutput)) unlinkSync(tmpOutput);
+  }
 
   // Step 4: 清理旧 latest.parquet（兼容迁移）
   if (existsSync(CLAIMS_DETAIL_PATH)) {
