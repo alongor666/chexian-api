@@ -1362,7 +1362,7 @@ function checkDataDrift() {
     { label: 'dim/salesman', rel: '数据管理/warehouse/dim/salesman' },
     { label: 'dim/plan', rel: '数据管理/warehouse/dim/plan' },
     { label: 'dim/brand', rel: '数据管理/warehouse/dim/brand' },
-    { label: 'fact/renewal', rel: '数据管理/warehouse/fact/renewal' },
+    { label: 'fact/renewal_tracker', rel: '数据管理/warehouse/fact/renewal_tracker' },
     { label: 'fact/quotes_conversion', rel: '数据管理/warehouse/fact/quotes_conversion' },
     { label: 'fact/claims_detail', rel: '数据管理/warehouse/fact/claims_detail' },
     { label: 'fact/cross_sell', rel: '数据管理/warehouse/fact/cross_sell' },

@@ -101,23 +101,9 @@ const BUNDLE_DEFINITIONS = {
     path: '/api/query/comprehensive-bundle',
     paramSets: [{}],
   },
-  // ── Phase 3 新增：续保宇宙核心端点（默认视图零/少参数）──
-  'renewal-metadata': {
-    path: '/api/query/renewal-v2/metadata',
-    paramSets: [{}],
-  },
-  'renewal-overview': {
-    path: '/api/query/renewal-v2/overview',
-    paramSets: [{}, { groupBy: 'org' }, { groupBy: 'salesman' }],
-  },
-  'renewal-trend': {
-    path: '/api/query/renewal-v2/trend',
-    paramSets: [{}],
-  },
-  'renewal-funnel': {
-    path: '/api/query/renewal-v2/funnel',
-    paramSets: [{}, { groupBy: 'org' }],
-  },
+  // renewal-v2 端点已于迁移至 renewal-tracker 时下线（server/src/routes/query/renewal-v2.ts 已删）。
+  // 原 4 个 bundle 定义（renewal-metadata / renewal-overview / renewal-trend / renewal-funnel）
+  // 指向的 /api/query/renewal-v2/* 路径全部 404，若保留会被新加的 80% 成功率阈值误判为构建失败。
 };
 
 // ── 工具函数 ─────────────────────────────────
