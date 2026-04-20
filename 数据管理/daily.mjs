@@ -29,7 +29,7 @@
 
 import { execSync } from 'child_process';
 import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync } from 'fs';
-import { basename, dirname, join, resolve } from 'path';
+import { basename, dirname, join, resolve, isAbsolute } from 'path';
 import { platform, homedir } from 'os';
 import { fileURLToPath } from 'url';
 import {
@@ -211,6 +211,11 @@ const CLAIMS_DETAIL_PATH = join(CLAIMS_DETAIL_DIR, 'latest.parquet');
 
 const _MANIFEST_CACHE = {};
 
+// 模块级发布 manifest；由 main() 在启动时根据 --manifest 参数设置。
+// runClaimsDetail / runRenewalTracker 等函数通过它判断是否跳过 metadata 写入，
+// 避免改动所有函数签名。
+let _currentReleaseManifest = null;
+
 /** 从 data-sources.json 读取域配置（含 trigger 子对象） */
 function loadDomainManifest(scriptDir, domainId) {
   if (!_MANIFEST_CACHE._loaded) {
@@ -219,6 +224,56 @@ function loadDomainManifest(scriptDir, domainId) {
     _MANIFEST_CACHE._loaded = true;
   }
   return _MANIFEST_CACHE[domainId];
+}
+
+// ── 发布 manifest（可选，由 --manifest <path> 触发） ──
+//
+// manifest 驱动流程：声明本次发布的 domain 范围 + 期望日期，并让所有 data-sources.json
+// 写入在流程末尾由 refresh_metadata.py 单点执行。消除 #4 双写漂移根因。
+//
+// 无 --manifest 时所有行为保持旧逻辑，完全向后兼容（cron / /daily-sync 不受影响）。
+
+function parseManifestArg(argv) {
+  const idx = argv.indexOf('--manifest');
+  return idx >= 0 ? argv[idx + 1] : null;
+}
+
+function loadReleaseManifest(scriptDir, manifestArg) {
+  if (!manifestArg) return null;
+  const path = isAbsolute(manifestArg) ? manifestArg : join(scriptDir, '..', manifestArg);
+  const m = JSON.parse(readFileSync(path, 'utf-8'));
+  log('cyan', `📋 发布 manifest: ${basename(path)} (run_id=${m.run_id}, ${Object.keys(m.domains || {}).length} 域)`);
+  return m;
+}
+
+// 流程末尾遍历 manifest 声明域，调 refresh_metadata.py 单点写入 data-sources.json。
+// parquet 路径 + 日期列从 data-sources.json 派生，避免重复硬编码。
+function runRefreshMetadata(python, scriptDir, releaseManifest) {
+  log('cyan', '\n═══ 元数据单点写入（refresh_metadata.py）═══\n');
+  const refreshScript = join(scriptDir, 'pipelines/refresh_metadata.py');
+  const dateColumnByDomain = {
+    premium: 'policy_date',
+    claims_detail: 'report_time',
+    cross_sell: 'policy_date',
+    customer_flow: 'insurance_start_date',
+  };
+  const runDate = releaseManifest.run_date;
+  for (const domainId of Object.keys(releaseManifest.domains || {})) {
+    const domain = loadDomainManifest(scriptDir, domainId);
+    if (!domain || !domain.output) {
+      log('yellow', `  ⚠ 跳过 ${domainId}（data-sources.json 无 output 字段）`);
+      continue;
+    }
+    const parquetGlob = join(scriptDir, domain.output);
+    const args = [
+      '--domain', domainId,
+      '--parquet', `"${parquetGlob}"`,
+      '--run-date', runDate,
+    ];
+    const dateCol = dateColumnByDomain[domainId];
+    if (dateCol) args.push('--date-column', dateCol);
+    runPythonScript(python, refreshScript, args);
+  }
 }
 
 /**
@@ -239,6 +294,11 @@ function runStandardDomain(python, scriptDir, manifest) {
 
   log('cyan', `\n═══ ${id} 域：${name || id}（${input_strategy}）═══\n`);
 
+  // manifest 驱动：该域被 release manifest 声明时，跳过 BaseConverter 与 Node 端 metadata 写入，
+  // 由流程末尾的 refresh_metadata.py 统一单点写入
+  const skipMetadata = _currentReleaseManifest?.domains?.[id] != null;
+  const extraArgs = skipMetadata ? ['--no-metadata'] : [];
+
   const sourceFiles = ls(input_glob, scriptDir);
   if (sourceFiles.length === 0) {
     log('yellow', `⚠ 未找到 ${input_glob}，跳过`);
@@ -252,6 +312,7 @@ function runStandardDomain(python, scriptDir, manifest) {
     python, id, scriptDir, sourceFiles, trigger,
     scriptPath: join(scriptDir, etl_script),
     outputAbs: join(scriptDir, output),
+    extraArgs,
   };
   ensureDir(dirname(ctx.outputAbs));
 
@@ -270,15 +331,17 @@ function runStandardDomain(python, scriptDir, manifest) {
   // 行数 + 列数从 parquet 实读（避免 manifest 中可能过时的 field_count）+ data-sources.json 回写
   const rowCount = getParquetRowCount(python, ctx.outputAbs);
   const fieldCount = getParquetColumnCount(python, ctx.outputAbs);
-  updateDataSources(id, { rowCount, fieldCount });
+  if (!skipMetadata) {
+    updateDataSources(id, { rowCount, fieldCount });
+  }
   log('green', `✅ ${id} 域完成`);
 }
 
-function runStrategySingle({ python, scriptPath, sourceFiles, outputAbs, trigger }) {
-  safeConvertDomain(python, scriptPath, sourceFiles[0].path, outputAbs, trigger.archive_prefix);
+function runStrategySingle({ python, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
+  safeConvertDomain(python, scriptPath, sourceFiles[0].path, outputAbs, trigger.archive_prefix, extraArgs);
 }
 
-function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs, trigger }) {
+function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
   const { archive_prefix, output_is_dir } = trigger;
   if (existsSync(outputAbs)) {
     const archiveDir = join(homedir(), 'chexian-archive');
@@ -288,11 +351,11 @@ function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs,
   }
   const inputArgs = ['-i', ...sourceFiles.map(f => `"${f.path}"`)];
   const outputArg = output_is_dir ? dirname(outputAbs) : outputAbs;
-  runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${outputArg}"`]);
+  runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${outputArg}"`, ...extraArgs]);
 }
 
 function runStrategyMultiMerge(ctx) {
-  const { python, id, scriptDir, scriptPath, sourceFiles, outputAbs, trigger } = ctx;
+  const { python, id, scriptDir, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] } = ctx;
   const { archive_prefix, merge_dedup_key, merge_order_by } = trigger;
   const hasHistory = trigger.merge_with_history === true && existsSync(outputAbs);
 
@@ -303,7 +366,8 @@ function runStrategyMultiMerge(ctx) {
     const tmpPath = join(tmpDir, file.name.replace(/\.xlsx$/i, '.parquet'));
     log('green', `▶ 转换: ${file.name}`);
     try {
-      runPythonScript(python, scriptPath, ['-i', `"${file.path}"`, '-o', `"${tmpPath}"`]);
+      // extraArgs 传给 BaseConverter 子脚本（如 --no-metadata），merge_parquet.py 不消费 extraArgs
+      runPythonScript(python, scriptPath, ['-i', `"${file.path}"`, '-o', `"${tmpPath}"`, ...extraArgs]);
     } catch (e) {
       log('yellow', `⚠ 转换失败: ${file.name} — ${e.message?.slice(0, 100)}`);
     }
@@ -398,10 +462,19 @@ function findAllXlsx(dir) {
 function runClaimsDetail(python, scriptDir) {
   log('cyan', '\n═══ ClaimsDetail 域：赔案明细（分区 + CDC）═══\n');
 
+  // manifest 驱动：优先使用 manifest.domains.claims_detail.files，避免误合入 legacy 02_*/车险报立结案清单_*
+  const claimsSpec = _currentReleaseManifest?.domains?.claims_detail;
+  const manifestFiles = claimsSpec
+    ? claimsSpec.files.map((rel) => {
+        const path = isAbsolute(rel) ? rel : join(scriptDir, '..', rel);
+        return { name: basename(path), path };
+      })
+    : null;
+
   // 查找赔案明细 xlsx（支持多文件合并，新命名优先）
   const newFiles = ls('02_理赔明细_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
   const legacyFiles = ls('车险报立结案清单_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
-  const sourceFiles = [...newFiles, ...legacyFiles];
+  const sourceFiles = manifestFiles || [...newFiles, ...legacyFiles];
   if (sourceFiles.length === 0) {
     log('yellow', '⚠ 未找到 02_理赔明细_*.xlsx 或 车险报立结案清单_*.xlsx，跳过');
     return;
@@ -438,7 +511,16 @@ function runClaimsDetail(python, scriptDir) {
     const hasPartitions = readdirSync(CLAIMS_DETAIL_DIR)
       .some(f => f.startsWith('claims_') && f.endsWith('.parquet'));
 
-    if (hasPartitions) {
+    if (hasPartitions && claimsSpec?.mode === 'replace_range') {
+      // manifest 驱动：按 report_time 日期窗替换（保留窗外历史）
+      log('green', `▶ Step 2: 日期窗替换 (${claimsSpec.report_start} ~ ${claimsSpec.report_end})`);
+      runPythonScript(python, partitionManager, [
+        'replace_range',
+        '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`,
+        '--report-start', claimsSpec.report_start,
+        '--report-end', claimsSpec.report_end,
+      ]);
+    } else if (hasPartitions) {
       // CDC 模式：增量合入已有分区
       log('green', '▶ Step 2: CDC 更新（合入已有分区）');
       runPythonScript(python, partitionManager, [
@@ -467,7 +549,10 @@ function runClaimsDetail(python, scriptDir) {
   // Step 5: 统计总行数 + 列数（从 parquet 实读，避免硬编码过时）
   const totalRows = getPartitionedRowCount(python, CLAIMS_DETAIL_DIR);
   const fieldCount = getPartitionedColumnCount(python, CLAIMS_DETAIL_DIR);
-  updateDataSources('claims_detail', { rowCount: totalRows, fieldCount });
+  // manifest 声明 claims_detail 时由 refresh_metadata.py 统一写入
+  if (!_currentReleaseManifest?.domains?.claims_detail) {
+    updateDataSources('claims_detail', { rowCount: totalRows, fieldCount });
+  }
 
   // Step 6: 显示分区状态
   try {
@@ -479,13 +564,13 @@ function runClaimsDetail(python, scriptDir) {
 
 // ── 安全域转换（先写 tmp，成功后再归档旧文件+原子替换）──
 
-function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePrefix) {
+function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePrefix, extraArgs = []) {
   const tmpPath = outputPath + '.tmp';
   ensureDir(dirname(outputPath));
 
-  // 先转换到临时文件
+  // 先转换到临时文件（extraArgs 透传给 BaseConverter 子脚本，如 --no-metadata）
   runPythonScript(python, scriptPath, [
-    '-i', `"${inputPath}"`, '-o', `"${tmpPath}"`
+    '-i', `"${inputPath}"`, '-o', `"${tmpPath}"`, ...extraArgs
   ]);
 
   // 转换成功后才归档旧文件
@@ -554,6 +639,10 @@ async function main() {
   const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'renewal_tracker', 'all'];
   const subcommand = process.argv.find(a => ALL_DOMAINS.includes(a));
 
+  // 发布 manifest（可选）：声明本次刷新的域范围 + 期望日期；
+  // 存在时所有 data-sources.json 写入延后到流程末尾由 refresh_metadata.py 统一执行，消除双写漂移。
+  _currentReleaseManifest = loadReleaseManifest(scriptDir, parseManifestArg(process.argv));
+
   // 子命令模式：单域处理
   if (subcommand && subcommand !== 'premium' && subcommand !== 'all') {
     const python = findPython();
@@ -571,6 +660,10 @@ async function main() {
       case 'repair': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'repair_resource')); break;
       case 'customer_flow': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'customer_flow')); break;
       case 'renewal_tracker': runRenewalTracker(python, scriptDir); break;
+    }
+    // manifest 驱动：该域完成后单点写入 metadata（替代 subroutine 内的 updateDataSources）
+    if (_currentReleaseManifest) {
+      runRefreshMetadata(python, scriptDir, _currentReleaseManifest);
     }
     if (!noSync) {
       const synced = await syncToVps(scriptDir);
@@ -773,8 +866,9 @@ async function main() {
   }
 
   // 更新 premium 域的 data-sources.json（汇总所有 current/ 分片行数）
+  // manifest 声明 premium 时由 refresh_metadata.py 统一写入
   const policyCurrentDir = join(WAREHOUSE, 'policy/current');
-  if (existsSync(policyCurrentDir)) {
+  if (existsSync(policyCurrentDir) && !_currentReleaseManifest?.domains?.premium) {
     const shardFiles = readdirSync(currentDir).filter(f => f.endsWith('.parquet'));
     let totalRows = 0;
     for (const f of shardFiles) {
@@ -794,6 +888,11 @@ async function main() {
     }
     // 派生域放末尾（依赖 policy + quotes_conversion + salesman 已产出）
     runRenewalTracker(python, scriptDir);
+  }
+
+  // manifest 驱动：所有域完成后单点写入 metadata（premium/claims_detail/cross_sell/customer_flow）
+  if (_currentReleaseManifest) {
+    runRefreshMetadata(python, scriptDir, _currentReleaseManifest);
   }
 
   // 7. VPS 同步 + 快照重建

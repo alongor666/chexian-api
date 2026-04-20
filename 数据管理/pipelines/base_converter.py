@@ -179,11 +179,14 @@ class BaseConverter(ABC):
         print(f"   验证: {len(verify):,} 行 × {len(verify.columns)} 列 ✅")
 
         # 9. 元数据回写（基类统一执行，修复历史缺口）
-        update_data_sources(
-            self.get_domain_id(),
-            row_count=len(df),
-            field_count=len(df.columns),
-        )
+        # manifest 驱动流程传入 --no-metadata，跳过此处写入；
+        # 由 refresh_metadata.py 在所有域完成后统一单点写入，消除 #4 双写漂移
+        if not args.no_metadata:
+            update_data_sources(
+                self.get_domain_id(),
+                row_count=len(df),
+                field_count=len(df.columns),
+            )
 
         # 10. post-write 钩子（如 customer_flow 的 diff 报告）
         self.post_write_hook(df, output_file)
@@ -195,4 +198,9 @@ class BaseConverter(ABC):
         parser = argparse.ArgumentParser(description=self.get_title())
         parser.add_argument("-i", "--input", required=True, help="输入 Excel 文件")
         parser.add_argument("-o", "--output", required=True, help="输出 Parquet 文件")
+        parser.add_argument(
+            "--no-metadata",
+            action="store_true",
+            help="跳过 data-sources.json 写入（manifest 驱动流程专用，由 refresh_metadata.py 统一写）",
+        )
         return parser.parse_args()
