@@ -112,10 +112,86 @@ const snapshotPathCache = new Map<string, string | null>();
 const SNAPSHOT_CACHE_TTL = 60 * 60 * 1000; // 1 小时后重新探测（数据日更，invalidateSnapshotPathCache() 在 ETL 时清空）
 let snapshotCacheExpiry = 0;
 
-/** 清空快照路径缓存（数据更新后调用） */
+let lastPurgeResult: { timestamp: string; filesDeleted: number; errors: number } | null = null;
+
+export function getSnapshotPurgeResult() { return lastPurgeResult; }
+
 export function invalidateSnapshotPathCache(): void {
   snapshotPathCache.clear();
   snapshotCacheExpiry = 0;
+  purgeSnapshotFiles().catch((err) => {
+    logger.warn('[snapshot-serve] Background snapshot purge failed:', err);
+  });
+}
+
+async function purgeSnapshotFiles(): Promise<void> {
+  let filesDeleted = 0;
+  let errors = 0;
+  for (const dir of getSnapshotDirs()) {
+    let entries: string[];
+    try {
+      entries = await fs.readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const bundle of entries) {
+      const bundleDir = path.join(dir, bundle);
+      let stat;
+      try {
+        stat = await fs.stat(bundleDir);
+      } catch {
+        continue;
+      }
+      if (!stat.isDirectory()) continue;
+      await purgeDirectory(bundleDir, (count, errCount) => {
+        filesDeleted += count;
+        errors += errCount;
+      });
+    }
+  }
+  lastPurgeResult = { timestamp: new Date().toISOString(), filesDeleted, errors };
+  if (filesDeleted > 0) {
+    logger.info(`[snapshot-serve] Purged ${filesDeleted} stale snapshot file(s)${errors > 0 ? ` (${errors} errors)` : ''}`);
+  }
+}
+
+async function purgeDirectory(dirPath: string, onResult: (deleted: number, errors: number) => void): Promise<void> {
+  let deleted = 0;
+  let errs = 0;
+  let entries: string[];
+  try {
+    entries = await fs.readdir(dirPath);
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry);
+    let stat;
+    try {
+      stat = await fs.stat(fullPath);
+    } catch {
+      continue;
+    }
+    if (stat.isDirectory()) {
+      await purgeDirectory(fullPath, (d, e) => { deleted += d; errs += e; });
+    } else if (entry.endsWith('.json')) {
+      try {
+        await fs.unlink(fullPath);
+        deleted++;
+      } catch {
+        errs++;
+      }
+    }
+  }
+  onResult(deleted, errs);
+  if (deleted > 0 || errs > 0) {
+    try {
+      const remaining = await fs.readdir(dirPath);
+      if (remaining.length === 0) {
+        await fs.rmdir(dirPath);
+      }
+    } catch { /* ignore */ }
+  }
 }
 
 /**
