@@ -492,11 +492,11 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).toContain('claims_cutoff');
   });
 
-  it('日历发展口径：MAKE_DATE + year_start + observation_end', () => {
+  it('日历发展口径：MAKE_DATE + year_start + effective_cutoff（闭区间端点，2026-04-20 重构）', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
     expect(sql).toContain('MAKE_DATE(');
     expect(sql).toContain('year_start');
-    expect(sql).toContain('observation_end');
+    expect(sql).toContain('effective_cutoff');
     expect(sql).toContain('to_months(m.dev_month)');
   });
 
@@ -505,9 +505,9 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).toContain('HAVING SUM(premium) > 0');
   });
 
-  it('赔案按报案时间过滤：report_time < observation_end', () => {
+  it('赔案按报案时间过滤：report_time <= effective_cutoff（闭区间，与理赔热力图统一，2026-04-20）', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
-    expect(sql).toContain('c.report_time < cw.observation_end');
+    expect(sql).toContain('CAST(c.report_time AS DATE) <= cw.effective_cutoff');
   });
 
   it('赔付金额统一口径：settled_amount + pending_amount（settled_fee 已并入 settled_amount，2026-04-18 移除）', () => {
@@ -517,9 +517,10 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).not.toContain('c.settled_fee');
   });
 
-  it('全局截止时间用 COALESCE(MAX(report_time), CURRENT_DATE) 防空值', () => {
+  it('全局截止时间用 MAX(policy_date) FROM PolicyFact（与理赔热力图统一，2026-04-20）', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
-    expect(sql).toContain('MAX(report_time)');
+    expect(sql).toContain('MAX(CAST(policy_date AS DATE))');
+    expect(sql).toContain('FROM PolicyFact');
     expect(sql).toContain('COALESCE(');
     expect(sql).toContain('claims_cutoff FROM claims_cutoff_cte');
   });

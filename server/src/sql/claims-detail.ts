@@ -374,10 +374,17 @@ export function generateClaimCycleQuery(filters: ClaimsDetailFilters): string {
 
 // ── 9. 出险频度同比 ──
 
-// ── 10. 赔付率发展三角形（日历发展口径：M_N=[年初, 年初+N月)）──
+// ── 10. 赔付率发展三角形（日历发展口径：M_N=[年初, 年初+N月-1日] 闭区间）──
 //
-// M1: 起保+出险都在1月 → M2: 都在1-2月 → M12: 全年
-// M13~M24: 保单固定为全年，出险窗口继续向次年扩展
+// 本质：M_N 列展示「该 cohort 年起保的保单，截至 effective_cutoff 的累计快照」。
+// effective_cutoff = LEAST(年初+N月-1日, max_policy_date)
+//   - 当 N 月窗口已完全过去（如往年 M12）→ effective_cutoff = 该月末
+//   - 当 N 月窗口未到（cutoff 落在窗口内，如 2026 M5 而 cutoff=4-20）→ effective_cutoff = max_policy_date
+// 与「理赔热力图」对账锚点：本年 M_(currentMonth) ≡ 热力图 max_policy_date 列
+//
+// 截止日定义：max(policy_date) FROM PolicyFact（与理赔热力图统一）
+// 边界规则：保单/赔案 <= effective_cutoff（闭区间）
+// 赔案时间字段：report_time（与理赔热力图默认一致）
 
 export function generateLossRatioDevelopmentQuery(
   filters: ClaimsDetailFilters,
@@ -389,7 +396,8 @@ export function generateLossRatioDevelopmentQuery(
 
   return `
     WITH claims_cutoff_cte AS (
-      SELECT COALESCE(CAST(MAX(report_time) AS DATE), CURRENT_DATE) - INTERVAL 1 DAY AS claims_cutoff FROM ClaimsDetail
+      -- 与理赔热力图统一：以保单录入截止日为全局 cutoff
+      SELECT COALESCE(MAX(CAST(policy_date AS DATE)), CURRENT_DATE) AS claims_cutoff FROM PolicyFact
     ),
     raw_policies AS (
       SELECT
@@ -421,7 +429,12 @@ export function generateLossRatioDevelopmentQuery(
         pt.cohort_year,
         m.dev_month,
         MAKE_DATE(pt.cohort_year, 1, 1) AS year_start,
-        MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month) AS observation_end
+        -- effective_cutoff = LEAST(年初+N月-1日, max_policy_date)
+        -- 闭区间端点；当本年窗口未完全过去时被 cutoff 截断，与理赔热力图对齐
+        LEAST(
+          (MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month) - INTERVAL 1 DAY)::DATE,
+          (SELECT claims_cutoff FROM claims_cutoff_cte)
+        ) AS effective_cutoff
       FROM policy_totals pt
       CROSS JOIN dev_months m
       WHERE MAKE_DATE(pt.cohort_year, 1, 1) + to_months(m.dev_month - 1)
@@ -433,16 +446,14 @@ export function generateLossRatioDevelopmentQuery(
         COUNT(DISTINCT p.policy_no) AS dev_policies,
         SUM(p.premium
             * LEAST(
-                DATE_DIFF('day', p.insurance_start_date,
-                  LEAST(cw.observation_end, (SELECT claims_cutoff FROM claims_cutoff_cte) + INTERVAL 1 DAY)),
+                DATE_DIFF('day', p.insurance_start_date, cw.effective_cutoff + INTERVAL 1 DAY),
                 p.policy_term_days
               )::DOUBLE
             / p.policy_term_days
         ) AS earned_premium,
         SUM(
             LEAST(
-                DATE_DIFF('day', p.insurance_start_date,
-                  LEAST(cw.observation_end, (SELECT claims_cutoff FROM claims_cutoff_cte) + INTERVAL 1 DAY)),
+                DATE_DIFF('day', p.insurance_start_date, cw.effective_cutoff + INTERVAL 1 DAY),
                 p.policy_term_days
             )::DOUBLE
             / p.policy_term_days
@@ -451,7 +462,7 @@ export function generateLossRatioDevelopmentQuery(
       JOIN policies p
         ON p.cohort_year = cw.cohort_year
        AND p.insurance_start_date >= cw.year_start
-       AND p.insurance_start_date <  LEAST(cw.observation_end, (SELECT claims_cutoff FROM claims_cutoff_cte) + INTERVAL 1 DAY)
+       AND p.insurance_start_date <= cw.effective_cutoff
       GROUP BY cw.cohort_year, cw.dev_month
     ),
     claimed AS (
@@ -465,10 +476,10 @@ export function generateLossRatioDevelopmentQuery(
       JOIN policies p
         ON p.cohort_year = cw.cohort_year
        AND p.insurance_start_date >= cw.year_start
-       AND p.insurance_start_date <  cw.observation_end
+       AND p.insurance_start_date <= cw.effective_cutoff
       LEFT JOIN ClaimsDetail c
         ON c.policy_no = p.policy_no
-       AND c.report_time < cw.observation_end
+       AND CAST(c.report_time AS DATE) <= cw.effective_cutoff
       GROUP BY cw.cohort_year, cw.dev_month
     )
     SELECT
