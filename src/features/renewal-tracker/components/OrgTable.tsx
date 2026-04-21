@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { cn, cardStyles, buttonStyles, colorClasses, fontStyles } from '@/shared/styles';
-import type { RenewalRow, SortField, SortDir } from '../types';
-import { formatNum, formatPct } from '../utils/format';
+import type { RenewalRow, SortField, SortDir, Selection } from '../types';
+import { formatNum, formatPct, shortenTeamName, stripSalesmanCode } from '../utils/format';
 
 interface Props {
   rows: RenewalRow[];
   overall: RenewalRow | null;
-  selectedOrg: string | null;
-  onOrgSelect: (org: string | null) => void;
+  selection: Selection;
+  onSelectionChange: (selection: Selection) => void;
   sortField: SortField;
   sortDir: SortDir;
   onSort: (field: SortField) => void;
@@ -32,11 +32,34 @@ function getSortValue(row: RenewalRow, field: SortField): number {
   return row[field];
 }
 
+function isOrgSelected(selection: Selection, org: string): boolean {
+  return selection.kind !== 'overall' && selection.org === org;
+}
+
+function isTeamSelected(selection: Selection, org: string, team: string | null): boolean {
+  if (selection.kind === 'team') return selection.org === org && selection.team === team;
+  return false;
+}
+
+function isSalesmanSelected(
+  selection: Selection,
+  org: string,
+  team: string | null,
+  salesman: string | null
+): boolean {
+  if (selection.kind !== 'salesman') return false;
+  return selection.org === org && selection.team === team && selection.salesman === salesman;
+}
+
+function isOverallSelected(selection: Selection): boolean {
+  return selection.kind === 'overall';
+}
+
 export default function OrgTable({
   rows,
   overall,
-  selectedOrg,
-  onOrgSelect,
+  selection,
+  onSelectionChange,
   sortField,
   sortDir,
   onSort,
@@ -56,26 +79,54 @@ export default function OrgTable({
     });
   }, [orgRows, sortField, sortDir]);
 
+  // 选中的机构名（用于判断是否展开下钻）
+  const selectedOrg = selection.kind === 'overall' ? null : selection.org;
+
   function handleDrill(org: string, mode: DrillMode) {
     if (selectedOrg === org && drillMode === mode) {
+      // 收起下钻
       setDrillMode(null);
       setExpandedTeams(new Set());
-      onOrgSelect(null);
+      onSelectionChange({ kind: 'org', org });
     } else {
       setDrillMode(mode);
       setExpandedTeams(new Set());
-      onOrgSelect(org);
+      onSelectionChange({ kind: 'org', org });
     }
   }
 
+  function handleOverallClick() {
+    if (isOverallSelected(selection)) return;
+    setDrillMode(null);
+    setExpandedTeams(new Set());
+    onSelectionChange({ kind: 'overall' });
+  }
+
   function handleOrgRowClick(org: string) {
-    if (selectedOrg === org) {
+    if (selection.kind === 'org' && selection.org === org) {
+      // 已选中该机构 → 回到整体
       setDrillMode(null);
       setExpandedTeams(new Set());
-      onOrgSelect(null);
+      onSelectionChange({ kind: 'overall' });
     } else {
-      if (drillMode === null) setDrillMode(null);
-      onOrgSelect(org);
+      onSelectionChange({ kind: 'org', org });
+    }
+  }
+
+  function handleTeamRowClick(org: string, team: string | null) {
+    if (isTeamSelected(selection, org, team)) {
+      onSelectionChange({ kind: 'org', org });
+    } else {
+      onSelectionChange({ kind: 'team', org, team: team || '' });
+    }
+  }
+
+  function handleSalesmanRowClick(org: string, team: string | null, salesman: string | null) {
+    if (!salesman) return;
+    if (isSalesmanSelected(selection, org, team, salesman)) {
+      onSelectionChange({ kind: 'org', org });
+    } else {
+      onSelectionChange({ kind: 'salesman', org, team, salesman });
     }
   }
 
@@ -103,12 +154,10 @@ export default function OrgTable({
     indent: number,
     isBold: boolean,
     rowKey: string,
+    isSelected: boolean,
     onClick?: () => void,
     labelNode?: React.ReactNode,
   ) {
-    const D = formatPct(row.B, row.A);
-    const E = formatPct(row.C, row.A);
-    const isSelectedOrg = row.org_level_3 === selectedOrg && row.row_level === 'org';
     return (
       <tr
         key={rowKey}
@@ -116,7 +165,7 @@ export default function OrgTable({
           'border-b transition-colors',
           colorClasses.border.neutral,
           onClick && cn('cursor-pointer', 'hover:bg-primary-bg/50'),
-          isSelectedOrg && colorClasses.bg.primary,
+          isSelected && colorClasses.bg.primary,
         )}
         onClick={onClick}
       >
@@ -132,8 +181,8 @@ export default function OrgTable({
         <td className={numericCellClass}>{formatNum(row.A)}</td>
         <td className={numericCellClass}>{formatNum(row.B)}</td>
         <td className={numericCellClass}>{formatNum(row.C)}</td>
-        <td className={numericCellClass}>{D}</td>
-        <td className={numericCellClass}>{E}</td>
+        <td className={numericCellClass}>{formatPct(row.B, row.A)}</td>
+        <td className={numericCellClass}>{formatPct(row.C, row.A)}</td>
       </tr>
     );
   }
@@ -159,30 +208,44 @@ export default function OrgTable({
             const vb = getSortValue(b, sortField);
             return sortDir === 'desc' ? vb - va : va - vb;
           });
+        const teamSelected = isTeamSelected(selection, org, team.team_name);
         nodes.push(
           renderRow(
             team,
             1,
             false,
             `team-${org}-${teamKey}`,
-            () => toggleTeam(teamKey),
+            teamSelected,
+            () => handleTeamRowClick(org, team.team_name),
             <span className="flex items-center gap-1.5">
-              <span className={cn('text-xs transition-transform inline-block', isExpanded && 'rotate-90')}>▶</span>
-              <span>{team.team_name || '(未分团队)'}</span>
+              <span
+                role="button"
+                aria-label={isExpanded ? '折叠团队' : '展开团队'}
+                onClick={e => {
+                  e.stopPropagation();
+                  toggleTeam(teamKey);
+                }}
+                className={cn('text-xs transition-transform inline-block cursor-pointer', isExpanded && 'rotate-90')}
+              >
+                ▶
+              </span>
+              <span>{shortenTeamName(team.team_name)}</span>
               <span className={cn('text-[10px]', colorClasses.text.neutralMuted)}>({teamSalesmen.length} 人)</span>
             </span>,
           ),
         );
         if (isExpanded) {
           teamSalesmen.forEach((s, idx) => {
+            const selected = isSalesmanSelected(selection, org, s.team_name, s.salesman_name);
             nodes.push(
               renderRow(
                 s,
                 2,
                 false,
                 `salesman-${org}-${teamKey}-${s.salesman_name || 'unknown'}-${idx}`,
-                undefined,
-                s.salesman_name || '(未分配)',
+                selected,
+                () => handleSalesmanRowClick(org, s.team_name, s.salesman_name),
+                stripSalesmanCode(s.salesman_name),
               ),
             );
           });
@@ -198,16 +261,18 @@ export default function OrgTable({
         const vb = getSortValue(b, sortField);
         return sortDir === 'desc' ? vb - va : va - vb;
       });
-      return sorted.map((s, idx) =>
-        renderRow(
+      return sorted.map((s, idx) => {
+        const selected = isSalesmanSelected(selection, org, s.team_name, s.salesman_name);
+        return renderRow(
           s,
           1,
           false,
           `salesman-flat-${org}-${s.salesman_name || 'unknown'}-${idx}`,
-          undefined,
-          s.salesman_name || '(未分配)',
-        ),
-      );
+          selected,
+          () => handleSalesmanRowClick(org, s.team_name, s.salesman_name),
+          stripSalesmanCode(s.salesman_name),
+        );
+      });
     }
 
     return null;
@@ -218,16 +283,18 @@ export default function OrgTable({
     return <span className={colorClasses.text.primary}>{sortDir === 'desc' ? '↓' : '↑'}</span>;
   };
 
+  const overallSelected = isOverallSelected(selection);
+
   return (
     <div className={cn(cardStyles.base, 'overflow-hidden')}>
       <div className={cn('px-4 py-3 border-b bg-neutral-50 dark:bg-surface-2 flex items-center justify-between', colorClasses.border.neutral)}>
         <h2 className={cn('text-base font-semibold', colorClasses.text.neutralBlack)}>按三级机构</h2>
-        {selectedOrg && (
+        {!overallSelected && (
           <button
             onClick={() => {
               setDrillMode(null);
               setExpandedTeams(new Set());
-              onOrgSelect(null);
+              onSelectionChange({ kind: 'overall' });
             }}
             className={cn(buttonStyles.base, buttonStyles.link, 'text-xs')}
           >
@@ -266,50 +333,51 @@ export default function OrgTable({
                 0,
                 true,
                 'overall-row',
-                () => {
-                  setDrillMode(null);
-                  setExpandedTeams(new Set());
-                  onOrgSelect(null);
-                },
+                overallSelected,
+                handleOverallClick,
                 '整体',
               )}
             </tbody>
           )}
-          {sortedOrgs.map(org => (
-            <tbody key={`org-${org.org_level_3}`}>
-              {renderRow(
-                org,
-                0,
-                false,
-                `org-row-${org.org_level_3}`,
-                () => handleOrgRowClick(org.org_level_3!),
-                <div className="flex items-center justify-between gap-2 w-full">
-                  <span className="truncate">{org.org_level_3}</span>
-                  <div className="flex gap-1 shrink-0">
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleDrill(org.org_level_3!, 'team');
-                      }}
-                      className={drillButtonClass(selectedOrg === org.org_level_3 && drillMode === 'team')}
-                    >
-                      团队
-                    </button>
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleDrill(org.org_level_3!, 'salesman');
-                      }}
-                      className={drillButtonClass(selectedOrg === org.org_level_3 && drillMode === 'salesman')}
-                    >
-                      业务员
-                    </button>
-                  </div>
-                </div>,
-              )}
-              {renderDrilldown(org.org_level_3!)}
-            </tbody>
-          ))}
+          {sortedOrgs.map(org => {
+            const orgSelected = selection.kind === 'org' && isOrgSelected(selection, org.org_level_3!);
+            return (
+              <tbody key={`org-${org.org_level_3}`}>
+                {renderRow(
+                  org,
+                  0,
+                  false,
+                  `org-row-${org.org_level_3}`,
+                  orgSelected,
+                  () => handleOrgRowClick(org.org_level_3!),
+                  <div className="flex items-center justify-between gap-2 w-full">
+                    <span className="truncate">{org.org_level_3}</span>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleDrill(org.org_level_3!, 'team');
+                        }}
+                        className={drillButtonClass(selectedOrg === org.org_level_3 && drillMode === 'team')}
+                      >
+                        团队
+                      </button>
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleDrill(org.org_level_3!, 'salesman');
+                        }}
+                        className={drillButtonClass(selectedOrg === org.org_level_3 && drillMode === 'salesman')}
+                      >
+                        业务员
+                      </button>
+                    </div>
+                  </div>,
+                )}
+                {renderDrilldown(org.org_level_3!)}
+              </tbody>
+            );
+          })}
         </table>
       </div>
     </div>

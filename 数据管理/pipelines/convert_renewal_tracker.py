@@ -84,7 +84,12 @@ def main():
             (insurance_start_date + INTERVAL '1 year' - INTERVAL '1 day') AS expected_expiry_date,
             org_level_3,
             customer_category,
-            salesman_name
+            salesman_name,
+            coverage_combination,
+            is_nev,
+            is_new_car,
+            is_transfer,
+            is_renewal
         FROM read_parquet('{args.policy_glob}')
         WHERE insurance_type = '商业保险'
           AND insurance_start_date >= DATE '{args.source_year}-01-01'
@@ -146,6 +151,10 @@ def main():
     """)
 
     # Step 5: LEFT JOIN 四表，写 parquet
+    # 派生维度字段：
+    #   fuel_category: is_nev → 电 / 油（本期两分，气需专用字段，暂跳过）
+    #   used_transfer_type: 新车 / 旧车过户 / 旧车非过户
+    #   renewal_type:       新车 / 续保 / 转保
     print(f"\n📊 Step 5: JOIN 生成 universe → {out_path.name}...")
     con.execute(f"""
         COPY (
@@ -159,6 +168,22 @@ def main():
                 COALESCE(s.team, '直管') AS team_name,
                 b.salesman_name,
                 b.customer_category,
+                b.coverage_combination,
+                CASE WHEN b.is_nev THEN '电' ELSE '油' END AS fuel_category,
+                b.is_nev,
+                b.is_new_car,
+                b.is_transfer,
+                b.is_renewal,
+                CASE
+                    WHEN b.is_new_car THEN '新车'
+                    WHEN b.is_transfer THEN '旧车过户'
+                    ELSE '旧车非过户'
+                END AS used_transfer_type,
+                CASE
+                    WHEN b.is_new_car THEN '新车'
+                    WHEN b.is_renewal THEN '续保'
+                    ELSE '转保'
+                END AS renewal_type,
                 CASE WHEN r.renewed_policy_no IS NOT NULL THEN true ELSE false END AS is_renewed,
                 r.renewed_policy_no,
                 r.renewed_date,
