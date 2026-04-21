@@ -234,6 +234,32 @@ export function generateClaimsHeatmapQuery(
         LEAST(MAKE_DATE(${policyYearExpr}, 12, 31), (SELECT max_date FROM ref_date)) AS effective_end
     ),
 
+    -- 2.5. 净额口径池：按 (policy_no, insurance_start_date) 聚合，
+    --      HAVING SUM(premium) > 0 → 排除退保/负向批改净额≤0 的保单
+    --      与「赔付率发展」统一口径，2026-04-20 用户决策
+    eligible_policies AS (
+      SELECT
+        policy_no,
+        CAST(insurance_start_date AS DATE) AS insurance_start_date,
+        SUM(premium) AS premium,
+        ANY_VALUE(org_level_3) AS org_level_3,
+        ANY_VALUE(customer_category) AS customer_category,
+        ANY_VALUE(salesman_name) AS salesman_name,
+        ANY_VALUE(coverage_combination) AS coverage_combination,
+        ANY_VALUE(is_nev) AS is_nev,
+        ANY_VALUE(is_transfer) AS is_transfer,
+        ANY_VALUE(is_new_car) AS is_new_car,
+        ANY_VALUE(is_renewal) AS is_renewal,
+        ANY_VALUE(insurance_grade) AS insurance_grade,
+        ANY_VALUE(tonnage_segment) AS tonnage_segment,
+        ANY_VALUE(vehicle_model) AS vehicle_model
+      FROM PolicyFact
+      WHERE EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) >= (SELECT policy_year FROM year_bounds) - 1
+        AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) <= (SELECT policy_year FROM year_bounds)
+      GROUP BY policy_no, CAST(insurance_start_date AS DATE)
+      HAVING SUM(premium) > 0
+    ),
+
     -- 3. 近 2 月的起点（再早折叠为月末）
     weekly_start AS (
       SELECT
@@ -309,12 +335,11 @@ export function generateClaimsHeatmapQuery(
           GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), ac.cutoff + INTERVAL 1 DAY), 0),
           GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)
         )::DOUBLE / GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)), 6) AS earned_exposure
-      FROM PolicyFact p
+      FROM eligible_policies p
       ${teamJoin}
       CROSS JOIN all_cutoffs ac
       WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds)
         AND CAST(p.insurance_start_date AS DATE) <= ac.cutoff
-        AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
       GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
     ),
@@ -330,13 +355,12 @@ export function generateClaimsHeatmapQuery(
         COUNT(DISTINCT c.claim_no) AS claim_count,
         ROUND(SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) / 1e4, 4) AS total_claims_wan
       FROM ClaimsDetail c
-      JOIN PolicyFact p ON c.policy_no = p.policy_no
+      JOIN eligible_policies p ON c.policy_no = p.policy_no
       ${teamJoin}
       CROSS JOIN all_cutoffs ac
       WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds)
         AND CAST(p.insurance_start_date AS DATE) <= ac.cutoff
         AND CAST(c.${safeClaimsDateField} AS DATE) <= ac.cutoff
-        AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
       GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
     ),
@@ -359,12 +383,11 @@ export function generateClaimsHeatmapQuery(
           GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), (ac.cutoff - INTERVAL 1 YEAR)::DATE + INTERVAL 1 DAY), 0),
           GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)
         )::DOUBLE / GREATEST(DATE_DIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR), 1)), 6) AS earned_exposure
-      FROM PolicyFact p
+      FROM eligible_policies p
       ${teamJoin}
       CROSS JOIN all_cutoffs ac
       WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds) - 1
         AND CAST(p.insurance_start_date AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
-        AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
       GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
     ),
@@ -376,13 +399,12 @@ export function generateClaimsHeatmapQuery(
         COUNT(DISTINCT c.claim_no) AS claim_count,
         ROUND(SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) / 1e4, 4) AS total_claims_wan
       FROM ClaimsDetail c
-      JOIN PolicyFact p ON c.policy_no = p.policy_no
+      JOIN eligible_policies p ON c.policy_no = p.policy_no
       ${teamJoin}
       CROSS JOIN all_cutoffs ac
       WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds) - 1
         AND CAST(p.insurance_start_date AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
         AND CAST(c.${safeClaimsDateField} AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
-        AND COALESCE(p.premium, 0) > 0
         ${policyWhere}
       GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
     ),
