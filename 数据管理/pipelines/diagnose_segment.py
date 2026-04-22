@@ -491,8 +491,8 @@ def build_report(args, where_clause: str, resolved_from_keywords: bool) -> Path:
 
 def main():
     parser = argparse.ArgumentParser(description="通用车型细分经营诊断（保单年龄发展口径）")
-    parser.add_argument("--start", required=True, help="起保日期下限（YYYY-MM-DD）")
-    parser.add_argument("--end", required=True, help="起保日期上限（YYYY-MM-DD）")
+    parser.add_argument("--start", default=None, help="起保日期下限（YYYY-MM-DD）；交互模式下由问卷填写，可省略")
+    parser.add_argument("--end", default=None, help="起保日期上限（YYYY-MM-DD）；交互模式下由问卷填写，可省略")
     parser.add_argument("--where", help="SQL WHERE 子句（不含 insurance_start_date 范围）")
     parser.add_argument("--keywords", help="词典关键词，逗号分隔（如 '天然气,新车,牵引车,10吨以上'）")
     parser.add_argument("--slug", help="报告 slug（文件名前缀），未指定则用 keywords 拼接")
@@ -532,6 +532,9 @@ def main():
         return
 
     args.drill = [d.strip() for d in args.drill.split(",") if d.strip()]
+
+    if not args.start or not args.end:
+        parser.error("非交互模式下 --start 和 --end 为必填参数")
 
     resolved_from_keywords = False
     if args.where and args.keywords:
