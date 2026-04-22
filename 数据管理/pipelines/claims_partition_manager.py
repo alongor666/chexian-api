@@ -49,6 +49,13 @@ def parse_args():
     u.add_argument('-i', '--input', required=True, help='新数据 parquet（含 insurance_year 列）')
     u.add_argument('-o', '--output-dir', required=True, help='分区目录')
 
+    # replace_range: 按报案时间日期窗替换
+    r = sub.add_parser('replace_range', help='按 report_time 日期窗替换分区记录')
+    r.add_argument('-i', '--input', required=True, help='新数据 parquet（含 insurance_year/report_time 列）')
+    r.add_argument('-o', '--output-dir', required=True, help='分区目录')
+    r.add_argument('--report-start', required=True, help='报案时间开始日期 YYYY-MM-DD（含）')
+    r.add_argument('--report-end', required=True, help='报案时间结束日期 YYYY-MM-DD（含）')
+
     # status: 查看
     s = sub.add_parser('status', help='查看分区状态')
     s.add_argument('-o', '--output-dir', required=True, help='分区目录')
@@ -73,6 +80,25 @@ def save_meta(output_dir: Path, meta: dict):
 
 def partition_filename(year: int) -> str:
     return f'claims_{year}.parquet'
+
+
+def parse_partition_year(path: Path) -> int | None:
+    """从 claims_YYYY.parquet 文件名提取年度。"""
+    try:
+        prefix, year = path.stem.split('_', 1)
+        if prefix != 'claims':
+            return None
+        return int(year)
+    except ValueError:
+        return None
+
+
+def validate_yyyy_mm_dd(value: str, label: str) -> str:
+    try:
+        return datetime.strptime(value, '%Y-%m-%d').date().isoformat()
+    except ValueError:
+        print(f'❌ {label} 必须是 YYYY-MM-DD: {value}')
+        sys.exit(1)
 
 
 def check_frozen(parquet_path: str) -> dict:
@@ -367,6 +393,139 @@ def do_update(args):
     print(f'✅ CDC 更新完成\n')
 
 
+def do_replace_range(args):
+    """按 report_time 日期窗替换记录，保留窗口外历史。"""
+    input_path = Path(args.input)
+    output_dir = Path(args.output_dir)
+    report_start = validate_yyyy_mm_dd(args.report_start, '--report-start')
+    report_end = validate_yyyy_mm_dd(args.report_end, '--report-end')
+
+    if report_start > report_end:
+        print(f'❌ --report-start 不得晚于 --report-end: {report_start} > {report_end}')
+        sys.exit(1)
+    if not input_path.exists():
+        print(f'❌ 输入文件不存在: {input_path}')
+        sys.exit(1)
+    if not output_dir.exists():
+        print(f'❌ 分区目录不存在: {output_dir}')
+        sys.exit(1)
+
+    meta = load_meta(output_dir)
+    in_window = (
+        f"CAST(report_time AS DATE) BETWEEN DATE '{report_start}' AND DATE '{report_end}'"
+    )
+    preserve_outside_window = (
+        f"report_time IS NULL OR CAST(report_time AS DATE) < DATE '{report_start}' "
+        f"OR CAST(report_time AS DATE) > DATE '{report_end}'"
+    )
+
+    new_year_rows = duckdb.sql(f"""
+        SELECT insurance_year, COUNT(*) as cnt
+        FROM read_parquet('{input_path}')
+        WHERE insurance_year IS NOT NULL
+        GROUP BY 1 ORDER BY 1
+    """).fetchall()
+    new_years = {int(year): int(cnt) for year, cnt in new_year_rows}
+
+    existing_years: dict[int, dict] = {}
+    for path in sorted(output_dir.glob('claims_*.parquet')):
+        year = parse_partition_year(path)
+        if year is None:
+            continue
+        row = duckdb.sql(f"""
+            SELECT COUNT(*) as old_rows,
+                   COUNT(*) FILTER (WHERE {in_window}) as in_range_rows
+            FROM read_parquet('{path}')
+        """).fetchone()
+        existing_years[year] = {
+            'path': path,
+            'old_rows': int(row[0]),
+            'in_range_rows': int(row[1]),
+        }
+
+    affected_years = sorted({
+        *new_years.keys(),
+        *(year for year, info in existing_years.items() if info['in_range_rows'] > 0),
+    })
+    if not affected_years:
+        print('⚠ 日期窗内无旧记录，incoming 也无可分区记录；无需替换')
+        return
+
+    print(f'\n{"="*60}')
+    print(f'🔁 日期窗替换: {input_path.name}')
+    print(f'   report_time: {report_start} ~ {report_end}')
+    print(f'{"="*60}\n')
+
+    cdc_summary = {
+        'timestamp': datetime.now().isoformat(),
+        'command': 'replace_range',
+        'source': input_path.name,
+        'report_start': report_start,
+        'report_end': report_end,
+        'partitions': {},
+    }
+
+    total_deleted = 0
+    total_inserted = 0
+    for year in affected_years:
+        filename = partition_filename(year)
+        existing_path = output_dir / filename
+        tmp_path = output_dir / f'{filename}.tmp'
+        old_rows = existing_years.get(year, {}).get('old_rows', 0)
+        deleted_in_range = existing_years.get(year, {}).get('in_range_rows', 0)
+        inserted = new_years.get(year, 0)
+
+        if existing_path.exists():
+            duckdb.sql(f"""
+                COPY (
+                    SELECT * FROM read_parquet('{existing_path}')
+                    WHERE {preserve_outside_window}
+                    UNION ALL BY NAME
+                    SELECT * FROM read_parquet('{input_path}')
+                    WHERE insurance_year = {year}
+                    ORDER BY report_time
+                ) TO '{tmp_path}' (FORMAT PARQUET, COMPRESSION SNAPPY)
+            """)
+            existing_path.unlink()
+            tmp_path.rename(existing_path)
+        else:
+            duckdb.sql(f"""
+                COPY (
+                    SELECT * FROM read_parquet('{input_path}')
+                    WHERE insurance_year = {year}
+                    ORDER BY report_time
+                ) TO '{tmp_path}' (FORMAT PARQUET, COMPRESSION SNAPPY)
+            """)
+            tmp_path.rename(existing_path)
+
+        final_rows = duckdb.sql(f"SELECT COUNT(*) FROM read_parquet('{existing_path}')").fetchone()[0]
+        status = check_frozen(str(existing_path))
+        meta['partitions'][str(year)] = {
+            'file': filename,
+            'rows': final_rows,
+            'frozen': status['frozen'],
+            'pending_count': status['pending_count'],
+            'pending_amount': status['pending_amount'],
+            'last_updated': datetime.now().isoformat(),
+        }
+        cdc_summary['partitions'][str(year)] = {
+            'old_rows': old_rows,
+            'deleted_in_range': deleted_in_range,
+            'inserted': inserted,
+            'final_rows': final_rows,
+        }
+        total_deleted += deleted_in_range
+        total_inserted += inserted
+        print(f'  {year}: old={old_rows:,}, delete={deleted_in_range:,}, insert={inserted:,}, final={final_rows:,}')
+
+    meta.setdefault('cdc_logs', []).append(cdc_summary)
+    meta['cdc_logs'] = meta['cdc_logs'][-30:]
+    save_meta(output_dir, meta)
+
+    print(f'\n  replace_range 汇总: -{total_deleted:,} 删除, +{total_inserted:,} 插入')
+    print('✅ 日期窗替换完成\n')
+
+
 def do_status(args):
     """查看所有分区的状态。"""
     output_dir = Path(args.output_dir)
@@ -431,6 +590,8 @@ def main():
         do_migrate(args)
     elif args.command == 'update':
         do_update(args)
+    elif args.command == 'replace_range':
+        do_replace_range(args)
     elif args.command == 'status':
         do_status(args)
 
