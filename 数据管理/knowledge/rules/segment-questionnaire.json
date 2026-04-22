@@ -1,0 +1,155 @@
+{
+  "_doc": "诊断问卷定义 — /diagnose-segment --interactive 模式的题组驱动文件。需求模糊时自动触发，每批 ≤4 题，答案映射到词典关键词后构造 WHERE 子句。",
+  "_update_protocol": "新增题目时：1) option 的 keyword 必须已在 segment-dictionary.json 中注册；2) 在 _changelog 登记；3) 同步更新 .claude/commands/diagnose-segment.md 中的问卷说明",
+  "version": "1.0",
+  "batch_size": 4,
+  "_changelog": [
+    {"version": "1.0", "date": "2026-04-22", "note": "初版：11 个题组，覆盖时间/客户类别/险种/下钻/燃料/新旧/过户/吨位/货车类型"}
+  ],
+  "batches": [
+    {
+      "id": "batch1",
+      "title": "基础参数（必答）",
+      "condition": null,
+      "questions": ["time_range", "customer_category", "insurance_type", "drill_dims"]
+    },
+    {
+      "id": "batch2_freight",
+      "title": "营业货车细化维度",
+      "condition": {"question": "customer_category", "contains_any": ["营业货车"]},
+      "questions": ["fuel_type", "is_new_car", "is_transfer", "tonnage_segment"]
+    },
+    {
+      "id": "batch3_truck_type",
+      "title": "货车结构类型",
+      "condition": {"question": "customer_category", "contains_any": ["营业货车"]},
+      "questions": ["truck_type"]
+    }
+  ],
+  "questions": {
+    "time_range": {
+      "prompt": "分析时间范围（起保日期）",
+      "type": "single_choice_or_custom",
+      "required": true,
+      "note": "选4输入自定义，格式 YYYY-MM-DD ~ YYYY-MM-DD",
+      "options": [
+        {"label": "2025 全年（2025-01-01 ~ 2025-12-31）", "value": {"start": "2025-01-01", "end": "2025-12-31"}},
+        {"label": "2026 以来（2026-01-01 ~ 今天）",        "value": {"start": "2026-01-01", "end": "__today__"}},
+        {"label": "近 15 个月（2025-01-01 ~ 今天）",       "value": {"start": "2025-01-01", "end": "__today__"}},
+        {"label": "自定义（输入日期范围）",                  "value": "custom"}
+      ]
+    },
+    "customer_category": {
+      "prompt": "客户类别（可多选编号，逗号分隔；直接回车=全部不过滤）",
+      "type": "multi_select",
+      "required": false,
+      "default": "all",
+      "note": "选'营业货车'将追加第2批货车专项问题；摩托车建议改用 /diagnose-motorcycle",
+      "options": [
+        {"label": "营业货车",     "keyword": "营业货车",    "triggers_batch": "batch2_freight"},
+        {"label": "非营业个人客车", "keyword": "非营业个人客车"},
+        {"label": "非营业货车",   "keyword": "非营业货车"},
+        {"label": "非营业企业客车","keyword": "非营业企业客车"},
+        {"label": "营业出租租赁", "keyword": "营业出租租赁"},
+        {"label": "特种车",       "keyword": "特种车"},
+        {"label": "营业公路客运", "keyword": "营业公路客运"},
+        {"label": "挂车",         "keyword": "挂车"},
+        {"label": "摩托车",       "keyword": "摩托车", "note": "⚠️ 建议改用 /diagnose-motorcycle"}
+      ]
+    },
+    "insurance_type": {
+      "prompt": "险种组合（单选；直接回车=不过滤）",
+      "type": "single_choice",
+      "required": false,
+      "default": "all",
+      "options": [
+        {"label": "全部（商业险+交强险，不过滤）", "value": "all"},
+        {"label": "仅商业险",                      "keyword": "商业险"},
+        {"label": "仅交强险",                      "keyword": "交强险"},
+        {"label": "交三（交强+第三者责任）",        "keyword": "交三"},
+        {"label": "主全（主险全量）",               "keyword": "主全"},
+        {"label": "单交（仅交强，无商业险）",        "keyword": "单交"}
+      ]
+    },
+    "drill_dims": {
+      "prompt": "下钻维度（可多选编号；直接回车=全部启用）",
+      "type": "checklist",
+      "required": false,
+      "default": "all",
+      "options": [
+        {"label": "厂牌车型 Top15",        "value": "vehicle_model"},
+        {"label": "出险省/市 Top20",       "value": "accident_province"},
+        {"label": "事故月份趋势",           "value": "accident_month"},
+        {"label": "事故时段（24小时分段）", "value": "accident_hour"},
+        {"label": "事故原因 Top15",        "value": "accident_cause"},
+        {"label": "损失类别分布",           "value": "loss_category"},
+        {"label": "Top10 大案",            "value": "large_cases"}
+      ]
+    },
+    "fuel_type": {
+      "prompt": "燃料类型（可多选编号；直接回车=全部不过滤）",
+      "type": "multi_select",
+      "required": false,
+      "default": "all",
+      "options": [
+        {"label": "天然气 (NG/CNG/LNG)", "keyword": "天然气"},
+        {"label": "柴油",                "keyword": "柴油"},
+        {"label": "汽油",                "keyword": "汽油"},
+        {"label": "纯电动",              "keyword": "纯电动"},
+        {"label": "插电混动",            "keyword": "插电混动"},
+        {"label": "新能源（含BEV/PHEV）","keyword": "新能源"},
+        {"label": "两用燃料",            "keyword": "两用燃料"}
+      ]
+    },
+    "is_new_car": {
+      "prompt": "新车/旧车（单选；直接回车=全部不过滤）",
+      "type": "single_choice",
+      "required": false,
+      "default": "all",
+      "options": [
+        {"label": "全部（不过滤）", "value": "all"},
+        {"label": "仅新车",        "keyword": "新车"},
+        {"label": "仅旧车",        "keyword": "旧车"}
+      ]
+    },
+    "is_transfer": {
+      "prompt": "过户车（单选；直接回车=全部不过滤）",
+      "type": "single_choice",
+      "required": false,
+      "default": "all",
+      "options": [
+        {"label": "全部（不过滤）",                         "value": "all"},
+        {"label": "仅过户车",                               "keyword": "过户车"},
+        {"label": "排除过户车（is_transfer = FALSE）",     "value": "not_transfer", "where": "is_transfer = FALSE"}
+      ]
+    },
+    "tonnage_segment": {
+      "prompt": "吨位段（可多选编号；直接回车=全部不过滤）",
+      "type": "multi_select",
+      "required": false,
+      "default": "all",
+      "options": [
+        {"label": "10吨以上", "keyword": "10吨以上"},
+        {"label": "9-10吨",   "keyword": "9-10吨"},
+        {"label": "2-9吨",    "keyword": "2-9吨"},
+        {"label": "1-2吨",    "keyword": "1-2吨"},
+        {"label": "1吨以下",  "keyword": "1吨以下"}
+      ]
+    },
+    "truck_type": {
+      "prompt": "货车结构类型（可多选编号；直接回车=全部不过滤）",
+      "type": "multi_select",
+      "required": false,
+      "default": "all",
+      "options": [
+        {"label": "牵引车",   "keyword": "牵引车"},
+        {"label": "自卸车",   "keyword": "自卸车"},
+        {"label": "厢式货车", "keyword": "厢式货车"},
+        {"label": "平板货车", "keyword": "平板货车"},
+        {"label": "仓栅车",   "keyword": "仓栅车"},
+        {"label": "冷藏车",   "keyword": "冷藏车"},
+        {"label": "普通货车", "keyword": "普通货车"}
+      ]
+    }
+  }
+}

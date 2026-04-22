@@ -40,6 +40,7 @@ POLICY = f"{DATA_ROOT}/数据管理/warehouse/fact/policy/current/*.parquet"
 CLAIMS = f"{DATA_ROOT}/数据管理/warehouse/fact/claims_detail/claims_*.parquet"
 OUTDIR = CODE_ROOT / "数据管理/数据分析报告"
 DICTIONARY = CODE_ROOT / "数据管理/knowledge/rules/segment-dictionary.json"
+QUESTIONNAIRE = CODE_ROOT / "数据管理/knowledge/rules/segment-questionnaire.json"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from policy_age_dev import (  # noqa: E402
@@ -239,6 +240,175 @@ def resolve_keywords(keywords: list[str], dictionary: dict) -> tuple[str, list[s
     return " AND ".join(parts), unresolved
 
 
+# ────────── 交互问卷 ──────────
+
+def _ask_single(prompt: str, options: list) -> "int | None":
+    """单选。返回 0-based 索引，回车返回 None（视作默认/全部）。"""
+    while True:
+        raw = input(f"▶ [1-{len(options)}, 回车跳过]: ").strip()
+        if not raw:
+            return None
+        try:
+            idx = int(raw)
+            if 1 <= idx <= len(options):
+                return idx - 1
+            print(f"  请输入 1~{len(options)} 之间的数字")
+        except ValueError:
+            print("  请输入数字")
+
+
+def _ask_multi(prompt: str, options: list) -> list:
+    """多选。返回 0-based 索引列表，回车返回 []（视作全部/默认）。"""
+    while True:
+        raw = input(f"▶ [逗号分隔编号, 回车=全部]: ").strip()
+        if not raw:
+            return []
+        try:
+            indices = [int(x.strip()) - 1 for x in raw.split(",") if x.strip()]
+            if all(0 <= i < len(options) for i in indices):
+                return indices
+            print(f"  编号需在 1~{len(options)} 范围内")
+        except ValueError:
+            print("  格式错误（如 1,3,5）")
+
+
+def run_interactive_mode(valuation_date: str):
+    """
+    引导式问卷：读 segment-questionnaire.json → 提问 → 返回 (start, end, where_clause, slug, drills)
+    """
+    from datetime import date as _date_cls
+    today = _date_cls.today().isoformat()
+
+    if not QUESTIONNAIRE.exists():
+        print(f"[ERROR] 问卷文件不存在：{QUESTIONNAIRE}", file=sys.stderr)
+        sys.exit(1)
+
+    qdata = json.loads(QUESTIONNAIRE.read_text(encoding="utf-8"))
+    questions_def = qdata["questions"]
+    batches = qdata["batches"]
+    dictionary = load_dictionary()
+
+    start = end = None
+    keywords: list = []
+    raw_where_parts: list = []
+    drills: list = DEFAULT_DRILLS.copy()
+    slug_parts: list = []
+
+    def _apply(opt: dict) -> None:
+        kw = opt.get("keyword")
+        where_raw = opt.get("where")
+        tb = opt.get("triggers_batch")
+        if kw:
+            keywords.append(kw)
+            slug_parts.append(opt["label"])
+        elif where_raw:
+            raw_where_parts.append(f"({where_raw})")
+            slug_parts.append(opt["label"].split("（")[0].strip())
+        if tb:
+            slug_parts.append(opt["label"])  # needed for batch condition check
+
+    for batch in batches:
+        cond = batch.get("condition")
+        if cond:
+            needed = cond.get("contains_any", [])
+            if not any(n in slug_parts for n in needed):
+                continue
+
+        print(f"\n{'━'*54}")
+        print(f"  {batch['title']}")
+        print(f"{'━'*54}")
+
+        for qid in batch["questions"]:
+            qdef = questions_def.get(qid)
+            if not qdef:
+                continue
+            qtype = qdef["type"]
+            opts = qdef.get("options", [])
+
+            print(f"\n  【{qdef['prompt']}】")
+            for i, opt in enumerate(opts, 1):
+                note = f"  ← {opt['note']}" if opt.get("note") else ""
+                print(f"    {i}. {opt['label']}{note}")
+
+            if qid == "time_range":
+                raw = input("▶ [1-4, 回车=近15个月]: ").strip()
+                idx = None
+                if raw:
+                    try:
+                        v = int(raw) - 1
+                        if 0 <= v < len(opts):
+                            idx = v
+                    except ValueError:
+                        pass
+                if idx is None:
+                    start, end = "2025-01-01", today
+                    slug_parts.append("近15个月")
+                elif opts[idx]["value"] == "custom":
+                    custom = input("  输入日期范围（YYYY-MM-DD ~ YYYY-MM-DD）: ").strip()
+                    ps = [p.strip() for p in custom.split("~")]
+                    start = ps[0]
+                    end = ps[1] if len(ps) >= 2 else today
+                    slug_parts.append(f"{start}至{end}")
+                else:
+                    val = opts[idx]["value"]
+                    start = val["start"]
+                    end = val["end"].replace("__today__", today)
+                    slug_parts.append(opts[idx]["label"].split("（")[0].strip())
+
+            elif qtype in ("single_choice", "single_choice_or_custom"):
+                chosen = _ask_single(qdef["prompt"], opts)
+                if chosen is not None and opts[chosen].get("value") != "all":
+                    _apply(opts[chosen])
+
+            elif qtype == "multi_select":
+                chosen_list = _ask_multi(qdef["prompt"], opts)
+                for i in chosen_list:
+                    _apply(opts[i])
+
+            elif qtype == "checklist":
+                chosen_list = _ask_multi(qdef["prompt"], opts)
+                if qid == "drill_dims" and chosen_list:
+                    drills = [opts[i]["value"] for i in chosen_list]
+
+    # 组装 WHERE
+    where_parts: list = []
+    if keywords:
+        kw_where, unresolved = resolve_keywords(keywords, dictionary)
+        if unresolved:
+            print(f"[ERROR] 关键词不在词典：{unresolved}", file=sys.stderr)
+            sys.exit(1)
+        if kw_where:
+            where_parts.append(kw_where)
+    where_parts.extend(raw_where_parts)
+
+    where_clause = " AND ".join(where_parts) if where_parts else "1=1"
+    # 去掉 slug 里来自 triggers_batch 的重复项（营业货车在 slug_parts 出现两次）
+    seen: set = set()
+    deduped = []
+    for p in slug_parts:
+        if p not in seen:
+            seen.add(p)
+            deduped.append(p)
+    slug = "_".join(deduped) if deduped else "全段诊断"
+
+    if start is None:
+        start, end = "2025-01-01", today
+
+    print(f"\n{'━'*54}")
+    print(f"  ✅ 参数确认")
+    print(f"{'━'*54}")
+    print(f"  时间:  {start} ~ {end}")
+    print(f"  WHERE: {where_clause}")
+    print(f"  slug:  {slug}")
+    print(f"  下钻:  {', '.join(drills)}")
+    confirm = input("\n▶ 确认执行？[Y/n]: ").strip().lower()
+    if confirm == "n":
+        print("[ABORT] 用户取消")
+        sys.exit(0)
+
+    return start, end, where_clause, slug, drills
+
+
 # ────────── Markdown 组装 ──────────
 
 def q(con, sql):
@@ -330,7 +500,36 @@ def main():
                         help=f"下钻维度，逗号分隔。可选：{','.join(DRILL_REGISTRY.keys())}")
     parser.add_argument("--valuation-date", default="2026-04-21", help="估值日")
     parser.add_argument("--dry-run", action="store_true", help="只解析参数，不实际跑查询")
+    parser.add_argument("--interactive", action="store_true",
+                        help="交互式问卷模式：逐批提问构建筛选条件（当 --where/--keywords 均未指定时自动触发）")
     args = parser.parse_args()
+
+    # --interactive 自动触发：需求模糊时（无 --where 且无 --keywords）
+    if not args.where and not args.keywords:
+        args.interactive = True
+
+    if args.interactive:
+        start, end, where_clause, slug, drill = run_interactive_mode(args.valuation_date)
+        args.start = start
+        args.end = end
+        args.slug = slug
+        args.drill = drill
+
+        print(f"\n=== 诊断参数（问卷填充）===")
+        print(f"  slug: {args.slug}")
+        print(f"  时间: {args.start} ~ {args.end}")
+        print(f"  WHERE: {where_clause}")
+        print(f"  下钻: {args.drill}")
+        print(f"  估值日: {args.valuation_date}")
+
+        if args.dry_run:
+            print("[DRY-RUN] 参数校验通过，未执行查询")
+            return
+
+        out_path = build_report(args, where_clause, False)
+        print(f"\n[OK] 报告已落盘：{out_path}")
+        print(f"     字符数 {len(out_path.read_text(encoding='utf-8')):,}")
+        return
 
     args.drill = [d.strip() for d in args.drill.split(",") if d.strip()]
 
