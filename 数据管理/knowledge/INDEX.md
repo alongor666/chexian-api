@@ -306,14 +306,18 @@ python3 数据管理/pipelines/diagnose_vehicle.py --filter "..." --skip 3,4
 
 输出: `数据分析报告/{title}_经营诊断_{years}_截至{max_date}.md`
 
-### 5.1b diagnose_segment.py — 细分车型发展口径诊断（v1.0, 2026-04-21）
+### 5.1b diagnose_segment.py — 细分车型发展口径诊断（v1.1, 2026-04-22）
 
 **路径**: `数据管理/pipelines/diagnose_segment.py`
 **共享模块**: `数据管理/pipelines/policy_age_dev.py`（CTE 构建器）
-**词典**: `数据管理/knowledge/rules/segment-dictionary.json`
+**词典**: `数据管理/knowledge/rules/segment-dictionary.json`（39 个关键词）
+**问卷**: `数据管理/knowledge/rules/segment-questionnaire.json`（11 题组，--interactive 模式）
 **Slash 命令**: `/diagnose-segment`
 
 ```bash
+# 方式 0：交互问卷（需求模糊时自动触发，或无任何参数时自动进入）
+python3 数据管理/pipelines/diagnose_segment.py --interactive
+
 # 方式 A：词典关键词（推荐）
 python3 数据管理/pipelines/diagnose_segment.py \
   --start 2025-01-01 --end 2026-04-20 \
