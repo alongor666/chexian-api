@@ -15,6 +15,7 @@
 | 全量更新（保费+赔付+报价） | daily.mjs all | `node 数据管理/daily.mjs all` |
 | 同步数据到 VPS | sync-vps.mjs | `node scripts/sync-vps.mjs` |
 | 诊断某类车型/客户 | diagnose_vehicle.py | `python3 数据管理/pipelines/diagnose_vehicle.py --filter "..."` |
+| **细分车型发展口径诊断（90/180/270/满期）** | **diagnose_segment.py** | **`python3 数据管理/pipelines/diagnose_segment.py --keywords "天然气,新车,牵引车,10吨以上" --start 2025-01-01 --end 2026-04-20`** |
 | 诊断某经代公司 | diagnose_agent.py | `python3 数据管理/pipelines/diagnose_agent.py --org 青羊 --agent "中升"` |
 | 生成维度表 | generate_dim_tables.py | `cd 数据管理 && python3 warehouse/dim/generate_dim_tables.py` |
 | 生成业务员映射 | generate_salesman_mapping.py | `cd 数据管理/warehouse/dim/业务员归属与规划 && python3 generate_salesman_mapping.py` |
@@ -304,6 +305,37 @@ python3 数据管理/pipelines/diagnose_vehicle.py --filter "..." --skip 3,4
 | 9 | s09_summary.py | 诊断总结（亮灯 + 关键发现 + 建议） |
 
 输出: `数据分析报告/{title}_经营诊断_{years}_截至{max_date}.md`
+
+### 5.1b diagnose_segment.py — 细分车型发展口径诊断（v1.0, 2026-04-21）
+
+**路径**: `数据管理/pipelines/diagnose_segment.py`
+**共享模块**: `数据管理/pipelines/policy_age_dev.py`（CTE 构建器）
+**词典**: `数据管理/knowledge/rules/segment-dictionary.json`
+**Slash 命令**: `/diagnose-segment`
+
+```bash
+# 方式 A：词典关键词（推荐）
+python3 数据管理/pipelines/diagnose_segment.py \
+  --start 2025-01-01 --end 2026-04-20 \
+  --keywords "天然气,新车,牵引车,10吨以上"
+
+# 方式 B：原生 WHERE
+python3 数据管理/pipelines/diagnose_segment.py \
+  --start 2025-01-01 --end 2026-04-20 \
+  --slug "my-segment" \
+  --where "is_new_car=TRUE AND truck_type='牵引'"
+```
+
+**产出**：四桩发展指标主表（90/180/270/满期）+ 6 个下钻维度（厂牌/省市/月份/时段/原因/损失类别）+ Top10 大案，落到 `数据分析报告/`。
+
+**与 diagnose_vehicle.py 的分工**：
+- `diagnose_vehicle.py`：板块化全量年份对比（适合宏观经营体检）
+- `diagnose_segment.py`：单 cohort 按保单年龄切四桩（适合"某批新车的赔付发展曲线"）
+
+**预设 wrapper**：
+- `diagnose_lng_tractor.py` — 天然气新车牵引车 10 吨+（调用 diagnose_segment.py）
+
+---
 
 ### 5.2 diagnose_agent.py — 经代公司诊断（v1.0）
 
