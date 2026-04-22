@@ -820,6 +820,7 @@ import {
   getSnapshotStats,
   getLatestEtlDate,
   setLatestEtlDate,
+  getSnapshotPurgeResult,
   SNAPSHOT_BUNDLES,
   permissionToScope,
 } from '../middleware/snapshot-serve.js';
@@ -899,6 +900,7 @@ router.get(
       data: {
         etlDate: getLatestEtlDate(),
         counters: stats,
+        lastPurge: getSnapshotPurgeResult(),
         bundles,
       },
     });
