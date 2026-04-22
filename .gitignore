@@ -134,3 +134,16 @@ output/playwright/
 .sage-wiki/
 sage-wiki
 .planning/
+
+# 编辑器 / 工具本地备份
+*.bak.*
+
+# 第三方 MCP 工具本地状态
+.smtcmp_json_db/
+
+# ETL 运行时分区元数据（每次 ETL 刷新）
+warehouse/**/_partition_meta.json
+数据管理/warehouse/**/_partition_meta.json
+
+# Copilot 本地模板工作区（个人资产，不入主仓库）
+copilot/
