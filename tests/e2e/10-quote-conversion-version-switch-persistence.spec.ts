@@ -24,8 +24,8 @@ test.describe.serial('报价转化版本切换与筛选保留', () => {
     await expect(page.getByText('版本 B · 旧车专题版')).toBeVisible({ timeout: 30000 });
     await expect(page.getByRole('tab', { name: '版本 B' })).toHaveAttribute('aria-selected', 'true');
 
-    await page.getByLabelText('电销').selectOption('电销');
-    await expect(page.getByLabelText('电销')).toHaveValue('电销');
+    await page.getByLabel('电销').selectOption('电销');
+    await expect(page.getByLabel('电销')).toHaveValue('电销');
 
     await page.getByRole('tab', { name: '版本 A' }).click();
     await expect(page.getByRole('tab', { name: '版本 A' })).toHaveAttribute('aria-selected', 'true');
@@ -36,6 +36,6 @@ test.describe.serial('报价转化版本切换与筛选保留', () => {
     await page.getByRole('tab', { name: '版本 B' }).click();
     await expect(page).toHaveURL(/version=B/);
     await expect(page.getByText('版本 B · 旧车专题版')).toBeVisible({ timeout: 30000 });
-    await expect(page.getByLabelText('电销')).toHaveValue('电销');
+    await expect(page.getByLabel('电销')).toHaveValue('电销');
   });
 });

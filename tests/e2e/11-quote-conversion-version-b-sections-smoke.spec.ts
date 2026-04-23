@@ -30,7 +30,7 @@ test.describe.serial('报价转化版本 B 专题冒烟', () => {
       const tab = page.getByRole('tab', { name: section.tab, exact: true });
       await expect(tab).toBeVisible();
       await tab.click();
-      await expect(page.getByText(section.title)).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole('heading', { name: section.title }).first()).toBeVisible({ timeout: 15000 });
     }
   });
 });
