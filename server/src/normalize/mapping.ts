@@ -56,6 +56,7 @@ export type DomainField =
   | 'tonnage_value'
   | 'no_claim_bonus'
   | 'compulsory_ncd'
+  | 'compulsory_ncd_factor'
   | 'commercial_ncd'
   | 'highway_risk_level'
   | 'insurance_score';
@@ -115,6 +116,7 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   tonnage_value: ['tonnage_value', 'tonnageValue', '吨位数', '实际吨位'],
   no_claim_bonus: ['no_claim_bonus', 'noClaimBonus', '无赔款优待记录', 'NCD记录'],
   compulsory_ncd: ['compulsory_ncd', 'compulsoryNcd', '交强险NCD', '交强险NCD分组', '交强险无赔款系数'],
+  compulsory_ncd_factor: ['compulsory_ncd_factor', 'compulsoryNcdFactor', '交强险NCD浮动系数', '交强险NCD系数'],
   commercial_ncd: ['commercial_ncd', 'commercialNcd', '商业险NCD', '商业险无赔款系数'],
   highway_risk_level: ['highway_risk_level', 'highwayRiskLevel', '高速风险等级'],
   insurance_score: ['insurance_score', 'insuranceScore', '车险分分数', '车险评分'],
@@ -157,6 +159,7 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'tonnage_value',
   'no_claim_bonus',
   'compulsory_ncd',
+  'compulsory_ncd_factor',
   'commercial_ncd',
   'highway_risk_level',
   'insurance_score',
@@ -213,6 +216,7 @@ export interface ColumnMapping {
   tonnage_value?: string; // 吨位数
   no_claim_bonus?: string; // 无赔款优待记录
   compulsory_ncd?: string; // 交强险NCD
+  compulsory_ncd_factor?: string; // 交强险NCD浮动系数
   commercial_ncd?: string; // 商业险NCD
   highway_risk_level?: string; // 高速风险等级
   insurance_score?: string; // 车险分分数
@@ -322,6 +326,7 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   tonnage_value: 'tonnage_value',
   no_claim_bonus: 'no_claim_bonus',
   compulsory_ncd: 'compulsory_ncd',
+  compulsory_ncd_factor: 'compulsory_ncd_factor',
   commercial_ncd: 'commercial_ncd',
   highway_risk_level: 'highway_risk_level',
   insurance_score: 'insurance_score',

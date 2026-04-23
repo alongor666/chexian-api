@@ -247,9 +247,11 @@ export function validateDataQuality(
 // ── 3. 生成 etl_fields.json（供 transform.py 读取）──
 function generateEtlFields() {
   // cn_to_en_mapping: sourceColumn(源Excel中文列名) → id(英文 snake_case Parquet 列名) 的一对一映射
-  // 注意：只用 sourceColumn，不用 aliases，避免 DataFrame 出现重名列
+  // 派生字段（derived: true）没有源列，跳过
   const cnToEn = {};
   for (const f of fields) {
+    if (f.derived) continue;
+    if (!f.sourceColumn) continue;
     cnToEn[f.sourceColumn] = f.id;
   }
 
