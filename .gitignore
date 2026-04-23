@@ -3,8 +3,8 @@
 .claude/worktrees/
 
 # 第三方 Claude Code 插件本地副本（gstack/codex/browse 等，非项目资产，体积 350MB+）
-# 保留项目特定的 skill .md 文件（accident-profile-report / incident-rate-development / README）
-.claude/skills/*/
+# 项目原创保留：.claude/skills/*.md 文件；第三方 skill（目录+gstack 旧版 symlink）全部忽略
+.claude/skills/*
 !.claude/skills/*.md
 
 # 本地 plans 目录（一次性规划文件）
