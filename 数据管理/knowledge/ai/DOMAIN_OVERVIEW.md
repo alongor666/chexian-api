@@ -12,7 +12,7 @@
 
 | 域 ID | 域名称 | DuckDB 关系 | 行数 | JOIN 键 | API 路由 | 前端页面 | 完整度 |
 |--------|--------|-------------|------|---------|----------|----------|--------|
-| premium | 保费（主数据） | PolicyFact → PolicyFactRealtime (TABLE) | 354万 | policy_no | /api/query/{kpi,trend,cost,growth,...} 21+ | 几乎所有页面 | 🟢 |
+| premium | 保费（主数据） | PolicyFact → PolicyFactRealtime (TABLE) | 见 QUICK_REFERENCE | policy_no | /api/query/{kpi,trend,cost,growth,...} 21+ | 几乎所有页面 | 🟢 |
 | claims_detail | 赔案明细 | ClaimsDetail (VIEW) + ClaimsAgg (TABLE) | 25.4万 | claim_no / policy_no | /api/query/claims-detail/* (10端点) | /#/claims-detail | 🟢 |
 | cross_sell | 交叉销售 | CrossSellFact (TABLE) → CrossSellDailyAgg (TABLE) | ~40万 | policy_no | /api/query/cross-sell* (7端点) | /#/specialty (tab=cross-sell) | 🟢 |
 | quotes_v2 | 报价清单(v2) | — (经 QuoteConversion VIEW) | ~48万 | vehicle_frame_no | /api/query/quote-conversion/* (7端点) | /#/quote-conversion | 🟢 |

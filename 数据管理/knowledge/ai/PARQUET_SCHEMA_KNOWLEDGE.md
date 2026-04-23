@@ -2,7 +2,7 @@
 
 **文档性质**: AI 必读知识源（NL2SQL 语义理解基础）
 **更新时间**: 2026-04-09
-**数据规模**: ~354万条原始记录（含交强商业分行）/ ~150万唯一保单 / 42个 PolicyFact 字段（4 个分片 Parquet，`warehouse/fact/policy/current/`）
+**数据规模**: 以 `knowledge/QUICK_REFERENCE.md` 的自动刷新结果为准（`warehouse/fact/policy/current/` 多分片 Parquet）
 
 ---
 
