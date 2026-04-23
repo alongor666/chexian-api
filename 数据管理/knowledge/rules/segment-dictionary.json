@@ -1,0 +1,94 @@
+{
+  "_doc": "业务口径词典 — 自然语言关键词 → SQL WHERE 子句。用于 /diagnose-segment 命令。词典之外的词必须 AskUserQuestion 确认。",
+  "_update_protocol": "新增关键词流程：1) DuckDB 探查该字段实际枚举值（别凭记忆） 2) 字段名从 field-registry/fields.json 取英文 id 3) 优先等值查询（而非 LIKE） 4) 更新此文件 + 在 _changelog 登记",
+  "version": "1.0",
+  "generated_at": "2026-04-21",
+  "_changelog": [
+    {"version": "1.0", "date": "2026-04-21", "note": "初版，覆盖 2025-2026 高频细分维度"}
+  ],
+  "keywords": {
+    "天然气": {
+      "where": "fuel_type = '天然气(NG/CNG/LNG)'",
+      "category": "燃料",
+      "note": "fuel_type 在 2025 有 71% 覆盖率（29% 空值），目标段内通常无空"
+    },
+    "汽油": {"where": "fuel_type = '汽油'", "category": "燃料"},
+    "柴油": {"where": "fuel_type = '柴油'", "category": "燃料"},
+    "纯电动": {
+      "where": "fuel_type IN ('纯电动(精友)', '纯电动(行业)')",
+      "category": "燃料",
+      "note": "合并精友和行业两个来源"
+    },
+    "插电混动": {
+      "where": "fuel_type IN ('插电式混合动力(精友)', '插电式混合动力(行业)')",
+      "category": "燃料"
+    },
+    "新能源": {
+      "where": "is_nev = TRUE",
+      "category": "燃料",
+      "note": "新能源标识字段，包括 BEV/PHEV/HEV/REEV 等"
+    },
+    "两用燃料": {"where": "fuel_type = '两用燃料'", "category": "燃料"},
+    "10吨以上": {"where": "tonnage_segment = '10吨以上'", "category": "吨位"},
+    "9-10吨": {"where": "tonnage_segment = '9-10吨'", "category": "吨位"},
+    "2-9吨": {"where": "tonnage_segment = '2-9吨'", "category": "吨位"},
+    "1-2吨": {"where": "tonnage_segment = '1-2吨'", "category": "吨位"},
+    "1吨以下": {"where": "tonnage_segment = '1吨以下'", "category": "吨位"},
+    "大货车": {
+      "where": "tonnage_segment IN ('9-10吨', '10吨以上')",
+      "category": "吨位",
+      "note": "9 吨以上营业货车的通用聚合口径"
+    },
+    "牵引车": {
+      "where": "truck_type = '牵引'",
+      "category": "货车类型",
+      "note": "用 truck_type 枚举等值查询（含半挂牵引/危险品牵引/天然气牵引等），与 vehicle_model LIKE '%牵引%' 在 2025 完全等价"
+    },
+    "自卸车": {"where": "truck_type = '自卸（非垃圾）'", "category": "货车类型"},
+    "厢式货车": {"where": "truck_type = '厢式'", "category": "货车类型"},
+    "平板货车": {"where": "truck_type = '平板'", "category": "货车类型"},
+    "仓栅车": {"where": "truck_type = '仓栅'", "category": "货车类型"},
+    "冷藏车": {"where": "truck_type = '冷藏'", "category": "货车类型"},
+    "普通货车": {"where": "truck_type = '普通载货汽车'", "category": "货车类型"},
+    "新车": {"where": "is_new_car = TRUE", "category": "车辆属性"},
+    "旧车": {"where": "is_new_car = FALSE", "category": "车辆属性"},
+    "过户车": {"where": "is_transfer = TRUE", "category": "车辆属性"},
+    "续保车": {
+      "where": "renewal_policy_no IS NOT NULL AND renewal_policy_no <> ''",
+      "category": "车辆属性",
+      "note": "以续保单号非空为准（is_renewal 字段已被识别为不可靠）"
+    },
+    "非营业个人客车": {"where": "customer_category = '非营业个人客车'", "category": "客户类别"},
+    "摩托车": {"where": "customer_category = '摩托车'", "category": "客户类别"},
+    "非营业货车": {"where": "customer_category = '非营业货车'", "category": "客户类别"},
+    "非营业企业客车": {"where": "customer_category = '非营业企业客车'", "category": "客户类别"},
+    "营业货车": {"where": "customer_category = '营业货车'", "category": "客户类别"},
+    "营业出租租赁": {"where": "customer_category = '营业出租租赁'", "category": "客户类别"},
+    "特种车": {"where": "customer_category = '特种车'", "category": "客户类别"},
+    "营业公路客运": {"where": "customer_category = '营业公路客运'", "category": "客户类别"},
+    "挂车": {"where": "customer_category = '挂车'", "category": "客户类别"},
+    "交强险": {"where": "insurance_type = '交强险'", "category": "险别"},
+    "商业险": {"where": "insurance_type = '商业保险'", "category": "险别"},
+    "单交": {"where": "coverage_combination = '单交'", "category": "险别组合"},
+    "交三": {"where": "coverage_combination = '交三'", "category": "险别组合"},
+    "主全": {"where": "coverage_combination = '主全'", "category": "险别组合"},
+    "电销": {"where": "is_telemarketing = TRUE", "category": "渠道"},
+    "2025年以来": {"where": "insurance_start_date >= DATE '2025-01-01'", "category": "时间"},
+    "2026年以来": {"where": "insurance_start_date >= DATE '2026-01-01'", "category": "时间"}
+  },
+  "composite_examples": {
+    "_doc": "典型组合查询示例 — 展示如何用 AND 拼多个关键词",
+    "2025年以来承保的天然气新车牵引车10吨以上": [
+      "2025年以来",
+      "天然气",
+      "新车",
+      "牵引车",
+      "10吨以上"
+    ],
+    "2026年非营业个人客车新能源车": [
+      "2026年以来",
+      "非营业个人客车",
+      "新能源"
+    ]
+  }
+}

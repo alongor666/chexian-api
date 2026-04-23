@@ -122,6 +122,7 @@ def _enrich_insurance_start_date(df: pd.DataFrame, policy_dir: str | None) -> pd
         )
 
     # Step 4: 派生 insurance_year（分区键）
+    df['insurance_start_date'] = pd.to_datetime(df['insurance_start_date'], errors='coerce')
     df['insurance_year'] = df['insurance_start_date'].dt.year.astype('Int64')
     fallback_count = len(df) - joined_count
     null_year = df['insurance_year'].isna().sum()

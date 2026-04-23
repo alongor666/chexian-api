@@ -190,8 +190,8 @@ setInterval(() => {
 }, 5 * 60 * 1000).unref(); // 5 分钟一次，unref 不阻止进程退出
 
 const LOCK_CONFIG = {
-  MAX_ATTEMPTS: 10,                    // 连续失败超过10次触发锁定
-  LOCK_DURATION_MS: 15 * 60 * 1000,   // 锁定15分钟
+  MAX_ATTEMPTS: 30,                    // 连续失败超过30次触发锁定
+  LOCK_DURATION_MS: 2 * 60 * 1000,    // 锁定2分钟
 };
 
 /**
