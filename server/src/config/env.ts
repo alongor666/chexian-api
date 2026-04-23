@@ -126,3 +126,16 @@ export const opsEnv = {
   /** 审计日志文件路径 */
   AUDIT_LOG_PATH: process.env.AUDIT_LOG_PATH ?? '',
 } as const;
+
+// ─── 测试配置 ──────────────────────────────────────────────────────────────────
+
+const _e2eTestMode = process.env.E2E_TEST_MODE ?? '';
+// 生产环境硬拦截：E2E_TEST_MODE=1 会削弱登录限流（rateLimiter loginLimiter skip）
+if (isProd && _e2eTestMode === '1') {
+  throw new Error('[env] E2E_TEST_MODE=1 禁止在生产环境启用（会削弱登录限流防护）');
+}
+
+export const testEnv = {
+  /** E2E 测试模式：仅非生产环境 + 值为 '1' 时生效，用于绕过登录限流 */
+  E2E_TEST_MODE: _e2eTestMode,
+} as const;
