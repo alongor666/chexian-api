@@ -62,6 +62,7 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   tonnage_value: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'INTEGER'], // 吨位数
   no_claim_bonus: ['VARCHAR', 'TEXT', 'STRING'], // 无赔款优待记录
   compulsory_ncd: ['VARCHAR', 'TEXT', 'STRING'], // 交强险NCD
+  compulsory_ncd_factor: ['DOUBLE', 'DECIMAL', 'FLOAT'], // 交强险NCD浮动系数
   commercial_ncd: ['VARCHAR', 'TEXT', 'STRING'], // 商业险NCD
   highway_risk_level: ['VARCHAR', 'TEXT', 'STRING'], // 高速风险等级
   insurance_score: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'VARCHAR'], // 车险分分数

@@ -246,18 +246,19 @@ export function validateDataQuality(
 
 // ── 3. 生成 etl_fields.json（供 transform.py 读取）──
 function generateEtlFields() {
-  // cn_to_en_mapping: parquetColumn(中文) → id(英文 snake_case) 的一对一映射
-  // 注意：只用 parquetColumn，不用 aliases，避免 DataFrame 出现重名列
-  // （aliases 是给 column-normalizer 运行时识别输入用的，不是 ETL rename 用的）
+  // cn_to_en_mapping: sourceColumn(源Excel中文列名) → id(英文 snake_case Parquet 列名) 的一对一映射
+  // 派生字段（derived: true）没有源列，跳过
   const cnToEn = {};
   for (const f of fields) {
-    cnToEn[f.parquetColumn] = f.id;
+    if (f.derived) continue;
+    if (!f.sourceColumn) continue;
+    cnToEn[f.sourceColumn] = f.id;
   }
 
   return JSON.stringify({
     _doc: "⚠️ AUTO-GENERATED from field-registry/fields.json — DO NOT EDIT",
-    core_fields: registry.etl.coreParquetColumns,
-    optional_fields: registry.etl.optionalParquetColumns,
+    core_fields: registry.etl.coreSourceColumns,
+    optional_fields: registry.etl.optionalSourceColumns,
     cn_to_en_mapping: cnToEn,
   }, null, 2) + '\n';
 }

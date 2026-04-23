@@ -17,7 +17,7 @@
         {
           "id": "report_date",
           "label": "统计时间",
-          "parquetColumn": "统计时间",
+          "sourceColumn": "统计时间",
           "required": false,
           "dataTypes": ["DATE", "TIMESTAMP"],
           "description": "当天快照日期"
@@ -25,7 +25,7 @@
         {
           "id": "org_level_3",
           "label": "修理厂归属中支",
-          "parquetColumn": "修理厂归属中支",
+          "sourceColumn": "修理厂归属中支",
           "required": false,
           "dataTypes": ["VARCHAR"],
           "description": "三级机构（与 PolicyFact.org_level_3 语义一致）"
@@ -33,7 +33,7 @@
         {
           "id": "cooperation_status",
           "label": "当天合作状态",
-          "parquetColumn": "当天合作状态",
+          "sourceColumn": "当天合作状态",
           "required": true,
           "dataTypes": ["VARCHAR"],
           "description": "7 态枚举：1生效中/0暂停合作/3退回修改/5待复核/7已撤销/8失效/无合作",
@@ -45,14 +45,14 @@
         {
           "id": "channel_type",
           "label": "渠道类型",
-          "parquetColumn": "渠道类型",
+          "sourceColumn": "渠道类型",
           "required": false,
           "dataTypes": ["VARCHAR"]
         },
         {
           "id": "repair_shop_name",
           "label": "修理厂名称",
-          "parquetColumn": "修理厂名称",
+          "sourceColumn": "修理厂名称",
           "required": true,
           "dataTypes": ["VARCHAR"],
           "description": "格式：前 8 位=编码 + 中文名",
@@ -63,28 +63,28 @@
         {
           "id": "is_4s_shop",
           "label": "是否4S店",
-          "parquetColumn": "是否4S店",
+          "sourceColumn": "是否4S店",
           "required": false,
           "dataTypes": ["BOOLEAN"]
         },
         {
           "id": "province",
           "label": "修理厂所在省",
-          "parquetColumn": "修理厂所在省",
+          "sourceColumn": "修理厂所在省",
           "required": false,
           "dataTypes": ["VARCHAR"]
         },
         {
           "id": "city",
           "label": "修理厂所在市",
-          "parquetColumn": "修理厂所在市",
+          "sourceColumn": "修理厂所在市",
           "required": false,
           "dataTypes": ["VARCHAR"]
         },
         {
           "id": "district",
           "label": "修理厂所在区",
-          "parquetColumn": "修理厂所在区",
+          "sourceColumn": "修理厂所在区",
           "required": false,
           "dataTypes": ["VARCHAR"],
           "description": "散点图 X 轴维度"
@@ -92,7 +92,7 @@
         {
           "id": "damage_assessment_amount",
           "label": "核损金额",
-          "parquetColumn": "核损金额",
+          "sourceColumn": "核损金额",
           "required": false,
           "dataTypes": ["DOUBLE"],
           "description": "= 维修产值（业务口径，用于修保比计算）"
@@ -100,7 +100,7 @@
         {
           "id": "parts_discount_rate",
           "label": "换件折扣率",
-          "parquetColumn": "换件折扣率",
+          "sourceColumn": "换件折扣率",
           "required": false,
           "dataTypes": ["DOUBLE"],
           "description": "0-1 区间"
@@ -108,7 +108,7 @@
         {
           "id": "net_premium",
           "label": "签单净保费",
-          "parquetColumn": "签单净保费",
+          "sourceColumn": "签单净保费",
           "required": false,
           "dataTypes": ["DOUBLE"]
         }
@@ -129,7 +129,7 @@
         {
           "id": "subject_repair_shop",
           "label": "标的汽修厂",
-          "parquetColumn": "标的汽修厂",
+          "sourceColumn": "标的汽修厂",
           "required": false,
           "dataTypes": ["VARCHAR"],
           "description": "标的车送修网点（与 third_party_repair 区分：后者为三者汽修厂）",

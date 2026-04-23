@@ -1034,6 +1034,35 @@ def save_to_parquet(df, output_path):
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"   ⚠️ cn_to_en_mapping 读取失败，保留中文列名: {e}")
 
+    # ── 派生字段物化：遍历字段注册表 derived:true 字段，按 derivation.type 执行 ──
+    # 派生字段规则是注册表的一部分（唯一事实源），此处仅做执行
+    registry_path = Path(__file__).resolve().parent.parent.parent / 'server/src/config/field-registry/fields.json'
+    try:
+        with open(registry_path) as f:
+            registry = json.load(f)
+        derived_fields = [fd for fd in registry.get('fields', []) if fd.get('derived')]
+        for fd in derived_fields:
+            fid = fd['id']
+            rule = fd.get('derivation', {})
+            rtype = rule.get('type')
+            source = rule.get('source')
+            if not source or source not in df.columns:
+                print(f"   ⚠️ 派生字段 {fid} 跳过（源列 {source} 缺失）")
+                continue
+            if rtype == 'prefix_map':
+                prefix_len = rule.get('prefixLength', 2)
+                mapping = rule.get('mapping', {})
+                default_value = rule.get('defaultValue')
+                df[fid] = df[source].astype(str).str[:prefix_len].map(mapping)
+                if default_value is not None:
+                    df[fid] = df[fid].fillna(default_value)
+                notna = df[fid].notna().sum()
+                print(f"   派生字段: {fid} ← {source}[:{ prefix_len}] 映射完成 ({notna:,} 条非空)")
+            else:
+                print(f"   ⚠️ 派生字段 {fid} 跳过（未支持的 derivation.type: {rtype}）")
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"   ⚠️ 派生字段注册表读取失败，跳过派生: {e}")
+
     print(f"   输出文件: {output_path}")
     print(f"   记录数: {len(df):,}")
     print(f"   字段数: {len(df.columns)}")
