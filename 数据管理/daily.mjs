@@ -8,7 +8,7 @@
  *   daily   — 日增量小文件，转到 staging/（不进 current/）
  *
  * 输出目录结构：
- *   warehouse/fact/policy/current/   ← 保单+保费（4个分片文件）
+ *   warehouse/fact/policy/current/   ← 保单+保费（多分片文件）
  *   warehouse/fact/policy/staging/   ← 日增量暂存（周更时清空）
  *   warehouse/fact/claims/latest.parquet  ← 赔付+费用（每周全量替换）
  *   warehouse/fact/quotes/latest.parquet  ← 报价状态（每日全量替换）
@@ -38,6 +38,7 @@ import {
   getPartitionedRowCount,
   getPartitionedColumnCount,
 } from './pipelines/parquet_stats.mjs';
+import { collectPolicyCurrentStats, syncQuickReferenceFile } from './pipelines/quick_reference.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -175,6 +176,7 @@ function cleanStaging(stagingDir) {
 // ── data-sources.json 自动更新 ──
 
 const DATA_SOURCES_PATH = join(__dirname, 'data-sources.json');
+const QUICK_REFERENCE_PATH = join(__dirname, 'knowledge/QUICK_REFERENCE.md');
 
 function updateDataSources(domainId, { rowCount, fieldCount, dataRange } = {}) {
   try {
@@ -192,6 +194,20 @@ function updateDataSources(domainId, { rowCount, fieldCount, dataRange } = {}) {
     log('green', `  📋 data-sources.json 已更新: ${domainId} (rows=${rowCount?.toLocaleString() ?? '-'})`);
   } catch (e) {
     log('yellow', `  ⚠️ data-sources.json 更新失败: ${e.message}`);
+  }
+}
+
+function updateQuickReference(python, policyCurrentDir) {
+  try {
+    const stats = collectPolicyCurrentStats(python, policyCurrentDir);
+    if (!stats) {
+      log('yellow', '  ⚠️ QUICK_REFERENCE.md 跳过：未找到 policy/current/*.parquet');
+      return;
+    }
+    const line = syncQuickReferenceFile(QUICK_REFERENCE_PATH, stats);
+    if (line) log('green', `  📝 QUICK_REFERENCE.md 已更新: ${line}`);
+  } catch (e) {
+    log('yellow', `  ⚠️ QUICK_REFERENCE.md 更新失败: ${e.message}`);
   }
 }
 
@@ -877,6 +893,7 @@ async function main() {
     }
     if (totalRows > 0) updateDataSources('premium', { rowCount: totalRows });
   }
+  updateQuickReference(python, policyCurrentDir);
 
   console.log('');
 

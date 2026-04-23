@@ -15,7 +15,7 @@ daily.mjs（入口，3层分片调度）
     ↓
 transform.py（核心转换引擎）
     ↓
-warehouse/fact/policy/current/*.parquet（4 个分片文件）
+warehouse/fact/policy/current/*.parquet（多分片文件）
     ↓
 sync-vps.mjs → VPS server/data/
     ↓

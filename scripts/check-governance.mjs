@@ -42,6 +42,10 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, execSync } from 'child_process';
+import {
+  collectPolicyCurrentStats,
+  extractQuickReferenceStats,
+} from '../数据管理/pipelines/quick_reference.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1018,41 +1022,63 @@ function checkKnowledgeDataConsistency() {
 
   const reportPath = path.join(ROOT_DIR, '数据管理', '数据分析报告', '转换质量报告.json');
   const qrPath = path.join(ROOT_DIR, '数据管理', 'knowledge', 'QUICK_REFERENCE.md');
+  const policyCurrentDir = path.join(ROOT_DIR, '数据管理', 'warehouse', 'fact', 'policy', 'current');
 
-  if (!fs.existsSync(reportPath)) {
-    warning('转换质量报告不存在，跳过知识库一致性检查');
-    return true;
-  }
   if (!fs.existsSync(qrPath)) {
     warning('QUICK_REFERENCE.md 不存在，跳过知识库一致性检查');
     return true;
   }
 
   try {
-    const report = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
     const qrText = fs.readFileSync(qrPath, 'utf-8');
+    const qrStats = extractQuickReferenceStats(qrText);
+    if (!qrStats) {
+      error('QUICK_REFERENCE.md 未找到可解析的数据规模/字段/分片声明');
+      return false;
+    }
 
+    const policyStats = collectPolicyCurrentStats(process.env.PYTHON || 'python3', policyCurrentDir);
+    if (policyStats) {
+      const expectedRoundedRows = Math.round(policyStats.rowCount / 10_000) * 10_000;
+      const mismatches = [];
+      if (qrStats.rowCountApprox !== expectedRoundedRows) {
+        mismatches.push(`行数 ${qrStats.rowCountApprox.toLocaleString()} vs 实际约 ${expectedRoundedRows.toLocaleString()}`);
+      }
+      if (qrStats.fieldCount !== policyStats.fieldCount) {
+        mismatches.push(`字段 ${qrStats.fieldCount} vs 实际 ${policyStats.fieldCount}`);
+      }
+      if (qrStats.shardCount !== policyStats.shardCount) {
+        mismatches.push(`分片 ${qrStats.shardCount} vs 实际 ${policyStats.shardCount}`);
+      }
+      if (mismatches.length > 0) {
+        error(`知识库数据规模不一致: ${mismatches.join('；')}`);
+        console.log('    修复: 运行 node 数据管理/daily.mjs，或用真实 policy/current 分片刷新 QUICK_REFERENCE.md');
+        return false;
+      }
+
+      success(`知识库数据规模一致（约 ${expectedRoundedRows.toLocaleString()} 行 / ${policyStats.fieldCount} 字段 / ${policyStats.shardCount} 分片）`);
+      return true;
+    }
+
+    if (!fs.existsSync(reportPath)) {
+      warning('缺少 policy/current parquet 与转换质量报告，跳过知识库一致性检查');
+      return true;
+    }
+
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
     const reportCols = report.basic_stats?.columns;
     if (!reportCols) {
       warning('转换质量报告缺少 basic_stats.columns，跳过');
       return true;
     }
 
-    // 从 QUICK_REFERENCE.md 提取声称的字段数
-    const colMatch = qrText.match(/(\d+)\s*字段/);
-    if (!colMatch) {
-      warning('QUICK_REFERENCE.md 未找到字段数声明，跳过');
-      return true;
-    }
-    const qrCols = parseInt(colMatch[1], 10);
-
-    if (Math.abs(reportCols - qrCols) > 3) {
-      error(`知识库数据规模不一致: 转换质量报告 ${reportCols} 字段 vs QUICK_REFERENCE.md ${qrCols} 字段（差 ${Math.abs(reportCols - qrCols)}）`);
-      console.log(`    修复: 运行 node 数据管理/daily.mjs（transform.py 会自动同步 QUICK_REFERENCE.md）`);
+    if (Math.abs(reportCols - qrStats.fieldCount) > 3) {
+      error(`知识库数据规模不一致: 转换质量报告 ${reportCols} 字段 vs QUICK_REFERENCE.md ${qrStats.fieldCount} 字段（差 ${Math.abs(reportCols - qrStats.fieldCount)}）`);
+      console.log('    修复: 运行 node 数据管理/daily.mjs，或用真实 policy/current 分片刷新 QUICK_REFERENCE.md');
       return false;
     }
 
-    success(`知识库数据规模一致（${reportCols} 字段）`);
+    success(`知识库数据规模一致（${reportCols} 字段；未发现本地 policy/current 分片，已跳过行数/分片校验）`);
     return true;
   } catch (e) {
     warning(`知识库一致性检查异常: ${e.message}`);
