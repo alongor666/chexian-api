@@ -38,6 +38,7 @@ export default defineConfig({
       ...process.env,
       NODE_ENV: process.env.NODE_ENV ?? 'development',
       CORS_ORIGIN: process.env.CORS_ORIGIN ?? LOCAL_CORS_ORIGINS,
+      E2E_TEST_MODE: '1',
     },
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,

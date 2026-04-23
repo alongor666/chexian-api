@@ -12,6 +12,19 @@
 
 import { rateLimit } from 'express-rate-limit';
 import { AppError } from './error.js';
+import { testEnv } from '../config/env.js';
+
+/**
+ * 限流 skip 判定（C4 组合策略，通用于所有限流器）
+ * 顺序：生产硬拒 → E2E 显式开关 → 本地 localhost 默认跳过
+ * 生产环境永远不会走到后两个分支（env.ts 启动时已拦截 E2E_TEST_MODE=1）
+ */
+function shouldSkipRateLimit(req: { ip?: string }): boolean {
+  if (process.env.NODE_ENV === 'production') return false;
+  if (testEnv.E2E_TEST_MODE === '1') return true;
+  const ip = req.ip ?? '';
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
 
 // ============================================
 // 限流配置
@@ -52,8 +65,8 @@ export const apiLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // 跳过健康检查
-  skip: (req) => req.path === '/health',
+  // 跳过健康检查 + C4 组合策略（生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过）
+  skip: (req) => req.path === '/health' || shouldSkipRateLimit(req),
   // 使用 IP + 用户 ID 作为键（已登录用户更宽松）
   keyGenerator: (req) => {
     const ip = req.ip || req.connection.remoteAddress || 'unknown';
@@ -76,6 +89,8 @@ export const loginLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // C4 组合策略：生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过
+  skip: shouldSkipRateLimit,
   // 使用 IP 作为键
   keyGenerator: (req) => req.ip || req.connection.remoteAddress || 'unknown',
   // 登录成功后重置计数（需要配合登录逻辑）
@@ -102,6 +117,8 @@ export const queryLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // C4 组合策略：生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过
+  skip: shouldSkipRateLimit,
   keyGenerator: (req) => {
     const ip = req.ip || req.connection.remoteAddress || 'unknown';
     const userId = (req as any).user?.userId || '';
@@ -123,6 +140,8 @@ export const aiLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // C4 组合策略：生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过
+  skip: shouldSkipRateLimit,
   keyGenerator: (req) => {
     const ip = req.ip || req.connection.remoteAddress || 'unknown';
     const userId = (req as any).user?.userId || '';
