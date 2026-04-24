@@ -7,6 +7,47 @@
 
 import { escapeSqlValue } from '../utils/security.js';
 
+/**
+ * B252 反向 JOIN 去重模板
+ *
+ * 背景：`FROM ClaimsDetail c JOIN PolicyFact p` 模式会因 PolicyFact 同 policy_no
+ * 存在原单+批改多行，使 `COUNT(*)` / `SUM(c.reserve_amount)` 被乘倍（全库虚增 4-5%）。
+ *
+ * 修复：替换为按 policy_no 去重后的子查询。外层 WHERE 继续用 `p.org_level_3 = ...`
+ * 等字段，子查询带出 `buildPolicyWhere` 引用的所有结构字段 + 展示字段。
+ *
+ * 口径：`GROUP BY policy_no HAVING SUM(premium) > 0`——与 claims-heatmap / Phase 1
+ * 统一（排除全退保 / 负向批改净额≤0）。此处仅按 policy_no 聚合（保单号年度唯一），
+ * 不引入 insurance_start_date 分组，避免同一保单跨年批改被拆。
+ *
+ * `insurance_grade` / `commercial_pricing_factor` 批改可能变值，优先取原单值（决策 3）。
+ */
+const DEDUPED_POLICY_SUBQUERY = `(
+  SELECT
+    policy_no,
+    SUM(premium) AS premium,
+    SUM(COALESCE(fee_amount, 0)) AS fee_amount,
+    ANY_VALUE(org_level_3) AS org_level_3,
+    ANY_VALUE(customer_category) AS customer_category,
+    ANY_VALUE(coverage_combination) AS coverage_combination,
+    ANY_VALUE(is_nev) AS is_nev,
+    ANY_VALUE(is_transfer) AS is_transfer,
+    ANY_VALUE(is_new_car) AS is_new_car,
+    ANY_VALUE(is_renewal) AS is_renewal,
+    ANY_VALUE(tonnage_segment) AS tonnage_segment,
+    ANY_VALUE(vehicle_model) AS vehicle_model,
+    ANY_VALUE(plate_no) AS plate_no,
+    ANY_VALUE(salesman_name) AS salesman_name,
+    ANY_VALUE(insurance_start_date) AS insurance_start_date,
+    COALESCE(
+      ANY_VALUE(CASE WHEN premium > 0 THEN insurance_grade END),
+      ANY_VALUE(insurance_grade)
+    ) AS insurance_grade
+  FROM PolicyFact
+  GROUP BY policy_no
+  HAVING SUM(premium) > 0
+)`;
+
 // ── 类型 ──
 
 export interface ClaimsDetailFilters {
@@ -128,7 +169,7 @@ export function generatePendingOverviewQuery(filters: ClaimsDetailFilters): stri
       ROUND(SUM(c.reserve_vehicle_amount) / 1e4, 0) AS vehicle_wan,
       ROUND(SUM(c.reserve_property_amount) / 1e4, 0) AS property_wan
     FROM ClaimsDetail c
-    JOIN PolicyFact p ON c.policy_no = p.policy_no
+    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
     GROUP BY c.claim_status
   `;
@@ -149,7 +190,7 @@ export function generatePendingByOrgQuery(filters: ClaimsDetailFilters): string 
       ROUND(AVG(DATEDIFF('day', c.accident_time, CURRENT_DATE)), 0) AS avg_pending_days,
       MAX(DATEDIFF('day', c.accident_time, CURRENT_DATE)) AS max_pending_days
     FROM ClaimsDetail c
-    JOIN PolicyFact p ON c.policy_no = p.policy_no
+    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
     GROUP BY p.org_level_3
     ORDER BY reserve_wan DESC
@@ -181,7 +222,7 @@ export function generatePendingAgingQuery(filters: ClaimsDetailFilters): string 
       ROUND(SUM(c.reserve_amount) / 1e4, 0) AS reserve_wan,
       SUM(CASE WHEN c.is_bodily_injury THEN 1 ELSE 0 END) AS injury_cases
     FROM ClaimsDetail c
-    JOIN PolicyFact p ON c.policy_no = p.policy_no
+    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
     GROUP BY aging_bucket, sort_order
     ORDER BY sort_order
@@ -202,7 +243,7 @@ export function generateCauseAnalysisQuery(filters: ClaimsDetailFilters): string
       SUM(CASE WHEN c.is_bodily_injury THEN 1 ELSE 0 END) AS injury_cases,
       ROUND(SUM(CASE WHEN c.is_bodily_injury THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS injury_pct
     FROM ClaimsDetail c
-    JOIN PolicyFact p ON c.policy_no = p.policy_no
+    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
     GROUP BY c.accident_cause
     ORDER BY cases DESC
@@ -226,7 +267,7 @@ export function generateGeoRiskByAccidentQuery(filters: ClaimsDetailFilters): st
       ROUND(AVG(DATEDIFF('day', c.accident_time, c.payment_time))
         FILTER (WHERE c.payment_time IS NOT NULL), 0) AS avg_cycle_days
     FROM ClaimsDetail c
-    JOIN PolicyFact p ON c.policy_no = p.policy_no
+    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
       AND c.accident_city IS NOT NULL
     GROUP BY c.accident_province, c.accident_city
@@ -273,7 +314,7 @@ export function generateGeoRiskByPlateQuery(filters: ClaimsDetailFilters): strin
           ELSE '其他'
         END AS plate_city
       FROM ClaimsDetail c
-      JOIN PolicyFact p ON c.policy_no = p.policy_no
+      JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
       WHERE ${where}${policyWhere}
     )
     SELECT
@@ -335,7 +376,7 @@ export function generateGeoComparisonQuery(filters: ClaimsDetailFilters): string
           END
         ) THEN TRUE ELSE FALSE END AS is_cross_region
       FROM ClaimsDetail c
-      JOIN PolicyFact p ON c.policy_no = p.policy_no
+      JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
       WHERE ${where}${policyWhere}
         AND p.plate_no IS NOT NULL
     )
@@ -365,7 +406,7 @@ export function generateClaimCycleQuery(filters: ClaimsDetailFilters): string {
       ROUND(AVG(DATEDIFF('day', c.accident_time, c.payment_time)), 1) AS avg_total_days,
       ROUND(MEDIAN(DATEDIFF('day', c.accident_time, c.payment_time)), 1) AS median_total_days
     FROM ClaimsDetail c
-    JOIN PolicyFact p ON c.policy_no = p.policy_no
+    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
       AND c.payment_time IS NOT NULL
     GROUP BY c.is_bodily_injury
@@ -517,7 +558,7 @@ export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string 
         SUM(CASE WHEN c.is_bodily_injury THEN 1 ELSE 0 END) AS injury_count,
         ROUND(SUM(c.reserve_amount) / 1e4, 0) AS reserve_wan
       FROM ClaimsDetail c
-      JOIN PolicyFact p ON c.policy_no = p.policy_no
+      JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
       WHERE c.accident_time >= '2022-01-01'${policyWhere}
       GROUP BY YEAR(c.accident_time), QUARTER(c.accident_time)
     ),

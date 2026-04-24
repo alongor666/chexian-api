@@ -39,10 +39,14 @@ const FULL_FILTERS: ClaimsDetailFilters = {
 // ═══════════════════════════════════════════════════
 
 describe('generatePendingOverviewQuery', () => {
-  it('基本结构：SELECT FROM ClaimsDetail + PolicyFact JOIN', () => {
+  it('基本结构：FROM ClaimsDetail + 去重 PolicyFact 子查询 JOIN（B252）', () => {
     const sql = generatePendingOverviewQuery(EMPTY_FILTERS);
     expect(sql).toContain('FROM ClaimsDetail c');
-    expect(sql).toContain('JOIN PolicyFact p ON c.policy_no = p.policy_no');
+    // B252：PolicyFact 已改为按 policy_no 去重的子查询
+    expect(sql).toContain('FROM PolicyFact');
+    expect(sql).toContain('GROUP BY policy_no');
+    expect(sql).toContain('HAVING SUM(premium) > 0');
+    expect(sql).toContain(') p ON c.policy_no = p.policy_no');
     expect(sql).toContain('GROUP BY c.claim_status');
   });
 
@@ -363,9 +367,11 @@ describe('generateGeoRiskByPlateQuery', () => {
     expect(sql).toContain('ORDER BY cases DESC');
   });
 
-  it('JOIN PolicyFact 以获取车牌号', () => {
+  it('JOIN 去重后的 PolicyFact 子查询以获取车牌号（B252）', () => {
     const sql = generateGeoRiskByPlateQuery(EMPTY_FILTERS);
-    expect(sql).toContain('JOIN PolicyFact p ON c.policy_no = p.policy_no');
+    expect(sql).toContain('FROM PolicyFact');
+    expect(sql).toContain('GROUP BY policy_no');
+    expect(sql).toContain(') p ON c.policy_no = p.policy_no');
     expect(sql).toContain('p.plate_no');
   });
 });
