@@ -40,11 +40,15 @@ const ALL_DIMENSIONS: CostDimension[] = [
 // ═══════════════════════════════════════════════════
 
 describe('generateClaimRatioQuery', () => {
-  it('基本结构：CTE + PolicyFact + ClaimsAgg JOIN', () => {
+  it('基本结构：policy_dedup + policy_exposure CTE + ClaimsAgg JOIN', () => {
     const sql = generateClaimRatioQuery(BASE_CONFIG);
-    expect(sql).toContain('WITH policy_exposure AS');
-    expect(sql).toContain('FROM PolicyFact p');
+    // B252：policy_dedup CTE 按 (policy_no, insurance_start_date) 去重后再 JOIN ClaimsAgg
+    expect(sql).toContain('policy_dedup AS');
+    expect(sql).toContain('policy_exposure AS');
+    expect(sql).toContain('FROM PolicyFact');
+    expect(sql).toContain('FROM policy_dedup p');
     expect(sql).toContain('LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no');
+    expect(sql).toContain('HAVING SUM(premium) > 0');
     expect(sql).toContain('GROUP BY customer_category');
     expect(sql).toContain('ORDER BY SUM(premium) DESC');
   });
@@ -141,10 +145,14 @@ describe('generateExpenseRatioQuery', () => {
 });
 
 describe('generateComprehensiveCostQuery', () => {
-  it('CTE 包含 ClaimsAgg JOIN + fee_amount', () => {
+  it('CTE 包含 policy_dedup + policy_exposure + ClaimsAgg JOIN + fee_amount', () => {
     const sql = generateComprehensiveCostQuery(BASE_CONFIG);
-    expect(sql).toContain('WITH policy_exposure AS');
+    // B252
+    expect(sql).toContain('policy_dedup AS');
+    expect(sql).toContain('policy_exposure AS');
+    expect(sql).toContain('FROM policy_dedup p');
     expect(sql).toContain('LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no');
+    expect(sql).toContain('HAVING SUM(premium) > 0');
     expect(sql).toContain('fee_amount');
   });
 
@@ -168,10 +176,14 @@ describe('generateComprehensiveCostQuery', () => {
 });
 
 describe('generateVariableCostQuery', () => {
-  it('CTE 包含 ClaimsAgg JOIN', () => {
+  it('CTE 包含 policy_dedup + policy_exposure + ClaimsAgg JOIN', () => {
     const sql = generateVariableCostQuery(BASE_CONFIG);
-    expect(sql).toContain('WITH policy_exposure AS');
+    // B252
+    expect(sql).toContain('policy_dedup AS');
+    expect(sql).toContain('policy_exposure AS');
+    expect(sql).toContain('FROM policy_dedup p');
     expect(sql).toContain('LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no');
+    expect(sql).toContain('HAVING SUM(premium) > 0');
   });
 
   it('输出变动成本率', () => {

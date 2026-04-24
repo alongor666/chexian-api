@@ -184,31 +184,43 @@ export const generateKpiQuery = (
       FROM filtered
       CROSS JOIN latest_context lc
     ),
+    -- B252：filtered_dedup 按 (policy_no, insurance_start_date) 聚合去重，
+    -- 防止 variable_cost_base JOIN ClaimsAgg 后因 PolicyFact 原单+批改多行导致赔款虚增
+    filtered_dedup AS (
+      SELECT
+        policy_no,
+        CAST(insurance_start_date AS DATE) AS insurance_start_date,
+        SUM(premium) AS premium,
+        SUM(COALESCE(fee_amount, 0)) AS fee_amount
+      FROM filtered
+      WHERE insurance_start_date IS NOT NULL
+      GROUP BY policy_no, CAST(insurance_start_date AS DATE)
+      HAVING SUM(premium) > 0
+    ),
     variable_cost_base AS (
       SELECT
         f.premium,
         COALESCE(ca.reported_claims, 0) AS reported_claims,
-        COALESCE(f.fee_amount, 0) AS fee_amount,
+        f.fee_amount,
         DATEDIFF(
           'day',
-          CAST(f.insurance_start_date AS DATE),
-          CAST(f.insurance_start_date AS DATE) + INTERVAL 1 YEAR
+          f.insurance_start_date,
+          f.insurance_start_date + INTERVAL 1 YEAR
         ) AS policy_term,
         LEAST(
           GREATEST(
-            DATEDIFF('day', CAST(f.insurance_start_date AS DATE), lc.latest_policy_date),
+            DATEDIFF('day', f.insurance_start_date, lc.latest_policy_date),
             0
           ),
           DATEDIFF(
             'day',
-            CAST(f.insurance_start_date AS DATE),
-            CAST(f.insurance_start_date AS DATE) + INTERVAL 1 YEAR
+            f.insurance_start_date,
+            f.insurance_start_date + INTERVAL 1 YEAR
           )
         ) AS earned_days
-      FROM filtered f
+      FROM filtered_dedup f
       CROSS JOIN latest_context lc
       LEFT JOIN ClaimsAgg ca ON f.policy_no = ca.policy_no
-      WHERE f.insurance_start_date IS NOT NULL
     ),
     variable_cost AS (
       SELECT

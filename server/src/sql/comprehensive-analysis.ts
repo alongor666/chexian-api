@@ -3,6 +3,8 @@
  * Comprehensive Analysis SQL Generators
  */
 
+import { buildPolicyDedupCTE } from './shared/policy-dedup.js';
+
 export type ComprehensiveDimension = 'org' | 'category' | 'business';
 export type ComprehensiveGranularity = 'daily' | 'weekly' | 'monthly';
 
@@ -29,30 +31,35 @@ function escapeSqlString(value: string): string {
 }
 
 function exposureBaseSql(whereClause: string, cutoffDate: string): string {
+  // B252：policy_dedup 按 (policy_no, insurance_start_date) 聚合去重，HAVING SUM(premium)>0
+  // 防止 LEFT JOIN ClaimsAgg 时因 PolicyFact 原单+批改多行让赔款虚增
+  const policyDedup = buildPolicyDedupCTE('policy_dedup', {
+    whereClause,
+    extraFields: ['org_level_3', 'customer_category', 'coverage_combination'],
+  });
   return `
-WITH policy_exposure AS (
+WITH ${policyDedup},
+policy_exposure AS (
   SELECT
     p.policy_no,
     p.org_level_3,
     p.customer_category,
     p.coverage_combination,
-    CAST(p.insurance_start_date AS DATE) AS insurance_start_date,
+    p.insurance_start_date,
     p.premium,
     COALESCE(c.reported_claims, 0) AS reported_claims,
-    COALESCE(p.fee_amount, 0) AS fee_amount,
+    p.fee_amount,
     COALESCE(c.claim_cases, 0) AS claim_cases,
-    DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term,
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}'),
         0
       ),
-      DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+      DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
     ) AS earned_days
-  FROM PolicyFact p
+  FROM policy_dedup p
   LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
-  WHERE ${whereClause}
-    AND p.insurance_start_date IS NOT NULL
 )
   `.trim();
 }

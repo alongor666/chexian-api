@@ -9,6 +9,7 @@
  */
 
 import { getMetricSql } from '../../config/metric-registry/index.js';
+import { buildPolicyDedupCTE } from '../shared/policy-dedup.js';
 import {
   type CostAnalysisConfig,
   type CostDimension,
@@ -34,30 +35,34 @@ export function generateClaimRatioQuery(config: CostAnalysisConfig): string {
   const groupByFields = DIMENSION_FIELD_MAP[dimension];
   const groupByClause = groupByFields.join(', ');
   const dimKeyExpression = buildDimKeyExpr(groupByFields);
+  // B252：policy_dedup 按 (policy_no, insurance_start_date) 聚合去重，HAVING SUM(premium)>0
+  const policyDedup = buildPolicyDedupCTE('policy_dedup', {
+    whereClause,
+    extraFields: groupByFields,
+  });
 
   return `
-WITH policy_exposure AS (
+WITH ${policyDedup},
+policy_exposure AS (
   SELECT
     p.policy_no,
     ${groupByFields.map((f) => `p.${f}`).join(', ')},
     p.premium,
     p.insurance_start_date AS start_date,
     -- 保险期限天数（闰年感知：365或366）
-    DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term,
     -- 满期天数：MIN(统计截止日 - 保险起期, policy_term)，最小为0
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}'),
         0
       ),
-      DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+      DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
     ) AS earned_days,
     COALESCE(c.claim_cases, 0) AS claim_cases,
     COALESCE(c.reported_claims, 0) AS reported_claims
-  FROM PolicyFact p
+  FROM policy_dedup p
   LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
-  WHERE ${whereClause}
-    AND p.insurance_start_date IS NOT NULL
 )
 SELECT
   ${dimKeyExpression} AS dim_key,
@@ -136,29 +141,33 @@ export function generateComprehensiveCostQuery(
   const groupByFields = DIMENSION_FIELD_MAP[dimension];
   const groupByClause = groupByFields.join(', ');
   const dimKeyExpression = buildDimKeyExpr(groupByFields);
+  // B252：policy_dedup 按 (policy_no, insurance_start_date) 聚合去重，HAVING SUM(premium)>0
+  const policyDedup = buildPolicyDedupCTE('policy_dedup', {
+    whereClause,
+    extraFields: groupByFields,
+  });
 
   return `
-WITH policy_exposure AS (
+WITH ${policyDedup},
+policy_exposure AS (
   SELECT
-    policy_no,
-    ${groupByFields.map((f) => `${f}`).join(', ')},
-    premium,
-    insurance_start_date AS start_date,
-    DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    p.policy_no,
+    ${groupByFields.map((f) => `p.${f}`).join(', ')},
+    p.premium,
+    p.insurance_start_date AS start_date,
+    DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term,
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}'),
         0
       ),
-      DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+      DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
     ) AS earned_days,
     COALESCE(c.claim_cases, 0) AS claim_cases,
     COALESCE(c.reported_claims, 0) AS reported_claims,
-    COALESCE(p.fee_amount, 0) AS fee_amount
-  FROM PolicyFact p
+    p.fee_amount
+  FROM policy_dedup p
   LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
-  WHERE ${whereClause}
-    AND p.insurance_start_date IS NOT NULL
 )
 SELECT
   ${dimKeyExpression} AS dim_key,
@@ -204,27 +213,31 @@ export function generateVariableCostQuery(config: CostAnalysisConfig): string {
   const groupByFields = DIMENSION_FIELD_MAP[dimension];
   const groupByClause = groupByFields.join(', ');
   const dimKeyExpression = buildDimKeyExpr(groupByFields);
+  // B252：policy_dedup 按 (policy_no, insurance_start_date) 聚合去重，HAVING SUM(premium)>0
+  const policyDedup = buildPolicyDedupCTE('policy_dedup', {
+    whereClause,
+    extraFields: groupByFields,
+  });
 
   return `
-WITH policy_exposure AS (
+WITH ${policyDedup},
+policy_exposure AS (
   SELECT
     p.policy_no,
     ${groupByFields.map((f) => `p.${f}`).join(', ')},
     p.premium,
-    DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term,
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}'),
         0
       ),
-      DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
+      DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
     ) AS earned_days,
     COALESCE(c.reported_claims, 0) AS reported_claims,
-    COALESCE(p.fee_amount, 0) AS fee_amount
-  FROM PolicyFact p
+    p.fee_amount
+  FROM policy_dedup p
   LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no
-  WHERE ${whereClause}
-    AND p.insurance_start_date IS NOT NULL
 )
 SELECT
   ${dimKeyExpression} AS dim_key,

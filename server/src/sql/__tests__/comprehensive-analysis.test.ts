@@ -182,10 +182,13 @@ describe('generateComprehensiveSummaryQuery', () => {
     expect(sql).toContain('SUM(reported_claims)');
   });
 
-  it('不包含 GROUP BY（汇总行）', () => {
+  it('不包含按业务维度的 GROUP BY（汇总行）', () => {
     const sql = generateComprehensiveSummaryQuery(BASE_WHERE, BASE_CUTOFF);
-    // 汇总查询是全量聚合，不需要 GROUP BY
-    expect(sql).not.toMatch(/GROUP BY(?!.*policy_exposure)/);
+    // 汇总查询是全量聚合，不按业务维度 GROUP BY
+    // B252：policy_dedup CTE 内的 GROUP BY policy_no, ... 属于去重聚合，允许
+    expect(sql).not.toContain('GROUP BY customer_category');
+    expect(sql).not.toContain('GROUP BY org_level_3');
+    expect(sql).not.toContain('GROUP BY coverage_combination');
   });
 });
 
