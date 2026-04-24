@@ -74,7 +74,9 @@
 
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
-| `数据管理/integrations/wecom_smartsheet/sync_zigong_renewal.py` | 将自贡商业险续保追踪名单按车架号 upsert 到企业微信智能表格 | `python3 数据管理/integrations/wecom_smartsheet/sync_zigong_renewal.py --dry-run` |
+| `数据管理/integrations/wecom_smartsheet/sync_renewal.py` | 按 `config.{instance}.json` 将分支机构商业险续保追踪名单按车架号 upsert 到企业微信智能表格（多实例） | `python3 数据管理/integrations/wecom_smartsheet/sync_renewal.py --config 数据管理/integrations/wecom_smartsheet/config.zigong.json --dry-run` |
+
+**自动化触发**：`daily.mjs` 步骤 8 会自动遍历模块内所有 `config.*.json` 并同步，由 `WECOM_SMARTSHEET_ENABLED=1`（`.env.local`）开关控制。失败降级告警不阻塞 ETL。
 
 ### 🚀 启动类
 

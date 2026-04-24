@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from sync_zigong_renewal import (
+from sync_renewal import (
     DEFAULT_SCHEMA,
     apply_add_response,
     build_record,

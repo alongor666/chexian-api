@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Sync Zigong commercial renewal rows to WeCom Smart Sheet.
+"""Sync commercial renewal rows to WeCom Smart Sheet (multi-instance).
 
 This module is intentionally local to 数据管理/integrations so it can reuse the
 warehouse parquet contract without turning the main ETL into an external-system
-sync job.
+sync job. Each `config.<instance>.json` drives one WeCom Smart Sheet target;
+state and logs are namespaced per instance.
 """
 
 from __future__ import annotations
@@ -54,6 +55,7 @@ DEFAULT_SCHEMA = {
 
 @dataclass(frozen=True)
 class SyncConfig:
+    instance_name: str = "default"
     org_level_3: str = "自贡"
     insurance_type: str = "商业保险"
     insurance_end_date_from: str = "2026-03-31"
@@ -69,8 +71,20 @@ class SyncConfig:
     quotes_path: str = str(DEFAULT_QUOTES_PATH)
     salesman_path: str = str(DEFAULT_SALESMAN_PATH)
     renewal_funnel_path: str = str(DEFAULT_RENEWAL_FUNNEL_PATH)
-    state_path: str = str(HERE / "state" / "zigong_vin_record_map.json")
-    log_dir: str = str(HERE / "logs")
+    state_path: str | None = None  # None => HERE/state/{instance_name}_vin_record_map.json
+    log_dir: str | None = None  # None => HERE/logs
+
+
+def resolve_state_path(config: SyncConfig) -> Path:
+    if config.state_path:
+        return Path(config.state_path)
+    return HERE / "state" / f"{config.instance_name}_vin_record_map.json"
+
+
+def resolve_log_dir(config: SyncConfig) -> Path:
+    if config.log_dir:
+        return Path(config.log_dir)
+    return HERE / "logs"
 
 
 @dataclass
@@ -220,15 +234,38 @@ def save_state(path: str, state: dict[str, Any]) -> None:
 def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
     con = duckdb.connect(":memory:")
     as_of_date = config.as_of_date or date.today().isoformat()
+    # policy 表 (policy_no, VIN) 可能因批改副本重复：
+    #   1) 按 (policy_no, VIN) 聚合取净保费（SUM），其余字段取 ANY_VALUE
+    #   2) 同一 VIN 下多 policy_no 时取止期最晚 + policy_no 最大的那张（续保提醒以最新保单为锚）
+    # 参考：memory/project_policy_table_duplicates + memory/feedback_premium_net_aggregation
     sql = f"""
-    WITH base AS (
-      SELECT policy_no, vehicle_frame_no, org_level_3, salesman_name, plate_no, customer_category,
-             coverage_combination, premium, commercial_pricing_factor, insurance_end_date
+    WITH policy_agg AS (
+      SELECT
+        policy_no,
+        vehicle_frame_no,
+        SUM(premium) AS premium,
+        MAX(CAST(insurance_end_date AS DATE)) AS insurance_end_date,
+        ANY_VALUE(org_level_3) AS org_level_3,
+        ANY_VALUE(salesman_name) AS salesman_name,
+        ANY_VALUE(plate_no) AS plate_no,
+        ANY_VALUE(customer_category) AS customer_category,
+        ANY_VALUE(coverage_combination) AS coverage_combination,
+        ANY_VALUE(commercial_pricing_factor) AS commercial_pricing_factor
       FROM read_parquet('{config.policy_glob}', union_by_name=true)
       WHERE org_level_3 = ?
         AND insurance_type = ?
         AND CAST(insurance_end_date AS DATE) BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)
-        AND premium > ?
+      GROUP BY policy_no, vehicle_frame_no
+      HAVING SUM(premium) > ?
+    ),
+    base AS (
+      SELECT * EXCLUDE rn FROM (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY vehicle_frame_no
+          ORDER BY insurance_end_date DESC NULLS LAST, policy_no DESC
+        ) AS rn
+        FROM policy_agg
+      ) WHERE rn = 1
     ),
     q_latest AS (
       SELECT * EXCLUDE rn FROM (
@@ -403,10 +440,10 @@ def iter_rate_limited_batches(
 
 
 def write_log(config: SyncConfig, summary: dict[str, Any]) -> Path:
-    log_dir = Path(config.log_dir)
+    log_dir = resolve_log_dir(config)
     log_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = log_dir / f"sync_{stamp}.json"
+    path = log_dir / f"{config.instance_name}_sync_{stamp}.json"
     path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
 
@@ -414,11 +451,13 @@ def write_log(config: SyncConfig, summary: dict[str, Any]) -> Path:
 def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -> dict[str, Any]:
     if config.sheet_records_per_minute_limit > config.doc_records_per_minute_limit:
         raise ValueError("工作表分钟限制不能大于智能表格文档分钟限制")
+    state_path = resolve_state_path(config)
     rows = build_source_rows(config)
-    state = load_state(config.state_path)
+    state = load_state(str(state_path))
     plan = plan_upsert(rows, state)
     summary: dict[str, Any] = {
         "dry_run": dry_run,
+        "instance_name": config.instance_name,
         "filter": {
             "org_level_3": config.org_level_3,
             "insurance_type": config.insurance_type,
@@ -443,7 +482,7 @@ def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -
         },
     }
     if dry_run:
-        summary["state_path"] = config.state_path
+        summary["state_path"] = str(state_path)
         summary["log_path"] = str(write_log(config, summary))
         return summary
 
@@ -494,16 +533,18 @@ def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -
         "state_records_after": len(state.get("records", {})),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    save_state(config.state_path, state)
+    save_state(str(state_path), state)
     summary["state_records_after"] = len(state.get("records", {}))
-    summary["state_path"] = config.state_path
+    summary["state_path"] = str(state_path)
     summary["log_path"] = str(write_log(config, summary))
     return summary
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="同步自贡商业险续保追踪数据到企业微信智能表格")
-    parser.add_argument("--config", help="配置 JSON；缺省使用模块默认配置")
+    parser = argparse.ArgumentParser(
+        description="同步分支机构商业险续保追踪数据到企业微信智能表格（多实例，config 驱动）"
+    )
+    parser.add_argument("--config", help="配置 JSON；缺省使用模块默认配置（自贡）")
     parser.add_argument("--dry-run", action="store_true", help="只生成计划和日志，不调用 webhook")
     parser.add_argument("--batch-size", type=int, default=100, help="每批 add/update 记录数")
     return parser.parse_args()

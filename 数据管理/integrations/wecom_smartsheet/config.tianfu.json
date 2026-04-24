@@ -1,0 +1,13 @@
+{
+  "instance_name": "tianfu",
+  "org_level_3": "天府",
+  "insurance_type": "商业保险",
+  "insurance_end_date_from": "2026-03-31",
+  "insurance_end_date_to": "2026-04-29",
+  "premium_gt": 300,
+  "quote_window_start": "2025-12-03",
+  "sheet_records_per_minute_limit": 3000,
+  "doc_records_per_minute_limit": 10000,
+  "rate_limit_sleep_seconds": 60,
+  "webhook_env": "WECOM_SMARTSHEET_WEBHOOK_TIANFU"
+}
