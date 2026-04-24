@@ -1,0 +1,18 @@
+{
+  "org_level_3": "自贡",
+  "insurance_type": "商业保险",
+  "insurance_end_date_from": "2026-03-31",
+  "insurance_end_date_to": "2026-05-30",
+  "premium_gt": 300,
+  "quote_window_start": "2025-12-03",
+  "sheet_records_per_minute_limit": 3000,
+  "doc_records_per_minute_limit": 10000,
+  "rate_limit_sleep_seconds": 60,
+  "webhook_env": "WECOM_SMARTSHEET_WEBHOOK_URL",
+  "policy_glob": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/warehouse/fact/policy/current/*.parquet",
+  "quotes_path": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/warehouse/fact/quotes_conversion/latest.parquet",
+  "salesman_path": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/warehouse/dim/salesman/latest.parquet",
+  "renewal_funnel_path": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/warehouse/fact/renewal/renewal_funnel_2026q1.parquet",
+  "state_path": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/integrations/wecom_smartsheet/state/zigong_vin_record_map.json",
+  "log_dir": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/integrations/wecom_smartsheet/logs"
+}

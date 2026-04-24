@@ -62,6 +62,9 @@
 ├── config/                      # ⚙️ 配置中心
 │   └── tasks/                   # 任务配置模板
 │
+├── integrations/                # 🔌 外部系统同步
+│   └── wecom_smartsheet/        # 企业微信智能表格同步
+│
 ├── cli.py                       # 命令行工具
 ├── run.mjs                       # 快捷执行脚本
 └── logs/                        # 运行日志
@@ -181,6 +184,19 @@ python3 pipelines/enrich.py \
 功能：
 - 按月计算已赚保费
 - 时间比例法实现
+
+### 4. 企业微信智能表格同步
+
+**模块**: `integrations/wecom_smartsheet/`
+
+功能：
+- 读取保单明细、报价数据和续回匹配口径
+- 按车架号维护 `record_id` 状态
+- 对企业微信智能表格执行新增/更新同步
+
+```bash
+python3 integrations/wecom_smartsheet/sync_zigong_renewal.py --dry-run
+```
 
 ## 配置说明
 

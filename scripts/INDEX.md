@@ -70,6 +70,12 @@
 | `extract_salesman_plan.py` | 从Excel提取业务员保费计划，生成标准化Parquet | `python3 scripts/extract_salesman_plan.py` |
 | `test-duckdb-sql.py` | 在DuckDB中测试SQL语法是否正确 | `python3 scripts/test-duckdb-sql.py "<sql>"` |
 
+### 🔌 外部系统集成
+
+| 脚本 | 作用 | 运行命令 |
+|------|------|----------|
+| `数据管理/integrations/wecom_smartsheet/sync_zigong_renewal.py` | 将自贡商业险续保追踪名单按车架号 upsert 到企业微信智能表格 | `python3 数据管理/integrations/wecom_smartsheet/sync_zigong_renewal.py --dry-run` |
+
 ### 🚀 启动类
 
 | 脚本 | 作用 | 运行命令 |
