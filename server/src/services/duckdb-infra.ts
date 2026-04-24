@@ -85,7 +85,15 @@ export class ConnectionPool {
     // 未达上限则新建
     if (this.activeCount < this.maxSize) {
       this.activeCount++;
-      return await this.instance.connect();
+      try {
+        return await this.instance.connect();
+      } catch (err) {
+        // instance.connect() 抛错时必须回滚 activeCount，否则每次失败永久泄漏 1 点，
+        // 累计到 maxSize 即进入"幽灵满载" —— 实际未持有连接却显示满载，永不自愈。
+        // 典型触发：高并发下 DuckDB 内部瞬时失败、资源竞争、FFI 绑定错误等。
+        this.activeCount--;
+        throw err;
+      }
     }
     // 队列已满 → fast-fail
     if (this.waitQueue.length >= MAX_WAIT_QUEUE) {
@@ -103,6 +111,12 @@ export class ConnectionPool {
   }
 
   release(conn: DuckDBConnection): void {
+    // 防御：上游若在 acquire 失败路径误调 release(undefined) 会污染 pool/waiter，
+    // 让下一个 acquire 拿到无效连接并崩溃，静默丢弃更安全。
+    if (!conn) {
+      console.warn('[ConnectionPool] release called with invalid connection, ignoring');
+      return;
+    }
     if (this.waitQueue.length > 0) {
       // 直接交给等待者
       const waiter = this.waitQueue.shift()!;
@@ -113,6 +127,18 @@ export class ConnectionPool {
       this.activeCount--;
       this.pool.push(conn);
     }
+  }
+
+  /**
+   * 池子状态快照，用于诊断和监控（/api/debug/pool-stats 等）
+   */
+  stats(): { active: number; idle: number; waiting: number; maxSize: number } {
+    return {
+      active: this.activeCount,
+      idle: this.pool.length,
+      waiting: this.waitQueue.length,
+      maxSize: this.maxSize,
+    };
   }
 
   async closeAll(): Promise<void> {
