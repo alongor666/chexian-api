@@ -366,6 +366,18 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
         END AS shop_tier
       FROM ClaimsDetail c
       WHERE c.subject_shop_code IS NOT NULL AND ${timeWhere}
+    ),
+    -- B252：PolicyFact 按 policy_no 去重，防止原单+批改多行让列表行数翻倍且 premium 显示错乱
+    policy_dedup AS (
+      SELECT
+        policy_no,
+        SUM(premium) AS premium,
+        ANY_VALUE(org_level_3) AS org_level_3,
+        ANY_VALUE(salesman_name) AS salesman_name,
+        ANY_VALUE(customer_category) AS customer_category
+      FROM PolicyFact
+      GROUP BY policy_no
+      HAVING SUM(premium) > 0
     )
     SELECT
       dc.policy_no,
@@ -380,7 +392,7 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
       p.customer_category,
       ROUND(p.premium, 2) AS premium
     FROM diversion_claims dc
-    LEFT JOIN PolicyFact p ON dc.policy_no = p.policy_no
+    LEFT JOIN policy_dedup p ON dc.policy_no = p.policy_no
     WHERE dc.shop_tier IN ('past', 'none', 'none_shadow') ${orgClause}
     ORDER BY p.premium DESC NULLS LAST
     LIMIT ${limit} OFFSET ${offset}
