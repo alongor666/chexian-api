@@ -36,6 +36,7 @@ import {
   generateClaimCycleQuery,
   generateFrequencyYoyQuery,
 } from '../claims-detail.js';
+import { generateRepairDiversionListQuery } from '../repair.js';
 
 // ═══════════════════════════════════════════════════
 // 1. dedupFieldSql：字段 ANY_VALUE 表达式生成
@@ -253,5 +254,34 @@ describe('B252 Phase 2 集成：claims-detail 反向 JOIN 去重', () => {
   it('insurance_grade 采用原单优先取值策略（决策 3）', () => {
     const sql = generatePendingOverviewQuery({});
     expect(sql).toContain('ANY_VALUE(CASE WHEN premium > 0 THEN insurance_grade END)');
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// 5. Phase 3 集成：repair.ts diversion 列表去重
+// ═══════════════════════════════════════════════════
+
+describe('B252 Phase 3 集成：repair 导流列表去重', () => {
+  it('generateRepairDiversionListQuery 采用 policy_dedup CTE（按 policy_no 聚合，HAVING premium>0）', () => {
+    const sql = generateRepairDiversionListQuery({ timeWindow: 'rolling12' });
+    // B252：diversion 列表不应 LEFT JOIN 原始 PolicyFact
+    expect(sql).not.toMatch(/LEFT JOIN PolicyFact p ON dc\.policy_no = p\.policy_no/);
+    // 应采用去重 CTE
+    expect(sql).toContain('policy_dedup AS');
+    expect(sql).toContain('GROUP BY policy_no');
+    expect(sql).toContain('HAVING SUM(premium) > 0');
+    expect(sql).toContain('LEFT JOIN policy_dedup p ON dc.policy_no = p.policy_no');
+  });
+
+  it('列表 premium 用 SUM(premium) 净值（排除退保，避免展示 0 元副本）', () => {
+    const sql = generateRepairDiversionListQuery({ timeWindow: 'rolling12' });
+    expect(sql).toContain('SUM(premium) AS premium');
+  });
+
+  it('带出 org_level_3 / salesman_name / customer_category 供展示', () => {
+    const sql = generateRepairDiversionListQuery({ timeWindow: 'rolling12' });
+    expect(sql).toContain('ANY_VALUE(org_level_3)');
+    expect(sql).toContain('ANY_VALUE(salesman_name)');
+    expect(sql).toContain('ANY_VALUE(customer_category)');
   });
 });
