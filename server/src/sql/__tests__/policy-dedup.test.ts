@@ -25,6 +25,17 @@ import {
   generateComprehensiveSummaryQuery,
 } from '../comprehensive-analysis.js';
 import { generateKpiQuery } from '../kpi.js';
+import {
+  generatePendingOverviewQuery,
+  generatePendingByOrgQuery,
+  generatePendingAgingQuery,
+  generateCauseAnalysisQuery,
+  generateGeoRiskByAccidentQuery,
+  generateGeoRiskByPlateQuery,
+  generateGeoComparisonQuery,
+  generateClaimCycleQuery,
+  generateFrequencyYoyQuery,
+} from '../claims-detail.js';
 
 // ═══════════════════════════════════════════════════
 // 1. dedupFieldSql：字段 ANY_VALUE 表达式生成
@@ -198,5 +209,49 @@ describe('B252 集成：3 个主生成器采用 policy_dedup', () => {
     expect(sql).toContain('FROM filtered_dedup f');
     // variable_cost_base 必须从 dedup 后取数，而非直接 filtered
     expect(sql).toMatch(/variable_cost_base AS[\s\S]*?FROM filtered_dedup/);
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// 4. Phase 2 集成：claims-detail 9 处反向 JOIN 已去重
+// ═══════════════════════════════════════════════════
+
+describe('B252 Phase 2 集成：claims-detail 反向 JOIN 去重', () => {
+  const generators: Array<[string, () => string]> = [
+    ['generatePendingOverviewQuery', () => generatePendingOverviewQuery({})],
+    ['generatePendingByOrgQuery', () => generatePendingByOrgQuery({})],
+    ['generatePendingAgingQuery', () => generatePendingAgingQuery({})],
+    ['generateCauseAnalysisQuery', () => generateCauseAnalysisQuery({})],
+    ['generateGeoRiskByAccidentQuery', () => generateGeoRiskByAccidentQuery({})],
+    ['generateGeoRiskByPlateQuery', () => generateGeoRiskByPlateQuery({})],
+    ['generateGeoComparisonQuery', () => generateGeoComparisonQuery({})],
+    ['generateClaimCycleQuery', () => generateClaimCycleQuery({})],
+    ['generateFrequencyYoyQuery', () => generateFrequencyYoyQuery({})],
+  ];
+
+  it.each(generators)('%s 不再直接 JOIN PolicyFact p（仅子查询 JOIN）', (_name, fn) => {
+    const sql = fn();
+    // 禁止出现直连的反模式
+    expect(sql).not.toMatch(/JOIN PolicyFact p ON c\.policy_no = p\.policy_no/);
+  });
+
+  it.each(generators)('%s 采用去重子查询（FROM PolicyFact + GROUP BY policy_no + HAVING）', (_name, fn) => {
+    const sql = fn();
+    expect(sql).toContain('FROM PolicyFact');
+    expect(sql).toContain('GROUP BY policy_no');
+    expect(sql).toContain('HAVING SUM(premium) > 0');
+    expect(sql).toContain(') p ON c.policy_no = p.policy_no');
+  });
+
+  it.each(generators)('%s 子查询带出 policyWhere 引用的结构字段', (_name, fn) => {
+    const sql = fn();
+    expect(sql).toContain('ANY_VALUE(org_level_3)');
+    expect(sql).toContain('ANY_VALUE(customer_category)');
+    expect(sql).toContain('ANY_VALUE(plate_no)');
+  });
+
+  it('insurance_grade 采用原单优先取值策略（决策 3）', () => {
+    const sql = generatePendingOverviewQuery({});
+    expect(sql).toContain('ANY_VALUE(CASE WHEN premium > 0 THEN insurance_grade END)');
   });
 });
