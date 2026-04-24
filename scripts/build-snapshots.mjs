@@ -14,7 +14,7 @@
  * 输出目录: 数据管理/warehouse/snapshots/{bundle}/{scope}/{paramHash}.json
  */
 
-import { existsSync, mkdirSync, writeFileSync, renameSync, readdirSync, statSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, renameSync, readdirSync, statSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
@@ -24,22 +24,45 @@ const ROOT_DIR = join(__dirname, '..');
 const SNAPSHOT_DIR = join(ROOT_DIR, '数据管理/warehouse/snapshots');
 const SERVER_URL = process.env.SNAPSHOT_SERVER_URL || 'http://localhost:3000';
 
-// ── 权限域 → 登录凭据映射 ────────────────────
-// 每个 scope 对应一个用户，用于获取该权限域的 JWT
-const SCOPE_CREDENTIALS = {
-  all: { username: 'admin', password: 'CxAdmin@2026!' },
-  '乐山': { username: 'leshan', password: 'leshan123' },
-  '天府': { username: 'tianfu', password: 'tianfu123' },
-  '宜宾': { username: 'yibin', password: 'yibin123' },
-  '德阳': { username: 'deyang', password: 'deyang123' },
-  '新都': { username: 'xindu', password: 'xindu123' },
-  '武侯': { username: 'wuhou', password: 'wuhou123' },
-  '泸州': { username: 'luzhou', password: 'luzhou123' },
-  '自贡': { username: 'zigong', password: 'zigong123' },
-  '资阳': { username: 'ziyang', password: 'ziyang123' },
-  '达州': { username: 'dazhou', password: 'dazhou123' },
-  '青羊': { username: 'qingyang', password: 'qingyang123' },
-  '高新': { username: 'gaoxin', password: 'gaoxin123' },
+// ── 生产环境硬拒：本地签 JWT 不得用于生产数据 ────
+// 脚本只用于本地 Mac 构建快照，生产快照由 CI/部署流程搬运
+if (process.env.NODE_ENV === 'production') {
+  console.error('✗ build-snapshots.mjs 禁止在 NODE_ENV=production 下运行');
+  process.exit(1);
+}
+
+// ── JWT_SECRET: 与 server 对齐（server 启动时 dotenv/config 读 server/.env）──
+// 优先级: 进程环境变量 > server/.env > fallback (同 env.ts)
+function loadJwtSecretFromServerEnv() {
+  const envPath = join(ROOT_DIR, 'server/.env');
+  if (!existsSync(envPath)) return null;
+  const content = readFileSync(envPath, 'utf-8');
+  const match = content.match(/^JWT_SECRET\s*=\s*(.+)$/m);
+  if (!match) return null;
+  return match[1].trim().replace(/^["']|["']$/g, '');
+}
+const JWT_SECRET =
+  process.env.JWT_SECRET ?? loadJwtSecretFromServerEnv() ?? 'change-me-in-production';
+// Token 时效 5 分钟：覆盖单次构建全部并行请求，过期后无残留
+const JWT_TTL_SECONDS = 5 * 60;
+
+// ── 权限域 → JWT Payload 映射 ────────────────
+// 字段保持与 server/src/services/auth.ts:141 中 login 生成的 payload 形状一致。
+// 源：server/src/config/preset-users.ts（不含密码；新增 scope 需同步此映射）。
+const SCOPE_PAYLOADS = {
+  all:    { userId: 'admin',    username: 'admin',    role: 'branch_admin' },
+  '乐山': { userId: 'leshan',   username: 'leshan',   role: 'org_user', organization: '乐山' },
+  '天府': { userId: 'tianfu',   username: 'tianfu',   role: 'org_user', organization: '天府' },
+  '宜宾': { userId: 'yibin',    username: 'yibin',    role: 'org_user', organization: '宜宾' },
+  '德阳': { userId: 'deyang',   username: 'deyang',   role: 'org_user', organization: '德阳' },
+  '新都': { userId: 'xindu',    username: 'xindu',    role: 'org_user', organization: '新都' },
+  '武侯': { userId: 'wuhou',    username: 'wuhou',    role: 'org_user', organization: '武侯' },
+  '泸州': { userId: 'luzhou',   username: 'luzhou',   role: 'org_user', organization: '泸州' },
+  '自贡': { userId: 'zigong',   username: 'zigong',   role: 'org_user', organization: '自贡' },
+  '资阳': { userId: 'ziyang',   username: 'ziyang',   role: 'org_user', organization: '资阳' },
+  '达州': { userId: 'dazhou',   username: 'dazhou',   role: 'org_user', organization: '达州' },
+  '青羊': { userId: 'qingyang', username: 'qingyang', role: 'org_user', organization: '青羊' },
+  '高新': { userId: 'gaoxin',   username: 'gaoxin',   role: 'org_user', organization: '高新' },
 };
 
 // ── bundle 定义 ─────────────────────────────
@@ -131,8 +154,10 @@ function computeParamHash(params) {
 }
 
 function parseArgs(argv = process.argv.slice(2)) {
-  // loginDelayMs: 登录间隔毫秒；防止生产环境触发登录频控 429（VPS 默认 12s，本地 0 即可）
-  const parsed = { bundle: null, scope: null, dryRun: false, help: false, clean: false, loginDelayMs: 12000 };
+  // concurrency: 限制并行 fetch 数。DuckDB 连接池 max=10（databaseConfig.maxConnections），
+  // dashboard-bundle 等 bundle 单次请求内部会并发发多条 DuckDB 查询，经验值 3 可 100% 通过；
+  // 调大会在 dashboard-bundle 集中出现 "queue full, server too busy"。无限并发必然打爆池子。
+  const parsed = { bundle: null, scope: null, dryRun: false, help: false, clean: false, concurrency: 3 };
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     switch (token) {
@@ -140,31 +165,58 @@ function parseArgs(argv = process.argv.slice(2)) {
       case '--scope': parsed.scope = argv[++i]; break;
       case '--dry-run': parsed.dryRun = true; break;
       case '--clean': parsed.clean = true; break;
-      case '--login-delay-ms': parsed.loginDelayMs = Number(argv[++i] ?? 12000); break;
+      case '--concurrency': parsed.concurrency = Number(argv[++i] ?? 6); break;
       case '--help': case '-h': parsed.help = true; break;
       default: throw new Error(`未知参数: ${token}`);
     }
   }
+  if (!Number.isFinite(parsed.concurrency) || parsed.concurrency < 1) {
+    throw new Error(`--concurrency 必须 >= 1，当前: ${parsed.concurrency}`);
+  }
   return parsed;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// ── 有限并发 worker pool（返回值形状与 Promise.allSettled 一致）────
+// 原实现 Promise.allSettled(tasks.map(async...)) 无并发闸，260 并发打爆 DuckDB 连接池。
+async function allSettledWithLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      try {
+        results[i] = { status: 'fulfilled', value: await fn(items[i], i) };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
-// ── 登录获取 JWT ─────────────────────────────
+// ── 本地签发 JWT（HS256，与 server/src/middleware/auth.ts 共用 JWT_SECRET）───
+// 替代 /api/auth/login：绕开密码/限流/账户锁定三道闸门，本地构建零摩擦。
+// 仅限开发模式（顶部已硬拒 NODE_ENV=production）。
 
-async function login(username, password) {
-  const res = await fetch(`${SERVER_URL}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
-  if (!res.ok) {
-    throw new Error(`Login failed for ${username}: ${res.status} ${res.statusText}`);
-  }
-  const body = await res.json();
-  return body.data?.token || body.token;
+function base64urlEncode(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function signJwtHS256(payload, secret, ttlSeconds) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const body = { ...payload, iat: now, exp: now + ttlSeconds };
+  const headerB64 = base64urlEncode(JSON.stringify(header));
+  const bodyB64 = base64urlEncode(JSON.stringify(body));
+  const signingInput = `${headerB64}.${bodyB64}`;
+  const sig = crypto.createHmac('sha256', secret).update(signingInput).digest();
+  return `${signingInput}.${base64urlEncode(sig)}`;
+}
+
+function issueScopeToken(payload) {
+  return signJwtHS256(payload, JWT_SECRET, JWT_TTL_SECONDS);
 }
 
 // ── 抓取 bundle 数据 ─────────────────────────
@@ -206,6 +258,10 @@ async function main() {
   node scripts/build-snapshots.mjs --scope 乐山              # 单权限域
   node scripts/build-snapshots.mjs --dry-run                 # 仅列出组合
   node scripts/build-snapshots.mjs --clean                   # 构建前清除旧快照
+  node scripts/build-snapshots.mjs --concurrency 4           # 调整并发（默认 3，dashboard-bundle 内部并发多需留余量）
+
+说明: 脚本通过 JWT_SECRET 本地签发 token，不再调用 /api/auth/login。
+      NODE_ENV=production 时拒绝运行。必要时设置 JWT_SECRET 环境变量与 server 对齐。
 `);
     return;
   }
@@ -226,22 +282,22 @@ async function main() {
   }
 
   const scopes = args.scope
-    ? { [args.scope]: SCOPE_CREDENTIALS[args.scope] }
-    : SCOPE_CREDENTIALS;
+    ? { [args.scope]: SCOPE_PAYLOADS[args.scope] }
+    : SCOPE_PAYLOADS;
 
-  if (args.scope && !SCOPE_CREDENTIALS[args.scope]) {
+  if (args.scope && !SCOPE_PAYLOADS[args.scope]) {
     log('red', `未知 scope: ${args.scope}`);
-    log('yellow', `可用: ${Object.keys(SCOPE_CREDENTIALS).join(', ')}`);
+    log('yellow', `可用: ${Object.keys(SCOPE_PAYLOADS).join(', ')}`);
     process.exit(1);
   }
 
   // 2. 枚举所有组合
   const tasks = [];
   for (const [bundleName, bundleDef] of Object.entries(bundles)) {
-    for (const [scope, creds] of Object.entries(scopes)) {
+    for (const [scope] of Object.entries(scopes)) {
       for (const params of bundleDef.paramSets) {
         const paramHash = computeParamHash(params);
-        tasks.push({ bundleName, scope, creds, params, paramHash, path: bundleDef.path });
+        tasks.push({ bundleName, scope, params, paramHash, path: bundleDef.path });
       }
     }
   }
@@ -281,66 +337,47 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. 获取每个 scope 的 JWT（串行 + 登录间隔）
-  //    并行登录在生产环境触发速率限制 429（多 scope 同时命中 /api/auth/login）。
-  //    串行 + loginDelayMs 间隔可消除该风险；本地无频控时传 --login-delay-ms 0。
-  log('yellow', `\n▶ 登录获取 JWT (串行, 间隔 ${args.loginDelayMs}ms)...`);
+  // 4. 本地签发每个 scope 的 JWT（与 server 共用 JWT_SECRET，绕开 login 接口）
+  //    原串行登录 + 登录间隔是为规避 429，本地签发无登录调用，零摩擦、无频控风险。
+  log('yellow', `\n▶ 本地签发 JWT (TTL ${JWT_TTL_SECONDS}s)...`);
   const tokenMap = {};
-  const scopeEntries = Object.entries(scopes);
-  for (let i = 0; i < scopeEntries.length; i++) {
-    const [scope, creds] = scopeEntries[i];
-    try {
-      const token = await login(creds.username, creds.password);
-      tokenMap[scope] = token;
-      log('green', `  ✓ ${scope}`);
-    } catch (err) {
-      log('red', `  ✗ 登录失败 ${scope}: ${err.message}`);
-    }
-    if (i < scopeEntries.length - 1 && args.loginDelayMs > 0) {
-      await sleep(args.loginDelayMs);
-    }
+  for (const [scope, payload] of Object.entries(scopes)) {
+    tokenMap[scope] = issueScopeToken(payload);
+    log('green', `  ✓ ${scope} (${payload.username})`);
   }
 
-  // 任何 scope 登录失败立即中止，避免后续 task 全 skip 被静默通过
-  if (Object.keys(tokenMap).length !== Object.keys(scopes).length) {
-    log('red', `\n  ✗ 存在 scope 未登录成功 (${Object.keys(tokenMap).length}/${Object.keys(scopes).length})，中止构建`);
-    process.exit(1);
-  }
-
-  // 5. 并行抓取所有 bundle 数据
-  log('yellow', '\n▶ 构建快照...');
+  // 5. 有限并发抓取所有 bundle 数据（并发闸：避免打爆 DuckDB 连接池）
+  log('yellow', `\n▶ 构建快照 (并发 ${args.concurrency})...`);
   const etlDate = new Date().toISOString().slice(0, 10);
   const buildTime = new Date().toISOString();
   let successCount = 0;
   let failCount = 0;
   let skipCount = 0;
 
-  const fetchResults = await Promise.allSettled(
-    tasks.map(async (task) => {
-      const token = tokenMap[task.scope];
-      if (!token) {
-        skipCount++;
-        return { task, skipped: true };
-      }
+  const fetchResults = await allSettledWithLimit(tasks, args.concurrency, async (task) => {
+    const token = tokenMap[task.scope];
+    if (!token) {
+      skipCount++;
+      return { task, skipped: true };
+    }
 
-      const data = await fetchBundle(task.path, task.params, token);
-      const snapshot = {
-        _meta: {
-          etlDate,
-          buildTime,
-          bundleType: task.bundleName,
-          scope: task.scope,
-          params: task.params,
-          paramHash: task.paramHash,
-        },
-        data,
-      };
+    const data = await fetchBundle(task.path, task.params, token);
+    const snapshot = {
+      _meta: {
+        etlDate,
+        buildTime,
+        bundleType: task.bundleName,
+        scope: task.scope,
+        params: task.params,
+        paramHash: task.paramHash,
+      },
+      data,
+    };
 
-      const filePath = join(SNAPSHOT_DIR, task.bundleName, task.scope, `${task.paramHash}.json`);
-      atomicWrite(filePath, JSON.stringify(snapshot));
-      return { task, filePath };
-    })
-  );
+    const filePath = join(SNAPSHOT_DIR, task.bundleName, task.scope, `${task.paramHash}.json`);
+    atomicWrite(filePath, JSON.stringify(snapshot));
+    return { task, filePath };
+  });
 
   for (const result of fetchResults) {
     if (result.status === 'fulfilled') {
