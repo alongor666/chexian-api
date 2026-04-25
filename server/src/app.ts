@@ -140,6 +140,7 @@ import queryRoutes from './routes/query.js';
 import filtersRoutes from './routes/filters.js';
 import dataRoutes, { setCurrentDataFile } from './routes/data.js';
 import aiRoutes from './routes/ai.js';
+import agentAuditRoutes from './agent/routes/agent-audit.js';
 
 app.use('/api/auth/wecom', wecomAuthRoutes); // 放前面避免 loginLimiter 影响
 app.use('/api/auth', authRoutes);
@@ -147,6 +148,7 @@ app.use('/api/query', queryRoutes);
 app.use('/api/filters', filtersRoutes);
 app.use('/api/data', dataRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/agent/audit', agentAuditRoutes);
 
 /**
  * 7. 404处理
