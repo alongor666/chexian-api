@@ -101,6 +101,12 @@ class RateLimitedBatch:
     sleep_before_seconds: int
 
 
+@dataclass(frozen=True)
+class OperationItem:
+    op: str
+    payload: Any
+
+
 def date_to_epoch_ms(value: date | datetime | Any) -> str:
     if hasattr(value, "to_pydatetime"):
         value = value.to_pydatetime()
@@ -254,6 +260,7 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
       FROM read_parquet('{config.policy_glob}', union_by_name=true)
       WHERE org_level_3 = ?
         AND insurance_type = ?
+        AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
         AND CAST(insurance_end_date AS DATE) BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)
       GROUP BY policy_no, vehicle_frame_no
       HAVING SUM(premium) > ?
@@ -302,7 +309,7 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
       b.org_level_3,
       COALESCE(s.team, NULLIF(NULLIF(q.quote_team, 'nan'), ''), '未分配') AS team_name,
       COALESCE(b.plate_no, '') AS plate_no,
-      COALESCE(b.vehicle_frame_no, '') AS vehicle_frame_no,
+      b.vehicle_frame_no AS vehicle_frame_no,
       COALESCE(b.salesman_name, '') AS salesman_name,
       COALESCE(b.customer_category, '') AS customer_category,
       COALESCE(b.coverage_combination, '') AS coverage_combination,
@@ -342,6 +349,7 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
             as_of_date,
         ],
     ).fetchdf().to_dict("records")
+    rows = [row for row in rows if text_value(row.get("vehicle_frame_no"))]
     vins = [text_value(row.get("vehicle_frame_no")) for row in rows]
     duplicates = sorted({vin for vin in vins if vins.count(vin) > 1})
     if duplicates:
@@ -408,6 +416,16 @@ def apply_update_response(response: dict[str, Any]) -> None:
 
 def chunked(items: list[Any], size: int) -> list[list[Any]]:
     return [items[index : index + size] for index in range(0, len(items), size)]
+
+
+def group_contiguous_operations(items: list[OperationItem]) -> list[tuple[str, list[Any]]]:
+    grouped: list[tuple[str, list[Any]]] = []
+    for item in items:
+        if grouped and grouped[-1][0] == item.op:
+            grouped[-1][1].append(item.payload)
+            continue
+        grouped.append((item.op, [item.payload]))
+    return grouped
 
 
 def iter_rate_limited_batches(
@@ -490,43 +508,37 @@ def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -
     if not webhook_url:
         raise RuntimeError(f"缺少环境变量 {config.webhook_env}")
 
+    operation_items: list[OperationItem] = [
+        *(OperationItem(op="update", payload=item) for item in plan.update_records),
+        *(OperationItem(op="add", payload=item) for item in plan.add_records),
+    ]
     for rate_batch in iter_rate_limited_batches(
-        plan.update_records,
+        operation_items,
         batch_size=batch_size,
         records_per_minute=config.sheet_records_per_minute_limit,
         sleep_seconds=config.rate_limit_sleep_seconds,
     ):
         if rate_batch.sleep_before_seconds:
             time_mod.sleep(rate_batch.sleep_before_seconds)
-        response = post_webhook(webhook_url, {"schema": DEFAULT_SCHEMA, "update_records": rate_batch.items})
-        apply_update_response(response)
-        summary["batches"].append({
-            "op": "update",
-            "sent": len(rate_batch.items),
-            "errcode": response.get("errcode"),
-            "sleep_before_seconds": rate_batch.sleep_before_seconds,
-        })
-        time_mod.sleep(0.2)
-
-    for rate_batch in iter_rate_limited_batches(
-        plan.add_records,
-        batch_size=batch_size,
-        records_per_minute=config.sheet_records_per_minute_limit,
-        sleep_seconds=config.rate_limit_sleep_seconds,
-    ):
-        if rate_batch.sleep_before_seconds:
-            time_mod.sleep(rate_batch.sleep_before_seconds)
-        add_rows = [item["source_row"] for item in rate_batch.items]
-        add_records = [item["record"] for item in rate_batch.items]
-        response = post_webhook(webhook_url, {"schema": DEFAULT_SCHEMA, "add_records": add_records})
-        apply_add_response(state, add_rows, response)
-        summary["batches"].append({
-            "op": "add",
-            "sent": len(rate_batch.items),
-            "errcode": response.get("errcode"),
-            "sleep_before_seconds": rate_batch.sleep_before_seconds,
-        })
-        time_mod.sleep(0.2)
+        grouped_ops = group_contiguous_operations(rate_batch.items)
+        for index, (op, op_items) in enumerate(grouped_ops):
+            if op == "update":
+                response = post_webhook(webhook_url, {"schema": DEFAULT_SCHEMA, "update_records": op_items})
+                apply_update_response(response)
+            elif op == "add":
+                add_rows = [item["source_row"] for item in op_items]
+                add_records = [item["record"] for item in op_items]
+                response = post_webhook(webhook_url, {"schema": DEFAULT_SCHEMA, "add_records": add_records})
+                apply_add_response(state, add_rows, response)
+            else:
+                raise ValueError(f"未知同步操作类型: {op}")
+            summary["batches"].append({
+                "op": op,
+                "sent": len(op_items),
+                "errcode": response.get("errcode"),
+                "sleep_before_seconds": rate_batch.sleep_before_seconds if index == 0 else 0,
+            })
+            time_mod.sleep(0.2)
 
     state["summary"] = {
         **summary,

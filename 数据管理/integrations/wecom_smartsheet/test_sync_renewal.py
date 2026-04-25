@@ -7,10 +7,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from sync_renewal import (
     DEFAULT_SCHEMA,
+    OperationItem,
     apply_add_response,
     build_record,
     date_to_epoch_ms,
     format_customer_status,
+    group_contiguous_operations,
     iter_rate_limited_batches,
     plan_upsert,
 )
@@ -162,4 +164,40 @@ def test_iter_rate_limited_batches_splits_by_minute_limit_and_marks_waits():
         (5, 1000, 0),
         (6, 1000, 0),
         (7, 500, 60),
+    ]
+
+
+def test_iter_rate_limited_batches_shared_budget_for_update_and_add():
+    operations = [
+        *(OperationItem(op="update", payload={"id": f"u{i}"}) for i in range(2000)),
+        *(OperationItem(op="add", payload={"id": f"a{i}"}) for i in range(2000)),
+    ]
+
+    windows = list(iter_rate_limited_batches(operations, batch_size=1000, records_per_minute=3000))
+
+    assert [(w.batch_index, len(w.items), w.sleep_before_seconds) for w in windows] == [
+        (1, 1000, 0),
+        (2, 1000, 0),
+        (3, 1000, 0),
+        (4, 1000, 60),
+    ]
+    assert windows[2].items[-1].op == "add"
+    assert windows[2].items[0].op == "update"
+
+
+def test_group_contiguous_operations_preserves_order_and_boundaries():
+    grouped = group_contiguous_operations(
+        [
+            OperationItem(op="update", payload=1),
+            OperationItem(op="update", payload=2),
+            OperationItem(op="add", payload=3),
+            OperationItem(op="add", payload=4),
+            OperationItem(op="update", payload=5),
+        ]
+    )
+
+    assert grouped == [
+        ("update", [1, 2]),
+        ("add", [3, 4]),
+        ("update", [5]),
     ]
