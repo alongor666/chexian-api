@@ -25,6 +25,14 @@
           {
             "type": "command",
             "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'git push'; then branch=$(git branch --show-current 2>/dev/null); if [ \"$branch\" = \"main\" ] || [ \"$branch\" = \"master\" ]; then echo \"❌ 禁止直接推送到 $branch。请使用 /commit-push-pr（自动创建分支 + PR）\"; exit 2; fi; fi"
+          },
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'git push'; then conflicts=$(grep -rn -E '^(<{7}|={7}|>{7})( |$)' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.py' --include='*.md' --include='*.json' --exclude-dir=node_modules --exclude-dir=.git . 2>/dev/null | head -10); if [ -n \"$conflicts\" ]; then echo \"❌ 发现未解决的冲突标记，禁止推送：\"; echo \"$conflicts\"; exit 2; fi; fi"
+          },
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'git push'; then if ! bun run governance > /tmp/governance-precheck.log 2>&1; then echo \"❌ governance 校验失败，禁止推送：\"; tail -30 /tmp/governance-precheck.log; exit 2; fi; fi"
           }
         ]
       }
