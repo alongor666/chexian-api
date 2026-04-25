@@ -8,7 +8,7 @@
 
 ## 0. 红线规则
 
-**写代码前三问**：1) 已有实现？→ `grep -r` 搜索 2) 改多少行？→ <30% 用 Edit，≥50% 用 Write 3) 怎么验证？→ 执行验证命令并贴出结果
+**写代码前两问**：1) 已有实现？→ `grep -r` 搜索 2) 怎么验证？→ 执行验证命令并贴出结果
 
 | 红线 | 做法 |
 |------|------|
@@ -16,12 +16,10 @@
 | 验证不声称 | 必须通过真实 API 请求验证并贴出结果 |
 | 修补不拆除 | 安全加固禁止删除整个模块，只能修补 |
 | 并行不串行 | 3+ 独立任务必须并行 sub-agents |
-| Edit > Write | 改动少用 Edit，新建/大改用 Write |
 | 执行不规划 | `commit/push/PR` 直接执行，零分析 |
 | 源数据验证 | 修改 SQL 生成器后，必须用 Parquet 直查与 API 返回对比验证 |
-| 文档同步 | 涉及 3+ 文件变更的重构完成后，扫描并更新受影响的索引和知识库（CODE_INDEX / scripts/INDEX / PARQUET_SCHEMA_KNOWLEDGE / DATA_FLOW_KNOWLEDGE / CLAUDE.md 注册表章节） |
 
-**Pre-flight（每次任务前）**：1) `grep -r` 搜索已有实现 2) 涉及数据时 `find 数据管理/` 3) 声称完成前 `curl` 验证 4) 删除前列影响清单等用户确认 5) push 前检查大文件 6) push 前 `grep -rn '<<<<<<'` 扫描冲突标记 7) push 前 `bun run governance`
+**Pre-flight（每次任务前）**：1) `grep -r` 搜索已有实现 2) 涉及数据时 `find 数据管理/` 3) 声称完成前 `curl` 验证 4) 删除前列影响清单等用户确认（push 时大文件/分支保护/冲突标记/governance 由 `.claude/settings.json` hooks 自动拦截）
 
 **方法确认协议**：遇到"下钻/层级"→问用户交互模型；"已完成"→curl 验证；"不存在"→先搜索；"安全加固/重构"→列清单等确认；"commit/push"→直接执行；"全部检查"→并行 sub-agents
 
@@ -95,9 +93,7 @@
 
 **架构协议**：Bun 包管理器（禁止 npm/yarn）· 智谱 API `glm-4.7-flash` · 三级限流（禁止降低）· `security.ts` 危险字符黑名单支持中文
 
-**报价数据口径**（待修正）：当前 `是否报价` 字段不可靠，正确逻辑应以「续保单号非空」判定已报价。用户待办，AI 不得擅自修改。
-
-> 分片架构、VPS 分层查询、数据同步等详细规则见 `.claude/rules/data-pipeline.md`。业务口径护栏见 `.claude/rules/sql-generators.md`。
+> 分片架构、VPS 分层查询、数据同步等详细规则见 `.claude/rules/data-pipeline.md`。业务口径护栏见 `.claude/rules/sql-generators.md`。报价口径修正见 BACKLOG B255。
 
 ---
 
@@ -119,7 +115,7 @@
 
 **启动**：`bun run dev:full`（禁止只运行 `bun run dev`）
 
-**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器，65 行）+ `query/*.ts`（19 子路由）· `server/src/sql/`（30 个 SQL 模块：27 生成器 + 3 共享）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
+**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器）+ `query/*.ts`（20 子路由 + shared）· `server/src/sql/`（50 个 SQL 模块：30 顶层 + 20 子目录拆分）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
 
 **API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录）· `/api/filters/*`（筛选器）
 
@@ -191,7 +187,7 @@ bun run snapshot:verify            # 快照 dry-run + 健康检查
 
 **CI/CD**：`deploy.yml`（push main → 构建→部署→健康检查）· `claude-code.yml`（@claude 触发）· `governance-check.yml`（PR 治理）
 
-**工具箱**：[.claude/commands/README.md](./.claude/commands/README.md)（30 命令）· `.claude/agents/`（14 agents）· 常用：`/commit-push-pr` `/sync-and-rebase` `/data-analysis` `/security-review` `/verify`
+**工具箱**：[.claude/commands/README.md](./.claude/commands/README.md)（40 命令）· `.claude/agents/`（14 agents）· 常用：`/commit-push-pr` `/sync-and-rebase` `/data-analysis` `/security-review` `/verify`
 
 ---
 
@@ -207,7 +203,7 @@ bun run snapshot:verify            # 快照 dry-run + 健康检查
 6. DuckDB/Parquet 兼容 — `union_by_name` schema 一致性
 7. 健康检查 — `curl -s https://chexian.cretvalu.com/health` 返回 200
 8. 快照文件 — `curl -s https://chexian.cretvalu.com/api/data/snapshot-health` 返回快照状态（首次部署无快照时全部 miss，正常）
-8. 核心 API — 至少一个 `/api/query/*` 返回 200 + 非空 JSON
+9. 核心 API — 至少一个 `/api/query/*` 返回 200 + 非空 JSON
 
 ---
 
@@ -240,13 +236,3 @@ bun run snapshot:verify            # 快照 dry-run + 健康检查
 | 禁止硬编码路径 | 使用 `server/src/config/paths.ts` 或环境变量 |
 | 数据文件 | `数据管理/warehouse/` 是本地源，`server/data/` 是 VPS 运行时 |
 
----
-
-## 12. 审查质量
-
-审查计划或文档时：
-
-1. **事实核查**：所有声明对照实际代码/数据验证，不信任表面描述
-2. **逻辑一致性**：检查边界条件和矛盾，不只看表面结构
-3. **诚实评分**：浅层审查浪费时间，宁可花多一轮也不输出低质量结论
-4. **业务逻辑标注**：涉及保险/分析内容，所有假设的业务逻辑都标注 `⚠️ 待用户确认`
