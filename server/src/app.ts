@@ -85,6 +85,8 @@ app.use('/api', apiLimiter);
 app.use('/api/auth/login', loginLimiter);
 // 查询接口限流（30次/分钟）
 app.use('/api/query', queryLimiter);
+// Agent 诊断接口会触发确定性分析查询，使用查询级限流
+app.use('/api/agent/diagnosis', queryLimiter);
 // AI接口最严格限流（10次/分钟）
 app.use('/api/ai', aiLimiter);
 
@@ -140,6 +142,8 @@ import queryRoutes from './routes/query.js';
 import filtersRoutes from './routes/filters.js';
 import dataRoutes, { setCurrentDataFile } from './routes/data.js';
 import aiRoutes from './routes/ai.js';
+import agentAuditRoutes from './agent/routes/agent-audit.js';
+import agentDiagnosisRoutes from './agent/routes/agent-diagnosis.js';
 
 app.use('/api/auth/wecom', wecomAuthRoutes); // 放前面避免 loginLimiter 影响
 app.use('/api/auth', authRoutes);
@@ -147,6 +151,8 @@ app.use('/api/query', queryRoutes);
 app.use('/api/filters', filtersRoutes);
 app.use('/api/data', dataRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/agent/audit', agentAuditRoutes);
+app.use('/api/agent/diagnosis', agentDiagnosisRoutes);
 
 /**
  * 7. 404处理
