@@ -342,7 +342,7 @@
       "required": false,
       "dataTypes": ["VARCHAR", "TEXT", "STRING"],
       "aliases": ["plate_no", "车牌号码", "车牌号", "车牌", "license_plate", "plateNo", "plate_number"],
-      "description": "车牌号码（仅保留前2位）"
+      "description": "车牌号码（完整值；归属地分析用 SUBSTRING(plate_no,1,2)）"
     },
     {
       "id": "seat_count",

@@ -664,15 +664,31 @@ def process_new_fields(df):
         avg_val = df['乘客险保额'].mean()
         print(f"      ✅ 乘客险保额: 平均值 {avg_val:,.2f}")
 
-    # 15. 处理车牌号码（只保留前2位）
+    # 15. 处理车牌号码（保留完整车牌，规整空值）
+    # 完整车牌供 integrations 续保链路使用；下游归属地分析仍可用 SUBSTRING(plate_no,1,2) / LIKE '川A%' 兼容
+    # 新车未上牌（源数据中以 *-* / *** / -- 等无字母数字占位符表达）统一归 NULL
     if '车牌号码' in df.columns:
         print(f"\n   处理车牌号码:")
         print(f"      数据类型: {df['车牌号码'].dtype}")
-        print(f"      空值数: {df['车牌号码'].isna().sum():,}")
-        df['车牌号码'] = df['车牌号码'].astype(str).str[:2].where(df['车牌号码'].notna(), None)
-        sample_vals = df['车牌号码'].dropna().head(3).tolist()
+        print(f"      原始空值数: {df['车牌号码'].isna().sum():,}")
+        cleaned = (
+            df['车牌号码']
+            .astype('string')
+            .str.strip()
+            .replace({'': pd.NA, 'nan': pd.NA, 'NaN': pd.NA, 'None': pd.NA, 'none': pd.NA, 'NULL': pd.NA})
+        )
+        new_car_mask = cleaned.notna() & ~cleaned.str.contains(r'[A-Za-z0-9一-鿿]', regex=True, na=False)
+        new_car_count = int(new_car_mask.sum())
+        cleaned = cleaned.where(~new_car_mask, pd.NA)
+        df['车牌号码'] = cleaned.where(cleaned.notna(), None)
+        non_null = df['车牌号码'].dropna()
+        sample_vals = non_null.head(3).tolist()
+        len_dist = non_null.str.len().value_counts().sort_index().head(8).to_dict()
+        print(f"      新车未上牌(归NULL): {new_car_count:,}")
+        print(f"      规整后空值数: {df['车牌号码'].isna().sum():,}")
+        print(f"      长度分布(TOP8): {len_dist}")
         print(f"      示例值: {sample_vals}")
-        print(f"      ✅ 车牌号码字段处理完成(保留前2位)")
+        print(f"      ✅ 车牌号码字段处理完成(保留完整车牌)")
 
     # 16. 处理座位数（整数）
     if '座位数' in df.columns:
