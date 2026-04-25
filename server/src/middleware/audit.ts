@@ -45,7 +45,7 @@ interface AuditLogEntry {
 }
 
 /** 需要记录审计日志的路径前缀 */
-const AUDITED_PATHS = ['/api/query', '/api/data'];
+const AUDITED_PATHS = ['/api/query', '/api/data', '/api/agent/diagnosis'];
 
 /**
  * 将日志条目写入文件（共用工具）

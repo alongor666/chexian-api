@@ -4,6 +4,8 @@
 
 本阶段新增 `/api/agent/audit/*`，用于审计 Agent 可用指标、能力、禁用指标和确定性问题路由。它不是聊天机器人，不调用 LLM，不生成 SQL，只映射到现有 API 与 SQL 生成器。
 
+Stage 2 在审计框架之上新增 `/api/agent/diagnosis/cost-indicators`，用于执行 `cost_indicator_diagnosis` 的确定性成本指标诊断。该接口仍不接 LLM，不生成自由 SQL，只复用现有成本 SQL 生成器和权限边界。
+
 ## API
 
 - `GET /api/agent/audit/metrics`：返回 Agent 指标注册表、支持级别和口径边界。
@@ -13,6 +15,8 @@
 - `POST /api/agent/audit/route-question`：确定性问题路由。
 
 所有返回结构都经过 Zod schema 校验。路由挂载在 `/api/agent/audit`，继续使用全局审计中间件，并在路由内使用 `authMiddleware` 和 `permissionMiddleware`。
+
+成本指标诊断路由挂载在 `/api/agent/diagnosis`，继续使用全局审计中间件，并在路由内使用 `authMiddleware`、`permissionMiddleware` 和 `createDomainMiddleware('ClaimsAgg')`。
 
 ## 支持能力
 

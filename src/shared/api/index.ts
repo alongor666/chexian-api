@@ -3,7 +3,15 @@
  */
 
 export { apiClient, API_BASE } from './client';
-export { QUERY_ROUTES, DATA_ROUTES, AUTH_ROUTES, AI_ROUTES, AGENT_AUDIT_ROUTES, FILTER_ROUTES } from './routes';
+export {
+  QUERY_ROUTES,
+  DATA_ROUTES,
+  AUTH_ROUTES,
+  AI_ROUTES,
+  AGENT_AUDIT_ROUTES,
+  AGENT_DIAGNOSIS_ROUTES,
+  FILTER_ROUTES,
+} from './routes';
 export type { KpiData, KpiDetailData, TrendData, FileInfo, LoadResult } from './client';
 
 // SQL 解析工具
