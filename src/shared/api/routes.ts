@@ -175,6 +175,17 @@ export const AI_ROUTES = {
 } as const;
 
 // ─────────────────────────────────────────────
+// /api/agent/audit/* 路由
+// ─────────────────────────────────────────────
+export const AGENT_AUDIT_ROUTES = {
+  METRICS: 'agent/audit/metrics',
+  CAPABILITIES: 'agent/audit/capabilities',
+  UNSUPPORTED: 'agent/audit/unsupported',
+  READINESS: 'agent/audit/readiness',
+  ROUTE_QUESTION: 'agent/audit/route-question',
+} as const;
+
+// ─────────────────────────────────────────────
 // /api/filters/* 路由
 // ─────────────────────────────────────────────
 export const FILTER_ROUTES = {
