@@ -2,7 +2,7 @@
 
 **唯一事实来源**：本文档定义项目技术栈、架构约束、验证方法。所有AI协作者必须先读本文档。
 
-> **架构模式**：纯 API 模式（后端 DuckDB + Express REST API）。从 chexianYJFX 双模式项目拆分而来，已移除所有 DuckDB-WASM / Local 模式代码。
+> **架构模式**：API-only 模式（React 客户端 + Express REST API + 后端 DuckDB native）。从 chexianYJFX 双模式项目拆分而来，当前运行架构不包含 DuckDB-WASM / Local 模式。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ### 1.1 前端技术栈
 ```
-React 19.0.0          - UI 框架
+React 19.2.4          - UI 框架
 TypeScript 5.9.3      - 类型系统
 Vite 5.4.21           - 构建工具
 Tailwind CSS 3.4.19   - 样式框架
@@ -23,7 +23,7 @@ Vitest 2.1.9          - 单元测试
 ### 1.2 后端技术栈
 ```
 Express 4.18.2        - Web 框架
-DuckDB 1.1.3          - 原生 SQL 引擎（非 WASM）
+@duckdb/node-api 1.4.4-r.1 - DuckDB native SQL 引擎（非 WASM）
 Apache Arrow 17.0.0   - 内存数据格式
 jsonwebtoken 9.0.2    - JWT 认证
 bcrypt 5.1.1          - 密码哈希
@@ -34,7 +34,7 @@ tsx 4.7.0             - 开发热重载
 ```
 
 **关键约束**：
-- DuckDB 运行在后端 Node.js 进程中（`duckdb` npm 包，原生绑定）
+- DuckDB 运行在后端 Node.js 进程中（`@duckdb/node-api` 原生绑定）
 - 前端不直接执行 SQL，所有查询通过 REST API 发送到后端
 - 后端 DuckDB 服务为单例模式，带连接池管理
 - SQL 模板定义在 `server/src/sql/` 目录，字段类型在 `server/src/services/duckdb.ts`
@@ -76,7 +76,7 @@ tsx 4.7.0             - 开发热重载
 
 ## 3. DuckDB 特定约束（CRITICAL）
 
-> DuckDB 运行在后端（`server/src/services/duckdb.ts`），使用 `duckdb` npm 原生包 v1.1.3。
+> DuckDB 运行在后端（`server/src/services/duckdb.ts`），使用 `@duckdb/node-api` 原生包 v1.4.4-r.1。
 > 不是 DuckDB-WASM，不在浏览器中执行。SQL 验证通过后端日志或 API 返回结果确认。
 
 ### 3.1 日期时间处理
@@ -348,6 +348,7 @@ server/
 - 新增后端路由 → 补充到 SS 7 目录结构
 
 **变更历史**：
+- 2026-04-24：对齐运行时定位为 API-only + DuckDB native；明确后端使用 `@duckdb/node-api` v1.4.4-r.1，前端不运行 DuckDB-WASM / Local 模式。
 - 2026-02-13：全面更新为 API-only 模式，移除所有 DuckDB-WASM 引用；更新版本号匹配 package.json（React 19.0.0, TS 5.9.3, Vite 5.4.21, ECharts 5.6.0）；新增后端技术栈（Express 4.18.2, DuckDB 1.1.3, JWT 9.0.2）；更新文件路径引用至 server/ 目录；新增后端目录结构（SS 7）；更新验证协议为 API 接口验证模式
 - 2026-01-08：同步 package.json 版本号并补充协作引用入口
 - 2026-01-08：创建技术栈声明，记录 DuckDB 验证教训
