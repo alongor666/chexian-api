@@ -1,0 +1,5 @@
+__pycache__/
+logs/*.json
+state/*.json
+!logs/.gitkeep
+!state/.gitkeep

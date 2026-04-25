@@ -30,6 +30,9 @@ parquet_data.json
 数据管理/patrol_reports/*/*.json
 !数据管理/patrol_reports/*/report.md
 
+# 外部系统同步产物（含客户 VIN/record_id 等敏感映射，禁止提交）
+数据管理/outputs/
+
 # 工作流模板
 CC工作流复制/
 签子流程复制/

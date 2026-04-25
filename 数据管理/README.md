@@ -62,6 +62,9 @@
 ├── config/                      # ⚙️ 配置中心
 │   └── tasks/                   # 任务配置模板
 │
+├── integrations/                # 🔌 外部系统同步
+│   └── wecom_smartsheet/        # 企业微信智能表格同步
+│
 ├── cli.py                       # 命令行工具
 ├── run.mjs                       # 快捷执行脚本
 └── logs/                        # 运行日志
@@ -181,6 +184,29 @@ python3 pipelines/enrich.py \
 功能：
 - 按月计算已赚保费
 - 时间比例法实现
+
+### 4. 企业微信智能表格同步
+
+**模块**: `integrations/wecom_smartsheet/`（多实例，config 驱动）
+
+功能：
+- 读取保单明细、报价数据和续回匹配口径
+- 按车架号维护 `record_id` 状态（各实例独立 state 文件）
+- 对企业微信智能表格执行新增/更新同步
+
+每个 `config.{instance}.json` 对应一个机构/一张表，state 和 log 按 `instance_name` 独立命名：
+
+```bash
+# 手动 dry-run（自贡）
+python3 integrations/wecom_smartsheet/sync_renewal.py \
+  --config integrations/wecom_smartsheet/config.zigong.json --dry-run
+
+# 手动 dry-run（天府）
+python3 integrations/wecom_smartsheet/sync_renewal.py \
+  --config integrations/wecom_smartsheet/config.tianfu.json --dry-run
+```
+
+**自动化**：`daily.mjs` 步骤 8 遍历模块内所有 `config.*.json`，按 `WECOM_SMARTSHEET_ENABLED=1`（`.env.local`）开关决定是否推送。失败降级告警不阻塞 ETL。
 
 ## 配置说明
 

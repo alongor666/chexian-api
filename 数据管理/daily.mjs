@@ -58,6 +58,23 @@ function log(color, message) {
   console.log(`${colors[color]}${message}${colors.reset}`);
 }
 
+// ── 环境变量加载（轻量 dotenv，仅 daily.mjs 使用，不污染全局） ──
+// 读取 chexian-api 根目录 .env.local，不覆盖已设置的 process.env
+function loadEnvLocal(scriptDir) {
+  const envPath = join(scriptDir, '..', '.env.local');
+  if (!existsSync(envPath)) return;
+  const content = readFileSync(envPath, 'utf-8');
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const match = trimmed.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+    const [, key, rawVal] = match;
+    if (process.env[key] !== undefined) continue;
+    process.env[key] = rawVal.replace(/^['"](.*)['"]$/, '$1');
+  }
+}
+
 // ── 工具函数 ──
 
 function isWindows() {
@@ -440,6 +457,49 @@ async function syncToVps(scriptDir) {
   }
 }
 
+// ETL 完成后按 config.{instance}.json 逐个同步到企业微信智能表格
+// 由 WECOM_SMARTSHEET_ENABLED=1 开关控制（默认关闭），失败降级告警不阻塞 ETL
+async function runPostEtlIntegrations(scriptDir, python) {
+  if (process.env.WECOM_SMARTSHEET_ENABLED !== '1') return;
+
+  const integrationDir = join(scriptDir, 'integrations/wecom_smartsheet');
+  const scriptPath = join(integrationDir, 'sync_renewal.py');
+  if (!existsSync(scriptPath)) return;
+
+  const configs = readdirSync(integrationDir)
+    .filter(f => f.startsWith('config.') && f.endsWith('.json'))
+    .sort();
+  if (configs.length === 0) return;
+
+  console.log('');
+  log('green', '╔══════════════════════════════════════════╗');
+  log('green', '║  8. 企业微信智能表格同步                   ║');
+  log('green', '╚══════════════════════════════════════════╝');
+  log('cyan', `  实例数: ${configs.length}`);
+
+  for (const configFile of configs) {
+    const instance = configFile.replace(/^config\.|\.json$/g, '');
+    log('cyan', `\n  ▶ 同步实例: ${instance}`);
+    try {
+      runPythonScript(python, scriptPath, [
+        '--config', `"${join(integrationDir, configFile)}"`,
+      ]);
+      log('green', `  ✓ ${instance} 同步完成`);
+    } catch (err) {
+      const fullMessage = (err.message || '').trim();
+      log('red', `  ⚠ ${instance} 同步失败（降级告警，不阻塞 ETL）`);
+      // 完整打印错误（不截断），方便定位企业微信 errcode 与 errmsg
+      for (const line of fullMessage.split('\n')) {
+        if (line.trim()) log('red', `     ${line}`);
+      }
+      log('yellow', `  排查指引：`);
+      log('yellow', `     1. 详细日志：${join(integrationDir, 'logs')}/${instance}_sync_*.json`);
+      log('yellow', `     2. 故障排查表：数据管理/integrations/wecom_smartsheet/README.md（"故障排查"章节）`);
+      log('yellow', `     3. 手动重试：python3 ${scriptPath} --config ${join(integrationDir, configFile)} --dry-run`);
+    }
+  }
+}
+
 async function rebuildSnapshots(scriptDir) {
   log('cyan', '[ETL] 重建静态快照（从 VPS 拉取新数据）...');
   const projectRoot = dirname(scriptDir);
@@ -650,6 +710,7 @@ function runRenewalTracker(python, scriptDir) {
 async function main() {
   const scriptDir = __dirname;
   process.chdir(scriptDir);
+  loadEnvLocal(scriptDir);
 
   const noSync = process.argv.includes('--no-sync');
   const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'renewal_tracker', 'all'];
@@ -685,6 +746,7 @@ async function main() {
       const synced = await syncToVps(scriptDir);
       if (synced) await rebuildSnapshots(scriptDir);
     }
+    await runPostEtlIntegrations(scriptDir, python);
     return;
   }
   if (subcommand === 'all') {
@@ -932,6 +994,9 @@ async function main() {
     const synced = await syncToVps(scriptDir);
     if (synced) await rebuildSnapshots(scriptDir);
   }
+
+  // 8. 外部系统集成（企业微信智能表格），失败降级告警不阻塞 ETL
+  await runPostEtlIntegrations(scriptDir, python);
 
   console.log('');
   log('green', '✅ ETL 流程完成！');
