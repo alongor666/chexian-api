@@ -1,6 +1,7 @@
 # 车险数据分析平台（chexian-api）
 
-> 面向车险经营分析的全栈数据平台，采用纯 API 架构：React 前端 + Express/DuckDB 后端。
+> 面向车险经营分析的 API-only 数据平台：React 客户端 + Express REST API + DuckDB native 后端。
+> 当前系统不包含浏览器 DuckDB-WASM / Local 模式，前端所有数据访问都通过 `/api/*`。
 > 519+ commits | 97 API 端点 | 15 数据域 | 35 SQL 生成器 | 77 测试文件
 
 ## 1) 项目概述
@@ -49,7 +50,7 @@
 | 技术 | 用途 |
 |------|------|
 | Express 4 + TypeScript | API 服务框架 |
-| DuckDB (`@duckdb/node-api`) | 列式分析引擎 |
+| DuckDB native (`@duckdb/node-api`) | 后端 Node.js 进程内列式分析引擎 |
 | jsonwebtoken + bcrypt | JWT 认证 |
 | helmet + express-rate-limit + cors | 安全中间件 |
 | multer | 文件上传 |
@@ -213,6 +214,19 @@ chexian-api/
 
 ## 5) 数据架构
 
+当前运行时数据链路：
+
+```text
+React 页面/Hook
+  → src/shared/api/client.ts
+  → Express REST API (/api/*)
+  → server/src/routes/* + server/src/sql/*
+  → server/src/services/duckdb.ts
+  → @duckdb/node-api（DuckDB native）
+```
+
+前端不直接执行 SQL，不加载 DuckDB-WASM，不再维护浏览器 Local 模式。
+
 ### 数据域注册表（15 域）
 
 | 域 ID | 名称 | 类型 | 状态 |
@@ -352,6 +366,7 @@ node scripts/sync-vps.mjs --export
 |------|------|
 | 架构规范 | `ARCHITECTURE.md` |
 | 技术栈详情 | `开发文档/TECH_STACK.md` |
+| Agent 化升级总览 | `docs/AGENTIC_UPGRADE.md` |
 | 开发约定 | `开发文档/DEVELOPER_CONVENTIONS.md` |
 | 数据知识库 | `数据管理/knowledge/` |
 | 业务规则字典 | `数据管理/knowledge/rules/车险数据业务规则字典.md` |
