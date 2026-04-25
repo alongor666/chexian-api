@@ -148,8 +148,12 @@
 以下校正优先于本文件历史条目：
 
 - `src/shared/duckdb/client.ts`、`src/shared/duckdb/README.md` 已不属于当前运行架构。
-- 当前数据链路：前端 `src/shared/api/client.ts` → 后端 `server/src/routes/*` → `server/src/sql/*` → `server/src/services/duckdb.ts`。
+- 当前数据链路：前端 `src/shared/api/client.ts` → 后端 `server/src/routes/*` → `server/src/sql/*` → `server/src/services/duckdb.ts` → `@duckdb/node-api`（DuckDB native）。
 - 如需查看 DuckDB 业务口径，请以 `server/src/services/duckdb.ts` 和 `server/src/sql/*.ts` 为准。
+
+## 2026-04 Agent 化升级入口（新增）
+
+- `docs/AGENTIC_UPGRADE.md`：Agent 化升级总览，明确当前系统基线为 API-only + DuckDB native，并定义后续 Agent-ready 能力目录、受控查询、任务编排与生产护栏路线。
 
 ## 2026-02-25 清理门禁报告（新增）
 

@@ -4,9 +4,16 @@
 
 ## 项目定位
 
-**chexian-api** = 车险数据分析平台（API 版），纯后端 API 模式，从 chexianYJFX 双模式项目拆分而来。包含：
+**chexian-api** = 车险数据分析平台（API-only 版），从 chexianYJFX 双模式项目拆分而来。当前系统定位为：
+
+- React 客户端只负责交互、渲染与调用 REST API
+- Express 后端提供 `/api/*` 服务、认证、权限、缓存与业务路由
+- DuckDB native 运行在后端 Node.js 进程中，通过 `@duckdb/node-api` 查询 Parquet / 预聚合数据
+- 前端不运行 DuckDB-WASM，不保留浏览器 Local 查询模式
+
+包含：
 - 前端应用（React + TypeScript + Vite）
-- 后端 API 服务（Bun + DuckDB）
+- 后端 API 服务（Express + DuckDB native）
 - 数据管理模块（Python脚本集）
 - 部署配置
 
@@ -17,7 +24,7 @@
 ```
 chexian-api/
 ├── src/                    # 前端源码（核心应用）
-├── server/                 # 后端 API 服务（Bun + DuckDB）
+├── server/                 # 后端 API 服务（Express + DuckDB native）
 ├── tests/                  # 测试用例
 ├── dist/                   # 构建产物
 ├── deploy/                 # 部署配置
@@ -180,7 +187,7 @@ hotfix/xxx              # 紧急修复
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   server/ 后端 API 服务                       │
-│  - DuckDB 查询引擎、REST API、JWT 认证                        │
+│  - DuckDB native 查询引擎、REST API、JWT 认证                 │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼

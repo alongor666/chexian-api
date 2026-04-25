@@ -89,8 +89,8 @@
 
   "project": {
     "name": "签单业绩分析看板",
-    "type": "data-dashboard",
-    "tech_stack": ["React", "TypeScript", "DuckDB-WASM", "Tailwind", "Bun"],
-    "description": "Insurance sales data analysis dashboard with DuckDB-WASM"
+    "type": "api-only-data-platform",
+    "tech_stack": ["React", "TypeScript", "Express", "@duckdb/node-api (DuckDB native)", "Tailwind", "Bun"],
+    "description": "Insurance data analysis platform: React client + Express REST API + DuckDB native backend. No DuckDB-WASM browser runtime."
   }
 }
