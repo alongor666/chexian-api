@@ -166,6 +166,13 @@ export const AGENT_AUDIT_ROUTES = {
 } as const;
 
 // ─────────────────────────────────────────────
+// /api/agent/diagnosis/* 路由
+// ─────────────────────────────────────────────
+export const AGENT_DIAGNOSIS_ROUTES = {
+  COST_INDICATORS: '/cost-indicators',
+} as const;
+
+// ─────────────────────────────────────────────
 // /api/filters/* 路由
 // ─────────────────────────────────────────────
 export const FILTER_ROUTES = {
