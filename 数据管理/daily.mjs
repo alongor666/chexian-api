@@ -486,8 +486,16 @@ async function runPostEtlIntegrations(scriptDir, python) {
       ]);
       log('green', `  ✓ ${instance} 同步完成`);
     } catch (err) {
+      const fullMessage = (err.message || '').trim();
       log('red', `  ⚠ ${instance} 同步失败（降级告警，不阻塞 ETL）`);
-      log('red', `     ${(err.message || '').split('\n')[0]}`);
+      // 完整打印错误（不截断），方便定位企业微信 errcode 与 errmsg
+      for (const line of fullMessage.split('\n')) {
+        if (line.trim()) log('red', `     ${line}`);
+      }
+      log('yellow', `  排查指引：`);
+      log('yellow', `     1. 详细日志：${join(integrationDir, 'logs')}/${instance}_sync_*.json`);
+      log('yellow', `     2. 故障排查表：数据管理/integrations/wecom_smartsheet/README.md（"故障排查"章节）`);
+      log('yellow', `     3. 手动重试：python3 ${scriptPath} --config ${join(integrationDir, configFile)} --dry-run`);
     }
   }
 }
