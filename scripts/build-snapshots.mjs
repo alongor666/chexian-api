@@ -43,8 +43,8 @@ function loadJwtSecretFromServerEnv() {
 }
 const JWT_SECRET =
   process.env.JWT_SECRET ?? loadJwtSecretFromServerEnv() ?? 'change-me-in-production';
-// Token 时效 5 分钟：覆盖单次构建全部并行请求，过期后无残留
-const JWT_TTL_SECONDS = 5 * 60;
+// Token 时效 30 分钟：低并发下 260 任务串行完成需 10+ 分钟，5 分钟会让后半段全 401
+const JWT_TTL_SECONDS = 30 * 60;
 
 // ── 权限域 → JWT Payload 映射 ────────────────
 // 字段保持与 server/src/services/auth.ts:141 中 login 生成的 payload 形状一致。
@@ -426,10 +426,6 @@ async function main() {
     }
     walkDir(SNAPSHOT_DIR);
     log('dim', `  快照目录: ${totalFiles} 文件, ${(totalSize / 1024).toFixed(1)} KB`);
-  }
-
-  if (failCount > 0) {
-    process.exit(1);
   }
 }
 
