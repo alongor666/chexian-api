@@ -12,6 +12,26 @@ describe('agent adaptation audit routing', () => {
       .toBe('supported');
   });
 
+  it('keeps comprehensive and fixed cost metrics in caution review capability only', () => {
+    const audit = getAgentCapabilityAudit();
+    const costDiagnosis = audit.capabilities.find((item) => item.id === 'cost_indicator_diagnosis');
+    const comprehensiveReview = audit.capabilities.find((item) => item.id === 'comprehensive_cost_indicator_review');
+
+    expect(comprehensiveReview?.supportLevel).toBe('caution');
+    expect(comprehensiveReview?.coreMetrics).toEqual(
+      expect.arrayContaining([
+        'comprehensive_expense_ratio',
+        'combined_cost_amount',
+        'combined_cost_ratio',
+        'fixed_cost_amount',
+        'fixed_cost_ratio',
+      ])
+    );
+    expect(costDiagnosis?.coreMetrics).not.toEqual(
+      expect.arrayContaining(['combined_cost_ratio', 'fixed_cost_ratio', 'comprehensive_expense_ratio'])
+    );
+  });
+
   it('routes variable cost questions to cost indicator diagnosis', () => {
     const result = routeAgentQuestion({ question: '变动成本率为什么升高？' });
 
@@ -40,6 +60,16 @@ describe('agent adaptation audit routing', () => {
     expect(result.blocked).toBe(true);
     expect(result.status).toBe('unsupported');
     expect(result.reason).toContain('财务盈亏');
+  });
+
+  it('blocks explicit profit amount and margin contribution questions', () => {
+    for (const question of ['哪个机构利润额最高？', '满期边际贡献额怎么看？', '预估边际贡献额下降原因？']) {
+      const result = routeAgentQuestion({ question });
+
+      expect(result.blocked).toBe(true);
+      expect(result.status).toBe('unsupported');
+      expect(result.reason).toContain('财务盈亏');
+    }
   });
 
   it('routes generic cost indicator anomaly questions without blocking variable cost ratio', () => {

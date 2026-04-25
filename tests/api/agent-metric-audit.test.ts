@@ -43,6 +43,61 @@ describe('agent metric audit registry', () => {
     );
   });
 
+  it('classifies registered profit and margin cost metrics as unsupported for Agent output', () => {
+    const audit = getAgentMetricAudit();
+    const metrics = new Map(audit.metrics.map((item) => [item.id, item]));
+
+    for (const metricId of ['earned_profit_amount', 'earned_margin_amount', 'projected_margin_amount']) {
+      const metric = metrics.get(metricId);
+      expect(metric).toBeDefined();
+      expect(metric?.supportLevel).toBe('unsupported');
+      expect(metric?.forbiddenInterpretations).toEqual(
+        expect.arrayContaining(['承保利润', '边际贡献', '盈利', '亏损', '财务盈利', '财务亏损'])
+      );
+      expect(metric?.replacementSuggestions?.join('')).toContain('变动成本率');
+    }
+  });
+
+  it('classifies registered comprehensive and fixed cost metrics as caution only', () => {
+    const audit = getAgentMetricAudit();
+    const metrics = new Map(audit.metrics.map((item) => [item.id, item]));
+
+    for (const metricId of [
+      'comprehensive_expense_ratio',
+      'combined_cost_amount',
+      'combined_cost_ratio',
+      'fixed_cost_amount',
+      'fixed_cost_ratio',
+    ]) {
+      const metric = metrics.get(metricId);
+      expect(metric).toBeDefined();
+      expect(metric?.supportLevel).toBe('caution');
+      expect(metric?.supportedUseCases).not.toContain('cost_indicator_diagnosis');
+      expect(metric?.cautionNotes.join('')).toContain('不进入成本指标诊断主路径');
+      expect(metric?.forbiddenInterpretations).toEqual(
+        expect.arrayContaining(['承保利润', '财务综合成本率', '盈亏判断'])
+      );
+    }
+  });
+
+  it('blocks explicit profit and margin metric terms in unsupported audit registry', () => {
+    const unsupported = getUnsupportedMetricAudit();
+    const allBlockedTerms = unsupported.metrics.flatMap((item) => item.blockedTerms);
+
+    expect(allBlockedTerms).toEqual(
+      expect.arrayContaining(['利润额', '满期边际贡献额', '预估边际贡献额', '边际贡献', '盈利', '亏损'])
+    );
+  });
+
+  it('documents that base metric registry presence does not allow Agent profit output', () => {
+    const doc = readSource('docs/AGENT_METRIC_SYSTEM_AUDIT.md');
+
+    expect(doc).toContain('底层指标注册表存在');
+    expect(doc).toContain('不等于 Agent 可以输出利润、边际贡献或盈亏结论');
+    expect(doc).toContain('earned_profit_amount');
+    expect(doc).toContain('combined_cost_ratio');
+  });
+
   it('mounts agent audit routes without changing the query route permission chain', () => {
     const app = readSource('server/src/app.ts');
     const queryRouter = readSource('server/src/routes/query.ts');
