@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sync_renewal import (
     DEFAULT_SCHEMA,
     OperationItem,
+    RateLimiter,
     apply_add_response,
     build_record,
     date_to_epoch_ms,
@@ -151,7 +152,7 @@ def test_apply_add_response_persists_vin_record_id_mapping():
     json.dumps(state, ensure_ascii=False)
 
 
-def test_iter_rate_limited_batches_splits_by_minute_limit_and_marks_waits():
+def test_iter_rate_limited_batches_splits_by_size_only():
     items = [{"id": i} for i in range(6500)]
 
     windows = list(iter_rate_limited_batches(items, batch_size=1000, records_per_minute=3000))
@@ -160,14 +161,14 @@ def test_iter_rate_limited_batches_splits_by_minute_limit_and_marks_waits():
         (1, 1000, 0),
         (2, 1000, 0),
         (3, 1000, 0),
-        (4, 1000, 60),
+        (4, 1000, 0),
         (5, 1000, 0),
         (6, 1000, 0),
-        (7, 500, 60),
+        (7, 500, 0),
     ]
 
 
-def test_iter_rate_limited_batches_shared_budget_for_update_and_add():
+def test_iter_rate_limited_batches_preserves_operation_order():
     operations = [
         *(OperationItem(op="update", payload={"id": f"u{i}"}) for i in range(2000)),
         *(OperationItem(op="add", payload={"id": f"a{i}"}) for i in range(2000)),
@@ -175,14 +176,66 @@ def test_iter_rate_limited_batches_shared_budget_for_update_and_add():
 
     windows = list(iter_rate_limited_batches(operations, batch_size=1000, records_per_minute=3000))
 
-    assert [(w.batch_index, len(w.items), w.sleep_before_seconds) for w in windows] == [
-        (1, 1000, 0),
-        (2, 1000, 0),
-        (3, 1000, 0),
-        (4, 1000, 60),
+    assert [(w.batch_index, len(w.items)) for w in windows] == [
+        (1, 1000),
+        (2, 1000),
+        (3, 1000),
+        (4, 1000),
     ]
-    assert windows[2].items[-1].op == "add"
-    assert windows[2].items[0].op == "update"
+    assert all(item.op == "update" for item in windows[1].items)
+    assert all(item.op == "add" for item in windows[2].items)
+
+
+def _make_clock():
+    state = {"t": 0.0, "slept": 0.0}
+
+    def now() -> float:
+        return state["t"]
+
+    def sleep(seconds: float) -> None:
+        state["slept"] += seconds
+        state["t"] += seconds
+
+    def advance(seconds: float) -> None:
+        state["t"] += seconds
+
+    return now, sleep, advance, state
+
+
+def test_rate_limiter_no_sleep_when_under_quota():
+    now, sleep, _advance, state = _make_clock()
+    limiter = RateLimiter(records_per_minute=3000, sleep_seconds=60, now_fn=now, sleep_fn=sleep)
+
+    for _ in range(3):
+        slept = limiter.acquire(1000)
+        assert slept == 0.0
+
+    assert state["slept"] == 0.0
+
+
+def test_rate_limiter_sleeps_only_for_remaining_window_when_quota_full():
+    now, sleep, advance, state = _make_clock()
+    limiter = RateLimiter(records_per_minute=3000, sleep_seconds=60, now_fn=now, sleep_fn=sleep)
+
+    limiter.acquire(3000)
+    advance(20)
+    slept = limiter.acquire(1)
+
+    assert slept == 40.0
+    assert state["slept"] == 40.0
+
+
+def test_rate_limiter_skips_sleep_when_window_already_elapsed():
+    """关键修复：webhook IO 慢导致窗口自然过期时，不再冗余 sleep 60s。"""
+    now, sleep, advance, state = _make_clock()
+    limiter = RateLimiter(records_per_minute=3000, sleep_seconds=60, now_fn=now, sleep_fn=sleep)
+
+    limiter.acquire(3000)
+    advance(186)
+    slept = limiter.acquire(100)
+
+    assert slept == 0.0
+    assert state["slept"] == 0.0
 
 
 def test_group_contiguous_operations_preserves_order_and_boundaries():

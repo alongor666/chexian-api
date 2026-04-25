@@ -21,7 +21,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import duckdb
 
@@ -432,29 +432,62 @@ def iter_rate_limited_batches(
     items: list[Any],
     batch_size: int,
     records_per_minute: int,
-    sleep_seconds: int = 60,
+    sleep_seconds: int = 60,  # noqa: ARG001 — kept for backward-compat
 ) -> list[RateLimitedBatch]:
+    """Split items into batches only. Rate-limit decisions live in RateLimiter (wall-clock)."""
     if batch_size <= 0:
         raise ValueError("batch_size 必须大于 0")
     if records_per_minute <= 0:
         raise ValueError("records_per_minute 必须大于 0")
     effective_batch_size = min(batch_size, records_per_minute)
-    batches: list[RateLimitedBatch] = []
-    used_in_window = 0
-    for raw_batch in chunked(items, effective_batch_size):
-        sleep_before = 0
-        if used_in_window + len(raw_batch) > records_per_minute:
-            sleep_before = sleep_seconds
-            used_in_window = 0
-        used_in_window += len(raw_batch)
-        batches.append(
-            RateLimitedBatch(
-                batch_index=len(batches) + 1,
-                items=raw_batch,
-                sleep_before_seconds=sleep_before,
-            )
-        )
-    return batches
+    return [
+        RateLimitedBatch(batch_index=i + 1, items=batch, sleep_before_seconds=0)
+        for i, batch in enumerate(chunked(items, effective_batch_size))
+    ]
+
+
+class RateLimiter:
+    """Wall-clock sliding-window limiter.
+
+    旧实现按"累积条数"判断 sleep，忽略真实时间流逝。当单批 webhook IO ~6s 时，
+    每 31 批攒满 3000 条配额需要 186s wall-clock，但旧逻辑仍 sleep 60s，导致
+    498 批同步多花 16 × 60s = 960s（21% wall-clock）。本类基于 monotonic 时钟
+    判断，仅在配额未恢复时才阻塞。
+    """
+
+    def __init__(
+        self,
+        records_per_minute: int,
+        sleep_seconds: int = 60,
+        now_fn: Callable[[], float] = time_mod.monotonic,
+        sleep_fn: Callable[[float], None] = time_mod.sleep,
+    ) -> None:
+        if records_per_minute <= 0:
+            raise ValueError("records_per_minute 必须大于 0")
+        self.limit = records_per_minute
+        self.window_seconds = sleep_seconds
+        self._now = now_fn
+        self._sleep = sleep_fn
+        self._window_start = now_fn()
+        self._used = 0
+
+    def acquire(self, records: int) -> float:
+        """Wait if needed, then reserve records against current window. Returns seconds slept."""
+        now = self._now()
+        elapsed = now - self._window_start
+        if elapsed >= self.window_seconds:
+            self._window_start = now
+            self._used = 0
+            elapsed = 0.0
+        slept = 0.0
+        if self._used + records > self.limit:
+            slept = max(self.window_seconds - elapsed, 0.0)
+            if slept > 0:
+                self._sleep(slept)
+            self._window_start = self._now()
+            self._used = 0
+        self._used += records
+        return slept
 
 
 def write_log(config: SyncConfig, summary: dict[str, Any]) -> Path:
@@ -512,14 +545,17 @@ def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -
         *(OperationItem(op="update", payload=item) for item in plan.update_records),
         *(OperationItem(op="add", payload=item) for item in plan.add_records),
     ]
+    limiter = RateLimiter(
+        records_per_minute=config.sheet_records_per_minute_limit,
+        sleep_seconds=config.rate_limit_sleep_seconds,
+    )
     for rate_batch in iter_rate_limited_batches(
         operation_items,
         batch_size=batch_size,
         records_per_minute=config.sheet_records_per_minute_limit,
         sleep_seconds=config.rate_limit_sleep_seconds,
     ):
-        if rate_batch.sleep_before_seconds:
-            time_mod.sleep(rate_batch.sleep_before_seconds)
+        actual_sleep = limiter.acquire(len(rate_batch.items))
         grouped_ops = group_contiguous_operations(rate_batch.items)
         for index, (op, op_items) in enumerate(grouped_ops):
             if op == "update":
@@ -536,7 +572,7 @@ def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -
                 "op": op,
                 "sent": len(op_items),
                 "errcode": response.get("errcode"),
-                "sleep_before_seconds": rate_batch.sleep_before_seconds if index == 0 else 0,
+                "sleep_before_seconds": actual_sleep if index == 0 else 0,
             })
             time_mod.sleep(0.2)
 
