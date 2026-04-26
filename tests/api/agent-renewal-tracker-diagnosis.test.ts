@@ -5,6 +5,7 @@ import { createRequire } from 'module';
 import type { Server } from 'http';
 
 import { diagnoseRenewalTrackerRows } from '../../server/src/agent/services/agent-renewal-tracker-diagnosis-service';
+import { RenewalTrackerDiagnosisRequestSchema } from '../../server/src/agent/schemas/agent-diagnosis.schema';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -28,6 +29,29 @@ function readSource(relativePath: string): string {
 const serverRequire = createRequire(path.resolve(process.cwd(), 'server/package.json'));
 
 describe('agent renewal tracker diagnosis workflow', () => {
+  it('parses renewal boolean filters explicitly and keeps "false" as false', () => {
+    const parsed = RenewalTrackerDiagnosisRequestSchema.parse({
+      start: '2026-04-01',
+      end: '2026-04-30',
+      cutoff: '2026-04-24',
+      filters: {
+        isRenewal: 'false',
+        isTransfer: 'true',
+      },
+    });
+    expect(parsed.filters.isRenewal).toBe(false);
+    expect(parsed.filters.isTransfer).toBe(true);
+
+    expect(() => RenewalTrackerDiagnosisRequestSchema.parse({
+      start: '2026-04-01',
+      end: '2026-04-30',
+      cutoff: '2026-04-24',
+      filters: {
+        isRenewal: '0',
+      },
+    })).toThrow();
+  });
+
   it('diagnoses renewal tracker overview, weak segments, and dimension risks', () => {
     const diagnosis = diagnoseRenewalTrackerRows({
       start: '2026-04-01',
@@ -189,6 +213,62 @@ describe('agent renewal tracker diagnosis workflow', () => {
       expect(sqlCalls[0]).toContain("customer_category IN ('非营业个人客车')");
       expect(sqlCalls[0]).toContain("coverage_combination IN ('主全')");
       expect(sqlCalls[0]).toContain('is_renewal = true');
+    } finally {
+      await closeServer(server);
+    }
+  });
+
+  it('rejects telemarketing_user to avoid invalid renewal tracker permission SQL', async () => {
+    const queryMock = vi.fn();
+    vi.doMock('../../server/src/services/duckdb.js', () => ({
+      duckdbService: {
+        query: queryMock,
+      },
+    }));
+
+    const express = serverRequire('express');
+    const jwt = serverRequire('jsonwebtoken');
+    const [{ authConfig }, { errorHandler }, { default: agentDiagnosisRoutes }] =
+      await Promise.all([
+        import('../../server/src/config/auth.js'),
+        import('../../server/src/middleware/error.js'),
+        import('../../server/src/agent/routes/agent-diagnosis.js'),
+      ]);
+
+    const app = express();
+    app.use(express.json());
+    app.use('/api/agent/diagnosis', agentDiagnosisRoutes);
+    app.use(errorHandler);
+
+    const server = app.listen(0);
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Failed to bind test server');
+
+      const token = jwt.sign(
+        {
+          userId: 'u2',
+          username: 'tm-user',
+          role: 'telemarketing_user',
+        },
+        authConfig.jwtSecret
+      );
+
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/agent/diagnosis/renewal-tracker`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          start: '2026-04-01',
+          end: '2026-04-30',
+          cutoff: '2026-04-24',
+          filters: {},
+        }),
+      });
+      expect(response.status).toBe(403);
+      expect(queryMock).not.toHaveBeenCalled();
     } finally {
       await closeServer(server);
     }

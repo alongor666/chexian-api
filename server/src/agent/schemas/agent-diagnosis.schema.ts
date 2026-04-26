@@ -277,6 +277,17 @@ const RenewalTrackerOptionalStringArraySchema = z.preprocess(
   z.array(z.string()).default([])
 );
 
+const RenewalTrackerOptionalBooleanSchema = z.preprocess((value) => {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+  return value;
+}, z.boolean().optional());
+
 export const RenewalTrackerDiagnosisFilterSchema = z.object({
   orgNames: RenewalTrackerOptionalStringArraySchema,
   salesmanNames: RenewalTrackerOptionalStringArraySchema,
@@ -285,10 +296,10 @@ export const RenewalTrackerDiagnosisFilterSchema = z.object({
   fuelCategories: RenewalTrackerOptionalStringArraySchema,
   usedTransferTypes: RenewalTrackerOptionalStringArraySchema,
   renewalTypes: RenewalTrackerOptionalStringArraySchema,
-  isNev: z.coerce.boolean().optional(),
-  isNewCar: z.coerce.boolean().optional(),
-  isTransfer: z.coerce.boolean().optional(),
-  isRenewal: z.coerce.boolean().optional(),
+  isNev: RenewalTrackerOptionalBooleanSchema,
+  isNewCar: RenewalTrackerOptionalBooleanSchema,
+  isTransfer: RenewalTrackerOptionalBooleanSchema,
+  isRenewal: RenewalTrackerOptionalBooleanSchema,
 });
 
 const RenewalTrackerDiagnosisDefaultFilters = {

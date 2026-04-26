@@ -22,6 +22,7 @@ describe('agent renewal tracker diagnosis route contract', () => {
     expect(route).toContain('router.use(authMiddleware);');
     expect(route).toContain('router.use(permissionMiddleware);');
     expect(route).toContain("createDomainMiddleware('RenewalTracker')");
+    expect(route).toContain("telemarketing_user is not supported for renewal tracker diagnosis");
   });
 
   it('locks request and response validation to the Agent schema layer', () => {
