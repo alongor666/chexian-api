@@ -192,6 +192,7 @@ export const AGENT_DIAGNOSIS_ROUTES = {
   COST_INDICATORS: 'agent/diagnosis/cost-indicators',
   GROWTH: 'agent/diagnosis/growth',
   QUOTE_CONVERSION: 'agent/diagnosis/quote-conversion',
+  RENEWAL_TRACKER: 'agent/diagnosis/renewal-tracker',
 } as const;
 
 // ─────────────────────────────────────────────

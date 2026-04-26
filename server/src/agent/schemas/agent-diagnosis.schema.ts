@@ -266,3 +266,109 @@ export type QuoteConversionDrilldownLevel = z.infer<typeof QuoteConversionDrilld
 export type QuoteConversionTrendGranularity = z.infer<typeof QuoteConversionTrendGranularitySchema>;
 export type QuoteConversionDiagnosisRequest = z.infer<typeof QuoteConversionDiagnosisRequestSchema>;
 export type QuoteConversionDiagnosisResult = z.infer<typeof QuoteConversionDiagnosisResultSchema>;
+
+const RenewalTrackerOptionalStringArraySchema = z.preprocess(
+  (value) => {
+    if (value === undefined || value === null || value === '') return [];
+    if (Array.isArray(value)) return value.filter((item) => typeof item === 'string' && item.trim().length > 0);
+    if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean);
+    return value;
+  },
+  z.array(z.string()).default([])
+);
+
+export const RenewalTrackerDiagnosisFilterSchema = z.object({
+  orgNames: RenewalTrackerOptionalStringArraySchema,
+  salesmanNames: RenewalTrackerOptionalStringArraySchema,
+  customerCategories: RenewalTrackerOptionalStringArraySchema,
+  coverageCombinations: RenewalTrackerOptionalStringArraySchema,
+  fuelCategories: RenewalTrackerOptionalStringArraySchema,
+  usedTransferTypes: RenewalTrackerOptionalStringArraySchema,
+  renewalTypes: RenewalTrackerOptionalStringArraySchema,
+  isNev: z.coerce.boolean().optional(),
+  isNewCar: z.coerce.boolean().optional(),
+  isTransfer: z.coerce.boolean().optional(),
+  isRenewal: z.coerce.boolean().optional(),
+});
+
+const RenewalTrackerDiagnosisDefaultFilters = {
+  orgNames: [],
+  salesmanNames: [],
+  customerCategories: [],
+  coverageCombinations: [],
+  fuelCategories: [],
+  usedTransferTypes: [],
+  renewalTypes: [],
+};
+
+export const RenewalTrackerToolIdSchema = z.enum(['renewal_tracker.query']);
+export const RenewalTrackerSeveritySchema = z.enum(['normal', 'observe', 'warning', 'critical']);
+export const RenewalTrackerDiagnosisLevelSchema = z.enum(['org', 'team', 'salesman']);
+export const RenewalTrackerDimensionSchema = z.enum([
+  'customer_category',
+  'coverage_combination',
+  'fuel_category',
+  'used_transfer_type',
+  'renewal_type',
+]);
+
+export const RenewalTrackerDiagnosisRequestSchema = z.object({
+  start: z.string().min(1),
+  end: z.string().min(1),
+  cutoff: z.string().min(1),
+  filters: RenewalTrackerDiagnosisFilterSchema.default(RenewalTrackerDiagnosisDefaultFilters),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export const RenewalTrackerMetricSetSchema = z.object({
+  expectedRenewalCount: z.number().nullable(),
+  quotedCount: z.number().nullable(),
+  renewedCount: z.number().nullable(),
+  quoteRate: z.number().nullable(),
+  renewalRate: z.number().nullable(),
+  quoteToRenewalRate: z.number().nullable(),
+  quoteGap: z.number().nullable(),
+  renewalGap: z.number().nullable(),
+});
+
+export const RenewalTrackerSegmentDiagnosisSchema = RenewalTrackerMetricSetSchema.extend({
+  level: RenewalTrackerDiagnosisLevelSchema,
+  dimKey: z.string(),
+  orgName: z.string().nullable(),
+  teamName: z.string().nullable(),
+  salesmanName: z.string().nullable(),
+  severity: RenewalTrackerSeveritySchema,
+});
+
+export const RenewalTrackerDimensionDiagnosisSchema = RenewalTrackerMetricSetSchema.extend({
+  dimension: RenewalTrackerDimensionSchema,
+  dimKey: z.string(),
+  severity: RenewalTrackerSeveritySchema,
+});
+
+export const RenewalTrackerDiagnosisResultSchema = z.object({
+  capabilityId: z.literal('renewal_tracker_diagnosis'),
+  status: z.literal('supported'),
+  requestedTools: z.array(RenewalTrackerToolIdSchema),
+  start: z.string(),
+  end: z.string(),
+  cutoff: z.string(),
+  filters: RenewalTrackerDiagnosisFilterSchema,
+  summary: RenewalTrackerMetricSetSchema.extend({
+    exposureRowCount: z.number().nullable(),
+    distinctVehicleCount: z.number().nullable(),
+    distinctSourcePolicyCount: z.number().nullable(),
+    latestDataDate: z.string().nullable(),
+    weakSegmentCount: z.number().int().nonnegative(),
+  }),
+  segmentDiagnostics: z.array(RenewalTrackerSegmentDiagnosisSchema),
+  dimensionDiagnostics: z.array(RenewalTrackerDimensionDiagnosisSchema),
+  cutoffExplanation: z.string(),
+  warnings: z.array(z.string()),
+  forbiddenInterpretations: z.array(z.string()),
+  drilldownSuggestions: z.array(z.string()),
+});
+
+export type RenewalTrackerDiagnosisFilters = z.infer<typeof RenewalTrackerDiagnosisFilterSchema>;
+export type RenewalTrackerDiagnosisRequest = z.infer<typeof RenewalTrackerDiagnosisRequestSchema>;
+export type RenewalTrackerDiagnosisResult = z.infer<typeof RenewalTrackerDiagnosisResultSchema>;
