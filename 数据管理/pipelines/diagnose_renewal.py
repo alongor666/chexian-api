@@ -91,21 +91,22 @@ def resolve_window(args: argparse.Namespace, today: date) -> tuple[date, date, s
 
 def load_dataset(
     win_start: date, win_end: date, insurance_type: str,
-    org: str | None, team: str | None
+    org: str | None, team: str | None, cutoff: date,
 ) -> pd.DataFrame:
     con = duckdb.connect(":memory:")
 
     extra: list[str] = []
-    params: list[object] = [insurance_type, win_start, win_end]
+    extra_params: list[object] = []
     if org:
         extra.append("AND f.org_level_3 = ?")
-        params.append(org)
+        extra_params.append(org)
     if team:
         extra.append("AND f.team_name LIKE ?")
-        params.append(f"%{team}%")
+        extra_params.append(f"%{team}%")
     extra_sql = "\n        ".join(extra)
-    # 两次出现 insurance_type 占位（policy_prior + policy_renewed），其余按位序拼接
-    params = [insurance_type, insurance_type] + params[1:]
+    # 占位符顺序：policy_prior(insurance_type) → policy_renewed(insurance_type)
+    # → main(cutoff for days_to_expiry, win_start, win_end, ...extra)
+    params = [insurance_type, insurance_type, cutoff, win_start, win_end] + extra_params
 
     sql = f"""
     WITH funnel AS (
@@ -138,13 +139,15 @@ def load_dataset(
       GROUP BY policy_no, vehicle_frame_no
     ),
     quote_earliest AS (
+      -- 与 first_quote_date 绑定同一行：用 ARG_MIN 取最早一次报价对应的折扣/保费
       SELECT vehicle_frame_no,
              MIN(CAST(quote_time AS DATE)) AS first_quote_date,
-             ANY_VALUE(commercial_pricing_factor) AS quote_factor,
-             ANY_VALUE(final_quote_premium) AS quote_premium
+             ARG_MIN(commercial_pricing_factor, quote_time) AS quote_factor,
+             ARG_MIN(final_quote_premium, quote_time) AS quote_premium
       FROM read_parquet('{QUOTES_PATH}')
       WHERE insurance_type = '商业保险'
         AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
+        AND quote_time IS NOT NULL
       GROUP BY vehicle_frame_no
     )
     SELECT f.org_level_3, f.team_name, f.salesman_name,
@@ -161,7 +164,7 @@ def load_dataset(
            CASE WHEN q.first_quote_date IS NOT NULL
                 THEN DATE_DIFF('day', q.first_quote_date, f.insurance_end_date)
            END AS quote_lead_days,
-           DATE_DIFF('day', CURRENT_DATE, f.insurance_end_date) AS days_to_expiry
+           DATE_DIFF('day', CAST(? AS DATE), f.insurance_end_date) AS days_to_expiry
     FROM funnel f
     LEFT JOIN policy_prior p ON p.policy_no = f.policy_no AND p.vehicle_frame_no = f.vehicle_frame_no
     LEFT JOIN policy_renewed pr ON pr.policy_no = f.renewed_policy_no AND pr.vehicle_frame_no = f.vehicle_frame_no
@@ -588,7 +591,7 @@ def main() -> int:
 
     print(f"[diagnose-renewal] 窗口 {win_start} ~ {win_end} ({view_label}) cutoff={today}", file=sys.stderr)
 
-    df = load_dataset(win_start, win_end, args.insurance_type, args.org, args.team)
+    df = load_dataset(win_start, win_end, args.insurance_type, args.org, args.team, today)
     if df.empty:
         print("窗口内无数据。请确认 funnel 是否覆盖该期间，或调整时间窗口。", file=sys.stderr)
         return 1
