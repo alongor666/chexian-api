@@ -170,6 +170,7 @@ export const AGENT_AUDIT_ROUTES = {
 // ─────────────────────────────────────────────
 export const AGENT_DIAGNOSIS_ROUTES = {
   COST_INDICATORS: '/cost-indicators',
+  GROWTH: '/growth',
 } as const;
 
 // ─────────────────────────────────────────────
