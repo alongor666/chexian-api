@@ -63,9 +63,56 @@ export const AgentReadinessPrerequisiteSchema = z.object({
   blocker: z.string().optional(),
 });
 
+export const AgentObservabilityAuditLogStatusSchema = z.enum([
+  'observed',
+  'missing_log',
+  'no_recent_agent_calls',
+  'not_production_evidence',
+  'error_rate_above_threshold',
+]);
+
+export const AgentObservabilityAuditLogSchema = z.object({
+  status: AgentObservabilityAuditLogStatusSchema,
+  auditLogConfigured: z.boolean(),
+  exists: z.boolean(),
+  productionEvidence: z.boolean(),
+  windowDays: z.number().int().positive(),
+  totalAgentDiagnosisCalls: z.number().int().nonnegative(),
+  errorCount: z.number().int().nonnegative(),
+  errorRate: z.number().nonnegative(),
+  lastObservedAt: z.string().optional(),
+  auditedPathPrefixes: z.array(z.string()),
+});
+
+export const AgentObservabilityEndpointCoverageSchema = z.object({
+  capabilityId: z.string().min(1),
+  endpoint: z.string().min(1),
+  observedCallCount: z.number().int().nonnegative(),
+  errorCount: z.number().int().nonnegative(),
+  errorRate: z.number().nonnegative(),
+  lastObservedAt: z.string().optional(),
+  status: z.enum(['observed', 'missing_recent_call']),
+});
+
+export const AgentDisplayContractSchema = z.object({
+  status: z.enum(['pending_caller_display_evidence']),
+  requiredFields: z.array(z.enum(['warnings', 'forbiddenInterpretations'])),
+  verifiedByTests: z.array(z.string()),
+  blocker: z.string().min(1),
+});
+
+export const AgentObservabilityAuditSchema = z.object({
+  phase: z.literal('agent_observability_readiness'),
+  auditLog: AgentObservabilityAuditLogSchema,
+  endpointCoverage: z.array(AgentObservabilityEndpointCoverageSchema),
+  stage5Evidence: z.array(AgentReadinessPrerequisiteSchema),
+  displayContract: AgentDisplayContractSchema,
+  notes: z.array(z.string()),
+});
+
 export const AgentReadinessAuditSchema = z.object({
   phase: z.literal('agent_metric_adaptation_audit'),
-  currentStage: z.literal('stage_4_business_patrol_ready'),
+  currentStage: z.literal('stage_4_6_observability_ready'),
   readyForLlm: z.literal(false),
   readyForChatWindow: z.literal(false),
   deterministicRouting: z.literal(true),
@@ -81,6 +128,7 @@ export const AgentReadinessAuditSchema = z.object({
   deterministicDiagnosisCapabilities: z.array(AgentDiagnosisCapabilityReadinessSchema),
   stage5Prerequisites: z.array(AgentReadinessPrerequisiteSchema),
   llmReadinessBlockers: z.array(z.string()),
+  observabilityEvidence: AgentObservabilityAuditSchema,
   notes: z.array(z.string()),
 });
 
@@ -112,6 +160,7 @@ export type UnsupportedMetricAudit = z.infer<typeof UnsupportedMetricAuditSchema
 export type AgentReadinessStage = z.infer<typeof AgentReadinessStageSchema>;
 export type AgentDiagnosisCapabilityReadiness = z.infer<typeof AgentDiagnosisCapabilityReadinessSchema>;
 export type AgentReadinessPrerequisite = z.infer<typeof AgentReadinessPrerequisiteSchema>;
+export type AgentObservabilityAudit = z.infer<typeof AgentObservabilityAuditSchema>;
 export type AgentReadinessAudit = z.infer<typeof AgentReadinessAuditSchema>;
 export type RouteQuestionInput = z.infer<typeof RouteQuestionInputSchema>;
 export type RouteQuestionResult = z.infer<typeof RouteQuestionResultSchema>;

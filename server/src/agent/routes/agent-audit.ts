@@ -5,6 +5,7 @@ import { asyncHandler } from '../../middleware/error.js';
 import {
   AgentCapabilityAuditSchema,
   AgentMetricAuditSchema,
+  AgentObservabilityAuditSchema,
   AgentReadinessAuditSchema,
   RouteQuestionInputSchema,
   RouteQuestionResultSchema,
@@ -14,6 +15,7 @@ import {
 import { getAgentMetricAudit } from '../services/agent-metric-audit-service.js';
 import {
   getAgentCapabilityAudit,
+  getAgentObservabilityAudit,
   getAgentReadinessAudit,
   getUnsupportedMetricAudit,
 } from '../services/agent-adaptation-audit-service.js';
@@ -52,6 +54,17 @@ router.get(
     const response = SuccessResponseSchema(UnsupportedMetricAuditSchema).parse({
       success: true,
       data: getUnsupportedMetricAudit(),
+    });
+    res.json(response);
+  })
+);
+
+router.get(
+  '/observability',
+  asyncHandler(async (_req, res) => {
+    const response = SuccessResponseSchema(AgentObservabilityAuditSchema).parse({
+      success: true,
+      data: getAgentObservabilityAudit(),
     });
     res.json(response);
   })
