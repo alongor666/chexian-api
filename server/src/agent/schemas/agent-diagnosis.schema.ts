@@ -557,3 +557,76 @@ export const CustomerFlowDiagnosisResultSchema = z.object({
 export type CustomerFlowDiagnosisFilters = z.infer<typeof CustomerFlowDiagnosisFilterSchema>;
 export type CustomerFlowDiagnosisRequest = z.infer<typeof CustomerFlowDiagnosisRequestSchema>;
 export type CustomerFlowDiagnosisResult = z.infer<typeof CustomerFlowDiagnosisResultSchema>;
+
+export const BusinessPatrolCapabilityIdSchema = z.enum([
+  'growth_diagnosis',
+  'cost_indicator_diagnosis',
+  'quote_conversion_diagnosis',
+  'renewal_tracker_diagnosis',
+  'claims_risk_diagnosis',
+  'customer_flow_diagnosis',
+]);
+export const BusinessPatrolSeveritySchema = z.enum(['normal', 'observe', 'warning', 'critical']);
+export const BusinessPatrolSubdiagnosisStatusSchema = z.enum(['completed', 'failed', 'timeout']);
+
+export const BusinessPatrolDiagnosisRequestSchema = z.object({
+  timeoutMs: z.coerce.number().int().min(100).max(5000).default(5000),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+  diagnostics: z.object({
+    growth: GrowthDiagnosisRequestSchema,
+    costIndicators: CostIndicatorDiagnosisRequestSchema,
+    quoteConversion: QuoteConversionDiagnosisRequestSchema.default({
+      filters: {},
+      drilldownLevel: 'org',
+      trendGranularity: 'week',
+      limit: 10,
+    }),
+    renewalTracker: RenewalTrackerDiagnosisRequestSchema,
+    claimsRisk: ClaimsRiskDiagnosisRequestSchema.default({ filters: {}, limit: 10 }),
+    customerFlow: CustomerFlowDiagnosisRequestSchema.default({ limit: 10 }),
+  }),
+});
+
+export const BusinessPatrolCapabilityStatusSchema = z.object({
+  capabilityId: BusinessPatrolCapabilityIdSchema,
+  status: BusinessPatrolSubdiagnosisStatusSchema,
+  durationMs: z.number().int().nonnegative(),
+  error: z.string().optional(),
+});
+
+export const BusinessPatrolFindingSchema = z.object({
+  rank: z.number().int().positive(),
+  capabilityId: BusinessPatrolCapabilityIdSchema,
+  severity: BusinessPatrolSeveritySchema,
+  affectedMetrics: z.array(z.string()),
+  message: z.string(),
+  recommendedDrilldown: z.array(z.string()),
+});
+
+export const BusinessPatrolDiagnosisResultSchema = z.object({
+  capabilityId: z.literal('business_patrol_diagnosis'),
+  status: z.enum(['supported', 'partial']),
+  requestedCapabilities: z.array(BusinessPatrolCapabilityIdSchema),
+  timeoutMs: z.number().int().positive(),
+  summary: z.object({
+    totalCapabilities: z.number().int().nonnegative(),
+    completedCount: z.number().int().nonnegative(),
+    failedCount: z.number().int().nonnegative(),
+    timeoutCount: z.number().int().nonnegative(),
+    prioritizedFindingCount: z.number().int().nonnegative(),
+    criticalCount: z.number().int().nonnegative(),
+    warningCount: z.number().int().nonnegative(),
+    topPriorityCapability: BusinessPatrolCapabilityIdSchema.nullable(),
+  }),
+  capabilityStatuses: z.array(BusinessPatrolCapabilityStatusSchema),
+  prioritizedFindings: z.array(BusinessPatrolFindingSchema),
+  warnings: z.array(z.string()),
+  forbiddenInterpretations: z.array(z.string()),
+  drilldownSuggestions: z.array(z.string()),
+});
+
+export type BusinessPatrolCapabilityId = z.infer<typeof BusinessPatrolCapabilityIdSchema>;
+export type BusinessPatrolSeverity = z.infer<typeof BusinessPatrolSeveritySchema>;
+export type BusinessPatrolSubdiagnosisStatus = z.infer<typeof BusinessPatrolSubdiagnosisStatusSchema>;
+export type BusinessPatrolDiagnosisRequest = z.infer<typeof BusinessPatrolDiagnosisRequestSchema>;
+export type BusinessPatrolDiagnosisResult = z.infer<typeof BusinessPatrolDiagnosisResultSchema>;

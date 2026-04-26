@@ -195,6 +195,7 @@ export const AGENT_DIAGNOSIS_ROUTES = {
   RENEWAL_TRACKER: 'agent/diagnosis/renewal-tracker',
   CLAIMS_RISK: 'agent/diagnosis/claims-risk',
   CUSTOMER_FLOW: 'agent/diagnosis/customer-flow',
+  BUSINESS_PATROL: 'agent/diagnosis/business-patrol',
 } as const;
 
 // ─────────────────────────────────────────────

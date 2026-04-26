@@ -16,6 +16,8 @@ Stage 3 PR4 新增 `/api/agent/diagnosis/claims-risk`，用于执行 `claims_ris
 
 Stage 3 PR5 新增 `/api/agent/diagnosis/customer-flow`，用于执行 `customer_flow_diagnosis` 的确定性客户流向诊断。该接口仅复用 CustomerFlow 的 `summary`、`inflow`、`outflow`、`trend` 四类既有查询；`metadata` 只用于数据新鲜度和 readiness 判断，不作为诊断指标主输出。CustomerFlow 当前 SQL 生成器只支持年度过滤，没有机构或业务员级权限筛选字段，因此 Agent 诊断端点对机构用户和电销用户返回 403，不降级为无权限过滤的全量查询。
 
+Stage 4 新增 `/api/agent/diagnosis/business-patrol`，用于执行 `business_patrol_diagnosis` 的确定性经营巡检聚合。该接口并行调用增长、成本指标、报价转化、续保追踪、赔案风险、客户流向六个已注册诊断能力，设置子诊断超时，单个子诊断失败或超时时返回 warning 而不是让整体 500。不新增 SQL 生成器，不接 LLM，不生成自由 SQL。
+
 ## API
 
 - `GET /api/agent/audit/metrics`：返回 Agent 指标注册表、支持级别和口径边界。
@@ -38,9 +40,11 @@ Stage 3 PR5 新增 `/api/agent/diagnosis/customer-flow`，用于执行 `customer
 
 客户流向诊断路由同样挂载在 `/api/agent/diagnosis`，继续使用全局审计中间件、查询级限流、`authMiddleware`、`permissionMiddleware` 和 `createDomainMiddleware('CustomerFlow')`。请求和响应均通过 Agent schema 层 Zod 校验。由于 CustomerFlow 当前视图和 SQL 生成器缺少机构、电销、业务员级过滤字段，机构用户和电销用户请求会返回 403，避免把全局客户流向误暴露给受限角色。
 
+经营巡检聚合路由同样挂载在 `/api/agent/diagnosis`，继续使用全局审计中间件、查询级限流、`authMiddleware` 和 `permissionMiddleware`。请求和响应均通过 Agent schema 层 Zod 校验。该路由不在进入 handler 前预加载所有子域，而是在各子诊断 task 内按需加载自身依赖域；单个子域加载失败或超时时会进入对应子诊断的 partial/warning 降级逻辑。该路由只编排已有确定性诊断能力；各子诊断仍复用自身权限过滤、口径警示和禁止解释边界。
+
 ## 支持能力
 
-- `business_patrol_diagnosis`：经营巡检。
+- `business_patrol_diagnosis`：经营巡检。确定性接口为 `POST /api/agent/diagnosis/business-patrol`，并行聚合增长、成本指标、报价转化、续保追踪、赔案风险和客户流向六类诊断，输出经营异常优先级、受影响指标、推荐下钻能力、子诊断失败/超时 warning 和禁止解释汇总；不新增 SQL 生成器，不输出利润、盈利、亏损、边际贡献或承保利润结论。
 - `growth_diagnosis`：增长归因。确定性接口为 `POST /api/agent/diagnosis/growth`，输出增长异常、主要维度贡献和下钻建议；禁止输出利润、盈利、亏损或承保利润结论。
 - `cost_indicator_diagnosis`：成本指标诊断。
 - `quote_conversion_diagnosis`：报价转化诊断。确定性接口为 `POST /api/agent/diagnosis/quote-conversion`，输出转化率概览、漏斗卡点、机构/团队/业务员差异和趋势异常；本阶段仅接入 `quote_conversion.kpi`、`quote_conversion.funnel`、`quote_conversion.drilldown`、`quote_conversion.trend`，不接入 heatmap、price、ranking；禁止输出利润、盈利、亏损或承保利润结论。

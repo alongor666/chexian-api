@@ -5,6 +5,7 @@ import { asyncHandler, AppError } from '../../middleware/error.js';
 import { buildWhereFromFilterParams, buildWhereFromFilterParamsWithoutDate } from '../../utils/filter-params.js';
 import { buildInCondition, isValidDateFormat, validateDateRange } from '../../utils/sql-sanitizer.js';
 import { createDomainMiddleware } from '../../routes/query/shared.js';
+import { getBootstrapper } from '../../services/bootstrapper-registry.js';
 import {
   CostIndicatorDiagnosisRequestSchema,
   CostIndicatorDiagnosisResultSchema,
@@ -16,6 +17,9 @@ import {
   ClaimsRiskDiagnosisResultSchema,
   CustomerFlowDiagnosisRequestSchema,
   CustomerFlowDiagnosisResultSchema,
+  BusinessPatrolDiagnosisRequestSchema,
+  BusinessPatrolDiagnosisResultSchema,
+  type BusinessPatrolDiagnosisRequest,
   type ClaimsRiskDiagnosisFilters,
   RenewalTrackerDiagnosisRequestSchema,
   RenewalTrackerDiagnosisResultSchema,
@@ -29,6 +33,7 @@ import { runQuoteConversionDiagnosis } from '../services/agent-quote-conversion-
 import { runRenewalTrackerDiagnosis } from '../services/agent-renewal-tracker-diagnosis-service.js';
 import { runClaimsRiskDiagnosis } from '../services/agent-claims-risk-diagnosis-service.js';
 import { runCustomerFlowDiagnosis } from '../services/agent-customer-flow-diagnosis-service.js';
+import { runBusinessPatrolTasks, type BusinessPatrolTask } from '../services/agent-business-patrol-diagnosis-service.js';
 
 const router = Router();
 
@@ -116,6 +121,129 @@ function ensureCustomerFlowDiagnosisAccess(user: AgentDiagnosisUserContext | und
   if (!user) return;
   if (user.role === 'org_user' || user.role === 'telemarketing_user') {
     throw new AppError(403, 'customer flow diagnosis requires branch-wide permission');
+  }
+}
+
+function validateBusinessPatrolInput(input: BusinessPatrolDiagnosisRequest): void {
+  if (!isValidDateFormat(input.diagnostics.costIndicators.cutoffDate)) {
+    throw new AppError(400, `Invalid cutoffDate format: ${input.diagnostics.costIndicators.cutoffDate}. Expected YYYY-MM-DD`);
+  }
+  try {
+    validateDateRange('growth.currentPeriod', input.diagnostics.growth.currentPeriod.startDate, input.diagnostics.growth.currentPeriod.endDate);
+    validateDateRange('growth.baselinePeriod', input.diagnostics.growth.baselinePeriod.startDate, input.diagnostics.growth.baselinePeriod.endDate);
+    validateDateRange('quoteConversion.filters.date', input.diagnostics.quoteConversion.filters.dateStart, input.diagnostics.quoteConversion.filters.dateEnd);
+    validateDateRange('renewalTracker.range', input.diagnostics.renewalTracker.start, input.diagnostics.renewalTracker.end);
+    validateDateRange('claimsRisk.filters.date', input.diagnostics.claimsRisk.filters.dateStart, input.diagnostics.claimsRisk.filters.dateEnd);
+  } catch (err) {
+    throw new AppError(400, err instanceof Error ? err.message : String(err));
+  }
+  if (!isValidDateFormat(input.diagnostics.renewalTracker.cutoff)) {
+    throw new AppError(400, `Invalid cutoff format: ${input.diagnostics.renewalTracker.cutoff}. Expected YYYY-MM-DD`);
+  }
+  const quoteFilters = input.diagnostics.quoteConversion.filters;
+  if (quoteFilters.ncdMin !== undefined && quoteFilters.ncdMax !== undefined && quoteFilters.ncdMin > quoteFilters.ncdMax) {
+    throw new AppError(400, 'ncdMin cannot be greater than ncdMax');
+  }
+}
+
+function buildBusinessPatrolTasks(
+  input: BusinessPatrolDiagnosisRequest,
+  permissionFilter: string | undefined,
+  user: AgentDiagnosisUserContext | undefined
+): BusinessPatrolTask[] {
+  const costWhereClause = buildWhereFromFilterParams(input.diagnostics.costIndicators.filters, permissionFilter || '1=1');
+  const growthWhereClause = buildWhereFromFilterParamsWithoutDate(input.diagnostics.growth.filters, permissionFilter || '1=1');
+  return [
+    {
+      capabilityId: 'growth_diagnosis',
+      run: async () => {
+        await ensureBusinessPatrolDomains();
+        return runGrowthDiagnosis({
+          currentPeriod: input.diagnostics.growth.currentPeriod,
+          baselinePeriod: input.diagnostics.growth.baselinePeriod,
+          comparisonMode: input.diagnostics.growth.comparisonMode,
+          timeView: input.diagnostics.growth.timeView,
+          perspective: input.diagnostics.growth.perspective,
+          dimension: input.diagnostics.growth.dimension,
+          whereClause: growthWhereClause,
+          includeDailyContext: input.diagnostics.growth.includeDailyContext,
+          limit: input.diagnostics.growth.limit,
+          minCurrentValue: input.diagnostics.growth.minCurrentValue,
+        });
+      },
+    },
+    {
+      capabilityId: 'cost_indicator_diagnosis',
+      run: async () => {
+        await ensureBusinessPatrolDomains('ClaimsAgg');
+        return runCostIndicatorDiagnosis({
+          cutoffDate: input.diagnostics.costIndicators.cutoffDate,
+          dimension: input.diagnostics.costIndicators.dimension,
+          whereClause: costWhereClause,
+          limit: input.diagnostics.costIndicators.limit,
+          minPremium: input.diagnostics.costIndicators.minPremium,
+        });
+      },
+    },
+    {
+      capabilityId: 'quote_conversion_diagnosis',
+      run: async () => {
+        const filters = applyQuoteConversionPermissionFilters(input.diagnostics.quoteConversion.filters, user);
+        await ensureBusinessPatrolDomains('QuoteConversion');
+        return runQuoteConversionDiagnosis({
+          filters,
+          drilldownLevel: input.diagnostics.quoteConversion.drilldownLevel,
+          trendGranularity: input.diagnostics.quoteConversion.trendGranularity,
+          limit: input.diagnostics.quoteConversion.limit,
+        });
+      },
+    },
+    {
+      capabilityId: 'renewal_tracker_diagnosis',
+      run: async () => {
+        const extraConditions = buildRenewalTrackerExtraConditions(input.diagnostics.renewalTracker.filters, permissionFilter, user);
+        await ensureBusinessPatrolDomains('RenewalTracker');
+        return runRenewalTrackerDiagnosis({
+          start: input.diagnostics.renewalTracker.start,
+          end: input.diagnostics.renewalTracker.end,
+          cutoff: input.diagnostics.renewalTracker.cutoff,
+          filters: input.diagnostics.renewalTracker.filters,
+          extraConditions,
+          limit: input.diagnostics.renewalTracker.limit,
+        });
+      },
+    },
+    {
+      capabilityId: 'claims_risk_diagnosis',
+      run: async () => {
+        const filters = applyClaimsRiskPermissionFilters(input.diagnostics.claimsRisk.filters, user);
+        await ensureBusinessPatrolDomains('ClaimsDetail', 'ClaimsAgg');
+        return runClaimsRiskDiagnosis({
+          filters,
+          limit: input.diagnostics.claimsRisk.limit,
+        });
+      },
+    },
+    {
+      capabilityId: 'customer_flow_diagnosis',
+      run: async () => {
+        ensureCustomerFlowDiagnosisAccess(user);
+        await ensureBusinessPatrolDomains('CustomerFlow');
+        const filters = input.diagnostics.customerFlow.year === undefined ? {} : { year: input.diagnostics.customerFlow.year };
+        return runCustomerFlowDiagnosis({
+          filters,
+          limit: input.diagnostics.customerFlow.limit,
+        });
+      },
+    },
+  ];
+}
+
+async function ensureBusinessPatrolDomains(...domains: string[]): Promise<void> {
+  const bootstrapper = getBootstrapper();
+  if (!bootstrapper) return;
+  for (const domain of domains) {
+    await bootstrapper.ensureDomainLoaded(domain);
   }
 }
 
@@ -277,6 +405,24 @@ router.post(
     });
 
     const response = SuccessResponseSchema(CustomerFlowDiagnosisResultSchema).parse({
+      success: true,
+      data: diagnosis,
+    });
+    res.json(response);
+  })
+);
+
+router.post(
+  '/business-patrol',
+  asyncHandler(async (req, res) => {
+    const input = BusinessPatrolDiagnosisRequestSchema.parse(req.body);
+    validateBusinessPatrolInput(input);
+    const diagnosis = await runBusinessPatrolTasks(
+      buildBusinessPatrolTasks(input, req.permissionFilter, req.user),
+      { timeoutMs: input.timeoutMs, limit: input.limit }
+    );
+
+    const response = SuccessResponseSchema(BusinessPatrolDiagnosisResultSchema).parse({
       success: true,
       data: diagnosis,
     });
