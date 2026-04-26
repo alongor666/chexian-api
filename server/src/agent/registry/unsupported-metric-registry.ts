@@ -12,7 +12,7 @@ export const unsupportedMetricRegistry = UnsupportedMetricDefinitionSchema.array
   {
     id: 'profit_margin',
     name: '利润率',
-    blockedTerms: ['利润率', '盈利率', '净利润', '边际贡献', '盈利', '亏损'],
+    blockedTerms: ['利润率', '盈利率', '净利润', '利润额', '边际贡献', '满期边际贡献额', '预估边际贡献额', '盈利', '亏损'],
     reason: '当前项目不是完整财务利润系统，不能输出利润率、边际贡献或财务盈亏判断。',
     replacementSuggestion: '可分析经营指标异常、变动成本率、费用率、赔付率、增长归因。',
   },

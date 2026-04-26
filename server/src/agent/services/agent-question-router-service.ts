@@ -44,7 +44,7 @@ export function routeAgentQuestion(input: RouteQuestionInput): RouteQuestionResu
     });
   }
 
-  if (includesAny(normalized, ['利润率', '盈利率', '净利润', '边际贡献', '财务盈利', '财务亏损', '盈利', '亏损'])) {
+  if (includesAny(normalized, ['利润率', '盈利率', '净利润', '利润额', '边际贡献', '满期边际贡献额', '预估边际贡献额', '财务盈利', '财务亏损', '盈利', '亏损'])) {
     return parseResult({
       blocked: true,
       status: 'unsupported',
