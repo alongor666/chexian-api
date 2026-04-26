@@ -104,6 +104,8 @@ def load_dataset(
         extra.append("AND f.team_name LIKE ?")
         params.append(f"%{team}%")
     extra_sql = "\n        ".join(extra)
+    # 两次出现 insurance_type 占位（policy_prior + policy_renewed），其余按位序拼接
+    params = [insurance_type, insurance_type] + params[1:]
 
     sql = f"""
     WITH funnel AS (
@@ -111,14 +113,25 @@ def load_dataset(
              customer_category, insurance_grade, tonnage_segment,
              CAST(insurance_start_date AS DATE) AS insurance_start_date,
              CAST(insurance_end_date AS DATE)   AS insurance_end_date,
-             is_quoted, is_renewed, renewal_mode, is_self_retained, competition_level
+             is_quoted, is_renewed, renewed_policy_no,
+             renewal_mode, is_self_retained, competition_level
       FROM read_parquet('{FUNNEL_GLOB}')
     ),
     policy_prior AS (
       SELECT policy_no, vehicle_frame_no,
              SUM(premium) AS prior_premium,
              ANY_VALUE(commercial_pricing_factor) AS prior_factor,
-             ANY_VALUE(coverage_combination) AS coverage_combination
+             ANY_VALUE(coverage_combination) AS coverage_combination,
+             BOOL_OR(is_telemarketing) AS prior_is_telemarketing
+      FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
+      WHERE insurance_type = ?
+        AND (endorsement_no IS NULL OR TRIM(CAST(endorsement_no AS VARCHAR)) = '')
+      GROUP BY policy_no, vehicle_frame_no
+    ),
+    policy_renewed AS (
+      SELECT policy_no, vehicle_frame_no,
+             BOOL_OR(is_telemarketing) AS renewed_is_telemarketing,
+             SUM(premium) AS renewed_premium
       FROM read_parquet('{POLICY_GLOB}', union_by_name=true)
       WHERE insurance_type = ?
         AND (endorsement_no IS NULL OR TRIM(CAST(endorsement_no AS VARCHAR)) = '')
@@ -137,10 +150,13 @@ def load_dataset(
     SELECT f.org_level_3, f.team_name, f.salesman_name,
            f.customer_category, f.insurance_grade, f.tonnage_segment,
            f.competition_level, f.renewal_mode,
-           f.vehicle_frame_no, f.policy_no,
+           f.vehicle_frame_no, f.policy_no, f.renewed_policy_no,
            f.insurance_start_date, f.insurance_end_date,
            f.is_quoted, f.is_renewed,
            p.prior_premium, p.prior_factor, p.coverage_combination,
+           COALESCE(p.prior_is_telemarketing, false) AS prior_is_telemarketing,
+           pr.renewed_is_telemarketing,
+           pr.renewed_premium,
            q.first_quote_date, q.quote_factor, q.quote_premium,
            CASE WHEN q.first_quote_date IS NOT NULL
                 THEN DATE_DIFF('day', q.first_quote_date, f.insurance_end_date)
@@ -148,6 +164,7 @@ def load_dataset(
            DATE_DIFF('day', CURRENT_DATE, f.insurance_end_date) AS days_to_expiry
     FROM funnel f
     LEFT JOIN policy_prior p ON p.policy_no = f.policy_no AND p.vehicle_frame_no = f.vehicle_frame_no
+    LEFT JOIN policy_renewed pr ON pr.policy_no = f.renewed_policy_no AND pr.vehicle_frame_no = f.vehicle_frame_no
     LEFT JOIN quote_earliest q ON q.vehicle_frame_no = f.vehicle_frame_no
     WHERE f.insurance_end_date BETWEEN ? AND ?
       {extra_sql}
@@ -369,6 +386,110 @@ def section_customer_structure(df: pd.DataFrame) -> str:
 
 
 # ============================================================================
+# 板块：电销渠道交叉（上年原单 × 续保单）
+# ============================================================================
+
+def section_channel_crosstab(df: pd.DataFrame) -> str:
+    """交叉分析：上年原单是否电销 × 续保单是否电销。
+    四类：自营续自营 / 自营续电销 / 电销续自营 / 电销续电销 + 未续回。
+    渠道标记来自 policy.is_telemarketing。"""
+    out = ["## 8. 电销渠道交叉（上年原单 × 续保单）", "",
+           "> 渠道判定依据 `policy.is_telemarketing`：上年原单与续保单各自的电销标记。"
+           "  续保单口径只统计已续回（is_renewed=true）的单子。",
+           ""]
+
+    if df.empty:
+        return "\n".join(out) + "（窗口内无应续数据）\n"
+
+    df = df.copy()
+    df["prior_channel"] = df.prior_is_telemarketing.fillna(False).map(lambda v: "电销" if v else "自营")
+    renewed = df[df.is_renewed == True].copy()
+
+    # 8.1 整体交叉表
+    out.append("### 8.1 整体：上年 → 续保 渠道流向（仅含已续回 N 件）")
+    if renewed.empty:
+        out.append("（窗口内无续回）")
+        return "\n".join(out) + "\n"
+    renewed["renewed_channel"] = renewed.renewed_is_telemarketing.fillna(False).map(
+        lambda v: "电销" if v else "自营"
+    )
+    cross = renewed.groupby(["prior_channel", "renewed_channel"]).size().unstack(fill_value=0)
+    total_renewed = len(renewed)
+
+    out.append(f"- 续回总数：{total_renewed:,d}")
+    out.append("")
+    out.append("| 上年 → 续保 | 件数 | 占续回总数 |")
+    out.append("|------------|------|-----------|")
+    flows = [
+        ("自营 → 自营", "自营", "自营"),
+        ("自营 → 电销", "自营", "电销"),
+        ("电销 → 自营", "电销", "自营"),
+        ("电销 → 电销", "电销", "电销"),
+    ]
+    for label, prior, new in flows:
+        n = int(cross.loc[prior, new]) if prior in cross.index and new in cross.columns else 0
+        share = n / total_renewed * 100 if total_renewed else 0
+        out.append(f"| {label} | {fi(n)} | {fp(share)} |")
+
+    # 上年渠道总盘 + 续回率
+    out.append("")
+    out.append("### 8.2 上年渠道续回画像")
+    out.append("| 上年渠道 | 应续 | 已续回 | 续回率 | 续回中转入电销占比 | 续回中保留自营占比 |")
+    out.append("|---------|------|-------|--------|------------------|------------------|")
+    for ch in ["自营", "电销"]:
+        sub = df[df.prior_channel == ch]
+        sub_renewed = renewed[renewed.prior_channel == ch]
+        A = len(sub); C = len(sub_renewed)
+        rr = C / A * 100 if A else None
+        if C > 0:
+            tele_ratio = (sub_renewed.renewed_channel == "电销").sum() / C * 100
+            self_ratio = (sub_renewed.renewed_channel == "自营").sum() / C * 100
+        else:
+            tele_ratio = self_ratio = None
+        out.append(f"| {ch} | {fi(A)} | {fi(C)} | {fp(rr)}{light(rr, TH_RENEW_RATE, higher_worse=False)} "
+                   f"| {fp(tele_ratio)} | {fp(self_ratio)} |")
+
+    # 8.3 各三级机构的渠道流向占比
+    out.append("")
+    out.append("### 8.3 各三级机构 续回渠道流向占比（应续 ≥ 50 才入选）")
+    out.append("| 三级机构 | 续回件数 | 自留自营 % | 自留→电销 % | 电销→自营 % | 电销→电销 % |")
+    out.append("|---------|---------|----------|-----------|-----------|-----------|")
+    rows = []
+    for org, g in renewed.groupby("org_level_3"):
+        org_total_apply = len(df[df.org_level_3 == org])
+        if org_total_apply < 50:
+            continue
+        n = len(g)
+        if n == 0:
+            continue
+        ss = ((g.prior_channel == "自营") & (g.renewed_channel == "自营")).sum() / n * 100
+        st = ((g.prior_channel == "自营") & (g.renewed_channel == "电销")).sum() / n * 100
+        ts = ((g.prior_channel == "电销") & (g.renewed_channel == "自营")).sum() / n * 100
+        tt = ((g.prior_channel == "电销") & (g.renewed_channel == "电销")).sum() / n * 100
+        rows.append((org, n, ss, st, ts, tt))
+    rows.sort(key=lambda r: r[1], reverse=True)
+    for org, n, ss, st, ts, tt in rows:
+        out.append(f"| {org} | {fi(n)} | {fp(ss)} | {fp(st)} | {fp(ts)} | {fp(tt)} |")
+
+    # 8.4 责任模式 (renewal_mode 自留/兜底) × 上年渠道 交叉续回率
+    out.append("")
+    out.append("### 8.4 责任模式 × 上年渠道 交叉续回率")
+    out.append("| 责任模式 | 上年渠道 | 应续 | 已续回 | 续回率 |")
+    out.append("|---------|---------|------|-------|--------|")
+    for mode in ["自留", "兜底", "未分类"]:
+        for ch in ["自营", "电销"]:
+            sub = df[(df.renewal_mode == mode) & (df.prior_channel == ch)]
+            A = len(sub); C = int(sub.is_renewed.sum())
+            if A == 0:
+                continue
+            rr = C / A * 100
+            out.append(f"| {mode} | {ch} | {fi(A)} | {fi(C)} | "
+                       f"{fp(rr)}{light(rr, TH_RENEW_RATE, higher_worse=False)} |")
+
+    return "\n".join(out) + "\n"
+
+
+# ============================================================================
 # 板块：待跟进清单（重点 — 输出 CSV）
 # ============================================================================
 
@@ -469,6 +590,7 @@ def main() -> int:
     sections.append(section_discount_premium(df))
     sections.append(section_productivity(df, args.top_n))
     sections.append(section_customer_structure(df))
+    sections.append(section_channel_crosstab(df))
     if not args.no_action_list:
         action_md, action_csv = section_action_list(df, today, run_id)
         sections.append(action_md)
