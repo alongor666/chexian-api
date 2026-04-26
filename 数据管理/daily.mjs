@@ -463,39 +463,66 @@ async function runPostEtlIntegrations(scriptDir, python) {
   if (process.env.WECOM_SMARTSHEET_ENABLED !== '1') return;
 
   const integrationDir = join(scriptDir, 'integrations/wecom_smartsheet');
-  const scriptPath = join(integrationDir, 'sync_renewal.py');
-  if (!existsSync(scriptPath)) return;
+  const scriptV2 = join(integrationDir, 'sync_renewal_v2.py');
+  const scriptV1 = join(integrationDir, 'sync_renewal.py');
+  const instancesDir = join(integrationDir, 'instances');
 
-  const configs = readdirSync(integrationDir)
-    .filter(f => f.startsWith('config.') && f.endsWith('.json'))
-    .sort();
-  if (configs.length === 0) return;
+  // v2：优先扫描 instances/*.yaml
+  let v2Instances = [];
+  if (existsSync(scriptV2) && existsSync(instancesDir)) {
+    v2Instances = readdirSync(instancesDir)
+      .filter(f => f.endsWith('.yaml') || f.endsWith('.yml'))
+      .sort();
+  }
+  // v1 兼容：旧 config.*.json 仍跑（待 v2 稳定后删）
+  let v1Configs = [];
+  if (existsSync(scriptV1)) {
+    v1Configs = readdirSync(integrationDir)
+      .filter(f => f.startsWith('config.') && f.endsWith('.json'))
+      .sort();
+  }
+
+  const total = v2Instances.length + v1Configs.length;
+  if (total === 0) return;
 
   console.log('');
   log('green', '╔══════════════════════════════════════════╗');
   log('green', '║  8. 企业微信智能表格同步                   ║');
   log('green', '╚══════════════════════════════════════════╝');
-  log('cyan', `  实例数: ${configs.length}`);
+  log('cyan', `  实例数: ${total}（v2 yaml=${v2Instances.length}, v1 json=${v1Configs.length}）`);
 
-  for (const configFile of configs) {
-    const instance = configFile.replace(/^config\.|\.json$/g, '');
-    log('cyan', `\n  ▶ 同步实例: ${instance}`);
+  // 8a. v2 yaml 实例
+  for (const yamlFile of v2Instances) {
+    const instance = yamlFile.replace(/\.ya?ml$/, '');
+    log('cyan', `\n  ▶ [v2] ${instance}`);
     try {
-      runPythonScript(python, scriptPath, [
+      runPythonScript(python, scriptV2, [
+        '--instance', `"${join(instancesDir, yamlFile)}"`,
+      ]);
+      log('green', `  ✓ ${instance} 同步完成`);
+    } catch (err) {
+      const msg = (err.message || '').trim();
+      log('red', `  ⚠ ${instance} 同步失败（降级告警，不阻塞 ETL）`);
+      for (const line of msg.split('\n')) if (line.trim()) log('red', `     ${line}`);
+      log('yellow', `     详细日志：${join(integrationDir, 'logs')}/${instance}_sync_*.json`);
+      log('yellow', `     手动重试：python3 ${scriptV2} --instance ${join(instancesDir, yamlFile)} --dry-run`);
+    }
+  }
+
+  // 8b. v1 json 实例（向后兼容，待 v2 稳定后删）
+  for (const configFile of v1Configs) {
+    const instance = configFile.replace(/^config\.|\.json$/g, '');
+    log('cyan', `\n  ▶ [v1] ${instance}`);
+    try {
+      runPythonScript(python, scriptV1, [
         '--config', `"${join(integrationDir, configFile)}"`,
       ]);
       log('green', `  ✓ ${instance} 同步完成`);
     } catch (err) {
-      const fullMessage = (err.message || '').trim();
+      const msg = (err.message || '').trim();
       log('red', `  ⚠ ${instance} 同步失败（降级告警，不阻塞 ETL）`);
-      // 完整打印错误（不截断），方便定位企业微信 errcode 与 errmsg
-      for (const line of fullMessage.split('\n')) {
-        if (line.trim()) log('red', `     ${line}`);
-      }
-      log('yellow', `  排查指引：`);
-      log('yellow', `     1. 详细日志：${join(integrationDir, 'logs')}/${instance}_sync_*.json`);
-      log('yellow', `     2. 故障排查表：数据管理/integrations/wecom_smartsheet/README.md（"故障排查"章节）`);
-      log('yellow', `     3. 手动重试：python3 ${scriptPath} --config ${join(integrationDir, configFile)} --dry-run`);
+      for (const line of msg.split('\n')) if (line.trim()) log('red', `     ${line}`);
+      log('yellow', `     手动重试：python3 ${scriptV1} --config ${join(integrationDir, configFile)} --dry-run`);
     }
   }
 }

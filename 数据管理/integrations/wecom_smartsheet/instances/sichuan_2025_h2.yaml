@@ -1,0 +1,44 @@
+# 四川 2025 下半年起保商业险续保追踪
+#
+# 起期 2025-07-01 ~ 2025-12-31 → 续保起期 2026-07-01 ~ 2026-12-31
+# 业务规则同 H1；跨期重叠 VIN 已归 H1
+
+instance_name: sichuan_2025_h2
+
+webhook_env: WECOM_SMARTSHEET_WEBHOOK_SC_2025H2
+
+batch_size: 100
+sheet_records_per_minute_limit: 3000
+doc_records_per_minute_limit: 10000
+rate_limit_sleep_seconds: 60
+
+filters:
+  insurance_type: 商业保险
+  insurance_start_date_from: '2025-07-01'
+  insurance_start_date_to:   '2025-12-31'
+  premium_gt: 200
+  exclude_endorsement: true
+  organization_in: null
+
+quote_window_start: '2025-12-03'
+
+exclusive_vin_strategy: earliest_start_first  # 与 H1 互斥：H1∩H2 的 VIN 不会出现在 H2
+
+fields_enabled:
+  - expiry_date
+  - org_3_by_salesman
+  - team_by_salesman
+  - plate_no
+  - vehicle_frame_no
+  - salesman_name
+  - customer_category
+  - coverage_combination
+  - is_quoted
+  - prior_discount
+  - prior_premium
+  - quote_discount
+  - quote_premium
+  - is_renewed
+  - renewal_mode
+  - renewed_sign_date
+  - earliest_quote_date

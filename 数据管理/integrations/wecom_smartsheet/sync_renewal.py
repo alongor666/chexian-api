@@ -24,6 +24,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 import duckdb
+import pandas as pd
+
+from time import sleep as time_module_sleep
 
 
 HERE = Path(__file__).resolve().parent
@@ -41,14 +44,15 @@ DEFAULT_SCHEMA = {
     "fMAfWQ": "车架号",
     "fn8TJd": "客户类别",
     "f8ZIoF": "险别组合",
-    "fkjhnX": "是否报价",
+    "fkjhnX": "报价",
     "fqTbVL": "上年折扣",
     "fFMlZM": "上年保费",
     "fDvNY2": "报价折扣",
     "fvtVUv": "报价保费",
     "fq3LsN": "是否续回",
     "fMDwYc": "业务员",
-    "fnk47h": "流失原因分析",
+    "fwUUeU": "续回日期",
+    "ft4uK0": "报价日期",
     "fEdcCG": "续保模式",
 }
 
@@ -56,10 +60,14 @@ DEFAULT_SCHEMA = {
 @dataclass(frozen=True)
 class SyncConfig:
     instance_name: str = "default"
-    org_level_3: str = "自贡"
+    org_level_3: str | None = "自贡"  # None 表示不按机构过滤（全量机构单实例）
     insurance_type: str = "商业保险"
-    insurance_end_date_from: str = "2026-03-31"
-    insurance_end_date_to: str = "2026-05-30"
+    # 保险止期窗口（与 _start_date_* 二选一或并存，至少一组非空）
+    insurance_end_date_from: str | None = "2026-03-31"
+    insurance_end_date_to: str | None = "2026-05-30"
+    # 保险起期窗口（用于按签单年度回溯，如全量机构 2025 年承保到期续保的整体观察）
+    insurance_start_date_from: str | None = None
+    insurance_start_date_to: str | None = None
     premium_gt: float = 300.0
     quote_window_start: str = "2025-12-03"
     as_of_date: str | None = None
@@ -195,7 +203,6 @@ def build_record(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "f8ZIoF": [{"text": text_value(row.get("coverage_combination"))}],
         "fkjhnX": [{"text": "是" if row.get("is_quoted") else "否"}],
         "fq3LsN": bool(row.get("is_renewed")),
-        "fnk47h": format_customer_status(row),
         "fEdcCG": [{"text": text_value(row.get("renewal_mode"))}],
     }
     prior_discount = clean_num(row.get("prior_discount"))
@@ -210,6 +217,18 @@ def build_record(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
         values["fDvNY2"] = quote_discount
     if quote_premium is not None:
         values["fvtVUv"] = quote_premium
+    renewed_sign_date = row.get("renewed_sign_date")
+    if row.get("is_renewed") and not pd.isna(renewed_sign_date):
+        try:
+            values["fwUUeU"] = date_to_epoch_ms(renewed_sign_date)
+        except (TypeError, ValueError):
+            pass
+    earliest_quote_date = row.get("earliest_quote_date")
+    if not pd.isna(earliest_quote_date):
+        try:
+            values["ft4uK0"] = date_to_epoch_ms(earliest_quote_date)
+        except (TypeError, ValueError):
+            pass
     return {"values": values}
 
 
@@ -240,6 +259,15 @@ def save_state(path: str, state: dict[str, Any]) -> None:
 def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
     con = duckdb.connect(":memory:")
     as_of_date = config.as_of_date or date.today().isoformat()
+
+    has_end_window = config.insurance_end_date_from is not None and config.insurance_end_date_to is not None
+    has_start_window = config.insurance_start_date_from is not None and config.insurance_start_date_to is not None
+    if not has_end_window and not has_start_window:
+        raise ValueError("config 至少要提供一组日期窗口：insurance_end_date_from/to 或 insurance_start_date_from/to")
+
+    org_filter_sql = "AND org_level_3 = ?" if config.org_level_3 is not None else ""
+    end_filter_sql = "AND CAST(insurance_end_date AS DATE) BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)" if has_end_window else ""
+    start_filter_sql = "AND CAST(insurance_start_date AS DATE) BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)" if has_start_window else ""
     # policy 表 (policy_no, VIN) 可能因批改副本重复：
     #   1) 按 (policy_no, VIN) 聚合取净保费（SUM），其余字段取 ANY_VALUE
     #   2) 同一 VIN 下多 policy_no 时取止期最晚 + policy_no 最大的那张（续保提醒以最新保单为锚）
@@ -258,10 +286,11 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
         ANY_VALUE(coverage_combination) AS coverage_combination,
         ANY_VALUE(commercial_pricing_factor) AS commercial_pricing_factor
       FROM read_parquet('{config.policy_glob}', union_by_name=true)
-      WHERE org_level_3 = ?
-        AND insurance_type = ?
+      WHERE insurance_type = ?
         AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
-        AND CAST(insurance_end_date AS DATE) BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)
+        {org_filter_sql}
+        {end_filter_sql}
+        {start_filter_sql}
       GROUP BY policy_no, vehicle_frame_no
       HAVING SUM(premium) > ?
     ),
@@ -286,14 +315,33 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
           AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
       ) WHERE rn = 1
     ),
-    renewed AS (
-      SELECT DISTINCT renewal_policy_no AS source_policy_no, vehicle_frame_no, policy_no AS renewed_policy_no
-      FROM read_parquet('{config.policy_glob}', union_by_name=true)
+    q_earliest AS (
+      SELECT vehicle_frame_no, MIN(CAST(quote_time AS DATE)) AS earliest_quote_date
+      FROM read_parquet('{config.quotes_path}')
       WHERE insurance_type = ?
-        AND is_renewal = true
-        AND renewal_policy_no IS NOT NULL AND renewal_policy_no != ''
+        AND CAST(quote_time AS DATE) >= CAST(? AS DATE)
         AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
-        AND CAST(insurance_start_date AS DATE) >= DATE '2026-01-01'
+      GROUP BY vehicle_frame_no
+    ),
+    renewed AS (
+      SELECT * EXCLUDE rn FROM (
+        SELECT
+          renewal_policy_no AS source_policy_no,
+          vehicle_frame_no,
+          policy_no AS renewed_policy_no,
+          CAST(policy_date AS DATE) AS renewed_sign_date,
+          ROW_NUMBER() OVER (
+            PARTITION BY renewal_policy_no, vehicle_frame_no
+            ORDER BY policy_date DESC NULLS LAST, policy_no DESC
+          ) AS rn
+        FROM read_parquet('{config.policy_glob}', union_by_name=true)
+        WHERE insurance_type = ?
+          AND is_renewal = true
+          AND renewal_policy_no IS NOT NULL AND renewal_policy_no != ''
+          AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
+          AND CAST(insurance_start_date AS DATE) >= DATE '2026-01-01'
+          AND (endorsement_no IS NULL OR TRIM(CAST(endorsement_no AS VARCHAR)) = '')
+      ) WHERE rn = 1
     ),
     salesman_dim AS (
       SELECT full_name, NULLIF(NULLIF(team, 'nan'), '') AS team FROM read_parquet('{config.salesman_path}')
@@ -318,7 +366,9 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
       q.quote_pricing_factor AS quote_discount,
       q.quote_premium,
       CASE WHEN q.quote_time IS NOT NULL THEN true ELSE false END AS is_quoted,
+      qe.earliest_quote_date AS earliest_quote_date,
       CASE WHEN r.renewed_policy_no IS NOT NULL THEN true ELSE false END AS is_renewed,
+      r.renewed_sign_date AS renewed_sign_date,
       CASE WHEN CAST(b.insurance_end_date AS DATE) < CAST(? AS DATE) THEN true ELSE false END AS is_expired,
       DATE_DIFF('day', CAST(? AS DATE), CAST(b.insurance_end_date AS DATE)) AS days_to_expiry,
       COALESCE(f.renewal_mode, '未分类') AS renewal_mode,
@@ -329,24 +379,32 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
       END AS loss_reason
     FROM base b
     LEFT JOIN q_latest q ON q.vehicle_frame_no = b.vehicle_frame_no
+    LEFT JOIN q_earliest qe ON qe.vehicle_frame_no = b.vehicle_frame_no
     LEFT JOIN renewed r ON r.source_policy_no = b.policy_no AND r.vehicle_frame_no = b.vehicle_frame_no
     LEFT JOIN salesman_dim s ON s.full_name = b.salesman_name
     LEFT JOIN funnel f ON f.policy_no = b.policy_no AND f.vehicle_frame_no = b.vehicle_frame_no
     ORDER BY expiry_date, b.policy_no
     """
+    base_params: list[Any] = [config.insurance_type]
+    if config.org_level_3 is not None:
+        base_params.append(config.org_level_3)
+    if has_end_window:
+        base_params.extend([config.insurance_end_date_from, config.insurance_end_date_to])
+    if has_start_window:
+        base_params.extend([config.insurance_start_date_from, config.insurance_start_date_to])
+    base_params.append(config.premium_gt)
+
     rows = con.execute(
         sql,
         [
-            config.org_level_3,
-            config.insurance_type,
-            config.insurance_end_date_from,
-            config.insurance_end_date_to,
-            config.premium_gt,
-            config.insurance_type,
-            config.quote_window_start,
-            config.insurance_type,
-            as_of_date,
-            as_of_date,
+            *base_params,
+            config.insurance_type,        # q_latest
+            config.quote_window_start,    # q_latest
+            config.insurance_type,        # q_earliest
+            config.quote_window_start,    # q_earliest
+            config.insurance_type,        # renewed
+            as_of_date,                   # SELECT is_expired
+            as_of_date,                   # SELECT days_to_expiry
         ],
     ).fetchdf().to_dict("records")
     rows = [row for row in rows if text_value(row.get("vehicle_frame_no"))]
@@ -376,20 +434,62 @@ def plan_upsert(rows: list[dict[str, Any]], state: dict[str, Any]) -> UpsertPlan
     return UpsertPlan(add_records=add_records, update_records=update_records, missing_vins=missing_vins)
 
 
-def post_webhook(url: str, payload: dict[str, Any], timeout: int = 60) -> dict[str, Any]:
+TRANSIENT_WECOM_ERRCODES = {-1, 45009, 2040035, 2040039}  # SmartsheetV2 Service Error / 限流类
+
+
+def post_webhook(url: str, payload: dict[str, Any], timeout: int = 60, max_retries: int = 5) -> dict[str, Any]:
+    """POST 到企业微信 webhook，带指数退避重试以容忍 SSL 抖动 / 瞬时网络错误 / 企业微信侧临时服务故障。
+
+    重试触发：
+      - URLError（含 SSL handshake 超时）、socket.timeout
+      - HTTPError 5xx / 429
+      - 企业微信 errcode in TRANSIENT_WECOM_ERRCODES（SmartsheetV2 Service Error 等瞬时错）
+    不重试：
+      - HTTPError 4xx（业务错误）
+      - 企业微信 errcode 但非 transient（如 2022004 field not found，2022034 invalid date）
+    """
+    import socket
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8", errors="replace"))
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"企业微信 webhook HTTP {exc.code}: {body}") from exc
+    last_exc: Exception | None = None
+    last_response: dict[str, Any] | None = None
+    for attempt in range(max_retries):
+        request = urllib.request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                resp = json.loads(response.read().decode("utf-8", errors="replace"))
+                ec = resp.get("errcode")
+                if ec in TRANSIENT_WECOM_ERRCODES and attempt < max_retries - 1:
+                    last_response = resp
+                    sleep_s = 2 ** attempt
+                    print(f"WARN: webhook errcode={ec}（transient）{sleep_s}s 后重试（{attempt + 1}/{max_retries}）: {resp.get('errmsg','')[:120]}", file=sys.stderr)
+                    time_module_sleep(sleep_s)
+                    continue
+                return resp
+        except urllib.error.HTTPError as exc:
+            if exc.code in (429, 500, 502, 503, 504) and attempt < max_retries - 1:
+                last_exc = exc
+                sleep_s = 2 ** attempt
+                print(f"WARN: webhook HTTP {exc.code}，{sleep_s}s 后重试（{attempt + 1}/{max_retries}）", file=sys.stderr)
+                time_module_sleep(sleep_s)
+                continue
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"企业微信 webhook HTTP {exc.code}: {body}") from exc
+        except (urllib.error.URLError, socket.timeout, TimeoutError) as exc:
+            last_exc = exc
+            if attempt < max_retries - 1:
+                sleep_s = 2 ** attempt
+                print(f"WARN: webhook 网络抖动 {exc}，{sleep_s}s 后重试（{attempt + 1}/{max_retries}）", file=sys.stderr)
+                time_module_sleep(sleep_s)
+                continue
+            raise RuntimeError(f"企业微信 webhook 网络重试 {max_retries} 次仍失败: {exc}") from exc
+    if last_response is not None:
+        return last_response  # 返回最后一次 response 让调用方走错误处理
+    raise RuntimeError(f"企业微信 webhook 重试耗尽: {last_exc}")
 
 
 def apply_add_response(state: dict[str, Any], add_rows: list[dict[str, Any]], response: dict[str, Any]) -> None:
@@ -514,6 +614,8 @@ def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -
             "insurance_type": config.insurance_type,
             "insurance_end_date_from": config.insurance_end_date_from,
             "insurance_end_date_to": config.insurance_end_date_to,
+            "insurance_start_date_from": config.insurance_start_date_from,
+            "insurance_start_date_to": config.insurance_start_date_to,
             "premium_gt": config.premium_gt,
             "unique_key": "vehicle_frame_no",
             "as_of_date": config.as_of_date or date.today().isoformat(),
@@ -541,10 +643,14 @@ def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -
     if not webhook_url:
         raise RuntimeError(f"缺少环境变量 {config.webhook_env}")
 
+    # add 优先：先把今日新增车架号写入表格（业务核心增量），随后再 update 已有记录的最新报价/续保状态
     operation_items: list[OperationItem] = [
-        *(OperationItem(op="update", payload=item) for item in plan.update_records),
         *(OperationItem(op="add", payload=item) for item in plan.add_records),
+        *(OperationItem(op="update", payload=item) for item in plan.update_records),
     ]
+    # update 阶段失败降级：企业微信侧偶发 SmartsheetV2 Service Error / 单条 record_id 不存在时不阻塞 add
+    update_failure_count = 0
+    update_failures: list[dict[str, Any]] = []
     limiter = RateLimiter(
         records_per_minute=config.sheet_records_per_minute_limit,
         sleep_seconds=config.rate_limit_sleep_seconds,
@@ -558,14 +664,24 @@ def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -
         actual_sleep = limiter.acquire(len(rate_batch.items))
         grouped_ops = group_contiguous_operations(rate_batch.items)
         for index, (op, op_items) in enumerate(grouped_ops):
+            response: dict[str, Any] = {}
             if op == "update":
-                response = post_webhook(webhook_url, {"schema": DEFAULT_SCHEMA, "update_records": op_items})
-                apply_update_response(response)
+                # update 失败不阻塞：捕获 RuntimeError，记录到 update_failures，继续后续批次
+                try:
+                    response = post_webhook(webhook_url, {"schema": DEFAULT_SCHEMA, "update_records": op_items})
+                    apply_update_response(response)
+                except RuntimeError as upd_exc:
+                    update_failure_count += len(op_items)
+                    update_failures.append({"sent": len(op_items), "error": str(upd_exc)[:200]})
+                    print(f"WARN: update batch 失败（{len(op_items)} 条）已降级跳过：{upd_exc}", file=sys.stderr)
+                    response = {"errcode": -1, "_degraded": True}
             elif op == "add":
                 add_rows = [item["source_row"] for item in op_items]
                 add_records = [item["record"] for item in op_items]
                 response = post_webhook(webhook_url, {"schema": DEFAULT_SCHEMA, "add_records": add_records})
                 apply_add_response(state, add_rows, response)
+                # 增量持久化 state：每个 add batch 完成后立刻 flush，避免后续异常丢失已提交的 record_id
+                save_state(str(state_path), state)
             else:
                 raise ValueError(f"未知同步操作类型: {op}")
             summary["batches"].append({
@@ -576,6 +692,8 @@ def run_sync(config: SyncConfig, dry_run: bool = False, batch_size: int = 100) -
             })
             time_mod.sleep(0.2)
 
+    summary["update_failures"] = update_failures
+    summary["update_failure_count"] = update_failure_count
     state["summary"] = {
         **summary,
         "state_records_after": len(state.get("records", {})),
