@@ -17,6 +17,7 @@ const AgentToolDefinitionSchema = z.object({
 export type AgentToolDefinition = z.infer<typeof AgentToolDefinitionSchema>;
 
 export const agentToolRegistry = AgentToolDefinitionSchema.array().parse([
+  { id: 'business_patrol.query', status: 'available', endpoint: '/api/agent/diagnosis/business-patrol', capabilityId: 'business_patrol_diagnosis', metrics: ['signed_premium', 'growth_rate', 'variable_cost_ratio', 'quote_conversion_rate', 'renewal_tracker_metrics', 'reported_claims', 'customer_flow_trend'] },
   { id: 'cost.claim_ratio', status: 'available', endpoint: '/api/query/cost', params: { analysisType: 'claimRatio' }, capabilityId: 'cost_indicator_diagnosis', metrics: ['earned_claim_ratio', 'earned_loss_frequency', 'avg_claim_amount'] },
   { id: 'cost.expense_ratio', status: 'available', endpoint: '/api/query/cost', params: { analysisType: 'expenseRatio' }, capabilityId: 'cost_indicator_diagnosis', metrics: ['expense_ratio'] },
   { id: 'cost.variable_cost', status: 'available', endpoint: '/api/query/cost', params: { analysisType: 'variableCost' }, capabilityId: 'cost_indicator_diagnosis', metrics: ['variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio'] },
