@@ -477,3 +477,83 @@ export const ClaimsRiskDiagnosisResultSchema = z.object({
 export type ClaimsRiskDiagnosisFilters = z.infer<typeof ClaimsRiskDiagnosisFilterSchema>;
 export type ClaimsRiskDiagnosisRequest = z.infer<typeof ClaimsRiskDiagnosisRequestSchema>;
 export type ClaimsRiskDiagnosisResult = z.infer<typeof ClaimsRiskDiagnosisResultSchema>;
+
+export const CustomerFlowToolIdSchema = z.enum([
+  'customer_flow.summary',
+  'customer_flow.inflow',
+  'customer_flow.outflow',
+  'customer_flow.trend',
+  'customer_flow.metadata',
+]);
+export const CustomerFlowSeveritySchema = z.enum(['normal', 'observe', 'warning', 'critical']);
+
+export const CustomerFlowDiagnosisFilterSchema = z.object({
+  year: z.coerce.number().int().min(2020).max(2030).optional(),
+});
+
+export const CustomerFlowDiagnosisRequestSchema = z.object({
+  year: z.coerce.number().int().min(2020).max(2030).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export const CustomerFlowInsurerDiagnosticSchema = z.object({
+  insurer: z.string(),
+  policyCount: z.number().nullable(),
+  sharePct: z.number().nullable(),
+});
+
+export const CustomerFlowTrendDiagnosticSchema = z.object({
+  month: z.string(),
+  totalPolicies: z.number().nullable(),
+  inflowCount: z.number().nullable(),
+  outflowCount: z.number().nullable(),
+  netFlow: z.number(),
+  direction: z.enum(['net_inflow', 'net_outflow', 'balanced']),
+});
+
+export const CustomerFlowDiagnosisItemSchema = z.object({
+  kind: z.literal('flow_balance'),
+  severity: CustomerFlowSeveritySchema,
+  message: z.string(),
+  value: z.number().nullable(),
+});
+
+export const CustomerFlowDiagnosisResultSchema = z.object({
+  capabilityId: z.literal('customer_flow_diagnosis'),
+  status: z.literal('supported'),
+  requestedTools: z.array(CustomerFlowToolIdSchema),
+  filters: CustomerFlowDiagnosisFilterSchema,
+  summary: z.object({
+    totalPolicies: z.number().nullable(),
+    hasPrevious: z.number().nullable(),
+    hasNext: z.number().nullable(),
+    inflowCount: z.number().nullable(),
+    outflowCount: z.number().nullable(),
+    netFlow: z.number(),
+    inflowRate: z.number().nullable(),
+    outflowRate: z.number().nullable(),
+    selfRenewalCount: z.number().nullable(),
+    topInflowInsurer: z.string().nullable(),
+    topOutflowInsurer: z.string().nullable(),
+    latestMonth: z.string().nullable(),
+    latestNetFlow: z.number().nullable(),
+  }),
+  diagnostics: z.array(CustomerFlowDiagnosisItemSchema),
+  inflowDiagnostics: z.array(CustomerFlowInsurerDiagnosticSchema),
+  outflowDiagnostics: z.array(CustomerFlowInsurerDiagnosticSchema),
+  trendDiagnostics: z.array(CustomerFlowTrendDiagnosticSchema),
+  dataReadiness: z.object({
+    minDate: z.string(),
+    maxDate: z.string(),
+    years: z.array(z.number()),
+    totalRows: z.number().nullable(),
+    status: z.enum(['ready', 'empty']),
+  }),
+  warnings: z.array(z.string()),
+  forbiddenInterpretations: z.array(z.string()),
+  drilldownSuggestions: z.array(z.string()),
+});
+
+export type CustomerFlowDiagnosisFilters = z.infer<typeof CustomerFlowDiagnosisFilterSchema>;
+export type CustomerFlowDiagnosisRequest = z.infer<typeof CustomerFlowDiagnosisRequestSchema>;
+export type CustomerFlowDiagnosisResult = z.infer<typeof CustomerFlowDiagnosisResultSchema>;

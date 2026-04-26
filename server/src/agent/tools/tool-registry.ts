@@ -35,6 +35,7 @@ export const agentToolRegistry = AgentToolDefinitionSchema.array().parse([
   { id: 'customer_flow.inflow', status: 'available', endpoint: '/api/query/customer-flow/inflow', capabilityId: 'customer_flow_diagnosis', metrics: ['customer_inflow'] },
   { id: 'customer_flow.outflow', status: 'available', endpoint: '/api/query/customer-flow/outflow', capabilityId: 'customer_flow_diagnosis', metrics: ['customer_outflow'] },
   { id: 'customer_flow.trend', status: 'available', endpoint: '/api/query/customer-flow/trend', capabilityId: 'customer_flow_diagnosis', metrics: ['customer_flow_trend'] },
+  { id: 'customer_flow.metadata', status: 'available', endpoint: '/api/query/customer-flow/metadata', capabilityId: 'customer_flow_diagnosis', metrics: [] },
   {
     id: 'cost.comprehensive_cost',
     status: 'caution',
