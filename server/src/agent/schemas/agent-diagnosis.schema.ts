@@ -163,3 +163,106 @@ export type GrowthDiagnosisTimeView = z.infer<typeof GrowthDiagnosisTimeViewSche
 export type GrowthDiagnosisPerspective = z.infer<typeof GrowthDiagnosisPerspectiveSchema>;
 export type GrowthDiagnosisRequest = z.infer<typeof GrowthDiagnosisRequestSchema>;
 export type GrowthDiagnosisResult = z.infer<typeof GrowthDiagnosisResultSchema>;
+
+function blankToUndefined(value: unknown): unknown {
+  return typeof value === 'string' && value.trim() === '' ? undefined : value;
+}
+
+const QuoteOptionalTextSchema = z.preprocess(blankToUndefined, z.string().optional());
+const QuoteOptionalEnumSchema = <T extends [string, ...string[]]>(values: T) =>
+  z.preprocess(blankToUndefined, z.enum(values).optional());
+
+export const QuoteConversionDiagnosisFilterSchema = z.object({
+  dateStart: QuoteOptionalTextSchema,
+  dateEnd: QuoteOptionalTextSchema,
+  renewalType: QuoteOptionalEnumSchema(['续保', '转保']),
+  orgName: QuoteOptionalTextSchema,
+  teamName: QuoteOptionalTextSchema,
+  salesmanNo: QuoteOptionalTextSchema,
+  customerCategory: QuoteOptionalTextSchema,
+  insuranceCombo: QuoteOptionalEnumSchema(['主全', '交三']),
+  isTelemarketing: QuoteOptionalEnumSchema(['电销', '非电销']),
+  isNewEnergy: QuoteOptionalEnumSchema(['是', '否']),
+  isTransferred: QuoteOptionalEnumSchema(['是', '否']),
+  riskGrade: QuoteOptionalEnumSchema(['A', 'B', 'C', 'D']),
+  ncdMin: z.preprocess(blankToUndefined, z.coerce.number().optional()),
+  ncdMax: z.preprocess(blankToUndefined, z.coerce.number().optional()),
+});
+
+export const QuoteConversionDrilldownLevelSchema = z.enum(['org', 'team', 'salesman']);
+export const QuoteConversionTrendGranularitySchema = z.enum(['day', 'week', 'month']);
+export const QuoteConversionToolIdSchema = z.enum([
+  'quote_conversion.kpi',
+  'quote_conversion.funnel',
+  'quote_conversion.drilldown',
+  'quote_conversion.trend',
+]);
+export const QuoteConversionSeveritySchema = z.enum(['normal', 'observe', 'warning', 'critical']);
+
+export const QuoteConversionDiagnosisRequestSchema = z.object({
+  filters: QuoteConversionDiagnosisFilterSchema.default({}),
+  drilldownLevel: QuoteConversionDrilldownLevelSchema.default('org'),
+  trendGranularity: QuoteConversionTrendGranularitySchema.default('week'),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+});
+
+export const QuoteFunnelBottleneckSchema = z.object({
+  renewalType: z.string(),
+  stage: z.enum(['total_to_valid', 'valid_to_quality', 'quality_to_insured']),
+  fromCount: z.number().nullable(),
+  toCount: z.number().nullable(),
+  dropRate: z.number().nullable(),
+  severity: QuoteConversionSeveritySchema,
+});
+
+export const QuoteSegmentDifferenceSchema = z.object({
+  dimKey: z.string(),
+  dimName: z.string(),
+  totalQuotes: z.number().nullable(),
+  totalInsured: z.number().nullable(),
+  underwritingRate: z.number().nullable(),
+  renewalRate: z.number().nullable(),
+  switchRate: z.number().nullable(),
+  gapFromOverall: z.number().nullable(),
+  severity: QuoteConversionSeveritySchema,
+});
+
+export const QuoteTrendAnomalySchema = z.object({
+  timeBucket: z.string(),
+  renewalType: z.string(),
+  underwritingRate: z.number().nullable(),
+  previousRate: z.number().nullable(),
+  rateChange: z.number().nullable(),
+  severity: QuoteConversionSeveritySchema,
+});
+
+export const QuoteConversionDiagnosisResultSchema = z.object({
+  capabilityId: z.literal('quote_conversion_diagnosis'),
+  status: z.literal('supported'),
+  requestedTools: z.array(QuoteConversionToolIdSchema),
+  filters: QuoteConversionDiagnosisFilterSchema,
+  drilldownLevel: QuoteConversionDrilldownLevelSchema,
+  trendGranularity: QuoteConversionTrendGranularitySchema,
+  summary: z.object({
+    totalQuotes: z.number().nullable(),
+    totalInsured: z.number().nullable(),
+    underwritingRate: z.number().nullable(),
+    avgDiscountRate: z.number().nullable(),
+    renewalUnderwritingRate: z.number().nullable(),
+    switchUnderwritingRate: z.number().nullable(),
+    worstSegment: z.string().nullable(),
+    trendDropCount: z.number().int().nonnegative(),
+  }),
+  funnelBottlenecks: z.array(QuoteFunnelBottleneckSchema),
+  segmentDifferences: z.array(QuoteSegmentDifferenceSchema),
+  trendAnomalies: z.array(QuoteTrendAnomalySchema),
+  warnings: z.array(z.string()),
+  forbiddenInterpretations: z.array(z.string()),
+  drilldownSuggestions: z.array(z.string()),
+});
+
+export type QuoteConversionDiagnosisFilters = z.infer<typeof QuoteConversionDiagnosisFilterSchema>;
+export type QuoteConversionDrilldownLevel = z.infer<typeof QuoteConversionDrilldownLevelSchema>;
+export type QuoteConversionTrendGranularity = z.infer<typeof QuoteConversionTrendGranularitySchema>;
+export type QuoteConversionDiagnosisRequest = z.infer<typeof QuoteConversionDiagnosisRequestSchema>;
+export type QuoteConversionDiagnosisResult = z.infer<typeof QuoteConversionDiagnosisResultSchema>;
