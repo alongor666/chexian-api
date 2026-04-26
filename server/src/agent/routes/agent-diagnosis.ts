@@ -10,15 +10,44 @@ import {
   CostIndicatorDiagnosisResultSchema,
   GrowthDiagnosisRequestSchema,
   GrowthDiagnosisResultSchema,
+  QuoteConversionDiagnosisRequestSchema,
+  QuoteConversionDiagnosisResultSchema,
+  type QuoteConversionDiagnosisFilters,
 } from '../schemas/agent-diagnosis.schema.js';
 import { SuccessResponseSchema } from '../schemas/agent-audit.schema.js';
 import { runCostIndicatorDiagnosis } from '../services/agent-cost-indicator-diagnosis-service.js';
 import { runGrowthDiagnosis } from '../services/agent-growth-diagnosis-service.js';
+import { runQuoteConversionDiagnosis } from '../services/agent-quote-conversion-diagnosis-service.js';
 
 const router = Router();
 
 router.use(authMiddleware);
 router.use(permissionMiddleware);
+
+interface AgentDiagnosisUserContext {
+  role?: string;
+  organization?: string;
+}
+
+function applyQuoteConversionPermissionFilters(
+  filters: QuoteConversionDiagnosisFilters,
+  user: AgentDiagnosisUserContext | undefined
+): QuoteConversionDiagnosisFilters {
+  if (!user) return filters;
+  if (user.role === 'org_user') {
+    return { ...filters, orgName: user.organization };
+  }
+  if (user.role === 'telemarketing_user') {
+    return { ...filters, isTelemarketing: '电销' };
+  }
+  return filters;
+}
+
+function validateOptionalDate(label: string, value: string | undefined): void {
+  if (value && !isValidDateFormat(value)) {
+    throw new AppError(400, `Invalid ${label} format: ${value}. Expected YYYY-MM-DD`);
+  }
+}
 
 router.post(
   '/cost-indicators',
@@ -77,6 +106,32 @@ router.post(
     });
 
     const response = SuccessResponseSchema(GrowthDiagnosisResultSchema).parse({
+      success: true,
+      data: diagnosis,
+    });
+    res.json(response);
+  })
+);
+
+router.post(
+  '/quote-conversion',
+  createDomainMiddleware('QuoteConversion'),
+  asyncHandler(async (req, res) => {
+    const input = QuoteConversionDiagnosisRequestSchema.parse(req.body);
+    validateOptionalDate('filters.dateStart', input.filters.dateStart);
+    validateOptionalDate('filters.dateEnd', input.filters.dateEnd);
+    if (input.filters.ncdMin !== undefined && input.filters.ncdMax !== undefined && input.filters.ncdMin > input.filters.ncdMax) {
+      throw new AppError(400, 'ncdMin cannot be greater than ncdMax');
+    }
+
+    const diagnosis = await runQuoteConversionDiagnosis({
+      filters: applyQuoteConversionPermissionFilters(input.filters, req.user),
+      drilldownLevel: input.drilldownLevel,
+      trendGranularity: input.trendGranularity,
+      limit: input.limit,
+    });
+
+    const response = SuccessResponseSchema(QuoteConversionDiagnosisResultSchema).parse({
       success: true,
       data: diagnosis,
     });
