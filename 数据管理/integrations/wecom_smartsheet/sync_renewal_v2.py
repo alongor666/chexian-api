@@ -93,11 +93,13 @@ class InstanceConfig:
     filters: dict[str, Any]
     quote_window_start: str
     exclusive_vin_strategy: str | None
+    exclusive_lower_bound: str | None
     fields_enabled: list[str]
 
 
 def load_instance(path: Path) -> InstanceConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    filters = raw["filters"]
     return InstanceConfig(
         instance_name=raw["instance_name"],
         webhook_env=raw["webhook_env"],
@@ -105,9 +107,10 @@ def load_instance(path: Path) -> InstanceConfig:
         sheet_rpm=raw.get("sheet_records_per_minute_limit", 3000),
         doc_rpm=raw.get("doc_records_per_minute_limit", 10000),
         rate_limit_sleep=raw.get("rate_limit_sleep_seconds", 60),
-        filters=raw["filters"],
+        filters=filters,
         quote_window_start=raw["quote_window_start"],
         exclusive_vin_strategy=raw.get("exclusive_vin_strategy"),
+        exclusive_lower_bound=raw.get("exclusive_lower_bound"),
         fields_enabled=raw["fields_enabled"],
     )
 
@@ -170,8 +173,10 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
     cross_filter_sql = ""
     cross_params: list[Any] = []
     if instance.exclusive_vin_strategy == "earliest_start_first":
-        # 找出"在 [当前 start_from 之前 ~ 当前 start_to]"区间内已被更早批次纳入的 VIN
-        # 该实例 start_from 之前的所有商业险原单 VIN，其起期一定更早 → 剔除
+        # 跨批排他：剔除起期落在 [exclusive_lower_bound, start_from) 区间的更早批次 VIN
+        # 下界优先级：实例显式 exclusive_lower_bound > 实例 start_from（仅当下界 < start_from 时启用）
+        # 默认 = start_from，意味着不启用历史排他（仅靠后续批次自身窗口去重）
+        lower_bound = instance.exclusive_lower_bound or start_from
         excl_sql = f"""
         SELECT DISTINCT vehicle_frame_no FROM (
           SELECT vehicle_frame_no, SUM(premium) AS prem
@@ -179,14 +184,14 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
           WHERE insurance_type = ?
             AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
             AND CAST(insurance_start_date AS DATE) < CAST(? AS DATE)
-            AND CAST(insurance_start_date AS DATE) >= DATE '2025-01-01'  -- 仅 2025 全年范围内的更早批
+            AND CAST(insurance_start_date AS DATE) >= CAST(? AS DATE)
             {endorsement_sql}
             {org_filter_sql}
           GROUP BY policy_no, vehicle_frame_no
           HAVING SUM(premium) > ?
         )
         """
-        excl_rows = con.execute(excl_sql, [insurance_type, start_from, *org_param, premium_gt]).fetchall()
+        excl_rows = con.execute(excl_sql, [insurance_type, start_from, lower_bound, *org_param, premium_gt]).fetchall()
         cross_batch_excluded = [r[0] for r in excl_rows if r[0]]
         if cross_batch_excluded:
             placeholders = ",".join(["?"] * len(cross_batch_excluded))

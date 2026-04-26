@@ -23,6 +23,7 @@ filters:
 quote_window_start: '2025-12-03'
 
 exclusive_vin_strategy: earliest_start_first  # 与 H1 互斥：H1∩H2 的 VIN 不会出现在 H2
+exclusive_lower_bound: '2025-01-01'           # 排他下界：仅检查 [2025-01-01, start_from) 区间的 H1 批次
 
 fields_enabled:
   - expiry_date
