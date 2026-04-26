@@ -103,6 +103,21 @@ function mapTrendRows(rows: RawRow[]) {
   });
 }
 
+function buildDataReadiness(filters: CustomerFlowFilters, metadataRow: RawRow) {
+  const years = toNumberArray(metadataRow.years);
+  const metadataRows = toNullableNumber(metadataRow.total_rows);
+  const yearIsAvailable = filters.year === undefined || years.includes(filters.year);
+  const totalRows = yearIsAvailable ? metadataRows : 0;
+
+  return {
+    minDate: stringOf(metadataRow.min_date, ''),
+    maxDate: stringOf(metadataRow.max_date, ''),
+    years,
+    totalRows,
+    status: totalRows && totalRows > 0 ? 'ready' as const : 'empty' as const,
+  };
+}
+
 export function diagnoseCustomerFlowRows(input: DiagnoseCustomerFlowRowsInput): CustomerFlowDiagnosisResult {
   const totalPolicies = toNullableNumber(input.summaryRow.total_policies);
   const inflowCount = toNullableNumber(input.summaryRow.inflow_count);
@@ -114,7 +129,7 @@ export function diagnoseCustomerFlowRows(input: DiagnoseCustomerFlowRowsInput): 
   const outflowDiagnostics = mapInsurerRows(input.outflowRows, input.limit);
   const trendDiagnostics = mapTrendRows(input.trendRows);
   const latestTrend = trendDiagnostics.at(-1) ?? null;
-  const dataRows = toNullableNumber(input.metadataRow.total_rows);
+  const dataReadiness = buildDataReadiness(input.filters, input.metadataRow);
 
   return CustomerFlowDiagnosisResultSchema.parse({
     capabilityId: 'customer_flow_diagnosis',
@@ -147,13 +162,7 @@ export function diagnoseCustomerFlowRows(input: DiagnoseCustomerFlowRowsInput): 
     inflowDiagnostics,
     outflowDiagnostics,
     trendDiagnostics,
-    dataReadiness: {
-      minDate: stringOf(input.metadataRow.min_date, ''),
-      maxDate: stringOf(input.metadataRow.max_date, ''),
-      years: toNumberArray(input.metadataRow.years),
-      totalRows: dataRows,
-      status: dataRows && dataRows > 0 ? 'ready' : 'empty',
-    },
+    dataReadiness,
     warnings: WARNINGS,
     forbiddenInterpretations: FORBIDDEN_INTERPRETATIONS,
     drilldownSuggestions: ['customer_flow.summary', 'customer_flow.inflow', 'customer_flow.outflow', 'customer_flow.trend'],

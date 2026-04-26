@@ -102,6 +102,38 @@ describe('agent customer flow diagnosis workflow', () => {
     );
   });
 
+  it('marks data readiness empty when requested year is outside metadata years', () => {
+    const diagnosis = diagnoseCustomerFlowRows({
+      filters: { year: 2030 },
+      limit: 2,
+      summaryRow: {
+        total_policies: 0,
+        has_previous: 0,
+        inflow_count: 0,
+        has_next: 0,
+        outflow_count: 0,
+        self_renewal_count: 0,
+      },
+      inflowRows: [],
+      outflowRows: [],
+      trendRows: [],
+      metadataRow: {
+        min_date: '2026-01-01',
+        max_date: '2026-03-31',
+        years: [2026],
+        total_rows: 1000,
+      },
+    });
+
+    expect(diagnosis.filters).toEqual({ year: 2030 });
+    expect(diagnosis.summary.netFlow).toBe(0);
+    expect(diagnosis.dataReadiness).toMatchObject({
+      years: [2026],
+      totalRows: 0,
+      status: 'empty',
+    });
+  });
+
   it('keeps the implementation deterministic and scoped to customer-flow tools', () => {
     const serviceSource = readSource('server/src/agent/services/agent-customer-flow-diagnosis-service.ts');
     const routeSource = readSource('server/src/agent/routes/agent-diagnosis.ts');
