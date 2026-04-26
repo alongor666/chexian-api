@@ -42,5 +42,6 @@ describe('agent observability audit route contract', () => {
     expect(combined).not.toMatch(/openrouter|zhipu|createChatCompletion|chatCompletion|completion\.create/i);
     expect(combined).not.toMatch(/rawSql|freeSql|nl2sql/i);
     expect(combined).not.toContain('CURRENT_DATE');
+    expect(combined).not.toContain('readFileSync');
   });
 });

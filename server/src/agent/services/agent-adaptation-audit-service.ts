@@ -15,7 +15,7 @@ import {
 } from '../schemas/agent-audit.schema.js';
 import type { AgentMetricSupportLevel } from '../schemas/agent-metric.schema.js';
 import { AUDITED_PATHS, getAuditLogPath } from '../../middleware/audit.js';
-import fs from 'fs';
+import { open, readFile, stat } from 'fs/promises';
 
 function summarizeBySupportLevel<T extends { supportLevel: AgentMetricSupportLevel }>(
   items: readonly T[]
@@ -219,7 +219,10 @@ export interface AgentObservabilityAuditOptions {
   now?: Date;
   nodeEnv?: string;
   windowDays?: number;
+  maxReadBytes?: number;
 }
+
+const DEFAULT_AUDIT_LOG_MAX_READ_BYTES = 5 * 1024 * 1024;
 
 function parseTimestamp(value: unknown): Date | null {
   if (typeof value !== 'string') return null;
@@ -250,10 +253,74 @@ function roundRate(value: number): number {
   return Number(value.toFixed(6));
 }
 
+function isMissingFileError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'ENOENT';
+}
+
+interface AuditLogTailReadResult {
+  exists: boolean;
+  lines: string[];
+  truncated: boolean;
+  bytesRead: number;
+  fileSizeBytes: number;
+}
+
+async function readAuditLogTail(auditLogPath: string, maxReadBytes: number): Promise<AuditLogTailReadResult> {
+  const boundedMaxReadBytes = Math.max(1, Math.floor(maxReadBytes));
+
+  try {
+    const fileStat = await stat(auditLogPath);
+    const fileSizeBytes = fileStat.size;
+    if (fileSizeBytes === 0) {
+      return { exists: true, lines: [], truncated: false, bytesRead: 0, fileSizeBytes };
+    }
+
+    if (fileSizeBytes <= boundedMaxReadBytes) {
+      const content = await readFile(auditLogPath, 'utf-8');
+      return {
+        exists: true,
+        lines: content.split('\n').filter(Boolean),
+        truncated: false,
+        bytesRead: Buffer.byteLength(content),
+        fileSizeBytes,
+      };
+    }
+
+    const bytesToRead = boundedMaxReadBytes;
+    const start = fileSizeBytes - bytesToRead;
+    const buffer = Buffer.alloc(bytesToRead);
+    const fileHandle = await open(auditLogPath, 'r');
+
+    try {
+      const result = await fileHandle.read(buffer, 0, bytesToRead, start);
+      const content = buffer.subarray(0, result.bytesRead).toString('utf-8');
+      const lines = content.split('\n');
+      const completeLines = start > 0 ? lines.slice(1) : lines;
+
+      return {
+        exists: true,
+        lines: completeLines.filter(Boolean),
+        truncated: start > 0,
+        bytesRead: result.bytesRead,
+        fileSizeBytes,
+      };
+    } finally {
+      await fileHandle.close();
+    }
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return { exists: false, lines: [], truncated: false, bytesRead: 0, fileSizeBytes: 0 };
+    }
+
+    throw error;
+  }
+}
+
 function buildStage5Evidence(observability: AgentObservabilityAudit): AgentReadinessPrerequisite[] {
   const productionAuditObserved = observability.auditLog.productionEvidence;
   const errorRateUnderThreshold =
     productionAuditObserved &&
+    observability.auditLog.windowComplete &&
     observability.auditLog.totalAgentDiagnosisCalls > 0 &&
     observability.auditLog.errorRate < 0.01;
 
@@ -290,6 +357,7 @@ function buildStage5Evidence(observability: AgentObservabilityAudit): AgentReadi
     evidence: errorRateUnderThreshold
       ? [
           `windowDays=${observability.auditLog.windowDays}`,
+          `windowComplete=${observability.auditLog.windowComplete}`,
           `errorRate=${observability.auditLog.errorRate}`,
           `errorCount=${observability.auditLog.errorCount}`,
         ]
@@ -306,13 +374,15 @@ function buildStage5Evidence(observability: AgentObservabilityAudit): AgentReadi
   ];
 }
 
-export function getAgentObservabilityAudit(options: AgentObservabilityAuditOptions = {}): AgentObservabilityAudit {
+export async function getAgentObservabilityAudit(options: AgentObservabilityAuditOptions = {}): Promise<AgentObservabilityAudit> {
   const auditLogPath = options.auditLogPath ?? getAuditLogPath();
   const now = options.now ?? new Date();
   const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV ?? 'development';
   const windowDays = options.windowDays ?? 30;
+  const maxReadBytes = options.maxReadBytes ?? DEFAULT_AUDIT_LOG_MAX_READ_BYTES;
   const sinceMs = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
-  const exists = fs.existsSync(auditLogPath);
+  const auditLogTail = await readAuditLogTail(auditLogPath, maxReadBytes);
+  const exists = auditLogTail.exists;
 
   const coverage = deterministicDiagnosisCapabilities.map((item) => ({
     capabilityId: item.capabilityId,
@@ -326,10 +396,10 @@ export function getAgentObservabilityAudit(options: AgentObservabilityAuditOptio
   let totalAgentDiagnosisCalls = 0;
   let errorCount = 0;
   let lastObservedAt: string | undefined;
+  let earliestObservedAt: string | undefined;
 
   if (exists) {
-    const lines = fs.readFileSync(auditLogPath, 'utf-8').split('\n').filter(Boolean);
-    for (const line of lines) {
+    for (const line of auditLogTail.lines) {
       const entry = parseAuditLine(line);
       if (!entry) continue;
 
@@ -345,6 +415,9 @@ export function getAgentObservabilityAudit(options: AgentObservabilityAuditOptio
       if (!lastObservedAt || timestamp.toISOString() > lastObservedAt) {
         lastObservedAt = timestamp.toISOString();
       }
+      if (!earliestObservedAt || timestamp.toISOString() < earliestObservedAt) {
+        earliestObservedAt = timestamp.toISOString();
+      }
 
       const endpoint = byEndpoint.get(requestPath);
       if (endpoint) {
@@ -359,10 +432,15 @@ export function getAgentObservabilityAudit(options: AgentObservabilityAuditOptio
 
   const errorRate = totalAgentDiagnosisCalls === 0 ? 0 : roundRate(errorCount / totalAgentDiagnosisCalls);
   const productionEvidence = nodeEnv === 'production' && exists && totalAgentDiagnosisCalls > 0;
+  const windowComplete =
+    exists &&
+    (!auditLogTail.truncated ||
+      (earliestObservedAt ? new Date(earliestObservedAt).getTime() <= sinceMs : false));
   const status = (() => {
     if (!exists) return 'missing_log' as const;
     if (totalAgentDiagnosisCalls === 0) return 'no_recent_agent_calls' as const;
     if (!productionEvidence) return 'not_production_evidence' as const;
+    if (!windowComplete) return 'partial_window_sample' as const;
     if (errorRate >= 0.01) return 'error_rate_above_threshold' as const;
     return 'observed' as const;
   })();
@@ -374,7 +452,11 @@ export function getAgentObservabilityAudit(options: AgentObservabilityAuditOptio
       auditLogConfigured: auditLogPath.length > 0,
       exists,
       productionEvidence,
+      windowComplete,
       windowDays,
+      logReadBytes: auditLogTail.bytesRead,
+      logFileBytes: auditLogTail.fileSizeBytes,
+      logTruncated: auditLogTail.truncated,
       totalAgentDiagnosisCalls,
       errorCount,
       errorRate,
@@ -395,6 +477,7 @@ export function getAgentObservabilityAudit(options: AgentObservabilityAuditOptio
     },
     notes: [
       '本审计只读取既有 audit log，不新增 SQL，不调用 LLM。',
+      '请求路径只异步读取审计日志尾部的限量样本；只有样本覆盖完整 30 天窗口时，才允许采信 30 天错误率达标证据。',
       '只有 NODE_ENV=production 且最近 30 天存在 /api/agent/diagnosis/* 调用时，才视为生产审计证据。',
       'warnings 与 forbiddenInterpretations 已在确定性 API 响应契约中存在，但 Stage 5 仍需要调用方展示证据。',
     ],
@@ -410,12 +493,12 @@ export interface AgentReadinessAuditOptions {
   observability?: AgentObservabilityAuditOptions;
 }
 
-export function getAgentReadinessAudit(options: AgentReadinessAuditOptions = {}): AgentReadinessAudit {
+export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions = {}): Promise<AgentReadinessAudit> {
   const capabilitySummary = summarizeBySupportLevel(agentDataCapabilityRegistry);
   const completedStages = stageReadiness.filter((stage) => stage.status === 'completed');
   const blockedStages = stageReadiness.filter((stage) => stage.status === 'blocked');
   const pendingStages = stageReadiness.filter((stage) => stage.status === 'pending');
-  const observabilityEvidence = getAgentObservabilityAudit(options.observability);
+  const observabilityEvidence = await getAgentObservabilityAudit(options.observability);
   const stage5Prerequisites = observabilityEvidence.stage5Evidence;
   const llmReadinessBlockers = stage5Prerequisites
     .filter((item) => !item.met && item.blocker)

@@ -114,8 +114,8 @@ describe('agent adaptation audit routing', () => {
       .toBe('renewal_tracker_diagnosis');
   });
 
-  it('reports Stage 1-4 deterministic readiness and keeps Stage 5 blocked by production evidence', () => {
-    const readiness = getAgentReadinessAudit();
+  it('reports Stage 1-4 deterministic readiness and keeps Stage 5 blocked by production evidence', async () => {
+    const readiness = await getAgentReadinessAudit();
 
     expect(readiness.currentStage).toBe('stage_4_6_observability_ready');
     expect(readiness.readyForLlm).toBe(false);
@@ -142,8 +142,8 @@ describe('agent adaptation audit routing', () => {
     expect(readiness.observabilityEvidence.phase).toBe('agent_observability_readiness');
   });
 
-  it('lists every deterministic diagnosis endpoint with integration and route-contract evidence', () => {
-    const readiness = getAgentReadinessAudit();
+  it('lists every deterministic diagnosis endpoint with integration and route-contract evidence', async () => {
+    const readiness = await getAgentReadinessAudit();
     const byCapability = new Map(readiness.deterministicDiagnosisCapabilities.map((item) => [item.capabilityId, item]));
 
     for (const capabilityId of [

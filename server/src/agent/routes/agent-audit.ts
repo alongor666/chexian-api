@@ -64,7 +64,7 @@ router.get(
   asyncHandler(async (_req, res) => {
     const response = SuccessResponseSchema(AgentObservabilityAuditSchema).parse({
       success: true,
-      data: getAgentObservabilityAudit(),
+      data: await getAgentObservabilityAudit(),
     });
     res.json(response);
   })
@@ -75,7 +75,7 @@ router.get(
   asyncHandler(async (_req, res) => {
     const response = SuccessResponseSchema(AgentReadinessAuditSchema).parse({
       success: true,
-      data: getAgentReadinessAudit(),
+      data: await getAgentReadinessAudit(),
     });
     res.json(response);
   })

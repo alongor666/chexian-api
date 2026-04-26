@@ -29,7 +29,7 @@ function writeJsonl(entries: unknown[]): string {
 }
 
 describe('agent observability audit readiness', () => {
-  it('computes 30-day agent diagnosis audit log coverage and error rate from production logs', () => {
+  it('computes 30-day agent diagnosis audit log coverage and error rate from production logs', async () => {
     const auditLogPath = writeJsonl([
       {
         timestamp: '2026-04-25T10:00:00.000Z',
@@ -68,7 +68,7 @@ describe('agent observability audit readiness', () => {
       },
     ]);
 
-    const audit = getAgentObservabilityAudit({
+    const audit = await getAgentObservabilityAudit({
       auditLogPath,
       now: new Date('2026-04-26T00:00:00.000Z'),
       nodeEnv: 'production',
@@ -97,8 +97,8 @@ describe('agent observability audit readiness', () => {
     expect(audit.stage5Evidence.find((item) => item.id === 'thirty_day_error_rate_under_threshold')?.met).toBe(false);
   });
 
-  it('keeps Stage 5 blocked until production logs and caller display evidence are available', () => {
-    const audit = getAgentObservabilityAudit({
+  it('keeps Stage 5 blocked until production logs and caller display evidence are available', async () => {
+    const audit = await getAgentObservabilityAudit({
       auditLogPath: '/tmp/chexian-agent-observability-missing.log',
       now: new Date('2026-04-26T00:00:00.000Z'),
       nodeEnv: 'development',
@@ -112,8 +112,40 @@ describe('agent observability audit readiness', () => {
     expect(audit.displayContract.status).toBe('pending_caller_display_evidence');
   });
 
-  it('embeds observability evidence into readiness while keeping LLM blocked', () => {
-    const readiness = getAgentReadinessAudit({
+  it('keeps 30-day error-rate evidence blocked when only a truncated tail sample is available', async () => {
+    const auditLogPath = writeJsonl([
+      {
+        timestamp: '2026-04-01T10:00:00.000Z',
+        method: 'POST',
+        path: '/api/agent/diagnosis/growth',
+        status: 500,
+        duration: 300,
+      },
+      {
+        timestamp: '2026-04-25T10:00:00.000Z',
+        method: 'POST',
+        path: '/api/agent/diagnosis/growth',
+        status: 200,
+        duration: 80,
+      },
+    ]);
+
+    const audit = await getAgentObservabilityAudit({
+      auditLogPath,
+      now: new Date('2026-04-26T00:00:00.000Z'),
+      nodeEnv: 'production',
+      maxReadBytes: 180,
+    });
+
+    expect(audit.auditLog.status).toBe('partial_window_sample');
+    expect(audit.auditLog.windowComplete).toBe(false);
+    expect(audit.auditLog.totalAgentDiagnosisCalls).toBe(1);
+    expect(audit.stage5Evidence.find((item) => item.id === 'production_audit_log_observed')?.met).toBe(true);
+    expect(audit.stage5Evidence.find((item) => item.id === 'thirty_day_error_rate_under_threshold')?.met).toBe(false);
+  });
+
+  it('embeds observability evidence into readiness while keeping LLM blocked', async () => {
+    const readiness = await getAgentReadinessAudit({
       observability: {
         auditLogPath: '/tmp/chexian-agent-observability-missing.log',
         now: new Date('2026-04-26T00:00:00.000Z'),

@@ -68,6 +68,7 @@ export const AgentObservabilityAuditLogStatusSchema = z.enum([
   'missing_log',
   'no_recent_agent_calls',
   'not_production_evidence',
+  'partial_window_sample',
   'error_rate_above_threshold',
 ]);
 
@@ -76,7 +77,11 @@ export const AgentObservabilityAuditLogSchema = z.object({
   auditLogConfigured: z.boolean(),
   exists: z.boolean(),
   productionEvidence: z.boolean(),
+  windowComplete: z.boolean(),
   windowDays: z.number().int().positive(),
+  logReadBytes: z.number().int().nonnegative(),
+  logFileBytes: z.number().int().nonnegative(),
+  logTruncated: z.boolean(),
   totalAgentDiagnosisCalls: z.number().int().nonnegative(),
   errorCount: z.number().int().nonnegative(),
   errorRate: z.number().nonnegative(),
