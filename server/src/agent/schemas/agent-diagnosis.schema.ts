@@ -383,3 +383,97 @@ export const RenewalTrackerDiagnosisResultSchema = z.object({
 export type RenewalTrackerDiagnosisFilters = z.infer<typeof RenewalTrackerDiagnosisFilterSchema>;
 export type RenewalTrackerDiagnosisRequest = z.infer<typeof RenewalTrackerDiagnosisRequestSchema>;
 export type RenewalTrackerDiagnosisResult = z.infer<typeof RenewalTrackerDiagnosisResultSchema>;
+
+const ClaimsRiskOptionalTextSchema = z.preprocess(blankToUndefined, z.string().optional());
+const ClaimsRiskOptionalEnumSchema = <T extends [string, ...string[]]>(values: T) =>
+  z.preprocess(blankToUndefined, z.enum(values).optional());
+
+export const ClaimsRiskDiagnosisFilterSchema = z.object({
+  dateStart: ClaimsRiskOptionalTextSchema,
+  dateEnd: ClaimsRiskOptionalTextSchema,
+  orgName: ClaimsRiskOptionalTextSchema,
+  claimStatus: ClaimsRiskOptionalTextSchema,
+  isBodilyInjury: ClaimsRiskOptionalEnumSchema(['true', 'false']),
+  accidentCause: ClaimsRiskOptionalTextSchema,
+  accidentCity: ClaimsRiskOptionalTextSchema,
+  customerCategory: ClaimsRiskOptionalTextSchema,
+  isNev: ClaimsRiskOptionalEnumSchema(['1', '0', 'true', 'false']),
+  coverageCombination: ClaimsRiskOptionalTextSchema,
+  isTransfer: ClaimsRiskOptionalEnumSchema(['true', 'false']),
+  vehicleQuickFilter: ClaimsRiskOptionalTextSchema,
+  businessNature: ClaimsRiskOptionalEnumSchema(['commercial', 'non_commercial']),
+  isNewCar: ClaimsRiskOptionalEnumSchema(['true', 'false']),
+  isRenewal: ClaimsRiskOptionalEnumSchema(['true', 'false']),
+});
+
+export const ClaimsRiskToolIdSchema = z.enum([
+  'claims_detail.pending_overview',
+  'claims_detail.cause_analysis',
+  'claims_detail.frequency_yoy',
+]);
+export const ClaimsRiskSeveritySchema = z.enum(['normal', 'observe', 'warning', 'critical']);
+
+export const ClaimsRiskDiagnosisRequestSchema = z.object({
+  filters: ClaimsRiskDiagnosisFilterSchema.default({}),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export const ClaimsRiskPendingRiskSchema = z.object({
+  pendingCases: z.number().nullable(),
+  pendingReserveWan: z.number().nullable(),
+  avgReserve: z.number().nullable(),
+  injuryCases: z.number().nullable(),
+  injuryReserveWan: z.number().nullable(),
+  pendingCaseShare: z.number().nullable(),
+  severity: ClaimsRiskSeveritySchema,
+});
+
+export const ClaimsRiskCauseDiagnosticSchema = z.object({
+  accidentCause: z.string(),
+  cases: z.number().nullable(),
+  reserveWan: z.number().nullable(),
+  avgReserve: z.number().nullable(),
+  injuryCases: z.number().nullable(),
+  injuryPct: z.number().nullable(),
+  severity: ClaimsRiskSeveritySchema,
+});
+
+export const ClaimsRiskFrequencyDiagnosticSchema = z.object({
+  period: z.string(),
+  year: z.number().int(),
+  quarter: z.number().int(),
+  claimCount: z.number().nullable(),
+  policyCount: z.number().nullable(),
+  reserveWan: z.number().nullable(),
+  freqPer1000: z.number().nullable(),
+  injuryPct: z.number().nullable(),
+  previousFreqPer1000: z.number().nullable(),
+  yoyChange: z.number().nullable(),
+  severity: ClaimsRiskSeveritySchema,
+});
+
+export const ClaimsRiskDiagnosisResultSchema = z.object({
+  capabilityId: z.literal('claims_risk_diagnosis'),
+  status: z.literal('supported'),
+  requestedTools: z.array(ClaimsRiskToolIdSchema),
+  filters: ClaimsRiskDiagnosisFilterSchema,
+  summary: z.object({
+    totalCases: z.number().nullable(),
+    pendingCases: z.number().nullable(),
+    pendingReserveWan: z.number().nullable(),
+    pendingCaseShare: z.number().nullable(),
+    topCause: z.string().nullable(),
+    latestFrequencyPer1000: z.number().nullable(),
+    latestFrequencyYoyChange: z.number().nullable(),
+  }),
+  pendingRisk: ClaimsRiskPendingRiskSchema,
+  causeDiagnostics: z.array(ClaimsRiskCauseDiagnosticSchema),
+  frequencyDiagnostics: z.array(ClaimsRiskFrequencyDiagnosticSchema),
+  warnings: z.array(z.string()),
+  forbiddenInterpretations: z.array(z.string()),
+  drilldownSuggestions: z.array(z.string()),
+});
+
+export type ClaimsRiskDiagnosisFilters = z.infer<typeof ClaimsRiskDiagnosisFilterSchema>;
+export type ClaimsRiskDiagnosisRequest = z.infer<typeof ClaimsRiskDiagnosisRequestSchema>;
+export type ClaimsRiskDiagnosisResult = z.infer<typeof ClaimsRiskDiagnosisResultSchema>;
