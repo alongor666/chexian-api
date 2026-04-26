@@ -201,4 +201,49 @@ describe('agent growth diagnosis workflow', () => {
       await closeServer(server);
     }
   });
+
+  it('rejects requests where currentPeriod.startDate > endDate', async () => {
+    const queryMock = vi.fn();
+    vi.doMock('../../server/src/services/duckdb.js', () => ({
+      duckdbService: { query: queryMock },
+    }));
+
+    const express = serverRequire('express');
+    const jwt = serverRequire('jsonwebtoken');
+    const [{ authConfig }, { errorHandler }, { default: agentDiagnosisRoutes }] = await Promise.all([
+      import('../../server/src/config/auth.js'),
+      import('../../server/src/middleware/error.js'),
+      import('../../server/src/agent/routes/agent-diagnosis.js'),
+    ]);
+
+    const app = express();
+    app.use(express.json());
+    app.use('/api/agent/diagnosis', agentDiagnosisRoutes);
+    app.use(errorHandler);
+
+    const server = app.listen(0);
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Failed to bind test server');
+      const token = jwt.sign(
+        { userId: 'u1', username: 'admin', role: 'branch_admin' },
+        authConfig.jwtSecret
+      );
+
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/agent/diagnosis/growth`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPeriod: { startDate: '2026-04-30', endDate: '2026-04-01' },
+          baselinePeriod: { startDate: '2025-04-01', endDate: '2025-04-24' },
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(queryMock).not.toHaveBeenCalled();
+      const body = await response.json() as { error?: { message?: string } };
+      expect(JSON.stringify(body)).toMatch(/Invalid currentPeriod range/);
+    } finally {
+      await closeServer(server);
+    }
+  });
 });

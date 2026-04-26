@@ -92,6 +92,7 @@ export const agentDataCapabilityRegistry = AgentCapabilityDefinitionSchema.array
     supportLevel: 'caution',
     description: '如果项目存在 comprehensiveCost，则仅作为历史经营指标审阅，不作为财务综合成本率 Agent。',
     coreMetrics: [
+      'comprehensive_cost_ratio',
       'comprehensive_expense_ratio',
       'combined_cost_amount',
       'combined_cost_ratio',

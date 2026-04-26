@@ -72,6 +72,7 @@ function severityForRate(rateValue: number | null): Severity {
 
 function severityForDrop(dropRate: number | null): Severity {
   if (dropRate === null) return 'normal';
+  if (dropRate < 0) return 'critical';
   if (dropRate >= 45) return 'critical';
   if (dropRate >= 30) return 'warning';
   if (dropRate >= 15) return 'observe';
@@ -109,13 +110,26 @@ function buildFunnelBottlenecks(rows: RawQuoteRow[], limit: number) {
     ];
     return candidates.map((item) => ({ ...item, severity: severityForDrop(item.dropRate) }));
   })
-    .filter((item) => item.dropRate !== null && item.dropRate > 0)
+    .filter((item) => item.dropRate !== null && item.dropRate !== 0)
     .sort((a, b) => {
       const stageDiff = stagePriority[a.stage] - stagePriority[b.stage];
       if (stageDiff !== 0) return stageDiff;
       return (b.dropRate ?? 0) - (a.dropRate ?? 0);
     })
     .slice(0, limit);
+}
+
+function hasNegativeFunnelDrop(rows: RawQuoteRow[]): boolean {
+  for (const row of rows) {
+    const l1 = toNullableNumber(row.l1_total);
+    const l2 = toNullableNumber(row.l2_valid);
+    const l3 = toNullableNumber(row.l3_quality);
+    const l4 = toNullableNumber(row.l4_insured);
+    if (l1 !== null && l2 !== null && l2 > l1) return true;
+    if (l2 !== null && l3 !== null && l3 > l2) return true;
+    if (l3 !== null && l4 !== null && l4 > l3) return true;
+  }
+  return false;
 }
 
 function buildSegmentDifferences(rows: RawQuoteRow[], overallRate: number | null, limit: number) {
@@ -182,6 +196,10 @@ export function diagnoseQuoteConversionRows(input: DiagnoseQuoteConversionRowsIn
   );
   const segmentDifferences = buildSegmentDifferences(input.drilldownRows, underwritingRate, input.limit);
   const trendAnomalies = buildTrendAnomalies(input.trendRows, input.limit);
+  const warnings = [...QUOTE_WARNINGS];
+  if (hasNegativeFunnelDrop(input.funnelRows)) {
+    warnings.push('漏斗下游环节计数大于上游，疑似数据异常或口径错位，请优先核对源数据。');
+  }
 
   return QuoteConversionDiagnosisResultSchema.parse({
     capabilityId: 'quote_conversion_diagnosis',
@@ -203,7 +221,7 @@ export function diagnoseQuoteConversionRows(input: DiagnoseQuoteConversionRowsIn
     funnelBottlenecks: buildFunnelBottlenecks(input.funnelRows, input.limit),
     segmentDifferences,
     trendAnomalies,
-    warnings: QUOTE_WARNINGS,
+    warnings,
     forbiddenInterpretations: FORBIDDEN_INTERPRETATIONS,
     drilldownSuggestions: ['team', 'salesman', 'customerCategory', 'insuranceCombo', 'riskGrade'],
   });

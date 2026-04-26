@@ -94,6 +94,26 @@ describe('agent quote conversion diagnosis workflow', () => {
     );
   });
 
+  it('flags negative funnel drops as critical and adds a data-anomaly warning', () => {
+    const diagnosis = diagnoseQuoteConversionRows({
+      filters: {},
+      drilldownLevel: 'org',
+      trendGranularity: 'week',
+      limit: 5,
+      kpiRow: { total_quotes: 100, total_insured: 50, underwriting_rate: 50 },
+      funnelRows: [
+        { renewal_type: '续保', l1_total: 100, l2_valid: 120, l3_quality: 100, l4_insured: 80 },
+      ],
+      drilldownRows: [],
+      trendRows: [],
+    });
+
+    const negative = diagnosis.funnelBottlenecks.find((b) => b.stage === 'total_to_valid');
+    expect(negative?.severity).toBe('critical');
+    expect((negative?.dropRate ?? 0) < 0).toBe(true);
+    expect(diagnosis.warnings.join('\n')).toContain('漏斗下游环节计数大于上游');
+  });
+
   it('keeps out excluded quote sub-routes, LLM, and free SQL', () => {
     const serviceSource = readSource('server/src/agent/services/agent-quote-conversion-diagnosis-service.ts');
     const routeSource = readSource('server/src/agent/routes/agent-diagnosis.ts');
@@ -202,6 +222,50 @@ describe('agent quote conversion diagnosis workflow', () => {
       const sqlCalls = queryMock.mock.calls.map(([sql]) => String(sql));
       expect(sqlCalls.join('\n')).toContain("org_level_3 = 'A机构'");
       expect(sqlCalls.join('\n')).toContain("customer_category = '非营业个人客车'");
+    } finally {
+      await closeServer(server);
+    }
+  });
+
+  it('rejects requests with dateStart later than dateEnd', async () => {
+    const queryMock = vi.fn();
+    vi.doMock('../../server/src/services/duckdb.js', () => ({
+      duckdbService: { query: queryMock },
+    }));
+
+    const express = serverRequire('express');
+    const jwt = serverRequire('jsonwebtoken');
+    const [{ authConfig }, { errorHandler }, { default: agentDiagnosisRoutes }] = await Promise.all([
+      import('../../server/src/config/auth.js'),
+      import('../../server/src/middleware/error.js'),
+      import('../../server/src/agent/routes/agent-diagnosis.js'),
+    ]);
+
+    const app = express();
+    app.use(express.json());
+    app.use('/api/agent/diagnosis', agentDiagnosisRoutes);
+    app.use(errorHandler);
+
+    const server = app.listen(0);
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Failed to bind test server');
+      const token = jwt.sign(
+        { userId: 'u1', username: 'admin', role: 'branch_admin' },
+        authConfig.jwtSecret
+      );
+
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/agent/diagnosis/quote-conversion`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filters: { dateStart: '2026-04-30', dateEnd: '2026-04-01' },
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(queryMock).not.toHaveBeenCalled();
+      const body = await response.json() as { error?: { message?: string } };
+      expect(JSON.stringify(body)).toMatch(/Invalid filters\.date range/);
     } finally {
       await closeServer(server);
     }
