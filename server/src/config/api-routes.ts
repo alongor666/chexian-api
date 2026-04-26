@@ -161,6 +161,7 @@ export const AGENT_AUDIT_ROUTES = {
   METRICS: '/metrics',
   CAPABILITIES: '/capabilities',
   UNSUPPORTED: '/unsupported',
+  OBSERVABILITY: '/observability',
   READINESS: '/readiness',
   ROUTE_QUESTION: '/route-question',
 } as const;

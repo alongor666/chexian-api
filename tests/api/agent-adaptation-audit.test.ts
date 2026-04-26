@@ -114,10 +114,10 @@ describe('agent adaptation audit routing', () => {
       .toBe('renewal_tracker_diagnosis');
   });
 
-  it('reports Stage 1-4 deterministic readiness and keeps Stage 5 blocked by production evidence', () => {
-    const readiness = getAgentReadinessAudit();
+  it('reports Stage 1-4 deterministic readiness and keeps Stage 5 blocked by production evidence', async () => {
+    const readiness = await getAgentReadinessAudit();
 
-    expect(readiness.currentStage).toBe('stage_4_business_patrol_ready');
+    expect(readiness.currentStage).toBe('stage_4_6_observability_ready');
     expect(readiness.readyForLlm).toBe(false);
     expect(readiness.deterministicDiagnosisCapabilityCount).toBe(7);
     expect(readiness.completedStages.map((stage) => stage.id)).toEqual(
@@ -127,6 +127,7 @@ describe('agent adaptation audit routing', () => {
         'stage_2_cost_indicator_diagnosis',
         'stage_3_deterministic_diagnoses',
         'stage_4_business_patrol',
+        'stage_4_6_observability_readiness',
       ])
     );
     expect(readiness.blockedStages.map((stage) => stage.id)).toContain('stage_5_llm_interpretation');
@@ -138,10 +139,11 @@ describe('agent adaptation audit routing', () => {
         '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
       ])
     );
+    expect(readiness.observabilityEvidence.phase).toBe('agent_observability_readiness');
   });
 
-  it('lists every deterministic diagnosis endpoint with integration and route-contract evidence', () => {
-    const readiness = getAgentReadinessAudit();
+  it('lists every deterministic diagnosis endpoint with integration and route-contract evidence', async () => {
+    const readiness = await getAgentReadinessAudit();
     const byCapability = new Map(readiness.deterministicDiagnosisCapabilities.map((item) => [item.capabilityId, item]));
 
     for (const capabilityId of [

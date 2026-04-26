@@ -20,21 +20,26 @@ Stage 4 新增 `/api/agent/diagnosis/business-patrol`，用于执行 `business_p
 
 Stage 4.5 对 `/api/agent/audit/readiness` 做确定性能力总验收硬化。该接口明确暴露 Stage 1-4 已完成、7 个确定性诊断端点已具备 HTTP 集成测试与 route contract 证据，并列出 Stage 5 LLM 解释层仍被生产 audit log、30 天错误率和调用方展示 `warnings` / `forbiddenInterpretations` 的验收证据阻塞。
 
+Stage 4.6 新增 `/api/agent/audit/observability`，用于读取既有 audit log，统计最近 30 天 `/api/agent/diagnosis/*` 调用量、错误数、错误率和各确定性诊断端点覆盖情况。请求路径只异步读取审计日志尾部的限量样本；如果尾部样本不能证明覆盖完整 30 天窗口，则只能证明有生产调用记录，不能解除 30 天 error rate 阻塞。该阶段只建立生产观测与验收证据闭环，不接 LLM，不新增 SQL，不改变诊断口径；`readiness` 会引用该观测证据，但在缺少生产日志、30 天 error rate 或调用方展示证据时仍保持 `readyForLlm=false`。
+
 ## API
 
 - `GET /api/agent/audit/metrics`：返回 Agent 指标注册表、支持级别和口径边界。
 - `GET /api/agent/audit/capabilities`：返回 Agent 能力注册表。
 - `GET /api/agent/audit/unsupported`：返回必须拒绝的指标和替代建议。
+- `GET /api/agent/audit/observability`：返回 Agent 诊断接口审计日志覆盖、30 天错误率和 Stage 5 证据状态。
 - `GET /api/agent/audit/readiness`：返回 Agent 阶段化就绪状态、确定性诊断端点验收清单和 Stage 5 前置阻塞项。
 - `POST /api/agent/audit/route-question`：确定性问题路由。
 
 所有返回结构都经过 Zod schema 校验。路由挂载在 `/api/agent/audit`，继续使用全局审计中间件，并在路由内使用 `authMiddleware` 和 `permissionMiddleware`。
 
-`/api/agent/audit/readiness` 当前应显示 `currentStage=stage_4_business_patrol_ready`，`readyForLlm=false`，并将以下证据缺口作为 LLM 前置阻塞项：
+`/api/agent/audit/readiness` 当前应显示 `currentStage=stage_4_6_observability_ready`，`readyForLlm=false`，并将以下证据缺口作为 LLM 前置阻塞项：
 
 - 生产 audit log 能看到 `/api/agent/diagnosis/*` 调用记录。
 - 最近 30 天 `/api/agent/diagnosis/*` error rate < 1%。
 - 前端或调用方已展示 `warnings` 与 `forbiddenInterpretations`。
+
+`/api/agent/audit/observability` 只把 `NODE_ENV=production` 且最近 30 天存在 `/api/agent/diagnosis/*` 调用的日志视为生产审计证据；本地开发日志或无调用日志只能证明统计链路可用，不能解除 Stage 5 阻塞。30 天 error rate < 1% 还要求 `windowComplete=true`，避免用截断的日志尾部样本替代完整观测窗口。
 
 成本指标诊断路由挂载在 `/api/agent/diagnosis`，继续使用全局审计中间件，并在路由内使用 `authMiddleware`、`permissionMiddleware` 和 `createDomainMiddleware('ClaimsAgg')`。
 

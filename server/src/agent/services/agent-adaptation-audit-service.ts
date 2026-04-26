@@ -2,16 +2,20 @@ import { agentDataCapabilityRegistry } from '../registry/agent-data-capability-r
 import { unsupportedMetricRegistry } from '../registry/unsupported-metric-registry.js';
 import {
   AgentCapabilityAuditSchema,
+  AgentObservabilityAuditSchema,
   AgentReadinessAuditSchema,
   UnsupportedMetricAuditSchema,
   type AgentCapabilityAudit,
   type AgentDiagnosisCapabilityReadiness,
+  type AgentObservabilityAudit,
   type AgentReadinessAudit,
   type AgentReadinessPrerequisite,
   type AgentReadinessStage,
   type UnsupportedMetricAudit,
 } from '../schemas/agent-audit.schema.js';
 import type { AgentMetricSupportLevel } from '../schemas/agent-metric.schema.js';
+import { AUDITED_PATHS, getAuditLogPath } from '../../middleware/audit.js';
+import { open, readFile, stat } from 'fs/promises';
 
 function summarizeBySupportLevel<T extends { supportLevel: AgentMetricSupportLevel }>(
   items: readonly T[]
@@ -170,6 +174,17 @@ const stageReadiness: AgentReadinessStage[] = [
     blockers: [],
   },
   {
+    id: 'stage_4_6_observability_readiness',
+    name: '生产观测与验收证据闭环',
+    status: 'completed',
+    evidence: [
+      '/api/agent/audit/observability',
+      '审计日志可统计 /api/agent/diagnosis/* 最近 30 天调用与错误率。',
+      'readiness 暴露 Stage 5 前置证据状态。',
+    ],
+    blockers: [],
+  },
+  {
     id: 'stage_5_llm_interpretation',
     name: 'LLM 解释层',
     status: 'blocked',
@@ -189,7 +204,127 @@ const stageReadiness: AgentReadinessStage[] = [
   },
 ];
 
-const stage5Prerequisites: AgentReadinessPrerequisite[] = [
+const displayContractTests = [
+  'tests/api/agent-cost-indicator-diagnosis.test.ts',
+  'tests/api/agent-growth-diagnosis.test.ts',
+  'tests/api/agent-quote-conversion-diagnosis.test.ts',
+  'tests/api/agent-renewal-tracker-diagnosis.test.ts',
+  'tests/api/agent-claims-risk-diagnosis.test.ts',
+  'tests/api/agent-customer-flow-diagnosis.test.ts',
+  'tests/api/agent-business-patrol-diagnosis.test.ts',
+];
+
+export interface AgentObservabilityAuditOptions {
+  auditLogPath?: string;
+  now?: Date;
+  nodeEnv?: string;
+  windowDays?: number;
+  maxReadBytes?: number;
+}
+
+const DEFAULT_AUDIT_LOG_MAX_READ_BYTES = 5 * 1024 * 1024;
+
+function parseTimestamp(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseAuditLine(line: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(line) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizePath(value: unknown): string {
+  return typeof value === 'string' ? value.split('?')[0] : '';
+}
+
+function statusToNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function roundRate(value: number): number {
+  return Number(value.toFixed(6));
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'ENOENT';
+}
+
+interface AuditLogTailReadResult {
+  exists: boolean;
+  lines: string[];
+  truncated: boolean;
+  bytesRead: number;
+  fileSizeBytes: number;
+}
+
+async function readAuditLogTail(auditLogPath: string, maxReadBytes: number): Promise<AuditLogTailReadResult> {
+  const boundedMaxReadBytes = Math.max(1, Math.floor(maxReadBytes));
+
+  try {
+    const fileStat = await stat(auditLogPath);
+    const fileSizeBytes = fileStat.size;
+    if (fileSizeBytes === 0) {
+      return { exists: true, lines: [], truncated: false, bytesRead: 0, fileSizeBytes };
+    }
+
+    if (fileSizeBytes <= boundedMaxReadBytes) {
+      const content = await readFile(auditLogPath, 'utf-8');
+      return {
+        exists: true,
+        lines: content.split('\n').filter(Boolean),
+        truncated: false,
+        bytesRead: Buffer.byteLength(content),
+        fileSizeBytes,
+      };
+    }
+
+    const bytesToRead = boundedMaxReadBytes;
+    const start = fileSizeBytes - bytesToRead;
+    const buffer = Buffer.alloc(bytesToRead);
+    const fileHandle = await open(auditLogPath, 'r');
+
+    try {
+      const result = await fileHandle.read(buffer, 0, bytesToRead, start);
+      const content = buffer.subarray(0, result.bytesRead).toString('utf-8');
+      const lines = content.split('\n');
+      const completeLines = start > 0 ? lines.slice(1) : lines;
+
+      return {
+        exists: true,
+        lines: completeLines.filter(Boolean),
+        truncated: start > 0,
+        bytesRead: result.bytesRead,
+        fileSizeBytes,
+      };
+    } finally {
+      await fileHandle.close();
+    }
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return { exists: false, lines: [], truncated: false, bytesRead: 0, fileSizeBytes: 0 };
+    }
+
+    throw error;
+  }
+}
+
+function buildStage5Evidence(observability: AgentObservabilityAudit): AgentReadinessPrerequisite[] {
+  const productionAuditObserved = observability.auditLog.productionEvidence;
+  const errorRateUnderThreshold =
+    productionAuditObserved &&
+    observability.auditLog.windowComplete &&
+    observability.auditLog.totalAgentDiagnosisCalls > 0 &&
+    observability.auditLog.errorRate < 0.01;
+
+  return [
   {
     id: 'deterministic_apis_merged',
     name: 'Stage 1-4 确定性 API 已合并',
@@ -205,38 +340,173 @@ const stage5Prerequisites: AgentReadinessPrerequisite[] = [
   {
     id: 'production_audit_log_observed',
     name: '生产 audit log 能看到 /api/agent/diagnosis/* 调用记录',
-    met: false,
-    evidence: [],
+    met: productionAuditObserved,
+    evidence: productionAuditObserved
+      ? [
+          `auditLogConfigured=${observability.auditLog.auditLogConfigured}`,
+          `totalAgentDiagnosisCalls=${observability.auditLog.totalAgentDiagnosisCalls}`,
+          `lastObservedAt=${observability.auditLog.lastObservedAt ?? 'unknown'}`,
+        ]
+      : [],
     blocker: '缺少生产 audit log 对 /api/agent/diagnosis/* 调用记录的验收证据。',
   },
   {
     id: 'thirty_day_error_rate_under_threshold',
     name: '最近 30 天 /api/agent/diagnosis/* error rate < 1%',
-    met: false,
-    evidence: [],
+    met: errorRateUnderThreshold,
+    evidence: errorRateUnderThreshold
+      ? [
+          `windowDays=${observability.auditLog.windowDays}`,
+          `windowComplete=${observability.auditLog.windowComplete}`,
+          `errorRate=${observability.auditLog.errorRate}`,
+          `errorCount=${observability.auditLog.errorCount}`,
+        ]
+      : [],
     blocker: '缺少最近 30 天 /api/agent/diagnosis/* error rate < 1% 的验收证据。',
   },
   {
     id: 'warnings_and_forbidden_interpretations_displayed',
     name: '前端或调用方展示 warnings 与 forbiddenInterpretations',
     met: false,
-    evidence: [],
+    evidence: observability.displayContract.verifiedByTests,
     blocker: '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
   },
-];
+  ];
+}
 
-export function getAgentReadinessAudit(): AgentReadinessAudit {
+export async function getAgentObservabilityAudit(options: AgentObservabilityAuditOptions = {}): Promise<AgentObservabilityAudit> {
+  const auditLogPath = options.auditLogPath ?? getAuditLogPath();
+  const now = options.now ?? new Date();
+  const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV ?? 'development';
+  const windowDays = options.windowDays ?? 30;
+  const maxReadBytes = options.maxReadBytes ?? DEFAULT_AUDIT_LOG_MAX_READ_BYTES;
+  const sinceMs = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
+  const auditLogTail = await readAuditLogTail(auditLogPath, maxReadBytes);
+  const exists = auditLogTail.exists;
+
+  const coverage = deterministicDiagnosisCapabilities.map((item) => ({
+    capabilityId: item.capabilityId,
+    endpoint: item.endpoint,
+    observedCallCount: 0,
+    errorCount: 0,
+    lastObservedAt: undefined as string | undefined,
+  }));
+
+  const byEndpoint = new Map(coverage.map((item) => [item.endpoint, item]));
+  let totalAgentDiagnosisCalls = 0;
+  let errorCount = 0;
+  let lastObservedAt: string | undefined;
+  let earliestObservedAt: string | undefined;
+
+  if (exists) {
+    for (const line of auditLogTail.lines) {
+      const entry = parseAuditLine(line);
+      if (!entry) continue;
+
+      const timestamp = parseTimestamp(entry.timestamp);
+      if (!timestamp || timestamp.getTime() < sinceMs || timestamp.getTime() > now.getTime()) continue;
+
+      const requestPath = normalizePath(entry.path);
+      if (!requestPath.startsWith('/api/agent/diagnosis/')) continue;
+
+      totalAgentDiagnosisCalls += 1;
+      const isError = statusToNumber(entry.status) >= 500;
+      if (isError) errorCount += 1;
+      if (!lastObservedAt || timestamp.toISOString() > lastObservedAt) {
+        lastObservedAt = timestamp.toISOString();
+      }
+      if (!earliestObservedAt || timestamp.toISOString() < earliestObservedAt) {
+        earliestObservedAt = timestamp.toISOString();
+      }
+
+      const endpoint = byEndpoint.get(requestPath);
+      if (endpoint) {
+        endpoint.observedCallCount += 1;
+        if (isError) endpoint.errorCount += 1;
+        if (!endpoint.lastObservedAt || timestamp.toISOString() > endpoint.lastObservedAt) {
+          endpoint.lastObservedAt = timestamp.toISOString();
+        }
+      }
+    }
+  }
+
+  const errorRate = totalAgentDiagnosisCalls === 0 ? 0 : roundRate(errorCount / totalAgentDiagnosisCalls);
+  const productionEvidence = nodeEnv === 'production' && exists && totalAgentDiagnosisCalls > 0;
+  const windowComplete =
+    exists &&
+    (!auditLogTail.truncated ||
+      (earliestObservedAt ? new Date(earliestObservedAt).getTime() <= sinceMs : false));
+  const status = (() => {
+    if (!exists) return 'missing_log' as const;
+    if (totalAgentDiagnosisCalls === 0) return 'no_recent_agent_calls' as const;
+    if (!productionEvidence) return 'not_production_evidence' as const;
+    if (!windowComplete) return 'partial_window_sample' as const;
+    if (errorRate >= 0.01) return 'error_rate_above_threshold' as const;
+    return 'observed' as const;
+  })();
+
+  const audit = AgentObservabilityAuditSchema.parse({
+    phase: 'agent_observability_readiness',
+    auditLog: {
+      status,
+      auditLogConfigured: auditLogPath.length > 0,
+      exists,
+      productionEvidence,
+      windowComplete,
+      windowDays,
+      logReadBytes: auditLogTail.bytesRead,
+      logFileBytes: auditLogTail.fileSizeBytes,
+      logTruncated: auditLogTail.truncated,
+      totalAgentDiagnosisCalls,
+      errorCount,
+      errorRate,
+      lastObservedAt,
+      auditedPathPrefixes: [...AUDITED_PATHS],
+    },
+    endpointCoverage: coverage.map((item) => ({
+      ...item,
+      errorRate: item.observedCallCount === 0 ? 0 : roundRate(item.errorCount / item.observedCallCount),
+      status: item.observedCallCount > 0 ? 'observed' : 'missing_recent_call',
+    })),
+    stage5Evidence: [],
+    displayContract: {
+      status: 'pending_caller_display_evidence',
+      requiredFields: ['warnings', 'forbiddenInterpretations'],
+      verifiedByTests: displayContractTests,
+      blocker: '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
+    },
+    notes: [
+      '本审计只读取既有 audit log，不新增 SQL，不调用 LLM。',
+      '请求路径只异步读取审计日志尾部的限量样本；只有样本覆盖完整 30 天窗口时，才允许采信 30 天错误率达标证据。',
+      '只有 NODE_ENV=production 且最近 30 天存在 /api/agent/diagnosis/* 调用时，才视为生产审计证据。',
+      'warnings 与 forbiddenInterpretations 已在确定性 API 响应契约中存在，但 Stage 5 仍需要调用方展示证据。',
+    ],
+  });
+
+  return AgentObservabilityAuditSchema.parse({
+    ...audit,
+    stage5Evidence: buildStage5Evidence(audit),
+  });
+}
+
+export interface AgentReadinessAuditOptions {
+  observability?: AgentObservabilityAuditOptions;
+}
+
+export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions = {}): Promise<AgentReadinessAudit> {
   const capabilitySummary = summarizeBySupportLevel(agentDataCapabilityRegistry);
   const completedStages = stageReadiness.filter((stage) => stage.status === 'completed');
   const blockedStages = stageReadiness.filter((stage) => stage.status === 'blocked');
   const pendingStages = stageReadiness.filter((stage) => stage.status === 'pending');
+  const observabilityEvidence = await getAgentObservabilityAudit(options.observability);
+  const stage5Prerequisites = observabilityEvidence.stage5Evidence;
   const llmReadinessBlockers = stage5Prerequisites
     .filter((item) => !item.met && item.blocker)
     .map((item) => item.blocker!);
 
   return AgentReadinessAuditSchema.parse({
     phase: 'agent_metric_adaptation_audit',
-    currentStage: 'stage_4_business_patrol_ready',
+    currentStage: 'stage_4_6_observability_ready',
     readyForLlm: false,
     readyForChatWindow: false,
     deterministicRouting: true,
@@ -252,8 +522,9 @@ export function getAgentReadinessAudit(): AgentReadinessAudit {
     deterministicDiagnosisCapabilities,
     stage5Prerequisites,
     llmReadinessBlockers,
+    observabilityEvidence,
     notes: [
-      'Stage 1-4 已完成：指标审计、注册表一致性、成本指标诊断、五类确定性诊断和经营巡检聚合。',
+      'Stage 1-4.6 已完成：指标审计、注册表一致性、确定性诊断、经营巡检聚合和观测证据闭环。',
       'Agent 层复用现有指标注册表、查询路由和 SQL 生成器，不新增自由查询能力。',
       '承保利润、利润率、边际贡献、财务盈亏、财务综合成本率保持 unsupported。',
       'Stage 5 LLM 解释层仍被生产 audit log、30 天错误率和 warnings/forbiddenInterpretations 展示证据阻塞。',
