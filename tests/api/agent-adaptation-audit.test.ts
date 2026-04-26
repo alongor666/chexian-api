@@ -20,6 +20,7 @@ describe('agent adaptation audit routing', () => {
     expect(comprehensiveReview?.supportLevel).toBe('caution');
     expect(comprehensiveReview?.coreMetrics).toEqual(
       expect.arrayContaining([
+        'comprehensive_cost_ratio',
         'comprehensive_expense_ratio',
         'combined_cost_amount',
         'combined_cost_ratio',
@@ -30,6 +31,17 @@ describe('agent adaptation audit routing', () => {
     expect(costDiagnosis?.coreMetrics).not.toEqual(
       expect.arrayContaining(['combined_cost_ratio', 'fixed_cost_ratio', 'comprehensive_expense_ratio'])
     );
+  });
+
+  it('keeps comprehensive_cost_ratio aligned across registry, mapping, and capability list', async () => {
+    const audit = getAgentCapabilityAudit();
+    const review = audit.capabilities.find((item) => item.id === 'comprehensive_cost_indicator_review');
+    const { metricCapabilityMapping } = await import('../../server/src/agent/registry/metric-capability-mapping.js');
+    const { agentMetricRegistry } = await import('../../server/src/agent/registry/agent-metric-registry.js');
+
+    expect(review?.coreMetrics).toContain('comprehensive_cost_ratio');
+    expect(metricCapabilityMapping.comprehensive_cost_ratio).toContain('comprehensive_cost_indicator_review');
+    expect(agentMetricRegistry.some((m) => m.id === 'comprehensive_cost_ratio')).toBe(true);
   });
 
   it('routes variable cost questions to cost indicator diagnosis', () => {

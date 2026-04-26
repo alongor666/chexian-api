@@ -3,7 +3,7 @@ import { authMiddleware } from '../../middleware/auth.js';
 import { permissionMiddleware } from '../../middleware/permission.js';
 import { asyncHandler, AppError } from '../../middleware/error.js';
 import { buildWhereFromFilterParams, buildWhereFromFilterParamsWithoutDate } from '../../utils/filter-params.js';
-import { buildInCondition, isValidDateFormat } from '../../utils/sql-sanitizer.js';
+import { buildInCondition, isValidDateFormat, validateDateRange } from '../../utils/sql-sanitizer.js';
 import { createDomainMiddleware } from '../../routes/query/shared.js';
 import {
   CostIndicatorDiagnosisRequestSchema,
@@ -39,18 +39,15 @@ function applyQuoteConversionPermissionFilters(
 ): QuoteConversionDiagnosisFilters {
   if (!user) return filters;
   if (user.role === 'org_user') {
+    if (!user.organization) {
+      throw new AppError(403, 'Organization not specified for org_user role');
+    }
     return { ...filters, orgName: user.organization };
   }
   if (user.role === 'telemarketing_user') {
     return { ...filters, isTelemarketing: '电销' };
   }
   return filters;
-}
-
-function validateOptionalDate(label: string, value: string | undefined): void {
-  if (value && !isValidDateFormat(value)) {
-    throw new AppError(400, `Invalid ${label} format: ${value}. Expected YYYY-MM-DD`);
-  }
 }
 
 function addInCondition(conditions: string[], column: string, values: string[]): void {
@@ -122,15 +119,11 @@ router.post(
   createDomainMiddleware('PolicyFact'),
   asyncHandler(async (req, res) => {
     const input = GrowthDiagnosisRequestSchema.parse(req.body);
-    for (const [label, value] of [
-      ['currentPeriod.startDate', input.currentPeriod.startDate],
-      ['currentPeriod.endDate', input.currentPeriod.endDate],
-      ['baselinePeriod.startDate', input.baselinePeriod.startDate],
-      ['baselinePeriod.endDate', input.baselinePeriod.endDate],
-    ] as const) {
-      if (!isValidDateFormat(value)) {
-        throw new AppError(400, `Invalid ${label} format: ${value}. Expected YYYY-MM-DD`);
-      }
+    try {
+      validateDateRange('currentPeriod', input.currentPeriod.startDate, input.currentPeriod.endDate);
+      validateDateRange('baselinePeriod', input.baselinePeriod.startDate, input.baselinePeriod.endDate);
+    } catch (err) {
+      throw new AppError(400, err instanceof Error ? err.message : String(err));
     }
 
     const whereClause = buildWhereFromFilterParamsWithoutDate(input.filters, req.permissionFilter || '1=1');
@@ -160,8 +153,11 @@ router.post(
   createDomainMiddleware('QuoteConversion'),
   asyncHandler(async (req, res) => {
     const input = QuoteConversionDiagnosisRequestSchema.parse(req.body);
-    validateOptionalDate('filters.dateStart', input.filters.dateStart);
-    validateOptionalDate('filters.dateEnd', input.filters.dateEnd);
+    try {
+      validateDateRange('filters.date', input.filters.dateStart, input.filters.dateEnd);
+    } catch (err) {
+      throw new AppError(400, err instanceof Error ? err.message : String(err));
+    }
     if (input.filters.ncdMin !== undefined && input.filters.ncdMax !== undefined && input.filters.ncdMin > input.filters.ncdMax) {
       throw new AppError(400, 'ncdMin cannot be greater than ncdMax');
     }
@@ -186,17 +182,13 @@ router.post(
   createDomainMiddleware('RenewalTracker'),
   asyncHandler(async (req, res) => {
     const input = RenewalTrackerDiagnosisRequestSchema.parse(req.body);
-    for (const [label, value] of [
-      ['start', input.start],
-      ['end', input.end],
-      ['cutoff', input.cutoff],
-    ] as const) {
-      if (!isValidDateFormat(value)) {
-        throw new AppError(400, `Invalid ${label} format: ${value}. Expected YYYY-MM-DD`);
-      }
+    try {
+      validateDateRange('range', input.start, input.end);
+    } catch (err) {
+      throw new AppError(400, err instanceof Error ? err.message : String(err));
     }
-    if (input.start > input.end) {
-      throw new AppError(400, 'start must be <= end');
+    if (!isValidDateFormat(input.cutoff)) {
+      throw new AppError(400, `Invalid cutoff format: ${input.cutoff}. Expected YYYY-MM-DD`);
     }
 
     const diagnosis = await runRenewalTrackerDiagnosis({

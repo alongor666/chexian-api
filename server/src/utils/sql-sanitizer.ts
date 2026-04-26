@@ -21,6 +21,27 @@ export function isValidDateTimeFormat(value: string): boolean {
 }
 
 /**
+ * 校验日期区间：start 和 end 都需 YYYY-MM-DD 且 start <= end。
+ * 任一为 undefined 时跳过对应检查（允许半开区间）。
+ * @throws Error 格式不合法或 start > end
+ */
+export function validateDateRange(
+  label: string,
+  start: string | undefined,
+  end: string | undefined
+): void {
+  if (start !== undefined && !isValidDateFormat(start)) {
+    throw new Error(`Invalid ${label}.start format: ${start}. Expected YYYY-MM-DD`);
+  }
+  if (end !== undefined && !isValidDateFormat(end)) {
+    throw new Error(`Invalid ${label}.end format: ${end}. Expected YYYY-MM-DD`);
+  }
+  if (start !== undefined && end !== undefined && start > end) {
+    throw new Error(`Invalid ${label} range: start (${start}) is after end (${end})`);
+  }
+}
+
+/**
  * @deprecated 使用 security.ts 的 escapeSqlLiteral 替代。保留仅为向后兼容。
  */
 export function escapeSqlString(value: string): string {
