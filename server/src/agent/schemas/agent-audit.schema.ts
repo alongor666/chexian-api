@@ -34,8 +34,38 @@ export const UnsupportedMetricAuditSchema = z.object({
   metrics: z.array(UnsupportedMetricDefinitionSchema),
 });
 
+export const AgentReadinessStageStatusSchema = z.enum(['completed', 'blocked', 'pending']);
+export const AgentReadinessStageSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  status: AgentReadinessStageStatusSchema,
+  evidence: z.array(z.string()),
+  blockers: z.array(z.string()).default([]),
+});
+
+export const AgentDiagnosisCapabilityReadinessSchema = z.object({
+  capabilityId: z.string().min(1),
+  endpoint: z.string().min(1),
+  routeConstant: z.string().min(1),
+  frontendRouteConstant: z.string().min(1),
+  status: z.enum(['ready', 'caution', 'blocked']),
+  httpIntegrationTest: z.string().min(1),
+  routeContractTest: z.string().min(1),
+  requiredWarnings: z.boolean(),
+  requiredForbiddenInterpretations: z.boolean(),
+});
+
+export const AgentReadinessPrerequisiteSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  met: z.boolean(),
+  evidence: z.array(z.string()),
+  blocker: z.string().optional(),
+});
+
 export const AgentReadinessAuditSchema = z.object({
   phase: z.literal('agent_metric_adaptation_audit'),
+  currentStage: z.literal('stage_4_business_patrol_ready'),
   readyForLlm: z.literal(false),
   readyForChatWindow: z.literal(false),
   deterministicRouting: z.literal(true),
@@ -44,6 +74,13 @@ export const AgentReadinessAuditSchema = z.object({
   supportedCapabilityCount: z.number().int().nonnegative(),
   cautionCapabilityCount: z.number().int().nonnegative(),
   unsupportedMetricCount: z.number().int().nonnegative(),
+  deterministicDiagnosisCapabilityCount: z.number().int().nonnegative(),
+  completedStages: z.array(AgentReadinessStageSchema),
+  blockedStages: z.array(AgentReadinessStageSchema),
+  pendingStages: z.array(AgentReadinessStageSchema),
+  deterministicDiagnosisCapabilities: z.array(AgentDiagnosisCapabilityReadinessSchema),
+  stage5Prerequisites: z.array(AgentReadinessPrerequisiteSchema),
+  llmReadinessBlockers: z.array(z.string()),
   notes: z.array(z.string()),
 });
 
@@ -72,6 +109,9 @@ export type UnsupportedMetricDefinition = z.infer<typeof UnsupportedMetricDefini
 export type AgentMetricAudit = z.infer<typeof AgentMetricAuditSchema>;
 export type AgentCapabilityAudit = z.infer<typeof AgentCapabilityAuditSchema>;
 export type UnsupportedMetricAudit = z.infer<typeof UnsupportedMetricAuditSchema>;
+export type AgentReadinessStage = z.infer<typeof AgentReadinessStageSchema>;
+export type AgentDiagnosisCapabilityReadiness = z.infer<typeof AgentDiagnosisCapabilityReadinessSchema>;
+export type AgentReadinessPrerequisite = z.infer<typeof AgentReadinessPrerequisiteSchema>;
 export type AgentReadinessAudit = z.infer<typeof AgentReadinessAuditSchema>;
 export type RouteQuestionInput = z.infer<typeof RouteQuestionInputSchema>;
 export type RouteQuestionResult = z.infer<typeof RouteQuestionResultSchema>;
