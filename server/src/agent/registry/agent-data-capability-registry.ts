@@ -21,7 +21,7 @@ export const agentDataCapabilityRegistry = AgentCapabilityDefinitionSchema.array
     description: '分析保费增长或下滑来源。',
     coreMetrics: ['signed_premium', 'policy_count', 'growth_rate'],
     sourceEndpoints: ['/api/query/growth'],
-    sourceTools: ['growth.query'],
+    sourceTools: ['growth.query', 'growth.daily_context'],
     allowedUseCases: ['同比分析', '环比分析', '自定义基期增长分析'],
     cautionNotes: ['增长不是利润，不能推断财务盈亏。'],
     forbiddenOutputs: ['承保利润', '财务盈利', '财务亏损'],

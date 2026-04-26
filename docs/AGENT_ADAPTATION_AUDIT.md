@@ -6,6 +6,8 @@
 
 Stage 2 在审计框架之上新增 `/api/agent/diagnosis/cost-indicators`，用于执行 `cost_indicator_diagnosis` 的确定性成本指标诊断。该接口仍不接 LLM，不生成自由 SQL，只复用现有成本 SQL 生成器和权限边界。
 
+Stage 3 PR1 新增 `/api/agent/diagnosis/growth`，用于执行 `growth_diagnosis` 的确定性增长诊断。该接口复用 `generateGrowthQuery` 与 `generateDailyGrowthWithContextQuery`，要求请求显式传入当前期和基期日期，不在 SQL 或服务层隐式取当天。
+
 ## API
 
 - `GET /api/agent/audit/metrics`：返回 Agent 指标注册表、支持级别和口径边界。
@@ -18,10 +20,12 @@ Stage 2 在审计框架之上新增 `/api/agent/diagnosis/cost-indicators`，用
 
 成本指标诊断路由挂载在 `/api/agent/diagnosis`，继续使用全局审计中间件，并在路由内使用 `authMiddleware`、`permissionMiddleware` 和 `createDomainMiddleware('ClaimsAgg')`。
 
+增长诊断路由同样挂载在 `/api/agent/diagnosis`，继续使用全局审计中间件、查询级限流、`authMiddleware`、`permissionMiddleware` 和 `createDomainMiddleware('PolicyFact')`。请求和响应均通过 Agent schema 层 Zod 校验。
+
 ## 支持能力
 
 - `business_patrol_diagnosis`：经营巡检。
-- `growth_diagnosis`：增长归因。
+- `growth_diagnosis`：增长归因。确定性接口为 `POST /api/agent/diagnosis/growth`，输出增长异常、主要维度贡献和下钻建议；禁止输出利润、盈利、亏损或承保利润结论。
 - `cost_indicator_diagnosis`：成本指标诊断。
 - `quote_conversion_diagnosis`：报价转化诊断。
 - `renewal_tracker_diagnosis`：续保追踪诊断。
