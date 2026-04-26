@@ -87,6 +87,34 @@ describe('agent claims risk diagnosis workflow', () => {
     );
   });
 
+  it('computes latest frequency yoy from the full series even when Top-N risks truncate it', () => {
+    const diagnosis = diagnoseClaimsRiskRows({
+      filters: {},
+      limit: 1,
+      pendingOverviewRows: [],
+      causeRows: [],
+      frequencyRows: [
+        { year: 2024, quarter: 1, claim_count: 100, policy_count: 10000, reserve_wan: 100, freq_per_1000: 10, injury_pct: 1 },
+        { year: 2024, quarter: 2, claim_count: 100, policy_count: 10000, reserve_wan: 100, freq_per_1000: 10, injury_pct: 1 },
+        { year: 2025, quarter: 1, claim_count: 300, policy_count: 10000, reserve_wan: 300, freq_per_1000: 30, injury_pct: 1 },
+        { year: 2025, quarter: 2, claim_count: 110, policy_count: 10000, reserve_wan: 110, freq_per_1000: 11, injury_pct: 1 },
+        { year: 2026, quarter: 1, claim_count: 310, policy_count: 10000, reserve_wan: 310, freq_per_1000: 31, injury_pct: 1 },
+        { year: 2026, quarter: 2, claim_count: 120, policy_count: 10000, reserve_wan: 120, freq_per_1000: 12, injury_pct: 1 },
+      ],
+    });
+
+    expect(diagnosis.frequencyDiagnostics).toHaveLength(1);
+    expect(diagnosis.frequencyDiagnostics[0]).toMatchObject({
+      period: '2025-Q1',
+      yoyChange: 20,
+      severity: 'critical',
+    });
+    expect(diagnosis.summary).toMatchObject({
+      latestFrequencyPer1000: 12,
+      latestFrequencyYoyChange: 1,
+    });
+  });
+
   it('keeps out excluded claims sub-routes, LLM, and free SQL', () => {
     const serviceSource = readSource('server/src/agent/services/agent-claims-risk-diagnosis-service.ts');
     const routeSource = readSource('server/src/agent/routes/agent-diagnosis.ts');
@@ -195,10 +223,14 @@ describe('agent claims risk diagnosis workflow', () => {
       expect(body.data.summary.pendingCases).toBe(120);
       expect(queryMock).toHaveBeenCalledTimes(3);
       const sqlCalls = queryMock.mock.calls.map(([sql]) => String(sql));
+      const frequencySql = sqlCalls[2];
       expect(sqlCalls.join('\n')).toContain("c.accident_cause = '碰撞''测试'");
       expect(sqlCalls.join('\n')).toContain("p.org_level_3 = 'A机构'");
       expect(sqlCalls.join('\n')).toContain("p.customer_category = '非营业个人客车'");
       expect(sqlCalls.join('\n')).toContain("p.coverage_combination = '主全'");
+      expect(frequencySql).toContain("c.accident_time >= '2026-01-01'");
+      expect(frequencySql).toContain("c.accident_time <= '2026-04-24 23:59:59'");
+      expect(frequencySql).toContain("c.accident_cause = '碰撞''测试'");
     } finally {
       await closeServer(server);
     }

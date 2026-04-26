@@ -70,14 +70,14 @@ export interface ClaimsDetailFilters {
 
 function buildWhere(filters: ClaimsDetailFilters, tableAlias = 'c'): string {
   const conditions: string[] = [];
-  if (filters.dateStart) conditions.push(`${tableAlias}.accident_time >= '${filters.dateStart}'`);
-  if (filters.dateEnd) conditions.push(`${tableAlias}.accident_time <= '${filters.dateEnd} 23:59:59'`);
-  if (filters.claimStatus) conditions.push(`${tableAlias}.claim_status = '${filters.claimStatus}'`);
+  if (filters.dateStart) conditions.push(`${tableAlias}.accident_time >= '${escapeSqlValue(filters.dateStart)}'`);
+  if (filters.dateEnd) conditions.push(`${tableAlias}.accident_time <= '${escapeSqlValue(filters.dateEnd)} 23:59:59'`);
+  if (filters.claimStatus) conditions.push(`${tableAlias}.claim_status = '${escapeSqlValue(filters.claimStatus)}'`);
   if (filters.isBodilyInjury !== undefined) {
     conditions.push(`${tableAlias}.is_bodily_injury = ${filters.isBodilyInjury === 'true'}`);
   }
-  if (filters.accidentCause) conditions.push(`${tableAlias}.accident_cause = '${filters.accidentCause}'`);
-  if (filters.accidentCity) conditions.push(`${tableAlias}.accident_city = '${filters.accidentCity}'`);
+  if (filters.accidentCause) conditions.push(`${tableAlias}.accident_cause = '${escapeSqlValue(filters.accidentCause)}'`);
+  if (filters.accidentCity) conditions.push(`${tableAlias}.accident_city = '${escapeSqlValue(filters.accidentCity)}'`);
   return conditions.length > 0 ? conditions.join(' AND ') : '1=1';
 }
 
@@ -547,6 +547,7 @@ export function generateLossRatioDevelopmentQuery(
 }
 
 export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string {
+  const claimWhere = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
   // 取最近3个完整年份的Q1-Q4数据
   return `
@@ -559,7 +560,7 @@ export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string 
         ROUND(SUM(c.reserve_amount) / 1e4, 0) AS reserve_wan
       FROM ClaimsDetail c
       JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
-      WHERE c.accident_time >= '2022-01-01'${policyWhere}
+      WHERE c.accident_time >= '2022-01-01' AND ${claimWhere}${policyWhere}
       GROUP BY YEAR(c.accident_time), QUARTER(c.accident_time)
     ),
     quarterly_policies AS (

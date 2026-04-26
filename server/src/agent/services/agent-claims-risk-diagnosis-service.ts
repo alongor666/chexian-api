@@ -4,7 +4,6 @@ import {
   generatePendingOverviewQuery,
   type ClaimsDetailFilters,
 } from '../../sql/claims-detail.js';
-import { escapeSqlValue } from '../../utils/security.js';
 import {
   ClaimsRiskDiagnosisResultSchema,
   type ClaimsRiskDiagnosisFilters,
@@ -133,7 +132,7 @@ function buildCauseDiagnostics(rows: RawRow[], limit: number) {
     .slice(0, limit);
 }
 
-function buildFrequencyDiagnostics(rows: RawRow[], limit: number) {
+function buildFrequencyDiagnosticSeries(rows: RawRow[]) {
   const sortedRows = [...rows].sort((a, b) => {
     const yearDiff = (toNullableNumber(a.year) ?? 0) - (toNullableNumber(b.year) ?? 0);
     if (yearDiff !== 0) return yearDiff;
@@ -141,7 +140,7 @@ function buildFrequencyDiagnostics(rows: RawRow[], limit: number) {
   });
   const previousByQuarter = new Map<number, number | null>();
 
-  const diagnostics = sortedRows.map((row) => {
+  return sortedRows.map((row) => {
     const year = toNullableNumber(row.year) ?? 0;
     const quarter = toNullableNumber(row.quarter) ?? 0;
     const freqPer1000 = toNullableNumber(row.freq_per_1000);
@@ -164,8 +163,10 @@ function buildFrequencyDiagnostics(rows: RawRow[], limit: number) {
       severity: severityForFrequency(yoyChange),
     };
   });
+}
 
-  return diagnostics
+function buildFrequencyDiagnostics(rows: RawRow[], limit: number) {
+  return buildFrequencyDiagnosticSeries(rows)
     .filter((item) => item.yoyChange !== null)
     .sort((a, b) => {
       const severityDiff = severityRank(a.severity) - severityRank(b.severity);
@@ -175,30 +176,14 @@ function buildFrequencyDiagnostics(rows: RawRow[], limit: number) {
     .slice(0, limit);
 }
 
-function buildExecutionFilters(filters: ClaimsRiskDiagnosisFilters): ClaimsDetailFilters {
-  return {
-    ...filters,
-    claimStatus: filters.claimStatus ? escapeSqlValue(filters.claimStatus) : undefined,
-    accidentCause: filters.accidentCause ? escapeSqlValue(filters.accidentCause) : undefined,
-    accidentCity: filters.accidentCity ? escapeSqlValue(filters.accidentCity) : undefined,
-  };
-}
-
 export function diagnoseClaimsRiskRows(input: DiagnoseClaimsRiskRowsInput): ClaimsRiskDiagnosisResult {
   const { totalCases, pendingRisk } = buildPendingRisk(input.pendingOverviewRows);
   const causeDiagnostics = buildCauseDiagnostics(input.causeRows, input.limit);
   const topCauseByCases = [...input.causeRows]
     .sort((a, b) => (toNullableNumber(b.cases) ?? 0) - (toNullableNumber(a.cases) ?? 0))[0];
+  const frequencySeries = buildFrequencyDiagnosticSeries(input.frequencyRows);
   const frequencyDiagnostics = buildFrequencyDiagnostics(input.frequencyRows, input.limit);
-  const latestFrequency = [...input.frequencyRows].sort((a, b) => {
-    const yearDiff = (toNullableNumber(a.year) ?? 0) - (toNullableNumber(b.year) ?? 0);
-    if (yearDiff !== 0) return yearDiff;
-    return (toNullableNumber(a.quarter) ?? 0) - (toNullableNumber(b.quarter) ?? 0);
-  }).at(-1);
-  const latestFrequencyDiagnostic = frequencyDiagnostics.find((item) =>
-    item.year === (toNullableNumber(latestFrequency?.year) ?? 0)
-    && item.quarter === (toNullableNumber(latestFrequency?.quarter) ?? 0)
-  ) ?? null;
+  const latestFrequencyDiagnostic = frequencySeries.at(-1) ?? null;
 
   return ClaimsRiskDiagnosisResultSchema.parse({
     capabilityId: 'claims_risk_diagnosis',
@@ -211,7 +196,7 @@ export function diagnoseClaimsRiskRows(input: DiagnoseClaimsRiskRowsInput): Clai
       pendingReserveWan: pendingRisk.pendingReserveWan,
       pendingCaseShare: pendingRisk.pendingCaseShare,
       topCause: topCauseByCases ? stringOf(topCauseByCases.accident_cause, '未知') : null,
-      latestFrequencyPer1000: toNullableNumber(latestFrequency?.freq_per_1000),
+      latestFrequencyPer1000: latestFrequencyDiagnostic?.freqPer1000 ?? null,
       latestFrequencyYoyChange: latestFrequencyDiagnostic?.yoyChange ?? null,
     },
     pendingRisk,
@@ -225,7 +210,7 @@ export function diagnoseClaimsRiskRows(input: DiagnoseClaimsRiskRowsInput): Clai
 
 export async function runClaimsRiskDiagnosis(input: RunClaimsRiskDiagnosisInput): Promise<ClaimsRiskDiagnosisResult> {
   const { duckdbService } = await import('../../services/duckdb.js');
-  const filters = buildExecutionFilters(input.filters);
+  const filters = input.filters as ClaimsDetailFilters;
 
   const [pendingOverviewRows, causeRows, frequencyRows] = await Promise.all([
     duckdbService.query<RawRow>(generatePendingOverviewQuery(filters)),
