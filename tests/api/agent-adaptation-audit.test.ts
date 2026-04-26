@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getAgentCapabilityAudit } from '../../server/src/agent/services/agent-adaptation-audit-service';
+import { getAgentCapabilityAudit, getAgentReadinessAudit } from '../../server/src/agent/services/agent-adaptation-audit-service';
 import { routeAgentQuestion } from '../../server/src/agent/services/agent-question-router-service';
 
 describe('agent adaptation audit routing', () => {
@@ -112,5 +112,57 @@ describe('agent adaptation audit routing', () => {
       .toBe('quote_conversion_diagnosis');
     expect(routeAgentQuestion({ question: '续保情况怎么样？' }).matchedCapabilityId)
       .toBe('renewal_tracker_diagnosis');
+  });
+
+  it('reports Stage 1-4 deterministic readiness and keeps Stage 5 blocked by production evidence', () => {
+    const readiness = getAgentReadinessAudit();
+
+    expect(readiness.currentStage).toBe('stage_4_business_patrol_ready');
+    expect(readiness.readyForLlm).toBe(false);
+    expect(readiness.deterministicDiagnosisCapabilityCount).toBe(7);
+    expect(readiness.completedStages.map((stage) => stage.id)).toEqual(
+      expect.arrayContaining([
+        'stage_1_metric_adaptation_audit',
+        'phase_0a_metric_registry_consistency',
+        'stage_2_cost_indicator_diagnosis',
+        'stage_3_deterministic_diagnoses',
+        'stage_4_business_patrol',
+      ])
+    );
+    expect(readiness.blockedStages.map((stage) => stage.id)).toContain('stage_5_llm_interpretation');
+    expect(readiness.pendingStages.map((stage) => stage.id)).toContain('stage_6_operations_workbench');
+    expect(readiness.llmReadinessBlockers).toEqual(
+      expect.arrayContaining([
+        '缺少生产 audit log 对 /api/agent/diagnosis/* 调用记录的验收证据。',
+        '缺少最近 30 天 /api/agent/diagnosis/* error rate < 1% 的验收证据。',
+        '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
+      ])
+    );
+  });
+
+  it('lists every deterministic diagnosis endpoint with integration and route-contract evidence', () => {
+    const readiness = getAgentReadinessAudit();
+    const byCapability = new Map(readiness.deterministicDiagnosisCapabilities.map((item) => [item.capabilityId, item]));
+
+    for (const capabilityId of [
+      'cost_indicator_diagnosis',
+      'growth_diagnosis',
+      'quote_conversion_diagnosis',
+      'renewal_tracker_diagnosis',
+      'claims_risk_diagnosis',
+      'customer_flow_diagnosis',
+      'business_patrol_diagnosis',
+    ]) {
+      const item = byCapability.get(capabilityId);
+      expect(item, capabilityId).toBeDefined();
+      expect(item?.status).toBe('ready');
+      expect(item?.endpoint).toMatch(/^\/api\/agent\/diagnosis\//);
+      expect(item?.routeConstant).toMatch(/^AGENT_DIAGNOSIS_ROUTES\./);
+      expect(item?.frontendRouteConstant).toMatch(/^AGENT_DIAGNOSIS_ROUTES\./);
+      expect(item?.httpIntegrationTest).toMatch(/^tests\/api\/agent-.*\.test\.ts$/);
+      expect(item?.routeContractTest).toMatch(/^tests\/api\/agent-.*\.route-contract\.test\.ts$/);
+      expect(item?.requiredWarnings).toBe(true);
+      expect(item?.requiredForbiddenInterpretations).toBe(true);
+    }
   });
 });
