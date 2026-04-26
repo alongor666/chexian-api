@@ -390,101 +390,123 @@ def section_customer_structure(df: pd.DataFrame) -> str:
 # ============================================================================
 
 def section_channel_crosstab(df: pd.DataFrame) -> str:
-    """交叉分析：上年原单是否电销 × 续保单是否电销。
-    四类：自营续自营 / 自营续电销 / 电销续自营 / 电销续电销 + 未续回。
-    渠道标记来自 policy.is_telemarketing。"""
-    out = ["## 8. 电销渠道交叉（上年原单 × 续保单）", "",
-           "> 渠道判定依据 `policy.is_telemarketing`：上年原单与续保单各自的电销标记。"
-           "  续保单口径只统计已续回（is_renewed=true）的单子。",
+    """上年责任模式（自留/兜底）× 续保实际出单渠道（电销/业务员）交叉。
+
+    业务口径
+    --------
+    - 责任模式 = 上年事前分配的续保跟进责任，来自 funnel.renewal_mode：
+        自留 = 业务员自己留下负责续保
+        兜底 = 业务员把单子交给电销坐席跟进
+    - 续保渠道 = 续保单实际出单渠道（事后结果），来自 policy.is_telemarketing：
+        电销 = 续保单走电销渠道出单
+        业务员 = 续保单由业务员/中介渠道出单
+    - 即使上年是「兜底」交给电销，最终续回也可能由业务员或中介达成（返流）。
+    """
+    out = ["## 8. 责任模式 × 续保渠道交叉", "",
+           "> **责任模式（事前）**：自留 = 业务员自留；兜底 = 业务员交给电销坐席跟进。",
+           "> **续保渠道（事后）**：电销 = 续保单走电销出单；业务员 = 业务员/中介渠道出单。",
+           "> 兜底单的续回未必由电销完成（业务员/中介可能返流接单）。",
            ""]
 
     if df.empty:
         return "\n".join(out) + "（窗口内无应续数据）\n"
 
     df = df.copy()
-    df["prior_channel"] = df.prior_is_telemarketing.fillna(False).map(lambda v: "电销" if v else "自营")
+    df["prior_mode"] = df.renewal_mode.fillna("未分类")
     renewed = df[df.is_renewed == True].copy()
-
-    # 8.1 整体交叉表
-    out.append("### 8.1 整体：上年 → 续保 渠道流向（仅含已续回 N 件）")
     if renewed.empty:
         out.append("（窗口内无续回）")
         return "\n".join(out) + "\n"
     renewed["renewed_channel"] = renewed.renewed_is_telemarketing.fillna(False).map(
-        lambda v: "电销" if v else "自营"
+        lambda v: "电销" if v else "业务员"
     )
-    cross = renewed.groupby(["prior_channel", "renewed_channel"]).size().unstack(fill_value=0)
-    total_renewed = len(renewed)
 
+    # 8.1 整体 4 类流向
+    out.append("### 8.1 整体：上年责任模式 → 续保渠道（仅已续回）")
+    total_renewed = len(renewed)
     out.append(f"- 续回总数：{total_renewed:,d}")
     out.append("")
-    out.append("| 上年 → 续保 | 件数 | 占续回总数 |")
-    out.append("|------------|------|-----------|")
+    out.append("| 上年责任模式 → 续保渠道 | 件数 | 占续回总数 |")
+    out.append("|----------------------|------|-----------|")
     flows = [
-        ("自营 → 自营", "自营", "自营"),
-        ("自营 → 电销", "自营", "电销"),
-        ("电销 → 自营", "电销", "自营"),
-        ("电销 → 电销", "电销", "电销"),
+        ("自留 → 业务员（自留真留住）", "自留", "业务员"),
+        ("自留 → 电销（自留转电销）", "自留", "电销"),
+        ("兜底 → 电销（兜底成功）", "兜底", "电销"),
+        ("兜底 → 业务员（兜底返流）", "兜底", "业务员"),
+        ("未分类 → 业务员", "未分类", "业务员"),
+        ("未分类 → 电销", "未分类", "电销"),
     ]
-    for label, prior, new in flows:
-        n = int(cross.loc[prior, new]) if prior in cross.index and new in cross.columns else 0
+    cross = renewed.groupby(["prior_mode", "renewed_channel"]).size().unstack(fill_value=0)
+    for label, mode, ch in flows:
+        n = int(cross.loc[mode, ch]) if mode in cross.index and ch in cross.columns else 0
         share = n / total_renewed * 100 if total_renewed else 0
         out.append(f"| {label} | {fi(n)} | {fp(share)} |")
 
-    # 上年渠道总盘 + 续回率
+    # 8.2 责任模式续回画像
     out.append("")
-    out.append("### 8.2 上年渠道续回画像")
-    out.append("| 上年渠道 | 应续 | 已续回 | 续回率 | 续回中转入电销占比 | 续回中保留自营占比 |")
-    out.append("|---------|------|-------|--------|------------------|------------------|")
-    for ch in ["自营", "电销"]:
-        sub = df[df.prior_channel == ch]
-        sub_renewed = renewed[renewed.prior_channel == ch]
+    out.append("### 8.2 责任模式续回画像（含返流）")
+    out.append("| 责任模式 | 应续 | 已续回 | 续回率 | 续回中由电销出单 | 续回中由业务员出单 |")
+    out.append("|---------|------|-------|--------|----------------|------------------|")
+    for mode in ["自留", "兜底", "未分类"]:
+        sub = df[df.prior_mode == mode]
+        sub_renewed = renewed[renewed.prior_mode == mode]
         A = len(sub); C = len(sub_renewed)
-        rr = C / A * 100 if A else None
+        if A == 0:
+            continue
+        rr = C / A * 100
         if C > 0:
-            tele_ratio = (sub_renewed.renewed_channel == "电销").sum() / C * 100
-            self_ratio = (sub_renewed.renewed_channel == "自营").sum() / C * 100
+            tele = (sub_renewed.renewed_channel == "电销").sum() / C * 100
+            self_ = (sub_renewed.renewed_channel == "业务员").sum() / C * 100
         else:
-            tele_ratio = self_ratio = None
-        out.append(f"| {ch} | {fi(A)} | {fi(C)} | {fp(rr)}{light(rr, TH_RENEW_RATE, higher_worse=False)} "
-                   f"| {fp(tele_ratio)} | {fp(self_ratio)} |")
+            tele = self_ = None
+        out.append(f"| {mode} | {fi(A)} | {fi(C)} | {fp(rr)}{light(rr, TH_RENEW_RATE, higher_worse=False)} "
+                   f"| {fp(tele)} | {fp(self_)} |")
 
-    # 8.3 各三级机构的渠道流向占比
+    # 8.3 各三级机构 续回 4 类流向占比
     out.append("")
-    out.append("### 8.3 各三级机构 续回渠道流向占比（应续 ≥ 50 才入选）")
-    out.append("| 三级机构 | 续回件数 | 自留自营 % | 自留→电销 % | 电销→自营 % | 电销→电销 % |")
-    out.append("|---------|---------|----------|-----------|-----------|-----------|")
+    out.append("### 8.3 各三级机构 续回流向占比（应续 ≥ 50 才入选）")
+    out.append("| 三级机构 | 续回件数 | 自留→业务员 % | 自留→电销 % | 兜底→电销 % | 兜底→业务员 % |")
+    out.append("|---------|---------|-------------|-----------|-----------|-------------|")
     rows = []
     for org, g in renewed.groupby("org_level_3"):
         org_total_apply = len(df[df.org_level_3 == org])
-        if org_total_apply < 50:
+        if org_total_apply < 50 or len(g) == 0:
             continue
         n = len(g)
-        if n == 0:
-            continue
-        ss = ((g.prior_channel == "自营") & (g.renewed_channel == "自营")).sum() / n * 100
-        st = ((g.prior_channel == "自营") & (g.renewed_channel == "电销")).sum() / n * 100
-        ts = ((g.prior_channel == "电销") & (g.renewed_channel == "自营")).sum() / n * 100
-        tt = ((g.prior_channel == "电销") & (g.renewed_channel == "电销")).sum() / n * 100
+        ss = ((g.prior_mode == "自留") & (g.renewed_channel == "业务员")).sum() / n * 100
+        st = ((g.prior_mode == "自留") & (g.renewed_channel == "电销")).sum() / n * 100
+        ts = ((g.prior_mode == "兜底") & (g.renewed_channel == "电销")).sum() / n * 100
+        tt = ((g.prior_mode == "兜底") & (g.renewed_channel == "业务员")).sum() / n * 100
         rows.append((org, n, ss, st, ts, tt))
     rows.sort(key=lambda r: r[1], reverse=True)
     for org, n, ss, st, ts, tt in rows:
         out.append(f"| {org} | {fi(n)} | {fp(ss)} | {fp(st)} | {fp(ts)} | {fp(tt)} |")
 
-    # 8.4 责任模式 (renewal_mode 自留/兜底) × 上年渠道 交叉续回率
+    # 8.4 兜底返流深度（核心诊断指标）
     out.append("")
-    out.append("### 8.4 责任模式 × 上年渠道 交叉续回率")
-    out.append("| 责任模式 | 上年渠道 | 应续 | 已续回 | 续回率 |")
-    out.append("|---------|---------|------|-------|--------|")
-    for mode in ["自留", "兜底", "未分类"]:
-        for ch in ["自营", "电销"]:
-            sub = df[(df.renewal_mode == mode) & (df.prior_channel == ch)]
-            A = len(sub); C = int(sub.is_renewed.sum())
-            if A == 0:
-                continue
-            rr = C / A * 100
-            out.append(f"| {mode} | {ch} | {fi(A)} | {fi(C)} | "
-                       f"{fp(rr)}{light(rr, TH_RENEW_RATE, higher_worse=False)} |")
+    out.append("### 8.4 兜底返流深度（核心指标）")
+    out.append("> 「兜底返流」= 上年责任分配给电销，但实际续回由业务员/中介达成。")
+    out.append("> 返流率高 = 电销坐席没跟到，业务员/中介托底完成。")
+    out.append("")
+    out.append("| 三级机构 | 兜底应续 | 兜底续回 | 兜底续回率 | 由电销续回 | 由业务员返流续回 | 返流占续回比 |")
+    out.append("|---------|---------|---------|-----------|-----------|----------------|------------|")
+    backflow_rows = []
+    for org, g in df[df.prior_mode == "兜底"].groupby("org_level_3"):
+        A = len(g)
+        if A < 30:
+            continue
+        sub_renewed = renewed[(renewed.prior_mode == "兜底") & (renewed.org_level_3 == org)]
+        C = len(sub_renewed)
+        rr = C / A * 100 if A else None
+        c_tele = int((sub_renewed.renewed_channel == "电销").sum())
+        c_back = int((sub_renewed.renewed_channel == "业务员").sum())
+        back_share = c_back / C * 100 if C else None
+        backflow_rows.append((org, A, C, rr, c_tele, c_back, back_share))
+    backflow_rows.sort(key=lambda r: (r[6] or 0), reverse=True)
+    for org, A, C, rr, ct, cb, bs in backflow_rows:
+        out.append(f"| {org} | {fi(A)} | {fi(C)} | "
+                   f"{fp(rr)}{light(rr, TH_RENEW_RATE, higher_worse=False)} "
+                   f"| {fi(ct)} | {fi(cb)} | {fp(bs)} |")
 
     return "\n".join(out) + "\n"
 
