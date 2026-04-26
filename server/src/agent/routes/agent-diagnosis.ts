@@ -14,6 +14,8 @@ import {
   QuoteConversionDiagnosisResultSchema,
   ClaimsRiskDiagnosisRequestSchema,
   ClaimsRiskDiagnosisResultSchema,
+  CustomerFlowDiagnosisRequestSchema,
+  CustomerFlowDiagnosisResultSchema,
   type ClaimsRiskDiagnosisFilters,
   RenewalTrackerDiagnosisRequestSchema,
   RenewalTrackerDiagnosisResultSchema,
@@ -26,6 +28,7 @@ import { runGrowthDiagnosis } from '../services/agent-growth-diagnosis-service.j
 import { runQuoteConversionDiagnosis } from '../services/agent-quote-conversion-diagnosis-service.js';
 import { runRenewalTrackerDiagnosis } from '../services/agent-renewal-tracker-diagnosis-service.js';
 import { runClaimsRiskDiagnosis } from '../services/agent-claims-risk-diagnosis-service.js';
+import { runCustomerFlowDiagnosis } from '../services/agent-customer-flow-diagnosis-service.js';
 
 const router = Router();
 
@@ -107,6 +110,13 @@ function applyClaimsRiskPermissionFilters(
     throw new AppError(403, 'telemarketing_user is not supported for claims risk diagnosis');
   }
   return filters;
+}
+
+function ensureCustomerFlowDiagnosisAccess(user: AgentDiagnosisUserContext | undefined): void {
+  if (!user) return;
+  if (user.role === 'org_user' || user.role === 'telemarketing_user') {
+    throw new AppError(403, 'customer flow diagnosis requires branch-wide permission');
+  }
 }
 
 router.post(
@@ -246,6 +256,27 @@ router.post(
     });
 
     const response = SuccessResponseSchema(ClaimsRiskDiagnosisResultSchema).parse({
+      success: true,
+      data: diagnosis,
+    });
+    res.json(response);
+  })
+);
+
+router.post(
+  '/customer-flow',
+  createDomainMiddleware('CustomerFlow'),
+  asyncHandler(async (req, res) => {
+    ensureCustomerFlowDiagnosisAccess(req.user);
+    const input = CustomerFlowDiagnosisRequestSchema.parse(req.body);
+    const filters = input.year === undefined ? {} : { year: input.year };
+
+    const diagnosis = await runCustomerFlowDiagnosis({
+      filters,
+      limit: input.limit,
+    });
+
+    const response = SuccessResponseSchema(CustomerFlowDiagnosisResultSchema).parse({
       success: true,
       data: diagnosis,
     });

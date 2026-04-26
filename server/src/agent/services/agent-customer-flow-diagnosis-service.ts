@@ -1,0 +1,183 @@
+import {
+  generateFlowMetadataQuery,
+  generateFlowSummaryQuery,
+  generateFlowTrendQuery,
+  generateInflowQuery,
+  generateOutflowQuery,
+  type CustomerFlowFilters,
+} from '../../sql/customer-flow.js';
+import {
+  CustomerFlowDiagnosisResultSchema,
+  type CustomerFlowDiagnosisResult,
+} from '../schemas/agent-diagnosis.schema.js';
+
+const REQUESTED_TOOLS = [
+  'customer_flow.summary',
+  'customer_flow.inflow',
+  'customer_flow.outflow',
+  'customer_flow.trend',
+  'customer_flow.metadata',
+] as const;
+
+const WARNINGS = [
+  '客户流向诊断基于 CustomerFlow 当前视图，用于经营流向观察。',
+  'metadata 仅用于数据新鲜度和 readiness 判断，不作为诊断指标主输出。',
+  '客户流向诊断不输出承保利润、利润率、财务盈利或财务亏损。',
+];
+
+const FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损', '边际贡献'];
+
+type RawRow = Record<string, unknown>;
+type Severity = 'normal' | 'observe' | 'warning' | 'critical';
+
+export interface DiagnoseCustomerFlowRowsInput {
+  filters: CustomerFlowFilters;
+  limit: number;
+  summaryRow: RawRow;
+  inflowRows: RawRow[];
+  outflowRows: RawRow[];
+  trendRows: RawRow[];
+  metadataRow: RawRow;
+}
+
+export interface RunCustomerFlowDiagnosisInput {
+  filters: CustomerFlowFilters;
+  limit: number;
+}
+
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function round4(value: number): number {
+  return Number(value.toFixed(4));
+}
+
+function rate(numerator: number | null, denominator: number | null): number | null {
+  if (numerator === null || denominator === null || denominator <= 0) return null;
+  return round4((numerator / denominator) * 100);
+}
+
+function stringOf(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+}
+
+function toNumberArray(value: unknown): number[] {
+  if (Array.isArray(value)) return value.map(Number).filter(Number.isFinite);
+  if (typeof value === 'string') {
+    return value.split(',').map((item) => Number(item.trim())).filter(Number.isFinite);
+  }
+  return [];
+}
+
+function severityForFlow(netFlow: number | null, outflowRate: number | null): Severity {
+  if ((netFlow ?? 0) <= -100 || (outflowRate ?? 0) >= 30) return 'critical';
+  if ((netFlow ?? 0) < 0 || (outflowRate ?? 0) >= 20) return 'warning';
+  if ((netFlow ?? 0) > 0 || (outflowRate ?? 0) > 0) return 'observe';
+  return 'normal';
+}
+
+function mapInsurerRows(rows: RawRow[], limit: number) {
+  return rows.slice(0, limit).map((row) => ({
+    insurer: stringOf(row.insurer, '未知'),
+    policyCount: toNullableNumber(row.policy_count),
+    sharePct: toNullableNumber(row.share_pct),
+  }));
+}
+
+function mapTrendRows(rows: RawRow[]) {
+  return rows.map((row) => {
+    const inflowCount = toNullableNumber(row.inflow_count);
+    const outflowCount = toNullableNumber(row.outflow_count);
+    const netFlow = (inflowCount ?? 0) - (outflowCount ?? 0);
+    return {
+      month: stringOf(row.month, '未知'),
+      totalPolicies: toNullableNumber(row.total_policies),
+      inflowCount,
+      outflowCount,
+      netFlow,
+      direction: netFlow > 0 ? 'net_inflow' as const : netFlow < 0 ? 'net_outflow' as const : 'balanced' as const,
+    };
+  });
+}
+
+export function diagnoseCustomerFlowRows(input: DiagnoseCustomerFlowRowsInput): CustomerFlowDiagnosisResult {
+  const totalPolicies = toNullableNumber(input.summaryRow.total_policies);
+  const inflowCount = toNullableNumber(input.summaryRow.inflow_count);
+  const outflowCount = toNullableNumber(input.summaryRow.outflow_count);
+  const netFlow = (inflowCount ?? 0) - (outflowCount ?? 0);
+  const inflowRate = rate(inflowCount, totalPolicies);
+  const outflowRate = rate(outflowCount, totalPolicies);
+  const inflowDiagnostics = mapInsurerRows(input.inflowRows, input.limit);
+  const outflowDiagnostics = mapInsurerRows(input.outflowRows, input.limit);
+  const trendDiagnostics = mapTrendRows(input.trendRows);
+  const latestTrend = trendDiagnostics.at(-1) ?? null;
+  const dataRows = toNullableNumber(input.metadataRow.total_rows);
+
+  return CustomerFlowDiagnosisResultSchema.parse({
+    capabilityId: 'customer_flow_diagnosis',
+    status: 'supported',
+    requestedTools: REQUESTED_TOOLS,
+    filters: input.filters,
+    summary: {
+      totalPolicies,
+      hasPrevious: toNullableNumber(input.summaryRow.has_previous),
+      hasNext: toNullableNumber(input.summaryRow.has_next),
+      inflowCount,
+      outflowCount,
+      netFlow,
+      inflowRate,
+      outflowRate,
+      selfRenewalCount: toNullableNumber(input.summaryRow.self_renewal_count),
+      topInflowInsurer: inflowDiagnostics[0]?.insurer ?? null,
+      topOutflowInsurer: outflowDiagnostics[0]?.insurer ?? null,
+      latestMonth: latestTrend?.month ?? null,
+      latestNetFlow: latestTrend?.netFlow ?? null,
+    },
+    diagnostics: [
+      {
+        kind: 'flow_balance',
+        severity: severityForFlow(netFlow, outflowRate),
+        message: netFlow < 0 ? `客户净流出 ${Math.abs(netFlow)} 件` : netFlow > 0 ? `客户净流入 ${netFlow} 件` : '客户流入流出基本平衡',
+        value: netFlow,
+      },
+    ],
+    inflowDiagnostics,
+    outflowDiagnostics,
+    trendDiagnostics,
+    dataReadiness: {
+      minDate: stringOf(input.metadataRow.min_date, ''),
+      maxDate: stringOf(input.metadataRow.max_date, ''),
+      years: toNumberArray(input.metadataRow.years),
+      totalRows: dataRows,
+      status: dataRows && dataRows > 0 ? 'ready' : 'empty',
+    },
+    warnings: WARNINGS,
+    forbiddenInterpretations: FORBIDDEN_INTERPRETATIONS,
+    drilldownSuggestions: ['customer_flow.summary', 'customer_flow.inflow', 'customer_flow.outflow', 'customer_flow.trend'],
+  });
+}
+
+export async function runCustomerFlowDiagnosis(input: RunCustomerFlowDiagnosisInput): Promise<CustomerFlowDiagnosisResult> {
+  const { duckdbService } = await import('../../services/duckdb.js');
+
+  const [summaryRows, inflowRows, outflowRows, trendRows, metadataRows] = await Promise.all([
+    duckdbService.query<RawRow>(generateFlowSummaryQuery(input.filters)),
+    duckdbService.query<RawRow>(generateInflowQuery(input.filters)),
+    duckdbService.query<RawRow>(generateOutflowQuery(input.filters)),
+    duckdbService.query<RawRow>(generateFlowTrendQuery(input.filters)),
+    duckdbService.query<RawRow>(generateFlowMetadataQuery()),
+  ]);
+
+  return diagnoseCustomerFlowRows({
+    filters: input.filters,
+    limit: input.limit,
+    summaryRow: summaryRows[0] ?? {},
+    inflowRows,
+    outflowRows,
+    trendRows,
+    metadataRow: metadataRows[0] ?? {},
+  });
+}
