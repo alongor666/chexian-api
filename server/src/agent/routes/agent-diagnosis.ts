@@ -67,7 +67,8 @@ function addBooleanCondition(conditions: string[], column: string, value: boolea
 
 function buildRenewalTrackerExtraConditions(
   filters: RenewalTrackerDiagnosisFilters,
-  permissionFilter: string | undefined
+  permissionFilter: string | undefined,
+  user: AgentDiagnosisUserContext | undefined
 ): string[] {
   const conditions: string[] = [];
   addInCondition(conditions, 'org_level_3', filters.orgNames);
@@ -81,6 +82,9 @@ function buildRenewalTrackerExtraConditions(
   addBooleanCondition(conditions, 'is_new_car', filters.isNewCar);
   addBooleanCondition(conditions, 'is_transfer', filters.isTransfer);
   addBooleanCondition(conditions, 'is_renewal', filters.isRenewal);
+  if (user?.role === 'telemarketing_user') {
+    throw new AppError(403, 'telemarketing_user is not supported for renewal tracker diagnosis');
+  }
   if (permissionFilter && permissionFilter !== '1=1') {
     conditions.push(`(${permissionFilter})`);
   }
@@ -200,7 +204,7 @@ router.post(
       end: input.end,
       cutoff: input.cutoff,
       filters: input.filters,
-      extraConditions: buildRenewalTrackerExtraConditions(input.filters, req.permissionFilter),
+      extraConditions: buildRenewalTrackerExtraConditions(input.filters, req.permissionFilter, req.user),
       limit: input.limit,
     });
 
