@@ -10,6 +10,8 @@ Stage 3 PR1 新增 `/api/agent/diagnosis/growth`，用于执行 `growth_diagnosi
 
 Stage 3 PR2 新增 `/api/agent/diagnosis/quote-conversion`，用于执行 `quote_conversion_diagnosis` 的确定性报价转化诊断。该接口仅复用 `kpi`、`funnel`、`drilldown`、`trend` 四类既有报价转化查询，不纳入 `heatmap`、`price`、`ranking`，也不输出利润、盈利、亏损或承保利润结论。
 
+Stage 3 PR3 新增 `/api/agent/diagnosis/renewal-tracker`，用于执行 `renewal_tracker_diagnosis` 的确定性续保追踪诊断。该接口仅复用当前 `/api/query/renewal-tracker` 背后的 `generateRenewalTrackerQuery` 与 `generateRenewalTrackerMetaQuery`，按 `expiry_date` 到期范围和 `cutoff` 截至日解释 A/B/C 指标，不接入旧 renewal funnel/v2。
+
 ## API
 
 - `GET /api/agent/audit/metrics`：返回 Agent 指标注册表、支持级别和口径边界。
@@ -26,13 +28,15 @@ Stage 3 PR2 新增 `/api/agent/diagnosis/quote-conversion`，用于执行 `quote
 
 报价转化诊断路由同样挂载在 `/api/agent/diagnosis`，继续使用全局审计中间件、查询级限流、`authMiddleware`、`permissionMiddleware` 和 `createDomainMiddleware('QuoteConversion')`。请求和响应均通过 Agent schema 层 Zod 校验，并将机构用户、电销用户的权限边界转为既有报价转化 SQL 生成器支持的筛选参数。
 
+续保追踪诊断路由同样挂载在 `/api/agent/diagnosis`，继续使用全局审计中间件、查询级限流、`authMiddleware`、`permissionMiddleware` 和 `createDomainMiddleware('RenewalTracker')`。请求和响应均通过 Agent schema 层 Zod 校验，时间参数必须显式传入 `start`、`end`、`cutoff`，不在 SQL 或服务层隐式取当天。
+
 ## 支持能力
 
 - `business_patrol_diagnosis`：经营巡检。
 - `growth_diagnosis`：增长归因。确定性接口为 `POST /api/agent/diagnosis/growth`，输出增长异常、主要维度贡献和下钻建议；禁止输出利润、盈利、亏损或承保利润结论。
 - `cost_indicator_diagnosis`：成本指标诊断。
 - `quote_conversion_diagnosis`：报价转化诊断。确定性接口为 `POST /api/agent/diagnosis/quote-conversion`，输出转化率概览、漏斗卡点、机构/团队/业务员差异和趋势异常；本阶段仅接入 `quote_conversion.kpi`、`quote_conversion.funnel`、`quote_conversion.drilldown`、`quote_conversion.trend`，不接入 heatmap、price、ranking；禁止输出利润、盈利、亏损或承保利润结论。
-- `renewal_tracker_diagnosis`：续保追踪诊断。
+- `renewal_tracker_diagnosis`：续保追踪诊断。确定性接口为 `POST /api/agent/diagnosis/renewal-tracker`，输出续保追踪概览、到期/报价/续保 cutoff 口径说明、机构/团队/业务员弱项、客户类别/险别组合/能源/新旧过户/续转新车维度风险；仅使用当前 renewal-tracker，不接入旧 renewal funnel/v2；禁止输出利润、盈利、亏损或承保利润结论。
 - `claims_risk_diagnosis`：赔案风险诊断。
 - `customer_flow_diagnosis`：客户流向诊断。
 
