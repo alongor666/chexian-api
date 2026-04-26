@@ -1,0 +1,135 @@
+# 企业微信智能表格字段注册表（全实例共用）
+#
+# 字段语义、类型、来源在此声明，instance YAML 通过 fields_enabled 列表选择启用哪些字段。
+# 表格里"由人工填写"的字段不应在此声明（也不应在任何 instance 启用）。
+#
+# 类型说明：
+#   text             纯文本
+#   select_text      单选/多选文本，企业微信要求 [{"text": ".."}] 形式
+#   select_yes_no    单选"是/否"，按 source bool 派生
+#   bool             布尔
+#   number           数字
+#   epoch_ms_date    DATE 转 epoch 毫秒字符串
+#
+# source 表达式约定：CTE 名.列名（合法 CTE：base / q_latest / q_earliest / renewed / funnel / salesman_dim / derived）
+#                  derived.* 表示在 SELECT 里派生（is_quoted/is_renewed）
+
+fields:
+  expiry_date:
+    field_id: f04Gwj
+    label: 到期日
+    source: base.insurance_end_date
+    type: epoch_ms_date
+
+  org_3_by_salesman:
+    field_id: ftQMc5
+    label: 三级机构
+    source: salesman_dim.organization   # 业务员当前归属机构（维度表权威）
+    type: select_text
+    fallback: 未知机构
+    alert_on_fallback: true
+
+  team_by_salesman:
+    field_id: fkMcDX
+    label: 销售团队
+    source: salesman_dim.team
+    type: text
+    fallback: 未知团队
+    alert_on_fallback: true
+
+  plate_no:
+    field_id: ftk5Tx
+    label: 车牌号码
+    source: base.plate_no
+    type: text
+    fallback: ''
+
+  vehicle_frame_no:
+    field_id: fMAfWQ
+    label: 车架号
+    source: base.vehicle_frame_no
+    type: text
+
+  salesman_name:
+    field_id: fMDwYc
+    label: 业务员
+    source: base.salesman_name
+    type: text
+    fallback: ''
+
+  customer_category:
+    field_id: fn8TJd
+    label: 客户类别
+    source: base.customer_category
+    type: text
+    fallback: ''
+
+  coverage_combination:
+    field_id: f8ZIoF
+    label: 险别组合
+    source: base.coverage_combination
+    type: select_text
+    fallback: ''
+
+  is_quoted:
+    field_id: fkjhnX
+    label: 报价
+    source: derived.is_quoted     # CASE WHEN q_latest.quote_time IS NOT NULL
+    type: select_yes_no
+
+  prior_discount:
+    field_id: fqTbVL
+    label: 上年折扣
+    source: base.commercial_pricing_factor
+    type: number
+    skip_when_null: true
+
+  prior_premium:
+    field_id: fFMlZM
+    label: 上年保费
+    source: base.premium
+    type: number
+    skip_when_null: true
+
+  quote_discount:
+    field_id: fDvNY2
+    label: 报价折扣
+    source: q_latest.quote_pricing_factor
+    type: number
+    skip_when_null: true
+
+  quote_premium:
+    field_id: fvtVUv
+    label: 报价保费
+    source: q_latest.quote_premium
+    type: number
+    skip_when_null: true
+
+  is_renewed:
+    field_id: fq3LsN
+    label: 是否续回
+    source: derived.is_renewed    # CASE WHEN renewed.renewed_policy_no IS NOT NULL
+    type: bool
+
+  renewal_mode:
+    field_id: fEdcCG
+    label: 续保模式
+    source: funnel.renewal_mode
+    type: select_text
+    default: 未分类
+
+  renewed_sign_date:
+    field_id: fwUUeU
+    label: 续回日期
+    source: renewed.renewed_sign_date   # 该 VIN 在 2026 年的签单日期，排除批单
+    type: epoch_ms_date
+    condition: is_renewed                # 仅 is_renewed=true 才写入
+
+  earliest_quote_date:
+    field_id: ft4uK0
+    label: 报价日期
+    source: q_earliest.earliest_quote_date  # quote_window_start 起最早报价日
+    type: epoch_ms_date
+
+# 表中存在但**不由代码写入**的字段（说明用，在此可读不强制）：
+# - f10BqT 姓名         （人工/业务员手填）
