@@ -173,6 +173,7 @@ export const AGENT_DIAGNOSIS_ROUTES = {
   GROWTH: '/growth',
   QUOTE_CONVERSION: '/quote-conversion',
   RENEWAL_TRACKER: '/renewal-tracker',
+  CLAIMS_RISK: '/claims-risk',
 } as const;
 
 // ─────────────────────────────────────────────

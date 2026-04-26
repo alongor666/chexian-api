@@ -12,6 +12,9 @@ import {
   GrowthDiagnosisResultSchema,
   QuoteConversionDiagnosisRequestSchema,
   QuoteConversionDiagnosisResultSchema,
+  ClaimsRiskDiagnosisRequestSchema,
+  ClaimsRiskDiagnosisResultSchema,
+  type ClaimsRiskDiagnosisFilters,
   RenewalTrackerDiagnosisRequestSchema,
   RenewalTrackerDiagnosisResultSchema,
   type RenewalTrackerDiagnosisFilters,
@@ -22,6 +25,7 @@ import { runCostIndicatorDiagnosis } from '../services/agent-cost-indicator-diag
 import { runGrowthDiagnosis } from '../services/agent-growth-diagnosis-service.js';
 import { runQuoteConversionDiagnosis } from '../services/agent-quote-conversion-diagnosis-service.js';
 import { runRenewalTrackerDiagnosis } from '../services/agent-renewal-tracker-diagnosis-service.js';
+import { runClaimsRiskDiagnosis } from '../services/agent-claims-risk-diagnosis-service.js';
 
 const router = Router();
 
@@ -86,6 +90,23 @@ function buildRenewalTrackerExtraConditions(
     conditions.push(`(${permissionFilter})`);
   }
   return conditions;
+}
+
+function applyClaimsRiskPermissionFilters(
+  filters: ClaimsRiskDiagnosisFilters,
+  user: AgentDiagnosisUserContext | undefined
+): ClaimsRiskDiagnosisFilters {
+  if (!user) return filters;
+  if (user.role === 'org_user') {
+    if (!user.organization) {
+      throw new AppError(403, 'Organization not specified for org_user role');
+    }
+    return { ...filters, orgName: user.organization };
+  }
+  if (user.role === 'telemarketing_user') {
+    throw new AppError(403, 'telemarketing_user is not supported for claims risk diagnosis');
+  }
+  return filters;
 }
 
 router.post(
@@ -201,6 +222,30 @@ router.post(
     });
 
     const response = SuccessResponseSchema(RenewalTrackerDiagnosisResultSchema).parse({
+      success: true,
+      data: diagnosis,
+    });
+    res.json(response);
+  })
+);
+
+router.post(
+  '/claims-risk',
+  createDomainMiddleware('ClaimsDetail', 'ClaimsAgg'),
+  asyncHandler(async (req, res) => {
+    const input = ClaimsRiskDiagnosisRequestSchema.parse(req.body);
+    try {
+      validateDateRange('filters.date', input.filters.dateStart, input.filters.dateEnd);
+    } catch (err) {
+      throw new AppError(400, err instanceof Error ? err.message : String(err));
+    }
+
+    const diagnosis = await runClaimsRiskDiagnosis({
+      filters: applyClaimsRiskPermissionFilters(input.filters, req.user),
+      limit: input.limit,
+    });
+
+    const response = SuccessResponseSchema(ClaimsRiskDiagnosisResultSchema).parse({
       success: true,
       data: diagnosis,
     });
