@@ -13,10 +13,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 // vi.mock 工厂会被 hoist 到顶部，所以这里用 vi.hoisted 一并提升 mock fn
-const { approveMock, rejectMock, useAuthMock } = vi.hoisted(() => ({
+const { approveMock, rejectMock, usePermissionMock } = vi.hoisted(() => ({
   approveMock: vi.fn(),
   rejectMock: vi.fn(),
-  useAuthMock: vi.fn(),
+  usePermissionMock: vi.fn(),
 }));
 
 vi.mock('../../../src/shared/api/client', () => ({
@@ -26,8 +26,8 @@ vi.mock('../../../src/shared/api/client', () => ({
   },
 }));
 
-vi.mock('../../../src/shared/contexts/AuthContext', () => ({
-  useAuth: () => useAuthMock(),
+vi.mock('../../../src/shared/contexts/PermissionContext', () => ({
+  usePermission: () => usePermissionMock(),
 }));
 
 import { ApprovalActions } from '../../../src/features/copilot/components/ApprovalActions';
@@ -44,12 +44,12 @@ const PENDING_APPROVAL: ApprovalState = {
 beforeEach(() => {
   approveMock.mockReset();
   rejectMock.mockReset();
-  useAuthMock.mockReset();
+  usePermissionMock.mockReset();
 });
 
 describe('ApprovalActions — 角色门控（前端 UX 层）', () => {
   it('branch_admin + pending_approval → 显示批准 + 拒绝按钮', () => {
-    useAuthMock.mockReturnValue({ user: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
+    usePermissionMock.mockReturnValue({ userPermission: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
     render(
       <ApprovalActions
         runId={RUN_ID}
@@ -63,7 +63,7 @@ describe('ApprovalActions — 角色门控（前端 UX 层）', () => {
   });
 
   it('analyst 角色（不在 approverRoles）→ 只显示徽章，不显示按钮', () => {
-    useAuthMock.mockReturnValue({ user: { username: 'a1', displayName: 'A', role: 'analyst' } });
+    usePermissionMock.mockReturnValue({ userPermission: { username: 'a1', displayName: 'A', role: 'analyst' } });
     render(
       <ApprovalActions
         runId={RUN_ID}
@@ -77,7 +77,7 @@ describe('ApprovalActions — 角色门控（前端 UX 层）', () => {
   });
 
   it('未登录 → 不显示按钮', () => {
-    useAuthMock.mockReturnValue({ user: null });
+    usePermissionMock.mockReturnValue({ userPermission: null });
     render(
       <ApprovalActions
         runId={RUN_ID}
@@ -90,7 +90,7 @@ describe('ApprovalActions — 角色门控（前端 UX 层）', () => {
   });
 
   it('status 不是 pending_approval（比如 success/failed）→ 不显示按钮', () => {
-    useAuthMock.mockReturnValue({ user: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
+    usePermissionMock.mockReturnValue({ userPermission: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
     render(
       <ApprovalActions
         runId={RUN_ID}
@@ -106,7 +106,7 @@ describe('ApprovalActions — 角色门控（前端 UX 层）', () => {
 
 describe('ApprovalActions — reject modal 必填校验', () => {
   beforeEach(() => {
-    useAuthMock.mockReturnValue({ user: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
+    usePermissionMock.mockReturnValue({ userPermission: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
   });
 
   it('点拒绝 → 弹 modal；reason 空时确认按钮 disabled', () => {
@@ -169,7 +169,7 @@ describe('ApprovalActions — reject modal 必填校验', () => {
 
 describe('ApprovalActions — 错误码映射', () => {
   beforeEach(() => {
-    useAuthMock.mockReturnValue({ user: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
+    usePermissionMock.mockReturnValue({ userPermission: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
   });
 
   it('approve 返回 409 → 显示「已被另一审批人处理」', async () => {
@@ -211,7 +211,7 @@ describe('ApprovalActions — 错误码映射', () => {
 
 describe('ApprovalActions — 已批准/已拒绝展示', () => {
   it('approval.approvedBy 已写入 → 渲染审批人 + 时间', () => {
-    useAuthMock.mockReturnValue({ user: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
+    usePermissionMock.mockReturnValue({ userPermission: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
     render(
       <ApprovalActions
         runId={RUN_ID}
@@ -228,7 +228,7 @@ describe('ApprovalActions — 已批准/已拒绝展示', () => {
   });
 
   it('approval.rejectedBy 已写入 → 渲染拒绝人 + reason', () => {
-    useAuthMock.mockReturnValue({ user: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
+    usePermissionMock.mockReturnValue({ userPermission: { username: 'admin', displayName: 'Admin', role: 'branch_admin' } });
     render(
       <ApprovalActions
         runId={RUN_ID}

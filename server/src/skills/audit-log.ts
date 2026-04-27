@@ -17,7 +17,9 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { opsEnv } from '../config/env.js';
 import { getDataDir } from '../config/paths.js';
+import { createLogger } from '../utils/logger.js';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Types
@@ -59,15 +61,21 @@ const RUNTIME_SUBDIR = 'runtime/audit-log';
 /** wr_<14digits>_<workflowId 1-64 [a-z0-9-]>_<8 hex> — 与 workflow-runner 一致 */
 const RUN_ID_PATTERN = /^wr_\d{14}_[a-z0-9-]{1,64}_[0-9a-f]{8}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const AUDIT_FILE_PATTERN = /^(\d{4}-\d{2}-\d{2})(?:\.(\d+))?\.jsonl$/;
+const MAX_AUDIT_FILE_BYTES = 50 * 1024 * 1024;
+const DEFAULT_RETENTION_DAYS = 90;
+const logger = createLogger('WorkflowAuditLog');
 
 export function getAuditDir(): string {
   return path.resolve(getDataDir(), RUNTIME_SUBDIR);
 }
 
-function resolveAuditFilePath(date: string): string | null {
+function resolveAuditFilePath(date: string, seq?: number): string | null {
   if (typeof date !== 'string' || !DATE_PATTERN.test(date)) return null;
+  if (seq !== undefined && (!Number.isInteger(seq) || seq < 1)) return null;
   const dir = getAuditDir();
-  const candidate = path.resolve(dir, `${date}.jsonl`);
+  const suffix = seq === undefined ? '' : `.${seq}`;
+  const candidate = path.resolve(dir, `${date}${suffix}.jsonl`);
   const rel = path.relative(dir, candidate);
   if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
   return candidate;
@@ -75,6 +83,36 @@ function resolveAuditFilePath(date: string): string | null {
 
 function todayUtcDate(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
+}
+
+function parseAuditFileName(name: string): { date: string; seq?: number } | null {
+  const match = name.match(AUDIT_FILE_PATTERN);
+  if (!match) return null;
+  const seq = match[2] ? Number(match[2]) : undefined;
+  if (seq !== undefined && (!Number.isInteger(seq) || seq < 1)) return null;
+  return { date: match[1], seq };
+}
+
+async function selectWritableAuditFilePath(date: string, nextLineBytes: number): Promise<string | null> {
+  await fs.mkdir(getAuditDir(), { recursive: true });
+  for (let seq: number | undefined = undefined; ; seq = seq === undefined ? 1 : seq + 1) {
+    const candidate = resolveAuditFilePath(date, seq);
+    if (!candidate) return null;
+    try {
+      const stat = await fs.stat(candidate);
+      if (stat.size + nextLineBytes <= MAX_AUDIT_FILE_BYTES) {
+        return candidate;
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return candidate;
+      throw err;
+    }
+  }
+}
+
+function getRetentionDays(): number {
+  const value = opsEnv.AUDIT_LOG_RETENTION_DAYS;
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_RETENTION_DAYS;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -95,11 +133,11 @@ export async function appendAuditEvent(event: AuditEventInput): Promise<void> {
     }
     const timestamp = event.timestamp ?? new Date().toISOString();
     const date = timestamp.slice(0, 10);
-    const filePath = resolveAuditFilePath(date);
-    if (!filePath) return;
 
     const record: AuditEvent = { ...event, timestamp };
     const line = JSON.stringify(record) + '\n';
+    const filePath = await selectWritableAuditFilePath(date, Buffer.byteLength(line, 'utf8'));
+    if (!filePath) return;
 
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.appendFile(filePath, line, { encoding: 'utf8' });
@@ -129,9 +167,9 @@ export async function readAuditEventsForRun(runId: string): Promise<AuditEvent[]
 
   const events: AuditEvent[] = [];
   for (const f of files) {
-    if (!f.endsWith('.jsonl')) continue;
-    const date = f.slice(0, -'.jsonl'.length);
-    const fullPath = resolveAuditFilePath(date);
+    const parsed = parseAuditFileName(f);
+    if (!parsed) continue;
+    const fullPath = resolveAuditFilePath(parsed.date, parsed.seq);
     if (!fullPath) continue;
     let raw: string;
     try {
@@ -156,13 +194,137 @@ export async function readAuditEventsForRun(runId: string): Promise<AuditEvent[]
   return events;
 }
 
+export interface AuditLogGcResult {
+  retentionDays: number;
+  candidateFiles: string[];
+  deletedFiles: string[];
+  dryRun: boolean;
+}
+
+export async function garbageCollectAuditLogs(options: { dryRun?: boolean } = {}): Promise<AuditLogGcResult> {
+  const dir = getAuditDir();
+  const retentionDays = getRetentionDays();
+  let files: string[];
+  try {
+    files = await fs.readdir(dir);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { retentionDays, candidateFiles: [], deletedFiles: [], dryRun: !!options.dryRun };
+    }
+    throw err;
+  }
+
+  const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const candidateFiles = files
+    .map((name) => ({ name, parsed: parseAuditFileName(name) }))
+    .filter((item): item is { name: string; parsed: { date: string; seq?: number } } => !!item.parsed)
+    .filter((item) => new Date(`${item.parsed.date}T00:00:00.000Z`).getTime() < cutoffMs)
+    .map((item) => resolveAuditFilePath(item.parsed.date, item.parsed.seq))
+    .filter((filePath): filePath is string => !!filePath)
+    .sort();
+
+  logger.info('[audit-log] GC dry-run candidates', {
+    retentionDays,
+    count: candidateFiles.length,
+    files: candidateFiles,
+  });
+
+  if (options.dryRun) {
+    return { retentionDays, candidateFiles, deletedFiles: [], dryRun: true };
+  }
+
+  const deletedFiles: string[] = [];
+  for (const filePath of candidateFiles) {
+    try {
+      await fs.unlink(filePath);
+      deletedFiles.push(filePath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        logger.warn('[audit-log] GC delete failed', { filePath, error: (err as Error).message });
+      }
+    }
+  }
+  logger.info('[audit-log] GC deleted files', { count: deletedFiles.length, files: deletedFiles });
+  return { retentionDays, candidateFiles, deletedFiles, dryRun: false };
+}
+
+export interface AuditLogStats {
+  totalFileCount: number;
+  totalBytes: number;
+  earliestEventTime: string | null;
+}
+
+export async function getAuditLogStats(): Promise<AuditLogStats> {
+  const dir = getAuditDir();
+  let files: string[];
+  try {
+    files = await fs.readdir(dir);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { totalFileCount: 0, totalBytes: 0, earliestEventTime: null };
+    }
+    throw err;
+  }
+
+  let totalFileCount = 0;
+  let totalBytes = 0;
+  let earliestEventTime: string | null = null;
+
+  for (const f of files) {
+    const parsed = parseAuditFileName(f);
+    if (!parsed) continue;
+    const fullPath = resolveAuditFilePath(parsed.date, parsed.seq);
+    if (!fullPath) continue;
+    try {
+      const stat = await fs.stat(fullPath);
+      totalFileCount += 1;
+      totalBytes += stat.size;
+      const raw = await fs.readFile(fullPath, 'utf8');
+      for (const line of raw.split('\n')) {
+        if (!line) continue;
+        try {
+          const obj = JSON.parse(line) as Partial<AuditEvent>;
+          if (typeof obj.timestamp === 'string' && (!earliestEventTime || obj.timestamp < earliestEventTime)) {
+            earliestEventTime = obj.timestamp;
+          }
+        } catch {
+          // 跳过损坏行
+        }
+      }
+    } catch {
+      // 跳过读不到的文件
+    }
+  }
+
+  return { totalFileCount, totalBytes, earliestEventTime };
+}
+
 /** 仅供测试使用：清空指定日期的 audit 文件 */
 export async function _resetAuditLogForDate(date: string = todayUtcDate()): Promise<void> {
-  const filePath = resolveAuditFilePath(date);
-  if (!filePath) return;
+  if (!DATE_PATTERN.test(date)) return;
+  const dir = getAuditDir();
+  let files: string[];
   try {
-    await fs.unlink(filePath);
+    files = await fs.readdir(dir);
   } catch {
-    // ignore
+    return;
   }
+  await Promise.all(
+    files.map(async (name) => {
+      const parsed = parseAuditFileName(name);
+      if (!parsed || parsed.date !== date) return;
+      const filePath = resolveAuditFilePath(parsed.date, parsed.seq);
+      if (!filePath) return;
+      try {
+        await fs.unlink(filePath);
+      } catch {
+        // ignore
+      }
+    }),
+  );
 }
+
+export const AUDIT_LOG_LIMITS = {
+  maxFileBytes: MAX_AUDIT_FILE_BYTES,
+  defaultRetentionDays: DEFAULT_RETENTION_DAYS,
+} as const;

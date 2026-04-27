@@ -13,7 +13,7 @@
  */
 
 import { useId, useState } from 'react';
-import { useAuth } from '../../../shared/contexts/AuthContext';
+import { usePermission } from '../../../shared/contexts/PermissionContext';
 import { apiClient } from '../../../shared/api/client';
 import type { ApprovalState } from '../types';
 import {
@@ -60,7 +60,7 @@ function formatErrorByCode(err: unknown): string {
 }
 
 export function ApprovalActions({ runId, status, approval, onResolved }: ApprovalActionsProps) {
-  const { user } = useAuth();
+  const { userPermission } = usePermission();
   const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -68,7 +68,7 @@ export function ApprovalActions({ runId, status, approval, onResolved }: Approva
   const reasonInputId = useId();
 
   const isPending = status === 'pending_approval';
-  const role = user?.role;
+  const role = userPermission?.role;
   const approverRoles = approval?.approverRoles ?? [];
   const canApprove = isPending && !!role && approverRoles.includes(role);
   const badge = STATUS_BADGE[status];

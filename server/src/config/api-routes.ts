@@ -213,4 +213,5 @@ export const WORKFLOWS_ROUTES = {
   RUN_APPROVE: '/runs/:runId/approve',
   RUN_REJECT: '/runs/:runId/reject',
   RUN_AUDIT: '/runs/:runId/audit',
+  HEALTH_RUNS_SUMMARY: '/health/runs-summary',
 } as const;

@@ -1,0 +1,106 @@
+/**
+ * audit-log rotation / GC / stats — PR-E
+ */
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import {
+  appendAuditEvent,
+  getAuditDir,
+  garbageCollectAuditLogs,
+  getAuditLogStats,
+  readAuditEventsForRun,
+  _resetAuditLogForDate,
+} from '../server/src/skills/audit-log.js';
+
+const MAX_AUDIT_FILE_BYTES = 50 * 1024 * 1024;
+const RUN_ID = 'wr_20260427000000_auto-risk-control-v1_aabbccdd';
+
+function isoDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+afterEach(async () => {
+  await fs.rm(getAuditDir(), { recursive: true, force: true });
+  vi.restoreAllMocks();
+});
+
+describe('audit-log rotation / GC / stats', () => {
+  it('当单个 jsonl 超过 50MB 时滚动到 {date}.{seq}.jsonl，读取仍能跨文件命中 runId', async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    await fs.mkdir(getAuditDir(), { recursive: true });
+    await fs.writeFile(path.join(getAuditDir(), `${date}.jsonl`), Buffer.alloc(MAX_AUDIT_FILE_BYTES + 1, 10));
+
+    await appendAuditEvent({
+      runId: RUN_ID,
+      workflowId: 'auto-risk-control-v1',
+      eventType: 'workflow-started',
+      userId: 'admin',
+      role: 'branch_admin',
+      requestId: 'req-rotation',
+      payload: { nodeCount: 1 },
+    });
+
+    const rolled = path.join(getAuditDir(), `${date}.1.jsonl`);
+    const rolledRaw = await fs.readFile(rolled, 'utf8');
+    expect(rolledRaw).toContain(RUN_ID);
+
+    const events = await readAuditEventsForRun(RUN_ID);
+    expect(events.map((e) => e.eventType)).toContain('workflow-started');
+  });
+
+  it('GC 先 dry-run 记录待删清单；dry-run 不删除，正式执行才删除 90 天前 jsonl', async () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    await fs.mkdir(getAuditDir(), { recursive: true });
+    const oldDate = isoDaysAgo(91).slice(0, 10);
+    const recentDate = isoDaysAgo(3).slice(0, 10);
+    const oldFile = path.join(getAuditDir(), `${oldDate}.jsonl`);
+    const recentFile = path.join(getAuditDir(), `${recentDate}.jsonl`);
+    await fs.writeFile(oldFile, '{"timestamp":"2026-01-01T00:00:00.000Z"}\n', 'utf8');
+    await fs.writeFile(recentFile, '{"timestamp":"2026-04-26T00:00:00.000Z"}\n', 'utf8');
+
+    const dryRun = await garbageCollectAuditLogs({ dryRun: true });
+    expect(dryRun.deletedFiles).toEqual([]);
+    expect(dryRun.candidateFiles.map((f) => path.basename(f))).toEqual([`${oldDate}.jsonl`]);
+    expect(await fs.stat(oldFile)).toBeTruthy();
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[audit-log] GC dry-run candidates'),
+      expect.objectContaining({ count: 1 }),
+    );
+
+    const deleted = await garbageCollectAuditLogs({ dryRun: false });
+    expect(deleted.deletedFiles.map((f) => path.basename(f))).toEqual([`${oldDate}.jsonl`]);
+    await expect(fs.stat(oldFile)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await fs.stat(recentFile)).toBeTruthy();
+  });
+
+  it('getAuditLogStats 返回文件数、总大小和最早事件时间', async () => {
+    await _resetAuditLogForDate();
+    await appendAuditEvent({
+      runId: RUN_ID,
+      workflowId: 'auto-risk-control-v1',
+      eventType: 'workflow-started',
+      userId: 'admin',
+      role: 'branch_admin',
+      requestId: 'req-stats',
+      timestamp: '2026-04-27T01:00:00.000Z',
+      payload: {},
+    });
+    await appendAuditEvent({
+      runId: RUN_ID,
+      workflowId: 'auto-risk-control-v1',
+      eventType: 'step-completed',
+      userId: 'admin',
+      role: 'branch_admin',
+      requestId: 'req-stats',
+      timestamp: '2026-04-27T01:00:01.000Z',
+      payload: { nodeId: 'n1' },
+    });
+
+    const stats = await getAuditLogStats();
+    expect(stats.totalFileCount).toBe(1);
+    expect(stats.totalBytes).toBeGreaterThan(0);
+    expect(stats.earliestEventTime).toBe('2026-04-27T01:00:00.000Z');
+  });
+});

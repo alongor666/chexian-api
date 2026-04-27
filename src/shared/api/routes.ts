@@ -235,4 +235,5 @@ export const WORKFLOWS_ROUTES = {
   RUN_APPROVE: 'workflows/runs/:runId/approve',
   RUN_REJECT: 'workflows/runs/:runId/reject',
   RUN_AUDIT: 'workflows/runs/:runId/audit',
+  HEALTH_RUNS_SUMMARY: 'workflows/health/runs-summary',
 } as const;

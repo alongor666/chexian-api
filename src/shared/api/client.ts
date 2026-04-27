@@ -1193,6 +1193,25 @@ class ApiClient {
     });
   }
 
+  /** Workflow run 运维健康汇总（branch_admin only） */
+  async getWorkflowRunsHealth(): Promise<{
+    windowHours: number;
+    generatedAt: string;
+    workflows: Array<{
+      workflowId: string;
+      total: number;
+      counts: Record<'success' | 'partial' | 'failed' | 'pending_approval', number>;
+      elapsedMs: { p50: number | null; p95: number | null };
+    }>;
+    auditLog: {
+      totalFileCount: number;
+      totalBytes: number;
+      earliestEventTime: string | null;
+    };
+  }> {
+    return this.request(`/${WORKFLOWS_ROUTES.HEALTH_RUNS_SUMMARY}`);
+  }
+
   async getRenewalTracker(params: Record<string, string>) {
     const query = this.buildQueryString(params);
     return this.request<{
