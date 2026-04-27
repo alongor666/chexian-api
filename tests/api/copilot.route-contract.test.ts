@@ -72,6 +72,14 @@ describe('copilot route contract', () => {
     expect(route).toContain("from '../skills/adapters/llm/index.js'");
     expect(route).not.toContain("from '../services/zhipu.js'");
   });
+
+  it('异步失败分支：先发 step-completed 再发 workflow-completed（SSE 订阅端不会丢错误详情）', () => {
+    const route = readSource('server/src/routes/copilot.ts');
+    const stepIdx = route.indexOf("nodeId: '__error__'");
+    const completedIdx = route.indexOf("type: 'workflow-completed'", stepIdx);
+    expect(stepIdx).toBeGreaterThan(0);
+    expect(completedIdx).toBeGreaterThan(stepIdx);
+  });
 });
 
 describe('copilot SSE event types — 与 workflow-runner.WorkflowStepEvent 对齐', () => {

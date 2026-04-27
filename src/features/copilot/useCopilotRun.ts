@@ -121,13 +121,24 @@ export function useCopilotRun() {
           if (data.type === 'workflow-completed') {
             es.close();
             esRef.current = null;
-            void fetchReport(runId, input.includeNarrative ?? false).then((report) => {
-              setState((prev) => ({
-                ...prev,
-                status: 'completed',
-                workflowStatus: report?.workflowStatus ?? prev.workflowStatus,
-                report,
-              }));
+            void fetchReport(runId, input.includeNarrative ?? false).then((reportRes) => {
+              setState((prev) => {
+                if (!reportRes.ok || !reportRes.report) {
+                  return {
+                    ...prev,
+                    status: 'error',
+                    workflowStatus: prev.workflowStatus,
+                    report: null,
+                    error: reportRes.error ?? '报告拉取失败（/report 未返回有效数据）',
+                  };
+                }
+                return {
+                  ...prev,
+                  status: 'completed',
+                  workflowStatus: reportRes.report.workflowStatus ?? prev.workflowStatus,
+                  report: reportRes.report,
+                };
+              });
             });
           } else if (data.type === 'stream-end') {
             es.close();
@@ -179,13 +190,34 @@ function applyEvent(state: CopilotRunState, event: CopilotStreamEvent): CopilotR
   return state;
 }
 
-async function fetchReport(runId: string, includeNarrative: boolean): Promise<CopilotReportResponse['data'] | null> {
+interface FetchReportResult {
+  ok: boolean;
+  report: CopilotReportResponse['data'] | null;
+  error?: string;
+}
+
+async function fetchReport(runId: string, includeNarrative: boolean): Promise<FetchReportResult> {
   const token = apiClient.getToken();
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const url = `${API_BASE}/copilot/runs/${runId}/report${includeNarrative ? '?includeNarrative=1' : ''}`;
-  const res = await fetch(url, { credentials: 'include', headers });
-  if (!res.ok) return null;
-  const body = (await res.json()) as CopilotReportResponse;
-  return body.data ?? null;
+  let res: Response;
+  try {
+    res = await fetch(url, { credentials: 'include', headers });
+  } catch (err) {
+    return { ok: false, report: null, error: err instanceof Error ? err.message : String(err) };
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return { ok: false, report: null, error: `报告 HTTP ${res.status}${text ? `: ${text.slice(0, 160)}` : ''}` };
+  }
+  try {
+    const body = (await res.json()) as CopilotReportResponse;
+    if (!body.success || !body.data) {
+      return { ok: false, report: null, error: body.error ?? '报告响应缺少 data' };
+    }
+    return { ok: true, report: body.data };
+  } catch (err) {
+    return { ok: false, report: null, error: err instanceof Error ? err.message : String(err) };
+  }
 }

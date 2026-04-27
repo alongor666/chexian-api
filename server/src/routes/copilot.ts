@@ -131,12 +131,8 @@ router.post(
       preassignedRunId: runId,
       onStep: (event) => pushEvent(channel, event),
     }).catch((err) => {
-      pushEvent(channel, {
-        type: 'workflow-completed',
-        runId,
-        status: 'failed',
-        elapsedMs: Date.now() - startedAt,
-      });
+      // 顺序关键：先发 step-completed 让订阅端拿到错误详情，再发 workflow-completed
+      // （SSE 订阅端在收到 workflow-completed 后立即关闭连接）
       pushEvent(channel, {
         type: 'step-completed',
         runId,
@@ -144,6 +140,12 @@ router.post(
         status: 'failed',
         elapsedMs: 0,
         error: err instanceof Error ? err.message : String(err),
+      });
+      pushEvent(channel, {
+        type: 'workflow-completed',
+        runId,
+        status: 'failed',
+        elapsedMs: Date.now() - startedAt,
       });
     });
 

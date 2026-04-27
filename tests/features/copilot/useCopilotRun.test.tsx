@@ -185,6 +185,60 @@ describe('useCopilotRun', () => {
     expect(result.current.state.status).toBe('idle');
   });
 
+  it('workflow-completed 后 /report 返回 500 → status=error，不假装 completed', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { runId: 'wr_x', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '' },
+      }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      text: async () => 'internal',
+    });
+
+    const { result } = renderHook(() => useCopilotRun());
+    await act(async () => {
+      await result.current.start({ startDate: '2026-04-01', endDate: '2026-04-26' });
+    });
+    const es = MockEventSource.instances[0];
+    await act(async () => {
+      es.emit({ type: 'workflow-completed', runId: 'wr_x', status: 'success', elapsedMs: 100 });
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe('error'));
+    expect(result.current.state.error).toContain('HTTP 500');
+    expect(result.current.state.report).toBeNull();
+  });
+
+  it('workflow-completed 后 /report success=false → status=error', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { runId: 'wr_x', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '' },
+      }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: false, error: '权限失效' }),
+    });
+
+    const { result } = renderHook(() => useCopilotRun());
+    await act(async () => {
+      await result.current.start({ startDate: '2026-04-01', endDate: '2026-04-26' });
+    });
+    const es = MockEventSource.instances[0];
+    await act(async () => {
+      es.emit({ type: 'workflow-completed', runId: 'wr_x', status: 'success', elapsedMs: 100 });
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe('error'));
+    expect(result.current.state.error).toContain('权限失效');
+  });
+
   it('includeNarrative=true → /report?includeNarrative=1', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

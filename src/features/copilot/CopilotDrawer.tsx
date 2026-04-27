@@ -14,11 +14,18 @@ import ReactMarkdown from 'react-markdown';
 import { useCopilotRun } from './useCopilotRun';
 import type { CopilotStepView } from './types';
 
+function formatLocalYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function getDefaultPeriod() {
+  // 用本地时区组合，避免 toISOString() 在非 UTC 时区把日期偏移到「明天」或「上月末」
   const now = new Date();
-  const end = now.toISOString().slice(0, 10);
-  const startObj = new Date(now.getFullYear(), now.getMonth(), 1);
-  const start = startObj.toISOString().slice(0, 10);
+  const end = formatLocalYmd(now);
+  const start = formatLocalYmd(new Date(now.getFullYear(), now.getMonth(), 1));
   return { startDate: start, endDate: end };
 }
 
