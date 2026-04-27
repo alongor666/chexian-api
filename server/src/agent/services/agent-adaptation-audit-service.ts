@@ -191,7 +191,7 @@ const stageReadiness: AgentReadinessStage[] = [
     id: 'stage_5_llm_interpretation',
     name: 'LLM 解释层',
     status: 'blocked',
-    evidence: ['必须等待确定性接口生产运行证据，并由单独 Stage 5 PR 显式启动。'],
+    evidence: ['Stage 5A 解释入口已注册，但必须等待生产运行证据后才能释放 readyForLlm。'],
     blockers: [
       '缺少生产 audit log 对 /api/agent/diagnosis/* 调用记录的验收证据。',
       '缺少最近 30 天 /api/agent/diagnosis/* error rate < 1% 的验收证据。',
@@ -205,6 +205,26 @@ const stageReadiness: AgentReadinessStage[] = [
     blockers: [],
   },
 ];
+
+const stage4_9DeterministicForecast: AgentReadinessStage = {
+  id: 'stage_4_9_deterministic_profit_forecast',
+  name: '确定性经营利润预测',
+  status: 'completed',
+  evidence: ['/api/agent/forecast/profit-scenario'],
+  blockers: [],
+};
+
+function buildStage4_9Stage(stage4_8: AgentReadinessStage): AgentReadinessStage {
+  if (stage4_8.status === 'completed') {
+    return stage4_9DeterministicForecast;
+  }
+
+  return {
+    ...stage4_9DeterministicForecast,
+    status: 'blocked',
+    blockers: ['等待 stage_4_8_caller_display_evidence 完成后再标记确定性经营利润预测阶段完成。'],
+  };
+}
 
 const displayContractTests = [
   'tests/api/agent-cost-indicator-diagnosis.test.ts',
@@ -726,10 +746,15 @@ export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions
   const capabilitySummary = summarizeBySupportLevel(agentDataCapabilityRegistry);
   const observabilityEvidence = await getAgentObservabilityAudit(options.observability);
   const stage4_8 = buildStage4_8Stage(observabilityEvidence);
-  // 在 stage_5_llm_interpretation 之前插入 stage_4_8（保持原有顺序）
+  const stage4_8Verified = stage4_8.status === 'completed';
+  const stage4_9 = buildStage4_9Stage(stage4_8);
+  // 在 stage_5_llm_interpretation 之前插入 stage_4_8 和 stage_4_9（保持原有顺序）
   const stages: AgentReadinessStage[] = [];
   for (const stage of stageReadiness) {
-    if (stage.id === 'stage_5_llm_interpretation') stages.push(stage4_8);
+    if (stage.id === 'stage_5_llm_interpretation') {
+      stages.push(stage4_8);
+      stages.push(stage4_9);
+    }
     stages.push(stage);
   }
   const completedStages = stages.filter((stage) => stage.status === 'completed');
@@ -739,12 +764,11 @@ export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions
   const llmReadinessBlockers = stage5Prerequisites
     .filter((item) => !item.met && item.blocker)
     .map((item) => item.blocker!);
-  const stage4_8Verified = stage4_8.status === 'completed';
 
   return AgentReadinessAuditSchema.parse({
     phase: 'agent_metric_adaptation_audit',
     currentStage: stage4_8Verified
-      ? 'stage_4_8_display_contract_ready'
+      ? 'stage_4_9_deterministic_profit_forecast'
       : 'stage_4_6_observability_ready',
     readyForLlm: false,
     readyForChatWindow: false,
@@ -767,9 +791,12 @@ export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions
       stage4_8Verified
         ? 'Stage 4.8 已完成：调用方 smoke harness 校验 warnings 与 forbiddenInterpretations 展示契约。'
         : 'Stage 4.8 仍被阻塞：缺少有效的调用方 smoke harness 报告（见 stage_4_8_caller_display_evidence.blockers）。',
+      stage4_9.status === 'completed'
+        ? 'Stage 4.9 已完成：确定性经营利润预测 calculator 已注册为不接 LLM、不访问 DuckDB、不生成 SQL 的 forecast 能力。'
+        : 'Stage 4.9 仍被阻塞：需等待 stage_4_8_caller_display_evidence 完成后再标记 forecast 能力阶段完成。',
       'Agent 层复用现有指标注册表、查询路由和 SQL 生成器，不新增自由查询能力。',
-      '承保利润、利润率、边际贡献、财务盈亏、财务综合成本率保持 unsupported。',
-      'Stage 5 LLM 解释层仍保持关闭；即使前置证据齐备，也必须通过单独 PR 显式启动。',
+      '承保利润、利润率、财务盈亏、财务综合成本率保持 unsupported；边际贡献额是 supported 经营指标但不得解释为财务利润。',
+      'Stage 5A 解释入口已注册，但 readyForLlm 仍保持关闭；释放 LLM 就绪必须等待生产 smoke 与观测证据闭环。',
     ],
   });
 }

@@ -21,7 +21,7 @@ const WARNINGS = [
   '本能力不代表完整准备金、IBNR、精算终极赔付或财务盈亏判断。',
   '赔案风险诊断不输出承保利润、利润率、财务盈利或财务亏损。',
 ];
-const FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损', '边际贡献', 'IBNR'];
+const FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损', 'IBNR'];
 
 type Severity = 'normal' | 'observe' | 'warning' | 'critical';
 type RawRow = Record<string, unknown>;

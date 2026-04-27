@@ -12,9 +12,23 @@ export const unsupportedMetricRegistry = UnsupportedMetricDefinitionSchema.array
   {
     id: 'profit_margin',
     name: '利润率',
-    blockedTerms: ['利润率', '盈利率', '净利润', '利润额', '边际贡献', '满期边际贡献额', '预估边际贡献额', '盈利', '亏损'],
-    reason: '当前项目不是完整财务利润系统，不能输出利润率、边际贡献或财务盈亏判断。',
-    replacementSuggestion: '可分析经营指标异常、变动成本率、费用率、赔付率、增长归因。',
+    blockedTerms: ['利润率', '盈利率', '净利润', '盈利', '亏损'],
+    reason: '当前项目不是完整财务利润系统，不能输出利润率、净利润或财务盈亏判断。',
+    replacementSuggestion: '可分析经营指标异常、变动成本率、边际贡献额、费用率、赔付率、增长归因。',
+  },
+  {
+    id: 'financial_statement_profit',
+    name: '财务报表利润',
+    blockedTerms: ['财务报表利润', '财务报表盈亏', '法定承保利润', '审计利润'],
+    reason: '当前项目不是完整财务/审计/法定报表系统。',
+    replacementSuggestion: '可分析经营变动成本率、边际贡献额、forecast 经营利润情景。',
+  },
+  {
+    id: 'unqualified_actual_profit_or_loss',
+    name: '实际承保盈亏',
+    blockedTerms: ['实际承保盈利', '实际承保亏损', '实际盈利', '实际亏损'],
+    reason: '"实际"一词暗示已确认的财务结论，当前项目无此口径。',
+    replacementSuggestion: '请改问 forecast 经营利润情景或边际贡献额。',
   },
   {
     id: 'financial_combined_ratio',

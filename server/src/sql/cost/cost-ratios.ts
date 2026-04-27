@@ -193,7 +193,13 @@ SELECT
     WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
     THEN ROUND((SUM(reported_claims) + SUM(fee_amount)) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2)
     ELSE NULL
-  END AS comprehensive_cost_ratio
+  END AS comprehensive_cost_ratio,
+
+  -- 满期边际贡献额（仅扣除变动成本）
+  ${getMetricSql('earned_margin_amount')},
+
+  -- 预估边际贡献额（仅扣除变动成本）
+  ${getMetricSql('projected_margin_amount')}
 
 FROM policy_exposure
 GROUP BY ${groupByClause}

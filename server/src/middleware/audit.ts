@@ -45,7 +45,7 @@ interface AuditLogEntry {
 }
 
 /** 需要记录审计日志的路径前缀 */
-export const AUDITED_PATHS = ['/api/query', '/api/data', '/api/agent/diagnosis'] as const;
+export const AUDITED_PATHS = ['/api/query', '/api/data', '/api/agent/diagnosis', '/api/agent/forecast'] as const;
 
 export function getAuditLogPath(): string {
   return AUDIT_LOG_PATH;

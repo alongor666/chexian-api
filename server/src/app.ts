@@ -89,6 +89,8 @@ app.use('/api/query', queryLimiter);
 app.use('/api/agent/diagnosis', queryLimiter);
 // Agent 解释接口会触发 LLM provider，使用查询级限流
 app.use('/api/agent/explain', queryLimiter);
+// Agent forecast 接口是确定性经营计算器，也使用查询级限流
+app.use('/api/agent/forecast', queryLimiter);
 // AI接口最严格限流（10次/分钟）
 app.use('/api/ai', aiLimiter);
 
@@ -147,6 +149,7 @@ import aiRoutes from './routes/ai.js';
 import agentAuditRoutes from './agent/routes/agent-audit.js';
 import agentDiagnosisRoutes from './agent/routes/agent-diagnosis.js';
 import agentExplainRoutes from './agent/routes/agent-explain.js';
+import agentForecastRoutes from './agent/routes/agent-forecast.js';
 import skillsRoutes from './routes/skills.js';
 import workflowsRoutes from './routes/workflows.js';
 import copilotRoutes from './routes/copilot.js';
@@ -160,6 +163,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/agent/audit', agentAuditRoutes);
 app.use('/api/agent/diagnosis', agentDiagnosisRoutes);
 app.use('/api/agent/explain', agentExplainRoutes);
+app.use('/api/agent/forecast', agentForecastRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/workflows', workflowsRoutes);
 app.use('/api/copilot', copilotRoutes);

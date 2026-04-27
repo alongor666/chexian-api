@@ -24,7 +24,7 @@ const QUOTE_WARNINGS = [
   '报价转化诊断不代表利润、盈利、亏损或承保利润。',
   '本能力仅复用 kpi、funnel、drilldown、trend 四个报价转化工具，不纳入 heatmap、price、ranking。',
 ];
-const FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损', '边际贡献'];
+const FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损'];
 
 type RawQuoteRow = Record<string, unknown>;
 type Severity = 'normal' | 'observe' | 'warning' | 'critical';

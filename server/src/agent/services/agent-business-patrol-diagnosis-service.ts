@@ -15,7 +15,7 @@ export const BUSINESS_PATROL_CAPABILITY_IDS = [
   'customer_flow_diagnosis',
 ] as const;
 
-const BASE_FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损', '边际贡献'];
+const BASE_FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损'];
 
 const CAPABILITY_METRICS: Record<BusinessPatrolCapabilityId, string[]> = {
   growth_diagnosis: ['signed_premium', 'policy_count', 'growth_rate'],
