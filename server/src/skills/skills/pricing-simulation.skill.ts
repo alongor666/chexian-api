@@ -104,8 +104,18 @@ export const PricingSimulationResultSchema = z.object({
     earnedPremiumAfter: z.number(),
     totalReportedClaims: z.number(),
     expectedClaimsAfter: z.number(),
+    /**
+     * weighted loss ratio 仅在「分子/分母同源」的可计算分段子集上聚合：
+     * - 排除 lossRatioAfterUncomputable=true 的分段（如 stop_underwriting → premiumAfter=0）
+     * - 排除 earnedPremiumBefore 为 null 的分段
+     * 这样 before/after 对比基于同一组分段，禁止混入"不可计算"分段虚高总体率。
+     */
     weightedLossRatioBefore: z.number().nullable(),
     weightedLossRatioAfter: z.number().nullable(),
+    /** 参与 weightedLossRatio* 聚合的分段数 */
+    weightedLossRatioBasisSegmentCount: z.number(),
+    /** 因 uncomputable / earnedPremiumBefore=null 被排除的分段数 */
+    weightedLossRatioExcludedSegmentCount: z.number(),
   }),
 });
 
@@ -222,13 +232,33 @@ export const pricingSimulationSkill: Skill<typeof InputSchema, Result> = {
     const totalReportedClaims = segments.reduce((sum, s) => sum + s.totalReportedClaims, 0);
     const expectedClaimsAfter = Number((totalReportedClaims * retention).toFixed(2));
 
+    // weightedLossRatio* 必须基于「分子/分母同源」的可计算子集（codex P1 修复）：
+    // 旧实现把 stop_underwriting 段 (premiumAfter=0) 的赔款混入分子，但分母只剩
+    // 非停止段的 earnedPremiumAfter，导致总后赔付率被系统性放大，误导定价判断。
+    // 现仅在「lossRatioAfter 可计算 且 earnedPremiumBefore 非空」的子集上同步聚合。
+    const lossRatioBasisSegments = segments.filter(
+      (s) => !s.lossRatioAfterUncomputable && s.earnedPremiumBefore !== null && s.earnedPremiumAfter !== null,
+    );
+    const weightedLossRatioBasisSegmentCount = lossRatioBasisSegments.length;
+    const weightedLossRatioExcludedSegmentCount = segments.length - lossRatioBasisSegments.length;
+    const basisEarnedPremiumBefore = lossRatioBasisSegments.reduce(
+      (sum, s) => sum + (s.earnedPremiumBefore ?? 0),
+      0,
+    );
+    const basisEarnedPremiumAfter = lossRatioBasisSegments.reduce(
+      (sum, s) => sum + (s.earnedPremiumAfter ?? 0),
+      0,
+    );
+    const basisReportedClaims = lossRatioBasisSegments.reduce((sum, s) => sum + s.totalReportedClaims, 0);
+    const basisExpectedClaimsAfter = basisReportedClaims * retention;
+
     const weightedLossRatioBefore =
-      earnedPremiumBefore > 0
-        ? Number(((totalReportedClaims / earnedPremiumBefore) * 100).toFixed(2))
+      weightedLossRatioBasisSegmentCount > 0 && basisEarnedPremiumBefore > 0
+        ? Number(((basisReportedClaims / basisEarnedPremiumBefore) * 100).toFixed(2))
         : null;
     const weightedLossRatioAfter =
-      earnedPremiumAfter > 0
-        ? Number(((expectedClaimsAfter / earnedPremiumAfter) * 100).toFixed(2))
+      weightedLossRatioBasisSegmentCount > 0 && basisEarnedPremiumAfter > 0
+        ? Number(((basisExpectedClaimsAfter / basisEarnedPremiumAfter) * 100).toFixed(2))
         : null;
 
     const warnings: string[] = [];
@@ -239,6 +269,13 @@ export const pricingSimulationSkill: Skill<typeof InputSchema, Result> = {
     if (uncomputable > 0) {
       warnings.push(
         `${uncomputable} 个 segment 因 premiumAfter=0（停止承保）或 earnedPremiumBefore 为空，lossRatioAfter 不可计算`,
+      );
+    }
+    if (weightedLossRatioExcludedSegmentCount > 0) {
+      warnings.push(
+        `weightedLossRatioBefore/After 仅基于 ${weightedLossRatioBasisSegmentCount} 个分子/分母同源的可计算分段；` +
+          `${weightedLossRatioExcludedSegmentCount} 个分段（含停止承保 / earnedPremium 缺失）已从总体率聚合中排除，` +
+          `避免分子分母不同源造成总体赔付率系统性放大`,
       );
     }
     if (retention !== 1.0) {
@@ -265,6 +302,8 @@ export const pricingSimulationSkill: Skill<typeof InputSchema, Result> = {
           expectedClaimsAfter,
           weightedLossRatioBefore,
           weightedLossRatioAfter,
+          weightedLossRatioBasisSegmentCount,
+          weightedLossRatioExcludedSegmentCount,
         },
       },
       evidence: [
@@ -278,13 +317,15 @@ export const pricingSimulationSkill: Skill<typeof InputSchema, Result> = {
           metric: 'weighted_loss_ratio_before',
           value: weightedLossRatioBefore,
           source: 'metric-registry:earned_claim_ratio (重算)',
-          note: 'Σ reported_claims / Σ earned_premium × 100（口径一致）',
+          note: `Σ reported_claims / Σ earned_premium × 100（口径一致），仅基于 ${weightedLossRatioBasisSegmentCount} 个可计算分段`,
         },
         {
           metric: 'weighted_loss_ratio_after',
           value: weightedLossRatioAfter,
           source: 'pricing-simulation',
-          note: `Σ (reported_claims × retention) / Σ earned_premium_after × 100，retention=${retention}`,
+          note:
+            `Σ (reported_claims × retention) / Σ earned_premium_after × 100，retention=${retention}；` +
+            `仅基于 ${weightedLossRatioBasisSegmentCount} 个可计算分段（${weightedLossRatioExcludedSegmentCount} 个排除）`,
         },
       ],
       confidence: segments.length === 0 ? 0.2 : 0.6, // 假设强 → confidence 不取 1.0

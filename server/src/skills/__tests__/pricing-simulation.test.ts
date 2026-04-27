@@ -210,6 +210,81 @@ describe('pricingSimulationSkill.run', () => {
     expect(out.result.totals.weightedLossRatioBefore).toBeCloseTo(58.33, 1);
     // after: (600+100)/(800×1.2 + 400×1.05) × 100 = 700/1380 × 100 ≈ 50.72
     expect(out.result.totals.weightedLossRatioAfter).toBeCloseTo(50.72, 1);
+    expect(out.result.totals.weightedLossRatioBasisSegmentCount).toBe(2);
+    expect(out.result.totals.weightedLossRatioExcludedSegmentCount).toBe(0);
+  });
+
+  it('混合停止承保段时只在可计算分段上聚合 weighted lossRatio（codex P1 回归）', async () => {
+    // 旧实现 bug: 把 stop 段的赔款 600 算进分子，但分母只剩 monitor 段的 420，
+    // 导致 weightedLossRatioAfter ≈ (600+100) / (0+420) × 100 ≈ 166.67（虚高）
+    // 修复后只对可计算分段聚合：两段都被排除/保留必须同进同出
+    const segs = [
+      sampleScored({
+        recommendation: 'stop_underwriting',
+        totalPremium: 1000,
+        earnedPremium: 800,
+        totalReportedClaims: 600,
+      }),
+      sampleScored({
+        recommendation: 'monitor',
+        totalPremium: 500,
+        earnedPremium: 400,
+        totalReportedClaims: 100,
+      }),
+    ];
+    const out = (await pricingSimulationSkill.run(
+      {
+        scoring: sampleScoring(segs),
+        rateDeltaByRecommendation: {
+          stop_underwriting: -1.0,
+          raise_rate: 0.2,
+          monitor: 0.05,
+          ok: 0.0,
+        },
+        expectedClaimsRetention: 1.0,
+      },
+      baseCtx,
+    )) as any;
+    // 只剩 monitor 段（stop 段 lossRatioAfterUncomputable=true 被排除）
+    // before: 100 / 400 × 100 = 25
+    // after:  100 / (400×1.05) × 100 = 100/420 × 100 ≈ 23.81
+    expect(out.result.totals.weightedLossRatioBefore).toBeCloseTo(25, 1);
+    expect(out.result.totals.weightedLossRatioAfter).toBeCloseTo(23.81, 1);
+    expect(out.result.totals.weightedLossRatioBasisSegmentCount).toBe(1);
+    expect(out.result.totals.weightedLossRatioExcludedSegmentCount).toBe(1);
+    // 总量字段仍包含全部分段（stop=1000×0=0 + monitor=500×1.05=525）
+    expect(out.result.totals.premiumBefore).toBe(1500);
+    expect(out.result.totals.premiumAfter).toBe(525);
+    // 显式 warning
+    expect(out.warnings.some((w: string) => w.includes('系统性放大'))).toBe(true);
+  });
+
+  it('全部分段不可计算时 weightedLossRatio* 为 null', async () => {
+    const segs = [
+      sampleScored({
+        recommendation: 'stop_underwriting',
+        totalPremium: 1000,
+        earnedPremium: 800,
+        totalReportedClaims: 600,
+      }),
+    ];
+    const out = (await pricingSimulationSkill.run(
+      {
+        scoring: sampleScoring(segs),
+        rateDeltaByRecommendation: {
+          stop_underwriting: -1.0,
+          raise_rate: 0.2,
+          monitor: 0.05,
+          ok: 0.0,
+        },
+        expectedClaimsRetention: 1.0,
+      },
+      baseCtx,
+    )) as any;
+    expect(out.result.totals.weightedLossRatioBefore).toBeNull();
+    expect(out.result.totals.weightedLossRatioAfter).toBeNull();
+    expect(out.result.totals.weightedLossRatioBasisSegmentCount).toBe(0);
+    expect(out.result.totals.weightedLossRatioExcludedSegmentCount).toBe(1);
   });
 
   it('confidence=0.6（强假设 → 不取 1.0）', async () => {
