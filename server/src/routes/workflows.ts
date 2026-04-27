@@ -1,14 +1,15 @@
 /**
- * /api/workflows 路由 — 阶段 2
+ * /api/workflows 路由 — 阶段 4 PR-B
  *
  * 端点：
- * - GET  /api/workflows                  列出所有可执行 workflow
- * - POST /api/workflows/:id/run          执行 workflow（同步，落盘）
- * - GET  /api/workflows/runs             列出 workflow 运行记录
- * - GET  /api/workflows/runs/:runId      获取单条记录
+ * - GET  /api/workflows                       列出所有可执行 workflow
+ * - POST /api/workflows/:id/run               执行 workflow（同步，落盘）
+ * - GET  /api/workflows/runs                  列出 workflow 运行记录
+ * - GET  /api/workflows/runs/:runId           获取单条记录
+ * - POST /api/workflows/runs/:runId/approve   审批通过 pending_approval 记录并 resume（PR-B）
  *
  * 鉴权：authMiddleware + permissionMiddleware（与 /api/skills 一致）
- * 阶段 4 将追加 POST /api/workflows/runs/:runId/approve|reject + attach-narrative
+ * /approve 额外校验 approver 的 role ∈ approval.approverRoles（在 resumeWorkflow 内部执行）
  */
 
 import { Router } from 'express';
@@ -19,6 +20,8 @@ import { getRequestContext } from '../utils/request-context.js';
 import { getWorkflow, listWorkflows } from '../skills/workflows/index.js';
 import {
   runWorkflow,
+  resumeWorkflow,
+  ApprovalError,
   getWorkflowRun,
   listWorkflowRuns,
   type WorkflowStatus,
@@ -123,6 +126,49 @@ router.get(
       throw new AppError(403, 'Cannot access run from another user');
     }
     res.json({ success: true, data: record });
+  })
+);
+
+/**
+ * POST /api/workflows/runs/:runId/approve
+ *
+ * 审批通过一个 pending_approval 状态的 workflow run，并从 approval 节点之后继续执行。
+ *
+ * 鉴权：approver 的 role 必须 ∈ workflow approval 节点声明的 approverRoles，
+ * 否则 ApprovalError(403) 被 errorHandler 转为 403。
+ */
+router.post(
+  '/runs/:runId/approve',
+  asyncHandler(async (req, res) => {
+    if (!req.user || !req.permissionFilter) {
+      throw new AppError(401, 'Authentication context missing');
+    }
+
+    const reqCtx = getRequestContext();
+    const ctx: SkillContext = {
+      userId: req.user.userId,
+      username: req.user.username,
+      role: req.user.role,
+      organization: req.user.organization,
+      permissionFilter: req.permissionFilter,
+      requestId: reqCtx?.requestId ?? 'unknown',
+      startedAt: Date.now(),
+      now: new Date(),
+    };
+
+    try {
+      const { record } = await resumeWorkflow(req.params.runId, ctx, {
+        resolveSkill: getSkill,
+        resolveWorkflow: getWorkflow,
+        approver: { username: req.user.username, role: req.user.role },
+      });
+      res.json({ success: true, data: record });
+    } catch (err) {
+      if (err instanceof ApprovalError) {
+        throw new AppError(err.statusCode, err.message);
+      }
+      throw err;
+    }
   })
 );
 
