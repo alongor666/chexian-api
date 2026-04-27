@@ -267,3 +267,166 @@ describe('resumeWorkflow — 鉴权与状态校验', () => {
     expect(err.statusCode).toBe(403);
   });
 });
+
+describe('resumeWorkflow — 历史失败状态保留（codex P1）', () => {
+  it('approval 之前有 failed step（skip-and-continue）→ resume 后整体 status=partial 而非 success', async () => {
+    const tracker: CallTracker = { calls: [] };
+    const failingSkill: Skill<typeof InputSchema, z.infer<typeof ResultSchema>> = {
+      id: 'pre',
+      name: 'pre',
+      version: '1.0.0',
+      description: '',
+      inputSchema: InputSchema,
+      outputResultSchema: ResultSchema,
+      deterministic: true,
+      async run() {
+        tracker.calls.push('pre');
+        throw new Error('boom-pre');
+      },
+    };
+    const skills = [failingSkill, makeOkSkill('post', 'POST', tracker)];
+    const map = new Map(skills.map((s) => [s.id, s as Skill<any, any>]));
+
+    // 用 skip-and-continue 让前置失败但 workflow 继续到 approval
+    const wfPartial: WorkflowDef<typeof InputSchema> = {
+      id: 'wf-partial-test',
+      name: 'wf-partial-test',
+      version: '1.0.0',
+      description: '',
+      inputSchema: InputSchema,
+      nodes: [
+        { id: 'pre', type: 'sequential', skillId: 'pre', onFailure: 'skip-and-continue' },
+        { id: 'gate', type: 'approval', approverRoles: ['branch_admin'] },
+        { id: 'post', type: 'sequential', skillId: 'post' },
+      ],
+    };
+
+    const { runId, record: priorRecord } = await runWorkflow(wfPartial, {}, ctx, {
+      resolveSkill: (id) => map.get(id),
+      persist: true,
+    });
+    createdRunIds.push(runId);
+
+    // 前置失败 → workflow 状态 pending_approval（approval 节点优先于 partial 终止状态）
+    expect(priorRecord.status).toBe('pending_approval');
+    expect(priorRecord.steps[0].status).toBe('failed');
+
+    const { record } = await resumeWorkflow(runId, adminCtx, {
+      resolveSkill: (id) => map.get(id),
+      resolveWorkflow: (id) => (id === wfPartial.id ? wfPartial : undefined),
+      approver: { username: 'admin', role: 'branch_admin' },
+      persist: true,
+    });
+
+    // 关键不变量：审批前 failed step 必须把 resume 后的整体状态保留为 partial
+    expect(record.status).toBe('partial');
+    // 但 post 仍然执行成功
+    const postStep = record.steps.find((s) => s.nodeId === 'post');
+    expect(postStep?.status).toBe('success');
+    expect(tracker.calls).toEqual(['pre', 'post']);
+  });
+});
+
+describe('resumeWorkflow — 并发审批互斥锁（codex P2）', () => {
+  it('两个并发 resume 同一 runId → 仅一个成功，另一个抛 ApprovalError(409)，下游 skill 仅执行一次', async () => {
+    const tracker: CallTracker = { calls: [] };
+    const skills = [
+      makeOkSkill('pre', 'PRE', tracker),
+      // post 加点延迟，让 race 窗口扩大
+      {
+        id: 'post',
+        name: 'post',
+        version: '1.0.0',
+        description: '',
+        inputSchema: InputSchema,
+        outputResultSchema: ResultSchema,
+        deterministic: true,
+        async run() {
+          tracker.calls.push('post');
+          await new Promise((r) => setTimeout(r, 30));
+          return {
+            result: { ok: true, tag: 'POST' },
+            evidence: [],
+            confidence: 1,
+            warnings: [],
+            assumptions: [],
+            dataLineage: [],
+            nextSuggestedSkills: [],
+          } as SkillResult<z.infer<typeof ResultSchema>>;
+        },
+      } as Skill<typeof InputSchema, z.infer<typeof ResultSchema>>,
+    ];
+    const map = new Map(skills.map((s) => [s.id, s as Skill<any, any>]));
+    const wf = makeWorkflow();
+
+    const { runId } = await runWorkflow(wf, {}, ctx, {
+      resolveSkill: (id) => map.get(id),
+      persist: true,
+    });
+    createdRunIds.push(runId);
+
+    const opts = {
+      resolveSkill: (id: string) => map.get(id),
+      resolveWorkflow: (id: string) => (id === wf.id ? wf : undefined),
+      approver: { username: 'admin', role: 'branch_admin' },
+      persist: true,
+    };
+
+    const settled = await Promise.allSettled([
+      resumeWorkflow(runId, adminCtx, opts),
+      resumeWorkflow(runId, adminCtx, opts),
+    ]);
+
+    const fulfilled = settled.filter((s) => s.status === 'fulfilled');
+    const rejected = settled.filter((s) => s.status === 'rejected') as PromiseRejectedResult[];
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toBeInstanceOf(ApprovalError);
+    expect((rejected[0].reason as ApprovalError).statusCode).toBe(409);
+
+    // 关键不变量：post skill 仅被调用一次（互斥锁阻止了第二个 resume 进入执行）
+    const postCalls = tracker.calls.filter((c) => c === 'post').length;
+    expect(postCalls).toBe(1);
+  });
+
+  it('resume 完成后锁文件被释放，允许后续合法操作', async () => {
+    const tracker: CallTracker = { calls: [] };
+    const skills = [makeOkSkill('pre', 'PRE', tracker), makeOkSkill('post', 'POST', tracker)];
+    const map = new Map(skills.map((s) => [s.id, s as Skill<any, any>]));
+    const wf = makeWorkflow();
+
+    const { runId } = await runWorkflow(wf, {}, ctx, {
+      resolveSkill: (id) => map.get(id),
+      persist: true,
+    });
+    createdRunIds.push(runId);
+
+    await resumeWorkflow(runId, adminCtx, {
+      resolveSkill: (id) => map.get(id),
+      resolveWorkflow: (id) => (id === wf.id ? wf : undefined),
+      approver: { username: 'admin', role: 'branch_admin' },
+      persist: true,
+    });
+
+    // 二次 resume → 因为已经 success，应是 409（不是因为锁，是状态校验）
+    await expect(
+      resumeWorkflow(runId, adminCtx, {
+        resolveSkill: (id) => map.get(id),
+        resolveWorkflow: (id) => (id === wf.id ? wf : undefined),
+        approver: { username: 'admin', role: 'branch_admin' },
+        persist: false,
+      }),
+    ).rejects.toMatchObject({ name: 'ApprovalError', statusCode: 409 });
+
+    // 锁文件不应残留
+    const { getDataDir } = await import('../../config/paths.js');
+    const lockFile = path.resolve(getDataDir(), 'runtime/workflow-runs', `${runId}.lock`);
+    let exists = true;
+    try {
+      await fs.access(lockFile);
+    } catch {
+      exists = false;
+    }
+    expect(exists).toBe(false);
+  });
+});

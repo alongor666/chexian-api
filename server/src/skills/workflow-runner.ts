@@ -177,6 +177,16 @@ function resolveRunPath(runId: string): string | null {
   return candidate;
 }
 
+/** resume 互斥锁路径：与 record JSON 同目录，扩展名 .lock，O_EXCL 创建（原子） */
+function resolveLockPath(runId: string): string | null {
+  if (typeof runId !== 'string' || !RUN_ID_PATTERN.test(runId)) return null;
+  const runsDir = getRunsDir();
+  const candidate = path.resolve(runsDir, `${runId}.lock`);
+  const rel = path.relative(runsDir, candidate);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  return candidate;
+}
+
 function generateWorkflowRunId(workflowId: string): string {
   const ts = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   const uid = randomUUID().slice(0, 8);
@@ -599,13 +609,86 @@ export interface ResumeWorkflowOptions {
 }
 
 /**
+ * 从 prior steps 推导 resume 的 initialStatus。
+ *
+ * 触发场景（codex P1）：前置 5 步 skip-and-continue 配置允许 partial，
+ * 即 approval 之前可能已有 failed step。如果 initialStatus 强行设为 'success'，
+ * resume 后整体会被误报为成功。规则：
+ *   - 任一历史 step.status === 'failed' → 'partial'
+ *   - 任一历史 parallel children 中 status === 'failed' → 'partial'
+ *   - approval 节点的 'skipped'/'awaiting' 不算失败（已在外层升级为 success）
+ *   - 否则 → 'success'
+ */
+function deriveInitialStatusFromHistory(
+  steps: ReadonlyArray<WorkflowStepRecord>,
+  approvalNodeId: string,
+): WorkflowStatus {
+  for (const step of steps) {
+    if (step.nodeId === approvalNodeId) continue;
+    if (step.status === 'failed') return 'partial';
+    if (step.children) {
+      for (const child of step.children) {
+        if (child.status === 'failed') return 'partial';
+      }
+    }
+  }
+  return 'success';
+}
+
+/**
+ * 抢占 resume 互斥锁（codex P2）。
+ *
+ * 用 fs.open(lockPath, 'wx') —— POSIX `O_CREAT | O_EXCL`，文件已存在即抛 EEXIST，
+ * 操作系统层面保证原子。两个并发 approve 请求只有一个能持锁；持锁失败抛
+ * ApprovalError(409)，调用方知道有审批正在进行，避免下游 skill 被重复执行。
+ *
+ * 锁文件内容写入 approver / pid，便于死锁排查；finally 中通过 unlinkLock 释放。
+ */
+async function acquireResumeLock(runId: string, approver: string): Promise<string> {
+  const lockPath = resolveLockPath(runId);
+  if (!lockPath) {
+    throw new ApprovalError(400, `Invalid runId: ${runId}`);
+  }
+  await fs.mkdir(path.dirname(lockPath), { recursive: true });
+  let handle: import('node:fs/promises').FileHandle | null = null;
+  try {
+    handle = await fs.open(lockPath, 'wx');
+    await handle.writeFile(
+      JSON.stringify({ approver, pid: process.pid, lockedAt: new Date().toISOString() }),
+      'utf8',
+    );
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new ApprovalError(409, `Workflow run ${runId} is being approved by another request`);
+    }
+    throw err;
+  } finally {
+    if (handle) {
+      await handle.close();
+    }
+  }
+  return lockPath;
+}
+
+async function releaseResumeLock(lockPath: string): Promise<void> {
+  try {
+    await fs.unlink(lockPath);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      // 锁文件已不存在（比如人工清理）不算错误；其他错误吞掉以免覆盖原始业务异常
+    }
+  }
+}
+
+/**
  * 从 pending_approval 状态恢复 workflow 执行。
  *
  * 不变量：
  * - record.status 必须是 'pending_approval'
- * - record.approval.approverRoles 必须包含 approver.role（branch_admin 不会被特殊放行；
- *   approval 节点本身定义了 ['branch_admin']，所以 admin 通过校验）
+ * - record.approval.approverRoles 必须包含 approver.role
  * - 从 record.steps 重建 results / childResults，再从 pendingNodeIndex+1 继续执行
+ * - 同一 runId 的并发 approve 由 fs O_EXCL 锁保证只能成功一次（codex P2）
+ * - resume 起始 status 从 prior.steps 派生，保留前置失败的 'partial' 信号（codex P1）
  */
 export async function resumeWorkflow(
   runId: string,
@@ -613,113 +696,124 @@ export async function resumeWorkflow(
   options: ResumeWorkflowOptions,
 ): Promise<{ record: WorkflowRunRecord }> {
   const persist = options.persist ?? true;
-  const prior = await getWorkflowRun(runId);
-  if (!prior) {
-    throw new ApprovalError(404, `Workflow run not found: ${runId}`);
-  }
-  if (prior.status !== 'pending_approval') {
-    throw new ApprovalError(409, `Workflow run is not pending approval (status=${prior.status})`);
-  }
-  const approval = prior.approval;
-  if (!approval) {
-    throw new ApprovalError(500, `Workflow run is pending_approval but missing approval state`);
-  }
-  if (!approval.approverRoles.includes(options.approver.role)) {
-    throw new ApprovalError(
-      403,
-      `Approver role '${options.approver.role}' is not in approverRoles [${approval.approverRoles.join(', ')}]`,
-    );
-  }
 
-  const workflow = options.resolveWorkflow(prior.workflowId);
-  if (!workflow) {
-    throw new ApprovalError(500, `Workflow definition not found for resume: ${prior.workflowId}`);
-  }
+  // 1) 抢锁（原子）— 失败立即 409，避免后续 read 又被并发请求看到 pending_approval
+  const lockPath = await acquireResumeLock(runId, options.approver.username);
 
-  // 校验 pendingNodeIndex 与 nodes 一致（防止 workflow 版本变更后 schema 漂移）
-  const pendingNode = workflow.nodes[approval.pendingNodeIndex];
-  if (!pendingNode || pendingNode.type !== 'approval' || pendingNode.id !== approval.pendingNodeId) {
-    throw new ApprovalError(
-      500,
-      `Workflow definition drift: nodes[${approval.pendingNodeIndex}] does not match pending approval node '${approval.pendingNodeId}'`,
-    );
-  }
-
-  // 重建 results / childResults
-  const stepRecords: WorkflowStepRecord[] = [...prior.steps];
-  const results: Record<string, SkillResult | undefined> = {};
-  const childResults: Record<string, SkillResult | undefined> = {};
-  for (const step of prior.steps) {
-    if (step.status === 'success' && step.result) {
-      results[step.nodeId] = step.result;
+  try {
+    const prior = await getWorkflowRun(runId);
+    if (!prior) {
+      throw new ApprovalError(404, `Workflow run not found: ${runId}`);
     }
-    if (step.children) {
-      for (const child of step.children) {
-        if (child.status === 'success' && child.result) {
-          childResults[`${step.nodeId}.${child.branchId}`] = child.result;
+    if (prior.status !== 'pending_approval') {
+      throw new ApprovalError(409, `Workflow run is not pending approval (status=${prior.status})`);
+    }
+    const approval = prior.approval;
+    if (!approval) {
+      throw new ApprovalError(500, `Workflow run is pending_approval but missing approval state`);
+    }
+    if (!approval.approverRoles.includes(options.approver.role)) {
+      throw new ApprovalError(
+        403,
+        `Approver role '${options.approver.role}' is not in approverRoles [${approval.approverRoles.join(', ')}]`,
+      );
+    }
+
+    const workflow = options.resolveWorkflow(prior.workflowId);
+    if (!workflow) {
+      throw new ApprovalError(500, `Workflow definition not found for resume: ${prior.workflowId}`);
+    }
+
+    // 校验 pendingNodeIndex 与 nodes 一致（防止 workflow 版本变更后 schema 漂移）
+    const pendingNode = workflow.nodes[approval.pendingNodeIndex];
+    if (!pendingNode || pendingNode.type !== 'approval' || pendingNode.id !== approval.pendingNodeId) {
+      throw new ApprovalError(
+        500,
+        `Workflow definition drift: nodes[${approval.pendingNodeIndex}] does not match pending approval node '${approval.pendingNodeId}'`,
+      );
+    }
+
+    // 重建 results / childResults
+    const stepRecords: WorkflowStepRecord[] = [...prior.steps];
+    const results: Record<string, SkillResult | undefined> = {};
+    const childResults: Record<string, SkillResult | undefined> = {};
+    for (const step of prior.steps) {
+      if (step.status === 'success' && step.result) {
+        results[step.nodeId] = step.result;
+      }
+      if (step.children) {
+        for (const child of step.children) {
+          if (child.status === 'success' && child.result) {
+            childResults[`${step.nodeId}.${child.branchId}`] = child.result;
+          }
         }
       }
     }
-  }
 
-  // 标记审批通过：把原 'skipped' / awaiting 状态升级为 'success'
-  const approvedAt = new Date().toISOString();
-  const approvalStepIndex = stepRecords.findIndex((s) => s.nodeId === approval.pendingNodeId);
-  if (approvalStepIndex >= 0) {
-    const old = stepRecords[approvalStepIndex];
-    stepRecords[approvalStepIndex] = {
-      ...old,
-      status: 'success',
-      error: undefined,
-      finishedAt: approvedAt,
+    // 标记审批通过：把原 'skipped' / awaiting 状态升级为 'success'
+    const approvedAt = new Date().toISOString();
+    const approvalStepIndex = stepRecords.findIndex((s) => s.nodeId === approval.pendingNodeId);
+    if (approvalStepIndex >= 0) {
+      const old = stepRecords[approvalStepIndex];
+      stepRecords[approvalStepIndex] = {
+        ...old,
+        status: 'success',
+        error: undefined,
+        finishedAt: approvedAt,
+      };
+    }
+
+    // codex P1：从历史 steps 推导起始 status，保留前置 partial 信号
+    const initialStatus = deriveInitialStatusFromHistory(prior.steps, approval.pendingNodeId);
+
+    options.onStep?.({
+      type: 'workflow-started',
+      runId,
+      workflowId: workflow.id,
+      nodeCount: workflow.nodes.length,
+    });
+
+    const outcome = await executeNodes({
+      workflow,
+      runInput: prior.input,
+      ctx,
+      resolveSkill: options.resolveSkill,
+      onStep: options.onStep,
+      startIndex: approval.pendingNodeIndex + 1,
+      stepRecords,
+      results,
+      childResults,
+      runId,
+      initialStatus,
+    });
+
+    const finishedAt = new Date();
+    const record: WorkflowRunRecord = {
+      ...prior,
+      status: outcome.status,
+      finishedAt: finishedAt.toISOString(),
+      elapsedMs: finishedAt.getTime() - new Date(prior.startedAt).getTime(),
+      steps: stepRecords,
+      approval: outcome.pendingApproval ?? {
+        ...approval,
+        approvedBy: options.approver.username,
+        approvedAt,
+      },
     };
+
+    if (persist) {
+      await saveWorkflowRun(record);
+    }
+    options.onStep?.({
+      type: 'workflow-completed',
+      runId,
+      status: outcome.status,
+      elapsedMs: record.elapsedMs,
+    });
+    return { record };
+  } finally {
+    await releaseResumeLock(lockPath);
   }
-
-  options.onStep?.({
-    type: 'workflow-started',
-    runId,
-    workflowId: workflow.id,
-    nodeCount: workflow.nodes.length,
-  });
-
-  const outcome = await executeNodes({
-    workflow,
-    runInput: prior.input,
-    ctx,
-    resolveSkill: options.resolveSkill,
-    onStep: options.onStep,
-    startIndex: approval.pendingNodeIndex + 1,
-    stepRecords,
-    results,
-    childResults,
-    runId,
-    initialStatus: 'success',
-  });
-
-  const finishedAt = new Date();
-  const record: WorkflowRunRecord = {
-    ...prior,
-    status: outcome.status,
-    finishedAt: finishedAt.toISOString(),
-    elapsedMs: finishedAt.getTime() - new Date(prior.startedAt).getTime(),
-    steps: stepRecords,
-    approval: outcome.pendingApproval ?? {
-      ...approval,
-      approvedBy: options.approver.username,
-      approvedAt,
-    },
-  };
-
-  if (persist) {
-    await saveWorkflowRun(record);
-  }
-  options.onStep?.({
-    type: 'workflow-completed',
-    runId,
-    status: outcome.status,
-    elapsedMs: record.elapsedMs,
-  });
-  return { record };
 }
 
 function buildFailedStepRecord(
