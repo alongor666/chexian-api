@@ -56,6 +56,8 @@ function generateMapping() {
     `  ${f.id}: '${f.id}',`
   ).join('\n');
 
+  const fieldIdsEntries = fields.map(f => `  '${f.id}',`).join('\n');
+
   const content = `/**
  * Column Mapping with Alias Support
  *
@@ -138,6 +140,20 @@ export function validateAndResolveMapping(
 export const DEFAULT_MAPPING: ColumnMapping = {
 ${defaultMappingEntries}
 };
+
+/**
+ * 字段 ID 字面量数组（编译期 + 运行期双锁定）
+ *
+ * 用法：在 zod schema 中作为 enum 源，使任何引用未注册字段的 Skill / 配置在
+ * \`bun run typecheck\` 阶段就报错，无需等到运行时 Binder Error。
+ *
+ * 示例：
+ *   import { FIELD_IDS } from '../../normalize/mapping.js';
+ *   const schema = z.array(z.enum(FIELD_IDS));
+ */
+export const FIELD_IDS = [
+${fieldIdsEntries}
+] as const satisfies ReadonlyArray<DomainField>;
 `;
   return content;
 }
