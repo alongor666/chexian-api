@@ -256,45 +256,49 @@ router.get(
       persist: false,
     });
 
-    // 阶段 4 PR-D：narrative 优先取自 record.report.narrative（attach-narrative skill 已落盘）
-    // - workflow 跑 attach-narrative 节点成功后 record.report.narrative 即被填充
-    // - 命中时 narrativeSource='workflow-skill'，避免重复调 LLM
-    // - 未命中且 includeNarrative=1 → 走旧 LLM 兜底，narrativeSource='route-llm'
-    // - 都没有 → narrativeSource=null
+    // 阶段 4 PR-D：narrative 路径设计（codex P2 修正：opt-in 语义不破坏）
+    // - 整个 narrative 段必须在 includeNarrative=1 才返回，与旧接口语义一致
+    //   旧客户端默认请求绝不会收到 narrative 文本（避免暴露未预期的 LLM 输出）
+    // - 启用 narrative 时优先取 record.report.narrative（attach-narrative skill 已落盘）
+    //   命中 → narrativeSource='workflow-skill'，避免重复调 LLM
+    // - 未命中 → 走 LLM 兜底，narrativeSource='route-llm'
+    // - 关闭 narrative 或都没有 → narrative=null, narrativeSource=null
     let narrative: string | null = null;
     let narrativeSource: 'workflow-skill' | 'route-llm' | null = null;
     let narrativeMeta:
       | { provider: string; blockedBySqlGuard?: boolean; tokens?: unknown; error?: string }
       | null = null;
 
-    const persistedNarrative = record.report?.narrative ?? null;
-    if (persistedNarrative) {
-      narrative = persistedNarrative;
-      narrativeSource = 'workflow-skill';
-    } else if (includeNarrative) {
-      const preflight = await tryGenerateNarrative(result.result.markdown, result.result.allWarnings);
-      narrativeMeta = preflight;
-      if (preflight && !preflight.error) {
-        const provider = getDefaultLlmProvider();
-        try {
-          const r = await provider.generateNarrative({
-            systemPrompt: NARRATIVE_SYSTEM_PROMPT,
-            userContent: buildNarrativeContext(result.result),
-            temperature: 0.3,
-            maxTokens: 400,
-          });
-          narrative = r.text;
-          narrativeSource = 'route-llm';
-          narrativeMeta = {
-            provider: provider.provider,
-            blockedBySqlGuard: r.blockedBySqlGuard,
-            tokens: r.tokens,
-          };
-        } catch (err) {
-          narrativeMeta = {
-            provider: provider.provider,
-            error: err instanceof LLMUnavailableError ? err.reason : err instanceof Error ? err.message : String(err),
-          };
+    if (includeNarrative) {
+      const persistedNarrative = record.report?.narrative ?? null;
+      if (persistedNarrative) {
+        narrative = persistedNarrative;
+        narrativeSource = 'workflow-skill';
+      } else {
+        const preflight = await tryGenerateNarrative(result.result.markdown, result.result.allWarnings);
+        narrativeMeta = preflight;
+        if (preflight && !preflight.error) {
+          const provider = getDefaultLlmProvider();
+          try {
+            const r = await provider.generateNarrative({
+              systemPrompt: NARRATIVE_SYSTEM_PROMPT,
+              userContent: buildNarrativeContext(result.result),
+              temperature: 0.3,
+              maxTokens: 400,
+            });
+            narrative = r.text;
+            narrativeSource = 'route-llm';
+            narrativeMeta = {
+              provider: provider.provider,
+              blockedBySqlGuard: r.blockedBySqlGuard,
+              tokens: r.tokens,
+            };
+          } catch (err) {
+            narrativeMeta = {
+              provider: provider.provider,
+              error: err instanceof LLMUnavailableError ? err.reason : err instanceof Error ? err.message : String(err),
+            };
+          }
         }
       }
     }

@@ -89,9 +89,18 @@ describe('copilot route contract', () => {
 
   it('persistedNarrative 命中时不再调用 LLM provider（避免重复调用）', () => {
     const route = readSource('server/src/routes/copilot.ts');
-    // 走 if/else if：persistedNarrative 命中走第一支；未命中且 includeNarrative 才走 LLM
+    // persistedNarrative 命中走第一支；未命中走 LLM 兜底
     expect(route).toMatch(/if\s*\(\s*persistedNarrative\s*\)/);
-    expect(route).toMatch(/else if\s*\(\s*includeNarrative\s*\)/);
+  });
+
+  it('整个 narrative 段必须在 includeNarrative 开关之后（codex P2：保留 opt-in 语义）', () => {
+    const route = readSource('server/src/routes/copilot.ts');
+    // persistedNarrative 必须在 includeNarrative 块内 — 旧客户端不传 includeNarrative 时
+    // 不能收到任何 narrative 文本（避免暴露未预期的 LLM 输出，破坏接口语义）
+    const includeIdx = route.indexOf('if (includeNarrative)');
+    const persistedIdx = route.indexOf('record.report?.narrative');
+    expect(includeIdx).toBeGreaterThan(0);
+    expect(persistedIdx).toBeGreaterThan(includeIdx);
   });
 
   it('LLM provider import path is the adapter, not zhipu service directly', () => {
