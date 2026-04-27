@@ -32,7 +32,7 @@ import {
 } from '../skills/workflow-runner.js';
 import { getSkill } from '../skills/registry.js';
 import type { SkillContext } from '../skills/types.js';
-import { appendAuditEvent, readAuditEventsForRun } from '../skills/audit-log.js';
+import { appendAuditEvent, getAuditLogStats, readAuditEventsForRun } from '../skills/audit-log.js';
 
 const router = Router();
 
@@ -47,6 +47,79 @@ router.get(
   asyncHandler(async (_req, res) => {
     res.json({ success: true, data: listWorkflows() });
   })
+);
+
+/**
+ * GET /api/workflows/health/runs-summary — PR-E
+ *
+ * 运维视角：最近 24h 每个 workflowId 的状态计数与耗时分位。
+ * 权限：branch_admin only。
+ */
+router.get(
+  '/health/runs-summary',
+  asyncHandler(async (req, res) => {
+    if (req.user?.role !== 'branch_admin') {
+      throw new AppError(403, 'Workflow health summary requires branch_admin');
+    }
+
+    const windowHours = 24;
+    const generatedAt = new Date();
+    const cutoffMs = generatedAt.getTime() - windowHours * 60 * 60 * 1000;
+    const records = (await listWorkflowRuns()).filter((record) => {
+      const startedMs = new Date(record.startedAt).getTime();
+      return Number.isFinite(startedMs) && startedMs >= cutoffMs;
+    });
+
+    const statuses: WorkflowStatus[] = ['success', 'partial', 'failed', 'pending_approval'];
+    const buckets = new Map<
+      string,
+      { workflowId: string; counts: Record<WorkflowStatus, number>; elapsedValues: number[] }
+    >();
+
+    for (const record of records) {
+      const bucket =
+        buckets.get(record.workflowId) ??
+        {
+          workflowId: record.workflowId,
+          counts: { success: 0, partial: 0, failed: 0, pending_approval: 0 },
+          elapsedValues: [],
+        };
+      bucket.counts[record.status] += 1;
+      if (Number.isFinite(record.elapsedMs) && record.elapsedMs >= 0) {
+        bucket.elapsedValues.push(record.elapsedMs);
+      }
+      buckets.set(record.workflowId, bucket);
+    }
+
+    const percentile = (values: number[], p: number): number | null => {
+      if (values.length === 0) return null;
+      const sorted = [...values].sort((a, b) => a - b);
+      const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
+      return sorted[idx];
+    };
+
+    const workflows = Array.from(buckets.values())
+      .map((bucket) => ({
+        workflowId: bucket.workflowId,
+        total: statuses.reduce((sum, status) => sum + bucket.counts[status], 0),
+        counts: bucket.counts,
+        elapsedMs: {
+          p50: percentile(bucket.elapsedValues, 0.5),
+          p95: percentile(bucket.elapsedValues, 0.95),
+        },
+      }))
+      .sort((a, b) => a.workflowId.localeCompare(b.workflowId));
+
+    res.json({
+      success: true,
+      data: {
+        windowHours,
+        generatedAt: generatedAt.toISOString(),
+        workflows,
+        auditLog: await getAuditLogStats(),
+      },
+    });
+  }),
 );
 
 /**

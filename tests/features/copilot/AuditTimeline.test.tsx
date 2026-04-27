@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { AuditEvent } from '../../../src/features/copilot/types';
 
 // vi.mock 工厂会被 vitest hoist 到文件顶部，此时模块顶层变量尚未初始化。
@@ -171,5 +171,34 @@ describe('AuditTimeline', () => {
 
     rerender(<AuditTimeline runId={RUN_ID} refreshToken={1} />);
     await waitFor(() => expect(getWorkflowAuditMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('超过 20 条事件时默认只渲染最近 20 条，点击加载更多后显示更早事件', async () => {
+    const manyEvents: AuditEvent[] = Array.from({ length: 21 }, (_, index) => ({
+      timestamp: new Date(Date.UTC(2026, 3, 27, 1, 0, index)).toISOString(),
+      runId: RUN_ID,
+      workflowId: 'auto-risk-control-v1',
+      eventType: 'step-completed',
+      userId: 'admin',
+      role: 'branch_admin',
+      requestId: 'r-many',
+      payload: { nodeId: `node-${index}`, status: 'success' },
+    }));
+    getWorkflowAuditMock.mockResolvedValue(manyEvents);
+
+    const { container } = render(<AuditTimeline runId={RUN_ID} />);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('[data-event-type]')).toHaveLength(20);
+    });
+    expect(screen.queryByText('node-0')).toBeNull();
+    expect(screen.getByText('node-20')).toBeTruthy();
+    const loadMore = screen.getByRole('button', { name: /加载更多/ });
+    expect(loadMore).toBeTruthy();
+
+    fireEvent.click(loadMore);
+
+    expect(container.querySelectorAll('[data-event-type]')).toHaveLength(21);
+    expect(screen.getByText('node-0')).toBeTruthy();
   });
 });

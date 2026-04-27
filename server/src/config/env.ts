@@ -125,6 +125,10 @@ export const wecomEnv = {
 export const opsEnv = {
   /** 审计日志文件路径 */
   AUDIT_LOG_PATH: process.env.AUDIT_LOG_PATH ?? '',
+  /** Workflow audit JSONL 保留天数 */
+  AUDIT_LOG_RETENTION_DAYS: process.env.AUDIT_LOG_RETENTION_DAYS
+    ? parseInt(process.env.AUDIT_LOG_RETENTION_DAYS, 10)
+    : 90,
 } as const;
 
 // ─── 测试配置 ──────────────────────────────────────────────────────────────────

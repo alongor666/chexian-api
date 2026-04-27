@@ -126,10 +126,12 @@ describe('workflows route constants — 阶段 4 PR-D', () => {
     expect(serverRoutes).toContain("RUN_AUDIT: '/runs/:runId/audit'");
     expect(serverRoutes).toContain("RUN_APPROVE: '/runs/:runId/approve'");
     expect(serverRoutes).toContain("RUN_REJECT: '/runs/:runId/reject'");
+    expect(serverRoutes).toContain("HEALTH_RUNS_SUMMARY: '/health/runs-summary'");
 
     expect(frontendRoutes).toContain("RUN_AUDIT: 'workflows/runs/:runId/audit'");
     expect(frontendRoutes).toContain("RUN_APPROVE: 'workflows/runs/:runId/approve'");
     expect(frontendRoutes).toContain("RUN_REJECT: 'workflows/runs/:runId/reject'");
+    expect(frontendRoutes).toContain("HEALTH_RUNS_SUMMARY: 'workflows/health/runs-summary'");
   });
 
   it('apiClient 暴露 getWorkflowAudit / approveWorkflowRun / rejectWorkflowRun', () => {
@@ -138,6 +140,7 @@ describe('workflows route constants — 阶段 4 PR-D', () => {
     expect(client).toContain('async approveWorkflowRun(');
     expect(client).toContain('async rejectWorkflowRun(');
     expect(client).toContain('async getWorkflowRun(');
+    expect(client).toContain('async getWorkflowRunsHealth(');
   });
 });
 

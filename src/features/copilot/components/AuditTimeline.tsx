@@ -29,6 +29,17 @@ const EVENT_TYPE_LABEL: Record<AuditEventType, string> = {
   'workflow-completed': '工作流完成',
 };
 
+const PAGE_SIZE = 20;
+const TIMESTAMP_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
 /**
  * 6 类事件的语义色（dark mode 友好，使用设计系统语义色块）。
  * - workflow-started: blue/primary（启动）
@@ -73,7 +84,7 @@ const PAYLOAD_WHITELIST: ReadonlySet<string> = new Set([
 function formatTimestamp(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString('zh-CN', { hour12: false });
+    return TIMESTAMP_FORMATTER.format(d);
   } catch {
     return iso;
   }
@@ -94,12 +105,14 @@ export function AuditTimeline({ runId, refreshToken = 0 }: AuditTimelineProps) {
   const [events, setEvents] = useState<AuditEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     if (!runId) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setVisibleCount(PAGE_SIZE);
     apiClient
       .getWorkflowAudit(runId)
       .then((data) => {
@@ -117,6 +130,9 @@ export function AuditTimeline({ runId, refreshToken = 0 }: AuditTimelineProps) {
       cancelled = true;
     };
   }, [runId, refreshToken]);
+
+  const visibleEvents = events ? events.slice(Math.max(0, events.length - visibleCount)) : [];
+  const hiddenCount = events ? Math.max(0, events.length - visibleEvents.length) : 0;
 
   return (
     <section className={cn(cardStyles.standard, 'space-y-2')} aria-label="审计事件时序">
@@ -141,46 +157,62 @@ export function AuditTimeline({ runId, refreshToken = 0 }: AuditTimelineProps) {
       )}
 
       {!error && events && events.length > 0 && (
-        <ol className="space-y-1.5">
-          {events.map((e, idx) => {
-            const visiblePairs = selectVisiblePayload(e.payload);
-            return (
-              <li
-                key={`${e.timestamp}-${e.eventType}-${idx}`}
-                className={cn(
-                  'flex flex-col gap-1 rounded border px-2 py-1.5',
-                  colorClasses.border.neutral,
-                  'bg-white dark:bg-surface-2',
-                )}
-                data-event-type={e.eventType}
-              >
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className={EVENT_BADGE[e.eventType]}>{EVENT_TYPE_LABEL[e.eventType]}</span>
-                  <span className={cn('font-numeric tabular-nums', colorClasses.text.neutralMuted)}>
-                    {formatTimestamp(e.timestamp)}
-                  </span>
-                </div>
-                <div className={cn('text-xs', colorClasses.text.neutralDark)}>
-                  <span className={colorClasses.text.neutralMuted}>{e.userId}</span>
-                  <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
-                  <span>{e.role}</span>
-                </div>
-                {visiblePairs.length > 0 && (
-                  <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                    {visiblePairs.map(([k, v]) => (
-                      <div key={k} className="contents">
-                        <dt className={colorClasses.text.neutralMuted}>{k}</dt>
-                        <dd className={cn('truncate', colorClasses.text.neutralDark)}>
-                          {formatPayloadValue(v)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-              </li>
-            );
-          })}
-        </ol>
+        <>
+          <ol className="space-y-1.5">
+            {visibleEvents.map((e, idx) => {
+              const visiblePairs = selectVisiblePayload(e.payload);
+              return (
+                <li
+                  key={`${e.timestamp}-${e.eventType}-${idx}`}
+                  className={cn(
+                    'flex flex-col gap-1 rounded border px-2 py-1.5',
+                    colorClasses.border.neutral,
+                    'bg-white dark:bg-surface-2',
+                  )}
+                  data-event-type={e.eventType}
+                >
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className={EVENT_BADGE[e.eventType]}>{EVENT_TYPE_LABEL[e.eventType]}</span>
+                    <span className={cn('font-numeric tabular-nums', colorClasses.text.neutralMuted)}>
+                      {formatTimestamp(e.timestamp)}
+                    </span>
+                  </div>
+                  <div className={cn('text-xs', colorClasses.text.neutralDark)}>
+                    <span className={colorClasses.text.neutralMuted}>{e.userId}</span>
+                    <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
+                    <span>{e.role}</span>
+                  </div>
+                  {visiblePairs.length > 0 && (
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+                      {visiblePairs.map(([k, v]) => (
+                        <div key={k} className="contents">
+                          <dt className={colorClasses.text.neutralMuted}>{k}</dt>
+                          <dd className={cn('truncate', colorClasses.text.neutralDark)}>
+                            {formatPayloadValue(v)}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              className={cn(
+                'w-full rounded border px-2 py-1.5 text-xs font-medium',
+                colorClasses.border.neutral,
+                colorClasses.text.neutralDark,
+                'hover:bg-neutral-50 dark:hover:bg-surface-2',
+              )}
+              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+            >
+              加载更多（{hiddenCount}）
+            </button>
+          )}
+        </>
       )}
     </section>
   );
