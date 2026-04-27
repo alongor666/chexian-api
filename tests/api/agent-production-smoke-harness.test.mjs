@@ -58,6 +58,7 @@ describe('agent production smoke harness', () => {
       'POST /api/agent/diagnosis/claims-risk',
       'POST /api/agent/diagnosis/customer-flow',
       'POST /api/agent/diagnosis/business-patrol',
+      'POST /api/agent/forecast/profit-scenario',
       'GET /api/agent/audit/observability',
       'GET /api/agent/audit/readiness',
     ]);

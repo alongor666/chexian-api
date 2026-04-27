@@ -104,12 +104,22 @@ describe('agent adaptation audit routing', () => {
   });
 
   it('blocks explicit profit amount and margin contribution questions', () => {
-    for (const question of ['哪个机构利润额最高？', '满期边际贡献额怎么看？', '预估边际贡献额下降原因？']) {
+    for (const question of ['哪个机构实际亏损？', '哪个机构承保利润最低？']) {
       const result = routeAgentQuestion({ question });
 
       expect(result.blocked).toBe(true);
       expect(result.status).toBe('unsupported');
-      expect(result.reason).toContain('财务盈亏');
+    }
+  });
+
+  it('routes margin contribution questions without treating them as financial profit', () => {
+    for (const question of ['满期边际贡献额怎么看？', '预估边际贡献额下降原因？']) {
+      const result = routeAgentQuestion({ question });
+
+      expect(result.blocked).toBe(false);
+      expect(result.status).toBe('supported');
+      expect(result.matchedCapabilityId).toBe('cost_indicator_diagnosis');
+      expect(result.warnings.join('')).toContain('边际贡献额仅扣变动成本');
     }
   });
 
@@ -141,6 +151,8 @@ describe('agent adaptation audit routing', () => {
       .toBe('quote_conversion_diagnosis');
     expect(routeAgentQuestion({ question: '续保情况怎么样？' }).matchedCapabilityId)
       .toBe('renewal_tracker_diagnosis');
+    expect(routeAgentQuestion({ question: '终极综合成本率怎么算？' }).matchedCapabilityId)
+      .toBe('forecast_operating_profit_scenario');
   });
 
   it('reports Stage 1-4 deterministic readiness and keeps Stage 5 blocked by production evidence', async () => {
@@ -153,7 +165,7 @@ describe('agent adaptation audit routing', () => {
       (item) => item.id === 'warnings_and_forbidden_interpretations_displayed'
     );
 
-    expect(readiness.currentStage).toBe('stage_4_8_display_contract_ready');
+    expect(readiness.currentStage).toBe('stage_4_9_deterministic_profit_forecast');
     expect(readiness.readyForLlm).toBe(false);
     expect(readiness.deterministicDiagnosisCapabilityCount).toBe(7);
     expect(readiness.completedStages.map((stage) => stage.id)).toEqual(
@@ -165,6 +177,7 @@ describe('agent adaptation audit routing', () => {
         'stage_4_business_patrol',
         'stage_4_6_observability_readiness',
         'stage_4_8_caller_display_evidence',
+        'stage_4_9_deterministic_profit_forecast',
       ])
     );
     expect(readiness.blockedStages.map((stage) => stage.id)).toContain('stage_5_llm_interpretation');

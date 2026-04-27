@@ -207,6 +207,13 @@ export const AGENT_EXPLAIN_ROUTES = {
 } as const;
 
 // ─────────────────────────────────────────────
+// /api/agent/forecast/* 路由
+// ─────────────────────────────────────────────
+export const AGENT_FORECAST_ROUTES = {
+  PROFIT_SCENARIO: 'agent/forecast/profit-scenario',
+} as const;
+
+// ─────────────────────────────────────────────
 // /api/filters/* 路由
 // ─────────────────────────────────────────────
 export const FILTER_ROUTES = {

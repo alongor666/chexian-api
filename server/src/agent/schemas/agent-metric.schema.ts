@@ -7,6 +7,17 @@ export const AgentMetricSupportLevelSchema = z.enum([
   'deprecated',
 ]);
 
+export const AgentMetricKindSchema = z.enum(['observed', 'forecast_output']);
+export const AgentMetricNatureSchema = z.enum([
+  'observed',
+  'assumption',
+  'scenario_derived',
+  'forecast_output',
+  'financial_actual',
+]);
+export const AgentMetricForecastRoleSchema = z.enum(['none', 'input', 'assumption', 'derived', 'output']);
+export const AgentMetricFinancialInterpretationSchema = z.enum(['allowed', 'caution', 'forbidden']);
+
 export const AgentMetricCategorySchema = z.enum([
   'premium',
   'growth',
@@ -40,8 +51,17 @@ export const AgentMetricDefinitionSchema = z.object({
   cautionNotes: z.array(z.string()),
   forbiddenInterpretations: z.array(z.string()),
   replacementSuggestions: z.array(z.string()).optional(),
+  metricKind: AgentMetricKindSchema.optional(),
+  metricNature: AgentMetricNatureSchema.optional(),
+  forecastRole: AgentMetricForecastRoleSchema.optional(),
+  requiresAssumptions: z.boolean().optional(),
+  actualFinancialInterpretation: AgentMetricFinancialInterpretationSchema.optional(),
 });
 
 export type AgentMetricSupportLevel = z.infer<typeof AgentMetricSupportLevelSchema>;
+export type AgentMetricKind = z.infer<typeof AgentMetricKindSchema>;
+export type AgentMetricNature = z.infer<typeof AgentMetricNatureSchema>;
+export type AgentMetricForecastRole = z.infer<typeof AgentMetricForecastRoleSchema>;
+export type AgentMetricFinancialInterpretation = z.infer<typeof AgentMetricFinancialInterpretationSchema>;
 export type AgentMetricCategory = z.infer<typeof AgentMetricCategorySchema>;
 export type AgentMetricDefinition = z.infer<typeof AgentMetricDefinitionSchema>;

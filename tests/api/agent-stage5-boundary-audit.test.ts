@@ -33,15 +33,32 @@ describe('Agent Stage 5 boundary audit', () => {
     const serverRoutes = readSource('server/src/config/api-routes.ts');
     const frontendRoutes = readSource('src/shared/api/routes.ts');
     const combinedAgentBoundary = [explanationRuntimeSource, serverRoutes, frontendRoutes].join('\n');
+    const forecastRuntimeSource = readSource('server/src/agent/services/agent-profit-forecast-service.ts');
 
     expect(app).toContain("app.use('/api/agent/audit', agentAuditRoutes)");
     expect(app).toContain("app.use('/api/agent/diagnosis', agentDiagnosisRoutes)");
     expect(app).toContain("app.use('/api/agent/explain', queryLimiter);");
     expect(app).toContain("app.use('/api/agent/explain', agentExplainRoutes)");
+    expect(app).toContain("app.use('/api/agent/forecast', queryLimiter);");
+    expect(app).toContain("app.use('/api/agent/forecast', agentForecastRoutes)");
     expect(existingDiagnosisRuntimeSource).toContain('runBusinessPatrolTasks');
     expect(combinedAgentBoundary).toContain('AGENT_EXPLAIN_ROUTES');
     expect(combinedAgentBoundary).toContain('agent/explain/diagnosis');
+    expect(combinedAgentBoundary).toContain('AGENT_FORECAST_ROUTES');
+    expect(combinedAgentBoundary).toContain('agent/forecast/profit-scenario');
     expect(combinedAgentBoundary).not.toMatch(/duckdbService|\.query\(|generate[A-Za-z]+Query|rawSql|freeSql|nl2sql|generateSqlWithZhipu/i);
+    expect(forecastRuntimeSource).not.toMatch(/duckdb|rawSql|freeSql|nl2sql|SELECT |select /i);
+    expect(readinessSchema).toContain('readyForLlm: z.literal(false)');
+  });
+
+  it('keeps forecast as a deterministic capability instead of an LLM entrypoint', () => {
+    const capabilityRegistry = readSource('server/src/agent/registry/agent-data-capability-registry.ts');
+    const forecastService = readSource('server/src/agent/services/agent-profit-forecast-service.ts');
+    const readinessSchema = readSource('server/src/agent/schemas/agent-audit.schema.ts');
+
+    expect(capabilityRegistry).toContain('forecast_operating_profit_scenario');
+    expect(forecastService).not.toMatch(/openrouter|zhipu|createChatCompletion|chatCompletion|completion\.create/i);
+    expect(forecastService).not.toMatch(/duckdb|rawSql|freeSql|nl2sql/i);
     expect(readinessSchema).toContain('readyForLlm: z.literal(false)');
   });
 
