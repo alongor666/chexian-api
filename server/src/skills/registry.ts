@@ -14,6 +14,8 @@ import { costDiagnosisSkill } from './skills/cost-diagnosis.skill.js';
 import { claimsDrilldownSkill } from './skills/claims-drilldown.skill.js';
 import { segmentRiskScanSkill } from './skills/segment-risk-scan.skill.js';
 import { reportTemplateSkill } from './skills/report-template.skill.js';
+import { riskScoringSkill } from './skills/risk-scoring.skill.js';
+import { pricingSimulationSkill } from './skills/pricing-simulation.skill.js';
 
 const ALL_SKILLS: ReadonlyArray<Skill<any, any>> = [
   dataHealthSkill,
@@ -22,6 +24,8 @@ const ALL_SKILLS: ReadonlyArray<Skill<any, any>> = [
   claimsDrilldownSkill,
   segmentRiskScanSkill,
   reportTemplateSkill,
+  riskScoringSkill,
+  pricingSimulationSkill,
 ];
 
 const SKILL_MAP = new Map<string, Skill<any, any>>(ALL_SKILLS.map((s) => [s.id, s]));
@@ -47,6 +51,7 @@ export function listSkills(): ReadonlyArray<{
   version: string;
   description: string;
   deterministic: boolean;
+  requiresApproval: boolean;
   requiredPermissions?: string[];
 }> {
   return ALL_SKILLS.map((s) => ({
@@ -55,6 +60,7 @@ export function listSkills(): ReadonlyArray<{
     version: s.version,
     description: s.description,
     deterministic: s.deterministic,
+    requiresApproval: s.requiresApproval ?? false,
     requiredPermissions: s.requiredPermissions,
   }));
 }

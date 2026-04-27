@@ -18,8 +18,11 @@ vi.mock('../../services/duckdb.js', () => ({
 const { costDiagnosisSkill } = await import('../skills/cost-diagnosis.skill.js');
 const { claimsDrilldownSkill } = await import('../skills/claims-drilldown.skill.js');
 const { segmentRiskScanSkill } = await import('../skills/segment-risk-scan.skill.js');
+const { riskScoringSkill } = await import('../skills/risk-scoring.skill.js');
+const { pricingSimulationSkill } = await import('../skills/pricing-simulation.skill.js');
 const { autoRiskControlWorkflow } = await import('../workflows/auto-risk-control.workflow.js');
 const { listRedLineSkillIds, RED_LINE_WARNINGS } = await import('../red-line-policy.js');
+const { listSkills } = await import('../registry.js');
 
 describe('cost-diagnosis schema', () => {
   it('接受最小合法输入', () => {
@@ -141,6 +144,117 @@ describe('auto-risk-control workflow shape', () => {
     expect(node?.type).toBe('sequential');
     if (node?.type === 'sequential') {
       expect(node.onFailure).toBe('stop');
+    }
+  });
+});
+
+describe('risk-scoring schema', () => {
+  const minimalScan = {
+    dimensions: ['customer_category', 'org_level_3'],
+    cutoffDate: '2026-04-26',
+    baselineEarnedClaimRatio: 55,
+    totalSegments: 0,
+    segments: [],
+    topRiskSegments: [],
+    redCount: 0,
+    yellowCount: 0,
+    greenCount: 0,
+  };
+
+  it('接受最小合法输入：仅 scan', () => {
+    const out = riskScoringSkill.inputSchema.safeParse({ scan: minimalScan });
+    expect(out.success).toBe(true);
+    if (out.success) {
+      expect(out.data.weights.lossRatio).toBe(0.7);
+      expect(out.data.thresholds.stop).toBe(80);
+      expect(out.data.credibilityFloor).toBe(0.3);
+    }
+  });
+
+  it('拒绝 thresholds 非严格递减', () => {
+    const out = riskScoringSkill.inputSchema.safeParse({
+      scan: minimalScan,
+      thresholds: { stop: 50, raise: 60, monitor: 40 },
+    });
+    expect(out.success).toBe(false);
+  });
+
+  it('拒绝 weights 越界', () => {
+    const out = riskScoringSkill.inputSchema.safeParse({
+      scan: minimalScan,
+      weights: { lossRatio: 1.5, credibility: 0.1, concentration: 0.1 },
+    });
+    expect(out.success).toBe(false);
+  });
+});
+
+describe('pricing-simulation schema', () => {
+  const minimalScoring = {
+    cutoffDate: '2026-04-26',
+    totalScored: 0,
+    scoredSegments: [],
+    topActionRequired: [],
+    summary: {
+      stopCount: 0,
+      raiseCount: 0,
+      monitorCount: 0,
+      okCount: 0,
+      credibilityDowngradedCount: 0,
+    },
+    weights: { lossRatio: 0.7, credibility: 0.15, concentration: 0.15 },
+    thresholds: { stop: 80, raise: 60, monitor: 40 },
+  };
+
+  it('接受最小合法输入：仅 scoring', () => {
+    const out = pricingSimulationSkill.inputSchema.safeParse({ scoring: minimalScoring });
+    expect(out.success).toBe(true);
+    if (out.success) {
+      expect(out.data.rateDeltaByRecommendation.stop_underwriting).toBe(-1.0);
+      expect(out.data.rateDeltaByRecommendation.raise_rate).toBe(0.2);
+      expect(out.data.expectedClaimsRetention).toBe(1.0);
+    }
+  });
+
+  it('拒绝 rateDelta 越界（< -1 或 > 2）', () => {
+    expect(
+      pricingSimulationSkill.inputSchema.safeParse({
+        scoring: minimalScoring,
+        rateDeltaByRecommendation: {
+          stop_underwriting: -1.5,
+          raise_rate: 0.2,
+          monitor: 0.05,
+          ok: 0,
+        },
+      }).success,
+    ).toBe(false);
+
+    expect(
+      pricingSimulationSkill.inputSchema.safeParse({
+        scoring: minimalScoring,
+        rateDeltaByRecommendation: {
+          stop_underwriting: -1,
+          raise_rate: 3,
+          monitor: 0.05,
+          ok: 0,
+        },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('listSkills() 暴露 requiresApproval 元数据', () => {
+  it('阶段 4 PR-A 新增 skill 标记 requiresApproval=true', () => {
+    const skills = listSkills();
+    const riskScoring = skills.find((s) => s.id === 'risk-scoring');
+    const pricingSim = skills.find((s) => s.id === 'pricing-simulation');
+    expect(riskScoring?.requiresApproval).toBe(true);
+    expect(pricingSim?.requiresApproval).toBe(true);
+  });
+
+  it('阶段 1-3 既有 skill 默认 requiresApproval=false', () => {
+    const skills = listSkills();
+    for (const id of ['data-health', 'kpi-baseline', 'cost-diagnosis', 'claims-drilldown', 'segment-risk-scan', 'report-template']) {
+      expect(skills.find((s) => s.id === id)?.requiresApproval).toBe(false);
     }
   });
 });
