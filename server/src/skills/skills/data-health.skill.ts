@@ -9,13 +9,25 @@ import { z } from 'zod';
 import type { Skill } from '../types.js';
 import { PeriodSchema } from '../types.js';
 import { buildPeriodWhere, runSql, listLoadedRelations, relationExists } from '../adapters/query-adapter.js';
+import { FIELD_IDS } from '../../normalize/mapping.js';
+
+// 默认核心健康字段（必须是 FIELD_IDS 子集 → typecheck 阶段锁定）
+const CORE_HEALTH_FIELDS = [
+  'premium',
+  'reported_claims',
+  'policy_date',
+  'org_level_3',
+  'vehicle_model',
+  'plate_no',
+  'is_nev',
+] as const satisfies ReadonlyArray<(typeof FIELD_IDS)[number]>;
 
 const InputSchema = z.object({
   period: PeriodSchema,
-  /** 期望覆盖的字段（用于完整度检查），默认核心 7 字段 */
+  /** 期望覆盖的字段（用于完整度检查），默认核心 7 字段；白名单来自 field-registry */
   requiredFields: z
-    .array(z.string())
-    .default(['premium', 'reported_claims', 'policy_date', 'org_level_3', 'vehicle_model', 'plate_no', 'is_nev']),
+    .array(z.enum(FIELD_IDS))
+    .default([...CORE_HEALTH_FIELDS]),
   /** 期望覆盖的数据域（表名），默认 PolicyFact */
   requiredDomains: z.array(z.string()).default(['PolicyFact']),
 });

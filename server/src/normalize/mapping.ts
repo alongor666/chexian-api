@@ -331,3 +331,70 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   highway_risk_level: 'highway_risk_level',
   insurance_score: 'insurance_score',
 };
+
+/**
+ * 字段 ID 字面量数组（编译期 + 运行期双锁定）
+ *
+ * 用法：在 zod schema 中作为 enum 源，使任何引用未注册字段的 Skill / 配置在
+ * `bun run typecheck` 阶段就报错，无需等到运行时 Binder Error。
+ *
+ * 示例：
+ *   import { FIELD_IDS } from '../../normalize/mapping.js';
+ *   const schema = z.array(z.enum(FIELD_IDS));
+ */
+export const FIELD_IDS = [
+  'policy_no',
+  'premium',
+  'policy_date',
+  'insurance_start_date',
+  'salesman_name',
+  'org_level_3',
+  'customer_category',
+  'insurance_type',
+  'coverage_combination',
+  'is_renewal',
+  'is_renewable',
+  'is_new_car',
+  'is_transfer',
+  'is_nev',
+  'is_telemarketing',
+  'tonnage_segment',
+  'renewal_policy_no',
+  'is_commercial_insure',
+  'vehicle_model',
+  'new_vehicle_price',
+  'endorsement_no',
+  'endorsement_type',
+  'commercial_pricing_factor',
+  'terminal_source',
+  'vehicle_frame_no',
+  'is_quote',
+  'claim_cases',
+  'reported_claims',
+  'fee_amount',
+  'renewal_mode',
+  'insurance_grade',
+  'is_cross_sell',
+  'cross_sell_premium_driver',
+  'underwriting_date',
+  'third_party_coverage',
+  'driver_coverage',
+  'passenger_coverage',
+  'plate_no',
+  'seat_count',
+  'driver_age_group',
+  'first_registration_date',
+  'fuel_type',
+  'agent_name',
+  'customer_source',
+  'insurance_end_date',
+  'insured_gender',
+  'truck_type',
+  'tonnage_value',
+  'no_claim_bonus',
+  'compulsory_ncd',
+  'compulsory_ncd_factor',
+  'commercial_ncd',
+  'highway_risk_level',
+  'insurance_score',
+] as const satisfies ReadonlyArray<DomainField>;
