@@ -30,6 +30,9 @@ export const RED_LINE_WARNINGS: Readonly<Record<string, ReadonlyArray<string>>> 
   'underwriting-recommendation': [
     '本建议未经核保人工审核，禁止直接执行写入',
   ],
+  'attach-narrative': [
+    '叙述基于规则模型输出，未经业务字典确认，不构成决策建议',
+  ],
 } as const;
 
 /**

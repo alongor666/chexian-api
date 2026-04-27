@@ -15,6 +15,49 @@ import type { z, ZodTypeAny } from 'zod';
 import { getDataDir } from '../config/paths.js';
 import type { Skill, SkillContext, SkillResult } from './types.js';
 import { runSkill } from './runner.js';
+import { appendAuditEvent, type AuditEventType } from './audit-log.js';
+
+// ───────────────────────── Audit helpers ─────────────────────────
+
+/**
+ * 安全调用 audit-log。永远不阻塞主流程，错误吞掉。
+ *
+ * 调用点：workflow-started / step-completed / approval-requested /
+ *          approval-granted / workflow-completed
+ * （approval-denied 由 routes/workflows.ts 在 reject 路径调用）
+ */
+function emitAuditEvent(
+  eventType: AuditEventType,
+  runId: string,
+  workflowId: string,
+  ctx: SkillContext,
+  payload: Record<string, unknown>,
+): void {
+  // fire-and-forget；不 await，避免 latency 累积；audit-log 内部已 try/catch 吞错
+  void appendAuditEvent({
+    runId,
+    workflowId,
+    eventType,
+    userId: ctx.userId,
+    role: ctx.role,
+    requestId: ctx.requestId,
+    payload,
+  });
+}
+
+/** 节点级简要 payload，禁止包含原始数据 */
+function buildStepCompletedPayload(record: WorkflowStepRecord): Record<string, unknown> {
+  return {
+    nodeId: record.nodeId,
+    nodeType: record.nodeType,
+    skillId: record.skillId,
+    status: record.status,
+    runId: record.runId,
+    elapsedMs: record.elapsedMs,
+    error: record.error,
+    childCount: record.children?.length,
+  };
+}
 
 // ───────────────────────── Types ─────────────────────────
 
@@ -119,6 +162,7 @@ export interface WorkflowStepRecord {
 
 /**
  * 阶段 4 PR-B：审批状态。挂起时由 runner 写入；resume 后填充 approver 字段。
+ * 阶段 4 PR-C：扩展 reject 路径字段（rejectedBy / rejectedAt / rejectReason）
  */
 export interface WorkflowApprovalState {
   /** 当前挂起的 approval 节点 ID（与 nodes[pendingNodeIndex].id 一致） */
@@ -129,6 +173,10 @@ export interface WorkflowApprovalState {
   approverRoles: ReadonlyArray<string>;
   approvedBy?: string;
   approvedAt?: string;
+  /** 阶段 4 PR-C：拒绝审批 */
+  rejectedBy?: string;
+  rejectedAt?: string;
+  rejectReason?: string;
 }
 
 export interface WorkflowRunRecord {
@@ -288,6 +336,21 @@ interface ExecuteNodesParams {
   runId: string;
   /** 初始 status，resume 时通常是 'success'（前置已完成），可被本次失败下调 */
   initialStatus: WorkflowStatus;
+  /**
+   * 阶段 4 PR-C：narrative bucket。当 attach-narrative skill 执行成功时，
+   * runner 把 result.result.narrative 写入此引用，外层在落盘时合并到 record.report.narrative。
+   * 之所以用 ref 而不是 return value，是为了让 resume 与 fresh run 共用 executeNodes 入口
+   * 而不强行扩展 ExecuteNodesOutcome 形状。
+   */
+  narrativeRef?: { value: string | null };
+}
+
+/** attach-narrative skill 的最小输出形状（避免循环依赖） */
+function extractNarrativeFromResult(skillId: string, result: SkillResult | undefined): string | null {
+  if (skillId !== 'attach-narrative' || !result) return null;
+  const r = result.result as { narrative?: unknown } | undefined;
+  if (r && typeof r.narrative === 'string') return r.narrative;
+  return null;
 }
 
 async function executeNodes(params: ExecuteNodesParams): Promise<ExecuteNodesOutcome> {
@@ -303,6 +366,7 @@ async function executeNodes(params: ExecuteNodesParams): Promise<ExecuteNodesOut
     childResults,
     runId,
     initialStatus,
+    narrativeRef,
   } = params;
 
   let overallStatus: WorkflowStatus = initialStatus;
@@ -319,6 +383,20 @@ async function executeNodes(params: ExecuteNodesParams): Promise<ExecuteNodesOut
       elapsedMs: record.elapsedMs,
       error: record.error,
     });
+    emitAuditEvent('step-completed', runId, workflow.id, ctx, buildStepCompletedPayload(record));
+
+    // 阶段 4 PR-C：attach-narrative 节点完成后注入 narrative
+    if (
+      narrativeRef &&
+      record.status === 'success' &&
+      record.skillId === 'attach-narrative' &&
+      record.result
+    ) {
+      const text = extractNarrativeFromResult(record.skillId, record.result);
+      if (text !== null) {
+        narrativeRef.value = text;
+      }
+    }
   };
 
   for (let nodeIndex = startIndex; nodeIndex < workflow.nodes.length; nodeIndex++) {
@@ -512,6 +590,12 @@ async function executeNodes(params: ExecuteNodesParams): Promise<ExecuteNodesOut
         approverRoles: node.approverRoles,
       };
       overallStatus = 'pending_approval';
+      // 阶段 4 PR-C：approval 挂起 → audit 事件
+      emitAuditEvent('approval-requested', runId, workflow.id, ctx, {
+        nodeId: node.id,
+        nodeIndex,
+        approverRoles: node.approverRoles,
+      });
       break;
     }
   }
@@ -541,11 +625,16 @@ export async function runWorkflow<I extends ZodTypeAny>(
   const runInput: z.infer<I> = parsed.data;
 
   onStep?.({ type: 'workflow-started', runId, workflowId: workflow.id, nodeCount: workflow.nodes.length });
+  emitAuditEvent('workflow-started', runId, workflow.id, ctx, {
+    nodeCount: workflow.nodes.length,
+    workflowVersion: workflow.version,
+  });
 
   // 2) 顺序执行节点
   const stepRecords: WorkflowStepRecord[] = [];
   const results: Record<string, SkillResult | undefined> = {};
   const childResults: Record<string, SkillResult | undefined> = {};
+  const narrativeRef: { value: string | null } = { value: null };
 
   const outcome = await executeNodes({
     workflow,
@@ -559,6 +648,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
     childResults,
     runId,
     initialStatus: 'success',
+    narrativeRef,
   });
 
   const finishedAt = new Date();
@@ -575,7 +665,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
     elapsedMs: finishedAt.getTime() - startedAt.getTime(),
     input: runInput,
     steps: stepRecords,
-    report: { narrative: null },
+    report: { narrative: narrativeRef.value },
     approval: outcome.pendingApproval,
   };
 
@@ -583,6 +673,12 @@ export async function runWorkflow<I extends ZodTypeAny>(
     await saveWorkflowRun(record);
   }
   onStep?.({ type: 'workflow-completed', runId, status: outcome.status, elapsedMs: record.elapsedMs });
+  emitAuditEvent('workflow-completed', runId, workflow.id, ctx, {
+    status: outcome.status,
+    elapsedMs: record.elapsedMs,
+    stepCount: stepRecords.length,
+    hasNarrative: narrativeRef.value !== null,
+  });
   return { runId, record };
 }
 
@@ -636,15 +732,18 @@ function deriveInitialStatusFromHistory(
 }
 
 /**
- * 抢占 resume 互斥锁（codex P2）。
+ * 抢占 run-level 互斥锁（codex P2 / PR-C codex review P1）。
  *
  * 用 fs.open(lockPath, 'wx') —— POSIX `O_CREAT | O_EXCL`，文件已存在即抛 EEXIST，
- * 操作系统层面保证原子。两个并发 approve 请求只有一个能持锁；持锁失败抛
- * ApprovalError(409)，调用方知道有审批正在进行，避免下游 skill 被重复执行。
+ * 操作系统层面保证原子。同一 runId 上的并发 approve / reject 请求只有一个能持锁；
+ * 持锁失败抛 ApprovalError(409)，调用方知道有 approve/reject 正在进行，避免：
+ *   - 两个 approve 重复触发下游 skill
+ *   - approve 与 reject 并发导致状态覆盖（reject 返回成功但 approve 已落盘下游执行）
+ *   - 两个 reject 并发导致 audit 双写
  *
- * 锁文件内容写入 approver / pid，便于死锁排查；finally 中通过 unlinkLock 释放。
+ * 锁文件内容写入 holder / pid，便于死锁排查；finally 中通过 releaseRunLock 释放。
  */
-async function acquireResumeLock(runId: string, approver: string): Promise<string> {
+export async function acquireRunLock(runId: string, holder: string): Promise<string> {
   const lockPath = resolveLockPath(runId);
   if (!lockPath) {
     throw new ApprovalError(400, `Invalid runId: ${runId}`);
@@ -654,12 +753,15 @@ async function acquireResumeLock(runId: string, approver: string): Promise<strin
   try {
     handle = await fs.open(lockPath, 'wx');
     await handle.writeFile(
-      JSON.stringify({ approver, pid: process.pid, lockedAt: new Date().toISOString() }),
+      JSON.stringify({ holder, pid: process.pid, lockedAt: new Date().toISOString() }),
       'utf8',
     );
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-      throw new ApprovalError(409, `Workflow run ${runId} is being approved by another request`);
+      throw new ApprovalError(
+        409,
+        `Workflow run ${runId} is being processed by another approve/reject request`,
+      );
     }
     throw err;
   } finally {
@@ -670,7 +772,7 @@ async function acquireResumeLock(runId: string, approver: string): Promise<strin
   return lockPath;
 }
 
-async function releaseResumeLock(lockPath: string): Promise<void> {
+export async function releaseRunLock(lockPath: string): Promise<void> {
   try {
     await fs.unlink(lockPath);
   } catch (err) {
@@ -698,7 +800,7 @@ export async function resumeWorkflow(
   const persist = options.persist ?? true;
 
   // 1) 抢锁（原子）— 失败立即 409，避免后续 read 又被并发请求看到 pending_approval
-  const lockPath = await acquireResumeLock(runId, options.approver.username);
+  const lockPath = await acquireRunLock(runId, `approve:${options.approver.username}`);
 
   try {
     const prior = await getWorkflowRun(runId);
@@ -772,6 +874,13 @@ export async function resumeWorkflow(
       workflowId: workflow.id,
       nodeCount: workflow.nodes.length,
     });
+    emitAuditEvent('approval-granted', runId, workflow.id, ctx, {
+      nodeId: approval.pendingNodeId,
+      approvedBy: options.approver.username,
+      approverRole: options.approver.role,
+    });
+
+    const narrativeRef: { value: string | null } = { value: prior.report?.narrative ?? null };
 
     const outcome = await executeNodes({
       workflow,
@@ -785,6 +894,7 @@ export async function resumeWorkflow(
       childResults,
       runId,
       initialStatus,
+      narrativeRef,
     });
 
     const finishedAt = new Date();
@@ -794,6 +904,7 @@ export async function resumeWorkflow(
       finishedAt: finishedAt.toISOString(),
       elapsedMs: finishedAt.getTime() - new Date(prior.startedAt).getTime(),
       steps: stepRecords,
+      report: { narrative: narrativeRef.value },
       approval: outcome.pendingApproval ?? {
         ...approval,
         approvedBy: options.approver.username,
@@ -810,9 +921,15 @@ export async function resumeWorkflow(
       status: outcome.status,
       elapsedMs: record.elapsedMs,
     });
+    emitAuditEvent('workflow-completed', runId, workflow.id, ctx, {
+      status: outcome.status,
+      elapsedMs: record.elapsedMs,
+      stepCount: stepRecords.length,
+      hasNarrative: narrativeRef.value !== null,
+    });
     return { record };
   } finally {
-    await releaseResumeLock(lockPath);
+    await releaseRunLock(lockPath);
   }
 }
 

@@ -16,6 +16,7 @@ import { segmentRiskScanSkill } from './skills/segment-risk-scan.skill.js';
 import { reportTemplateSkill } from './skills/report-template.skill.js';
 import { riskScoringSkill } from './skills/risk-scoring.skill.js';
 import { pricingSimulationSkill } from './skills/pricing-simulation.skill.js';
+import { attachNarrativeSkill } from './skills/attach-narrative.skill.js';
 
 const ALL_SKILLS: ReadonlyArray<Skill<any, any>> = [
   dataHealthSkill,
@@ -26,6 +27,7 @@ const ALL_SKILLS: ReadonlyArray<Skill<any, any>> = [
   reportTemplateSkill,
   riskScoringSkill,
   pricingSimulationSkill,
+  attachNarrativeSkill,
 ];
 
 const SKILL_MAP = new Map<string, Skill<any, any>>(ALL_SKILLS.map((s) => [s.id, s]));

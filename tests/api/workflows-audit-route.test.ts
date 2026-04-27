@@ -1,11 +1,12 @@
 /**
- * /api/workflows/runs/:runId/approve HTTP 集成测试 — 阶段 4 PR-B
+ * /api/workflows/runs/:runId/audit + /reject HTTP 集成测试 — 阶段 4 PR-C
  *
- * 用真实 express + JWT 启动一个最小 server，验证：
- *   - 未鉴权 → 401
- *   - 角色不在 approverRoles → 403
- *   - 正确 admin 角色 → 200，下游 skill 被调用，最终 status='success'
- *   - 不存在的 runId → 404
+ * 验证：
+ *  - GET /audit 未鉴权 → 401
+ *  - GET /audit 跨用户访问 → 403
+ *  - GET /audit 自己的 run → 200，事件序列含 workflow-started + step-completed + approval-requested
+ *  - POST /reject 错误角色 → 403
+ *  - POST /reject 正确 admin → 200，record.status='failed'，audit 含 approval-denied
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -37,35 +38,29 @@ const createdRunIds: string[] = [];
 
 afterAll(async () => {
   const { getDataDir } = await import('../../server/src/config/paths.js');
-  const dir = path.resolve(getDataDir(), 'runtime/workflow-runs');
+  const runDir = path.resolve(getDataDir(), 'runtime/workflow-runs');
   for (const id of createdRunIds) {
     for (const ext of ['.json', '.lock']) {
       try {
-        await fs.unlink(path.join(dir, `${id}${ext}`));
+        await fs.unlink(path.join(runDir, `${id}${ext}`));
       } catch {
         // ignore
       }
     }
   }
+  // 不删 audit 文件 — 同日其他测试可能仍在用；audit-log.test.ts 的 _resetAuditLogForDate 会清
 });
 
-/**
- * 在 SkillRegistry / WorkflowRegistry 内部注入一个最小的 mock workflow，
- * 不触碰真实 skill 域（避免冷启动 DuckDB）。
- *
- * 策略：mock 整个 'workflows/index' 与 'registry'，只暴露我们的测试 workflow + skill。
- */
-const TEST_WORKFLOW_ID = 'wf-approve-route-test';
+const TEST_WORKFLOW_ID = 'wf-audit-route-test';
 
 async function buildTestApp() {
-  // 关键：vi.doMock 必须在动态 import 之前
   vi.doMock('../../server/src/skills/workflows/index.js', async () => {
     const { z: zod } = await import('zod');
     const wf = {
       id: TEST_WORKFLOW_ID,
-      name: 'wf-approve-route-test',
+      name: 'wf-audit-route-test',
       version: '1.0.0',
-      description: 'http approve route test',
+      description: 'http audit route test',
       inputSchema: zod.object({ x: zod.number().default(0) }),
       nodes: [
         { id: 'pre', type: 'sequential', skillId: 'pre' },
@@ -127,7 +122,6 @@ async function buildTestApp() {
     };
   });
 
-  // permission middleware 也需要 mock 成放行（不依赖真实 access-control / parquet）
   vi.doMock('../../server/src/middleware/permission.js', () => ({
     permissionMiddleware: (req: any, _res: any, next: any) => {
       req.permissionFilter = '1=1';
@@ -151,7 +145,7 @@ async function buildTestApp() {
   return { app, jwt, authConfig };
 }
 
-describe('POST /api/workflows/runs/:runId/approve', () => {
+describe('GET /api/workflows/runs/:runId/audit + POST /reject', () => {
   let server: Server;
   let endpointBase: string;
   let jwt: any;
@@ -171,8 +165,7 @@ describe('POST /api/workflows/runs/:runId/approve', () => {
     await closeServer(server);
   });
 
-  async function createPendingRun(): Promise<string> {
-    // 直接调 runWorkflow 把 mock workflow 跑到 pending_approval，不走 HTTP
+  async function createPendingRun(username = 'analyst1', role = 'analyst'): Promise<string> {
     const { runWorkflow } = await import('../../server/src/skills/workflow-runner.js');
     const { getWorkflow } = await import('../../server/src/skills/workflows/index.js');
     const { getSkill } = await import('../../server/src/skills/registry.js');
@@ -181,9 +174,9 @@ describe('POST /api/workflows/runs/:runId/approve', () => {
     if (!wf) throw new Error('test workflow not registered');
 
     const ctx = {
-      userId: 'analyst1',
-      username: 'analyst1',
-      role: 'analyst',
+      userId: username,
+      username,
+      role,
       permissionFilter: '1=1',
       requestId: 'r-test',
       startedAt: Date.now(),
@@ -199,92 +192,141 @@ describe('POST /api/workflows/runs/:runId/approve', () => {
     return runId;
   }
 
-  it('未鉴权 → 401', async () => {
+  it('GET /audit — 未鉴权 → 401', async () => {
     const runId = await createPendingRun();
-    const response = await fetch(`${endpointBase}/api/workflows/runs/${runId}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-    expect(response.status).toBe(401);
+    const r = await fetch(`${endpointBase}/api/workflows/runs/${runId}/audit`);
+    expect(r.status).toBe(401);
   });
 
-  it('错误角色（非 branch_admin）→ 403，下游不被调用，记录仍 pending_approval', async () => {
-    const runId = await createPendingRun();
+  it('GET /audit — 跨用户访问 → 403', async () => {
+    const runId = await createPendingRun('analyst1', 'analyst');
+    const otherToken = jwt.sign(
+      { userId: 'analyst2', username: 'analyst2', role: 'analyst' },
+      authConfig.jwtSecret,
+    );
+    const r = await fetch(`${endpointBase}/api/workflows/runs/${runId}/audit`, {
+      headers: { Authorization: `Bearer ${otherToken}` },
+    });
+    expect(r.status).toBe(403);
+  });
 
+  it('GET /audit — 自己的 run → 200，含 workflow-started + step-completed + approval-requested', async () => {
+    const runId = await createPendingRun('analyst1', 'analyst');
+    // 给 fire-and-forget 一点时间
+    await new Promise((r) => setTimeout(r, 80));
+
+    const token = jwt.sign(
+      { userId: 'analyst1', username: 'analyst1', role: 'analyst' },
+      authConfig.jwtSecret,
+    );
+    const r = await fetch(`${endpointBase}/api/workflows/runs/${runId}/audit`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { success: boolean; data: Array<{ eventType: string }> };
+    expect(body.success).toBe(true);
+    const types = body.data.map((e) => e.eventType);
+    expect(types).toEqual(
+      expect.arrayContaining(['workflow-started', 'step-completed', 'approval-requested']),
+    );
+  });
+
+  it('POST /reject — 错误角色 → 403，记录仍是 pending_approval', async () => {
+    const runId = await createPendingRun('analyst1', 'analyst');
     const analystToken = jwt.sign(
       { userId: 'analyst1', username: 'analyst1', role: 'analyst' },
       authConfig.jwtSecret,
     );
-    const response = await fetch(`${endpointBase}/api/workflows/runs/${runId}/approve`, {
+    const r = await fetch(`${endpointBase}/api/workflows/runs/${runId}/reject`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${analystToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ reason: 'test' }),
     });
-    expect(response.status).toBe(403);
+    expect(r.status).toBe(403);
 
-    // 记录仍是 pending_approval
     const { getWorkflowRun } = await import('../../server/src/skills/workflow-runner.js');
     const reread = await getWorkflowRun(runId);
     expect(reread?.status).toBe('pending_approval');
   });
 
-  it('正确 admin 角色 → 200，状态变为 success，audit 字段写入', async () => {
-    const runId = await createPendingRun();
-
+  it('POST /reject — admin → 200，status=failed，approval.rejectedBy 写入', async () => {
+    const runId = await createPendingRun('analyst1', 'analyst');
     const adminToken = jwt.sign(
       { userId: 'admin', username: 'admin', role: 'branch_admin' },
       authConfig.jwtSecret,
     );
-    const response = await fetch(`${endpointBase}/api/workflows/runs/${runId}/approve`, {
+    const r = await fetch(`${endpointBase}/api/workflows/runs/${runId}/reject`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ reason: '风险评估不足' }),
     });
-    expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as {
       success: boolean;
-      data: { status: string; approval?: { approvedBy?: string }; steps: Array<{ nodeId: string; status: string }> };
+      data: { status: string; approval?: { rejectedBy?: string; rejectReason?: string } };
     };
-    expect(payload.success).toBe(true);
-    expect(payload.data.status).toBe('success');
-    expect(payload.data.approval?.approvedBy).toBe('admin');
-    // post 步骤实际执行
-    const postStep = payload.data.steps.find((s) => s.nodeId === 'post');
-    expect(postStep?.status).toBe('success');
+    expect(body.success).toBe(true);
+    expect(body.data.status).toBe('failed');
+    expect(body.data.approval?.rejectedBy).toBe('admin');
+    expect(body.data.approval?.rejectReason).toBe('风险评估不足');
+
+    // audit log 应含 approval-denied 事件
+    await new Promise((r) => setTimeout(r, 80));
+    const auditR = await fetch(`${endpointBase}/api/workflows/runs/${runId}/audit`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(auditR.status).toBe(200);
+    const audit = (await auditR.json()) as { data: Array<{ eventType: string }> };
+    expect(audit.data.map((e) => e.eventType)).toContain('approval-denied');
   });
 
-  it('不存在的 runId → 404', async () => {
+  it('POST /reject — approve 与 reject 并发 → 仅一个成功，另一个 409（codex P1 互斥锁）', async () => {
+    const runId = await createPendingRun('analyst1', 'analyst');
     const adminToken = jwt.sign(
       { userId: 'admin', username: 'admin', role: 'branch_admin' },
       authConfig.jwtSecret,
     );
-    const response = await fetch(
-      `${endpointBase}/api/workflows/runs/wr_20260101000000_unknown_deadbeef/approve`,
-      {
+    const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
+
+    // 并发发起 approve + reject
+    const [a, r] = await Promise.all([
+      fetch(`${endpointBase}/api/workflows/runs/${runId}/approve`, { method: 'POST', headers, body: '{}' }),
+      fetch(`${endpointBase}/api/workflows/runs/${runId}/reject`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      },
-    );
-    expect(response.status).toBe(404);
+        headers,
+        body: JSON.stringify({ reason: 'concurrent test' }),
+      }),
+    ]);
+
+    // 一个 200 一个 409（哪个先持锁取决于事件循环顺序）
+    const statuses = [a.status, r.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    // 终态确定（要么 success/failed，不可能两者都生效）
+    const { getWorkflowRun } = await import('../../server/src/skills/workflow-runner.js');
+    const final = await getWorkflowRun(runId);
+    expect(['success', 'failed']).toContain(final?.status);
+    // 互斥：approval 状态字段不会同时含 approvedBy 与 rejectedBy
+    const approval = final?.approval;
+    const hasApproved = !!approval?.approvedBy;
+    const hasRejected = !!approval?.rejectedBy;
+    expect(hasApproved && hasRejected).toBe(false);
+    expect(hasApproved || hasRejected).toBe(true);
   });
 
-  it('已 success 的 run 再次 approve → 409', async () => {
-    const runId = await createPendingRun();
+  it('POST /reject — 已 failed 的 run 再次 reject → 409', async () => {
+    const runId = await createPendingRun('analyst1', 'analyst');
     const adminToken = jwt.sign(
       { userId: 'admin', username: 'admin', role: 'branch_admin' },
       authConfig.jwtSecret,
     );
-    // 第一次 approve → 200
-    const first = await fetch(`${endpointBase}/api/workflows/runs/${runId}/approve`, {
+    const first = await fetch(`${endpointBase}/api/workflows/runs/${runId}/reject`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
     expect(first.status).toBe(200);
-    // 第二次 → 409 conflict
-    const second = await fetch(`${endpointBase}/api/workflows/runs/${runId}/approve`, {
+    const second = await fetch(`${endpointBase}/api/workflows/runs/${runId}/reject`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -293,5 +335,4 @@ describe('POST /api/workflows/runs/:runId/approve', () => {
   });
 });
 
-// 让 vitest 知道这个测试不依赖运行时环境（避免 transformer 把 InputSchema 标为 dead code）
 export { InputSchema, ResultSchema };
