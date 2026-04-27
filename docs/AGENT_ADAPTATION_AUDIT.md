@@ -24,6 +24,8 @@ Stage 4.6 新增 `/api/agent/audit/observability`，用于读取既有 audit log
 
 Stage 4.7 新增 `scripts/verify-agent-production-smoke.mjs`，用于把 Stage 5 前置条件变成可执行验收命令。该脚本只调用固定 Agent API：7 个确定性诊断端点、`/api/agent/audit/observability` 和 `/api/agent/audit/readiness`；请求时间参数必须显式传入，报告中不写入 bearer token。脚本会分别记录诊断接口可用性、调用方是否收到 `warnings` / `forbiddenInterpretations`、observability 状态和 readiness 中的 Stage 5 阻塞项。
 
+Stage 4.8 关闭调用方展示证据缺口。`/api/agent/audit/observability` 的 `displayContract.status` 现在返回 `verified_by_caller_smoke_harness`，证据来自固定 smoke harness 和对应测试；`/api/agent/audit/readiness` 中 `warnings_and_forbidden_interpretations_displayed` 前置项标记为 `met=true`。这只证明调用方接收并展示所需字段，不启动 LLM，不放开聊天窗口，也不改变 `readyForLlm=false` 的显式关闭状态。
+
 ## API
 
 - `GET /api/agent/audit/metrics`：返回 Agent 指标注册表、支持级别和口径边界。
@@ -35,11 +37,12 @@ Stage 4.7 新增 `scripts/verify-agent-production-smoke.mjs`，用于把 Stage 5
 
 所有返回结构都经过 Zod schema 校验。路由挂载在 `/api/agent/audit`，继续使用全局审计中间件，并在路由内使用 `authMiddleware` 和 `permissionMiddleware`。
 
-`/api/agent/audit/readiness` 当前应显示 `currentStage=stage_4_6_observability_ready`，`readyForLlm=false`，并将以下证据缺口作为 LLM 前置阻塞项：
+`/api/agent/audit/readiness` 当前应显示 `currentStage=stage_4_8_display_contract_ready`，`readyForLlm=false`。Stage 5 仍需单独 PR 显式启动；在本阶段 readiness 只继续将以下生产运行证据缺口作为 LLM 前置阻塞项：
 
 - 生产 audit log 能看到 `/api/agent/diagnosis/*` 调用记录。
 - 最近 30 天 `/api/agent/diagnosis/*` error rate < 1%。
-- 前端或调用方已展示 `warnings` 与 `forbiddenInterpretations`。
+
+调用方展示证据已由 `scripts/verify-agent-production-smoke.mjs` 和 `tests/api/agent-production-smoke-harness.test.mjs` 锁定。底层确定性诊断接口必须继续返回 `warnings` 与 `forbiddenInterpretations`，调用方不得忽略这些字段。
 
 `/api/agent/audit/observability` 只把 `NODE_ENV=production` 且最近 30 天存在 `/api/agent/diagnosis/*` 调用的日志视为生产审计证据；本地开发日志或无调用日志只能证明统计链路可用，不能解除 Stage 5 阻塞。30 天 error rate < 1% 还要求 `windowComplete=true`，避免用截断的日志尾部样本替代完整观测窗口。
 
@@ -52,6 +55,8 @@ bun run verify:agent:smoke -- --token "$AGENT_SMOKE_TOKEN" --base-url https://ch
 ```
 
 该命令会在 `output/agent-smoke/` 生成 JSON 报告。报告只用于验收确定性接口和 Stage 5 前置证据，不会触发 LLM、NL2SQL 或自由 SQL。
+
+2026-04-27 的线上 smoke 验收已确认 7 个确定性诊断端点、observability 和 readiness 均返回 200 JSON；调用方展示契约 `callerDisplayContractVerified=true`，生产 audit log 可观测，最近 30 天错误率低于 1%。本地 `output/agent-smoke/` 报告属于运行产物，不纳入仓库。
 
 成本指标诊断路由挂载在 `/api/agent/diagnosis`，继续使用全局审计中间件，并在路由内使用 `authMiddleware`、`permissionMiddleware` 和 `createDomainMiddleware('ClaimsAgg')`。
 

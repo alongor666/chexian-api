@@ -30,6 +30,8 @@ describe('agent observability audit route contract', () => {
     const route = readSource('server/src/agent/routes/agent-audit.ts');
 
     expect(schema).toContain('AgentObservabilityAuditSchema');
+    expect(schema).toContain('verified_by_caller_smoke_harness');
+    expect(schema).toContain('stage_4_8_display_contract_ready');
     expect(route).toContain('SuccessResponseSchema(AgentObservabilityAuditSchema).parse');
   });
 

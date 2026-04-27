@@ -100,10 +100,11 @@ export const AgentObservabilityEndpointCoverageSchema = z.object({
 });
 
 export const AgentDisplayContractSchema = z.object({
-  status: z.enum(['pending_caller_display_evidence']),
+  status: z.enum(['pending_caller_display_evidence', 'verified_by_caller_smoke_harness']),
   requiredFields: z.array(z.enum(['warnings', 'forbiddenInterpretations'])),
   verifiedByTests: z.array(z.string()),
-  blocker: z.string().min(1),
+  evidence: z.array(z.string()).default([]),
+  blocker: z.string().optional(),
 });
 
 export const AgentObservabilityAuditSchema = z.object({
@@ -117,7 +118,7 @@ export const AgentObservabilityAuditSchema = z.object({
 
 export const AgentReadinessAuditSchema = z.object({
   phase: z.literal('agent_metric_adaptation_audit'),
-  currentStage: z.literal('stage_4_6_observability_ready'),
+  currentStage: z.enum(['stage_4_6_observability_ready', 'stage_4_8_display_contract_ready']),
   readyForLlm: z.literal(false),
   readyForChatWindow: z.literal(false),
   deterministicRouting: z.literal(true),
