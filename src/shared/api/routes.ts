@@ -221,3 +221,18 @@ export const COPILOT_ROUTES = {
   RUN_STREAM: 'copilot/runs/:runId/stream',
   RUN_REPORT: 'copilot/runs/:runId/report',
 } as const;
+
+// ─────────────────────────────────────────────
+// /api/workflows/* 路由（阶段 4 PR-B/C/D）
+// 与 server/src/config/api-routes.ts WORKFLOWS_ROUTES 镜像，
+// 这里追加 'workflows/' 前缀以便前端 fetch 直接拼接 API_BASE。
+// ─────────────────────────────────────────────
+export const WORKFLOWS_ROUTES = {
+  LIST: 'workflows',
+  RUN: 'workflows/:id/run',
+  RUNS_LIST: 'workflows/runs',
+  RUN_BY_ID: 'workflows/runs/:runId',
+  RUN_APPROVE: 'workflows/runs/:runId/approve',
+  RUN_REJECT: 'workflows/runs/:runId/reject',
+  RUN_AUDIT: 'workflows/runs/:runId/audit',
+} as const;
