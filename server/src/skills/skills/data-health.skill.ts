@@ -15,7 +15,7 @@ const InputSchema = z.object({
   /** 期望覆盖的字段（用于完整度检查），默认核心 7 字段 */
   requiredFields: z
     .array(z.string())
-    .default(['premium', 'reported_claims', 'policy_date', 'org_level_3', 'vehicle_type', 'plate_region', 'is_nev']),
+    .default(['premium', 'reported_claims', 'policy_date', 'org_level_3', 'vehicle_model', 'plate_no', 'is_nev']),
   /** 期望覆盖的数据域（表名），默认 PolicyFact */
   requiredDomains: z.array(z.string()).default(['PolicyFact']),
 });
