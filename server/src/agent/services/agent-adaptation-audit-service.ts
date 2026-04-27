@@ -15,7 +15,8 @@ import {
 } from '../schemas/agent-audit.schema.js';
 import type { AgentMetricSupportLevel } from '../schemas/agent-metric.schema.js';
 import { AUDITED_PATHS, getAuditLogPath } from '../../middleware/audit.js';
-import { open, readFile, stat } from 'fs/promises';
+import { open, readdir, readFile, stat } from 'fs/promises';
+import path from 'path';
 
 function summarizeBySupportLevel<T extends { supportLevel: AgentMetricSupportLevel }>(
   items: readonly T[]
@@ -184,17 +185,8 @@ const stageReadiness: AgentReadinessStage[] = [
     ],
     blockers: [],
   },
-  {
-    id: 'stage_4_8_caller_display_evidence',
-    name: '调用方展示证据闭环',
-    status: 'completed',
-    evidence: [
-      'scripts/verify-agent-production-smoke.mjs',
-      'tests/api/agent-production-smoke-harness.test.mjs',
-      '调用方 smoke harness 会校验每个诊断响应都包含 warnings 与 forbiddenInterpretations。',
-    ],
-    blockers: [],
-  },
+  // stage_4_8_caller_display_evidence 由 buildStageReadiness() 动态注入：
+  // 必须由真实 smoke 报告派生，不能像 PR 之前那样硬编码 status='completed'。
   {
     id: 'stage_5_llm_interpretation',
     name: 'LLM 解释层',
@@ -235,9 +227,18 @@ export interface AgentObservabilityAuditOptions {
   nodeEnv?: string;
   windowDays?: number;
   maxReadBytes?: number;
+  /** 调用方 smoke harness 报告目录（默认 output/agent-smoke）。测试可注入临时目录。 */
+  smokeReportDir?: string;
+  /** smoke 报告最大有效期（天，默认 30）。超期视为缺失证据。 */
+  smokeReportMaxAgeDays?: number;
+  /** smoke 报告单文件最大读取字节数（默认 1MB），防御异常大的 JSON */
+  smokeReportMaxBytes?: number;
 }
 
 const DEFAULT_AUDIT_LOG_MAX_READ_BYTES = 5 * 1024 * 1024;
+const DEFAULT_SMOKE_REPORT_DIR = 'output/agent-smoke';
+const DEFAULT_SMOKE_REPORT_MAX_AGE_DAYS = 30;
+const DEFAULT_SMOKE_REPORT_MAX_BYTES = 1 * 1024 * 1024;
 
 function parseTimestamp(value: unknown): Date | null {
   if (typeof value !== 'string') return null;
@@ -270,6 +271,136 @@ function roundRate(value: number): number {
 
 function isMissingFileError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'ENOENT';
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Caller display smoke report evidence
+//
+// 实现原则（codex P1 修复）：displayContract.status 必须从真实 smoke
+// 报告派生，而不是硬编码。getAgentObservabilityAudit 在每次调用时扫描
+// output/agent-smoke/ 目录中最新的报告，校验 evaluation.ok === true 且
+// summary.callerDisplayContractVerified === true 且 startedAt 落在窗口内，
+// 才允许将 status 标记为 verified_by_caller_smoke_harness。
+// ─────────────────────────────────────────────────────────────────────
+
+interface SmokeReportEvidence {
+  reportPath: string;
+  startedAt: string;
+  ageMs: number;
+  ok: boolean;
+  callerDisplayContractVerified: boolean;
+  /** 当 ok 或 callerDisplayContractVerified 为 false 时的具体原因 */
+  failureReason?: string;
+}
+
+interface SmokeReportLookupResult {
+  /** 最新的有效证据；不存在或过期则为 null */
+  latest: SmokeReportEvidence | null;
+  /** 扫描过的合法 JSON 报告数（含失败、过期） */
+  reportsScanned: number;
+  /** 扫描过的最新的「不合格」报告（用于诊断 blocker） */
+  latestStaleOrFailed: SmokeReportEvidence | null;
+}
+
+async function readLatestSmokeReport(
+  smokeReportDir: string,
+  now: Date,
+  maxAgeDays: number,
+  maxBytes: number,
+): Promise<SmokeReportLookupResult> {
+  const empty: SmokeReportLookupResult = { latest: null, reportsScanned: 0, latestStaleOrFailed: null };
+  const maxAgeMs = Math.max(0, maxAgeDays) * 24 * 60 * 60 * 1000;
+
+  let entries: string[];
+  try {
+    entries = await readdir(smokeReportDir);
+  } catch (error) {
+    if (isMissingFileError(error)) return empty;
+    throw error;
+  }
+
+  const candidates = entries.filter((f) => f.endsWith('.json'));
+  if (candidates.length === 0) return empty;
+
+  let latestValid: SmokeReportEvidence | null = null;
+  let latestStaleOrFailed: SmokeReportEvidence | null = null;
+  let scanned = 0;
+
+  for (const file of candidates) {
+    const fullPath = path.resolve(smokeReportDir, file);
+
+    let fileStat;
+    try {
+      fileStat = await stat(fullPath);
+    } catch (err) {
+      if (isMissingFileError(err)) continue;
+      throw err;
+    }
+    if (!fileStat.isFile()) continue;
+    if (fileStat.size > maxBytes) continue;
+
+    let raw: string;
+    try {
+      raw = await readFile(fullPath, 'utf-8');
+    } catch (err) {
+      if (isMissingFileError(err)) continue;
+      throw err;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+    const report = parsed as Record<string, unknown>;
+    if (report.phase !== 'agent_production_smoke_harness') continue;
+
+    const startedAt = parseTimestamp(report.startedAt);
+    if (!startedAt) continue;
+
+    const evaluation = report.evaluation && typeof report.evaluation === 'object' && !Array.isArray(report.evaluation)
+      ? (report.evaluation as Record<string, unknown>)
+      : null;
+    if (!evaluation) continue;
+
+    const summary = evaluation.summary && typeof evaluation.summary === 'object' && !Array.isArray(evaluation.summary)
+      ? (evaluation.summary as Record<string, unknown>)
+      : null;
+
+    const ok = evaluation.ok === true;
+    const callerDisplayContractVerified = summary?.callerDisplayContractVerified === true;
+    const ageMs = now.getTime() - startedAt.getTime();
+    const expired = ageMs > maxAgeMs;
+
+    let failureReason: string | undefined;
+    if (!ok) failureReason = 'evaluation.ok=false';
+    else if (!callerDisplayContractVerified) failureReason = 'summary.callerDisplayContractVerified=false';
+    else if (expired) failureReason = `report age ${Math.floor(ageMs / (24 * 60 * 60 * 1000))}d > ${maxAgeDays}d`;
+
+    const evidence: SmokeReportEvidence = {
+      reportPath: fullPath,
+      startedAt: startedAt.toISOString(),
+      ageMs,
+      ok,
+      callerDisplayContractVerified,
+      failureReason,
+    };
+    scanned += 1;
+
+    if (failureReason === undefined) {
+      if (!latestValid || startedAt.getTime() > new Date(latestValid.startedAt).getTime()) {
+        latestValid = evidence;
+      }
+    } else {
+      if (!latestStaleOrFailed || startedAt.getTime() > new Date(latestStaleOrFailed.startedAt).getTime()) {
+        latestStaleOrFailed = evidence;
+      }
+    }
+  }
+
+  return { latest: latestValid, reportsScanned: scanned, latestStaleOrFailed };
 }
 
 interface AuditLogTailReadResult {
@@ -331,6 +462,80 @@ async function readAuditLogTail(auditLogPath: string, maxReadBytes: number): Pro
   }
 }
 
+function buildDisplayContract(
+  smokeLookup: SmokeReportLookupResult,
+  smokeReportDir: string,
+  smokeReportMaxAgeDays: number,
+): {
+  status: 'pending_caller_display_evidence' | 'verified_by_caller_smoke_harness';
+  requiredFields: ['warnings', 'forbiddenInterpretations'];
+  verifiedByTests: string[];
+  evidence: string[];
+  blocker?: string;
+} {
+  if (smokeLookup.latest) {
+    return {
+      status: 'verified_by_caller_smoke_harness',
+      requiredFields: ['warnings', 'forbiddenInterpretations'],
+      verifiedByTests: [...displayContractTests],
+      evidence: [
+        ...callerDisplayEvidence,
+        `latest smoke report: ${smokeLookup.latest.reportPath}`,
+        `startedAt=${smokeLookup.latest.startedAt}`,
+        `evaluation.ok=true`,
+        `summary.callerDisplayContractVerified=true`,
+      ],
+    };
+  }
+
+  let blocker: string;
+  if (smokeLookup.latestStaleOrFailed) {
+    const failed = smokeLookup.latestStaleOrFailed;
+    blocker =
+      `最近一份 smoke 报告未通过校验：${failed.reportPath}（${failed.failureReason ?? 'unknown'}）。` +
+      `请重新运行 scripts/verify-agent-production-smoke.mjs 并产出新报告。`;
+  } else if (smokeLookup.reportsScanned > 0) {
+    blocker =
+      `${smokeReportDir} 中存在 ${smokeLookup.reportsScanned} 份报告但均不合规（缺失 phase 或 evaluation 字段）。`;
+  } else {
+    blocker =
+      `缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据；` +
+      `${smokeReportDir} 中未发现 ${smokeReportMaxAgeDays} 天内的有效 smoke 报告。` +
+      `请运行 scripts/verify-agent-production-smoke.mjs --token <jwt> 生成。`;
+  }
+
+  return {
+    status: 'pending_caller_display_evidence',
+    requiredFields: ['warnings', 'forbiddenInterpretations'],
+    verifiedByTests: [...displayContractTests],
+    evidence: [...callerDisplayEvidence],
+    blocker,
+  };
+}
+
+function buildStage4_8Stage(observability: AgentObservabilityAudit): AgentReadinessStage {
+  const verified = observability.displayContract.status === 'verified_by_caller_smoke_harness';
+  return {
+    id: 'stage_4_8_caller_display_evidence',
+    name: '调用方展示证据闭环',
+    status: verified ? 'completed' : 'blocked',
+    evidence: verified
+      ? [
+          'scripts/verify-agent-production-smoke.mjs',
+          'tests/api/agent-production-smoke-harness.test.mjs',
+          ...observability.displayContract.evidence.filter((e) => e.startsWith('latest smoke report:') || e.startsWith('startedAt=')),
+          '调用方 smoke harness 校验每个诊断响应都包含 warnings 与 forbiddenInterpretations。',
+        ]
+      : [
+          'scripts/verify-agent-production-smoke.mjs',
+          'tests/api/agent-production-smoke-harness.test.mjs',
+        ],
+    blockers: verified
+      ? []
+      : [observability.displayContract.blocker ?? '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。'],
+  };
+}
+
 function buildStage5Evidence(observability: AgentObservabilityAudit): AgentReadinessPrerequisite[] {
   const productionAuditObserved = observability.auditLog.productionEvidence;
   const errorRateUnderThreshold =
@@ -390,7 +595,8 @@ function buildStage5Evidence(observability: AgentObservabilityAudit): AgentReadi
       ],
       blocker: callerDisplayVerified
         ? undefined
-        : '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
+        : observability.displayContract.blocker
+          ?? '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
     },
   ];
 }
@@ -401,8 +607,14 @@ export async function getAgentObservabilityAudit(options: AgentObservabilityAudi
   const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV ?? 'development';
   const windowDays = options.windowDays ?? 30;
   const maxReadBytes = options.maxReadBytes ?? DEFAULT_AUDIT_LOG_MAX_READ_BYTES;
+  const smokeReportDir = options.smokeReportDir ?? DEFAULT_SMOKE_REPORT_DIR;
+  const smokeReportMaxAgeDays = options.smokeReportMaxAgeDays ?? DEFAULT_SMOKE_REPORT_MAX_AGE_DAYS;
+  const smokeReportMaxBytes = options.smokeReportMaxBytes ?? DEFAULT_SMOKE_REPORT_MAX_BYTES;
   const sinceMs = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
-  const auditLogTail = await readAuditLogTail(auditLogPath, maxReadBytes);
+  const [auditLogTail, smokeLookup] = await Promise.all([
+    readAuditLogTail(auditLogPath, maxReadBytes),
+    readLatestSmokeReport(smokeReportDir, now, smokeReportMaxAgeDays, smokeReportMaxBytes),
+  ]);
   const exists = auditLogTail.exists;
 
   const coverage = deterministicDiagnosisCapabilities.map((item) => ({
@@ -490,17 +702,13 @@ export async function getAgentObservabilityAudit(options: AgentObservabilityAudi
       status: item.observedCallCount > 0 ? 'observed' : 'missing_recent_call',
     })),
     stage5Evidence: [],
-    displayContract: {
-      status: 'verified_by_caller_smoke_harness',
-      requiredFields: ['warnings', 'forbiddenInterpretations'],
-      verifiedByTests: displayContractTests,
-      evidence: callerDisplayEvidence,
-    },
+    displayContract: buildDisplayContract(smokeLookup, smokeReportDir, smokeReportMaxAgeDays),
     notes: [
       '本审计只读取既有 audit log，不新增 SQL，不调用 LLM。',
       '请求路径只异步读取审计日志尾部的限量样本；只有样本覆盖完整 30 天窗口时，才允许采信 30 天错误率达标证据。',
       '只有 NODE_ENV=production 且最近 30 天存在 /api/agent/diagnosis/* 调用时，才视为生产审计证据。',
-      'warnings 与 forbiddenInterpretations 已在确定性 API 响应契约中存在，并由生产 smoke harness 校验调用方接收展示契约。',
+      `warnings 与 forbiddenInterpretations 展示契约通过扫描 ${smokeReportDir} 中最新 smoke harness 报告派生：` +
+        '只有 evaluation.ok=true 且 summary.callerDisplayContractVerified=true 且 startedAt 落在窗口内才视为已验证。',
     ],
   });
 
@@ -516,18 +724,28 @@ export interface AgentReadinessAuditOptions {
 
 export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions = {}): Promise<AgentReadinessAudit> {
   const capabilitySummary = summarizeBySupportLevel(agentDataCapabilityRegistry);
-  const completedStages = stageReadiness.filter((stage) => stage.status === 'completed');
-  const blockedStages = stageReadiness.filter((stage) => stage.status === 'blocked');
-  const pendingStages = stageReadiness.filter((stage) => stage.status === 'pending');
   const observabilityEvidence = await getAgentObservabilityAudit(options.observability);
+  const stage4_8 = buildStage4_8Stage(observabilityEvidence);
+  // 在 stage_5_llm_interpretation 之前插入 stage_4_8（保持原有顺序）
+  const stages: AgentReadinessStage[] = [];
+  for (const stage of stageReadiness) {
+    if (stage.id === 'stage_5_llm_interpretation') stages.push(stage4_8);
+    stages.push(stage);
+  }
+  const completedStages = stages.filter((stage) => stage.status === 'completed');
+  const blockedStages = stages.filter((stage) => stage.status === 'blocked');
+  const pendingStages = stages.filter((stage) => stage.status === 'pending');
   const stage5Prerequisites = observabilityEvidence.stage5Evidence;
   const llmReadinessBlockers = stage5Prerequisites
     .filter((item) => !item.met && item.blocker)
     .map((item) => item.blocker!);
+  const stage4_8Verified = stage4_8.status === 'completed';
 
   return AgentReadinessAuditSchema.parse({
     phase: 'agent_metric_adaptation_audit',
-    currentStage: 'stage_4_8_display_contract_ready',
+    currentStage: stage4_8Verified
+      ? 'stage_4_8_display_contract_ready'
+      : 'stage_4_6_observability_ready',
     readyForLlm: false,
     readyForChatWindow: false,
     deterministicRouting: true,
@@ -546,7 +764,9 @@ export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions
     observabilityEvidence,
     notes: [
       'Stage 1-4.6 已完成：指标审计、注册表一致性、确定性诊断、经营巡检聚合和观测证据闭环。',
-      'Stage 4.8 已完成：调用方 smoke harness 校验 warnings 与 forbiddenInterpretations 展示契约。',
+      stage4_8Verified
+        ? 'Stage 4.8 已完成：调用方 smoke harness 校验 warnings 与 forbiddenInterpretations 展示契约。'
+        : 'Stage 4.8 仍被阻塞：缺少有效的调用方 smoke harness 报告（见 stage_4_8_caller_display_evidence.blockers）。',
       'Agent 层复用现有指标注册表、查询路由和 SQL 生成器，不新增自由查询能力。',
       '承保利润、利润率、边际贡献、财务盈亏、财务综合成本率保持 unsupported。',
       'Stage 5 LLM 解释层仍保持关闭；即使前置证据齐备，也必须通过单独 PR 显式启动。',

@@ -118,7 +118,7 @@ export const AgentObservabilityAuditSchema = z.object({
 
 export const AgentReadinessAuditSchema = z.object({
   phase: z.literal('agent_metric_adaptation_audit'),
-  currentStage: z.literal('stage_4_8_display_contract_ready'),
+  currentStage: z.enum(['stage_4_6_observability_ready', 'stage_4_8_display_contract_ready']),
   readyForLlm: z.literal(false),
   readyForChatWindow: z.literal(false),
   deterministicRouting: z.literal(true),

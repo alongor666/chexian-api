@@ -1,7 +1,36 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import { getAgentCapabilityAudit, getAgentReadinessAudit } from '../../server/src/agent/services/agent-adaptation-audit-service';
 import { routeAgentQuestion } from '../../server/src/agent/services/agent-question-router-service';
+
+function writeValidSmokeReport(now = new Date()): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-smoke-fixture-'));
+  const reportPath = path.join(dir, `agent-production-smoke-${now.getTime()}.json`);
+  const report = {
+    phase: 'agent_production_smoke_harness',
+    startedAt: now.toISOString(),
+    options: {},
+    steps: [],
+    evaluation: {
+      ok: true,
+      summary: {
+        diagnosisOk: true,
+        auditOk: true,
+        callerDisplayContractVerified: true,
+        readyForLlm: false,
+        observabilityStatus: 'observed',
+        observabilityWindowComplete: true,
+        stage5Prerequisites: [],
+      },
+      failures: [],
+    },
+  };
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf-8');
+  return dir;
+}
 
 describe('agent adaptation audit routing', () => {
   it('returns cost_indicator_diagnosis in capability audit', () => {
@@ -115,7 +144,11 @@ describe('agent adaptation audit routing', () => {
   });
 
   it('reports Stage 1-4 deterministic readiness and keeps Stage 5 blocked by production evidence', async () => {
-    const readiness = await getAgentReadinessAudit();
+    const now = new Date('2026-04-27T00:00:00.000Z');
+    const smokeReportDir = writeValidSmokeReport(now);
+    const readiness = await getAgentReadinessAudit({
+      observability: { now, smokeReportDir },
+    });
     const displayEvidence = readiness.stage5Prerequisites.find(
       (item) => item.id === 'warnings_and_forbidden_interpretations_displayed'
     );
