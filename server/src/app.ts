@@ -87,6 +87,8 @@ app.use('/api/auth/login', loginLimiter);
 app.use('/api/query', queryLimiter);
 // Agent 诊断接口会触发确定性分析查询，使用查询级限流
 app.use('/api/agent/diagnosis', queryLimiter);
+// Agent 解释接口会触发 LLM provider，使用查询级限流
+app.use('/api/agent/explain', queryLimiter);
 // AI接口最严格限流（10次/分钟）
 app.use('/api/ai', aiLimiter);
 
@@ -144,6 +146,7 @@ import dataRoutes, { setCurrentDataFile } from './routes/data.js';
 import aiRoutes from './routes/ai.js';
 import agentAuditRoutes from './agent/routes/agent-audit.js';
 import agentDiagnosisRoutes from './agent/routes/agent-diagnosis.js';
+import agentExplainRoutes from './agent/routes/agent-explain.js';
 import skillsRoutes from './routes/skills.js';
 import workflowsRoutes from './routes/workflows.js';
 import copilotRoutes from './routes/copilot.js';
@@ -156,6 +159,7 @@ app.use('/api/data', dataRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/agent/audit', agentAuditRoutes);
 app.use('/api/agent/diagnosis', agentDiagnosisRoutes);
+app.use('/api/agent/explain', agentExplainRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/workflows', workflowsRoutes);
 app.use('/api/copilot', copilotRoutes);
