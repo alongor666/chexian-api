@@ -55,18 +55,55 @@
 - 需要提交、推送、建 PR 时，直接执行，不要只停留在建议层。
 - 如果任务范围明显偏大，先拆分再做，避免把独立问题混成一个难以验证的改动。
 
-## 8. CLAUDE 体系禁改
+## 8. CLAUDE 体系修改护栏（分级）
 
-- 不要修改 `CLAUDE.md`。
-- 不要修改 `.claude/` 目录及其所有子文件、子目录。
-- 不要修改 `CLAUDE.md` 中直接点名的体系文件，包括但不限于：
-  - `.claude/data-knowledge-protocol.md`
-  - `.claude/rules/data-pipeline.md`
-  - `.claude/rules/sql-generators.md`
-  - `.claude/commands/README.md`
-  - `.claude/commands/` 下的所有命令文件
-  - `.claude/agents/` 下的所有文件
-  - `.claude/shared-memory/` 下的所有文件
-  - `~/.claude/shared-memory/chexian/` 本地运行时内容
-  - `reference_shared_memory.md`
-- 只要一个文件在 `CLAUDE.md` 里被当作“必读 / 唯一事实源 / 护栏 / 注册表 / 共享记忆 / 命令 / agents 体系”点名，就默认需要你明确授权后才能修改；未经授权时不改。
+不再用单一"禁改名单"，按目录用途分三档。**判断顺序：先看 policy，再做改动**。
+
+### 8.1 `frozen` — 业务护栏 / 红线规则 / Agent 契约
+
+任何修改都需要用户**显式书面授权**（聊天里口头同意 + PR 标题或 commit message 含 `[policy-override]`）。
+
+| 路径 | 理由 |
+|------|------|
+| `CLAUDE.md` | 项目顶层指令 |
+| `.claude/data-knowledge-protocol.md` | 数据口径事实源 |
+| `.claude/rules/data-pipeline.md` | ETL/分片护栏 |
+| `.claude/rules/sql-generators.md` | SQL 业务口径护栏 |
+| `.claude/rules/claude-md-budget.md` | CLAUDE.md 体积红线 |
+| `.claude/agents/**` | Agent 行为契约 |
+| `reference_shared_memory.md` | 共享记忆契约 |
+| AGENTS.md §8 本节 | 元规则（修改本节也算 frozen）|
+
+### 8.2 `append-only` — 工具注册表 / 命令体系
+
+允许：**新增**命令文件、**追加**索引新行、**新增** README 表格行。
+禁止：修改既有命令文件的实质逻辑、删除既有命令、修改 README 既有行（除追加新行/更新计数/时间戳外）。
+
+| 路径 | 操作准则 |
+|------|---------|
+| `.claude/commands/*.md`（除 README）| 允许新增；既有命令的修订需用户口头确认 |
+| `.claude/commands/README.md` | 允许追加索引行 + 同步计数/时间戳；禁止改既有行 |
+| `.claude/rules/`（除上面 frozen 列出的外）| 允许新增独立护栏文件；既有文件改动按 frozen 处理 |
+
+PR 涉及 append-only 路径的纯新增时，**不需要**额外授权，但 PR 描述必须显式注明 `policy: append-only`。
+
+### 8.3 `user-only` — 本地状态 / 共享记忆
+
+AI 不得修改，只读引用；只能由用户手动 sync / 编辑。
+
+| 路径 |
+|------|
+| `.claude/shared-memory/**` |
+| `~/.claude/shared-memory/chexian/**` |
+| `.claude/scheduled_tasks.lock` |
+| `~/.claude/projects/**/memory/**`（auto-memory，hook 自动写入除外）|
+
+### 8.4 与外部 AI 评审协作（Codex）
+
+Codex 评审基于规则字面解释；Claude Code 承担"判断 policy 等级"的职责。
+
+- Codex 标记 P1 违反 §8 时：先识别变更路径属于哪一档
+  - `frozen` + 无授权 → 立即遵从，回滚
+  - `append-only` + 纯新增 → 在 PR comment 注明 policy 等级，**不必回滚**
+  - 规则本身脱节 / 粒度不当 → 同 PR 加一个修改 §8 的 commit，让用户拍板
+- 不要把 Codex 字面解释当作终审；规则合理性由用户 + Claude Code 协同判断。
