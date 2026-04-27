@@ -25,6 +25,8 @@ import {
   getWorkflowRun,
   listWorkflowRuns,
   saveWorkflowRun,
+  acquireRunLock,
+  releaseRunLock,
   type WorkflowStatus,
   type WorkflowRunRecord,
 } from '../skills/workflow-runner.js';
@@ -176,13 +178,18 @@ router.post(
 );
 
 /**
- * POST /api/workflows/runs/:runId/reject — 阶段 4 PR-C
+ * POST /api/workflows/runs/:runId/reject — 阶段 4 PR-C（codex review P1：与 approve 共享 run-level 互斥锁）
  *
  * 拒绝审批：record.status = 'failed' + approval.rejectedBy / rejectedAt 写入。
  * 鉴权：role 必须 ∈ approval.approverRoles（与 /approve 一致）；不在其中 → 403。
  * 状态：record.status 必须是 'pending_approval'，否则 409。
  *
  * 与 /approve 区别：不调用 resumeWorkflow，下游 skill 永不执行；落盘 audit 事件 approval-denied。
+ *
+ * 并发安全：acquireRunLock 与 /approve 共享同一个锁文件（O_EXCL 原子互斥）。
+ *   - approve + reject 并发 → 第二个请求 409
+ *   - 两个 reject 并发 → 第二个 409，避免状态覆盖与 audit 双写
+ *   - 锁内做 read-check-write，保证 status 检查与落盘原子可见
  */
 router.post(
   '/runs/:runId/reject',
@@ -191,53 +198,69 @@ router.post(
       throw new AppError(401, 'Authentication context missing');
     }
     const runId = req.params.runId;
-    const prior = await getWorkflowRun(runId);
-    if (!prior) {
-      throw new AppError(404, `Workflow run not found: ${runId}`);
+
+    // 抢 run-level 锁（与 approve 共享）。失败 → 409
+    let lockPath: string;
+    try {
+      lockPath = await acquireRunLock(runId, `reject:${req.user.username}`);
+    } catch (err) {
+      if (err instanceof ApprovalError) {
+        throw new AppError(err.statusCode, err.message);
+      }
+      throw err;
     }
-    if (prior.status !== 'pending_approval' || !prior.approval) {
-      throw new AppError(409, `Workflow run is not pending approval (status=${prior.status})`);
-    }
-    if (!prior.approval.approverRoles.includes(req.user.role)) {
-      throw new AppError(
-        403,
-        `Approver role '${req.user.role}' is not in approverRoles [${prior.approval.approverRoles.join(', ')}]`,
+
+    try {
+      const prior = await getWorkflowRun(runId);
+      if (!prior) {
+        throw new AppError(404, `Workflow run not found: ${runId}`);
+      }
+      if (prior.status !== 'pending_approval' || !prior.approval) {
+        throw new AppError(409, `Workflow run is not pending approval (status=${prior.status})`);
+      }
+      if (!prior.approval.approverRoles.includes(req.user.role)) {
+        throw new AppError(
+          403,
+          `Approver role '${req.user.role}' is not in approverRoles [${prior.approval.approverRoles.join(', ')}]`,
+        );
+      }
+
+      const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : undefined;
+      const rejectedAt = new Date().toISOString();
+      const updatedSteps = prior.steps.map((s) =>
+        s.nodeId === prior.approval!.pendingNodeId
+          ? { ...s, status: 'failed' as const, error: reason ?? 'rejected by approver', finishedAt: rejectedAt }
+          : s,
       );
+      const updated: WorkflowRunRecord = {
+        ...prior,
+        status: 'failed',
+        finishedAt: rejectedAt,
+        elapsedMs: new Date(rejectedAt).getTime() - new Date(prior.startedAt).getTime(),
+        steps: updatedSteps,
+        approval: {
+          ...prior.approval,
+          rejectedBy: req.user.username,
+          rejectedAt,
+          rejectReason: reason,
+        },
+      };
+      await saveWorkflowRun(updated);
+
+      const reqCtx = getRequestContext();
+      void appendAuditEvent({
+        runId,
+        workflowId: prior.workflowId,
+        eventType: 'approval-denied',
+        userId: req.user.userId,
+        role: req.user.role,
+        requestId: reqCtx?.requestId ?? 'unknown',
+        payload: { nodeId: prior.approval.pendingNodeId, reason },
+      });
+      res.json({ success: true, data: updated });
+    } finally {
+      await releaseRunLock(lockPath);
     }
-
-    const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : undefined;
-    const rejectedAt = new Date().toISOString();
-    const updatedSteps = prior.steps.map((s) =>
-      s.nodeId === prior.approval!.pendingNodeId
-        ? { ...s, status: 'failed' as const, error: reason ?? 'rejected by approver', finishedAt: rejectedAt }
-        : s,
-    );
-    const updated: WorkflowRunRecord = {
-      ...prior,
-      status: 'failed',
-      finishedAt: rejectedAt,
-      elapsedMs: new Date(rejectedAt).getTime() - new Date(prior.startedAt).getTime(),
-      steps: updatedSteps,
-      approval: {
-        ...prior.approval,
-        rejectedBy: req.user.username,
-        rejectedAt,
-        rejectReason: reason,
-      },
-    };
-    await saveWorkflowRun(updated);
-
-    const reqCtx = getRequestContext();
-    void appendAuditEvent({
-      runId,
-      workflowId: prior.workflowId,
-      eventType: 'approval-denied',
-      userId: req.user.userId,
-      role: req.user.role,
-      requestId: reqCtx?.requestId ?? 'unknown',
-      payload: { nodeId: prior.approval.pendingNodeId, reason },
-    });
-    res.json({ success: true, data: updated });
   }),
 );
 

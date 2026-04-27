@@ -40,10 +40,12 @@ afterAll(async () => {
   const { getDataDir } = await import('../../server/src/config/paths.js');
   const runDir = path.resolve(getDataDir(), 'runtime/workflow-runs');
   for (const id of createdRunIds) {
-    try {
-      await fs.unlink(path.join(runDir, `${id}.json`));
-    } catch {
-      // ignore
+    for (const ext of ['.json', '.lock']) {
+      try {
+        await fs.unlink(path.join(runDir, `${id}${ext}`));
+      } catch {
+        // ignore
+      }
     }
   }
   // 不删 audit 文件 — 同日其他测试可能仍在用；audit-log.test.ts 的 _resetAuditLogForDate 会清
@@ -276,6 +278,40 @@ describe('GET /api/workflows/runs/:runId/audit + POST /reject', () => {
     expect(auditR.status).toBe(200);
     const audit = (await auditR.json()) as { data: Array<{ eventType: string }> };
     expect(audit.data.map((e) => e.eventType)).toContain('approval-denied');
+  });
+
+  it('POST /reject — approve 与 reject 并发 → 仅一个成功，另一个 409（codex P1 互斥锁）', async () => {
+    const runId = await createPendingRun('analyst1', 'analyst');
+    const adminToken = jwt.sign(
+      { userId: 'admin', username: 'admin', role: 'branch_admin' },
+      authConfig.jwtSecret,
+    );
+    const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
+
+    // 并发发起 approve + reject
+    const [a, r] = await Promise.all([
+      fetch(`${endpointBase}/api/workflows/runs/${runId}/approve`, { method: 'POST', headers, body: '{}' }),
+      fetch(`${endpointBase}/api/workflows/runs/${runId}/reject`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ reason: 'concurrent test' }),
+      }),
+    ]);
+
+    // 一个 200 一个 409（哪个先持锁取决于事件循环顺序）
+    const statuses = [a.status, r.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    // 终态确定（要么 success/failed，不可能两者都生效）
+    const { getWorkflowRun } = await import('../../server/src/skills/workflow-runner.js');
+    const final = await getWorkflowRun(runId);
+    expect(['success', 'failed']).toContain(final?.status);
+    // 互斥：approval 状态字段不会同时含 approvedBy 与 rejectedBy
+    const approval = final?.approval;
+    const hasApproved = !!approval?.approvedBy;
+    const hasRejected = !!approval?.rejectedBy;
+    expect(hasApproved && hasRejected).toBe(false);
+    expect(hasApproved || hasRejected).toBe(true);
   });
 
   it('POST /reject — 已 failed 的 run 再次 reject → 409', async () => {

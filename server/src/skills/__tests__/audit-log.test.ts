@@ -29,13 +29,15 @@ const validRunId = (suffix: string) => `wr_20260427000000_test_${suffix.padEnd(8
 const cleanupRunIds: string[] = [];
 
 afterAll(async () => {
-  // 清理 audit log 文件 + workflow run 文件
+  // 清理 audit log 文件 + workflow run 文件 + 锁文件残留
   const dir = path.resolve(getDataDir(), 'runtime/workflow-runs');
   for (const id of cleanupRunIds) {
-    try {
-      await fs.unlink(path.join(dir, `${id}.json`));
-    } catch {
-      // ignore
+    for (const ext of ['.json', '.lock']) {
+      try {
+        await fs.unlink(path.join(dir, `${id}${ext}`));
+      } catch {
+        // ignore
+      }
     }
   }
   // 清理 audit-log 当日文件（避免污染下次运行）

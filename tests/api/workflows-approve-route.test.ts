@@ -39,10 +39,12 @@ afterAll(async () => {
   const { getDataDir } = await import('../../server/src/config/paths.js');
   const dir = path.resolve(getDataDir(), 'runtime/workflow-runs');
   for (const id of createdRunIds) {
-    try {
-      await fs.unlink(path.join(dir, `${id}.json`));
-    } catch {
-      // ignore
+    for (const ext of ['.json', '.lock']) {
+      try {
+        await fs.unlink(path.join(dir, `${id}${ext}`));
+      } catch {
+        // ignore
+      }
     }
   }
 });

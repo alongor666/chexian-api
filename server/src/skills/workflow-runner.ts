@@ -732,15 +732,18 @@ function deriveInitialStatusFromHistory(
 }
 
 /**
- * 抢占 resume 互斥锁（codex P2）。
+ * 抢占 run-level 互斥锁（codex P2 / PR-C codex review P1）。
  *
  * 用 fs.open(lockPath, 'wx') —— POSIX `O_CREAT | O_EXCL`，文件已存在即抛 EEXIST，
- * 操作系统层面保证原子。两个并发 approve 请求只有一个能持锁；持锁失败抛
- * ApprovalError(409)，调用方知道有审批正在进行，避免下游 skill 被重复执行。
+ * 操作系统层面保证原子。同一 runId 上的并发 approve / reject 请求只有一个能持锁；
+ * 持锁失败抛 ApprovalError(409)，调用方知道有 approve/reject 正在进行，避免：
+ *   - 两个 approve 重复触发下游 skill
+ *   - approve 与 reject 并发导致状态覆盖（reject 返回成功但 approve 已落盘下游执行）
+ *   - 两个 reject 并发导致 audit 双写
  *
- * 锁文件内容写入 approver / pid，便于死锁排查；finally 中通过 unlinkLock 释放。
+ * 锁文件内容写入 holder / pid，便于死锁排查；finally 中通过 releaseRunLock 释放。
  */
-async function acquireResumeLock(runId: string, approver: string): Promise<string> {
+export async function acquireRunLock(runId: string, holder: string): Promise<string> {
   const lockPath = resolveLockPath(runId);
   if (!lockPath) {
     throw new ApprovalError(400, `Invalid runId: ${runId}`);
@@ -750,12 +753,15 @@ async function acquireResumeLock(runId: string, approver: string): Promise<strin
   try {
     handle = await fs.open(lockPath, 'wx');
     await handle.writeFile(
-      JSON.stringify({ approver, pid: process.pid, lockedAt: new Date().toISOString() }),
+      JSON.stringify({ holder, pid: process.pid, lockedAt: new Date().toISOString() }),
       'utf8',
     );
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-      throw new ApprovalError(409, `Workflow run ${runId} is being approved by another request`);
+      throw new ApprovalError(
+        409,
+        `Workflow run ${runId} is being processed by another approve/reject request`,
+      );
     }
     throw err;
   } finally {
@@ -766,7 +772,7 @@ async function acquireResumeLock(runId: string, approver: string): Promise<strin
   return lockPath;
 }
 
-async function releaseResumeLock(lockPath: string): Promise<void> {
+export async function releaseRunLock(lockPath: string): Promise<void> {
   try {
     await fs.unlink(lockPath);
   } catch (err) {
@@ -794,7 +800,7 @@ export async function resumeWorkflow(
   const persist = options.persist ?? true;
 
   // 1) 抢锁（原子）— 失败立即 409，避免后续 read 又被并发请求看到 pending_approval
-  const lockPath = await acquireResumeLock(runId, options.approver.username);
+  const lockPath = await acquireRunLock(runId, `approve:${options.approver.username}`);
 
   try {
     const prior = await getWorkflowRun(runId);
@@ -923,7 +929,7 @@ export async function resumeWorkflow(
     });
     return { record };
   } finally {
-    await releaseResumeLock(lockPath);
+    await releaseRunLock(lockPath);
   }
 }
 
