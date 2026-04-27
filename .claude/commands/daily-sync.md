@@ -30,19 +30,30 @@ cp "/Users/alongor666/Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/<
 
 多个增量 xlsx 可共存（如 `01_签单清单_增量_20260415.xlsx` + `01_签单清单_增量_20260416.xlsx`），daily.mjs 会按日期合并，**不要删除旧增量**。
 
-## 1. 运行 ETL
+## 1. 运行全流程（推荐）
 
 ```bash
-node 数据管理/daily.mjs
+node scripts/sync-and-reload.mjs        # daily.mjs all → governance → PM2 reload → /health
+node scripts/sync-and-reload.mjs premium  # 仅保费域
+node scripts/sync-and-reload.mjs --dry-run  # 仅打印计划
 ```
 
-**daily.mjs 自动行为**：
+任一阶段失败立即退出，不进入后续阶段。
+
+## 1.5 仅 ETL（不上线，调试场景）
+
+```bash
+node 数据管理/daily.mjs all              # 跑全部域
+node 数据管理/daily.mjs premium          # 仅保费域
+```
+
+**daily.mjs 单一职责**：
 - 智能检测哪些域需更新（根据新 xlsx）
 - 转换 Parquet 到 `数据管理/warehouse/fact/*/` 和 `dim/*/`
 - 末尾调用 `sync-vps.mjs --no-restart`（同步 13 个目录，**不重启 PM2**）
 - 写 `.last-sync-manifest.json`（governance 数据漂移检查依据）
 
-## 2. 手动重启 PM2（CRITICAL — daily.mjs 不会自动做）
+## 2. 手动重启 PM2（仅当用 1.5 单跑 daily.mjs 时）
 
 ```bash
 ssh chexian-vps-deploy "sudo /usr/local/bin/deploy-chexian-api reload"

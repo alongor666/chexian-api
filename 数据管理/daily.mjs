@@ -463,16 +463,19 @@ function runStrategyMultiMerge(ctx) {
 }
 
 async function syncToVps(scriptDir) {
-  log('cyan', '[ETL] 自动同步到 VPS...');
+  log('cyan', '[ETL] 自动同步到 VPS（仅 rsync，不重启 PM2）...');
   const projectRoot = dirname(scriptDir);
   const syncScript = join(projectRoot, 'scripts/sync-vps.mjs');
   try {
-    execSync(`node "${syncScript}"`, { stdio: 'inherit', env: { ...process.env, RUN_MAIN: '1' } });
-    log('green', '✅ VPS 同步完成');
+    // --no-restart：daily.mjs 只负责数据同步，不触发 PM2 restart
+    // PM2 reload 由 scripts/sync-and-reload.mjs 全流程入口 或 用户手动执行
+    // pm2 restart 无法恢复 errored 状态，pm2 delete+start (reload) 才能
+    execSync(`node "${syncScript}" --no-restart`, { stdio: 'inherit', env: { ...process.env, RUN_MAIN: '1' } });
+    log('green', '✅ VPS 同步完成（PM2 未重启，使用 sync-and-reload.mjs 或手动 reload）');
     return true;
   } catch (e) {
     console.warn(`[ETL] VPS 同步失败（数据已写入本地）: ${e.message}`);
-    console.warn('[ETL] 可手动重试: node scripts/sync-vps.mjs');
+    console.warn('[ETL] 可手动重试: node scripts/sync-vps.mjs --no-restart');
     return false;
   }
 }
