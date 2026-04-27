@@ -35,6 +35,17 @@ describe('agent profit and margin question routing', () => {
     }
   });
 
+  it('blocks profit-rate terms before forecast routing', () => {
+    for (const question of ['预测利润率是多少？', '按终极变动85%、固定9%预测净利润是多少？']) {
+      const result = routeAgentQuestion({ question });
+
+      expect(result.blocked).toBe(true);
+      expect(result.status).toBe('unsupported');
+      expect(result.matchedCapabilityId).toBeUndefined();
+      expect(result.reason).toContain('利润率或净利润');
+    }
+  });
+
   it('keeps ambiguous combined cost ratio as caution', () => {
     const result = routeAgentQuestion({ question: '哪个机构综合成本率最高？' });
 
