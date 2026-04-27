@@ -87,7 +87,7 @@ function base64UrlEncode(data: Buffer | string): string {
  * 生成智谱 API 的 JWT Token
  * API Key 格式: {id}.{secret}
  */
-function generateJwtToken(apiKey: string, expSeconds: number = 3600): string {
+export function generateJwtToken(apiKey: string, expSeconds: number = 3600): string {
   const parts = apiKey.split('.');
   if (parts.length !== 2) {
     throw new Error('无效的 API Key 格式，应为 {id}.{secret}');

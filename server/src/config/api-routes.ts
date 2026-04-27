@@ -185,3 +185,12 @@ export const AGENT_DIAGNOSIS_ROUTES = {
 export const FILTER_ROUTES = {
   OPTIONS: '/options',
 } as const;
+
+// ─────────────────────────────────────────────
+// /api/copilot/* 路由（阶段 3）
+// ─────────────────────────────────────────────
+export const COPILOT_ROUTES = {
+  RUNS: '/runs',
+  RUN_STREAM: '/runs/:runId/stream',
+  RUN_REPORT: '/runs/:runId/report',
+} as const;

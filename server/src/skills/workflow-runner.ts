@@ -222,11 +222,21 @@ export async function listWorkflowRuns(options: ListWorkflowRunsOptions = {}): P
 
 // ───────────────────────── Runner ─────────────────────────
 
+export type WorkflowStepEvent =
+  | { type: 'workflow-started'; runId: string; workflowId: string; nodeCount: number }
+  | { type: 'step-started'; runId: string; nodeId: string; skillId?: string; index: number }
+  | { type: 'step-completed'; runId: string; nodeId: string; skillId?: string; status: StepStatus; elapsedMs: number; error?: string }
+  | { type: 'workflow-completed'; runId: string; status: WorkflowStatus; elapsedMs: number };
+
 export interface RunWorkflowOptions {
   /** 是否落盘，默认 true */
   persist?: boolean;
   /** Skill 解析函数（registry.getSkill） */
   resolveSkill: (skillId: string) => Skill<any, any> | undefined;
+  /** 阶段 3：每步前后回调（用于 SSE 实时推送，不影响执行流程） */
+  onStep?: (event: WorkflowStepEvent) => void;
+  /** 外部预生成的 runId（阶段 3：copilot 路由先生成 runId 再异步执行，前端 SSE 可立即订阅） */
+  preassignedRunId?: string;
 }
 
 export async function runWorkflow<I extends ZodTypeAny>(
@@ -236,8 +246,9 @@ export async function runWorkflow<I extends ZodTypeAny>(
   options: RunWorkflowOptions
 ): Promise<{ runId: string; record: WorkflowRunRecord }> {
   const persist = options.persist ?? true;
-  const runId = generateWorkflowRunId(workflow.id);
+  const runId = options.preassignedRunId ?? generateWorkflowRunId(workflow.id);
   const startedAt = new Date(ctx.startedAt);
+  const onStep = options.onStep;
 
   // 1) inputSchema 校验
   const parsed = workflow.inputSchema.safeParse(rawInput);
@@ -249,6 +260,8 @@ export async function runWorkflow<I extends ZodTypeAny>(
   }
   const runInput: z.infer<I> = parsed.data;
 
+  onStep?.({ type: 'workflow-started', runId, workflowId: workflow.id, nodeCount: workflow.nodes.length });
+
   // 2) 顺序执行节点
   const stepRecords: WorkflowStepRecord[] = [];
   const results: Record<string, SkillResult | undefined> = {};
@@ -256,15 +269,32 @@ export async function runWorkflow<I extends ZodTypeAny>(
 
   let overallStatus: WorkflowStatus = 'success';
 
+  const pushStep = (record: WorkflowStepRecord) => {
+    stepRecords.push(record);
+    onStep?.({
+      type: 'step-completed',
+      runId,
+      nodeId: record.nodeId,
+      skillId: record.skillId,
+      status: record.status,
+      elapsedMs: record.elapsedMs,
+      error: record.error,
+    });
+  };
+
+  let nodeIndex = 0;
   for (const node of workflow.nodes) {
+    const currentIndex = nodeIndex++;
     const nodeStartedAt = new Date();
     const execCtx: WorkflowExecCtx = { runInput, results, childResults };
+    const nodeSkillIdHint = node.type === 'sequential' ? node.skillId : node.type === 'branch' ? undefined : undefined;
+    onStep?.({ type: 'step-started', runId, nodeId: node.id, skillId: nodeSkillIdHint, index: currentIndex });
 
     if (node.type === 'sequential') {
       const skill = options.resolveSkill(node.skillId);
       if (!skill) {
         const rec = buildFailedStepRecord(node, undefined, `skill not found: ${node.skillId}`, nodeStartedAt);
-        stepRecords.push(rec);
+        pushStep(rec);
         if ((node.onFailure ?? 'skip-and-continue') === 'stop') {
           overallStatus = 'failed';
           break;
@@ -277,7 +307,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
         const { runId: stepRunId, result } = await runSkill(skill, input, ctx);
         const finishedAt = new Date();
         results[node.id] = result;
-        stepRecords.push({
+        pushStep({
           nodeId: node.id,
           nodeType: node.type,
           skillId: node.skillId,
@@ -291,7 +321,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         const rec = buildFailedStepRecord(node, undefined, errMsg, nodeStartedAt);
-        stepRecords.push(rec);
+        pushStep(rec);
         if ((node.onFailure ?? 'skip-and-continue') === 'stop') {
           overallStatus = 'failed';
           break;
@@ -342,7 +372,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
       const finishedAt = new Date();
       const anyFailed = children.some((c) => c.status === 'failed');
       const allFailed = children.every((c) => c.status === 'failed');
-      stepRecords.push({
+      pushStep({
         nodeId: node.id,
         nodeType: node.type,
         children,
@@ -376,7 +406,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
       if (!target) {
         // 没有任何分支命中且无 fallback：跳过
         const finishedAt = new Date();
-        stepRecords.push({
+        pushStep({
           nodeId: node.id,
           nodeType: node.type,
           status: 'skipped',
@@ -390,7 +420,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
       }
       const skill = options.resolveSkill(target.skillId);
       if (!skill) {
-        stepRecords.push(buildFailedStepRecord(node, target.skillId, `skill not found: ${target.skillId}`, nodeStartedAt));
+        pushStep(buildFailedStepRecord(node, target.skillId, `skill not found: ${target.skillId}`, nodeStartedAt));
         if ((node.onFailure ?? 'skip-and-continue') === 'stop') {
           overallStatus = 'failed';
           break;
@@ -403,7 +433,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
         const { runId: stepRunId, result } = await runSkill(skill, input, ctx);
         const finishedAt = new Date();
         results[node.id] = result;
-        stepRecords.push({
+        pushStep({
           nodeId: node.id,
           nodeType: node.type,
           skillId: target.skillId,
@@ -415,7 +445,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
           elapsedMs: finishedAt.getTime() - nodeStartedAt.getTime(),
         });
       } catch (err) {
-        stepRecords.push(buildFailedStepRecord(node, target.skillId, err instanceof Error ? err.message : String(err), nodeStartedAt));
+        pushStep(buildFailedStepRecord(node, target.skillId, err instanceof Error ? err.message : String(err), nodeStartedAt));
         if ((node.onFailure ?? 'skip-and-continue') === 'stop') {
           overallStatus = 'failed';
           break;
@@ -428,7 +458,7 @@ export async function runWorkflow<I extends ZodTypeAny>(
     if (node.type === 'approval') {
       // 阶段 4 实现；当前直接挂起（status=pending_approval），后续节点不再执行
       const finishedAt = new Date();
-      stepRecords.push({
+      pushStep({
         nodeId: node.id,
         nodeType: node.type,
         status: 'skipped',
@@ -462,8 +492,12 @@ export async function runWorkflow<I extends ZodTypeAny>(
   if (persist) {
     await saveWorkflowRun(record);
   }
+  onStep?.({ type: 'workflow-completed', runId, status: overallStatus, elapsedMs: record.elapsedMs });
   return { runId, record };
 }
+
+/** 暴露 runId 生成器供 copilot 路由预先订阅 SSE */
+export { generateWorkflowRunId };
 
 function buildFailedStepRecord(
   node: WorkflowNode,
