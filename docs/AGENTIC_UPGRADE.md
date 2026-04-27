@@ -66,6 +66,14 @@ Agent 化升级的目标不是替换现有业务系统，而是在现有 API-onl
 - 生产动作必须绑定验证命令和回滚说明。
 - 审计日志需要能回答：谁触发、触发了什么、影响了哪些数据、验证是否通过。
 
+### PR-5：Agent LLM 解释层
+
+- 进入实现前必须先满足 Stage 1-4 的确定性诊断、生产 observability、30 天错误率和调用方展示 `warnings` / `forbiddenInterpretations` 的验收要求。
+- 未来最小入口为 `POST /api/agent/explain/diagnosis`，只解释确定性诊断 API 返回的数据，不触发查询、工作流或任意工具。
+- LLM 解释层必须复用 `routeAgentQuestion`、`unsupportedMetricRegistry`、Agent 指标注册表、诊断响应中的 `warnings` / `forbiddenInterpretations` 和 LLM sql-guard。
+- 现有 `/api/copilot/runs/:runId/report?includeNarrative=1` 是 workflow report 的可选 narrative，不是 Agent Stage 5 解释层。
+- 详细边界以 [`docs/AGENT_STAGE5_LLM_BOUNDARY_AUDIT.md`](./AGENT_STAGE5_LLM_BOUNDARY_AUDIT.md) 为准；在单独实现 PR 之前，`/api/agent/audit/readiness` 必须保持 `readyForLlm=false`。
+
 ## 5. 验收原则
 
 - 不破坏现有 API-only 数据链路。
@@ -74,3 +82,4 @@ Agent 化升级的目标不是替换现有业务系统，而是在现有 API-onl
 - 每个 Agent 能力都有明确的输入输出契约和失败语义。
 - 每个高风险动作都有验证证据和回滚路径。
 - 文档、注册表、脚本索引和运行时代码保持一致。
+- LLM 只能解释确定性 API 返回的数据，不生成 SQL，不自创指标，不输出承保利润、利润率、边际贡献、财务盈利或财务亏损。
