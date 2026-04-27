@@ -128,7 +128,7 @@ describe('auto-risk-control workflow shape', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('5 步线性流：data-health → kpi-baseline → cost-diagnosis → claims-drilldown → segment-risk-scan', () => {
+  it('阶段 4 PR-B：8 节点流（5 步前置 + risk-scoring + approval + pricing-simulation）', () => {
     const ids = autoRiskControlWorkflow.nodes.map((n) => n.id);
     expect(ids).toEqual([
       'data-health',
@@ -136,6 +136,9 @@ describe('auto-risk-control workflow shape', () => {
       'cost-diagnosis',
       'claims-drilldown',
       'segment-risk-scan',
+      'risk-scoring',
+      'risk-control-approval',
+      'pricing-simulation',
     ]);
   });
 
@@ -144,6 +147,23 @@ describe('auto-risk-control workflow shape', () => {
     expect(node?.type).toBe('sequential');
     if (node?.type === 'sequential') {
       expect(node.onFailure).toBe('stop');
+    }
+  });
+
+  it('risk-scoring / pricing-simulation 节点 onFailure=stop（审批前后任何失败禁止下游执行）', () => {
+    const scoring = autoRiskControlWorkflow.nodes.find((n) => n.id === 'risk-scoring');
+    const pricing = autoRiskControlWorkflow.nodes.find((n) => n.id === 'pricing-simulation');
+    expect(scoring?.type).toBe('sequential');
+    expect(pricing?.type).toBe('sequential');
+    if (scoring?.type === 'sequential') expect(scoring.onFailure).toBe('stop');
+    if (pricing?.type === 'sequential') expect(pricing.onFailure).toBe('stop');
+  });
+
+  it('risk-control-approval 是 approval 节点，approverRoles=[branch_admin]', () => {
+    const node = autoRiskControlWorkflow.nodes.find((n) => n.id === 'risk-control-approval');
+    expect(node?.type).toBe('approval');
+    if (node?.type === 'approval') {
+      expect(node.approverRoles).toEqual(['branch_admin']);
     }
   });
 });
