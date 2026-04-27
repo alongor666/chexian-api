@@ -15,8 +15,9 @@
  *   readAuditEventsForRun 扫描所有 jsonl 文件 grep runId 行 → 返回时序数组
  */
 
-import { promises as fs } from 'node:fs';
+import { createReadStream, promises as fs } from 'node:fs';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import { opsEnv } from '../config/env.js';
 import { getDataDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
@@ -64,6 +65,8 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const AUDIT_FILE_PATTERN = /^(\d{4}-\d{2}-\d{2})(?:\.(\d+))?\.jsonl$/;
 const MAX_AUDIT_FILE_BYTES = 50 * 1024 * 1024;
 const DEFAULT_RETENTION_DAYS = 90;
+const DEFAULT_GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const STATS_TIMESTAMP_PROBE_BYTES = 64 * 1024;
 const logger = createLogger('WorkflowAuditLog');
 
 export function getAuditDir(): string {
@@ -248,10 +251,66 @@ export async function garbageCollectAuditLogs(options: { dryRun?: boolean } = {}
   return { retentionDays, candidateFiles, deletedFiles, dryRun: false };
 }
 
+export async function runAuditLogGcCycle(): Promise<AuditLogGcResult> {
+  const dryRun = await garbageCollectAuditLogs({ dryRun: true });
+  if (dryRun.candidateFiles.length === 0) {
+    return dryRun;
+  }
+  return garbageCollectAuditLogs({ dryRun: false });
+}
+
+export function startAuditLogMaintenance(options: { intervalMs?: number } = {}): () => void {
+  const intervalMs = options.intervalMs ?? DEFAULT_GC_INTERVAL_MS;
+  let inFlight = false;
+
+  const run = () => {
+    if (inFlight) return;
+    inFlight = true;
+    runAuditLogGcCycle()
+      .catch((err) => {
+        logger.warn('[audit-log] GC cycle failed', { error: (err as Error).message });
+      })
+      .finally(() => {
+        inFlight = false;
+      });
+  };
+
+  run();
+  const timer = setInterval(run, intervalMs);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}
+
 export interface AuditLogStats {
   totalFileCount: number;
   totalBytes: number;
   earliestEventTime: string | null;
+}
+
+async function readFirstAuditTimestamp(filePath: string): Promise<string | null> {
+  const stream = createReadStream(filePath, {
+    encoding: 'utf8',
+    start: 0,
+    end: STATS_TIMESTAMP_PROBE_BYTES - 1,
+  });
+  const rl = createInterface({ input: stream, crlfDelay: Infinity });
+  try {
+    for await (const line of rl) {
+      if (!line) continue;
+      try {
+        const obj = JSON.parse(line) as Partial<AuditEvent>;
+        if (typeof obj.timestamp === 'string') {
+          return obj.timestamp;
+        }
+      } catch {
+        // 跳过损坏行，继续找首个有效事件时间
+      }
+    }
+    return null;
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
 }
 
 export async function getAuditLogStats(): Promise<AuditLogStats> {
@@ -266,37 +325,41 @@ export async function getAuditLogStats(): Promise<AuditLogStats> {
     throw err;
   }
 
-  let totalFileCount = 0;
-  let totalBytes = 0;
-  let earliestEventTime: string | null = null;
-
-  for (const f of files) {
-    const parsed = parseAuditFileName(f);
+  const auditFiles: Array<{ date: string; seq?: number; fullPath: string }> = [];
+  for (const name of files) {
+    const parsed = parseAuditFileName(name);
     if (!parsed) continue;
     const fullPath = resolveAuditFilePath(parsed.date, parsed.seq);
     if (!fullPath) continue;
+    auditFiles.push({ date: parsed.date, seq: parsed.seq, fullPath });
+  }
+  auditFiles.sort((a, b) => a.date.localeCompare(b.date) || (a.seq ?? 0) - (b.seq ?? 0));
+
+  let totalBytes = 0;
+  let earliestEventTime: string | null = null;
+
+  for (const file of auditFiles) {
     try {
-      const stat = await fs.stat(fullPath);
-      totalFileCount += 1;
+      const stat = await fs.stat(file.fullPath);
       totalBytes += stat.size;
-      const raw = await fs.readFile(fullPath, 'utf8');
-      for (const line of raw.split('\n')) {
-        if (!line) continue;
-        try {
-          const obj = JSON.parse(line) as Partial<AuditEvent>;
-          if (typeof obj.timestamp === 'string' && (!earliestEventTime || obj.timestamp < earliestEventTime)) {
-            earliestEventTime = obj.timestamp;
-          }
-        } catch {
-          // 跳过损坏行
-        }
-      }
     } catch {
-      // 跳过读不到的文件
+      // 跳过读不到的文件；totalFileCount 仍反映目录内 jsonl 文件数量
     }
   }
 
-  return { totalFileCount, totalBytes, earliestEventTime };
+  for (const file of auditFiles) {
+    try {
+      const timestamp = await readFirstAuditTimestamp(file.fullPath);
+      if (timestamp) {
+        earliestEventTime = timestamp;
+        break;
+      }
+    } catch {
+      // 跳过损坏或读取失败的文件
+    }
+  }
+
+  return { totalFileCount: auditFiles.length, totalBytes, earliestEventTime };
 }
 
 /** 仅供测试使用：清空指定日期的 audit 文件 */
@@ -327,4 +390,5 @@ export async function _resetAuditLogForDate(date: string = todayUtcDate()): Prom
 export const AUDIT_LOG_LIMITS = {
   maxFileBytes: MAX_AUDIT_FILE_BYTES,
   defaultRetentionDays: DEFAULT_RETENTION_DAYS,
+  defaultGcIntervalMs: DEFAULT_GC_INTERVAL_MS,
 } as const;

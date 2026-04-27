@@ -11,6 +11,7 @@ import {
   garbageCollectAuditLogs,
   getAuditLogStats,
   readAuditEventsForRun,
+  runAuditLogGcCycle,
   _resetAuditLogForDate,
 } from '../server/src/skills/audit-log.js';
 
@@ -75,6 +76,25 @@ describe('audit-log rotation / GC / stats', () => {
     expect(await fs.stat(recentFile)).toBeTruthy();
   });
 
+  it('runAuditLogGcCycle 先执行 dry-run 再正式删除候选文件', async () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    await fs.mkdir(getAuditDir(), { recursive: true });
+    const oldDate = isoDaysAgo(91).slice(0, 10);
+    const oldFile = path.join(getAuditDir(), `${oldDate}.jsonl`);
+    await fs.writeFile(oldFile, '{"timestamp":"2026-01-01T00:00:00.000Z"}\n', 'utf8');
+
+    const result = await runAuditLogGcCycle();
+
+    expect(result.dryRun).toBe(false);
+    expect(result.deletedFiles.map((f) => path.basename(f))).toEqual([`${oldDate}.jsonl`]);
+    await expect(fs.stat(oldFile)).rejects.toMatchObject({ code: 'ENOENT' });
+    const labels = infoSpy.mock.calls.map((call) => String(call[0]));
+    const dryRunIndex = labels.findIndex((label) => label.includes('GC dry-run candidates'));
+    const deletedIndex = labels.findIndex((label) => label.includes('GC deleted files'));
+    expect(dryRunIndex).toBeGreaterThanOrEqual(0);
+    expect(deletedIndex).toBeGreaterThan(dryRunIndex);
+  });
+
   it('getAuditLogStats 返回文件数、总大小和最早事件时间', async () => {
     await _resetAuditLogForDate();
     await appendAuditEvent({
@@ -98,9 +118,11 @@ describe('audit-log rotation / GC / stats', () => {
       payload: { nodeId: 'n1' },
     });
 
+    const readFileSpy = vi.spyOn(fs, 'readFile');
     const stats = await getAuditLogStats();
     expect(stats.totalFileCount).toBe(1);
     expect(stats.totalBytes).toBeGreaterThan(0);
     expect(stats.earliestEventTime).toBe('2026-04-27T01:00:00.000Z');
+    expect(readFileSpy).not.toHaveBeenCalled();
   });
 });
