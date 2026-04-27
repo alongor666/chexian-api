@@ -145,6 +145,7 @@ import aiRoutes from './routes/ai.js';
 import agentAuditRoutes from './agent/routes/agent-audit.js';
 import agentDiagnosisRoutes from './agent/routes/agent-diagnosis.js';
 import skillsRoutes from './routes/skills.js';
+import workflowsRoutes from './routes/workflows.js';
 
 app.use('/api/auth/wecom', wecomAuthRoutes); // 放前面避免 loginLimiter 影响
 app.use('/api/auth', authRoutes);
@@ -155,6 +156,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/agent/audit', agentAuditRoutes);
 app.use('/api/agent/diagnosis', agentDiagnosisRoutes);
 app.use('/api/skills', skillsRoutes);
+app.use('/api/workflows', workflowsRoutes);
 
 /**
  * 7. 404处理

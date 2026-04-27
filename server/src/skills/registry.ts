@@ -10,10 +10,16 @@
 import type { Skill } from './types.js';
 import { dataHealthSkill } from './skills/data-health.skill.js';
 import { kpiBaselineSkill } from './skills/kpi-baseline.skill.js';
+import { costDiagnosisSkill } from './skills/cost-diagnosis.skill.js';
+import { claimsDrilldownSkill } from './skills/claims-drilldown.skill.js';
+import { segmentRiskScanSkill } from './skills/segment-risk-scan.skill.js';
 
 const ALL_SKILLS: ReadonlyArray<Skill<any, any>> = [
   dataHealthSkill,
   kpiBaselineSkill,
+  costDiagnosisSkill,
+  claimsDrilldownSkill,
+  segmentRiskScanSkill,
 ];
 
 const SKILL_MAP = new Map<string, Skill<any, any>>(ALL_SKILLS.map((s) => [s.id, s]));
