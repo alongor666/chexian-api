@@ -17,6 +17,7 @@ import { seedAccessControlData } from './services/access-control.js';
 import { DataBootstrapper } from './services/data-bootstrapper.js';
 import { registerBootstrapper } from './services/bootstrapper-registry.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
+import { startAuditLogMaintenance } from './skills/audit-log.js';
 
 import type { Server } from 'http';
 
@@ -27,6 +28,8 @@ const PORT = serverEnv.PORT;
 let dataReady = false;
 /** HTTP server 引用，优雅关闭时先停止接收新请求 */
 let httpServer: Server | null = null;
+/** audit-log GC 维护任务停止函数 */
+let stopAuditLogMaintenance: (() => void) | null = null;
 
 /**
  * 1. 安全中间件
@@ -214,6 +217,7 @@ async function startServer() {
       console.log(`[Server] 🚀 Server is running on http://${BIND_HOST}:${PORT}`);
       console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`[Server] Health check: http://${BIND_HOST}:${PORT}/health`);
+      stopAuditLogMaintenance = startAuditLogMaintenance();
 
       // 通知 PM2 进程已就绪（配合 wait_ready: true）
       if (typeof process.send === 'function') {
@@ -233,6 +237,8 @@ async function startServer() {
 async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`[Server] ${signal} received, shutting down gracefully...`);
   dataReady = false; // 健康检查立即返回 503，通知负载均衡器摘除节点
+  stopAuditLogMaintenance?.();
+  stopAuditLogMaintenance = null;
 
   // 1. 停止接收新的 TCP 连接
   if (httpServer) {
