@@ -30,6 +30,7 @@ import {
   AUTH_ROUTES,
   AI_ROUTES,
   FILTER_ROUTES,
+  WORKFLOWS_ROUTES,
 } from './routes';
 
 /** API 基础地址（从环境变量获取，默认本地开发地址） */
@@ -1127,6 +1128,70 @@ class ApiClient {
   }
 
   // ── 续保追踪 ──
+
+  // ============================================
+  // Workflows API（阶段 4 PR-B/C/D）
+  // ============================================
+
+  /** 获取 workflow run 完整记录（含 approval 状态） */
+  async getWorkflowRun(runId: string): Promise<{
+    runId: string;
+    workflowId: string;
+    workflowVersion: string;
+    status: 'success' | 'partial' | 'failed' | 'pending_approval';
+    userId: string;
+    username: string;
+    requestId: string;
+    startedAt: string;
+    finishedAt: string;
+    elapsedMs: number;
+    input: unknown;
+    steps: Array<Record<string, unknown>>;
+    report?: { narrative: string | null };
+    approval?: {
+      pendingNodeId: string;
+      pendingNodeIndex: number;
+      approverRoles: ReadonlyArray<string>;
+      approvedBy?: string;
+      approvedAt?: string;
+      rejectedBy?: string;
+      rejectedAt?: string;
+      rejectReason?: string;
+    } | null;
+  }> {
+    const path = WORKFLOWS_ROUTES.RUN_BY_ID.replace(':runId', encodeURIComponent(runId));
+    return this.request(`/${path}`);
+  }
+
+  /** 列出指定 runId 的审计事件序列（按时间升序） */
+  async getWorkflowAudit(runId: string): Promise<Array<{
+    timestamp: string;
+    runId: string;
+    workflowId: string;
+    eventType: 'workflow-started' | 'step-completed' | 'approval-requested' | 'approval-granted' | 'approval-denied' | 'workflow-completed';
+    userId: string;
+    role: string;
+    requestId: string;
+    payload: Record<string, unknown>;
+  }>> {
+    const path = WORKFLOWS_ROUTES.RUN_AUDIT.replace(':runId', encodeURIComponent(runId));
+    return this.request(`/${path}`);
+  }
+
+  /** 审批通过 pending_approval 的 workflow run，触发 resume */
+  async approveWorkflowRun(runId: string): Promise<Record<string, unknown>> {
+    const path = WORKFLOWS_ROUTES.RUN_APPROVE.replace(':runId', encodeURIComponent(runId));
+    return this.request(`/${path}`, { method: 'POST', body: JSON.stringify({}) });
+  }
+
+  /** 拒绝 pending_approval 的 workflow run；reason 透传到 audit + record.approval.rejectReason */
+  async rejectWorkflowRun(runId: string, reason?: string): Promise<Record<string, unknown>> {
+    const path = WORKFLOWS_ROUTES.RUN_REJECT.replace(':runId', encodeURIComponent(runId));
+    return this.request(`/${path}`, {
+      method: 'POST',
+      body: JSON.stringify(reason ? { reason } : {}),
+    });
+  }
 
   async getRenewalTracker(params: Record<string, string>) {
     const query = this.buildQueryString(params);

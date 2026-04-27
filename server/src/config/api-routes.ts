@@ -201,3 +201,16 @@ export const COPILOT_ROUTES = {
   RUN_STREAM: '/runs/:runId/stream',
   RUN_REPORT: '/runs/:runId/report',
 } as const;
+
+// ─────────────────────────────────────────────
+// /api/workflows/* 路由（阶段 4 PR-B/C/D）
+// ─────────────────────────────────────────────
+export const WORKFLOWS_ROUTES = {
+  LIST: '/',
+  RUN: '/:id/run',
+  RUNS_LIST: '/runs',
+  RUN_BY_ID: '/runs/:runId',
+  RUN_APPROVE: '/runs/:runId/approve',
+  RUN_REJECT: '/runs/:runId/reject',
+  RUN_AUDIT: '/runs/:runId/audit',
+} as const;
