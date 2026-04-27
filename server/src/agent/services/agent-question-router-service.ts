@@ -31,6 +31,10 @@ function isForecastQuestion(text: string): boolean {
   );
 }
 
+function isProfitRateOrNetProfitQuestion(text: string): boolean {
+  return includesAny(text, ['利润率', '盈利率', '净利润', '利润边际', '财务盈利', '财务亏损']);
+}
+
 export function routeAgentQuestion(input: RouteQuestionInput): RouteQuestionResult {
   const { question } = RouteQuestionInputSchema.parse(input);
   const normalized = question.trim().toLowerCase();
@@ -65,6 +69,15 @@ export function routeAgentQuestion(input: RouteQuestionInput): RouteQuestionResu
     });
   }
 
+  if (isProfitRateOrNetProfitQuestion(normalized)) {
+    return parseResult({
+      blocked: true,
+      status: 'unsupported',
+      reason: '当前项目数据不支持财务盈亏、利润率或净利润分析。',
+      replacementSuggestions: ['经营利润预测情景测算', '成本指标诊断：变动成本率、赔付率、费用率、边际贡献额', '增长归因', '报价转化', '续保追踪', '赔案风险'],
+    });
+  }
+
   if (isForecastQuestion(normalized)) {
     return parseResult({
       blocked: false,
@@ -92,7 +105,7 @@ export function routeAgentQuestion(input: RouteQuestionInput): RouteQuestionResu
     });
   }
 
-  if (includesAny(normalized, ['利润率', '盈利率', '净利润', '经营利润', '利润边际', '财务盈利', '财务亏损', '盈利', '亏损'])) {
+  if (includesAny(normalized, ['经营利润', '盈利', '亏损'])) {
     return parseResult({
       blocked: true,
       status: 'unsupported',
