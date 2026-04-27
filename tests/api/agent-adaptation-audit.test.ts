@@ -116,8 +116,11 @@ describe('agent adaptation audit routing', () => {
 
   it('reports Stage 1-4 deterministic readiness and keeps Stage 5 blocked by production evidence', async () => {
     const readiness = await getAgentReadinessAudit();
+    const displayEvidence = readiness.stage5Prerequisites.find(
+      (item) => item.id === 'warnings_and_forbidden_interpretations_displayed'
+    );
 
-    expect(readiness.currentStage).toBe('stage_4_6_observability_ready');
+    expect(readiness.currentStage).toBe('stage_4_8_display_contract_ready');
     expect(readiness.readyForLlm).toBe(false);
     expect(readiness.deterministicDiagnosisCapabilityCount).toBe(7);
     expect(readiness.completedStages.map((stage) => stage.id)).toEqual(
@@ -128,6 +131,7 @@ describe('agent adaptation audit routing', () => {
         'stage_3_deterministic_diagnoses',
         'stage_4_business_patrol',
         'stage_4_6_observability_readiness',
+        'stage_4_8_caller_display_evidence',
       ])
     );
     expect(readiness.blockedStages.map((stage) => stage.id)).toContain('stage_5_llm_interpretation');
@@ -136,9 +140,19 @@ describe('agent adaptation audit routing', () => {
       expect.arrayContaining([
         '缺少生产 audit log 对 /api/agent/diagnosis/* 调用记录的验收证据。',
         '缺少最近 30 天 /api/agent/diagnosis/* error rate < 1% 的验收证据。',
-        '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
       ])
     );
+    expect(readiness.llmReadinessBlockers).not.toContain(
+      '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。'
+    );
+    expect(displayEvidence?.met).toBe(true);
+    expect(displayEvidence?.evidence).toEqual(
+      expect.arrayContaining([
+        'scripts/verify-agent-production-smoke.mjs',
+        'tests/api/agent-production-smoke-harness.test.mjs',
+      ])
+    );
+    expect(readiness.observabilityEvidence.displayContract.status).toBe('verified_by_caller_smoke_harness');
     expect(readiness.observabilityEvidence.phase).toBe('agent_observability_readiness');
   });
 

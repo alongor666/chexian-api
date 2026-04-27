@@ -116,7 +116,7 @@ describe('agent production smoke harness', () => {
               stage5Prerequisites: [
                 { id: 'production_audit_log_observed', met: true },
                 { id: 'thirty_day_error_rate_under_threshold', met: false },
-                { id: 'warnings_and_forbidden_interpretations_displayed', met: false },
+                { id: 'warnings_and_forbidden_interpretations_displayed', met: true },
               ],
             },
           },
@@ -131,6 +131,7 @@ describe('agent production smoke harness', () => {
     expect(evaluation.summary.callerDisplayContractVerified).toBe(true);
     expect(evaluation.summary.readyForLlm).toBe(false);
     expect(evaluation.summary.stage5Prerequisites.thirty_day_error_rate_under_threshold).toBe(false);
+    expect(evaluation.summary.stage5Prerequisites.warnings_and_forbidden_interpretations_displayed).toBe(true);
   });
 
   it('does not add LLM, NL2SQL, raw SQL, or implicit current-date behavior', () => {

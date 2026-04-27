@@ -97,7 +97,7 @@ describe('agent observability audit readiness', () => {
     expect(audit.stage5Evidence.find((item) => item.id === 'thirty_day_error_rate_under_threshold')?.met).toBe(false);
   });
 
-  it('keeps Stage 5 blocked until production logs and caller display evidence are available', async () => {
+  it('keeps Stage 5 blocked until production logs are available while caller display evidence is verified', async () => {
     const audit = await getAgentObservabilityAudit({
       auditLogPath: '/tmp/chexian-agent-observability-missing.log',
       now: new Date('2026-04-26T00:00:00.000Z'),
@@ -108,8 +108,14 @@ describe('agent observability audit readiness', () => {
     expect(audit.auditLog.productionEvidence).toBe(false);
     expect(audit.stage5Evidence.find((item) => item.id === 'production_audit_log_observed')?.met).toBe(false);
     expect(audit.stage5Evidence.find((item) => item.id === 'warnings_and_forbidden_interpretations_displayed')?.met)
-      .toBe(false);
-    expect(audit.displayContract.status).toBe('pending_caller_display_evidence');
+      .toBe(true);
+    expect(audit.displayContract.status).toBe('verified_by_caller_smoke_harness');
+    expect(audit.displayContract.evidence).toEqual(
+      expect.arrayContaining([
+        'scripts/verify-agent-production-smoke.mjs',
+        'tests/api/agent-production-smoke-harness.test.mjs',
+      ])
+    );
   });
 
   it('keeps 30-day error-rate evidence blocked when only a truncated tail sample is available', async () => {
@@ -153,7 +159,7 @@ describe('agent observability audit readiness', () => {
       },
     });
 
-    expect(readiness.currentStage).toBe('stage_4_6_observability_ready');
+    expect(readiness.currentStage).toBe('stage_4_8_display_contract_ready');
     expect(readiness.readyForLlm).toBe(false);
     expect(readiness.observabilityEvidence.auditLog.status).toBe('missing_log');
     expect(readiness.stage5Prerequisites.map((item) => item.id)).toEqual(

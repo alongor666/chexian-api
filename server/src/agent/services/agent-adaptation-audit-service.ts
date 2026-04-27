@@ -185,14 +185,24 @@ const stageReadiness: AgentReadinessStage[] = [
     blockers: [],
   },
   {
+    id: 'stage_4_8_caller_display_evidence',
+    name: '调用方展示证据闭环',
+    status: 'completed',
+    evidence: [
+      'scripts/verify-agent-production-smoke.mjs',
+      'tests/api/agent-production-smoke-harness.test.mjs',
+      '调用方 smoke harness 会校验每个诊断响应都包含 warnings 与 forbiddenInterpretations。',
+    ],
+    blockers: [],
+  },
+  {
     id: 'stage_5_llm_interpretation',
     name: 'LLM 解释层',
     status: 'blocked',
-    evidence: ['必须等待确定性接口生产运行证据。'],
+    evidence: ['必须等待确定性接口生产运行证据，并由单独 Stage 5 PR 显式启动。'],
     blockers: [
       '缺少生产 audit log 对 /api/agent/diagnosis/* 调用记录的验收证据。',
       '缺少最近 30 天 /api/agent/diagnosis/* error rate < 1% 的验收证据。',
-      '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
     ],
   },
   {
@@ -212,6 +222,11 @@ const displayContractTests = [
   'tests/api/agent-claims-risk-diagnosis.test.ts',
   'tests/api/agent-customer-flow-diagnosis.test.ts',
   'tests/api/agent-business-patrol-diagnosis.test.ts',
+];
+
+const callerDisplayEvidence = [
+  'scripts/verify-agent-production-smoke.mjs',
+  'tests/api/agent-production-smoke-harness.test.mjs',
 ];
 
 export interface AgentObservabilityAuditOptions {
@@ -323,54 +338,60 @@ function buildStage5Evidence(observability: AgentObservabilityAudit): AgentReadi
     observability.auditLog.windowComplete &&
     observability.auditLog.totalAgentDiagnosisCalls > 0 &&
     observability.auditLog.errorRate < 0.01;
+  const callerDisplayVerified = observability.displayContract.status === 'verified_by_caller_smoke_harness';
 
   return [
-  {
-    id: 'deterministic_apis_merged',
-    name: 'Stage 1-4 确定性 API 已合并',
-    met: true,
-    evidence: deterministicDiagnosisCapabilities.map((item) => item.endpoint),
-  },
-  {
-    id: 'http_and_contract_tests',
-    name: '每个诊断 API 均有 HTTP 集成测试和 route contract 测试',
-    met: true,
-    evidence: deterministicDiagnosisCapabilities.flatMap((item) => [item.httpIntegrationTest, item.routeContractTest]),
-  },
-  {
-    id: 'production_audit_log_observed',
-    name: '生产 audit log 能看到 /api/agent/diagnosis/* 调用记录',
-    met: productionAuditObserved,
-    evidence: productionAuditObserved
-      ? [
-          `auditLogConfigured=${observability.auditLog.auditLogConfigured}`,
-          `totalAgentDiagnosisCalls=${observability.auditLog.totalAgentDiagnosisCalls}`,
-          `lastObservedAt=${observability.auditLog.lastObservedAt ?? 'unknown'}`,
-        ]
-      : [],
-    blocker: '缺少生产 audit log 对 /api/agent/diagnosis/* 调用记录的验收证据。',
-  },
-  {
-    id: 'thirty_day_error_rate_under_threshold',
-    name: '最近 30 天 /api/agent/diagnosis/* error rate < 1%',
-    met: errorRateUnderThreshold,
-    evidence: errorRateUnderThreshold
-      ? [
-          `windowDays=${observability.auditLog.windowDays}`,
-          `windowComplete=${observability.auditLog.windowComplete}`,
-          `errorRate=${observability.auditLog.errorRate}`,
-          `errorCount=${observability.auditLog.errorCount}`,
-        ]
-      : [],
-    blocker: '缺少最近 30 天 /api/agent/diagnosis/* error rate < 1% 的验收证据。',
-  },
-  {
-    id: 'warnings_and_forbidden_interpretations_displayed',
-    name: '前端或调用方展示 warnings 与 forbiddenInterpretations',
-    met: false,
-    evidence: observability.displayContract.verifiedByTests,
-    blocker: '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
-  },
+    {
+      id: 'deterministic_apis_merged',
+      name: 'Stage 1-4 确定性 API 已合并',
+      met: true,
+      evidence: deterministicDiagnosisCapabilities.map((item) => item.endpoint),
+    },
+    {
+      id: 'http_and_contract_tests',
+      name: '每个诊断 API 均有 HTTP 集成测试和 route contract 测试',
+      met: true,
+      evidence: deterministicDiagnosisCapabilities.flatMap((item) => [item.httpIntegrationTest, item.routeContractTest]),
+    },
+    {
+      id: 'production_audit_log_observed',
+      name: '生产 audit log 能看到 /api/agent/diagnosis/* 调用记录',
+      met: productionAuditObserved,
+      evidence: productionAuditObserved
+        ? [
+            `auditLogConfigured=${observability.auditLog.auditLogConfigured}`,
+            `totalAgentDiagnosisCalls=${observability.auditLog.totalAgentDiagnosisCalls}`,
+            `lastObservedAt=${observability.auditLog.lastObservedAt ?? 'unknown'}`,
+          ]
+        : [],
+      blocker: '缺少生产 audit log 对 /api/agent/diagnosis/* 调用记录的验收证据。',
+    },
+    {
+      id: 'thirty_day_error_rate_under_threshold',
+      name: '最近 30 天 /api/agent/diagnosis/* error rate < 1%',
+      met: errorRateUnderThreshold,
+      evidence: errorRateUnderThreshold
+        ? [
+            `windowDays=${observability.auditLog.windowDays}`,
+            `windowComplete=${observability.auditLog.windowComplete}`,
+            `errorRate=${observability.auditLog.errorRate}`,
+            `errorCount=${observability.auditLog.errorCount}`,
+          ]
+        : [],
+      blocker: '缺少最近 30 天 /api/agent/diagnosis/* error rate < 1% 的验收证据。',
+    },
+    {
+      id: 'warnings_and_forbidden_interpretations_displayed',
+      name: '前端或调用方展示 warnings 与 forbiddenInterpretations',
+      met: callerDisplayVerified,
+      evidence: [
+        ...observability.displayContract.verifiedByTests,
+        ...observability.displayContract.evidence,
+      ],
+      blocker: callerDisplayVerified
+        ? undefined
+        : '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
+    },
   ];
 }
 
@@ -470,16 +491,16 @@ export async function getAgentObservabilityAudit(options: AgentObservabilityAudi
     })),
     stage5Evidence: [],
     displayContract: {
-      status: 'pending_caller_display_evidence',
+      status: 'verified_by_caller_smoke_harness',
       requiredFields: ['warnings', 'forbiddenInterpretations'],
       verifiedByTests: displayContractTests,
-      blocker: '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
+      evidence: callerDisplayEvidence,
     },
     notes: [
       '本审计只读取既有 audit log，不新增 SQL，不调用 LLM。',
       '请求路径只异步读取审计日志尾部的限量样本；只有样本覆盖完整 30 天窗口时，才允许采信 30 天错误率达标证据。',
       '只有 NODE_ENV=production 且最近 30 天存在 /api/agent/diagnosis/* 调用时，才视为生产审计证据。',
-      'warnings 与 forbiddenInterpretations 已在确定性 API 响应契约中存在，但 Stage 5 仍需要调用方展示证据。',
+      'warnings 与 forbiddenInterpretations 已在确定性 API 响应契约中存在，并由生产 smoke harness 校验调用方接收展示契约。',
     ],
   });
 
@@ -506,7 +527,7 @@ export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions
 
   return AgentReadinessAuditSchema.parse({
     phase: 'agent_metric_adaptation_audit',
-    currentStage: 'stage_4_6_observability_ready',
+    currentStage: 'stage_4_8_display_contract_ready',
     readyForLlm: false,
     readyForChatWindow: false,
     deterministicRouting: true,
@@ -525,9 +546,10 @@ export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions
     observabilityEvidence,
     notes: [
       'Stage 1-4.6 已完成：指标审计、注册表一致性、确定性诊断、经营巡检聚合和观测证据闭环。',
+      'Stage 4.8 已完成：调用方 smoke harness 校验 warnings 与 forbiddenInterpretations 展示契约。',
       'Agent 层复用现有指标注册表、查询路由和 SQL 生成器，不新增自由查询能力。',
       '承保利润、利润率、边际贡献、财务盈亏、财务综合成本率保持 unsupported。',
-      'Stage 5 LLM 解释层仍被生产 audit log、30 天错误率和 warnings/forbiddenInterpretations 展示证据阻塞。',
+      'Stage 5 LLM 解释层仍保持关闭；即使前置证据齐备，也必须通过单独 PR 显式启动。',
     ],
   });
 }
