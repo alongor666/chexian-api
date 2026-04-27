@@ -51,6 +51,7 @@ DEFAULT_SCHEMA = {
     "fvtVUv": "报价保费",
     "fq3LsN": "是否续回",
     "fMDwYc": "业务员",
+    "fnk47h": "流失原因分析",
     "fwUUeU": "续回日期",
     "ft4uK0": "报价日期",
     "fEdcCG": "续保模式",
@@ -204,6 +205,7 @@ def build_record(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "fkjhnX": [{"text": "是" if row.get("is_quoted") else "否"}],
         "fq3LsN": bool(row.get("is_renewed")),
         "fEdcCG": [{"text": text_value(row.get("renewal_mode"))}],
+        "fnk47h": format_customer_status(row),
     }
     prior_discount = clean_num(row.get("prior_discount"))
     prior_premium = clean_num(row.get("prior_premium"))

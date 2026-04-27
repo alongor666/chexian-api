@@ -111,6 +111,12 @@ fields:
     source: derived.is_renewed    # CASE WHEN renewed.renewed_policy_no IS NOT NULL
     type: bool
 
+  loss_reason:
+    field_id: fnk47h
+    label: 流失原因分析
+    source: derived.customer_status
+    type: text
+
   renewal_mode:
     field_id: fEdcCG
     label: 续保模式
