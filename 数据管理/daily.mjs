@@ -384,7 +384,14 @@ function runStandardDomain(python, scriptDir, manifest) {
 }
 
 function runStrategySingle({ python, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
-  safeConvertDomain(python, scriptPath, sourceFiles[0].path, outputAbs, trigger.archive_prefix, extraArgs);
+  // 多 glob 并存时按 mtime 取最新文件（避免历史旧命名文件长期占据声明顺序首位、屏蔽新命名更新）
+  const latest = sourceFiles
+    .slice()
+    .sort((a, b) => statSync(b.path).mtimeMs - statSync(a.path).mtimeMs)[0];
+  if (sourceFiles.length > 1) {
+    log('cyan', `  single 策略：${sourceFiles.length} 个候选 → 选 mtime 最新: ${latest.name}`);
+  }
+  safeConvertDomain(python, scriptPath, latest.path, outputAbs, trigger.archive_prefix, extraArgs);
 }
 
 function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
