@@ -31,10 +31,17 @@ export interface ExplainDiagnosisOptions {
   provider: LLMAdapter;
 }
 
-function ensureSupportedCapability(capabilityId: string): void {
-  if (!agentDataCapabilityRegistry.some((capability) => capability.id === capabilityId)) {
+function findCapability(capabilityId: string) {
+  const capability = agentDataCapabilityRegistry.find((item) => item.id === capabilityId);
+  if (!capability) {
     throw new AppError(400, `Unknown Agent capability: ${capabilityId}`);
   }
+  return capability;
+}
+
+function replacementSuggestionsForCapability(capabilityId: string): string[] {
+  const capability = agentDataCapabilityRegistry.find((item) => item.id === capabilityId);
+  return capability?.replacementSuggestions ?? ['请改用已支持的确定性 Agent 诊断能力。'];
 }
 
 function collectReferencedMetricIds(input: AgentDiagnosisExplanationRequest, routedMetrics: string[]): string[] {
@@ -79,7 +86,8 @@ function buildUserContent(input: AgentDiagnosisExplanationRequest, referencedMet
 function buildRefusedResult(
   input: AgentDiagnosisExplanationRequest,
   reason: string,
-  replacementSuggestions: string[]
+  replacementSuggestions: string[],
+  source: 'routeAgentQuestion' | 'unsupportedMetricRegistry' | 'agentDataCapabilityRegistry' = 'routeAgentQuestion'
 ): AgentDiagnosisExplanationResult {
   return AgentDiagnosisExplanationResultSchema.parse({
     capabilityId: input.sourceCapabilityId,
@@ -90,7 +98,7 @@ function buildRefusedResult(
     warnings: input.diagnosisResult.warnings,
     forbiddenInterpretations: input.diagnosisResult.forbiddenInterpretations,
     unsupportedRefusals: [{
-      source: 'routeAgentQuestion',
+      source,
       reason,
       replacementSuggestions,
     }],
@@ -106,7 +114,15 @@ export async function explainDiagnosisResult(
   options: ExplainDiagnosisOptions
 ): Promise<AgentDiagnosisExplanationResult> {
   const input = AgentDiagnosisExplanationRequestSchema.parse(rawInput);
-  ensureSupportedCapability(input.sourceCapabilityId);
+  const capability = findCapability(input.sourceCapabilityId);
+  if (capability.supportLevel !== 'supported') {
+    return buildRefusedResult(
+      input,
+      `${capability.name} 当前不是 supported Agent 诊断能力，解释层不会调用 LLM。`,
+      replacementSuggestionsForCapability(capability.id),
+      'agentDataCapabilityRegistry'
+    );
+  }
 
   const routed = input.userQuestion ? routeAgentQuestion({ question: input.userQuestion }) : undefined;
   if (routed?.blocked) {
@@ -135,7 +151,24 @@ export async function explainDiagnosisResult(
     userContent,
     temperature: 0.2,
     maxTokens: 500,
-  });
+  }).catch(() => undefined);
+  if (!narrative) {
+    return AgentDiagnosisExplanationResultSchema.parse({
+      capabilityId: input.sourceCapabilityId,
+      status: 'explained',
+      summary: '解释生成暂不可用，请直接参考确定性诊断结果、warnings 和 forbiddenInterpretations。',
+      referencedMetricIds,
+      evidence: buildEvidence(referencedMetricIds),
+      warnings,
+      forbiddenInterpretations: input.diagnosisResult.forbiddenInterpretations,
+      unsupportedRefusals: [],
+      narrativeMeta: {
+        provider: options.provider.provider,
+        blockedBySqlGuard: false,
+        error: 'provider_error',
+      },
+    });
+  }
   const guard = inspectForSql(narrative.text);
   const blockedBySqlGuard = narrative.blockedBySqlGuard || guard.blocked;
   const summary = blockedBySqlGuard

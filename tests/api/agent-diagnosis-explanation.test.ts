@@ -37,6 +37,14 @@ function makeProvider(text: string): LLMAdapter {
   };
 }
 
+function makeRejectingProvider(): LLMAdapter {
+  return {
+    provider: 'test-provider',
+    enabled: true,
+    generateNarrative: vi.fn().mockRejectedValue(new Error('network timeout with internal details')),
+  };
+}
+
 function makeCostDiagnosisResult() {
   return {
     capabilityId: 'cost_indicator_diagnosis',
@@ -117,6 +125,52 @@ describe('agent diagnosis explanation service', () => {
       reason: '当前项目数据不支持承保利润分析。',
     });
     expect(provider.generateNarrative).not.toHaveBeenCalled();
+  });
+
+  it('refuses non-supported capabilities before calling the provider', async () => {
+    const provider = makeProvider('不应生成这段解释');
+
+    const result = await explainDiagnosisResult(
+      {
+        sourceCapabilityId: 'underwriting_profit_diagnosis',
+        diagnosisResult: {
+          ...makeCostDiagnosisResult(),
+          capabilityId: 'underwriting_profit_diagnosis',
+        },
+      },
+      { provider }
+    );
+
+    expect(result.status).toBe('refused');
+    expect(result.summary).toContain('当前不是 supported Agent 诊断能力');
+    expect(result.unsupportedRefusals[0]).toMatchObject({
+      source: 'agentDataCapabilityRegistry',
+      replacementSuggestions: expect.arrayContaining(['cost_indicator_diagnosis']),
+    });
+    expect(provider.generateNarrative).not.toHaveBeenCalled();
+  });
+
+  it('falls back to deterministic output when the provider fails', async () => {
+    const provider = makeRejectingProvider();
+
+    const result = await explainDiagnosisResult(
+      {
+        sourceCapabilityId: 'cost_indicator_diagnosis',
+        userQuestion: '变动成本率为什么升高？',
+        diagnosisResult: makeCostDiagnosisResult(),
+      },
+      { provider }
+    );
+
+    expect(result.status).toBe('explained');
+    expect(result.summary).toContain('解释生成暂不可用');
+    expect(result.narrativeMeta).toMatchObject({
+      provider: 'test-provider',
+      blockedBySqlGuard: false,
+      error: 'provider_error',
+    });
+    expect(result.narrativeMeta.error).not.toContain('network timeout');
+    expect(provider.generateNarrative).toHaveBeenCalledTimes(1);
   });
 
   it('runs sql-guard over provider output and returns a guarded placeholder', async () => {

@@ -24,7 +24,7 @@ export const AgentDiagnosisExplanationEvidenceSchema = z.object({
 });
 
 export const AgentDiagnosisExplanationRefusalSchema = z.object({
-  source: z.enum(['routeAgentQuestion', 'unsupportedMetricRegistry']),
+  source: z.enum(['routeAgentQuestion', 'unsupportedMetricRegistry', 'agentDataCapabilityRegistry']),
   reason: z.string().min(1),
   replacementSuggestions: z.array(z.string()).default([]),
 });
