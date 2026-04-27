@@ -1,27 +1,32 @@
 /**
- * auto-risk-control 工作流 — 阶段 4 PR-B（线性 5 步前置 + risk-scoring + approval + pricing-simulation）
+ * auto-risk-control 工作流 — 阶段 4 PR-C（在 PR-B 基础上追加 attach-narrative 末尾节点）
  *
- * 流程：
+ * 流程（v1.2.0）：
  *   1. data-health
  *   2. kpi-baseline
  *   3. cost-diagnosis
  *   4. claims-drilldown
  *   5. segment-risk-scan
  *   6. risk-scoring          （阶段 4 PR-B；接 segment-risk-scan 输出，纯确定性内存计算）
- *   7. risk-control-approval （阶段 4 PR-B；approval 节点，approverRoles=branch_admin，挂起整个 workflow）
- *   8. pricing-simulation    （阶段 4 PR-B；审批通过后才执行，接 risk-scoring 输出）
+ *   7. risk-control-approval （阶段 4 PR-B；approval 节点，approverRoles=branch_admin）
+ *   8. pricing-simulation    （阶段 4 PR-B；审批通过后才执行）
+ *   9. attach-narrative      （阶段 4 PR-C；首个 deterministic=false skill；
+ *                              生成自然语言叙述，仅文本，不改任何数字；
+ *                              失败 onFailure='skip-and-continue'，不阻断 workflow）
  *
  * 失败策略：
  *   - 5 步前置保留原 skip-and-continue（除 data-health=stop）
- *   - risk-scoring / pricing-simulation: onFailure='stop'，审批前后任何失败都不能继续执行下游
+ *   - risk-scoring / pricing-simulation: onFailure='stop'
+ *   - attach-narrative: skip-and-continue（advisory，不能因 LLM 失败拖累整个 workflow）
  */
 
 import { z } from 'zod';
 import { PeriodSchema } from '../types.js';
 import type { SkillResult } from '../types.js';
-import type { WorkflowDef } from '../workflow-runner.js';
+import type { WorkflowDef, WorkflowExecCtx } from '../workflow-runner.js';
 import type { SegmentRiskScanResultSchema } from '../skills/segment-risk-scan.skill.js';
 import type { RiskScoringResultSchema } from '../skills/risk-scoring.skill.js';
+import type { StepSummary } from '../skills/attach-narrative.skill.js';
 
 const InputSchema = z.object({
   period: PeriodSchema,
@@ -46,13 +51,59 @@ const InputSchema = z.object({
     .default(['customer_category', 'org_level_3']),
 });
 
+/**
+ * 把 ctx.results 转成 attach-narrative 的 stepsSummary 输入。
+ *
+ * 仅抽取已聚合的元数据（status/skillId/warnings/evidence），禁止注入原始数据 / SQL / 字段名。
+ * inputBuilder 时点：所有上游节点已完成（含 pricing-simulation），ctx.results 完整。
+ */
+export function buildAttachNarrativeStepsFromCtx(ctx: WorkflowExecCtx): StepSummary[] {
+  const orderedNodeIds = [
+    'data-health',
+    'kpi-baseline',
+    'cost-diagnosis',
+    'claims-drilldown',
+    'segment-risk-scan',
+    'risk-scoring',
+    'pricing-simulation',
+  ] as const;
+  const out: StepSummary[] = [];
+  for (const nodeId of orderedNodeIds) {
+    const r = ctx.results[nodeId];
+    if (!r) {
+      // 失败 / 跳过的节点也保留摘要（status='skipped'）以便叙述完整反映失败信号
+      out.push({
+        nodeId,
+        skillId: nodeId,
+        status: 'skipped',
+        warnings: [],
+        evidence: [],
+      });
+      continue;
+    }
+    out.push({
+      nodeId,
+      skillId: nodeId,
+      status: 'success',
+      warnings: r.warnings ?? [],
+      evidence: (r.evidence ?? []).map((ev) => ({
+        metric: ev.metric,
+        value: ev.value,
+        source: ev.source,
+        note: ev.note,
+      })),
+    });
+  }
+  return out;
+}
+
 export const autoRiskControlWorkflow: WorkflowDef<typeof InputSchema> = {
   id: 'auto-risk-control-v1',
-  name: '自动风险管控（5 步前置 + 评分 + 审批 + 定价模拟）',
-  version: '1.1.0',
+  name: '自动风险管控（5 步前置 + 评分 + 审批 + 定价模拟 + 叙述）',
+  version: '1.2.0',
   description:
     'data-health → kpi-baseline → cost-diagnosis → claims-drilldown → segment-risk-scan → ' +
-    'risk-scoring → risk-control-approval → pricing-simulation',
+    'risk-scoring → risk-control-approval → pricing-simulation → attach-narrative',
   inputSchema: InputSchema,
   nodes: [
     {
@@ -135,8 +186,9 @@ export const autoRiskControlWorkflow: WorkflowDef<typeof InputSchema> = {
       id: 'pricing-simulation',
       type: 'sequential',
       skillId: 'pricing-simulation',
-      // 审批通过后再失败 → 不允许继续，但当前节点已是末尾，stop 与 skip 等价；
-      // 显式 stop 表达"审批后任何失败也不再向下游传递"的语义。
+      // 审批通过后再失败 → 不允许继续到下游 deterministic 输出。
+      // attach-narrative 在 pricing-simulation 失败时不应被执行（叙述需要完整数据）；
+      // stop 直接 break，attach-narrative 节点不会被调用 — 符合预期。
       onFailure: 'stop',
       inputBuilder: (ctx) => {
         const upstream = ctx.results['risk-scoring'] as SkillResult | undefined;
@@ -145,6 +197,21 @@ export const autoRiskControlWorkflow: WorkflowDef<typeof InputSchema> = {
         }
         return {
           scoring: upstream.result as z.infer<typeof RiskScoringResultSchema>,
+        };
+      },
+    },
+    {
+      id: 'attach-narrative',
+      type: 'sequential',
+      skillId: 'attach-narrative',
+      // LLM 失败不阻断 workflow，advisory 信息
+      onFailure: 'skip-and-continue',
+      inputBuilder: (ctx) => {
+        const steps = buildAttachNarrativeStepsFromCtx(ctx);
+        return {
+          workflowId: 'auto-risk-control-v1',
+          scope: 'full',
+          steps,
         };
       },
     },

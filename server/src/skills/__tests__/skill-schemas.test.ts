@@ -128,7 +128,7 @@ describe('auto-risk-control workflow shape', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('阶段 4 PR-B：8 节点流（5 步前置 + risk-scoring + approval + pricing-simulation）', () => {
+  it('阶段 4 PR-C：9 节点流（5 步前置 + risk-scoring + approval + pricing-simulation + attach-narrative）', () => {
     const ids = autoRiskControlWorkflow.nodes.map((n) => n.id);
     expect(ids).toEqual([
       'data-health',
@@ -139,7 +139,17 @@ describe('auto-risk-control workflow shape', () => {
       'risk-scoring',
       'risk-control-approval',
       'pricing-simulation',
+      'attach-narrative',
     ]);
+  });
+
+  it('阶段 4 PR-C：attach-narrative 节点 onFailure=skip-and-continue（advisory，不阻断 workflow）', () => {
+    const node = autoRiskControlWorkflow.nodes.find((n) => n.id === 'attach-narrative');
+    expect(node?.type).toBe('sequential');
+    if (node?.type === 'sequential') {
+      expect(node.skillId).toBe('attach-narrative');
+      expect(node.onFailure).toBe('skip-and-continue');
+    }
   });
 
   it('data-health 节点配置 onFailure=stop（数据 fail → 后续无意义）', () => {
@@ -291,6 +301,7 @@ describe('red-line policy 覆盖', () => {
         'risk-scoring',
         'pricing-simulation',
         'underwriting-recommendation',
+        'attach-narrative',
       ])
     );
   });
