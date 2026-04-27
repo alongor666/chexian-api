@@ -56,6 +56,11 @@ export interface StartRunInput {
 export function useCopilotRun() {
   const [state, setState] = useState<CopilotRunState>(INITIAL);
   const esRef = useRef<EventSource | null>(null);
+  const stateRef = useRef<CopilotRunState>(INITIAL);
+  // 同步 ref，便于 refresh 等回调读取最新 runId 不依赖闭包
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const cleanup = useCallback(() => {
     esRef.current?.close();
@@ -68,6 +73,36 @@ export function useCopilotRun() {
     cleanup();
     setState(INITIAL);
   }, [cleanup]);
+
+  /**
+   * 阶段 4 PR-D：refetch 报告（用于 approve/reject 后刷新 narrative + workflowStatus）。
+   * 只允许在已有 runId 时调用；仍走 includeNarrative=1 路径，但路由层已优先使用 record.report.narrative。
+   */
+  const refresh = useCallback(async () => {
+    setState((prev) => {
+      if (!prev.runId) return prev;
+      return { ...prev, status: 'fetching-report', error: null };
+    });
+    const runId = stateRef.current.runId;
+    if (!runId) return;
+    const reportRes = await fetchReport(runId, true);
+    setState((prev) => {
+      if (!reportRes.ok || !reportRes.report) {
+        return {
+          ...prev,
+          status: 'error',
+          report: prev.report,
+          error: reportRes.error ?? '报告刷新失败',
+        };
+      }
+      return {
+        ...prev,
+        status: 'completed',
+        workflowStatus: reportRes.report.workflowStatus ?? prev.workflowStatus,
+        report: reportRes.report,
+      };
+    });
+  }, []);
 
   const start = useCallback(
     async (input: StartRunInput) => {
@@ -159,7 +194,7 @@ export function useCopilotRun() {
     [cleanup]
   );
 
-  return { state, start, reset };
+  return { state, start, reset, refresh };
 }
 
 function applyEvent(state: CopilotRunState, event: CopilotStreamEvent): CopilotRunState {

@@ -67,6 +67,33 @@ describe('copilot route contract', () => {
     expect(route).toContain('NARRATIVE_SYSTEM_PROMPT');
   });
 
+  // ─────────────────────────────────────────────
+  // 阶段 4 PR-D: narrative 优先级 — record.report.narrative > LLM 兜底
+  // ─────────────────────────────────────────────
+  it('narrative 优先取自 record.report.narrative（attach-narrative skill 已落盘）', () => {
+    const route = readSource('server/src/routes/copilot.ts');
+    // 路由必须读取 record.report?.narrative
+    expect(route).toContain('record.report?.narrative');
+    // 必须支持 narrativeSource 标记
+    expect(route).toMatch(/narrativeSource/);
+    // 必须有 'workflow-skill' 与 'route-llm' 两个来源标记
+    expect(route).toContain("'workflow-skill'");
+    expect(route).toContain("'route-llm'");
+  });
+
+  it('narrativeSource 字段在响应中暴露（让前端区分来源）', () => {
+    const route = readSource('server/src/routes/copilot.ts');
+    // res.json 的 data 段必须包含 narrativeSource
+    expect(route).toMatch(/narrative,\s*\n\s*narrativeSource,/);
+  });
+
+  it('persistedNarrative 命中时不再调用 LLM provider（避免重复调用）', () => {
+    const route = readSource('server/src/routes/copilot.ts');
+    // 走 if/else if：persistedNarrative 命中走第一支；未命中且 includeNarrative 才走 LLM
+    expect(route).toMatch(/if\s*\(\s*persistedNarrative\s*\)/);
+    expect(route).toMatch(/else if\s*\(\s*includeNarrative\s*\)/);
+  });
+
   it('LLM provider import path is the adapter, not zhipu service directly', () => {
     const route = readSource('server/src/routes/copilot.ts');
     expect(route).toContain("from '../skills/adapters/llm/index.js'");
@@ -79,6 +106,29 @@ describe('copilot route contract', () => {
     const completedIdx = route.indexOf("type: 'workflow-completed'", stepIdx);
     expect(stepIdx).toBeGreaterThan(0);
     expect(completedIdx).toBeGreaterThan(stepIdx);
+  });
+});
+
+describe('workflows route constants — 阶段 4 PR-D', () => {
+  it('注册 WORKFLOWS_ROUTES 常量在 server + frontend mirror（治理 #18 一致性）', () => {
+    const serverRoutes = readSource('server/src/config/api-routes.ts');
+    const frontendRoutes = readSource('src/shared/api/routes.ts');
+
+    expect(serverRoutes).toContain("RUN_AUDIT: '/runs/:runId/audit'");
+    expect(serverRoutes).toContain("RUN_APPROVE: '/runs/:runId/approve'");
+    expect(serverRoutes).toContain("RUN_REJECT: '/runs/:runId/reject'");
+
+    expect(frontendRoutes).toContain("RUN_AUDIT: 'workflows/runs/:runId/audit'");
+    expect(frontendRoutes).toContain("RUN_APPROVE: 'workflows/runs/:runId/approve'");
+    expect(frontendRoutes).toContain("RUN_REJECT: 'workflows/runs/:runId/reject'");
+  });
+
+  it('apiClient 暴露 getWorkflowAudit / approveWorkflowRun / rejectWorkflowRun', () => {
+    const client = readSource('src/shared/api/client.ts');
+    expect(client).toContain('async getWorkflowAudit(');
+    expect(client).toContain('async approveWorkflowRun(');
+    expect(client).toContain('async rejectWorkflowRun(');
+    expect(client).toContain('async getWorkflowRun(');
   });
 });
 

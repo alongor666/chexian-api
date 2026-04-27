@@ -256,11 +256,25 @@ router.get(
       persist: false,
     });
 
+    // 阶段 4 PR-D：narrative 优先取自 record.report.narrative（attach-narrative skill 已落盘）
+    // - workflow 跑 attach-narrative 节点成功后 record.report.narrative 即被填充
+    // - 命中时 narrativeSource='workflow-skill'，避免重复调 LLM
+    // - 未命中且 includeNarrative=1 → 走旧 LLM 兜底，narrativeSource='route-llm'
+    // - 都没有 → narrativeSource=null
     let narrative: string | null = null;
-    let narrativeMeta: { provider: string; blockedBySqlGuard?: boolean; tokens?: unknown; error?: string } | null = null;
-    if (includeNarrative) {
-      narrativeMeta = await tryGenerateNarrative(result.result.markdown, result.result.allWarnings);
-      if (narrativeMeta && !narrativeMeta.error) {
+    let narrativeSource: 'workflow-skill' | 'route-llm' | null = null;
+    let narrativeMeta:
+      | { provider: string; blockedBySqlGuard?: boolean; tokens?: unknown; error?: string }
+      | null = null;
+
+    const persistedNarrative = record.report?.narrative ?? null;
+    if (persistedNarrative) {
+      narrative = persistedNarrative;
+      narrativeSource = 'workflow-skill';
+    } else if (includeNarrative) {
+      const preflight = await tryGenerateNarrative(result.result.markdown, result.result.allWarnings);
+      narrativeMeta = preflight;
+      if (preflight && !preflight.error) {
         const provider = getDefaultLlmProvider();
         try {
           const r = await provider.generateNarrative({
@@ -270,6 +284,7 @@ router.get(
             maxTokens: 400,
           });
           narrative = r.text;
+          narrativeSource = 'route-llm';
           narrativeMeta = {
             provider: provider.provider,
             blockedBySqlGuard: r.blockedBySqlGuard,
@@ -302,6 +317,7 @@ router.get(
         skippedCount: result.result.skippedCount,
         totalElapsedMs: result.result.totalElapsedMs,
         narrative,
+        narrativeSource,
         narrativeMeta,
       },
     });
