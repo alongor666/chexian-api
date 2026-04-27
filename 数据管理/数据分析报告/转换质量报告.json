@@ -1,8 +1,8 @@
 {
   "stage": "原始数据",
-  "timestamp": "2026-04-25T20:44:10.513017",
+  "timestamp": "2026-04-26T18:22:50.760104",
   "basic_stats": {
-    "rows": 678,
+    "rows": 612,
     "columns": 40,
     "column_names": [
       "保单号",
@@ -51,12 +51,12 @@
     "保单号": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 678
+      "unique_count": 610
     },
     "业务员": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 128
+      "unique_count": 115
     },
     "三级机构": {
       "null_count": 0,
@@ -71,7 +71,7 @@
     "保险起期": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 44
+      "unique_count": 41
     },
     "险类": {
       "null_count": 0,
@@ -86,7 +86,7 @@
     "保费": {
       "null_count": 0,
       "null_rate": 0.0,
-      "unique_count": 202
+      "unique_count": 187
     }
   }
 }
