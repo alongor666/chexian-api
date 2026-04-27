@@ -13,6 +13,7 @@
 | 跨平台启动项目（自动检测运行时） | `start.mjs` | `node scripts/start.mjs --all` |
 | 一键发布“业绩分析热力图”到 VPS 并自动验收 | `release-vps-heatmap.mjs` | `bun run release:vps:heatmap` |
 | 仅做 VPS 线上热力图验收（不部署） | `verify-vps-heatmap.mjs` | `bun run verify:vps:heatmap` |
+| 验收 Agent 确定性诊断与 Stage 5 前置证据 | `verify-agent-production-smoke.mjs` | `bun run verify:agent:smoke -- --token <jwt> --start-date YYYY-MM-DD --end-date YYYY-MM-DD --baseline-start-date YYYY-MM-DD --baseline-end-date YYYY-MM-DD` |
 | 检查代码提交前是否合规 | `check-governance.mjs` | `bun run governance` |
 | 检查热点文件是否带上契约测试 | `check-hotfile-contracts.mjs` | `bun run governance:hotfiles` |
 | 一键执行生产级门禁（治理+构建+测试+关键e2e） | `production-gate.mjs` | `bun run production:gate` |
@@ -90,6 +91,7 @@
 |------|------|----------|
 | `release-vps-heatmap.mjs` | **VPS 一键发布 + 验收编排**：构建前后端、同步 VPS、重启 PM2、健康检查并调用线上热力图验收 | `bun run release:vps:heatmap` |
 | `verify-vps-heatmap.mjs` | **VPS 热力图专项验收**：真实登录线上页面并校验热力图标题/三标签切换/`performance-org-heatmap` 200 | `bun run verify:vps:heatmap` |
+| `verify-agent-production-smoke.mjs` | **Agent 生产验收 smoke**：按固定 API 调用 7 个确定性诊断端点、observability 和 readiness，输出 Stage 5 前置证据报告；不接 LLM、不生成 SQL、不输出 token | `bun run verify:agent:smoke -- --token <jwt> --start-date YYYY-MM-DD --end-date YYYY-MM-DD --baseline-start-date YYYY-MM-DD --baseline-end-date YYYY-MM-DD` |
 
 ### 🛠️ 工具类
 
