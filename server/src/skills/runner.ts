@@ -14,6 +14,7 @@
 import { AppError } from '../middleware/error.js';
 import type { Skill, SkillContext, SkillResult, SkillRunRecord } from './types.js';
 import { saveRun, generateRunId } from './run-store.js';
+import { applyRedLinePolicy } from './red-line-policy.js';
 
 export interface RunSkillOptions {
   /** 是否落盘运行记录，默认 true */
@@ -71,6 +72,9 @@ export async function runSkill<R = unknown>(
       `Skill ${skill.id} output invalid: ${issue?.path.join('.')} - ${issue?.message ?? 'unknown'}`
     );
   }
+
+  // 4.5 红线警告强制注入（CLAUDE.md §10：未确认口径必须显式标注）
+  result = applyRedLinePolicy(skill.id, result);
 
   // 5. 落盘
   if (persist) {
