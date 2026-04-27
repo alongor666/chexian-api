@@ -358,7 +358,8 @@ export async function runWorkflow<I extends ZodTypeAny>(
         }
         overallStatus = 'partial';
       } else if (anyFailed) {
-        overallStatus = overallStatus === 'failed' ? overallStatus : 'partial';
+        // 'failed' 已在上面分支 break；走到这里 overallStatus 只可能是 'success' | 'partial'
+        overallStatus = 'partial';
       }
       continue;
     }
