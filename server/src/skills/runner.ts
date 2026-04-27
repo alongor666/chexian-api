@@ -50,11 +50,21 @@ export async function runSkill<R = unknown>(
   }
 
   // 2.5 lazy 域加载（避免冷启动后第一次调用 Catalog Error）
+  // 失败也走 failed run 落盘路径，保留可观测性（codex P2）
   if (skill.lazyDomains?.length) {
     const bootstrapper = getBootstrapper();
     if (bootstrapper) {
-      for (const domain of skill.lazyDomains) {
-        await bootstrapper.ensureDomainLoaded(domain);
+      try {
+        for (const domain of skill.lazyDomains) {
+          await bootstrapper.ensureDomainLoaded(domain);
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const wrapped = `Lazy domain load failed (${skill.lazyDomains.join(', ')}): ${errMsg}`;
+        if (persist) {
+          await saveRun(buildFailedRecord(runId, skill, ctx, parsedInput.data, wrapped));
+        }
+        throw new AppError(503, wrapped);
       }
     }
   }
