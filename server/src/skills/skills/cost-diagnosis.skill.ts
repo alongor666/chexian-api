@@ -136,6 +136,7 @@ export const costDiagnosisSkill: Skill<typeof InputSchema, Result> = {
   inputSchema: InputSchema,
   outputResultSchema: ResultSchema,
   deterministic: true,
+  lazyDomains: ['ClaimsAgg'],
   async run(input, ctx) {
     const cutoffDate = input.period.endDate;
     const dateField: 'policy_date' | 'insurance_start_date' = 'policy_date';

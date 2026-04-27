@@ -114,6 +114,7 @@ export const segmentRiskScanSkill: Skill<typeof InputSchema, Result> = {
   inputSchema: InputSchema,
   outputResultSchema: ResultSchema,
   deterministic: true,
+  lazyDomains: ['ClaimsAgg'],
   async run(input, ctx) {
     // 维度处理：截断 + 去重
     const rawDims = input.dimensions;

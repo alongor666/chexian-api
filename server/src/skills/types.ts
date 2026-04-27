@@ -79,6 +79,12 @@ export interface Skill<I extends z.ZodTypeAny = z.ZodTypeAny, R = unknown> {
   requiredPermissions?: string[];
   /** 是否纯确定性（不调用 LLM）。runner 据此强制校验 */
   deterministic: boolean;
+  /**
+   * Skill SQL 依赖的 lazy 注册域（如 ClaimsAgg / ClaimsDetail / CrossSell 等）。
+   * runner 在执行前调 bootstrapper.ensureDomainLoaded() 触发加载，避免冷启动后
+   * 第一次调用直接 Catalog Error。完整域列表见 data-bootstrapper.ts:registerLazyDomains()。
+   */
+  lazyDomains?: readonly string[];
   run(input: z.infer<I>, ctx: SkillContext): Promise<SkillResult<R>>;
 }
 

@@ -15,6 +15,7 @@ import { AppError } from '../middleware/error.js';
 import type { Skill, SkillContext, SkillResult, SkillRunRecord } from './types.js';
 import { saveRun, generateRunId } from './run-store.js';
 import { applyRedLinePolicy } from './red-line-policy.js';
+import { getBootstrapper } from '../services/bootstrapper-registry.js';
 
 export interface RunSkillOptions {
   /** 是否落盘运行记录，默认 true */
@@ -45,6 +46,16 @@ export async function runSkill<R = unknown>(
     const hasAll = skill.requiredPermissions.every((p) => role === 'branch_admin' || role === p);
     if (!hasAll) {
       throw new AppError(403, `Skill ${skill.id} requires permissions: ${skill.requiredPermissions.join(', ')}`);
+    }
+  }
+
+  // 2.5 lazy 域加载（避免冷启动后第一次调用 Catalog Error）
+  if (skill.lazyDomains?.length) {
+    const bootstrapper = getBootstrapper();
+    if (bootstrapper) {
+      for (const domain of skill.lazyDomains) {
+        await bootstrapper.ensureDomainLoaded(domain);
+      }
     }
   }
 

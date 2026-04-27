@@ -160,6 +160,7 @@ export const claimsDrilldownSkill: Skill<typeof InputSchema, Result> = {
   inputSchema: InputSchema,
   outputResultSchema: ResultSchema,
   deterministic: true,
+  lazyDomains: ['ClaimsDetail'],
   async run(input, ctx) {
     const policySubquery = buildPolicyDedupedSubquery(ctx.permissionFilter);
     const policyFilters = buildPolicyFilters(input);
