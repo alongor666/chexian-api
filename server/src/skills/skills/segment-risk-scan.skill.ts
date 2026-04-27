@@ -57,7 +57,9 @@ const InputSchema = z.object({
 
 const RiskLevelSchema = z.enum(['red', 'yellow', 'green']);
 
-const SegmentSchema = z.object({
+// 阶段 4 PR-A：导出供下游 skill (risk-scoring / pricing-simulation) 严格校验输入用。
+// 任何对 SegmentSchema 字段的修改都会触发下游 skill 的 schema 校验失败 → 主动暴露 contract 漂移。
+export const SegmentRiskScanSegmentSchema = z.object({
   dimKey: z.string(),
   dimValues: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
   policyCount: z.number(),
@@ -70,7 +72,10 @@ const SegmentSchema = z.object({
   riskLevel: RiskLevelSchema,
 });
 
-const ResultSchema = z.object({
+// 内部别名，旧实现继续使用 SegmentSchema 名称
+const SegmentSchema = SegmentRiskScanSegmentSchema;
+
+export const SegmentRiskScanResultSchema = z.object({
   dimensions: z.array(DimensionSchema),
   cutoffDate: z.string(),
   baselineEarnedClaimRatio: z.number().nullable(),
@@ -81,6 +86,8 @@ const ResultSchema = z.object({
   yellowCount: z.number(),
   greenCount: z.number(),
 });
+
+const ResultSchema = SegmentRiskScanResultSchema;
 
 type Result = z.infer<typeof ResultSchema>;
 type Segment = z.infer<typeof SegmentSchema>;

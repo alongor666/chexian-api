@@ -80,6 +80,15 @@ export interface Skill<I extends z.ZodTypeAny = z.ZodTypeAny, R = unknown> {
   /** 是否纯确定性（不调用 LLM）。runner 据此强制校验 */
   deterministic: boolean;
   /**
+   * 是否需要人工审批后才能在 workflow 中继续向下游传递结果。阶段 4 起：
+   * - `risk-scoring` / `pricing-simulation` / `underwriting-recommendation` 设为 true
+   * - workflow-runner 的 ApprovalNode 检测下游 skill 的 requiresApproval=true 时
+   *   会挂起为 status='pending_approval'（routes/workflows.ts 在阶段 4 PR-B 启用）
+   * - 路由层（routes/skills.ts）当前不阻断单步执行，但 listSkills() 会暴露此元数据
+   *   以便前端 UI 标注「此结果未经审批，禁止直接执行落库」
+   */
+  requiresApproval?: boolean;
+  /**
    * Skill SQL 依赖的 lazy 注册域（如 ClaimsAgg / ClaimsDetail / CrossSell 等）。
    * runner 在执行前调 bootstrapper.ensureDomainLoaded() 触发加载，避免冷启动后
    * 第一次调用直接 Catalog Error。完整域列表见 data-bootstrapper.ts:registerLazyDomains()。
