@@ -6,32 +6,8 @@ function readSource(relativePath: string): string {
   return fs.readFileSync(path.resolve(process.cwd(), relativePath), 'utf-8');
 }
 
-function readSourcesUnder(relativePath: string): string {
-  const root = path.resolve(process.cwd(), relativePath);
-  const sources: string[] = [];
-
-  function walk(directory: string): void {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const entryPath = path.join(directory, entry.name);
-
-      if (entry.isDirectory()) {
-        walk(entryPath);
-        continue;
-      }
-
-      if (entry.isFile() && entry.name.endsWith('.ts')) {
-        const sourcePath = path.relative(process.cwd(), entryPath);
-        sources.push(`// ${sourcePath}\n${fs.readFileSync(entryPath, 'utf-8')}`);
-      }
-    }
-  }
-
-  walk(root);
-  return sources.sort().join('\n');
-}
-
 describe('Agent Stage 5 boundary audit', () => {
-  it('documents the Stage 5 minimum LLM explanation contract before implementation', () => {
+  it('documents the Stage 5 minimum LLM explanation contract and runtime boundary', () => {
     const doc = readSource('docs/AGENT_STAGE5_LLM_BOUNDARY_AUDIT.md');
 
     expect(doc).toContain('POST /api/agent/explain/diagnosis');
@@ -45,21 +21,27 @@ describe('Agent Stage 5 boundary audit', () => {
     expect(doc).toContain('readyForLlm=false');
   });
 
-  it('keeps /api/agent routes free of LLM calls and explain endpoints in this audit PR', () => {
+  it('keeps /api/agent explanation runtime free of SQL execution paths', () => {
     const app = readSource('server/src/app.ts');
-    const agentRuntimeSource = readSourcesUnder('server/src/agent');
+    const explanationRuntimeSource = [
+      readSource('server/src/agent/routes/agent-explain.ts'),
+      readSource('server/src/agent/services/agent-diagnosis-explanation-service.ts'),
+      readSource('server/src/agent/schemas/agent-explanation.schema.ts'),
+    ].join('\n');
+    const existingDiagnosisRuntimeSource = readSource('server/src/agent/services/agent-business-patrol-diagnosis-service.ts');
     const readinessSchema = readSource('server/src/agent/schemas/agent-audit.schema.ts');
     const serverRoutes = readSource('server/src/config/api-routes.ts');
     const frontendRoutes = readSource('src/shared/api/routes.ts');
-    const combinedAgentBoundary = [agentRuntimeSource, serverRoutes, frontendRoutes].join('\n');
+    const combinedAgentBoundary = [explanationRuntimeSource, serverRoutes, frontendRoutes].join('\n');
 
     expect(app).toContain("app.use('/api/agent/audit', agentAuditRoutes)");
     expect(app).toContain("app.use('/api/agent/diagnosis', agentDiagnosisRoutes)");
-    expect(app).not.toContain("app.use('/api/agent/explain'");
-    expect(agentRuntimeSource).toContain('server/src/agent/services/agent-business-patrol-diagnosis-service.ts');
-    expect(combinedAgentBoundary).not.toMatch(/agent\/explain|AGENT_EXPLAIN_ROUTES|explain\/diagnosis/i);
-    expect(combinedAgentBoundary).not.toMatch(/getDefaultLlmProvider|generateNarrative|openrouter|chat\/completions/i);
-    expect(combinedAgentBoundary).not.toMatch(/rawSql|freeSql|nl2sql|generateSqlWithZhipu/i);
+    expect(app).toContain("app.use('/api/agent/explain', queryLimiter);");
+    expect(app).toContain("app.use('/api/agent/explain', agentExplainRoutes)");
+    expect(existingDiagnosisRuntimeSource).toContain('runBusinessPatrolTasks');
+    expect(combinedAgentBoundary).toContain('AGENT_EXPLAIN_ROUTES');
+    expect(combinedAgentBoundary).toContain('agent/explain/diagnosis');
+    expect(combinedAgentBoundary).not.toMatch(/duckdbService|\.query\(|generate[A-Za-z]+Query|rawSql|freeSql|nl2sql|generateSqlWithZhipu/i);
     expect(readinessSchema).toContain('readyForLlm: z.literal(false)');
   });
 
