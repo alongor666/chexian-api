@@ -1,8 +1,8 @@
 # Claude Code 命令索引 (v3.0)
 
-> 车险数据分析平台 — 29 个 Slash Commands
+> 车险数据分析平台 — 30 个 Slash Commands
 
-**最后更新**: 2026-02-24
+**最后更新**: 2026-04-27
 
 ---
 
@@ -12,6 +12,7 @@
 |---------|------|---------|
 | 提交代码并创建 PR | `/commit-push-pr` | [commit-push-pr.md](./commit-push-pr.md) |
 | 同步远程代码 | `/sync-and-rebase` | [sync-and-rebase.md](./sync-and-rebase.md) |
+| 清理已合并 worktree | `/cleanup-worktrees` | [cleanup-worktrees.md](./cleanup-worktrees.md) |
 | 车险数据分析 | `/data-analysis` | [data-analysis.md](./data-analysis.md) |
 | 数据概览 | `/data-profile` | [data-profile.md](./data-profile.md) |
 | 业绩排名 | `/data-kpi` | [data-kpi.md](./data-kpi.md) |

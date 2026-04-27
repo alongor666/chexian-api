@@ -40,9 +40,45 @@ export interface CopilotReportResponse {
     skippedCount: number;
     totalElapsedMs: number;
     narrative: string | null;
+    /** 阶段 4 PR-D：narrative 来源标记 — 让前端区分是 attach-narrative skill 已落盘的（workflow-skill）还是路由层 LLM 兜底（route-llm）。null 表示无 narrative */
+    narrativeSource?: 'workflow-skill' | 'route-llm' | null;
     narrativeMeta: { provider: string; blockedBySqlGuard?: boolean; tokens?: unknown; error?: string } | null;
   };
   error?: string;
+}
+
+// ─────────────────────────────────────────────
+// 阶段 4 PR-D: workflow audit + approval 类型
+// ─────────────────────────────────────────────
+
+export type AuditEventType =
+  | 'workflow-started'
+  | 'step-completed'
+  | 'approval-requested'
+  | 'approval-granted'
+  | 'approval-denied'
+  | 'workflow-completed';
+
+export interface AuditEvent {
+  timestamp: string;
+  runId: string;
+  workflowId: string;
+  eventType: AuditEventType;
+  userId: string;
+  role: string;
+  requestId: string;
+  payload: Record<string, unknown>;
+}
+
+export interface ApprovalState {
+  pendingNodeId: string;
+  pendingNodeIndex: number;
+  approverRoles: ReadonlyArray<string>;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  rejectReason?: string;
 }
 
 export interface CopilotRunCreateResponse {

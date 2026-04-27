@@ -9,10 +9,13 @@
  *  - 红线 warning 由后端 markdown 顶部生成，前端直接 render，不二次过滤
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useCopilotRun } from './useCopilotRun';
-import type { CopilotStepView } from './types';
+import { AuditTimeline } from './components/AuditTimeline';
+import { ApprovalActions } from './components/ApprovalActions';
+import { apiClient } from '../../shared/api/client';
+import type { ApprovalState, CopilotStepView } from './types';
 
 function formatLocalYmd(d: Date): string {
   const y = d.getFullYear();
@@ -49,7 +52,9 @@ export function CopilotDrawer() {
   const [open, setOpen] = useState(false);
   const [period, setPeriod] = useState(getDefaultPeriod);
   const [includeNarrative, setIncludeNarrative] = useState(false);
-  const { state, start, reset } = useCopilotRun();
+  const { state, start, reset, refresh } = useCopilotRun();
+  const [approval, setApproval] = useState<ApprovalState | null>(null);
+  const [auditRefreshToken, setAuditRefreshToken] = useState(0);
 
   const isBusy = state.status === 'creating' || state.status === 'running' || state.status === 'fetching-report';
   const overallSummary = useMemo(() => {
@@ -57,6 +62,32 @@ export function CopilotDrawer() {
     const r = state.report;
     return `${r.workflowStatus} · 成功 ${r.successCount} / 失败 ${r.failedCount} / 跳过 ${r.skippedCount} · 耗时 ${(r.totalElapsedMs / 1000).toFixed(1)}s`;
   }, [state.report]);
+
+  // 阶段 4 PR-D：拉取 workflow run record 以获取 approval 状态
+  // 仅在 status='completed' / 'fetching-report' 之后（即报告已存在）才尝试拉取
+  // 失败静默忽略 — approval 不存在不影响报告本身渲染
+  const fetchApproval = useCallback(async (runId: string) => {
+    try {
+      const record = await apiClient.getWorkflowRun(runId);
+      setApproval((record.approval ?? null) as ApprovalState | null);
+    } catch {
+      setApproval(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (state.runId && (state.status === 'completed' || state.status === 'error')) {
+      void fetchApproval(state.runId);
+    } else if (!state.runId) {
+      setApproval(null);
+    }
+  }, [state.runId, state.status, fetchApproval]);
+
+  const handleApprovalResolved = useCallback(() => {
+    void refresh();
+    if (state.runId) void fetchApproval(state.runId);
+    setAuditRefreshToken((t) => t + 1);
+  }, [refresh, state.runId, fetchApproval]);
 
   return (
     <>
@@ -176,14 +207,36 @@ export function CopilotDrawer() {
             )}
             {state.report && (
               <>
-                {overallSummary && (
-                  <div className="mb-3 px-3 py-2 text-xs bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-subtle rounded">
-                    {overallSummary}
+                {/* 顶部 status 行：summary + ApprovalActions（仅 pending_approval 时显示按钮） */}
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs bg-neutral-50 dark:bg-white/5 border border-neutral-200 dark:border-subtle rounded">
+                  <span>{overallSummary}</span>
+                  {state.runId && state.report?.workflowStatus && (
+                    <ApprovalActions
+                      runId={state.runId}
+                      status={state.report.workflowStatus}
+                      approval={approval}
+                      onResolved={handleApprovalResolved}
+                    />
+                  )}
+                </div>
+
+                {/* narrative 来源标记 — 让审计/合规可识别叙述是否经过审批节点的 attach-narrative skill */}
+                {state.report.narrative && state.report.narrativeSource && (
+                  <div className="mb-2 text-[10px] text-neutral-500 dark:text-neutral-400">
+                    narrative source: <code>{state.report.narrativeSource}</code>
                   </div>
                 )}
+
                 <article className="prose prose-sm dark:prose-invert max-w-none">
                   <ReactMarkdown>{state.report.markdown}</ReactMarkdown>
                 </article>
+
+                {/* 阶段 4 PR-D：审计事件时序 */}
+                {state.runId && (
+                  <div className="mt-4">
+                    <AuditTimeline runId={state.runId} refreshToken={auditRefreshToken} />
+                  </div>
+                )}
               </>
             )}
           </section>
