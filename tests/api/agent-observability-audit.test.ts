@@ -299,6 +299,8 @@ describe('agent observability audit readiness', () => {
     expect(readiness.completedStages.map((s) => s.id)).not.toContain('stage_4_9_deterministic_profit_forecast');
     const stage4_9 = readiness.blockedStages.find((s) => s.id === 'stage_4_9_deterministic_profit_forecast');
     expect(stage4_9?.blockers.join('\n')).toContain('stage_4_8_caller_display_evidence');
+    expect(readiness.notes.join('\n')).toContain('Stage 4.9 仍被阻塞');
+    expect(readiness.notes.join('\n')).not.toContain('Stage 4.9 已完成');
   });
 
   it('serves the protected observability audit route over HTTP', async () => {
