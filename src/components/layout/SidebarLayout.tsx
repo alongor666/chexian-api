@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { SidebarNavigation } from './SidebarNavigation';
 import { TopNavigation } from './TopNavigation';
 import { Watermark } from './Watermark';
+import { CopilotDrawer } from '../../features/copilot';
 
 interface SidebarContextValue {
   collapsed: boolean;
@@ -143,6 +144,7 @@ export const SidebarLayout: React.FC = () => {
             </div>
           </main>
         </div>
+        <CopilotDrawer />
       </div>
     </SidebarContext.Provider>
   );

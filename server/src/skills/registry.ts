@@ -13,6 +13,7 @@ import { kpiBaselineSkill } from './skills/kpi-baseline.skill.js';
 import { costDiagnosisSkill } from './skills/cost-diagnosis.skill.js';
 import { claimsDrilldownSkill } from './skills/claims-drilldown.skill.js';
 import { segmentRiskScanSkill } from './skills/segment-risk-scan.skill.js';
+import { reportTemplateSkill } from './skills/report-template.skill.js';
 
 const ALL_SKILLS: ReadonlyArray<Skill<any, any>> = [
   dataHealthSkill,
@@ -20,6 +21,7 @@ const ALL_SKILLS: ReadonlyArray<Skill<any, any>> = [
   costDiagnosisSkill,
   claimsDrilldownSkill,
   segmentRiskScanSkill,
+  reportTemplateSkill,
 ];
 
 const SKILL_MAP = new Map<string, Skill<any, any>>(ALL_SKILLS.map((s) => [s.id, s]));

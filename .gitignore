@@ -149,7 +149,8 @@ warehouse/**/_partition_meta.json
 数据管理/warehouse/**/_partition_meta.json
 
 # Copilot 本地模板工作区（个人资产，不入主仓库）
-copilot/
+# 仅匹配根目录 /copilot/，避免误伤 src/features/copilot 等代码目录
+/copilot/
 
 # Snapshot 运行时产物（build-snapshots.mjs 每次重建，52MB+ 不入仓库）
 数据管理/warehouse/snapshots/
