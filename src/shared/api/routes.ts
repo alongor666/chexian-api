@@ -200,6 +200,13 @@ export const AGENT_DIAGNOSIS_ROUTES = {
 } as const;
 
 // ─────────────────────────────────────────────
+// /api/agent/explain/* 路由
+// ─────────────────────────────────────────────
+export const AGENT_EXPLAIN_ROUTES = {
+  DIAGNOSIS: 'agent/explain/diagnosis',
+} as const;
+
+// ─────────────────────────────────────────────
 // /api/filters/* 路由
 // ─────────────────────────────────────────────
 export const FILTER_ROUTES = {
