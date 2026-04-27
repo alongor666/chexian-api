@@ -25,7 +25,7 @@ const WARNINGS = [
   '客户流向诊断不输出承保利润、利润率、财务盈利或财务亏损。',
 ];
 
-const FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损', '边际贡献'];
+const FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损'];
 
 type RawRow = Record<string, unknown>;
 type Severity = 'normal' | 'observe' | 'warning' | 'critical';

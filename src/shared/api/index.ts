@@ -10,6 +10,8 @@ export {
   AI_ROUTES,
   AGENT_AUDIT_ROUTES,
   AGENT_DIAGNOSIS_ROUTES,
+  AGENT_EXPLAIN_ROUTES,
+  AGENT_FORECAST_ROUTES,
   FILTER_ROUTES,
 } from './routes';
 export type { KpiData, KpiDetailData, TrendData, FileInfo, LoadResult } from './client';

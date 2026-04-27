@@ -32,6 +32,7 @@ describe('agent observability audit route contract', () => {
     expect(schema).toContain('AgentObservabilityAuditSchema');
     expect(schema).toContain('verified_by_caller_smoke_harness');
     expect(schema).toContain('stage_4_8_display_contract_ready');
+    expect(schema).toContain('stage_4_9_deterministic_profit_forecast');
     expect(route).toContain('SuccessResponseSchema(AgentObservabilityAuditSchema).parse');
   });
 

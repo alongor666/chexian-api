@@ -8,7 +8,10 @@ const COST_METRIC_REGISTRY = 'server/src/config/metric-registry/categories/cost.
 const COMPREHENSIVE_ROUTE = 'server/src/routes/query/comprehensive.ts';
 const COMPREHENSIVE_SQL = 'server/src/sql/comprehensive-analysis.ts';
 
-const PROFIT_MARGIN_FORBIDDEN = ['承保利润', '利润率', '边际贡献', '盈利', '亏损', '财务盈利', '财务亏损'];
+const PROFIT_MARGIN_FORBIDDEN = ['承保利润', '利润率', '盈利', '亏损', '财务盈利', '财务亏损'];
+const MARGIN_FORBIDDEN = ['承保利润', '财务利润', '净利润', '财务盈亏'];
+const MARGIN_CAUTION =
+  '边际贡献额仅扣除变动成本（赔付+费用），不等于承保利润（后者还需扣固定成本/准备金/再保/税费）。';
 const CAUTION_COST_FORBIDDEN = ['承保利润', '财务综合成本率', '完整综合成本率', '盈亏判断', '利润率'];
 
 export const agentMetricRegistry = AgentMetricDefinitionSchema.array().parse([
@@ -203,6 +206,8 @@ export const agentMetricRegistry = AgentMetricDefinitionSchema.array().parse([
     requiredParams: ['analysisType=variableCost', 'cutoffDate'],
     supportedDimensions: ['org_level_3', 'customer_category', 'coverage_combination', 'org_customer', 'org_coverage'],
     supportedUseCases: ['cost_indicator_diagnosis', 'business_patrol_diagnosis'],
+    metricNature: 'observed',
+    forecastRole: 'input',
     cautionNotes: [
       '这是项目内经营分析口径。',
       '不代表完整财务综合成本率。',
@@ -318,38 +323,40 @@ export const agentMetricRegistry = AgentMetricDefinitionSchema.array().parse([
     name: '满期边际贡献额',
     aliases: ['满期边际贡献额', '边际贡献额', 'earned_margin_amount'],
     category: 'cost',
-    supportLevel: 'unsupported',
-    businessDefinition: '底层成本指标注册表已有的边际贡献类指标；Agent 层禁止输出或推断边际贡献、盈利、亏损结论。',
+    supportLevel: 'supported',
+    businessDefinition: '底层成本指标注册表已有的 L4 边际贡献类经营指标，仅扣除变动成本，不是承保利润或财务利润。',
     formula: '底层注册表口径：满期保费 × (1 - 满期赔付率 - 费用率)',
     sourceMetrics: ['earned_margin_amount'],
-    sourceEndpoints: [],
-    sourceRoutes: [COST_METRIC_REGISTRY],
-    sourceSqlGenerators: [],
-    requiredParams: [],
-    supportedDimensions: [],
-    supportedUseCases: [],
-    cautionNotes: ['底层指标注册表存在不等于 Agent 可以输出利润、边际贡献或盈亏结论。'],
-    forbiddenInterpretations: PROFIT_MARGIN_FORBIDDEN,
-    replacementSuggestions: ['如需经营成本压力，请使用变动成本率（variable_cost_ratio）、满期赔付率（earned_claim_ratio）、费用率（expense_ratio）分别分析。'],
+    sourceEndpoints: [COST_ENDPOINT],
+    sourceRoutes: [COST_ROUTE, COST_METRIC_REGISTRY],
+    sourceSqlGenerators: ['generateComprehensiveCostQuery'],
+    requiredParams: ['analysisType=comprehensiveCost', 'cutoffDate'],
+    supportedDimensions: ['org_level_3', 'customer_category', 'coverage_combination'],
+    supportedUseCases: ['cost_indicator_diagnosis', 'comprehensive_cost_indicator_review'],
+    metricNature: 'observed',
+    forecastRole: 'none',
+    cautionNotes: [MARGIN_CAUTION],
+    forbiddenInterpretations: MARGIN_FORBIDDEN,
   },
   {
     id: 'projected_margin_amount',
     name: '预估边际贡献额',
     aliases: ['预估边际贡献额', '预计边际贡献', 'projected_margin_amount'],
     category: 'cost',
-    supportLevel: 'unsupported',
-    businessDefinition: '底层成本指标注册表已有的预估边际贡献类指标；Agent 层禁止输出或推断边际贡献、盈利、亏损结论。',
+    supportLevel: 'supported',
+    businessDefinition: '底层成本指标注册表已有的 L4 预估边际贡献经营指标，仅扣除变动成本，不是承保利润或财务利润。',
     formula: '底层注册表口径：签单保费 × (1 - 满期赔付率 - 费用率)',
     sourceMetrics: ['projected_margin_amount'],
-    sourceEndpoints: [],
-    sourceRoutes: [COST_METRIC_REGISTRY],
-    sourceSqlGenerators: [],
-    requiredParams: [],
-    supportedDimensions: [],
-    supportedUseCases: [],
-    cautionNotes: ['底层指标注册表存在不等于 Agent 可以输出利润、边际贡献或盈亏结论。'],
-    forbiddenInterpretations: PROFIT_MARGIN_FORBIDDEN,
-    replacementSuggestions: ['如需经营成本压力，请使用变动成本率（variable_cost_ratio）、满期赔付率（earned_claim_ratio）、费用率（expense_ratio）分别分析。'],
+    sourceEndpoints: [COST_ENDPOINT],
+    sourceRoutes: [COST_ROUTE, COST_METRIC_REGISTRY],
+    sourceSqlGenerators: ['generateComprehensiveCostQuery'],
+    requiredParams: ['analysisType=comprehensiveCost', 'cutoffDate'],
+    supportedDimensions: ['org_level_3', 'customer_category', 'coverage_combination'],
+    supportedUseCases: ['cost_indicator_diagnosis', 'comprehensive_cost_indicator_review'],
+    metricNature: 'observed',
+    forecastRole: 'none',
+    cautionNotes: [MARGIN_CAUTION],
+    forbiddenInterpretations: MARGIN_FORBIDDEN,
   },
   {
     id: 'comprehensive_expense_ratio',

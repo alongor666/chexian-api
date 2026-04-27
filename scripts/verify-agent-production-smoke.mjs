@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 const DIAGNOSIS_BASE = '/api/agent/diagnosis';
 const AUDIT_BASE = '/api/agent/audit';
+const FORECAST_BASE = '/api/agent/forecast';
 
 function stripTrailingSlash(value) {
   return value.replace(/\/+$/, '');
@@ -224,6 +225,24 @@ export function buildSmokePlan(options) {
         timeoutMs: 5000,
         limit: 10,
         diagnostics,
+      },
+    },
+    {
+      name: 'forecast_operating_profit_scenario',
+      kind: 'diagnosis',
+      capabilityId: 'forecast_operating_profit_scenario',
+      method: 'POST',
+      path: `${FORECAST_BASE}/profit-scenario`,
+      body: {
+        premium: 20000000,
+        ultimateVariableCostRatio: 85,
+        ultimateFixedCostRatio: 9,
+        earningSchedule: [
+          { period: options.endDate.slice(0, 4), earnedRatio: 52 },
+          { period: String(Number(options.endDate.slice(0, 4)) + 1), earnedRatio: 48 },
+        ],
+        scenarioName: 'agent-smoke-profit-scenario',
+        assumptionSource: 'caller_provided',
       },
     },
     {

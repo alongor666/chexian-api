@@ -17,7 +17,7 @@ const GROWTH_WARNINGS = [
   '增长诊断只解释保费规模和件数变化，不代表利润、盈利、亏损或承保利润。',
   '本能力复用项目现有增长 SQL 生成器，不生成自由 SQL。',
 ];
-const FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损', '边际贡献'];
+const FORBIDDEN_INTERPRETATIONS = ['承保利润', '利润率', '财务盈利', '财务亏损'];
 
 type RawGrowthRow = Record<string, unknown>;
 

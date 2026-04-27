@@ -268,7 +268,7 @@ describe('agent observability audit readiness', () => {
       },
     });
 
-    expect(readiness.currentStage).toBe('stage_4_8_display_contract_ready');
+    expect(readiness.currentStage).toBe('stage_4_9_deterministic_profit_forecast');
     expect(readiness.readyForLlm).toBe(false);
     expect(readiness.observabilityEvidence.auditLog.status).toBe('missing_log');
     expect(readiness.stage5Prerequisites.map((item) => item.id)).toEqual(

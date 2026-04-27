@@ -1,6 +1,7 @@
 import { agentMetricRegistry } from '../registry/agent-metric-registry.js';
+import { agentForecastOutputRegistry } from '../registry/agent-forecast-output-registry.js';
 import { AgentMetricAuditSchema, type AgentMetricAudit } from '../schemas/agent-audit.schema.js';
-import type { AgentMetricSupportLevel } from '../schemas/agent-metric.schema.js';
+import type { AgentMetricDefinition, AgentMetricSupportLevel } from '../schemas/agent-metric.schema.js';
 
 function summarizeBySupportLevel<T extends { supportLevel: AgentMetricSupportLevel }>(
   items: readonly T[]
@@ -14,8 +15,23 @@ function summarizeBySupportLevel<T extends { supportLevel: AgentMetricSupportLev
 }
 
 export function getAgentMetricAudit(): AgentMetricAudit {
+  const observed = withAuditDefaults(agentMetricRegistry);
+  const forecastOutputs = withAuditDefaults(agentForecastOutputRegistry);
   return AgentMetricAuditSchema.parse({
-    summary: summarizeBySupportLevel(agentMetricRegistry),
-    metrics: agentMetricRegistry,
+    summary: summarizeBySupportLevel(observed),
+    metrics: observed,
+    observed,
+    forecastOutputs,
   });
+}
+
+function withAuditDefaults(metrics: readonly AgentMetricDefinition[]): AgentMetricDefinition[] {
+  return metrics.map((metric) => ({
+    metricKind: 'observed',
+    metricNature: 'observed',
+    forecastRole: 'none',
+    requiresAssumptions: false,
+    actualFinancialInterpretation: 'forbidden',
+    ...metric,
+  }));
 }

@@ -119,10 +119,11 @@ describe('agent diagnosis explanation service', () => {
     );
 
     expect(result.status).toBe('refused');
-    expect(result.summary).toContain('当前项目数据不支持承保利润分析');
+    expect(result.summary).toContain('当前项目数据不支持承保利润');
+    expect(result.summary).toContain('财务利润');
     expect(result.unsupportedRefusals[0]).toMatchObject({
       source: 'routeAgentQuestion',
-      reason: '当前项目数据不支持承保利润分析。',
+      reason: expect.stringContaining('当前项目数据不支持承保利润'),
     });
     expect(provider.generateNarrative).not.toHaveBeenCalled();
   });

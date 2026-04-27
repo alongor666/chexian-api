@@ -43,19 +43,46 @@ describe('agent metric audit registry', () => {
     );
   });
 
-  it('classifies registered profit and margin cost metrics as unsupported for Agent output', () => {
+  it('classifies registered margin cost metrics as supported while keeping earned profit unsupported', () => {
     const audit = getAgentMetricAudit();
     const metrics = new Map(audit.metrics.map((item) => [item.id, item]));
 
-    for (const metricId of ['earned_profit_amount', 'earned_margin_amount', 'projected_margin_amount']) {
+    for (const metricId of ['earned_margin_amount', 'projected_margin_amount']) {
       const metric = metrics.get(metricId);
       expect(metric).toBeDefined();
-      expect(metric?.supportLevel).toBe('unsupported');
+      expect(metric?.supportLevel).toBe('supported');
+      expect(metric?.sourceEndpoints).toContain('/api/query/cost');
+      expect(metric?.supportedUseCases).toContain('cost_indicator_diagnosis');
+      expect(metric?.cautionNotes.join('')).toContain('边际贡献额仅扣除变动成本');
       expect(metric?.forbiddenInterpretations).toEqual(
-        expect.arrayContaining(['承保利润', '边际贡献', '盈利', '亏损', '财务盈利', '财务亏损'])
+        expect.arrayContaining(['承保利润', '财务利润', '净利润', '财务盈亏'])
       );
-      expect(metric?.replacementSuggestions?.join('')).toContain('变动成本率');
+      expect(metric?.forbiddenInterpretations).not.toEqual(expect.arrayContaining(['边际贡献']));
     }
+
+    const earnedProfit = metrics.get('earned_profit_amount');
+    expect(earnedProfit).toBeDefined();
+    expect(earnedProfit?.supportLevel).toBe('unsupported');
+    expect(earnedProfit?.forbiddenInterpretations).toEqual(
+      expect.arrayContaining(['承保利润', '盈利', '亏损', '财务盈利', '财务亏损'])
+    );
+  });
+
+  it('adds audit metadata defaults and separates forecast output metrics', () => {
+    const audit = getAgentMetricAudit() as ReturnType<typeof getAgentMetricAudit> & {
+      observed?: Array<{ id: string; metricKind?: string; actualFinancialInterpretation?: string }>;
+      forecastOutputs?: Array<{ id: string; metricKind?: string; requiresAssumptions?: boolean }>;
+    };
+
+    const variableCost = audit.metrics.find((item) => item.id === 'variable_cost_ratio') as
+      | { metricKind?: string; actualFinancialInterpretation?: string }
+      | undefined;
+    expect(variableCost?.metricKind).toBe('observed');
+    expect(variableCost?.actualFinancialInterpretation).toBe('forbidden');
+    expect(audit.observed?.map((item) => item.id)).toContain('variable_cost_ratio');
+    expect(audit.forecastOutputs?.map((item) => item.id)).toContain('forecast_operating_profit_amount');
+    expect(audit.forecastOutputs?.find((item) => item.id === 'forecast_operating_profit_amount')?.metricKind)
+      .toBe('forecast_output');
   });
 
   it('classifies registered comprehensive and fixed cost metrics as caution only', () => {
@@ -85,17 +112,23 @@ describe('agent metric audit registry', () => {
     const allBlockedTerms = unsupported.metrics.flatMap((item) => item.blockedTerms);
 
     expect(allBlockedTerms).toEqual(
-      expect.arrayContaining(['利润额', '满期边际贡献额', '预估边际贡献额', '边际贡献', '盈利', '亏损'])
+      expect.arrayContaining(['利润率', '盈利率', '净利润', '盈利', '亏损'])
+    );
+    expect(allBlockedTerms).not.toEqual(
+      expect.arrayContaining(['利润额', '满期边际贡献额', '预估边际贡献额', '边际贡献'])
+    );
+    expect(unsupported.metrics.map((item) => item.id)).toEqual(
+      expect.arrayContaining(['financial_statement_profit', 'unqualified_actual_profit_or_loss'])
     );
   });
 
-  it('documents that base metric registry presence does not allow Agent profit output', () => {
+  it('documents margin/profit boundary instead of hard-blocking margin metrics', () => {
     const doc = readSource('docs/AGENT_METRIC_SYSTEM_AUDIT.md');
 
-    expect(doc).toContain('底层指标注册表存在');
-    expect(doc).toContain('不等于 Agent 可以输出利润、边际贡献或盈亏结论');
+    expect(doc).toContain('边际贡献额仅扣除变动成本');
+    expect(doc).toContain('不等于承保利润');
     expect(doc).toContain('earned_profit_amount');
-    expect(doc).toContain('combined_cost_ratio');
+    expect(doc).toContain('projected_margin_amount');
   });
 
   it('mounts agent audit routes without changing the query route permission chain', () => {

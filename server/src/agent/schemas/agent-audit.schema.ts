@@ -18,6 +18,8 @@ export const AgentMetricAuditSchema = z.object({
     deprecated: z.number().int().nonnegative(),
   }),
   metrics: z.array(AgentMetricDefinitionSchema),
+  observed: z.array(AgentMetricDefinitionSchema).default([]),
+  forecastOutputs: z.array(AgentMetricDefinitionSchema).default([]),
 });
 
 export const AgentCapabilityAuditSchema = z.object({
@@ -118,7 +120,11 @@ export const AgentObservabilityAuditSchema = z.object({
 
 export const AgentReadinessAuditSchema = z.object({
   phase: z.literal('agent_metric_adaptation_audit'),
-  currentStage: z.enum(['stage_4_6_observability_ready', 'stage_4_8_display_contract_ready']),
+  currentStage: z.enum([
+    'stage_4_6_observability_ready',
+    'stage_4_8_display_contract_ready',
+    'stage_4_9_deterministic_profit_forecast',
+  ]),
   readyForLlm: z.literal(false),
   readyForChatWindow: z.literal(false),
   deterministicRouting: z.literal(true),
