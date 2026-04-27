@@ -139,6 +139,11 @@ function checkVpsConnectivity() {
 
 /** 从文件名提取日期范围，支持下划线和连字符 */
 function extractDateRange(filename) {
+  // 新前缀格式（2026-04-26 起）：20260426_01_签单清单.xlsx → single-day（归入 weekly 处理）
+  const newPrefix = filename.match(/^(\d{8})_\d{2}_/);
+  if (newPrefix) {
+    return { start: newPrefix[1], end: newPrefix[1] };
+  }
   // 新格式：01_签单清单_21-23年.xlsx → { start: '20210101', end: '20231231' }
   const newFmt = filename.match(/(\d{2})-(\d{2})年/);
   if (newFmt) {
@@ -163,8 +168,8 @@ function extractDateRange(filename) {
 function getShardType(filename, config) {
   const range = extractDateRange(filename);
   if (!range) return null;
-  // 增量文件强制归入 weekly（以新格式处理，输出到 current/）
-  if (filename.match(/增量_\d{8}/)) return 'weekly';
+  // 增量文件 / 新前缀单日文件 强制归入 weekly（以新格式处理，输出到 current/）
+  if (filename.match(/增量_\d{8}/) || filename.match(/^\d{8}_\d{2}_/)) return 'weekly';
 
   const cutoff = parseInt(config.static_cutoff.replace(/-/g, ''));
   const weeklyStart = config.weekly_start.replace(/-/g, '');
@@ -323,7 +328,11 @@ function runStandardDomain(python, scriptDir, manifest) {
     return;
   }
   const { id, name, etl_script, output, trigger } = manifest;
-  const { input_strategy, input_glob } = trigger;
+  const { input_strategy } = trigger;
+  // 兼容 input_glob (单字符串) 和 input_globs (数组) 两种声明
+  const inputGlobs = Array.isArray(trigger.input_globs)
+    ? trigger.input_globs
+    : (trigger.input_globs ? [trigger.input_globs] : [trigger.input_glob]).filter(Boolean);
 
   log('cyan', `\n═══ ${id} 域：${name || id}（${input_strategy}）═══\n`);
 
@@ -332,9 +341,13 @@ function runStandardDomain(python, scriptDir, manifest) {
   const skipMetadata = _currentReleaseManifest?.domains?.[id] != null;
   const extraArgs = skipMetadata ? ['--no-metadata'] : [];
 
-  const sourceFiles = ls(input_glob, scriptDir);
+  // 多 glob 合并 + 按 path 去重（避免同一文件被多个模式匹配重复）
+  const seen = new Set();
+  const sourceFiles = inputGlobs
+    .flatMap(g => ls(g, scriptDir))
+    .filter(f => (seen.has(f.path) ? false : (seen.add(f.path), true)));
   if (sourceFiles.length === 0) {
-    log('yellow', `⚠ 未找到 ${input_glob}，跳过`);
+    log('yellow', `⚠ 未找到 ${inputGlobs.join(' / ')}，跳过`);
     return;
   }
   for (const f of sourceFiles) {
@@ -371,7 +384,14 @@ function runStandardDomain(python, scriptDir, manifest) {
 }
 
 function runStrategySingle({ python, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
-  safeConvertDomain(python, scriptPath, sourceFiles[0].path, outputAbs, trigger.archive_prefix, extraArgs);
+  // 多 glob 并存时按 mtime 取最新文件（避免历史旧命名文件长期占据声明顺序首位、屏蔽新命名更新）
+  const latest = sourceFiles
+    .slice()
+    .sort((a, b) => statSync(b.path).mtimeMs - statSync(a.path).mtimeMs)[0];
+  if (sourceFiles.length > 1) {
+    log('cyan', `  single 策略：${sourceFiles.length} 个候选 → 选 mtime 最新: ${latest.name}`);
+  }
+  safeConvertDomain(python, scriptPath, latest.path, outputAbs, trigger.archive_prefix, extraArgs);
 }
 
 function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
@@ -575,11 +595,14 @@ function runClaimsDetail(python, scriptDir) {
     : null;
 
   // 查找赔案明细 xlsx（支持多文件合并，新命名优先）
-  const newFiles = ls('02_理赔明细_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
+  const newFiles = [
+    ...ls('02_理赔明细_*.xlsx', scriptDir),
+    ...ls('????????_02_理赔明细*.xlsx', scriptDir),
+  ].sort((a, b) => a.name.localeCompare(b.name));
   const legacyFiles = ls('车险报立结案清单_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
   const sourceFiles = manifestFiles || [...newFiles, ...legacyFiles];
   if (sourceFiles.length === 0) {
-    log('yellow', '⚠ 未找到 02_理赔明细_*.xlsx 或 车险报立结案清单_*.xlsx，跳过');
+    log('yellow', '⚠ 未找到 02_理赔明细_*.xlsx / ????????_02_理赔明细*.xlsx 或 车险报立结案清单_*.xlsx，跳过');
     return;
   }
   for (const f of sourceFiles) {
@@ -835,12 +858,15 @@ async function main() {
     log('yellow', '⚠ 未找到续保源文件，将跳过续保业务类型匹配');
   }
 
-  // 2. 识别所有 xlsx 分片（新格式 + 旧格式 + 剔摩/限摩）
+  // 2. 识别所有 xlsx 分片（新格式 + 旧格式 + 剔摩/限摩 + 新前缀 YYYYMMDD_01_*）
   const legacyXlsx = ls('每日数据_*.xlsx', scriptDir);
-  const newFormatXlsx = ls('01_签单清单_*.xlsx', scriptDir);
+  const newFormatXlsx = [
+    ...ls('01_签单清单_*.xlsx', scriptDir),
+    ...ls('????????_01_签单清单*.xlsx', scriptDir),
+  ];
   const allXlsx = [...legacyXlsx, ...newFormatXlsx];
   if (allXlsx.length === 0) {
-    log('red', '❌ 未找到任何签单清单 xlsx 文件（每日数据_*.xlsx 或 01_签单清单_*.xlsx）');
+    log('red', '❌ 未找到任何签单清单 xlsx 文件（每日数据_*.xlsx / 01_签单清单_*.xlsx / ????????_01_签单清单*.xlsx）');
     process.exit(1);
   }
   if (newFormatXlsx.length > 0) {
@@ -909,7 +935,7 @@ async function main() {
 
   for (const file of shards.weekly) {
     const range = extractDateRange(file.name);
-    const isNewFormat = file.name.startsWith('01_签单清单_');
+    const isNewFormat = file.name.startsWith('01_签单清单_') || /^\d{8}_01_签单清单/.test(file.name);
 
     // 新格式：保留原始名称（如 01_签单清单_剔摩_24年至.parquet），支持多文件共存
     // 旧格式：使用日期范围命名（如 每日数据_20240101_20260409.parquet）

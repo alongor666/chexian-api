@@ -11,9 +11,9 @@
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-04-26",
+      "last_updated": "2026-04-27",
       "data_range": "2021-01-01 ~ 2026-04-07",
-      "row_count": 2535136,
+      "row_count": 2535748,
       "field_count": 42,
       "key_fields": [
         "保单号",
@@ -46,9 +46,9 @@
       "etl_script": "pipelines/convert_claims_detail.py",
       "output": "warehouse/fact/claims_detail/claims_*.parquet",
       "update_cadence": "daily_cdc_partition",
-      "last_updated": "2026-04-26",
+      "last_updated": "2026-04-27",
       "data_range": "2019-01-01 ~ 2026-04-03",
-      "row_count": 281265,
+      "row_count": 281375,
       "field_count": 41,
       "key_fields": [
         "claim_no",
@@ -82,13 +82,13 @@
       "etl_script": "pipelines/quote_etl.py",
       "trigger": {
         "input_strategy": "multi_file_input",
-        "input_glob": "04_报价清单*.xlsx",
+        "input_globs": ["04_报价清单*.xlsx", "????????_04_报价清单*.xlsx"],
         "output_is_dir": true,
         "archive_prefix": "quotes_conversion_latest"
       },
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
-      "last_updated": "2026-04-26",
+      "last_updated": "2026-04-27",
       "data_range": "2025-12-02 ~ 2026-04-09",
       "row_count": 648447,
       "field_count": 32,
@@ -176,12 +176,12 @@
       "etl_script": "pipelines/convert_brand_dim.py",
       "trigger": {
         "input_strategy": "single",
-        "input_glob": "06_厂牌明细*.xlsx",
+        "input_globs": ["06_厂牌明细*.xlsx", "????????_06_厂牌明细*.xlsx"],
         "archive_prefix": "brand_latest"
       },
       "output": "warehouse/dim/brand/latest.parquet",
       "update_cadence": "with_premium",
-      "last_updated": "2026-04-26",
+      "last_updated": "2026-04-27",
       "row_count": 371359,
       "field_count": 15,
       "key_fields": [
@@ -247,7 +247,7 @@
       "etl_script": "pipelines/convert_cross_sell.py",
       "trigger": {
         "input_strategy": "multi_file_merge",
-        "input_glob": "03_交叉销售_*.xlsx",
+        "input_globs": ["03_交叉销售_*.xlsx", "????????_03_交叉销售*.xlsx"],
         "merge_dedup_key": "policy_no",
         "merge_order_by": "policy_date DESC NULLS LAST",
         "merge_with_history": true,
@@ -271,8 +271,8 @@
       ],
       "frontend_page": "specialty (tab=cross-sell)",
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重",
-      "last_updated": "2026-04-26",
-      "row_count": 407387,
+      "last_updated": "2026-04-27",
+      "row_count": 407443,
       "field_count": 9
     },
     {
@@ -311,7 +311,7 @@
       "etl_script": "pipelines/convert_repair.py",
       "trigger": {
         "input_strategy": "multi_file_merge",
-        "input_glob": "07_维修资源*.xlsx",
+        "input_globs": ["07_维修资源*.xlsx", "????????_07_维修资源*.xlsx"],
         "merge_dedup_key": "repair_shop_name",
         "merge_order_by": "report_date DESC NULLS LAST",
         "archive_prefix": "repair_latest"
@@ -333,7 +333,7 @@
       ],
       "frontend_page": "repair",
       "notes": "维修厂合作数据，12列+派生 shop_code（前8位编码），含核损金额/换件折扣率/合作状态。2026-04-18 重设计：引入 coop_tier 三态分类 + shop_code JOIN ClaimsDetail",
-      "last_updated": "2026-04-26",
+      "last_updated": "2026-04-27",
       "row_count": 690,
       "field_count": 13
     },
@@ -346,7 +346,7 @@
       "etl_script": "pipelines/convert_customer_flow.py",
       "trigger": {
         "input_strategy": "single",
-        "input_glob": "08_客户来源去向*.xlsx",
+        "input_globs": ["08_客户来源去向*.xlsx", "????????_08_客户来源去向*.xlsx"],
         "archive_prefix": "customer_flow_latest"
       },
       "output": "warehouse/fact/customer_flow/latest.parquet",
@@ -366,7 +366,7 @@
       ],
       "frontend_page": "customer-flow",
       "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知",
-      "last_updated": "2026-04-26",
+      "last_updated": "2026-04-27",
       "row_count": 1009250,
       "field_count": 7
     },
@@ -404,7 +404,7 @@
       ],
       "frontend_page": "renewal-tracker",
       "notes": "派生域：2025 起保 + 2026 到期商业险宇宙。dual-key 续保匹配 (source_policy_no + VIN)。报价窗口 2025-12-03 起。从 renewal-tracker 子项目迁移（2026-04-19，替代 2026-04-18 下线的 renewal 模块）",
-      "last_updated": "2026-04-26",
+      "last_updated": "2026-04-27",
       "row_count": 127677,
       "field_count": 23
     }
