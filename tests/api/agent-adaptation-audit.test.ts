@@ -1,7 +1,36 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import { getAgentCapabilityAudit, getAgentReadinessAudit } from '../../server/src/agent/services/agent-adaptation-audit-service';
 import { routeAgentQuestion } from '../../server/src/agent/services/agent-question-router-service';
+
+function writeValidSmokeReport(now = new Date()): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-smoke-fixture-'));
+  const reportPath = path.join(dir, `agent-production-smoke-${now.getTime()}.json`);
+  const report = {
+    phase: 'agent_production_smoke_harness',
+    startedAt: now.toISOString(),
+    options: {},
+    steps: [],
+    evaluation: {
+      ok: true,
+      summary: {
+        diagnosisOk: true,
+        auditOk: true,
+        callerDisplayContractVerified: true,
+        readyForLlm: false,
+        observabilityStatus: 'observed',
+        observabilityWindowComplete: true,
+        stage5Prerequisites: [],
+      },
+      failures: [],
+    },
+  };
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf-8');
+  return dir;
+}
 
 describe('agent adaptation audit routing', () => {
   it('returns cost_indicator_diagnosis in capability audit', () => {
@@ -115,9 +144,16 @@ describe('agent adaptation audit routing', () => {
   });
 
   it('reports Stage 1-4 deterministic readiness and keeps Stage 5 blocked by production evidence', async () => {
-    const readiness = await getAgentReadinessAudit();
+    const now = new Date('2026-04-27T00:00:00.000Z');
+    const smokeReportDir = writeValidSmokeReport(now);
+    const readiness = await getAgentReadinessAudit({
+      observability: { now, smokeReportDir },
+    });
+    const displayEvidence = readiness.stage5Prerequisites.find(
+      (item) => item.id === 'warnings_and_forbidden_interpretations_displayed'
+    );
 
-    expect(readiness.currentStage).toBe('stage_4_6_observability_ready');
+    expect(readiness.currentStage).toBe('stage_4_8_display_contract_ready');
     expect(readiness.readyForLlm).toBe(false);
     expect(readiness.deterministicDiagnosisCapabilityCount).toBe(7);
     expect(readiness.completedStages.map((stage) => stage.id)).toEqual(
@@ -128,6 +164,7 @@ describe('agent adaptation audit routing', () => {
         'stage_3_deterministic_diagnoses',
         'stage_4_business_patrol',
         'stage_4_6_observability_readiness',
+        'stage_4_8_caller_display_evidence',
       ])
     );
     expect(readiness.blockedStages.map((stage) => stage.id)).toContain('stage_5_llm_interpretation');
@@ -136,9 +173,19 @@ describe('agent adaptation audit routing', () => {
       expect.arrayContaining([
         '缺少生产 audit log 对 /api/agent/diagnosis/* 调用记录的验收证据。',
         '缺少最近 30 天 /api/agent/diagnosis/* error rate < 1% 的验收证据。',
-        '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。',
       ])
     );
+    expect(readiness.llmReadinessBlockers).not.toContain(
+      '缺少前端或调用方已展示 warnings 与 forbiddenInterpretations 的验收证据。'
+    );
+    expect(displayEvidence?.met).toBe(true);
+    expect(displayEvidence?.evidence).toEqual(
+      expect.arrayContaining([
+        'scripts/verify-agent-production-smoke.mjs',
+        'tests/api/agent-production-smoke-harness.test.mjs',
+      ])
+    );
+    expect(readiness.observabilityEvidence.displayContract.status).toBe('verified_by_caller_smoke_harness');
     expect(readiness.observabilityEvidence.phase).toBe('agent_observability_readiness');
   });
 

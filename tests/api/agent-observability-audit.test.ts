@@ -28,6 +28,58 @@ function writeJsonl(entries: unknown[]): string {
   return file;
 }
 
+function writeValidSmokeReport(now: Date): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-smoke-'));
+  const reportPath = path.join(dir, `agent-production-smoke-${now.getTime()}.json`);
+  const report = {
+    phase: 'agent_production_smoke_harness',
+    startedAt: now.toISOString(),
+    options: {},
+    steps: [],
+    evaluation: {
+      ok: true,
+      summary: {
+        diagnosisOk: true,
+        auditOk: true,
+        callerDisplayContractVerified: true,
+        readyForLlm: false,
+        observabilityStatus: 'observed',
+        observabilityWindowComplete: true,
+        stage5Prerequisites: [],
+      },
+      failures: [],
+    },
+  };
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf-8');
+  return dir;
+}
+
+function writeFailedSmokeReport(now: Date, failureReason: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-smoke-failed-'));
+  const reportPath = path.join(dir, `agent-production-smoke-${now.getTime()}.json`);
+  const report = {
+    phase: 'agent_production_smoke_harness',
+    startedAt: now.toISOString(),
+    options: {},
+    steps: [],
+    evaluation: {
+      ok: false,
+      summary: {
+        diagnosisOk: false,
+        auditOk: true,
+        callerDisplayContractVerified: false,
+        readyForLlm: false,
+        observabilityStatus: 'observed',
+        observabilityWindowComplete: true,
+        stage5Prerequisites: [],
+      },
+      failures: [failureReason],
+    },
+  };
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf-8');
+  return dir;
+}
+
 describe('agent observability audit readiness', () => {
   it('computes 30-day agent diagnosis audit log coverage and error rate from production logs', async () => {
     const auditLogPath = writeJsonl([
@@ -97,19 +149,79 @@ describe('agent observability audit readiness', () => {
     expect(audit.stage5Evidence.find((item) => item.id === 'thirty_day_error_rate_under_threshold')?.met).toBe(false);
   });
 
-  it('keeps Stage 5 blocked until production logs and caller display evidence are available', async () => {
+  it('keeps Stage 5 blocked until production logs are available while caller display evidence is verified', async () => {
+    const now = new Date('2026-04-26T00:00:00.000Z');
+    const smokeReportDir = writeValidSmokeReport(now);
     const audit = await getAgentObservabilityAudit({
       auditLogPath: '/tmp/chexian-agent-observability-missing.log',
-      now: new Date('2026-04-26T00:00:00.000Z'),
+      now,
       nodeEnv: 'development',
+      smokeReportDir,
     });
 
     expect(audit.auditLog.status).toBe('missing_log');
     expect(audit.auditLog.productionEvidence).toBe(false);
     expect(audit.stage5Evidence.find((item) => item.id === 'production_audit_log_observed')?.met).toBe(false);
     expect(audit.stage5Evidence.find((item) => item.id === 'warnings_and_forbidden_interpretations_displayed')?.met)
-      .toBe(false);
+      .toBe(true);
+    expect(audit.displayContract.status).toBe('verified_by_caller_smoke_harness');
+    expect(audit.displayContract.evidence).toEqual(
+      expect.arrayContaining([
+        'scripts/verify-agent-production-smoke.mjs',
+        'tests/api/agent-production-smoke-harness.test.mjs',
+      ])
+    );
+    expect(audit.displayContract.evidence.some((e) => e.startsWith('latest smoke report:'))).toBe(true);
+  });
+
+  it('marks displayContract pending when no smoke report exists', async () => {
+    const audit = await getAgentObservabilityAudit({
+      auditLogPath: '/tmp/chexian-agent-observability-missing.log',
+      now: new Date('2026-04-26T00:00:00.000Z'),
+      nodeEnv: 'development',
+      smokeReportDir: '/tmp/chexian-agent-smoke-missing-dir',
+    });
+
     expect(audit.displayContract.status).toBe('pending_caller_display_evidence');
+    expect(audit.displayContract.blocker).toContain('未发现');
+    const prereq = audit.stage5Evidence.find(
+      (item) => item.id === 'warnings_and_forbidden_interpretations_displayed'
+    );
+    expect(prereq?.met).toBe(false);
+    expect(prereq?.blocker).toContain('未发现');
+  });
+
+  it('marks displayContract pending when smoke report failed', async () => {
+    const now = new Date('2026-04-26T00:00:00.000Z');
+    const smokeReportDir = writeFailedSmokeReport(now, 'caller_display_contract_missing');
+    const audit = await getAgentObservabilityAudit({
+      auditLogPath: '/tmp/chexian-agent-observability-missing.log',
+      now,
+      nodeEnv: 'development',
+      smokeReportDir,
+    });
+
+    expect(audit.displayContract.status).toBe('pending_caller_display_evidence');
+    expect(audit.displayContract.blocker).toContain('未通过校验');
+    expect(audit.stage5Evidence.find((item) => item.id === 'warnings_and_forbidden_interpretations_displayed')?.met)
+      .toBe(false);
+  });
+
+  it('marks displayContract pending when smoke report is older than maxAge window', async () => {
+    const now = new Date('2026-04-26T00:00:00.000Z');
+    const stale = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
+    const smokeReportDir = writeValidSmokeReport(stale);
+    const audit = await getAgentObservabilityAudit({
+      auditLogPath: '/tmp/chexian-agent-observability-missing.log',
+      now,
+      nodeEnv: 'development',
+      smokeReportDir,
+      smokeReportMaxAgeDays: 30,
+    });
+
+    expect(audit.displayContract.status).toBe('pending_caller_display_evidence');
+    expect(audit.displayContract.blocker).toContain('未通过校验');
+    expect(audit.displayContract.blocker).toContain('report age');
   });
 
   it('keeps 30-day error-rate evidence blocked when only a truncated tail sample is available', async () => {
@@ -145,15 +257,18 @@ describe('agent observability audit readiness', () => {
   });
 
   it('embeds observability evidence into readiness while keeping LLM blocked', async () => {
+    const now = new Date('2026-04-26T00:00:00.000Z');
+    const smokeReportDir = writeValidSmokeReport(now);
     const readiness = await getAgentReadinessAudit({
       observability: {
         auditLogPath: '/tmp/chexian-agent-observability-missing.log',
-        now: new Date('2026-04-26T00:00:00.000Z'),
+        now,
         nodeEnv: 'development',
+        smokeReportDir,
       },
     });
 
-    expect(readiness.currentStage).toBe('stage_4_6_observability_ready');
+    expect(readiness.currentStage).toBe('stage_4_8_display_contract_ready');
     expect(readiness.readyForLlm).toBe(false);
     expect(readiness.observabilityEvidence.auditLog.status).toBe('missing_log');
     expect(readiness.stage5Prerequisites.map((item) => item.id)).toEqual(
@@ -164,6 +279,23 @@ describe('agent observability audit readiness', () => {
       ])
     );
     expect(readiness.llmReadinessBlockers.join('\n')).toContain('缺少生产 audit log');
+  });
+
+  it('falls back to stage_4_6_observability_ready when smoke evidence is missing', async () => {
+    const readiness = await getAgentReadinessAudit({
+      observability: {
+        auditLogPath: '/tmp/chexian-agent-observability-missing.log',
+        now: new Date('2026-04-26T00:00:00.000Z'),
+        nodeEnv: 'development',
+        smokeReportDir: '/tmp/chexian-agent-smoke-missing-dir',
+      },
+    });
+
+    expect(readiness.currentStage).toBe('stage_4_6_observability_ready');
+    const stage4_8 = readiness.blockedStages.find((s) => s.id === 'stage_4_8_caller_display_evidence');
+    expect(stage4_8?.status).toBe('blocked');
+    expect(stage4_8?.blockers.join('\n')).toContain('未发现');
+    expect(readiness.completedStages.map((s) => s.id)).not.toContain('stage_4_8_caller_display_evidence');
   });
 
   it('serves the protected observability audit route over HTTP', async () => {
