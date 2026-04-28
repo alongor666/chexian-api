@@ -85,8 +85,12 @@ router.post(
   '/route-question',
   asyncHandler(async (req, res) => {
     const input = RouteQuestionInputSchema.parse(req.body);
-    const result = RouteQuestionResultSchema.parse(routeAgentQuestion(input));
-    res.json(result);
+    const result = routeAgentQuestion(input);
+    const response = SuccessResponseSchema(RouteQuestionResultSchema).parse({
+      success: true,
+      data: result,
+    });
+    res.json(response);
   })
 );
 
