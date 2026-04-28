@@ -59,6 +59,7 @@ describe('agent production smoke harness', () => {
       'POST /api/agent/diagnosis/customer-flow',
       'POST /api/agent/diagnosis/business-patrol',
       'POST /api/agent/forecast/profit-scenario',
+      'POST /api/agent/explain/diagnosis',
       'GET /api/agent/audit/observability',
       'GET /api/agent/audit/readiness',
     ]);
@@ -69,6 +70,16 @@ describe('agent production smoke harness', () => {
 
     const businessPatrol = plan.find((step) => step.capabilityId === 'business_patrol_diagnosis');
     expect(businessPatrol?.body.diagnostics.growth.currentPeriod.endDate).toBe('2026-04-26');
+
+    const explanation = plan.find((step) => step.name === 'agent_diagnosis_explanation');
+    expect(explanation?.kind).toBe('explain');
+    expect(explanation?.body.sourceCapabilityId).toBe('cost_indicator_diagnosis');
+    expect(explanation?.body.diagnosisResult.warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining('变动成本率')])
+    );
+    expect(explanation?.body.diagnosisResult.forbiddenInterpretations).toEqual(
+      expect.arrayContaining(['承保利润', '利润率', '财务盈利', '财务亏损'])
+    );
     expect(JSON.stringify(plan)).not.toContain('CURRENT_DATE');
   });
 
@@ -84,6 +95,21 @@ describe('agent production smoke harness', () => {
             success: true,
             data: {
               capabilityId: 'growth_diagnosis',
+              warnings: ['sample warning'],
+              forbiddenInterpretations: ['承保利润'],
+            },
+          },
+        },
+        {
+          name: 'agent_diagnosis_explanation',
+          kind: 'explain',
+          ok: true,
+          status: 200,
+          response: {
+            success: true,
+            data: {
+              capabilityId: 'cost_indicator_diagnosis',
+              status: 'explained',
               warnings: ['sample warning'],
               forbiddenInterpretations: ['承保利润'],
             },
@@ -130,6 +156,7 @@ describe('agent production smoke harness', () => {
     expect(evaluation.ok).toBe(true);
     expect(evaluation.summary.diagnosisOk).toBe(true);
     expect(evaluation.summary.callerDisplayContractVerified).toBe(true);
+    expect(evaluation.summary.explanationContractVerified).toBe(true);
     expect(evaluation.summary.readyForLlm).toBe(false);
     expect(evaluation.summary.stage5Prerequisites.thirty_day_error_rate_under_threshold).toBe(false);
     expect(evaluation.summary.stage5Prerequisites.warnings_and_forbidden_interpretations_displayed).toBe(true);
