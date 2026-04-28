@@ -61,6 +61,26 @@ export const agentDataCapabilityRegistry = AgentCapabilityDefinitionSchema.array
     forbiddenOutputs: ['法定承保利润', '审计利润', '财务净利润', '未注明口径的实际盈亏'],
   },
   {
+    id: 'forecast_operating_profit_segment',
+    name: '分群经营利润预测情景测算',
+    supportLevel: 'supported',
+    description: '在维度白名单（org_level_3 / customer_category / coverage_combination / salesman_name）内按分群独立传递成本率假设，做并行确定性情景计算的经营预测输出。仅向 branch_admin 开放。',
+    coreMetrics: [
+      'forecast_operating_profit_by_segment',
+      'forecast_operating_profit_amount',
+      'ultimate_combined_cost_ratio',
+    ],
+    sourceEndpoints: ['/api/agent/forecast/profit-segment'],
+    sourceTools: ['forecast.profit_segment'],
+    allowedUseCases: ['分机构利润预测', '分客户类别利润预测', '分险种组合利润预测', '分业务员利润预测', '保费加权综合成本率测算'],
+    cautionNotes: [
+      '输出为经营预测利润，不是财务报表利润。',
+      '仅向 branch_admin 角色开放；其他角色 403。',
+      '分群保费加权聚合，不做跨分群插值。',
+    ],
+    forbiddenOutputs: ['法定承保利润', '审计利润', '财务净利润', '未注明口径的实际盈亏'],
+  },
+  {
     id: 'quote_conversion_diagnosis',
     name: '报价转化诊断',
     supportLevel: 'supported',

@@ -65,4 +65,29 @@ describe('agent profit and margin question routing', () => {
     );
     expect(result.warnings.join('')).toContain('边际贡献额仅扣变动成本');
   });
+
+  it('routes segment-style profit forecast questions to the segment capability', () => {
+    for (const question of [
+      '按机构分群预测利润',
+      '分客户类别预测利润',
+      '分业务员预测利润情景',
+      '逐机构预测利润对比',
+    ]) {
+      const result = routeAgentQuestion({ question });
+
+      expect(result.blocked).toBe(false);
+      expect(result.status).toBe('supported');
+      expect(result.matchedCapabilityId).toBe('forecast_operating_profit_segment');
+      expect(result.recommendedTools).toContain('forecast.profit_segment');
+      expect(result.warnings.join('')).toContain('branch_admin');
+    }
+  });
+
+  it('still routes non-segment forecast phrasings to the single-scenario capability', () => {
+    const result = routeAgentQuestion({ question: '按终极变动85%、固定9%预测利润' });
+
+    expect(result.blocked).toBe(false);
+    expect(result.status).toBe('supported');
+    expect(result.matchedCapabilityId).toBe('forecast_operating_profit_scenario');
+  });
 });

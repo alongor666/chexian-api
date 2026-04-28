@@ -23,6 +23,7 @@ export const agentToolRegistry = AgentToolDefinitionSchema.array().parse([
   { id: 'cost.variable_cost', status: 'available', endpoint: '/api/query/cost', params: { analysisType: 'variableCost' }, capabilityId: 'cost_indicator_diagnosis', metrics: ['variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio'] },
   { id: 'cost.earned_premium', status: 'available', endpoint: '/api/query/cost', params: { type: 'earned' }, capabilityId: 'cost_indicator_diagnosis', metrics: ['earned_premium'] },
   { id: 'forecast.profit_scenario', status: 'available', endpoint: '/api/agent/forecast/profit-scenario', capabilityId: 'forecast_operating_profit_scenario', metrics: ['forecast_operating_profit_amount'] },
+  { id: 'forecast.profit_segment', status: 'available', endpoint: '/api/agent/forecast/profit-segment', capabilityId: 'forecast_operating_profit_segment', metrics: ['forecast_operating_profit_by_segment', 'forecast_operating_profit_amount'] },
   { id: 'growth.query', status: 'available', endpoint: '/api/query/growth', capabilityId: 'growth_diagnosis', metrics: ['signed_premium', 'policy_count', 'growth_rate'] },
   { id: 'growth.daily_context', status: 'available', endpoint: '/api/query/growth', params: { type: 'daily-context' }, capabilityId: 'growth_diagnosis', metrics: ['signed_premium', 'growth_rate'] },
   { id: 'quote_conversion.kpi', status: 'available', endpoint: '/api/query/quote-conversion/kpi', capabilityId: 'quote_conversion_diagnosis', metrics: ['quote_conversion_rate'] },

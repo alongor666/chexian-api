@@ -31,6 +31,25 @@ function isForecastQuestion(text: string): boolean {
   );
 }
 
+function isForecastSegmentQuestion(text: string): boolean {
+  if (!isForecastQuestion(text)) return false;
+  return includesAny(text, [
+    '分群',
+    '分机构',
+    '按机构',
+    '分客户类别',
+    '按客户类别',
+    '分险种',
+    '按险种',
+    '分业务员',
+    '按业务员',
+    '逐机构',
+    '逐分群',
+    '机构对比预测',
+    '分群对比',
+  ]);
+}
+
 function isProfitRateOrNetProfitQuestion(text: string): boolean {
   return includesAny(text, ['利润率', '盈利率', '净利润', '利润边际', '财务盈利', '财务亏损']);
 }
@@ -75,6 +94,26 @@ export function routeAgentQuestion(input: RouteQuestionInput): RouteQuestionResu
       status: 'unsupported',
       reason: '当前项目数据不支持财务盈亏、利润率或净利润分析。',
       replacementSuggestions: ['经营利润预测情景测算', '成本指标诊断：变动成本率、赔付率、费用率、边际贡献额', '增长归因', '报价转化', '续保追踪', '赔案风险'],
+    });
+  }
+
+  if (isForecastSegmentQuestion(normalized)) {
+    return parseResult({
+      blocked: false,
+      status: 'supported',
+      matchedCapabilityId: 'forecast_operating_profit_segment',
+      recommendedMetrics: [
+        'forecast_operating_profit_by_segment',
+        'forecast_operating_profit_amount',
+        'ultimate_combined_cost_ratio',
+      ],
+      recommendedTools: toolIdsForCapability('forecast_operating_profit_segment'),
+      warnings: [
+        FORECAST_WARNING,
+        '必须展示每个分群的终极变动成本率、终极固定成本率和已赚率假设。',
+        '分群预测仅向 branch_admin 角色开放；其他角色请使用单情景接口。',
+      ],
+      replacementSuggestions: [],
     });
   }
 
