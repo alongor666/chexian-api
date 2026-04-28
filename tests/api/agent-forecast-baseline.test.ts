@@ -331,6 +331,75 @@ describe('agent forecast baseline — HTTP route', () => {
   });
 });
 
+describe('agent forecast baseline — SQL composition guards (PR #312 codex P1 review)', () => {
+  it('reuses project-wide buildPolicyDedupCTE for all four queries (no ad-hoc ROW_NUMBER dedup)', async () => {
+    const observed: string[] = [];
+    vi.doMock('../../server/src/services/duckdb.js', () => ({
+      duckdbService: {
+        query: vi.fn(async (sql: string) => {
+          observed.push(sql);
+          return [];
+        }),
+      },
+    }));
+
+    const { buildForecastBaseline } = await import('../../server/src/agent/services/agent-forecast-baseline-service.js');
+
+    await buildForecastBaseline({
+      request: {
+        cutoffDate: '2026-04-28',
+        filters: {},
+        historyWindowYears: 3,
+        recentExpenseMonths: 6,
+      },
+      permissionFilter: '1=1',
+    });
+
+    expect(observed).toHaveLength(4);
+    for (const sql of observed) {
+      // The shared dedup CTE GROUPs by (policy_no, insurance_start_date) and SUMs premium/fee_amount.
+      expect(sql).toContain('policy_dedup AS');
+      expect(sql).toContain('GROUP BY policy_no, CAST(insurance_start_date AS DATE)');
+      expect(sql).toContain('HAVING SUM(premium) > 0');
+      expect(sql).toContain('SUM(premium) AS premium');
+      expect(sql).toContain('SUM(COALESCE(fee_amount, 0)) AS fee_amount');
+      // Forbid the previous ad-hoc ROW_NUMBER dedup that drops batch corrections.
+      expect(sql).not.toMatch(/ROW_NUMBER\s*\(\s*\)\s*OVER/i);
+      expect(sql).not.toContain('rn = 1');
+    }
+  });
+
+  it('applies policy_date <= cutoff so historical cutoffs do not leak future-signed policies', async () => {
+    const observed: string[] = [];
+    vi.doMock('../../server/src/services/duckdb.js', () => ({
+      duckdbService: {
+        query: vi.fn(async (sql: string) => {
+          observed.push(sql);
+          return [];
+        }),
+      },
+    }));
+
+    const { buildForecastBaseline } = await import('../../server/src/agent/services/agent-forecast-baseline-service.js');
+
+    await buildForecastBaseline({
+      request: {
+        cutoffDate: '2024-06-01', // historical cutoff
+        filters: {},
+        historyWindowYears: 3,
+        recentExpenseMonths: 6,
+      },
+      permissionFilter: '1=1',
+    });
+
+    // All four queries must guard against future-signed policies.
+    expect(observed).toHaveLength(4);
+    for (const sql of observed) {
+      expect(sql).toContain("policy_date <= DATE '2024-06-01'");
+    }
+  });
+});
+
 describe('agent forecast baseline — source-level isolation', () => {
   function readSource(p: string): string {
     return fs.readFileSync(path.resolve(process.cwd(), p), 'utf-8');

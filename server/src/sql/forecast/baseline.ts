@@ -7,17 +7,23 @@
  * percentiles for each unknown variable.
  *
  * Field names are taken from server/src/config/field-registry/fields.json:
- *  - policy_date           — 签单日期（用于 V2 同期增速口径）
- *  - insurance_start_date  — 保险起期（用于已赚天数 + 历史保单年份分组）
+ *  - policy_date           — 签单日期（V2 同期增速 + 截止快照过滤）
+ *  - insurance_start_date  — 保险起期（已赚天数 + 历史保单年份分组）
  *  - premium               — 签单保费
  *  - fee_amount            — 费用金额
  *  - reported_claims       — 累计已报告赔款（来自 ClaimsAgg）
- *  - claim_cases           — 赔案件数
  *
- * Permission filter is appended to whereClause by the route layer.
+ * Deduplication rule (B252) — reuses shared buildPolicyDedupCTE so that
+ * 同一保单的原单+批改多行被 SUM 累加成净额，而不是只取最新一行。直接照搬
+ * cost-ratios.ts / claims-heatmap 里的口径，避免 baseline 产出与既有诊断
+ * endpoint 在 premium / fee_amount 上出现批改净值偏差。
+ *
+ * Cutoff snapshot rule — 所有 4 个查询都附加 policy_date <= cutoff，
+ * 用户传一个历史 cutoff 时未来签单不会进入 actual / historical samples。
  */
 
 import { getMetricSql } from '../../config/metric-registry/index.js';
+import { buildPolicyDedupCTE } from '../shared/policy-dedup.js';
 
 export interface BaselineQueryConfig {
   cutoffDate: string; // YYYY-MM-DD
@@ -28,50 +34,30 @@ export interface BaselineQueryConfig {
   recentExpenseMonths: number;
 }
 
-const POLICY_DEDUP_CTE = `
-policy_dedup AS (
-  SELECT
-    policy_no,
-    insurance_start_date,
-    premium,
-    fee_amount,
-    policy_date
-  FROM (
-    SELECT
-      policy_no,
-      insurance_start_date,
-      premium,
-      fee_amount,
-      policy_date,
-      ROW_NUMBER() OVER (
-        PARTITION BY policy_no, insurance_start_date
-        ORDER BY policy_date DESC NULLS LAST
-      ) AS rn
-    FROM PolicyFact
-    WHERE \${WHERE}
-  ) t
-  WHERE rn = 1
-)
-`.trim();
-
-function buildPolicyDedupCte(whereClause: string): string {
-  return POLICY_DEDUP_CTE.replace('${WHERE}', whereClause);
+/**
+ * Compose the project-wide PolicyFact dedup CTE with a cutoff snapshot guard.
+ *
+ * - Reuses buildPolicyDedupCTE → SUM(premium) / SUM(fee_amount) per
+ *   (policy_no, insurance_start_date), HAVING SUM(premium) > 0.
+ * - Appends `policy_date <= cutoff` so historical cutoffs do not leak
+ *   future-signed policies into actual / cohorts / yoy / recent.
+ * - extraFields are exposed via ANY_VALUE() per buildPolicyDedupCTE
+ *   conventions (cohort/yoy queries need policy_date for downstream
+ *   filtering).
+ */
+function dedupCte(whereClause: string, cutoffDate: string, extraFields: string[] = []): string {
+  const guarded = `(${whereClause}) AND policy_date <= DATE '${cutoffDate}'`;
+  return buildPolicyDedupCTE('policy_dedup', { whereClause: guarded, extraFields });
 }
 
 /**
  * SQL A — Actual baseline: aggregates already-occurred figures up to cutoff.
- *
- * Returns a single row with:
- *  - signed_premium / earned_premium / earned_ratio_pct
- *  - cumulative_reported_claims / earned_claim_ratio_pct
- *  - cumulative_fee / fee_ratio_pct
- *  - remaining_exposure (= signed - earned)
  */
 export function generateBaselineActualQuery(config: BaselineQueryConfig): string {
   const { cutoffDate, whereClause = '1=1' } = config;
 
   return `
-WITH ${buildPolicyDedupCte(whereClause)},
+WITH ${dedupCte(whereClause, cutoffDate)},
 policy_exposure AS (
   SELECT
     p.policy_no,
@@ -115,7 +101,7 @@ export function generateHistoricalLossRatioQuery(config: BaselineQueryConfig): s
   const toYear = cutoffYear - 1;
 
   return `
-WITH ${buildPolicyDedupCte(whereClause)},
+WITH ${dedupCte(whereClause, cutoffDate)},
 yearly AS (
   SELECT
     YEAR(p.insurance_start_date) AS signing_year,
@@ -154,7 +140,7 @@ export function generateYoYGrowthQuery(config: BaselineQueryConfig): string {
   const toYear = cutoffYear - 1;
 
   return `
-WITH ${buildPolicyDedupCte(whereClause)},
+WITH ${dedupCte(whereClause, cutoffDate, ['policy_date'])},
 yearly AS (
   SELECT
     YEAR(p.policy_date) AS year,
@@ -188,7 +174,7 @@ export function generateRecentExpenseRatioQuery(config: BaselineQueryConfig): st
   const { cutoffDate, whereClause = '1=1', recentExpenseMonths } = config;
 
   return `
-WITH ${buildPolicyDedupCte(whereClause)}
+WITH ${dedupCte(whereClause, cutoffDate, ['policy_date'])}
 SELECT
   ROUND(SUM(p.premium), 2) AS recent_signed_premium,
   ROUND(SUM(COALESCE(p.fee_amount, 0)), 2) AS recent_fee,
