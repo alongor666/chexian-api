@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 const DIAGNOSIS_BASE = '/api/agent/diagnosis';
 const AUDIT_BASE = '/api/agent/audit';
 const FORECAST_BASE = '/api/agent/forecast';
+const EXPLAIN_BASE = '/api/agent/explain';
 
 function stripTrailingSlash(value) {
   return value.replace(/\/+$/, '');
@@ -163,6 +164,41 @@ function buildDiagnosisInputs(options) {
   return { growth, costIndicators, quoteConversion, renewalTracker, claimsRisk, customerFlow };
 }
 
+function buildExplanationInput() {
+  return {
+    sourceCapabilityId: 'cost_indicator_diagnosis',
+    userQuestion: '变动成本率为什么升高？',
+    diagnosisResult: {
+      capabilityId: 'cost_indicator_diagnosis',
+      status: 'supported',
+      requestedTools: ['cost.variable_cost', 'cost.claim_ratio', 'cost.expense_ratio'],
+      summary: {
+        smoke: true,
+        primaryMetricId: 'variable_cost_ratio',
+      },
+      diagnostics: [
+        {
+          metricId: 'variable_cost_ratio',
+          severity: 'warning',
+          note: 'Agent production smoke fixture for explanation contract verification.',
+        },
+        {
+          metricId: 'earned_claim_ratio',
+          severity: 'info',
+          note: 'Agent production smoke fixture for claim ratio context.',
+        },
+        {
+          metricId: 'expense_ratio',
+          severity: 'info',
+          note: 'Agent production smoke fixture for expense ratio context.',
+        },
+      ],
+      warnings: ['变动成本率为项目内经营分析口径，不代表完整财务承保利润。'],
+      forbiddenInterpretations: ['承保利润', '利润率', '财务盈利', '财务亏损'],
+    },
+  };
+}
+
 export function buildSmokePlan(options) {
   const diagnostics = buildDiagnosisInputs(options);
 
@@ -244,6 +280,14 @@ export function buildSmokePlan(options) {
         scenarioName: 'agent-smoke-profit-scenario',
         assumptionSource: 'caller_provided',
       },
+    },
+    {
+      name: 'agent_diagnosis_explanation',
+      kind: 'explain',
+      capabilityId: 'cost_indicator_diagnosis',
+      method: 'POST',
+      path: `${EXPLAIN_BASE}/diagnosis`,
+      body: buildExplanationInput(),
     },
     {
       name: 'observability',
@@ -362,6 +406,11 @@ function hasDisplayContract(step) {
   return Array.isArray(data?.warnings) && Array.isArray(data?.forbiddenInterpretations);
 }
 
+function hasExplanationContract(step) {
+  const data = step.response?.data;
+  return hasDisplayContract(step) && (data?.status === 'explained' || data?.status === 'refused');
+}
+
 function mapStage5Prerequisites(readinessStep) {
   const prerequisites = readinessStep?.response?.data?.stage5Prerequisites;
   if (!Array.isArray(prerequisites)) return {};
@@ -370,6 +419,7 @@ function mapStage5Prerequisites(readinessStep) {
 
 export function evaluateSmokeReport(report, options = {}) {
   const diagnosisSteps = report.steps.filter((step) => step.kind === 'diagnosis');
+  const explainSteps = report.steps.filter((step) => step.kind === 'explain');
   const auditSteps = report.steps.filter((step) => step.kind === 'audit');
   const readinessStep = report.steps.find((step) => step.name === 'readiness');
   const observabilityStep = report.steps.find((step) => step.name === 'observability');
@@ -377,6 +427,8 @@ export function evaluateSmokeReport(report, options = {}) {
   const readyForLlm = readinessStep?.response?.data?.readyForLlm === true;
   const callerDisplayContractVerified =
     diagnosisSteps.length > 0 && diagnosisSteps.every((step) => step.ok && hasDisplayContract(step));
+  const explanationContractVerified =
+    explainSteps.length > 0 && explainSteps.every((step) => step.ok && hasExplanationContract(step));
   const failures = [];
 
   for (const step of report.steps) {
@@ -387,14 +439,19 @@ export function evaluateSmokeReport(report, options = {}) {
   if (!callerDisplayContractVerified) {
     failures.push('caller_display_contract_missing: diagnosis responses must include warnings and forbiddenInterpretations arrays');
   }
+  if (!explanationContractVerified) {
+    failures.push('agent_explanation_contract_missing: explanation response must include status, warnings and forbiddenInterpretations arrays');
+  }
   if (options.expectLlmBlocked !== false && readyForLlm) {
     failures.push('readyForLlm unexpectedly became true; Stage 5 must remain blocked until explicitly released');
   }
 
   const summary = {
     diagnosisOk: diagnosisSteps.every((step) => step.ok),
+    explanationOk: explainSteps.every((step) => step.ok),
     auditOk: auditSteps.every((step) => step.ok),
     callerDisplayContractVerified,
+    explanationContractVerified,
     readyForLlm,
     observabilityStatus: observabilityStep?.response?.data?.auditLog?.status,
     observabilityWindowComplete: observabilityStep?.response?.data?.auditLog?.windowComplete,
