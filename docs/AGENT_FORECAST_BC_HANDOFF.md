@@ -158,7 +158,8 @@ E2E_PASSWORD=... bun run test:e2e --grep "forecast"
 - Q2 建模模式：乐观/中观/悲观 = p25/p50/p75 线性插值；历史窗口默认 3 年；"套用"用窗口内单年实际值
 - Q3 v1 处置：A — D2 上线后通过 D3 直接隐藏 v1 panel（保留代码不删除）
 
-**关键文件（D1 已就位，D2 起点）**：
+**关键文件（位于 PR #312 分支 `codex/forecast-baseline-endpoint`，未 merge — 在 main 上不可见）**：
+> ⚠️ 状态语义：以下路径只在 PR #312 合并到 main 之后才会出现在仓库。在此之前，新会话需先 `gh pr checkout 312` 才能查看实现。如果 PR #312 已被关闭或重建，本节路径作废，重新核对 PR 状态。
 - 后端 endpoint：`POST /api/agent/forecast/baseline` — 见 `server/src/agent/routes/agent-forecast.ts`
 - 响应 schema：`server/src/agent/schemas/agent-forecast-baseline.schema.ts`
 - SQL helpers：`server/src/sql/forecast/baseline.ts`
