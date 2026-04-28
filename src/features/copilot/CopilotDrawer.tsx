@@ -14,8 +14,16 @@ import ReactMarkdown from 'react-markdown';
 import { useCopilotRun } from './useCopilotRun';
 import { AuditTimeline } from './components/AuditTimeline';
 import { ApprovalActions } from './components/ApprovalActions';
+import { ForecastScenarioPanel } from './components/ForecastScenarioPanel';
 import { apiClient } from '../../shared/api/client';
 import type { ApprovalState, CopilotStepView } from './types';
+
+type CopilotMode = 'patrol' | 'forecast';
+
+const MODE_LABELS: Record<CopilotMode, string> = {
+  patrol: '经营巡检',
+  forecast: '经营利润情景测算',
+};
 
 function formatLocalYmd(d: Date): string {
   const y = d.getFullYear();
@@ -50,6 +58,7 @@ const STATUS_COLORS: Record<CopilotStepView['status'], string> = {
 
 export function CopilotDrawer() {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<CopilotMode>('patrol');
   const [period, setPeriod] = useState(getDefaultPeriod);
   const [includeNarrative, setIncludeNarrative] = useState(false);
   const { state, start, reset, refresh } = useCopilotRun();
@@ -105,7 +114,9 @@ export function CopilotDrawer() {
           <header className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-subtle">
             <div>
               <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">经营 Copilot</h2>
-              <p className="text-xs text-neutral-500">auto-risk-control-v1（5 步 workflow）</p>
+              <p className="text-xs text-neutral-500">
+                {mode === 'patrol' ? 'auto-risk-control-v1（5 步 workflow）' : '确定性情景测算（无 LLM / 无 SQL）'}
+              </p>
             </div>
             <button
               type="button"
@@ -117,6 +128,53 @@ export function CopilotDrawer() {
             </button>
           </header>
 
+          {/* Mode 切换器：「经营巡检」与「经营利润情景测算」并列入口 */}
+          <div
+            role="tablist"
+            aria-label="Copilot 模式"
+            className="flex border-b border-neutral-200 dark:border-subtle px-2 pt-2 gap-1"
+          >
+            {(Object.keys(MODE_LABELS) as CopilotMode[]).map((m) => {
+              const active = m === mode;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls={`copilot-panel-${m}`}
+                  id={`copilot-tab-${m}`}
+                  onClick={() => setMode(m)}
+                  className={
+                    active
+                      ? 'px-3 py-1.5 text-sm font-medium border-b-2 border-primary text-primary -mb-px'
+                      : 'px-3 py-1.5 text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 border-b-2 border-transparent -mb-px'
+                  }
+                >
+                  {MODE_LABELS[m]}
+                </button>
+              );
+            })}
+          </div>
+
+          {mode === 'forecast' && (
+            <div
+              role="tabpanel"
+              id="copilot-panel-forecast"
+              aria-labelledby="copilot-tab-forecast"
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <ForecastScenarioPanel />
+            </div>
+          )}
+
+          {mode === 'patrol' && (
+            <div
+              role="tabpanel"
+              id="copilot-panel-patrol"
+              aria-labelledby="copilot-tab-patrol"
+              className="flex-1 flex flex-col overflow-hidden"
+            >
           <div className="px-4 py-3 border-b border-neutral-200 dark:border-subtle space-y-2">
             <div className="grid grid-cols-2 gap-2 text-sm">
               <label className="flex flex-col gap-1">
@@ -240,6 +298,8 @@ export function CopilotDrawer() {
               </>
             )}
           </section>
+            </div>
+          )}
         </div>
       )}
     </>
