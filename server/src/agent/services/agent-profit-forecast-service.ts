@@ -92,20 +92,25 @@ function calculateOneSegment(segment: ProfitSegmentScenario): ProfitSegmentRespo
 export function calculateProfitSegment(input: ProfitSegmentRequest): ProfitSegmentResponse {
   const segments = input.segments.map(calculateOneSegment);
 
-  const totalPremium = roundCurrency(
-    input.segments.reduce((sum, segment) => sum + segment.premium, 0)
+  // Keep unrounded sums for internal math; only round values that ship in the response.
+  // Rounding totalPremium first would distort the weighted ratio when premiums include
+  // small decimals (schema permits any positive number; round-to-cents could land on 0
+  // for sub-cent inputs, collapsing the denominator).
+  const totalPremiumExact = input.segments.reduce((sum, segment) => sum + segment.premium, 0);
+  const totalFullCycleExact = segments.reduce(
+    (sum, segment) => sum + segment.fullCycleForecastOperatingProfit,
+    0
   );
-  const totalFullCycleForecastOperatingProfit = roundCurrency(
-    segments.reduce((sum, segment) => sum + segment.fullCycleForecastOperatingProfit, 0)
-  );
-  const weightedUltimateCombinedCostRatio = totalPremium > 0
+  const weightedUltimateCombinedCostRatio = totalPremiumExact > 0
     ? roundRatio(
         input.segments.reduce(
           (sum, segment) => sum + (segment.ultimateVariableCostRatio + segment.ultimateFixedCostRatio) * segment.premium,
           0
-        ) / totalPremium
+        ) / totalPremiumExact
       )
     : 0;
+  const totalPremium = roundCurrency(totalPremiumExact);
+  const totalFullCycleForecastOperatingProfit = roundCurrency(totalFullCycleExact);
 
   const hasCallerProvided = input.segments.some((segment) => segment.assumptionSource === 'caller_provided');
   const warnings = [

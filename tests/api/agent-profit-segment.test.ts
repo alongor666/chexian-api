@@ -76,6 +76,74 @@ describe('agent operating profit forecast — segment capability', () => {
     expect(seg.onePctSensitivity).toEqual(singleResult.data.onePctSensitivity);
   });
 
+  it('uses unrounded internal sums so weighted ratio survives sub-cent decimal premiums', async () => {
+    // Regression for PR #307 codex P2 review: rounding totalPremium to cents BEFORE
+    // computing the weighted ratio collapses the denominator when all segment
+    // premiums are sub-cent (here: 0.001 each). The output must still reflect the
+    // true premium-weighted average (here: a uniform 90% across both segments).
+    const { calculateProfitSegment } = await import('../../server/src/agent/services/agent-profit-forecast-service.js');
+
+    const result = calculateProfitSegment({
+      scenarioName: 'sub-cent-premium',
+      dimension: 'org_level_3',
+      segments: [
+        {
+          dimensionLabel: '机构α',
+          premium: 0.001,
+          ultimateVariableCostRatio: 80,
+          ultimateFixedCostRatio: 10,
+          earningSchedule: [{ period: '2026', earnedRatio: 100 }],
+          assumptionSource: 'caller_provided',
+        },
+        {
+          dimensionLabel: '机构β',
+          premium: 0.001,
+          ultimateVariableCostRatio: 80,
+          ultimateFixedCostRatio: 10,
+          earningSchedule: [{ period: '2026', earnedRatio: 100 }],
+          assumptionSource: 'caller_provided',
+        },
+      ],
+    });
+
+    // Both segments have cc=90; weighted average must remain 90 even when
+    // totalPremium rounds to 0 in the response payload.
+    expect(result.data.aggregate.weightedUltimateCombinedCostRatio).toBeCloseTo(90, 6);
+    expect(result.data.aggregate.totalPremium).toBe(0); // displayed value rounds to cents
+  });
+
+  it('keeps weighted ratio correct when premiums include fractional cents', async () => {
+    // Heterogeneous decimal premiums: ensure the weighting uses the exact totals.
+    const { calculateProfitSegment } = await import('../../server/src/agent/services/agent-profit-forecast-service.js');
+
+    const result = calculateProfitSegment({
+      scenarioName: 'fractional-premiums',
+      dimension: 'org_level_3',
+      segments: [
+        {
+          dimensionLabel: 'A',
+          premium: 10000.45,
+          ultimateVariableCostRatio: 80,
+          ultimateFixedCostRatio: 10,
+          earningSchedule: [{ period: '2026', earnedRatio: 100 }],
+          assumptionSource: 'caller_provided',
+        },
+        {
+          dimensionLabel: 'B',
+          premium: 20000.55,
+          ultimateVariableCostRatio: 95,
+          ultimateFixedCostRatio: 8,
+          earningSchedule: [{ period: '2026', earnedRatio: 100 }],
+          assumptionSource: 'caller_provided',
+        },
+      ],
+    });
+
+    const totalExact = 10000.45 + 20000.55;
+    const expectedWeighted = (10000.45 * 90 + 20000.55 * 103) / totalExact;
+    expect(result.data.aggregate.weightedUltimateCombinedCostRatio).toBeCloseTo(expectedWeighted, 4);
+  });
+
   it('aggregates premium-weighted ultimate combined cost ratio across segments', async () => {
     const { calculateProfitSegment } = await import('../../server/src/agent/services/agent-profit-forecast-service.js');
 

@@ -287,6 +287,11 @@ export function buildSmokePlan(options) {
       capabilityId: 'forecast_operating_profit_segment',
       method: 'POST',
       path: `${FORECAST_BASE}/profit-segment`,
+      // Role-gated: branch_admin only. When smoke runs with org_user/telemarketing_user
+      // tokens, 403 is the expected outcome and must NOT fail the whole report. The
+      // evaluator treats this step as role-skipped (still recorded, but excluded from
+      // ok/failure aggregation and from caller-display-contract verification).
+      acceptableNonOkStatuses: [403],
       body: {
         scenarioName: 'agent-smoke-profit-segment',
         dimension: 'org_level_3',
@@ -406,6 +411,10 @@ async function runStep(step, options) {
     );
     const body = await readJsonResponse(response);
 
+    const acceptableNonOk = Array.isArray(step.acceptableNonOkStatuses)
+      ? step.acceptableNonOkStatuses.includes(response.status)
+      : false;
+    const trulyOk = response.ok && body?.success !== false;
     return {
       name: step.name,
       kind: step.kind,
@@ -413,7 +422,8 @@ async function runStep(step, options) {
       method: step.method,
       path: step.path,
       status: response.status,
-      ok: response.ok && body?.success !== false,
+      ok: trulyOk || acceptableNonOk,
+      roleSkipped: !trulyOk && acceptableNonOk,
       durationMs: Date.now() - startedAt,
       responseSummary: summarizeResponse(body),
       response: sanitizeResponseForReport(body),
@@ -457,8 +467,15 @@ export function evaluateSmokeReport(report, options = {}) {
   const observabilityStep = report.steps.find((step) => step.name === 'observability');
   const stage5Prerequisites = mapStage5Prerequisites(readinessStep);
   const readyForLlm = readinessStep?.response?.data?.readyForLlm === true;
+  // Role-skipped steps (e.g. branch_admin-only forecast endpoints reached with a
+  // non-admin token) returned an acceptable 4xx; they must NOT contribute to
+  // display-contract verification (no payload to inspect) and must NOT fail the
+  // overall report.
+  const verifiableDiagnosisSteps = diagnosisSteps.filter((step) => !step.roleSkipped);
+  const roleSkippedSteps = report.steps.filter((step) => step.roleSkipped);
   const callerDisplayContractVerified =
-    diagnosisSteps.length > 0 && diagnosisSteps.every((step) => step.ok && hasDisplayContract(step));
+    verifiableDiagnosisSteps.length > 0 &&
+    verifiableDiagnosisSteps.every((step) => step.ok && hasDisplayContract(step));
   const explanationContractVerified =
     explainSteps.length > 0 && explainSteps.every((step) => step.ok && hasExplanationContract(step));
   const failures = [];
@@ -488,6 +505,7 @@ export function evaluateSmokeReport(report, options = {}) {
     observabilityStatus: observabilityStep?.response?.data?.auditLog?.status,
     observabilityWindowComplete: observabilityStep?.response?.data?.auditLog?.windowComplete,
     stage5Prerequisites,
+    roleSkippedStepNames: roleSkippedSteps.map((step) => step.name),
   };
 
   return {
