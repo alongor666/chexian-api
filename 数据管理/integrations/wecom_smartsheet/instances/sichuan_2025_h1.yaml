@@ -42,6 +42,7 @@ fields_enabled:
   - quote_discount
   - quote_premium
   - is_renewed
+  - loss_reason
   - renewal_mode
   - renewed_sign_date
   - earliest_quote_date

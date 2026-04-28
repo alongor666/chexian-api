@@ -321,6 +321,9 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
     ]
     rows = con.execute(main_sql, main_params).fetchdf().to_dict("records")
     rows = [r for r in rows if r.get("vehicle_frame_no")]
+    as_of = date.fromisoformat(as_of_date)
+    for row in rows:
+        row["customer_status"] = format_customer_status(row, as_of)
 
     # VIN 唯一性强制
     seen: set[str] = set()
@@ -366,6 +369,63 @@ def clean_num(v: Any) -> float | None:
         return float(v)
     except (TypeError, ValueError):
         return None
+
+
+def format_pct(value: float) -> str:
+    rounded = round(value, 1)
+    if rounded.is_integer():
+        return str(int(rounded))
+    return f"{rounded:.1f}"
+
+
+def as_date(value: Any) -> date | None:
+    if value is None or pd.isna(value):
+        return None
+    if hasattr(value, "to_pydatetime"):
+        value = value.to_pydatetime()
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def format_customer_status(row: dict[str, Any], as_of: date | None = None) -> str:
+    expiry_date = as_date(row.get("insurance_end_date"))
+    as_of = as_of or date.today()
+    days_to_expiry = (expiry_date - as_of).days if expiry_date is not None else None
+    is_expired = days_to_expiry is not None and days_to_expiry < 0
+    in_quote_period = is_expired or (days_to_expiry is not None and 0 <= days_to_expiry <= 30)
+
+    prior_premium = clean_num(row.get("premium"))
+    quote_premium = clean_num(row.get("quote_premium"))
+    renewal_status = "已续回" if row.get("is_renewed") else "未续回"
+
+    if not in_quote_period:
+        middle_status = "未到报价期"
+    elif not row.get("is_quoted"):
+        middle_status = "未报价"
+    elif prior_premium is None or prior_premium == 0 or quote_premium is None:
+        middle_status = "涨价未知"
+    elif quote_premium > prior_premium:
+        increase_pct = (quote_premium - prior_premium) / prior_premium * 100
+        middle_status = f"涨价{format_pct(increase_pct)}%"
+    else:
+        middle_status = "未涨价"
+
+    if row.get("is_renewed"):
+        return f"{middle_status}、{renewal_status}" if middle_status != "未报价" else renewal_status
+
+    if is_expired:
+        expiry_status = "已过期"
+    elif days_to_expiry is not None and 0 <= days_to_expiry <= 30:
+        expiry_status = f"{days_to_expiry}天后到期"
+    else:
+        return middle_status
+    return f"{expiry_status}、{middle_status}、{renewal_status}"
 
 
 def resolve_source(row: dict[str, Any], source_expr: str) -> Any:

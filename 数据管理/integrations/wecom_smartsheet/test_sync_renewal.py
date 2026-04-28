@@ -17,6 +17,7 @@ from sync_renewal import (
     iter_rate_limited_batches,
     plan_upsert,
 )
+from sync_renewal_v2 import FieldDef, build_record as build_record_v2
 
 
 def test_build_record_writes_salesman_as_text_and_utc_date():
@@ -112,6 +113,25 @@ def test_format_customer_status_records_price_quote_renewal_and_expiry():
             "days_to_expiry": -1,
         }
     ) == "涨价25%、已续回"
+
+
+def test_v2_build_record_writes_loss_reason_from_derived_customer_status():
+    field = FieldDef(
+        key="loss_reason",
+        field_id="fnk47h",
+        label="流失原因分析",
+        source="derived.customer_status",
+        type="text",
+    )
+    record = build_record_v2(
+        {
+            "customer_status": "已过期、涨价24.4%、未续回",
+            "salesman_unmatched": False,
+        },
+        [field],
+    )
+
+    assert record["values"]["fnk47h"] == "已过期、涨价24.4%、未续回"
 
 
 def test_plan_upsert_splits_existing_new_and_missing_vins():
