@@ -9,9 +9,14 @@ import {
   ProfitSegmentResponseSchema,
 } from '../schemas/agent-forecast.schema.js';
 import {
+  ForecastBaselineRequestSchema,
+  ForecastBaselineResponseSchema,
+} from '../schemas/agent-forecast-baseline.schema.js';
+import {
   calculateProfitScenario,
   calculateProfitSegment,
 } from '../services/agent-profit-forecast-service.js';
+import { buildForecastBaseline } from '../services/agent-forecast-baseline-service.js';
 
 const router = Router();
 
@@ -27,6 +32,23 @@ router.post(
     }
 
     const response = ProfitScenarioResponseSchema.parse(calculateProfitScenario(parsed.data));
+    res.json(response);
+  })
+);
+
+router.post(
+  '/baseline',
+  asyncHandler(async (req, res) => {
+    const parsed = ForecastBaselineRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, parsed.error.issues.map((issue) => issue.message).join('; '));
+    }
+
+    const result = await buildForecastBaseline({
+      request: parsed.data,
+      permissionFilter: req.permissionFilter || '1=1',
+    });
+    const response = ForecastBaselineResponseSchema.parse(result);
     res.json(response);
   })
 );
