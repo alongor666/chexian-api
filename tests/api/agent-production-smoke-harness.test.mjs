@@ -65,6 +65,9 @@ describe('agent production smoke harness', () => {
       'GET /api/agent/audit/readiness',
     ]);
 
+    const segmentStep = plan.find((step) => step.name === 'forecast_operating_profit_segment');
+    expect(segmentStep?.acceptableNonOkStatuses).toEqual([403]);
+
     const growth = plan.find((step) => step.capabilityId === 'growth_diagnosis');
     expect(growth?.body.currentPeriod).toEqual({ startDate: '2026-04-01', endDate: '2026-04-26' });
     expect(growth?.body.baselinePeriod).toEqual({ startDate: '2025-04-01', endDate: '2025-04-26' });
@@ -169,5 +172,93 @@ describe('agent production smoke harness', () => {
     expect(source).not.toMatch(/openrouter|zhipu|createChatCompletion|chatCompletion|completion\.create/i);
     expect(source).not.toMatch(/rawSql|freeSql|nl2sql/i);
     expect(source).not.toContain('CURRENT_DATE');
+  });
+
+  it('treats role-skipped 403 on profit-segment as OK and excludes it from display-contract verification', () => {
+    // Simulates a smoke run with a non-admin token: profit-segment returns 403 by design.
+    // Whole-report ok must remain true; the role-skipped step is recorded in summary
+    // and excluded from the diagnosis caller-display contract aggregation.
+    const report = {
+      steps: [
+        {
+          name: 'cost_indicator_diagnosis',
+          kind: 'diagnosis',
+          ok: true,
+          status: 200,
+          response: {
+            success: true,
+            data: {
+              capabilityId: 'cost_indicator_diagnosis',
+              warnings: ['cost warning'],
+              forbiddenInterpretations: ['承保利润'],
+            },
+          },
+        },
+        {
+          name: 'forecast_operating_profit_segment',
+          kind: 'diagnosis',
+          ok: true,
+          roleSkipped: true,
+          status: 403,
+          response: { success: false, error: { statusCode: 403, messagePresent: true } },
+        },
+        {
+          name: 'agent_diagnosis_explanation',
+          kind: 'explain',
+          ok: true,
+          status: 200,
+          response: {
+            success: true,
+            data: {
+              capabilityId: 'cost_indicator_diagnosis',
+              status: 'explained',
+              warnings: ['x'],
+              forbiddenInterpretations: ['承保利润'],
+            },
+          },
+        },
+        {
+          name: 'observability',
+          kind: 'audit',
+          ok: true,
+          status: 200,
+          response: { success: true, data: { auditLog: { status: 'observed', windowComplete: true } } },
+        },
+        {
+          name: 'readiness',
+          kind: 'audit',
+          ok: true,
+          status: 200,
+          response: { success: true, data: { readyForLlm: false, stage5Prerequisites: [] } },
+        },
+      ],
+    };
+
+    const evaluation = evaluateSmokeReport(report, { expectLlmBlocked: true });
+
+    expect(evaluation.ok).toBe(true);
+    expect(evaluation.failures).toEqual([]);
+    expect(evaluation.summary.callerDisplayContractVerified).toBe(true);
+    expect(evaluation.summary.roleSkippedStepNames).toContain('forecast_operating_profit_segment');
+  });
+
+  it('keeps the harness honest when an unexpected non-OK status hits a non-role-gated step', () => {
+    // Sanity check: a 500 on a regular diagnosis step must still fail the report.
+    const report = {
+      steps: [
+        {
+          name: 'growth_diagnosis',
+          kind: 'diagnosis',
+          ok: false,
+          status: 500,
+          response: { success: false, error: { statusCode: 500, messagePresent: true } },
+        },
+      ],
+    };
+
+    const evaluation = evaluateSmokeReport(report, { expectLlmBlocked: true });
+
+    expect(evaluation.ok).toBe(false);
+    expect(evaluation.failures.join('\n')).toContain('growth_diagnosis returned status 500');
   });
 });

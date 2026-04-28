@@ -135,18 +135,26 @@ E2E_PASSWORD=... bun run test:e2e --grep "forecast"
 
 ## 4. 当前推进状态（每次会话开始/结束时更新）
 
+> **状态语义**：`created` = PR 已开但未合并；`merged` = 已合并到 main、已部署生产。
+> **单一事实源**：本节是新会话定位"下一步"的唯一权威；正文其他章节如有不一致，以本节为准。
+
 ```
-[x] D    PR #305 created  → 检查 `gh pr view 305 --json mergedAt,state`
-[x] B1   PR #307 created  → branch=codex/agent-forecast-profit-segment
-[ ] C1   PR-C1 状态        → branch=未创建, PR=未创建（等 B1 merge 后启动）
-[ ] A/E  评估时机          → B+C 完成后再决策
+[x] D    PR #305 merged   2026-04-28 06:24 (route-question SuccessResponse 包装)
+[x] B1   PR #307 merged   2026-04-28 06:58 (deterministic profit-segment)
+[x] B1-fix codex review follow-up — 由 fix PR 处理
+            P1: smoke harness role-gate（acceptableNonOkStatuses）
+            P2: weighted ratio precision（未 round 内部 sum）
+            P2: 本文档状态语义（created vs merged）
+[ ] C1   前端 Copilot forecast 面板  → branch=未创建, PR=未创建（fix PR ship 后启动）
+[ ] A/E  评估时机                    → C1 完成后再决策
 ```
 
 **最后会话推进至**（2026-04-28）：
-- D 技术债清理 PR #305（route-question 响应包装）已 ship
-- 交接文档 PR #306（本文档）已 ship
-- B1 后端分群预测 PR #307 已 ship — typecheck ✅ / governance 24/24 ✅ / 1964 tests ✅
-- C1 前端 Copilot forecast 面板等 B1 merge 后启动
+- D 技术债清理 PR #305 已 **merged**
+- 交接文档 PR #306 已 **merged**
+- B1 后端分群预测 PR #307 已 **merged**（生产部署成功，health 200）
+- B1 codex review 三条 follow-up 由当前 fix PR 一并处理
+- C1 前端 Copilot forecast 面板等 fix PR ship 后启动
 
 ---
 
