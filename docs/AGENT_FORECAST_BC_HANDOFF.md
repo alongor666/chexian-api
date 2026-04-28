@@ -142,18 +142,33 @@ E2E_PASSWORD=... bun run test:e2e --grep "forecast"
 [x] D       PR #305 merged   2026-04-28 06:24 (route-question SuccessResponse 包装)
 [x] B1      PR #307 merged   2026-04-28 06:58 (deterministic profit-segment)
 [x] B1-fix  PR #308 merged   2026-04-28 09:40 (smoke role-gate + weighted precision + doc 语义)
-[x] C1      PR #309 created  2026-04-28      (Copilot 经营利润情景测算面板，单情景 v1)
-[ ] B-v2    分群预测前端面板（按交接文档 §3 锁定的 v2 方向）
-[ ] A/E     评估时机                          → C1 ship 后决策
+[x] C1      PR #309 merged   2026-04-28      (Copilot v1 单情景手填面板)
+[x] C1-doc  PR #310 merged   2026-04-28      (handoff §4 状态同步)
+[~] v1 弃用决策已锁定：v1 是产品错误（Excel-on-web）；
+              v2 重做为"已发生事实 + 4 个未来变量建模"
+[x] D1      PR #312 created  2026-04-28      (后端 forecast-baseline endpoint —
+              4 SQL helpers + percentile + V3=V1 默认 + 16 新测试)
+[ ] D2      v2 前端面板（基线驱动 + 4 变量情景模式）— D1 merge 后启动
+[ ] D3      v1 panel 隐藏 — D2 上线后立即做
+[ ] A/E     Stage 5B / 生产 smoke 凭据闭环 — D2/D3 ship 后再决策
 ```
 
+**v2 设计决策（2026-04-28 锁定）**：
+- Q1 模型：4 个真正变量 — V1 历史保单剩余敞口赔付率 / V2 新签保费增速 / V3 新签业务赔付率（默认与 V1 同源）/ V4 新签业务费用率
+- Q2 建模模式：乐观/中观/悲观 = p25/p50/p75 线性插值；历史窗口默认 3 年；"套用"用窗口内单年实际值
+- Q3 v1 处置：A — D2 上线后通过 D3 直接隐藏 v1 panel（保留代码不删除）
+
+**关键文件（D1 已就位，D2 起点）**：
+- 后端 endpoint：`POST /api/agent/forecast/baseline` — 见 `server/src/agent/routes/agent-forecast.ts`
+- 响应 schema：`server/src/agent/schemas/agent-forecast-baseline.schema.ts`
+- SQL helpers：`server/src/sql/forecast/baseline.ts`
+- 前端常量：`AGENT_FORECAST_ROUTES.BASELINE` (`agent/forecast/baseline`)
+
 **最后会话推进至**（2026-04-28）：
-- D 技术债清理 PR #305 已 **merged**
-- 交接文档 PR #306 已 **merged**
-- B1 后端分群预测 PR #307 已 **merged**（生产部署成功，health 200）
-- B1 codex review fix PR #308 已 **merged**（smoke role-gate + 加权精度 + 文档语义）
-- C1 前端 Copilot forecast 面板 PR #309 **created**（149 文件 / 1992 测试 passed；typecheck/governance/build 全绿）
-- 下一步选项：v2 分群面板 / Stage 5B LLM 释放 / 生产 smoke 凭据闭环（A/E）— 待 C1 merge 后决策
+- D / C1 / B1 / B1-fix / C1-doc 全部 **merged**
+- v1 panel 经用户判定为产品错误（凭空填表 ≈ Excel）— **决定重做 v2**
+- D1 后端 baseline endpoint PR #312 **created**（151 文件 / 2008 测试 passed）
+- 下一步：D1 merge → 启动 D2（前端 v2 panel 重做）
 
 ---
 
