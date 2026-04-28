@@ -136,14 +136,17 @@ E2E_PASSWORD=... bun run test:e2e --grep "forecast"
 ## 4. 当前推进状态（每次会话开始/结束时更新）
 
 ```
-[x] D    PR #305 merged?  → 检查 `gh pr view 305 --json mergedAt`
-[ ] B1   PR-B1 状态        → branch=codex/agent-forecast-profit-segment, PR=未创建
-[ ] C1   PR-C1 状态        → branch=未创建, PR=未创建
+[x] D    PR #305 created  → 检查 `gh pr view 305 --json mergedAt,state`
+[x] B1   PR #307 created  → branch=codex/agent-forecast-profit-segment
+[ ] C1   PR-C1 状态        → branch=未创建, PR=未创建（等 B1 merge 后启动）
 [ ] A/E  评估时机          → B+C 完成后再决策
 ```
 
-**最后会话结束时间**：2026-04-28（Asia/Shanghai）  
-**最后会话推进至**：D PR #305 已创建，B+C 决策已锁定，本交接文档刚生成
+**最后会话推进至**（2026-04-28）：
+- D 技术债清理 PR #305（route-question 响应包装）已 ship
+- 交接文档 PR #306（本文档）已 ship
+- B1 后端分群预测 PR #307 已 ship — typecheck ✅ / governance 24/24 ✅ / 1964 tests ✅
+- C1 前端 Copilot forecast 面板等 B1 merge 后启动
 
 ---
 
