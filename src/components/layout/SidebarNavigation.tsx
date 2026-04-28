@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSidebar } from './SidebarLayout';
+import { DESKTOP_SIDEBAR_WIDTH, useSidebar } from './SidebarLayout';
 import type { LucideIcon } from 'lucide-react';
 import {
   Gauge,
@@ -10,8 +10,6 @@ import {
   BarChart3,
   Calculator,
   Gift,
-  ChevronLeft,
-  ChevronRight,
   X,
   Bike,
   Shield,
@@ -31,7 +29,6 @@ import { useRBAC } from '../../shared/hooks/useRBAC';
 import { buildFilterParams } from '../../shared/utils/filterParams';
 import { apiClient } from '../../shared/api/client';
 import { queryKeys } from '../../shared/api/query-keys';
-import { useSidebarResize } from '../../shared/hooks/useSidebarResize';
 
 
 interface NavItem {
@@ -77,8 +74,7 @@ const adminNavItems: NavItem[] = [
  * - Lucide图标 + 文字标签
  */
 export const SidebarNavigation: React.FC = () => {
-  const { collapsed, toggle, mobileOpen, setMobileOpen, isMobile, sidebarWidth, setSidebarWidth, isDragging, setIsDragging } = useSidebar();
-  const { handleMouseDown: handleResizeMouseDown } = useSidebarResize({ sidebarWidth, setSidebarWidth, setIsDragging });
+  const { mobileOpen, setMobileOpen, isMobile } = useSidebar();
   const location = useLocation();
   const { userPermission } = usePermission();
   const queryClient = useQueryClient();
@@ -120,37 +116,35 @@ export const SidebarNavigation: React.FC = () => {
     }
   }, [filters, isOrgUser, userOrg, queryClient]);
 
-  // 移动端：总是展开显示；桌面端：根据 collapsed 状态
-  const showExpanded = isMobile || !collapsed;
-
-  const renderCollapsedTooltip = (label: string, description?: string) => (
-    <div className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-50 -translate-y-1/2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 shadow-lg opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-      <div className="whitespace-nowrap text-sm font-medium text-neutral-800 dark:text-neutral-200">{label}</div>
-      {description ? <div className="mt-0.5 whitespace-nowrap text-xs text-neutral-500 dark:text-neutral-400">{description}</div> : null}
-    </div>
-  );
+  // 移动端保持抽屉展开；桌面端固定为图标 + 两字短标签的窄栏。
+  const isCompactRail = !isMobile;
 
   const renderNavItem = (item: NavItem) => {
     const IconComponent = item.icon;
     const canAccess = userPermission ? canAccessRoute(userPermission, item.path) : true;
+    const visibleLabel = isCompactRail ? item.shortLabel ?? item.label.slice(0, 2) : item.label;
+    const itemClasses = isCompactRail
+      ? 'group relative flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 transition-colors duration-200'
+      : 'group relative flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0';
+    const labelClasses = isCompactRail
+      ? 'text-[13px] font-semibold leading-none tracking-normal'
+      : 'ml-3 text-sm font-medium truncate';
 
     if (!canAccess) {
       return (
         <div
           key={item.path}
-          className="group relative flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0 text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-800 cursor-not-allowed opacity-70"
-          title={!showExpanded ? `${item.label}（无权限）` : undefined}
+          className={`${itemClasses} text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-800 cursor-not-allowed opacity-70`}
+          title={`${item.label}（无权限）`}
           aria-disabled="true"
+          aria-label={`${item.label}（无权限）`}
         >
           <IconComponent
             size={20}
             className="flex-shrink-0"
             aria-hidden="true"
           />
-          {showExpanded && (
-            <span className="ml-3 text-sm font-medium truncate">{item.label}</span>
-          )}
-          {!showExpanded && renderCollapsedTooltip(item.tooltipLabel ?? item.label, '当前账号无权限')}
+          <span className={labelClasses}>{visibleLabel}</span>
         </div>
       );
     }
@@ -159,11 +153,12 @@ export const SidebarNavigation: React.FC = () => {
       <NavLink
         key={item.path}
         to={item.path}
-        className={`group relative flex items-center px-3 py-2.5 md:py-2.5 rounded-lg transition-all duration-200 min-h-[44px] md:min-h-0 ${isActive(item.path)
+        className={`${itemClasses} ${isActive(item.path)
           ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-semibold'
           : 'text-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 hover:text-neutral-900'
           }`}
-        title={!showExpanded ? item.label : undefined}
+        title={item.label}
+        aria-label={item.tooltipLabel ?? item.label}
         onMouseEnter={() => handlePrefetch(item.path)}
       >
         {isActive(item.path) && (
@@ -174,24 +169,21 @@ export const SidebarNavigation: React.FC = () => {
           className="flex-shrink-0"
           aria-hidden="true"
         />
-        {showExpanded && (
-          <span className="ml-3 text-sm font-medium truncate">{item.label}</span>
-        )}
-        {!showExpanded && renderCollapsedTooltip(item.tooltipLabel ?? item.label)}
+        <span className={labelClasses}>{visibleLabel}</span>
       </NavLink>
     );
   };
 
-  const renderSection = (title: string, items: NavItem[]) => (
+  const renderSection = (title: string, items: NavItem[], shortTitle = title.slice(0, 2)) => (
     <>
       <div className="my-3 border-t border-neutral-200 dark:border-neutral-700" role="separator" />
-      {showExpanded ? (
+      {isMobile ? (
         <div className="px-3 py-2 text-xs font-semibold text-neutral-400 uppercase tracking-[0.16em]">
           {title}
         </div>
       ) : (
-        <div className="flex justify-center py-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-neutral-300" aria-hidden="true" />
+        <div className="px-1 py-2 text-center text-[11px] font-semibold leading-none tracking-normal text-neutral-400">
+          {shortTitle}
         </div>
       )}
       {items.map(renderNavItem)}
@@ -200,32 +192,23 @@ export const SidebarNavigation: React.FC = () => {
 
   // 计算侧边栏的显示状态和样式
   const getSidebarClasses = () => {
-    const baseClasses = `fixed left-0 top-14 bottom-0 bg-white dark:bg-neutral-800 border-r border-neutral-200 dark:border-neutral-700 z-40 flex flex-col ${!isDragging ? 'transition-all duration-300' : ''}`;
+    const baseClasses = 'fixed left-0 top-14 bottom-0 bg-white dark:bg-neutral-800 border-r border-neutral-200 dark:border-neutral-700 z-40 flex flex-col transition-all duration-300';
 
     if (isMobile) {
       // 移动端：抽屉模式，不淡化
       return `${baseClasses} w-72 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`;
     }
 
-    // 桌面端：默认淡化，hover 显现
-    return `${baseClasses} opacity-30 hover:opacity-100 transition-opacity duration-300`;
+    return baseClasses;
   };
 
   return (
     <aside
       className={getSidebarClasses()}
-      style={!isMobile ? { width: collapsed ? '64px' : `${sidebarWidth}px` } : undefined}
+      style={!isMobile ? { width: `${DESKTOP_SIDEBAR_WIDTH}px` } : undefined}
       role="navigation"
       aria-label="主导航"
     >
-      {/* 拖拽把手 - 放侧边栏右侧 */}
-      {!isMobile && !collapsed && (
-        <div
-          className="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-primary-400 z-50 transition-colors"
-          style={{ transform: 'translateX(50%)' }}
-          onMouseDown={handleResizeMouseDown}
-        />
-      )}
       {/* 移动端：关闭按钮 */}
       {isMobile && (
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-700 md:hidden">
@@ -242,7 +225,7 @@ export const SidebarNavigation: React.FC = () => {
 
       {/* 导航菜单 */}
       <div className="flex-1 overflow-y-auto overflow-x-visible">
-        <nav className="px-3 py-4 space-y-1">
+        <nav className={`${isMobile ? 'px-3 py-4' : 'px-2 py-3'} space-y-1`}>
           {renderSection(
             '数据分析',
             dataNavItems.filter(item => {
@@ -271,29 +254,9 @@ export const SidebarNavigation: React.FC = () => {
 
       </div>
 
-      {/* 底部区域：用户面板 + 收起/展开按钮 */}
-      <div className="border-t border-neutral-200 dark:border-neutral-700 p-3 space-y-2">
+      {/* 底部区域：用户面板 */}
+      <div className="border-t border-neutral-200 dark:border-neutral-700 p-2">
         <SidebarUserPanel />
-
-        {/* 收起/展开按钮 - 仅桌面端显示 */}
-        {!isMobile && (
-          <button
-            onClick={toggle}
-            className="w-full flex items-center justify-center px-3 py-2 rounded-lg text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
-            title={collapsed ? '展开侧边栏' : '收起侧边栏'}
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
-          >
-            {collapsed ? (
-              <ChevronRight size={20} aria-hidden="true" />
-            ) : (
-              <>
-                <ChevronLeft size={20} aria-hidden="true" />
-                <span className="ml-2 text-sm">收起侧边栏</span>
-              </>
-            )}
-          </button>
-        )}
       </div>
     </aside>
   );

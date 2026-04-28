@@ -17,13 +17,15 @@ interface SidebarContextValue {
   setIsDragging: (dragging: boolean) => void;
 }
 
+export const DESKTOP_SIDEBAR_WIDTH = 96;
+
 const SidebarContext = createContext<SidebarContextValue>({
-  collapsed: false,
+  collapsed: true,
   toggle: () => { },
   mobileOpen: false,
   setMobileOpen: () => { },
   isMobile: false,
-  sidebarWidth: 240,
+  sidebarWidth: DESKTOP_SIDEBAR_WIDTH,
   setSidebarWidth: () => { },
   isDragging: false,
   setIsDragging: () => { },
@@ -45,41 +47,9 @@ export const useSidebar = () => useContext(SidebarContext);
  * └──────┴─────────────────────────────────────────────┘
  */
 export const SidebarLayout: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      const saved = localStorage.getItem('sidebar-collapsed');
-      return saved !== null ? saved === 'true' : false;
-    } catch {
-      return false;
-    }
-  });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const location = useLocation();
-
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    try {
-      const saved = localStorage.getItem('sidebar-width');
-      return saved ? parseInt(saved, 10) : 240;
-    } catch {
-      return 240;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('sidebar-width', sidebarWidth.toString());
-    } catch { }
-  }, [sidebarWidth]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('sidebar-collapsed', collapsed.toString());
-    } catch { }
-  }, [collapsed]);
-
-  const toggle = () => setCollapsed((prev) => !prev);
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -112,7 +82,19 @@ export const SidebarLayout: React.FC = () => {
   }, [mobileOpen, isMobile]);
 
   return (
-    <SidebarContext.Provider value={{ collapsed, toggle, mobileOpen, setMobileOpen, isMobile, sidebarWidth, setSidebarWidth, isDragging, setIsDragging }}>
+    <SidebarContext.Provider
+      value={{
+        collapsed: true,
+        toggle: () => { },
+        mobileOpen,
+        setMobileOpen,
+        isMobile,
+        sidebarWidth: DESKTOP_SIDEBAR_WIDTH,
+        setSidebarWidth: () => { },
+        isDragging: false,
+        setIsDragging: () => { },
+      }}
+    >
       <div className="h-screen overflow-hidden bg-neutral-50 dark:bg-neutral-900 flex flex-col">
         {/* 顶部导航栏 */}
         <TopNavigation />
@@ -133,8 +115,8 @@ export const SidebarLayout: React.FC = () => {
 
           {/* 主内容区 - 移动端全宽，桌面端有侧边栏边距 */}
           <main
-            className={`flex-1 overflow-hidden ${!isDragging ? 'transition-all duration-300' : ''}`}
-            style={{ marginLeft: isMobile ? '0px' : collapsed ? '64px' : `${sidebarWidth}px` }}
+            className="flex-1 overflow-hidden transition-all duration-300"
+            style={{ marginLeft: isMobile ? '0px' : `${DESKTOP_SIDEBAR_WIDTH}px` }}
           >
             <div className="h-full flex flex-col">
               <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-neutral-900 overflow-y-auto relative" id="main-scroll-container">
