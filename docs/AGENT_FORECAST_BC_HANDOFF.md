@@ -139,22 +139,21 @@ E2E_PASSWORD=... bun run test:e2e --grep "forecast"
 > **单一事实源**：本节是新会话定位"下一步"的唯一权威；正文其他章节如有不一致，以本节为准。
 
 ```
-[x] D    PR #305 merged   2026-04-28 06:24 (route-question SuccessResponse 包装)
-[x] B1   PR #307 merged   2026-04-28 06:58 (deterministic profit-segment)
-[x] B1-fix codex review follow-up — 由 fix PR 处理
-            P1: smoke harness role-gate（acceptableNonOkStatuses）
-            P2: weighted ratio precision（未 round 内部 sum）
-            P2: 本文档状态语义（created vs merged）
-[ ] C1   前端 Copilot forecast 面板  → branch=未创建, PR=未创建（fix PR ship 后启动）
-[ ] A/E  评估时机                    → C1 完成后再决策
+[x] D       PR #305 merged   2026-04-28 06:24 (route-question SuccessResponse 包装)
+[x] B1      PR #307 merged   2026-04-28 06:58 (deterministic profit-segment)
+[x] B1-fix  PR #308 merged   2026-04-28 09:40 (smoke role-gate + weighted precision + doc 语义)
+[x] C1      PR #309 created  2026-04-28      (Copilot 经营利润情景测算面板，单情景 v1)
+[ ] B-v2    分群预测前端面板（按交接文档 §3 锁定的 v2 方向）
+[ ] A/E     评估时机                          → C1 ship 后决策
 ```
 
 **最后会话推进至**（2026-04-28）：
 - D 技术债清理 PR #305 已 **merged**
 - 交接文档 PR #306 已 **merged**
 - B1 后端分群预测 PR #307 已 **merged**（生产部署成功，health 200）
-- B1 codex review 三条 follow-up 由当前 fix PR 一并处理
-- C1 前端 Copilot forecast 面板等 fix PR ship 后启动
+- B1 codex review fix PR #308 已 **merged**（smoke role-gate + 加权精度 + 文档语义）
+- C1 前端 Copilot forecast 面板 PR #309 **created**（149 文件 / 1992 测试 passed；typecheck/governance/build 全绿）
+- 下一步选项：v2 分群面板 / Stage 5B LLM 释放 / 生产 smoke 凭据闭环（A/E）— 待 C1 merge 后决策
 
 ---
 
