@@ -3,8 +3,11 @@
  *
  * Verifies the new tablist UX:
  *  - default mode is patrol
- *  - clicking forecast tab swaps the panel to ForecastScenarioPanel
+ *  - clicking forecast tab swaps the panel to ForecastBaselinePanel (v2)
  *  - tab roles + aria-selected are wired correctly for accessibility
+ *
+ * 2026-04-28 D2 update: forecast tab now mounts v2 ForecastBaselinePanel
+ * (baseline-driven mode pickers, no manual premium/vc inputs).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -71,15 +74,17 @@ describe('CopilotDrawer mode switcher', () => {
     expect(screen.getByText(/auto-risk-control-v1/)).toBeTruthy();
   });
 
-  it('switches to forecast mode and renders ForecastScenarioPanel inputs', () => {
+  it('switches to forecast mode and renders ForecastBaselinePanel (v2)', () => {
     render(<CopilotDrawer />);
     fireEvent.click(screen.getByRole('button', { name: '打开 Copilot' }));
 
     fireEvent.click(screen.getByRole('tab', { name: '经营利润情景测算' }));
 
     expect(screen.getByRole('tab', { name: '经营利润情景测算' }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByText(/确定性情景测算（无 LLM/)).toBeTruthy();
-    expect(screen.getByPlaceholderText(/2026 终极假设/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: '测算情景' })).toBeTruthy();
+    // v2 subtitle distinguishes baseline-driven panel from v1 manual-input panel
+    expect(screen.getByText(/已发生事实 \+ 4 变量假设/)).toBeTruthy();
+    // v2 panel root controls
+    expect(screen.getByTestId('forecast-baseline-load-button')).toBeTruthy();
+    expect(screen.getByText(/从系统加载已发生数据/)).toBeTruthy();
   });
 });
