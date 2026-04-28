@@ -282,6 +282,38 @@ export function buildSmokePlan(options) {
       },
     },
     {
+      name: 'forecast_operating_profit_segment',
+      kind: 'diagnosis',
+      capabilityId: 'forecast_operating_profit_segment',
+      method: 'POST',
+      path: `${FORECAST_BASE}/profit-segment`,
+      body: {
+        scenarioName: 'agent-smoke-profit-segment',
+        dimension: 'org_level_3',
+        segments: [
+          {
+            dimensionLabel: 'agent-smoke-org-a',
+            premium: 20000000,
+            ultimateVariableCostRatio: 85,
+            ultimateFixedCostRatio: 9,
+            earningSchedule: [
+              { period: options.endDate.slice(0, 4), earnedRatio: 52 },
+              { period: String(Number(options.endDate.slice(0, 4)) + 1), earnedRatio: 48 },
+            ],
+            assumptionSource: 'caller_provided',
+          },
+          {
+            dimensionLabel: 'agent-smoke-org-b',
+            premium: 15000000,
+            ultimateVariableCostRatio: 92,
+            ultimateFixedCostRatio: 9,
+            earningSchedule: [{ period: options.endDate.slice(0, 4), earnedRatio: 100 }],
+            assumptionSource: 'caller_provided',
+          },
+        ],
+      },
+    },
+    {
       name: 'agent_diagnosis_explanation',
       kind: 'explain',
       capabilityId: 'cost_indicator_diagnosis',

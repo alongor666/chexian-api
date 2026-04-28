@@ -211,6 +211,7 @@ export const AGENT_EXPLAIN_ROUTES = {
 // ─────────────────────────────────────────────
 export const AGENT_FORECAST_ROUTES = {
   PROFIT_SCENARIO: 'agent/forecast/profit-scenario',
+  PROFIT_SEGMENT: 'agent/forecast/profit-segment',
 } as const;
 
 // ─────────────────────────────────────────────

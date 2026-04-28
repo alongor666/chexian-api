@@ -57,9 +57,23 @@ describe('Agent Stage 5 boundary audit', () => {
     const readinessSchema = readSource('server/src/agent/schemas/agent-audit.schema.ts');
 
     expect(capabilityRegistry).toContain('forecast_operating_profit_scenario');
+    expect(capabilityRegistry).toContain('forecast_operating_profit_segment');
     expect(forecastService).not.toMatch(/openrouter|zhipu|createChatCompletion|chatCompletion|completion\.create/i);
     expect(forecastService).not.toMatch(/duckdb|rawSql|freeSql|nl2sql/i);
     expect(readinessSchema).toContain('readyForLlm: z.literal(false)');
+  });
+
+  it('keeps the profit-segment capability deterministic, role-gated, and SQL-free', () => {
+    const route = readSource('server/src/agent/routes/agent-forecast.ts');
+    const service = readSource('server/src/agent/services/agent-profit-forecast-service.ts');
+    const schema = readSource('server/src/agent/schemas/agent-forecast.schema.ts');
+
+    expect(route).toContain('UserRole.BRANCH_ADMIN');
+    expect(route).toContain("'/profit-segment'");
+    expect(service).toContain('calculateProfitSegment');
+    expect(service).not.toMatch(/duckdb|rawSql|freeSql|nl2sql|fetch\s*\(/i);
+    expect(schema).toContain('SegmentDimensionSchema');
+    expect(schema).not.toMatch(/duckdb|rawSql|freeSql|nl2sql/i);
   });
 
   it('distinguishes existing Copilot narrative from Agent Stage 5 explanation', () => {
