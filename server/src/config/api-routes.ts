@@ -192,6 +192,7 @@ export const AGENT_EXPLAIN_ROUTES = {
 export const AGENT_FORECAST_ROUTES = {
   PROFIT_SCENARIO: '/profit-scenario',
   PROFIT_SEGMENT: '/profit-segment',
+  BASELINE: '/baseline',
 } as const;
 
 // ─────────────────────────────────────────────

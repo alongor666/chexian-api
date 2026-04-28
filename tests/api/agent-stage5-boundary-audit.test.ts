@@ -76,6 +76,25 @@ describe('Agent Stage 5 boundary audit', () => {
     expect(schema).not.toMatch(/duckdb|rawSql|freeSql|nl2sql/i);
   });
 
+  it('keeps the forecast-baseline capability deterministic and free of LLM/NL2SQL paths', () => {
+    const route = readSource('server/src/agent/routes/agent-forecast.ts');
+    const service = readSource('server/src/agent/services/agent-forecast-baseline-service.ts');
+    const sql = readSource('server/src/sql/forecast/baseline.ts');
+    const schema = readSource('server/src/agent/schemas/agent-forecast-baseline.schema.ts');
+
+    expect(route).toContain("'/baseline'");
+    expect(service).toContain('buildForecastBaseline');
+    expect(sql).toContain('generateBaselineActualQuery');
+    expect(sql).toContain('generateHistoricalLossRatioQuery');
+    expect(sql).toContain('generateYoYGrowthQuery');
+    expect(sql).toContain('generateRecentExpenseRatioQuery');
+    // Deterministic only — no free-form SQL, no LLM clients, no current-date fallback
+    const combined = [route, service, schema].join('\n');
+    expect(combined).not.toMatch(/openrouter|zhipu|createChatCompletion|chatCompletion|completion\.create/i);
+    expect(combined).not.toContain('CURRENT_DATE');
+    expect(schema).toContain('ForecastBaselineRequestSchema');
+  });
+
   it('distinguishes existing Copilot narrative from Agent Stage 5 explanation', () => {
     const copilotRoute = readSource('server/src/routes/copilot.ts');
     const doc = readSource('docs/AGENT_STAGE5_LLM_BOUNDARY_AUDIT.md');
