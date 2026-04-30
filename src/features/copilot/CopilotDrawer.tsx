@@ -14,7 +14,9 @@ import ReactMarkdown from 'react-markdown';
 import { useCopilotRun } from './useCopilotRun';
 import { AuditTimeline } from './components/AuditTimeline';
 import { ApprovalActions } from './components/ApprovalActions';
-import { ForecastScenarioPanel } from './components/ForecastScenarioPanel';
+// v2 panel 使用 baseline 端点提供"已发生 vs 未来变量"分离的产品形态。
+// v1 ForecastScenarioPanel 文件保留待清理（D3），但不再渲染——避免"网页 Excel"反模式。
+import { ForecastBaselinePanel } from './components/ForecastBaselinePanel';
 import { apiClient } from '../../shared/api/client';
 import type { ApprovalState, CopilotStepView } from './types';
 
@@ -115,7 +117,7 @@ export function CopilotDrawer() {
             <div>
               <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">经营 Copilot</h2>
               <p className="text-xs text-neutral-500">
-                {mode === 'patrol' ? 'auto-risk-control-v1（5 步 workflow）' : '确定性情景测算（无 LLM / 无 SQL）'}
+                {mode === 'patrol' ? 'auto-risk-control-v1（5 步 workflow）' : '已发生事实 + 4 变量假设（无 LLM / 无 SQL）'}
               </p>
             </div>
             <button
@@ -164,7 +166,7 @@ export function CopilotDrawer() {
               aria-labelledby="copilot-tab-forecast"
               className="flex-1 flex flex-col overflow-hidden"
             >
-              <ForecastScenarioPanel />
+              <ForecastBaselinePanel />
             </div>
           )}
 
