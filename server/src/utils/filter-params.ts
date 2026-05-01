@@ -224,52 +224,12 @@ export function buildConditionsFromFilterParams(
     }
   }
 
-  // 车型快捷筛选
-  if (params.vehicleQuickFilter) {
-    switch (params.vehicleQuickFilter) {
-      case 'home_car':
-        if (params.enterpriseCar === 'true') {
-          // 家自车 + 企客同时选中
-          conditions.push("customer_category IN ('非营业个人客车', '非营业企业客车')");
-        } else {
-          conditions.push("customer_category = '非营业个人客车'");
-        }
-        break;
-      case 'truck_1t':
-        conditions.push("customer_category IN ('营业货车', '非营业货车')");
-        conditions.push("tonnage_segment = '1吨以下'");
-        break;
-      case 'truck_2_9t':
-        conditions.push("customer_category IN ('营业货车', '非营业货车')");
-        conditions.push("tonnage_segment = '2-9吨'");
-        break;
-      case 'motorcycle':
-        conditions.push("customer_category = '摩托车'");
-        break;
-      case 'truck_1_2t':
-        conditions.push("customer_category IN ('营业货车', '非营业货车')");
-        conditions.push("tonnage_segment = '1-2吨'");
-        break;
-      case 'rental':
-        conditions.push("customer_category = '营业出租租赁'");
-        break;
-      case 'dump':
-        conditions.push("customer_category = '营业货车'");
-        conditions.push("tonnage_segment = '10吨以上'");
-        conditions.push("vehicle_model LIKE '%自卸%'");
-        break;
-      case 'tractor':
-        conditions.push("customer_category = '营业货车'");
-        conditions.push("tonnage_segment = '10吨以上'");
-        conditions.push("vehicle_model LIKE '%牵引%'");
-        break;
-      case 'general':
-        conditions.push("customer_category = '营业货车'");
-        conditions.push("tonnage_segment = '10吨以上'");
-        conditions.push("vehicle_model NOT LIKE '%自卸%'");
-        conditions.push("vehicle_model NOT LIKE '%牵引%'");
-        break;
-    }
+  // 车型快捷筛选（home_car 含企客联动需特殊处理，其他 case 走共享 helper）
+  if (params.vehicleQuickFilter === 'home_car' && params.enterpriseCar === 'true') {
+    // 家自车 + 企客同时选中
+    conditions.push("customer_category IN ('非营业个人客车', '非营业企业客车')");
+  } else if (params.vehicleQuickFilter) {
+    pushVehicleQuickFilterConditions(conditions, params.vehicleQuickFilter);
   }
 
   // 企客单独选中（无 vehicleQuickFilter 时）
@@ -319,4 +279,73 @@ export function buildWhereFromFilterParamsWithoutDate(
     return `${userWhere} AND ${permissionFilter}`;
   }
   return userWhere;
+}
+
+export const VEHICLE_QUICK_FILTER_VALUES = [
+  'home_car',
+  'truck_1t',
+  'truck_2_9t',
+  'motorcycle',
+  'truck_1_2t',
+  'rental',
+  'dump',
+  'tractor',
+  'general',
+] as const;
+
+export type VehicleQuickFilterValue = (typeof VEHICLE_QUICK_FILTER_VALUES)[number];
+
+/**
+ * 共享：把 vehicleQuickFilter 翻译成 SQL 条件 push 进 conditions。
+ *
+ * 唯一事实源 — claims-detail / claims-heatmap / commonFilterSchema 都调用此 helper。
+ * 9 个 case 集中在此处维护，避免漂移（参考 BACKLOG: claims-heatmap 漂移 bug）。
+ *
+ * 注意：home_car + enterpriseCar=true 的联动逻辑保留在 buildConditionsFromFilterParams 中处理，
+ * 该 helper 只负责单独 home_car 的"非营业个人客车"语义。
+ */
+export function pushVehicleQuickFilterConditions(
+  conditions: string[],
+  value: string,
+  prefix: string = ''
+): void {
+  switch (value) {
+    case 'home_car':
+      conditions.push(`${prefix}customer_category = '非营业个人客车'`);
+      break;
+    case 'truck_1t':
+      conditions.push(`${prefix}customer_category IN ('营业货车', '非营业货车')`);
+      conditions.push(`${prefix}tonnage_segment = '1吨以下'`);
+      break;
+    case 'truck_2_9t':
+      conditions.push(`${prefix}customer_category IN ('营业货车', '非营业货车')`);
+      conditions.push(`${prefix}tonnage_segment = '2-9吨'`);
+      break;
+    case 'motorcycle':
+      conditions.push(`${prefix}customer_category = '摩托车'`);
+      break;
+    case 'truck_1_2t':
+      conditions.push(`${prefix}customer_category IN ('营业货车', '非营业货车')`);
+      conditions.push(`${prefix}tonnage_segment = '1-2吨'`);
+      break;
+    case 'rental':
+      conditions.push(`${prefix}customer_category = '营业出租租赁'`);
+      break;
+    case 'dump':
+      conditions.push(`${prefix}customer_category = '营业货车'`);
+      conditions.push(`${prefix}tonnage_segment = '10吨以上'`);
+      conditions.push(`${prefix}vehicle_model LIKE '%自卸%'`);
+      break;
+    case 'tractor':
+      conditions.push(`${prefix}customer_category = '营业货车'`);
+      conditions.push(`${prefix}tonnage_segment = '10吨以上'`);
+      conditions.push(`${prefix}vehicle_model LIKE '%牵引%'`);
+      break;
+    case 'general':
+      conditions.push(`${prefix}customer_category = '营业货车'`);
+      conditions.push(`${prefix}tonnage_segment = '10吨以上'`);
+      conditions.push(`${prefix}vehicle_model NOT LIKE '%自卸%'`);
+      conditions.push(`${prefix}vehicle_model NOT LIKE '%牵引%'`);
+      break;
+  }
 }
