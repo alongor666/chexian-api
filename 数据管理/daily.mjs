@@ -159,6 +159,12 @@ function extractDateRange(filename) {
   if (incr) {
     return { start: incr[1], end: incr[1] };
   }
+  // 显式日期范围格式（无中文锚点）：01_签单清单_剔摩_20240101_20260504.xlsx
+  // 上游 2026-05-05 起改用此格式替代「24年至YYYYMMDD」
+  const explicitRange = filename.match(/_(\d{8})_(\d{8})\.xlsx?$/i);
+  if (explicitRange) {
+    return { start: explicitRange[1], end: explicitRange[2] };
+  }
   // 旧格式：每日数据_20240101_20260407.xlsx
   const m = filename.match(/每日数据_(\d{8})[_-](\d{8})/);
   return m ? { start: m[1], end: m[2] } : null;
@@ -875,13 +881,20 @@ async function main() {
   }
 
   const shards = { static: [], weekly: [], daily: [] };
+  const unrecognized = [];
   for (const file of allXlsx) {
     const type = getShardType(file.name, config);
     if (!type) {
-      log('yellow', `⚠ 无法识别分片类型: ${file.name}`);
+      unrecognized.push(file.name);
       continue;
     }
     shards[type].push(file);
+  }
+  if (unrecognized.length > 0) {
+    log('red', `❌ ${unrecognized.length} 个 xlsx 无法识别分片类型，ETL 中止以避免静默丢数据：`);
+    for (const name of unrecognized) log('red', `   ${name}`);
+    log('red', `   修复：在 daily.mjs:extractDateRange 增加对应正则后重跑`);
+    process.exit(1);
   }
 
   console.log('');

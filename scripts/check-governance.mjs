@@ -736,6 +736,13 @@ function checkParquetOverlapInCurrent() {
     return true;
   }
 
+  // 业务互补：剔摩（非摩托）和 限摩（仅摩托）按险类切分，时间重叠也无数据翻倍
+  const isComplementary = (a, b) => {
+    const aTuomo = /_剔摩_/.test(a), aXianmo = /_限摩_/.test(a);
+    const bTuomo = /_剔摩_/.test(b), bXianmo = /_限摩_/.test(b);
+    return (aTuomo && bXianmo) || (aXianmo && bTuomo);
+  };
+
   const overlaps = [];
   for (let i = 0; i < parquetFiles.length; i++) {
     for (let j = i + 1; j < parquetFiles.length; j++) {
@@ -743,6 +750,7 @@ function checkParquetOverlapInCurrent() {
       const b = parquetFiles[j];
       // 两个区间重叠条件：a.start <= b.end AND b.start <= a.end
       if (a.range.start <= b.range.end && b.range.start <= a.range.end) {
+        if (isComplementary(a.name, b.name)) continue; // 剔摩/限摩互补豁免
         overlaps.push(
           `"${a.name}" [${a.range.start}~${a.range.end}] ↔ "${b.name}" [${b.range.start}~${b.range.end}]`
         );
