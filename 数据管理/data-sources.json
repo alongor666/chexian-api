@@ -47,8 +47,8 @@
       "output": "warehouse/fact/claims_detail/claims_*.parquet",
       "update_cadence": "daily_cdc_partition",
       "last_updated": "2026-05-05",
-      "data_range": "2019-01-01 ~ 2026-04-03",
-      "row_count": 359507,
+      "data_range": "2019-01-01 ~ 2026-05-04",
+      "row_count": 282807,
       "field_count": 41,
       "key_fields": [
         "claim_no",
