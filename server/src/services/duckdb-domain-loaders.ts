@@ -347,7 +347,7 @@ export async function buildAchievementView(db: DuckDBQueryable, planYear: number
 // 独立数据域加载
 // ============================================
 
-// loadRenewalFunnel / loadRenewalUniverse removed — renewal 数据源已下线（2026-04-18）
+// Legacy renewal loaders removed; use RenewalTrackerFact.
 
 /**
  * 加载报价转化 Parquet → QuoteConversion 视图

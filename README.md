@@ -227,33 +227,29 @@ React 页面/Hook
 
 前端不直接执行 SQL，不加载 DuckDB-WASM，不再维护浏览器 Local 模式。
 
-### 数据域注册表（15 域）
+### 数据域注册表（11 个活跃域）
 
 | 域 ID | 名称 | 类型 | 状态 |
 |--------|------|------|------|
 | premium | 保费 | fact | 活跃 — 350 万+ 行 |
 | claims_detail | 赔案明细 | fact | 活跃 |
 | cross_sell | 交叉销售 | fact | 活跃 |
-| quotes_conversion | 报价转化(旧车商业险) | fact | 活跃 |
-| quotes_v2 | 报价清单(商业险v2) | fact | 活跃 |
-| renewal_v2 | 续保清单(套单) | fact | 活跃 |
-| renewal_funnel | 续保转化漏斗 | fact | 活跃 |
+| quotes_conversion | 报价转化 | fact | 活跃 |
+| renewal_tracker | 续保追踪（派生域） | fact | 活跃 |
 | customer_flow | 客户来源去向 | fact | 活跃 |
-| quotes_status | 报价状态(保单域) | fact | 活跃 |
 | salesman | 业务员 | dim | 活跃 |
 | plan | 保费计划 | dim | 活跃 |
 | brand | 品牌车型 | dim | 活跃 |
 | plate_region | 车牌归属地 | dim | 活跃 |
 | repair_resource | 维修资源 | dim | 活跃 |
-| claims | 赔付 | fact | **已废弃** — 迁移到 claims_detail |
 
 ### DuckDB 数据模型（4 层）
 
 | 层级 | 表/视图 | 说明 |
 |------|---------|------|
 | **L1 原始层** | `raw_parquet` | 由上传文件或启动扫描加载 |
-| **L2 事实视图** | `PolicyFact`, `PolicyFactRenewal` | 统一字段口径，列映射由 `mapping.ts` 生成 |
-| **L3 预聚合** | `DailyAggregated`, `PeriodAggregated`, `CrossSellDailyAgg`, `KpiDailySummary`, `RenewalDailyAgg` | 性能核心，VPS 优先加载 |
+| **L2 事实视图** | `PolicyFact`, `RenewalTrackerFact`, `ClaimsDetail`, `QuoteConversion` | 统一字段口径，列映射由 `mapping.ts` 生成 |
+| **L3 预聚合** | `DailyAggregated`, `PeriodAggregated`, `CrossSellDailyAgg`, `KpiDailySummary` | 性能核心，VPS 优先加载 |
 | **L4 维度/权限** | `UserAccount`, `RoleConfig`, `KpiPlanConfig`, `SalesmanTeamMapping`, `achievement_cache` | 配置与权限 |
 
 ### VPS 模式

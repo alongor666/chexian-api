@@ -259,7 +259,7 @@ src/features/*                                    # 功能模块 UI 渲染
 | `数据管理/pipelines/preflight_refresh.py` | 发布预检：源文件摆放/日期范围/premium 重叠/legacy 残留/tmp 文件 |
 | `数据管理/pipelines/refresh_metadata.py` | 从最终 parquet 单点派生 `data-sources.json`（替代 daily.mjs 4 处散落写入） |
 
-**SOP**（参考 `docs/superpowers/plans/2026-04-19-data-release-pipeline-hardening.md` Task 8）:
+**SOP**:
 1. `python3 数据管理/pipelines/preflight_refresh.py --manifest 数据管理/release-manifests/YYYY-MM-DD.json`
 2. 备份 + ETL（daily.mjs/replace_range）
 3. `python3 数据管理/pipelines/refresh_metadata.py --domain <id> --parquet <glob> --date-column <col> --run-date YYYY-MM-DD`

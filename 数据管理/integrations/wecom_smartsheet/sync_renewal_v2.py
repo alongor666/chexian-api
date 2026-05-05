@@ -42,7 +42,6 @@ DATA_ROOT = HERE.parents[1]
 DEFAULT_POLICY_GLOB = DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
 DEFAULT_QUOTES_PATH = DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet"
 DEFAULT_SALESMAN_PATH = DATA_ROOT / "warehouse" / "dim" / "salesman" / "latest.parquet"
-DEFAULT_RENEWAL_FUNNEL_PATH = DATA_ROOT / "warehouse" / "fact" / "renewal" / "renewal_funnel_2026q1.parquet"
 
 TRANSIENT_WECOM_ERRCODES = {-1, 45009, 2040035, 2040039}
 
@@ -275,11 +274,6 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
           AND CAST(insurance_start_date AS DATE) >= DATE '2026-01-01'
           AND (endorsement_no IS NULL OR TRIM(CAST(endorsement_no AS VARCHAR)) = '')
       ) WHERE rn = 1
-    ),
-    funnel AS (
-      SELECT policy_no, vehicle_frame_no, MAX(NULLIF(renewal_mode, '')) AS renewal_mode
-      FROM read_parquet('{DEFAULT_RENEWAL_FUNNEL_PATH}')
-      GROUP BY 1, 2
     )
     SELECT
       b.policy_no,
@@ -302,13 +296,12 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
       r.renewed_sign_date AS renewed_sign_date,
       CASE WHEN q.quote_time IS NOT NULL THEN true ELSE false END AS is_quoted,
       CASE WHEN r.renewed_policy_no IS NOT NULL THEN true ELSE false END AS is_renewed,
-      f.renewal_mode AS renewal_mode
+      '未分类' AS renewal_mode
     FROM base b
     LEFT JOIN salesman_dim s ON s.full_name = b.salesman_name
     LEFT JOIN q_latest q ON q.vehicle_frame_no = b.vehicle_frame_no
     LEFT JOIN q_earliest qe ON qe.vehicle_frame_no = b.vehicle_frame_no
     LEFT JOIN renewed r ON r.source_policy_no = b.policy_no AND r.vehicle_frame_no = b.vehicle_frame_no
-    LEFT JOIN funnel f ON f.policy_no = b.policy_no AND f.vehicle_frame_no = b.vehicle_frame_no
     """
     main_params = [
         insurance_type, start_from, start_to,

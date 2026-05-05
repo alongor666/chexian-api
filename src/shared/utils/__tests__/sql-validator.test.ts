@@ -71,10 +71,11 @@ describe('sql-validator', () => {
       expect(result.error).toContain('PolicyFact');
     });
 
-    it('应该允许使用 PolicyFactRenewal 视图', () => {
+    it('应该拒绝使用已下线的 PolicyFactRenewal 视图', () => {
       const sql = 'SELECT COUNT(*) FROM PolicyFactRenewal';
       const result = validateSQL(sql);
-      expect(result.valid).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('PolicyFactRenewal 已下线');
     });
   });
 });

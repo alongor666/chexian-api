@@ -24,9 +24,7 @@
 | 统计项目 Token 数 | `count-tokens.mjs` | `bun run count-tokens` |
 | 检测多 Agent 任务ID冲突 | `check-task-id-conflict.mjs` | `node scripts/check-task-id-conflict.mjs` |
 | 分析 Parquet 文件结构 | `analyze-parquet-schema.py` | `python3 scripts/analyze-parquet-schema.py` |
-| 计算续保率 | `calculate-renewal-rate.py` | `python3 scripts/calculate-renewal-rate.py` |
 | 提取业务员计划数据 | `extract_salesman_plan.py` | `python3 scripts/extract_salesman_plan.py` |
-| 测试 DuckDB SQL 语法 | `test-duckdb-sql.py` | `python3 scripts/test-duckdb-sql.py` |
 | 执行关键路由 15 分钟并发稳定性压测 | `benchmark-key-routes-soak.mjs` | `bun run benchmark:key-routes:soak` |
 | 从字段注册表生成 mapping/validator/etl 文件 | `field-registry/generate.mjs` | `node scripts/field-registry/generate.mjs` |
 | 校验 codegen 产物是否与注册表同步 | `field-registry/generate.mjs --check` | `node scripts/field-registry/generate.mjs --check` |
@@ -63,13 +61,9 @@
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
 | `analyze-parquet-schema.py` | 分析Parquet文件的schema结构和字段类型 | `python3 scripts/analyze-parquet-schema.py <file>` |
-| `calculate-renewal-rate.py` | 计算续保率（按机构/时间段） | `python3 scripts/calculate-renewal-rate.py` |
 | `compare-schema-mapping.py` | 对比Excel列名与mapping.ts定义的差异 | `python3 scripts/compare-schema-mapping.py` |
-| `diagnose-renewal.py` | 诊断续保匹配失败的原因 | `python3 scripts/diagnose-renewal.py` |
-| `generate-renewal-analysis.py` | 生成完整的续保分析报告 | `python3 scripts/generate-renewal-analysis.py` |
 | `inspect_columns.py` | 检查Parquet/Excel文件的列名和数据类型 | `python3 scripts/inspect_columns.py <file>` |
 | `extract_salesman_plan.py` | 从Excel提取业务员保费计划，生成标准化Parquet | `python3 scripts/extract_salesman_plan.py` |
-| `test-duckdb-sql.py` | 在DuckDB中测试SQL语法是否正确 | `python3 scripts/test-duckdb-sql.py "<sql>"` |
 
 ### 🔌 外部系统集成
 
@@ -168,14 +162,6 @@ python3 scripts/analyze-parquet-schema.py 数据文件.parquet
 # 对比列名映射
 python3 scripts/compare-schema-mapping.py
 ```
-
-### 场景5：续保分析全流程
-```bash
-python3 scripts/calculate-renewal-rate.py   # 计算续保率
-python3 scripts/generate-renewal-analysis.py # 生成报告
-```
-
----
 
 ## 关联索引
 

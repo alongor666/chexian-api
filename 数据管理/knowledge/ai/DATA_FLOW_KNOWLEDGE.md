@@ -263,7 +263,7 @@ WHERE salesman_name LIKE '%目标姓名%'
 
 ## 7. 跨源字段名不一致对照表
 
-5 个 Excel 数据源中同一业务概念的不同列名。`mapping.ts` 已注册全部别名，`convert_quotes.py` 已做标准化。
+5 个 Excel 数据源中同一业务概念的不同列名。`mapping.ts` 已注册全部别名，报价域由 `quote_etl.py` 做标准化。
 
 | 业务概念 | 每日数据 | 变动成本清单 | 交商同保续保 | 旧车商业险报价 | Parquet 标准名 | DuckDB 域字段 |
 |---------|---------|------------|------------|-------------|-------------|-------------|
@@ -324,18 +324,16 @@ Part B:  未映射业务员（有保单但不在 mapping 中）
 ⚠️ CRITICAL: 人数统计必须用 COUNT(DISTINCT full_name)，不能 COUNT(*)
 ```
 
-### 8.3 RenewalFunnel 视图
+### 8.3 RenewalTrackerFact 视图
 
 ```
-renewal/renewal_funnel_2026q1.parquet
-    ↓ duckdb.ts:loadRenewalFunnel()
-RenewalFunnel VIEW
-    → 动态计算:
-        days_since_expiry = CURRENT_DATE - insurance_end_date
-        days_to_expiry = insurance_end_date - CURRENT_DATE
-        in_quote_window = days_to_expiry <= 30
-        maturity = mature | pending | future
-        action_priority = P1(未报价即将到期) | P2(已报价近期到期) | P3(已报价中期到期) | P4(远期)
+renewal_tracker/latest.parquet
+    ↓ duckdb-domain-loaders.ts:loadRenewalTracker()
+RenewalTrackerFact VIEW
+    → 派生来源:
+        policy/current/*.parquet
+        quotes_conversion/latest.parquet
+        dim/salesman/latest.parquet
 ```
 
 ### 8.4 QuoteConversion 视图
@@ -370,7 +368,7 @@ diagnose_vehicle.py / diagnose_agent.py
 | J2' | ClaimsDetail (c) | → | PolicyFact (p) | LEFT JOIN | `c.policy_no = p.policy_no` | claims-detail.ts (loss-ratio, frequency) |
 | J3 | CrossSellFact (cs) | → | PolicyFact (p) | LEFT JOIN | `cs.policy_no = p.policy_no` | duckdb.ts (CrossSellDailyAgg 创建) |
 | J4 | CrossSellDailyAgg | → | SalesmanTeamMapping (tm) | LEFT JOIN | `salesman_name = tm.full_name` | cross-sell.ts |
-| J5 | PolicyFactRenewal (r) | → | SalesmanPlanFact (s) | LEFT JOIN | `r.salesman_name = s.salesman_name` | renewal-drilldown.ts |
+| J5 | RenewalTrackerFact (r) | → | SalesmanDim (s) | LEFT JOIN | `r.salesman_name = s.full_name` | renewal-tracker.ts |
 | J6 | SalesmanDim (s) | → | PlanFact (p) | LEFT JOIN | `s.business_no = p.business_no` | duckdb.ts (系统初始化) |
 | J7 | CustomerFlow | — | (独立查询) | — | 按 policy_no 去重 | customer-flow.ts |
 
@@ -391,8 +389,8 @@ diagnose_vehicle.py / diagnose_agent.py
 premium           01_签单清单_*.xlsx       transform.py              policy/current/*.parquet        PolicyFact(Realtime)      kpi/cost/trend/...      几乎所有
 claims_detail     02_理赔明细_*.xlsx       convert_claims_detail.py  claims_detail/claims_*.parquet  ClaimsDetail+ClaimsAgg    claims-detail.ts        /#/claims-detail
 cross_sell        03_交叉销售_*.xlsx       convert_cross_sell.py     cross_sell/latest.parquet       CrossSellFact→DailyAgg    cross-sell*.ts          /#/specialty
-quotes_v2         04_报价清单_*.xlsx       convert_quotes_v2.py      quotes/latest.parquet          QuoteConversion           quote-conversion.ts     /#/quote-conversion
-renewal_v2        05_续保清单_*.xlsx       convert_renewal.py        renewal/latest.parquet         PolicyFactRenewal         renewal*.ts             /#/specialty
+quotes_conversion 04_报价清单_*.xlsx       quote_etl.py              quotes_conversion/latest.parquet QuoteConversion          quote-conversion.ts     /#/quote-conversion
+renewal_tracker   派生(policy+quote)        convert_renewal_tracker.py renewal_tracker/latest.parquet RenewalTrackerFact       renewal-tracker.ts      /#/renewal-tracker
 customer_flow     08_客户来源去向*.xlsx    convert_customer_flow.py  customer_flow/latest.parquet   CustomerFlow              customer-flow.ts        /#/customer-flow
 repair_resource   07_维修资源*.xlsx        convert_repair.py         dim/repair/latest.parquet      RepairDim                 repair.ts               /#/repair
 brand             保单 parquet 提取        generate_brand_dim.py     dim/brand/latest.parquet       BrandDim                  (诊断工具直用)          无
@@ -408,7 +406,7 @@ plan              计划 xlsx + mapping      generate_dim_tables.py    dim/plan/
 >
 > **CRITICAL #7**: `CrossSellDailyAgg` 中的 `org_level_3` 来自原始 PolicyFact（Parquet 原始值），不经 `SalesmanTeamMapping.organization` 覆盖。推介率按机构统计时，跨机构业务员的数据归入保单所在机构。
 >
-> **CRITICAL #8**: `ClaimsAgg` 是从 `ClaimsDetail` 按 `policy_no` 动态聚合的派生表（SUM settled_amount + pending_amount → reported_claims）。唯一生成路径: `duckdb-domain-loaders.ts:createClaimsAggFromDetail()`，服务端惰性加载时自动创建。旧的 `claims_bulk`、`claims` 预计算文件和 `generate_claims_aggregate.py` 已于 2026-04-14 删除。
+> **CRITICAL #8**: `ClaimsAgg` 是从 `ClaimsDetail` 按 `policy_no` 动态聚合的派生表（SUM settled_amount + pending_amount → reported_claims）。唯一生成路径: `duckdb-domain-loaders.ts:createClaimsAggFromDetail()`，服务端惰性加载时自动创建。
 
 ---
 

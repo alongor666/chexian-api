@@ -42,7 +42,7 @@ fuel_type,
 |------|------|----------|
 | `endorsement_no` | 批单号未包含在视图 | 无 |
 | `endorsement_type` | 批改类型未包含在视图 | 无 |
-| `renewal_policy_no` | 仅在 PolicyFactRenewal 视图可用 | 用 `is_renewal` 布尔字段 |
+| `renewal_policy_no` | 未包含在 PolicyFact 视图 | 用 `is_renewal` 布尔字段；续保追踪用 `RenewalTrackerFact.renewed_policy_no` |
 | `new_vehicle_price` | 新车购置价未包含在视图 | 无 |
 | `team_name` | 团队名称未包含 | 用 `salesman_name` |
 | `org_level_4` | 四级机构未包含 | 用 `org_level_3` |
@@ -525,9 +525,9 @@ ORDER BY "达成率%" DESC
 
 **使用场景**: 业务员/团队/机构业绩排名。
 
-### 8.3 RenewalFunnel — 续保漏斗
+### 8.3 RenewalTrackerFact — 续保追踪
 
-动态计算 `days_since_expiry`、`days_to_expiry`、`in_quote_window`、`maturity`（mature/pending/future）、`action_priority`（P1-P4）。
+透传 `renewal_tracker/latest.parquet`，由 policy + quotes_conversion + salesman 派生。
 
 ### 8.4 QuoteConversion — 报价转化
 

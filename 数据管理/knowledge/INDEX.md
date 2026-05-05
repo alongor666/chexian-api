@@ -64,14 +64,12 @@ warehouse/
 │   │   ├── staging/                          ← 日增量暂存（不同步 VPS）
 │   │   ├── cache/                            ← Parquet 缓存
 │   │   └── archive/                          ← 历史版本归档
-│   ├── claims/
-│   │   └── latest.parquet                    9.7MB  赔付+费用（全量替换）
-│   ├── quotes/
-│   │   └── latest.parquet                    588KB  报价状态（全量替换）
+│   ├── claims_detail/
+│   │   └── claims_*.parquet                  赔案明细（年度分区）
 │   ├── quotes_conversion/
-│   │   └── latest.parquet                    15MB   报价转化率（独立分析）
-│   └── renewal/
-│       └── renewal_funnel_2026q1.parquet     1.1MB  续保漏斗
+│   │   └── latest.parquet                    报价转化
+│   └── renewal_tracker/
+│       └── latest.parquet                    续保追踪派生域
 ├── dim/
 │   ├── salesman/
 │   │   └── latest.parquet                    18KB   业务员主数据（296人）
@@ -133,11 +131,12 @@ warehouse/
     │
     ▼ 产出
     │  policy/current/*.parquet  （保单分片）
-    │  claims/latest.parquet     （赔付+费用，--domain claims）
-    │  quotes/latest.parquet     （报价状态，--domain quotes 或 convert_quotes.py）
+    │  claims_detail/claims_*.parquet       （赔案明细）
+    │  quotes_conversion/latest.parquet      （报价转化）
+    │  renewal_tracker/latest.parquet        （续保追踪派生域）
     │
     ▼ node scripts/sync-vps.mjs
-    │  rsync policy/current/ + dim/ + renewal/ → VPS
+    │  rsync policy/current/ + dim/ + renewal_tracker/ → VPS
     │  PM2 重启 + 健康检查
     │
     ▼ VPS: server/src/services/duckdb.ts
@@ -147,7 +146,7 @@ warehouse/
        loadDimParquet()          → SalesmanDim + PlanFact + SalesmanTeamMapping
        buildAchievementView()    → achievement_cache（三部分聚合）
        createCrossSellRealtimeView() → CrossSellDailyAgg（分批物化）
-       loadRenewalFunnel()       → RenewalFunnel 视图
+       loadRenewalTracker()      → RenewalTrackerFact 视图
        loadQuoteConversion()     → QuoteConversion 视图
 ```
 
@@ -162,20 +161,21 @@ warehouse/
 
 ```bash
 node 数据管理/daily.mjs              # 默认：premium 分片
-node 数据管理/daily.mjs claims       # 赔付域全量替换
+node 数据管理/daily.mjs claims_detail # 赔案明细域全量替换
 node 数据管理/daily.mjs quotes       # 报价域全量替换
-node 数据管理/daily.mjs all          # premium + claims + quotes
+node 数据管理/daily.mjs renewal_tracker # 续保追踪派生域
+node 数据管理/daily.mjs all          # 全部活跃域
 node 数据管理/daily.mjs --no-sync    # 跳过 VPS 同步
 ```
 
 | 输入 | 输出 |
 |------|------|
 | `每日数据_*.xlsx`（源数据） | `warehouse/fact/policy/current/*.parquet` |
-| `续保类型匹配*.xlsx`（可选） | `warehouse/fact/claims/latest.parquet` |
-| `商业险续转保报价*.xlsx`（可选） | `warehouse/fact/quotes/latest.parquet` |
+| `02_理赔明细_*.xlsx` | `warehouse/fact/claims_detail/claims_*.parquet` |
+| `04_报价清单*.xlsx` | `warehouse/fact/quotes_conversion/latest.parquet` |
 | `shard-config.json`（分片配置） | |
 
-调用链: `daily.mjs` → `transform.py` / `convert_quotes.py` → `sync-vps.mjs`
+调用链: `daily.mjs` → `transform.py` / `quote_etl.py` / 各域转换器 → `sync-vps.mjs`
 
 ### 4.2 pipelines/transform.py — Excel→Parquet 核心转换
 
@@ -185,7 +185,6 @@ node 数据管理/daily.mjs --no-sync    # 跳过 VPS 同步
 ```bash
 python3 数据管理/pipelines/transform.py -i input.xlsx -o output.parquet
 python3 数据管理/pipelines/transform.py -i input.xlsx -o output.parquet -r 续保源.xlsx
-python3 数据管理/pipelines/transform.py -i input.xlsx -o output.parquet --domain claims
 ```
 
 | 参数 | 说明 |
@@ -193,26 +192,16 @@ python3 数据管理/pipelines/transform.py -i input.xlsx -o output.parquet --do
 | `-i` | 输入 Excel |
 | `-o` | 输出 Parquet |
 | `-r` | 续保源 Excel（按保单号匹配续保业务类型） |
-| `--domain` | 输出域：policy（默认）/ claims / quotes / all |
+| `--domain` | 输出域：policy / all |
 | `--after-date` | 增量截止日期 |
 
 **域输出字段**:
 - **policy**：23 核心 + 19 可选 = 最多 42 字段（含经代名、客户源等原始字段）
-- **claims**：保单号、车架号、赔案件数、已报告赔款、费用金额（按保单号 SUM 聚合）
-- **quotes**：续保单号、签单日期（仅 `是否报价=True`）
 
-### 4.3 pipelines/convert_quotes.py — 独立报价文件转换
-
-**路径**: `数据管理/pipelines/convert_quotes.py`
-**状态**: 现役（被 daily.mjs 调用）
-
-输入: `商业险续转保报价*.xlsx`（独立报价数据，字段结构与主数据不同）
-输出: `warehouse/fact/quotes/latest.parquet`
-
-### 4.4 pipelines/quote_etl.py — 报价转化率 ETL
+### 4.3 pipelines/quote_etl.py — 报价转化 ETL
 
 **路径**: `数据管理/pipelines/quote_etl.py`
-**状态**: 独立分析工具（不在 daily.mjs 主流程中）
+**状态**: 现役（daily.mjs quotes 子命令调用）
 
 输入: `旧车商业险报价*.xlsx` + `dim/salesman/latest.parquet`
 输出: `warehouse/fact/quotes_conversion/latest.parquet`
@@ -258,7 +247,7 @@ node scripts/sync-vps.mjs --no-restart  # 同步但不重启
 | `warehouse/fact/policy/current/` | `server/data/current/` |
 | `warehouse/dim/salesman/` | `server/data/dim/salesman/` |
 | `warehouse/dim/plan/` | `server/data/dim/plan/` |
-| `warehouse/fact/renewal/` | `server/data/fact/renewal/`（存在时） |
+| `warehouse/fact/renewal_tracker/` | `server/data/fact/renewal_tracker/` |
 
 ---
 
@@ -452,18 +441,18 @@ cd 数据管理 && python3 warehouse/dim/generate_dim_tables.py
 | `archive/legacy-scripts/sync-data.sh` | bash 版同步 | `scripts/sync-vps.mjs` |
 | 旧 CLI 工具目录（data_tools/ 等） | 已删除，INDEX.md v1.0 遗留引用 | `pipelines/` 下实际脚本 |
 | `cli.py` TOOL_REGISTRY | 注册表指向不存在的模块 | 直接调用 pipelines/ 下脚本 |
-| `claims` 域 + `claims_bulk` 域 | 已物理删除（2026-04-14）。赔付数据统一由 `claims_detail` 提供 | `claims_detail` 域 + `ClaimsAgg` 动态聚合 |
-| `quotes_status` 域 | 2列简化版已被完整报价清单替代 | `quotes_v2` 域（25列） |
+| 历史赔付聚合域 | 已清除。赔付数据统一由 `claims_detail` 提供 | `claims_detail` 域 + `ClaimsAgg` 动态聚合 |
+| 历史报价域 | 已清除。报价统一由 `quotes_conversion` 提供 | `quotes_conversion` 域 |
+| 历史续保域 | 已清除。续保追踪统一由派生域提供 | `renewal_tracker` 派生域 |
 
 ---
 
-## 9. 服务端 DuckDB 视图/表全景（14 活跃域）
+## 9. 服务端 DuckDB 视图/表全景（活跃域）
 
 ```
 raw_parquet (VIEW)
     ↓ 列名映射（中文→英文）
 PolicyFact (VIEW) → PolicyFactRealtime (TABLE，物化)
-PolicyFactRenewal (VIEW → PolicyFact)
     │
     ├─→ CrossSellDailyAgg (TABLE，分批物化，19 维度 GROUP BY)
     ├─→ achievement_cache (TABLE，3 部分 UNION ALL)
@@ -475,8 +464,8 @@ SalesmanDim (TABLE ← dim/salesman/latest.parquet)
 PlanFact (TABLE ← dim/plan/latest.parquet)
 SalesmanTeamMapping (TABLE ← SalesmanDim LEFT JOIN PlanFact)
 SalesmanPlanFact (VIEW ← PlanFact LEFT JOIN SalesmanDim，多年计划)
-RenewalFunnel (VIEW ← renewal/*.parquet，动态计算到期天数+优先级 P1-P4)
 QuoteConversion (VIEW ← quotes_conversion/*.parquet，透传)
+RenewalTrackerFact (VIEW ← renewal_tracker/latest.parquet)
 
 ── 8 域分域架构新增（2026-04） ──
 ClaimsDetail (VIEW ← claims_detail/latest.parquet，赔案级明细)

@@ -160,11 +160,18 @@ export function validateSQL(sql: string): ValidationResult {
   }
 
   // 6. 访问边界检测
-  // 6.1 必须引用 PolicyFact 或 PolicyFactRenewal 视图
+  if (normalizedSQL.includes('POLICYFACTRENEWAL')) {
+    return {
+      valid: false,
+      error: 'PolicyFactRenewal 已下线，请使用 PolicyFact 或 renewal-tracker API',
+    };
+  }
+
+  // 6.1 必须引用 PolicyFact 视图
   if (!normalizedSQL.includes('POLICYFACT')) {
     return {
       valid: false,
-      error: '查询必须使用 PolicyFact 或 PolicyFactRenewal 视图 (访问边界限制)',
+      error: '查询必须使用 PolicyFact 视图 (访问边界限制)',
     };
   }
 

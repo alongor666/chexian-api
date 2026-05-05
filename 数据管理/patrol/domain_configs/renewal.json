@@ -1,7 +1,7 @@
 {
   "domain": "renewal",
   "display_name": "续保巡检",
-  "data_source": "warehouse/fact/renewal_universe/latest.parquet",
+  "data_source": "warehouse/fact/renewal_tracker/latest.parquet",
   "base_filter": null,
   "dimensions": [
     {
@@ -14,18 +14,6 @@
       "id": "customer_category",
       "display_name": "客户类别",
       "sql_column": "customer_category",
-      "min_sample": 30
-    },
-    {
-      "id": "insurance_grade",
-      "display_name": "风险等级",
-      "sql_column": "insurance_grade",
-      "min_sample": 30
-    },
-    {
-      "id": "action_priority",
-      "display_name": "行动优先级",
-      "sql_column": "action_priority",
       "min_sample": 30
     },
     {
@@ -65,14 +53,6 @@
       "format": "percent",
       "direction": "higher_is_better",
       "thresholds": { "red": 0.35, "orange": 0.42, "yellow": 0.50 }
-    },
-    {
-      "id": "premium_at_risk",
-      "display_name": "流失保费(万)",
-      "sql": "ROUND(SUM(CASE WHEN NOT is_renewed THEN total_premium ELSE 0 END) / 10000, 2)",
-      "format": "number",
-      "direction": "lower_is_better",
-      "thresholds": { "red": 5000, "orange": 3000, "yellow": 1500 }
     },
     {
       "id": "policy_count",

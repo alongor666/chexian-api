@@ -124,9 +124,7 @@ const BUNDLE_DEFINITIONS = {
     path: '/api/query/comprehensive-bundle',
     paramSets: [{}],
   },
-  // renewal-v2 端点已于迁移至 renewal-tracker 时下线（server/src/routes/query/renewal-v2.ts 已删）。
-  // 原 4 个 bundle 定义（renewal-metadata / renewal-overview / renewal-trend / renewal-funnel）
-  // 指向的 /api/query/renewal-v2/* 路径全部 404，若保留会被新加的 80% 成功率阈值误判为构建失败。
+  // 已下线的续保旧端点不参与快照构建。
 };
 
 // ── 工具函数 ─────────────────────────────────

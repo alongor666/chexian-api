@@ -97,10 +97,8 @@ bun run verify:agent:smoke -- --token "$AGENT_SMOKE_TOKEN" --base-url https://ch
 
 - `comprehensive_cost_indicator_review`：综合费用/综合成本历史指标审阅。仅用于项目已有经营指标口径审阅，不作为财务综合成本率 Agent。
 
-## 下线或禁用能力
+## 禁用能力
 
-- `renewal_funnel_diagnosis`：deprecated。
-- `renewal_v2_diagnosis`：deprecated。
 - `underwriting_profit_diagnosis`：unsupported。
 - `profit_margin_diagnosis`：unsupported。
 - `financial_combined_ratio_diagnosis`：unsupported。

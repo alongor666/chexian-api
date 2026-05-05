@@ -203,10 +203,10 @@ END as tonnage_segment
 - 去重逻辑: MAX(premium)
 - 用于: KPI计算、趋势分析
 
-**PolicyFactRenewal**: 续保专项分析视图
-- 仅包含续保保单
-- 去重逻辑: 保留续保单号关联
-- 用于: 续保率、续保周期分析
+**RenewalTrackerFact**: 续保追踪派生视图
+- 来源: `warehouse/fact/renewal_tracker/latest.parquet`
+- 派生逻辑: policy + quotes_conversion + salesman
+- 用于: 续保追踪、报价覆盖、续回分析
 
 ### 决策结论
 

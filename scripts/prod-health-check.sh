@@ -91,8 +91,7 @@ growth
 cost
 coefficient
 truck
-renewal
-renewal-drilldown
+renewal-tracker
 cross-sell
 cross-sell-trend
 cross-sell-summary
@@ -115,14 +114,6 @@ comprehensive-analysis-bundle
 dashboard-bundle
 performance-bundle
 cross-sell-bundle
-renewal-funnel/overview
-renewal-funnel/trend
-renewal-funnel/team
-renewal-funnel/salesman
-renewal-funnel/action-list
-renewal-funnel/matrix
-renewal-funnel/metadata
-renewal-funnel/risk
 "
 
 # 合并去重
