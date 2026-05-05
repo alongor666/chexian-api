@@ -1,12 +1,16 @@
 /**
  * 费用率发展 SQL 生成器
  *
- * 数据源：PolicyFact（保单维度，fee_amount + premium）
+ * 数据源：PolicyFact（保单维度，fee_amount + premium）→ 经 policy_dedup CTE 去重
  * 端点：/api/query/expense-development
  *
  * 日历发展口径：M_N = [年初, 年初+N个月)，累计扩展。
  * M1 = 1月承保保单，M12 = 全年。
+ *
+ * 口径：与赔付率/综合费用率/变动成本率统一，走 policy_dedup（保单级聚合 + HAVING SUM(premium)>0 排除全退保）。
  */
+
+import { buildPolicyDedupCTE } from './shared/policy-dedup.js';
 
 /**
  * @param whereClause - 由 buildWhereFromFilterParams 生成的 WHERE 条件（不含日期，因为用 cohort year 代替）
@@ -19,19 +23,21 @@ export function generateExpenseRatioDevelopmentQuery(
   maxDevMonth: number = 12
 ): string {
   const yearsIn = cohortYears.join(',');
+  // 把 cohort 年限制下推到 dedup CTE 的 WHERE，避免聚合无关年份的批改副本
+  const policyDedup = buildPolicyDedupCTE('policy_dedup', {
+    whereClause: `(${whereClause}) AND YEAR(insurance_start_date) IN (${yearsIn})`,
+  });
 
   return `
-    WITH policies AS (
+    WITH ${policyDedup},
+    policies AS (
       SELECT
-        YEAR(p.insurance_start_date) AS cohort_year,
-        p.policy_no,
-        p.insurance_start_date,
-        p.premium,
-        COALESCE(p.fee_amount, 0) AS fee_amount
-      FROM PolicyFact p
-      WHERE YEAR(p.insurance_start_date) IN (${yearsIn})
-        AND p.premium > 0
-        AND ${whereClause}
+        YEAR(insurance_start_date) AS cohort_year,
+        policy_no,
+        insurance_start_date,
+        premium,
+        fee_amount
+      FROM policy_dedup
     ),
     policy_totals AS (
       SELECT cohort_year,

@@ -114,7 +114,7 @@ SELECT
   END AS earned_claim_ratio,
   CASE
     WHEN d.signed_premium > 0
-    THEN ROUND(d.fee_amount * 100.0 / d.signed_premium, 2)
+    THEN d.fee_amount * 100.0 / d.signed_premium
     ELSE NULL
   END AS expense_ratio,
   CASE
@@ -194,7 +194,7 @@ SELECT
   END AS earned_claim_ratio,
   CASE
     WHEN SUM(premium) > 0
-    THEN ROUND(SUM(fee_amount) * 100.0 / SUM(premium), 2)
+    THEN SUM(fee_amount) * 100.0 / SUM(premium)
     ELSE NULL
   END AS expense_ratio,
   CASE
