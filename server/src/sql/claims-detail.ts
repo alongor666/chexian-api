@@ -6,6 +6,7 @@
  */
 
 import { escapeSqlValue } from '../utils/security.js';
+import { pushVehicleQuickFilterConditions } from '../utils/filter-params.js';
 
 /**
  * B252 反向 JOIN 去重模板
@@ -91,47 +92,9 @@ function buildPolicyWhere(filters: ClaimsDetailFilters): string {
   if (filters.isTransfer === 'true') conditions.push(`p.is_transfer = true`);
   if (filters.isTransfer === 'false') conditions.push(`p.is_transfer = false`);
 
-  // 车型快捷筛选
+  // 车型快捷筛选（共享 helper，9 case 单一来源）
   if (filters.vehicleQuickFilter) {
-    switch (filters.vehicleQuickFilter) {
-      case 'home_car':
-        conditions.push("p.customer_category = '非营业个人客车'");
-        break;
-      case 'truck_1t':
-        conditions.push("p.customer_category IN ('营业货车', '非营业货车')");
-        conditions.push("p.tonnage_segment = '1吨以下'");
-        break;
-      case 'truck_2_9t':
-        conditions.push("p.customer_category IN ('营业货车', '非营业货车')");
-        conditions.push("p.tonnage_segment = '2-9吨'");
-        break;
-      case 'motorcycle':
-        conditions.push("p.customer_category = '摩托车'");
-        break;
-      case 'truck_1_2t':
-        conditions.push("p.customer_category IN ('营业货车', '非营业货车')");
-        conditions.push("p.tonnage_segment = '1-2吨'");
-        break;
-      case 'rental':
-        conditions.push("p.customer_category = '营业出租租赁'");
-        break;
-      case 'dump':
-        conditions.push("p.customer_category = '营业货车'");
-        conditions.push("p.tonnage_segment = '10吨以上'");
-        conditions.push("p.vehicle_model LIKE '%自卸%'");
-        break;
-      case 'tractor':
-        conditions.push("p.customer_category = '营业货车'");
-        conditions.push("p.tonnage_segment = '10吨以上'");
-        conditions.push("p.vehicle_model LIKE '%牵引%'");
-        break;
-      case 'general':
-        conditions.push("p.customer_category = '营业货车'");
-        conditions.push("p.tonnage_segment = '10吨以上'");
-        conditions.push("p.vehicle_model NOT LIKE '%自卸%'");
-        conditions.push("p.vehicle_model NOT LIKE '%牵引%'");
-        break;
-    }
+    pushVehicleQuickFilterConditions(conditions, filters.vehicleQuickFilter, 'p.');
   }
 
   // 营业/非营业性质

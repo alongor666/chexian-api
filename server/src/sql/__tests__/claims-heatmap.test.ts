@@ -174,6 +174,28 @@ describe('generateClaimsHeatmapQuery — 维度切片', () => {
     const sql = generateClaimsHeatmapQuery({ vehicleQuickFilter: 'motorcycle' });
     expect(sql).toContain("p.customer_category = '摩托车'");
   });
+
+  it('vehicleQuickFilter=dump 注入营业货车 + 10吨以上 + 自卸', () => {
+    const sql = generateClaimsHeatmapQuery({ vehicleQuickFilter: 'dump' });
+    expect(sql).toContain("p.customer_category = '营业货车'");
+    expect(sql).toContain("p.tonnage_segment = '10吨以上'");
+    expect(sql).toContain("p.vehicle_model LIKE '%自卸%'");
+  });
+
+  it('vehicleQuickFilter=tractor 注入营业货车 + 10吨以上 + 牵引', () => {
+    const sql = generateClaimsHeatmapQuery({ vehicleQuickFilter: 'tractor' });
+    expect(sql).toContain("p.customer_category = '营业货车'");
+    expect(sql).toContain("p.tonnage_segment = '10吨以上'");
+    expect(sql).toContain("p.vehicle_model LIKE '%牵引%'");
+  });
+
+  it('vehicleQuickFilter=general 注入营业货车 + 10吨以上 + 非自卸非牵引', () => {
+    const sql = generateClaimsHeatmapQuery({ vehicleQuickFilter: 'general' });
+    expect(sql).toContain("p.customer_category = '营业货车'");
+    expect(sql).toContain("p.tonnage_segment = '10吨以上'");
+    expect(sql).toContain("p.vehicle_model NOT LIKE '%自卸%'");
+    expect(sql).toContain("p.vehicle_model NOT LIKE '%牵引%'");
+  });
 });
 
 // ═══════════════════════════════════════════════════

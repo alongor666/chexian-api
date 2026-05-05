@@ -24,6 +24,7 @@
 
 import { logger } from '../utils/logger.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { pushVehicleQuickFilterConditions } from '../utils/filter-params.js';
 import {
   truthyExpr,
 } from './performance-analysis-shared.js';
@@ -78,29 +79,7 @@ function buildPolicyWhere(filters: ClaimsHeatmapFilters, prefix = 'p.'): string 
   if (filters.isRenewal === 'false') conditions.push(`${prefix}is_renewal = false`);
 
   if (filters.vehicleQuickFilter) {
-    switch (filters.vehicleQuickFilter) {
-      case 'home_car':
-        conditions.push(`${prefix}customer_category = '非营业个人客车'`);
-        break;
-      case 'truck_1t':
-        conditions.push(`${prefix}customer_category IN ('营业货车', '非营业货车')`);
-        conditions.push(`${prefix}tonnage_segment = '1吨以下'`);
-        break;
-      case 'truck_2_9t':
-        conditions.push(`${prefix}customer_category IN ('营业货车', '非营业货车')`);
-        conditions.push(`${prefix}tonnage_segment = '2-9吨'`);
-        break;
-      case 'motorcycle':
-        conditions.push(`${prefix}customer_category = '摩托车'`);
-        break;
-      case 'truck_1_2t':
-        conditions.push(`${prefix}customer_category IN ('营业货车', '非营业货车')`);
-        conditions.push(`${prefix}tonnage_segment = '1-2吨'`);
-        break;
-      case 'rental':
-        conditions.push(`${prefix}customer_category = '营业出租租赁'`);
-        break;
-    }
+    pushVehicleQuickFilterConditions(conditions, filters.vehicleQuickFilter, prefix);
   }
 
   if (filters.businessNature === 'commercial') {
