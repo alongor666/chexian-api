@@ -211,6 +211,13 @@ export class DataBootstrapper {
         result.push(...group);
         continue;
       }
+      // 业务互补豁免：剔摩（非摩托）和限摩（仅摩托）按险类切分，时间重叠也无数据翻倍
+      // 与 scripts/check-governance.mjs:checkParquetOverlapInCurrent 保持一致
+      if (DataBootstrapper.allComplementary(group.map(f => f.name))) {
+        console.log(`[Bootstrap] Parquet overlap (start=${key}): all complementary (剔摩/限摩), keeping ${group.length} files`);
+        result.push(...group);
+        continue;
+      }
       group.sort((a, b) => {
         const aEnd = datePattern.exec(a.name)?.[2] ?? '';
         const bEnd = datePattern.exec(b.name)?.[2] ?? '';
@@ -223,6 +230,28 @@ export class DataBootstrapper {
     }
 
     return result;
+  }
+
+  /**
+   * 判断一组文件名是否两两互补（剔摩↔限摩）。
+   * 互补对：一个含 _剔摩_ 一个含 _限摩_。
+   * 整组所有 pair 互补时返回 true，应跳过去重保留全部。
+   */
+  static allComplementary(names: string[]): boolean {
+    if (names.length < 2) return false;
+    const isPairComplementary = (a: string, b: string) => {
+      const aTuomo = /_剔摩_/.test(a);
+      const aXianmo = /_限摩_/.test(a);
+      const bTuomo = /_剔摩_/.test(b);
+      const bXianmo = /_限摩_/.test(b);
+      return (aTuomo && bXianmo) || (aXianmo && bTuomo);
+    };
+    for (let i = 0; i < names.length; i++) {
+      for (let j = i + 1; j < names.length; j++) {
+        if (!isPairComplementary(names[i], names[j])) return false;
+      }
+    }
+    return true;
   }
 
   // ============================================
