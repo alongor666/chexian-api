@@ -152,7 +152,12 @@ const ENDPOINT_DEFINITIONS = [
   { slug: 'customer-flow-metadata', path: '/api/query/customer-flow/metadata', params: {}, deprecated: false },
 
   // ── /api/query/renewal-tracker ────────────
-  { slug: 'renewal-tracker', path: '/api/query/renewal-tracker', params: {}, deprecated: false },
+  {
+    slug: 'renewal-tracker',
+    path: '/api/query/renewal-tracker',
+    params: { start: '2026-01-01', end: '2026-12-31', cutoff: '2026-04-29' },
+    deprecated: false,
+  },
 
   // ── /api/query/patrol（动态路由，用 premium 域测试）
   { slug: 'patrol-premium', path: '/api/query/patrol/premium', params: {}, deprecated: false },
