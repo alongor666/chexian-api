@@ -34,7 +34,6 @@ DATA_ROOT = HERE.parents[1]
 DEFAULT_POLICY_GLOB = DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
 DEFAULT_QUOTES_PATH = DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet"
 DEFAULT_SALESMAN_PATH = DATA_ROOT / "warehouse" / "dim" / "salesman" / "latest.parquet"
-DEFAULT_RENEWAL_FUNNEL_PATH = DATA_ROOT / "warehouse" / "fact" / "renewal" / "renewal_funnel_2026q1.parquet"
 
 DEFAULT_SCHEMA = {
     "f04Gwj": "到期日",
@@ -79,7 +78,6 @@ class SyncConfig:
     policy_glob: str = str(DEFAULT_POLICY_GLOB)
     quotes_path: str = str(DEFAULT_QUOTES_PATH)
     salesman_path: str = str(DEFAULT_SALESMAN_PATH)
-    renewal_funnel_path: str = str(DEFAULT_RENEWAL_FUNNEL_PATH)
     state_path: str | None = None  # None => HERE/state/{instance_name}_vin_record_map.json
     log_dir: str | None = None  # None => HERE/logs
 
@@ -347,11 +345,6 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
     ),
     salesman_dim AS (
       SELECT full_name, NULLIF(NULLIF(team, 'nan'), '') AS team FROM read_parquet('{config.salesman_path}')
-    ),
-    funnel AS (
-      SELECT policy_no, vehicle_frame_no, MAX(NULLIF(renewal_mode, '')) AS renewal_mode
-      FROM read_parquet('{config.renewal_funnel_path}')
-      GROUP BY 1, 2
     )
     SELECT
       b.policy_no,
@@ -373,7 +366,7 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
       r.renewed_sign_date AS renewed_sign_date,
       CASE WHEN CAST(b.insurance_end_date AS DATE) < CAST(? AS DATE) THEN true ELSE false END AS is_expired,
       DATE_DIFF('day', CAST(? AS DATE), CAST(b.insurance_end_date AS DATE)) AS days_to_expiry,
-      COALESCE(f.renewal_mode, '未分类') AS renewal_mode,
+      '未分类' AS renewal_mode,
       CASE
         WHEN r.renewed_policy_no IS NOT NULL THEN ''
         WHEN q.quote_time IS NULL THEN '未报价'
@@ -384,7 +377,6 @@ def build_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
     LEFT JOIN q_earliest qe ON qe.vehicle_frame_no = b.vehicle_frame_no
     LEFT JOIN renewed r ON r.source_policy_no = b.policy_no AND r.vehicle_frame_no = b.vehicle_frame_no
     LEFT JOIN salesman_dim s ON s.full_name = b.salesman_name
-    LEFT JOIN funnel f ON f.policy_no = b.policy_no AND f.vehicle_frame_no = b.vehicle_frame_no
     ORDER BY expiry_date, b.policy_no
     """
     base_params: list[Any] = [config.insurance_type]

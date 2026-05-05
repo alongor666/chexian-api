@@ -1,14 +1,14 @@
 # 车险数据快速参考 (~300 tokens)
 
-**更新**: 2026-04-28 | **数据规模**: ~254 万条 / 42 字段 | **分片**: 15 个 Parquet（policy/current/）
+**更新**: 2026-04-30 | **数据规模**: ~254 万条 / 42 字段 | **分片**: 17 个 Parquet（policy/current/）
 
 ## 数据规模（三层口径）
 
 | 口径 | 数值 | 说明 |
 |------|------|------|
 | 原始记录 | ~254 万行 | policy/current UNION ALL 行数 |
-| 唯一保单 | ~247 万 | COUNT DISTINCT policy_no |
-| 2024+ 活跃 | ~120 万行 | policy_date >= 2024-01-01 |
+| 唯一保单 | ~248 万 | COUNT DISTINCT policy_no |
+| 2024+ 活跃 | ~121 万行 | policy_date >= 2024-01-01 |
 
 ## 域全景速览
 
@@ -17,8 +17,8 @@
 | premium | PolicyFact(Realtime) | 保费/KPI/趋势/业绩/成本（主数据） |
 | claims_detail | ClaimsDetail + ClaimsAgg | 赔案明细 + 保单级赔付聚合 |
 | cross_sell | CrossSellFact → CrossSellDailyAgg | 驾意险推介率 |
-| quotes_v2 | QuoteConversion | 报价转化分析 |
-| renewal_v2 | PolicyFactRenewal | 续保跟踪 |
+| quotes_conversion | QuoteConversion | 报价转化分析 |
+| renewal_tracker | RenewalTrackerFact | 续保追踪（派生域） |
 | customer_flow | CustomerFlow | 转入/流失分析 |
 | repair_resource | RepairDim | 维修厂合作 |
 | brand | BrandDim | 品牌维度（诊断工具用，无前端） |

@@ -151,13 +151,8 @@ const ENDPOINT_DEFINITIONS = [
   { slug: 'customer-flow-trend', path: '/api/query/customer-flow/trend', params: {}, deprecated: false },
   { slug: 'customer-flow-metadata', path: '/api/query/customer-flow/metadata', params: {}, deprecated: false },
 
-  // ── /api/query/renewal-v2 ─────────────────
-  { slug: 'renewal-v2-overview', path: '/api/query/renewal-v2/overview', params: {}, deprecated: false },
-  { slug: 'renewal-v2-trend', path: '/api/query/renewal-v2/trend', params: {}, deprecated: false },
-  { slug: 'renewal-v2-funnel', path: '/api/query/renewal-v2/funnel', params: {}, deprecated: false },
-  { slug: 'renewal-v2-competition', path: '/api/query/renewal-v2/competition', params: {}, deprecated: false },
-  { slug: 'renewal-v2-action', path: '/api/query/renewal-v2/action', params: {}, deprecated: false },
-  { slug: 'renewal-v2-metadata', path: '/api/query/renewal-v2/metadata', params: {}, deprecated: false },
+  // ── /api/query/renewal-tracker ────────────
+  { slug: 'renewal-tracker', path: '/api/query/renewal-tracker', params: {}, deprecated: false },
 
   // ── /api/query/patrol（动态路由，用 premium 域测试）
   { slug: 'patrol-premium', path: '/api/query/patrol/premium', params: {}, deprecated: false },

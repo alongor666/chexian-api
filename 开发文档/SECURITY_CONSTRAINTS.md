@@ -84,14 +84,13 @@ if (!hasAggregate && !hasGroupBy) {
 
 **允许访问的视图**:
 - `PolicyFact` - 主业绩分析视图
-- `PolicyFactRenewal` - 续保专项分析视图
 
 **禁止访问的表**:
 - `raw_parquet` - 原始数据表
 
 **代码位置**: `src/shared/utils/sql-validator.ts`
 ```typescript
-const allowedTables = ['PolicyFact', 'PolicyFactRenewal'];
+const allowedTables = ['PolicyFact'];
 const fromClause = sql.match(/\bFROM (\w+)\b/i);
 if (fromClause && !allowedTables.includes(fromClause[1])) {
   throw new Error(`禁止访问表: ${fromClause[1]}`);

@@ -59,8 +59,8 @@ def parse_args():
     parser.add_argument('-m', '--mode', choices=['merged', 'full'], default='full',
                         help='处理模式: full=保留所有记录(默认), merged=合并批改记录')
     parser.add_argument('-r', '--renewal-source', type=str, help='续保业务类型源文件路径（可选）')
-    parser.add_argument('--domain', choices=['policy', 'claims', 'quotes', 'all'],
-                        default='all', help='输出域: policy(排除赔付费用报价), claims(赔付+费用), quotes(报价), all(默认全量)')
+    parser.add_argument('--domain', choices=['policy', 'all'],
+                        default='all', help='输出域: policy(排除赔付费用报价), all(默认全量)')
     parser.add_argument('--after-date', type=str, default=None,
                         help='增量模式：只保留签单日期 > 此日期的记录（格式 YYYY-MM-DD 或 YYYYMMDD）')
     parser.add_argument('--force', action='store_true',
@@ -73,7 +73,7 @@ INPUT_FILE = Path(args.input) if args.input else DEFAULT_INPUT_FILE
 OUTPUT_FILE = Path(args.output) if args.output else DEFAULT_OUTPUT_FILE
 OUTPUT_MODE = args.mode
 RENEWAL_SOURCE_FILE = Path(args.renewal_source) if args.renewal_source else None
-DOMAIN = args.domain          # 输出域: policy/claims/quotes/all
+DOMAIN = args.domain          # 输出域: policy/all
 AFTER_DATE = args.after_date  # 增量截止日期
 
 POLICY_KEY_ALIASES = ['保单号', '保单号码', '保单编号', '保单']
@@ -1191,15 +1191,6 @@ def main():
 
     # 14. 保存为 Parquet
     save_to_parquet(df, OUTPUT_FILE)
-
-    # 15. 更新 data-sources.json（非 policy 域，policy 由 daily.mjs 汇总更新）
-    if DOMAIN in ('claims', 'quotes'):
-        try:
-            from pipelines.data_sources_updater import update_data_sources
-            domain_map = {'claims': 'claims', 'quotes': 'quotes_status'}
-            update_data_sources(domain_map[DOMAIN], row_count=len(df), field_count=len(df.columns))
-        except Exception as e:
-            print(f"  ⚠️ data-sources.json 更新跳过: {e}")
 
     print(f"\n{'='*80}")
     print("✅ 转换完成！")

@@ -7,7 +7,7 @@
 - 保单明细：`数据管理/warehouse/fact/policy/current/*.parquet`
 - 报价数据：`数据管理/warehouse/fact/quotes_conversion/latest.parquet`
 - 业务员团队：`数据管理/warehouse/dim/salesman/latest.parquet`
-- 续保模式参考：`数据管理/warehouse/fact/renewal/renewal_funnel_2026q1.parquet`
+- 续保模式：当前同步统一写入 `未分类`
 
 ## 多实例设计
 
@@ -43,7 +43,7 @@
 | 是否续回 | 是否按 `renewal_policy_no + VIN` 匹配到续保保单 |
 | 业务员 | `policy.salesman_name`，按文本写入 |
 | 流失原因分析 | 未续回按 (到期状态、报价/涨价状态、未续回) 组合；超过 30 天未到报价期只写 `未到报价期` |
-| 续保模式 | `renewal_funnel_2026q1.renewal_mode`，无匹配为 `未分类` |
+| 续保模式 | 当前统一为 `未分类` |
 
 ## 环境变量（持久化到 `.env.local`）
 

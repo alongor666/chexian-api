@@ -10,8 +10,8 @@
  * 输出目录结构：
  *   warehouse/fact/policy/current/   ← 保单+保费（多分片文件）
  *   warehouse/fact/policy/staging/   ← 日增量暂存（周更时清空）
- *   warehouse/fact/claims/latest.parquet  ← 赔付+费用（每周全量替换）
- *   warehouse/fact/quotes/latest.parquet  ← 报价状态（每日全量替换）
+ *   warehouse/fact/claims_detail/claims_*.parquet  ← 赔案明细
+ *   warehouse/fact/quotes_conversion/latest.parquet ← 报价转化
  *
  * 用法：
  *   node daily.mjs                # 自动处理 premium 分片
@@ -238,8 +238,6 @@ function updateQuickReference(python, policyCurrentDir) {
 // getPartitionedColumnCount 已抽到 pipelines/parquet_stats.mjs
 
 const WAREHOUSE = join(__dirname, 'warehouse/fact');
-const QUOTES_DIR = join(WAREHOUSE, 'quotes');
-const QUOTES_PATH = join(QUOTES_DIR, 'latest.parquet');
 const CLAIMS_DETAIL_DIR = join(WAREHOUSE, 'claims_detail');
 const CLAIMS_DETAIL_PATH = join(CLAIMS_DETAIL_DIR, 'latest.parquet');
 // 标准域路径（cross_sell/quotes_conversion/brand/repair_resource/customer_flow）
@@ -714,7 +712,7 @@ function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePre
 }
 
 // ── 旧 runXxx 已被 runStandardDomain 替代（cross_sell/quotes_conversion/brand/repair_resource/customer_flow） ──
-// renewal_v2 / renewal_universe 已下线（2026-04-18），convert_renewal.py / generate_renewal_universe.py 已删除
+// 当前续保追踪由 policy + quotes_conversion + salesman 派生。
 
 // ── 派生域：renewal_tracker（依赖 policy + quotes_conversion + salesman，非 Excel） ──
 
