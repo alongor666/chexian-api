@@ -612,18 +612,28 @@ function runClaimsDetail(python, scriptDir) {
     log('yellow', '⚠ 未找到 02_理赔明细_*.xlsx / ????????_02_理赔明细*.xlsx 或 车险报立结案清单_*.xlsx，跳过');
     return;
   }
-  // 自动归档与新全量文件覆盖区间冲突的旧文件（与签单清单一致的护栏）
+  // 自动归档与最新全量文件覆盖区间冲突的旧文件（与签单清单一致的护栏）
   // 上游切换到 _YYYYMMDD_YYYYMMDD 全量格式时，旧增量/前缀文件需归档，否则 concat 双倍计入。
   if (!manifestFiles) {
-    const fullFile = sourceFiles.find(f => /02_理赔明细.*_\d{8}_\d{8}\.xlsx?$/i.test(f.name));
-    if (fullFile) {
-      const m = fullFile.name.match(/_(\d{8})_(\d{8})\.xlsx?$/i);
-      const fullStart = m[1], fullEnd = m[2];
+    // 全量文件名格式：02_理赔明细_报案时间YYYYMMDD_YYYYMMDD.xlsx
+    // 第一个日期紧跟「报案时间」（无下划线），第二个日期前才是下划线
+    const FULL_RE = /^02_理赔明细.*?(\d{8})_(\d{8})\.xlsx?$/i;
+    // 收集所有全量文件并按 end 日期降序排序，取 end 最大者作为「当前最新全量」
+    // 避免按文件名升序取到较旧全量、把较新全量误归档
+    const fullCandidates = sourceFiles
+      .map(f => ({ f, m: f.name.match(FULL_RE) }))
+      .filter(x => x.m)
+      .sort((a, b) => b.m[2].localeCompare(a.m[2]));
+    if (fullCandidates.length > 0) {
+      const fullFile = fullCandidates[0].f;
+      const fullStart = fullCandidates[0].m[1];
+      const fullEnd = fullCandidates[0].m[2];
       const conflicting = sourceFiles.filter(f => {
         if (f.name === fullFile.name) return false;
-        const r = f.name.match(/(\d{8})/g);
-        if (!r) return false;
-        const days = r.map(s => s);
+        // 不归档其他全量文件本身（保留历史快照），仅归档增量/前缀
+        if (FULL_RE.test(f.name)) return false;
+        const days = f.name.match(/(\d{8})/g);
+        if (!days) return false;
         return days.some(d => d >= fullStart && d <= fullEnd);
       });
       if (conflicting.length > 0) {
