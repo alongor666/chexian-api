@@ -57,12 +57,12 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'expense_ratio',
-    version: '1.1.0',
+    version: '1.2.0',
     name: '费用率',
     category: 'cost',
     tags: ['kpi', 'cost'],
     formula: {
-      description: '费用金额 / 签单保费',
+      description: '费用金额 / 签单保费（保单明细域 fee_amount，不混同综合费用率/综合成本率）',
       numerator: 'SUM(fee_amount)',
       denominator: 'SUM(premium)',
       unit: '%',
@@ -70,16 +70,18 @@ export const costMetrics: readonly MetricDefinition[] = [
     sql: {
       expression: `CASE
     WHEN SUM(premium) > 0
-    THEN ROUND(SUM(COALESCE(fee_amount, 0)) * 100.0 / SUM(premium), 2)
+    THEN SUM(COALESCE(fee_amount, 0)) * 100.0 / SUM(premium)
     ELSE NULL
   END AS expense_ratio`,
       requiredColumns: ['fee_amount', 'premium'],
+      notes: '不在 SQL 内 ROUND，避免与前端 display.decimals 双重舍入；前端按 decimals=1 单次舍入。',
     },
     display: {
       formatter: 'percent',
       label: '费用率',
       unit: '%',
       decimals: 1,
+      tooltip: '费用率 = 费用金额 / 签单保费 × 100%（保单明细域 fee_amount）。分母为签单保费，不是满期保费；与综合费用率/综合成本率口径不同。',
     },
     testCases: [
       {
@@ -91,6 +93,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     changelog: [
       { version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' },
       { version: '1.1.0', date: '2026-04-17', changes: '铁律对齐：展示精度 2→1 位小数' },
+      { version: '1.2.0', date: '2026-05-01', changes: '消除 SQL ROUND(2) 与前端 decimals=1 的双重舍入；补充 tooltip 与 sql.notes 明确分母为签单保费、与综合费用率/综合成本率不同源' },
     ],
   },
 

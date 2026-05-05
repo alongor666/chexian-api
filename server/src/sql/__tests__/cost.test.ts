@@ -119,10 +119,11 @@ describe('generateClaimRatioQuery', () => {
 });
 
 describe('generateExpenseRatioQuery', () => {
-  it('直接查 PolicyFact（无 CTE）', () => {
+  it('走 policy_dedup CTE（与赔付率/综合费用率口径对齐）', () => {
     const sql = generateExpenseRatioQuery(BASE_CONFIG);
-    expect(sql).toContain('FROM PolicyFact');
-    expect(sql).not.toContain('WITH');
+    expect(sql).toContain('WITH policy_dedup');
+    expect(sql).toContain('FROM policy_dedup');
+    expect(sql).toContain('HAVING SUM(premium) > 0');
     expect(sql).not.toContain('ClaimsAgg');
   });
 

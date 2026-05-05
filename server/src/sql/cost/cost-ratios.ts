@@ -109,8 +109,14 @@ export function generateExpenseRatioQuery(config: CostAnalysisConfig): string {
   const groupByFields = DIMENSION_FIELD_MAP[dimension];
   const groupByClause = groupByFields.join(', ');
   const dimKeyExpression = buildDimKeyExpr(groupByFields);
+  // B252：与赔付率/综合费用率/变动成本率口径一致 — 按 (policy_no, insurance_start_date) 去重 + HAVING SUM(premium)>0
+  const policyDedup = buildPolicyDedupCTE('policy_dedup', {
+    whereClause,
+    extraFields: groupByFields,
+  });
 
   return `
+WITH ${policyDedup}
 SELECT
   ${dimKeyExpression} AS dim_key,
   CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
@@ -120,8 +126,7 @@ SELECT
   -- 费用率 = 费用金额 / 保费 * 100%
   ${getMetricSql('expense_ratio')}
 
-FROM PolicyFact
-WHERE ${whereClause}
+FROM policy_dedup
 GROUP BY ${groupByClause}
 ORDER BY SUM(premium) DESC
   `.trim();
@@ -182,9 +187,10 @@ SELECT
   ${getMetricSql('earned_claim_ratio')},
 
   -- 费用率（注意：CTE 中 fee_amount 已 COALESCE(fee_amount,0)，字面上不含 COALESCE，保持原样）
+  -- 不 ROUND，避免与前端 decimals=1 双重舍入（注册表 expense_ratio v1.2.0）
   CASE
     WHEN SUM(premium) > 0
-    THEN ROUND(SUM(fee_amount) * 100.0 / SUM(premium), 2)
+    THEN SUM(fee_amount) * 100.0 / SUM(premium)
     ELSE NULL
   END AS expense_ratio,
 
@@ -258,9 +264,10 @@ SELECT
   ${getMetricSql('earned_claim_ratio')},
 
   -- 费用率（注意：CTE 中 fee_amount 已 COALESCE(fee_amount,0)，字面上不含 COALESCE，保持原样）
+  -- 不 ROUND，避免与前端 decimals=1 双重舍入（注册表 expense_ratio v1.2.0）
   CASE
     WHEN SUM(premium) > 0
-    THEN ROUND(SUM(fee_amount) * 100.0 / SUM(premium), 2)
+    THEN SUM(fee_amount) * 100.0 / SUM(premium)
     ELSE NULL
   END AS expense_ratio,
 
