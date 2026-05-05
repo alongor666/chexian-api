@@ -771,6 +771,51 @@ function checkParquetOverlapInCurrent() {
 }
 
 // ============================================================
+// 第13.5项检查：claims_detail/ Parquet claim_no 去重检测
+// ============================================================
+
+/**
+ * 检查 claims_detail/ 各分区文件 claim_no 是否存在重复（含跨文件）。
+ *
+ * 根因：2026-05-05 事故 — daily.mjs 把新全量 + 旧增量 11 个文件一并喂给 ETL，
+ * convert_claims_detail.py 裸 concat 无去重，76,844 个 claim_no 各 2 行写入分区，
+ * 服务端 SUM(settled+pending) 不去重，赔付率虚高 92% (真实 48%)。
+ */
+function checkClaimsDetailDeduplication() {
+  info('检查 claims_detail/ Parquet claim_no 去重...');
+
+  const dir = path.join(ROOT_DIR, '数据管理/warehouse/fact/claims_detail');
+  if (!fs.existsSync(dir)) {
+    success('claims_detail/ 目录不存在，跳过');
+    return true;
+  }
+  const files = fs.readdirSync(dir).filter(f => f.startsWith('claims_') && f.endsWith('.parquet'));
+  if (files.length === 0) {
+    success('claims_detail/ 无分区文件，跳过');
+    return true;
+  }
+  try {
+    const out = execSync(
+      `python3 -c "import duckdb; r = duckdb.sql(\\"SELECT COUNT(*) AS rows, COUNT(DISTINCT claim_no) AS dis FROM read_parquet('${dir}/claims_*.parquet', union_by_name=true)\\").fetchone(); print(r[0], r[1])"`,
+      { encoding: 'utf-8' }
+    ).trim();
+    const [rows, dis] = out.split(/\s+/).map(Number);
+    const dup = rows - dis;
+    if (dup > 0) {
+      error(`claims_detail/ claim_no 重复 ${dup.toLocaleString()} 行（rows=${rows.toLocaleString()} / distinct=${dis.toLocaleString()}）`);
+      console.log(`    ▶ 修复：归档冲突的旧增量 xlsx + 重跑 node 数据管理/daily.mjs claims_detail`);
+      console.log(`    ▶ 影响：服务端 SUM(settled+pending) 会双重计入，赔付率虚高约 ${Math.round(dup * 100 / dis)}%`);
+      return false;
+    }
+    success(`claims_detail/ 去重检测通过（${rows.toLocaleString()} 行 = ${dis.toLocaleString()} distinct claim_no）`);
+    return true;
+  } catch (e) {
+    warning(`claims_detail/ 去重检测跳过：${e.message.split('\n')[0]}`);
+    return true;
+  }
+}
+
+// ============================================================
 // 第14项检查：暂存区凭据/敏感产物扫描
 // ============================================================
 
@@ -1635,6 +1680,7 @@ function main() {
     { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
     { name: '锁文件策略', fn: checkPackageManagerLockPolicy },
     { name: 'Parquet重叠', fn: checkParquetOverlapInCurrent },
+    { name: 'Claims去重', fn: checkClaimsDetailDeduplication },
     { name: '凭据扫描', fn: checkStagedCredentials },
     { name: 'PR体量门禁', fn: checkPrSizeLimit },
     { name: '知识库一致性', fn: checkKnowledgeDataConsistency },

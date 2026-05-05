@@ -607,10 +607,37 @@ function runClaimsDetail(python, scriptDir) {
     ...ls('????????_02_理赔明细*.xlsx', scriptDir),
   ].sort((a, b) => a.name.localeCompare(b.name));
   const legacyFiles = ls('车险报立结案清单_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
-  const sourceFiles = manifestFiles || [...newFiles, ...legacyFiles];
+  let sourceFiles = manifestFiles || [...newFiles, ...legacyFiles];
   if (sourceFiles.length === 0) {
     log('yellow', '⚠ 未找到 02_理赔明细_*.xlsx / ????????_02_理赔明细*.xlsx 或 车险报立结案清单_*.xlsx，跳过');
     return;
+  }
+  // 自动归档与新全量文件覆盖区间冲突的旧文件（与签单清单一致的护栏）
+  // 上游切换到 _YYYYMMDD_YYYYMMDD 全量格式时，旧增量/前缀文件需归档，否则 concat 双倍计入。
+  if (!manifestFiles) {
+    const fullFile = sourceFiles.find(f => /02_理赔明细.*_\d{8}_\d{8}\.xlsx?$/i.test(f.name));
+    if (fullFile) {
+      const m = fullFile.name.match(/_(\d{8})_(\d{8})\.xlsx?$/i);
+      const fullStart = m[1], fullEnd = m[2];
+      const conflicting = sourceFiles.filter(f => {
+        if (f.name === fullFile.name) return false;
+        const r = f.name.match(/(\d{8})/g);
+        if (!r) return false;
+        const days = r.map(s => s);
+        return days.some(d => d >= fullStart && d <= fullEnd);
+      });
+      if (conflicting.length > 0) {
+        const archiveDir = join(scriptDir, '.xlsx-archive', formatDate());
+        ensureDir(archiveDir);
+        log('yellow', `📦 自动归档 ${conflicting.length} 个被新全量 ${fullFile.name} 覆盖的旧 xlsx`);
+        for (const f of conflicting) {
+          const dest = join(archiveDir, f.name);
+          renameSync(f.path, dest);
+          log('yellow', `   ${f.name} → .xlsx-archive/${formatDate()}/`);
+        }
+        sourceFiles = sourceFiles.filter(f => !conflicting.includes(f));
+      }
+    }
   }
   for (const f of sourceFiles) {
     log('green', `源文件: ${f.name} (${(statSync(f.path).size / 1024 / 1024).toFixed(1)} MB)`);

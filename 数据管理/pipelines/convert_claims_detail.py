@@ -110,11 +110,12 @@ def _enrich_insurance_start_date(df: pd.DataFrame, policy_dir: str | None) -> pd
     # Step 3: 合并——优先用 JOIN 结果，回退到 policy_no 年份
     if '_pf_insurance_start_date' in df.columns:
         df['insurance_start_date'] = df['_pf_insurance_start_date']
-        # 未匹配的用 policy_no 年份构造 YYYY-01-01
+        # 未匹配的用 policy_no 年份构造 YYYY-01-01；mask 全 False 时跳过赋值（pandas 2.x+ 拒绝 empty→datetime64）
         mask = df['insurance_start_date'].isna() & df['_pn_year'].notna()
-        df.loc[mask, 'insurance_start_date'] = df.loc[mask, '_pn_year'].apply(
-            lambda y: pd.Timestamp(year=int(y), month=1, day=1)
-        )
+        if mask.any():
+            df.loc[mask, 'insurance_start_date'] = df.loc[mask, '_pn_year'].apply(
+                lambda y: pd.Timestamp(year=int(y), month=1, day=1)
+            )
         df.drop(columns=['_pf_insurance_start_date'], inplace=True)
     else:
         df['insurance_start_date'] = df['_pn_year'].apply(
@@ -160,6 +161,13 @@ def main():
     df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
     if len(frames) > 1:
         print(f"   合并 {len(frames)} 个文件: {len(df):,} 行")
+    # 防御性去重：源含同一笔赔案的多个版本（旧增量 + 新全量）时 keep='last'，
+    # 避免 CDC partition manager 把相同 claim_no 双倍写入分区。
+    # 上游 2026-05-05 事故根因：daily.mjs 把新全量 + 11 个旧增量一并喂入，concat 后 76,844 个 claim_no 各 2 行 → 赔付率虚高 92%。
+    pre_dedup = len(df)
+    df = df.drop_duplicates(subset=['赔案号'], keep='last')
+    if len(df) < pre_dedup:
+        print(f"   ⚠ 去重: {pre_dedup:,} → {len(df):,} 行（移除 {pre_dedup - len(df):,} 个重复 赔案号）")
     print(f"   源列: {list(df.columns)}")
 
     # ── Schema 契约 ──
