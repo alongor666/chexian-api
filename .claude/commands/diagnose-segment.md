@@ -24,6 +24,17 @@ last_updated: "2026-04-22"
 
 ---
 
+## 诊断路由边界（先判定）
+
+执行前先按 `/diagnose-router` 分流；本命令只处理**细分 cohort + 90/180/270/满期发展**。
+
+必须让路：
+- 续保 funnel / 报价 / 续回 / 待跟进 → `/diagnose-renewal`
+- 摩托车专项经营 → `/diagnose-motorcycle`
+- 过户车出险地异常 / 车牌归属地 → `/diagnose-transfer-location`
+- 双 cutoff 月末估值对比 / 同比影响度 → `/diagnose-cohort-comparison`
+- 机构 / 经代整体经营三问 → `/diagnose-agent`
+
 ## 使用场景
 
 - 「2025-2026 承保的 **X 车型细分** 经营怎么样？」

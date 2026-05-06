@@ -22,6 +22,12 @@ last_updated: "2026-04-01"
 
 ---
 
+## 诊断路由边界（先判定）
+
+执行前先按 `/diagnose-router` 分流；只要用户问题命中**摩托车 + 经营 / 盈亏 / 赔付 / 成本模型**，本命令优先于 `/diagnose-agent` 和 `/diagnose-segment`。
+
+若用户只问摩托车在两个 cutoff 间的 cohort 发展，先用 `/diagnose-cohort-comparison` 做时间变化，再用本命令解释真实盈亏线；不得用普通车险口径直接下结论。
+
 ## 摩托车业务本质（RED LINE）
 
 ```

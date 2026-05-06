@@ -21,6 +21,17 @@ last_updated: "2026-04-01"
 > 核心理念：脚本是聚合引擎，不是诊断者。Claude 读结构化 JSON 做研判，不够时追加下钻。
 > 管理层三问：**赚不赚？亏在哪？要不要继续？**
 
+## 诊断路由边界（先判定）
+
+执行前先按 `/diagnose-router` 分流；本命令只做**机构 / 经代 / 经营单元整体经营诊断兜底**。
+
+必须让路：
+- 续保、报价、续回、责任模式、待跟进名单 → `/diagnose-renewal`
+- 摩托车经营 / 盈亏 / 赔付 → `/diagnose-motorcycle`
+- 过户车出险地异常、车牌归属地 vs 出险地 → `/diagnose-transfer-location`
+- 两个 cutoff 的 cohort 发展对比 → `/diagnose-cohort-comparison`
+- 明确车型 / 客户类别 / 能源 / 吨位 / WHERE 细分发展 → `/diagnose-segment`
+
 ## 文件组织规则（RED LINE）
 
 **每个分析项目一个独立文件夹**，所有产出文件放入同一目录：
