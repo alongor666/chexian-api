@@ -112,7 +112,7 @@ export const SidebarNavigation: React.FC = () => {
             drillPath: [],
             groupBy: 'org_level_3',
             segmentTag: 'all',
-            timePeriod: 'month',
+            timePeriod: 'day',
             growthMode: 'mom',
             expandDims: 'none',
           };
@@ -129,8 +129,8 @@ export const SidebarNavigation: React.FC = () => {
             drillPath: [],
             groupBy: 'org_level_3',
             vehicleCategory: 'passenger',
-            granularity: 'monthly',
-            timePeriod: 'monthly',
+            granularity: 'daily',
+            timePeriod: 'daily',
           };
           queryClient.prefetchQuery({
             queryKey: queryKeys.crossSellBundle(crossSellParams),
