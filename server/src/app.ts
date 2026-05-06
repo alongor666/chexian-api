@@ -16,6 +16,7 @@ import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { DataBootstrapper } from './services/data-bootstrapper.js';
 import { registerBootstrapper } from './services/bootstrapper-registry.js';
+import { cacheWarmer } from './services/cache-warmer.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { startAuditLogMaintenance } from './skills/audit-log.js';
 
@@ -204,6 +205,7 @@ async function startServer() {
           fileSizeBytes: result.totalSize,
         });
         console.log(`[Server] Data ready: ${result.fileNames} (${result.fileCount} file(s), ${result.rowCount} rows)`);
+        await cacheWarmer.warmStartupCritical();
       }
     } catch (error) {
       console.warn('[Server] Data loading failed (non-fatal):', error);

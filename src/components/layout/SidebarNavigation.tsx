@@ -86,25 +86,57 @@ export const SidebarNavigation: React.FC = () => {
   /** hover 时预取对应页面的 bundle 数据（利用 150-300ms hover 时间差） */
   const handlePrefetch = useCallback((path: string) => {
     const params = buildFilterParams(filters, { isOrgUser, userOrg });
+    if (!params.startDate || !params.endDate) {
+      return;
+    }
 
     switch (path) {
       case '/dashboard':
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.dashboardBundle(params),
-          queryFn: () => apiClient.getDashboardBundle(params),
-        });
+        {
+          const dashboardParams = {
+            ...params,
+            granularity: 'week',
+            perspective: 'premium',
+            rankingLimit: '10',
+          };
+          queryClient.prefetchQuery({
+            queryKey: queryKeys.dashboardBundle(dashboardParams),
+            queryFn: () => apiClient.getDashboardBundle(dashboardParams),
+          });
+        }
         break;
       case '/performance-analysis':
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.performanceBundle(params),
-          queryFn: () => apiClient.getPerformanceBundle(params),
-        });
+        {
+          const performanceParams = {
+            ...params,
+            drillPath: [],
+            groupBy: 'org_level_3',
+            segmentTag: 'all',
+            timePeriod: 'day',
+            growthMode: 'mom',
+            expandDims: 'none',
+          };
+          queryClient.prefetchQuery({
+            queryKey: queryKeys.performanceBundle(performanceParams),
+            queryFn: () => apiClient.getPerformanceBundle(performanceParams),
+          });
+        }
         break;
       case '/specialty':
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.crossSellBundle(params),
-          queryFn: () => apiClient.getCrossSellBundle(params),
-        });
+        {
+          const crossSellParams = {
+            ...params,
+            drillPath: [],
+            groupBy: 'org_level_3',
+            vehicleCategory: 'passenger',
+            granularity: 'daily',
+            timePeriod: 'daily',
+          };
+          queryClient.prefetchQuery({
+            queryKey: queryKeys.crossSellBundle(crossSellParams),
+            queryFn: () => apiClient.getCrossSellBundle(crossSellParams),
+          });
+        }
         break;
       case '/growth':
         queryClient.prefetchQuery({

@@ -40,6 +40,7 @@ export function useDashboardBundle({
   enabled = true,
 }: UseDashboardBundleProps): UseDashboardBundleResult {
   const { isOrgUser, userOrg } = useRBAC();
+  const hasDateRange = Boolean(filters.policy_date_start && filters.policy_date_end);
 
   const params = {
     ...buildFilterParams(filters, { isOrgUser, userOrg }),
@@ -51,12 +52,12 @@ export function useDashboardBundle({
   const { data, isLoading, error } = useQuery<DashboardBundleResponse, Error>({
     queryKey: queryKeys.dashboardBundle(params),
     queryFn: () => apiClient.getDashboardBundle(params),
-    enabled,
+    enabled: enabled && hasDateRange,
   });
 
   return {
     bundle: data ?? null,
-    loading: isLoading,
+    loading: hasDateRange ? isLoading : enabled,
     error: error ? (error instanceof Error ? error.message : String(error)) : null,
   };
 }
