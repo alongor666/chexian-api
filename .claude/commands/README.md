@@ -21,9 +21,6 @@
 | Python 数据工具 | `/data-tools` | [data-tools.md](./data-tools.md) |
 | 成本分析 | `/cost-analysis` | [cost-analysis.md](./cost-analysis.md) |
 | 定价红线 | `/pricing-redline` | [pricing-redline.md](./pricing-redline.md) |
-| 流向分析 | `/flow-analysis` | [flow-analysis.md](./flow-analysis.md) |
-| 业务巡检 | `/patrol` | [patrol.md](./patrol.md) |
-| 每日同步 | `/daily-sync` | [daily-sync.md](./daily-sync.md) |
 | 生成周报 | `/weekly-report` | [weekly-report.md](./weekly-report.md) |
 | 周报子命令 | `/report-weekly` | [report-weekly.md](./report-weekly.md) |
 | 月报子命令 | `/report-monthly` | [report-monthly.md](./report-monthly.md) |
@@ -39,21 +36,19 @@
 | 管理会话 | `/session-manager` | [session-manager.md](./session-manager.md) |
 | 提取知识 | `/extract-knowledge` | [extract-knowledge.md](./extract-knowledge.md) |
 | 汇总沟通记录 | `/session-summary` | [session-summary.md](./session-summary.md) |
-| 会话复盘 | `/session-debrief` | [session-debrief.md](./session-debrief.md) |
 | 初始化项目 | `/init-project` | [init-project.md](./init-project.md) |
-| 部署 | `/deploy` | [deploy.md](./deploy.md) |
 | TDD 工作流 | `/tdd` | [tdd.md](./tdd.md) |
 | 检查点保存 | `/checkpoint` | [checkpoint.md](./checkpoint.md) |
 | 多层验证 | `/verify` | [verify.md](./verify.md) |
 | 多 Agent 编排 | `/orchestrate` | [orchestrate.md](./orchestrate.md) |
 | 配置演进 | `/evolve` | [evolve.md](./evolve.md) |
+| 过户车出险地点 | `/diagnose-transfer-location` | [diagnose-transfer-location.md](./diagnose-transfer-location.md) |
 | 诊断命令路由 | `/diagnose-router` | [diagnose-router.md](./diagnose-router.md) |
 | 机构/经代经营诊断 | `/diagnose-agent` | [diagnose-agent.md](./diagnose-agent.md) |
 | 车型细分诊断 | `/diagnose-segment` | [diagnose-segment.md](./diagnose-segment.md) |
 | 双 cutoff cohort 对比 | `/diagnose-cohort-comparison` | [diagnose-cohort-comparison.md](./diagnose-cohort-comparison.md) |
 | 续保诊断 | `/diagnose-renewal` | [diagnose-renewal.md](./diagnose-renewal.md) |
 | 摩托车专项诊断 | `/diagnose-motorcycle` | [diagnose-motorcycle.md](./diagnose-motorcycle.md) |
-| 过户车出险地点 | `/diagnose-transfer-location` | [diagnose-transfer-location.md](./diagnose-transfer-location.md) |
 
 ---
 
@@ -61,15 +56,16 @@
 
 | 类别 | 主命令 | 子命令 |
 |------|--------|--------|
-| **Git 工作流** | `commit-push-pr`, `sync-and-rebase`, `cleanup-worktrees` | — |
-| **数据分析** | `data-analysis`, `data-tools`, `cost-analysis`, `pricing-redline`, `flow-analysis`, `patrol` | `data-profile`, `data-kpi`, `data-trends`, `data-export`, `daily-sync` |
-| **经营诊断** | `diagnose-router`, `diagnose-agent`, `diagnose-segment`, `diagnose-cohort-comparison`, `diagnose-renewal`, `diagnose-motorcycle`, `diagnose-transfer-location` | — |
+| **Git 工作流** | `commit-push-pr`, `sync-and-rebase` | — |
+| **数据分析** | `data-analysis`, `data-tools`, `cost-analysis`, `pricing-redline` | `data-profile`, `data-kpi`, `data-trends`, `data-export` |
+| **经营诊断** | `diagnose-agent`, `diagnose-motorcycle`, `diagnose-transfer-location` | — |
 | **报告生成** | `weekly-report` | `report-weekly`, `report-monthly`, `report-custom` |
 | **安全审查** | `security-review` | `security-sql`, `security-xss`, `security-cors`, `security-all` |
 | **开发工具** | `performance-audit`, `ui-review`, `test-coverage` | — |
-| **知识管理** | `session-manager`, `extract-knowledge`, `session-summary`, `session-debrief` | — |
-| **项目管理** | `init-project`, `deploy` | — |
+| **知识管理** | `session-manager`, `extract-knowledge`, `session-summary` | — |
+| **项目管理** | `init-project` | — |
 | **工作流增强** | `tdd`, `checkpoint`, `verify`, `orchestrate`, `evolve` | — |
+| **经营诊断补充** | `diagnose-router`, `diagnose-segment`, `diagnose-cohort-comparison`, `diagnose-renewal` | — |
 
 ---
 
