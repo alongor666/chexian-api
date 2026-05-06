@@ -1,9 +1,25 @@
-import { Request, Response } from 'express';
 import { logger } from '../utils/logger.js';
 import { duckdbService } from './duckdb.js';
 import { setRouteCache } from './route-cache.js';
 import { fetchDashboardBundleData } from '../routes/query.js';
-import { generateKpiQuery } from '../sql/kpi.js';
+import { QUERY_CACHE } from '../routes/query/shared.js';
+import { getBootstrapper } from './bootstrapper-registry.js';
+
+type QueryValue = string | number | boolean | null | undefined;
+
+function buildSyntheticRouteCacheKey(
+    routeName: string,
+    permissionFilter: string,
+    query: Record<string, QueryValue>
+): string {
+    const normalizedQuery = Object.entries(query)
+        .filter(([, value]) => value !== undefined && value !== null)
+        .map(([key, value]) => [key, String(value)] as const)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => `${key}=${value}`)
+        .join('&');
+    return `${routeName}|${permissionFilter || '1=1'}|${normalizedQuery}`;
+}
 
 /**
  * 后台智能预热服务
@@ -13,6 +29,38 @@ import { generateKpiQuery } from '../sql/kpi.js';
  */
 export class CacheWarmer {
     private isWarming = false;
+
+    /**
+     * 启动阻塞式关键路径预热。
+     *
+     * 目标不是构建静态 snapshot 文件，而是把真实 DuckDB 查询结果放入进程内
+     * route cache，让首个页面请求也走毫秒级响应。
+     */
+    async warmStartupCritical(dataYear?: number) {
+        if (this.isWarming) {
+            logger.info('[CacheWarmer] Already running, skipped startup critical warming.');
+            return;
+        }
+
+        this.isWarming = true;
+        const startTime = Date.now();
+        try {
+            const { startDate, maxDate } = await this.resolveDefaultDateRange(dataYear);
+            if (!maxDate) {
+                logger.warn('[CacheWarmer] No data found, skipped startup critical warming.');
+                return;
+            }
+
+            await this.ensureStartupDomainsLoaded();
+            await this.warmDefaultDashboardRoute(startDate, maxDate);
+
+            logger.info(`[CacheWarmer] Startup critical warming completed in ${Date.now() - startTime}ms.`);
+        } catch (e) {
+            logger.error('[CacheWarmer] Startup critical warming failed', e);
+        } finally {
+            this.isWarming = false;
+        }
+    }
 
     async runAll(dataYear: number) {
         if (this.isWarming) {
@@ -55,6 +103,73 @@ export class CacheWarmer {
         }
     }
 
+    private async ensureStartupDomainsLoaded() {
+        const bootstrapper = getBootstrapper();
+        if (!bootstrapper) {
+            logger.warn('[CacheWarmer] Bootstrapper not registered, skipped startup domain warming.');
+            return;
+        }
+
+        // 当前 /api/query 挂载顺序会让 cross-sell 子路由 middleware 先于 bundle handler 执行。
+        // 若这里不预载，首个 dashboard-bundle 即使 route cache 命中，也会先付出惰性域加载成本。
+        await bootstrapper.ensureDomainLoaded('CrossSell');
+        await bootstrapper.ensureDomainLoaded('ClaimsAgg');
+    }
+
+    private async resolveDefaultDateRange(dataYear?: number): Promise<{ startDate: string; maxDate: string | null }> {
+        const whereYear = dataYear ? `WHERE EXTRACT(YEAR FROM policy_date) = ${dataYear}` : '';
+        const maxDateResult = await duckdbService.query<{ max_date: string }>(
+            `SELECT MAX(policy_date) as max_date FROM PolicyFact ${whereYear}`,
+            QUERY_CACHE.hotspotLong
+        );
+        const maxDateRaw = maxDateResult[0]?.max_date;
+        const maxDate = maxDateRaw ? String(maxDateRaw).slice(0, 10) : null;
+        const resolvedYear = dataYear || (maxDate ? Number(maxDate.slice(0, 4)) : new Date().getFullYear());
+        return {
+            startDate: `${resolvedYear}-01-01`,
+            maxDate,
+        };
+    }
+
+    private async warmDefaultDashboardRoute(startDate: string, maxDate: string) {
+        logger.info(`[CacheWarmer] Warming default dashboard-bundle route: ${startDate} to ${maxDate}`);
+
+        const whereWithDate = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}'`;
+        const whereWithoutDate = '1=1';
+        const bundleData = await fetchDashboardBundleData({
+            whereWithDate,
+            whereWithoutDate,
+            prevYearWhereWithDate: `policy_date >= '${String(Number(startDate.slice(0, 4)) - 1)}-01-01' AND policy_date <= '${String(Number(maxDate.slice(0, 4)) - 1)}${maxDate.slice(4)}'`,
+            orgNames: [],
+            salesmanNames: [],
+            rankingLimit: 10,
+            timeView: 'weekly',
+            perspective: 'premium',
+            groupDim: undefined,
+            dateField: 'policy_date'
+        });
+
+        const baseQuery = {
+            dateField: 'policy_date',
+            startDate,
+            endDate: maxDate,
+            granularity: 'week',
+            perspective: 'premium',
+        };
+
+        const queryVariants: Array<Record<string, QueryValue>> = [
+            baseQuery,
+            { ...baseQuery, rankingLimit: '10' },
+        ];
+
+        for (const query of queryVariants) {
+            const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', '1=1', query);
+            setRouteCache(cacheKey, bundleData, QUERY_CACHE.hotspotLong);
+        }
+
+        logger.info(`[CacheWarmer] Default dashboard-bundle route cached (${queryVariants.length} key variants).`);
+    }
+
     /**
      * 建立第一层硬缓存
      * 相当于直接给最纯净的首页条件生成完整的 bundle 回包。
@@ -85,7 +200,7 @@ export class CacheWarmer {
             orgNames: [],
             salesmanNames: [],
             rankingLimit: 10,
-            timeView: 'daily',
+            timeView: 'weekly',
             perspective: 'premium',
             groupDim: undefined,
             dateField: 'policy_date'
