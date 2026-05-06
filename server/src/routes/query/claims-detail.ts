@@ -252,7 +252,22 @@ router.get(
       policyYear = parsed;
     }
 
-    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField, policyYear);
+    // customCutoffs: 自定义 cutoff（YYYY-MM-DD,...）；提供时跳过自动月末/周六生成
+    let customCutoffs: string[] | undefined;
+    if (typeof q.customCutoffs === 'string' && q.customCutoffs.length > 0) {
+      const parts = q.customCutoffs.split(',').map(s => s.trim()).filter(Boolean);
+      for (const p of parts) {
+        if (!isValidDateFormat(p)) {
+          throw new AppError(400, `customCutoffs 含非法日期: ${p}`);
+        }
+      }
+      if (parts.length > 24) {
+        throw new AppError(400, `customCutoffs 最多 24 个，收到 ${parts.length}`);
+      }
+      customCutoffs = parts;
+    }
+
+    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField, policyYear, customCutoffs);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })

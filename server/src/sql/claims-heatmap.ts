@@ -60,6 +60,26 @@ const VALID_CLAIMS_DATE_FIELDS = new Set<ClaimsDateField>(['report_time', 'accid
 const MIN_POLICY_YEAR = 2020;
 const MAX_POLICY_YEAR = 2030;
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_CUSTOM_CUTOFFS = 24;
+
+/** 校验 customCutoffs：保留 ISO 日期、去重、按升序排序、上限 24 个 */
+function sanitizeCustomCutoffs(input?: string[]): string[] | null {
+  if (!input || input.length === 0) return null;
+  const seen = new Set<string>();
+  for (const raw of input) {
+    if (typeof raw !== 'string') continue;
+    const trimmed = raw.trim();
+    if (!ISO_DATE_RE.test(trimmed)) continue;
+    const d = new Date(`${trimmed}T00:00:00Z`);
+    if (Number.isNaN(d.getTime())) continue;
+    seen.add(trimmed);
+  }
+  if (seen.size === 0) return null;
+  const sorted = Array.from(seen).sort();
+  return sorted.slice(0, MAX_CUSTOM_CUTOFFS);
+}
+
 // ============================================================================
 // 筛选器构建
 // ============================================================================
@@ -161,6 +181,8 @@ function getDimensionExpr(
  * @param dateField 保费时间轴字段（保留参数以兼容，实际固定为 insurance_start_date）
  * @param claimsDateField 赔案纳入截止字段（决定"已报案" or "已出险"）
  * @param policyYear 保单年度（insurance_start_date 年份）；undefined 时取 max_date 所在年
+ * @param customCutoffs 自定义 cutoff 列表（YYYY-MM-DD）；提供时跳过自动 cutoff 生成（月末+周六）
+ *                      用于精确双时点对比、月末同比等诊断场景，最多 24 个
  */
 export function generateClaimsHeatmapQuery(
   filters: ClaimsHeatmapFilters,
@@ -168,6 +190,7 @@ export function generateClaimsHeatmapQuery(
   dateField: string = 'insurance_start_date',
   claimsDateField: ClaimsDateField = 'report_time',
   policyYear?: number,
+  customCutoffs?: string[],
 ): string {
   // 白名单校验，防止 SQL 注入
   // dateField 参数保留兼容，但累计口径下 cohort 必须锚定 insurance_start_date
@@ -197,48 +220,19 @@ export function generateClaimsHeatmapQuery(
     ? String(safePolicyYear)
     : `(EXTRACT(YEAR FROM (SELECT max_date FROM ref_date))::INT)`;
 
-  const sql = `
-    WITH
-    -- 1. 数据截止日
-    ref_date AS (
-      SELECT MAX(CAST(policy_date AS DATE)) AS max_date FROM PolicyFact
-    ),
-
-    -- 2. 所选保单年度的累计区间
-    year_bounds AS (
+  // customCutoffs：白名单+去重+排序，提供时整段替换 cutoff 来源 CTE
+  const safeCustomCutoffs = sanitizeCustomCutoffs(customCutoffs);
+  const cutoffsCte = safeCustomCutoffs
+    ? `
+    -- 3-5. 自定义 cutoffs（用户精确指定，跳过自动月末+周六生成）
+    all_cutoffs AS (
       SELECT
-        ${policyYearExpr} AS policy_year,
-        MAKE_DATE(${policyYearExpr}, 1, 1) AS year_start,
-        MAKE_DATE(${policyYearExpr}, 12, 31) AS year_end,
-        LEAST(MAKE_DATE(${policyYearExpr}, 12, 31), (SELECT max_date FROM ref_date)) AS effective_end
-    ),
-
-    -- 2.5. 净额口径池：按 (policy_no, insurance_start_date) 聚合，
-    --      HAVING SUM(premium) > 0 → 排除退保/负向批改净额≤0 的保单
-    --      与「赔付率发展」统一口径，2026-04-20 用户决策
-    eligible_policies AS (
-      SELECT
-        policy_no,
-        CAST(insurance_start_date AS DATE) AS insurance_start_date,
-        SUM(premium) AS premium,
-        ANY_VALUE(org_level_3) AS org_level_3,
-        ANY_VALUE(customer_category) AS customer_category,
-        ANY_VALUE(salesman_name) AS salesman_name,
-        ANY_VALUE(coverage_combination) AS coverage_combination,
-        ANY_VALUE(is_nev) AS is_nev,
-        ANY_VALUE(is_transfer) AS is_transfer,
-        ANY_VALUE(is_new_car) AS is_new_car,
-        ANY_VALUE(is_renewal) AS is_renewal,
-        ANY_VALUE(insurance_grade) AS insurance_grade,
-        ANY_VALUE(tonnage_segment) AS tonnage_segment,
-        ANY_VALUE(vehicle_model) AS vehicle_model
-      FROM PolicyFact
-      WHERE EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) >= (SELECT policy_year FROM year_bounds) - 1
-        AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) <= (SELECT policy_year FROM year_bounds)
-      GROUP BY policy_no, CAST(insurance_start_date AS DATE)
-      HAVING SUM(premium) > 0
-    ),
-
+        t.cutoff::DATE AS cutoff,
+        'custom' AS cutoff_type,
+        ROW_NUMBER() OVER (ORDER BY t.cutoff::DATE) AS cutoff_idx
+      FROM (VALUES ${safeCustomCutoffs.map(d => `(DATE '${d}')`).join(', ')}) AS t(cutoff)
+    ),`
+    : `
     -- 3. 近 2 月的起点（再早折叠为月末）
     weekly_start AS (
       SELECT
@@ -293,7 +287,51 @@ export function generateClaimsHeatmapQuery(
         SELECT cutoff, cutoff_type FROM weekly_cutoffs
       ) combined
       GROUP BY cutoff
+    ),`;
+
+  const sql = `
+    WITH
+    -- 1. 数据截止日
+    ref_date AS (
+      SELECT MAX(CAST(policy_date AS DATE)) AS max_date FROM PolicyFact
     ),
+
+    -- 2. 所选保单年度的累计区间
+    year_bounds AS (
+      SELECT
+        ${policyYearExpr} AS policy_year,
+        MAKE_DATE(${policyYearExpr}, 1, 1) AS year_start,
+        MAKE_DATE(${policyYearExpr}, 12, 31) AS year_end,
+        LEAST(MAKE_DATE(${policyYearExpr}, 12, 31), (SELECT max_date FROM ref_date)) AS effective_end
+    ),
+
+    -- 2.5. 净额口径池：按 (policy_no, insurance_start_date) 聚合，
+    --      HAVING SUM(premium) > 0 → 排除退保/负向批改净额≤0 的保单
+    --      与「赔付率发展」统一口径，2026-04-20 用户决策
+    eligible_policies AS (
+      SELECT
+        policy_no,
+        CAST(insurance_start_date AS DATE) AS insurance_start_date,
+        SUM(premium) AS premium,
+        ANY_VALUE(org_level_3) AS org_level_3,
+        ANY_VALUE(customer_category) AS customer_category,
+        ANY_VALUE(salesman_name) AS salesman_name,
+        ANY_VALUE(coverage_combination) AS coverage_combination,
+        ANY_VALUE(is_nev) AS is_nev,
+        ANY_VALUE(is_transfer) AS is_transfer,
+        ANY_VALUE(is_new_car) AS is_new_car,
+        ANY_VALUE(is_renewal) AS is_renewal,
+        ANY_VALUE(insurance_grade) AS insurance_grade,
+        ANY_VALUE(tonnage_segment) AS tonnage_segment,
+        ANY_VALUE(vehicle_model) AS vehicle_model
+      FROM PolicyFact
+      WHERE EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) >= (SELECT policy_year FROM year_bounds) - 1
+        AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) <= (SELECT policy_year FROM year_bounds)
+      GROUP BY policy_no, CAST(insurance_start_date AS DATE)
+      HAVING SUM(premium) > 0
+    ),
+
+    ${cutoffsCte}
 
     -- ═══════════════════════════════════════════════════════════
     -- 保费侧：所选年度起保保单 × 累计 cutoff
@@ -407,6 +445,8 @@ export function generateClaimsHeatmapQuery(
       CASE
         WHEN ac.cutoff_type = 'month'
           THEN CAST(EXTRACT(MONTH FROM ac.cutoff) AS INT) || '月末'
+        WHEN ac.cutoff_type = 'custom'
+          THEN CAST(ac.cutoff AS VARCHAR)
         ELSE CAST(EXTRACT(MONTH FROM ac.cutoff) AS INT)
              || '.' || CAST(EXTRACT(DAY FROM ac.cutoff) AS INT)
       END AS period_label,
@@ -471,6 +511,7 @@ export function generateClaimsHeatmapQuery(
     dimension,
     policyYear: safePolicyYear ?? 'auto(max_date.year)',
     claimsInclusion: safeClaimsDateField,
+    customCutoffs: safeCustomCutoffs ? safeCustomCutoffs.join(',') : 'auto',
     sqlLength: sql.length,
   });
 
