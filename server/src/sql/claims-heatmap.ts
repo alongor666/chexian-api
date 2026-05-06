@@ -73,6 +73,9 @@ function sanitizeCustomCutoffs(input?: string[]): string[] | null {
     if (!ISO_DATE_RE.test(trimmed)) continue;
     const d = new Date(`${trimmed}T00:00:00Z`);
     if (Number.isNaN(d.getTime())) continue;
+    // 严格日历校验：JS Date 会把 2026-02-31 归一化为 2026-03-03，
+    // 必须回写比对原串，否则 SQL 端 DATE '2026-02-31' 会运行时报错
+    if (d.toISOString().slice(0, 10) !== trimmed) continue;
     seen.add(trimmed);
   }
   if (seen.size === 0) return null;
