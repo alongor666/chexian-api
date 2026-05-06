@@ -220,3 +220,110 @@ describe('generateClaimsHeatmapQuery — 安全', () => {
     expect(sql).toContain("p.org_level_3 = '天''府'");
   });
 });
+
+// ═══════════════════════════════════════════════════
+// 7. customCutoffs：自定义 cutoff 列表
+// ═══════════════════════════════════════════════════
+
+describe('generateClaimsHeatmapQuery — customCutoffs', () => {
+  it('提供 customCutoffs 时跳过 monthly/weekly cutoff CTE', () => {
+    const sql = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'accident_time', 2026,
+      ['2026-03-31', '2026-04-30'],
+    );
+    expect(sql).not.toContain('weekly_start AS');
+    expect(sql).not.toContain('monthly_cutoffs AS');
+    expect(sql).not.toContain('weekly_cutoffs_raw AS');
+    expect(sql).toContain("VALUES (DATE '2026-03-31'), (DATE '2026-04-30')");
+    expect(sql).toContain("'custom' AS cutoff_type");
+  });
+
+  it('未提供 customCutoffs 时保留自动 cutoff CTE', () => {
+    const sql = generateClaimsHeatmapQuery(EMPTY, 'org_level_3', 'insurance_start_date', 'report_time', 2026);
+    expect(sql).toContain('weekly_start AS');
+    expect(sql).toContain('monthly_cutoffs AS');
+    expect(sql).toContain('weekly_cutoffs_raw AS');
+    expect(sql).not.toContain('VALUES (DATE');
+  });
+
+  it('customCutoffs 自动去重并升序排序', () => {
+    const sql = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'report_time', 2026,
+      ['2026-04-30', '2026-03-31', '2026-03-31'],
+    );
+    expect(sql).toContain("VALUES (DATE '2026-03-31'), (DATE '2026-04-30')");
+  });
+
+  it('customCutoffs 过滤非 ISO 格式日期', () => {
+    const sql = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'report_time', 2026,
+      ['2026-04-30', 'evil; DROP--', '2026/3/31'],
+    );
+    expect(sql).not.toContain('evil');
+    expect(sql).not.toContain('DROP');
+    expect(sql).toContain("VALUES (DATE '2026-04-30')");
+  });
+
+  it('customCutoffs 全部非法时回退到自动 cutoff', () => {
+    const sql = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'report_time', 2026,
+      ['evil', '2026/3/31', ''],
+    );
+    expect(sql).toContain('weekly_start AS');
+    expect(sql).toContain('monthly_cutoffs AS');
+  });
+
+  it('customCutoffs 严格校验日历有效性（2026-02-31 / 2025-13-01 必须丢弃）', () => {
+    // JS Date 会把 2026-02-31 归一化为 2026-03-03，必须回写比对拦截
+    const sql = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'report_time', 2026,
+      ['2026-02-31', '2025-13-01', '2026-04-31', '2026-04-30'],
+    );
+    expect(sql).not.toContain('2026-02-31');
+    expect(sql).not.toContain('2026-03-03'); // 不应被归一化注入
+    expect(sql).not.toContain('2025-13-01');
+    expect(sql).not.toContain('2026-04-31');
+    expect(sql).toContain("VALUES (DATE '2026-04-30')");
+  });
+
+  it('customCutoffs 闰年 2024-02-29 合法，2025-02-29 非法', () => {
+    const sql1 = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'report_time', 2024,
+      ['2024-02-29'],
+    );
+    expect(sql1).toContain("VALUES (DATE '2024-02-29')");
+
+    const sql2 = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'report_time', 2025,
+      ['2025-02-29', '2025-03-31'],
+    );
+    expect(sql2).not.toContain('2025-02-29');
+    expect(sql2).not.toContain('2025-03-01'); // 归一化结果不应出现
+    expect(sql2).toContain("VALUES (DATE '2025-03-31')");
+  });
+
+  it('customCutoffs 空数组等同未提供', () => {
+    const sql = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'report_time', 2026,
+      [],
+    );
+    expect(sql).toContain('monthly_cutoffs AS');
+  });
+
+  it('custom cutoff_type 触发 period_label 显示完整日期', () => {
+    const sql = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'report_time', 2026,
+      ['2026-03-31'],
+    );
+    expect(sql).toMatch(/WHEN ac\.cutoff_type = 'custom'\s+THEN CAST\(ac\.cutoff AS VARCHAR\)/);
+  });
+
+  it('YoY 分支与 customCutoffs 兼容（cutoff - 1 YEAR 仍生效）', () => {
+    const sql = generateClaimsHeatmapQuery(
+      EMPTY, 'customer_category', 'insurance_start_date', 'accident_time', 2026,
+      ['2026-03-31', '2026-04-30'],
+    );
+    expect(sql).toMatch(/prev_premium_cumulative AS[\s\S]*?\(ac\.cutoff - INTERVAL 1 YEAR\)::DATE/);
+    expect(sql).toMatch(/prev_claims_cumulative AS[\s\S]*?CAST\(c\.accident_time AS DATE\) <= \(ac\.cutoff - INTERVAL 1 YEAR\)::DATE/);
+  });
+});
