@@ -24,6 +24,17 @@ last_updated: "2026-05-06"
 
 ---
 
+## 诊断路由边界（先判定）
+
+执行前先按 `/diagnose-router` 分流；本命令只处理**同一 policy-year cohort 的双 cutoff 变化**。
+
+必须让路：
+- 单 cutoff 细分经营 / 90/180/270/满期四桩 → `/diagnose-segment`
+- 机构 / 经代整体经营三问 → `/diagnose-agent`
+- 续保、报价、续回 → `/diagnose-renewal`
+- 摩托车真实盈亏线 → `/diagnose-motorcycle`
+- 过户车出险地异常 → `/diagnose-transfer-location`
+
 ## 使用场景
 
 - 「2026 年保单截至 4-30 vs 截至 3-31，各客户类别如何变化」

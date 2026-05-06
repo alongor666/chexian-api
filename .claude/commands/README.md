@@ -1,8 +1,8 @@
-# Claude Code 命令索引 (v3.0)
+# Claude Code 命令索引 (v3.1)
 
-> 车险数据分析平台 — 30 个 Slash Commands
+> 车险数据分析平台 — 44 个 Slash Commands
 
-**最后更新**: 2026-04-27
+**最后更新**: 2026-05-06
 
 ---
 
@@ -43,6 +43,12 @@
 | 多 Agent 编排 | `/orchestrate` | [orchestrate.md](./orchestrate.md) |
 | 配置演进 | `/evolve` | [evolve.md](./evolve.md) |
 | 过户车出险地点 | `/diagnose-transfer-location` | [diagnose-transfer-location.md](./diagnose-transfer-location.md) |
+| 诊断命令路由 | `/diagnose-router` | [diagnose-router.md](./diagnose-router.md) |
+| 机构/经代经营诊断 | `/diagnose-agent` | [diagnose-agent.md](./diagnose-agent.md) |
+| 车型细分诊断 | `/diagnose-segment` | [diagnose-segment.md](./diagnose-segment.md) |
+| 双 cutoff cohort 对比 | `/diagnose-cohort-comparison` | [diagnose-cohort-comparison.md](./diagnose-cohort-comparison.md) |
+| 续保诊断 | `/diagnose-renewal` | [diagnose-renewal.md](./diagnose-renewal.md) |
+| 摩托车专项诊断 | `/diagnose-motorcycle` | [diagnose-motorcycle.md](./diagnose-motorcycle.md) |
 
 ---
 
@@ -59,6 +65,7 @@
 | **知识管理** | `session-manager`, `extract-knowledge`, `session-summary` | — |
 | **项目管理** | `init-project` | — |
 | **工作流增强** | `tdd`, `checkpoint`, `verify`, `orchestrate`, `evolve` | — |
+| **经营诊断补充** | `diagnose-router`, `diagnose-segment`, `diagnose-cohort-comparison`, `diagnose-renewal` | — |
 
 ---
 
@@ -66,15 +73,16 @@
 
 | 类别 | 主命令 | 子命令 | 合计 |
 |------|--------|--------|------|
-| Git 工作流 | 2 | 0 | 2 |
-| 数据分析 | 3 | 4 | 7 |
+| Git 工作流 | 3 | 0 | 3 |
+| 数据分析 | 6 | 5 | 11 |
+| 经营诊断 | 7 | 0 | 7 |
 | 报告生成 | 1 | 3 | 4 |
 | 安全审查 | 1 | 4 | 5 |
 | 开发工具 | 3 | 0 | 3 |
-| 知识管理 | 3 | 0 | 3 |
-| 项目管理 | 1 | 0 | 1 |
+| 知识管理 | 4 | 0 | 4 |
+| 项目管理 | 2 | 0 | 2 |
 | 工作流增强 | 5 | 0 | 5 |
-| **合计** | **19** | **11** | **30** |
+| **合计** | **32** | **12** | **44** |
 
 ---
 
