@@ -13,6 +13,7 @@ import { statSync } from 'fs';
 import type { DuckDBQueryable } from './duckdb-types.js';
 import { escapeSqlValue } from '../utils/security.js';
 import { AppError } from '../middleware/error.js';
+import { setDataVersion } from './data-version.js';
 
 // ============================================
 // Parquet 指纹缓存（按表名存储）
@@ -111,6 +112,7 @@ export async function loadMultipleParquet(
           SELECT * FROM read_parquet([${escapedNew}], union_by_name=true)
         `);
         db.invalidateCache();
+        setDataVersion(fpResult!.fingerprint);
         parquetFingerprintCache.set(TABLE_NAME, {
           fingerprint: fpResult!.fingerprint,
           fileSet: new Set(filePaths),
@@ -148,8 +150,9 @@ export async function loadMultipleParquet(
 
   db.invalidateCache();
 
-  // 更新指纹缓存（fpResult 为 null 时跳过缓存写入，保持下次仍走全量）
+  // 更新指纹缓存 + dataVersion（fpResult 为 null 时跳过，下次仍走全量）
   if (fpResult !== null) {
+    setDataVersion(fpResult.fingerprint);
     parquetFingerprintCache.set(TABLE_NAME, {
       fingerprint: fpResult.fingerprint,
       fileSet: new Set(filePaths),

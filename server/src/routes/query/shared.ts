@@ -3,11 +3,13 @@
  */
 
 import type { Request, Response } from 'express';
+import crypto from 'crypto';
 import { getRouteCache, setRouteCache, computeEtag, sendWithEtag } from '../../services/route-cache.js';
 import { markRequestCacheHit } from '../../utils/request-context.js';
 import { buildResponseMeta } from '../../utils/api-meta.js';
 import { DEFAULT_COMPREHENSIVE_THRESHOLDS } from '../../config/comprehensive-thresholds.js';
 import { dbEnv } from '../../config/env.js';
+import { getDataVersion } from '../../services/data-version.js';
 
 // Re-export commonly used items for convenience
 export type { Request, Response } from 'express';
@@ -55,12 +57,23 @@ export function buildRouteCacheKey(req: Request, routeName: string): string {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)
     .join('&');
-  return `${routeName}|${req.permissionFilter || '1=1'}|${normalizedQuery}`;
+  // 版本后缀：ETL 完成后版本变更，旧 key 自然不再被命中，由 LRU 淘汰
+  return `${routeName}|${req.permissionFilter || '1=1'}|${normalizedQuery}|v=${getDataVersion()}`;
+}
+
+/**
+ * 基于 cache key 的确定性 ETag（不依赖响应体）。
+ * 因为 cache key 已含 dataVersion，同 key 即同数据版本同筛选条件，
+ * 客户端 If-None-Match 命中可直接 304，无需查 LRU 也无需执行 SQL。
+ */
+function deterministicEtag(cacheKey: string): string {
+  return `"${crypto.createHash('md5').update(cacheKey).digest('hex').slice(0, 16)}"`;
 }
 
 /**
  * 路由级 LRU 缓存中间件。
- * - 命中：直接 sendWithEtag(cached) 返回（<1ms）
+ * - If-None-Match 命中（确定性 ETag）：直接 304，无 LRU 查询、无 SQL 执行
+ * - LRU 命中：sendWithEtag(cached) 返回（<1ms）
  * - 未命中：拦截 res.json() 自动缓存成功响应
  *
  * 用法：router.get('/path', withRouteCache('routeName'), asyncHandler(...))
@@ -72,16 +85,32 @@ export function withRouteCache(
 ) {
   return (req: Request, res: Response, next: import('express').NextFunction): void => {
     const key = buildRouteCacheKey(req, routeName);
+    const etag = deterministicEtag(key);
+
+    // Fast path: 客户端持有当前版本的 ETag → 直接 304
+    if (req.headers['if-none-match'] === etag) {
+      markRequestCacheHit();
+      res.set('ETag', etag);
+      res.set('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=3600`);
+      res.status(304).end();
+      return;
+    }
+
     const cached = getRouteCache<unknown>(key);
     if (cached) {
       markRequestCacheHit();
-      sendWithEtag(req, res, cached, maxAgeSec);
+      res.set('ETag', etag);
+      res.set('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=3600`);
+      res.json(cached);
       return;
     }
+
     const origJson = res.json.bind(res);
     res.json = function (body: any) {
       if (res.statusCode >= 200 && res.statusCode < 300 && body && body.success !== false) {
         setRouteCache(key, body, ttlMs);
+        res.set('ETag', etag);
+        res.set('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=3600`);
       }
       return origJson(body);
     } as any;

@@ -9,7 +9,6 @@ import type { DuckDBQueryable } from './duckdb-types.js';
 import { initDuckDBTables } from './duckdb-init-tables.js';
 import { convertBigIntToNumber, SLOW_QUERY_THRESHOLD_MS } from './duckdb-type-converter.js';
 import { loadMultipleParquet } from './duckdb-parquet-loader.js';
-import { clearRouteCache } from './route-cache.js';
 
 /** 构造参数（省略字段从 databaseConfig / DUCKDB_INIT_OPTIONS 回退；测试传 `{ path: ':memory:' }`） */
 export interface DuckDBServiceConfig {
@@ -47,9 +46,11 @@ export class DuckDBService implements DuckDBQueryable {
   }
 
   invalidateCache(options?: { silent?: boolean }): void {
+    // 仅清 DuckDB 内部 SQL cache。route-cache 由 dataVersion 后缀驱动，旧版本 key
+    // 在 ETL 后自然不再被命中，由 LRU 淘汰，无需主动清空（避免日切 cold cliff）。
     const size = this.queryCache.size;
-    this.queryCache.invalidateAll(); clearRouteCache();
-    if (size > 0 && !options?.silent) console.log(`[DuckDB] All caches invalidated (query: ${size}, route cache cleared)`);
+    this.queryCache.invalidateAll();
+    if (size > 0 && !options?.silent) console.log(`[DuckDB] Query cache invalidated (${size} entries; route cache preserved, version-keyed)`);
   }
 
   get cacheSize(): number { return this.queryCache.size; }
