@@ -170,7 +170,6 @@ const ENDPOINT_DEFINITIONS = [
   { slug: 'data-metadata', path: '/api/data/metadata', params: {}, deprecated: false },
   { slug: 'data-files', path: '/api/data/files', params: {}, deprecated: false },
   { slug: 'data-version', path: '/api/data/version', params: {}, deprecated: false },
-  { slug: 'data-snapshot-health', path: '/api/data/snapshot-health', params: {}, deprecated: false },
   { slug: 'data-kpi-plan-config', path: '/api/data/kpi-plan-config', params: {}, deprecated: false },
 
   // ── /api/auth（GET only）─────────────────
