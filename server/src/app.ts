@@ -17,6 +17,7 @@ import { seedAccessControlData } from './services/access-control.js';
 import { DataBootstrapper } from './services/data-bootstrapper.js';
 import { registerBootstrapper } from './services/bootstrapper-registry.js';
 import { cacheWarmer } from './services/cache-warmer.js';
+import { onDataVersionChange } from './services/data-version.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { startAuditLogMaintenance } from './skills/audit-log.js';
 
@@ -196,6 +197,16 @@ async function startServer() {
     // 2. 数据启动（发现→去重→验证→加载→维度）
     const bootstrapper = new DataBootstrapper(duckdbService);
     registerBootstrapper(bootstrapper); // 注册到全局注册中心，供路由中间件使用
+
+    // ETL 后 dataVersion 变更时自动重新预热（消除日切 cold cliff）
+    // 启动时首次 setDataVersion 也会触发，与下方 await warmStartupCritical
+    // 通过 cacheWarmer 内部 isWarming 标志去重。
+    onDataVersionChange(async (next, previous) => {
+      if (previous === 'init0000') return; // 启动首次由 await 路径处理
+      console.log(`[Server] dataVersion ${previous}→${next}, re-warming cache...`);
+      await cacheWarmer.warmStartupCritical();
+    });
+
     try {
       const result = await bootstrapper.bootstrap();
       if (result) {

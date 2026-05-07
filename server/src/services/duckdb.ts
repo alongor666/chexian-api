@@ -8,8 +8,8 @@ import { QueryCache, ConnectionPool, dropRelationIfExists, hasRelation, getTable
 import type { DuckDBQueryable } from './duckdb-types.js';
 import { initDuckDBTables } from './duckdb-init-tables.js';
 import { convertBigIntToNumber, SLOW_QUERY_THRESHOLD_MS } from './duckdb-type-converter.js';
-import { loadMultipleParquet } from './duckdb-parquet-loader.js';
-import { clearRouteCache } from './route-cache.js';
+import { loadMultipleParquet, computeParquetFingerprint } from './duckdb-parquet-loader.js';
+import { setDataVersion, bumpDataVersionFromTimestamp } from './data-version.js';
 
 /** 构造参数（省略字段从 databaseConfig / DUCKDB_INIT_OPTIONS 回退；测试传 `{ path: ':memory:' }`） */
 export interface DuckDBServiceConfig {
@@ -47,9 +47,11 @@ export class DuckDBService implements DuckDBQueryable {
   }
 
   invalidateCache(options?: { silent?: boolean }): void {
+    // 仅清 DuckDB 内部 SQL cache。route-cache 由 dataVersion 后缀驱动，旧版本 key
+    // 在 ETL 后自然不再被命中，由 LRU 淘汰，无需主动清空（避免日切 cold cliff）。
     const size = this.queryCache.size;
-    this.queryCache.invalidateAll(); clearRouteCache();
-    if (size > 0 && !options?.silent) console.log(`[DuckDB] All caches invalidated (query: ${size}, route cache cleared)`);
+    this.queryCache.invalidateAll();
+    if (size > 0 && !options?.silent) console.log(`[DuckDB] Query cache invalidated (${size} entries; route cache preserved, version-keyed)`);
   }
 
   get cacheSize(): number { return this.queryCache.size; }
@@ -92,6 +94,14 @@ export class DuckDBService implements DuckDBQueryable {
     await this.dropRelationIfExists(sanitizeTableName(tableName));
     await this.query(`CREATE OR REPLACE TABLE ${sanitizeTableName(tableName)} AS SELECT * FROM read_parquet('${escapeSqlValue(filePath)}')`);
     this.invalidateCache();
+    // 单文件路径也必须 bump dataVersion，否则旧 cache key 会继续命中重建前的结果。
+    // 优先按文件指纹（mtime+size），stat 失败时退回到时间戳兜底。
+    const fp = computeParquetFingerprint([filePath]);
+    if (fp !== null) {
+      setDataVersion(fp.fingerprint);
+    } else {
+      bumpDataVersionFromTimestamp();
+    }
     console.log(`[DuckDB] Loaded Parquet file: ${filePath} -> ${sanitizeTableName(tableName)}`);
   }
 
