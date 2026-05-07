@@ -1,15 +1,24 @@
 import crypto from 'crypto';
+import { brotliCompressSync, constants } from 'zlib';
 import { LRUCache } from 'lru-cache';
+import { clientAcceptsBrotli } from '../utils/accept-encoding.js';
 
-interface RouteCacheEntry<T> {
-    data: T;
+/**
+ * 缓存条目存预序列化的 JSON Buffer + 预 brotli 压缩后的 Buffer。
+ * 命中时直接 res.end(buffer)，省掉 JSON.stringify（5MB bundle ≈ 30-50ms）+ brotli 压缩（≈ 20ms）。
+ */
+interface RouteCacheEntry {
+    jsonBuffer: Buffer;
+    brotliBuffer: Buffer | null;
     etag: string;
     sizeBytes: number;
 }
 
 const DEFAULT_MAX_TOTAL_BYTES = 400 * 1024 * 1024; // 400MB
 const DEFAULT_MAX_ENTRIES = 5000;
-const DEFAULT_MAX_ENTRY_BYTES = 2 * 1024 * 1024;   // 2MB
+const DEFAULT_MAX_ENTRY_BYTES = 2 * 1024 * 1024;   // 2MB（仅按 jsonBuffer 计）
+const COMPRESS_THRESHOLD = 1024;
+const BROTLI_QUALITY = 4;
 
 const MAX_TOTAL_BYTES = Number(process.env.ROUTE_CACHE_MAX_BYTES) || DEFAULT_MAX_TOTAL_BYTES;
 const MAX_ENTRIES = Number(process.env.ROUTE_CACHE_MAX_ENTRIES) || DEFAULT_MAX_ENTRIES;
@@ -19,7 +28,7 @@ let _hits = 0;
 let _misses = 0;
 let _evictions = 0;
 
-const cache = new LRUCache<string, RouteCacheEntry<unknown>>({
+const cache = new LRUCache<string, RouteCacheEntry>({
     max: MAX_ENTRIES,
     maxSize: MAX_TOTAL_BYTES,
     sizeCalculation: (entry) => entry.sizeBytes,
@@ -45,30 +54,95 @@ export function computeEtag(data: unknown): string {
     return `"${crypto.createHash('md5').update(json).digest('hex').slice(0, 16)}"`;
 }
 
-function estimateSize(data: unknown): number {
-    const json = typeof data === 'string' ? data : JSON.stringify(data);
-    return Buffer.byteLength(json, 'utf8');
-}
-
-export function getRouteCache<T>(key: string): T | null {
+/**
+ * 返回完整缓存条目（含预序列化 Buffer + 预 brotli），供 fast-path
+ * 直接 res.end(buffer) 使用，省掉 stringify + 压缩。withRouteCache 使用此 API。
+ */
+export function getRouteCacheEntry(key: string): RouteCacheEntry | null {
     const entry = cache.get(key);
     if (!entry) { _misses++; return null; }
     _hits++;
-    return entry.data as T;
+    return entry;
 }
 
-export function setRouteCache<T>(key: string, data: T, ttlMs: number): void {
-    const sizeBytes = estimateSize(data);
-    if (sizeBytes > MAX_ENTRY_BYTES) return;
+/**
+ * 返回反序列化后的对象（向后兼容老调用方：bundles.ts / comprehensive.ts）。
+ * 内部 JSON.parse(jsonBuffer)，比 V8 直接持对象稍慢但内存占用减半。
+ * 性能优先路径请改用 getRouteCacheEntry + sendCachedEntry。
+ */
+export function getRouteCache<T = unknown>(key: string): T | null {
+    const entry = cache.get(key);
+    if (!entry) { _misses++; return null; }
+    _hits++;
+    try {
+        return JSON.parse(entry.jsonBuffer.toString('utf-8')) as T;
+    } catch {
+        return null;
+    }
+}
+
+export function setRouteCache(key: string, data: unknown, ttlMs: number): void {
+    const json = JSON.stringify(data);
+    const jsonBuffer = Buffer.from(json, 'utf-8');
+    if (jsonBuffer.length > MAX_ENTRY_BYTES) return;
+
+    let brotliBuffer: Buffer | null = null;
+    if (jsonBuffer.length >= COMPRESS_THRESHOLD) {
+        try {
+            brotliBuffer = brotliCompressSync(jsonBuffer, {
+                params: {
+                    [constants.BROTLI_PARAM_QUALITY]: BROTLI_QUALITY,
+                    [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
+                },
+            });
+        } catch {
+            brotliBuffer = null;
+        }
+    }
+
+    const etag = `"${crypto.createHash('md5').update(jsonBuffer).digest('hex').slice(0, 16)}"`;
+    const sizeBytes = jsonBuffer.length + (brotliBuffer?.length ?? 0);
+
     cache.set(
         key,
-        { data, etag: computeEtag(data), sizeBytes },
+        { jsonBuffer, brotliBuffer, etag, sizeBytes },
         { ttl: ttlMs },
     );
 }
 
 /**
- * 发送带 ETag + Cache-Control 的 JSON 响应。
+ * 发送已缓存条目：根据 Accept-Encoding 选 brotli/原始 JSON Buffer，
+ * 直接 res.end 绕过 res.json + 中间件的二次序列化和压缩。
+ */
+export function sendCachedEntry(
+    req: any,
+    res: any,
+    entry: RouteCacheEntry,
+    etag: string,
+    maxAgeSec: number,
+): void {
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=3600`);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+
+    if (entry.brotliBuffer && clientAcceptsBrotli(req.headers['accept-encoding'])) {
+        res.setHeader('Content-Encoding', 'br');
+        res.setHeader('Content-Length', String(entry.brotliBuffer.length));
+        const existing = res.getHeader('Vary');
+        const varies = new Set(
+            (existing ? String(existing).split(/,\s*/) : []).concat('Accept-Encoding'),
+        );
+        res.setHeader('Vary', Array.from(varies).join(', '));
+        res.end(entry.brotliBuffer);
+        return;
+    }
+
+    res.setHeader('Content-Length', String(entry.jsonBuffer.length));
+    res.end(entry.jsonBuffer);
+}
+
+/**
+ * 发送带 ETag + Cache-Control 的 JSON 响应（兼容老路径，无 LRU）。
  * 若客户端 If-None-Match 命中则返回 304。
  */
 export function sendWithEtag(req: any, res: any, body: unknown, maxAgeSec: number): void {

@@ -4,7 +4,7 @@
 
 import type { Request, Response } from 'express';
 import crypto from 'crypto';
-import { getRouteCache, setRouteCache, computeEtag, sendWithEtag } from '../../services/route-cache.js';
+import { getRouteCache, getRouteCacheEntry, setRouteCache, computeEtag, sendWithEtag, sendCachedEntry } from '../../services/route-cache.js';
 import { markRequestCacheHit } from '../../utils/request-context.js';
 import { buildResponseMeta } from '../../utils/api-meta.js';
 import { DEFAULT_COMPREHENSIVE_THRESHOLDS } from '../../config/comprehensive-thresholds.js';
@@ -96,12 +96,11 @@ export function withRouteCache(
       return;
     }
 
-    const cached = getRouteCache<unknown>(key);
-    if (cached) {
+    const cachedEntry = getRouteCacheEntry(key);
+    if (cachedEntry) {
       markRequestCacheHit();
-      res.set('ETag', etag);
-      res.set('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=3600`);
-      res.json(cached);
+      // 直接 res.end(buffer)，跳过 res.json + 二次 stringify + 压缩中间件
+      sendCachedEntry(req, res, cachedEntry, etag, maxAgeSec);
       return;
     }
 
