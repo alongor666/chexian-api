@@ -1,21 +1,30 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getRouteCache,
+  getRouteCacheEntry,
   setRouteCache,
   clearRouteCache,
   computeEtag,
   getRouteCacheStats,
 } from '../route-cache.js';
 
-describe('route-cache (lru-cache backed)', () => {
+describe('route-cache (lru-cache + buffer)', () => {
   beforeEach(() => {
     clearRouteCache();
   });
 
-  it('miss → set → hit', () => {
+  it('miss → set → hit (getRouteCache 返回 parsed data)', () => {
     expect(getRouteCache('k1')).toBeNull();
     setRouteCache('k1', { x: 1 }, 60_000);
     expect(getRouteCache('k1')).toEqual({ x: 1 });
+  });
+
+  it('getRouteCacheEntry 返回 entry，含 jsonBuffer + brotliBuffer', () => {
+    setRouteCache('e1', { x: 1 }, 60_000);
+    const entry = getRouteCacheEntry('e1');
+    expect(entry).not.toBeNull();
+    expect(entry!.jsonBuffer).toBeInstanceOf(Buffer);
+    expect(JSON.parse(entry!.jsonBuffer.toString('utf-8'))).toEqual({ x: 1 });
   });
 
   it('TTL 过期后命中应返回 null', async () => {
@@ -24,7 +33,7 @@ describe('route-cache (lru-cache backed)', () => {
     expect(getRouteCache('k2')).toBeNull();
   });
 
-  it('单条超 maxEntryBytes（>2MB）不缓存', () => {
+  it('单条 jsonBuffer 超 maxEntryBytes（>2MB）不缓存', () => {
     const huge = { data: 'x'.repeat(3 * 1024 * 1024) };
     setRouteCache('huge', huge, 60_000);
     expect(getRouteCache('huge')).toBeNull();
@@ -59,5 +68,26 @@ describe('route-cache (lru-cache backed)', () => {
     const stats = getRouteCacheStats();
     expect(stats.maxBytes).toBeGreaterThanOrEqual(400 * 1024 * 1024);
     expect(stats.maxEntries).toBe(5000);
+  });
+
+  it('大于 1KB 时预 brotli 压缩，小于阈值时跳过', () => {
+    setRouteCache('small', { x: 'y' }, 60_000);
+    const small = getRouteCacheEntry('small');
+    expect(small!.brotliBuffer).toBeNull();
+
+    const big = { rows: Array.from({ length: 200 }, (_, i) => ({ id: i, val: 'a'.repeat(50) })) };
+    setRouteCache('big', big, 60_000);
+    const bigEntry = getRouteCacheEntry('big');
+    expect(bigEntry!.brotliBuffer).toBeInstanceOf(Buffer);
+    // brotli 压缩通常比原 JSON 小 50%+
+    expect(bigEntry!.brotliBuffer!.length).toBeLessThan(bigEntry!.jsonBuffer.length);
+  });
+
+  it('etag 由 jsonBuffer 派生，相同对象产生相同 etag', () => {
+    setRouteCache('et1', { a: 1, b: 2 }, 60_000);
+    const e1 = getRouteCacheEntry('et1')!.etag;
+    setRouteCache('et2', { a: 1, b: 2 }, 60_000);
+    const e2 = getRouteCacheEntry('et2')!.etag;
+    expect(e1).toBe(e2);
   });
 });
