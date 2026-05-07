@@ -19,7 +19,7 @@ interface CacheEntry<T = any> {
 
 export class QueryCache {
   private cache = new Map<string, CacheEntry>();
-  private maxSize = 500;
+  private maxSize = Number(process.env.DUCKDB_QUERY_CACHE_MAX_ENTRIES) || 3000;
 
   get<T = any>(key: string): T | null {
     const entry = this.cache.get(key);

@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import {
-  asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware,
+  asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache,
 } from './shared.js';
 import {
   generatePendingOverviewQuery,
@@ -67,6 +67,7 @@ function parseFilters(query: Record<string, unknown>): ClaimsDetailFilters {
  */
 router.get(
   '/claims-detail/pending-overview',
+  withRouteCache('claims-detail-pending-overview'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generatePendingOverviewQuery(filters);
@@ -81,6 +82,7 @@ router.get(
  */
 router.get(
   '/claims-detail/pending-by-org',
+  withRouteCache('claims-detail-pending-by-org'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generatePendingByOrgQuery(filters);
@@ -95,6 +97,7 @@ router.get(
  */
 router.get(
   '/claims-detail/pending-aging',
+  withRouteCache('claims-detail-pending-aging'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generatePendingAgingQuery(filters);
@@ -109,6 +112,7 @@ router.get(
  */
 router.get(
   '/claims-detail/cause-analysis',
+  withRouteCache('claims-detail-cause-analysis'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateCauseAnalysisQuery(filters);
@@ -123,6 +127,7 @@ router.get(
  */
 router.get(
   '/claims-detail/geo-accident',
+  withRouteCache('claims-detail-geo-accident'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateGeoRiskByAccidentQuery(filters);
@@ -137,6 +142,7 @@ router.get(
  */
 router.get(
   '/claims-detail/geo-plate',
+  withRouteCache('claims-detail-geo-plate'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateGeoRiskByPlateQuery(filters);
@@ -151,6 +157,7 @@ router.get(
  */
 router.get(
   '/claims-detail/geo-comparison',
+  withRouteCache('claims-detail-geo-comparison'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateGeoComparisonQuery(filters);
@@ -165,6 +172,7 @@ router.get(
  */
 router.get(
   '/claims-detail/claim-cycle',
+  withRouteCache('claims-detail-claim-cycle'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateClaimCycleQuery(filters);
@@ -179,6 +187,7 @@ router.get(
  */
 router.get(
   '/claims-detail/frequency-yoy',
+  withRouteCache('claims-detail-frequency-yoy'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateFrequencyYoyQuery(filters);
@@ -193,6 +202,7 @@ router.get(
  */
 router.get(
   '/claims-detail/loss-ratio-development',
+  withRouteCache('claims-detail-loss-ratio-development'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const cohortYearsStr = req.query.cohortYears;
@@ -216,6 +226,7 @@ const VALID_HEATMAP_DIMENSIONS = new Set<string>([
 
 router.get(
   '/claims-detail/heatmap',
+  withRouteCache('claims-detail-heatmap'),
   asyncHandler(async (req, res) => {
     const heatmapFilters: ClaimsHeatmapFilters = {};
     const q = req.query;

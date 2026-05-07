@@ -17,7 +17,7 @@ module.exports = {
       cwd: '/var/www/chexian/server',
       instances: 1, // 单实例，DuckDB 不支持多进程共享
       exec_mode: 'fork',
-      node_args: '--max-old-space-size=2048', // 2GB 内存限制
+      node_args: '--max-old-space-size=3072', // 3GB Node 堆（route-cache 400MB + 业务数据 + 兜底）
 
       // 环境变量（默认 = 生产环境，pm2 restart 不带 --env 时使用此块）
       env: {
@@ -37,7 +37,7 @@ module.exports = {
       log_type: 'json',
 
       // 自动重启配置
-      max_memory_restart: '2048M', // 启动加载 Parquet+索引峰值约 1.5G，稳态约 800M
+      max_memory_restart: '3500M', // DuckDB ~1.5G + Node 稳态 800M + route-cache 400MB → 4G VPS 留 500MB 安全边际
       restart_delay: 5000, // 重启间隔 5 秒（给 OS 回收内存）
       max_restarts: 5, // 最多重启 5 次（减少 OOM 循环）
       min_uptime: '30s', // 最小运行时间（启动加载需 30-40s）

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames } from './shared.js';
+import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, withRouteCache } from './shared.js';
 import { generateKpiQuery } from '../../sql/kpi.js';
 import { generateKpiDetailQuery } from '../../sql/kpi-detail.js';
 
@@ -12,6 +12,7 @@ const router = Router();
  */
 router.get(
   '/kpi',
+  withRouteCache('kpi', QUERY_CACHE.hotspotShort),
   asyncHandler(async (req, res) => {
     const { filterData, whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
 
@@ -39,6 +40,7 @@ router.get(
  */
 router.get(
   '/kpi-detail',
+  withRouteCache('kpi-detail', QUERY_CACHE.hotspotShort),
   asyncHandler(async (req, res) => {
     const { whereClause } = parseFiltersAndBuildWhere(req);
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere } from './shared.js';
+import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, withRouteCache } from './shared.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../../sql/salesman-ranking.js';
 
 const router = Router();
@@ -12,6 +12,7 @@ const salesmanRankingExtraSchema = z.object({
 
 router.get(
   '/salesman-ranking',
+  withRouteCache('salesman-ranking'),
   asyncHandler(async (req, res) => {
     const rankingResult = salesmanRankingExtraSchema.safeParse(req.query);
     if (!rankingResult.success) {

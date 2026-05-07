@@ -155,15 +155,6 @@ export function getPatrolNarrativePaths(domain: string): string[] {
   ];
 }
 
-// ── 快照 JSON 路径（本地优先，VPS 回退）──
-
-export function getSnapshotDirs(): string[] {
-  return [
-    path.resolve(SERVER_ROOT, '../数据管理/warehouse/snapshots'),
-    path.resolve(getDataDir(), 'snapshots'),
-  ];
-}
-
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,

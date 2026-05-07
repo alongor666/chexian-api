@@ -22,6 +22,7 @@ import {
   HTTP_MAX_AGE,
   sendWithEtag,
   createDomainMiddleware,
+  withRouteCache,
 } from './shared.js';
 import { buildInCondition } from '../../utils/sql-sanitizer.js';
 import {
@@ -69,6 +70,7 @@ function parseBooleanCondition(value: unknown, column: string): string | null {
  */
 router.get(
   '/renewal-tracker',
+  withRouteCache('renewal-tracker'),
   asyncHandler(async (req, res) => {
     const { start, end, cutoff } = req.query;
 

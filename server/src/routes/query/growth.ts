@@ -4,7 +4,7 @@ import {
   asyncHandler, AppError, duckdbService,
   commonFilterSchema, buildWhereFromFilterParams,
   isValidDateFormat,
-  QUERY_CACHE,
+  QUERY_CACHE, withRouteCache,
 } from './shared.js';
 import {
   generateGrowthQuery,
@@ -34,6 +34,7 @@ const growthExtraSchema = z.object({
  */
 router.get(
   '/growth',
+  withRouteCache('growth'),
   asyncHandler(async (req, res) => {
     const growthResult = growthExtraSchema.safeParse(req.query);
     if (!growthResult.success) {

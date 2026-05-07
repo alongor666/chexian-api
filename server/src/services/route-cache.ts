@@ -1,27 +1,43 @@
 import crypto from 'crypto';
+import { LRUCache } from 'lru-cache';
 
 interface RouteCacheEntry<T> {
     data: T;
     etag: string;
-    expiry: number;
     sizeBytes: number;
 }
 
-/** 缓存配置：字节上限 50MB，单条上限 500KB，条目上限 200 */
-const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
-const MAX_ENTRY_BYTES = 500 * 1024;
-const MAX_ENTRIES = 200;
+const DEFAULT_MAX_TOTAL_BYTES = 400 * 1024 * 1024; // 400MB
+const DEFAULT_MAX_ENTRIES = 5000;
+const DEFAULT_MAX_ENTRY_BYTES = 2 * 1024 * 1024;   // 2MB
 
-const routeResponseCache = new Map<string, RouteCacheEntry<unknown>>();
-let totalBytes = 0;
+const MAX_TOTAL_BYTES = Number(process.env.ROUTE_CACHE_MAX_BYTES) || DEFAULT_MAX_TOTAL_BYTES;
+const MAX_ENTRIES = Number(process.env.ROUTE_CACHE_MAX_ENTRIES) || DEFAULT_MAX_ENTRIES;
+const MAX_ENTRY_BYTES = Number(process.env.ROUTE_CACHE_MAX_ENTRY_BYTES) || DEFAULT_MAX_ENTRY_BYTES;
 
-/** 缓存指标（供 health detail 端点使用） */
 let _hits = 0;
 let _misses = 0;
 let _evictions = 0;
 
+const cache = new LRUCache<string, RouteCacheEntry<unknown>>({
+    max: MAX_ENTRIES,
+    maxSize: MAX_TOTAL_BYTES,
+    sizeCalculation: (entry) => entry.sizeBytes,
+    dispose: (_value, _key, reason) => {
+        if (reason === 'evict' || reason === 'set') _evictions++;
+    },
+});
+
 export function getRouteCacheStats() {
-    return { size: routeResponseCache.size, totalBytes, hits: _hits, misses: _misses, evictions: _evictions };
+    return {
+        size: cache.size,
+        totalBytes: cache.calculatedSize,
+        hits: _hits,
+        misses: _misses,
+        evictions: _evictions,
+        maxBytes: MAX_TOTAL_BYTES,
+        maxEntries: MAX_ENTRIES,
+    };
 }
 
 export function computeEtag(data: unknown): string {
@@ -30,76 +46,25 @@ export function computeEtag(data: unknown): string {
 }
 
 function estimateSize(data: unknown): number {
-    // 快速估算：JSON 序列化后的字节数（UTF-8）
     const json = typeof data === 'string' ? data : JSON.stringify(data);
     return Buffer.byteLength(json, 'utf8');
 }
 
-/** 驱逐 LRU 条目直到满足字节/条目限制 */
-function evictUntilFits(neededBytes: number): void {
-    while (
-        routeResponseCache.size > 0 &&
-        (totalBytes + neededBytes > MAX_TOTAL_BYTES || routeResponseCache.size >= MAX_ENTRIES)
-    ) {
-        const lruKey = routeResponseCache.keys().next().value;
-        if (!lruKey) break;
-        const evicted = routeResponseCache.get(lruKey);
-        if (evicted) totalBytes -= evicted.sizeBytes;
-        routeResponseCache.delete(lruKey);
-        _evictions++;
-    }
-}
-
-/** 清理已过期条目（写入时顺带执行，避免累积） */
-function purgeExpired(): void {
-    const now = Date.now();
-    for (const [key, entry] of routeResponseCache) {
-        if (now > entry.expiry) {
-            totalBytes -= entry.sizeBytes;
-            routeResponseCache.delete(key);
-        }
-    }
-}
-
 export function getRouteCache<T>(key: string): T | null {
-    const entry = routeResponseCache.get(key);
+    const entry = cache.get(key);
     if (!entry) { _misses++; return null; }
-    if (Date.now() > entry.expiry) {
-        totalBytes -= entry.sizeBytes;
-        routeResponseCache.delete(key);
-        _misses++;
-        return null;
-    }
-    // LRU: 访问时 delete→set 移到 Map 末尾
-    routeResponseCache.delete(key);
-    routeResponseCache.set(key, entry);
     _hits++;
     return entry.data as T;
 }
 
 export function setRouteCache<T>(key: string, data: T, ttlMs: number): void {
     const sizeBytes = estimateSize(data);
-    // 单条超限 → 不缓存
     if (sizeBytes > MAX_ENTRY_BYTES) return;
-
-    // 已存在则先移除旧条目（释放字节配额）
-    const existing = routeResponseCache.get(key);
-    if (existing) {
-        totalBytes -= existing.sizeBytes;
-        routeResponseCache.delete(key);
-    }
-
-    // 写入前清理过期条目 + LRU 驱逐
-    purgeExpired();
-    evictUntilFits(sizeBytes);
-
-    routeResponseCache.set(key, {
-        data,
-        etag: computeEtag(data),
-        expiry: Date.now() + ttlMs,
-        sizeBytes,
-    });
-    totalBytes += sizeBytes;
+    cache.set(
+        key,
+        { data, etag: computeEtag(data), sizeBytes },
+        { ttl: ttlMs },
+    );
 }
 
 /**
@@ -118,8 +83,7 @@ export function sendWithEtag(req: any, res: any, body: unknown, maxAgeSec: numbe
 }
 
 export function clearRouteCache(): void {
-    routeResponseCache.clear();
-    totalBytes = 0;
+    cache.clear();
     _hits = 0;
     _misses = 0;
     _evictions = 0;

@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, createDomainMiddleware } from './shared.js';
+import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache } from './shared.js';
 import {
   generateRepairOverviewQuery,
   generateRepairDetailQuery,
@@ -59,6 +59,7 @@ function parseFiltersV2(query: Record<string, unknown>): RepairFiltersV2 {
 /** GET /api/query/repair/overview — 机构级汇总 */
 router.get(
   '/repair/overview',
+  withRouteCache('repair-overview'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const data = await duckdbService.query(generateRepairOverviewQuery(filters));
@@ -69,6 +70,7 @@ router.get(
 /** GET /api/query/repair/detail — 修理厂明细 */
 router.get(
   '/repair/detail',
+  withRouteCache('repair-detail'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const page = Math.max(1, Number(req.query.page) || 1);
@@ -83,6 +85,7 @@ router.get(
 /** GET /api/query/repair/status — 合作状态分布 */
 router.get(
   '/repair/status',
+  withRouteCache('repair-status'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const data = await duckdbService.query(generateRepairStatusQuery(filters));
@@ -93,6 +96,7 @@ router.get(
 /** GET /api/query/repair/metadata — 筛选选项 */
 router.get(
   '/repair/metadata',
+  withRouteCache('repair-metadata', 14_400_000),
   asyncHandler(async (_req, res) => {
     const data = await duckdbService.query(generateRepairMetadataQuery());
     res.json({ success: true, data: data[0] ?? {} });
@@ -111,6 +115,7 @@ v2Router.use(createDomainMiddleware('ClaimsDetail'));
 /** GET /api/query/repair/city — 城市汇总 */
 v2Router.get(
   '/repair/city',
+  withRouteCache('repair-city'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const data = await duckdbService.query(generateRepairCityQuery(filters));
@@ -121,6 +126,7 @@ v2Router.get(
 /** GET /api/query/repair/channel — 渠道 × 4S 交叉 */
 v2Router.get(
   '/repair/channel',
+  withRouteCache('repair-channel'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const data = await duckdbService.query(generateRepairChannelQuery(filters));
@@ -131,6 +137,7 @@ v2Router.get(
 /** GET /api/query/repair/coop-tier — 三态合作分布（含影子网点） */
 v2Router.get(
   '/repair/coop-tier',
+  withRouteCache('repair-coop-tier'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const data = await duckdbService.query(generateRepairCoopTierQuery(filters));
@@ -141,6 +148,7 @@ v2Router.get(
 /** GET /api/query/repair/scatter — 散点图（区县×机构，三态颜色） */
 v2Router.get(
   '/repair/scatter',
+  withRouteCache('repair-scatter'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const data = await duckdbService.query(generateRepairScatterQuery(filters));
@@ -151,6 +159,7 @@ v2Router.get(
 /** GET /api/query/repair/local-resource — 本地资源占比（L4 JOIN） */
 v2Router.get(
   '/repair/local-resource',
+  withRouteCache('repair-local-resource'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const data = await duckdbService.query(generateRepairLocalResourceQuery(filters));
@@ -161,6 +170,7 @@ v2Router.get(
 /** GET /api/query/repair/to-premium — 修保比（维修产值/净保费） */
 v2Router.get(
   '/repair/to-premium',
+  withRouteCache('repair-to-premium'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const data = await duckdbService.query(generateRepairToPremiumQuery(filters));
@@ -171,6 +181,7 @@ v2Router.get(
 /** GET /api/query/repair/diversion-list — 导流目标保单清单 */
 v2Router.get(
   '/repair/diversion-list',
+  withRouteCache('repair-diversion-list'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const page = Math.max(1, Number(req.query.page) || 1);
@@ -185,6 +196,7 @@ v2Router.get(
 /** GET /api/query/repair/orphan-shops — 影子网点（未合作+地理归属） */
 v2Router.get(
   '/repair/orphan-shops',
+  withRouteCache('repair-orphan-shops'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));

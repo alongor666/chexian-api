@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService } from './shared.js';
+import { asyncHandler, AppError, duckdbService, withRouteCache } from './shared.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../../sql/premiumPlan.js';
 
 const router = Router();
@@ -22,6 +22,7 @@ const premiumPlanSchema = z.object({
 
 router.get(
   '/premium-plan',
+  withRouteCache('premium-plan'),
   asyncHandler(async (req, res) => {
     const parseResult = premiumPlanSchema.safeParse(req.query);
     if (!parseResult.success) {
@@ -98,6 +99,7 @@ const planAchievementSchema = z.object({
 
 router.get(
   '/plan-achievement',
+  withRouteCache('plan-achievement'),
   asyncHandler(async (req, res) => {
     const parseResult = planAchievementSchema.safeParse(req.query);
     if (!parseResult.success) {

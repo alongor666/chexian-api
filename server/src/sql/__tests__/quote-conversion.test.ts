@@ -14,18 +14,7 @@ vi.mock('../../services/duckdb.js', () => ({
 const duckdbQuery = vi.mocked(duckdbService.query);
 
 function getKpiRouteHandler() {
-  const layer = quoteConversionRouter.stack.find(
-    (item: { route?: { path?: string; stack?: Array<{ handle: unknown }> } }) =>
-      item.route?.path === '/quote-conversion/kpi',
-  );
-  if (!layer?.route?.stack?.[0]) {
-    throw new Error('无法定位 quote-conversion/kpi 路由处理器');
-  }
-  return layer.route.stack[0].handle as (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ) => unknown;
+  return getRouteHandler('/quote-conversion/kpi');
 }
 
 function getRouteHandler(path: string) {
@@ -33,10 +22,12 @@ function getRouteHandler(path: string) {
     (item: { route?: { path?: string; stack?: Array<{ handle: unknown }> } }) =>
       item.route?.path === path,
   );
-  if (!layer?.route?.stack?.[0]) {
+  const stack = layer?.route?.stack;
+  if (!stack || stack.length === 0) {
     throw new Error(`无法定位 ${path} 路由处理器`);
   }
-  return layer.route.stack[0].handle as (
+  // 链路末位是真正的 asyncHandler；前置可能有 withRouteCache 中间件
+  return stack[stack.length - 1].handle as (
     req: Request,
     res: Response,
     next: NextFunction,

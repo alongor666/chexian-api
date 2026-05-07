@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere } from './shared.js';
+import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, withRouteCache } from './shared.js';
 import { generatePolicyGeoProvinceQuery, generatePolicyGeoCityQuery } from '../../sql/policy-geo.js';
 import type { PolicyGeoFilters } from '../../sql/policy-geo.js';
 
@@ -21,6 +21,7 @@ const router = Router();
  */
 router.get(
   '/policy-geo/province',
+  withRouteCache('policy-geo-province'),
   asyncHandler(async (req, res) => {
     const { whereClause } = parseFiltersAndBuildWhere(req);
     const filters: PolicyGeoFilters = { whereClause };
@@ -41,6 +42,7 @@ router.get(
  */
 router.get(
   '/policy-geo/city',
+  withRouteCache('policy-geo-city'),
   asyncHandler(async (req, res) => {
     const { whereClause } = parseFiltersAndBuildWhere(req);
     const rawProvince = typeof req.query.province === 'string' ? req.query.province : undefined;

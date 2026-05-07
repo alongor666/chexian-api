@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware } from './shared.js';
+import { asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache } from './shared.js';
 import {
   generateQuoteKpiQuery,
   generateQuoteFunnelQuery,
@@ -92,6 +92,7 @@ function parseEnumParam<T extends [string, ...string[]]>(
  */
 router.get(
   '/quote-conversion/kpi',
+  withRouteCache('quote-conversion-kpi'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateQuoteKpiQuery(filters);
@@ -106,6 +107,7 @@ router.get(
  */
 router.get(
   '/quote-conversion/funnel',
+  withRouteCache('quote-conversion-funnel'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateQuoteFunnelQuery(filters);
@@ -120,6 +122,7 @@ router.get(
  */
 router.get(
   '/quote-conversion/drilldown',
+  withRouteCache('quote-conversion-drilldown'),
   asyncHandler(async (req, res) => {
     const level = parseEnumParam(req.query.level, ['org', 'team', 'salesman'], 'level', 'org') as 'org' | 'team' | 'salesman';
     const filters = parseFilters(req.query);
@@ -135,6 +138,7 @@ router.get(
  */
 router.get(
   '/quote-conversion/heatmap',
+  withRouteCache('quote-conversion-heatmap'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const colDimension = (req.query.colDimension as string) ?? '续保情况';
@@ -150,6 +154,7 @@ router.get(
  */
 router.get(
   '/quote-conversion/price',
+  withRouteCache('quote-conversion-price'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const sql = generateQuotePriceQuery(filters);
@@ -164,6 +169,7 @@ router.get(
  */
 router.get(
   '/quote-conversion/ranking',
+  withRouteCache('quote-conversion-ranking'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const dimension = (req.query.dimension as string) ?? '客户类别';
@@ -179,6 +185,7 @@ router.get(
  */
 router.get(
   '/quote-conversion/trend',
+  withRouteCache('quote-conversion-trend'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const granularity = parseEnumParam(req.query.granularity, ['day', 'week', 'month'], 'granularity', 'week') as 'day' | 'week' | 'month';

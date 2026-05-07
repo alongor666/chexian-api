@@ -58,6 +58,37 @@ export function buildRouteCacheKey(req: Request, routeName: string): string {
   return `${routeName}|${req.permissionFilter || '1=1'}|${normalizedQuery}`;
 }
 
+/**
+ * 路由级 LRU 缓存中间件。
+ * - 命中：直接 sendWithEtag(cached) 返回（<1ms）
+ * - 未命中：拦截 res.json() 自动缓存成功响应
+ *
+ * 用法：router.get('/path', withRouteCache('routeName'), asyncHandler(...))
+ */
+export function withRouteCache(
+  routeName: string,
+  ttlMs: number = QUERY_CACHE.hotspotMedium,
+  maxAgeSec: number = HTTP_MAX_AGE.query,
+) {
+  return (req: Request, res: Response, next: import('express').NextFunction): void => {
+    const key = buildRouteCacheKey(req, routeName);
+    const cached = getRouteCache<unknown>(key);
+    if (cached) {
+      markRequestCacheHit();
+      sendWithEtag(req, res, cached, maxAgeSec);
+      return;
+    }
+    const origJson = res.json.bind(res);
+    res.json = function (body: any) {
+      if (res.statusCode >= 200 && res.statusCode < 300 && body && body.success !== false) {
+        setRouteCache(key, body, ttlMs);
+      }
+      return origJson(body);
+    } as any;
+    next();
+  };
+}
+
 export function isBundleRoutesEnabled(): boolean {
   return dbEnv.ENABLE_QUERY_BUNDLES !== 'false';
 }

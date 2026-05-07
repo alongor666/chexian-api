@@ -29,6 +29,4 @@
 - `bun run test`
 - `bun run test:integration`
 - `bun run governance`
-- `bun run snapshot:build`
-- `bun run snapshot:verify`
 
