@@ -91,10 +91,13 @@ router.get(
 /**
  * GET /api/query/test
  * 测试查询端点（验证数据库连接和权限过滤）
+ *
+ * 不接 withRouteCache：响应体含 req.user，但 buildRouteCacheKey 仅按
+ * routeName + permissionFilter + query 生成键。同 permissionFilter 的
+ * 不同用户（如多个 branch_admin / 1=1）会跨用户命中前者缓存导致身份泄露。
  */
 router.get(
   '/test',
-  withRouteCache('test'),
   asyncHandler(async (req, res) => {
     const sql = `
       SELECT
