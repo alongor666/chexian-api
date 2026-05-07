@@ -8,6 +8,7 @@
 import 'dotenv/config';
 import express, { Application } from 'express';
 import compression from 'compression';
+import { brotliMiddleware } from './middleware/brotli.js';
 import cors from 'cors';
 import helmet from 'helmet';
 import { corsConfig } from './config/cors.js';
@@ -52,8 +53,11 @@ app.use(helmet({
 app.use(cors(corsConfig)); // 跨域配置
 
 /**
- * 1.5 HTTP 响应压缩（gzip，>1KB 自动压缩）
+ * 1.5 HTTP 响应压缩
+ * - 客户端支持 br → brotli q4（比 gzip 小 15-25%）
+ * - 不支持 br → fallback 到 compression() 的 gzip
  */
+app.use(brotliMiddleware());
 app.use(compression({ level: 6, threshold: 1024 }));
 
 /**
