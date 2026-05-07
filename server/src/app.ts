@@ -198,15 +198,6 @@ async function startServer() {
     const bootstrapper = new DataBootstrapper(duckdbService);
     registerBootstrapper(bootstrapper); // 注册到全局注册中心，供路由中间件使用
 
-    // ETL 后 dataVersion 变更时自动重新预热（消除日切 cold cliff）
-    // 启动时首次 setDataVersion 也会触发，与下方 await warmStartupCritical
-    // 通过 cacheWarmer 内部 isWarming 标志去重。
-    onDataVersionChange(async (next, previous) => {
-      if (previous === 'init0000') return; // 启动首次由 await 路径处理
-      console.log(`[Server] dataVersion ${previous}→${next}, re-warming cache...`);
-      await cacheWarmer.warmStartupCritical();
-    });
-
     try {
       const result = await bootstrapper.bootstrap();
       if (result) {
@@ -222,6 +213,15 @@ async function startServer() {
       console.warn('[Server] Data loading failed (non-fatal):', error);
       console.warn('[Server] Server will start without data. APIs will return empty results.');
     }
+
+    // 注册 ETL 后自动重新预热的监听者。
+    // 在 bootstrap await 之后注册，确保启动期 setDataVersion(init0000→real) 不被监听
+    // 拦截（已由上方 await 路径处理），消除竞态。bootstrap 失败时 await 路径不执行，
+    // 但后续 reload/ETL 触发的 setDataVersion 仍会被监听者捕获并预热（消除 cold cliff）。
+    onDataVersionChange(async (next, previous) => {
+      console.log(`[Server] dataVersion ${previous}→${next}, re-warming cache...`);
+      await cacheWarmer.warmStartupCritical();
+    });
 
     // 3. 标记就绪 + 启动 HTTP
     dataReady = true;
