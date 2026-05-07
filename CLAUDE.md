@@ -123,7 +123,7 @@
 
 **DONE 判定**：关联文档 + 关联代码 + 验收证据（至少一项）。核心层改动须更新 INDEX.md。提交前：`bun run governance`
 
-**技术栈**：React + TypeScript + Vite + DuckDB + ECharts · Bun 包管理器
+**技术栈**：React + TypeScript + Vite + DuckDB + ECharts · Bun 包管理器 · DuckDB CLI（`brew install duckdb`，与 Neo `@duckdb/node-api` minor 兼容，用于源数据直查与口径验证）
 
 ```bash
 bun install && bun run dev:full    # 安装+启动
@@ -148,7 +148,7 @@ bun run governance                 # 治理校验
 |------|----------|
 | 修改 SQL | `curl -s localhost:3000/api/query/kpi \| jq '.data \| length'` |
 | 修改交叉销售 SQL | `python3 scripts/verify-cross-sell.py --date <YYYY-MM-DD>` |
-| 源数据口径验证 | DuckDB 直查 Parquet → 与 API 返回对比 |
+| 源数据口径验证 | `duckdb -c "SELECT ... FROM '数据管理/warehouse/<域>/.../*.parquet'"` 直查 → 与 API 返回对比 |
 | 修改路由 | `curl -s -o /dev/null -w '%{http_code}' localhost:3000/api/[路由]` |
 | 修改前端 | `bun run build` 零 TS 报错 |
 | 声称完成 | 至少一个 API 200 + 非空 JSON |
