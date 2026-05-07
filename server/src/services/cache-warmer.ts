@@ -4,6 +4,7 @@ import { setRouteCache } from './route-cache.js';
 import { fetchDashboardBundleData } from '../routes/query.js';
 import { QUERY_CACHE } from '../routes/query/shared.js';
 import { getBootstrapper } from './bootstrapper-registry.js';
+import { getDataVersion } from './data-version.js';
 
 type QueryValue = string | number | boolean | null | undefined;
 
@@ -18,7 +19,8 @@ function buildSyntheticRouteCacheKey(
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, value]) => `${key}=${value}`)
         .join('&');
-    return `${routeName}|${permissionFilter || '1=1'}|${normalizedQuery}`;
+    // 与 buildRouteCacheKey（shared.ts）保持一致：版本后缀
+    return `${routeName}|${permissionFilter || '1=1'}|${normalizedQuery}|v=${getDataVersion()}`;
 }
 
 /**
@@ -44,8 +46,10 @@ export class CacheWarmer {
 
         this.isWarming = true;
         const startTime = Date.now();
+        let startDate: string | undefined;
+        let maxDate: string | null | undefined;
         try {
-            const { startDate, maxDate } = await this.resolveDefaultDateRange(dataYear);
+            ({ startDate, maxDate } = await this.resolveDefaultDateRange(dataYear));
             if (!maxDate) {
                 logger.warn('[CacheWarmer] No data found, skipped startup critical warming.');
                 return;
@@ -59,6 +63,68 @@ export class CacheWarmer {
             logger.error('[CacheWarmer] Startup critical warming failed', e);
         } finally {
             this.isWarming = false;
+        }
+
+        // 异步扩展：Top 5 机构 dashboard 预热（不阻塞首次请求 readiness）
+        if (startDate && maxDate) {
+            this.warmTopOrgsBackground(startDate, maxDate, 5).catch((err) =>
+                logger.warn('[CacheWarmer] Top-orgs background warming failed:', err)
+            );
+        }
+    }
+
+    /**
+     * 后台异步预热 Top N 机构的默认 dashboard 视图。
+     * 不持有 isWarming 锁（不阻塞 startup readiness 与下次 ETL trigger）。
+     */
+    private async warmTopOrgsBackground(startDate: string, maxDate: string, topN: number): Promise<void> {
+        const startTime = Date.now();
+        try {
+            const topOrgsRes = await duckdbService.query<{ org_level_3: string }>(`
+                SELECT org_level_3, SUM(premium) AS total
+                FROM PolicyFact
+                WHERE policy_date BETWEEN '${startDate}' AND '${maxDate}'
+                GROUP BY org_level_3
+                ORDER BY total DESC
+                LIMIT ${topN}
+            `);
+            const topOrgs = topOrgsRes.map((r) => r.org_level_3).filter(Boolean);
+            if (topOrgs.length === 0) return;
+
+            for (const org of topOrgs) {
+                try {
+                    const escapedOrg = String(org).replace(/'/g, "''");
+                    const whereWithDate = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}' AND org_level_3 IN ('${escapedOrg}')`;
+                    const whereWithoutDate = `org_level_3 IN ('${escapedOrg}')`;
+                    const payload = await fetchDashboardBundleData({
+                        whereWithDate,
+                        whereWithoutDate,
+                        orgNames: [org],
+                        salesmanNames: [],
+                        rankingLimit: 10,
+                        timeView: 'weekly',
+                        perspective: 'premium',
+                        groupDim: undefined,
+                        dateField: 'policy_date',
+                    });
+
+                    const baseQuery: Record<string, QueryValue> = {
+                        dateField: 'policy_date',
+                        startDate,
+                        endDate: maxDate,
+                        granularity: 'week',
+                        perspective: 'premium',
+                        orgNames: org,
+                    };
+                    const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', '1=1', baseQuery);
+                    setRouteCache(cacheKey, payload, QUERY_CACHE.hotspotLong);
+                } catch (e) {
+                    logger.warn(`[CacheWarmer] Top-orgs warm failed for org=${org}:`, e);
+                }
+            }
+            logger.info(`[CacheWarmer] Top ${topOrgs.length} orgs warmed in ${Date.now() - startTime}ms (background).`);
+        } catch (e) {
+            logger.warn('[CacheWarmer] Top-orgs background warming aborted:', e);
         }
     }
 
