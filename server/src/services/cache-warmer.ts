@@ -91,14 +91,20 @@ export class CacheWarmer {
             const topOrgs = topOrgsRes.map((r) => r.org_level_3).filter(Boolean);
             if (topOrgs.length === 0) return;
 
+            // 上年同期日期窗（与 bundles.ts:493-507 对齐：日期平移 -1 年保留其他筛选）
+            const prevStartDate = `${Number(startDate.slice(0, 4)) - 1}${startDate.slice(4)}`;
+            const prevMaxDate = `${Number(maxDate.slice(0, 4)) - 1}${maxDate.slice(4)}`;
+
             for (const org of topOrgs) {
                 try {
                     const escapedOrg = String(org).replace(/'/g, "''");
                     const whereWithDate = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}' AND org_level_3 IN ('${escapedOrg}')`;
                     const whereWithoutDate = `org_level_3 IN ('${escapedOrg}')`;
+                    const prevYearWhereWithDate = `policy_date >= '${prevStartDate}' AND policy_date <= '${prevMaxDate}' AND org_level_3 IN ('${escapedOrg}')`;
                     const payload = await fetchDashboardBundleData({
                         whereWithDate,
                         whereWithoutDate,
+                        prevYearWhereWithDate,
                         orgNames: [org],
                         salesmanNames: [],
                         rankingLimit: 10,
