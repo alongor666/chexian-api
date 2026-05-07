@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, createDomainMiddleware } from './shared.js';
+import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, createDomainMiddleware, withRouteCache } from './shared.js';
 import {
   generateClaimRatioQuery,
   generateExpenseRatioQuery,
@@ -39,6 +39,7 @@ const costExtraSchema = z.object({
  */
 router.get(
   '/cost',
+  withRouteCache('cost'),
   asyncHandler(async (req, res) => {
     const costResult = costExtraSchema.safeParse(req.query);
     if (!costResult.success) {

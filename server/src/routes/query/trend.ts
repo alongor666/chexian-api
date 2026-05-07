@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, resolveGroupDim } from './shared.js';
+import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, resolveGroupDim, withRouteCache } from './shared.js';
 import { generatePremiumTrendQuery, generateQualityBusinessTrendQuery, TimeView } from '../../sql/trend.js';
 import type { ViewPerspective } from '../../types/view-perspective.js';
 
@@ -27,6 +27,7 @@ const trendExtraSchema = z.object({
  */
 router.get(
   '/trend',
+  withRouteCache('trend'),
   asyncHandler(async (req, res) => {
     // 解析趋势特有参数
     const trendResult = trendExtraSchema.safeParse(req.query);
@@ -60,6 +61,7 @@ router.get(
  */
 router.get(
   '/quality-business-trend',
+  withRouteCache('quality-business-trend'),
   asyncHandler(async (req, res) => {
     const trendResult = trendExtraSchema.safeParse(req.query);
     const timeView = (granularityMap[
@@ -92,6 +94,7 @@ router.get(
  */
 router.get(
   '/test',
+  withRouteCache('test'),
   asyncHandler(async (req, res) => {
     const sql = `
       SELECT

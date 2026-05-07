@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, createDomainMiddleware } from './shared.js';
+import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache } from './shared.js';
 import {
   generateInflowQuery,
   generateOutflowQuery,
@@ -35,6 +35,7 @@ function parseFilters(query: Record<string, unknown>): CustomerFlowFilters {
 /** GET /api/query/customer-flow/summary — 总览统计 */
 router.get(
   '/customer-flow/summary',
+  withRouteCache('customer-flow-summary'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const data = await duckdbService.query(generateFlowSummaryQuery(filters));
@@ -45,6 +46,7 @@ router.get(
 /** GET /api/query/customer-flow/inflow — 转入分析 */
 router.get(
   '/customer-flow/inflow',
+  withRouteCache('customer-flow-inflow'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const data = await duckdbService.query(generateInflowQuery(filters));
@@ -55,6 +57,7 @@ router.get(
 /** GET /api/query/customer-flow/outflow — 流失分析 */
 router.get(
   '/customer-flow/outflow',
+  withRouteCache('customer-flow-outflow'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const data = await duckdbService.query(generateOutflowQuery(filters));
@@ -65,6 +68,7 @@ router.get(
 /** GET /api/query/customer-flow/trend — 月度趋势 */
 router.get(
   '/customer-flow/trend',
+  withRouteCache('customer-flow-trend'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const data = await duckdbService.query(generateFlowTrendQuery(filters));
@@ -75,6 +79,7 @@ router.get(
 /** GET /api/query/customer-flow/metadata — 元数据 */
 router.get(
   '/customer-flow/metadata',
+  withRouteCache('customer-flow-metadata', 14_400_000),
   asyncHandler(async (_req, res) => {
     const data = await duckdbService.query(generateFlowMetadataQuery());
     res.json({ success: true, data: data[0] ?? {} });

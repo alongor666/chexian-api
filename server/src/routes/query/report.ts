@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, QUERY_CACHE } from './shared.js';
+import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, QUERY_CACHE, withRouteCache } from './shared.js';
 import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery, generateHolidayFreeDrilldownQuery, type HolidayDrillDimension, type HolidayDrillStep } from '../../sql/marketing-report.js';
 import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../../sql/premium-report.js';
 
@@ -13,6 +13,7 @@ const marketingReportSchema = z.object({
 
 router.get(
   '/marketing-report',
+  withRouteCache('marketing-report'),
   asyncHandler(async (req, res) => {
     const extraResult = marketingReportSchema.safeParse(req.query);
     if (!extraResult.success) {
@@ -57,6 +58,7 @@ const holidayDrilldownSchema = z.object({
 
 router.get(
   '/holiday-drilldown',
+  withRouteCache('holiday-drilldown'),
   asyncHandler(async (req, res) => {
     const parseResult = holidayDrilldownSchema.safeParse(req.query);
     if (!parseResult.success) {
@@ -106,6 +108,7 @@ const premiumReportExtraSchema = z.object({
 
 router.get(
   '/premium-report',
+  withRouteCache('premium-report'),
   asyncHandler(async (req, res) => {
     const extraResult = premiumReportExtraSchema.safeParse(req.query);
     if (!extraResult.success) {

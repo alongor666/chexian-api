@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere,
-  logger, QUERY_CACHE, createDomainMiddleware,
+  logger, QUERY_CACHE, createDomainMiddleware, withRouteCache,
 } from './shared.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../../sql/cross-sell.js';
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../../sql/cross-sell-summary.js';
@@ -74,7 +74,7 @@ const crossSellExtraSchema = z.object({
   timePeriod: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).optional(),
 });
 
-router.get('/cross-sell', asyncHandler(async (req, res) => {
+router.get('/cross-sell', withRouteCache('cross-sell'), asyncHandler(async (req, res) => {
   const crossSellResult = crossSellExtraSchema.safeParse(req.query);
   if (!crossSellResult.success) {
     throw new AppError(400, crossSellResult.error.issues[0].message);
@@ -134,7 +134,7 @@ const crossSellTrendSchema = z.object({
   seatCoverageLevel: z.enum(['all', 'eq_1w', 'gte_2w', 'lt_1w']).optional(),
 });
 
-router.get('/cross-sell-trend', asyncHandler(async (req, res) => {
+router.get('/cross-sell-trend', withRouteCache('cross-sell-trend'), asyncHandler(async (req, res) => {
   const extraResult = crossSellTrendSchema.safeParse(req.query);
   if (!extraResult.success) {
     throw new AppError(400, extraResult.error.issues[0].message);
@@ -176,7 +176,7 @@ const crossSellSummarySchema = z.object({
   seatCoverageLevel: z.enum(['all', 'eq_1w', 'gte_2w', 'lt_1w']).optional(),
 });
 
-router.get('/cross-sell-summary', asyncHandler(async (req, res) => {
+router.get('/cross-sell-summary', withRouteCache('cross-sell-summary'), asyncHandler(async (req, res) => {
   const extraResult = crossSellSummarySchema.safeParse(req.query);
   if (!extraResult.success) {
     throw new AppError(400, extraResult.error.issues[0].message);
@@ -232,7 +232,7 @@ const crossSellOrgTrendSchema = z.object({
   granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).optional(),
 });
 
-router.get('/cross-sell-org-trend', asyncHandler(async (req, res) => {
+router.get('/cross-sell-org-trend', withRouteCache('cross-sell-org-trend'), asyncHandler(async (req, res) => {
   const extraResult = crossSellOrgTrendSchema.safeParse(req.query);
   if (!extraResult.success) {
     throw new AppError(400, extraResult.error.issues[0].message);
@@ -280,7 +280,7 @@ const crossSellHeatmapSchema = z.object({
   drillFilter: z.string().optional().default('[]'),
 });
 
-router.get('/cross-sell-heatmap', asyncHandler(async (req, res) => {
+router.get('/cross-sell-heatmap', withRouteCache('cross-sell-heatmap'), asyncHandler(async (req, res) => {
   const extraResult = crossSellHeatmapSchema.safeParse(req.query);
   if (!extraResult.success) {
     throw new AppError(400, extraResult.error.issues[0].message);
@@ -348,7 +348,7 @@ const crossSellTopSalesmanSchema = z.object({
   seatCoverageLevel: z.enum(['all', 'eq_1w', 'gte_2w', 'lt_1w']).optional(),
 });
 
-router.get('/cross-sell-top-salesman', asyncHandler(async (req, res) => {
+router.get('/cross-sell-top-salesman', withRouteCache('cross-sell-top-salesman'), asyncHandler(async (req, res) => {
   const extraResult = crossSellTopSalesmanSchema.safeParse(req.query);
   if (!extraResult.success) {
     throw new AppError(400, extraResult.error.issues[0].message);

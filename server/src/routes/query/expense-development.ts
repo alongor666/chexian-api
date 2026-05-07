@@ -9,7 +9,7 @@
 
 import { Router } from 'express';
 import {
-  asyncHandler, parseFiltersAndBuildWhere, duckdbService,
+  asyncHandler, parseFiltersAndBuildWhere, duckdbService, withRouteCache,
 } from './shared.js';
 import {
   generateExpenseRatioDevelopmentQuery,
@@ -31,6 +31,7 @@ const router = Router();
  */
 router.get(
   '/expense-development',
+  withRouteCache('expense-development'),
   asyncHandler(async (req, res) => {
     // 解析全局筛选参数，不含日期（发展口径用 cohortYears 代替）
     const parseResult = commonFilterSchema.safeParse(req.query);

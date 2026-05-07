@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere } from './shared.js';
+import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, withRouteCache } from './shared.js';
 import { generateTonnageRoseQuery, generateOrgByTonnageQuery, generateTonnageByOrgQuery } from '../../sql/truck.js';
 
 const router = Router();
@@ -19,6 +19,7 @@ const truckExtraSchema = z.object({
  */
 router.get(
   '/truck',
+  withRouteCache('truck'),
   asyncHandler(async (req, res) => {
     const truckResult = truckExtraSchema.safeParse(req.query);
     if (!truckResult.success) {

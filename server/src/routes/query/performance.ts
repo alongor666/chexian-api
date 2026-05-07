@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere,
-  QUERY_CACHE,
+  QUERY_CACHE, withRouteCache,
 } from './shared.js';
 import {
   generatePerformanceSummaryQuery,
@@ -81,6 +81,7 @@ const performanceSummarySchema = z.object({
 
 router.get(
   '/performance-summary',
+  withRouteCache('performance-summary'),
   asyncHandler(async (req, res) => {
     const extraResult = performanceSummarySchema.safeParse(req.query);
     if (!extraResult.success) {
@@ -120,6 +121,7 @@ const performanceTrendSchema = z.object({
 
 router.get(
   '/performance-trend',
+  withRouteCache('performance-trend'),
   asyncHandler(async (req, res) => {
     const extraResult = performanceTrendSchema.safeParse(req.query);
     if (!extraResult.success) {
@@ -157,6 +159,7 @@ const performanceDrilldownSchema = z.object({
 
 router.get(
   '/performance-drilldown',
+  withRouteCache('performance-drilldown'),
   asyncHandler(async (req, res) => {
     const extraResult = performanceDrilldownSchema.safeParse(req.query);
     if (!extraResult.success) {
@@ -231,6 +234,7 @@ const performanceOrgHeatmapSchema = z.object({
 
 router.get(
   '/performance-org-heatmap',
+  withRouteCache('performance-org-heatmap'),
   asyncHandler(async (req, res) => {
     const parseResult = performanceOrgHeatmapSchema.safeParse(req.query);
     if (!parseResult.success) {
@@ -278,6 +282,7 @@ const performanceTopSalesmanSchema = z.object({
 
 router.get(
   '/performance-top-salesman',
+  withRouteCache('performance-top-salesman'),
   asyncHandler(async (req, res) => {
     const extraResult = performanceTopSalesmanSchema.safeParse(req.query);
     if (!extraResult.success) {
