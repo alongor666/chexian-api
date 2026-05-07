@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { brotliCompressSync, constants } from 'zlib';
 import { LRUCache } from 'lru-cache';
+import { clientAcceptsBrotli } from '../utils/accept-encoding.js';
 
 /**
  * 缓存条目存预序列化的 JSON Buffer + 预 brotli 压缩后的 Buffer。
@@ -124,8 +125,7 @@ export function sendCachedEntry(
     res.setHeader('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=3600`);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    const accept = String(req.headers['accept-encoding'] || '');
-    if (entry.brotliBuffer && /\bbr\b/.test(accept)) {
+    if (entry.brotliBuffer && clientAcceptsBrotli(req.headers['accept-encoding'])) {
         res.setHeader('Content-Encoding', 'br');
         res.setHeader('Content-Length', String(entry.brotliBuffer.length));
         const existing = res.getHeader('Vary');

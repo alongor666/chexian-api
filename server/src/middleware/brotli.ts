@@ -10,14 +10,14 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { brotliCompressSync, constants } from 'zlib';
+import { clientAcceptsBrotli } from '../utils/accept-encoding.js';
 
 const THRESHOLD = 1024; // 字节，与 compression() 一致
 const QUALITY = 4;
 
 export function brotliMiddleware() {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const accept = String(req.headers['accept-encoding'] || '');
-    if (!/\bbr\b/.test(accept)) {
+    if (!clientAcceptsBrotli(req.headers['accept-encoding'] as string | undefined)) {
       next();
       return;
     }

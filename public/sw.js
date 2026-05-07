@@ -106,10 +106,15 @@ async function handleQueryRequest(request) {
     if (networkResponse.ok) {
       const responseToCache = await addTimestamp(networkResponse.clone());
       cache.put(cacheKey, responseToCache);
+      return addSwHeaders(networkResponse, 'network');
+    }
+    // 上游 5xx/429 等暂时性错误：若有过期缓存则回退（避免短暂故障替换可用数据）
+    if (cachedResponse) {
+      return addSwHeaders(cachedResponse.clone(), 'cache-stale-fallback');
     }
     return addSwHeaders(networkResponse, 'network');
   } catch (err) {
-    // 网络失败：兜底返回过期缓存（如果有）
+    // 网络异常（fetch throw）：兜底返回过期缓存（如果有）
     if (cachedResponse) {
       return addSwHeaders(cachedResponse.clone(), 'cache-stale-fallback');
     }
