@@ -59,7 +59,6 @@ const LOCAL_RENEWAL_TRACKER_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/re
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_region');
 const LOCAL_PATROL_REPORTS_DIR = join(ROOT_DIR, '数据管理/patrol_reports');
-const LOCAL_SNAPSHOTS_DIR = join(ROOT_DIR, '数据管理/warehouse/snapshots');
 
 const colors = {
   green: '\x1b[32m',
@@ -454,7 +453,6 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${runConfig.remoteDir}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${runConfig.remoteDir}/dim/plate_region`,       critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${runConfig.remoteDir}/patrol_reports`,         critical: false },
-    { label: 'snapshots',           local: LOCAL_SNAPSHOTS_DIR,          remote: `${runConfig.remoteDir}/snapshots`,              critical: false },
   ];
 
   for (const task of syncTasks) {
@@ -510,7 +508,6 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,   remote: `${remote}/patrol_reports`,         critical: false },
-    { label: 'snapshots',            local: LOCAL_SNAPSHOTS_DIR,        remote: `${remote}/snapshots`,              critical: false },
   ];
 
   // 过滤不存在的目录

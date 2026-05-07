@@ -10,7 +10,6 @@ import { initDuckDBTables } from './duckdb-init-tables.js';
 import { convertBigIntToNumber, SLOW_QUERY_THRESHOLD_MS } from './duckdb-type-converter.js';
 import { loadMultipleParquet } from './duckdb-parquet-loader.js';
 import { clearRouteCache } from './route-cache.js';
-import { invalidateSnapshotPathCache } from '../middleware/snapshot-serve.js';
 
 /** 构造参数（省略字段从 databaseConfig / DUCKDB_INIT_OPTIONS 回退；测试传 `{ path: ':memory:' }`） */
 export interface DuckDBServiceConfig {
@@ -49,8 +48,8 @@ export class DuckDBService implements DuckDBQueryable {
 
   invalidateCache(options?: { silent?: boolean }): void {
     const size = this.queryCache.size;
-    this.queryCache.invalidateAll(); clearRouteCache(); invalidateSnapshotPathCache();
-    if (size > 0 && !options?.silent) console.log(`[DuckDB] All caches invalidated (query: ${size}, route + snapshot path cleared)`);
+    this.queryCache.invalidateAll(); clearRouteCache();
+    if (size > 0 && !options?.silent) console.log(`[DuckDB] All caches invalidated (query: ${size}, route cache cleared)`);
   }
 
   get cacheSize(): number { return this.queryCache.size; }

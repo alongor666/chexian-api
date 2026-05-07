@@ -554,29 +554,6 @@ async function runPostEtlIntegrations(scriptDir, python) {
   }
 }
 
-async function rebuildSnapshots(scriptDir) {
-  log('cyan', '[ETL] 重建静态快照（从 VPS 拉取新数据）...');
-  const projectRoot = dirname(scriptDir);
-  const buildScript = join(projectRoot, 'scripts/build-snapshots.mjs');
-  const syncScript = join(projectRoot, 'scripts/sync-vps.mjs');
-  try {
-    execSync(`node "${buildScript}"`, {
-      stdio: 'inherit',
-      env: { ...process.env, SNAPSHOT_SERVER_URL: 'https://chexian.cretvalu.com' },
-    });
-    log('green', '✅ 快照重建完成');
-    // 增量推送快照到 VPS（不重启，rsync 只传变更文件）
-    execSync(`node "${syncScript}" --no-restart`, {
-      stdio: 'inherit',
-      env: { ...process.env, RUN_MAIN: '1' },
-    });
-    log('green', '✅ 快照已同步到 VPS');
-  } catch (e) {
-    console.warn(`[ETL] 快照重建失败（不影响数据同步）: ${e.message}`);
-    console.warn('[ETL] 可手动重试: SNAPSHOT_SERVER_URL=https://chexian.cretvalu.com bun run snapshot:build');
-  }
-}
-
 /** 找最大的全量 xlsx（quotes 需要完整历史） */
 function findLargestXlsx(dir) {
   const files = ls('每日数据_*.xlsx', dir);
@@ -837,8 +814,7 @@ async function main() {
       runRefreshMetadata(python, scriptDir, _currentReleaseManifest);
     }
     if (!noSync) {
-      const synced = await syncToVps(scriptDir);
-      if (synced) await rebuildSnapshots(scriptDir);
+      await syncToVps(scriptDir);
     }
     await runPostEtlIntegrations(scriptDir, python);
     return;
@@ -1091,12 +1067,11 @@ async function main() {
     runRefreshMetadata(python, scriptDir, _currentReleaseManifest);
   }
 
-  // 7. VPS 同步 + 快照重建
+  // 7. VPS 同步
   if (noSync) {
     log('yellow', '已跳过 VPS 同步（--no-sync）');
   } else {
-    const synced = await syncToVps(scriptDir);
-    if (synced) await rebuildSnapshots(scriptDir);
+    await syncToVps(scriptDir);
   }
 
   // 8. 外部系统集成（企业微信智能表格），失败降级告警不阻塞 ETL
