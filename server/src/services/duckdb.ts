@@ -8,7 +8,8 @@ import { QueryCache, ConnectionPool, dropRelationIfExists, hasRelation, getTable
 import type { DuckDBQueryable } from './duckdb-types.js';
 import { initDuckDBTables } from './duckdb-init-tables.js';
 import { convertBigIntToNumber, SLOW_QUERY_THRESHOLD_MS } from './duckdb-type-converter.js';
-import { loadMultipleParquet } from './duckdb-parquet-loader.js';
+import { loadMultipleParquet, computeParquetFingerprint } from './duckdb-parquet-loader.js';
+import { setDataVersion, bumpDataVersionFromTimestamp } from './data-version.js';
 
 /** 构造参数（省略字段从 databaseConfig / DUCKDB_INIT_OPTIONS 回退；测试传 `{ path: ':memory:' }`） */
 export interface DuckDBServiceConfig {
@@ -93,6 +94,14 @@ export class DuckDBService implements DuckDBQueryable {
     await this.dropRelationIfExists(sanitizeTableName(tableName));
     await this.query(`CREATE OR REPLACE TABLE ${sanitizeTableName(tableName)} AS SELECT * FROM read_parquet('${escapeSqlValue(filePath)}')`);
     this.invalidateCache();
+    // 单文件路径也必须 bump dataVersion，否则旧 cache key 会继续命中重建前的结果。
+    // 优先按文件指纹（mtime+size），stat 失败时退回到时间戳兜底。
+    const fp = computeParquetFingerprint([filePath]);
+    if (fp !== null) {
+      setDataVersion(fp.fingerprint);
+    } else {
+      bumpDataVersionFromTimestamp();
+    }
     console.log(`[DuckDB] Loaded Parquet file: ${filePath} -> ${sanitizeTableName(tableName)}`);
   }
 

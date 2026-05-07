@@ -50,6 +50,19 @@ export function onDataVersionChange(listener: VersionChangeListener): void {
   listeners.push(listener);
 }
 
+/**
+ * 兜底 bump：当无法计算确定性指纹（如 stat 失败、单文件无指纹通道）时，
+ * 用时间戳 + 随机后缀强制产生新版本，保证 ETL/上传后 cache key 不再命中旧数据。
+ *
+ * 仅用于"不得不让缓存失效，但拿不到内容指纹"的场景。
+ * 同一份数据多次调用会产生不同版本，因此**优先使用 setDataVersion(fingerprint)**。
+ */
+export function bumpDataVersionFromTimestamp(): void {
+  const ts = Date.now().toString(36);
+  const rnd = Math.random().toString(36).slice(2, 6);
+  setDataVersion(`${ts}${rnd}`.padEnd(8, '0'));
+}
+
 export function _resetDataVersionForTesting(): void {
   currentVersion = 'init0000';
   listeners.length = 0;

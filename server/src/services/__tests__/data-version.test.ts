@@ -3,6 +3,7 @@ import {
   getDataVersion,
   setDataVersion,
   onDataVersionChange,
+  bumpDataVersionFromTimestamp,
   _resetDataVersionForTesting,
 } from '../data-version.js';
 
@@ -63,5 +64,22 @@ describe('data-version', () => {
     await new Promise((r) => setImmediate(r));
     expect(getDataVersion()).toBe('feedface');
     expect(ok).toHaveBeenCalledTimes(1);
+  });
+
+  it('bumpDataVersionFromTimestamp 兜底：不依赖指纹也能切换版本', () => {
+    bumpDataVersionFromTimestamp();
+    const first = getDataVersion();
+    expect(first).not.toBe('init0000');
+    expect(first).toHaveLength(8);
+  });
+
+  it('bumpDataVersionFromTimestamp 多次调用产生不同版本（保证旧 cache key 失效）', async () => {
+    bumpDataVersionFromTimestamp();
+    const v1 = getDataVersion();
+    // 用 setImmediate 让 Date.now/Math.random 有机会变更
+    await new Promise((r) => setTimeout(r, 5));
+    bumpDataVersionFromTimestamp();
+    const v2 = getDataVersion();
+    expect(v2).not.toBe(v1);
   });
 });
