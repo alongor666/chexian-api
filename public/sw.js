@@ -1,15 +1,18 @@
 /**
- * Service Worker — Phase 2: 离线优先 + 预取
+ * Service Worker — Phase C: cache-first + 5min 版本轮询
  *
- * 策略: stale-while-revalidate（仅 /api/query/* 路由）
- * - 缓存命中 → 立即返回 (0ms) + 后台静默更新
- * - 缓存未命中 → 透传到 Express → 缓存响应
- * - 离线 → 直接返回缓存
- * - 每日轮询 /api/data/version → 版本变化 → 清空缓存 → 预取热点
+ * 策略: cache-first（仅 /api/query/* 路由）
+ * - 缓存命中且未过期 → 立即返回 (0ms)，不发后台 fetch（消除每页 5-10 次冗余网络往返）
+ * - 缓存命中但已过期 → 走网络拉取 + 更新缓存（revalidate-on-expiry）
+ * - 缓存未命中 → 网络拉取 + 缓存
+ * - 离线 → 即使过期也返回缓存
+ * - 每 5 分钟轮询 /api/data/version → 版本变化 → 清空缓存 + 通知客户端
+ *   （日级数据 + 服务端 dataVersion 进 cache key + 服务端预热已覆盖 ETL，
+ *    SW 5min 轮询作为客户端兜底，让长期开着的 tab 也能感知新版本）
  */
 
-const CACHE_NAME = 'chexian-api-v1';
-const VERSION_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 小时
+const CACHE_NAME = 'chexian-api-v2';
+const VERSION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 分钟
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 小时
 
 // 仅缓存 query 路由（不缓存 auth/data/ai/filters）
@@ -67,34 +70,37 @@ self.addEventListener('fetch', (event) => {
 });
 
 /**
- * stale-while-revalidate 策略
+ * cache-first 策略
+ * - 命中且未过期 → 直接返回（0ms，无后台 fetch）
+ * - 命中但已过期 → 走网络（revalidate-on-expiry）
+ * - 未命中 → 走网络
+ * - 离线 → 即使过期也返回缓存
  */
 async function handleQueryRequest(request) {
   const cache = await caches.open(CACHE_NAME);
   const cacheKey = buildCacheKey(request);
 
-  // 1. 尝试从缓存读取
   const cachedResponse = await cache.match(cacheKey);
 
   if (cachedResponse) {
     const cachedTime = cachedResponse.headers.get('X-SW-Cached-At');
     const isExpired = cachedTime && (Date.now() - parseInt(cachedTime, 10)) > CACHE_TTL;
 
-    // 离线时直接返回缓存（不管是否过期）
     if (!navigator.onLine) {
       return addSwHeaders(cachedResponse.clone(), 'cache-offline');
     }
 
-    // 后台静默更新（不阻塞响应）
-    refreshInBackground(request, cache, cacheKey);
-
     // 触发版本检查（限频）
     maybeCheckVersion();
 
-    return addSwHeaders(cachedResponse.clone(), isExpired ? 'cache-stale' : 'cache-hit');
+    if (!isExpired) {
+      // cache-first：未过期直接返回，不发后台 fetch
+      return addSwHeaders(cachedResponse.clone(), 'cache-hit');
+    }
+    // 过期：走网络拉新（同步等待，确保用户拿到的是新版本）
   }
 
-  // 2. 缓存未命中 → 网络请求 + 缓存响应
+  // 网络请求 + 缓存响应
   try {
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
@@ -103,25 +109,14 @@ async function handleQueryRequest(request) {
     }
     return addSwHeaders(networkResponse, 'network');
   } catch (err) {
-    // 网络失败且无缓存 → 返回错误
+    // 网络失败：兜底返回过期缓存（如果有）
+    if (cachedResponse) {
+      return addSwHeaders(cachedResponse.clone(), 'cache-stale-fallback');
+    }
     return new Response(
       JSON.stringify({ success: false, error: 'Offline and no cache available' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }
     );
-  }
-}
-
-// ── 后台静默更新 ─────────────────────────────
-
-async function refreshInBackground(request, cache, cacheKey) {
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const responseToCache = await addTimestamp(networkResponse.clone());
-      await cache.put(cacheKey, responseToCache);
-    }
-  } catch {
-    // 后台更新失败不影响用户
   }
 }
 
