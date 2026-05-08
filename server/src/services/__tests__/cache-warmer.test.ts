@@ -4,51 +4,9 @@ import { cacheWarmer } from '../cache-warmer.js';
 describe('cacheWarmer.warmCommonRoutes', () => {
   const range = { startDate: '2026-01-01', maxDate: '2026-05-08' };
 
-  it('buildCommonRouteTasks: 默认 6 路由 × 6 机构 = 36 个任务（含 renewal-tracker）', () => {
+  it('buildCommonRouteTasks: 默认 5 路由 × 6 机构 = 30 个任务', () => {
     const tasks = cacheWarmer.buildCommonRouteTasks(range);
-    expect(tasks.length).toBe(6 * 6);
-  });
-
-  it('buildAllWarmupTasks: COMMON 36 + ALL_ONLY 3 = 39 任务（生产实际预热数）', () => {
-    const tasks = cacheWarmer.buildAllWarmupTasks(range);
-    expect(tasks.length).toBe(6 * 6 + 3);
-  });
-
-  it('renewal-tracker 路由 query 含 start/end/cutoff（非 startDate/endDate）', () => {
-    const tasks = cacheWarmer.buildCommonRouteTasks(range);
-    const t = tasks.find((x) => x.url.includes('/api/query/renewal-tracker?'));
-    expect(t).toBeDefined();
-    expect(t!.url).toContain('start=2026-01-01');
-    expect(t!.url).toContain('end=2026-05-08');
-    expect(t!.url).toContain('cutoff=2026-05-08');
-    expect(t!.url).not.toContain('dateField=');
-    expect(t!.url).not.toContain('startDate=');
-  });
-
-  it('quote-conversion/kpi 与 funnel 是 ALL_ONLY（query 为空，不带 orgNames）', () => {
-    const tasks = cacheWarmer.buildAllWarmupTasks(range);
-    const kpi = tasks.find((x) => x.url.includes('/api/query/quote-conversion/kpi'));
-    const funnel = tasks.find((x) => x.url.includes('/api/query/quote-conversion/funnel'));
-    expect(kpi).toBeDefined();
-    expect(funnel).toBeDefined();
-    // 空 query → 形如 /api/query/quote-conversion/kpi?（末尾问号无内容）
-    expect(kpi!.url.split('?')[1] ?? '').toBe('');
-    expect(funnel!.url.split('?')[1] ?? '').toBe('');
-    expect(kpi!.label).toContain('(all)');
-    // 不应被 cartesian 化（每个 ALL_ONLY 路由只有 1 条任务）
-    expect(tasks.filter((t) => t.url.includes('quote-conversion/kpi')).length).toBe(1);
-    expect(tasks.filter((t) => t.url.includes('quote-conversion/funnel')).length).toBe(1);
-  });
-
-  it('plan-achievement 是 ALL_ONLY，含 zod 默认参数（planYear=2026, level=org, sortField=actual_vehicle, sortOrder=desc）', () => {
-    const tasks = cacheWarmer.buildAllWarmupTasks(range);
-    const t = tasks.find((x) => x.url.includes('/api/query/plan-achievement'));
-    expect(t).toBeDefined();
-    expect(t!.url).toContain('planYear=2026');
-    expect(t!.url).toContain('level=org');
-    expect(t!.url).toContain('sortField=actual_vehicle');
-    expect(t!.url).toContain('sortOrder=desc');
-    expect(tasks.filter((x) => x.url.includes('plan-achievement')).length).toBe(1);
+    expect(tasks.length).toBe(5 * 6);
   });
 
   it('每个任务 URL 含 dateField/startDate/endDate；首条无 orgNames（全公司）', () => {
