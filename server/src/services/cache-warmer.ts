@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger.js';
 import { duckdbService } from './duckdb.js';
 import { setRouteCache } from './route-cache.js';
@@ -5,6 +6,77 @@ import { fetchDashboardBundleData } from '../routes/query.js';
 import { QUERY_CACHE } from '../routes/query/shared.js';
 import { getBootstrapper } from './bootstrapper-registry.js';
 import { getDataVersion } from './data-version.js';
+import { authConfig } from '../config/auth.js';
+import { serverEnv } from '../config/env.js';
+
+/**
+ * 高频 endpoint 清单（GET，已包 withRouteCache 中间件）。
+ * 选取规则：每个核心业务页的"门面"路由，访问后能让 dashboard 首屏即时呈现。
+ * 子聚合路由（cross-sell-*、claims-detail-*）按需走冷启动，避免预热放大无关流量。
+ *
+ * 各路径必须与 server/src/routes/query/<file>.ts 中 router.get 的第一个参数一致。
+ */
+type RouteWarmConfig = {
+    path: string;
+    ttlMs: number;
+    /** 路由必填的额外参数（除通用 startDate/endDate/dateField/orgNames 之外）。 */
+    extraParams?: (range: { startDate: string; maxDate: string }) => Record<string, string>;
+};
+
+const COMMON_WARM_ROUTES: ReadonlyArray<RouteWarmConfig> = [
+    { path: '/api/query/kpi', ttlMs: QUERY_CACHE.hotspotShort },
+    { path: '/api/query/trend', ttlMs: QUERY_CACHE.hotspotMedium },
+    { path: '/api/query/policy-geo/province', ttlMs: QUERY_CACHE.hotspotMedium },
+    {
+        path: '/api/query/cost',
+        ttlMs: QUERY_CACHE.hotspotMedium,
+        extraParams: (range) => ({ cutoffDate: range.maxDate }),
+    },
+    { path: '/api/query/growth', ttlMs: QUERY_CACHE.hotspotMedium },
+    { path: '/api/query/expense-development', ttlMs: QUERY_CACHE.hotspotMedium },
+    { path: '/api/query/premium-plan', ttlMs: QUERY_CACHE.hotspotMedium },
+    { path: '/api/query/quote-conversion/funnel', ttlMs: QUERY_CACHE.hotspotMedium },
+    {
+        path: '/api/query/renewal-tracker',
+        ttlMs: QUERY_CACHE.hotspotMedium,
+        // renewal-tracker 用 start/end/cutoff 而非 startDate/endDate
+        extraParams: (range) => ({
+            start: range.startDate,
+            end: range.maxDate,
+            cutoff: range.maxDate,
+        }),
+    },
+    { path: '/api/query/salesman-ranking', ttlMs: QUERY_CACHE.hotspotMedium },
+    { path: '/api/query/performance-summary', ttlMs: QUERY_CACHE.hotspotMedium },
+    { path: '/api/query/marketing-report', ttlMs: QUERY_CACHE.hotspotMedium },
+];
+
+/**
+ * 机构维度：全公司 + 头部 5 个 org_level_3。
+ * 选取依据：实测 13 个 org_level_3，头部 5 个占 ~85% 流量
+ * （SQL: SELECT org_level_3, COUNT(*) FROM PolicyFact WHERE policy_date >= '2026-01-01'
+ *  GROUP BY 1 ORDER BY 2 DESC）。
+ */
+const TOP_ORG_NAMES: ReadonlyArray<string> = ['天府', '宜宾', '高新', '青羊', '泸州'];
+
+const WARM_CONCURRENCY = 4;
+/**
+ * 用 v8 heapUsed 而非 RSS 做安全阀：
+ * RSS 包含 vite/DuckDB native 内存（本地动辄 4-5GB），不能反映 cache 实际占用。
+ * heapUsed 才是 v8 持有的对象（含 LRU buffer），超过 2GB 即代表预热路径出问题，
+ * 此时停止可避免 OOM。生产 PM2 max_memory_restart=3500MB 仍是兜底。
+ */
+const WARM_HEAP_LIMIT_MB = 2000;
+const WARM_HEAP_CHECK_EVERY = 20;
+const WARM_FETCH_TIMEOUT_MS = 15_000;
+
+interface WarmCommonRoutesResult {
+    written: number;
+    skipped: number;
+    failed: number;
+    durationMs: number;
+    rssStopped: boolean;
+}
 
 type QueryValue = string | number | boolean | null | undefined;
 
@@ -291,6 +363,135 @@ export class CacheWarmer {
     }
 
     /**
+     * 笛卡尔预热：高频 endpoint × 头部机构 × YTD 默认时窗。
+     *
+     * 通过本机 HTTP 自调用各路由，请求经 withRouteCache 中间件自动写入 LRU。
+     * 零侵入路由 handler，单点失败容忍（catch 后继续），并发 ≤ 4，
+     * RSS 安全阀防 OOM。在 app.listen 之后触发（warmStartupCritical 不阻塞）。
+     *
+     * 对外暴露用于：
+     * 1) 启动 listen 回调中 setImmediate 触发（首次预热）
+     * 2) onDataVersionChange 中 ETL 后追加触发（消除 cold cliff）
+     */
+    async warmCommonRoutes(): Promise<WarmCommonRoutesResult> {
+        const start = Date.now();
+        const result: WarmCommonRoutesResult = {
+            written: 0,
+            skipped: 0,
+            failed: 0,
+            durationMs: 0,
+            rssStopped: false,
+        };
+
+        // 解析默认时窗（当年 YTD）
+        let dateRange: { startDate: string; maxDate: string };
+        try {
+            const resolved = await this.resolveDefaultDateRange();
+            if (!resolved.maxDate) {
+                logger.warn('[CacheWarmer] warmCommonRoutes: no data, skipped.');
+                result.durationMs = Date.now() - start;
+                return result;
+            }
+            dateRange = { startDate: resolved.startDate, maxDate: resolved.maxDate };
+        } catch (e) {
+            logger.warn('[CacheWarmer] warmCommonRoutes: resolveDefaultDateRange failed:', e);
+            result.failed += 1;
+            result.durationMs = Date.now() - start;
+            return result;
+        }
+
+        const tasks = this.buildCommonRouteTasks(dateRange);
+        const token = signServiceToken();
+
+        let stopped = false;
+        let processed = 0;
+
+        const runOne = async (task: { url: string; ttlMs: number; label: string }): Promise<void> => {
+            if (stopped) {
+                result.skipped += 1;
+                return;
+            }
+            processed += 1;
+            if (processed % WARM_HEAP_CHECK_EVERY === 0) {
+                const heapMB = process.memoryUsage().heapUsed / 1024 / 1024;
+                if (heapMB > WARM_HEAP_LIMIT_MB) {
+                    stopped = true;
+                    result.rssStopped = true;
+                    logger.warn(
+                        `[CacheWarmer] warmCommonRoutes stopped: heapUsed ${heapMB.toFixed(0)}MB > ${WARM_HEAP_LIMIT_MB}MB.`,
+                    );
+                    return;
+                }
+            }
+            try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), WARM_FETCH_TIMEOUT_MS);
+                try {
+                    const res = await fetch(task.url, {
+                        method: 'GET',
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'X-Cache-Warmup': '1',
+                        },
+                        signal: controller.signal,
+                    });
+                    if (res.ok) {
+                        // 读完 body 触发 withRouteCache 中间件写入 LRU；丢弃数据本身
+                        await res.arrayBuffer();
+                        result.written += 1;
+                    } else {
+                        result.failed += 1;
+                        logger.warn(
+                            `[CacheWarmer] warm ${task.label} → HTTP ${res.status}`,
+                        );
+                    }
+                } finally {
+                    clearTimeout(timer);
+                }
+            } catch (e) {
+                result.failed += 1;
+                logger.warn(`[CacheWarmer] warm ${task.label} failed:`, e);
+            }
+        };
+
+        await runWithConcurrency(tasks, WARM_CONCURRENCY, runOne);
+
+        result.durationMs = Date.now() - start;
+        logger.info(
+            `[CacheWarmer] warmCommonRoutes done: written=${result.written}, skipped=${result.skipped}, failed=${result.failed}, ${result.durationMs}ms${result.rssStopped ? ' (RSS-stopped)' : ''}`,
+        );
+        return result;
+    }
+
+    /** 构造预热任务清单。导出供单测验证组合数。 */
+    buildCommonRouteTasks(
+        dateRange: { startDate: string; maxDate: string },
+        routes: ReadonlyArray<RouteWarmConfig> = COMMON_WARM_ROUTES,
+        orgs: ReadonlyArray<string | null> = [null, ...TOP_ORG_NAMES],
+    ): Array<{ url: string; ttlMs: number; label: string }> {
+        const baseUrl = `http://127.0.0.1:${serverEnv.PORT}`;
+        const tasks: Array<{ url: string; ttlMs: number; label: string }> = [];
+        for (const route of routes) {
+            const extras = route.extraParams ? route.extraParams(dateRange) : {};
+            for (const org of orgs) {
+                const params = new URLSearchParams();
+                params.set('dateField', 'policy_date');
+                params.set('startDate', dateRange.startDate);
+                params.set('endDate', dateRange.maxDate);
+                for (const [k, v] of Object.entries(extras)) params.set(k, v);
+                if (org) params.set('orgNames', org);
+                const qs = params.toString();
+                tasks.push({
+                    url: `${baseUrl}${route.path}?${qs}`,
+                    ttlMs: route.ttlMs,
+                    label: `${route.path}${org ? ` org=${org}` : ' (all)'}`,
+                });
+            }
+        }
+        return tasks;
+    }
+
+    /**
      * 建立第二层内存预热
      */
     private async buildTier2MemoryCache(dataYear: number, startDate: string, maxDate: string) {
@@ -338,3 +539,36 @@ export class CacheWarmer {
 }
 
 export const cacheWarmer = new CacheWarmer();
+
+/**
+ * 用 admin/branch_admin 身份自签 service token，专供 cache-warmer 自调用使用。
+ * 不暴露密码，TTL 短（15 分钟，单轮预热足够）。
+ */
+function signServiceToken(): string {
+    return jwt.sign(
+        {
+            userId: 'admin',
+            username: 'admin',
+            role: 'branch_admin',
+        },
+        authConfig.jwtSecret,
+        { expiresIn: '15m' },
+    );
+}
+
+/** 内部并发池：避免引入 p-limit 依赖。*/
+async function runWithConcurrency<T>(
+    items: ReadonlyArray<T>,
+    limit: number,
+    fn: (item: T) => Promise<void>,
+): Promise<void> {
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (true) {
+            const i = cursor++;
+            if (i >= items.length) return;
+            await fn(items[i]);
+        }
+    });
+    await Promise.all(workers);
+}

@@ -225,6 +225,11 @@ async function startServer() {
     onDataVersionChange(async (next, previous) => {
       console.log(`[Server] dataVersion ${previous}→${next}, re-warming cache...`);
       await cacheWarmer.warmStartupCritical();
+      // 笛卡尔预热依赖 listen 端口，必须在 listen 后才能跑；
+      // 监听者注册位置在 listen 之前，所以这里发起即可（首次 listen 完成后再触发也安全）
+      cacheWarmer.warmCommonRoutes().catch((err) =>
+        console.warn('[Server] warmCommonRoutes (post-ETL) failed:', err),
+      );
     });
 
     // 3. 标记就绪 + 启动 HTTP
@@ -241,6 +246,14 @@ async function startServer() {
         process.send('ready');
         console.log('[Server] PM2 ready signal sent');
       }
+
+      // 笛卡尔预热：在 PM2 ready 信号之后异步触发，不阻塞 readiness。
+      // 内部 fetch 自调用，依赖 listen 已完成；setImmediate 让出当前 tick。
+      setImmediate(() => {
+        cacheWarmer.warmCommonRoutes().catch((err) =>
+          console.warn('[Server] warmCommonRoutes (startup) failed:', err),
+        );
+      });
     });
   } catch (error) {
     console.error('[Server] Failed to start server:', error);
