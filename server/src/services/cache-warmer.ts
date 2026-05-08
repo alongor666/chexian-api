@@ -10,45 +10,89 @@ import { authConfig } from '../config/auth.js';
 import { serverEnv } from '../config/env.js';
 
 /**
- * 高频 endpoint 清单（GET，已包 withRouteCache 中间件）。
- * 选取规则：每个核心业务页的"门面"路由，访问后能让 dashboard 首屏即时呈现。
- * 子聚合路由（cross-sell-*、claims-detail-*）按需走冷启动，避免预热放大无关流量。
+ * 笛卡尔预热路由清单（GET，已包 withRouteCache 中间件）。
  *
- * 各路径必须与 server/src/routes/query/<file>.ts 中 router.get 的第一个参数一致。
+ * **入选硬门槛**（修 Codex P1 后）：
+ *   预热的 query string 必须与前端 hook 首屏真实请求**逐字节一致**，
+ *   否则 buildRouteCacheKey 生成的 cache key 不同，预热无法命中真实流量。
+ *   每条路由的 buildQuery 已对照 src/features/.../*hooks*.ts + src/shared/api/client.ts
+ *   核对，注释里标注了来源。
+ *
+ * **暂不入选的路由**（待后续按真实参数协议补全）：
+ *   - growth：必填 baselineStart/baselineEnd，前端默认值由业务逻辑决定
+ *   - expense-development：前端用 cohortYears 而非日期
+ *   - premium-plan：planYear/level/orgFilter 完全不同协议
+ *   - quote-conversion/funnel：dateStart/dateEnd/orgName 不同 key 命名
+ *   - performance-summary：segmentTag/timePeriod/growthMode 业务参数
+ *   - marketing-report：必填 holidayDates，无固定默认值
+ *   - renewal-tracker：前端额外 ...filterParams 默认值不易复现
  */
+type WarmRange = { startDate: string; maxDate: string };
 type RouteWarmConfig = {
     path: string;
     ttlMs: number;
-    /** 路由必填的额外参数（除通用 startDate/endDate/dateField/orgNames 之外）。 */
-    extraParams?: (range: { startDate: string; maxDate: string }) => Record<string, string>;
+    /**
+     * 构造完整 query 参数对象。键名/值必须与前端 apiClient.* 调用真实输出对齐。
+     * `org` 为 null 时表示"全公司"（不设 orgNames）。
+     */
+    buildQuery: (range: WarmRange, org: string | null) => Record<string, string>;
 };
 
+/** 通用 commonFilterSchema 协议：dateField + startDate + endDate + 可选 orgNames。 */
+function commonFilterQuery(range: WarmRange, org: string | null): Record<string, string> {
+    const q: Record<string, string> = {
+        dateField: 'policy_date',
+        startDate: range.startDate,
+        endDate: range.maxDate,
+    };
+    if (org) q.orgNames = org;
+    return q;
+}
+
 const COMMON_WARM_ROUTES: ReadonlyArray<RouteWarmConfig> = [
-    { path: '/api/query/kpi', ttlMs: QUERY_CACHE.hotspotShort },
-    { path: '/api/query/trend', ttlMs: QUERY_CACHE.hotspotMedium },
-    { path: '/api/query/policy-geo/province', ttlMs: QUERY_CACHE.hotspotMedium },
     {
-        path: '/api/query/cost',
-        ttlMs: QUERY_CACHE.hotspotMedium,
-        extraParams: (range) => ({ cutoffDate: range.maxDate }),
+        // 来源：useKpiData → buildFilterParams（commonFilterSchema 标准协议）
+        path: '/api/query/kpi',
+        ttlMs: QUERY_CACHE.hotspotShort,
+        buildQuery: commonFilterQuery,
     },
-    { path: '/api/query/growth', ttlMs: QUERY_CACHE.hotspotMedium },
-    { path: '/api/query/expense-development', ttlMs: QUERY_CACHE.hotspotMedium },
-    { path: '/api/query/premium-plan', ttlMs: QUERY_CACHE.hotspotMedium },
-    { path: '/api/query/quote-conversion/funnel', ttlMs: QUERY_CACHE.hotspotMedium },
     {
-        path: '/api/query/renewal-tracker',
+        // 来源：useTrendData → apiClient.getTrend(granularity, { ...buildFilterParams, perspective })
+        // client.ts:530 把 { granularity } 合并进 query。首屏默认 timeView='daily' → 'day'，perspective='premium'
+        path: '/api/query/trend',
         ttlMs: QUERY_CACHE.hotspotMedium,
-        // renewal-tracker 用 start/end/cutoff 而非 startDate/endDate
-        extraParams: (range) => ({
-            start: range.startDate,
-            end: range.maxDate,
-            cutoff: range.maxDate,
+        buildQuery: (range, org) => ({
+            ...commonFilterQuery(range, org),
+            granularity: 'day',
+            perspective: 'premium',
         }),
     },
-    { path: '/api/query/salesman-ranking', ttlMs: QUERY_CACHE.hotspotMedium },
-    { path: '/api/query/performance-summary', ttlMs: QUERY_CACHE.hotspotMedium },
-    { path: '/api/query/marketing-report', ttlMs: QUERY_CACHE.hotspotMedium },
+    {
+        // 来源：usePolicyGeo → apiClient.getPolicyGeoProvince(buildFilterParams)
+        path: '/api/query/policy-geo/province',
+        ttlMs: QUERY_CACHE.hotspotMedium,
+        buildQuery: commonFilterQuery,
+    },
+    {
+        // 来源：useCostAnalysis → apiClient.getCostAnalysis(...)
+        // 服务端 cost.ts 必填 cutoffDate（默认 = endDate）
+        path: '/api/query/cost',
+        ttlMs: QUERY_CACHE.hotspotMedium,
+        buildQuery: (range, org) => ({
+            ...commonFilterQuery(range, org),
+            cutoffDate: range.maxDate,
+        }),
+    },
+    {
+        // 来源：useSalesmanRanking → apiClient.getSalesmanRanking(20, filters)
+        // client.ts:609 把 { limit: '20' } 合并进 query；首屏默认 limit=20
+        path: '/api/query/salesman-ranking',
+        ttlMs: QUERY_CACHE.hotspotMedium,
+        buildQuery: (range, org) => ({
+            ...commonFilterQuery(range, org),
+            limit: '20',
+        }),
+    },
 ];
 
 /**
@@ -463,26 +507,26 @@ export class CacheWarmer {
         return result;
     }
 
-    /** 构造预热任务清单。导出供单测验证组合数。 */
+    /**
+     * 构造预热任务清单。导出供单测验证组合数。
+     *
+     * 每条任务的 query string 由 route.buildQuery 完全控制，确保与前端 hook
+     * 真实首屏请求逐字节一致（Codex P1 修复）。
+     */
     buildCommonRouteTasks(
-        dateRange: { startDate: string; maxDate: string },
+        dateRange: WarmRange,
         routes: ReadonlyArray<RouteWarmConfig> = COMMON_WARM_ROUTES,
         orgs: ReadonlyArray<string | null> = [null, ...TOP_ORG_NAMES],
     ): Array<{ url: string; ttlMs: number; label: string }> {
         const baseUrl = `http://127.0.0.1:${serverEnv.PORT}`;
         const tasks: Array<{ url: string; ttlMs: number; label: string }> = [];
         for (const route of routes) {
-            const extras = route.extraParams ? route.extraParams(dateRange) : {};
             for (const org of orgs) {
+                const queryObj = route.buildQuery(dateRange, org);
                 const params = new URLSearchParams();
-                params.set('dateField', 'policy_date');
-                params.set('startDate', dateRange.startDate);
-                params.set('endDate', dateRange.maxDate);
-                for (const [k, v] of Object.entries(extras)) params.set(k, v);
-                if (org) params.set('orgNames', org);
-                const qs = params.toString();
+                for (const [k, v] of Object.entries(queryObj)) params.set(k, v);
                 tasks.push({
-                    url: `${baseUrl}${route.path}?${qs}`,
+                    url: `${baseUrl}${route.path}?${params.toString()}`,
                     ttlMs: route.ttlMs,
                     label: `${route.path}${org ? ` org=${org}` : ' (all)'}`,
                 });
