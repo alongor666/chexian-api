@@ -181,5 +181,56 @@ describe('route-cache (lru-cache + buffer)', () => {
       expect(res.headers['Content-Encoding']).toBe('br');
       expect(res.body).toEqual(entry.brotliBuffer);
     });
+
+    it('Accept-Encoding: gzip;q=1, br;q=0.1 → 选 gzip（修 Codex P2 q-value 偏好）', () => {
+      setRouteCache('s-q-gzip', bigPayload(), 60_000);
+      const entry = getRouteCacheEntry('s-q-gzip')!;
+      const res = makeRes();
+      sendCachedEntry(
+        { headers: { 'accept-encoding': 'gzip;q=1, br;q=0.1' } },
+        res,
+        entry,
+        entry.etag,
+        60,
+      );
+
+      expect(res.headers['Content-Encoding']).toBe('gzip');
+      expect(res.body).toEqual(entry.gzipBuffer);
+    });
+
+    it('Accept-Encoding: br;q=1, gzip;q=0.5 → 选 br（q 高者胜）', () => {
+      setRouteCache('s-q-br', bigPayload(), 60_000);
+      const entry = getRouteCacheEntry('s-q-br')!;
+      const res = makeRes();
+      sendCachedEntry(
+        { headers: { 'accept-encoding': 'br;q=1, gzip;q=0.5' } },
+        res,
+        entry,
+        entry.etag,
+        60,
+      );
+
+      expect(res.headers['Content-Encoding']).toBe('br');
+      expect(res.body).toEqual(entry.brotliBuffer);
+    });
+
+    it('小 payload (< 1KB) 无预压缩 buffer → 直接发 raw 不会空响应', () => {
+      setRouteCache('s-tiny', { x: 1 }, 60_000);
+      const entry = getRouteCacheEntry('s-tiny')!;
+      // 双重保险：tiny payload 不应有预压缩
+      expect(entry.brotliBuffer).toBeNull();
+      expect(entry.gzipBuffer).toBeNull();
+
+      const res = makeRes();
+      sendCachedEntry(
+        { headers: { 'accept-encoding': 'br, gzip' } },
+        res,
+        entry,
+        entry.etag,
+        60,
+      );
+      expect(res.headers['Content-Encoding']).toBeUndefined();
+      expect(res.body).toEqual(entry.jsonBuffer);
+    });
   });
 });

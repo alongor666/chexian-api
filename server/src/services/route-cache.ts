@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { brotliCompressSync, constants, gzipSync } from 'zlib';
 import { LRUCache } from 'lru-cache';
-import { clientAcceptsBrotli, clientAcceptsGzip } from '../utils/accept-encoding.js';
+import { selectBestEncoding } from '../utils/accept-encoding.js';
 
 /**
  * 缓存条目存预序列化的 JSON Buffer + 预 brotli/gzip 压缩后的 Buffer。
@@ -129,9 +129,10 @@ function appendVary(res: any, value: string): void {
 }
 
 /**
- * 发送已缓存条目：根据 Accept-Encoding 优先级 br > gzip > raw 选缓冲，
+ * 发送已缓存条目：在 entry 已有的预压缩 buffer（br/gzip）中按客户端
+ * q-value 选最优编码；q 相等时偏好 br（体积更小）。无可用压缩则发 raw。
+ *
  * 直接 res.end 绕过 res.json + 中间件的二次序列化和压缩。
- * gzip 兜底用于不支持 br 的客户端（严格代理、CDN、br;q=0），避免吞流量发 raw。
  */
 export function sendCachedEntry(
     req: any,
@@ -144,8 +145,16 @@ export function sendCachedEntry(
     res.setHeader('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=3600`);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    const ae = req.headers['accept-encoding'];
-    if (entry.brotliBuffer && clientAcceptsBrotli(ae)) {
+    // 仅把"实际压好"的编码作为候选，避免在 entry.gzipBuffer 为 null 时
+    // 还把 'gzip' 列入候选导致空响应。candidates 顺序即同 q 时的偏好：
+    // br 体积小，所以放第一位。
+    const candidates: string[] = [];
+    if (entry.brotliBuffer) candidates.push('br');
+    if (entry.gzipBuffer) candidates.push('gzip');
+
+    const chosen = selectBestEncoding(req.headers['accept-encoding'], candidates);
+
+    if (chosen === 'br' && entry.brotliBuffer) {
         res.setHeader('Content-Encoding', 'br');
         res.setHeader('Content-Length', String(entry.brotliBuffer.length));
         appendVary(res, 'Accept-Encoding');
@@ -153,7 +162,7 @@ export function sendCachedEntry(
         return;
     }
 
-    if (entry.gzipBuffer && clientAcceptsGzip(ae)) {
+    if (chosen === 'gzip' && entry.gzipBuffer) {
         res.setHeader('Content-Encoding', 'gzip');
         res.setHeader('Content-Length', String(entry.gzipBuffer.length));
         appendVary(res, 'Accept-Encoding');
