@@ -1,15 +1,17 @@
 import crypto from 'crypto';
-import { brotliCompressSync, constants } from 'zlib';
+import { brotliCompressSync, constants, gzipSync } from 'zlib';
 import { LRUCache } from 'lru-cache';
-import { clientAcceptsBrotli } from '../utils/accept-encoding.js';
+import { clientAcceptsBrotli, clientAcceptsGzip } from '../utils/accept-encoding.js';
 
 /**
- * 缓存条目存预序列化的 JSON Buffer + 预 brotli 压缩后的 Buffer。
- * 命中时直接 res.end(buffer)，省掉 JSON.stringify（5MB bundle ≈ 30-50ms）+ brotli 压缩（≈ 20ms）。
+ * 缓存条目存预序列化的 JSON Buffer + 预 brotli/gzip 压缩后的 Buffer。
+ * 命中时直接 res.end(buffer)，省掉 JSON.stringify（5MB bundle ≈ 30-50ms）+ 压缩（≈ 20ms）。
+ * gzipBuffer 兜底不支持 br 的客户端（严格代理、CDN、Accept-Encoding: br;q=0）。
  */
 interface RouteCacheEntry {
     jsonBuffer: Buffer;
     brotliBuffer: Buffer | null;
+    gzipBuffer: Buffer | null;
     etag: string;
     sizeBytes: number;
 }
@@ -19,6 +21,7 @@ const DEFAULT_MAX_ENTRIES = 5000;
 const DEFAULT_MAX_ENTRY_BYTES = 2 * 1024 * 1024;   // 2MB（仅按 jsonBuffer 计）
 const COMPRESS_THRESHOLD = 1024;
 const BROTLI_QUALITY = 4;
+const GZIP_LEVEL = 6; // zlib 默认；与 Express compression 中间件同级
 
 const MAX_TOTAL_BYTES = Number(process.env.ROUTE_CACHE_MAX_BYTES) || DEFAULT_MAX_TOTAL_BYTES;
 const MAX_ENTRIES = Number(process.env.ROUTE_CACHE_MAX_ENTRIES) || DEFAULT_MAX_ENTRIES;
@@ -87,6 +90,7 @@ export function setRouteCache(key: string, data: unknown, ttlMs: number): void {
     if (jsonBuffer.length > MAX_ENTRY_BYTES) return;
 
     let brotliBuffer: Buffer | null = null;
+    let gzipBuffer: Buffer | null = null;
     if (jsonBuffer.length >= COMPRESS_THRESHOLD) {
         try {
             brotliBuffer = brotliCompressSync(jsonBuffer, {
@@ -98,21 +102,36 @@ export function setRouteCache(key: string, data: unknown, ttlMs: number): void {
         } catch {
             brotliBuffer = null;
         }
+        try {
+            gzipBuffer = gzipSync(jsonBuffer, { level: GZIP_LEVEL });
+        } catch {
+            gzipBuffer = null;
+        }
     }
 
     const etag = `"${crypto.createHash('md5').update(jsonBuffer).digest('hex').slice(0, 16)}"`;
-    const sizeBytes = jsonBuffer.length + (brotliBuffer?.length ?? 0);
+    const sizeBytes =
+        jsonBuffer.length + (brotliBuffer?.length ?? 0) + (gzipBuffer?.length ?? 0);
 
     cache.set(
         key,
-        { jsonBuffer, brotliBuffer, etag, sizeBytes },
+        { jsonBuffer, brotliBuffer, gzipBuffer, etag, sizeBytes },
         { ttl: ttlMs },
     );
 }
 
+function appendVary(res: any, value: string): void {
+    const existing = res.getHeader('Vary');
+    const varies = new Set(
+        (existing ? String(existing).split(/,\s*/).filter(Boolean) : []).concat(value),
+    );
+    res.setHeader('Vary', Array.from(varies).join(', '));
+}
+
 /**
- * 发送已缓存条目：根据 Accept-Encoding 选 brotli/原始 JSON Buffer，
+ * 发送已缓存条目：根据 Accept-Encoding 优先级 br > gzip > raw 选缓冲，
  * 直接 res.end 绕过 res.json + 中间件的二次序列化和压缩。
+ * gzip 兜底用于不支持 br 的客户端（严格代理、CDN、br;q=0），避免吞流量发 raw。
  */
 export function sendCachedEntry(
     req: any,
@@ -125,15 +144,20 @@ export function sendCachedEntry(
     res.setHeader('Cache-Control', `private, max-age=${maxAgeSec}, stale-while-revalidate=3600`);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    if (entry.brotliBuffer && clientAcceptsBrotli(req.headers['accept-encoding'])) {
+    const ae = req.headers['accept-encoding'];
+    if (entry.brotliBuffer && clientAcceptsBrotli(ae)) {
         res.setHeader('Content-Encoding', 'br');
         res.setHeader('Content-Length', String(entry.brotliBuffer.length));
-        const existing = res.getHeader('Vary');
-        const varies = new Set(
-            (existing ? String(existing).split(/,\s*/) : []).concat('Accept-Encoding'),
-        );
-        res.setHeader('Vary', Array.from(varies).join(', '));
+        appendVary(res, 'Accept-Encoding');
         res.end(entry.brotliBuffer);
+        return;
+    }
+
+    if (entry.gzipBuffer && clientAcceptsGzip(ae)) {
+        res.setHeader('Content-Encoding', 'gzip');
+        res.setHeader('Content-Length', String(entry.gzipBuffer.length));
+        appendVary(res, 'Accept-Encoding');
+        res.end(entry.gzipBuffer);
         return;
     }
 

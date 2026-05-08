@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { gunzipSync } from 'zlib';
 import {
   getRouteCache,
   getRouteCacheEntry,
@@ -6,7 +7,34 @@ import {
   clearRouteCache,
   computeEtag,
   getRouteCacheStats,
+  sendCachedEntry,
 } from '../route-cache.js';
+
+interface MockRes {
+  headers: Record<string, string>;
+  body: Buffer | null;
+  ended: boolean;
+  setHeader(name: string, value: string): void;
+  getHeader(name: string): string | undefined;
+  end(buf?: Buffer): void;
+}
+
+function makeRes(): MockRes {
+  const headers: Record<string, string> = {};
+  return {
+    headers,
+    body: null,
+    ended: false,
+    setHeader(name, value) { headers[name] = value; },
+    getHeader(name) { return headers[name]; },
+    end(buf?: Buffer) { this.body = buf ?? null; this.ended = true; },
+  };
+}
+
+function bigPayload() {
+  // > 1KB 触发预压缩；冗余字符串保证 br/gzip 都能显著压缩
+  return { rows: Array.from({ length: 200 }, (_, i) => ({ id: i, val: 'a'.repeat(50) })) };
+}
 
 describe('route-cache (lru-cache + buffer)', () => {
   beforeEach(() => {
@@ -89,5 +117,69 @@ describe('route-cache (lru-cache + buffer)', () => {
     setRouteCache('et2', { a: 1, b: 2 }, 60_000);
     const e2 = getRouteCacheEntry('et2')!.etag;
     expect(e1).toBe(e2);
+  });
+
+  it('大于 1KB 时同时预 gzip 压缩，且体积小于原 JSON', () => {
+    setRouteCache('gz', bigPayload(), 60_000);
+    const entry = getRouteCacheEntry('gz')!;
+    expect(entry.gzipBuffer).toBeInstanceOf(Buffer);
+    expect(entry.gzipBuffer!.length).toBeLessThan(entry.jsonBuffer.length);
+    // entry.sizeBytes 应包含 raw + br + gzip 三者总和
+    expect(entry.sizeBytes).toBe(
+      entry.jsonBuffer.length + (entry.brotliBuffer?.length ?? 0) + entry.gzipBuffer!.length,
+    );
+  });
+
+  describe('sendCachedEntry 三态协商', () => {
+    it('Accept-Encoding: gzip 命中 → Content-Encoding: gzip + 解压回原 JSON', () => {
+      setRouteCache('s-gzip', bigPayload(), 60_000);
+      const entry = getRouteCacheEntry('s-gzip')!;
+      const res = makeRes();
+      sendCachedEntry({ headers: { 'accept-encoding': 'gzip' } }, res, entry, entry.etag, 60);
+
+      expect(res.headers['Content-Encoding']).toBe('gzip');
+      expect(res.headers['Content-Length']).toBe(String(entry.gzipBuffer!.length));
+      expect(res.headers['Vary']).toContain('Accept-Encoding');
+      expect(res.headers['ETag']).toBe(entry.etag);
+      const decoded = JSON.parse(gunzipSync(res.body!).toString('utf-8'));
+      expect(decoded).toEqual(bigPayload());
+    });
+
+    it('Accept-Encoding: br;q=0, gzip 应回退到 gzip（q-value 解析）', () => {
+      setRouteCache('s-brq0', bigPayload(), 60_000);
+      const entry = getRouteCacheEntry('s-brq0')!;
+      const res = makeRes();
+      sendCachedEntry(
+        { headers: { 'accept-encoding': 'br;q=0, gzip' } },
+        res,
+        entry,
+        entry.etag,
+        60,
+      );
+
+      expect(res.headers['Content-Encoding']).toBe('gzip');
+      expect(res.body).toEqual(entry.gzipBuffer);
+    });
+
+    it('Accept-Encoding: identity 命中 → 走 raw jsonBuffer，无 Content-Encoding', () => {
+      setRouteCache('s-raw', bigPayload(), 60_000);
+      const entry = getRouteCacheEntry('s-raw')!;
+      const res = makeRes();
+      sendCachedEntry({ headers: { 'accept-encoding': 'identity' } }, res, entry, entry.etag, 60);
+
+      expect(res.headers['Content-Encoding']).toBeUndefined();
+      expect(res.headers['Content-Length']).toBe(String(entry.jsonBuffer.length));
+      expect(res.body).toEqual(entry.jsonBuffer);
+    });
+
+    it('Accept-Encoding: br 命中 → 优先返回 brotliBuffer（回归用例）', () => {
+      setRouteCache('s-br', bigPayload(), 60_000);
+      const entry = getRouteCacheEntry('s-br')!;
+      const res = makeRes();
+      sendCachedEntry({ headers: { 'accept-encoding': 'br' } }, res, entry, entry.etag, 60);
+
+      expect(res.headers['Content-Encoding']).toBe('br');
+      expect(res.body).toEqual(entry.brotliBuffer);
+    });
   });
 });
