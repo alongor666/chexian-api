@@ -56,6 +56,11 @@ export class DuckDBService implements DuckDBQueryable {
 
   get cacheSize(): number { return this.queryCache.size; }
 
+  /** 连接池状态快照（供 /health 等观测端点使用，未初始化时返回 null） */
+  getPoolStats(): { active: number; idle: number; waiting: number; maxSize: number } | null {
+    return this.connectionPool?.stats() ?? null;
+  }
+
   async query<T = any>(sql: string, cacheTtlMs: number = 0): Promise<T[]> {
     if (cacheTtlMs > 0) {
       const cached = this.queryCache.get<T[]>(sql);

@@ -33,7 +33,7 @@ describe('ConnectionPool — 幽灵满载防护', () => {
     }
 
     // 切换为成功实现；若 activeCount 被正确回滚，此次 acquire 应立即返回新连接，
-    // 而不是进排队等 5s ACQUIRE_TIMEOUT_MS 或抛 "queue full"。
+    // 而不是进排队等 ACQUIRE_TIMEOUT_MS（当前 2s）或抛 "queue full"。
     let callCount = 0;
     (instance as any).connect = async () => {
       callCount++;
@@ -56,7 +56,7 @@ describe('ConnectionPool — 幽灵满载防护', () => {
     // 先失败一次（修复前：activeCount=1，已"占满"maxSize=1）
     await expect(pool.acquire()).rejects.toThrow('transient failure');
 
-    // 切换为成功：修复前此时 acquire 会进排队等 5s 超时；修复后立即成功
+    // 切换为成功：修复前此时 acquire 会进排队等 ACQUIRE_TIMEOUT_MS 超时；修复后立即成功
     shouldFail = false;
     const conn = await Promise.race([
       pool.acquire(),

@@ -115,9 +115,14 @@ app.get('/health', (req, res) => {
     });
     return;
   }
-  res.json({
-    success: true,
-    message: 'Server is running',
+  // 连接池过载判定：所有连接被占用且仍有请求在排队 = 已达硬上限边缘
+  // 返回 503 让 Nginx/PM2 健康检查能感知，前端可立即重试而非堆积
+  const pool = duckdbService.getPoolStats();
+  const overloaded = pool !== null && pool.active >= pool.maxSize && pool.waiting > 0;
+  res.status(overloaded ? 503 : 200).json({
+    success: !overloaded,
+    message: overloaded ? 'Server overloaded' : 'Server is running',
+    pool,
     timestamp: new Date().toISOString(),
   });
 });

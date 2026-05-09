@@ -74,6 +74,13 @@ export const dbEnv = {
   DUCKDB_MAX_MEMORY: process.env.DUCKDB_MAX_MEMORY ?? '4GB',
   /** DuckDB 线程数 */
   DUCKDB_THREADS: process.env.DUCKDB_THREADS ? parseInt(process.env.DUCKDB_THREADS, 10) : 4,
+  /**
+   * 连接池最大连接数（默认 4，与 2 核 VPS 物理边界对齐）
+   * VPS 上调优可设置 DUCKDB_MAX_CONNECTIONS=4，本地开发可设置更大值
+   */
+  DUCKDB_MAX_CONNECTIONS: process.env.DUCKDB_MAX_CONNECTIONS
+    ? parseInt(process.env.DUCKDB_MAX_CONNECTIONS, 10)
+    : 4,
   /** 数据版本标识，用于 API 响应 meta */
   DATA_VERSION: process.env.DATA_VERSION ?? 'v1',
   /** 是否启用 Bundle 路由（false 字符串禁用） */

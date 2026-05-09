@@ -57,8 +57,11 @@ export class QueryCache {
 // 连接池
 // ============================================
 
-const ACQUIRE_TIMEOUT_MS = 5_000;
-const MAX_WAIT_QUEUE = 20;
+// 严苛边界：与 2 核 VPS 物理对齐
+// - 2s timeout：5s 排队对用户已无意义（已刷新或超时）
+// - queue=8：配合 maxConn=4，硬上限 12，永不进入"假死"
+const ACQUIRE_TIMEOUT_MS = 2_000;
+const MAX_WAIT_QUEUE = 8;
 
 export class ConnectionPool {
   private pool: DuckDBConnection[] = [];

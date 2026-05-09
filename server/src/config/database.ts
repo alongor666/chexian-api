@@ -20,7 +20,9 @@ export const databaseConfig: DatabaseConfig = {
   path: dbEnv.DUCKDB_PATH,
   dataPath: dbEnv.DATA_PATH,
   readOnly: false,
-  maxConnections: 10,
+  // 严苛边界：与 2 核 VPS 物理对齐（2 核 × THREADS=2 = 4 worker 槽，1:1 对齐）
+  // 通过 DUCKDB_MAX_CONNECTIONS env 可在 VPS reload 时调参，无需重新部署
+  maxConnections: dbEnv.DUCKDB_MAX_CONNECTIONS,
 };
 
 /**
