@@ -126,7 +126,75 @@ def test_build_doc_a_persists_kpi_sheet_id_before_init_fields(tmp_path: Path) ->
             pass
         persisted = json.loads(sp.read_text(encoding="utf-8"))
         assert persisted["doc_a"]["kpi_sheet_id"] == "SHT_KPI"
+        assert persisted["doc_a"]["kpi_fields_initialized"] is False
         assert len(init_calls) == 1
+    finally:
+        crt.init_default_sheet_fields = original
+
+
+def test_build_doc_a_retries_kpi_init_after_first_init_failure(tmp_path: Path) -> None:
+    """codex P1：init_fields 首次失败、kpi_fields_initialized=False 落盘后，
+    重跑必须补 init（不能因 docid+kpi_sheet_id 都齐就整体跳过）。"""
+    cli = MagicMock(spec=crt.WeComCli)
+    cli.create_doc.return_value = {"docid": "DOC_NEW", "url": "https://x/new"}
+    cli.get_sheets.return_value = [{"sheet_id": "SHT_KPI"}]
+
+    init_calls = []
+
+    def fake_init_fail_then_succeed(*args, **kwargs):
+        init_calls.append(1)
+        if len(init_calls) == 1:
+            raise RuntimeError("模拟首次 init_fields 失败")
+        # 第二次成功
+
+    state: dict = {}
+    sp = tmp_path / "state.json"
+    original = crt.init_default_sheet_fields
+    crt.init_default_sheet_fields = fake_init_fail_then_succeed
+    try:
+        # 首次：create_doc + get_sheets + 失败的 init
+        try:
+            crt.build_doc_a(cli, state, smoke=False, state_sink=sp, log=_silent_log)
+        except RuntimeError:
+            pass
+
+        # 重跑：必须不再 create_doc / get_sheets，但要重新 init（这里关键）
+        cli.create_doc.reset_mock()
+        cli.get_sheets.reset_mock()
+        result = crt.build_doc_a(cli, state, smoke=False, state_sink=sp, log=_silent_log)
+
+        cli.create_doc.assert_not_called()
+        cli.get_sheets.assert_not_called()
+        assert len(init_calls) == 2  # init 又被调一次（补 init）
+        assert result["kpi_fields_initialized"] is True
+        persisted = json.loads(sp.read_text(encoding="utf-8"))
+        assert persisted["doc_a"]["kpi_fields_initialized"] is True
+    finally:
+        crt.init_default_sheet_fields = original
+
+
+def test_build_doc_a_skip_for_legacy_state_without_init_flag(tmp_path: Path) -> None:
+    """向后兼容：PR #343 建好的 Doc A（state 无 kpi_fields_initialized 字段）必须直接跳过 init。"""
+    cli = MagicMock(spec=crt.WeComCli)
+    state = {
+        "doc_a": {
+            "docid": "DOC_LEGACY",
+            "url": "https://x/legacy",
+            "kpi_sheet_id": "SHT_LEGACY",
+            "kpi_records": {},
+            "salesman_sheets": {},
+        }
+    }
+    sp = tmp_path / "state.json"
+    init_called = []
+    original = crt.init_default_sheet_fields
+    crt.init_default_sheet_fields = lambda *a, **kw: init_called.append(1)
+    try:
+        result = crt.build_doc_a(cli, state, smoke=False, state_sink=sp, log=_silent_log)
+        cli.create_doc.assert_not_called()
+        cli.get_sheets.assert_not_called()
+        assert len(init_called) == 0  # 旧 state 视为已初始化，不补 init
+        assert result["docid"] == "DOC_LEGACY"
     finally:
         crt.init_default_sheet_fields = original
 

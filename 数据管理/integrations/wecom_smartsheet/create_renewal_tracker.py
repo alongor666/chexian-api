@@ -602,7 +602,10 @@ def build_doc_a(
     """
     doc_a = state.setdefault("doc_a", {})
 
-    if doc_a.get("docid") and doc_a.get("kpi_sheet_id"):
+    # 跳过条件：必须同时满足 docid + kpi_sheet_id + 字段已初始化
+    # 旧 state（无 kpi_fields_initialized 字段）视为已初始化，向后兼容 PR #343 建好的 Doc A
+    kpi_fields_done = doc_a.get("kpi_fields_initialized") is not False  # True or 缺字段
+    if doc_a.get("docid") and doc_a.get("kpi_sheet_id") and kpi_fields_done:
         log("info", f"[skip] Doc A already in state（{doc_a.get('url')}）")
         doc_a.setdefault("kpi_records", {})
         doc_a.setdefault("salesman_sheets", {})
@@ -629,8 +632,14 @@ def build_doc_a(
         kpi_sheet_id = sheets[0].get("sheet_id") or sheets[0].get("id")
         cli.update_sheet(doc_a["docid"], kpi_sheet_id, title="KPI看板")
         doc_a["kpi_sheet_id"] = kpi_sheet_id
+        doc_a["kpi_fields_initialized"] = False  # sheet 已建但字段还没 init
         save_state(state_sink, state)
-        init_default_sheet_fields(cli, doc_a["docid"], kpi_sheet_id, fs.KPI_FIELDS)
+
+    if doc_a.get("kpi_fields_initialized") is False:
+        # 进入此分支：本次 add_sheet 后字段未 init，或上次重跑在 init 阶段崩溃
+        init_default_sheet_fields(cli, doc_a["docid"], doc_a["kpi_sheet_id"], fs.KPI_FIELDS)
+        doc_a["kpi_fields_initialized"] = True
+        save_state(state_sink, state)
 
     doc_a.setdefault("kpi_records", {})
     doc_a.setdefault("salesman_sheets", {})
