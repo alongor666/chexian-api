@@ -20,7 +20,8 @@ export const databaseConfig: DatabaseConfig = {
   path: dbEnv.DUCKDB_PATH,
   dataPath: dbEnv.DATA_PATH,
   readOnly: false,
-  // 严苛边界：与 2 核 VPS 物理对齐（2 核 × THREADS=2 = 4 worker 槽，1:1 对齐）
+  // 严苛边界：双重对齐 —— CPU 物理上限 ∩ 应用 fanout 下限
+  // 默认 8 槽：覆盖 bundles 路由单请求 10 query 并发，仍比原 10 紧 20%
   // 通过 DUCKDB_MAX_CONNECTIONS env 可在 VPS reload 时调参，无需重新部署
   maxConnections: dbEnv.DUCKDB_MAX_CONNECTIONS,
 };

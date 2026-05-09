@@ -22,6 +22,21 @@ function requireInProduction(name: string, value: string | undefined, placeholde
   return value ?? '';
 }
 
+/**
+ * 安全解析正整数 env 变量。
+ * 拒绝 NaN / 0 / 负数 / 非整数，失败时记录警告并 fallback。
+ * 用于会进入连接池/线程池等下游消费者的关键资源参数，避免"启动看似成功但运行时不可用"。
+ */
+function parsePositiveInt(name: string, value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1 || !Number.isInteger(parsed)) {
+    console.warn(`[env] ${name}="${value}" 不是正整数，使用默认值 ${fallback}`);
+    return fallback;
+  }
+  return parsed;
+}
+
 // ─── 服务器配置 ────────────────────────────────────────────────────────────────
 
 export const serverEnv = {
@@ -75,12 +90,13 @@ export const dbEnv = {
   /** DuckDB 线程数 */
   DUCKDB_THREADS: process.env.DUCKDB_THREADS ? parseInt(process.env.DUCKDB_THREADS, 10) : 4,
   /**
-   * 连接池最大连接数（默认 4，与 2 核 VPS 物理边界对齐）
-   * VPS 上调优可设置 DUCKDB_MAX_CONNECTIONS=4，本地开发可设置更大值
+   * 连接池最大连接数（默认 8）
+   * 双重对齐：CPU 物理上限 ∩ 应用 fanout 下限。
+   * - 8 槽配合 queue=32，覆盖 bundles 路由单请求 10 query 并发 + cache-warmer
+   * - 仍比原 10 紧 20%，保留治理意图
+   * - 非正整数（NaN/0/负数）会 fallback 到默认值，避免启动后 DB 不可用
    */
-  DUCKDB_MAX_CONNECTIONS: process.env.DUCKDB_MAX_CONNECTIONS
-    ? parseInt(process.env.DUCKDB_MAX_CONNECTIONS, 10)
-    : 4,
+  DUCKDB_MAX_CONNECTIONS: parsePositiveInt('DUCKDB_MAX_CONNECTIONS', process.env.DUCKDB_MAX_CONNECTIONS, 8),
   /** 数据版本标识，用于 API 响应 meta */
   DATA_VERSION: process.env.DATA_VERSION ?? 'v1',
   /** 是否启用 Bundle 路由（false 字符串禁用） */

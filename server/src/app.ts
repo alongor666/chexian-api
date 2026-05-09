@@ -115,10 +115,11 @@ app.get('/health', (req, res) => {
     });
     return;
   }
-  // 连接池过载判定：所有连接被占用且仍有请求在排队 = 已达硬上限边缘
-  // 返回 503 让 Nginx/PM2 健康检查能感知，前端可立即重试而非堆积
+  // 连接池过载判定：基于"最近 5s 是否真的发生过 acquire 失败"
+  // 而非"瞬时 active==maxSize"——后者会因正常 fanout（如 bundles 单请求 10 query）误报。
+  // saturatedRecently 由 ConnectionPool 在 queue full 或 acquire timeout 时打点。
   const pool = duckdbService.getPoolStats();
-  const overloaded = pool !== null && pool.active >= pool.maxSize && pool.waiting > 0;
+  const overloaded = pool !== null && pool.saturatedRecently;
   res.status(overloaded ? 503 : 200).json({
     success: !overloaded,
     message: overloaded ? 'Server overloaded' : 'Server is running',

@@ -119,4 +119,40 @@ describe('ConnectionPool — 幽灵满载防护', () => {
     expect(c2).toBeDefined();
     expect(c3).toBeDefined();
   });
+
+  // CP-06: 真实饱和信号 — stats().saturatedRecently 仅在真正 acquire 失败时为 true，
+  // 防止 /health 因瞬时 active==maxSize 误报 503
+  it('CP-06: 正常占满（active==maxSize 但都 release）不触发 saturatedRecently', async () => {
+    const instance = makeInstance(async () => fakeConnection());
+    const pool = new ConnectionPool(instance, 2);
+
+    const c1 = await pool.acquire();
+    const c2 = await pool.acquire();
+    // 此时 active==maxSize，但没有 acquire 失败
+    expect(pool.stats().active).toBe(2);
+    expect(pool.stats().saturatedRecently).toBe(false);
+
+    pool.release(c1);
+    pool.release(c2);
+    expect(pool.stats().saturatedRecently).toBe(false);
+  });
+
+  // CP-07: 队列已满 fast-fail 必须打点 saturatedRecently
+  it('CP-07: queue full 错误立即标记 saturatedRecently=true', async () => {
+    // 用一个永远不 resolve 的 connect 模拟所有连接都阻塞
+    const blocking = new Promise<DuckDBConnection>(() => {});
+    const instance = makeInstance(() => blocking);
+    const pool = new ConnectionPool(instance, 1);
+
+    // 触发占满：第 1 个 acquire 阻塞在 connect
+    pool.acquire().catch(() => {});
+    // 后续 32 个进 waitQueue（不会立即 reject 因为还在排队等连接）
+    for (let i = 0; i < 32; i++) pool.acquire().catch(() => {});
+
+    expect(pool.stats().saturatedRecently).toBe(false); // 还没溢出
+
+    // 第 33 个超出 MAX_WAIT_QUEUE=32，立即 fast-fail
+    await expect(pool.acquire()).rejects.toThrow('queue full');
+    expect(pool.stats().saturatedRecently).toBe(true);
+  });
 });
