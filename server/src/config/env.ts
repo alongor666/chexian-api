@@ -11,6 +11,8 @@
  * - development 允许使用默认值继续运行
  */
 
+import { parsePositiveInt } from '../utils/parse-env.js';
+
 const isProd = process.env.NODE_ENV === 'production';
 
 // ─── 启动时校验工具 ────────────────────────────────────────────────────────────
@@ -20,21 +22,6 @@ function requireInProduction(name: string, value: string | undefined, placeholde
     throw new Error(`[env] 生产环境必需变量 ${name} 未配置${placeholder ? `（不允许使用默认占位符 "${placeholder}"）` : ''}`);
   }
   return value ?? '';
-}
-
-/**
- * 安全解析正整数 env 变量。
- * 拒绝 NaN / 0 / 负数 / 非整数，失败时记录警告并 fallback。
- * 用于会进入连接池/线程池等下游消费者的关键资源参数，避免"启动看似成功但运行时不可用"。
- */
-function parsePositiveInt(name: string, value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-  const parsed = parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1 || !Number.isInteger(parsed)) {
-    console.warn(`[env] ${name}="${value}" 不是正整数，使用默认值 ${fallback}`);
-    return fallback;
-  }
-  return parsed;
 }
 
 // ─── 服务器配置 ────────────────────────────────────────────────────────────────
