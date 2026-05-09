@@ -21,12 +21,11 @@ import { serverEnv } from '../config/env.js';
  * **暂不入选的路由**（待后续按真实参数协议补全）：
  *   - growth：必填 baselineStart/baselineEnd，前端默认值由业务逻辑决定
  *   - expense-development：前端用 cohortYears 而非日期
- *   - premium-plan：planYear/level/orgFilter 完全不同协议；handler 用 Promise.all 同时占 3 个连接，
- *     笛卡尔预热下易触发连接池耗尽（详见 PR #337 → revert）
- *   - quote-conversion/kpi、quote-conversion/funnel：触发 createDomainMiddleware('QuoteConversion')
- *     首次域加载，与 cache-warmer 并发竞争连接（同上事故）
+ *   - premium-plan：planYear/level/orgFilter 完全不同协议
+ *   - quote-conversion/funnel：dateStart/dateEnd/orgName 不同 key 命名
  *   - performance-summary：segmentTag/timePeriod/growthMode 业务参数
  *   - marketing-report：必填 holidayDates，无固定默认值
+ *   - renewal-tracker：前端额外 ...filterParams 默认值不易复现
  */
 type WarmRange = { startDate: string; maxDate: string };
 type RouteWarmConfig = {
@@ -93,23 +92,6 @@ const COMMON_WARM_ROUTES: ReadonlyArray<RouteWarmConfig> = [
             ...commonFilterQuery(range, org),
             limit: '20',
         }),
-    },
-    {
-        // 来源：useRenewalTracker → apiClient.getRenewalTracker({ start, end, cutoff, ...filterParams })
-        // 注意 query 协议与 commonFilterSchema 不同（start/end/cutoff，非 startDate/endDate/dateField），
-        // 也不带 orgNames 时不发送（与前端 useNonTimeFilterParams 的 if filters.org_level_3.length>0 一致）。
-        // 首屏 timeRange 默认 = { start: startDate, end: maxDate, cutoff: maxDate }（YTD）。
-        path: '/api/query/renewal-tracker',
-        ttlMs: QUERY_CACHE.hotspotMedium,
-        buildQuery: (range, org) => {
-            const q: Record<string, string> = {
-                start: range.startDate,
-                end: range.maxDate,
-                cutoff: range.maxDate,
-            };
-            if (org) q.orgNames = org;
-            return q;
-        },
     },
 ];
 
@@ -320,10 +302,6 @@ export class CacheWarmer {
         // 若这里不预载，首个 dashboard-bundle 即使 route cache 命中，也会先付出惰性域加载成本。
         await bootstrapper.ensureDomainLoaded('CrossSell');
         await bootstrapper.ensureDomainLoaded('ClaimsAgg');
-        // RenewalTracker 进入笛卡尔预热（6 路由 × 6 机构），4 并发首次访问会同时触发
-        // createDomainMiddleware('RenewalTracker') 域加载，加载本身需要连接池。
-        // 此处先序列化加载，让 warmCommonRoutes 启动时域已就绪，仅消耗 1 个连接做实际查询。
-        await bootstrapper.ensureDomainLoaded('RenewalTracker');
     }
 
     private async resolveDefaultDateRange(dataYear?: number): Promise<{ startDate: string; maxDate: string | null }> {
