@@ -2,7 +2,8 @@
  * HTML 报告托管路由
  * Reports HTML Hosting Route
  *
- * GET /reports/:filename — 鉴权后返回 server/data/reports/<filename>.html
+ * GET /api/reports/:filename — 鉴权后返回 server/data/reports/<filename>.html
+ * （前缀 /api/reports 是为了避开前端 SPA 的 /reports 保费达成页路由）
  *
  * 使用场景：
  *   - 数据管理/integrations/wecom_bot/push_html.py 把 HTML 复制到 server/data/reports/

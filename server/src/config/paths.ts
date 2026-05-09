@@ -157,7 +157,7 @@ export function getPatrolNarrativePaths(domain: string): string[] {
 
 // ── HTML 报告托管目录 ──────────────────────────────────────────────────────
 
-/** HTML 报告托管目录：server/data/reports/，由 /reports/:filename 路由 serve */
+/** HTML 报告托管目录：server/data/reports/，由 /api/reports/:filename 路由 serve */
 export function getReportsDir(): string {
   return path.resolve(getDataDir(), 'reports');
 }
