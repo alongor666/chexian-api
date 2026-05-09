@@ -13,6 +13,7 @@ dist/
 data/*.parquet
 data/*.duckdb
 data/*.duckdb.wal
+data/reports/
 
 # Logs
 logs/
