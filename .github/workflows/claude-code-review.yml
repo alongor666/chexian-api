@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
@@ -31,7 +31,21 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Detect workflow-only changes
+        id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename')
+          echo "$files"
+          if [ "$(echo "$files" | wc -l | tr -d ' ')" = "1" ] && [ "$files" = ".github/workflows/claude-code-review.yml" ]; then
+            echo "skip_review=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip_review=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run Claude Code Review
+        if: steps.changes.outputs.skip_review != 'true'
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
@@ -39,6 +53,11 @@ jobs:
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          use_sticky_comment: true
+          display_report: true
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 
+      - name: Skip Claude Code Review for workflow self-change
+        if: steps.changes.outputs.skip_review == 'true'
+        run: echo "Skipping Claude Code Review because this PR only changes the review workflow itself."
