@@ -11,6 +11,8 @@
  * - development 允许使用默认值继续运行
  */
 
+import { parsePositiveInt } from '../utils/parse-env.js';
+
 const isProd = process.env.NODE_ENV === 'production';
 
 // ─── 启动时校验工具 ────────────────────────────────────────────────────────────
@@ -74,6 +76,14 @@ export const dbEnv = {
   DUCKDB_MAX_MEMORY: process.env.DUCKDB_MAX_MEMORY ?? '4GB',
   /** DuckDB 线程数 */
   DUCKDB_THREADS: process.env.DUCKDB_THREADS ? parseInt(process.env.DUCKDB_THREADS, 10) : 4,
+  /**
+   * 连接池最大连接数（默认 8）
+   * 双重对齐：CPU 物理上限 ∩ 应用 fanout 下限。
+   * - 8 槽配合 queue=32，覆盖 bundles 路由单请求 10 query 并发 + cache-warmer
+   * - 仍比原 10 紧 20%，保留治理意图
+   * - 非正整数（NaN/0/负数）会 fallback 到默认值，避免启动后 DB 不可用
+   */
+  DUCKDB_MAX_CONNECTIONS: parsePositiveInt('DUCKDB_MAX_CONNECTIONS', process.env.DUCKDB_MAX_CONNECTIONS, 8),
   /** 数据版本标识，用于 API 响应 meta */
   DATA_VERSION: process.env.DATA_VERSION ?? 'v1',
   /** 是否启用 Bundle 路由（false 字符串禁用） */

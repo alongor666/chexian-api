@@ -115,9 +115,15 @@ app.get('/health', (req, res) => {
     });
     return;
   }
-  res.json({
-    success: true,
-    message: 'Server is running',
+  // 连接池过载判定：基于"最近 5s 是否真的发生过 acquire 失败"
+  // 而非"瞬时 active==maxSize"——后者会因正常 fanout（如 bundles 单请求 10 query）误报。
+  // saturatedRecently 由 ConnectionPool 在 queue full 或 acquire timeout 时打点。
+  const pool = duckdbService.getPoolStats();
+  const overloaded = pool !== null && pool.saturatedRecently;
+  res.status(overloaded ? 503 : 200).json({
+    success: !overloaded,
+    message: overloaded ? 'Server overloaded' : 'Server is running',
+    pool,
     timestamp: new Date().toISOString(),
   });
 });

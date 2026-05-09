@@ -57,8 +57,13 @@ export class QueryCache {
 // 连接池
 // ============================================
 
-const ACQUIRE_TIMEOUT_MS = 5_000;
-const MAX_WAIT_QUEUE = 20;
+// 严苛边界：双重对齐 —— CPU 物理上限 ∩ 应用 fanout 下限
+// - 2s timeout：5s 排队对用户已无意义
+// - queue=32：覆盖最坏 cold-start fanout（4 warmer × 10 query bundles - 8 active = 32）
+// - SATURATION_WINDOW：用真实失败信号驱动 /health 503，避免瞬时排队误报
+const ACQUIRE_TIMEOUT_MS = 2_000;
+const MAX_WAIT_QUEUE = 32;
+const SATURATION_WINDOW_MS = 5_000;
 
 export class ConnectionPool {
   private pool: DuckDBConnection[] = [];
@@ -70,6 +75,9 @@ export class ConnectionPool {
     timer: ReturnType<typeof setTimeout>;
   }> = [];
   private instance: DuckDBInstance;
+  // 真实饱和时间戳：仅在 acquire 真的失败（queue full / timeout）时才更新。
+  // /health 用此判定 503，避免"active==maxSize 但都正常完成"的瞬时误报。
+  private lastSaturationAt = 0;
 
   constructor(instance: DuckDBInstance, maxSize: number = 10) {
     this.instance = instance;
@@ -95,8 +103,9 @@ export class ConnectionPool {
         throw err;
       }
     }
-    // 队列已满 → fast-fail
+    // 队列已满 → fast-fail（标记真实饱和）
     if (this.waitQueue.length >= MAX_WAIT_QUEUE) {
+      this.lastSaturationAt = Date.now();
       throw new Error('ConnectionPool: queue full, server too busy');
     }
     // 达上限，排队等待（带超时）
@@ -104,6 +113,8 @@ export class ConnectionPool {
       const timer = setTimeout(() => {
         const idx = this.waitQueue.findIndex((w) => w.resolve === resolve);
         if (idx !== -1) this.waitQueue.splice(idx, 1);
+        // acquire 真的超时未拿到连接 → 标记真实饱和
+        this.lastSaturationAt = Date.now();
         reject(new Error(`ConnectionPool: acquire timeout after ${ACQUIRE_TIMEOUT_MS}ms`));
       }, ACQUIRE_TIMEOUT_MS);
       this.waitQueue.push({ resolve, reject, timer });
@@ -130,14 +141,26 @@ export class ConnectionPool {
   }
 
   /**
-   * 池子状态快照，用于诊断和监控（/api/debug/pool-stats 等）
+   * 池子状态快照，用于诊断和监控（/health, /api/debug/pool-stats 等）
+   *
+   * - active/idle/waiting/maxSize：原始计数
+   * - saturatedRecently：最近 5s 内是否发生过真实 acquire 失败（queue full / timeout）
+   *   /health 用此判定 503，避免"active==maxSize 但全部正常完成"的瞬时排队误报
    */
-  stats(): { active: number; idle: number; waiting: number; maxSize: number } {
+  stats(): {
+    active: number;
+    idle: number;
+    waiting: number;
+    maxSize: number;
+    saturatedRecently: boolean;
+  } {
     return {
       active: this.activeCount,
       idle: this.pool.length,
       waiting: this.waitQueue.length,
       maxSize: this.maxSize,
+      saturatedRecently:
+        this.lastSaturationAt > 0 && Date.now() - this.lastSaturationAt < SATURATION_WINDOW_MS,
     };
   }
 
