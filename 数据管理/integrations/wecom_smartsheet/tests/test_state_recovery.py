@@ -48,7 +48,7 @@ def test_build_doc_b_skips_when_state_has_docid(tmp_path: Path) -> None:
     cli.add_records.assert_not_called()
 
 
-def test_build_doc_a_skips_when_state_has_docid_and_kpi_sheet() -> None:
+def test_build_doc_a_skips_when_state_has_docid_and_kpi_sheet(tmp_path: Path) -> None:
     """新版 build_doc_a：完整建好（含 kpi_sheet_id）才跳过创建。"""
     cli = MagicMock(spec=crt.WeComCli)
     state = {
@@ -60,14 +60,15 @@ def test_build_doc_a_skips_when_state_has_docid_and_kpi_sheet() -> None:
             "salesman_sheets": {},
         }
     }
-    result = crt.build_doc_a(cli, state, smoke=False, log=_silent_log)
+    sp = tmp_path / "state.json"
+    result = crt.build_doc_a(cli, state, smoke=False, state_sink=sp, log=_silent_log)
     assert result["docid"] == "doc_a_existing"
     assert result["kpi_sheet_id"] == "sht_kpi_existing"
     cli.create_doc.assert_not_called()
     cli.add_sheet.assert_not_called()  # 不再建全量明细子表
 
 
-def test_build_doc_a_includes_salesman_sheets_dict() -> None:
+def test_build_doc_a_includes_salesman_sheets_dict(tmp_path: Path) -> None:
     """新版 doc_a state 必须有 salesman_sheets 字典占位（即使空）。"""
     cli = MagicMock(spec=crt.WeComCli)
     state = {
@@ -77,10 +78,74 @@ def test_build_doc_a_includes_salesman_sheets_dict() -> None:
             "kpi_sheet_id": "sht_kpi_existing",
         }
     }
-    result = crt.build_doc_a(cli, state, smoke=False, log=_silent_log)
+    sp = tmp_path / "state.json"
+    result = crt.build_doc_a(cli, state, smoke=False, state_sink=sp, log=_silent_log)
     assert "salesman_sheets" in result
     assert result["salesman_sheets"] == {}
     assert "kpi_records" in result
+
+
+def test_build_doc_a_persists_docid_immediately_after_create(tmp_path: Path) -> None:
+    """codex P1：create_doc 成功后立即 save_state，防止后续步骤失败造成孤儿 Doc A。"""
+    cli = MagicMock(spec=crt.WeComCli)
+    cli.create_doc.return_value = {"docid": "DOC_NEW", "url": "https://x/new"}
+    cli.get_sheets.side_effect = RuntimeError("模拟 get_sheets 失败")
+
+    state: dict = {}
+    sp = tmp_path / "state.json"
+    try:
+        crt.build_doc_a(cli, state, smoke=False, state_sink=sp, log=_silent_log)
+    except RuntimeError:
+        pass
+    persisted = json.loads(sp.read_text(encoding="utf-8"))
+    assert persisted["doc_a"]["docid"] == "DOC_NEW"
+    assert persisted["doc_a"]["url"] == "https://x/new"
+    assert "kpi_sheet_id" not in persisted["doc_a"]
+
+
+def test_build_doc_a_persists_kpi_sheet_id_before_init_fields(tmp_path: Path) -> None:
+    """codex P1：拿到 kpi_sheet_id 后立即 save_state，再 init_fields；init 失败重跑不再建 sheet。"""
+    cli = MagicMock(spec=crt.WeComCli)
+    cli.create_doc.return_value = {"docid": "DOC_NEW", "url": "https://x/new"}
+    cli.get_sheets.return_value = [{"sheet_id": "SHT_KPI"}]
+
+    init_calls = []
+
+    def fake_init(*args, **kwargs):
+        init_calls.append(1)
+        raise RuntimeError("模拟 init_fields 失败")
+
+    state: dict = {}
+    sp = tmp_path / "state.json"
+    original = crt.init_default_sheet_fields
+    crt.init_default_sheet_fields = fake_init
+    try:
+        try:
+            crt.build_doc_a(cli, state, smoke=False, state_sink=sp, log=_silent_log)
+        except RuntimeError:
+            pass
+        persisted = json.loads(sp.read_text(encoding="utf-8"))
+        assert persisted["doc_a"]["kpi_sheet_id"] == "SHT_KPI"
+        assert len(init_calls) == 1
+    finally:
+        crt.init_default_sheet_fields = original
+
+
+def test_group_by_salesman_unassigned_fallback() -> None:
+    """codex P1：空 salesman_name 必须 fallback 到 "未分配" 桶，不可静默丢弃（防数据丢失）。"""
+    rows = [
+        {"salesman_name": "张三", "vehicle_frame_no": "VIN_A"},
+        {"salesman_name": "", "vehicle_frame_no": "VIN_B"},
+        {"salesman_name": None, "vehicle_frame_no": "VIN_C"},
+        {"salesman_name": "  ", "vehicle_frame_no": "VIN_D"},  # 仅空白
+        {"salesman_name": "李四", "vehicle_frame_no": "VIN_E"},
+    ]
+    groups = dict(crt.group_by_salesman(rows))
+    assert "张三" in groups and len(groups["张三"]) == 1
+    assert "李四" in groups and len(groups["李四"]) == 1
+    assert crt.UNASSIGNED_SALESMAN in groups
+    assert len(groups[crt.UNASSIGNED_SALESMAN]) == 3
+    assert sum(len(g) for g in groups.values()) == len(rows)
 
 
 def test_state_path_smoke_isolated_from_prod() -> None:

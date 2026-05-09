@@ -129,3 +129,41 @@ def test_two_salesmen_isolated_sheet_ids(tmp_path: Path) -> None:
     assert sheets["李四"]["sheet_id"] == "sht_li"
     assert sheets["张三"]["records"] == {"VIN_Z1": "rec_z1"}
     assert sheets["李四"]["records"] == {"VIN_L1": "rec_l1"}
+
+
+def test_persists_sheet_id_before_init_fields(tmp_path: Path) -> None:
+    """codex P2：add_sheet 拿到 sheet_id 立即 save_state，再 init_fields；init 失败重试只补字段。"""
+    state = {"doc_a": {"docid": "doc_a", "kpi_sheet_id": "sht_kpi", "salesman_sheets": {}}}
+    cli = MagicMock(spec=crt.WeComCli)
+    cli.add_sheet.return_value = {"sheet_id": "sht_zhang_a"}
+
+    init_calls = []
+
+    def fake_init(*args, **kwargs):
+        init_calls.append(1)
+        if len(init_calls) == 1:
+            raise RuntimeError("模拟首次 init_fields 失败")
+
+    sp = tmp_path / "state.json"
+    original = crt.init_default_sheet_fields
+    crt.init_default_sheet_fields = fake_init
+    try:
+        try:
+            crt.build_doc_a_salesman_sheet(cli, state, "张三", [_row("VIN_001")], sp, _silent_log)
+        except RuntimeError:
+            pass
+
+        snap1 = state["doc_a"]["salesman_sheets"]["张三"]
+        assert snap1["sheet_id"] == "sht_zhang_a"
+        assert snap1.get("fields_initialized") is False
+
+        cli.add_records.return_value = [{"record_id": "rec_aa1"}]
+        crt.build_doc_a_salesman_sheet(cli, state, "张三", [_row("VIN_001")], sp, _silent_log)
+
+        cli.add_sheet.assert_called_once()
+        assert len(init_calls) == 2
+        snap2 = state["doc_a"]["salesman_sheets"]["张三"]
+        assert snap2["fields_initialized"] is True
+        assert snap2["records"] == {"VIN_001": "rec_aa1"}
+    finally:
+        crt.init_default_sheet_fields = original

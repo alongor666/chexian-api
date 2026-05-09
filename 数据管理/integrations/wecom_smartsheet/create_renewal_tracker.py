@@ -390,13 +390,14 @@ def fetch_rows(org: str, start: str, end: str) -> list[dict[str, Any]]:
     return build_source_rows(config)
 
 
+UNASSIGNED_SALESMAN = "未分配"
+
+
 def group_by_salesman(rows: list[dict[str, Any]]) -> list[tuple[str, list[dict[str, Any]]]]:
-    """按业务员名分组，跳过空名；返回 [(salesman, rows), ...]，按行数倒序。"""
+    """按业务员名分组；空名 fallback 到 "未分配" 桶（防数据丢失）；按行数倒序。"""
     buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        name = (row.get("salesman_name") or "").strip()
-        if not name:
-            continue
+        name = (row.get("salesman_name") or "").strip() or UNASSIGNED_SALESMAN
         buckets[name].append(row)
     return sorted(buckets.items(), key=lambda kv: (-len(kv[1]), kv[0]))
 
@@ -584,11 +585,20 @@ def build_doc_b(
 # ===========================================================================
 # 建 Doc A（主管汇总）
 # ===========================================================================
-def build_doc_a(cli: WeComCli, state: dict[str, Any], smoke: bool, log) -> dict[str, Any]:
+def build_doc_a(
+    cli: WeComCli,
+    state: dict[str, Any],
+    smoke: bool,
+    state_sink: Path,
+    log,
+) -> dict[str, Any]:
     """建主管汇总文档（仅 KPI 子表骨架）。返回 doc_a state。
 
     业务员子表（每业务员 1 个）由 build_doc_a_salesman_sheet 在 Doc B 建完后追加，
     避免一次性创建空子表后又难以判断哪些已写完。
+
+    幂等性：create_doc 成功后立即 save_state（拿到 docid 就 fsync），
+    后续 get_sheets/update_sheet/init_fields 任一失败重跑都不会再建第二份 Doc A。
     """
     doc_a = state.setdefault("doc_a", {})
 
@@ -612,13 +622,15 @@ def build_doc_a(cli: WeComCli, state: dict[str, Any], smoke: bool, log) -> dict[
             "url": url,
             "created_at": datetime.now().isoformat(timespec="seconds"),
         })
+        save_state(state_sink, state)
 
     if not doc_a.get("kpi_sheet_id"):
         sheets = cli.get_sheets(doc_a["docid"])
         kpi_sheet_id = sheets[0].get("sheet_id") or sheets[0].get("id")
         cli.update_sheet(doc_a["docid"], kpi_sheet_id, title="KPI看板")
-        init_default_sheet_fields(cli, doc_a["docid"], kpi_sheet_id, fs.KPI_FIELDS)
         doc_a["kpi_sheet_id"] = kpi_sheet_id
+        save_state(state_sink, state)
+        init_default_sheet_fields(cli, doc_a["docid"], kpi_sheet_id, fs.KPI_FIELDS)
 
     doc_a.setdefault("kpi_records", {})
     doc_a.setdefault("salesman_sheets", {})
@@ -647,7 +659,9 @@ def build_doc_a_salesman_sheet(
     snapshot = salesman_sheets.setdefault(salesman, {})
 
     # ---- 阶段 1：add_sheet + 字段初始化 ----
-    if not snapshot.get("sheet_id"):
+    # 幂等性：拿到 sheet_id 立即落盘，再 init_fields；init 失败重试只补字段不重建 tab。
+    is_new_sheet = not snapshot.get("sheet_id")
+    if is_new_sheet:
         log("info", f"[doc_a] add_sheet {salesman}")
         added = cli.add_sheet(docid, title=salesman)
         sheet_id = added.get("sheet_id") or added.get("id")
@@ -656,9 +670,20 @@ def build_doc_a_salesman_sheet(
             sheet_id = all_sheets[-1].get("sheet_id") or all_sheets[-1].get("id")
         if not sheet_id:
             raise WeComCliError(f"add_sheet 未拿到 sheet_id（业务员 {salesman}）")
-        init_default_sheet_fields(cli, docid, sheet_id, fs.WORKBENCH_FIELDS)
         snapshot["sheet_id"] = sheet_id
         snapshot.setdefault("records", {})
+        snapshot["fields_initialized"] = False
+        save_state(state_sink, state)
+
+    # 仅对当前进程刚 add_sheet 的 sheet 做 init；旧 state（无 fields_initialized 字段）视为已初始化向后兼容
+    if is_new_sheet and not snapshot.get("fields_initialized"):
+        init_default_sheet_fields(cli, docid, snapshot["sheet_id"], fs.WORKBENCH_FIELDS)
+        snapshot["fields_initialized"] = True
+        save_state(state_sink, state)
+    elif snapshot.get("fields_initialized") is False:
+        # 上次 add_sheet 成功但 init 失败的恢复路径
+        init_default_sheet_fields(cli, docid, snapshot["sheet_id"], fs.WORKBENCH_FIELDS)
+        snapshot["fields_initialized"] = True
         save_state(state_sink, state)
 
     sheet_id = snapshot["sheet_id"]
@@ -1003,7 +1028,11 @@ base AS (
     FROM policy_agg
   ) WHERE rn = 1
 )
-SELECT salesman_name, COUNT(*) AS rows, ROUND(SUM(premium), 2) AS total_premium
+SELECT
+  CASE WHEN salesman_name IS NULL OR TRIM(salesman_name) = ''
+       THEN '未分配' ELSE TRIM(salesman_name) END AS salesman_name,
+  COUNT(*) AS rows,
+  ROUND(SUM(premium), 2) AS total_premium
 FROM base GROUP BY 1 ORDER BY 2 DESC;
 """.strip()
 
@@ -1110,7 +1139,7 @@ def main() -> int:
 
         # 1) 建 Doc A 空架子（仅 KPI 子表）
         try:
-            build_doc_a(cli, state, smoke, log)
+            build_doc_a(cli, state, smoke, sp, log)
             save_state(sp, state)
         except Exception as exc:  # noqa: BLE001
             log("error", f"Doc A 建立失败：{exc}")
