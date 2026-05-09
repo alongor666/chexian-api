@@ -32,8 +32,10 @@ echo "===> 2/4 修改 nginx：注入 location /reports/"
 if grep -q "location /reports/" "$NGINX_CONF"; then
   echo "⚠ /reports/ 已配置，跳过 nginx 修改"
 else
-  # 在 location /health 块后插入 /reports/ 块
-  cp "$NGINX_CONF" "${NGINX_CONF}.bak.$(date +%Y%m%d_%H%M%S)"
+  # 用本次专属备份路径（避免与历史 .bak.* 冲突，确保 awk 输入唯一 + 回滚精确）
+  TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+  BACKUP="${NGINX_CONF}.bak.${TIMESTAMP}"
+  cp -- "$NGINX_CONF" "$BACKUP"
 
   # 用 awk 在 location /health { ... } 块结束的 } 后插入新块
   awk '
@@ -53,12 +55,13 @@ else
       print "    }"
       in_health=0
     }
-  ' "${NGINX_CONF}.bak."* > "$NGINX_CONF"
+  ' -- "$BACKUP" > "${NGINX_CONF}.new"
+  mv -- "${NGINX_CONF}.new" "$NGINX_CONF"
 
   # nginx 语法测试
   if ! nginx -t 2>&1; then
     echo "❌ nginx 配置语法错误，回滚..."
-    cp "${NGINX_CONF}.bak."* "$NGINX_CONF"
+    cp -- "$BACKUP" "$NGINX_CONF"
     nginx -t
     exit 1
   fi
