@@ -141,6 +141,16 @@ export const opsEnv = {
     : 90,
 } as const;
 
+// ─── HTML 报告托管 ────────────────────────────────────────────────────────────
+
+export const reportsEnv = {
+  /** 公网 base URL，用于拼接报告链接写入企微智能表格
+   *  本地：http://localhost:3000
+   *  VPS：https://chexian.cretvalu.com
+   */
+  PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000',
+} as const;
+
 // ─── 测试配置 ──────────────────────────────────────────────────────────────────
 
 const _e2eTestMode = process.env.E2E_TEST_MODE ?? '';

@@ -168,6 +168,7 @@ import agentForecastRoutes from './agent/routes/agent-forecast.js';
 import skillsRoutes from './routes/skills.js';
 import workflowsRoutes from './routes/workflows.js';
 import copilotRoutes from './routes/copilot.js';
+import reportsRoutes from './routes/reports.js';
 
 app.use('/api/auth/wecom', wecomAuthRoutes); // 放前面避免 loginLimiter 影响
 app.use('/api/auth', authRoutes);
@@ -182,6 +183,8 @@ app.use('/api/agent/forecast', agentForecastRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/workflows', workflowsRoutes);
 app.use('/api/copilot', copilotRoutes);
+// HTML 报告托管（不在 /api 前缀下，由 authMiddleware 在路由内部守卫）
+app.use('/reports', reportsRoutes);
 
 /**
  * 7. 404处理
