@@ -21,12 +21,11 @@ import { serverEnv } from '../config/env.js';
  * **暂不入选的路由**（待后续按真实参数协议补全）：
  *   - growth：必填 baselineStart/baselineEnd，前端默认值由业务逻辑决定
  *   - expense-development：前端用 cohortYears 而非日期
+ *   - premium-plan：planYear/level/orgFilter 完全不同协议
+ *   - quote-conversion/funnel：dateStart/dateEnd/orgName 不同 key 命名
  *   - performance-summary：segmentTag/timePeriod/growthMode 业务参数
  *   - marketing-report：必填 holidayDates，无固定默认值
- *
- * **ALL_ONLY 路由**（首屏请求空 filters，不参与 × orgs cartesian）：
- *   - quote-conversion/kpi、quote-conversion/funnel：QuoteConversionPage 初始 filters={}
- *   - plan-achievement：plan_year=2026 + level=org（PlanFact 不按 PolicyFact orgs 切分）
+ *   - renewal-tracker：前端额外 ...filterParams 默认值不易复现
  */
 type WarmRange = { startDate: string; maxDate: string };
 type RouteWarmConfig = {
@@ -92,57 +91,6 @@ const COMMON_WARM_ROUTES: ReadonlyArray<RouteWarmConfig> = [
         buildQuery: (range, org) => ({
             ...commonFilterQuery(range, org),
             limit: '20',
-        }),
-    },
-    {
-        // 来源：useRenewalTracker → apiClient.getRenewalTracker({ start, end, cutoff, ...filterParams })
-        // RenewalTrackerPage.tsx:33-41 首屏默认 timeView='ytd' → start={year}-01-01, end=cutoff=latestDataDate
-        // 非时间筛选首屏全空（FilterContext 默认值），仅 orgNames 由 cartesian 维度提供
-        path: '/api/query/renewal-tracker',
-        ttlMs: QUERY_CACHE.hotspotMedium,
-        buildQuery: (range, org) => {
-            const q: Record<string, string> = {
-                start: range.startDate,
-                end: range.maxDate,
-                cutoff: range.maxDate,
-            };
-            if (org) q.orgNames = org;
-            return q;
-        },
-    },
-];
-
-/**
- * ALL_ONLY 预热路由：首屏请求不带任何业务筛选（用户尚未操作 FilterPanel），
- * 也不按 PolicyFact org_level_3 切分（业务上不合理或参数协议不同）。
- *
- * 入选硬门槛同 COMMON_WARM_ROUTES：query string 必须与前端 hook 首次渲染逐字节一致。
- */
-const ALL_ONLY_WARM_ROUTES: ReadonlyArray<RouteWarmConfig> = [
-    {
-        // 来源：useQuoteKpi(filters)，QuoteConversionPage.tsx:17 useState<QuoteFilters>({})
-        // 首屏 filtersToParams({}) 返回空对象 → 无任何 query 参数
-        path: '/api/query/quote-conversion/kpi',
-        ttlMs: QUERY_CACHE.hotspotMedium,
-        buildQuery: () => ({}),
-    },
-    {
-        // 来源：useQuoteFunnel(filters)，与 kpi 同源 filters
-        path: '/api/query/quote-conversion/funnel',
-        ttlMs: QUERY_CACHE.hotspotMedium,
-        buildQuery: () => ({}),
-    },
-    {
-        // 来源：usePremiumPlan.loadInitial(2026) → apiClient.getPlanAchievement({...})
-        // hooks/usePremiumPlan.ts:88,196-201 默认 planYear=2026, level=org, sortField=actual_vehicle, sortOrder=desc
-        // 后端 zod schema 已对齐这些 default
-        path: '/api/query/plan-achievement',
-        ttlMs: QUERY_CACHE.hotspotMedium,
-        buildQuery: () => ({
-            planYear: '2026',
-            level: 'org',
-            sortField: 'actual_vehicle',
-            sortOrder: 'desc',
         }),
     },
 ];
@@ -496,7 +444,7 @@ export class CacheWarmer {
             return result;
         }
 
-        const tasks = this.buildAllWarmupTasks(dateRange);
+        const tasks = this.buildCommonRouteTasks(dateRange);
         const token = signServiceToken();
 
         let stopped = false;
@@ -557,18 +505,6 @@ export class CacheWarmer {
             `[CacheWarmer] warmCommonRoutes done: written=${result.written}, skipped=${result.skipped}, failed=${result.failed}, ${result.durationMs}ms${result.rssStopped ? ' (RSS-stopped)' : ''}`,
         );
         return result;
-    }
-
-    /**
-     * 合并 COMMON × orgs 笛卡尔 + ALL_ONLY × [null]，得到本轮要预热的全部任务清单。
-     *
-     * 任意一组为空（例如未来想临时关闭 ALL_ONLY 预热）也安全：分别构造、再 concat。
-     */
-    buildAllWarmupTasks(dateRange: WarmRange): Array<{ url: string; ttlMs: number; label: string }> {
-        return [
-            ...this.buildCommonRouteTasks(dateRange),
-            ...this.buildCommonRouteTasks(dateRange, ALL_ONLY_WARM_ROUTES, [null]),
-        ];
     }
 
     /**
