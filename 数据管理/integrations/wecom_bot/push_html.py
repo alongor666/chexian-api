@@ -42,7 +42,7 @@ FEEDBACK_META_NAME = "_feedback_form_meta.json"
 # 项目根：数据管理/integrations/wecom_bot/ 向上 3 级
 REPO_ROOT = HERE.parent.parent.parent
 DEFAULT_REPORTS_DIR = REPO_ROOT / "server" / "data" / "reports"
-DEFAULT_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:3000")
+DEFAULT_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://chexian.cretvalu.com")
 
 FEEDBACK_PLACEHOLDER = "<!-- FEEDBACK_URL -->"
 
