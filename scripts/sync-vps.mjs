@@ -22,7 +22,7 @@
  *   数据管理/warehouse/fact/customer_flow/        →  data/fact/customer_flow/
  *   数据管理/warehouse/fact/renewal_tracker/      →  data/fact/renewal_tracker/
  *   数据管理/patrol_reports/                      →  data/patrol_reports/
- *   server/data/reports/                          →  data/reports/
+ *   server/data/reports/                          →  data/reports/  （追加同步，不删除远端历史报告）
  *
  * 可选环境变量:
  *   SYNC_VPS_SSH_ALIAS, SYNC_VPS_HOST, SYNC_VPS_USER, SYNC_VPS_PORT,
@@ -326,17 +326,19 @@ async function execRemote(config, remoteCommand, options = {}) {
 const RSYNC_EXCLUDES = ['_incoming.parquet', '*.tmp', '_tmp/', '.DS_Store'];
 const RSYNC_EXCLUDE_ARGS = RSYNC_EXCLUDES.flatMap((p) => ['--exclude', p]);
 
-async function rsyncDir(alias, localDir, remoteDir, label) {
+async function rsyncDir(alias, localDir, remoteDir, label, options = {}) {
   // 确保 localDir 以 / 结尾（rsync 语义：同步目录内容而非目录本身）
   const src = localDir.endsWith('/') ? localDir : `${localDir}/`;
   const dst = remoteDir.endsWith('/') ? remoteDir : `${remoteDir}/`;
+  const deleteRemote = options.deleteRemote !== false;
+  const deleteArgs = deleteRemote ? ['--delete'] : [];
 
-  log('yellow', `  rsync ${label}: ${src} → ${alias}:${dst}`);
+  log('yellow', `  rsync ${label}${deleteRemote ? '' : ' (no --delete)'}: ${src} → ${alias}:${dst}`);
 
   try {
     await runLocal('rsync', [
       '-azv',
-      '--delete',
+      ...deleteArgs,
       ...RSYNC_EXCLUDE_ARGS,
       '-e', 'ssh',
       src,
@@ -411,12 +413,13 @@ function printHelp() {
   node scripts/sync-vps.mjs --dry-run   # 仅打印执行计划，不连接 VPS
   node scripts/sync-vps.mjs --no-restart  # 同步但不重启 PM2
 
-同步目录（使用 rsync --delete，VPS 多余文件会被清理）:
+同步目录（默认使用 rsync --delete，VPS 多余文件会被清理）:
   数据管理/warehouse/fact/policy/current/       →  data/current/
   数据管理/warehouse/dim/salesman/              →  data/dim/salesman/
   数据管理/warehouse/dim/plan/                  →  data/dim/plan/
   数据管理/warehouse/dim/brand/                 →  data/dim/brand/
   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/  (存在时)
+  server/data/reports/                          →  data/reports/  (不使用 --delete，保留历史报告)
 
 可选参数:
   --alias <name>       覆盖 SSH alias（默认 chexian-vps-deploy）
@@ -440,7 +443,7 @@ function printDryRun(sshConfig, runConfig) {
   console.log(`Restart: ${runConfig.noRestart ? 'no' : 'yes'}`);
   console.log(`Health URL: ${runConfig.healthUrl}`);
   console.log('');
-  console.log('将执行以下 rsync（含 --delete）:');
+  console.log('将执行以下 rsync:');
 
   const syncTasks = [
     { label: 'policy/current',       local: LOCAL_CURRENT_DIR,            remote: `${runConfig.remoteDir}/current`,               critical: true },
@@ -455,6 +458,7 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${runConfig.remoteDir}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${runConfig.remoteDir}/dim/plate_region`,       critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${runConfig.remoteDir}/patrol_reports`,         critical: false },
+    { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${runConfig.remoteDir}/reports`,                critical: false, deleteRemote: false },
   ];
 
   for (const task of syncTasks) {
@@ -462,7 +466,8 @@ function printDryRun(sshConfig, runConfig) {
     const tag = task.critical ? '[CRITICAL]' : '[optional]';
     const suffix = exists ? '' : '  （本地目录不存在，跳过）';
     const excludeStr = RSYNC_EXCLUDES.map((p) => `--exclude '${p}'`).join(' ');
-    console.log(`  ${tag} rsync -azv --delete ${excludeStr} -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
+    const deleteArg = task.deleteRemote === false ? '' : '--delete ';
+    console.log(`  ${tag} rsync -azv ${deleteArg}${excludeStr} -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
   }
 }
 
@@ -510,7 +515,7 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,   remote: `${remote}/patrol_reports`,         critical: false },
-    { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,     remote: `${remote}/reports`,                critical: false },
+    { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,     remote: `${remote}/reports`,                critical: false, deleteRemote: false },
   ];
 
   // 过滤不存在的目录
@@ -527,7 +532,7 @@ async function runStandardMode(sshConfig, runConfig) {
 
   // 并行 rsync 所有目录
   const results = await Promise.allSettled(
-    activeTasks.map(task => rsyncDir(alias, task.local, task.remote, task.label))
+    activeTasks.map(task => rsyncDir(alias, task.local, task.remote, task.label, { deleteRemote: task.deleteRemote }))
   );
 
   // 收集失败结果；optional 任务一次性重试（网络抖动/SSH 瞬时失败容错）
@@ -539,7 +544,7 @@ async function runStandardMode(sshConfig, runConfig) {
     let rsyncResult = result.status === 'fulfilled' ? result.value : { ok: false, label: task.label, error: result.reason?.message };
     if (!rsyncResult.ok && !task.critical) {
       log('yellow', `  重试 optional ${task.label}（抖动容错）...`);
-      rsyncResult = await rsyncDir(alias, task.local, task.remote, task.label);
+      rsyncResult = await rsyncDir(alias, task.local, task.remote, task.label, { deleteRemote: task.deleteRemote });
     }
     if (!rsyncResult.ok) {
       failures.push({ ...rsyncResult, critical: task.critical });

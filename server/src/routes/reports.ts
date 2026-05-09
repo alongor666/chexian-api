@@ -29,6 +29,19 @@ import { getReportsDir } from '../config/paths.js';
 const router = Router();
 
 const REPORTS_DIR = getReportsDir();
+const REPORT_HTML_CSP = [
+  "default-src 'none'",
+  "script-src 'none'",
+  "connect-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'self'",
+  "style-src 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "sandbox allow-popups allow-popups-to-escape-sandbox",
+].join('; ');
 
 if (!fs.existsSync(REPORTS_DIR)) {
   fs.mkdirSync(REPORTS_DIR, { recursive: true });
@@ -53,7 +66,9 @@ router.get(
 
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.set('Cache-Control', 'private, max-age=0, must-revalidate');
+    res.set('Content-Security-Policy', REPORT_HTML_CSP);
     res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Referrer-Policy', 'no-referrer');
 
     fs.createReadStream(fullPath).pipe(res);
   })
