@@ -283,7 +283,7 @@ def main() -> int:
         feedback_url=feedback_url,
         source_label=title,
     )
-    public_url = f"{base_url}/reports/{staged.name}"
+    public_url = f"{base_url}/api/reports/{staged.name}"
     print(f"[托管] HTML 已落到：{staged}")
     print(f"[公网] URL：{public_url}")
 

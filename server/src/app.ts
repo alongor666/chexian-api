@@ -183,8 +183,8 @@ app.use('/api/agent/forecast', agentForecastRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/workflows', workflowsRoutes);
 app.use('/api/copilot', copilotRoutes);
-// HTML 报告托管（不在 /api 前缀下，由 authMiddleware 在路由内部守卫）
-app.use('/reports', reportsRoutes);
+// HTML 报告托管（authMiddleware 在路由内部守卫；放 /api 前缀避开前端 SPA 的 /reports 路由）
+app.use('/api/reports', reportsRoutes);
 
 /**
  * 7. 404处理
