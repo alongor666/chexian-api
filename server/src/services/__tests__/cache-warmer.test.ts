@@ -4,9 +4,9 @@ import { cacheWarmer } from '../cache-warmer.js';
 describe('cacheWarmer.warmCommonRoutes', () => {
   const range = { startDate: '2026-01-01', maxDate: '2026-05-08' };
 
-  it('buildCommonRouteTasks: 默认 5 路由 × 6 机构 = 30 个任务', () => {
+  it('buildCommonRouteTasks: 默认 6 路由 × 6 机构 = 36 个任务', () => {
     const tasks = cacheWarmer.buildCommonRouteTasks(range);
-    expect(tasks.length).toBe(5 * 6);
+    expect(tasks.length).toBe(6 * 6);
   });
 
   it('每个任务 URL 含 dateField/startDate/endDate；首条无 orgNames（全公司）', () => {
@@ -47,6 +47,29 @@ describe('cacheWarmer.warmCommonRoutes', () => {
     const t = tasks.find((x) => x.url.includes('/api/query/salesman-ranking?'));
     expect(t).toBeDefined();
     expect(t!.url).toContain('limit=20');
+  });
+
+  it('renewal-tracker 路由 query 用 start/end/cutoff（对齐前端 useRenewalTracker，非 commonFilterSchema）', () => {
+    const tasks = cacheWarmer.buildCommonRouteTasks(range);
+    const t = tasks.find((x) => x.url.includes('/api/query/renewal-tracker?'));
+    expect(t).toBeDefined();
+    // 续保追踪用独立时间协议（expiry_date 语义）
+    expect(t!.url).toContain('start=2026-01-01');
+    expect(t!.url).toContain('end=2026-05-08');
+    expect(t!.url).toContain('cutoff=2026-05-08');
+    // 必须不带 dateField/startDate/endDate（commonFilterSchema 的 key）
+    expect(t!.url).not.toContain('dateField=');
+    expect(t!.url).not.toContain('startDate=');
+    expect(t!.url).not.toContain('endDate=');
+  });
+
+  it('renewal-tracker 全公司任务不带 orgNames（与前端 if filters.org_level_3.length>0 一致）', () => {
+    const tasks = cacheWarmer.buildCommonRouteTasks(range);
+    const allOrg = tasks.filter(
+      (x) => x.url.includes('/api/query/renewal-tracker?') && x.label.includes('(all)'),
+    );
+    expect(allOrg.length).toBe(1);
+    expect(allOrg[0].url).not.toContain('orgNames=');
   });
 
   it('显式传入路由/机构 → 任务数 = routes × orgs', () => {
