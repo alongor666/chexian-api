@@ -226,12 +226,23 @@ def build_proj_year_projection(
 
     # 用 max(insurance_start_date)（起保日）算外推系数
     # 已赚保费按起保日累计，外推基准也应该按起保日：max(起保日) - proj_year-01-01 即"已签业务覆盖的起保区间"
+    # 注意：必须读 v_policy_proj（已过滤主全/交三/单交），与 df_signed 同一总体；
+    # 若读原始 parquet，被排除的 '未知'/'其他' 险别组合若有更晚起保日，会高估 months_in、低估 scale_factor
     max_date_row = con.execute(f"""
         SELECT MAX(insurance_start_date)::DATE AS d,
                DATE_DIFF('day', DATE '{proj_year}-01-01', MAX(insurance_start_date)::DATE) AS days_in
-        FROM read_parquet(?, union_by_name=true)
+        FROM read_parquet('{GLOB}', union_by_name=true)
         WHERE YEAR(insurance_start_date) = {proj_year}
-    """, [GLOB]).fetchone()
+          AND {COVERAGE_FILTER}
+    """).fetchone()
+
+    # P1 守护：预测年无数据时 MAX 返回 NULL，给出明确错误而非 TypeError
+    if max_date_row is None or max_date_row[0] is None:
+        raise SystemExit(
+            f"[ERROR] {proj_year} 年无符合 coverage_combination IN ('主全','交三','单交') 的起保保单。\n"
+            f"  请确认：1) 数据已加载到 {proj_year} 年 2) coverage_combination 字段非空\n"
+            f"  跨年场景常见原因：--proj-year 设置过早，数据尚未到位"
+        )
 
     max_start_date = str(max_date_row[0])
     days_in = max(int(max_date_row[1]), 1)
@@ -650,8 +661,19 @@ def main():
     if args.overrides and args.overrides.exists():
         overrides_df = pd.read_csv(args.overrides, comment="#", encoding="utf-8-sig")
         overrides_df = overrides_df.dropna(subset=["expected_lr"])
+
+        # P2 守护：4D key 必须唯一，否则 left-join 会复制目标 cell 行，扭曲全年保费/赔款/LR
+        key_cols = ["customer_category", "is_nev", "vehicle_type_4", "coverage_combination"]
+        dup_mask = overrides_df.duplicated(subset=key_cols, keep=False)
+        if dup_mask.any():
+            dup_rows = overrides_df[dup_mask][key_cols + ["expected_lr"]]
+            raise SystemExit(
+                f"[ERROR] overrides CSV 含重复 4D key（会导致 merge 后行复制扭曲结果），请去重后重试:\n"
+                f"{dup_rows.to_string(index=False)}"
+            )
+
         overrides_used = len(overrides_df)
-        print(f"[INFO]   - 加载 overrides: {overrides_used} 行")
+        print(f"[INFO]   - 加载 overrides: {overrides_used} 行（4D key 唯一性已校验）")
 
     df = apply_fallback_and_overrides(
         df_proj, hist, scale_factor, overrides_df, threshold_premium, threshold_vehicle,
