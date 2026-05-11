@@ -24,6 +24,8 @@ export class DuckDBService implements DuckDBQueryable {
   private isInitialized = false;
   private connectionPool: ConnectionPool | null = null;
   private queryCache = new QueryCache();
+  private inflightQueries = new Map<string, Promise<any[]>>();
+  private queryCacheEpoch = 0;
 
   constructor(private readonly config?: DuckDBServiceConfig) {}
 
@@ -51,6 +53,8 @@ export class DuckDBService implements DuckDBQueryable {
     // 在 ETL 后自然不再被命中，由 LRU 淘汰，无需主动清空（避免日切 cold cliff）。
     const size = this.queryCache.size;
     this.queryCache.invalidateAll();
+    this.inflightQueries.clear();
+    this.queryCacheEpoch++;
     if (size > 0 && !options?.silent) console.log(`[DuckDB] Query cache invalidated (${size} entries; route cache preserved, version-keyed)`);
   }
 
@@ -71,7 +75,25 @@ export class DuckDBService implements DuckDBQueryable {
     if (cacheTtlMs > 0) {
       const cached = this.queryCache.get<T[]>(sql);
       if (cached) { recordQueryMetric(sql, 0, true); return cached; }
+      const inflight = this.inflightQueries.get(sql) as Promise<T[]> | undefined;
+      if (inflight) {
+        const result = await inflight;
+        recordQueryMetric(sql, 0, true);
+        return result;
+      }
+
+      const promise = this.executeQuery(sql, cacheTtlMs, this.queryCacheEpoch);
+      this.inflightQueries.set(sql, promise);
+      try {
+        return await promise;
+      } finally {
+        this.inflightQueries.delete(sql);
+      }
     }
+    return this.executeQuery(sql, cacheTtlMs, this.queryCacheEpoch);
+  }
+
+  private async executeQuery<T = any>(sql: string, cacheTtlMs: number = 0, cacheEpoch: number = this.queryCacheEpoch): Promise<T[]> {
     if (!this.connectionPool) throw new AppError(500, 'DuckDB not initialized');
     const pool = this.connectionPool; // 捕获引用，防止 close() 期间置 null 导致 finally 空引用
     const conn = await pool.acquire();
@@ -85,7 +107,7 @@ export class DuckDBService implements DuckDBQueryable {
         console.warn(`[DuckDB] ⚠️ Slow query (${duration}ms) route=${ctx?.routeKey ?? 'unknown'} reqId=${ctx?.requestId ?? '-'}`);
       }
       const converted = convertBigIntToNumber(result) as T[];
-      if (cacheTtlMs > 0) this.queryCache.set(sql, converted, cacheTtlMs);
+      if (cacheTtlMs > 0 && cacheEpoch === this.queryCacheEpoch) this.queryCache.set(sql, converted, cacheTtlMs);
       recordQueryMetric(sql, duration, false);
       return converted;
     } catch (err: unknown) {

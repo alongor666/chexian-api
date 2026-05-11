@@ -51,8 +51,11 @@ export const HTTP_MAX_AGE = {
   query: 300,     // 5 分钟（旧: 30-60 秒）— 独立查询端点
 } as const;
 
+const NON_SEMANTIC_QUERY_PARAMS = new Set(['_t', '_', 'cacheBust', 'cachebuster', 'timestamp']);
+
 export function buildRouteCacheKey(req: Request, routeName: string): string {
   const normalizedQuery = Object.entries(req.query)
+    .filter(([key]) => !NON_SEMANTIC_QUERY_PARAMS.has(key))
     .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : String(value)] as const)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)

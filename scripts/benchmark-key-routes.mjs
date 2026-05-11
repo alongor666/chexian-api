@@ -74,6 +74,25 @@ function routeKey(route) {
   return route.split('?')[0] || route;
 }
 
+function asRouteSpec(route) {
+  if (typeof route === 'string') {
+    return { label: routeKey(route), route, dynamicCacheBust: false };
+  }
+  return route;
+}
+
+function displayRoute(spec) {
+  return spec.dynamicCacheBust
+    ? `${spec.route}${spec.route.includes('?') ? '&' : '?'}_t=<dynamic>`
+    : spec.route;
+}
+
+function routeForRequest(spec, sequence) {
+  if (!spec.dynamicCacheBust) return spec.route;
+  const sep = spec.route.includes('?') ? '&' : '?';
+  return `${spec.route}${sep}_t=${Date.now()}-${sequence}`;
+}
+
 function readJsonSafe(text) {
   try {
     return JSON.parse(text);
@@ -154,7 +173,7 @@ async function runOne(baseUrl, route, token, fallbackRetryAfterMs) {
 
 async function benchmarkRoute({
   baseUrl,
-  route,
+  route: rawRoute,
   coldRuns,
   iterations,
   warmup,
@@ -163,13 +182,17 @@ async function benchmarkRoute({
   max429Retries,
   retryAfterMs,
 }) {
+  const route = asRouteSpec(rawRoute);
   const statusCounts = {};
   const errorCounts = {};
+  let requestSequence = 0;
 
   const runWith429Retry = async () => {
     let retries = 0;
+    requestSequence += 1;
+    const requestRoute = routeForRequest(route, requestSequence);
     while (true) {
-      const result = await runOne(baseUrl, route, token, retryAfterMs);
+      const result = await runOne(baseUrl, requestRoute, token, retryAfterMs);
       if (result.status === 429 && retries < max429Retries) {
         retries += 1;
         await sleep(result.retryAfterMs || retryAfterMs);
@@ -236,8 +259,10 @@ async function benchmarkRoute({
   const coldStatsAll = summarize(coldSamplesAll);
 
   return {
-    route,
-    routeKey: routeKey(route),
+    label: route.label,
+    route: displayRoute(route),
+    routeKey: routeKey(route.route),
+    dynamicCacheBust: Boolean(route.dynamicCacheBust),
     coldRuns,
     iterations,
     warmup,
@@ -447,20 +472,22 @@ async function main() {
   }
 
   const routes = [
-    `/api/query/cross-sell-summary?dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger`,
-    `/api/query/cross-sell?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger`,
-    `/api/query/cross-sell-trend?dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger&granularity=monthly`,
-    `/api/query/cross-sell-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger&granularity=monthly&timePeriod=monthly`,
-    `/api/query/performance-summary?dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none`,
-    `/api/query/performance-top-salesman?dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&limit=20`,
-    `/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none&granularity=monthly&limit=20`,
-    `/api/query/dashboard-bundle?dateField=policy_date&startDate=${yearStart}&endDate=${today}&granularity=week&perspective=premium`,
+    { label: 'cross-sell-summary', route: `/api/query/cross-sell-summary?dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger` },
+    { label: 'cross-sell', route: `/api/query/cross-sell?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger` },
+    { label: 'cross-sell-trend', route: `/api/query/cross-sell-trend?dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger&granularity=monthly` },
+    { label: 'cross-sell-bundle', route: `/api/query/cross-sell-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger&granularity=monthly&timePeriod=monthly` },
+    { label: 'kpi', route: `/api/query/kpi?dateField=policy_date&startDate=${yearStart}&endDate=${today}` },
+    { label: 'kpi-cache-bust-dynamic', route: `/api/query/kpi?dateField=policy_date&startDate=${yearStart}&endDate=${today}`, dynamicCacheBust: true },
+    { label: 'performance-summary', route: `/api/query/performance-summary?dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none` },
+    { label: 'performance-top-salesman', route: `/api/query/performance-top-salesman?dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&limit=20` },
+    { label: 'performance-bundle', route: `/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none&granularity=monthly&limit=20` },
+    { label: 'dashboard-bundle', route: `/api/query/dashboard-bundle?dateField=policy_date&startDate=${yearStart}&endDate=${today}&granularity=week&perspective=premium` },
   ];
 
   const startedAt = new Date().toISOString();
   const results = [];
   for (const [idx, route] of routes.entries()) {
-    console.log(`[benchmark] (${idx + 1}/${routes.length}) ${route}`);
+    console.log(`[benchmark] (${idx + 1}/${routes.length}) ${route.label}: ${displayRoute(route)}`);
     // eslint-disable-next-line no-await-in-loop
     const report = await benchmarkRoute({
       baseUrl,
@@ -495,7 +522,7 @@ async function main() {
     ? null
     : collectBaselineFromAuditLog({
       logPath: baselineLog,
-      routeKeys: routes.map((route) => routeKey(route)),
+      routeKeys: routes.map((route) => routeKey(route.route)),
       baselineDate,
     });
 

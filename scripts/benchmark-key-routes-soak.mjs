@@ -40,6 +40,18 @@ function routeKey(route) {
   return route.split('?')[0] || route;
 }
 
+function displayRoute(spec) {
+  return spec.dynamicCacheBust
+    ? `${spec.route}${spec.route.includes('?') ? '&' : '?'}_t=<dynamic>`
+    : spec.route;
+}
+
+function routeForRequest(spec) {
+  if (!spec.dynamicCacheBust) return spec.route;
+  const sep = spec.route.includes('?') ? '&' : '?';
+  return `${spec.route}${sep}_t=${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function readJsonSafe(text) {
   try {
     return JSON.parse(text);
@@ -228,11 +240,13 @@ async function main() {
   }
 
   const routes = [
-    `/api/query/cross-sell-summary?dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger`,
-    `/api/query/cross-sell-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger&granularity=monthly&timePeriod=monthly`,
-    `/api/query/performance-summary?dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none`,
-    `/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none&granularity=monthly&limit=20`,
-    `/api/query/dashboard-bundle?dateField=policy_date&startDate=${yearStart}&endDate=${today}&granularity=week&perspective=premium`,
+    { label: 'cross-sell-summary', route: `/api/query/cross-sell-summary?dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger` },
+    { label: 'cross-sell-bundle', route: `/api/query/cross-sell-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&vehicleCategory=passenger&granularity=monthly&timePeriod=monthly` },
+    { label: 'kpi', route: `/api/query/kpi?dateField=policy_date&startDate=${yearStart}&endDate=${today}` },
+    { label: 'kpi-cache-bust-dynamic', route: `/api/query/kpi?dateField=policy_date&startDate=${yearStart}&endDate=${today}`, dynamicCacheBust: true },
+    { label: 'performance-summary', route: `/api/query/performance-summary?dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none` },
+    { label: 'performance-bundle', route: `/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=${yearStart}&endDate=${today}&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none&granularity=monthly&limit=20` },
+    { label: 'dashboard-bundle', route: `/api/query/dashboard-bundle?dateField=policy_date&startDate=${yearStart}&endDate=${today}&granularity=week&perspective=premium` },
   ];
 
   const durationMs = Math.max(1, durationMinutes) * 60 * 1000;
@@ -255,8 +269,9 @@ async function main() {
 
   const worker = async () => {
     while (Date.now() < deadlineMs) {
-      const route = routes[routeIdx % routes.length];
+      const routeSpec = routes[routeIdx % routes.length];
       routeIdx += 1;
+      const route = routeForRequest(routeSpec);
 
       let retries = 0;
       // eslint-disable-next-line no-constant-condition
@@ -327,7 +342,12 @@ async function main() {
     max429Retries,
     retryAfterMs,
     windowSeconds,
-    routes,
+    routes: routes.map((route) => ({
+      label: route.label,
+      route: displayRoute(route),
+      routeKey: routeKey(route.route),
+      dynamicCacheBust: Boolean(route.dynamicCacheBust),
+    })),
     totals: {
       requests: events.length,
       successes: successDurations.length,
