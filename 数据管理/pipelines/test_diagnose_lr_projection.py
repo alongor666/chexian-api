@@ -65,7 +65,9 @@ def test_e2e_default_run(tmp_path):
     assert report_md.exists(), "缺 Markdown 报告"
 
     detail = pd.read_csv(detail_csv)
-    assert 100 < len(detail) < 200, f"2026 cell 数 {len(detail)} 偏离预期 (~138)"
+    # 4 维笛卡尔上限 = 11 客户类别 × 2 能源 × 4 四分类 × 3 险别 = 264
+    # 下限 100 是合理基底（默认窗口下不会少于 ~130）；上限 264 让数据自然增长不误报
+    assert 100 < len(detail) <= 264, f"2026 cell 数 {len(detail)} 不在 (100, 264] 范围内"
 
     fb_levels = set(detail["fallback_level"].unique())
     assert "4d_original" in fb_levels, "fallback 分布缺 4d_original — 核心 cell 路径异常"
