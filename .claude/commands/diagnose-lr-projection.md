@@ -11,7 +11,7 @@ requires:
   - duckdb (pip)
   - pandas (pip)
 dependencies:
-  - 数据管理/pipelines/diagnose_lr_2026_projection.py
+  - 数据管理/pipelines/diagnose_lr_projection.py
   - 数据管理/pipelines/diagnose_common.py
   - 数据管理/warehouse/fact/policy/current/*.parquet
   - 数据管理/warehouse/fact/claims_detail/claims_*.parquet
@@ -62,7 +62,7 @@ last_updated: "2026-05-11"
 ### 默认就能跑（无参 = 2023-2025 → 2026）
 
 ```bash
-python3 数据管理/pipelines/diagnose_lr_2026_projection.py
+python3 数据管理/pipelines/diagnose_lr_projection.py
 ```
 
 ### 全参数
@@ -105,34 +105,34 @@ python3 数据管理/pipelines/diagnose_lr_2026_projection.py
 ### 1. 默认跑（2023-2025 → 2026）
 
 ```bash
-python3 数据管理/pipelines/diagnose_lr_2026_projection.py
+python3 数据管理/pipelines/diagnose_lr_projection.py
 ```
 
 ### 2. 带 override（业务介入异常 cell）
 
 ```bash
-python3 数据管理/pipelines/diagnose_lr_2026_projection.py \
-  --overrides 数据管理/pipelines/lr_projection_overrides.csv
+python3 数据管理/pipelines/diagnose_lr_projection.py \
+  --overrides 数据管理/inputs/lr_projection_overrides.csv
 ```
 
 ### 3. 跨年度复用（2027 预测）
 
 ```bash
-python3 数据管理/pipelines/diagnose_lr_2026_projection.py \
+python3 数据管理/pipelines/diagnose_lr_projection.py \
   --hist-years 2024-2026 --proj-year 2027
 ```
 
 ### 4. 放宽小样本阈值（中小机构）
 
 ```bash
-python3 数据管理/pipelines/diagnose_lr_2026_projection.py \
+python3 数据管理/pipelines/diagnose_lr_projection.py \
   --threshold-premium-wan 300 --threshold-vehicle 3000
 ```
 
 ### 5. 4 年历史窗口（含 2022）
 
 ```bash
-python3 数据管理/pipelines/diagnose_lr_2026_projection.py \
+python3 数据管理/pipelines/diagnose_lr_projection.py \
   --hist-years 2022-2025 --proj-year 2026
 ```
 
@@ -140,7 +140,7 @@ python3 数据管理/pipelines/diagnose_lr_2026_projection.py \
 
 ## Override CSV 格式
 
-`数据管理/pipelines/lr_projection_overrides.csv` 模板：
+`数据管理/inputs/lr_projection_overrides.csv` 模板：
 
 ```csv
 customer_category,is_nev,vehicle_type_4,coverage_combination,expected_lr,note
