@@ -87,7 +87,9 @@ export class DuckDBService implements DuckDBQueryable {
       try {
         return await promise;
       } finally {
-        this.inflightQueries.delete(sql);
+        if (this.inflightQueries.get(sql) === promise) {
+          this.inflightQueries.delete(sql);
+        }
       }
     }
     return this.executeQuery(sql, cacheTtlMs, this.queryCacheEpoch);

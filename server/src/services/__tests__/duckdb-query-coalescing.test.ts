@@ -100,6 +100,46 @@ describe('DuckDBService query in-flight coalescing', () => {
     expect(runCount).toBe(2);
   });
 
+  it('does not let an older in-flight finally delete a newer in-flight promise after invalidation', async () => {
+    const gateA = deferred<void>();
+    const gateB = deferred<void>();
+    let runCount = 0;
+    const conn = {
+      runAndReadAll: async () => {
+        runCount += 1;
+        if (runCount === 1) {
+          await gateA.promise;
+          return makeReader([{ version: 'old' }]);
+        }
+        if (runCount === 2) {
+          await gateB.promise;
+          return makeReader([{ version: 'new' }]);
+        }
+        return makeReader([{ version: 'duplicate' }]);
+      },
+    } as unknown as DuckDBConnection;
+    const service = makeService(conn);
+
+    const pendingA = service.query<{ version: string }>('SELECT versioned_value', 60_000);
+    await Promise.resolve();
+    service.invalidateCache({ silent: true });
+    const pendingB = service.query<{ version: string }>('SELECT versioned_value', 60_000);
+    await Promise.resolve();
+
+    gateA.resolve();
+    expect(await pendingA).toEqual([{ version: 'old' }]);
+
+    const pendingC = service.query<{ version: string }>('SELECT versioned_value', 60_000);
+    await Promise.resolve();
+
+    expect(runCount).toBe(2);
+    gateB.resolve();
+    expect(await Promise.all([pendingB, pendingC])).toEqual([
+      [{ version: 'new' }],
+      [{ version: 'new' }],
+    ]);
+  });
+
   it('does not coalesce non-cacheable queries', async () => {
     let runCount = 0;
     const conn = {
