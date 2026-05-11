@@ -27,12 +27,32 @@ describe('LazyDomainRegistry', () => {
     expect(reg.isLoaded('ConcurrentDomain')).toBe(true);
   });
 
-  it('loader 失败：state=failed，后续 ensureLoaded 立即 throw 同一 error', async () => {
+  it('loader 失败：state 回滚为 unloaded，下次 ensureLoaded 重新调用 loader（不缓存 failed）', async () => {
     const reg = new LazyDomainRegistry();
+    let callCount = 0;
     const originalErr = new Error('load failed');
-    reg.register('FailDomain', async () => { throw originalErr; });
+    reg.register('FailDomain', async () => {
+      callCount++;
+      throw originalErr;
+    });
     await expect(reg.ensureLoaded('FailDomain')).rejects.toBe(originalErr);
+    expect(reg.getState('FailDomain')).toBe('unloaded');
     await expect(reg.ensureLoaded('FailDomain')).rejects.toBe(originalErr);
+    expect(callCount).toBe(2); // loader 被重试，而非缓存上次失败
+  });
+
+  it('loader 首次失败、二次成功：transient 错误自愈（覆盖 ConnectionPool acquire timeout 场景）', async () => {
+    const reg = new LazyDomainRegistry();
+    let callCount = 0;
+    reg.register('FlakeyDomain', async () => {
+      callCount++;
+      if (callCount === 1) throw new Error('ConnectionPool: acquire timeout after 2000ms');
+    });
+    await expect(reg.ensureLoaded('FlakeyDomain')).rejects.toThrow('ConnectionPool');
+    expect(reg.getState('FlakeyDomain')).toBe('unloaded');
+    await reg.ensureLoaded('FlakeyDomain');
+    expect(reg.isLoaded('FlakeyDomain')).toBe(true);
+    expect(callCount).toBe(2);
   });
 
   it('加载超时（15s 模拟）：抛出 statusCode=503 的错误，state 保持 loading', async () => {

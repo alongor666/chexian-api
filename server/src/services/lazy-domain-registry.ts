@@ -5,7 +5,9 @@
  * - 注册：register(name, loader) — 仅记录 loader 闭包，不加载
  * - 触发：ensureLoaded(name) — 首次调用时触发加载，并发安全（Promise 锁）
  * - 超时：15s 后返回 503，state 保持 loading（下次请求仍可等待原 Promise）
- * - 失败：state=failed，后续调用立即 throw 同一 error（不重试）
+ * - 失败：state 回滚到 unloaded，下次请求自动重试（本次请求仍 throw err，让上游感知）。
+ *   这样 transient 错误（如 ConnectionPool acquire timeout）能在连接池恢复后自愈，
+ *   permanent 错误（如文件缺失）也只是每请求 retry 一次 fs.existsSync，成本可忽略。
  *
  * @see 04-02-PLAN.md — MAT-01 惰性域架构
  */
@@ -38,13 +40,16 @@ export class LazyDomainRegistry {
       ]);
     }
 
-    if (entry.state === 'failed') throw entry.error!;
-
     // 首次触发加载
     entry.state = 'loading';
     entry.promise = entry.loader()
       .then(() => { entry.state = 'loaded'; })
-      .catch((err) => { entry.state = 'failed'; entry.error = err; throw err; });
+      .catch((err) => {
+        entry.state = 'unloaded';
+        entry.promise = null;
+        entry.error = err;
+        throw err;
+      });
 
     return Promise.race([entry.promise, this.timeoutReject(name)]);
   }
