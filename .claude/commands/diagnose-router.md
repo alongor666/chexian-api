@@ -34,6 +34,7 @@ last_updated: "2026-05-06"
 | 1 | 摩托车、交强 120 元、人身险捆绑、A/B 类机构、真实盈亏线 | `/diagnose-motorcycle` | 摩托车必须用专属成本模型 |
 | 1 | 过户车、车牌归属地、出险地、异地出险、挂靠/假资料 | `/diagnose-transfer-location` | 风控/欺诈专项，不是普通事故地点下钻 |
 | 2 | 两个 cutoff、3-31 vs 4-30、月末估值对比、同比发展、影响度分解 | `/diagnose-cohort-comparison` | 双 cutoff cohort 专项 |
+| 2 | 全年预期赔付率、年终 LR 预测、burning-cost 平移、4 维 cell 矩阵、override 业务介入 | `/diagnose-lr-projection` | 结构性全年预期 LR 专项 |
 | 3 | 任意车型/客户类别/能源/吨位/WHERE 细分，90/180/270/满期发展 | `/diagnose-segment` | 细分 cohort 专项 |
 | 4 | 机构、经代、经营单元、赚不赚、亏在哪、要不要继续 | `/diagnose-agent` | 总控型经营诊断兜底 |
 
@@ -57,6 +58,19 @@ last_updated: "2026-05-06"
 
 - 90/180/270/满期四桩发展 → `/diagnose-segment`
 - 同一 policy-year cohort 在两个 cutoff 之间变化 → `/diagnose-cohort-comparison`
+
+### `/diagnose-lr-projection` vs `/diagnose-cohort-comparison` / `/diagnose-segment`
+
+- "全年预期 LR 会到多少 / 年终结构性预测" → `/diagnose-lr-projection`（4 维 cell × burning-cost 平移）
+- "两个 cutoff 间历史 LR 怎么变" → `/diagnose-cohort-comparison`（历史发展）
+- "某细分 cohort 90/180/270/满期发展曲线" → `/diagnose-segment`（cohort 时间发展）
+- 关键区别：lr-projection 是**预测未来**，cohort-comparison/segment 是**复盘历史**
+
+### `/diagnose-lr-projection` vs `/diagnose-forecast-claim`
+
+- "全年预期 LR 是多少 + 4 维结构归因" → `/diagnose-lr-projection`（结构性平移）
+- "若达到目标 LR，剩余期还能新增多少赔款" → `/diagnose-forecast-claim`（what-if 反推空间）
+- 两者正交互补：lr-projection 给"会到多少"，forecast-claim 给"还能承受多少"
 
 ### `/diagnose-segment` vs `/diagnose-transfer-location`
 
