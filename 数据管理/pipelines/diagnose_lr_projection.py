@@ -12,16 +12,17 @@ Fallback：4 维 cell 满期保费 < 阈值 → 逐级降到 3 维 → 2 维 →
 Override：CSV (4 维完整 + LR) 覆盖 fallback
 
 用法（默认：历史 2023-2025、预测 2026、阈值 500 万 或 5000 台）:
-  python3 diagnose_lr_2026_projection.py
-  python3 diagnose_lr_2026_projection.py --overrides 数据管理/pipelines/lr_projection_overrides.csv
+  python3 diagnose_lr_projection.py
+  python3 diagnose_lr_projection.py --overrides 数据管理/inputs/lr_projection_overrides.csv
 
 跨年度复用（如 2027 预测）:
-  python3 diagnose_lr_2026_projection.py --hist-years 2024-2026 --proj-year 2027
-  python3 diagnose_lr_2026_projection.py --threshold-premium-wan 300 --threshold-vehicle 3000
+  python3 diagnose_lr_projection.py --hist-years 2024-2026 --proj-year 2027
+  python3 diagnose_lr_projection.py --threshold-premium-wan 300 --threshold-vehicle 3000
 """
 
 from __future__ import annotations
 import argparse
+import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -402,6 +403,58 @@ def render_top_cells_table(df: pd.DataFrame, top_n: int, ascending: bool) -> str
     return "\n".join(lines)
 
 
+def compute_structure_attribution(
+    df: pd.DataFrame,
+    con: duckdb.DuckDBPyConnection,
+) -> pd.DataFrame:
+    """各维度结构变化对 ΔLR 的边际贡献（一阶 Shapley 近似）。
+
+    contrib_D = Σ_d (proj_share[d] - hist_share[d]) × hist_lr[d]
+
+    四个维度独立测算，合计 ≈ 总 ΔLR（差异 = 二阶交互项 + override 影响）。
+    """
+    rows = []
+    DIMS = [
+        ("客户类别", "customer_category"),
+        ("能源类型", "is_nev"),
+        ("四分类", "vehicle_type_4"),
+        ("险别组合", "coverage_combination"),
+    ]
+    for label, dim_col in DIMS:
+        hist_dim = con.execute(f"""
+            SELECT {dim_col} AS k,
+                   SUM(earned_premium) AS earned,
+                   SUM(reported_claims) / NULLIF(SUM(earned_premium), 0) AS lr
+            FROM v_policy_hist
+            GROUP BY 1
+        """).fetchdf()
+        hist_total = float(hist_dim["earned"].sum())
+        if hist_total <= 0:
+            rows.append({"dim_label": label, "dim_col": dim_col, "contrib_pp": 0.0})
+            continue
+        hist_dim["share"] = hist_dim["earned"] / hist_total
+
+        proj_g = df.groupby(dim_col, dropna=False).agg(
+            proj_earned=("earned_premium_full_year", "sum")
+        ).reset_index().rename(columns={dim_col: "k"})
+        proj_total = float(proj_g["proj_earned"].sum())
+        proj_g["proj_share"] = proj_g["proj_earned"] / proj_total if proj_total > 0 else 0
+
+        merged = pd.merge(
+            hist_dim[["k", "lr", "share"]],
+            proj_g[["k", "proj_share"]],
+            on="k", how="outer",
+        ).fillna(0)
+        merged["contrib_pp"] = (merged["proj_share"] - merged["share"]) * merged["lr"] * 100
+        rows.append({
+            "dim_label": label,
+            "dim_col": dim_col,
+            "contrib_pp": float(merged["contrib_pp"].sum()),
+        })
+
+    return pd.DataFrame(rows)
+
+
 def render_report(
     df: pd.DataFrame,
     df_no_override: pd.DataFrame,
@@ -414,15 +467,14 @@ def render_report(
     proj_year: int,
     threshold_premium_wan: float,
     threshold_vehicle: int,
+    attribution: pd.DataFrame,
 ) -> str:
-    """渲染完整 Markdown 报告（10 板块）"""
+    """渲染完整 Markdown 报告（结论先行版，11 板块 + 附录）。"""
 
     total_premium = df["earned_premium_full_year"].sum() / 10000  # 万元
     total_claims = df["projected_claims"].sum() / 10000
     overall_lr = (df["projected_claims"].sum() / df["earned_premium_full_year"].sum()) * 100
 
-    total_premium_no_ov = df_no_override["earned_premium_full_year"].sum() / 10000
-    total_claims_no_ov = df_no_override["projected_claims"].sum() / 10000
     overall_lr_no_ov = (df_no_override["projected_claims"].sum()
                        / df_no_override["earned_premium_full_year"].sum()) * 100
 
@@ -430,59 +482,93 @@ def render_report(
     hist_earned_wan = float(hist["0d"]["hist_earned"].iloc[0]) / 10000
 
     fallback_stats = df["fallback_level"].value_counts().to_dict()
+    total_cells = len(df)
+    delta_vs_hist = overall_lr - hist_overall_lr
 
-    lines = []
+    # 4d_original 保费覆盖率（数据可信度信号 R4）
+    prem_4d = df[df["fallback_level"] == "4d_original"]["earned_premium_full_year"].sum() / 10000
+    coverage_4d_pct = prem_4d / total_premium * 100 if total_premium > 0 else 0
+
+    # R3: 高影响 cell 警报阈值（保费 ≥ 200 万 + LR 偏离整体）
+    HIGH_IMPACT_PREMIUM = 2_000_000
+    high_lr_threshold = TH_LR[2] / 100  # 一般→关注 阈值
+    low_lr_threshold = TH_LR[0] / 100   # 优秀→良好 阈值
 
     hist_label = f"{hist_years[0]}-{hist_years[-1]}" if len(hist_years) > 1 else str(hist_years[0])
     hist_year_word = f"{len(hist_years)} 年"
 
-    # 板块 1: 方法论
+    lines = []
+
+    # Header
     lines.append(f"# {proj_year} 车险整体满期赔付率平移预测\n")
-    lines.append(f"**运行日期**: {RUN_DATE} · **历史窗口**: {hist_label} {hist_year_word} · "
-                f"**{proj_year} 最晚起保日**: {max_start_date} · **全年外推系数**: {scale_factor:.3f}\n")
-    lines.append("## 1. 方法论\n")
     lines.append(
-        f"- **目标**: 用 {hist_label} {hist_year_word}历史保单 4 维 cell 满期赔付率，"
-        f"平移到 {proj_year} 起保保单同 cell，预测 {proj_year} 全年车险整体满期赔付率\n"
-        "- **4 维交叉**: 客户类别(11) × is_nev(2) × 标准四分类(4) × 险别组合(3) = 最多 264 cell\n"
-        "- **标准四分类**: 新车 > 旧车过户 > 旧车非过户续保 > 旧车非过户转保（优先级）\n"
-        "- **险别组合**: 主全 / 交三 / 单交（已排除 coverage_combination='未知'/'其他'）\n"
-        f"- **整体口径**: 全险种合计算一个率，先 SUM 分子分母再除（禁加权平均）\n"
-        f"- **Fallback**: 每一级 cell 都需满足 满期保费 ≥ {threshold_premium_wan:.0f} 万元 "
-        f"OR 车辆台数 ≥ {threshold_vehicle} 台（达任一即合格），"
-        f"否则逐级降维 4→3→2→1→整体，避免极端值\n"
-        f"- **Override**: 共 {overrides_used} 行用户提供的预期 LR 覆盖了自动 fallback\n"
-        f"- **{proj_year} 全年预估**: 已签数据线性外推 × {scale_factor:.3f}\n"
+        f"**运行日期**: {RUN_DATE} · **历史窗口**: {hist_label} {hist_year_word} · "
+        f"**{proj_year} 最晚起保日**: {max_start_date} · **全年外推系数**: {scale_factor:.3f}\n"
     )
 
-    # 板块 2: 整体预测（结论先行）
-    lines.append("## 2. 整体预测（结论先行）\n")
+    # 板块 1: 结论先行（含 R4 数据可信度 + R5 重跑判据）
     lr_light = light(overall_lr, TH_LR, higher_worse=True)
+    lines.append("## 1. 结论先行\n")
     lines.append(
         f"- **{proj_year} 全年预期车险整体满期赔付率 = {fp(overall_lr)}{lr_light}**\n"
-        f"- 预期满期保费: {fw(total_premium)} 万元\n"
-        f"- 预期已报告赔款: {fw(total_claims)} 万元\n"
+        f"- 预期满期保费 {fw(total_premium)} 万元 · 预期已报告赔款 {fw(total_claims)} 万元\n"
+        f"- vs 历史 {hist_label} 整体 {fp(hist_overall_lr)}"
+        f"（满期保费 {fw(hist_earned_wan)} 万元）: **{delta_vs_hist:+.2f} pp** "
+        f"（结构归因详见板块 2）\n"
+        f"- **数据可信度**: 4d_original 覆盖 **{coverage_4d_pct:.1f}%** 满期保费 "
+        f"（{fallback_stats.get('4d_original', 0)}/{total_cells} cell）\n"
     )
     if overrides_used > 0:
         diff = overall_lr - overall_lr_no_ov
         lines.append(
-            f"\n**含/不含 Override 对比**:\n"
-            f"- 仅自动 fallback: {fp(overall_lr_no_ov)}\n"
-            f"- 应用 {overrides_used} 行 override 后: {fp(overall_lr)} ({diff:+.2f} pp)\n"
+            f"- **Override 影响**: 仅自动 fallback {fp(overall_lr_no_ov)} → "
+            f"应用 {overrides_used} 行 override 后 {fp(overall_lr)} ({diff:+.2f} pp)\n"
         )
     lines.append(
-        f"\n**与历史整体对比**:\n"
-        f"- {hist_label} {hist_year_word}合计实际满期赔付率: {fp(hist_overall_lr)} "
-        f"(满期保费 {fw(hist_earned_wan)} 万元)\n"
-        f"- {proj_year} 预期值 {fp(overall_lr)} vs 历史 {fp(hist_overall_lr)}: "
-        f"{(overall_lr - hist_overall_lr):+.2f} pp"
-        f" （差异来自 {proj_year} 业务结构变化，各 cell LR 沿用历史）\n"
+        f"- **何时重跑**: ① 数据月度更新后 ② 单 cell 实际 cohort 满期 LR 与历史偏离 ≥ 5 pp"
+        f"（候选 override 升级） ③ Override CSV 修订后 ④ Fallback 阈值或历史窗口调整后\n"
     )
+
+    # 板块 2: 业务结构变化归因（R2）
+    contrib_total = float(attribution["contrib_pp"].sum())
+    residual = delta_vs_hist - contrib_total
+    lines.append(
+        f"\n## 2. 业务结构变化归因（{proj_year} vs {hist_label}，一阶 Shapley 近似）\n"
+    )
+    lines.append(
+        f"\n实际 ΔLR = **{delta_vs_hist:+.2f} pp**。按维度边际拆解"
+        f"（contrib_D = Σ (proj_share − hist_share) × hist_lr_D）:\n"
+    )
+    lines.append("| 维度 | 边际贡献 ΔLR | 解读 |")
+    lines.append("|---|---:|---|")
+    for _, r in attribution.iterrows():
+        c = float(r["contrib_pp"])
+        if c > 0.05:
+            reading = "↑ 该维度结构变化推高整体 LR"
+        elif c < -0.05:
+            reading = "↓ 该维度结构变化压低整体 LR"
+        else:
+            reading = "≈ 该维度结构变化对整体 LR 影响可忽略"
+        lines.append(f"| {r['dim_label']} | {c:+.2f} pp | {reading} |")
+    lines.append(f"| **一阶合计** | **{contrib_total:+.2f} pp** | — |")
+    if overrides_used > 0:
+        override_effect = overall_lr - overall_lr_no_ov
+        interaction = residual - override_effect
+        lines.append(
+            f"| Override 显式介入 | {override_effect:+.2f} pp | {overrides_used} 行业务 override（详见板块 1） |"
+        )
+        lines.append(
+            f"| 维度间二阶交互项 | {interaction:+.2f} pp | 残差，无法归到单一维度的联动效应 |"
+        )
+    else:
+        lines.append(
+            f"| 维度间二阶交互项 | {residual:+.2f} pp | 残差，维度间联动效应 |"
+        )
 
     # 板块 3-6: 按维度
     by_cust = aggregate_by_dim(df, ["customer_category"]).sort_values(
         "earned_premium_full_year", ascending=False)
-    lines.append("\n## 3. 按客户类别（11 行）\n")
+    lines.append("\n\n## 3. 按客户类别（11 行）\n")
     lines.append(render_md_table_dim(by_cust, "customer_category", "客户类别"))
 
     by_nev = aggregate_by_dim(df, ["is_nev"]).copy()
@@ -504,26 +590,77 @@ def render_report(
     lines.append("\n\n## 6. 按险别组合\n")
     lines.append(render_md_table_dim(by_cov, "coverage_combination", "险别组合"))
 
-    # 板块 7-8: Top cells
-    lines.append(f"\n\n## 7. Top 10 高赔付率 cell（最大风险点，{proj_year} 满期保费 ≥ 50 万）\n")
+    # 板块 7: 高影响警报 cell（R3）
+    high_impact = df[
+        (df["earned_premium_full_year"] >= HIGH_IMPACT_PREMIUM)
+        & (df["applied_lr"] >= high_lr_threshold)
+    ].sort_values("earned_premium_full_year", ascending=False)
+    lines.append(
+        f"\n\n## 7. 高影响警报 cell（保费 ≥ {HIGH_IMPACT_PREMIUM/10000:.0f} 万 × "
+        f"LR ≥ {high_lr_threshold*100:.0f}%）\n"
+    )
+    if len(high_impact) == 0:
+        lines.append("\n_无 cell 同时满足高保费 + 高赔付，整体风险结构健康。_\n")
+    else:
+        lines.append("\n这些 cell 对整体 LR 影响最大（保费体量 × LR 偏离），优先关注：\n")
+        lines.append(render_top_cells_table(high_impact, len(high_impact), ascending=False))
+
+    # 板块 8: 高效益支柱 cell（R3）
+    high_value = df[
+        (df["earned_premium_full_year"] >= HIGH_IMPACT_PREMIUM)
+        & (df["applied_lr"] <= low_lr_threshold)
+    ].sort_values("earned_premium_full_year", ascending=False)
+    lines.append(
+        f"\n\n## 8. 高效益支柱 cell（保费 ≥ {HIGH_IMPACT_PREMIUM/10000:.0f} 万 × "
+        f"LR ≤ {low_lr_threshold*100:.0f}%）\n"
+    )
+    if len(high_value) == 0:
+        lines.append("\n_无 cell 同时满足高保费 + 低赔付。_\n")
+    else:
+        lines.append("\n这些 cell 是利润支柱，应保持市场份额：\n")
+        lines.append(render_top_cells_table(high_value, len(high_value), ascending=True))
+
+    # 板块 9-10: 单维 Top 10（原 7-8）
+    lines.append(
+        f"\n\n## 9. Top 10 高 LR cell（单维排序，{proj_year} 满期保费 ≥ 50 万）\n"
+    )
     lines.append(render_top_cells_table(df, 10, ascending=False))
 
-    lines.append(f"\n\n## 8. Top 10 低赔付率 cell（机会点，{proj_year} 满期保费 ≥ 50 万）\n")
+    lines.append(
+        f"\n\n## 10. Top 10 低 LR cell（单维排序，{proj_year} 满期保费 ≥ 50 万）\n"
+    )
     lines.append(render_top_cells_table(df, 10, ascending=True))
 
-    # 板块 9: Fallback 统计
-    lines.append("\n\n## 9. Fallback 兜底情况统计\n")
-    total_cells = len(df)
+    # 板块 11: Fallback 详细分布
+    lines.append("\n\n## 11. Fallback 兜底详细分布\n")
     lines.append(f"\n共 {total_cells} 个 {proj_year} cell（实际出现）。各级使用情况:\n")
     for level in ["4d_original", "3d_fallback", "2d_fallback", "1d_fallback", "overall", "override"]:
         cnt = fallback_stats.get(level, 0)
         pct = cnt / total_cells * 100 if total_cells > 0 else 0
         prem = df[df["fallback_level"] == level]["earned_premium_full_year"].sum() / 10000
+        prem_pct = prem / total_premium * 100 if total_premium > 0 else 0
         lines.append(f"- **{level}**: {cnt} cell ({pct:.1f}%), "
-                    f"满期保费 {fw(prem)} 万元 ({prem/total_premium*100:.1f}%)")
+                    f"满期保费 {fw(prem)} 万元 ({prem_pct:.1f}%)")
 
-    # 板块 10: 局限性
-    lines.append("\n\n## 10. 方法论局限性与使用建议\n")
+    # 附录: 方法论与局限性（R1 — 从第 1 节降到末位）
+    lines.append("\n\n---\n\n## 附录: 方法论与局限性\n")
+    lines.append("\n### A.1 方法论\n")
+    lines.append(
+        f"- **目标**: 用 {hist_label} {hist_year_word}历史 4 维 cell 满期赔付率，"
+        f"平移到 {proj_year} 起保保单同 cell，预测 {proj_year} 全年车险整体满期赔付率\n"
+        "- **4 维交叉**: 客户类别(11) × is_nev(2) × 标准四分类(4) × 险别组合(3) = 最多 264 cell\n"
+        "- **标准四分类**: 新车 > 旧车过户 > 旧车非过户续保 > 旧车非过户转保（优先级）\n"
+        "- **险别组合**: 主全 / 交三 / 单交（已排除 coverage_combination='未知'/'其他'）\n"
+        "- **整体口径**: 全险种合计算一个率，先 SUM 分子分母再除（禁加权平均）\n"
+        f"- **Fallback**: 每一级 cell 都需满足 满期保费 ≥ {threshold_premium_wan:.0f} 万元 "
+        f"OR 车辆台数 ≥ {threshold_vehicle} 台（达任一即合格），"
+        f"否则逐级降维 4→3→2→1→整体，避免极端值\n"
+        f"- **Override**: 共 {overrides_used} 行用户提供的预期 LR 覆盖了自动 fallback\n"
+        f"- **{proj_year} 全年预估**: 已签数据线性外推 × {scale_factor:.3f}\n"
+        "- **结构归因**: 一阶 Shapley 近似 — 维度 D 的贡献 ="
+        " Σ (proj_share − hist_share) × hist_lr_D；二阶交互项归入残差\n"
+    )
+    lines.append("\n### A.2 局限性\n")
     lines.append(
         f"\n1. **线性外推假设**: {proj_year} 全年预估使用最晚起保日 {max_start_date} 的业务结构 × "
         f"{scale_factor:.3f}（按起保日累计，与已赚保费口径一致），忽略季节性（如年末新车上险高峰）"
@@ -535,6 +672,7 @@ def render_report(
         "某客户类别赔付率结构性变化），请在 `lr_projection_overrides.csv` 中提供 expected_lr 覆盖"
         f"\n5. **历史窗口估值时点**: 历史保费分母满期截至 {hist_as_of}，"
         f"对 {hist_years[-1]} 年起保保单（部分未满 1 年）的分子分母为同步口径"
+        "\n6. **归因残差**: 一阶 Shapley 加总 ≠ 总 ΔLR，残差含二阶交互项与 Override 影响"
     )
 
     return "\n".join(lines)
@@ -584,6 +722,133 @@ def export_csvs(df: pd.DataFrame, output_dir: Path, proj_year: int) -> None:
 # ============================================================================
 # 主入口
 # ============================================================================
+
+def export_summary_json(
+    df: pd.DataFrame,
+    df_no_override: pd.DataFrame,
+    hist: dict[str, pd.DataFrame],
+    attribution: pd.DataFrame,
+    overrides_used: int,
+    scale_factor: float,
+    max_start_date: str,
+    hist_as_of: str,
+    hist_years: list[int],
+    proj_year: int,
+    output_dir: Path,
+    threshold_premium_wan: float,
+    threshold_vehicle: int,
+) -> None:
+    """落机器可读 JSON 副本 — 供企微推送 / AI 总结 / Dashboard 集成。"""
+
+    total_premium = float(df["earned_premium_full_year"].sum())
+    total_claims = float(df["projected_claims"].sum())
+    overall_lr = total_claims / total_premium if total_premium > 0 else 0
+    overall_lr_no_ov = float(
+        df_no_override["projected_claims"].sum()
+        / df_no_override["earned_premium_full_year"].sum()
+    ) if df_no_override["earned_premium_full_year"].sum() > 0 else 0
+    hist_overall_lr = float(hist["0d"]["lr"].iloc[0])
+
+    fallback_stats = df["fallback_level"].value_counts().to_dict()
+    prem_4d = float(df[df["fallback_level"] == "4d_original"]["earned_premium_full_year"].sum())
+    coverage_4d_pct = prem_4d / total_premium * 100 if total_premium > 0 else 0
+
+    HIGH_IMPACT_PREMIUM = 2_000_000
+    high_lr_threshold = TH_LR[2] / 100
+    low_lr_threshold = TH_LR[0] / 100
+
+    def by_dim(dim_col: str, label_map: dict | None = None) -> list[dict]:
+        g = aggregate_by_dim(df, [dim_col])
+        out = []
+        for _, r in g.iterrows():
+            k = r[dim_col]
+            label = label_map.get(k, str(k)) if label_map else (
+                bool(k) if isinstance(k, bool) else str(k)
+            )
+            out.append({
+                "key": label,
+                "earned_premium_full_year_wan": float(r["earned_premium_full_year"] / 10000),
+                "projected_claims_wan": float(r["projected_claims"] / 10000),
+                "expected_lr": float(r["expected_lr"]),
+                "cell_count": int(r["cell_count"]),
+            })
+        return out
+
+    def cell_dict(r: pd.Series) -> dict:
+        return {
+            "customer_category": r["customer_category"],
+            "is_nev": bool(r["is_nev"]),
+            "vehicle_type_4": r["vehicle_type_4"],
+            "coverage_combination": r["coverage_combination"],
+            "earned_premium_full_year_wan": float(r["earned_premium_full_year"] / 10000),
+            "applied_lr": float(r["applied_lr"]),
+            "fallback_level": str(r["fallback_level"]),
+        }
+
+    high_impact = df[
+        (df["earned_premium_full_year"] >= HIGH_IMPACT_PREMIUM)
+        & (df["applied_lr"] >= high_lr_threshold)
+    ].sort_values("earned_premium_full_year", ascending=False)
+    high_value = df[
+        (df["earned_premium_full_year"] >= HIGH_IMPACT_PREMIUM)
+        & (df["applied_lr"] <= low_lr_threshold)
+    ].sort_values("earned_premium_full_year", ascending=False)
+
+    summary = {
+        "proj_year": proj_year,
+        "as_of": hist_as_of,
+        "run_date": RUN_DATE,
+        "hist_years": hist_years,
+        "max_start_date": max_start_date,
+        "scale_factor": float(scale_factor),
+        "thresholds": {
+            "premium_wan": float(threshold_premium_wan),
+            "vehicle": int(threshold_vehicle),
+            "high_impact_premium_wan": HIGH_IMPACT_PREMIUM / 10000,
+            "high_lr_threshold": high_lr_threshold,
+            "low_lr_threshold": low_lr_threshold,
+        },
+        "overall": {
+            "lr": overall_lr,
+            "lr_no_override": overall_lr_no_ov,
+            "hist_lr": hist_overall_lr,
+            "delta_pp_vs_hist": (overall_lr - hist_overall_lr) * 100,
+            "earned_premium_full_year_wan": total_premium / 10000,
+            "projected_claims_wan": total_claims / 10000,
+            "data_quality_4d_coverage_pct": coverage_4d_pct,
+        },
+        "overrides_applied": overrides_used,
+        "attribution": [
+            {
+                "dim": r["dim_col"],
+                "dim_label": r["dim_label"],
+                "contrib_pp": float(r["contrib_pp"]),
+            }
+            for _, r in attribution.iterrows()
+        ],
+        "by_customer_category": by_dim("customer_category"),
+        "by_energy": by_dim("is_nev", {True: "新能源", False: "燃油"}),
+        "by_vehicle_type_4": by_dim("vehicle_type_4"),
+        "by_coverage": by_dim("coverage_combination"),
+        "high_impact_alerts": [cell_dict(r) for _, r in high_impact.iterrows()],
+        "high_value_cells": [cell_dict(r) for _, r in high_value.iterrows()],
+        "fallback_distribution": {
+            level: {
+                "cell_count": int(fallback_stats.get(level, 0)),
+                "earned_premium_wan": float(
+                    df[df["fallback_level"] == level]["earned_premium_full_year"].sum() / 10000
+                ),
+            }
+            for level in ["4d_original", "3d_fallback", "2d_fallback",
+                          "1d_fallback", "overall", "override"]
+        },
+    }
+
+    (output_dir / f"{proj_year}_LR_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+
 
 def parse_hist_years(s: str) -> list[int]:
     """解析 --hist-years 参数：'2023-2025' 或 '2022,2023,2024' → [2023,2024,2025]"""
@@ -685,22 +950,35 @@ def main():
     fb_summary = df["fallback_level"].value_counts().to_dict()
     print(f"[INFO]   - Fallback 分布: {fb_summary}")
 
+    # Step 4.5: 业务结构变化归因
+    print(f"[INFO] Step 4.5/5: 计算业务结构变化归因…")
+    attribution = compute_structure_attribution(df, con)
+
     # Step 5: 输出
-    print(f"[INFO] Step 5/5: 生成 CSV 与 Markdown 报告…")
+    print(f"[INFO] Step 5/5: 生成 CSV / JSON / Markdown 报告…")
     export_csvs(df, output_dir, proj_year)
 
     md_content = render_report(
         df, df_no_override, hist, scale_factor, max_start_date,
         overrides_used, args.as_of,
         hist_years, proj_year, args.threshold_premium_wan, threshold_vehicle,
+        attribution,
     )
     (output_dir / f"{proj_year}_LR_平移预测_报告.md").write_text(md_content, encoding="utf-8")
+
+    export_summary_json(
+        df, df_no_override, hist, attribution, overrides_used,
+        scale_factor, max_start_date, args.as_of,
+        hist_years, proj_year, output_dir,
+        args.threshold_premium_wan, threshold_vehicle,
+    )
 
     overall_lr = (df["projected_claims"].sum() / df["earned_premium_full_year"].sum()) * 100
     print(f"\n[DONE] {proj_year} 全年预期车险整体满期赔付率 = {overall_lr:.2f}%")
     print(f"[DONE] 产物:")
     print(f"  - {output_dir / f'{proj_year}_LR_cells_detail.csv'}")
     print(f"  - {output_dir / f'{proj_year}_LR_summary_by_dim.csv'}")
+    print(f"  - {output_dir / f'{proj_year}_LR_summary.json'}")
     print(f"  - {output_dir / f'{proj_year}_LR_平移预测_报告.md'}")
 
 
