@@ -231,7 +231,7 @@ b_earn AS (
 claims_agg AS (
   SELECT b.org,
     COUNT(DISTINCT c.claim_no) AS claim_cnt,
-    SUM(CASE WHEN c.settled_amount + COALESCE(c.reserve_amount, 0) >= 200000 THEN 1 ELSE 0 END) AS big_cnt,
+    SUM(CASE WHEN COALESCE(c.settled_amount, 0) + COALESCE(c.reserve_amount, 0) >= 200000 THEN 1 ELSE 0 END) AS big_cnt,
     SUM(CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
              ELSE COALESCE(c.reserve_amount, 0) END) AS total_loss
   FROM b_earn b
@@ -661,8 +661,9 @@ def main():
     if args.preset:
         dictionary = load_dictionary()
         presets = dictionary.get("presets", {})
-        if args.preset not in presets:
-            print(f"[ERROR] 未知 preset：{args.preset}（可用：{list(presets.keys())}）", file=sys.stderr)
+        valid_presets = [k for k, v in presets.items() if isinstance(v, dict)]
+        if args.preset not in presets or not isinstance(presets[args.preset], dict):
+            print(f"[ERROR] 未知 preset：{args.preset}（可用：{valid_presets}）", file=sys.stderr)
             sys.exit(1)
         preset = presets[args.preset]
         if not args.keywords and not args.where:
