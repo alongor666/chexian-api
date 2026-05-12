@@ -15,6 +15,22 @@ import { AppError } from './error.js';
 import { testEnv } from '../config/env.js';
 
 /**
+ * 限流 key 生成器（PAT 优先 → IP+userId → 纯 IP）
+ *
+ * PAT 调用走独立桶（pat:<tokenId>），与 IP+userId 不混淆。
+ * 这样 PAT 的加严上限（60/min）只作用于 PAT 调用方，不影响浏览器/JWT 用户。
+ */
+function keyByPatOrUser(req: { ip?: string; connection?: any; pat?: { tokenId: string }; user?: { userId?: string } }): string {
+  if (req.pat?.tokenId) return `pat:${req.pat.tokenId}`;
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const userId = req.user?.userId || '';
+  return userId ? `${ip}:${userId}` : ip;
+}
+
+/** PAT 加严上限：在原有三级基线之外，PAT 调用每分钟最多 60 次 */
+const PAT_LIMIT_PER_MIN = 60;
+
+/**
  * 限流 skip 判定（C4 组合策略，通用于所有限流器）
  * 顺序：生产硬拒 → E2E 显式开关 → 本地 localhost 默认跳过
  * 生产环境永远不会走到后两个分支（env.ts 启动时已拦截 E2E_TEST_MODE=1）
@@ -57,7 +73,8 @@ const defaultConfig: RateLimitConfig = {
  */
 export const apiLimiter = rateLimit({
   windowMs: defaultConfig.windowMs,
-  limit: 100,
+  // 三级基线 100/min 保持不变；PAT 调用单独加严到 60/min
+  limit: (req) => ((req as any).pat ? PAT_LIMIT_PER_MIN : 100),
   message: {
     success: false,
     error: '请求过于频繁，请 1 分钟后再试',
@@ -67,12 +84,7 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false,
   // 跳过健康检查 + C4 组合策略（生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过）
   skip: (req) => req.path === '/health' || shouldSkipRateLimit(req),
-  // 使用 IP + 用户 ID 作为键（已登录用户更宽松）
-  keyGenerator: (req) => {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
-    const userId = (req as any).user?.userId || '';
-    return userId ? `${ip}:${userId}` : ip;
-  },
+  keyGenerator: (req) => keyByPatOrUser(req as any),
 });
 
 /**
@@ -109,7 +121,8 @@ export const loginLimiter = rateLimit({
  */
 export const queryLimiter = rateLimit({
   windowMs: 60 * 1000,   // 1 分钟
-  limit: 200,            // 200 次查询
+  // 三级基线 200/min 保持不变；PAT 调用单独加严到 60/min（避免脚本失控）
+  limit: (req) => ((req as any).pat ? PAT_LIMIT_PER_MIN : 200),
   message: {
     success: false,
     error: '查询请求过于频繁，请 1 分钟后再试',
@@ -117,13 +130,8 @@ export const queryLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // C4 组合策略：生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过
   skip: shouldSkipRateLimit,
-  keyGenerator: (req) => {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
-    const userId = (req as any).user?.userId || '';
-    return userId ? `${ip}:${userId}` : ip;
-  },
+  keyGenerator: (req) => keyByPatOrUser(req as any),
 });
 
 /**
@@ -132,7 +140,7 @@ export const queryLimiter = rateLimit({
  */
 export const aiLimiter = rateLimit({
   windowMs: 60 * 1000,   // 1 分钟
-  max: 10,               // 10 次 AI 调用
+  max: 10,               // 10 次 AI 调用（最严格）
   message: {
     success: false,
     error: 'AI 调用次数过多，请 1 分钟后再试',
@@ -140,13 +148,8 @@ export const aiLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // C4 组合策略：生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过
   skip: shouldSkipRateLimit,
-  keyGenerator: (req) => {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
-    const userId = (req as any).user?.userId || '';
-    return userId ? `${ip}:${userId}` : ip;
-  },
+  keyGenerator: (req) => keyByPatOrUser(req as any),
 });
 
 // ============================================
@@ -176,11 +179,7 @@ export function createDynamicLimiter(
     },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => {
-      const ip = req.ip || req.connection.remoteAddress || 'unknown';
-      const userId = (req as any).user?.userId || '';
-      return userId ? `${ip}:${userId}` : ip;
-    },
+    keyGenerator: (req) => keyByPatOrUser(req as any),
   });
 }
 

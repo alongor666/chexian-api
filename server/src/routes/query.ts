@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { permissionMiddleware } from '../middleware/permission.js';
+import { readonlyMiddleware } from '../middleware/readonly.js';
 
 import kpiRoutes from './query/kpi.js';
 import trendRoutes from './query/trend.js';
@@ -38,6 +39,7 @@ export { fetchDashboardBundleData } from './query/bundles.js';
 const router = Router();
 
 router.use(authMiddleware);
+router.use(readonlyMiddleware);
 router.use(permissionMiddleware);
 
 router.use(kpiRoutes);

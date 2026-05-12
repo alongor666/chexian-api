@@ -22,6 +22,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
+import { readonlyMiddleware } from '../middleware/readonly.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
 import { createPolicyFactView, dropAllDerivedTables } from '../services/duckdb-materialization.js';
@@ -284,8 +285,10 @@ export function setCurrentDataFile(info: {
 
 /**
  * 应用认证中间件（数据管理需要登录）
+ * PAT 调用方仅允许 GET（如 GET /api/data/version）；POST/PUT/DELETE 由 readonlyMiddleware 直接 403。
  */
 router.use(authMiddleware);
+router.use(readonlyMiddleware);
 
 /**
  * POST /api/data/upload
