@@ -138,7 +138,7 @@ def test_duplicate_override_keys_rejected(tmp_path):
 
 
 # ============================================================================
-# 阶段 0 口径硬化回归测试(6 个)
+# 口径硬化回归测试（B287 阶段 0 落地后保留的契约锁）
 # ============================================================================
 
 
@@ -206,7 +206,7 @@ def test_dedup_reduces_row_count(tmp_path, monkeypatch):
     }).to_parquet(claims_fixture, index=False)
     monkeypatch.setattr(mod, "CLAIMS_GLOB", str(claims_fixture))
 
-    mod.build_views(con, "2024-12-31", [2024], 2025, hardening_stage="dedup")
+    mod.build_views(con, "2024-12-31", [2024], 2025)
 
     raw_count = con.execute(
         f"SELECT COUNT(*) FROM read_parquet('{fixture}', union_by_name=true)"
@@ -221,80 +221,13 @@ def test_dedup_reduces_row_count(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
-def test_estimation_cutoff_no_leak(tmp_path):
-    """估值截止护栏:as_of=2024-12-31 时,2025+ 报案不应进入赔款总额。
-
-    通过 raw 与 final 两阶对比:
-      - raw 不过滤 report_time → 含 2025+ 报案
-      - final 过滤 report_time <= as_of → 不含 2025+ 报案
-    如真实数据有跨年报案,final 的历史赔款应 < raw。
-    """
-    raw_dir = tmp_path / "raw"
-    cutoff_dir = tmp_path / "cutoff"
-    for stage, out_dir in [("raw", raw_dir), ("cutoff", cutoff_dir)]:
-        r = subprocess.run([
-            sys.executable, str(SCRIPT_PATH),
-            "--proj-year", "2025", "--hist-years", "2023,2024",
-            "--as-of", "2024-12-31",
-            "--debug-hardening-stage", stage,
-            "--output-dir", str(out_dir),
-        ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
-        assert r.returncode == 0, f"{stage} 跑失败:\n{r.stderr}"
-
-    raw_s = json.loads((raw_dir / "2025_LR_summary.json").read_text(encoding="utf-8"))
-    cutoff_s = json.loads((cutoff_dir / "2025_LR_summary.json").read_text(encoding="utf-8"))
-
-    # 弱断言:cutoff 不应"增加"历史赔款(只可能持平或减少)
-    raw_hist_lr = raw_s["overall"]["hist_lr"]
-    cutoff_hist_lr = cutoff_s["overall"]["hist_lr"]
-    # 双向容忍 0.5pp 浮点误差;真实意义:截止后历史 LR 不能虚增
-    assert cutoff_hist_lr <= raw_hist_lr + 0.005, (
-        f"截止后历史 LR 不应增加,raw={raw_hist_lr:.4f} cutoff={cutoff_hist_lr:.4f}"
-    )
-
-
-@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
-def test_baseline_diff_decomposable(tmp_path):
-    """三项分解恒等式:final − raw == (dedup − raw) + (cutoff − dedup) + (final − cutoff)。"""
-    out_root = tmp_path / "stages"
-    summaries = {}
-    for stage in ("raw", "dedup", "cutoff", "final"):
-        out_dir = out_root / stage
-        r = subprocess.run([
-            sys.executable, str(SCRIPT_PATH),
-            "--proj-year", "2026", "--hist-years", "2023-2025",
-            "--as-of", "2026-05-10",
-            "--debug-hardening-stage", stage,
-            "--output-dir", str(out_dir),
-        ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
-        assert r.returncode == 0, f"{stage} 跑失败:\n{r.stderr}"
-        summaries[stage] = json.loads(
-            (out_dir / "2026_LR_summary.json").read_text(encoding="utf-8")
-        )
-
-    lr = {s: summaries[s]["overall"]["lr"] for s in ("raw", "dedup", "cutoff", "final")}
-    dedup_eff = lr["dedup"] - lr["raw"]
-    cutoff_eff = lr["cutoff"] - lr["dedup"]
-    tie_eff = lr["final"] - lr["cutoff"]
-    total = lr["final"] - lr["raw"]
-    residual = total - (dedup_eff + cutoff_eff + tie_eff)
-
-    # 恒等式残差容忍 0.005 个百分点(浮点累积误差)
-    assert abs(residual) < 5e-5, (
-        f"三项分解恒等式残差 {residual:.6f} 超过 0.005pp,"
-        f"raw={lr['raw']:.6f} dedup={lr['dedup']:.6f} "
-        f"cutoff={lr['cutoff']:.6f} final={lr['final']:.6f}"
-    )
-
-
-@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
 def test_proj_year_dedup_consistency(tmp_path):
     """历史与预测年都从 v_policy_base_dedup 派生,两侧行数均 <= raw rows(可减不增)。"""
     import duckdb
     import diagnose_lr_projection as mod  # type: ignore
 
     con = duckdb.connect()
-    mod.build_views(con, "2026-05-10", [2023, 2024, 2025], 2026, hardening_stage="dedup")
+    mod.build_views(con, "2026-05-10", [2023, 2024, 2025], 2026)
 
     hist_count = con.execute("SELECT COUNT(*) FROM v_policy_hist").fetchone()[0]
     proj_count = con.execute("SELECT COUNT(*) FROM v_policy_proj").fetchone()[0]
@@ -324,7 +257,7 @@ def test_proj_year_dedup_consistency(tmp_path):
 
 @pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
 def test_distinct_on_determinism(tmp_path):
-    """final 阶段反复跑两次,2026 预测 LR 差异必须 < 0.001 个百分点。
+    """反复跑两次,2026 预测 LR 差异必须 < 0.001 个百分点。
 
     严格"完全一致"不可达:`v_policy_base_dedup` 用 `ANY_VALUE()` 聚合批改字段时
     DuckDB 无确定性保证。本测试容忍 1e-5(0.001 个百分点)的浮点扰动,
@@ -337,7 +270,6 @@ def test_distinct_on_determinism(tmp_path):
             sys.executable, str(SCRIPT_PATH),
             "--proj-year", "2026", "--hist-years", "2023-2025",
             "--as-of", "2026-05-10",
-            "--debug-hardening-stage", "final",
             "--output-dir", str(out_dir),
         ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
         assert r.returncode == 0, f"第 {i} 次跑失败:\n{r.stderr}"
@@ -425,7 +357,6 @@ def test_snapshot_tag_subprocess_e2e(tmp_path):
         sys.executable, str(SCRIPT_PATH),
         "--proj-year", "2026", "--hist-years", "2023-2025",
         "--as-of", "2026-05-10",
-        "--debug-hardening-stage", "final",
         "--snapshot-tag", "gamma_test",
         "--output-dir", str(tmp_path / "out_gamma"),
     ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
@@ -433,36 +364,4 @@ def test_snapshot_tag_subprocess_e2e(tmp_path):
     # stdout 中应包含 snapshot 标签提示行(确认参数被脚本识别并影响行为)
     assert "gamma_test" in r.stdout, (
         f"stdout 未提及 snapshot-tag=gamma_test:\n{r.stdout[-500:]}"
-    )
-
-
-@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
-def test_max_start_date_consistent_with_dedup(tmp_path):
-    """final 阶段的 max_start_date 必须来自 v_policy_proj(去重后),
-    与 raw 阶段对比不应错位到已被剔除的保单。
-
-    Codex P2 反馈:之前 max_date_row 直接读 raw parquet,与 v_policy_proj 总体可能不一致。
-    """
-    out_root = tmp_path / "stages"
-    summaries = {}
-    for stage in ("raw", "final"):
-        out_dir = out_root / stage
-        r = subprocess.run([
-            sys.executable, str(SCRIPT_PATH),
-            "--proj-year", "2026", "--hist-years", "2023-2025",
-            "--as-of", "2026-05-10",
-            "--debug-hardening-stage", stage,
-            "--output-dir", str(out_dir),
-        ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
-        assert r.returncode == 0, f"{stage} 跑失败:\n{r.stderr}"
-        summaries[stage] = json.loads(
-            (out_dir / "2026_LR_summary.json").read_text(encoding="utf-8")
-        )
-
-    # final 的 max_start_date 应 ≤ raw(去重后可能去掉最晚的净额≤0 保单)
-    raw_max = summaries["raw"]["max_start_date"]
-    final_max = summaries["final"]["max_start_date"]
-    assert final_max <= raw_max, (
-        f"final max_start_date {final_max} 不应晚于 raw {raw_max}"
-        f"(v_policy_proj 是 raw 的子集)"
     )
