@@ -65,7 +65,7 @@ cross_sell        03_交叉销售_*.xlsx    convert_cross_sell.py      cross_sel
 quotes_conversion 04_报价清单_*.xlsx    quote_etl.py               quotes_conversion/latest.parquet QuoteConversion         quote-conversion.ts
 renewal_tracker   派生(policy+quote)     convert_renewal_tracker.py renewal_tracker/latest.parquet  RenewalTrackerFact      renewal-tracker.ts
 customer_flow     08_客户来源去向*.xlsx convert_customer_flow.py   customer_flow/latest.parquet   CustomerFlow             customer-flow.ts
-brand             保单parquet提取       generate_brand_dim.py      dim/brand/latest.parquet       BrandDim                 (诊断工具)
+brand             06_厂牌明细*.xlsx     convert_brand_dim.py       dim/brand/latest.parquet       BrandDim                 (诊断工具)
 repair_resource   07_维修资源*.xlsx     convert_repair.py          dim/repair/latest.parquet      RepairDim                repair.ts
 salesman          川分销售人员名单*.xlsx generate_dim_tables.py     dim/salesman/latest.parquet    SalesmanDim              (间接,via mapping)
 plan              计划xlsx+mapping      generate_dim_tables.py     dim/plan/latest.parquet        PlanFact                 (间接,via cache)

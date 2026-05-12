@@ -26,7 +26,7 @@ except ImportError:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from diagnose_common import (
-    GLOB, kpi_select, escape_sql,
+    GLOB, kpi_select, escape_sql, joined_source,
     fw, fp, fi, fc, light,
     TH_VC, TH_MR, TH_LR, TH_IR, TH_AC_CARGO,
     POLICY_TERM, EARNED_DAYS, EARNED,
@@ -39,6 +39,10 @@ from diagnose_report import Report
 # ============================================================================
 GLOB_CURRENT = str(Path(__file__).resolve().parent.parent / "warehouse/fact/policy/current/*.parquet")
 BRAND_DIM = str(Path(__file__).resolve().parent.parent / "warehouse/dim/brand/latest.parquet")
+BRAND_KEY_EXPR = (
+    "COALESCE(NULLIF(TRIM(b.brand), ''), '未知品牌') || '_' || "
+    "COALESCE(NULLIF(TRIM(b.vehicle_class), ''), '未知车型分类')"
+)
 OUT_DIR = str(Path(__file__).resolve().parent.parent / "数据分析报告")
 
 # ============================================================================
@@ -169,6 +173,7 @@ def section_01_overview(ctx, rpt, silent=False):
 def section_02_brand(ctx, rpt, silent=False):
     """板块 2: 品牌维度"""
     con = ctx.con
+    src = joined_source(con)
 
     # 检查品牌维度表
     if not Path(BRAND_DIM).exists():
@@ -178,33 +183,33 @@ def section_02_brand(ctx, rpt, silent=False):
         # 使用vehicle_model前缀提取品牌（修复转义序列）
         brand_sql = f"""
             SELECT
-                REGEXP_EXTRACT(vehicle_model, '^([\u4e00-\u9fff][\u4e00-\u9fff\\-]*)', 1) as brand,
-                COUNT(DISTINCT policy_no) as policy_count,
-                SUM(premium)/10000 as written_premium,
-                SUM({EARNED})/10000 as earned_premium,
-                SUM(reported_claims)/10000 as reported_claims,
-                SUM(claim_cases) as claim_cases,
-                SUM({EARNED}) * (1 - SUM(reported_claims)/NULLIF(SUM({EARNED}), 0) - SUM(fee_amount)/NULLIF(SUM(premium), 0))/10000 as earned_margin
-            FROM read_parquet('{GLOB_CURRENT}', union_by_name=true)
-            WHERE {BASE_FILTER} AND vehicle_model IS NOT NULL
-            GROUP BY brand
-            HAVING COUNT(DISTINCT policy_no) >= 100
-            ORDER BY written_premium DESC
-        """
-    else:
-        brand_sql = f"""
-            SELECT
-                b.品牌_用途 as brand,
+                REGEXP_EXTRACT(p.vehicle_model, '^([\u4e00-\u9fff][\u4e00-\u9fff\\-]*)', 1) as brand,
                 COUNT(DISTINCT p.policy_no) as policy_count,
                 SUM(p.premium)/10000 as written_premium,
                 SUM({EARNED})/10000 as earned_premium,
                 SUM(p.reported_claims)/10000 as reported_claims,
                 SUM(p.claim_cases) as claim_cases,
                 SUM({EARNED}) * (1 - SUM(p.reported_claims)/NULLIF(SUM({EARNED}), 0) - SUM(p.fee_amount)/NULLIF(SUM(p.premium), 0))/10000 as earned_margin
-            FROM read_parquet('{GLOB_CURRENT}', union_by_name=true) p
-            JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model
+            FROM {src} p
+            WHERE {BASE_FILTER} AND p.vehicle_model IS NOT NULL
+            GROUP BY 1
+            HAVING COUNT(DISTINCT policy_no) >= 100
+            ORDER BY written_premium DESC
+        """
+    else:
+        brand_sql = f"""
+            SELECT
+                {BRAND_KEY_EXPR} as brand,
+                COUNT(DISTINCT p.policy_no) as policy_count,
+                SUM(p.premium)/10000 as written_premium,
+                SUM({EARNED})/10000 as earned_premium,
+                SUM(p.reported_claims)/10000 as reported_claims,
+                SUM(p.claim_cases) as claim_cases,
+                SUM({EARNED}) * (1 - SUM(p.reported_claims)/NULLIF(SUM({EARNED}), 0) - SUM(p.fee_amount)/NULLIF(SUM(p.premium), 0))/10000 as earned_margin
+            FROM {src} p
+            JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name
             WHERE {BASE_FILTER}
-            GROUP BY b.品牌_用途
+            GROUP BY 1
             HAVING COUNT(DISTINCT p.policy_no) >= 100
             ORDER BY written_premium DESC
         """
@@ -234,8 +239,8 @@ def section_02_brand(ctx, rpt, silent=False):
         data["brands"].append(brand_data)
 
     if not silent:
-        rpt.add("## 2. 品牌×用途维度（保单≥100）\n")
-        rpt.add("| 品牌_用途 | 保单数 | premium(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
+        rpt.add("## 2. 品牌×车型分类维度（保单≥100）\n")
+        rpt.add("| 品牌_车型分类 | 保单数 | premium(万) | 赔付率 | 案均赔款† | 边际贡献(万) |")
         rpt.add("|:---|---:|---:|---:|---:|---:|")
         for b in data["brands"][:20]:
             rpt.add(
@@ -553,14 +558,15 @@ def section_06_insurance(ctx, rpt, silent=False):
 def section_07_brand_org(ctx, rpt, silent=False):
     """板块 7: 品牌×机构交叉分析（多维度）"""
     con = ctx.con
+    src = joined_source(con)
 
     # 品牌 Top 10 × 机构
     if not Path(BRAND_DIM).exists():
         brand_field = r"REGEXP_EXTRACT(vehicle_model, '^([\u4e00-\u9fff][\u4e00-\u9fff\\-]*)', 1)"
     else:
-        brand_field = "b.品牌_用途"
+        brand_field = BRAND_KEY_EXPR
 
-    join_clause = f"JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model" if Path(BRAND_DIM).exists() else ""
+    join_clause = f"JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name" if Path(BRAND_DIM).exists() else ""
 
     result = con.execute(f"""
         SELECT
@@ -571,10 +577,10 @@ def section_07_brand_org(ctx, rpt, silent=False):
             SUM({EARNED})/10000 as earned_premium,
             SUM(reported_claims)/10000 as reported_claims,
             SUM(claim_cases) as claim_cases
-        FROM read_parquet('{GLOB_CURRENT}', union_by_name=true) p
+        FROM {src} p
         {join_clause}
         WHERE {BASE_FILTER}
-        GROUP BY brand, org_level_3
+        GROUP BY 1, org_level_3
         HAVING COUNT(DISTINCT policy_no) >= 50
         ORDER BY written_premium DESC
         LIMIT 30
@@ -602,10 +608,10 @@ def section_07_brand_org(ctx, rpt, silent=False):
         data["cross"].append(cross_data)
 
     if not silent:
-        rpt.add("## 7. 品牌_用途×机构交叉分析（保单≥50）\n")
+        rpt.add("## 7. 品牌×车型分类×机构交叉分析（保单≥50）\n")
         rpt.add("> **发现风险组合**: 关注高赔付率 + 高案均赔款的组合\n")
         rpt.add()
-        rpt.add("| 品牌_用途 | 机构 | 保单数 | premium(万) | 赔付率 | 案均赔款† |")
+        rpt.add("| 品牌_车型分类 | 机构 | 保单数 | premium(万) | 赔付率 | 案均赔款† |")
         rpt.add("|:---|:---|---:|---:|---:|---:|")
         for c in data["cross"]:
             rpt.add(

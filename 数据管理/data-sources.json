@@ -191,15 +191,16 @@
       "row_count": 371359,
       "field_count": 15,
       "key_fields": [
-        "厂牌车型",
-        "品牌",
-        "车辆用途",
-        "用途大类"
+        "vehicle_model_code",
+        "vehicle_model_name",
+        "brand",
+        "manufacturer",
+        "vehicle_class"
       ],
       "duckdb_relation": "BrandDim (TABLE)",
       "api_routes": [],
       "frontend_page": null,
-      "notes": "每次有新保单数据时重跑，避免新车型缺少品牌映射。无前端页面，仅诊断工具使用"
+      "notes": "来自06_厂牌明细，标准连接键为 PolicyFact.vehicle_model = BrandDim.vehicle_model_name；无前端页面，仅诊断工具使用"
     },
     {
       "id": "salesman",

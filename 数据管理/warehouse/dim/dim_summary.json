@@ -23,10 +23,10 @@
     "path": "plan/latest.parquet"
   },
   "brand": {
-    "total_models": 37788,
-    "total_brand_usage_combos": 2936,
-    "composite_key": "brand_usage",
-    "generated_at": "2026-04-03T19:16:52.438762",
+    "total_models": 371359,
+    "model_key": "vehicle_model_name",
+    "category_key": "vehicle_class",
+    "generated_at": "2026-05-12",
     "path": "brand/latest.parquet"
   }
 }
