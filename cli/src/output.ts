@@ -9,11 +9,20 @@ export type OutputFormat = 'table' | 'json' | 'csv';
 export function renderOutput(data: unknown, format: OutputFormat): string {
   if (format === 'json') return JSON.stringify(data, null, 2);
 
+  // extractRows: null = 非 list 型响应；[] = list 型但空。分流避免空 wrapper 被当 KV 渲染。
   const rows = extractRows(data);
-  if (!rows || rows.length === 0) return kleur.gray('(no rows)');
+  if (rows !== null) {
+    if (rows.length === 0) return kleur.gray('(no rows)');
+    return format === 'csv' ? toCsv(rows) : toTable(rows);
+  }
 
-  if (format === 'csv') return toCsv(rows);
-  return toTable(rows);
+  // KPI/summary 类路由返回单 object（非数组）：纵向 key/value 渲染
+  const kv = extractKeyValue(data);
+  if (kv) {
+    return format === 'csv' ? toCsv([Object.fromEntries(kv)]) : toKeyValueTable(kv);
+  }
+
+  return kleur.gray('(no rows)');
 }
 
 /** 从 API 响应里挖出 rows 数组 */
@@ -29,6 +38,22 @@ function extractRows(data: unknown): Record<string, unknown>[] | null {
     if (Array.isArray(inner.rows)) return inner.rows as Record<string, unknown>[];
   }
   return null;
+}
+
+/** 单 object 响应（如 KPI）→ [key, value] 列表 */
+function extractKeyValue(data: unknown): Array<[string, unknown]> | null {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const entries = Object.entries(data as Record<string, unknown>);
+  return entries.length > 0 ? entries : null;
+}
+
+function toKeyValueTable(entries: Array<[string, unknown]>): string {
+  const t = new Table({
+    head: [kleur.cyan('field'), kleur.cyan('value')],
+    style: { head: [], border: ['gray'] },
+  });
+  for (const [k, v] of entries) t.push([k, formatCell(v)]);
+  return t.toString();
 }
 
 function toTable(rows: Record<string, unknown>[]): string {
