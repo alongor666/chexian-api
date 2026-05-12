@@ -78,6 +78,14 @@ export function getUserStorePath(): string {
   return path.resolve(getDataDir(), 'user_store.json');
 }
 
+/**
+ * PAT 持久层文件路径。DuckDB ApiToken 表是 :memory: 表，
+ * PM2 reload 后必须从此文件重建，否则用户 token 全部失效。
+ */
+export function getApiTokenStorePath(): string {
+  return path.resolve(getDataDir(), 'api_tokens.json');
+}
+
 // ── 报价转化 Parquet 路径（本地优先，VPS 回退）──
 
 export function getQuoteConversionPaths(): string[] {

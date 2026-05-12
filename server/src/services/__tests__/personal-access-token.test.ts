@@ -43,6 +43,12 @@ vi.mock('../access-control.js', () => {
   };
 });
 
+// PAT 持久层 mock：只统计调用次数，不真写文件
+const saveApiTokensSpy = vi.fn(async () => {});
+vi.mock('../personal-access-token-store.js', () => ({
+  saveApiTokens: () => saveApiTokensSpy(),
+}));
+
 import {
   createPat,
   verifyPat,
@@ -75,6 +81,7 @@ beforeEach(() => {
   _clearVerifyCacheForTest();
   setMockedUser(defaultUser);
   setQueryImpl(async () => []);
+  saveApiTokensSpy.mockClear();
 });
 
 describe('createPat', () => {
@@ -302,5 +309,57 @@ describe('last_used_at 异步批量写入', () => {
     await _flushPendingForTest();
     expect(calls.some(s => /UPDATE ApiToken[\s\S]*SET last_used_at/.test(s))).toBe(true);
     expect(calls.some(s => s.includes('10.0.0.42'))).toBe(true);
+  });
+});
+
+describe('PAT 持久化双写：create / revoke / flush 必须触发 saveApiTokens', () => {
+  it('createPat 成功后触发 1 次 saveApiTokens', async () => {
+    setQueryImpl(async () => []);
+    await createPat({ userId: 'u-1', username: 'alice', name: 'cli', ttlDays: 90 });
+    expect(saveApiTokensSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('revokePat 成功后触发 1 次 saveApiTokens', async () => {
+    setQueryImpl(async (sql) => {
+      if (/SELECT token_id FROM ApiToken/i.test(sql)) return [{ token_id: 'AAAAAAAA' }];
+      return [];
+    });
+    await revokePat('u-1', 'AAAAAAAA');
+    expect(saveApiTokensSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('last_used_at flush 成功后触发 1 次 saveApiTokens', async () => {
+    // 准备一个有效 token + 让 verifyPat 通过
+    setQueryImpl(async () => []);
+    const created = await createPat({
+      userId: 'u-1', username: 'alice', name: 'cli', ttlDays: 90,
+    });
+    const insertSql = getQueries().find(q => /INSERT INTO ApiToken/.test(q.sql))!.sql;
+    const tokenHash = insertSql.match(/'\$2b\$10\$[^']+'/)![0].slice(1, -1);
+
+    saveApiTokensSpy.mockClear();  // 清掉 create 这一次
+
+    setQueryImpl(async (sql) => {
+      if (/SELECT[\s\S]*FROM ApiToken/i.test(sql)) {
+        return [{
+          token_id: created.token.tokenId,
+          token_hash: tokenHash,
+          user_id: 'u-1',
+          username: 'alice',
+          name: 'cli',
+          expires_at: new Date(Date.now() + 86_400_000),
+          revoked_at: null,
+        }];
+      }
+      return [];
+    });
+    await verifyPat(created.plaintext, '10.0.0.42');
+    await _flushPendingForTest();
+    expect(saveApiTokensSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('flush 无更新（buffer 空）不触发 saveApiTokens', async () => {
+    await _flushPendingForTest();
+    expect(saveApiTokensSpy).not.toHaveBeenCalled();
   });
 });

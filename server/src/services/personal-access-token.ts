@@ -21,6 +21,7 @@ import { getUserByUsername, type AccessUser } from './access-control.js';
 import { authConfig } from '../config/auth.js';
 import { escapeSqlValue } from '../utils/security.js';
 import { AppError } from '../middleware/error.js';
+import { saveApiTokens } from './personal-access-token-store.js';
 
 const TOKEN_PREFIX = 'cx_pat_';
 const TOKEN_ID_LEN = 8;
@@ -158,6 +159,7 @@ async function flushPendingUpdates(): Promise<void> {
     }
   }
   pendingBuffer = [];
+  let anyUpdated = false;
   for (const update of byToken.values()) {
     try {
       await duckdbService.query(`
@@ -166,10 +168,13 @@ async function flushPendingUpdates(): Promise<void> {
             last_used_ip = '${escapeSqlValue(update.ip)}'
         WHERE token_id = '${escapeSqlValue(update.tokenId)}'
       `);
+      anyUpdated = true;
     } catch (err) {
       console.warn(`[PAT] last_used_at update failed for ${update.tokenId}:`, err);
     }
   }
+  // batch flush 完后一次性落盘（受 500ms throttle + 100 buffer 节流，写盘频率可控）
+  if (anyUpdated) await saveApiTokens();
 }
 
 function scheduleLastUsedUpdate(tokenId: string, ip: string): void {
@@ -223,6 +228,7 @@ export async function createPat(input: {
       TIMESTAMP '${createdAtSql}'
     )
   `);
+  await saveApiTokens();
 
   return {
     plaintext: `${TOKEN_PREFIX}${tokenId}.${secret}`,
@@ -274,6 +280,7 @@ export async function revokePat(userId: string, tokenId: string): Promise<void> 
   for (const key of verifyCache.keys()) {
     if (key.startsWith(`${tokenId}:`)) verifyCache.delete(key);
   }
+  await saveApiTokens();
 }
 
 /**
