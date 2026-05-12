@@ -196,10 +196,19 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('MAX(pd) AS max_pd');
     expect(sql).toContain('period_window');
     expect(sql).toContain('current_cutoff');
+    expect(sql).toContain('prev_mom_cutoff');
     expect(sql).toContain('f.pd >= pw.period_key - INTERVAL 1 YEAR');
     expect(sql).toContain('f.pd <= pw.current_cutoff - INTERVAL 1 YEAR');
     expect(sql).toContain('prev_yoy.period_key = bg.period_key');
     expect(sql).not.toContain('prev_yoy.period_key = bg.period_key - INTERVAL 1 YEAR');
+  });
+
+  it('heatmap completed monthly MoM should use the previous natural period end', () => {
+    const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'month', 15, 'org_level_3');
+
+    expect(sql).toContain('THEN pp.period_key - INTERVAL 1 DAY');
+    expect(sql).toContain('f.pd <= pw.prev_mom_cutoff');
+    expect(sql).not.toContain('f.pd <= pw.current_cutoff - INTERVAL 1 MONTH');
   });
 
   it('heatmap SQL should normalize table aliases without generating double dots', () => {

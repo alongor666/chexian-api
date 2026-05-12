@@ -295,6 +295,17 @@ export function generatePerformanceOrgHeatmapQuery(
       break;
   }
 
+  const currentCutoffExpr = `CASE
+          WHEN pp.period_key = pb.ref_date THEN LEAST(pb.max_pd, ${periodEndExpr})
+          ELSE ${periodEndExpr}
+        END`;
+  const prevMomCutoffExpr = timePeriod === 'day'
+    ? `(${currentCutoffExpr}) - ${momOffset}`
+    : `CASE
+          WHEN (${currentCutoffExpr}) = ${periodEndExpr} THEN pp.period_key - INTERVAL 1 DAY
+          ELSE (${currentCutoffExpr}) - ${momOffset}
+        END`;
+
   const planCtes = supportsAnnualPlan && planDimExpr ? `,
     plan_by_dim AS (
       SELECT
@@ -381,10 +392,8 @@ export function generatePerformanceOrgHeatmapQuery(
       SELECT
         pp.period_key,
         ${periodEndExpr} AS period_end,
-        CASE
-          WHEN pp.period_key = pb.ref_date THEN LEAST(pb.max_pd, ${periodEndExpr})
-          ELSE ${periodEndExpr}
-        END AS current_cutoff
+        ${currentCutoffExpr} AS current_cutoff,
+        ${prevMomCutoffExpr} AS prev_mom_cutoff
       FROM period_pool pp
       CROSS JOIN period_bounds pb
     ),
@@ -418,7 +427,7 @@ export function generatePerformanceOrgHeatmapQuery(
       FROM period_window pw
       JOIN filtered f
         ON f.pd >= pw.period_key - ${momOffset}
-        AND f.pd <= pw.current_cutoff - ${momOffset}
+        AND f.pd <= pw.prev_mom_cutoff
       GROUP BY pw.period_key, f.${dimConfig.alias}
     ),
     prev_yoy_data AS (
