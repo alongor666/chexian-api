@@ -248,7 +248,6 @@ export function generatePerformanceOrgHeatmapQuery(
   let windowOffset: string;     // 窗口向前偏移量
   let seriesStep: string;       // generate_series 步长
   let momOffset: string;        // 环比偏移
-  let yoyTruncExpr: string;     // 同比聚合的分组键
   let yoyOffset: string;        // 同比偏移
   let periodEndExpr: string;    // 当前 period_key 对应的周期结束日
   const planDenom = getPlanDenominator(timePeriod);
@@ -259,7 +258,6 @@ export function generatePerformanceOrgHeatmapQuery(
       windowOffset = `${safePeriods - 1} WEEK`;
       seriesStep = 'INTERVAL 1 WEEK';
       momOffset = 'INTERVAL 1 WEEK';
-      yoyTruncExpr = `DATE_TRUNC('week', pd)::DATE`;
       yoyOffset = 'INTERVAL 1 YEAR';
       periodEndExpr = `pp.period_key + INTERVAL 6 DAY`;
       break;
@@ -268,7 +266,6 @@ export function generatePerformanceOrgHeatmapQuery(
       windowOffset = `${safePeriods - 1} MONTH`;
       seriesStep = 'INTERVAL 1 MONTH';
       momOffset = 'INTERVAL 1 MONTH';
-      yoyTruncExpr = `DATE_TRUNC('month', pd)::DATE`;
       yoyOffset = 'INTERVAL 1 YEAR';
       periodEndExpr = `DATE_TRUNC('month', pp.period_key)::DATE + INTERVAL 1 MONTH - INTERVAL 1 DAY`;
       break;
@@ -277,7 +274,6 @@ export function generatePerformanceOrgHeatmapQuery(
       windowOffset = `${(safePeriods - 1) * 3} MONTH`;
       seriesStep = 'INTERVAL 3 MONTH';
       momOffset = 'INTERVAL 3 MONTH';
-      yoyTruncExpr = `DATE_TRUNC('quarter', pd)::DATE`;
       yoyOffset = 'INTERVAL 1 YEAR';
       periodEndExpr = `DATE_TRUNC('quarter', pp.period_key)::DATE + INTERVAL 3 MONTH - INTERVAL 1 DAY`;
       break;
@@ -286,7 +282,6 @@ export function generatePerformanceOrgHeatmapQuery(
       windowOffset = `${safePeriods - 1} YEAR`;
       seriesStep = 'INTERVAL 1 YEAR';
       momOffset = 'INTERVAL 1 YEAR';
-      yoyTruncExpr = `DATE_TRUNC('year', pd)::DATE`;
       yoyOffset = 'INTERVAL 1 YEAR';
       periodEndExpr = `DATE_TRUNC('year', pp.period_key)::DATE + INTERVAL 1 YEAR - INTERVAL 1 DAY`;
       break;
@@ -295,11 +290,21 @@ export function generatePerformanceOrgHeatmapQuery(
       windowOffset = `${safePeriods - 1} DAY`;
       seriesStep = 'INTERVAL 1 DAY';
       momOffset = 'INTERVAL 7 DAY';  // 日视图环比=上周同天
-      yoyTruncExpr = 'pd';
       yoyOffset = 'INTERVAL 1 YEAR';
       periodEndExpr = `pp.period_key`;
       break;
   }
+
+  const currentCutoffExpr = `CASE
+          WHEN pp.period_key = pb.ref_date THEN LEAST(pb.max_pd, ${periodEndExpr})
+          ELSE ${periodEndExpr}
+        END`;
+  const prevMomCutoffExpr = timePeriod === 'day'
+    ? `(${currentCutoffExpr}) - ${momOffset}`
+    : `CASE
+          WHEN (${currentCutoffExpr}) = ${periodEndExpr} THEN pp.period_key - INTERVAL 1 DAY
+          ELSE (${currentCutoffExpr}) - ${momOffset}
+        END`;
 
   const planCtes = supportsAnnualPlan && planDimExpr ? `,
     plan_by_dim AS (
@@ -351,6 +356,7 @@ export function generatePerformanceOrgHeatmapQuery(
     ),
     period_bounds AS (
       SELECT
+        MAX(pd) AS max_pd,
         ${timePeriod === 'day' ? 'MAX(pd)' : `DATE_TRUNC('${timePeriod === 'quarter' ? 'quarter' : timePeriod}', MAX(pd))::DATE`} AS ref_date,
         ${timePeriod === 'day' ? 'MAX(pd)' : `DATE_TRUNC('${timePeriod === 'quarter' ? 'quarter' : timePeriod}', MAX(pd))::DATE`} - INTERVAL ${windowOffset} AS start_date
       FROM filtered
@@ -382,25 +388,34 @@ export function generatePerformanceOrgHeatmapQuery(
       FROM period_bounds pb,
       generate_series(pb.start_date, pb.ref_date, ${seriesStep}) AS t(d)
     ),
+    period_window AS (
+      SELECT
+        pp.period_key,
+        ${periodEndExpr} AS period_end,
+        ${currentCutoffExpr} AS current_cutoff,
+        ${prevMomCutoffExpr} AS prev_mom_cutoff
+      FROM period_pool pp
+      CROSS JOIN period_bounds pb
+    ),
     period_progress AS (
       SELECT
         pp.period_key,
-        CAST(DATE_DIFF('day', pp.period_key, ${periodEndExpr}) + 1 AS DOUBLE) AS total_days,
+        CAST(DATE_DIFF('day', pp.period_key, pp.period_end) + 1 AS DOUBLE) AS total_days,
         CAST(
           CASE
-            WHEN LEAST(CAST(CURRENT_DATE AS DATE), ${periodEndExpr}) < pp.period_key THEN 0
-            ELSE DATE_DIFF('day', pp.period_key, LEAST(CAST(CURRENT_DATE AS DATE), ${periodEndExpr})) + 1
+            WHEN LEAST(CAST(CURRENT_DATE AS DATE), pp.period_end) < pp.period_key THEN 0
+            ELSE DATE_DIFF('day', pp.period_key, LEAST(CAST(CURRENT_DATE AS DATE), pp.period_end)) + 1
           END AS DOUBLE
         ) AS elapsed_days,
         CASE
-          WHEN DATE_DIFF('day', pp.period_key, ${periodEndExpr}) + 1 <= 0 THEN 0
-          WHEN LEAST(CAST(CURRENT_DATE AS DATE), ${periodEndExpr}) < pp.period_key THEN 0
+          WHEN DATE_DIFF('day', pp.period_key, pp.period_end) + 1 <= 0 THEN 0
+          WHEN LEAST(CAST(CURRENT_DATE AS DATE), pp.period_end) < pp.period_key THEN 0
           ELSE CAST(
-            DATE_DIFF('day', pp.period_key, LEAST(CAST(CURRENT_DATE AS DATE), ${periodEndExpr})) + 1
+            DATE_DIFF('day', pp.period_key, LEAST(CAST(CURRENT_DATE AS DATE), pp.period_end)) + 1
             AS DOUBLE
-          ) / CAST(DATE_DIFF('day', pp.period_key, ${periodEndExpr}) + 1 AS DOUBLE)
+          ) / CAST(DATE_DIFF('day', pp.period_key, pp.period_end) + 1 AS DOUBLE)
         END AS progress_ratio
-      FROM period_pool pp
+      FROM period_window pp
     ),
     base_grid AS (
       SELECT o.${dimConfig.alias}, pp.period_key
@@ -408,14 +423,20 @@ export function generatePerformanceOrgHeatmapQuery(
       CROSS JOIN period_pool pp
     ),
     prev_mom_data AS (
-      SELECT ${yoyTruncExpr} AS period_key, ${dimConfig.alias}, ROUND(SUM(premium_wan), 4) AS premium
-      FROM filtered
-      GROUP BY ${yoyTruncExpr}, ${dimConfig.alias}
+      SELECT pw.period_key, f.${dimConfig.alias}, ROUND(SUM(f.premium_wan), 4) AS premium
+      FROM period_window pw
+      JOIN filtered f
+        ON f.pd >= pw.period_key - ${momOffset}
+        AND f.pd <= pw.prev_mom_cutoff
+      GROUP BY pw.period_key, f.${dimConfig.alias}
     ),
     prev_yoy_data AS (
-      SELECT ${yoyTruncExpr} AS period_key, ${dimConfig.alias}, ROUND(SUM(premium_wan), 4) AS premium
-      FROM filtered
-      GROUP BY ${yoyTruncExpr}, ${dimConfig.alias}
+      SELECT pw.period_key, f.${dimConfig.alias}, ROUND(SUM(f.premium_wan), 4) AS premium
+      FROM period_window pw
+      JOIN filtered f
+        ON f.pd >= pw.period_key - ${yoyOffset}
+        AND f.pd <= pw.current_cutoff - ${yoyOffset}
+      GROUP BY pw.period_key, f.${dimConfig.alias}
     )
     ${planCtes}
     SELECT
@@ -445,8 +466,8 @@ export function generatePerformanceOrgHeatmapQuery(
     LEFT JOIN dim_period cur ON cur.${dimConfig.alias} = bg.${dimConfig.alias} AND cur.period_key = bg.period_key
     LEFT JOIN period_progress pr ON pr.period_key = bg.period_key
     ${planJoin}
-    LEFT JOIN prev_mom_data prev_mom ON prev_mom.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_mom.period_key = bg.period_key - ${momOffset}
-    LEFT JOIN prev_yoy_data prev_yoy ON prev_yoy.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_yoy.period_key = bg.period_key - ${yoyOffset}
+    LEFT JOIN prev_mom_data prev_mom ON prev_mom.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_mom.period_key = bg.period_key
+    LEFT JOIN prev_yoy_data prev_yoy ON prev_yoy.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_yoy.period_key = bg.period_key
     ORDER BY bg.${dimConfig.alias}, bg.period_key
   `;
 
