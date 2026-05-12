@@ -15,6 +15,7 @@ import { corsConfig } from './config/cors.js';
 import { serverEnv } from './config/env.js';
 import { duckdbService } from './services/duckdb.js';
 import { seedAccessControlData } from './services/access-control.js';
+import { loadApiTokensIntoTable } from './services/personal-access-token-store.js';
 import { DataBootstrapper } from './services/data-bootstrapper.js';
 import { registerBootstrapper } from './services/bootstrapper-registry.js';
 import { cacheWarmer } from './services/cache-warmer.js';
@@ -205,6 +206,8 @@ async function startServer() {
     console.log('[Server] Initializing DuckDB...');
     await duckdbService.init();
     await seedAccessControlData();
+    // PAT 持久层：DuckDB 主库是 :memory:，PM2 reload 后必须从 api_tokens.json 重建
+    await loadApiTokensIntoTable();
     console.log('[Server] ⚡ Realtime-only mode: all analytics query PolicyFact in realtime');
 
     // 2. 数据启动（发现→去重→验证→加载→维度）
