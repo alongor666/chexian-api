@@ -72,7 +72,7 @@ def run(ctx, rpt, collected, silent=False):
     SELECT {BRAND_KEY_EXPR} AS brand_key,
         {kpi_select()}
     FROM {src} p
-    JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name
+    LEFT JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name
     WHERE {base_where} AND YEAR(p.insurance_start_date) BETWEEN {min_yr} AND {max_yr}
     GROUP BY 1
     HAVING COUNT(DISTINCT p.policy_no) >= {MIN_POLICIES}
@@ -102,7 +102,7 @@ def run(ctx, rpt, collected, silent=False):
             b_result = con.execute(f"""
             SELECT {kpi_select()}
             FROM {src} p
-            JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name
+            LEFT JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name
             WHERE {base_where} AND {BRAND_KEY_EXPR} = '{escape_sql(brand)}' AND {ctx.yr_where(yr)}
             """)
             b_cols2 = [d[0] for d in b_result.description]

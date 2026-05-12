@@ -207,7 +207,7 @@ def section_02_brand(ctx, rpt, silent=False):
                 SUM(p.claim_cases) as claim_cases,
                 SUM({EARNED}) * (1 - SUM(p.reported_claims)/NULLIF(SUM({EARNED}), 0) - SUM(p.fee_amount)/NULLIF(SUM(p.premium), 0))/10000 as earned_margin
             FROM {src} p
-            JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name
+            LEFT JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name
             WHERE {BASE_FILTER}
             GROUP BY 1
             HAVING COUNT(DISTINCT p.policy_no) >= 100
@@ -566,7 +566,7 @@ def section_07_brand_org(ctx, rpt, silent=False):
     else:
         brand_field = BRAND_KEY_EXPR
 
-    join_clause = f"JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name" if Path(BRAND_DIM).exists() else ""
+    join_clause = f"LEFT JOIN read_parquet('{BRAND_DIM}') b ON p.vehicle_model = b.vehicle_model_name" if Path(BRAND_DIM).exists() else ""
 
     result = con.execute(f"""
         SELECT
