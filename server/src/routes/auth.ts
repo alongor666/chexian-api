@@ -486,37 +486,37 @@ router.get(
 
 /**
  * GET /api/auth/me
- * 返回当前登录用户（基于 access cookie 或 bearer）
+ * 返回当前登录用户（基于 access cookie / JWT bearer / PAT bearer）
+ * tokenType: 'session' 来自 cookie/JWT, 'pat' 来自 PAT。
  */
 router.get(
   '/me',
+  authMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization;
-    const bearer = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-    const cookieToken = parseCookieValue(req, ACCESS_COOKIE);
-    const accessToken = bearer || cookieToken;
-    if (!accessToken) throw new AppError(401, 'No token provided');
+    if (!req.user) throw new AppError(401, 'No token provided');
+    const { username, role, organization } = req.user;
+    const tokenType = req.pat ? 'pat' : 'session';
 
-    const payload = authService.verifyToken(accessToken);
-    let user = await getUserByUsername(payload.username);
+    let user = await getUserByUsername(username);
     if (!user) {
-      user = await ensurePresetUser(payload.username);
+      user = await ensurePresetUser(username);
     }
     if (user) {
       const { passwordHash: _pw, ...rest } = user;
       res.json({
         success: true,
-        data: rest,
+        data: { ...rest, tokenType },
       });
       return;
     }
     res.json({
       success: true,
       data: {
-        username: payload.username,
-        displayName: payload.username === 'admin' ? '系统管理员' : payload.username,
-        role: payload.role,
-        organization: payload.organization,
+        username,
+        displayName: username === 'admin' ? '系统管理员' : username,
+        role,
+        organization,
+        tokenType,
       },
     });
   })
