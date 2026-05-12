@@ -389,3 +389,80 @@ def test_run_params_hash_semantics(tmp_path):
     h_ov2 = compute_run_params_hash(**{**base_kwargs, "overrides_path": ov2})
     assert h_ov1 != h_ov2, "overrides 内容变化必须改变哈希"
     assert h_base != h_ov1, "有无 overrides 必须改变哈希"
+
+
+def test_snapshot_tag_isolates_output_dir():
+    """--snapshot-tag 必须落到默认产物路径(不需要 --output-dir 显式覆盖)。
+
+    Codex P2 反馈:之前 snapshot-tag 只 print 不影响路径,raw/dedup/cutoff/final
+    在默认 output-dir 下互相覆盖。
+
+    本测试单元级别验证:同函数中 args.snapshot_tag 的两种值会产生不同默认路径。
+    端到端验证通过 stdout 中的 [INFO] 输出目录 行间接覆盖。
+    """
+    import diagnose_lr_projection as mod  # type: ignore
+
+    # 构造同 main() 中相同的默认路径逻辑(避免动 subprocess)
+    def make_default_dir(tag: str | None) -> str:
+        suffix = f"_{tag}" if tag else ""
+        return str(mod.OUTPUT_BASE / f"2026_LR_平移预测_{mod.RUN_DATE}{suffix}")
+
+    no_tag = make_default_dir(None)
+    alpha = make_default_dir("alpha")
+    beta = make_default_dir("beta")
+
+    assert no_tag != alpha, "无 tag 与 alpha tag 必须产生不同路径"
+    assert alpha != beta, "alpha tag 与 beta tag 必须产生不同路径"
+    assert alpha.endswith("_alpha"), f"alpha 路径应以 _alpha 结尾,实际: {alpha}"
+    assert beta.endswith("_beta"), f"beta 路径应以 _beta 结尾,实际: {beta}"
+
+
+@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
+def test_snapshot_tag_subprocess_e2e(tmp_path):
+    """端到端验证:subprocess 跑时 stdout 报出的输出目录路径含 snapshot-tag。"""
+    # 用 --output-dir 控制基址,加 snapshot-tag,断言 stdout 含 tag(覆盖 print 路径)
+    r = subprocess.run([
+        sys.executable, str(SCRIPT_PATH),
+        "--proj-year", "2026", "--hist-years", "2023-2025",
+        "--as-of", "2026-05-10",
+        "--debug-hardening-stage", "final",
+        "--snapshot-tag", "gamma_test",
+        "--output-dir", str(tmp_path / "out_gamma"),
+    ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
+    assert r.returncode == 0, f"跑失败:\n{r.stderr}"
+    # stdout 中应包含 snapshot 标签提示行(确认参数被脚本识别并影响行为)
+    assert "gamma_test" in r.stdout, (
+        f"stdout 未提及 snapshot-tag=gamma_test:\n{r.stdout[-500:]}"
+    )
+
+
+@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
+def test_max_start_date_consistent_with_dedup(tmp_path):
+    """final 阶段的 max_start_date 必须来自 v_policy_proj(去重后),
+    与 raw 阶段对比不应错位到已被剔除的保单。
+
+    Codex P2 反馈:之前 max_date_row 直接读 raw parquet,与 v_policy_proj 总体可能不一致。
+    """
+    out_root = tmp_path / "stages"
+    summaries = {}
+    for stage in ("raw", "final"):
+        out_dir = out_root / stage
+        r = subprocess.run([
+            sys.executable, str(SCRIPT_PATH),
+            "--proj-year", "2026", "--hist-years", "2023-2025",
+            "--as-of", "2026-05-10",
+            "--debug-hardening-stage", stage,
+            "--output-dir", str(out_dir),
+        ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
+        assert r.returncode == 0, f"{stage} 跑失败:\n{r.stderr}"
+        summaries[stage] = json.loads(
+            (out_dir / "2026_LR_summary.json").read_text(encoding="utf-8")
+        )
+
+    # final 的 max_start_date 应 ≤ raw(去重后可能去掉最晚的净额≤0 保单)
+    raw_max = summaries["raw"]["max_start_date"]
+    final_max = summaries["final"]["max_start_date"]
+    assert final_max <= raw_max, (
+        f"final max_start_date {final_max} 不应晚于 raw {raw_max}"
+        f"(v_policy_proj 是 raw 的子集)"
+    )

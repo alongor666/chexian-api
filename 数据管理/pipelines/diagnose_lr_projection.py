@@ -217,6 +217,7 @@ def build_views(
                 {VEHICLE_TYPE_4_SQL} AS vehicle_type_4,
                 p.coverage_combination,
                 p.premium,
+                p.insurance_start_date,
                 {earned_premium_as_of(proj_eoy)} AS earned_premium_full,
                 {earned_premium_as_of(hist_as_of)} AS earned_premium_signed
             FROM read_parquet('{GLOB}', union_by_name=true) p
@@ -275,6 +276,7 @@ def build_views(
             {VEHICLE_TYPE_4_SQL} AS vehicle_type_4,
             p.coverage_combination,
             p.premium,
+            p.insurance_start_date,
             {earned_premium_as_of(proj_eoy)} AS earned_premium_full,
             {earned_premium_as_of(hist_as_of)} AS earned_premium_signed
         FROM v_policy_base_dedup p
@@ -351,16 +353,17 @@ def build_proj_year_projection(
         GROUP BY 1,2,3,4
     """).fetchdf()
 
-    # 用 max(insurance_start_date)（起保日）算外推系数
-    # 已赚保费按起保日累计，外推基准也应该按起保日：max(起保日) - proj_year-01-01 即"已签业务覆盖的起保区间"
-    # 注意：必须读 v_policy_proj（已过滤主全/交三/单交），与 df_signed 同一总体；
-    # 若读原始 parquet，被排除的 '未知'/'其他' 险别组合若有更晚起保日，会高估 months_in、低估 scale_factor
+    # 用 max(insurance_start_date)(起保日)算外推系数
+    # 已赚保费按起保日累计,外推基准也应该按起保日:max(起保日) - proj_year-01-01 即"已签业务覆盖的起保区间"
+    # 关键:必须从 v_policy_proj 读(而非原始 parquet),保证与 df_signed 同一总体——
+    #   1) 已过滤主全/交三/单交;
+    #   2) dedup/cutoff/final 阶段经 v_policy_base_dedup 剔除净额≤0 保单,
+    #      若读原始 parquet 会让 max_start_date 落在已被去重的"幽灵"保单上,
+    #      高估 days_in、低估 scale_factor。
     max_date_row = con.execute(f"""
         SELECT MAX(insurance_start_date)::DATE AS d,
                DATE_DIFF('day', DATE '{proj_year}-01-01', MAX(insurance_start_date)::DATE) AS days_in
-        FROM read_parquet('{GLOB}', union_by_name=true)
-        WHERE YEAR(insurance_start_date) = {proj_year}
-          AND {COVERAGE_FILTER}
+        FROM v_policy_proj
     """).fetchone()
 
     # P1 守护：预测年无数据时 MAX 返回 NULL，给出明确错误而非 TypeError
@@ -1025,8 +1028,10 @@ def main():
     threshold_vehicle = args.threshold_vehicle
     hardening_stage = args.debug_hardening_stage
 
+    # snapshot_tag 仅影响产物路径(不进入 run_params_hash),用于隔离同一日期下多次跑批
+    snapshot_suffix = f"_{args.snapshot_tag}" if args.snapshot_tag else ""
     output_dir = args.output_dir or (
-        OUTPUT_BASE / f"{proj_year}_LR_平移预测_{RUN_DATE}"
+        OUTPUT_BASE / f"{proj_year}_LR_平移预测_{RUN_DATE}{snapshot_suffix}"
     )
 
     # 跑批参数哈希(只含语义参数,排除 snapshot_tag/output_dir/debug_hardening_stage)
