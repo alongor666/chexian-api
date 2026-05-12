@@ -115,7 +115,13 @@
 
 **关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器）+ `query/*.ts`（20 子路由 + shared）· `server/src/sql/`（50 个 SQL 模块：30 顶层 + 20 子目录拆分）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
 
-**API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录）· `/api/filters/*`（筛选器）
+**API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录 + tokens + route-catalog）· `/api/filters/*`（筛选器）
+
+**PAT + CLI + MCP 三件套**（程序化只读访问，详见 `开发文档/PAT_GUIDE.md`）：
+- **PAT**：长期 Bearer Token，格式 `cx_pat_<id8>.<secret43>`，强制只读（`readonlyMiddleware` 拦 POST/PUT/DELETE），权限完全继承用户（dataScope/allowedRoutes）；DB 存 `bcrypt(secret)`，明文仅生成时返回一次
+- **CLI**（`@chexian/cli`）：`cx login/whoami/routes/query`，commander + cli-table3 + kleur，配置 `~/.chexian/config.json`（chmod 600）
+- **MCP**（`@chexian/mcp`）：stdio，启动拉 `/api/auth/route-catalog` 转 MCP tools；Claude Desktop 配 `mcpServers.chexian.env.CX_PAT`
+- **限流**：PAT 单独桶 60/min（基线 100/200 不变）；**审计** `logs/audit.log` 加 `auth_kind` + `token_id` 字段
 
 ---
 

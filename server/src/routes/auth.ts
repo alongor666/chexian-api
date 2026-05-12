@@ -33,6 +33,7 @@ import {
   revokePat,
   type TtlDays,
 } from '../services/personal-access-token.js';
+import { QUERY_ROUTE_METADATA } from '../config/query-routes-metadata.js';
 
 const router = Router();
 
@@ -458,6 +459,28 @@ router.delete(
       organization: req.user.organization,
     });
     res.json({ success: true, data: { revoked: true, tokenId: req.params.id } });
+  })
+);
+
+/**
+ * GET /api/auth/route-catalog
+ * 返回 /api/query/* 路由元数据，供 CLI / MCP 命令枚举使用。
+ * 鉴权：JWT 或 PAT 均可（这是只读元数据，PAT 可访问）。
+ */
+router.get(
+  '/route-catalog',
+  authMiddleware,
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      data: {
+        version: 1,
+        routes: QUERY_ROUTE_METADATA.map((r) => ({
+          ...r,
+          fullPath: `/api/query${r.path}`,
+        })),
+      },
+    });
   })
 );
 

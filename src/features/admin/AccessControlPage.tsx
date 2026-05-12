@@ -10,8 +10,10 @@ import {
   Input,
   Select,
   Table,
+  Tabs,
   useConfirmDialog,
 } from '../../shared/ui';
+import { ApiTokensPanel } from './ApiTokensPanel';
 
 /**
  * 所有可通过路由白名单配置的路由列表。
@@ -162,6 +164,7 @@ export const AccessControlPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [activeTab, setActiveTab] = useState<'config' | 'tokens'>('config');
 
   // 删除确认对话框
   const deleteUserConfirm = useConfirmDialog();
@@ -409,6 +412,19 @@ export const AccessControlPage: React.FC = () => {
           {success}
         </div>
       )}
+
+      <Tabs
+        items={[
+          { key: 'config', label: '用户与角色' },
+          { key: 'tokens', label: '我的 API Token' },
+        ]}
+        activeKey={activeTab}
+        onChange={(k) => setActiveTab(k as 'config' | 'tokens')}
+      />
+
+      {activeTab === 'tokens' && <ApiTokensPanel />}
+
+      {activeTab === 'config' && (<>
 
       {/* 用户管理 */}
       <Card
@@ -747,6 +763,8 @@ export const AccessControlPage: React.FC = () => {
           />
         </div>
       </ConfirmDialog>
+
+      </>)}
     </div>
   );
 };

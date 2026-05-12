@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": ["cli", "mcp"],
   "scripts": {
     "start": "node scripts/start.mjs",
     "start:dev": "node scripts/start.mjs --dev",

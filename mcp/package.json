@@ -1,0 +1,25 @@
+{
+  "name": "@chexian/mcp",
+  "version": "0.1.0",
+  "description": "chexian-api MCP server (stdio) — 给 Claude Desktop / Cursor 等 AI 客户端的只读数据通道",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "chexian-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "files": ["dist", "README.md"]
+}
