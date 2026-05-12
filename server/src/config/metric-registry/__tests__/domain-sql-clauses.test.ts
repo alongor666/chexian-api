@@ -80,15 +80,15 @@ describe('基准保费 SQL — 商业险自主系数归一', () => {
     expect(baselinePremiumSql).toMatch(/premium\s*\/\s*NULLIF\s*\(\s*commercial_pricing_factor/i);
   });
 
-  it('baseline_earned_premium 使用 baseline_premium 和满期因子', () => {
-    expect(baselineEarnedPremiumSql).toContain('baseline_premium');
+  it('baseline_earned_premium 自包含 SQL（内联 commercial_pricing_factor CASE + 满期因子）', () => {
+    expect(baselineEarnedPremiumSql).toContain('commercial_pricing_factor');
     expect(baselineEarnedPremiumSql).toContain('earned_days');
     expect(baselineEarnedPremiumSql).toContain('policy_term');
   });
 
-  it('baseline_earned_claim_ratio 使用 reported_claims / baseline_earned_premium', () => {
+  it('baseline_earned_claim_ratio 自包含 SQL（reported_claims 分子 + 内联满期基准保费分母）', () => {
     expect(baselineEarnedClaimRatioSql).toContain('reported_claims');
-    expect(baselineEarnedClaimRatioSql).toContain('baseline_earned_premium');
+    expect(baselineEarnedClaimRatioSql).toContain('commercial_pricing_factor');
     expect(baselineEarnedClaimRatioSql).not.toMatch(/\/\s*SUM\s*\(\s*premium\s*\)/i);
   });
 });

@@ -26,12 +26,15 @@ describe('定价系数仅适用商业险', () => {
     }
   });
 
-  it('基准保费链路中只有 baseline_premium 直接使用 commercial_pricing_factor', () => {
+  it('commercial_pricing_factor 仅出现在基准保费链路指标中', () => {
     const metricsWithCommercialFactor = getAllMetrics().filter((m) =>
       m.sql.expression.includes('commercial_pricing_factor'),
     );
 
-    expect(metricsWithCommercialFactor.map((m) => m.id)).toEqual(['baseline_premium']);
+    // baseline_earned_premium / baseline_earned_claim_ratio 已内联展开 baseline_premium CASE
+    // （codex P1 修复：让 L3 指标 SQL 自包含、可单 SELECT 独立执行）
+    const baselineChain = ['baseline_premium', 'baseline_earned_premium', 'baseline_earned_claim_ratio'];
+    expect(metricsWithCommercialFactor.map((m) => m.id).sort()).toEqual(baselineChain.sort());
   });
 });
 

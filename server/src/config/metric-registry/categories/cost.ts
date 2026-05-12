@@ -215,9 +215,17 @@ export const costMetrics: readonly MetricDefinition[] = [
       unit: '元',
     },
     sql: {
-      expression: 'ROUND(SUM(baseline_premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS baseline_earned_premium',
-      requiredColumns: ['baseline_premium', 'earned_days', 'policy_term'],
-      notes: '依赖上游先计算 baseline_premium。对于已完全满期保单，earned_days = policy_term，满期基准保费等于基准保费。',
+      expression: `ROUND(SUM(
+    (CASE
+      WHEN insurance_type = '商业保险' AND commercial_pricing_factor > 0
+      THEN premium / NULLIF(commercial_pricing_factor, 0)
+      WHEN insurance_type = '商业保险'
+      THEN NULL
+      ELSE premium
+    END) * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)
+  ), 2) AS baseline_earned_premium`,
+      requiredColumns: ['premium', 'insurance_type', 'commercial_pricing_factor', 'earned_days', 'policy_term'],
+      notes: '自包含表达式：内联 baseline_premium CASE 以避免别名引用（domain-testcases 测试单独消费）。对于已完全满期保单，earned_days = policy_term，满期基准保费等于基准保费。',
     },
     display: {
       formatter: 'premiumWan',
@@ -251,12 +259,34 @@ export const costMetrics: readonly MetricDefinition[] = [
     },
     sql: {
       expression: `CASE
-    WHEN SUM(baseline_earned_premium) > 0
-    THEN ROUND(SUM(reported_claims) * 100.0 / SUM(baseline_earned_premium), 2)
+    WHEN SUM(
+      (CASE
+        WHEN insurance_type = '商业保险' AND commercial_pricing_factor > 0
+        THEN premium / NULLIF(commercial_pricing_factor, 0)
+        WHEN insurance_type = '商业保险'
+        THEN NULL
+        ELSE premium
+      END) * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)
+    ) > 0
+    THEN ROUND(SUM(
+      CASE
+        WHEN insurance_type = '商业保险' AND NOT (commercial_pricing_factor > 0)
+        THEN NULL
+        ELSE reported_claims
+      END
+    ) * 100.0 / SUM(
+      (CASE
+        WHEN insurance_type = '商业保险' AND commercial_pricing_factor > 0
+        THEN premium / NULLIF(commercial_pricing_factor, 0)
+        WHEN insurance_type = '商业保险'
+        THEN NULL
+        ELSE premium
+      END) * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)
+    ), 2)
     ELSE NULL
   END AS baseline_earned_claim_ratio`,
-      requiredColumns: ['reported_claims', 'baseline_earned_premium'],
-      notes: '依赖上游先计算 baseline_premium 与 baseline_earned_premium。用于按险类、车险等级、客群等维度沉淀价格因子归一后的风险基准。',
+      requiredColumns: ['reported_claims', 'premium', 'insurance_type', 'commercial_pricing_factor', 'earned_days', 'policy_term'],
+      notes: '自包含表达式：内联满期基准保费分母以避免别名引用。分子分母使用一致的有效样本过滤（商业险无效自主系数记录在分子分母都排除）。',
     },
     display: {
       formatter: 'percent',

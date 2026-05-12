@@ -144,7 +144,9 @@ describe('商业险基准保费链路', () => {
 
   it('满期基准保费由基准保费乘满期因子得到', () => {
     expect(baselineEarnedPremium!.formula.numerator).toContain('baseline_premium');
-    expect(baselineEarnedPremium!.sql.requiredColumns).toContain('baseline_premium');
+    // SQL 自包含展开（codex P1 修复）：直接消费底表字段而非引用别名
+    expect(baselineEarnedPremium!.sql.requiredColumns).toContain('premium');
+    expect(baselineEarnedPremium!.sql.requiredColumns).toContain('commercial_pricing_factor');
     expect(baselineEarnedPremium!.sql.requiredColumns).toContain('earned_days');
     expect(baselineEarnedPremium!.sql.requiredColumns).toContain('policy_term');
   });
@@ -152,7 +154,9 @@ describe('商业险基准保费链路', () => {
   it('满期基准赔付率分母使用满期基准保费', () => {
     expect(baselineEarnedClaimRatio!.formula.denominator).toContain('baseline_earned_premium');
     expect(baselineEarnedClaimRatio!.sql.requiredColumns).toContain('reported_claims');
-    expect(baselineEarnedClaimRatio!.sql.requiredColumns).toContain('baseline_earned_premium');
+    // SQL 自包含展开（codex P1 修复）
+    expect(baselineEarnedClaimRatio!.sql.requiredColumns).toContain('premium');
+    expect(baselineEarnedClaimRatio!.sql.requiredColumns).toContain('commercial_pricing_factor');
   });
 });
 
