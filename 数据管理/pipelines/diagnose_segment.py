@@ -176,7 +176,9 @@ ORDER BY 赔款_万 DESC NULLS LAST
 """.strip()
 
 
-def drill_large_cases_sql(where_clause: str, valuation_date: str, top_n: int = 10) -> str:
+def drill_large_cases_sql(where_clause: str, valuation_date: str, top_n: int = 10,
+                          big_threshold: float = 200000.0) -> str:
+    """Top N 大案明细：已决/未决金额拆分，默认阈值 20 万。"""
     return f"""
 WITH policy_cohort AS (
   SELECT DISTINCT policy_no FROM read_parquet('{POLICY}', union_by_name := true)
@@ -188,19 +190,81 @@ SELECT
   COALESCE(c.accident_province, '') || '/' || COALESCE(c.accident_city, '') AS 地点,
   COALESCE(c.accident_cause, '—') AS 原因,
   COALESCE(c.loss_category, '—') AS 类别,
-  ROUND((CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
-              ELSE COALESCE(c.reserve_amount, 0) END)/1e4, 1) AS 赔款_万,
-  CASE WHEN c.settlement_time IS NOT NULL THEN '已结' ELSE '未决' END AS 状态
+  ROUND(COALESCE(c.settled_amount, 0)/1e4, 1) AS 已决_万,
+  ROUND(COALESCE(c.reserve_amount, 0)/1e4, 1) AS 未决_万,
+  ROUND((COALESCE(c.settled_amount, 0) + COALESCE(c.reserve_amount, 0))/1e4, 1) AS 合计_万,
+  CASE WHEN c.is_bodily_injury THEN '人伤' ELSE '物损' END AS 人伤,
+  CASE WHEN c.settlement_time IS NOT NULL THEN '已结' ELSE '未结' END AS 状态
 FROM read_parquet('{CLAIMS}', union_by_name := true) c
 INNER JOIN policy_cohort p ON c.policy_no = p.policy_no
 WHERE c.accident_time <= {valuation_date}
-ORDER BY (CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
-               ELSE COALESCE(c.reserve_amount, 0) END) DESC NULLS LAST
+  AND (COALESCE(c.settled_amount, 0) + COALESCE(c.reserve_amount, 0)) >= {big_threshold}
+ORDER BY 合计_万 DESC NULLS LAST
 LIMIT {top_n}
 """.strip()
 
 
+def drill_org_sql(where_clause: str, valuation_date: str) -> str:
+    """机构画像下钻：按 org_level_3 矩阵展示满期赔付率+费用率+变动成本率。"""
+    return f"""
+WITH base AS (
+  SELECT
+    policy_no,
+    ANY_VALUE(org_level_3) AS org,
+    MIN(insurance_start_date) AS start_date,
+    MAX(DATE_DIFF('day', insurance_start_date, insurance_end_date)) AS term_days,
+    SUM(premium) AS premium,
+    SUM(COALESCE(fee_amount, 0)) AS fee
+  FROM read_parquet('{POLICY}', union_by_name := true)
+  WHERE {where_clause}
+  GROUP BY policy_no
+  HAVING SUM(premium) > 0 AND MAX(DATE_DIFF('day', insurance_start_date, insurance_end_date)) > 0
+),
+b_earn AS (
+  SELECT org, policy_no, premium, fee,
+    premium * LEAST(
+      GREATEST(0, DATE_DIFF('day', start_date, LEAST(start_date + term_days * INTERVAL 1 DAY, {valuation_date}))),
+      term_days
+    )::DOUBLE / term_days AS earned_premium
+  FROM base
+),
+claims_agg AS (
+  SELECT b.org,
+    COUNT(DISTINCT c.claim_no) AS claim_cnt,
+    SUM(CASE WHEN c.settled_amount + COALESCE(c.reserve_amount, 0) >= 200000 THEN 1 ELSE 0 END) AS big_cnt,
+    SUM(CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
+             ELSE COALESCE(c.reserve_amount, 0) END) AS total_loss
+  FROM b_earn b
+  LEFT JOIN read_parquet('{CLAIMS}', union_by_name := true) c
+    ON c.policy_no = b.policy_no AND c.accident_time <= {valuation_date}
+  GROUP BY b.org
+)
+SELECT
+  COALESCE(b.org, '<空>') AS 机构,
+  COUNT(DISTINCT b.policy_no) AS 保单数,
+  ROUND(SUM(b.premium)/1e4, 1) AS 签单保费_万,
+  ROUND(SUM(b.earned_premium)/1e4, 1) AS 满期保费_万,
+  COALESCE(ca.claim_cnt, 0) AS 赔案数,
+  COALESCE(ca.big_cnt, 0) AS 大案数,
+  ROUND(COALESCE(ca.total_loss, 0)/1e4, 1) AS 已报告赔款_万,
+  ROUND(SUM(b.fee)/1e4, 1) AS 费用金额_万,
+  ROUND(COALESCE(ca.total_loss, 0) * 100.0 / NULLIF(SUM(b.earned_premium), 0), 1) AS 满期赔付率_pct,
+  ROUND(SUM(b.fee) * 100.0 / NULLIF(SUM(b.premium), 0), 1) AS 费用率_pct,
+  ROUND(
+    COALESCE(ca.total_loss, 0) * 100.0 / NULLIF(SUM(b.earned_premium), 0)
+    + SUM(b.fee) * 100.0 / NULLIF(SUM(b.premium), 0),
+    1
+  ) AS 变动成本率_pct
+FROM b_earn b
+LEFT JOIN claims_agg ca USING(org)
+GROUP BY b.org, ca.claim_cnt, ca.big_cnt, ca.total_loss
+ORDER BY 签单保费_万 DESC NULLS LAST
+""".strip()
+
+
 DRILL_REGISTRY = {
+    "org_level_3": ("机构画像（满期赔付率+费用率+变动成本率）",
+                    lambda w, v: drill_org_sql(w, v)),
     "vehicle_model": ("厂牌车型（件数 ≥20 Top15）",
                       lambda w, v: build_vehicle_model_drill_sql(POLICY, CLAIMS, w, v)),
     "accident_province": ("出险地点 Top20（省/市）",
@@ -209,7 +273,8 @@ DRILL_REGISTRY = {
     "accident_hour": ("事故时段分布（一天 24 小时四分段）", lambda w, v: drill_hour_sql(w, v)),
     "accident_cause": ("事故原因 Top15（按赔款金额）", lambda w, v: drill_cause_sql(w, v)),
     "loss_category": ("损失类别分布", lambda w, v: drill_loss_category_sql(w, v)),
-    "large_cases": ("Top10 大案", lambda w, v: drill_large_cases_sql(w, v)),
+    "large_cases": ("Top10 大案（已决/未决拆分，阈值 20 万）",
+                    lambda w, v: drill_large_cases_sql(w, v)),
 }
 
 DEFAULT_DRILLS = ["vehicle_model", "accident_province", "accident_month",
@@ -427,6 +492,71 @@ def md_table(cols, rows):
     return "\n".join(out)
 
 
+def _light_variable_cost(rate) -> str:
+    """变动成本率亮灯：≤91% 🟢 / 91-94% 🟡 / >94% 🔴（来自 metric registry combined cost 阈值）"""
+    if rate is None:
+        return ""
+    try:
+        r = float(rate)
+    except (TypeError, ValueError):
+        return ""
+    if r <= 91:
+        return "🟢"
+    if r <= 94:
+        return "🟡"
+    return "🔴"
+
+
+def build_exec_summary_md(cohort_cols, cohort_rows, main_cols, main_rows,
+                          org_cols, org_rows) -> str:
+    """生成管理层摘要（业务规模 / 盈亏现状 / 风险机构 TOP3）。"""
+    lines = ["## 0. 管理层摘要（执行层 5 分钟版）\n"]
+
+    # —— 业务规模 ——
+    if cohort_rows:
+        c0 = dict(zip(cohort_cols, cohort_rows[0]))
+        pol_cnt = c0.get("保单数", "—")
+        premium = c0.get("保费_万", "—")
+        lines.append(f"- **业务规模**：{pol_cnt:,} 单 / {premium} 万保费\n")
+
+    # —— 盈亏现状（满期桩，变动成本率亮灯）——
+    if main_rows and main_cols:
+        eol = main_rows[-1]  # 满期桩
+        row = dict(zip(main_cols, eol))
+        lr = row.get("满期赔付率_pct")
+        er = row.get("费用率_pct")
+        vc = row.get("变动成本率_pct")
+        if vc is not None:
+            lines.append(
+                f"- **盈亏现状（满期桩）**：满期赔付率 **{lr}%** + 费用率 **{er}%** = "
+                f"**变动成本率 {vc}%** {_light_variable_cost(vc)}\n"
+            )
+
+    # —— 风险机构 TOP3（仅当 org_level_3 下钻存在）——
+    if org_rows and org_cols:
+        try:
+            org_i = org_cols.index("机构")
+            vc_i = org_cols.index("变动成本率_pct")
+            pol_i = org_cols.index("保单数")
+        except ValueError:
+            org_i = vc_i = pol_i = None
+        if vc_i is not None:
+            qualified = [r for r in org_rows
+                         if r[vc_i] is not None and (r[pol_i] or 0) >= 20]
+            top3 = sorted(qualified, key=lambda r: r[vc_i], reverse=True)[:3]
+            if top3:
+                parts = [
+                    f"{r[org_i]} {r[vc_i]:.1f}% {_light_variable_cost(r[vc_i])}"
+                    for r in top3
+                ]
+                lines.append(
+                    f"- **风险机构 TOP3（按变动成本率，保单 ≥20）**：{' / '.join(parts)}\n"
+                )
+
+    lines.append("> 亮灯：变动成本率 ≤91% 🟢 ｜ 91-94% 🟡 ｜ >94% 🔴\n")
+    return "\n".join(lines)
+
+
 def build_report(args, where_clause: str, resolved_from_keywords: bool) -> Path:
     con = duckdb.connect()
     valuation_date = f"DATE '{args.valuation_date}'"
@@ -437,7 +567,7 @@ def build_report(args, where_clause: str, resolved_from_keywords: bool) -> Path:
     parts.append(f">\n> **WHERE**：`{where_clause}`")
     if resolved_from_keywords:
         parts.append(f">\n> **来源**：词典关键词 `{args.keywords}`")
-    parts.append(f">\n> **估值日**：{args.valuation_date}  **报告生成**：{today}")
+    parts.append(f">\n> **估值日**:{args.valuation_date}  **报告生成**：{today}")
     parts.append(f">\n> **数据源**：`policy/current/*.parquet` + `claims_detail/claims_*.parquet`")
     parts.append(f">\n> **赔案锚定**：`accident_time`；**赔款**：已决 `settled_amount` + 未结 `reserve_amount`\n")
 
@@ -448,17 +578,11 @@ def build_report(args, where_clause: str, resolved_from_keywords: bool) -> Path:
     print("[1/3] Cohort 概览...")
     c0, r0 = q(con, build_cohort_summary_sql(POLICY, full_where, args.start, args.end))
 
-    parts.append("## 0. Cohort 概览\n")
-    parts.append(md_table(c0, r0))
-
     print("[2/3] 主表四桩...")
     c1, r1 = q(con, build_main_table_sql(POLICY, CLAIMS, full_where, valuation_date))
-    parts.append("\n## 1. 主表：保单年龄发展口径四桩\n")
-    parts.append(md_table(c1, r1))
-    parts.append("\n> 四桩 cohort 独立不等大（递减），**不是同一批车随时间递增成熟**。")
-    parts.append("> 每桩 eligible = 该桩所需发展天数已过估值日的保单。满期=保单止期已过估值日。")
-    parts.append("> 已赚保费 = 保费 × min(N, policy_term)/policy_term；已赚暴露 = min(N, policy_term)/365（年化）。\n")
 
+    # 先跑 org_level_3 下钻（如果在用户的 drill 列表里），其结果用于管理层摘要
+    drill_results: dict[str, tuple] = {}
     print(f"[3/3] 下钻 {len(args.drill)} 个维度...")
     for idx, drill_name in enumerate(args.drill, 1):
         if drill_name not in DRILL_REGISTRY:
@@ -467,7 +591,32 @@ def build_report(args, where_clause: str, resolved_from_keywords: bool) -> Path:
         title, sql_fn = DRILL_REGISTRY[drill_name]
         print(f"  ({idx}) {drill_name} — {title}")
         cols, rows = q(con, sql_fn(full_where, valuation_date))
-        parts.append(f"\n## {idx + 1}. 下钻：{title}\n")
+        drill_results[drill_name] = (title, cols, rows)
+
+    # 管理层摘要（仅当 --exec-summary 时输出，放在最前）
+    if getattr(args, "exec_summary", False):
+        org_cols, org_rows = (None, None)
+        if "org_level_3" in drill_results:
+            _, org_cols, org_rows = drill_results["org_level_3"]
+        parts.append(build_exec_summary_md(c0, r0, c1, r1, org_cols, org_rows))
+
+    parts.append("## 1. Cohort 概览\n")
+    parts.append(md_table(c0, r0))
+
+    parts.append("\n## 2. 主表：保单年龄发展口径四桩\n")
+    parts.append(md_table(c1, r1))
+    parts.append("\n> 四桩 cohort 独立不等大（递减），**不是同一批车随时间递增成熟**。")
+    parts.append("> 每桩 eligible = 该桩所需发展天数已过估值日的保单。满期=保单止期已过估值日。")
+    parts.append("> 已赚保费 = 保费 × min(N, policy_term)/policy_term；已赚暴露 = min(N, policy_term)/365（年化）。")
+    parts.append("> 变动成本率 = 满期赔付率（÷满期保费）+ 费用率（÷签单保费）；亮灯：≤91% 🟢 ｜ 91-94% 🟡 ｜ >94% 🔴。\n")
+
+    section_idx = 2
+    for drill_name in args.drill:
+        if drill_name not in drill_results:
+            continue
+        title, cols, rows = drill_results[drill_name]
+        section_idx += 1
+        parts.append(f"\n## {section_idx}. 下钻：{title}\n")
         parts.append(md_table(cols, rows))
 
     parts.append("\n## 附：关键口径说明\n")
@@ -499,10 +648,35 @@ def main():
     parser.add_argument("--drill", default=",".join(DEFAULT_DRILLS),
                         help=f"下钻维度，逗号分隔。可选：{','.join(DRILL_REGISTRY.keys())}")
     parser.add_argument("--valuation-date", default="2026-04-21", help="估值日")
+    parser.add_argument("--preset", default=None,
+                        help="预设组合（来自 segment-dictionary.json:presets），自动注入 keywords/drill/start/end/slug")
+    parser.add_argument("--exec-summary", dest="exec_summary", action="store_true",
+                        help="报告头部追加管理层摘要（业务规模/盈亏亮灯/风险机构 TOP3）")
     parser.add_argument("--dry-run", action="store_true", help="只解析参数，不实际跑查询")
     parser.add_argument("--interactive", action="store_true",
                         help="交互式问卷模式：逐批提问构建筛选条件（当 --where/--keywords 均未指定时自动触发）")
     args = parser.parse_args()
+
+    # —— preset 解析：从词典 presets 注入默认值（仅填充未显式指定的项）——
+    if args.preset:
+        dictionary = load_dictionary()
+        presets = dictionary.get("presets", {})
+        if args.preset not in presets:
+            print(f"[ERROR] 未知 preset：{args.preset}（可用：{list(presets.keys())}）", file=sys.stderr)
+            sys.exit(1)
+        preset = presets[args.preset]
+        if not args.keywords and not args.where:
+            args.keywords = ",".join(preset.get("keywords", []))
+        if args.drill == ",".join(DEFAULT_DRILLS) and preset.get("default_drills"):
+            args.drill = ",".join(preset["default_drills"])
+        if not args.start and preset.get("default_start"):
+            args.start = preset["default_start"]
+        if not args.end and preset.get("default_end"):
+            args.end = preset["default_end"]
+        if not args.slug:
+            args.slug = args.preset
+        if not args.exec_summary and preset.get("default_exec_summary"):
+            args.exec_summary = True
 
     # --interactive 自动触发：需求模糊时（无 --where 且无 --keywords）
     if not args.where and not args.keywords:

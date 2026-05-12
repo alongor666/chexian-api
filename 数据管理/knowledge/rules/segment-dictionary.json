@@ -4,8 +4,20 @@
   "version": "1.0",
   "generated_at": "2026-04-21",
   "_changelog": [
-    {"version": "1.0", "date": "2026-04-21", "note": "初版，覆盖 2025-2026 高频细分维度"}
+    {"version": "1.0", "date": "2026-04-21", "note": "初版，覆盖 2025-2026 高频细分维度"},
+    {"version": "1.1", "date": "2026-05-12", "note": "新增 presets 节点：预设 keywords/drill/start/exec_summary 组合，配合 --preset 参数"}
   ],
+  "presets": {
+    "_doc": "预设组合 — 一次性注入关键词+下钻+时间窗+执行摘要的高频诊断场景。调用：python3 diagnose_segment.py --preset <名称>。仅当 CLI 未显式指定的参数才从 preset 注入。",
+    "牵引新车": {
+      "keywords": ["牵引车", "新车"],
+      "default_drills": ["org_level_3", "vehicle_model", "accident_province", "accident_hour", "large_cases"],
+      "default_start": "2024-01-01",
+      "default_end": "2026-05-11",
+      "default_exec_summary": true,
+      "note": "重卡牵引新车专项诊断（机构画像+车型+地点+时段+大案）。报告头部带管理层摘要。"
+    }
+  },
   "keywords": {
     "天然气": {
       "where": "fuel_type = '天然气(NG/CNG/LNG)'",
