@@ -56,6 +56,26 @@ export interface AccessRole extends Record<string, unknown> {
   defaultRoute?: string;
 }
 
+/** API Token 信息（不含明文/哈希） */
+export interface ApiTokenInfo {
+  tokenId: string;
+  name: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+  lastUsedIp: string | null;
+  revokedAt: string | null;
+}
+
+/** 创建 PAT 的返回：包含明文 token（仅此次可见） */
+export interface CreatedToken {
+  token: string;
+  tokenId: string;
+  name: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 /** AI 能力信息 */
 export interface CapabilityInfo {
   id: string;

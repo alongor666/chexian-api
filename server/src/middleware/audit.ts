@@ -42,6 +42,10 @@ interface AuditLogEntry {
   total_time_ms: number;   // 总耗时
   status: number;          // HTTP 状态码
   duration: number;        // 响应时间（毫秒）
+  /** 鉴权来源（jwt = Bearer/Cookie JWT；pat = Personal Access Token） */
+  auth_kind?: 'jwt' | 'pat';
+  /** PAT 调用时填，便于按 token 维度审计与告警 */
+  token_id?: string;
 }
 
 /** 需要记录审计日志的路径前缀 */
@@ -113,6 +117,8 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
           total_time_ms: totalTimeMs,
           status: res.statusCode,
           duration: totalTimeMs,
+          auth_kind: req.pat ? 'pat' : 'jwt',
+          token_id: req.pat?.tokenId,
         });
       } catch (error) {
         console.error('[Audit] 审计日志记录异常:', error);
@@ -127,30 +133,44 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
  * 显式记录认证事件（登录成功/失败）
  * 在 auth 路由中主动调用，无需等待 req.user 挂载
  */
+export type AuthEventKind =
+  | 'login_success'
+  | 'login_failure'
+  | 'login_ip_denied'
+  | 'pat_created'
+  | 'pat_revoked'
+  | 'pat_expired';
+
 export function auditAuthEvent(params: {
-  event: 'login_success' | 'login_failure' | 'login_ip_denied';
+  event: AuthEventKind;
   username: string;
-  ip: string;
+  ip?: string;
   role?: string;
   organization?: string;
+  tokenId?: string;
 }): void {
+  const isLoginPath = params.event.startsWith('login_');
+  const path = isLoginPath ? '/api/auth/login' : '/api/auth/tokens';
+  const successEvents = new Set<AuthEventKind>(['login_success', 'pat_created', 'pat_revoked']);
   writeAuditLog({
     timestamp: new Date().toISOString(),
     request_id: 'auth-event',
-    route_key: '/api/auth/login',
-    query_hash: `${params.event}:${params.username}`,
+    route_key: path,
+    query_hash: `${params.event}:${params.username}${params.tokenId ? ':' + params.tokenId : ''}`,
     username: params.username,
     userId: params.username,
     role: params.role ?? 'unknown',
     organization: params.organization,
-    ip: params.ip,
+    ip: params.ip ?? 'unknown',
     method: 'POST',
-    path: '/api/auth/login',
-    query: { event: params.event },
+    path,
+    query: params.tokenId
+      ? { event: params.event, tokenId: params.tokenId }
+      : { event: params.event },
     cache_hit: false,
     sql_time_ms: 0,
     total_time_ms: 0,
-    status: params.event === 'login_success' ? 200 : 401,
+    status: successEvents.has(params.event) ? 200 : 401,
     duration: 0,
   });
 }

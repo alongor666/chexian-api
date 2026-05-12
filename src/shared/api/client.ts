@@ -7,7 +7,7 @@
 
 // 类型定义集中管理在 types.ts
 export type {
-  ApiResponseMeta, AuthData, AccessUser, AccessRole,
+  ApiResponseMeta, AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
   CapabilityInfo, DetectRequirementResponse,
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
   CrossSellBundleResponse, PerformanceBundleResponse, DashboardBundleResponse,
@@ -16,7 +16,7 @@ export type {
 } from './types';
 
 import type {
-  ApiResponse, AuthData, AccessUser, AccessRole,
+  ApiResponse, AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
   CapabilityInfo, DetectRequirementResponse,
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
   CrossSellBundleResponse, PerformanceBundleResponse, DashboardBundleResponse,
@@ -350,6 +350,24 @@ class ApiClient {
 
   async deleteUser(id: string): Promise<void> {
     await this.request(`/${AUTH_ROUTES.USER_BY_ID}/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ─── PAT (Personal Access Token) ─────────────────────────
+  async listMyTokens(): Promise<ApiTokenInfo[]> {
+    return this.request<ApiTokenInfo[]>('/auth/tokens');
+  }
+
+  async createMyToken(payload: { name: string; ttlDays: 30 | 90 | 180 | 365 }): Promise<CreatedToken> {
+    return this.request<CreatedToken>('/auth/tokens', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async revokeMyToken(tokenId: string): Promise<void> {
+    await this.request(`/auth/tokens/${encodeURIComponent(tokenId)}`, {
       method: 'DELETE',
     });
   }

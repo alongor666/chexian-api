@@ -27,6 +27,13 @@ import {
   getUserByUsername,
   ensurePresetUser,
 } from '../services/access-control.js';
+import {
+  createPat,
+  listPatsByUser,
+  revokePat,
+  type TtlDays,
+} from '../services/personal-access-token.js';
+import { QUERY_ROUTE_METADATA } from '../config/query-routes-metadata.js';
 
 const router = Router();
 
@@ -127,6 +134,18 @@ const roleSchema = z.object({
   allowedRoutes: z.array(z.string().min(1)).optional().default([]),
   defaultRoute: z.string().optional(),
 });
+
+const tokenCreateSchema = z.object({
+  name: z.string().min(1, 'Token name is required').max(64, 'Token name too long'),
+  ttlDays: z.union([z.literal(30), z.literal(90), z.literal(180), z.literal(365)]).default(90),
+});
+
+/** PAT 不能管理 PAT — 任何 tokens 端点都强制要求 JWT/Cookie 来源 */
+function requireSessionAuth(req: Request): void {
+  if (req.pat) {
+    throw new AppError(403, 'Cannot manage tokens via PAT. Use browser session.');
+  }
+}
 
 /**
  * POST /api/auth/login
@@ -346,6 +365,122 @@ router.delete(
   asyncHandler(async (req: Request, res: Response) => {
     await deleteRole(req.params.role);
     res.json({ success: true, data: { deleted: true } });
+  })
+);
+
+/**
+ * GET /api/auth/tokens
+ * 列出当前用户的所有 PAT（不含明文/哈希）
+ */
+router.get(
+  '/tokens',
+  authMiddleware,
+  asyncHandler(async (req: Request, res: Response) => {
+    requireSessionAuth(req);
+    if (!req.user) throw new AppError(401, 'Authentication required');
+    const tokens = await listPatsByUser(req.user.userId);
+    res.json({
+      success: true,
+      data: tokens.map((t) => ({
+        tokenId: t.tokenId,
+        name: t.name,
+        createdAt: t.createdAt.toISOString(),
+        expiresAt: t.expiresAt.toISOString(),
+        lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
+        lastUsedIp: t.lastUsedIp ?? null,
+        revokedAt: t.revokedAt?.toISOString() ?? null,
+      })),
+    });
+  })
+);
+
+/**
+ * POST /api/auth/tokens
+ * 生成新 PAT。明文 token 仅此次返回，之后无法再取回。
+ */
+router.post(
+  '/tokens',
+  authMiddleware,
+  asyncHandler(async (req: Request, res: Response) => {
+    requireSessionAuth(req);
+    if (!req.user) throw new AppError(401, 'Authentication required');
+
+    const parseResult = tokenCreateSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+
+    const { name, ttlDays } = parseResult.data;
+    const result = await createPat({
+      userId: req.user.userId,
+      username: req.user.username,
+      name,
+      ttlDays: ttlDays as TtlDays,
+    });
+
+    auditAuthEvent({
+      event: 'pat_created',
+      username: req.user.username,
+      ip: req.ip,
+      role: req.user.role,
+      organization: req.user.organization,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        token: result.plaintext, // 明文，仅此次返回
+        tokenId: result.token.tokenId,
+        name: result.token.name,
+        createdAt: result.token.createdAt.toISOString(),
+        expiresAt: result.token.expiresAt.toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * DELETE /api/auth/tokens/:id
+ * 吊销指定 PAT（软删 revoked_at）。只允许吊销自己的 token。
+ */
+router.delete(
+  '/tokens/:id',
+  authMiddleware,
+  asyncHandler(async (req: Request, res: Response) => {
+    requireSessionAuth(req);
+    if (!req.user) throw new AppError(401, 'Authentication required');
+
+    await revokePat(req.user.userId, req.params.id);
+    auditAuthEvent({
+      event: 'pat_revoked',
+      username: req.user.username,
+      ip: req.ip,
+      role: req.user.role,
+      organization: req.user.organization,
+    });
+    res.json({ success: true, data: { revoked: true, tokenId: req.params.id } });
+  })
+);
+
+/**
+ * GET /api/auth/route-catalog
+ * 返回 /api/query/* 路由元数据，供 CLI / MCP 命令枚举使用。
+ * 鉴权：JWT 或 PAT 均可（这是只读元数据，PAT 可访问）。
+ */
+router.get(
+  '/route-catalog',
+  authMiddleware,
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      data: {
+        version: 1,
+        routes: QUERY_ROUTE_METADATA.map((r) => ({
+          ...r,
+          fullPath: `/api/query${r.path}`,
+        })),
+      },
+    });
   })
 );
 

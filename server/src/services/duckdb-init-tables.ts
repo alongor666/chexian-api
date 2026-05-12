@@ -62,6 +62,23 @@ export async function initDuckDBTables(db: DuckDBQueryable): Promise<void> {
     )
   `);
 
+  // Personal Access Token：只读 API 长期令牌
+  // token_hash = bcrypt(secret)，secret 仅在创建时返回明文一次
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS ApiToken (
+      token_id VARCHAR PRIMARY KEY,
+      token_hash VARCHAR NOT NULL,
+      user_id VARCHAR NOT NULL,
+      username VARCHAR NOT NULL,
+      name VARCHAR NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      last_used_at TIMESTAMP,
+      last_used_ip VARCHAR,
+      created_at TIMESTAMP NOT NULL,
+      revoked_at TIMESTAMP
+    )
+  `);
+
   // 加载 KpiPlanConfig JSON 数据
   try {
     const fs = (await import('fs')).default;
