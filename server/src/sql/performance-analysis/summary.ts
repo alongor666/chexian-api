@@ -297,10 +297,11 @@ export function generatePerformancePeriodBoundsQuery(
   whereWithDate: string,
   segmentTag: PerformanceSegmentTag,
   timePeriod: PerformanceTimePeriod,
-  growthMode: PerformanceGrowthMode
+  growthMode: PerformanceGrowthMode,
+  dateField: string = 'policy_date'
 ): string {
   const segmentFilter = getPerformanceSegmentFilter(segmentTag);
-  const periodBounds = buildPeriodBoundsCte(whereWithDate, segmentFilter, timePeriod, growthMode);
+  const periodBounds = buildPeriodBoundsCte(whereWithDate, segmentFilter, timePeriod, growthMode, dateField);
   return `
     WITH
     ${periodBounds}

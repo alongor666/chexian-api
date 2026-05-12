@@ -299,13 +299,14 @@ router.get(
       throw new AppError(400, 'Invalid drillPath JSON');
     }
 
-    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const { whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
     const trendGranularity = (granularity || mapPerformanceTimeToGranularity(timePeriod as PerformanceTimePeriod)) as PerformanceTrendGranularity;
     const periodBoundsSql = generatePerformancePeriodBoundsQuery(
       whereWithDate,
       segmentTag as PerformanceSegmentTag,
       timePeriod as PerformanceTimePeriod,
-      growthMode as PerformanceGrowthMode
+      growthMode as PerformanceGrowthMode,
+      dateField
     );
     const periodBoundsRows = await duckdbService.query<Record<string, unknown>>(
       periodBoundsSql,
@@ -329,12 +330,14 @@ router.get(
       timePeriod as PerformanceTimePeriod,
       growthMode as PerformanceGrowthMode,
       expandDims as PerformanceSummaryExpandDims,
-      periodBounds
+      periodBounds,
+      dateField
     );
     const trendSql = generatePerformanceTrendQuery(
       whereWithDate,
       segmentTag as PerformanceSegmentTag,
-      trendGranularity
+      trendGranularity,
+      dateField
     );
     const drillSummarySql = generatePerformanceDrilldownQuery(
       whereWithDate,
@@ -344,7 +347,8 @@ router.get(
       growthMode as PerformanceGrowthMode,
       drillPath,
       null,
-      periodBounds
+      periodBounds,
+      dateField
     );
     const drillRowsSql = groupBy
       ? generatePerformanceDrilldownQuery(
@@ -355,7 +359,8 @@ router.get(
         growthMode as PerformanceGrowthMode,
         drillPath,
         groupBy as PerformanceDimension,
-        periodBounds
+        periodBounds,
+        dateField
       )
       : null;
     const topSalesmanSql = generatePerformanceTopSalesmanQuery(
@@ -365,7 +370,8 @@ router.get(
       timePeriod as PerformanceTimePeriod,
       growthMode as PerformanceGrowthMode,
       limit,
-      periodBounds
+      periodBounds,
+      dateField
     );
 
     const [summaryRows, trendRows, drillSummaryRows, drillRows, topSalesmanRows] = await Promise.all([
