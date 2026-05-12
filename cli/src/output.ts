@@ -9,8 +9,10 @@ export type OutputFormat = 'table' | 'json' | 'csv';
 export function renderOutput(data: unknown, format: OutputFormat): string {
   if (format === 'json') return JSON.stringify(data, null, 2);
 
+  // extractRows: null = 非 list 型响应；[] = list 型但空。分流避免空 wrapper 被当 KV 渲染。
   const rows = extractRows(data);
-  if (rows && rows.length > 0) {
+  if (rows !== null) {
+    if (rows.length === 0) return kleur.gray('(no rows)');
     return format === 'csv' ? toCsv(rows) : toTable(rows);
   }
 

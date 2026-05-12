@@ -58,4 +58,21 @@ describe('renderOutput', () => {
   it('空 object：返回 (no rows)', () => {
     expect(renderOutput({}, 'table')).toMatch(/no rows/);
   });
+
+  // 回归: codex P2 — 空 wrapper 必须落到 (no rows)，不能被 KV 渲染吞掉
+  it('空 rows wrapper { rows: [] }: 返回 (no rows) 而非 KV', () => {
+    const out = renderOutput({ rows: [] }, 'table');
+    expect(out).toMatch(/no rows/);
+    // KV 渲染会产生 field/value 表头，确保没走到那
+    expect(out).not.toMatch(/field/);
+    expect(out).not.toMatch(/value/);
+  });
+
+  it('空 data array { data: [] }: 返回 (no rows)', () => {
+    expect(renderOutput({ data: [] }, 'table')).toMatch(/no rows/);
+  });
+
+  it('空 nested rows { data: { rows: [] } }: 返回 (no rows)', () => {
+    expect(renderOutput({ data: { rows: [] } }, 'table')).toMatch(/no rows/);
+  });
 });
