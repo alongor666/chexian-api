@@ -447,14 +447,11 @@ def main():
         json.dump(summary, f, ensure_ascii=False, indent=2)
     print(f"\n  ✅ 摘要: {summary_path.name}")
 
-    # 品牌维度表（从 Parquet 保单数据提取，不依赖 Excel）
+    # 品牌维度表来自 06_厂牌明细 Excel，经 daily.mjs brand / convert_brand_dim.py 生成。
+    # 旧的“从保单厂牌车型字符串抽取品牌_用途”生成器会产出过期 schema，不能再覆盖 latest.parquet。
     print(f"\n{'='*60}")
     print("品牌维度表")
-    try:
-        from brand.generate_brand_dim import generate as generate_brand
-        generate_brand()
-    except Exception as e:
-        print(f"  ⚠️ 品牌维度表生成失败: {e}")
+    print("  ⏭️  跳过：请使用 `node 数据管理/daily.mjs brand` 刷新 warehouse/dim/brand/latest.parquet")
 
     # 更新 data-sources.json
     try:
