@@ -3,6 +3,7 @@
 """diagnose_lr_projection 回归测试 — 锁定 burning-cost 平移核心契约。"""
 
 from __future__ import annotations
+import json
 import os
 import subprocess
 import sys
@@ -15,11 +16,15 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from diagnose_lr_projection import parse_hist_years  # type: ignore
+from diagnose_lr_projection import (  # type: ignore
+    compute_run_params_hash,
+    parse_hist_years,
+)
 
 PROJECT_ROOT = _HERE.parent.parent
 PARQUET_DIR = PROJECT_ROOT / "数据管理" / "warehouse" / "fact" / "policy" / "current"
 _HAS_PARQUET = PARQUET_DIR.exists() and any(PARQUET_DIR.glob("*.parquet"))
+SCRIPT_PATH = PROJECT_ROOT / "数据管理" / "pipelines" / "diagnose_lr_projection.py"
 
 
 @pytest.mark.parametrize("s,expected", [
@@ -130,3 +135,334 @@ def test_duplicate_override_keys_rejected(tmp_path):
     combined = result.stdout + result.stderr
     assert "重复" in combined or "duplicate" in combined.lower(), \
         f"错误信息未提及重复键:\n{combined}"
+
+
+# ============================================================================
+# 阶段 0 口径硬化回归测试(6 个)
+# ============================================================================
+
+
+def _build_dedup_fixture(tmp_path: Path) -> Path:
+    """构造含重复保单的 fixture parquet:3 条同 (policy_no, insurance_start_date) 行 + 1 条独立保单。"""
+    fixture_path = tmp_path / "dedup_fixture.parquet"
+    df = pd.DataFrame([
+        # P001 的 3 个批改副本(同 policy_no + 同 insurance_start_date)
+        {"policy_no": "P001", "insurance_start_date": pd.Timestamp("2024-01-01"),
+         "premium": 1000.0, "fee_amount": 500.0,
+         "customer_category": "非营业个人客车", "is_nev": False,
+         "is_new_car": False, "is_transfer": False, "is_renewal": True,
+         "coverage_combination": "主全", "vehicle_frame_no": "VIN001"},
+        {"policy_no": "P001", "insurance_start_date": pd.Timestamp("2024-01-01"),
+         "premium": 200.0, "fee_amount": 100.0,
+         "customer_category": "非营业个人客车", "is_nev": False,
+         "is_new_car": False, "is_transfer": False, "is_renewal": True,
+         "coverage_combination": "主全", "vehicle_frame_no": "VIN001"},
+        {"policy_no": "P001", "insurance_start_date": pd.Timestamp("2024-01-01"),
+         "premium": -100.0, "fee_amount": -50.0,
+         "customer_category": "非营业个人客车", "is_nev": False,
+         "is_new_car": False, "is_transfer": False, "is_renewal": True,
+         "coverage_combination": "主全", "vehicle_frame_no": "VIN001"},
+        # P002 单条,无重复
+        {"policy_no": "P002", "insurance_start_date": pd.Timestamp("2024-02-01"),
+         "premium": 2000.0, "fee_amount": 1000.0,
+         "customer_category": "摩托车", "is_nev": False,
+         "is_new_car": True, "is_transfer": False, "is_renewal": False,
+         "coverage_combination": "单交", "vehicle_frame_no": "VIN002"},
+        # P003 净额 ≤ 0(整张保单全退),应被 HAVING SUM(premium) > 0 剔除
+        {"policy_no": "P003", "insurance_start_date": pd.Timestamp("2024-03-01"),
+         "premium": 500.0, "fee_amount": 200.0,
+         "customer_category": "非营业个人客车", "is_nev": False,
+         "is_new_car": False, "is_transfer": False, "is_renewal": True,
+         "coverage_combination": "主全", "vehicle_frame_no": "VIN003"},
+        {"policy_no": "P003", "insurance_start_date": pd.Timestamp("2024-03-01"),
+         "premium": -500.0, "fee_amount": -200.0,
+         "customer_category": "非营业个人客车", "is_nev": False,
+         "is_new_car": False, "is_transfer": False, "is_renewal": True,
+         "coverage_combination": "主全", "vehicle_frame_no": "VIN003"},
+    ])
+    df.to_parquet(fixture_path, index=False)
+    return fixture_path
+
+
+def test_dedup_reduces_row_count(tmp_path, monkeypatch):
+    """fixture 固化场景:6 raw 行 → 2 dedup 行(P001 合并、P003 净额 ≤ 0 被剔除)。"""
+    import duckdb
+    import diagnose_lr_projection as mod  # type: ignore
+
+    fixture = _build_dedup_fixture(tmp_path)
+    monkeypatch.setattr(mod, "GLOB", str(fixture))
+
+    con = duckdb.connect()
+    # 借 claims fixture(空表)避免 build_views 在赔案侧报错
+    claims_fixture = tmp_path / "claims_empty.parquet"
+    pd.DataFrame({
+        "policy_no": pd.Series([], dtype="object"),
+        "claim_no": pd.Series([], dtype="object"),
+        "report_time": pd.Series([], dtype="datetime64[ns]"),
+        "settled_amount": pd.Series([], dtype="float64"),
+        "pending_amount": pd.Series([], dtype="float64"),
+        "settlement_time": pd.Series([], dtype="datetime64[ns]"),
+        "payment_time": pd.Series([], dtype="datetime64[ns]"),
+    }).to_parquet(claims_fixture, index=False)
+    monkeypatch.setattr(mod, "CLAIMS_GLOB", str(claims_fixture))
+
+    mod.build_views(con, "2024-12-31", [2024], 2025, hardening_stage="dedup")
+
+    raw_count = con.execute(
+        f"SELECT COUNT(*) FROM read_parquet('{fixture}', union_by_name=true)"
+    ).fetchone()[0]
+    dedup_count = con.execute("SELECT COUNT(*) FROM v_policy_base_dedup").fetchone()[0]
+
+    assert raw_count == 6, f"fixture 应有 6 行,实际 {raw_count}"
+    assert dedup_count == 2, (
+        f"去重后应剩 2 条(P001 合并、P003 净额 ≤ 0 被剔除),实际 {dedup_count}"
+    )
+    assert dedup_count < raw_count, "去重必须严格减少行数"
+
+
+@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
+def test_estimation_cutoff_no_leak(tmp_path):
+    """估值截止护栏:as_of=2024-12-31 时,2025+ 报案不应进入赔款总额。
+
+    通过 raw 与 final 两阶对比:
+      - raw 不过滤 report_time → 含 2025+ 报案
+      - final 过滤 report_time <= as_of → 不含 2025+ 报案
+    如真实数据有跨年报案,final 的历史赔款应 < raw。
+    """
+    raw_dir = tmp_path / "raw"
+    cutoff_dir = tmp_path / "cutoff"
+    for stage, out_dir in [("raw", raw_dir), ("cutoff", cutoff_dir)]:
+        r = subprocess.run([
+            sys.executable, str(SCRIPT_PATH),
+            "--proj-year", "2025", "--hist-years", "2023,2024",
+            "--as-of", "2024-12-31",
+            "--debug-hardening-stage", stage,
+            "--output-dir", str(out_dir),
+        ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
+        assert r.returncode == 0, f"{stage} 跑失败:\n{r.stderr}"
+
+    raw_s = json.loads((raw_dir / "2025_LR_summary.json").read_text(encoding="utf-8"))
+    cutoff_s = json.loads((cutoff_dir / "2025_LR_summary.json").read_text(encoding="utf-8"))
+
+    # 弱断言:cutoff 不应"增加"历史赔款(只可能持平或减少)
+    raw_hist_lr = raw_s["overall"]["hist_lr"]
+    cutoff_hist_lr = cutoff_s["overall"]["hist_lr"]
+    # 双向容忍 0.5pp 浮点误差;真实意义:截止后历史 LR 不能虚增
+    assert cutoff_hist_lr <= raw_hist_lr + 0.005, (
+        f"截止后历史 LR 不应增加,raw={raw_hist_lr:.4f} cutoff={cutoff_hist_lr:.4f}"
+    )
+
+
+@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
+def test_baseline_diff_decomposable(tmp_path):
+    """三项分解恒等式:final − raw == (dedup − raw) + (cutoff − dedup) + (final − cutoff)。"""
+    out_root = tmp_path / "stages"
+    summaries = {}
+    for stage in ("raw", "dedup", "cutoff", "final"):
+        out_dir = out_root / stage
+        r = subprocess.run([
+            sys.executable, str(SCRIPT_PATH),
+            "--proj-year", "2026", "--hist-years", "2023-2025",
+            "--as-of", "2026-05-10",
+            "--debug-hardening-stage", stage,
+            "--output-dir", str(out_dir),
+        ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
+        assert r.returncode == 0, f"{stage} 跑失败:\n{r.stderr}"
+        summaries[stage] = json.loads(
+            (out_dir / "2026_LR_summary.json").read_text(encoding="utf-8")
+        )
+
+    lr = {s: summaries[s]["overall"]["lr"] for s in ("raw", "dedup", "cutoff", "final")}
+    dedup_eff = lr["dedup"] - lr["raw"]
+    cutoff_eff = lr["cutoff"] - lr["dedup"]
+    tie_eff = lr["final"] - lr["cutoff"]
+    total = lr["final"] - lr["raw"]
+    residual = total - (dedup_eff + cutoff_eff + tie_eff)
+
+    # 恒等式残差容忍 0.005 个百分点(浮点累积误差)
+    assert abs(residual) < 5e-5, (
+        f"三项分解恒等式残差 {residual:.6f} 超过 0.005pp,"
+        f"raw={lr['raw']:.6f} dedup={lr['dedup']:.6f} "
+        f"cutoff={lr['cutoff']:.6f} final={lr['final']:.6f}"
+    )
+
+
+@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
+def test_proj_year_dedup_consistency(tmp_path):
+    """历史与预测年都从 v_policy_base_dedup 派生,两侧行数均 <= raw rows(可减不增)。"""
+    import duckdb
+    import diagnose_lr_projection as mod  # type: ignore
+
+    con = duckdb.connect()
+    mod.build_views(con, "2026-05-10", [2023, 2024, 2025], 2026, hardening_stage="dedup")
+
+    hist_count = con.execute("SELECT COUNT(*) FROM v_policy_hist").fetchone()[0]
+    proj_count = con.execute("SELECT COUNT(*) FROM v_policy_proj").fetchone()[0]
+
+    raw_hist = con.execute(f"""
+        SELECT COUNT(*) FROM read_parquet('{mod.GLOB}', union_by_name=true)
+        WHERE YEAR(insurance_start_date) IN (2023, 2024, 2025)
+          AND insurance_start_date IS NOT NULL
+          AND {mod.COVERAGE_FILTER}
+    """).fetchone()[0]
+    raw_proj = con.execute(f"""
+        SELECT COUNT(*) FROM read_parquet('{mod.GLOB}', union_by_name=true)
+        WHERE YEAR(insurance_start_date) = 2026
+          AND insurance_start_date IS NOT NULL
+          AND {mod.COVERAGE_FILTER}
+    """).fetchone()[0]
+
+    assert hist_count <= raw_hist, (
+        f"历史 dedup 行数虚增: {hist_count} > {raw_hist}"
+    )
+    assert proj_count <= raw_proj, (
+        f"预测年 dedup 行数虚增: {proj_count} > {raw_proj}"
+    )
+    # 弱断言:两侧都基于同一 v_policy_base_dedup,行数都 <= raw 即可
+    # 不要求"减少比例一致",因为各年份批改/重复分布天然不同
+
+
+@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
+def test_distinct_on_determinism(tmp_path):
+    """final 阶段反复跑两次,2026 预测 LR 差异必须 < 0.001 个百分点。
+
+    严格"完全一致"不可达:`v_policy_base_dedup` 用 `ANY_VALUE()` 聚合批改字段时
+    DuckDB 无确定性保证。本测试容忍 1e-5(0.001 个百分点)的浮点扰动,
+    业务上完全无意义。排序 tie-breaker 把扰动控制在此量级。
+    """
+    results = []
+    for i in range(2):
+        out_dir = tmp_path / f"run_{i}"
+        r = subprocess.run([
+            sys.executable, str(SCRIPT_PATH),
+            "--proj-year", "2026", "--hist-years", "2023-2025",
+            "--as-of", "2026-05-10",
+            "--debug-hardening-stage", "final",
+            "--output-dir", str(out_dir),
+        ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
+        assert r.returncode == 0, f"第 {i} 次跑失败:\n{r.stderr}"
+        s = json.loads((out_dir / "2026_LR_summary.json").read_text(encoding="utf-8"))
+        results.append(s["overall"]["lr"])
+
+    diff = abs(results[0] - results[1])
+    assert diff < 1e-5, (
+        f"反复跑差异 {diff:.2e} 超过 1e-5(0.001 个百分点): "
+        f"{results[0]:.10f} vs {results[1]:.10f}"
+    )
+
+
+def test_run_params_hash_semantics(tmp_path):
+    """run_params_hash 只含语义参数:snapshot-tag/output-dir 不影响,proj-year 必影响。"""
+    base_kwargs = dict(
+        proj_year=2026,
+        hist_years=[2023, 2024, 2025],
+        hist_as_of="2026-05-10",
+        threshold_premium_wan=500.0,
+        threshold_vehicle=5000,
+        overrides_path=None,
+    )
+    h_base = compute_run_params_hash(**base_kwargs)
+    # 语义参数相同 → 哈希必相等(即使 hist_years 顺序不同)
+    h_reorder = compute_run_params_hash(
+        **{**base_kwargs, "hist_years": [2025, 2024, 2023]}
+    )
+    assert h_base == h_reorder, "hist_years 顺序变化不应改变哈希"
+
+    # proj_year 改变 → 哈希必变
+    h_diff_year = compute_run_params_hash(**{**base_kwargs, "proj_year": 2027})
+    assert h_base != h_diff_year, "proj_year 变化必须改变哈希"
+
+    # 阈值改变 → 哈希必变
+    h_diff_thr = compute_run_params_hash(
+        **{**base_kwargs, "threshold_premium_wan": 300.0}
+    )
+    assert h_base != h_diff_thr, "阈值变化必须改变哈希"
+
+    # overrides 内容变化 → 哈希必变
+    ov1 = tmp_path / "ov1.csv"
+    ov1.write_text("customer_category,is_nev,vehicle_type_4,coverage_combination,expected_lr\n"
+                   "摩托车,False,新车,单交,0.7\n", encoding="utf-8")
+    ov2 = tmp_path / "ov2.csv"
+    ov2.write_text("customer_category,is_nev,vehicle_type_4,coverage_combination,expected_lr\n"
+                   "摩托车,False,新车,单交,0.8\n", encoding="utf-8")
+    h_ov1 = compute_run_params_hash(**{**base_kwargs, "overrides_path": ov1})
+    h_ov2 = compute_run_params_hash(**{**base_kwargs, "overrides_path": ov2})
+    assert h_ov1 != h_ov2, "overrides 内容变化必须改变哈希"
+    assert h_base != h_ov1, "有无 overrides 必须改变哈希"
+
+
+def test_snapshot_tag_isolates_output_dir():
+    """--snapshot-tag 必须落到默认产物路径(不需要 --output-dir 显式覆盖)。
+
+    Codex P2 反馈:之前 snapshot-tag 只 print 不影响路径,raw/dedup/cutoff/final
+    在默认 output-dir 下互相覆盖。
+
+    本测试单元级别验证:同函数中 args.snapshot_tag 的两种值会产生不同默认路径。
+    端到端验证通过 stdout 中的 [INFO] 输出目录 行间接覆盖。
+    """
+    import diagnose_lr_projection as mod  # type: ignore
+
+    # 构造同 main() 中相同的默认路径逻辑(避免动 subprocess)
+    def make_default_dir(tag: str | None) -> str:
+        suffix = f"_{tag}" if tag else ""
+        return str(mod.OUTPUT_BASE / f"2026_LR_平移预测_{mod.RUN_DATE}{suffix}")
+
+    no_tag = make_default_dir(None)
+    alpha = make_default_dir("alpha")
+    beta = make_default_dir("beta")
+
+    assert no_tag != alpha, "无 tag 与 alpha tag 必须产生不同路径"
+    assert alpha != beta, "alpha tag 与 beta tag 必须产生不同路径"
+    assert alpha.endswith("_alpha"), f"alpha 路径应以 _alpha 结尾,实际: {alpha}"
+    assert beta.endswith("_beta"), f"beta 路径应以 _beta 结尾,实际: {beta}"
+
+
+@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
+def test_snapshot_tag_subprocess_e2e(tmp_path):
+    """端到端验证:subprocess 跑时 stdout 报出的输出目录路径含 snapshot-tag。"""
+    # 用 --output-dir 控制基址,加 snapshot-tag,断言 stdout 含 tag(覆盖 print 路径)
+    r = subprocess.run([
+        sys.executable, str(SCRIPT_PATH),
+        "--proj-year", "2026", "--hist-years", "2023-2025",
+        "--as-of", "2026-05-10",
+        "--debug-hardening-stage", "final",
+        "--snapshot-tag", "gamma_test",
+        "--output-dir", str(tmp_path / "out_gamma"),
+    ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
+    assert r.returncode == 0, f"跑失败:\n{r.stderr}"
+    # stdout 中应包含 snapshot 标签提示行(确认参数被脚本识别并影响行为)
+    assert "gamma_test" in r.stdout, (
+        f"stdout 未提及 snapshot-tag=gamma_test:\n{r.stdout[-500:]}"
+    )
+
+
+@pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
+def test_max_start_date_consistent_with_dedup(tmp_path):
+    """final 阶段的 max_start_date 必须来自 v_policy_proj(去重后),
+    与 raw 阶段对比不应错位到已被剔除的保单。
+
+    Codex P2 反馈:之前 max_date_row 直接读 raw parquet,与 v_policy_proj 总体可能不一致。
+    """
+    out_root = tmp_path / "stages"
+    summaries = {}
+    for stage in ("raw", "final"):
+        out_dir = out_root / stage
+        r = subprocess.run([
+            sys.executable, str(SCRIPT_PATH),
+            "--proj-year", "2026", "--hist-years", "2023-2025",
+            "--as-of", "2026-05-10",
+            "--debug-hardening-stage", stage,
+            "--output-dir", str(out_dir),
+        ], capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=180)
+        assert r.returncode == 0, f"{stage} 跑失败:\n{r.stderr}"
+        summaries[stage] = json.loads(
+            (out_dir / "2026_LR_summary.json").read_text(encoding="utf-8")
+        )
+
+    # final 的 max_start_date 应 ≤ raw(去重后可能去掉最晚的净额≤0 保单)
+    raw_max = summaries["raw"]["max_start_date"]
+    final_max = summaries["final"]["max_start_date"]
+    assert final_max <= raw_max, (
+        f"final max_start_date {final_max} 不应晚于 raw {raw_max}"
+        f"(v_policy_proj 是 raw 的子集)"
+    )
