@@ -164,6 +164,120 @@ export const costMetrics: readonly MetricDefinition[] = [
   },
 
   {
+    id: 'baseline_premium',
+    version: '1.0.0',
+    name: '基准保费',
+    category: 'cost',
+    tags: ['cost', 'pricing', 'baseline'],
+    formula: {
+      description: '基准保费：商业险按商车自主定价系数归一，非商业险保持原保费',
+      numerator: '商业险 premium / commercial_pricing_factor；非商业险 premium',
+      unit: '元',
+    },
+    sql: {
+      expression: `CASE
+    WHEN insurance_type = '商业保险' AND commercial_pricing_factor > 0
+    THEN premium / NULLIF(commercial_pricing_factor, 0)
+    WHEN insurance_type = '商业保险'
+    THEN NULL
+    ELSE premium
+  END AS baseline_premium`,
+      requiredColumns: ['premium', 'insurance_type', 'commercial_pricing_factor'],
+      notes: '先计算基准保费，再进入满期口径。商业险自主系数缺失、为0或负数时输出 NULL，调用方应单独输出异常数据；交强险等非商业险不做自主系数折算。',
+    },
+    display: {
+      formatter: 'premiumWan',
+      label: '基准保费',
+      unit: '万元',
+      tooltip: '基准保费 = 商业险保费 / 商车自主定价系数；非商业险保费不折算',
+    },
+    testCases: [
+      {
+        name: '基准保费非负',
+        input: { whereClause: '1=1' },
+        assertions: { baseline_premium: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [
+      { version: '1.0.0', date: '2026-05-12', changes: '新增：商业险价格因子归一的基准保费，作为满期基准保费的前置层' },
+    ],
+  },
+
+  {
+    id: 'baseline_earned_premium',
+    version: '1.0.0',
+    name: '满期基准保费',
+    category: 'cost',
+    tags: ['cost', 'pricing', 'baseline'],
+    formula: {
+      description: '满期基准保费 = 基准保费 × 满期天数 / 保险期限天数（闰年感知）',
+      numerator: 'SUM(baseline_premium * earned_days / policy_term)',
+      unit: '元',
+    },
+    sql: {
+      expression: 'ROUND(SUM(baseline_premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS baseline_earned_premium',
+      requiredColumns: ['baseline_premium', 'earned_days', 'policy_term'],
+      notes: '依赖上游先计算 baseline_premium。对于已完全满期保单，earned_days = policy_term，满期基准保费等于基准保费。',
+    },
+    display: {
+      formatter: 'premiumWan',
+      label: '满期基准保费',
+      unit: '万元',
+      tooltip: '满期基准保费 = 基准保费 × 满期天数 / 保险期限天数',
+    },
+    testCases: [
+      {
+        name: '满期基准保费非负',
+        input: { whereClause: '1=1' },
+        assertions: { baseline_earned_premium: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [
+      { version: '1.0.0', date: '2026-05-12', changes: '新增：基准保费进入满期口径后的分母指标' },
+    ],
+  },
+
+  {
+    id: 'baseline_earned_claim_ratio',
+    version: '1.0.0',
+    name: '满期基准赔付率',
+    category: 'cost',
+    tags: ['cost', 'pricing', 'baseline'],
+    formula: {
+      description: '满期基准赔付率 = 已报告赔款 / 满期基准保费',
+      numerator: 'SUM(reported_claims)',
+      denominator: 'SUM(baseline_earned_premium)',
+      unit: '%',
+    },
+    sql: {
+      expression: `CASE
+    WHEN SUM(baseline_earned_premium) > 0
+    THEN ROUND(SUM(reported_claims) * 100.0 / SUM(baseline_earned_premium), 2)
+    ELSE NULL
+  END AS baseline_earned_claim_ratio`,
+      requiredColumns: ['reported_claims', 'baseline_earned_premium'],
+      notes: '依赖上游先计算 baseline_premium 与 baseline_earned_premium。用于按险类、车险等级、客群等维度沉淀价格因子归一后的风险基准。',
+    },
+    display: {
+      formatter: 'percent',
+      label: '满期基准赔付率',
+      unit: '%',
+      decimals: 1,
+      tooltip: '满期基准赔付率 = 已报告赔款 / 满期基准保费 × 100%',
+    },
+    testCases: [
+      {
+        name: '满期基准赔付率非负',
+        input: { whereClause: '1=1' },
+        assertions: { baseline_earned_claim_ratio: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [
+      { version: '1.0.0', date: '2026-05-12', changes: '新增：基于满期基准保费的价格因子归一赔付率' },
+    ],
+  },
+
+  {
     id: 'variable_cost_ratio',
     version: '2.0.0',
     name: '变动成本率',

@@ -15,7 +15,8 @@ import { getAllMetrics, getMetric } from '../index.js';
 describe('定价系数仅适用商业险', () => {
   it('含 pricing_factor 的指标 requiredColumns 必含 insurance_type', () => {
     const metricsWithPricing = getAllMetrics().filter((m) =>
-      m.sql.requiredColumns.includes('pricing_factor'),
+      m.sql.requiredColumns.includes('pricing_factor') ||
+      m.sql.requiredColumns.includes('commercial_pricing_factor'),
     );
     for (const m of metricsWithPricing) {
       expect(
@@ -23,6 +24,14 @@ describe('定价系数仅适用商业险', () => {
         `${m.id} 使用 pricing_factor 但缺少 insurance_type 约束`,
       ).toContain('insurance_type');
     }
+  });
+
+  it('基准保费链路中只有 baseline_premium 直接使用 commercial_pricing_factor', () => {
+    const metricsWithCommercialFactor = getAllMetrics().filter((m) =>
+      m.sql.expression.includes('commercial_pricing_factor'),
+    );
+
+    expect(metricsWithCommercialFactor.map((m) => m.id)).toEqual(['baseline_premium']);
   });
 });
 
