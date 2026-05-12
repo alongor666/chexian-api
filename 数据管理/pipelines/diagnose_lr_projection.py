@@ -22,9 +22,10 @@ Override：CSV (4 维完整 + LR) 覆盖 fallback
 
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import duckdb
@@ -52,6 +53,12 @@ DEFAULT_THRESHOLD_VEHICLE = 5000
 
 OUTPUT_BASE = PROJECT_ROOT / "数据管理/数据分析报告"
 RUN_DATE = date.today().strftime("%Y-%m-%d")
+
+# JSON 副本 schema 版本(差异桥与下游消费契约)
+SCHEMA_VERSION = "2.0"
+
+# 阶段 0 临时口径开关 — PR-0 合并后立即 PR-0.5 移除
+HARDENING_STAGES = ("raw", "dedup", "cutoff", "final")
 
 # 保留的险别组合（'主全'/'交三'/'单交'），排除 '未知'/'其他'
 COVERAGE_FILTER = "coverage_combination IN ('主全','交三','单交')"
@@ -94,6 +101,40 @@ END
 
 
 # ============================================================================
+# 跑批参数哈希(差异桥与可审计的语义指纹)
+# ============================================================================
+
+def compute_run_params_hash(
+    proj_year: int,
+    hist_years: list[int],
+    hist_as_of: str,
+    threshold_premium_wan: float,
+    threshold_vehicle: int,
+    overrides_path: Path | None,
+) -> str:
+    """SHA256 摘要,只含**影响模型结果**的语义参数。
+
+    显式排除:snapshot_tag / output_dir / debug_hardening_stage / verbose 等运行时参数。
+    overrides 用文件内容 SHA256 表示,文件路径变化但内容不变时哈希仍稳定。
+    """
+    overrides_sha = None
+    if overrides_path and overrides_path.exists():
+        overrides_sha = hashlib.sha256(overrides_path.read_bytes()).hexdigest()
+
+    payload = {
+        "proj_year": proj_year,
+        "hist_years": sorted(hist_years),
+        "hist_as_of": hist_as_of,
+        "threshold_premium_wan": float(threshold_premium_wan),
+        "threshold_vehicle": int(threshold_vehicle),
+        "overrides_content_sha256": overrides_sha,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+
+# ============================================================================
 # 视图构建
 # ============================================================================
 
@@ -102,14 +143,40 @@ def build_views(
     hist_as_of: str,
     hist_years: list[int],
     proj_year: int,
+    hardening_stage: str = "final",
 ) -> None:
     """在 DuckDB 内建分析视图。
 
-    - v_claims_agg: 按 policy_no 聚合赔款（claim_no 去重防双倍）
-    - v_policy_hist: 历史 N 年保单 + 派生维度 + 满期保费（截至 hist_as_of）
-    - v_policy_proj: 预测年起保保单 + 满期保费（截至 proj_year-12-31）
+    - v_claims_agg: 按 policy_no 聚合赔款(claim_no 去重防双倍)
+    - v_policy_base_dedup: 统一保单去重视图(供历史与预测年派生,口径对齐 policy-dedup.ts)
+    - v_policy_hist: 历史 N 年保单 + 派生维度 + 满期保费(截至 hist_as_of)
+    - v_policy_proj: 预测年起保保单 + 满期保费(截至 proj_year-12-31)
+
+    口径开关 `hardening_stage`(阶段 0 临时,PR-0.5 后移除):
+      - raw    : 旧口径 — 裸 read_parquet + claim_no 单字段去重 + 无 report_time 过滤
+      - dedup  : 仅启用 v_policy_base_dedup; 赔案侧维持旧口径
+      - cutoff : dedup + v_claims_agg 增加 report_time <= hist_as_of
+      - final  : cutoff + DISTINCT ON 排序键加 settlement_time / payment_time tie-breaker
     """
+    if hardening_stage not in HARDENING_STAGES:
+        raise ValueError(
+            f"hardening_stage 必须是 {HARDENING_STAGES} 之一,收到: {hardening_stage}"
+        )
+
     proj_eoy = f"{proj_year}-12-31"
+
+    # ---------- 赔案侧 ----------
+    claims_where = (
+        f"WHERE report_time <= TIMESTAMP '{hist_as_of} 23:59:59'"
+        if hardening_stage in ("cutoff", "final") else ""
+    )
+    distinct_on_order = (
+        "ORDER BY claim_no, report_time DESC, "
+        "settlement_time DESC NULLS LAST, "
+        "payment_time DESC NULLS LAST"
+        if hardening_stage == "final" else "ORDER BY claim_no"
+    )
+
     con.execute(f"""
         CREATE OR REPLACE VIEW v_claims_agg AS
         SELECT policy_no,
@@ -117,11 +184,72 @@ def build_views(
                SUM(COALESCE(settled_amount, 0) + COALESCE(pending_amount, 0)) AS reported_claims
         FROM (SELECT DISTINCT ON (claim_no) *
               FROM read_parquet('{CLAIMS_GLOB}', union_by_name=true)
-              ORDER BY claim_no)
+              {claims_where}
+              {distinct_on_order})
         GROUP BY policy_no
     """)
 
-    # vehicle_key 用于按车架号去重计台数（diagnose_common.py 标准口径）
+    # ---------- 保单侧 ----------
+    if hardening_stage == "raw":
+        # 旧口径:历史与预测年都直接 read_parquet,无去重 CTE
+        con.execute(f"""
+            CREATE OR REPLACE VIEW v_policy_hist AS
+            SELECT
+                p.customer_category,
+                p.is_nev,
+                {VEHICLE_TYPE_4_SQL} AS vehicle_type_4,
+                p.coverage_combination,
+                p.premium,
+                p.policy_no,
+                COALESCE(NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), ''), p.policy_no) AS vehicle_key,
+                {earned_premium_as_of(hist_as_of)} AS earned_premium,
+                COALESCE(c.reported_claims, 0) AS reported_claims
+            FROM read_parquet('{GLOB}', union_by_name=true) p
+            LEFT JOIN v_claims_agg c ON p.policy_no = c.policy_no
+            WHERE YEAR(p.insurance_start_date) IN ({", ".join(str(y) for y in hist_years)})
+              AND {COVERAGE_FILTER}
+        """)
+        con.execute(f"""
+            CREATE OR REPLACE VIEW v_policy_proj AS
+            SELECT
+                p.customer_category,
+                p.is_nev,
+                {VEHICLE_TYPE_4_SQL} AS vehicle_type_4,
+                p.coverage_combination,
+                p.premium,
+                {earned_premium_as_of(proj_eoy)} AS earned_premium_full,
+                {earned_premium_as_of(hist_as_of)} AS earned_premium_signed
+            FROM read_parquet('{GLOB}', union_by_name=true) p
+            WHERE YEAR(p.insurance_start_date) = {proj_year}
+              AND {COVERAGE_FILTER}
+        """)
+        return
+
+    # ---------- dedup / cutoff / final 共用:统一去重基础视图 ----------
+    # 字段清单对齐 server/src/sql/shared/policy-dedup.ts:
+    #   GROUP BY policy_no, CAST(insurance_start_date AS DATE)
+    #   HAVING SUM(premium) > 0  (排除全退保/负向批改)
+    #   premium SUM(批改净额); 其他字段 ANY_VALUE(批改通常不改)
+    con.execute(f"""
+        CREATE OR REPLACE VIEW v_policy_base_dedup AS
+        SELECT
+            policy_no,
+            CAST(insurance_start_date AS DATE) AS insurance_start_date,
+            SUM(premium) AS premium,
+            ANY_VALUE(customer_category) AS customer_category,
+            ANY_VALUE(is_nev) AS is_nev,
+            ANY_VALUE(is_new_car) AS is_new_car,
+            ANY_VALUE(is_transfer) AS is_transfer,
+            ANY_VALUE(is_renewal) AS is_renewal,
+            ANY_VALUE(coverage_combination) AS coverage_combination,
+            ANY_VALUE(vehicle_frame_no) AS vehicle_frame_no
+        FROM read_parquet('{GLOB}', union_by_name=true)
+        WHERE insurance_start_date IS NOT NULL
+          AND {COVERAGE_FILTER}
+        GROUP BY policy_no, CAST(insurance_start_date AS DATE)
+        HAVING SUM(premium) > 0
+    """)
+
     con.execute(f"""
         CREATE OR REPLACE VIEW v_policy_hist AS
         SELECT
@@ -134,10 +262,9 @@ def build_views(
             COALESCE(NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), ''), p.policy_no) AS vehicle_key,
             {earned_premium_as_of(hist_as_of)} AS earned_premium,
             COALESCE(c.reported_claims, 0) AS reported_claims
-        FROM read_parquet('{GLOB}', union_by_name=true) p
+        FROM v_policy_base_dedup p
         LEFT JOIN v_claims_agg c ON p.policy_no = c.policy_no
         WHERE YEAR(p.insurance_start_date) IN ({", ".join(str(y) for y in hist_years)})
-          AND {COVERAGE_FILTER}
     """)
 
     con.execute(f"""
@@ -150,9 +277,8 @@ def build_views(
             p.premium,
             {earned_premium_as_of(proj_eoy)} AS earned_premium_full,
             {earned_premium_as_of(hist_as_of)} AS earned_premium_signed
-        FROM read_parquet('{GLOB}', union_by_name=true) p
+        FROM v_policy_base_dedup p
         WHERE YEAR(p.insurance_start_date) = {proj_year}
-          AND {COVERAGE_FILTER}
     """)
 
 
@@ -737,6 +863,8 @@ def export_summary_json(
     output_dir: Path,
     threshold_premium_wan: float,
     threshold_vehicle: int,
+    run_params_hash: str = "",
+    hardening_stage: str = "final",
 ) -> None:
     """落机器可读 JSON 副本 — 供企微推送 / AI 总结 / Dashboard 集成。"""
 
@@ -795,6 +923,10 @@ def export_summary_json(
     ].sort_values("earned_premium_full_year", ascending=False)
 
     summary = {
+        "schema_version": SCHEMA_VERSION,
+        "run_params_hash": run_params_hash,
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "hardening_stage": hardening_stage,
         "proj_year": proj_year,
         "as_of": hist_as_of,
         "run_date": RUN_DATE,
@@ -879,21 +1011,43 @@ def main():
                         help=f"小样本阈值-车辆台数（默认 {DEFAULT_THRESHOLD_VEHICLE}）")
     parser.add_argument("--output-dir", type=Path, default=None,
                         help="输出目录（默认 数据管理/数据分析报告/{proj_year}_LR_平移预测_{date}/）")
+    parser.add_argument("--snapshot-tag", type=str, default=None,
+                        help="产物命名隔离标签(不影响模型结果,不进入 run_params_hash)")
+    parser.add_argument("--debug-hardening-stage", type=str, default="final",
+                        choices=HARDENING_STAGES,
+                        help="[阶段 0 临时] 口径阶段开关 raw|dedup|cutoff|final"
+                             "(PR-0.5 后移除)")
     args = parser.parse_args()
 
     hist_years = parse_hist_years(args.hist_years)
     proj_year = args.proj_year
     threshold_premium = args.threshold_premium_wan * 10000
     threshold_vehicle = args.threshold_vehicle
+    hardening_stage = args.debug_hardening_stage
 
     output_dir = args.output_dir or (
         OUTPUT_BASE / f"{proj_year}_LR_平移预测_{RUN_DATE}"
+    )
+
+    # 跑批参数哈希(只含语义参数,排除 snapshot_tag/output_dir/debug_hardening_stage)
+    run_params_hash = compute_run_params_hash(
+        proj_year=proj_year,
+        hist_years=hist_years,
+        hist_as_of=args.as_of,
+        threshold_premium_wan=args.threshold_premium_wan,
+        threshold_vehicle=threshold_vehicle,
+        overrides_path=args.overrides,
     )
 
     print(f"[INFO] 开始 {proj_year} LR 平移预测分析")
     print(f"[INFO] 历史窗口: {hist_years}; 历史保单满期截至: {args.as_of}")
     print(f"[INFO] 小样本阈值: 满期保费 ≥ {args.threshold_premium_wan:.0f} 万 "
           f"OR 车辆 ≥ {threshold_vehicle} 台")
+    if hardening_stage != "final":
+        print(f"[INFO] ⚠ 口径阶段: {hardening_stage} (调试模式,PR-0.5 后移除)")
+    if args.snapshot_tag:
+        print(f"[INFO] 快照标签: {args.snapshot_tag}")
+    print(f"[INFO] 参数哈希: {run_params_hash[:16]}…")
     print(f"[INFO] 输出目录: {output_dir}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -902,7 +1056,7 @@ def main():
 
     # Step 1: 视图
     print(f"[INFO] Step 1/5: 构建视图…")
-    build_views(con, args.as_of, hist_years, proj_year)
+    build_views(con, args.as_of, hist_years, proj_year, hardening_stage=hardening_stage)
 
     # Step 2: 历史 LR（含各级 fallback）
     hist_label = (f"{hist_years[0]}-{hist_years[-1]}"
@@ -971,6 +1125,8 @@ def main():
         scale_factor, max_start_date, args.as_of,
         hist_years, proj_year, output_dir,
         args.threshold_premium_wan, threshold_vehicle,
+        run_params_hash=run_params_hash,
+        hardening_stage=hardening_stage,
     )
 
     overall_lr = (df["projected_claims"].sum() / df["earned_premium_full_year"].sum()) * 100

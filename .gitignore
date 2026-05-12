@@ -25,6 +25,9 @@ server/.tmp/
 # 临时数据文件
 parquet_data.json
 
+# LR 平移预测阶段 0 口径硬化产物(本地基线对账,不入仓)
+数据管理/数据分析报告/.lr_hardening/
+
 # 巡检报告 JSON（生成数据，通过 rsync 同步到 VPS）
 数据管理/patrol_reports/*/latest.json
 数据管理/patrol_reports/*/*.json
