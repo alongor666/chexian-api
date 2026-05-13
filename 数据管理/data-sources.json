@@ -358,12 +358,24 @@
       "etl_entry": "node 数据管理/daily.mjs customer_flow",
       "etl_script": "pipelines/convert_customer_flow.py",
       "trigger": {
-        "input_strategy": "single",
+        "input_strategy": "multi_file_merge",
         "input_globs": [
           "08_客户来源去向*.xlsx",
           "????????_08_客户来源去向*.xlsx"
         ],
-        "archive_prefix": "customer_flow_latest"
+        "archive_prefix": "customer_flow_latest",
+        "merge_with_history": true,
+        "merge_dedup_key": "policy_no",
+        "merge_order_by": "insurance_start_date DESC NULLS LAST",
+        "validation": {
+          "date_column": "insurance_start_date",
+          "min_rows": 900000,
+          "min_date": "2025-01-01",
+          "require_non_null": {
+            "previous_insurer": 1,
+            "next_insurer": 1
+          }
+        }
       },
       "output": "warehouse/fact/customer_flow/latest.parquet",
       "update_cadence": "with_source_xlsx",
@@ -382,8 +394,8 @@
       ],
       "frontend_page": "customer-flow",
       "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知",
-      "last_updated": "2026-05-07",
-      "row_count": 1848,
+      "last_updated": "2026-05-13",
+      "row_count": 1035992,
       "field_count": 7
     },
     {
