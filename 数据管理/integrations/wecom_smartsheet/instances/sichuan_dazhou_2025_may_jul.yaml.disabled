@@ -1,0 +1,47 @@
+# 达州 三级机构 2025-05~07 起期商业险续保追踪
+#
+# 起期 2025-05-01 ~ 2025-07-31 → 续保起期 2026-05-01 ~ 2026-07-31
+# 业务规则：原单（排除批单）+ 单 VIN 净保费 > 200 元
+# 按 policy.org_level_3 = '达州' 严格过滤
+#
+# 字段集对齐 12 张机构表（15 字段，使用 field_registry_orgsheet.yaml）
+# 表中"姓名"列由业务员手填，不由代码写入
+
+instance_name: sichuan_dazhou_2025_may_jul
+
+webhook_env: WECOM_SMARTSHEET_WEBHOOK_DAZHOU
+
+# 机构表字段类型与 H1/H2 不同（select/bool 全改为 text），用独立 registry
+field_registry_path: field_registry_orgsheet.yaml
+
+batch_size: 100
+sheet_records_per_minute_limit: 3000
+doc_records_per_minute_limit: 10000
+rate_limit_sleep_seconds: 60
+
+filters:
+  insurance_type: 商业保险
+  insurance_start_date_from: '2025-05-01'
+  insurance_start_date_to:   '2025-07-31'
+  premium_gt: 200
+  exclude_endorsement: true
+  organization_in: ['达州']
+
+quote_window_start: '2025-12-03'
+
+fields_enabled:
+  - expiry_date
+  - plate_no
+  - vehicle_frame_no
+  - salesman_name
+  - customer_category
+  - coverage_combination
+  - is_quoted
+  - prior_discount
+  - prior_premium
+  - quote_discount
+  - quote_premium
+  - is_renewed
+  - renewal_mode
+  - renewed_sign_date
+  - earliest_quote_date

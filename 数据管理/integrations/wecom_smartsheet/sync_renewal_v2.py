@@ -94,6 +94,7 @@ class InstanceConfig:
     exclusive_vin_strategy: str | None
     exclusive_lower_bound: str | None
     fields_enabled: list[str]
+    field_registry_path: str | None  # 可选：覆盖默认 field_registry.yaml（机构表用 field_registry_orgsheet.yaml）
 
 
 def load_instance(path: Path) -> InstanceConfig:
@@ -111,6 +112,7 @@ def load_instance(path: Path) -> InstanceConfig:
         exclusive_vin_strategy=raw.get("exclusive_vin_strategy"),
         exclusive_lower_bound=raw.get("exclusive_lower_bound"),
         fields_enabled=raw["fields_enabled"],
+        field_registry_path=raw.get("field_registry_path"),
     )
 
 
@@ -467,6 +469,10 @@ def build_record(row: dict[str, Any], fields: Iterable[FieldDef], unmatched_set:
         elif fd.type == "select_yes_no":
             values[fd.field_id] = [{"text": "是" if bool(raw) else "否"}]
 
+        elif fd.type == "text_yes_no":
+            # bool source → text "是"/"否"（机构表 select 字段被改为 text 类型）
+            values[fd.field_id] = "是" if bool(raw) else "否"
+
         elif fd.type == "bool":
             values[fd.field_id] = bool(raw)
 
@@ -711,8 +717,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        registry = load_field_registry(Path(args.field_registry))
         instance = load_instance(Path(args.instance))
+        # instance 自带 field_registry_path 优先（机构表用 orgsheet 版）；相对路径相对 HERE 解析
+        if instance.field_registry_path:
+            rp = Path(instance.field_registry_path)
+            registry_path = rp if rp.is_absolute() else HERE / rp
+        else:
+            registry_path = Path(args.field_registry)
+        registry = load_field_registry(registry_path)
         # 解析启用的字段
         missing = [k for k in instance.fields_enabled if k not in registry]
         if missing:
