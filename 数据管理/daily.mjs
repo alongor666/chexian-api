@@ -1023,19 +1023,6 @@ async function main() {
     ]);
   }
 
-  // 5.5 费用金额回填：24+签单源可能总费用金额为空，使用变动成本清单的实际手续费补齐
-  const feeBackfillCsv = join(scriptDir, '车险保单变动成本清单_精简.csv');
-  const feeBackfillScript = join(scriptDir, 'pipelines/backfill_policy_fee_amount.py');
-  if (existsSync(feeBackfillCsv)) {
-    log('green', `▶ 回填 PolicyFact 费用金额: ${basename(feeBackfillCsv)}`);
-    runPythonScript(python, feeBackfillScript, [
-      '--policy-dir', `"${currentDir}"`,
-      '--fee-csv', `"${feeBackfillCsv}"`
-    ]);
-  } else {
-    log('yellow', `⚠️  未找到费用回填清单，跳过: ${feeBackfillCsv}`);
-  }
-
   // 更新 premium 域的 data-sources.json（汇总所有 current/ 分片行数）
   // manifest 声明 premium 时由 refresh_metadata.py 统一写入
   const policyCurrentDir = join(WAREHOUSE, 'policy/current');
