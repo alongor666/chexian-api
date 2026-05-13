@@ -176,9 +176,6 @@ def build_filtered_cte(agent_name: str, start_date: str, end_date: str, personal
       WHERE policy_no IS NOT NULL
       GROUP BY policy_no
     ),
-    latest_ctx AS (
-      SELECT MAX(insurance_start_date) AS latest_isd FROM filtered_dedup
-    ),
     base AS (
       SELECT
         f.*,
@@ -200,14 +197,14 @@ def build_filtered_cte(agent_name: str, start_date: str, end_date: str, personal
           ELSE SUBSTR(f.plate_no, 1, 2)
         END AS plate_prefix,
         DATEDIFF('day', f.insurance_start_date, f.insurance_start_date + INTERVAL 1 YEAR) AS policy_term,
+        -- earned_days 锚定到报告截止日期（codex P1 修复），不再依赖 sample 中最近保单起期
         LEAST(
-          GREATEST(DATEDIFF('day', f.insurance_start_date, lc.latest_isd), 0),
+          GREATEST(DATEDIFF('day', f.insurance_start_date, DATE '{end_date}'), 0),
           DATEDIFF('day', f.insurance_start_date, f.insurance_start_date + INTERVAL 1 YEAR)
         ) AS earned_days,
         COALESCE(ca.claim_cases, 0) AS claim_cases,
         COALESCE(ca.reported_claims, 0) AS reported_claims
       FROM filtered_dedup f
-      CROSS JOIN latest_ctx lc
       LEFT JOIN claims_agg ca ON f.policy_no = ca.policy_no
     )
     """
@@ -444,8 +441,9 @@ def render_monthly_pivot(con: duckdb.DuckDBPyConnection, base_cte: str) -> str:
             r = cell.get("reported_wan")
             total_p += float(p or 0)
             total_r += float(r or 0)
-            cells.append(f'<td class="num">{fmt_num(p, 1) if p else "—"}</td>')
-            cells.append(f'<td class="num">{fmt_num(r, 1) if r else "—"}</td>')
+            # codex P2 修复：用 None 判定缺失而非 truthy 检查，避免把合法零值（无赔月）误显示为缺失
+            cells.append(f'<td class="num">{fmt_num(p, 1) if p is not None else "—"}</td>')
+            cells.append(f'<td class="num">{fmt_num(r, 1) if r is not None else "—"}</td>')
         cells.append(f'<td class="num"><strong>{fmt_num(total_p, 1)}</strong></td>')
         cells.append(f'<td class="num"><strong>{fmt_num(total_r, 1)}</strong></td>')
         body_rows.append("<tr>" + "".join(cells) + "</tr>")
