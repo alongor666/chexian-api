@@ -40,6 +40,14 @@ fields:
     type: text
     fallback: ''
 
+  sales_team:
+    field_id: frfak0
+    label: 销售团队
+    source: salesman_dim.team
+    type: text
+    fallback: 未知团队
+    alert_on_fallback: true
+
   customer_category:
     field_id: fn8TJd
     label: 客户类别
@@ -113,6 +121,15 @@ fields:
     label: 报价日期
     source: q_earliest.earliest_quote_date
     type: epoch_ms_date
+
+  loss_company:
+    # 流失公司：来自 customer_flow.next_insurer（车辆流向去了哪家公司）。
+    # 当前 ETL 仅回填 previous_insurer，next_insurer 多为空字符串；后续 ETL 补齐后无需改代码自动同步。
+    field_id: fMexTG
+    label: 流失公司
+    source: flow.next_insurer
+    type: text
+    fallback: ''
 
 # 机构表中"由人工填写"的字段（不在此声明、不在任何 instance 启用）：
 # - f10BqT 姓名（业务员手填）

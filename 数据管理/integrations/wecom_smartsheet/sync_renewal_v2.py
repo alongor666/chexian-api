@@ -42,6 +42,7 @@ DATA_ROOT = HERE.parents[1]
 DEFAULT_POLICY_GLOB = DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
 DEFAULT_QUOTES_PATH = DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet"
 DEFAULT_SALESMAN_PATH = DATA_ROOT / "warehouse" / "dim" / "salesman" / "latest.parquet"
+DEFAULT_CUSTOMER_FLOW_PATH = DATA_ROOT / "warehouse" / "fact" / "customer_flow" / "latest.parquet"
 
 TRANSIENT_WECOM_ERRCODES = {-1, 45009, 2040035, 2040039}
 
@@ -276,6 +277,17 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
           AND CAST(insurance_start_date AS DATE) >= DATE '2026-01-01'
           AND (endorsement_no IS NULL OR TRIM(CAST(endorsement_no AS VARCHAR)) = '')
       ) WHERE rn = 1
+    ),
+    flow AS (
+      -- 客户来源去向：next_insurer 即"流失公司"。当前 ETL 仅回填 previous_insurer，next_insurer
+      -- 多为空；future ETL 补齐后无需改代码自动同步。按 vehicle_frame_no 聚合，优先取非空值。
+      SELECT vehicle_frame_no,
+             ANY_VALUE(NULLIF(NULLIF(next_insurer, ''), 'NaN')) FILTER (
+               WHERE next_insurer IS NOT NULL AND next_insurer != ''
+             ) AS next_insurer
+      FROM read_parquet('{DEFAULT_CUSTOMER_FLOW_PATH}')
+      WHERE vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
+      GROUP BY vehicle_frame_no
     )
     SELECT
       b.policy_no,
@@ -296,6 +308,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
       qe.earliest_quote_date AS earliest_quote_date,
       r.renewed_policy_no AS renewed_policy_no,
       r.renewed_sign_date AS renewed_sign_date,
+      COALESCE(f.next_insurer, '') AS next_insurer,
       CASE WHEN q.quote_time IS NOT NULL THEN true ELSE false END AS is_quoted,
       CASE WHEN r.renewed_policy_no IS NOT NULL THEN true ELSE false END AS is_renewed,
       '未分类' AS renewal_mode
@@ -304,6 +317,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
     LEFT JOIN q_latest q ON q.vehicle_frame_no = b.vehicle_frame_no
     LEFT JOIN q_earliest qe ON qe.vehicle_frame_no = b.vehicle_frame_no
     LEFT JOIN renewed r ON r.source_policy_no = b.policy_no AND r.vehicle_frame_no = b.vehicle_frame_no
+    LEFT JOIN flow f ON f.vehicle_frame_no = b.vehicle_frame_no
     """
     main_params = [
         insurance_type, start_from, start_to,
