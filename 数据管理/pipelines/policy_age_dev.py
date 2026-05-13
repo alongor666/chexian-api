@@ -26,13 +26,14 @@ from __future__ import annotations
 
 
 def build_cohort_cte(policy_glob: str, where_clause: str) -> str:
-    """构建 base cohort CTE：按保单唯一化 + 净保费 + 最长保期"""
+    """构建 base cohort CTE：按保单唯一化 + 净保费 + 最长保期 + 净费用金额"""
     return f"""
   base AS (
     SELECT policy_no,
       MIN(insurance_start_date) AS start_date,
       MAX(DATE_DIFF('day', insurance_start_date, insurance_end_date)) AS term_days,
-      SUM(premium) AS premium
+      SUM(premium) AS premium,
+      SUM(COALESCE(fee_amount, 0)) AS fee_amount
     FROM read_parquet('{policy_glob}', union_by_name := true)
     WHERE {where_clause}
     GROUP BY policy_no
@@ -63,7 +64,7 @@ def build_policy_stage_cte(valuation_date: str) -> str:
     return f"""
   policy_stage AS (
     SELECT s.stage, s.ord, s.days_param,
-      b.policy_no, b.start_date, b.term_days, b.premium,
+      b.policy_no, b.start_date, b.term_days, b.premium, b.fee_amount,
       CASE WHEN s.days_param IS NULL THEN b.start_date + b.term_days * INTERVAL 1 DAY
            ELSE b.start_date + LEAST(s.days_param, b.term_days) * INTERVAL 1 DAY
       END AS window_end,
@@ -114,7 +115,8 @@ def build_main_table_sql(
 
     Returns:
         SELECT ord, stage, 件数, 保费_万, 已赚保费_万, 已赚暴露, 赔案数,
-               已报告赔款_万, 案均赔款_元, 满期出险率_pct, 满期赔付率_pct
+               已报告赔款_万, 案均赔款_元, 满期出险率_pct, 满期赔付率_pct,
+               费用金额_万, 费用率_pct, 变动成本率_pct
     """
     if stages is None:
         stages = [("90天", 90), ("180天", 180), ("270天", 270), ("满期", None)]
@@ -133,7 +135,14 @@ SELECT ep.ord, ep.stage,
   ROUND(COALESCE(ca.total_loss, 0)/1e4, 2) AS 已报告赔款_万,
   ROUND(COALESCE(ca.total_loss, 0) / NULLIF(ca.claim_count, 0), 0) AS 案均赔款_元,
   ROUND(COALESCE(ca.claim_count, 0) * 100.0 / NULLIF(SUM(ep.earned_exposure), 0), 2) AS 满期出险率_pct,
-  ROUND(COALESCE(ca.total_loss, 0) * 100.0 / NULLIF(SUM(ep.earned_premium), 0), 2) AS 满期赔付率_pct
+  ROUND(COALESCE(ca.total_loss, 0) * 100.0 / NULLIF(SUM(ep.earned_premium), 0), 2) AS 满期赔付率_pct,
+  ROUND(SUM(ep.fee_amount)/1e4, 2) AS 费用金额_万,
+  ROUND(SUM(ep.fee_amount) * 100.0 / NULLIF(SUM(ep.premium), 0), 2) AS 费用率_pct,
+  ROUND(
+    COALESCE(ca.total_loss, 0) * 100.0 / NULLIF(SUM(ep.earned_premium), 0)
+    + SUM(ep.fee_amount) * 100.0 / NULLIF(SUM(ep.premium), 0),
+    2
+  ) AS 变动成本率_pct
 FROM eligible_policies ep
 LEFT JOIN claims_agg ca USING(ord, stage)
 GROUP BY ep.ord, ep.stage, ca.claim_count, ca.total_loss

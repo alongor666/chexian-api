@@ -133,27 +133,40 @@ python3 数据管理/pipelines/diagnose_segment.py \
 
 | 参数 | 必填 | 说明 | 示例 |
 |------|------|------|------|
-| `--start` | ✅ | 起保日期下限 | `2025-01-01` |
-| `--end` | ✅ | 起保日期上限 | `2026-04-20` |
+| `--preset` | ⚪ | 预设组合（来自 `segment-dictionary.json:presets`），一次注入 keywords/drill/start/exec_summary | `牵引新车` |
+| `--start` | ✅* | 起保日期下限（preset 提供时可省） | `2025-01-01` |
+| `--end` | ✅* | 起保日期上限（preset 提供时可省） | `2026-04-20` |
 | `--keywords` | ⚪ | 词典关键词，逗号分隔 | `天然气,新车,牵引车` |
 | `--where` | ⚪ | 原生 SQL WHERE（与 keywords 互斥） | `is_new_car=TRUE AND ...` |
 | `--slug` | ⚪ | 报告 slug（文件名前缀） | `天然气新车牵引车10吨+` |
-| `--drill` | ⚪ | 下钻维度，逗号分隔 | `vehicle_model,accident_province` |
+| `--drill` | ⚪ | 下钻维度，逗号分隔 | `org_level_3,large_cases` |
+| `--exec-summary` | ⚪ | 报告头部追加管理层摘要（业务规模 / 变动成本率亮灯 / 风险机构 TOP3） | — |
 | `--valuation-date` | ⚪ | 估值日 | 默认 `2026-04-21` |
 | `--dry-run` | ⚪ | 只解析参数不跑查询 | — |
 | `--interactive` | ⚪ | 强制进入交互问卷（默认：无 --where/--keywords 时自动触发） | — |
 
-### 可用下钻维度（默认全部启用）
+### 可用下钻维度（默认全部启用，preset 可覆盖默认）
 
 | 维度 | 产出 |
 |------|------|
+| `org_level_3` | **机构画像（保单/保费/赔付/费用/变动成本率）** |
 | `vehicle_model` | 厂牌车型（件数 ≥20 Top15）+ 满期赔付率/出险率 |
 | `accident_province` | 出险省/市 Top20 |
 | `accident_month` | 事故月份趋势 |
 | `accident_hour` | 事故时段（一天 24 小时四分段） |
 | `accident_cause` | 事故原因 Top15（按赔款金额） |
 | `loss_category` | 损失类别分布 |
-| `large_cases` | Top10 大案 |
+| `large_cases` | **Top10 大案（已决/未决拆分，阈值 20 万）** |
+
+### 可用预设（segment-dictionary.json:presets）
+
+| preset | 内置 keywords | 内置 drill | 内置时间窗 |
+|---|---|---|---|
+| `牵引新车` | 牵引车 + 新车 | org_level_3, vehicle_model, accident_province, accident_hour, large_cases | 2024-01-01 ~ 2026-05-11 |
+
+### 主表新增指标
+
+主表已加 3 列：`费用金额_万` / `费用率_pct` / `变动成本率_pct`。变动成本率 = 满期赔付率 + 费用率（两个分母不同，metric registry `variable_cost_ratio` 口径）。亮灯：≤91% 🟢 ｜ 91-94% 🟡 ｜ >94% 🔴。
 
 ---
 
