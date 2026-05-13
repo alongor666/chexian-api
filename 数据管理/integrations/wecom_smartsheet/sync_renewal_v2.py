@@ -95,7 +95,7 @@ class InstanceConfig:
     exclusive_vin_strategy: str | None
     exclusive_lower_bound: str | None
     fields_enabled: list[str]
-    field_registry_path: str | None  # 可选：覆盖默认 field_registry.yaml（机构表用 field_registry_orgsheet.yaml）
+    field_registry_path: str | None = None  # 可选：覆盖默认 field_registry.yaml（机构表用 field_registry_orgsheet.yaml）
 
 
 def load_instance(path: Path) -> InstanceConfig:
