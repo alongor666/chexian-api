@@ -22,4 +22,14 @@ describe('customer_flow ETL contract', () => {
       },
     });
   });
+
+  it('rejects candidate parquet when date validation is enabled but date stats are empty', () => {
+    const dailySourcePath = resolve(process.cwd(), '数据管理/daily.mjs');
+    const dailySource = readFileSync(dailySourcePath, 'utf-8');
+
+    expect(dailySource).toContain('validation.min_date && !stats.min_date');
+    expect(dailySource).toContain('min_date is empty; required <=');
+    expect(dailySource).toContain('validation.max_date && !stats.max_date');
+    expect(dailySource).toContain('max_date is empty; required >=');
+  });
 });

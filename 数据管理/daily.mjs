@@ -191,10 +191,14 @@ print(json.dumps(dict(zip(cols, row)), ensure_ascii=False, default=str))
   if (validation.min_rows != null && Number(stats.row_count) < Number(validation.min_rows)) {
     failures.push(`row_count ${stats.row_count} < min_rows ${validation.min_rows}`);
   }
-  if (validation.min_date && stats.min_date > validation.min_date) {
+  if (validation.min_date && !stats.min_date) {
+    failures.push(`min_date is empty; required <= ${validation.min_date}`);
+  } else if (validation.min_date && stats.min_date > validation.min_date) {
     failures.push(`min_date ${stats.min_date} > required ${validation.min_date}`);
   }
-  if (validation.max_date && stats.max_date < validation.max_date) {
+  if (validation.max_date && !stats.max_date) {
+    failures.push(`max_date is empty; required >= ${validation.max_date}`);
+  } else if (validation.max_date && stats.max_date < validation.max_date) {
     failures.push(`max_date ${stats.max_date} < required ${validation.max_date}`);
   }
   for (const [field, minCount] of Object.entries(validation.require_non_null || {})) {
