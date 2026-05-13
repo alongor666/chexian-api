@@ -1,0 +1,135 @@
+# 12 个三级机构（高新/自贡/...）智能表格字段注册表
+#
+# 与 field_registry.yaml（H1/H2 全省大表）的差异：
+# 1. 移除：org_3_by_salesman / team_by_salesman / loss_reason（机构表无这 3 列）
+# 2. type 调整：select_text → text、select_yes_no → text_yes_no、bool → text_yes_no
+#    （机构表所有字段均为 text/number/epoch_ms_date 类型，统一按字符串写入）
+#
+# 类型说明：
+#   text             纯文本
+#   text_yes_no      bool/select 派生为 "是"/"否" 字符串
+#   number           数字
+#   epoch_ms_date    DATE 转 epoch 毫秒字符串
+#
+# source 表达式约定见 field_registry.yaml
+
+fields:
+  expiry_date:
+    field_id: f04Gwj
+    label: 到期日
+    source: base.insurance_end_date
+    type: epoch_ms_date
+
+  plate_no:
+    field_id: ftk5Tx
+    label: 车牌号码
+    source: base.plate_no
+    type: text
+    fallback: ''
+
+  vehicle_frame_no:
+    field_id: fMAfWQ
+    label: 车架号
+    source: base.vehicle_frame_no
+    type: text
+
+  salesman_name:
+    field_id: fMDwYc
+    label: 业务员
+    source: base.salesman_name
+    type: text
+    fallback: ''
+
+  sales_team:
+    field_id: frfak0
+    label: 销售团队
+    source: salesman_dim.team
+    type: text
+    fallback: 未知团队
+    alert_on_fallback: true
+
+  customer_category:
+    field_id: fn8TJd
+    label: 客户类别
+    source: base.customer_category
+    type: text
+    fallback: ''
+
+  coverage_combination:
+    field_id: f8ZIoF
+    label: 险别组合
+    source: base.coverage_combination
+    type: text
+    fallback: ''
+
+  is_quoted:
+    field_id: fkjhnX
+    label: 报价
+    source: derived.is_quoted
+    type: text_yes_no
+
+  prior_discount:
+    field_id: fqTbVL
+    label: 上年折扣
+    source: base.commercial_pricing_factor
+    type: number
+    skip_when_null: true
+
+  prior_premium:
+    field_id: fFMlZM
+    label: 上年保费
+    source: base.premium
+    type: number
+    skip_when_null: true
+
+  quote_discount:
+    field_id: fDvNY2
+    label: 报价折扣
+    source: q_latest.quote_pricing_factor
+    type: number
+    skip_when_null: true
+
+  quote_premium:
+    field_id: fvtVUv
+    label: 报价保费
+    source: q_latest.quote_premium
+    type: number
+    skip_when_null: true
+
+  is_renewed:
+    field_id: fq3LsN
+    label: 是否续回
+    source: derived.is_renewed
+    type: text_yes_no
+
+  renewal_mode:
+    field_id: fEdcCG
+    label: 续保模式
+    source: funnel.renewal_mode
+    type: text
+    default: 未分类
+
+  renewed_sign_date:
+    field_id: fwUUeU
+    label: 续回日期
+    source: renewed.renewed_sign_date
+    type: epoch_ms_date
+    condition: is_renewed
+
+  earliest_quote_date:
+    field_id: ft4uK0
+    label: 报价日期
+    source: q_earliest.earliest_quote_date
+    type: epoch_ms_date
+
+  loss_company:
+    # 流失公司：来自 customer_flow.next_insurer（车辆流向去了哪家公司）。
+    # 当前 ETL 仅回填 previous_insurer，next_insurer 多为空字符串；后续 ETL 补齐后无需改代码自动同步。
+    field_id: fMexTG
+    label: 流失公司
+    source: flow.next_insurer
+    type: text
+    fallback: ''
+
+# 机构表中"由人工填写"的字段（不在此声明、不在任何 instance 启用）：
+# - f10BqT 姓名（业务员手填）
