@@ -119,7 +119,49 @@ describe('满期保费 (earned_premium) 闰年感知', () => {
 });
 
 // ═══════════════════════════════════════════════════
-// 5. 满期出险率 (earned_loss_frequency): 已赚暴露 + 年化
+// 5. 基准保费链路: 基准保费 → 满期基准保费 → 满期基准赔付率
+// ═══════════════════════════════════════════════════
+
+describe('商业险基准保费链路', () => {
+  const baselinePremium = getMetric('baseline_premium');
+  const baselineEarnedPremium = getMetric('baseline_earned_premium');
+  const baselineEarnedClaimRatio = getMetric('baseline_earned_claim_ratio');
+
+  it('注册 baseline_premium（基准保费）', () => {
+    expect(baselinePremium).toBeDefined();
+    expect(baselinePremium!.formula.description).toContain('基准保费');
+  });
+
+  it('注册 baseline_earned_premium（满期基准保费）', () => {
+    expect(baselineEarnedPremium).toBeDefined();
+    expect(baselineEarnedPremium!.formula.description).toContain('满期基准保费');
+  });
+
+  it('注册 baseline_earned_claim_ratio（满期基准赔付率）', () => {
+    expect(baselineEarnedClaimRatio).toBeDefined();
+    expect(baselineEarnedClaimRatio!.formula.description).toContain('满期基准赔付率');
+  });
+
+  it('满期基准保费由基准保费乘满期因子得到', () => {
+    expect(baselineEarnedPremium!.formula.numerator).toContain('baseline_premium');
+    // SQL 自包含展开（codex P1 修复）：直接消费底表字段而非引用别名
+    expect(baselineEarnedPremium!.sql.requiredColumns).toContain('premium');
+    expect(baselineEarnedPremium!.sql.requiredColumns).toContain('commercial_pricing_factor');
+    expect(baselineEarnedPremium!.sql.requiredColumns).toContain('earned_days');
+    expect(baselineEarnedPremium!.sql.requiredColumns).toContain('policy_term');
+  });
+
+  it('满期基准赔付率分母使用满期基准保费', () => {
+    expect(baselineEarnedClaimRatio!.formula.denominator).toContain('baseline_earned_premium');
+    expect(baselineEarnedClaimRatio!.sql.requiredColumns).toContain('reported_claims');
+    // SQL 自包含展开（codex P1 修复）
+    expect(baselineEarnedClaimRatio!.sql.requiredColumns).toContain('premium');
+    expect(baselineEarnedClaimRatio!.sql.requiredColumns).toContain('commercial_pricing_factor');
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// 6. 满期出险率 (earned_loss_frequency): 已赚暴露 + 年化
 // ═══════════════════════════════════════════════════
 
 describe('满期出险率 (earned_loss_frequency) 年化公式', () => {

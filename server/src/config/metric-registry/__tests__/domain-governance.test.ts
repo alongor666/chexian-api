@@ -15,7 +15,8 @@ import { getAllMetrics, getMetric } from '../index.js';
 describe('定价系数仅适用商业险', () => {
   it('含 pricing_factor 的指标 requiredColumns 必含 insurance_type', () => {
     const metricsWithPricing = getAllMetrics().filter((m) =>
-      m.sql.requiredColumns.includes('pricing_factor'),
+      m.sql.requiredColumns.includes('pricing_factor') ||
+      m.sql.requiredColumns.includes('commercial_pricing_factor'),
     );
     for (const m of metricsWithPricing) {
       expect(
@@ -23,6 +24,17 @@ describe('定价系数仅适用商业险', () => {
         `${m.id} 使用 pricing_factor 但缺少 insurance_type 约束`,
       ).toContain('insurance_type');
     }
+  });
+
+  it('commercial_pricing_factor 仅出现在基准保费链路指标中', () => {
+    const metricsWithCommercialFactor = getAllMetrics().filter((m) =>
+      m.sql.expression.includes('commercial_pricing_factor'),
+    );
+
+    // baseline_earned_premium / baseline_earned_claim_ratio 已内联展开 baseline_premium CASE
+    // （codex P1 修复：让 L3 指标 SQL 自包含、可单 SELECT 独立执行）
+    const baselineChain = ['baseline_premium', 'baseline_earned_premium', 'baseline_earned_claim_ratio'];
+    expect(metricsWithCommercialFactor.map((m) => m.id).sort()).toEqual(baselineChain.sort());
   });
 });
 

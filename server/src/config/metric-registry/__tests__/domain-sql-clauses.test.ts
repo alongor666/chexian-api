@@ -66,7 +66,35 @@ describe('满期保费 (earned_premium) SQL 闰年感知', () => {
 });
 
 // ═══════════════════════════════════════════════════
-// 3. 满期出险率 SQL — 年化公式
+// 3. 基准保费 SQL — 商业险先归一，再进入满期口径
+// ═══════════════════════════════════════════════════
+
+describe('基准保费 SQL — 商业险自主系数归一', () => {
+  const baselinePremiumSql = getMetric('baseline_premium')!.sql.expression;
+  const baselineEarnedPremiumSql = getMetric('baseline_earned_premium')!.sql.expression;
+  const baselineEarnedClaimRatioSql = getMetric('baseline_earned_claim_ratio')!.sql.expression;
+
+  it('baseline_premium 仅商业险除以 commercial_pricing_factor', () => {
+    expect(baselinePremiumSql).toContain('insurance_type');
+    expect(baselinePremiumSql).toContain('commercial_pricing_factor');
+    expect(baselinePremiumSql).toMatch(/premium\s*\/\s*NULLIF\s*\(\s*commercial_pricing_factor/i);
+  });
+
+  it('baseline_earned_premium 自包含 SQL（内联 commercial_pricing_factor CASE + 满期因子）', () => {
+    expect(baselineEarnedPremiumSql).toContain('commercial_pricing_factor');
+    expect(baselineEarnedPremiumSql).toContain('earned_days');
+    expect(baselineEarnedPremiumSql).toContain('policy_term');
+  });
+
+  it('baseline_earned_claim_ratio 自包含 SQL（reported_claims 分子 + 内联满期基准保费分母）', () => {
+    expect(baselineEarnedClaimRatioSql).toContain('reported_claims');
+    expect(baselineEarnedClaimRatioSql).toContain('commercial_pricing_factor');
+    expect(baselineEarnedClaimRatioSql).not.toMatch(/\/\s*SUM\s*\(\s*premium\s*\)/i);
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// 4. 满期出险率 SQL — 年化公式
 // ═══════════════════════════════════════════════════
 
 describe('满期出险率 (earned_loss_frequency) SQL 年化公式', () => {
