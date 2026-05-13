@@ -21,13 +21,13 @@
  *   node daily.mjs cross_sell     # 全量替换交叉销售域
  *   node daily.mjs brand          # 全量替换厂牌维度表
  *   node daily.mjs repair         # 全量替换维修资源域
- *   node daily.mjs customer_flow  # 全量替换客户来源去向域
+ *   node daily.mjs customer_flow  # 合并客户来源去向历史+增量
  *   node daily.mjs renewal_tracker # 续保追踪派生域（JOIN policy+quotes+salesman）
  *   node daily.mjs all            # 全部域（含派生域）
  *   node daily.mjs --no-sync      # 跳过 VPS 同步
  */
 
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync } from 'fs';
 import { basename, dirname, join, resolve, isAbsolute } from 'path';
 import { platform, homedir } from 'os';
@@ -124,6 +124,93 @@ function runPythonScript(python, scriptPath, args) {
     env.PYTHONPATH = existingPath ? `${__dirname};${existingPath}` : __dirname;
   }
   execSync(cmd, { stdio: 'inherit', cwd: __dirname, env, timeout: 30 * 60 * 1000 });
+}
+
+function runPythonInline(python, script, args = []) {
+  const env = { ...process.env };
+  const existingPath = env.PYTHONPATH || '';
+  env.PYTHONPATH = existingPath ? `${__dirname}:${existingPath}` : __dirname;
+  if (isWindows()) {
+    env.PYTHONIOENCODING = 'utf-8';
+    env.PYTHONUTF8 = '1';
+    env.PYTHONPATH = existingPath ? `${__dirname};${existingPath}` : __dirname;
+  }
+  const result = spawnSync(python, ['-', ...args], {
+    input: script,
+    encoding: 'utf-8',
+    cwd: __dirname,
+    env,
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    throw new Error(result.stderr?.trim() || `python inline script failed with code ${result.status}`);
+  }
+  return result.stdout.trim();
+}
+
+function assertSqlIdentifier(value, label) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`非法 ${label}: ${value}`);
+  }
+}
+
+function validateDomainCandidate(python, domainId, parquetPath, validation) {
+  if (!validation) return;
+  const dateColumn = validation.date_column || 'insurance_start_date';
+  assertSqlIdentifier(dateColumn, 'date_column');
+  for (const field of Object.keys(validation.require_non_null || {})) {
+    assertSqlIdentifier(field, 'require_non_null 字段');
+  }
+
+  const script = `
+import json
+import sys
+import duckdb
+
+path = sys.argv[1].replace("'", "''")
+cfg = json.loads(sys.argv[2])
+date_col = cfg.get("date_column") or "insurance_start_date"
+require_non_null = cfg.get("require_non_null") or {}
+
+selects = ["COUNT(*) AS row_count"]
+if cfg.get("min_date") or cfg.get("max_date"):
+    selects.append(f"CAST(MIN(CAST({date_col} AS DATE)) AS VARCHAR) AS min_date")
+    selects.append(f"CAST(MAX(CAST({date_col} AS DATE)) AS VARCHAR) AS max_date")
+for field in require_non_null:
+    selects.append(f"COUNT(NULLIF(TRIM({field}), '')) AS {field}__non_null")
+
+sql = f"SELECT {', '.join(selects)} FROM read_parquet('{path}')"
+cursor = duckdb.sql(sql)
+row = cursor.fetchone()
+cols = [desc[0] for desc in cursor.description]
+print(json.dumps(dict(zip(cols, row)), ensure_ascii=False, default=str))
+`.trim();
+
+  const stats = JSON.parse(runPythonInline(python, script, [parquetPath, JSON.stringify(validation)]));
+  const failures = [];
+  if (validation.min_rows != null && Number(stats.row_count) < Number(validation.min_rows)) {
+    failures.push(`row_count ${stats.row_count} < min_rows ${validation.min_rows}`);
+  }
+  if (validation.min_date && !stats.min_date) {
+    failures.push(`min_date is empty; required <= ${validation.min_date}`);
+  } else if (validation.min_date && stats.min_date > validation.min_date) {
+    failures.push(`min_date ${stats.min_date} > required ${validation.min_date}`);
+  }
+  if (validation.max_date && !stats.max_date) {
+    failures.push(`max_date is empty; required >= ${validation.max_date}`);
+  } else if (validation.max_date && stats.max_date < validation.max_date) {
+    failures.push(`max_date ${stats.max_date} < required ${validation.max_date}`);
+  }
+  for (const [field, minCount] of Object.entries(validation.require_non_null || {})) {
+    const actual = Number(stats[`${field}__non_null`] || 0);
+    if (actual < Number(minCount)) {
+      failures.push(`${field} non_null ${actual} < required ${minCount}`);
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(`${domainId} 候选 parquet 未通过替换前校验: ${failures.join('; ')}`);
+  }
+  log('green', `  ✅ ${domainId} 候选 parquet 校验通过: rows=${Number(stats.row_count).toLocaleString()}`);
 }
 
 function checkVpsConnectivity() {
@@ -387,7 +474,7 @@ function runStandardDomain(python, scriptDir, manifest) {
   log('green', `✅ ${id} 域完成`);
 }
 
-function runStrategySingle({ python, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
+function runStrategySingle({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
   // 多 glob 并存时按 mtime 取最新文件（避免历史旧命名文件长期占据声明顺序首位、屏蔽新命名更新）
   const latest = sourceFiles
     .slice()
@@ -395,7 +482,15 @@ function runStrategySingle({ python, scriptPath, sourceFiles, outputAbs, trigger
   if (sourceFiles.length > 1) {
     log('cyan', `  single 策略：${sourceFiles.length} 个候选 → 选 mtime 最新: ${latest.name}`);
   }
-  safeConvertDomain(python, scriptPath, latest.path, outputAbs, trigger.archive_prefix, extraArgs);
+  safeConvertDomain(
+    python,
+    scriptPath,
+    latest.path,
+    outputAbs,
+    trigger.archive_prefix,
+    extraArgs,
+    candidatePath => validateDomainCandidate(python, id, candidatePath, trigger.validation),
+  );
 }
 
 function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
@@ -436,8 +531,10 @@ function runStrategyMultiMerge(ctx) {
   }
 
   const archiveDir = join(homedir(), 'chexian-archive');
+  const validateCandidate = candidatePath => validateDomainCandidate(python, id, candidatePath, trigger.validation);
   // 短路：单文件 + 不合并历史 → 直接替换（避免起 DuckDB 进程）
   if (tmpFiles.length === 1 && !hasHistory) {
+    validateCandidate(tmpFiles[0]);
     if (existsSync(outputAbs)) {
       ensureDir(archiveDir);
       renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
@@ -456,6 +553,7 @@ function runStrategyMultiMerge(ctx) {
       '--dedup-key', merge_dedup_key,
       '--order-by', `"${merge_order_by}"`,
     ]);
+    validateCandidate(tmpOutput);
     if (existsSync(outputAbs)) {
       ensureDir(archiveDir);
       renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
@@ -711,7 +809,7 @@ function runClaimsDetail(python, scriptDir) {
 
 // ── 安全域转换（先写 tmp，成功后再归档旧文件+原子替换）──
 
-function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePrefix, extraArgs = []) {
+function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePrefix, extraArgs = [], validateCandidate = null) {
   const tmpPath = outputPath + '.tmp';
   ensureDir(dirname(outputPath));
 
@@ -719,6 +817,8 @@ function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePre
   runPythonScript(python, scriptPath, [
     '-i', `"${inputPath}"`, '-o', `"${tmpPath}"`, ...extraArgs
   ]);
+
+  if (validateCandidate) validateCandidate(tmpPath);
 
   // 转换成功后才归档旧文件
   if (existsSync(outputPath)) {
