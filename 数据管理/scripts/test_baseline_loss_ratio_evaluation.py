@@ -94,7 +94,9 @@ def test_run_evaluation_applies_baseline_chain_to_target_agent() -> None:
     commercial_target = target[("商业保险", "A")]
     assert commercial_target["target_earned_premium"] == 4.41
     assert commercial_target["target_baseline_earned_premium"] == 6.3
-    assert commercial_target["estimated_reported_claims"] == 2.52
+    # codex P2 修复后：estimated_* 使用未 ROUND 的精确分子分母计算，
+    # 不再受 target_baseline_earned_premium 展示列 ROUND(2) 的误差影响
+    assert round(commercial_target["estimated_reported_claims"], 4) == 2.5205
     assert round(commercial_target["estimated_earned_claim_ratio"], 4) == 57.1429
 
     compulsory_base = baseline[("交强险", "A")]

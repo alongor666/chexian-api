@@ -147,12 +147,12 @@ policy_filtered AS (
 policy_base AS (
   SELECT
     {policy_no} AS policy_no,
+    {ins_type},
+    COALESCE(NULLIF(TRIM({grade}), ''), {sql_string(params.grade_null_value)}) AS insurance_grade,
     MIN(CAST({start_field} AS DATE)) AS insurance_start_date,
     MAX(COALESCE(CAST({end_field} AS DATE), {fallback_end})) AS insurance_end_date,
     ANY_VALUE({agent}) AS agent_name,
     ANY_VALUE({category}) AS customer_category,
-    ANY_VALUE({ins_type}) AS insurance_type,
-    COALESCE(NULLIF(TRIM(ANY_VALUE({grade})), ''), {sql_string(params.grade_null_value)}) AS insurance_grade,
     ANY_VALUE({factor}) AS commercial_pricing_factor,
     SUM(COALESCE({premium}, 0)) AS premium,
     BOOL_OR(CAST({date_field} AS DATE) BETWEEN DATE {sql_string(params.start_date)} AND DATE {sql_string(params.end_date)}) AS is_baseline_period,
@@ -161,9 +161,10 @@ policy_base AS (
       AND {agent} LIKE {sql_string(params.target_agent_pattern)}
     ) AS is_target_period
   FROM policy_filtered
-  GROUP BY {policy_no}
+  GROUP BY {policy_no}, {ins_type}, COALESCE(NULLIF(TRIM({grade}), ''), {sql_string(params.grade_null_value)})
 ),
 claims_agg AS (
+  -- 赔案表无 insurance_type 字段；赔款按 policy_no 聚合后只关联到商业险行（codex P1 配套）
   SELECT
     {policy_no} AS policy_no,
     SUM(COALESCE({settled}, 0) + COALESCE({pending}, 0)) AS reported_claims
@@ -260,19 +261,20 @@ target AS (
     insurance_type,
     insurance_grade,
     COUNT(DISTINCT policy_no) AS target_policy_count,
-    ROUND(SUM(earned_premium), 2) AS target_earned_premium,
-    ROUND(SUM(baseline_earned_premium), 2) AS target_baseline_earned_premium,
-    ROUND(SUM(reported_claims), 2) AS target_observed_reported_claims,
+    -- 保留未 ROUND 的精确值用于下游估算，展示列在最终 SELECT 中 ROUND
+    SUM(earned_premium) AS target_earned_premium_raw,
+    SUM(baseline_earned_premium) AS target_baseline_earned_premium_raw,
+    SUM(reported_claims) AS target_observed_reported_claims_raw,
     CASE
       WHEN SUM(earned_premium) > 0
-      THEN ROUND(SUM(reported_claims) * 100.0 / SUM(earned_premium), 4)
+      THEN SUM(reported_claims) * 100.0 / SUM(earned_premium)
       ELSE NULL
-    END AS target_observed_earned_claim_ratio,
+    END AS target_observed_earned_claim_ratio_raw,
     CASE
       WHEN SUM(baseline_earned_premium) > 0
-      THEN ROUND(SUM(earned_premium) / SUM(baseline_earned_premium), 6)
+      THEN SUM(earned_premium) / SUM(baseline_earned_premium)
       ELSE NULL
-    END AS earned_pricing_factor,
+    END AS earned_pricing_factor_raw,
     SUM(CASE WHEN insurance_type = '商业保险' AND baseline_earned_premium IS NULL THEN 1 ELSE 0 END) AS invalid_factor_policy_count
   FROM exposure
   WHERE is_target
@@ -282,21 +284,23 @@ SELECT
   t.insurance_type,
   t.insurance_grade,
   t.target_policy_count,
-  t.target_earned_premium,
-  t.target_baseline_earned_premium,
-  t.target_observed_reported_claims,
-  t.target_observed_earned_claim_ratio,
+  -- 展示列在最终输出时 ROUND（避免下游估算用到提前 ROUND 的值）
+  ROUND(t.target_earned_premium_raw, 2) AS target_earned_premium,
+  ROUND(t.target_baseline_earned_premium_raw, 2) AS target_baseline_earned_premium,
+  ROUND(t.target_observed_reported_claims_raw, 2) AS target_observed_reported_claims,
+  ROUND(t.target_observed_earned_claim_ratio_raw, 4) AS target_observed_earned_claim_ratio,
   ROUND(b.baseline_ratio_decimal * 100.0, 4) AS baseline_earned_claim_ratio,
-  ROUND(t.target_baseline_earned_premium * b.baseline_ratio_decimal, 4) AS estimated_reported_claims,
+  -- 估算用未 ROUND 的精确值
+  ROUND(t.target_baseline_earned_premium_raw * b.baseline_ratio_decimal, 4) AS estimated_reported_claims,
   CASE
-    WHEN t.target_earned_premium > 0
+    WHEN t.target_earned_premium_raw > 0
     THEN ROUND(
-      t.target_baseline_earned_premium * b.baseline_ratio_decimal * 100.0 / t.target_earned_premium,
+      t.target_baseline_earned_premium_raw * b.baseline_ratio_decimal * 100.0 / t.target_earned_premium_raw,
       4
     )
     ELSE NULL
   END AS estimated_earned_claim_ratio,
-  t.earned_pricing_factor,
+  ROUND(t.earned_pricing_factor_raw, 6) AS earned_pricing_factor,
   t.invalid_factor_policy_count
 FROM target t
 LEFT JOIN baseline b USING (insurance_type, insurance_grade)
