@@ -55,18 +55,19 @@ export const growthMetrics: readonly MetricDefinition[] = [
     tags: ['kpi', 'growth', 'alert', 'branch-ops'],
     formula: {
       description: '(本期签单保费 − 去年同期签单保费) × 100 ÷ 去年同期签单保费',
-      numerator: 'current_premium - previous_premium',
-      denominator: 'previous_premium',
+      numerator: 'current_value - previous_value',
+      denominator: 'previous_value',
       unit: '%',
     },
     sql: {
       expression: `CASE
-    WHEN previous_premium > 0
-    THEN ROUND((current_premium - previous_premium) * 100.0 / previous_premium, 2)
+    WHEN previous_value > 0
+    THEN ROUND((current_value - previous_value) * 100.0 / previous_value, 2)
     ELSE NULL
   END AS premium_growth_pct`,
-      requiredColumns: ['current_premium', 'previous_premium'],
-      notes: 'current_premium = SUM(premium) 当期；previous_premium = 去年同期 SUM(premium)，需在外层 CTE 中预计算。YTD 列对比去年同 YTD',
+      requiredColumns: ['current_value', 'previous_value'],
+      notes:
+        'current_value = SUM(premium) 当期；previous_value = 去年同期 SUM(premium)，需在外层 CTE 中预计算（与 growth_rate_yoy 共用 growth_data CTE 协议）。YTD 列对比去年同 YTD',
     },
     display: {
       formatter: 'percent',

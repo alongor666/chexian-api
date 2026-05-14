@@ -4,13 +4,21 @@
  * 避免 L4_IDS 等常量在多个测试文件中重复硬编码。
  */
 
-/** L4 占位符指标 — SQL 以注释 "-- L4" 开头，无法执行 */
+/**
+ * 集成测试跳过的指标。两类来源：
+ *   1. L4 占位符指标：SQL 以注释 "-- L4" 开头，本身无法执行
+ *   2. 依赖外部 CTE 字段未在合成 fixture 中提供的可执行指标
+ *      （如 plan_completion_pct 依赖 dim/plan JOIN 产出的 actual_premium /
+ *       plan_premium / time_progress，无法在 policy_data / growth_data 等
+ *       通用 fixture 中合成）
+ */
 export const L4_METRIC_IDS: ReadonlySet<string> = new Set([
   'fixed_cost_amount',
   'fixed_cost_ratio',
   'combined_cost_amount',
   'combined_cost_ratio',
   'earned_profit_amount',
+  'plan_completion_pct',
 ]);
 
 /** L4 ID 数组形式（用于 it.each） */

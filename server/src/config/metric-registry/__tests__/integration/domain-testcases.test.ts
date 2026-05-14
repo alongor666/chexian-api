@@ -20,7 +20,7 @@ const CROSS_SELL_IDS = new Set([
 ]);
 
 /** 需要 Growth CTE output schema 的指标 */
-const GROWTH_IDS = new Set(['growth_rate_yoy', 'growth_rate_mom']);
+const GROWTH_IDS = new Set(['growth_rate_yoy', 'growth_rate_mom', 'premium_growth_pct']);
 
 /** 需要 RepairDim schema 的指标 */
 const REPAIR_IDS = new Set([
