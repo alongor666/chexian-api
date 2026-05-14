@@ -48,6 +48,59 @@ export const growthMetrics: readonly MetricDefinition[] = [
   },
 
   {
+    id: 'premium_growth_pct',
+    version: '1.0.0',
+    name: '保费增长率',
+    category: 'growth',
+    tags: ['kpi', 'growth', 'alert', 'branch-ops'],
+    formula: {
+      description: '(本期签单保费 − 去年同期签单保费) × 100 ÷ 去年同期签单保费',
+      numerator: 'current_value - previous_value',
+      denominator: 'previous_value',
+      unit: '%',
+    },
+    sql: {
+      expression: `CASE
+    WHEN previous_value > 0
+    THEN ROUND((current_value - previous_value) * 100.0 / previous_value, 2)
+    ELSE NULL
+  END AS premium_growth_pct`,
+      requiredColumns: ['current_value', 'previous_value'],
+      notes:
+        'current_value = SUM(premium) 当期；previous_value = 去年同期 SUM(premium)，需在外层 CTE 中预计算（与 growth_rate_yoy 共用 growth_data CTE 协议）。YTD 列对比去年同 YTD',
+    },
+    display: {
+      formatter: 'percent',
+      label: '保费增长率',
+      unit: '%',
+      decimals: 2,
+      tooltip: '同比口径（YoY）。≥10% 优秀 / 5-10% 健康 / 2-5% 异常 / <2% 危险',
+    },
+    testCases: [
+      {
+        name: '增长率类型为数字',
+        input: { whereClause: '1=1' },
+        assertions: { premium_growth_pct: { op: 'type', value: 'number' } },
+      },
+    ],
+    thresholds: {
+      direction: 'lower_worse',
+      notice: 10,
+      warn: 5,
+      danger: 2,
+      unit: '%',
+      source: 'skills/diagnose-html-render/lib/alerts.py v1.7 (2026-05-13)',
+    },
+    changelog: [
+      {
+        version: '1.0.0',
+        date: '2026-05-13',
+        changes: '新增：与诊断技能 alerts.py v1.7 阈值对齐（10/5/2，lower_worse）',
+      },
+    ],
+  },
+
+  {
     id: 'growth_rate_mom',
     version: '1.0.0',
     name: '环比增长率',

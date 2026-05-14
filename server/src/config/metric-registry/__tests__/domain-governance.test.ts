@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { getAllMetrics, getMetric } from '../index.js';
+import { L4_METRIC_IDS } from './test-helpers.js';
 
 // ═══════════════════════════════════════════════════
 // 1. 定价系数仅适用商业险
@@ -137,14 +138,8 @@ describe('赔付率分子必须是已报告赔款', () => {
 // ═══════════════════════════════════════════════════
 
 describe('所有非 L4 指标 SQL 含 AS alias', () => {
-  const L4_IDS = new Set([
-    'fixed_cost_amount', 'fixed_cost_ratio',
-    'combined_cost_amount', 'combined_cost_ratio',
-    'earned_profit_amount',
-  ]);
-
   it('每个可执行指标 SQL 含 AS 关键字', () => {
-    const executableMetrics = getAllMetrics().filter((m) => !L4_IDS.has(m.id));
+    const executableMetrics = getAllMetrics().filter((m) => !L4_METRIC_IDS.has(m.id));
     for (const m of executableMetrics) {
       expect(
         m.sql.expression,

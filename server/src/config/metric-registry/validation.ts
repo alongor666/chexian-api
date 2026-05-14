@@ -79,6 +79,28 @@ export function validateRegistry(): {
     if (m.changelog.length === 0) {
       errors.push({ metricId: m.id, field: 'changelog', message: '变更历史不能为空' });
     }
+
+    // thresholds 单调性（可选字段）
+    if (m.thresholds) {
+      const { direction, notice, warn, danger } = m.thresholds;
+      if (direction === 'higher_worse') {
+        if (!(notice < warn && warn < danger)) {
+          errors.push({
+            metricId: m.id,
+            field: 'thresholds',
+            message: `higher_worse 要求 notice < warn < danger，实际 (${notice}, ${warn}, ${danger})`,
+          });
+        }
+      } else if (direction === 'lower_worse') {
+        if (!(notice > warn && warn > danger)) {
+          errors.push({
+            metricId: m.id,
+            field: 'thresholds',
+            message: `lower_worse 要求 notice > warn > danger，实际 (${notice}, ${warn}, ${danger})`,
+          });
+        }
+      }
+    }
   }
 
   return {
