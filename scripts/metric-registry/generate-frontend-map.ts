@@ -20,24 +20,27 @@ const ROOT = resolve(__dirname, '../..');
 const metrics = getAllMetrics();
 const stats = getRegistryStats();
 
+// 使用 JSON.stringify 输出字符串字面量，确保单引号/反斜杠/换行被正确转义
+const str = (s: string) => JSON.stringify(s);
+
 // 生成标签映射
 const labelEntries = metrics
-  .map((m) => `  '${m.id}': '${m.display.label}',`)
+  .map((m) => `  ${str(m.id)}: ${str(m.display.label)},`)
   .join('\n');
 
 // 生成格式化器映射
 const formatterEntries = metrics
   .map((m) => {
-    const parts = [`formatter: '${m.display.formatter}'`];
-    if (m.display.unit) parts.push(`unit: '${m.display.unit}'`);
+    const parts = [`formatter: ${str(m.display.formatter)}`];
+    if (m.display.unit) parts.push(`unit: ${str(m.display.unit)}`);
     if (m.display.decimals !== undefined) parts.push(`decimals: ${m.display.decimals}`);
-    return `  '${m.id}': { ${parts.join(', ')} },`;
+    return `  ${str(m.id)}: { ${parts.join(', ')} },`;
   })
   .join('\n');
 
 // 生成公式映射
 const formulaEntries = metrics
-  .map((m) => `  '${m.id}': '${m.formula.description}',`)
+  .map((m) => `  ${str(m.id)}: ${str(m.formula.description)},`)
   .join('\n');
 
 const output = `/**

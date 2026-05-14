@@ -14,7 +14,9 @@ export type MetricCategory =
   | 'cost'         // 成本指标：赔付率、费用率、综合费用率
   | 'cross_sell'   // 交叉销售：驾意险推介率
   | 'growth'       // 增长指标：同比、环比
-  | 'repair';      // 维修资源：修保比、本地资源占比、合作启用率
+  | 'repair'       // 维修资源：修保比、本地资源占比、合作启用率
+  | 'plan'         // 计划达成：年度计划/时间进度达成率
+  | 'structure';   // 业务结构：客户类别占比、车型占比
 
 /** 格式化函数 ID（与 src/shared/utils/formatters.ts 对应） */
 export type FormatterId =
@@ -42,6 +44,33 @@ export type TestAssertion =
   | { readonly op: 'type'; readonly value: 'number' | 'string' }       // 类型检查
   | { readonly op: 'notNull' }                                         // 非空
   | number;                                                             // 精确值
+
+/**
+ * 四级亮灯方向（与 ~/.claude/skills/diagnose-html-render/lib/alerts.py:LOWER_WORSE 对齐）
+ *
+ * - higher_worse: 数值越高越差。val > danger → 危险 / > warn → 异常 / > notice → 健康 / 否则 优秀
+ * - lower_worse:  数值越低越差。val < danger → 危险 / < warn → 异常 / < notice → 健康 / 否则 优秀
+ */
+export type AlertDirection = 'higher_worse' | 'lower_worse';
+
+/**
+ * 四级亮灯阈值（3 个分界点 → 4 个等级：优秀/健康/异常/危险）
+ *
+ * 与诊断技能 lib/alerts.py:TH 一一对应。注册表本身不执行打灯逻辑，
+ * 仅作为前端/看板/外部脚本的事实源（避免硬编码阈值）。
+ *
+ * 元组顺序约定（同 alerts.py）：(notice, warn, danger)
+ *   - higher_worse 时 notice < warn < danger
+ *   - lower_worse  时 notice > warn > danger
+ */
+export interface MetricThresholds {
+  readonly direction: AlertDirection;
+  readonly notice: number;   // 优秀 / 健康 分界
+  readonly warn: number;     // 健康 / 异常 分界
+  readonly danger: number;   // 异常 / 危险 分界
+  readonly unit: string;     // 阈值单位（"%" | "元" ...）
+  readonly source?: string;  // 来源说明，例如 "skills/diagnose-html-render/lib/alerts.py v1.7"
+}
 
 /** 测试用例 */
 export interface MetricTestCase {
@@ -90,6 +119,9 @@ export interface MetricDefinition {
 
   // ===== 测试 =====
   readonly testCases: readonly MetricTestCase[];  // 至少 1 个
+
+  // ===== 四级亮灯阈值（可选） =====
+  readonly thresholds?: MetricThresholds;
 
   // ===== 版本历史 =====
   readonly changelog: readonly MetricVersion[];

@@ -20,8 +20,8 @@ const EXPECTED_CUSTOMER_CATEGORY_COUNT = 11;
 describe('金丝雀: 注册表稳定性', () => {
   const allMetrics = getAllMetrics();
 
-  it('指标总数 = 44（新增/删除必须同步更新此处）', () => {
-    expect(allMetrics.length).toBe(44);
+  it('指标总数 = 47（新增/删除必须同步更新此处）', () => {
+    expect(allMetrics.length).toBe(47);
   });
 
   it('所有 ID 唯一', () => {
