@@ -118,13 +118,25 @@ def run_concat(input_paths, output_path):
 # ── dedup 模式（DuckDB ROW_NUMBER） ──
 
 def _validate_sql_identifier(value: str, label: str) -> None:
-    """防 SQL 注入：仅允许字母数字下划线和有限关键字"""
-    allowed_keywords = {"ASC", "DESC", "NULLS", "LAST", "FIRST", ","}
-    for part in value.replace(",", " , ").split():
-        if part.upper() in allowed_keywords:
+    """防 SQL 注入：仅允许字母数字下划线、有限关键字、括号和 IS NULL 表达式"""
+    allowed_keywords = {"ASC", "DESC", "NULLS", "LAST", "FIRST", ",", "IS", "NOT", "NULL"}
+    # 先剥离括号（用于 `(col IS NULL) ASC` 这类条件排序），再按空格切分
+    tokens = (
+        value
+        .replace("(", " ( ")
+        .replace(")", " ) ")
+        .replace(",", " , ")
+        .split()
+    )
+    for part in tokens:
+        upper = part.upper()
+        if upper in allowed_keywords or upper in {"(", ")"}:
             continue
         if not part.replace("_", "").isalnum():
-            print(f"❌ 非法 {label}: {value}（仅允许字母数字下划线 + ASC/DESC/NULLS LAST）")
+            print(
+                f"❌ 非法 {label}: {value}"
+                "（允许：字母数字下划线 + ASC/DESC/NULLS LAST/FIRST/IS NOT NULL/括号/逗号）"
+            )
             sys.exit(1)
 
 

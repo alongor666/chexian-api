@@ -65,7 +65,13 @@ class BaseConverter(ABC):
     # ── 可选 override ──
 
     def get_dedup_key(self):
-        """去重列（英文名）。返回 None 表示不去重（如 dim 表 / 续保跟踪）。"""
+        """去重列（英文名）。
+
+        返回:
+          - None: 不去重（如 dim 表 / 续保跟踪）
+          - str:  单列去重
+          - list[str]: 复合主键去重（如 customer_flow 的 (policy_no, insurance_start_date)）
+        """
         return None
 
     def get_required_non_null_cols(self) -> list:
@@ -142,17 +148,25 @@ class BaseConverter(ABC):
         # 5. 业务规则校验
         df = self.validate_business_rules(df)
 
-        # 6a. 去重（仅 dedup_key 非 None）
-        if key and key in df.columns:
-            before = len(df)
-            df = df.drop_duplicates(subset=[key], keep="first")
-            if len(df) < before:
-                print(f"   去重: {before - len(df):,} 行（按 {key}）")
+        # 6a. 去重（仅 dedup_key 非 None；支持单列或复合主键）
+        if key:
+            key_cols = [key] if isinstance(key, str) else list(key)
+            missing_keys = [c for c in key_cols if c not in df.columns]
+            if missing_keys:
+                print(f"   ⚠ 去重列缺失，跳过去重: {missing_keys}")
+            else:
+                before = len(df)
+                df = df.drop_duplicates(subset=key_cols, keep="first")
+                if len(df) < before:
+                    label = key if isinstance(key, str) else "+".join(key_cols)
+                    print(f"   去重: {before - len(df):,} 行（按 {label}）")
 
         # 6b. 必须非空列过滤（dedup_key 自动加入）
         non_null_cols = list(self.get_required_non_null_cols())
-        if key and key not in non_null_cols:
-            non_null_cols.append(key)
+        if key:
+            for k in ([key] if isinstance(key, str) else key):
+                if k not in non_null_cols:
+                    non_null_cols.append(k)
         for col in non_null_cols:
             if col in df.columns:
                 before = len(df)

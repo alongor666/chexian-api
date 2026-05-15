@@ -551,7 +551,7 @@ function runStrategyMultiMerge(ctx) {
     runPythonScript(python, mergeScript, [
       '-i', ...mergeInputs.map(f => `"${f}"`),
       '-o', `"${tmpOutput}"`,
-      '--dedup-key', merge_dedup_key,
+      '--dedup-key', `"${merge_dedup_key}"`,
       '--order-by', `"${merge_order_by}"`,
     ]);
     validateCandidate(tmpOutput);

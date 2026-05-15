@@ -11,8 +11,10 @@ describe('customer_flow ETL contract', () => {
     expect(customerFlow).toBeTruthy();
     expect(customerFlow.trigger.input_strategy).toBe('multi_file_merge');
     expect(customerFlow.trigger.merge_with_history).toBe(true);
-    expect(customerFlow.trigger.merge_dedup_key).toBe('policy_no');
-    expect(customerFlow.trigger.merge_order_by).toBe('insurance_start_date DESC NULLS LAST');
+    expect(customerFlow.trigger.merge_dedup_key).toBe('policy_no, insurance_start_date');
+    expect(customerFlow.trigger.merge_order_by).toBe(
+      'insurance_start_date DESC NULLS LAST, (next_insurer IS NULL) ASC, (previous_insurer IS NULL) ASC',
+    );
     expect(customerFlow.trigger.validation).toMatchObject({
       min_rows: 900000,
       min_date: '2025-01-01',
