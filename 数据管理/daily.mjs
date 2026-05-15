@@ -642,12 +642,46 @@ async function runPostEtlIntegrations(scriptDir, python) {
   log('cyan', `  实例数: ${total}（v2 yaml=${v2Instances.length}, v1 json=${v1Configs.length}）`);
 
   // 8a. v2 yaml 实例
+  //   yaml 内可声明 `script: <name>.py` 路由到 sync_renewal_v2.py 之外的引擎
+  //   缺省路由到 sync_renewal_v2.py（续保口径）
   for (const yamlFile of v2Instances) {
     const instance = yamlFile.replace(/\.ya?ml$/, '');
-    log('cyan', `\n  ▶ [v2] ${instance}`);
+    const yamlPath = join(instancesDir, yamlFile);
+
+    // 读 yaml 头部解析 `script:` 行（轻量正则，允许行末 inline 注释）
+    //   匹配示例：
+    //     script: sync_filtered_policies.py
+    //     script: sync_filtered_policies.py   # daily.mjs 据此路由...
+    let targetScript = scriptV2;
+    let scriptName = 'sync_renewal_v2.py';
+    let isFilteredEngine = false;
     try {
-      runPythonScript(python, scriptV2, [
-        '--instance', `"${join(instancesDir, yamlFile)}"`,
+      const yamlText = readFileSync(yamlPath, 'utf-8');
+      const scriptMatch = yamlText.match(/^script:\s*([\w./-]+)\s*(?:#.*)?$/m);
+      if (scriptMatch) {
+        const declared = scriptMatch[1].trim();
+        const candidate = join(integrationDir, declared);
+        if (existsSync(candidate)) {
+          targetScript = candidate;
+          scriptName = declared;
+          isFilteredEngine = declared !== 'sync_renewal_v2.py';
+        } else {
+          log('yellow', `  ⚠ ${instance}: 声明 script=${declared} 不存在，回退到 sync_renewal_v2.py`);
+        }
+      }
+    } catch (err) {
+      // 读取失败时静默回退
+    }
+
+    // 非续保引擎（sync_filtered_policies.py）需显式传 --mode sync 走增量
+    // upsert，避免每次定时跑都全量重写（review #2）
+    const extraArgs = isFilteredEngine ? ['--mode', 'sync'] : [];
+
+    log('cyan', `\n  ▶ [v2] ${instance}  (engine: ${scriptName}${isFilteredEngine ? ', mode=sync' : ''})`);
+    try {
+      runPythonScript(python, targetScript, [
+        '--instance', `"${yamlPath}"`,
+        ...extraArgs,
       ]);
       log('green', `  ✓ ${instance} 同步完成`);
     } catch (err) {
@@ -655,7 +689,7 @@ async function runPostEtlIntegrations(scriptDir, python) {
       log('red', `  ⚠ ${instance} 同步失败（降级告警，不阻塞 ETL）`);
       for (const line of msg.split('\n')) if (line.trim()) log('red', `     ${line}`);
       log('yellow', `     详细日志：${join(integrationDir, 'logs')}/${instance}_sync_*.json`);
-      log('yellow', `     手动重试：python3 ${scriptV2} --instance ${join(instancesDir, yamlFile)} --dry-run`);
+      log('yellow', `     手动重试：python3 ${targetScript} --instance ${yamlPath} --dry-run`);
     }
   }
 

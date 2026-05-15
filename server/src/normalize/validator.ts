@@ -66,6 +66,7 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   commercial_ncd: ['VARCHAR', 'TEXT', 'STRING'], // 商业险NCD
   highway_risk_level: ['VARCHAR', 'TEXT', 'STRING'], // 高速风险等级
   insurance_score: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'VARCHAR'], // 车险分分数
+  vehicle_age_group: ['VARCHAR', 'TEXT', 'STRING'], // 车龄分段
 };
 
 export interface SchemaColumn {
