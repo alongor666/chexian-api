@@ -22,11 +22,12 @@
  *   数据管理/warehouse/fact/customer_flow/        →  data/fact/customer_flow/
  *   数据管理/warehouse/fact/renewal_tracker/      →  data/fact/renewal_tracker/
  *   数据管理/patrol_reports/                      →  data/patrol_reports/
- *   server/data/reports/                          →  data/reports/  （追加同步，不删除远端历史报告）
+ *   server/data/reports/                          →  data/reports/  （追加同步，不删除远端历史报告；后端鉴权访问）
+ *   public/reports/                               →  frontend/dist/reports/  （追加同步；Nginx 静态托管，浏览器 /reports/* 可直达）
  *
  * 可选环境变量:
  *   SYNC_VPS_SSH_ALIAS, SYNC_VPS_HOST, SYNC_VPS_USER, SYNC_VPS_PORT,
- *   SYNC_VPS_KEY_PATH, SYNC_VPS_DATA_DIR, SYNC_VPS_HEALTH_URL
+ *   SYNC_VPS_KEY_PATH, SYNC_VPS_DATA_DIR, SYNC_VPS_FRONTEND_DIST, SYNC_VPS_HEALTH_URL
  */
 
 import { existsSync, statSync, readdirSync, readFileSync, writeFileSync } from 'fs';
@@ -45,6 +46,7 @@ const DEFAULTS = {
   username: process.env.SYNC_VPS_USER || 'deployer',
   port: Number(process.env.SYNC_VPS_PORT || 22),
   remoteDir: process.env.SYNC_VPS_DATA_DIR || '/var/www/chexian/server/data',
+  frontendDistDir: process.env.SYNC_VPS_FRONTEND_DIST || '/var/www/chexian/frontend/dist',
   healthUrl: process.env.SYNC_VPS_HEALTH_URL || 'http://localhost:3000/health',
 };
 
@@ -61,6 +63,7 @@ const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_region');
 const LOCAL_PATROL_REPORTS_DIR = join(ROOT_DIR, '数据管理/patrol_reports');
 const LOCAL_HTML_REPORTS_DIR = join(ROOT_DIR, 'server/data/reports');
+const LOCAL_PUBLIC_REPORTS_DIR = join(ROOT_DIR, 'public/reports');
 
 const colors = {
   green: '\x1b[32m',
@@ -258,6 +261,7 @@ function resolveSSHConfig(parsedArgs) {
 function resolveRunConfig(parsedArgs) {
   return {
     remoteDir: parsedArgs.remoteDir || DEFAULTS.remoteDir,
+    frontendDistDir: DEFAULTS.frontendDistDir,
     healthUrl: parsedArgs.healthUrl || DEFAULTS.healthUrl,
     noRestart: parsedArgs.noRestart,
     dryRun: parsedArgs.dryRun,
@@ -419,7 +423,8 @@ function printHelp() {
   数据管理/warehouse/dim/plan/                  →  data/dim/plan/
   数据管理/warehouse/dim/brand/                 →  data/dim/brand/
   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/  (存在时)
-  server/data/reports/                          →  data/reports/  (不使用 --delete，保留历史报告)
+  server/data/reports/                          →  data/reports/  (不使用 --delete，保留历史报告；后端鉴权访问)
+  public/reports/                               →  frontend/dist/reports/  (不使用 --delete；Nginx 静态托管)
 
 可选参数:
   --alias <name>       覆盖 SSH alias（默认 chexian-vps-deploy）
@@ -440,6 +445,7 @@ function printDryRun(sshConfig, runConfig) {
   console.log(`SSH: ${sshConfig.username}@${sshConfig.host}:${sshConfig.port}`);
   console.log(`Key: ${sshConfig.privateKeyPath}`);
   console.log(`Remote data root: ${runConfig.remoteDir}`);
+  console.log(`Remote frontend dist: ${runConfig.frontendDistDir}`);
   console.log(`Restart: ${runConfig.noRestart ? 'no' : 'yes'}`);
   console.log(`Health URL: ${runConfig.healthUrl}`);
   console.log('');
@@ -459,6 +465,7 @@ function printDryRun(sshConfig, runConfig) {
     { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${runConfig.remoteDir}/dim/plate_region`,       critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${runConfig.remoteDir}/patrol_reports`,         critical: false },
     { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${runConfig.remoteDir}/reports`,                critical: false, deleteRemote: false },
+    { label: 'public_reports',       local: LOCAL_PUBLIC_REPORTS_DIR,     remote: `${runConfig.frontendDistDir}/reports`,          critical: false, deleteRemote: false },
   ];
 
   for (const task of syncTasks) {
@@ -500,6 +507,7 @@ async function maybeRestart(config, noRestart, healthUrl) {
 async function runStandardMode(sshConfig, runConfig) {
   const alias = sshConfig.alias;
   const remote = runConfig.remoteDir;
+  const frontendDist = runConfig.frontendDistDir;
 
   // 声明式任务列表：critical=true 的目录失败会阻断重启
   const syncTasks = [
@@ -516,6 +524,7 @@ async function runStandardMode(sshConfig, runConfig) {
     { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,   remote: `${remote}/patrol_reports`,         critical: false },
     { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,     remote: `${remote}/reports`,                critical: false, deleteRemote: false },
+    { label: 'public_reports',       local: LOCAL_PUBLIC_REPORTS_DIR,   remote: `${frontendDist}/reports`,          critical: false, deleteRemote: false },
   ];
 
   // 过滤不存在的目录
