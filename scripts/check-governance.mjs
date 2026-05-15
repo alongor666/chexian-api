@@ -46,6 +46,7 @@ import {
   collectPolicyCurrentStats,
   extractQuickReferenceStats,
 } from '../数据管理/pipelines/quick_reference.mjs';
+import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -701,73 +702,35 @@ function checkPackageManagerLockPolicy() {
 // ============================================================
 
 /**
- * 从文件名中解析日期范围（格式：*_YYYYMMDD_YYYYMMDD.parquet）
- * @returns {{ start: number, end: number } | null}
- */
-function parseDateRangeFromFilename(filename) {
-  const match = filename.match(/_(\d{8})_(\d{8})\.parquet$/);
-  if (!match) return null;
-  return { start: parseInt(match[1], 10), end: parseInt(match[2], 10) };
-}
-
-/**
  * 检查本地 current/ 目录中是否存在时间范围重叠的 Parquet 文件。
  *
- * 根因：多个重叠文件经 UNION ALL 后数据翻倍（历史事故：1,837,252行 vs 正确的 1,161,809行）。
- * 修复：sync-vps.mjs 已默认清理，本检查作为提交前最后一道防线。
+ * 根因：多个重叠文件经 UNION ALL 后数据翻倍（历史事故：1,837,252行 vs 正确的 1,161,809行；
+ * 2026-05-15 复发：裸名主分片+限摩 → 多出 310,822 行/10.8% 虚高）。
+ * 共享逻辑在 scripts/lib/parquet-overlap-check.mjs（daily.mjs / sync-vps.mjs 同源调用）。
  */
 function checkParquetOverlapInCurrent() {
   info('检查 current/ Parquet 文件时间范围重叠...');
 
   const currentDir = path.join(ROOT_DIR, '数据管理/warehouse/fact/policy/current');
+  const result = detectPolicyCurrentOverlap(currentDir);
 
-  if (!fs.existsSync(currentDir)) {
+  if (result.skipped) {
     success('current/ 目录不存在，跳过重叠检测');
     return true;
   }
 
-  const parquetFiles = fs.readdirSync(currentDir)
-    .filter(f => f.endsWith('.parquet') && !f.startsWith('test-data'))
-    .map(f => ({ name: f, range: parseDateRangeFromFilename(f) }))
-    .filter(f => f.range !== null); // 只检测有日期范围的文件（聚合文件无日期不参与检测）
-
-  if (parquetFiles.length <= 1) {
-    success(`current/ Parquet 重叠检测通过（${parquetFiles.length} 个有效文件，无重叠风险）`);
+  if (result.count === 0) {
+    success(`current/ Parquet 重叠检测通过（${result.files} 个文件，区间互补无重叠）`);
     return true;
   }
 
-  // 业务互补：剔摩（非摩托）和 限摩（仅摩托）按险类切分，时间重叠也无数据翻倍
-  const isComplementary = (a, b) => {
-    const aTuomo = /_剔摩_/.test(a), aXianmo = /_限摩_/.test(a);
-    const bTuomo = /_剔摩_/.test(b), bXianmo = /_限摩_/.test(b);
-    return (aTuomo && bXianmo) || (aXianmo && bTuomo);
-  };
-
-  const overlaps = [];
-  for (let i = 0; i < parquetFiles.length; i++) {
-    for (let j = i + 1; j < parquetFiles.length; j++) {
-      const a = parquetFiles[i];
-      const b = parquetFiles[j];
-      // 两个区间重叠条件：a.start <= b.end AND b.start <= a.end
-      if (a.range.start <= b.range.end && b.range.start <= a.range.end) {
-        if (isComplementary(a.name, b.name)) continue; // 剔摩/限摩互补豁免
-        overlaps.push(
-          `"${a.name}" [${a.range.start}~${a.range.end}] ↔ "${b.name}" [${b.range.start}~${b.range.end}]`
-        );
-      }
-    }
+  error('current/ Parquet 文件存在时间范围重叠（将导致数据翻倍）：');
+  for (const o of result.overlaps) {
+    console.log(`    - "${o.a}" [${o.aRange[0]}~${o.aRange[1]}] ↔ "${o.b}" [${o.bRange[0]}~${o.bRange[1]}]`);
   }
-
-  if (overlaps.length > 0) {
-    error(`current/ Parquet 文件存在时间范围重叠（将导致数据翻倍）：`);
-    overlaps.forEach(o => console.log(`    - ${o}`));
-    console.log('    ▶ 修复：删除或移出重叠文件，保留互补的文件集合');
-    console.log('    ▶ 同步时使用 node scripts/sync-vps.mjs（默认清理旧文件）');
-    return false;
-  }
-
-  success(`current/ Parquet 重叠检测通过（${parquetFiles.length} 个文件，区间互补无重叠）`);
-  return true;
+  console.log('    ▶ 修复：删除冗余文件（裸名主分片+限摩=反模式），或确保剔摩↔限摩成对存在');
+  console.log('    ▶ 同步时使用 node scripts/sync-vps.mjs（默认清理旧文件）');
+  return false;
 }
 
 // ============================================================

@@ -13,6 +13,8 @@
 | 编号 | 文件名模式 | 数据域 | 处理器 |
 |------|-----------|--------|--------|
 | 01 | `01_签单清单_增量_YYYYMMDD.xlsx` / `01_签单清单_剔摩_*.xlsx` | 保费 | daily.mjs premium |
+
+> **铁律**：`current/` 不得出现**裸名主分片 + 限摩**组合（如 `01_签单清单_20230101_20241231.parquet` + `01_签单清单_限摩_*.parquet`）。裸名主分片含全险种（含摩托），限摩单独存在会让摩托数据 UNION ALL 翻倍。互补豁免仅对 `_剔摩_` ↔ `_限摩_` 成对生效。门禁在 `daily.mjs`/`sync-vps.mjs`/`check-governance.mjs` 三处由 `scripts/lib/parquet-overlap-check.mjs` 共享拦截。
 | 02 | `02_理赔明细_*.xlsx` | 赔案 | daily.mjs claims_detail（CDC）|
 | 03 | `03_交叉销售_*.xlsx` | 交叉销售 | daily.mjs cross_sell |
 | 04 | `04_报价清单*.xlsx` | 报价 | daily.mjs quotes |
