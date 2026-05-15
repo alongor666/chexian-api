@@ -20,6 +20,7 @@ import {
   ArrowLeftRight,
   TrendingDown,
   RefreshCw,
+  Home,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
@@ -40,6 +41,7 @@ interface NavItem {
 }
 
 const dataNavItems: NavItem[] = [
+  { path: '/home', icon: Home, label: '首页', shortLabel: '首页' },
   { path: '/dashboard', icon: Gauge, label: '仪表盘', shortLabel: '仪表' },
   { path: '/performance-analysis', icon: TrendingUp, label: '业绩分析', shortLabel: '业绩' },
   { path: '/reports', icon: DollarSign, label: '保费达成', shortLabel: '保费' },

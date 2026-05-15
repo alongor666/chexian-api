@@ -54,6 +54,9 @@ const FeatureGuard: FC<{
 };
 
 // Lazy load page components for better performance
+const HomePage = lazy(() =>
+  import('../features/home/HomePage').then((m) => ({ default: m.HomePage }))
+);
 const PremiumDashboardPage = lazy(() =>
   import('../features/pages/PremiumDashboardPage').then((m) => ({ default: m.PremiumDashboardPage }))
 );
@@ -146,8 +149,18 @@ function App() {
                     <SidebarLayout />
                   </AuthGuard>
                 }>
-                  {/* 首页 → 仪表盘 */}
-                  <Route index element={<Navigate to="dashboard" replace />} />
+                  {/* 首页 → 门户 */}
+                  <Route index element={<Navigate to="home" replace />} />
+
+                  {/* 门户首页：报告入口聚合（不套 DataGuard，etlDate 内部兜底） */}
+                  <Route
+                    path="home"
+                    element={
+                      <RouteAccessGuard routePath="/home">
+                        <LazyRoute><HomePage /></LazyRoute>
+                      </RouteAccessGuard>
+                    }
+                  />
 
                   {/* 数据导入页（原首页） */}
                   <Route

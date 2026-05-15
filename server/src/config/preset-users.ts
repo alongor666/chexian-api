@@ -20,6 +20,7 @@ export interface PresetRole {
 }
 
 export const ORG_ROLE_ALLOWED_ROUTES: string[] = [
+  '/home',
   '/performance-analysis',
   '/growth',
   '/specialty',

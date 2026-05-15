@@ -64,6 +64,7 @@ export interface UserPermission {
  * 机构角色默认可访问路由（未单独配置 allowedRoutes 时生效）
  */
 export const ORG_USER_DEFAULT_ALLOWED_ROUTES: readonly string[] = [
+  '/home',
   '/performance-analysis',
   '/growth',
   '/specialty',
