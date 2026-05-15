@@ -32,7 +32,7 @@ from pathlib import Path
 
 import duckdb
 
-ROOT = Path("/Users/alongor666/Downloads/底层数据湖DUD/chexian-api")
+ROOT = Path(__file__).resolve().parents[2]
 POLICY_GLOB = str(ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
 CLAIMS_GLOB = str(ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 REPORT_DIR = ROOT / "数据管理/数据分析报告"

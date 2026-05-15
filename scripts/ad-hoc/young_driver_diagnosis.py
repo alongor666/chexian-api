@@ -22,7 +22,12 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-SKILL_ROOT = Path("/Users/alongor666/.claude/skills/diagnose-html-render")
+SKILL_ROOT = Path.home() / ".claude/skills/diagnose-html-render"
+if not SKILL_ROOT.exists():
+    raise SystemExit(
+        f"diagnose-html-render skill 未安装于 {SKILL_ROOT}；"
+        "请先安装 gstack diagnose-html-render 或设置 ~/.claude/skills/ 软链。"
+    )
 sys.path.insert(0, str(SKILL_ROOT))
 
 from lib import (  # noqa: E402
@@ -105,7 +110,7 @@ def sample_ok(row: Optional[pd.Series]) -> bool:
         return False
     return int(row.get("policy_count", 0)) >= MIN_SAMPLE
 
-ROOT = Path("/Users/alongor666/Downloads/底层数据湖DUD/chexian-api")
+ROOT = Path(__file__).resolve().parents[2]
 POLICY_GLOB = str(ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
 CLAIMS_GLOB = str(ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 PLATE_DIM = str(ROOT / "数据管理/warehouse/dim/plate_region/latest.parquet")

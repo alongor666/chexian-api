@@ -12,12 +12,17 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-SKILL_ROOT = Path("/Users/alongor666/.claude/skills/diagnose-html-render")
+SKILL_ROOT = Path.home() / ".claude/skills/diagnose-html-render"
+if not SKILL_ROOT.exists():
+    raise SystemExit(
+        f"diagnose-html-render skill 未安装于 {SKILL_ROOT}；"
+        "请先安装 gstack diagnose-html-render 或设置 ~/.claude/skills/ 软链。"
+    )
 sys.path.insert(0, str(SKILL_ROOT))
 
 from lib import standard_query  # noqa: E402
 
-ROOT = Path("/Users/alongor666/Downloads/底层数据湖DUD/chexian-api")
+ROOT = Path(__file__).resolve().parents[2]
 POLICY_GLOB = str(ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
 CLAIMS_GLOB = str(ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 
