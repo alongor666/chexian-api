@@ -7,8 +7,8 @@
  * 3. 三段不重叠主分片 → 0 overlap
  * 4. 不存在的目录 → skipped
  */
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { describe, expect, it, afterEach } from 'vitest';
+import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {

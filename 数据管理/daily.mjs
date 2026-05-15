@@ -975,7 +975,8 @@ async function main() {
     }
     runPeriodTrendReport(scriptDir, python);
     if (!noSync) {
-      await syncToVps(scriptDir);
+      const synced = await syncToVps(scriptDir);
+      if (!synced) process.exit(1);
     }
     await runPostEtlIntegrations(scriptDir, python);
     return;
