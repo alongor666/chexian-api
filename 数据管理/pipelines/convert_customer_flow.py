@@ -47,7 +47,9 @@ class CustomerFlowConverter(BaseConverter):
         return {"保单号": str, "车架号": str}
 
     def get_dedup_key(self):
-        return "policy_no"
+        # 复合主键: 源 Excel 单文件内 policy_no 重复率 8~15%（同保单不同起期），
+        # 加上 insurance_start_date 后唯一。详见 docs/data-sources/customer_flow.md
+        return ["policy_no", "insurance_start_date"]
 
     def transform_rows(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -73,6 +75,17 @@ class CustomerFlowConverter(BaseConverter):
         print("\n   === 数据概览 ===")
         print(f"   记录数: {len(df):,}")
         print(f"   唯一保单: {df['policy_no'].nunique():,}")
+        # 复合主键去重核查（治理 #1：源 Excel policy_no 在同文件内会重复 8~15%，
+        # 加 insurance_start_date 后必须唯一）
+        if {"policy_no", "insurance_start_date"}.issubset(df.columns):
+            composite_dup = int(
+                df.duplicated(subset=["policy_no", "insurance_start_date"]).sum()
+            )
+            if composite_dup > 0:
+                print(f"   ⚠ 复合主键残留重复: {composite_dup:,} 行 (policy_no + start_date)")
+                print(f"      预期 0；如出现请排查 BaseConverter 去重逻辑")
+            else:
+                print(f"   ✓ 复合主键唯一性: 通过 (policy_no + start_date)")
         if "previous_insurer" in df.columns:
             n = int(df["previous_insurer"].notna().sum())
             print(f"   有上年承保主体: {n:,} ({safe_pct(n, len(df)):.1f}%)")
@@ -81,8 +94,86 @@ class CustomerFlowConverter(BaseConverter):
             n = int(df["next_insurer"].notna().sum())
             print(f"   有次年保险公司: {n:,} ({safe_pct(n, len(df)):.1f}%)")
             print(f"   次年保险公司TOP10: {df['next_insurer'].value_counts().head(10).to_dict()}")
+            # 治理 #1 观测：next_insurer 当前是「单次写入式」，填充率应只升不降
+            self._print_next_insurer_drift(df, output_file)
+        # 日期连续性观测（治理 #1）
+        if "insurance_start_date" in df.columns:
+            self._print_date_continuity(df)
         # 与旧 latest.parquet 做 diff（写新 parquet 之前对比）
         self._print_diff_report(df, output_file)
+
+    @staticmethod
+    def _print_date_continuity(df: pd.DataFrame) -> None:
+        """检查 insurance_start_date 在 2025-01-01 ~ max(start_date) 区间是否连续
+
+        仅在合并后的大文件上有意义；单文件（< 100k 行）跳过以避免误报。
+        """
+        if len(df) < 100_000:
+            return  # 单文件转换阶段跳过，仅在最终合并/历史底库上检查
+        from datetime import timedelta
+        d = pd.to_datetime(df["insurance_start_date"], errors="coerce").dropna()
+        if d.empty:
+            return
+        start = pd.Timestamp("2025-01-01")
+        end = d.max().normalize()
+        if end < start:
+            return
+        present = set(d.dt.normalize().unique())
+        expected_days = (end - start).days + 1
+        missing = []
+        cur = start
+        while cur <= end:
+            if cur not in present:
+                missing.append(cur.strftime("%Y-%m-%d"))
+            cur += timedelta(days=1)
+        present_days = expected_days - len(missing)
+        print(f"   日期覆盖 (2025-01-01~{end.date()}): {present_days}/{expected_days} 天，"
+              f"缺失 {len(missing)} 天")
+        if missing:
+            preview = ", ".join(missing[:5])
+            more = f" ... +{len(missing) - 5} 天" if len(missing) > 5 else ""
+            print(f"   ⚠ 缺失日期: {preview}{more}")
+
+    @staticmethod
+    def _print_next_insurer_drift(df_new: pd.DataFrame, output_file: Path) -> None:
+        """对照旧 parquet 检查 next_insurer 漂移：
+
+        - 空 → 非空：业务侧补录（治理目标，看到就好）
+        - 非空 → 空：异常（不应发生，告警）
+        - 值变更：异常（业务侧改正，少见）
+        """
+        old_path = output_file.parent / "latest.parquet"
+        if output_file.name == "latest.parquet":
+            old_path = output_file
+        if not old_path.exists():
+            return
+        try:
+            df_old = pd.read_parquet(
+                old_path,
+                columns=["policy_no", "insurance_start_date", "next_insurer"],
+            )
+        except Exception:
+            return
+        join_cols = ["policy_no", "insurance_start_date"]
+        merged = df_new[join_cols + ["next_insurer"]].merge(
+            df_old[join_cols + ["next_insurer"]].rename(columns={"next_insurer": "next_old"}),
+            on=join_cols,
+            how="inner",
+            validate="one_to_one",
+        )
+        void_to_value = int(((merged["next_old"].isna()) & (merged["next_insurer"].notna())).sum())
+        value_to_void = int(((merged["next_old"].notna()) & (merged["next_insurer"].isna())).sum())
+        value_change = int(
+            (merged["next_old"].notna())
+            & (merged["next_insurer"].notna())
+            & (merged["next_old"] != merged["next_insurer"])
+        )
+        print(f"   next_insurer 漂移对照旧 parquet:")
+        print(f"     空→非空（补录）: {void_to_value:,}  ← 治理目标值，越多越好")
+        if value_to_void > 0:
+            print(f"     ⚠ 非空→空      : {value_to_void:,}  ← 异常，请排查源数据")
+        if value_change > 0:
+            print(f"     值变更（改正） : {value_change:,}")
 
     @staticmethod
     def _print_diff_report(df_new: pd.DataFrame, output_file: Path) -> None:

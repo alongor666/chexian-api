@@ -365,8 +365,16 @@
         ],
         "archive_prefix": "customer_flow_latest",
         "merge_with_history": true,
-        "merge_dedup_key": "policy_no",
-        "merge_order_by": "insurance_start_date DESC NULLS LAST",
+        "merge_dedup_key": "policy_no, insurance_start_date",
+        "merge_order_by": "insurance_start_date DESC NULLS LAST, (next_insurer IS NULL) ASC, (previous_insurer IS NULL) ASC",
+        "_dedup_rationale": "复合主键 (policy_no, insurance_start_date) — 源 Excel 单文件 policy_no 重复率 8~15%，加起期后唯一；排序优先保留 next/prev 非空那条，防御未来业务侧补录漂移",
+        "file_roles": {
+          "08_客户来源去向_20250101_20260419.xlsx": "历史底库 — 唯一覆盖 2025-01-01~2025-01-26 共 26 天",
+          "08_客户来源去向_每周日更新.xlsx": "滚动底库 — 2025-01-27~~T-7，每周日全量替换",
+          "08_客户来源去向_20260426.xlsx": "单日补齐 — 2026-04-26 唯一来源",
+          "08_客户来源去向_20260430_20260504.xlsx": "跨窗口补齐 — 五一假期 5 天唯一来源",
+          "YYYYMMDD_08_客户来源去向.xlsx": "日增量 — 当日单天数据"
+        },
         "validation": {
           "date_column": "insurance_start_date",
           "min_rows": 900000,
@@ -393,9 +401,9 @@
         "/api/query/customer-flow/trend"
       ],
       "frontend_page": "customer-flow",
-      "notes": "客户转保/流失分析，7列，按保单号去重（非车架号），空值=未知",
-      "last_updated": "2026-05-13",
-      "row_count": 1035992,
+      "notes": "客户转保/流失分析；按 (policy_no, insurance_start_date) 复合主键去重；next_insurer 业务侧补录滞后 1-3 月，整体非空率约 3%。详见 docs/data-sources/customer_flow.md",
+      "last_updated": "2026-05-15",
+      "row_count": 2052,
       "field_count": 7
     },
     {
