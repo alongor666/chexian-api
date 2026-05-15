@@ -504,6 +504,29 @@
       "dataTypes": ["DOUBLE", "DECIMAL", "NUMERIC", "FLOAT", "VARCHAR"],
       "aliases": ["insurance_score", "insuranceScore", "车险分分数", "车险评分"],
       "description": "车险评分数值（24-26新格式用，替代旧车险分等级字母）"
+    },
+    {
+      "id": "vehicle_age_group",
+      "label": "车龄分段",
+      "sourceColumn": null,
+      "derived": true,
+      "derivedFrom": ["first_registration_date", "policy_date"],
+      "derivation": {
+        "type": "case_when",
+        "expression": "DATE_DIFF('year', first_registration_date::DATE, policy_date::DATE)",
+        "buckets": [
+          { "max": 1, "label": "0-1年" },
+          { "max": 3, "label": "1-3年" },
+          { "max": 5, "label": "3-5年" },
+          { "max": 8, "label": "5-8年" },
+          { "label": "8年以上" }
+        ],
+        "nullLabel": "未知"
+      },
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["vehicle_age_group", "vehicleAgeGroup", "车龄分段", "车龄分组"],
+      "description": "车龄分段（派生字段，查询时由 first_registration_date 与 policy_date 计算；未落 ETL Parquet，查询方需自行 CASE WHEN 派生。桶口径：0-1/1-3/3-5/5-8/8+ 年）"
     }
   ],
   "etl": {

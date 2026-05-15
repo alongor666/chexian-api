@@ -1,0 +1,67 @@
+# 邮政经代签单明细（2026-04-20 起）→ 企业微信智能表「车险业务员保单明细」
+#
+# 业务规则：agent_name LIKE '%邮政%' AND policy_date >= '2026-04-20'
+# 主键：policy_no（年度唯一；本批仅含 2026 年签单，无跨年问题）
+#
+# 智能表 docid: dcJ-zNN0aLOLdF2vV6T-Yabc_iRjeZ0a3ZJQC0l05gyT5Qe5IQ2MIAWKK19GIzgPMjTph6l4pP4EPuNLhdXz3C6g
+# sheet_id:    q979lj
+# url:         https://doc.weixin.qq.com/smartsheet/s3_ABkAfniHALMCNZ1iOnwIsScu1R2Ew_a
+
+instance_name: postal-policy-since-20260420
+script: sync_filtered_policies.py        # daily.mjs 据此路由到非续保脚本；缺省则走 sync_renewal_v2.py
+
+webhook_env: WECOM_SMARTSHEET_WEBHOOK_POSTAL
+
+batch_size: 100
+sheet_records_per_minute_limit: 3000
+
+filters:
+  agent_name_like: "%邮政%"
+  policy_date_from: "2026-04-20"
+
+primary_key: policy_no
+
+# 字段映射：SQL 输出列名（en） → 智能表 field_id
+field_mapping:
+  org_level_3:           fxxKfG      # 机构（TEXT）
+  salesman_name:         fIRILE      # 业务员（TEXT）
+  policy_date:           fK6Njt      # 签单日期（DATE_TIME, 毫秒 ts）
+  plate_no:              fWbeil      # 车牌（TEXT）
+  insurance_grade:       f1RB2K      # 风险等级（SINGLE_SELECT）
+  premium:               fTHxjw      # 保费（NUMBER）
+  commercial_pricing_factor: fMc5sO  # 自主系数（NUMBER；UI 预先调 3 位小数）
+  insurance_start_date:  fKXu8z      # 起保日期（DATE_TIME, 毫秒 ts）
+  vehicle_model:         ftlPvj      # 厂牌车型（TEXT）
+  driver_age_group:      fm1Pg9      # 年龄分组（SINGLE_SELECT）
+  vehicle_price_segment: f9W7Xr      # 车价分段（SINGLE_SELECT，SQL 派生）
+  vehicle_age_group:     fkHRFt      # 车龄分段（SINGLE_SELECT，SQL 派生；fields.json 已注册）
+
+# 智能表字段类型（用于格式化值）
+field_types:
+  fxxKfG: TEXT
+  fIRILE: TEXT
+  fK6Njt: DATE_TIME
+  fWbeil: TEXT
+  f1RB2K: SINGLE_SELECT
+  fTHxjw: NUMBER
+  fMc5sO: NUMBER
+  fKXu8z: DATE_TIME
+  ftlPvj: TEXT
+  fm1Pg9: SINGLE_SELECT
+  f9W7Xr: SINGLE_SELECT
+  fkHRFt: SINGLE_SELECT
+
+# 智能表字段中文 label（供 webhook payload 中 schema 字段使用；可省略则取 field_id）
+field_labels:
+  fxxKfG: 机构
+  fIRILE: 业务员
+  fK6Njt: 签单日期
+  fWbeil: 车牌
+  f1RB2K: 风险等级
+  fTHxjw: 保费
+  fMc5sO: 自主系数
+  fKXu8z: 起保日期
+  ftlPvj: 厂牌车型
+  fm1Pg9: 年龄分组
+  f9W7Xr: 车价分段
+  fkHRFt: 车龄分段

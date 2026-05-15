@@ -59,7 +59,8 @@ export type DomainField =
   | 'compulsory_ncd_factor'
   | 'commercial_ncd'
   | 'highway_risk_level'
-  | 'insurance_score';
+  | 'insurance_score'
+  | 'vehicle_age_group';
 
 export interface ColumnAliasConfig {
   [key: string]: string[];
@@ -120,6 +121,7 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   commercial_ncd: ['commercial_ncd', 'commercialNcd', '商业险NCD', '商业险无赔款系数'],
   highway_risk_level: ['highway_risk_level', 'highwayRiskLevel', '高速风险等级'],
   insurance_score: ['insurance_score', 'insuranceScore', '车险分分数', '车险评分'],
+  vehicle_age_group: ['vehicle_age_group', 'vehicleAgeGroup', '车龄分段', '车龄分组'],
 };
 
 export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
@@ -163,6 +165,7 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'commercial_ncd',
   'highway_risk_level',
   'insurance_score',
+  'vehicle_age_group',
 ]);
 
 export interface ColumnMapping {
@@ -220,6 +223,7 @@ export interface ColumnMapping {
   commercial_ncd?: string; // 商业险NCD
   highway_risk_level?: string; // 高速风险等级
   insurance_score?: string; // 车险分分数
+  vehicle_age_group?: string; // 车龄分段
 }
 
 export interface ValidationResult {
@@ -330,6 +334,7 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   commercial_ncd: 'commercial_ncd',
   highway_risk_level: 'highway_risk_level',
   insurance_score: 'insurance_score',
+  vehicle_age_group: 'vehicle_age_group',
 };
 
 /**
@@ -397,4 +402,5 @@ export const FIELD_IDS = [
   'commercial_ncd',
   'highway_risk_level',
   'insurance_score',
+  'vehicle_age_group',
 ] as const satisfies ReadonlyArray<DomainField>;
