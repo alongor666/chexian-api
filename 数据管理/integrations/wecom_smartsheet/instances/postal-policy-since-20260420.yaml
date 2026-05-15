@@ -1,7 +1,7 @@
 # 邮政经代签单明细（2026-04-20 起）→ 企业微信智能表「车险业务员保单明细」
 #
 # 业务规则：agent_name LIKE '%邮政%' AND policy_date >= '2026-04-20'
-# 主键：policy_no（年度唯一；本批仅含 2026 年签单，无跨年问题）
+# 同步幂等键：composite_key（同 policy_no 可能存在批改副本/保费拆分）
 #
 # 智能表 docid: dcJ-zNN0aLOLdF2vV6T-Yabc_iRjeZ0a3ZJQC0l05gyT5Qe5IQ2MIAWKK19GIzgPMjTph6l4pP4EPuNLhdXz3C6g
 # sheet_id:    q979lj
@@ -20,6 +20,15 @@ filters:
   policy_date_from: "2026-04-20"
 
 primary_key: policy_no
+
+# 复合主键：批改副本/保费拆分会让同 policy_no 出现多行（686 行里 7 行重复 → 679 unique policy_no）。
+# 仅用 policy_no 去重会让 sync 模式漏掉新进的批改记录，所以用 (policy_no, plate_no, premium, policy_date) 复合键。
+# 修改本字段后必须跑 --rebuild-state 重建 state.json。
+composite_key:
+  - policy_no
+  - plate_no
+  - premium
+  - policy_date
 
 # 字段映射：SQL 输出列名（en） → 智能表 field_id
 field_mapping:
