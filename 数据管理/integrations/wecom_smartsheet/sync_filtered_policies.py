@@ -12,8 +12,12 @@ YAML 配置示例见 instances/postal-policy-since-20260420.yaml。
 
 mode 语义：
     init  首次全量导入；按 SQL 抽数顺序 add_records，不查既有记录
-    sync  增量 upsert；按 primary_key 维护 state.json，新增 add / 已存在 update
-          （v0 仅实现 add；update 视后续业务需求接入 plan_upsert）
+          （注意：重复触发会重复写入；仅用于首次或清表后重建）
+    sync  增量 add-only：按 primary_key 维护 state.json，仅 add 不在已同步集合内的行
+          （v0 不实现 update；既有记录字段变化不会回写智能表，等业务确认是否需要）
+
+    默认 mode 不再是 init —— daily.mjs 周期调用必须显式传 --mode sync，
+    init 仅供手工首次全量。
 """
 
 from __future__ import annotations
@@ -252,20 +256,57 @@ def write_log(instance: InstanceConfig, summary: dict[str, Any]) -> Path:
     return path
 
 
+def state_path(instance: InstanceConfig) -> Path:
+    """sync 模式的状态文件路径：记录已写入智能表的 primary_key 集合。"""
+    return HERE / "state" / f"{instance.instance_name}_synced_keys.json"
+
+
+def load_state(instance: InstanceConfig) -> dict[str, Any]:
+    p = state_path(instance)
+    if not p.exists():
+        return {"synced_keys": [], "last_sync_at": None}
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def save_state(instance: InstanceConfig, state: dict[str, Any]) -> None:
+    p = state_path(instance)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _row_key(row: dict[str, Any]) -> str:
+    """row 主键值（来自 SQL 的 _primary_key 别名列）。"""
+    return str(row.get("_primary_key", ""))
+
+
 def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     rows = fetch_rows(instance)
     schema = {fid: instance.field_labels.get(fid, fid) for fid in instance.field_mapping.values()}
 
+    # sync 模式过滤已同步的主键；init 模式全量
+    if mode == "sync":
+        state = load_state(instance)
+        synced = set(state.get("synced_keys", []))
+        new_rows = [r for r in rows if _row_key(r) not in synced]
+        skipped = len(rows) - len(new_rows)
+    else:
+        state = {"synced_keys": [], "last_sync_at": None}
+        synced = set()
+        new_rows = rows
+        skipped = 0
+
     add_records = []
-    for row in rows:
+    for row in new_rows:
         values = build_record_values(row, instance.field_mapping, instance.field_types)
-        add_records.append({"values": values})
+        add_records.append({"values": values, "_primary_key": _row_key(row)})
 
     summary: dict[str, Any] = {
         "instance_name": instance.instance_name,
         "mode": mode,
         "filters": instance.filters,
         "source_rows": len(rows),
+        "state_synced_keys_before": len(synced),
+        "skipped_already_synced": skipped,
         "add_records_planned": len(add_records),
         "dry_run": dry_run,
         "schema_field_ids": list(schema.keys()),
@@ -273,15 +314,22 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
 
     if dry_run:
         # 打印前 3 条 sample，便于肉眼检查
-        summary["sample_records"] = add_records[:3]
+        summary["sample_records"] = [
+            {"values": r["values"]} for r in add_records[:3]
+        ]
         log_path = write_log(instance, summary)
         summary["log_path"] = str(log_path)
         return summary
 
-    if mode != "init":
-        raise NotImplementedError(
-            f"mode={mode} 尚未实现（v0 仅支持 init）。后续增量同步可基于 primary_key 维护 state.json。"
-        )
+    if mode not in ("init", "sync"):
+        raise ValueError(f"unknown mode: {mode}")
+
+    if not add_records:
+        summary["batches"] = []
+        summary["completed_at"] = datetime.now(timezone.utc).isoformat()
+        log_path = write_log(instance, summary)
+        summary["log_path"] = str(log_path)
+        return summary
 
     webhook_url = os.environ.get(instance.webhook_env)
     if not webhook_url:
@@ -290,17 +338,31 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     import time as time_mod
 
     summary["batches"] = []
+    newly_synced_keys: list[str] = []
     for chunk in chunked(add_records, instance.batch_size):
-        resp = post_webhook(webhook_url, {"schema": schema, "add_records": chunk})
+        # webhook payload 不带内部 _primary_key 标记
+        payload_records = [{"values": r["values"]} for r in chunk]
+        resp = post_webhook(webhook_url, {"schema": schema, "add_records": payload_records})
+        errcode = resp.get("errcode")
         summary["batches"].append({
             "op": "add",
             "sent": len(chunk),
-            "errcode": resp.get("errcode"),
+            "errcode": errcode,
             "errmsg": (resp.get("errmsg") or "")[:200],
         })
+        # 成功 batch 内的主键追加到已同步集合（errcode == 0 = OK）
+        if errcode == 0:
+            newly_synced_keys.extend(r["_primary_key"] for r in chunk if r["_primary_key"])
         # 速率限制：每条记录占用 60/sheet_rpm 秒
         time_mod.sleep(60.0 / max(1, instance.sheet_rpm) * len(chunk))
 
+    # 写回 state（init/sync 两种模式都更新，避免 init 后再 sync 又重复写入）
+    state["synced_keys"] = sorted(set(state.get("synced_keys", [])) | set(newly_synced_keys))
+    state["last_sync_at"] = datetime.now(timezone.utc).isoformat()
+    save_state(instance, state)
+
+    summary["state_synced_keys_after"] = len(state["synced_keys"])
+    summary["newly_synced_count"] = len(newly_synced_keys)
     summary["completed_at"] = datetime.now(timezone.utc).isoformat()
     log_path = write_log(instance, summary)
     summary["log_path"] = str(log_path)

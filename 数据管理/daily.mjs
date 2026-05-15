@@ -648,18 +648,23 @@ async function runPostEtlIntegrations(scriptDir, python) {
     const instance = yamlFile.replace(/\.ya?ml$/, '');
     const yamlPath = join(instancesDir, yamlFile);
 
-    // 读 yaml 头部解析 `script:` 行（轻量正则，避免额外引入 yaml 解析器）
+    // 读 yaml 头部解析 `script:` 行（轻量正则，允许行末 inline 注释）
+    //   匹配示例：
+    //     script: sync_filtered_policies.py
+    //     script: sync_filtered_policies.py   # daily.mjs 据此路由...
     let targetScript = scriptV2;
     let scriptName = 'sync_renewal_v2.py';
+    let isFilteredEngine = false;
     try {
       const yamlText = readFileSync(yamlPath, 'utf-8');
-      const scriptMatch = yamlText.match(/^script:\s*([\w./-]+)\s*$/m);
+      const scriptMatch = yamlText.match(/^script:\s*([\w./-]+)\s*(?:#.*)?$/m);
       if (scriptMatch) {
         const declared = scriptMatch[1].trim();
         const candidate = join(integrationDir, declared);
         if (existsSync(candidate)) {
           targetScript = candidate;
           scriptName = declared;
+          isFilteredEngine = declared !== 'sync_renewal_v2.py';
         } else {
           log('yellow', `  ⚠ ${instance}: 声明 script=${declared} 不存在，回退到 sync_renewal_v2.py`);
         }
@@ -668,10 +673,15 @@ async function runPostEtlIntegrations(scriptDir, python) {
       // 读取失败时静默回退
     }
 
-    log('cyan', `\n  ▶ [v2] ${instance}  (engine: ${scriptName})`);
+    // 非续保引擎（sync_filtered_policies.py）需显式传 --mode sync 走增量
+    // upsert，避免每次定时跑都全量重写（review #2）
+    const extraArgs = isFilteredEngine ? ['--mode', 'sync'] : [];
+
+    log('cyan', `\n  ▶ [v2] ${instance}  (engine: ${scriptName}${isFilteredEngine ? ', mode=sync' : ''})`);
     try {
       runPythonScript(python, targetScript, [
         '--instance', `"${yamlPath}"`,
+        ...extraArgs,
       ]);
       log('green', `  ✓ ${instance} 同步完成`);
     } catch (err) {
