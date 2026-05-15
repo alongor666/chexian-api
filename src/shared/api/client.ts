@@ -552,6 +552,11 @@ class ApiClient {
   async getCostAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COST, filters); }
   async getComprehensiveBundle(params?: ComprehensiveFilterParams): Promise<ComprehensiveBundleResponse> { return this.queryGet<ComprehensiveBundleResponse>(QUERY_ROUTES.COMPREHENSIVE_BUNDLE, params as Record<string, unknown>); }
 
+  /** 获取 ETL 数据版本（数据截止日 + 构建时间）。HomePage / SW 共用。 */
+  async getDataVersion(): Promise<{ etlDate: string; buildTime: string; serverStartTime: string }> {
+    return this.request<{ etlDate: string; buildTime: string; serverStartTime: string }>('/data/version');
+  }
+
   /**
    * 获取车驾意推介率数据
    */
