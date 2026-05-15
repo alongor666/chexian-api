@@ -1,7 +1,7 @@
 # 邮政经代签单明细（2026-04-20 起）→ 企业微信智能表「车险业务员保单明细」
 #
 # 业务规则：agent_name LIKE '%邮政%' AND policy_date >= '2026-04-20'
-# 主键：policy_no（年度唯一；本批仅含 2026 年签单，无跨年问题）
+# 同步幂等键：composite_key（同 policy_no 可能存在批改副本/保费拆分）
 #
 # 智能表 docid: dcJ-zNN0aLOLdF2vV6T-Yabc_iRjeZ0a3ZJQC0l05gyT5Qe5IQ2MIAWKK19GIzgPMjTph6l4pP4EPuNLhdXz3C6g
 # sheet_id:    q979lj

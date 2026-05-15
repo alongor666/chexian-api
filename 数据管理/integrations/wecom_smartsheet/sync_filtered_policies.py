@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone, date as date_cls
@@ -273,10 +274,59 @@ def load_state(instance: InstanceConfig) -> dict[str, Any]:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def save_state(instance: InstanceConfig, state: dict[str, Any]) -> None:
+def save_state(instance: InstanceConfig, state: dict[str, Any], *, backup_existing: bool = False) -> None:
     p = state_path(instance)
     p.parent.mkdir(parents=True, exist_ok=True)
+    if backup_existing and p.exists():
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        shutil.copy2(p, p.with_name(f"{p.name}.bak.{ts}"))
     p.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def key_strategy(instance: InstanceConfig) -> str:
+    return "composite_key" if instance.composite_key else "primary_key"
+
+
+def composite_fields(instance: InstanceConfig) -> list[str]:
+    return list(instance.composite_key) if instance.composite_key else [instance.primary_key]
+
+
+def state_fields_compatible(instance: InstanceConfig, state: dict[str, Any]) -> bool:
+    actual_strategy = state.get("key_strategy")
+    actual_fields = state.get("composite_fields")
+    expected_strategy = key_strategy(instance)
+    if actual_strategy != expected_strategy:
+        return False
+    # 过渡兼容：PR 引入期间已有 composite_key state 只写了 key_strategy，
+    # 下一次成功 sync/rebuild 会补写 composite_fields。
+    if actual_fields is None and expected_strategy == "composite_key":
+        keys = [str(k) for k in state.get("synced_keys", []) if k]
+        return bool(keys) and all("|" in k for k in keys)
+    return actual_fields == composite_fields(instance)
+
+
+def validate_state_key_strategy(instance: InstanceConfig, state: dict[str, Any]) -> None:
+    """sync 前校验 state 口径，防止旧 primary_key state 被 composite_key 全量错配。"""
+    keys = state.get("synced_keys", [])
+    if not keys:
+        return
+
+    expected_strategy = key_strategy(instance)
+    expected_fields = composite_fields(instance)
+    actual_strategy = state.get("key_strategy")
+    actual_fields = state.get("composite_fields")
+
+    if actual_strategy is None:
+        raise RuntimeError(
+            "state.json 缺少 key_strategy，疑似旧 primary_key 口径；"
+            "请先执行 --rebuild-state --dry-run 核对，再按提示迁移或使用显式 force"
+        )
+    if not state_fields_compatible(instance, state):
+        raise RuntimeError(
+            "state.json key_strategy/composite_fields 与当前实例配置不一致："
+            f"state=({actual_strategy}, {actual_fields}) current=({expected_strategy}, {expected_fields})；"
+            "拒绝 sync，避免重复写入或漏同步"
+        )
 
 
 def _stable_value(v: Any) -> str:
@@ -301,7 +351,10 @@ def _row_key(row: dict[str, Any], instance: InstanceConfig | None = None) -> str
     - 否则 → row 的 _primary_key 别名列（即 instance.primary_key 字段值）
     """
     if instance is not None and instance.composite_key:
-        return "|".join(_stable_value(row.get(f)) for f in instance.composite_key)
+        missing = [f for f in instance.composite_key if f not in row]
+        if missing:
+            raise KeyError(f"row 缺少 composite_key 字段: {missing}")
+        return "|".join(_stable_value(row[f]) for f in instance.composite_key)
     return str(row.get("_primary_key", ""))
 
 
@@ -312,6 +365,7 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     # sync 模式过滤已同步的主键；init 模式全量
     if mode == "sync":
         state = load_state(instance)
+        validate_state_key_strategy(instance, state)
         synced = set(state.get("synced_keys", []))
         new_rows = [r for r in rows if _row_key(r, instance) not in synced]
         skipped = len(rows) - len(new_rows)
@@ -385,6 +439,8 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     # 写回 state（init/sync 两种模式都更新，避免 init 后再 sync 又重复写入）
     state["synced_keys"] = sorted(set(state.get("synced_keys", [])) | set(newly_synced_keys))
     state["last_sync_at"] = datetime.now(timezone.utc).isoformat()
+    state["key_strategy"] = key_strategy(instance)
+    state["composite_fields"] = composite_fields(instance)
     save_state(instance, state)
 
     summary["state_synced_keys_after"] = len(state["synced_keys"])
@@ -395,29 +451,88 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     return summary
 
 
-def rebuild_state(instance: InstanceConfig) -> dict[str, Any]:
-    """根据当前源数据按 composite_key/primary_key 重建 state.json。
+def rebuild_state(
+    instance: InstanceConfig,
+    *,
+    dry_run: bool = False,
+    force_assume_remote_complete: bool = False,
+) -> dict[str, Any]:
+    """按当前 key 口径重建/迁移 state.json。
 
     使用场景：composite_key 配置变更后，旧 state（按 primary_key 存储）需重生成。
-    本操作仅读源数据 + 写本地 state，不发 webhook、不触达智能表。
+    默认只做可证明安全的迁移；若要把当前源数据全量视为已同步，必须显式 force。
     """
     rows = fetch_rows(instance)
-    keys = sorted({_row_key(r, instance) for r in rows if _row_key(r, instance)})
+    previous_state = load_state(instance)
+    previous_keys = set(previous_state.get("synced_keys", []))
+    row_keys = {_row_key(r, instance) for r in rows if _row_key(r, instance)}
+
+    ambiguous_primary_keys: dict[str, list[str]] = {}
+    missing_primary_keys: list[str] = []
+
+    if force_assume_remote_complete:
+        keys = sorted(row_keys)
+        rebuild_mode = "force_assume_remote_complete"
+    elif state_fields_compatible(instance, previous_state):
+        keys = sorted(previous_keys)
+        rebuild_mode = "refresh_existing_strategy"
+    elif previous_keys and not previous_state.get("key_strategy") and instance.composite_key:
+        by_primary: dict[str, list[str]] = {}
+        for row in rows:
+            primary = str(row.get("_primary_key", ""))
+            if not primary:
+                continue
+            by_primary.setdefault(primary, []).append(_row_key(row, instance))
+
+        migrated: set[str] = set()
+        for primary in sorted(previous_keys):
+            matches = sorted(set(by_primary.get(primary, [])))
+            if not matches:
+                missing_primary_keys.append(primary)
+            elif len(matches) == 1:
+                migrated.add(matches[0])
+            else:
+                ambiguous_primary_keys[primary] = matches
+
+        if ambiguous_primary_keys:
+            sample = ", ".join(list(ambiguous_primary_keys)[:5])
+            raise RuntimeError(
+                "旧 primary_key state 存在一对多 composite_key，无法确认远端是否已写入全部行；"
+                f"ambiguous={len(ambiguous_primary_keys)} sample={sample}。"
+                "请人工核验企微表后使用 --force-assume-remote-complete，或先补写缺失行"
+            )
+        keys = sorted(migrated)
+        rebuild_mode = "migrate_primary_to_composite"
+    else:
+        raise RuntimeError(
+            "无法安全重建 state：缺少可迁移的旧 state，或 state 口径与当前配置不兼容。"
+            "如已核验远端表完整，请加 --force-assume-remote-complete"
+        )
+
     state = {
         "synced_keys": keys,
         "last_sync_at": datetime.now(timezone.utc).isoformat(),
         "rebuilt_from_source": True,
-        "key_strategy": "composite_key" if instance.composite_key else "primary_key",
+        "key_strategy": key_strategy(instance),
+        "composite_fields": composite_fields(instance),
+        "rebuild_mode": rebuild_mode,
     }
-    save_state(instance, state)
+    if not dry_run:
+        save_state(instance, state, backup_existing=True)
     return {
         "instance_name": instance.instance_name,
         "operation": "rebuild_state",
+        "dry_run": dry_run,
+        "state_path": str(state_path(instance)),
+        "rebuild_mode": rebuild_mode,
         "key_strategy": state["key_strategy"],
-        "composite_fields": list(instance.composite_key) if instance.composite_key else [instance.primary_key],
+        "composite_fields": state["composite_fields"],
         "source_rows": len(rows),
+        "previous_keys": len(previous_keys),
         "unique_keys_after": len(keys),
         "duplicates_collapsed": len(rows) - len(keys),
+        "missing_primary_keys": missing_primary_keys[:20],
+        "missing_primary_key_count": len(missing_primary_keys),
         "completed_at": state["last_sync_at"],
     }
 
@@ -430,6 +545,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch-size", type=int, help="覆盖实例 YAML 中 batch_size")
     p.add_argument("--rebuild-state", action="store_true",
                    help="按当前 composite_key/primary_key 重建 state.json；不发 webhook、不写智能表")
+    p.add_argument("--force-assume-remote-complete", action="store_true",
+                   help="仅用于 --rebuild-state：已人工核验远端完整时，把当前源数据全量标为已同步")
     return p.parse_args()
 
 
@@ -444,7 +561,11 @@ def main() -> None:
         )
 
     if args.rebuild_state:
-        summary = rebuild_state(instance)
+        summary = rebuild_state(
+            instance,
+            dry_run=args.dry_run,
+            force_assume_remote_complete=args.force_assume_remote_complete,
+        )
         print(json.dumps(summary, ensure_ascii=False, indent=2, default=str))
         return
 
