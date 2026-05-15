@@ -164,9 +164,11 @@ class CustomerFlowConverter(BaseConverter):
         void_to_value = int(((merged["next_old"].isna()) & (merged["next_insurer"].notna())).sum())
         value_to_void = int(((merged["next_old"].notna()) & (merged["next_insurer"].isna())).sum())
         value_change = int(
-            (merged["next_old"].notna())
-            & (merged["next_insurer"].notna())
-            & (merged["next_old"] != merged["next_insurer"])
+            (
+                (merged["next_old"].notna())
+                & (merged["next_insurer"].notna())
+                & (merged["next_old"] != merged["next_insurer"])
+            ).sum()
         )
         print(f"   next_insurer 漂移对照旧 parquet:")
         print(f"     空→非空（补录）: {void_to_value:,}  ← 治理目标值，越多越好")
