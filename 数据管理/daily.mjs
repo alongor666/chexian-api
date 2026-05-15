@@ -39,6 +39,7 @@ import {
   getPartitionedColumnCount,
 } from './pipelines/parquet_stats.mjs';
 import { collectPolicyCurrentStats, syncQuickReferenceFile } from './pipelines/quick_reference.mjs';
+import { assertNoPolicyCurrentOverlap } from '../scripts/lib/parquet-overlap-check.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1216,6 +1217,19 @@ async function main() {
 
   // 7a. 短中长期对照报告（失败不阻塞，先于 VPS 同步以便 rsync 顺带推 HTML）
   runPeriodTrendReport(scriptDir, python);
+
+  // 7b. ETL 末端门禁：policy/current 重叠检测（防止 2026-05-15 类裸名+限摩重复事故复发）
+  const overlapOk = assertNoPolicyCurrentOverlap(
+    join(WAREHOUSE, 'policy/current'),
+    {
+      onPass: (msg) => log('green', `✓ ${msg}`),
+      onFail: (msg) => log('red', `❌ ${msg}`),
+    }
+  );
+  if (!overlapOk) {
+    log('red', '中止 VPS 同步：current/ 存在数据翻倍风险，请先修复后重跑');
+    process.exit(1);
+  }
 
   // 7. VPS 同步
   if (noSync) {

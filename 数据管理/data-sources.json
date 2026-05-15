@@ -11,9 +11,9 @@
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-05-12",
+      "last_updated": "2026-05-15",
       "data_range": "2021-01-01 ~ 2026-05-12",
-      "row_count": 2563045,
+      "row_count": 2565922,
       "field_count": 42,
       "key_fields": [
         "保单号",
