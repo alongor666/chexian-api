@@ -54,6 +54,7 @@ class InstanceConfig:
     sheet_rpm: int
     filters: dict[str, Any]
     primary_key: str
+    composite_key: tuple[str, ...] | None  # 复合主键：声明时按 `|` 拼接去重；None 回退 primary_key
     field_mapping: dict[str, str]
     field_types: dict[str, str]
     field_labels: dict[str, str]
@@ -63,6 +64,8 @@ class InstanceConfig:
 
 def load_instance(path: Path) -> InstanceConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    composite_raw = raw.get("composite_key")
+    composite = tuple(composite_raw) if composite_raw else None
     return InstanceConfig(
         instance_name=raw["instance_name"],
         webhook_env=raw["webhook_env"],
@@ -70,6 +73,7 @@ def load_instance(path: Path) -> InstanceConfig:
         sheet_rpm=int(raw.get("sheet_records_per_minute_limit", 3000)),
         filters=raw["filters"],
         primary_key=raw.get("primary_key", "policy_no"),
+        composite_key=composite,
         field_mapping=raw["field_mapping"],
         field_types=raw.get("field_types", {}),
         field_labels=raw.get("field_labels", {}),
@@ -134,6 +138,7 @@ def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
       new_vehicle_price,
       first_registration_date,
       agent_name,
+      policy_no,
       {pk} AS _primary_key,
       /* 车价分段：运行时派生 */
       CASE
@@ -274,8 +279,29 @@ def save_state(instance: InstanceConfig, state: dict[str, Any]) -> None:
     p.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _row_key(row: dict[str, Any]) -> str:
-    """row 主键值（来自 SQL 的 _primary_key 别名列）。"""
+def _stable_value(v: Any) -> str:
+    """把任意值稳定化为字符串，用于复合主键拼接（避免 float 精度漂移与 NaN）。"""
+    if v is None:
+        return ""
+    if isinstance(v, float):
+        if v != v:  # NaN
+            return ""
+        return f"{v:.4f}"
+    if isinstance(v, datetime):
+        return v.isoformat(timespec="seconds")
+    if isinstance(v, date_cls):
+        return v.isoformat()
+    return str(v).strip()
+
+
+def _row_key(row: dict[str, Any], instance: InstanceConfig | None = None) -> str:
+    """row 唯一性键值：
+
+    - 若 instance.composite_key 声明 → 按字段顺序 `|` 拼接稳定化值
+    - 否则 → row 的 _primary_key 别名列（即 instance.primary_key 字段值）
+    """
+    if instance is not None and instance.composite_key:
+        return "|".join(_stable_value(row.get(f)) for f in instance.composite_key)
     return str(row.get("_primary_key", ""))
 
 
@@ -287,7 +313,7 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     if mode == "sync":
         state = load_state(instance)
         synced = set(state.get("synced_keys", []))
-        new_rows = [r for r in rows if _row_key(r) not in synced]
+        new_rows = [r for r in rows if _row_key(r, instance) not in synced]
         skipped = len(rows) - len(new_rows)
     else:
         state = {"synced_keys": [], "last_sync_at": None}
@@ -298,7 +324,7 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     add_records = []
     for row in new_rows:
         values = build_record_values(row, instance.field_mapping, instance.field_types)
-        add_records.append({"values": values, "_primary_key": _row_key(row)})
+        add_records.append({"values": values, "_primary_key": _row_key(row, instance)})
 
     summary: dict[str, Any] = {
         "instance_name": instance.instance_name,
@@ -369,12 +395,41 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     return summary
 
 
+def rebuild_state(instance: InstanceConfig) -> dict[str, Any]:
+    """根据当前源数据按 composite_key/primary_key 重建 state.json。
+
+    使用场景：composite_key 配置变更后，旧 state（按 primary_key 存储）需重生成。
+    本操作仅读源数据 + 写本地 state，不发 webhook、不触达智能表。
+    """
+    rows = fetch_rows(instance)
+    keys = sorted({_row_key(r, instance) for r in rows if _row_key(r, instance)})
+    state = {
+        "synced_keys": keys,
+        "last_sync_at": datetime.now(timezone.utc).isoformat(),
+        "rebuilt_from_source": True,
+        "key_strategy": "composite_key" if instance.composite_key else "primary_key",
+    }
+    save_state(instance, state)
+    return {
+        "instance_name": instance.instance_name,
+        "operation": "rebuild_state",
+        "key_strategy": state["key_strategy"],
+        "composite_fields": list(instance.composite_key) if instance.composite_key else [instance.primary_key],
+        "source_rows": len(rows),
+        "unique_keys_after": len(keys),
+        "duplicates_collapsed": len(rows) - len(keys),
+        "completed_at": state["last_sync_at"],
+    }
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="通用筛选保单 → 企业微信智能表同步引擎")
     p.add_argument("--instance", required=True, help="实例 YAML 路径")
-    p.add_argument("--mode", default="init", choices=["init", "sync"], help="init=全量 add；sync=增量 upsert（v0 未实现）")
+    p.add_argument("--mode", default="init", choices=["init", "sync"], help="init=全量 add；sync=增量 add-only")
     p.add_argument("--dry-run", action="store_true", help="仅查询并打印 sample，不写入智能表")
     p.add_argument("--batch-size", type=int, help="覆盖实例 YAML 中 batch_size")
+    p.add_argument("--rebuild-state", action="store_true",
+                   help="按当前 composite_key/primary_key 重建 state.json；不发 webhook、不写智能表")
     return p.parse_args()
 
 
@@ -387,6 +442,11 @@ def main() -> None:
         instance = InstanceConfig(
             **{**instance.__dict__, "batch_size": args.batch_size}
         )
+
+    if args.rebuild_state:
+        summary = rebuild_state(instance)
+        print(json.dumps(summary, ensure_ascii=False, indent=2, default=str))
+        return
 
     summary = run(instance, mode=args.mode, dry_run=args.dry_run)
 

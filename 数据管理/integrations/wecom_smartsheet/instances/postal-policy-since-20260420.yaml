@@ -21,6 +21,15 @@ filters:
 
 primary_key: policy_no
 
+# 复合主键：批改副本/保费拆分会让同 policy_no 出现多行（686 行里 7 行重复 → 679 unique policy_no）。
+# 仅用 policy_no 去重会让 sync 模式漏掉新进的批改记录，所以用 (policy_no, plate_no, premium, policy_date) 复合键。
+# 修改本字段后必须跑 --rebuild-state 重建 state.json。
+composite_key:
+  - policy_no
+  - plate_no
+  - premium
+  - policy_date
+
 # 字段映射：SQL 输出列名（en） → 智能表 field_id
 field_mapping:
   org_level_3:           fxxKfG      # 机构（TEXT）
