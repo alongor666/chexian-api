@@ -36,6 +36,7 @@ import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import os from 'os';
+import { assertNoPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -661,6 +662,14 @@ async function main(argv = process.argv.slice(2)) {
     log('red', `错误：SSH 预检失败: ${e.message}`);
     process.exit(1);
   }
+
+  // policy/current 重叠门禁：拒绝把翻倍数据推上 VPS
+  // 共享逻辑 → scripts/lib/parquet-overlap-check.mjs（与 check-governance + daily.mjs 同源）
+  const overlapOk = assertNoPolicyCurrentOverlap(LOCAL_CURRENT_DIR, {
+    onPass: (msg) => log('green', `✓ ${msg}`),
+    onFail: (msg) => log('red', `❌ ${msg}`),
+  });
+  if (!overlapOk) process.exit(1);
 
   if (runConfig.checkMode) {
     const dirs = collectCheckDirs();
