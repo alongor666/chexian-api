@@ -564,6 +564,31 @@ function runStrategyMultiMerge(ctx) {
   try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch (e) {}
 }
 
+// ETL 完成后调用 diagnose-period-trend skill，生成短中长期对照 HTML 报告
+// 失败仅 console.warn 不阻塞 ETL；HTML 写入 <project_root>/public/reports/diagnose-period-trend/<cutoff>.html
+function runPeriodTrendReport(scriptDir, python) {
+  const skillCli = join(homedir(), '.claude/skills/diagnose-period-trend/lib/cli.py');
+  if (!existsSync(skillCli)) {
+    console.warn(`[ETL] 跳过短中长期对照报告：skill cli.py 不存在 (${skillCli})`);
+    return;
+  }
+  const projectRoot = dirname(scriptDir);
+  log('cyan', '\n═══ 9. 短中长期对照报告（diagnose-period-trend skill）═══\n');
+  const result = spawnSync(python, [skillCli, '--project-root', projectRoot], {
+    stdio: 'inherit',
+    cwd: projectRoot,
+    env: process.env,
+    timeout: 10 * 60 * 1000,
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    console.warn(`[ETL] 短中长期对照报告生成失败（不阻塞 ETL），exit=${result.status}`);
+    if (result.error) console.warn(`        ${result.error.message}`);
+    return;
+  }
+  log('green', '✅ 短中长期对照报告已生成');
+}
+
 async function syncToVps(scriptDir) {
   log('cyan', '[ETL] 自动同步到 VPS（仅 rsync，不重启 PM2）...');
   const projectRoot = dirname(scriptDir);
@@ -913,6 +938,7 @@ async function main() {
     if (_currentReleaseManifest) {
       runRefreshMetadata(python, scriptDir, _currentReleaseManifest);
     }
+    runPeriodTrendReport(scriptDir, python);
     if (!noSync) {
       await syncToVps(scriptDir);
     }
@@ -1153,6 +1179,9 @@ async function main() {
   if (_currentReleaseManifest) {
     runRefreshMetadata(python, scriptDir, _currentReleaseManifest);
   }
+
+  // 7a. 短中长期对照报告（失败不阻塞，先于 VPS 同步以便 rsync 顺带推 HTML）
+  runPeriodTrendReport(scriptDir, python);
 
   // 7. VPS 同步
   if (noSync) {
