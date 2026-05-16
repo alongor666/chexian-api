@@ -35,6 +35,13 @@ jobs:
       - name: Build backend
         run: cd server && bun install --frozen-lockfile && bun run build
 
+      # state-db Phase 0 sandbox smoke 已在临时 worktree 验证 better-sqlite3 工作。
+      # 这里在 CI 跑一次确保（a）原生模块 build 成功 ESM import 成功；
+      # （b）后续 PR 升级 Node/better-sqlite3 时若 ABI 不兼容会被立即抓出，
+      # 而不是等到 VPS 部署后才 panic（exit 127 类错误代价更大）。
+      - name: State DB smoke (better-sqlite3 ABI sanity)
+        run: cd server && node ../scripts/state-db-smoke.mjs
+
       - name: Deploy readiness check
         run: bun scripts/check-deploy-readiness.mjs
 

@@ -88,6 +88,15 @@ export const dbEnv = {
   DATA_VERSION: process.env.DATA_VERSION ?? 'v1',
   /** 是否启用 Bundle 路由（false 字符串禁用） */
   ENABLE_QUERY_BUNDLES: process.env.ENABLE_QUERY_BUNDLES ?? 'true',
+  /**
+   * 应用状态持久层后端（v5 状态持久层迁移）
+   * - 'json'   ：保留旧路径（user_store.json / api_tokens.json），默认值，零行为变更
+   * - 'sqlite' ：启用 better-sqlite3 state.db（Phase 2/3 落地后才进入读写路径）
+   * Phase 1（仅基础层）：值为 'sqlite' 时 state-db 模块会被 init，但 store 仍走 JSON
+   */
+  STATE_STORE_BACKEND: process.env.STATE_STORE_BACKEND ?? 'json',
+  /** state.db 文件路径（仅 STATE_STORE_BACKEND=sqlite 时使用） */
+  STATE_DB_PATH: process.env.STATE_DB_PATH ?? '',
 } as const;
 
 // ─── AI 提供商配置 ─────────────────────────────────────────────────────────────

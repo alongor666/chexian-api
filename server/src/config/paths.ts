@@ -86,6 +86,29 @@ export function getApiTokenStorePath(): string {
   return path.resolve(getDataDir(), 'api_tokens.json');
 }
 
+/**
+ * state.db SQLite 文件路径（v5 状态持久层迁移）。
+ * 优先级：dbEnv.STATE_DB_PATH > server/data/state.db
+ * 仅 STATE_STORE_BACKEND=sqlite 时被 init，否则文件不会被创建。
+ */
+export function getStateDbPath(stateDbPathEnv: string): string {
+  if (stateDbPathEnv) {
+    return path.isAbsolute(stateDbPathEnv)
+      ? stateDbPathEnv
+      : path.resolve(SERVER_ROOT, stateDbPathEnv);
+  }
+  return path.resolve(getDataDir(), 'state.db');
+}
+
+/**
+ * 一次性迁移标记文件路径（v5 状态持久层迁移）。
+ * 防止 Phase 2/3 的 import-from-json 脚本在 SQLite 已迁移后重复执行。
+ * 内容：{ migrated_at, source_hash, scope } JSON。
+ */
+export function getStateMigrationLockPath(): string {
+  return path.resolve(getDataDir(), '.state-migration.lock');
+}
+
 // ── 报价转化 Parquet 路径（本地优先，VPS 回退）──
 
 export function getQuoteConversionPaths(): string[] {

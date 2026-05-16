@@ -52,9 +52,23 @@ export PATH="$(dirname "$NODE_BIN"):$PATH"
 
 **现象**：把 smoke 脚本放在 `scripts/` 跑会找不到 `node_modules/better-sqlite3`，因为 node 从脚本所在目录向上找 node_modules
 
-**缓解**：smoke 脚本运行时必须 `cd server/`（package.json 所在目录）才能正确解析依赖
+**缓解**：smoke 脚本用 `createRequire(serverDir/package.json)` 显式从 server/node_modules 解析；脚本可以从任意 cwd 调用
 
-**Phase 1 影响**：CI 集成时 `node scripts/state-db-smoke.mjs` 改为 `cd server && node ../scripts/state-db-smoke.mjs` 或者把 smoke 移到 server/scripts/
+**Phase 1 落地**：`scripts/state-db-smoke.mjs` 改用 createRequire 模式（B296 Phase 1 完成），CI `cd server && node ../scripts/state-db-smoke.mjs` 工作
+
+### 3.3 Bun runtime 与 better-sqlite3 不兼容（Phase 0 沙盒漏检）
+
+**现象**：B296 Phase 1 落地后用 `bun src/app.ts` 启动 + 显式 `STATE_STORE_BACKEND=sqlite` 抛 `ERR_DLOPEN_FAILED: 'better-sqlite3' is not yet supported in Bun.`（[bun#4290](https://github.com/oven-sh/bun/issues/4290)）
+
+**根因**：Phase 0 三路径验证全是 **Node runtime**（本地 worktree node / VPS npm 装好后 node / wrapper 用 root nvm 的 node）。**本地 dev 默认用 Bun runtime** (`bun run dev:full`)，沙盒预检没覆盖到。better-sqlite3 是 NAPI 原生模块，Bun 暂未实现 NAPI dlopen。
+
+**Phase 1 防御**（已落地）：
+1. `state-db.ts init()` 检测 `globalThis.Bun !== undefined` → 抛 friendly error（含解决方案指引），避免栈底 NAPI 报错滑梯
+2. 默认 `STATE_STORE_BACKEND=json`，本地 dev 不会触发 init，使用 JSON 文件持久层（与现状一致，零行为变更）
+3. 单元测试 mock 全局 `Bun` 覆盖此防御分支
+4. CI smoke 用 `node`，VPS PM2 启动也用 `node` — 生产路径完全不受影响
+
+**未来 Phase 5 注意**：若有"本地 sqlite 模式调试"需求，必须改用 `node dist/app.js` 或 `tsx src/app.ts`，不能用 `bun`
 
 ## 4. DuckDB 持久 DB 负面对照
 

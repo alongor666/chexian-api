@@ -12,8 +12,14 @@ import { brotliMiddleware } from './middleware/brotli.js';
 import cors from 'cors';
 import helmet from 'helmet';
 import { corsConfig } from './config/cors.js';
-import { serverEnv } from './config/env.js';
+import { serverEnv, dbEnv } from './config/env.js';
 import { duckdbService } from './services/duckdb.js';
+// state-db 仅在 STATE_STORE_BACKEND=sqlite 时动态加载（codex P1 修复 b85efba）：
+// state-db.ts 顶部 import 'better-sqlite3'，虽然 binding.js 是 lazy（new Database
+// 才 dlopen NAPI），不能依赖此隐性实现。dynamic import 把模块加载边界对齐到
+// backend 分支，保证 backend=json + Bun runtime 永远不接触 better-sqlite3。
+import type * as StateDbModule from './services/state-db.js';
+let stateDb: typeof StateDbModule | null = null;
 import { seedAccessControlData } from './services/access-control.js';
 import { loadApiTokensIntoTable } from './services/personal-access-token-store.js';
 import { DataBootstrapper } from './services/data-bootstrapper.js';
@@ -205,6 +211,12 @@ async function startServer() {
     // 1. 初始化 DuckDB + 权限
     console.log('[Server] Initializing DuckDB...');
     await duckdbService.init();
+    // State DB（v5 状态持久层 Phase 1）：仅 STATE_STORE_BACKEND=sqlite 时才动态加载并 init。
+    // dynamic import 防止默认 backend=json 模式下意外加载 better-sqlite3 触发 Bun NAPI 错误。
+    if (dbEnv.STATE_STORE_BACKEND === 'sqlite') {
+      stateDb = await import('./services/state-db.js');
+      stateDb.init();
+    }
     await seedAccessControlData();
     // PAT 持久层：DuckDB 主库是 :memory:，PM2 reload 后必须从 api_tokens.json 重建
     await loadApiTokensIntoTable();
@@ -291,6 +303,13 @@ async function gracefulShutdown(signal: string): Promise<void> {
   // 2. 关闭 DuckDB（内部会 drain 活跃查询 + 关闭连接池）
   await duckdbService.close();
   console.log('[Server] DuckDB closed');
+
+  // 3. 关闭 state-db（如已 init）。stateDb 仅在 sqlite 模式被 dynamic import 赋值；
+  // json 模式 stateDb 始终为 null，此分支直接跳过。
+  if (stateDb?.isInitialized()) {
+    stateDb.close();
+    console.log('[Server] StateDB closed');
+  }
 
   process.exit(0);
 }

@@ -15,10 +15,19 @@
  *
  * 退出码：0 = SMOKE OK；1 = 任一步骤失败（带具体错误信息）
  */
-import Database from 'better-sqlite3';
+// better-sqlite3 是 server 子项目的 dependency（不是仓库根），
+// 用 createRequire 显式从 server/node_modules 解析，无需依赖 cwd
+// 这样无论从 root 还是 server 目录跑，import 路径都稳定
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const serverDir = resolve(__dirname, '..', 'server');
+const requireFromServer = createRequire(join(serverDir, 'package.json'));
+const Database = requireFromServer('better-sqlite3');
 
 const tmp = mkdtempSync(join(tmpdir(), 'state-db-smoke-'));
 const dbPath = join(tmp, 'test.db');
