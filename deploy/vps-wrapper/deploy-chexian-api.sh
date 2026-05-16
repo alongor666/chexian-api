@@ -35,12 +35,19 @@ PM2_BIN="$NVM_BIN_DIR/pm2"
 NODE_BIN="$NVM_BIN_DIR/node"
 NPM_BIN="$NVM_BIN_DIR/npm"
 
+# 暴露 nvm 路径到 PATH：必要的兼容性补丁。
+# 理由：虽然 PM2_BIN/NODE_BIN/NPM_BIN 都用绝对路径调用，但 npm 自身是 node 脚本，
+# 其 shebang `#!/usr/bin/env node` 仍需 `node` 在 PATH 中。sudo 默认 secure_path
+# 不含 nvm 目录，导致 `"$NPM_BIN" ci` 内部启动 npm 时报：
+#   /usr/bin/env: 'node': No such file or directory
+# 之前 deploy 失败（PR #380/#381 merge 后 exit 127）的直接根因。
+# Phase 0 沙盒预检（B295 doc §3.1）已发现此问题，但当时只写在 doc 里没回写到 wrapper。
+export PATH="$NVM_BIN_DIR:$PATH"
+
 # --- 固定常量 ---
 APP_DIR="/var/www/chexian/server"
 APP_NAME="chexian-api"
 ECOSYSTEM="${APP_DIR}/ecosystem.config.cjs"
-
-# 所有二进制均用绝对路径调用，不修改 PATH
 
 # --- 子命令分发 ---
 case "${1:-help}" in
@@ -49,6 +56,10 @@ case "${1:-help}" in
     # npm ci 行为：清空 node_modules 后按 lockfile 严格安装，版本不会漂移
     # 失败模式：lockfile 缺失或与 package.json 不一致 → 立即报错，避免半升级状态
     cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev
+    # 修复混合所有权：npm ci 通过 sudo 跑会产生 root-owned 子目录（如 node_modules/express/）
+    # 这让后续 deploy.yml trap rollback 的 `rm -rf node_modules` 报 Permission denied
+    # 修法：install 末尾把 node_modules 整体 chown 到 deployer，保持单一所有权
+    chown -R deployer:deployer "$APP_DIR/node_modules"
     ;;
   start)
     "$PM2_BIN" start "$ECOSYSTEM" --env production
