@@ -111,6 +111,45 @@ jobs:
             [ -f server/ecosystem.config.cjs ] && cp server/ecosystem.config.cjs server/ecosystem.config.cjs.bak
             [ -d server/node_modules ] && cp -r server/node_modules server/node_modules.bak
 
+            # ── 注册回滚 trap：覆盖 install/reload 失败 + 健康检查失败两条路径 ──
+            # 背景（codex review P1, PR #379）：
+            #   set -e 让 install / reload 一旦失败立即退出，根本不会进入 HEALTHY=false 分支。
+            #   而 npm ci 清空旧 node_modules 后失败 = 半升级状态，正是本次改造要避免的。
+            # 策略：用 ROLLBACK_NEEDED 标志 + trap EXIT，任何非正常退出（含 set -e 中断和
+            #       显式 exit 1）都走完整回滚；HEALTHY=true 时清掉标志，trap 不动作。
+            ROLLBACK_NEEDED=true
+            rollback_deploy() {
+              local exit_code=$?
+              set +e   # 回滚内部禁止单步失败中断，确保 5 个对象都尝试还原
+              if [ "$ROLLBACK_NEEDED" = true ]; then
+                echo "Deploy failed (exit_code=$exit_code), rolling back..."
+                # 前端 dist
+                if [ -d /var/www/chexian/frontend/dist.bak ]; then
+                  rm -rf /var/www/chexian/frontend/dist
+                  mv /var/www/chexian/frontend/dist.bak /var/www/chexian/frontend/dist
+                fi
+                # 后端 dist
+                if [ -d /var/www/chexian/server/dist.bak ]; then
+                  rm -rf /var/www/chexian/server/dist
+                  mv /var/www/chexian/server/dist.bak /var/www/chexian/server/dist
+                fi
+                # 包描述文件（仅在备份存在时还原）
+                [ -f /var/www/chexian/server/package.json.bak ] && mv -f /var/www/chexian/server/package.json.bak /var/www/chexian/server/package.json
+                [ -f /var/www/chexian/server/package-lock.json.bak ] && mv -f /var/www/chexian/server/package-lock.json.bak /var/www/chexian/server/package-lock.json
+                [ -f /var/www/chexian/server/ecosystem.config.cjs.bak ] && mv -f /var/www/chexian/server/ecosystem.config.cjs.bak /var/www/chexian/server/ecosystem.config.cjs
+                # node_modules（原生模块半升级状态的关键还原点）
+                if [ -d /var/www/chexian/server/node_modules.bak ]; then
+                  rm -rf /var/www/chexian/server/node_modules
+                  mv /var/www/chexian/server/node_modules.bak /var/www/chexian/server/node_modules
+                fi
+                # 用 reload 而非 restart：确保 PM2 重读还原后的 ecosystem.config.cjs
+                sudo /usr/local/bin/deploy-chexian-api reload || echo "Rollback reload failed, manual intervention required"
+              fi
+              # 保留原始退出码：set -e 中断时是失败命令的退出码；HEALTHY=false 显式 exit 1 时是 1
+              exit $exit_code
+            }
+            trap rollback_deploy EXIT
+
             tar -xzf "/tmp/${BUNDLE_NAME}" -C "${STAGING_DIR}"
 
             rm -rf /var/www/chexian/frontend/dist
@@ -122,6 +161,7 @@ jobs:
             cp "${STAGING_DIR}/server/package-lock.json" /var/www/chexian/server/package-lock.json
             cp "${STAGING_DIR}/server/ecosystem.config.cjs" /var/www/chexian/server/ecosystem.config.cjs
 
+            # 以下任一失败都会触发 trap → 走完整回滚
             sudo /usr/local/bin/deploy-chexian-api install
             sudo /usr/local/bin/deploy-chexian-api reload
 
@@ -137,6 +177,7 @@ jobs:
 
             if [ "$HEALTHY" = true ]; then
               echo "Deploy success!"
+              ROLLBACK_NEEDED=false   # 关掉回滚标志，trap 仍会触发但不动作
               rm -rf /var/www/chexian/frontend/dist.bak
               rm -rf /var/www/chexian/server/dist.bak
               rm -f /var/www/chexian/server/package.json.bak
@@ -144,25 +185,8 @@ jobs:
               rm -f /var/www/chexian/server/ecosystem.config.cjs.bak
               rm -rf /var/www/chexian/server/node_modules.bak
             else
-              echo "Health check failed! Rolling back..."
-              # 前端 dist
-              rm -rf /var/www/chexian/frontend/dist
-              mv /var/www/chexian/frontend/dist.bak /var/www/chexian/frontend/dist
-              # 后端 dist
-              rm -rf /var/www/chexian/server/dist
-              mv /var/www/chexian/server/dist.bak /var/www/chexian/server/dist
-              # 包描述文件（仅在备份存在时还原）
-              [ -f /var/www/chexian/server/package.json.bak ] && mv -f /var/www/chexian/server/package.json.bak /var/www/chexian/server/package.json
-              [ -f /var/www/chexian/server/package-lock.json.bak ] && mv -f /var/www/chexian/server/package-lock.json.bak /var/www/chexian/server/package-lock.json
-              [ -f /var/www/chexian/server/ecosystem.config.cjs.bak ] && mv -f /var/www/chexian/server/ecosystem.config.cjs.bak /var/www/chexian/server/ecosystem.config.cjs
-              # node_modules（原生模块半升级状态的关键还原点）
-              if [ -d /var/www/chexian/server/node_modules.bak ]; then
-                rm -rf /var/www/chexian/server/node_modules
-                mv /var/www/chexian/server/node_modules.bak /var/www/chexian/server/node_modules
-              fi
-              # 用 reload 而非 restart：确保 PM2 重读还原后的 ecosystem.config.cjs
-              sudo /usr/local/bin/deploy-chexian-api reload
-              exit 1
+              echo "Health check failed!"
+              exit 1   # 显式失败 → trap 触发 rollback_deploy
             fi
 
             rm -f "/tmp/${BUNDLE_NAME}"
