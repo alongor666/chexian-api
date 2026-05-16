@@ -672,28 +672,100 @@ function checkTsconfigTypecheckScope() {
 }
 
 // ============================================================
-// 第12项检查：包管理器锁文件策略（Bun-only）
+// 第12项检查：包管理器锁文件策略
+//   - root: Bun-only（保持现状，CI/dev 用 Bun）
+//   - server/: bun.lock + package-lock.json 共存例外
+//     CI build 用 bun install --frozen-lockfile，
+//     VPS wrapper 用 npm ci --omit=dev（见 deploy/vps-wrapper/deploy-chexian-api.sh）
 // ============================================================
 
 function checkPackageManagerLockPolicy() {
-  info('检查包管理器锁文件策略（Bun-only）...');
+  info('检查包管理器锁文件策略（root: Bun-only / server: 双锁定）...');
 
-  const lockfiles = ['bun.lock', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'];
-  const existing = lockfiles.filter((name) => fs.existsSync(path.join(ROOT_DIR, name)));
+  // ── root: 仍 Bun-only ──
+  const rootLockfiles = ['bun.lock', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'];
+  const rootExisting = rootLockfiles.filter((name) => fs.existsSync(path.join(ROOT_DIR, name)));
 
-  if (!existing.includes('bun.lock')) {
-    error('缺少 bun.lock（项目默认执行器为 Bun）');
+  if (!rootExisting.includes('bun.lock')) {
+    error('root: 缺少 bun.lock（项目默认执行器为 Bun）');
     return false;
   }
 
-  const disallowed = existing.filter((name) => name !== 'bun.lock');
-  if (disallowed.length > 0) {
-    error(`检测到非 Bun 锁文件：${disallowed.join(', ')}`);
-    console.log('    - 请移除非 Bun 锁文件，避免依赖解析漂移');
+  const rootDisallowed = rootExisting.filter((name) => name !== 'bun.lock');
+  if (rootDisallowed.length > 0) {
+    error(`root: 检测到非 Bun 锁文件：${rootDisallowed.join(', ')}`);
+    console.log('    - root 仍是 Bun-only，禁止 npm/yarn/pnpm 锁文件');
     return false;
   }
 
-  success('包管理器锁文件策略检查通过');
+  // ── server: 显式双锁定例外 ──
+  const serverDir = path.join(ROOT_DIR, 'server');
+  if (!fs.existsSync(serverDir)) {
+    success('包管理器锁文件策略检查通过（无 server 目录）');
+    return true;
+  }
+
+  const serverBunLock = path.join(serverDir, 'bun.lock');
+  const serverNpmLock = path.join(serverDir, 'package-lock.json');
+  if (!fs.existsSync(serverBunLock)) {
+    error('server: 缺少 server/bun.lock（CI build 用 bun install --frozen-lockfile）');
+    return false;
+  }
+  if (!fs.existsSync(serverNpmLock)) {
+    error('server: 缺少 server/package-lock.json（VPS wrapper 用 npm ci --omit=dev）');
+    console.log('    - 见 deploy/vps-wrapper/deploy-chexian-api.sh install 子命令');
+    return false;
+  }
+
+  // ── 内容一致性：server/package.json 的生产依赖必须在两个 lockfile 都被锁定 ──
+  // 防止 deploy bundle 携带的 lockfile 与 CI build 时使用的依赖版本漂移
+  try {
+    const serverPkg = JSON.parse(fs.readFileSync(path.join(serverDir, 'package.json'), 'utf-8'));
+    const prodDeps = Object.keys(serverPkg.dependencies || {});
+    if (prodDeps.length > 0) {
+      const bunLockContent = fs.readFileSync(serverBunLock, 'utf-8');
+      const npmLock = JSON.parse(fs.readFileSync(serverNpmLock, 'utf-8'));
+      const npmLockedPackages = new Set(
+        Object.keys(npmLock.packages || {})
+          .filter((p) => p.startsWith('node_modules/'))
+          .map((p) => p.replace(/^node_modules\//, ''))
+      );
+
+      const missing = [];
+      for (const dep of prodDeps) {
+        // bun.lock 文本格式，按 `"<dep>":` 或 `"<dep>@` 模式匹配
+        const inBun = bunLockContent.includes(`"${dep}":`) || bunLockContent.includes(`"${dep}@`);
+        const inNpm = npmLockedPackages.has(dep);
+        if (!inBun || !inNpm) {
+          missing.push(`${dep} (bun=${inBun ? 'Y' : 'N'} npm=${inNpm ? 'Y' : 'N'})`);
+        }
+      }
+      if (missing.length > 0) {
+        error(`server: 生产依赖未在两个 lockfile 同时锁定：${missing.join(', ')}`);
+        console.log('    - 执行 `cd server && bun install && npm install` 让两边重新解析');
+        return false;
+      }
+    }
+  } catch (err) {
+    error(`server: 锁文件内容校验失败：${err.message}`);
+    return false;
+  }
+
+  // ── deploy bundle 必须打包 server/package-lock.json ──
+  // 防止改 deploy.yml 时漏掉 lockfile，导致 wrapper 的 npm ci 在 VPS 失败
+  const deployYmlPath = path.join(ROOT_DIR, '.github/workflows/deploy.yml');
+  if (fs.existsSync(deployYmlPath)) {
+    const deployYml = fs.readFileSync(deployYmlPath, 'utf-8');
+    if (!deployYml.includes('tar -czf deploy-bundle.tar.gz')) {
+      // deploy.yml 改用其他打包方式 → 跳过检查（保持向前兼容）
+    } else if (!deployYml.includes('server/package-lock.json')) {
+      error('deploy.yml 的 deploy bundle 未包含 server/package-lock.json');
+      console.log('    - VPS wrapper 用 npm ci，必须 bundle 携带 lockfile');
+      return false;
+    }
+  }
+
+  success('包管理器锁文件策略检查通过（root: bun-only / server: 双锁定 + bundle 一致）');
   return true;
 }
 
