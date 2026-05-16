@@ -40,10 +40,13 @@ jobs:
 
       - name: Create deploy bundle
         run: |
+          # 加入 server/package-lock.json：wrapper install 改用 npm ci --omit=dev，
+          # 必须有 lockfile 才能保证 VPS 安装的依赖版本与 CI 构建一致。
           tar -czf deploy-bundle.tar.gz \
             dist/ \
             server/dist/ \
             server/package.json \
+            server/package-lock.json \
             server/ecosystem.config.cjs
 
       - name: Deploy to VPS
@@ -97,8 +100,16 @@ jobs:
 
             cd /var/www/chexian
 
+            # ── 备份阶段：原生模块 + 锁文件回滚需要完整快照 ──
+            # 仅 dist 回滚不够：npm ci --omit=dev 会重建 node_modules，
+            # 若新版本的 better-sqlite3 等原生依赖编译失败或运行时异常，
+            # 必须能还原到部署前的 node_modules + lockfile + package.json 状态。
             [ -d frontend/dist ] && cp -r frontend/dist frontend/dist.bak
             [ -d server/dist ] && cp -r server/dist server/dist.bak
+            [ -f server/package.json ] && cp server/package.json server/package.json.bak
+            [ -f server/package-lock.json ] && cp server/package-lock.json server/package-lock.json.bak
+            [ -f server/ecosystem.config.cjs ] && cp server/ecosystem.config.cjs server/ecosystem.config.cjs.bak
+            [ -d server/node_modules ] && cp -r server/node_modules server/node_modules.bak
 
             tar -xzf "/tmp/${BUNDLE_NAME}" -C "${STAGING_DIR}"
 
@@ -108,6 +119,7 @@ jobs:
             rm -rf /var/www/chexian/server/dist
             mv "${STAGING_DIR}/server/dist" /var/www/chexian/server/dist
             cp "${STAGING_DIR}/server/package.json" /var/www/chexian/server/package.json
+            cp "${STAGING_DIR}/server/package-lock.json" /var/www/chexian/server/package-lock.json
             cp "${STAGING_DIR}/server/ecosystem.config.cjs" /var/www/chexian/server/ecosystem.config.cjs
 
             sudo /usr/local/bin/deploy-chexian-api install
@@ -127,13 +139,29 @@ jobs:
               echo "Deploy success!"
               rm -rf /var/www/chexian/frontend/dist.bak
               rm -rf /var/www/chexian/server/dist.bak
+              rm -f /var/www/chexian/server/package.json.bak
+              rm -f /var/www/chexian/server/package-lock.json.bak
+              rm -f /var/www/chexian/server/ecosystem.config.cjs.bak
+              rm -rf /var/www/chexian/server/node_modules.bak
             else
               echo "Health check failed! Rolling back..."
+              # 前端 dist
               rm -rf /var/www/chexian/frontend/dist
               mv /var/www/chexian/frontend/dist.bak /var/www/chexian/frontend/dist
+              # 后端 dist
               rm -rf /var/www/chexian/server/dist
               mv /var/www/chexian/server/dist.bak /var/www/chexian/server/dist
-              sudo /usr/local/bin/deploy-chexian-api restart
+              # 包描述文件（仅在备份存在时还原）
+              [ -f /var/www/chexian/server/package.json.bak ] && mv -f /var/www/chexian/server/package.json.bak /var/www/chexian/server/package.json
+              [ -f /var/www/chexian/server/package-lock.json.bak ] && mv -f /var/www/chexian/server/package-lock.json.bak /var/www/chexian/server/package-lock.json
+              [ -f /var/www/chexian/server/ecosystem.config.cjs.bak ] && mv -f /var/www/chexian/server/ecosystem.config.cjs.bak /var/www/chexian/server/ecosystem.config.cjs
+              # node_modules（原生模块半升级状态的关键还原点）
+              if [ -d /var/www/chexian/server/node_modules.bak ]; then
+                rm -rf /var/www/chexian/server/node_modules
+                mv /var/www/chexian/server/node_modules.bak /var/www/chexian/server/node_modules
+              fi
+              # 用 reload 而非 restart：确保 PM2 重读还原后的 ecosystem.config.cjs
+              sudo /usr/local/bin/deploy-chexian-api reload
               exit 1
             fi
 
