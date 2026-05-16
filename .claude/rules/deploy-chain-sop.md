@@ -3,30 +3,31 @@
 > 来源：PR #379 Phase 1-pre 部署链改造实施过程中沉淀的三条规则。
 > 适用：任何改动 `deploy/`、`.github/workflows/deploy.yml`、`scripts/sync-vps.mjs` 的 PR。
 
-## 1. Wrapper 源文件 vs runtime 二分（CRITICAL）
+## 1. Wrapper 源/runtime 同步（B294 已实施：CI 自动）
 
-**事实**：
+**历史背景（B292/B293 已修复）**：
 - 仓库源码：`deploy/vps-wrapper/deploy-chexian-api.sh`
 - VPS runtime：`/usr/local/bin/deploy-chexian-api`（受限 sudoers 路径，由 root 安装）
+- 历史问题：改 wrapper 源文件 + PR merge **曾经不会**自动同步到 VPS runtime（PR #379 之前都靠手工 root sync，长期漂移到 25 行旧版）。
 
-**后果**：
-- 改 wrapper 源文件 + PR merge **不会**自动同步到 VPS runtime
-- CI 部署链 ssh 调用的是 VPS 上的旧 wrapper（旧的 `npm install` 行为、旧的子命令集）
-- 表现是"PR 合并了但改造只生效一半"
+**现状（B294 之后）**：
+- `deploy/vps-wrapper/deploy-chexian-api.sh` 已加入 deploy bundle
+- VPS wrapper 含 `self-update` 子命令：从 `/var/www/chexian/server/.wrapper-source/deploy-chexian-api.sh` 自我替换（cmp 检测无变化时 skip）
+- `.github/workflows/deploy.yml` 在 `install` 之前调 `sudo /usr/local/bin/deploy-chexian-api self-update`
+- 任何 wrapper 源文件改动随 PR merge → CI 自动同步 → 5 分钟内 VPS runtime 更新到位
+- sudoers 不变：self-update 仍属同一 wrapper 的子命令，沿用现有 `deployer ALL=(root) NOPASSWD: /usr/local/bin/deploy-chexian-api`
 
-**正确做法**：
-1. wrapper 源文件变更的 PR 合并后，**第一件事**由 root 手工执行：
-   ```bash
-   ssh root@vps
-   sudo cp /var/www/chexian/.../deploy-chexian-api.sh /usr/local/bin/deploy-chexian-api
-   sudo chmod 755 /usr/local/bin/deploy-chexian-api
-   sudo /usr/local/bin/deploy-chexian-api doctor   # 验证新子命令上线
-   ```
-2. 同步完成后再触发新部署，让新 CI deploy.yml 与新 wrapper 配合验证
-3. 监控窗口必须覆盖 wrapper 同步 + 后续一次 deploy 的全程
+**Bootstrap（仅首次需要）**：
+- B294 PR 合并时，VPS wrapper 已经手工预装含 self-update 的版本（B293 SSH sync 已铺到位）
+- 之后所有 wrapper 改动 PR 都不需要任何手工操作
 
-**兜底建议（未实施）**：
-- deploy.yml 可加 wrapper diff 检测步骤：对比 `deploy/vps-wrapper/deploy-chexian-api.sh` 与 VPS 上 `/usr/local/bin/deploy-chexian-api` 的 hash，不一致就在 CI 输出**警告**（不自动 sudo cp，避免提权）
+**降级策略**：
+- 若 self-update 失败（旧 wrapper 不识别子命令 / 源损坏被 `bash -n` 拒绝）：`|| true` 让 deploy 继续，旧 wrapper 保持工作（无半升级风险）
+- 真正坏的 wrapper 改动会在后续 install/reload 失败时被 trap rollback 链路抓出（覆盖完整 5 对象还原）
+
+**禁止**：
+- ❌ 手工 sudo cp wrapper 到 VPS（破坏 CI 单一来源原则，导致 main 与 VPS 漂移再现）
+- ❌ deploy.yml 跳过 self-update 步骤（即使认为 wrapper 无改动，cmp 检测会自动 skip 不增成本）
 
 ## 2. 部署链 PR 不可 auto-merge（RED LINE）
 
