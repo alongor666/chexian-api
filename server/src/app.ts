@@ -12,8 +12,9 @@ import { brotliMiddleware } from './middleware/brotli.js';
 import cors from 'cors';
 import helmet from 'helmet';
 import { corsConfig } from './config/cors.js';
-import { serverEnv } from './config/env.js';
+import { serverEnv, dbEnv } from './config/env.js';
 import { duckdbService } from './services/duckdb.js';
+import * as stateDb from './services/state-db.js';
 import { seedAccessControlData } from './services/access-control.js';
 import { loadApiTokensIntoTable } from './services/personal-access-token-store.js';
 import { DataBootstrapper } from './services/data-bootstrapper.js';
@@ -205,6 +206,10 @@ async function startServer() {
     // 1. 初始化 DuckDB + 权限
     console.log('[Server] Initializing DuckDB...');
     await duckdbService.init();
+    // State DB（v5 状态持久层 Phase 1）：仅 STATE_STORE_BACKEND=sqlite 才 init，默认 'json' 跳过
+    if (dbEnv.STATE_STORE_BACKEND === 'sqlite') {
+      stateDb.init();
+    }
     await seedAccessControlData();
     // PAT 持久层：DuckDB 主库是 :memory:，PM2 reload 后必须从 api_tokens.json 重建
     await loadApiTokensIntoTable();
@@ -291,6 +296,12 @@ async function gracefulShutdown(signal: string): Promise<void> {
   // 2. 关闭 DuckDB（内部会 drain 活跃查询 + 关闭连接池）
   await duckdbService.close();
   console.log('[Server] DuckDB closed');
+
+  // 3. 关闭 state-db（如已 init）
+  if (stateDb.isInitialized()) {
+    stateDb.close();
+    console.log('[Server] StateDB closed');
+  }
 
   process.exit(0);
 }

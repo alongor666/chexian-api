@@ -1696,6 +1696,121 @@ function checkEtlMultiSheetCompliance() {
 }
 
 // ============================================================
+// state-db 依赖隔离（B296 Phase 1）
+// ============================================================
+
+/**
+ * state.db 模块仅供 API server 使用，CLI/MCP/前端必须走 HTTP API。
+ *
+ * 检查：
+ * 1) better-sqlite3 仅出现在 server/package.json（root + 未来 cli/mcp 不可有）
+ * 2) state-db.ts 含访问契约注释（"ONLY ... may import"）
+ * 3) state-db.js 的 import 来源仅来自白名单文件（防止意外扩散）
+ *
+ * 白名单（Phase 1 起，Phase 2/3 时 append）：
+ * - server/src/app.ts                              （init/close 生命周期）
+ * - server/src/services/state-db-schema.ts         （同包 schema 模块）
+ * - server/src/services/__tests__/state-db.test.ts （单元测试）
+ * 未来 Phase 2 加 access-control-store.ts；Phase 3 加 personal-access-token-store.ts
+ */
+function checkStateDbDependencyIsolation() {
+  info('检查 state-db 依赖隔离（B296 Phase 1）...');
+
+  // 1) 仓库根 package.json 不能含 better-sqlite3
+  const rootPkgPath = path.join(ROOT_DIR, 'package.json');
+  if (fs.existsSync(rootPkgPath)) {
+    const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf-8'));
+    const allRootDeps = {
+      ...(rootPkg.dependencies || {}),
+      ...(rootPkg.devDependencies || {}),
+    };
+    if (allRootDeps['better-sqlite3']) {
+      error('root package.json 不允许引入 better-sqlite3（仅 server 可用）');
+      console.log('    - 状态持久层是后端权威写入口，前端构建工具链不应携带原生模块');
+      return false;
+    }
+  }
+
+  // 1b) 未来 cli/ mcp/ 目录创建时也不能引入 better-sqlite3
+  for (const dir of ['cli', 'mcp']) {
+    const pkgPath = path.join(ROOT_DIR, dir, 'package.json');
+    if (!fs.existsSync(pkgPath)) continue; // 目录不存在则跳过（未来扩展）
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    const deps = {
+      ...(pkg.dependencies || {}),
+      ...(pkg.devDependencies || {}),
+    };
+    if (deps['better-sqlite3']) {
+      error(`${dir}/package.json 不允许引入 better-sqlite3（必须走 HTTP API 客户端）`);
+      console.log('    - CLI/MCP 是 PAT 持有者，通过 /api/* 调 API，禁止 require 原生 SQLite');
+      return false;
+    }
+  }
+
+  // 2) state-db.ts 文件头契约注释存在
+  const stateDbPath = path.join(ROOT_DIR, 'server/src/services/state-db.ts');
+  if (!fs.existsSync(stateDbPath)) {
+    success('state-db.ts 尚未创建，跳过依赖隔离检查（B296 未启用）');
+    return true;
+  }
+  const stateDbSrc = fs.readFileSync(stateDbPath, 'utf-8');
+  if (!stateDbSrc.includes('ONLY')) {
+    error('state-db.ts 缺少访问契约注释（应含 "ONLY {access-control,personal-access-token}-store.ts may import"）');
+    return false;
+  }
+
+  // 3) state-db 的 import 来源限白名单
+  const allowedImporters = new Set([
+    'server/src/app.ts',
+    'server/src/services/state-db-schema.ts',
+    'server/src/services/__tests__/state-db.test.ts',
+    // Phase 2 待加：server/src/services/access-control-store.ts
+    // Phase 3 待加：server/src/services/personal-access-token-store.ts
+  ]);
+
+  const serverSrc = path.join(ROOT_DIR, 'server/src');
+  const violators = [];
+
+  function walk(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.tsx')) continue;
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      // 匹配 import 'state-db' / 'state-db.js' 但排除 'state-db-schema'
+      const importsStateDb =
+        /from\s+['"][^'"]*\/state-db(?:\.js)?['"]/m.test(content) ||
+        /import\s+['"][^'"]*\/state-db(?:\.js)?['"]/m.test(content);
+      if (!importsStateDb) continue;
+
+      const relPath = path.relative(ROOT_DIR, fullPath);
+      // 自身免检
+      if (relPath === 'server/src/services/state-db.ts') continue;
+      if (!allowedImporters.has(relPath)) {
+        violators.push(relPath);
+      }
+    }
+  }
+  walk(serverSrc);
+
+  if (violators.length > 0) {
+    error('未授权的 state-db 导入：');
+    for (const v of violators) console.log(`    - ${v}`);
+    console.log('    修复：');
+    console.log('    - 通过 *-store.ts Repository 层访问，不要直接 import state-db');
+    console.log('    - 确属必要时，在 check-governance.mjs 的 allowedImporters 白名单中添加');
+    return false;
+  }
+
+  success('state-db 依赖隔离通过（root/cli/mcp 无 better-sqlite3 + 契约注释存在 + 导入白名单受控）');
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -1728,6 +1843,7 @@ function main() {
     { name: 'SQL模块数一致', fn: checkSqlModuleCountConsistency },
     { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
     { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
+    { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
   ];
 
   let passedCount = 0;
