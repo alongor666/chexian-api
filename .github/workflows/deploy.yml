@@ -42,12 +42,15 @@ jobs:
         run: |
           # 加入 server/package-lock.json：wrapper install 改用 npm ci --omit=dev，
           # 必须有 lockfile 才能保证 VPS 安装的依赖版本与 CI 构建一致。
+          # 加入 deploy/vps-wrapper/deploy-chexian-api.sh：供 wrapper self-update
+          # 子命令自我替换，避免每次 wrapper 改动都要手工 root sync（B294）。
           tar -czf deploy-bundle.tar.gz \
             dist/ \
             server/dist/ \
             server/package.json \
             server/package-lock.json \
-            server/ecosystem.config.cjs
+            server/ecosystem.config.cjs \
+            deploy/vps-wrapper/deploy-chexian-api.sh
 
       - name: Deploy to VPS
         env:
@@ -161,7 +164,15 @@ jobs:
             cp "${STAGING_DIR}/server/package-lock.json" /var/www/chexian/server/package-lock.json
             cp "${STAGING_DIR}/server/ecosystem.config.cjs" /var/www/chexian/server/ecosystem.config.cjs
 
+            # 投放 wrapper 源到固定路径，供 self-update 子命令读取（B294）
+            mkdir -p /var/www/chexian/server/.wrapper-source
+            cp "${STAGING_DIR}/deploy/vps-wrapper/deploy-chexian-api.sh" /var/www/chexian/server/.wrapper-source/deploy-chexian-api.sh
+
             # 以下任一失败都会触发 trap → 走完整回滚
+            # self-update：cmp 检测无变化则 skip；旧 wrapper 不识别此子命令时 exit 1
+            # → 用 || true 优雅降级（旧 wrapper 不动，下次 wrapper 改动 PR 也不阻塞）
+            # 即使源损坏未被替换，旧 wrapper 仍正常工作（无半升级风险）
+            sudo /usr/local/bin/deploy-chexian-api self-update || echo "[self-update] non-fatal (old wrapper or source rejected)"
             sudo /usr/local/bin/deploy-chexian-api install
             sudo /usr/local/bin/deploy-chexian-api reload
 

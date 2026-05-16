@@ -4,9 +4,10 @@
 # 配合 sudoers: deployer ALL=(root) NOPASSWD: /usr/local/bin/deploy-chexian-api
 #
 # 安全设计:
-#   - 子命令白名单，只允许 install/start/restart/reload/stop/status/describe/logs/save
+#   - 子命令白名单，只允许 install/start/restart/reload/stop/status/describe/logs/save/doctor/self-update
 #   - start 仅允许固定 ecosystem 文件路径，防止任意脚本执行
 #   - install 仅在 /var/www/chexian/server 下执行，防止目录逃逸
+#   - self-update 只从固定路径 $APP_DIR/.wrapper-source/ 读取，由 deploy bundle 投放
 #   - 自动探测 root nvm 下的 PM2 绝对路径，不依赖 $PATH
 set -euo pipefail
 umask 0027
@@ -91,20 +92,51 @@ case "${1:-help}" in
     echo "PM2_BIN=$PM2_BIN"
     echo "NODE_VERSION=$("$NODE_BIN" --version 2>&1)"
     ;;
+  self-update)
+    # 从 deploy bundle 投放的 wrapper 源自我替换。
+    # 流程：
+    #   1) 由 deploy.yml 在 install 之前 cp 仓库源到固定路径
+    #   2) CI ssh 调 `sudo /usr/local/bin/deploy-chexian-api self-update`
+    #   3) cmp 检测：无变化 skip，有变化备份后替换
+    # 安全：SOURCE 路径固定，不接受参数，无目录逃逸风险
+    SOURCE="$APP_DIR/.wrapper-source/deploy-chexian-api.sh"
+    CURRENT="/usr/local/bin/deploy-chexian-api"
+    if [ ! -f "$SOURCE" ]; then
+      echo "[self-update] $SOURCE 不存在，跳过（deploy bundle 未包含 wrapper 源？）"
+      exit 0
+    fi
+    # 语法校验：损坏的源不允许替换 runtime
+    if ! bash -n "$SOURCE" 2>/dev/null; then
+      echo "[self-update] 错误: 源文件语法不通过 $SOURCE" >&2
+      exit 1
+    fi
+    # 无变化跳过：避免每次 deploy 都重写 wrapper
+    if cmp -s "$SOURCE" "$CURRENT"; then
+      echo "[self-update] wrapper 已是最新，无需更新"
+      exit 0
+    fi
+    # 备份 + 替换：cp 而非 mv，保留 SELinux 上下文与 inode 关联
+    TS=$(date +%Y%m%d%H%M%S)
+    cp "$CURRENT" "$CURRENT.bak.$TS"
+    cp "$SOURCE" "$CURRENT"
+    chmod 755 "$CURRENT"
+    echo "[self-update] wrapper 已更新（备份: $CURRENT.bak.$TS）"
+    ;;
   help|*)
-    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor}"
+    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor|self-update}"
     echo ""
     echo "子命令:"
-    echo "  install   在 $APP_DIR 执行 npm ci --omit=dev (要求 package-lock.json)"
-    echo "  start     启动 PM2 进程 (ecosystem.config.cjs)"
-    echo "  restart   重启 PM2 进程 (保留环境变量)"
-    echo "  reload    删除后重新启动 (重读 ecosystem 配置)"
-    echo "  stop      停止 PM2 进程"
-    echo "  status    查看 PM2 进程列表"
-    echo "  describe  查看进程详情"
-    echo "  logs [N]  查看最近 N 行日志 (默认 50)"
-    echo "  save      保存 PM2 进程列表 (用于开机自启)"
-    echo "  doctor    输出探测到的 NODE_BIN/NPM_BIN/PM2_BIN + 版本，供外部脚本 eval"
+    echo "  install      在 $APP_DIR 执行 npm ci --omit=dev (要求 package-lock.json)"
+    echo "  start        启动 PM2 进程 (ecosystem.config.cjs)"
+    echo "  restart      重启 PM2 进程 (保留环境变量)"
+    echo "  reload       删除后重新启动 (重读 ecosystem 配置)"
+    echo "  stop         停止 PM2 进程"
+    echo "  status       查看 PM2 进程列表"
+    echo "  describe     查看进程详情"
+    echo "  logs [N]     查看最近 N 行日志 (默认 50)"
+    echo "  save         保存 PM2 进程列表 (用于开机自启)"
+    echo "  doctor       输出探测到的 NODE_BIN/NPM_BIN/PM2_BIN + 版本，供外部脚本 eval"
+    echo "  self-update  从 deploy bundle 投放的 wrapper 源自我替换 (CI 在 install 前调用)"
     exit 1
     ;;
 esac
