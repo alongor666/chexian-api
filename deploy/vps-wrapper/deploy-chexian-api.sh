@@ -44,7 +44,10 @@ ECOSYSTEM="${APP_DIR}/ecosystem.config.cjs"
 # --- 子命令分发 ---
 case "${1:-help}" in
   install)
-    cd "$APP_DIR" && "$NPM_BIN" install --production
+    # 锁文件驱动安装：要求 server/package-lock.json 存在（由 deploy.yml bundle 提供）
+    # npm ci 行为：清空 node_modules 后按 lockfile 严格安装，版本不会漂移
+    # 失败模式：lockfile 缺失或与 package.json 不一致 → 立即报错，避免半升级状态
+    cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev
     ;;
   start)
     "$PM2_BIN" start "$ECOSYSTEM" --env production
@@ -79,11 +82,20 @@ case "${1:-help}" in
   save)
     "$PM2_BIN" save
     ;;
+  doctor)
+    # 只读输出 wrapper 探测到的二进制路径与版本
+    # 用途：外部脚本（Phase 0 沙盒、smoke、备份）通过 `eval "$(... doctor)"` 注入环境
+    # 避免从 `pm2 describe` 输出中 grep 路径这种脆弱模式
+    echo "NODE_BIN=$NODE_BIN"
+    echo "NPM_BIN=$NPM_BIN"
+    echo "PM2_BIN=$PM2_BIN"
+    echo "NODE_VERSION=$("$NODE_BIN" --version 2>&1)"
+    ;;
   help|*)
-    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save}"
+    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor}"
     echo ""
     echo "子命令:"
-    echo "  install   在 $APP_DIR 执行 npm install --production"
+    echo "  install   在 $APP_DIR 执行 npm ci --omit=dev (要求 package-lock.json)"
     echo "  start     启动 PM2 进程 (ecosystem.config.cjs)"
     echo "  restart   重启 PM2 进程 (保留环境变量)"
     echo "  reload    删除后重新启动 (重读 ecosystem 配置)"
@@ -92,6 +104,7 @@ case "${1:-help}" in
     echo "  describe  查看进程详情"
     echo "  logs [N]  查看最近 N 行日志 (默认 50)"
     echo "  save      保存 PM2 进程列表 (用于开机自启)"
+    echo "  doctor    输出探测到的 NODE_BIN/NPM_BIN/PM2_BIN + 版本，供外部脚本 eval"
     exit 1
     ;;
 esac
