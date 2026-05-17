@@ -91,6 +91,35 @@ curl -s -o /dev/null -w '%{http_code}\n' https://chexian.cretvalu.com/health
 # 期望 200
 ```
 
+## 3.5 生成多年保单赔付发展报告（可选）
+
+ETL 完成、数据校验通过后，可选择重生成 diagnose-loss-development v2.1 报告
+（1 主页 + 75 副维度归因子页），自动部署到 `chexian.cretvalu.com/api/reports/`。
+
+```bash
+# 步骤 A：本地生成报告到 server/data/reports/diagnose-loss-development/<cutoff>/
+python3 ~/.claude/skills/diagnose-loss-development/lib/cli.py \
+  --cutoff $(date +%F) \
+  --project-root "$(pwd)" \
+  --deploy
+# 输出末尾会打印生产 URL（约 2 分钟，含 75 子页生成）
+
+# 步骤 B：rsync 同步到 VPS（与 Step 2 的 sync-vps 合并执行，--no-delete 累积历史快照）
+node scripts/sync-vps.mjs
+
+# 步骤 C：推送企微通知（v2.2 自动化前，先手动调用）
+# 主页 URL：https://chexian.cretvalu.com/api/reports/diagnose-loss-development/<cutoff>/preview-mvp.html
+# 临时方案：在企微群发消息 + 粘贴 URL
+# 正式方案：v2.2 在 push_html.py 加 --external-url 参数支持多文件报告
+```
+
+**验证清单**：
+
+- [ ] cli.py 输出含 `[OK] 部署 URL: https://chexian.cretvalu.com/api/reports/...`
+- [ ] curl 主页（带 admin cookie）返回 200 + HTML
+- [ ] curl 子页（含 `drill/team/<hash>.html`）返回 200
+- [ ] 浏览器打开主页 → 点维度值 → 跳转下钻子页 → 返回主页正常
+
 ## 4. 故障排查
 
 | 症状 | 根因 | 修复 |

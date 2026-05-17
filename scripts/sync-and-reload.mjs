@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 全流程入口：ETL → governance → PM2 reload → 健康检查
+ * 全流程入口：ETL → governance → PM2 reload → 健康检查 → 可选企微同步
  *
  * 设计哲学：daily.mjs 单一职责（ETL + rsync），本脚本负责"上线变更"全流程。
  *
@@ -9,12 +9,16 @@
  *   2. bun run governance                         （24+ 项校验，失败则中止）
  *   3. ssh sudo /usr/local/bin/deploy-chexian-api reload  （pm2 delete + start，可恢复 errored）
  *   4. curl https://chexian.cretvalu.com/health   （重试 8 次 / 5 秒间隔）
+ *   5. 可选：批量同步机构续保追踪企业微信智能表格
  *
  * 使用：
  *   node scripts/sync-and-reload.mjs                        # daily.mjs all
  *   node scripts/sync-and-reload.mjs premium                # 仅保费域
  *   node scripts/sync-and-reload.mjs --skip-governance      # 跳过 governance（不推荐）
  *   node scripts/sync-and-reload.mjs --skip-reload          # 仅 ETL+governance，不重启
+ *   node scripts/sync-and-reload.mjs --wecom                # 线上健康后同步企微机构续保表
+ *   node scripts/sync-and-reload.mjs --wecom-dry-run        # 只打印企微同步计划
+ *   node scripts/sync-and-reload.mjs --wecom --wecom-org 新都,资阳
  *   node scripts/sync-and-reload.mjs --dry-run              # 仅打印计划，不执行
  *
  * 任一阶段失败立即退出且告知排查方向，不进入后续阶段。
@@ -45,13 +49,34 @@ function log(color, msg) {
 }
 
 function parseArgs(argv) {
-  const opts = { dryRun: false, skipGovernance: false, skipReload: false, dailyArgs: [] };
-  for (const a of argv) {
+  const opts = {
+    dryRun: false,
+    skipGovernance: false,
+    skipReload: false,
+    wecom: false,
+    wecomDryRun: false,
+    wecomOrg: null,
+    dailyArgs: [],
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
     if (a === '--dry-run') opts.dryRun = true;
     else if (a === '--skip-governance') opts.skipGovernance = true;
     else if (a === '--skip-reload') opts.skipReload = true;
+    else if (a === '--wecom') opts.wecom = true;
+    else if (a === '--wecom-dry-run') {
+      opts.wecom = true;
+      opts.wecomDryRun = true;
+    }
+    else if (a === '--wecom-org') {
+      opts.wecomOrg = argv[++i];
+      if (!opts.wecomOrg) throw new Error('--wecom-org 需要机构列表，例如：--wecom-org 新都,资阳');
+    }
+    else if (a.startsWith('--wecom-org=')) {
+      opts.wecomOrg = a.slice('--wecom-org='.length);
+    }
     else if (a === '--help' || a === '-h') {
-      log('cyan', '用法：node scripts/sync-and-reload.mjs [daily.mjs subcommand] [--dry-run] [--skip-governance] [--skip-reload]');
+      log('cyan', '用法：node scripts/sync-and-reload.mjs [daily.mjs subcommand] [--dry-run] [--skip-governance] [--skip-reload] [--wecom|--wecom-dry-run] [--wecom-org 机构列表]');
       process.exit(0);
     } else opts.dailyArgs.push(a);
   }
@@ -113,6 +138,8 @@ async function main() {
   log('cyan', `  health url:        ${healthUrl}`);
   log('cyan', `  skip governance:   ${opts.skipGovernance}`);
   log('cyan', `  skip reload:       ${opts.skipReload}`);
+  log('cyan', `  wecom:             ${opts.wecom}${opts.wecomDryRun ? ' (dry-run)' : ''}`);
+  if (opts.wecomOrg) log('cyan', `  wecom org:         ${opts.wecomOrg}`);
   log('cyan', `  dry-run:           ${opts.dryRun}`);
 
   // Stage 1: ETL
@@ -152,7 +179,20 @@ async function main() {
     }
   }
 
-  log('green', '\n✅ 全流程完成（ETL → governance → reload → /health）');
+  // Stage 5: 企业微信机构续保表同步（显式开关）
+  if (opts.wecom) {
+    const wecomArgs = ['数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py'];
+    if (!opts.wecomDryRun) wecomArgs.push('--execute');
+    if (opts.wecomOrg) wecomArgs.push('--org', opts.wecomOrg);
+    await runCmd(
+      opts.wecomDryRun ? 'WeCom dry-run' : 'WeCom sync',
+      'python3',
+      wecomArgs,
+      { dryRun: opts.dryRun, timeoutMs: 90 * 60 * 1000 }
+    );
+  }
+
+  log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
 }
 
 main().catch(err => {
