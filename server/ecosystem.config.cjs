@@ -27,6 +27,12 @@ module.exports = {
         CORS_ORIGIN: 'https://chexian.cretvalu.com',
         DUCKDB_MAX_MEMORY: '1536MB',
         DUCKDB_THREADS: '2',
+        // v5 状态持久层 Phase 3 启用：state.db 的 api_tokens / access_users / access_roles 为主权威
+        // 启用前必须先 SSH VPS 跑 admin-import-{pat,users}-from-json，并确认 lock 文件已写、
+        // SQLite COUNT 与 JSON length 一致（参见 docs/migration/phase3-vps-rollout-runbook.md §1-§2）。
+        // Rollback：本块 revert PR 或临时 `pm2 restart chexian-api --update-env --env STATE_STORE_BACKEND=json`。
+        STATE_STORE_BACKEND: 'sqlite',
+        STATE_DB_PATH: '/var/www/chexian/server/data/state.db',
       },
 
       // 日志配置

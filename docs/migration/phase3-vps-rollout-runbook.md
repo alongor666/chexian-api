@@ -109,7 +109,7 @@ EOF
 
 ---
 
-## 3. 修改 ecosystem.config.cjs 加 SQLite 双写 env
+## 3. 修改 server/ecosystem.config.cjs 加 SQLite 双写 env
 
 在本地仓库改 + PR + merge 触发 deploy（不要直接 SSH 改 VPS 文件，违反"VPS 与仓库单一来源"原则）：
 
@@ -118,7 +118,7 @@ git checkout main && git pull
 git checkout -b chore/enable-state-db-sqlite-vps
 ```
 
-编辑 `ecosystem.config.cjs`，在 `env:` 块加 2 行：
+编辑 `server/ecosystem.config.cjs`（**注意：文件在 server/ 子目录**），在 `env:` 块加 2 行：
 
 ```diff
        env: {
@@ -138,7 +138,7 @@ git checkout -b chore/enable-state-db-sqlite-vps
 提交 + PR：
 
 ```bash
-git add ecosystem.config.cjs
+git add server/ecosystem.config.cjs
 git -c commit.gpgsign=false commit -m "chore(deploy): VPS 启用 STATE_STORE_BACKEND=sqlite（B298 Phase 3）
 
 依赖 admin-import-pat-from-json + admin-import-users-from-json
