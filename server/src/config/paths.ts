@@ -102,10 +102,21 @@ export function getStateDbPath(stateDbPathEnv: string): string {
 
 /**
  * 一次性迁移标记文件路径（v5 状态持久层迁移）。
- * 防止 Phase 2/3 的 import-from-json 脚本在 SQLite 已迁移后重复执行。
+ * 防止 import-from-json 脚本在 SQLite 已迁移后重复执行。
+ * 每个 scope 独立 lock 文件：users / pat，避免 Phase 2 已部署的 lock 被 Phase 3 误改语义。
  * 内容：{ migrated_at, source_hash, scope } JSON。
  */
-export function getStateMigrationLockPath(): string {
+export function getStateMigrationLockPath(scope: 'users' | 'pat'): string {
+  return path.resolve(getDataDir(), `.state-migration-${scope}.lock`);
+}
+
+/**
+ * Phase 2 旧版无 scope 后缀的 lock 路径（仅 users 用过）。
+ * codex P2 (PR #389) 修复：scope 命名重构后必须把旧锁也视为已迁移，
+ * 否则在「旧锁存在 + state.db 丢失」场景下会用旧 user_store.json 覆盖运行期变更。
+ * 仅 admin-import-users-from-json.ts 读，不写。
+ */
+export function getLegacyStateMigrationLockPath(): string {
   return path.resolve(getDataDir(), '.state-migration.lock');
 }
 
