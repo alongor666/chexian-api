@@ -158,7 +158,10 @@ def build_views(
         CREATE OR REPLACE VIEW v_claims_agg AS
         SELECT policy_no,
                COUNT(DISTINCT claim_no) AS claim_cases,
-               SUM(COALESCE(settled_amount, 0) + COALESCE(pending_amount, 0)) AS reported_claims
+               SUM(CASE WHEN settlement_time IS NOT NULL
+                          AND settlement_time <= TIMESTAMP '{hist_as_of} 23:59:59'
+                        THEN COALESCE(settled_amount, 0)
+                        ELSE COALESCE(reserve_amount, 0) END) AS reported_claims
         FROM (SELECT DISTINCT ON (claim_no) *
               FROM read_parquet('{CLAIMS_GLOB}', union_by_name=true)
               WHERE report_time <= TIMESTAMP '{hist_as_of} 23:59:59'

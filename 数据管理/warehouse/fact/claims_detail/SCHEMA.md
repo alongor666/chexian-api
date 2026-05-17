@@ -26,13 +26,13 @@
 1. **ETL 出参对齐**：`convert_claims_detail.py` 无论源是哪代，输出 parquet 必然同时包含 `settled_fee` 和 `subject_repair` 两列（缺失列补 `pd.NA`）。
 2. **CDC 分区合并**：`claims_partition_manager.py do_update` 使用 `UNION ALL BY NAME` 处理新输入与旧分区的 schema 漂移。
 3. **服务端读取**：`server/src/services/duckdb-parquet-loader.ts` 使用 `read_parquet([...], union_by_name=true)` 兼容各年度分区列差异。
-4. **下游 SQL**：`settled_fee` 被 `COALESCE(..., 0)` 保护（`claims-detail.ts:462`、`claims-heatmap.ts:325/395`），新分区 NULL 自动视作 0。
+4. **下游 SQL**：总赔款统一按结案状态二选一，已结案取 `settled_amount`，未结案取 `reserve_amount`，新分区缺失的废弃字段不再参与赔款计算。
 
 ## 4. 业务口径：总赔付金额
 
-**正确公式**：`settled_amount + pending_amount`（2026-04-18 修正）
+**正确公式**：`CASE WHEN settlement_time IS NOT NULL THEN settled_amount ELSE reserve_amount END`（已决/未决二选一，不相加）。
 
-旧公式曾包含 `+ settled_fee`，但用户确认 `已决费用` 本就包含在 `已决金额` 内，历史数据为冗余字段。已在 `server/src/sql/claims-detail.ts:462`、`claims-heatmap.ts:325,395` 移除，修复 2021-2024 数据 ~1-2.5% 的双重计数（合计约 2,060 万元）。2025+ 源已直接移除该列。
+旧公式曾包含 `+ settled_fee`，但用户确认 `已决费用` 本就包含在 `已决金额` 内，历史数据为冗余字段；后续又统一收敛为已结案取 `settled_amount`、未结案取 `reserve_amount`。2025+ 源已直接移除 `settled_fee` 列。
 
 ## 5. 分区列表（截至 2026-04-18）
 

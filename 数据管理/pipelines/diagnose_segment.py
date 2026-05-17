@@ -192,13 +192,15 @@ SELECT
   COALESCE(c.loss_category, '—') AS 类别,
   ROUND(COALESCE(c.settled_amount, 0)/1e4, 1) AS 已决_万,
   ROUND(COALESCE(c.reserve_amount, 0)/1e4, 1) AS 未决_万,
-  ROUND((COALESCE(c.settled_amount, 0) + COALESCE(c.reserve_amount, 0))/1e4, 1) AS 合计_万,
+  ROUND((CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
+              ELSE COALESCE(c.reserve_amount, 0) END)/1e4, 1) AS 合计_万,
   CASE WHEN c.is_bodily_injury THEN '人伤' ELSE '物损' END AS 人伤,
   CASE WHEN c.settlement_time IS NOT NULL THEN '已结' ELSE '未结' END AS 状态
 FROM read_parquet('{CLAIMS}', union_by_name := true) c
 INNER JOIN policy_cohort p ON c.policy_no = p.policy_no
 WHERE c.accident_time <= {valuation_date}
-  AND (COALESCE(c.settled_amount, 0) + COALESCE(c.reserve_amount, 0)) >= {big_threshold}
+  AND (CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
+            ELSE COALESCE(c.reserve_amount, 0) END) >= {big_threshold}
 ORDER BY 合计_万 DESC NULLS LAST
 LIMIT {top_n}
 """.strip()
@@ -231,7 +233,8 @@ b_earn AS (
 claims_agg AS (
   SELECT b.org,
     COUNT(DISTINCT c.claim_no) AS claim_cnt,
-    SUM(CASE WHEN COALESCE(c.settled_amount, 0) + COALESCE(c.reserve_amount, 0) >= 200000 THEN 1 ELSE 0 END) AS big_cnt,
+    SUM(CASE WHEN (CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
+                        ELSE COALESCE(c.reserve_amount, 0) END) >= 200000 THEN 1 ELSE 0 END) AS big_cnt,
     SUM(CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
              ELSE COALESCE(c.reserve_amount, 0) END) AS total_loss
   FROM b_earn b
@@ -273,7 +276,7 @@ DRILL_REGISTRY = {
     "accident_hour": ("事故时段分布（一天 24 小时四分段）", lambda w, v: drill_hour_sql(w, v)),
     "accident_cause": ("事故原因 Top15（按赔款金额）", lambda w, v: drill_cause_sql(w, v)),
     "loss_category": ("损失类别分布", lambda w, v: drill_loss_category_sql(w, v)),
-    "large_cases": ("Top10 大案（已决/未决拆分，阈值 20 万）",
+    "large_cases": ("Top10 大案（已决/未决二选一，阈值 20 万）",
                     lambda w, v: drill_large_cases_sql(w, v)),
 }
 
@@ -569,7 +572,7 @@ def build_report(args, where_clause: str, resolved_from_keywords: bool) -> Path:
         parts.append(f">\n> **来源**：词典关键词 `{args.keywords}`")
     parts.append(f">\n> **估值日**:{args.valuation_date}  **报告生成**：{today}")
     parts.append(f">\n> **数据源**：`policy/current/*.parquet` + `claims_detail/claims_*.parquet`")
-    parts.append(f">\n> **赔案锚定**：`accident_time`；**赔款**：已决 `settled_amount` + 未结 `reserve_amount`\n")
+    parts.append(f">\n> **赔案锚定**：`accident_time`；**赔款**：已结案取 `settled_amount`，未结案取 `reserve_amount`，不相加\n")
 
     # 把时间范围也拼进 WHERE
     full_where = (f"insurance_start_date BETWEEN DATE '{args.start}' AND DATE '{args.end}'"

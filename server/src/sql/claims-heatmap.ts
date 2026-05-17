@@ -373,7 +373,12 @@ export function generateClaimsHeatmapQuery(
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         ac.cutoff_idx,
         COUNT(DISTINCT c.claim_no) AS claim_count,
-        ROUND(SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) / 1e4, 4) AS total_claims_wan
+        ROUND(SUM(CASE
+          WHEN c.settlement_time IS NOT NULL
+           AND CAST(c.settlement_time AS DATE) <= ac.cutoff
+          THEN COALESCE(c.settled_amount, 0)
+          ELSE COALESCE(c.reserve_amount, 0)
+        END) / 1e4, 4) AS total_claims_wan
       FROM ClaimsDetail c
       JOIN eligible_policies p ON c.policy_no = p.policy_no
       ${teamJoin}
@@ -417,7 +422,12 @@ export function generateClaimsHeatmapQuery(
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         ac.cutoff_idx,
         COUNT(DISTINCT c.claim_no) AS claim_count,
-        ROUND(SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) / 1e4, 4) AS total_claims_wan
+        ROUND(SUM(CASE
+          WHEN c.settlement_time IS NOT NULL
+           AND CAST(c.settlement_time AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
+          THEN COALESCE(c.settled_amount, 0)
+          ELSE COALESCE(c.reserve_amount, 0)
+        END) / 1e4, 4) AS total_claims_wan
       FROM ClaimsDetail c
       JOIN eligible_policies p ON c.policy_no = p.policy_no
       ${teamJoin}

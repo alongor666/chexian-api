@@ -474,7 +474,12 @@ export function generateLossRatioDevelopmentQuery(
         cw.cohort_year, cw.dev_month,
         COUNT(DISTINCT c.claim_no) AS claim_count,
         SUM(
-          COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)
+          CASE
+            WHEN c.settlement_time IS NOT NULL
+             AND CAST(c.settlement_time AS DATE) <= cw.effective_cutoff
+            THEN COALESCE(c.settled_amount, 0)
+            ELSE COALESCE(c.reserve_amount, 0)
+          END
         ) AS total_reserve
       FROM calendar_window cw
       JOIN policies p

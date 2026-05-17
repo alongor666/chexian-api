@@ -300,8 +300,8 @@ src/hooks/useTruckAnalysis.ts - Parameter 'data' implicitly has an 'any' type
 **指标定义**（来自业务规则字典）：
 - id: `earned_loss_ratio`
 - name: 满期赔付率
-- formula: (已决赔款 + 未决赔款) / 满期保费
-- SQL expression: `(SUM(settled_claims) + SUM(outstanding_claims)) / NULLIF(SUM(earned_premium), 0)`
+- formula: 已结案取 settled_amount、未结案取 reserve_amount（二选一，不相加） / 满期保费
+- SQL expression: `SUM(CASE WHEN settlement_time IS NOT NULL THEN settled_amount ELSE reserve_amount END) / NULLIF(SUM(earned_premium), 0)`
 - display: { format: 'percent', precision: 2, thresholds: { warning: 0.7, danger: 0.9 } }
 
 **流程**（按 CLAUDE.md §14 指标开发协议）：

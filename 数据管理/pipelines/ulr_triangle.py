@@ -236,8 +236,10 @@ def build_current_incurred_snapshot(
             COUNT(DISTINCT p.policy_no) AS policy_count,
             COUNT(DISTINCT c.claim_no)  AS claim_count,
             SUM(COALESCE(c.settled_amount, 0))  AS current_paid,
-            SUM(COALESCE(c.pending_amount, 0))  AS current_pending,
-            SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) AS current_incurred
+            SUM(CASE WHEN c.settlement_time IS NULL THEN COALESCE(c.reserve_amount, 0)
+                     ELSE 0 END)  AS current_pending,
+            SUM(CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
+                     ELSE COALESCE(c.reserve_amount, 0) END) AS current_incurred
         FROM origin_policy p
         LEFT JOIN read_parquet('{claims_path}') c ON c.policy_no = p.policy_no
         GROUP BY p.cohort_year

@@ -134,6 +134,14 @@ describe('generateClaimsHeatmapQuery — 输出列', () => {
     expect(sql).toContain('AS policy_year');
   });
 
+  it('赔款口径按 cutoff 二选一：已结案取 settled_amount，未结案取 reserve_amount，不相加', () => {
+    expect(sql).toContain('c.settlement_time IS NOT NULL');
+    expect(sql).toContain('c.settled_amount');
+    expect(sql).toContain('c.reserve_amount');
+    expect(sql).not.toContain('c.pending_amount');
+    expect(sql).not.toMatch(/COALESCE\(c\.settled_amount,\s*0\)\s*\+\s*COALESCE\(c\.(pending|reserve)_amount,\s*0\)/);
+  });
+
   it('列 cutoff 月度标签为 "X月末"', () => {
     expect(sql).toContain("'月末'");
   });

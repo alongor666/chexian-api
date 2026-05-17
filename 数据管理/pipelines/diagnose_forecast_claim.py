@@ -314,15 +314,17 @@ def compute_cohort(con, args, base_start: str, base_end: str, eval_date: str,
       c AS (
         SELECT policy_no,
           COALESCE(settled_amount, 0) AS settled_amount,
-          COALESCE(pending_amount, 0) AS pending_amount
+          COALESCE(reserve_amount, 0) AS reserve_amount,
+          settlement_time
         FROM cl
         WHERE report_time < TIMESTAMP '{base_end_excl}'
       )
       SELECT
         COUNT(*) AS n_claims,
-        COALESCE(SUM(c.settled_amount), 0) AS settled,
-        COALESCE(SUM(c.pending_amount), 0) AS pending,
-        COALESCE(SUM(c.settled_amount + c.pending_amount), 0) AS reported
+        COALESCE(SUM(CASE WHEN c.settlement_time IS NOT NULL THEN c.settled_amount ELSE 0 END), 0) AS settled,
+        COALESCE(SUM(CASE WHEN c.settlement_time IS NULL THEN c.reserve_amount ELSE 0 END), 0) AS pending,
+        COALESCE(SUM(CASE WHEN c.settlement_time IS NOT NULL THEN c.settled_amount
+                          ELSE c.reserve_amount END), 0) AS reported
       FROM c JOIN p USING(policy_no)
     """
     rc = con.execute(sql_claims).fetchone()
@@ -508,7 +510,7 @@ def render_markdown(args, current: dict, alt: dict, prior: dict | None,
     else:
         lines.append(f"- Projection earned ratio（lead 分布积分）= "
                      f"**{current['proj_earned_ratio']*100:.3f}%**")
-    lines.append(f"- 已报告赔款 = settled + pending（已决+未决）")
+    lines.append(f"- 已报告赔款 = 已结案取 settled，未结案取 reserve（二选一，不相加）")
     lines.append(f"- 保单去重：`SUM(premium) GROUP BY policy_no, HAVING > 0`（去原单+批改重复）")
     if current['pending'] > 0 and current['reported'] > 0:
         pct = current['pending'] / current['reported'] * 100
