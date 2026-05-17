@@ -14,9 +14,15 @@
 - doc 权限开放
 - 仅 stdlib，subprocess 调 wecom-cli
 
-用法：
+用法（两种模式互斥）：
+    # 模式 A：单文件 HTML，本脚本负责 stage + 拼 URL
     python3 数据管理/integrations/wecom_bot/push_html.py [HTML 路径] [选项]
     # 不指定路径默认发本目录 hello_demo.html
+
+    # 模式 B：多文件报告（v2.1+，URL 已由生成端 stage 到子目录树），只推 URL
+    python3 数据管理/integrations/wecom_bot/push_html.py \\
+      --external-url https://chexian.cretvalu.com/api/reports/diagnose-loss-development/2026-05-14/preview-mvp.html \\
+      --note "诊断报告 v2.1"
 """
 
 from __future__ import annotations
@@ -26,12 +32,12 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_DEMO = HERE / "hello_demo.html"
@@ -198,6 +204,16 @@ def stage_html(
     return target
 
 
+def derive_title_from_url(url: str) -> str:
+    """从公网 URL 末段派生默认标题（去 .html/.htm 后缀）。
+
+    https://.../preview-mvp.html → "preview-mvp"
+    https://.../drill/team/abc123.html → "abc123"
+    """
+    last_segment = urlparse(url).path.rstrip("/").rsplit("/", 1)[-1] or "report"
+    return re.sub(r"\.html?$", "", last_segment, flags=re.IGNORECASE) or "report"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="把本地 HTML 报告托管到 chexian-api，链接推送到企微智能表格"
@@ -206,12 +222,18 @@ def main() -> int:
         "html_file",
         nargs="?",
         type=Path,
-        default=DEFAULT_DEMO,
-        help=f"HTML 文件路径（默认 {DEFAULT_DEMO.name}）",
+        default=None,
+        help=f"HTML 文件路径（不传且无 --external-url 时回落到 {DEFAULT_DEMO.name}）",
+    )
+    parser.add_argument(
+        "--external-url",
+        help="跳过本地 stage，直接把这个公网 URL 写入智能表格（多文件报告场景）。"
+        "与 html_file 互斥。",
     )
     parser.add_argument("--name", help="智能表格文档名（仅新建时用，复用时忽略）")
     parser.add_argument("--note", default="", help="备注/概要（写入备注列）")
-    parser.add_argument("--title", help="本行报告标题（默认 HTML 文件名 stem）")
+    parser.add_argument("--title", help="本行报告标题（默认：单文件模式→HTML 文件名 stem，"
+                                          "--external-url 模式→URL 末段文件名 stem）")
     parser.add_argument(
         "--date",
         default=date.today().isoformat(),
@@ -245,47 +267,69 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    html_path = args.html_file.expanduser().resolve()
-    if not html_path.is_file():
-        sys.stderr.write(f"[ERROR] HTML 文件不存在: {html_path}\n")
-        return 1
-    if html_path.suffix.lower() not in (".html", ".htm"):
-        sys.stderr.write(f"[ERROR] 不是 HTML 文件: {html_path}\n")
-        return 1
+    if args.external_url is not None and args.html_file is not None:
+        sys.stderr.write("[ERROR] --external-url 与 html_file 互斥，请只传一个\n")
+        return 2
 
     meta_path = (
         args.meta.expanduser().resolve() if args.meta else STATE_DIR / META_NAME
     )
     meta_path.parent.mkdir(parents=True, exist_ok=True)
 
-    feedback_meta_path = (
-        args.feedback_meta.expanduser().resolve()
-        if args.feedback_meta
-        else STATE_DIR / FEEDBACK_META_NAME
-    )
-    feedback_url = load_feedback_url(feedback_meta_path)
-    if feedback_url == "#":
-        print(
-            f"[WARN] 反馈表 meta 不存在（{feedback_meta_path}），HTML 内 "
-            f"{FEEDBACK_PLACEHOLDER} 将替换为 '#'。先跑 feedback_form.py 建反馈表。"
+    if args.external_url is not None:
+        if not args.external_url.strip():
+            sys.stderr.write("[ERROR] --external-url 不能为空\n")
+            return 2
+        parsed = urlparse(args.external_url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            sys.stderr.write(
+                f"[ERROR] --external-url 必须是 http(s) 绝对 URL: {args.external_url}\n"
+            )
+            return 2
+        if not re.search(r"\.html?$", parsed.path, re.IGNORECASE):
+            sys.stderr.write(
+                f"[ERROR] --external-url 应指向 .html / .htm: {args.external_url}\n"
+            )
+            return 2
+        public_url = args.external_url
+        title = args.title or derive_title_from_url(public_url)
+        print(f"[外链] 跳过 stage，直接写入企微表格：{public_url}")
+    else:
+        html_path = (args.html_file or DEFAULT_DEMO).expanduser().resolve()
+        if not html_path.is_file():
+            sys.stderr.write(f"[ERROR] HTML 文件不存在: {html_path}\n")
+            return 1
+        if html_path.suffix.lower() not in (".html", ".htm"):
+            sys.stderr.write(f"[ERROR] 不是 HTML 文件: {html_path}\n")
+            return 1
+
+        feedback_meta_path = (
+            args.feedback_meta.expanduser().resolve()
+            if args.feedback_meta
+            else STATE_DIR / FEEDBACK_META_NAME
         )
+        feedback_url = load_feedback_url(feedback_meta_path)
+        if feedback_url == "#":
+            print(
+                f"[WARN] 反馈表 meta 不存在（{feedback_meta_path}），HTML 内 "
+                f"{FEEDBACK_PLACEHOLDER} 将替换为 '#'。先跑 feedback_form.py 建反馈表。"
+            )
 
-    title = args.title or html_path.stem
-    reports_dir = args.reports_dir.expanduser().resolve()
-    base_url = args.base_url.rstrip("/")
+        title = args.title or html_path.stem
+        reports_dir = args.reports_dir.expanduser().resolve()
+        base_url = args.base_url.rstrip("/")
 
-    # 1. stage HTML 到 reports 目录（注入反馈链接）
-    staged = stage_html(
-        src=html_path,
-        reports_dir=reports_dir,
-        title=title,
-        push_date=args.date,
-        feedback_url=feedback_url,
-        source_label=title,
-    )
-    public_url = f"{base_url}/api/reports/{staged.name}"
-    print(f"[托管] HTML 已落到：{staged}")
-    print(f"[公网] URL：{public_url}")
+        staged = stage_html(
+            src=html_path,
+            reports_dir=reports_dir,
+            title=title,
+            push_date=args.date,
+            feedback_url=feedback_url,
+            source_label=title,
+        )
+        public_url = f"{base_url}/api/reports/{staged.name}"
+        print(f"[托管] HTML 已落到：{staged}")
+        print(f"[公网] URL：{public_url}")
 
     # 2. 复用或新建推送智能表格
     if meta_path.exists() and not args.force_new:
@@ -323,10 +367,13 @@ def main() -> int:
 
     print()
     print("[OK] 链路完成")
-    print(f"  HTML 文件：{staged.name}")
+    if args.external_url:
+        print(f"  数据源：--external-url（未 stage 本地文件）")
+    else:
+        print(f"  HTML 文件：{staged.name}")
+        print(f"  托管目录：{reports_dir}")
     print(f"  报告标题：{title}")
     print(f"  推送日期：{args.date}")
-    print(f"  托管目录：{reports_dir}")
     print(f"  公网链接：{public_url}")
     print(f"  企微表格：{url}")
     print(f"  推送 meta：{meta_path}")

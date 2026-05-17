@@ -107,10 +107,18 @@ python3 ~/.claude/skills/diagnose-loss-development/lib/cli.py \
 # 步骤 B：rsync 同步到 VPS（与 Step 2 的 sync-vps 合并执行，--no-delete 累积历史快照）
 node scripts/sync-vps.mjs
 
-# 步骤 C：推送企微通知（v2.2 自动化前，先手动调用）
-# 主页 URL：https://chexian.cretvalu.com/api/reports/diagnose-loss-development/<cutoff>/preview-mvp.html
-# 临时方案：在企微群发消息 + 粘贴 URL
-# 正式方案：v2.2 在 push_html.py 加 --external-url 参数支持多文件报告
+# 步骤 C：推送企微通知（v2.2.1 自动化，多文件报告走 --external-url 跳过 stage）
+# 用专用 meta 文件让本报告独立成一张 smartsheet（首跑自动新建，之后追加行）
+python3 数据管理/integrations/wecom_bot/push_html.py \
+  --external-url "https://chexian.cretvalu.com/api/reports/diagnose-loss-development/$(date +%F)/preview-mvp.html" \
+  --title "多年保单赔付发展报告 $(date +%F)" \
+  --note "v2.1 主页 · 含 75 子页下钻 · cutoff $(date +%F)" \
+  --meta 数据管理/integrations/wecom_bot/state/_loss_dev_meta.json \
+  --name "chexian-api · 多年保单赔付发展报告"
+# --external-url：跳过本地 stage，直接把链接写入企微智能表格「链接」列
+# --meta：本报告独立 meta，与共享报告表（_html_push_meta.json）解耦，避免污染
+# --name：首跑（meta 不存在）时用于建表的文档名；之后复用，--name 被忽略
+# wecom-cli 鉴权失败（errcode 851003 "no authority"）须在企微 IP 白名单内出口跑（本地公网 IP 通常不在）
 ```
 
 **验证清单**：
@@ -119,6 +127,7 @@ node scripts/sync-vps.mjs
 - [ ] curl 主页（带 admin cookie）返回 200 + HTML
 - [ ] curl 子页（含 `drill/team/<hash>.html`）返回 200
 - [ ] 浏览器打开主页 → 点维度值 → 跳转下钻子页 → 返回主页正常
+- [ ] push_html.py --external-url 日志含 `[外链] 跳过 stage` + `[写入] 智能表格新行`，企微表格新增一行
 
 ## 4. 故障排查
 
