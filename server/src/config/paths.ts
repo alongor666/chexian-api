@@ -102,11 +102,12 @@ export function getStateDbPath(stateDbPathEnv: string): string {
 
 /**
  * 一次性迁移标记文件路径（v5 状态持久层迁移）。
- * 防止 Phase 2/3 的 import-from-json 脚本在 SQLite 已迁移后重复执行。
+ * 防止 import-from-json 脚本在 SQLite 已迁移后重复执行。
+ * 每个 scope 独立 lock 文件：users / pat，避免 Phase 2 已部署的 lock 被 Phase 3 误改语义。
  * 内容：{ migrated_at, source_hash, scope } JSON。
  */
-export function getStateMigrationLockPath(): string {
-  return path.resolve(getDataDir(), '.state-migration.lock');
+export function getStateMigrationLockPath(scope: 'users' | 'pat'): string {
+  return path.resolve(getDataDir(), `.state-migration-${scope}.lock`);
 }
 
 // ── 报价转化 Parquet 路径（本地优先，VPS 回退）──

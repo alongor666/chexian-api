@@ -99,10 +99,11 @@ describe('saveApiTokens', () => {
     expect(parsed.tokens).toEqual([]);
   });
 
-  it('DuckDB 查询失败不抛（持久化失败不阻塞热路径）', async () => {
+  it('DuckDB 查询失败抛错（v5 Phase 3：失败必须传播给调用方）', async () => {
     setQueryImpl(async () => { throw new Error('db gone'); });
-    // 不抛即通过
-    await expect(saveApiTokens()).resolves.toBeUndefined();
+    // v5 Phase 3 行为变化：throw 替代吞错。
+    // 调用方决定是否包成 AppError 或在 flush 路径用 try/catch warn 兜底。
+    await expect(saveApiTokens()).rejects.toThrow(/db gone/);
     // 也不应创建文件（写之前查询就挂了）
     expect(fs.existsSync(_getStorePathForTest())).toBe(false);
   });
@@ -211,8 +212,10 @@ describe('codex P1: 并发 saveApiTokens 串行化', () => {
       if (attempt === 1) throw new Error('boom');
       return [sampleRow];
     });
-    await saveApiTokens();  // 第一次失败
-    await saveApiTokens();  // 第二次应正常完成
+    // v5 Phase 3：第一次 throw（调用方处理），第二次必须能正常完成
+    // 关键保护：writeQueue 内部 `.catch(() => {})` 防 chain 死掉
+    await expect(saveApiTokens()).rejects.toThrow(/boom/);
+    await expect(saveApiTokens()).resolves.toBeUndefined();
     const parsed = JSON.parse(fs.readFileSync(_getStorePathForTest(), 'utf-8'));
     expect(parsed.tokens).toHaveLength(1);
   });

@@ -56,7 +56,7 @@ function main(): void {
     );
   }
 
-  const lockPath = getStateMigrationLockPath();
+  const lockPath = getStateMigrationLockPath('users');
   if (fs.existsSync(lockPath)) {
     const existing = fs.readFileSync(lockPath, 'utf-8');
     console.log(`[admin-import] 已存在 migration lock，跳过重导入:\n${existing}`);

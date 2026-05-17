@@ -44,10 +44,43 @@ vi.mock('../access-control.js', () => {
 });
 
 // PAT 持久层 mock：只统计调用次数，不真写文件
+// v5 Phase 3：新增 SQLite Repository 方法 mock，默认无副作用 / 成功 resolve
 const saveApiTokensSpy = vi.fn(async () => {});
+const upsertPatSpy = vi.fn(async (_r: unknown) => {});
+const revokePatSpy = vi.fn(async (_id: string, _at: string) => {});
+const unrevokePatSpy = vi.fn(async (_id: string) => {});
+const deletePatSpy = vi.fn(async (_id: string) => {});
+const updateLastUsedBatchSpy = vi.fn(async (_u: unknown) => {});
+const reloadMirrorSpy = vi.fn(async () => {});
+
 vi.mock('../personal-access-token-store.js', () => ({
   saveApiTokens: () => saveApiTokensSpy(),
+  upsertPatToSqlite: (r: unknown) => upsertPatSpy(r),
+  revokePatInSqlite: (id: string, at: string) => revokePatSpy(id, at),
+  unrevokePatInSqlite: (id: string) => unrevokePatSpy(id),
+  deletePatFromSqlite: (id: string) => deletePatSpy(id),
+  updateLastUsedBatchInSqlite: (u: unknown) => updateLastUsedBatchSpy(u),
+  reloadApiTokenMirrorFromSqlite: () => reloadMirrorSpy(),
 }));
+
+// dbEnv mock：动态读 process.env.__TEST_BACKEND（默认 'json' 跑原用例）
+// 保留 authEnv 等其他 env 真实导出（personal-access-token → auth.ts 依赖）
+vi.mock('../../config/env.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../config/env.js')>();
+  return {
+    ...actual,
+    dbEnv: new Proxy(
+      {},
+      {
+        get: (_t, key) => {
+          if (key === 'STATE_STORE_BACKEND') return process.env.__TEST_BACKEND ?? 'json';
+          if (key === 'STATE_DB_PATH') return process.env.__TEST_STATE_DB_PATH ?? '';
+          return undefined;
+        },
+      },
+    ),
+  };
+});
 
 import {
   createPat,
@@ -82,6 +115,13 @@ beforeEach(() => {
   setMockedUser(defaultUser);
   setQueryImpl(async () => []);
   saveApiTokensSpy.mockClear();
+  upsertPatSpy.mockClear().mockImplementation(async () => {});
+  revokePatSpy.mockClear().mockImplementation(async () => {});
+  unrevokePatSpy.mockClear().mockImplementation(async () => {});
+  deletePatSpy.mockClear().mockImplementation(async () => {});
+  updateLastUsedBatchSpy.mockClear().mockImplementation(async () => {});
+  reloadMirrorSpy.mockClear().mockImplementation(async () => {});
+  delete process.env.__TEST_BACKEND;  // 默认回到 json
 });
 
 describe('createPat', () => {
@@ -361,5 +401,180 @@ describe('PAT 持久化双写：create / revoke / flush 必须触发 saveApiToke
   it('flush 无更新（buffer 空）不触发 saveApiTokens', async () => {
     await _flushPendingForTest();
     expect(saveApiTokensSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// v5 Phase 3 (B298)：backend=sqlite 模式三层原子覆盖
+// ─────────────────────────────────────────────────────────────
+describe('v5 Phase 3: backend=sqlite createPat 三层原子', () => {
+  beforeEach(() => {
+    process.env.__TEST_BACKEND = 'sqlite';
+  });
+
+  it('成功路径：upsertPat → mirror INSERT → saveApiTokens 三层都触发', async () => {
+    setQueryImpl(async () => []);
+    await createPat({ userId: 'u-1', username: 'alice', name: 'cli', ttlDays: 90 });
+    expect(upsertPatSpy).toHaveBeenCalledTimes(1);
+    // saveApiTokens 也调一次（snapshot 兜底）
+    expect(saveApiTokensSpy).toHaveBeenCalledTimes(1);
+    // DuckDB INSERT 应被调用一次
+    const inserts = getQueries().filter((q) => /INSERT INTO ApiToken/.test(q.sql));
+    expect(inserts).toHaveLength(1);
+  });
+
+  it('SQLite upsert 失败 → 5xx，DuckDB mirror 不被触达', async () => {
+    upsertPatSpy.mockImplementationOnce(async () => {
+      throw new Error('disk full');
+    });
+    await expect(
+      createPat({ userId: 'u-1', username: 'alice', name: 'cli', ttlDays: 90 }),
+    ).rejects.toThrow(/state\.db 写入失败/);
+    const inserts = getQueries().filter((q) => /INSERT INTO ApiToken/.test(q.sql));
+    expect(inserts).toHaveLength(0);
+    expect(saveApiTokensSpy).not.toHaveBeenCalled();
+  });
+
+  it('mirror INSERT 失败 → reload 兜底成功（校验通过）→ 整体成功', async () => {
+    let insertAttempt = 0;
+    let createdTokenId: string | null = null;
+    setQueryImpl(async (sql) => {
+      if (/INSERT INTO ApiToken/.test(sql)) {
+        insertAttempt++;
+        // 第一次 INSERT 失败
+        if (insertAttempt === 1) {
+          const m = sql.match(/'([0-9A-Z]{8})'/);
+          if (m) createdTokenId = m[1];
+          throw new Error('mirror crashed');
+        }
+        return [];
+      }
+      // reload 后的 SELECT 校验：mirror 已恢复
+      if (/SELECT revoked_at FROM ApiToken/.test(sql)) {
+        return [{ revoked_at: null }];
+      }
+      return [];
+    });
+    const result = await createPat({
+      userId: 'u-1', username: 'alice', name: 'cli', ttlDays: 90,
+    });
+    expect(reloadMirrorSpy).toHaveBeenCalledTimes(1);
+    // 整体成功 → saveApiTokens 仍被调
+    expect(saveApiTokensSpy).toHaveBeenCalledTimes(1);
+    // 不回滚 SQLite
+    expect(deletePatSpy).not.toHaveBeenCalled();
+    expect(result.plaintext).toMatch(/^cx_pat_/);
+    expect(createdTokenId).toBeTruthy();
+  });
+
+  it('mirror INSERT 失败 + reload 后校验仍缺 token → 回滚 SQLite + 5xx', async () => {
+    setQueryImpl(async (sql) => {
+      if (/INSERT INTO ApiToken/.test(sql)) {
+        throw new Error('mirror crashed');
+      }
+      // reload 后的校验：mirror 仍然找不到该 token
+      if (/SELECT revoked_at FROM ApiToken/.test(sql)) {
+        return [];
+      }
+      return [];
+    });
+    await expect(
+      createPat({ userId: 'u-1', username: 'alice', name: 'cli', ttlDays: 90 }),
+    ).rejects.toThrow(/DuckDB mirror sync 失败/);
+    expect(reloadMirrorSpy).toHaveBeenCalledTimes(1);
+    // 回滚 SQLite（create → delete）
+    expect(deletePatSpy).toHaveBeenCalledTimes(1);
+    // saveApiTokens 不调（前置失败）
+    expect(saveApiTokensSpy).not.toHaveBeenCalled();
+  });
+
+  it('JSON saveApiTokens 失败 → 5xx，但 SQLite/DuckDB 仍处于一致状态（不回滚）', async () => {
+    saveApiTokensSpy.mockImplementationOnce(async () => {
+      throw new Error('[PAT] api_tokens.json 写入失败: [INCONSISTENCY] disk full');
+    });
+    await expect(
+      createPat({ userId: 'u-1', username: 'alice', name: 'cli', ttlDays: 90 }),
+    ).rejects.toThrow(/INCONSISTENCY/);
+    expect(upsertPatSpy).toHaveBeenCalledTimes(1);
+    // 不触发回滚（运营介入）
+    expect(deletePatSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('v5 Phase 3: backend=sqlite revokePat 三层原子', () => {
+  beforeEach(() => {
+    process.env.__TEST_BACKEND = 'sqlite';
+  });
+
+  it('成功路径：revokePatInSqlite → mirror UPDATE → saveApiTokens', async () => {
+    setQueryImpl(async (sql) => {
+      if (/SELECT token_id FROM ApiToken/i.test(sql)) return [{ token_id: 'AAAAAAAA' }];
+      return [];
+    });
+    await revokePat('u-1', 'AAAAAAAA');
+    expect(revokePatSpy).toHaveBeenCalledTimes(1);
+    expect(saveApiTokensSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('mirror UPDATE 失败 + reload 仍缺 token → 回滚 unrevoke + 5xx', async () => {
+    let calls = 0;
+    setQueryImpl(async (sql) => {
+      if (/SELECT token_id FROM ApiToken/i.test(sql)) return [{ token_id: 'AAAAAAAA' }];
+      if (/UPDATE ApiToken[\s\S]*SET revoked_at = TIMESTAMP/i.test(sql)) {
+        calls++;
+        throw new Error('mirror update crashed');
+      }
+      if (/SELECT revoked_at FROM ApiToken/.test(sql)) {
+        return [];  // mirror 仍缺
+      }
+      return [];
+    });
+    await expect(revokePat('u-1', 'AAAAAAAA')).rejects.toThrow(/DuckDB mirror sync 失败/);
+    expect(reloadMirrorSpy).toHaveBeenCalledTimes(1);
+    expect(unrevokePatSpy).toHaveBeenCalledTimes(1);  // 回滚动作
+    expect(saveApiTokensSpy).not.toHaveBeenCalled();
+    expect(calls).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('v5 Phase 3: backend=sqlite flushPendingUpdates fire-and-forget warn', () => {
+  beforeEach(() => {
+    process.env.__TEST_BACKEND = 'sqlite';
+  });
+
+  it('SQLite batch update 失败仅 warn 不抛（不阻塞热路径）', async () => {
+    updateLastUsedBatchSpy.mockImplementationOnce(async () => {
+      throw new Error('sqlite batch crashed');
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      // 准备一条 PAT 并触发 verifyPat 走 scheduleLastUsedUpdate
+      setQueryImpl(async () => []);
+      const created = await createPat({ userId: 'u-1', username: 'alice', name: 'cli', ttlDays: 90 });
+      const insertSql = getQueries().find((q) => /INSERT INTO ApiToken/.test(q.sql))!.sql;
+      const tokenHash = insertSql.match(/'\$2b\$10\$[^']+'/)![0].slice(1, -1);
+
+      setQueryImpl(async (sql) => {
+        if (/SELECT[\s\S]*FROM ApiToken/i.test(sql)) {
+          return [{
+            token_id: created.token.tokenId,
+            token_hash: tokenHash,
+            user_id: 'u-1',
+            username: 'alice',
+            name: 'cli',
+            expires_at: new Date(Date.now() + 86_400_000),
+            revoked_at: null,
+          }];
+        }
+        return [];
+      });
+      await verifyPat(created.plaintext, '10.0.0.42');
+      // flush 不应抛错
+      await expect(_flushPendingForTest()).resolves.toBeUndefined();
+      // warn 被调用（至少 1 次：SQLite batch / JSON save 其一）
+      expect(warnSpy).toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

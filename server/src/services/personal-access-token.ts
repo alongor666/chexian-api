@@ -19,9 +19,19 @@ import { LRUCache } from 'lru-cache';
 import { duckdbService } from './duckdb.js';
 import { getUserByUsername, type AccessUser } from './access-control.js';
 import { authConfig } from '../config/auth.js';
+import { dbEnv } from '../config/env.js';
 import { escapeSqlValue } from '../utils/security.js';
 import { AppError } from '../middleware/error.js';
-import { saveApiTokens } from './personal-access-token-store.js';
+import {
+  saveApiTokens,
+  upsertPatToSqlite,
+  revokePatInSqlite,
+  unrevokePatInSqlite,
+  deletePatFromSqlite,
+  updateLastUsedBatchInSqlite,
+  reloadApiTokenMirrorFromSqlite,
+  type PatRecord,
+} from './personal-access-token-store.js';
 
 const TOKEN_PREFIX = 'cx_pat_';
 const TOKEN_ID_LEN = 8;
@@ -159,22 +169,41 @@ async function flushPendingUpdates(): Promise<void> {
     }
   }
   pendingBuffer = [];
-  let anyUpdated = false;
+
+  const successful: Array<{ tokenId: string; lastUsedAt: string; lastUsedIp: string }> = [];
   for (const update of byToken.values()) {
+    const lastUsedIso = new Date(update.ts).toISOString();
     try {
       await duckdbService.query(`
         UPDATE ApiToken
-        SET last_used_at = TIMESTAMP '${new Date(update.ts).toISOString().slice(0, 19).replace('T', ' ')}',
+        SET last_used_at = TIMESTAMP '${lastUsedIso.slice(0, 19).replace('T', ' ')}',
             last_used_ip = '${escapeSqlValue(update.ip)}'
         WHERE token_id = '${escapeSqlValue(update.tokenId)}'
       `);
-      anyUpdated = true;
+      successful.push({ tokenId: update.tokenId, lastUsedAt: lastUsedIso, lastUsedIp: update.ip });
     } catch (err) {
-      console.warn(`[PAT] last_used_at update failed for ${update.tokenId}:`, err);
+      console.warn(`[PAT] mirror last_used_at update failed for ${update.tokenId}:`, err);
     }
   }
-  // batch flush 完后一次性落盘（受 500ms throttle + 100 buffer 节流，写盘频率可控）
-  if (anyUpdated) await saveApiTokens();
+
+  if (successful.length === 0) return;
+
+  // SQLite batch update（fire-and-forget warn — 红线：不阻塞热路径，不抛）
+  if (dbEnv.STATE_STORE_BACKEND === 'sqlite') {
+    try {
+      await updateLastUsedBatchInSqlite(successful);
+    } catch (err) {
+      console.warn('[PAT] state.db last_used_at batch update failed:', err);
+    }
+  }
+
+  // JSON snapshot 落盘（受 500ms throttle + 100 buffer 节流，写盘频率可控）
+  // saveApiTokens 现在会 throw，flush 路径必须 wrap 保持 fire-and-forget 语义
+  try {
+    await saveApiTokens();
+  } catch (err) {
+    console.warn('[PAT] api_tokens.json save in flush path failed:', err);
+  }
 }
 
 function scheduleLastUsedUpdate(tokenId: string, ip: string): void {
@@ -215,20 +244,67 @@ export async function createPat(input: {
   const expiresAtSql = expiresAt.toISOString().slice(0, 19).replace('T', ' ');
   const createdAtSql = now.toISOString().slice(0, 19).replace('T', ' ');
 
-  await duckdbService.query(`
-    INSERT INTO ApiToken
-      (token_id, token_hash, user_id, username, name, expires_at, created_at)
-    VALUES (
-      '${escapeSqlValue(tokenId)}',
-      '${escapeSqlValue(tokenHash)}',
-      '${escapeSqlValue(input.userId)}',
-      '${escapeSqlValue(input.username)}',
-      '${escapeSqlValue(trimmed)}',
-      TIMESTAMP '${expiresAtSql}',
-      TIMESTAMP '${createdAtSql}'
-    )
-  `);
-  await saveApiTokens();
+  const backend = dbEnv.STATE_STORE_BACKEND;
+
+  // ─── Layer 1: SQLite first（仅 backend=sqlite） ──────────────────
+  let sqliteWritten = false;
+  if (backend === 'sqlite') {
+    const record: PatRecord = {
+      token_id: tokenId,
+      token_hash: tokenHash,
+      user_id: input.userId,
+      username: input.username,
+      name: trimmed,
+      expires_at: expiresAt.toISOString(),
+      last_used_at: null,
+      last_used_ip: null,
+      created_at: now.toISOString(),
+      revoked_at: null,
+    };
+    try {
+      await upsertPatToSqlite(record);
+      sqliteWritten = true;
+    } catch (err) {
+      throw new AppError(
+        500,
+        `[PAT] state.db 写入失败: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  // ─── Layer 2: DuckDB :memory: mirror INSERT ─────────────────────
+  try {
+    await duckdbService.query(`
+      INSERT INTO ApiToken
+        (token_id, token_hash, user_id, username, name, expires_at, created_at)
+      VALUES (
+        '${escapeSqlValue(tokenId)}',
+        '${escapeSqlValue(tokenHash)}',
+        '${escapeSqlValue(input.userId)}',
+        '${escapeSqlValue(input.username)}',
+        '${escapeSqlValue(trimmed)}',
+        TIMESTAMP '${expiresAtSql}',
+        TIMESTAMP '${createdAtSql}'
+      )
+    `);
+  } catch (mirrorErr) {
+    await handleMirrorFailure({
+      action: 'create',
+      tokenId,
+      sqliteWritten,
+      mirrorErr,
+    });
+    // handleMirrorFailure 内部已 throw AppError
+  }
+
+  // ─── Layer 3: JSON snapshot（+ SQLite snapshot 兜底） ────────────
+  // backend=sqlite 模式下：snapshot 内部会再做一次 SQLite 全量替换（与 row-level 等价，幂等）
+  try {
+    await saveApiTokens();
+  } catch (jsonErr) {
+    // saveApiTokens 已含 [INCONSISTENCY] 标记
+    throw new AppError(500, jsonErr instanceof Error ? jsonErr.message : String(jsonErr));
+  }
 
   return {
     plaintext: `${TOKEN_PREFIX}${tokenId}.${secret}`,
@@ -241,6 +317,67 @@ export async function createPat(input: {
       createdAt: now,
     },
   };
+}
+
+/**
+ * DuckDB :memory: mirror 写入失败的统一处理：
+ *  - backend=sqlite：reload mirror from SQLite → 校验目标 token 是否回正
+ *      ├─ 校验通过：mirror 已恢复，吃掉这次 mirrorErr 并继续
+ *      └─ 校验失败：回滚 SQLite（create→DELETE, revoke→unrevoke）→ throw 5xx
+ *  - backend=json：mirror 是唯一权威源，直接 throw 5xx
+ */
+async function handleMirrorFailure(params: {
+  action: 'create' | 'revoke';
+  tokenId: string;
+  sqliteWritten: boolean;
+  mirrorErr: unknown;
+}): Promise<void> {
+  const { action, tokenId, sqliteWritten, mirrorErr } = params;
+  const backend = dbEnv.STATE_STORE_BACKEND;
+  const mirrorMsg = mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr);
+
+  if (backend !== 'sqlite') {
+    throw new AppError(500, `[PAT] DuckDB INSERT/UPDATE 失败: ${mirrorMsg}`);
+  }
+
+  // backend=sqlite：尝试 reload 兜底
+  try {
+    await reloadApiTokenMirrorFromSqlite();
+    const expectRevoked = action === 'revoke';
+    const verifyRows = await duckdbService.query(`
+      SELECT revoked_at FROM ApiToken
+      WHERE token_id = '${escapeSqlValue(tokenId)}'
+      LIMIT 1
+    `);
+    if (verifyRows.length === 0) {
+      throw new Error('reload 后 mirror 仍缺该 token');
+    }
+    if (expectRevoked && !verifyRows[0].revoked_at) {
+      throw new Error('reload 后 mirror 该 token 未处于 revoked 状态');
+    }
+    // 校验通过：mirror 已与 SQLite 一致，继续后续步骤
+    console.warn(`[PAT] mirror ${action} 失败但 reload 兜底成功 (token=${tokenId}): ${mirrorMsg}`);
+    return;
+  } catch (reloadErr) {
+    // reload / 校验仍失败 → 回滚 SQLite，让最终状态一致
+    if (sqliteWritten) {
+      try {
+        if (action === 'create') {
+          await deletePatFromSqlite(tokenId);
+        } else {
+          await unrevokePatInSqlite(tokenId);
+        }
+      } catch (rollbackErr) {
+        // 回滚失败仅日志，不掩盖原始错误
+        console.error(`[PAT] SQLite 回滚失败 (token=${tokenId}):`, rollbackErr);
+      }
+    }
+    const reloadMsg = reloadErr instanceof Error ? reloadErr.message : String(reloadErr);
+    throw new AppError(
+      500,
+      `[PAT] DuckDB mirror sync 失败 (action=${action}, token=${tokenId}): mirror=${mirrorMsg}; reload=${reloadMsg}`,
+    );
+  }
 }
 
 export async function listPatsByUser(userId: string): Promise<ApiTokenRow[]> {
@@ -269,18 +406,52 @@ export async function revokePat(userId: string, tokenId: string): Promise<void> 
   if (rows.length === 0) {
     throw new AppError(404, 'Token not found or already revoked');
   }
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  await duckdbService.query(`
-    UPDATE ApiToken
-    SET revoked_at = TIMESTAMP '${now}'
-    WHERE token_id = '${escapeSqlValue(tokenId)}'
-  `);
-  verifyCache.delete(`${tokenId}:*`);
-  // 简单粗暴：吊销时清空与该 tokenId 相关的所有缓存条目
+
+  const nowDate = new Date();
+  const nowSql = nowDate.toISOString().slice(0, 19).replace('T', ' ');
+  const backend = dbEnv.STATE_STORE_BACKEND;
+
+  // ─── Layer 1: SQLite first（仅 backend=sqlite） ──────────────────
+  let sqliteWritten = false;
+  if (backend === 'sqlite') {
+    try {
+      await revokePatInSqlite(tokenId, nowDate.toISOString());
+      sqliteWritten = true;
+    } catch (err) {
+      throw new AppError(
+        500,
+        `[PAT] state.db 写入失败: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  // ─── Layer 2: DuckDB :memory: mirror UPDATE ─────────────────────
+  try {
+    await duckdbService.query(`
+      UPDATE ApiToken
+      SET revoked_at = TIMESTAMP '${nowSql}'
+      WHERE token_id = '${escapeSqlValue(tokenId)}'
+    `);
+  } catch (mirrorErr) {
+    await handleMirrorFailure({
+      action: 'revoke',
+      tokenId,
+      sqliteWritten,
+      mirrorErr,
+    });
+  }
+
+  // 清空与该 tokenId 相关的所有验证缓存条目
   for (const key of verifyCache.keys()) {
     if (key.startsWith(`${tokenId}:`)) verifyCache.delete(key);
   }
-  await saveApiTokens();
+
+  // ─── Layer 3: JSON snapshot（+ SQLite snapshot 兜底） ────────────
+  try {
+    await saveApiTokens();
+  } catch (jsonErr) {
+    throw new AppError(500, jsonErr instanceof Error ? jsonErr.message : String(jsonErr));
+  }
 }
 
 /**

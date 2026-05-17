@@ -65,7 +65,10 @@ describe('access-control-store schema', () => {
     const migrations = db
       .prepare('SELECT id FROM schema_migrations ORDER BY id')
       .all() as Array<{ id: number }>;
-    expect(migrations.map((m) => m.id)).toEqual([1, 2]);
+    // append-only：本测试只断言 Phase 2 表已建（id 1,2 必在），不强约束后续 phase
+    const ids = migrations.map((m) => m.id);
+    expect(ids).toContain(1);
+    expect(ids).toContain(2);
 
     // 索引存在
     const idx = db

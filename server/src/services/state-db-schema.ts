@@ -64,6 +64,26 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    id: 3,
+    description: 'api_tokens for Phase 3 (B298)',
+    sql: `
+      CREATE TABLE IF NOT EXISTS api_tokens (
+        token_id     TEXT PRIMARY KEY,
+        token_hash   TEXT NOT NULL,
+        user_id      TEXT NOT NULL,
+        username     TEXT NOT NULL,
+        name         TEXT NOT NULL,
+        expires_at   TEXT NOT NULL,
+        last_used_at TEXT,
+        last_used_ip TEXT,
+        created_at   TEXT NOT NULL,
+        revoked_at   TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON api_tokens(user_id);
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_revoked ON api_tokens(revoked_at);
+    `,
+  },
 ];
 
 /**
