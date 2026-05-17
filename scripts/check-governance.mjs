@@ -1764,7 +1764,9 @@ function checkStateDbDependencyIsolation() {
     'server/src/app.ts',
     'server/src/services/state-db-schema.ts',
     'server/src/services/__tests__/state-db.test.ts',
-    // Phase 2 待加：server/src/services/access-control-store.ts
+    // Phase 2（B297）：users / roles Repository + 单元测试
+    'server/src/services/access-control-store.ts',
+    'server/src/services/__tests__/access-control-store.test.ts',
     // Phase 3 待加：server/src/services/personal-access-token-store.ts
   ]);
 

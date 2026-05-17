@@ -5,7 +5,19 @@ import { duckdbService } from './duckdb.js';
 import { escapeSqlValue } from '../utils/security.js';
 import { PRESET_ROLES, PRESET_USERS, PresetRole, PresetUser } from '../config/preset-users.js';
 import { getUserStorePath } from '../config/paths.js';
+import { dbEnv } from '../config/env.js';
 import { AppError } from '../middleware/error.js';
+
+// access-control-store / state-db 是 backend=sqlite 模式下的双写目标。
+// dynamic import 防止默认 backend=json 模式下意外加载 better-sqlite3（codex P1 同款修复）。
+type AccessControlStoreModule = typeof import('./access-control-store.js');
+let accessControlStore: AccessControlStoreModule | null = null;
+
+async function ensureAccessControlStore(): Promise<AccessControlStoreModule> {
+  if (accessControlStore) return accessControlStore;
+  accessControlStore = await import('./access-control-store.js');
+  return accessControlStore;
+}
 
 export interface AccessUser {
   id: string;
@@ -102,23 +114,54 @@ function ensureDataDir(): void {
   }
 }
 
+/**
+ * 持久化 users + roles snapshot 到磁盘（v5 状态持久层 Phase 2 改造，B297）。
+ *
+ * 关键变更（vs 旧版吞错路径）：
+ * - 任何写失败立即 throw AppError → asyncHandler 接住 → errorHandler 映射 HTTP 5xx。
+ *   旧版 console.error 短路会导致 DuckDB :memory: 已更新 / 磁盘陈旧 → reload 后用户改动丢失。
+ * - backend=sqlite 模式启用双写：SQLite first（新主权威）→ JSON（fallback / 可读 backup）。
+ *   SQLite 成功 + JSON 失败 → `[INCONSISTENCY]` 日志 + throw（需运营介入修 JSON backup）。
+ * - backend=json 模式：行为完全等于旧版（除 throw 替代吞错）。VPS 默认 json，零生效。
+ */
 async function persistToFile(): Promise<void> {
+  const users = await listUsersInternal();
+  const roles = await listRoles();
+  const snapshot: UserStoreData = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    users,
+    roles,
+  };
+
+  // SQLite first（仅 backend=sqlite 模式）—— v5 plan 用户决策 lock 2026-05-16
+  if (dbEnv.STATE_STORE_BACKEND === 'sqlite') {
+    try {
+      const store = await ensureAccessControlStore();
+      store.replaceAll({ users, roles });
+    } catch (err) {
+      throw new AppError(
+        500,
+        `[AccessControl] state.db 写入失败: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  // JSON fallback（无论 backend 都写，保证 reload 启动加载路径可读）
+  ensureDataDir();
+  const storePath = getUserStorePath();
+  const tmpPath = storePath + '.tmp';
   try {
-    const users = await listUsersInternal();
-    const roles = await listRoles();
-    const store: UserStoreData = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      users,
-      roles,
-    };
-    ensureDataDir();
-    const storePath = getUserStorePath();
-    const tmpPath = storePath + '.tmp';
-    fs.writeFileSync(tmpPath, JSON.stringify(store, null, 2), 'utf-8');
+    fs.writeFileSync(tmpPath, JSON.stringify(snapshot, null, 2), 'utf-8');
     fs.renameSync(tmpPath, storePath);
   } catch (err) {
-    console.error('[AccessControl] 持久化到文件失败:', err);
+    const inconsistency = dbEnv.STATE_STORE_BACKEND === 'sqlite'
+      ? ' [INCONSISTENCY] SQLite 已写入但 JSON backup 失败，需运营介入修复 JSON。'
+      : '';
+    throw new AppError(
+      500,
+      `[AccessControl] user_store.json 写入失败:${inconsistency} ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
