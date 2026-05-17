@@ -110,6 +110,16 @@ export function getStateMigrationLockPath(scope: 'users' | 'pat'): string {
   return path.resolve(getDataDir(), `.state-migration-${scope}.lock`);
 }
 
+/**
+ * Phase 2 旧版无 scope 后缀的 lock 路径（仅 users 用过）。
+ * codex P2 (PR #389) 修复：scope 命名重构后必须把旧锁也视为已迁移，
+ * 否则在「旧锁存在 + state.db 丢失」场景下会用旧 user_store.json 覆盖运行期变更。
+ * 仅 admin-import-users-from-json.ts 读，不写。
+ */
+export function getLegacyStateMigrationLockPath(): string {
+  return path.resolve(getDataDir(), '.state-migration.lock');
+}
+
 // ── 报价转化 Parquet 路径（本地优先，VPS 回退）──
 
 export function getQuoteConversionPaths(): string[] {

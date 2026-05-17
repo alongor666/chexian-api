@@ -33,11 +33,15 @@ vi.mock('../../config/env.js', () => ({
   ),
 }));
 
-// Mock duckdbService — store-sqlite 测试只关心 SQLite Repository，
-// 不应触发任何 DuckDB 实际调用（reloadApiTokenMirrorFromSqlite 走的是 token.ts，本测试不覆盖）。
+// Mock duckdbService — 捕获 SQL + 可注入失败实现，给 reload 原子事务 P1 回归用
+const duckdbQueries: Array<{ sql: string }> = [];
+let duckdbQueryImpl: (sql: string) => Promise<any[]> = async () => [];
 vi.mock('../duckdb.js', () => ({
   duckdbService: {
-    query: vi.fn(async () => []),
+    query: async (sql: string) => {
+      duckdbQueries.push({ sql });
+      return duckdbQueryImpl(sql);
+    },
   },
 }));
 
@@ -51,6 +55,7 @@ import {
   replaceAllPatsInSqlite,
   readAllPatsFromSqlite,
   hasPatDataInSqlite,
+  reloadApiTokenMirrorFromSqlite,
   _resetStateDbModuleForTest,
   type PatRecord,
 } from '../personal-access-token-store.js';
@@ -60,6 +65,8 @@ beforeEach(() => {
   dbPath = path.join(tmpDir, 'state.db');
   process.env.__TEST_STATE_DB_PATH = dbPath;
   stateDb.init();
+  duckdbQueries.length = 0;
+  duckdbQueryImpl = async () => [];
 });
 
 afterEach(() => {
@@ -220,4 +227,45 @@ describe('hasPatDataInSqlite', () => {
     await deletePatFromSqlite('AAAAAAAA');
     expect(await hasPatDataInSqlite()).toBe(false);
   });
+});
+
+// codex P1 (PR #389) 回归：reload 不可先 DELETE 后 INSERT，
+// 否则 readAll 或 INSERT 失败会把 DuckDB 镜像永久清空，verifyPat 全失败。
+describe('reloadApiTokenMirrorFromSqlite 原子事务（codex P1 PR#389）', () => {
+  it('非空表：单次 query 包含 BEGIN/DELETE/INSERT/COMMIT 而非两次 query', async () => {
+    await upsertPatToSqlite(buildRecord());
+    duckdbQueries.length = 0;
+    await reloadApiTokenMirrorFromSqlite();
+    // 整个 reload 只发一次 query（原子事务，不是 DELETE+INSERT 两次）
+    expect(duckdbQueries).toHaveLength(1);
+    const sql = duckdbQueries[0].sql;
+    expect(sql).toContain('BEGIN TRANSACTION');
+    expect(sql).toContain('DELETE FROM ApiToken');
+    expect(sql).toContain('INSERT INTO ApiToken');
+    expect(sql).toContain('COMMIT');
+    // 严格顺序：BEGIN < DELETE < INSERT < COMMIT
+    expect(sql.indexOf('BEGIN TRANSACTION')).toBeLessThan(sql.indexOf('DELETE FROM ApiToken'));
+    expect(sql.indexOf('DELETE FROM ApiToken')).toBeLessThan(sql.indexOf('INSERT INTO ApiToken'));
+    expect(sql.indexOf('INSERT INTO ApiToken')).toBeLessThan(sql.indexOf('COMMIT'));
+  });
+
+  it('空表：单 DELETE 即可，不需要事务包裹', async () => {
+    // SQLite 没数据
+    duckdbQueries.length = 0;
+    await reloadApiTokenMirrorFromSqlite();
+    expect(duckdbQueries).toHaveLength(1);
+    expect(duckdbQueries[0].sql).toContain('DELETE FROM ApiToken');
+    expect(duckdbQueries[0].sql).not.toContain('INSERT INTO ApiToken');
+  });
+
+  it('DuckDB 事务 INSERT 失败 → 错误传播但只调用一次 query（DELETE 与 INSERT 同一事务，由 DuckDB 自动回滚）', async () => {
+    await upsertPatToSqlite(buildRecord());
+    duckdbQueryImpl = async () => { throw new Error('DuckDB constraint violation'); };
+    duckdbQueries.length = 0;
+    await expect(reloadApiTokenMirrorFromSqlite()).rejects.toThrow(/DuckDB constraint/);
+    // 只发了一次 query；之前的 DELETE-then-INSERT 实现会调两次（第二次失败前第一次已清空镜像）
+    expect(duckdbQueries).toHaveLength(1);
+    expect(duckdbQueries[0].sql).toContain('BEGIN TRANSACTION');
+  });
+
 });

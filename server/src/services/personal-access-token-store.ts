@@ -347,25 +347,12 @@ async function insertRecordsIntoDuckDb(records: PatRecord[]): Promise<number> {
   const validTokens = filterValidRecords(records);
   if (validTokens.length === 0) return 0;
 
-  const values = validTokens.map((t) => `(
-    '${escapeSqlValue(t.token_id)}',
-    '${escapeSqlValue(t.token_hash)}',
-    '${escapeSqlValue(t.user_id)}',
-    '${escapeSqlValue(t.username)}',
-    '${escapeSqlValue(t.name)}',
-    ${toSqlTimestampOrNull(t.expires_at)},
-    ${toSqlTimestampOrNull(t.last_used_at)},
-    ${toSqlStringOrNull(t.last_used_ip)},
-    ${toSqlTimestampOrNull(t.created_at)},
-    ${toSqlTimestampOrNull(t.revoked_at)}
-  )`).join(',\n');
-
   await duckdbService.query(`
     INSERT INTO ApiToken
       (token_id, token_hash, user_id, username, name,
        expires_at, last_used_at, last_used_ip, created_at, revoked_at)
     VALUES
-    ${values}
+    ${buildInsertValues(validTokens)}
   `);
   return validTokens.length;
 }
@@ -427,12 +414,54 @@ async function loadFromJsonFile(): Promise<number> {
 /**
  * createPat / revokePat 内部用：mirror INSERT/UPDATE 失败后从 SQLite 重灌 DuckDB :memory:。
  * 仅 backend=sqlite 模式调用。
+ *
+ * codex P1 (PR #389) 修复：不能先 DELETE 再 INSERT，否则 readAll/insert 任一步
+ * 失败就把镜像永久清空到下次重启（verifyPat 仅查 DuckDB 镜像，全实例 PAT 立刻失效）。
+ * 修复策略：
+ *   1. 先读 SQLite + 预构造 INSERT VALUES → 任何失败都不动镜像（旧状态保留）
+ *   2. 用 DuckDB BEGIN ... COMMIT 单次 SQL 把 DELETE + INSERT 包成原子事务 →
+ *      INSERT 失败时 DuckDB 自动回滚 DELETE，镜像保持旧状态
+ *   3. 空表场景独立处理（单 DELETE，不需事务）
  */
 export async function reloadApiTokenMirrorFromSqlite(): Promise<void> {
-  await duckdbService.query('DELETE FROM ApiToken');
+  // Step 1: 先读 SQLite + 预构造 INSERT 子句 — 任何失败不动镜像
   const records = await readAllPatsFromSqlite();
-  if (records.length === 0) return;
-  await insertRecordsIntoDuckDb(records);
+  const validRecords = filterValidRecords(records);
+
+  if (validRecords.length === 0) {
+    // 空表：单 DELETE，失败直接抛（不会让镜像处于"部分清空"中间态）
+    await duckdbService.query('DELETE FROM ApiToken');
+    return;
+  }
+
+  const values = buildInsertValues(validRecords);
+
+  // Step 2: 原子事务 DELETE + INSERT；任一失败 DuckDB 自动 ROLLBACK
+  await duckdbService.query(`
+    BEGIN TRANSACTION;
+    DELETE FROM ApiToken;
+    INSERT INTO ApiToken
+      (token_id, token_hash, user_id, username, name,
+       expires_at, last_used_at, last_used_ip, created_at, revoked_at)
+    VALUES
+    ${values};
+    COMMIT;
+  `);
+}
+
+function buildInsertValues(records: PatRecord[]): string {
+  return records.map((t) => `(
+    '${escapeSqlValue(t.token_id)}',
+    '${escapeSqlValue(t.token_hash)}',
+    '${escapeSqlValue(t.user_id)}',
+    '${escapeSqlValue(t.username)}',
+    '${escapeSqlValue(t.name)}',
+    ${toSqlTimestampOrNull(t.expires_at)},
+    ${toSqlTimestampOrNull(t.last_used_at)},
+    ${toSqlStringOrNull(t.last_used_ip)},
+    ${toSqlTimestampOrNull(t.created_at)},
+    ${toSqlTimestampOrNull(t.revoked_at)}
+  )`).join(',\n');
 }
 
 /** 测试 helper：清空磁盘文件 */

@@ -25,7 +25,11 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { dbEnv } from '../config/env.js';
-import { getUserStorePath, getStateMigrationLockPath } from '../config/paths.js';
+import {
+  getUserStorePath,
+  getStateMigrationLockPath,
+  getLegacyStateMigrationLockPath,
+} from '../config/paths.js';
 import * as stateDb from '../services/state-db.js';
 import * as accessControlStore from '../services/access-control-store.js';
 import type { AccessUser, AccessRole } from '../services/access-control.js';
@@ -57,10 +61,24 @@ function main(): void {
   }
 
   const lockPath = getStateMigrationLockPath('users');
+  const legacyLockPath = getLegacyStateMigrationLockPath();
+  // 兼容 Phase 2 已部署环境：旧版用 `.state-migration.lock`（无 scope 后缀）作为 users 锁。
+  // codex P2 (PR #389) 修复：scope 命名重构后必须把旧锁也视为已迁移，
+  // 否则在「旧锁存在 + state.db 丢失」场景下会再次导入，覆盖运行期用户/角色变更。
   if (fs.existsSync(lockPath)) {
     const existing = fs.readFileSync(lockPath, 'utf-8');
     console.log(`[admin-import] 已存在 migration lock，跳过重导入:\n${existing}`);
     console.log(`[admin-import] 若需强制重导入，先删除 ${lockPath} 并确认运行期 state.db 数据可丢弃。`);
+    return;
+  }
+  if (fs.existsSync(legacyLockPath)) {
+    const existing = fs.readFileSync(legacyLockPath, 'utf-8');
+    console.log(
+      `[admin-import] 检测到 Phase 2 旧 marker lock (${legacyLockPath})，视为已迁移：\n${existing}`,
+    );
+    console.log(`[admin-import] 自动升级到新文件名 ${lockPath}（保留旧锁防止其他工具回滚）。`);
+    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+    fs.copyFileSync(legacyLockPath, lockPath);
     return;
   }
 
