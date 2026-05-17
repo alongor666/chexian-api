@@ -241,7 +241,8 @@ def calc_relativities(
         COUNT(DISTINCT p.policy_no) AS policy_count,
         COUNT(DISTINCT c.claim_no) AS claim_count,
         SUM(p.premium * GREATEST(p.earned_factor, 0)) AS earned_premium,
-        SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) AS incurred
+        SUM(CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
+                 ELSE COALESCE(c.reserve_amount, 0) END) AS incurred
     FROM origin_policy p
     LEFT JOIN read_parquet('{claims_path}') c ON c.policy_no = p.policy_no
     GROUP BY p.{dimension_col}

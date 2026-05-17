@@ -49,7 +49,10 @@ OUT_DIR     = str(SCRIPT_DIR.parent / "数据分析报告")
 
 # ── SQL 片段 ──────────────────────────────────────────────────────
 CITY_EXTRACT  = "REGEXP_EXTRACT(c.accident_city, '[^0-9]+')"
-CLAIM_AMT     = "COALESCE(c.settled_amount, 0) + COALESCE(c.reserve_amount, 0)"
+CLAIM_AMT     = (
+    "CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0) "
+    "ELSE COALESCE(c.reserve_amount, 0) END"
+)
 IS_LOCAL      = "plate_city = accident_city_name"
 IS_INPROV_RMT = "plate_province = '四川' AND plate_city != accident_city_name"
 IS_OUTPROV    = "plate_province != '四川'"
