@@ -319,11 +319,21 @@ def compute_cohort(con, args, base_start: str, base_end: str, eval_date: str,
         FROM cl
         WHERE report_time < TIMESTAMP '{base_end_excl}'
       )
+      -- 已决/未决判定必须与 cohort 时点严格对齐：
+      -- 仅按 settlement_time IS NULL 判定会把 base_end 之后才结案的赔案
+      -- 算进"已决"，造成未来信息泄漏（codex P1，PR #388）。
+      -- 因此结案口径同步按 settlement_time < base_end_excl 截断。
       SELECT
         COUNT(*) AS n_claims,
-        COALESCE(SUM(CASE WHEN c.settlement_time IS NOT NULL THEN c.settled_amount ELSE 0 END), 0) AS settled,
-        COALESCE(SUM(CASE WHEN c.settlement_time IS NULL THEN c.reserve_amount ELSE 0 END), 0) AS pending,
-        COALESCE(SUM(CASE WHEN c.settlement_time IS NOT NULL THEN c.settled_amount
+        COALESCE(SUM(CASE WHEN c.settlement_time IS NOT NULL
+                            AND c.settlement_time < TIMESTAMP '{base_end_excl}'
+                          THEN c.settled_amount ELSE 0 END), 0) AS settled,
+        COALESCE(SUM(CASE WHEN c.settlement_time IS NULL
+                            OR c.settlement_time >= TIMESTAMP '{base_end_excl}'
+                          THEN c.reserve_amount ELSE 0 END), 0) AS pending,
+        COALESCE(SUM(CASE WHEN c.settlement_time IS NOT NULL
+                            AND c.settlement_time < TIMESTAMP '{base_end_excl}'
+                          THEN c.settled_amount
                           ELSE c.reserve_amount END), 0) AS reported
       FROM c JOIN p USING(policy_no)
     """
