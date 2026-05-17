@@ -109,7 +109,7 @@ EOF
 
 ---
 
-## 3. 修改 ecosystem.config.cjs 加 SQLite 双写 env
+## 3. 修改 server/ecosystem.config.cjs 加 SQLite 双写 env
 
 在本地仓库改 + PR + merge 触发 deploy（不要直接 SSH 改 VPS 文件，违反"VPS 与仓库单一来源"原则）：
 
@@ -118,7 +118,7 @@ git checkout main && git pull
 git checkout -b chore/enable-state-db-sqlite-vps
 ```
 
-编辑 `ecosystem.config.cjs`，在 `env:` 块加 2 行：
+编辑 `server/ecosystem.config.cjs`（**注意：文件在 server/ 子目录**），在 `env:` 块加 2 行：
 
 ```diff
        env: {
@@ -138,7 +138,7 @@ git checkout -b chore/enable-state-db-sqlite-vps
 提交 + PR：
 
 ```bash
-git add ecosystem.config.cjs
+git add server/ecosystem.config.cjs
 git -c commit.gpgsign=false commit -m "chore(deploy): VPS 启用 STATE_STORE_BACKEND=sqlite（B298 Phase 3）
 
 依赖 admin-import-pat-from-json + admin-import-users-from-json
@@ -249,10 +249,16 @@ git revert <merge-commit-of-enable-sqlite-PR>
 git push origin main  # 触发自动 deploy 回到 json 模式
 
 # 方案 B：紧急 SSH 手工改（仅 deploy 链路同时坏的极端场景）
+# 注意 PM2 命令语法（codex P1 PR#391 修正）：
+#   `--env <name>` 只选 ecosystem 中的 env_<name> 块（如 --env production），
+#   不能用来设单个变量。要让 PM2 重读 process.env，必须用 shell 前缀赋值 + --update-env：
 ssh chexian-vps << 'EOF'
 cd /var/www/chexian/server
-# 临时移除 SQLite env（在 PM2 内联 env，不改文件）
-pm2 restart chexian-api --update-env --env "STATE_STORE_BACKEND=json"
+# 临时切回 json 模式（变量在 pm2 命令前以 shell 前缀传，--update-env 让 PM2 重读 env）
+STATE_STORE_BACKEND=json pm2 restart chexian-api --update-env
+
+# 验证生效（输出应含 STATE_STORE_BACKEND=json）
+pm2 env 0 | grep STATE_STORE_BACKEND
 # 然后立即 revert PR（恢复仓库与 VPS 一致）
 EOF
 ```
