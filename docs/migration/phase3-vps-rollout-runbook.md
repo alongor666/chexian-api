@@ -249,10 +249,16 @@ git revert <merge-commit-of-enable-sqlite-PR>
 git push origin main  # 触发自动 deploy 回到 json 模式
 
 # 方案 B：紧急 SSH 手工改（仅 deploy 链路同时坏的极端场景）
+# 注意 PM2 命令语法（codex P1 PR#391 修正）：
+#   `--env <name>` 只选 ecosystem 中的 env_<name> 块（如 --env production），
+#   不能用来设单个变量。要让 PM2 重读 process.env，必须用 shell 前缀赋值 + --update-env：
 ssh chexian-vps << 'EOF'
 cd /var/www/chexian/server
-# 临时移除 SQLite env（在 PM2 内联 env，不改文件）
-pm2 restart chexian-api --update-env --env "STATE_STORE_BACKEND=json"
+# 临时切回 json 模式（变量在 pm2 命令前以 shell 前缀传，--update-env 让 PM2 重读 env）
+STATE_STORE_BACKEND=json pm2 restart chexian-api --update-env
+
+# 验证生效（输出应含 STATE_STORE_BACKEND=json）
+pm2 env 0 | grep STATE_STORE_BACKEND
 # 然后立即 revert PR（恢复仓库与 VPS 一致）
 EOF
 ```
