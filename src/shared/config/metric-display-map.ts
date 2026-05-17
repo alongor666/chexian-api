@@ -2,8 +2,8 @@
  * 指标展示映射 — 从注册表自动生成
  *
  * 生成命令：npx tsx scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-05-14T04:35:37.591Z
- * 指标数量：47
+ * 生成时间：2026-05-17T01:34:54.738Z
+ * 指标数量：49
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成
  */
@@ -42,6 +42,8 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   "combined_cost_amount": "综合成本额",
   "combined_cost_ratio": "综合成本率",
   "earned_profit_amount": "利润额",
+  "bi_case_ratio_pct": "人伤案占比",
+  "bi_amount_ratio_pct": "人伤金额占比",
   "cross_sell_total_rate": "推介率",
   "cross_sell_danjiao_rate": "单交推介率",
   "cross_sell_jiaosan_rate": "交三推介率",
@@ -97,6 +99,8 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   "combined_cost_amount": { formatter: "premiumWan", unit: "万元" },
   "combined_cost_ratio": { formatter: "percent", unit: "%", decimals: 1 },
   "earned_profit_amount": { formatter: "premiumWan", unit: "万元" },
+  "bi_case_ratio_pct": { formatter: "percent", unit: "%", decimals: 1 },
+  "bi_amount_ratio_pct": { formatter: "percent", unit: "%", decimals: 1 },
   "cross_sell_total_rate": { formatter: "percent", unit: "%", decimals: 2 },
   "cross_sell_danjiao_rate": { formatter: "percent", unit: "%", decimals: 2 },
   "cross_sell_jiaosan_rate": { formatter: "percent", unit: "%", decimals: 2 },
@@ -148,6 +152,8 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   "combined_cost_amount": "变动成本额 + 固定成本额 = 已报告赔款 + 费用金额 + 固定成本额",
   "combined_cost_ratio": "综合成本额 / 满期保费（绝对值除法，非率值相加）",
   "earned_profit_amount": "满期保费 - 综合成本额 = 边际贡献额 - 固定成本额",
+  "bi_case_ratio_pct": "人伤案件数 / 总案件数（claims_detail 底表）",
+  "bi_amount_ratio_pct": "(人伤已决 + 人伤未决) / (总已决 + 总未决)（claims_detail 底表）",
   "cross_sell_total_rate": "驾意险件数 / 车险件数",
   "cross_sell_danjiao_rate": "单交下驾意险件数 / 单交车险件数",
   "cross_sell_jiaosan_rate": "交三下驾意险件数 / 交三车险件数",

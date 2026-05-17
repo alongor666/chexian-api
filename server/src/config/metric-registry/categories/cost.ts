@@ -701,4 +701,89 @@ export const costMetrics: readonly MetricDefinition[] = [
     ],
     changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增：全口径利润，含固定成本（管理费+推动费+附加税费）' }],
   },
+
+  {
+    id: 'bi_case_ratio_pct',
+    version: '1.0.0',
+    name: '人伤案件占比',
+    category: 'cost',
+    tags: ['cost', 'bodily-injury'],
+    formula: {
+      description: '人伤案件数 / 总案件数（claims_detail 底表）',
+      numerator: 'SUM(CAST(is_bodily_injury AS INT))',
+      denominator: 'COUNT(*)',
+      unit: '%',
+    },
+    sql: {
+      expression: `CASE
+    WHEN COUNT(*) > 0
+    THEN 100.0 * SUM(CAST(COALESCE(is_bodily_injury, FALSE) AS INT)) / COUNT(*)
+    ELSE NULL
+  END AS bi_case_ratio_pct`,
+      requiredColumns: ['is_bodily_injury'],
+      notes: '作用于 claims_detail 原始底表（非 policy 聚合 CTE）。is_bodily_injury 老案可能 NULL，COALESCE FALSE 兜底。整体实测约 10.7%（74.8 万案 / 8.01 万人伤）。',
+    },
+    display: {
+      formatter: 'percent',
+      label: '人伤案占比',
+      unit: '%',
+      decimals: 1,
+      tooltip: '人伤案件占比 = 人伤案件数 ÷ 总案件数（频率维度的人伤暴露）',
+    },
+    testCases: [
+      {
+        name: '人伤案占比在 0-100 之间',
+        input: { whereClause: '1=1' },
+        assertions: { bi_case_ratio_pct: { op: 'between', min: 0, max: 100 } },
+      },
+    ],
+    changelog: [
+      { version: '1.0.0', date: '2026-05-16', changes: '由 diagnose-loss-development 引入；与 bi_amount_ratio_pct 配对呈现"频率轻/金额重"的人伤特性' },
+    ],
+  },
+
+  {
+    id: 'bi_amount_ratio_pct',
+    version: '1.0.0',
+    name: '人伤赔款占比',
+    category: 'cost',
+    tags: ['cost', 'bodily-injury'],
+    formula: {
+      description: '(人伤已决 + 人伤未决) / (总已决 + 总未决)（claims_detail 底表）',
+      numerator: 'SUM(settled_bodily_amount) + SUM(reserve_bodily_amount)',
+      denominator: 'SUM(settled_amount) + SUM(reserve_amount)',
+      unit: '%',
+    },
+    sql: {
+      expression: `CASE
+    WHEN (SUM(settled_amount) + SUM(reserve_amount)) > 0
+    THEN 100.0 * (SUM(settled_bodily_amount) + SUM(reserve_bodily_amount)) / (SUM(settled_amount) + SUM(reserve_amount))
+    ELSE NULL
+  END AS bi_amount_ratio_pct`,
+      requiredColumns: ['settled_bodily_amount', 'reserve_bodily_amount', 'settled_amount', 'reserve_amount'],
+      notes: '作用于 claims_detail 原始底表。未决金额用 reserve_amount（项目标准口径，非 pending_amount，参 feedback_pending_vs_reserve_amount）。整体实测约 53.95%（人伤案件占比仅 10.7%，但占用 54% 赔款金额—严重性放大 5 倍）。',
+    },
+    display: {
+      formatter: 'percent',
+      label: '人伤金额占比',
+      unit: '%',
+      decimals: 1,
+      tooltip: '人伤赔款占比 = (人伤已决+人伤未决) ÷ (总已决+总未决)（严重性维度的人伤占用）',
+    },
+    testCases: [
+      {
+        name: '人伤金额占比在 0-100 之间',
+        input: { whereClause: '1=1' },
+        assertions: { bi_amount_ratio_pct: { op: 'between', min: 0, max: 100 } },
+      },
+      {
+        name: '人伤金额占比 > 人伤案占比（严重性放大效应）',
+        input: { whereClause: '1=1' },
+        assertions: { bi_amount_ratio_pct: { op: 'gt', value: 30 } },
+      },
+    ],
+    changelog: [
+      { version: '1.0.0', date: '2026-05-16', changes: '由 diagnose-loss-development 引入；与 bi_case_ratio_pct 配对呈现"频率轻/金额重"的人伤特性' },
+    ],
+  },
 ];
