@@ -74,9 +74,26 @@ function validateReportSubPath(relPath: string): string {
   return decoded;
 }
 
+export function isValidSnapshotDate(snapshot: string): boolean {
+  const match = snapshot.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+
+  const normalized = new Date(Date.UTC(year, month - 1, day));
+  return (
+    normalized.getUTCFullYear() === year &&
+    normalized.getUTCMonth() === month - 1 &&
+    normalized.getUTCDate() === day
+  );
+}
+
 function validateSnapshotName(snapshot: string): void {
-  // 仅允许 YYYY-MM-DD（与项目 cutoff 数据日期对齐）
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshot)) {
+  // 仅允许真实存在的 YYYY-MM-DD 日期（与项目 cutoff 数据日期对齐）
+  if (!isValidSnapshotDate(snapshot)) {
     throw new AppError(400, '快照名格式应为 YYYY-MM-DD');
   }
 }
