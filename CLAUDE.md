@@ -182,6 +182,8 @@ bun run governance                 # 治理校验
 
 **生产环境**：腾讯云 2核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist` · **PM2 重启**：deployer 无法直接调 pm2，须 `sudo /usr/local/bin/deploy-chexian-api reload`（或 `restart`/`install`）
 
+**日常数据发布**：优先用 `bun run release:daily:dry`（只看计划）· `bun run release:daily:check`（ETL/VPS/reload/health，企微 dry-run）· `bun run release:daily`（ETL → VPS → reload → health → 企微同步）。细节见 `数据管理/integrations/wecom_smartsheet/README.md` 与 `scripts/sync-and-reload.mjs --help`
+
 **数据 ETL**：`node 数据管理/daily.mjs`（智能检测）· `node 数据管理/daily.mjs premium|claims|quotes|all`（强制）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py`
 
 **数据同步**：`node scripts/sync-vps.mjs`（rsync `policy/current/` + `claims/` + `quotes/` + 维度表 `salesman/` + `plan/`）
@@ -235,4 +237,3 @@ bun run governance                 # 治理校验
 | Session 数据 | 读 `~/.claude/` 下 JSONL 文件，不是项目文档 |
 | 禁止硬编码路径 | 使用 `server/src/config/paths.ts` 或环境变量 |
 | 数据文件 | `数据管理/warehouse/` 是本地源，`server/data/` 是 VPS 运行时 |
-
