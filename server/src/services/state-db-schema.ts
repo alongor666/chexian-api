@@ -35,6 +35,35 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    id: 2,
+    description: 'access_users + access_roles for Phase 2 (B297)',
+    sql: `
+      CREATE TABLE IF NOT EXISTS access_users (
+        id               TEXT PRIMARY KEY,
+        username         TEXT NOT NULL UNIQUE,
+        display_name     TEXT NOT NULL,
+        password_hash    TEXT NOT NULL,
+        role             TEXT NOT NULL,
+        organization     TEXT,
+        allowed_routes   TEXT,
+        default_route    TEXT,
+        allowed_ips      TEXT,
+        special_features TEXT,
+        active           INTEGER NOT NULL DEFAULT 1,
+        updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_access_users_role ON access_users(role);
+      CREATE TABLE IF NOT EXISTS access_roles (
+        role           TEXT PRIMARY KEY,
+        name           TEXT NOT NULL,
+        data_scope     TEXT NOT NULL,
+        allowed_routes TEXT,
+        default_route  TEXT,
+        updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `,
+  },
 ];
 
 /**

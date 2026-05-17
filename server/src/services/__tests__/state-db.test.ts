@@ -74,12 +74,12 @@ describe('state-db', () => {
     expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
     expect(db.pragma('busy_timeout', { simple: true })).toBe(5000);
 
-    // schema_migrations 表存在且 bootstrap migration 已记录
+    // schema_migrations 表存在且所有已注册 migrations 已应用（bootstrap + Phase 2 表结构）
     const rows = db.prepare('SELECT id, description FROM schema_migrations ORDER BY id').all() as {
       id: number;
       description: string;
     }[];
-    expect(rows).toHaveLength(1);
+    expect(rows.length).toBeGreaterThanOrEqual(1);
     expect(rows[0].id).toBe(1);
     expect(rows[0].description).toMatch(/schema_migrations/);
   });
@@ -87,14 +87,17 @@ describe('state-db', () => {
   it('重复 init() 幂等（不抛错，不重复 migration）', () => {
     stateDb.init();
     const beforePath = stateDb.getCurrentDbPath();
+    const beforeCount = (
+      stateDb.getDb().prepare('SELECT COUNT(*) AS c FROM schema_migrations').get() as { c: number }
+    ).c;
     stateDb.init(); // 二次调用
     const afterPath = stateDb.getCurrentDbPath();
     expect(beforePath).toBe(afterPath);
 
-    const rows = stateDb.getDb().prepare('SELECT COUNT(*) AS c FROM schema_migrations').get() as {
-      c: number;
-    };
-    expect(rows.c).toBe(1); // 不会因二次 init 重复插入
+    const afterCount = (
+      stateDb.getDb().prepare('SELECT COUNT(*) AS c FROM schema_migrations').get() as { c: number }
+    ).c;
+    expect(afterCount).toBe(beforeCount); // 二次 init 不会重复插入
   });
 
   it('未 init 时 getDb() 抛错', () => {
