@@ -41,6 +41,13 @@
 - `bun run test:e2e`
 - `bun run governance`
 
+## 5.1 日常数据发布入口
+
+- `bun run release:daily:dry`：只看 ETL/VPS/企微同步计划，不写外部系统。
+- `bun run release:daily:check`：执行 ETL/VPS/reload/health，企微只 dry-run。
+- `bun run release:daily`：执行 ETL → VPS → reload → health → 企微同步。
+- 细节见 `数据管理/integrations/wecom_smartsheet/README.md` 与 `scripts/sync-and-reload.mjs --help`。
+
 ## 6. 分区细则
 
 - 前端、组件、服务层规则：[`src/AGENTS.md`](./src/AGENTS.md)
