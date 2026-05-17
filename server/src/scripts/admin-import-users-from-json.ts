@@ -24,11 +24,11 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { dbEnv } from '../src/config/env.js';
-import { getUserStorePath, getStateMigrationLockPath } from '../src/config/paths.js';
-import * as stateDb from '../src/services/state-db.js';
-import * as accessControlStore from '../src/services/access-control-store.js';
-import type { AccessUser, AccessRole } from '../src/services/access-control.js';
+import { dbEnv } from '../config/env.js';
+import { getUserStorePath, getStateMigrationLockPath } from '../config/paths.js';
+import * as stateDb from '../services/state-db.js';
+import * as accessControlStore from '../services/access-control-store.js';
+import type { AccessUser, AccessRole } from '../services/access-control.js';
 
 interface UserStoreJson {
   version: number;

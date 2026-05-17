@@ -1767,6 +1767,8 @@ function checkStateDbDependencyIsolation() {
     // Phase 2（B297）：users / roles Repository + 单元测试
     'server/src/services/access-control-store.ts',
     'server/src/services/__tests__/access-control-store.test.ts',
+    // Phase 2（B297）：一次性迁移 CLI — 需 init/close state-db 生命周期
+    'server/src/scripts/admin-import-users-from-json.ts',
     // Phase 3 待加：server/src/services/personal-access-token-store.ts
   ]);
 
