@@ -19,6 +19,7 @@ python3 sync_renewal_v2.py --instance instances/sichuan_2025_h1.yaml [--dry-run]
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import socket
@@ -511,6 +512,17 @@ def build_schema(fields: Iterable[FieldDef]) -> dict[str, str]:
     return {fd.field_id: fd.label for fd in fields}
 
 
+def payload_hash(record: dict[str, Any]) -> str:
+    payload = json.dumps(
+        record.get("values", {}),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 # ---------- Webhook ----------
 
 def post_webhook(url: str, payload: dict[str, Any], timeout: int = 60, max_retries: int = 5) -> dict[str, Any]:
@@ -591,8 +603,14 @@ def plan_upsert(rows: list[dict[str, Any]], state: dict[str, Any], schema: dict[
         existing = mapped.get(vin, {})
         record_id = existing.get("record_id")
         if record_id:
+            rec_hash = payload_hash(rec)
+            if existing.get("payload_hash") == rec_hash:
+                continue
             item = dict(rec)
             item["record_id"] = record_id
+            item["_vin"] = vin
+            item["_payload_hash"] = rec_hash
+            item["_source_row"] = row
             update_items.append(item)
         else:
             add_items.append({"source_row": row, "record": rec})
@@ -605,21 +623,28 @@ def chunked(items: list[Any], size: int) -> Iterable[list[Any]]:
         yield items[i:i + size]
 
 
-def apply_add_response(state: dict[str, Any], add_rows: list[dict[str, Any]], response: dict[str, Any]) -> None:
+def update_state_record(state: dict[str, Any], vin: str, src: dict[str, Any], record_id: str, record_hash: str) -> None:
+    state.setdefault("records", {})
+    state["records"][vin] = {
+        "record_id": record_id,
+        "policy_no": text_value(src.get("policy_no")),
+        "expiry_date": text_value(src.get("expiry_date")),
+        "salesman_name": text_value(src.get("salesman_name")),
+        "payload_hash": record_hash,
+    }
+
+
+def apply_add_response(state: dict[str, Any], add_items: list[dict[str, Any]], response: dict[str, Any]) -> None:
     if response.get("errcode") != 0:
         raise RuntimeError(f"企业微信新增失败: {response}")
     added = response.get("add_records", [])
-    if len(added) != len(add_rows):
-        raise RuntimeError(f"新增返回数量不一致: sent={len(add_rows)} returned={len(added)}")
-    state.setdefault("records", {})
-    for src, ret in zip(add_rows, added):
+    if len(added) != len(add_items):
+        raise RuntimeError(f"新增返回数量不一致: sent={len(add_items)} returned={len(added)}")
+    for item, ret in zip(add_items, added):
+        src = item["source_row"]
+        rec = item["record"]
         vin = str(src.get("vehicle_frame_no"))
-        state["records"][vin] = {
-            "record_id": ret["record_id"],
-            "policy_no": text_value(src.get("policy_no")),
-            "expiry_date": text_value(src.get("expiry_date")),
-            "salesman_name": text_value(src.get("salesman_name")),
-        }
+        update_state_record(state, vin, src, ret["record_id"], payload_hash(rec))
 
 
 def apply_update_response(response: dict[str, Any]) -> None:
@@ -681,6 +706,15 @@ def run_sync(instance: InstanceConfig, fields: list[FieldDef], dry_run: bool = F
         try:
             resp = post_webhook(webhook_url, {"schema": schema, "update_records": update_payload})
             apply_update_response(resp)
+            for it in chunk:
+                update_state_record(
+                    state,
+                    it["_vin"],
+                    it["_source_row"],
+                    it["record_id"],
+                    it["_payload_hash"],
+                )
+            save_state(state_path, state)
             summary["batches"].append({"op": "update", "sent": len(chunk), "errcode": resp.get("errcode")})
         except RuntimeError as exc:
             update_failures.append({"sent": len(chunk), "error": str(exc)[:200]})
@@ -690,10 +724,9 @@ def run_sync(instance: InstanceConfig, fields: list[FieldDef], dry_run: bool = F
 
     # add 新车架号
     for chunk in chunked(plan.add_items, instance.batch_size):
-        add_rows = [it["source_row"] for it in chunk]
         add_records = [it["record"] for it in chunk]
         resp = post_webhook(webhook_url, {"schema": schema, "add_records": add_records})
-        apply_add_response(state, add_rows, resp)
+        apply_add_response(state, chunk, resp)
         save_state(state_path, state)
         summary["batches"].append({"op": "add", "sent": len(chunk), "errcode": resp.get("errcode")})
         time_mod.sleep(60.0 / max(1, instance.sheet_rpm) * len(chunk))

@@ -68,19 +68,55 @@ python3 数据管理/integrations/wecom_smartsheet/sync_renewal.py \
   --config 数据管理/integrations/wecom_smartsheet/config.tianfu.json
 ```
 
-## 自动化（推荐）
+### 机构表批量同步（xlsx 登记表）
 
-ETL 结束后自动遍历所有 `config.*.json`：
+机构续保追踪表 webhook 不写入仓库，日常从 iCloud 登记表读取：
 
 ```bash
-# 1) 写入 .env.local 并置 WECOM_SMARTSHEET_ENABLED=1
-# 2) 跑日常 ETL
-node 数据管理/daily.mjs        # 或 /daily-sync 命令
-# → 步骤 7 同步 VPS + 快照
-# → 步骤 8 遍历 config.zigong.json / config.tianfu.json 推送企业微信
+# 默认 dry-run：只看新增/更新计划，不调用 webhook
+python3 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py
+
+# 确认 dry-run 后真实推送全部登记机构
+python3 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py --execute
+
+# 只补某几个机构
+python3 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py --org 新都,资阳 --execute
 ```
 
-**失败策略**：单个实例 webhook 失败降级告警不阻塞 ETL（其他实例照常执行）。
+默认登记表路径：
+`/Users/alongor666/Library/Mobile Documents/com~apple~CloudDocs/续保追踪表链接与意见反馈.xlsx`
+
+脚本复用 `instances/sichuan_*_2025_may_jul.yaml(.disabled)` 和
+`state/*_vin_record_map.json`，因此每天重跑会按 VIN 状态自动区分
+`update_records` 与 `add_records`，不会依赖 `.env.local` 中的旧 webhook。
+
+## 自动化（推荐）
+
+日常推荐走仓库的一键发布入口，完成 ETL、VPS 同步、PM2 reload、健康检查后，再同步机构续保追踪表：
+
+```bash
+# 先看全流程计划，不执行外部写入
+bun run release:daily:dry
+
+# 真实 ETL/VPS/reload，但企微只 dry-run
+bun run release:daily:check
+
+# 日常真实发布：ETL → VPS → reload → /health → 机构续保表同步
+bun run release:daily
+
+# 只补某几个机构
+node scripts/sync-and-reload.mjs --wecom --wecom-org 新都,资阳
+```
+
+企微同步读取 iCloud xlsx 登记表中的 webhook，不依赖 `.env.local` 中的旧 webhook。
+
+**增量策略**：
+- 本地 state 无 VIN：走 `add_records` 并保存 `record_id`
+- 本地 state 有 VIN 但 payload hash 变化：走 `update_records`
+- 本地 state 有 VIN 且 payload hash 未变化：跳过，不调用 webhook
+- 已在 state 但不再符合筛选口径的 VIN：写入 `missing_vins`，不自动删除
+
+**失败策略**：发布入口任一阶段失败会中止；单独跑企微 wrapper 时，会继续后续机构并在摘要里报告失败机构。
 
 ## 新增实例
 

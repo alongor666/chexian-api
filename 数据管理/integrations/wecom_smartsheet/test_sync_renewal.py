@@ -17,7 +17,12 @@ from sync_renewal import (
     iter_rate_limited_batches,
     plan_upsert,
 )
-from sync_renewal_v2 import FieldDef, build_record as build_record_v2
+from sync_renewal_v2 import (
+    FieldDef,
+    build_record as build_record_v2,
+    payload_hash,
+    plan_upsert as plan_upsert_v2,
+)
 
 
 def test_build_record_writes_salesman_as_text_and_utc_date():
@@ -132,6 +137,38 @@ def test_v2_build_record_writes_loss_reason_from_derived_customer_status():
     )
 
     assert record["values"]["fnk47h"] == "已过期、涨价24.4%、未续回"
+
+
+def test_v2_plan_upsert_skips_unchanged_payload_hash():
+    field = FieldDef(
+        key="salesman_name",
+        field_id="fMDwYc",
+        label="业务员",
+        source="base.salesman_name",
+        type="text",
+    )
+    row = {"vehicle_frame_no": "VIN001", "salesman_name": "A"}
+    record = build_record_v2(row, [field])
+    state = {
+        "records": {
+            "VIN001": {
+                "record_id": "rec-1",
+                "payload_hash": payload_hash(record),
+            }
+        }
+    }
+
+    plan = plan_upsert_v2([row], state, {}, [field], set())
+
+    assert plan.add_items == []
+    assert plan.update_items == []
+    assert plan.missing_vins == []
+
+    changed = {"vehicle_frame_no": "VIN001", "salesman_name": "B"}
+    changed_plan = plan_upsert_v2([changed], state, {}, [field], set())
+
+    assert len(changed_plan.update_items) == 1
+    assert changed_plan.update_items[0]["record_id"] == "rec-1"
 
 
 def test_plan_upsert_splits_existing_new_and_missing_vins():
