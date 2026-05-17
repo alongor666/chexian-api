@@ -383,7 +383,10 @@ export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<vo
     CREATE OR REPLACE TABLE ClaimsAgg AS
     SELECT policy_no,
            COUNT(DISTINCT claim_no) AS claim_cases,
-           SUM(COALESCE(settled_amount, 0) + COALESCE(pending_amount, 0)) AS reported_claims
+           SUM(CASE
+                 WHEN settlement_time IS NOT NULL THEN COALESCE(settled_amount, 0)
+                 ELSE COALESCE(reserve_amount, 0)
+               END) AS reported_claims
     FROM ClaimsDetail
     WHERE policy_no IS NOT NULL
     GROUP BY policy_no

@@ -34,6 +34,8 @@ from ulr_methods import (
     predict_benktander,
 )
 from ulr_dimensions import credibility_blend
+from ulr_triangle import build_current_incurred_snapshot
+from ulr_v1_maturity import compute_cohort_maturity
 
 
 # ============================================================================
@@ -375,3 +377,93 @@ class TestCredibilityBlend:
             n_claims=100_000,
         )
         assert z > 0.9, f"极大样本时 Z 应接近 1，得到 {z:.4f}"
+
+
+# ============================================================================
+# Test 5: Claims amount semantics（已决/未决二选一）
+# ============================================================================
+
+def _build_ulr_claim_semantics_fixtures(tmp_path):
+    """构造一张已结案 + 一张未结案赔案，已结案 reserve 不得进入 pending。"""
+    policy_path = tmp_path / "policy.parquet"
+    claims_path = tmp_path / "claims.parquet"
+
+    pd.DataFrame([
+        {
+            "policy_no": "P001",
+            "endorsement_no": None,
+            "insurance_start_date": pd.Timestamp("2024-01-01"),
+            "premium": 10_000.0,
+            "customer_category": "非营业个人客车",
+            "coverage_combination": "主全",
+            "insurance_grade": "A",
+            "org_level_3": "成都",
+            "is_nev": False,
+            "is_new_car": False,
+            "is_renewal": True,
+            "tonnage_segment": "其他",
+        },
+    ]).to_parquet(policy_path, index=False)
+
+    pd.DataFrame([
+        {
+            "policy_no": "P001",
+            "claim_no": "C_SETTLED",
+            "settlement_time": pd.Timestamp("2024-06-01"),
+            "settled_amount": 100.0,
+            "reserve_amount": 1_000.0,
+            "settled_vehicle_amount": 100.0,
+            "settled_bodily_amount": 0.0,
+            "reserve_vehicle_amount": 1_000.0,
+            "reserve_bodily_amount": 0.0,
+            "reserve_property_amount": 0.0,
+        },
+        {
+            "policy_no": "P001",
+            "claim_no": "C_PENDING",
+            "settlement_time": pd.NaT,
+            "settled_amount": 50.0,
+            "reserve_amount": 200.0,
+            "settled_vehicle_amount": 50.0,
+            "settled_bodily_amount": 0.0,
+            "reserve_vehicle_amount": 200.0,
+            "reserve_bodily_amount": 0.0,
+            "reserve_property_amount": 0.0,
+        },
+    ]).to_parquet(claims_path, index=False)
+
+    return policy_path, claims_path
+
+
+def test_current_pending_excludes_settled_claim_reserve(tmp_path):
+    """current_pending 是未决分项，只能取未结案 reserve，不能泄漏已结案 reserve。"""
+    con = duckdb.connect(":memory:")
+    policy_path, claims_path = _build_ulr_claim_semantics_fixtures(tmp_path)
+
+    result = build_current_incurred_snapshot(
+        con,
+        [2024],
+        valuation_date="2024-12-31",
+        policy_glob=str(policy_path),
+        claims_path=str(claims_path),
+    )
+
+    row = result.loc[2024]
+    assert row["current_pending"] == pytest.approx(200.0)
+    assert row["current_incurred"] == pytest.approx(300.0)
+
+
+def test_maturity_pending_excludes_settled_claim_reserve(tmp_path):
+    """maturity 的 pending_all 同样只统计未结案 reserve。"""
+    con = duckdb.connect(":memory:")
+    policy_path, claims_path = _build_ulr_claim_semantics_fixtures(tmp_path)
+
+    rows = compute_cohort_maturity(
+        con,
+        "2024-12-31",
+        [2024],
+        policy_glob=str(policy_path),
+        claims_path=str(claims_path),
+    )
+
+    assert rows[0]["pending_all"] == pytest.approx(200.0)

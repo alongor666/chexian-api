@@ -98,7 +98,10 @@ claims AS (
   SELECT
     e.customer_category,
     COUNT(DISTINCT c.claim_no) AS claim_count,
-    SUM(COALESCE(c.settled_amount, 0) + COALESCE(c.pending_amount, 0)) / 1e4 AS total_claims_wan
+    SUM(CASE WHEN c.settlement_time IS NOT NULL
+              AND CAST(c.settlement_time AS DATE) <= DATE '{cutoff_iso}'
+            THEN COALESCE(c.settled_amount, 0)
+            ELSE COALESCE(c.reserve_amount, 0) END) / 1e4 AS total_claims_wan
   FROM read_parquet('{CLAIMS}', union_by_name := true) c
   JOIN eligible e USING (policy_no)
   WHERE CAST(c.{claims_date_field} AS DATE) <= DATE '{cutoff_iso}'

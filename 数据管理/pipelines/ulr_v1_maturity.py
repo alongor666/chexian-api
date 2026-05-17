@@ -17,7 +17,7 @@ ULR v1 · Development Maturity 判定脚本（T2 交付物）
   人伤     : settled_bodily_amount
 
 未决：
-  pending_amount / (settled_amount + pending_amount)
+  reserve_amount / (settled_amount + reserve_amount)，未决不与已决相加作为同一案件赔款口径
 """
 
 from __future__ import annotations
@@ -128,7 +128,8 @@ def compute_cohort_maturity(
             COALESCE(c.reserve_vehicle_amount, 0) AS reserve_vehicle,
             COALESCE(c.reserve_bodily_amount, 0) AS reserve_bodily,
             COALESCE(c.reserve_property_amount, 0) AS reserve_property,
-            COALESCE(c.pending_amount, 0) AS pending_total
+            CASE WHEN c.settlement_time IS NULL THEN COALESCE(c.reserve_amount, 0)
+                 ELSE 0 END AS pending_total
         FROM read_parquet('{claims_path}') c
         JOIN origin_policy p ON p.policy_no = c.policy_no
         WHERE YEAR(p.insurance_start_date) IN ({years_csv})
@@ -352,8 +353,8 @@ def format_markdown(assessments: list[dict], valuation_date: str,
         "  - `车损` = `settled_vehicle_amount`",
         "  - `三者责任` = `settled_amount - settled_vehicle_amount - settled_bodily_amount`（残余项）",
         "  - `人伤` = `settled_bodily_amount`",
-        "- 未决拆分：按 `reserve_vehicle / reserve_property / reserve_bodily` 比例摊分 `pending_amount`",
-        "- 未决占比：`pending / (paid_now + pending)`，反映 development 尾部风险",
+        "- 未决拆分：按 `reserve_vehicle / reserve_property / reserve_bodily` 比例摊分 `reserve_amount`",
+        "- 未决占比：`reserve / (paid_now + reserve)`，反映 development 尾部风险",
         "",
         "## 5. 后续使用",
         "",
