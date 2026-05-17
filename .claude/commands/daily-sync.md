@@ -108,12 +108,16 @@ python3 ~/.claude/skills/diagnose-loss-development/lib/cli.py \
 node scripts/sync-vps.mjs
 
 # 步骤 C：推送企微通知（v2.2.1 自动化，多文件报告走 --external-url 跳过 stage）
+# 用专用 meta 文件让本报告独立成一张 smartsheet（首跑自动新建，之后追加行）
 python3 数据管理/integrations/wecom_bot/push_html.py \
   --external-url "https://chexian.cretvalu.com/api/reports/diagnose-loss-development/$(date +%F)/preview-mvp.html" \
   --title "多年保单赔付发展报告 $(date +%F)" \
-  --note "v2.1 主页 · 含 75 子页下钻 · cutoff $(date +%F)"
-# push_html.py 在 --external-url 模式不动本地文件，直接把链接写入企微智能表格「链接」列
-# 报告标题默认 = URL 末段 stem（如 "preview-mvp"），传 --title 可覆盖
+  --note "v2.1 主页 · 含 75 子页下钻 · cutoff $(date +%F)" \
+  --meta 数据管理/integrations/wecom_bot/state/_loss_dev_meta.json \
+  --name "chexian-api · 多年保单赔付发展报告"
+# --external-url：跳过本地 stage，直接把链接写入企微智能表格「链接」列
+# --meta：本报告独立 meta，与共享报告表（_html_push_meta.json）解耦，避免污染
+# --name：首跑（meta 不存在）时用于建表的文档名；之后复用，--name 被忽略
 # wecom-cli 鉴权失败（errcode 851003 "no authority"）须在企微 IP 白名单内出口跑（本地公网 IP 通常不在）
 ```
 
