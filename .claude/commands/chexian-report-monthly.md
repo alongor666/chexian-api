@@ -1,10 +1,10 @@
 ---
-name: report-weekly
-description: 生成周报（自然周数据，环比分析，业绩排名）
+name: chexian-report-monthly
+description: 生成月报（自然月数据，同比环比，趋势分析）
 category: reporting
 version: 1.0.0
 author: "@claude"
-tags: ["weekly","report","kpi"]
+tags: ["monthly","report","trends"]
 scope: project
 requires:
   - DuckDB
@@ -17,24 +17,23 @@ parent_version: "2.0.0"
 last_updated: "2026-01-11"
 ---
 
-# 周报生成
+# 月报生成
 
-生成指定自然周的业务周报。
+生成指定自然月的业务月报。
 
 ## 使用示例
 
 ```bash
-/report-weekly
-/report-weekly --week 50
-/report-weekly --start 2025-12-09 --end 2025-12-15
+/chexian-report-monthly
+/chexian-report-monthly --month 2025-12
 ```
 
 ## 报告内容
 
-- 核心KPI（当前周 vs 上周）
-- 业绩排名
-- 续保分析
-- 异常预警
+- 月度KPI（当前月 vs 上月）
+- 趋势分析
+- 各机构对比
+- 业务洞察
 
 ## 详细SQL
 
@@ -45,4 +44,4 @@ last_updated: "2026-01-11"
 
 **注意**: 这是拆分后的子命令。完整功能请参考父命令文档。
 
-**父命令**: `/weekly-report`
+**父命令**: `/chexian-report-weekly`

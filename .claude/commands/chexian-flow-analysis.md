@@ -1,5 +1,5 @@
 ---
-name: flow-analysis
+name: chexian-flow-analysis
 description: 客户来源去向分析（转入来源、流出去向、竞品追踪、机构对标）
 category: data-analysis
 version: 1.0.0

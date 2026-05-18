@@ -1,4 +1,4 @@
-# 每日数据同步（/daily-sync）
+# 每日数据同步（/chexian-daily-sync）
 
 ## 触发模式
 

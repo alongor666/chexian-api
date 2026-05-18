@@ -1,5 +1,5 @@
 ---
-name: data-export
+name: chexian-data-export
 description: 数据导出工具（CSV/JSON/Excel格式，支持筛选和聚合）
 category: data-analysis
 version: 1.0.0
@@ -30,8 +30,8 @@ last_updated: "2026-01-11"
 ## 使用示例
 
 ```bash
-/data-export --query "SELECT * FROM PolicyFact LIMIT 1000" --format csv
-/data-export --query "SELECT 业务员, SUM(保费) FROM PolicyFact GROUP BY 业务员" --format excel
+/chexian-data-export --query "SELECT * FROM PolicyFact LIMIT 1000" --format csv
+/chexian-data-export --query "SELECT 业务员, SUM(保费) FROM PolicyFact GROUP BY 业务员" --format excel
 ```
 
 ## 筛选和聚合
@@ -43,4 +43,4 @@ last_updated: "2026-01-11"
 
 **注意**: 这是拆分后的子命令。完整功能请参考父命令文档。
 
-**父命令**: `/data-analysis`
+**父命令**: `/chexian-data-analysis`

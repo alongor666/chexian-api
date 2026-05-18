@@ -29,7 +29,7 @@ last_updated: "2026-04-26"
 
 执行前先按 `/diagnose-router` 分流；本命令只处理**续保 funnel / 报价 / 续回 / 跟进清单**。
 
-不得用 `/diagnose-agent`、`/diagnose-segment` 或 `/data-trends` 替代续保口径。若用户问“续保盘子是否影响经营利润”，先跑本命令确认续保漏斗，再另行用 `/diagnose-agent` 做经营汇总。
+不得用 `/diagnose-agent`、`/diagnose-segment` 或 `/chexian-data-trends` 替代续保口径。若用户问“续保盘子是否影响经营利润”，先跑本命令确认续保漏斗，再另行用 `/diagnose-agent` 做经营汇总。
 
 ## 适合场景
 
@@ -40,7 +40,7 @@ last_updated: "2026-04-26"
 - 「**未报价的高价值优质客户** 是哪些（导给业务员跟进）？」
 - 「**销售团队/业务员** 续保产能排名（含倒数末位预警）」
 
-**不适合**：续保模块前端 UI 切片（用 `/api/query/renewal-tracker`）、跨年度趋势（用 `/data-trends`）、风险等级专项（用 `/diagnose-vehicle`）。
+**不适合**：续保模块前端 UI 切片（用 `/api/query/renewal-tracker`）、跨年度趋势（用 `/chexian-data-trends`）、风险等级专项（用 `/diagnose-vehicle`）。
 
 ---
 

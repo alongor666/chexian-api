@@ -1,5 +1,5 @@
 ---
-name: data-trends
+name: chexian-data-trends
 description: 时间趋势分析（月度/周度趋势、环比增长、异常检测）
 category: data-analysis
 version: 1.0.0
@@ -40,9 +40,9 @@ last_updated: "2026-01-11"
 ## 使用示例
 
 ```bash
-/data-trends
-/data-trends --period month
-/data-trends --period week --last 12
+/chexian-data-trends
+/chexian-data-trends --period month
+/chexian-data-trends --period week --last 12
 ```
 
 ## SQL 查询
@@ -54,4 +54,4 @@ last_updated: "2026-01-11"
 
 **注意**: 这是拆分后的子命令。完整功能请参考父命令文档。
 
-**父命令**: `/data-analysis`
+**父命令**: `/chexian-data-analysis`

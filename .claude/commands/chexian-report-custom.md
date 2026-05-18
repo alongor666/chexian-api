@@ -1,5 +1,5 @@
 ---
-name: report-custom
+name: chexian-report-custom
 description: 自定义报告生成（灵活时间范围，自定义维度）
 category: reporting
 version: 1.0.0
@@ -24,8 +24,8 @@ last_updated: "2026-01-11"
 ## 使用示例
 
 ```bash
-/report-custom --start 2025-10-01 --end 2025-12-31
-/report-custom --dimensions 机构,险类 --start 2025-12-01
+/chexian-report-custom --start 2025-10-01 --end 2025-12-31
+/chexian-report-custom --dimensions 机构,险类 --start 2025-12-01
 ```
 
 ## 支持的维度
@@ -45,4 +45,4 @@ last_updated: "2026-01-11"
 
 **注意**: 这是拆分后的子命令。完整功能请参考父命令文档。
 
-**父命令**: `/weekly-report`
+**父命令**: `/chexian-report-weekly`
