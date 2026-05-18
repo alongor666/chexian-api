@@ -181,6 +181,48 @@ if [ -f "scripts/check-governance.mjs" ]; then
 fi
 ```
 
+#### 3.4 自审 diff（取代云端 PR 自动 review）
+
+> **背景（2026-05-17）**：`claude-code-review.yml`（PR 后自动跑 `/code-review`）已下线——拖慢 CI 且产出价值低。改为**本步骤强制 Claude 自审**，diff 还在本地、问题就地修，不用再开一轮"补丁 commit + 等 CI"循环。
+
+**执行**（必须由 Claude 完成，不可跳过）：
+
+```bash
+git diff --stat origin/main
+git diff origin/main
+```
+
+读完 diff 后，**逐条**对照本项目红线清单自查：
+
+| 红线 | 自查问题 |
+|------|---------|
+| 指标/字段注册表 | 是否在 SQL 生成器中硬编码新指标？是否手编了 `mapping.ts`/`validator.ts`？是否新增 ETL 字段没声明到 `shard-config.json`/`fields.json`？ |
+| SQL 安全 | 是否拼接了用户输入？是否绕过 `security.ts` 黑名单？分子/分母 cohort 是否一致？ |
+| 业务口径 | 是否假设了因果关系（终端来源 vs 渠道、定价系数 vs 出险率）？分母是否用了 earned exposure？驾乘推介率分母是否排除纯交强/单交？ |
+| 验证证据 | 声称"完成"是否贴出 `curl` 200 + 非空 JSON？修改 SQL 是否同时用 DuckDB CLI 直查 Parquet 对账？ |
+| 安全敏感 | 是否处理用户输入/鉴权/敏感数据但**没**触发 `/security-review`？是否新增 PAT/token 相关代码未走 `readonlyMiddleware`？ |
+| 影响半径 | `client.ts` / `routes.ts` / `query-keys.ts` 改了，后端路由/`paths.ts`/`api-routes.ts` 是否同步？前端硬编码的指标标签/阈值是否从注册表派生？ |
+| 大文件/路径 | diff 是否引入 >50MB 文件？是否出现硬编码路径（应走 `paths.ts` 或环境变量）？ |
+
+**输出格式**（贴在对话中，便于用户复核）：
+
+```
+🔍 自审清单
+- 指标/字段注册表 ✅
+- SQL 安全 ✅
+- 业务口径 ⚠️ <说明>
+- 验证证据 ✅ <curl 输出摘要>
+- 安全敏感 N/A
+- 影响半径 ✅
+- 大文件/路径 ✅
+
+结论：可推送 / 需先修 <项>
+```
+
+**发现问题** → 当场修复 → 重跑 3.2/3.3/3.4 → 全部 ✅ 才进入步骤 4。
+
+**注**：需要"第二意见"时（架构变动、跨模块重构、可疑业务口径），追加 `/codex review` 或在 PR 评论 `@claude review` 显式触发 `claude-code.yml` 的 auto-review job。**不要**为常规变更滥用——这两个都是付费 token，自审不到位时才上。
+
 **只有所有检查通过后，才执行步骤4（Git 操作）**
 
 ### 4. 执行 Git 操作
