@@ -1,5 +1,5 @@
 ---
-name: cost-analysis
+name: chexian-cost-analysis
 description: 成本分析深度审计（赔付率/费用率/综合费用率/变动成本率）
 category: data-analysis
 version: 1.0.0
@@ -16,7 +16,7 @@ dependencies:
 last_updated: "2026-01-16"
 ---
 
-# /cost-analysis
+# /chexian-cost-analysis
 
 成本分析深度审计命令，涵盖赔付率、费用率、综合费用率、变动成本率四大核心指标。
 
@@ -24,21 +24,21 @@ last_updated: "2026-01-16"
 
 ```bash
 # 完整成本分析（推荐）
-/cost-analysis
+/chexian-cost-analysis
 
 # 仅分析赔付率
-/cost-analysis --claim-ratio
+/chexian-cost-analysis --claim-ratio
 
 # 仅分析费用率
-/cost-analysis --expense-ratio
+/chexian-cost-analysis --expense-ratio
 
 # 指定分析维度
-/cost-analysis --dimension 机构
-/cost-analysis --dimension 客户类别
-/cost-analysis --dimension 险别组合
+/chexian-cost-analysis --dimension 机构
+/chexian-cost-analysis --dimension 客户类别
+/chexian-cost-analysis --dimension 险别组合
 
 # 指定截止日期
-/cost-analysis --cutoff-date "2026-01-15"
+/chexian-cost-analysis --cutoff-date "2026-01-15"
 ```
 
 ## 分析维度

@@ -28,10 +28,10 @@ last_updated: "2026-02-24"
 
 | 子命令 | 功能 | 检查项数 |
 |--------|------|---------|
-| `/security-sql` | SQL注入防护 + SQL验证器合规 | 2项 |
-| `/security-xss` | XSS防护 + React/TS安全 | 1项 |
-| `/security-cors` | CORS配置 + 文件上传安全 | 2项 |
-| `/security-all` | 全量审查 | 8项 |
+| `/chexian-security-sql` | SQL注入防护 + SQL验证器合规 | 2项 |
+| `/chexian-security-xss` | XSS防护 + React/TS安全 | 1项 |
+| `/chexian-security-cors` | CORS配置 + 文件上传安全 | 2项 |
+| `/chexian-security-all` | 全量审查 | 8项 |
 
 **完整审查**: 使用本命令执行所有 8 项安全检查。
 

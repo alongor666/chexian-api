@@ -41,7 +41,7 @@ last_updated: "2026-04-22"
 - 「**新能源营业货车**的赔付发展曲线」
 - 「**某吨位段牵引车**赔付率为什么高」
 
-**不适合**：跨年度趋势对比（用 `/data-trends`）、机构级经营（用 `/diagnose-agent`）、摩托车专项（用 `/diagnose-motorcycle`）。
+**不适合**：跨年度趋势对比（用 `/chexian-data-trends`）、机构级经营（用 `/diagnose-agent`）、摩托车专项（用 `/diagnose-motorcycle`）。
 
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: security-all
+name: chexian-security-all
 description: 全量安全审查（8项检查完整覆盖）
 category: security
 version: 1.0.0
@@ -35,8 +35,8 @@ last_updated: "2026-01-11"
 ## 使用示例
 
 ```bash
-/security-all
-/security-all --target all
+/chexian-security-all
+/chexian-security-all --target all
 ```
 
 ## 详细规则

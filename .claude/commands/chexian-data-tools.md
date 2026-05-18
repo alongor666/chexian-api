@@ -1,5 +1,5 @@
 ---
-name: data-tools
+name: chexian-data-tools
 description: Python数据分析工具库（Parquet分析、字段分析、数据转换）
 category: data-analysis
 version: 1.0.0
@@ -21,14 +21,14 @@ last_updated: "2026-01-16"
 
 ```bash
 # 列出所有工具
-/data-tools --list
+/chexian-data-tools --list
 
 # 搜索工具
-/data-tools --search parquet
+/chexian-data-tools --search parquet
 
 # 运行工具
-/data-tools analyze_parquet
-/data-tools earned_premium
+/chexian-data-tools analyze_parquet
+/chexian-data-tools earned_premium
 ```
 
 ## 工具列表
@@ -74,34 +74,34 @@ last_updated: "2026-01-16"
 ### 场景1: 数据格式转换
 ```bash
 # 将Excel转换为Parquet
-/data-tools excel_to_parquet
+/chexian-data-tools excel_to_parquet
 ```
 
 ### 场景2: 数据探索
 ```bash
 # 分析Parquet文件结构
-/data-tools analyze_parquet
+/chexian-data-tools analyze_parquet
 
 # 深度数据分析
-/data-tools deep_analysis
+/chexian-data-tools deep_analysis
 ```
 
 ### 场景3: 字段质量评估
 ```bash
 # 字段关联分析
-/data-tools field_relation
+/chexian-data-tools field_relation
 
 # 字段深度分析
-/data-tools field_deep
+/chexian-data-tools field_deep
 
 # 字段穷举分析
-/data-tools field_exhaustive
+/chexian-data-tools field_exhaustive
 ```
 
 ### 场景4: 业务计算
 ```bash
 # 计算已赚保费
-/data-tools earned_premium
+/chexian-data-tools earned_premium
 ```
 
 ## CLI 高级用法
@@ -156,34 +156,34 @@ python3 business_tools/earned_premium/calculate.py
 ### 典型的数据处理流程
 ```bash
 # 1. 分析Excel文件结构
-/data-tools analyze_excel
+/chexian-data-tools analyze_excel
 
 # 2. 转换为Parquet格式
-/data-tools excel_to_parquet
+/chexian-data-tools excel_to_parquet
 
 # 3. 分析Parquet文件结构
-/data-tools analyze_parquet
+/chexian-data-tools analyze_parquet
 
 # 4. 深度数据探索
-/data-tools deep_analysis
+/chexian-data-tools deep_analysis
 
 # 5. 字段关联分析
-/data-tools field_relation
+/chexian-data-tools field_relation
 
 # 6. 计算已赚保费
-/data-tools earned_premium
+/chexian-data-tools earned_premium
 ```
 
 ### 字段质量评估流程
 ```bash
 # 1. 深度分析单个字段
-/data-tools field_deep
+/chexian-data-tools field_deep
 
 # 2. 穷举分析所有字段
-/data-tools field_exhaustive
+/chexian-data-tools field_exhaustive
 
 # 3. 字段关联关系分析
-/data-tools field_relation
+/chexian-data-tools field_relation
 ```
 
 ## 常见问题

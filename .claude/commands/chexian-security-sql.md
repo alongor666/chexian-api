@@ -1,5 +1,5 @@
 ---
-name: security-sql
+name: chexian-security-sql
 description: SQL注入防护专项检查（输入清理、SQL验证器、LIKE子句）
 category: security
 version: 1.0.0
@@ -37,8 +37,8 @@ last_updated: "2026-01-11"
 ## 使用示例
 
 ```bash
-/security-sql
-/security-sql --target src/shared/sql
+/chexian-security-sql
+/chexian-security-sql --target src/shared/sql
 ```
 
 ## 详细规则

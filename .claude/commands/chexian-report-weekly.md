@@ -1,5 +1,5 @@
 ---
-name: weekly-report
+name: chexian-report-weekly
 description: 车险业务周报自动生成（董事会级，数据驱动，业务洞察型）
 category: reporting
 version: 2.2.0
@@ -29,19 +29,19 @@ last_updated: "2026-02-24"
 
 | 子命令 | 功能 | 时间维度 |
 |--------|------|---------|
-| `/report-weekly` | 周报生成 | 自然周 |
-| `/report-monthly` | 月报生成 | 自然月 |
-| `/report-custom` | 自定义报告 | 灵活范围 |
+| `/chexian-report-weekly` | 周报生成 | 自然周 |
+| `/chexian-report-monthly` | 月报生成 | 自然月 |
+| `/chexian-report-custom` | 自定义报告 | 灵活范围 |
 
 ---
 
 ## 输入参数
 
 ```bash
-/weekly-report                                   # 默认：最近一周
-/weekly-report --period week --number 50         # 指定自然周
-/weekly-report --start 2025-12-01 --end 2025-12-31  # 指定时间范围
-/weekly-report --period month --value 2025-12    # 月度报告
+/chexian-report-weekly                                   # 默认：最近一周
+/chexian-report-weekly --period week --number 50         # 指定自然周
+/chexian-report-weekly --start 2025-12-01 --end 2025-12-31  # 指定时间范围
+/chexian-report-weekly --period month --value 2025-12    # 月度报告
 ```
 
 ---
@@ -130,8 +130,8 @@ last_updated: "2026-02-24"
 
 ## 相关
 
-- `/cost-analysis` — 成本分析深度审计
-- `/data-analysis` — 多维度深度分析
+- `/chexian-cost-analysis` — 成本分析深度审计
+- `/chexian-data-analysis` — 多维度深度分析
 - `数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md` — 完整字段定义
 
 ---
