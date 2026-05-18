@@ -247,17 +247,17 @@ bun run governance                 # 治理校验
 | 前缀 | 真实语义 | 簇角色 | 代表 |
 |------|------|------|------|
 | `chexian-*` | 中文"车险"前缀 | 项目基础设施 / 工程任务（通常被 import 或为项目改造任务） | chexian-report-shell（渲染基础设施）、chexian-local-risk-control |
-| `auto-*` | 英文 "auto insurance" 前缀 | 车险领域知识 / 决策协议 / 业务推理 | auto-channel / auto-pricing / auto-market-analysis / auto-ir-diagnosis / auto-ops-review |
+| ~~`auto-*`~~ → `chexian-*` | ✅ 2026-05-18 P3.1 已治理改名，全部归入 chexian 簇：chexian-channel / chexian-pricing-decision / chexian-market-analysis / chexian-ir-diagnosis / chexian-ops-review |
 | `diagnose-*` | 诊断报告前缀 | 数据驱动诊断（Python + DuckDB → HTML） | diagnose-org-weekly / diagnose-period-trend / diagnose-loss-development |
 
-**前缀语义不绑定内容形式**：`auto-*` 不强制"纯 prompt 无代码"，`diagnose-*` 不强制必须含 `lib/*.py`。前缀只表达**业务定位**。`auto-` 与 `chexian-` 都指向"车险"是历史冗余，统一治理待 P3 单独立项。
+**前缀语义不绑定内容形式**：`chexian-*` 不强制项目专属（含决策协议 + 业务推理）、`diagnose-*` 不强制必须含 `lib/*.py`。前缀只表达**业务定位**。`auto-*` → `chexian-*` 历史冗余已于 2026-05-18 P3.1 治理完成（5 个 skill 全部归并到 chexian 簇）。
 
 **遗留前缀 — `xcl-*`**（用户名字缩写，违反"前缀语义化"原则）：
 
 | Skill | 状态 | 治理动作 |
 |---|---|---|
 | `xcl-pdf2lark` | DEPRECATED（2026-11 退役） | 等自然退役 |
-| `xcl-ppt2im` | 活跃，是车险报告 → 飞书/企微分发的核心出口 | 改名归入 `chexian-*` 簇（待 P3.2 单独立项） |
+| ~~`xcl-ppt2im`~~ → `chexian-im-push` | ✅ 已改名归入 chexian 簇（2026-05-18 P3.2 完成） | — |
 
 **新增 skill 铁律**：
 - ✅ 业务领域前缀（`chexian-` / `auto-` / `diagnose-`）
