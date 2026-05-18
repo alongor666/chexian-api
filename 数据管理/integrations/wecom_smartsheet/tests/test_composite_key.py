@@ -140,6 +140,55 @@ field_mapping:
     assert inst.composite_key is None
 
 
+def test_load_instances_expands_targets_with_shared_mapping(tmp_path: Path) -> None:
+    """同一业务配置可展开成多个目标表，目标级 filters 只追加不复制字段映射。"""
+    yaml_path = tmp_path / "postal.yaml"
+    yaml_path.write_text(
+        """
+instance_name: postal
+script: sync_filtered_policies.py
+filters:
+  agent_name_like: "%邮政%"
+  policy_date_from: "2026-04-20"
+targets:
+  - name: risk
+    instance_name: postal-risk
+    webhook_env: WEBHOOK_RISK
+    filters:
+      extra_where: "insurance_grade IS NOT NULL"
+  - name: all
+    instance_name: postal-all
+    webhook_env: WEBHOOK_ALL
+primary_key: policy_no
+field_mapping:
+  policy_no: fAAA
+field_types:
+  fAAA: TEXT
+field_labels:
+  fAAA: 保单号
+""".strip(),
+        encoding="utf-8",
+    )
+
+    risk, all_rows = sfp.load_instances(yaml_path)
+
+    assert risk.instance_name == "postal-risk"
+    assert risk.webhook_env == "WEBHOOK_RISK"
+    assert risk.filters == {
+        "agent_name_like": "%邮政%",
+        "policy_date_from": "2026-04-20",
+        "extra_where": "insurance_grade IS NOT NULL",
+    }
+    assert all_rows.instance_name == "postal-all"
+    assert all_rows.webhook_env == "WEBHOOK_ALL"
+    assert all_rows.filters == {
+        "agent_name_like": "%邮政%",
+        "policy_date_from": "2026-04-20",
+    }
+    assert risk.field_mapping is not all_rows.field_mapping
+    assert risk.field_mapping == all_rows.field_mapping == {"policy_no": "fAAA"}
+
+
 def test_validate_state_rejects_old_primary_state_for_composite_key() -> None:
     inst = _make_instance(composite_key=("policy_no", "plate_no", "premium", "policy_date"))
     old_state = {"synced_keys": ["P123"]}
