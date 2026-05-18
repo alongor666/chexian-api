@@ -203,7 +203,7 @@ E2E_PASSWORD=... bun run test:e2e --grep "forecast"
 | 既有 forecast contract 测试 | `tests/api/agent-profit-forecast.route-contract.test.ts` |
 | 既有 forecast isolation 测试 | `tests/api/agent-profit-forecast-isolation.test.ts` |
 | Stage 5 boundary 测试 | `tests/api/agent-stage5-boundary-audit.test.ts` |
-| Smoke harness | `scripts/chexian-verify-agent-production-smoke.mjs` |
+| Smoke harness | `scripts/verify-agent-production-smoke.mjs` |
 | Smoke harness 测试 | `tests/api/agent-production-smoke-harness.test.mjs` |
 
 ---
