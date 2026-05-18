@@ -93,7 +93,7 @@
 
 **Gate**: `bun run build` 零 TS 报错 + 第 5 Tab 正常加载数据
 
-## Phase 5: /patrol Skill
+## Phase 5: /chexian-patrol Skill
 
 - [ ] **5.1** 新建 `.claude/skills/patrol/SKILL.md` 或 `.claude/commands/patrol.md`
   - 触发 `python3 数据管理/patrol/patrol_engine.py --domain renewal`
@@ -103,7 +103,7 @@
   - 支持交互追问："XX 机构为什么续保率下降？"→ 自动下钻查询
 - [ ] **5.2** 更新 `.claude/commands/README.md` 注册新命令
 
-**Gate**: `/patrol` 跑通，产出带文本摘要的完整巡检报告
+**Gate**: `/chexian-patrol` 跑通，产出带文本摘要的完整巡检报告
 
 ## Phase 6: 文档与验证
 

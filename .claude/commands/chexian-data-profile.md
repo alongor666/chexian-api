@@ -1,5 +1,5 @@
 ---
-name: data-profile
+name: chexian-data-profile
 description: 数据概览与质量检查（基础统计、字段完整性、保费分布）
 category: data-analysis
 version: 1.0.0
@@ -39,8 +39,8 @@ last_updated: "2026-01-11"
 ## 使用示例
 
 ```bash
-/data-profile
-/data-profile --output report.md
+/chexian-data-profile
+/chexian-data-profile --output report.md
 ```
 
 ## SQL 查询
@@ -52,4 +52,4 @@ last_updated: "2026-01-11"
 
 **注意**: 这是拆分后的子命令。完整功能请参考父命令文档。
 
-**父命令**: `/data-analysis`
+**父命令**: `/chexian-data-analysis`

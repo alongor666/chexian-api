@@ -1,5 +1,5 @@
 ---
-name: performance-audit
+name: chexian-performance-audit
 description: 全栈性能审计（前端渲染+后端查询+内存优化）
 category: optimization
 version: 2.0.0
@@ -16,7 +16,7 @@ dependencies:
 last_updated: "2026-01-16"
 ---
 
-# /performance-audit
+# /chexian-performance-audit
 
 全栈性能审计命令，涵盖前端渲染性能、DuckDB 查询性能、内存使用优化。
 
@@ -24,16 +24,16 @@ last_updated: "2026-01-16"
 
 ```bash
 # 完整性能审计（推荐）
-/performance-audit
+/chexian-performance-audit
 
 # 仅审计前端性能
-/performance-audit --frontend
+/chexian-performance-audit --frontend
 
 # 仅审计数据库查询
-/performance-audit --database
+/chexian-performance-audit --database
 
 # 生成性能报告
-/performance-audit --report
+/chexian-performance-audit --report
 ```
 
 ## 审计流程

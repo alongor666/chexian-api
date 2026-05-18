@@ -1,5 +1,5 @@
 ---
-name: security-xss
+name: chexian-security-xss
 description: XSS防护专项检查（输出编码、innerHTML使用、React安全）
 category: security
 version: 1.0.0
@@ -31,8 +31,8 @@ last_updated: "2026-01-11"
 ## 使用示例
 
 ```bash
-/security-xss
-/security-xss --target src/features
+/chexian-security-xss
+/chexian-security-xss --target src/features
 ```
 
 ## 详细规则

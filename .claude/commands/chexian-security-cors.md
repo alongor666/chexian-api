@@ -1,5 +1,5 @@
 ---
-name: security-cors
+name: chexian-security-cors
 description: CORS与文件上传安全检查（COOP/COEP头部、文件验证）
 category: security
 version: 1.0.0
@@ -36,8 +36,8 @@ last_updated: "2026-01-11"
 ## 使用示例
 
 ```bash
-/security-cors
-/security-cors --check upload
+/chexian-security-cors
+/chexian-security-cors --check upload
 ```
 
 ## 详细规则

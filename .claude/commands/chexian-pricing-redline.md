@@ -1,5 +1,5 @@
 ---
-name: pricing-redline
+name: chexian-pricing-redline
 description: 反事实定价分析 — 固定赔付和费用，反推各维度盈亏平衡定价系数（红线矩阵）
 category: data-analysis
 version: 1.1.0
@@ -70,9 +70,9 @@ END AS coeff_ceiling
 
 | 组合场景 | 工作流 |
 |---------|-------|
-| `/diagnose-agent` → `/pricing-redline` | 诊断发现亏损 → 追加红线分析，定位哪些维度靠定价可救、哪些不可救 |
-| `/pricing-redline` → `/auto-pricing` | 红线矩阵产出 → 输入定价策略，给出调价建议 |
-| `/pricing-redline` 独立使用 | 定期（月度/季度）跑红线监控，及早发现定价不足的板块 |
+| `/diagnose-agent` → `/chexian-pricing-redline` | 诊断发现亏损 → 追加红线分析，定位哪些维度靠定价可救、哪些不可救 |
+| `/chexian-pricing-redline` → `/auto-pricing` | 红线矩阵产出 → 输入定价策略，给出调价建议 |
+| `/chexian-pricing-redline` 独立使用 | 定期（月度/季度）跑红线监控，及早发现定价不足的板块 |
 
 ---
 

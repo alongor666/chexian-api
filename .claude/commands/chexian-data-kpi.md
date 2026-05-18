@@ -1,5 +1,5 @@
 ---
-name: data-kpi
+name: chexian-data-kpi
 description: 业绩分析与排名（Top30业务员、机构对比、四象限分层）
 category: data-analysis
 version: 1.0.0
@@ -41,8 +41,8 @@ last_updated: "2026-01-11"
 ## 使用示例
 
 ```bash
-/data-kpi
-/data-kpi --top 50
+/chexian-data-kpi
+/chexian-data-kpi --top 50
 ```
 
 ## SQL 查询
@@ -54,4 +54,4 @@ last_updated: "2026-01-11"
 
 **注意**: 这是拆分后的子命令。完整功能请参考父命令文档。
 
-**父命令**: `/data-analysis`
+**父命令**: `/chexian-data-analysis`

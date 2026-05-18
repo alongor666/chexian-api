@@ -1,5 +1,5 @@
 ---
-name: push-wecom
+name: chexian-push-wecom
 description: 把本地 markdown 报告推送到企业微信智能表格（章节表格化），按 H1/H2 拆成多行，返回 url 和 docid 供复粘到群
 category: integration
 version: 2.0.0
@@ -18,13 +18,13 @@ last_updated: "2026-05-08"
 
 # 推送 markdown 到企业微信智能表格
 
-把本地 markdown 报告（如 `/report-weekly`、`/diagnose-*` 生成的产物）发布为企业微信「智能表格」，按 H1/H2 自动拆成多行——每个章节一条记录，便于按层级筛选、按章节定位。
+把本地 markdown 报告（如 `/chexian-report-weekly`、`/diagnose-*` 生成的产物）发布为企业微信「智能表格」，按 H1/H2 自动拆成多行——每个章节一条记录，便于按层级筛选、按章节定位。
 
 ## 何时使用
 
 - 用户说「推到企微 / 发到企业微信 / 推送报告 / push wecom」
 - 用户已生成 markdown 报告，希望让团队通过链接查看（非自己留档）
-- 报告生成命令（`/report-weekly` 等）执行完后用户主动要求分享
+- 报告生成命令（`/chexian-report-weekly` 等）执行完后用户主动要求分享
 
 ## 用法
 
@@ -65,7 +65,7 @@ python3 数据管理/integrations/wecom_doc/push_markdown.py <md路径> --dry-ru
 
 ## 与其他命令的衔接
 
-报告生成类命令（`/report-weekly`、`/diagnose-agent` 等）执行完，若用户希望推到企微，AI 应主动建议：
+报告生成类命令（`/chexian-report-weekly`、`/diagnose-agent` 等）执行完，若用户希望推到企微，AI 应主动建议：
 
 > 报告已生成在 `<path>`。如需推送到企业微信，运行：
 > `python3 数据管理/integrations/wecom_doc/push_markdown.py <path>`

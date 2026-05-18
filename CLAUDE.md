@@ -190,7 +190,7 @@ bun run governance                 # 治理校验
 
 **CI/CD**：`deploy.yml`（push main → 构建→部署→健康检查）· `claude-code.yml`（@claude 触发）· `governance-check.yml`（PR 治理）
 
-**工具箱**：[.claude/commands/README.md](./.claude/commands/README.md)（40 命令）· `.claude/agents/`（14 agents）· 常用：`/chexian-commit-push-pr` `/sync-and-rebase` `/data-analysis` `/chexian-security-review` `/chexian-verify`
+**工具箱**：[.claude/commands/README.md](./.claude/commands/README.md)（40 命令）· `.claude/agents/`（14 agents）· 常用：`/chexian-commit-push-pr` `/chexian-data-analysis` `/chexian-security-review` `/chexian-verify` `/chexian-deploy`
 
 ---
 

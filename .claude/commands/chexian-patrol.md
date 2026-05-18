@@ -2,9 +2,9 @@
 
 ## 用法
 
-- `/patrol` — 执行续保巡检，生成报告并给出文本摘要
-- `/patrol --dry-run` — 只打印 SQL 不执行
-- `/patrol --sync` — 执行巡检后同步到 VPS
+- `/chexian-patrol` — 执行续保巡检，生成报告并给出文本摘要
+- `/chexian-patrol --dry-run` — 只打印 SQL 不执行
+- `/chexian-patrol --sync` — 执行巡检后同步到 VPS
 
 ## 必读
 
