@@ -9,14 +9,14 @@
  *   2. bun run governance                         （24+ 项校验，失败则中止）
  *   3. ssh sudo /usr/local/bin/deploy-chexian-api reload  （pm2 delete + start，可恢复 errored）
  *   4. curl https://chexian.cretvalu.com/health   （重试 8 次 / 5 秒间隔）
- *   5. 可选：批量同步机构续保追踪企业微信智能表格
+ *   5. 可选：批量同步企微机构续保追踪表 + 邮政经代签单表
  *
  * 使用：
  *   node scripts/sync-and-reload.mjs                        # daily.mjs all
  *   node scripts/sync-and-reload.mjs premium                # 仅保费域
  *   node scripts/sync-and-reload.mjs --skip-governance      # 跳过 governance（不推荐）
  *   node scripts/sync-and-reload.mjs --skip-reload          # 仅 ETL+governance，不重启
- *   node scripts/sync-and-reload.mjs --wecom                # 线上健康后同步企微机构续保表
+ *   node scripts/sync-and-reload.mjs --wecom                # 线上健康后同步企微机构续保表 + 邮政经代表
  *   node scripts/sync-and-reload.mjs --wecom-dry-run        # 只打印企微同步计划
  *   node scripts/sync-and-reload.mjs --wecom --wecom-org 新都,资阳
  *   node scripts/sync-and-reload.mjs --dry-run              # 仅打印计划，不执行
@@ -29,6 +29,7 @@
  */
 
 import { spawn } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -46,6 +47,24 @@ const COLORS = {
 
 function log(color, msg) {
   process.stdout.write(`${COLORS[color] || ''}${msg}${COLORS.reset}\n`);
+}
+
+function loadDotEnvLocal() {
+  const envPath = join(ROOT_DIR, '.env.local');
+  if (!existsSync(envPath)) return;
+  const lines = readFileSync(envPath, 'utf-8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
+    const idx = trimmed.indexOf('=');
+    const key = trimmed.slice(0, idx).trim();
+    let value = trimmed.slice(idx + 1).trim();
+    if (!key || process.env[key] !== undefined) continue;
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
 }
 
 function parseArgs(argv) {
@@ -126,6 +145,7 @@ async function healthCheck(url, maxAttempts = 8, intervalMs = 5000) {
 }
 
 async function main() {
+  loadDotEnvLocal();
   const opts = parseArgs(process.argv.slice(2));
   const sshAlias = process.env.SYNC_VPS_SSH_ALIAS || 'chexian-vps-deploy';
   const healthUrl = process.env.SYNC_AND_RELOAD_HEALTH_URL || 'https://chexian.cretvalu.com/health';
@@ -179,16 +199,31 @@ async function main() {
     }
   }
 
-  // Stage 5: 企业微信机构续保表同步（显式开关）
+  // Stage 5: 企业微信同步（显式开关）
   if (opts.wecom) {
     const wecomArgs = ['数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py'];
     if (!opts.wecomDryRun) wecomArgs.push('--execute');
     if (opts.wecomOrg) wecomArgs.push('--org', opts.wecomOrg);
     await runCmd(
-      opts.wecomDryRun ? 'WeCom dry-run' : 'WeCom sync',
+      opts.wecomDryRun ? 'WeCom renewal dry-run' : 'WeCom renewal sync',
       'python3',
       wecomArgs,
       { dryRun: opts.dryRun, timeoutMs: 90 * 60 * 1000 }
+    );
+
+    const postalArgs = [
+      '数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py',
+      '--instance',
+      '数据管理/integrations/wecom_smartsheet/instances/postal-policy-since-20260420.yaml',
+      '--mode',
+      'sync',
+    ];
+    if (opts.wecomDryRun) postalArgs.push('--dry-run');
+    await runCmd(
+      opts.wecomDryRun ? 'WeCom postal dry-run' : 'WeCom postal sync',
+      'python3',
+      postalArgs,
+      { dryRun: opts.dryRun, timeoutMs: 30 * 60 * 1000 }
     );
   }
 

@@ -63,24 +63,40 @@ class InstanceConfig:
     script: str | None  # 仅供 daily.mjs 路由用
 
 
-def load_instance(path: Path) -> InstanceConfig:
-    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -> InstanceConfig:
+    target = target or {}
+    filters = dict(raw.get("filters", {}))
+    filters.update(target.get("filters", {}))
     composite_raw = raw.get("composite_key")
     composite = tuple(composite_raw) if composite_raw else None
     return InstanceConfig(
-        instance_name=raw["instance_name"],
-        webhook_env=raw["webhook_env"],
+        instance_name=target.get("instance_name") or (
+            f"{raw['instance_name']}-{target['name']}" if target.get("name") else raw["instance_name"]
+        ),
+        webhook_env=target.get("webhook_env") or raw["webhook_env"],
         batch_size=int(raw.get("batch_size", 100)),
         sheet_rpm=int(raw.get("sheet_records_per_minute_limit", 3000)),
-        filters=raw["filters"],
+        filters=filters,
         primary_key=raw.get("primary_key", "policy_no"),
         composite_key=composite,
-        field_mapping=raw["field_mapping"],
-        field_types=raw.get("field_types", {}),
-        field_labels=raw.get("field_labels", {}),
+        field_mapping=dict(raw["field_mapping"]),
+        field_types=dict(raw.get("field_types", {})),
+        field_labels=dict(raw.get("field_labels", {})),
         policy_glob=raw.get("policy_glob", DEFAULT_POLICY_GLOB),
         script=raw.get("script"),
     )
+
+
+def load_instances(path: Path) -> list[InstanceConfig]:
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    targets = raw.get("targets") or []
+    if not targets:
+        return [_build_instance(raw)]
+    return [_build_instance(raw, target) for target in targets]
+
+
+def load_instance(path: Path) -> InstanceConfig:
+    return load_instances(path)[0]
 
 
 # ---------- SQL ----------
@@ -553,24 +569,44 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     instance_path = Path(args.instance).resolve()
-    instance = load_instance(instance_path)
+    instances = load_instances(instance_path)
 
     if args.batch_size:
-        instance = InstanceConfig(
-            **{**instance.__dict__, "batch_size": args.batch_size}
-        )
+        instances = [
+            InstanceConfig(**{**instance.__dict__, "batch_size": args.batch_size})
+            for instance in instances
+        ]
 
     if args.rebuild_state:
-        summary = rebuild_state(
-            instance,
-            dry_run=args.dry_run,
-            force_assume_remote_complete=args.force_assume_remote_complete,
-        )
-        print(json.dumps(summary, ensure_ascii=False, indent=2, default=str))
+        summaries = [
+            rebuild_state(
+                instance,
+                dry_run=args.dry_run,
+                force_assume_remote_complete=args.force_assume_remote_complete,
+            )
+            for instance in instances
+        ]
+        payload = summaries[0] if len(summaries) == 1 else {
+            "instance_file": str(instance_path),
+            "target_count": len(summaries),
+            "results": summaries,
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
         return
 
-    summary = run(instance, mode=args.mode, dry_run=args.dry_run)
+    summaries = [run(instance, mode=args.mode, dry_run=args.dry_run) for instance in instances]
+    if len(summaries) > 1:
+        print(json.dumps({
+            "instance_file": str(instance_path),
+            "target_count": len(summaries),
+            "results": [
+                {k: v for k, v in summary.items() if k != "sample_records"}
+                for summary in summaries
+            ],
+        }, ensure_ascii=False, indent=2, default=str))
+        return
 
+    summary = summaries[0]
     print(json.dumps(
         {k: v for k, v in summary.items() if k != "sample_records"},
         ensure_ascii=False, indent=2, default=str,
