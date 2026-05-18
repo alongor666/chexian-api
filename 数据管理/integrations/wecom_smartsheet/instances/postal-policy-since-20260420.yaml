@@ -7,23 +7,11 @@
 # sheet_id:    q979lj
 # url:         https://doc.weixin.qq.com/smartsheet/s3_ABkAfniHALMCNZ1iOnwIsScu1R2Ew_a
 
-instance_name: postal-policy-since-20260420
+instance_name: postal-policy-all-since-20260420
 script: sync_filtered_policies.py        # daily.mjs 据此路由到非续保脚本；缺省则走 sync_renewal_v2.py
 
-# 一个邮政业务口径可对应多个企业微信目标表。字段映射只维护一份；
-# 各目标仅声明 webhook 和额外筛选，额外字段由目标表自行保留，脚本不写入。
-targets:
-  # 地址一：高风险/特殊等级表，只同步车险风险等级非空且不为 A/B/C 的记录。
-  - name: risk-filtered
-    instance_name: postal-policy-risk-filtered-since-20260420
-    webhook_env: WECOM_SMARTSHEET_WEBHOOK_POSTAL_RISK_FILTERED
-    filters:
-      extra_where: "insurance_grade IS NOT NULL AND TRIM(CAST(insurance_grade AS VARCHAR)) != '' AND insurance_grade NOT IN ('A', 'B', 'C')"
-
-  # 地址二：全量表，继承 base filters，不追加筛选。
-  - name: all
-    instance_name: postal-policy-all-since-20260420
-    webhook_env: WECOM_SMARTSHEET_WEBHOOK_POSTAL_ALL
+# 邮政只同步全量表。保留 all 实例名以复用既有 state，避免后续重复推送。
+webhook_env: WECOM_SMARTSHEET_WEBHOOK_POSTAL_ALL
 
 batch_size: 100
 sheet_records_per_minute_limit: 3000
