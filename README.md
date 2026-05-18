@@ -355,7 +355,7 @@ node scripts/sync-vps.mjs --export
 | `claude-code.yml` | @claude 评论 | Claude Code 自动处理（`@claude review` 显式触发 review） |
 | `claude.yml` | @claude 评论/review | Claude 辅助 workflow（按需触发） |
 
-> **注**：PR 后的自动 Claude code review 已下线（2026-05-17）——拖慢 CI 且产出价值低。改为**提交前由 Claude 自审 diff**，流程见 `.claude/commands/commit-push-pr.md` §3.4。需要二次审查时仍可在 PR 评论 `@claude review` 显式触发。
+> **注**：PR 后的自动 Claude code review 已下线（2026-05-17）——拖慢 CI 且产出价值低。改为**提交前由 Claude 自审 diff**，流程见 `.claude/commands/chexian-commit-push-pr.md` §3.4。需要二次审查时仍可在 PR 评论 `@claude review` 显式触发。
 
 ## 参考文档
 

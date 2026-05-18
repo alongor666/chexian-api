@@ -2,7 +2,7 @@
 
 ## 优化内容
 
-已为 `/commit-push-pr` 命令添加**前置冲突检测**功能，在提交 PR 前自动检查与 `main` 分支的 merge 冲突。
+已为 `/chexian-commit-push-pr` 命令添加**前置冲突检测**功能，在提交 PR 前自动检查与 `main` 分支的 merge 冲突。
 
 ## 新增功能
 
@@ -37,7 +37,7 @@ echo "# 测试注释" >> README.md
 # 3. 提交并运行命令
 git add .
 git commit -m "test: 添加测试注释"
-/commit-push-pr
+/chexian-commit-push-pr
 
 # 预期结果：
 # ✅ 冲突检查通过
@@ -58,7 +58,7 @@ git commit -m "test: main添加新内容"
 git checkout test/no-conflict-branch
 
 # 3. 运行命令
-/commit-push-pr
+/chexian-commit-push-pr
 
 # 预期结果：
 # ⚠️ 警告：当前分支不是基于最新的 main 分支
@@ -81,7 +81,7 @@ git add .
 git commit -m "test: 分支修改CLAUDE.md"
 
 # 3. 运行命令
-/commit-push-pr
+/chexian-commit-push-pr
 
 # 预期结果：
 # ❌ 检测到与 main 分支存在冲突！
@@ -106,7 +106,7 @@ git add <冲突文件>
 git rebase --continue
 
 # 4. 重新运行命令
-/commit-push-pr
+/chexian-commit-push-pr
 ```
 
 ## 优势

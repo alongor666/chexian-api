@@ -1,5 +1,5 @@
 ---
-name: security-review
+name: chexian-security-review
 description: 车险业绩看板全面安全审查（SQL注入、XSS、CORS等8项检查）
 category: security
 version: 2.1.0
@@ -40,9 +40,9 @@ last_updated: "2026-02-24"
 ## 输入参数
 
 ```bash
-/security-review                              # 默认：审查所有已修改文件
-/security-review --target src/shared/utils    # 指定目录
-/security-review --target all                 # 全量审查
+/chexian-security-review                              # 默认：审查所有已修改文件
+/chexian-security-review --target src/shared/utils    # 指定目录
+/chexian-security-review --target all                 # 全量审查
 ```
 
 ---

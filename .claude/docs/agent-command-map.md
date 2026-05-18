@@ -29,13 +29,13 @@
 | `data-validator` | `/data-profile` | validator 做深度校验，profile 做概览 |
 | `duckdb-optimizer` | — | 查询慢时触发 |
 | `e2e-runner` | — | E2E 测试专用 |
-| `knowledge-miner` | `/extract-knowledge` | miner 提取知识，command 触发流程 |
+| `knowledge-miner` | `/chexian-extract-knowledge` | miner 提取知识，command 触发流程 |
 | `react-performance` | `/performance-audit` | agent 专注 React，command 做全栈审计 |
-| `security-reviewer` | `/security-review` | agent 深度分析，command 8 项检查清单 |
-| `session-manager` | `/session-manager` | 功能相同，command 是快捷入口 |
-| `tdd-guide` | `/tdd` | agent 引导 TDD，command 执行 TDD 流程 |
+| `security-reviewer` | `/chexian-security-review` | agent 深度分析，command 8 项检查清单 |
+| `session-manager` | `/chexian-session-manager` | 功能相同，command 是快捷入口 |
+| `tdd-guide` | — | 项目无对应 command（敲 `/tdd` 会用全局通用版） |
 | `ui-ux-designer` | `/ui-review` | agent 设计，command 审查 |
-| `verify-app` | `/verify` | agent 全面验证，command 快速检查 |
+| `verify-app` | `/chexian-verify` | agent 全面验证，command 快速检查 |
 
 ---
 
@@ -62,7 +62,7 @@
 ### 安全类
 | Command | 说明 |
 |---------|------|
-| `/security-review` | 全量 8 项审查 |
+| `/chexian-security-review` | 全量 8 项审查 |
 | `/security-sql` | SQL 注入专项 |
 | `/security-xss` | XSS 专项 |
 | `/security-cors` | CORS+文件上传 |
@@ -71,9 +71,8 @@
 ### 工作流类
 | Command | 说明 |
 |---------|------|
-| `/commit-push-pr` | Git 提交+推送+PR |
+| `/chexian-commit-push-pr` | Git 提交+推送+PR |
 | `/sync-and-rebase` | 同步远程+Rebase |
-| `/tdd` | TDD 开发流程 |
-| `/verify` | 多层验证 |
-| `/checkpoint` | 会话存档 |
-| `/test-coverage` | 测试覆盖率 |
+| `/chexian-verify` | 多层验证 |
+| `/chexian-checkpoint` | 会话存档 |
+| `/chexian-test-coverage` | 测试覆盖率 |

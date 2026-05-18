@@ -4,7 +4,7 @@ Sequential agent workflow for complex tasks.
 
 ## Usage
 
-`/orchestrate [workflow-type] [task-description]`
+`/chexian-orchestrate [workflow-type] [task-description]`
 
 ## Workflow Types
 
@@ -67,7 +67,7 @@ Between agents, create handoff document:
 ## Example: Feature Workflow
 
 ```
-/orchestrate feature "Add user authentication"
+/chexian-orchestrate feature "Add user authentication"
 ```
 
 Executes:
@@ -160,7 +160,7 @@ $ARGUMENTS:
 ## Custom Workflow Example
 
 ```
-/orchestrate custom "architect,tdd-guide,code-reviewer" "Redesign caching layer"
+/chexian-orchestrate custom "architect,tdd-guide,code-reviewer" "Redesign caching layer"
 ```
 
 ## Tips

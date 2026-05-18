@@ -24,7 +24,7 @@
 | 生成驾意险推介率日报 | daily_report_jiayi.py | `python3 数据管理/驾意险推介率/脚本/daily_report_jiayi.py` |
 | 计算已赚保费（月末） | earned_premium_monthly.py | `python3 数据管理/pipelines/已赚保费/earned_premium_monthly.py` |
 | 运行率值治理测试 | test_rate_governance.py | `pytest 数据管理/pipelines/test_rate_governance.py -v` |
-| 验证交叉销售口径 | verify-cross-sell.py | `python3 scripts/verify-cross-sell.py --date 2026-03-28` |
+| 验证交叉销售口径 | verify-cross-sell.py | `python3 scripts/chexian-verify-cross-sell.py --date 2026-03-28` |
 | 查阅字段值域 | PARQUET_SCHEMA_KNOWLEDGE.md | 见下方知识库索引 |
 | 查阅业务规则 | 车险数据业务规则字典.md | 见下方知识库索引 |
 | 查阅数据流变换 | DATA_FLOW_KNOWLEDGE.md | 见下方知识库索引 |
