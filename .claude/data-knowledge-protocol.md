@@ -487,7 +487,7 @@ cd 数据管理 && python3 warehouse/dim/generate_dim_tables.py
 node scripts/sync-vps.mjs
 
 # 交叉销售口径验证
-python3 scripts/chexian-verify-cross-sell.py --date 2026-03-28
+python3 scripts/verify-cross-sell.py --date 2026-03-28
 ```
 
 ### Claude Code Slash Command
