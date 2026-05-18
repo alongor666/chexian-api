@@ -12,11 +12,11 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-SKILL_ROOT = Path.home() / ".claude/skills/diagnose-html-render"
+SKILL_ROOT = Path.home() / ".claude/skills/chexian-report-shell"
 if not SKILL_ROOT.exists():
     raise SystemExit(
-        f"diagnose-html-render skill 未安装于 {SKILL_ROOT}；"
-        "请先安装 gstack diagnose-html-render 或设置 ~/.claude/skills/ 软链。"
+        f"chexian-report-shell skill 未安装于 {SKILL_ROOT}；"
+        "请先安装 gstack chexian-report-shell 或设置 ~/.claude/skills/ 软链。"
     )
 sys.path.insert(0, str(SKILL_ROOT))
 

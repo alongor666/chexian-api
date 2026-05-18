@@ -61,7 +61,7 @@ export const structureMetrics: readonly MetricDefinition[] = [
       warn: 65,
       danger: 60,
       unit: '%',
-      source: 'skills/diagnose-html-render/lib/alerts.py v1.7 (2026-05-13)',
+      source: 'skills/chexian-report-shell/lib/alerts.py v1.7 (2026-05-13)',
     },
     changelog: [
       {
