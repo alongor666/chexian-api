@@ -1,6 +1,7 @@
 ---
 name: data-validator
 description: Data quality validation specialist for Parquet data and DuckDB queries. Use when loading new data, validating data quality, or checking business rules.
+model: sonnet
 ---
 
 # Data Validator Agent

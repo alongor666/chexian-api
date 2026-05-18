@@ -1,6 +1,7 @@
 ---
 name: session-manager
 description: Claude Code CLI conversation history management specialist. Use for viewing, searching, renaming, exporting, and managing sessions.
+model: haiku
 ---
 
 # Session Manager Agent

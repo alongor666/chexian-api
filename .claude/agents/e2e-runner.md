@@ -2,7 +2,7 @@
 name: e2e-runner
 description: End-to-end testing specialist using Playwright. Use for generating, maintaining, and running E2E tests. Manages test journeys, quarantines flaky tests, uploads artifacts.
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
-model: opus
+model: sonnet
 ---
 
 # E2E Test Runner

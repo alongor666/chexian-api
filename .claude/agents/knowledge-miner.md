@@ -1,6 +1,7 @@
 ---
 name: knowledge-miner
 description: Specialist for extracting implicit knowledge from conversation history and structuring it. Use after important conversations, project initialization, or periodic maintenance.
+model: haiku
 ---
 
 # Knowledge Miner Agent
