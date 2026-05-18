@@ -46,7 +46,7 @@ export type TestAssertion =
   | number;                                                             // 精确值
 
 /**
- * 四级亮灯方向（与 ~/.claude/skills/diagnose-html-render/lib/alerts.py:LOWER_WORSE 对齐）
+ * 四级亮灯方向（与 ~/.claude/skills/chexian-report-shell/lib/alerts.py:LOWER_WORSE 对齐）
  *
  * - higher_worse: 数值越高越差。val > danger → 危险 / > warn → 异常 / > notice → 健康 / 否则 优秀
  * - lower_worse:  数值越低越差。val < danger → 危险 / < warn → 异常 / < notice → 健康 / 否则 优秀
@@ -69,7 +69,7 @@ export interface MetricThresholds {
   readonly warn: number;     // 健康 / 异常 分界
   readonly danger: number;   // 异常 / 危险 分界
   readonly unit: string;     // 阈值单位（"%" | "元" ...）
-  readonly source?: string;  // 来源说明，例如 "skills/diagnose-html-render/lib/alerts.py v1.7"
+  readonly source?: string;  // 来源说明，例如 "skills/chexian-report-shell/lib/alerts.py v1.7"
 }
 
 /** 测试用例 */
