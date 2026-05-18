@@ -1,7 +1,7 @@
 """非营业个人客车 · 年轻驾驶人（<24岁 / 24-28岁）经营诊断报告
 
 设计意图（针对前版"多维度数据罗列"批评的改造）：
-  1. 用 diagnose-html-render skill 的四级亮灯（TH_LR/TH_IR/TH_VC）做标准化判断
+  1. 用 chexian-report-shell skill 的四级亮灯（TH_LR/TH_IR/TH_VC）做标准化判断
   2. 车牌归属地用 plate_region dim 表 JOIN 真实地市，不再硬编码
   3. 维度精选 + 增量：增 续保/过户/车价段/保险等级 4 个高价值维度，去重复的拼接表格
   4. 每张表配 callout：why（业务原因）+ so what（决策含义）
@@ -22,11 +22,11 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-SKILL_ROOT = Path.home() / ".claude/skills/diagnose-html-render"
+SKILL_ROOT = Path.home() / ".claude/skills/chexian-report-shell"
 if not SKILL_ROOT.exists():
     raise SystemExit(
-        f"diagnose-html-render skill 未安装于 {SKILL_ROOT}；"
-        "请先安装 gstack diagnose-html-render 或设置 ~/.claude/skills/ 软链。"
+        f"chexian-report-shell skill 未安装于 {SKILL_ROOT}；"
+        "请先安装 gstack chexian-report-shell 或设置 ~/.claude/skills/ 软链。"
     )
 sys.path.insert(0, str(SKILL_ROOT))
 

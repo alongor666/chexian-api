@@ -89,7 +89,7 @@ export const growthMetrics: readonly MetricDefinition[] = [
       warn: 5,
       danger: 2,
       unit: '%',
-      source: 'skills/diagnose-html-render/lib/alerts.py v1.7 (2026-05-13)',
+      source: 'skills/chexian-report-shell/lib/alerts.py v1.7 (2026-05-13)',
     },
     changelog: [
       {
