@@ -93,7 +93,7 @@
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
 | `count-tokens.mjs` | 统计项目Token数（按文件类型/目录分类） | `bun run count-tokens` |
-| `session-manager.mjs` | 管理Claude Code会话状态和上下文 | `node scripts/session-manager.mjs` |
+| `session-manager.mjs` | 管理Claude Code会话状态和上下文 | `node scripts/chexian-session-manager.mjs` |
 | `diagnose-renewal.mjs` | 续保诊断工具（JS版，调用DuckDB） | `node scripts/diagnose-renewal.mjs` |
 | `split-commands.mjs` | 拆分过长的slash command文件 | `node scripts/split-commands.mjs` |
 | `reorganize-commands.sh` | 重组.claude/commands目录结构 | `bash scripts/reorganize-commands.sh` |

@@ -86,8 +86,8 @@ last_updated: "2026-01-11"
 ### 2. Slash Commands
 
 **通用命令**（所有项目）：
-- `/commit-push-pr` - Git 工作流
-- `/security-review` - 安全审查
+- `/chexian-commit-push-pr` - Git 工作流
+- `/chexian-security-review` - 安全审查
 - `/test` - 运行测试
 
 **数据项目专用**：
@@ -234,10 +234,10 @@ fi
 - [x] .claude/settings.json - Claude Code 配置
 
 ### Slash Commands (5个)
-- [x] /commit-push-pr - Git 工作流自动化
+- [x] /chexian-commit-push-pr - Git 工作流自动化
 - [x] /data-analysis - 数据分析
 - [x] /weekly-report - 周报生成
-- [x] /security-review - 安全审查
+- [x] /chexian-security-review - 安全审查
 - [x] /test - 测试运行
 
 ### Subagents (3个)
@@ -278,7 +278,7 @@ vim .env
 ### 4. 第一次提交
 \```bash
 claude
-> /commit-push-pr
+> /chexian-commit-push-pr
 \```
 
 ## 下一步

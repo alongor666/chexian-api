@@ -2,7 +2,7 @@
 
 ## ✅ 实施完成
 
-已成功将冲突检测功能集成到 `/commit-push-pr` 命令中，采用**方案2：独立工具 + 调用**。
+已成功将冲突检测功能集成到 `/chexian-commit-push-pr` 命令中，采用**方案2：独立工具 + 调用**。
 
 ---
 
@@ -75,7 +75,7 @@ $ bun run scripts/check-write-conflict.mjs
 用户现在可以使用：
 
 ```bash
-/commit-push-pr
+/chexian-commit-push-pr
 ```
 
 自动执行：
@@ -119,7 +119,7 @@ git commit -m "feat(xxx): ..."
 git push
 
 # 3. 完成功能后
-/commit-push-pr
+/chexian-commit-push-pr
 ```
 
 ### 冲突检测工具也可以单独使用
@@ -141,12 +141,12 @@ bun run scripts/check-document-partition.mjs
 
 ### 修改的文件
 
-- ✅ `.claude/commands/commit-push-pr.md` - 集成冲突检测调用
+- ✅ `.claude/commands/chexian-commit-push-pr.md` - 集成冲突检测调用
 
 ### 新建的文件
 
 - ✅ `.claude/commands/sync-and-rebase.md` - 快捷同步命令
-- ✅ `.claude/commands/commit-push-pr-test-guide.md` - 测试指南
+- ✅ `.claude/commands/chexian-commit-push-pr-test-guide.md` - 测试指南
 - ✅ `.claude/commands/conflict-free-quick-reference.md` - 快速参考卡片
 
 ### 已存在的工具（无需修改）
@@ -179,7 +179,7 @@ bun run scripts/check-document-partition.mjs
 **核心价值**：
 
 1. **用户体验不变**：
-   - 仍然是一个命令（`/commit-push-pr`）完成所有操作
+   - 仍然是一个命令（`/chexian-commit-push-pr`）完成所有操作
    - 自动执行所有检查
 
 2. **代码质量提升**：

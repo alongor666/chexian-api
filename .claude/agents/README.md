@@ -16,8 +16,8 @@
 | UI/UX 设计优化 | `ui-ux-designer` | — | [ui-ux-designer.md](./ui-ux-designer.md) |
 | 代码简化与重构 | `code-simplifier` | sonnet | [code-simplifier.md](./code-simplifier.md) |
 | 数据验证与清洗 | `data-validator` | — | [data-validator.md](./data-validator.md) |
-| 应用验证与测试 | `verify-app` | — | [verify-app.md](./verify-app.md) |
-| 会话管理 | `session-manager` | — | [session-manager.md](./session-manager.md) |
+| 应用验证与测试 | `verify-app` | — | [verify-app.md](./chexian-verify-app.md) |
+| 会话管理 | `session-manager` | — | [chexian-session-manager.md](./chexian-session-manager.md) |
 | 知识提取与归档 | `knowledge-miner` | — | [knowledge-miner.md](./knowledge-miner.md) |
 | 架构规划 | `architect` | opus | [architect.md](./architect.md) |
 | 构建错误解决 | `build-error-resolver` | opus | [build-error-resolver.md](./build-error-resolver.md) |

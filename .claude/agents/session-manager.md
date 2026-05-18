@@ -178,8 +178,8 @@ Each session is a JSON file containing:
 
 ## Related Documentation
 
-- **Command Documentation**: [`.claude/commands/session-manager.md`](../commands/session-manager.md)
-- **Implementation Code**: [`scripts/session-manager.mjs`](../../scripts/session-manager.mjs)
+- **Command Documentation**: [`.claude/commands/chexian-session-manager.md`](../commands/chexian-session-manager.md)
+- **Implementation Code**: [`scripts/chexian-session-manager.mjs`](../../scripts/chexian-session-manager.mjs)
 
 ---
 

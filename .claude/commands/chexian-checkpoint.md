@@ -4,13 +4,13 @@ Create or verify a checkpoint in your workflow.
 
 ## Usage
 
-`/checkpoint [create|verify|list] [name]`
+`/chexian-checkpoint [create|verify|list] [name]`
 
 ## Create Checkpoint
 
 When creating a checkpoint:
 
-1. Run `/verify quick` to ensure current state is clean
+1. Run `/chexian-verify quick` to ensure current state is clean
 2. Create a git stash or commit with checkpoint name
 3. Log checkpoint to `.claude/checkpoints.log`:
 
@@ -54,15 +54,15 @@ Show all checkpoints with:
 Typical checkpoint flow:
 
 ```
-[Start] --> /checkpoint create "feature-start"
+[Start] --> /chexian-checkpoint create "feature-start"
    |
-[Implement] --> /checkpoint create "core-done"
+[Implement] --> /chexian-checkpoint create "core-done"
    |
-[Test] --> /checkpoint verify "core-done"
+[Test] --> /chexian-checkpoint verify "core-done"
    |
-[Refactor] --> /checkpoint create "refactor-done"
+[Refactor] --> /chexian-checkpoint create "refactor-done"
    |
-[PR] --> /checkpoint verify "feature-start"
+[PR] --> /chexian-checkpoint verify "feature-start"
 ```
 
 ## Arguments

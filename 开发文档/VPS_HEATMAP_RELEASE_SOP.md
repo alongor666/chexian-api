@@ -64,8 +64,8 @@ node scripts/release-vps-heatmap.mjs --skip-verify
 常用参数：
 
 ```bash
-node scripts/verify-vps-heatmap.mjs --base-url https://chexian.cretvalu.com
-node scripts/verify-vps-heatmap.mjs --username admin --password '你的密码'
+node scripts/chexian-verify-vps-heatmap.mjs --base-url https://chexian.cretvalu.com
+node scripts/chexian-verify-vps-heatmap.mjs --username admin --password '你的密码'
 ```
 
 ## 证据产物

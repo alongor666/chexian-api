@@ -1,5 +1,5 @@
 ---
-name: session-summary
+name: chexian-session-summary
 description: 扫描历史Session，提取用户原文和AI回复概要，增量汇总到沟通记录表
 category: knowledge-management
 version: 2.0.0
@@ -13,7 +13,7 @@ dependencies:
 last_updated: "2026-01-18"
 ---
 
-# /session-summary
+# /chexian-session-summary
 
 扫描 **所有历史 Session**，提取用户原文和 AI 回复概要，**增量更新**到沟通记录汇总表。
 
@@ -81,32 +81,32 @@ Claude Code 历史 session 存储在以下位置：
 
 ```bash
 # 🔥 推荐：处理所有未汇总的历史 session
-/session-summary
+/chexian-session-summary
 
 # 处理所有历史 session（包括已处理的，会跳过重复）
-/session-summary --scope all
+/chexian-session-summary --scope all
 
 # 筛选包含"续保"的历史对话
-/session-summary --filter "续保"
+/chexian-session-summary --filter "续保"
 
 # 筛选指定日期范围
-/session-summary --date-from "2026-01-01" --date-to "2026-01-15"
+/chexian-session-summary --date-from "2026-01-01" --date-to "2026-01-15"
 
 # 批量模式（无需确认）
-/session-summary --mode batch
+/chexian-session-summary --mode batch
 
 # 仅预览，不写入
-/session-summary --mode preview --filter "性能"
+/chexian-session-summary --mode preview --filter "性能"
 
 # 重置追踪，重新处理所有
-/session-summary --reset --scope all
+/chexian-session-summary --reset --scope all
 ```
 
 ---
 
 ## 执行协议（CRITICAL）
 
-当用户调用 `/session-summary` 时，**必须按以下步骤执行**：
+当用户调用 `/chexian-session-summary` 时，**必须按以下步骤执行**：
 
 ### 步骤 1：定位 Session 存储
 
@@ -259,7 +259,7 @@ for record in records:
 
 ```bash
 # 删除追踪文件，下次运行将重新处理所有 session
-/session-summary --reset
+/chexian-session-summary --reset
 ```
 
 ---
@@ -313,19 +313,19 @@ for record in records:
 
 ### 1. 每日结束时运行一次
 ```bash
-/session-summary --mode batch
+/chexian-session-summary --mode batch
 ```
 
 ### 2. 按主题回顾
 ```bash
 # 回顾所有续保相关的讨论
-/session-summary --filter "续保" --mode preview
+/chexian-session-summary --filter "续保" --mode preview
 ```
 
 ### 3. 定期全量同步
 ```bash
 # 每周一重置并全量同步
-/session-summary --reset --scope all --mode batch
+/chexian-session-summary --reset --scope all --mode batch
 ```
 
 ---
@@ -334,5 +334,5 @@ for record in records:
 
 - `开发文档/沟通记录汇总表.md` - 汇总表文件
 - `.claude/session-tracking.json` - 追踪文件
-- `.claude/commands/session-manager.md` - 会话管理器
-- `.claude/commands/extract-knowledge.md` - 知识提取
+- `.claude/commands/chexian-session-manager.md` - 会话管理器
+- `.claude/commands/chexian-extract-knowledge.md` - 知识提取

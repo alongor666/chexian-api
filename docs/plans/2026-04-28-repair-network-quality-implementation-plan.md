@@ -2,7 +2,7 @@
 
 **Goal:** 修订维修合作网络质量 P0 验证资产，使输出底表具备可信口径：拆清 shadow 与流程占位，统一维修金额口径，避免资源金额在赔案 JOIN 后被重复放大。
 
-**Architecture:** 保持“文档先行 + Parquet 直读验证”路径。本阶段只修改 `docs/plans` 两份文档与 `scripts/verify-repair-network.py`，不新增 API、不改前端、不改现有 repair 页面。脚本直接加载 `RepairDim` 与 `ClaimsDetail`，输出整体、机构、4S、区县、风险网点、未登记影子、流程占位七类底表。
+**Architecture:** 保持“文档先行 + Parquet 直读验证”路径。本阶段只修改 `docs/plans` 两份文档与 `scripts/chexian-verify-repair-network.py`，不新增 API、不改前端、不改现有 repair 页面。脚本直接加载 `RepairDim` 与 `ClaimsDetail`，输出整体、机构、4S、区县、风险网点、未登记影子、流程占位七类底表。
 
 **Tech Stack:** Markdown、Python 3、DuckDB、Parquet、项目现有维修资源口径。
 
@@ -20,7 +20,7 @@
 ## Task 2: 修订 P0 验证脚本
 
 **Files:**
-- Update: `scripts/verify-repair-network.py`
+- Update: `scripts/chexian-verify-repair-network.py`
 
 **Steps:**
 - 构建 `repair_all`：RepairDim 全量登记网点，仅用于判断是否真正未登记。
@@ -37,7 +37,7 @@
 ## Task 3: 修复聚合放大风险
 
 **Files:**
-- Update: `scripts/verify-repair-network.py`
+- Update: `scripts/chexian-verify-repair-network.py`
 
 **Steps:**
 - 机构质量排名中，资源侧 `damage_assessment_amount` / `net_premium` 先按机构聚合。
@@ -48,7 +48,7 @@
 ## Task 4: 增加回归断言
 
 **Files:**
-- Update: `scripts/verify-repair-network.py`
+- Update: `scripts/chexian-verify-repair-network.py`
 
 **Assertions:**
 - 整体 `repair_base.total_net_premium` 必须等于各 4S 分组 `net_premium` 合计。
@@ -61,9 +61,9 @@
 **Run:**
 
 ```bash
-python3 -m py_compile scripts/verify-repair-network.py
-python3 scripts/verify-repair-network.py --window rolling12 --top-n 10
-python3 scripts/verify-repair-network.py --window ytd --top-n 10
+python3 -m py_compile scripts/chexian-verify-repair-network.py
+python3 scripts/chexian-verify-repair-network.py --window rolling12 --top-n 10
+python3 scripts/chexian-verify-repair-network.py --window ytd --top-n 10
 ```
 
 **Expected:**
@@ -77,7 +77,7 @@ python3 scripts/verify-repair-network.py --window ytd --top-n 10
 **Files:**
 - `docs/plans/2026-04-28-repair-network-quality-design.md`
 - `docs/plans/2026-04-28-repair-network-quality-implementation-plan.md`
-- `scripts/verify-repair-network.py`
+- `scripts/chexian-verify-repair-network.py`
 
 **Steps:**
 - 完成修订后统一查看 diff。

@@ -1,5 +1,5 @@
 ---
-name: test-coverage
+name: chexian-test-coverage
 description: 测试覆盖率分析与增强建议
 category: development-tools
 version: 1.0.0
@@ -16,7 +16,7 @@ dependencies:
 last_updated: "2026-01-16"
 ---
 
-# /test-coverage
+# /chexian-test-coverage
 
 测试覆盖率分析命令，检查单元测试、集成测试、E2E 测试覆盖情况。
 
@@ -24,23 +24,23 @@ last_updated: "2026-01-16"
 
 ```bash
 # 生成测试覆盖率报告（推荐）
-/test-coverage
+/chexian-test-coverage
 
 # 仅运行单元测试
-/test-coverage --unit
+/chexian-test-coverage --unit
 
 # 仅运行集成测试
-/test-coverage --integration
+/chexian-test-coverage --integration
 
 # 仅运行 E2E 测试
-/test-coverage --e2e
+/chexian-test-coverage --e2e
 
 # 生成覆盖率报告
-/test-coverage --report
+/chexian-test-coverage --report
 
 # 检查特定模块
-/test-coverage --module sql
-/test-coverage --module components
+/chexian-test-coverage --module sql
+/chexian-test-coverage --module components
 ```
 
 ## 测试类型

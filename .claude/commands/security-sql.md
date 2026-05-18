@@ -50,4 +50,4 @@ last_updated: "2026-01-11"
 
 **注意**: 这是拆分后的子命令。完整功能请参考父命令文档。
 
-**父命令**: `/security-review`
+**父命令**: `/chexian-security-review`

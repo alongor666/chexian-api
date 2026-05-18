@@ -1,5 +1,5 @@
 ---
-name: extract-knowledge
+name: chexian-extract-knowledge
 description: 提取对话中的隐性知识并结构化归档到知识库
 category: knowledge-management
 version: 1.0.0
@@ -13,7 +13,7 @@ dependencies:
 last_updated: "2026-01-11"
 ---
 
-# /extract-knowledge
+# /chexian-extract-knowledge
 
 提取对话中的隐性知识并结构化归档到知识库。
 
@@ -46,16 +46,16 @@ last_updated: "2026-01-11"
 
 ```bash
 # 提取本次对话的全部知识
-/extract-knowledge
+/chexian-extract-knowledge
 
 # 提取本次对话,仅关注业务规则
-/extract-knowledge --focus business-rules
+/chexian-extract-knowledge --focus business-rules
 
 # 提取历史对话
-/extract-knowledge --scope history
+/chexian-extract-knowledge --scope history
 
 # 批量模式,快速确认
-/extract-knowledge --mode batch
+/chexian-extract-knowledge --mode batch
 ```
 
 ## 工作流程

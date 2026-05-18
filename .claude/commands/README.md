@@ -10,7 +10,7 @@
 
 | 我想... | 命令 | 详细文档 |
 |---------|------|---------|
-| 提交代码并创建 PR | `/commit-push-pr` | [commit-push-pr.md](./commit-push-pr.md) |
+| 提交代码并创建 PR | `/chexian-commit-push-pr` | [chexian-commit-push-pr.md](./chexian-commit-push-pr.md) |
 | 同步远程代码 | `/sync-and-rebase` | [sync-and-rebase.md](./sync-and-rebase.md) |
 | 清理已合并 worktree | `/cleanup-worktrees` | [cleanup-worktrees.md](./cleanup-worktrees.md) |
 | 车险数据分析 | `/data-analysis` | [data-analysis.md](./data-analysis.md) |
@@ -25,23 +25,21 @@
 | 周报子命令 | `/report-weekly` | [report-weekly.md](./report-weekly.md) |
 | 月报子命令 | `/report-monthly` | [report-monthly.md](./report-monthly.md) |
 | 自定义报告 | `/report-custom` | [report-custom.md](./report-custom.md) |
-| 安全审查 | `/security-review` | [security-review.md](./security-review.md) |
+| 安全审查 | `/chexian-security-review` | [security-review.md](./chexian-security-review.md) |
 | SQL 注入检查 | `/security-sql` | [security-sql.md](./security-sql.md) |
 | XSS 检查 | `/security-xss` | [security-xss.md](./security-xss.md) |
 | CORS 检查 | `/security-cors` | [security-cors.md](./security-cors.md) |
 | 全量安全审查 | `/security-all` | [security-all.md](./security-all.md) |
 | 性能审计 | `/performance-audit` | [performance-audit.md](./performance-audit.md) |
 | UI 审查 | `/ui-review` | [ui-review.md](./ui-review.md) |
-| 测试覆盖率 | `/test-coverage` | [test-coverage.md](./test-coverage.md) |
-| 管理会话 | `/session-manager` | [session-manager.md](./session-manager.md) |
-| 提取知识 | `/extract-knowledge` | [extract-knowledge.md](./extract-knowledge.md) |
-| 汇总沟通记录 | `/session-summary` | [session-summary.md](./session-summary.md) |
+| 测试覆盖率 | `/chexian-test-coverage` | [chexian-test-coverage.md](./chexian-test-coverage.md) |
+| 管理会话 | `/chexian-session-manager` | [chexian-session-manager.md](./chexian-session-manager.md) |
+| 提取知识 | `/chexian-extract-knowledge` | [chexian-extract-knowledge.md](./chexian-extract-knowledge.md) |
+| 汇总沟通记录 | `/chexian-session-summary` | [chexian-session-summary.md](./chexian-session-summary.md) |
 | 初始化项目 | `/init-project` | [init-project.md](./init-project.md) |
-| TDD 工作流 | `/tdd` | [tdd.md](./tdd.md) |
-| 检查点保存 | `/checkpoint` | [checkpoint.md](./checkpoint.md) |
-| 多层验证 | `/verify` | [verify.md](./verify.md) |
-| 多 Agent 编排 | `/orchestrate` | [orchestrate.md](./orchestrate.md) |
-| 配置演进 | `/evolve` | [evolve.md](./evolve.md) |
+| 检查点保存 | `/chexian-checkpoint` | [chexian-checkpoint.md](./chexian-checkpoint.md) |
+| 多层验证 | `/chexian-verify` | [chexian-verify.md](./chexian-verify.md) |
+| 多 Agent 编排 | `/chexian-orchestrate` | [chexian-orchestrate.md](./chexian-orchestrate.md) |
 | 过户车出险地点 | `/diagnose-transfer-location` | [diagnose-transfer-location.md](./diagnose-transfer-location.md) |
 | 诊断命令路由 | `/diagnose-router` | [diagnose-router.md](./diagnose-router.md) |
 | 机构/经代经营诊断 | `/diagnose-agent` | [diagnose-agent.md](./diagnose-agent.md) |
