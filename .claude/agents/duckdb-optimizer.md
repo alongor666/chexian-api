@@ -1,6 +1,7 @@
 ---
 name: duckdb-optimizer
 description: DuckDB performance optimization and SQL query tuning specialist. Use when queries exceed 3 seconds, memory issues, or large dataset processing is slow.
+model: sonnet
 ---
 
 # DuckDB Optimizer Agent

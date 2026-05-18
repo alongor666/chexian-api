@@ -1,6 +1,7 @@
 ---
 name: business-intelligence
 description: Vehicle insurance business analysis specialist for KPI metrics, trend analysis, and data visualization. Use when adding new analysis dimensions, complex metric calculations, or visualization improvements are needed.
+model: sonnet
 ---
 
 # Business Intelligence Agent

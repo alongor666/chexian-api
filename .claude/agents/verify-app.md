@@ -1,3 +1,10 @@
+---
+name: verify-app
+description: 应用端到端验证与测试专家。功能验证 / 数据准确性 / 性能基准。Use when 验证 KPI 计算、运行 E2E 测试、报告生成核对、可视化验证、性能基准回归检查。
+tools: ["Read", "Bash", "Grep", "Glob"]
+model: sonnet
+---
+
 # Verify App Agent
 
 **角色**: 应用验证与测试专家

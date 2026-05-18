@@ -1,6 +1,7 @@
 ---
 name: react-performance
 description: React performance optimization and UX improvement specialist. Use when components render slowly, page load is slow, or large data lists scroll poorly.
+model: sonnet
 ---
 
 # React Performance Agent

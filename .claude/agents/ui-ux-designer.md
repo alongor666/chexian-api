@@ -1,6 +1,7 @@
 ---
 name: ui-ux-designer
 description: UI/UX design specialist for modern layouts and interactions. Use when creating new UI components, fixing layout issues, or improving user experience.
+model: sonnet
 ---
 
 # UI/UX Designer Agent
