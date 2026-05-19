@@ -36,3 +36,9 @@
 - **根因**: 改前端没完整梳理后端依赖链（paths.ts / query.ts / api-routes.ts）
 - **修复**: 补建第二个 commit
 - **预防**: `/chexian-commit-push-pr` 步骤 1 新增「依赖链完整性检查」——修改前端 API 调用时，必须 grep 确认后端路由、paths、api-routes 三处均已注册
+
+### 2026-05-18 — PR #408: 字典 claim_cases 出险率公式与 registry 漂移（codex P2）
+- **症状**: 字典新写「出险率 = 赔案件数/已赚暴露」，但 `metric-registry/categories/cost.ts:355-385` (`earned_loss_frequency`) 是「年化赔案数 / DISTINCT 保单件数」。两者对未满期保单不等价（举例满期+未满期 1:1 时差异 78.5% vs 182.5%）
+- **根因**: 修字典时只对照了 `variable_cost_ratio`/`comprehensive_expense_ratio`，**漏查 `earned_loss_frequency`**；凭"赔付率分母用 earned exposure"的肌肉记忆把出险率分母也写成 earned exposure
+- **修复**: 字典按注册表完整公式改写 + 加「口径陷阱」警告：earned_exposure 仅用于赔付率分母，不可移植到出险率
+- **预防**: 自审清单「业务口径」一栏强化——**改字典/文档涉及任何指标公式时，必须把涉及的每个指标 id 逐个 grep `server/src/config/metric-registry/categories/*.ts` 拿 SQL expression 对照，禁止凭"通用规则"推导单个指标**。同类失败再发生 2 次 → 转 governance 自动化（"字典公式与 registry SQL 关键 token 重叠率"检查）
