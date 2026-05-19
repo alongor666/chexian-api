@@ -25,6 +25,8 @@
 
 ## 当前项目专属技能（3 个）
 
+当前共 3 个项目级 skill：`accident-profile-report` / `incident-rate-development` / `ncd-pricing-diagnosis`。
+
 | 技能 | 用途 | 文件 |
 |------|------|------|
 | `accident-profile-report` | 基于理赔明细文本生成分车种/分险种事故画像报告 | [accident-profile-report.md](./accident-profile-report.md) |
@@ -55,7 +57,13 @@
 
 ## 相关索引
 
-- **指令**：[`.claude/commands/README.md`](../commands/README.md) — 41 个 chexian-* / diagnose-*
+- **指令**：[`.claude/commands/README.md`](../commands/README.md) — 40 个 chexian-* / diagnose-* 项目命令
 - **智能体**：[`.claude/agents/README.md`](../agents/README.md) — 14 个项目 agent
 - **全局 skill 速查**：[`.claude/rules/skills-map.md`](../rules/skills-map.md) — 本项目相关全局 skill 的"项目用法"标注
 - **协作宪法**：[`CLAUDE.md`](../../CLAUDE.md) §12 扩展机制前缀规范
+
+## 非项目 skill 不计数
+
+`~/.claude/skills/chexian-*` 与 `~/.claude/skills/diagnose-*` 是全局资产，由用户级 Claude 配置治理，不计入本目录的项目 skill 数量。
+
+`.claude/rules/skills-map.md` 只记录全局 skill 在本项目中的用法；`.claude/skills/README.md` 只记录本仓库跟踪的项目 skill。两者永远不互相覆盖。

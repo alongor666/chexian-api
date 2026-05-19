@@ -1,5 +1,6 @@
 # AGENTS.md
 
+> 本文件为 Claude 在本项目的入口。Codex 入口见根 `AGENTS.md`。
 > GitHub Copilot / Codex 协作指南 — **chexian-api** 车险数据分析平台
 
 ## 项目概览

@@ -1,6 +1,20 @@
 {
   "permissions": {
-    "allow": []
+    "allow": [],
+    "deny": [
+      "Read(./node_modules/**)",
+      "Read(./dist/**)",
+      "Read(./.claude/worktrees/**)",
+      "Read(./server/data/**)",
+      "Read(./logs/**)",
+      "Read(./public/reports/**)",
+      "Bash(rm -rf ./数据管理/warehouse/**)",
+      "Bash(rm -rf ./.git/**)",
+      "mcp__filesystem__write_file",
+      "mcp__filesystem__edit_file",
+      "mcp__filesystem__create_directory",
+      "mcp__filesystem__move_file"
+    ]
   },
   "hooks": {
     "Stop": [
@@ -9,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | wc -l | tr -d ' '); if [ \"$changed\" -gt 3 ]; then echo '⚠️ 文档同步提醒：本次变更 '$changed' 个文件，请确认 CODE_INDEX / scripts/INDEX / PARQUET_SCHEMA_KNOWLEDGE / CLAUDE.md 注册表章节是否需要同步更新'; fi"
+            "command": "changed=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' '); if [ \"$changed\" -gt 0 ]; then echo '⚠️ harness/文档候选同步清单：当前工作区有 '$changed' 个变更，请按影响面人工核对 CODE_INDEX / scripts/INDEX / PARQUET_SCHEMA_KNOWLEDGE / CLAUDE.md / AGENTS.md / .claude/README 索引是否需要同步；hook 只提示，不修改 frozen 文件。'; fi"
           }
         ]
       }
