@@ -196,36 +196,13 @@ bun run governance                 # 治理校验
 
 ## 9. 部署清单
 
-声称"已部署"前，按顺序逐项验证：
-
-1. `bun run build` — 零 TS 报错
-2. `bun run governance` — 治理通过
-3. PM2 状态检查 — `sudo /usr/local/bin/deploy-chexian-api describe`，若 errored 则 `sudo /usr/local/bin/deploy-chexian-api reload`（禁止只 restart）
-4. 环境变量 — 确认 `ecosystem.config.cjs` 中所有 env 变量在 VPS 上有值
-5. CORS 配置 — 确认不会因 env 缺失抛异常
-6. DuckDB/Parquet 兼容 — `union_by_name` schema 一致性
-7. 健康检查 — `curl -s https://chexian.cretvalu.com/health` 返回 200
-8. 核心 API — 至少一个 `/api/query/*` 返回 200 + 非空 JSON
+声称"已部署"前必须逐项验证 build / governance / PM2 / env / CORS / Parquet schema / 健康检查 / 核心 API 共 8 项 — 详见 [.claude/rules/deploy-chain-sop.md §4](./.claude/rules/deploy-chain-sop.md)。
 
 ---
 
 ## 10. 领域知识
 
-车险分析任务中，**禁止假设因果关系或业务定义**，不确定时必须先问用户确认。
-
-| 规则 | 说明 |
-|------|------|
-| 风险等级是结构性数据 | `insurance_grade`(A-G/X) 是车辆属性字段，不是"质量泄漏"或可控因子 |
-| 终端来源 ≠ 渠道 | `terminal_source`(出单终端) 和 `channel`(业务渠道) 是不同维度，禁止混用 |
-| 定价系数 ≠ 赔付因果 | `商车自主定价系数` 不直接导致出险率变化，禁止假设因果链 |
-| 出险率分母 | 用已赚暴露(earned exposure)，不是签单件数(written count) |
-| 驾乘推介率 | = 驾意险推介件数 / 商业险出单件数（非保费比）。分母仅含主全+交三，排除纯交强/单交 |
-| 驾乘渗透率 | = 驾意险承保件数 / 商业险承保件数 |
-| 推介率分母 | 商业险出单件数（去重车架号），不含纯交强/单交。整体行 = 主全 + 交三 |
-| 赔付率分子 | 已决赔款 + 未决赔款（满期赔付率用满期保费做分母） |
-| 客户类别 | 11 类，按车辆使用性质分，详见业务规则字典 |
-
-**唯一事实源**：`数据管理/knowledge/rules/车险数据业务规则字典.md`。公式/口径有疑问先查此文件，查不到再问用户。
+车险分析任务**禁止假设因果关系或业务定义**，不确定时先问用户。9 条铁律（风险等级 / 终端来源 ≠ 渠道 / 定价系数 ≠ 赔付因果 / 出险率分母 / 驾乘推介率与渗透率 / 推介率分母 / 赔付率分子 / 客户类别 11 类）+ 业务规则字典唯一事实源 — 详见 [.claude/rules/business-domain.md](./.claude/rules/business-domain.md)。
 
 ---
 
@@ -240,34 +217,6 @@ bun run governance                 # 治理校验
 
 ---
 
-## 12. 扩展机制前缀规范（chexian 簇）
+## 12. 扩展机制前缀规范
 
-新增 / 重命名 / 审计 `~/.claude/skills/` 下的 chexian 簇 skill 时遵守：
-
-| 前缀 | 真实语义 | 簇角色 | 代表 |
-|------|------|------|------|
-| `chexian-*` | 中文"车险"前缀 | 项目基础设施 / 工程任务（通常被 import 或为项目改造任务） | chexian-report-shell（渲染基础设施）、chexian-local-risk-control |
-| ~~`auto-*`~~ → `chexian-*` | ✅ 2026-05-18 P3.1 已治理改名，全部归入 chexian 簇：chexian-channel / chexian-pricing-decision / chexian-market-analysis / chexian-ir-diagnosis / chexian-ops-review |
-| `diagnose-*` | 诊断报告前缀 | 数据驱动诊断（Python + DuckDB → HTML） | diagnose-org-weekly / diagnose-period-trend / diagnose-loss-development |
-
-**前缀语义不绑定内容形式**：`chexian-*` 不强制项目专属（含决策协议 + 业务推理）、`diagnose-*` 不强制必须含 `lib/*.py`。前缀只表达**业务定位**。`auto-*` → `chexian-*` 历史冗余已于 2026-05-18 P3.1 治理完成（5 个 skill 全部归并到 chexian 簇）。
-
-**遗留前缀 — `xcl-*`**（用户名字缩写，违反"前缀语义化"原则）：
-
-| Skill | 状态 | 治理动作 |
-|---|---|---|
-| `xcl-pdf2lark` | DEPRECATED（2026-11 退役） | 等自然退役 |
-| ~~`xcl-ppt2im`~~ → `chexian-im-push` | ✅ 已改名归入 chexian 簇（2026-05-18 P3.2 完成） | — |
-
-**新增 skill 铁律**：
-- ✅ 业务领域前缀（`chexian-` / `auto-` / `diagnose-`）
-- ✅ 角色/功能前缀（`lark-` / `wecomcli-` 等中性工具集前缀）
-- ❌ 禁止个人/机构名字缩写做前缀（`xcl-` 等）— 命名要让任何人/AI 看名字就能猜功能
-
-**frontmatter 必填**：`name`（与目录名一致）、`description`（含触发语义：`Use when` / `当用户` / `触发` / `适用于` 任一）。
-
-**frontmatter 推荐**：`version`（业务 skill 演进可追溯）、`user_invocable`（基础设施层显式 `false`）；agent 文件推荐显式 `model`（默认 sonnet，仅架构推理类用 opus，搜索归档类用 haiku）。
-
-**单一事实源**：跨 skill 重复的常量 / 模板 / 规则 ≥ 2 处出现 → 上提到 `~/.claude/skills/chexian-report-shell/lib/`。
-
-**审计**：`bash ~/.claude/audits/scripts/{T1,T2,T4}.sh` 出基线 TSV。完整方法论与流程见 `~/.claude/plans/claude-dode-slash-agent-refactored-crane.md`。
+`chexian-*` / `diagnose-*` 簇命名规则、`xcl-*` 遗留治理、frontmatter 必填项、单一事实源策略、审计脚本 — 详见 [.claude/rules/skill-prefix.md](./.claude/rules/skill-prefix.md)。本项目相关全局 skill 的"项目用法"见 [.claude/rules/skills-map.md](./.claude/rules/skills-map.md)。

@@ -69,6 +69,19 @@
 - `gh pr view <num> --json reviews` 返回 `reviews` 非空 → codex 已评
 - `gh pr checks <num>` 看 codex check 状态
 
+## 4. 部署清单（CLAUDE.md §9 下沉）
+
+声称"已部署"前，按顺序逐项验证：
+
+1. `bun run build` — 零 TS 报错
+2. `bun run governance` — 治理通过
+3. PM2 状态检查 — `sudo /usr/local/bin/deploy-chexian-api describe`，若 errored 则 `sudo /usr/local/bin/deploy-chexian-api reload`（禁止只 restart）
+4. 环境变量 — 确认 `ecosystem.config.cjs` 中所有 env 变量在 VPS 上有值
+5. CORS 配置 — 确认不会因 env 缺失抛异常
+6. DuckDB/Parquet 兼容 — `union_by_name` schema 一致性
+7. 健康检查 — `curl -s https://chexian.cretvalu.com/health` 返回 200
+8. 核心 API — 至少一个 `/api/query/*` 返回 200 + 非空 JSON
+
 ## 关联
 
 - 母 PR：[#379 feat(deploy): Phase 1-pre 部署链 lockfile-driven 完整回滚](https://github.com/alongor666/chexian-api/pull/379)
