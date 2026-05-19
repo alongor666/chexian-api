@@ -8,8 +8,8 @@
  *   - 单机构案均 ≥ 全省案均 × 1.2 → 关注（warn，单机构洞察）
  *   - 单机构最长滞留 > 90 天      → 异常
  *   - 单机构最长滞留 > 30 天      → 关注
- *   - 31~90 天账龄占未决 ≥ 50%   → 关注
- *   - 人伤金额占比 ≥ 25%         → 关注
+ *   - 超过 30 天账龄占未决 ≥ 50% → 关注
+ *   - 人伤金额占未决总金额 ≥ 25% → 关注（按金额比，非件数比）
  *
  * 修改阈值时务必同步更新本文件顶部注释 + changelog。
  */
@@ -29,35 +29,52 @@ export const THRESHOLDS = {
   maxStayDaysBad: 90,
   /** 单机构最长滞留 > → 关注 */
   maxStayDaysWarn: 30,
-  /** 31~90 天账龄占未决件数 ≥ % → 关注 */
+  /** 超过 30 天账龄占未决件数 ≥ % → 关注 */
   agingMidSharePctWarn: 50,
   /** 人伤金额占未决总金额 ≥ % → 关注 */
   injurySharePctWarn: 25,
 } as const;
 
 /**
- * 已知账龄分桶白名单（与后端 SQL `claims-detail/pending-aging.ts` 对齐）。
- * 用于精确判定"超过 30 天"而不依赖脆弱正则。
+ * 已知账龄分桶白名单 — 必须严格等于后端 SQL `generatePendingAgingQuery`
+ * (server/src/sql/claims-detail.ts:165) 的 CASE 输出字符串。
+ *
+ * ⚠️ RED LINE：字面值用半角连字符 "-"，不是波浪号 "~"。如果后端 SQL 改了
+ * 分桶字面，必须同步本常量 + insights.test.ts，否则 isAgingMidBucket /
+ * isAgingOverdueBucket 会全部返回 false，洞察归类全部失效（codex P2 #1）。
  */
 export const AGING_BUCKETS = {
   /** 0-30 天分桶（不算逾期）*/
-  fresh: '0~30天',
+  fresh: '0-30天',
   /** 31-90 天分桶（关注高亮）*/
-  mid: '31~90天',
+  mid: '31-90天',
   /** 91-180 天分桶 */
-  long: '91~180天',
-  /** >180 天分桶 */
-  veryLong: '>180天',
+  long: '91-180天',
+  /** 181-365 天分桶 */
+  veryLong: '181-365天',
+  /** 365 天+ 分桶 */
+  ancient: '365天+',
 } as const;
 
-/** 31~90 天分桶（关注高亮）*/
+/** 全部已知分桶字面（用于识别"未知桶"）*/
+const KNOWN_BUCKETS: readonly string[] = Object.values(AGING_BUCKETS);
+
+/** 31-90 天分桶（关注高亮）*/
 export function isAgingMidBucket(bucket: string | undefined): boolean {
   return bucket === AGING_BUCKETS.mid;
 }
 
-/** 超过 30 天的分桶（用于 "账龄结构需关注" 占比）*/
+/**
+ * 超过 30 天的分桶 — 用于"账龄结构需关注"占比分子。
+ *
+ * 严格白名单匹配：只承认 mid / long / veryLong / ancient 四个已知桶。
+ * 未知字面（包括后端格式漂移产生的新桶名）→ 返回 false，宁可漏告警，
+ * 也不要把所有未识别桶都误判为"逾期"，造成虚假 100% 滞留警报。
+ */
 export function isAgingOverdueBucket(bucket: string | undefined): boolean {
-  return bucket !== undefined && bucket !== AGING_BUCKETS.fresh;
+  if (bucket === undefined) return false;
+  if (!KNOWN_BUCKETS.includes(bucket)) return false;
+  return bucket !== AGING_BUCKETS.fresh;
 }
 
 export function severityForStayDays(days: number | undefined | null): Severity {
@@ -127,16 +144,16 @@ export function deriveInsights(
     metricLabel: '% 滞留',
   });
 
-  // 3. 人伤占比
+  // 3. 人伤占比 — 严重度按"金额比"判定（与 jsdoc 阈值口径一致）。
+  // 单件高额人伤 + 多件低额非人伤的场景下，件数比可能不到 25% 但金额比已超 25%，
+  // 此时应该告警；反之件数 ≥ 25% 但金额 < 25% 时反而属于低额轻伤，不告警（codex P2 #3）。
   const injuryCases = pending?.injury_cases ?? 0;
-  const totalCases = pending?.cases ?? 0;
-  const injurySharePct = totalCases > 0 ? (injuryCases / totalCases) * 100 : 0;
   const injuryReserveShare =
     pending?.reserve_wan && pending.reserve_wan > 0
       ? ((pending.injury_reserve_wan ?? 0) / pending.reserve_wan) * 100
       : 0;
   const injurySev: Severity =
-    injurySharePct >= THRESHOLDS.injurySharePctWarn ? 'warn' : 'good';
+    injuryReserveShare >= THRESHOLDS.injurySharePctWarn ? 'warn' : 'good';
   items.push({
     id: 'injury-share',
     severity: injurySev,

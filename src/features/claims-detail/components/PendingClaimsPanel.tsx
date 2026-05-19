@@ -140,7 +140,9 @@ export const PendingClaimsPanel: React.FC<Props> = ({ hook, params }) => {
   );
 
   const isLoading = pendingOverview.loading || pendingAging.loading;
-  const hasData = !isLoading && !!pending;
+  // 加载结束就退出骨架，无未决数据时显示 0 件正常态（codex P2 #2）。
+  // 之前用 `!isLoading && !!pending` 会让"全是已决、无未决"筛选场景永远卡在骨架。
+  const hasData = !isLoading;
   const error = pendingOverview.error || pendingAging.error || pendingByOrg.error;
 
   if (error) return <div className={cn(colorClasses.text.danger, 'p-4')}>{error}</div>;
