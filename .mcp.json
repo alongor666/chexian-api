@@ -8,7 +8,7 @@
       "env": {
         "GITHUB_TOKEN": "${GITHUB_TOKEN}"
       },
-      "description": "GitHub API integration - issues, PRs, repos",
+      "description": "GitHub API integration - issues, PRs, repos. ⚠️ 项目级 npx 例外（上游 MCP 包无 Bun 入口）",
       "enabled": true,
       "timeout": 30000,
       "tools": [
@@ -24,7 +24,7 @@
     "puppeteer": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
-      "description": "Browser automation for UI testing - test dashboard",
+      "description": "Browser automation for UI testing - test dashboard. ⚠️ 项目级 npx 例外（上游 MCP 包无 Bun 入口）",
       "enabled": true,
       "timeout": 120000,
       "tools": [
@@ -44,15 +44,14 @@
     "filesystem": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
-      "description": "File system access with read/write permissions",
+      "description": "File system access. ⚠️ 项目级 npx 例外（上游 MCP 包无 Bun 入口），仅授予只读",
       "enabled": true,
       "timeout": 10000,
       "tools": [
         "read_file",
-        "write_file",
+        "read_text_file",
         "list_directory",
-        "create_directory",
-        "move_file",
+        "directory_tree",
         "search_files"
       ]
     }

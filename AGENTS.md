@@ -1,6 +1,7 @@
 # AGENTS.md
 
 > 这是给 Codex 的仓库工作地图。先读根目录规则，再按任务进入子目录细则。
+> 本文件为 Codex 工作地图入口。Claude 项目入口见 `.claude/AGENTS.md`，专项规则见 `.claude/rules/`。
 
 ## 1. 语言与优先级
 

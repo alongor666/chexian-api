@@ -1,0 +1,159 @@
+#!/usr/bin/env node
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ROOT_DIR = path.resolve(__dirname, '../..');
+
+const requiredDenyEntries = [
+  'Read(./node_modules/**)',
+  'Read(./dist/**)',
+  'Read(./.claude/worktrees/**)',
+  'Read(./server/data/**)',
+  'Read(./logs/**)',
+  'Read(./public/reports/**)',
+  'Bash(rm -rf ./数据管理/warehouse/**)',
+  'Bash(rm -rf ./.git/**)',
+  'mcp__filesystem__write_file',
+  'mcp__filesystem__edit_file',
+  'mcp__filesystem__create_directory',
+  'mcp__filesystem__move_file',
+];
+
+function readText(relativePath) {
+  return fs.readFileSync(path.join(ROOT_DIR, relativePath), 'utf8');
+}
+
+function readJson(relativePath) {
+  return JSON.parse(readText(relativePath));
+}
+
+function listMarkdownFiles(relativeDir) {
+  return fs
+    .readdirSync(path.join(ROOT_DIR, relativeDir), { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'README.md')
+    .map(entry => entry.name)
+    .sort();
+}
+
+function assert(condition, message, errors) {
+  if (!condition) {
+    errors.push(message);
+  }
+}
+
+function extractCount(content, patterns, label) {
+  const hits = patterns.map(p => content.match(p)).filter(Boolean);
+  if (hits.length !== patterns.length) {
+    throw new Error(`${label} README 未匹配全部 ${patterns.length} 处声明`);
+  }
+  const nums = hits.map(m => Number(m[1]));
+  if (new Set(nums).size > 1) {
+    throw new Error(`${label} README 多处数量不一致：${nums.join(' vs ')}`);
+  }
+  return nums[0];
+}
+
+function checkReadmeCounts(errors) {
+  const checks = [
+    {
+      label: 'commands',
+      dir: '.claude/commands',
+      readme: '.claude/commands/README.md',
+      patterns: [/^> 车险数据分析平台 — (\d+) 个项目级/m],
+    },
+    {
+      label: 'agents',
+      dir: '.claude/agents',
+      readme: '.claude/agents/README.md',
+      patterns: [/^> 车险数据分析平台 — (\d+) 个专业化 AI 子代理/m],
+    },
+    {
+      label: 'skills',
+      dir: '.claude/skills',
+      readme: '.claude/skills/README.md',
+      patterns: [/^## 当前项目专属技能（(\d+) 个）/m, /当前共 (\d+) 个项目级 skill/],
+    },
+  ];
+
+  for (const check of checks) {
+    const actual = listMarkdownFiles(check.dir).length;
+    const declared = extractCount(readText(check.readme), check.patterns, check.label);
+    assert(
+      actual === declared,
+      `H1 ${check.label} README 数量不一致：声明 ${declared}，实际 ${actual}`,
+      errors
+    );
+  }
+}
+
+function checkMcpFilesystemTools(errors) {
+  const mcp = readJson('.mcp.json');
+  const tools = mcp?.mcpServers?.filesystem?.tools ?? [];
+  const writeTools = tools.filter(tool => /write|create|move|edit/i.test(tool));
+  assert(
+    writeTools.length === 0,
+    `H2 filesystem MCP 暴露写工具：${writeTools.join(', ')}`,
+    errors
+  );
+}
+
+function checkPermissionsDeny(errors) {
+  const settings = readJson('.claude/settings.json');
+  const deny = settings?.permissions?.deny;
+  assert(Array.isArray(deny) && deny.length > 0, 'H3 permissions.deny 必须为非空数组', errors);
+
+  const denySet = new Set(Array.isArray(deny) ? deny : []);
+  for (const entry of requiredDenyEntries) {
+    assert(denySet.has(entry), `H3 permissions.deny 缺少：${entry}`, errors);
+  }
+}
+
+function collectHookCommands(hooks) {
+  const commands = [];
+  for (const hookEntries of Object.values(hooks ?? {})) {
+    for (const entry of hookEntries ?? []) {
+      for (const hook of entry.hooks ?? []) {
+        if (typeof hook.command === 'string') commands.push(hook.command);
+      }
+    }
+  }
+  return commands;
+}
+
+function checkStopHookDoesNotUseGitHistory(errors) {
+  const settings = readJson('.claude/settings.json');
+  const stopCommands = collectHookCommands({ Stop: settings?.hooks?.Stop });
+  const offenders = stopCommands.filter(command => command.includes('HEAD~1 HEAD'));
+  assert(offenders.length === 0, 'H4 Stop hook 仍包含 HEAD~1 HEAD', errors);
+}
+
+function main() {
+  if (process.env.HARNESS_SKIP === '1') {
+    if (process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') {
+      console.error('[harness] HARNESS_SKIP 在 CI 环境下被禁用');
+      process.exit(1);
+    }
+    console.warn('[harness] HARNESS_SKIP=1，跳过 harness 静态检查（仅限本地调试）');
+    return;
+  }
+
+  const errors = [];
+  checkReadmeCounts(errors);
+  checkMcpFilesystemTools(errors);
+  checkPermissionsDeny(errors);
+  checkStopHookDoesNotUseGitHistory(errors);
+
+  if (errors.length > 0) {
+    console.error('[harness] 检查失败：');
+    for (const error of errors) console.error(`  - ${error}`);
+    process.exit(1);
+  }
+
+  console.log('[harness] H1-H4 检查通过');
+}
+
+main();
