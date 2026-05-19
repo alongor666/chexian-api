@@ -71,7 +71,7 @@ END AS coeff_ceiling
 | 组合场景 | 工作流 |
 |---------|-------|
 | `/diagnose-agent` → `/chexian-pricing-redline` | 诊断发现亏损 → 追加红线分析，定位哪些维度靠定价可救、哪些不可救 |
-| `/chexian-pricing-redline` → `/auto-pricing` | 红线矩阵产出 → 输入定价策略，给出调价建议 |
+| `/chexian-pricing-redline` → `/chexian-pricing-decision` | 红线矩阵产出 → 输入定价策略，给出调价建议（前身 /auto-pricing；2026-05-18 P3.1 改名） |
 | `/chexian-pricing-redline` 独立使用 | 定期（月度/季度）跑红线监控，及早发现定价不足的板块 |
 
 ---
