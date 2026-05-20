@@ -112,55 +112,78 @@ export function frequencyYoyDeterioration(yoyRows: FrequencyYoyRow[]): {
 }
 
 /**
+ * 全国案均（元）— 从 GeoComparisonRow 计算，处理三种数据形态（修 codex review #411）。
+ *
+ * 必须用 comparison（不是 accidents）算的原因：
+ *   - `comparison` SQL 无 LIMIT，是全数据集真值
+ *   - `accidents` SQL 有 `LIMIT 100`（cases DESC），>100 城市时是截断子集
+ *
+ * 单侧赔案场景（cross 或 local 为 NULL）由 if-else 显式处理：
+ *   - 全本地：local_avg 即全国均值
+ *   - 全异地：cross_avg 即全国均值
+ *   - 两侧都有：cases 加权平均
+ */
+export function overallAvgFromComparison(comp: GeoComparisonRow | undefined | null): number {
+  if (!comp) return 0;
+  const total = comp.total_cases ?? 0;
+  if (total <= 0) return 0;
+  const crossCases = comp.cross_region_cases ?? 0;
+  const localCases = total - crossCases;
+  const crossAvg = comp.cross_region_avg_reserve;
+  const localAvg = comp.local_avg_reserve;
+
+  // 两侧都有：cases 加权平均
+  if (crossAvg != null && localAvg != null) {
+    return (crossAvg * crossCases + localAvg * localCases) / total;
+  }
+  // 全本地：local_avg 即全国均值（cross_avg 为 NULL）
+  if (crossCases === 0 && localAvg != null) return localAvg;
+  // 全异地：cross_avg 即全国均值（local_avg 为 NULL）
+  if (localCases === 0 && crossAvg != null) return crossAvg;
+  // 数据不一致（理论上 SQL 不会产生这种状态）— 兜底返回 0
+  return 0;
+}
+
+/**
  * 按省份聚合 geoAccident，找案均最高的省 + 与全国均值比值。
  *
- * 关键设计（修 codex review #411）：
+ * 关键设计（修 codex review #411 两轮反馈）：
  *
- *   P1 (单侧赔案场景)：不再依赖 GeoComparisonRow.cross_region_avg_reserve /
- *      local_avg_reserve 算全国均值 — 单侧（全本地或全异地）那一侧的 AVG 为 NULL，
- *      会让"案均最高省份"误降级。改为从 accidents 自身一次扫描算全国均值，
- *      与省级聚合同源，永远自洽。
+ *   第一轮 P1 (单侧赔案场景) + 第二轮 P1 (LIMIT 截断)：
+ *     全国均值由调用方通过 `overallAvgFromComparison(comp)` 计算（用无 LIMIT 的
+ *     comparison 数据），传入本函数。本函数只负责省级聚合 + ratio 计算。
  *
- *   P2 (量化误差)：用 `avg_reserve * cases`（保精度的城市级原始数据）累加，
- *      而非 `reserve_wan * 10000`。后者在 SQL 中已四舍五入到整数万，低额城市
- *      可能被量化为 0，导致省级案均系统性低估。
+ *   第一轮 P2 (量化误差)：
+ *     用 `avg_reserve * cases`（保精度的城市级原始数据）累加省级总金额，
+ *     而非 `reserve_wan * 10000`。后者在 SQL 中已 ROUND 到整数万，低额城市
+ *     可能被量化为 0，导致省级案均系统性低估。
  */
-export function topProvinceAvgClaim(accidents: GeoAccidentRow[]): {
+export function topProvinceAvgClaim(
+  accidents: GeoAccidentRow[],
+  overallAvg: number,
+): {
   provinceName: string;
   provinceAvg: number;
   ratio: number;
   cases: number;
-  overallAvg: number;
 } | null {
-  if (accidents.length === 0) return null;
+  if (accidents.length === 0 || overallAvg <= 0) return null;
 
-  // 同一次扫描：累加省级聚合 + 全国总和
+  // 省级聚合 — 用 avg_reserve × cases 避免 reserve_wan 量化误差
   const agg = new Map<string, { cases: number; totalReserve: number }>();
-  let nationalCases = 0;
-  let nationalReserve = 0;
   for (const r of accidents) {
     const name = extractProvinceName(r.province);
+    if (!name) continue;
     const cases = r.cases ?? 0;
-    // 用 avg_reserve（保精度的元）× cases 算城市原始总金额；
-    // fallback 到 reserve_wan * 10000（量化的万元）兼容旧 fixtures，但生产数据应总有 avg_reserve
     const cityReserve =
       r.avg_reserve != null
         ? r.avg_reserve * cases
-        : (r.reserve_wan ?? 0) * 10000;
-
-    nationalCases += cases;
-    nationalReserve += cityReserve;
-
-    if (!name) continue;
+        : (r.reserve_wan ?? 0) * 10000; // 向后兼容旧 fixtures
     const prev = agg.get(name) ?? { cases: 0, totalReserve: 0 };
     prev.cases += cases;
     prev.totalReserve += cityReserve;
     agg.set(name, prev);
   }
-
-  if (nationalCases <= 0) return null;
-  const overallAvg = nationalReserve / nationalCases;
-  if (overallAvg <= 0) return null;
 
   // 找案均最高省份（必须有件数 > 0）
   let best: { name: string; avg: number; cases: number } | null = null;
@@ -178,7 +201,6 @@ export function topProvinceAvgClaim(accidents: GeoAccidentRow[]): {
     provinceAvg: best.avg,
     ratio: best.avg / overallAvg,
     cases: best.cases,
-    overallAvg,
   };
 }
 
@@ -282,9 +304,12 @@ export function deriveGeoInsights(
     metricLabel: '% 同比',
   });
 
-  // 4. 案均最高省份 — 全国均值从 accidents 自身算，不再依赖 comparison.avg_*
-  // 解决 codex P1：单侧赔案场景（cross 或 local 一侧为 NULL）下也能正确判定
-  const topProv = topProvinceAvgClaim(accidents);
+  // 4. 案均最高省份
+  // 全国均值来自无 LIMIT 的 comparison（修 codex 第二轮 P1：accidents LIMIT 100 会截断）
+  // overallAvgFromComparison 内部处理单侧 NULL（修 codex 第一轮 P1）
+  // topProvinceAvgClaim 内部用 avg_reserve × cases 保精度（修 codex 第一轮 P2）
+  const overallAvg = overallAvgFromComparison(comparison);
+  const topProv = topProvinceAvgClaim(accidents, overallAvg);
   const topProvSev = topProv ? topProvinceSeverity(topProv.ratio) : 'neutral';
   items.push({
     id: 'top-province',

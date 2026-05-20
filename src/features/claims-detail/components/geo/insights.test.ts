@@ -6,7 +6,8 @@
  *   - topProvinceSeverity（沿用 Tab 1 套路）
  *   - extractProvinceName / topPlateConcentration（数据形态钉死）
  *   - frequencyYoyDeterioration（同比窗口判定）
- *   - topProvinceAvgClaim（聚合 + 比值）
+ *   - overallAvgFromComparison（全国均值，处理单侧 NULL）
+ *   - topProvinceAvgClaim（省级聚合 + 比值）
  *   - deriveGeoInsights（端到端 4 卡 + 降级）
  */
 import { describe, expect, it } from 'vitest';
@@ -16,6 +17,7 @@ import {
   deriveGeoInsights,
   extractProvinceName,
   frequencyYoyDeterioration,
+  overallAvgFromComparison,
   topPlateConcentration,
   topProvinceAvgClaim,
   topProvinceSeverity,
@@ -176,74 +178,130 @@ describe('frequencyYoyDeterioration', () => {
   });
 });
 
+describe('overallAvgFromComparison', () => {
+  it('两侧都有 → cases 加权平均', () => {
+    const comp: GeoComparisonRow = {
+      total_cases: 1000,
+      cross_region_cases: 300,
+      cross_region_avg_reserve: 8000,
+      local_avg_reserve: 5000,
+    };
+    // (8000 * 300 + 5000 * 700) / 1000 = (2,400,000 + 3,500,000) / 1000 = 5900
+    expect(overallAvgFromComparison(comp)).toBe(5900);
+  });
+
+  it('codex 第一轮 P1: 全本地（cross_avg = null）→ local_avg 即全国均值', () => {
+    const comp: GeoComparisonRow = {
+      total_cases: 100,
+      cross_region_cases: 0,
+      cross_region_avg_reserve: undefined,
+      local_avg_reserve: 6000,
+    };
+    expect(overallAvgFromComparison(comp)).toBe(6000);
+  });
+
+  it('codex 第一轮 P1: 全异地（local_avg = null）→ cross_avg 即全国均值', () => {
+    const comp: GeoComparisonRow = {
+      total_cases: 100,
+      cross_region_cases: 100,
+      cross_region_avg_reserve: 8000,
+      local_avg_reserve: undefined,
+    };
+    expect(overallAvgFromComparison(comp)).toBe(8000);
+  });
+
+  it('comparison 为 null/undefined → 0（不崩溃）', () => {
+    expect(overallAvgFromComparison(null)).toBe(0);
+    expect(overallAvgFromComparison(undefined)).toBe(0);
+  });
+
+  it('total_cases = 0 → 0', () => {
+    expect(
+      overallAvgFromComparison({ total_cases: 0, cross_region_cases: 0 }),
+    ).toBe(0);
+  });
+
+  it('数据不一致兜底（两侧 cases > 0 但一侧 avg 为 null）→ 0', () => {
+    // 理论上 SQL 不产生此状态，但代码必须兜底
+    const comp: GeoComparisonRow = {
+      total_cases: 100,
+      cross_region_cases: 50,
+      cross_region_avg_reserve: undefined,
+      local_avg_reserve: 5000,
+    };
+    expect(overallAvgFromComparison(comp)).toBe(0);
+  });
+});
+
 describe('topProvinceAvgClaim', () => {
-  it('找案均最高省份 + 内部算 overallAvg（用 avg_reserve × cases，保精度）', () => {
+  it('找案均最高省份 + 用调用方传入的 overallAvg 算 ratio', () => {
     const accidents: GeoAccidentRow[] = [
-      // 四川: 10 件，案均 5 万元 = 总 50 万
+      // 四川: 10 件，案均 5 万元
       { province: '510000四川省', city: 'X', cases: 10, avg_reserve: 50000, reserve_wan: 50 },
-      // 北京: 5 件，案均 10 万元 = 总 50 万（案均最高）
+      // 北京: 5 件，案均 10 万元（最高）
       { province: '110000北京市', city: 'Y', cases: 5, avg_reserve: 100000, reserve_wan: 50 },
     ];
-    // 全国：15 件 + 100 万 = 案均 66666.67 元（内部自算）
-    const out = topProvinceAvgClaim(accidents);
+    // 调用方计算的全国均值（来自 comparison）
+    const overallAvg = 60000;
+    const out = topProvinceAvgClaim(accidents, overallAvg);
     expect(out).not.toBeNull();
     expect(out!.provinceName).toBe('北京市');
     expect(out!.provinceAvg).toBe(100000);
-    expect(out!.overallAvg).toBeCloseTo(100 * 10000 / 15, 0); // 66666.67
-    expect(out!.ratio).toBeCloseTo(100000 / (100 * 10000 / 15), 2); // 1.5
+    expect(out!.ratio).toBeCloseTo(100000 / 60000, 2);
     expect(out!.cases).toBe(5);
   });
 
+  it('overallAvg ≤ 0 → null（数据不足时调用方传 0）', () => {
+    const accidents: GeoAccidentRow[] = [
+      { province: '510000四川省', city: 'X', cases: 10, avg_reserve: 50000 },
+    ];
+    expect(topProvinceAvgClaim(accidents, 0)).toBeNull();
+    expect(topProvinceAvgClaim(accidents, -1)).toBeNull();
+  });
+
   it('空 accidents → null', () => {
-    expect(topProvinceAvgClaim([])).toBeNull();
+    expect(topProvinceAvgClaim([], 60000)).toBeNull();
   });
 
   it('全部 cases = 0 → null（避免除零）', () => {
     const accidents: GeoAccidentRow[] = [
       { province: '510000四川省', city: 'X', cases: 0, avg_reserve: 5000 },
     ];
-    expect(topProvinceAvgClaim(accidents)).toBeNull();
+    expect(topProvinceAvgClaim(accidents, 60000)).toBeNull();
   });
 
   it('同省多市数据聚合', () => {
     const accidents: GeoAccidentRow[] = [
-      { province: '510000四川省', city: '510100成都市', cases: 5, avg_reserve: 50000, reserve_wan: 25 },
-      { province: '510000四川省', city: '510700绵阳市', cases: 5, avg_reserve: 50000, reserve_wan: 25 },
+      { province: '510000四川省', city: '510100成都市', cases: 5, avg_reserve: 50000 },
+      { province: '510000四川省', city: '510700绵阳市', cases: 5, avg_reserve: 50000 },
     ];
-    const out = topProvinceAvgClaim(accidents);
+    const out = topProvinceAvgClaim(accidents, 30000);
     // 合并后：10 件，每件 5 万元 → 省案均 50000
     expect(out!.provinceAvg).toBe(50000);
     expect(out!.cases).toBe(10);
-    expect(out!.overallAvg).toBe(50000);
-    expect(out!.ratio).toBe(1);
+    expect(out!.ratio).toBeCloseTo(50000 / 30000, 2);
   });
 
-  it('codex P2 反例：低额城市 reserve_wan 量化到 0，但 avg_reserve 完整 → 不受量化误差影响', () => {
-    // 真实场景：城市 A 200 件 × 案均 200 元 = 总 40000 元（4 万元）
-    // SQL 输出 reserve_wan = ROUND(40000/10000) = 4 万 — 还好
-    // 但 200 件 × 案均 50 元 = 1万元，ROUND(1/10000... 还是 1 万)
-    // 真正极端：1 件 × 49 元 = 49 元，ROUND(0.0049) = 0 万元（量化误差）
+  it('codex 第一轮 P2 反例：低额城市 avg_reserve 用元（避量化）', () => {
+    // 1 件 × 案均 49 元 = 49 元，SQL 量化后 reserve_wan = 0 万
+    // 旧逻辑 reserve_wan * 10000 = 0 → 错误归零
+    // 新逻辑 avg_reserve * cases = 49 元保精度
     const accidents: GeoAccidentRow[] = [
-      // 北京：1 件 + 案均 49 元（reserve_wan 量化为 0）
       { province: '110000北京市', city: 'X', cases: 1, avg_reserve: 49, reserve_wan: 0 },
-      // 四川：1 件 + 案均 100 元
       { province: '510000四川省', city: 'Y', cases: 1, avg_reserve: 100, reserve_wan: 0 },
     ];
-    const out = topProvinceAvgClaim(accidents);
-    // 旧逻辑用 reserve_wan: 两省都 0 → 案均为 0 → null
-    // 新逻辑用 avg_reserve: 四川 100 元最高，全国均值 74.5 元
+    const out = topProvinceAvgClaim(accidents, 74.5);
     expect(out).not.toBeNull();
     expect(out!.provinceName).toBe('四川省');
     expect(out!.provinceAvg).toBe(100);
-    expect(out!.overallAvg).toBe(74.5);
   });
 
   it('avg_reserve 缺失时 fallback 到 reserve_wan * 10000（向后兼容）', () => {
     const accidents: GeoAccidentRow[] = [
-      // 无 avg_reserve 字段，只有 reserve_wan
+      // 无 avg_reserve 字段
       { province: '510000四川省', city: 'X', cases: 10, reserve_wan: 50 },
     ];
-    const out = topProvinceAvgClaim(accidents);
+    const out = topProvinceAvgClaim(accidents, 40000);
     expect(out).not.toBeNull();
     expect(out!.provinceAvg).toBe(50000); // 50 万 / 10 = 5 万元
   });
@@ -301,13 +359,12 @@ describe('deriveGeoInsights', () => {
     expect(out[2].title).toBe('出险频度同比恶化');
   });
 
-  it('北京市案均 10 万 vs 自算全国均值 → bad（ratio ≥ 1.6）', () => {
+  it('北京市案均 10 万 vs comparison 全国均值 → bad（ratio ≥ 1.6）', () => {
     const out = deriveGeoInsights(COMP, PLATES, YOY, ACCIDENTS);
-    // 自算全国均值（accidents 自身）：
-    //   (10 * 50000 + 5 * 100000) / 15 = 66666.67 元
-    // 北京案均 100000 / 66666.67 = 1.5 倍 → warn（介于 1.2 和 1.6 之间）
-    // 注：旧版用 comparison 估算 ratio ≈ 16.5（错误，混了 reserve_wan 量纲），新版自洽
-    expect(out[3].severity).toBe('warn');
+    // 全国均值 = overallAvgFromComparison(COMP) 加权平均：
+    //   (8000 * 350 + 5000 * 650) / 1000 = 6050 元
+    // 北京案均 100000 / 6050 ≈ 16.5 倍 → bad
+    expect(out[3].severity).toBe('bad');
     expect(out[3].title).toContain('北京市');
   });
 
