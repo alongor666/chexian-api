@@ -4,7 +4,7 @@
  */
 import { cn, colorClasses, fontStyles } from '@/shared/styles';
 import { formatCount } from '@/shared/utils/formatters';
-import { RiskBar } from './atoms';
+import { RiskBar } from '../shared/atoms';
 import { severityForStayDays, severityToColor } from './insights';
 import type { OrgRow } from './types';
 

@@ -4,8 +4,7 @@
  */
 import React from 'react';
 import { cn, colorClasses, numericStyles } from '@/shared/styles';
-import { severityToColor } from './insights';
-import type { Severity } from './types';
+import { severityToColor, type Severity } from './severity';
 
 export function StatusPill({
   severity,
