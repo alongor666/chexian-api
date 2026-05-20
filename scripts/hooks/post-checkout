@@ -1,0 +1,75 @@
+#!/bin/bash
+# post-checkout hook：
+#   1. 转交 git-lfs（如果安装）
+#   2. 缺依赖自动 bun install 子项目（解决 worktree add 后子 package 空 node_modules 陷阱）
+#
+# Git 触发参数：
+#   $1 = previous HEAD
+#   $2 = new HEAD
+#   $3 = checkout type (1=branch checkout，含 git worktree add；0=file checkout)
+#
+# 设计要点：
+#   - 只在 branch checkout 时跑（$3=1），跳过 file checkout 避免不必要的扫描
+#   - 只在子项目缺 node_modules 时跑 install — 普通切分支 0 开销
+#   - 单个失败不阻断（warn 后继续），用户切分支不应被半夜的 npm registry 挂掉卡住
+
+# ── 1. git-lfs（保留现有行为）────────────────────────────────────
+if command -v git-lfs >/dev/null 2>&1; then
+  git lfs post-checkout "$@"
+else
+  printf >&2 "\n%s\n\n" "This repository is configured for Git LFS but 'git-lfs' was not found on your path. If you no longer wish to use Git LFS, set core.hooksPath back to .git/hooks and remove this hook."
+fi
+
+# ── 2. 子项目依赖自愈 ───────────────────────────────────────────
+# 仅在分支切换（含 git worktree add）时触发
+[ "$3" != "1" ] && exit 0
+
+ROOT="$(git rev-parse --show-toplevel)" || exit 0
+
+# 子项目清单：root workspace (cli/mcp 由 root bun install 联动) + server 独立 package
+SUBPACKAGES=("cli" "mcp" "server")
+
+NEED_INSTALL=()
+for SUB in "${SUBPACKAGES[@]}"; do
+  if [ -f "$ROOT/$SUB/package.json" ] && [ ! -d "$ROOT/$SUB/node_modules" ]; then
+    NEED_INSTALL+=("$SUB")
+  fi
+done
+
+ROOT_NEEDS=""
+if [ -f "$ROOT/package.json" ] && [ ! -d "$ROOT/node_modules" ]; then
+  ROOT_NEEDS="root"
+fi
+
+if [ -z "$ROOT_NEEDS" ] && [ ${#NEED_INSTALL[@]} -eq 0 ]; then
+  exit 0
+fi
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "⚠️  [post-checkout] bun 未安装，跳过子项目依赖自愈（请手动 bun install）"
+  exit 0
+fi
+
+if [ -n "$ROOT_NEEDS" ]; then
+  echo "🔧 [post-checkout] root 缺 node_modules，自动 bun install（含 workspaces cli/mcp）..."
+  if bun install --cwd "$ROOT" >/dev/null 2>&1; then
+    echo "✅ [post-checkout] root bun install 完成"
+  else
+    echo "⚠️  [post-checkout] root bun install 失败，请手动重试: bun install"
+  fi
+  # root install 后 workspaces (cli, mcp) 已就位，从 NEED_INSTALL 移除
+  NEED_INSTALL=("${NEED_INSTALL[@]/cli}")
+  NEED_INSTALL=("${NEED_INSTALL[@]/mcp}")
+fi
+
+for SUB in "${NEED_INSTALL[@]}"; do
+  [ -z "$SUB" ] && continue
+  echo "🔧 [post-checkout] $SUB 缺 node_modules，自动 bun install..."
+  if bun install --cwd "$ROOT/$SUB" >/dev/null 2>&1; then
+    echo "✅ [post-checkout] $SUB bun install 完成"
+  else
+    echo "⚠️  [post-checkout] $SUB bun install 失败，请手动重试: bun install --cwd $ROOT/$SUB"
+  fi
+done
+
+exit 0
