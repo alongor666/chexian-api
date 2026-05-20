@@ -94,6 +94,10 @@ python3 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py
 
 日常推荐走仓库的一键发布入口，完成 ETL、VPS 同步、PM2 reload、健康检查后，再同步机构续保追踪表：
 
+多 webhook / 多智能表目标的当前登记、state、schema 与字段策略见
+[`WEBHOOK_TARGETS.md`](./WEBHOOK_TARGETS.md)。新增或转让智能表时，先更新该目标登记，
+再执行同步，避免误用旧 webhook、旧字段 ID 或旧 record_id state。
+
 ```bash
 # 先看全流程计划，不执行外部写入
 bun run release:daily:dry

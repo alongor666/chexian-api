@@ -97,6 +97,16 @@ def test_stable_value_handles_none_nan_and_datetime() -> None:
     assert sfp._stable_value("  川A12345  ") == "川A12345"
 
 
+def test_to_ts_ms_encodes_business_date_at_utc_noon() -> None:
+    """DATE_TIME 写入固定为 UTC 中午，避免查看端时区把业务日期显示成前一天。"""
+    assert sfp._to_ts_ms(date(2026, 5, 19)) == "1779192000000"
+    assert sfp._to_ts_ms(datetime(2026, 5, 19, 0, 0, 0)) == "1779192000000"
+
+
+def test_to_select_omits_nan() -> None:
+    assert sfp._to_select(float("nan")) is None
+
+
 def test_load_instance_parses_composite_key_as_tuple(tmp_path: Path) -> None:
     """YAML 中 composite_key 是 list，加载后应为 tuple（frozen dataclass 友好）。"""
     yaml_path = tmp_path / "test.yaml"
@@ -268,7 +278,7 @@ def test_run_success_writes_composite_strategy(monkeypatch: pytest.MonkeyPatch) 
         "key_strategy": "composite_key",
         "composite_fields": ["policy_no", "plate_no", "premium", "policy_date"],
     })
-    monkeypatch.setattr(sfp, "post_webhook", lambda *_args, **_kwargs: {"errcode": 0})
+    monkeypatch.setattr(sfp, "post_webhook", lambda *_args, **_kwargs: {"errcode": 0, "add_records": [{"record_id": "rec1"}]})
     monkeypatch.setattr(sfp, "write_log", lambda *_args, **_kwargs: Path("/tmp/test-log.json"))
     monkeypatch.setattr(sfp, "save_state", lambda _inst, state, **_kwargs: saved.update(state))
     monkeypatch.setenv("TEST_WEBHOOK", "https://example.invalid/webhook")
@@ -279,3 +289,20 @@ def test_run_success_writes_composite_strategy(monkeypatch: pytest.MonkeyPatch) 
     assert saved["key_strategy"] == "composite_key"
     assert saved["composite_fields"] == ["policy_no", "plate_no", "premium", "policy_date"]
     assert saved["synced_keys"] == ["P123|川A12345|100.0000|2026-05-14"]
+
+
+def test_run_rejects_success_response_without_add_records(monkeypatch: pytest.MonkeyPatch) -> None:
+    inst = _make_instance(composite_key=("policy_no", "plate_no", "premium", "policy_date"))
+    row = {"_primary_key": "P123", "policy_no": "P123", "plate_no": "川A12345", "premium": 100.0, "policy_date": date(2026, 5, 14)}
+    monkeypatch.setattr(sfp, "fetch_rows", lambda _inst: [row])
+    monkeypatch.setattr(sfp, "load_state", lambda _inst: {
+        "synced_keys": [],
+        "key_strategy": "composite_key",
+        "composite_fields": ["policy_no", "plate_no", "premium", "policy_date"],
+    })
+    monkeypatch.setattr(sfp, "post_webhook", lambda *_args, **_kwargs: {"errcode": 0})
+    monkeypatch.setattr(sfp, "write_log", lambda *_args, **_kwargs: Path("/tmp/test-log.json"))
+    monkeypatch.setenv("TEST_WEBHOOK", "https://example.invalid/webhook")
+
+    with pytest.raises(RuntimeError, match="新增返回数量不一致"):
+        sfp.run(inst, mode="sync", dry_run=False)
