@@ -233,6 +233,7 @@ export function generateGeoRiskByAccidentQuery(filters: ClaimsDetailFilters): st
     JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
       AND c.accident_city IS NOT NULL
+      AND p.plate_no IS NOT NULL  -- 与 generateGeoComparisonQuery 共享 cohort，避免案均最高省份卡片 ratio 失真（codex review PR #411 第三轮 P1）
     GROUP BY c.accident_province, c.accident_city
     ORDER BY cases DESC
     LIMIT 100
@@ -342,6 +343,7 @@ export function generateGeoComparisonQuery(filters: ClaimsDetailFilters): string
       JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
       WHERE ${where}${policyWhere}
         AND p.plate_no IS NOT NULL
+        AND c.accident_city IS NOT NULL  -- 与 generateGeoRiskByAccidentQuery 共享 cohort（codex review PR #411 第三轮 P1）
     )
     SELECT
       COUNT(*) AS total_cases,

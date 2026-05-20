@@ -118,6 +118,11 @@ export function frequencyYoyDeterioration(yoyRows: FrequencyYoyRow[]): {
  *   - `comparison` SQL 无 LIMIT，是全数据集真值
  *   - `accidents` SQL 有 `LIMIT 100`（cases DESC），>100 城市时是截断子集
  *
+ * cohort 对齐（codex 第三轮 P1）：两条 SQL 的 WHERE 条件已统一为
+ *   `c.accident_city IS NOT NULL AND p.plate_no IS NOT NULL`，所以分子
+ *   （topProvinceAvgClaim 的省级案均）与分母（本函数返回的全国均值）来自同一
+ *   赔案集合，ratio 严格自洽。
+ *
  * 单侧赔案场景（cross 或 local 为 NULL）由 if-else 显式处理：
  *   - 全本地：local_avg 即全国均值
  *   - 全异地：cross_avg 即全国均值

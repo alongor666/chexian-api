@@ -316,6 +316,11 @@ describe('generateGeoRiskByAccidentQuery', () => {
     expect(sql).toContain('c.accident_city IS NOT NULL');
   });
 
+  it('共享 cohort：plate_no IS NOT NULL（与 generateGeoComparisonQuery 对齐 codex P1）', () => {
+    const sql = generateGeoRiskByAccidentQuery(EMPTY_FILTERS);
+    expect(sql).toContain('p.plate_no IS NOT NULL');
+  });
+
   it('LIMIT 100 防止数据过大', () => {
     const sql = generateGeoRiskByAccidentQuery(EMPTY_FILTERS);
     expect(sql).toContain('LIMIT 100');
@@ -390,6 +395,11 @@ describe('generateGeoComparisonQuery', () => {
   it('过滤 plate_no IS NOT NULL', () => {
     const sql = generateGeoComparisonQuery(EMPTY_FILTERS);
     expect(sql).toContain('p.plate_no IS NOT NULL');
+  });
+
+  it('共享 cohort：accident_city IS NOT NULL（与 generateGeoRiskByAccidentQuery 对齐 codex P1）', () => {
+    const sql = generateGeoComparisonQuery(EMPTY_FILTERS);
+    expect(sql).toContain('c.accident_city IS NOT NULL');
   });
 
   it('输出跨区域统计四字段', () => {
