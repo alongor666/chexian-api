@@ -104,6 +104,7 @@ FIELD_SETS = {
     "quote": ["is_renewed", "is_quoted", "pricing_factor"],
     "all": ["is_renewed", "is_quoted", "insurance_grade", "pricing_factor", "loss_company"],
 }
+SEED_UPDATE_KEYS = ["is_renewed", "is_quoted", "coverage_combination", "insurance_grade", "pricing_factor", "loss_company"]
 BASE_UPDATE_KEYS = list(FIELD_SETS["quote"])
 BASE_SEED_KEYS = list(FULL_FIELD_IDS.keys())
 
@@ -157,7 +158,6 @@ def parse_args() -> argparse.Namespace:
     sync.add_argument("--webhook-url", help="直接传 webhook URL；优先级高于 --webhook-env，不建议写入脚本")
     sync.add_argument(
         "--table-schema-file",
-        default=str(DEFAULT_TABLE_SCHEMA_PATH),
         help="目标表 webhook 示例 JSON，含 schema/add_records，用于覆盖字段 ID 和字段类型",
     )
     sync.add_argument("--batch-size", type=int, default=100)
@@ -198,7 +198,6 @@ def parse_args() -> argparse.Namespace:
     seed.add_argument("--webhook-url", help="直接传 webhook URL；优先级高于 --webhook-env")
     seed.add_argument(
         "--table-schema-file",
-        default=str(DEFAULT_TABLE_SCHEMA_PATH),
         help="目标表 webhook 示例 JSON，含 schema/add_records，用于覆盖字段 ID 和字段类型",
     )
     seed.add_argument("--batch-size", type=int, default=100)
@@ -597,6 +596,7 @@ EXCEL_FIELD_TO_KEY = {
     "坐席域账号": "seat_account",
     "归属团队": "team",
     "车型": "vehicle_type",
+    "险别组合": "coverage_combination",
 }
 
 
@@ -647,6 +647,7 @@ def build_seed_values(excel_row: dict[str, Any], enrichment_row: dict[str, Any] 
     put("seat_account", excel_row.get("seat_account"))
     put("team", excel_row.get("team"))
     put("vehicle_type", excel_row.get("vehicle_type"))
+    put("coverage_combination", excel_row.get("coverage_combination"))
 
     if enrichment_row:
         values.update(build_update_values(enrichment_row))
@@ -1001,7 +1002,7 @@ def main() -> int:
             state_path = Path(args.state).expanduser().resolve()
             if args.table_schema_file:
                 apply_table_schema_file(Path(args.table_schema_file).expanduser())
-            BASE_UPDATE_KEYS[:] = FIELD_SETS["all"]
+            BASE_UPDATE_KEYS[:] = SEED_UPDATE_KEYS
             config = SyncConfig(
                 start=args.start,
                 end=args.end,
