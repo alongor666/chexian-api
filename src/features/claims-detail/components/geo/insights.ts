@@ -112,30 +112,55 @@ export function frequencyYoyDeterioration(yoyRows: FrequencyYoyRow[]): {
 }
 
 /**
- * 按省份聚合 geoAccident，找案均最高的省 + 与全国均值比值
+ * 按省份聚合 geoAccident，找案均最高的省 + 与全国均值比值。
+ *
+ * 关键设计（修 codex review #411）：
+ *
+ *   P1 (单侧赔案场景)：不再依赖 GeoComparisonRow.cross_region_avg_reserve /
+ *      local_avg_reserve 算全国均值 — 单侧（全本地或全异地）那一侧的 AVG 为 NULL，
+ *      会让"案均最高省份"误降级。改为从 accidents 自身一次扫描算全国均值，
+ *      与省级聚合同源，永远自洽。
+ *
+ *   P2 (量化误差)：用 `avg_reserve * cases`（保精度的城市级原始数据）累加，
+ *      而非 `reserve_wan * 10000`。后者在 SQL 中已四舍五入到整数万，低额城市
+ *      可能被量化为 0，导致省级案均系统性低估。
  */
-export function topProvinceAvgClaim(
-  accidents: GeoAccidentRow[],
-  overallAvg: number,
-): {
+export function topProvinceAvgClaim(accidents: GeoAccidentRow[]): {
   provinceName: string;
   provinceAvg: number;
   ratio: number;
   cases: number;
+  overallAvg: number;
 } | null {
-  if (accidents.length === 0 || overallAvg <= 0) return null;
+  if (accidents.length === 0) return null;
 
-  // 省级聚合
+  // 同一次扫描：累加省级聚合 + 全国总和
   const agg = new Map<string, { cases: number; totalReserve: number }>();
+  let nationalCases = 0;
+  let nationalReserve = 0;
   for (const r of accidents) {
     const name = extractProvinceName(r.province);
+    const cases = r.cases ?? 0;
+    // 用 avg_reserve（保精度的元）× cases 算城市原始总金额；
+    // fallback 到 reserve_wan * 10000（量化的万元）兼容旧 fixtures，但生产数据应总有 avg_reserve
+    const cityReserve =
+      r.avg_reserve != null
+        ? r.avg_reserve * cases
+        : (r.reserve_wan ?? 0) * 10000;
+
+    nationalCases += cases;
+    nationalReserve += cityReserve;
+
     if (!name) continue;
     const prev = agg.get(name) ?? { cases: 0, totalReserve: 0 };
-    prev.cases += r.cases ?? 0;
-    // reserve_wan 转回元
-    prev.totalReserve += (r.reserve_wan ?? 0) * 10000;
+    prev.cases += cases;
+    prev.totalReserve += cityReserve;
     agg.set(name, prev);
   }
+
+  if (nationalCases <= 0) return null;
+  const overallAvg = nationalReserve / nationalCases;
+  if (overallAvg <= 0) return null;
 
   // 找案均最高省份（必须有件数 > 0）
   let best: { name: string; avg: number; cases: number } | null = null;
@@ -153,6 +178,7 @@ export function topProvinceAvgClaim(
     provinceAvg: best.avg,
     ratio: best.avg / overallAvg,
     cases: best.cases,
+    overallAvg,
   };
 }
 
@@ -256,15 +282,9 @@ export function deriveGeoInsights(
     metricLabel: '% 同比',
   });
 
-  // 4. 案均最高省份
-  const totalAvg =
-    totalCases > 0 && comparison?.cross_region_avg_reserve != null && comparison?.local_avg_reserve != null
-      ? // 用 cross_region 和 local 的加权平均估算全国均值
-        ((comparison.cross_region_avg_reserve ?? 0) * (comparison.cross_region_cases ?? 0) +
-          (comparison.local_avg_reserve ?? 0) * (totalCases - (comparison.cross_region_cases ?? 0))) /
-        totalCases
-      : 0;
-  const topProv = topProvinceAvgClaim(accidents, totalAvg);
+  // 4. 案均最高省份 — 全国均值从 accidents 自身算，不再依赖 comparison.avg_*
+  // 解决 codex P1：单侧赔案场景（cross 或 local 一侧为 NULL）下也能正确判定
+  const topProv = topProvinceAvgClaim(accidents);
   const topProvSev = topProv ? topProvinceSeverity(topProv.ratio) : 'neutral';
   items.push({
     id: 'top-province',
