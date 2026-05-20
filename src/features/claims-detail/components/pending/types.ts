@@ -1,8 +1,11 @@
 /**
  * 未决赔案监控面板专用类型
+ *
+ * Severity 已上提到 shared/severity.ts（跨 Tab 复用），此处 re-export 保持对外 API。
  */
 
-export type Severity = 'bad' | 'warn' | 'good' | 'neutral';
+export type { Severity } from '../shared/severity';
+import type { Severity } from '../shared/severity';
 
 export interface OverviewRow {
   claim_status?: string;

@@ -9,7 +9,7 @@ import {
   colorClasses,
   numericStyles,
 } from '@/shared/styles';
-import { StatusDot } from './atoms';
+import { StatusDot } from '../shared/atoms';
 import { severityToColor } from './insights';
 import type { Severity } from './types';
 
