@@ -3,7 +3,7 @@
  */
 import { cn, colorClasses, fontStyles } from '@/shared/styles';
 import { formatCount } from '@/shared/utils/formatters';
-import { StatusPill } from './atoms';
+import { StatusPill } from '../shared/atoms';
 
 interface AgingBarRowProps {
   label: string;

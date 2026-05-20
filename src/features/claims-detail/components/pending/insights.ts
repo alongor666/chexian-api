@@ -181,37 +181,7 @@ export function deriveInsights(
 }
 
 /**
- * 严重度 → 设计系统色映射
+ * severityToColor 已上提到 shared/severity.ts（跨 Tab 复用）。
+ * 此处 re-export 保持对 OrgLeaderRow / KpiCard / InsightCard 等下游引用的兼容。
  */
-export function severityToColor(s: Severity) {
-  switch (s) {
-    case 'bad':
-      return {
-        text: 'text-danger',
-        bg: 'bg-danger-bg',
-        border: 'border-danger-border',
-        ring: 'bg-danger',
-      };
-    case 'warn':
-      return {
-        text: 'text-warning',
-        bg: 'bg-warning-bg',
-        border: 'border-warning-border',
-        ring: 'bg-warning',
-      };
-    case 'good':
-      return {
-        text: 'text-success',
-        bg: 'bg-success-bg',
-        border: 'border-success-border',
-        ring: 'bg-success',
-      };
-    default:
-      return {
-        text: 'text-neutral-400 dark:text-neutral-500',
-        bg: 'bg-neutral-50 dark:bg-surface-2',
-        border: 'border-neutral-200 dark:border-subtle',
-        ring: 'bg-neutral-400',
-      };
-  }
-}
+export { severityToColor } from '../shared/severity';

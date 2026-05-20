@@ -31,7 +31,7 @@ import {
   RiskBar,
   SectionHeader,
   StatusPill,
-} from './pending/atoms';
+} from './shared/atoms';
 import { AgingBarRow } from './pending/AgingBarRow';
 import { InsightCard } from './pending/InsightCard';
 import { KpiCard } from './pending/KpiCard';
