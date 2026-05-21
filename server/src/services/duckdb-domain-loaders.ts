@@ -377,6 +377,15 @@ export async function loadClaimsDetail(db: DuckDBQueryable, parquetPath: string)
 
 /**
  * 从 ClaimsDetail VIEW 聚合创建 ClaimsAgg TABLE（唯一来源）
+ *
+ * 2026-05-20 业务口径修正（与 xlsx 周报对账校准）：
+ *   claim_cases  ── COUNT(DISTINCT claim_no) 不过滤，保持件数 cohort 与 xlsx 对齐
+ *   reported_claims ── 在 SUM 内做 CASE 过滤，剔除以下案件的金额：
+ *     1) liability_ratio = 0  (无责案件，本保单不构成赔款)
+ *     2) case_type ∈ {零结, 注销, 拒赔}  (结案/撤案/拒赔后残留 reserve_amount 不应计入)
+ *
+ * 实证（YTD 2026 截至 5/16）：
+ *   修前总赔款 +2.85% / 赔付率 +7.30% → 修后总赔款 +1.22% / 赔付率 +1.28%
  */
 export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<void> {
   await db.query(`
@@ -384,8 +393,13 @@ export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<vo
     SELECT policy_no,
            COUNT(DISTINCT claim_no) AS claim_cases,
            SUM(CASE
-                 WHEN settlement_time IS NOT NULL THEN COALESCE(settled_amount, 0)
-                 ELSE COALESCE(reserve_amount, 0)
+                 WHEN COALESCE(liability_ratio, 100) > 0
+                  AND (case_type IS NULL OR case_type NOT IN ('零结','注销','拒赔'))
+                 THEN (CASE
+                         WHEN settlement_time IS NOT NULL THEN COALESCE(settled_amount, 0)
+                         ELSE COALESCE(reserve_amount, 0)
+                       END)
+                 ELSE 0
                END) AS reported_claims
     FROM ClaimsDetail
     WHERE policy_no IS NOT NULL

@@ -155,6 +155,10 @@ warehouse/**/_partition_meta.json
 # Snapshot 运行时产物（build-snapshots.mjs 每次重建，52MB+ 不入仓库）
 数据管理/warehouse/snapshots/
 
+# 赔付率周报对账输出（每周覆盖，每次 6MB；README.md 入 git，子目录 JSON 不入）
+数据管理/validation/loss-ratio-weekly/*/
+!数据管理/validation/loss-ratio-weekly/README.md
+
 # 集成同步运行时产物（wecom_smartsheet 等含 VIN/保单号敏感数据，禁止提交）
 数据管理/integrations/*/state/
 数据管理/integrations/*/logs/

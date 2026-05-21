@@ -52,9 +52,11 @@ policy_exposure AS (
     -- 保险期限天数（闰年感知：365或366）
     DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term,
     -- 满期天数：MIN(统计截止日 - 保险起期, policy_term)，最小为0
+    -- earned_days +1：含起保当天（与 sql-builder.ts 已有的 statMonthEnd 口径统一）
+    -- 2026-05-20 对账校准：与 xlsx 周报满期保费偏差 -1.51% → -0.06% PASS
     LEAST(
       GREATEST(
-        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}'),
+        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}') + 1,
         0
       ),
       DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
@@ -161,9 +163,11 @@ policy_exposure AS (
     p.premium,
     p.insurance_start_date AS start_date,
     DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term,
+    -- earned_days +1：含起保当天（与 sql-builder.ts 已有的 statMonthEnd 口径统一）
+    -- 2026-05-20 对账校准：与 xlsx 周报满期保费偏差 -1.51% → -0.06% PASS
     LEAST(
       GREATEST(
-        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}'),
+        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}') + 1,
         0
       ),
       DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
@@ -239,9 +243,11 @@ policy_exposure AS (
     ${groupByFields.map((f) => `p.${f}`).join(', ')},
     p.premium,
     DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term,
+    -- earned_days +1：含起保当天（与 sql-builder.ts 已有的 statMonthEnd 口径统一）
+    -- 2026-05-20 对账校准：与 xlsx 周报满期保费偏差 -1.51% → -0.06% PASS
     LEAST(
       GREATEST(
-        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}'),
+        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}') + 1,
         0
       ),
       DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)

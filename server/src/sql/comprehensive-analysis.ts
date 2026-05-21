@@ -51,9 +51,10 @@ policy_exposure AS (
     p.fee_amount,
     COALESCE(c.claim_cases, 0) AS claim_cases,
     DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term,
+    -- earned_days +1：含起保当天（与 cost-ratios.ts / sql-builder.ts 口径统一）
     LEAST(
       GREATEST(
-        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}'),
+        DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}') + 1,
         0
       ),
       DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
