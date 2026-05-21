@@ -173,9 +173,10 @@ WITH policy_exposure AS (
     p.premium,
     p.insurance_start_date AS start_date,
     DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
+    -- earned_days +1：含起保当天（与 cost-ratios.ts / 行 235/294 已有 +1 口径统一）
     LEAST(
       GREATEST(
-        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}'),
+        DATEDIFF('day', CAST(p.insurance_start_date AS DATE), DATE '${cutoffDate}') + 1,
         0
       ),
       DATEDIFF('day', CAST(p.insurance_start_date AS DATE), CAST(p.insurance_start_date AS DATE) + INTERVAL 1 YEAR)
