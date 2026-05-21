@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -58,3 +59,39 @@ def test_seed_enrichment_keys_include_coverage_combination() -> None:
         smrf.BASE_UPDATE_KEYS[:] = original_keys
 
     assert values[smrf.field_id("coverage_combination")] == [{"text": "主全"}]
+
+
+def test_date_to_epoch_ms_uses_utc_noon_to_preserve_business_date() -> None:
+    assert smrf.date_to_epoch_ms(date(2026, 5, 18)) == "1779105600000"
+
+
+def test_plan_field_stats_counts_each_updated_field() -> None:
+    smrf.reset_table_spec()
+    original_keys = list(smrf.BASE_UPDATE_KEYS)
+    try:
+        smrf.BASE_UPDATE_KEYS[:] = ["is_renewed", "is_quoted", "pricing_factor"]
+        stats = smrf.plan_field_stats([
+            {
+                "values": {
+                    smrf.field_id("is_renewed"): [{"text": "是"}],
+                    smrf.field_id("is_quoted"): [{"text": "否"}],
+                }
+            },
+            {
+                "values": {
+                    smrf.field_id("is_quoted"): [{"text": "是"}],
+                    smrf.field_id("pricing_factor"): 0.72,
+                }
+            },
+        ])
+    finally:
+        smrf.BASE_UPDATE_KEYS[:] = original_keys
+
+    assert stats == {
+        "total_update_records": 2,
+        "field_counts": {
+            "is_renewed": 1,
+            "is_quoted": 2,
+            "pricing_factor": 1,
+        },
+    }

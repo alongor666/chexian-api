@@ -478,7 +478,9 @@ def date_to_epoch_ms(value: Any) -> str | None:
         value = value.date()
     if not isinstance(value, date):
         return None
-    dt = datetime.combine(value, time.min, tzinfo=timezone.utc)
+    # 企业微信 DATE_TIME 在前端按本地时区渲染；用 UTC noon 表示业务日期，
+    # 避免 UTC midnight 在中国时区/浏览器转换时显示成前一天。
+    dt = datetime.combine(value, time(12, 0), tzinfo=timezone.utc)
     return str(int(dt.timestamp() * 1000))
 
 
@@ -767,6 +769,21 @@ def build_plan(rows: list[dict[str, Any]], state: dict[str, Any], *, force: bool
     }
 
 
+def plan_field_stats(update_records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Count how many planned updates touch each business field."""
+    field_to_key = {field_id(key): key for key in BASE_UPDATE_KEYS if key in CURRENT_FULL_FIELD_IDS}
+    counts = {key: 0 for key in BASE_UPDATE_KEYS}
+    for record in update_records:
+        for target_id in record.get("values", {}):
+            key = field_to_key.get(target_id)
+            if key:
+                counts[key] = counts.get(key, 0) + 1
+    return {
+        "total_update_records": len(update_records),
+        "field_counts": counts,
+    }
+
+
 def chunked(items: list[Any], size: int) -> Iterable[list[Any]]:
     for i in range(0, len(items), size):
         yield items[i:i + size]
@@ -829,6 +846,7 @@ def run_sync(config: SyncConfig, *, execute: bool) -> dict[str, Any]:
         "missing_in_state_sample": plan["missing_in_state"][:20],
         "missing_in_source_count": len(plan["missing_in_source"]),
         "missing_in_source_sample": plan["missing_in_source"][:20],
+        "field_update_stats": plan_field_stats(plan["update_records"]),
         "schema_field_ids": list(schema.keys()),
         "sample_updates": [
             {"record_id": r["record_id"], "values": r["values"], "_vin": r["_vin"]}

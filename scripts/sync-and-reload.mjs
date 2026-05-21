@@ -9,14 +9,14 @@
  *   2. bun run governance                         （24+ 项校验，失败则中止）
  *   3. ssh sudo /usr/local/bin/deploy-chexian-api reload  （pm2 delete + start，可恢复 errored）
  *   4. curl https://chexian.cretvalu.com/health   （重试 8 次 / 5 秒间隔）
- *   5. 可选：批量同步企微机构续保追踪表 + 邮政经代签单表
+ *   5. 可选：批量同步企微机构续保追踪表 + 续保5月表 + 邮政经代签单表
  *
  * 使用：
  *   node scripts/sync-and-reload.mjs                        # daily.mjs all
  *   node scripts/sync-and-reload.mjs premium                # 仅保费域
  *   node scripts/sync-and-reload.mjs --skip-governance      # 跳过 governance（不推荐）
  *   node scripts/sync-and-reload.mjs --skip-reload          # 仅 ETL+governance，不重启
- *   node scripts/sync-and-reload.mjs --wecom                # 线上健康后同步企微机构续保表 + 邮政经代表
+ *   node scripts/sync-and-reload.mjs --wecom                # 线上健康后同步企微机构续保表 + 续保5月表 + 邮政经代表
  *   node scripts/sync-and-reload.mjs --wecom-dry-run        # 只打印企微同步计划
  *   node scripts/sync-and-reload.mjs --wecom --wecom-org 新都,资阳
  *   node scripts/sync-and-reload.mjs --dry-run              # 仅打印计划，不执行
@@ -209,6 +209,18 @@ async function main() {
       'python3',
       wecomArgs,
       { dryRun: opts.dryRun, timeoutMs: 90 * 60 * 1000 }
+    );
+
+    const renewalMayArgs = [
+      '数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py',
+      'sync',
+    ];
+    if (!opts.wecomDryRun) renewalMayArgs.push('--execute');
+    await runCmd(
+      opts.wecomDryRun ? 'WeCom renewal May dry-run' : 'WeCom renewal May sync',
+      'python3',
+      renewalMayArgs,
+      { dryRun: opts.dryRun, timeoutMs: 30 * 60 * 1000 }
     );
 
     const postalArgs = [

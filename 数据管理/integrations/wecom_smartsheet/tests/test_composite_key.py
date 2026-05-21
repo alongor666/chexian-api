@@ -107,6 +107,42 @@ def test_to_select_omits_nan() -> None:
     assert sfp._to_select(float("nan")) is None
 
 
+def test_postal_salesman_stats_reports_dedup_vin_and_premium() -> None:
+    rows = [
+        {"salesman_name": "张三", "policy_no": "P1", "vehicle_frame_no": "VIN1", "premium": 100.12},
+        {"salesman_name": "张三", "policy_no": "P2", "vehicle_frame_no": "VIN1", "premium": 50},
+        {"salesman_name": "李四", "policy_no": "P3", "vehicle_frame_no": "VIN2", "premium": 200},
+    ]
+
+    assert sfp.salesman_stats(rows) == [
+        {
+            "salesman_name": "张三",
+            "raw_rows": 2,
+            "policy_count": 2,
+            "dedup_vin_count": 1,
+            "premium_sum": 150.12,
+        },
+        {
+            "salesman_name": "李四",
+            "raw_rows": 1,
+            "policy_count": 1,
+            "dedup_vin_count": 1,
+            "premium_sum": 200.0,
+        },
+    ]
+
+
+def test_invalid_grade_stats_treats_nan_as_blank() -> None:
+    rows = [
+        {"insurance_grade": "A"},
+        {"insurance_grade": "X"},
+        {"insurance_grade": float("nan")},
+        {"insurance_grade": None},
+    ]
+
+    assert sfp.invalid_grade_stats(rows) == {"空值": 2, "X": 1}
+
+
 def test_load_instance_parses_composite_key_as_tuple(tmp_path: Path) -> None:
     """YAML 中 composite_key 是 list，加载后应为 tuple（frozen dataclass 友好）。"""
     yaml_path = tmp_path / "test.yaml"
