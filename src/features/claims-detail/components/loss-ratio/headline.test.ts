@@ -110,6 +110,23 @@ describe('deriveHeadline — 双 cohort + 同窗口可比', () => {
     expect(h.hero!.badge).toMatch(/\+40\.0%/);
     expect(h.severity).toBe('warn');
   });
+
+  it('案均赔款 prevVal=0 不能算涨幅：badge=undefined + headline 说明基期为零（codex P2-1）', () => {
+    // 反例：早期发展月 prev cohort 尚无赔案（avg_claim=0）
+    // 不能 fallback 到 pp 分支（会输出 "+5000.0pp vs 2024" 这种单位错误的徽章）
+    const cohorts = {
+      2024: makeCohort(1000, 5000, [{ dev_month: 5, avg_claim: 0 }]),
+      2026: makeCohort(500, 2500, [{ dev_month: 5, avg_claim: 5000 }]),
+    };
+    const h = deriveHeadline(cohorts, [2024, 2026], 'avg_claim');
+    expect(h.hero).not.toBeNull();
+    expect(h.hero!.badge).toBeUndefined();
+    expect(h.headline).toContain('基期为零');
+    expect(h.headline).toContain('2024');
+    // 关键反断言：不出现 'pp' 这种错误单位
+    expect(h.headline).not.toMatch(/pp/);
+    expect(h.hero!.value).toBe('5,000'); // currVal 仍展示
+  });
 });
 
 describe('deriveHeadline — prev cohort 选择口径', () => {

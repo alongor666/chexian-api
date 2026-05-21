@@ -156,11 +156,20 @@ export function deriveHeadline(
     };
     const dir = delta > 0 ? worsenedFor[metric] : improvedFor[metric];
 
-    if (metric === 'avg_claim' && deltaPct != null) {
-      // 案均用百分比差
-      headline = `${currYr}年第${currM}月${meta.display} ${valStr}${meta.unit}，较 ${prevYr}年同期${dir} ${fmtDelta(deltaPct, 1, '%')}`;
-      badge = `${fmtDelta(deltaPct, 1, '%')} vs ${prevYr}`;
+    if (metric === 'avg_claim') {
+      // 案均赔款必须用百分比表达涨幅 — 单位是「元」与 pp 无量纲冲突。
+      // codex review #416 P2-1：prevVal=0 时（早期发展月 prev cohort 尚无赔案）
+      // deltaPct=null，不能 fallback 到 pp 分支（会输出类似 "+5000.0pp" 的错误徽章）。
+      // 此时省略 badge、headline 显式说明基期为零，避免误导。
+      if (deltaPct != null) {
+        headline = `${currYr}年第${currM}月${meta.display} ${valStr}${meta.unit}，较 ${prevYr}年同期${dir} ${fmtDelta(deltaPct, 1, '%')}`;
+        badge = `${fmtDelta(deltaPct, 1, '%')} vs ${prevYr}`;
+      } else {
+        headline = `${currYr}年第${currM}月${meta.display} ${valStr}${meta.unit}（${prevYr}年同期基期为零，无法计算涨幅）`;
+        badge = undefined;
+      }
     } else {
+      // loss_ratio_pct / incident_rate_pct 用百分点（pp）— 与原值同量纲，可加可减
       headline = `${currYr}年第${currM}月${meta.display} ${valStr}${meta.unit}，较 ${prevYr}年同期${dir} ${fmtDelta(Math.abs(delta), 1, 'pp')}`;
       badge = `${fmtDelta(delta, 1, 'pp')} vs ${prevYr}`;
     }

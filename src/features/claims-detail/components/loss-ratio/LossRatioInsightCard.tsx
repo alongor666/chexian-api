@@ -14,7 +14,8 @@ import {
 import { InsightCard as SharedInsightCard } from '../shared/InsightCard';
 import type { LossRatioInsight } from './types';
 
-const ICON_MAP = {
+/** iconKey → LucideIcon 映射（Panel 内 note 渲染也复用，避免重复定义） */
+export const LOSS_RATIO_ICON_MAP = {
   alert: AlertTriangle,
   flame: Flame,
   trendUp: TrendingUp,
@@ -29,7 +30,7 @@ export function LossRatioInsightCard({ insight }: { insight: LossRatioInsight })
   return (
     <SharedInsightCard
       severity={insight.severity}
-      icon={ICON_MAP[insight.iconKey]}
+      icon={LOSS_RATIO_ICON_MAP[insight.iconKey]}
       title={insight.title}
       body={insight.body}
       metricValue={insight.metricValue}

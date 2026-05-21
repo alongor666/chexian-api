@@ -28,7 +28,10 @@ import { useTheme } from '@/shared/theme';
 import { getChartTheme } from '@/shared/config/chartStyles';
 
 import { HeroMetric, SectionHeader, StatusPill } from './shared/atoms';
-import { LossRatioInsightCard } from './loss-ratio/LossRatioInsightCard';
+import {
+  LOSS_RATIO_ICON_MAP,
+  LossRatioInsightCard,
+} from './loss-ratio/LossRatioInsightCard';
 import { deriveHeadline } from './loss-ratio/headline';
 import { deriveLossRatioInsights } from './loss-ratio/insights';
 import type {
@@ -223,6 +226,11 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
   const isLoading = lossRatioDev.loading;
   const error = lossRatioDev.error;
   const m = METRIC_OPTIONS.find(o => o.key === metric)!;
+  // 三态分离（codex review #416 P2-2）：
+  //   - isLoading：请求未完成 → 渲染骨架屏
+  //   - isEmptyState：请求完成但 cohort 为空（如筛选过严）→ 渲染"无数据"卡，避免永久骨架感知
+  //   - hasData：正常渲染横幅 + 洞察 + 图表 + 表格
+  const isEmptyState = !isLoading && activeYears.length === 0;
   const hasData = !isLoading && activeYears.length > 0;
 
   if (error)
@@ -231,7 +239,20 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
   return (
     <div className="space-y-5">
       {/* 1. 叙事横幅 */}
-      {hasData ? (
+      {isLoading && <NarrativeBannerSkeleton />}
+      {isEmptyState && (
+        <div
+          className={cn(
+            cardStyles.standard,
+            'px-6 py-8 text-center',
+            colorClasses.text.neutralMuted,
+          )}
+        >
+          <div className="text-sm">当前筛选条件下没有匹配的赔付率发展数据</div>
+          <div className="text-xs mt-1">请调整三级机构 / 客户类别等筛选项后重试</div>
+        </div>
+      )}
+      {hasData && (
         <div
           className={cn(
             cardStyles.standard,
@@ -294,8 +315,6 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
             )}
           </div>
         </div>
-      ) : (
-        <NarrativeBannerSkeleton />
       )}
 
       {/* 2. 指标切换器 */}
@@ -351,21 +370,31 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
               )}
             >
               <ul className="space-y-1.5 text-xs leading-relaxed">
-                {insightNotes.map(ins => (
-                  <li key={ins.id} className="flex items-start gap-2">
-                    <span
-                      className={cn(
-                        'font-semibold whitespace-nowrap',
-                        colorClasses.text.neutralDark,
-                      )}
-                    >
-                      {ins.title}
-                    </span>
-                    <span className={colorClasses.text.neutralMuted}>
-                      {ins.body}
-                    </span>
-                  </li>
-                ))}
+                {insightNotes.map(ins => {
+                  // claude review #416 P3：note 渲染补 iconKey 小图标（opacity-50 不抢视觉权重），
+                  // 让 compare（📊）和 info（ℹ️）有细微辨识 — 此前两种 note 仅靠文字区分。
+                  const NoteIcon = LOSS_RATIO_ICON_MAP[ins.iconKey];
+                  return (
+                    <li key={ins.id} className="flex items-start gap-2">
+                      <NoteIcon
+                        size={12}
+                        className={cn('shrink-0 mt-0.5 opacity-50', colorClasses.text.neutralMuted)}
+                        aria-hidden
+                      />
+                      <span
+                        className={cn(
+                          'font-semibold whitespace-nowrap',
+                          colorClasses.text.neutralDark,
+                        )}
+                      >
+                        {ins.title}
+                      </span>
+                      <span className={colorClasses.text.neutralMuted}>
+                        {ins.body}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

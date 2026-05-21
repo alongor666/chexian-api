@@ -591,6 +591,10 @@ describe('generateLossRatioDevelopmentQuery — cohort 同源 anchor', () => {
 
   it('earned CTE JOIN policies（不通过子查询独立取数）', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    // ⚠️ 此正则锚点依赖 CTE 顺序：earned ... claimed。
+    // 如果 SQL 生成器调整顺序（如把 claimed 提到 earned 之前），m 会变为 null，
+    // 触发 'expect(m).not.toBeNull()' 失败 — 这正是 anchor 的目的（强迫维护者重读契约），
+    // 但失败信息会指向正则而不是业务意图，迁移时请同步更新此处与下一条 claimed CTE 测试。
     const m = sql.match(/earned AS \(([\s\S]*?)\),\s+claimed AS \(/);
     expect(m).not.toBeNull();
     const earnedBody = m![1];
@@ -600,6 +604,7 @@ describe('generateLossRatioDevelopmentQuery — cohort 同源 anchor', () => {
 
   it('claimed CTE 同样 JOIN 同一个 policies（cohort 严格对齐）', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    // ⚠️ 同上 — 此正则依赖 claimed 是 CTE 链最后一个、紧接 SELECT 主查询的顺序。
     const m = sql.match(/claimed AS \(([\s\S]*?)\)\s+SELECT/);
     expect(m).not.toBeNull();
     const claimedBody = m![1];

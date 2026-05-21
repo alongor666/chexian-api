@@ -197,6 +197,55 @@ describe('deriveLossRatioInsights — 案均赔款', () => {
     expect(trend!.iconKey).toBe('trendUp');
     expect(trend!.severity).toBe('warn');
   });
+
+  it('anomaly 精确边界：peak = 3×mean 不触发，peak > 3×mean 才触发（claude review P4）', () => {
+    // peak 恰好等于 3 × mean — 代码 `peak.v > mean * 3` 用 strict >，不触发
+    const exact3x = {
+      2025: makeCohort(1000, 5000, [
+        { dev_month: 1, avg_claim: 10000 },
+        { dev_month: 2, avg_claim: 10000 },
+        { dev_month: 3, avg_claim: 10000 }, // mean = (10000+10000+10000+30000)/4 = 15000
+        { dev_month: 4, avg_claim: 30000 }, // peak / mean = 30000/15000 = 2 ← 不触发
+      ]),
+    };
+    expect(
+      deriveLossRatioInsights(exact3x, [2025], 'avg_claim').find(i =>
+        i.id.startsWith('ac-spike'),
+      ),
+    ).toBeUndefined();
+
+    // 真正构造 peak = exactly 3×mean 的算术：设 mean = M, peak = 3M
+    // mean = (a + b + c + 3M) / 4 = M → a + b + c = M
+    // 取 a=b=c=M/3=4000，peak=36000 → mean = (4000*3 + 36000)/4 = 12000 → 36000/12000=3 ← 不触发
+    const exact3xBoundary = {
+      2025: makeCohort(1000, 5000, [
+        { dev_month: 1, avg_claim: 4000 },
+        { dev_month: 2, avg_claim: 4000 },
+        { dev_month: 3, avg_claim: 4000 },
+        { dev_month: 4, avg_claim: 36000 },
+      ]),
+    };
+    expect(
+      deriveLossRatioInsights(exact3xBoundary, [2025], 'avg_claim').find(i =>
+        i.id.startsWith('ac-spike'),
+      ),
+    ).toBeUndefined();
+
+    // peak 略大于 3×mean — strict > 触发
+    const just_over_3x = {
+      2025: makeCohort(1000, 5000, [
+        { dev_month: 1, avg_claim: 4000 },
+        { dev_month: 2, avg_claim: 4000 },
+        { dev_month: 3, avg_claim: 4000 },
+        { dev_month: 4, avg_claim: 36001 },
+      ]),
+    };
+    expect(
+      deriveLossRatioInsights(just_over_3x, [2025], 'avg_claim').find(i =>
+        i.id.startsWith('ac-spike'),
+      ),
+    ).toBeDefined();
+  });
 });
 
 describe('deriveLossRatioInsights — 同期 cohort 选择', () => {
