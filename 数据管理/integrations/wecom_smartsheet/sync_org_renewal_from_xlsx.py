@@ -165,6 +165,20 @@ def compact_summary(org: str, link: str, summary: dict[str, Any]) -> dict[str, A
         "source_rows": summary.get("source_rows"),
         "to_add": summary.get("to_add"),
         "to_update": summary.get("to_update"),
+        "changed_rows": summary.get("changed_rows"),
+        "premium_sum": summary.get("premium_sum"),
+        "renewal_rate": summary.get("renewal_rate"),
+        "add_premium_sum": summary.get("add_premium_sum"),
+        "add_renewed_count": summary.get("add_renewed_count"),
+        "add_renewal_rate": summary.get("add_renewal_rate"),
+        "update_premium_sum": summary.get("update_premium_sum"),
+        "update_renewed_count": summary.get("update_renewed_count"),
+        "update_renewal_rate": summary.get("update_renewal_rate"),
+        "changed_premium_sum": summary.get("changed_premium_sum"),
+        "changed_renewed_count": summary.get("changed_renewed_count"),
+        "changed_renewal_rate": summary.get("changed_renewal_rate"),
+        "renewed_count": summary.get("renewed_count"),
+        "quoted_count": summary.get("quoted_count"),
         "missing_vins_count": summary.get("missing_vins_count"),
         "unmatched_salesmen_count": summary.get("unmatched_salesmen_count"),
         "update_failure_count": summary.get("update_failure_count"),
@@ -250,9 +264,17 @@ def main() -> int:
         "source_rows": sum(item.get("source_rows") or 0 for item in results),
         "to_add": sum(item.get("to_add") or 0 for item in results),
         "to_update": sum(item.get("to_update") or 0 for item in results),
+        "changed_rows": sum(item.get("changed_rows") or 0 for item in results),
+        "changed_premium_sum": round(sum(item.get("changed_premium_sum") or 0 for item in results), 2),
+        "changed_renewed_count": sum(item.get("changed_renewed_count") or 0 for item in results),
         "missing_vins_count": sum(item.get("missing_vins_count") or 0 for item in results),
         "failed_count": sum(1 for item in results if item.get("error")),
     }
+    total["changed_renewal_rate"] = (
+        round(total["changed_renewed_count"] / total["changed_rows"], 4)
+        if total["changed_rows"]
+        else None
+    )
     print(json.dumps({"total": total, "results": results}, ensure_ascii=False, indent=2))
     return 1 if failed else 0
 

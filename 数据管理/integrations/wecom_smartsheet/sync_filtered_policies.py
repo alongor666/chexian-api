@@ -221,7 +221,7 @@ def _to_select(value: Any) -> list[dict[str, str]] | None:
     except TypeError:
         pass
     text = str(value).strip()
-    if not text:
+    if not text or text.lower() in {"nan", "none", "<na>", "nat"}:
         return None
     return [{"text": text}]
 
@@ -244,6 +244,60 @@ def _to_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _money(value: Any) -> float:
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return 0.0 if f != f else f
+
+
+def salesman_stats(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        name = _to_text(row.get("salesman_name")) or "未填"
+        item = grouped.setdefault(
+            name,
+            {
+                "salesman_name": name,
+                "raw_rows": 0,
+                "policy_count": 0,
+                "dedup_vin_count": 0,
+                "premium_sum": 0.0,
+                "_policies": set(),
+                "_vins": set(),
+            },
+        )
+        item["raw_rows"] += 1
+        item["premium_sum"] += _money(row.get("premium"))
+        policy_no = _to_text(row.get("policy_no"))
+        vin = _to_text(row.get("vehicle_frame_no"))
+        if policy_no:
+            item["_policies"].add(policy_no)
+        if vin:
+            item["_vins"].add(vin)
+    out: list[dict[str, Any]] = []
+    for item in grouped.values():
+        item["policy_count"] = len(item.pop("_policies"))
+        item["dedup_vin_count"] = len(item.pop("_vins"))
+        item["premium_sum"] = round(item["premium_sum"], 2)
+        out.append(item)
+    return sorted(out, key=lambda x: (-x["dedup_vin_count"], x["salesman_name"]))
+
+
+def invalid_grade_stats(rows: list[dict[str, Any]]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for row in rows:
+        value = row.get("insurance_grade")
+        text = _to_text(value)
+        if text and text.lower() in {"nan", "none", "<na>", "nat"}:
+            text = None
+        if text not in {"A", "B", "C", "D", "E", "F"}:
+            key = text or "空值"
+            out[key] = out.get(key, 0) + 1
+    return dict(sorted(out.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
 def format_value(field_type: str, value: Any) -> Any:
@@ -269,6 +323,8 @@ def build_record_values(
     values: dict[str, Any] = {}
     for src_field, target_id in field_mapping.items():
         raw_val = row.get(src_field)
+        if src_field == "insurance_grade" and str(raw_val).strip() not in {"A", "B", "C", "D", "E", "F"}:
+            raw_val = None
         field_type = field_types.get(target_id, "TEXT")
         formatted = format_value(field_type, raw_val)
         if formatted is None:
@@ -308,6 +364,15 @@ def save_state(instance: InstanceConfig, state: dict[str, Any], *, backup_existi
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         shutil.copy2(p, p.with_name(f"{p.name}.bak.{ts}"))
     p.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def persist_synced_keys(instance: InstanceConfig, state: dict[str, Any], newly_synced_keys: list[str]) -> None:
+    """Persist successful batch keys immediately to avoid duplicate adds after partial failure."""
+    state["synced_keys"] = sorted(set(state.get("synced_keys", [])) | set(newly_synced_keys))
+    state["last_sync_at"] = datetime.now(timezone.utc).isoformat()
+    state["key_strategy"] = key_strategy(instance)
+    state["composite_fields"] = composite_fields(instance)
+    save_state(instance, state)
 
 
 def key_strategy(instance: InstanceConfig) -> str:
@@ -415,6 +480,12 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
         "state_synced_keys_before": len(synced),
         "skipped_already_synced": skipped,
         "add_records_planned": len(add_records),
+        "new_dedup_vin_count": len({_to_text(r.get("vehicle_frame_no")) for r in new_rows if _to_text(r.get("vehicle_frame_no"))}),
+        "new_premium_sum": round(sum(_money(r.get("premium")) for r in new_rows), 2),
+        "salesman_stats": salesman_stats(rows),
+        "new_salesman_stats": salesman_stats(new_rows),
+        "invalid_grade_stats": invalid_grade_stats(rows),
+        "new_invalid_grade_stats": invalid_grade_stats(new_rows),
         "dry_run": dry_run,
         "schema_field_ids": list(schema.keys()),
     }
@@ -459,6 +530,8 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
             "errmsg": (resp.get("errmsg") or "")[:200],
             "returned": len(returned_records) if isinstance(returned_records, list) else None,
         })
+        if errcode != 0:
+            raise RuntimeError(f"{instance.instance_name} webhook add failed: errcode={errcode}, errmsg={resp.get('errmsg')}")
         # 成功 batch 内的主键追加到已同步集合（errcode == 0 = OK）
         if errcode == 0:
             if not isinstance(returned_records, list) or len(returned_records) != len(chunk):
@@ -468,15 +541,9 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
                     f"{len(returned_records) if isinstance(returned_records, list) else 'missing'}"
                 )
             newly_synced_keys.extend(r["_primary_key"] for r in chunk if r["_primary_key"])
+            persist_synced_keys(instance, state, newly_synced_keys)
         # 速率限制：每条记录占用 60/sheet_rpm 秒
         time_mod.sleep(60.0 / max(1, instance.sheet_rpm) * len(chunk))
-
-    # 写回 state（init/sync 两种模式都更新，避免 init 后再 sync 又重复写入）
-    state["synced_keys"] = sorted(set(state.get("synced_keys", [])) | set(newly_synced_keys))
-    state["last_sync_at"] = datetime.now(timezone.utc).isoformat()
-    state["key_strategy"] = key_strategy(instance)
-    state["composite_fields"] = composite_fields(instance)
-    save_state(instance, state)
 
     summary["state_synced_keys_after"] = len(state["synced_keys"])
     summary["newly_synced_count"] = len(newly_synced_keys)

@@ -21,11 +21,12 @@ def _make_instance(
     *,
     primary_key: str = "policy_no",
     composite_key: tuple[str, ...] | None = None,
+    batch_size: int = 100,
 ) -> sfp.InstanceConfig:
     return sfp.InstanceConfig(
         instance_name="test",
         webhook_env="TEST_WEBHOOK",
-        batch_size=100,
+        batch_size=batch_size,
         sheet_rpm=3000,
         filters={},
         primary_key=primary_key,
@@ -105,6 +106,42 @@ def test_to_ts_ms_encodes_business_date_at_utc_noon() -> None:
 
 def test_to_select_omits_nan() -> None:
     assert sfp._to_select(float("nan")) is None
+
+
+def test_postal_salesman_stats_reports_dedup_vin_and_premium() -> None:
+    rows = [
+        {"salesman_name": "张三", "policy_no": "P1", "vehicle_frame_no": "VIN1", "premium": 100.12},
+        {"salesman_name": "张三", "policy_no": "P2", "vehicle_frame_no": "VIN1", "premium": 50},
+        {"salesman_name": "李四", "policy_no": "P3", "vehicle_frame_no": "VIN2", "premium": 200},
+    ]
+
+    assert sfp.salesman_stats(rows) == [
+        {
+            "salesman_name": "张三",
+            "raw_rows": 2,
+            "policy_count": 2,
+            "dedup_vin_count": 1,
+            "premium_sum": 150.12,
+        },
+        {
+            "salesman_name": "李四",
+            "raw_rows": 1,
+            "policy_count": 1,
+            "dedup_vin_count": 1,
+            "premium_sum": 200.0,
+        },
+    ]
+
+
+def test_invalid_grade_stats_treats_nan_as_blank() -> None:
+    rows = [
+        {"insurance_grade": "A"},
+        {"insurance_grade": "X"},
+        {"insurance_grade": float("nan")},
+        {"insurance_grade": None},
+    ]
+
+    assert sfp.invalid_grade_stats(rows) == {"空值": 2, "X": 1}
 
 
 def test_load_instance_parses_composite_key_as_tuple(tmp_path: Path) -> None:
@@ -306,3 +343,32 @@ def test_run_rejects_success_response_without_add_records(monkeypatch: pytest.Mo
 
     with pytest.raises(RuntimeError, match="新增返回数量不一致"):
         sfp.run(inst, mode="sync", dry_run=False)
+
+
+def test_run_persists_successful_batch_before_later_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    inst = _make_instance(composite_key=("policy_no", "plate_no", "premium", "policy_date"), batch_size=1)
+    rows = [
+        {"_primary_key": "P1", "policy_no": "P1", "plate_no": "川A00001", "premium": 100.0, "policy_date": date(2026, 5, 14)},
+        {"_primary_key": "P2", "policy_no": "P2", "plate_no": "川A00002", "premium": 200.0, "policy_date": date(2026, 5, 14)},
+    ]
+    saved_states: list[dict[str, object]] = []
+    responses = iter([
+        {"errcode": 0, "add_records": [{"record_id": "rec1"}]},
+        {"errcode": 45009, "errmsg": "rate limit exceeded"},
+    ])
+    monkeypatch.setattr(sfp, "fetch_rows", lambda _inst: rows)
+    monkeypatch.setattr(sfp, "load_state", lambda _inst: {
+        "synced_keys": [],
+        "key_strategy": "composite_key",
+        "composite_fields": ["policy_no", "plate_no", "premium", "policy_date"],
+    })
+    monkeypatch.setattr(sfp, "post_webhook", lambda *_args, **_kwargs: next(responses))
+    monkeypatch.setattr(sfp, "write_log", lambda *_args, **_kwargs: Path("/tmp/test-log.json"))
+    monkeypatch.setattr(sfp, "save_state", lambda _inst, state, **_kwargs: saved_states.append(dict(state)))
+    monkeypatch.setenv("TEST_WEBHOOK", "https://example.invalid/webhook")
+
+    with pytest.raises(RuntimeError, match="45009"):
+        sfp.run(inst, mode="sync", dry_run=False)
+
+    assert saved_states
+    assert saved_states[-1]["synced_keys"] == ["P1|川A00001|100.0000|2026-05-14"]
