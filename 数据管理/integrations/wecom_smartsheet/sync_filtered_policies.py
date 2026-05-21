@@ -188,20 +188,26 @@ def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
 
 
 def _to_ts_ms(value: Any) -> str | None:
-    """DATE_TIME 字段统一转毫秒 timestamp 字符串。"""
+    """DATE_TIME 字段统一转毫秒 timestamp 字符串。
+
+    企微日期字段会按查看端时区展示。业务日期没有日内时间含义，
+    因此固定写成 UTC 中午，避免 UTC 零点在美西等时区显示成前一天。
+    """
     if value is None:
         return None
     if isinstance(value, str) and not value.strip():
         return None
     if isinstance(value, datetime):
-        return str(int(value.timestamp() * 1000))
+        dt = datetime.combine(value.date(), datetime.min.time(), tzinfo=timezone.utc).replace(hour=12)
+        return str(int(dt.timestamp() * 1000))
     if isinstance(value, date_cls):
-        dt = datetime.combine(value, datetime.min.time())
+        dt = datetime.combine(value, datetime.min.time(), tzinfo=timezone.utc).replace(hour=12)
         return str(int(dt.timestamp() * 1000))
     # duckdb 返回 pandas.Timestamp / numpy.datetime64
     try:
         ts = datetime.fromisoformat(str(value).replace("Z", "+00:00").split(".")[0].replace("T", " "))
-        return str(int(ts.timestamp() * 1000))
+        dt = datetime.combine(ts.date(), datetime.min.time(), tzinfo=timezone.utc).replace(hour=12)
+        return str(int(dt.timestamp() * 1000))
     except (ValueError, TypeError):
         return None
 
@@ -209,6 +215,11 @@ def _to_ts_ms(value: Any) -> str | None:
 def _to_select(value: Any) -> list[dict[str, str]] | None:
     if value is None:
         return None
+    try:
+        if value != value:  # NaN check
+            return None
+    except TypeError:
+        pass
     text = str(value).strip()
     if not text:
         return None
@@ -440,14 +451,22 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
         payload_records = [{"values": r["values"]} for r in chunk]
         resp = post_webhook(webhook_url, {"schema": schema, "add_records": payload_records})
         errcode = resp.get("errcode")
+        returned_records = resp.get("add_records")
         summary["batches"].append({
             "op": "add",
             "sent": len(chunk),
             "errcode": errcode,
             "errmsg": (resp.get("errmsg") or "")[:200],
+            "returned": len(returned_records) if isinstance(returned_records, list) else None,
         })
         # 成功 batch 内的主键追加到已同步集合（errcode == 0 = OK）
         if errcode == 0:
+            if not isinstance(returned_records, list) or len(returned_records) != len(chunk):
+                raise RuntimeError(
+                    "企业微信新增返回数量不一致，拒绝更新本地 state："
+                    f"sent={len(chunk)} returned="
+                    f"{len(returned_records) if isinstance(returned_records, list) else 'missing'}"
+                )
             newly_synced_keys.extend(r["_primary_key"] for r in chunk if r["_primary_key"])
         # 速率限制：每条记录占用 60/sheet_rpm 秒
         time_mod.sleep(60.0 / max(1, instance.sheet_rpm) * len(chunk))

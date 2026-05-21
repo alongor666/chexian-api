@@ -3,9 +3,9 @@
 # 业务规则：agent_name LIKE '%邮政%' AND policy_date >= '2026-04-20'
 # 同步幂等键：composite_key（同 policy_no 可能存在批改副本/保费拆分）
 #
-# 智能表 docid: dcJ-zNN0aLOLdF2vV6T-Yabc_iRjeZ0a3ZJQC0l05gyT5Qe5IQ2MIAWKK19GIzgPMjTph6l4pP4EPuNLhdXz3C6g
-# sheet_id:    q979lj
-# url:         https://doc.weixin.qq.com/smartsheet/s3_ABkAfniHALMCNZ1iOnwIsScu1R2Ew_a
+# 当前表：使用 .env.local:WECOM_SMARTSHEET_WEBHOOK_POSTAL_ALL 指向的新表 webhook。
+# 注意：新表额外包含「业务员姓名」「投保人」「上传员工证明」「上传行驶证」等字段，
+# 本同步仍只写入下方 field_mapping 声明的原 12 个字段，不写入新增字段。
 
 instance_name: postal-policy-all-since-20260420
 script: sync_filtered_policies.py        # daily.mjs 据此路由到非续保脚本；缺省则走 sync_renewal_v2.py
@@ -49,7 +49,7 @@ field_mapping:
 # 智能表字段类型（用于格式化值）
 field_types:
   fxxKfG: TEXT
-  fIRILE: TEXT
+  fIRILE: SINGLE_SELECT
   fK6Njt: DATE_TIME
   fWbeil: TEXT
   f1RB2K: SINGLE_SELECT
