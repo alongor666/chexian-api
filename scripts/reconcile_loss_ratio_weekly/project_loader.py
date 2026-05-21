@@ -35,13 +35,18 @@ ClaimsDetail AS (
 ),
 -- 件数不过滤 + 赔款过滤（liability=0 / case_type 异常 不计入金额，但计入件数）
 ClaimsAgg AS (
+  -- codex review P1 fix（commit 6ee72dd 之后第二轮）：
+  -- DuckDB TIMESTAMP vs DATE 比较时 DATE 隐式提升到 00:00:00，会丢失 cutoff 当天的数据
+  -- ClaimsDetail.report_time / settlement_time 均为 TIMESTAMP，必须 CAST AS DATE 比较
+  -- 参考：.claude/rules/sql-generators.md "日期处理先 CAST(field AS DATE)"
   SELECT policy_no,
          COUNT(DISTINCT claim_no) AS claim_cases,
          SUM(CASE
                WHEN COALESCE(liability_ratio, 100) > 0
                 AND (case_type IS NULL OR case_type NOT IN ('零结','注销','拒赔'))
                THEN (CASE
-                       WHEN settlement_time IS NOT NULL AND settlement_time <= DATE '{cutoff_date}'
+                       WHEN settlement_time IS NOT NULL
+                        AND CAST(settlement_time AS DATE) <= DATE '{cutoff_date}'
                          THEN COALESCE(settled_amount, 0)
                        ELSE COALESCE(reserve_amount, 0)
                      END)
@@ -49,7 +54,7 @@ ClaimsAgg AS (
              END) AS reported_claims
   FROM ClaimsDetail
   WHERE policy_no IS NOT NULL
-    AND report_time BETWEEN DATE '{policy_year_start}' AND DATE '{cutoff_date}'
+    AND CAST(report_time AS DATE) BETWEEN DATE '{policy_year_start}' AND DATE '{cutoff_date}'
   GROUP BY policy_no
 ),
 policy_dedup AS (
