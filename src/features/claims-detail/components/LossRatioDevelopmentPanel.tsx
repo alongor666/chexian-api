@@ -1,16 +1,41 @@
 /**
- * 赔付率发展三角形面板（日历发展口径）
+ * 赔付率发展三角形面板（日历发展口径，重设计 v2）
  *
- * 发展月 M_N 的观察窗口 = [年初, 年初+N个月)，累计扩展。
- * 规则驱动洞察 + 折线图 + 横向数据表（年份行 × M1~M24 列）
+ * 信息架构（自上而下）：
+ *   1. 叙事横幅         — 一句话结论 + 状态徽章 + 单 hero metric（同期对比徽章）
+ *   2. 指标切换器       — 满期赔付率 / 出险率 / 案均
+ *   3. 智能洞察 grid    — kind='card' 的 InsightCard 网格 + kind='note' 的横排小条
+ *   4. 折线图           — 4 cohort × M1~M24（保留切换交互）
+ *   5. 横向数据表       — 年份行 × M1~M24 列（"准 Excel 体验"，业务方依赖）
+ *   6. 方法论说明
+ *
+ * 子组件位于 ./loss-ratio/，业务阈值与规则在 ./loss-ratio/insights.ts 单元测试覆盖。
+ * cohort 同源（codex review 防御）：所有数从同一条 SQL `generateLossRatioDevelopmentQuery`
+ * 派生，横幅 / hero / insights / 图表 / 表格共享 `lossRatioDev.data`。
  */
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '@/shared/utils/echarts';
-import { cardStyles, colorClasses, cn, fontStyles, getYearChartColor } from '@/shared/styles';
-import { generateDevInsights } from '../utils/devInsightRules';
+import {
+  cardStyles,
+  colorClasses,
+  cn,
+  fontStyles,
+  getYearChartColor,
+} from '@/shared/styles';
 import { useTheme } from '@/shared/theme';
 import { getChartTheme } from '@/shared/config/chartStyles';
+
+import { HeroMetric, SectionHeader, StatusPill } from './shared/atoms';
+import { LossRatioInsightCard } from './loss-ratio/LossRatioInsightCard';
+import { deriveHeadline } from './loss-ratio/headline';
+import { deriveLossRatioInsights } from './loss-ratio/insights';
+import type {
+  CohortData,
+  LossRatioDevRow,
+  LossRatioMetric,
+} from './loss-ratio/types';
 
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
 
@@ -21,28 +46,48 @@ interface Props {
 
 const COHORT_YEARS = [2023, 2024, 2025, 2026];
 const MAX_DEV = 24;
-/** 从设计令牌获取年份颜色 */
 const getCohortColor = (year: number): string => getYearChartColor(year);
 
-type Metric = 'loss_ratio_pct' | 'incident_rate_pct' | 'avg_claim';
-
-const METRIC_OPTIONS: { key: Metric; label: string; unit: string; decimals: number }[] = [
+const METRIC_OPTIONS: {
+  key: LossRatioMetric;
+  label: string;
+  unit: string;
+  decimals: number;
+}[] = [
   { key: 'loss_ratio_pct', label: '满期赔付率(%)', unit: '%', decimals: 1 },
   { key: 'incident_rate_pct', label: '满期出险率(%)', unit: '%', decimals: 1 },
   { key: 'avg_claim', label: '案均立案金额(元)', unit: '元', decimals: 0 },
 ];
 
-interface CohortData {
-  policyCount: number;
-  premiumWan: number;
-  maxDev: number;
-  months: Record<number, any>;
+/** 数据加载占位 — 防止"正常 → 异常"视觉跳变 */
+function NarrativeBannerSkeleton() {
+  return (
+    <div
+      className={cn(
+        cardStyles.standard,
+        'relative overflow-hidden px-6 py-5',
+        'bg-gradient-to-br from-white to-neutral-50',
+        'dark:from-surface-1 dark:to-surface-2',
+      )}
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div className="flex items-start justify-between gap-6 flex-wrap">
+        <div className="flex-1 min-w-[280px] space-y-3">
+          <div className="h-5 w-20 rounded-full bg-neutral-200 dark:bg-surface-2 animate-pulse" />
+          <div className="h-6 w-72 rounded bg-neutral-200 dark:bg-surface-2 animate-pulse" />
+          <div className="h-4 w-96 max-w-full rounded bg-neutral-100 dark:bg-surface-3 animate-pulse" />
+        </div>
+        <div className="h-16 w-56 rounded-xl bg-neutral-100 dark:bg-surface-2 animate-pulse" />
+      </div>
+    </div>
+  );
 }
 
 export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => {
   const { lossRatioDev } = hook;
   const claimsCutoff = lossRatioDev.claimsCutoff ?? null;
-  const [metric, setMetric] = useState<Metric>('loss_ratio_pct');
+  const [metric, setMetric] = useState<LossRatioMetric>('loss_ratio_pct');
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
   const chartTheme = getChartTheme(isDark);
@@ -54,50 +99,71 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
     });
   }, [hook.fetchLossRatioDev, params]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  // 按年份分组
-  const cohorts = useMemo(() => {
+  // 按年份分组 cohort
+  const cohorts = useMemo<Record<number, CohortData>>(() => {
     const result: Record<number, CohortData> = {};
     for (const yr of COHORT_YEARS) {
       result[yr] = { policyCount: 0, premiumWan: 0, maxDev: 0, months: {} };
     }
-    for (const row of lossRatioDev.data) {
+    for (const row of lossRatioDev.data as LossRatioDevRow[]) {
       const yr = row.cohort_year ?? 0;
       if (!result[yr]) continue;
       result[yr].policyCount = row.total_policies ?? 0;
       result[yr].premiumWan = row.total_premium_wan ?? 0;
-      result[yr].months[row.dev_month] = row;
-      if ((row.dev_month ?? 0) > result[yr].maxDev) {
-        result[yr].maxDev = row.dev_month;
+      const devM = row.dev_month ?? 0;
+      result[yr].months[devM] = row;
+      if (devM > result[yr].maxDev) {
+        result[yr].maxDev = devM;
       }
     }
     return result;
   }, [lossRatioDev.data]);
 
-  const getVal = (yr: number, m: number, key: string): number | null => {
-    const row = cohorts[yr]?.months[m];
-    if (!row) return null;
-    const v = row[key];
-    return v != null ? Number(v) : null;
-  };
+  const activeYears = useMemo(
+    () => COHORT_YEARS.filter(yr => cohorts[yr]?.maxDev > 0),
+    [cohorts],
+  );
+
+  const getVal = useCallback(
+    (yr: number, m: number, key: keyof LossRatioDevRow): number | null => {
+      const v = cohorts[yr]?.months[m]?.[key];
+      return v != null ? Number(v) : null;
+    },
+    [cohorts],
+  );
+
+  // 横幅派生（跟随当前 metric）
+  const headline = useMemo(
+    () => deriveHeadline(cohorts, activeYears, metric),
+    [cohorts, activeYears, metric],
+  );
+
+  // 洞察派生（跟随当前 metric）
+  const insights = useMemo(
+    () => deriveLossRatioInsights(cohorts, activeYears, metric),
+    [cohorts, activeYears, metric],
+  );
+  const insightCards = insights.filter(i => i.kind === 'card');
+  const insightNotes = insights.filter(i => i.kind === 'note');
 
   // 图表 option
   const chartOption = useMemo(() => {
     const m = METRIC_OPTIONS.find(o => o.key === metric)!;
-    const series = COHORT_YEARS
-      .filter(yr => cohorts[yr]?.maxDev > 0)
-      .map(yr => ({
-        name: String(yr),
-        type: 'line' as const,
-        data: Array.from({ length: MAX_DEV }, (_, i) => getVal(yr, i + 1, m.key)),
-        connectNulls: false,
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 4,
-        lineStyle: { width: 2.5 },
-        itemStyle: { color: getCohortColor(yr) },
-      }));
+    const series = activeYears.map(yr => ({
+      name: String(yr),
+      type: 'line' as const,
+      data: Array.from({ length: MAX_DEV }, (_, i) => getVal(yr, i + 1, m.key)),
+      connectNulls: false,
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 4,
+      lineStyle: { width: 2.5 },
+      itemStyle: { color: getCohortColor(yr) },
+    }));
 
     return {
       tooltip: {
@@ -107,20 +173,25 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
           const idx = params[0]?.dataIndex ?? 0;
           const devM = idx + 1;
           let html = `<b>发展月 M${devM}</b><br/>`;
-          COHORT_YEARS.forEach(yr => {
-            if (!cohorts[yr] || cohorts[yr].maxDev === 0) return;
+          for (const yr of activeYears) {
             const v = getVal(yr, devM, m.key);
-            if (v == null) return;
+            if (v == null) continue;
             const cov = getVal(yr, devM, 'coverage_pct');
-            const partial = cov != null && cov < 99.9 ? ` <span style="color:#f59e0b">(${cov.toFixed(0)}%覆盖)</span>` : '';
-            const vStr = m.decimals > 0 ? v.toFixed(m.decimals) + m.unit : Math.round(v).toLocaleString() + m.unit;
+            const partial =
+              cov != null && cov < 99.9
+                ? ` <span style="color:#f59e0b">(${cov.toFixed(0)}%覆盖)</span>`
+                : '';
+            const vStr =
+              m.decimals > 0
+                ? v.toFixed(m.decimals) + m.unit
+                : Math.round(v).toLocaleString() + m.unit;
             html += `<span style="color:${getCohortColor(yr)}">●</span> ${yr}: ${vStr}${partial}<br/>`;
-          });
+          }
           return html;
         },
       },
       legend: {
-        data: COHORT_YEARS.filter(yr => cohorts[yr]?.maxDev > 0).map(String),
+        data: activeYears.map(String),
         textStyle: { color: chartTheme.textColors.secondary },
       },
       grid: { left: 48, right: 8, top: 40, bottom: 4 },
@@ -134,8 +205,12 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
       yAxis: {
         type: 'value' as const,
         name: m.label,
-        min: (value: any) => Math.floor(value.min * 0.9 / 10) * 10,
-        axisLabel: { ...chartTheme.yAxisConfig.axisLabel, formatter: (v: number) => m.unit === '%' ? `${v}%` : v.toLocaleString() },
+        min: (value: any) => Math.floor((value.min * 0.9) / 10) * 10,
+        axisLabel: {
+          ...chartTheme.yAxisConfig.axisLabel,
+          formatter: (v: number) =>
+            m.unit === '%' ? `${v}%` : v.toLocaleString(),
+        },
         axisLine: chartTheme.yAxisConfig.axisLine,
         axisTick: chartTheme.yAxisConfig.axisTick,
         splitLine: { show: false },
@@ -143,41 +218,89 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
       },
       series,
     };
-  }, [metric, cohorts, chartTheme]);
+  }, [metric, activeYears, getVal, chartTheme]);
 
   const isLoading = lossRatioDev.loading;
   const error = lossRatioDev.error;
   const m = METRIC_OPTIONS.find(o => o.key === metric)!;
+  const hasData = !isLoading && activeYears.length > 0;
 
-  // 有数据的年份
-  const activeYears = COHORT_YEARS.filter(yr => cohorts[yr]?.maxDev > 0);
-
-  // 规则驱动洞察（跟随当前选中指标）
-  const insights = useMemo(
-    () => generateDevInsights(cohorts, activeYears, metric),
-    [cohorts, activeYears, metric],
-  );
-
-  /** 洞察类型→文字颜色 */
-  const insightTextClass = (type: string): string => {
-    switch (type) {
-      case 'warning': return colorClasses.text.danger;
-      case 'danger': return colorClasses.text.danger;
-      case 'trend': return colorClasses.text.neutral;
-      case 'anomaly': return colorClasses.text.warning;
-      case 'compare': return colorClasses.text.primary;
-      case 'info':
-      default: return colorClasses.text.neutralMuted;
-    }
-  };
-
-  if (error) return <div className={cn(colorClasses.text.danger, 'p-4')}>{error}</div>;
+  if (error)
+    return <div className={cn(colorClasses.text.danger, 'p-4')}>{error}</div>;
 
   return (
-    <div className="space-y-6">
-      {/* 指标切换 + 洞察 + 图表（一体） */}
+    <div className="space-y-5">
+      {/* 1. 叙事横幅 */}
+      {hasData ? (
+        <div
+          className={cn(
+            cardStyles.standard,
+            'relative overflow-hidden px-6 py-5',
+            'bg-gradient-to-br from-white to-neutral-50',
+            'dark:from-surface-1 dark:to-surface-2',
+          )}
+        >
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            <div className="flex-1 min-w-[280px]">
+              <div className="flex items-center gap-3 mb-3">
+                <StatusPill severity={headline.severity} label={headline.tagLabel} />
+                <span className={cn('text-xs', colorClasses.text.neutralMuted)}>
+                  赔付率发展三角形
+                </span>
+                {claimsCutoff && (
+                  <span
+                    className={cn(
+                      'ml-auto text-xs whitespace-nowrap',
+                      colorClasses.text.neutralMuted,
+                    )}
+                  >
+                    数据截止 {claimsCutoff}
+                  </span>
+                )}
+              </div>
+              <h2
+                className={cn(
+                  'text-xl font-bold tracking-tight leading-tight',
+                  colorClasses.text.neutralBlack,
+                )}
+              >
+                {headline.headline}
+              </h2>
+              <p
+                className={cn(
+                  'text-sm mt-2 leading-relaxed',
+                  colorClasses.text.neutralDark,
+                )}
+              >
+                {headline.summary}
+              </p>
+            </div>
+            {headline.hero && (
+              <div
+                className={cn(
+                  'flex items-center px-5 py-3 rounded-xl border',
+                  'bg-white dark:bg-surface-2',
+                  colorClasses.border.neutral,
+                )}
+              >
+                <HeroMetric
+                  label={headline.hero.label}
+                  value={headline.hero.value}
+                  unit={headline.hero.unit}
+                  severity={headline.hero.severity}
+                  badge={headline.hero.badge}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <NarrativeBannerSkeleton />
+      )}
+
+      {/* 2. 指标切换器 */}
       <div className={cn(cardStyles.standard, 'p-4')}>
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
           {METRIC_OPTIONS.map(opt => (
             <button
               key={opt.key}
@@ -186,119 +309,194 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
                 'px-3 py-1.5 text-sm rounded-lg border transition-colors',
                 metric === opt.key
                   ? 'bg-primary-solid text-white border-primary'
-                  : `bg-transparent ${colorClasses.border.neutral} ${colorClasses.text.neutral} hover:bg-neutral-100 dark:hover:bg-white/8`
+                  : `bg-transparent ${colorClasses.border.neutral} ${colorClasses.text.neutral} hover:bg-neutral-100 dark:hover:bg-white/8`,
               )}
             >
               {opt.label}
             </button>
           ))}
-          {claimsCutoff && (
-            <span className={cn('ml-auto text-xs whitespace-nowrap', colorClasses.text.neutralMuted)}>
-              数据截止至 {claimsCutoff}
-            </span>
-          )}
+          <span className={cn('ml-auto text-xs', colorClasses.text.neutralMuted)}>
+            切换指标，下方洞察 / 图表 / 表格同步更新
+          </span>
         </div>
-
-        {/* 洞察文字（跟随指标切换） */}
-        {!isLoading && insights.length > 0 && (
-          <div className="mb-3 space-y-1.5">
-            {insights.map((item, idx) => (
-              <div key={idx} className="flex items-start gap-2 text-sm leading-relaxed">
-                <span className="flex-shrink-0 mt-0.5">{item.icon}</span>
-                <div>
-                  <span className={cn('font-semibold', insightTextClass(item.type))}>{item.title}</span>
-                  <span className={cn('ml-1.5', colorClasses.text.neutral)}>{item.description}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="h-[400px] flex items-center justify-center">加载中...</div>
-        ) : (
-          <ReactEChartsCore echarts={echarts} option={chartOption} style={{ height: 360 }} />
-        )}
-
-        {/* 横向数据表：年份行 × M1~M24 列，紧贴图表 */}
-        {!isLoading && (
-          <div className="-mt-1">
-            <table className={cn('w-full border-collapse', fontStyles.numeric)} style={{ tableLayout: 'fixed', fontSize: '11px' }}>
-              <colgroup>
-                <col style={{ width: 48 }} />
-                {Array.from({ length: MAX_DEV }, () => (
-                  <col />
-                ))}
-              </colgroup>
-              <thead>
-                <tr>
-                  <th className={`text-left px-1 py-1 border-b ${colorClasses.border.neutral}`} />
-                  {Array.from({ length: MAX_DEV }, (_, i) => (
-                    <th
-                      key={i}
-                      className={cn(
-                        `text-center px-0 py-1 border-b ${colorClasses.border.neutral}`,
-                        colorClasses.text.neutralMuted,
-                      )}
-                    >
-                      {i + 1}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {activeYears.map(yr => {
-                  const c = cohorts[yr];
-                  return (
-                    <tr key={yr} className={`border-b ${colorClasses.border.neutral}`}>
-                      <td className="px-1 py-1 whitespace-nowrap">
-                        <span
-                          className="inline-block w-2 h-2 rounded-sm mr-1 align-middle"
-                          style={{ background: getCohortColor(yr) }}
-                        />
-                        <span style={{ color: getCohortColor(yr) }}>{yr}</span>
-                      </td>
-                      {Array.from({ length: MAX_DEV }, (_, i) => {
-                        const devM = i + 1;
-                        const v = getVal(yr, devM, m.key);
-                        const isLastMonth = devM === c.maxDev;
-                        const vStr = v != null
-                          ? (m.decimals > 0 ? v.toFixed(m.decimals) : Math.round(v).toLocaleString())
-                          : '';
-                        return (
-                          <td
-                            key={devM}
-                            className={cn(
-                              'text-center px-0 py-1',
-                              isLastMonth && 'font-bold',
-                            )}
-                            style={isLastMonth ? { color: getCohortColor(yr) } : undefined}
-                          >
-                            {vStr}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
 
-      {/* 方法论说明 */}
-      <div className={cn(colorClasses.text.neutralMuted, 'text-xs leading-relaxed px-1')}>
-        <b>方法论说明（日历发展口径，与「理赔热力图」同口径）</b><br />
-        1. 发展月 M 的观察终点 = LEAST(年初+M月-1日, max(policy_date))。M1=1月末, M12=全年末, 当 cutoff 落在窗口内时被截断。<br />
-        2. 保单范围：起保日 ∈ [年初, 观察终点]（闭区间）。<br />
-        3. 赔案范围：报案时间 ≤ 观察终点（report_time, 与理赔热力图默认一致）& 保单在窗口内。<br />
-        4. 赔款取值：按结案状态二选一；已结案取已决赔款，未结案取立案金额，不相加。<br />
-        5. 已赚保费 = 保费 × min(起保日到观察终点+1的天数, 保险期间) / 保险期间。<br />
-        6. 满期出险率 = 赔案数 / 已赚暴露。已赚暴露 = Σ min(已赚天数, 保险期间) / 保险期间，年化可比。<br />
-        7. 覆盖率 = 窗口内保单数 / 该年全部保单数。M12 时 ≈ 100%。<br />
-        8. 数据截止：以保单最新录入日期 max(policy_date) 为全局 cutoff，与理赔热力图统一。<br />
+      {/* 3. 智能洞察 */}
+      {hasData && (insightCards.length > 0 || insightNotes.length > 0) && (
+        <section>
+          <SectionHeader
+            icon={Sparkles}
+            title="智能洞察"
+            sub={`基于当前指标「${m.label}」自动识别需关注的事项`}
+            rightExtra={
+              <span className={cn('text-xs', colorClasses.text.neutralMuted)}>
+                {insightCards.length} 条主洞察
+                {insightNotes.length > 0 ? ` · ${insightNotes.length} 条补充` : ''}
+              </span>
+            }
+          />
+          {insightCards.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {insightCards.map(ins => (
+                <LossRatioInsightCard key={ins.id} insight={ins} />
+              ))}
+            </div>
+          )}
+          {insightNotes.length > 0 && (
+            <div
+              className={cn(
+                'mt-3 px-4 py-2.5 rounded-lg border border-dashed',
+                colorClasses.border.neutral,
+                'bg-neutral-50/60 dark:bg-surface-2/60',
+              )}
+            >
+              <ul className="space-y-1.5 text-xs leading-relaxed">
+                {insightNotes.map(ins => (
+                  <li key={ins.id} className="flex items-start gap-2">
+                    <span
+                      className={cn(
+                        'font-semibold whitespace-nowrap',
+                        colorClasses.text.neutralDark,
+                      )}
+                    >
+                      {ins.title}
+                    </span>
+                    <span className={colorClasses.text.neutralMuted}>
+                      {ins.body}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 4. 折线图 */}
+      {hasData && (
+        <div className={cn(cardStyles.standard, 'p-4')}>
+          <ReactEChartsCore
+            echarts={echarts}
+            option={chartOption}
+            style={{ height: 360 }}
+          />
+        </div>
+      )}
+
+      {/* 5. 横向数据表 — "准 Excel 体验"，业务方依赖 24 列布局，不做折叠优化 */}
+      {hasData && (
+        <div className={cn(cardStyles.standard, 'p-4 overflow-x-auto')}>
+          <table
+            className={cn('w-full border-collapse', fontStyles.numeric)}
+            style={{ tableLayout: 'fixed', fontSize: '11px' }}
+          >
+            <colgroup>
+              <col style={{ width: 48 }} />
+              {Array.from({ length: MAX_DEV }, (_, i) => (
+                <col key={i} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                <th
+                  className={`text-left px-1 py-1 border-b ${colorClasses.border.neutral}`}
+                />
+                {Array.from({ length: MAX_DEV }, (_, i) => (
+                  <th
+                    key={i}
+                    className={cn(
+                      `text-center px-0 py-1 border-b ${colorClasses.border.neutral}`,
+                      colorClasses.text.neutralMuted,
+                    )}
+                  >
+                    {i + 1}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {activeYears.map(yr => {
+                const c = cohorts[yr];
+                return (
+                  <tr key={yr} className={`border-b ${colorClasses.border.neutral}`}>
+                    <td className="px-1 py-1 whitespace-nowrap">
+                      <span
+                        className="inline-block w-2 h-2 rounded-sm mr-1 align-middle"
+                        style={{ background: getCohortColor(yr) }}
+                      />
+                      <span style={{ color: getCohortColor(yr) }}>{yr}</span>
+                    </td>
+                    {Array.from({ length: MAX_DEV }, (_, i) => {
+                      const devM = i + 1;
+                      const v = getVal(yr, devM, m.key);
+                      const cov = getVal(yr, devM, 'coverage_pct');
+                      const isLastMonth = devM === c.maxDev;
+                      const partial = cov != null && cov < 99.9;
+                      const vStr =
+                        v != null
+                          ? m.decimals > 0
+                            ? v.toFixed(m.decimals)
+                            : Math.round(v).toLocaleString()
+                          : '';
+                      return (
+                        <td
+                          key={devM}
+                          className={cn(
+                            'text-center px-0 py-1',
+                            isLastMonth && 'font-bold',
+                            partial && colorClasses.text.warning,
+                          )}
+                          style={
+                            isLastMonth && !partial
+                              ? { color: getCohortColor(yr) }
+                              : undefined
+                          }
+                          title={
+                            partial && cov != null
+                              ? `覆盖 ${cov.toFixed(0)}% 保单（部分窗口）`
+                              : undefined
+                          }
+                        >
+                          {vStr}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 6. 方法论说明 */}
+      <div
+        className={cn(
+          colorClasses.text.neutralMuted,
+          'text-xs leading-relaxed px-1',
+        )}
+      >
+        <b>方法论说明（日历发展口径，与「理赔热力图」同口径）</b>
+        <br />
+        1. 发展月 M 的观察终点 = LEAST(年初+M月-1日, max(policy_date))。M1=1月末, M12=全年末, 当 cutoff 落在窗口内时被截断。
+        <br />
+        2. 保单范围：起保日 ∈ [年初, 观察终点]（闭区间）。
+        <br />
+        3. 赔案范围：报案时间 ≤ 观察终点（report_time, 与理赔热力图默认一致）& 保单在窗口内。
+        <br />
+        4. 赔款取值：按结案状态二选一；已结案取已决赔款，未结案取立案金额，不相加。
+        <br />
+        5. 已赚保费 = 保费 × min(起保日到观察终点+1的天数, 保险期间) / 保险期间。
+        <br />
+        6. 满期出险率 = 赔案数 / 已赚暴露。已赚暴露 = Σ min(已赚天数, 保险期间) / 保险期间，年化可比。
+        <br />
+        7. 覆盖率 = 窗口内保单数 / 该年全部保单数。M12 时 ≈ 100%；表格中部分覆盖以橙色提示。
+        <br />
+        8. 数据截止：以保单最新录入日期 max(policy_date) 为全局 cutoff，与理赔热力图统一。
+        <br />
         9. 对账锚点：本年 M_(currentMonth) 列 ≡ 理赔热力图末列（同 cutoff 同保单池同赔案池）。
+        <br />
+        10. cohort 同源：横幅 / hero / 洞察 / 图表 / 表格全部派生自同一条 SQL（generateLossRatioDevelopmentQuery），分子分母 cohort 严格自洽。
       </div>
     </div>
   );

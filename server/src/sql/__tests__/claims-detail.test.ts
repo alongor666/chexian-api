@@ -568,6 +568,94 @@ describe('generateLossRatioDevelopmentQuery', () => {
 });
 
 // ═══════════════════════════════════════════════════
+// 9b. generateLossRatioDevelopmentQuery — cohort 同源 anchor
+//
+// 前端 Tab 3 用同一份返回数据派生横幅 / hero / 洞察 / 图表 / 24 列表。
+// 跨 cohort_year 的同期比较（如 2026 M5 vs 2025 M5）必须满足：分子分母均
+// 出自同一条 SQL 的同一 `policies` + `calendar_window` cohort，避免重蹈
+// PR #411 Tab 2 跨 SQL ratio 不自洽的 P1。
+//
+// 任何破坏单 SQL 单 cohort 设计（如改用子查询取数、把 earned/claimed
+// 拆到不同 policies CTE、改 JOIN key）的 PR 都会让本块测试红。
+// ═══════════════════════════════════════════════════
+
+describe('generateLossRatioDevelopmentQuery — cohort 同源 anchor', () => {
+  it('只有一个 policies CTE：earned 和 claimed 共享保单池（不与 raw_policies 混淆）', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    // 排除 raw_policies — 用负零宽前断言确保 'policies AS (' 前不是下划线
+    const policiesDefs = sql.match(/(?<!_)policies AS \(/g) ?? [];
+    expect(policiesDefs.length).toBe(1);
+    // policy_totals 也是独立 CTE，但它依赖 policies 聚合，不破坏单 cohort
+    expect(sql).toContain('policy_totals AS (');
+  });
+
+  it('earned CTE JOIN policies（不通过子查询独立取数）', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    const m = sql.match(/earned AS \(([\s\S]*?)\),\s+claimed AS \(/);
+    expect(m).not.toBeNull();
+    const earnedBody = m![1];
+    expect(earnedBody).toContain('JOIN policies p');
+    expect(earnedBody).toContain('p.cohort_year = cw.cohort_year');
+  });
+
+  it('claimed CTE 同样 JOIN 同一个 policies（cohort 严格对齐）', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    const m = sql.match(/claimed AS \(([\s\S]*?)\)\s+SELECT/);
+    expect(m).not.toBeNull();
+    const claimedBody = m![1];
+    expect(claimedBody).toContain('JOIN policies p');
+    expect(claimedBody).toContain('p.cohort_year = cw.cohort_year');
+  });
+
+  it('earned 和 claimed 在同一 calendar_window 上聚合（窗口对齐）', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    const earnedFrom = sql.match(/earned AS \([\s\S]*?FROM calendar_window cw/);
+    const claimedFrom = sql.match(/claimed AS \([\s\S]*?FROM calendar_window cw/);
+    expect(earnedFrom).not.toBeNull();
+    expect(claimedFrom).not.toBeNull();
+  });
+
+  it('earned ↔ claimed JOIN：cohort_year + dev_month 双键，确保比值同 cohort', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    expect(sql).toContain(
+      'JOIN claimed cl ON e.cohort_year = cl.cohort_year AND e.dev_month = cl.dev_month',
+    );
+  });
+
+  it('赔案 JOIN 限定在保单池内：c.policy_no = p.policy_no（杜绝保单外赔案漏入）', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    const m = sql.match(/claimed AS \(([\s\S]*?)\)\s+SELECT/);
+    const claimedBody = m![1];
+    expect(claimedBody).toContain('LEFT JOIN ClaimsDetail c');
+    expect(claimedBody).toContain('c.policy_no = p.policy_no');
+  });
+
+  it('保单池窗口约束与赔案窗口约束一致（effective_cutoff 闭区间）', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    const earnedMatches =
+      sql.match(/p\.insurance_start_date <= cw\.effective_cutoff/g) ?? [];
+    expect(earnedMatches.length).toBeGreaterThanOrEqual(2);
+    expect(sql).toContain('CAST(c.report_time AS DATE) <= cw.effective_cutoff');
+  });
+
+  it('policyWhere 过滤注入到 raw_policies（避免 earned/claimed 各自过滤）', () => {
+    const sql = generateLossRatioDevelopmentQuery({ orgName: '乐山' });
+    const orgMatches = sql.match(/p\.org_level_3 = '乐山'/g) ?? [];
+    expect(orgMatches.length).toBe(1);
+    const rawPoliciesBlock = sql.match(/raw_policies AS \(([\s\S]*?)\),\s+policies AS \(/);
+    expect(rawPoliciesBlock).not.toBeNull();
+    expect(rawPoliciesBlock![1]).toContain("p.org_level_3 = '乐山'");
+  });
+
+  it('claims_cutoff 全局唯一（cohort 跨年共享同一 cutoff，与理赔热力图对账）', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    const cutoffDefs = sql.match(/claims_cutoff_cte AS \(/g) ?? [];
+    expect(cutoffDefs.length).toBe(1);
+    expect(sql).toContain('(SELECT claims_cutoff FROM claims_cutoff_cte) AS claims_cutoff');
+  });
+});
+
+// ═══════════════════════════════════════════════════
 // 10. generateFrequencyYoyQuery — 出险频度同比
 // ═══════════════════════════════════════════════════
 
