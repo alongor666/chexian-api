@@ -9,6 +9,7 @@ xlsx 1.1.1 sheet → 客户类别 7 类 records（精简版）
 metric_id ∈ {total_premium_wan, earned_premium_wan, reported_claim_count, total_reported_claims_wan}
 """
 from __future__ import annotations
+import sys
 import openpyxl
 from .config import (
     XLSX_SHEET,
@@ -83,6 +84,7 @@ def _rollup_to_customer_category(raw: list[dict], policy_year: str) -> list[dict
     # 按 (customer_category, metric_id) 聚合金额（4 个指标都是可加的）
     groups: dict[tuple, float] = {}
     total_row: dict[tuple, float] = {}  # 合计行的原始值
+    unknown_biz_types: set[str] = set()
     for r in raw:
         biz_type = r['biz_type']
         if biz_type == '合计':
@@ -90,9 +92,18 @@ def _rollup_to_customer_category(raw: list[dict], policy_year: str) -> list[dict
             continue
         cust_cat = BUSINESS_TYPE_TO_CUSTOMER_CATEGORY.get(biz_type)
         if cust_cat is None:
+            # codex/Claude review L2 fix: 不再静默丢弃未知业务类型，stderr 显式告警
+            unknown_biz_types.add(biz_type)
             continue
         key = (cust_cat, r['metric_id'], r['metric_cn'])
         groups[key] = groups.get(key, 0.0) + r['value']
+
+    if unknown_biz_types:
+        print(
+            f'WARN: xlsx 中 {len(unknown_biz_types)} 个业务类型未在 BUSINESS_TYPE_TO_CUSTOMER_CATEGORY 映射中，已丢弃：',
+            sorted(unknown_biz_types),
+            file=sys.stderr,
+        )
 
     for (cust_cat, metric_id, metric_cn), v in groups.items():
         out.append({

@@ -61,6 +61,7 @@ def reconcile(
     project: list[dict],
     *,
     week: str,
+    policy_year: str = '2026',
     verbose: bool = False,
 ) -> dict:
     out_dir = _cfg.OUTPUT_BASE_DIR / week
@@ -112,9 +113,9 @@ def reconcile(
     diffs.sort(key=lambda d: abs(d['abs_diff']), reverse=True)
 
     summary = _summarize(diffs)
-    _dump_json(out_dir / 'diff.json', {'week': week, 'diffs': diffs})
+    _dump_json(out_dir / 'diff.json', {'week': week, 'policy_year': policy_year, 'diffs': diffs})
     _dump_json(out_dir / 'summary.json', summary)
-    _print_stdout(summary, diffs, week=week, verbose=verbose)
+    _print_stdout(summary, diffs, week=week, policy_year=policy_year, verbose=verbose)
     return summary
 
 
@@ -136,7 +137,7 @@ def _summarize(diffs) -> dict:
     }
 
 
-def _print_stdout(summary, diffs, *, week, verbose):
+def _print_stdout(summary, diffs, *, week, policy_year, verbose):
     METRIC_ORDER = [
         'total_premium_wan', 'earned_premium_wan',
         'reported_claim_count', 'total_reported_claims_wan',
@@ -153,7 +154,7 @@ def _print_stdout(summary, diffs, *, week, verbose):
 
     print()
     print('━' * 90)
-    print(f'赔付率周报对账（YTD 2026 截至 {week}） — 客户类别 7 类 + 合计')
+    print(f'赔付率周报对账（YTD {policy_year} 截至 {week}） — 客户类别 7 类 + 合计')
     print('━' * 90)
     o = summary['overall']
     print(f"总对比 {o['total']}   PASS {o.get('PASS',0)} ({o['pass_rate']:.1%})   "

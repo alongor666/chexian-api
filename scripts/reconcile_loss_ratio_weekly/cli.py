@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f'      → {len(project)} 条 records')
 
     print('[3/3] 对账判定 + 输出 ...')
-    summary = reconcile(external, project, week=week, verbose=args.verbose)
+    summary = reconcile(external, project, week=week, policy_year=args.policy_year, verbose=args.verbose)
 
     return 1 if summary['overall'].get('FAIL', 0) > 0 else 0
 
