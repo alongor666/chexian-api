@@ -92,7 +92,11 @@ python3 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py
 
 ## 自动化（推荐）
 
-日常推荐走仓库的一键发布入口，完成 ETL、VPS 同步、PM2 reload、健康检查后，再同步机构续保追踪表：
+日常推荐走仓库的一键发布入口，完成 ETL、VPS 同步、PM2 reload、健康检查后，再按固定顺序同步三类企微表：
+
+1. 各三级机构续保追踪表
+2. 续保5月字段回填表
+3. 邮政经代签单全量表
 
 多 webhook / 多智能表目标的当前登记、state、schema 与字段策略见
 [`WEBHOOK_TARGETS.md`](./WEBHOOK_TARGETS.md)。新增或转让智能表时，先更新该目标登记，
@@ -112,7 +116,21 @@ bun run release:daily
 node scripts/sync-and-reload.mjs --wecom --wecom-org 新都,资阳
 ```
 
-企微同步读取 iCloud xlsx 登记表中的 webhook，不依赖 `.env.local` 中的旧 webhook。
+机构续保同步读取 iCloud xlsx 登记表中的 webhook，不依赖 `.env.local` 中的旧 webhook。续保5月表读取
+`WECOM_SMARTSHEET_WEBHOOK_RENEWAL_MAY`；邮政表读取
+`instances/postal-policy-since-20260420.yaml` 中声明的 webhook env。
+
+### 日常核对输出
+
+发布入口会直接打印三个脚本的 JSON 摘要，日常只需要看这些字段：
+
+| 目标 | 关键字段 | 用途 |
+|---|---|---|
+| 三级机构续保表 | `results[].org`, `to_add`, `to_update`, `changed_rows`, `changed_premium_sum`, `changed_renewal_rate` | 看每个机构本次新增/更新了多少条、涉及多少保费、变化记录中的续保率 |
+| 三级机构续保表汇总 | `total.changed_rows`, `total.changed_premium_sum`, `total.changed_renewal_rate` | 看本次机构续保同步总影响 |
+| 续保5月表 | `to_update`, `field_update_stats.field_counts` | 看本次更新多少行，以及是否成交/是否报价/自主系数等字段各更新多少格 |
+| 邮政表 | `add_records_planned`, `new_dedup_vin_count`, `new_premium_sum`, `new_salesman_stats` | 看本次新增保单里每个人多少台车（VIN 去重）和多少保费 |
+| 邮政表全量审计 | `salesman_stats`, `invalid_grade_stats` | 看邮政全量表按业务员的台数/保费，以及被跳过的非法风险等级 |
 
 **增量策略**：
 - 本地 state 无 VIN：走 `add_records` 并保存 `record_id`

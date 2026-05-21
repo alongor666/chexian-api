@@ -592,6 +592,42 @@ class UpsertPlan:
     missing_vins: list[str]
 
 
+def money_sum(rows: Iterable[dict[str, Any]], field: str = "premium") -> float:
+    total = 0.0
+    for row in rows:
+        value = clean_num(row.get(field))
+        if value is not None:
+            total += value
+    return round(total, 2)
+
+
+def renewal_rate(renewed: int, total: int) -> float | None:
+    if total <= 0:
+        return None
+    return round(renewed / total, 4)
+
+
+def rows_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    renewed = sum(1 for row in rows if row.get("is_renewed"))
+    return {
+        "rows": len(rows),
+        "premium_sum": money_sum(rows),
+        "renewed_count": renewed,
+        "renewal_rate": renewal_rate(renewed, len(rows)),
+    }
+
+
+def plan_metrics(plan: UpsertPlan) -> dict[str, Any]:
+    add_rows = [item["source_row"] for item in plan.add_items]
+    update_rows = [item["_source_row"] for item in plan.update_items]
+    changed_rows = add_rows + update_rows
+    return {
+        "add": rows_metrics(add_rows),
+        "update": rows_metrics(update_rows),
+        "changed": rows_metrics(changed_rows),
+    }
+
+
 def plan_upsert(rows: list[dict[str, Any]], state: dict[str, Any], schema: dict[str, str], fields: list[FieldDef], unmatched_set: set[str]) -> UpsertPlan:
     mapped = state.get("records", {})
     current_vins = {str(r.get("vehicle_frame_no")) for r in rows}
@@ -661,6 +697,8 @@ def run_sync(instance: InstanceConfig, fields: list[FieldDef], dry_run: bool = F
     schema = build_schema(fields)
     unmatched_salesmen: set[str] = set()
     plan = plan_upsert(rows, state, schema, fields, unmatched_salesmen)
+    sync_metrics = plan_metrics(plan)
+    overall_metrics = rows_metrics(rows)
 
     summary: dict[str, Any] = {
         "dry_run": dry_run,
@@ -671,6 +709,18 @@ def run_sync(instance: InstanceConfig, fields: list[FieldDef], dry_run: bool = F
         "to_update": len(plan.update_items),
         "missing_vins_count": len(plan.missing_vins),
         "missing_vins_sample": plan.missing_vins[:20],
+        "premium_sum": overall_metrics["premium_sum"],
+        "renewal_rate": overall_metrics["renewal_rate"],
+        "add_premium_sum": sync_metrics["add"]["premium_sum"],
+        "add_renewed_count": sync_metrics["add"]["renewed_count"],
+        "add_renewal_rate": sync_metrics["add"]["renewal_rate"],
+        "update_premium_sum": sync_metrics["update"]["premium_sum"],
+        "update_renewed_count": sync_metrics["update"]["renewed_count"],
+        "update_renewal_rate": sync_metrics["update"]["renewal_rate"],
+        "changed_rows": sync_metrics["changed"]["rows"],
+        "changed_premium_sum": sync_metrics["changed"]["premium_sum"],
+        "changed_renewed_count": sync_metrics["changed"]["renewed_count"],
+        "changed_renewal_rate": sync_metrics["changed"]["renewal_rate"],
         "quoted_count": sum(1 for r in rows if r.get("is_quoted")),
         "renewed_count": sum(1 for r in rows if r.get("is_renewed")),
         "unmatched_salesmen_count": len({r.get("salesman_name") for r in rows if r.get("salesman_unmatched")}),
