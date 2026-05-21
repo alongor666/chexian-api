@@ -207,9 +207,10 @@ export const generateKpiQuery = (
           f.insurance_start_date,
           f.insurance_start_date + INTERVAL 1 YEAR
         ) AS policy_term,
+        -- earned_days +1：含起保当天（与 cost-ratios.ts / sql-builder.ts 口径统一）
         LEAST(
           GREATEST(
-            DATEDIFF('day', f.insurance_start_date, lc.latest_policy_date),
+            DATEDIFF('day', f.insurance_start_date, lc.latest_policy_date) + 1,
             0
           ),
           DATEDIFF(
