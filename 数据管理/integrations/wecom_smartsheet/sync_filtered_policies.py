@@ -366,6 +366,15 @@ def save_state(instance: InstanceConfig, state: dict[str, Any], *, backup_existi
     p.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def persist_synced_keys(instance: InstanceConfig, state: dict[str, Any], newly_synced_keys: list[str]) -> None:
+    """Persist successful batch keys immediately to avoid duplicate adds after partial failure."""
+    state["synced_keys"] = sorted(set(state.get("synced_keys", [])) | set(newly_synced_keys))
+    state["last_sync_at"] = datetime.now(timezone.utc).isoformat()
+    state["key_strategy"] = key_strategy(instance)
+    state["composite_fields"] = composite_fields(instance)
+    save_state(instance, state)
+
+
 def key_strategy(instance: InstanceConfig) -> str:
     return "composite_key" if instance.composite_key else "primary_key"
 
@@ -532,15 +541,9 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
                     f"{len(returned_records) if isinstance(returned_records, list) else 'missing'}"
                 )
             newly_synced_keys.extend(r["_primary_key"] for r in chunk if r["_primary_key"])
+            persist_synced_keys(instance, state, newly_synced_keys)
         # 速率限制：每条记录占用 60/sheet_rpm 秒
         time_mod.sleep(60.0 / max(1, instance.sheet_rpm) * len(chunk))
-
-    # 写回 state（init/sync 两种模式都更新，避免 init 后再 sync 又重复写入）
-    state["synced_keys"] = sorted(set(state.get("synced_keys", [])) | set(newly_synced_keys))
-    state["last_sync_at"] = datetime.now(timezone.utc).isoformat()
-    state["key_strategy"] = key_strategy(instance)
-    state["composite_fields"] = composite_fields(instance)
-    save_state(instance, state)
 
     summary["state_synced_keys_after"] = len(state["synced_keys"])
     summary["newly_synced_count"] = len(newly_synced_keys)
