@@ -11,16 +11,30 @@
 - 数据路径（policy / claims_detail parquet）
 """
 
+import os
 from pathlib import Path
 
-# ─── 路径 ───────────────────────────────────────────────────────────────
-DATA_REPO_ROOT = Path('/Users/alongor666/Downloads/底层数据湖DUD/chexian-api')
-POLICY_PARQUET_GLOB = str(DATA_REPO_ROOT / '数据管理/warehouse/fact/policy/current/*.parquet')
-CLAIMS_PARQUET_GLOB = str(DATA_REPO_ROOT / '数据管理/warehouse/fact/claims_detail/*.parquet')
-XLSX_PATH = '/Users/alongor666/Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/1.赔付率周报_（合订版）.xlsx'
+# ─── 路径（codex review P2 fix：移除硬编码路径，改用环境变量 + 仓库相对默认值）───
+# 优先级：CLI 参数 > 环境变量 > 默认值
+# - CX_DATA_ROOT：parquet 数据根（默认 = 仓库根，即脚本所在仓库；可在 CI 用环境变量指向数据卷）
+# - CX_RECONCILE_XLSX：xlsx 路径（无默认值，必须通过环境变量或 CLI --xlsx 提供）
+# - CX_RECONCILE_OUTPUT：输出根（默认 = 仓库根/数据管理/validation/loss-ratio-weekly）
 
 SCRIPT_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-OUTPUT_BASE_DIR = SCRIPT_REPO_ROOT / '数据管理/validation/loss-ratio-weekly'
+
+# 数据源：相对仓库根（CI / 容器内可通过 CX_DATA_ROOT 覆盖）
+DATA_REPO_ROOT = Path(os.environ.get('CX_DATA_ROOT', str(SCRIPT_REPO_ROOT)))
+POLICY_PARQUET_GLOB = str(DATA_REPO_ROOT / '数据管理/warehouse/fact/policy/current/*.parquet')
+CLAIMS_PARQUET_GLOB = str(DATA_REPO_ROOT / '数据管理/warehouse/fact/claims_detail/*.parquet')
+
+# xlsx：无默认值（环境特定，必须显式提供）
+# 本机典型值：~/Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/1.赔付率周报_（合订版）.xlsx
+XLSX_PATH = os.environ.get('CX_RECONCILE_XLSX', '')
+
+OUTPUT_BASE_DIR = Path(os.environ.get(
+    'CX_RECONCILE_OUTPUT',
+    str(SCRIPT_REPO_ROOT / '数据管理/validation/loss-ratio-weekly')
+))
 
 
 # ─── 4 个核心指标 ──────────────────────────────────────────────────────

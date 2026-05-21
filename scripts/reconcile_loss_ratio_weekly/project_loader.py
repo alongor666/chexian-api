@@ -16,23 +16,22 @@
 """
 from __future__ import annotations
 import duckdb
-from .config import (
-    POLICY_PARQUET_GLOB,
-    CLAIMS_PARQUET_GLOB,
-    CUSTOMER_CATEGORY_CASES,
-)
+from . import config as _cfg
+from .config import CUSTOMER_CATEGORY_CASES
 
 
 def _build_sql(*, cutoff_date: str, policy_year_start: str) -> str:
-    """单一 SQL：客户类别 7 类明细 + 合计 → 4 指标"""
+    """单一 SQL：客户类别 7 类明细 + 合计 → 4 指标
+    路径用 lazy lookup（_cfg.POLICY_PARQUET_GLOB），让 CLI 注入的覆盖值生效。
+    """
     cc = CUSTOMER_CATEGORY_CASES
 
     return f"""
 WITH PolicyFact AS (
-  SELECT * FROM read_parquet('{POLICY_PARQUET_GLOB}', union_by_name=true)
+  SELECT * FROM read_parquet('{_cfg.POLICY_PARQUET_GLOB}', union_by_name=true)
 ),
 ClaimsDetail AS (
-  SELECT * FROM read_parquet('{CLAIMS_PARQUET_GLOB}', union_by_name=true)
+  SELECT * FROM read_parquet('{_cfg.CLAIMS_PARQUET_GLOB}', union_by_name=true)
 ),
 -- 件数不过滤 + 赔款过滤（liability=0 / case_type 异常 不计入金额，但计入件数）
 ClaimsAgg AS (

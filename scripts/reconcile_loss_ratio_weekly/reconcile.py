@@ -10,7 +10,8 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from pathlib import Path
-from .config import THRESHOLDS, OUTPUT_BASE_DIR, DERIVED_METRIC_ID, DERIVED_METRIC_CN
+from . import config as _cfg
+from .config import THRESHOLDS, DERIVED_METRIC_ID, DERIVED_METRIC_CN
 
 
 def _key(r: dict) -> tuple:
@@ -62,7 +63,7 @@ def reconcile(
     week: str,
     verbose: bool = False,
 ) -> dict:
-    out_dir = OUTPUT_BASE_DIR / week
+    out_dir = _cfg.OUTPUT_BASE_DIR / week
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 派生满期赔付率（两端）
@@ -76,11 +77,30 @@ def reconcile(
     prj_idx = {_key(r): r for r in prj_all}
 
     diffs = []
+    # codex review P1 fix：缺失键计入 FAIL，不再静默 continue 高估通过率
     for k in set(ext_idx.keys()) | set(prj_idx.keys()):
         ext, prj = ext_idx.get(k), prj_idx.get(k)
-        if ext is None or prj is None:
-            continue
         sheet, year, dim_path, metric_id = k
+        if ext is None:
+            diffs.append({
+                'sheet': sheet, 'policy_year': year, 'dim_path': list(dim_path),
+                'metric_id': metric_id,
+                'external_value': None, 'project_value': prj['value'],
+                'abs_diff': prj['value'], 'rel_diff': None,
+                'status': 'FAIL', 'missing_side': 'external',
+                'threshold': THRESHOLDS.get(metric_id),
+            })
+            continue
+        if prj is None:
+            diffs.append({
+                'sheet': sheet, 'policy_year': year, 'dim_path': list(dim_path),
+                'metric_id': metric_id,
+                'external_value': ext['value'], 'project_value': None,
+                'abs_diff': -ext['value'], 'rel_diff': None,
+                'status': 'FAIL', 'missing_side': 'project',
+                'threshold': THRESHOLDS.get(metric_id),
+            })
+            continue
         status, abs_diff, rel_diff = _judge(metric_id, ext['value'], prj['value'])
         diffs.append({
             'sheet': sheet, 'policy_year': year, 'dim_path': list(dim_path),
@@ -157,14 +177,15 @@ def _print_stdout(summary, diffs, *, week, verbose):
             ad = d['abs_diff']
             rel = f"{d['rel_diff']*100:>+7.2f}%" if d['rel_diff'] is not None else '    n/a '
             icon = {'PASS':'✓','WARN':'⚠','FAIL':'✗'}[d['status']]
+            missing = d.get('missing_side')
+            note = f' (仅{missing}端有数)' if missing else ''
             if dim == '合计':
                 print('═' * 90)
-            if is_count:
-                print(f'{dim:<18s}  {ext:>13.0f}  {prj:>13.0f}  {ad:>+11.0f}  {rel:>9s}   {icon} {d["status"]}')
-            elif is_ratio:
-                print(f'{dim:<18s}  {ext:>13.4f}  {prj:>13.4f}  {ad:>+11.4f}  {rel:>9s}   {icon} {d["status"]}')
-            else:
-                print(f'{dim:<18s}  {ext:>13.2f}  {prj:>13.2f}  {ad:>+11.2f}  {rel:>9s}   {icon} {d["status"]}')
+            # 缺失侧显示为 n/a
+            ext_str = ('     n/a    ' if ext is None else (f'{ext:>13.0f}' if is_count else (f'{ext:>13.4f}' if is_ratio else f'{ext:>13.2f}')))
+            prj_str = ('     n/a    ' if prj is None else (f'{prj:>13.0f}' if is_count else (f'{prj:>13.4f}' if is_ratio else f'{prj:>13.2f}')))
+            ad_str = f'{ad:>+11.0f}' if is_count else (f'{ad:>+11.4f}' if is_ratio else f'{ad:>+11.2f}')
+            print(f'{dim:<18s}  {ext_str}  {prj_str}  {ad_str}  {rel:>9s}   {icon} {d["status"]}{note}')
         print()
 
     print('━━ 按指标通过率 ━━')
@@ -173,7 +194,7 @@ def _print_stdout(summary, diffs, *, week, verbose):
         print(f"  {METRIC_CN[m]:<15s} PASS {st.get('PASS',0):>2}/{st.get('total',0):<2} ({st.get('pass_rate',0):.0%})  WARN {st.get('WARN',0):>2}  FAIL {st.get('FAIL',0):>2}")
 
     print()
-    print(f'输出: {OUTPUT_BASE_DIR.relative_to(OUTPUT_BASE_DIR.parent.parent.parent.parent)}/{week}/')
+    print(f'输出: {_cfg.OUTPUT_BASE_DIR}/{week}/')
     print('━' * 90)
 
 
