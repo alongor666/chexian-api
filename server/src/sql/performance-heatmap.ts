@@ -378,8 +378,8 @@ export function generatePerformanceOrgHeatmapQuery(
         ROUND(SUM(wr.premium_wan), 4) AS premium,
         COUNT(DISTINCT CASE WHEN NOT wr.is_endorsement THEN wr.policy_key END) AS policy_count,
         ROUND(
-          SUM(CASE WHEN wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan END)
-          / NULLIF(SUM(CASE WHEN wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan / wr.cpf END), 0),
+          SUM(CASE WHEN NOT wr.is_endorsement AND wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan END)
+          / NULLIF(SUM(CASE WHEN NOT wr.is_endorsement AND wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan / wr.cpf END), 0),
         4) AS avg_pricing_coefficient
       FROM window_rows wr
       GROUP BY wr.${dimConfig.alias}, wr.period_key

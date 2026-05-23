@@ -45,7 +45,6 @@ export function generatePerformanceSummaryQuery(
   const businessMetricsSql = `
         SUM(premium_wan) AS premium,
         COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count,
-        COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS row_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_nev_bool THEN policy_key END) AS nev_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_renewal_bool THEN policy_key END) AS renewal_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN policy_key END) AS transfer_business_count,
@@ -155,11 +154,11 @@ export function generatePerformanceSummaryQuery(
           WHEN COALESCE(p.premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.premium) * 100.0 / p.premium, 2)
         END AS growth_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.row_count, 2) END AS nev_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.row_count, 2) END AS renewal_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.row_count, 2) END AS transfer_business_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.row_count, 2) END AS new_car_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.row_count, 2) END AS transfer_rate
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.auto_count, 2) END AS nev_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.auto_count, 2) END AS transfer_business_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.auto_count, 2) END AS new_car_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.auto_count, 2) END AS transfer_rate
       FROM parent_current c
       LEFT JOIN parent_prev p ON c.coverage_combination = p.coverage_combination
       CROSS JOIN period_progress pp
@@ -230,11 +229,11 @@ export function generatePerformanceSummaryQuery(
           WHEN COALESCE(p.premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.premium) * 100.0 / p.premium, 2)
         END AS growth_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.row_count, 2) END AS nev_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.row_count, 2) END AS renewal_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.row_count, 2) END AS transfer_business_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.row_count, 2) END AS new_car_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.row_count, 2) END AS transfer_rate
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.auto_count, 2) END AS nev_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.auto_count, 2) END AS transfer_business_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.auto_count, 2) END AS new_car_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.auto_count, 2) END AS transfer_rate
       FROM child_current c
       LEFT JOIN child_prev p
         ON c.coverage_combination = p.coverage_combination

@@ -87,7 +87,6 @@ export function generatePerformanceTopSalesmanQuery(
         dimension_name,
         SUM(premium_wan) AS premium,
         COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count,
-        COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS row_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_nev THEN policy_key END) AS nev_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_renewal THEN policy_key END) AS renewal_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) THEN policy_key END) AS transfer_business_count,
@@ -128,11 +127,11 @@ export function generatePerformanceTopSalesmanQuery(
           WHEN COALESCE(p.prev_premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.prev_premium) * 100.0 / p.prev_premium, 2)
         END AS growth_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.row_count, 2) END AS nev_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.row_count, 2) END AS renewal_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.row_count, 2) END AS transfer_business_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.row_count, 2) END AS new_car_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.row_count, 2) END AS transfer_rate
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.auto_count, 2) END AS nev_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.auto_count, 2) END AS transfer_business_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.auto_count, 2) END AS new_car_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.auto_count, 2) END AS transfer_rate
       FROM current_group c
       LEFT JOIN prev_group p ON c.dimension_name = p.dimension_name
       CROSS JOIN period_progress pp

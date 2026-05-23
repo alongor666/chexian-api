@@ -115,6 +115,9 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('AS transfer_business_rate');
     expect(sql).toContain('AS new_car_rate');
     expect(sql).toContain('AS transfer_rate');
+    expect(sql).toContain('CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate');
+    expect(sql).not.toContain(' AS row_count');
+    expect(sql).not.toContain('c.row_count');
     expect(sql).toContain('period_progress');
     expect(sql).toContain('generate_series');
     expect(sql).toContain('CURRENT_DATE');
@@ -161,6 +164,9 @@ describe('performance analysis SQL', () => {
     const sql = generatePerformanceTopSalesmanQuery('1=1', '1=1', 'motorcycle', 'day', 'mom', 20);
 
     expect(sql).toContain('AS plan_premium');
+    expect(sql).toContain('CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate');
+    expect(sql).not.toContain(' AS row_count');
+    expect(sql).not.toContain('c.row_count');
     expect(sql).toContain('ORDER BY m.achievement_rate ASC NULLS LAST, m.premium DESC');
     expect(sql).toContain('LIMIT 20');
   });
@@ -241,6 +247,7 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('COALESCE(p.premium, 0) / 10000.0 AS premium_wan');
     expect(sql).toContain('AS is_endorsement');
     expect(sql).toContain('COUNT(DISTINCT CASE WHEN NOT wr.is_endorsement THEN wr.policy_key END) AS policy_count');
+    expect(sql).toContain('SUM(CASE WHEN NOT wr.is_endorsement AND wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan END)');
     expect(sql).not.toContain('AND COALESCE(p.premium, 0) > 0');
   });
 
