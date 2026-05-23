@@ -103,6 +103,38 @@ function run(command, cwd) {
   }
 }
 
+function capture(command, cwd) {
+  const result = spawnSync('bash', ['-lc', command], {
+    cwd,
+    encoding: 'utf8',
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    throw new Error(`Command failed (${result.status}): ${command}\n${result.stderr || result.stdout}`);
+  }
+  return result.stdout.trim();
+}
+
+function assertProductionRef(rootDir) {
+  run('git fetch origin main --quiet', rootDir);
+
+  const head = capture('git rev-parse HEAD', rootDir);
+  const originMain = capture('git rev-parse origin/main', rootDir);
+
+  if (head !== originMain) {
+    throw new Error(
+      [
+        'Refusing to deploy stale frontend to VPS.',
+        `HEAD=${head.slice(0, 12)}`,
+        `origin/main=${originMain.slice(0, 12)}`,
+        'Checkout or create a clean worktree at origin/main, then rerun release:vps:heatmap.',
+      ].join('\n')
+    );
+  }
+
+  console.log(`[release] git ref verified: origin/main ${head.slice(0, 12)}`);
+}
+
 function main() {
   const options = parseArgs(process.argv.slice(2));
   if (options.help) {
@@ -121,6 +153,7 @@ function main() {
   console.log(`[release] remote root: ${options.remoteRoot}`);
   console.log(`[release] verify url: ${options.baseUrl}`);
 
+  assertProductionRef(rootDir);
   run(`ssh ${host} echo ok`, rootDir);
   run('bun run build', rootDir);
   run('bun run build', path.join(rootDir, 'server'));
