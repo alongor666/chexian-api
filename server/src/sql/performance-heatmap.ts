@@ -345,13 +345,17 @@ export function generatePerformanceOrgHeatmapQuery(
         CAST(p.${dateField} AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
         COALESCE(NULLIF(TRIM(CAST(p.salesman_name AS VARCHAR)), ''), '__unknown__') AS salesman_name,
-        p.premium / 10000.0 AS premium_wan,
+        COALESCE(
+          NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), ''),
+          NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), '')
+        ) AS policy_key,
+        NULLIF(TRIM(CAST(p.endorsement_no AS VARCHAR)), '') IS NOT NULL AS is_endorsement,
+        COALESCE(p.premium, 0) / 10000.0 AS premium_wan,
         p.commercial_pricing_factor AS cpf
       FROM PolicyFact p
       ${needsTeamJoin ? "LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))" : ''}
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
-        AND COALESCE(p.premium, 0) > 0
         ${drillAnd}
     ),
     period_bounds AS (
@@ -372,10 +376,10 @@ export function generatePerformanceOrgHeatmapQuery(
         wr.${dimConfig.alias},
         wr.period_key,
         ROUND(SUM(wr.premium_wan), 4) AS premium,
-        COUNT(*) AS policy_count,
+        COUNT(DISTINCT CASE WHEN NOT wr.is_endorsement THEN wr.policy_key END) AS policy_count,
         ROUND(
-          SUM(CASE WHEN wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan END)
-          / NULLIF(SUM(CASE WHEN wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan / wr.cpf END), 0),
+          SUM(CASE WHEN NOT wr.is_endorsement AND wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan END)
+          / NULLIF(SUM(CASE WHEN NOT wr.is_endorsement AND wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan / wr.cpf END), 0),
         4) AS avg_pricing_coefficient
       FROM window_rows wr
       GROUP BY wr.${dimConfig.alias}, wr.period_key

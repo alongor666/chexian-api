@@ -5,6 +5,7 @@ import {
   generatePerformanceTrendQuery,
   generatePerformanceDrilldownQuery,
   generatePerformanceTopSalesmanQuery,
+  generatePerformanceOrgHeatmapQuery,
 } from '../performance-analysis.js';
 
 // ── 共享参数 ──
@@ -52,6 +53,19 @@ describe('generatePerformanceSummaryQuery', () => {
     // 无 expand 时返回有效 SQL
     expect(sql.length).toBeGreaterThan(200);
     expect(sql).toContain('premium_wan');
+  });
+
+  it('批单口径：保费保留净额，件数只计原始保单', () => {
+    const sql = generatePerformanceSummaryQuery(
+      WHERE_WITH_DATE, WHERE_WITHOUT_DATE, SEGMENT, TIME_PERIOD, GROWTH_MODE
+    );
+    expect(sql).toContain('COALESCE(premium, 0) / 10000.0 AS premium_wan');
+    expect(sql).toContain('AS is_endorsement');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count');
+    expect(sql).toContain('CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate');
+    expect(sql).not.toContain(' AS row_count');
+    expect(sql).not.toContain('c.row_count');
+    expect(sql).not.toContain('CASE WHEN premium > 0 THEN premium / 10000.0 ELSE 0 END');
   });
 });
 
@@ -106,6 +120,14 @@ describe('generatePerformanceTrendQuery', () => {
     const sql = generatePerformanceTrendQuery(WHERE_WITH_DATE, 'truck', 'monthly');
     expect(sql).toContain('segment_tag');
   });
+
+  it('批单口径：趋势保费使用净额，件数只计原始保单', () => {
+    const sql = generatePerformanceTrendQuery(WHERE_WITH_DATE, SEGMENT, 'monthly');
+    expect(sql).toContain('COALESCE(premium, 0) / 10000.0 AS premium_wan');
+    expect(sql).toContain('AS is_endorsement');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count');
+    expect(sql).not.toContain('CASE WHEN premium > 0 THEN premium / 10000.0 ELSE 0 END');
+  });
 });
 
 // ═══════════════════════════════════════════════════
@@ -134,6 +156,19 @@ describe('generatePerformanceDrilldownQuery', () => {
       [], 'org_level_3'
     );
     expect(sql).toContain('org_level_3');
+  });
+
+  it('批单口径：下钻保费使用净额，件数只计原始保单', () => {
+    const sql = generatePerformanceDrilldownQuery(
+      WHERE_WITH_DATE, WHERE_WITHOUT_DATE, SEGMENT, TIME_PERIOD, GROWTH_MODE
+    );
+    expect(sql).toContain('COALESCE(p.premium, 0) / 10000.0 AS premium_wan');
+    expect(sql).toContain('AS is_endorsement');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count');
+    expect(sql).toContain('CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate');
+    expect(sql).not.toContain(' AS row_count');
+    expect(sql).not.toContain('c.row_count');
+    expect(sql).not.toContain('CASE WHEN p.premium > 0 THEN p.premium / 10000.0 ELSE 0 END');
   });
 });
 
@@ -164,10 +199,40 @@ describe('generatePerformanceTopSalesmanQuery', () => {
     expect(sql).toContain('premium');
     expect(sql).toContain('auto_count');
   });
+
+  it('批单口径：Top业务员保费使用净额，件数只计原始保单', () => {
+    const sql = generatePerformanceTopSalesmanQuery(
+      WHERE_WITH_DATE, WHERE_WITHOUT_DATE, SEGMENT, TIME_PERIOD, GROWTH_MODE
+    );
+    expect(sql).toContain('COALESCE(p.premium, 0) / 10000.0 AS premium_wan');
+    expect(sql).toContain('AS is_endorsement');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count');
+    expect(sql).toContain('CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate');
+    expect(sql).not.toContain(' AS row_count');
+    expect(sql).not.toContain('c.row_count');
+    expect(sql).not.toContain('CASE WHEN p.premium > 0 THEN p.premium / 10000.0 ELSE 0 END');
+  });
 });
 
 // ═══════════════════════════════════════════════════
-// 6. 所有生成器返回非空 SQL
+// 6. Org Heatmap 查询
+// ═══════════════════════════════════════════════════
+
+describe('generatePerformanceOrgHeatmapQuery', () => {
+  it('批单口径：热力图保费使用净额，件数只计原始保单', () => {
+    const sql = generatePerformanceOrgHeatmapQuery(
+      WHERE_WITHOUT_DATE, SEGMENT, 'day', 15, 'org_level_3', [], 'policy_date'
+    );
+    expect(sql).toContain('COALESCE(p.premium, 0) / 10000.0 AS premium_wan');
+    expect(sql).toContain('AS is_endorsement');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN NOT wr.is_endorsement THEN wr.policy_key END) AS policy_count');
+    expect(sql).toContain('SUM(CASE WHEN NOT wr.is_endorsement AND wr.cpf IS NOT NULL AND wr.cpf > 0 THEN wr.premium_wan END)');
+    expect(sql).not.toContain('AND COALESCE(p.premium, 0) > 0');
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// 7. 所有生成器返回非空 SQL
 // ═══════════════════════════════════════════════════
 
 describe('所有生成器返回有效 SQL', () => {
