@@ -30,10 +30,11 @@ export function generatePerformanceTrendQuery(
       SELECT
         CAST(${dateField} AS DATE) AS pd,
         COALESCE(
-          NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''),
-          NULLIF(TRIM(CAST(policy_no AS VARCHAR)), '')
-        ) AS dedup_key,
-        CASE WHEN premium > 0 THEN premium / 10000.0 ELSE 0 END AS premium_wan,
+          NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''),
+          NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')
+        ) AS policy_key,
+        NULLIF(TRIM(CAST(endorsement_no AS VARCHAR)), '') IS NOT NULL AS is_endorsement,
+        COALESCE(premium, 0) / 10000.0 AS premium_wan,
         COALESCE(TRIM(CAST(customer_category AS VARCHAR)), '') AS customer_category,
         COALESCE(NULLIF(TRIM(CAST(tonnage_segment AS VARCHAR)), ''), '未知') AS norm_tonnage,
         ${segmentCaseExpr()} AS segment_tag
@@ -54,7 +55,7 @@ export function generatePerformanceTrendQuery(
       line_label,
       line_order,
       ROUND(SUM(premium_wan), 4) AS premium,
-      COUNT(DISTINCT dedup_key) AS auto_count
+      COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count
     FROM line_source
     GROUP BY time_period, line_key, line_label, line_order
     ORDER BY time_period, line_order

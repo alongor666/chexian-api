@@ -493,35 +493,35 @@ export function supportsAnnualPlanByDimension(dimension: PerformanceDimension | 
 export function getTrendLineSourceSql(segmentTag: PerformanceSegmentTag): string {
   if (segmentTag === 'all') {
     return `
-      SELECT 'overall' AS line_key, '整体' AS line_label, 1 AS line_order, pd, dedup_key, premium_wan FROM selected_rows
+      SELECT 'overall' AS line_key, '整体' AS line_label, 1 AS line_order, pd, policy_key, is_endorsement, premium_wan FROM selected_rows
       UNION ALL
-      SELECT 'non_business_passenger', '非营客', 2, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'non_business_passenger'
+      SELECT 'non_business_passenger', '非营客', 2, pd, policy_key, is_endorsement, premium_wan FROM selected_rows WHERE segment_tag = 'non_business_passenger'
       UNION ALL
-      SELECT 'business_passenger', '营客', 3, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'business_passenger'
+      SELECT 'business_passenger', '营客', 3, pd, policy_key, is_endorsement, premium_wan FROM selected_rows WHERE segment_tag = 'business_passenger'
       UNION ALL
-      SELECT 'business_truck', '营货', 4, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'business_truck'
+      SELECT 'business_truck', '营货', 4, pd, policy_key, is_endorsement, premium_wan FROM selected_rows WHERE segment_tag = 'business_truck'
       UNION ALL
-      SELECT 'non_business_truck', '非营货', 5, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'non_business_truck'
+      SELECT 'non_business_truck', '非营货', 5, pd, policy_key, is_endorsement, premium_wan FROM selected_rows WHERE segment_tag = 'non_business_truck'
       UNION ALL
-      SELECT 'motorcycle', '摩托车', 6, pd, dedup_key, premium_wan FROM selected_rows WHERE segment_tag = 'motorcycle'
+      SELECT 'motorcycle', '摩托车', 6, pd, policy_key, is_endorsement, premium_wan FROM selected_rows WHERE segment_tag = 'motorcycle'
     `;
   }
 
   if (segmentTag === 'non_business_passenger') {
     return `
-      SELECT 'overall' AS line_key, '非营客整体' AS line_label, 1 AS line_order, pd, dedup_key, premium_wan FROM selected_rows
+      SELECT 'overall' AS line_key, '非营客整体' AS line_label, 1 AS line_order, pd, policy_key, is_endorsement, premium_wan FROM selected_rows
       UNION ALL
-      SELECT 'non_business_personal', '非营业个人客车', 2, pd, dedup_key, premium_wan FROM selected_rows WHERE customer_category = '非营业个人客车'
+      SELECT 'non_business_personal', '非营业个人客车', 2, pd, policy_key, is_endorsement, premium_wan FROM selected_rows WHERE customer_category = '非营业个人客车'
       UNION ALL
-      SELECT 'non_business_enterprise', '非营业企业客车', 3, pd, dedup_key, premium_wan FROM selected_rows WHERE customer_category = '非营业企业客车'
+      SELECT 'non_business_enterprise', '非营业企业客车', 3, pd, policy_key, is_endorsement, premium_wan FROM selected_rows WHERE customer_category = '非营业企业客车'
       UNION ALL
-      SELECT 'non_business_agency', '非营业机关客车', 4, pd, dedup_key, premium_wan FROM selected_rows WHERE customer_category = '非营业机关客车'
+      SELECT 'non_business_agency', '非营业机关客车', 4, pd, policy_key, is_endorsement, premium_wan FROM selected_rows WHERE customer_category = '非营业机关客车'
     `;
   }
 
   if (segmentTag === 'business_truck' || segmentTag === 'non_business_truck' || segmentTag === 'truck') {
     return `
-      SELECT 'overall' AS line_key, '整体' AS line_label, 1 AS line_order, pd, dedup_key, premium_wan FROM selected_rows
+      SELECT 'overall' AS line_key, '整体' AS line_label, 1 AS line_order, pd, policy_key, is_endorsement, premium_wan FROM selected_rows
       UNION ALL
       SELECT
         'tonnage_' || REPLACE(REPLACE(norm_tonnage, '-', '_'), '吨', '') AS line_key,
@@ -535,13 +535,14 @@ export function getTrendLineSourceSql(segmentTag: PerformanceSegmentTag): string
           ELSE 99
         END AS line_order,
         pd,
-        dedup_key,
+        policy_key,
+        is_endorsement,
         premium_wan
       FROM selected_rows
     `;
   }
 
   return `
-    SELECT 'overall' AS line_key, '整体' AS line_label, 1 AS line_order, pd, dedup_key, premium_wan FROM selected_rows
+    SELECT 'overall' AS line_key, '整体' AS line_label, 1 AS line_order, pd, policy_key, is_endorsement, premium_wan FROM selected_rows
   `;
 }

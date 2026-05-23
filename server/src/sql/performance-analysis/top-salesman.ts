@@ -46,10 +46,11 @@ export function generatePerformanceTopSalesmanQuery(
         CAST(p.${dateField} AS DATE) AS pd,
         p.salesman_name,
         COALESCE(
-          NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), ''),
-          NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), '')
-        ) AS dedup_key,
-        CASE WHEN p.premium > 0 THEN p.premium / 10000.0 ELSE 0 END AS premium_wan,
+          NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), ''),
+          NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), '')
+        ) AS policy_key,
+        NULLIF(TRIM(CAST(p.endorsement_no AS VARCHAR)), '') IS NOT NULL AS is_endorsement,
+        COALESCE(p.premium, 0) / 10000.0 AS premium_wan,
         CASE WHEN ${truthyExpr('p.is_nev')} THEN true ELSE false END AS is_nev,
         CASE WHEN ${truthyExpr('p.is_renewal')} THEN true ELSE false END AS is_renewal,
         CASE WHEN ${truthyExpr('p.is_new_car')} THEN true ELSE false END AS is_new_car,
@@ -85,13 +86,12 @@ export function generatePerformanceTopSalesmanQuery(
       SELECT
         dimension_name,
         SUM(premium_wan) AS premium,
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(*) AS row_count,
-        SUM(CASE WHEN is_nev THEN 1 ELSE 0 END) AS nev_count,
-        SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS renewal_count,
-        SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) THEN 1 ELSE 0 END) AS transfer_business_count,
-        SUM(CASE WHEN (NOT is_renewal) AND is_new_car THEN 1 ELSE 0 END) AS new_car_count,
-        SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN 1 ELSE 0 END) AS transfer_count,
+        COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count,
+        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_nev THEN policy_key END) AS nev_count,
+        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_renewal THEN policy_key END) AS renewal_count,
+        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) THEN policy_key END) AS transfer_business_count,
+        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_renewal) AND is_new_car THEN policy_key END) AS new_car_count,
+        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN policy_key END) AS transfer_count,
         SUM(
           CASE
             WHEN COALESCE(st.salesman_premium_wan, 0) > 0
@@ -127,11 +127,11 @@ export function generatePerformanceTopSalesmanQuery(
           WHEN COALESCE(p.prev_premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.prev_premium) * 100.0 / p.prev_premium, 2)
         END AS growth_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.row_count, 2) END AS nev_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.row_count, 2) END AS renewal_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.row_count, 2) END AS transfer_business_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.row_count, 2) END AS new_car_rate,
-        CASE WHEN c.row_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.row_count, 2) END AS transfer_rate
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.auto_count, 2) END AS nev_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_business_count * 100.0 / c.auto_count, 2) END AS transfer_business_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.auto_count, 2) END AS new_car_rate,
+        CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.auto_count, 2) END AS transfer_rate
       FROM current_group c
       LEFT JOIN prev_group p ON c.dimension_name = p.dimension_name
       CROSS JOIN period_progress pp
