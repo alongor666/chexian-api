@@ -101,7 +101,7 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('line_key');
     expect(sql).toContain('line_label');
     expect(sql).toContain('ROUND(SUM(premium_wan), 4) AS premium');
-    expect(sql).toContain('COUNT(DISTINCT dedup_key) AS auto_count');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count');
   });
 
   it('drilldown SQL should contain required analysis fields', () => {
@@ -123,8 +123,8 @@ describe('performance analysis SQL', () => {
   it('drilldown SQL should treat 续保直接等于是否续保且过户为过户转保', () => {
     const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'week', 'mom', [], 'org_level_3');
 
-    expect(sql).toContain('SUM(CASE WHEN is_renewal THEN 1 ELSE 0 END) AS renewal_count');
-    expect(sql).toContain('SUM(CASE WHEN (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN 1 ELSE 0 END) AS transfer_count');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_renewal THEN policy_key END) AS renewal_count');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN policy_key END) AS transfer_count');
   });
 
   it('drilldown SQL should render is_renewal grouping as 续保/非续保', () => {
@@ -235,11 +235,13 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('NULL AS achievement_rate');
   });
 
-  it('heatmap SQL should use 承保口径并排除零负保费记录', () => {
+  it('heatmap SQL should use signed premium net amount and keep endorsement rows', () => {
     const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'business_nature');
 
-    expect(sql).toContain('p.premium / 10000.0 AS premium_wan');
-    expect(sql).toContain('AND COALESCE(p.premium, 0) > 0');
+    expect(sql).toContain('COALESCE(p.premium, 0) / 10000.0 AS premium_wan');
+    expect(sql).toContain('AS is_endorsement');
+    expect(sql).toContain('COUNT(DISTINCT CASE WHEN NOT wr.is_endorsement THEN wr.policy_key END) AS policy_count');
+    expect(sql).not.toContain('AND COALESCE(p.premium, 0) > 0');
   });
 
   it('heatmap business_nature should generate 4-category dimension: 新保/续保/过户转保/非过户转保', () => {
