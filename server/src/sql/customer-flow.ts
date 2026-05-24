@@ -1,8 +1,8 @@
 /**
  * 客户来源去向分析 SQL 生成器
  *
- * 数据源：CustomerFlow VIEW（7列：保单号/保险起期/车架号/整备质量/续航里程分组/上年承保主体/次年保险公司）
- * 核心分析：转入分析（从哪家转入华安）+ 流失分析（流向哪家竞争公司）
+ * 数据源：CustomerFlow VIEW（4列：保单号/保险起期/车架号/次年保险公司）
+ * 核心分析：按车架号识别续保客户流失到哪家公司
  */
 
 import { escapeSqlValue } from '../utils/security.js';
@@ -12,42 +12,47 @@ export interface CustomerFlowFilters {
   direction?: 'inflow' | 'outflow';
 }
 
-/** 转入分析：上年承保主体 → 华安 */
+/** 转入分析已废弃：当前源仅保留次年保险公司。保留空结果以兼容旧端点。 */
 export function generateInflowQuery(filters: CustomerFlowFilters): string {
-  const yearClause = filters.year
-    ? `AND YEAR(CAST(insurance_start_date AS DATE)) = ${Number(filters.year)}`
-    : '';
+  void filters;
   return `
     SELECT
-      previous_insurer AS insurer,
-      COUNT(*) AS policy_count,
-      ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS share_pct
-    FROM CustomerFlow
-    WHERE previous_insurer IS NOT NULL
-      AND TRIM(previous_insurer) != ''
-      AND previous_insurer NOT LIKE '%华安%'
-      ${yearClause}
-    GROUP BY previous_insurer
-    ORDER BY policy_count DESC
-    LIMIT 20
+      CAST(NULL AS VARCHAR) AS insurer,
+      CAST(0 AS BIGINT) AS policy_count,
+      CAST(0 AS DOUBLE) AS share_pct
+    WHERE FALSE
   `.trim();
 }
 
-/** 流失分析：华安 → 次年保险公司 */
+/** 流失分析：按车架号去重，统计续保客户流向的次年保险公司 */
 export function generateOutflowQuery(filters: CustomerFlowFilters): string {
   const yearClause = filters.year
     ? `AND YEAR(CAST(insurance_start_date AS DATE)) = ${Number(filters.year)}`
     : '';
   return `
+    WITH vin_latest AS (
+      SELECT vehicle_frame_no, NULLIF(TRIM(next_insurer), '') AS next_insurer
+      FROM (
+        SELECT
+          TRIM(vehicle_frame_no) AS vehicle_frame_no,
+          next_insurer,
+          ROW_NUMBER() OVER (
+            PARTITION BY TRIM(vehicle_frame_no)
+            ORDER BY CAST(insurance_start_date AS DATE) DESC NULLS LAST, policy_no DESC NULLS LAST
+          ) AS rn
+        FROM CustomerFlow
+        WHERE vehicle_frame_no IS NOT NULL
+          AND TRIM(vehicle_frame_no) != ''
+          ${yearClause}
+      ) WHERE rn = 1
+    )
     SELECT
       next_insurer AS insurer,
       COUNT(*) AS policy_count,
-      ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS share_pct
-    FROM CustomerFlow
+      ROUND(COUNT(*) * 100.0 / NULLIF(SUM(COUNT(*)) OVER (), 0), 1) AS share_pct
+    FROM vin_latest
     WHERE next_insurer IS NOT NULL
-      AND TRIM(next_insurer) != ''
       AND next_insurer NOT LIKE '%华安%'
-      ${yearClause}
     GROUP BY next_insurer
     ORDER BY policy_count DESC
     LIMIT 20
@@ -60,14 +65,30 @@ export function generateFlowTrendQuery(filters: CustomerFlowFilters): string {
     ? `AND YEAR(CAST(insurance_start_date AS DATE)) = ${Number(filters.year)}`
     : '';
   return `
+    WITH vin_latest AS (
+      SELECT vehicle_frame_no, insurance_start_date, NULLIF(TRIM(next_insurer), '') AS next_insurer
+      FROM (
+        SELECT
+          TRIM(vehicle_frame_no) AS vehicle_frame_no,
+          insurance_start_date,
+          next_insurer,
+          ROW_NUMBER() OVER (
+            PARTITION BY TRIM(vehicle_frame_no)
+            ORDER BY CAST(insurance_start_date AS DATE) DESC NULLS LAST, policy_no DESC NULLS LAST
+          ) AS rn
+        FROM CustomerFlow
+        WHERE insurance_start_date IS NOT NULL
+          AND vehicle_frame_no IS NOT NULL
+          AND TRIM(vehicle_frame_no) != ''
+          ${yearClause}
+      ) WHERE rn = 1
+    )
     SELECT
       STRFTIME(CAST(insurance_start_date AS DATE), '%Y-%m') AS month,
       COUNT(*) AS total_policies,
-      COUNT(CASE WHEN previous_insurer IS NOT NULL AND TRIM(previous_insurer) != '' AND previous_insurer NOT LIKE '%华安%' THEN 1 END) AS inflow_count,
-      COUNT(CASE WHEN next_insurer IS NOT NULL AND TRIM(next_insurer) != '' AND next_insurer NOT LIKE '%华安%' THEN 1 END) AS outflow_count
-    FROM CustomerFlow
-    WHERE insurance_start_date IS NOT NULL
-      ${yearClause}
+      CAST(0 AS BIGINT) AS inflow_count,
+      COUNT(CASE WHEN next_insurer IS NOT NULL AND next_insurer NOT LIKE '%华安%' THEN 1 END) AS outflow_count
+    FROM vin_latest
     GROUP BY month
     ORDER BY month
   `.trim();
@@ -79,15 +100,30 @@ export function generateFlowSummaryQuery(filters: CustomerFlowFilters): string {
     ? `AND YEAR(CAST(insurance_start_date AS DATE)) = ${Number(filters.year)}`
     : '';
   return `
+    WITH vin_latest AS (
+      SELECT vehicle_frame_no, NULLIF(TRIM(next_insurer), '') AS next_insurer
+      FROM (
+        SELECT
+          TRIM(vehicle_frame_no) AS vehicle_frame_no,
+          next_insurer,
+          ROW_NUMBER() OVER (
+            PARTITION BY TRIM(vehicle_frame_no)
+            ORDER BY CAST(insurance_start_date AS DATE) DESC NULLS LAST, policy_no DESC NULLS LAST
+          ) AS rn
+        FROM CustomerFlow
+        WHERE vehicle_frame_no IS NOT NULL
+          AND TRIM(vehicle_frame_no) != ''
+          ${yearClause}
+      ) WHERE rn = 1
+    )
     SELECT
       COUNT(*) AS total_policies,
-      COUNT(CASE WHEN previous_insurer IS NOT NULL AND TRIM(previous_insurer) != '' THEN 1 END) AS has_previous,
-      COUNT(CASE WHEN previous_insurer IS NOT NULL AND TRIM(previous_insurer) != '' AND previous_insurer NOT LIKE '%华安%' THEN 1 END) AS inflow_count,
-      COUNT(CASE WHEN next_insurer IS NOT NULL AND TRIM(next_insurer) != '' THEN 1 END) AS has_next,
-      COUNT(CASE WHEN next_insurer IS NOT NULL AND TRIM(next_insurer) != '' AND next_insurer NOT LIKE '%华安%' THEN 1 END) AS outflow_count,
-      COUNT(CASE WHEN previous_insurer LIKE '%华安%' THEN 1 END) AS self_renewal_count
-    FROM CustomerFlow
-    WHERE 1=1 ${yearClause}
+      CAST(0 AS BIGINT) AS has_previous,
+      CAST(0 AS BIGINT) AS inflow_count,
+      COUNT(CASE WHEN next_insurer IS NOT NULL THEN 1 END) AS has_next,
+      COUNT(CASE WHEN next_insurer IS NOT NULL AND next_insurer NOT LIKE '%华安%' THEN 1 END) AS outflow_count,
+      CAST(0 AS BIGINT) AS self_renewal_count
+    FROM vin_latest
   `.trim();
 }
 

@@ -35,10 +35,6 @@ export const CustomerFlowPage: React.FC = () => {
     queryKey: ['customer-flow-summary', params],
     queryFn: () => apiClient.getCustomerFlowSummary(params) as Promise<FlowSummary>,
   });
-  const { data: inflow } = useQuery({
-    queryKey: ['customer-flow-inflow', params],
-    queryFn: () => apiClient.getCustomerFlowInflow(params) as Promise<FlowRow[]>,
-  });
   const { data: outflow } = useQuery({
     queryKey: ['customer-flow-outflow', params],
     queryFn: () => apiClient.getCustomerFlowOutflow(params) as Promise<FlowRow[]>,
@@ -52,12 +48,12 @@ export const CustomerFlowPage: React.FC = () => {
     queryFn: () => apiClient.getCustomerFlowMetadata() as Promise<{ years: number[]; total_rows: number }>,
   });
 
-  const renderTable = (_title: string, data: FlowRow[] | undefined, direction: 'inflow' | 'outflow') => (
+  const renderTable = (_title: string, data: FlowRow[] | undefined) => (
     <div className={cardStyles.base}>
       <h3 className={textStyles.titleSmall}>
-        {direction === 'inflow' ? '转入来源 TOP20' : '流失去向 TOP20'}
+        流失去向 TOP20
         <span className={cn(textStyles.caption, 'ml-2')}>
-          {direction === 'inflow' ? '（从哪家公司转入华安）' : '（流向哪家竞争公司）'}
+          （按车架号去重，流向哪家竞争公司）
         </span>
       </h3>
       <div className={tableStyles.container}>
@@ -66,7 +62,7 @@ export const CustomerFlowPage: React.FC = () => {
             <tr>
               <th className={cn(tableStyles.headerCell, 'w-8')}>#</th>
               <th className={tableStyles.headerCell}>保险公司</th>
-              <th className={cn(tableStyles.headerCell, 'text-right')}>保单数</th>
+              <th className={cn(tableStyles.headerCell, 'text-right')}>车辆数</th>
               <th className={cn(tableStyles.headerCell, 'text-right')}>占比(%)</th>
             </tr>
           </thead>
@@ -108,10 +104,10 @@ export const CustomerFlowPage: React.FC = () => {
       {/* KPI 卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: '总保单数', value: formatCount(summary?.total_policies ?? 0) },
-          { label: '转入（非华安→华安）', value: formatCount(summary?.inflow_count ?? 0), color: colorClasses.text.success },
-          { label: '流失（华安→竞品）', value: formatCount(summary?.outflow_count ?? 0), color: colorClasses.text.danger },
-          { label: '自续保（华安→华安）', value: formatCount(summary?.self_renewal_count ?? 0) },
+          { label: '车辆数', value: formatCount(summary?.total_policies ?? 0) },
+          { label: '已填流失去向', value: formatCount(summary?.has_next ?? 0) },
+          { label: '流失到竞品', value: formatCount(summary?.outflow_count ?? 0), color: colorClasses.text.danger },
+          { label: '未填流失去向', value: formatCount((summary?.total_policies ?? 0) - (summary?.has_next ?? 0)) },
         ].map(kpi => (
           <div key={kpi.label} className={cardStyles.compact}>
             <div className={textStyles.caption}>{kpi.label}</div>
@@ -120,38 +116,27 @@ export const CustomerFlowPage: React.FC = () => {
         ))}
       </div>
 
-      {/* 转入 + 流失并列 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {renderTable('转入来源', inflow, 'inflow')}
-        {renderTable('流失去向', outflow, 'outflow')}
-      </div>
+      {renderTable('流失去向', outflow)}
 
       {/* 月度趋势 */}
       <div className={cardStyles.base}>
-        <h3 className={textStyles.titleSmall}>月度转入/流失趋势</h3>
+        <h3 className={textStyles.titleSmall}>月度流失趋势</h3>
         <div className={tableStyles.container}>
           <table className="w-full">
             <thead className={tableStyles.header}>
               <tr>
                 <th className={tableStyles.headerCell}>月份</th>
-                <th className={cn(tableStyles.headerCell, 'text-right')}>总保单</th>
-                <th className={cn(tableStyles.headerCell, 'text-right')}>转入</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>车辆数</th>
                 <th className={cn(tableStyles.headerCell, 'text-right')}>流失</th>
-                <th className={cn(tableStyles.headerCell, 'text-right')}>净流入</th>
               </tr>
             </thead>
             <tbody>
               {(trend ?? []).map(row => {
-                const net = row.inflow_count - row.outflow_count;
                 return (
                   <tr key={row.month} className="border-b border-neutral-100">
                     <td className={tableStyles.cell}>{row.month}</td>
                     <td className={tableStyles.cellNumeric}>{formatCount(row.total_policies)}</td>
-                    <td className={cn(tableStyles.cellNumeric, colorClasses.text.success)}>{formatCount(row.inflow_count)}</td>
                     <td className={cn(tableStyles.cellNumeric, colorClasses.text.danger)}>{formatCount(row.outflow_count)}</td>
-                    <td className={cn(tableStyles.cellNumeric, net >= 0 ? colorClasses.text.success : colorClasses.text.danger)}>
-                      {net >= 0 ? '+' : ''}{formatCount(net)}
-                    </td>
                   </tr>
                 );
               })}

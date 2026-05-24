@@ -2,7 +2,7 @@
 """
 客户来源去向 Excel → customer_flow/latest.parquet
 
-客户转保/流失分析数据：上年承保主体 → 华安 → 次年保险公司。
+续保客户流失去向数据：按车架号匹配次年保险公司。
 
 用法：
   python3 convert_customer_flow.py -i 08_客户来源去向.xlsx -o warehouse/fact/customer_flow/latest.parquet
@@ -34,14 +34,11 @@ class CustomerFlowConverter(BaseConverter):
             "保单号": "policy_no",
             "保险起期": "insurance_start_date",
             "车架号": "vehicle_frame_no",
-            "整备质量": "curb_weight",
-            "续航里程分组": "range_group",
-            "上年承保主体": "previous_insurer",
             "次年保险公司": "next_insurer",
         }
 
     def get_required_columns(self) -> list:
-        return ["保单号"]
+        return ["保单号", "保险起期", "车架号", "次年保险公司"]
 
     def get_str_force_cols(self) -> dict:
         return {"保单号": str, "车架号": str}
@@ -62,10 +59,7 @@ class CustomerFlowConverter(BaseConverter):
                 f"   保险起期: {df['insurance_start_date'].min()} ~"
                 f" {df['insurance_start_date'].max()} ({valid:,} 有值)"
             )
-        if "curb_weight" in df.columns:
-            df["curb_weight"] = pd.to_numeric(df["curb_weight"], errors="coerce")
-        for col in ("policy_no", "vehicle_frame_no", "previous_insurer",
-                    "next_insurer", "range_group"):
+        for col in ("policy_no", "vehicle_frame_no", "next_insurer"):
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip().replace(PLACEHOLDER_STRS, None)
         return df
@@ -86,10 +80,6 @@ class CustomerFlowConverter(BaseConverter):
                 print(f"      预期 0；如出现请排查 BaseConverter 去重逻辑")
             else:
                 print(f"   ✓ 复合主键唯一性: 通过 (policy_no + start_date)")
-        if "previous_insurer" in df.columns:
-            n = int(df["previous_insurer"].notna().sum())
-            print(f"   有上年承保主体: {n:,} ({safe_pct(n, len(df)):.1f}%)")
-            print(f"   上年承保主体TOP10: {df['previous_insurer'].value_counts().head(10).to_dict()}")
         if "next_insurer" in df.columns:
             n = int(df["next_insurer"].notna().sum())
             print(f"   有次年保险公司: {n:,} ({safe_pct(n, len(df)):.1f}%)")
@@ -190,7 +180,7 @@ class CustomerFlowConverter(BaseConverter):
 
         try:
             df_old = pd.read_parquet(
-                old_path, columns=["policy_no", "previous_insurer", "next_insurer"]
+                old_path, columns=["policy_no", "next_insurer"]
             )
         except Exception as e:
             print(f"\n   ⚠ 读取旧 parquet 失败，跳过 diff: {e}")
@@ -202,12 +192,12 @@ class CustomerFlowConverter(BaseConverter):
         removed_keys = old_set - new_set
         common_keys = old_set & new_set
 
-        # 状态变更：上年承保主体或次年保险公司发生变化
+        # 状态变更：次年保险公司发生变化
         changed_count = 0
         flow_changes = []
         if common_keys:
-            old_lookup = df_old.set_index("policy_no")[["previous_insurer", "next_insurer"]]
-            new_lookup = df_new.set_index("policy_no")[["previous_insurer", "next_insurer"]]
+            old_lookup = df_old.set_index("policy_no")[["next_insurer"]]
+            new_lookup = df_new.set_index("policy_no")[["next_insurer"]]
             common_old = old_lookup.loc[old_lookup.index.isin(common_keys)]
             common_new = new_lookup.loc[new_lookup.index.isin(common_keys)]
             common_old, common_new = common_old.align(common_new, join="inner")
@@ -256,7 +246,7 @@ class CustomerFlowConverter(BaseConverter):
         print(f"   {'-'*12} {'-'*8}  {'-'*30}")
         rows = [
             ("新增保单", len(added_keys), "新签保单首次进入流转"),
-            ("状态变更", changed_count, "上年承保主体或次年保险公司有变化"),
+            ("状态变更", changed_count, "次年保险公司有变化"),
             ("消失保单", len(removed_keys), "旧数据有、新数据无"),
         ]
         for label, count, desc in rows:

@@ -210,6 +210,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
         MAX(CAST(insurance_end_date AS DATE)) AS insurance_end_date,
         ANY_VALUE(salesman_name) AS salesman_name,
         ANY_VALUE(plate_no) AS plate_no,
+        ANY_VALUE(is_nev) AS is_nev,
         ANY_VALUE(customer_category) AS customer_category,
         ANY_VALUE(coverage_combination) AS coverage_combination,
         ANY_VALUE(commercial_pricing_factor) AS commercial_pricing_factor
@@ -243,6 +244,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
         SELECT vehicle_frame_no, quote_time,
                commercial_pricing_factor AS quote_pricing_factor,
                final_quote_premium AS quote_premium,
+               insurance_grade AS insurance_grade,
                team AS quote_team,
                ROW_NUMBER() OVER (PARTITION BY vehicle_frame_no ORDER BY quote_time DESC NULLS LAST) rn
         FROM read_parquet('{DEFAULT_QUOTES_PATH}')
@@ -280,8 +282,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
       ) WHERE rn = 1
     ),
     flow AS (
-      -- 客户来源去向：next_insurer 即"流失公司"。当前 ETL 仅回填 previous_insurer，next_insurer
-      -- 多为空；future ETL 补齐后无需改代码自动同步。按 vehicle_frame_no 聚合，优先取非空值。
+      -- 客户来源去向：next_insurer 即"流失公司"。当前源按 vehicle_frame_no 匹配次年保险公司。
       SELECT vehicle_frame_no,
              ANY_VALUE(NULLIF(NULLIF(next_insurer, ''), 'NaN')) FILTER (
                WHERE next_insurer IS NOT NULL AND next_insurer != ''
@@ -299,6 +300,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
       COALESCE(s.team, '未知团队') AS team,
       CASE WHEN s.full_name IS NULL THEN true ELSE false END AS salesman_unmatched,
       COALESCE(b.plate_no, '') AS plate_no,
+      CASE WHEN b.is_nev THEN '新能源' ELSE '燃油' END AS energy_type,
       b.vehicle_frame_no AS vehicle_frame_no,
       COALESCE(b.salesman_name, '') AS salesman_name,
       COALESCE(b.customer_category, '') AS customer_category,
@@ -306,6 +308,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
       q.quote_pricing_factor AS quote_pricing_factor,
       q.quote_premium AS quote_premium,
       q.quote_time AS quote_time,
+      q.insurance_grade AS insurance_grade,
       qe.earliest_quote_date AS earliest_quote_date,
       r.renewed_policy_no AS renewed_policy_no,
       r.renewed_sign_date AS renewed_sign_date,
@@ -457,6 +460,8 @@ def build_record(row: dict[str, Any], fields: Iterable[FieldDef], unmatched_set:
                 continue
 
         raw = resolve_source(row, fd.source)
+        if fd.skip_when_null and (raw is None or pd.isna(raw) or str(raw).strip() == ""):
+            continue
 
         if fd.type == "epoch_ms_date":
             if raw is None or pd.isna(raw):

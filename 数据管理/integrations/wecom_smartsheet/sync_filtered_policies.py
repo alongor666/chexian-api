@@ -156,6 +156,7 @@ def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
       first_registration_date,
       agent_name,
       policy_no,
+      vehicle_frame_no,
       {pk} AS _primary_key,
       /* 车价分段：运行时派生 */
       CASE
