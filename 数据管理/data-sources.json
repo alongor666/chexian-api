@@ -11,9 +11,9 @@
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-05-18",
-      "data_range": "2021-01-01 ~ 2026-05-16",
-      "row_count": 2568372,
+      "last_updated": "2026-05-24",
+      "data_range": "2021-01-01 ~ 2026-05-22",
+      "row_count": 2576382,
       "field_count": 42,
       "key_fields": [
         "保单号",
@@ -46,9 +46,9 @@
       "etl_script": "pipelines/convert_claims_detail.py",
       "output": "warehouse/fact/claims_detail/claims_*.parquet",
       "update_cadence": "daily_cdc_partition",
-      "last_updated": "2026-05-18",
-      "data_range": "2019-01-01 ~ 2026-05-16",
-      "row_count": 284196,
+      "last_updated": "2026-05-24",
+      "data_range": "2021-01-01 ~ 2026-05-22",
+      "row_count": 285148,
       "field_count": 41,
       "key_fields": [
         "claim_no",
@@ -91,9 +91,9 @@
       },
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
-      "last_updated": "2026-05-21",
-      "data_range": "2025-12-02 ~ 2026-05-20",
-      "row_count": 766613,
+      "last_updated": "2026-05-24",
+      "data_range": "2025-12-02 ~ 2026-05-21",
+      "row_count": 775615,
       "field_count": 32,
       "key_fields": [
         "quote_time",
@@ -187,7 +187,7 @@
       },
       "output": "warehouse/dim/brand/latest.parquet",
       "update_cadence": "with_premium",
-      "last_updated": "2026-05-18",
+      "last_updated": "2026-05-24",
       "row_count": 371359,
       "field_count": 15,
       "key_fields": [
@@ -281,9 +281,10 @@
       ],
       "frontend_page": "specialty (tab=cross-sell)",
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重",
-      "last_updated": "2026-05-18",
-      "row_count": 413634,
-      "field_count": 9
+      "last_updated": "2026-05-24",
+      "row_count": 415851,
+      "field_count": 9,
+      "data_range": "2023-01-01 ~ 2026-05-22"
     },
     {
       "id": "quotes_v2",
@@ -346,9 +347,10 @@
       ],
       "frontend_page": "repair",
       "notes": "维修厂合作数据，12列+派生 shop_code（前8位编码），含核损金额/换件折扣率/合作状态。2026-04-18 重设计：引入 coop_tier 三态分类 + shop_code JOIN ClaimsDetail",
-      "last_updated": "2026-05-21",
-      "row_count": 6540,
-      "field_count": 13
+      "last_updated": "2026-05-24",
+      "row_count": 6549,
+      "field_count": 13,
+      "data_range": "2025-01-01 ~ 2026-05-21"
     },
     {
       "id": "customer_flow",
@@ -358,29 +360,21 @@
       "etl_entry": "node 数据管理/daily.mjs customer_flow",
       "etl_script": "pipelines/convert_customer_flow.py",
       "trigger": {
-        "input_strategy": "multi_file_merge",
+        "input_strategy": "single",
         "input_globs": [
-          "08_客户来源去向*.xlsx",
           "????????_08_客户来源去向*.xlsx"
         ],
         "archive_prefix": "customer_flow_latest",
-        "merge_with_history": true,
-        "merge_dedup_key": "policy_no, insurance_start_date",
-        "merge_order_by": "insurance_start_date DESC NULLS LAST, (next_insurer IS NULL) ASC, (previous_insurer IS NULL) ASC",
-        "_dedup_rationale": "复合主键 (policy_no, insurance_start_date) — 源 Excel 单文件 policy_no 重复率 8~15%，加起期后唯一；排序优先保留 next/prev 非空那条，防御未来业务侧补录漂移",
+        "merge_with_history": false,
+        "_dedup_rationale": "源文件是 2025-01-01 至指定日期的全量快照；每天只取最新快照原子覆盖，文件内仍按 (policy_no, insurance_start_date) 去重。",
         "file_roles": {
-          "08_客户来源去向_20250101_20260419.xlsx": "历史底库 — 唯一覆盖 2025-01-01~2025-01-26 共 26 天",
-          "08_客户来源去向_每周日更新.xlsx": "滚动底库 — 2025-01-27~~T-7，每周日全量替换",
-          "08_客户来源去向_20260426.xlsx": "单日补齐 — 2026-04-26 唯一来源",
-          "08_客户来源去向_20260430_20260504.xlsx": "跨窗口补齐 — 五一假期 5 天唯一来源",
-          "YYYYMMDD_08_客户来源去向.xlsx": "日增量 — 当日单天数据"
+          "YYYYMMDD_08_客户来源去向.xlsx": "全量快照 — 覆盖 2025-01-01 至 YYYY-MM-DD"
         },
         "validation": {
           "date_column": "insurance_start_date",
           "min_rows": 900000,
           "min_date": "2025-01-01",
           "require_non_null": {
-            "previous_insurer": 1,
             "next_insurer": 1
           }
         }
@@ -389,22 +383,21 @@
       "update_cadence": "with_source_xlsx",
       "key_fields": [
         "policy_no",
-        "previous_insurer",
         "next_insurer",
         "insurance_start_date"
       ],
       "duckdb_relation": "CustomerFlow (VIEW)",
       "api_routes": [
         "/api/query/customer-flow/summary",
-        "/api/query/customer-flow/inflow",
         "/api/query/customer-flow/outflow",
         "/api/query/customer-flow/trend"
       ],
       "frontend_page": "customer-flow",
-      "notes": "客户转保/流失分析；按 (policy_no, insurance_start_date) 复合主键去重；next_insurer 业务侧补录滞后 1-3 月，整体非空率约 3%。详见 docs/data-sources/customer_flow.md",
-      "last_updated": "2026-05-18",
-      "row_count": 1044216,
-      "field_count": 7
+      "notes": "续保客户流失去向分析；源字段已缩减为保单号/保险起期/车架号/次年保险公司 4 列；按 (policy_no, insurance_start_date) 复合主键去重，消费侧按 vehicle_frame_no 匹配 next_insurer。",
+      "last_updated": "2026-05-24",
+      "row_count": 1054779,
+      "field_count": 4,
+      "data_range": "2025-01-01 ~ 2026-05-22"
     },
     {
       "id": "renewal_tracker",
@@ -440,9 +433,10 @@
       ],
       "frontend_page": "renewal-tracker",
       "notes": "派生域：2025 起保 + 2026 到期商业险宇宙。dual-key 续保匹配 (source_policy_no + VIN)。报价窗口 2025-12-03 起。从 renewal-tracker 子项目迁移（2026-04-19，替代 2026-04-18 下线的 renewal 模块）",
-      "last_updated": "2026-05-21",
-      "row_count": 127869,
-      "field_count": 23
+      "last_updated": "2026-05-24",
+      "row_count": 127886,
+      "field_count": 23,
+      "data_range": "2026-01-01 ~ 2026-12-31"
     }
   ]
 }

@@ -28,30 +28,27 @@ function readSource(relativePath: string): string {
 const serverRequire = createRequire(path.resolve(process.cwd(), 'server/package.json'));
 
 describe('agent customer flow diagnosis workflow', () => {
-  it('diagnoses inflow, outflow, trend direction, and data readiness', () => {
+  it('diagnoses outflow-only customer flow and marks inflow unavailable', () => {
     const diagnosis = diagnoseCustomerFlowRows({
       filters: { year: 2026 },
       limit: 2,
       summaryRow: {
         total_policies: 1000,
-        has_previous: 800,
-        inflow_count: 200,
+        has_previous: null,
+        inflow_count: null,
         has_next: 700,
         outflow_count: 250,
-        self_renewal_count: 500,
+        self_renewal_count: null,
       },
-      inflowRows: [
-        { insurer: 'A保险', policy_count: 120, share_pct: 60 },
-        { insurer: 'B保险', policy_count: 80, share_pct: 40 },
-      ],
+      inflowRows: [],
       outflowRows: [
         { insurer: 'X保险', policy_count: 150, share_pct: 60 },
         { insurer: 'Y保险', policy_count: 100, share_pct: 40 },
       ],
       trendRows: [
-        { month: '2026-01', total_policies: 400, inflow_count: 80, outflow_count: 60 },
-        { month: '2026-02', total_policies: 300, inflow_count: 50, outflow_count: 100 },
-        { month: '2026-03', total_policies: 300, inflow_count: 70, outflow_count: 90 },
+        { month: '2026-01', total_policies: 400, inflow_count: null, outflow_count: 60 },
+        { month: '2026-02', total_policies: 300, inflow_count: null, outflow_count: 100 },
+        { month: '2026-03', total_policies: 300, inflow_count: null, outflow_count: 90 },
       ],
       metadataRow: {
         min_date: '2026-01-01',
@@ -65,23 +62,22 @@ describe('agent customer flow diagnosis workflow', () => {
     expect(diagnosis.status).toBe('supported');
     expect(diagnosis.requestedTools).toEqual([
       'customer_flow.summary',
-      'customer_flow.inflow',
       'customer_flow.outflow',
       'customer_flow.trend',
       'customer_flow.metadata',
     ]);
     expect(diagnosis.summary).toMatchObject({
       totalPolicies: 1000,
-      inflowCount: 200,
+      inflowCount: null,
       outflowCount: 250,
-      netFlow: -50,
-      inflowRate: 20,
+      netFlow: null,
+      inflowRate: null,
       outflowRate: 25,
-      selfRenewalCount: 500,
-      topInflowInsurer: 'A保险',
+      selfRenewalCount: null,
+      topInflowInsurer: null,
       topOutflowInsurer: 'X保险',
       latestMonth: '2026-03',
-      latestNetFlow: -20,
+      latestNetFlow: null,
     });
     expect(diagnosis.dataReadiness).toMatchObject({
       minDate: '2026-01-01',
@@ -90,13 +86,13 @@ describe('agent customer flow diagnosis workflow', () => {
       status: 'ready',
     });
     expect(diagnosis.diagnostics[0]).toMatchObject({
-      kind: 'flow_balance',
+      kind: 'outflow_only',
       severity: 'warning',
-      message: '客户净流出 50 件',
+      message: '转入口径不可用；客户流失到竞品 250 件',
     });
-    expect(diagnosis.inflowDiagnostics[0]).toMatchObject({ insurer: 'A保险', policyCount: 120, sharePct: 60 });
+    expect(diagnosis.inflowDiagnostics).toEqual([]);
     expect(diagnosis.outflowDiagnostics[0]).toMatchObject({ insurer: 'X保险', policyCount: 150, sharePct: 60 });
-    expect(diagnosis.trendDiagnostics.at(-1)).toMatchObject({ month: '2026-03', netFlow: -20, direction: 'net_outflow' });
+    expect(diagnosis.trendDiagnostics.at(-1)).toMatchObject({ month: '2026-03', netFlow: null, direction: 'outflow_only' });
     expect(diagnosis.forbiddenInterpretations).toEqual(
       expect.arrayContaining(['承保利润', '利润率', '财务盈利', '财务亏损'])
     );
@@ -108,11 +104,11 @@ describe('agent customer flow diagnosis workflow', () => {
       limit: 2,
       summaryRow: {
         total_policies: 0,
-        has_previous: 0,
-        inflow_count: 0,
+        has_previous: null,
+        inflow_count: null,
         has_next: 0,
         outflow_count: 0,
-        self_renewal_count: 0,
+        self_renewal_count: null,
       },
       inflowRows: [],
       outflowRows: [],
@@ -126,7 +122,7 @@ describe('agent customer flow diagnosis workflow', () => {
     });
 
     expect(diagnosis.filters).toEqual({ year: 2030 });
-    expect(diagnosis.summary.netFlow).toBe(0);
+    expect(diagnosis.summary.netFlow).toBeNull();
     expect(diagnosis.dataReadiness).toMatchObject({
       years: [2026],
       totalRows: 0,
@@ -142,7 +138,7 @@ describe('agent customer flow diagnosis workflow', () => {
     const frontendRoutesSource = readSource('src/shared/api/routes.ts');
 
     expect(serviceSource).toContain('generateFlowSummaryQuery');
-    expect(serviceSource).toContain('generateInflowQuery');
+    expect(serviceSource).not.toContain('generateInflowQuery');
     expect(serviceSource).toContain('generateOutflowQuery');
     expect(serviceSource).toContain('generateFlowTrendQuery');
     expect(serviceSource).toContain('generateFlowMetadataQuery');
@@ -160,11 +156,10 @@ describe('agent customer flow diagnosis workflow', () => {
     const queryMock = vi
       .fn()
       .mockResolvedValueOnce([
-        { total_policies: 1000, has_previous: 800, inflow_count: 200, has_next: 700, outflow_count: 250, self_renewal_count: 500 },
+        { total_policies: 1000, has_previous: null, inflow_count: null, has_next: 700, outflow_count: 250, self_renewal_count: null },
       ])
-      .mockResolvedValueOnce([{ insurer: 'A保险', policy_count: 120, share_pct: 60 }])
       .mockResolvedValueOnce([{ insurer: 'X保险', policy_count: 150, share_pct: 60 }])
-      .mockResolvedValueOnce([{ month: '2026-03', total_policies: 300, inflow_count: 70, outflow_count: 90 }])
+      .mockResolvedValueOnce([{ month: '2026-03', total_policies: 300, inflow_count: null, outflow_count: 90 }])
       .mockResolvedValueOnce([{ min_date: '2026-01-01', max_date: '2026-03-31', years: [2026], total_rows: 1000 }]);
 
     vi.doMock('../../server/src/services/duckdb.js', () => ({
@@ -225,13 +220,13 @@ describe('agent customer flow diagnosis workflow', () => {
 
       const body = await response.json() as {
         success: boolean;
-        data: { capabilityId: string; summary: { netFlow: number } };
+        data: { capabilityId: string; summary: { netFlow: number | null } };
       };
       expect(response.status).toBe(200);
       expect(body.success).toBe(true);
       expect(body.data.capabilityId).toBe('customer_flow_diagnosis');
-      expect(body.data.summary.netFlow).toBe(-50);
-      expect(queryMock).toHaveBeenCalledTimes(5);
+      expect(body.data.summary.netFlow).toBeNull();
+      expect(queryMock).toHaveBeenCalledTimes(4);
       const sqlCalls = queryMock.mock.calls.map(([sql]) => String(sql));
       expect(sqlCalls.slice(0, 4).join('\n')).toContain('YEAR(CAST(insurance_start_date AS DATE)) = 2026');
     } finally {

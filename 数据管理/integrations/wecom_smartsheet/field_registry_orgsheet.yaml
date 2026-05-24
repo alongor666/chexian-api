@@ -62,11 +62,24 @@ fields:
     type: text
     fallback: ''
 
+  energy_type:
+    field_id: fhyMmb
+    label: 能源类型
+    source: base.energy_type
+    type: select_text
+
   is_quoted:
     field_id: fkjhnX
     label: 报价
     source: derived.is_quoted
     type: text_yes_no
+
+  insurance_grade:
+    field_id: f0KEzD
+    label: 风险等级
+    source: q_latest.insurance_grade
+    type: select_text
+    skip_when_null: true
 
   prior_discount:
     field_id: fqTbVL

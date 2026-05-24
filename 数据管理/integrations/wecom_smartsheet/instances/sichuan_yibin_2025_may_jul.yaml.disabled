@@ -37,7 +37,9 @@ fields_enabled:
   - sales_team
   - customer_category
   - coverage_combination
+  - energy_type
   - is_quoted
+  - insurance_grade
   - prior_discount
   - prior_premium
   - quote_discount

@@ -2,7 +2,6 @@ import {
   generateFlowMetadataQuery,
   generateFlowSummaryQuery,
   generateFlowTrendQuery,
-  generateInflowQuery,
   generateOutflowQuery,
   type CustomerFlowFilters,
 } from '../../sql/customer-flow.js';
@@ -13,7 +12,6 @@ import {
 
 const REQUESTED_TOOLS = [
   'customer_flow.summary',
-  'customer_flow.inflow',
   'customer_flow.outflow',
   'customer_flow.trend',
   'customer_flow.metadata',
@@ -21,6 +19,7 @@ const REQUESTED_TOOLS = [
 
 const WARNINGS = [
   '客户流向诊断基于 CustomerFlow 当前视图，用于经营流向观察。',
+  '当前 customer_flow 源不再提供转入字段；转入口径不可用，不输出净流入/净流出判断。',
   'metadata 仅用于数据新鲜度和 readiness 判断，不作为诊断指标主输出。',
   '客户流向诊断不输出承保利润、利润率、财务盈利或财务亏损。',
 ];
@@ -72,10 +71,10 @@ function toNumberArray(value: unknown): number[] {
   return [];
 }
 
-function severityForFlow(netFlow: number | null, outflowRate: number | null): Severity {
-  if ((netFlow ?? 0) <= -100 || (outflowRate ?? 0) >= 30) return 'critical';
-  if ((netFlow ?? 0) < 0 || (outflowRate ?? 0) >= 20) return 'warning';
-  if ((netFlow ?? 0) > 0 || (outflowRate ?? 0) > 0) return 'observe';
+function severityForOutflow(outflowRate: number | null): Severity {
+  if ((outflowRate ?? 0) >= 30) return 'critical';
+  if ((outflowRate ?? 0) >= 20) return 'warning';
+  if ((outflowRate ?? 0) > 0) return 'observe';
   return 'normal';
 }
 
@@ -91,14 +90,14 @@ function mapTrendRows(rows: RawRow[]) {
   return rows.map((row) => {
     const inflowCount = toNullableNumber(row.inflow_count);
     const outflowCount = toNullableNumber(row.outflow_count);
-    const netFlow = (inflowCount ?? 0) - (outflowCount ?? 0);
+    const netFlow = inflowCount === null || outflowCount === null ? null : inflowCount - outflowCount;
     return {
       month: stringOf(row.month, '未知'),
       totalPolicies: toNullableNumber(row.total_policies),
       inflowCount,
       outflowCount,
       netFlow,
-      direction: netFlow > 0 ? 'net_inflow' as const : netFlow < 0 ? 'net_outflow' as const : 'balanced' as const,
+      direction: netFlow === null ? 'outflow_only' as const : netFlow > 0 ? 'net_inflow' as const : netFlow < 0 ? 'net_outflow' as const : 'balanced' as const,
     };
   });
 }
@@ -122,10 +121,9 @@ export function diagnoseCustomerFlowRows(input: DiagnoseCustomerFlowRowsInput): 
   const totalPolicies = toNullableNumber(input.summaryRow.total_policies);
   const inflowCount = toNullableNumber(input.summaryRow.inflow_count);
   const outflowCount = toNullableNumber(input.summaryRow.outflow_count);
-  const netFlow = (inflowCount ?? 0) - (outflowCount ?? 0);
+  const netFlow = inflowCount === null || outflowCount === null ? null : inflowCount - outflowCount;
   const inflowRate = rate(inflowCount, totalPolicies);
   const outflowRate = rate(outflowCount, totalPolicies);
-  const inflowDiagnostics = mapInsurerRows(input.inflowRows, input.limit);
   const outflowDiagnostics = mapInsurerRows(input.outflowRows, input.limit);
   const trendDiagnostics = mapTrendRows(input.trendRows);
   const latestTrend = trendDiagnostics.at(-1) ?? null;
@@ -146,35 +144,34 @@ export function diagnoseCustomerFlowRows(input: DiagnoseCustomerFlowRowsInput): 
       inflowRate,
       outflowRate,
       selfRenewalCount: toNullableNumber(input.summaryRow.self_renewal_count),
-      topInflowInsurer: inflowDiagnostics[0]?.insurer ?? null,
+      topInflowInsurer: null,
       topOutflowInsurer: outflowDiagnostics[0]?.insurer ?? null,
       latestMonth: latestTrend?.month ?? null,
       latestNetFlow: latestTrend?.netFlow ?? null,
     },
     diagnostics: [
       {
-        kind: 'flow_balance',
-        severity: severityForFlow(netFlow, outflowRate),
-        message: netFlow < 0 ? `客户净流出 ${Math.abs(netFlow)} 件` : netFlow > 0 ? `客户净流入 ${netFlow} 件` : '客户流入流出基本平衡',
-        value: netFlow,
+        kind: 'outflow_only',
+        severity: severityForOutflow(outflowRate),
+        message: `转入口径不可用；客户流失到竞品 ${outflowCount ?? 0} 件`,
+        value: outflowCount,
       },
     ],
-    inflowDiagnostics,
+    inflowDiagnostics: [],
     outflowDiagnostics,
     trendDiagnostics,
     dataReadiness,
     warnings: WARNINGS,
     forbiddenInterpretations: FORBIDDEN_INTERPRETATIONS,
-    drilldownSuggestions: ['customer_flow.summary', 'customer_flow.inflow', 'customer_flow.outflow', 'customer_flow.trend'],
+    drilldownSuggestions: ['customer_flow.summary', 'customer_flow.outflow', 'customer_flow.trend'],
   });
 }
 
 export async function runCustomerFlowDiagnosis(input: RunCustomerFlowDiagnosisInput): Promise<CustomerFlowDiagnosisResult> {
   const { duckdbService } = await import('../../services/duckdb.js');
 
-  const [summaryRows, inflowRows, outflowRows, trendRows, metadataRows] = await Promise.all([
+  const [summaryRows, outflowRows, trendRows, metadataRows] = await Promise.all([
     duckdbService.query<RawRow>(generateFlowSummaryQuery(input.filters)),
-    duckdbService.query<RawRow>(generateInflowQuery(input.filters)),
     duckdbService.query<RawRow>(generateOutflowQuery(input.filters)),
     duckdbService.query<RawRow>(generateFlowTrendQuery(input.filters)),
     duckdbService.query<RawRow>(generateFlowMetadataQuery()),
@@ -184,7 +181,7 @@ export async function runCustomerFlowDiagnosis(input: RunCustomerFlowDiagnosisIn
     filters: input.filters,
     limit: input.limit,
     summaryRow: summaryRows[0] ?? {},
-    inflowRows,
+    inflowRows: [],
     outflowRows,
     trendRows,
     metadataRow: metadataRows[0] ?? {},
