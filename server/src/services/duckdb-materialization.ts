@@ -66,10 +66,12 @@ export async function materializeInBatches(
   aggregateSql: string,
   viewFallbackSql: string,
   indexes: Array<{ name: string; column: string }> = [],
+  options: { batchDateExpression?: string } = {},
 ): Promise<'table' | 'view'> {
   await db.dropRelationIfExists(tableName);
 
   const t0 = Date.now();
+  const batchDateExpression = options.batchDateExpression ?? 'policy_date';
   // VPS（threads<=2）：逐月分批降低峰值内存；本地（threads>2）：直接物化更快
   const useBatching = DUCKDB_INIT_OPTIONS.threads <= 2;
   console.log(`[DuckDB] Materializing ${tableName} (${useBatching ? 'batched by month' : 'direct'})...`);
@@ -99,7 +101,7 @@ export async function materializeInBatches(
         await db.query(`
           CREATE TABLE ${tableName} AS
           WITH normalized AS (${cteSql}
-            AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[0]}'
+            AND strftime(CAST(${batchDateExpression} AS DATE), '%Y-%m') = '${months[0]}'
           ) ${aggregateSql}
         `);
         console.log(`[DuckDB] ${tableName} batch 1/${months.length}: ${months[0]}`);
@@ -108,7 +110,7 @@ export async function materializeInBatches(
           await db.query(`
             INSERT INTO ${tableName}
             WITH normalized AS (${cteSql}
-              AND strftime(CAST(policy_date AS DATE), '%Y-%m') = '${months[i]}'
+              AND strftime(CAST(${batchDateExpression} AS DATE), '%Y-%m') = '${months[i]}'
             ) ${aggregateSql}
           `);
           console.log(`[DuckDB] ${tableName} batch ${i + 1}/${months.length}: ${months[i]}`);
@@ -295,6 +297,7 @@ export async function createCrossSellRealtimeView(db: DuckDBQueryable): Promise<
         { name: 'idx_cross_sell_agg_date', column: 'policy_date' },
         { name: 'idx_cross_sell_agg_category', column: 'customer_category' },
       ],
+      { batchDateExpression: 'p.policy_date' },
     );
   } else {
     // ── 旧模式：从 PolicyFact 全扫描构建（向后兼容）──

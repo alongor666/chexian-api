@@ -7,17 +7,21 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { duckdbService } from '../duckdb.js';
 import { materializeInBatches } from '../duckdb-materialization.js';
+import { DUCKDB_INIT_OPTIONS } from '../../config/database.js';
 
 describe('materializeInBatches — 批次物化逻辑', () => {
   const sqlCalls: string[] = [];
+  const originalThreads = DUCKDB_INIT_OPTIONS.threads;
 
   beforeEach(async () => {
+    DUCKDB_INIT_OPTIONS.threads = 2;
     await duckdbService.init();
     sqlCalls.length = 0;
   });
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    DUCKDB_INIT_OPTIONS.threads = originalThreads;
     try { await duckdbService.close(); } catch { /* ignore */ }
   });
 
@@ -94,6 +98,28 @@ describe('materializeInBatches — 批次物化逻辑', () => {
     );
     expect(sqlCalls.some(s => s === 'SET threads=1')).toBe(false);
     expect(sqlCalls.some(s => s.includes('SET preserve_insertion_order'))).toBe(false);
+  });
+
+  // MB-05: joined CTE 可指定批处理日期列，避免 p/cs 双表都有 policy_date 时歧义
+  it('MB-05: joined CTE 批处理条件使用指定日期表达式', async () => {
+    mockQuery(['2024-01', '2024-02']);
+    await materializeInBatches(
+      duckdbService,
+      'CrossSellDailyAgg',
+      `SELECT p.policy_date, cs.policy_date AS cs_policy_date
+       FROM PolicyFact p
+       LEFT JOIN CrossSellFact cs ON p.policy_no = cs.policy_no
+       WHERE p.policy_date IS NOT NULL`,
+      'SELECT policy_date FROM normalized',
+      'CREATE OR REPLACE VIEW CrossSellDailyAgg AS SELECT 1',
+      [],
+      { batchDateExpression: 'p.policy_date' },
+    );
+
+    const batchedSql = sqlCalls.filter(s => s.includes('CrossSellDailyAgg') && s.includes('strftime'));
+    expect(batchedSql.length).toBe(2);
+    expect(batchedSql.every(s => s.includes("strftime(CAST(p.policy_date AS DATE), '%Y-%m')"))).toBe(true);
+    expect(batchedSql.some(s => s.includes("strftime(CAST(policy_date AS DATE), '%Y-%m')"))).toBe(false);
   });
 
   // MB-06: 索引创建

@@ -1,9 +1,50 @@
 import { Router } from 'express';
-import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, withRouteCache } from './shared.js';
+import type { NextFunction, Request, Response } from 'express';
+import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, createDomainMiddleware, withRouteCache } from './shared.js';
 import { generateKpiQuery } from '../../sql/kpi.js';
 import { generateKpiDetailQuery } from '../../sql/kpi-detail.js';
+import { RouteConcurrencyGate } from '../../services/route-concurrency.js';
 
 const router = Router();
+const KPI_COLD_QUERY_GATE = new RouteConcurrencyGate({
+  limit: Number(process.env.KPI_COLD_QUERY_CONCURRENCY) || 6,
+  maxQueue: Number(process.env.KPI_COLD_QUERY_MAX_QUEUE) || 64,
+  queueTimeoutMs: Number(process.env.KPI_COLD_QUERY_QUEUE_TIMEOUT_MS) || 60_000,
+});
+
+function kpiColdQueryGate() {
+  return async (_req: Request, res: Response, next: NextFunction) => {
+    const abortController = new AbortController();
+    let release: (() => void) | null = null;
+    let released = false;
+    const releaseOnce = () => {
+      if (released) return;
+      released = true;
+      release?.();
+    };
+    const handleClose = () => {
+      abortController.abort();
+      releaseOnce();
+    };
+
+    res.once('close', handleClose);
+
+    try {
+      release = await KPI_COLD_QUERY_GATE.enter({ signal: abortController.signal });
+      if (abortController.signal.aborted || res.destroyed || res.writableEnded) {
+        releaseOnce();
+        return;
+      }
+      res.once('finish', releaseOnce);
+      next();
+    } catch (err) {
+      res.off('close', handleClose);
+      if (abortController.signal.aborted) return;
+      const message = err instanceof Error ? err.message : String(err);
+      next(new AppError(429, message));
+    }
+  };
+}
 
 /**
  * GET /api/query/kpi
@@ -13,6 +54,8 @@ const router = Router();
 router.get(
   '/kpi',
   withRouteCache('kpi', QUERY_CACHE.hotspotShort),
+  kpiColdQueryGate(),
+  createDomainMiddleware('ClaimsAgg'),
   asyncHandler(async (req, res) => {
     const { filterData, whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
 

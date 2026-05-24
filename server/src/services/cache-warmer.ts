@@ -31,12 +31,16 @@ type WarmRange = { startDate: string; maxDate: string };
 type RouteWarmConfig = {
     path: string;
     ttlMs: number;
+    timeoutMs?: number;
+    orgScope?: 'default' | 'all-company-only';
     /**
      * 构造完整 query 参数对象。键名/值必须与前端 apiClient.* 调用真实输出对齐。
      * `org` 为 null 时表示"全公司"（不设 orgNames）。
      */
     buildQuery: (range: WarmRange, org: string | null) => Record<string, string>;
 };
+type WarmTask = { url: string; ttlMs: number; timeoutMs: number; label: string; path: string; org: string | null };
+type WarmTaskBatch = { name: string; concurrency: number; tasks: WarmTask[] };
 
 /** 通用 commonFilterSchema 协议：dateField + startDate + endDate + 可选 orgNames。 */
 function commonFilterQuery(range: WarmRange, org: string | null): Record<string, string> {
@@ -54,6 +58,7 @@ const COMMON_WARM_ROUTES: ReadonlyArray<RouteWarmConfig> = [
         // 来源：useKpiData → buildFilterParams（commonFilterSchema 标准协议）
         path: '/api/query/kpi',
         ttlMs: QUERY_CACHE.hotspotShort,
+        timeoutMs: 45_000,
         buildQuery: commonFilterQuery,
     },
     {
@@ -93,17 +98,74 @@ const COMMON_WARM_ROUTES: ReadonlyArray<RouteWarmConfig> = [
             limit: '20',
         }),
     },
+    {
+        path: '/api/query/performance-summary',
+        ttlMs: QUERY_CACHE.hotspotShort,
+        timeoutMs: 30_000,
+        orgScope: 'all-company-only',
+        buildQuery: (range) => ({
+            ...commonFilterQuery(range, null),
+            segmentTag: 'all',
+            timePeriod: 'month',
+            growthMode: 'mom',
+            expandDims: 'none',
+        }),
+    },
+    {
+        path: '/api/query/performance-top-salesman',
+        ttlMs: QUERY_CACHE.hotspotShort,
+        timeoutMs: 30_000,
+        orgScope: 'all-company-only',
+        buildQuery: (range) => ({
+            ...commonFilterQuery(range, null),
+            segmentTag: 'all',
+            timePeriod: 'month',
+            growthMode: 'mom',
+        }),
+    },
+    {
+        path: '/api/query/performance-bundle',
+        ttlMs: QUERY_CACHE.hotspotShort,
+        timeoutMs: 45_000,
+        orgScope: 'all-company-only',
+        buildQuery: (range) => ({
+            ...commonFilterQuery(range, null),
+            drillPath: '[]',
+            groupBy: 'org_level_3',
+            segmentTag: 'all',
+            timePeriod: 'month',
+            growthMode: 'mom',
+            expandDims: 'none',
+        }),
+    },
 ];
 
 /**
- * 机构维度：全公司 + 头部 5 个 org_level_3。
- * 选取依据：实测 13 个 org_level_3，头部 5 个占 ~85% 流量
- * （SQL: SELECT org_level_3, COUNT(*) FROM PolicyFact WHERE policy_date >= '2026-01-01'
- *  GROUP BY 1 ORDER BY 2 DESC）。
+ * 机构维度：全公司 + 12 机构验收集。
+ * P2 验收会并发打这些 org_level_3；预热必须覆盖同一组 key，且 KPI 按单并发小批量执行。
  */
-const TOP_ORG_NAMES: ReadonlyArray<string> = ['天府', '宜宾', '高新', '青羊', '泸州'];
+const TOP_ORG_NAMES: ReadonlyArray<string> = [
+    '天府',
+    '宜宾',
+    '高新',
+    '青羊',
+    '泸州',
+    '新都',
+    '武侯',
+    '乐山',
+    '德阳',
+    '自贡',
+    '资阳',
+    '达州',
+];
 
-const WARM_CONCURRENCY = 4;
+const WARM_ALL_COMPANY_CONCURRENCY = 1;
+const WARM_HEAVY_ORG_CONCURRENCY = 1;
+const WARM_LIGHT_ORG_CONCURRENCY = 2;
+const WARM_MAX_ATTEMPTS = 2;
+const WARM_RETRY_BACKOFF_MS = 750;
+export const STARTUP_DOMAIN_WARMUP_TIMEOUT_MS = 120_000;
+const STARTUP_DOMAIN_WARMUP_ORDER = ['ClaimsDetail', 'ClaimsAgg', 'CrossSell'] as const;
 /**
  * 用 v8 heapUsed 而非 RSS 做安全阀：
  * RSS 包含 vite/DuckDB native 内存（本地动辄 4-5GB），不能反映 cache 实际占用。
@@ -113,6 +175,20 @@ const WARM_CONCURRENCY = 4;
 const WARM_HEAP_LIMIT_MB = 2000;
 const WARM_HEAP_CHECK_EVERY = 20;
 const WARM_FETCH_TIMEOUT_MS = 15_000;
+
+export function getWarmRetryDelayMs(attempt: number): number {
+    return WARM_RETRY_BACKOFF_MS * Math.max(1, attempt);
+}
+
+export function resolveWarmEndDate(maxDataDate: string | null, today: string = new Date().toISOString().slice(0, 10)): string | null {
+    if (!maxDataDate) return null;
+    const dataDate = maxDataDate.slice(0, 10);
+    const todayDate = today.slice(0, 10);
+    if (todayDate.slice(0, 4) === dataDate.slice(0, 4) && todayDate > dataDate) {
+        return todayDate;
+    }
+    return dataDate;
+}
 
 interface WarmCommonRoutesResult {
     written: number;
@@ -164,6 +240,7 @@ export class CacheWarmer {
         const startTime = Date.now();
         let startDate: string | undefined;
         let maxDate: string | null | undefined;
+        let startupCriticalReady = false;
         try {
             ({ startDate, maxDate } = await this.resolveDefaultDateRange(dataYear));
             if (!maxDate) {
@@ -173,6 +250,7 @@ export class CacheWarmer {
 
             await this.ensureStartupDomainsLoaded();
             await this.warmDefaultDashboardRoute(startDate, maxDate);
+            startupCriticalReady = true;
 
             logger.info(`[CacheWarmer] Startup critical warming completed in ${Date.now() - startTime}ms.`);
         } catch (e) {
@@ -182,7 +260,7 @@ export class CacheWarmer {
         }
 
         // 异步扩展：Top 5 机构 dashboard 预热（不阻塞首次请求 readiness）
-        if (startDate && maxDate) {
+        if (startupCriticalReady && startDate && maxDate) {
             this.warmTopOrgsBackground(startDate, maxDate, 5).catch((err) =>
                 logger.warn('[CacheWarmer] Top-orgs background warming failed:', err)
             );
@@ -298,10 +376,12 @@ export class CacheWarmer {
             return;
         }
 
-        // 当前 /api/query 挂载顺序会让 cross-sell 子路由 middleware 先于 bundle handler 执行。
-        // 若这里不预载，首个 dashboard-bundle 即使 route cache 命中，也会先付出惰性域加载成本。
-        await bootstrapper.ensureDomainLoaded('CrossSell');
-        await bootstrapper.ensureDomainLoaded('ClaimsAgg');
+        // 内部启动预热允许等待 VPS 上较慢的物化任务；HTTP 请求仍走 LazyDomainRegistry 默认 15s 保护。
+        // ClaimsAgg 是 KPI 冷启动依赖，必须先于 CrossSell，避免 CrossSellDailyAgg 长物化挡住 KPI 预热。
+        for (const domain of STARTUP_DOMAIN_WARMUP_ORDER) {
+            // eslint-disable-next-line no-await-in-loop
+            await bootstrapper.ensureDomainLoaded(domain, { timeoutMs: STARTUP_DOMAIN_WARMUP_TIMEOUT_MS });
+        }
     }
 
     private async resolveDefaultDateRange(dataYear?: number): Promise<{ startDate: string; maxDate: string | null }> {
@@ -311,7 +391,7 @@ export class CacheWarmer {
             QUERY_CACHE.hotspotLong
         );
         const maxDateRaw = maxDateResult[0]?.max_date;
-        const maxDate = maxDateRaw ? String(maxDateRaw).slice(0, 10) : null;
+        const maxDate = resolveWarmEndDate(maxDateRaw ? String(maxDateRaw).slice(0, 10) : null);
         const resolvedYear = dataYear || (maxDate ? Number(maxDate.slice(0, 4)) : new Date().getFullYear());
         return {
             startDate: `${resolvedYear}-01-01`,
@@ -450,7 +530,7 @@ export class CacheWarmer {
         let stopped = false;
         let processed = 0;
 
-        const runOne = async (task: { url: string; ttlMs: number; label: string }): Promise<void> => {
+        const runOne = async (task: WarmTask): Promise<void> => {
             if (stopped) {
                 result.skipped += 1;
                 return;
@@ -467,38 +547,58 @@ export class CacheWarmer {
                     return;
                 }
             }
-            try {
+            for (let attempt = 1; attempt <= WARM_MAX_ATTEMPTS; attempt++) {
                 const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), WARM_FETCH_TIMEOUT_MS);
+                const timer = setTimeout(() => controller.abort(), task.timeoutMs);
                 try {
-                    const res = await fetch(task.url, {
-                        method: 'GET',
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            'X-Cache-Warmup': '1',
-                        },
-                        signal: controller.signal,
-                    });
-                    if (res.ok) {
-                        // 读完 body 触发 withRouteCache 中间件写入 LRU；丢弃数据本身
-                        await res.arrayBuffer();
-                        result.written += 1;
-                    } else {
+                    try {
+                        const res = await fetch(task.url, {
+                            method: 'GET',
+                            headers: {
+                                Authorization: `Bearer ${token}`,
+                                'X-Cache-Warmup': '1',
+                            },
+                            signal: controller.signal,
+                        });
+                        if (res.ok) {
+                            // 读完 body 触发 withRouteCache 中间件写入 LRU；丢弃数据本身
+                            await res.arrayBuffer();
+                            result.written += 1;
+                            return;
+                        }
+                        if (attempt < WARM_MAX_ATTEMPTS) {
+                            const delayMs = getWarmRetryDelayMs(attempt);
+                            logger.warn(`[CacheWarmer] warm ${task.label} → HTTP ${res.status}; retry in ${delayMs}ms`);
+                            await sleep(delayMs);
+                            continue;
+                        }
                         result.failed += 1;
                         logger.warn(
                             `[CacheWarmer] warm ${task.label} → HTTP ${res.status}`,
                         );
+                        return;
+                    } finally {
+                        clearTimeout(timer);
                     }
-                } finally {
-                    clearTimeout(timer);
+                } catch (e) {
+                    if (attempt < WARM_MAX_ATTEMPTS) {
+                        const delayMs = getWarmRetryDelayMs(attempt);
+                        logger.warn(`[CacheWarmer] warm ${task.label} failed; retry in ${delayMs}ms:`, e);
+                        await sleep(delayMs);
+                        continue;
+                    }
+                    result.failed += 1;
+                    logger.warn(`[CacheWarmer] warm ${task.label} failed:`, e);
+                    return;
                 }
-            } catch (e) {
-                result.failed += 1;
-                logger.warn(`[CacheWarmer] warm ${task.label} failed:`, e);
             }
         };
 
-        await runWithConcurrency(tasks, WARM_CONCURRENCY, runOne);
+        for (const batch of this.buildWarmTaskBatches(tasks)) {
+            logger.info(`[CacheWarmer] warm batch ${batch.name}: tasks=${batch.tasks.length}, concurrency=${batch.concurrency}`);
+            // eslint-disable-next-line no-await-in-loop
+            await runWithConcurrency(batch.tasks, batch.concurrency, runOne);
+        }
 
         result.durationMs = Date.now() - start;
         logger.info(
@@ -517,22 +617,41 @@ export class CacheWarmer {
         dateRange: WarmRange,
         routes: ReadonlyArray<RouteWarmConfig> = COMMON_WARM_ROUTES,
         orgs: ReadonlyArray<string | null> = [null, ...TOP_ORG_NAMES],
-    ): Array<{ url: string; ttlMs: number; label: string }> {
+    ): WarmTask[] {
         const baseUrl = `http://127.0.0.1:${serverEnv.PORT}`;
-        const tasks: Array<{ url: string; ttlMs: number; label: string }> = [];
+        const tasks: WarmTask[] = [];
         for (const route of routes) {
-            for (const org of orgs) {
+            const routeOrgs = route.orgScope === 'all-company-only' ? [null] : orgs;
+            for (const org of routeOrgs) {
                 const queryObj = route.buildQuery(dateRange, org);
                 const params = new URLSearchParams();
                 for (const [k, v] of Object.entries(queryObj)) params.set(k, v);
                 tasks.push({
                     url: `${baseUrl}${route.path}?${params.toString()}`,
                     ttlMs: route.ttlMs,
+                    timeoutMs: route.timeoutMs ?? WARM_FETCH_TIMEOUT_MS,
                     label: `${route.path}${org ? ` org=${org}` : ' (all)'}`,
+                    path: route.path,
+                    org,
                 });
             }
         }
         return tasks;
+    }
+
+    buildWarmTaskBatches(tasks: ReadonlyArray<WarmTask>): WarmTaskBatch[] {
+        const allCompany = tasks.filter((task) => task.org === null);
+        const orgTasks = tasks.filter((task) => task.org !== null);
+        const orgKpi = orgTasks.filter((task) => task.path === '/api/query/kpi');
+        const orgTrend = orgTasks.filter((task) => task.path === '/api/query/trend');
+        const orgRest = orgTasks.filter((task) => task.path !== '/api/query/kpi' && task.path !== '/api/query/trend');
+
+        return [
+            { name: 'all-company', concurrency: WARM_ALL_COMPANY_CONCURRENCY, tasks: allCompany },
+            { name: 'org-kpi', concurrency: WARM_HEAVY_ORG_CONCURRENCY, tasks: orgKpi },
+            { name: 'org-trend', concurrency: WARM_HEAVY_ORG_CONCURRENCY, tasks: orgTrend },
+            { name: 'org-rest', concurrency: WARM_LIGHT_ORG_CONCURRENCY, tasks: orgRest },
+        ].filter((batch) => batch.tasks.length > 0);
     }
 
     /**
@@ -615,4 +734,8 @@ async function runWithConcurrency<T>(
         }
     });
     await Promise.all(workers);
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -14,6 +14,10 @@
 
 const LAZY_LOAD_TIMEOUT_MS = 15_000;
 
+export interface LazyDomainLoadOptions {
+  timeoutMs?: number;
+}
+
 interface LazyDomainEntry {
   loader: () => Promise<void>;
   state: 'unloaded' | 'loading' | 'loaded' | 'failed';
@@ -28,15 +32,16 @@ export class LazyDomainRegistry {
     this.domains.set(name, { loader, state: 'unloaded', promise: null, error: null });
   }
 
-  async ensureLoaded(name: string): Promise<void> {
+  async ensureLoaded(name: string, options: LazyDomainLoadOptions = {}): Promise<void> {
     const entry = this.domains.get(name);
     if (!entry || entry.state === 'loaded') return;
+    const timeoutMs = options.timeoutMs ?? LAZY_LOAD_TIMEOUT_MS;
 
     if (entry.state === 'loading') {
       // 并发安全：等待已有 Promise（加超时保护）
       return Promise.race([
         entry.promise!,
-        this.timeoutReject(name),
+        this.timeoutReject(name, timeoutMs),
       ]);
     }
 
@@ -51,16 +56,16 @@ export class LazyDomainRegistry {
         throw err;
       });
 
-    return Promise.race([entry.promise, this.timeoutReject(name)]);
+    return Promise.race([entry.promise, this.timeoutReject(name, timeoutMs)]);
   }
 
-  private timeoutReject(name: string): Promise<never> {
+  private timeoutReject(name: string, timeoutMs: number): Promise<never> {
     return new Promise<never>((_, reject) =>
       setTimeout(() => {
-        const err = new Error(`Domain ${name} loading timeout (${LAZY_LOAD_TIMEOUT_MS}ms)`);
+        const err = new Error(`Domain ${name} loading timeout (${timeoutMs}ms)`);
         (err as any).statusCode = 503;
         reject(err);
-      }, LAZY_LOAD_TIMEOUT_MS)
+      }, timeoutMs)
     );
   }
 
