@@ -69,6 +69,22 @@ describe('LazyDomainRegistry', () => {
     vi.useRealTimers();
   });
 
+  it('内部调用可传更长 timeout，不受默认 15s HTTP 保护影响', async () => {
+    vi.useFakeTimers();
+    const reg = new LazyDomainRegistry();
+    reg.register('SlowWarmupDomain', () => new Promise<void>((resolve) => setTimeout(resolve, 20_000)));
+
+    const loadPromise = reg.ensureLoaded('SlowWarmupDomain', { timeoutMs: 30_000 });
+    vi.advanceTimersByTime(15_001);
+    await Promise.resolve();
+    expect(reg.getState('SlowWarmupDomain')).toBe('loading');
+
+    vi.advanceTimersByTime(5_000);
+    await loadPromise;
+    expect(reg.isLoaded('SlowWarmupDomain')).toBe(true);
+    vi.useRealTimers();
+  });
+
   // TC-05: 域依赖链 —— ClaimsAgg → ClaimsDetail 模式验证
   // 验证计划 04-02-PLAN.md 中 ClaimsAgg 三路回退最终分支的显式依赖声明
   it('TC-05: 域 B 的 loader 内调用 ensureLoaded(A)，两个域均成功加载', async () => {

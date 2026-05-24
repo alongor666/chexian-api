@@ -33,7 +33,7 @@ import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarn
 import { isValidParquetFile } from '../utils/security.js';
 import * as materialization from './duckdb-materialization.js';
 import * as domainLoaders from './duckdb-domain-loaders.js';
-import { LazyDomainRegistry } from './lazy-domain-registry.js';
+import { LazyDomainRegistry, type LazyDomainLoadOptions } from './lazy-domain-registry.js';
 
 // ============================================
 // Types
@@ -480,8 +480,8 @@ export class DataBootstrapper {
    * 供路由中间件调用：确保指定域已加载（首次触发加载，含 15s 超时保护）。
    * 超时返回 503，失败返回 500，并发安全（Promise 锁）。
    */
-  async ensureDomainLoaded(domain: string): Promise<void> {
-    return this.lazyRegistry.ensureLoaded(domain);
+  async ensureDomainLoaded(domain: string, options?: LazyDomainLoadOptions): Promise<void> {
+    return this.lazyRegistry.ensureLoaded(domain, options);
   }
 
   /**
