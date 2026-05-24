@@ -41,7 +41,7 @@ describe('agent customer flow diagnosis route contract', () => {
     const combined = `${service}\n${readSource('server/src/agent/routes/agent-diagnosis.ts')}`;
 
     expect(service).toContain('generateFlowSummaryQuery');
-    expect(service).toContain('generateInflowQuery');
+    expect(service).not.toContain('generateInflowQuery');
     expect(service).toContain('generateOutflowQuery');
     expect(service).toContain('generateFlowTrendQuery');
     expect(service).toContain('generateFlowMetadataQuery');

@@ -507,12 +507,12 @@ export const CustomerFlowTrendDiagnosticSchema = z.object({
   totalPolicies: z.number().nullable(),
   inflowCount: z.number().nullable(),
   outflowCount: z.number().nullable(),
-  netFlow: z.number(),
-  direction: z.enum(['net_inflow', 'net_outflow', 'balanced']),
+  netFlow: z.number().nullable(),
+  direction: z.enum(['net_inflow', 'net_outflow', 'balanced', 'outflow_only']),
 });
 
 export const CustomerFlowDiagnosisItemSchema = z.object({
-  kind: z.literal('flow_balance'),
+  kind: z.enum(['flow_balance', 'outflow_only']),
   severity: CustomerFlowSeveritySchema,
   message: z.string(),
   value: z.number().nullable(),
@@ -529,7 +529,7 @@ export const CustomerFlowDiagnosisResultSchema = z.object({
     hasNext: z.number().nullable(),
     inflowCount: z.number().nullable(),
     outflowCount: z.number().nullable(),
-    netFlow: z.number(),
+    netFlow: z.number().nullable(),
     inflowRate: z.number().nullable(),
     outflowRate: z.number().nullable(),
     selfRenewalCount: z.number().nullable(),

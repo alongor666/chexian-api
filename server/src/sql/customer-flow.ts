@@ -18,8 +18,8 @@ export function generateInflowQuery(filters: CustomerFlowFilters): string {
   return `
     SELECT
       CAST(NULL AS VARCHAR) AS insurer,
-      CAST(0 AS BIGINT) AS policy_count,
-      CAST(0 AS DOUBLE) AS share_pct
+      CAST(NULL AS BIGINT) AS policy_count,
+      CAST(NULL AS DOUBLE) AS share_pct
     WHERE FALSE
   `.trim();
 }
@@ -65,15 +65,15 @@ export function generateFlowTrendQuery(filters: CustomerFlowFilters): string {
     ? `AND YEAR(CAST(insurance_start_date AS DATE)) = ${Number(filters.year)}`
     : '';
   return `
-    WITH vin_latest AS (
-      SELECT vehicle_frame_no, insurance_start_date, NULLIF(TRIM(next_insurer), '') AS next_insurer
+    WITH monthly_vin AS (
+      SELECT month, vehicle_frame_no, NULLIF(TRIM(next_insurer), '') AS next_insurer
       FROM (
         SELECT
+          STRFTIME(CAST(insurance_start_date AS DATE), '%Y-%m') AS month,
           TRIM(vehicle_frame_no) AS vehicle_frame_no,
-          insurance_start_date,
           next_insurer,
           ROW_NUMBER() OVER (
-            PARTITION BY TRIM(vehicle_frame_no)
+            PARTITION BY STRFTIME(CAST(insurance_start_date AS DATE), '%Y-%m'), TRIM(vehicle_frame_no)
             ORDER BY CAST(insurance_start_date AS DATE) DESC NULLS LAST, policy_no DESC NULLS LAST
           ) AS rn
         FROM CustomerFlow
@@ -84,11 +84,11 @@ export function generateFlowTrendQuery(filters: CustomerFlowFilters): string {
       ) WHERE rn = 1
     )
     SELECT
-      STRFTIME(CAST(insurance_start_date AS DATE), '%Y-%m') AS month,
+      month,
       COUNT(*) AS total_policies,
-      CAST(0 AS BIGINT) AS inflow_count,
+      CAST(NULL AS BIGINT) AS inflow_count,
       COUNT(CASE WHEN next_insurer IS NOT NULL AND next_insurer NOT LIKE '%华安%' THEN 1 END) AS outflow_count
-    FROM vin_latest
+    FROM monthly_vin
     GROUP BY month
     ORDER BY month
   `.trim();
@@ -118,11 +118,11 @@ export function generateFlowSummaryQuery(filters: CustomerFlowFilters): string {
     )
     SELECT
       COUNT(*) AS total_policies,
-      CAST(0 AS BIGINT) AS has_previous,
-      CAST(0 AS BIGINT) AS inflow_count,
+      CAST(NULL AS BIGINT) AS has_previous,
+      CAST(NULL AS BIGINT) AS inflow_count,
       COUNT(CASE WHEN next_insurer IS NOT NULL THEN 1 END) AS has_next,
       COUNT(CASE WHEN next_insurer IS NOT NULL AND next_insurer NOT LIKE '%华安%' THEN 1 END) AS outflow_count,
-      CAST(0 AS BIGINT) AS self_renewal_count
+      CAST(NULL AS BIGINT) AS self_renewal_count
     FROM vin_latest
   `.trim();
 }
