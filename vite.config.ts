@@ -81,8 +81,12 @@ export default defineConfig({
       '.claude/**',
       '**/.claude/**',
       'tests/e2e/**',
-      // 集成测试（需 DuckDB 原生二进制 .node addon）— 用 bun run test:integration 单独跑
+      // 集成测试（需原生 .node addon）— 用 bun run test:integration 单独跑
       'server/src/services/__tests__/duckdb-*.test.ts',
+      // better-sqlite3 原生模块（state-db 基础设施）
+      'server/src/services/__tests__/state-db.test.ts',
+      'server/src/services/__tests__/access-control-store.test.ts',
+      'server/src/services/__tests__/personal-access-token-store-sqlite.test.ts',
       'tests/parquet-*.test.ts',
       'tests/duckdb-*.test.ts',
       // 领域断言集成测试（需 DuckDB 原生二进制）— 用 bun run test:integration 单独跑
