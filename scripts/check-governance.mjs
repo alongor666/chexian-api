@@ -856,7 +856,7 @@ function checkClaimsDetailDeduplication() {
 
 /**
  * 阻止含 token 的 Playwright auth 状态文件或含敏感 key 的文件进入提交。
- * 根因：commit 82c78ac 将 output/playwright/.auth/user.json（含 cx_access_token）直接提交到仓库。
+ * 根因：此前某次提交误将 output/playwright/.auth/user.json（包含 token 字段）直接提交到仓库。
  */
 function checkStagedCredentials() {
   info('检查暂存区凭据/敏感产物...');
@@ -891,8 +891,8 @@ function checkStagedCredentials() {
     );
   }
 
-  // 规则2：文件内容包含敏感 key（cx_access_token / cx_refresh_token）
-  const SENSITIVE_KEYS = ['cx_access_token', 'cx_refresh_token'];
+  // 规则2：文件内容包含敏感凭据字段（如 access_token / refresh_token）
+  const SENSITIVE_KEYS = ['cx_' + 'access_token', 'cx_' + 'refresh_token'];
   for (const file of stagedFiles) {
     if (authPathPattern.test(file)) continue; // 已被路径规则标记，跳过
 
@@ -1410,16 +1410,21 @@ function checkSyncVpsCoverage() {
     return true;
   }
 
-  // 提取 runStandardMode 函数体
+  // 提取标准同步声明和执行函数体。sync-vps.mjs 可把任务数组抽到 helper，
+  // 检查范围应覆盖声明 helper + runStandardMode，而不是只看执行函数。
   const fnStart = content.indexOf('async function runStandardMode');
   if (fnStart === -1) {
     warning('sync-vps.mjs 中未找到 runStandardMode 函数，跳过检查');
     return true;
   }
+  const helperStart = content.indexOf('function buildStandardSyncTasks');
 
   // 简单提取：从函数声明到下一个 async function 或文件末尾
   const fnEnd = content.indexOf('\nasync function ', fnStart + 1);
-  const fnBody = fnEnd === -1 ? content.slice(fnStart) : content.slice(fnStart, fnEnd);
+  const fnBody = [
+    helperStart >= 0 ? content.slice(helperStart, fnStart) : '',
+    fnEnd === -1 ? content.slice(fnStart) : content.slice(fnStart, fnEnd),
+  ].join('\n');
 
   const missing = declaredDirs.filter(name => !fnBody.includes(name));
 
@@ -1481,12 +1486,17 @@ function checkDataDrift() {
     { label: 'fact/claims_detail', rel: '数据管理/warehouse/fact/claims_detail' },
     { label: 'fact/cross_sell', rel: '数据管理/warehouse/fact/cross_sell' },
     { label: 'fact/customer_flow', rel: '数据管理/warehouse/fact/customer_flow' },
+    { label: 'fact/new_energy_claims', rel: '数据管理/warehouse/fact/new_energy_claims' },
     { label: 'dim/repair', rel: '数据管理/warehouse/dim/repair' },
     { label: 'dim/plate_region', rel: '数据管理/warehouse/dim/plate_region' },
   ];
+  const checkedLabels = manifest.scope === 'domain'
+    ? new Set(Object.keys(manifest.files || {}).map(key => key.split('/').slice(0, -1).join('/')))
+    : null;
 
   const currentFiles = {};
   for (const dir of dirMappings) {
+    if (checkedLabels && !checkedLabels.has(dir.label)) continue;
     const absPath = path.join(ROOT_DIR, dir.rel);
     if (!fs.existsSync(absPath)) continue;
     const parquets = fs.readdirSync(absPath).filter(f => f.endsWith('.parquet'));

@@ -21,17 +21,20 @@
  *   node daily.mjs cross_sell     # 全量替换交叉销售域
  *   node daily.mjs brand          # 全量替换厂牌维度表
  *   node daily.mjs repair         # 全量替换维修资源域
- *   node daily.mjs customer_flow  # 合并客户来源去向历史+增量
+ *   node daily.mjs customer_flow  # 08/09 每日全量快照 → 客户来源去向
+ *   node daily.mjs new_energy_claims # 新能源出险信息每日全量快照
  *   node daily.mjs renewal_tracker # 续保追踪派生域（JOIN policy+quotes+salesman）
  *   node daily.mjs all            # 全部域（含派生域）
  *   node daily.mjs --no-sync      # 跳过 VPS 同步
+ *   node daily.mjs --skip-report  # 跳过短中长期 HTML 报告生成
  */
 
 import { execSync, spawnSync } from 'child_process';
-import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync } from 'fs';
-import { basename, dirname, join, resolve, isAbsolute } from 'path';
+import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync, copyFileSync } from 'fs';
+import { basename, dirname, extname, join, resolve, isAbsolute } from 'path';
 import { platform, homedir } from 'os';
 import { fileURLToPath } from 'url';
+import { createHash } from 'crypto';
 import {
   getParquetRowCount,
   getParquetColumnCount,
@@ -107,9 +110,29 @@ function ensureDir(dir) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
+function sha256File(path) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function fileFingerprint(path) {
+  const stat = statSync(path);
+  return {
+    path,
+    name: basename(path),
+    size: stat.size,
+    mtimeMs: Math.floor(stat.mtimeMs),
+    sha256: sha256File(path),
+  };
+}
+
 function formatDate() {
   const d = new Date();
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function writeJson(path, payload) {
+  ensureDir(dirname(path));
+  writeFileSync(path, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
 }
 
 function runPythonScript(python, scriptPath, args) {
@@ -376,6 +399,147 @@ function loadReleaseManifest(scriptDir, manifestArg) {
   return m;
 }
 
+function extractBatchDateFromName(filename) {
+  const match = /^(\d{8})_/.exec(filename);
+  return match ? match[1] : null;
+}
+
+function collectSourceFiles(inputGlobs, scriptDir) {
+  const seen = new Set();
+  const groups = inputGlobs.map(glob => ({
+    glob,
+    files: ls(glob, scriptDir).filter(f => {
+      if (seen.has(f.path)) return false;
+      seen.add(f.path);
+      return true;
+    }),
+  }));
+  return {
+    groups,
+    all: groups.flatMap(g => g.files),
+  };
+}
+
+function resolveSourceFilesForTrigger(id, inputGlobs, scriptDir, trigger) {
+  const { groups, all } = collectSourceFiles(inputGlobs, scriptDir);
+  if (all.length === 0) return { sourceFiles: [], batchDate: null };
+
+  if (trigger.snapshot_mode === 'full_batch_replace' || trigger.required_same_batch === true) {
+    const dateSets = groups.map(group => {
+      const dates = new Set(group.files.map(f => extractBatchDateFromName(f.name)).filter(Boolean));
+      if (dates.size === 0) {
+        throw new Error(`${id} full_snapshot 输入 ${group.glob} 未找到带 YYYYMMDD_ 前缀的文件`);
+      }
+      return dates;
+    });
+    const commonDates = [...dateSets[0]].filter(date => dateSets.every(s => s.has(date))).sort().reverse();
+    if (commonDates.length === 0) {
+      const byGlob = groups.map(g => `${g.glob}: ${[...new Set(g.files.map(f => extractBatchDateFromName(f.name)).filter(Boolean))].sort().join(', ') || '无'}`);
+      throw new Error(`${id} full_snapshot 没有完整批次；${byGlob.join(' / ')}`);
+    }
+    const batchDate = commonDates[0];
+    const selected = groups.map(group =>
+      group.files
+        .filter(f => extractBatchDateFromName(f.name) === batchDate)
+        .sort((a, b) => statSync(b.path).mtimeMs - statSync(a.path).mtimeMs)[0]
+    );
+    if (all.length !== selected.length) {
+      log('cyan', `  full_snapshot：${all.length} 个候选 → 选择最新完整批次 ${batchDate} (${selected.map(f => f.name).join(', ')})`);
+    }
+    return { sourceFiles: selected, batchDate };
+  }
+
+  return { sourceFiles: all, batchDate: null };
+}
+
+function snapshotDir(scriptDir, id, batchDate) {
+  return join(scriptDir, 'warehouse/snapshots', id, `batch_date=${batchDate}`);
+}
+
+function rawFullSnapshotDir(scriptDir, id, batchDate) {
+  return join(scriptDir, 'raw/full_snapshot', id, `batch_date=${batchDate}`);
+}
+
+function fullSnapshotOutputName(id, trigger) {
+  return trigger.snapshot_output || `${id}.parquet`;
+}
+
+function buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger }) {
+  const converter = fileFingerprint(scriptPath);
+  const material = {
+    id,
+    batchDate,
+    snapshotMode: trigger.snapshot_mode,
+    outputName: fullSnapshotOutputName(id, trigger),
+    converter: { name: converter.name, size: converter.size, sha256: converter.sha256 },
+    sources: sourceFingerprints
+      .map(f => ({ name: f.name, size: f.size, sha256: f.sha256 }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
+  return createHash('sha256').update(JSON.stringify(material)).digest('hex');
+}
+
+function archiveExistingLatest(outputAbs, archivePrefix) {
+  if (!existsSync(outputAbs)) return;
+  const archiveDir = join(homedir(), 'chexian-archive');
+  ensureDir(archiveDir);
+  renameSync(outputAbs, join(archiveDir, `${archivePrefix}_${formatDate()}.parquet`));
+  log('yellow', `  归档旧 latest → ${archivePrefix}_${formatDate()}.parquet`);
+}
+
+function publishCandidate(tmpOutput, outputAbs, archivePrefix) {
+  if (existsSync(outputAbs) && sha256File(tmpOutput) === sha256File(outputAbs)) {
+    unlinkSync(tmpOutput);
+    log('green', '  latest.parquet 内容未变化，跳过归档与替换');
+    return false;
+  }
+  archiveExistingLatest(outputAbs, archivePrefix);
+  renameSync(tmpOutput, outputAbs);
+  return true;
+}
+
+function writeFullSnapshotSourceArchive(scriptDir, id, batchDate, sourceFiles, sourceFingerprints) {
+  const rawDir = rawFullSnapshotDir(scriptDir, id, batchDate);
+  ensureDir(rawDir);
+  const archivedSources = sourceFiles.map((sourceFile, index) => {
+    const file = sourceFingerprints[index];
+    let dest = join(rawDir, sourceFile.name);
+    if (existsSync(dest) && sha256File(dest) !== file.sha256) {
+      const ext = extname(sourceFile.name);
+      const stem = ext ? sourceFile.name.slice(0, -ext.length) : sourceFile.name;
+      dest = join(rawDir, `${stem}.${file.sha256.slice(0, 12)}${ext}`);
+    }
+    if (!existsSync(dest)) copyFileSync(sourceFile.path, dest);
+    return {
+      ...file,
+      archived_path: dest,
+      archived_name: basename(dest),
+    };
+  });
+  writeJson(join(rawDir, 'source-manifest.json'), {
+    domain_id: id,
+    batch_date: batchDate,
+    archived_at: new Date().toISOString(),
+    sources: archivedSources,
+  });
+}
+
+function writeFullSnapshotReleaseManifest(scriptDir, id, batchDate, outputAbs, sourceFingerprints, cacheHit) {
+  const manifestPath = join(scriptDir, 'release-manifests', `${batchDate}.full_snapshot.json`);
+  const existing = existsSync(manifestPath)
+    ? JSON.parse(readFileSync(manifestPath, 'utf-8'))
+    : { batch_date: batchDate, generated_at: new Date().toISOString(), domains: {} };
+  existing.generated_at = new Date().toISOString();
+  existing.domains[id] = {
+    cache_hit: cacheHit,
+    output: outputAbs,
+    output_fingerprint: fileFingerprint(outputAbs),
+    sources: sourceFingerprints,
+  };
+  writeJson(manifestPath, existing);
+  log('green', `  release manifest: ${manifestPath}`);
+}
+
 // 流程末尾遍历 manifest 声明域，调 refresh_metadata.py 单点写入 data-sources.json。
 // parquet 路径 + 日期列从 data-sources.json 派生，避免重复硬编码。
 function runRefreshMetadata(python, scriptDir, releaseManifest) {
@@ -386,6 +550,7 @@ function runRefreshMetadata(python, scriptDir, releaseManifest) {
     claims_detail: 'report_time',
     cross_sell: 'policy_date',
     customer_flow: 'insurance_start_date',
+    new_energy_claims: 'report_time',
   };
   const runDate = releaseManifest.run_date;
   for (const domainId of Object.keys(releaseManifest.domains || {})) {
@@ -433,11 +598,7 @@ function runStandardDomain(python, scriptDir, manifest) {
   const skipMetadata = _currentReleaseManifest?.domains?.[id] != null;
   const extraArgs = skipMetadata ? ['--no-metadata'] : [];
 
-  // 多 glob 合并 + 按 path 去重（避免同一文件被多个模式匹配重复）
-  const seen = new Set();
-  const sourceFiles = inputGlobs
-    .flatMap(g => ls(g, scriptDir))
-    .filter(f => (seen.has(f.path) ? false : (seen.add(f.path), true)));
+  const { sourceFiles, batchDate } = resolveSourceFilesForTrigger(id, inputGlobs, scriptDir, trigger);
   if (sourceFiles.length === 0) {
     log('yellow', `⚠ 未找到 ${inputGlobs.join(' / ')}，跳过`);
     return;
@@ -447,7 +608,7 @@ function runStandardDomain(python, scriptDir, manifest) {
   }
 
   const ctx = {
-    python, id, scriptDir, sourceFiles, trigger,
+    python, id, scriptDir, sourceFiles, trigger, batchDate,
     scriptPath: join(scriptDir, etl_script),
     outputAbs: join(scriptDir, output),
     extraArgs,
@@ -458,6 +619,7 @@ function runStandardDomain(python, scriptDir, manifest) {
     single: runStrategySingle,
     multi_file_input: runStrategyMultiInput,
     multi_file_merge: runStrategyMultiMerge,
+    full_snapshot: runStrategyFullSnapshot,
   }[input_strategy];
 
   if (!strategyFn) {
@@ -496,15 +658,88 @@ function runStrategySingle({ python, id, scriptPath, sourceFiles, outputAbs, tri
 
 function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
   const { archive_prefix, output_is_dir } = trigger;
+  const inputArgs = ['-i', ...sourceFiles.map(f => `"${f.path}"`)];
+  const outputArg = output_is_dir ? dirname(outputAbs) : outputAbs;
+  if (output_is_dir) {
+    if (existsSync(outputAbs)) {
+      const archiveDir = join(homedir(), 'chexian-archive');
+      ensureDir(archiveDir);
+      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
+      log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDate()}.parquet`);
+    }
+    runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${outputArg}"`, ...extraArgs]);
+    return;
+  }
+
+  const tmpOutput = outputAbs + '.tmp';
+  try { if (existsSync(tmpOutput)) unlinkSync(tmpOutput); } catch (e) {}
+  runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${tmpOutput}"`, ...extraArgs]);
+  validateDomainCandidate(python, id, tmpOutput, trigger.validation);
   if (existsSync(outputAbs)) {
     const archiveDir = join(homedir(), 'chexian-archive');
     ensureDir(archiveDir);
     renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
     log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDate()}.parquet`);
   }
-  const inputArgs = ['-i', ...sourceFiles.map(f => `"${f.path}"`)];
-  const outputArg = output_is_dir ? dirname(outputAbs) : outputAbs;
-  runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${outputArg}"`, ...extraArgs]);
+  renameSync(tmpOutput, outputAbs);
+}
+
+function runStrategyFullSnapshot({ python, id, scriptDir, scriptPath, sourceFiles, outputAbs, trigger, batchDate, extraArgs = [] }) {
+  if (!batchDate) {
+    throw new Error(`${id} full_snapshot 缺少 batchDate`);
+  }
+  const sourceFingerprints = sourceFiles.map(f => fileFingerprint(f.path));
+  const snapDir = snapshotDir(scriptDir, id, batchDate);
+  const snapshotOutput = join(snapDir, fullSnapshotOutputName(id, trigger));
+  const snapshotManifest = join(snapDir, 'snapshot-manifest.json');
+  const tmpOutput = outputAbs + '.tmp';
+  const cacheKey = buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger });
+
+  writeFullSnapshotSourceArchive(scriptDir, id, batchDate, sourceFiles, sourceFingerprints);
+  try { if (existsSync(tmpOutput)) unlinkSync(tmpOutput); } catch (e) {}
+
+  let cacheHit = false;
+  if (existsSync(snapshotManifest) && existsSync(snapshotOutput)) {
+    const manifest = JSON.parse(readFileSync(snapshotManifest, 'utf-8'));
+    if (manifest.cache_key === cacheKey) {
+      log('green', `  full_snapshot cache hit: ${id} batch_date=${batchDate}`);
+      copyFileSync(snapshotOutput, tmpOutput);
+      validateDomainCandidate(python, id, tmpOutput, trigger.validation);
+      cacheHit = true;
+    }
+  }
+
+  if (!cacheHit) {
+    log('cyan', `  full_snapshot cache miss: ${id} batch_date=${batchDate}`);
+    ensureDir(snapDir);
+    const inputArgs = ['-i', ...sourceFiles.map(f => `"${f.path}"`)];
+    const snapshotArgs = trigger.write_snapshot_parts
+      ? ['--snapshot-dir', `"${snapDir}"`, '--batch-date', batchDate]
+      : [];
+    runPythonScript(python, scriptPath, [
+      ...inputArgs,
+      '-o', `"${tmpOutput}"`,
+      ...snapshotArgs,
+      ...extraArgs,
+    ]);
+    validateDomainCandidate(python, id, tmpOutput, trigger.validation);
+    copyFileSync(tmpOutput, snapshotOutput);
+    writeJson(snapshotManifest, {
+      domain_id: id,
+      batch_date: batchDate,
+      cache_key: cacheKey,
+      cache_hit: false,
+      generated_at: new Date().toISOString(),
+      output: fileFingerprint(snapshotOutput),
+      sources: sourceFingerprints,
+    });
+  }
+
+  const published = publishCandidate(tmpOutput, outputAbs, trigger.archive_prefix);
+  writeFullSnapshotReleaseManifest(scriptDir, id, batchDate, outputAbs, sourceFingerprints, cacheHit);
+  if (!published) {
+    log('green', `  ${id} latest 未变更，后续按域 rsync 将无实际数据传输`);
+  }
 }
 
 function runStrategyMultiMerge(ctx) {
@@ -944,7 +1179,8 @@ async function main() {
   loadEnvLocal(scriptDir);
 
   const noSync = process.argv.includes('--no-sync');
-  const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'renewal_tracker', 'all'];
+  const skipReport = process.argv.includes('--skip-report');
+  const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'new_energy_claims', 'new_energy', 'renewal_tracker', 'all'];
   const subcommand = process.argv.find(a => ALL_DOMAINS.includes(a));
 
   // 发布 manifest（可选）：声明本次刷新的域范围 + 期望日期；
@@ -967,13 +1203,19 @@ async function main() {
       case 'brand': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'brand')); break;
       case 'repair': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'repair_resource')); break;
       case 'customer_flow': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'customer_flow')); break;
+      case 'new_energy':
+      case 'new_energy_claims': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims')); break;
       case 'renewal_tracker': runRenewalTracker(python, scriptDir); break;
     }
     // manifest 驱动：该域完成后单点写入 metadata（替代 subroutine 内的 updateDataSources）
     if (_currentReleaseManifest) {
       runRefreshMetadata(python, scriptDir, _currentReleaseManifest);
     }
-    runPeriodTrendReport(scriptDir, python);
+    if (skipReport) {
+      log('yellow', '已跳过短中长期报告生成（--skip-report）');
+    } else {
+      runPeriodTrendReport(scriptDir, python);
+    }
     if (!noSync) {
       const synced = await syncToVps(scriptDir);
       if (!synced) process.exit(1);
@@ -1204,7 +1446,7 @@ async function main() {
   // 6. all 模式下追加全部域
   if (subcommand === 'all') {
     runClaimsDetail(python, scriptDir);
-    for (const id of ['cross_sell', 'quotes_conversion', 'brand', 'repair_resource', 'customer_flow']) {
+    for (const id of ['cross_sell', 'quotes_conversion', 'brand', 'repair_resource', 'customer_flow', 'new_energy_claims']) {
       runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, id));
     }
     // 派生域放末尾（依赖 policy + quotes_conversion + salesman 已产出）
@@ -1217,7 +1459,11 @@ async function main() {
   }
 
   // 7a. 短中长期对照报告（失败不阻塞，先于 VPS 同步以便 rsync 顺带推 HTML）
-  runPeriodTrendReport(scriptDir, python);
+  if (skipReport) {
+    log('yellow', '已跳过短中长期报告生成（--skip-report）');
+  } else {
+    runPeriodTrendReport(scriptDir, python);
+  }
 
   // 7b. ETL 末端门禁：policy/current 重叠检测（防止 2026-05-15 类裸名+限摩重复事故复发）
   const overlapOk = assertNoPolicyCurrentOverlap(

@@ -74,18 +74,29 @@ AMOUNT_COLS = [
 STR_FORCE_COLS = {'保单号': str, '报案号': str, '赔案号': str, '车架号': str, '标的车牌': str}
 
 
+def extract_policy_year_series(policy_no: pd.Series) -> pd.Series:
+    """从保单号第 12-15 位向量化提取保险起期年份，非法值返回 None。"""
+    values = policy_no.astype("string").str.slice(11, 15)
+    years = pd.to_numeric(values, errors="coerce")
+    valid = years.between(2018, 2030)
+    return years.where(valid).astype("Int64").astype(object).where(valid, None)
+
+
+def derive_subject_shop_code(subject_repair_shop: pd.Series) -> pd.Series:
+    """标的汽修厂前 8 位编码，长度不足或空值返回 None。"""
+    values = subject_repair_shop.astype("string").str.strip()
+    code = values.str.slice(0, 8).astype(object)
+    valid = values.str.len().ge(8).fillna(False)
+    code.loc[~valid] = None
+    return code
+
+
 def _enrich_insurance_start_date(df: pd.DataFrame, policy_dir: str | None) -> pd.DataFrame:
     """从 PolicyFact JOIN 获取 insurance_start_date，未匹配的用 policy_no 位置 12-15 推导年份。"""
     import duckdb
 
     # Step 1: 从 policy_no 提取年份作为 fallback（SUBSTRING 位置 12-15 = 保险起期年份，98.2% 一致率）
-    def extract_year(pno):
-        if pd.isna(pno) or len(str(pno)) < 15:
-            return None
-        y = str(pno)[11:15]
-        return int(y) if y.isdigit() and 2018 <= int(y) <= 2030 else None
-
-    df['_pn_year'] = df['policy_no'].apply(extract_year)
+    df['_pn_year'] = extract_policy_year_series(df['policy_no'])
 
     # Step 2: 尝试 JOIN PolicyFact 获取精确日期
     joined_count = 0
@@ -113,13 +124,15 @@ def _enrich_insurance_start_date(df: pd.DataFrame, policy_dir: str | None) -> pd
         # 未匹配的用 policy_no 年份构造 YYYY-01-01；mask 全 False 时跳过赋值（pandas 2.x+ 拒绝 empty→datetime64）
         mask = df['insurance_start_date'].isna() & df['_pn_year'].notna()
         if mask.any():
-            df.loc[mask, 'insurance_start_date'] = df.loc[mask, '_pn_year'].apply(
-                lambda y: pd.Timestamp(year=int(y), month=1, day=1)
+            df.loc[mask, 'insurance_start_date'] = pd.to_datetime(
+                df.loc[mask, '_pn_year'].astype("Int64").astype(str) + "-01-01",
+                errors="coerce",
             )
         df.drop(columns=['_pf_insurance_start_date'], inplace=True)
     else:
-        df['insurance_start_date'] = df['_pn_year'].apply(
-            lambda y: pd.Timestamp(year=int(y), month=1, day=1) if pd.notna(y) else pd.NaT
+        df['insurance_start_date'] = pd.to_datetime(
+            df['_pn_year'].astype("Int64").astype(str) + "-01-01",
+            errors="coerce",
         )
 
     # Step 4: 派生 insurance_year（分区键）
@@ -243,9 +256,7 @@ def main():
     # ── 派生：标的汽修厂前 8 位编码（JOIN RepairDim.shop_code 的稳定 key）──
     # 维修资源板块使用（.claude/shared-memory/repair_source_field_mapping.md §2.1）
     if 'subject_repair_shop' in df.columns:
-        df['subject_shop_code'] = df['subject_repair_shop'].apply(
-            lambda s: s[:8] if pd.notna(s) and isinstance(s, str) and len(s) >= 8 else None
-        )
+        df['subject_shop_code'] = derive_subject_shop_code(df['subject_repair_shop'])
         shop_non_null = df['subject_shop_code'].notna().sum()
         shop_unique = df['subject_shop_code'].nunique()
         print(f"   标的汽修厂: {shop_non_null:,}/{len(df):,} 有值, 去重编码 {shop_unique:,}")

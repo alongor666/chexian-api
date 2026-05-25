@@ -45,6 +45,13 @@ const COLORS = {
   bold: '\x1b[1m',
 };
 
+const FULL_SNAPSHOT_DOMAINS = new Set(['customer_flow', 'new_energy_claims', 'new_energy']);
+const FULL_SNAPSHOT_DOMAIN_ALIASES = {
+  customer_flow: 'customer_flow',
+  new_energy: 'new_energy_claims',
+  new_energy_claims: 'new_energy_claims',
+};
+
 function log(color, msg) {
   process.stdout.write(`${COLORS[color] || ''}${msg}${COLORS.reset}\n`);
 }
@@ -125,6 +132,65 @@ function runCmd(label, cmd, args, { dryRun, cwd = ROOT_DIR, timeoutMs = 0 } = {}
   });
 }
 
+function resolveFullSnapshotDomains(dailyArgs) {
+  const domains = dailyArgs
+    .filter(arg => !arg.startsWith('--'))
+    .flatMap(arg => arg.split(',').map(part => part.trim()).filter(Boolean))
+    .map(arg => FULL_SNAPSHOT_DOMAIN_ALIASES[arg] || arg);
+  if (domains.length === 0) return [];
+  if (!domains.every(domain => FULL_SNAPSHOT_DOMAINS.has(domain))) return [];
+  return [...new Set(domains)];
+}
+
+function buildEtlCommands(dailyArgs, fullSnapshotDomains) {
+  if (fullSnapshotDomains.length > 0) {
+    return fullSnapshotDomains.map(domain => ({
+      label: `ETL:${domain}`,
+      args: ['数据管理/daily.mjs', domain, '--no-sync', '--skip-report'],
+    }));
+  }
+  const args = dailyArgs.includes('--no-sync') ? [...dailyArgs] : [...dailyArgs, '--no-sync'];
+  return [{ label: 'ETL', args: ['数据管理/daily.mjs', ...args] }];
+}
+
+async function runDataReload(domains, { dryRun, healthUrl }) {
+  const token = process.env.ADMIN_RELOAD_TOKEN || process.env.SYNC_AND_RELOAD_ADMIN_TOKEN;
+  const payload = JSON.stringify({ domains });
+  const url = `${healthUrl.replace(/\/health$/, '')}/api/admin/data/reload`;
+  if (dryRun) {
+    log('cyan', `\n▶ [data-reload] POST ${url} ${payload}`);
+    log('yellow', '  (dry-run，full_snapshot 域将使用数据 reload，不选择 PM2 reload)');
+    return true;
+  }
+  if (!token) {
+    log('yellow', '\n⚠ 未设置 ADMIN_RELOAD_TOKEN，无法调用数据 reload，将回退 PM2 reload');
+    return false;
+  }
+  log('cyan', `\n▶ [data-reload] POST ${url}`);
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: payload,
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    log('yellow', `  数据 reload 请求失败，将回退 PM2 reload: ${err.message}`);
+    return false;
+  }
+  const body = await res.text();
+  if (!res.ok) {
+    log('yellow', `  数据 reload 失败 HTTP ${res.status}: ${body.slice(0, 200)}`);
+    return false;
+  }
+  log('green', `  ✓ 数据 reload 完成: ${body.slice(0, 200)}`);
+  return true;
+}
+
 async function healthCheck(url, maxAttempts = 8, intervalMs = 5000) {
   for (let i = 1; i <= maxAttempts; i++) {
     log('cyan', `  健康检查 ${i}/${maxAttempts}：GET ${url}`);
@@ -162,8 +228,12 @@ async function main() {
   if (opts.wecomOrg) log('cyan', `  wecom org:         ${opts.wecomOrg}`);
   log('cyan', `  dry-run:           ${opts.dryRun}`);
 
+  const fullSnapshotDomains = resolveFullSnapshotDomains(opts.dailyArgs);
+
   // Stage 1: ETL
-  await runCmd('ETL', 'node', ['数据管理/daily.mjs', ...opts.dailyArgs], { dryRun: opts.dryRun });
+  for (const step of buildEtlCommands(opts.dailyArgs, fullSnapshotDomains)) {
+    await runCmd(step.label, 'node', step.args, { dryRun: opts.dryRun });
+  }
 
   // Stage 2: governance
   if (opts.skipGovernance) {
@@ -172,22 +242,43 @@ async function main() {
     await runCmd('governance', 'bun', ['run', 'governance'], { dryRun: opts.dryRun });
   }
 
-  // Stage 3: PM2 reload（reload = pm2 delete + start，可恢复 errored）
-  if (opts.skipReload) {
-    log('yellow', '\n⚠ 跳过 PM2 reload（--skip-reload）');
-    log('green', '\n✅ ETL+governance 完成（未重启 PM2）');
-    return;
+  // Stage 3: 数据同步。sync-and-reload 统一控制上传范围，daily.mjs 固定 --no-sync。
+  const syncArgs = ['scripts/sync-vps.mjs', '--no-restart'];
+  if (fullSnapshotDomains.length > 0) syncArgs.push('--domain', fullSnapshotDomains.join(','));
+  if (opts.dryRun) {
+    log('cyan', `\n▶ [VPS sync] node ${syncArgs.join(' ')}`);
+    log('yellow', '  (dry-run，跳过实际上传)');
+  } else {
+    await runCmd('VPS sync', 'node', syncArgs, { dryRun: false });
   }
-  await runCmd(
-    'PM2 reload',
-    'ssh',
-    ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', sshAlias, 'sudo /usr/local/bin/deploy-chexian-api reload'],
-    { dryRun: opts.dryRun, timeoutMs: 60000 }
-  );
+
+  // Stage 4: full_snapshot 域优先数据 reload，其他域才 PM2 reload
+  if (opts.skipReload) {
+    log('yellow', '\n⚠ 跳过 reload（--skip-reload）');
+  }
+  let shouldRunProcessReload = !opts.skipReload;
+  let shouldRunHealthCheck = !opts.skipReload;
+  if (!opts.skipReload && fullSnapshotDomains.length > 0) {
+    const dataReloaded = await runDataReload(fullSnapshotDomains, { dryRun: opts.dryRun, healthUrl });
+    if (dataReloaded) {
+      shouldRunProcessReload = false;
+      log('green', '\n✅ full_snapshot 数据 reload 完成（不执行 PM2 reload）');
+    }
+  }
+  if (shouldRunProcessReload) {
+    await runCmd(
+      'PM2 reload',
+      'ssh',
+      ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', sshAlias, 'sudo /usr/local/bin/deploy-chexian-api reload'],
+      { dryRun: opts.dryRun, timeoutMs: 180000 }
+    );
+  }
 
   // Stage 4: 健康检查
   if (opts.dryRun) {
     log('yellow', '  (dry-run，跳过健康检查)');
+  } else if (!shouldRunHealthCheck) {
+    log('yellow', '  (skip-reload，跳过健康检查)');
   } else {
     log('cyan', '\n▶ [health-check] 等待 5s 让进程稳定');
     await new Promise(r => setTimeout(r, 5000));
@@ -242,11 +333,20 @@ async function main() {
   log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
 }
 
-main().catch(err => {
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(err => {
   log('red', `\n❌ 流程中断：${err.message}`);
   log('yellow', '提示：单步重试可使用：');
   log('yellow', '  node 数据管理/daily.mjs <subcommand>');
   log('yellow', '  bun run governance');
   log('yellow', '  ssh chexian-vps-deploy "sudo /usr/local/bin/deploy-chexian-api reload"');
   process.exit(1);
-});
+  });
+}
+
+export {
+  buildEtlCommands,
+  parseArgs,
+  runDataReload,
+  resolveFullSnapshotDomains,
+};

@@ -2,7 +2,7 @@
 """
 客户来源去向 Excel → customer_flow/latest.parquet
 
-续保客户流失去向数据：按车架号匹配次年保险公司。
+客户转保/流失分析数据：上年承保主体 → 华安 → 次年保险公司。
 
 用法：
   python3 convert_customer_flow.py -i 08_客户来源去向.xlsx -o warehouse/fact/customer_flow/latest.parquet
@@ -22,23 +22,121 @@ from pipelines.base_converter import BaseConverter
 from pipelines.etl_validation import PLACEHOLDER_STRS, safe_pct
 
 
+OUTPUT_COLUMNS = [
+    "policy_no",
+    "insurance_start_date",
+    "vehicle_frame_no",
+    "previous_insurer",
+    "next_insurer",
+]
+
+
+def infer_snapshot_part_name(input_file: Path) -> str | None:
+    if "_08_" in input_file.name:
+        return "08_loss.parquet"
+    if "_09_" in input_file.name:
+        return "09_previous.parquet"
+    return None
+
+
+def build_customer_flow_dataframe(
+    input_files: list[Path],
+    snapshot_dir: Path | None = None,
+    batch_date: str | None = None,
+) -> pd.DataFrame:
+    """读取新的 08/09 双产物，并合成为原 customer_flow schema。"""
+    from pipelines.etl_validation import load_excel_all_sheets
+
+    converter = CustomerFlowConverter()
+    frames = []
+    required = converter.get_required_columns()
+    cn_to_en = converter.get_cn_to_en()
+
+    for input_file in input_files:
+        df = load_excel_all_sheets(
+            input_file,
+            dtype=converter.get_str_force_cols(),
+            required_columns=required,
+        ).copy()
+        df.columns = df.columns.str.strip()
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            raise ValueError(f"{input_file.name} 缺少必须列: {missing}; 实际列: {list(df.columns)}")
+
+        rename_map = {k: v for k, v in cn_to_en.items() if k in df.columns}
+        df = df.rename(columns=rename_map)
+        keep = [c for c in df.columns if c in OUTPUT_COLUMNS]
+        df = df[keep]
+        for col in OUTPUT_COLUMNS:
+            if col not in df.columns:
+                df[col] = pd.NA
+        df = converter.transform_rows(df[OUTPUT_COLUMNS])
+        if snapshot_dir:
+            part_name = infer_snapshot_part_name(input_file)
+            if part_name:
+                from pipelines.parquet_utils import write_parquet_with_metadata
+
+                snapshot_dir.mkdir(parents=True, exist_ok=True)
+                write_parquet_with_metadata(
+                    df[OUTPUT_COLUMNS],
+                    snapshot_dir / part_name,
+                    source_file=str(input_file),
+                    processing_mode=f"convert_customer_flow_{part_name.replace('.parquet', '')}",
+                    extra_metadata={"source_batch_date": batch_date or ""},
+                )
+        frames.append(df)
+        print(f"   产物: {input_file.name} → {len(df):,} 行 × {len(df.columns)} 列")
+
+    if not frames:
+        raise ValueError("未提供 customer_flow 输入文件")
+
+    df = pd.concat(frames, ignore_index=True)
+    before_filter = len(df)
+    df = df[df["policy_no"].notna() & df["insurance_start_date"].notna()].copy()
+    if len(df) < before_filter:
+        print(f"   过滤无 policy_no/insurance_start_date: {before_filter - len(df):,} 行")
+
+    before = len(df)
+    df = (
+        df.groupby(["policy_no", "insurance_start_date"], as_index=False, sort=False)
+        .first()
+    )
+    if len(df) < before:
+        print(f"   合并 08/09 重叠主键: {before - len(df):,} 行")
+
+    final = df[OUTPUT_COLUMNS].sort_values(["insurance_start_date", "policy_no"]).reset_index(drop=True)
+    if snapshot_dir:
+        from pipelines.parquet_utils import write_parquet_with_metadata
+
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        write_parquet_with_metadata(
+            final,
+            snapshot_dir / "customer_flow.parquet",
+            source_file=", ".join(str(p) for p in input_files),
+            processing_mode="convert_customer_flow_snapshot",
+            extra_metadata={"source_batch_date": batch_date or ""},
+        )
+    return final
+
+
 class CustomerFlowConverter(BaseConverter):
     def get_domain_id(self) -> str:
         return "customer_flow"
 
     def get_title(self) -> str:
-        return "客户来源去向 → Parquet"
+        return "08/09 客户流向双产物 → Parquet"
 
     def get_cn_to_en(self) -> dict:
         return {
             "保单号": "policy_no",
             "保险起期": "insurance_start_date",
             "车架号": "vehicle_frame_no",
+            "上年承保主体": "previous_insurer",
             "次年保险公司": "next_insurer",
         }
 
     def get_required_columns(self) -> list:
-        return ["保单号", "保险起期", "车架号", "次年保险公司"]
+        return ["保单号"]
 
     def get_str_force_cols(self) -> dict:
         return {"保单号": str, "车架号": str}
@@ -59,7 +157,8 @@ class CustomerFlowConverter(BaseConverter):
                 f"   保险起期: {df['insurance_start_date'].min()} ~"
                 f" {df['insurance_start_date'].max()} ({valid:,} 有值)"
             )
-        for col in ("policy_no", "vehicle_frame_no", "next_insurer"):
+        for col in ("policy_no", "vehicle_frame_no", "previous_insurer",
+                    "next_insurer"):
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip().replace(PLACEHOLDER_STRS, None)
         return df
@@ -80,6 +179,10 @@ class CustomerFlowConverter(BaseConverter):
                 print(f"      预期 0；如出现请排查 BaseConverter 去重逻辑")
             else:
                 print(f"   ✓ 复合主键唯一性: 通过 (policy_no + start_date)")
+        if "previous_insurer" in df.columns:
+            n = int(df["previous_insurer"].notna().sum())
+            print(f"   有上年承保主体: {n:,} ({safe_pct(n, len(df)):.1f}%)")
+            print(f"   上年承保主体TOP10: {df['previous_insurer'].value_counts().head(10).to_dict()}")
         if "next_insurer" in df.columns:
             n = int(df["next_insurer"].notna().sum())
             print(f"   有次年保险公司: {n:,} ({safe_pct(n, len(df)):.1f}%)")
@@ -91,6 +194,68 @@ class CustomerFlowConverter(BaseConverter):
             self._print_date_continuity(df)
         # 与旧 latest.parquet 做 diff（写新 parquet 之前对比）
         self._print_diff_report(df, output_file)
+
+    def run(self) -> None:
+        import argparse
+
+        from pipelines.data_sources_updater import update_data_sources
+        from pipelines.etl_validation import (
+            validate_input_path,
+            validate_output_path,
+            verify_non_empty,
+        )
+        from pipelines.parquet_utils import write_parquet_with_metadata
+
+        parser = argparse.ArgumentParser(description=self.get_title())
+        parser.add_argument("-i", "--input", nargs="+", required=True, help="输入 Excel 文件（08/09 双产物）")
+        parser.add_argument("-o", "--output", required=True, help="输出 Parquet 文件")
+        parser.add_argument(
+            "--no-metadata",
+            action="store_true",
+            help="跳过 data-sources.json 写入（manifest 驱动流程专用，由 refresh_metadata.py 统一写）",
+        )
+        parser.add_argument("--snapshot-dir", default=None, help="可选：写出 08/09 中间快照和 final snapshot 的目录")
+        parser.add_argument("--batch-date", default=None, help="可选：快照批次日期 YYYYMMDD")
+        args = parser.parse_args()
+
+        input_files = [validate_input_path(str(p)) for p in args.input]
+        output_file = validate_output_path(str(args.output))
+
+        print("=" * 80)
+        print(f"📋 {self.get_title()}")
+        print("=" * 80)
+        for input_file in input_files:
+            print(f"   输入: {input_file.name}")
+
+        snapshot_dir = Path(args.snapshot_dir).resolve() if args.snapshot_dir else None
+        df = build_customer_flow_dataframe(input_files, snapshot_dir=snapshot_dir, batch_date=args.batch_date)
+        self.pre_write_hook(df, output_file)
+
+        source_names = ", ".join(str(p) for p in input_files)
+        write_parquet_with_metadata(
+            df,
+            output_file,
+            source_file=source_names,
+            processing_mode=f"convert_{self.get_domain_id()}",
+        )
+        size_mb = output_file.stat().st_size / 1024 / 1024
+        print(f"\n   输出: {output_file} ({size_mb:.1f} MB)")
+
+        verify = pd.read_parquet(output_file)
+        verify_non_empty(verify)
+        print(f"   验证: {len(verify):,} 行 × {len(verify.columns)} 列 ✅")
+
+        if not args.no_metadata:
+            update_data_sources(
+                self.get_domain_id(),
+                row_count=len(df),
+                field_count=len(df.columns),
+            )
+
+        self.post_write_hook(df, output_file)
+
+        print("=" * 80)
+        print("✅ 完成")
 
     @staticmethod
     def _print_date_continuity(df: pd.DataFrame) -> None:
@@ -180,7 +345,7 @@ class CustomerFlowConverter(BaseConverter):
 
         try:
             df_old = pd.read_parquet(
-                old_path, columns=["policy_no", "next_insurer"]
+                old_path, columns=["policy_no", "previous_insurer", "next_insurer"]
             )
         except Exception as e:
             print(f"\n   ⚠ 读取旧 parquet 失败，跳过 diff: {e}")
@@ -192,12 +357,12 @@ class CustomerFlowConverter(BaseConverter):
         removed_keys = old_set - new_set
         common_keys = old_set & new_set
 
-        # 状态变更：次年保险公司发生变化
+        # 状态变更：上年承保主体或次年保险公司发生变化
         changed_count = 0
         flow_changes = []
         if common_keys:
-            old_lookup = df_old.set_index("policy_no")[["next_insurer"]]
-            new_lookup = df_new.set_index("policy_no")[["next_insurer"]]
+            old_lookup = df_old.set_index("policy_no")[["previous_insurer", "next_insurer"]]
+            new_lookup = df_new.set_index("policy_no")[["previous_insurer", "next_insurer"]]
             common_old = old_lookup.loc[old_lookup.index.isin(common_keys)]
             common_new = new_lookup.loc[new_lookup.index.isin(common_keys)]
             common_old, common_new = common_old.align(common_new, join="inner")
@@ -246,7 +411,7 @@ class CustomerFlowConverter(BaseConverter):
         print(f"   {'-'*12} {'-'*8}  {'-'*30}")
         rows = [
             ("新增保单", len(added_keys), "新签保单首次进入流转"),
-            ("状态变更", changed_count, "次年保险公司有变化"),
+            ("状态变更", changed_count, "上年承保主体或次年保险公司有变化"),
             ("消失保单", len(removed_keys), "旧数据有、新数据无"),
         ]
         for label, count, desc in rows:
