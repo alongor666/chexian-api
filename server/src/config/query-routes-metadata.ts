@@ -330,6 +330,33 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
     dataScope: 'any',
     tags: ['renewal'],
   },
+
+  // ── PIVOT 维度×指标交叉聚合 ──────────────────────
+  {
+    key: 'PIVOT', path: '/pivot', method: 'GET',
+    summary: '维度×指标交叉聚合',
+    description: '让 Agent 自由组合 1-2 个维度 × 1-10 个指标做 GROUP BY 聚合。维度走白名单（org_level_3 / salesman_name / customer_category / insurance_type / coverage_combination / tonnage_segment / renewal_mode / insurance_grade / is_renewal / is_new_car / is_nev / is_telemarketing / is_transfer / week_number / month_number），指标走 metric-registry（参考 /api/discover/metrics）。',
+    parameters: [
+      { name: 'dimensions', type: 'string', required: true, description: '逗号分隔的 1-2 个维度（如 org_level_3,customer_category）' },
+      { name: 'metrics', type: 'string', required: true, description: '逗号分隔的 1-10 个指标 id（如 total_premium,policy_count）' },
+      { name: 'limit', type: 'number', description: '返回行数，默认 100，上限 500' },
+      ...TS_COMMON, ...ORG_FILTER,
+    ],
+    dataScope: 'any',
+    tags: ['pivot', 'agent'],
+  },
+
+  // ── SQL 直通 ─────────────────────────────────────
+  {
+    key: 'SQL', path: '/sql', method: 'GET',
+    summary: 'DuckDB SELECT/WITH 直通',
+    description: '复杂查询安全兜底。强制 SELECT|WITH 开头、必须含 PolicyFact、必须聚合、禁止 policy_no 明细、≤8000 字符。行级权限自动注入到每个 FROM PolicyFact。',
+    parameters: [
+      { name: 'sql', type: 'string', required: true, description: 'DuckDB SELECT 或 WITH 查询语句（≤8000 字符，必须聚合）' },
+    ],
+    dataScope: 'any',
+    tags: ['sql', 'agent'],
+  },
 ];
 
 /** 按 key 索引 */

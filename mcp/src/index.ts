@@ -19,7 +19,13 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadMcpConfig, mcpGet } from './api.js';
-import { fetchAllTools, type RouteMeta, type McpTool } from './tools/build-tools.js';
+import {
+  fetchAllTools,
+  buildDiscoveryTools,
+  type RouteMeta,
+  type McpTool,
+  type DiscoveryToolBinding,
+} from './tools/build-tools.js';
 
 async function main(): Promise<void> {
   const cfg = loadMcpConfig();
@@ -27,10 +33,13 @@ async function main(): Promise<void> {
   // 启动时拉一次 catalog；失败直接退出（Claude Desktop 会显示错误）
   let tools: McpTool[] = [];
   let routes: RouteMeta[] = [];
+  let discoveryBindings: DiscoveryToolBinding[] = [];
   try {
     const result = await fetchAllTools(cfg);
     tools = result.tools;
     routes = result.routes;
+    discoveryBindings = await buildDiscoveryTools(cfg);
+    tools = tools.concat(discoveryBindings.map((b) => b.tool));
   } catch (err) {
     console.error(`[chexian-mcp] Failed to fetch route-catalog: ${(err as Error).message}`);
     process.exit(1);
@@ -38,6 +47,9 @@ async function main(): Promise<void> {
 
   const routesByToolName = new Map<string, RouteMeta>(
     routes.map((r) => [`cx_query_${r.key.toLowerCase()}`, r]),
+  );
+  const discoveryByToolName = new Map<string, string>(
+    discoveryBindings.map((b) => [b.tool.name, b.endpoint]),
   );
 
   const server = new Server(
@@ -49,6 +61,27 @@ async function main(): Promise<void> {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const toolName = request.params.name;
+    const args = (request.params.arguments ?? {}) as Record<string, string | number | boolean>;
+
+    // 发现工具：转发到 /api/discover/*
+    const discoveryEndpoint = discoveryByToolName.get(toolName);
+    if (discoveryEndpoint) {
+      try {
+        const data = await mcpGet<unknown>(cfg, discoveryEndpoint, args);
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify((data as any)?.data ?? data, null, 2),
+          }],
+        };
+      } catch (err) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: (err as Error).message }],
+        };
+      }
+    }
+
     const route = routesByToolName.get(toolName);
     if (!route) {
       return {
@@ -57,7 +90,6 @@ async function main(): Promise<void> {
       };
     }
     try {
-      const args = (request.params.arguments ?? {}) as Record<string, string | number | boolean>;
       const data = await mcpGet<unknown>(cfg, route.fullPath, args);
       return {
         content: [{
