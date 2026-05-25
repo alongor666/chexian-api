@@ -41,6 +41,25 @@ describe('sql passthrough validation chain', () => {
     expect(v.valid).toBe(true);
   });
 
+  it('注释中的 PolicyFact 不满足访问边界要求', () => {
+    const v = validateSQL('WITH x AS (SELECT 1) SELECT COUNT(*) FROM ApiToken -- PolicyFact');
+    expect(v.valid).toBe(false);
+    expect(v.error).toMatch(/访问边界/);
+  });
+
+  it('拒绝会泄漏 policy_no 明细值的聚合函数', () => {
+    for (const sql of [
+      "SELECT STRING_AGG(policy_no, ',') AS policies FROM PolicyFact GROUP BY org_level_3",
+      'SELECT ARRAY_AGG(policy_no) AS policies FROM PolicyFact GROUP BY org_level_3',
+      'SELECT MIN(policy_no) AS one_policy FROM PolicyFact GROUP BY org_level_3',
+      'SELECT MAX(policy_no) AS one_policy FROM PolicyFact GROUP BY org_level_3',
+    ]) {
+      const v = validateSQL(sql);
+      expect(v.valid).toBe(false);
+      expect(v.error).toMatch(/policy_no/);
+    }
+  });
+
   it('不引用 PolicyFact 被拒绝', () => {
     const v = validateSQL('SELECT 1 AS x');
     expect(v.valid).toBe(false);
