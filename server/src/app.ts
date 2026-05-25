@@ -165,6 +165,7 @@ app.get('/api/health/detail', authMiddleware, (req, res) => {
 import authRoutes from './routes/auth.js';
 import wecomAuthRoutes from './routes/wecom-auth.js';
 import queryRoutes from './routes/query.js';
+import discoverRoutes from './routes/discover.js';
 import filtersRoutes from './routes/filters.js';
 import dataRoutes, { setCurrentDataFile } from './routes/data.js';
 import aiRoutes from './routes/ai.js';
@@ -180,6 +181,7 @@ import reportsRoutes from './routes/reports.js';
 app.use('/api/auth/wecom', wecomAuthRoutes); // 放前面避免 loginLimiter 影响
 app.use('/api/auth', authRoutes);
 app.use('/api/query', queryRoutes);
+app.use('/api/discover', discoverRoutes);
 app.use('/api/filters', filtersRoutes);
 app.use('/api/data', dataRoutes);
 app.use('/api/ai', aiRoutes);

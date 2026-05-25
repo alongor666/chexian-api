@@ -111,6 +111,98 @@ export function injectPermissionFilter(sql: string, permissionFilter: string): s
 }
 
 /**
+ * CTE 兼容的权限注入。
+ *
+ * 策略：对 SQL 中每个直接读取 PolicyFact 的位置（`FROM PolicyFact [alias]`）
+ * 应用与 injectWhereAfterFrom 相同的注入规则。引用其它 CTE 别名的 FROM 不动 ——
+ * 因为它的上游 CTE 已经被过滤过了。
+ *
+ * 非 CTE 情况直接委托给 injectPermissionFilter，保持兼容。
+ *
+ * @param sql - 原始用户 SQL（可能含 CTE）
+ * @param permissionFilter - 权限过滤条件
+ * @returns 注入权限后的 SQL
+ */
+export function injectPermissionIntoAnySql(sql: string, permissionFilter: string): string {
+  if (!permissionFilter || permissionFilter === '1=1') {
+    return sql;
+  }
+
+  if (!hasCTE(sql)) {
+    return injectPermissionFilter(sql, permissionFilter);
+  }
+
+  // CTE 路径：遍历每个 `FROM PolicyFact [alias]` 引用，注入 WHERE
+  // 用大小写不敏感的全局正则定位 PolicyFact 引用的范围（含可选别名）
+  const polRefPattern = /\bFROM\s+PolicyFact(?:\s+AS\s+\w+|\s+\w+)?\b/gi;
+  let result = sql;
+  let consumedUpTo = 0;
+  const out: string[] = [];
+  let match: RegExpExecArray | null;
+
+  // 我们对每个匹配 FROM PolicyFact 后的子句应用 inject 逻辑。为避免正则反复
+  // 撞到已替换的文本，构造一份替换计划再一次性拼接。
+  const replacements: Array<{ start: number; end: number; replaced: string }> = [];
+
+  while ((match = polRefPattern.exec(sql)) !== null) {
+    const fromStart = match.index;
+    // 找到该 PolicyFact 引用所属的子查询/CTE 的结尾：
+    // 即下一个 `)` 之前、或下一个 CTE 起点之前、或 SQL 结尾。
+    // 简化做法：取从 FROM 起到下一个不被括号闭合的 `)`、或全文末尾的范围。
+    const fragmentEnd = findFragmentEnd(sql, fromStart);
+    const fragment = sql.slice(fromStart, fragmentEnd);
+    // 把"FROM PolicyFact [alias] <rest>"片段当作一个独立 SQL 走原 inject 逻辑。
+    // injectWhereAfterFrom 的几种 case 都是 "FROM <table> ..." 起始；
+    // 我们这里片段也以 FROM 起始，可直接复用。
+    const injected = injectWhereAfterFrom(fragment, permissionFilter);
+    replacements.push({ start: fromStart, end: fragmentEnd, replaced: injected });
+  }
+
+  if (replacements.length === 0) {
+    // 兜底：没匹配到 PolicyFact 引用（理论上 validateSQL 已要求必须含 PolicyFact）
+    return sql;
+  }
+
+  // 按起点排序，重建 SQL
+  replacements.sort((a, b) => a.start - b.start);
+  let cursor = 0;
+  result = '';
+  for (const r of replacements) {
+    if (r.start < cursor) continue; // 跳过已被前一个替换覆盖的重叠区间
+    result += sql.slice(cursor, r.start) + r.replaced;
+    cursor = r.end;
+  }
+  result += sql.slice(cursor);
+  return result;
+}
+
+/**
+ * 找到从 fromIndex 起一个 PolicyFact-from 片段的逻辑结尾：
+ * 下一个未匹配的 `)`、或下一个 CTE 头（`)\s*,\s*<ident>\s+AS\s*\(`）、或 SQL 末尾。
+ * 简化策略：括号深度跟踪，深度 < 0 时停。
+ */
+function findFragmentEnd(sql: string, fromIndex: number): number {
+  let depth = 0;
+  let inSingleQuote = false;
+  for (let i = fromIndex; i < sql.length; i++) {
+    const ch = sql[i];
+    if (ch === "'") {
+      // 处理 '' 转义
+      if (inSingleQuote && sql[i + 1] === "'") { i++; continue; }
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+    if (inSingleQuote) continue;
+    if (ch === '(') depth++;
+    else if (ch === ')') {
+      if (depth === 0) return i; // 遇到所属 CTE 的闭合括号
+      depth--;
+    }
+  }
+  return sql.length;
+}
+
+/**
  * 允许在权限过滤条件中使用的字段名白名单
  */
 const ALLOWED_PERMISSION_FIELDS = new Set([

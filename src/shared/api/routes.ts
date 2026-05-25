@@ -130,6 +130,12 @@ export const QUERY_ROUTES = {
     LOSS_RATIO_DEV: 'claims-detail/loss-ratio-development',
     HEATMAP: 'claims-detail/heatmap',
   },
+
+  // PIVOT 维度×指标交叉聚合（Agent 自由编排）
+  PIVOT: 'pivot',
+
+  // SQL 直通（复杂查询安全兜底）
+  SQL: 'sql',
 } as const;
 
 // ─────────────────────────────────────────────

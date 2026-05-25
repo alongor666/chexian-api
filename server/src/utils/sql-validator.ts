@@ -91,6 +91,70 @@ const AGGREGATE_FUNCTIONS = [
   'STRING_AGG',
 ];
 
+function removeSqlComments(sql: string): string {
+  return sql
+    .replace(/--[^\n\r]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+function maskStringLiterals(sql: string): string {
+  return sql.replace(/'(?:''|[^'])*'/g, "''");
+}
+
+function sqlForStructuralChecks(sql: string): string {
+  return maskStringLiterals(removeSqlComments(sql));
+}
+
+function collectCteAliases(sql: string): Set<string> {
+  const aliases = new Set<string>();
+  const ctePattern = /(?:\bWITH|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s+AS\s*\(/gi;
+  let match: RegExpExecArray | null;
+  while ((match = ctePattern.exec(sql)) !== null) {
+    aliases.add(match[1].toUpperCase());
+  }
+  return aliases;
+}
+
+function collectReferencedRelations(sql: string): string[] {
+  const refs: string[] = [];
+  const relationPattern = /\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_.]*)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = relationPattern.exec(sql)) !== null) {
+    refs.push(match[1]);
+  }
+  return refs;
+}
+
+function validatePolicyFactBoundary(sql: string): ValidationResult | null {
+  const cteAliases = collectCteAliases(sql);
+  const relations = collectReferencedRelations(sql);
+  let hasPolicyFact = false;
+
+  for (const relation of relations) {
+    const normalized = relation.toUpperCase();
+    if (normalized === 'POLICYFACT') {
+      hasPolicyFact = true;
+      continue;
+    }
+    if (cteAliases.has(normalized)) {
+      continue;
+    }
+    return {
+      valid: false,
+      error: `禁止访问 ${relation} 表 (访问边界限制)`,
+    };
+  }
+
+  if (!hasPolicyFact) {
+    return {
+      valid: false,
+      error: '查询必须使用 PolicyFact 视图 (访问边界限制)',
+    };
+  }
+
+  return null;
+}
+
 /**
  * 验证 SQL 查询
  *
@@ -128,9 +192,11 @@ export function validateSQL(sql: string): ValidationResult {
 
   // 规范化 SQL (转大写,用于关键词检测)
   const normalizedSQL = trimmedSQL.toUpperCase();
+  const structuralSQL = sqlForStructuralChecks(trimmedSQL);
+  const normalizedStructuralSQL = structuralSQL.toUpperCase();
 
   // 3. 只读语句限制 (仅允许 SELECT 或 WITH 开头)
-  if (!normalizedSQL.startsWith('SELECT') && !normalizedSQL.startsWith('WITH')) {
+  if (!normalizedStructuralSQL.startsWith('SELECT') && !normalizedStructuralSQL.startsWith('WITH')) {
     return {
       valid: false,
       error: '只允许 SELECT 或 WITH 查询语句',
@@ -141,7 +207,7 @@ export function validateSQL(sql: string): ValidationResult {
   for (const keyword of FORBIDDEN_KEYWORDS) {
     // 使用单词边界匹配,避免误判 (例如 INSERT 不应匹配到 INSERTED)
     const regex = new RegExp(`\\b${keyword}\\b`, 'i');
-    if (regex.test(normalizedSQL)) {
+    if (regex.test(normalizedStructuralSQL)) {
       return {
         valid: false,
         error: `禁止使用 ${keyword} 语句 (只读查询模式)`,
@@ -151,7 +217,7 @@ export function validateSQL(sql: string): ValidationResult {
 
   // 5. 文件操作函数检测
   for (const func of FORBIDDEN_FUNCTIONS) {
-    if (normalizedSQL.includes(func.toUpperCase())) {
+    if (normalizedStructuralSQL.includes(func.toUpperCase())) {
       return {
         valid: false,
         error: `禁止使用文件操作函数 ${func} (只读查询模式)`,
@@ -160,17 +226,12 @@ export function validateSQL(sql: string): ValidationResult {
   }
 
   // 6. 访问边界检测
-  // 6.1 必须引用 PolicyFact 视图
-  if (!normalizedSQL.includes('POLICYFACT')) {
-    return {
-      valid: false,
-      error: '查询必须使用 PolicyFact 视图 (访问边界限制)',
-    };
-  }
+  const boundaryError = validatePolicyFactBoundary(structuralSQL);
+  if (boundaryError) return boundaryError;
 
-  // 6.2 禁止访问 raw_parquet
+  // 6.1 禁止访问 raw_parquet
   for (const table of FORBIDDEN_TABLES) {
-    if (normalizedSQL.includes(table.toUpperCase())) {
+    if (normalizedStructuralSQL.includes(table.toUpperCase())) {
       return {
         valid: false,
         error: `禁止访问 ${table} 表 (访问边界限制)`,
@@ -179,37 +240,21 @@ export function validateSQL(sql: string): ValidationResult {
   }
 
   // 7. 隐私口径检测 (禁止选择保单明细字段)
-  // 策略：确保 policy_no 的 **每一个** 出现都在聚合函数内部
+  // 策略：policy_no 只允许作为计数字段出现，禁止返回或重构明细值。
   for (const field of FORBIDDEN_FIELDS) {
-    const fieldPattern = new RegExp(`\\b${field}\\b`, 'gi');
-
-    // 7.1 检查 SELECT 子句
-    const selectClauseMatch = trimmedSQL.match(/SELECT\s+(.*?)\s+FROM/is);
-    if (selectClauseMatch) {
-      const selectClause = selectClauseMatch[1];
-
-      if (fieldPattern.test(selectClause)) {
-        // 构建聚合函数模式：匹配 AGG_FUNC(...field...) 包括嵌套情况
-        // 如 COUNT(DISTINCT policy_no), COUNT(policy_no), COUNT(CASE WHEN ... policy_no ... END)
-        const aggregatePattern = new RegExp(
-          `\\b(${AGGREGATE_FUNCTIONS.join('|')})\\s*\\([^()]*${field}[^()]*\\)`,
-          'gi'
-        );
-
-        // 移除所有在聚合函数内的 field 出现
-        const clauseWithoutAggregates = selectClause.replace(aggregatePattern, '');
-
-        // 检查移除聚合后是否还有裸露的 field
-        if (new RegExp(`\\b${field}\\b`, 'i').test(clauseWithoutAggregates)) {
-          return {
-            valid: false,
-            error: `禁止查询保单明细字段 ${field} (隐私保护)`,
-          };
-        }
-      }
+    const allowedCountPattern = new RegExp(
+      `\\bCOUNT\\s*\\(\\s*(?:DISTINCT\\s+)?(?:\\w+\\.)?${field}\\s*\\)`,
+      'gi'
+    );
+    const sqlWithoutAllowedCounts = structuralSQL.replace(allowedCountPattern, '');
+    if (new RegExp(`\\b${field}\\b`, 'i').test(sqlWithoutAllowedCounts)) {
+      return {
+        valid: false,
+        error: `禁止查询保单明细字段 ${field} (隐私保护)`,
+      };
     }
 
-    // 7.2 检查 GROUP BY 子句（禁止 GROUP BY policy_no）
+    // 7.1 检查 GROUP BY 子句（禁止 GROUP BY policy_no）
     const groupByMatch = trimmedSQL.match(/GROUP\s+BY\s+(.+?)(?:HAVING|ORDER|LIMIT|$)/is);
     if (groupByMatch) {
       const groupByClause = groupByMatch[1];
@@ -221,7 +266,7 @@ export function validateSQL(sql: string): ValidationResult {
       }
     }
 
-    // 7.3 检查 ORDER BY 子句（禁止 ORDER BY policy_no）
+    // 7.2 检查 ORDER BY 子句（禁止 ORDER BY policy_no）
     const orderByMatch = trimmedSQL.match(/ORDER\s+BY\s+(.+?)(?:LIMIT|$)/is);
     if (orderByMatch) {
       const orderByClause = orderByMatch[1];

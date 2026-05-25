@@ -32,6 +32,8 @@ import customerFlowRoutes from './query/customer-flow.js';
 import patrolRoutes from './query/patrol.js';
 import policyGeoRoutes from './query/policy-geo.js';
 import renewalTrackerRoutes from './query/renewal-tracker.js';
+import pivotRoutes from './query/pivot.js';
+import sqlPassthroughRoutes from './query/sql-passthrough.js';
 
 export { buildRouteCacheKey } from './query/shared.js';
 export { fetchDashboardBundleData } from './query/bundles.js';
@@ -62,5 +64,7 @@ router.use(customerFlowRoutes);
 router.use(patrolRoutes);
 router.use(policyGeoRoutes);
 router.use(renewalTrackerRoutes);
+router.use(pivotRoutes);
+router.use(sqlPassthroughRoutes);
 
 export default router;

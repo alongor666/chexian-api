@@ -108,6 +108,12 @@ export const QUERY_ROUTES = {
   // 续保追踪
   RENEWAL_TRACKER: '/renewal-tracker',
 
+  // PIVOT 维度×指标交叉聚合（Agent 自由编排）
+  PIVOT: '/pivot',
+
+  // SQL 直通（复杂查询安全兜底）
+  SQL: '/sql',
+
   // 测试（仅开发环境）
   TEST: '/test',
 } as const;
