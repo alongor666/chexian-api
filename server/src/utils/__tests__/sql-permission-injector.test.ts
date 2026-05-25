@@ -77,4 +77,20 @@ describe('injectPermissionIntoAnySql', () => {
     const sql = 'WITH base AS (SELECT * FROM PolicyFact) SELECT * FROM base';
     expect(() => injectPermissionFilter(sql, PF)).toThrow(/CTE/);
   });
+
+  it('CTE 内嵌套子查询 — 跳过重叠区间避免生成损坏 SQL', () => {
+    // JOIN (SELECT ... FROM PolicyFact) 内层引用被外层匹配区间覆盖
+    // 修复前：内层替换在 cursor 已超过其 start 后仍追加，产出 "...sub.idFROM PolicyFact WHERE..." 类乱序 SQL
+    // 修复后：内层区间 start < cursor 时跳过，只注入外层一次
+    const sql =
+      'WITH base AS (' +
+      'SELECT * FROM PolicyFact JOIN (SELECT id FROM PolicyFact) sub ON PolicyFact.id = sub.id' +
+      ') SELECT * FROM base';
+    const out = injectPermissionIntoAnySql(sql, PF);
+    // permission filter 仅出现一次（不因重叠替换被重复追加）
+    const filterOccurrences = (out.match(/org_level_3\s*=\s*'乐山'/g) ?? []).length;
+    expect(filterOccurrences).toBe(1);
+    // 结构完整：主查询部分 FROM base 未被破坏
+    expect(out).toMatch(/\)\s*SELECT\s+\*\s+FROM\s+base\s*$/i);
+  });
 });

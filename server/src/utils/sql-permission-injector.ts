@@ -168,6 +168,7 @@ export function injectPermissionIntoAnySql(sql: string, permissionFilter: string
   let cursor = 0;
   result = '';
   for (const r of replacements) {
+    if (r.start < cursor) continue; // 跳过已被前一个替换覆盖的重叠区间
     result += sql.slice(cursor, r.start) + r.replaced;
     cursor = r.end;
   }
