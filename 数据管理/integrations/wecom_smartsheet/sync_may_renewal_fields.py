@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refresh five fields in the May renewal tracking WeCom smart sheet.
+"""Refresh five fields in the 电销5-7月续保追踪表 WeCom smart sheet.
 
 This script intentionally updates existing rows only. A WeCom smartsheet
 webhook cannot read rows, so the first run must prime a local VIN -> record_id
@@ -38,6 +38,8 @@ VIN_FIELD_ID = "fcCW6A"
 FIELD_IDS = {
     "is_renewed": "fwuflw",       # 是否成交
     "is_quoted": "fyIIAm",        # 是否报价
+    "latest_quote_time": "feTyzE",  # 最后报价
+    "quote_salesman": "ftvF1W",     # 最后报价人
     "insurance_grade": "fq15NT",  # 风险等级
     "pricing_factor": "fvCvWp",   # 自主系数
     "loss_company": "fXXEDk",     # 流失公司
@@ -70,6 +72,8 @@ KEY_LABELS = {
     "coverage_combination": "险别组合",
     "is_renewed": "是否成交",
     "is_quoted": "是否报价",
+    "latest_quote_time": "最新报价时间",
+    "quote_salesman": "报价人",
     "insurance_grade": "风险等级",
     "pricing_factor": "自主系数",
     "loss_company": "流失公司",
@@ -92,6 +96,8 @@ DEFAULT_FIELD_TYPES = {
     "coverage_combination": "select",
     "is_renewed": "select",
     "is_quoted": "select",
+    "latest_quote_time": "text",
+    "quote_salesman": "text",
     "insurance_grade": "select",
     "pricing_factor": "number",
     "loss_company": "text",
@@ -101,10 +107,10 @@ CURRENT_FIELD_TYPES = dict(DEFAULT_FIELD_TYPES)
 DEFAULT_WEBHOOK_ENV = "WECOM_SMARTSHEET_WEBHOOK_RENEWAL_MAY"
 FIELD_SETS = {
     # 日常默认只写报价相关稳定字段；风险等级/流失公司先观察，避免目标表单选项不全时阻塞报价更新。
-    "quote": ["is_renewed", "is_quoted", "pricing_factor"],
-    "all": ["is_renewed", "is_quoted", "insurance_grade", "pricing_factor", "loss_company"],
+    "quote": ["is_renewed", "is_quoted", "latest_quote_time", "quote_salesman", "pricing_factor"],
+    "all": ["is_renewed", "is_quoted", "latest_quote_time", "quote_salesman", "insurance_grade", "pricing_factor", "loss_company"],
 }
-SEED_UPDATE_KEYS = ["is_renewed", "is_quoted", "coverage_combination", "insurance_grade", "pricing_factor", "loss_company"]
+SEED_UPDATE_KEYS = ["is_renewed", "is_quoted", "latest_quote_time", "quote_salesman", "coverage_combination", "insurance_grade", "pricing_factor", "loss_company"]
 BASE_UPDATE_KEYS = list(FIELD_SETS["quote"])
 BASE_SEED_KEYS = list(FULL_FIELD_IDS.keys())
 
@@ -384,6 +390,7 @@ def fetch_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
                insurance_grade AS quote_insurance_grade,
                commercial_pricing_factor AS quote_pricing_factor,
                quote_time,
+               regexp_replace(salesman_name, '^\d+', '') AS quote_salesman,
                ROW_NUMBER() OVER (
                  PARTITION BY vehicle_frame_no
                  ORDER BY quote_time DESC NULLS LAST
@@ -423,6 +430,8 @@ def fetch_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
       rt.coverage_combination,
       rt.is_renewed,
       rt.is_quoted,
+      CAST(FLOOR(EPOCH(q.quote_time) * 1000) AS BIGINT) AS latest_quote_time,
+      COALESCE(q.quote_salesman, '') AS quote_salesman,
       COALESCE(q.quote_insurance_grade, p.policy_insurance_grade, '') AS insurance_grade,
       COALESCE(q.quote_pricing_factor, p.policy_pricing_factor) AS pricing_factor,
       COALESCE(flow.next_insurer, '') AS loss_company
@@ -572,6 +581,8 @@ def build_update_values(row: dict[str, Any]) -> dict[str, Any]:
     for key, raw in (
         ("is_renewed", yes_no(row.get("is_renewed"))),
         ("is_quoted", yes_no(row.get("is_quoted"))),
+        ("latest_quote_time", row.get("latest_quote_time")),
+        ("quote_salesman", row.get("quote_salesman")),
         ("coverage_combination", row.get("coverage_combination")),
         ("insurance_grade", row.get("insurance_grade")),
         ("pricing_factor", row.get("pricing_factor")),
