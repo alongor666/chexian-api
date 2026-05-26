@@ -217,7 +217,7 @@ async function main() {
     ];
     if (!opts.wecomDryRun) renewalMayArgs.push('--execute');
     await runCmd(
-      opts.wecomDryRun ? 'WeCom renewal May dry-run' : 'WeCom renewal May sync',
+      opts.wecomDryRun ? 'WeCom 电销5-7月续保 dry-run' : 'WeCom 电销5-7月续保 sync',
       'python3',
       renewalMayArgs,
       { dryRun: opts.dryRun, timeoutMs: 30 * 60 * 1000 }
