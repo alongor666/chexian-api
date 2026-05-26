@@ -394,8 +394,8 @@
       ],
       "frontend_page": "customer-flow",
       "notes": "续保客户流失去向分析；源字段已缩减为保单号/保险起期/车架号/次年保险公司 4 列；按 (policy_no, insurance_start_date) 复合主键去重，消费侧按 vehicle_frame_no 匹配 next_insurer。",
-      "last_updated": "2026-05-25",
-      "row_count": 1311,
+      "last_updated": "2026-05-24",
+      "row_count": 1054779,
       "field_count": 4,
       "data_range": "2025-01-01 ~ 2026-05-22"
     },
