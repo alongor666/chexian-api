@@ -391,7 +391,7 @@ claims_detail     02_理赔明细_*.xlsx       convert_claims_detail.py  claims_
 cross_sell        03_交叉销售_*.xlsx       convert_cross_sell.py     cross_sell/latest.parquet       CrossSellFact→DailyAgg    cross-sell*.ts          /#/specialty
 quotes_conversion 04_报价清单_*.xlsx       quote_etl.py              quotes_conversion/latest.parquet QuoteConversion          quote-conversion.ts     /#/quote-conversion
 renewal_tracker   派生(policy+quote)        convert_renewal_tracker.py renewal_tracker/latest.parquet RenewalTrackerFact       renewal-tracker.ts      /#/renewal-tracker
-customer_flow     08_客户来源去向*.xlsx    convert_customer_flow.py  customer_flow/latest.parquet   CustomerFlow              customer-flow.ts        /#/customer-flow
+customer_flow     08_商业险续保流失公司 + 09_商业险转保上年公司 convert_customer_flow.py  customer_flow/latest.parquet   CustomerFlow              customer-flow.ts        /#/customer-flow
 repair_resource   07_维修资源*.xlsx        convert_repair.py         dim/repair/latest.parquet      RepairDim                 repair.ts               /#/repair
 brand             06_厂牌明细*.xlsx        convert_brand_dim.py      dim/brand/latest.parquet       BrandDim                  (诊断工具直用)          无
 salesman          川分销售人员名单*.xlsx   generate_dim_tables.py    dim/salesman/latest.parquet    SalesmanDim               间接(via mapping)       间接

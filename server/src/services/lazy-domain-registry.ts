@@ -59,6 +59,32 @@ export class LazyDomainRegistry {
     return Promise.race([entry.promise, this.timeoutReject(name, timeoutMs)]);
   }
 
+  async reload(name: string, options: LazyDomainLoadOptions = {}): Promise<void> {
+    const entry = this.domains.get(name);
+    if (!entry) {
+      const err = new Error(`Domain ${name} is not registered`);
+      (err as any).statusCode = 404;
+      throw err;
+    }
+    const timeoutMs = options.timeoutMs ?? LAZY_LOAD_TIMEOUT_MS;
+    if (entry.state === 'loading' && entry.promise) {
+      return Promise.race([entry.promise, this.timeoutReject(name, timeoutMs)]);
+    }
+    entry.state = 'loading';
+    entry.error = null;
+    entry.promise = entry.loader()
+      .then(() => {
+        entry.state = 'loaded';
+      })
+      .catch((err) => {
+        entry.state = 'unloaded';
+        entry.promise = null;
+        entry.error = err;
+        throw err;
+      });
+    return Promise.race([entry.promise, this.timeoutReject(name, timeoutMs)]);
+  }
+
   private timeoutReject(name: string, timeoutMs: number): Promise<never> {
     return new Promise<never>((_, reject) =>
       setTimeout(() => {

@@ -7,6 +7,7 @@
  *   node scripts/sync-vps.mjs                    # rsync 同步所有数据目录
  *   node scripts/sync-vps.mjs --check            # 仅预检 SSH 与本地待同步文件
  *   node scripts/sync-vps.mjs --no-restart       # 同步但不重启
+ *   node scripts/sync-vps.mjs --domain customer_flow --no-restart
  *   node scripts/sync-vps.mjs --dry-run          # 仅打印执行计划，不连接 VPS
  *
  * 同步目录（本地 → VPS）:
@@ -59,6 +60,7 @@ const LOCAL_QUOTES_CONVERSION_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/
 const LOCAL_CLAIMS_DETAIL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/claims_detail');
 const LOCAL_CROSS_SELL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/cross_sell');
 const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
+const LOCAL_NEW_ENERGY_CLAIMS_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/new_energy_claims');
 const LOCAL_RENEWAL_TRACKER_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_tracker');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_region');
@@ -99,6 +101,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     keyPath: undefined,
     remoteDir: undefined,
     healthUrl: undefined,
+    domains: [],
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -147,7 +150,15 @@ function parseArgs(argv = process.argv.slice(2)) {
         parsed.healthUrl = next;
         i += 1;
         break;
+      case '--domain':
+        parsed.domains = next.split(',').map((d) => d.trim()).filter(Boolean);
+        i += 1;
+        break;
       default:
+        if (token.startsWith('--domain=')) {
+          parsed.domains = token.slice('--domain='.length).split(',').map((d) => d.trim()).filter(Boolean);
+          break;
+        }
         throw new Error(`未知参数: ${token}`);
     }
   }
@@ -268,6 +279,7 @@ function resolveRunConfig(parsedArgs) {
     dryRun: parsedArgs.dryRun,
     checkMode: parsedArgs.checkMode,
     helpMode: parsedArgs.helpMode,
+    domains: parsedArgs.domains || [],
   };
 }
 
@@ -357,6 +369,33 @@ async function rsyncDir(alias, localDir, remoteDir, label, options = {}) {
   }
 }
 
+async function rsyncLatestAtomically(config, localDir, remoteDir, label) {
+  const latest = join(localDir, 'latest.parquet');
+  if (!existsSync(latest)) {
+    const message = 'latest.parquet 不存在';
+    log('red', `  ✗ ${label} ${message}`);
+    return { ok: false, label, error: message };
+  }
+  const tmpRemote = `${remoteDir}/latest.parquet.uploading`;
+  const finalRemote = `${remoteDir}/latest.parquet`;
+  try {
+    await execRemote(config, `mkdir -p ${quoteForSingle(remoteDir)}`, { silent: true });
+    log('yellow', `  rsync ${label} atomic latest: ${latest} → ${config.alias}:${tmpRemote}`);
+    await runLocal('rsync', [
+      '-azv',
+      '-e', 'ssh',
+      latest,
+      `${config.alias}:${tmpRemote}`,
+    ]);
+    await execRemote(config, `mv ${quoteForSingle(tmpRemote)} ${quoteForSingle(finalRemote)}`);
+    log('green', `  ✓ ${label} latest 原子同步完成`);
+    return { ok: true, label };
+  } catch (err) {
+    log('red', `  ✗ ${label} atomic latest 失败: ${err.message}`);
+    return { ok: false, label, error: err.message };
+  }
+}
+
 async function ensureSshReady(config) {
   const sshProbe = await runLocal('ssh', ['-V'], { silent: true, allowFailure: true });
   if (sshProbe.code !== 0) {
@@ -414,6 +453,7 @@ function collectCheckDirs() {
 function printHelp() {
   console.log(`用法:
   node scripts/sync-vps.mjs              # rsync 同步所有数据目录
+  node scripts/sync-vps.mjs --domain customer_flow --no-restart
   node scripts/sync-vps.mjs --check     # 预检 SSH + 列出本地待同步文件
   node scripts/sync-vps.mjs --dry-run   # 仅打印执行计划，不连接 VPS
   node scripts/sync-vps.mjs --no-restart  # 同步但不重启 PM2
@@ -435,7 +475,47 @@ function printHelp() {
   --key <path>         覆盖私钥路径
   --remote-dir <path>  覆盖远端数据根目录
   --health-url <url>   覆盖健康检查地址
+  --domain <ids>       仅同步指定数据域（逗号分隔），如 customer_flow,new_energy_claims
 `);
+}
+
+function buildStandardSyncTasks(remote, frontendDist) {
+  return [
+    { label: 'policy/current',       local: LOCAL_CURRENT_DIR,            remote: `${remote}/current`,               critical: true },
+    { label: 'dim/salesman',         local: LOCAL_SALESMAN_DIR,           remote: `${remote}/dim/salesman`,          critical: true },
+    { label: 'dim/plan',             local: LOCAL_PLAN_DIR,               remote: `${remote}/dim/plan`,              critical: true },
+    { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${remote}/fact/quotes_conversion`, critical: false },
+    { label: 'dim/brand',            local: LOCAL_BRAND_DIR,              remote: `${remote}/dim/brand`,             critical: false },
+    { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${remote}/fact/claims_detail`,    critical: true },
+    { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${remote}/fact/cross_sell`,       critical: false },
+    { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
+    { label: 'fact/new_energy_claims', local: LOCAL_NEW_ENERGY_CLAIMS_DIR, remote: `${remote}/fact/new_energy_claims`, critical: false },
+    { label: 'fact/renewal_tracker', local: LOCAL_RENEWAL_TRACKER_DIR,    remote: `${remote}/fact/renewal_tracker`,  critical: false },
+    { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
+    { label: 'dim/plate_region',     local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
+    { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${remote}/patrol_reports`,        critical: false },
+    { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${remote}/reports`,               critical: false, deleteRemote: false },
+    { label: 'public_reports',       local: LOCAL_PUBLIC_REPORTS_DIR,     remote: `${frontendDist}/reports`,         critical: false, deleteRemote: false },
+  ];
+}
+
+function buildDomainSyncTasks(remote, domainIds) {
+  const domainTaskMap = {
+    customer_flow: { label: 'fact/customer_flow', local: LOCAL_CUSTOMER_FLOW_DIR, remote: `${remote}/fact/customer_flow`, critical: true, atomicLatest: true },
+    new_energy_claims: { label: 'fact/new_energy_claims', local: LOCAL_NEW_ENERGY_CLAIMS_DIR, remote: `${remote}/fact/new_energy_claims`, critical: true, atomicLatest: true },
+  };
+  return domainIds.map((domainId) => {
+    const task = domainTaskMap[domainId];
+    if (!task) throw new Error(`不支持 --domain ${domainId}`);
+    return { ...task, domain: domainId };
+  });
+}
+
+function buildSyncTasks(runConfig) {
+  if (runConfig.domains.length > 0) {
+    return buildDomainSyncTasks(runConfig.remoteDir, runConfig.domains);
+  }
+  return buildStandardSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir);
 }
 
 function printDryRun(sshConfig, runConfig) {
@@ -448,26 +528,12 @@ function printDryRun(sshConfig, runConfig) {
   console.log(`Remote data root: ${runConfig.remoteDir}`);
   console.log(`Remote frontend dist: ${runConfig.frontendDistDir}`);
   console.log(`Restart: ${runConfig.noRestart ? 'no' : 'yes'}`);
+  console.log(`Domains: ${runConfig.domains.length ? runConfig.domains.join(',') : '(all)'}`);
   console.log(`Health URL: ${runConfig.healthUrl}`);
   console.log('');
-  console.log('将执行以下 rsync:');
+  console.log('将执行以下同步:');
 
-  const syncTasks = [
-    { label: 'policy/current',       local: LOCAL_CURRENT_DIR,            remote: `${runConfig.remoteDir}/current`,               critical: true },
-    { label: 'dim/salesman',         local: LOCAL_SALESMAN_DIR,           remote: `${runConfig.remoteDir}/dim/salesman`,          critical: true },
-    { label: 'dim/plan',             local: LOCAL_PLAN_DIR,               remote: `${runConfig.remoteDir}/dim/plan`,              critical: true },
-    { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${runConfig.remoteDir}/fact/quotes_conversion`, critical: false },
-    { label: 'dim/brand',            local: LOCAL_BRAND_DIR,              remote: `${runConfig.remoteDir}/dim/brand`,             critical: false },
-    { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${runConfig.remoteDir}/fact/claims_detail`,    critical: true },
-    { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${runConfig.remoteDir}/fact/cross_sell`,       critical: false },
-    { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${runConfig.remoteDir}/fact/customer_flow`,    critical: false },
-    { label: 'fact/renewal_tracker', local: LOCAL_RENEWAL_TRACKER_DIR,    remote: `${runConfig.remoteDir}/fact/renewal_tracker`,  critical: false },
-    { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${runConfig.remoteDir}/dim/repair`,            critical: false },
-    { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${runConfig.remoteDir}/dim/plate_region`,       critical: false },
-    { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${runConfig.remoteDir}/patrol_reports`,         critical: false },
-    { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${runConfig.remoteDir}/reports`,                critical: false, deleteRemote: false },
-    { label: 'public_reports',       local: LOCAL_PUBLIC_REPORTS_DIR,     remote: `${runConfig.frontendDistDir}/reports`,          critical: false, deleteRemote: false },
-  ];
+  const syncTasks = buildSyncTasks(runConfig);
 
   for (const task of syncTasks) {
     const exists = existsSync(task.local);
@@ -475,7 +541,11 @@ function printDryRun(sshConfig, runConfig) {
     const suffix = exists ? '' : '  （本地目录不存在，跳过）';
     const excludeStr = RSYNC_EXCLUDES.map((p) => `--exclude '${p}'`).join(' ');
     const deleteArg = task.deleteRemote === false ? '' : '--delete ';
-    console.log(`  ${tag} rsync -azv ${deleteArg}${excludeStr} -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
+    if (task.atomicLatest) {
+      console.log(`  ${tag} rsync -azv -e ssh ${task.local}/latest.parquet ${sshConfig.alias}:${task.remote}/latest.parquet.uploading && mv latest.parquet.uploading latest.parquet${suffix}`);
+    } else {
+      console.log(`  ${tag} rsync -azv ${deleteArg}${excludeStr} -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
+    }
   }
 }
 
@@ -507,26 +577,7 @@ async function maybeRestart(config, noRestart, healthUrl) {
  */
 async function runStandardMode(sshConfig, runConfig) {
   const alias = sshConfig.alias;
-  const remote = runConfig.remoteDir;
-  const frontendDist = runConfig.frontendDistDir;
-
-  // 声明式任务列表：critical=true 的目录失败会阻断重启
-  const syncTasks = [
-    { label: 'policy/current',       local: LOCAL_CURRENT_DIR,            remote: `${remote}/current`,               critical: true },
-    { label: 'dim/salesman',         local: LOCAL_SALESMAN_DIR,           remote: `${remote}/dim/salesman`,          critical: true },
-    { label: 'dim/plan',             local: LOCAL_PLAN_DIR,               remote: `${remote}/dim/plan`,              critical: true },
-    { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${remote}/fact/quotes_conversion`, critical: false },
-    { label: 'dim/brand',            local: LOCAL_BRAND_DIR,              remote: `${remote}/dim/brand`,             critical: false },
-    { label: 'fact/claims_detail',   local: LOCAL_CLAIMS_DETAIL_DIR,      remote: `${remote}/fact/claims_detail`,    critical: true },
-    { label: 'fact/cross_sell',      local: LOCAL_CROSS_SELL_DIR,         remote: `${remote}/fact/cross_sell`,       critical: false },
-    { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
-    { label: 'fact/renewal_tracker', local: LOCAL_RENEWAL_TRACKER_DIR,    remote: `${remote}/fact/renewal_tracker`,  critical: false },
-    { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
-    { label: 'dim/plate_region',    local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
-    { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,   remote: `${remote}/patrol_reports`,         critical: false },
-    { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,     remote: `${remote}/reports`,                critical: false, deleteRemote: false },
-    { label: 'public_reports',       local: LOCAL_PUBLIC_REPORTS_DIR,   remote: `${frontendDist}/reports`,          critical: false, deleteRemote: false },
-  ];
+  const syncTasks = buildSyncTasks(runConfig);
 
   // 过滤不存在的目录
   const activeTasks = [];
@@ -542,7 +593,11 @@ async function runStandardMode(sshConfig, runConfig) {
 
   // 并行 rsync 所有目录
   const results = await Promise.allSettled(
-    activeTasks.map(task => rsyncDir(alias, task.local, task.remote, task.label, { deleteRemote: task.deleteRemote }))
+    activeTasks.map(task => (
+      task.atomicLatest
+        ? rsyncLatestAtomically(sshConfig, task.local, task.remote, task.label)
+        : rsyncDir(alias, task.local, task.remote, task.label, { deleteRemote: task.deleteRemote })
+    ))
   );
 
   // 收集失败结果；optional 任务一次性重试（网络抖动/SSH 瞬时失败容错）
@@ -554,7 +609,9 @@ async function runStandardMode(sshConfig, runConfig) {
     let rsyncResult = result.status === 'fulfilled' ? result.value : { ok: false, label: task.label, error: result.reason?.message };
     if (!rsyncResult.ok && !task.critical) {
       log('yellow', `  重试 optional ${task.label}（抖动容错）...`);
-      rsyncResult = await rsyncDir(alias, task.local, task.remote, task.label, { deleteRemote: task.deleteRemote });
+      rsyncResult = task.atomicLatest
+        ? await rsyncLatestAtomically(sshConfig, task.local, task.remote, task.label)
+        : await rsyncDir(alias, task.local, task.remote, task.label, { deleteRemote: task.deleteRemote });
     }
     if (!rsyncResult.ok) {
       failures.push({ ...rsyncResult, critical: task.critical });
@@ -584,7 +641,7 @@ async function runStandardMode(sshConfig, runConfig) {
   }
 
   // 写同步清单：记录本次同步的文件指纹，governance 用于检测数据漂移
-  writeSyncManifest();
+  writeSyncManifest(activeTasks, runConfig);
 
   await maybeRestart(sshConfig, runConfig.noRestart, runConfig.healthUrl);
 }
@@ -593,41 +650,57 @@ async function runStandardMode(sshConfig, runConfig) {
  * 扫描所有 LOCAL_*_DIR 目录中的 parquet 文件，生成指纹清单。
  * governance 对比此清单与当前文件状态，不一致则阻断 push。
  */
-function writeSyncManifest() {
-  const dirs = [
-    { label: 'policy/current', path: LOCAL_CURRENT_DIR },
-    { label: 'dim/salesman', path: LOCAL_SALESMAN_DIR },
-    { label: 'dim/plan', path: LOCAL_PLAN_DIR },
-    { label: 'dim/brand', path: LOCAL_BRAND_DIR },
-    { label: 'fact/quotes_conversion', path: LOCAL_QUOTES_CONVERSION_DIR },
-    { label: 'fact/claims_detail', path: LOCAL_CLAIMS_DETAIL_DIR },
-    { label: 'fact/cross_sell', path: LOCAL_CROSS_SELL_DIR },
-    { label: 'fact/customer_flow', path: LOCAL_CUSTOMER_FLOW_DIR },
-    { label: 'fact/renewal_tracker', path: LOCAL_RENEWAL_TRACKER_DIR },
-    { label: 'dim/repair', path: LOCAL_REPAIR_DIR },
-    { label: 'dim/plate_region', path: LOCAL_PLATE_REGION_DIR },
-    { label: 'patrol_reports', path: LOCAL_PATROL_REPORTS_DIR },
-  ];
+function taskLabelFromManifestKey(key) {
+  return key.split('/').slice(0, -1).join('/');
+}
 
+function readExistingSyncManifest(manifestPath) {
+  if (!existsSync(manifestPath)) return null;
+  try {
+    return JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DEFAULTS.frontendDistDir), runConfig = { domains: [] }) {
   const files = {};
-  for (const dir of dirs) {
+  for (const dir of tasks.map(task => ({ label: task.label, path: task.local }))) {
     if (!existsSync(dir.path)) continue;
     const parquets = readdirSync(dir.path).filter(f => f.endsWith('.parquet'));
     for (const f of parquets) {
       const fullPath = join(dir.path, f);
       const stat = statSync(fullPath);
       const key = `${dir.label}/${f}`;
-      files[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
+      files[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs), sha256: createHash('sha256').update(readFileSync(fullPath)).digest('hex') };
     }
+  }
+
+  const manifestPath = join(ROOT_DIR, '.last-sync-manifest.json');
+  const existing = readExistingSyncManifest(manifestPath);
+  let mergedFiles = files;
+  let scope = runConfig.domains?.length ? 'domain' : 'all';
+
+  if (scope === 'domain' && existing?.files) {
+    const activeLabels = new Set(tasks.map(task => task.label));
+    mergedFiles = { ...existing.files };
+    for (const key of Object.keys(mergedFiles)) {
+      if (activeLabels.has(taskLabelFromManifestKey(key))) {
+        delete mergedFiles[key];
+      }
+    }
+    Object.assign(mergedFiles, files);
+    scope = 'all';
   }
 
   const manifest = {
     syncedAt: new Date().toISOString(),
-    fileCount: Object.keys(files).length,
-    files,
+    scope,
+    domains: runConfig.domains || [],
+    fileCount: Object.keys(mergedFiles).length,
+    files: mergedFiles,
   };
 
-  const manifestPath = join(ROOT_DIR, '.last-sync-manifest.json');
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
   log('green', `✓ 同步清单已写入 .last-sync-manifest.json（${manifest.fileCount} 个文件）`);
 }
@@ -698,6 +771,10 @@ export {
   parseSSHConfig,
   resolveSSHConfig,
   resolveRunConfig,
+  buildDomainSyncTasks,
+  buildStandardSyncTasks,
+  buildSyncTasks,
+  rsyncLatestAtomically,
 };
 
 const isMain = process.env.RUN_MAIN || (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]));

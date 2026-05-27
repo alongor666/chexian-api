@@ -83,6 +83,15 @@ def split_salesman(name: str):
     return ('', name)
 
 
+def split_salesman_columns(raw: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """向量化拆分业务员字段，保持 split_salesman 的兼容语义。"""
+    values = raw.astype("string").str.strip()
+    parts = values.str.extract(r"^(\d+)(.*)$")
+    salesman_no = parts[0].fillna("")
+    salesman_name = parts[1].where(parts[0].notna(), values).fillna("")
+    return salesman_no, salesman_name
+
+
 def main():
     parser = argparse.ArgumentParser(description='报价转化数据 ETL（04_报价清单 → Parquet）')
     parser.add_argument('-i', '--input', nargs='+', help='输入 Excel 文件（支持多个）')
@@ -208,8 +217,7 @@ def main():
     #    同时拆出 salesman_no 用于 JOIN dim 表
     print('🔧 处理业务员字段...')
     if 'salesman_raw' in df.columns:
-        splits = df['salesman_raw'].apply(split_salesman)
-        df['salesman_no'] = splits.apply(lambda x: x[0])
+        df['salesman_no'], _salesman_name = split_salesman_columns(df['salesman_raw'])
         df['salesman_name'] = df['salesman_raw'].str.strip()  # 对齐保单命名
         df = df.drop(columns=['salesman_raw'])
 

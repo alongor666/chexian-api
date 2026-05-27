@@ -177,6 +177,7 @@ import skillsRoutes from './routes/skills.js';
 import workflowsRoutes from './routes/workflows.js';
 import copilotRoutes from './routes/copilot.js';
 import reportsRoutes from './routes/reports.js';
+import adminRoutes from './routes/admin.js';
 
 app.use('/api/auth/wecom', wecomAuthRoutes); // 放前面避免 loginLimiter 影响
 app.use('/api/auth', authRoutes);
@@ -192,6 +193,7 @@ app.use('/api/agent/forecast', agentForecastRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/workflows', workflowsRoutes);
 app.use('/api/copilot', copilotRoutes);
+app.use('/api/admin', adminRoutes);
 // HTML 报告托管（authMiddleware 在路由内部守卫；放 /api 前缀避开前端 SPA 的 /reports 路由）
 app.use('/api/reports', reportsRoutes);
 

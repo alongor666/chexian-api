@@ -27,13 +27,15 @@ import {
   getRepairDimPaths,
   getBrandDimPaths,
   getCustomerFlowPaths,
+  getNewEnergyClaimsPaths,
   getRenewalTrackerPaths,
 } from '../config/paths.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 import { isValidParquetFile } from '../utils/security.js';
 import * as materialization from './duckdb-materialization.js';
 import * as domainLoaders from './duckdb-domain-loaders.js';
-import { LazyDomainRegistry, type LazyDomainLoadOptions } from './lazy-domain-registry.js';
+import { type LazyDomainLoadOptions, LazyDomainRegistry } from './lazy-domain-registry.js';
+import { bumpDataVersionFromTimestamp } from './data-version.js';
 
 // ============================================
 // Types
@@ -45,6 +47,11 @@ interface ParquetFileInfo {
   size: number;
   mtimeMs: number;
 }
+
+const RELOADABLE_FULL_SNAPSHOT_DOMAINS: Record<string, { lazyName: string; relation: string }> = {
+  customer_flow: { lazyName: 'CustomerFlow', relation: 'CustomerFlow' },
+  new_energy_claims: { lazyName: 'NewEnergyClaims', relation: 'NewEnergyClaims' },
+};
 
 /** bootstrap() 的返回结果，供 app.ts 注册当前数据文件 */
 export interface BootstrapResult {
@@ -453,6 +460,13 @@ export class DataBootstrapper {
       await domainLoaders.loadCustomerFlow(db, p);
     });
 
+    // NewEnergyClaims（新能源出险信息全量快照）
+    this.lazyRegistry.register('NewEnergyClaims', async () => {
+      const p = getNewEnergyClaimsPaths().find(p => fs.existsSync(p));
+      if (!p) return;
+      await domainLoaders.loadNewEnergyClaims(db, p);
+    });
+
     // QuoteConversion（仅报价转化页）
     this.lazyRegistry.register('QuoteConversion', async () => {
       const p = getQuoteConversionPaths().find(p => fs.existsSync(p));
@@ -469,7 +483,7 @@ export class DataBootstrapper {
       console.timeEnd('[Bootstrap:Lazy] RenewalTracker');
     });
 
-    console.log('[Bootstrap] Lazy domains registered: ClaimsDetail, ClaimsAgg, CrossSell, RepairDim, BrandDim, CustomerFlow, QuoteConversion, RenewalTracker');
+    console.log('[Bootstrap] Lazy domains registered: ClaimsDetail, ClaimsAgg, CrossSell, RepairDim, BrandDim, CustomerFlow, NewEnergyClaims, QuoteConversion, RenewalTracker');
   }
 
   // ============================================
@@ -490,5 +504,31 @@ export class DataBootstrapper {
    */
   getDomainState(domain: string): string {
     return this.lazyRegistry.getState(domain);
+  }
+
+  /**
+   * 数据发布后按域重载 full_snapshot 辅助域。
+   * 不重建 PolicyFact / CrossSellDailyAgg 等无关关系，只重建对应 VIEW 并让缓存版本失效。
+   */
+  async reloadDomains(domainIds: string[]): Promise<Array<{ domain: string; lazyName: string; relation: string; rowCount: number | null; state: string }>> {
+    const results = [];
+    for (const domainId of domainIds) {
+      const cfg = RELOADABLE_FULL_SNAPSHOT_DOMAINS[domainId];
+      if (!cfg) {
+        throw new Error(`Unsupported data reload domain: ${domainId}`);
+      }
+      await this.lazyRegistry.reload(cfg.lazyName);
+      const rows = await this.db.query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM ${cfg.relation}`);
+      results.push({
+        domain: domainId,
+        lazyName: cfg.lazyName,
+        relation: cfg.relation,
+        rowCount: rows[0]?.cnt ?? null,
+        state: this.lazyRegistry.getState(cfg.lazyName),
+      });
+    }
+    this.db.invalidateCache();
+    bumpDataVersionFromTimestamp();
+    return results;
   }
 }

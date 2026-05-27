@@ -172,6 +172,15 @@ export function getCustomerFlowPaths(): string[] {
   ];
 }
 
+// ── 新能源出险信息 Parquet 路径 ──
+
+export function getNewEnergyClaimsPaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/new_energy_claims/latest.parquet'),
+    path.resolve(getDataDir(), 'fact/new_energy_claims/latest.parquet'),
+  ];
+}
+
 // ── 续保追踪派生域 Parquet 路径 ──
 
 export function getRenewalTrackerPaths(): string[] {

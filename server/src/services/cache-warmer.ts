@@ -376,11 +376,13 @@ export class CacheWarmer {
             return;
         }
 
-        // 内部启动预热允许等待 VPS 上较慢的物化任务；HTTP 请求仍走 LazyDomainRegistry 默认 15s 保护。
+        // 启动预热允许长等待，避免 ClaimsAgg/CrossSell 冷物化超过 15s 后跳过首屏缓存。
         // ClaimsAgg 是 KPI 冷启动依赖，必须先于 CrossSell，避免 CrossSellDailyAgg 长物化挡住 KPI 预热。
         for (const domain of STARTUP_DOMAIN_WARMUP_ORDER) {
             // eslint-disable-next-line no-await-in-loop
-            await bootstrapper.ensureDomainLoaded(domain, { timeoutMs: STARTUP_DOMAIN_WARMUP_TIMEOUT_MS });
+            await bootstrapper.ensureDomainLoaded(domain, {
+                timeoutMs: STARTUP_DOMAIN_WARMUP_TIMEOUT_MS,
+            });
         }
     }
 

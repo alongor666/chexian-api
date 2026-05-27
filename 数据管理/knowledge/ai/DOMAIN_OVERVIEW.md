@@ -17,7 +17,7 @@
 | cross_sell | 交叉销售 | CrossSellFact (TABLE) → CrossSellDailyAgg (TABLE) | ~40万 | policy_no | /api/query/cross-sell* (7端点) | /#/specialty (tab=cross-sell) | 🟢 |
 | quotes_conversion | 报价转化 | QuoteConversion (VIEW) | ~67万 | vehicle_frame_no | /api/query/quote-conversion/* (7端点) | /#/quote-conversion | 🟢 |
 | renewal_tracker | 续保追踪（派生域） | RenewalTrackerFact (VIEW) | ~12.8万 | source_policy_no / vehicle_frame_no | /api/query/renewal-tracker | /#/renewal-tracker | 🟢 |
-| customer_flow | 客户来源去向 | CustomerFlow (VIEW) | — | policy_no | /api/query/customer-flow/* (5端点) | /#/customer-flow | 🟢 |
+| customer_flow | 客户来源去向 | CustomerFlow (VIEW) | 18.5万 | policy_no | /api/query/customer-flow/* (5端点) | /#/customer-flow | 🟢 |
 
 ### 维度表（Dim）
 
@@ -64,7 +64,7 @@ claims_detail     02_理赔明细_*.xlsx    convert_claims_detail.py   claims_de
 cross_sell        03_交叉销售_*.xlsx    convert_cross_sell.py      cross_sell/latest.parquet       CrossSellFact→DailyAgg   cross-sell*.ts
 quotes_conversion 04_报价清单_*.xlsx    quote_etl.py               quotes_conversion/latest.parquet QuoteConversion         quote-conversion.ts
 renewal_tracker   派生(policy+quote)     convert_renewal_tracker.py renewal_tracker/latest.parquet  RenewalTrackerFact      renewal-tracker.ts
-customer_flow     08_客户来源去向*.xlsx convert_customer_flow.py   customer_flow/latest.parquet   CustomerFlow             customer-flow.ts
+customer_flow     08_商业险续保流失公司+09_商业险转保上年公司 convert_customer_flow.py   customer_flow/latest.parquet   CustomerFlow             customer-flow.ts
 brand             06_厂牌明细*.xlsx     convert_brand_dim.py       dim/brand/latest.parquet       BrandDim                 (诊断工具)
 repair_resource   07_维修资源*.xlsx     convert_repair.py          dim/repair/latest.parquet      RepairDim                repair.ts
 salesman          川分销售人员名单*.xlsx generate_dim_tables.py     dim/salesman/latest.parquet    SalesmanDim              (间接,via mapping)

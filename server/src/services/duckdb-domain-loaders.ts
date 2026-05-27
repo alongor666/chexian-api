@@ -449,7 +449,6 @@ export async function loadBrandDim(db: DuckDBQueryable, parquetPath: string): Pr
 }
 
 /**
-/**
  * 加载客户来源去向 Parquet → CustomerFlow VIEW
  */
 export async function loadCustomerFlow(db: DuckDBQueryable, parquetPath: string): Promise<void> {
@@ -460,6 +459,19 @@ export async function loadCustomerFlow(db: DuckDBQueryable, parquetPath: string)
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CustomerFlow');
   console.log(`[DuckDB] CustomerFlow view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+}
+
+/**
+ * 加载新能源出险信息 Parquet → NewEnergyClaims VIEW
+ */
+export async function loadNewEnergyClaims(db: DuckDBQueryable, parquetPath: string): Promise<void> {
+  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+  await db.query(`
+    CREATE OR REPLACE VIEW NewEnergyClaims AS
+    SELECT * FROM read_parquet('${safePath}')
+  `);
+  const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM NewEnergyClaims');
+  console.log(`[DuckDB] NewEnergyClaims view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
 }
 
 /**
