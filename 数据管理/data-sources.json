@@ -295,9 +295,6 @@
       "row_count": 416397,
       "field_count": 9,
       "data_range": "2023-01-01 ~ 2026-05-22"
-      "last_updated": "2026-05-18",
-      "row_count": 413634,
-      "field_count": 9
     },
     {
       "id": "quotes_v2",
@@ -364,9 +361,6 @@
       "row_count": 6561,
       "field_count": 13,
       "data_range": "2025-01-01 ~ 2026-05-21"
-      "last_updated": "2026-05-21",
-      "row_count": 6540,
-      "field_count": 13
     },
     {
       "id": "customer_flow",

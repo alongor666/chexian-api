@@ -90,11 +90,11 @@ describe('LazyDomainRegistry', () => {
 
     const loadPromise = reg.ensureLoaded('SlowWarmupDomain');
     vi.advanceTimersByTime(15_001);
-    await Promise.resolve();
+    await expect(loadPromise).rejects.toMatchObject({ statusCode: 503 });
     expect(reg.getState('SlowWarmupDomain')).toBe('loading');
 
     vi.advanceTimersByTime(5_000);
-    await loadPromise;
+    await reg.ensureLoaded('SlowWarmupDomain');
     expect(reg.isLoaded('SlowWarmupDomain')).toBe(true);
     vi.useRealTimers();
   });
