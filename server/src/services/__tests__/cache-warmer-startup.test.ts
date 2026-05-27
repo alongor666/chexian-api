@@ -61,7 +61,7 @@ vi.mock('../../utils/logger.js', () => ({
   },
 }));
 
-import { cacheWarmer } from '../cache-warmer.js';
+import { STARTUP_DOMAIN_WARMUP_TIMEOUT_MS, cacheWarmer } from '../cache-warmer.js';
 
 describe('cacheWarmer.warmStartupCritical', () => {
   beforeEach(() => {
@@ -77,9 +77,15 @@ describe('cacheWarmer.warmStartupCritical', () => {
   it('内部启动预热按 ClaimsDetail → ClaimsAgg → CrossSell 顺序长等待，避免 CrossSell 长物化挡住 KPI 依赖', async () => {
     await cacheWarmer.warmStartupCritical();
 
-    expect(ensureDomainLoadedMock).toHaveBeenNthCalledWith(1, 'ClaimsDetail');
-    expect(ensureDomainLoadedMock).toHaveBeenNthCalledWith(2, 'ClaimsAgg');
-    expect(ensureDomainLoadedMock).toHaveBeenNthCalledWith(3, 'CrossSell');
+    expect(ensureDomainLoadedMock).toHaveBeenNthCalledWith(1, 'ClaimsDetail', {
+      timeoutMs: STARTUP_DOMAIN_WARMUP_TIMEOUT_MS,
+    });
+    expect(ensureDomainLoadedMock).toHaveBeenNthCalledWith(2, 'ClaimsAgg', {
+      timeoutMs: STARTUP_DOMAIN_WARMUP_TIMEOUT_MS,
+    });
+    expect(ensureDomainLoadedMock).toHaveBeenNthCalledWith(3, 'CrossSell', {
+      timeoutMs: STARTUP_DOMAIN_WARMUP_TIMEOUT_MS,
+    });
     expect(fetchDashboardBundleDataMock).toHaveBeenCalledTimes(1);
   });
 

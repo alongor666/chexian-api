@@ -1490,13 +1490,8 @@ function checkDataDrift() {
     { label: 'dim/repair', rel: '数据管理/warehouse/dim/repair' },
     { label: 'dim/plate_region', rel: '数据管理/warehouse/dim/plate_region' },
   ];
-  const checkedLabels = manifest.scope === 'domain'
-    ? new Set(Object.keys(manifest.files || {}).map(key => key.split('/').slice(0, -1).join('/')))
-    : null;
-
   const currentFiles = {};
   for (const dir of dirMappings) {
-    if (checkedLabels && !checkedLabels.has(dir.label)) continue;
     const absPath = path.join(ROOT_DIR, dir.rel);
     if (!fs.existsSync(absPath)) continue;
     const parquets = fs.readdirSync(absPath).filter(f => f.endsWith('.parquet'));

@@ -69,6 +69,25 @@ describe('LazyDomainRegistry', () => {
     expect(reg.isLoaded('CustomerFlow')).toBe(true);
   });
 
+  it('并发 reload 同一域时复用进行中的 loader', async () => {
+    vi.useFakeTimers();
+    const reg = new LazyDomainRegistry();
+    let callCount = 0;
+    reg.register('CustomerFlow', async () => {
+      callCount++;
+      await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
+    });
+
+    const first = reg.reload('CustomerFlow');
+    const second = reg.reload('CustomerFlow');
+    vi.advanceTimersByTime(1_000);
+    await Promise.all([first, second]);
+
+    expect(callCount).toBe(1);
+    expect(reg.isLoaded('CustomerFlow')).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('加载超时（15s 模拟）：抛出 statusCode=503 的错误，state 保持 loading', async () => {
     vi.useFakeTimers();
     const reg = new LazyDomainRegistry();
@@ -95,6 +114,19 @@ describe('LazyDomainRegistry', () => {
 
     vi.advanceTimersByTime(5_000);
     await reg.ensureLoaded('SlowWarmupDomain');
+    expect(reg.isLoaded('SlowWarmupDomain')).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('ensureLoaded 支持长超时选项', async () => {
+    vi.useFakeTimers();
+    const reg = new LazyDomainRegistry();
+    reg.register('SlowWarmupDomain', () => new Promise<void>((resolve) => setTimeout(resolve, 20_000)));
+
+    const loadPromise = reg.ensureLoaded('SlowWarmupDomain', { timeoutMs: 120_000 });
+    vi.advanceTimersByTime(20_000);
+    await loadPromise;
+
     expect(reg.isLoaded('SlowWarmupDomain')).toBe(true);
     vi.useRealTimers();
   });

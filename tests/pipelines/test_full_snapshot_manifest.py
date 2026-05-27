@@ -68,6 +68,21 @@ class FullSnapshotManifestTest(unittest.TestCase):
         self.assertIn("sha256File(dest) !== file.sha256", daily_source)
         self.assertIn("sha256.slice(0, 12)", daily_source)
 
+    def test_cache_key_includes_shared_pipeline_dependencies(self):
+        daily_source = (ROOT / "数据管理/daily.mjs").read_text()
+
+        self.assertIn("fullSnapshotDependencyPaths", daily_source)
+        self.assertIn("base_converter.py", daily_source)
+        self.assertIn("etl_validation.py", daily_source)
+        self.assertIn("parquet_utils.py", daily_source)
+
+    def test_full_snapshot_retention_is_enforced(self):
+        daily_source = (ROOT / "数据管理/daily.mjs").read_text()
+
+        self.assertIn("pruneFullSnapshotHistory", daily_source)
+        self.assertIn("snapshot_retention_batches", daily_source)
+        self.assertIn("source_retention_days", daily_source)
+
 
 if __name__ == "__main__":
     unittest.main()

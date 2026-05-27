@@ -372,8 +372,9 @@ async function rsyncDir(alias, localDir, remoteDir, label, options = {}) {
 async function rsyncLatestAtomically(config, localDir, remoteDir, label) {
   const latest = join(localDir, 'latest.parquet');
   if (!existsSync(latest)) {
-    log('yellow', `  跳过 ${label}（latest.parquet 不存在）`);
-    return { ok: true, label, skipped: true };
+    const message = 'latest.parquet 不存在';
+    log('red', `  ✗ ${label} ${message}`);
+    return { ok: false, label, error: message };
   }
   const tmpRemote = `${remoteDir}/latest.parquet.uploading`;
   const finalRemote = `${remoteDir}/latest.parquet`;
@@ -649,6 +650,19 @@ async function runStandardMode(sshConfig, runConfig) {
  * 扫描所有 LOCAL_*_DIR 目录中的 parquet 文件，生成指纹清单。
  * governance 对比此清单与当前文件状态，不一致则阻断 push。
  */
+function taskLabelFromManifestKey(key) {
+  return key.split('/').slice(0, -1).join('/');
+}
+
+function readExistingSyncManifest(manifestPath) {
+  if (!existsSync(manifestPath)) return null;
+  try {
+    return JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
 function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DEFAULTS.frontendDistDir), runConfig = { domains: [] }) {
   const files = {};
   for (const dir of tasks.map(task => ({ label: task.label, path: task.local }))) {
@@ -662,15 +676,31 @@ function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DE
     }
   }
 
+  const manifestPath = join(ROOT_DIR, '.last-sync-manifest.json');
+  const existing = readExistingSyncManifest(manifestPath);
+  let mergedFiles = files;
+  let scope = runConfig.domains?.length ? 'domain' : 'all';
+
+  if (scope === 'domain' && existing?.files) {
+    const activeLabels = new Set(tasks.map(task => task.label));
+    mergedFiles = { ...existing.files };
+    for (const key of Object.keys(mergedFiles)) {
+      if (activeLabels.has(taskLabelFromManifestKey(key))) {
+        delete mergedFiles[key];
+      }
+    }
+    Object.assign(mergedFiles, files);
+    scope = 'all';
+  }
+
   const manifest = {
     syncedAt: new Date().toISOString(),
-    scope: runConfig.domains?.length ? 'domain' : 'all',
+    scope,
     domains: runConfig.domains || [],
-    fileCount: Object.keys(files).length,
-    files,
+    fileCount: Object.keys(mergedFiles).length,
+    files: mergedFiles,
   };
 
-  const manifestPath = join(ROOT_DIR, '.last-sync-manifest.json');
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
   log('green', `✓ 同步清单已写入 .last-sync-manifest.json（${manifest.fileCount} 个文件）`);
 }
@@ -744,6 +774,7 @@ export {
   buildDomainSyncTasks,
   buildStandardSyncTasks,
   buildSyncTasks,
+  rsyncLatestAtomically,
 };
 
 const isMain = process.env.RUN_MAIN || (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]));

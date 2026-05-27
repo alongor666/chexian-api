@@ -30,7 +30,7 @@
  */
 
 import { execSync, spawnSync } from 'child_process';
-import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync, copyFileSync } from 'fs';
+import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync, copyFileSync, rmSync } from 'fs';
 import { basename, dirname, extname, join, resolve, isAbsolute } from 'path';
 import { platform, homedir } from 'os';
 import { fileURLToPath } from 'url';
@@ -465,18 +465,80 @@ function fullSnapshotOutputName(id, trigger) {
 }
 
 function buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger }) {
-  const converter = fileFingerprint(scriptPath);
+  const dependencies = fullSnapshotDependencyPaths(dirname(scriptPath), scriptPath)
+    .filter(p => existsSync(p))
+    .map(p => {
+      const fp = fileFingerprint(p);
+      return { name: fp.name, size: fp.size, sha256: fp.sha256 };
+    });
   const material = {
     id,
     batchDate,
     snapshotMode: trigger.snapshot_mode,
     outputName: fullSnapshotOutputName(id, trigger),
-    converter: { name: converter.name, size: converter.size, sha256: converter.sha256 },
+    dependencies,
     sources: sourceFingerprints
       .map(f => ({ name: f.name, size: f.size, sha256: f.sha256 }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   };
   return createHash('sha256').update(JSON.stringify(material)).digest('hex');
+}
+
+function fullSnapshotDependencyPaths(pipelineDir, scriptPath) {
+  return [
+    scriptPath,
+    join(pipelineDir, 'base_converter.py'),
+    join(pipelineDir, 'etl_validation.py'),
+    join(pipelineDir, 'parquet_utils.py'),
+  ];
+}
+
+function removeDirRecursive(dir) {
+  if (!existsSync(dir)) return;
+  rmSync(dir, { recursive: true, force: true });
+}
+
+function listBatchDirs(parentDir) {
+  if (!existsSync(parentDir)) return [];
+  return readdirSync(parentDir)
+    .filter(name => name.startsWith('batch_date='))
+    .map(name => ({
+      name,
+      path: join(parentDir, name),
+      batchDate: name.slice('batch_date='.length),
+    }))
+    .filter(item => /^\d{8}$/.test(item.batchDate))
+    .sort((a, b) => b.batchDate.localeCompare(a.batchDate));
+}
+
+function pruneSnapshotBatches(scriptDir, id, retainBatches) {
+  const limit = Number(retainBatches);
+  if (!Number.isFinite(limit) || limit <= 0) return;
+  const parentDir = join(scriptDir, 'warehouse/snapshots', id);
+  for (const item of listBatchDirs(parentDir).slice(limit)) {
+    removeDirRecursive(item.path);
+    log('yellow', `  清理旧 snapshot batch: ${id}/${item.name}`);
+  }
+}
+
+function pruneRawFullSnapshotSources(scriptDir, id, retentionDays) {
+  const days = Number(retentionDays);
+  if (!Number.isFinite(days) || days <= 0) return;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffKey = `${cutoff.getFullYear()}${String(cutoff.getMonth() + 1).padStart(2, '0')}${String(cutoff.getDate()).padStart(2, '0')}`;
+  const parentDir = join(scriptDir, 'raw/full_snapshot', id);
+  for (const item of listBatchDirs(parentDir)) {
+    if (item.batchDate < cutoffKey) {
+      removeDirRecursive(item.path);
+      log('yellow', `  清理旧 raw full_snapshot: ${id}/${item.name}`);
+    }
+  }
+}
+
+function pruneFullSnapshotHistory(scriptDir, id, trigger) {
+  pruneSnapshotBatches(scriptDir, id, trigger.snapshot_retention_batches);
+  pruneRawFullSnapshotSources(scriptDir, id, trigger.source_retention_days);
 }
 
 function archiveExistingLatest(outputAbs, archivePrefix) {
@@ -737,6 +799,7 @@ function runStrategyFullSnapshot({ python, id, scriptDir, scriptPath, sourceFile
 
   const published = publishCandidate(tmpOutput, outputAbs, trigger.archive_prefix);
   writeFullSnapshotReleaseManifest(scriptDir, id, batchDate, outputAbs, sourceFingerprints, cacheHit);
+  pruneFullSnapshotHistory(scriptDir, id, trigger);
   if (!published) {
     log('green', `  ${id} latest 未变更，后续按域 rsync 将无实际数据传输`);
   }
