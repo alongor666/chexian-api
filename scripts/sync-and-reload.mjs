@@ -244,7 +244,7 @@ async function main() {
     await runCmd(
       'period-trend report',
       'python3',
-      [skillCli, '--view', 'v1', '--project-root', ROOT_DIR],
+      [skillCli, '--view', 'all', '--project-root', ROOT_DIR],
       { dryRun: opts.dryRun, timeoutMs: 3 * 60 * 1000 }
     );
   } else {

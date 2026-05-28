@@ -873,13 +873,17 @@ function runPeriodTrendReport(scriptDir, python) {
   }
   const projectRoot = dirname(scriptDir);
   log('cyan', '\n═══ 9. 短中长期对照报告（diagnose-period-trend skill）═══\n');
-  const result = spawnSync(python, [skillCli, '--project-root', projectRoot], {
-    stdio: 'inherit',
-    cwd: projectRoot,
-    env: process.env,
-    timeout: 10 * 60 * 1000,
-    windowsHide: true,
-  });
+  const result = spawnSync(
+    python,
+    [skillCli, '--view', 'all', '--project-root', projectRoot],
+    {
+      stdio: 'inherit',
+      cwd: projectRoot,
+      env: process.env,
+      timeout: 10 * 60 * 1000,
+      windowsHide: true,
+    }
+  );
   if (result.status !== 0) {
     console.warn(`[ETL] 短中长期对照报告生成失败（不阻塞 ETL），exit=${result.status}`);
     if (result.error) console.warn(`        ${result.error.message}`);
