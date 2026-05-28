@@ -38,7 +38,7 @@ export const reportEntries: ReportEntry[] = [
       '双主题',
     ],
     getReportUrl: (etlDate) =>
-      etlDate ? `/reports/diagnose-period-trend/${etlDate}.html` : null,
+      etlDate ? `/reports/diagnose-period-trend/${etlDate}-dashboard.html` : null,
     accent: 'primary',
   },
 ]

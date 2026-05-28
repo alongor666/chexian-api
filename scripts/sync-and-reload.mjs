@@ -5,11 +5,13 @@
  * 设计哲学：daily.mjs 单一职责（ETL + rsync），本脚本负责"上线变更"全流程。
  *
  * 流程（严格顺序）：
- *   1. node 数据管理/daily.mjs <subcommand>      （默认 all；可传 premium/claims_detail 等）
- *   2. bun run governance                         （24+ 项校验，失败则中止）
- *   3. ssh sudo /usr/local/bin/deploy-chexian-api reload  （pm2 delete + start，可恢复 errored）
- *   4. curl https://chexian.cretvalu.com/health   （重试 8 次 / 5 秒间隔）
- *   5. 可选：批量同步企微机构续保追踪表 + 续保5月表 + 邮政经代签单表
+ *   1.   node 数据管理/daily.mjs <subcommand>                （默认 all；可传 premium/claims_detail 等）
+ *   1.5. python3 ~/.claude/skills/diagnose-period-trend/lib/cli.py --view v1  （生成驾驶舱 HTML）
+ *   2.   bun run governance                                   （24+ 项校验，失败则中止）
+ *   3.   ssh sudo /usr/local/bin/deploy-chexian-api reload    （pm2 delete + start，可恢复 errored）
+ *   4.   curl https://chexian.cretvalu.com/health             （重试 8 次 / 5 秒间隔）
+ *   4.5. rsync public/reports/ → VPS frontend/dist/reports/   （Nginx 静态托管）
+ *   5.   可选：批量同步企微机构续保追踪表 + 续保5月表 + 邮政经代签单表
  *
  * 使用：
  *   node scripts/sync-and-reload.mjs                        # daily.mjs all
@@ -32,6 +34,7 @@ import { spawn } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import os from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -235,6 +238,19 @@ async function main() {
     await runCmd(step.label, 'node', step.args, { dryRun: opts.dryRun });
   }
 
+  // Stage 1.5: 生成周期趋势诊断报告（V1 驾驶舱）——ETL 完成后数据最新
+  const skillCli = join(os.homedir(), '.claude/skills/diagnose-period-trend/lib/cli.py');
+  if (existsSync(skillCli)) {
+    await runCmd(
+      'period-trend report',
+      'python3',
+      [skillCli, '--view', 'v1', '--project-root', ROOT_DIR],
+      { dryRun: opts.dryRun, timeoutMs: 3 * 60 * 1000 }
+    );
+  } else {
+    log('yellow', `\n⚠ 跳过报告生成（技能文件不存在：${skillCli}）`);
+  }
+
   // Stage 2: governance
   if (opts.skipGovernance) {
     log('yellow', '\n⚠ 跳过 governance（--skip-governance）');
@@ -287,6 +303,22 @@ async function main() {
       log('red', '\n❌ 健康检查失败！PM2 可能未正常启动');
       log('yellow', '  排查：ssh ' + sshAlias + ' "sudo /usr/local/bin/deploy-chexian-api logs 50"');
       process.exit(1);
+    }
+  }
+
+  // Stage 4.5: 同步静态报告到 VPS（Nginx 直接 serve）
+  if (!opts.skipReload) {
+    const frontendDistDir = process.env.SYNC_VPS_FRONTEND_DIST || '/var/www/chexian/frontend/dist';
+    const localReportsDir = join(ROOT_DIR, 'public/reports/');
+    if (existsSync(localReportsDir)) {
+      await runCmd(
+        'sync reports → VPS',
+        'rsync',
+        ['-azv', '-e', 'ssh', localReportsDir, `${sshAlias}:${frontendDistDir}/reports/`],
+        { dryRun: opts.dryRun, timeoutMs: 60 * 1000 }
+      );
+    } else {
+      log('yellow', '\n⚠ 跳过报告同步（public/reports/ 不存在）');
     }
   }
 
