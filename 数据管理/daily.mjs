@@ -875,7 +875,7 @@ function runPeriodTrendReport(scriptDir, python) {
   log('cyan', '\n═══ 9. 短中长期对照报告（diagnose-period-trend skill）═══\n');
   const result = spawnSync(
     python,
-    [skillCli, '--project-root', projectRoot, '--view', 'all'],
+    [skillCli, '--view', 'all', '--project-root', projectRoot],
     {
       stdio: 'inherit',
       cwd: projectRoot,
