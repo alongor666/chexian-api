@@ -1,0 +1,115 @@
+{
+  "startedAt": "2026-05-24T09:49:34.760Z",
+  "finishedAt": "2026-05-24T09:49:50.729Z",
+  "baseUrl": "https://chexian.cretvalu.com",
+  "route": "/api/query/kpi",
+  "concurrency": 12,
+  "orgs": [
+    "天府",
+    "宜宾",
+    "高新",
+    "青羊",
+    "泸州",
+    "新都",
+    "武侯",
+    "乐山",
+    "德阳",
+    "自贡",
+    "资阳",
+    "达州"
+  ],
+  "statusCounts": {
+    "200": 12
+  },
+  "success": 12,
+  "failure": 0,
+  "p50": 9268,
+  "p95": 15506,
+  "max": 15960,
+  "results": [
+    {
+      "org": "天府",
+      "status": 200,
+      "ok": true,
+      "durationMs": 14809,
+      "error": null
+    },
+    {
+      "org": "宜宾",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9268,
+      "error": null
+    },
+    {
+      "org": "高新",
+      "status": 200,
+      "ok": true,
+      "durationMs": 14711,
+      "error": null
+    },
+    {
+      "org": "青羊",
+      "status": 200,
+      "ok": true,
+      "durationMs": 15960,
+      "error": null
+    },
+    {
+      "org": "泸州",
+      "status": 200,
+      "ok": true,
+      "durationMs": 5530,
+      "error": null
+    },
+    {
+      "org": "新都",
+      "status": 200,
+      "ok": true,
+      "durationMs": 5593,
+      "error": null
+    },
+    {
+      "org": "武侯",
+      "status": 200,
+      "ok": true,
+      "durationMs": 5533,
+      "error": null
+    },
+    {
+      "org": "乐山",
+      "status": 200,
+      "ok": true,
+      "durationMs": 15506,
+      "error": null
+    },
+    {
+      "org": "德阳",
+      "status": 200,
+      "ok": true,
+      "durationMs": 14701,
+      "error": null
+    },
+    {
+      "org": "自贡",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9267,
+      "error": null
+    },
+    {
+      "org": "资阳",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9260,
+      "error": null
+    },
+    {
+      "org": "达州",
+      "status": 200,
+      "ok": true,
+      "durationMs": 15501,
+      "error": null
+    }
+  ]
+}

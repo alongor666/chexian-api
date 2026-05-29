@@ -1,0 +1,785 @@
+{
+  "startedAt": "2026-05-24T10:01:55.492Z",
+  "finishedAt": "2026-05-24T10:02:56.483Z",
+  "baseUrl": "https://chexian.cretvalu.com",
+  "coldRuns": 1,
+  "iterations": 3,
+  "warmup": 1,
+  "paceMs": 0,
+  "max429Retries": 1,
+  "retryAfterMs": 60000,
+  "routeCooldownMs": 1000,
+  "baselineDate": "2026-02-25",
+  "baselineLog": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/logs/audit.log",
+  "baseline": {
+    "source": "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/logs/audit.log",
+    "baselineDate": "2026-02-25",
+    "found": true,
+    "routes": {
+      "/api/query/cross-sell-summary": {
+        "count": 78,
+        "p50": 167,
+        "p95": 1534,
+        "p99": 1696,
+        "avg": 423,
+        "max": 1982,
+        "min": 57
+      },
+      "/api/query/cross-sell": {
+        "count": 87,
+        "p50": 150,
+        "p95": 1138,
+        "p99": 1313,
+        "avg": 327,
+        "max": 1480,
+        "min": 36
+      },
+      "/api/query/cross-sell-trend": {
+        "count": 145,
+        "p50": 106,
+        "p95": 1088,
+        "p99": 1313,
+        "avg": 253,
+        "max": 1461,
+        "min": 23
+      },
+      "/api/query/cross-sell-bundle": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      },
+      "/api/query/kpi": {
+        "count": 60,
+        "p50": 137,
+        "p95": 993,
+        "p99": 1416,
+        "avg": 278,
+        "max": 1479,
+        "min": 1
+      },
+      "/api/query/performance-summary": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      },
+      "/api/query/performance-top-salesman": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      },
+      "/api/query/performance-bundle": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      },
+      "/api/query/dashboard-bundle": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "avg": null,
+        "max": null,
+        "min": null
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "route": "/api/query/cross-sell-summary?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&vehicleCategory=passenger",
+      "routeKey": "/api/query/cross-sell-summary",
+      "baselineP95": 1534,
+      "currentP95": 376,
+      "currentP95All": 376,
+      "p95ImprovementPct": 75.49,
+      "baselineCount": 78,
+      "failures": 0,
+      "successes": 3
+    },
+    {
+      "route": "/api/query/cross-sell?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&vehicleCategory=passenger",
+      "routeKey": "/api/query/cross-sell",
+      "baselineP95": 1138,
+      "currentP95": 319,
+      "currentP95All": 319,
+      "p95ImprovementPct": 71.97,
+      "baselineCount": 87,
+      "failures": 0,
+      "successes": 3
+    },
+    {
+      "route": "/api/query/cross-sell-trend?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&vehicleCategory=passenger&granularity=monthly",
+      "routeKey": "/api/query/cross-sell-trend",
+      "baselineP95": 1088,
+      "currentP95": 347,
+      "currentP95All": 347,
+      "p95ImprovementPct": 68.11,
+      "baselineCount": 145,
+      "failures": 0,
+      "successes": 3
+    },
+    {
+      "route": "/api/query/cross-sell-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&vehicleCategory=passenger&granularity=monthly&timePeriod=monthly",
+      "routeKey": "/api/query/cross-sell-bundle",
+      "baselineP95": null,
+      "currentP95": 318,
+      "currentP95All": 318,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 0,
+      "successes": 3
+    },
+    {
+      "route": "/api/query/kpi?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24",
+      "routeKey": "/api/query/kpi",
+      "baselineP95": 993,
+      "currentP95": 321,
+      "currentP95All": 321,
+      "p95ImprovementPct": 67.67,
+      "baselineCount": 60,
+      "failures": 0,
+      "successes": 3
+    },
+    {
+      "route": "/api/query/kpi?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&_t=<dynamic>",
+      "routeKey": "/api/query/kpi",
+      "baselineP95": 993,
+      "currentP95": 324,
+      "currentP95All": 324,
+      "p95ImprovementPct": 67.37,
+      "baselineCount": 60,
+      "failures": 0,
+      "successes": 3
+    },
+    {
+      "route": "/api/query/performance-summary?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none",
+      "routeKey": "/api/query/performance-summary",
+      "baselineP95": null,
+      "currentP95": 408,
+      "currentP95All": 408,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 0,
+      "successes": 3
+    },
+    {
+      "route": "/api/query/performance-top-salesman?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&segmentTag=all&timePeriod=month&growthMode=mom&limit=20",
+      "routeKey": "/api/query/performance-top-salesman",
+      "baselineP95": null,
+      "currentP95": 320,
+      "currentP95All": 320,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 0,
+      "successes": 3
+    },
+    {
+      "route": "/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none&granularity=monthly&limit=20",
+      "routeKey": "/api/query/performance-bundle",
+      "baselineP95": null,
+      "currentP95": 378,
+      "currentP95All": 378,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 0,
+      "successes": 3
+    },
+    {
+      "route": "/api/query/dashboard-bundle?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&granularity=week&perspective=premium",
+      "routeKey": "/api/query/dashboard-bundle",
+      "baselineP95": null,
+      "currentP95": 316,
+      "currentP95All": 316,
+      "p95ImprovementPct": null,
+      "baselineCount": 0,
+      "failures": 0,
+      "successes": 3
+    }
+  ],
+  "thresholds": {
+    "warmP95Ms": 800,
+    "warmP99Ms": 1500,
+    "coldP95Ms": 3000,
+    "maxRssMb": 1229
+  },
+  "runtime": {
+    "serverPid": null,
+    "rssMb": null
+  },
+  "gate": {
+    "strictGate": false,
+    "passed": false,
+    "violations": [
+      "/api/query/kpi: cold p95 17237ms > 3000ms",
+      "/api/query/performance-top-salesman: cold p95 5038ms > 3000ms",
+      "/api/query/performance-bundle: cold p95 7240ms > 3000ms"
+    ]
+  },
+  "results": [
+    {
+      "label": "cross-sell-summary",
+      "route": "/api/query/cross-sell-summary?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&vehicleCategory=passenger",
+      "routeKey": "/api/query/cross-sell-summary",
+      "dynamicCacheBust": false,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 1798,
+      "coldP95": 1798,
+      "coldP99": 1798,
+      "coldAvg": 1798,
+      "coldP50All": 1798,
+      "coldP95All": 1798,
+      "coldP99All": 1798,
+      "coldAvgAll": 1798,
+      "p50": 376,
+      "p95": 376,
+      "p99": 376,
+      "avg": 376,
+      "max": 428,
+      "min": 323,
+      "p50All": 376,
+      "p95All": 376,
+      "p99All": 376,
+      "avgAll": 376,
+      "maxAll": 428,
+      "minAll": 323,
+      "coldSamples": [
+        1798
+      ],
+      "coldSamplesAll": [
+        1798
+      ],
+      "samples": [
+        323,
+        428,
+        376
+      ],
+      "samplesAll": [
+        323,
+        428,
+        376
+      ]
+    },
+    {
+      "label": "cross-sell",
+      "route": "/api/query/cross-sell?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&vehicleCategory=passenger",
+      "routeKey": "/api/query/cross-sell",
+      "dynamicCacheBust": false,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 358,
+      "coldP95": 358,
+      "coldP99": 358,
+      "coldAvg": 358,
+      "coldP50All": 358,
+      "coldP95All": 358,
+      "coldP99All": 358,
+      "coldAvgAll": 358,
+      "p50": 319,
+      "p95": 319,
+      "p99": 319,
+      "avg": 319,
+      "max": 320,
+      "min": 318,
+      "p50All": 319,
+      "p95All": 319,
+      "p99All": 319,
+      "avgAll": 319,
+      "maxAll": 320,
+      "minAll": 318,
+      "coldSamples": [
+        358
+      ],
+      "coldSamplesAll": [
+        358
+      ],
+      "samples": [
+        320,
+        318,
+        319
+      ],
+      "samplesAll": [
+        320,
+        318,
+        319
+      ]
+    },
+    {
+      "label": "cross-sell-trend",
+      "route": "/api/query/cross-sell-trend?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&vehicleCategory=passenger&granularity=monthly",
+      "routeKey": "/api/query/cross-sell-trend",
+      "dynamicCacheBust": false,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 490,
+      "coldP95": 490,
+      "coldP99": 490,
+      "coldAvg": 490,
+      "coldP50All": 490,
+      "coldP95All": 490,
+      "coldP99All": 490,
+      "coldAvgAll": 490,
+      "p50": 347,
+      "p95": 347,
+      "p99": 347,
+      "avg": 346,
+      "max": 369,
+      "min": 323,
+      "p50All": 347,
+      "p95All": 347,
+      "p99All": 347,
+      "avgAll": 346,
+      "maxAll": 369,
+      "minAll": 323,
+      "coldSamples": [
+        490
+      ],
+      "coldSamplesAll": [
+        490
+      ],
+      "samples": [
+        369,
+        347,
+        323
+      ],
+      "samplesAll": [
+        369,
+        347,
+        323
+      ]
+    },
+    {
+      "label": "cross-sell-bundle",
+      "route": "/api/query/cross-sell-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&vehicleCategory=passenger&granularity=monthly&timePeriod=monthly",
+      "routeKey": "/api/query/cross-sell-bundle",
+      "dynamicCacheBust": false,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 687,
+      "coldP95": 687,
+      "coldP99": 687,
+      "coldAvg": 687,
+      "coldP50All": 687,
+      "coldP95All": 687,
+      "coldP99All": 687,
+      "coldAvgAll": 687,
+      "p50": 318,
+      "p95": 318,
+      "p99": 318,
+      "avg": 637,
+      "max": 1277,
+      "min": 315,
+      "p50All": 318,
+      "p95All": 318,
+      "p99All": 318,
+      "avgAll": 637,
+      "maxAll": 1277,
+      "minAll": 315,
+      "coldSamples": [
+        687
+      ],
+      "coldSamplesAll": [
+        687
+      ],
+      "samples": [
+        1277,
+        315,
+        318
+      ],
+      "samplesAll": [
+        1277,
+        315,
+        318
+      ]
+    },
+    {
+      "label": "kpi",
+      "route": "/api/query/kpi?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24",
+      "routeKey": "/api/query/kpi",
+      "dynamicCacheBust": false,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 17237,
+      "coldP95": 17237,
+      "coldP99": 17237,
+      "coldAvg": 17237,
+      "coldP50All": 17237,
+      "coldP95All": 17237,
+      "coldP99All": 17237,
+      "coldAvgAll": 17237,
+      "p50": 321,
+      "p95": 321,
+      "p99": 321,
+      "avg": 321,
+      "max": 323,
+      "min": 318,
+      "p50All": 321,
+      "p95All": 321,
+      "p99All": 321,
+      "avgAll": 321,
+      "maxAll": 323,
+      "minAll": 318,
+      "coldSamples": [
+        17237
+      ],
+      "coldSamplesAll": [
+        17237
+      ],
+      "samples": [
+        321,
+        318,
+        323
+      ],
+      "samplesAll": [
+        321,
+        318,
+        323
+      ]
+    },
+    {
+      "label": "kpi-cache-bust-dynamic",
+      "route": "/api/query/kpi?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&_t=<dynamic>",
+      "routeKey": "/api/query/kpi",
+      "dynamicCacheBust": true,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 354,
+      "coldP95": 354,
+      "coldP99": 354,
+      "coldAvg": 354,
+      "coldP50All": 354,
+      "coldP95All": 354,
+      "coldP99All": 354,
+      "coldAvgAll": 354,
+      "p50": 324,
+      "p95": 324,
+      "p99": 324,
+      "avg": 322,
+      "max": 325,
+      "min": 316,
+      "p50All": 324,
+      "p95All": 324,
+      "p99All": 324,
+      "avgAll": 322,
+      "maxAll": 325,
+      "minAll": 316,
+      "coldSamples": [
+        354
+      ],
+      "coldSamplesAll": [
+        354
+      ],
+      "samples": [
+        325,
+        316,
+        324
+      ],
+      "samplesAll": [
+        325,
+        316,
+        324
+      ]
+    },
+    {
+      "label": "performance-summary",
+      "route": "/api/query/performance-summary?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none",
+      "routeKey": "/api/query/performance-summary",
+      "dynamicCacheBust": false,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 2465,
+      "coldP95": 2465,
+      "coldP99": 2465,
+      "coldAvg": 2465,
+      "coldP50All": 2465,
+      "coldP95All": 2465,
+      "coldP99All": 2465,
+      "coldAvgAll": 2465,
+      "p50": 408,
+      "p95": 408,
+      "p99": 408,
+      "avg": 386,
+      "max": 409,
+      "min": 340,
+      "p50All": 408,
+      "p95All": 408,
+      "p99All": 408,
+      "avgAll": 386,
+      "maxAll": 409,
+      "minAll": 340,
+      "coldSamples": [
+        2465
+      ],
+      "coldSamplesAll": [
+        2465
+      ],
+      "samples": [
+        340,
+        408,
+        409
+      ],
+      "samplesAll": [
+        340,
+        408,
+        409
+      ]
+    },
+    {
+      "label": "performance-top-salesman",
+      "route": "/api/query/performance-top-salesman?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&segmentTag=all&timePeriod=month&growthMode=mom&limit=20",
+      "routeKey": "/api/query/performance-top-salesman",
+      "dynamicCacheBust": false,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 5038,
+      "coldP95": 5038,
+      "coldP99": 5038,
+      "coldAvg": 5038,
+      "coldP50All": 5038,
+      "coldP95All": 5038,
+      "coldP99All": 5038,
+      "coldAvgAll": 5038,
+      "p50": 320,
+      "p95": 320,
+      "p99": 320,
+      "avg": 319,
+      "max": 321,
+      "min": 317,
+      "p50All": 320,
+      "p95All": 320,
+      "p99All": 320,
+      "avgAll": 319,
+      "maxAll": 321,
+      "minAll": 317,
+      "coldSamples": [
+        5038
+      ],
+      "coldSamplesAll": [
+        5038
+      ],
+      "samples": [
+        320,
+        317,
+        321
+      ],
+      "samplesAll": [
+        320,
+        317,
+        321
+      ]
+    },
+    {
+      "label": "performance-bundle",
+      "route": "/api/query/performance-bundle?drillPath=%5B%5D&groupBy=org_level_3&dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&segmentTag=all&timePeriod=month&growthMode=mom&expandDims=none&granularity=monthly&limit=20",
+      "routeKey": "/api/query/performance-bundle",
+      "dynamicCacheBust": false,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 7240,
+      "coldP95": 7240,
+      "coldP99": 7240,
+      "coldAvg": 7240,
+      "coldP50All": 7240,
+      "coldP95All": 7240,
+      "coldP99All": 7240,
+      "coldAvgAll": 7240,
+      "p50": 378,
+      "p95": 378,
+      "p99": 378,
+      "avg": 366,
+      "max": 396,
+      "min": 323,
+      "p50All": 378,
+      "p95All": 378,
+      "p99All": 378,
+      "avgAll": 366,
+      "maxAll": 396,
+      "minAll": 323,
+      "coldSamples": [
+        7240
+      ],
+      "coldSamplesAll": [
+        7240
+      ],
+      "samples": [
+        396,
+        323,
+        378
+      ],
+      "samplesAll": [
+        396,
+        323,
+        378
+      ]
+    },
+    {
+      "label": "dashboard-bundle",
+      "route": "/api/query/dashboard-bundle?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-24&granularity=week&perspective=premium",
+      "routeKey": "/api/query/dashboard-bundle",
+      "dynamicCacheBust": false,
+      "coldRuns": 1,
+      "iterations": 3,
+      "warmup": 1,
+      "coldRetries429": 0,
+      "retries429": 0,
+      "coldFailures": 0,
+      "failures": 0,
+      "coldSuccesses": 1,
+      "successes": 3,
+      "statusCounts": {
+        "200": 3
+      },
+      "errorCounts": {},
+      "coldP50": 632,
+      "coldP95": 632,
+      "coldP99": 632,
+      "coldAvg": 632,
+      "coldP50All": 632,
+      "coldP95All": 632,
+      "coldP99All": 632,
+      "coldAvgAll": 632,
+      "p50": 316,
+      "p95": 316,
+      "p99": 316,
+      "avg": 319,
+      "max": 325,
+      "min": 315,
+      "p50All": 316,
+      "p95All": 316,
+      "p99All": 316,
+      "avgAll": 319,
+      "maxAll": 325,
+      "minAll": 315,
+      "coldSamples": [
+        632
+      ],
+      "coldSamplesAll": [
+        632
+      ],
+      "samples": [
+        316,
+        325,
+        315
+      ],
+      "samplesAll": [
+        316,
+        325,
+        315
+      ]
+    }
+  ]
+}

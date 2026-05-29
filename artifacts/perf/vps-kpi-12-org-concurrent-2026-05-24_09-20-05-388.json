@@ -1,0 +1,116 @@
+{
+  "startedAt": "2026-05-24T09:20:05.388Z",
+  "finishedAt": "2026-05-24T09:20:27.479Z",
+  "baseUrl": "https://chexian.cretvalu.com",
+  "route": "/api/query/kpi",
+  "concurrency": 12,
+  "orgs": [
+    "天府",
+    "宜宾",
+    "高新",
+    "青羊",
+    "泸州",
+    "新都",
+    "武侯",
+    "乐山",
+    "德阳",
+    "自贡",
+    "资阳",
+    "达州"
+  ],
+  "statusCounts": {
+    "200": 11,
+    "500": 1
+  },
+  "success": 11,
+  "failure": 1,
+  "p50": 9469,
+  "p95": 18179,
+  "max": 18179,
+  "results": [
+    {
+      "org": "天府",
+      "status": 500,
+      "ok": false,
+      "durationMs": 8698,
+      "error": "{\"success\":false,\"error\":{\"message\":\"Internal Server Error\",\"statusCode\":500}}"
+    },
+    {
+      "org": "宜宾",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9743,
+      "error": null
+    },
+    {
+      "org": "高新",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9464,
+      "error": null
+    },
+    {
+      "org": "青羊",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9469,
+      "error": null
+    },
+    {
+      "org": "泸州",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9476,
+      "error": null
+    },
+    {
+      "org": "新都",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9462,
+      "error": null
+    },
+    {
+      "org": "武侯",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9471,
+      "error": null
+    },
+    {
+      "org": "乐山",
+      "status": 200,
+      "ok": true,
+      "durationMs": 12877,
+      "error": null
+    },
+    {
+      "org": "德阳",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9465,
+      "error": null
+    },
+    {
+      "org": "自贡",
+      "status": 200,
+      "ok": true,
+      "durationMs": 11989,
+      "error": null
+    },
+    {
+      "org": "资阳",
+      "status": 200,
+      "ok": true,
+      "durationMs": 18179,
+      "error": null
+    },
+    {
+      "org": "达州",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9441,
+      "error": null
+    }
+  ]
+}

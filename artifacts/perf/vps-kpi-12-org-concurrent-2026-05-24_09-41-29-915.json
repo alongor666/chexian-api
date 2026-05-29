@@ -1,0 +1,116 @@
+{
+  "startedAt": "2026-05-24T09:41:29.915Z",
+  "finishedAt": "2026-05-24T09:41:40.398Z",
+  "baseUrl": "https://chexian.cretvalu.com",
+  "route": "/api/query/kpi",
+  "concurrency": 12,
+  "orgs": [
+    "天府",
+    "宜宾",
+    "高新",
+    "青羊",
+    "泸州",
+    "新都",
+    "武侯",
+    "乐山",
+    "德阳",
+    "自贡",
+    "资阳",
+    "达州"
+  ],
+  "statusCounts": {
+    "200": 8,
+    "500": 4
+  },
+  "success": 8,
+  "failure": 4,
+  "p50": 9509,
+  "p95": 9643,
+  "max": 10481,
+  "results": [
+    {
+      "org": "天府",
+      "status": 200,
+      "ok": true,
+      "durationMs": 10481,
+      "error": null
+    },
+    {
+      "org": "宜宾",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9522,
+      "error": null
+    },
+    {
+      "org": "高新",
+      "status": 500,
+      "ok": false,
+      "durationMs": 4779,
+      "error": "{\"success\":false,\"error\":{\"message\":\"Internal Server Error\",\"statusCode\":500}}"
+    },
+    {
+      "org": "青羊",
+      "status": 500,
+      "ok": false,
+      "durationMs": 9023,
+      "error": "{\"success\":false,\"error\":{\"message\":\"Internal Server Error\",\"statusCode\":500}}"
+    },
+    {
+      "org": "泸州",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9509,
+      "error": null
+    },
+    {
+      "org": "新都",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9520,
+      "error": null
+    },
+    {
+      "org": "武侯",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9512,
+      "error": null
+    },
+    {
+      "org": "乐山",
+      "status": 500,
+      "ok": false,
+      "durationMs": 3646,
+      "error": "{\"success\":false,\"error\":{\"message\":\"Internal Server Error\",\"statusCode\":500}}"
+    },
+    {
+      "org": "德阳",
+      "status": 500,
+      "ok": false,
+      "durationMs": 5491,
+      "error": "{\"success\":false,\"error\":{\"message\":\"Internal Server Error\",\"statusCode\":500}}"
+    },
+    {
+      "org": "自贡",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9509,
+      "error": null
+    },
+    {
+      "org": "资阳",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9643,
+      "error": null
+    },
+    {
+      "org": "达州",
+      "status": 200,
+      "ok": true,
+      "durationMs": 9610,
+      "error": null
+    }
+  ]
+}
