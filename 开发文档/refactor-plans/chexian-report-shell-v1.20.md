@@ -9,7 +9,7 @@
 3. 业务侧 `diagnose-period-trend` 自己写了 `Period` / `Anomaly` / `derive_metrics()` —— 这些是诊断报告的**通用能力**，应该下沉到 shell。
 4. 历史残留：`SKILL.md` 保留 v1.18 废弃章节、`examples/` 与 `styles/` 为空目录、`tests/test_sections_contract.py` 是空文件但 SKILL.md 声称"9 个契约单测全 PASS"。
 
-**目标**：v1.20 把 period-trend 验证过的实践沉淀到 shell，按组件拆开 `render.py`，统一 import 入口，补齐契约测试。**严格向后兼容**——3 个下游 skill + 2 个 ad-hoc 脚本零改动也能继续跑。
+**目标**：v1.20 把 period-trend 验证过的实践沉淀到 shell，按组件拆开 `render.py`，统一 import 入口，补齐契约测试。**严格向后兼容既有公开入口**——3 个下游 skill + 2 个 ad-hoc 脚本的 `from lib import ...` / `from lib.render import ...` 零改动也能继续跑。
 
 ## 关键执行环境说明（reviewer 必读）
 
@@ -48,13 +48,13 @@ graph LR
       RA["_assets.py<br/>跨子模块共享 CSS/JS"]
     end
 
-    SHIM["render.py<br/>(垫片 from .render import *)"]
+    RFACADE["render/__init__.py<br/>公开 facade"]
     INIT["__init__.py<br/>显式 __all__<br/>+ get_threshold()"]
     Q["queries.py<br/>make_weekly_windows<br/>= build_periods 薄包装"]
 
-    SHIM -.re-export.-> RP
-    SHIM -.re-export.-> RT
-    SHIM -.re-export.-> RC
+    RFACADE -.re-export.-> RP
+    RFACADE -.re-export.-> RT
+    RFACADE -.re-export.-> RC
     INIT --> TW
     INIT --> AB
     INIT --> LD
@@ -73,8 +73,8 @@ graph LR
   classDef new fill:#d4f4dd,stroke:#2e7d32
   classDef shim fill:#fff3cd,stroke:#856404
   classDef untouched fill:#e3e3e3,stroke:#555
-  class TW,AB,LD,RP,RT,RC,RN,RTH,RW,RS,RA,INIT new
-  class SHIM,Q shim
+  class TW,AB,LD,RP,RT,RC,RN,RTH,RW,RS,RA,RFACADE,INIT new
+  class Q shim
   class A0 untouched
 ```
 
@@ -115,7 +115,7 @@ def make_weekly_windows(cutoff):
             for p in build_periods(cutoff, preset="weekly")]
 ```
 
-period-trend 后续 PR 自己改为 `from chexian_report_shell.time_windows import Period, build_periods`，**本 PR 不动 period-trend**。
+period-trend 后续 PR 自己改为 `from lib.time_windows import Period, build_periods`（沿用当前 consumer 将 shell 根目录加入 `sys.path` 后导入 `lib` 的布局），**本 PR 不动 period-trend**。
 
 ### 2. 下沉 `Anomaly` 基类 → `lib/anomaly_base.py`（新建，~60 行）
 
@@ -152,7 +152,7 @@ def load_shell(*, alias: str = "dhr_lib"):
     """一行加载 shell 全量 API：处理 importlib 隔离 + sys.modules 注册。
 
     用法：
-        from chexian_report_shell.loader import load_shell
+        from lib.loader import load_shell
         shell = load_shell()
         TH, light, render_page = shell.TH, shell.light, shell.render_page
     """
@@ -166,13 +166,13 @@ SKILL.md 新增"推荐 import 方式（v1.20）"表：
 
 | 场景 | 推荐 |
 |---|---|
-| 新建 diagnose-* skill | `from chexian_report_shell.loader import load_shell` 一行入口 |
+| 新建 diagnose-* skill | `from lib.loader import load_shell` 一行入口 |
 | 已存在 skill 维护 | 旧 `sys.path.insert` + `from lib import …` 继续工作，不强制迁移 |
 | 本项目 ad-hoc 脚本 | 同上，不强制迁移 |
 
 ### 4. 拆分 `render.py`（1851 行 → 7 子模块）
 
-按组件拆，**保持 `from lib import render_page` / `from lib.render import render_page` 100% 可用**：
+按组件拆，**保持 `from lib import render_page` / `from lib.render import render_page` 100% 可用**。注意：`lib/render.py` 文件和 `lib/render/` 目录不能同名共存；拆分时必须先把旧文件内容迁入子包，再删除旧文件，由 `lib/render/__init__.py` 承担 re-export facade。
 
 ```
 lib/render/
@@ -187,14 +187,17 @@ lib/render/
 └── status.py          # render_status_bar
 ```
 
-**兼容垫片**：原 `lib/render.py` 内容替换为：
+**兼容 facade**：不要保留 `lib/render.py` 垫片；旧文件删除后，`lib/render/__init__.py` 作为唯一公开入口：
 
 ```python
-# v1.20: 实现已迁至 lib/render/；本文件保留为兼容垫片
-from .render import *  # noqa: F401,F403
+# v1.20: render 实现拆到子模块；本包保留公开 re-export 入口
+from .page import render_page
+from .table import render_table
+from .card import render_card, render_callout, render_rule
+# 其余公开符号按拆分前公开清单继续 re-export
 ```
 
-**拆分前置动作**：在动手前用 `grep -n "^def \|^[A-Z_]\+ ?=" lib/render.py` 列出所有公开符号（函数 + 模块级常量），按归属表分组；CSS/JS 字符串模板的跨函数引用关系单独梳理一遍，跨子模块共享的统一放 `render/_assets.py`。
+**拆分前置动作**：在动手前用 `grep -n "^def \|^[A-Z_]\+ ?=" lib/render.py` 列出所有公开符号（函数 + 模块级常量），按归属表分组；CSS/JS 字符串模板的跨函数引用关系单独梳理一遍，跨子模块共享的统一放 `render/_assets.py`。迁移完成后执行 `test ! -f lib/render.py && test -d lib/render`，防止同名文件/目录方案回归。
 
 ### 5. 清理废弃 + 文档重写
 
@@ -252,12 +255,12 @@ class TestThresholdAPI:
 
 ### 修改
 - `lib/__init__.py` — 显式 `__all__` + 新 API 导出 + `get_threshold()`
-- `lib/render.py` — 改为兼容垫片
 - `lib/queries.py:make_weekly_windows` — 改为 `build_periods` 薄包装
 - `SKILL.md` — 删 v1.18 / 加 v1.20 章节 / 重写"如何被业务 skill 集成"
 - `README.md` — 同步推荐 `load_shell()`
 
 ### 删除
+- `lib/render.py` — 迁移到 `lib/render/` 子包后删除，不能和同名目录共存
 - 空目录 `examples/`、`styles/`
 - SKILL.md v1.18 章节
 
@@ -327,6 +330,7 @@ grep -rn "from lib import" ~/.claude/skills/diagnose-*/  # 旧入口应继续被
 
 | 风险 | 缓解 |
 |---|---|
+| `render.py` 文件和 `render/` 目录同名冲突 | 拆分时删除旧 `lib/render.py`，由 `lib/render/__init__.py` 做唯一 facade；验证 `test ! -f lib/render.py && test -d lib/render` |
 | `render.py` 拆分后跨文件共用的 CSS/JS 字符串导致渲染坏 | 拆分前先列依赖图；跨子模块共用字符串统一放 `render/_assets.py`；产物字节级 diff 兜底 |
 | period-trend 自己的 `Anomaly` 类与下沉的基类字段冲突 | shell 只下沉骨架，period-trend 后续 PR 再继承迁移，本 PR 不强制 |
 | 业务 skill 仍用 `make_weekly_windows()` | 保留薄包装，不删，不加 DeprecationWarning（v1.20 是无感知升级） |
