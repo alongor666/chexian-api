@@ -491,22 +491,346 @@ const sql = buildStandardQuery({ cte: buildPolicyExposureCTE(filters), metrics, 
 <!-- SECTION:6 -->
 ## 6. 议题三：数据管道人工中间环节
 
-<!-- PLACEHOLDER -->
+### 6.1 问题描述
+
+当前日常数据发布路径（来自 `CLAUDE.md §8`、`data-pipeline.md`、`sync-and-reload.mjs`）：
+
+```
+Excel 源文件 (Mac Downloads/)
+     │
+     ▼ 手动：node 数据管理/daily.mjs
+Python ETL (transform.py)
+     │
+     ▼ 手动：node scripts/sync-vps.mjs
+rsync → VPS server/data/fact/...
+     │
+     ▼ 手动：bun run release:daily
+sudo deploy-chexian-api reload
+     │
+     ▼ 自动：Service Worker 感知版本变化
+```
+
+**三个结构性问题**：
+
+**问题 1：VPS 禁用原始查询的约束仅在文档中**
+
+`data-pipeline.md` 的"黄金规则"：「禁止在 VPS 上查询原始 PolicyFact 构建新功能」。但这个约束：
+- 只记录在 `.claude/rules/data-pipeline.md`（AI 指引文档）
+- 没有被 governance check 自动校验
+- 新加入的开发者若未读 CLAUDE.md，极易在 VPS 上写查询原始 Parquet 的新功能，重演历史 OOM（「历史上原始 Parquet 在 VPS 聚合导致内存 800MB+、PM2 177 次重启」）
+
+**问题 2：rsync 无原子交换保证**
+
+`sync-vps.mjs` 用 rsync 推送 Parquet 文件到 VPS，但：
+- rsync 是文件级增量，非原子操作
+- 在推送进行中，VPS 上的 DuckDB 若同时读取 policy/current/，可能读到新旧混合分片
+- PM2 热重载后 DuckDB 重加载 Parquet，但重载前的 in-flight 请求已读到的可能是半更新状态
+- 目前用 `dataVersion` 后缀 cache key + ETL 后 version bump 来缓解，但 rsync 推送期间无保护窗口
+
+**问题 3：data-sources.json 重复字段**
+
+`data-sources.json` 中 premium 域存在两个 `last_updated` 和两个 `data_range` 字段（文件直接可见），说明元数据写入存在竞争或合并错误，唯一事实源机制在元数据层有空洞。
+
+### 6.2 可选方案
+
+#### 方案 A：Governance 检查覆盖 VPS 原始查询约束（低成本，立竿见影）
+
+在 `scripts/check-governance.mjs` 新增检查 #26（或附加到已有 VPS 相关检查）：
+- 扫描 `server/src/sql/**/*.ts` 中新增代码
+- 检测是否出现 `PolicyFact` / `raw_parquet` / `policy/current/` 等原始数据访问模式
+- 若新增文件（git diff 中新增行）包含上述模式，报 Warning + 提示"是否已在 Mac 本地预聚合？"
+
+这不能完全阻止，但能在 CI / governance 运行时给出提醒，形成第二道防线。
+
+**优点**：1 天实现；有效降低新成员违反约束的概率  
+**缺点**：正则匹配有误报；老文件豁免逻辑需维护
+
+#### 方案 B：原子数据切换（rsync → 暂存目录 + 符号链接 swap）
+
+修改 `sync-vps.mjs` + `deploy-chexian-api` wrapper，实现蓝绿 Parquet 切换：
+
+```bash
+# 推送到暂存目录（不影响运行中的 DuckDB）
+rsync ... server/data/fact/policy/incoming/
+
+# 验证文件完整性（checksum 或行数验证）
+node scripts/verify-parquet-incoming.mjs
+
+# 原子符号链接切换
+ln -sfn server/data/fact/policy/incoming server/data/fact/policy/current-new
+mv -Tf server/data/fact/policy/current-new server/data/fact/policy/current
+
+# 触发 PM2 热重载（DuckDB 重新加载 current/）
+sudo deploy-chexian-api reload
+```
+
+**优点**：消除 rsync 推送窗口中的数据不一致风险；`incoming/` 目录可保留上一版本用于回滚  
+**缺点**：VPS 磁盘需额外保留一份 Parquet 副本（约 300-500MB）；wrapper 脚本改动需走部署链 PR
+
+#### 方案 C：GitHub Actions 触发 ETL（半自动化管道）
+
+将 Mac 本地的手动步骤部分迁移到 GitHub Actions：
+- 用户将 Excel 文件上传到指定 S3/OSS bucket（或 GitHub Release asset）
+- Actions workflow 触发：下载 Excel → 运行 Python ETL（在 Actions runner 上，非 VPS）→ 生成 Parquet → rsync 到 VPS
+- 保留 Mac 本地作为应急路径
+
+**优点**：消除本地 Mac 依赖；ETL 过程可审计（Actions 日志）；不再需要本地配置 Python 环境  
+**缺点**：Actions runner 存储 Excel 源文件（敏感数据）；Python ETL 依赖需在 Actions 上安装（启动慢）；架构复杂度增加；需要配置 OSS/S3 存储
+
+### 6.3 方案对比矩阵
+
+| 维度 | A (Governance 检查) | B (原子切换) | C (Actions ETL) |
+|------|--------------------|-----------|-----------------|
+| Product Impact | 无 | 无（可用性提升）| 低（流程自动化）|
+| Implementation Complexity | 低（1 天） | 中（2-3 天）| 高（1-2 周）|
+| Operational Complexity | 低 | 低（脚本维护）| 高（S3/Actions 维护）|
+| Maintainability | 中（豁免列表） | 好（无状态脚本）| 中（Actions yaml 维护）|
+| Scalability | 不适用 | 好（原子操作）| 好（去本地依赖）|
+| Cost | 零 | 零 | S3 存储 + Actions 时间 |
+| Migration Risk | 极低 | 低 | 中（数据流路径变化）|
+
+### 6.4 推荐方案
+
+**执行 A（立即），评估 B（一个月内）**：
+
+1. **本周**：Governance #26 检查 VPS 原始查询约束，覆盖存量文件豁免表（cost/kpi/trend/growth 等现有文件加豁免注释）
+2. **一月内**：实现方案 B 原子切换，修改 `sync-vps.mjs` 推送逻辑 + wrapper 加 verify 步骤
+3. **暂不建议方案 C**：当前数据量和团队规模下 Mac 本地 ETL 已足够，Actions ETL 引入的运维复杂度超过收益
+
+同时修复 `data-sources.json` 重复字段问题（运行 `refresh_metadata.py` 重新生成，删除重复 key）。
+
+### 6.5 风险与缓解
+
+| 风险 | 概率 | 影响 | 缓解措施 |
+|------|------|------|---------|
+| 原子切换实现错误导致 VPS Parquet 丢失 | 低 | 高 | `incoming/` 保留上一版本；wrapper 增加 checksum 验证步骤；失败时 fallback 到旧符号链接 |
+| Governance 误报豁免老文件遗漏 | 中 | 低 | 审计阶段用 Warning 不用 Error；豁免列表 PR review 覆盖 |
+| data-sources.json 重复字段持续增长 | 中 | 低 | ETL 后自动用 `refresh_metadata.py` 覆写，避免手动编辑 |
+
+### 6.6 Open Questions
+
+- **Q6**: `sync-vps.mjs` rsync 推送期间，VPS DuckDB 是否会在 PolicyFact 上持有文件锁，使 rsync 写入被阻塞还是可并发？
+- **Q7**: 当前 Mac 本地 ETL 成功率如何？是否有因为 Mac 环境问题（Python 版本、源文件格式变化）导致 ETL 失败的记录？
 
 ---
 
 <!-- SECTION:7 -->
 ## 7. 分阶段 Rollout 计划
 
-<!-- PLACEHOLDER -->
+### Phase 0：MVP（1-2 周，零风险改动）
+
+目标：消除已知的最高风险点，纯配置/文档/CI 改动，不触碰业务代码。
+
+| 任务 | 文件 | 工时 | 风险 |
+|------|------|------|------|
+| 降低 Node 堆上限 `--max-old-space-size=3072→2048` | `server/ecosystem.config.cjs` | 0.5h | 极低 |
+| 显式设置 `ROUTE_CACHE_MAX_BYTES=209715200`（200MB）| `server/ecosystem.config.cjs` | 0.5h | 极低 |
+| 修改代码默认 `DUCKDB_MAX_MEMORY='4GB'→'2GB'` | `server/src/config/env.ts` L76 | 0.5h | 低 |
+| 添加内存预算注释表（组件/分配/实测对比） | `server/ecosystem.config.cjs` | 0.5h | 极低 |
+| Governance #26：VPS 原始查询约束检查 | `scripts/check-governance.mjs` | 1d | 极低 |
+| 修复 `data-sources.json` 重复 key | 运行 `refresh_metadata.py` | 0.5h | 极低 |
+
+**验收标准**：
+- `bun run governance` 通过 + 新增 #26 检查在存量代码上无误报
+- PM2 描述中 `node_args` 已更新
+
+**Rollback**：git revert ecosystem.config.cjs 单个 commit 即可
+
+---
+
+### Phase 1：Hardening（2-4 周）
+
+目标：引入自动化防漏机制，让漂移和约束违反在 CI 中被捕获。
+
+| 任务 | 文件 | 工时 | 风险 |
+|------|------|------|------|
+| SQL Snapshot 测试框架（DuckDB in-memory）| `tests/metric-registry/snapshot.test.ts` | 2d | 低 |
+| 25 个注册表指标 testCase 补全（补缺失的）| `metric-registry/categories/*.ts` | 1d | 极低 |
+| cost / kpi / performance 路由输出字段断言 | `tests/snapshots/*.snap.ts` | 2d | 低 |
+| 原子数据切换脚本（incoming + symlink swap）| `scripts/sync-vps-atomic.mjs` + `deploy/vps-wrapper/` | 2d | 中 |
+| Governance #25：新增 SQL 文件聚合表达式检查 | `scripts/check-governance.mjs` | 1d | 低 |
+
+**验收标准**：
+- `bun run test` 包含 snapshot 测试，25 个指标全部通过
+- `bun run release:daily` 使用新的原子切换脚本，health check 通过
+
+**Rollback**：每项任务独立 PR，可单独回滚
+
+---
+
+### Phase 2：Scale-out（1-3 月）
+
+目标：为 VPS 升级和数据量增长做好准备。
+
+| 任务 | 工时 | 依赖 | 价值 |
+|------|------|------|------|
+| VPS 升级评估（4C8G 成本收益分析）| 1d | Phase 0 完成后的稳态内存监控数据 | 根本解决内存压力 |
+| `/api/admin/metrics` 端点：暴露 route-cache 命中率 + DuckDB pool stats | 1d | 无 | 日常运维可观测性 |
+| DuckDB slow query 日志结构化（JSON + 路由 key）| 0.5d | 无 | 慢查询追踪 |
+| 高频路由预聚合可行性评估（kpi / trend 路由）| 2d | Phase 1 snapshot 测试提供安全网 | 查询性能 5-10x |
+
+**验收标准**：
+- `/api/admin/metrics` 返回内存 + 缓存统计
+- 有 4 周运行时数据支撑 VPS 升级决策
+
+---
+
+### Phase 3：Migration & Rollback（3+ 月）
+
+目标：长期架构改善，仅在数据量或性能要求超出现有架构时执行。
+
+| 任务 | 触发条件 | 估计工时 |
+|------|---------|---------|
+| VPS 升级（4C8G）| 稳态内存 > 3GB 或 PM2 restart > 2 次/月 | 运营操作 |
+| kpi / trend 路由迁移到预聚合 Parquet | 高频路由 P99 > 3s 或 DuckDB 内存 > 1.2GB | 4-6 周 |
+| ETL 管道半自动化（GitHub Actions trigger）| 团队规模扩大或 Mac 本地 ETL 频率 > 每日 | 2-3 周 |
+| state-db 迁移评估（better-sqlite3 → PostgreSQL）| PAT 用量 > 100 个或需要多实例共享状态 | 3-4 周 |
+
+**注意**：Phase 3 任务互相独立，按触发条件分别评估，不需要整体推进。
+
+---
+
+### Rollback 总体策略
+
+| 层级 | Rollback 机制 |
+|------|--------------|
+| 代码配置 | git revert + 走 CI/deploy 链 |
+| VPS 部署 | `deploy-chexian-api reload` 完整 5 对象回滚 |
+| 数据文件 | `sync-vps-atomic.mjs` 保留 incoming/ 副本，可重新 symlink |
+| 指标注册表 | `changelog` 字段追踪版本，可定点回退 `sql.expression` |
+| state-db | `STATE_STORE_BACKEND=json pm2 restart --update-env` 临时回退 JSON 模式 |
 
 ---
 
 <!-- SECTION:8 -->
 ## 8. Observability 与测试策略
 
-<!-- PLACEHOLDER -->
+### 8.1 当前可观测性覆盖
+
+| 组件 | 当前状态 | 缺口 |
+|------|---------|------|
+| HTTP 层 | `logs/audit.log`（JSON，含 auth_kind/token_id/route） | 无 P99 延迟聚合；无 error rate 仪表盘 |
+| DuckDB 层 | `[DuckDB] ⚠️ Slow query (XXms)` console.warn | 无结构化 JSON 输出；无路由聚合慢查询排行 |
+| route-cache 层 | `getRouteCacheStats()` 函数存在 | 无对外端点（`/api/admin/cache-stats`）暴露 |
+| DuckDB 连接池 | `getPoolStats()` 函数存在 | 同上，无端点暴露；`saturatedRecently` 字段有价值但未用 |
+| 内存使用 | PM2 `max_memory_restart` 被动触发 | 无主动告警（预警阈值 3.0GB 时发企微通知）|
+| 数据版本 | `GET /api/data/version` 返回 ETL 日期 | ETL 失败时无告警 |
+| ETL 管道 | `node 数据管理/daily.mjs` console 输出 | 无结构化日志；无失败通知 |
+
+### 8.2 建议的可观测性增强（优先级排序）
+
+#### 高优先（Phase 1）
+
+**1. 内存预警企微通知**
+
+在 `server/src/app.ts` 中增加定时任务（5min 间隔），当 Node.js `process.memoryUsage().rss > 2.5GB` 时，通过 `services/wecom.ts` 发送告警：
+
+```typescript
+setInterval(() => {
+  const rss = process.memoryUsage().rss;
+  if (rss > 2.5 * 1024 ** 3) {
+    notifyWecom(`⚠️ chexian-api RSS=${(rss/1024**3).toFixed(2)}GB，接近 PM2 重启阈值`);
+  }
+}, 5 * 60 * 1000);
+```
+
+**2. `/api/admin/health` 扩展**
+
+将 route-cache stats + DuckDB pool stats 集成到 `/health` 或新增 `/api/admin/metrics` 端点：
+
+```json
+{
+  "status": "ok",
+  "memory": { "rss": "1.8GB", "heapUsed": "1.2GB" },
+  "routeCache": { "hits": 1234, "misses": 89, "size": 156, "totalBytes": "180MB" },
+  "duckdb": { "active": 2, "idle": 6, "waiting": 0, "saturatedRecently": false }
+}
+```
+
+**3. 慢查询结构化日志**
+
+修改 `duckdb.ts` slow query 输出为 JSON：
+
+```json
+{ "level": "warn", "type": "slow_query", "durationMs": 4521, "routeKey": "kpi", "reqId": "abc123" }
+```
+
+便于 `grep '"type":"slow_query"' logs/api-out.log | jq '.durationMs' | sort -n | tail -10` 分析。
+
+#### 中优先（Phase 2）
+
+**4. ETL 失败通知**
+
+在 `node 数据管理/daily.mjs` exit code 非 0 时，通过 `scripts/sync-and-reload.mjs` 的 `--wecom` 路径发送失败通知（已有企微集成基础设施）。
+
+**5. 数据版本漂移监控**
+
+`/api/data/version` 当前仅返回 ETL 日期。增加监控：若 `last_updated` 距今 > 2 天（非工作日除外），在 `/health` 响应中加 warning 字段。
+
+### 8.3 测试策略
+
+#### 当前测试层次
+
+```
+单元测试 (bun run test)
+├─ 72 文件 / 892 测试
+├─ SQL 校验器 / SQL 生成器单元逻辑
+├─ 格式化函数 / 查询构建器
+└─ 安全工具 / AI 洞察
+
+集成测试 (bun run test:integration)  [仅本地]
+└─ 4 文件 (DuckDB 原生二进制，CI 排除)
+
+E2E 测试 (bun run test:e2e)
+├─ 需先运行 dev:full
+└─ Playwright 驱动
+```
+
+#### 建议补充的测试层次
+
+| 层次 | 建议添加 | 目的 | CI 可行性 |
+|------|---------|------|----------|
+| **指标 Snapshot** | `tests/metric-registry/snapshot.test.ts` | 防止注册表公式与实现漂移 | ✅ DuckDB in-memory |
+| **路由 Contract** | `tests/routes/contract.test.ts` | 断言路由返回字段集和数值范围 | ✅ mock DuckDB |
+| **SQL 安全** | 补充 `sql-passthrough` 的 injection 用例 | NL2SQL 路径安全 | ✅ |
+| **VPS 约束** | governance #26 自动检查 | 防止新代码违反 VPS 禁令 | ✅ CI |
+
+#### 测试覆盖率目标
+
+| 模块 | 当前覆盖 | 目标 | 备注 |
+|------|---------|------|------|
+| `server/src/sql/**/*.ts` | 低（主要是 SQL 字符串，难以纯单测） | 通过 snapshot 测试覆盖输出合理性 | Phase 1 |
+| `server/src/config/metric-registry/` | 中（有 testCase 框架） | 100% testCase 完整率 | Phase 1 |
+| `server/src/services/route-cache.ts` | 高（现有 `__tests__/`）| 维持 | — |
+| `server/src/middleware/**` | 中 | 补 PAT 认证路径边界用例 | Phase 2 |
+
+### 8.4 架构健康度仪表盘建议
+
+建议在内部 Wiki 或 `docs/runbook.md` 中维护以下指标的每周快照，作为架构健康度基线：
+
+| 指标 | 目标值 | 当前实测 | 告警阈值 |
+|------|--------|---------|---------|
+| VPS RSS 稳态 | < 2.5GB | 待测 | > 3GB |
+| route-cache 命中率 | > 80% | 待测 | < 60% |
+| DuckDB P99 查询延迟 | < 2s | 待测 | > 5s |
+| ETL 发布成功率 | 100% | 未追踪 | 任何失败 |
+| PM2 非计划重启次数/月 | 0 | 未追踪 | > 2 次 |
+| 单元测试通过率 | 100% | 892/892 | 任何失败 |
+| governance 检查通过率 | 100% | 通过 | 任何失败 |
 
 ---
 
-*报告生成中，最终版本追加 `<!-- AUDIT-COMPLETE -->` 哨兵*
+## 附录：整体风险清单
+
+| # | 风险 | 当前状态 | 建议缓解 | Phase |
+|---|------|---------|---------|-------|
+| R1 | VPS 内存峰值超 3.5GB 触发 PM2 循环重启 | **活跃** | 调低参数边界（方案 A）| P0 |
+| R2 | 指标公式漂移（注册表 vs 实现不一致）| **潜在** | Snapshot 测试 + Governance #25 | P1 |
+| R3 | 新功能在 VPS 违反"禁止原始查询"约束 | **潜在** | Governance #26 | P0 |
+| R4 | rsync 推送期间读到新旧混合 Parquet | **潜在** | 原子切换脚本 | P1 |
+| R5 | DuckDB 单进程无 HA，PM2 重启期间 30-120s 不可用 | **已知** | Service Worker 缓存提供部分缓解；长期 VPS 升级后考虑 read replica | P3 |
+| R6 | better-sqlite3 ABI 不兼容（Node 升级时）| **已有保护**（CI smoke test）| 维持现状 | — |
+| R7 | NL2SQL 路径注入（智谱 API 返回恶意 SQL）| **已有保护**（sql-validator 白名单）| 定期审计白名单完整性 | P2 |
+| R8 | data-sources.json 重复 key 导致元数据错误 | **已发生**（文件可见两个 last_updated）| 运行 refresh_metadata.py 修复 | P0 |
+
+<!-- AUDIT-COMPLETE -->
