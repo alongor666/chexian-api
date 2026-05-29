@@ -170,3 +170,9 @@ warehouse/**/_partition_meta.json
 # 报告 HTML 由 skill 本地生成，不入仓库（VPS 通过 sync-vps.mjs 单独分发）
 public/reports/**/*.html
 2026-05-23_诊断报告_结构化汇总_完整版.md
+
+# 一次性诊断产物（HTML 报告的 md 导出）
+2026-05-*_诊断报告_*.md
+
+# 性能测试产物
+artifacts/
