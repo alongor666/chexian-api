@@ -1,6 +1,6 @@
 # Claude Code 命令索引 (v3.3)
 
-> 车险数据分析平台 — 39 个项目级 Slash Commands（不含本 README）
+> 车险数据分析平台 — 40 个项目级 Slash Commands（不含本 README）
 
 **最后更新**: 2026-05-18（P3.3 第三刀 — 散落车险功能归簇完成）
 
@@ -24,6 +24,7 @@
 | 客户来源去向 | `/chexian-flow-analysis` | [chexian-flow-analysis.md](./chexian-flow-analysis.md) |
 | 续保巡检 | `/chexian-patrol` | [chexian-patrol.md](./chexian-patrol.md) |
 | 推送企业微信 | `/chexian-push-wecom` | [chexian-push-wecom.md](./chexian-push-wecom.md) |
+| 报告路由（选周/月/自定义） | `/chexian-report` | [chexian-report.md](./chexian-report.md) |
 | 生成周报 | `/chexian-report-weekly` | [chexian-report-weekly.md](./chexian-report-weekly.md) |
 | 月报 | `/chexian-report-monthly` | [chexian-report-monthly.md](./chexian-report-monthly.md) |
 | 自定义报告 | `/chexian-report-custom` | [chexian-report-custom.md](./chexian-report-custom.md) |
@@ -62,7 +63,7 @@
 | **部署/同步** | `chexian-deploy`, `chexian-daily-sync` | — |
 | **数据分析** | `chexian-data-analysis`, `chexian-data-tools`, `chexian-cost-analysis`, `chexian-pricing-redline`, `chexian-flow-analysis` | `chexian-data-profile`, `chexian-data-kpi`, `chexian-data-trends`, `chexian-data-export` |
 | **续保巡检** | `chexian-patrol` | — |
-| **报告生成** | `chexian-report-weekly` | `chexian-report-monthly`, `chexian-report-custom` |
+| **报告生成** | `chexian-report`（路由器）, `chexian-report-weekly` | `chexian-report-monthly`, `chexian-report-custom` |
 | **报告分发** | `chexian-push-wecom` | — |
 | **安全审查** | `chexian-security-review`（路由器） | `chexian-security-sql`, `chexian-security-xss`, `chexian-security-cors` |
 | **开发工具** | `chexian-performance-audit`, `chexian-ui-review`, `chexian-test-coverage`, `chexian-verify` | — |
