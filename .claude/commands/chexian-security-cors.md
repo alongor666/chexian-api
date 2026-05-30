@@ -42,11 +42,4 @@ last_updated: "2026-01-11"
 
 ## 详细规则
 
-参见 security-review.md § 3-5
-
-
----
-
-**注意**: 这是拆分后的子命令。完整功能请参考父命令文档。
-
-**父命令**: `/chexian-security-review`
+参见 `/chexian-security-review` 「全量 8 项审查清单」§3-4。全量审查或其它安全域检查由路由器 `/chexian-security-review` 统一分发。

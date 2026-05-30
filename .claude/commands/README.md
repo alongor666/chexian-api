@@ -1,6 +1,6 @@
 # Claude Code 命令索引 (v3.3)
 
-> 车险数据分析平台 — 40 个项目级 Slash Commands（不含本 README）
+> 车险数据分析平台 — 39 个项目级 Slash Commands（不含本 README）
 
 **最后更新**: 2026-05-18（P3.3 第三刀 — 散落车险功能归簇完成）
 
@@ -27,11 +27,10 @@
 | 生成周报 | `/chexian-report-weekly` | [chexian-report-weekly.md](./chexian-report-weekly.md) |
 | 月报 | `/chexian-report-monthly` | [chexian-report-monthly.md](./chexian-report-monthly.md) |
 | 自定义报告 | `/chexian-report-custom` | [chexian-report-custom.md](./chexian-report-custom.md) |
-| 安全审查 | `/chexian-security-review` | [chexian-security-review.md](./chexian-security-review.md) |
+| 安全审查（路由器） | `/chexian-security-review` | [chexian-security-review.md](./chexian-security-review.md) |
 | SQL 注入检查 | `/chexian-security-sql` | [chexian-security-sql.md](./chexian-security-sql.md) |
 | XSS 检查 | `/chexian-security-xss` | [chexian-security-xss.md](./chexian-security-xss.md) |
 | CORS 检查 | `/chexian-security-cors` | [chexian-security-cors.md](./chexian-security-cors.md) |
-| 全量安全审查 | `/chexian-security-all` | [chexian-security-all.md](./chexian-security-all.md) |
 | 性能审计 | `/chexian-performance-audit` | [chexian-performance-audit.md](./chexian-performance-audit.md) |
 | UI 审查 | `/chexian-ui-review` | [chexian-ui-review.md](./chexian-ui-review.md) |
 | 测试覆盖率 | `/chexian-test-coverage` | [chexian-test-coverage.md](./chexian-test-coverage.md) |
@@ -65,7 +64,7 @@
 | **续保巡检** | `chexian-patrol` | — |
 | **报告生成** | `chexian-report-weekly` | `chexian-report-monthly`, `chexian-report-custom` |
 | **报告分发** | `chexian-push-wecom` | — |
-| **安全审查** | `chexian-security-review`, `chexian-security-all` | `chexian-security-sql`, `chexian-security-xss`, `chexian-security-cors` |
+| **安全审查** | `chexian-security-review`（路由器） | `chexian-security-sql`, `chexian-security-xss`, `chexian-security-cors` |
 | **开发工具** | `chexian-performance-audit`, `chexian-ui-review`, `chexian-test-coverage`, `chexian-verify` | — |
 | **知识管理** | `chexian-session-manager`, `chexian-extract-knowledge`, `chexian-session-summary` | — |
 | **工作流增强** | `chexian-orchestrate` | — |
@@ -77,9 +76,9 @@
 
 | 类别 | 命令数 |
 |------|--------|
-| 车险簇 chexian-* | 31 |
+| 车险簇 chexian-* | 30 |
 | 诊断簇 diagnose-* | 9 |
-| **合计** | **40** |
+| **合计** | **39** |
 
 ---
 
