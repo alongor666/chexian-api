@@ -3,6 +3,8 @@
 > **唯一事实源**：每个 skill 完整定义在 `~/.claude/skills/<name>/SKILL.md`。本文件**只记录"本项目怎么用它"**，不重复 skill 自我描述，避免漂移。
 >
 > **更新规则**：会话中发现"找一个 skill 又花 5K+ token"或"用户提到我没识别的 skill"——必须当场补登记。
+>
+> **上游同步（2026-05-30）**：B 段 5 个 `chexian-*` 与 A1 `rewrite-conclusion` 权威版已在分享仓 `alongor666/alongor666-skills` 升级到官方最佳实践（frontmatter 重写 + 拆 `references/`，领域口径零改动），安装态 `~/.claude/skills/` 已同步到位。该仓后续再升级后用 `npx skills add alongor666/alongor666-skills -g --skill <name>` 重新同步。新基座 `commit-push-pr-core`（提交建 PR + 通用 git 护栏）亦在该仓，本项目 `chexian-commit-push-pr` 即其 wrapper。
 
 ---
 
@@ -27,11 +29,11 @@
 
 | Skill | 何时调用 |
 |-------|---------|
-| **chexian-ir-diagnosis** | 出险率恶化根因分析（"为什么出险率上升"；2026-05-18 由 `auto-ir-diagnosis` 改名） |
-| **chexian-channel** | 渠道经营评估：4S / 经代 / 代理 / 经纪是否值得继续投入（2026-05-18 由 `auto-channel` 改名） |
-| **chexian-pricing-decision** | 定价决策：商业险报价、核保策略（2026-05-18 由 `auto-pricing` 改名；与 chexian-pricing-redline 反事实定价分析平行） |
-| **chexian-market-analysis** | 市场竞争结构分析 / 增长机会评估（2026-05-18 由 `auto-market-analysis` 改名） |
-| **chexian-ops-review** | 城市级（华安）经营复盘：市场+渠道+承保+理赔合并视图（2026-05-18 由 `auto-ops-review` 改名） |
+| **chexian-ir-diagnosis** | 出险率恶化根因分析（"为什么出险率上升"） |
+| **chexian-channel** | 渠道经营评估：4S / 经代 / 代理 / 经纪是否值得继续投入 |
+| **chexian-pricing-decision** | 定价决策：商业险报价、核保策略（与 chexian-pricing-redline 反事实定价分析平行） |
+| **chexian-market-analysis** | 市场竞争结构分析 / 增长机会评估 |
+| **chexian-ops-review** | 城市级（华安）经营复盘：市场+渠道+承保+理赔合并视图 |
 | **chexian-local-risk-control** | 本项目专属：本地个人版车险风险选择 / 成本控制 TypeScript 编排（`/api/local-skills/run`） |
 
 ## C. 报告分发与演示（二线·按需）
@@ -74,8 +76,8 @@
 ## 触发对齐规则
 
 - **用户说"X 经营诊断周报""跑一份 X 周报"** → 直接用 A1 的 `diagnose-org-weekly` 命令模板，**禁止搜索 skill 位置**
-- **用户问"X 出险率为什么升""为什么赔得多"** → B 的 `chexian-ir-diagnosis`（2026-05-18 由 `auto-ir-diagnosis` 改名）
-- **报告做完要推** → C 优先 `chexian-im-push`（飞书云文档式 HTML 链接；2026-05-18 由 `xcl-ppt2im` 改名）
+- **用户问"X 出险率为什么升""为什么赔得多"** → B 的 `chexian-ir-diagnosis`
+- **报告做完要推** → C 优先 `chexian-im-push`（飞书云文档式 HTML 链接）
 - **要发到 IM** → D 表中查域 + 平台
 - **写代码、debug、PR** → E
 
