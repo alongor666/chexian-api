@@ -5,6 +5,8 @@
 > **更新规则**：会话中发现"找一个 skill 又花 5K+ token"或"用户提到我没识别的 skill"——必须当场补登记。
 >
 > **上游同步（2026-05-30）**：B 段 5 个 `chexian-*` 与 A1 `rewrite-conclusion` 权威版已在分享仓 `alongor666/alongor666-skills` 升级到官方最佳实践（frontmatter 重写 + 拆 `references/`，领域口径零改动），安装态 `~/.claude/skills/` 已同步到位。该仓后续再升级后用 `npx skills add alongor666/alongor666-skills -g --skill <name>` 重新同步。新基座 `commit-push-pr-core`（提交建 PR + 通用 git 护栏）亦在该仓，本项目 `chexian-commit-push-pr` 即其 wrapper。
+>
+> **赔款口径治理（2026-05-30）**：四川分公司诊断暴露多窗口报告赔款分子缺 `accident_time` 过滤 → 上季度变动成本率虚高数倍（183.6%→81.0%）。已把 5 个可执行 skill 的赔款 CTE 统一对齐**项目 SSOT**（`server/src/sql/cost/cost-ratios.ts` + `duckdb-domain-loaders.ts:390`）：`accident_time<=窗口右端` + `settlement_time 有则 settled 否则 reserve` + 剔除无责/零结/注销/拒赔（金额过滤，件数不过滤）。涉及 `chexian-report-shell`(queries/report_queries) / `diagnose-org-weekly`(3 sections) / `diagnose-period-trend` / `diagnose-loss-development`，已发布到分享仓(commit e7ff560)并转软链。项目自身 `ClaimsAgg` 同源潜在隐患见 BACKLOG B299（被 cutoff 恒最新掩盖，未动生产 SQL）。口径方法论沉淀于 memory `feedback_claims_window_aligned_to_earned`。
 
 ---
 
