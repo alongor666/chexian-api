@@ -1,11 +1,24 @@
 /**
  * 入口卡组件 — 数据驱动，items 在 data/reportEntries.ts 中声明。
- * 点击 → window.open(reportUrl, '_blank')；etlDate 为 null 显示 Skeleton。
+ *
+ * 数据日期（etlDate）与报告生成解耦：卡片先读 `/reports/<slug>/manifest.json`
+ * 解析出真正存在的最新一期报告（resolveReport），再决定：
+ *   - ready      → 正常打开（数据截止 = 报告日期）
+ *   - stale      → 数据已更新但报告未刷新：醒目提醒「数据未更新」，仍可打开上一期
+ *   - unavailable→ 一期报告都没有：禁用，提示「报告暂未生成」
+ *   - unknown    → manifest 尚未部署（旧链路）：回落到 etlDate 直拼，保持兼容
  */
 import { memo } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { Card } from '../../../shared/ui/Card'
 import { badgeStyles, cn, colorClasses } from '../../../shared/styles'
-import type { ReportEntry } from '../data/reportEntries'
+import {
+  getLegacyReportUrl,
+  getReportUrl,
+  type ReportEntry,
+} from '../data/reportEntries'
+import { resolveReport } from '../data/resolveReport'
+import { useReportManifest } from '../hooks/useReportManifest'
 
 interface ReportEntryCardProps {
   entry: ReportEntry
@@ -18,9 +31,22 @@ export const ReportEntryCard = memo(function ReportEntryCard({
   etlDate,
   loading = false,
 }: ReportEntryCardProps) {
-  const reportUrl = entry.getReportUrl(etlDate)
+  const { data: manifest, isLoading: manifestLoading } = useReportManifest(entry)
+
+  const resolution = resolveReport(manifest ?? null, etlDate)
+
+  // 解析出实际要打开的 URL
+  const reportUrl =
+    resolution.status === 'unknown'
+      ? getLegacyReportUrl(entry.slug, etlDate) // 旧链路：manifest 未部署
+      : resolution.reportFile
+        ? getReportUrl(entry.slug, resolution.reportFile)
+        : null
+
+  const isBusy = loading || manifestLoading
+  const isClickable = !isBusy && reportUrl !== null
   const Icon = entry.icon
-  const isClickable = !loading && reportUrl !== null
+  const isStale = resolution.status === 'stale'
 
   const handleClick = () => {
     if (!isClickable || !reportUrl) return
@@ -33,6 +59,7 @@ export const ReportEntryCard = memo(function ReportEntryCard({
       padding="spacious"
       onClick={isClickable ? handleClick : undefined}
       aria-disabled={!isClickable}
+      className={cn(isStale && 'border-warning')}
       title={
         <div className="flex items-center gap-3">
           <span
@@ -60,17 +87,73 @@ export const ReportEntryCard = memo(function ReportEntryCard({
           </span>
         ))}
       </div>
-      <div className={cn('mt-4 text-sm', colorClasses.text.neutralMuted)}>
-        {loading ? (
-          <span>加载中…</span>
-        ) : etlDate ? (
-          <span>
-            数据截止 <strong className="text-neutral-700 dark:text-neutral-300">{etlDate}</strong> · 点击新窗口打开
-          </span>
-        ) : (
-          <span>报告暂未生成</span>
-        )}
-      </div>
+
+      <ReportStatusFooter
+        busy={isBusy}
+        status={resolution.status}
+        reportDate={resolution.reportDate}
+        etlDate={etlDate}
+      />
     </Card>
   )
 })
+
+function ReportStatusFooter({
+  busy,
+  status,
+  reportDate,
+  etlDate,
+}: {
+  busy: boolean
+  status: ReturnType<typeof resolveReport>['status']
+  reportDate: string | null
+  etlDate: string | null
+}) {
+  if (busy) {
+    return <div className={cn('mt-4 text-sm', colorClasses.text.neutralMuted)}>加载中…</div>
+  }
+
+  // 数据已更新但报告未刷新 —— 醒目提醒，但仍可打开上一期
+  if (status === 'stale') {
+    return (
+      <div
+        className={cn(
+          'mt-4 flex items-start gap-2 rounded-lg px-3 py-2 text-sm',
+          'bg-warning-bg text-warning-dark'
+        )}
+        role="status"
+      >
+        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+        <span>
+          数据未更新：报告截止{' '}
+          <strong className="text-neutral-700 dark:text-neutral-200">{reportDate}</strong>
+          ，当前数据已更新至{' '}
+          <strong className="text-neutral-700 dark:text-neutral-200">{etlDate}</strong>
+          。展示的是最近一期可用报告，点击新窗口打开。
+        </span>
+      </div>
+    )
+  }
+
+  if (status === 'unavailable') {
+    return (
+      <div className={cn('mt-4 text-sm', colorClasses.text.neutralMuted)}>
+        报告暂未生成{etlDate ? `（数据已就绪至 ${etlDate}）` : ''}
+      </div>
+    )
+  }
+
+  // ready / unknown：正常可点开
+  const shownDate = reportDate ?? etlDate
+  return (
+    <div className={cn('mt-4 text-sm', colorClasses.text.neutralMuted)}>
+      {shownDate ? (
+        <span>
+          数据截止 <strong className="text-neutral-700 dark:text-neutral-300">{shownDate}</strong> · 点击新窗口打开
+        </span>
+      ) : (
+        <span>报告暂未生成</span>
+      )}
+    </div>
+  )
+}

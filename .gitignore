@@ -169,6 +169,8 @@ warehouse/**/_partition_meta.json
 
 # 报告 HTML 由 skill 本地生成，不入仓库（VPS 通过 sync-vps.mjs 单独分发）
 public/reports/**/*.html
+# manifest.json 是 gen-reports-manifest.mjs 的生成产物（owning host 上累积，不入仓库）
+public/reports/**/manifest.json
 2026-05-23_诊断报告_结构化汇总_完整版.md
 
 # 一次性诊断产物（HTML 报告的 md 导出）

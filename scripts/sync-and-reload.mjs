@@ -35,6 +35,7 @@ import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
+import { generateReportsManifests } from './gen-reports-manifest.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -311,6 +312,20 @@ async function main() {
     const frontendDistDir = process.env.SYNC_VPS_FRONTEND_DIST || '/var/www/chexian/frontend/dist';
     const localReportsDir = join(ROOT_DIR, 'public/reports/');
     if (existsSync(localReportsDir)) {
+      // 同步前刷新 manifest.json，让前端能感知“哪几期报告真实存在”
+      // （ETL 推进了 etlDate 但报告未重新生成时，前端据此提醒“数据未更新”而非打开空白页）
+      if (opts.dryRun) {
+        log('cyan', '\n▶ [reports-manifest] node scripts/gen-reports-manifest.mjs  (dry-run，跳过)');
+      } else {
+        const summaries = generateReportsManifests(join(ROOT_DIR, 'public/reports'));
+        for (const s of summaries) {
+          if (s.skipped) {
+            log('yellow', `  ⚠ manifest ${s.slug}: 本地无报告文件，跳过（保留既有 manifest，不清空远端）`);
+          } else {
+            log('green', `  ✓ manifest ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
+          }
+        }
+      }
       await runCmd(
         'sync reports → VPS',
         'rsync',
