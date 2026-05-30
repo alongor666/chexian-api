@@ -22,7 +22,7 @@
  * 也可作为模块导入：import { generateReportsManifests } from './gen-reports-manifest.mjs'
  */
 
-import { readdirSync, statSync, writeFileSync, existsSync } from 'fs';
+import { readdirSync, statSync, writeFileSync, readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -32,23 +32,54 @@ const DEFAULT_REPORTS_ROOT = join(__dirname, '..', 'public', 'reports');
 // 报告文件名约定：<YYYY-MM-DD>-dashboard.html（首选）或 <YYYY-MM-DD>.html（旧版）
 const REPORT_FILE_RE = /^(\d{4}-\d{2}-\d{2})(-dashboard)?\.html$/;
 
+/** 读取 slug 目录下已存在的 manifest.json，返回其 entries（容错，失败返回 []）。 */
+function readExistingEntries(slugDir) {
+  const manifestPath = join(slugDir, 'manifest.json');
+  if (!existsSync(manifestPath)) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    if (!Array.isArray(parsed?.entries)) return [];
+    return parsed.entries.filter(
+      (e) => e && typeof e.date === 'string' && typeof e.file === 'string',
+    );
+  } catch {
+    return [];
+  }
+}
+
 /**
  * 扫描单个 slug 目录，返回按日期降序排列的 [{ date, file }]。
- * 同一日期同时存在 dashboard 与旧版时，优先 dashboard。
+ *
+ * 关键：与该目录已存在的 manifest.json **合并**（取并集）。
+ * 原因（codex P2）：报告 HTML 被 gitignore，sync-vps 又是 append-only（不 --delete），
+ * 历史报告只存在于远端/owning host。若仅做本地扫描就覆盖 manifest，从一个不含全部
+ * 历史文件的 host 跑同步时，会把远端 manifest 缩成「只有本地这几期」甚至空，导致首页卡
+ * 反而打不开既有报告。合并已存在 entries 可保证 manifest 在 owning host 上只增不减。
+ *
+ * 同一日期：优先 *-dashboard.html，其次保留先出现的；本地实际文件优先于旧 manifest 记录。
  */
 export function scanSlugDir(slugDir) {
   const byDate = new Map();
+
+  // 先放入旧 manifest 记录（优先级低，可被本地实际文件覆盖）
+  for (const e of readExistingEntries(slugDir)) {
+    const isDashboard = /-dashboard\.html$/i.test(e.file);
+    byDate.set(e.date, { date: e.date, file: e.file, isDashboard, fromDisk: false });
+  }
+
+  // 本地实际存在的文件（优先级高）
   for (const name of readdirSync(slugDir)) {
     const m = name.match(REPORT_FILE_RE);
     if (!m) continue;
     const date = m[1];
     const isDashboard = Boolean(m[2]);
     const existing = byDate.get(date);
-    // 首次出现，或当前是 dashboard 且已有的不是 → 覆盖为首选
-    if (!existing || (isDashboard && !existing.isDashboard)) {
-      byDate.set(date, { date, file: name, isDashboard });
+    // 覆盖条件：尚无记录 / 已有记录来自旧 manifest / 当前是 dashboard 而已有不是
+    if (!existing || !existing.fromDisk || (isDashboard && !existing.isDashboard)) {
+      byDate.set(date, { date, file: name, isDashboard, fromDisk: true });
     }
   }
+
   return [...byDate.values()]
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     .map(({ date, file }) => ({ date, file }));
@@ -74,6 +105,14 @@ export function generateReportsManifests(reportsRoot = DEFAULT_REPORTS_ROOT) {
     if (!isDir) continue;
 
     const entries = scanSlugDir(slugDir);
+
+    // 防御：绝不用「空 manifest」覆盖已存在的非空 manifest（codex P2）。
+    // 从无历史文件的 host 误跑时，宁可保持远端/既有 manifest 不动，也不要清空。
+    if (entries.length === 0) {
+      summaries.push({ slug, latest: null, count: 0, skipped: true });
+      continue;
+    }
+
     const latest = entries[0] ?? null;
     const manifest = {
       slug,
@@ -97,7 +136,11 @@ if (isMain || process.argv[1]?.endsWith('gen-reports-manifest.mjs')) {
     console.log(`[reports-manifest] 无报告目录可扫描：${root}`);
   } else {
     for (const s of summaries) {
-      console.log(`[reports-manifest] ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
+      if (s.skipped) {
+        console.log(`[reports-manifest] ${s.slug}: 本地无报告文件，跳过（保留既有 manifest）`);
+      } else {
+        console.log(`[reports-manifest] ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
+      }
     }
   }
 }

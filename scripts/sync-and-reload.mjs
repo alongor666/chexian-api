@@ -319,7 +319,11 @@ async function main() {
       } else {
         const summaries = generateReportsManifests(join(ROOT_DIR, 'public/reports'));
         for (const s of summaries) {
-          log('green', `  ✓ manifest ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
+          if (s.skipped) {
+            log('yellow', `  ⚠ manifest ${s.slug}: 本地无报告文件，跳过（保留既有 manifest，不清空远端）`);
+          } else {
+            log('green', `  ✓ manifest ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
+          }
         }
       }
       await runCmd(
