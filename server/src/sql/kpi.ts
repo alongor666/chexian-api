@@ -1,4 +1,5 @@
 import { getMetricSql } from '../config/metric-registry/index.js';
+import { escapeSqlValue } from '../utils/security.js';
 
 /**
  * 优质业务定义条件SQL片段
@@ -25,7 +26,7 @@ interface KpiQueryOptions {
   salesmanNames?: string[];
 }
 
-const esc = (value: string): string => value.replace(/'/g, "''");
+const esc = escapeSqlValue;
 
 const buildAchievementCacheWhere = (options: KpiQueryOptions = {}): string => {
   const conditions: string[] = [];

@@ -19,6 +19,8 @@
  * - 新增 generatePlanAchievementPanel() 供合并端点 /plan-achievement 使用
  */
 
+import { escapeSqlValue } from '../utils/security.js';
+
 /** 下钻层级 */
 export type PlanDrilldownLevel =
   | 'company'
@@ -64,9 +66,7 @@ export type SortOrder = 'asc' | 'desc';
 
 // ─── 内部工具 ──────────────────────────────────────────────────────────────
 
-function esc(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/'/g, "''");
-}
+const esc = escapeSqlValue;
 
 /**
  * 将 achievement_cache 字段映射到前端期望的输出字段名

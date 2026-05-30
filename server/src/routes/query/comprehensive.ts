@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
@@ -32,7 +33,7 @@ const comprehensiveExtraSchema = z.object({
   granularity: z.enum(['daily', 'weekly', 'monthly']).default('monthly'),
 });
 
-async function handleComprehensiveBundle(req: any, res: any): Promise<void> {
+async function handleComprehensiveBundle(req: Request, res: Response): Promise<void> {
   const parseResult = comprehensiveExtraSchema.safeParse(req.query);
   if (!parseResult.success) {
     throw new AppError(400, parseResult.error.issues[0].message);
