@@ -38,6 +38,7 @@ import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import os from 'os';
 import { assertNoPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
+import { generateReportsManifests } from './gen-reports-manifest.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -577,6 +578,16 @@ async function maybeRestart(config, noRestart, healthUrl) {
  */
 async function runStandardMode(sshConfig, runConfig) {
   const alias = sshConfig.alias;
+
+  // 同步静态报告前刷新 manifest.json：让前端能感知“哪几期报告真实存在”，
+  // ETL 推进 etlDate 但报告未重新生成时提醒“数据未更新”，而不是打开空白 SPA 页。
+  if (existsSync(LOCAL_PUBLIC_REPORTS_DIR)) {
+    const summaries = generateReportsManifests(LOCAL_PUBLIC_REPORTS_DIR);
+    for (const s of summaries) {
+      log('green', `  ✓ manifest ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
+    }
+  }
+
   const syncTasks = buildSyncTasks(runConfig);
 
   // 过滤不存在的目录

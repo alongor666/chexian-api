@@ -87,6 +87,7 @@
 | `release-vps-heatmap.mjs` | **VPS 一键发布 + 验收编排**：构建前后端、同步 VPS、重启 PM2、健康检查并调用线上热力图验收 | `bun run release:vps:heatmap` |
 | `verify-vps-heatmap.mjs` | **VPS 热力图专项验收**：真实登录线上页面并校验热力图标题/三标签切换/`performance-org-heatmap` 200 | `bun run verify:vps:heatmap` |
 | `verify-agent-production-smoke.mjs` | **Agent 生产验收 smoke**：按固定 API 调用 7 个确定性诊断端点、observability 和 readiness，输出 Stage 5 前置证据报告；不接 LLM、不生成 SQL、不输出 token | `bun run verify:agent:smoke -- --token <jwt> --start-date YYYY-MM-DD --end-date YYYY-MM-DD --baseline-start-date YYYY-MM-DD --baseline-end-date YYYY-MM-DD` |
+| `gen-reports-manifest.mjs` | **静态报告 manifest 生成**：扫描 `public/reports/<slug>/`，把真实存在的报告日期写入 `manifest.json`，供首页卡片解析「应打开哪一期 + 是否落后于 etlDate」。由 `sync-vps.mjs` / `sync-and-reload.mjs` 同步前自动调用 | `bun run reports:manifest` |
 
 ### 🛠️ 工具类
 
