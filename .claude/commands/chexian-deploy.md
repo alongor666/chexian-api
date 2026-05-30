@@ -1,3 +1,10 @@
+---
+name: chexian-deploy
+description: 当用户需要将代码发布到生产 VPS 时使用 — 按顺序执行 build/governance/rsync/SSH 拉取/bun 安装/PM2 重启/健康检查共 15 步，任一步失败立即停止。
+category: deployment
+scope: project
+---
+
 # 部署到 VPS
 
 按顺序执行以下步骤，任何一步失败立即停止并报告：
