@@ -7,7 +7,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell-summary.js';
+import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell/shared.js';
 
 export type TrendGranularity = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 

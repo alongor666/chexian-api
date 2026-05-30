@@ -4,6 +4,7 @@
  */
 
 import { buildPolicyDedupCTE } from './shared/policy-dedup.js';
+import { escapeSqlValue } from '../utils/security.js';
 
 export type ComprehensiveDimension = 'org' | 'category' | 'business';
 export type ComprehensiveGranularity = 'daily' | 'weekly' | 'monthly';
@@ -26,9 +27,6 @@ function dimensionField(dimension: ComprehensiveDimension): string {
   }
 }
 
-function escapeSqlString(value: string): string {
-  return value.replace(/'/g, "''");
-}
 
 function exposureBaseSql(whereClause: string, cutoffDate: string): string {
   // B252：policy_dedup 按 (policy_no, insurance_start_date) 聚合去重，HAVING SUM(premium)>0
@@ -299,7 +297,7 @@ export function generateComprehensivePlanByOrgQuery(
 ): string {
   const orgCondition =
     orgNames.length > 0
-      ? `AND org_name IN (${orgNames.map((org) => `'${escapeSqlString(org)}'`).join(', ')})`
+      ? `AND org_name IN (${orgNames.map((org) => `'${escapeSqlValue(org)}'`).join(', ')})`
       : '';
 
   return `

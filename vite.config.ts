@@ -75,6 +75,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    deps: {
+      moduleDirectories: ['node_modules', 'server/node_modules'],
+    },
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
@@ -95,6 +98,7 @@ export default defineConfig({
     // server 端测试走 node 环境（解析 express/@duckdb/node-api），前端测试走 jsdom
     environmentMatchGlobs: [
       ['server/**/*.test.ts', 'node'],
+      ['tests/api/**/*.test.ts', 'node'],
     ],
     browser: {
       enabled: false,
