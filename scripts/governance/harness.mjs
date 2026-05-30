@@ -31,62 +31,9 @@ function readJson(relativePath) {
   return JSON.parse(readText(relativePath));
 }
 
-function listMarkdownFiles(relativeDir) {
-  return fs
-    .readdirSync(path.join(ROOT_DIR, relativeDir), { withFileTypes: true })
-    .filter(entry => entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'README.md')
-    .map(entry => entry.name)
-    .sort();
-}
-
 function assert(condition, message, errors) {
   if (!condition) {
     errors.push(message);
-  }
-}
-
-function extractCount(content, patterns, label) {
-  const hits = patterns.map(p => content.match(p)).filter(Boolean);
-  if (hits.length !== patterns.length) {
-    throw new Error(`${label} README 未匹配全部 ${patterns.length} 处声明`);
-  }
-  const nums = hits.map(m => Number(m[1]));
-  if (new Set(nums).size > 1) {
-    throw new Error(`${label} README 多处数量不一致：${nums.join(' vs ')}`);
-  }
-  return nums[0];
-}
-
-function checkReadmeCounts(errors) {
-  const checks = [
-    {
-      label: 'commands',
-      dir: '.claude/commands',
-      readme: '.claude/commands/README.md',
-      patterns: [/^> 车险数据分析平台 — (\d+) 个项目级/m],
-    },
-    {
-      label: 'agents',
-      dir: '.claude/agents',
-      readme: '.claude/agents/README.md',
-      patterns: [/^> 车险数据分析平台 — (\d+) 个专业化 AI 子代理/m],
-    },
-    {
-      label: 'skills',
-      dir: '.claude/skills',
-      readme: '.claude/skills/README.md',
-      patterns: [/^## 当前项目专属技能（(\d+) 个）/m, /当前共 (\d+) 个项目级 skill/],
-    },
-  ];
-
-  for (const check of checks) {
-    const actual = listMarkdownFiles(check.dir).length;
-    const declared = extractCount(readText(check.readme), check.patterns, check.label);
-    assert(
-      actual === declared,
-      `H1 ${check.label} README 数量不一致：声明 ${declared}，实际 ${actual}`,
-      errors
-    );
   }
 }
 
@@ -142,7 +89,8 @@ function main() {
   }
 
   const errors = [];
-  checkReadmeCounts(errors);
+  // H1（README 计数）已移除：本项目为 AI-native，命令/agent/skill 由各自 frontmatter
+  // 的 description 自动注入上下文被发现，不再维护人类向 README 索引，故无需计数校验。
   checkMcpFilesystemTools(errors);
   checkPermissionsDeny(errors);
   checkStopHookDoesNotUseGitHistory(errors);
@@ -153,7 +101,7 @@ function main() {
     process.exit(1);
   }
 
-  console.log('[harness] H1-H4 检查通过');
+  console.log('[harness] H2-H4 检查通过');
 }
 
 main();

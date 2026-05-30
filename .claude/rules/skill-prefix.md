@@ -42,4 +42,4 @@
 ## 关联
 
 - 全局 skill 速查与"本项目用法"：[skills-map.md](./skills-map.md)
-- 项目级 skill 治理：[../skills/README.md](../skills/README.md)
+- 项目级 skill（`.claude/skills/*.md`）由各自 frontmatter `description` 自动注入上下文被发现（AI-native，不维护 README 索引）

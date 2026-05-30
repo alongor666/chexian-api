@@ -82,13 +82,14 @@
 
 ### 8.2 `append-only` — 工具注册表 / 命令体系
 
-允许：**新增**命令文件、**追加**索引新行、**新增** README 表格行。
-禁止：修改既有命令文件的实质逻辑、删除既有命令、修改 README 既有行（除追加新行/更新计数/时间戳外）。
+允许：**新增**命令文件。
+禁止：修改既有命令文件的实质逻辑、删除既有命令。
+
+> **AI-native（2026-05-30）**：项目不再维护人类向 README 索引（`.claude/commands|agents|skills/README.md` 已删除，governance H1 计数检查同步移除）。命令/agent/skill 由各自 frontmatter `description` 自动注入上下文被发现；新增时写好 frontmatter 即可，无需登记任何索引行。
 
 | 路径 | 操作准则 |
 |------|---------|
-| `.claude/commands/*.md`（除 README）| 允许新增；既有命令的修订需用户口头确认 |
-| `.claude/commands/README.md` | 允许追加索引行 + 同步计数/时间戳；禁止改既有行 |
+| `.claude/commands/*.md` | 允许新增；既有命令的修订需用户口头确认 |
 | `.claude/rules/`（除上面 frozen 列出的外）| 允许新增独立护栏文件；既有文件改动按 frozen 处理 |
 
 PR 涉及 append-only 路径的纯新增时，**不需要**额外授权，但 PR 描述必须显式注明 `policy: append-only`。
