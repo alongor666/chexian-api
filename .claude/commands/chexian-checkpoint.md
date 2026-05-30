@@ -1,3 +1,10 @@
+---
+name: chexian-checkpoint
+description: 当用户需要在工作流中创建、核验或列举检查点时使用 — 对比 git 提交前后的文件变化、测试通过率与覆盖率差值，并写入 .claude/checkpoints.log。
+category: workflow
+scope: project
+---
+
 # Checkpoint Command
 
 Create or verify a checkpoint in your workflow.
