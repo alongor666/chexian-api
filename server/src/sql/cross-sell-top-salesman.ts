@@ -6,7 +6,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell-summary.js';
+import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell/shared.js';
 
 export type TopSalesmanCoverage = '主全' | '交三';
 

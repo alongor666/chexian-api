@@ -315,3 +315,104 @@ export interface LoadResult {
   rowCount: number;
   fileSizeMB: number;
 }
+
+// ─── 货车分析 ───────────────────────────────────────────────
+
+/** 货车分析 — 玫瑰图数据行（按吨位/车型聚合） */
+export interface TruckRoseRow {
+  name: string;
+  value: number;
+  [key: string]: unknown;
+}
+
+/** 货车分析 — 机构按吨位分组数据行 */
+export interface TruckTonnageByOrgRow {
+  org_level_3: string;
+  tonnage_segment: string;
+  premium: number;
+  premium_ratio: number;
+  [key: string]: unknown;
+}
+
+/** 货车分析 — `queryType=all` 时的聚合响应 */
+export interface TruckAnalysisResponse {
+  rosePremium: TruckRoseRow[];
+  roseCount: TruckRoseRow[];
+  tonnageByOrg: TruckTonnageByOrgRow[];
+  orgPremium: Array<{ org_level_3: string; premium: number; [key: string]: unknown }>;
+}
+
+// ─── 增长分析 ───────────────────────────────────────────────
+
+/** 增长分析数据行（同比/环比/YTD） */
+export interface GrowthAnalysisRow {
+  time_period?: string;
+  period?: string;
+  current_value?: number;
+  current_premium?: number;
+  previous_value?: number;
+  previous_premium?: number;
+  growth_rate?: number | null;
+  org_level_3?: string;
+  salesman_name?: string;
+  period_total_current?: number;
+  period_total_previous?: number;
+  period_growth_rate?: number;
+  ytd_total_current?: number;
+  ytd_total_previous?: number;
+  ytd_growth_rate?: number;
+  [key: string]: unknown;
+}
+
+// ─── 成本分析 ───────────────────────────────────────────────
+
+/** 成本分析通用数据行（赔付率/费用率/综合成本/变动成本均通过此类型） */
+export type CostAnalysisRow = Record<string, unknown>;
+
+// ─── 车驾意推介率下钻 ───────────────────────────────────────
+
+/** 车驾意推介率下钻响应 */
+export interface CrossSellDrilldownResponse {
+  summary: Record<string, unknown> | null;
+  rows: Array<Record<string, unknown>>;
+  drillPath: Array<{ dimension: string; value: string }>;
+  groupBy: string | null;
+}
+
+// ─── 业务员排名 ─────────────────────────────────────────────
+
+/** 业务员排名数据行 */
+export interface SalesmanRankingRow {
+  salesman_name: string;
+  org_level_3: string;
+  total_premium: number;
+  policy_count: number;
+  [key: string]: unknown;
+}
+
+// ─── 营销战报 ───────────────────────────────────────────────
+
+/** 营销战报数据行（机构维度） */
+export interface MarketingReportRow {
+  [key: string]: unknown;
+}
+
+// ─── 假日营销下钻 ───────────────────────────────────────────
+
+/** 假日营销自由维度下钻数据行 */
+export interface HolidayDrilldownRow {
+  group_name: string;
+  premium_wan: number;
+  commercial_premium_wan: number;
+  [key: string]: unknown;
+}
+
+// ─── 保费报表 ───────────────────────────────────────────────
+
+/** 保费报表数据行（机构/业务员维度，列名含中文） */
+export type PremiumReportRow = Record<string, unknown>;
+
+// ─── 保费达成下钻 ───────────────────────────────────────────
+
+/** 保费达成下钻数据行 */
+export type PremiumPlanRow = Record<string, unknown>;

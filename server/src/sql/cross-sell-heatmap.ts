@@ -8,7 +8,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell-summary.js';
+import { getVehicleCategoryFilter, type VehicleCategory, crossSellTruthyExpr } from './cross-sell/shared.js';
 import { escapeSqlValue } from '../utils/security.js';
 
 export interface CrossSellHeatmapDrillStep {
@@ -263,10 +263,7 @@ export function generateCrossSellHeatmapQuery(
     ? 'MAX(pd)'
     : `DATE_TRUNC('${timePeriod === 'quarter' ? 'quarter' : timePeriod}', MAX(pd))::DATE`;
 
-  const isCrossSelltruthy = `(
-    TRY_CAST(p.is_cross_sell AS BOOLEAN) = true
-    OR LOWER(TRIM(CAST(p.is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-  )`;
+  const isCrossSelltruthy = crossSellTruthyExpr('p.is_cross_sell');
 
   const filteredCte = usePF ? `
     WITH normalized AS (
