@@ -109,6 +109,9 @@ const REPORT_HTML_CSP = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
   "object-src 'none'",
+  // 允许同源 iframe：多视图报告用一个壳页（含顶部 Tab）内嵌同源的驾驶舱/叙事/超表子报告，
+  // 实现「一个链接、登录一次、页面内切换」。frame-src 不写则回落 default-src 'none' 会拦截 iframe。
+  "frame-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
   "frame-ancestors 'self'",
