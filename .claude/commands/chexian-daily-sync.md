@@ -1,3 +1,10 @@
+---
+name: chexian-daily-sync
+description: 当用户说"XX 文件已更新，请 ETL 到 VPS"或需要执行每日数据同步时使用 — 完成 iCloud xlsx 拷贝、daily.mjs ETL、rsync 同步、PM2 reload 及双重健康验证的全链路 SOP。
+category: data-pipeline
+scope: project
+---
+
 # 每日数据同步（/chexian-daily-sync）
 
 ## 触发模式

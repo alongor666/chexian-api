@@ -1,3 +1,10 @@
+---
+name: chexian-patrol
+description: 当用户需要执行续保数据巡检时使用 — 驱动 patrol_engine.py 采集数据，对 5 个优先客户类别各跑三口径（已到期/30天内/全年），输出 AI 深度研判结果和标准巡检报告。
+category: data-analysis
+scope: project
+---
+
 # 续保数据巡检
 
 ## 用法
