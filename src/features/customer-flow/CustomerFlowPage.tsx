@@ -27,6 +27,23 @@ interface FlowTrend {
   outflow_count: number;
 }
 
+/**
+ * 防御性归一：后端 DuckDB 字段（尤其 array_agg LIST 类型，如 metadata.years）
+ * 经序列化后可能不是纯 JS 数组（null / {items:[...]} / 数字键对象），
+ * 直接 `?? []` 只能挡住 null/undefined，对象会让 `.map` 抛
+ * `((intermediate value) ?? []).map is not a function`。统一在消费侧归一为数组。
+ */
+function ensureArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    // DuckDB LIST 可能序列化为 { items: [...] }
+    if (Array.isArray(obj.items)) return obj.items as T[];
+    return Object.values(obj) as T[];
+  }
+  return [];
+}
+
 export const CustomerFlowPage: React.FC = () => {
   const [year, setYear] = useState<string>('');
   const params = useMemo((): Record<string, string> | undefined => year ? { year } : undefined, [year]);
@@ -48,7 +65,9 @@ export const CustomerFlowPage: React.FC = () => {
     queryFn: () => apiClient.getCustomerFlowMetadata() as Promise<{ years: number[]; total_rows: number }>,
   });
 
-  const renderTable = (_title: string, data: FlowRow[] | undefined) => (
+  const renderTable = (_title: string, rawData: FlowRow[] | undefined) => {
+    const data = ensureArray<FlowRow>(rawData);
+    return (
     <div className={cardStyles.base}>
       <h3 className={textStyles.titleSmall}>
         流失去向 TOP20
@@ -67,7 +86,7 @@ export const CustomerFlowPage: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {(data ?? []).map((row, i) => (
+            {data.map((row, i) => (
               <tr key={row.insurer} className="border-b border-neutral-100">
                 <td className={tableStyles.cell}>{i + 1}</td>
                 <td className={tableStyles.cell}>{row.insurer}</td>
@@ -75,14 +94,15 @@ export const CustomerFlowPage: React.FC = () => {
                 <td className={tableStyles.cellNumeric}>{formatPercent(row.share_pct)}</td>
               </tr>
             ))}
-            {(!data || data.length === 0) && (
+            {data.length === 0 && (
               <tr><td colSpan={4} className={cn(tableStyles.cell, 'text-center py-6')}>暂无数据</td></tr>
             )}
           </tbody>
         </table>
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -95,7 +115,7 @@ export const CustomerFlowPage: React.FC = () => {
           onChange={e => setYear(e.target.value)}
         >
           <option value="">全部年份</option>
-          {(metadata?.years ?? []).map(y => (
+          {ensureArray<number>(metadata?.years).map(y => (
             <option key={y} value={y}>{y}年</option>
           ))}
         </select>
@@ -131,7 +151,7 @@ export const CustomerFlowPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {(trend ?? []).map(row => {
+              {ensureArray<FlowTrend>(trend).map(row => {
                 return (
                   <tr key={row.month} className="border-b border-neutral-100">
                     <td className={tableStyles.cell}>{row.month}</td>
