@@ -1,3 +1,10 @@
+---
+name: chexian-verify
+description: 当用户需要在提交或发 PR 前对当前代码库做全面验证时使用 — 按序执行 build/类型检查/lint/测试套件/console.log 审计/git 状态，输出结构化 PASS/FAIL 报告。
+category: workflow
+scope: project
+---
+
 # Verification Command
 
 Run comprehensive verification on current codebase state.

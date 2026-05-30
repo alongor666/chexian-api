@@ -1,3 +1,10 @@
+---
+name: chexian-orchestrate
+description: 当用户需要对复杂任务（feature/bugfix/refactor/security）编排多个串行 Agent 工作流时使用 — 按预设管道依次调用 planner/tdd-guide/code-reviewer/security-reviewer 并生成结构化汇总报告。
+category: orchestration
+scope: project
+---
+
 # Orchestrate Command
 
 Sequential agent workflow for complex tasks.
