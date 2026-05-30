@@ -62,11 +62,10 @@
 ### 安全类
 | Command | 说明 |
 |---------|------|
-| `/chexian-security-review` | 全量 8 项审查 |
+| `/chexian-security-review` | 路由器：全量 8 项审查 / 转发子命令 |
 | `/chexian-security-sql` | SQL 注入专项 |
 | `/chexian-security-xss` | XSS 专项 |
 | `/chexian-security-cors` | CORS+文件上传 |
-| `/chexian-security-all` | 快速全量 |
 
 ### 工作流类
 | Command | 说明 |
