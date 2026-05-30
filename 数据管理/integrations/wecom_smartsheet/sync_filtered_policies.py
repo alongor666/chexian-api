@@ -61,6 +61,8 @@ class InstanceConfig:
     field_labels: dict[str, str]
     policy_glob: str
     script: str | None  # 仅供 daily.mjs 路由用
+    aggregate_key: tuple[str, ...] | None = None  # 声明时先按字段聚合，再做 state 去重/企微写入
+    prefer_insurance_type: str | None = None  # 聚合代表行优先选择的险种，如“商业保险”
 
 
 def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -> InstanceConfig:
@@ -69,6 +71,13 @@ def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -
     filters.update(target.get("filters", {}))
     composite_raw = raw.get("composite_key")
     composite = tuple(composite_raw) if composite_raw else None
+    aggregate_raw = raw.get("aggregate_key")
+    if isinstance(aggregate_raw, list):
+        aggregate = tuple(aggregate_raw)
+    elif aggregate_raw:
+        aggregate = (str(aggregate_raw),)
+    else:
+        aggregate = None
     return InstanceConfig(
         instance_name=target.get("instance_name") or (
             f"{raw['instance_name']}-{target['name']}" if target.get("name") else raw["instance_name"]
@@ -84,6 +93,8 @@ def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -
         field_labels=dict(raw.get("field_labels", {})),
         policy_glob=raw.get("policy_glob", DEFAULT_POLICY_GLOB),
         script=raw.get("script"),
+        aggregate_key=aggregate,
+        prefer_insurance_type=raw.get("prefer_insurance_type"),
     )
 
 
@@ -155,6 +166,7 @@ def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
       new_vehicle_price,
       first_registration_date,
       agent_name,
+      insurance_type,
       policy_no,
       vehicle_frame_no,
       {pk} AS _primary_key,
@@ -253,6 +265,101 @@ def _money(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
     return 0.0 if f != f else f
+
+
+def _is_present(value: Any) -> bool:
+    if value is None:
+        return False
+    try:
+        if value != value:  # NaN / NaT
+            return False
+    except TypeError:
+        pass
+    if isinstance(value, str):
+        text = value.strip().lower()
+        return bool(text) and text not in {"nan", "none", "<na>", "nat"}
+    return True
+
+
+def _first_present(rows: list[dict[str, Any]], field: str) -> Any:
+    for row in rows:
+        value = row.get(field)
+        if _is_present(value):
+            return value
+    return None
+
+
+def aggregate_rows(rows: list[dict[str, Any]], instance: InstanceConfig) -> list[dict[str, Any]]:
+    """按业务键聚合源行，再交给 state 去重与 webhook 写入。
+
+    邮政表按业务键管理记录。源清单可能出现同一保单号+车架号的重复行。
+    若直接逐源行同步，企微会出现重复记录。启用 aggregate_key 后：
+    - 一组只产出一条记录；
+    - 保费按组内所有源行求和；
+    - 风险等级/自主系数等字段优先取指定险种（通常为商业保险）的非空值。
+    """
+    if not instance.aggregate_key:
+        return rows
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for idx, row in enumerate(rows):
+        key_parts = [_stable_value(row.get(field)) for field in instance.aggregate_key]
+        if not any(key_parts):
+            key = f"__missing__{idx}__{_stable_value(row.get('_primary_key'))}"
+        else:
+            key = "|".join(key_parts)
+        grouped.setdefault(key, []).append(row)
+
+    out: list[dict[str, Any]] = []
+    for key, group in grouped.items():
+        preferred = None
+        if instance.prefer_insurance_type:
+            preferred = next(
+                (
+                    row for row in group
+                    if _stable_value(row.get("insurance_type")) == instance.prefer_insurance_type
+                ),
+                None,
+            )
+        base = dict(preferred or group[0])
+        ordered = [base] + [row for row in group if row is not base]
+
+        for field in (
+            "org_level_3",
+            "salesman_name",
+            "policy_date",
+            "plate_no",
+            "insurance_grade",
+            "commercial_pricing_factor",
+            "insurance_start_date",
+            "vehicle_model",
+            "driver_age_group",
+            "new_vehicle_price",
+            "first_registration_date",
+            "agent_name",
+            "policy_no",
+            "vehicle_frame_no",
+            "vehicle_price_segment",
+            "vehicle_age_group",
+            "_primary_key",
+        ):
+            value = _first_present(ordered, field)
+            if value is not None:
+                base[field] = value
+
+        base["premium"] = round(sum(_money(row.get("premium")) for row in group), 2)
+        base["_aggregate_key"] = key
+        base["_source_row_count"] = len(group)
+        out.append(base)
+
+    return sorted(
+        out,
+        key=lambda row: (
+            _stable_value(row.get("policy_date")),
+            "|".join(_stable_value(row.get(field)) for field in (instance.aggregate_key or ())),
+        ),
+        reverse=True,
+    )
 
 
 def salesman_stats(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -452,7 +559,8 @@ def _row_key(row: dict[str, Any], instance: InstanceConfig | None = None) -> str
 
 
 def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
-    rows = fetch_rows(instance)
+    raw_rows = fetch_rows(instance)
+    rows = aggregate_rows(raw_rows, instance)
     schema = {fid: instance.field_labels.get(fid, fid) for fid in instance.field_mapping.values()}
 
     # sync 模式过滤已同步的主键；init 模式全量
@@ -478,6 +586,9 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
         "mode": mode,
         "filters": instance.filters,
         "source_rows": len(rows),
+        "source_rows_before_aggregate": len(raw_rows),
+        "rows_collapsed_by_aggregate": len(raw_rows) - len(rows),
+        "aggregate_key": instance.aggregate_key,
         "state_synced_keys_before": len(synced),
         "skipped_already_synced": skipped,
         "add_records_planned": len(add_records),
@@ -565,7 +676,8 @@ def rebuild_state(
     使用场景：composite_key 配置变更后，旧 state（按 primary_key 存储）需重生成。
     默认只做可证明安全的迁移；若要把当前源数据全量视为已同步，必须显式 force。
     """
-    rows = fetch_rows(instance)
+    raw_rows = fetch_rows(instance)
+    rows = aggregate_rows(raw_rows, instance)
     previous_state = load_state(instance)
     previous_keys = set(previous_state.get("synced_keys", []))
     row_keys = {_row_key(r, instance) for r in rows if _row_key(r, instance)}
@@ -631,6 +743,9 @@ def rebuild_state(
         "key_strategy": state["key_strategy"],
         "composite_fields": state["composite_fields"],
         "source_rows": len(rows),
+        "source_rows_before_aggregate": len(raw_rows),
+        "rows_collapsed_by_aggregate": len(raw_rows) - len(rows),
+        "aggregate_key": instance.aggregate_key,
         "previous_keys": len(previous_keys),
         "unique_keys_after": len(keys),
         "duplicates_collapsed": len(rows) - len(keys),

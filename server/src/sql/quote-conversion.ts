@@ -20,6 +20,8 @@
  *   - conversion_rate：@deprecated v1.1，旧别名，与 underwriting_rate 同值。新前端代码请用 underwriting_rate。
  */
 
+import { escapeSqlValue } from '../utils/security.js';
+
 export interface QuoteConversionFilters {
   dateStart?: string;
   dateEnd?: string;
@@ -37,9 +39,7 @@ export interface QuoteConversionFilters {
   ncdMax?: number;
 }
 
-function esc(val: string): string {
-  return val.replace(/'/g, "''");
-}
+const esc = escapeSqlValue;
 
 function buildWhere(filters: QuoteConversionFilters): string {
   const conds: string[] = ['1=1'];

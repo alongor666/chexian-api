@@ -7,19 +7,10 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell-summary.js';
+import { getVehicleCategoryFilter, type VehicleCategory, crossSellTruthyExpr } from './cross-sell/shared.js';
 
 export type CoverageCombinationFilter = '整体' | '交三' | '主全' | '单交';
 
-/**
- * 交叉销售判定条件（与其他 SQL 生成器保持一致）
- */
-function getCrossSellCondition(): string {
-  return `(
-    TRY_CAST(is_cross_sell AS BOOLEAN) = true
-    OR LOWER(TRIM(CAST(is_cross_sell AS VARCHAR))) IN ('1', 'y', 'yes', 'true', 't', '是')
-  )`;
-}
 
 /**
  * 生成机构推介率走势查询
@@ -42,7 +33,7 @@ export function generateCrossSellOrgTrendQuery(
   logger.debug('Generating cross-sell org trend query', { vehicleCategory, coverageCombination, days });
 
   const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
-  const crossSellCond = getCrossSellCondition();
+  const crossSellCond = crossSellTruthyExpr('is_cross_sell');
   const safedays = Math.max(1, Math.min(90, days));
 
   const coverageFilter =

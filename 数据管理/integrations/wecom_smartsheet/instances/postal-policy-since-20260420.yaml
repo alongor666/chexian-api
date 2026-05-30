@@ -1,7 +1,8 @@
 # 邮政经代签单明细（2026-04-20 起）→ 企业微信智能表「车险业务员保单明细」
 #
 # 业务规则：agent_name LIKE '%邮政%' AND policy_date >= '2026-04-20'
-# 同步幂等键：composite_key（同 policy_no 可能存在批改副本/保费拆分）
+# 同步粒度：保单号 + 车架号唯一。源清单中同一保单号+车架号可能出现重复行，
+# 写企微前先按该组合聚合，防止同一保单同一车辆重复写入。
 #
 # 当前表：使用 .env.local:WECOM_SMARTSHEET_WEBHOOK_POSTAL_ALL 指向的新表 webhook。
 # 注意：新表额外包含「业务员姓名」「投保人」「上传员工证明」「上传行驶证」等字段，
@@ -22,14 +23,17 @@ filters:
 
 primary_key: policy_no
 
-# 复合主键：批改副本/保费拆分会让同 policy_no 出现多行（686 行里 7 行重复 → 679 unique policy_no）。
-# 仅用 policy_no 去重会让 sync 模式漏掉新进的批改记录，所以用 (policy_no, plate_no, premium, policy_date) 复合键。
+# 聚合规则：同一保单号 + 车架号只写一条，保费为组内源行求和。
+# 修改本字段后必须跑 --rebuild-state 重建 state.json。
+aggregate_key:
+  - policy_no
+  - vehicle_frame_no
+
+# 复合主键：邮政表按保单号 + 车架号作为幂等键。
 # 修改本字段后必须跑 --rebuild-state 重建 state.json。
 composite_key:
   - policy_no
-  - plate_no
-  - premium
-  - policy_date
+  - vehicle_frame_no
 
 # 字段映射：SQL 输出列名（en） → 智能表 field_id
 field_mapping:

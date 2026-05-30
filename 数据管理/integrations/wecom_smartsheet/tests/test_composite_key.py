@@ -133,6 +133,48 @@ def test_postal_salesman_stats_reports_dedup_vin_and_premium() -> None:
     ]
 
 
+def test_aggregate_rows_collapses_postal_duplicates_by_policy_and_vin() -> None:
+    inst = _make_instance(composite_key=("policy_no", "vehicle_frame_no"))
+    inst = sfp.InstanceConfig(**{
+        **inst.__dict__,
+        "aggregate_key": ("policy_no", "vehicle_frame_no"),
+    })
+    rows = [
+        {
+            "_primary_key": "JQ1",
+            "policy_no": "JQ1",
+            "vehicle_frame_no": "VIN1",
+            "plate_no": "川A12345",
+            "insurance_type": "交强险",
+            "insurance_grade": "B",
+            "premium": 0.0,
+            "commercial_pricing_factor": None,
+            "policy_date": date(2026, 5, 29),
+        },
+        {
+            "_primary_key": "SY1",
+            "policy_no": "JQ1",
+            "vehicle_frame_no": "VIN1",
+            "plate_no": "川A12345",
+            "insurance_type": "交强险",
+            "insurance_grade": "B",
+            "premium": 627.36,
+            "commercial_pricing_factor": None,
+            "policy_date": date(2026, 5, 29),
+        },
+    ]
+
+    aggregated = sfp.aggregate_rows(rows, inst)
+
+    assert len(aggregated) == 1
+    assert aggregated[0]["vehicle_frame_no"] == "VIN1"
+    assert aggregated[0]["policy_no"] == "JQ1"
+    assert aggregated[0]["premium"] == 627.36
+    assert aggregated[0]["insurance_grade"] == "B"
+    assert aggregated[0]["_source_row_count"] == 2
+    assert sfp._row_key(aggregated[0], inst) == "JQ1|VIN1"
+
+
 def test_invalid_grade_stats_treats_nan_as_blank() -> None:
     rows = [
         {"insurance_grade": "A"},
@@ -166,6 +208,27 @@ field_mapping:
     inst = sfp.load_instance(yaml_path)
     assert inst.composite_key == ("policy_no", "premium", "plate_no")
     assert isinstance(inst.composite_key, tuple)
+
+
+def test_load_instance_parses_aggregate_key_as_tuple(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "test.yaml"
+    yaml_path.write_text(
+        """
+instance_name: test
+webhook_env: TEST_WEBHOOK
+filters:
+  agent_name_like: "%test%"
+primary_key: policy_no
+aggregate_key:
+  - policy_no
+  - vehicle_frame_no
+field_mapping:
+  policy_no: fAAA
+""".strip(),
+        encoding="utf-8",
+    )
+    inst = sfp.load_instance(yaml_path)
+    assert inst.aggregate_key == ("policy_no", "vehicle_frame_no")
 
 
 def test_load_instance_composite_key_absent_means_none(tmp_path: Path) -> None:
