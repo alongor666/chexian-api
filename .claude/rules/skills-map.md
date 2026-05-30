@@ -15,7 +15,7 @@
 | Skill | 本项目用法 | 一键命令 |
 |-------|-----------|---------|
 | **diagnose-org-weekly** (v1.19) | 三级机构经营诊断周报（10 板块 + 22 个 SPA 下钻子页·单文件） | `python3 ~/.claude/skills/diagnose-org-weekly/cli.py --org "<机构>" --year 2026` 产出 `/tmp/<机构>_2026_经营诊断周报.html` (~780KB) |
-| **diagnose-period-trend** (v1.0) | 周期趋势诊断报表（YTD × 上年同期 × 滚动 6/12/24/36/48 月） | 用户说"周期趋势/趋势诊断"时触发，产出 `public/reports/diagnose-period-trend/YYYY-MM-DD.html` |
+| **diagnose-period-trend** (v2.0) | 短中长期对照（YTD × 上年同期 × 滚动 6/12/24/36 月 × 5 指标 × 11 客户类别 × 14 机构），三视图：V1 驾驶舱 / V3 叙事周报 / V4 超表 + legacy | 用户说"周期趋势/趋势诊断/短中长期对照/超表/驾驶舱"时触发，`python3 ~/.claude/skills/diagnose-period-trend/lib/cli.py --view all`，产出 `public/reports/diagnose-period-trend/<cutoff>-{dashboard,weekly,table}.html`（cutoff 默认取 MAX 起保日） |
 | **diagnose-loss-development** (v2.2) | 赔付率发展诊断（cohort + 月份矩阵 + 多维下钻） | 用户说"赔付率发展/loss-development"时触发，产出 `server/data/reports/diagnose-loss-development/YYYY-MM-DD/` |
 | **rewrite-conclusion** | L2 诊断结论 AI 重写：读 L1 脚本的车型子文档和机构诊断卡，提炼为管理层可读判断 | `--topic 出险率\|费用率\|保费达成` |
 
@@ -70,6 +70,7 @@
 | **investigate** | 系统性 debug：四阶段（investigate→analyze→hypothesize→implement），铁律"无根因不修复" |
 | **claude-api** | 修改本项目 Anthropic SDK 调用（如智谱 → 真 Claude 切换、prompt caching 调优） |
 | **sql-pro** | DuckDB 复杂 SQL 优化（窗口函数 / CTE / 执行计划） |
+| **chexian-crystallize-skill** | 用户说"沉淀成 skill / 固化成技能 / 封装成 skill" → 自动跑五步流水线（判归属→查重叠→写 SSOT→push+装软链→登记）。维护铁律「改在仓库·装到本地·本地只读」，详见 memory `project_skills_maintenance_model` |
 
 ---
 
@@ -83,6 +84,6 @@
 
 ## 维护协议
 
-- **新增 skill**：在 `~/.claude/skills/` 里创建后，**同一会话内必须**把"本项目用法"补登到对应小节
+- **新增 skill**：走 `chexian-crystallize-skill` 流水线（共享 skill 改在仓库 `alongor666/alongor666-skills` 再 `skills add` 装软链；项目级放 `.claude/skills/*.md`）。**禁止在 `~/.claude/skills/` 直接建实体目录**。创建后同一会话内必须把"本项目用法"补登到对应小节
 - **skill 弃用**：在表格行尾标注 `[DEPRECATED YYYY-MM]`（参 `xcl-pdf2lark` 不在本表的处理）
 - **eager-load 体积监控**：本表保持 ≤ 6KB（v1.19 拆分 A 段为 A1/A2 后从 4KB 上调；再涨先裁 D 表"其他"行的低频条目）
