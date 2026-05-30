@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
-import { cn, cardStyles, buttonStyles, colorClasses, fontStyles } from '@/shared/styles';
+import { cn, cardStyles, buttonStyles, colorClasses } from '@/shared/styles';
 import type { RenewalRow, SortField, SortDir, Selection } from '../types';
-import { formatNum, formatPct, shortenTeamName, stripSalesmanCode } from '../utils/format';
+import { shortenTeamName, stripSalesmanCode } from '../utils/format';
+import { isBadRow } from '../utils/grading';
+import MetricCells from './MetricCells';
+import FunnelLegend from './FunnelLegend';
 
 interface Props {
   rows: RenewalRow[];
@@ -15,12 +18,12 @@ interface Props {
 
 type DrillMode = 'team' | 'salesman';
 
-const METRIC_COLS: { key: SortField; label: string }[] = [
+const METRIC_COLS: { key: SortField; label: string; theme?: boolean }[] = [
   { key: 'A', label: '应续件数' },
   { key: 'B', label: '报价件数' },
   { key: 'C', label: '已续件数' },
   { key: 'D', label: '报价率' },
-  { key: 'E', label: '续保率' },
+  { key: 'E', label: '续保率', theme: true },
 ];
 
 const INDENT_BASE = 16;
@@ -139,8 +142,6 @@ export default function OrgTable({
     });
   }
 
-  const numericCellClass = cn('px-4 py-2 text-sm text-right whitespace-nowrap', fontStyles.numeric, colorClasses.text.neutralBlack);
-
   const drillButtonClass = (active: boolean) =>
     cn(
       'text-[10px] px-1.5 py-0.5 rounded border transition-colors',
@@ -149,6 +150,7 @@ export default function OrgTable({
         : cn(colorClasses.bg.neutralLight, colorClasses.border.neutral, colorClasses.text.neutralLight, 'hover:bg-neutral-200 dark:hover:bg-surface-3'),
     );
 
+  /** 渲染一行：统一处理 坏行高亮 / 选中左条 / 缩进 / 指标列 */
   function renderRow(
     row: RenewalRow,
     indent: number,
@@ -157,32 +159,41 @@ export default function OrgTable({
     isSelected: boolean,
     onClick?: () => void,
     labelNode?: React.ReactNode,
+    isTotal = false,
   ) {
+    const bad = !isTotal && isBadRow(row);
+    const barStyle = isSelected
+      ? { boxShadow: 'inset 3px 0 0 var(--c-primary)' }
+      : bad
+        ? { boxShadow: 'inset 3px 0 0 var(--c-danger)' }
+        : undefined;
+
     return (
       <tr
         key={rowKey}
         className={cn(
           'border-b transition-colors',
           colorClasses.border.neutral,
-          onClick && cn('cursor-pointer', 'hover:bg-primary-bg/50'),
-          isSelected && colorClasses.bg.primary,
+          onClick && 'cursor-pointer',
+          isTotal && cn(colorClasses.bg.neutral, 'font-semibold'),
+          isSelected
+            ? colorClasses.bg.primary
+            : bad
+              ? colorClasses.bg.danger
+              : onClick && 'hover:bg-primary-bg/50',
         )}
         onClick={onClick}
       >
         <td
           className={cn(
-            'px-4 py-2 text-sm whitespace-nowrap',
+            'px-3 py-2 text-sm whitespace-nowrap',
             isBold ? cn('font-semibold', colorClasses.text.neutralBlack) : colorClasses.text.neutralBlack,
           )}
-          style={{ paddingLeft: `${INDENT_BASE + indent * INDENT_STEP}px` }}
+          style={{ paddingLeft: `${INDENT_BASE + indent * INDENT_STEP}px`, ...barStyle }}
         >
           {labelNode || row.org_level_3 || row.team_name || row.salesman_name || '—'}
         </td>
-        <td className={numericCellClass}>{formatNum(row.A)}</td>
-        <td className={numericCellClass}>{formatNum(row.B)}</td>
-        <td className={numericCellClass}>{formatNum(row.C)}</td>
-        <td className={numericCellClass}>{formatPct(row.B, row.A)}</td>
-        <td className={numericCellClass}>{formatPct(row.C, row.A)}</td>
+        <MetricCells row={row} showFunnel />
       </tr>
     );
   }
@@ -225,11 +236,11 @@ export default function OrgTable({
                   e.stopPropagation();
                   toggleTeam(teamKey);
                 }}
-                className={cn('text-xs transition-transform inline-block cursor-pointer', isExpanded && 'rotate-90')}
+                className={cn('text-xs transition-transform inline-block cursor-pointer', colorClasses.text.neutralLight, isExpanded && 'rotate-90')}
               >
                 ▶
               </span>
-              <span>{shortenTeamName(team.team_name)}</span>
+              <span className={colorClasses.text.neutralDark}>{shortenTeamName(team.team_name)}</span>
               <span className={cn('text-[10px]', colorClasses.text.neutralMuted)}>({teamSalesmen.length} 人)</span>
             </span>,
           ),
@@ -245,7 +256,10 @@ export default function OrgTable({
                 `salesman-${org}-${teamKey}-${s.salesman_name || 'unknown'}-${idx}`,
                 selected,
                 () => handleSalesmanRowClick(org, s.team_name, s.salesman_name),
-                stripSalesmanCode(s.salesman_name),
+                <span className="flex items-center gap-1.5">
+                  <span className={cn('font-mono', colorClasses.text.neutralMuted)}>└</span>
+                  <span className={colorClasses.text.neutral}>{stripSalesmanCode(s.salesman_name)}</span>
+                </span>,
               ),
             );
           });
@@ -270,7 +284,10 @@ export default function OrgTable({
           `salesman-flat-${org}-${s.salesman_name || 'unknown'}-${idx}`,
           selected,
           () => handleSalesmanRowClick(org, s.team_name, s.salesman_name),
-          stripSalesmanCode(s.salesman_name),
+          <span className="flex items-center gap-1.5">
+            <span className={cn('font-mono', colorClasses.text.neutralMuted)}>└</span>
+            <span className={colorClasses.text.neutral}>{stripSalesmanCode(s.salesman_name)}</span>
+          </span>,
         );
       });
     }
@@ -306,13 +323,19 @@ export default function OrgTable({
         <table className="w-full">
           <thead>
             <tr className={cn('bg-neutral-50 dark:bg-surface-2 border-b-2', colorClasses.border.neutral)}>
-              <th className={cn('px-4 py-2 text-left text-xs font-medium uppercase whitespace-nowrap', colorClasses.text.neutralMuted)}>
+              <th className={cn('sticky top-0 z-10 bg-neutral-50 dark:bg-surface-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap', colorClasses.text.neutralLight)}>
                 三级机构
+              </th>
+              <th className={cn('sticky top-0 z-10 bg-neutral-50 dark:bg-surface-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap', colorClasses.text.neutralLight)}>
+                漏斗 A→B→C
               </th>
               {METRIC_COLS.map(col => (
                 <th
                   key={col.key}
-                  className={cn('px-4 py-2 text-right text-xs font-medium uppercase whitespace-nowrap', colorClasses.text.neutralMuted)}
+                  className={cn(
+                    'sticky top-0 z-10 bg-neutral-50 dark:bg-surface-2 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide whitespace-nowrap',
+                    col.theme ? colorClasses.text.primaryDark : colorClasses.text.neutralLight,
+                  )}
                 >
                   <button
                     type="button"
@@ -335,7 +358,11 @@ export default function OrgTable({
                 'overall-row',
                 overallSelected,
                 handleOverallClick,
-                '整体',
+                <span className="flex items-center gap-2">
+                  <span>整体</span>
+                  <span className={cn('text-[10px] font-normal', colorClasses.text.neutralMuted)}>四川分公司 · 全部</span>
+                </span>,
+                true,
               )}
             </tbody>
           )}
@@ -379,6 +406,9 @@ export default function OrgTable({
             );
           })}
         </table>
+      </div>
+      <div className={cn('px-4 py-2.5 border-t bg-neutral-50 dark:bg-surface-2', colorClasses.border.neutral)}>
+        <FunnelLegend />
       </div>
     </div>
   );

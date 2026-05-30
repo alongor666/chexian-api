@@ -8,11 +8,16 @@
  *   salesman  → 指定业务员的维度分布
  *
  * Tab 维度：客户类别 / 险别组合 / 能源类型 / 新旧过户 / 续转新车
+ * 重设计：标题强绑定（primary 圆点 + 面包屑）让「正在看左边选中的谁」一目了然，
+ *         坏行（续保率低于健康线）danger 高亮，续保率列为主题色。
  */
 import { useMemo, useState } from 'react';
-import { cn, cardStyles, colorClasses, fontStyles } from '@/shared/styles';
+import { cn, cardStyles, buttonStyles, colorClasses } from '@/shared/styles';
 import type { RenewalRow, SortField, SortDir, Selection, LinkageDimension } from '../types';
-import { formatNum, formatPct, shortenTeamName, stripSalesmanCode } from '../utils/format';
+import { shortenTeamName, stripSalesmanCode } from '../utils/format';
+import { isBadRow } from '../utils/grading';
+import MetricCells from './MetricCells';
+import Crumb from './Crumb';
 
 interface Props {
   selection: Selection;
@@ -26,14 +31,15 @@ interface Props {
   sortField: SortField;
   sortDir: SortDir;
   onSort: (field: SortField) => void;
+  onClearSelection: () => void;
 }
 
-const METRIC_COLS: { key: SortField; label: string }[] = [
-  { key: 'A', label: '应续件数' },
-  { key: 'B', label: '报价件数' },
-  { key: 'C', label: '已续件数' },
+const METRIC_COLS: { key: SortField; label: string; theme?: boolean }[] = [
+  { key: 'A', label: '应续' },
+  { key: 'B', label: '报价' },
+  { key: 'C', label: '已续' },
   { key: 'D', label: '报价率' },
-  { key: 'E', label: '续保率' },
+  { key: 'E', label: '续保率', theme: true },
 ];
 
 interface DimensionConfig {
@@ -139,6 +145,24 @@ function buildSelectionLabel(selection: Selection): string {
   }
 }
 
+function buildCrumbPath(selection: Selection): string[] {
+  switch (selection.kind) {
+    case 'overall':
+      return ['整体'];
+    case 'org':
+      return ['整体', selection.org];
+    case 'team':
+      return ['整体', selection.org, shortenTeamName(selection.team)];
+    case 'salesman':
+      return [
+        '整体',
+        selection.org,
+        ...(selection.team ? [shortenTeamName(selection.team)] : []),
+        stripSalesmanCode(selection.salesman),
+      ];
+  }
+}
+
 export default function CategoryTable({
   selection,
   overall,
@@ -151,6 +175,7 @@ export default function CategoryTable({
   sortField,
   sortDir,
   onSort,
+  onClearSelection,
 }: Props) {
   const [activeTab, setActiveTab] = useState<LinkageDimension>('customer_category');
 
@@ -178,14 +203,13 @@ export default function CategoryTable({
 
   const headerRow = findHeaderRow(selection, overall, orgRows);
   const selectionLabel = buildSelectionLabel(selection);
+  const crumbPath = buildCrumbPath(selection);
   const title = `${selectionLabel} · ${activeConfig.label}`;
 
   const sortIcon = (f: SortField) => {
     if (sortField !== f) return <span className={colorClasses.text.neutralMuted}>↕</span>;
     return <span className={colorClasses.text.primary}>{sortDir === 'desc' ? '↓' : '↑'}</span>;
   };
-
-  const numericCellClass = cn('px-4 py-2 text-sm text-right whitespace-nowrap', fontStyles.numeric, colorClasses.text.neutralBlack);
 
   const tabClass = (active: boolean) =>
     cn(
@@ -199,20 +223,20 @@ export default function CategoryTable({
     <div className={cn(cardStyles.base, 'overflow-hidden')}>
       <div className={cn('px-4 py-3 border-b bg-neutral-50 dark:bg-surface-2', colorClasses.border.neutral)}>
         <div className="flex items-center justify-between gap-2">
-          <h2 className={cn('text-base font-semibold truncate', colorClasses.text.neutralBlack)}>{title}</h2>
+          <h2 className={cn('text-base font-semibold truncate flex items-center gap-2', colorClasses.text.neutralBlack)} title={title}>
+            <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block shrink-0" />
+            <span className="truncate">{title}</span>
+          </h2>
           {selection.kind !== 'overall' && (
-            <span
-              className={cn(
-                'text-xs px-2 py-0.5 rounded whitespace-nowrap',
-                colorClasses.bg.primary,
-                colorClasses.text.primaryDark,
-              )}
-            >
-              联动: {selectionLabel}
-            </span>
+            <button onClick={onClearSelection} className={cn(buttonStyles.base, buttonStyles.link, 'text-xs whitespace-nowrap shrink-0')}>
+              回到整体
+            </button>
           )}
         </div>
-        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+        <div className="mt-2">
+          <Crumb path={crumbPath} />
+        </div>
+        <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
           {DIMENSIONS.map(d => (
             <button
               key={d.key}
@@ -230,13 +254,16 @@ export default function CategoryTable({
         <table className="w-full">
           <thead>
             <tr className={cn('bg-neutral-50 dark:bg-surface-2 border-b-2', colorClasses.border.neutral)}>
-              <th className={cn('px-4 py-2 text-left text-xs font-medium uppercase whitespace-nowrap', colorClasses.text.neutralMuted)}>
+              <th className={cn('sticky top-0 z-10 bg-neutral-50 dark:bg-surface-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap', colorClasses.text.neutralLight)}>
                 {activeConfig.headerLabel}
               </th>
               {METRIC_COLS.map(col => (
                 <th
                   key={col.key}
-                  className={cn('px-4 py-2 text-right text-xs font-medium uppercase whitespace-nowrap', colorClasses.text.neutralMuted)}
+                  className={cn(
+                    'sticky top-0 z-10 bg-neutral-50 dark:bg-surface-2 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide whitespace-nowrap',
+                    col.theme ? colorClasses.text.primaryDark : colorClasses.text.neutralLight,
+                  )}
                 >
                   <button
                     type="button"
@@ -252,15 +279,11 @@ export default function CategoryTable({
           </thead>
           <tbody>
             {headerRow && (
-              <tr className={cn('border-b font-semibold', colorClasses.border.neutral, 'bg-neutral-50/50 dark:bg-surface-2/50')}>
-                <td className={cn('px-4 py-2 text-sm whitespace-nowrap', colorClasses.text.neutralBlack)}>
+              <tr className={cn('border-b font-semibold', colorClasses.border.neutral, colorClasses.bg.neutral)}>
+                <td className={cn('px-3 py-2 text-sm whitespace-nowrap', colorClasses.text.neutralBlack)}>
                   {selectionLabel} 小计
                 </td>
-                <td className={numericCellClass}>{formatNum(headerRow.A)}</td>
-                <td className={numericCellClass}>{formatNum(headerRow.B)}</td>
-                <td className={numericCellClass}>{formatNum(headerRow.C)}</td>
-                <td className={numericCellClass}>{formatPct(headerRow.B, headerRow.A)}</td>
-                <td className={numericCellClass}>{formatPct(headerRow.C, headerRow.A)}</td>
+                <MetricCells row={headerRow} />
               </tr>
             )}
             {displayRows.length === 0 && (
@@ -272,19 +295,23 @@ export default function CategoryTable({
             )}
             {displayRows.map((row, idx) => {
               const dimValue = (row[activeConfig.field] as string | null) || '(未分类)';
+              const bad = isBadRow(row);
               return (
                 <tr
                   key={`${activeConfig.key}-${dimValue}-${idx}`}
-                  className={cn('border-b transition-colors', colorClasses.border.neutral, 'hover:bg-primary-bg/50')}
+                  className={cn(
+                    'border-b transition-colors',
+                    colorClasses.border.neutral,
+                    bad ? colorClasses.bg.danger : 'hover:bg-primary-bg/50',
+                  )}
                 >
-                  <td className={cn('px-4 py-2 text-sm whitespace-nowrap', colorClasses.text.neutralBlack)}>
+                  <td
+                    className={cn('px-3 py-2 text-sm whitespace-nowrap', colorClasses.text.neutralBlack)}
+                    style={bad ? { boxShadow: 'inset 3px 0 0 var(--c-danger)' } : undefined}
+                  >
                     {dimValue}
                   </td>
-                  <td className={numericCellClass}>{formatNum(row.A)}</td>
-                  <td className={numericCellClass}>{formatNum(row.B)}</td>
-                  <td className={numericCellClass}>{formatNum(row.C)}</td>
-                  <td className={numericCellClass}>{formatPct(row.B, row.A)}</td>
-                  <td className={numericCellClass}>{formatPct(row.C, row.A)}</td>
+                  <MetricCells row={row} />
                 </tr>
               );
             })}
