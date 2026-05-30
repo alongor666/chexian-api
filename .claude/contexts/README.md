@@ -21,7 +21,6 @@
 
 在对话中根据任务类型手动加载对应上下文，或在 Agent/Command 中引用。
 
-## 相关索引
+## 相关
 
-- [Agents 索引](../agents/README.md)
-- [Commands 索引](../commands/README.md)
+命令在 `../commands/`、agent 在 `../agents/`，均由各文件 frontmatter `description` 自动注入上下文被发现（AI-native，不维护 README 索引）。
