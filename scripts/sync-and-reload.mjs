@@ -252,7 +252,15 @@ async function main() {
     log('yellow', `\n⚠ 跳过报告生成（技能文件不存在：${skillCli}）`);
   }
 
-  // Stage 2: governance
+  // Stage 1.7: 数据就绪校验（数据状态质量，已从代码门禁 governance 解耦至此）
+  // ETL 完成后、发布前校验：Parquet 重叠 / Claims 去重 / 知识库规模 / 同步漂移。
+  if (opts.skipGovernance) {
+    log('yellow', '\n⚠ 跳过 data-readiness（--skip-governance）');
+  } else {
+    await runCmd('data-readiness', 'node', ['scripts/check-data-readiness.mjs'], { dryRun: opts.dryRun });
+  }
+
+  // Stage 2: governance（纯代码治理；数据状态校验见 Stage 1.7）
   if (opts.skipGovernance) {
     log('yellow', '\n⚠ 跳过 governance（--skip-governance）');
   } else {
