@@ -30,7 +30,7 @@
  */
 
 import { execSync, spawnSync } from 'child_process';
-import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync, copyFileSync, rmSync } from 'fs';
+import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync, copyFileSync, rmSync, openSync, closeSync } from 'fs';
 import { basename, dirname, extname, join, resolve, isAbsolute } from 'path';
 import { platform, homedir } from 'os';
 import { fileURLToPath } from 'url';
@@ -43,6 +43,8 @@ import {
 } from './pipelines/parquet_stats.mjs';
 import { collectPolicyCurrentStats, syncQuickReferenceFile } from './pipelines/quick_reference.mjs';
 import { assertNoPolicyCurrentOverlap } from '../scripts/lib/parquet-overlap-check.mjs';
+// 分片判定纯函数抽到 lib/shard-classify.mjs（可单测，daily.mjs 顶层执行 main() 无法被 import）
+import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -99,7 +101,10 @@ function findPython() {
 function ls(pattern, dir = '.') {
   const absDir = resolve(dir);
   if (!existsSync(absDir)) return [];
-  const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+  // 先转义除通配符 * ? 外的所有正则元字符（如 .()+ 等），再把 glob 通配符转正则，
+  // 避免 `每日数据_*.xlsx` 里的 `.` 被当成"任意字符"而过匹配。
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp('^' + escaped.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
   return readdirSync(absDir)
     .filter(f => regex.test(f))
     .map(f => ({ name: f, path: join(absDir, f) }))
@@ -125,9 +130,12 @@ function fileFingerprint(path) {
   };
 }
 
-function formatDate() {
+// formatDate（YYYYMMDD）已抽到 lib/shard-classify.mjs 并 import。
+// 归档文件名用秒级精度，避免同日多次运行覆盖当日已归档的上一版（YYYYMMDD_HHMMSS）。
+function formatDateTime() {
   const d = new Date();
-  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
 function writeJson(path, payload) {
@@ -135,35 +143,49 @@ function writeJson(path, payload) {
   writeFileSync(path, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
 }
 
-function runPythonScript(python, scriptPath, args) {
-  const cmd = `"${python}" "${scriptPath}" ${args.join(' ')}`;
-  log('blue', `执行: ${cmd}`);
+// 确保 pipelines 包可被 import（from pipelines.xxx import ...）；Windows 上强制 UTF-8
+function buildPythonEnv() {
   const env = { ...process.env };
-  // 确保 pipelines 包可被 import（from pipelines.xxx import ...）
   const existingPath = env.PYTHONPATH || '';
-  env.PYTHONPATH = existingPath ? `${__dirname}:${existingPath}` : __dirname;
+  const sep = isWindows() ? ';' : ':';
+  env.PYTHONPATH = existingPath ? `${__dirname}${sep}${existingPath}` : __dirname;
   if (isWindows()) {
     env.PYTHONIOENCODING = 'utf-8';
     env.PYTHONUTF8 = '1';
-    env.PYTHONPATH = existingPath ? `${__dirname};${existingPath}` : __dirname;
   }
-  execSync(cmd, { stdio: 'inherit', cwd: __dirname, env, timeout: 30 * 60 * 1000 });
+  return env;
+}
+
+function runPythonScript(python, scriptPath, args) {
+  // spawnSync 数组传参不经过 shell：彻底消除文件名含 $ / 反引号 / 空格 触发的注入与拆分。
+  // 历史调用点用 `"${path}"` 包裹参数以适配旧的 shell 字符串拼接；这里剥离每个参数最外层
+  // 的一对双引号（spawnSync 按字面量传递，剥离后即为真实路径，对未加引号的 flag 是 no-op）。
+  const cleanArgs = args.map(a => {
+    const s = String(a);
+    return s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
+  });
+  log('blue', `执行: ${python} ${scriptPath} ${cleanArgs.join(' ')}`);
+  const result = spawnSync(python, [scriptPath, ...cleanArgs], {
+    stdio: 'inherit',
+    cwd: __dirname,
+    env: buildPythonEnv(),
+    timeout: 30 * 60 * 1000,
+    windowsHide: true,
+  });
+  // execSync 会在非零退出/超时时抛错，调用方（try/catch、try/finally）依赖此行为；
+  // spawnSync 不抛，需手动还原：超时/启动失败抛 result.error，非零退出抛带退出码的错误。
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`python 脚本失败 (exit=${result.status}): ${basename(scriptPath)}`);
+  }
 }
 
 function runPythonInline(python, script, args = []) {
-  const env = { ...process.env };
-  const existingPath = env.PYTHONPATH || '';
-  env.PYTHONPATH = existingPath ? `${__dirname}:${existingPath}` : __dirname;
-  if (isWindows()) {
-    env.PYTHONIOENCODING = 'utf-8';
-    env.PYTHONUTF8 = '1';
-    env.PYTHONPATH = existingPath ? `${__dirname};${existingPath}` : __dirname;
-  }
   const result = spawnSync(python, ['-', ...args], {
     input: script,
     encoding: 'utf-8',
     cwd: __dirname,
-    env,
+    env: buildPythonEnv(),
     windowsHide: true,
   });
   if (result.status !== 0) {
@@ -246,55 +268,43 @@ function checkVpsConnectivity() {
   }
 }
 
+// ── 互斥锁（防止 cron + 手动并发损坏归档/替换）──
+
+function isProcessAlive(pid) {
+  if (!pid) return false;
+  try { process.kill(pid, 0); return true; }
+  catch (e) { return e.code === 'EPERM'; } // EPERM = 进程存在但无权限发信号 → 视为存活
+}
+
+function acquireLock(scriptDir) {
+  const lockPath = join(scriptDir, '.daily.lock');
+  try {
+    const fd = openSync(lockPath, 'wx'); // O_EXCL：已存在则抛 EEXIST
+    writeFileSync(fd, String(process.pid));
+    closeSync(fd);
+  } catch (e) {
+    if (e.code !== 'EEXIST') throw e;
+    let holderPid = null;
+    try { holderPid = parseInt(readFileSync(lockPath, 'utf-8').trim(), 10) || null; } catch (_) {}
+    if (isProcessAlive(holderPid)) {
+      log('red', `❌ 另一个 daily.mjs 实例正在运行 (pid=${holderPid})，本次中止以避免并发归档/替换冲突`);
+      log('yellow', `   若确认无运行实例，手动删除: ${lockPath}`);
+      process.exit(1);
+    }
+    log('yellow', `⚠ 发现陈旧锁 (pid=${holderPid ?? '?'} 已退出)，接管`);
+    unlinkSync(lockPath);
+    return acquireLock(scriptDir);
+  }
+  // 所有退出路径（含 process.exit 与信号）都释放锁
+  const release = () => { try { if (existsSync(lockPath)) unlinkSync(lockPath); } catch (_) {} };
+  process.on('exit', release);
+  process.on('SIGINT', () => { release(); process.exit(130); });
+  process.on('SIGTERM', () => { release(); process.exit(143); });
+  return lockPath;
+}
+
 // ── 分片逻辑 ──
-
-/** 从文件名提取日期范围，支持下划线和连字符 */
-function extractDateRange(filename) {
-  // 新前缀格式（2026-04-26 起）：20260426_01_签单清单.xlsx → single-day（归入 weekly 处理）
-  const newPrefix = filename.match(/^(\d{8})_\d{2}_/);
-  if (newPrefix) {
-    return { start: newPrefix[1], end: newPrefix[1] };
-  }
-  // 新格式：01_签单清单_21-23年.xlsx → { start: '20210101', end: '20231231' }
-  const newFmt = filename.match(/(\d{2})-(\d{2})年/);
-  if (newFmt) {
-    return { start: `20${newFmt[1]}0101`, end: `20${newFmt[2]}1231` };
-  }
-  // 开放结束格式：01_签单清单_剔摩_24年至.xlsx → { start: '20240101', end: 今天 }
-  const openEnd = filename.match(/(\d{2})年至/);
-  if (openEnd) {
-    return { start: `20${openEnd[1]}0101`, end: formatDate() };
-  }
-  // 增量格式：01_签单清单_增量_20260411.xlsx → single-day（归入 weekly 处理）
-  const incr = filename.match(/增量_(\d{8})/);
-  if (incr) {
-    return { start: incr[1], end: incr[1] };
-  }
-  // 显式日期范围格式（无中文锚点）：01_签单清单_剔摩_20240101_20260504.xlsx
-  // 上游 2026-05-05 起改用此格式替代「24年至YYYYMMDD」
-  const explicitRange = filename.match(/_(\d{8})_(\d{8})\.xlsx?$/i);
-  if (explicitRange) {
-    return { start: explicitRange[1], end: explicitRange[2] };
-  }
-  // 旧格式：每日数据_20240101_20260407.xlsx
-  const m = filename.match(/每日数据_(\d{8})[_-](\d{8})/);
-  return m ? { start: m[1], end: m[2] } : null;
-}
-
-/** 判断分片类型 */
-function getShardType(filename, config) {
-  const range = extractDateRange(filename);
-  if (!range) return null;
-  // 增量文件 / 新前缀单日文件 强制归入 weekly（以新格式处理，输出到 current/）
-  if (filename.match(/增量_\d{8}/) || filename.match(/^\d{8}_\d{2}_/)) return 'weekly';
-
-  const cutoff = parseInt(config.static_cutoff.replace(/-/g, ''));
-  const weeklyStart = config.weekly_start.replace(/-/g, '');
-
-  if (parseInt(range.end) <= cutoff) return 'static';
-  if (range.start === weeklyStart) return 'weekly';
-  return 'daily';
-}
+// extractDateRange / getShardType 已抽到 lib/shard-classify.mjs（可单测）并 import。
 
 /** xlsx 比 parquet 更新时返回 true */
 function isCacheStale(xlsxPath, parquetPath) {
@@ -545,8 +555,8 @@ function archiveExistingLatest(outputAbs, archivePrefix) {
   if (!existsSync(outputAbs)) return;
   const archiveDir = join(homedir(), 'chexian-archive');
   ensureDir(archiveDir);
-  renameSync(outputAbs, join(archiveDir, `${archivePrefix}_${formatDate()}.parquet`));
-  log('yellow', `  归档旧 latest → ${archivePrefix}_${formatDate()}.parquet`);
+  renameSync(outputAbs, join(archiveDir, `${archivePrefix}_${formatDateTime()}.parquet`));
+  log('yellow', `  归档旧 latest → ${archivePrefix}_${formatDateTime()}.parquet`);
 }
 
 function publishCandidate(tmpOutput, outputAbs, archivePrefix) {
@@ -726,8 +736,8 @@ function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs,
     if (existsSync(outputAbs)) {
       const archiveDir = join(homedir(), 'chexian-archive');
       ensureDir(archiveDir);
-      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
-      log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDate()}.parquet`);
+      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
+      log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDateTime()}.parquet`);
     }
     runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${outputArg}"`, ...extraArgs]);
     return;
@@ -740,8 +750,8 @@ function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs,
   if (existsSync(outputAbs)) {
     const archiveDir = join(homedir(), 'chexian-archive');
     ensureDir(archiveDir);
-    renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
-    log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDate()}.parquet`);
+    renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
+    log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDateTime()}.parquet`);
   }
   renameSync(tmpOutput, outputAbs);
 }
@@ -813,6 +823,7 @@ function runStrategyMultiMerge(ctx) {
   const tmpDir = join(dirname(outputAbs), '_tmp');
   ensureDir(tmpDir);
   const tmpFiles = [];
+  const failed = [];
   for (const file of sourceFiles) {
     const tmpPath = join(tmpDir, file.name.replace(/\.xlsx$/i, '.parquet'));
     log('green', `▶ 转换: ${file.name}`);
@@ -820,9 +831,17 @@ function runStrategyMultiMerge(ctx) {
       // extraArgs 传给 BaseConverter 子脚本（如 --no-metadata），merge_parquet.py 不消费 extraArgs
       runPythonScript(python, scriptPath, ['-i', `"${file.path}"`, '-o', `"${tmpPath}"`, ...extraArgs]);
     } catch (e) {
-      log('yellow', `⚠ 转换失败: ${file.name} — ${e.message?.slice(0, 100)}`);
+      log('red', `❌ 转换失败: ${file.name} — ${e.message?.slice(0, 200)}`);
+      failed.push(file.name);
     }
     if (existsSync(tmpPath)) tmpFiles.push(tmpPath);
+  }
+  // 任一源文件转换失败即中止：避免静默把剩余分片合并成缺数据的产物（数据完整性护栏，
+  // 与「未识别分片直接 exit」同级）。先清理已生成的临时 parquet 再抛错。
+  if (failed.length > 0) {
+    for (const f of tmpFiles) { try { unlinkSync(f); } catch (e) {} }
+    try { if (readdirSync(tmpDir).length === 0) rmdirSync(tmpDir); } catch (e) {}
+    throw new Error(`${id} 域 ${failed.length}/${sourceFiles.length} 个源文件转换失败，中止合并以防缺数据: ${failed.join(', ')}`);
   }
   if (tmpFiles.length === 0) {
     log('red', `❌ 未生成任何 ${id} parquet`);
@@ -836,7 +855,7 @@ function runStrategyMultiMerge(ctx) {
     validateCandidate(tmpFiles[0]);
     if (existsSync(outputAbs)) {
       ensureDir(archiveDir);
-      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
+      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
     }
     renameSync(tmpFiles[0], outputAbs);
   } else {
@@ -855,7 +874,7 @@ function runStrategyMultiMerge(ctx) {
     validateCandidate(tmpOutput);
     if (existsSync(outputAbs)) {
       ensureDir(archiveDir);
-      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDate()}.parquet`));
+      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
     }
     renameSync(tmpOutput, outputAbs);
     for (const f of tmpFiles) { try { unlinkSync(f); } catch (e) {} }
@@ -1149,7 +1168,7 @@ function runClaimsDetail(python, scriptDir) {
   if (existsSync(CLAIMS_DETAIL_PATH)) {
     const archiveDir = join(homedir(), 'chexian-archive');
     ensureDir(archiveDir);
-    renameSync(CLAIMS_DETAIL_PATH, join(archiveDir, `claims_detail_latest_${formatDate()}.parquet`));
+    renameSync(CLAIMS_DETAIL_PATH, join(archiveDir, `claims_detail_latest_${formatDateTime()}.parquet`));
     log('yellow', '  归档旧 latest.parquet → archive/');
   }
 
@@ -1186,7 +1205,7 @@ function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePre
   if (existsSync(outputPath)) {
     const archiveDir = join(homedir(), 'chexian-archive');
     ensureDir(archiveDir);
-    renameSync(outputPath, join(archiveDir, `${archivePrefix}_${formatDate()}.parquet`));
+    renameSync(outputPath, join(archiveDir, `${archivePrefix}_${formatDateTime()}.parquet`));
   }
 
   // 原子替换
@@ -1226,7 +1245,7 @@ function runRenewalTracker(python, scriptDir) {
   if (existsSync(outputPath)) {
     const archiveDir = join(homedir(), 'chexian-archive');
     ensureDir(archiveDir);
-    renameSync(outputPath, join(archiveDir, `renewal_tracker_latest_${formatDate()}.parquet`));
+    renameSync(outputPath, join(archiveDir, `renewal_tracker_latest_${formatDateTime()}.parquet`));
     log('yellow', '  归档旧 latest.parquet → archive/');
   }
   renameSync(tmpPath, outputPath);
@@ -1244,6 +1263,9 @@ async function main() {
   const scriptDir = __dirname;
   process.chdir(scriptDir);
   loadEnvLocal(scriptDir);
+  // 互斥锁：cron 与手动 /daily-sync 可能并发，归档→替换序列无锁会相互覆盖。
+  // 取锁后注册退出钩子（含 process.exit/信号路径）自动释放。
+  acquireLock(scriptDir);
 
   const noSync = process.argv.includes('--no-sync');
   const skipReport = process.argv.includes('--skip-report');
@@ -1405,17 +1427,20 @@ async function main() {
     const outputPath = join(currentDir, outputName);
 
     if (existsSync(outputPath)) {
-      // staleness 检测：transform.py 比 parquet 新 → 告警
+      // staleness 检测：transform.py 比 parquet 新 → schema 可能已变更，不能静默用旧数据
+      // （否则旧 schema 静态分片会与新 schema 周更分片混入 current/，union_by_name 下列错位）。
+      // 静态分片的源 xlsx 仍在本批次中，直接删除旧 parquet 落到下方重转：
+      // 幂等且自限（重转后 parquet mtime 反超 transform.py，下次命中缓存跳过）。
       const scriptMtime = statSync(transformScript).mtimeMs;
       const parquetMtime = statSync(outputPath).mtimeMs;
       if (scriptMtime > parquetMtime) {
-        log('yellow', `⚠️  静态分片已过时: ${outputName}`);
-        log('yellow', `   transform.py 修改时间晚于 parquet，schema 可能已变更`);
-        log('yellow', `   → 删除 ${outputPath} 后重新运行以更新`);
+        log('yellow', `⚠️  静态分片已过时（transform.py 晚于 parquet，schema 可能变更），自动重转: ${outputName}`);
+        unlinkSync(outputPath);
+        // 不 continue，落到下方重新转换
       } else {
         log('green', `✓ 静态分片已存在，跳过: ${outputName}`);
+        continue;
       }
-      continue;
     }
 
     log('green', `▶ 转换静态分片: ${file.name} → ${outputName}`);
@@ -1454,7 +1479,7 @@ async function main() {
         .filter(f => f.endsWith('.parquet') && f.startsWith('每日数据_') && f !== outputName
                 && extractDateRange(f)?.start === weeklyStart);
       for (const old of existingOldWeekly) {
-        const archivedName = `${old.replace('.parquet', '')}_${formatDate()}.parquet`;
+        const archivedName = `${old.replace('.parquet', '')}_${formatDateTime()}.parquet`;
         renameSync(join(currentDir, old), join(archiveDir, archivedName));
         log('yellow', `📦 归档旧周更: ${old} → ${archivedName}`);
       }
@@ -1545,11 +1570,15 @@ async function main() {
     process.exit(1);
   }
 
-  // 7. VPS 同步
+  // 7. VPS 同步（与子命令路径一致：失败即 exit(1)，不静默吞掉同步失败）
   if (noSync) {
     log('yellow', '已跳过 VPS 同步（--no-sync）');
   } else {
-    await syncToVps(scriptDir);
+    const synced = await syncToVps(scriptDir);
+    if (!synced) {
+      log('red', '❌ VPS 同步失败（数据已写入本地）。修复网络后重试: node scripts/sync-vps.mjs --no-restart');
+      process.exit(1);
+    }
   }
 
   // 8. 外部系统集成（企业微信智能表格），失败降级告警不阻塞 ETL
