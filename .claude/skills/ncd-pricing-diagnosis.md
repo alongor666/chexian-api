@@ -163,10 +163,16 @@ HAVING has_comm=1 AND has_compul=1
 -- Step 3: 赔案关联
 CREATE OR REPLACE VIEW CA AS
 SELECT f.vehicle_frame_no, f.insurance_start_date, f.insurance_type, c.claim_no,
-  COALESCE(c.settled_amount,0)+COALESCE(c.pending_amount,0) AS amt
+  -- 对齐项目 SSOT：剔除无责/零结/注销/拒赔；已结取已决赔款，否则取立案金额
+  CASE
+    WHEN COALESCE(c.liability_ratio, 100) > 0
+     AND (c.case_type IS NULL OR c.case_type NOT IN ('零结', '注销', '拒赔'))
+    THEN (CASE WHEN c.settlement_time IS NOT NULL THEN COALESCE(c.settled_amount, 0)
+               ELSE COALESCE(c.reserve_amount, 0) END)
+    ELSE 0 END AS amt
 FROM F f 
 JOIN read_parquet('{CLAIMS_PATH}', union_by_name=true) c ON f.policy_no = c.policy_no
-WHERE COALESCE(c.settled_amount,0)+COALESCE(c.pending_amount,0) > 0
+WHERE COALESCE(c.settled_amount,0)+COALESCE(c.reserve_amount,0) > 0
 ;
 ```
 
