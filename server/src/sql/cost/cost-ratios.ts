@@ -1,11 +1,18 @@
 /**
- * 核心成本率 SQL 生成器
+ * 核心成本率 SQL 生成器 — 时间分摊口径（与赔款 cohort 同步）
  *
  * 4 种成本率口径：
  * - 赔付率（满期赔付率 + 满期出险率 + 案均赔款）
  * - 费用率
  * - 综合费用率
  * - 变动成本率
+ *
+ * ⚠️ 口径警告（B304）：本文件输出的 `earned_premium` 是【时间分摊口径】，
+ *    用 `LEAST(cutoff - 起保 + 1, policy_term) / policy_term × premium` 计算，
+ *    `policy_term = +INTERVAL 1 YEAR`（闰年感知 365/366），**不分险类、无系数**。
+ *    与 `cost/earned-premium.ts` 的【财务口径】（+INTERVAL 364 DAY + 险类系数
+ *    α=0.82/0.94/0.90）**字段同名但公式不同**，禁止下游混用——会算错赔付率。
+ *    详见 `cost/earned-premium.ts` 文件头对照表 + BACKLOG B304。
  */
 
 import { getMetricSql } from '../../config/metric-registry/index.js';
