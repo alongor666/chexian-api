@@ -136,6 +136,47 @@ app.get('/health', (req, res) => {
 });
 
 /**
+ * 内部数据指纹（localhost-only，无鉴权）
+ *
+ * 供 scripts/sync-vps.mjs 的完整性闸门对比"本地 vs VPS 现役"的 policy maxDate + rowCount，
+ * 防止某台 parquet 不全的机器把残缺数据 rsync 覆盖到生产。
+ *
+ * 安全：仅直连 PM2(localhost:3000) 可访问——经 Nginx 的外部请求会带 X-Forwarded-For /
+ * X-Real-IP 头，一律 403。故意不放 /api/* 路径以遵守"所有 /api/* 必须鉴权"红线
+ * （见 .claude/rules/api-routes.md）。数据已在内存连接池，毫秒级。
+ */
+app.get('/internal/data-fingerprint', async (req, res) => {
+  const remote = req.socket.remoteAddress || '';
+  const isLoopback =
+    remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  const viaProxy = Boolean(req.headers['x-forwarded-for'] || req.headers['x-real-ip']);
+  if (!isLoopback || viaProxy) {
+    res.status(403).json({ success: false, message: 'localhost-only' });
+    return;
+  }
+  if (!dataReady) {
+    res.status(503).json({ success: false, message: 'data not loaded yet' });
+    return;
+  }
+  try {
+    const rows = await duckdbService.query<{ max_date: string | null; row_count: number }>(
+      `SELECT MAX(CAST(policy_date AS DATE))::VARCHAR AS max_date, COUNT(*) AS row_count FROM PolicyFact`
+    );
+    res.json({
+      success: true,
+      data: {
+        policy: {
+          maxDate: rows[0]?.max_date ?? null,
+          rowCount: Number(rows[0]?.row_count ?? 0),
+        },
+      },
+    });
+  } catch {
+    res.status(503).json({ success: false, message: 'PolicyFact unavailable' });
+  }
+});
+
+/**
  * 5.1 内部状态详情（需认证，供运维监控）
  */
 import { getRouteCacheStats } from './services/route-cache.js';
