@@ -38,8 +38,10 @@ function shortOrg(name: string | null): string {
 export default function OverviewBand({ overall, orgRows, selection, onSelectOrg }: Props) {
   const orgs = useMemo(() => orgRows.filter(r => r.row_level === 'org'), [orgRows]);
 
+  // 仅对有应续业务（A>0）的机构排「续保率最低」——零应续是无数据，不是最差
   const worst = useMemo(() => {
-    return [...orgs]
+    return orgs
+      .filter(o => o.A > 0)
       .sort((a, b) => (renewRate(a) ?? 0) - (renewRate(b) ?? 0))
       .slice(0, 5);
   }, [orgs]);

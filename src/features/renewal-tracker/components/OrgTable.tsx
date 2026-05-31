@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { cn, cardStyles, buttonStyles, colorClasses } from '@/shared/styles';
 import type { RenewalRow, SortField, SortDir, Selection } from '../types';
 import { shortenTeamName, stripSalesmanCode } from '../utils/format';
-import { isBadRow } from '../utils/grading';
+import { isBadRow, compareRows } from '../utils/grading';
 import MetricCells from './MetricCells';
 import FunnelLegend from './FunnelLegend';
 
@@ -28,12 +28,6 @@ const METRIC_COLS: { key: SortField; label: string; theme?: boolean }[] = [
 
 const INDENT_BASE = 16;
 const INDENT_STEP = 24;
-
-function getSortValue(row: RenewalRow, field: SortField): number {
-  if (field === 'D') return row.A > 0 ? row.B / row.A : 0;
-  if (field === 'E') return row.A > 0 ? row.C / row.A : 0;
-  return row[field];
-}
 
 function isOrgSelected(selection: Selection, org: string): boolean {
   return selection.kind !== 'overall' && selection.org === org;
@@ -75,11 +69,7 @@ export default function OrgTable({
   const salesmanRows = useMemo(() => rows.filter(r => r.row_level === 'salesman'), [rows]);
 
   const sortedOrgs = useMemo(() => {
-    return [...orgRows].sort((a, b) => {
-      const va = getSortValue(a, sortField);
-      const vb = getSortValue(b, sortField);
-      return sortDir === 'desc' ? vb - va : va - vb;
-    });
+    return [...orgRows].sort((a, b) => compareRows(a, b, sortField, sortDir));
   }, [orgRows, sortField, sortDir]);
 
   // 选中的机构名（用于判断是否展开下钻）
@@ -203,22 +193,14 @@ export default function OrgTable({
 
     if (drillMode === 'team') {
       const orgTeams = teamRows.filter(r => r.org_level_3 === org);
-      const sortedTeams = [...orgTeams].sort((a, b) => {
-        const va = getSortValue(a, sortField);
-        const vb = getSortValue(b, sortField);
-        return sortDir === 'desc' ? vb - va : va - vb;
-      });
+      const sortedTeams = [...orgTeams].sort((a, b) => compareRows(a, b, sortField, sortDir));
       const nodes: React.ReactNode[] = [];
       sortedTeams.forEach(team => {
         const teamKey = team.team_name || '';
         const isExpanded = expandedTeams.has(teamKey);
         const teamSalesmen = salesmanRows
           .filter(s => s.org_level_3 === org && s.team_name === team.team_name)
-          .sort((a, b) => {
-            const va = getSortValue(a, sortField);
-            const vb = getSortValue(b, sortField);
-            return sortDir === 'desc' ? vb - va : va - vb;
-          });
+          .sort((a, b) => compareRows(a, b, sortField, sortDir));
         const teamSelected = isTeamSelected(selection, org, team.team_name);
         nodes.push(
           renderRow(
@@ -270,11 +252,7 @@ export default function OrgTable({
 
     if (drillMode === 'salesman') {
       const orgSalesmen = salesmanRows.filter(r => r.org_level_3 === org);
-      const sorted = [...orgSalesmen].sort((a, b) => {
-        const va = getSortValue(a, sortField);
-        const vb = getSortValue(b, sortField);
-        return sortDir === 'desc' ? vb - va : va - vb;
-      });
+      const sorted = [...orgSalesmen].sort((a, b) => compareRows(a, b, sortField, sortDir));
       return sorted.map((s, idx) => {
         const selected = isSalesmanSelected(selection, org, s.team_name, s.salesman_name);
         return renderRow(
@@ -358,10 +336,7 @@ export default function OrgTable({
                 'overall-row',
                 overallSelected,
                 handleOverallClick,
-                <span className="flex items-center gap-2">
-                  <span>整体</span>
-                  <span className={cn('text-[10px] font-normal', colorClasses.text.neutralMuted)}>四川分公司 · 全部</span>
-                </span>,
+                '整体',
                 true,
               )}
             </tbody>

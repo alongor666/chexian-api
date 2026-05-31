@@ -15,7 +15,7 @@ import { useMemo, useState } from 'react';
 import { cn, cardStyles, buttonStyles, colorClasses } from '@/shared/styles';
 import type { RenewalRow, SortField, SortDir, Selection, LinkageDimension } from '../types';
 import { shortenTeamName, stripSalesmanCode } from '../utils/format';
-import { isBadRow } from '../utils/grading';
+import { isBadRow, compareRows } from '../utils/grading';
 import MetricCells from './MetricCells';
 import Crumb from './Crumb';
 
@@ -57,12 +57,6 @@ const DIMENSIONS: DimensionConfig[] = [
   { key: 'used_transfer_type', label: '新旧过户', field: 'used_transfer_type', headerLabel: '新旧过户', levelPrefix: 'used_transfer' },
   { key: 'renewal_type', label: '续转新车', field: 'renewal_type', headerLabel: '续转新车', levelPrefix: 'renewal_type' },
 ];
-
-function getSortValue(row: RenewalRow, field: SortField): number {
-  if (field === 'D') return row.A > 0 ? row.B / row.A : 0;
-  if (field === 'E') return row.A > 0 ? row.C / row.A : 0;
-  return row[field];
-}
 
 /**
  * 根据 selection 返回 row_level 前缀 (overall/org/team/salesman)
@@ -194,11 +188,7 @@ export default function CategoryTable({
 
   const displayRows = useMemo(() => {
     const filtered = filterDimensionRows(rowsByDimension[activeTab], selection, activeConfig.levelPrefix);
-    return [...filtered].sort((a, b) => {
-      const va = getSortValue(a, sortField);
-      const vb = getSortValue(b, sortField);
-      return sortDir === 'desc' ? vb - va : va - vb;
-    });
+    return [...filtered].sort((a, b) => compareRows(a, b, sortField, sortDir));
   }, [rowsByDimension, activeTab, selection, activeConfig.levelPrefix, sortField, sortDir]);
 
   const headerRow = findHeaderRow(selection, overall, orgRows);
