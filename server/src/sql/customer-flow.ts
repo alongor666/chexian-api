@@ -9,7 +9,6 @@ import { escapeSqlValue } from '../utils/security.js';
 
 export interface CustomerFlowFilters {
   year?: number;
-  direction?: 'inflow' | 'outflow';
 }
 
 /** 转入分析：上年承保主体 → 华安 */

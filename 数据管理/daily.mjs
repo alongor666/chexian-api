@@ -733,7 +733,7 @@ function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs,
     return;
   }
 
-  const tmpOutput = outputAbs + '.tmp';
+  const tmpOutput = outputAbs + `.${process.pid}.tmp`;
   try { if (existsSync(tmpOutput)) unlinkSync(tmpOutput); } catch (e) {}
   runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${tmpOutput}"`, ...extraArgs]);
   validateDomainCandidate(python, id, tmpOutput, trigger.validation);
@@ -754,7 +754,7 @@ function runStrategyFullSnapshot({ python, id, scriptDir, scriptPath, sourceFile
   const snapDir = snapshotDir(scriptDir, id, batchDate);
   const snapshotOutput = join(snapDir, fullSnapshotOutputName(id, trigger));
   const snapshotManifest = join(snapDir, 'snapshot-manifest.json');
-  const tmpOutput = outputAbs + '.tmp';
+  const tmpOutput = outputAbs + `.${process.pid}.tmp`;
   const cacheKey = buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger });
 
   writeFullSnapshotSourceArchive(scriptDir, id, batchDate, sourceFiles, sourceFingerprints);
@@ -842,7 +842,7 @@ function runStrategyMultiMerge(ctx) {
   } else {
     // merge_parquet.py dedup 合并；若 merge_with_history 则把历史 latest 加入输入
     const mergeInputs = hasHistory ? [outputAbs, ...tmpFiles] : tmpFiles;
-    const tmpOutput = outputAbs + '.tmp';
+    const tmpOutput = outputAbs + `.${process.pid}.tmp`;
     const mergeScript = join(scriptDir, 'pipelines/merge_parquet.py');
     const desc = hasHistory ? `历史 latest + ${tmpFiles.length} 增量` : `${tmpFiles.length} 分片`;
     log('green', `▶ 合并（${desc}），按 ${merge_dedup_key} 去重...`);

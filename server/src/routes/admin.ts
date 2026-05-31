@@ -4,11 +4,12 @@ import { authMiddleware } from '../middleware/auth.js';
 import { requireRole, UserRole } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { getBootstrapper } from '../services/bootstrapper-registry.js';
+import { RELOADABLE_DOMAIN_IDS } from '../services/data-bootstrapper.js';
 
 const router = Router();
 
 const reloadSchema = z.object({
-  domains: z.array(z.enum(['customer_flow', 'new_energy_claims'])).min(1),
+  domains: z.array(z.enum(RELOADABLE_DOMAIN_IDS as [string, ...string[]])).min(1),
 });
 
 router.post(

@@ -152,7 +152,9 @@ function buildEtlCommands(dailyArgs, fullSnapshotDomains) {
       args: ['数据管理/daily.mjs', domain, '--no-sync', '--skip-report'],
     }));
   }
-  const args = dailyArgs.includes('--no-sync') ? [...dailyArgs] : [...dailyArgs, '--no-sync'];
+  // Stage 1.5 统一生成周期趋势报告，daily.mjs 内部报告恒跳过以免重复（省 ~6min）。
+  const base = dailyArgs.includes('--no-sync') ? [...dailyArgs] : [...dailyArgs, '--no-sync'];
+  const args = base.includes('--skip-report') ? base : [...base, '--skip-report'];
   return [{ label: 'ETL', args: ['数据管理/daily.mjs', ...args] }];
 }
 
@@ -179,7 +181,9 @@ async function runDataReload(domains, { dryRun, healthUrl }) {
         'Content-Type': 'application/json',
       },
       body: payload,
-      signal: AbortSignal.timeout(10_000),
+      // 服务端惰性加载上限 15s（LAZY_LOAD_TIMEOUT_MS）+ COUNT 查询余量，客户端取 30s 以免
+      // 误判超时后回退 PM2 reload 与服务端 loader 竞争、且漏掉 bumpDataVersion。
+      signal: AbortSignal.timeout(30_000),
     });
   } catch (err) {
     log('yellow', `  数据 reload 请求失败，将回退 PM2 reload: ${err.message}`);

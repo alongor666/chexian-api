@@ -27,11 +27,11 @@ describe('sync-and-reload full_snapshot plan', () => {
     ]);
   });
 
-  it('普通域仍保持单次 daily.mjs 调用', () => {
+  it('普通域单次 daily.mjs 调用并跳过内部报告（Stage 1.5 统一出报告，避免重复）', () => {
     expect(buildEtlCommands(['premium'], [])).toEqual([
       {
         label: 'ETL',
-        args: ['数据管理/daily.mjs', 'premium', '--no-sync'],
+        args: ['数据管理/daily.mjs', 'premium', '--no-sync', '--skip-report'],
       },
     ]);
   });

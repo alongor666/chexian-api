@@ -53,6 +53,9 @@ const RELOADABLE_FULL_SNAPSHOT_DOMAINS: Record<string, { lazyName: string; relat
   new_energy_claims: { lazyName: 'NewEnergyClaims', relation: 'NewEnergyClaims' },
 };
 
+/** 可数据 reload 的 full_snapshot 域 ID（单一事实源，供 admin 路由 zod 校验派生） */
+export const RELOADABLE_DOMAIN_IDS = Object.keys(RELOADABLE_FULL_SNAPSHOT_DOMAINS);
+
 /** bootstrap() 的返回结果，供 app.ts 注册当前数据文件 */
 export interface BootstrapResult {
   rowCount: number;
@@ -512,23 +515,32 @@ export class DataBootstrapper {
    */
   async reloadDomains(domainIds: string[]): Promise<Array<{ domain: string; lazyName: string; relation: string; rowCount: number | null; state: string }>> {
     const results = [];
-    for (const domainId of domainIds) {
-      const cfg = RELOADABLE_FULL_SNAPSHOT_DOMAINS[domainId];
-      if (!cfg) {
-        throw new Error(`Unsupported data reload domain: ${domainId}`);
+    let reloadedAny = false;
+    try {
+      for (const domainId of domainIds) {
+        const cfg = RELOADABLE_FULL_SNAPSHOT_DOMAINS[domainId];
+        if (!cfg) {
+          throw new Error(`Unsupported data reload domain: ${domainId}`);
+        }
+        await this.lazyRegistry.reload(cfg.lazyName);
+        reloadedAny = true;
+        const rows = await this.db.query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM ${cfg.relation}`);
+        results.push({
+          domain: domainId,
+          lazyName: cfg.lazyName,
+          relation: cfg.relation,
+          rowCount: rows[0]?.cnt ?? null,
+          state: this.lazyRegistry.getState(cfg.lazyName),
+        });
       }
-      await this.lazyRegistry.reload(cfg.lazyName);
-      const rows = await this.db.query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM ${cfg.relation}`);
-      results.push({
-        domain: domainId,
-        lazyName: cfg.lazyName,
-        relation: cfg.relation,
-        rowCount: rows[0]?.cnt ?? null,
-        state: this.lazyRegistry.getState(cfg.lazyName),
-      });
+    } finally {
+      // 任一域成功 reload 后必须让缓存失效并 bump 版本，否则前序域数据已换、
+      // 客户端却仍命中 route-cache 旧值且无版本提示（即使后续某域 reload 抛错）。
+      if (reloadedAny) {
+        this.db.invalidateCache();
+        bumpDataVersionFromTimestamp();
+      }
     }
-    this.db.invalidateCache();
-    bumpDataVersionFromTimestamp();
     return results;
   }
 }

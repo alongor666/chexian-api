@@ -664,6 +664,9 @@ function readExistingSyncManifest(manifestPath) {
 }
 
 function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DEFAULTS.frontendDistDir), runConfig = { domains: [] }) {
+  const manifestPath = join(ROOT_DIR, '.last-sync-manifest.json');
+  const existing = readExistingSyncManifest(manifestPath);
+
   const files = {};
   for (const dir of tasks.map(task => ({ label: task.label, path: task.local }))) {
     if (!existsSync(dir.path)) continue;
@@ -672,12 +675,16 @@ function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DE
       const fullPath = join(dir.path, f);
       const stat = statSync(fullPath);
       const key = `${dir.label}/${f}`;
-      files[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs), sha256: createHash('sha256').update(readFileSync(fullPath)).digest('hex') };
+      const mtimeMs = Math.floor(stat.mtimeMs);
+      // size+mtime 未变则复用旧 hash，免每次同步全量重读 1–3GB parquet。
+      const prev = existing?.files?.[key];
+      const sha256 = (prev && prev.size === stat.size && prev.mtimeMs === mtimeMs && prev.sha256)
+        ? prev.sha256
+        : createHash('sha256').update(readFileSync(fullPath)).digest('hex');
+      files[key] = { size: stat.size, mtimeMs, sha256 };
     }
   }
 
-  const manifestPath = join(ROOT_DIR, '.last-sync-manifest.json');
-  const existing = readExistingSyncManifest(manifestPath);
   let mergedFiles = files;
   let scope = runConfig.domains?.length ? 'domain' : 'all';
 
