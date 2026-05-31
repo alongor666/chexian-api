@@ -124,23 +124,26 @@ const NON_ALIAS_KEYWORDS = new Set([
 /**
  * CTE / 子查询安全的权限注入（RLS 强制）。
  *
- * 策略：把每个直接读取 PolicyFact 的位置 `FROM PolicyFact [alias]` 替换为
- * **过滤内联视图**：
+ * 策略：把每个直接读取 PolicyFact 的位置 `FROM/JOIN/逗号连接 PolicyFact [alias]`
+ * 替换为 **过滤内联视图**：
  *
  *   FROM PolicyFact            →  FROM (SELECT * FROM PolicyFact WHERE <filter>) AS PolicyFact
  *   FROM PolicyFact p          →  FROM (SELECT * FROM PolicyFact WHERE <filter>) AS p
- *   FROM PolicyFact AS p       →  FROM (SELECT * FROM PolicyFact WHERE <filter>) AS p
+ *   JOIN PolicyFact q          →  JOIN (SELECT * FROM PolicyFact WHERE <filter>) AS q
+ *   FROM a, PolicyFact b       →  FROM a, (SELECT * FROM PolicyFact WHERE <filter>) AS b
  *
  * 相比旧实现（在外层查询里找位置插 WHERE），此法对每个 PolicyFact 读取点
  * 都独立、就地强制行级过滤——无论它出现在主查询、SELECT 列表/WHERE 中的标量
- * 子查询、JOIN 子查询、CTE 体，还是窗口函数上下文。彻底杜绝"子查询读全量"
- * 的 RLS 绕过（旧的 WHERE-插入实现只覆盖最外层 FROM，子查询不被过滤）。
+ * 子查询、JOIN/逗号连接的第 2+ 个引用、CTE 体，还是窗口函数上下文。彻底杜绝
+ * "子查询 / 第二个 JOIN 引用读全量"的 RLS 绕过。
  *
  * 引用其它 CTE 别名的 `FROM <cte_alias>` 不受影响（仅匹配字面表名 PolicyFact），
- * 它们的上游 CTE 已经被过滤。
+ * 它们的上游 CTE 已经被过滤。`PolicyFact.col` 形式的列引用（紧跟 `.`）不被误改。
  *
  * 单次全局正则替换：String.replace 不回扫替换后文本，故注入文本里新增的
- * `FROM PolicyFact` 不会被二次匹配，无需额外去重。
+ * `FROM PolicyFact` 不会被二次匹配，无需额外去重。替换后再做 fail-closed 残留
+ * 扫描：若仍有未被内联视图包裹的 PolicyFact 关系引用（例如未来出现的怪异语法），
+ * 抛错拒绝执行，绝不放行一条可能未过滤的查询。
  *
  * @param sql - 原始用户 SQL（可能含 CTE / 子查询）
  * @param permissionFilter - 权限过滤条件
@@ -151,24 +154,33 @@ export function injectPermissionIntoAnySql(sql: string, permissionFilter: string
     return sql;
   }
 
-  // 捕获组：(1) 可选的别名片段（含前导空白），(2) 别名标识符本身
-  const polRefPattern = /\bFROM\s+PolicyFact\b(\s+(?:AS\s+)?([A-Za-z_]\w*))?/gi;
+  const filteredView = `(SELECT * FROM PolicyFact WHERE ${permissionFilter})`;
+  // 捕获组：(1) 引导关键字（FROM/JOIN/逗号），(2) 可选别名片段（含前导空白），
+  // (3) 别名标识符本身。`(?!\s*\.)` 排除 `PolicyFact.col` 列引用（仅匹配关系引用）。
+  // JOIN 覆盖 LEFT/RIGHT/INNER/OUTER/CROSS JOIN —— JOIN 永远紧贴表名出现。
+  const polRefPattern = /(\bFROM\b|\bJOIN\b|,)\s+PolicyFact\b(?!\s*\.)(\s+(?:AS\s+)?([A-Za-z_]\w*))?/gi;
   let injectedCount = 0;
 
   const result = sql.replace(
     polRefPattern,
-    (_full: string, aliasPart: string | undefined, aliasName: string | undefined) => {
+    (
+      _full: string,
+      lead: string,
+      aliasPart: string | undefined,
+      aliasName: string | undefined,
+    ) => {
       injectedCount++;
       let alias = 'PolicyFact';
       let tail = '';
       if (aliasName && !NON_ALIAS_KEYWORDS.has(aliasName.toUpperCase())) {
-        // 真实别名：FROM PolicyFact p / FROM PolicyFact AS p
+        // 真实别名：… PolicyFact p / … PolicyFact AS p
         alias = aliasName;
       } else if (aliasPart) {
-        // 紧跟的是子句关键字（WHERE/GROUP/JOIN…）而非别名 → 原样保留
+        // 紧跟的是子句关键字（WHERE/GROUP/ON/JOIN…）而非别名 → 原样保留
         tail = aliasPart;
       }
-      return `FROM (SELECT * FROM PolicyFact WHERE ${permissionFilter}) AS ${alias}${tail}`;
+      // 保留引导关键字（FROM/JOIN/,），只替换表引用为过滤内联视图
+      return `${lead} ${filteredView} AS ${alias}${tail}`;
     },
   );
 
@@ -176,6 +188,15 @@ export function injectPermissionIntoAnySql(sql: string, permissionFilter: string
     // fail-closed：validateSQL 已要求 SQL 必须引用 PolicyFact；若仍未匹配到，
     // 说明 SQL 形态异常，拒绝执行而非放行一条未注入权限的查询。
     throw new Error('RLS 注入失败：未能定位 PolicyFact 引用，拒绝执行');
+  }
+
+  // fail-closed 残留扫描：剥离所有已注入的过滤视图后，若仍有"关系位置"的
+  // PolicyFact 引用（FROM/JOIN/逗号 紧跟 PolicyFact）说明有读取点漏过滤 → 拒绝执行。
+  // 注意只查关系位置：被注入的派生表别名 `AS PolicyFact`（无原始别名时）与列引用
+  // `PolicyFact.col` 都不在此模式内，不会误报。
+  const stripped = result.split(filteredView).join('');
+  if (/(\bFROM\b|\bJOIN\b|,)\s+PolicyFact\b/i.test(stripped)) {
+    throw new Error('RLS 注入失败：检测到未被行级过滤覆盖的 PolicyFact 关系引用，拒绝执行');
   }
   return result;
 }

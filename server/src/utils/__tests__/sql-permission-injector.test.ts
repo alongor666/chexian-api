@@ -66,6 +66,38 @@ describe('injectPermissionIntoAnySql', () => {
     expect(filterOccurrences).toBe(2);
   });
 
+  it('RLS JOIN 绕过回归（Codex P1）— 第二个 JOIN PolicyFact 也被过滤', () => {
+    // 修复前：正则只匹配 FROM PolicyFact，JOIN PolicyFact q 漏过 → q 扫全量泄漏全局聚合
+    const sql = 'SELECT COUNT(*) FROM PolicyFact p JOIN PolicyFact q ON TRUE';
+    const out = injectPermissionIntoAnySql(sql, PF);
+    const filterOccurrences = (out.match(/org_level_3\s*=\s*'乐山'/g) ?? []).length;
+    expect(filterOccurrences).toBe(2);
+    // 两个别名都保留，引导关键字 FROM/JOIN 不丢
+    expect(out).toMatch(/FROM\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE\s+org_level_3\s*=\s*'乐山'\)\s+AS\s+p\b/i);
+    expect(out).toMatch(/JOIN\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE\s+org_level_3\s*=\s*'乐山'\)\s+AS\s+q\b/i);
+    expect(out).toContain('ON TRUE');
+  });
+
+  it('RLS LEFT JOIN — 引导关键字前缀（LEFT）保留且引用被过滤', () => {
+    const sql = 'SELECT COUNT(*) FROM PolicyFact p LEFT JOIN PolicyFact q ON p.policy_no = q.policy_no';
+    const out = injectPermissionIntoAnySql(sql, PF);
+    expect((out.match(/org_level_3\s*=\s*'乐山'/g) ?? []).length).toBe(2);
+    expect(out).toMatch(/LEFT\s+JOIN\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE/i);
+  });
+
+  it('RLS 逗号连接 — 第二个逗号连接 PolicyFact 也被过滤，列引用 PolicyFact.col 不误伤', () => {
+    const sql = 'SELECT a.premium FROM PolicyFact a, PolicyFact b WHERE a.policy_no = b.policy_no';
+    const out = injectPermissionIntoAnySql(sql, PF);
+    expect((out.match(/org_level_3\s*=\s*'乐山'/g) ?? []).length).toBe(2);
+    // 列引用形式 PolicyFact.col 不应被当作关系替换
+    const colRef = injectPermissionIntoAnySql(
+      'SELECT SUM(PolicyFact.premium) FROM PolicyFact GROUP BY 1',
+      PF,
+    );
+    expect(colRef).toContain('SUM(PolicyFact.premium)');
+    expect((colRef.match(/org_level_3\s*=\s*'乐山'/g) ?? []).length).toBe(1);
+  });
+
   it('CTE + CTE 内无 WHERE — 在 CTE 内 FROM PolicyFact 后注入 WHERE', () => {
     const sql = 'WITH base AS (SELECT * FROM PolicyFact) SELECT COUNT(*) FROM base';
     const out = injectPermissionIntoAnySql(sql, PF);
