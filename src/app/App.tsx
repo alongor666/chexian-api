@@ -105,6 +105,9 @@ const ExpenseDevelopmentPage = lazy(() =>
 const RenewalTrackerPage = lazy(() =>
   import('../features/renewal-tracker').then((m) => ({ default: m.RenewalTrackerPage }))
 );
+const SocialWorkStudyPage = lazy(() =>
+  import('../features/social-work/SocialWorkStudyPage').then((m) => ({ default: m.SocialWorkStudyPage }))
+);
 
 // Loading fallback — content-aware skeleton screen
 const PageLoader = () => (
@@ -142,6 +145,7 @@ function App() {
               <Routes>
                 {/* 登录页面 - 不需要认证 */}
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/social-work" element={<LazyRoute><SocialWorkStudyPage /></LazyRoute>} />
 
                 {/* 主应用 - 需要认证 */}
                 <Route path="/" element={

@@ -213,6 +213,14 @@ export function getReportsDir(): string {
   return path.resolve(getDataDir(), 'reports');
 }
 
+export function getSocialWorkQuestionBankPath(): string {
+  return path.resolve(getDataDir(), 'social-work/question-bank.json');
+}
+
+export function getSocialWorkStudyStorePath(): string {
+  return path.resolve(getDataDir(), 'social-work/study-store.json');
+}
+
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,
