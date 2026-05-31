@@ -12,6 +12,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
+import { readonlyMiddleware } from '../middleware/readonly.js';
 import { permissionMiddleware } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { validateApiKey, analyzeOrgTrendWithZhipu } from '../services/zhipu.js';
@@ -27,6 +28,7 @@ const router = Router();
  * 应用认证中间件
  */
 router.use(authMiddleware);
+router.use(readonlyMiddleware); // PAT 强制只读：非 GET 直接 403
 router.use(permissionMiddleware);
 
 /**

@@ -72,7 +72,9 @@ describe('sql passthrough validation chain', () => {
     const v = validateSQL(sql);
     expect(v.valid).toBe(true);
     const safe = injectPermissionIntoAnySql(sql, PF);
-    expect(safe).toMatch(/AND\s+\(org_level_3\s*=\s*'乐山'\)/);
+    // RLS 以"过滤内联视图"形式注入，CTE 内原 WHERE 完整保留
+    expect(safe).toMatch(/FROM\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE\s+org_level_3\s*=\s*'乐山'\)\s+AS\s+PolicyFact/i);
+    expect(safe).toMatch(/week_number\s*=\s*1/);
   });
 
   it('文件函数被拒绝', () => {

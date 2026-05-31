@@ -64,6 +64,10 @@ export class QueryCache {
 const ACQUIRE_TIMEOUT_MS = 2_000;
 const MAX_WAIT_QUEUE = 32;
 const SATURATION_WINDOW_MS = 5_000;
+// 优雅关闭时等待活跃查询 drain 的上限。超过则放弃等待，关闭空闲连接收尾
+// （卡死的查询连接交由 instance 释放兜底），避免 SIGTERM 后进程无限期挂起。
+const DRAIN_TIMEOUT_MS = 10_000;
+const DRAIN_POLL_MS = 50;
 
 export class ConnectionPool {
   private pool: DuckDBConnection[] = [];
@@ -78,6 +82,9 @@ export class ConnectionPool {
   // 真实饱和时间戳：仅在 acquire 真的失败（queue full / timeout）时才更新。
   // /health 用此判定 503，避免"active==maxSize 但都正常完成"的瞬时误报。
   private lastSaturationAt = 0;
+  // 关闭中标志：closeAll() 期间为 true。此后归还的连接直接关闭而非回池，
+  // 避免在 pool 已清空后 release 把连接重新塞进来造成泄漏。
+  private closing = false;
 
   constructor(instance: DuckDBInstance, maxSize: number = 10) {
     this.instance = instance;
@@ -128,6 +135,13 @@ export class ConnectionPool {
       console.warn('[ConnectionPool] release called with invalid connection, ignoring');
       return;
     }
+    if (this.closing) {
+      // 关闭中：不再回池、不再交给等待者（等待者已被 closeAll 拒绝并清空）。
+      // 直接关闭连接并扣减活跃计数，让 closeAll 的 drain 循环能收敛到 0。
+      this.activeCount--;
+      try { conn.closeSync(); } catch { /* ignore */ }
+      return;
+    }
     if (this.waitQueue.length > 0) {
       // 直接交给等待者
       const waiter = this.waitQueue.shift()!;
@@ -165,12 +179,29 @@ export class ConnectionPool {
   }
 
   async closeAll(): Promise<void> {
-    // 清理所有等待者
+    // 1. 进入关闭态：拒绝所有排队等待者，停止接纳新等待者归还入池
+    this.closing = true;
     for (const waiter of this.waitQueue) {
       clearTimeout(waiter.timer);
       waiter.reject(new Error('ConnectionPool: closing'));
     }
     this.waitQueue = [];
+
+    // 2. drain：等待已借出（in-flight）的连接执行完并 release。
+    //    activeCount === 借出但未归还的连接数；release 在 closing 态会扣减它。
+    //    带超时兜底：卡死的查询不应让 SIGTERM 后的进程永久挂起。
+    const deadline = Date.now() + DRAIN_TIMEOUT_MS;
+    while (this.activeCount > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
+    }
+    if (this.activeCount > 0) {
+      console.warn(
+        `[ConnectionPool] drain timeout: ${this.activeCount} active connection(s) still running after ${DRAIN_TIMEOUT_MS}ms, closing pool anyway`,
+      );
+    }
+
+    // 3. 关闭所有空闲连接（drain 完成后，归还的连接已在 closing 态被即时关闭，
+    //    此处主要处理 drain 开始前就空闲在池中的连接）
     for (const conn of this.pool) {
       try { conn.closeSync(); } catch { /* ignore */ }
     }

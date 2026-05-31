@@ -230,6 +230,9 @@ async function startServer() {
     const bootstrapper = new DataBootstrapper(duckdbService);
     registerBootstrapper(bootstrapper); // 注册到全局注册中心，供路由中间件使用
 
+    // 数据加载是否失败（抛异常）。仅"抛异常"视为失败 → /health 返回 503；
+    // bootstrap 返回 null（未发现数据文件，但未报错）保持旧语义：照常启动、APIs 返回空集。
+    let dataLoadFailed = false;
     try {
       const result = await bootstrapper.bootstrap();
       if (result) {
@@ -242,8 +245,9 @@ async function startServer() {
         await cacheWarmer.warmStartupCritical();
       }
     } catch (error) {
-      console.warn('[Server] Data loading failed (non-fatal):', error);
-      console.warn('[Server] Server will start without data. APIs will return empty results.');
+      dataLoadFailed = true;
+      console.warn('[Server] Data loading failed:', error);
+      console.warn('[Server] Server will start but /health stays 503 until a successful ETL reload re-loads data.');
     }
 
     // 注册 ETL 后自动重新预热的监听者。
@@ -252,6 +256,9 @@ async function startServer() {
     // 但后续 reload/ETL 触发的 setDataVersion 仍会被监听者捕获并预热（消除 cold cliff）。
     onDataVersionChange(async (next, previous) => {
       console.log(`[Server] dataVersion ${previous}→${next}, re-warming cache...`);
+      // 数据版本变更意味着数据已（重新）就绪：若启动期 bootstrap 曾失败导致 503，
+      // 此处把节点恢复为健康，让负载均衡重新纳入流量（消除"启动失败后永久 503"）。
+      dataReady = true;
       await cacheWarmer.warmStartupCritical();
       // 笛卡尔预热依赖 listen 端口，必须在 listen 后才能跑；
       // 监听者注册位置在 listen 之前，所以这里发起即可（首次 listen 完成后再触发也安全）
@@ -261,7 +268,9 @@ async function startServer() {
     });
 
     // 3. 标记就绪 + 启动 HTTP
-    dataReady = true;
+    // bootstrap 抛异常 → dataReady=false：/health 返回 503，负载均衡不摘除进程但不导流，
+    // 直到 onDataVersionChange 监听者在成功 ETL 后将其翻回 true。
+    dataReady = !dataLoadFailed;
     const BIND_HOST = serverEnv.BIND_HOST;
     httpServer = app.listen(PORT, BIND_HOST, () => {
       console.log(`[Server] 🚀 Server is running on http://${BIND_HOST}:${PORT}`);

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/auth.js';
+import { readonlyMiddleware } from '../../middleware/readonly.js';
 import { permissionMiddleware } from '../../middleware/permission.js';
 import { asyncHandler } from '../../middleware/error.js';
 import { getDefaultLlmProvider } from '../../skills/adapters/llm/index.js';
@@ -13,6 +14,7 @@ import { explainDiagnosisResult } from '../services/agent-diagnosis-explanation-
 const router = Router();
 
 router.use(authMiddleware);
+router.use(readonlyMiddleware); // PAT 强制只读：非 GET 直接 403
 router.use(permissionMiddleware);
 
 router.post(

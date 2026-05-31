@@ -111,15 +111,41 @@ export function injectPermissionFilter(sql: string, permissionFilter: string): s
 }
 
 /**
- * CTE 兼容的权限注入。
+ * 不可作为表别名的 SQL 关键字 —— 用于区分 `FROM PolicyFact p`（p 是别名）
+ * 与 `FROM PolicyFact WHERE ...`（WHERE 是子句关键字，不是别名）。
+ */
+const NON_ALIAS_KEYWORDS = new Set([
+  'WHERE', 'GROUP', 'ORDER', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL',
+  'CROSS', 'ON', 'USING', 'LIMIT', 'HAVING', 'UNION', 'EXCEPT', 'INTERSECT',
+  'QUALIFY', 'WINDOW', 'LATERAL', 'OFFSET', 'FETCH', 'AS', 'NATURAL', 'ASOF',
+  'POSITIONAL', 'ANTI', 'SEMI', 'TABLESAMPLE', 'PIVOT', 'UNPIVOT',
+]);
+
+/**
+ * CTE / 子查询安全的权限注入（RLS 强制）。
  *
- * 策略：对 SQL 中每个直接读取 PolicyFact 的位置（`FROM PolicyFact [alias]`）
- * 应用与 injectWhereAfterFrom 相同的注入规则。引用其它 CTE 别名的 FROM 不动 ——
- * 因为它的上游 CTE 已经被过滤过了。
+ * 策略：把每个直接读取 PolicyFact 的位置 `FROM/JOIN/逗号连接 PolicyFact [alias]`
+ * 替换为 **过滤内联视图**：
  *
- * 非 CTE 情况直接委托给 injectPermissionFilter，保持兼容。
+ *   FROM PolicyFact            →  FROM (SELECT * FROM PolicyFact WHERE <filter>) AS PolicyFact
+ *   FROM PolicyFact p          →  FROM (SELECT * FROM PolicyFact WHERE <filter>) AS p
+ *   JOIN PolicyFact q          →  JOIN (SELECT * FROM PolicyFact WHERE <filter>) AS q
+ *   FROM a, PolicyFact b       →  FROM a, (SELECT * FROM PolicyFact WHERE <filter>) AS b
  *
- * @param sql - 原始用户 SQL（可能含 CTE）
+ * 相比旧实现（在外层查询里找位置插 WHERE），此法对每个 PolicyFact 读取点
+ * 都独立、就地强制行级过滤——无论它出现在主查询、SELECT 列表/WHERE 中的标量
+ * 子查询、JOIN/逗号连接的第 2+ 个引用、CTE 体，还是窗口函数上下文。彻底杜绝
+ * "子查询 / 第二个 JOIN 引用读全量"的 RLS 绕过。
+ *
+ * 引用其它 CTE 别名的 `FROM <cte_alias>` 不受影响（仅匹配字面表名 PolicyFact），
+ * 它们的上游 CTE 已经被过滤。`PolicyFact.col` 形式的列引用（紧跟 `.`）不被误改。
+ *
+ * 单次全局正则替换：String.replace 不回扫替换后文本，故注入文本里新增的
+ * `FROM PolicyFact` 不会被二次匹配，无需额外去重。替换后再做 fail-closed 残留
+ * 扫描：若仍有未被内联视图包裹的 PolicyFact 关系引用（例如未来出现的怪异语法），
+ * 抛错拒绝执行，绝不放行一条可能未过滤的查询。
+ *
+ * @param sql - 原始用户 SQL（可能含 CTE / 子查询）
  * @param permissionFilter - 权限过滤条件
  * @returns 注入权限后的 SQL
  */
@@ -128,78 +154,51 @@ export function injectPermissionIntoAnySql(sql: string, permissionFilter: string
     return sql;
   }
 
-  if (!hasCTE(sql)) {
-    return injectPermissionFilter(sql, permissionFilter);
+  const filteredView = `(SELECT * FROM PolicyFact WHERE ${permissionFilter})`;
+  // 捕获组：(1) 引导关键字（FROM/JOIN/逗号），(2) 可选别名片段（含前导空白），
+  // (3) 别名标识符本身。`(?!\s*\.)` 排除 `PolicyFact.col` 列引用（仅匹配关系引用）。
+  // JOIN 覆盖 LEFT/RIGHT/INNER/OUTER/CROSS JOIN —— JOIN 永远紧贴表名出现。
+  const polRefPattern = /(\bFROM\b|\bJOIN\b|,)\s+PolicyFact\b(?!\s*\.)(\s+(?:AS\s+)?([A-Za-z_]\w*))?/gi;
+  let injectedCount = 0;
+
+  const result = sql.replace(
+    polRefPattern,
+    (
+      _full: string,
+      lead: string,
+      aliasPart: string | undefined,
+      aliasName: string | undefined,
+    ) => {
+      injectedCount++;
+      let alias = 'PolicyFact';
+      let tail = '';
+      if (aliasName && !NON_ALIAS_KEYWORDS.has(aliasName.toUpperCase())) {
+        // 真实别名：… PolicyFact p / … PolicyFact AS p
+        alias = aliasName;
+      } else if (aliasPart) {
+        // 紧跟的是子句关键字（WHERE/GROUP/ON/JOIN…）而非别名 → 原样保留
+        tail = aliasPart;
+      }
+      // 保留引导关键字（FROM/JOIN/,），只替换表引用为过滤内联视图
+      return `${lead} ${filteredView} AS ${alias}${tail}`;
+    },
+  );
+
+  if (injectedCount === 0) {
+    // fail-closed：validateSQL 已要求 SQL 必须引用 PolicyFact；若仍未匹配到，
+    // 说明 SQL 形态异常，拒绝执行而非放行一条未注入权限的查询。
+    throw new Error('RLS 注入失败：未能定位 PolicyFact 引用，拒绝执行');
   }
 
-  // CTE 路径：遍历每个 `FROM PolicyFact [alias]` 引用，注入 WHERE
-  // 用大小写不敏感的全局正则定位 PolicyFact 引用的范围（含可选别名）
-  const polRefPattern = /\bFROM\s+PolicyFact(?:\s+AS\s+\w+|\s+\w+)?\b/gi;
-  let result = sql;
-  let consumedUpTo = 0;
-  const out: string[] = [];
-  let match: RegExpExecArray | null;
-
-  // 我们对每个匹配 FROM PolicyFact 后的子句应用 inject 逻辑。为避免正则反复
-  // 撞到已替换的文本，构造一份替换计划再一次性拼接。
-  const replacements: Array<{ start: number; end: number; replaced: string }> = [];
-
-  while ((match = polRefPattern.exec(sql)) !== null) {
-    const fromStart = match.index;
-    // 找到该 PolicyFact 引用所属的子查询/CTE 的结尾：
-    // 即下一个 `)` 之前、或下一个 CTE 起点之前、或 SQL 结尾。
-    // 简化做法：取从 FROM 起到下一个不被括号闭合的 `)`、或全文末尾的范围。
-    const fragmentEnd = findFragmentEnd(sql, fromStart);
-    const fragment = sql.slice(fromStart, fragmentEnd);
-    // 把"FROM PolicyFact [alias] <rest>"片段当作一个独立 SQL 走原 inject 逻辑。
-    // injectWhereAfterFrom 的几种 case 都是 "FROM <table> ..." 起始；
-    // 我们这里片段也以 FROM 起始，可直接复用。
-    const injected = injectWhereAfterFrom(fragment, permissionFilter);
-    replacements.push({ start: fromStart, end: fragmentEnd, replaced: injected });
+  // fail-closed 残留扫描：剥离所有已注入的过滤视图后，若仍有"关系位置"的
+  // PolicyFact 引用（FROM/JOIN/逗号 紧跟 PolicyFact）说明有读取点漏过滤 → 拒绝执行。
+  // 注意只查关系位置：被注入的派生表别名 `AS PolicyFact`（无原始别名时）与列引用
+  // `PolicyFact.col` 都不在此模式内，不会误报。
+  const stripped = result.split(filteredView).join('');
+  if (/(\bFROM\b|\bJOIN\b|,)\s+PolicyFact\b/i.test(stripped)) {
+    throw new Error('RLS 注入失败：检测到未被行级过滤覆盖的 PolicyFact 关系引用，拒绝执行');
   }
-
-  if (replacements.length === 0) {
-    // 兜底：没匹配到 PolicyFact 引用（理论上 validateSQL 已要求必须含 PolicyFact）
-    return sql;
-  }
-
-  // 按起点排序，重建 SQL
-  replacements.sort((a, b) => a.start - b.start);
-  let cursor = 0;
-  result = '';
-  for (const r of replacements) {
-    if (r.start < cursor) continue; // 跳过已被前一个替换覆盖的重叠区间
-    result += sql.slice(cursor, r.start) + r.replaced;
-    cursor = r.end;
-  }
-  result += sql.slice(cursor);
   return result;
-}
-
-/**
- * 找到从 fromIndex 起一个 PolicyFact-from 片段的逻辑结尾：
- * 下一个未匹配的 `)`、或下一个 CTE 头（`)\s*,\s*<ident>\s+AS\s*\(`）、或 SQL 末尾。
- * 简化策略：括号深度跟踪，深度 < 0 时停。
- */
-function findFragmentEnd(sql: string, fromIndex: number): number {
-  let depth = 0;
-  let inSingleQuote = false;
-  for (let i = fromIndex; i < sql.length; i++) {
-    const ch = sql[i];
-    if (ch === "'") {
-      // 处理 '' 转义
-      if (inSingleQuote && sql[i + 1] === "'") { i++; continue; }
-      inSingleQuote = !inSingleQuote;
-      continue;
-    }
-    if (inSingleQuote) continue;
-    if (ch === '(') depth++;
-    else if (ch === ')') {
-      if (depth === 0) return i; // 遇到所属 CTE 的闭合括号
-      depth--;
-    }
-  }
-  return sql.length;
 }
 
 /**
