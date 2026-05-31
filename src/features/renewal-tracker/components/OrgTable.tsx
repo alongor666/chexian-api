@@ -29,10 +29,6 @@ const METRIC_COLS: { key: SortField; label: string; theme?: boolean }[] = [
 const INDENT_BASE = 16;
 const INDENT_STEP = 24;
 
-function isOrgSelected(selection: Selection, org: string): boolean {
-  return selection.kind !== 'overall' && selection.org === org;
-}
-
 function isTeamSelected(selection: Selection, org: string, team: string | null): boolean {
   if (selection.kind === 'team') return selection.org === org && selection.team === team;
   return false;
@@ -342,7 +338,8 @@ export default function OrgTable({
             </tbody>
           )}
           {sortedOrgs.map(org => {
-            const orgSelected = selection.kind === 'org' && isOrgSelected(selection, org.org_level_3!);
+            // 仅当选中项本身是「机构」行（而非其下团队/业务员）时高亮该机构行
+            const orgSelected = selection.kind === 'org' && selection.org === org.org_level_3;
             return (
               <tbody key={`org-${org.org_level_3}`}>
                 {renderRow(

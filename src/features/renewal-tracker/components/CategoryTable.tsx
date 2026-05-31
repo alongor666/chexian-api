@@ -173,13 +173,17 @@ export default function CategoryTable({
 }: Props) {
   const [activeTab, setActiveTab] = useState<LinkageDimension>('customer_category');
 
-  const rowsByDimension: Record<LinkageDimension, RenewalRow[]> = {
-    customer_category: categoryRows,
-    coverage_combination: coverageRows,
-    fuel_category: fuelRows,
-    used_transfer_type: usedTransferRows,
-    renewal_type: renewalTypeRows,
-  };
+  // 包 useMemo：否则每次渲染都是新对象引用，会击穿下方 displayRows 的 memo
+  const rowsByDimension = useMemo<Record<LinkageDimension, RenewalRow[]>>(
+    () => ({
+      customer_category: categoryRows,
+      coverage_combination: coverageRows,
+      fuel_category: fuelRows,
+      used_transfer_type: usedTransferRows,
+      renewal_type: renewalTypeRows,
+    }),
+    [categoryRows, coverageRows, fuelRows, usedTransferRows, renewalTypeRows]
+  );
 
   const activeConfig = useMemo(
     () => DIMENSIONS.find(d => d.key === activeTab) ?? DIMENSIONS[0],
@@ -278,7 +282,7 @@ export default function CategoryTable({
             )}
             {displayRows.length === 0 && (
               <tr>
-                <td colSpan={6} className={cn('px-4 py-8 text-center text-sm', colorClasses.text.neutralMuted)}>
+                <td colSpan={METRIC_COLS.length + 1} className={cn('px-4 py-8 text-center text-sm', colorClasses.text.neutralMuted)}>
                   暂无数据
                 </td>
               </tr>

@@ -15,9 +15,10 @@ interface Props {
 
 export default function FunnelBar({ row }: Props) {
   const a = row.A || 1;
-  const cW = Math.max(0, (row.C / a) * 100);
-  const bW = Math.max(0, ((row.B - row.C) / a) * 100);
-  const aW = Math.max(0, ((a - row.B) / a) * 100);
+  // clamp 到 [0,100]：防脏数据（C>A / B>A）导致段宽溢出、比例语义失真
+  const cW = Math.min(100, Math.max(0, (row.C / a) * 100));
+  const bW = Math.min(100, Math.max(0, ((row.B - row.C) / a) * 100));
+  const aW = Math.min(100, Math.max(0, ((a - row.B) / a) * 100));
   const bad = isBadRow(row);
 
   const title = `已续 ${formatNum(row.C)} (${formatPct(row.C, row.A)}) / 报价 ${formatNum(row.B)} (${formatPct(
