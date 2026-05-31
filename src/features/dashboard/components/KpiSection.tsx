@@ -161,10 +161,9 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
     return v <= 1.5 ? v * 100 : v;
   };
 
-  /** 构造单卡 props — Hero 三张携带参照系 + 状态；其它走标准变体 */
+  /** 构造单卡 props — Hero 三张携带参照系 + 状态；其它走标准变体（Hero 归属由 HERO_KPI_IDS + visibleHero 分组决定） */
   const buildCardProps = (id: KpiCardId): EnhancedKpiCardProps | null => {
     const title = labelMap[id] || id;
-    const isHero = HERO_KPI_IDS.includes(id);
 
     switch (id) {
       /* -------- Hero #1：车险保费（数值型，progress bar） -------- */
