@@ -476,13 +476,23 @@ export function generateLossRatioDevelopmentQuery(
     claimed AS (
       SELECT
         cw.cohort_year, cw.dev_month,
+        -- 件数不过滤（与 SSOT 件数口径一致：ClaimsAgg.claim_cases COUNT 不加条件）
         COUNT(DISTINCT c.claim_no) AS claim_count,
+        -- B302: 与 duckdb-domain-loaders.ts:395-403 ClaimsAgg.reported_claims 同口径过滤
+        -- 外层 CASE 排除无责(liability_ratio=0)及无效案件(零结/注销/拒赔)
+        -- 内层 CASE 保留发展三角特有时间约束(settlement_time <= effective_cutoff)
         SUM(
           CASE
-            WHEN c.settlement_time IS NOT NULL
-             AND CAST(c.settlement_time AS DATE) <= cw.effective_cutoff
-            THEN COALESCE(c.settled_amount, 0)
-            ELSE COALESCE(c.reserve_amount, 0)
+            WHEN COALESCE(c.liability_ratio, 100) > 0
+             AND (c.case_type IS NULL OR c.case_type NOT IN ('零结','注销','拒赔'))
+            THEN
+              CASE
+                WHEN c.settlement_time IS NOT NULL
+                 AND CAST(c.settlement_time AS DATE) <= cw.effective_cutoff
+                THEN COALESCE(c.settled_amount, 0)
+                ELSE COALESCE(c.reserve_amount, 0)
+              END
+            ELSE 0
           END
         ) AS total_reserve
       FROM calendar_window cw
