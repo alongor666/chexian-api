@@ -179,7 +179,7 @@ python3 数据管理/pipelines/diagnose_segment.py \
 | 已赚保费 | `premium × min(N, policy_term) / policy_term`；满期=全额 |
 | 已赚暴露 | `min(N, policy_term) / 365`（年化可比） |
 | 赔案数 | `COUNT(DISTINCT claim_no)`，accident_time ∈ [start_date, start_date+N) 且 ≤估值日 |
-| 赔款 | 已结案 `settled_amount` + 未结案 `reserve_amount`（不重复） |
+| 赔款 | 已结案 `settled_amount` + 未结案 `reserve_amount`（不重复）；剔除无责(liability_ratio=0)与零结/注销/拒赔（对齐项目 SSOT） |
 | 案均赔款 | 赔款 / 赔案数 |
 | 满期出险率 | 赔案数 / 已赚暴露（年化 %） |
 | 满期赔付率 | 赔款 / 已赚保费（%） |

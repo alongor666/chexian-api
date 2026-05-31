@@ -184,7 +184,7 @@ END
 | 满期天数（闰年感知）| `DATE_DIFF('day', insurance_start_date, insurance_start_date + INTERVAL 1 YEAR)` |
 | 历史满期保费 | `premium × LEAST(GREATEST(DATEDIFF('day', start, as_of), 0), policy_term) / policy_term` |
 | 预测年满期保费 | 同上，as_of 替换为 `{proj_year}-12-31` |
-| 已报告赔款 | `SUM(COALESCE(settled_amount, 0) + COALESCE(pending_amount, 0))` JOIN policy_no |
+| 已报告赔款 | `SUM(CASE WHEN COALESCE(liability_ratio,100)>0 AND (case_type IS NULL OR case_type NOT IN ('零结','注销','拒赔')) THEN (CASE WHEN settlement_time IS NOT NULL THEN COALESCE(settled_amount,0) ELSE COALESCE(reserve_amount,0) END) ELSE 0 END)` JOIN policy_no（对齐项目 SSOT：剔除无责/零结/注销/拒赔，已结取已决否则取立案） |
 | 赔案去重 | `SELECT DISTINCT ON (claim_no) ... ORDER BY claim_no`（防批改副本双倍） |
 | 车辆台数 | `COUNT(DISTINCT COALESCE(NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), ''), policy_no))` |
 | cell LR | `SUM(hist_claims) / NULLIF(SUM(hist_earned_premium), 0)` —— 禁加权平均 |
