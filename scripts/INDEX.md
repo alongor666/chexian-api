@@ -38,7 +38,8 @@
 
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
-| `check-governance.mjs` | **主治理校验**：检查必需文件、索引完整性、BACKLOG证据链、DC-002合规 | `bun run governance` |
+| `check-governance.mjs` | **主治理校验**（纯代码治理 22 项；数据状态校验已解耦至 `check-data-readiness.mjs`）：必需文件、索引完整性、BACKLOG证据链、DC-002合规 | `bun run governance` |
+| `check-data-readiness.mjs` | **数据就绪校验**（4 项数据状态）：Parquet 重叠 / Claims 去重 / 知识库规模 / 同步漂移；由 release:daily（`sync-and-reload.mjs` Stage 1.7）在 ETL 后、发布前执行，**不在**代码门禁跑 | `node scripts/check-data-readiness.mjs` |
 | `check-hotfile-contracts.mjs` | **热点契约门禁**：`query.ts` / `client.ts` 改动时要求同步修改契约测试 | `bun run governance:hotfiles` |
 | `production-gate.mjs` | **生产门禁编排**：治理 + 构建 + 全量测试 + 关键E2E（可选压测门禁） | `bun run production:gate [-- --with-perf]` |
 | `test-preflight.mjs` | **测试运行时预检**：检查 `node_modules`、`vitest`、`playwright` 与关键 E2E 文件是否就绪 | `bun run test:preflight [-- --mode all]` |
