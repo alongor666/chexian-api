@@ -1,12 +1,7 @@
-const QUALITY_BUSINESS_CONDITION = `
-  (
-    (customer_category LIKE '%网约车%' AND insurance_type = '商业保险')
-    OR
-    (customer_category LIKE '%出租车%' AND insurance_type = '商业保险')
-    OR
-    (customer_category LIKE '%货车%' AND tonnage_segment IN ('1吨以下', '2-9吨'))
-  )
-`;
+// B301: 优质业务定义统一到单一事实源（以 kpi/trend 口径为准，业务确认 2026-05-31）。
+// ⚠️ 口径变更：此前本模块用「网约车/出租车等营业客车」口径，现统一为「非营业客车」口径，
+// 业务员优质业务排名结果会随之变化。生产数值须本地 Parquet 直查对账后再发布。
+import { QUALITY_BUSINESS_CONDITION } from './shared/business-conditions.js';
 
 /**
  * 业务员全部业务 TopN 排名查询

@@ -1,24 +1,9 @@
 import { getMetricSql } from '../config/metric-registry/index.js';
 import { escapeSqlValue } from '../utils/security.js';
+// B301: 优质业务定义收归单一事实源，re-export 以兼容既有 import { QUALITY_BUSINESS_CONDITION } from './kpi.js'
+import { QUALITY_BUSINESS_CONDITION } from './shared/business-conditions.js';
 
-/**
- * 优质业务定义条件SQL片段
- *
- * 优质业务包括：
- * 1. 非新能源车 AND (客户类别为非营业个人/企业/机关客车)
- * 2. 货车 AND 吨位分段为1吨以下或2-9吨
- */
-export const QUALITY_BUSINESS_CONDITION = `
-  (
-    (is_nev = false AND (
-      customer_category LIKE '%非营业个人%'
-      OR customer_category LIKE '%企业%'
-      OR customer_category LIKE '%机关%'
-    ))
-    OR
-    (customer_category LIKE '%货车%' AND tonnage_segment IN ('1吨以下', '2-9吨'))
-  )
-`;
+export { QUALITY_BUSINESS_CONDITION };
 
 
 interface KpiQueryOptions {
@@ -226,19 +211,10 @@ export const generateKpiQuery = (
     ),
     variable_cost AS (
       SELECT
-        CASE
-          WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
-            AND SUM(premium) > 0
-          THEN ROUND(
-            (
-              SUM(reported_claims) * 100.0
-              / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE))
-              + SUM(fee_amount) * 100.0 / SUM(premium)
-            ),
-            2
-          )
-          ELSE NULL
-        END AS variable_cost_ratio
+        -- B305：变动成本率公式收归指标注册表（唯一事实源），消除此处硬编码 CASE WHEN。
+        -- variable_cost_base CTE 已暴露注册表 requiredColumns（premium/reported_claims/
+        -- fee_amount/earned_days/policy_term），registry expression 可直接内联。
+        ${getMetricSql('variable_cost_ratio')}
       FROM variable_cost_base
     ),
     vehicle_plan AS (
