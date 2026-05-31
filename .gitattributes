@@ -1,1 +1,7 @@
 *.parquet filter=lfs diff=lfs merge=lfs -text
+
+# BACKLOG.md 纯追加型（各任务往末尾加 B3xx 行），merge=union 让多分支的新增行自动并入，
+# 消除高频追加冲突（近 30 天 18 次改动的最大冲突源）。
+# 注意：union 仅适合"纯追加文本"。JSON/结构化派生文件（data-sources.json / 转换质量报告.json）
+# 禁用 union（会产生非法结构）；它们冲突时走"重新生成而非手解"，见 .claude/rules/worktree-setup.md。
+BACKLOG.md merge=union
