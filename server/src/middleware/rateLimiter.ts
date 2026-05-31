@@ -15,14 +15,57 @@ import { AppError } from './error.js';
 import { testEnv } from '../config/env.js';
 
 /**
- * 限流 key 生成器（PAT 优先 → IP+userId → 纯 IP）
+ * 从 Authorization 头嗅探请求是否为 PAT 调用（不依赖 req.pat）。
  *
- * PAT 调用走独立桶（pat:<tokenId>），与 IP+userId 不混淆。
- * 这样 PAT 的加严上限（60/min）只作用于 PAT 调用方，不影响浏览器/JWT 用户。
+ * 关键：限流器挂在 `/api`、`/api/query` 等前缀上（app.ts），执行时机在
+ * 路由级 authMiddleware **之前**，此刻 req.pat / req.user 尚未注入。若只看
+ * req.pat，PAT 调用永远走不进 60/min 加严分支（桶失效）。故这里直接解析
+ * header 里的明文 token 前缀判定是否 PAT-shaped。
+ *
+ * 安全（Codex PR #455 P1）：**绝不**用 token 里攻击者可控的 tokenId 作为限流
+ * key——否则未认证客户端轮换 8 位 ID 即可为每个假 ID 各拿 60/min 配额，绕过
+ * 按 IP 的基线保护洪泛下游。这里只返回布尔「是否 PAT」，分桶一律按 IP（见
+ * keyByPatOrUser）。pre-auth 无法可信识别具体 token，per-token 粒度只能放到
+ * authMiddleware 之后（验证后的 req.pat.tokenId 才可信，见 BACKLOG 后续项）。
+ *
+ * PAT 格式：`cx_pat_<tokenId>.<secret>`，tokenId 为 8 位 [0-9A-Z]
+ * （与 personal-access-token.ts splitRawToken 同源）。
  */
-function keyByPatOrUser(req: { ip?: string; connection?: any; pat?: { tokenId: string }; user?: { userId?: string } }): string {
-  if (req.pat?.tokenId) return `pat:${req.pat.tokenId}`;
+const PAT_PREFIX = 'cx_pat_';
+const PAT_TOKEN_ID_LEN = 8;
+
+export function isPatShapedAuth(req: {
+  headers?: Record<string, unknown>;
+  pat?: { tokenId: string };
+}): boolean {
+  // 快路径：少数挂在 auth 之后的限流器，req.pat 已注入（已验证可信）
+  if (req.pat?.tokenId) return true;
+  const authHeader = req.headers?.authorization;
+  if (typeof authHeader !== 'string') return false;
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+  if (!token.startsWith(PAT_PREFIX)) return false;
+  const tokenId = token.slice(PAT_PREFIX.length, PAT_PREFIX.length + PAT_TOKEN_ID_LEN);
+  return /^[0-9A-Z]{8}$/.test(tokenId);
+}
+
+/** 请求是否来自 PAT（基于 header 嗅探，供 limit 选择加严上限用） */
+function isPatRequest(req: { headers?: Record<string, unknown>; pat?: { tokenId: string } }): boolean {
+  return isPatShapedAuth(req);
+}
+
+/**
+ * 限流 key 生成器（PAT → pat:<ip> 独立桶 → IP+userId → 纯 IP）
+ *
+ * PAT 调用走独立桶 `pat:<ip>`（与 IP+userId、纯 IP 不混淆），加严上限 60/min
+ * 只作用于 PAT 调用方，不影响浏览器/JWT 用户。
+ *
+ * 安全（Codex PR #455 P1）：PAT 桶按 **IP** 分，而非按 token 里攻击者可控的
+ * tokenId——否则未认证客户端轮换 8 位 ID 即可为每个假 ID 各拿 60/min，绕过 IP
+ * 基线洪泛。按 IP 分桶后，同一 IP 的所有（真/假）PAT 请求坍缩到一个 60/min 桶。
+ */
+export function keyByPatOrUser(req: { ip?: string; connection?: any; headers?: Record<string, unknown>; pat?: { tokenId: string }; user?: { userId?: string } }): string {
   const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  if (isPatShapedAuth(req)) return `pat:${ip}`;
   const userId = req.user?.userId || '';
   return userId ? `${ip}:${userId}` : ip;
 }
@@ -74,7 +117,7 @@ const defaultConfig: RateLimitConfig = {
 export const apiLimiter = rateLimit({
   windowMs: defaultConfig.windowMs,
   // 三级基线 100/min 保持不变；PAT 调用单独加严到 60/min
-  limit: (req) => ((req as any).pat ? PAT_LIMIT_PER_MIN : 100),
+  limit: (req) => (isPatRequest(req as any) ? PAT_LIMIT_PER_MIN : 100),
   message: {
     success: false,
     error: '请求过于频繁，请 1 分钟后再试',
@@ -122,7 +165,7 @@ export const loginLimiter = rateLimit({
 export const queryLimiter = rateLimit({
   windowMs: 60 * 1000,   // 1 分钟
   // 三级基线 200/min 保持不变；PAT 调用单独加严到 60/min（避免脚本失控）
-  limit: (req) => ((req as any).pat ? PAT_LIMIT_PER_MIN : 200),
+  limit: (req) => (isPatRequest(req as any) ? PAT_LIMIT_PER_MIN : 200),
   message: {
     success: false,
     error: '查询请求过于频繁，请 1 分钟后再试',
