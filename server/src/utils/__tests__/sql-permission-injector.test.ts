@@ -29,16 +29,41 @@ describe('injectPermissionIntoAnySql', () => {
     expect(out).toMatch(/WHERE\s+org_level_3\s*=\s*'乐山'/);
   });
 
-  it('非 CTE + 已有 WHERE — 用 AND 拼接', () => {
+  it('非 CTE + 已有 WHERE — 过滤内联视图 + 保留原 WHERE', () => {
     const sql = "SELECT SUM(premium) FROM PolicyFact WHERE policy_date >= '2026-01-01' GROUP BY org_level_3";
     const out = injectPermissionIntoAnySql(sql, PF);
-    expect(out).toMatch(/AND\s+\(org_level_3\s*=\s*'乐山'\)/);
+    // 权限过滤进入内联视图
+    expect(out).toMatch(/FROM\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE\s+org_level_3\s*=\s*'乐山'\)\s+AS\s+PolicyFact/i);
+    // 用户原有 WHERE 完整保留
+    expect(out).toMatch(/policy_date\s*>=\s*'2026-01-01'/);
     expect(out).toContain('GROUP BY org_level_3');
   });
 
-  it('非 CTE 行为应与现有 injectPermissionFilter 一致', () => {
-    const sql = 'SELECT SUM(premium) FROM PolicyFact GROUP BY org_level_3';
-    expect(injectPermissionIntoAnySql(sql, PF)).toBe(injectPermissionFilter(sql, PF));
+  it('保留表别名 — FROM PolicyFact p / FROM PolicyFact AS p', () => {
+    const out1 = injectPermissionIntoAnySql('SELECT p.premium FROM PolicyFact p', PF);
+    expect(out1).toMatch(/FROM\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE\s+org_level_3\s*=\s*'乐山'\)\s+AS\s+p\b/i);
+    const out2 = injectPermissionIntoAnySql('SELECT p.premium FROM PolicyFact AS p', PF);
+    expect(out2).toMatch(/FROM\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE\s+org_level_3\s*=\s*'乐山'\)\s+AS\s+p\b/i);
+  });
+
+  it('RLS 子查询绕过回归 — SELECT 列表中的标量子查询也被过滤', () => {
+    // 修复前：仅最外层 FROM 被注入 WHERE，内层 (SELECT ... FROM PolicyFact) 读全量 → 越权
+    const sql =
+      "SELECT SUM(premium) AS t, (SELECT SUM(premium) FROM PolicyFact) AS all_orgs FROM PolicyFact GROUP BY org_level_3";
+    const out = injectPermissionIntoAnySql(sql, PF);
+    // 两处 PolicyFact 读取点都必须被过滤
+    const filterOccurrences = (out.match(/org_level_3\s*=\s*'乐山'/g) ?? []).length;
+    expect(filterOccurrences).toBe(2);
+    // 原始未过滤的裸 FROM PolicyFact 不应再以"非内联视图"形式存在
+    expect(out).not.toMatch(/\(SELECT\s+SUM\(premium\)\s+FROM\s+PolicyFact\)\s+AS\s+all_orgs/i);
+  });
+
+  it('RLS 子查询绕过回归 — WHERE 中的 IN 子查询也被过滤', () => {
+    const sql =
+      "SELECT SUM(premium) FROM PolicyFact WHERE policy_no IN (SELECT policy_no FROM PolicyFact)";
+    const out = injectPermissionIntoAnySql(sql, PF);
+    const filterOccurrences = (out.match(/org_level_3\s*=\s*'乐山'/g) ?? []).length;
+    expect(filterOccurrences).toBe(2);
   });
 
   it('CTE + CTE 内无 WHERE — 在 CTE 内 FROM PolicyFact 后注入 WHERE', () => {
@@ -47,12 +72,12 @@ describe('injectPermissionIntoAnySql', () => {
     expect(out).toMatch(/FROM\s+PolicyFact\s+WHERE\s+org_level_3\s*=\s*'乐山'/i);
   });
 
-  it('CTE + CTE 内有 WHERE — 用 AND 拼接 permission filter', () => {
+  it('CTE + CTE 内有 WHERE — 过滤内联视图 + 保留 CTE 内原 WHERE', () => {
     const sql =
       "WITH base AS (SELECT * FROM PolicyFact WHERE policy_date >= '2026-01-01') SELECT SUM(premium) FROM base";
     const out = injectPermissionIntoAnySql(sql, PF);
     expect(out).toMatch(/policy_date\s*>=\s*'2026-01-01'/);
-    expect(out).toMatch(/AND\s+\(org_level_3\s*=\s*'乐山'\)/);
+    expect(out).toMatch(/FROM\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE\s+org_level_3\s*=\s*'乐山'\)\s+AS\s+PolicyFact/i);
   });
 
   it('多个 CTE 引用 PolicyFact — 每个 FROM PolicyFact 都注入', () => {
@@ -78,18 +103,18 @@ describe('injectPermissionIntoAnySql', () => {
     expect(() => injectPermissionFilter(sql, PF)).toThrow(/CTE/);
   });
 
-  it('CTE 内嵌套子查询 — 跳过重叠区间避免生成损坏 SQL', () => {
-    // JOIN (SELECT ... FROM PolicyFact) 内层引用被外层匹配区间覆盖
-    // 修复前：内层替换在 cursor 已超过其 start 后仍追加，产出 "...sub.idFROM PolicyFact WHERE..." 类乱序 SQL
-    // 修复后：内层区间 start < cursor 时跳过，只注入外层一次
+  it('CTE 内嵌套子查询 JOIN — 内外两处 PolicyFact 读取都被过滤', () => {
+    // 过滤内联视图法：JOIN 子查询里的 FROM PolicyFact 与外层 FROM PolicyFact
+    // 都各自包成 (SELECT * FROM PolicyFact WHERE <filter>)，两处都强制行级过滤，
+    // 不存在"内层子查询读全量"的越权窗口。
     const sql =
       'WITH base AS (' +
       'SELECT * FROM PolicyFact JOIN (SELECT id FROM PolicyFact) sub ON PolicyFact.id = sub.id' +
       ') SELECT * FROM base';
     const out = injectPermissionIntoAnySql(sql, PF);
-    // permission filter 仅出现一次（不因重叠替换被重复追加）
+    // 内外两处 PolicyFact 读取点都被过滤
     const filterOccurrences = (out.match(/org_level_3\s*=\s*'乐山'/g) ?? []).length;
-    expect(filterOccurrences).toBe(1);
+    expect(filterOccurrences).toBe(2);
     // 结构完整：主查询部分 FROM base 未被破坏
     expect(out).toMatch(/\)\s*SELECT\s+\*\s+FROM\s+base\s*$/i);
   });

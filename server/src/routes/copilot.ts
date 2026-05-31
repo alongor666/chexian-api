@@ -17,6 +17,7 @@
 import { Router, type Response } from 'express';
 import { EventEmitter } from 'node:events';
 import { authMiddleware } from '../middleware/auth.js';
+import { readonlyMiddleware } from '../middleware/readonly.js';
 import { permissionMiddleware } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { getRequestContext } from '../utils/request-context.js';
@@ -85,6 +86,7 @@ function pushEvent(ch: RunChannel, event: WorkflowStepEvent): void {
 
 const router = Router();
 router.use(authMiddleware);
+router.use(readonlyMiddleware); // PAT 强制只读：非 GET 直接 403
 router.use(permissionMiddleware);
 
 const ALLOWED_WORKFLOW_IDS = new Set(['auto-risk-control-v1']);
