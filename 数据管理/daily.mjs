@@ -1426,28 +1426,31 @@ async function main() {
       : file.name.replace(/\.xlsx$/i, '.parquet');
     const outputPath = join(currentDir, outputName);
 
+    let staleReplace = false;
     if (existsSync(outputPath)) {
       // staleness 检测：transform.py 比 parquet 新 → schema 可能已变更，不能静默用旧数据
       // （否则旧 schema 静态分片会与新 schema 周更分片混入 current/，union_by_name 下列错位）。
-      // 静态分片的源 xlsx 仍在本批次中，直接删除旧 parquet 落到下方重转：
-      // 幂等且自限（重转后 parquet mtime 反超 transform.py，下次命中缓存跳过）。
       const scriptMtime = statSync(transformScript).mtimeMs;
       const parquetMtime = statSync(outputPath).mtimeMs;
       if (scriptMtime > parquetMtime) {
-        log('yellow', `⚠️  静态分片已过时（transform.py 晚于 parquet，schema 可能变更），自动重转: ${outputName}`);
-        unlinkSync(outputPath);
-        // 不 continue，落到下方重新转换
+        log('yellow', `⚠️  静态分片已过时（transform.py 晚于 parquet，schema 可能变更），重转替换: ${outputName}`);
+        staleReplace = true; // 落到下方走 tmp + 原子 rename，转换成功前不破坏现有分片
       } else {
         log('green', `✓ 静态分片已存在，跳过: ${outputName}`);
         continue;
       }
     }
 
+    // 过时替换先写 .tmp，转换成功后 renameSync 原子替换：避免转换失败/超时时
+    // current/ 丢失原本可用的静态分片（codex PR#450 P2）。首次转换无旧文件，直写即可。
+    const convertTarget = staleReplace ? outputPath + '.tmp' : outputPath;
+    if (staleReplace) { try { if (existsSync(convertTarget)) unlinkSync(convertTarget); } catch (e) {} }
     log('green', `▶ 转换静态分片: ${file.name} → ${outputName}`);
     runPythonScript(python, transformScript, [
       '-i', `"${file.path}"`,
-      '-o', `"${outputPath}"`
+      '-o', `"${convertTarget}"`
     ]);
+    if (staleReplace) renameSync(convertTarget, outputPath); // 同目录原子替换
   }
 
   // 4. 处理周更分片（每次重新转换）
