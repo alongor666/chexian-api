@@ -86,7 +86,9 @@ dim_agg AS (
     SUM(
       CAST(claim_cases AS DOUBLE) * CAST(policy_term AS DOUBLE)
       / NULLIF(CAST(earned_days AS DOUBLE), 0)
-    ) AS annualized_claim_cases
+    ) AS annualized_claim_cases,
+    -- B303: 满期天数合计（出险率分母，与 cost-ratios.ts earned_loss_frequency 口径统一）
+    SUM(earned_days) AS total_earned_days
   FROM policy_exposure
   GROUP BY COALESCE(${dimField}, '未知')
 ),
@@ -131,8 +133,10 @@ SELECT
     ELSE NULL
   END AS avg_claim_amount,
   CASE
-    WHEN d.policy_count > 0 AND d.annualized_claim_cases IS NOT NULL
-    THEN ROUND(d.annualized_claim_cases * 100.0 / CAST(d.policy_count AS DOUBLE), 2)
+    -- B303: 出险率分母改为 earned_exposure（总满期天数/365），与 cost-ratios.ts 口径统一
+    -- 旧逻辑用 policy_count（签单件数），未满期 cohort 分母虚大导致出险率严重低估
+    WHEN d.total_earned_days > 0 AND d.annualized_claim_cases IS NOT NULL
+    THEN ROUND(d.annualized_claim_cases * 100.0 / (CAST(d.total_earned_days AS DOUBLE) / 365.0), 2)
     ELSE NULL
   END AS claim_frequency,
   CASE
