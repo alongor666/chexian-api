@@ -397,6 +397,97 @@ async function rsyncLatestAtomically(config, localDir, remoteDir, label) {
   }
 }
 
+/**
+ * 完整性闸门：对比"本地 vs VPS 现役"的 policy maxDate + rowCount，
+ * 本地更旧/更少则拒绝同步，防止 parquet 不全的机器覆盖生产数据。
+ *
+ * 纯决策函数，导出供单测。verdict:
+ *   - 'block' → 本地数据倒退，必须拒绝
+ *   - 'skip'  → 某一侧指纹拿不到（端点未部署/网络/duckdb CLI 缺失），降级放行
+ *   - 'pass'  → 本地不低于现役
+ */
+function evaluateFreshness(local, vps) {
+  if (!vps) {
+    return {
+      verdict: 'skip',
+      reason: 'VPS 现役指纹不可用（/internal/data-fingerprint 未部署或网络失败）——本次同步未受完整性保护',
+    };
+  }
+  if (!local) {
+    return { verdict: 'skip', reason: '本地指纹查询失败（duckdb CLI 缺失或 parquet 读取异常），降级放行' };
+  }
+  const reasons = [];
+  if (local.maxDate && vps.maxDate && local.maxDate < vps.maxDate) {
+    reasons.push(`本地 policy maxDate ${local.maxDate} 早于 VPS 现役 ${vps.maxDate}`);
+  }
+  if (local.rowCount < vps.rowCount) {
+    reasons.push(`本地 policy 行数 ${local.rowCount} 少于 VPS 现役 ${vps.rowCount}`);
+  }
+  if (reasons.length) {
+    return {
+      verdict: 'block',
+      reason: `${reasons.join('；')} — 疑似本地数据不全或在错误机器上同步，拒绝以防覆盖生产`,
+    };
+  }
+  return {
+    verdict: 'pass',
+    reason: `本地 policy ${local.maxDate}/${local.rowCount} 不低于 VPS 现役 ${vps.maxDate}/${vps.rowCount}`,
+  };
+}
+
+async function queryLocalPolicyFingerprint(localCurrentDir) {
+  const glob = join(localCurrentDir, '*.parquet').replace(/'/g, "''");
+  // union_by_name=true 对齐后端加载器（duckdb-parquet-loader.ts）：分片间存在兼容字段差异时，
+  // 不加会让 CLI 抛错 → queryLocalPolicyFingerprint 返回 null → 闸门 skip 降级放行，
+  // 反而绕过本闸门要防的残缺数据同步。
+  const sql = `SELECT MAX(CAST(policy_date AS DATE))::VARCHAR AS max_date, COUNT(*) AS row_count FROM read_parquet('${glob}', union_by_name=true)`;
+  try {
+    const { stdout } = await runLocal('duckdb', ['-json', '-c', sql], { silent: true });
+    const rows = JSON.parse(stdout || '[]');
+    const r = rows[0] || {};
+    return { maxDate: r.max_date ?? null, rowCount: Number(r.row_count ?? 0) };
+  } catch {
+    return null; // duckdb CLI 缺失 / parquet 读取失败 → 降级
+  }
+}
+
+async function queryVpsPolicyFingerprint(config) {
+  const url = 'http://localhost:3000/internal/data-fingerprint';
+  try {
+    const { stdout } = await execRemote(config, `curl -s -m 5 ${quoteForSingle(url)}`, {
+      silent: true,
+      allowFailure: true,
+    });
+    const parsed = JSON.parse((stdout || '').trim()); // 端点未部署时返回非 JSON → 抛错降级
+    if (!parsed?.success || !parsed?.data?.policy) return null;
+    const p = parsed.data.policy;
+    return { maxDate: p.maxDate ?? null, rowCount: Number(p.rowCount ?? 0) };
+  } catch {
+    return null; // 404 / 网络失败 / JSON 解析失败 → 降级
+  }
+}
+
+async function assertLocalNotStaleVsVps(config, localCurrentDir, hooks = {}) {
+  const onPass = hooks.onPass || (() => {});
+  const onWarn = hooks.onWarn || (() => {});
+  const onFail = hooks.onFail || (() => {});
+  const [local, vps] = await Promise.all([
+    queryLocalPolicyFingerprint(localCurrentDir),
+    queryVpsPolicyFingerprint(config),
+  ]);
+  const { verdict, reason } = evaluateFreshness(local, vps);
+  if (verdict === 'block') {
+    onFail(reason);
+    return false;
+  }
+  if (verdict === 'skip') {
+    onWarn(reason);
+    return true;
+  }
+  onPass(reason);
+  return true;
+}
+
 async function ensureSshReady(config) {
   const sshProbe = await runLocal('ssh', ['-V'], { silent: true, allowFailure: true });
   if (sshProbe.code !== 0) {
@@ -759,6 +850,22 @@ async function main(argv = process.argv.slice(2)) {
   });
   if (!overlapOk) process.exit(1);
 
+  // 完整性闸门：本地 policy 数据若比 VPS 现役更旧/更少则拒绝，防残缺数据覆盖生产。
+  // 仅在本次确实会同步 policy/current 时执行——--domain（只传对应 fact 域 latest.parquet，
+  // 不含 policy）和 --check（仅预检）不该被 policy 新鲜度阻断。
+  const willSyncPolicy = buildSyncTasks(runConfig).some((t) => t.label === 'policy/current');
+  if (!runConfig.checkMode && willSyncPolicy) {
+    const freshnessOk = await assertLocalNotStaleVsVps(sshConfig, LOCAL_CURRENT_DIR, {
+      onPass: (msg) => log('green', `✓ 完整性闸门: ${msg}`),
+      onWarn: (msg) => log('yellow', `⚠ 完整性闸门: ${msg}`),
+      onFail: (msg) => log('red', `❌ 完整性闸门: ${msg}`),
+    });
+    if (!freshnessOk) {
+      log('red', '  本地数据疑似不全。若确属正常（如上游修正删重），请在数据完整的 ETL 机重跑，或人工核对后再同步。');
+      process.exit(1);
+    }
+  }
+
   if (runConfig.checkMode) {
     const dirs = collectCheckDirs();
     let totalFiles = 0;
@@ -790,6 +897,7 @@ export {
   buildStandardSyncTasks,
   buildSyncTasks,
   rsyncLatestAtomically,
+  evaluateFreshness,
 };
 
 const isMain = process.env.RUN_MAIN || (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]));

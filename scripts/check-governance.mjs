@@ -40,11 +40,12 @@
 
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { execFileSync, execSync } from 'child_process';
 import {
   collectPolicyCurrentStats,
   extractQuickReferenceStats,
+  syncQuickReferenceFile,
 } from '../数据管理/pipelines/quick_reference.mjs';
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 
@@ -1139,9 +1140,20 @@ function checkKnowledgeDataConsistency() {
         mismatches.push(`分片 ${qrStats.shardCount} vs 实际 ${policyStats.shardCount}`);
       }
       if (mismatches.length > 0) {
-        error(`知识库数据规模不一致: ${mismatches.join('；')}`);
-        console.log('    修复: 运行 node 数据管理/daily.mjs，或用真实 policy/current 分片刷新 QUICK_REFERENCE.md');
-        return false;
+        // 目录即唯一事实源：QUICK_REFERENCE.md 的数据规模/字段/分片均为派生值，
+        // 漂移时直接按 policy/current 目录重算并回写，不再因手填值过期而阻断提交。
+        // 回写失败（如文件结构损坏）才降级为阻断。
+        try {
+          const refreshedLine = syncQuickReferenceFile(qrPath, policyStats);
+          warning(`知识库数据规模漂移，已按 policy/current 目录自动刷新 QUICK_REFERENCE.md：${mismatches.join('；')}`);
+          console.log(`    新规模行: ${refreshedLine}`);
+          console.log('    ▶ 文件已在工作区更新，请 git add 后随本次变更一并提交');
+          return true;
+        } catch (e) {
+          error(`知识库数据规模不一致且自动刷新失败: ${mismatches.join('；')}（${e.message}）`);
+          console.log('    修复: 运行 node 数据管理/daily.mjs，或用真实 policy/current 分片刷新 QUICK_REFERENCE.md');
+          return false;
+        }
       }
 
       success(`知识库数据规模一致（约 ${expectedRoundedRows.toLocaleString()} 行 / ${policyStats.fieldCount} 字段 / ${policyStats.shardCount} 分片）`);
@@ -1826,37 +1838,49 @@ function checkStateDbDependencyIsolation() {
 // 主函数
 // ============================================================
 
-function main() {
-  console.log(`\n${colors.bold}=== 治理一致性校验 ===${colors.reset}\n`);
+// 数据/运维状态校验：随「数据更新」而变红，与代码无关。
+// 已从代码门禁解耦，搬到数据发布流程（scripts/check-data-readiness.mjs，
+// 由 release:daily / sync-and-reload.mjs 在 ETL 后、发布前执行）。
+// 在 PR/push 的代码门禁里跑这些项没有意义——CI 无 Parquet 数据时它们本就 skip，
+// 只会绊住本地开发者。详见 BACKLOG 数据状态/代码分离条目。
+export const DATA_READINESS_CHECKS = [
+  { name: 'Parquet重叠', fn: checkParquetOverlapInCurrent },
+  { name: 'Claims去重', fn: checkClaimsDetailDeduplication },
+  { name: '知识库一致性', fn: checkKnowledgeDataConsistency },
+  { name: '数据漂移检测', fn: checkDataDrift },
+];
 
-  const checks = [
-    { name: '必需文件', fn: checkRequiredFiles },
-    { name: '核心层索引', fn: checkCoreLayerIndices },
-    { name: 'BACKLOG证据链', fn: checkBacklogEvidence },
-    { name: 'CLAUDE章节', fn: checkClaudeMdSections },
-    { name: 'DC-002合规', fn: checkDC002Compliance },
-    { name: '任务ID分配', fn: checkTaskIdAllocation },
-    { name: 'Conflict标记', fn: checkMergeConflictMarkers },
-    { name: '调试产物', fn: checkStagedDebugArtifacts },
-    { name: '热点文件契约', fn: checkHotfileContractCoverage },
-    { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
-    { name: '锁文件策略', fn: checkPackageManagerLockPolicy },
-    { name: 'Parquet重叠', fn: checkParquetOverlapInCurrent },
-    { name: 'Claims去重', fn: checkClaimsDetailDeduplication },
-    { name: '凭据扫描', fn: checkStagedCredentials },
-    { name: 'PR体量门禁', fn: checkPrSizeLimit },
-    { name: '知识库一致性', fn: checkKnowledgeDataConsistency },
-    { name: 'gitignore审计', fn: checkGitignoreShadow },
-    { name: '字段定义一致', fn: checkFieldDefinitionConsistency },
-    { name: 'DarkMode质量', fn: checkDarkModeQuality },
-    { name: 'ECharts网格线', fn: checkEchartsSplitLine },
-    { name: 'sync-vps覆盖', fn: checkSyncVpsCoverage },
-    { name: '数据漂移检测', fn: checkDataDrift },
-    { name: 'SQL模块数一致', fn: checkSqlModuleCountConsistency },
-    { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
-    { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
-    { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
-  ];
+// 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
+const CODE_GOVERNANCE_CHECKS = [
+  { name: '必需文件', fn: checkRequiredFiles },
+  { name: '核心层索引', fn: checkCoreLayerIndices },
+  { name: 'BACKLOG证据链', fn: checkBacklogEvidence },
+  { name: 'CLAUDE章节', fn: checkClaudeMdSections },
+  { name: 'DC-002合规', fn: checkDC002Compliance },
+  { name: '任务ID分配', fn: checkTaskIdAllocation },
+  { name: 'Conflict标记', fn: checkMergeConflictMarkers },
+  { name: '调试产物', fn: checkStagedDebugArtifacts },
+  { name: '热点文件契约', fn: checkHotfileContractCoverage },
+  { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
+  { name: '锁文件策略', fn: checkPackageManagerLockPolicy },
+  { name: '凭据扫描', fn: checkStagedCredentials },
+  { name: 'PR体量门禁', fn: checkPrSizeLimit },
+  { name: 'gitignore审计', fn: checkGitignoreShadow },
+  { name: '字段定义一致', fn: checkFieldDefinitionConsistency },
+  { name: 'DarkMode质量', fn: checkDarkModeQuality },
+  { name: 'ECharts网格线', fn: checkEchartsSplitLine },
+  { name: 'sync-vps覆盖', fn: checkSyncVpsCoverage },
+  { name: 'SQL模块数一致', fn: checkSqlModuleCountConsistency },
+  { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
+  { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
+  { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
+];
+
+/**
+ * 执行一组检查并打印汇总。返回 true 表示全部通过（不退出进程，由调用方决定退出码）。
+ */
+export function runCheckList(checks, title) {
+  console.log(`\n${colors.bold}=== ${title} ===${colors.reset}\n`);
 
   let passedCount = 0;
   let failedCount = 0;
@@ -1871,7 +1895,6 @@ function main() {
     console.log(''); // 空行分隔
   }
 
-  // 输出总结
   console.log(`${colors.bold}=== Summary ===${colors.reset}`);
   console.log(`Total checks: ${checks.length}`);
   console.log(`${colors.green}✓ Passed: ${passedCount}${colors.reset}`);
@@ -1880,14 +1903,20 @@ function main() {
   }
   console.log('');
 
-  // 返回退出码
-  if (failedCount > 0) {
-    error('治理校验失败，请修复上述问题后重试');
-    process.exit(1);
-  } else {
-    success('所有治理校验通过！');
-    process.exit(0);
-  }
+  return failedCount === 0;
 }
 
-main();
+function main() {
+  const ok = runCheckList(CODE_GOVERNANCE_CHECKS, '治理一致性校验');
+  if (!ok) {
+    error('治理校验失败，请修复上述问题后重试');
+    process.exit(1);
+  }
+  success('所有治理校验通过！');
+  process.exit(0);
+}
+
+// 仅在直接执行时运行 main()；被 import（如 check-data-readiness.mjs）时不触发。
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}
