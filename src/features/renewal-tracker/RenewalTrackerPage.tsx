@@ -15,6 +15,7 @@ import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
 import { deriveQuickFilters, applyQuickFiltersToGlobal } from '@/shared/utils/quickFilterHelpers';
 import { useRenewalTracker } from './hooks/useRenewalTracker';
 import TimeFilter from './components/TimeFilter';
+import OverviewBand from './components/OverviewBand';
 import OrgTable from './components/OrgTable';
 import CategoryTable from './components/CategoryTable';
 import type { TimeView, SortField, SortDir, TimeRange, Selection } from './types';
@@ -26,8 +27,9 @@ export default function RenewalTrackerPage() {
   const [timeView, setTimeView] = useState<TimeView>('ytd');
   const [timeRange, setTimeRange] = useState<TimeRange | null>(null);
   const [selection, setSelection] = useState<Selection>({ kind: 'overall' });
-  const [sortField, setSortField] = useState<SortField>('A');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  // 默认按主题指标「续保率」从差到好排（升序）—— 最差的机构置顶，让「差」一眼可见
+  const [sortField, setSortField] = useState<SortField>('E');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   // 初始化 timeRange（YTD 默认）
   useEffect(() => {
@@ -52,9 +54,18 @@ export default function RenewalTrackerPage() {
       setSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
     } else {
       setSortField(field);
-      setSortDir('desc');
+      // 率值默认升序（最差置顶）；件数默认降序（最大置顶）
+      setSortDir(field === 'D' || field === 'E' ? 'asc' : 'desc');
     }
   }, [sortField]);
+
+  const handleClearSelection = useCallback(() => setSelection({ kind: 'overall' }), []);
+
+  const handleSelectOrg = useCallback((org: string) => {
+    setSelection(prev =>
+      prev.kind !== 'overall' && prev.org === org ? { kind: 'overall' } : { kind: 'org', org }
+    );
+  }, []);
 
   const quickFilters = useMemo(
     () => deriveQuickFilters(filters),
@@ -111,7 +122,14 @@ export default function RenewalTrackerPage() {
       )}
 
       {data && (
-        <div className={`grid grid-cols-1 xl:grid-cols-5 gap-4 ${isFetching ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={isFetching ? 'opacity-50 pointer-events-none' : ''}>
+          <OverviewBand
+            overall={data.overall}
+            orgRows={data.orgRows}
+            selection={selection}
+            onSelectOrg={handleSelectOrg}
+          />
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
           <div className="xl:col-span-3">
             <OrgTable
               rows={data.orgRows}
@@ -136,7 +154,9 @@ export default function RenewalTrackerPage() {
               sortField={sortField}
               sortDir={sortDir}
               onSort={handleSort}
+              onClearSelection={handleClearSelection}
             />
+          </div>
           </div>
         </div>
       )}
