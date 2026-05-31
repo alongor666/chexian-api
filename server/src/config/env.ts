@@ -57,12 +57,24 @@ export const authEnv = {
   DEV_SKIP_AUTH: process.env.DEV_SKIP_AUTH ?? '',
 } as const;
 
-// 生产环境未配置 USER_PASSWORDS 时给出警告（不阻断启动）
+// 生产环境未配置 USER_PASSWORDS → 默认 fail-fast（拒绝带预置弱口令哈希启动）。
+// 与 JWT_SECRET 的 requireInProduction 一致：默认弱口令是真实可登录凭据，
+// 生产暴露 = 直接被接管。提供显式逃生阀 ALLOW_DEFAULT_CREDENTIALS=true 供
+// 受控环境（内网演示 / 首次引导）临时放行，但会打印醒目告警。
 if (isProd && !authEnv.USER_PASSWORDS) {
-  console.warn(
-    '[env] WARNING: USER_PASSWORDS 未设置，生产环境使用默认密码哈希。' +
-    '请配置 USER_PASSWORDS 为 JSON 映射表以保证安全。'
-  );
+  if (process.env.ALLOW_DEFAULT_CREDENTIALS === 'true') {
+    console.warn(
+      '[env] ⚠️ ALLOW_DEFAULT_CREDENTIALS=true：生产环境正在使用 preset-users 默认密码哈希。' +
+      '这些是已知弱口令，仅供受控临时场景。请尽快配置 USER_PASSWORDS 并移除此逃生阀。'
+    );
+  } else {
+    throw new Error(
+      '[env] 生产环境必需变量 USER_PASSWORDS 未配置：' +
+      'preset-users.ts 内置的是已知默认弱口令哈希，禁止用于生产。' +
+      '请将 USER_PASSWORDS 配置为 {"username":"$2b$10$..."} JSON 映射表；' +
+      '若确需临时使用默认口令，显式设置 ALLOW_DEFAULT_CREDENTIALS=true。'
+    );
+  }
 }
 
 // ─── 数据库配置 ────────────────────────────────────────────────────────────────

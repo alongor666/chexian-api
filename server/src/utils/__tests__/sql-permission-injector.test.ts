@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import {
   injectPermissionIntoAnySql,
   injectPermissionFilter,
+  isValidPermissionFilter,
 } from '../sql-permission-injector.js';
 
 const PF = "org_level_3 = '乐山'";
@@ -149,5 +150,47 @@ describe('injectPermissionIntoAnySql', () => {
     expect(filterOccurrences).toBe(2);
     // 结构完整：主查询部分 FROM base 未被破坏
     expect(out).toMatch(/\)\s*SELECT\s+\*\s+FROM\s+base\s*$/i);
+  });
+});
+
+describe('isValidPermissionFilter（白名单校验，已接入 injectPermissionIntoAnySql）', () => {
+  it('接受三种真实生成的过滤器形态', () => {
+    expect(isValidPermissionFilter('1=1')).toBe(true);
+    expect(isValidPermissionFilter("org_level_3 = '乐山'")).toBe(true);
+    // 电销 dataScope（布尔字面量，字段已加入白名单）
+    expect(isValidPermissionFilter('is_telemarketing = true')).toBe(true);
+  });
+
+  it('接受 LIKE / IN / AND 组合', () => {
+    expect(isValidPermissionFilter("org_level_3 LIKE '%乐山%'")).toBe(true);
+    expect(isValidPermissionFilter("org_level_3 IN ('乐山', '成都')")).toBe(true);
+    expect(isValidPermissionFilter("org_level_3 = '乐山' AND salesman_name = '张三'")).toBe(true);
+  });
+
+  it('接受 SQL 转义的内嵌单引号（escapeSqlString 产物）', () => {
+    expect(isValidPermissionFilter("org_level_3 = 'O''Brien'")).toBe(true);
+  });
+
+  it('拒绝非白名单字段', () => {
+    expect(isValidPermissionFilter("secret_col = '1'")).toBe(false);
+    expect(isValidPermissionFilter("is_telemarketing = 'true' OR evil = '1'")).toBe(false);
+  });
+
+  it('拒绝注入向量（子查询/注释/语句终止/UNION）', () => {
+    expect(isValidPermissionFilter("org_level_3 = '乐山'; DROP TABLE x")).toBe(false);
+    expect(isValidPermissionFilter("org_level_3 = '乐山' -- ")).toBe(false);
+    expect(isValidPermissionFilter("org_level_3 IN (SELECT x FROM y)")).toBe(false);
+    expect(isValidPermissionFilter("org_level_3 = '乐山' UNION SELECT 1")).toBe(false);
+  });
+
+  it('injectPermissionIntoAnySql 对非法过滤器 fail-closed 抛错', () => {
+    const sql = 'SELECT SUM(premium) FROM PolicyFact';
+    expect(() => injectPermissionIntoAnySql(sql, "evil_col = '1'")).toThrow(/白名单/);
+    expect(() => injectPermissionIntoAnySql(sql, "org_level_3 = '乐山'); DROP TABLE x--")).toThrow(/白名单/);
+  });
+
+  it('injectPermissionIntoAnySql 对电销布尔过滤器正常注入', () => {
+    const out = injectPermissionIntoAnySql('SELECT COUNT(*) FROM PolicyFact', 'is_telemarketing = true');
+    expect(out).toMatch(/FROM\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE\s+is_telemarketing\s*=\s*true\)\s+AS\s+PolicyFact/i);
   });
 });
