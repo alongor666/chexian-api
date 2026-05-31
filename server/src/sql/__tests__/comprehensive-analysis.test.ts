@@ -8,6 +8,7 @@ import {
   type ComprehensiveDimension,
   type ComprehensiveGranularity,
 } from '../comprehensive-analysis.js';
+import { getMetricSql } from '../../config/metric-registry/index.js';
 
 // ── 共享配置 ──
 
@@ -89,6 +90,42 @@ describe('generateComprehensiveDimensionMetricsQuery', () => {
     expect(sql).toContain('claim_frequency');
   });
 
+  // B305：成本率指标由指标注册表派生，不再硬编码公式
+  it('B305: 费用率/变动成本率/综合费用率/满期保费由注册表派生（含注册表表达式）', () => {
+    const sql = generateComprehensiveDimensionMetricsQuery(BASE_DIM_CONFIG);
+    // 生成 SQL 必须包含 getMetricSql 产出的注册表表达式本身
+    expect(sql).toContain(getMetricSql('earned_premium'));
+    expect(sql).toContain(getMetricSql('expense_ratio'));
+    expect(sql).toContain(getMetricSql('variable_cost_ratio'));
+    expect(sql).toContain(getMetricSql('comprehensive_expense_ratio'));
+    // 注册表 expense_ratio 特征：分子带 COALESCE(fee_amount, 0)
+    expect(sql).toContain('SUM(COALESCE(fee_amount, 0)) * 100.0 / SUM(premium)');
+    // 旧硬编码费用率（无 COALESCE，分母用透传列 d.signed_premium）必须消失
+    expect(sql).not.toContain('d.fee_amount * 100.0 / d.signed_premium');
+  });
+
+  // B305：fee_amount 聚合采用 COALESCE 口径（与注册表依赖一致）
+  it('B305: fee_amount 聚合使用 COALESCE(fee_amount, 0)', () => {
+    const sql = generateComprehensiveDimensionMetricsQuery(BASE_DIM_CONFIG);
+    expect(sql).toContain('ROUND(SUM(COALESCE(fee_amount, 0)), 2) AS fee_amount');
+  });
+
+  // B303：满期出险率分母必须用已赚暴露（Σ earned_days / 365），不得用签单件数 policy_count
+  it('B303: claim_frequency 分母用已赚暴露而非 policy_count', () => {
+    const sql = generateComprehensiveDimensionMetricsQuery(BASE_DIM_CONFIG);
+    expect(sql).toContain('earned_exposure');
+    expect(sql).toMatch(
+      /SUM\(CAST\(earned_days AS DOUBLE\)\)\s*\/\s*365\.0\s+AS earned_exposure/
+    );
+    expect(sql).toMatch(
+      /d\.annualized_claim_cases \* 100\.0 \/ d\.earned_exposure/
+    );
+    // 旧硬编码（分母用签单件数 policy_count）必须消失
+    expect(sql).not.toContain(
+      'd.annualized_claim_cases * 100.0 / CAST(d.policy_count AS DOUBLE)'
+    );
+  });
+
   it('WHERE 子句正确注入', () => {
     const sql = generateComprehensiveDimensionMetricsQuery({
       ...BASE_DIM_CONFIG,
@@ -161,6 +198,26 @@ describe('generateComprehensiveSummaryQuery', () => {
     expect(sql).toContain('earned_claim_ratio');
     expect(sql).toContain('expense_ratio');
     expect(sql).toContain('variable_cost_ratio');
+  });
+
+  // B305：汇总查询同样从注册表派生成本率指标（COALESCE 口径）
+  it('B305: 汇总成本率指标由注册表派生', () => {
+    const sql = generateComprehensiveSummaryQuery(BASE_WHERE, BASE_CUTOFF);
+    expect(sql).toContain(getMetricSql('earned_premium'));
+    expect(sql).toContain(getMetricSql('expense_ratio'));
+    expect(sql).toContain(getMetricSql('variable_cost_ratio'));
+    expect(sql).toContain(getMetricSql('comprehensive_expense_ratio'));
+    expect(sql).toContain('ROUND(SUM(COALESCE(fee_amount, 0)), 2) AS fee_amount');
+    // 旧硬编码费用率（无 COALESCE）必须消失
+    expect(sql).not.toContain('SUM(fee_amount) * 100.0 / SUM(premium)');
+  });
+
+  // B303：汇总满期出险率分母改为已赚暴露 Σ(earned_days)/365
+  it('B303: 汇总 claim_frequency 分母用已赚暴露', () => {
+    const sql = generateComprehensiveSummaryQuery(BASE_WHERE, BASE_CUTOFF);
+    expect(sql).toMatch(
+      /100\.0 \/ \(SUM\(CAST\(earned_days AS DOUBLE\)\) \/ 365\.0\)/
+    );
   });
 
   it('WHERE 子句正确注入', () => {
