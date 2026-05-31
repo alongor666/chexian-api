@@ -169,7 +169,7 @@ export default function OrgTable({
           isSelected
             ? colorClasses.bg.primary
             : bad
-              ? colorClasses.bg.danger
+              ? cn(colorClasses.bg.danger, onClick && 'hover:brightness-95')
               : onClick && 'hover:bg-primary-bg/50',
         )}
         onClick={onClick}
