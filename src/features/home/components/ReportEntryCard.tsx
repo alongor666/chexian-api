@@ -3,20 +3,15 @@
  *
  * 数据日期（etlDate）与报告生成解耦：卡片先读 `/reports/<slug>/manifest.json`
  * 解析出真正存在的最新一期报告（resolveReport），再决定：
- *   - ready      → 正常打开（数据截止 = 报告日期）
- *   - stale      → 数据已更新但报告未刷新：醒目提醒「数据未更新」，仍可打开上一期
- *   - unavailable→ 一期报告都没有：禁用，提示「报告暂未生成」
- *   - unknown    → manifest 尚未部署（旧链路）：回落到 etlDate 直拼，保持兼容
+ *   - ready       → 正常打开（数据截止 = 报告日期）
+ *   - stale       → 数据已更新但报告未刷新：醒目提醒「数据未更新」，仍可打开上一期
+ *   - unavailable → 一期报告都没有 / manifest 拉不到：禁用，提示「报告暂未生成」
  */
 import { memo } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Card } from '../../../shared/ui/Card'
 import { badgeStyles, cn, colorClasses } from '../../../shared/styles'
-import {
-  getLegacyReportUrl,
-  getReportUrl,
-  type ReportEntry,
-} from '../data/reportEntries'
+import { getReportUrl, type ReportEntry } from '../data/reportEntries'
 import { resolveReport } from '../data/resolveReport'
 import { useReportManifest } from '../hooks/useReportManifest'
 
@@ -35,13 +30,9 @@ export const ReportEntryCard = memo(function ReportEntryCard({
 
   const resolution = resolveReport(manifest ?? null, etlDate)
 
-  // 解析出实际要打开的 URL
-  const reportUrl =
-    resolution.status === 'unknown'
-      ? getLegacyReportUrl(entry.slug, etlDate) // 旧链路：manifest 未部署
-      : resolution.reportFile
-        ? getReportUrl(entry.slug, resolution.reportFile)
-        : null
+  const reportUrl = resolution.reportFile
+    ? getReportUrl(entry.slug, resolution.reportFile)
+    : null
 
   const isBusy = loading || manifestLoading
   const isClickable = !isBusy && reportUrl !== null
@@ -143,13 +134,12 @@ function ReportStatusFooter({
     )
   }
 
-  // ready / unknown：正常可点开
-  const shownDate = reportDate ?? etlDate
+  // ready：正常可点开
   return (
     <div className={cn('mt-4 text-sm', colorClasses.text.neutralMuted)}>
-      {shownDate ? (
+      {reportDate ? (
         <span>
-          数据截止 <strong className="text-neutral-700 dark:text-neutral-300">{shownDate}</strong> · 点击新窗口打开
+          数据截止 <strong className="text-neutral-700 dark:text-neutral-300">{reportDate}</strong> · 点击新窗口打开
         </span>
       ) : (
         <span>报告暂未生成</span>

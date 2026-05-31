@@ -6,9 +6,13 @@
  * 报告还没重新生成，链接就指向不存在的文件（Nginx 回落到 SPA index.html，
  * 返回 200 空白页 → “看不到报告”）。
  *
- * 本模块据 manifest（由 scripts/gen-reports-manifest.mjs 生成）解析出：
+ * 本模块据 manifest（由 scripts/gen-reports-manifest.mjs 在 VPS 端生成）解析出：
  *   - 应该打开哪一期报告（≤ etlDate 的最新一期可用报告）
  *   - 该报告是否落后于当前数据（stale → 视觉/文案提醒“数据未更新”）
+ *
+ * 设计铁律（PR 修复 PR 441 漏洞）：manifest 拉不到 / 不是合法 JSON
+ * **绝不** 回落到 etlDate 直拼 URL —— 这正是 PR 441 想根除的旧空白页行为。
+ * 一律视为 `unavailable`，由 UI 显式提示「报告暂未生成」，禁用点击。
  */
 
 /** 单期报告条目 */
@@ -33,16 +37,14 @@ export type ReportStatus =
   | 'ready'
   /** 最新可用报告早于 etlDate —— 数据已更新但报告未刷新 */
   | 'stale'
-  /** manifest 已加载但没有任何报告 */
+  /** manifest 拉不到 / 不是合法 JSON / entries 为空 —— 没有任何可打开的报告 */
   | 'unavailable'
-  /** manifest 尚未部署（旧版本）—— 回落到 etlDate 直拼，保持兼容、不做提醒 */
-  | 'unknown'
 
 export interface ResolvedReport {
   status: ReportStatus
-  /** 实际打开的报告日期；unknown 时为 etlDate；unavailable 时为 null */
+  /** 实际打开的报告日期；unavailable 时为 null */
   reportDate: string | null
-  /** 相对 slug 目录的文件名；无可用报告时为 null */
+  /** 相对 slug 目录的文件名；unavailable 时为 null */
   reportFile: string | null
   /** 当前 ETL 数据日期（透传，便于 UI 文案） */
   etlDate: string | null
@@ -51,16 +53,17 @@ export interface ResolvedReport {
 /**
  * 解析应展示的报告。
  *
- * @param manifest   已加载的 manifest；null 表示尚未部署 manifest（旧链路）
+ * @param manifest   已加载的 manifest；null 表示拉取失败 / 内容非合法 JSON —
+ *                   一律视为 unavailable（绝不回落到 etlDate 直拼，避免 PR 441 修复的空白页问题复发）
  * @param etlDate    当前 ETL 数据日期；null 表示未知
  */
 export function resolveReport(
   manifest: ReportManifest | null,
   etlDate: string | null,
 ): ResolvedReport {
-  // manifest 未部署 → 维持旧行为（由调用方用 etlDate 直拼），不做 stale 判定
+  // manifest 拉不到 / 非合法 JSON / entries 缺失 → 一律 unavailable
   if (!manifest) {
-    return { status: 'unknown', reportDate: etlDate, reportFile: null, etlDate }
+    return { status: 'unavailable', reportDate: null, reportFile: null, etlDate }
   }
 
   const entries = manifest.entries ?? []
