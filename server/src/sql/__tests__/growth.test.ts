@@ -120,6 +120,29 @@ describe('generateCustomGrowthQuery', () => {
     expect(sql).toContain("'2025-01-01'");
     expect(sql).toContain("'2026-03-31'");
   });
+
+  // B300: currentPeriod/baselinePeriod 经 buildDateCondition 校验，恶意日期必须抛错而非拼入 SQL
+  it('当期日期含注入 payload 时抛错', () => {
+    expect(() =>
+      generateCustomGrowthQuery({
+        ...BASE_CONFIG,
+        growthType: 'custom',
+        baselinePeriod: { startDate: '2025-01-01', endDate: '2025-12-31' },
+        currentPeriod: { startDate: "2026-01-01' OR '1'='1", endDate: '2026-03-31' },
+      })
+    ).toThrow(/Invalid date format/);
+  });
+
+  it('基期日期含注入 payload 时抛错', () => {
+    expect(() =>
+      generateCustomGrowthQuery({
+        ...BASE_CONFIG,
+        growthType: 'custom',
+        baselinePeriod: { startDate: '2025-01-01', endDate: "2025-12-31'; DROP TABLE PolicyFact;--" },
+        currentPeriod: { startDate: '2026-01-01', endDate: '2026-03-31' },
+      })
+    ).toThrow(/Invalid date format/);
+  });
 });
 
 // ═══════════════════════════════════════════════════
@@ -160,6 +183,17 @@ describe('generateDailyGrowthWithContextQuery', () => {
     expect(() => generateDailyGrowthWithContextQuery(BASE_CONFIG)).toThrow(
       'requires both currentPeriod and baselinePeriod'
     );
+  });
+
+  // B300: daily-context 路径下 currentPeriod 直接拼 SQL，恶意日期必须抛错
+  it('当期日期含注入 payload 时抛错', () => {
+    expect(() =>
+      generateDailyGrowthWithContextQuery({
+        ...BASE_CONFIG,
+        currentPeriod: { startDate: "2026-03-01' OR '1'='1", endDate: '2026-03-31' },
+        baselinePeriod: { startDate: '2025-03-01', endDate: '2025-03-31' },
+      })
+    ).toThrow(/Invalid date format/);
   });
 });
 

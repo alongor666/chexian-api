@@ -52,8 +52,13 @@ router.get(
     // daily-context 类型：使用带月度/年度上下文的日度增长查询
     // 返回每日 current/previous 值 + period_total + ytd_total + 各级增长率
     if (queryType === 'daily-context' && startDate && endDate && baselineStart && baselineEnd) {
-      if (!isValidDateFormat(baselineStart) || !isValidDateFormat(baselineEnd)) {
-        throw new AppError(400, 'Invalid baseline date format. Expected YYYY-MM-DD');
+      // B300: startDate/endDate 会被剥离出 WHERE 并直接进入 currentPeriod 拼入 SQL，
+      // 必须与 baseline 一样强制校验格式，否则绕过 buildWhereFromFilterParams 的日期校验
+      if (
+        !isValidDateFormat(baselineStart) || !isValidDateFormat(baselineEnd) ||
+        !isValidDateFormat(startDate) || !isValidDateFormat(endDate)
+      ) {
+        throw new AppError(400, 'Invalid date format. Expected YYYY-MM-DD');
       }
 
       // daily-context 不把日期放进 WHERE（由 SQL 的 currentPeriod/baselinePeriod 控制）
@@ -105,8 +110,12 @@ router.get(
     };
 
     if (growthType === 'custom' && baselineStart && baselineEnd && startDate && endDate) {
-      if (!isValidDateFormat(baselineStart) || !isValidDateFormat(baselineEnd)) {
-        throw new AppError(400, 'Invalid baseline date format. Expected YYYY-MM-DD');
+      // B300: 同 daily-context，custom 下 startDate/endDate 进入 currentPeriod 直接拼 SQL，须校验格式
+      if (
+        !isValidDateFormat(baselineStart) || !isValidDateFormat(baselineEnd) ||
+        !isValidDateFormat(startDate) || !isValidDateFormat(endDate)
+      ) {
+        throw new AppError(400, 'Invalid date format. Expected YYYY-MM-DD');
       }
       config.baselinePeriod = { startDate: baselineStart, endDate: baselineEnd };
       config.currentPeriod = { startDate, endDate };
