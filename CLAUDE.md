@@ -21,7 +21,7 @@
 
 **Pre-flight（每次任务前）**：1) `grep -r` 搜索已有实现 2) 涉及数据时 `find 数据管理/` 3) 声称完成前 `curl` 验证 4) 删除前列影响清单等用户确认（push 时大文件/分支保护/冲突标记/governance 由 `.claude/settings.json` hooks 自动拦截）
 
-**方法确认协议**：遇到"下钻/层级"→问用户交互模型；"已完成"→curl 验证；"不存在"→先搜索；"安全加固/重构"→列清单等确认；"commit/push"→直接执行；"全部检查"→并行 sub-agents
+**方法确认协议**：遇到"下钻/层级"→先问用户交互模型再实现（其余触发词的处置见上方红线表与 Pre-flight）
 
 ---
 
@@ -178,7 +178,7 @@ bun run governance                 # 治理校验
 
 **任务 ID**：@user B001-B099 / @claude B100-B199 / @codex B200-B299
 
-**并行规则**：3+ 独立模块/任务必须并行 sub-agents。PR 前：`git fetch origin main && git rebase origin/main && bun run governance`
+**PR 前**：`git fetch origin main && git rebase origin/main && bun run governance`（并行规则见 §0 红线"并行不串行"）
 
 **生产环境**：腾讯云 2核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist` · **PM2 重启**：deployer 无法直接调 pm2，须 `sudo /usr/local/bin/deploy-chexian-api reload`（或 `restart`/`install`）
 
