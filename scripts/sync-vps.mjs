@@ -437,7 +437,10 @@ function evaluateFreshness(local, vps) {
 
 async function queryLocalPolicyFingerprint(localCurrentDir) {
   const glob = join(localCurrentDir, '*.parquet').replace(/'/g, "''");
-  const sql = `SELECT MAX(CAST(policy_date AS DATE))::VARCHAR AS max_date, COUNT(*) AS row_count FROM read_parquet('${glob}')`;
+  // union_by_name=true 对齐后端加载器（duckdb-parquet-loader.ts）：分片间存在兼容字段差异时，
+  // 不加会让 CLI 抛错 → queryLocalPolicyFingerprint 返回 null → 闸门 skip 降级放行，
+  // 反而绕过本闸门要防的残缺数据同步。
+  const sql = `SELECT MAX(CAST(policy_date AS DATE))::VARCHAR AS max_date, COUNT(*) AS row_count FROM read_parquet('${glob}', union_by_name=true)`;
   try {
     const { stdout } = await runLocal('duckdb', ['-json', '-c', sql], { silent: true });
     const rows = JSON.parse(stdout || '[]');
@@ -847,15 +850,20 @@ async function main(argv = process.argv.slice(2)) {
   });
   if (!overlapOk) process.exit(1);
 
-  // 完整性闸门：本地 policy 数据若比 VPS 现役更旧/更少则拒绝，防残缺数据覆盖生产
-  const freshnessOk = await assertLocalNotStaleVsVps(sshConfig, LOCAL_CURRENT_DIR, {
-    onPass: (msg) => log('green', `✓ 完整性闸门: ${msg}`),
-    onWarn: (msg) => log('yellow', `⚠ 完整性闸门: ${msg}`),
-    onFail: (msg) => log('red', `❌ 完整性闸门: ${msg}`),
-  });
-  if (!freshnessOk) {
-    log('red', '  本地数据疑似不全。若确属正常（如上游修正删重），请在数据完整的 ETL 机重跑，或人工核对后再同步。');
-    process.exit(1);
+  // 完整性闸门：本地 policy 数据若比 VPS 现役更旧/更少则拒绝，防残缺数据覆盖生产。
+  // 仅在本次确实会同步 policy/current 时执行——--domain（只传对应 fact 域 latest.parquet，
+  // 不含 policy）和 --check（仅预检）不该被 policy 新鲜度阻断。
+  const willSyncPolicy = buildSyncTasks(runConfig).some((t) => t.label === 'policy/current');
+  if (!runConfig.checkMode && willSyncPolicy) {
+    const freshnessOk = await assertLocalNotStaleVsVps(sshConfig, LOCAL_CURRENT_DIR, {
+      onPass: (msg) => log('green', `✓ 完整性闸门: ${msg}`),
+      onWarn: (msg) => log('yellow', `⚠ 完整性闸门: ${msg}`),
+      onFail: (msg) => log('red', `❌ 完整性闸门: ${msg}`),
+    });
+    if (!freshnessOk) {
+      log('red', '  本地数据疑似不全。若确属正常（如上游修正删重），请在数据完整的 ETL 机重跑，或人工核对后再同步。');
+      process.exit(1);
+    }
   }
 
   if (runConfig.checkMode) {

@@ -5,7 +5,7 @@
  * 防 parquet 不全的机器把残缺数据覆盖到生产。
  */
 import { describe, expect, it } from 'vitest';
-import { evaluateFreshness } from '../sync-vps.mjs';
+import { evaluateFreshness, buildSyncTasks } from '../sync-vps.mjs';
 
 const vps = { maxDate: '2026-05-30', rowCount: 1_000_000 };
 
@@ -48,5 +48,23 @@ describe('evaluateFreshness', () => {
   it('一侧 maxDate 为 null 时不据日期 block，仅看行数', () => {
     // 现役 maxDate 缺失（如刚启动未查到）但行数完整 → 不应误 block
     expect(evaluateFreshness({ maxDate: null, rowCount: 1_000_000 }, { maxDate: null, rowCount: 1_000_000 }).verdict).toBe('pass');
+  });
+});
+
+// policy 完整性闸门只该在本次确实同步 policy/current 时执行：
+// --domain 模式只传对应 fact 域 latest.parquet，不含 policy，不应被 policy 新鲜度阻断。
+describe('闸门执行范围（buildSyncTasks 是否含 policy/current）', () => {
+  const cfg = (domains) => ({ domains, remoteDir: '/r', frontendDistDir: '/f' });
+
+  it('标准全量同步 → 含 policy/current（闸门生效）', () => {
+    expect(buildSyncTasks(cfg([])).some((t) => t.label === 'policy/current')).toBe(true);
+  });
+
+  it('--domain customer_flow → 不含 policy/current（闸门跳过）', () => {
+    expect(buildSyncTasks(cfg(['customer_flow'])).some((t) => t.label === 'policy/current')).toBe(false);
+  });
+
+  it('--domain new_energy_claims → 不含 policy/current（闸门跳过）', () => {
+    expect(buildSyncTasks(cfg(['new_energy_claims'])).some((t) => t.label === 'policy/current')).toBe(false);
   });
 });
