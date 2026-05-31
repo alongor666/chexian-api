@@ -12,6 +12,7 @@
  */
 
 import { DateCriteria } from '../../types/data.js';
+import { buildDateCondition } from '../../utils/sql-sanitizer.js';
 import { GrowthConfig, GrowthType, TimeView } from './shared.js';
 import { generateYoYGrowthQuery } from './yoy.js';
 import { generateMoMGrowthQuery } from './mom.js';
@@ -46,8 +47,8 @@ export function generateCustomGrowthQuery(
         ${metric} AS baseline_value${groupByClause}
       FROM PolicyFact
       WHERE ${whereClause}
-        AND ${df} >= '${config.baselinePeriod!.startDate}'
-        AND ${df} <= '${config.baselinePeriod!.endDate}'
+        AND ${buildDateCondition(df, '>=', config.baselinePeriod!.startDate)}
+        AND ${buildDateCondition(df, '<=', config.baselinePeriod!.endDate)}
       GROUP BY ${groupBy.length > 0 ? groupBy.join(', ') : "'all'"}
     ),
     current_data AS (
@@ -55,8 +56,8 @@ export function generateCustomGrowthQuery(
         ${metric} AS current_value${groupByClause}
       FROM PolicyFact
       WHERE ${whereClause}
-        AND ${df} >= '${config.currentPeriod!.startDate}'
-        AND ${df} <= '${config.currentPeriod!.endDate}'
+        AND ${buildDateCondition(df, '>=', config.currentPeriod!.startDate)}
+        AND ${buildDateCondition(df, '<=', config.currentPeriod!.endDate)}
       GROUP BY ${groupBy.length > 0 ? groupBy.join(', ') : "'all'"}
     )
     SELECT
@@ -131,8 +132,8 @@ export function generateDailyGrowthWithContextQuery(
         ${metric} AS current_value${groupByClause}
       FROM PolicyFact
       WHERE ${whereClause}
-        AND ${df} >= '${config.currentPeriod.startDate}'
-        AND ${df} <= '${config.currentPeriod.endDate}'
+        AND ${buildDateCondition(df, '>=', config.currentPeriod.startDate)}
+        AND ${buildDateCondition(df, '<=', config.currentPeriod.endDate)}
       GROUP BY CAST(${df} AS DATE)${groupByClause}
     ),
     previous_daily AS (
@@ -141,8 +142,8 @@ export function generateDailyGrowthWithContextQuery(
         ${metric} AS previous_value${groupByClause}
       FROM PolicyFact
       WHERE ${whereClause}
-        AND ${df} >= '${config.baselinePeriod.startDate}'
-        AND ${df} <= '${config.baselinePeriod.endDate}'
+        AND ${buildDateCondition(df, '>=', config.baselinePeriod.startDate)}
+        AND ${buildDateCondition(df, '<=', config.baselinePeriod.endDate)}
       GROUP BY CAST(${df} AS DATE)${groupByClause}
     ),
     -- 对齐日期：将去年同期数据的日期加1年，以便与今年数据Join
