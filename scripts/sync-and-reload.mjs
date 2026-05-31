@@ -380,7 +380,7 @@ async function main() {
   log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(err => {
   log('red', `\n❌ 流程中断：${err.message}`);
   log('yellow', '提示：单步重试可使用：');
