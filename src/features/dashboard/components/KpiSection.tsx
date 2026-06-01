@@ -8,6 +8,7 @@ import {
   formatPercent,
   formatPremiumWan,
   formatRate,
+  formatWanDirect,
 } from '../../../shared/utils/formatters';
 import type { KpiData } from '../hooks/useKpiData';
 import type { KpiDetailResult } from '../../../shared/types/kpi';
@@ -188,7 +189,7 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
           progress: {
             value: ratePct,
             threshold: T.premiumProgressWarn,
-            note: plan ? `目标 ${formatPremiumWan(plan)} 万元` : undefined,
+            note: plan ? `目标 ${formatWanDirect(plan)} 万元` : undefined,
           },
           status,
         };
@@ -249,7 +250,6 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
         return {
           title,
           value: kpis.vehicle_growth_rate,
-          unit: '%',
           formatter: formatAchievementRate,
           loading,
           type: 'value',
@@ -263,7 +263,6 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
         return {
           title,
           value: kpis.bundle_renewal_rate,
-          unit: '%',
           formatter: (value) => formatAchievementRate(value, 2),
           loading,
           type: 'value',
@@ -283,7 +282,6 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
         return {
           title,
           value: kpis.driver_achievement_rate,
-          unit: '%',
           formatter: formatAchievementRate,
           loading,
           type: 'value',
@@ -297,7 +295,6 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
         return {
           title,
           value: kpis.driver_growth_rate,
-          unit: '%',
           formatter: formatAchievementRate,
           loading,
           type: 'value',
