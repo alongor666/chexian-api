@@ -225,12 +225,16 @@ SELECT
     ELSE NULL
   END AS per_vehicle_premium,
   CASE
-    WHEN COUNT(DISTINCT policy_no) > 0
+    -- B303-followup (codex P2 #457): summary 出险率分母改 earned_exposure，与 dim 行同口径
+    -- 旧逻辑用 COUNT(DISTINCT policy_no) → 同一 /api/query/comprehensive 响应里
+    -- summary 卡片与 dim 表的 claim_frequency 不可对齐，未满期 cutoff 下表现显著
+    -- policy_exposure 已基于 policy_dedup（B252），SUM(earned_days) 无重复行问题
+    WHEN SUM(earned_days) > 0
     THEN ROUND(
       SUM(
         CAST(claim_cases AS DOUBLE) * CAST(policy_term AS DOUBLE)
         / NULLIF(CAST(earned_days AS DOUBLE), 0)
-      ) * 100.0 / CAST(COUNT(DISTINCT policy_no) AS DOUBLE),
+      ) * 100.0 / (CAST(SUM(earned_days) AS DOUBLE) / 365.0),
       2
     )
     ELSE NULL

@@ -540,18 +540,22 @@ export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string 
     ),
     quarterly_policies AS (
       SELECT
-        YEAR(insurance_start_date) AS year,
-        QUARTER(insurance_start_date) AS quarter,
-        COUNT(DISTINCT policy_no) AS policy_count,
+        YEAR(p.insurance_start_date) AS year,
+        QUARTER(p.insurance_start_date) AS quarter,
+        COUNT(DISTINCT p.policy_no) AS policy_count,
         -- B303: 满期天数（与 cost-ratios.ts earned_days 同口径）
         -- LEAST(max earned, full policy term) → cutoff 前已赚天数
+        -- B303-followup (codex P2 #457): 必须用 DEDUPED_POLICY_SUBQUERY 去重，否则
+        -- PolicyFact 同一保单的原单+批改多行会让 SUM(earned_days) 被重复累计，
+        -- 已满期保单算成多个 earned exposure → 系统性压低 freq_per_1000。
+        -- quarterly_claims 已用同一去重子查询，分子分母 cohort 同源。
         SUM(LEAST(
-          GREATEST(DATEDIFF('day', insurance_start_date, DATE '${cutoffDate}') + 1, 0),
-          DATEDIFF('day', insurance_start_date, insurance_start_date + INTERVAL 1 YEAR)
+          GREATEST(DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}') + 1, 0),
+          DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
         )) AS total_earned_days
-      FROM PolicyFact p
-      WHERE insurance_start_date >= '2022-01-01'${policyWhere.replace(/p\./g, '')}
-      GROUP BY YEAR(insurance_start_date), QUARTER(insurance_start_date)
+      FROM ${DEDUPED_POLICY_SUBQUERY} p
+      WHERE p.insurance_start_date >= '2022-01-01'${policyWhere}
+      GROUP BY YEAR(p.insurance_start_date), QUARTER(p.insurance_start_date)
     )
     SELECT
       c.year, c.quarter,
