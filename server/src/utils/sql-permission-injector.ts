@@ -154,6 +154,12 @@ export function injectPermissionIntoAnySql(sql: string, permissionFilter: string
     return sql;
   }
 
+  // fail-closed 白名单校验：permissionFilter 虽由服务端（permissionMiddleware）生成，
+  // 但在拼进 SQL 前再过一道白名单（字段 + 格式），纵深防御任何上游回归/注入。
+  if (!isValidPermissionFilter(permissionFilter)) {
+    throw new Error('RLS 注入失败：权限过滤条件未通过白名单校验，拒绝执行');
+  }
+
   const filteredView = `(SELECT * FROM PolicyFact WHERE ${permissionFilter})`;
   // 捕获组：(1) 引导关键字（FROM/JOIN/逗号），(2) 可选别名片段（含前导空白），
   // (3) 别名标识符本身。`(?!\s*\.)` 排除 `PolicyFact.col` 列引用（仅匹配关系引用）。
@@ -210,6 +216,8 @@ const ALLOWED_PERMISSION_FIELDS = new Set([
   'org_level_1',
   'salesman_name',
   'organization',
+  // 电销 dataScope 过滤器 `is_telemarketing = true`（middleware/permission.ts:64）
+  'is_telemarketing',
 ]);
 
 /**
@@ -272,19 +280,23 @@ export function isValidPermissionFilter(filter: string): boolean {
     const trimmed = cond.trim();
     if (!trimmed) continue;
 
-    // 允许的格式：
+    // 允许的格式（字符串值用 '...'，内部单引号以 '' 转义）：
     // 1. field LIKE '%value%'
     // 2. field = 'value'
     // 3. field IN ('v1', 'v2', ...)
-    const likePattern = /^(\w+)\s+LIKE\s+'[^']*'(?:\s+ESCAPE\s+'[^']*')?$/i;
-    const eqPattern = /^(\w+)\s*=\s*'[^']*'$/i;
-    const inPattern = /^(\w+)\s+IN\s*\(\s*(?:'[^']*'(?:\s*,\s*'[^']*')*)\s*\)$/i;
+    // 4. field = true | false   （布尔字面量，如电销 is_telemarketing = true）
+    const STR = "'(?:[^']|'')*'"; // 单引号字符串，兼容 '' 转义（escapeSqlString 产物）
+    const likePattern = new RegExp(`^(\\w+)\\s+LIKE\\s+${STR}(?:\\s+ESCAPE\\s+${STR})?$`, 'i');
+    const eqPattern = new RegExp(`^(\\w+)\\s*=\\s*${STR}$`, 'i');
+    const inPattern = new RegExp(`^(\\w+)\\s+IN\\s*\\(\\s*(?:${STR}(?:\\s*,\\s*${STR})*)\\s*\\)$`, 'i');
+    const boolPattern = /^(\w+)\s*=\s*(?:true|false)$/i;
 
     let fieldName: string | null = null;
 
     const likeMatch = trimmed.match(likePattern);
     const eqMatch = trimmed.match(eqPattern);
     const inMatch = trimmed.match(inPattern);
+    const boolMatch = trimmed.match(boolPattern);
 
     if (likeMatch) {
       fieldName = likeMatch[1];
@@ -292,6 +304,8 @@ export function isValidPermissionFilter(filter: string): boolean {
       fieldName = eqMatch[1];
     } else if (inMatch) {
       fieldName = inMatch[1];
+    } else if (boolMatch) {
+      fieldName = boolMatch[1];
     } else {
       // 不匹配任何允许的格式
       return false;

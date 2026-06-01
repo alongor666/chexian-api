@@ -15,16 +15,37 @@ import type { DuckDBQueryable } from './duckdb-types.js';
 interface CacheEntry<T = any> {
   data: T;
   expiry: number;
+  /** 估算字节数（粗略，用于字节上限驱逐），set 时计算一次 */
+  bytes: number;
+}
+
+/**
+ * 粗略估算缓存值占用字节数。
+ *
+ * 不追求精确（JS 堆内存难以精确测量），只要"大结果显著大于小结果"即可驱动
+ * 字节上限驱逐。用 JSON 序列化长度近似（×2 粗估 UTF-16 / 对象开销）。
+ * 单条估算失败（循环引用等）退回一个保守常量，避免抛错破坏缓存写入。
+ */
+function estimateBytes(data: unknown): number {
+  try {
+    return JSON.stringify(data).length * 2;
+  } catch {
+    return 64 * 1024; // 兜底：当作 64KB
+  }
 }
 
 export class QueryCache {
   private cache = new Map<string, CacheEntry>();
   private maxSize = Number(process.env.DUCKDB_QUERY_CACHE_MAX_ENTRIES) || 3000;
+  // 字节上限：防止少量超大结果集（宽表全量导出等）撑爆堆内存——条数上限挡不住
+  // "3000 条里有几条几十 MB"。默认 256MB，可经 env 调整。
+  private maxBytes = Number(process.env.DUCKDB_QUERY_CACHE_MAX_BYTES) || 256 * 1024 * 1024;
+  private currentBytes = 0;
 
   get<T = any>(key: string): T | null {
     const entry = this.cache.get(key);
     if (!entry || Date.now() > entry.expiry) {
-      this.cache.delete(key);
+      if (entry) { this.currentBytes -= entry.bytes; this.cache.delete(key); }
       return null;
     }
     // LRU: 访问时 delete→set 将 key 移到 Map 末尾（最近访问）
@@ -34,22 +55,40 @@ export class QueryCache {
   }
 
   set(key: string, data: any, ttlMs: number): void {
-    // 已存在则先删除（保证 set 后在末尾）
-    this.cache.delete(key);
-    if (this.cache.size >= this.maxSize) {
-      // 驱逐 Map 首元素（最久未访问）
+    // 已存在则先删除（保证 set 后在末尾），扣回旧字节
+    const existing = this.cache.get(key);
+    if (existing) { this.currentBytes -= existing.bytes; this.cache.delete(key); }
+
+    const bytes = estimateBytes(data);
+    this.cache.set(key, { data, expiry: Date.now() + ttlMs, bytes });
+    this.currentBytes += bytes;
+
+    // 驱逐 Map 首元素（最久未访问）直到同时满足条数 + 字节双上限。
+    // 始终保留刚写入的 key（不自我驱逐），避免单条超大值导致空写。
+    while (
+      this.cache.size > this.maxSize ||
+      (this.currentBytes > this.maxBytes && this.cache.size > 1)
+    ) {
       const firstKey = this.cache.keys().next().value;
-      if (firstKey) this.cache.delete(firstKey);
+      if (firstKey === undefined || firstKey === key) break;
+      const evicted = this.cache.get(firstKey);
+      if (evicted) this.currentBytes -= evicted.bytes;
+      this.cache.delete(firstKey);
     }
-    this.cache.set(key, { data, expiry: Date.now() + ttlMs });
   }
 
   invalidateAll(): void {
     this.cache.clear();
+    this.currentBytes = 0;
   }
 
   get size(): number {
     return this.cache.size;
+  }
+
+  /** 当前估算缓存字节数（监控/测试用） */
+  get bytes(): number {
+    return this.currentBytes;
   }
 }
 

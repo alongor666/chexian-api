@@ -39,10 +39,7 @@ export class LazyDomainRegistry {
 
     if (entry.state === 'loading') {
       // 并发安全：等待已有 Promise（加超时保护）
-      return Promise.race([
-        entry.promise!,
-        this.timeoutReject(name, timeoutMs),
-      ]);
+      return this.raceWithTimeout(entry.promise!, name, timeoutMs);
     }
 
     // 首次触发加载
@@ -56,7 +53,7 @@ export class LazyDomainRegistry {
         throw err;
       });
 
-    return Promise.race([entry.promise, this.timeoutReject(name, timeoutMs)]);
+    return this.raceWithTimeout(entry.promise!, name, timeoutMs);
   }
 
   async reload(name: string, options: LazyDomainLoadOptions = {}): Promise<void> {
@@ -68,7 +65,7 @@ export class LazyDomainRegistry {
     }
     const timeoutMs = options.timeoutMs ?? LAZY_LOAD_TIMEOUT_MS;
     if (entry.state === 'loading' && entry.promise) {
-      return Promise.race([entry.promise, this.timeoutReject(name, timeoutMs)]);
+      return this.raceWithTimeout(entry.promise!, name, timeoutMs);
     }
     entry.state = 'loading';
     entry.error = null;
@@ -82,17 +79,32 @@ export class LazyDomainRegistry {
         entry.error = err;
         throw err;
       });
-    return Promise.race([entry.promise, this.timeoutReject(name, timeoutMs)]);
+    return this.raceWithTimeout(entry.promise!, name, timeoutMs);
   }
 
-  private timeoutReject(name: string, timeoutMs: number): Promise<never> {
-    return new Promise<never>((_, reject) =>
-      setTimeout(() => {
+  /**
+   * 在超时上限内等待加载 promise；超时则 reject 503。
+   *
+   * 关键：用 try/finally 在 race 结束（无论 promise 先完成还是超时）后 clearTimeout，
+   * 杜绝旧实现"加载胜出后定时器仍挂着到 timeoutMs 才触发"的泄漏——高频请求下会累积
+   * 成百上千个待触发定时器，且 setTimeout 持有闭包引用阻止 GC。另对定时器 unref()，
+   * 避免它单独把事件循环钉住（进程/测试无法干净退出）。
+   */
+  private async raceWithTimeout<T>(promise: Promise<T>, name: string, timeoutMs: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
         const err = new Error(`Domain ${name} loading timeout (${timeoutMs}ms)`);
         (err as any).statusCode = 503;
         reject(err);
-      }, timeoutMs)
-    );
+      }, timeoutMs);
+      (timer as any).unref?.();
+    });
+    try {
+      return await Promise.race([promise, timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   isLoaded(name: string): boolean {
