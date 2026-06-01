@@ -102,6 +102,8 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
     const otherPremiums = data.map(d => Math.max(0, d.total_premium - d.quality_premium));
     const qualityRatios = data.map(d => d.quality_ratio * 100);
     const showEdgeLabels = timeView === 'daily' && timePeriods.length < 32;
+    // 紧凑模式：矮图（如仪表盘次级小图 180px）下隐藏密集点标签 / 滑块 / 图例，避免重叠糊成一团
+    const compact = (height ?? 400) < 240;
 
     // Prepare MarkPoints for Daily View
     const markPointData: Array<Record<string, unknown>> = [];
@@ -154,15 +156,16 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
           return result;
         },
       },
-      legend: { data: ['优质业务', '其他业务', '优质业务占比'], top: 30, textStyle: { color: theme.chartTextStyles.legend.color } },
-      grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+      legend: { show: !compact, data: ['优质业务', '其他业务', '优质业务占比'], top: 30, textStyle: { color: theme.chartTextStyles.legend.color } },
+      grid: { left: '3%', right: '4%', bottom: compact ? '8%' : '15%', top: compact ? '8%' : 60, containLabel: true },
       xAxis: {
         type: 'category',
         data: timePeriods,
         axisLabel: {
           ...theme.xAxisConfig.axisLabel,
           rotate: 0,
-          interval: 0,
+          // 矮图（次级小图）抽稀 X 标签到 ~6 个，避免周标签挤成一条
+          interval: compact ? Math.max(1, Math.ceil(timePeriods.length / 6)) : 0,
           formatter: (value: string, index: number) => {
             if (timeView === 'weekly') {
               const [yearStr, weekStr] = value.split('-W');
@@ -254,7 +257,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
           data: qualityPremiums,
           itemStyle: { color: '#059669' },
           label: {
-            show: timeView !== 'daily',
+            show: timeView !== 'daily' && !compact,
             position: 'inside',
             formatter: (params: any) => {
               const safeParams = params as EChartsParam;
@@ -281,9 +284,9 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
           data: qualityRatios,
           smooth: true,
           itemStyle: { color: '#F59E0B' },
-          lineStyle: { width: 3 },
+          lineStyle: { width: compact ? 2 : 3 },
           label: {
-            show: true,
+            show: !compact,
             position: 'top',
             formatter: (params: any) => {
               const safeParams = params as EChartsParam;
@@ -303,10 +306,12 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
           } : undefined
         },
       ],
-      dataZoom: [
-        { type: 'inside', start: 0, end: 100 },
-        { type: 'slider', start: 0, end: 100, height: 20 },
-      ],
+      dataZoom: compact
+        ? [{ type: 'inside', start: 0, end: 100 }]
+        : [
+            { type: 'inside', start: 0, end: 100 },
+            { type: 'slider', start: 0, end: 100, height: 20 },
+          ],
     };
 
     chart.setOption(option, true);

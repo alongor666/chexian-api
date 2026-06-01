@@ -1,13 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import type { EChartsOption, SeriesOption } from 'echarts';
 import { echarts } from '../../shared/utils/echarts';
-import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
+import { formatPremiumWan } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 import { getYearChartColor } from '../../shared/styles';
 import { cardStyles, cn } from '../../shared/styles';
 import type { PremiumTrendBarData } from '../../features/dashboard/hooks/useTrendData';
 import { getChartTheme } from '../../shared/config/chartStyles';
 import { useTheme } from '../../shared/theme';
+
+// 同比增长率是小数比率（可 >1，如 +500% → 5.0），必须显式 ×100；
+// 不能用 formatRate（其 >1 自动检测会把 5.0 误判成"5%"，导致轴刻度不单调）
+const fmtYoy = (v: number) => `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`;
 
 interface YoyComboChartProps {
   /** 同比柱线组合图数据 */
@@ -70,7 +74,20 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
     const currentYear = String(year);
     const prevYear = String(year - 1);
 
-    const xLabels = data.map((d) => d.display_label);
+    // 次级小图：数据点过多时均匀抽稀（对齐设计简报的次级图疏朗处理），避免柱挤
+    const plot = data.length > 9
+      ? data.filter((_, i) => i % Math.ceil(data.length / 7) === 0 || i === data.length - 1)
+      : data;
+
+    const xLabels = plot.map((d) => d.display_label);
+
+    // 同比增长率右 Y 轴 robust 范围：早期周上年基数极小会产生上万%的 outlier，
+    // 直接 auto-scale 会把刻度拉坏。用对称裁剪范围（默认 ±50%，按实际值适度放宽到上限 200%）。
+    const yoys = plot
+      .map((d) => d.yoy_rate)
+      .filter((v): v is number => v != null && isFinite(v));
+    const yoyAbsMax = yoys.length ? Math.max(...yoys.map((v) => Math.abs(v))) : 0.2;
+    const yoyBound = Math.min(2, Math.max(0.2, yoyAbsMax));
 
     const series: SeriesOption[] = [
       // 上年保费柱（ghost）
@@ -80,7 +97,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
         yAxisIndex: 0,
         barGap: '8%',
         barCategoryGap: '38%',
-        data: data.map((d) => d.prev_premium),
+        data: plot.map((d) => d.prev_premium),
         itemStyle: { color: getYearChartColor(prevYear), opacity: 0.55 },
       },
       // 本年保费柱（primary）
@@ -88,7 +105,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
         name: `${currentYear}年`,
         type: 'bar',
         yAxisIndex: 0,
-        data: data.map((d) => d.current_premium),
+        data: plot.map((d) => d.current_premium),
         itemStyle: { color: getYearChartColor(currentYear) },
       },
       // 同比增长率折线（右 Y）
@@ -96,7 +113,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
         name: '同比增长率',
         type: 'line',
         yAxisIndex: 1,
-        data: data.map((d) => d.yoy_rate),
+        data: plot.map((d) => d.yoy_rate),
         smooth: false,
         symbol: 'circle',
         symbolSize: 5,
@@ -108,7 +125,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
           formatter: (params: any) => {
             const v = typeof params.value === 'number' ? params.value : null;
             if (v === null) return '';
-            return (v >= 0 ? '+' : '') + formatRate(v);
+            return fmtYoy(v);
           },
           color: '#52c41a',
           fontSize: 10,
@@ -135,7 +152,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
             if (param.value == null) return;
             const isRate = name.includes('增长率');
             const formatted = isRate
-              ? (raw >= 0 ? '+' : '') + formatRate(raw)
+              ? fmtYoy(raw)
               : formatPremiumWan(raw) + '万';
             result += `<div style="display:flex;align-items:center;gap:6px;margin-top:3px">
               <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${param.color}"></span>
@@ -190,13 +207,17 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
           name: '同比',
           nameTextStyle: { fontSize: 10, color: '#52c41a', padding: [0, -10, 0, 0] },
           position: 'right',
+          // robust 对称范围，避免极端同比把刻度拉坏（超界点贴边显示，tooltip 仍给真实值）
+          min: -yoyBound,
+          max: yoyBound,
+          splitNumber: 3,
           axisLine: { show: false },
           axisTick: { show: false },
           splitLine: { show: false },
           axisLabel: {
             fontSize: 10,
             color: '#52c41a',
-            formatter: formatRate,
+            formatter: (v: number) => `${(v * 100).toFixed(0)}%`,
           },
         },
       ],
