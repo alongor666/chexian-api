@@ -58,6 +58,11 @@ function parseFilters(query: Record<string, unknown>): ClaimsDetailFilters {
   if (query.coverageCombinations && typeof query.coverageCombinations === 'string') filters.coverageCombination = query.coverageCombinations;
   if (query.isNewCar && typeof query.isNewCar === 'string') filters.isNewCar = query.isNewCar;
   if (query.isRenewal && typeof query.isRenewal === 'string') filters.isRenewal = query.isRenewal;
+  // B303: cutoffDate 透传（用于 earned_exposure 分母计算）
+  if (query.cutoffDate && typeof query.cutoffDate === 'string') {
+    if (!isValidDateFormat(query.cutoffDate)) throw new AppError(400, 'cutoffDate 格式无效');
+    filters.cutoffDate = query.cutoffDate;
+  }
   return filters;
 }
 

@@ -67,6 +67,8 @@ export interface ClaimsDetailFilters {
   businessNature?: string;     // 营业/非营业性质
   isNewCar?: string;           // 是否新车：true/false
   isRenewal?: string;          // 是否续保：true/false
+  // B303: 满期截止日（用于 earned_days 计算），缺省 '9999-12-31' 视为全部到期
+  cutoffDate?: string;
 }
 
 function buildWhere(filters: ClaimsDetailFilters, tableAlias = 'c'): string {
@@ -474,13 +476,23 @@ export function generateLossRatioDevelopmentQuery(
     claimed AS (
       SELECT
         cw.cohort_year, cw.dev_month,
+        -- 件数不过滤（与 SSOT 件数口径一致：ClaimsAgg.claim_cases COUNT 不加条件）
         COUNT(DISTINCT c.claim_no) AS claim_count,
+        -- B302: 与 duckdb-domain-loaders.ts:395-403 ClaimsAgg.reported_claims 同口径过滤
+        -- 外层 CASE 排除无责(liability_ratio=0)及无效案件(零结/注销/拒赔)
+        -- 内层 CASE 保留发展三角特有时间约束(settlement_time <= effective_cutoff)
         SUM(
           CASE
-            WHEN c.settlement_time IS NOT NULL
-             AND CAST(c.settlement_time AS DATE) <= cw.effective_cutoff
-            THEN COALESCE(c.settled_amount, 0)
-            ELSE COALESCE(c.reserve_amount, 0)
+            WHEN COALESCE(c.liability_ratio, 100) > 0
+             AND (c.case_type IS NULL OR c.case_type NOT IN ('零结','注销','拒赔'))
+            THEN
+              CASE
+                WHEN c.settlement_time IS NOT NULL
+                 AND CAST(c.settlement_time AS DATE) <= cw.effective_cutoff
+                THEN COALESCE(c.settled_amount, 0)
+                ELSE COALESCE(c.reserve_amount, 0)
+              END
+            ELSE 0
           END
         ) AS total_reserve
       FROM calendar_window cw
@@ -519,6 +531,9 @@ export function generateLossRatioDevelopmentQuery(
 export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string {
   const claimWhere = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
+  // B303: cutoffDate 用于 earned_days 计算（与 cost-ratios.ts earned_loss_frequency 同口径）
+  // 缺省 '9999-12-31' → 所有保单视为已满期（等同旧逻辑的上界）
+  const cutoffDate = escapeSqlValue(filters.cutoffDate ?? '9999-12-31');
   // 取最近3个完整年份的Q1-Q4数据
   return `
     WITH quarterly_claims AS (
@@ -535,18 +550,31 @@ export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string 
     ),
     quarterly_policies AS (
       SELECT
-        YEAR(insurance_start_date) AS year,
-        QUARTER(insurance_start_date) AS quarter,
-        COUNT(DISTINCT policy_no) AS policy_count
-      FROM PolicyFact p
-      WHERE insurance_start_date >= '2022-01-01'${policyWhere.replace(/p\./g, '')}
-      GROUP BY YEAR(insurance_start_date), QUARTER(insurance_start_date)
+        YEAR(p.insurance_start_date) AS year,
+        QUARTER(p.insurance_start_date) AS quarter,
+        COUNT(DISTINCT p.policy_no) AS policy_count,
+        -- B303: 满期天数（与 cost-ratios.ts earned_days 同口径）
+        -- LEAST(max earned, full policy term) → cutoff 前已赚天数
+        -- B303-followup (codex P2 #457): 必须用 DEDUPED_POLICY_SUBQUERY 去重，否则
+        -- PolicyFact 同一保单的原单+批改多行会让 SUM(earned_days) 被重复累计，
+        -- 已满期保单算成多个 earned exposure → 系统性压低 freq_per_1000。
+        -- quarterly_claims 已用同一去重子查询，分子分母 cohort 同源。
+        SUM(LEAST(
+          GREATEST(DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}') + 1, 0),
+          DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
+        )) AS total_earned_days
+      FROM ${DEDUPED_POLICY_SUBQUERY} p
+      WHERE p.insurance_start_date >= '2022-01-01'${policyWhere}
+      GROUP BY YEAR(p.insurance_start_date), QUARTER(p.insurance_start_date)
     )
     SELECT
       c.year, c.quarter,
       c.claim_count, c.injury_count, c.reserve_wan,
       e.policy_count,
-      ROUND(c.claim_count * 1000.0 / NULLIF(e.policy_count, 0), 2) AS freq_per_1000,
+      e.total_earned_days,
+      -- B303: 出险率分母改为 earned_exposure（已赚暴露=满期天数/365），年化出险件数/已赚年份
+      -- 旧逻辑用 policy_count，2026 Q2 等未满期季度分母恒为全量，导致出险率低估 1205%
+      ROUND(c.claim_count * 1000.0 / NULLIF(e.total_earned_days / 365.0, 0), 2) AS freq_per_1000,
       ROUND(c.injury_count * 100.0 / NULLIF(c.claim_count, 0), 1) AS injury_pct
     FROM quarterly_claims c
     LEFT JOIN quarterly_policies e ON c.year = e.year AND c.quarter = e.quarter
