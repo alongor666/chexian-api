@@ -7,7 +7,11 @@
 import type { MetricDefinition } from '../types.js';
 
 /**
- * 优质业务条件 SQL 片段（与 kpi.ts:QUALITY_BUSINESS_CONDITION 同源）
+ * 优质业务条件 SQL 片段
+ *
+ * SSOT（B301）：`server/src/sql/shared/business-conditions.ts:QUALITY_BUSINESS_CONDITION`。
+ * 注册表层（metric-registry）不可反向 import sql/ 层（避免循环依赖），故此处保留本地副本，
+ * 但口径必须与 SSOT 一致（非营业客车 + 货车1-9吨）。修改 SSOT 时须同步本处。
  *
  * 优质业务包括：
  * 1. 非新能源车 AND (客户类别为非营业个人/企业/机关客车)

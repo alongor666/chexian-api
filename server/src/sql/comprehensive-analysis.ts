@@ -5,6 +5,7 @@
 
 import { buildPolicyDedupCTE } from './shared/policy-dedup.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { getMetricSql } from '../config/metric-registry/index.js';
 
 export type ComprehensiveDimension = 'org' | 'category' | 'business';
 export type ComprehensiveGranularity = 'daily' | 'weekly' | 'monthly';
@@ -80,9 +81,16 @@ dim_agg AS (
     CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
     ROUND(SUM(premium), 2) AS signed_premium,
     ROUND(SUM(reported_claims), 2) AS reported_claims,
-    ROUND(SUM(fee_amount), 2) AS fee_amount,
+    -- B305: fee_amount 聚合统一用 COALESCE(fee_amount,0)，与注册表 expense_ratio 等指标依赖口径一致
+    ROUND(SUM(COALESCE(fee_amount, 0)), 2) AS fee_amount,
     CAST(SUM(claim_cases) AS INTEGER) AS claim_cases,
-    ROUND(SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS earned_premium,
+    -- B305: 满期保费/费用率/变动成本率/综合费用率均改为引用指标注册表（唯一事实源）
+    -- 注册表表达式为聚合级，在 dim_agg 直接计算后由外层 SELECT 透传；
+    -- 这些指标自带 COALESCE(fee_amount,0)，对比原硬编码（fee_amount 无 COALESCE）会修正 NULL 值
+    ${getMetricSql('earned_premium')},
+    ${getMetricSql('expense_ratio')},
+    ${getMetricSql('variable_cost_ratio')},
+    ${getMetricSql('comprehensive_expense_ratio')},
     SUM(
       CAST(claim_cases AS DOUBLE) * CAST(policy_term AS DOUBLE)
       / NULLIF(CAST(earned_days AS DOUBLE), 0)
@@ -113,25 +121,15 @@ SELECT
     THEN ROUND(d.reported_claims * 100.0 / d.earned_premium, 2)
     ELSE NULL
   END AS earned_claim_ratio,
-  CASE
-    WHEN d.signed_premium > 0
-    THEN d.fee_amount * 100.0 / d.signed_premium
-    ELSE NULL
-  END AS expense_ratio,
-  CASE
-    WHEN d.earned_premium > 0 AND d.signed_premium > 0
-    THEN ROUND(
-      d.reported_claims * 100.0 / d.earned_premium
-      + d.fee_amount * 100.0 / d.signed_premium,
-      2
-    )
-    ELSE NULL
-  END AS variable_cost_ratio,
+  -- B305: 费用率/变动成本率/综合费用率已在 dim_agg 用注册表表达式算好，直接透传
+  d.expense_ratio,
+  d.variable_cost_ratio,
   CASE
     WHEN d.claim_cases > 0
     THEN ROUND(d.reported_claims / CAST(d.claim_cases AS DOUBLE), 2)
     ELSE NULL
   END AS avg_claim_amount,
+  -- B303: 满期出险率分母由 policy_count（签单件数）改为 earned_exposure（已赚暴露），对齐出险率分母铁律
   CASE
     -- B303: 出险率分母改为 earned_exposure（总满期天数/365），与 cost-ratios.ts 口径统一
     -- 旧逻辑用 policy_count（签单件数），未满期 cohort 分母虚大导致出险率严重低估
@@ -139,11 +137,7 @@ SELECT
     THEN ROUND(d.annualized_claim_cases * 100.0 / (CAST(d.total_earned_days AS DOUBLE) / 365.0), 2)
     ELSE NULL
   END AS claim_frequency,
-  CASE
-    WHEN d.earned_premium > 0
-    THEN ROUND((d.reported_claims + d.fee_amount) * 100.0 / d.earned_premium, 2)
-    ELSE NULL
-  END AS comprehensive_expense_ratio,
+  d.comprehensive_expense_ratio,
   CASE
     WHEN d.policy_count > 0
     THEN ROUND(d.signed_premium / CAST(d.policy_count AS DOUBLE), 2)
@@ -182,8 +176,10 @@ ${exposureBaseSql(whereClause, cutoffDate)}
 SELECT
   ROUND(SUM(premium), 2) AS signed_premium,
   ROUND(SUM(reported_claims), 2) AS reported_claims,
-  ROUND(SUM(fee_amount), 2) AS fee_amount,
-  ROUND(SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS earned_premium,
+  -- B305: fee_amount 聚合统一用 COALESCE(fee_amount,0)（与注册表指标依赖口径一致）
+  ROUND(SUM(COALESCE(fee_amount, 0)), 2) AS fee_amount,
+  -- B305: 满期保费引用指标注册表 earned_premium
+  ${getMetricSql('earned_premium')},
   CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
   CAST(SUM(claim_cases) AS INTEGER) AS claim_cases,
   CASE
@@ -195,35 +191,16 @@ SELECT
     )
     ELSE NULL
   END AS earned_claim_ratio,
-  CASE
-    WHEN SUM(premium) > 0
-    THEN SUM(fee_amount) * 100.0 / SUM(premium)
-    ELSE NULL
-  END AS expense_ratio,
-  CASE
-    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0 AND SUM(premium) > 0
-    THEN ROUND(
-      SUM(reported_claims) * 100.0
-      / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE))
-      + SUM(fee_amount) * 100.0 / SUM(premium),
-      2
-    )
-    ELSE NULL
-  END AS variable_cost_ratio,
-  CASE
-    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
-    THEN ROUND(
-      (SUM(reported_claims) + SUM(fee_amount)) * 100.0
-      / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)),
-      2
-    )
-    ELSE NULL
-  END AS comprehensive_expense_ratio,
+  -- B305: 费用率/变动成本率/综合费用率引用注册表（自带 COALESCE(fee_amount,0)，修正原硬编码缺失）
+  ${getMetricSql('expense_ratio')},
+  ${getMetricSql('variable_cost_ratio')},
+  ${getMetricSql('comprehensive_expense_ratio')},
   CASE
     WHEN COUNT(DISTINCT policy_no) > 0
     THEN ROUND(SUM(premium) / CAST(COUNT(DISTINCT policy_no) AS DOUBLE), 2)
     ELSE NULL
   END AS per_vehicle_premium,
+  -- B303: 满期出险率分母由 policy_count（签单件数）改为已赚暴露 Σ(earned_days)/365
   CASE
     -- B303-followup (codex P2 #457): summary 出险率分母改 earned_exposure，与 dim 行同口径
     -- 旧逻辑用 COUNT(DISTINCT policy_no) → 同一 /api/query/comprehensive 响应里
@@ -269,7 +246,8 @@ period_agg AS (
   SELECT
     ${timePeriodExpr} AS time_period,
     ROUND(SUM(reported_claims), 2) AS reported_claims,
-    ROUND(SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2) AS earned_premium
+    -- B305: 满期保费引用指标注册表 earned_premium
+    ${getMetricSql('earned_premium')}
   FROM policy_exposure
   GROUP BY ${timePeriodExpr}
 ),
