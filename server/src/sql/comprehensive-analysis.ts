@@ -91,12 +91,11 @@ dim_agg AS (
     ${getMetricSql('expense_ratio')},
     ${getMetricSql('variable_cost_ratio')},
     ${getMetricSql('comprehensive_expense_ratio')},
+    -- 满期出险率分子：Σ(claim_cases × policy_term/earned_days)，已按已赚暴露年化（分母用保单件数）
     SUM(
       CAST(claim_cases AS DOUBLE) * CAST(policy_term AS DOUBLE)
       / NULLIF(CAST(earned_days AS DOUBLE), 0)
-    ) AS annualized_claim_cases,
-    -- B303: 满期天数合计（出险率分母，与 cost-ratios.ts earned_loss_frequency 口径统一）
-    SUM(earned_days) AS total_earned_days
+    ) AS annualized_claim_cases
   FROM policy_exposure
   GROUP BY COALESCE(${dimField}, '未知')
 ),
@@ -129,12 +128,13 @@ SELECT
     THEN ROUND(d.reported_claims / CAST(d.claim_cases AS DOUBLE), 2)
     ELSE NULL
   END AS avg_claim_amount,
-  -- B303: 满期出险率分母由 policy_count（签单件数）改为 earned_exposure（已赚暴露），对齐出险率分母铁律
+  -- 满期出险率 = SUM(claim_cases × policy_term/earned_days) / COUNT(DISTINCT policy_no)
+  -- 对齐注册表 earned_loss_frequency SSOT：分子(annualized_claim_cases)已按已赚暴露年化，
+  -- 分母用保单件数。⚠️ 不可再除以已赚暴露(Σearned/365)，否则二次按暴露放大出险率
+  -- （PR#461 引入、Codex P1 复核确认的回归，此处已修正）。
   CASE
-    -- B303: 出险率分母改为 earned_exposure（总满期天数/365），与 cost-ratios.ts 口径统一
-    -- 旧逻辑用 policy_count（签单件数），未满期 cohort 分母虚大导致出险率严重低估
-    WHEN d.total_earned_days > 0 AND d.annualized_claim_cases IS NOT NULL
-    THEN ROUND(d.annualized_claim_cases * 100.0 / (CAST(d.total_earned_days AS DOUBLE) / 365.0), 2)
+    WHEN d.policy_count > 0 AND d.annualized_claim_cases IS NOT NULL
+    THEN ROUND(d.annualized_claim_cases * 100.0 / CAST(d.policy_count AS DOUBLE), 2)
     ELSE NULL
   END AS claim_frequency,
   d.comprehensive_expense_ratio,
@@ -200,18 +200,17 @@ SELECT
     THEN ROUND(SUM(premium) / CAST(COUNT(DISTINCT policy_no) AS DOUBLE), 2)
     ELSE NULL
   END AS per_vehicle_premium,
-  -- B303: 满期出险率分母由 policy_count（签单件数）改为已赚暴露 Σ(earned_days)/365
+  -- 满期出险率 = SUM(claim_cases × policy_term/earned_days) / COUNT(DISTINCT policy_no)
+  -- 对齐注册表 earned_loss_frequency SSOT：分子已按已赚暴露年化，分母用保单件数，
+  -- 与 dim 行同口径。⚠️ 不可再除以 Σ(earned_days)/365，否则二次按暴露放大
+  -- （PR#461 引入、Codex P1 复核确认的回归，此处已修正）。
   CASE
-    -- B303-followup (codex P2 #457): summary 出险率分母改 earned_exposure，与 dim 行同口径
-    -- 旧逻辑用 COUNT(DISTINCT policy_no) → 同一 /api/query/comprehensive 响应里
-    -- summary 卡片与 dim 表的 claim_frequency 不可对齐，未满期 cutoff 下表现显著
-    -- policy_exposure 已基于 policy_dedup（B252），SUM(earned_days) 无重复行问题
-    WHEN SUM(earned_days) > 0
+    WHEN COUNT(DISTINCT policy_no) > 0
     THEN ROUND(
       SUM(
         CAST(claim_cases AS DOUBLE) * CAST(policy_term AS DOUBLE)
         / NULLIF(CAST(earned_days AS DOUBLE), 0)
-      ) * 100.0 / (CAST(SUM(earned_days) AS DOUBLE) / 365.0),
+      ) * 100.0 / CAST(COUNT(DISTINCT policy_no) AS DOUBLE),
       2
     )
     ELSE NULL
