@@ -62,6 +62,7 @@ export const TableSection = memo<TableSectionProps>(function TableSection({
           premiumLabel="总保费"
           data={allBusinessData}
           loading={loading}
+          tone="primary"
           actions={renderExportButtons(onExportAll, allBusinessData.length === 0)}
         />
         <SalesmanRankingTable
@@ -69,6 +70,7 @@ export const TableSection = memo<TableSectionProps>(function TableSection({
           premiumLabel="优质保费"
           data={qualityBusinessData}
           loading={loading}
+          tone="success"
           actions={renderExportButtons(onExportQuality, qualityBusinessData.length === 0)}
         />
       </div>
