@@ -13,10 +13,18 @@ function manifest(dates: string[]): ReportManifest {
 }
 
 describe('resolveReport', () => {
-  it('manifest 缺失 → unknown，回落 etlDate（保持旧行为）', () => {
+  it('manifest 拉不到 (null) → unavailable，不回落到 etlDate 直拼（PR 441 漏洞修复）', () => {
     const r = resolveReport(null, '2026-05-29')
-    expect(r.status).toBe('unknown')
-    expect(r.reportDate).toBe('2026-05-29')
+    expect(r.status).toBe('unavailable')
+    expect(r.reportDate).toBeNull()
+    expect(r.reportFile).toBeNull()
+    expect(r.etlDate).toBe('2026-05-29')
+  })
+
+  it('manifest 拉不到且 etlDate 也未知 → unavailable', () => {
+    const r = resolveReport(null, null)
+    expect(r.status).toBe('unavailable')
+    expect(r.reportDate).toBeNull()
     expect(r.reportFile).toBeNull()
   })
 

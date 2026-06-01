@@ -26,6 +26,11 @@
  *   server/data/reports/                          →  data/reports/  （追加同步，不删除远端历史报告；后端鉴权访问）
  *   public/reports/                               →  frontend/dist/reports/  （追加同步；Nginx 静态托管，浏览器 /reports/* 可直达）
  *
+ * 报告 manifest 生成：
+ *   rsync 完成后，scp `scripts/gen-reports-manifest.mjs` 到 VPS `/tmp/` 并 ssh 执行
+ *   `node /tmp/<script> <frontendDist>/reports`，按 VPS 真实存在的 HTML 文件清单
+ *   写出每个 slug 目录下的 `manifest.json`。前端据此判 ready/stale/unavailable。
+ *
  * 可选环境变量:
  *   SYNC_VPS_SSH_ALIAS, SYNC_VPS_HOST, SYNC_VPS_USER, SYNC_VPS_PORT,
  *   SYNC_VPS_KEY_PATH, SYNC_VPS_DATA_DIR, SYNC_VPS_FRONTEND_DIST, SYNC_VPS_HEALTH_URL
@@ -38,7 +43,6 @@ import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import os from 'os';
 import { assertNoPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
-import { generateReportsManifests } from './gen-reports-manifest.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -670,19 +674,6 @@ async function maybeRestart(config, noRestart, healthUrl) {
 async function runStandardMode(sshConfig, runConfig) {
   const alias = sshConfig.alias;
 
-  // 同步静态报告前刷新 manifest.json：让前端能感知“哪几期报告真实存在”，
-  // ETL 推进 etlDate 但报告未重新生成时提醒“数据未更新”，而不是打开空白 SPA 页。
-  if (existsSync(LOCAL_PUBLIC_REPORTS_DIR)) {
-    const summaries = generateReportsManifests(LOCAL_PUBLIC_REPORTS_DIR);
-    for (const s of summaries) {
-      if (s.skipped) {
-        log('yellow', `  ⚠ manifest ${s.slug}: 本地无报告文件，跳过（保留既有 manifest，不清空远端）`);
-      } else {
-        log('green', `  ✓ manifest ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
-      }
-    }
-  }
-
   const syncTasks = buildSyncTasks(runConfig);
 
   // 过滤不存在的目录
@@ -746,10 +737,72 @@ async function runStandardMode(sshConfig, runConfig) {
     log('yellow', '\n⚠ 非关键目录同步失败，继续重启（数据不完整但核心功能可用）');
   }
 
+  // 在 VPS 端按真实存在的 HTML 文件清单生成 reports manifest.json
+  // 设计要点（PR 441 漏洞修复）：
+  //   - 本地（dev / Mac）通常不会跑 diagnose-* skill 产 HTML，public/reports/ 只有 .gitkeep
+  //   - 旧实现：本地生成 manifest → 本地 entries=0 → 跳过 → VPS 永远没 manifest
+  //   - 新实现：rsync 完报告后，让 VPS 自己当 owning host，按 frontend/dist/reports/ 真实文件清单生成
+  //   - manifest 失败不阻断重启（前端 resolveReport 会判 unavailable 并显式提示，不再回落到空白页）
+  const reportsTask = activeTasks.find((t) => t.label === 'public_reports');
+  if (reportsTask) {
+    const manifestResult = await generateManifestsOnRemote(sshConfig, reportsTask.remote);
+    if (!manifestResult.ok) {
+      log('yellow', `⚠ manifest 远端生成失败（不阻断重启）：${manifestResult.error}`);
+    }
+  }
+
   // 写同步清单：记录本次同步的文件指纹，governance 用于检测数据漂移
   writeSyncManifest(activeTasks, runConfig);
 
   await maybeRestart(sshConfig, runConfig.noRestart, runConfig.healthUrl);
+}
+
+/**
+ * 在 VPS 端按 reportsRoot 下真实存在的 HTML 文件清单生成 manifest.json。
+ *
+ * 实现：scp 本仓库 `scripts/gen-reports-manifest.mjs` 到 VPS `/tmp/`，
+ * 再 ssh 执行 `node /tmp/<script> <reportsRoot>`。生成器内部仅依赖 fs/path/url
+ * 三个 Node 内置模块，无 npm 依赖；VPS 已有 node（部署链 npm ci 前置依赖），所以
+ * 单文件分发即可。
+ */
+async function generateManifestsOnRemote(sshConfig, reportsRoot) {
+  const alias = sshConfig.alias;
+  const localScript = join(ROOT_DIR, 'scripts/gen-reports-manifest.mjs');
+  if (!existsSync(localScript)) {
+    return { ok: false, error: `脚本不存在: ${localScript}` };
+  }
+  const remoteScript = '/tmp/chexian-gen-reports-manifest.mjs';
+
+  log('green', '\n▶ 在 VPS 端生成 reports manifest...');
+  log('yellow', `  scp gen-reports-manifest.mjs → ${alias}:${remoteScript}`);
+  try {
+    await runLocal('scp', [
+      '-o', 'StrictHostKeyChecking=accept-new',
+      localScript,
+      `${alias}:${remoteScript}`,
+    ]);
+  } catch (err) {
+    return { ok: false, error: `scp 失败: ${err.message}` };
+  }
+
+  log('yellow', `  ssh node ${remoteScript} ${reportsRoot}`);
+  try {
+    const { stdout } = await execRemote(
+      sshConfig,
+      `node ${remoteScript} ${quoteForSingle(reportsRoot)}`,
+      { silent: true, allowFailure: false }
+    );
+    const lines = (stdout || '').split('\n').map((l) => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      log('green', `  ${line}`);
+    }
+    if (lines.length === 0) {
+      log('yellow', '  ⚠ 远端生成器无输出（reportsRoot 可能为空目录）');
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `node 远端执行失败: ${err.message}` };
+  }
 }
 
 /**

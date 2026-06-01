@@ -35,7 +35,6 @@ import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import os from 'os';
-import { generateReportsManifests } from './gen-reports-manifest.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -315,31 +314,45 @@ async function main() {
     }
   }
 
-  // Stage 4.5: 同步静态报告到 VPS（Nginx 直接 serve）
+  // Stage 4.5: 同步静态报告到 VPS（Nginx 直接 serve）+ 在 VPS 端按真实文件清单生成 manifest
+  // PR 441 漏洞修复：本地（dev / Mac）通常不会跑 diagnose-* skill 产 HTML，
+  // public/reports/ 只有 .gitkeep —— 旧实现「本地生成 manifest」永远 skipped，
+  // VPS 上 manifest 缺失 → 前端 916B SPA fallback → 仍打开空白页。
+  // 新实现：rsync 完成后让 VPS 自己当 owning host，按 frontend/dist/reports/
+  // 真实存在的 HTML 文件清单生成 manifest.json。
   if (!opts.skipReload) {
     const frontendDistDir = process.env.SYNC_VPS_FRONTEND_DIST || '/var/www/chexian/frontend/dist';
     const localReportsDir = join(ROOT_DIR, 'public/reports/');
+    const remoteReportsRoot = `${frontendDistDir}/reports`;
     if (existsSync(localReportsDir)) {
-      // 同步前刷新 manifest.json，让前端能感知“哪几期报告真实存在”
-      // （ETL 推进了 etlDate 但报告未重新生成时，前端据此提醒“数据未更新”而非打开空白页）
-      if (opts.dryRun) {
-        log('cyan', '\n▶ [reports-manifest] node scripts/gen-reports-manifest.mjs  (dry-run，跳过)');
-      } else {
-        const summaries = generateReportsManifests(join(ROOT_DIR, 'public/reports'));
-        for (const s of summaries) {
-          if (s.skipped) {
-            log('yellow', `  ⚠ manifest ${s.slug}: 本地无报告文件，跳过（保留既有 manifest，不清空远端）`);
-          } else {
-            log('green', `  ✓ manifest ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
-          }
-        }
-      }
       await runCmd(
         'sync reports → VPS',
         'rsync',
-        ['-azv', '-e', 'ssh', localReportsDir, `${sshAlias}:${frontendDistDir}/reports/`],
+        ['-azv', '-e', 'ssh', localReportsDir, `${sshAlias}:${remoteReportsRoot}/`],
         { dryRun: opts.dryRun, timeoutMs: 60 * 1000 }
       );
+
+      // 在 VPS 端生成 manifest.json：scp 脚本 + ssh 执行
+      // 失败时只 warn 不 abort：manifest 缺失会让前端显示 unavailable（友好提示），
+      // 不影响企微同步等后续阶段。
+      const manifestScript = join(ROOT_DIR, 'scripts/gen-reports-manifest.mjs');
+      const remoteScript = '/tmp/chexian-gen-reports-manifest.mjs';
+      try {
+        await runCmd(
+          'scp gen-reports-manifest.mjs',
+          'scp',
+          ['-o', 'StrictHostKeyChecking=accept-new', manifestScript, `${sshAlias}:${remoteScript}`],
+          { dryRun: opts.dryRun, timeoutMs: 30 * 1000 }
+        );
+        await runCmd(
+          'gen reports manifest on VPS',
+          'ssh',
+          ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', sshAlias, `node ${remoteScript} '${remoteReportsRoot}'`],
+          { dryRun: opts.dryRun, timeoutMs: 30 * 1000 }
+        );
+      } catch (err) {
+        log('yellow', `⚠ reports manifest 远端生成失败（不阻断后续流程）：${err.message}`);
+      }
     } else {
       log('yellow', '\n⚠ 跳过报告同步（public/reports/ 不存在）');
     }

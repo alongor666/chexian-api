@@ -1,9 +1,11 @@
 /**
- * 读取 `/reports/<slug>/manifest.json`（Nginx 静态托管）。
+ * 读取 `/reports/<slug>/manifest.json`（Nginx 静态托管，由 VPS 端
+ * `gen-reports-manifest.mjs` 按真实存在的 HTML 文件清单生成）。
  *
  * 容错要点：当 manifest 不存在时，Nginx `try_files` 会回落到 SPA index.html
  * 并返回 200（HTML 而非 JSON）。因此这里必须严格校验返回体是合法 manifest，
- * 否则一律视为「manifest 未部署」返回 null（调用方走旧版 etlDate 回落逻辑）。
+ * 否则一律返回 null —— 调用方（resolveReport）会显式判为 unavailable 并
+ * 禁用按钮，**不再** 回落到 etlDate 直拼（那会重新打开 PR 441 修复的空白页）。
  */
 import { useQuery } from '@tanstack/react-query'
 import { getManifestUrl, type ReportEntry } from '../data/reportEntries'

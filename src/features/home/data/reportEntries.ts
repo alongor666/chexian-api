@@ -3,9 +3,10 @@
  *
  * 新增入口卡：往 `reportEntries` 数组追加一个 ReportEntry 即可（无需改 HomePage / ReportEntryCard）。
  *
- * 报告 URL 不再直接用 etlDate 直拼，而是先读 `/reports/<slug>/manifest.json`
- * （由 scripts/gen-reports-manifest.mjs 生成），解析出真正存在的最新一期报告，
- * 详见 components/ReportEntryCard.tsx 与 data/resolveReport.ts。
+ * 报告 URL **必须** 通过 `/reports/<slug>/manifest.json` 解析 —— manifest 由
+ * `scripts/gen-reports-manifest.mjs` 在 VPS 端按真实存在的 HTML 文件清单生成。
+ * 拉不到 / 非合法 JSON 一律视为 unavailable，**不再** 回落到 etlDate 直拼
+ * （那正是 PR 441 想根除的「空白 SPA 页」行为）。
  */
 import { BarChart3, type LucideIcon } from 'lucide-react'
 
@@ -34,11 +35,6 @@ export function getManifestUrl(slug: string): string {
 /** 由 slug + 文件名拼出报告 URL */
 export function getReportUrl(slug: string, file: string): string {
   return `/reports/${slug}/${file}`
-}
-
-/** manifest 缺失时的旧版回落：用 etlDate 直拼（保持向后兼容） */
-export function getLegacyReportUrl(slug: string, etlDate: string | null): string | null {
-  return etlDate ? `/reports/${slug}/${etlDate}-dashboard.html` : null
 }
 
 export const reportEntries: ReportEntry[] = [
