@@ -113,12 +113,12 @@ describe('generateComprehensiveDimensionMetricsQuery', () => {
   // B303：满期出险率分母必须用已赚暴露（Σ earned_days / 365），不得用签单件数 policy_count
   it('B303: claim_frequency 分母用已赚暴露而非 policy_count', () => {
     const sql = generateComprehensiveDimensionMetricsQuery(BASE_DIM_CONFIG);
-    expect(sql).toContain('earned_exposure');
+    expect(sql).toContain('total_earned_days');
     expect(sql).toMatch(
-      /SUM\(CAST\(earned_days AS DOUBLE\)\)\s*\/\s*365\.0\s+AS earned_exposure/
+      /SUM\(earned_days\)\s+AS total_earned_days/
     );
     expect(sql).toMatch(
-      /d\.annualized_claim_cases \* 100\.0 \/ d\.earned_exposure/
+      /d\.annualized_claim_cases \* 100\.0 \/ \(CAST\(d\.total_earned_days AS DOUBLE\) \/ 365\.0\)/
     );
     // 旧硬编码（分母用签单件数 policy_count）必须消失
     expect(sql).not.toContain(
@@ -216,7 +216,7 @@ describe('generateComprehensiveSummaryQuery', () => {
   it('B303: 汇总 claim_frequency 分母用已赚暴露', () => {
     const sql = generateComprehensiveSummaryQuery(BASE_WHERE, BASE_CUTOFF);
     expect(sql).toMatch(
-      /100\.0 \/ \(SUM\(CAST\(earned_days AS DOUBLE\)\) \/ 365\.0\)/
+      /100\.0 \/ \(CAST\(SUM\(earned_days\) AS DOUBLE\) \/ 365\.0\)/
     );
   });
 
