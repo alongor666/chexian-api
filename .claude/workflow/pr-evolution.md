@@ -42,3 +42,9 @@
 - **根因**: 修字典时只对照了 `variable_cost_ratio`/`comprehensive_expense_ratio`，**漏查 `earned_loss_frequency`**；凭"赔付率分母用 earned exposure"的肌肉记忆把出险率分母也写成 earned exposure
 - **修复**: 字典按注册表完整公式改写 + 加「口径陷阱」警告：earned_exposure 仅用于赔付率分母，不可移植到出险率
 - **预防**: 自审清单「业务口径」一栏强化——**改字典/文档涉及任何指标公式时，必须把涉及的每个指标 id 逐个 grep `server/src/config/metric-registry/categories/*.ts` 拿 SQL expression 对照，禁止凭"通用规则"推导单个指标**。同类失败再发生 2 次 → 转 governance 自动化（"字典公式与 registry SQL 关键 token 重叠率"检查）
+
+### 2026-05-31 — PR #459: 本地 build 过 ✅ 但 CI typecheck 卡在 unused 变量
+- **症状**: `bun run build` 本地零错误零警告，但 CI 的 Production Gate / Typecheck 阶段（`scripts/typecheck.mjs` → `tsc --noEmit`）报 `TS6133: 'isHero' is declared but its value is never read`
+- **根因**: 重构 KpiSection 时为可读性引入了 `const isHero = HERO_KPI_IDS.includes(id)` 但后续逻辑没真用到它（Hero 归属判定走 `visibleHero / visibleCore` 过滤）；vite 的 esbuild 把它当 dead-code 静默吃掉，而项目根 `tsconfig.json` 启用 `noUnusedLocals: true` 让 `tsc --noEmit` 报错——两条工具链的严格度不一致
+- **修复**: 删掉这个未用的本地变量，commit `11988299`
+- **预防**: §3 前置检查里 `bun run build` 不等同于 `bun run typecheck`。**push 前必须额外跑 `bun run typecheck`**（已在 `scripts/typecheck.mjs` 暴露）。同类失败再发生 1 次 → 把 `bun run typecheck` 加进 §3.3 默认治理校验链，让 CI 那一关本地必先过

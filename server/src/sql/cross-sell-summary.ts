@@ -8,7 +8,8 @@
 
 import { logger } from '../utils/logger.js';
 import { getVehicleCategoryFilter, type VehicleCategory } from './cross-sell/shared.js';
-export { VehicleCategory, getVehicleCategoryFilter } from './cross-sell/shared.js';
+export { getVehicleCategoryFilter } from './cross-sell/shared.js';
+export type { VehicleCategory } from './cross-sell/shared.js';
 
 // ============================================================
 // 主查询生成
