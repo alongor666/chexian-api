@@ -1140,9 +1140,17 @@ function checkKnowledgeDataConsistency() {
         mismatches.push(`分片 ${qrStats.shardCount} vs 实际 ${policyStats.shardCount}`);
       }
       if (mismatches.length > 0) {
-        // 目录即唯一事实源：QUICK_REFERENCE.md 的数据规模/字段/分片均为派生值，
-        // 漂移时直接按 policy/current 目录重算并回写，不再因手填值过期而阻断提交。
-        // 回写失败（如文件结构损坏）才降级为阻断。
+        // 目录即唯一事实源：QUICK_REFERENCE.md 的数据规模/字段/分片均为派生值。
+        // CI/非交互环境：禁止静默回写放行——CI 只跑 `bun run governance`，回写的
+        // 文件不会被提交，若放行则 stale QR 会借自愈蒙混过关、治理门禁形同虚设。
+        // 故 CI 下直接失败并提示提交生成结果；本地（dev）才自愈回写放行。
+        const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
+        if (isCI) {
+          error(`知识库数据规模不一致: ${mismatches.join('；')}`);
+          console.log('    CI 不自动回写。请本地运行 node 数据管理/daily.mjs 刷新 QUICK_REFERENCE.md 后提交');
+          return false;
+        }
+        // 本地：按目录重算并回写，自愈放行。回写失败（如文件结构损坏）才降级为阻断。
         try {
           const refreshedLine = syncQuickReferenceFile(qrPath, policyStats);
           warning(`知识库数据规模漂移，已按 policy/current 目录自动刷新 QUICK_REFERENCE.md：${mismatches.join('；')}`);
