@@ -26,6 +26,9 @@ import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 
 type MapLevel = 'china' | 'province';
 
+// 数据条单色顺序强度底色（= 项目语义 primary #1890ff 的 RGB 分量，供 rgba alpha 拼接）
+const DATA_BAR_RGB = '24,144,255';
+
 /** HTML 转义（防止 tooltip XSS） */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -205,6 +208,12 @@ export const GeoSection: React.FC = () => {
   // ── 当前展示的表格数据 ──
   const tableData: PolicyGeoRow[] = mapLevel === 'china' ? provinceData.data : cityData.data;
   const isLoading = provinceData.loading || cityData.loading || mapLoading;
+
+  // ── 明细表保费列数据条：当前视图最大保费（useMemo，tableData 变化时重算）──
+  const maxPremium = useMemo(
+    () => tableData.reduce((m, row) => Math.max(m, row.premium_wan), 0),
+    [tableData]
+  );
   const dataError = provinceData.error || cityData.error;
 
   if (dataError) return <div className={cn(colorClasses.text.danger, 'p-4')}>{dataError}</div>;
@@ -277,13 +286,17 @@ export const GeoSection: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {tableData.map((row) => {
+              {tableData.map((row, idx) => {
                 const stableKey = mapLevel === 'china'
                   ? `prov-${row.province}`
                   : `city-${row.province}-${row.city ?? ''}`;
                 const displayName = mapLevel === 'china'
                   ? row.province
                   : getCityAbbrev(row.city ?? '');
+                // 数据条：宽度比例 & alpha 强度（与地图蓝阶呼应）
+                const ratio = maxPremium > 0 ? row.premium_wan / maxPremium : 0;
+                const barWidth = `${ratio * 100}%`;
+                const barAlpha = (0.14 + 0.7 * ratio).toFixed(3);
                 return (
                   <tr
                     key={stableKey}
@@ -294,6 +307,13 @@ export const GeoSection: React.FC = () => {
                     onClick={mapLevel === 'china' ? () => void drillToProvince(row.province) : undefined}
                   >
                     <td className={tableStyles.cell}>
+                      {/* 排名序号：弱化灰色小字，tabular-nums */}
+                      <span
+                        className={cn(colorClasses.text.neutralMuted, fontStyles.numeric, 'text-xs mr-1.5 inline-block w-4 text-right')}
+                        style={{ fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        {idx + 1}
+                      </span>
                       {displayName}
                       {mapLevel === 'china' && (
                         <span className={cn(colorClasses.text.neutralMuted, 'text-xs ml-1')}>
@@ -307,8 +327,22 @@ export const GeoSection: React.FC = () => {
                     <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
                       {formatPercent(row.vehicle_pct ?? 0)}
                     </td>
-                    <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
-                      {formatCount(row.premium_wan)}
+                    {/* 保费(万) 列：单元格内数据条 */}
+                    <td className={cn(tableStyles.cell, 'text-right')}>
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        <div style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: '20%',
+                          height: '60%',
+                          borderRadius: 2,
+                          width: barWidth,
+                          background: `rgba(${DATA_BAR_RGB},${barAlpha})`,
+                        }} />
+                        <span style={{ position: 'relative' }} className={fontStyles.numeric}>
+                          {formatCount(row.premium_wan)}
+                        </span>
+                      </div>
                     </td>
                     <td className={cn(tableStyles.cell, 'text-right', fontStyles.numeric)}>
                       {formatPercent(row.premium_pct ?? 0)}
