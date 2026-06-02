@@ -154,13 +154,30 @@ export default function OrgTable({
         ? { boxShadow: 'inset 3px 0 0 var(--c-danger)' }
         : undefined;
 
+    // 可点击行补键盘可达性（沿用 EnhancedKpiCard 的 role/tabIndex/Enter·Space 惯例）
+    const interactiveProps = onClick
+      ? {
+          role: 'button' as const,
+          tabIndex: 0,
+          onKeyDown: (e: React.KeyboardEvent) => {
+            // 只处理落在行本身的按键；忽略从嵌套「团队/业务员」按钮冒泡上来的
+            // Enter/Space，否则键盘激活下钻按钮会被行 onClick 抢走（Codex P2）
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onClick();
+            }
+          },
+        }
+      : {};
+
     return (
       <tr
         key={rowKey}
         className={cn(
           'border-b transition-colors',
           colorClasses.border.neutral,
-          onClick && 'cursor-pointer',
+          onClick && 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
           isTotal && cn(colorClasses.bg.neutral, 'font-semibold'),
           isSelected
             ? colorClasses.bg.primary
@@ -169,6 +186,7 @@ export default function OrgTable({
               : onClick && 'hover:bg-primary-bg/50',
         )}
         onClick={onClick}
+        {...interactiveProps}
       >
         <td
           className={cn(

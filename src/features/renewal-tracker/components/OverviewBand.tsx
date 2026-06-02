@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import { cn, cardStyles, colorClasses, fontStyles } from '@/shared/styles';
 import HeroFunnel from './HeroFunnel';
 import { formatNum, formatPct } from '../utils/format';
-import { gradeRate, renewRate, type Grade } from '../utils/grading';
+import { gradeRate, renewRate, isBadRow, type Grade } from '../utils/grading';
 import type { RenewalRow, Selection } from '../types';
 
 interface Props {
@@ -50,6 +50,8 @@ export default function OverviewBand({ overall, orgRows, selection, onSelectOrg 
 
   const overallRate = renewRate(overall);
   const overallGrade = gradeRate('renew', overallRate);
+  // 仅当确有续保率跌破健康线的机构时才升起 ⚠ 红标，避免「全员健康」时过度预警
+  const hasBad = worst.some(isBadRow);
 
   return (
     <div className={cn(cardStyles.base, 'mb-4 overflow-hidden')}>
@@ -75,8 +77,8 @@ export default function OverviewBand({ overall, orgRows, selection, onSelectOrg 
 
         {/* Worst orgs */}
         <div className="min-w-0">
-          <div className={cn('text-xs mb-1.5 flex items-center gap-1.5', colorClasses.text.dangerDark)}>
-            <span aria-hidden>⚠</span>
+          <div className={cn('text-xs mb-1.5 flex items-center gap-1.5', hasBad ? colorClasses.text.dangerDark : colorClasses.text.neutralLight)}>
+            {hasBad && <span aria-hidden>⚠</span>}
             <span>续保率最低的机构（点击下钻）</span>
           </div>
           <div className="flex flex-col gap-1">
