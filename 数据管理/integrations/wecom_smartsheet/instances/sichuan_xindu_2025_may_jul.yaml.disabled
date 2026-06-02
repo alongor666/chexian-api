@@ -4,15 +4,16 @@
 # 业务规则：原单（排除批单）+ 单 VIN 净保费 > 200 元
 # 按 policy.org_level_3 = '新都' 严格过滤
 #
-# 字段集对齐 12 张机构表（17 字段，使用 field_registry_orgsheet.yaml）
+# 字段集对齐机构表稳定字段；客户类别/风险等级为新都表专属单选字段，
+# 但当前表端选项不接受源数据值，先不启用写入。
 # 表中"姓名"列由业务员手填，不由代码写入
 
 instance_name: sichuan_xindu_2025_may_jul
 
 webhook_env: WECOM_SMARTSHEET_WEBHOOK_XINDU
 
-# 机构表字段类型与 H1/H2 不同（select/bool 全改为 text），用独立 registry
-field_registry_path: field_registry_orgsheet.yaml
+# 新都表有专属字段 ID，见 field_registry_orgsheet_xindu.yaml
+field_registry_path: field_registry_orgsheet_xindu.yaml
 
 batch_size: 100
 sheet_records_per_minute_limit: 3000
@@ -35,7 +36,6 @@ fields_enabled:
   - vehicle_frame_no
   - salesman_name
   - sales_team
-  - customer_category
   - coverage_combination
   - is_quoted
   - prior_discount
