@@ -56,4 +56,15 @@ describe('generateKpiQuery — variable_cost_ratio 注册表派生 (B305)', () =
     expect(sql).toContain('vc.variable_cost_ratio AS variable_cost_ratio');
     expect(sql).toContain('CROSS JOIN variable_cost vc');
   });
+
+  it('KPI 工作集不再从 PolicyFact 做 SELECT * 宽表扫描', () => {
+    const sql = generateKpiQuery('1=1');
+
+    expect(sql).not.toMatch(/SELECT\s+\*\s+FROM\s+PolicyFact/i);
+    expect(sql).not.toMatch(/SELECT\s+\*\s*\n\s*FROM\s+PolicyFact/i);
+    expect(sql).toContain('base_periods AS');
+    expect(sql).not.toContain('vehicle_periods AS');
+    expect(sql).not.toContain('driver_periods AS');
+    expect(sql).not.toMatch(/YEAR\s*\(\s*CAST\s*\(\s*insurance_start_date\s+AS\s+DATE\s*\)\s*\)/i);
+  });
 });
