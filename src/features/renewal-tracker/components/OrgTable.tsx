@@ -160,6 +160,9 @@ export default function OrgTable({
           role: 'button' as const,
           tabIndex: 0,
           onKeyDown: (e: React.KeyboardEvent) => {
+            // 只处理落在行本身的按键；忽略从嵌套「团队/业务员」按钮冒泡上来的
+            // Enter/Space，否则键盘激活下钻按钮会被行 onClick 抢走（Codex P2）
+            if (e.target !== e.currentTarget) return;
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               onClick();
