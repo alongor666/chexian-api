@@ -40,17 +40,39 @@ export const generateKpiQuery = (
 
   return `
     WITH filtered AS (
-      SELECT *
+      SELECT
+        CAST(${dateField} AS DATE) AS kpi_date,
+        policy_no,
+        vehicle_frame_no,
+        org_level_3,
+        salesman_name,
+        premium,
+        fee_amount,
+        is_transfer,
+        is_telemarketing,
+        is_renewal,
+        insurance_type,
+        is_nev,
+        is_new_car,
+        customer_category,
+        tonnage_segment,
+        is_commercial_insure,
+        CAST(insurance_start_date AS DATE) AS insurance_start_date,
+        renewal_policy_no
       FROM PolicyFact
       WHERE ${whereClause}
     ),
     filtered_base AS (
-      SELECT *
+      SELECT
+        CAST(${dateField} AS DATE) AS kpi_date,
+        premium,
+        customer_category,
+        cross_sell_premium_driver
       FROM PolicyFact
       WHERE ${finalBaseWhereClause}
     ),
     latest_policy AS (
-      SELECT MAX(CAST(${dateField} AS DATE)) AS latest_policy_date
+      SELECT MAX(kpi_date) AS latest_policy_date
       FROM filtered
     ),
     latest_context AS (
@@ -78,16 +100,42 @@ export const generateKpiQuery = (
         ${getMetricSql('new_car_rate')},
         ${getMetricSql('quality_business_rate')},
         ${getMetricSql('commercial_insurance_rate')},
-        ${getMetricSql('per_vehicle_premium')}
+        ${getMetricSql('per_vehicle_premium')},
+        CASE
+          -- 分母：上一年起保的套单（应续件数），与续保分析板块口径一致
+          WHEN COUNT(CASE
+            WHEN is_commercial_insure = '套单'
+              AND insurance_start_date >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+              AND insurance_start_date < DATE_TRUNC('year', lc.latest_policy_date)
+            THEN 1
+          END) > 0
+          THEN
+            -- 分子：上一年起保的套单中，有续保单号的数量（已续件数）
+            COUNT(CASE
+              WHEN is_commercial_insure = '套单'
+                AND insurance_start_date >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND insurance_start_date < DATE_TRUNC('year', lc.latest_policy_date)
+                AND renewal_policy_no IS NOT NULL AND renewal_policy_no <> ''
+              THEN 1
+            END) * 1.0
+            / COUNT(CASE
+              WHEN is_commercial_insure = '套单'
+                AND insurance_start_date >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND insurance_start_date < DATE_TRUNC('year', lc.latest_policy_date)
+              THEN 1
+            END)
+          ELSE NULL
+        END AS bundle_renewal_rate
       FROM filtered
+      CROSS JOIN latest_context lc
     ),
-    vehicle_periods AS (
+    base_periods AS (
       SELECT
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date)
-                AND CAST(f.${dateField} AS DATE) <= lc.latest_policy_date
+              WHEN f.kpi_date >= DATE_TRUNC('year', lc.latest_policy_date)
+                AND f.kpi_date <= lc.latest_policy_date
               THEN f.premium
               ELSE 0
             END
@@ -97,24 +145,19 @@ export const generateKpiQuery = (
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
-                AND CAST(f.${dateField} AS DATE) <= lc.latest_policy_date - INTERVAL 1 YEAR
+              WHEN f.kpi_date >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND f.kpi_date <= lc.latest_policy_date - INTERVAL 1 YEAR
               THEN f.premium
               ELSE 0
             END
           ),
           0
-        ) AS vehicle_prev_ytd_premium
-      FROM filtered_base f
-      CROSS JOIN latest_context lc
-    ),
-    driver_periods AS (
-      SELECT
+        ) AS vehicle_prev_ytd_premium,
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date)
-                AND CAST(f.${dateField} AS DATE) <= lc.latest_policy_date
+              WHEN f.kpi_date >= DATE_TRUNC('year', lc.latest_policy_date)
+                AND f.kpi_date <= lc.latest_policy_date
                 AND f.customer_category != '摩托车'
               THEN COALESCE(f.cross_sell_premium_driver, 0)
               ELSE 0
@@ -125,8 +168,8 @@ export const generateKpiQuery = (
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
-                AND CAST(f.${dateField} AS DATE) <= lc.latest_policy_date - INTERVAL 1 YEAR
+              WHEN f.kpi_date >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND f.kpi_date <= lc.latest_policy_date - INTERVAL 1 YEAR
                 AND f.customer_category != '摩托车'
               THEN COALESCE(f.cross_sell_premium_driver, 0)
               ELSE 0
@@ -137,8 +180,8 @@ export const generateKpiQuery = (
         COALESCE(
           SUM(
             CASE
-              WHEN CAST(f.${dateField} AS DATE) >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
-                AND CAST(f.${dateField} AS DATE) < DATE_TRUNC('year', lc.latest_policy_date)
+              WHEN f.kpi_date >= DATE_TRUNC('year', lc.latest_policy_date - INTERVAL 1 YEAR)
+                AND f.kpi_date < DATE_TRUNC('year', lc.latest_policy_date)
                 AND f.customer_category != '摩托车'
               THEN COALESCE(f.cross_sell_premium_driver, 0)
               ELSE 0
@@ -149,38 +192,17 @@ export const generateKpiQuery = (
       FROM filtered_base f
       CROSS JOIN latest_context lc
     ),
-    bundle_renewal AS (
-      SELECT
-        CASE
-          -- 分母：上一年起保的套单（应续件数），与续保分析板块口径一致
-          WHEN COUNT(CASE WHEN is_commercial_insure = '套单' 
-                           AND YEAR(CAST(insurance_start_date AS DATE)) = lc.latest_year - 1 
-                      THEN 1 END) > 0
-          THEN 
-            -- 分子：上一年起保的套单中，有续保单号的数量（已续件数）
-            COUNT(CASE WHEN is_commercial_insure = '套单' 
-                            AND YEAR(CAST(insurance_start_date AS DATE)) = lc.latest_year - 1 
-                            AND renewal_policy_no IS NOT NULL AND renewal_policy_no <> '' 
-                       THEN 1 END) * 1.0
-            / COUNT(CASE WHEN is_commercial_insure = '套单' 
-                              AND YEAR(CAST(insurance_start_date AS DATE)) = lc.latest_year - 1 
-                         THEN 1 END)
-          ELSE NULL
-        END AS bundle_renewal_rate
-      FROM filtered
-      CROSS JOIN latest_context lc
-    ),
     -- B252：filtered_dedup 按 (policy_no, insurance_start_date) 聚合去重，
     -- 防止 variable_cost_base JOIN ClaimsAgg 后因 PolicyFact 原单+批改多行导致赔款虚增
     filtered_dedup AS (
       SELECT
         policy_no,
-        CAST(insurance_start_date AS DATE) AS insurance_start_date,
+        insurance_start_date,
         SUM(premium) AS premium,
         SUM(COALESCE(fee_amount, 0)) AS fee_amount
       FROM filtered
       WHERE insurance_start_date IS NOT NULL
-      GROUP BY policy_no, CAST(insurance_start_date AS DATE)
+      GROUP BY policy_no, insurance_start_date
       HAVING SUM(premium) > 0
     ),
     variable_cost_base AS (
@@ -235,30 +257,30 @@ export const generateKpiQuery = (
     SELECT
       lc.latest_policy_date AS latest_policy_date,
       vpl.vehicle_plan_wan AS vehicle_plan_wan,
-      vp.vehicle_ytd_premium AS vehicle_premium,
+      bp.vehicle_ytd_premium AS vehicle_premium,
       CASE
         WHEN vpl.vehicle_plan_wan > 0 AND lc.natural_day_progress > 0
-        THEN (vp.vehicle_ytd_premium / 10000.0) / (vpl.vehicle_plan_wan * lc.natural_day_progress)
+        THEN (bp.vehicle_ytd_premium / 10000.0) / (vpl.vehicle_plan_wan * lc.natural_day_progress)
         ELSE NULL
       END AS vehicle_achievement_rate,
       CASE
-        WHEN vp.vehicle_prev_ytd_premium > 0
-        THEN (vp.vehicle_ytd_premium - vp.vehicle_prev_ytd_premium) / vp.vehicle_prev_ytd_premium
+        WHEN bp.vehicle_prev_ytd_premium > 0
+        THEN (bp.vehicle_ytd_premium - bp.vehicle_prev_ytd_premium) / bp.vehicle_prev_ytd_premium
         ELSE NULL
       END AS vehicle_growth_rate,
       vc.variable_cost_ratio AS variable_cost_ratio,
-      br.bundle_renewal_rate AS bundle_renewal_rate,
-      dp.driver_ytd_premium AS driver_premium,
+      fm.bundle_renewal_rate AS bundle_renewal_rate,
+      bp.driver_ytd_premium AS driver_premium,
       CASE
         WHEN lc.natural_day_progress > 0
-          AND COALESCE(NULLIF(dpl.driver_plan_wan, 0), dp.driver_prev_full_premium / 10000.0) > 0
-        THEN (dp.driver_ytd_premium / 10000.0)
-          / (COALESCE(NULLIF(dpl.driver_plan_wan, 0), dp.driver_prev_full_premium / 10000.0) * lc.natural_day_progress)
+          AND COALESCE(NULLIF(dpl.driver_plan_wan, 0), bp.driver_prev_full_premium / 10000.0) > 0
+        THEN (bp.driver_ytd_premium / 10000.0)
+          / (COALESCE(NULLIF(dpl.driver_plan_wan, 0), bp.driver_prev_full_premium / 10000.0) * lc.natural_day_progress)
         ELSE NULL
       END AS driver_achievement_rate,
       CASE
-        WHEN dp.driver_prev_ytd_premium > 0
-        THEN (dp.driver_ytd_premium - dp.driver_prev_ytd_premium) / dp.driver_prev_ytd_premium
+        WHEN bp.driver_prev_ytd_premium > 0
+        THEN (bp.driver_ytd_premium - bp.driver_prev_ytd_premium) / bp.driver_prev_ytd_premium
         ELSE NULL
       END AS driver_growth_rate,
       fm.total_premium,
@@ -277,11 +299,9 @@ export const generateKpiQuery = (
       fm.per_vehicle_premium
     FROM latest_context lc
     CROSS JOIN focus_metrics fm
-    CROSS JOIN vehicle_periods vp
-    CROSS JOIN driver_periods dp
+    CROSS JOIN base_periods bp
     CROSS JOIN vehicle_plan vpl
     CROSS JOIN driver_plan dpl
-    CROSS JOIN bundle_renewal br
     CROSS JOIN variable_cost vc
   `;
 };
@@ -369,4 +389,3 @@ export const generateDimensionShareQuery = (
     ORDER BY value DESC
   `;
 };
-

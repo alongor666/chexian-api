@@ -50,6 +50,81 @@ const performanceBundleSchema = z.object({
 
 const router = Router();
 
+type DuckDBQueryFn = (sql: string, cacheTtlMs?: number) => Promise<Record<string, unknown>[]>;
+
+export interface PerformanceBundleQueryPlan {
+  summarySql: string;
+  trendSql: string;
+  drillSummarySql: string;
+  drillRowsSql: string | null;
+  topSalesmanSql: string;
+  cacheTtlMs: number;
+}
+
+export interface PerformanceBundleQueryRows {
+  summaryRows: Record<string, unknown>[];
+  trendRows: Record<string, unknown>[];
+  drillSummaryRows: Record<string, unknown>[];
+  drillRows: Record<string, unknown>[];
+  topSalesmanRows: Record<string, unknown>[];
+}
+
+function resolvePerformanceBundleInnerConcurrency(): number {
+  const override = Number(process.env.PERFORMANCE_BUNDLE_INNER_CONCURRENCY);
+  if (Number.isFinite(override) && override > 0) {
+    return Math.max(1, Math.floor(override));
+  }
+
+  const duckdbThreads = Number(process.env.DUCKDB_THREADS || 4);
+  if (Number.isFinite(duckdbThreads) && duckdbThreads <= 2) {
+    return 1;
+  }
+
+  return 2;
+}
+
+export async function runPerformanceBundleQueries(
+  query: DuckDBQueryFn,
+  plan: PerformanceBundleQueryPlan
+): Promise<PerformanceBundleQueryRows> {
+  const tasks: Array<{
+    key: keyof PerformanceBundleQueryRows;
+    sql: string | null;
+  }> = [
+    { key: 'summaryRows', sql: plan.summarySql },
+    { key: 'trendRows', sql: plan.trendSql },
+    { key: 'drillSummaryRows', sql: plan.drillSummarySql },
+    { key: 'drillRows', sql: plan.drillRowsSql },
+    { key: 'topSalesmanRows', sql: plan.topSalesmanSql },
+  ];
+  const results: PerformanceBundleQueryRows = {
+    summaryRows: [],
+    trendRows: [],
+    drillSummaryRows: [],
+    drillRows: [],
+    topSalesmanRows: [],
+  };
+  const concurrency = resolvePerformanceBundleInnerConcurrency();
+
+  for (let i = 0; i < tasks.length; i += concurrency) {
+    const batch = tasks.slice(i, i + concurrency);
+    const rows = await Promise.all(
+      batch.map(async (task) => {
+        if (!task.sql) return { key: task.key, rows: [] };
+        return {
+          key: task.key,
+          rows: await query(task.sql, plan.cacheTtlMs),
+        };
+      })
+    );
+    for (const item of rows) {
+      results[item.key] = item.rows;
+    }
+  }
+
+  return results;
+}
+
 /**
  * GET /api/query/performance-bundle
  * 业绩分析页面聚合端点：summary + trend + drilldown + topSalesman
@@ -175,13 +250,23 @@ router.get(
       dateField
     );
 
-    const [summaryRows, trendRows, drillSummaryRows, drillRows, topSalesmanRows] = await Promise.all([
-      duckdbService.query(summarySql, QUERY_CACHE.hotspotShort),
-      duckdbService.query(trendSql, QUERY_CACHE.hotspotShort),
-      duckdbService.query(drillSummarySql, QUERY_CACHE.hotspotShort),
-      drillRowsSql ? duckdbService.query(drillRowsSql, QUERY_CACHE.hotspotShort) : Promise.resolve([]),
-      duckdbService.query(topSalesmanSql, QUERY_CACHE.hotspotShort),
-    ]);
+    const {
+      summaryRows,
+      trendRows,
+      drillSummaryRows,
+      drillRows,
+      topSalesmanRows,
+    } = await runPerformanceBundleQueries(
+      (sql, cacheTtlMs) => duckdbService.query(sql, cacheTtlMs),
+      {
+        summarySql,
+        trendSql,
+        drillSummarySql,
+        drillRowsSql,
+        topSalesmanSql,
+        cacheTtlMs: QUERY_CACHE.hotspotShort,
+      }
+    );
 
     const bundleData = {
       summary: { rows: summaryRows },
