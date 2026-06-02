@@ -1,0 +1,128 @@
+# 新都续保追踪表字段注册表
+#
+# 新都表相对通用机构表有两个专属字段 ID：
+# - 客户类别: ffbk5Z
+# - 风险等级: fpU8Y2
+
+fields:
+  expiry_date:
+    field_id: f04Gwj
+    label: 到期日
+    source: base.insurance_end_date
+    type: epoch_ms_date
+
+  plate_no:
+    field_id: ftk5Tx
+    label: 车牌号码
+    source: base.plate_no
+    type: text
+    fallback: ''
+
+  vehicle_frame_no:
+    field_id: fMAfWQ
+    label: 车架号
+    source: base.vehicle_frame_no
+    type: text
+
+  salesman_name:
+    field_id: fMDwYc
+    label: 业务员
+    source: base.salesman_name
+    type: text
+    fallback: ''
+
+  sales_team:
+    field_id: frfak0
+    label: 销售团队
+    source: salesman_dim.team
+    type: text
+    fallback: 未知团队
+    alert_on_fallback: true
+
+  customer_category:
+    field_id: ffbk5Z
+    label: 客户类别
+    source: base.customer_category
+    type: text
+    fallback: ''
+
+  coverage_combination:
+    field_id: f8ZIoF
+    label: 险别组合
+    source: base.coverage_combination
+    type: text
+    fallback: ''
+
+  is_quoted:
+    field_id: fkjhnX
+    label: 报价
+    source: derived.is_quoted
+    type: text_yes_no
+
+  insurance_grade:
+    field_id: fpU8Y2
+    label: 风险等级
+    source: q_latest.insurance_grade
+    type: select_text
+    skip_when_null: true
+
+  prior_discount:
+    field_id: fqTbVL
+    label: 上年折扣
+    source: base.commercial_pricing_factor
+    type: number
+    skip_when_null: true
+
+  prior_premium:
+    field_id: fFMlZM
+    label: 上年保费
+    source: base.premium
+    type: number
+    skip_when_null: true
+
+  quote_discount:
+    field_id: fDvNY2
+    label: 报价折扣
+    source: q_latest.quote_pricing_factor
+    type: number
+    skip_when_null: true
+
+  quote_premium:
+    field_id: fvtVUv
+    label: 报价保费
+    source: q_latest.quote_premium
+    type: number
+    skip_when_null: true
+
+  is_renewed:
+    field_id: fq3LsN
+    label: 是否续回
+    source: derived.is_renewed
+    type: text_yes_no
+
+  renewal_mode:
+    field_id: fEdcCG
+    label: 续保模式
+    source: funnel.renewal_mode
+    type: text
+    default: 未分类
+
+  renewed_sign_date:
+    field_id: fwUUeU
+    label: 续回日期
+    source: renewed.renewed_sign_date
+    type: epoch_ms_date
+    condition: is_renewed
+
+  earliest_quote_date:
+    field_id: ft4uK0
+    label: 报价日期
+    source: q_earliest.earliest_quote_date
+    type: epoch_ms_date
+
+  loss_company:
+    field_id: fMexTG
+    label: 流失公司
+    source: flow.next_insurer
+    type: text
+    fallback: ''
