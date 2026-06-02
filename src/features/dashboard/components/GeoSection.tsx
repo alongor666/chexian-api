@@ -26,6 +26,9 @@ import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 
 type MapLevel = 'china' | 'province';
 
+// 数据条单色顺序强度底色（= 项目语义 primary #1890ff 的 RGB 分量，供 rgba alpha 拼接）
+const DATA_BAR_RGB = '24,144,255';
+
 /** HTML 转义（防止 tooltip XSS） */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -334,7 +337,7 @@ export const GeoSection: React.FC = () => {
                           height: '60%',
                           borderRadius: 2,
                           width: barWidth,
-                          background: `rgba(24,144,255,${barAlpha})`,
+                          background: `rgba(${DATA_BAR_RGB},${barAlpha})`,
                         }} />
                         <span style={{ position: 'relative' }} className={fontStyles.numeric}>
                           {formatCount(row.premium_wan)}

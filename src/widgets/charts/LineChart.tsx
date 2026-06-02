@@ -79,7 +79,7 @@ function renderPrimaryLineChart(
   chart: ReturnType<typeof echarts.init>,
   barData: PremiumTrendBarData[],
   title: string,
-  timeView: TimeView,
+  _timeView: TimeView,
   analysisYear: number,
   isDark: boolean,
   targetPremiumWan?: number,
@@ -212,14 +212,8 @@ function renderPrimaryLineChart(
       splitLine: { show: false },
       axisLabel: {
         ...theme.xAxisConfig.axisLabel,
+        // x 轴标签已是 useTrendData 加工好的 display_label（"3月"/"W22"/"03-15"），无需再格式化
         interval: Math.max(0, Math.floor(xLabels.length / 8) - 1),
-        formatter: (value: string) => {
-          if (timeView === 'daily') {
-            // "03-15" → "03-15"
-            return value;
-          }
-          return value;
-        },
       },
     },
     yAxis: [
@@ -702,10 +696,14 @@ export const LineChart: React.FC<LineChartProps> = ({
       renderLegacyLineChart(chart, data, title, timeView, startDate, endDate, yAxisLabel, isDark);
     }
 
-    const handleResize = () => chart.resize();
+  }, [data, loading, title, timeView, startDate, endDate, yAxisLabel, barChartData, analysisYear, isDark, showPrimaryLineMode, targetPremiumWan]);
+
+  // resize 独立订阅（空依赖），避免随主 useEffect 的频繁依赖变化反复增删监听器
+  useEffect(() => {
+    const handleResize = () => chartInstance.current?.resize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [data, loading, title, timeView, startDate, endDate, yAxisLabel, barChartData, analysisYear, isDark, showPrimaryLineMode, targetPremiumWan]);
+  }, []);
 
   useEffect(() => {
     return () => {

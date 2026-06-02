@@ -9,6 +9,9 @@ import type { PremiumTrendBarData } from '../../features/dashboard/hooks/useTren
 import { getChartTheme } from '../../shared/config/chartStyles';
 import { useTheme } from '../../shared/theme';
 
+// 同比增长率线专用色（Ant Design green-6，与项目语义 success #52c41a 对齐）
+const YOY_LINE_COLOR = '#52c41a';
+
 // 同比增长率是小数比率（可 >1，如 +500% → 5.0），必须显式 ×100；
 // 不能用 formatRate（其 >1 自动检测会把 5.0 误判成"5%"，导致轴刻度不单调）
 const fmtYoy = (v: number) => `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`;
@@ -70,6 +73,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
     }
 
     const theme = getChartTheme(isDark);
+    const compact = (height ?? 200) < 240;
     const year = analysisYear ?? new Date().getFullYear();
     const currentYear = String(year);
     const prevYear = String(year - 1);
@@ -117,8 +121,8 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
         smooth: false,
         symbol: 'circle',
         symbolSize: 5,
-        itemStyle: { color: '#52c41a' },
-        lineStyle: { color: '#52c41a', width: 2 },
+        itemStyle: { color: YOY_LINE_COLOR },
+        lineStyle: { color: YOY_LINE_COLOR, width: 2 },
         // 线端直接标注最新值
         endLabel: {
           show: true,
@@ -127,7 +131,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
             if (v === null) return '';
             return fmtYoy(v);
           },
-          color: '#52c41a',
+          color: YOY_LINE_COLOR,
           fontSize: 10,
           fontWeight: 700,
         },
@@ -163,6 +167,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
         },
       },
       legend: {
+        show: !compact,
         type: 'scroll',
         bottom: 0,
         itemWidth: 10,
@@ -174,7 +179,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
           { name: '同比增长率', icon: 'circle' },
         ],
       },
-      grid: { left: '2%', right: '14%', bottom: '20%', top: '6%', containLabel: true, show: false },
+      grid: { left: '2%', right: '14%', bottom: compact ? '6%' : '20%', top: '6%', containLabel: true, show: false },
       xAxis: {
         type: 'category',
         data: xLabels,
@@ -205,7 +210,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
         {
           type: 'value',
           name: '同比',
-          nameTextStyle: { fontSize: 10, color: '#52c41a', padding: [0, -10, 0, 0] },
+          nameTextStyle: { fontSize: 10, color: YOY_LINE_COLOR, padding: [0, -10, 0, 0] },
           position: 'right',
           // robust 对称范围，避免极端同比把刻度拉坏（超界点贴边显示，tooltip 仍给真实值）
           min: -yoyBound,
@@ -216,7 +221,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
           splitLine: { show: false },
           axisLabel: {
             fontSize: 10,
-            color: '#52c41a',
+            color: YOY_LINE_COLOR,
             formatter: (v: number) => `${(v * 100).toFixed(0)}%`,
           },
         },
@@ -226,7 +231,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
 
     chart.setOption(option, true);
 
-  }, [data, loading, analysisYear, isDark]);
+  }, [data, loading, analysisYear, isDark, height]);
 
   useEffect(() => {
     return () => {
