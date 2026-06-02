@@ -31,6 +31,18 @@ interface LineChartProps {
   barChartData?: PremiumTrendBarData[];
   /** 当前分析年份（用于颜色选择） */
   analysisYear?: number;
+  /**
+   * V4.0: 主折线模式（设计简报 §5）
+   * true  → 本年实线 + 上年 ghost 虚线 + markLine 目标参考线，线端直接标注
+   * false → 原有行为（barChartData 有值走组合图，否则走旧折线图）
+   * 默认 false，向后兼容所有现有调用方。
+   */
+  showPrimaryLineMode?: boolean;
+  /**
+   * 目标保费（万元），仅 showPrimaryLineMode=true 时使用。
+   * 有值时在主折线图上绘制 warning 色虚线目标参考线。
+   */
+  targetPremiumWan?: number;
 }
 
 /**
@@ -53,6 +65,180 @@ const CHART_COLORS = {
   yoyLine: '#f59e0b',       // amber-500: 同比增长率
   achievementLine: '#8b5cf6', // violet-500: 计划达成率
 } as const;
+
+/**
+ * 渲染主折线图（V4.0 设计简报 §5）
+ *
+ * - 本年保费实线（primary 色，线宽 2.5）
+ * - 上年同期 ghost 虚线（opacity 0.55）
+ * - 可选目标参考线（warning 色虚线 markLine）
+ * - 线端直接标注最新值（endLabel），无图例
+ * - 无网格线、坐标轴极简、精确值进 tooltip
+ */
+function renderPrimaryLineChart(
+  chart: ReturnType<typeof echarts.init>,
+  barData: PremiumTrendBarData[],
+  title: string,
+  _timeView: TimeView,
+  analysisYear: number,
+  isDark: boolean,
+  targetPremiumWan?: number,
+): void {
+  const theme = getChartTheme(isDark);
+  const currentYear = String(analysisYear);
+  const prevYear = String(analysisYear - 1);
+
+  const xLabels = barData.map((d) => d.display_label);
+  const n = xLabels.length;
+
+  // 原始值（元），formatPremiumWan 会自动换算为万元
+  const currentValues = barData.map((d) => d.current_premium);
+  const prevValues = barData.map((d) => d.prev_premium);
+
+  // markLine 数据：目标参考线（万元 → 原值 *10000）
+  const markLineData = targetPremiumWan != null && targetPremiumWan > 0
+    ? [{
+        yAxis: targetPremiumWan * 10000,
+        name: '目标',
+        label: {
+          show: true,
+          position: 'insideEndTop' as const,
+          formatter: '目标',
+          fontSize: 10,
+          color: '#faad14',
+          fontWeight: 700 as const,
+        },
+        lineStyle: { type: 'dashed' as const, color: '#faad14', width: 1.5, opacity: 0.9 },
+      }]
+    : [];
+
+  const series: SeriesOption[] = [
+    // 系列1：上年同期 ghost 虚线（背景层）
+    {
+      name: `${prevYear}年`,
+      type: 'line',
+      yAxisIndex: 0,
+      data: prevValues,
+      smooth: false,
+      symbol: 'none',
+      lineStyle: {
+        color: getYearChartColor(prevYear),
+        width: 1.5,
+        type: 'dashed',
+        opacity: 0.55,
+      },
+      itemStyle: { color: getYearChartColor(prevYear), opacity: 0.55 },
+      // ghost 线右端标注年份
+      endLabel: {
+        show: n > 0,
+        formatter: `{a}`,
+        color: getYearChartColor(prevYear),
+        opacity: 0.7,
+        fontSize: 10,
+      },
+    },
+    // 系列2：本年保费主实线
+    {
+      name: `${currentYear}年`,
+      type: 'line',
+      yAxisIndex: 0,
+      data: currentValues,
+      smooth: false,
+      symbol: 'circle',
+      symbolSize: 5,
+      showSymbol: false,
+      // 仅最后一点显示端点圆
+      lineStyle: { color: getYearChartColor(currentYear), width: 2.5 },
+      itemStyle: { color: getYearChartColor(currentYear) },
+      // 线端直接标注最新值
+      endLabel: {
+        show: n > 0,
+        formatter: (params: any) => {
+          const v = typeof params.value === 'number' ? params.value : null;
+          if (v === null) return '';
+          return formatPremiumWan(v) + '万';
+        },
+        color: getYearChartColor(currentYear),
+        fontSize: 11,
+        fontWeight: 700,
+      },
+      markLine: markLineData.length > 0
+        ? {
+            symbol: ['none', 'none'],
+            silent: true,
+            data: markLineData,
+          }
+        : undefined,
+    },
+  ];
+
+  const option: EChartsOption = {
+    title: title ? {
+      text: title,
+      left: 'center',
+      textStyle: { fontSize: 14, fontWeight: 'bold' as const },
+    } : undefined,
+    tooltip: {
+      ...theme.tooltipConfig,
+      trigger: 'axis' as const,
+      axisPointer: { type: 'line' as const },
+      formatter: (params: any) => {
+        const safeParams = (Array.isArray(params) ? params : []) as EChartsParam[];
+        if (safeParams.length === 0) return '';
+        let result = `<div style="font-weight:bold;margin-bottom:4px">${safeParams[0].axisValue}</div>`;
+        safeParams.forEach((param) => {
+          const name = String(param.seriesName ?? '');
+          const raw = typeof param.value === 'number' ? param.value : Number(param.value ?? 0);
+          if (param.value == null) return;
+          const formatted = formatPremiumWan(raw) + '万';
+          const opacity = name.includes(prevYear) ? 0.6 : 1;
+          result += `<div style="display:flex;align-items:center;gap:6px;margin-top:3px;opacity:${opacity}">
+            <span style="display:inline-block;width:10px;height:3px;background:${param.color}"></span>
+            <span>${name}: <strong>${formatted}</strong></span>
+          </div>`;
+        });
+        return result;
+      },
+    },
+    // 无图例：靠线端直接标注区分
+    legend: { show: false },
+    grid: { left: '2%', right: '12%', bottom: '8%', top: title ? '14%' : '8%', containLabel: true, show: false },
+    xAxis: {
+      type: 'category',
+      data: xLabels,
+      boundaryGap: false,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { show: false },
+      axisLabel: {
+        ...theme.xAxisConfig.axisLabel,
+        // x 轴标签已是 useTrendData 加工好的 display_label（"3月"/"W22"/"03-15"），无需再格式化
+        interval: Math.max(0, Math.floor(xLabels.length / 8) - 1),
+      },
+    },
+    yAxis: [
+      {
+        type: 'value',
+        name: '万元',
+        nameTextStyle: { fontSize: 10, color: theme.chartTextStyles.axisLabel.color, padding: [0, 0, 0, -10] },
+        position: 'left',
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: {
+          ...theme.yAxisConfig.axisLabel,
+          formatter: formatPremiumWan,
+        },
+      },
+    ],
+    series,
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+    ],
+  };
+
+  chart.setOption(option, true);
+}
 
 /**
  * 渲染双Y轴柱状+折线组合图（V3.0）
@@ -462,6 +648,8 @@ export const LineChart: React.FC<LineChartProps> = ({
   yAxisLabel = '保费（万元）',
   barChartData,
   analysisYear,
+  showPrimaryLineMode = false,
+  targetPremiumWan,
 }) => {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
@@ -486,8 +674,12 @@ export const LineChart: React.FC<LineChartProps> = ({
 
     chart.hideLoading();
 
-    // V3.0: 优先走柱+折线组合图
-    if (barChartData && barChartData.length > 0) {
+    // V4.0: 主折线模式（设计简报 §5，showPrimaryLineMode=true 时最优先）
+    if (showPrimaryLineMode && barChartData && barChartData.length > 0) {
+      const year = analysisYear ?? new Date().getFullYear();
+      renderPrimaryLineChart(chart, barChartData, title, timeView, year, isDark, targetPremiumWan);
+    // V3.0: 原有柱+折线组合图（showPrimaryLineMode=false 时维持原逻辑）
+    } else if (!showPrimaryLineMode && barChartData && barChartData.length > 0) {
       const year = analysisYear ?? new Date().getFullYear();
       renderBarLineCombo(chart, barChartData, title, timeView, year, isDark);
     } else if (data.length === 0) {
@@ -504,10 +696,14 @@ export const LineChart: React.FC<LineChartProps> = ({
       renderLegacyLineChart(chart, data, title, timeView, startDate, endDate, yAxisLabel, isDark);
     }
 
-    const handleResize = () => chart.resize();
+  }, [data, loading, title, timeView, startDate, endDate, yAxisLabel, barChartData, analysisYear, isDark, showPrimaryLineMode, targetPremiumWan]);
+
+  // resize 独立订阅（空依赖），避免随主 useEffect 的频繁依赖变化反复增删监听器
+  useEffect(() => {
+    const handleResize = () => chartInstance.current?.resize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [data, loading, title, timeView, startDate, endDate, yAxisLabel, barChartData, analysisYear, isDark]);
+  }, []);
 
   useEffect(() => {
     return () => {
