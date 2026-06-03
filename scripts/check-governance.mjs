@@ -1843,6 +1843,56 @@ function checkStateDbDependencyIsolation() {
 }
 
 // ============================================================
+// 25. 空 catch 块禁令（静默失败 Law 1）
+//    - server/src + src 禁止 `catch (e) {}` / `catch {}` 空块
+//    - 空 catch 吞掉异常且无任何痕迹，是最典型的静默失败
+//    - 仅拦"纯空块"（正则可精确识别、零误报）；"catch 返回空值无日志/无判别"
+//      正则无法无误报地识别，留 silent-failure-guard skill 软自查 + 待 ESLint AST
+//    - 配套 skill: .claude/skills/silent-failure-guard.md
+// ============================================================
+
+function checkEmptyCatchBlocks() {
+  info('检查空 catch 块（静默失败 Law 1）...');
+
+  const scanDirs = ['server/src', 'src'].map(d => path.join(ROOT_DIR, d));
+  // 匹配 catch (...) {  } 或 catch {  }，块内仅空白（含跨行）
+  const emptyCatchRe = /catch\s*(\([^)]*\))?\s*\{\s*\}/g;
+  const violations = [];
+
+  function walk(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+        walk(full);
+      } else if (/\.(ts|tsx)$/.test(entry.name)) {
+        const content = fs.readFileSync(full, 'utf-8');
+        let m;
+        emptyCatchRe.lastIndex = 0;
+        while ((m = emptyCatchRe.exec(content)) !== null) {
+          const line = content.slice(0, m.index).split('\n').length;
+          violations.push(`${path.relative(ROOT_DIR, full)}:${line}`);
+        }
+      }
+    }
+  }
+
+  for (const d of scanDirs) walk(d);
+
+  if (violations.length > 0) {
+    error(`发现空 catch 块（吞异常无痕迹）= ${violations.length} 处：`);
+    for (const v of violations) console.log(`    - ${v}`);
+    console.log('    修复：catch 内至少记日志（含上下文），并重抛或返回带错误标记的结果');
+    console.log('    依据：.claude/skills/silent-failure-guard.md 五律 Law 1');
+    return false;
+  }
+
+  success('空 catch 块检查通过（server/src + src 无吞异常空块）');
+  return true;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -1882,6 +1932,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
   { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
+  { name: '空catch禁令', fn: checkEmptyCatchBlocks },
 ];
 
 /**
