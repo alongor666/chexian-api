@@ -22,13 +22,16 @@ version: 1.0.0
 
 ## 审查动作
 
-1. **grep 扫描**（提交前自查）：
+1. **快速扫描（提交前自查）**——⚠️ 真实 TS/Express 代码常把 `} catch (err) {` 与 `return []/null` 或空块**分成多行**，普通 `grep` 逐行匹配会漏掉它们（恰好是本 skill 要拦的吞异常）。故用 ripgrep 多行模式 `rg -U`（PCRE `-P`）：
    ```bash
-   # 空 catch / 吞异常嫌疑
-   grep -rn "catch" server/src --include=*.ts | grep -E "catch.*\{\s*\}|catch.*\{\s*return (\[\]|null|\{\})"
+   # 空 catch（含跨行 } catch (e) { \n }）
+   rg -UP 'catch\s*\([^)]*\)\s*\{\s*\}' server/src -g '*.ts'
+   # catch 块里直接 return 空值（含跨行，启发式：catch 到最近 } 之间出现 return []/null/{}）
+   rg -UP 'catch\s*\([^)]*\)\s*\{[^}]*return\s*(\[\]|null|\{\})' server/src -g '*.ts'
    # 生产代码里的 mock 回退
-   grep -rni "mock\|fixture\|fakeData" server/src --include=*.ts | grep -v test
+   rg -ni 'mock|fixture|fakeData' server/src -g '*.ts' -g '!*test*'
    ```
+   > grep/rg 终究是**启发式**（`[^}]*` 跨不过嵌套大括号、无法判断"有没有 logger"）。**结构性强制拦截应走 AST/lint**：ESLint `no-empty`（空块）、`no-useless-catch`，或自定义 rule 检测"catch 内仅 return 空值且无 log 调用"。grep 用于人工自查的快速定位，lint 用于 CI 硬拦截——按 `code-search-routing` 原则各司其职。
 2. **逐处判定**：每个命中点按"是合法可缺省，还是掩盖了错误？"二选一定性。
 3. **置信度阈值**：报告问题时只报 ≥75% 把握的（与 analyst 一致），避免误报淹没真问题。
 
@@ -44,4 +47,4 @@ version: 1.0.0
 
 - **注入/XSS/CORS** 类安全 → 走 `chexian-security-review` 全家桶，本 skill 不覆盖。
 - **本 skill 专管**：错误处理的"静默性"——代码不崩但悄悄给错结果。
-- **可固化为 governance 检查项**：上面的 grep 规则可加进 `scripts/check-governance.mjs` 做自动拦截（按需，先以 skill 形态人工审查验证误报率，再固化）。
+- **固化为自动拦截**：稳健做法是 ESLint rule（`no-empty` / `no-useless-catch` / 自定义"catch 仅 return 空值且无 log"）进 CI 硬拦截；§审查动作 的 `rg -UP` 仅作人工自查的快速定位。先以 skill 形态验证误报率，再固化为 lint 规则。
