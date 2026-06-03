@@ -21,6 +21,41 @@
 | 派生文件冲突**重新生成不手解** | `data-sources.json` / `QUICK_REFERENCE.md` / `转换质量报告.json` 是 ETL 派生（结构稳定，仅 row_count / 规模数字变）。merge 冲突时跑 `node 数据管理/daily.mjs`（或对应生成器）重新生成 + `git add`，**禁止手解**。三者均有 governance / ETL 配置消费方（daily.mjs 读 data-sources.json 取域配置；check-governance.mjs 读另两者校验），**禁止移出 git 追踪** |
 | BACKLOG 追加冲突已自动化 | `.gitattributes` 已对 `BACKLOG.md` 设 `merge=union`，多分支往末尾加 B3xx 自动合并；仍建议追加到末尾、ID 取全局最大 +1 |
 
+### 反模式：禁止用 `git sparse-checkout` 物理执行"主目录只读"
+
+**历史事故**（2026-06-03 session `a241089d`）：有 AI 会话把"主目录禁开发"误执行为 `git sparse-checkout set server/src/config/metric-registry/`——后果是 `scripts/`、`src/`、`tests/`、`数据管理/{daily.mjs,pipelines,integrations}` 被物理裁掉 **1416/1492 个跟踪文件**，本地 governance / sync-vps / readiness 全部跑不了；该会话最后只能给出"转由 CI 跑"的妥协，单次反馈环 7-10 分钟，效率倒退。
+
+**机制错配的根因**——§A 铁律各条目的**正确**执行机制：
+
+| 目标 | ❌ 错误机制（sparse-checkout） | ✅ 正确机制 |
+|------|------------------------------|------------|
+| 禁止主目录开发改代码 | 把 scripts/src/tests/ 全裁 | CLAUDE.md 红线 + PR 流程 + branch protection |
+| 防本地脏 commit 推 main | 把代码裁掉让人改不了 | GitHub branch protection + `pre-push` hook |
+| 并发隔离 / 长任务不阻塞 | sparse 无关 | **git worktree（本规则唯一指定机制）** |
+| 主目录跑 governance / sync-vps / ETL | sparse 把 scripts/ 裁掉 → 跑不了 | **应该能跑**（只读 / 数据运维不是代码开发） |
+
+**禁止条款**：
+
+- ❌ 任何 AI agent / 自动化脚本不得在主目录执行 `git sparse-checkout init` / `set` / `add` / `reapply`
+- ❌ 不得通过裁文件方式"加强" §A 铁律——铁律靠**纪律 + CI + branch protection 三层**，不靠物理隔离
+
+**检测与处置**：
+
+```bash
+# 检测
+git config core.sparseCheckout        # 期望 false 或 unset
+[ -e .git/info/sparse-checkout ] && echo "⚠ 已开启" || echo "✓ 未开启"
+
+# 处置（含主目录两个长期未提交派生文件的 stash 保护）
+git stash push -m "wip: pre-disable" 数据管理/data-sources.json 数据管理/knowledge/QUICK_REFERENCE.md
+git sparse-checkout disable
+git stash pop
+bun install
+bun run governance && node scripts/check-data-readiness.mjs   # 期望分别 23/23 与 4/4 全过
+```
+
+发现 sparse-checkout 被开启时，**必查上游 skill / 自动化脚本**找出真凶并修源头，避免重蹈覆辙。
+
 ### 收尾
 
 合并后用 `cleanup-worktrees` skill 清理已合并的 worktree + 本地分支。
