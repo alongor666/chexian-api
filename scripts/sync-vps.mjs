@@ -785,11 +785,21 @@ async function generateManifestsOnRemote(sshConfig, reportsRoot) {
     return { ok: false, error: `scp 失败: ${err.message}` };
   }
 
-  log('yellow', `  ssh node ${remoteScript} ${reportsRoot}`);
+  // 修复 2026-06-02：ssh 默认 non-login shell 不读 .profile/.nvm.sh → `node` not found。
+  // 用 `bash -lc` 强制 login shell + 多 nvm.sh 路径 fallback 兼容常见部署。
+  const remoteCmd =
+    `bash -lc '` +
+    `source ~/.nvm/nvm.sh 2>/dev/null || ` +
+    `source /usr/local/nvm/nvm.sh 2>/dev/null || ` +
+    `source /etc/profile.d/nvm.sh 2>/dev/null || true; ` +
+    `NODE_BIN=$(command -v node || ls /usr/local/bin/node /usr/bin/node 2>/dev/null | head -1); ` +
+    `if [ -z "$NODE_BIN" ]; then echo "node not found on VPS" >&2; exit 127; fi; ` +
+    `"$NODE_BIN" ${remoteScript} ${quoteForSingle(reportsRoot)}'`;
+  log('yellow', `  ssh ${remoteCmd}`);
   try {
     const { stdout } = await execRemote(
       sshConfig,
-      `node ${remoteScript} ${quoteForSingle(reportsRoot)}`,
+      remoteCmd,
       { silent: true, allowFailure: false }
     );
     const lines = (stdout || '').split('\n').map((l) => l.trim()).filter(Boolean);
