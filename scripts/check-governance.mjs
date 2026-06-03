@@ -32,6 +32,9 @@
  * 24. ETL 多 sheet 加载规范：
  *    - pipelines/convert_*.py 和 quote_etl.py 禁止裸 pd.read_excel()
  *    - 必须使用 load_excel_all_sheets() 自动合并续表，防止 Excel 拆分后静默丢数据
+ * 25. 空 catch 块禁令（静默失败 Law 1）：
+ *    - server/src + src 禁止纯空 catch 块（catch {} / catch (e) {}）
+ *    - 空 catch 吞异常且无痕迹，是最典型的静默失败；配套 .claude/skills/silent-failure-guard.md
  *
  * 退出码：
  * - 0: 所有检查通过
