@@ -1382,6 +1382,28 @@ async function main() {
     log('red', '❌ 未找到任何签单清单 xlsx 文件（每日数据_*.xlsx / 01_签单清单_*.xlsx / ????????_01_签单清单*.xlsx）');
     process.exit(1);
   }
+
+  // iCloud placeholder 体检：未下载的 iCloud 文件在 cp 后可能为 0 字节占位 → ETL 必败
+  // 提前检测并明确报错，避免 pandas 读到空 xlsx 抛 ZipFile error 难定位
+  const placeholderFiles = allXlsx.filter(f => {
+    try {
+      const stat = statSync(f.path);
+      return stat.size === 0;
+    } catch {
+      return false;
+    }
+  });
+  if (placeholderFiles.length > 0) {
+    log('red', '❌ 检测到 0 字节 xlsx 文件（疑似 iCloud 占位未下载）：');
+    for (const f of placeholderFiles) {
+      log('red', `   ${f.path}`);
+    }
+    log('yellow', '修复：在 Finder 中右键→「立即下载」，或运行：');
+    for (const f of placeholderFiles) {
+      log('yellow', `   brctl download "${f.path}"`);
+    }
+    process.exit(1);
+  }
   if (newFormatXlsx.length > 0) {
     log('green', `新格式文件: ${newFormatXlsx.map(f => f.name).join(', ')}`);
   }
@@ -1538,14 +1560,38 @@ async function main() {
 
   console.log('');
 
-  // 6. all 模式下追加全部域
+  // 6. all 模式下追加全部域（带耗时打点：定位 ETL 瓶颈用）
+  const __etlTimings = [];
+  const __timeDomain = (label, fn) => {
+    const t0 = Date.now();
+    try {
+      fn();
+    } finally {
+      const dur = ((Date.now() - t0) / 1000).toFixed(1);
+      __etlTimings.push({ domain: label, seconds: Number(dur) });
+      log('cyan', `⏱  [${label}] 耗时 ${dur}s`);
+    }
+  };
   if (subcommand === 'all') {
-    runClaimsDetail(python, scriptDir);
+    __timeDomain('claims_detail', () => runClaimsDetail(python, scriptDir));
     for (const id of ['cross_sell', 'quotes_conversion', 'brand', 'repair_resource', 'customer_flow', 'new_energy_claims']) {
-      runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, id));
+      __timeDomain(id, () => runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, id)));
     }
     // 派生域放末尾（依赖 policy + quotes_conversion + salesman 已产出）
-    runRenewalTracker(python, scriptDir);
+    __timeDomain('renewal_tracker', () => runRenewalTracker(python, scriptDir));
+    // ETL 阶段总结 — 一目了然识别瓶颈
+    if (__etlTimings.length > 0) {
+      console.log('');
+      log('cyan', '=== ETL 耗时汇总（all 模式各域）===');
+      const sorted = [...__etlTimings].sort((a, b) => b.seconds - a.seconds);
+      const total = sorted.reduce((s, x) => s + x.seconds, 0);
+      for (const { domain, seconds } of sorted) {
+        const pct = total > 0 ? ((seconds / total) * 100).toFixed(0) : '0';
+        log('cyan', `  ${domain.padEnd(20)} ${String(seconds).padStart(6)}s  (${pct}%)`);
+      }
+      log('cyan', `  ${'TOTAL'.padEnd(20)} ${String(total.toFixed(1)).padStart(6)}s`);
+      console.log('');
+    }
   }
 
   // manifest 驱动：所有域完成后单点写入 metadata（premium/claims_detail/cross_sell/customer_flow）

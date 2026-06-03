@@ -152,7 +152,9 @@ function buildEtlCommands(dailyArgs, fullSnapshotDomains) {
       args: ['数据管理/daily.mjs', domain, '--no-sync', '--skip-report'],
     }));
   }
+  // sync-and-reload 自有 period-trend 报告生成阶段（Stage 1.5），daily.mjs 内部跳过避免重复
   const args = dailyArgs.includes('--no-sync') ? [...dailyArgs] : [...dailyArgs, '--no-sync'];
+  if (!args.includes('--skip-report')) args.push('--skip-report');
   return [{ label: 'ETL', args: ['数据管理/daily.mjs', ...args] }];
 }
 
@@ -192,6 +194,42 @@ async function runDataReload(domains, { dryRun, healthUrl }) {
   }
   log('green', `  ✓ 数据 reload 完成: ${body.slice(0, 200)}`);
   return true;
+}
+
+/**
+ * 前端可见性闭环验证：调用 /api/filters/options，检查 dateRange.max_date 非空。
+ * 失败不抛错（返回 false），由调用方决定是否阻断。
+ * 设计为软警告：不带凭据的 401/403 也算"未通过"但不阻断 — 不强依赖鉴权配置。
+ */
+async function verifyFrontendDataVisibility(healthUrl) {
+  const baseUrl = healthUrl.replace(/\/health$/, '');
+  const optionsUrl = `${baseUrl}/api/filters/options`;
+  log('cyan', `\n▶ [closure-check] GET ${optionsUrl}`);
+  try {
+    const headers = {};
+    if (process.env.FILTERS_OPTIONS_COOKIE) headers.Cookie = process.env.FILTERS_OPTIONS_COOKIE;
+    if (process.env.FILTERS_OPTIONS_BEARER) headers.Authorization = `Bearer ${process.env.FILTERS_OPTIONS_BEARER}`;
+    const res = await fetch(optionsUrl, { headers, signal: AbortSignal.timeout(10_000) });
+    if (res.status === 401 || res.status === 403) {
+      log('yellow', `  filters/options 需要鉴权（HTTP ${res.status}）；设置 FILTERS_OPTIONS_COOKIE 或 FILTERS_OPTIONS_BEARER 启用闭环验证`);
+      return false;
+    }
+    if (!res.ok) {
+      log('yellow', `  filters/options HTTP ${res.status}`);
+      return false;
+    }
+    const body = await res.json().catch(() => null);
+    const maxDate = body?.data?.dateRange?.max_date ?? body?.dateRange?.max_date ?? null;
+    if (!maxDate) {
+      log('yellow', `  filters/options 返回无 dateRange.max_date 字段`);
+      return false;
+    }
+    log('green', `  ✓ 前端可见 max_date = ${maxDate}`);
+    return true;
+  } catch (err) {
+    log('yellow', `  filters/options 请求异常：${err.message}`);
+    return false;
+  }
 }
 
 async function healthCheck(url, maxAttempts = 8, intervalMs = 5000) {
@@ -251,12 +289,18 @@ async function main() {
     log('yellow', `\n⚠ 跳过报告生成（技能文件不存在：${skillCli}）`);
   }
 
-  // Stage 1.7: 数据就绪校验（数据状态质量，已从代码门禁 governance 解耦至此）
-  // ETL 完成后、发布前校验：Parquet 重叠 / Claims 去重 / 知识库规模 / 同步漂移。
+  // Stage 1.7: 数据就绪校验（pre-sync）— ETL 完成后、sync-vps 前
+  // 只跑 Parquet 重叠 / Claims 去重 / 知识库规模；同步漂移留到 Stage 3.5（sync-vps 后）
+  // 原因：刚完成 ETL，本地必然领先 VPS，把"同步漂移"放在这里必然失败。
   if (opts.skipGovernance) {
-    log('yellow', '\n⚠ 跳过 data-readiness（--skip-governance）');
+    log('yellow', '\n⚠ 跳过 data-readiness pre-sync（--skip-governance）');
   } else {
-    await runCmd('data-readiness', 'node', ['scripts/check-data-readiness.mjs'], { dryRun: opts.dryRun });
+    await runCmd(
+      'data-readiness:pre',
+      'node',
+      ['scripts/check-data-readiness.mjs', '--phase=pre'],
+      { dryRun: opts.dryRun }
+    );
   }
 
   // Stage 2: governance（纯代码治理；数据状态校验见 Stage 1.7）
@@ -274,6 +318,18 @@ async function main() {
     log('yellow', '  (dry-run，跳过实际上传)');
   } else {
     await runCmd('VPS sync', 'node', syncArgs, { dryRun: false });
+  }
+
+  // Stage 3.5: 数据就绪校验（post-sync）— sync-vps 完成后，检查同步漂移
+  if (opts.skipGovernance) {
+    log('yellow', '\n⚠ 跳过 data-readiness post-sync（--skip-governance）');
+  } else {
+    await runCmd(
+      'data-readiness:post',
+      'node',
+      ['scripts/check-data-readiness.mjs', '--phase=post'],
+      { dryRun: opts.dryRun }
+    );
   }
 
   // Stage 4: full_snapshot 域优先数据 reload，其他域才 PM2 reload
@@ -298,7 +354,7 @@ async function main() {
     );
   }
 
-  // Stage 4: 健康检查
+  // Stage 4: 健康检查 + 闭环验证 + 稳定性二次确认
   if (opts.dryRun) {
     log('yellow', '  (dry-run，跳过健康检查)');
   } else if (!shouldRunHealthCheck) {
@@ -312,6 +368,23 @@ async function main() {
       log('yellow', '  排查：ssh ' + sshAlias + ' "sudo /usr/local/bin/deploy-chexian-api logs 50"');
       process.exit(1);
     }
+    // 闭环验证：前端可见性（filters/options 必须能返回最新 max_date）
+    // — /health 只验进程活着，不验数据加载完整；用 filters/options 看后端能否给出 dateRange
+    const closureOk = await verifyFrontendDataVisibility(healthUrl);
+    if (!closureOk) {
+      log('yellow', '⚠ filters/options 闭环验证未通过（不阻断，但请人工核对数据可见性）');
+    }
+    // 稳定性二次确认：等 30s 让进程跑过启动期，再查一次 /health（jlist 需要 ssh + sudo，
+    // 这里只做 HTTP 二次探测：如果 30s 内进程崩了，第二次 /health 会失败）
+    log('cyan', '\n▶ [stability-recheck] 等待 30s 后二次探测 /health');
+    await new Promise(r => setTimeout(r, 30000));
+    const stillHealthy = await healthCheck(healthUrl, 2, 3000);
+    if (!stillHealthy) {
+      log('red', '\n❌ 稳定性二次校验失败：进程在启动 30s 内崩溃，疑似 OOM/启动后崩溃');
+      log('yellow', '  排查：ssh ' + sshAlias + ' "sudo /usr/local/bin/deploy-chexian-api logs 100"');
+      process.exit(1);
+    }
+    log('green', '  ✓ 30s 稳定性二次校验通过');
   }
 
   // Stage 4.5: 同步静态报告到 VPS（Nginx 直接 serve）+ 在 VPS 端按真实文件清单生成 manifest
@@ -335,8 +408,20 @@ async function main() {
       // 在 VPS 端生成 manifest.json：scp 脚本 + ssh 执行
       // 失败时只 warn 不 abort：manifest 缺失会让前端显示 unavailable（友好提示），
       // 不影响企微同步等后续阶段。
+      // 修复 2026-06-02：ssh 默认 non-login shell 不读 .profile/.nvm.sh 导致 `node` 找不到。
+      // 用 `bash -lc` 强制 login shell + 多个 nvm.sh 路径 fallback，覆盖常见部署位置。
       const manifestScript = join(ROOT_DIR, 'scripts/gen-reports-manifest.mjs');
       const remoteScript = '/tmp/chexian-gen-reports-manifest.mjs';
+      const remoteCmd =
+        `bash -lc '` +
+        // 优先 source nvm（多个候选位置 + 当前用户 home 的 nvm 兜底）
+        `source ~/.nvm/nvm.sh 2>/dev/null || ` +
+        `source /usr/local/nvm/nvm.sh 2>/dev/null || ` +
+        `source /etc/profile.d/nvm.sh 2>/dev/null || true; ` +
+        // 找不到时 fallback 到常见绝对路径
+        `NODE_BIN=$(command -v node || ls /usr/local/bin/node /usr/bin/node 2>/dev/null | head -1); ` +
+        `if [ -z "$NODE_BIN" ]; then echo "node not found on VPS — install via nvm or apt"; exit 127; fi; ` +
+        `"$NODE_BIN" ${remoteScript} "${remoteReportsRoot}"'`;
       try {
         await runCmd(
           'scp gen-reports-manifest.mjs',
@@ -347,7 +432,7 @@ async function main() {
         await runCmd(
           'gen reports manifest on VPS',
           'ssh',
-          ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', sshAlias, `node ${remoteScript} '${remoteReportsRoot}'`],
+          ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', sshAlias, remoteCmd],
           { dryRun: opts.dryRun, timeoutMs: 30 * 1000 }
         );
       } catch (err) {
@@ -359,28 +444,18 @@ async function main() {
   }
 
   // Stage 5: 企业微信同步（显式开关）
+  // 三个脚本独立 webhook、互不依赖，并行执行；任一失败仍记录但不中断其他（Promise.allSettled）。
+  // 失败统一在 Stage 5 末尾抛出，便于人工排查。
   if (opts.wecom) {
-    const wecomArgs = ['数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py'];
-    if (!opts.wecomDryRun) wecomArgs.push('--execute');
-    if (opts.wecomOrg) wecomArgs.push('--org', opts.wecomOrg);
-    await runCmd(
-      opts.wecomDryRun ? 'WeCom renewal dry-run' : 'WeCom renewal sync',
-      'python3',
-      wecomArgs,
-      { dryRun: opts.dryRun, timeoutMs: 90 * 60 * 1000 }
-    );
+    const orgRenewalArgs = ['数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py'];
+    if (!opts.wecomDryRun) orgRenewalArgs.push('--execute');
+    if (opts.wecomOrg) orgRenewalArgs.push('--org', opts.wecomOrg);
 
     const renewalMayArgs = [
       '数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py',
       'sync',
     ];
     if (!opts.wecomDryRun) renewalMayArgs.push('--execute');
-    await runCmd(
-      opts.wecomDryRun ? 'WeCom 电销5-7月续保 dry-run' : 'WeCom 电销5-7月续保 sync',
-      'python3',
-      renewalMayArgs,
-      { dryRun: opts.dryRun, timeoutMs: 30 * 60 * 1000 }
-    );
 
     const postalArgs = [
       '数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py',
@@ -390,12 +465,41 @@ async function main() {
       'sync',
     ];
     if (opts.wecomDryRun) postalArgs.push('--dry-run');
-    await runCmd(
-      opts.wecomDryRun ? 'WeCom postal dry-run' : 'WeCom postal sync',
-      'python3',
-      postalArgs,
-      { dryRun: opts.dryRun, timeoutMs: 30 * 60 * 1000 }
+
+    const wecomTasks = [
+      {
+        label: opts.wecomDryRun ? 'WeCom renewal dry-run' : 'WeCom renewal sync',
+        args: orgRenewalArgs,
+        timeoutMs: 90 * 60 * 1000,
+      },
+      {
+        label: opts.wecomDryRun ? 'WeCom 电销5-7月续保 dry-run' : 'WeCom 电销5-7月续保 sync',
+        args: renewalMayArgs,
+        timeoutMs: 30 * 60 * 1000,
+      },
+      {
+        label: opts.wecomDryRun ? 'WeCom postal dry-run' : 'WeCom postal sync',
+        args: postalArgs,
+        timeoutMs: 30 * 60 * 1000,
+      },
+    ];
+
+    log('cyan', `\n▶ [WeCom] 并行启动 ${wecomTasks.length} 个智能表格同步任务`);
+    const results = await Promise.allSettled(
+      wecomTasks.map(task =>
+        runCmd(task.label, 'python3', task.args, { dryRun: opts.dryRun, timeoutMs: task.timeoutMs })
+      )
     );
+    const failures = results
+      .map((r, i) => ({ r, label: wecomTasks[i].label }))
+      .filter(({ r }) => r.status === 'rejected');
+    if (failures.length > 0) {
+      for (const { r, label } of failures) {
+        log('red', `  ❌ ${label}: ${r.reason?.message || r.reason}`);
+      }
+      throw new Error(`WeCom 同步存在 ${failures.length}/${wecomTasks.length} 个失败任务`);
+    }
+    log('green', `  ✓ WeCom 全部 ${wecomTasks.length} 个任务完成`);
   }
 
   log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
