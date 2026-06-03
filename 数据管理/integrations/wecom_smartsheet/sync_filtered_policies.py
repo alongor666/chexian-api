@@ -22,6 +22,14 @@ mode 语义：
 
 from __future__ import annotations
 
+# --- bootstrap: load .env.local for standalone python3 invocation (see _env.py) ---
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))
+import _env as _env  # noqa: F401,E402  module-level load_dotenv_local() runs on import
+del _sys, _Path
+# --- end bootstrap ---
+
 import argparse
 import json
 import os

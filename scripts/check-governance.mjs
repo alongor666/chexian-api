@@ -1904,11 +1904,22 @@ function checkEmptyCatchBlocks() {
 // 由 release:daily / sync-and-reload.mjs 在 ETL 后、发布前执行）。
 // 在 PR/push 的代码门禁里跑这些项没有意义——CI 无 Parquet 数据时它们本就 skip，
 // 只会绊住本地开发者。详见 BACKLOG 数据状态/代码分离条目。
-export const DATA_READINESS_CHECKS = [
+// pre-sync 检查：sync-vps 之前跑（数据内在质量，本地可独立验证）
+export const PRE_SYNC_READINESS_CHECKS = [
   { name: 'Parquet重叠', fn: checkParquetOverlapInCurrent },
   { name: 'Claims去重', fn: checkClaimsDetailDeduplication },
   { name: '知识库一致性', fn: checkKnowledgeDataConsistency },
+];
+
+// post-sync 检查：sync-vps 之后跑（本地 vs VPS 清单一致性，ETL 后必然先漂移再同步）
+export const POST_SYNC_READINESS_CHECKS = [
   { name: '数据漂移检测', fn: checkDataDrift },
+];
+
+// 保留旧名以兼容现有调用方（=pre+post 全集，单独跑时仍是 4 项全过才通过）
+export const DATA_READINESS_CHECKS = [
+  ...PRE_SYNC_READINESS_CHECKS,
+  ...POST_SYNC_READINESS_CHECKS,
 ];
 
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。

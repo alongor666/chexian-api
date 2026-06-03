@@ -27,11 +27,20 @@ describe('sync-and-reload full_snapshot plan', () => {
     ]);
   });
 
-  it('普通域仍保持单次 daily.mjs 调用', () => {
+  it('普通域仍保持单次 daily.mjs 调用，自动注入 --skip-report 让 sync-and-reload Stage 1.5 独占 period-trend 报告生成', () => {
     expect(buildEtlCommands(['premium'], [])).toEqual([
       {
         label: 'ETL',
-        args: ['数据管理/daily.mjs', 'premium', '--no-sync'],
+        args: ['数据管理/daily.mjs', 'premium', '--no-sync', '--skip-report'],
+      },
+    ]);
+  });
+
+  it('调用方已显式带 --skip-report 时不重复追加', () => {
+    expect(buildEtlCommands(['premium', '--skip-report'], [])).toEqual([
+      {
+        label: 'ETL',
+        args: ['数据管理/daily.mjs', 'premium', '--skip-report', '--no-sync'],
       },
     ]);
   });
