@@ -38,7 +38,7 @@
 
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
-| `check-governance.mjs` | **主治理校验**（纯代码治理 22 项；数据状态校验已解耦至 `check-data-readiness.mjs`）：必需文件、索引完整性、BACKLOG证据链、DC-002合规 | `bun run governance` |
+| `check-governance.mjs` | **主治理校验**（纯代码治理 23 项；数据状态校验已解耦至 `check-data-readiness.mjs`）：必需文件、索引完整性、BACKLOG证据链、DC-002合规、空catch禁令 | `bun run governance` |
 | `check-data-readiness.mjs` | **数据就绪校验**（4 项数据状态）：Parquet 重叠 / Claims 去重 / 知识库规模 / 同步漂移；由 release:daily（`sync-and-reload.mjs` Stage 1.7）在 ETL 后、发布前执行，**不在**代码门禁跑 | `node scripts/check-data-readiness.mjs` |
 | `check-hotfile-contracts.mjs` | **热点契约门禁**：`query.ts` / `client.ts` 改动时要求同步修改契约测试 | `bun run governance:hotfiles` |
 | `production-gate.mjs` | **生产门禁编排**：治理 + 构建 + 全量测试 + 关键E2E（可选压测门禁） | `bun run production:gate [-- --with-perf]` |
@@ -214,3 +214,7 @@ python3 scripts/compare-schema-mapping.py
 
 - `check-governance.mjs` 新增“包管理器锁文件策略（Bun-only）”检查：`bun.lock` 必须存在且禁止 `package-lock.json`/`yarn.lock`/`pnpm-lock.yaml` 混入。
 - `sync-vps.mjs` 升级为真正跨系统配置解析：支持从 `~/.ssh/config`、环境变量和 CLI 参数分层覆盖，并新增 `--dry-run` 用于无副作用预演。
+
+## 2026-06-03 追加记录
+
+- `check-governance.mjs` 新增 #25“空 catch 块禁令”检查：`server/src` + `src` 禁止纯空 catch 块（静默失败 Law 1），纯代码治理项 22 → 23；配套 `.claude/skills/silent-failure-guard.md`。
