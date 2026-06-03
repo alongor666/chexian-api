@@ -1,7 +1,7 @@
 # 技术决策记录
 
 **维护**: 架构团队
-**更新**: 2026-01-11
+**更新**: 2026-06-03
 **用途**: 记录项目关键技术决策的背景、理由和实现细节
 
 ---
@@ -13,6 +13,7 @@
 3. [PolicyFact视图去重逻辑](#3-policyfact视图去重逻辑)
 4. [参数化查询模板](#4-参数化查询模板)
 5. [下钻式图表交互](#5-下钻式图表交互)
+6. [外部 AI Agent 框架的引入策略（ADR-001）](#6-外部-ai-agent-框架的引入策略adr-001)
 
 ---
 
@@ -369,6 +370,26 @@ const colorMap = {
 
 ---
 
+## 6. 外部 AI Agent 框架的引入策略（ADR-001）
+
+> 本节按 `.claude/skills/adr-tiered-response` 的结构化 ADR 模板记录（含 ≥2 备选方案）。复杂度档位：**L3 完整 ADR**——确立"如何对待外部 AI 框架/资产"的可复用先例，非一次性改动。
+
+- **状态**: 采纳（2026-06-03）
+- **背景**: 评估是否引入 `LZMW/super-powers-team-suite`（一套 DM/DI/DG 三团队 + 黑板模式的 Claude Code agent 框架）。它要求 (a) `cp CLAUDE.md` 覆盖本项目、(b) 把 skills/agents 装到 `~/.claude/`、(c) 强依赖 CodeGraph MCP，且整仓 **AGPL-3.0**。本项目是生产 SaaS（`chexian.cretvalu.com`），需要一个可复用的判据决定"外部 agent 资产引不引、怎么引"。
+- **决策**: **不整包迁入；提炼其方法论精髓，用本项目栈重写为项目级 skill。** 并确立通用先例——外部 AI 资产引入须先过两道闸：①**许可证闸**（copyleft/AGPL 类不进生产代码库与分发面）②**红线闸**（不得覆盖 CLAUDE.md、不得绕开注册表/governance、不得在 `~/.claude/` 直接建实体目录）。过不了闸则"只读学习、自措辞重写"。
+- **备选方案**:
+  - 方案 A · 整包迁入（按其 README cp + 装 `~/.claude`）— 优点：开箱即用、零重写成本 / 缺点：**AGPL 网络 copyleft 触发源码披露风险**、覆盖 CLAUDE.md 撞 §0 红线与 20KB 预算、装 `~/.claude` 违反 crystallize 流水线、强绑 CodeGraph（陈旧性陷阱）。**否决**。
+  - 方案 B · 完全不引入 — 优点：零风险、零成本 / 缺点：放掉其真实有价值的方法论（停机纪律、独立验证、复杂度分级、按问题选刀）。**部分否决**（保守但浪费）。
+  - 方案 C · 提炼重写为项目级 skill（**选中**）— 优点：规避 AGPL（思想/方法不受版权约束，自措辞重写）、适配本项目栈与护栏、可逐条过 `rule-promotion-gate` 语义独立测试 / 缺点：需重写工作量、需自行维护。
+- **结论**: 选 C。法律风险（A）与机会成本（B）都不可接受；C 用"重写"同时拿到价值与合规。产出 6 个项目级方法论 skill + 1 条 governance 硬门 + CLAUDE.md §0 精化（详见 PR #469）。
+- **影响**:
+  - 新增 `.claude/skills/` 方法论簇（`dev-stop-on-mismatch` / `silent-failure-guard` / `rule-promotion-gate` / `adr-tiered-response` / `code-search-routing` / `agent-system-design-principles`），其中 `silent-failure-guard` 升级为 `check-governance.mjs` #25 硬门。
+  - 约束：今后任何"引入外部 agent 框架/skill 仓"的提案，须在本 ADR 的两道闸下评估；跨库上提走 `chexian-crystallize-skill`（见 BACKLOG B321）。
+  - 不改动运行时架构（纯方法论/治理层），不触 SQL 口径红线。
+- **代码位置**: `.claude/skills/*.md`（6 个新 skill）· `scripts/check-governance.mjs`（#25 空catch禁令）· `CLAUDE.md` §0（grep→LSP 精化）· PR #469。
+
+---
+
 ## 📚 相关文档
 
 - [开发文档/TECH_STACK.md](./TECH_STACK.md) - 技术栈详细说明
@@ -379,3 +400,4 @@ const colorMap = {
 
 **变更历史**:
 - 2026-01-11: 初始版本,基于代码深度分析提取5大技术决策
+- 2026-06-03: 新增 ADR-001（外部 AI Agent 框架引入策略），首次采用结构化 ADR 模板（见 `.claude/skills/adr-tiered-response`）
