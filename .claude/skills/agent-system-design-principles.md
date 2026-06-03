@@ -1,6 +1,6 @@
 ---
 name: agent-system-design-principles
-description: Agent/skill 系统设计的第一性原理与生成式配方 — 从"LLM 本性→失效模式→对冲机制"推导设计，而非抄现成框架。Use when 设计新 agent/skill、编排多步 AI 工作流、决定要不要加质量门/验证/状态外置，或评估某个 agent 框架值不值得引入时。
+description: Agent 系统设计的第一性原理与生成式配方 — 从"LLM 本性→失效模式→对冲机制"推导设计。Use when 设计一套新的 agent 系统/多 agent 编排，或评估是否引入某个外部 agent 框架（如 super-powers/team-suite 类）时。注意：单写一个普通 skill/单步任务不必触发本 skill。
 version: 1.0.0
 ---
 

@@ -46,3 +46,5 @@ version: 1.0.0
 
 - CLAUDE.md §0 红线"先搜再写 `grep -r`" → 本 skill 不推翻它，而是**精化**：grep 仍是默认，符号级引用/影响查询补 LSP。
 - 不引入 CodeGraph MCP 强依赖（避陈旧性陷阱 + 避 AGPL 套件的工具绑定）。
+
+> 母原理：本 skill 是 `agent-system-design-principles` 原理⑤（按问题选刀 = 投入配风险）的落地件。

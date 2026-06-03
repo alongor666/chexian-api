@@ -59,3 +59,5 @@ version: 1.0.0
 - **部署链决策** → 走 `.claude/rules/deploy-chain-sop.md`，不重复进 ADR。
 - **本 skill 专管**：架构/技术选型类改动的"响应该写多深 + 决策怎么结构化留痕"。
 - **复杂度↔档位不匹配**（如新模块只给了 L1 签收）= 红灯，补到对应档位再继续。
+
+> 母原理：本 skill 是 `agent-system-design-principles` 原理⑤（投入配风险）的落地件。

@@ -69,7 +69,8 @@ function parseStringArray(raw: unknown): string[] | undefined {
     if (Array.isArray(parsed)) {
       return parsed.map(item => String(item)).filter(Boolean);
     }
-  } catch {
+  } catch (err) {
+    console.warn('[AccessControl] parseStringArray: 非法 JSON，按 undefined 处理:', err);
   }
   return undefined;
 }

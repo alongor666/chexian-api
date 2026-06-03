@@ -50,3 +50,5 @@ version: 1.0.0
 - **从对话提取知识** → `chexian-extract-knowledge` / `knowledge-miner`。
 - **本闸专管**：上提**之前**的"够不够格 + 放哪一层"判定，防止把项目专属经验污染进通用层、或重复登记已覆盖的规则。
 - **单一事实源**：跨 skill 重复 ≥2 处的常量/规则 → 上提到 `chexian-report-shell/lib/`（见 skill-prefix.md）。
+
+> 母原理：本 skill 是 `agent-system-design-principles` 原理③（独立验证 / judge not lawyer）的落地件。

@@ -47,4 +47,6 @@ version: 1.0.0
 
 - **注入/XSS/CORS** 类安全 → 走 `chexian-security-review` 全家桶，本 skill 不覆盖。
 - **本 skill 专管**：错误处理的"静默性"——代码不崩但悄悄给错结果。
-- **固化为自动拦截**：稳健做法是 ESLint rule（`no-empty` / `no-useless-catch` / 自定义"catch 仅 return 空值且无 log"）进 CI 硬拦截；§审查动作 的 `rg -UP` 仅作人工自查的快速定位。先以 skill 形态验证误报率，再固化为 lint 规则。
+- **固化为自动拦截**：**空 catch 块已进 CI 硬门**（`bun run governance` 的「空catch禁令」检查，`check-governance.mjs` #25）；"catch 返回空值无日志/无判别"正则无法无误报识别，留 §审查动作 的 `rg -UP` 人工自查，稳健硬门待引入 ESLint AST（`no-useless-catch` / 自定义 rule，已登记 BACKLOG）。
+
+> 母原理：本 skill 是 `agent-system-design-principles` 原理③（证据观）+ ⑥（门=强制）的落地件。
