@@ -5,10 +5,17 @@
  *
  * 数据来源：复用 `usePerformanceBundle` 与 PerformanceAnalysisPanel 同源（React Query
  * queryKey 命中，仅触发 1 次 HTTP 请求）。从 bundle 中解析 4 个语义信号：
- *   1. 整体达成进度（summary.rows where row_level=0）
- *   2. 最弱险别组合（summary.rows 中 achievement_rate 最低）
+ *   1. 整体达成进度 — 优先取 bundle.drilldown.summary（含真实 plan_premium /
+ *      achievement_rate）；后端 SQL summary.ts:151 写死了 summary.rows 的
+ *      plan_premium=NULL / achievement_rate=NULL，不能从 summary.rows 取整体达成。
+ *      drilldown.summary 不可用时回落到 summary 整体行的环比。
+ *   2. 异常险别组合 — summary.rows 非整体行按 growth_rate 找最差（同理 achievement_rate 全 NULL）
  *   3. 落后下钻维度（drilldown.rows 中 achievement_rate 最低，机构/业务员视维度而定）
  *   4. 掉队业务员（topSalesman.rows 已按 ach 升序，取首位）
+ *
+ * Bundle 开关：与 PerformanceAnalysisPanel / PremiumDashboard / useCrossSellAnalysis
+ * 统一遵守 ENABLE_BUNDLE_ROUTES（VITE_ENABLE_BUNDLE_ROUTES）。开关关闭时本组件不渲染，
+ * 避免在 legacy 模式 503。
  *
  * 来源：Claude Design 视觉重做 2026-06-03（design-handoff/performance-analysis-20260603）。
  */
@@ -21,6 +28,7 @@ import type {
   PerformanceTimePeriod,
 } from './hooks/usePerformanceSummary';
 import type { AdvancedFilterState } from '@/shared/types/data';
+import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
 import {
   cardStyles,
   colorClasses,
@@ -67,19 +75,47 @@ function achTone(ach: number | null | undefined): { text: string; dot: string } 
 }
 
 /**
- * 从 bundle 的 summary 中找"整体"行。
+ * 取整体口径（达成率 / 环比 / 缺口）。
  *
- * row_label === '整体' 是后端契约（见 server SQL 中的 row 顺序常量），比 row_level
- * 更稳定（实际数据中 summary 全部 4 行 row_level 都是 0，无法区分整体/险别行）。
+ * 优先级：
+ *   1. `bundle.drilldown.summary` — 后端 SQL drilldown.ts 显式计算 plan_premium /
+ *      achievement_rate，是整体达成的唯一数据源。
+ *   2. `bundle.summary.rows` 中 row_label='整体' 的环比 — 仅作为 drilldown.summary
+ *      不可用时的回落（后端 summary.ts:151 写死 plan_premium=NULL，achievement_rate
+ *      永远拿不到）。
  */
-function extractOverall(rows: Array<Record<string, unknown>>): {
+function extractOverall(
+  drilldownSummary: Record<string, unknown> | null | undefined,
+  summaryRows: Array<Record<string, unknown>>
+): {
   ach: number | null;
   mom: number | null;
   gap: number;
 } | null {
+  // 优先：drilldown.summary（含真实 plan_premium / achievement_rate）
+  if (drilldownSummary) {
+    const ach =
+      drilldownSummary.achievement_rate == null
+        ? null
+        : Number(drilldownSummary.achievement_rate);
+    const mom =
+      drilldownSummary.growth_rate == null
+        ? null
+        : Number(drilldownSummary.growth_rate);
+    const premium = Number(drilldownSummary.premium ?? 0);
+    const plan =
+      drilldownSummary.plan_premium == null
+        ? null
+        : Number(drilldownSummary.plan_premium);
+    const gap = plan != null && plan > premium ? plan - premium : 0;
+    if (ach != null || mom != null) {
+      return { ach, mom, gap };
+    }
+  }
+  // 回落：summary.rows 整体行（仅 growth_rate 可用）
   const overall =
-    rows.find((r) => String(r.row_label ?? '') === '整体') ??
-    rows.find((r) => String(r.coverage_combination ?? '') === '整体');
+    summaryRows.find((r) => String(r.row_label ?? '') === '整体') ??
+    summaryRows.find((r) => String(r.coverage_combination ?? '') === '整体');
   if (!overall) return null;
   const ach = overall.achievement_rate == null ? null : Number(overall.achievement_rate);
   const mom = overall.growth_rate == null ? null : Number(overall.growth_rate);
@@ -188,12 +224,15 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
     timePeriod,
     growthMode,
     expandDims,
+    // Bundle 路由开关：与 Panel / PremiumDashboard / useCrossSellAnalysis 一致。
+    // 关闭时不发起请求，组件后续在 render 阶段返回 null（见下方 disabled 短路）。
+    enabled: ENABLE_BUNDLE_ROUTES,
   });
 
   const tiles = useMemo<FocusTile[] | null>(() => {
     if (!bundle) return null;
 
-    const overall = extractOverall(bundle.summary?.rows ?? []);
+    const overall = extractOverall(bundle.drilldown?.summary, bundle.summary?.rows ?? []);
     const weakestCov = extractWeakestCoverage(bundle.summary?.rows ?? []);
     const worstDrill = extractWorstByAch(bundle.drilldown?.rows ?? [], [
       'dimension_name',
@@ -292,6 +331,12 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
 
     return built;
   }, [bundle]);
+
+  // Bundle 路由开关关闭（legacy 部署）：本组件依赖 bundle，整体不渲染。
+  // 主 Panel 已有 legacy 回退路径，业绩分析页其余区块照常工作。
+  if (!ENABLE_BUNDLE_ROUTES) {
+    return null;
+  }
 
   // 加载态：4 个骨架卡片占位（保留 grid 结构防布局跳动）
   if (loading && !tiles) {
