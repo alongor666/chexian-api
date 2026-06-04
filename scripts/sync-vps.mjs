@@ -633,7 +633,9 @@ function printDryRun(sshConfig, runConfig) {
   console.log(`Health URL: ${runConfig.healthUrl}`);
   console.log('');
   if (!runConfig.noCleanup) {
-    console.log('前置步骤: node scripts/cleanup-reports.mjs --apply --quiet  (清理本地 reports 累积)');
+    console.log('前置步骤: 依次清理两个累积目录（server/data/reports + public/reports）');
+    console.log('  node scripts/cleanup-reports.mjs --dir server/data/reports --apply --quiet');
+    console.log('  node scripts/cleanup-reports.mjs --dir public/reports        --apply --quiet');
   } else {
     console.log('前置步骤: ⊝ 跳过 reports 清理（--no-cleanup）');
   }
@@ -692,13 +694,25 @@ async function runReportsCleanup(runConfig) {
     log('yellow', `⊝ cleanup-reports.mjs 不存在，跳过`);
     return;
   }
-  const args = ['--quiet'];
-  if (!runConfig.dryRun) args.push('--apply');
-  log('blue', `▶ 同步前清理本地 reports（${runConfig.dryRun ? 'dry-run' : 'apply'}）...`);
-  try {
-    await runLocal('node', [script, ...args]);
-  } catch (err) {
-    log('yellow', `  ⚠ reports 清理失败（非致命）: ${err.message}`);
+  // 同时覆盖两个 deleteRemote:false 累积目录（codex review P2）
+  const targets = [
+    { dir: LOCAL_HTML_REPORTS_DIR, label: 'server/data/reports' },
+    { dir: LOCAL_PUBLIC_REPORTS_DIR, label: 'public/reports' },
+  ];
+  const mode = runConfig.dryRun ? 'dry-run' : 'apply';
+  for (const t of targets) {
+    if (!existsSync(t.dir)) {
+      log('yellow', `  ⊝ ${t.label} 本地不存在，跳过`);
+      continue;
+    }
+    const args = ['--dir', t.dir, '--quiet'];
+    if (!runConfig.dryRun) args.push('--apply');
+    log('blue', `▶ 同步前清理 ${t.label}（${mode}）...`);
+    try {
+      await runLocal('node', [script, ...args]);
+    } catch (err) {
+      log('yellow', `  ⚠ ${t.label} 清理失败（非致命）: ${err.message}`);
+    }
   }
 }
 

@@ -82,39 +82,6 @@
 7. 健康检查 — `curl -s https://chexian.cretvalu.com/health` 返回 200
 8. 核心 API — 至少一个 `/api/query/*` 返回 200 + 非空 JSON
 
-## 5. Reports 累积清理三件套（防 VPS 磁盘膨胀）
-
-**问题**：`scripts/sync-vps.mjs` 中 `html_reports` 和 `public_reports` 任务用 `deleteRemote: false` 模式（保留 VPS 历史报告），导致 `server/data/reports/` 和 `frontend/dist/reports/` 只增不减——长期累积 GB 级浪费（曾盘到 1.3 GB）。
-
-**清理三件套**（一次性 + 同步前 + cron 兜底）：
-
-| 层级 | 工具 | 触发 | 作用 |
-|------|------|------|------|
-| 一次性 | `node scripts/cleanup-reports.mjs [--apply]` | 手动 | 默认 dry-run；按业务名分组保留最新 + 删纯时间戳测试 + 子目录按日期保最新 |
-| 同步前 | `runReportsCleanup()` in sync-vps.mjs | 每次 `node scripts/sync-vps.mjs` | 本地清干净再 rsync。`--no-cleanup` 可跳过 |
-| VPS cron 兜底 | `deploy/vps-wrapper/cleanup-reports-vps.sh` | crontab 每日 3:30 | 纯 bash，专杀两类大头：纯时间戳测试文件 + 日期格式子目录非最新 |
-
-**VPS cron 部署（仅首次需要）**：
-
-```bash
-# 1. 拷脚本到 VPS 标准路径
-sudo cp /var/www/chexian/server/deploy/vps-wrapper/cleanup-reports-vps.sh /usr/local/bin/cleanup-chexian-reports.sh
-sudo chmod +x /usr/local/bin/cleanup-chexian-reports.sh
-
-# 2. 安装 cron（root crontab，每日 3:30）
-sudo crontab -e
-# 追加一行：
-# 30 3 * * * /usr/local/bin/cleanup-chexian-reports.sh >> /var/log/cleanup-chexian-reports.log 2>&1
-
-# 3. 验证
-sudo /usr/local/bin/cleanup-chexian-reports.sh --dry-run
-sudo tail -f /var/log/cleanup-chexian-reports.log
-```
-
-**禁止**：
-- ❌ 关闭 sync-vps 的前置清理（`--no-cleanup` 仅供调试，长期使用会让 reports 复发累积）
-- ❌ 直接 `rm -rf reports/*`（会误删保留中的业务报告唯一份）
-
 ## 关联
 
 - 母 PR：[#379 feat(deploy): Phase 1-pre 部署链 lockfile-driven 完整回滚](https://github.com/alongor666/chexian-api/pull/379)
