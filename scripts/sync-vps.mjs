@@ -99,6 +99,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     dryRun: false,
     checkMode: false,
     helpMode: false,
+    noCleanup: false,
     alias: undefined,
     host: undefined,
     username: undefined,
@@ -122,6 +123,9 @@ function parseArgs(argv = process.argv.slice(2)) {
         break;
       case '--check':
         parsed.checkMode = true;
+        break;
+      case '--no-cleanup':
+        parsed.noCleanup = true;
         break;
       case '--help':
       case '-h':
@@ -284,6 +288,7 @@ function resolveRunConfig(parsedArgs) {
     dryRun: parsedArgs.dryRun,
     checkMode: parsedArgs.checkMode,
     helpMode: parsedArgs.helpMode,
+    noCleanup: parsedArgs.noCleanup,
     domains: parsedArgs.domains || [],
   };
 }
@@ -627,6 +632,12 @@ function printDryRun(sshConfig, runConfig) {
   console.log(`Domains: ${runConfig.domains.length ? runConfig.domains.join(',') : '(all)'}`);
   console.log(`Health URL: ${runConfig.healthUrl}`);
   console.log('');
+  if (!runConfig.noCleanup) {
+    console.log('前置步骤: node scripts/cleanup-reports.mjs --apply --quiet  (清理本地 reports 累积)');
+  } else {
+    console.log('前置步骤: ⊝ 跳过 reports 清理（--no-cleanup）');
+  }
+  console.log('');
   console.log('将执行以下同步:');
 
   const syncTasks = buildSyncTasks(runConfig);
@@ -671,8 +682,31 @@ async function maybeRestart(config, noRestart, healthUrl) {
  * - critical 目录失败 → 中止重启 + process.exit(1)
  * - optional 目录失败 → 打印警告，继续重启
  */
+async function runReportsCleanup(runConfig) {
+  if (runConfig.noCleanup) {
+    log('yellow', '⊝ 跳过 reports 清理（--no-cleanup）');
+    return;
+  }
+  const script = join(__dirname, 'cleanup-reports.mjs');
+  if (!existsSync(script)) {
+    log('yellow', `⊝ cleanup-reports.mjs 不存在，跳过`);
+    return;
+  }
+  const args = ['--quiet'];
+  if (!runConfig.dryRun) args.push('--apply');
+  log('blue', `▶ 同步前清理本地 reports（${runConfig.dryRun ? 'dry-run' : 'apply'}）...`);
+  try {
+    await runLocal('node', [script, ...args]);
+  } catch (err) {
+    log('yellow', `  ⚠ reports 清理失败（非致命）: ${err.message}`);
+  }
+}
+
 async function runStandardMode(sshConfig, runConfig) {
   const alias = sshConfig.alias;
+
+  // 同步前清理本地 reports（与 html_reports/public_reports deleteRemote:false 累积问题配套）
+  await runReportsCleanup(runConfig);
 
   const syncTasks = buildSyncTasks(runConfig);
 
