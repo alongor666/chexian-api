@@ -1895,6 +1895,64 @@ function checkEmptyCatchBlocks() {
   return true;
 }
 
+/**
+ * Bundle 路由开关合规检查
+ *
+ * 背景：项目支持 `VITE_ENABLE_BUNDLE_ROUTES=false` 的兼容部署（legacy 模式），
+ * 后端会让 `/performance-bundle` 等聚合路由返回 503。任何调用 `usePerformanceBundle`
+ * / `usePerformanceBundleApi` 等 bundle hook 的前端组件，必须显式遵守
+ * `ENABLE_BUNDLE_ROUTES` 开关（通过 `enabled` 参数短路 + 渲染时 fallback / 隐藏），
+ * 否则在 legacy 部署上会一直显示加载失败。
+ *
+ * 触发：codex review PR #477 line 190（FocusStrip 漏开关导致 legacy 模式 503 红卡）。
+ *
+ * 规则：任何 `src/` 下 `.ts/.tsx` 文件如果调用 `usePerformanceBundle(`，必须同时
+ * 出现 `ENABLE_BUNDLE_ROUTES` 字符串（用于 import + enabled 引用）。
+ */
+function checkBundleRoutesGuard() {
+  info('检查 Bundle 路由开关合规（usePerformanceBundle 调用方须遵守 ENABLE_BUNDLE_ROUTES）...');
+
+  const scanDirs = ['src'].map((d) => path.join(ROOT_DIR, d));
+  const violations = [];
+
+  function walk(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+        walk(full);
+      } else if (/\.(ts|tsx)$/.test(entry.name)) {
+        const content = fs.readFileSync(full, 'utf-8');
+        // 跳过 hook 本身（定义方）和测试文件
+        if (full.endsWith('usePerformanceBundle.ts')) continue;
+        if (full.includes('__tests__') || full.endsWith('.test.ts') || full.endsWith('.test.tsx')) continue;
+        const callsBundle = /\busePerformanceBundle\s*\(/.test(content);
+        if (!callsBundle) continue;
+        const referencesGuard = /\bENABLE_BUNDLE_ROUTES\b/.test(content);
+        if (!referencesGuard) {
+          violations.push(path.relative(ROOT_DIR, full));
+        }
+      }
+    }
+  }
+
+  for (const d of scanDirs) walk(d);
+
+  if (violations.length > 0) {
+    error(`Bundle 路由开关缺失 = ${violations.length} 处：`);
+    for (const v of violations) console.log(`    - ${v}`);
+    console.log('    修复：import { ENABLE_BUNDLE_ROUTES } from "@/shared/api/client";');
+    console.log('    然后 usePerformanceBundle({ ..., enabled: <existing-condition> && ENABLE_BUNDLE_ROUTES })');
+    console.log('    并在 render 阶段 if (!ENABLE_BUNDLE_ROUTES) 走 legacy fallback 或隐藏。');
+    console.log('    依据：PR #477 codex review line 190；现有遵守者：PerformanceAnalysisPanel.tsx / PremiumDashboard.tsx');
+    return false;
+  }
+
+  success('Bundle 路由开关合规检查通过（所有 usePerformanceBundle 调用方均遵守 ENABLE_BUNDLE_ROUTES）');
+  return true;
+}
+
 // ============================================================
 // 主函数
 // ============================================================
@@ -1947,6 +2005,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
   { name: '空catch禁令', fn: checkEmptyCatchBlocks },
+  { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },
 ];
 
 /**
