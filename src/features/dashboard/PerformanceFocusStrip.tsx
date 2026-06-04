@@ -261,16 +261,22 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
     if (overall) {
       if (overall.ach != null) {
         const tone = achTone(overall.ach);
+        // 阈值视觉/文案一致性（PR #478 codex review line 274）：
+        //   - achTone 在 ach>=99 时已视作"达成"（绿点 + 主文本色）
+        //   - 但 getPeriodGap 是按 100% 目标算的，99-100 区间会冒出"缺口 0.X 万"
+        //   - 这与 dot/tone 矛盾，绿点却显示有缺口
+        // 按 achTone 同阈值（99）守住"达成"语义：
+        //   - ach >= 99 → 永远显示"达成"（忽略 gap 余量）
+        //   - ach < 99 且 gap > 0 → 显示真实缺口（万元）
+        // overall.gap 单位是万元（与 plan_premium / premium 同口径），用 formatWanAdaptive
+        // 不用 formatPremiumWan（后者 input=元，会再 ÷10000 → 30 万显示为 0）。
+        const isReached = overall.ach >= 99;
         built.push({
           label: '整体达成进度',
           value: overall.ach.toFixed(1),
           unit: '%',
           sub:
-            overall.gap > 0
-              // overall.gap 来自 getPeriodGap，单位已是万元（与后端 plan_premium /
-              // premium 同口径）。必须用 formatWanAdaptive（接受万元 input），不能用
-              // formatPremiumWan（input=元，会再 ÷10000 → 30 万显示为 0）。
-              // 与 Panel 内 formatPremiumWanDisplay → formatWanAdaptive 对齐。
+            !isReached && overall.gap > 0
               ? `缺口 ${formatWanAdaptive(overall.gap)} 万 · 阈值 99`
               : '达成 · 阈值 99',
           tone: tone.text,
@@ -304,8 +310,12 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
       if (weakestCov.mom != null) {
         subParts.push(`环比 ${weakestCov.mom > 0 ? '+' : ''}${weakestCov.mom.toFixed(1)}`);
       }
-      // 同 tile 1：weakestCov.gap 已是万元，必须 formatWanAdaptive
-      if (weakestCov.gap > 0) subParts.push(`缺口 ${formatWanAdaptive(weakestCov.gap)} 万`);
+      // 同 tile 1：weakestCov.gap 已是万元，必须 formatWanAdaptive。
+      // 阈值一致性：ach>=99 视作达成，不展示余量缺口（同 tile 1 修复，PR #478 line 274）
+      const covReached = weakestCov.ach != null && weakestCov.ach >= 99;
+      if (!covReached && weakestCov.gap > 0) {
+        subParts.push(`缺口 ${formatWanAdaptive(weakestCov.gap)} 万`);
+      }
       built.push({
         label: '异常险别组合',
         value: weakestCov.name,
