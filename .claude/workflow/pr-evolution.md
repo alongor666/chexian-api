@@ -48,3 +48,9 @@
 - **根因**: 重构 KpiSection 时为可读性引入了 `const isHero = HERO_KPI_IDS.includes(id)` 但后续逻辑没真用到它（Hero 归属判定走 `visibleHero / visibleCore` 过滤）；vite 的 esbuild 把它当 dead-code 静默吃掉，而项目根 `tsconfig.json` 启用 `noUnusedLocals: true` 让 `tsc --noEmit` 报错——两条工具链的严格度不一致
 - **修复**: 删掉这个未用的本地变量，commit `11988299`
 - **预防**: §3 前置检查里 `bun run build` 不等同于 `bun run typecheck`。**push 前必须额外跑 `bun run typecheck`**（已在 `scripts/typecheck.mjs` 暴露）。同类失败再发生 1 次 → 把 `bun run typecheck` 加进 §3.3 默认治理校验链，让 CI 那一关本地必先过
+
+### 2026-06-03 — PR #476: worktree 模式下把改动写到主目录 main
+- **症状**: 任务 A（reports 清理三件套）实施完成后才发现，4 个新/改文件全部落在主目录 `chexian-api/` (在 main 分支)，而不是预期的 worktree `.claude/worktrees/determined-mcclintock-7b70a7/`。事后用 `cp + git checkout HEAD --` 跨工作树迁移修正，浪费一轮操作
+- **根因**: Bash 工具的 cwd 跨调用会重置（`Shell cwd was reset to ...` 提示），但每次跑的 Write/Edit 用的是**绝对路径**，绝对路径写主目录而非 worktree——cwd 切换对 Write/Edit 无效；同时整个会话的 system reminder（CLAUDE.md）路径含 worktree 前缀让人误以为已经在 worktree 里
+- **修复**: cp 4 个文件到 worktree 对应路径 + 在主目录 `git checkout HEAD -- ` 还原 2 个 modified + `rm` 2 个 untracked
+- **预防**: §3 前置检查在第一次 Write/Edit 前必须先确认落点：`git -C $WT_PATH branch --show-current` 应输出 feature 分支名而非 main；Write/Edit 的目标绝对路径必须包含 `.claude/worktrees/` 子串。同类失败再发生 1 次 → 在 settings.json 加 PreToolUse hook 拦截：Write/Edit 路径若指向当前主仓但分支为 main 时 deny
