@@ -41,6 +41,7 @@ import {
   formatPremiumWan,
   formatSalesmanName,
 } from '@/shared/utils/formatters';
+import { getPeriodGap } from './utils/performancePlanDenominator';
 
 interface PerformanceFocusStripProps {
   filters: AdvancedFilterState;
@@ -86,7 +87,8 @@ function achTone(ach: number | null | undefined): { text: string; dot: string } 
  */
 function extractOverall(
   drilldownSummary: Record<string, unknown> | null | undefined,
-  summaryRows: Array<Record<string, unknown>>
+  summaryRows: Array<Record<string, unknown>>,
+  timePeriod: PerformanceTimePeriod
 ): {
   ach: number | null;
   mom: number | null;
@@ -107,12 +109,15 @@ function extractOverall(
       drilldownSummary.plan_premium == null
         ? null
         : Number(drilldownSummary.plan_premium);
-    const gap = plan != null && plan > premium ? plan - premium : 0;
+    // 重要：plan_premium 是年度计划。在 day/week/month/quarter 口径下，
+    // 缺口必须按 getPlanDenominator(timePeriod) 周期化后再做减法，
+    // 否则会得到"年度计划 - 当期保费"的失真值（PR #477 codex line 110）。
+    const gap = getPeriodGap(plan, premium, timePeriod);
     if (ach != null || mom != null) {
       return { ach, mom, gap };
     }
   }
-  // 回落：summary.rows 整体行（仅 growth_rate 可用）
+  // 回落：summary.rows 整体行（仅 growth_rate 可用，plan_premium 后端写死 NULL）
   const overall =
     summaryRows.find((r) => String(r.row_label ?? '') === '整体') ??
     summaryRows.find((r) => String(r.coverage_combination ?? '') === '整体');
@@ -121,7 +126,7 @@ function extractOverall(
   const mom = overall.growth_rate == null ? null : Number(overall.growth_rate);
   const premium = Number(overall.premium ?? 0);
   const plan = overall.plan_premium == null ? null : Number(overall.plan_premium);
-  const gap = plan != null && plan > premium ? plan - premium : 0;
+  const gap = getPeriodGap(plan, premium, timePeriod);
   return { ach, mom, gap };
 }
 
@@ -232,7 +237,11 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
   const tiles = useMemo<FocusTile[] | null>(() => {
     if (!bundle) return null;
 
-    const overall = extractOverall(bundle.drilldown?.summary, bundle.summary?.rows ?? []);
+    const overall = extractOverall(
+      bundle.drilldown?.summary,
+      bundle.summary?.rows ?? [],
+      timePeriod
+    );
     const weakestCov = extractWeakestCoverage(bundle.summary?.rows ?? []);
     const worstDrill = extractWorstByAch(bundle.drilldown?.rows ?? [], [
       'dimension_name',
@@ -330,7 +339,7 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
     }
 
     return built;
-  }, [bundle]);
+  }, [bundle, timePeriod]);
 
   // Bundle 路由开关关闭（legacy 部署）：本组件依赖 bundle，整体不渲染。
   // 主 Panel 已有 legacy 回退路径，业绩分析页其余区块照常工作。
