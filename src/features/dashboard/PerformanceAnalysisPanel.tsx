@@ -19,7 +19,7 @@ import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatWanAdaptive, formatTeamName, formatSalesmanName } from '@/shared/utils/formatters';
 import { useTheme } from '@/shared/theme';
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { buttonStyles, cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles } from '@/shared/styles';
+import { buttonStyles, cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles, toggleButtonStyles } from '@/shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
 import {
   classifyAchievementBand,
@@ -642,6 +642,16 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     { key: 'insurance_grade', label: '风险评分' },
   ];
 
+  // 维度分段控件分组（组织 / 业务）。label 全部从 HEATMAP_DIMENSION_LABELS SSOT 取，
+  // 改 SSOT 自动跟进，避免硬编码。
+  const HEATMAP_DIM_GROUPS: { groupLabel: string; keys: HeatmapDimension[] }[] = [
+    { groupLabel: '组织', keys: ['org_level_3', 'team', 'salesman'] },
+    {
+      groupLabel: '业务',
+      keys: ['customer_category', 'coverage_combination', 'energy_type', 'business_nature', 'insurance_grade'],
+    },
+  ];
+
   const handlePerfHeatmapRowClick = (org: string) => {
     setPendingHeatmapRow(org);
     setShowHeatmapPicker(true);
@@ -893,15 +903,52 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           }
           leftContent={
             heatmapDrillPath.length === 0 ? (
-              <Tabs
-                items={(Object.entries(HEATMAP_DIMENSION_LABELS) as [HeatmapDimension, string][]).map(([key, label]) => ({ key, label }))}
-                activeKey={heatmapDimension}
-                onChange={(key) => { setHeatmapDimension(key as HeatmapDimension); setHeatmapGroupBy(key as HeatmapDimension); }}
-                variant="pills"
-                size="mini"
-              />
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                {HEATMAP_DIM_GROUPS.map((group) => (
+                  <div key={group.groupLabel} className="flex items-center gap-2">
+                    <span className="text-xs text-neutral-400 dark:text-neutral-500">{group.groupLabel}</span>
+                    <div
+                      role="radiogroup"
+                      aria-label={`${group.groupLabel}维度`}
+                      className="inline-flex rounded-md bg-neutral-100 dark:bg-white/5 p-0.5 text-xs"
+                    >
+                      {group.keys.map((key) => {
+                        const active = heatmapDimension === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            className={cn(
+                              'px-2.5 py-1 rounded-[5px] transition-colors',
+                              active ? toggleButtonStyles.active : toggleButtonStyles.inactive,
+                            )}
+                            onClick={() => {
+                              setHeatmapDimension(key);
+                              setHeatmapGroupBy(key);
+                            }}
+                          >
+                            {HEATMAP_DIMENSION_LABELS[key]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="flex items-center gap-1 text-xs text-neutral-500">
+              <div className="flex items-center gap-2 text-xs text-neutral-500">
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full font-medium',
+                    colorClasses.bg.primary,
+                    colorClasses.text.primaryDark,
+                  )}
+                  aria-label={`已下钻 ${heatmapDrillPath.length} 层`}
+                >
+                  下钻 <span className="font-numeric">{heatmapDrillPath.length}</span> 层
+                </span>
                 <button
                   className="hover:text-primary hover:underline cursor-pointer"
                   onClick={() => handlePerfHeatmapBreadcrumbClick(-1)}
