@@ -38,7 +38,7 @@ import {
 } from '@/shared/styles';
 import {
   formatPercent,
-  formatPremiumWan,
+  formatWanAdaptive,
   formatSalesmanName,
 } from '@/shared/utils/formatters';
 import { getPeriodGap } from './utils/performancePlanDenominator';
@@ -267,7 +267,11 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
           unit: '%',
           sub:
             overall.gap > 0
-              ? `缺口 ${formatPremiumWan(overall.gap)} 万 · 阈值 99`
+              // overall.gap 来自 getPeriodGap，单位已是万元（与后端 plan_premium /
+              // premium 同口径）。必须用 formatWanAdaptive（接受万元 input），不能用
+              // formatPremiumWan（input=元，会再 ÷10000 → 30 万显示为 0）。
+              // 与 Panel 内 formatPremiumWanDisplay → formatWanAdaptive 对齐。
+              ? `缺口 ${formatWanAdaptive(overall.gap)} 万 · 阈值 99`
               : '达成 · 阈值 99',
           tone: tone.text,
           dot: tone.dot,
@@ -300,7 +304,8 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
       if (weakestCov.mom != null) {
         subParts.push(`环比 ${weakestCov.mom > 0 ? '+' : ''}${weakestCov.mom.toFixed(1)}`);
       }
-      if (weakestCov.gap > 0) subParts.push(`缺口 ${formatPremiumWan(weakestCov.gap)} 万`);
+      // 同 tile 1：weakestCov.gap 已是万元，必须 formatWanAdaptive
+      if (weakestCov.gap > 0) subParts.push(`缺口 ${formatWanAdaptive(weakestCov.gap)} 万`);
       built.push({
         label: '异常险别组合',
         value: weakestCov.name,
