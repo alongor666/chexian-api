@@ -54,7 +54,7 @@ function isGroupable(dataTypes: readonly string[]): boolean {
 
 /**
  * GET /api/discover/fields
- * 返回字段注册表（42 个字段）的精简视图。
+ * 返回字段注册表（56 个字段）的精简视图。
  */
 router.get(
   '/fields',
