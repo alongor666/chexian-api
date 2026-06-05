@@ -69,7 +69,19 @@ const DEFAULT_GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const STATS_TIMESTAMP_PROBE_BYTES = 64 * 1024;
 const logger = createLogger('WorkflowAuditLog');
 
+/**
+ * Workflow audit JSONL 根目录。
+ *
+ * 默认 server/data/runtime/audit-log/。可用 AUDIT_LOG_DIR 环境变量覆盖——**惰性直读
+ * process.env**（不走 opsEnv 的加载时快照），使并行测试文件能在运行时各自指向独立临时
+ * 目录，避免跨文件在同一日期 jsonl 上读/写/删（_resetAuditLogForDate / fs.rm / GC）
+ * 产生竞态（读路径 readAuditEventsForRun 偶发返回 []）。生产环境不设此变量时行为不变。
+ */
 export function getAuditDir(): string {
+  const override = process.env.AUDIT_LOG_DIR;
+  if (typeof override === 'string' && override.trim().length > 0) {
+    return path.resolve(override.trim());
+  }
   return path.resolve(getDataDir(), RUNTIME_SUBDIR);
 }
 

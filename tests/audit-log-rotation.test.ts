@@ -2,9 +2,10 @@
  * audit-log rotation / GC / stats — PR-E
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import {
   appendAuditEvent,
   getAuditDir,
@@ -21,6 +22,23 @@ const RUN_ID = 'wr_20260427000000_auto-risk-control-v1_aabbccdd';
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
+
+// ── 审计目录隔离（防跨文件竞态）─────────────────────────────────────────────
+// 本文件的 afterEach 会 fs.rm 整个 audit 目录；与其他并行测试共享默认目录时会清空它们
+// 的当日数据。指定独立临时审计目录，把破坏性清理限制在隔离目录内。
+const _prevAuditDir = process.env.AUDIT_LOG_DIR;
+let _isolatedAuditDir = '';
+
+beforeAll(async () => {
+  _isolatedAuditDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chexian-audit-rotation-'));
+  process.env.AUDIT_LOG_DIR = _isolatedAuditDir;
+});
+
+afterAll(async () => {
+  if (_prevAuditDir === undefined) delete process.env.AUDIT_LOG_DIR;
+  else process.env.AUDIT_LOG_DIR = _prevAuditDir;
+  if (_isolatedAuditDir) await fs.rm(_isolatedAuditDir, { recursive: true, force: true });
+});
 
 afterEach(async () => {
   await fs.rm(getAuditDir(), { recursive: true, force: true });

@@ -15,6 +15,25 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import type { Server } from 'http';
 import { z } from 'zod';
+import os from 'node:os';
+
+// ── 审计目录隔离（防跨文件竞态）─────────────────────────────────────────────
+// 多个测试文件并行读/写/删共享的 server/data/runtime/audit-log/{今天}.jsonl 会互相
+// 清空对方数据（_resetAuditLogForDate / fs.rm / GC）。给本文件指定独立临时审计目录，
+// 使 appendAuditEvent（写）与 GET /audit（读）都落在隔离目录，彻底消除竞态。
+const _prevAuditDir = process.env.AUDIT_LOG_DIR;
+let _isolatedAuditDir = '';
+
+beforeAll(async () => {
+  _isolatedAuditDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chexian-audit-route-'));
+  process.env.AUDIT_LOG_DIR = _isolatedAuditDir;
+});
+
+afterAll(async () => {
+  if (_prevAuditDir === undefined) delete process.env.AUDIT_LOG_DIR;
+  else process.env.AUDIT_LOG_DIR = _prevAuditDir;
+  if (_isolatedAuditDir) await fs.rm(_isolatedAuditDir, { recursive: true, force: true });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
