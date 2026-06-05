@@ -37,37 +37,21 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from openpyxl import load_workbook
-
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 # 触发 _env.py 加载 .env.local（与 sync_org_renewal_from_xlsx.py 保持一致）
 import _env  # noqa: F401
+from _safety import cli_call, WecomCliError  # noqa: E402 — SSOT 调用器（含 errcode 检查）
 from sync_org_renewal_from_xlsx import ORG_SLUGS, read_registry, DEFAULT_XLSX  # noqa: E402
 
 STATE_DIR = HERE / "state"
 BATCH = 500
-
-
-def cli_call(group: str, command: str, payload: dict[str, Any], timeout: int = 120) -> dict[str, Any]:
-    cmd = ["wecom-cli", group, command, "--json", json.dumps(payload, ensure_ascii=False)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"wecom-cli {group} {command} 失败 rc={proc.returncode}: "
-            f"stdout={proc.stdout[:300]!r} stderr={proc.stderr[:300]!r}"
-        )
-    try:
-        return json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"wecom-cli 返回非 JSON: {proc.stdout[:300]!r}") from exc
 
 
 def resolve_sheet_id(url: str) -> str:

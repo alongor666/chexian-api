@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +37,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import _env  # noqa: F401
+from _safety import cli_call, WecomCliError  # noqa: E402 — SSOT 调用器，errcode 非 0 直接抛
 from sync_org_renewal_from_xlsx import ORG_SLUGS, read_registry, DEFAULT_XLSX  # noqa: E402
 from create_renewal_tracker import _read_text  # noqa: E402 — 复用 cell 形态解析（list/dict/str）
 
@@ -45,46 +45,30 @@ STATE_DIR = HERE / "state"
 VIN_FIELD_TITLE = "车架号"  # field_registry_orgsheet.yaml 里 VIN 列标题
 
 
-def cli_call(group: str, command: str, payload: dict[str, Any], timeout: int = 180) -> dict[str, Any]:
-    cmd = ["wecom-cli", group, command, "--json", json.dumps(payload, ensure_ascii=False)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"wecom-cli {group} {command} 失败 rc={proc.returncode}: "
-            f"stdout={proc.stdout[:300]!r} stderr={proc.stderr[:300]!r}"
-        )
-    try:
-        return json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"wecom-cli 返回非 JSON: {proc.stdout[:300]!r}") from exc
-
-
 def resolve_sheet_id(url: str) -> str:
+    # _safety.cli_call 已自动解 MCP envelope + 校验业务 errcode
     resp = cli_call("doc", "smartsheet_get_sheet", {"url": url})
-    # 兼容 mcp_rpc 嵌套返回
-    if isinstance(resp.get("result"), dict):
-        content = resp["result"].get("content") or []
-        if content and isinstance(content[0], dict) and content[0].get("text"):
-            resp = json.loads(content[0]["text"])
     sheets = resp.get("sheet_list") or resp.get("sheets") or []
     if not sheets:
-        raise RuntimeError(f"smartsheet_get_sheet 返回空: {resp}")
-    return sheets[0].get("sheet_id") or sheets[0].get("id")
+        raise RuntimeError(f"smartsheet_get_sheet 返回空 sheet_list: {resp}")
+    sheet_id = sheets[0].get("sheet_id") or sheets[0].get("id")
+    if not sheet_id:
+        raise RuntimeError(f"sheet_list[0] 无 sheet_id 字段: {sheets[0]}")
+    return sheet_id
 
 
 def get_all_records(url: str, sheet_id: str) -> list[dict[str, Any]]:
-    """分页拉所有 records；wecom-cli 支持 cursor + limit。"""
+    """分页拉所有 records；wecom-cli 支持 cursor + limit。
+    _safety.cli_call 已校验 errcode；errcode 非 0（如 851014 文档权限过期）
+    直接抛 WecomCliError，不会让我们用空 vin_index 覆盖 state.records。
+    """
     rows: list[dict[str, Any]] = []
     cursor = None
     while True:
-        payload = {"url": url, "sheet_id": sheet_id, "limit": 500}
+        payload: dict[str, Any] = {"url": url, "sheet_id": sheet_id, "limit": 500}
         if cursor:
             payload["cursor"] = cursor
         resp = cli_call("doc", "smartsheet_get_records", payload)
-        if isinstance(resp.get("result"), dict):
-            content = resp["result"].get("content") or []
-            if content and isinstance(content[0], dict) and content[0].get("text"):
-                resp = json.loads(content[0]["text"])
         batch = resp.get("records") or []
         rows.extend(batch)
         cursor = resp.get("next_cursor") or resp.get("cursor")

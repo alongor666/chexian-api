@@ -1,16 +1,28 @@
-"""Wecom 智能表行级重复风险闸 — 共享安全护栏。
+"""Wecom 智能表行级重复风险闸 + 共享 wecom-cli 调用器。
 
 设计目标
 --------
 2026-06-03 事故根因：state.records 跑前为空 → sync 走 add 路径 → 与企微表既存
 数据形成行级重复（合计 28,899 行）。详见 [[project_wecom_org_renewal_first_real_run_dup]]。
 
-本模块提供三个共享组件，被 sync_org_renewal_from_xlsx / sync_filtered_policies /
-sync_may_renewal_fields 三个写入脚本共用：
+本模块提供两类共享组件：
 
-1. `print_preflight_banner` — 写入前打印对比表（state 预期 vs source 现状 vs 计划写入）
-2. `evaluate_gate` — 判断是否触发危险信号（state 空 / to_add 占比过高 / 全 add 无 update）
-3. `--i-checked-wecom-rows` 显式覆盖开关（用户去企微表点查行数后才能加）
+A. 行级重复风险闸（被 sync_org_renewal_from_xlsx / sync_filtered_policies /
+   sync_may_renewal_fields 三个写入脚本共用）
+   1. `print_preflight_banner` — 写入前打印对比表（state 预期 vs source 现状 vs 计划写入）
+   2. `evaluate_gate` — 判断是否触发危险信号（state 空 / to_add 占比过高 / 全 add 无 update）
+   3. `--i-checked-wecom-rows` 显式覆盖开关（用户去企微表点查行数后才能加）
+
+B. wecom-cli 安全调用器（被 cleanup_org_renewal_dup / prime_state_from_wecom /
+   rebuild_state_from_distribute 三个一次性运维脚本共用）
+   1. `cli_call` — 唯一入口，覆盖：超时 / 非 0 退出码 / 空输出 / JSON parse / MCP envelope 解包 / 业务 errcode
+   2. `WecomCliError` — 上述任一失败时抛出，调用方按异常处理
+   动因：codex PR #485 第二轮 P1 — `wecom-cli` 进程 returncode=0 但响应里
+   errcode 非 0（如 851014 文档权限过期、40058 webhook 不支持的操作）时，
+   旧版 cli_call 只看 returncode → 静默把错误响应当成功响应，造成 cleanup
+   误清 state / prime 用空 vin_index 覆盖 state.records。本入口与
+   create_renewal_tracker.WeComCli._invoke / sync_may_renewal_fields
+   .normalize_wecom_response 同等校验水准。
 
 为什么不靠 wecom-cli 直接 GET 企微表行数？
 - 应用 API 受 errcode 851014 (authorization expired) 阻塞，无法绕开（详见
@@ -20,8 +32,10 @@ sync_may_renewal_fields 三个写入脚本共用：
 """
 from __future__ import annotations
 
+import json
+import subprocess
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 # to_add / source_rows 超过此比例视为高风险（疑似重复写入）
 DANGER_ADD_RATIO = 0.30
@@ -112,3 +126,92 @@ def must_check_wecom_rows_hint(label: str, state_count: int) -> str:
         f"    必须先人工清表（去企微 UI 删除所有行），再加 --i-checked-wecom-rows 放行\n"
         f"\n参考：[[project_wecom_org_renewal_first_real_run_dup]] [[feedback_wecom_no_row_duplication]]"
     )
+
+
+# ============================================================================
+# B. wecom-cli 安全调用器（SSOT）
+# ============================================================================
+class WecomCliError(RuntimeError):
+    """wecom-cli 调用失败 — 超时 / 非 0 退出 / 空输出 / JSON 解析失败 / 业务 errcode 非 0。"""
+
+
+def _unwrap_mcp_envelope(envelope: Any) -> Any:
+    """wecom-cli 0.1.8 MCP JSON-RPC 风格：业务对象嵌在 result.content[0].text 里（JSON 字符串）。
+    若非 MCP 包装则原样返回。
+    """
+    if not isinstance(envelope, dict):
+        return envelope
+    if "jsonrpc" not in envelope and "result" not in envelope:
+        return envelope
+    if envelope.get("error"):
+        raise WecomCliError(f"MCP RPC error: {envelope['error']}")
+    result = envelope.get("result")
+    if not isinstance(result, dict):
+        return envelope
+    if result.get("isError"):
+        raise WecomCliError(f"MCP RPC isError: {result}")
+    content = result.get("content")
+    if not isinstance(content, list) or not content:
+        return result
+    first = content[0]
+    if not isinstance(first, dict):
+        return result
+    text = first.get("text", "")
+    if not isinstance(text, str):
+        return first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return first
+
+
+def cli_call(
+    group: str,
+    command: str,
+    payload: dict[str, Any],
+    *,
+    timeout: int = 120,
+) -> dict[str, Any]:
+    """共享 wecom-cli 调用器（SSOT）。
+
+    覆盖六类失败模式，任一触发即抛 WecomCliError：
+      1. 超时（subprocess.TimeoutExpired）
+      2. 非 0 退出码
+      3. stdout 为空
+      4. stdout 非 JSON
+      5. MCP envelope 的 isError / error
+      6. 业务 errcode 非 0（如 851014 文档权限过期、40058 webhook 不支持）
+
+    成功则返回**已解包**的业务对象（dict）。
+
+    本入口设立动因：codex PR #485 第二轮 P1 — 旧的 cli_call 复制版只看
+    returncode，static 把 errcode 非 0 响应当成功响应；cleanup 误清 state、
+    prime 用空 vin_index 覆盖 state.records 等都是其后果。
+    """
+    cmd = ["wecom-cli", group, command, "--json", json.dumps(payload, ensure_ascii=False)]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise WecomCliError(f"{group} {command} 调用超时（{timeout}s）") from exc
+
+    if proc.returncode != 0:
+        raise WecomCliError(
+            f"{group} {command} 退出码 {proc.returncode}: stderr={proc.stderr.strip()[:500]}"
+        )
+    if not proc.stdout.strip():
+        raise WecomCliError(
+            f"{group} {command} 输出为空（stderr: {proc.stderr.strip()[:300]}）"
+        )
+    try:
+        envelope = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise WecomCliError(
+            f"{group} {command} 输出非 JSON: {proc.stdout.strip()[:300]}"
+        ) from exc
+
+    data = _unwrap_mcp_envelope(envelope)
+    if isinstance(data, dict) and data.get("errcode") not in (None, 0):
+        raise WecomCliError(
+            f"{group} {command} errcode={data.get('errcode')} errmsg={data.get('errmsg')}"
+        )
+    return data if isinstance(data, dict) else {"_raw": data}
