@@ -118,4 +118,11 @@ export interface HeatmapFocusPanelProps {
   readonly growthMode: PerformanceGrowthMode;
   readonly onDrillClick: () => void;
   readonly onClear: () => void;
+  /**
+   * 抽屉之上是否还浮着 DimensionPicker（或其他模态）。
+   * 为 true 时抽屉的 ESC 处理器让位（picker / 模态自己处理），
+   * 避免按 ESC 时把抽屉的 heatmapSelection 清空，picker 仍开着却拿不到下钻上下文。
+   * 修 PR #481 codex 第 2 轮 P2-1。
+   */
+  readonly isPickerOpen?: boolean;
 }

@@ -86,6 +86,7 @@ export function HeatmapCell({
     <button
       ref={cellRef}
       type="button"
+      data-heatmap-cell="true"
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
