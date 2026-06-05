@@ -4,8 +4,7 @@
  * 使用 jsPDF 和 jspdf-autotable 生成专业的 PDF 报告
  */
 
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import type { jsPDF as JsPDFType } from 'jspdf';
 import type {
   ExportConfig,
   ExportContent,
@@ -20,6 +19,32 @@ import { captureCharts, waitForChartRender } from './chartCapture';
 import { Logger } from '@/shared/utils/logger';
 
 const logger = new Logger('PdfExporter');
+
+/**
+ * jsPDF（≈400KB gzip）和 jspdf-autotable（≈200KB gzip）仅在用户实际触发
+ * 导出时才需要，因此动态 import 以剥离出首屏 bundle。Promise 缓存避免重复加载。
+ */
+type JsPDFCtor = typeof import('jspdf')['jsPDF'];
+type AutoTableFn = typeof import('jspdf-autotable')['default'];
+
+interface PdfLibs {
+  jsPDF: JsPDFCtor;
+  autoTable: AutoTableFn;
+}
+
+let pdfLibsPromise: Promise<PdfLibs> | null = null;
+function loadPdfLibs(): Promise<PdfLibs> {
+  if (!pdfLibsPromise) {
+    pdfLibsPromise = Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]).then(([jspdfMod, autoTableMod]) => ({
+      jsPDF: jspdfMod.jsPDF,
+      autoTable: autoTableMod.default,
+    }));
+  }
+  return pdfLibsPromise;
+}
 
 /**
  * 默认PDF样式
@@ -41,14 +66,15 @@ const DEFAULT_PDF_STYLE: Required<PDFStyleConfig> = {
  * PDF导出器类
  */
 export class PDFExporter {
-  private doc: jsPDF;
+  private doc: JsPDFType;
+  private autoTable: AutoTableFn;
   private config: Required<ExportConfig>;
   private style: Required<PDFStyleConfig>;
   private currentY: number = 0;
   private pageHeight: number;
   private pageWidth: number;
 
-  constructor(config: ExportConfig) {
+  constructor(config: ExportConfig, libs: PdfLibs) {
     // 填充默认配置
     this.config = {
       ...config,
@@ -68,7 +94,8 @@ export class PDFExporter {
     };
 
     // 创建PDF文档
-    this.doc = new jsPDF({
+    this.autoTable = libs.autoTable;
+    this.doc = new libs.jsPDF({
       orientation: this.config.orientation,
       unit: 'mm',
       format: this.config.pageSize,
@@ -389,7 +416,7 @@ export class PDFExporter {
     this.currentY += 10;
 
     // 使用 autoTable 生成表格
-    autoTable(this.doc, {
+    this.autoTable(this.doc, {
       startY: this.currentY,
       head: [table.headers],
       body: table.rows,
@@ -480,6 +507,7 @@ export async function exportToPDF(
   content: ExportContent,
   onProgress?: (progress: ExportProgress) => void
 ): Promise<ExportResult> {
-  const exporter = new PDFExporter(config);
+  const libs = await loadPdfLibs();
+  const exporter = new PDFExporter(config, libs);
   return exporter.generate(content, onProgress);
 }

@@ -1,9 +1,13 @@
-import React, { useState, createContext, useContext, useEffect } from 'react';
+import React, { useState, createContext, useContext, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { SidebarNavigation } from './SidebarNavigation';
 import { TopNavigation } from './TopNavigation';
 import { Watermark } from './Watermark';
-import { CopilotDrawer } from '../../features/copilot';
+
+// CopilotDrawer 携带 AI 相关重依赖且默认关闭，lazy 加载以剥离出首屏 bundle。
+const CopilotDrawer = lazy(() =>
+  import('../../features/copilot').then((m) => ({ default: m.CopilotDrawer })),
+);
 
 interface SidebarContextValue {
   collapsed: boolean;
@@ -81,20 +85,25 @@ export const SidebarLayout: React.FC = () => {
     };
   }, [mobileOpen, isMobile]);
 
+  // Context value 用 useMemo 稳定引用，避免 SidebarLayout 每次重渲染都生成新对象
+  // 导致 useSidebar() 的所有消费者（SidebarNavigation/TopNavigation 等）级联重渲染。
+  const sidebarContextValue = useMemo<SidebarContextValue>(
+    () => ({
+      collapsed: true,
+      toggle: () => { },
+      mobileOpen,
+      setMobileOpen,
+      isMobile,
+      sidebarWidth: DESKTOP_SIDEBAR_WIDTH,
+      setSidebarWidth: () => { },
+      isDragging: false,
+      setIsDragging: () => { },
+    }),
+    [mobileOpen, isMobile],
+  );
+
   return (
-    <SidebarContext.Provider
-      value={{
-        collapsed: true,
-        toggle: () => { },
-        mobileOpen,
-        setMobileOpen,
-        isMobile,
-        sidebarWidth: DESKTOP_SIDEBAR_WIDTH,
-        setSidebarWidth: () => { },
-        isDragging: false,
-        setIsDragging: () => { },
-      }}
-    >
+    <SidebarContext.Provider value={sidebarContextValue}>
       <div className="h-screen overflow-hidden bg-neutral-50 dark:bg-neutral-900 flex flex-col">
         {/* 顶部导航栏 */}
         <TopNavigation />
@@ -126,7 +135,9 @@ export const SidebarLayout: React.FC = () => {
             </div>
           </main>
         </div>
-        <CopilotDrawer />
+        <Suspense fallback={null}>
+          <CopilotDrawer />
+        </Suspense>
       </div>
     </SidebarContext.Provider>
   );
