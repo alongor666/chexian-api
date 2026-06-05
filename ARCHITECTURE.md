@@ -23,28 +23,53 @@
 
 ```
 chexian-api/
-├── src/                    # 前端源码（核心应用）
+├── src/                    # 前端源码（React + TS + Vite）
+│   ├── app/                #   应用入口（App.tsx / main.tsx）
+│   ├── features/           #   21 个业务功能模块（前端主体）
+│   ├── shared/             #   共享层（api / contexts / hooks / ui / 设计系统）
+│   ├── widgets/            #   通用 UI 组件库（charts / kpi / table）
+│   ├── components/         #   全局布局组件（layout/）
+│   ├── charts/ services/   #   特化图表 / 前端服务（PdfExport）
+│   └── core/ types/ shims/ #   历史遗留区（core/types 待归档）+ 类型垫片
+│
 ├── server/                 # 后端 API 服务（Express + DuckDB native）
+│   └── src/
+│       ├── routes/         #   API 路由层（12 顶层 + query/ 23 子路由）
+│       ├── sql/            #   SQL 生成器（31 顶层 + 8 子目录，共 55 文件）
+│       ├── services/       #   服务层（28 文件：DuckDB 簇 / 认证 / 权限 / 缓存）
+│       ├── config/         #   配置注册表（字段 / 指标 / 客户类别 / 环境）
+│       ├── agent/          #   AI Agent 系统（诊断 / 解释 / 预测 / 审计）
+│       ├── skills/         #   后端技能编排（技能 + 工作流）
+│       ├── middleware/ normalize/ utils/ scripts/ types/
+│
+├── cli/                    # @chexian/cli（PAT 只读 CLI，独立 package）
+├── mcp/                    # @chexian/mcp（MCP server，独立 package）
+├── public/                 # 前端静态资源（含 Service Worker sw.js）
 ├── tests/                  # 测试用例
-├── dist/                   # 构建产物
-├── deploy/                 # 部署配置
+├── deploy/                 # 部署配置（vps-wrapper 等）
 │
-├── 数据管理/                # 【功能域】数据处理模块集
-│   ├── 原始数据加工/        #   子项目：数据预处理
-│   ├── 业务员归属与规划/     #   子项目：业务员数据
-│   ├── 保单明细/            #   子项目：保单数据处理
-│   ├── 已赚保费/            #   子项目：已赚保费计算
-│   └── 数据分析报告/        #   子项目：报告生成
+├── 数据管理/                # 【功能域】数据仓库 + ETL 管道（详见下方说明）
+│   ├── warehouse/          #   Parquet 数据仓库（fact / dim）— 本地源
+│   ├── pipelines/          #   发布管道（preflight / refresh_metadata）
+│   ├── knowledge/          #   业务规则字典 + Parquet schema 知识
+│   ├── config/             #   固定成本参数 / shard-config
+│   ├── integrations/       #   外部集成（wecom_smartsheet 等）
+│   ├── patrol/ validation/ #   续保巡检引擎 / 数据校验
+│   ├── lib/ tools/ scripts/ staging/ release-manifests/ archive/ logs/
+│   ├── daily.mjs run.mjs   #   ETL 入口（智能检测 / 强制域）
+│   └── data-sources.json   #   数据域注册表（ETL 自动派生）
 │
-├── 开发文档/                # 开发相关文档
-├── docs/                   # 用户文档
-├── scripts/                # 项目级脚本（构建、部署等）
+├── 开发文档/                # 开发文档（含 00_index 四索引）
+├── docs/ reference/        # 用户文档 / 参考资料
+├── scripts/                # 项目级脚本（治理校验、构建、部署）
 │
 └── [配置文件]              # 根目录配置
     ├── CLAUDE.md           # AI协作指南
     ├── ARCHITECTURE.md     # 本文档
     └── README.md           # 项目入口
 ```
+
+> **数据管理模型已演进**：早期（v1.0）的 `原始数据加工/`→`保单明细/`→`已赚保费/` 等"输入/输出文件传递的 Python 子项目"链路，已重构为 **`warehouse/`（Parquet 仓库）+ `pipelines/`（发布管道）+ `daily.mjs`（ETL 编排）** 的数据仓库模型。下文第三、五、六节描述的"L2 子项目标准结构 / input-output 通信"为**历史约定**，仅适用于新增独立 Python 子项目；当前 `数据管理/` 已不采用该目录形态。
 
 ---
 
@@ -160,41 +185,30 @@ hotfix/xxx              # 紧急修复
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     外部数据源                               │
-│  (Downloads/车险签单报价数据.xlsx, 业务员计划表.xlsx 等)      │
+│  (车险签单报价数据.xlsx, 业务员计划表.xlsx, 理赔数据 等)       │
 └─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+                              │  数据管理/daily.mjs（ETL 编排）
+                              ▼  + pipelines/（preflight / refresh_metadata）
 ┌─────────────────────────────────────────────────────────────┐
-│                    数据管理/原始数据加工/                     │
-│  - 字段匹配、格式转换、数据清洗                               │
-│  - 输出：标准化的中间数据                                     │
+│              数据管理/warehouse/  Parquet 数据仓库            │
+│  - fact/（事实表：保费/赔案/报价/交叉销售/客户流转）          │
+│  - dim/（维度表：业务员/机构/计划）                          │
+│  - data-sources.json（9 域元数据，ETL 自动派生）             │
 └─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│ 业务员归属与规划 │ │    保单明细     │ │    已赚保费     │
-│ - 归属关系处理   │ │ - 保单数据处理  │ │ - 保费计算      │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
-              │               │               │
-              └───────────────┼───────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     数据分析报告/                            │
-│  - 汇总分析、报表生成                                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
+                              │  scripts/sync-vps.mjs（rsync 同步）
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   server/ 后端 API 服务                       │
-│  - DuckDB native 查询引擎、REST API、JWT 认证                 │
+│  路由聚合 query.ts → sql/*.ts 生成器 → duckdb.ts 查询执行     │
+│  - DuckDB native 引擎、route-cache LRU、JWT/PAT 认证鉴权      │
+│  - /api/query · /api/agent · /api/skills · /api/ai …         │
 └─────────────────────────────────────────────────────────────┘
-                              │
+                              │  REST /api/* （Service Worker 缓存）
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      src/ 前端应用                           │
-│  - React + TypeScript、可视化展示、用户交互                    │
-│  - 通过 REST API 访问后端 DuckDB，无 DuckDB-WASM            │
+│  apiClient → React Query → features/ 渲染（ECharts 可视化）   │
+│  - React + TypeScript，通过 REST API 访问后端，无 DuckDB-WASM │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -231,9 +245,10 @@ hotfix/xxx              # 紧急修复
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
+| v1.2 | 2026-06-05 | 目录结构总览补全 src/、server/src/ 一级目录与真实 `数据管理/` 仓库结构（含 cli/mcp/public）；数据流向图重构为 warehouse + ETL 管道 + API 服务模型；标注早期"输入/输出 Python 子项目"模型为历史约定 |
 | v1.1 | 2026-02-13 | 更新为 chexian-api（API 版），移除 chexianYJFX 引用，补充 server/ 后端 API 层 |
 | v1.0 | 2026-02-01 | 初始版本，定义基本架构规范 |
 
 ---
 
-*维护者：alongor | 最后更新：2026-02-13*
+*维护者：alongor | 最后更新：2026-06-05*
