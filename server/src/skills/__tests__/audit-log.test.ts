@@ -8,9 +8,10 @@
  *  - 工作流跑一次（含 approval + resume）→ 至少 6 类事件落盘
  */
 
-import { afterAll, beforeEach, describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, it, expect } from 'vitest';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { z } from 'zod';
 
 import {
@@ -28,6 +29,18 @@ const validRunId = (suffix: string) => `wr_20260427000000_test_${suffix.padEnd(8
 
 const cleanupRunIds: string[] = [];
 
+// ── 审计目录隔离（防跨文件竞态）─────────────────────────────────────────────
+// 与 tests/audit-log-rotation.test.ts、tests/api/workflows-audit-route.test.ts 并行时，
+// 共享的 audit-log/{今天}.jsonl 会被彼此的 _resetAuditLogForDate / fs.rm 清空。指定独立
+// 临时审计目录，使本文件的 append/read/reset 全部落在隔离目录。
+const _prevAuditDir = process.env.AUDIT_LOG_DIR;
+let _isolatedAuditDir = '';
+
+beforeAll(async () => {
+  _isolatedAuditDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chexian-audit-unit-'));
+  process.env.AUDIT_LOG_DIR = _isolatedAuditDir;
+});
+
 afterAll(async () => {
   // 清理 audit log 文件 + workflow run 文件 + 锁文件残留
   const dir = path.resolve(getDataDir(), 'runtime/workflow-runs');
@@ -40,8 +53,10 @@ afterAll(async () => {
       }
     }
   }
-  // 清理 audit-log 当日文件（避免污染下次运行）
-  await _resetAuditLogForDate();
+  // 清理隔离审计目录并还原环境变量（替代旧的 _resetAuditLogForDate 当日清理）
+  if (_prevAuditDir === undefined) delete process.env.AUDIT_LOG_DIR;
+  else process.env.AUDIT_LOG_DIR = _prevAuditDir;
+  if (_isolatedAuditDir) await fs.rm(_isolatedAuditDir, { recursive: true, force: true });
 });
 
 describe('appendAuditEvent + readAuditEventsForRun — JSONL 写读', () => {
