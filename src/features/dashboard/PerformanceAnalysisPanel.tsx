@@ -1019,6 +1019,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         growthMode={growthMode}
         onDrillClick={() => setShowPicker(true)}
         onClear={() => setHeatmapSelection(null)}
+        isPickerOpen={showPicker}
       />
 
       <SectionBlock id="performance-summary">

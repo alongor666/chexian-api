@@ -1,13 +1,15 @@
 /**
- * HeatmapFocusPanel — 焦点诊断区
+ * HeatmapFocusPanel — 焦点诊断抽屉（slide-in drawer）
  *
- * 选中单元格后展示诊断摘要 + 下钻入口按钮。
+ * 选中单元格后从右侧滑入：诊断摘要 + 指标 chip + 下钻入口按钮 + 清除按钮。
+ * 关闭：点击 × / 按 ESC / 点击外部。
  * 替代 PerformanceAnalysisPanel 中的"已选择"区块。
  */
 
+import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/shared/theme';
 import { formatCount, formatPercent, formatWanAdaptive } from '@/shared/utils/formatters';
-import { cardStyles, cn, colorClasses, textStyles } from '@/shared/styles';
+import { cn, colorClasses, textStyles } from '@/shared/styles';
 import type { HeatmapFocusPanelProps } from '../types';
 import { getWeekdayLabel, TIER_LABELS, TIER_BUSINESS_NOTES, THRESHOLD_MAP, HEATMAP_COLOR_SCALE } from '../config';
 import type { HeatmapTier } from '../types';
@@ -29,11 +31,48 @@ export function HeatmapFocusPanel({
   growthMode,
   onDrillClick,
   onClear,
+  isPickerOpen = false,
 }: HeatmapFocusPanelProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
+  const asideRef = useRef<HTMLDivElement>(null);
+  const [enterFrame, setEnterFrame] = useState(false);
 
-  if (!activeCell) return null;
+  const isOpen = activeCell !== null;
+
+  // 入场动画：mount 后下一帧切换 translate-x-0，触发 transition
+  useEffect(() => {
+    if (!isOpen) {
+      setEnterFrame(false);
+      return;
+    }
+    const id = window.requestAnimationFrame(() => setEnterFrame(true));
+    return () => window.cancelAnimationFrame(id);
+  }, [isOpen]);
+
+  // ESC 键关闭
+  // 注意：DimensionPicker 等更高层 fixed overlay 打开时（isPickerOpen=true），
+  // 抽屉让出 ESC 处理 — 否则按 ESC 会先清掉 heatmapSelection，
+  // picker 仍开着却拿不到下钻上下文（codex PR #481 第 2 轮 P2-1）。
+  useEffect(() => {
+    if (!isOpen || isPickerOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClear();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isOpen, isPickerOpen, onClear]);
+
+  // 关闭路径：× 按钮 / ESC 键 / 点击其他单元格切换。
+  // 不挂"document 外部点击关闭"：抽屉的主 CTA「选择下钻维度」会弹出 DimensionPicker
+  // （`fixed inset-0` overlay 渲染在抽屉外），任何 document 级 mousedown 监听都会先于
+  // picker 按钮 onClick 触发，从而把 heatmapSelection 清空、丢失下钻上下文（codex PR #481 P1）。
+  // 设计稿本身也未要求外部点击关闭。
+
+  if (!isOpen || !activeCell) return null;
 
   const growthRate = row ? (growthMode === 'mom' ? row.momGrowthRate : row.yoyGrowthRate) : null;
   const primaryValue = (() => {
@@ -54,99 +93,119 @@ export function HeatmapFocusPanel({
   const tierColor = isDark ? HEATMAP_COLOR_SCALE.dark[tier] : HEATMAP_COLOR_SCALE.light[tier];
 
   return (
-    <section className={cn(cardStyles.standard, 'space-y-3')}>
-      {/* 标题行 */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+    <aside
+      ref={asideRef}
+      role="dialog"
+      aria-modal="false"
+      aria-label={`${activeCell.org} ${activeCell.date} 诊断详情`}
+      // top-14 避开 fixed TopNavigation（h-14 z-50 opacity-30 hover:opacity-100）首屏遮挡，
+      // 否则抽屉头部 56px 被 nav 截获鼠标事件，× 按钮和标题不可点不可见
+      // （codex PR #481 第 2 轮 P2-2）。z-40 与 SidebarNavigation / Drawer 同层但低于 nav 和 picker，
+      // 不影响 DimensionPicker (z-50) 浮在抽屉之上。
+      className={cn(
+        'fixed top-14 right-0 bottom-0 w-80 max-w-[85vw] z-40 flex flex-col overflow-hidden',
+        'bg-white dark:bg-surface-1 border-l border-neutral-200 dark:border-subtle shadow-lg dark:shadow-none',
+        'transition-[transform,opacity] duration-200 ease-out',
+        enterFrame ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none',
+      )}
+    >
+      {/* 抽屉标题栏 */}
+      <header className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-subtle shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
           <span
-            className="inline-block w-2.5 h-2.5 rounded-sm"
+            className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
             style={{ backgroundColor: tierColor.bg, border: `1px solid ${tierColor.text}40` }}
           />
-          <span className={cn(textStyles.body, 'font-semibold', colorClasses.text.neutralDark)}>
-            {activeCell.org}
-          </span>
-          <span className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
-            {activeCell.date} ({getWeekdayLabel(activeCell.date)})
-          </span>
+          <div className="min-w-0">
+            <h3 className={cn(textStyles.body, 'font-semibold truncate', colorClasses.text.neutralDark)}>
+              {activeCell.org}
+            </h3>
+            <p className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
+              {activeCell.date} ({getWeekdayLabel(activeCell.date)})
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onDrillClick}
-            className={cn(
-              'px-3 py-1.5 text-sm rounded-lg border transition-colors',
-              colorClasses.border.primary,
-              colorClasses.text.primary,
-              'hover:bg-primary-50 dark:hover:bg-primary-900/20',
-            )}
-          >
-            选择下钻维度
-          </button>
-          <button
-            type="button"
-            onClick={onClear}
-            className={cn(
-              'px-2 py-1.5 text-sm rounded-lg transition-colors',
-              colorClasses.text.neutralMuted,
-              'hover:bg-neutral-100 dark:hover:bg-neutral-800',
-            )}
-          >
-            清除
-          </button>
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="关闭"
+          className={cn(
+            'text-lg leading-none w-7 h-7 rounded hover:bg-neutral-100 dark:hover:bg-white/5 shrink-0',
+            colorClasses.text.neutralMuted,
+          )}
+        >
+          ×
+        </button>
+      </header>
+
+      {/* 抽屉内容 */}
+      <div className="px-4 py-3 overflow-auto flex-1 space-y-3">
+        {/* 指标卡片 */}
+        {row && (
+          <div className="grid grid-cols-2 gap-2">
+            <MetricChip
+              label={growthMode === 'mom' ? '环比' : '同比'}
+              value={growthRate !== null ? formatPercent(growthRate) : '-'}
+              isActive={metric === 'growth'}
+            />
+            <MetricChip
+              label="进度"
+              value={row.achievementRate !== null ? formatPercent(row.achievementRate) : '-'}
+              isActive={metric === 'achievement'}
+            />
+            <MetricChip
+              label="保费(万)"
+              value={formatWanAdaptive(row.premium)}
+              isActive={metric === 'premium'}
+            />
+            <MetricChip
+              label="系数均值"
+              value={row.avgPricingCoefficient !== null ? row.avgPricingCoefficient.toFixed(4) : '-'}
+              isActive={metric === 'coefficient'}
+            />
+            <MetricChip
+              label="占比"
+              value={row.premiumShare !== null ? formatPercent(row.premiumShare) : '-'}
+              isActive={metric === 'share'}
+            />
+            <MetricChip
+              label="件均(元)"
+              value={row.perPolicyPremium !== null ? formatCount(Math.round(row.perPolicyPremium * 10000)) : '-'}
+              isActive={metric === 'per_policy'}
+            />
+          </div>
+        )}
+
+        {/* 诊断摘要 */}
+        <div
+          className="rounded-lg px-3 py-2 text-xs"
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb',
+            color: isDark ? '#9ca3af' : '#6b7280',
+          }}
+        >
+          <span className="font-medium" style={{ color: tierColor.text }}>
+            {TIER_LABELS[tier]}
+          </span>
+          <span className="mx-1.5">·</span>
+          <span>{TIER_BUSINESS_NOTES[tier]}</span>
         </div>
       </div>
 
-      {/* 指标卡片 */}
-      {row && (
-        <div className="flex flex-wrap gap-4">
-          <MetricChip
-            label={growthMode === 'mom' ? '环比' : '同比'}
-            value={growthRate !== null ? formatPercent(growthRate) : '-'}
-            isActive={metric === 'growth'}
-          />
-          <MetricChip
-            label="进度"
-            value={row.achievementRate !== null ? formatPercent(row.achievementRate) : '-'}
-            isActive={metric === 'achievement'}
-          />
-          <MetricChip
-            label="保费(万)"
-            value={formatWanAdaptive(row.premium)}
-            isActive={metric === 'premium'}
-          />
-          <MetricChip
-            label="系数均值"
-            value={row.avgPricingCoefficient !== null ? row.avgPricingCoefficient.toFixed(4) : '-'}
-            isActive={metric === 'coefficient'}
-          />
-          <MetricChip
-            label="占比"
-            value={row.premiumShare !== null ? formatPercent(row.premiumShare) : '-'}
-            isActive={metric === 'share'}
-          />
-          <MetricChip
-            label="件均(元)"
-            value={row.perPolicyPremium !== null ? formatCount(Math.round(row.perPolicyPremium * 10000)) : '-'}
-            isActive={metric === 'per_policy'}
-          />
-        </div>
-      )}
-
-      {/* 诊断摘要 */}
-      <div
-        className="rounded-lg px-3 py-2 text-xs"
-        style={{
-          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb',
-          color: isDark ? '#9ca3af' : '#6b7280',
-        }}
-      >
-        <span className="font-medium" style={{ color: tierColor.text }}>
-          {TIER_LABELS[tier]}
-        </span>
-        <span className="mx-1.5">·</span>
-        <span>{TIER_BUSINESS_NOTES[tier]}</span>
-      </div>
-    </section>
+      {/* 抽屉底部 CTA */}
+      <footer className="px-4 py-3 border-t border-neutral-200 dark:border-subtle shrink-0">
+        <button
+          type="button"
+          onClick={onDrillClick}
+          className={cn(
+            'w-full px-3 py-2 text-sm rounded-md font-medium transition-colors',
+            'bg-primary text-white hover:bg-primary-light',
+          )}
+        >
+          选择下钻维度 →
+        </button>
+      </footer>
+    </aside>
   );
 }
 
