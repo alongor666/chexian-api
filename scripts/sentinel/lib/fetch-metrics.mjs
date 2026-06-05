@@ -10,10 +10,10 @@
  *     · 幂等：带 If-None-Match:<lastEtag> → 304 表示数据版本未变（getDataVersion 指纹），静默退出
  *   - GET /api/query/trend?perspective=premium|policy_count → data:[{time_period, <metric>}]（断崖检测）
  *
- * 调用量 ≈ 5 次/run，远低于 PAT 60/min 单桶。串行 + 控速。
+ * 调用量 ≈ 4 次/run（1 version + 1 comprehensive + 2 trend），远低于 PAT 60/min 单桶。
+ * YoY 同期对齐改由 stats.evaluateMetricSeries 内部从 series 查 latestMature 期 -1 年（codex P2 修复，
+ * 省去原 fetchClaimRatioYoY 远程调用 + 把 YTD 累计快照口径错对齐单月被检值的坑）。
  */
-
-import { lastYearCutoff } from './stats.mjs';
 
 const ENVELOPE_OK = (j) => j && j.success === true && j.data !== undefined;
 
@@ -113,23 +113,14 @@ export async function fetchTrend(apiBase, pat, { perspective = 'premium', granul
 /** 把 comprehensive lossTrendRows 规整成 {time_period, value=earned_claim_ratio} 逐期序列 */
 export function lossTrendToSeries(lossTrendRows) {
   return lossTrendRows
-    .filter((r) => r && r.time_period != null && Number.isFinite(Number(r.earned_claim_ratio)))
+    .filter(
+      (r) =>
+        r &&
+        r.time_period != null &&
+        // 显式拒绝 null/undefined：Number(null)===0 会让未来月（值为 null）被错当成 0 进入序列
+        r.earned_claim_ratio != null &&
+        Number.isFinite(Number(r.earned_claim_ratio))
+    )
     .map((r) => ({ time_period: String(r.time_period), value: Number(r.earned_claim_ratio) }));
 }
 
-/**
- * 取去年同期满期赔付率（YoY 交叉确认）。失败返回 null（不阻断主流程）。
- */
-export async function fetchClaimRatioYoY(apiBase, pat, currentCutoff, currentValue) {
-  const lyCutoff = lastYearCutoff(currentCutoff);
-  if (!lyCutoff) return null;
-  try {
-    const r = await fetchComprehensive(apiBase, pat, { granularity: 'monthly', cutoffDate: lyCutoff });
-    if (r.notModified) return null;
-    const prev = Number(r.summary?.earnedClaimRatio);
-    if (!Number.isFinite(prev)) return null;
-    return { current: Number(currentValue), previous: prev, previousCutoff: lyCutoff };
-  } catch {
-    return null;
-  }
-}
