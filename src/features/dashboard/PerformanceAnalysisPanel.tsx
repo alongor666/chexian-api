@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EChartsOption } from 'echarts';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { Tabs } from '@/shared/ui/Tabs';
@@ -87,6 +87,18 @@ export function resolvePerformanceDrilldownPrefetched(
 }
 
 export const PERFORMANCE_HEATMAP_PERIOD_COUNT = 15;
+
+/** 热力图下钻可选维度，静态常量（模块级，避免组件每次渲染重建数组） */
+const PERF_HEATMAP_DRILL_DIMENSIONS: { key: HeatmapDimension; label: string }[] = [
+  { key: 'org_level_3', label: '三级机构' },
+  { key: 'team', label: '团队' },
+  { key: 'salesman', label: '业务员' },
+  { key: 'customer_category', label: '客户类别' },
+  { key: 'coverage_combination', label: '险别组合' },
+  { key: 'energy_type', label: '能源类型' },
+  { key: 'business_nature', label: '新转续' },
+  { key: 'insurance_grade', label: '风险评分' },
+];
 
 function getPerformanceHeatmapPeriodUnit(timePeriod: PerformanceTimePeriod): string {
   switch (timePeriod) {
@@ -482,17 +494,20 @@ function DistributionChart({
     };
 
     chart.setOption(option, true);
-
-    const resizeObserver = new ResizeObserver(() => {
-      chart.resize();
-    });
-    if (chartRef.current) {
-      resizeObserver.observe(chartRef.current);
-    }
-    return () => {
-      resizeObserver.disconnect();
-    };
   }, [axisRange, error, loading, points, resolvedTheme]);
+
+  // ResizeObserver 仅需挂载时注册一次。此前与 setOption 同处一个 effect，
+  // 导致每次数据/主题变化都 disconnect + 重建 observer（无谓 DOM 操作）。
+  // resize 回调按调用时读取实例 ref，与图表 init 的时序无关。
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const resizeObserver = new ResizeObserver(() => {
+      chartInstanceRef.current?.resize();
+    });
+    resizeObserver.observe(el);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -632,32 +647,21 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const [showHeatmapPicker, setShowHeatmapPicker] = useState(false);
   const [pendingHeatmapRow, setPendingHeatmapRow] = useState<string | null>(null);
 
-  const PERF_HEATMAP_DRILL_DIMENSIONS: { key: HeatmapDimension; label: string }[] = [
-    { key: 'org_level_3', label: '三级机构' },
-    { key: 'team', label: '团队' },
-    { key: 'salesman', label: '业务员' },
-    { key: 'customer_category', label: '客户类别' },
-    { key: 'coverage_combination', label: '险别组合' },
-    { key: 'energy_type', label: '能源类型' },
-    { key: 'business_nature', label: '新转续' },
-    { key: 'insurance_grade', label: '风险评分' },
-  ];
-
-  const handlePerfHeatmapRowClick = (org: string) => {
+  const handlePerfHeatmapRowClick = useCallback((org: string) => {
     setPendingHeatmapRow(org);
     setShowHeatmapPicker(true);
-  };
+  }, []);
 
-  const handlePerfHeatmapDimSelect = (dim: HeatmapDimension) => {
+  const handlePerfHeatmapDimSelect = useCallback((dim: HeatmapDimension) => {
     if (!pendingHeatmapRow) return;
     const newStep: HeatmapDrillStep = { dimension: heatmapGroupBy, value: pendingHeatmapRow };
     setHeatmapDrillPath((prev) => [...prev, newStep]);
     setHeatmapGroupBy(dim);
     setShowHeatmapPicker(false);
     setPendingHeatmapRow(null);
-  };
+  }, [pendingHeatmapRow, heatmapGroupBy]);
 
-  const handlePerfHeatmapBreadcrumbClick = (index: number) => {
+  const handlePerfHeatmapBreadcrumbClick = useCallback((index: number) => {
     if (index < 0) {
       setHeatmapDrillPath([]);
       setHeatmapGroupBy('org_level_3');
@@ -666,7 +670,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     const nextDim = heatmapDrillPath[index + 1]?.dimension as HeatmapDimension | undefined;
     setHeatmapDrillPath(heatmapDrillPath.slice(0, index + 1));
     if (nextDim) setHeatmapGroupBy(nextDim);
-  };
+  }, [heatmapDrillPath]);
 
   const activeHeatmapGroupBy = heatmapDrillPath.length === 0 ? heatmapDimension : heatmapGroupBy;
 
