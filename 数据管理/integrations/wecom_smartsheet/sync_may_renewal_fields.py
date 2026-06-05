@@ -619,6 +619,9 @@ EXCEL_FIELD_TO_KEY = {
     "坐席域账号": "seat_account",
     "归属团队": "team",
     "车型": "vehicle_type",
+    # 别名：部分企微导出会用表列名"客户类别"作表头（脚本内部 key 仍叫 vehicle_type）。
+    # read_excel_rows 已防多别名互相覆盖；当前源 Excel 用"车型"，此别名仅为未来导出格式兜底。
+    "客户类别": "vehicle_type",
     "险别组合": "coverage_combination",
 }
 
@@ -640,7 +643,11 @@ def read_excel_rows(path: Path) -> list[dict[str, Any]]:
             row: dict[str, Any] = {"_sheet": ws.title, "_excel_row": excel_row_num}
             for label, key in EXCEL_FIELD_TO_KEY.items():
                 idx = header_index.get(label)
-                row[key] = values[idx] if idx is not None and idx < len(values) else None
+                val = values[idx] if idx is not None and idx < len(values) else None
+                # 支持同一 key 多别名（如 车型/客户类别）：已读到非空值时，
+                # 不被后续缺失别名覆盖回 None。
+                if val is not None or key not in row:
+                    row[key] = val
             vin = clean_text(row.get("vehicle_frame_no"))
             if not vin:
                 continue
@@ -654,6 +661,10 @@ def build_seed_values(excel_row: dict[str, Any], enrichment_row: dict[str, Any] 
 
     def put(key: str, raw: Any) -> None:
         if key == "owner_user":
+            return
+        # 与 build_update_values 对齐：schema file 裁剪掉的字段（不在 CURRENT_FULL_FIELD_IDS）
+        # 直接跳过——目标表没有该列时本就不该写，否则 field_id(key) 抛 KeyError。
+        if key not in CURRENT_FULL_FIELD_IDS:
             return
         rendered = render_cell_value(key, raw)
         if rendered is not None:

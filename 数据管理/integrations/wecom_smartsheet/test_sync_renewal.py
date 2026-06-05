@@ -311,3 +311,51 @@ def test_group_contiguous_operations_preserves_order_and_boundaries():
         ("add", [3, 4]),
         ("update", [5]),
     ]
+
+
+def test_may_build_seed_values_skips_schema_trimmed_fields():
+    """codex PR#487 (P2): schema file 裁剪掉的 seed 字段，build_seed_values 应跳过，
+    而非在 field_id(key) 抛 KeyError（与 build_update_values 的守卫对齐）。"""
+    import sync_may_renewal_fields as may
+
+    may.reset_table_spec()
+    # 模拟 --table-schema-file 把目标表没有的列裁掉
+    may.CURRENT_FULL_FIELD_IDS.pop("seat_account", None)
+    may.CURRENT_FULL_FIELD_IDS.pop("team", None)
+    excel_row = {
+        "vehicle_frame_no": "VIN001",
+        "seat_account": "acct01",  # 被裁字段且有值 —— 旧实现会抛 KeyError
+        "team": "团队A",
+        "vehicle_type": "非营业货车",
+    }
+    try:
+        values = may.build_seed_values(excel_row, None)
+        # 被裁字段不写入；保留字段正常写入
+        assert may.FULL_FIELD_IDS["seat_account"] not in values
+        assert may.FULL_FIELD_IDS["team"] not in values
+        assert may.CURRENT_FULL_FIELD_IDS["vehicle_type"] in values
+    finally:
+        may.reset_table_spec()  # 复原全局态，避免污染其他测试
+
+
+def test_may_read_excel_rows_maps_vehicle_type_aliases(tmp_path):
+    """codex PR#487 (P2): '车型'(当前导出) 与 '客户类别'(表列名) 两种表头都映射到
+    vehicle_type，且多别名不互相覆盖为 None。"""
+    from openpyxl import Workbook
+
+    import sync_may_renewal_fields as may
+
+    def make(headers, values):
+        wb = Workbook()
+        ws = wb.active
+        ws.append(headers)
+        ws.append(values)
+        path = tmp_path / f"{headers[-1]}.xlsx"
+        wb.save(path)
+        return path
+
+    rows_chexing = may.read_excel_rows(make(["车架号", "车型"], ["VINA", "非营业货车"]))
+    rows_kehu = may.read_excel_rows(make(["车架号", "客户类别"], ["VINB", "家庭自用车"]))
+
+    assert rows_chexing[0]["vehicle_type"] == "非营业货车"
+    assert rows_kehu[0]["vehicle_type"] == "家庭自用车"
