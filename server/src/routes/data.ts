@@ -557,11 +557,15 @@ router.get(
       res.json({
         success: true,
         data: {
+          // file.rowCount 是"调用方可见行数"，严格遵循 permissionFilter（行级过滤）。
+          // 不再使用 currentDataFile.rowCount（全量缓存值），否则 org_user 会读到全省总记录数。
+          // branch_admin 的 permissionFilter='1=1' → rowCount 自然等于全量，行为兼容。
+          // 修复 codex PR#482 review：metadata 接口 file.rowCount 不应泄漏全省总行数。
           file: currentDataFile ? {
             filename: currentDataFile.filename,
             originalName: currentDataFile.originalName,
             uploadTime: currentDataFile.uploadTime,
-            rowCount: currentDataFile.rowCount,
+            rowCount,
             fileSizeMB: Math.round(currentDataFile.fileSizeBytes / 1024 / 1024 * 100) / 100,
           } : {
             filename: 'unknown',

@@ -77,9 +77,17 @@ const MODE_WARN = process.argv.includes('--warn');
 function parseTopLevelRouters() {
   const content = fs.readFileSync(APP_TS, 'utf-8');
 
-  // 1. 收集 import：`import xxxRoutes from './routes/...'`
+  // 1. 收集 import 的 default 名 → 文件路径映射
+  //    支持的形态（捕获 default 名）：
+  //      - `import xxxRoutes from '...'`
+  //      - `import xxxRoutes, { named1, named2 } from '...'`     ← codex PR#482 修复
+  //      - `import xxxRoutes, * as ns from '...'`
+  //    不支持（也不应支持，这些不是顶层 router）：
+  //      - `import { name } from '...'`（无 default，注定不是默认导出的 router 实例）
+  //      - `import * as ns from '...'`（namespace 用法，与 router 注册无关）
   const imports = new Map(); // variableName -> filePath
-  const importRe = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g;
+  // 关键：default 之后允许可选的 `, { ... }` 或 `, * as Name`，再到 `from`
+  const importRe = /import\s+(\w+)(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+))?\s+from\s+['"]([^'"]+)['"]/g;
   let m;
   while ((m = importRe.exec(content)) !== null) {
     const varName = m[1];
