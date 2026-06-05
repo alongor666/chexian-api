@@ -67,6 +67,7 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   highway_risk_level: ['VARCHAR', 'TEXT', 'STRING'], // 高速风险等级
   insurance_score: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'VARCHAR'], // 车险分分数
   vehicle_age_group: ['VARCHAR', 'TEXT', 'STRING'], // 车龄分段
+  branch_code: ['VARCHAR', 'TEXT', 'STRING'], // 分公司编码
 };
 
 export interface SchemaColumn {

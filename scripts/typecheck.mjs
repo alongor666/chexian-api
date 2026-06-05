@@ -44,6 +44,8 @@ const tscCommand = useLocalTsc ? `node --max-old-space-size=${heapMB} ./${path.r
 
 if (!useLocalTsc) {
   console.log('[typecheck] ⚠️  local ./node_modules/.bin/tsc 未找到，回退到全局 tsc');
+  console.log('[typecheck] 💡 全局 tsc 版本可能与项目锁定的 typescript 不一致（如全局 6.x 会对 baseUrl 报 TS5101，并非真实类型错误）。');
+  console.log('[typecheck] 💡 全新 clone 请先运行 `bun install`（根目录）安装本地 typescript，结果才可靠。');
 }
 
 try {

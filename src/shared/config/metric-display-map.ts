@@ -1,8 +1,8 @@
 /**
  * 指标展示映射 — 从注册表自动生成
  *
- * 生成命令：npx tsx scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-05-17T01:34:54.738Z
+ * 生成命令：bun scripts/metric-registry/generate-frontend-map.ts
+ * 生成时间：2026-06-05T14:19:19.738Z
  * 指标数量：49
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成

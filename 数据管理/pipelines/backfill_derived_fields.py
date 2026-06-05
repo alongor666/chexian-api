@@ -10,17 +10,26 @@
 
 支持的 derivation.type：
   - prefix_map: 按源列前缀 N 位映射到系数
+  - constant: 写入常量（envVar 优先于 defaultValue；多分公司 branch_code 用）
 
 用法：
-  python3 数据管理/pipelines/backfill_derived_fields.py           # 执行（跳过已存在）
+  python3 数据管理/pipelines/backfill_derived_fields.py           # 默认 policy/current
   python3 数据管理/pipelines/backfill_derived_fields.py --force   # 强制覆盖已存在的派生列
   python3 数据管理/pipelines/backfill_derived_fields.py --dry-run # 只打印计划不写入
 
-扫描目录：数据管理/warehouse/fact/policy/current/*.parquet
+  # 多分公司 branch_code backfill（一次性 0C 收尾）：
+  BRANCH_CODE=SC python3 数据管理/pipelines/backfill_derived_fields.py \\
+      --path 数据管理/warehouse --recursive
+
+  # 指定单一目录（如山西数据落地后只补一类）：
+  python3 数据管理/pipelines/backfill_derived_fields.py --path 数据管理/warehouse/dim/salesman
+
+扫描目录：默认 数据管理/warehouse/fact/policy/current/*.parquet；可通过 --path 覆盖。
 """
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -30,6 +39,10 @@ import pyarrow.parquet as pq
 ROOT = Path(__file__).resolve().parent.parent.parent
 REGISTRY_PATH = ROOT / "server/src/config/field-registry/fields.json"
 POLICY_CURRENT = ROOT / "数据管理/warehouse/fact/policy/current"
+
+# 递归扫描时跳过的目录前缀（备份/分片中间态/缓存）
+EXCLUDED_DIR_PARTS = {"__pycache__", "staging"}
+EXCLUDED_DIR_PREFIXES = (".backup", ".dup-archive")
 
 
 def load_derived_rules() -> list[dict]:
@@ -44,16 +57,15 @@ def apply_derivation(df: pd.DataFrame, field: dict, force: bool) -> tuple[pd.Dat
     fid = field["id"]
     rule = field.get("derivation", {})
     rtype = rule.get("type")
-    source = rule.get("source")
-
-    if not source or source not in df.columns:
-        return df, f"skip({fid}: source {source} missing)"
 
     if fid in df.columns and not force:
         nonnull = df[fid].notna().sum()
         return df, f"skip({fid}: already exists, {nonnull:,} non-null, use --force to overwrite)"
 
     if rtype == "prefix_map":
+        source = rule.get("source")
+        if not source or source not in df.columns:
+            return df, f"skip({fid}: source {source} missing)"
         prefix_len = rule.get("prefixLength", 2)
         mapping = rule.get("mapping", {})
         default_value = rule.get("defaultValue")
@@ -62,6 +74,16 @@ def apply_derivation(df: pd.DataFrame, field: dict, force: bool) -> tuple[pd.Dat
             df[fid] = df[fid].fillna(default_value)
         nonnull = df[fid].notna().sum()
         return df, f"ok({fid}: {nonnull:,}/{len(df):,} non-null)"
+
+    if rtype == "constant":
+        env_var = rule.get("envVar")
+        env_value = os.environ.get(env_var) if env_var else None
+        value = env_value if env_value else rule.get("defaultValue")
+        if value is None:
+            return df, f"skip({fid}: constant 无 envVar={env_var} 命中且无 defaultValue)"
+        df[fid] = value
+        hint = f"envVar={env_var}" if env_value else "defaultValue"
+        return df, f"ok({fid}: 常量 '{value}' ({hint}), {len(df):,} rows)"
 
     return df, f"skip({fid}: unsupported derivation.type={rtype})"
 
@@ -99,10 +121,38 @@ def backfill_parquet(path: Path, derived_fields: list[dict], force: bool, dry_ru
     return {"path": path.name, "changed": True, "statuses": statuses, "rows": len(df)}
 
 
+def is_excluded_dir(path: Path) -> bool:
+    """判断目录是否应跳过（备份/staging/缓存）。"""
+    for part in path.parts:
+        if part in EXCLUDED_DIR_PARTS:
+            return True
+        if any(part.startswith(prefix) for prefix in EXCLUDED_DIR_PREFIXES):
+            return True
+    return False
+
+
+def collect_parquet_files(root: Path, recursive: bool) -> list[Path]:
+    """扫描目标目录下的 *.parquet 文件，跳过备份/staging/缓存。"""
+    if not recursive:
+        return sorted(p for p in root.glob("*.parquet") if not is_excluded_dir(p.parent))
+    return sorted(p for p in root.rglob("*.parquet") if not is_excluded_dir(p.parent))
+
+
 def main():
     parser = argparse.ArgumentParser(description="派生字段 backfill")
     parser.add_argument("--force", action="store_true", help="强制覆盖已存在的派生列")
     parser.add_argument("--dry-run", action="store_true", help="只打印计划不写入")
+    parser.add_argument(
+        "--path",
+        type=str,
+        default=None,
+        help="扫描目录（默认 数据管理/warehouse/fact/policy/current）",
+    )
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="递归扫描子目录所有 *.parquet（用于多域 branch_code 一次性 backfill）",
+    )
     args = parser.parse_args()
 
     derived_fields = load_derived_rules()
@@ -114,12 +164,15 @@ def main():
     for fd in derived_fields:
         print(f"   - {fd['id']} ({fd.get('derivation', {}).get('type', '?')})")
 
-    if not POLICY_CURRENT.exists():
-        print(f"❌ 分片目录不存在: {POLICY_CURRENT}")
+    scan_root = Path(args.path).resolve() if args.path else POLICY_CURRENT
+    if not scan_root.exists():
+        print(f"❌ 扫描目录不存在: {scan_root}")
         return 1
 
-    parquet_files = sorted(POLICY_CURRENT.glob("*.parquet"))
-    print(f"\n📁 扫描 {POLICY_CURRENT.relative_to(ROOT)}: {len(parquet_files)} 个分片\n")
+    parquet_files = collect_parquet_files(scan_root, args.recursive)
+    rel = scan_root.relative_to(ROOT) if scan_root.is_relative_to(ROOT) else scan_root
+    suffix = "（递归）" if args.recursive else ""
+    print(f"\n📁 扫描 {rel}{suffix}: {len(parquet_files)} 个分片\n")
 
     if not parquet_files:
         print("⚠️  无分片文件")
@@ -130,7 +183,8 @@ def main():
     for path in parquet_files:
         result = backfill_parquet(path, derived_fields, args.force, args.dry_run)
         tag = "DRY-RUN" if result.get("dry_run") else ("✅" if result["changed"] else "⏭️ ")
-        print(f"{tag} {result['path']}")
+        display_path = path.relative_to(scan_root) if path.is_relative_to(scan_root) else path.name
+        print(f"{tag} {display_path}")
         for s in result["statuses"]:
             print(f"       {s}")
         if result["changed"]:

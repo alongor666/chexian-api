@@ -25,6 +25,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 import argparse
+import os
 import sys
 import time
 
@@ -1061,11 +1062,11 @@ def save_to_parquet(df, output_path):
             fid = fd['id']
             rule = fd.get('derivation', {})
             rtype = rule.get('type')
-            source = rule.get('source')
-            if not source or source not in df.columns:
-                print(f"   ⚠️ 派生字段 {fid} 跳过（源列 {source} 缺失）")
-                continue
             if rtype == 'prefix_map':
+                source = rule.get('source')
+                if not source or source not in df.columns:
+                    print(f"   ⚠️ 派生字段 {fid} 跳过（源列 {source} 缺失）")
+                    continue
                 prefix_len = rule.get('prefixLength', 2)
                 mapping = rule.get('mapping', {})
                 default_value = rule.get('defaultValue')
@@ -1074,6 +1075,16 @@ def save_to_parquet(df, output_path):
                     df[fid] = df[fid].fillna(default_value)
                 notna = df[fid].notna().sum()
                 print(f"   派生字段: {fid} ← {source}[:{ prefix_len}] 映射完成 ({notna:,} 条非空)")
+            elif rtype == 'constant':
+                env_var = rule.get('envVar')
+                env_value = os.environ.get(env_var) if env_var else None
+                value = env_value if env_value else rule.get('defaultValue')
+                if value is None:
+                    print(f"   ⚠️ 派生字段 {fid} 跳过（constant 无 envVar={env_var} 命中且无 defaultValue）")
+                    continue
+                hint = f"envVar={env_var}" if env_value else "defaultValue"
+                df[fid] = value
+                print(f"   派生字段: {fid} ← 常量 '{value}' ({hint})")
             else:
                 print(f"   ⚠️ 派生字段 {fid} 跳过（未支持的 derivation.type: {rtype}）")
     except (FileNotFoundError, json.JSONDecodeError) as e:
