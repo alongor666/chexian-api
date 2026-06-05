@@ -41,17 +41,23 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 
 const APP_TS = path.join(REPO_ROOT, 'server/src/app.ts');
 
-// 公开 router 白名单（无需挂 permissionMiddleware / requireRole）
-//   - /api/auth：登录入口，未登录就要能调
-//   - /api/auth/wecom：企微免密登录回调
+// 白名单按"豁免什么"拆成两类，避免一个集合把两种语义混在一起削弱鉴权红线
+// （修 codex PR#482 第三轮 P2：原 PUBLIC_ROUTES 同时跳过 auth + permission 检查，
+//   一旦 /api/discover 误删 router.use(authMiddleware)，governance 也不会拦）。
+//
+// 类别 A：**免认证 + 免权限**（登录入口本身必须未登录可访问）
+const UNAUTHENTICATED_ROUTES = new Set([
+  '/api/auth',           // 登录入口
+  '/api/auth/wecom',     // 企微免密登录回调
+]);
+//
+// 类别 B：**仅免行级权限**（authMiddleware 仍是红线，必须挂；只是不挂 permissionMiddleware）
 //   - /api/discover：Agent/CLI/MCP 元数据发现层（fields/metrics/presets 注册表全国通用，无业务数据）
-//                   ⚠️ 0D phase 评估：若按 branchCode 裁剪可见路由 catalog，则从此白名单移除并加权限中间件
-// 注：/health 和其他系统级路由由 health 路由文件挂载（不在 /api 前缀，不在此扫描范围）
-const PUBLIC_ROUTES = new Set([
-  '/api/auth',
-  '/api/auth/wecom',
+//                   ⚠️ 0D phase 评估：若按 branchCode 裁剪可见路由 catalog，则从此白名单移除并挂 permissionMiddleware
+const NO_PERMISSION_ROUTES = new Set([
   '/api/discover',
 ]);
+// 注：/health 和其他系统级路由由 health 路由文件挂载（不在 /api 前缀，不在此扫描范围）
 
 // 已知缺口（KNOWN_GAPS）：明知有跨分公司风险，但本 PR 范围外，留作 TODO。
 // 加入此清单的路由不会让 governance 失败，但每次跑都会显式提醒（可见 + 可追溯）。
@@ -219,33 +225,34 @@ for (const mount of mounts) {
     continue;
   }
 
-  const isPublic = PUBLIC_ROUTES.has(mount.route);
+  const isUnauthenticated = UNAUTHENTICATED_ROUTES.has(mount.route);
+  const isNoPermissionOnly = NO_PERMISSION_ROUTES.has(mount.route);
   const knownGap = KNOWN_GAPS.get(mount.route);
 
-  if (!isPublic) {
-    if (!a.hasAuth) {
-      const entry = {
-        route: mount.route,
-        file: path.relative(REPO_ROOT, mount.filePath),
-        rule: 'missing-auth',
-        message: '未挂 authMiddleware',
-      };
-      // KNOWN_GAPS 仅豁免 missing-permission（缺权限），不豁免 missing-auth（缺认证更严重）
-      violations.push(entry);
-    }
+  // 鉴权红线（authMiddleware）：只有 UNAUTHENTICATED_ROUTES 才豁免；
+  // NO_PERMISSION_ROUTES 类（如 /api/discover）仍强制必挂——这是关键修复点：
+  // 一旦 discover 等"仅免行级权限"路由误删 router.use(authMiddleware)，governance 必须拦住。
+  if (!isUnauthenticated && !a.hasAuth) {
+    violations.push({
+      route: mount.route,
+      file: path.relative(REPO_ROOT, mount.filePath),
+      rule: 'missing-auth',
+      message: '未挂 authMiddleware（鉴权红线，仅 UNAUTHENTICATED_ROUTES 可豁免）',
+    });
+  }
 
-    if (!a.hasPermissionMw && !a.hasRequireRole) {
-      const entry = {
-        route: mount.route,
-        file: path.relative(REPO_ROOT, mount.filePath),
-        rule: 'missing-permission',
-        message: '未挂 permissionMiddleware 或 requireRole',
-      };
-      if (knownGap) {
-        knownGaps.push({ ...entry, gapNote: knownGap });
-      } else {
-        violations.push(entry);
-      }
+  // 行级权限：UNAUTHENTICATED_ROUTES 和 NO_PERMISSION_ROUTES 两类都豁免
+  if (!isUnauthenticated && !isNoPermissionOnly && !a.hasPermissionMw && !a.hasRequireRole) {
+    const entry = {
+      route: mount.route,
+      file: path.relative(REPO_ROOT, mount.filePath),
+      rule: 'missing-permission',
+      message: '未挂 permissionMiddleware 或 requireRole',
+    };
+    if (knownGap) {
+      knownGaps.push({ ...entry, gapNote: knownGap });
+    } else {
+      violations.push(entry);
     }
   }
 
