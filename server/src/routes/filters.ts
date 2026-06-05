@@ -7,6 +7,7 @@
 
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
+import { readonlyMiddleware } from '../middleware/readonly.js';
 import { permissionMiddleware } from '../middleware/permission.js';
 import { asyncHandler } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
@@ -18,6 +19,8 @@ const router = Router();
  * 应用认证与权限中间件
  */
 router.use(authMiddleware);
+// PAT 只读护栏：filters 仅 GET，对齐 query.ts，拦截 PAT 的非 GET 请求
+router.use(readonlyMiddleware);
 router.use(permissionMiddleware);
 
 /**
