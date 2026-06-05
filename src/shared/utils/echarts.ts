@@ -13,8 +13,10 @@ import {
   TooltipComponent,
   VisualMapComponent,
 } from 'echarts/components';
-import { CanvasRenderer, SVGRenderer } from 'echarts/renderers';
+import { CanvasRenderer } from 'echarts/renderers';
 
+// 注：SVGRenderer 仅 PerformanceTrendChart 一处使用，已移至该组件内按需
+// echarts.use([SVGRenderer]) 注册，避免全量 SVG 渲染器进入共享 bundle。
 echarts.use([
   BarChart,
   LineChart,
@@ -33,7 +35,6 @@ echarts.use([
   TooltipComponent,
   VisualMapComponent,
   CanvasRenderer,
-  SVGRenderer,
 ]);
 
 export type EChartsCore = typeof echarts;
