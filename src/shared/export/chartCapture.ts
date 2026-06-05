@@ -4,13 +4,23 @@
  * 使用 html2canvas 捕获图表元素并转换为图片数据URL
  */
 
-import html2canvas from 'html2canvas';
 import type { ChartData, ChartCaptureOptions } from './types';
 import { createExportIgnoreElements } from './ignoreElements';
 
 import { Logger } from '@/shared/utils/logger';
 
 const logger = new Logger('ChartCapture');
+
+/**
+ * html2canvas（≈200KB gzip）仅在导出图表截图时才需要，动态 import 以剥离首屏 bundle。
+ */
+let html2canvasPromise: Promise<typeof import('html2canvas')['default']> | null = null;
+function loadHtml2Canvas(): Promise<typeof import('html2canvas')['default']> {
+  if (!html2canvasPromise) {
+    html2canvasPromise = import('html2canvas').then((m) => m.default);
+  }
+  return html2canvasPromise;
+}
 
 /**
  * 默认截图选项
@@ -37,6 +47,7 @@ export async function captureChart(
   const opts = { ...DEFAULT_CAPTURE_OPTIONS, ...options };
 
   try {
+    const html2canvas = await loadHtml2Canvas();
     const canvas = await html2canvas(element, {
       backgroundColor: opts.backgroundColor,
       scale: opts.scale,

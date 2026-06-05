@@ -1,6 +1,11 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import type { EChartsOption } from 'echarts';
+import { SVGRenderer } from 'echarts/renderers';
 import { echarts } from '@/shared/utils/echarts';
+
+// 本组件用 SVG 渲染器（renderer: 'svg'）。SVGRenderer 已从共享 echarts 注册中移除，
+// 故在此按需注册（echarts.use 幂等，重复调用安全）。
+echarts.use([SVGRenderer]);
 import { formatCount, formatWanAdaptive, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '@/shared/utils/formatters';
 import { cardStyles, colors, textStyles, colorClasses, cn } from '@/shared/styles';
 import { useTheme } from '@/shared/theme';
