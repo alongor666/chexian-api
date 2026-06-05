@@ -2,6 +2,7 @@
 # post-checkout hook：
 #   1. 转交 git-lfs（如果安装）
 #   2. 缺依赖自动 bun install 子项目（解决 worktree add 后子 package 空 node_modules 陷阱）
+#   3. server 原生模块自愈（CN 代理偶发腐蚀预编译下载 → 损坏 .node，从源码重编译兜底）
 #
 # Git 触发参数：
 #   $1 = previous HEAD
@@ -12,6 +13,7 @@
 #   - 只在 branch checkout 时跑（$3=1），跳过 file checkout 避免不必要的扫描
 #   - 只在子项目缺 node_modules 时跑 install — 普通切分支 0 开销
 #   - 单个失败不阻断（warn 后继续），用户切分支不应被半夜的 npm registry 挂掉卡住
+#   - 原生模块自愈仅在"本 hook 已触发安装"（worktree 新建 / 缺依赖）后运行，普通切分支 0 开销
 
 # ── 1. git-lfs（保留现有行为）────────────────────────────────────
 if command -v git-lfs >/dev/null 2>&1; then
@@ -71,5 +73,33 @@ for SUB in "${NEED_INSTALL[@]}"; do
     echo "⚠️  [post-checkout] $SUB bun install 失败，请手动重试: bun install --cwd $ROOT/$SUB"
   fi
 done
+
+# ── 3. server 原生模块自愈 ──────────────────────────────────────
+# 背景：CN 代理（如 127.0.0.1:1082）偶发腐蚀 node-pre-gyp 从 GitHub 下载的预编译
+#       二进制（典型 bcrypt）。install 会报"完成"，但 .node 被截断，dlopen 崩
+#       （"segment '__LINKEDIT' ... extends beyond end of file"）→ 所有走 auth/permission
+#       链路的 server 测试在 *加载阶段* 整套失败，pre-push 的 bun run test 跑不过。
+# 策略：逐个原生模块做 require 健康检查（判退出码，禁用管道以免吞掉真实退出码），
+#       对加载失败者 `rm + npm_config_build_from_source=true bun install` 从源码重编译，
+#       绕开被代理腐蚀的下载（源码已在 node_modules，仅需本机 clang；实测不改 lockfile/package.json）。
+# 范围：仅在已执行过安装（上方未提前 exit）时运行 → 普通切分支 0 开销。
+#       better-sqlite3 / @duckdb/node-api 健康时跳过；若损坏且源码编译不支持，打印手动指引不阻断。
+SERVER_DIR="$ROOT/server"
+if command -v node >/dev/null 2>&1 && [ -d "$SERVER_DIR/node_modules" ]; then
+  NATIVE_MODULES=("bcrypt" "better-sqlite3" "@duckdb/node-api")
+  for M in "${NATIVE_MODULES[@]}"; do
+    [ -d "$SERVER_DIR/node_modules/$M" ] || continue
+    if ( cd "$SERVER_DIR" && node -e "require('$M')" ) >/dev/null 2>&1; then
+      continue  # 健康，跳过
+    fi
+    echo "🔧 [post-checkout] $M 原生二进制损坏（疑似代理腐蚀下载），从源码重编译..."
+    if ( cd "$SERVER_DIR" && rm -rf "node_modules/$M" && npm_config_build_from_source=true bun install ) >/dev/null 2>&1 \
+       && ( cd "$SERVER_DIR" && node -e "require('$M')" ) >/dev/null 2>&1; then
+      echo "✅ [post-checkout] $M 已从源码重编译恢复"
+    else
+      echo "⚠️  [post-checkout] $M 自愈失败，请手动: (cd server && rm -rf node_modules/$M && npm_config_build_from_source=true bun install)"
+    fi
+  done
+fi
 
 exit 0

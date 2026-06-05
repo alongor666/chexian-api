@@ -73,6 +73,10 @@ bun run governance && node scripts/check-data-readiness.mjs   # 期望分别 23/
 
 `scripts/hooks/post-checkout` 会在 worktree 创建（`git worktree add` 触发的 branch checkout）时自动跑 `bun install` 装缺失的子项目依赖。**唯一前置条件**：执行过一次 `bun run hooks:install`（首次克隆仓库时做）。
 
+**§3 server 原生模块自愈（应对代理腐蚀下载）**：`bun install` 之后，hook 会逐个对 `bcrypt` / `better-sqlite3` / `@duckdb/node-api` 做 `node -e "require()"` 健康检查；对加载失败者用 `npm_config_build_from_source=true bun install` 从源码重编译。仅在"本次发生过安装"（worktree 新建 / 缺依赖）后运行，普通切分支零开销。
+
+> **为什么需要**：CN 代理（如 `127.0.0.1:1082`）会**偶发**腐蚀 node-pre-gyp 从 GitHub 下载的预编译二进制（典型 `bcrypt`）。`bun install` 报"完成"，但 `.node` 被截断 → `dlopen` 崩（`segment '__LINKEDIT' ... extends beyond end of file`）→ 所有走 auth/permission 链路的 server 测试在**加载阶段整套失败**，pre-push 的 `bun run test` 跑不过。曾被误判为"worktree 缺 parquet 数据"——实为原生二进制损坏（CI 无数据照样绿即铁证）。源码重编译绕开被腐蚀的下载（源码已在 node_modules，仅需本机 clang，实测不改 lockfile/package.json）。
+
 ### 验证 hook 已生效
 
 ```bash
@@ -90,6 +94,10 @@ bun install --cwd <worktree>
 
 # server 独立 package（不在 workspaces 内）
 bun install --cwd <worktree>/server
+
+# 原生模块被代理腐蚀（require 报 dlopen / __LINKEDIT 错）→ 从源码重编译
+# ⚠️ 普通 bun install 会重新走被腐蚀的下载，无效；必须 build-from-source
+cd <worktree>/server && rm -rf node_modules/bcrypt && npm_config_build_from_source=true bun install
 ```
 
 ## 不要做的事
