@@ -23,6 +23,8 @@ export interface UserCredential {
   displayName: string;
   role: string;
   organization?: string;
+  /** 分公司编码（'SC' / 'SX'）。undefined → 系统级超管 */
+  branchCode?: string;
   allowedIps?: string[];
   allowedRoutes?: string[];
   defaultRoute?: string;
@@ -143,6 +145,7 @@ class AuthService {
       username: userCredential.username,
       role: userCredential.role,
       organization: userCredential.organization,
+      branchCode: userCredential.branchCode,
     };
 
     const token = jwt.sign(
@@ -199,6 +202,7 @@ class AuthService {
       username: user.username,
       role: user.role,
       organization: user.organization,
+      branchCode: user.branchCode,
     };
     const sessionId = `sid_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const refreshTtlSec = this.parseDurationToSeconds(authConfig.jwtRefreshExpiresIn, 7 * 24 * 3600);
@@ -318,12 +322,14 @@ class AuthService {
       username: decoded.username,
       role: decoded.role,
       organization: decoded.organization,
+      branchCode: decoded.branchCode,
     };
     const next = this.issueCookieSession({
       username: payload.username,
       displayName: payload.username,
       role: payload.role,
       organization: payload.organization,
+      branchCode: payload.branchCode,
     });
     return {
       ...next,

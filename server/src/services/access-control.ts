@@ -26,6 +26,8 @@ export interface AccessUser {
   passwordHash: string;
   role: string;
   organization?: string;
+  /** 分公司编码（'SC' / 'SX'）。undefined → 系统级超管看全国。详见 PresetUser.branchCode */
+  branchCode?: string;
   allowedRoutes?: string[];
   defaultRoute?: string;
   allowedIps?: string[];
@@ -83,6 +85,7 @@ function mapUserRow(row: any): AccessUser {
     passwordHash: String(row.password_hash ?? row.passwordHash ?? ''),
     role: String(row.role),
     organization: row.organization ? String(row.organization) : undefined,
+    branchCode: row.branch_code ? String(row.branch_code) : undefined,
     allowedRoutes: parseStringArray(row.allowed_routes),
     defaultRoute: row.default_route ? String(row.default_route) : undefined,
     allowedIps: parseStringArray(row.allowed_ips),
@@ -216,6 +219,7 @@ async function loadFromStore(store: UserStoreData): Promise<void> {
       '${escapeSqlValue(user.passwordHash)}',
       '${escapeSqlValue(user.role)}',
       ${toSqlString(user.organization)},
+      ${toSqlString(user.branchCode)},
       ${serializeStringArray(user.allowedRoutes)},
       ${toSqlString(user.defaultRoute)},
       ${serializeStringArray(user.allowedIps)},
@@ -226,7 +230,7 @@ async function loadFromStore(store: UserStoreData): Promise<void> {
     )`).join(',\n');
     await duckdbService.query(`
       INSERT INTO UserAccount
-        (id, username, display_name, password_hash, role, organization, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
+        (id, username, display_name, password_hash, role, organization, branch_code, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
       VALUES
       ${userValues}
     `);
@@ -267,6 +271,7 @@ async function seedFromPreset(): Promise<void> {
     '${escapeSqlValue(user.passwordHash)}',
     '${escapeSqlValue(user.role)}',
     ${toSqlString(user.organization)},
+    ${toSqlString(user.branchCode)},
     ${serializeStringArray(user.allowedRoutes)},
     ${toSqlString(user.defaultRoute)},
     ${serializeStringArray(user.allowedIps)},
@@ -278,7 +283,7 @@ async function seedFromPreset(): Promise<void> {
   if (userValues.length > 0) {
     await duckdbService.query(`
       INSERT INTO UserAccount
-        (id, username, display_name, password_hash, role, organization, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
+        (id, username, display_name, password_hash, role, organization, branch_code, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
       VALUES
       ${userValues}
     `);
@@ -295,7 +300,7 @@ async function ensureUserFromPreset(user: PresetUser): Promise<AccessUser> {
   const id = crypto.randomUUID();
   await duckdbService.query(`
     INSERT INTO UserAccount
-      (id, username, display_name, password_hash, role, organization, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
+      (id, username, display_name, password_hash, role, organization, branch_code, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
     VALUES (
       '${escapeSqlValue(id)}',
       '${escapeSqlValue(user.username)}',
@@ -303,6 +308,7 @@ async function ensureUserFromPreset(user: PresetUser): Promise<AccessUser> {
       '${escapeSqlValue(user.passwordHash)}',
       '${escapeSqlValue(user.role)}',
       ${toSqlString(user.organization)},
+      ${toSqlString(user.branchCode)},
       ${serializeStringArray(user.allowedRoutes)},
       ${toSqlString(user.defaultRoute)},
       ${serializeStringArray(user.allowedIps)},
@@ -364,6 +370,7 @@ export async function createUser(input: {
   passwordHash: string;
   role: string;
   organization?: string;
+  branchCode?: string;
   allowedRoutes?: string[];
   defaultRoute?: string;
   allowedIps?: string[];
@@ -377,7 +384,7 @@ export async function createUser(input: {
   const id = crypto.randomUUID();
   await duckdbService.query(`
     INSERT INTO UserAccount
-      (id, username, display_name, password_hash, role, organization, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
+      (id, username, display_name, password_hash, role, organization, branch_code, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
     VALUES (
       '${escapeSqlValue(id)}',
       '${escapeSqlValue(input.username)}',
@@ -385,6 +392,7 @@ export async function createUser(input: {
       '${escapeSqlValue(input.passwordHash)}',
       '${escapeSqlValue(input.role)}',
       ${toSqlString(input.organization)},
+      ${toSqlString(input.branchCode)},
       ${serializeStringArray(input.allowedRoutes)},
       ${toSqlString(input.defaultRoute)},
       ${serializeStringArray(input.allowedIps)},
@@ -407,6 +415,7 @@ export async function updateUser(id: string, input: {
   passwordHash?: string;
   role: string;
   organization?: string;
+  branchCode?: string;
   allowedRoutes?: string[];
   defaultRoute?: string;
   allowedIps?: string[];
@@ -417,6 +426,7 @@ export async function updateUser(id: string, input: {
     `display_name = '${escapeSqlValue(input.displayName)}'`,
     `role = '${escapeSqlValue(input.role)}'`,
     `organization = ${toSqlString(input.organization)}`,
+    `branch_code = ${toSqlString(input.branchCode)}`,
     `allowed_routes = ${serializeStringArray(input.allowedRoutes)}`,
     `default_route = ${toSqlString(input.defaultRoute)}`,
     `allowed_ips = ${serializeStringArray(input.allowedIps)}`,

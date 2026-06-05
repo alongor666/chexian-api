@@ -33,6 +33,7 @@ export async function initDuckDBTables(db: DuckDBQueryable): Promise<void> {
       password_hash VARCHAR,
       role VARCHAR,
       organization VARCHAR,
+      branch_code VARCHAR,
       allowed_routes VARCHAR,
       default_route VARCHAR,
       allowed_ips VARCHAR,
@@ -46,6 +47,13 @@ export async function initDuckDBTables(db: DuckDBQueryable): Promise<void> {
   // 迁移：已有表可能缺少 special_features 列
   try {
     await db.query(`ALTER TABLE UserAccount ADD COLUMN IF NOT EXISTS special_features VARCHAR`);
+  } catch {
+    // 列已存在或表刚创建，忽略
+  }
+
+  // 迁移：plan v2 多分公司前置（0D），已有表补 branch_code 列
+  try {
+    await db.query(`ALTER TABLE UserAccount ADD COLUMN IF NOT EXISTS branch_code VARCHAR`);
   } catch {
     // 列已存在或表刚创建，忽略
   }
