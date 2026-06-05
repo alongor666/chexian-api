@@ -113,7 +113,14 @@ export async function fetchTrend(apiBase, pat, { perspective = 'premium', granul
 /** 把 comprehensive lossTrendRows 规整成 {time_period, value=earned_claim_ratio} 逐期序列 */
 export function lossTrendToSeries(lossTrendRows) {
   return lossTrendRows
-    .filter((r) => r && r.time_period != null && Number.isFinite(Number(r.earned_claim_ratio)))
+    .filter(
+      (r) =>
+        r &&
+        r.time_period != null &&
+        // 显式拒绝 null/undefined：Number(null)===0 会让未来月（值为 null）被错当成 0 进入序列
+        r.earned_claim_ratio != null &&
+        Number.isFinite(Number(r.earned_claim_ratio))
+    )
     .map((r) => ({ time_period: String(r.time_period), value: Number(r.earned_claim_ratio) }));
 }
 

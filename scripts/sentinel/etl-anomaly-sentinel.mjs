@@ -167,7 +167,9 @@ async function main() {
       zThreshold: mc.zThreshold ?? 2,
       momThreshold: mc.momThreshold ?? null,
       direction: mc.direction ?? 'both',
-      excludeRecent,
+      // metric 可覆写全局 excludeRecent：rate 类（lossTrend）需排 cutoff 月+未来 null 月（默认 3）；
+      // flow 类（trend 接口无未来月）只需排 cutoff 当月（覆写为 1），否则倒退到春节高峰期会伪触发
+      excludeRecent: Number.isInteger(mc.excludeRecent) ? mc.excludeRecent : excludeRecent,
       yoy,
       yoyThreshold: mc.yoyThreshold ?? null,
     });
