@@ -38,11 +38,31 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import _env  # noqa: F401
 from _safety import cli_call, WecomCliError  # noqa: E402 — SSOT 调用器，errcode 非 0 直接抛
-from sync_org_renewal_from_xlsx import ORG_SLUGS, read_registry, DEFAULT_XLSX  # noqa: E402
+from sync_org_renewal_from_xlsx import ORG_SLUGS, read_registry, DEFAULT_XLSX, resolve_instance_path, load_fields  # noqa: E402
+from sync_renewal_v2 import FieldDef, load_instance  # noqa: E402
 from create_renewal_tracker import _read_text  # noqa: E402 — 复用 cell 形态解析（list/dict/str）
 
 STATE_DIR = HERE / "state"
-VIN_FIELD_TITLE = "车架号"  # field_registry_orgsheet.yaml 里 VIN 列标题
+VIN_FIELD_KEY = "vehicle_frame_no"  # field_registry_orgsheet.yaml 里 VIN 字段的 key
+
+# 拉到 N 行但抽不到 X% VIN → 拒绝 --execute（防止 field_id 不匹配导致空 vin_index 覆盖 state）
+MIN_VIN_EXTRACT_RATIO = 0.80
+
+
+def _resolve_vin_field(org: str) -> FieldDef:
+    """从机构实例的字段注册表里拿 VIN 字段定义。
+
+    动因（codex PR #485 第三轮 P1）：企微 records.values 的 key 取决于写入方式 —
+    sync_renewal_v2.build_record 写 values[fd.field_id]（如 'fMAfWQ'），
+    所以读出来 key 也是 field_id 而不是中文标题。硬编码 'fMAfWQ' 是脆的（field_id
+    可能在 schema 演进中变），改从字段注册表反查。
+    """
+    instance = load_instance(resolve_instance_path(org))
+    fields = load_fields(instance)
+    for fd in fields:
+        if fd.key == VIN_FIELD_KEY:
+            return fd
+    raise RuntimeError(f"{org} 实例的字段注册表无 {VIN_FIELD_KEY}")
 
 
 def resolve_sheet_id(url: str) -> str:
@@ -59,8 +79,13 @@ def resolve_sheet_id(url: str) -> str:
 
 def get_all_records(url: str, sheet_id: str) -> list[dict[str, Any]]:
     """分页拉所有 records；wecom-cli 支持 cursor + limit。
-    _safety.cli_call 已校验 errcode；errcode 非 0（如 851014 文档权限过期）
-    直接抛 WecomCliError，不会让我们用空 vin_index 覆盖 state.records。
+
+    兼容三种 records 字段名（codex PR #485 第三轮 P1）—— 与
+    create_renewal_tracker.WeComCli.get_records 对齐：
+      - record_list（wecom-cli 0.1.8+ 命令形态）
+      - records（早期形态）
+      - data.records（部分网关嵌套）
+    任何匹配上即视为有效响应；都为空才认为该页结束。
     """
     rows: list[dict[str, Any]] = []
     cursor = None
@@ -69,32 +94,71 @@ def get_all_records(url: str, sheet_id: str) -> list[dict[str, Any]]:
         if cursor:
             payload["cursor"] = cursor
         resp = cli_call("doc", "smartsheet_get_records", payload)
-        batch = resp.get("records") or []
+        nested = resp.get("data") if isinstance(resp.get("data"), dict) else {}
+        batch = (
+            resp.get("record_list")
+            or resp.get("records")
+            or nested.get("record_list")
+            or nested.get("records")
+            or []
+        )
         rows.extend(batch)
-        cursor = resp.get("next_cursor") or resp.get("cursor")
+        cursor = (
+            resp.get("next_cursor")
+            or resp.get("cursor")
+            or nested.get("next_cursor")
+            or nested.get("cursor")
+        )
         if not cursor or not batch:
             break
     return rows
 
 
-def extract_vin_record_pairs(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """从企微 records 提取 {vin: {record_id, ...}} 索引。"""
+def extract_vin_record_pairs(
+    records: list[dict[str, Any]],
+    *,
+    vin_field: FieldDef,
+) -> dict[str, dict[str, Any]]:
+    """从企微 records 提取 {vin: {record_id, ...}} 索引。
+
+    values 的 key 三种形态都兼容（codex PR #485 多轮 P1）：
+      1. field_id（如 'fMAfWQ'）—— sync_renewal_v2.build_record 写入用
+      2. label（中文标题如 '车架号'）—— 部分接口形态
+      3. cell.title == label —— 兼容 {field_id: {title, text}} 嵌套形态
+
+    cell 值同样三种形态都兼容（_read_text 统一解析）：str / dict / list-of-dict。
+    """
     out: dict[str, dict[str, Any]] = {}
+    key_candidates = {vin_field.field_id, vin_field.label}
     for rec in records:
         rid = rec.get("record_id") or rec.get("id")
         values = rec.get("values") or rec.get("fields") or {}
-        vin = None
-        # values 可能是 {field_title: cell} 或 {field_id: cell}；
-        # cell 可能是 str / dict({"text": ...}) / list([{"text": ...}])。
-        # 用 _read_text 统一解析；否则 list 形态会被 str(v) 序列化成 "[{'text': ...}]"
-        # 导致 sync 按 vehicle_frame_no 查 state 匹配不到（codex P1 PR #485）。
-        for k, v in values.items():
-            if k == VIN_FIELD_TITLE or (isinstance(v, dict) and v.get("title") == VIN_FIELD_TITLE):
-                vin = _read_text(v)
+        vin_cell: Any = None
+
+        # 路径 1+2: 直接按 field_id 或 label 取
+        for k in key_candidates:
+            if k in values:
+                vin_cell = values[k]
                 break
-        if not vin:
+
+        # 路径 3: 兜底扫所有 cell，看嵌套 title
+        if vin_cell is None:
+            for v in values.values():
+                if isinstance(v, dict) and v.get("title") == vin_field.label:
+                    vin_cell = v
+                    break
+                if (
+                    isinstance(v, list)
+                    and v
+                    and isinstance(v[0], dict)
+                    and v[0].get("title") == vin_field.label
+                ):
+                    vin_cell = v
+                    break
+
+        if vin_cell is None:
             continue
-        vin = vin.strip()
+        vin = _read_text(vin_cell).strip()
         if not vin:
             continue
         out[vin] = {"record_id": rid, "primed_at": datetime.now(timezone.utc).isoformat()}
@@ -110,6 +174,16 @@ def prime_one(org: str, link: str, *, execute: bool) -> dict[str, Any]:
         "state_file": str(state_file),
         "errors": [],
     }
+
+    try:
+        vin_field = _resolve_vin_field(org)
+        summary["vin_field_id"] = vin_field.field_id
+        summary["vin_field_label"] = vin_field.label
+    except Exception as exc:
+        summary["status"] = "resolve_vin_field_failed"
+        summary["errors"].append(str(exc)[:300])
+        return summary
+
     try:
         sheet_id = resolve_sheet_id(link)
         summary["sheet_id"] = sheet_id
@@ -126,8 +200,19 @@ def prime_one(org: str, link: str, *, execute: bool) -> dict[str, Any]:
         return summary
     summary["wecom_rows_fetched"] = len(records)
 
-    vin_index = extract_vin_record_pairs(records)
+    vin_index = extract_vin_record_pairs(records, vin_field=vin_field)
     summary["vin_index_size"] = len(vin_index)
+
+    # Sanity guard：拉到数据但抽不到 VIN（schema 错位 / field_id 不匹配等）→ 拒写
+    # 防止 codex 第三轮 P1 反复抓到的 "成功响应当成空写入 state" 类问题。
+    if records and len(vin_index) < int(len(records) * MIN_VIN_EXTRACT_RATIO):
+        summary["status"] = "vin_extract_ratio_too_low"
+        summary["errors"].append(
+            f"vin_index={len(vin_index)} / wecom_rows={len(records)} "
+            f"= {len(vin_index)/max(1, len(records)):.0%} < {MIN_VIN_EXTRACT_RATIO:.0%}；"
+            f"疑似 vin_field_id={vin_field.field_id} 与企微表结构不匹配，拒写以保护现有 state。"
+        )
+        return summary
 
     if not execute:
         summary["status"] = "dry_run"
@@ -144,6 +229,7 @@ def prime_one(org: str, link: str, *, execute: bool) -> dict[str, Any]:
             "source": "wecom-cli smartsheet_get_records",
             "wecom_rows_fetched": len(records),
             "vins_indexed": len(vin_index),
+            "vin_field_id": vin_field.field_id,
         }
     )
     state_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
