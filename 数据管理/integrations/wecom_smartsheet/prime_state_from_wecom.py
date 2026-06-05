@@ -205,11 +205,14 @@ def prime_one(org: str, link: str, *, execute: bool) -> dict[str, Any]:
 
     # Sanity guard：拉到数据但抽不到 VIN（schema 错位 / field_id 不匹配等）→ 拒写
     # 防止 codex 第三轮 P1 反复抓到的 "成功响应当成空写入 state" 类问题。
-    if records and len(vin_index) < int(len(records) * MIN_VIN_EXTRACT_RATIO):
+    # 用浮点比率直接比较 — 早期版本 int(len(records)*ratio) 向下取整会放过
+    # 1 行抽 0 / 2 行抽 1 / 4 行抽 3（实际抽取率 0% / 50% / 75% 都通过 guard），
+    # codex PR #485 第四轮 P1 修复。
+    if records and (len(vin_index) / len(records)) < MIN_VIN_EXTRACT_RATIO:
         summary["status"] = "vin_extract_ratio_too_low"
         summary["errors"].append(
             f"vin_index={len(vin_index)} / wecom_rows={len(records)} "
-            f"= {len(vin_index)/max(1, len(records)):.0%} < {MIN_VIN_EXTRACT_RATIO:.0%}；"
+            f"= {len(vin_index)/len(records):.0%} < {MIN_VIN_EXTRACT_RATIO:.0%}；"
             f"疑似 vin_field_id={vin_field.field_id} 与企微表结构不匹配，拒写以保护现有 state。"
         )
         return summary
