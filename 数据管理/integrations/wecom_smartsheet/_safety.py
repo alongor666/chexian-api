@@ -1,0 +1,114 @@
+"""Wecom 智能表行级重复风险闸 — 共享安全护栏。
+
+设计目标
+--------
+2026-06-03 事故根因：state.records 跑前为空 → sync 走 add 路径 → 与企微表既存
+数据形成行级重复（合计 28,899 行）。详见 [[project_wecom_org_renewal_first_real_run_dup]]。
+
+本模块提供三个共享组件，被 sync_org_renewal_from_xlsx / sync_filtered_policies /
+sync_may_renewal_fields 三个写入脚本共用：
+
+1. `print_preflight_banner` — 写入前打印对比表（state 预期 vs source 现状 vs 计划写入）
+2. `evaluate_gate` — 判断是否触发危险信号（state 空 / to_add 占比过高 / 全 add 无 update）
+3. `--i-checked-wecom-rows` 显式覆盖开关（用户去企微表点查行数后才能加）
+
+为什么不靠 wecom-cli 直接 GET 企微表行数？
+- 应用 API 受 errcode 851014 (authorization expired) 阻塞，无法绕开（详见
+  [[project_wecom_org_renewal_xindu_dazhou_broken]]）
+- webhook 通道只支持 add/update，不支持 read / delete（实测 errcode 40058）
+- 唯一可靠的"企微当前行数"信息来源：人工去企微表点查 → 加 --i-checked-wecom-rows
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
+# to_add / source_rows 超过此比例视为高风险（疑似重复写入）
+DANGER_ADD_RATIO = 0.30
+
+Verdict = Literal["ok", "danger_empty_state", "danger_high_add_ratio", "danger_all_add_no_update"]
+
+
+@dataclass(frozen=True)
+class GateResult:
+    ok: bool
+    verdict: Verdict
+    message: str
+
+
+def evaluate_gate(*, state_count: int, source_rows: int, to_add: int, to_update: int) -> GateResult:
+    """根据三项指标判断是否放行 --execute。
+
+    返回 ok=True 表示安全可写；ok=False 表示触发危险信号，需用户显式 --i-checked-wecom-rows
+    覆盖（先去企微表点查行数确认无误）。
+
+    判断顺序（短路）：
+    1. state 空 + 想写入 → 一定危险（除非首次建表，但首次必须人工确认企微表为空）
+    2. to_add == source_rows 且 to_update == 0 → 危险（疑似首次/重复）
+    3. to_add / source_rows > 30% → 危险（state 显著失真）
+    4. 其他 → 安全
+    """
+    if source_rows == 0:
+        return GateResult(True, "ok", "源数据为 0，无写入操作")
+
+    if state_count == 0 and to_add > 0:
+        return GateResult(
+            False,
+            "danger_empty_state",
+            f"state.records 为 0 但 to_add={to_add}：无法判断企微表是否已有数据，存在重复风险。",
+        )
+
+    if to_add == source_rows and to_update == 0:
+        return GateResult(
+            False,
+            "danger_all_add_no_update",
+            f"to_add={to_add} == source_rows，to_update=0：疑似首次建表或 state 完全失真，存在重复风险。",
+        )
+
+    ratio = to_add / source_rows
+    if ratio > DANGER_ADD_RATIO:
+        return GateResult(
+            False,
+            "danger_high_add_ratio",
+            f"to_add={to_add} / source_rows={source_rows} = {ratio:.0%} > {DANGER_ADD_RATIO:.0%}：state 部分失真，存在重复风险。",
+        )
+
+    return GateResult(True, "ok", f"to_add={to_add}/{source_rows} ({ratio:.0%})，state 状态健康")
+
+
+def print_preflight_banner(
+    label: str,
+    *,
+    state_count: int,
+    source_rows: int,
+    to_add: int,
+    to_update: int,
+    gate: GateResult | None = None,
+) -> GateResult:
+    """打印对比表 + 合理性判断；返回 gate 结果。如果调用方已算好 gate，可传入复用。"""
+    if gate is None:
+        gate = evaluate_gate(
+            state_count=state_count, source_rows=source_rows, to_add=to_add, to_update=to_update
+        )
+    icon = "✓" if gate.ok else "✗"
+    print(f"  ┌─── preflight: {label} ───")
+    print(f"  │ state.records_count : {state_count:>8}  ← 脚本预期企微表当前行数")
+    print(f"  │ source_rows         : {source_rows:>8}  ← 本次源数据行数")
+    print(f"  │ to_add              : {to_add:>8}  ← 将新增（写入企微表）")
+    print(f"  │ to_update           : {to_update:>8}  ← 将更新（按 record_id 改既有行）")
+    print(f"  │ 合理性              : {icon} {gate.message}")
+    print(f"  └────────────────────────────────────────────")
+    return gate
+
+
+def must_check_wecom_rows_hint(label: str, state_count: int) -> str:
+    """触发危险信号时的固定指引，由调用方拼到错误消息里。"""
+    return (
+        f"\n[{label}] 行级重复风险闸触发，--execute 拒绝执行。\n"
+        f"\n请去企微表点查当前行数：\n"
+        f"  - 当前行数 ≈ {state_count}（脚本预期值）→ state 准确，可加 --i-checked-wecom-rows 放行\n"
+        f"  - 当前行数 ≈ 0（企微表为空）→ 首次建表/已被人工清空，可加 --i-checked-wecom-rows 放行\n"
+        f"  - 当前行数显著大于以上两种 → **禁止 --execute**，会产生行级重复；\n"
+        f"    必须先人工清表（去企微 UI 删除所有行），再加 --i-checked-wecom-rows 放行\n"
+        f"\n参考：[[project_wecom_org_renewal_first_real_run_dup]] [[feedback_wecom_no_row_duplication]]"
+    )

@@ -106,6 +106,17 @@ def parse_args() -> argparse.Namespace:
         help="只同步指定机构，多个用英文逗号分隔，例如：天府,高新,新都",
     )
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument(
+        "--i-checked-wecom-rows",
+        action="store_true",
+        dest="i_checked_wecom_rows",
+        help=(
+            "RED LINE 闸覆盖开关：state 空 / to_add 占比过高 / 全 add 无 update 等"
+            "危险信号触发时，--execute 默认拒绝执行（防止重复 add）。仅在你已**亲自**"
+            "去企微表点查当前行数，并确认与 preflight banner 的 state.records_count 或 0"
+            "吻合时，才能加此开关放行。详见 [[project_wecom_org_renewal_first_real_run_dup]]。"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -252,10 +263,40 @@ def main() -> int:
             if args.batch_size:
                 instance = replace(instance, batch_size=args.batch_size)
             fields = load_fields(instance)
+
             if args.prime_hashes:
                 summary = prime_state_hashes(instance, fields)
             else:
-                summary = run_sync(instance, fields, dry_run=not args.execute)
+                # RED LINE preflight：永远先跑 dry-run 拿 plan，打 banner + 跑 gate；
+                # 通过且 args.execute 才真写入。dry-run 不调 webhook，只 xlsx 解析。
+                from _safety import (  # 局部 import 避免循环
+                    evaluate_gate,
+                    print_preflight_banner,
+                    must_check_wecom_rows_hint,
+                )
+
+                state_path = resolve_state_path(instance)
+                state_check = load_state(state_path) if state_path.exists() else {"records": {}}
+                state_count = len(state_check.get("records") or {})
+
+                plan = run_sync(instance, fields, dry_run=True)
+                gate = print_preflight_banner(
+                    label=f"{org} 续保追踪表",
+                    state_count=state_count,
+                    source_rows=plan.get("source_rows") or 0,
+                    to_add=plan.get("to_add") or 0,
+                    to_update=plan.get("to_update") or 0,
+                )
+
+                if not gate.ok and args.execute and not args.i_checked_wecom_rows:
+                    raise RuntimeError(
+                        gate.message + must_check_wecom_rows_hint(org, state_count)
+                    )
+
+                if args.execute:
+                    summary = run_sync(instance, fields, dry_run=False)
+                else:
+                    summary = plan
             results.append(compact_summary(org, row["link"], summary))
         except Exception as exc:  # keep later orgs visible in one run
             failed = True
