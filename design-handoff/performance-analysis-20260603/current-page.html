@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>业绩分析 — 当前页 standalone 还原 (2026-06-03)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+// 把项目真实 token 灌进 Tailwind config，保证视觉与生产一致
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        primary: { DEFAULT: '#1890ff', light: '#40a9ff', dark: '#096dd9', bg: '#e6f7ff', border: '#91d5ff' },
+        success: { DEFAULT: '#52c41a', light: '#73d13d', dark: '#389e0d', bg: '#f6ffed', border: '#b7eb8f', solid: '#389e0d' },
+        warning: { DEFAULT: '#faad14', light: '#ffc53d', dark: '#d48806', bg: '#fffbe6', border: '#ffe58f' },
+        danger:  { DEFAULT: '#ff4d4f', light: '#ff7875', dark: '#d9363e', bg: '#fff1f0', border: '#ffccc7' },
+        neutral: { 50:'#fafafa',100:'#f5f5f5',200:'#e8e8e8',300:'#d9d9d9',400:'#bfbfbf',500:'#8c8c8c',600:'#595959',700:'#434343',800:'#262626',900:'#1f1f1f' },
+        purple: { DEFAULT: '#722ed1', bg: '#f9f0ff', border: '#d3adf7' },
+        amber:  { DEFAULT: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
+        surface: { 0:'#0f0f10', 1:'#161618', 2:'#1c1c1f', 3:'#232326' }
+      },
+      fontFamily: {
+        sans:   ['-apple-system','BlinkMacSystemFont','"SF Pro Text"','"PingFang SC"','"Microsoft YaHei"','sans-serif'],
+        kpi:    ['"Avenir Next"','"Century Gothic"','"SF Pro Display"','-apple-system','"PingFang SC"','sans-serif'],
+        numeric:['"SF Pro Text"','"Helvetica Neue"','"PingFang SC"','sans-serif']
+      },
+      boxShadow: { 'sm':'0 1px 2px 0 rgba(0,0,0,0.05)' }
+    }
+  }
+}
+</script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .font-numeric { font-variant-numeric: tabular-nums; }
+  .font-kpi     { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  /* sticky table 装饰 */
+  .sticky-shadow-bottom { box-shadow: inset 0 -1px 0 0 rgba(229,231,235,1); }
+  .sticky-shadow-right  { box-shadow: inset -1px 0 0 0 rgba(229,231,235,1); }
+  .sticky-shadow-cross  { box-shadow: inset -1px 0 0 0 rgba(229,231,235,1), inset 0 -1px 0 0 rgba(229,231,235,1); }
+  /* 热力图色阶（getHeatmapColor 6 档） */
+  .hm-excellent { background:#389e0d; color:#fff; }
+  .hm-healthy   { background:#b7eb8f; color:#1f1f1f; }
+  .hm-good      { background:#f6ffed; color:#262626; }
+  .hm-warn      { background:#fffbeb; color:#262626; }
+  .hm-danger    { background:#fff1f0; color:#262626; }
+  .hm-bad       { background:#ffccc7; color:#262626; }
+</style>
+</head>
+<body class="bg-neutral-50 text-neutral-700">
+
+<!-- ============== 顶部导航 ============== -->
+<header class="h-14 flex items-center justify-between px-6 bg-white border-b border-neutral-200 sticky top-0 z-40">
+  <div class="flex items-center gap-6">
+    <span class="font-semibold text-neutral-900">车险数据分析平台</span>
+    <nav class="text-sm text-neutral-500 flex gap-4">
+      <a class="hover:text-neutral-900">首页</a>
+      <a class="text-primary font-medium">业绩分析</a>
+      <a class="hover:text-neutral-900">成本分析</a>
+      <a class="hover:text-neutral-900">报告中心</a>
+    </nav>
+  </div>
+  <div class="flex items-center gap-3 text-sm text-neutral-500">
+    <span>四川分公司 / admin</span>
+    <button class="px-2 py-1 rounded-md hover:bg-neutral-100">🌙</button>
+  </div>
+</header>
+
+<div class="flex">
+  <!-- ============== 侧边栏 ============== -->
+  <aside class="w-60 shrink-0 border-r border-neutral-200 bg-white min-h-[calc(100vh-3.5rem)] py-4">
+    <ul class="text-sm">
+      <li class="px-4 py-2 text-xs uppercase tracking-wider text-neutral-400">经营看板</li>
+      <li class="px-4 py-2 bg-primary-bg text-primary-dark font-medium border-r-2 border-primary">业绩分析</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 text-neutral-700">保费看板</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 text-neutral-700">成本分析</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 text-neutral-700">增长诊断</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 text-neutral-700">续保追踪</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 text-neutral-700">报价转化</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 text-neutral-700">客户流转</li>
+      <li class="px-4 py-2 mt-2 text-xs uppercase tracking-wider text-neutral-400">报告</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 text-neutral-700">机构周报</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 text-neutral-700">趋势诊断</li>
+    </ul>
+  </aside>
+
+  <!-- ============== 主内容区 ============== -->
+  <main class="flex-1 min-w-0">
+
+    <!-- 页面头 + 快速筛选 + 锚点 -->
+    <div class="px-6 py-4 bg-white border-b border-neutral-200">
+      <div class="flex items-center justify-between mb-3">
+        <h1 class="text-xl font-semibold text-neutral-900">业绩分析</h1>
+        <div class="flex items-center gap-2">
+          <!-- 客户类别下拉 -->
+          <select class="text-sm border border-neutral-300 rounded-md px-3 py-1.5 bg-white">
+            <option>全部客户</option><option>非营业客车</option><option>营业客车</option><option>营业货车</option><option>非营业货车</option><option>摩托车</option>
+          </select>
+          <!-- 重置 + 高级筛选 -->
+          <button class="text-sm px-3 py-1.5 rounded-md hover:bg-neutral-100 text-neutral-600">❌ 重置</button>
+          <button class="text-sm px-3 py-1.5 rounded-md border border-neutral-300 hover:bg-neutral-100 text-neutral-700 flex items-center gap-1">
+            ⚙ 高级筛选 <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-primary-bg text-primary-dark font-medium">3</span>
+          </button>
+        </div>
+      </div>
+      <!-- QuickFilterBar -->
+      <div class="flex flex-wrap gap-2 mb-2">
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-neutral-100 text-neutral-700">燃油车 ×</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-neutral-100 text-neutral-700">非新车 ×</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-neutral-100 text-neutral-700">续保业务 ×</span>
+      </div>
+      <!-- 锚点 sticky nav -->
+      <nav class="flex gap-1 text-sm">
+        <a class="px-3 py-1.5 rounded-md bg-neutral-800 text-white">热力图</a>
+        <a class="px-3 py-1.5 rounded-md text-neutral-600 hover:bg-neutral-100">业绩概览</a>
+        <a class="px-3 py-1.5 rounded-md text-neutral-600 hover:bg-neutral-100">趋势分析</a>
+        <a class="px-3 py-1.5 rounded-md text-neutral-600 hover:bg-neutral-100">下钻分析</a>
+        <a class="px-3 py-1.5 rounded-md text-neutral-600 hover:bg-neutral-100">Top20</a>
+      </nav>
+    </div>
+
+    <div class="p-6 space-y-4">
+
+      <!-- ============== 区块 1 · 热力图 ============== -->
+      <section id="performance-heatmap" class="bg-white rounded-lg border border-neutral-200 shadow-sm">
+        <header class="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
+          <div>
+            <h2 class="text-base font-semibold text-neutral-800">机构连续 N 周期业绩热力图</h2>
+            <p class="text-xs text-neutral-500 mt-0.5">最近 15 个时间段 × 三级机构（行）· 颜色按达成率分 6 档</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <!-- 粒度 -->
+            <div class="inline-flex rounded-md border border-neutral-200 overflow-hidden text-xs">
+              <button class="px-2.5 py-1 bg-neutral-800 text-white">日</button>
+              <button class="px-2.5 py-1 text-neutral-600 hover:bg-neutral-100">周</button>
+              <button class="px-2.5 py-1 text-neutral-600 hover:bg-neutral-100">月</button>
+              <button class="px-2.5 py-1 text-neutral-600 hover:bg-neutral-100">季</button>
+              <button class="px-2.5 py-1 text-neutral-600 hover:bg-neutral-100">年</button>
+            </div>
+            <!-- 增长口径 -->
+            <div class="inline-flex rounded-md border border-neutral-200 overflow-hidden text-xs">
+              <button class="px-2.5 py-1 bg-neutral-800 text-white">环比</button>
+              <button class="px-2.5 py-1 text-neutral-600 hover:bg-neutral-100">同比</button>
+            </div>
+          </div>
+        </header>
+
+        <!-- 维度 Tab -->
+        <div class="px-4 pt-3 flex flex-wrap gap-1 text-xs">
+          <button class="px-3 py-1 rounded-md bg-neutral-800 text-white">三级机构</button>
+          <button class="px-3 py-1 rounded-md text-neutral-600 bg-neutral-100 hover:bg-neutral-200">团队</button>
+          <button class="px-3 py-1 rounded-md text-neutral-600 bg-neutral-100 hover:bg-neutral-200">业务员</button>
+          <button class="px-3 py-1 rounded-md text-neutral-600 bg-neutral-100 hover:bg-neutral-200">客户类别</button>
+          <button class="px-3 py-1 rounded-md text-neutral-600 bg-neutral-100 hover:bg-neutral-200">险别</button>
+          <button class="px-3 py-1 rounded-md text-neutral-600 bg-neutral-100 hover:bg-neutral-200">能源</button>
+          <button class="px-3 py-1 rounded-md text-neutral-600 bg-neutral-100 hover:bg-neutral-200">新续转</button>
+          <button class="px-3 py-1 rounded-md text-neutral-600 bg-neutral-100 hover:bg-neutral-200">风险评分</button>
+        </div>
+
+        <!-- 面包屑 -->
+        <div class="px-4 pt-2 text-xs text-neutral-500 flex items-center gap-1">
+          <span class="text-primary hover:underline cursor-pointer">全部</span>
+          <span>›</span>
+          <span class="text-primary hover:underline cursor-pointer">天府新区</span>
+          <span>›</span>
+          <span class="text-neutral-700 font-medium">业务员视图</span>
+        </div>
+
+        <!-- 热力图主体 -->
+        <div class="px-4 py-3 overflow-auto">
+          <table class="min-w-full text-xs font-numeric border-separate border-spacing-0">
+            <thead>
+              <tr>
+                <th class="sticky left-0 z-20 bg-white sticky-shadow-right text-left px-2 py-2 text-neutral-600 font-semibold uppercase tracking-wider min-w-[140px]">三级机构</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-20</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-21</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-22</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-23</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-24</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-25</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-26</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-27</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-28</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-29</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-30</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center">05-31</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center bg-neutral-50">06-01</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center bg-neutral-50">06-02</th>
+                <th class="px-2 py-2 text-neutral-600 font-semibold text-center bg-neutral-50">06-03</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- 行 1 -->
+              <tr class="hover:bg-neutral-50 cursor-pointer">
+                <td class="sticky left-0 z-10 bg-white sticky-shadow-right px-2 py-2 text-neutral-800 font-medium flex items-center justify-between">
+                  天府新区 <span class="text-neutral-400 text-xs">▼</span>
+                </td>
+                <td class="hm-excellent px-2 py-2 text-center">128.5</td>
+                <td class="hm-excellent px-2 py-2 text-center">115.2</td>
+                <td class="hm-healthy px-2 py-2 text-center">108.7</td>
+                <td class="hm-healthy px-2 py-2 text-center">112.3</td>
+                <td class="hm-good px-2 py-2 text-center">96.4</td>
+                <td class="hm-warn px-2 py-2 text-center">88.2</td>
+                <td class="hm-warn px-2 py-2 text-center">85.1</td>
+                <td class="hm-good px-2 py-2 text-center">94.8</td>
+                <td class="hm-healthy px-2 py-2 text-center">105.6</td>
+                <td class="hm-healthy px-2 py-2 text-center">102.4</td>
+                <td class="hm-healthy px-2 py-2 text-center">110.5</td>
+                <td class="hm-excellent px-2 py-2 text-center">122.8</td>
+                <td class="hm-excellent px-2 py-2 text-center ring-2 ring-primary ring-offset-1">131.5</td>
+                <td class="hm-excellent px-2 py-2 text-center">125.7</td>
+                <td class="hm-excellent px-2 py-2 text-center">128.9</td>
+              </tr>
+              <tr class="hover:bg-neutral-50 cursor-pointer">
+                <td class="sticky left-0 z-10 bg-white sticky-shadow-right px-2 py-2 text-neutral-800 font-medium flex items-center justify-between">
+                  高新支公司 <span class="text-neutral-400 text-xs">▼</span>
+                </td>
+                <td class="hm-healthy px-2 py-2 text-center">105.3</td>
+                <td class="hm-good px-2 py-2 text-center">98.6</td>
+                <td class="hm-warn px-2 py-2 text-center">87.4</td>
+                <td class="hm-warn px-2 py-2 text-center">82.1</td>
+                <td class="hm-danger px-2 py-2 text-center">68.5</td>
+                <td class="hm-danger px-2 py-2 text-center">62.3</td>
+                <td class="hm-bad px-2 py-2 text-center">45.8</td>
+                <td class="hm-danger px-2 py-2 text-center">58.4</td>
+                <td class="hm-danger px-2 py-2 text-center">71.2</td>
+                <td class="hm-warn px-2 py-2 text-center">80.5</td>
+                <td class="hm-warn px-2 py-2 text-center">85.7</td>
+                <td class="hm-good px-2 py-2 text-center">92.1</td>
+                <td class="hm-good px-2 py-2 text-center">95.4</td>
+                <td class="hm-healthy px-2 py-2 text-center">103.2</td>
+                <td class="hm-healthy px-2 py-2 text-center">107.6</td>
+              </tr>
+              <tr class="hover:bg-neutral-50 cursor-pointer">
+                <td class="sticky left-0 z-10 bg-white sticky-shadow-right px-2 py-2 text-neutral-800 font-medium flex items-center justify-between">
+                  宜宾中心支公司 <span class="text-neutral-400 text-xs">▼</span>
+                </td>
+                <td class="hm-good px-2 py-2 text-center">94.2</td>
+                <td class="hm-healthy px-2 py-2 text-center">106.8</td>
+                <td class="hm-healthy px-2 py-2 text-center">112.5</td>
+                <td class="hm-excellent px-2 py-2 text-center">118.4</td>
+                <td class="hm-excellent px-2 py-2 text-center">125.2</td>
+                <td class="hm-healthy px-2 py-2 text-center">109.7</td>
+                <td class="hm-healthy px-2 py-2 text-center">104.5</td>
+                <td class="hm-good px-2 py-2 text-center">96.8</td>
+                <td class="hm-warn px-2 py-2 text-center">86.4</td>
+                <td class="hm-good px-2 py-2 text-center">93.5</td>
+                <td class="hm-healthy px-2 py-2 text-center">108.2</td>
+                <td class="hm-healthy px-2 py-2 text-center">115.4</td>
+                <td class="hm-excellent px-2 py-2 text-center">126.7</td>
+                <td class="hm-excellent px-2 py-2 text-center">131.8</td>
+                <td class="hm-excellent px-2 py-2 text-center">128.5</td>
+              </tr>
+              <tr class="hover:bg-neutral-50 cursor-pointer">
+                <td class="sticky left-0 z-10 bg-white sticky-shadow-right px-2 py-2 text-neutral-800 font-medium flex items-center justify-between">
+                  自贡分公司 <span class="text-neutral-400 text-xs">▼</span>
+                </td>
+                <td class="hm-warn px-2 py-2 text-center">85.4</td>
+                <td class="hm-warn px-2 py-2 text-center">82.6</td>
+                <td class="hm-danger px-2 py-2 text-center">68.4</td>
+                <td class="hm-danger px-2 py-2 text-center">65.2</td>
+                <td class="hm-bad px-2 py-2 text-center">42.1</td>
+                <td class="hm-bad px-2 py-2 text-center">38.5</td>
+                <td class="hm-danger px-2 py-2 text-center">54.8</td>
+                <td class="hm-danger px-2 py-2 text-center">62.3</td>
+                <td class="hm-warn px-2 py-2 text-center">75.4</td>
+                <td class="hm-warn px-2 py-2 text-center">81.6</td>
+                <td class="hm-good px-2 py-2 text-center">88.2</td>
+                <td class="hm-good px-2 py-2 text-center">93.7</td>
+                <td class="hm-good px-2 py-2 text-center">95.4</td>
+                <td class="hm-healthy px-2 py-2 text-center">102.8</td>
+                <td class="hm-healthy px-2 py-2 text-center">105.6</td>
+              </tr>
+              <tr class="hover:bg-neutral-50 cursor-pointer">
+                <td class="sticky left-0 z-10 bg-white sticky-shadow-right px-2 py-2 text-neutral-800 font-medium flex items-center justify-between">
+                  达州中支 <span class="text-neutral-400 text-xs">▼</span>
+                </td>
+                <td class="hm-healthy px-2 py-2 text-center">104.5</td>
+                <td class="hm-healthy px-2 py-2 text-center">107.8</td>
+                <td class="hm-excellent px-2 py-2 text-center">115.6</td>
+                <td class="hm-excellent px-2 py-2 text-center">122.4</td>
+                <td class="hm-excellent px-2 py-2 text-center">128.7</td>
+                <td class="hm-excellent px-2 py-2 text-center">131.2</td>
+                <td class="hm-excellent px-2 py-2 text-center">126.5</td>
+                <td class="hm-healthy px-2 py-2 text-center">112.8</td>
+                <td class="hm-good px-2 py-2 text-center">96.4</td>
+                <td class="hm-warn px-2 py-2 text-center">88.7</td>
+                <td class="hm-good px-2 py-2 text-center">94.2</td>
+                <td class="hm-healthy px-2 py-2 text-center">106.5</td>
+                <td class="hm-healthy px-2 py-2 text-center">115.3</td>
+                <td class="hm-excellent px-2 py-2 text-center">124.6</td>
+                <td class="hm-excellent px-2 py-2 text-center">132.1</td>
+              </tr>
+              <tr class="hover:bg-neutral-50 cursor-pointer">
+                <td class="sticky left-0 z-10 bg-white sticky-shadow-right px-2 py-2 text-neutral-800 font-medium flex items-center justify-between">
+                  绵阳支公司 <span class="text-neutral-400 text-xs">▼</span>
+                </td>
+                <td class="hm-warn px-2 py-2 text-center">82.4</td>
+                <td class="hm-warn px-2 py-2 text-center">85.6</td>
+                <td class="hm-good px-2 py-2 text-center">94.2</td>
+                <td class="hm-good px-2 py-2 text-center">96.8</td>
+                <td class="hm-healthy px-2 py-2 text-center">108.4</td>
+                <td class="hm-healthy px-2 py-2 text-center">115.7</td>
+                <td class="hm-excellent px-2 py-2 text-center">125.3</td>
+                <td class="hm-excellent px-2 py-2 text-center">128.9</td>
+                <td class="hm-excellent px-2 py-2 text-center">132.1</td>
+                <td class="hm-healthy px-2 py-2 text-center">112.5</td>
+                <td class="hm-healthy px-2 py-2 text-center">105.8</td>
+                <td class="hm-good px-2 py-2 text-center">97.4</td>
+                <td class="hm-warn px-2 py-2 text-center">86.5</td>
+                <td class="hm-good px-2 py-2 text-center">93.7</td>
+                <td class="hm-healthy px-2 py-2 text-center">104.2</td>
+              </tr>
+            </tbody>
+          </table>
+          <!-- 色阶图例 -->
+          <div class="mt-3 flex items-center gap-3 text-xs text-neutral-500">
+            <span>达成率:</span>
+            <span class="px-2 py-0.5 hm-bad rounded">&lt;1%</span>
+            <span class="px-2 py-0.5 hm-danger rounded">≥1%</span>
+            <span class="px-2 py-0.5 hm-warn rounded">≥4%</span>
+            <span class="px-2 py-0.5 hm-good rounded">≥7%</span>
+            <span class="px-2 py-0.5 hm-healthy rounded">≥10%</span>
+            <span class="px-2 py-0.5 hm-excellent rounded">≥15%</span>
+            <span class="ml-auto text-neutral-400">单元格点击 → 右侧 HeatmapFocusPanel 详情</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============== 区块 2 · 业绩概览 ============== -->
+      <section id="performance-summary" class="bg-white rounded-lg border border-neutral-200 shadow-sm">
+        <header class="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
+          <div>
+            <h2 class="text-base font-semibold text-neutral-800">业绩概览（按险别组合）</h2>
+            <p class="text-xs text-neutral-500 mt-0.5">YTD 截至 2026-06-03 · 排序：达成率升序</p>
+          </div>
+          <div class="inline-flex rounded-md border border-neutral-200 overflow-hidden text-xs">
+            <button class="px-2.5 py-1 bg-neutral-800 text-white">不展开</button>
+            <button class="px-2.5 py-1 text-neutral-600 hover:bg-neutral-100">油电</button>
+            <button class="px-2.5 py-1 text-neutral-600 hover:bg-neutral-100">新转续</button>
+            <button class="px-2.5 py-1 text-neutral-600 hover:bg-neutral-100">油电+新转续</button>
+          </div>
+        </header>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-neutral-50 border-b border-neutral-200">
+              <tr>
+                <th class="px-3 py-2 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">险别组合</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">保费(万元)</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">计划(万元)</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">件数</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">达成率(%)</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">环比(%)</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">新能源占比(%)</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">续保率(%)</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider">过户率(%)</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-neutral-100">
+              <!-- 整体行 -->
+              <tr class="bg-neutral-50/40 hover:bg-neutral-50">
+                <td class="px-3 py-2 font-semibold text-neutral-900">整体</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">12,856</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">14,200</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">28,547</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-warning-dark">90.5</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">4.2</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">28.4</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">72.6</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">8.3</td>
+              </tr>
+              <!-- 主全 - 展开 -->
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2"><span class="text-neutral-400 mr-1 cursor-pointer">▾</span><span class="font-medium text-neutral-900">主全（主险+全损）</span></td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">8,425</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">9,500</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">12,548</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-warning-dark">88.7</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">3.5</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">32.1</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">75.4</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">7.8</td>
+              </tr>
+              <!-- 子行示例 -->
+              <tr class="bg-neutral-50/40">
+                <td class="px-3 py-2 pl-10 text-neutral-600">└ 燃油</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-700">5,728</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">6,400</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-700">8,234</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-warning-dark">89.5</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">2.8</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">-</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-700">76.2</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-700">7.5</td>
+              </tr>
+              <tr class="bg-neutral-50/40">
+                <td class="px-3 py-2 pl-10 text-neutral-600">└ 新能源</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-700">2,697</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">3,100</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-700">4,314</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-warning-dark">87.0</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">5.4</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">-</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-700">73.8</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-700">8.4</td>
+              </tr>
+              <!-- 交三 -->
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2"><span class="text-neutral-400 mr-1 cursor-pointer">▸</span><span class="font-medium text-neutral-900">交三（交强+三责）</span></td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">3,425</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">3,700</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">10,856</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-warning-dark">92.6</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">6.8</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">22.7</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">68.2</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">9.1</td>
+              </tr>
+              <!-- 纯交 -->
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2"><span class="text-neutral-400 mr-1 cursor-pointer">▸</span><span class="font-medium text-neutral-900">纯交（仅交强）</span></td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">528</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">600</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">3,247</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-danger">88.0</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-danger">-2.4</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">15.3</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">62.5</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">10.2</td>
+              </tr>
+              <!-- 单交 -->
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2"><span class="text-neutral-400 mr-1 cursor-pointer">▸</span><span class="font-medium text-neutral-900">单交（仅商业）</span></td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">478</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">400</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">1,896</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">119.5</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">8.3</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">35.7</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">71.8</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-900">5.2</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============== 区块 3 · 趋势分析 ============== -->
+      <section id="performance-trend" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-white rounded-lg border border-neutral-200 shadow-sm p-4">
+          <h3 class="text-base font-semibold text-neutral-800 mb-1">保费走势（万元）</h3>
+          <p class="text-xs text-neutral-500 mb-3">按日 · 2026 vs 2025 vs 2024</p>
+          <!-- 折线图占位（含图例 + Y 轴 + 趋势线 SVG） -->
+          <div class="relative h-48 border-b border-neutral-200">
+            <svg viewBox="0 0 400 180" class="w-full h-full">
+              <!-- 2026 蓝 -->
+              <polyline fill="none" stroke="#3B82F6" stroke-width="2" points="0,140 30,128 60,120 90,135 120,118 150,100 180,108 210,90 240,82 270,75 300,68 330,55 360,48 400,42"/>
+              <!-- 2025 绿 -->
+              <polyline fill="none" stroke="#10B981" stroke-width="1.5" stroke-dasharray="4 2" points="0,148 30,140 60,135 90,128 120,130 150,118 180,112 210,108 240,98 270,92 300,88 330,82 360,75 400,72"/>
+              <!-- 2024 橙 -->
+              <polyline fill="none" stroke="#F97316" stroke-width="1.5" stroke-dasharray="4 2" points="0,155 30,150 60,148 90,142 120,138 150,132 180,128 210,122 240,118 270,112 300,108 330,102 360,98 400,95"/>
+              <!-- 最新点标签 -->
+              <circle cx="400" cy="42" r="3" fill="#3B82F6"/>
+              <text x="370" y="35" font-size="10" fill="#3B82F6" font-weight="600" font-family="SF Pro Text">1,285</text>
+              <!-- 极值标签 -->
+              <circle cx="60" cy="120" r="2" fill="#3B82F6"/>
+              <text x="40" y="115" font-size="9" fill="#3B82F6">峰值</text>
+            </svg>
+          </div>
+          <div class="flex items-center gap-4 mt-3 text-xs">
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5" style="background:#3B82F6"></span>2026</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 border-t border-dashed" style="border-color:#10B981"></span>2025</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 border-t border-dashed" style="border-color:#F97316"></span>2024</span>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg border border-neutral-200 shadow-sm p-4">
+          <h3 class="text-base font-semibold text-neutral-800 mb-1">件数走势（件）</h3>
+          <p class="text-xs text-neutral-500 mb-3">按日 · 2026 vs 2025 vs 2024</p>
+          <div class="relative h-48 border-b border-neutral-200">
+            <svg viewBox="0 0 400 180" class="w-full h-full">
+              <polyline fill="none" stroke="#3B82F6" stroke-width="2" points="0,130 30,118 60,108 90,115 120,98 150,85 180,90 210,72 240,68 270,58 300,50 330,42 360,38 400,32"/>
+              <polyline fill="none" stroke="#10B981" stroke-width="1.5" stroke-dasharray="4 2" points="0,142 30,135 60,128 90,118 120,120 150,108 180,105 210,98 240,88 270,82 300,75 330,70 360,65 400,60"/>
+              <polyline fill="none" stroke="#F97316" stroke-width="1.5" stroke-dasharray="4 2" points="0,152 30,148 60,142 90,135 120,128 150,122 180,118 210,112 240,108 270,105 300,98 330,92 360,88 400,85"/>
+              <circle cx="400" cy="32" r="3" fill="#3B82F6"/>
+              <text x="362" y="25" font-size="10" fill="#3B82F6" font-weight="600">2,854</text>
+            </svg>
+          </div>
+          <div class="flex items-center gap-4 mt-3 text-xs">
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5" style="background:#3B82F6"></span>2026</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 border-t border-dashed" style="border-color:#10B981"></span>2025</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 border-t border-dashed" style="border-color:#F97316"></span>2024</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============== 区块 4 · 下钻分析 ============== -->
+      <section id="performance-drilldown" class="bg-white rounded-lg border border-neutral-200 shadow-sm">
+        <header class="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
+          <div>
+            <h2 class="text-base font-semibold text-neutral-800">下钻分析</h2>
+            <p class="text-xs text-neutral-500 mt-0.5">当前维度：<span class="text-neutral-700 font-medium">客户类别</span> · 下钻路径：全部 › 天府新区 › 客户类别</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="text-sm px-3 py-1.5 rounded-md border border-neutral-300 hover:bg-neutral-100 text-neutral-700">选择下钻维度 ▼</button>
+            <button class="text-sm px-3 py-1.5 rounded-md text-danger hover:bg-danger-bg">重置分析</button>
+          </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 p-4">
+          <!-- 四象限图 -->
+          <div class="lg:col-span-2 border border-neutral-200 rounded-md p-3">
+            <h4 class="text-sm font-semibold text-neutral-700 mb-2">达成率 × 增长率（气泡=件数）</h4>
+            <div class="relative h-64 bg-neutral-50/40">
+              <svg viewBox="0 0 300 240" class="w-full h-full">
+                <!-- 分界线 -->
+                <line x1="150" y1="0" x2="150" y2="240" stroke="#d9d9d9" stroke-dasharray="3 3"/>
+                <line x1="0" y1="120" x2="300" y2="120" stroke="#d9d9d9" stroke-dasharray="3 3"/>
+                <text x="155" y="14" font-size="9" fill="#8c8c8c">达成 100%</text>
+                <text x="270" y="118" font-size="9" fill="#8c8c8c">环比 5%</text>
+                <!-- 象限标签 -->
+                <text x="225" y="65" font-size="10" fill="#52c41a" font-weight="600">优秀</text>
+                <text x="75"  y="65" font-size="10" fill="#faad14" font-weight="600">异常</text>
+                <text x="225" y="200" font-size="10" fill="#faad14" font-weight="600">预警</text>
+                <text x="75"  y="200" font-size="10" fill="#ff4d4f" font-weight="600">危险</text>
+                <!-- 气泡 -->
+                <circle cx="220" cy="80"  r="20" fill="#52c41a" fill-opacity="0.35" stroke="#389e0d"/>
+                <text x="220" y="83" font-size="9" text-anchor="middle" fill="#1f1f1f">非营客</text>
+                <circle cx="195" cy="95"  r="14" fill="#52c41a" fill-opacity="0.35" stroke="#389e0d"/>
+                <text x="195" y="98" font-size="8" text-anchor="middle" fill="#1f1f1f">营客</text>
+                <circle cx="105" cy="105" r="12" fill="#faad14" fill-opacity="0.35" stroke="#d48806"/>
+                <text x="105" y="108" font-size="8" text-anchor="middle" fill="#1f1f1f">营货</text>
+                <circle cx="125" cy="160" r="18" fill="#ff4d4f" fill-opacity="0.35" stroke="#d9363e"/>
+                <text x="125" y="163" font-size="9" text-anchor="middle" fill="#1f1f1f">非营货</text>
+                <circle cx="240" cy="175" r="10" fill="#faad14" fill-opacity="0.35" stroke="#d48806"/>
+                <text x="240" y="178" font-size="8" text-anchor="middle" fill="#1f1f1f">摩托</text>
+              </svg>
+            </div>
+          </div>
+
+          <!-- 下钻表格 -->
+          <div class="lg:col-span-3 overflow-auto">
+            <table class="min-w-full text-sm">
+              <thead class="bg-neutral-50 border-b border-neutral-200">
+                <tr>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer">维度 <span class="text-neutral-400">⇅</span></th>
+                  <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer">保费(万元) <span class="text-neutral-400">⇅</span></th>
+                  <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer">计划(万元) <span class="text-neutral-400">⇅</span></th>
+                  <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer">件数 <span class="text-neutral-400">⇅</span></th>
+                  <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer text-primary">达成率(%) <span>▲</span></th>
+                  <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer">环比(%) <span class="text-neutral-400">⇅</span></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-neutral-100">
+                <tr class="hover:bg-neutral-50">
+                  <td class="px-3 py-2 text-neutral-900">
+                    <span class="font-medium">非营业货车</span>
+                    <span class="text-neutral-400 ml-1 cursor-pointer text-xs">▼</span>
+                  </td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">1,856</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">2,500</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">3,247</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-danger">74.2</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-danger">-3.5</td>
+                </tr>
+                <tr class="hover:bg-neutral-50">
+                  <td class="px-3 py-2 text-neutral-900"><span class="font-medium">营业货车</span><span class="text-neutral-400 ml-1 cursor-pointer text-xs">▼</span></td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">428</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">520</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">896</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-warning-dark">82.3</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">3.8</td>
+                </tr>
+                <tr class="hover:bg-neutral-50">
+                  <td class="px-3 py-2 text-neutral-900"><span class="font-medium">摩托车</span><span class="text-neutral-400 ml-1 cursor-pointer text-xs">▼</span></td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">125</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">140</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">2,156</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-warning-dark">89.3</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">2.4</td>
+                </tr>
+                <tr class="hover:bg-neutral-50">
+                  <td class="px-3 py-2 text-neutral-900"><span class="font-medium">营业客车</span><span class="text-neutral-400 ml-1 cursor-pointer text-xs">▼</span></td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">3,425</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">3,560</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">8,425</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">96.2</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">5.8</td>
+                </tr>
+                <tr class="hover:bg-neutral-50">
+                  <td class="px-3 py-2 text-neutral-900"><span class="font-medium">非营业客车</span><span class="text-neutral-400 ml-1 cursor-pointer text-xs">▼</span></td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">7,022</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">7,480</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums">13,823</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">93.9</td>
+                  <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">6.4</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============== 区块 5 · Top20 业务员 ============== -->
+      <section id="performance-top20" class="bg-white rounded-lg border border-neutral-200 shadow-sm">
+        <header class="px-4 py-3 border-b border-neutral-200 flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-semibold text-neutral-800">Top 20 业务员（达成率升序，最差排前）</h2>
+            <p class="text-xs text-neutral-500 mt-0.5">默认排序：达成率升序，方便优先关注落后业务员</p>
+          </div>
+          <span class="text-xs text-neutral-400">共 247 位业务员 · 展示前 20</span>
+        </header>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-neutral-50 border-b border-neutral-200">
+              <tr>
+                <th class="px-3 py-2 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">业务员</th>
+                <th class="px-3 py-2 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">三级机构</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer">保费(万元) <span class="text-neutral-400">⇅</span></th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer">计划(万元) <span class="text-neutral-400">⇅</span></th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer">件数 <span class="text-neutral-400">⇅</span></th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer text-primary">达成率(%) <span>▲</span></th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-neutral-600 uppercase tracking-wider cursor-pointer">环比(%) <span class="text-neutral-400">⇅</span></th>
+                <th class="px-3 py-2 text-left text-xs font-semibold text-neutral-600 uppercase tracking-wider">亮灯</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-neutral-100">
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2 text-neutral-900 font-medium">张** (1023)</td>
+                <td class="px-3 py-2 text-neutral-700">自贡分公司</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">28</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">82</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">42</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-danger">34.1</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-danger">-12.5</td>
+                <td class="px-3 py-2">🔴</td>
+              </tr>
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2 text-neutral-900 font-medium">李** (0847)</td>
+                <td class="px-3 py-2 text-neutral-700">高新支公司</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">45</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">105</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">68</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-danger">42.9</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-danger">-8.2</td>
+                <td class="px-3 py-2">🔴</td>
+              </tr>
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2 text-neutral-900 font-medium">王** (1156)</td>
+                <td class="px-3 py-2 text-neutral-700">绵阳支公司</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">62</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">120</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">95</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-danger">51.7</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">2.3</td>
+                <td class="px-3 py-2">🔴</td>
+              </tr>
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2 text-neutral-900 font-medium">陈** (0521)</td>
+                <td class="px-3 py-2 text-neutral-700">达州中支</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">78</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">130</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">128</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-warning-dark">60.0</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">3.5</td>
+                <td class="px-3 py-2">🟡</td>
+              </tr>
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2 text-neutral-900 font-medium">刘** (0982)</td>
+                <td class="px-3 py-2 text-neutral-700">天府新区</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">98</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">140</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">182</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-warning-dark">70.0</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">5.2</td>
+                <td class="px-3 py-2">🟡</td>
+              </tr>
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2 text-neutral-900 font-medium">赵** (1287)</td>
+                <td class="px-3 py-2 text-neutral-700">宜宾中心支公司</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">112</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">135</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">215</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">83.0</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">7.8</td>
+                <td class="px-3 py-2">🔵</td>
+              </tr>
+              <tr class="hover:bg-neutral-50">
+                <td class="px-3 py-2 text-neutral-900 font-medium">孙** (0356)</td>
+                <td class="px-3 py-2 text-neutral-700">高新支公司</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">128</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-neutral-500">120</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums">256</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">106.7</td>
+                <td class="px-3 py-2 text-right font-numeric tabular-nums text-success">12.5</td>
+                <td class="px-3 py-2">🟢</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <footer class="px-4 py-2.5 border-t border-neutral-200 text-xs text-neutral-500 flex items-center justify-between">
+          <span>🟢 ≥100% &nbsp;·&nbsp; 🔵 ≥80% &nbsp;·&nbsp; 🟡 ≥60% &nbsp;·&nbsp; 🔴 &lt;60%</span>
+          <a class="text-primary hover:underline cursor-pointer">查看全部 247 位 →</a>
+        </footer>
+      </section>
+
+      <!-- ============== 视觉态参考（empty / loading / error） ============== -->
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white rounded-lg border border-neutral-200 shadow-sm p-6 flex flex-col items-center justify-center min-h-[160px]">
+          <div class="text-neutral-300 text-3xl mb-2">∅</div>
+          <p class="text-sm text-neutral-500">暂无下钻数据</p>
+          <p class="text-xs text-neutral-400 mt-1">当前筛选下没有符合的业务员</p>
+        </div>
+        <div class="bg-white rounded-lg border border-neutral-200 shadow-sm p-6 min-h-[160px]">
+          <div class="space-y-2 animate-pulse">
+            <div class="h-4 bg-neutral-100 rounded w-1/3"></div>
+            <div class="h-3 bg-neutral-100 rounded w-full"></div>
+            <div class="h-3 bg-neutral-100 rounded w-5/6"></div>
+            <div class="h-3 bg-neutral-100 rounded w-4/6"></div>
+            <div class="h-3 bg-neutral-100 rounded w-5/6"></div>
+          </div>
+          <p class="text-xs text-neutral-400 mt-3">数据加载中...</p>
+        </div>
+        <div class="bg-danger-bg rounded-lg border border-danger-border p-6 min-h-[160px]">
+          <h4 class="text-sm font-semibold text-danger-dark mb-1">加载失败</h4>
+          <p class="text-xs text-danger-dark/80 mb-3">/api/query/performance-bundle: 504 Gateway Timeout</p>
+          <button class="text-xs px-3 py-1.5 rounded-md bg-danger text-white hover:bg-danger-light">重试</button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<footer class="px-6 py-4 text-center text-xs text-neutral-400 border-t border-neutral-200 bg-white">
+  车险数据分析平台 · 业绩分析页 · standalone 还原稿 2026-06-03 · 用于 Claude Design 视觉重做的起点
+</footer>
+
+</body>
+</html>
