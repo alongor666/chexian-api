@@ -81,5 +81,5 @@ PAT 不能由 PAT 自铸（`POST /api/auth/tokens` 强制会话）。须**浏览
 ## 关联
 
 - 计划：`~/.claude/plans/synthetic-herding-cloud.md`（v3）
-- BACKLOG：`/api/filters/options` 漏挂 `readonlyMiddleware`（对比 `server/src/routes/query.ts:44`）
+- 同 PR 修复：`/api/filters/options` 补挂 `readonlyMiddleware`（原漏挂，对齐 `server/src/routes/query.ts`）
 - 记忆：`feedback_claims_window_aligned_to_earned`（IBNR 早期窗口虚高）
