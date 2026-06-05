@@ -33,8 +33,24 @@ router.get(
     // 1. 获取用户可见的机构列表（根据权限）
     const visibleOrganizations = permissionService.getVisibleOrganizations(req.user!);
 
-    // 2. 构建权限WHERE子句
-    const permissionWhere = req.permissionFilter || '1=1';
+    // 2. 构建权限WHERE子句（fail-closed：permissionFilter 未生成时拒绝放行任何行）
+    const permissionWhere = req.permissionFilter || '1=0';
+
+    // 维度表 SalesmanTeamMapping 用 organization 字段而非 PolicyFact 的 org_level_3，
+    // 故由 permissionService 单独生成等价的行级过滤（branch_admin → 1=1；
+    // org_user → organization='${org}'；telemarketing_user → 1=1，电销跨机构）。
+    // 单维度表的过滤无法直接套 req.permissionFilter（字段不同），手工组装。
+    const mappingPermissionWhere = (() => {
+      const user = req.user!;
+      if (user.role === 'branch_admin') return '1=1';
+      if (user.role === 'telemarketing_user') return '1=1';
+      if (user.role === 'org_user' && user.organization) {
+        const escaped = user.organization.replace(/'/g, "''");
+        return `organization = '${escaped}'`;
+      }
+      // fail-closed：未知角色或缺机构信息
+      return '1=0';
+    })();
 
     // 3. 查询机构列表（从数据中实际存在的机构）
     const orgSql = `
@@ -89,13 +105,16 @@ router.get(
       WHERE ${permissionWhere} AND policy_date IS NOT NULL
       ORDER BY year DESC
     `;
-    // 12. 查询业务员-团队映射（从 SalesmanTeamMapping 维度表，降级为空数组）
+    // 12. 查询业务员-团队映射（从 SalesmanTeamMapping 维度表，按 organization 行级过滤）
+    // 多分公司前置（0A 改造）：原 SQL 未挂行级过滤，会泄漏跨机构业务员-团队关系；
+    // 现按 user.organization 限定 → org_user 仅看本机构映射，branch_admin/电销保持全量。
     const salesmanTeamSql = `
       SELECT DISTINCT
         full_name AS salesman_name,
         COALESCE(NULLIF(TRIM(CAST(team_name AS VARCHAR)), ''), '未归属团队') AS team_name,
         organization AS org_name
       FROM SalesmanTeamMapping
+      WHERE ${mappingPermissionWhere}
       ORDER BY full_name
     `;
 

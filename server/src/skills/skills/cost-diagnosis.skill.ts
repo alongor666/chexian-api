@@ -124,7 +124,9 @@ function buildPolicyWhere(
   // 这里把日期 + 行级过滤一并交付，让生成器内部不需要感知 period。
   const escStart = startDate.replace(/'/g, "''");
   const escEnd = endDate.replace(/'/g, "''");
-  const perm = permissionFilter || '1=1';
+  // fail-closed：上游 routes/skills.ts 已强校验 req.permissionFilter 非空才进入；
+  // 此处兜底用 '1=0' 而非 '1=1'，防止未来新增直调路径忘挂权限时悄悄放开数据。
+  const perm = permissionFilter || '1=0';
   return `CAST(${dateField} AS DATE) >= DATE '${escStart}' AND CAST(${dateField} AS DATE) <= DATE '${escEnd}' AND (${perm})`;
 }
 

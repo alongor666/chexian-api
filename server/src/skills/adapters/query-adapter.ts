@@ -32,7 +32,10 @@ export function buildPeriodWhere(
   const dateField = options.dateField ?? 'policy_date';
   const startEsc = escapeSqlString(period.startDate);
   const endEsc = escapeSqlString(period.endDate);
-  const permission = ctx.permissionFilter || '1=1';
+  // fail-closed：调用方未传 permissionFilter 时禁止放行任何行（'1=0' 而非 '1=1'）。
+  // 上游 routes/{skills,workflows,copilot}.ts 已显式校验 req.permissionFilter 非空才进入，
+  // 这里是 defense-in-depth：未来若新增 skill 直调入口忘了挂权限，至少 fail-closed 而不是悄悄放开数据。
+  const permission = ctx.permissionFilter || '1=0';
 
   const dateClause = `CAST(${dateField} AS DATE) >= DATE '${startEsc}' AND CAST(${dateField} AS DATE) <= DATE '${endEsc}'`;
   return {
