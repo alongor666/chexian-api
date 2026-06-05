@@ -396,24 +396,33 @@ function isOutsideTriangle(policyMonth: number, statYear: number, statMonth: num
 
 // ==================== 精算三角表格组件 ====================
 
-/** 2025年保单精算三角表格 */
-const Policy2025TriangleTable: React.FC<{
-  data: Policy2025TriangleRow[];
+/**
+ * 保单精算三角表格（通用）
+ *
+ * 2025/2026 两张表结构完全相同，仅「起保年份前缀」（baseYear / baseYear+1）
+ * 与 isOutsideTriangle 的 baseYear 参数不同，故合并为单一泛型组件，
+ * 由 baseYear prop 派生两个年度列前缀。
+ */
+const PolicyTriangleTable: React.FC<{
+  data: Array<Policy2025TriangleRow | Policy2026TriangleRow>;
   loading?: boolean;
-}> = ({ data, loading }) => {
+  /** 起保年份（如 2025 / 2026），决定三角的两个年度列前缀 */
+  baseYear: number;
+}> = ({ data, loading, baseYear }) => {
   if (loading) {
     return <div className={cn('p-8 text-center', colorClasses.text.neutralMuted)}>加载中...</div>;
   }
 
-  // 表头：起保月、保费、首日费用、25-1~25-12、26-1~26-12、最终已赚
+  const y1 = baseYear % 100;        // 起保年两位数（25 / 26）
+  const y2 = (baseYear + 1) % 100;  // 次年两位数（26 / 27）
+
+  // 表头：起保月、保费、首日费用、起保年各月、次年各月、最终已赚
   const headers = [
     { key: 'policy_month', label: '起保月', width: 56 },
     { key: 'premium', label: '保费', width: 72 },
     { key: 'first_day_fee', label: '首日', width: 56 },
-    // 25年各月
-    ...Array.from({ length: 12 }, (_, i) => ({ key: `earned_25_${String(i + 1).padStart(2, '0')}`, label: `25-${i + 1}`, width: 52 })),
-    // 26年各月
-    ...Array.from({ length: 12 }, (_, i) => ({ key: `earned_26_${String(i + 1).padStart(2, '0')}`, label: `26-${i + 1}`, width: 52 })),
+    ...Array.from({ length: 12 }, (_, i) => ({ key: `earned_${y1}_${String(i + 1).padStart(2, '0')}`, label: `${y1}-${i + 1}`, width: 52 })),
+    ...Array.from({ length: 12 }, (_, i) => ({ key: `earned_${y2}_${String(i + 1).padStart(2, '0')}`, label: `${y2}-${i + 1}`, width: 52 })),
     { key: 'earned_total', label: '满期', width: 72 },
   ];
 
@@ -436,6 +445,7 @@ const Policy2025TriangleTable: React.FC<{
         <tbody>
           {data.map((row) => {
             const policyMonth = row.policy_month;
+            const cells = row as unknown as Record<string, number>;
             return (
               <tr key={policyMonth} className="border-b border-neutral-100 hover:bg-primary-bg/30">
                 {/* 起保月 */}
@@ -450,12 +460,12 @@ const Policy2025TriangleTable: React.FC<{
                 <td className={cn('px-1 py-1.5 text-right', fontStyles.numeric, colorClasses.text.primary)}>
                   {formatPremiumWan(row.first_day_fee)}
                 </td>
-                {/* 25年各月 */}
+                {/* 起保年各月（受三角约束） */}
                 {Array.from({ length: 12 }, (_, i) => {
                   const m = i + 1;
-                  const key = `earned_25_${String(m).padStart(2, '0')}` as keyof Policy2025TriangleRow;
-                  const value = row[key] as number;
-                  const isOutside = isOutsideTriangle(policyMonth, 2025, m, 2025);
+                  const key = `earned_${y1}_${String(m).padStart(2, '0')}`;
+                  const value = cells[key];
+                  const isOutside = isOutsideTriangle(policyMonth, baseYear, m, baseYear);
                   const isZero = value === 0 || isOutside;
                   // 起保月的单元格用特殊背景色（首日费用+时间分摊）
                   const isStartMonth = m === policyMonth;
@@ -472,118 +482,11 @@ const Policy2025TriangleTable: React.FC<{
                     </td>
                   );
                 })}
-                {/* 26年各月 */}
+                {/* 次年各月 */}
                 {Array.from({ length: 12 }, (_, i) => {
                   const m = i + 1;
-                  const key = `earned_26_${String(m).padStart(2, '0')}` as keyof Policy2025TriangleRow;
-                  const value = row[key] as number;
-                  const isZero = value === 0;
-                  return (
-                    <td
-                      key={key}
-                      className={cn(
-                        'px-1 py-1.5 text-right', fontStyles.numeric,
-                        isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack
-                      )}
-                    >
-                      {isZero ? '0' : formatPremiumWan(value)}
-                    </td>
-                  );
-                })}
-                {/* 最终已赚 */}
-                <td className={cn('px-1 py-1.5 text-right font-semibold bg-indigo-bg', fontStyles.numeric, colorClasses.text.indigo)}>
-                  {formatPremiumWan(row.earned_total)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
-/** 2026年保单精算三角表格 */
-const Policy2026TriangleTable: React.FC<{
-  data: Policy2026TriangleRow[];
-  loading?: boolean;
-}> = ({ data, loading }) => {
-  if (loading) {
-    return <div className={cn('p-8 text-center', colorClasses.text.neutralMuted)}>加载中...</div>;
-  }
-
-  // 表头：起保月、保费、首日费用、26-1~26-12、27-1~27-12、最终已赚
-  const headers = [
-    { key: 'policy_month', label: '起保月', width: 56 },
-    { key: 'premium', label: '保费', width: 72 },
-    { key: 'first_day_fee', label: '首日', width: 56 },
-    // 26年各月
-    ...Array.from({ length: 12 }, (_, i) => ({ key: `earned_26_${String(i + 1).padStart(2, '0')}`, label: `26-${i + 1}`, width: 52 })),
-    // 27年各月
-    ...Array.from({ length: 12 }, (_, i) => ({ key: `earned_27_${String(i + 1).padStart(2, '0')}`, label: `27-${i + 1}`, width: 52 })),
-    { key: 'earned_total', label: '满期', width: 72 },
-  ];
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="text-xs border-collapse" style={{ minWidth: '1400px' }}>
-        <thead>
-          <tr className={cn(colorClasses.bg.neutral, 'border-b', colorClasses.border.neutral)}>
-            {headers.map((h) => (
-              <th
-                key={h.key}
-                style={{ width: h.width, minWidth: h.width }}
-                className={cn('px-1 py-2 text-center font-medium whitespace-nowrap', colorClasses.text.neutral)}
-              >
-                {h.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row) => {
-            const policyMonth = row.policy_month;
-            return (
-              <tr key={policyMonth} className="border-b border-neutral-100 hover:bg-primary-bg/30">
-                {/* 起保月 */}
-                <td className={cn('px-1 py-1.5 text-center font-medium', colorClasses.text.neutralDark)}>
-                  {MONTH_LABELS[policyMonth]}
-                </td>
-                {/* 保费 */}
-                <td className={cn('px-1 py-1.5 text-right', fontStyles.numeric, colorClasses.text.neutralBlack)}>
-                  {formatPremiumWan(row.premium)}
-                </td>
-                {/* 首日费用 */}
-                <td className={cn('px-1 py-1.5 text-right', fontStyles.numeric, colorClasses.text.primary)}>
-                  {formatPremiumWan(row.first_day_fee)}
-                </td>
-                {/* 26年各月 */}
-                {Array.from({ length: 12 }, (_, i) => {
-                  const m = i + 1;
-                  const key = `earned_26_${String(m).padStart(2, '0')}` as keyof Policy2026TriangleRow;
-                  const value = row[key] as number;
-                  const isOutside = isOutsideTriangle(policyMonth, 2026, m, 2026);
-                  const isZero = value === 0 || isOutside;
-                  // 起保月的单元格用特殊背景色（首日费用+时间分摊）
-                  const isStartMonth = m === policyMonth;
-                  return (
-                    <td
-                      key={key}
-                      className={cn(
-                        'px-1 py-1.5 text-right', fontStyles.numeric,
-                        isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack,
-                        isStartMonth && !isZero && `${colorClasses.bg.success} font-medium ${colorClasses.text.success}`
-                      )}
-                    >
-                      {isZero ? '0' : formatPremiumWan(value)}
-                    </td>
-                  );
-                })}
-                {/* 27年各月 */}
-                {Array.from({ length: 12 }, (_, i) => {
-                  const m = i + 1;
-                  const key = `earned_27_${String(m).padStart(2, '0')}` as keyof Policy2026TriangleRow;
-                  const value = row[key] as number;
+                  const key = `earned_${y2}_${String(m).padStart(2, '0')}`;
+                  const value = cells[key];
                   const isZero = value === 0;
                   return (
                     <td
@@ -770,7 +673,7 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
               <span className={textStyles.caption}>共 {policy2025TriangleData.length} 条记录</span>
             </div>
           </div>
-          <Policy2025TriangleTable data={policy2025TriangleData} loading={loading} />
+          <PolicyTriangleTable baseYear={2025} data={policy2025TriangleData} loading={loading} />
         </div>
       );
     }
@@ -810,7 +713,7 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
               <span className={textStyles.caption}>共 {policy2026TriangleData.length} 条记录</span>
             </div>
           </div>
-          <Policy2026TriangleTable data={policy2026TriangleData} loading={loading} />
+          <PolicyTriangleTable baseYear={2026} data={policy2026TriangleData} loading={loading} />
         </div>
       );
     }
