@@ -36,6 +36,7 @@ sys.path.insert(0, str(HERE))
 
 import field_spec as fs  # noqa: E402
 from sync_renewal import SyncConfig, build_source_rows  # noqa: E402
+from _safety import read_cell_text  # noqa: E402 — cell 文本提取 SSOT（原 _read_text 已收敛至此）
 
 
 DATA_ROOT = HERE.parents[1]
@@ -363,7 +364,7 @@ def rescue_records_from_doc_b(
         vin_to_rid: dict[str, str] = dict(sheet.get("records") or {})
         for rec in records:
             values = rec.get("values", {}) or {}
-            vin = _read_text(values.get("车架号"))
+            vin = read_cell_text(values.get("车架号"))
             rid = rec.get("record_id") or rec.get("id")
             if vin and rid:
                 vin_to_rid[vin] = rid
@@ -797,12 +798,12 @@ def refresh_kpi_and_followup(
         statuses = []
         for rec in records:
             values = rec.get("values", {}) or {}
-            vin = _read_text(values.get("车架号"))
+            vin = read_cell_text(values.get("车架号"))
             if not vin:
                 continue
             status = _read_select(values.get("跟进状态"))
-            note = _read_text(values.get("跟进备注"))
-            name = _read_text(values.get("姓名"))
+            note = read_cell_text(values.get("跟进备注"))
+            name = read_cell_text(values.get("姓名"))
             vin_to_followup[vin] = {"跟进状态": status, "跟进备注": note, "姓名": name}
             statuses.append(status)
         salesman_followup[salesman] = vin_to_followup
@@ -868,21 +869,6 @@ def refresh_kpi_and_followup(
             log("info", f"[refresh] {salesman} 子表回拉跟进字段 {len(sm_update)} 行")
             total_pushed += len(sm_update)
     log("info", f"[refresh] 业务员子表共回拉 {total_pushed} 行")
-
-
-def _read_text(cell: Any) -> str:
-    """从 wecom-cli get_records 返回的 cell 解析为纯字符串。"""
-    if cell is None:
-        return ""
-    if isinstance(cell, str):
-        return cell
-    if isinstance(cell, list) and cell:
-        first = cell[0]
-        if isinstance(first, dict):
-            return str(first.get("text") or first.get("link") or "")
-    if isinstance(cell, dict):
-        return str(cell.get("text") or "")
-    return str(cell)
 
 
 def _read_select(cell: Any) -> str:

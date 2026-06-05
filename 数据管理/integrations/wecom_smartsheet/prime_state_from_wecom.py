@@ -37,10 +37,9 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import _env  # noqa: F401
-from _safety import cli_call, WecomCliError  # noqa: E402 — SSOT 调用器，errcode 非 0 直接抛
+from _safety import cli_call, WecomCliError, read_cell_text  # noqa: E402 — SSOT 调用器 + cell 文本提取
 from sync_org_renewal_from_xlsx import ORG_SLUGS, read_registry, DEFAULT_XLSX, resolve_instance_path, load_fields  # noqa: E402
 from sync_renewal_v2 import FieldDef, load_instance  # noqa: E402
-from create_renewal_tracker import _read_text  # noqa: E402 — 复用 cell 形态解析（list/dict/str）
 
 STATE_DIR = HERE / "state"
 VIN_FIELD_KEY = "vehicle_frame_no"  # field_registry_orgsheet.yaml 里 VIN 字段的 key
@@ -126,7 +125,7 @@ def extract_vin_record_pairs(
       2. label（中文标题如 '车架号'）—— 部分接口形态
       3. cell.title == label —— 兼容 {field_id: {title, text}} 嵌套形态
 
-    cell 值同样三种形态都兼容（_read_text 统一解析）：str / dict / list-of-dict。
+    cell 值同样三种形态都兼容（read_cell_text 统一解析）：str / dict / list-of-dict。
     """
     out: dict[str, dict[str, Any]] = {}
     key_candidates = {vin_field.field_id, vin_field.label}
@@ -158,7 +157,7 @@ def extract_vin_record_pairs(
 
         if vin_cell is None:
             continue
-        vin = _read_text(vin_cell).strip()
+        vin = read_cell_text(vin_cell).strip()
         if not vin:
             continue
         out[vin] = {"record_id": rid, "primed_at": datetime.now(timezone.utc).isoformat()}

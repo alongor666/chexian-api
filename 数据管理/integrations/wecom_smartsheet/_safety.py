@@ -5,7 +5,7 @@
 2026-06-03 事故根因：state.records 跑前为空 → sync 走 add 路径 → 与企微表既存
 数据形成行级重复（合计 28,899 行）。详见 [[project_wecom_org_renewal_first_real_run_dup]]。
 
-本模块提供两类共享组件：
+本模块提供三类共享组件：
 
 A. 行级重复风险闸（被 sync_org_renewal_from_xlsx / sync_filtered_policies /
    sync_may_renewal_fields 三个写入脚本共用）
@@ -23,6 +23,14 @@ B. wecom-cli 安全调用器（被 cleanup_org_renewal_dup / prime_state_from_we
    误清 state / prime 用空 vin_index 覆盖 state.records。本入口与
    create_renewal_tracker.WeComCli._invoke / sync_may_renewal_fields
    .normalize_wecom_response 同等校验水准。
+
+C. wecom-cli get_records cell 文本提取（被所有读 cell 的脚本共用）
+   `read_cell_text` — 把 wecom-cli 返回的 cell（str / 数值 / dict / list-of-dict /
+   None / 其它）统一解析为纯文本。合并历史两套并行实现：
+     - create_renewal_tracker._read_text（join_list=False：list 取首元素）
+     - sync_may_renewal_fields.extract_text（join_list=True：list 拼接全部，分隔符 ""）
+   动因：两套实现长期并行漂移（dict 是否兜底 value、str 是否 strip、list 取首/拼接
+   语义都不一致），新脚本极易复制错版本。收敛到此 SSOT 后只有一处真相。
 
 为什么不靠 wecom-cli 直接 GET 企微表行数？
 - 应用 API 受 errcode 851014 (authorization expired) 阻塞，无法绕开（详见
@@ -215,3 +223,61 @@ def cli_call(
             f"{group} {command} errcode={data.get('errcode')} errmsg={data.get('errmsg')}"
         )
     return data if isinstance(data, dict) else {"_raw": data}
+
+
+# ============================================================================
+# C. wecom-cli get_records cell 文本提取（SSOT）
+# ============================================================================
+def _cell_scalar_text(value: Any) -> str:
+    """非 list 形态 → 原始文本（**不** strip，strip 由 read_cell_text 按模式决定）。
+
+    dict 取值优先级统一为 text → value → link：
+      - text：普通文本/单选 cell 的标准字段
+      - value：部分接口形态（extract_text 历史支持）
+      - link：超链接 cell（_read_text list 分支历史支持）
+    三者均为安全兜底——仅在前者为空时生效，不会改变原本非空的返回。
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return str(value.get("text") or value.get("value") or value.get("link") or "")
+    # int / float / bool / 其它
+    return str(value)
+
+
+def read_cell_text(cell: Any, *, join_list: bool = False) -> str:
+    """统一企微 smartsheet cell → 文本提取（SSOT）。
+
+    支持形态：str / int / float / bool / dict / list / None / 其它。
+
+    Args:
+        cell: wecom-cli get_records 返回的 cell（形态见上）。
+        join_list: 控制 **list** 形态的处理与是否 strip，分别复刻历史两套实现：
+            False（默认）→ list 仅取**首个**元素；str / 数值 / dict 结果**不 strip**。
+                向后兼容 create_renewal_tracker._read_text（VIN/姓名/备注等单值字段）。
+            True → list **拼接所有**元素（分隔符 ``""``，每段先 strip）；标量结果也 strip。
+                向后兼容 sync_may_renewal_fields.extract_text。
+
+    ⚠️ join_list=True 的 list 分隔符是空串 ``""``（``"".join``），多元素结果形如
+       ``"ab"`` 而非 ``"a,b"``——这是 extract_text 的既有语义，禁止改成逗号，
+       否则破坏 sync_may_renewal_fields 的写入行为。
+    """
+    if isinstance(cell, list):
+        if not join_list:
+            if not cell:
+                return ""
+            first = cell[0]
+            # 防御：首元素仍是 list 时递归（真实调用方不会命中）
+            return read_cell_text(first) if isinstance(first, list) else _cell_scalar_text(first)
+        # join_list=True：拼接全部元素，每段 strip 后以空串连接
+        return "".join(
+            read_cell_text(item, join_list=True)
+            if isinstance(item, list)
+            else _cell_scalar_text(item).strip()
+            for item in cell
+        ).strip()
+
+    text = _cell_scalar_text(cell)
+    return text.strip() if join_list else text
