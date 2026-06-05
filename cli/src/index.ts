@@ -61,7 +61,7 @@ program
 
 program
   .command('fields')
-  .description('列出字段注册表（42 个字段）。--groupable 仅列可分组（VARCHAR/TEXT）字段。')
+  .description('列出字段注册表（56 个字段）。--groupable 仅列可分组（VARCHAR/TEXT）字段。')
   .option('--groupable', '只列出可分组字段')
   .option('-f, --format <fmt>', '输出格式 table|json|csv')
   .action((options) => {
@@ -70,7 +70,7 @@ program
 
 program
   .command('metrics')
-  .description('列出指标注册表（25 个指标）。--category 按分类过滤。')
+  .description('列出指标注册表（49 个指标）。--category 按分类过滤。')
   .option('--category <cat>', '指标分类（foundation|ratio|cost|cross_sell|growth|repair|plan|structure）')
   .option('-f, --format <fmt>', '输出格式 table|json|csv')
   .action((options) => {

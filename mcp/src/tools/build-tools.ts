@@ -103,7 +103,7 @@ export async function buildDiscoveryTools(cfg: McpConfig): Promise<DiscoveryTool
       endpoint: '/api/discover/fields',
       tool: {
         name: 'cx_discover_fields',
-        description: `列出字段注册表（42 个字段）。groupable=true 仅返回可分组（VARCHAR/TEXT）字段。常用可分组字段：${groupableFieldIds || '(N/A)'}。`,
+        description: `列出字段注册表（56 个字段）。groupable=true 仅返回可分组（VARCHAR/TEXT）字段。常用可分组字段：${groupableFieldIds || '(N/A)'}。`,
         inputSchema: {
           type: 'object',
           properties: {
