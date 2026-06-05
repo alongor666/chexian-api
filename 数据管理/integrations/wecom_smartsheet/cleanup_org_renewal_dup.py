@@ -135,6 +135,7 @@ def cleanup_one(org: str, link: str, *, execute: bool) -> dict[str, Any]:
         summary["status"] = "dry_run"
         return summary
 
+    deleted_ids: list[str] = []
     for batch in chunks(record_ids, BATCH):
         try:
             cli_call(
@@ -145,28 +146,43 @@ def cleanup_one(org: str, link: str, *, execute: bool) -> dict[str, Any]:
             )
             summary["batches_done"] += 1
             summary["deleted_count"] += len(batch)
+            deleted_ids.extend(batch)
             time.sleep(0.3)  # 轻微节流避免 webhook 频控
         except Exception as exc:
+            # 失败 batch 的 record_id 不进 deleted_ids → state 里保留以便后续精确重试
             summary["errors"].append(f"batch {summary['batches_done']+1}: {str(exc)[:300]}")
 
-    # 备份并清空 state.records（保留 summary 历史做审计）
-    if state_file.exists():
+    # 备份并精确移除已删 record_id 对应的 vin（未删成功的保留在 state，下次按原计划重试）
+    if state_file.exists() and deleted_ids:
         bak_dir = STATE_DIR / "_backup_20260603_cleanup"
         bak_dir.mkdir(exist_ok=True)
         bak = bak_dir / state_file.name
         bak.write_text(state_file.read_text(encoding="utf-8"), encoding="utf-8")
         data = json.loads(state_file.read_text(encoding="utf-8"))
+        records = data.get("records") or {}
+        deleted_set = set(deleted_ids)
+        vins_to_drop = [
+            vin
+            for vin, info in records.items()
+            if isinstance(info, dict) and info.get("record_id") in deleted_set
+        ]
+        for vin in vins_to_drop:
+            records.pop(vin, None)
+        data["records"] = records
         data.setdefault("cleanup_history", []).append(
             {
                 "at": datetime.now(timezone.utc).isoformat(),
                 "reason": "remove duplicates from 2026-06-03 first-real-run with empty state",
                 "deleted_count": summary["deleted_count"],
+                "removed_state_vins": len(vins_to_drop),
+                "remaining_state_records": len(records),
+                "had_errors": bool(summary["errors"]),
                 "backup": str(bak),
             }
         )
-        data["records"] = {}
         state_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        summary["state_cleared"] = True
+        summary["state_cleared"] = not records  # 仅在全删干净时为 True
+        summary["state_remaining"] = len(records)
 
     summary["status"] = "ok" if not summary["errors"] else "partial"
     return summary

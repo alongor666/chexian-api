@@ -39,6 +39,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import _env  # noqa: F401
 from sync_org_renewal_from_xlsx import ORG_SLUGS, read_registry, DEFAULT_XLSX  # noqa: E402
+from create_renewal_tracker import _read_text  # noqa: E402 — 复用 cell 形态解析（list/dict/str）
 
 STATE_DIR = HERE / "state"
 VIN_FIELD_TITLE = "车架号"  # field_registry_orgsheet.yaml 里 VIN 列标题
@@ -99,10 +100,13 @@ def extract_vin_record_pairs(records: list[dict[str, Any]]) -> dict[str, dict[st
         rid = rec.get("record_id") or rec.get("id")
         values = rec.get("values") or rec.get("fields") or {}
         vin = None
-        # values 可能是 {field_title: cell} 或 {field_id: cell}
+        # values 可能是 {field_title: cell} 或 {field_id: cell}；
+        # cell 可能是 str / dict({"text": ...}) / list([{"text": ...}])。
+        # 用 _read_text 统一解析；否则 list 形态会被 str(v) 序列化成 "[{'text': ...}]"
+        # 导致 sync 按 vehicle_frame_no 查 state 匹配不到（codex P1 PR #485）。
         for k, v in values.items():
             if k == VIN_FIELD_TITLE or (isinstance(v, dict) and v.get("title") == VIN_FIELD_TITLE):
-                vin = v.get("text") if isinstance(v, dict) else str(v)
+                vin = _read_text(v)
                 break
         if not vin:
             continue
