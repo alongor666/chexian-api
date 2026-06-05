@@ -3,8 +3,8 @@
   "apiBase": "https://chexian.cretvalu.com",
   "granularity": "monthly",
   "maturity": {
-    "_comment": "排除最近 N 个完整期不进 Z 计算（IBNR/赔款报告滞后防线，codex 评审 E2）。月度建议 1，越保守越大。",
-    "excludeRecent": 1
+    "_comment": "排除最近 N 个完整期不进 Z 计算（IBNR/赔款报告滞后防线，codex 评审 E2）。止血值=3：覆盖 cutoff 当月（未满期分母极小放大）+ 2 个未来月（API 按 insurance_start_date 分组，会出现 7/8 月起保 earned_claim_ratio=null）。P2 改为按 time_period < cutoff 月动态过滤。",
+    "excludeRecent": 3
   },
   "history": {
     "_comment": "comprehensive lossTrend 已返回全量逐期序列，此处仅约束统计用的最小完整期数。",
@@ -44,7 +44,8 @@
       "direction": "both",
       "zThreshold": 2.5,
       "momThreshold": 30,
-      "_note": "断崖检测（暴增/暴跌均告警）。"
+      "excludeRecent": 1,
+      "_note": "断崖检测（暴增/暴跌均告警）。trend 接口无未来月（按 insurance_start_date 分组的 trend 仅返回到 cutoff 月），覆写 excludeRecent=1 只排 cutoff 当月，避免被全局 3 倒退到春节高峰期伪触发。"
     },
     {
       "id": "policy_count",
@@ -55,7 +56,8 @@
       "direction": "both",
       "zThreshold": 2.5,
       "momThreshold": 30,
-      "_note": "断崖检测。"
+      "excludeRecent": 1,
+      "_note": "断崖检测。同 total_premium，覆写 excludeRecent=1。"
     },
     {
       "id": "variable_cost_ratio",

@@ -27,7 +27,7 @@ import { readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs'
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  fetchDataVersion, fetchComprehensive, fetchTrend, lossTrendToSeries, fetchClaimRatioYoY,
+  fetchDataVersion, fetchComprehensive, fetchTrend, lossTrendToSeries,
 } from './lib/fetch-metrics.mjs';
 import { evaluateMetricSeries } from './lib/stats.mjs';
 import { judgeAnomalies } from './lib/llm-judge.mjs';
@@ -156,19 +156,17 @@ async function main() {
       continue;
     }
 
-    // YoY 交叉（仅赔付率）
-    let yoy = null;
-    if (mc.id === 'earned_claim_ratio') {
-      const latestVal = series.length ? series[series.length - 1].value : null;
-      yoy = await fetchClaimRatioYoY(apiBase, pat, cutoffDate, latestVal);
-    }
-
+    // YoY 由 evaluateMetricSeries 内部自动按 latestMature 期对齐（codex P2 修复：
+    // 不再从外部用 series 尾月 + 远程 fetchClaimRatioYoY 取数；series 已含历史逐期值，
+    // 直接 series.find(period-1y) 即可，且口径=单月对齐，比原 summary.earnedClaimRatio 的
+    // YTD 累计快照更对得上 latestMature 的单月被检值）
     const v = evaluateMetricSeries(mc.id, series, {
       zThreshold: mc.zThreshold ?? 2,
       momThreshold: mc.momThreshold ?? null,
       direction: mc.direction ?? 'both',
-      excludeRecent,
-      yoy,
+      // metric 可覆写全局 excludeRecent：rate 类（lossTrend）需排 cutoff 月+未来 null 月（默认 3）；
+      // flow 类（trend 接口无未来月）只需排 cutoff 当月（覆写为 1），否则倒退到春节高峰期会伪触发
+      excludeRecent: Number.isInteger(mc.excludeRecent) ? mc.excludeRecent : excludeRecent,
       yoyThreshold: mc.yoyThreshold ?? null,
     });
     v.name = mc.name;
