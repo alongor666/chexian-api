@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { exportArrayToCSV, exportToExcel, getTimestampForFilename } from '../../shared/utils/export';
 import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
@@ -155,7 +155,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
   });
 
-  const handleExportTrend = (format: 'csv' | 'excel') => {
+  const handleExportTrend = useCallback((format: 'csv' | 'excel') => {
     if (trendData.length === 0) {
       alert('暂无趋势数据可导出');
       return;
@@ -175,9 +175,9 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     }
 
     exportArrayToCSV(exportData, `${filename}.csv`);
-  };
+  }, [trendData, timeView]);
 
-  const handleExportAllBusiness = (format: 'csv' | 'excel') => {
+  const handleExportAllBusiness = useCallback((format: 'csv' | 'excel') => {
     if (allBusinessTop10.length === 0) {
       alert('暂无表格数据可导出');
       return;
@@ -191,9 +191,9 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     }
 
     exportArrayToCSV(allBusinessTop10, `${filename}.csv`);
-  };
+  }, [allBusinessTop10]);
 
-  const handleExportQualityBusiness = (format: 'csv' | 'excel') => {
+  const handleExportQualityBusiness = useCallback((format: 'csv' | 'excel') => {
     if (qualityBusinessTop10.length === 0) {
       alert('暂无表格数据可导出');
       return;
@@ -207,7 +207,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     }
 
     exportArrayToCSV(qualityBusinessTop10, `${filename}.csv`);
-  };
+  }, [qualityBusinessTop10]);
 
   const visibleKpisByGroup = useMemo<Record<KpiGroup, KpiCardId[]>>(
     () => ({
@@ -217,7 +217,9 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     [kpiOrderByGroup, kpiVisibilityByGroup]
   );
 
-  const sectionContent: Record<DashboardSectionId, React.ReactNode> = {
+  // sectionContent 用 useMemo 稳定各 section 的 JSX element 引用，避免
+  // showCustomizerPanel / 模块排序 / 可见性等非数据交互触发 4 棵子树整体重建。
+  const sectionContent = useMemo<Record<DashboardSectionId, React.ReactNode>>(() => ({
     kpi: (
       <KpiSection
         kpis={kpis}
@@ -283,7 +285,15 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
         onExportQuality={handleExportQualityBusiness}
       />
     ),
-  };
+  }), [
+    kpis, kpiDetails, kpiLoading, visibleKpisByGroup,
+    isInitialized, timeView, setTimeView,
+    trendData, qualityBusinessData, barChartData, trendLoading, qualityBusinessLoading,
+    handleExportTrend, perspective, setPerspective, perspectiveConfig,
+    filters.policy_date_start, filters.policy_date_end, filters.analysis_year,
+    allBusinessTop10, qualityBusinessTop10, loading.table,
+    handleExportAllBusiness, handleExportQualityBusiness,
+  ]);
 
   const visibleSections = useMemo(
     () => sectionOrder.filter((id) => sectionVisibility[id]),
