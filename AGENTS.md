@@ -71,7 +71,6 @@
 
 | 路径 | 理由 |
 |------|------|
-| `CLAUDE.md` | 项目顶层指令 |
 | `.claude/data-knowledge-protocol.md` | 数据口径事实源 |
 | `.claude/rules/data-pipeline.md` | ETL/分片护栏 |
 | `.claude/rules/sql-generators.md` | SQL 业务口径护栏 |
@@ -79,6 +78,8 @@
 | `.claude/agents/**` | Agent 行为契约 |
 | `reference_shared_memory.md` | 共享记忆契约 |
 | AGENTS.md §8 本节 | 元规则（修改本节也算 frozen）|
+
+> **2026-06-05（PR #493）**：经 owner 显式授权（`[policy-override]`），`CLAUDE.md` 移出 frozen 名单——顶层指令的常规校准（注册表计数、命令约定等）不再需逐次 `[policy-override]`；CLAUDE.md 体积红线仍由 frozen 的 `.claude/rules/claude-md-budget.md` + governance #23 守护，业务口径/红线表的实质改动仍应走 PR + review。
 
 ### 8.2 `append-only` — 工具注册表 / 命令体系
 
