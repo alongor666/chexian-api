@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -21,27 +20,13 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import create_renewal_tracker as crt  # noqa: E402
+from _safety import cli_call, WecomCliError  # noqa: E402 — SSOT 调用器（含 errcode + MCP 解包）
 
 LOGS_DIR = HERE / "logs"
 STATE_PATH = HERE / "state" / "leshan_renewal.json"
 
 
 DOCID_RE = re.compile(r"smartsheet/([A-Za-z0-9_]+)")
-
-
-def cli_call(group: str, command: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """直接调 wecom-cli，支持 payload 含 url 替代 docid（schema 允许二选一）。"""
-    cmd = ["wecom-cli", group, command, "--json", json.dumps(payload, ensure_ascii=False)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    if proc.returncode != 0:
-        raise RuntimeError(f"{command} exit {proc.returncode}: {proc.stderr.strip()[:300]}")
-    if not proc.stdout.strip():
-        raise RuntimeError(f"{command} 输出为空: stderr={proc.stderr.strip()[:300]}")
-    envelope = json.loads(proc.stdout)
-    data = crt._unwrap_mcp_envelope(envelope)
-    if isinstance(data, dict) and data.get("errcode") not in (None, 0):
-        raise RuntimeError(f"{command} errcode={data.get('errcode')} errmsg={data.get('errmsg')}")
-    return data
 
 
 def find_latest_build_log() -> Path:

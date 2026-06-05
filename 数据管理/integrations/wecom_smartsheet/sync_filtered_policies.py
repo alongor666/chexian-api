@@ -763,6 +763,20 @@ def rebuild_state(
     }
 
 
+def _add_safety_flag(p: argparse.ArgumentParser) -> None:
+    """共享：所有 wecom 写入脚本都接 --i-checked-wecom-rows 闸覆盖开关。"""
+    p.add_argument(
+        "--i-checked-wecom-rows",
+        action="store_true",
+        dest="i_checked_wecom_rows",
+        help=(
+            "RED LINE 闸覆盖开关：state 失真 / 全 add 等危险信号触发时，默认拒绝执行。"
+            "仅在你已亲自去企微表点查当前行数，与 preflight banner 的 state.records_count "
+            "或 0 吻合时，才能加此开关放行。详见 [[project_wecom_org_renewal_first_real_run_dup]]。"
+        ),
+    )
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="通用筛选保单 → 企业微信智能表同步引擎")
     p.add_argument("--instance", required=True, help="实例 YAML 路径")
@@ -773,6 +787,7 @@ def parse_args() -> argparse.Namespace:
                    help="按当前 composite_key/primary_key 重建 state.json；不发 webhook、不写智能表")
     p.add_argument("--force-assume-remote-complete", action="store_true",
                    help="仅用于 --rebuild-state：已人工核验远端完整时，把当前源数据全量标为已同步")
+    _add_safety_flag(p)
     return p.parse_args()
 
 
@@ -804,7 +819,35 @@ def main() -> None:
         print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
         return
 
-    summaries = [run(instance, mode=args.mode, dry_run=args.dry_run) for instance in instances]
+    # RED LINE preflight：真写入前永远先跑 dry-run 拿 plan，打 banner + 跑 gate；
+    # 通过且非 --dry-run 才真写入。dry-run 不调 webhook。
+    from _safety import (  # 局部 import 避免循环
+        evaluate_gate,
+        print_preflight_banner,
+        must_check_wecom_rows_hint,
+    )
+
+    summaries: list[dict[str, Any]] = []
+    for instance in instances:
+        if args.dry_run:
+            summaries.append(run(instance, mode=args.mode, dry_run=True))
+            continue
+        plan = run(instance, mode=args.mode, dry_run=True)
+        gate = print_preflight_banner(
+            label=f"{instance.instance_name}（postal add-only）",
+            state_count=plan.get("state_synced_keys_before") or 0,
+            source_rows=plan.get("source_rows") or 0,
+            to_add=plan.get("add_records_planned") or 0,
+            to_update=0,  # postal 是 add-only 模式，无 update 概念
+        )
+        if not gate.ok and not args.i_checked_wecom_rows:
+            raise RuntimeError(
+                gate.message
+                + must_check_wecom_rows_hint(
+                    instance.instance_name, plan.get("state_synced_keys_before") or 0
+                )
+            )
+        summaries.append(run(instance, mode=args.mode, dry_run=False))
     if len(summaries) > 1:
         print(json.dumps({
             "instance_file": str(instance_path),
