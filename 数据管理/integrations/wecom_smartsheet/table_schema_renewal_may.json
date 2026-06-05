@@ -1,0 +1,46 @@
+{
+  "schema": {
+    "f3ShQB": "名单类型",
+    "fCUIIa": "投保险种",
+    "fQrZnC": "险别组合",
+    "fPJzr7": "车牌号",
+    "fcCW6A": "车架号",
+    "fd0gUV": "到期日",
+    "feXYXJ": "归属人",
+    "fgKOrG": "坐席域账号",
+    "fjg2u5": "归属团队",
+    "fqrd28": "客户类别",
+    "fwuflw": "是否成交",
+    "fyIIAm": "是否报价",
+    "feTyzE": "最后报价",
+    "ftvF1W": "最后报价人",
+    "fq15NT": "风险等级",
+    "fvCvWp": "自主系数",
+    "fXXEDk": "流失公司",
+    "fgAVcT": "文本"
+  },
+  "add_records": [
+    {
+      "values": {
+        "f3ShQB": [ { "text": "兜底" } ],
+        "fCUIIa": [ { "text": "交商同保" } ],
+        "fQrZnC": [ { "text": "交三" } ],
+        "fPJzr7": "测试文本",
+        "fcCW6A": "测试文本",
+        "fd0gUV": "1735660800000",
+        "feXYXJ": "测试文本",
+        "fgKOrG": "测试文本",
+        "fjg2u5": [ { "text": "刘丹" } ],
+        "fqrd28": [ { "text": "营业货车" } ],
+        "fwuflw": [ { "text": "是" } ],
+        "fyIIAm": [ { "text": "是" } ],
+        "feTyzE": "1735660800000",
+        "ftvF1W": "测试文本",
+        "fq15NT": [ { "text": "C" } ],
+        "fvCvWp": 1,
+        "fXXEDk": "测试文本",
+        "fgAVcT": "测试文本"
+      }
+    }
+  ]
+}
