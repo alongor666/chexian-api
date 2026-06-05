@@ -52,6 +52,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     passwordHash: '$2b$10$04CoRcf7Hk9iSiPD6QWRmelsAGNWoqJ3DGB5Mvfjcc/CH6GEJRUC6',
     displayName: '系统管理员',
     role: 'branch_admin',
+    branchCode: 'SC',
     specialFeatures: ['cost', 'moto_cost'],
   },
   leshan: {

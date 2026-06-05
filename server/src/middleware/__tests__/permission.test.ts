@@ -86,16 +86,10 @@ describe('permissionMiddleware: 0F BRANCH_RLS_ENABLED=true 矩阵', () => {
     envMock.BRANCH_RLS_ENABLED = 'true';
   });
 
-  it('branch_admin + branchCode=SC → (1=1) AND branch_code = \'SC\'', async () => {
+  it('branch_admin + branchCode=SC → branch_code = \'SC\'（无括号，baseFilter=1=1 优化掉）', async () => {
     const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: 'SC' });
     await runMiddleware(req);
-    expect(req.permissionFilter).toBe(`(1=1) AND branch_code = 'SC'`);
-  });
-
-  it('branch_admin 无 branchCode（系统级超管 admin）→ 1=1（不加 branch_code，看全国）', async () => {
-    const req = makeReq({ role: UserRole.BRANCH_ADMIN });
-    await runMiddleware(req);
-    expect(req.permissionFilter).toBe('1=1');
+    expect(req.permissionFilter).toBe(`branch_code = 'SC'`);
   });
 
   it('org_user + branchCode=SC → (org_level_3 = \'乐山\') AND branch_code = \'SC\'', async () => {
@@ -113,13 +107,36 @@ describe('permissionMiddleware: 0F BRANCH_RLS_ENABLED=true 矩阵', () => {
   it('branchCode=SX → 用 SX 而非 SC（多分公司独立）', async () => {
     const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: 'SX' });
     await runMiddleware(req);
-    expect(req.permissionFilter).toBe(`(1=1) AND branch_code = 'SX'`);
+    expect(req.permissionFilter).toBe(`branch_code = 'SX'`);
   });
 
   it('SQL 注入防御：branchCode 含单引号必须转义', async () => {
     const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: `S'C` });
     await runMiddleware(req);
-    expect(req.permissionFilter).toBe(`(1=1) AND branch_code = 'S''C'`);
+    expect(req.permissionFilter).toBe(`branch_code = 'S''C'`);
+  });
+
+  // codex PR #492 P1 fail-closed：旧 JWT / 旧 user_store.json 无 branchCode → 必须 401
+  it('fail-closed: branch_admin 无 branchCode → AppError 401 强制重登', async () => {
+    const req = makeReq({ role: UserRole.BRANCH_ADMIN });
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(401);
+    expect((err as AppError).message).toMatch(/branchCode/);
+  });
+
+  it('fail-closed: org_user 有 organization 但无 branchCode → 401（不降级到 org_level_3 过滤）', async () => {
+    const req = makeReq({ role: UserRole.ORG_USER, organization: '乐山' });
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(401);
+  });
+
+  it('fail-closed: telemarketing 无 branchCode → 401（不降级到 is_telemarketing 过滤）', async () => {
+    const req = makeReq({ role: UserRole.TELEMARKETING_USER });
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(401);
   });
 });
 
@@ -131,8 +148,8 @@ describe('permissionMiddleware: 0F flag off + 有 branchCode → 不注入（兼
     expect(req.permissionFilter).toBe(`org_level_3 = '乐山'`);
   });
 
-  it('flag=true 但用户无 branchCode（外部接入未带）→ 退化到基础过滤', async () => {
-    envMock.BRANCH_RLS_ENABLED = 'true';
+  it('flag=false + 无 branchCode → 正常基础过滤（兼容期，不 fail-closed）', async () => {
+    envMock.BRANCH_RLS_ENABLED = 'false';
     const req = makeReq({ role: UserRole.TELEMARKETING_USER });
     await runMiddleware(req);
     expect(req.permissionFilter).toBe('is_telemarketing = true');
@@ -140,13 +157,12 @@ describe('permissionMiddleware: 0F flag off + 有 branchCode → 不注入（兼
 });
 
 describe('permissionMiddleware: preset 用户标签验证', () => {
-  it('所有 SC 用户的 branchCode=SC（19/20）', async () => {
+  it('所有 preset 用户都有 branchCode=SC（含 admin，0D 单租户假设）', async () => {
     const { PRESET_USERS } = await import('../../config/preset-users.js');
     const users = Object.values(PRESET_USERS);
     const scUsers = users.filter((u) => u.branchCode === 'SC');
-    const adminWithoutBranch = users.filter((u) => !u.branchCode);
-    expect(scUsers.length).toBe(19); // 19 个非 admin 用户
-    expect(adminWithoutBranch.length).toBe(1); // 仅 admin 不标
-    expect(adminWithoutBranch[0]?.username).toBe('admin');
+    const noBranchCode = users.filter((u) => !u.branchCode);
+    expect(scUsers.length).toBe(20); // 全部 20 个用户都标 SC
+    expect(noBranchCode.length).toBe(0); // 无人缺 branchCode（fail-closed 前提）
   });
 });

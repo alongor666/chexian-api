@@ -77,12 +77,23 @@ export function permissionMiddleware(
       throw new AppError(403, 'Invalid user role');
     }
 
-    // 3. 多分公司 RLS（0F feature flag）：可选注入 branch_code 过滤
+    // 3. 多分公司 RLS（0F feature flag，含 codex PR #492 P1 fail-closed 修复）
     // - flag 关闭：保留 0C 之前的单租户行为（兼容期）
-    // - flag 开启 + 用户有 branchCode：AND `branch_code='${escape(branchCode)}'`
-    // - flag 开启 + 用户无 branchCode（系统级超管 admin）：不加，看全国
-    if (isBranchRlsEnabled() && branchCode) {
-      req.permissionFilter = `(${baseFilter}) AND branch_code = '${escapeSqlString(branchCode)}'`;
+    // - flag 开启 + 用户有 branchCode：注入 branch_code 等值过滤
+    //   - baseFilter='1=1' 时直接 `branch_code='${branchCode}'`（避免冗余括号让 SQL 直通白名单失败）
+    //   - 否则 `(${baseFilter}) AND branch_code='${branchCode}'`
+    // - flag 开启 + 用户无 branchCode：**fail-closed 401**，强制重登拿带 branchCode 的新 token
+    //   旧 JWT（升级前签发）/旧 user_store.json 用户没有 branchCode 字段，必须重新登录刷新 token；
+    //   admin（系统超管）由 preset-users 已显式标 'SC'，落在上方有 branchCode 分支。
+    if (isBranchRlsEnabled()) {
+      if (!branchCode) {
+        throw new AppError(
+          401,
+          'Token missing branchCode (multi-branch RLS enabled). Please re-login to refresh your token.'
+        );
+      }
+      const branchClause = `branch_code = '${escapeSqlString(branchCode)}'`;
+      req.permissionFilter = baseFilter === '1=1' ? branchClause : `(${baseFilter}) AND ${branchClause}`;
     } else {
       req.permissionFilter = baseFilter;
     }
