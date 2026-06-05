@@ -123,7 +123,7 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   highway_risk_level: ['highway_risk_level', 'highwayRiskLevel', '高速风险等级'],
   insurance_score: ['insurance_score', 'insuranceScore', '车险分分数', '车险评分'],
   vehicle_age_group: ['vehicle_age_group', 'vehicleAgeGroup', '车龄分段', '车龄分组'],
-  branch_code: ['branch_code', 'branchCode', '分公司编码', '分公司'],
+  branch_code: ['branch_code', 'branchCode'],
 };
 
 export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
