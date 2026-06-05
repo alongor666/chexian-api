@@ -31,6 +31,7 @@ export function HeatmapFocusPanel({
   growthMode,
   onDrillClick,
   onClear,
+  isPickerOpen = false,
 }: HeatmapFocusPanelProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
@@ -50,8 +51,11 @@ export function HeatmapFocusPanel({
   }, [isOpen]);
 
   // ESC 键关闭
+  // 注意：DimensionPicker 等更高层 fixed overlay 打开时（isPickerOpen=true），
+  // 抽屉让出 ESC 处理 — 否则按 ESC 会先清掉 heatmapSelection，
+  // picker 仍开着却拿不到下钻上下文（codex PR #481 第 2 轮 P2-1）。
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || isPickerOpen) return;
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -60,7 +64,7 @@ export function HeatmapFocusPanel({
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [isOpen, onClear]);
+  }, [isOpen, isPickerOpen, onClear]);
 
   // 关闭路径：× 按钮 / ESC 键 / 点击其他单元格切换。
   // 不挂"document 外部点击关闭"：抽屉的主 CTA「选择下钻维度」会弹出 DimensionPicker
@@ -94,8 +98,12 @@ export function HeatmapFocusPanel({
       role="dialog"
       aria-modal="false"
       aria-label={`${activeCell.org} ${activeCell.date} 诊断详情`}
+      // top-14 避开 fixed TopNavigation（h-14 z-50 opacity-30 hover:opacity-100）首屏遮挡，
+      // 否则抽屉头部 56px 被 nav 截获鼠标事件，× 按钮和标题不可点不可见
+      // （codex PR #481 第 2 轮 P2-2）。z-40 与 SidebarNavigation / Drawer 同层但低于 nav 和 picker，
+      // 不影响 DimensionPicker (z-50) 浮在抽屉之上。
       className={cn(
-        'fixed top-0 right-0 h-screen w-80 max-w-[85vw] z-30 flex flex-col overflow-hidden',
+        'fixed top-14 right-0 bottom-0 w-80 max-w-[85vw] z-40 flex flex-col overflow-hidden',
         'bg-white dark:bg-surface-1 border-l border-neutral-200 dark:border-subtle shadow-lg dark:shadow-none',
         'transition-[transform,opacity] duration-200 ease-out',
         enterFrame ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none',
