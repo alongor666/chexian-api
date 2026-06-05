@@ -193,4 +193,29 @@ describe('isValidPermissionFilter（白名单校验，已接入 injectPermission
     const out = injectPermissionIntoAnySql('SELECT COUNT(*) FROM PolicyFact', 'is_telemarketing = true');
     expect(out).toMatch(/FROM\s+\(SELECT\s+\*\s+FROM\s+PolicyFact\s+WHERE\s+is_telemarketing\s*=\s*true\)\s+AS\s+PolicyFact/i);
   });
+
+  // codex PR #492 P2: 多分公司 RLS 注入后白名单接受新形式
+  describe('plan v2 0F multi-branch RLS 形式', () => {
+    it('接受 permission.ts baseFilter=1=1 优化后的 branch_code 单条件', () => {
+      expect(isValidPermissionFilter("branch_code = 'SC'")).toBe(true);
+      expect(isValidPermissionFilter("branch_code = 'SX'")).toBe(true);
+    });
+
+    it('接受带外层括号的 baseFilter AND branch_code 组合', () => {
+      expect(isValidPermissionFilter("(org_level_3 = '乐山') AND branch_code = 'SC'")).toBe(true);
+      expect(isValidPermissionFilter("(is_telemarketing = true) AND branch_code = 'SC'")).toBe(true);
+    });
+
+    it('injectPermissionIntoAnySql 对带 branch_code 的合成 filter 正常注入', () => {
+      const out = injectPermissionIntoAnySql(
+        'SELECT SUM(premium) FROM PolicyFact',
+        "(org_level_3 = '乐山') AND branch_code = 'SC'"
+      );
+      expect(out).toContain("WHERE (org_level_3 = '乐山') AND branch_code = 'SC'");
+    });
+
+    it('拒绝 branch_code 通过白名单后再混入非法字段', () => {
+      expect(isValidPermissionFilter("branch_code = 'SC' AND secret_col = '1'")).toBe(false);
+    });
+  });
 });

@@ -84,6 +84,13 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_api_tokens_revoked ON api_tokens(revoked_at);
     `,
   },
+  {
+    id: 4,
+    description: 'branch_code on access_users for multi-branch RLS (plan v2 0D)',
+    sql: `
+      ALTER TABLE access_users ADD COLUMN branch_code TEXT;
+    `,
+  },
 ];
 
 /**

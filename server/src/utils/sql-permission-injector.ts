@@ -218,6 +218,8 @@ const ALLOWED_PERMISSION_FIELDS = new Set([
   'organization',
   // 电销 dataScope 过滤器 `is_telemarketing = true`（middleware/permission.ts:64）
   'is_telemarketing',
+  // 多分公司 RLS（plan v2 0F）：permission.ts 注入 `branch_code = 'SC' | 'SX'`
+  'branch_code',
 ]);
 
 /**
@@ -277,8 +279,15 @@ export function isValidPermissionFilter(filter: string): boolean {
   const conditions = filter.split(/\b(?:AND|OR)\b/i);
 
   for (const cond of conditions) {
-    const trimmed = cond.trim();
+    let trimmed = cond.trim();
     if (!trimmed) continue;
+
+    // 容忍一层外层括号（permission.ts 合成 `(baseFilter) AND branch_code='SC'` 时，
+    // baseFilter 部分会带括号，例如 `(org_level_3 = '乐山')`）。
+    // 多层括号 / 嵌套 AND-OR 不在本 PR 范围（permission.ts 不会生成此类形式）。
+    if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+      trimmed = trimmed.slice(1, -1).trim();
+    }
 
     // 允许的格式（字符串值用 '...'，内部单引号以 '' 转义）：
     // 1. field LIKE '%value%'
