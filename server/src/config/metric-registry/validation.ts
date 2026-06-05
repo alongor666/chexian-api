@@ -54,9 +54,13 @@ export function validateRegistry(): {
     }
 
     // SQL 表达式
-    if (!m.sql.expression.trim()) {
+    // L4 占位符指标的 expression 以注释 "--" 开头（真实 SQL 由诊断脚本动态生成），
+    // 本身不可执行、也无法承载 AS alias，跳过 alias 检查。判定口径与
+    // __tests__/test-helpers.ts 的 L4_METRIC_IDS（"SQL 以注释 -- 开头"）一致。
+    const expr = m.sql.expression.trim();
+    if (!expr) {
       errors.push({ metricId: m.id, field: 'sql.expression', message: 'SQL 表达式不能为空' });
-    } else if (!/\bAS\b/i.test(m.sql.expression)) {
+    } else if (!expr.startsWith('--') && !/\bAS\b/i.test(expr)) {
       warnings.push({ metricId: m.id, field: 'sql.expression', message: 'SQL 表达式缺少 AS alias' });
     }
 

@@ -63,7 +63,7 @@
 
 ### 字段注册表（RED LINE）
 
-**唯一事实源**：`server/src/config/field-registry/fields.json`（42 个字段）
+**唯一事实源**：`server/src/config/field-registry/fields.json`（56 个字段：14 必需 + 42 可选）
 
 **新增/修改字段流程**（必须按顺序）：
 1. 修改 `fields.json` 中的字段定义
@@ -79,8 +79,8 @@
 
 | 注册表 | 路径 | 覆盖范围 | codegen |
 |--------|------|---------|---------|
-| 指标注册表 | `server/src/config/metric-registry/` | 25 个指标 | `generate-frontend-map.ts` |
-| 字段注册表 | `server/src/config/field-registry/fields.json` | 42 个字段 | `field-registry/generate.mjs` |
+| 指标注册表 | `server/src/config/metric-registry/` | 49 个指标 | `generate-frontend-map.ts` |
+| 字段注册表 | `server/src/config/field-registry/fields.json` | 56 个字段 | `field-registry/generate.mjs` |
 | 客户类别 | `src/shared/config/customer-categories.ts` + `server/src/config/` | 11 类枚举 | — |
 | 环境变量 | `server/src/config/env.ts` | 20+ 变量（6 分组） | — |
 | API 路由 | `server/src/config/api-routes.ts` + `src/shared/api/routes.ts` | 50+ 路由 | — |
@@ -141,7 +141,7 @@ bun run governance                 # 治理校验
 ```
 
 **CI 测试分层协议**（RED LINE）：
-- **单元测试** (`bun run test`): 72 文件 / 892 测试 — CI + 本地
+- **单元测试** (`bun run test`): 198 文件 / 2559 测试 — CI + 本地
 - **集成测试** (`bun run test:integration`): 4 文件 — 仅本地（需 DuckDB 原生二进制）
 - CI 环境无法解析 `.node` 原生模块（vitest/jsdm 限制），相关测试必须在 `vite.config.ts` exclude 中排除
 - 新增原生模块依赖时，必须检查是否有对应测试需排除
