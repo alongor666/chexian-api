@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>业绩分析 — 视觉重做 (claude-design-export)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+// 把项目真实 token 灌进 Tailwind config。语义色统一走 CSS 变量 → 自动 light/dark。
+// 中性色 / surface 静态值，dark 用 dark: 前缀。
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        primary: { DEFAULT:'var(--c-primary)', light:'var(--c-primary-light)', dark:'var(--c-primary-dark)', bg:'var(--c-primary-bg)', border:'var(--c-primary-border)', solid:'var(--c-primary-solid)', 400:'var(--c-primary-light)' },
+        success: { DEFAULT:'var(--c-success)', light:'var(--c-success-light)', dark:'var(--c-success-dark)', bg:'var(--c-success-bg)', border:'var(--c-success-border)', solid:'var(--c-success-solid)' },
+        warning: { DEFAULT:'var(--c-warning)', light:'var(--c-warning-light)', dark:'var(--c-warning-dark)', bg:'var(--c-warning-bg)', border:'var(--c-warning-border)', solid:'var(--c-warning-solid)' },
+        danger:  { DEFAULT:'var(--c-danger)',  light:'var(--c-danger-light)',  dark:'var(--c-danger-dark)',  bg:'var(--c-danger-bg)',  border:'var(--c-danger-border)',  solid:'var(--c-danger-solid)' },
+        purple:  { DEFAULT:'var(--c-purple)',  bg:'var(--c-purple-bg)',  border:'var(--c-purple-border)' },
+        amber:   { DEFAULT:'var(--c-amber)',   bg:'var(--c-amber-bg)',   border:'var(--c-amber-border)' },
+        sky:     { DEFAULT:'var(--c-sky)',     bg:'var(--c-sky-bg)',     border:'var(--c-sky-border)' },
+        indigo:  { DEFAULT:'var(--c-indigo)',  bg:'var(--c-indigo-bg)',  border:'var(--c-indigo-border)' },
+        neutral: { 50:'#fafafa',100:'#f5f5f5',200:'#e8e8e8',300:'#d9d9d9',400:'#bfbfbf',500:'#8c8c8c',600:'#595959',700:'#434343',800:'#262626',900:'#1f1f1f' },
+        surface: { 0:'#0f0f10', 1:'#161618', 2:'#1c1c1f', 3:'#232326' },
+        subtle:  'rgba(255,255,255,0.08)'
+      },
+      fontFamily: {
+        sans:   ['-apple-system','BlinkMacSystemFont','"SF Pro Text"','"PingFang SC"','"Microsoft YaHei"','sans-serif'],
+        kpi:    ['"Avenir Next"','"Century Gothic"','"SF Pro Display"','-apple-system','"PingFang SC"','sans-serif'],
+        numeric:['"SF Pro Text"','"Helvetica Neue"','"PingFang SC"','sans-serif']
+      },
+      boxShadow: { 'sm':'0 1px 2px 0 rgba(0,0,0,0.05)' }
+    }
+  }
+}
+</script>
+<style>
+  :root{
+    --c-primary:#1890ff; --c-primary-light:#40a9ff; --c-primary-dark:#096dd9; --c-primary-solid:#096dd9; --c-primary-bg:#e6f7ff; --c-primary-border:#91d5ff;
+    --c-success:#52c41a; --c-success-light:#73d13d; --c-success-dark:#389e0d; --c-success-solid:#389e0d; --c-success-bg:#f6ffed; --c-success-border:#b7eb8f;
+    --c-warning:#faad14; --c-warning-light:#ffc53d; --c-warning-dark:#d48806; --c-warning-solid:#d48806; --c-warning-bg:#fffbe6; --c-warning-border:#ffe58f;
+    --c-danger:#ff4d4f;  --c-danger-light:#ff7875;  --c-danger-dark:#d9363e;  --c-danger-solid:#d9363e;  --c-danger-bg:#fff1f0;  --c-danger-border:#ffccc7;
+    --c-purple:#722ed1;  --c-purple-bg:#f9f0ff; --c-purple-border:#d3adf7;
+    --c-amber:#d97706;   --c-amber-bg:#fffbeb;  --c-amber-border:#fcd34d;
+    --c-sky:#0284c7;     --c-sky-bg:#f0f9ff;    --c-sky-border:#7dd3fc;
+    --c-indigo:#4f46e5;  --c-indigo-bg:#eef2ff; --c-indigo-border:#a5b4fc;
+  }
+  .dark{
+    --c-primary:#3c9aef; --c-primary-light:#69c0ff; --c-primary-dark:#69c0ff; --c-primary-solid:#1668c5; --c-primary-bg:rgba(56,144,239,0.16); --c-primary-border:rgba(56,144,239,0.42);
+    --c-success:#6abe3f; --c-success-light:#95de64; --c-success-dark:#95de64; --c-success-solid:#3f9e2f; --c-success-bg:rgba(82,196,26,0.15); --c-success-border:rgba(82,196,26,0.42);
+    --c-warning:#e8b339; --c-warning-light:#ffd666; --c-warning-dark:#ffd666; --c-warning-solid:#a06a08; --c-warning-bg:rgba(250,173,20,0.16); --c-warning-border:rgba(250,173,20,0.42);
+    --c-danger:#ff6b6d;  --c-danger-light:#ff9c9e;  --c-danger-dark:#ff9c9e;  --c-danger-solid:#cf3b3d;  --c-danger-bg:rgba(255,77,79,0.16);  --c-danger-border:rgba(255,77,79,0.42);
+    --c-purple:#9a6fe0;  --c-purple-bg:rgba(114,46,209,0.22); --c-purple-border:rgba(114,46,209,0.45);
+    --c-amber:#f0a33c;   --c-amber-bg:rgba(217,119,6,0.18);   --c-amber-border:rgba(217,119,6,0.45);
+    --c-sky:#38bdf8;     --c-sky-bg:rgba(2,132,199,0.18);     --c-sky-border:rgba(2,132,199,0.45);
+    --c-indigo:#818cf8;  --c-indigo-bg:rgba(79,70,229,0.2);   --c-indigo-border:rgba(79,70,229,0.45);
+  }
+  body { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif; }
+  .font-numeric { font-variant-numeric: tabular-nums; }
+  .font-kpi     { font-variant-numeric: tabular-nums; letter-spacing:-0.01em; }
+  /* sticky 装饰：靠 inset 边线，不靠阴影 */
+  .stick-r{ box-shadow: inset -1px 0 0 0 var(--stick,rgba(229,231,235,1)); }
+  .dark .stick-r{ --stick:rgba(255,255,255,0.07); }
+  /* 紧凑密度 */
+  .density-compact td, .density-compact th.cell { padding-top:.3rem; padding-bottom:.3rem; }
+  /* 焦点面板 */
+  .focus-panel{ transition: transform .22s ease, opacity .22s ease; }
+  /* 自定义滚动条 */
+  ::-webkit-scrollbar{ height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(140,140,140,.35); border-radius:8px; }
+  /* 锚点偏移 */
+  section[id]{ scroll-margin-top:120px; }
+</style>
+</head>
+<body class="bg-neutral-50 dark:bg-surface-0 text-neutral-700 dark:text-neutral-300">
+
+<!-- ============== 顶部导航 ============== -->
+<header class="h-14 flex items-center justify-between px-6 bg-white dark:bg-surface-1 border-b border-neutral-200 dark:border-subtle sticky top-0 z-40">
+  <div class="flex items-center gap-6">
+    <span class="font-semibold text-neutral-900 dark:text-neutral-100">车险数据分析平台</span>
+    <nav class="text-sm text-neutral-500 dark:text-neutral-400 flex gap-4">
+      <a class="hover:text-neutral-900 dark:hover:text-neutral-100 cursor-pointer">首页</a>
+      <a class="text-primary font-medium cursor-pointer">业绩分析</a>
+      <a class="hover:text-neutral-900 dark:hover:text-neutral-100 cursor-pointer">成本分析</a>
+      <a class="hover:text-neutral-900 dark:hover:text-neutral-100 cursor-pointer">报告中心</a>
+    </nav>
+  </div>
+  <div class="flex items-center gap-3 text-sm text-neutral-500 dark:text-neutral-400">
+    <span>四川分公司 / admin</span>
+    <!-- 演示控制 -->
+    <div class="relative">
+      <button id="demoBtn" class="px-2 py-1 rounded-md hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-600 dark:text-neutral-300" title="演示控制">⚙</button>
+      <div id="demoMenu" class="hidden absolute right-0 mt-2 w-60 bg-white dark:bg-surface-2 border border-neutral-200 dark:border-subtle rounded-lg shadow-sm p-3 z-50 text-left">
+        <p class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-2">演示控制</p>
+        <div class="space-y-2.5 text-sm text-neutral-700 dark:text-neutral-300">
+          <label class="flex items-center justify-between cursor-pointer"><span>暗色模式</span><input id="tgDark" type="checkbox" class="accent-primary"></label>
+          <label class="flex items-center justify-between cursor-pointer"><span>紧凑密度</span><input id="tgDensity" type="checkbox" class="accent-primary"></label>
+          <label class="flex items-center justify-between cursor-pointer"><span>今日焦点条</span><input id="tgFocus" type="checkbox" class="accent-primary" checked></label>
+          <div class="pt-1">
+            <span class="block text-xs text-neutral-500 dark:text-neutral-400 mb-1">视觉态预览</span>
+            <div class="inline-flex rounded-md border border-neutral-200 dark:border-subtle overflow-hidden text-xs w-full">
+              <button data-state="normal" class="stateBtn flex-1 px-2 py-1 bg-neutral-800 text-white">正常</button>
+              <button data-state="loading" class="stateBtn flex-1 px-2 py-1 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/10">加载</button>
+              <button data-state="empty" class="stateBtn flex-1 px-2 py-1 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/10">空</button>
+              <button data-state="error" class="stateBtn flex-1 px-2 py-1 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/10">错误</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="flex">
+  <!-- ============== 侧边栏 ============== -->
+  <aside class="w-56 shrink-0 border-r border-neutral-200 dark:border-subtle bg-white dark:bg-surface-1 min-h-[calc(100vh-3.5rem)] py-4 hidden lg:block">
+    <ul class="text-sm">
+      <li class="px-4 py-2 text-xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500">经营看板</li>
+      <li class="px-4 py-2 bg-primary-bg text-primary-dark font-medium border-r-2 border-primary">业绩分析</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer">保费看板</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer">成本分析</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer">增长诊断</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer">续保追踪</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer">报价转化</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer">客户流转</li>
+      <li class="px-4 py-2 mt-2 text-xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500">报告</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer">机构周报</li>
+      <li class="px-4 py-2 hover:bg-neutral-50 dark:hover:bg-white/5 text-neutral-700 dark:text-neutral-300 cursor-pointer">趋势诊断</li>
+    </ul>
+  </aside>
+
+  <!-- ============== 主内容区 ============== -->
+  <main class="flex-1 min-w-0">
+
+    <!-- 页面头 + 快速筛选 + 锚点 -->
+    <div class="px-6 py-3.5 bg-white dark:bg-surface-1 border-b border-neutral-200 dark:border-subtle sticky top-14 z-30">
+      <div class="flex items-center justify-between mb-2.5">
+        <div class="flex items-baseline gap-3">
+          <h1 class="text-xl font-semibold text-neutral-900 dark:text-neutral-100">业绩分析</h1>
+          <span class="text-xs text-neutral-400 dark:text-neutral-500 font-numeric">YTD 截至 2026-06-03</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <select class="text-sm border border-neutral-300 dark:border-subtle rounded-md px-3 py-1.5 bg-white dark:bg-surface-2 text-neutral-700 dark:text-neutral-200">
+            <option>全部客户</option><option>非营业客车</option><option>营业客车</option><option>营业货车</option><option>非营业货车</option><option>摩托车</option>
+          </select>
+          <button class="text-sm px-3 py-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-600 dark:text-neutral-300">重置</button>
+          <button class="text-sm px-3 py-1.5 rounded-md border border-neutral-300 dark:border-subtle hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-700 dark:text-neutral-200 flex items-center gap-1.5">
+            高级筛选 <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-primary-bg text-primary-dark font-medium font-numeric">3</span>
+          </button>
+        </div>
+      </div>
+      <div class="flex items-center justify-between gap-4">
+        <!-- 锚点 sticky nav -->
+        <nav id="anchorNav" class="flex gap-1 text-sm">
+          <a data-anchor="performance-heatmap" class="px-3 py-1.5 rounded-md cursor-pointer transition-colors">热力图</a>
+          <a data-anchor="performance-summary" class="px-3 py-1.5 rounded-md cursor-pointer transition-colors">业绩概览</a>
+          <a data-anchor="performance-trend" class="px-3 py-1.5 rounded-md cursor-pointer transition-colors">趋势分析</a>
+          <a data-anchor="performance-drilldown" class="px-3 py-1.5 rounded-md cursor-pointer transition-colors">下钻分析</a>
+          <a data-anchor="performance-top20" class="px-3 py-1.5 rounded-md cursor-pointer transition-colors">Top20</a>
+        </nav>
+        <!-- QuickFilterBar -->
+        <div class="hidden md:flex flex-wrap gap-1.5">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-neutral-100 dark:bg-white/10 text-neutral-700 dark:text-neutral-300">燃油车 <span class="cursor-pointer text-neutral-400 hover:text-danger">×</span></span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-neutral-100 dark:bg-white/10 text-neutral-700 dark:text-neutral-300">非新车 <span class="cursor-pointer text-neutral-400 hover:text-danger">×</span></span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-neutral-100 dark:bg-white/10 text-neutral-700 dark:text-neutral-300">续保业务 <span class="cursor-pointer text-neutral-400 hover:text-danger">×</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-6 space-y-4">
+
+      <!-- ============== 今日焦点（异常优先汇总） ============== -->
+      <section id="focusStrip" class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- tiles injected by JS -->
+      </section>
+
+      <!-- ============== 区块 1 · 热力图 ============== -->
+      <section id="performance-heatmap" class="relative bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none overflow-hidden">
+        <header class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-200 dark:border-subtle">
+          <div>
+            <h2 class="text-base font-semibold text-neutral-800 dark:text-neutral-100">连续 15 周期增长热力图</h2>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">行 = 维度值 · 列 = 最近 15 个时间段 · 颜色按增长率 6 档语义映射</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <div id="granTabs" class="inline-flex rounded-md border border-neutral-200 dark:border-subtle overflow-hidden text-xs" data-toggle></div>
+            <div id="growthTabs" class="inline-flex rounded-md border border-neutral-200 dark:border-subtle overflow-hidden text-xs" data-toggle></div>
+          </div>
+        </header>
+
+        <!-- 维度选择：分组分段控件（机构层 / 业务层 / 客户层），比 8 个平铺 Tab 更紧凑 -->
+        <div class="px-4 pt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-neutral-400 dark:text-neutral-500 w-8">组织</span>
+            <div class="inline-flex rounded-md bg-neutral-100 dark:bg-white/5 p-0.5 text-xs" data-dimgroup>
+              <button class="dim px-2.5 py-1 rounded-[5px]" data-dim="三级机构">三级机构</button>
+              <button class="dim px-2.5 py-1 rounded-[5px]" data-dim="团队">团队</button>
+              <button class="dim px-2.5 py-1 rounded-[5px]" data-dim="业务员">业务员</button>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-neutral-400 dark:text-neutral-500 w-8">业务</span>
+            <div class="inline-flex rounded-md bg-neutral-100 dark:bg-white/5 p-0.5 text-xs" data-dimgroup>
+              <button class="dim px-2.5 py-1 rounded-[5px]" data-dim="客户类别">客户类别</button>
+              <button class="dim px-2.5 py-1 rounded-[5px]" data-dim="险别">险别</button>
+              <button class="dim px-2.5 py-1 rounded-[5px]" data-dim="能源">能源</button>
+              <button class="dim px-2.5 py-1 rounded-[5px]" data-dim="新续转">新续转</button>
+              <button class="dim px-2.5 py-1 rounded-[5px]" data-dim="风险评分">风险评分</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 面包屑 + 下钻深度徽章（更强的"已下钻 N 层"提示） -->
+        <div class="px-4 pt-2.5 flex items-center gap-2 text-xs">
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary-bg text-primary-dark font-medium">下钻 <span class="font-numeric">2</span> 层</span>
+          <nav id="breadcrumb" class="flex items-center gap-1 text-neutral-500 dark:text-neutral-400">
+            <span class="text-primary hover:underline cursor-pointer">全部</span>
+            <span class="text-neutral-300 dark:text-neutral-600">›</span>
+            <span class="text-primary hover:underline cursor-pointer">天府新区</span>
+            <span class="text-neutral-300 dark:text-neutral-600">›</span>
+            <span class="text-neutral-700 dark:text-neutral-200 font-medium">业务员视图</span>
+          </nav>
+        </div>
+
+        <!-- 热力图主体 -->
+        <div id="heatmapBody" class="px-4 py-3 overflow-auto">
+          <div class="hmWrap"></div>
+          <div class="mt-3 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 flex-wrap">
+            <span class="mr-1">增长率(%)</span>
+            <span class="px-2 py-0.5 rounded font-numeric bg-danger-border text-neutral-800 dark:text-neutral-100">&lt;1</span>
+            <span class="px-2 py-0.5 rounded font-numeric bg-danger-bg text-neutral-800 dark:text-neutral-100">≥1</span>
+            <span class="px-2 py-0.5 rounded font-numeric bg-amber-bg text-neutral-800 dark:text-neutral-100">≥4</span>
+            <span class="px-2 py-0.5 rounded font-numeric bg-success-bg text-neutral-800 dark:text-neutral-100">≥7</span>
+            <span class="px-2 py-0.5 rounded font-numeric bg-success-border text-neutral-900 dark:text-neutral-100">≥10</span>
+            <span class="px-2 py-0.5 rounded font-numeric bg-success-solid text-white">≥15</span>
+            <span class="ml-auto text-neutral-400 dark:text-neutral-500 hidden sm:inline">点击单元格查看详情 →</span>
+          </div>
+        </div>
+
+        <!-- HeatmapFocusPanel：单元格点击右侧抽出 -->
+        <div id="focusPanel" class="focus-panel absolute top-0 right-0 h-full w-80 max-w-[85vw] bg-white dark:bg-surface-2 border-l border-neutral-200 dark:border-subtle translate-x-full opacity-0 pointer-events-none z-20 flex flex-col">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-subtle">
+            <h3 class="text-sm font-semibold text-neutral-800 dark:text-neutral-100">单元格详情</h3>
+            <button id="focusClose" class="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 text-lg leading-none">×</button>
+          </div>
+          <div id="focusContent" class="p-4 overflow-auto text-sm"></div>
+        </div>
+      </section>
+
+      <!-- ============== 区块 2 · 业绩概览 ============== -->
+      <section id="performance-summary" class="bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none">
+        <header class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-200 dark:border-subtle">
+          <div>
+            <h2 class="text-base font-semibold text-neutral-800 dark:text-neutral-100">业绩概览（按险别组合）</h2>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">排序：达成率升序 · 落后排前 · 阈值 99%</p>
+          </div>
+          <div id="expandTabs" class="inline-flex rounded-md border border-neutral-200 dark:border-subtle overflow-hidden text-xs" data-toggle></div>
+        </header>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-neutral-50 dark:bg-surface-2 border-b border-neutral-200 dark:border-subtle">
+              <tr id="summaryHead"></tr>
+            </thead>
+            <tbody id="summaryBody" class="divide-y divide-neutral-100 dark:divide-white/5"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============== 区块 3 · 趋势分析 ============== -->
+      <section id="performance-trend" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none p-4">
+          <div class="flex items-baseline justify-between mb-1">
+            <h3 class="text-base font-semibold text-neutral-800 dark:text-neutral-100">保费走势</h3>
+            <span class="text-xs text-neutral-400 dark:text-neutral-500">万元 · 按日</span>
+          </div>
+          <p class="text-xs text-neutral-500 dark:text-neutral-400 mb-2">2026 vs 2025 vs 2024 · 仅标注峰值/最新</p>
+          <div id="chartPremium" class="h-56"></div>
+        </div>
+        <div class="bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none p-4">
+          <div class="flex items-baseline justify-between mb-1">
+            <h3 class="text-base font-semibold text-neutral-800 dark:text-neutral-100">件数走势</h3>
+            <span class="text-xs text-neutral-400 dark:text-neutral-500">件 · 按日</span>
+          </div>
+          <p class="text-xs text-neutral-500 dark:text-neutral-400 mb-2">2026 vs 2025 vs 2024 · 仅标注峰值/最新</p>
+          <div id="chartCount" class="h-56"></div>
+        </div>
+      </section>
+
+      <!-- ============== 区块 4 · 下钻分析 ============== -->
+      <section id="performance-drilldown" class="bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none">
+        <header class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-200 dark:border-subtle">
+          <div>
+            <h2 class="text-base font-semibold text-neutral-800 dark:text-neutral-100">下钻分析</h2>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">当前维度 <span class="text-neutral-700 dark:text-neutral-200 font-medium">客户类别</span> · 路径 全部 › 天府新区 › 客户类别</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="text-sm px-3 py-1.5 rounded-md border border-neutral-300 dark:border-subtle hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-700 dark:text-neutral-200">选择下钻维度 ▾</button>
+            <button class="text-sm px-3 py-1.5 rounded-md text-danger hover:bg-danger-bg">重置分析</button>
+          </div>
+        </header>
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 p-4">
+          <div class="lg:col-span-2 border border-neutral-200 dark:border-subtle rounded-md p-3">
+            <h4 class="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-1">达成率 × 增长率</h4>
+            <p class="text-xs text-neutral-400 dark:text-neutral-500 mb-1">气泡 = 件数 · 颜色 = 象限</p>
+            <div id="chartScatter" class="h-64"></div>
+          </div>
+          <div class="lg:col-span-3 overflow-auto">
+            <table class="min-w-full text-sm">
+              <thead class="bg-neutral-50 dark:bg-surface-2 border-b border-neutral-200 dark:border-subtle">
+                <tr id="drillHead"></tr>
+              </thead>
+              <tbody id="drillBody" class="divide-y divide-neutral-100 dark:divide-white/5"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============== 区块 5 · Top20 业务员 ============== -->
+      <section id="performance-top20" class="bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none">
+        <header class="px-4 py-3 border-b border-neutral-200 dark:border-subtle flex items-center justify-between gap-4">
+          <div>
+            <h2 class="text-base font-semibold text-neutral-800 dark:text-neutral-100">Top 20 业务员</h2>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">达成率升序 · 落后排前 · 优先关注</p>
+          </div>
+          <span class="text-xs text-neutral-400 dark:text-neutral-500 font-numeric">共 247 位 · 展示前 20</span>
+        </header>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-neutral-50 dark:bg-surface-2 border-b border-neutral-200 dark:border-subtle">
+              <tr id="topHead"></tr>
+            </thead>
+            <tbody id="topBody" class="divide-y divide-neutral-100 dark:divide-white/5"></tbody>
+          </table>
+        </div>
+        <footer class="px-4 py-2.5 border-t border-neutral-200 dark:border-subtle text-xs text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
+          <span>🟢 达成 ≥100 &nbsp;·&nbsp; 🔵 ≥80 &nbsp;·&nbsp; 🟡 ≥60 &nbsp;·&nbsp; 🔴 &lt;60</span>
+          <a class="text-primary hover:underline cursor-pointer">查看全部 247 位 →</a>
+        </footer>
+      </section>
+
+      <!-- ============== 视觉态参考 ============== -->
+      <section>
+        <p class="text-xs font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2">视觉态参考 · loading / empty / error</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none p-4 min-h-[150px]">
+            <p class="text-xs text-neutral-400 dark:text-neutral-500 mb-3">加载中</p>
+            <div class="space-y-2.5">
+              <div class="h-3 rounded bg-neutral-100 dark:bg-white/5 w-3/4"></div>
+              <div class="h-3 rounded bg-neutral-100 dark:bg-white/5 w-full"></div>
+              <div class="h-3 rounded bg-neutral-100 dark:bg-white/5 w-5/6"></div>
+              <div class="h-3 rounded bg-neutral-100 dark:bg-white/5 w-2/3"></div>
+            </div>
+            <p class="text-xs text-neutral-400 dark:text-neutral-500 mt-4">数据加载中…</p>
+          </div>
+          <div class="bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none p-4 min-h-[150px] flex flex-col items-center justify-center text-center">
+            <div class="w-10 h-10 rounded-full border-2 border-neutral-200 dark:border-subtle mb-3"></div>
+            <p class="text-sm text-neutral-500 dark:text-neutral-400">暂无数据</p>
+            <p class="text-xs text-neutral-400 dark:text-neutral-500 mt-1">调整筛选条件后重试</p>
+          </div>
+          <div class="bg-white dark:bg-surface-1 rounded-lg border border-danger-border shadow-sm dark:shadow-none p-4 min-h-[150px] flex flex-col items-center justify-center text-center">
+            <div class="w-10 h-10 rounded-full bg-danger-bg flex items-center justify-center text-danger mb-3">!</div>
+            <p class="text-sm text-danger font-medium">加载失败</p>
+            <p class="text-xs text-neutral-400 dark:text-neutral-500 mt-1">network timeout · 点击重试</p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script>
+/* ===================== 设计系统工具（对齐 src/shared/styles/index.ts） ===================== */
+function getHeatmapColor(rate){
+  if(rate>=15) return 'bg-success-solid text-white';
+  if(rate>=10) return 'bg-success-border text-neutral-900 dark:text-neutral-100';
+  if(rate>=7)  return 'bg-success-bg text-neutral-800 dark:text-neutral-100';
+  if(rate>=4)  return 'bg-amber-bg text-neutral-800 dark:text-neutral-100';
+  if(rate>=1)  return 'bg-danger-bg text-neutral-800 dark:text-neutral-100';
+  return 'bg-danger-border text-neutral-800 dark:text-neutral-100';
+}
+const TOGGLE_ACTIVE='bg-neutral-800 text-white dark:bg-white/15 dark:text-neutral-100';
+const TOGGLE_INACTIVE='text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/10';
+const fmt = n => n==null ? '-' : n.toLocaleString('en-US');
+const f1 = n => n==null ? '-' : n.toFixed(1);
+const YEARC = { '2024':'#F97316','2025':'#10B981','2026':'#3B82F6' };
+
+/* ===================== 数据 ===================== */
+// 热力图：行 profile → 15 周期增长率(%)，确定性生成，制造可读叙事（红色连片更抓眼）
+const PERIODS = ['05-20','05-21','05-22','05-23','05-24','05-25','05-26','05-27','05-28','05-29','05-30','05-31','06-01','06-02','06-03'];
+function genRow(base, amp, phase, drift){
+  return PERIODS.map((_,i)=>{
+    const v = base + amp*Math.sin((i/2.1)+phase) + drift*i/14 + ((i*7+phase*13)%5-2)*0.6;
+    return Math.round(v*10)/10;
+  });
+}
+const HEAT_DIMS = {
+  '三级机构': [
+    ['天府新区', genRow(13,4,0.2,2)],
+    ['高新支公司', genRow(2,7,1.1,6)],
+    ['宜宾中心支公司', genRow(9,5,2.0,1)],
+    ['自贡分公司', genRow(-3,6,0.6,9)],
+    ['达州中支', genRow(12,4,2.6,0)],
+    ['绵阳支公司', genRow(6,6,1.6,-1)],
+    ['泸州支公司', genRow(4,5,0.9,3)]
+  ],
+  '业务员': [
+    ['刘**(0982)', genRow(10,4,0.3,1)],
+    ['赵**(1287)', genRow(7,5,1.4,2)],
+    ['张**(1023)', genRow(-5,5,0.5,8)],
+    ['李**(0847)', genRow(0,6,1.9,5)],
+    ['王**(1156)', genRow(3,6,2.4,4)],
+    ['孙**(0356)', genRow(13,3,1.1,0)]
+  ]
+};
+HEAT_DIMS['团队']=HEAT_DIMS['三级机构']; HEAT_DIMS['客户类别']=HEAT_DIMS['三级机构'];
+HEAT_DIMS['险别']=HEAT_DIMS['业务员']; HEAT_DIMS['能源']=HEAT_DIMS['业务员'];
+HEAT_DIMS['新续转']=HEAT_DIMS['业务员']; HEAT_DIMS['风险评分']=HEAT_DIMS['三级机构'];
+
+const SUMMARY = [
+  {name:'整体', overall:true, prem:12856, plan:14200, cnt:28547, ach:90.5, mom:4.2, ev:28.4, ren:72.6, trf:8.3},
+  {name:'主全（主险+全损）', expandable:true, open:true, prem:8425, plan:9500, cnt:12548, ach:88.7, mom:3.5, ev:32.1, ren:75.4, trf:7.8, children:[
+    {name:'燃油', prem:5728, plan:6400, cnt:8234, ach:89.5, mom:2.8, ev:null, ren:76.2, trf:7.5},
+    {name:'新能源', prem:2697, plan:3100, cnt:4314, ach:87.0, mom:5.4, ev:null, ren:73.8, trf:8.4}
+  ]},
+  {name:'交三（交强+三责）', expandable:true, prem:3425, plan:3700, cnt:10856, ach:92.6, mom:6.8, ev:22.7, ren:68.2, trf:9.1},
+  {name:'纯交（仅交强）', expandable:true, prem:528, plan:600, cnt:3247, ach:88.0, mom:-2.4, ev:15.3, ren:62.5, trf:10.2},
+  {name:'单交（仅商业）', expandable:true, prem:478, plan:400, cnt:1896, ach:119.5, mom:8.3, ev:35.7, ren:71.8, trf:5.2}
+];
+
+const DRILL = [
+  {name:'非营业货车', prem:1856, plan:2500, cnt:3247, ach:74.2, mom:-3.5, quad:'危险'},
+  {name:'营业货车', prem:428, plan:520, cnt:896, ach:82.3, mom:3.8, quad:'预警'},
+  {name:'摩托车', prem:125, plan:140, cnt:2156, ach:89.3, mom:2.4, quad:'预警'},
+  {name:'营业客车', prem:3425, plan:3560, cnt:8425, ach:96.2, mom:5.8, quad:'优秀'},
+  {name:'非营业客车', prem:7022, plan:7480, cnt:13823, ach:93.9, mom:6.4, quad:'优秀'}
+];
+const QUAD_COLOR = { '优秀':'#52c41a', '异常':'#faad14', '预警':'#d97706', '危险':'#ff4d4f' };
+
+function light(ach){ if(ach>=100) return '🟢'; if(ach>=80) return '🔵'; if(ach>=60) return '🟡'; return '🔴'; }
+const TOP = [
+  {name:'张**(1023)', org:'自贡分公司', prem:28, plan:82, cnt:42, ach:34.1, mom:-12.5},
+  {name:'李**(0847)', org:'高新支公司', prem:45, plan:105, cnt:68, ach:42.9, mom:-8.2},
+  {name:'王**(1156)', org:'绵阳支公司', prem:62, plan:120, cnt:95, ach:51.7, mom:2.3},
+  {name:'陈**(0521)', org:'达州中支', prem:78, plan:130, cnt:128, ach:60.0, mom:3.5},
+  {name:'刘**(0982)', org:'天府新区', prem:98, plan:140, cnt:182, ach:70.0, mom:5.2},
+  {name:'周**(0744)', org:'泸州支公司', prem:104, plan:142, cnt:198, ach:73.2, mom:1.1},
+  {name:'赵**(1287)', org:'宜宾中心支公司', prem:112, plan:135, cnt:215, ach:83.0, mom:7.8},
+  {name:'吴**(0915)', org:'天府新区', prem:121, plan:140, cnt:236, ach:86.4, mom:4.6},
+  {name:'孙**(0356)', org:'高新支公司', prem:128, plan:120, cnt:256, ach:106.7, mom:12.5}
+];
+
+/* ===================== 渲染：今日焦点 ===================== */
+function renderFocus(){
+  const tiles = [
+    {label:'整体达成进度', val:'90.5', unit:'%', tone:'text-warning-dark', sub:'缺口 1,344 万 · 阈值 99', dot:'bg-warning'},
+    {label:'落后机构', val:'自贡分公司', big:false, tone:'text-danger', sub:'达成 78.2 · 环比 −3.5', dot:'bg-danger'},
+    {label:'异常业务类', val:'非营业货车', big:false, tone:'text-danger', sub:'达成 74.2 · 缺口 644 万', dot:'bg-danger'},
+    {label:'掉队业务员', val:'张**(1023)', big:false, tone:'text-danger', sub:'达成 34.1 🔴 · 自贡', dot:'bg-danger'}
+  ];
+  document.getElementById('focusStrip').innerHTML = tiles.map(t=>`
+    <div class="bg-white dark:bg-surface-1 rounded-lg border border-neutral-200 dark:border-subtle shadow-sm dark:shadow-none p-3.5">
+      <div class="flex items-center gap-1.5 mb-1.5">
+        <span class="w-1.5 h-1.5 rounded-full ${t.dot}"></span>
+        <span class="text-xs text-neutral-500 dark:text-neutral-400">${t.label}</span>
+      </div>
+      <div class="font-kpi ${t.tone} ${t.big===false?'text-2xl':'text-3xl'} font-bold leading-none truncate">${t.val}${t.unit?'<span class="text-lg ml-0.5">'+t.unit+'</span>':''}</div>
+      <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5 font-numeric">${t.sub}</p>
+    </div>`).join('');
+}
+
+/* ===================== 渲染：分段控件 ===================== */
+function buildToggle(el, opts, active){
+  el.innerHTML = opts.map(o=>`<button data-v="${o}" class="px-2.5 py-1 ${o===active?TOGGLE_ACTIVE:TOGGLE_INACTIVE}">${o}</button>`).join('');
+  el.addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    el.querySelectorAll('button').forEach(x=>x.className=`px-2.5 py-1 ${x===b?TOGGLE_ACTIVE:TOGGLE_INACTIVE}`);
+    if(el.id==='expandTabs') renderSummary(b.dataset.v!=='不展开');
+  });
+}
+
+/* ===================== 渲染：热力图 ===================== */
+let curDim='业务员';
+function renderHeatmap(){
+  const rows = HEAT_DIMS[curDim];
+  const head = `<tr>
+    <th class="stick-r sticky left-0 z-20 bg-white dark:bg-surface-1 text-left px-2 py-2 text-neutral-600 dark:text-neutral-400 font-semibold min-w-[150px]">${curDim}</th>
+    ${PERIODS.map((p,i)=>`<th class="px-1.5 py-2 text-neutral-500 dark:text-neutral-400 font-semibold text-center font-numeric ${i>=12?'bg-neutral-50 dark:bg-white/5':''}">${p}</th>`).join('')}
+  </tr>`;
+  const body = rows.map((r,ri)=>`<tr class="group">
+    <td class="stick-r sticky left-0 z-10 bg-white dark:bg-surface-1 group-hover:bg-neutral-50 dark:group-hover:bg-surface-2 px-2 py-2 text-neutral-800 dark:text-neutral-200 font-medium whitespace-nowrap">
+      <span class="flex items-center justify-between gap-2">${r[0]} <span class="text-neutral-300 dark:text-neutral-600 text-xs cursor-pointer hover:text-primary">▾</span></span>
+    </td>
+    ${r[1].map((v,ci)=>`<td data-r="${ri}" data-c="${ci}" class="hmCell ${getHeatmapColor(v)} px-1.5 py-2 text-center font-numeric cursor-pointer">${f1(v)}</td>`).join('')}
+  </tr>`).join('');
+  document.querySelector('#performance-heatmap .hmWrap').innerHTML =
+    `<table class="min-w-full text-xs border-separate border-spacing-0">
+      <thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+function openFocus(ri,ci,cell){
+  const rows=HEAT_DIMS[curDim]; const name=rows[ri][0]; const v=rows[ri][1][ci]; const per=PERIODS[ci];
+  document.querySelectorAll('.hmCell').forEach(c=>c.classList.remove('ring-2','ring-primary','ring-inset'));
+  cell.classList.add('ring-2','ring-primary','ring-inset');
+  const tone = v>=10?'text-success-dark':v>=4?'text-warning-dark':v>=1?'text-danger':'text-danger';
+  document.getElementById('focusContent').innerHTML = `
+    <div class="mb-3">
+      <p class="text-xs text-neutral-500 dark:text-neutral-400">${curDim} · ${per}</p>
+      <p class="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mt-0.5">${name}</p>
+    </div>
+    <div class="rounded-md bg-neutral-50 dark:bg-white/5 p-3 mb-3">
+      <p class="text-xs text-neutral-500 dark:text-neutral-400">环比增长率</p>
+      <p class="font-kpi text-3xl font-bold ${tone} leading-none mt-1">${f1(v)}<span class="text-base ml-0.5">%</span></p>
+    </div>
+    <dl class="space-y-2 text-sm">
+      ${[['当期保费(万元)', fmt(Math.round(420+v*9))],['计划(万元)', '480'],['件数', fmt(Math.round(820+v*11))],['达成率(%)', f1(82+v*0.9)],['同比(%)', f1(v*0.7+1.4)]].map(([k,val])=>`
+        <div class="flex items-center justify-between border-b border-neutral-100 dark:border-white/5 pb-1.5">
+          <dt class="text-neutral-500 dark:text-neutral-400">${k}</dt>
+          <dd class="font-numeric text-neutral-900 dark:text-neutral-100">${val}</dd>
+        </div>`).join('')}
+    </dl>
+    <button class="mt-4 w-full text-sm px-3 py-2 rounded-md bg-primary text-white hover:bg-primary-light transition-colors">下钻该${curDim} →</button>`;
+  const p=document.getElementById('focusPanel');
+  p.classList.remove('translate-x-full','opacity-0','pointer-events-none');
+}
+function closeFocus(){
+  const p=document.getElementById('focusPanel');
+  p.classList.add('translate-x-full','opacity-0','pointer-events-none');
+  document.querySelectorAll('.hmCell').forEach(c=>c.classList.remove('ring-2','ring-primary','ring-inset'));
+}
+
+/* ===================== 渲染：业绩概览 ===================== */
+function achTone(ach){ return ach>=100?'text-success':ach>=99?'text-neutral-900 dark:text-neutral-100':'text-warning-dark'; }
+function momTone(m){ return m>0?'text-success':m<0?'text-danger':'text-neutral-500'; }
+function renderSummary(expand){
+  const cols=['险别组合','保费(万元)','计划(万元)','件数','达成率(%)','环比(%)','新能源占比(%)','续保率(%)','过户率(%)'];
+  document.getElementById('summaryHead').innerHTML = cols.map((c,i)=>
+    `<th class="cell px-3 py-2 ${i===0?'text-left':'text-right'} text-xs font-semibold text-neutral-600 dark:text-neutral-400">${c}</th>`).join('');
+  const numCell=(v,tone)=>`<td class="cell px-3 py-2 text-right font-numeric tabular-nums ${tone||'text-neutral-900 dark:text-neutral-100'}">${v}</td>`;
+  let html='';
+  SUMMARY.forEach((r,ri)=>{
+    const caret = r.expandable ? `<span class="text-neutral-400 mr-1 cursor-pointer caret" data-ri="${ri}">${r.open?'▾':'▸'}</span>` : '';
+    const nameCls = r.overall?'font-semibold text-neutral-900 dark:text-neutral-100':'font-medium text-neutral-900 dark:text-neutral-100';
+    html+=`<tr class="${r.overall?'bg-neutral-50/60 dark:bg-white/5':''} hover:bg-neutral-50 dark:hover:bg-surface-2">
+      <td class="cell px-3 py-2">${caret}<span class="${nameCls}">${r.name}</span></td>
+      ${numCell(fmt(r.prem))}${numCell(fmt(r.plan),'text-neutral-500 dark:text-neutral-400')}${numCell(fmt(r.cnt))}
+      ${numCell(f1(r.ach),achTone(r.ach))}${numCell((r.mom>0?'+':'')+f1(r.mom),momTone(r.mom))}
+      ${numCell(r.ev==null?'-':f1(r.ev))}${numCell(f1(r.ren))}${numCell(f1(r.trf))}</tr>`;
+    if(r.children && expand && r.open){
+      r.children.forEach(c=>{
+        html+=`<tr class="bg-neutral-50/40 dark:bg-white/[0.03]">
+          <td class="cell px-3 py-2 pl-10 text-neutral-600 dark:text-neutral-400">└ ${c.name}</td>
+          ${numCell(fmt(c.prem),'text-neutral-700 dark:text-neutral-300')}${numCell(fmt(c.plan),'text-neutral-500 dark:text-neutral-400')}${numCell(fmt(c.cnt),'text-neutral-700 dark:text-neutral-300')}
+          ${numCell(f1(c.ach),achTone(c.ach))}${numCell((c.mom>0?'+':'')+f1(c.mom),momTone(c.mom))}
+          ${numCell(c.ev==null?'-':f1(c.ev),'text-neutral-700 dark:text-neutral-300')}${numCell(f1(c.ren),'text-neutral-700 dark:text-neutral-300')}${numCell(f1(c.trf),'text-neutral-700 dark:text-neutral-300')}</tr>`;
+      });
+    }
+  });
+  document.getElementById('summaryBody').innerHTML=html;
+  document.querySelectorAll('#summaryBody .caret').forEach(c=>c.addEventListener('click',()=>{
+    const r=SUMMARY[c.dataset.ri]; r.open=!r.open; renderSummary(true);
+  }));
+}
+
+/* ===================== 渲染：可排序表格（下钻 + Top20） ===================== */
+function makeSortable(headEl, bodyEl, cols, data, render, defaultSort){
+  let sort=defaultSort;
+  function paint(){
+    headEl.innerHTML = cols.map(c=>{
+      const active = sort.key===c.key;
+      const ind = c.sortable ? (active ? (sort.dir>0?'▲':'▼') : '⇅') : '';
+      return `<th class="cell px-3 py-2 ${c.align==='right'?'text-right':'text-left'} text-xs font-semibold ${active?'text-primary':'text-neutral-600 dark:text-neutral-400'} ${c.sortable?'cursor-pointer select-none':''}" data-k="${c.key}">
+        ${c.label} ${ind?`<span class="${active?'':'text-neutral-400'}">${ind}</span>`:''}</th>`;
+    }).join('');
+    headEl.querySelectorAll('th[data-k]').forEach(th=>{
+      const col=cols.find(c=>c.key===th.dataset.k); if(!col||!col.sortable) return;
+      th.addEventListener('click',()=>{
+        if(sort.key===col.key) sort.dir*=-1; else { sort.key=col.key; sort.dir=col.key==='ach'?1:-1; }
+        sortData(); paint(); bodyEl.innerHTML=data.map(render).join('');
+      });
+    });
+  }
+  function sortData(){
+    data.sort((a,b)=>{
+      let x=a[sort.key], y=b[sort.key];
+      if(x==null) return 1; if(y==null) return -1;
+      if(typeof x==='string') return sort.dir*x.localeCompare(y,'zh');
+      return sort.dir*(x-y);
+    });
+  }
+  sortData(); paint(); bodyEl.innerHTML=data.map(render).join('');
+}
+
+function renderDrill(){
+  const cols=[
+    {key:'name',label:'维度',align:'left',sortable:true},
+    {key:'prem',label:'保费(万元)',align:'right',sortable:true},
+    {key:'plan',label:'计划(万元)',align:'right',sortable:true},
+    {key:'cnt',label:'件数',align:'right',sortable:true},
+    {key:'ach',label:'达成率(%)',align:'right',sortable:true},
+    {key:'mom',label:'环比(%)',align:'right',sortable:true}
+  ];
+  const render=r=>`<tr class="hover:bg-neutral-50 dark:hover:bg-surface-2">
+    <td class="cell px-3 py-2 text-neutral-900 dark:text-neutral-100"><span class="font-medium">${r.name}</span><span class="text-neutral-400 ml-1.5 cursor-pointer text-xs hover:text-primary">▾</span></td>
+    <td class="cell px-3 py-2 text-right font-numeric">${fmt(r.prem)}</td>
+    <td class="cell px-3 py-2 text-right font-numeric text-neutral-500 dark:text-neutral-400">${fmt(r.plan)}</td>
+    <td class="cell px-3 py-2 text-right font-numeric">${fmt(r.cnt)}</td>
+    <td class="cell px-3 py-2 text-right font-numeric ${achTone(r.ach)}">${f1(r.ach)}</td>
+    <td class="cell px-3 py-2 text-right font-numeric ${momTone(r.mom)}">${(r.mom>0?'+':'')+f1(r.mom)}</td></tr>`;
+  makeSortable(document.getElementById('drillHead'),document.getElementById('drillBody'),cols,DRILL,render,{key:'ach',dir:1});
+}
+function renderTop(){
+  const cols=[
+    {key:'name',label:'业务员',align:'left',sortable:false},
+    {key:'org',label:'三级机构',align:'left',sortable:false},
+    {key:'prem',label:'保费(万元)',align:'right',sortable:true},
+    {key:'plan',label:'计划(万元)',align:'right',sortable:true},
+    {key:'cnt',label:'件数',align:'right',sortable:true},
+    {key:'ach',label:'达成率(%)',align:'right',sortable:true},
+    {key:'mom',label:'环比(%)',align:'right',sortable:true},
+    {key:'light',label:'亮灯',align:'left',sortable:false}
+  ];
+  const render=r=>`<tr class="hover:bg-neutral-50 dark:hover:bg-surface-2">
+    <td class="cell px-3 py-2 text-neutral-900 dark:text-neutral-100 font-medium">${r.name}</td>
+    <td class="cell px-3 py-2 text-neutral-700 dark:text-neutral-300">${r.org}</td>
+    <td class="cell px-3 py-2 text-right font-numeric">${fmt(r.prem)}</td>
+    <td class="cell px-3 py-2 text-right font-numeric text-neutral-500 dark:text-neutral-400">${fmt(r.plan)}</td>
+    <td class="cell px-3 py-2 text-right font-numeric">${fmt(r.cnt)}</td>
+    <td class="cell px-3 py-2 text-right font-numeric ${achTone(r.ach)}">${f1(r.ach)}</td>
+    <td class="cell px-3 py-2 text-right font-numeric ${momTone(r.mom)}">${(r.mom>0?'+':'')+f1(r.mom)}</td>
+    <td class="cell px-3 py-2">${light(r.ach)}</td></tr>`;
+  makeSortable(document.getElementById('topHead'),document.getElementById('topBody'),cols,TOP,render,{key:'ach',dir:1});
+}
+
+/* ===================== ECharts ===================== */
+let chartP, chartC, chartS;
+function themeAxis(){
+  const dark=document.documentElement.classList.contains('dark');
+  return { axis: dark?'rgba(255,255,255,0.18)':'#e8e8e8', label: dark?'#8c8c8c':'#8c8c8c', text: dark?'#bfbfbf':'#595959', bg: dark?'#1c1c1f':'#fff' };
+}
+function lineDays(n){ const a=[]; const d=new Date(2026,4,20); for(let i=0;i<n;i++){a.push(`${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); d.setDate(d.getDate()+1);} return a; }
+function seriesGen(base, amp, growth, n, seed){ const a=[]; for(let i=0;i<n;i++){ a.push(Math.round(base + i*growth + amp*Math.sin(i/2+seed) + ((i*seed)%4))); } return a; }
+function lineOption(title){
+  const t=themeAxis(); const days=lineDays(14);
+  const isPrem = title==='premium';
+  const s26=seriesGen(isPrem?900:1900, isPrem?40:90, isPrem?28:60, 14, 1);
+  const s25=seriesGen(isPrem?840:1760, isPrem?35:70, isPrem?20:42, 14, 2);
+  const s24=seriesGen(isPrem?760:1620, isPrem?30:60, isPrem?14:30, 14, 3);
+  const maxIdx=s26.indexOf(Math.max(...s26));
+  function mk(name,data,color,solid){ return {
+    name, type:'line', smooth:true, symbol:'none', data,
+    lineStyle:{ width:solid?2.5:1.5, color, type:solid?'solid':'dashed' },
+    emphasis:{focus:'series'},
+    endLabel: solid?{ show:true, color, fontWeight:600, fontFamily:'SF Pro Text', formatter:p=>p.value.toLocaleString('en-US'), fontSize:11 }:undefined,
+    markPoint: solid?{ symbol:'circle', symbolSize:6, data:[{coord:[days[maxIdx],s26[maxIdx]]}], itemStyle:{color}, label:{show:true,formatter:'峰值',position:'top',color,fontSize:10} }:undefined
+  };}
+  return {
+    grid:{ left:8, right:46, top:28, bottom:20, containLabel:true },
+    tooltip:{ trigger:'axis', backgroundColor:t.bg, borderColor:t.axis, textStyle:{color:t.text,fontSize:12}, axisPointer:{type:'line',lineStyle:{color:t.axis}} },
+    legend:{ right:0, top:0, itemWidth:14, itemHeight:8, textStyle:{color:t.label,fontSize:11}, data:['2026','2025','2024'] },
+    xAxis:{ type:'category', data:days, boundaryGap:false, axisLine:{lineStyle:{color:t.axis}}, axisTick:{show:false}, axisLabel:{color:t.label,fontSize:10,fontFamily:'SF Pro Text',interval:2} },
+    yAxis:{ type:'value', splitLine:{show:false}, axisLine:{show:false}, axisTick:{show:false}, axisLabel:{color:t.label,fontSize:10,fontFamily:'SF Pro Text'} },
+    series:[ mk('2026',s26,YEARC['2026'],true), mk('2025',s25,YEARC['2025'],false), mk('2024',s24,YEARC['2024'],false) ]
+  };
+}
+function scatterOption(){
+  const t=themeAxis();
+  const data=DRILL.map(d=>({ name:d.name, value:[d.ach,d.mom,d.cnt], itemStyle:{color:QUAD_COLOR[d.quad], opacity:0.85, borderColor:QUAD_COLOR[d.quad]} }));
+  return {
+    grid:{ left:8, right:14, top:24, bottom:24, containLabel:true },
+    tooltip:{ backgroundColor:t.bg, borderColor:t.axis, textStyle:{color:t.text,fontSize:12}, formatter:p=>`${p.data.name}<br/>达成率 ${p.value[0].toFixed(1)} · 环比 ${p.value[1].toFixed(1)} · ${p.value[2].toLocaleString('en-US')} 件` },
+    xAxis:{ type:'value', name:'达成率', nameTextStyle:{color:t.label,fontSize:10}, min:60, max:110, splitLine:{show:false}, axisLine:{lineStyle:{color:t.axis}}, axisTick:{show:false}, axisLabel:{color:t.label,fontSize:10,fontFamily:'SF Pro Text'} },
+    yAxis:{ type:'value', name:'增长率', nameTextStyle:{color:t.label,fontSize:10}, min:-8, max:10, splitLine:{show:false}, axisLine:{lineStyle:{color:t.axis}}, axisTick:{show:false}, axisLabel:{color:t.label,fontSize:10,fontFamily:'SF Pro Text'} },
+    series:[{
+      type:'scatter', data,
+      symbolSize:v=>Math.max(14,Math.sqrt(v[2])/3),
+      label:{ show:true, formatter:p=>p.data.name, position:'top', color:t.text, fontSize:10 },
+      markLine:{ silent:true, symbol:'none', lineStyle:{color:t.axis,type:'dashed'}, label:{show:false}, data:[{xAxis:100},{yAxis:5}] }
+    }]
+  };
+}
+function initCharts(){
+  chartP=echarts.init(document.getElementById('chartPremium'),null,{renderer:'svg'});
+  chartC=echarts.init(document.getElementById('chartCount'),null,{renderer:'svg'});
+  chartS=echarts.init(document.getElementById('chartScatter'),null,{renderer:'svg'});
+  drawCharts();
+  window.addEventListener('resize',()=>{ chartP.resize(); chartC.resize(); chartS.resize(); });
+}
+function drawCharts(){
+  chartP.setOption(lineOption('premium'),true);
+  chartC.setOption(lineOption('count'),true);
+  chartS.setOption(scatterOption(),true);
+}
+
+/* ===================== 交互装配 ===================== */
+function setDark(on){
+  document.documentElement.classList.toggle('dark',on);
+  document.getElementById('tgDark').checked=on;
+  drawCharts();
+}
+function setAnchorActive(id){
+  document.querySelectorAll('#anchorNav a').forEach(a=>{
+    const on=a.dataset.anchor===id;
+    a.className=`px-3 py-1.5 rounded-md cursor-pointer transition-colors ${on?'bg-neutral-800 text-white dark:bg-white/15':'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/10'}`;
+  });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  renderFocus();
+  buildToggle(document.getElementById('granTabs'),['日','周','月','季','年'],'日');
+  buildToggle(document.getElementById('growthTabs'),['环比','同比'],'环比');
+  buildToggle(document.getElementById('expandTabs'),['不展开','油电','新转续','油电+新转续'],'油电');
+  // 维度分段
+  function paintDims(){ document.querySelectorAll('[data-dimgroup] .dim').forEach(b=>{
+    const on=b.dataset.dim===curDim;
+    b.className=`dim px-2.5 py-1 rounded-[5px] ${on?'bg-white dark:bg-white/15 text-neutral-900 dark:text-neutral-100 shadow-sm':'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100'}`;
+  });}
+  document.querySelectorAll('[data-dimgroup] .dim').forEach(b=>b.addEventListener('click',()=>{ curDim=b.dataset.dim; paintDims(); renderHeatmap(); closeFocus(); }));
+  paintDims(); renderHeatmap();
+  renderSummary(true);
+  renderDrill(); renderTop();
+  initCharts();
+  setAnchorActive('performance-heatmap');
+
+  // 热力图单元格点击
+  document.querySelector('#performance-heatmap .hmWrap').addEventListener('click',e=>{
+    const c=e.target.closest('.hmCell'); if(!c) return; openFocus(+c.dataset.r,+c.dataset.c,c);
+  });
+  document.getElementById('focusClose').addEventListener('click',closeFocus);
+
+  // 锚点点击 + 滚动监听
+  document.querySelectorAll('#anchorNav a').forEach(a=>a.addEventListener('click',()=>{
+    const el=document.getElementById(a.dataset.anchor);
+    const y=el.getBoundingClientRect().top+window.scrollY-118;
+    window.scrollTo({top:y,behavior:'smooth'});
+  }));
+  const obs=new IntersectionObserver(es=>{ es.forEach(en=>{ if(en.isIntersecting) setAnchorActive(en.target.id); }); },{rootMargin:'-120px 0px -55% 0px'});
+  ['performance-heatmap','performance-summary','performance-trend','performance-drilldown','performance-top20'].forEach(id=>obs.observe(document.getElementById(id)));
+
+  // 演示控制
+  const demoBtn=document.getElementById('demoBtn'), demoMenu=document.getElementById('demoMenu');
+  demoBtn.addEventListener('click',e=>{ e.stopPropagation(); demoMenu.classList.toggle('hidden'); });
+  document.addEventListener('click',e=>{ if(!demoMenu.contains(e.target)&&e.target!==demoBtn) demoMenu.classList.add('hidden'); });
+  document.getElementById('tgDark').addEventListener('change',e=>setDark(e.target.checked));
+  document.getElementById('tgDensity').addEventListener('change',e=>document.body.classList.toggle('density-compact',e.target.checked));
+  document.getElementById('tgFocus').addEventListener('change',e=>document.getElementById('focusStrip').classList.toggle('hidden',!e.target.checked));
+
+  // 视觉态预览（作用于热力图区块作演示）
+  const hmBody=document.getElementById('heatmapBody');
+  const normalHTML=hmBody.innerHTML;
+  document.querySelectorAll('.stateBtn').forEach(btn=>btn.addEventListener('click',()=>{
+    document.querySelectorAll('.stateBtn').forEach(b=>b.className='stateBtn flex-1 px-2 py-1 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/10');
+    btn.className='stateBtn flex-1 px-2 py-1 bg-neutral-800 text-white';
+    const s=btn.dataset.state;
+    if(s==='normal'){ hmBody.innerHTML=normalHTML; renderHeatmap(); }
+    else if(s==='loading'){ hmBody.innerHTML=`<div class="py-10"><div class="space-y-2.5 max-w-3xl">${'<div class="h-3 rounded bg-neutral-100 dark:bg-white/5"></div>'.repeat(6)}</div><p class="text-xs text-neutral-400 mt-4">数据加载中…</p></div>`; }
+    else if(s==='empty'){ hmBody.innerHTML=`<div class="py-12 flex flex-col items-center justify-center text-center"><div class="w-10 h-10 rounded-full border-2 border-neutral-200 dark:border-subtle mb-3"></div><p class="text-sm text-neutral-500 dark:text-neutral-400">暂无数据</p><p class="text-xs text-neutral-400 mt-1">调整粒度或下钻维度后重试</p></div>`; }
+    else { hmBody.innerHTML=`<div class="py-12 flex flex-col items-center justify-center text-center"><div class="w-10 h-10 rounded-full bg-danger-bg flex items-center justify-center text-danger mb-3">!</div><p class="text-sm text-danger font-medium">加载失败: query timeout</p><p class="text-xs text-neutral-400 mt-1">点击重试</p></div>`; }
+  }));
+});
+</script>
+</body>
+</html>
