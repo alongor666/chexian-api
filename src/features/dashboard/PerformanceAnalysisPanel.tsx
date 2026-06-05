@@ -19,7 +19,7 @@ import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatWanAdaptive, formatTeamName, formatSalesmanName } from '@/shared/utils/formatters';
 import { useTheme } from '@/shared/theme';
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { buttonStyles, cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles } from '@/shared/styles';
+import { buttonStyles, cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles, toggleButtonStyles } from '@/shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
 import {
   classifyAchievementBand,
@@ -56,6 +56,7 @@ import {
   HEATMAP_DIMENSION_LABELS,
   type HeatmapDrillStep,
 } from './hooks/usePerformanceOrgHeatmap';
+import { HEATMAP_DIM_GROUPS } from './config/heatmapDimGroups';
 import {
   type PerformanceHeatmapSelection,
 } from './utils/performanceHeatmapSelection';
@@ -893,15 +894,60 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           }
           leftContent={
             heatmapDrillPath.length === 0 ? (
-              <Tabs
-                items={(Object.entries(HEATMAP_DIMENSION_LABELS) as [HeatmapDimension, string][]).map(([key, label]) => ({ key, label }))}
-                activeKey={heatmapDimension}
-                onChange={(key) => { setHeatmapDimension(key as HeatmapDimension); setHeatmapGroupBy(key as HeatmapDimension); }}
-                variant="pills"
-                size="mini"
-              />
+              // 单一 radiogroup 包住全部 8 个 radio（互斥单选语义要求每组恰好 1 个 aria-checked）。
+              // 视觉上仍按"组织/业务"分组，分组标签 aria-hidden 仅装饰。
+              // 修复 PR #480 codex P2（双 radiogroup 共用一个状态导致其中一组无任何 aria-checked）。
+              <div
+                role="radiogroup"
+                aria-label="热力图维度"
+                className="flex flex-wrap items-center gap-x-4 gap-y-2"
+              >
+                {HEATMAP_DIM_GROUPS.map((group) => (
+                  <div key={group.groupLabel} className="flex items-center gap-2">
+                    <span
+                      aria-hidden="true"
+                      className="text-xs text-neutral-400 dark:text-neutral-500"
+                    >
+                      {group.groupLabel}
+                    </span>
+                    <div className="inline-flex rounded-md bg-neutral-100 dark:bg-white/5 p-0.5 text-xs">
+                      {group.keys.map((key) => {
+                        const active = heatmapDimension === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            className={cn(
+                              'px-2.5 py-1 rounded-[5px] transition-colors',
+                              active ? toggleButtonStyles.active : toggleButtonStyles.inactive,
+                            )}
+                            onClick={() => {
+                              setHeatmapDimension(key);
+                              setHeatmapGroupBy(key);
+                            }}
+                          >
+                            {HEATMAP_DIMENSION_LABELS[key]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="flex items-center gap-1 text-xs text-neutral-500">
+              <div className="flex items-center gap-2 text-xs text-neutral-500">
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full font-medium',
+                    colorClasses.bg.primary,
+                    colorClasses.text.primaryDark,
+                  )}
+                  aria-label={`已下钻 ${heatmapDrillPath.length} 层`}
+                >
+                  下钻 <span className="font-numeric">{heatmapDrillPath.length}</span> 层
+                </span>
                 <button
                   className="hover:text-primary hover:underline cursor-pointer"
                   onClick={() => handlePerfHeatmapBreadcrumbClick(-1)}
