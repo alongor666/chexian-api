@@ -10,9 +10,42 @@
 |------|------|------|----------|
 | 后端服务层 | `server/src/` | Express 服务、DuckDB 查询、SQL 生成、认证鉴权 | [server/src/sql/INDEX.md](../../server/src/sql/INDEX.md) |
 | 前端共享层 | `src/shared/` | API 客户端、上下文管理、通用工具、类型定义 | [INDEX.md](../../src/shared/INDEX.md) |
-| 功能特性层 | `src/features/` | Dashboard、Filters 等 13 个业务功能模块 | [INDEX.md](../../src/features/INDEX.md) |
+| 功能特性层 | `src/features/` | Dashboard、Filters 等 21 个业务功能模块 | [INDEX.md](../../src/features/INDEX.md) |
 | UI 组件层 | `src/widgets/` | Charts、KPI、Table 通用组件 | [INDEX.md](../../src/widgets/INDEX.md) |
 | 自动化脚本 | `scripts/` | 治理校验、构建、CI/CD | [INDEX.md](../../scripts/INDEX.md) |
+
+> 上表仅列**带独立 INDEX.md 的核心层**。下面两张全景表枚举 `src/` 与 `server/src/` 的**全部一级目录**（含核心层未覆盖的入口/遗留/新增模块）。
+
+### 前端 `src/` 一级目录全景
+
+| 一级目录 | 二级/三级要点 | 职责 | 状态 |
+|---------|--------------|------|------|
+| `app/` | App.tsx · main.tsx · index.css | 应用入口（路由挂载、根组件） | 活跃 |
+| `features/` | 21 模块，各含 components/hooks/utils/types | **业务功能模块集**（前端主体） | 活跃 |
+| `shared/` | api · contexts · hooks · ui · ai-insights · config · styles · theme · types · utils | 共享层（API 客户端/上下文/设计系统） | 活跃 |
+| `widgets/` | alerts · charts · export · filters · kpi · table · tables | 通用 UI 组件库 | 活跃 |
+| `components/` | layout/ | 全局布局组件（PageFilterPanel 等） | 活跃 |
+| `charts/` | ScissorsTrendChart.tsx | 独立特化图表 | 活跃 |
+| `services/` | PdfExportService.ts | 前端轻量服务（看板导出 PDF） | 活跃 |
+| `shims/` | external-modules.d.ts | 第三方模块类型垫片 | 活跃 |
+| `core/` | 仅 README | 历史架构遗留区，主链路已迁出 | ⚠️ 待归档 |
+| `types/` | chart.types.ts | 历史类型目录，新类型放 `shared/types/` | ⚠️ 待归档 |
+
+### 后端 `server/src/` 一级目录全景
+
+| 一级目录 | 二级/三级要点 | 职责 | 状态 |
+|---------|--------------|------|------|
+| `routes/` | 12 顶层路由 + `query/`（23 子路由 + bundles） | API 路由层（聚合器 + 子路由） | 活跃 |
+| `sql/` | 31 顶层 + 8 子目录（cost/cross-sell/trend/growth/performance-analysis/forecast/shared），共 55 文件 | SQL 生成器（业务口径核心） | 活跃 |
+| `services/` | 28 文件（duckdb-* 9 拆分 + auth/permission/access-control/PAT/route-cache/state-db…） | 服务层（查询执行/认证/权限/缓存/状态库） | 活跃 |
+| `config/` | field-registry/ · metric-registry/（categories 8 域 + __tests__） | 配置注册表（字段/指标/客户类别/环境/路由） | 活跃 |
+| `agent/` | registry · routes · schemas · services · tools | **AI Agent 系统**（诊断/解释/预测/审计 + 能力注册表） | 活跃 |
+| `skills/` | registry · runner · workflow-runner · red-line-policy · audit-log · skills/ · workflows/ · adapters/llm | **后端技能编排系统**（技能定义 + 工作流编排） | 活跃 |
+| `middleware/` | auth · permission · error | 中间件（认证/权限/错误处理） | 活跃 |
+| `normalize/` | mapping · validator（codegen 生成） | 列名标准化（中文→英文标准列名） | 活跃 |
+| `utils/` | sql-validator · sql-sanitizer · security · logger | 工具（SQL 安全校验/转义/日志） | 活跃 |
+| `scripts/` | admin-import-pat · admin-import-users | 管理脚本（PAT/用户导入） | 活跃 |
+| `types/` | data.ts 等 | 后端类型定义 | 活跃 |
 
 ## 快速入口
 
@@ -43,16 +76,27 @@ src/features/*                                    # 功能模块 UI 渲染
 
 #### 路由层 (`server/src/routes/`)
 
-| 文件 | 职责 |
-|------|------|
-| `query.ts` | 查询路由聚合器（65 行，挂载 19 个子路由 + 统一认证中间件） |
-| `query/*.ts` | 19 个子路由模块（KPI/趋势/排名/成本/系数/续保/交叉销售/赔案/报价等） |
-| `data.ts` | 数据管理路由（文件上传/列表/加载） |
-| `auth.ts` | 认证路由（登录/注册/Token 刷新） |
-| `filters.ts` | 筛选选项路由（机构/业务员/客户类别等） |
-| `ai.ts` | AI 助手路由（NL2SQL/智能分析） |
+共 12 个顶层路由文件，全部在 `server/src/app.ts` 挂载到 `/api/*`：
 
-#### SQL 生成器 (`server/src/sql/`，31 个文件)
+| 文件 | API 前缀 | 职责 |
+|------|---------|------|
+| `query.ts` | `/api/query` | 查询路由聚合器（挂载 23 个子路由 + 统一认证中间件） |
+| `query/*.ts` | `/api/query/*` | 23 个子路由模块（KPI/趋势/排名/成本/系数/续保/交叉销售/赔案/报价等）+ `bundles/` |
+| `data.ts` | `/api/data` | 数据管理路由（文件上传/列表/加载） |
+| `auth.ts` | `/api/auth` | 认证路由（登录/注册/Token 刷新/route-catalog） |
+| `wecom-auth.ts` | `/api/auth/wecom` | 企微扫码认证（前置避开 loginLimiter） |
+| `filters.ts` | `/api/filters` | 筛选选项路由（机构/业务员/客户类别等） |
+| `ai.ts` | `/api/ai` | AI 助手路由（NL2SQL/智能分析） |
+| `discover.ts` | `/api/discover` | 能力/路由发现 |
+| `reports.ts` | `/api/reports` | 报告产物服务（HTML 报告托管） |
+| `skills.ts` | `/api/skills` | 后端技能调用（驱动 `skills/` 编排） |
+| `workflows.ts` | `/api/workflows` | 工作流调用（驱动 `skills/workflows/`） |
+| `copilot.ts` | `/api/copilot` | AI 副驾对话路由 |
+| `admin.ts` | `/api/admin` | 管理后台（用户/PAT 管理） |
+
+> Agent 域路由不在 `routes/` 而在 `server/src/agent/routes/`，挂载到 `/api/agent/{audit,diagnosis,explain,forecast}`（见下文 Agent 系统）。
+
+#### SQL 生成器 (`server/src/sql/`，31 顶层 + 8 子目录拆分，共 55 文件)
 
 **共享基础设施（3 个）**
 
@@ -95,15 +139,69 @@ src/features/*                                    # 功能模块 UI 渲染
 | 续保 | `renewal-tracker.ts` | ~90 | 续保追踪（GROUPING SETS 输出 6 种层级聚合，消费派生域 RenewalTrackerFact） |
 | Agent | `pivot.ts` | ~50 | PIVOT 维度×指标交叉聚合生成器（白名单维度 + metric-registry 指标） |
 
-#### 服务层 (`server/src/services/`)
+#### 服务层 (`server/src/services/`，28 文件)
+
+**DuckDB 引擎簇（10 个，duckdb.ts 主入口 + 9 个职责拆分）**
 
 | 文件 | 职责 |
 |------|------|
-| `duckdb.ts` | DuckDB 连接池、查询执行、数据加载（单例） |
-| `column-normalizer.ts` | 列名标准化（中文→英文标准列名） |
+| `duckdb.ts` | DuckDB 连接池、查询执行、数据加载（单例主入口） |
+| `duckdb-infra.ts` / `duckdb-types.ts` / `duckdb-type-converter.ts` | 连接基建 / 类型定义 / 类型转换 |
+| `duckdb-parquet-loader.ts` / `duckdb-domain-loaders.ts` | Parquet 加载 / 分域加载器 |
+| `duckdb-init-tables.ts` / `duckdb-materialization.ts` | 初始化建表 / 物化预聚合 |
+| `data-bootstrapper.ts` / `bootstrapper-registry.ts` / `lazy-domain-registry.ts` | 数据引导 / 引导注册表 / 懒加载域注册表 |
+
+**认证与权限（5 个）**
+
+| 文件 | 职责 |
+|------|------|
 | `auth.ts` | 认证服务（JWT 生成、密码验证） |
 | `permission.ts` | 权限服务（机构过滤、SQL WHERE 子句生成） |
-| `zhipu.ts` | 智谱 AI 服务（NL2SQL） |
+| `access-control.ts` / `access-control-store.ts` | 访问控制（dataScope/allowedRoutes）+ 持久化 |
+| `personal-access-token.ts` / `personal-access-token-store.ts` | PAT（只读 Bearer Token）签发与校验 + 存储 |
+
+**缓存 / 状态 / 数据版本（5 个）**
+
+| 文件 | 职责 |
+|------|------|
+| `route-cache.ts` / `route-concurrency.ts` | 路由 LRU 内存缓存 / 并发控制 |
+| `cache-warmer.ts` | 缓存预热 |
+| `data-version.ts` | 数据版本（ETL 更新检测，供 SW 轮询） |
+| `state-db.ts` / `state-db-schema.ts` | 状态库（SQLite）+ schema |
+
+**外部集成与其他（6 个）**
+
+| 文件 | 职责 |
+|------|------|
+| `column-normalizer.ts` | 列名标准化（中文→英文标准列名） |
+| `zhipu.ts` / `openrouter.ts` | 智谱 AI（NL2SQL） / OpenRouter LLM 适配 |
+| `wecom.ts` / `notify.ts` | 企业微信集成 / 通知 |
+| `requirement-detector.ts` | 需求识别（AI 意图判定） |
+
+#### AI Agent 系统 (`server/src/agent/`)
+
+挂载到 `/api/agent/*`，结构化诊断/解释/预测/审计 Agent，输出受 Zod schema 约束。
+
+| 二级目录 | 职责 |
+|---------|------|
+| `routes/` | 4 个路由：`agent-audit` / `agent-diagnosis` / `agent-explain` / `agent-forecast` → `/api/agent/{audit,diagnosis,explain,forecast}` |
+| `services/` | 14 个诊断服务：成本/增长/赔案风险/客户流转/报价转化/续保/业务巡检诊断、利润预测、问题路由、指标审计等 |
+| `registry/` | Agent 能力注册表：data-capability / metric / forecast-output / unsupported-metric / metric-capability-mapping |
+| `schemas/` | 7 个 Zod 契约：audit / capability / diagnosis / explanation / forecast(+baseline) / metric |
+| `tools/` | `tool-registry.ts`（Agent 工具注册） |
+
+#### 后端技能编排系统 (`server/src/skills/`)
+
+挂载到 `/api/skills` 与 `/api/workflows`，可组合的"技能 → 工作流"运行器，含红线策略与审计。
+
+| 文件/目录 | 职责 |
+|----------|------|
+| `registry.ts` / `runner.ts` | 技能注册表 / 单技能运行器 |
+| `workflow-runner.ts` / `workflows/` | 工作流运行器 / 工作流定义（如 `auto-risk-control.workflow.ts`） |
+| `skills/` | 8 个技能定义：kpi-baseline / cost-diagnosis / claims-drilldown / risk-scoring / segment-risk-scan / pricing-simulation / report-template / attach-narrative / data-health |
+| `red-line-policy.ts` / `audit-log.ts` / `run-store.ts` | 红线策略守卫 / 审计日志 / 运行记录存储 |
+| `adapters/` | `query-adapter.ts` + `adapters/llm/`（LLM 适配） |
+| `types.ts` | 技能/工作流类型定义 |
 
 #### 列名映射与校验 (`server/src/normalize/`)
 
@@ -172,21 +270,33 @@ src/features/*                                    # 功能模块 UI 渲染
 
 #### 功能模块 (`src/features/`)
 
+共 21 个模块（多数含 `components/hooks/utils/types` 三级分层）：
+
 | 模块 | 路径 | 职责 |
 |------|------|------|
-| Home | `home/` | 首页数据导入（拖拽上传、最近文件） |
-| Dashboard | `dashboard/` | 仪表盘主视图（KPI、图表、表格、续保分析） |
-| Filters | `filters/` | 筛选面板（日期/机构/业务员/险别） |
-| Growth | `growth/` | 增长率分析（同比/环比/年累计） |
-| SQL Query | `sql-query/` | 交互式SQL查询（只读+聚合，NL2SQL） |
+| Dashboard | `dashboard/` | 仪表盘主视图（KPI、图表、表格、续保分析），主链路入口 `PremiumDashboard.tsx` |
+| Comprehensive Analysis | `comprehensive-analysis/` | 综合分析（保费+赔款+费用+变动成本率，含 adapters/charts） |
 | Cost | `cost/` | 成本分析（赔付率/费用率/综合费用率/变动成本率） |
-| Premium Report | `premium-report/` | 保费报表（机构保费+业务员明细） |
-| Marketing Report | `marketing-report/` | 营销战报（假日营销分析） |
-| Auth | `auth/` | 登录/认证页面 |
+| Expense Development | `expense-development/` | 费用发展分析 |
+| Growth | `growth/` | 增长率分析（同比/环比/年累计） |
+| Claims Detail | `claims-detail/` | 赔案明细（未决监控 + 地理热力图） |
+| Customer Flow | `customer-flow/` | 客户来源去向（转保/流失） |
+| Quote Conversion | `quote-conversion/` | 报价转化分析 |
+| Renewal Tracker | `renewal-tracker/` | 续保追踪 |
+| Premium Report | `premium-report/` | 保费报表（机构保费 + 业务员明细） |
+| Moto Cost | `moto-cost/` | 摩托车成本（交强 + 人身险捆绑经营） |
+| Repair | `repair/` | 维修资源合作 |
+| Copilot | `copilot/` | AI 副驾（对话式分析，含 __tests__） |
+| Home | `home/` | 首页数据导入（拖拽上传、最近文件、意图解析 intentParser） |
+| Filters | `filters/` | 筛选面板（日期/机构/业务员/险别） |
 | Report | `report/` | 报表模板功能 |
+| Admin | `admin/` | 管理后台（用户/PAT 管理） |
+| Auth | `auth/` | 登录/认证页面 |
 | Settings | `settings/` | 设置面板 |
 | File | `file/` | 文件菜单（数据导入/导出） |
 | Pages | `pages/` | 页面路由组件 |
+
+> 已下线：`sql-query/`（交互式 SQL 查询）与 `marketing-report/`（营销战报）已从 features/ 移除。
 
 ### 关键类型定义
 
@@ -273,4 +383,5 @@ src/features/*                                    # 功能模块 UI 渲染
 - 类型检查护栏：`scripts/check-governance.mjs` 新增 `TS检查范围`，禁止通过 `tsconfig.exclude` 排除活跃目录规避类型问题。
 
 **变更记录**：
+- 2026-06-05：一级目录全景对齐——新增「前端 `src/` 一级目录全景」「后端 `server/src/` 一级目录全景」两张全景表，补登此前未文档化的前端 `app/charts/core/services/shims/types` 与后端 `agent/skills/scripts` 模块；新增 Agent 系统、技能编排系统两节；路由表补全 12 顶层路由 + API 前缀，服务层 5→28 文件，SQL 31→55（含子目录），features 13→21（移除已下线 `sql-query`/`marketing-report`）。
 - 2026-02-13：全面更新为 API-only 架构，移除所有 DuckDB-WASM/Local 模式引用，更新数据链路为前端 API Client → 后端路由 → SQL 生成器 → DuckDB 服务，补全后端模块清单（路由/SQL/服务/中间件/工具）、前端模块清单（API/上下文/Hooks/功能模块）、测试清单。
