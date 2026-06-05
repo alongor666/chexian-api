@@ -52,31 +52,81 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [series]);
 
+  const formatValue = useMemo(
+    () => (value: number) =>
+      metric === 'premium' ? formatWanAdaptive(value) : formatCount(value),
+    [metric],
+  );
+
   const lineSeries = useMemo(() => {
-    return series.map((line) => {
+    return series.map((line, index) => {
       const color = getLineColor(line.line_key, line.line_label);
       const valueMap = new Map(line.points.map((point) => [
         point.time_period,
         metric === 'premium' ? point.premium : point.auto_count,
       ]));
+      const data = xData.map((x) => valueMap.get(x) ?? null);
+      const isPrimary = index === 0;
+      let peakCoord: [string, number] | null = null;
+      if (isPrimary) {
+        let peakIdx = -1;
+        let peakValue = -Infinity;
+        data.forEach((v, i) => {
+          if (v !== null && v > peakValue) {
+            peakValue = v;
+            peakIdx = i;
+          }
+        });
+        if (peakIdx >= 0) {
+          peakCoord = [xData[peakIdx], peakValue];
+        }
+      }
       return {
         name: line.line_label,
         type: 'line' as const,
         smooth: true,
-        data: xData.map((x) => valueMap.get(x) ?? null),
+        data,
         symbol: 'circle',
         symbolSize: 4,
-        lineStyle: { width: 2, color },
+        lineStyle: { width: isPrimary ? 2.5 : 2, color },
         itemStyle: { color },
         connectNulls: true,
+        endLabel: isPrimary
+          ? {
+              show: true,
+              color,
+              fontSize: 11,
+              fontWeight: 600,
+              formatter: (params: { value?: unknown }) => {
+                const v = params?.value;
+                if (v == null || v === '' || Number.isNaN(Number(v))) return '';
+                return formatValue(Number(v));
+              },
+            }
+          : undefined,
+        markPoint: peakCoord
+          ? {
+              symbol: 'circle',
+              symbolSize: 6,
+              data: [{ name: '峰值', coord: peakCoord }],
+              itemStyle: { color },
+              label: {
+                show: true,
+                formatter: '峰值',
+                position: 'top' as const,
+                color,
+                fontSize: 10,
+              },
+            }
+          : undefined,
       };
     });
-  }, [metric, series, xData]);
+  }, [formatValue, metric, series, xData]);
 
   useEffect(() => {
     if (!chartRef.current) return;
     if (!chartInstanceRef.current) {
-      chartInstanceRef.current = echarts.init(chartRef.current);
+      chartInstanceRef.current = echarts.init(chartRef.current, undefined, { renderer: 'svg' });
     }
     const chart = chartInstanceRef.current;
     if (!chart) return;
@@ -115,7 +165,7 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
         type: 'scroll',
         textStyle: { color: isDark ? '#a3a3a3' : '#595959' },
       },
-      grid: { left: '4%', right: '4%', top: 52, bottom: 36, containLabel: true },
+      grid: { left: '4%', right: 56, top: 52, bottom: 36, containLabel: true },
       xAxis: {
         type: 'category',
         data: xData,
