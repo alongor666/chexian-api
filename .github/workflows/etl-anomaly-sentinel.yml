@@ -1,0 +1,121 @@
+name: ETL Anomaly Sentinel
+
+# ETL 异常哨兵 — 发布后监控（非准入闸门）。
+# 周期轮询生产 API（PAT 只读），统计层判定异常 + LLM 归因，异常才在追踪 issue 告警。
+# 幂等：以 comprehensive 响应的 ETag（绑定 getDataVersion 指纹）去重，数据版本未变即静默。
+# 详见 scripts/sentinel/README.md 与计划 v3。
+
+on:
+  schedule:
+    # UTC；约 17:00 / 20:00 北京。多跑无害：数据版本未变会 304 静默退出。
+    - cron: '0 9,12 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '忽略 ETag 幂等，强制重新判定（调试用）'
+        type: boolean
+        default: false
+
+# 串行化：避免 cron 与手动触发并发竞态写状态/重复告警。
+concurrency:
+  group: etl-anomaly-sentinel
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sentinel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 滚动缓存：恢复上次见过的 ETag（rolling-cache 模式，restore-keys 取最近一份）
+      - name: Restore last ETag
+        id: cache_restore
+        uses: actions/cache/restore@v4
+        with:
+          path: .sentinel-state
+          key: sentinel-etag-${{ github.run_id }}
+          restore-keys: |
+            sentinel-etag-
+
+      - name: Read last ETag
+        id: last_etag
+        run: |
+          mkdir -p .sentinel-state
+          if [ "${{ inputs.force }}" = "true" ]; then
+            echo "value=" >> "$GITHUB_OUTPUT"
+            echo "force mode: 忽略缓存 ETag"
+          elif [ -f .sentinel-state/etag ]; then
+            echo "value=$(cat .sentinel-state/etag)" >> "$GITHUB_OUTPUT"
+            echo "last etag: $(cat .sentinel-state/etag)"
+          else
+            echo "value=" >> "$GITHUB_OUTPUT"
+            echo "no cached etag"
+          fi
+
+      - name: Run sentinel
+        id: run
+        env:
+          CX_PAT: ${{ secrets.CX_PAT }}
+          SENTINEL_API_BASE: ${{ vars.SENTINEL_API_BASE || 'https://chexian.cretvalu.com' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          node scripts/sentinel/etl-anomaly-sentinel.mjs \
+            --api-base "$SENTINEL_API_BASE" \
+            --last-etag "${{ steps.last_etag.outputs.value }}" \
+            --out-dir sentinel-out
+
+      - name: Persist new ETag
+        if: steps.run.outputs.not_modified != 'true' && steps.run.outputs.etag != ''
+        run: |
+          mkdir -p .sentinel-state
+          printf '%s' "${{ steps.run.outputs.etag }}" > .sentinel-state/etag
+
+      - name: Save ETag cache
+        if: steps.run.outputs.not_modified != 'true' && steps.run.outputs.etag != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .sentinel-state
+          key: sentinel-etag-${{ github.run_id }}
+
+      - name: Upload run-log artifact
+        if: always() && steps.run.outputs.not_modified != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-run-${{ github.run_id }}
+          path: sentinel-out/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Post anomaly to tracking issue
+        if: steps.run.outputs.has_anomalies == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUMMARY_PATH: ${{ steps.run.outputs.summary_path }}
+        run: |
+          set -euo pipefail
+          TITLE="ETL 异常哨兵追踪"
+          LABEL="sentinel-anomaly"
+          # 确保 label 存在（已存在则忽略）
+          gh label create "$LABEL" --color B60205 --description "ETL 异常哨兵告警" 2>/dev/null || true
+          # 查找已存在的追踪 issue（open）
+          ISSUE=$(gh issue list --state open --search "in:title $TITLE" --json number,title \
+            --jq ".[] | select(.title==\"$TITLE\") | .number" | head -n1)
+          if [ -z "$ISSUE" ]; then
+            ISSUE=$(gh issue create --title "$TITLE" --label "$LABEL" \
+              --body "ETL 异常哨兵的集中追踪 issue。每次检测到异常会在此追加评论；无异常静默。" \
+              | grep -oE '[0-9]+$' | head -n1)
+            echo "created tracking issue #$ISSUE"
+          fi
+          gh issue edit "$ISSUE" --add-label "$LABEL" 2>/dev/null || true
+          gh issue comment "$ISSUE" --body-file "$SUMMARY_PATH"
+          echo "posted anomaly to issue #$ISSUE"

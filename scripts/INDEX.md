@@ -29,6 +29,7 @@
 | 从字段注册表生成 mapping/validator/etl 文件 | `field-registry/generate.mjs` | `node scripts/field-registry/generate.mjs` |
 | 校验 codegen 产物是否与注册表同步 | `field-registry/generate.mjs --check` | `node scripts/field-registry/generate.mjs --check` |
 | Phase 0 better-sqlite3 沙盒预检（验证 ESM/PRAGMA/CRUD/backup） | `state-db-smoke.mjs` | `node scripts/state-db-smoke.mjs`（沙盒中需先 `bun add better-sqlite3`） |
+| ETL 后异常哨兵（统计判定+LLM 归因，异常才告警） | `sentinel/etl-anomaly-sentinel.mjs` | `CX_PAT=... node scripts/sentinel/etl-anomaly-sentinel.mjs --dry-run` |
 
 ---
 
@@ -89,6 +90,17 @@
 | `verify-vps-heatmap.mjs` | **VPS 热力图专项验收**：真实登录线上页面并校验热力图标题/三标签切换/`performance-org-heatmap` 200 | `bun run verify:vps:heatmap` |
 | `verify-agent-production-smoke.mjs` | **Agent 生产验收 smoke**：按固定 API 调用 7 个确定性诊断端点、observability 和 readiness，输出 Stage 5 前置证据报告；不接 LLM、不生成 SQL、不输出 token | `bun run verify:agent:smoke -- --token <jwt> --start-date YYYY-MM-DD --end-date YYYY-MM-DD --baseline-start-date YYYY-MM-DD --baseline-end-date YYYY-MM-DD` |
 | `gen-reports-manifest.mjs` | **静态报告 manifest 生成**：扫描 `public/reports/<slug>/`，把真实存在的报告日期写入 `manifest.json`，供首页卡片解析「应打开哪一期 + 是否落后于 etlDate」。由 `sync-vps.mjs` / `sync-and-reload.mjs` 同步前自动调用 | `bun run reports:manifest` |
+
+### 🛡️ 监控哨兵类
+
+| 脚本 | 作用 | 运行命令 |
+|------|------|----------|
+| `sentinel/etl-anomaly-sentinel.mjs` | **ETL 异常哨兵**（发布后监控）：每日 ETL 后调生产 API（PAT 只读），统计层判定核心指标异常（赔付率/费用率/保费/件数，含 IBNR 成熟度过滤）+ LLM 归因，异常才在 GitHub 追踪 issue 告警。幂等以 comprehensive 响应 ETag 去重。详见 `scripts/sentinel/README.md` | `CX_PAT=... node scripts/sentinel/etl-anomaly-sentinel.mjs --dry-run --api-base https://chexian.cretvalu.com` |
+| `sentinel/lib/stats.mjs` | 哨兵统计纯函数（Z-score/环比/成熟度过滤/指标判定），单测 `tests/sentinel/stats.test.ts` | （被主脚本引用） |
+| `sentinel/lib/fetch-metrics.mjs` | 哨兵取数封装（data/version、comprehensive、trend、YoY），PAT 只读 + ETag 幂等 | （被主脚本引用） |
+| `sentinel/lib/llm-judge.mjs` | 哨兵 LLM 归因（Anthropic/智谱，temperature=0，不裁决告警），不可用时规则兜底 | （被主脚本引用） |
+
+> 工作流：`.github/workflows/etl-anomaly-sentinel.yml`（schedule 轮询 + workflow_dispatch）。哨兵是**发布后监控非准入闸门**。
 
 ### 🛠️ 工具类
 
@@ -218,3 +230,7 @@ python3 scripts/compare-schema-mapping.py
 ## 2026-06-03 追加记录
 
 - `check-governance.mjs` 新增 #25“空 catch 块禁令”检查：`server/src` + `src` 禁止纯空 catch 块（静默失败 Law 1），纯代码治理项 22 → 23；配套 `.claude/skills/silent-failure-guard.md`。
+
+## 2026-06-05 追加记录
+
+- 新增 **ETL 异常哨兵**（`scripts/sentinel/`）：发布后监控，每日 ETL 后调生产 API（PAT 只读）做核心指标「当前 vs 历史」对比，统计层确定性判定告警 + LLM 归因（不裁决），异常才在 GitHub 追踪 issue 告警、无异常静默。取数坍缩到 `/api/query/comprehensive` 一次调用；幂等以响应 ETag（绑定 `getDataVersion` 指纹）去重；满期赔付率做 IBNR 成熟度过滤。工作流 `.github/workflows/etl-anomaly-sentinel.yml`。配套新增「🛡️ 监控哨兵类」分类。

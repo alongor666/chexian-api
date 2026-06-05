@@ -1,0 +1,85 @@
+{
+  "_comment": "ETL 异常哨兵配置 — 声明式。改阈值/加指标只改此文件。详见 README.md。",
+  "apiBase": "https://chexian.cretvalu.com",
+  "granularity": "monthly",
+  "maturity": {
+    "_comment": "排除最近 N 个完整期不进 Z 计算（IBNR/赔款报告滞后防线，codex 评审 E2）。月度建议 1，越保守越大。",
+    "excludeRecent": 1
+  },
+  "history": {
+    "_comment": "comprehensive lossTrend 已返回全量逐期序列，此处仅约束统计用的最小完整期数。",
+    "minMaturePeriods": 3
+  },
+  "metrics": [
+    {
+      "id": "earned_claim_ratio",
+      "name": "满期赔付率",
+      "alert": true,
+      "source": "comprehensive.lossTrend",
+      "unit": "%",
+      "direction": "up",
+      "zThreshold": 2.5,
+      "momThreshold": 8,
+      "yoyThreshold": 10,
+      "_note": "核心。逐期序列 Z-score + 成熟度排除 + YoY 交叉。赔付率波动天然大，阈值放宽到 2.5。"
+    },
+    {
+      "id": "expense_ratio",
+      "name": "费用率",
+      "alert": true,
+      "source": "comprehensive.summarySnapshot",
+      "unit": "%",
+      "direction": "up",
+      "zThreshold": 2,
+      "momThreshold": 5,
+      "yoyThreshold": 8,
+      "_note": "稳定指标。无逐期序列时退化为快照 + 环比/同比。"
+    },
+    {
+      "id": "total_premium",
+      "name": "签单保费",
+      "alert": true,
+      "source": "trend.premium",
+      "unit": "元",
+      "direction": "both",
+      "zThreshold": 2.5,
+      "momThreshold": 30,
+      "_note": "断崖检测（暴增/暴跌均告警）。"
+    },
+    {
+      "id": "policy_count",
+      "name": "出单件数",
+      "alert": true,
+      "source": "trend.policy_count",
+      "unit": "件",
+      "direction": "both",
+      "zThreshold": 2.5,
+      "momThreshold": 30,
+      "_note": "断崖检测。"
+    },
+    {
+      "id": "variable_cost_ratio",
+      "name": "变动成本率",
+      "alert": false,
+      "source": "comprehensive.summarySnapshot",
+      "unit": "%",
+      "_note": "派生展示（≈赔付率+费用率，强相关）。不单独触警，避免冗余三连告警（codex E7）。"
+    },
+    {
+      "id": "comprehensive_expense_ratio",
+      "name": "综合费用率",
+      "alert": false,
+      "source": "comprehensive.summarySnapshot",
+      "unit": "%",
+      "_note": "派生展示，不单独触警。"
+    }
+  ],
+  "llm": {
+    "enabled": true,
+    "_comment": "LLM 仅对统计已触发项做归因（one_line_cause）+ 分级，不裁决是否告警（codex E2）。",
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5-20251001",
+    "temperature": 0,
+    "maxTokens": 1024
+  }
+}
