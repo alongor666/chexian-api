@@ -1,10 +1,10 @@
-#!/usr/bin/env bun
+#!/usr/bin/env npx tsx
 /**
  * 从指标注册表生成指标字典文档
  *
  * 输出：开发文档/指标字典.md
  *
- * 用法：bun scripts/metric-registry/generate-metric-doc.ts
+ * 用法：npx tsx scripts/metric-registry/generate-metric-doc.ts
  */
 
 import { writeFileSync } from 'fs';
@@ -40,7 +40,7 @@ let md = `# 指标字典
 
 > 从指标注册表自动生成，不要手动编辑
 >
-> 生成命令：\`bun scripts/metric-registry/generate-metric-doc.ts\`
+> 生成命令：\`npx tsx scripts/metric-registry/generate-metric-doc.ts\`
 >
 > 生成时间：${new Date().toISOString().slice(0, 10)}
 >

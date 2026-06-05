@@ -306,8 +306,8 @@ src/hooks/useTruckAnalysis.ts - Parameter 'data' implicitly has an 'any' type
 
 **流程**（按 CLAUDE.md §14 指标开发协议）：
 1. 添加到 `server/src/config/metric-registry/categories/cost.ts`（含 testCase + changelog）
-2. `bun scripts/metric-registry/validate.ts` — 校验通过
-3. `bun scripts/metric-registry/generate-frontend-map.ts` — 更新前端映射
+2. `npx tsx scripts/metric-registry/validate.ts` — 校验通过
+3. `npx tsx scripts/metric-registry/generate-frontend-map.ts` — 更新前端映射
 4. 不要在 SQL 生成器中硬编码此指标公式
 
 **验证**：`bun run governance` 通过
@@ -705,7 +705,7 @@ ssh: connect to host 162.14.113.44 port 22: Connection timed out
 
 **常见失败项及修复方式**：
 - #17 codegen 不一致 → `node scripts/field-registry/generate.mjs`
-- 指标注册表校验失败 → `bun scripts/metric-registry/validate.ts` 查看具体错误
+- 指标注册表校验失败 → `npx tsx scripts/metric-registry/validate.ts` 查看具体错误
 - 大文件检测 → 检查是否有 Parquet/Excel 文件被误提交
 
 **约束**：只修复治理失败项，不要顺手重构其他代码。

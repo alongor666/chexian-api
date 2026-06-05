@@ -50,8 +50,8 @@
 1. `grep -r "id: '${NEW_ID}'" server/src/config/metric-registry/` — 确认不存在
 2. 判断复杂度：L1-L3（单行 SQL 表达式）→ 添加到 `categories/*.ts`；L4（CTE/窗口函数/多表 JOIN）→ SQL 生成器中实现，引用注册表原子指标
 3. 必须包含：id + name + formula + sql.expression + display + 至少 1 个 testCase + changelog
-4. `bun scripts/metric-registry/validate.ts` 校验通过
-5. `bun scripts/metric-registry/generate-frontend-map.ts` 更新前端映射
+4. `npx tsx scripts/metric-registry/validate.ts` 校验通过
+5. `npx tsx scripts/metric-registry/generate-frontend-map.ts` 更新前端映射
 
 **禁止**：
 - ❌ 在 SQL 生成器中硬编码新指标公式而不在注册表注册
@@ -63,7 +63,7 @@
 
 ### 字段注册表（RED LINE）
 
-**唯一事实源**：`server/src/config/field-registry/fields.json`（56 个字段：14 必需 + 42 可选）
+**唯一事实源**：`server/src/config/field-registry/fields.json`（42 个字段）
 
 **新增/修改字段流程**（必须按顺序）：
 1. 修改 `fields.json` 中的字段定义
@@ -79,8 +79,8 @@
 
 | 注册表 | 路径 | 覆盖范围 | codegen |
 |--------|------|---------|---------|
-| 指标注册表 | `server/src/config/metric-registry/` | 49 个指标 | `generate-frontend-map.ts` |
-| 字段注册表 | `server/src/config/field-registry/fields.json` | 56 个字段 | `field-registry/generate.mjs` |
+| 指标注册表 | `server/src/config/metric-registry/` | 25 个指标 | `generate-frontend-map.ts` |
+| 字段注册表 | `server/src/config/field-registry/fields.json` | 42 个字段 | `field-registry/generate.mjs` |
 | 客户类别 | `src/shared/config/customer-categories.ts` + `server/src/config/` | 11 类枚举 | — |
 | 环境变量 | `server/src/config/env.ts` | 20+ 变量（6 分组） | — |
 | API 路由 | `server/src/config/api-routes.ts` + `src/shared/api/routes.ts` | 50+ 路由 | — |
@@ -141,7 +141,7 @@ bun run governance                 # 治理校验
 ```
 
 **CI 测试分层协议**（RED LINE）：
-- **单元测试** (`bun run test`): 198 文件 / 2559 测试 — CI + 本地
+- **单元测试** (`bun run test`): 72 文件 / 892 测试 — CI + 本地
 - **集成测试** (`bun run test:integration`): 4 文件 — 仅本地（需 DuckDB 原生二进制）
 - CI 环境无法解析 `.node` 原生模块（vitest/jsdm 限制），相关测试必须在 `vite.config.ts` exclude 中排除
 - 新增原生模块依赖时，必须检查是否有对应测试需排除

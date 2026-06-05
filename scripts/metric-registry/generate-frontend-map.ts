@@ -1,11 +1,11 @@
-#!/usr/bin/env bun
+#!/usr/bin/env npx tsx
 /**
  * 从指标注册表生成前端映射文件
  *
  * 输出：src/shared/config/metric-display-map.ts
  * 包含：METRIC_LABEL_MAP + METRIC_FORMATTER_MAP
  *
- * 用法：bun scripts/metric-registry/generate-frontend-map.ts
+ * 用法：npx tsx scripts/metric-registry/generate-frontend-map.ts
  */
 
 import { writeFileSync } from 'fs';
@@ -46,7 +46,7 @@ const formulaEntries = metrics
 const output = `/**
  * 指标展示映射 — 从注册表自动生成
  *
- * 生成命令：bun scripts/metric-registry/generate-frontend-map.ts
+ * 生成命令：npx tsx scripts/metric-registry/generate-frontend-map.ts
  * 生成时间：${new Date().toISOString()}
  * 指标数量：${stats.total}
  *

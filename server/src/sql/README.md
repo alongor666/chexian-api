@@ -305,7 +305,7 @@ To add a new KPI:
 { id: 'avg_policy_value', name: '件均保费', formula: 'AVG(premium)', sql: { expression: 'AVG(premium) as avg_policy_value' }, ... }
 ```
 
-2. Validate: `bun scripts/metric-registry/validate.ts`
+2. Validate: `npx tsx scripts/metric-registry/validate.ts`
 
 3. Add to `generateKpiQuery()`:
 ```typescript
@@ -315,7 +315,7 @@ SELECT
   ...
 ```
 
-4. Update frontend map: `bun scripts/metric-registry/generate-frontend-map.ts`
+4. Update frontend map: `npx tsx scripts/metric-registry/generate-frontend-map.ts`
 
 5. Update Dashboard component to display it:
 ```typescript
