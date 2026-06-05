@@ -63,6 +63,24 @@ export function splitByMaturity(series, excludeRecent = 1) {
 }
 
 /**
+ * 从逐期序列中查找指定 period 的去年同期值。
+ * period 格式：'YYYY-MM' 或 'YYYY-MM-DD'。年份 -1 + 月日不变。找不到或非有限数值返回 null。
+ *
+ * 用途：YoY 必须用「latestMature 期」对齐，而非 series 尾月（codex P2 评审）。
+ * series 尾月在 lossTrend 经 null filter 后仍可能是 cutoff 当月（如 2026-06，
+ * 4 天满期分母极小放大值），用它作 yoy.current 会把 6 月未成熟值当佐证 3 月告警。
+ */
+export function findSamePeriodLastYear(series, period) {
+  if (!Array.isArray(series) || typeof period !== 'string') return null;
+  const m = period.match(/^(\d{4})(-.+)$/);
+  if (!m) return null;
+  const targetPeriod = `${Number(m[1]) - 1}${m[2]}`;
+  const row = series.find((r) => r && r.time_period === targetPeriod);
+  if (!row || !Number.isFinite(Number(row.value))) return null;
+  return { time_period: row.time_period, value: Number(row.value) };
+}
+
+/**
  * 对单个指标的逐期序列做异常判定。
  *
  * 判定逻辑（统计层，确定性）：
@@ -73,6 +91,8 @@ export function splitByMaturity(series, excludeRecent = 1) {
  *   5) 触发条件：Z 门 OR 环比门（任一命中即候选）。
  *   6) 方向敏感：direction='up' 只在升高时告警（如赔付率），'down' 只在降低时，
  *      'both' 双向。
+ *   7) YoY 对齐：opts.yoy 缺省 → 自动从 series 查 latestMature 同月前一年值，
+ *      避免把 series 尾月（cutoff 当月未成熟）当 yoy.current 错误佐证（codex P2）。
  *
  * @returns {object} verdict（含 triggered / 触发原因 / 数值上下文，供 LLM 归因与 issue 展示）
  */
@@ -82,7 +102,7 @@ export function evaluateMetricSeries(metric, series, opts = {}) {
     momThreshold = null, // null = 不启用环比门
     direction = 'both',
     excludeRecent = 1,
-    yoy = null, // { current, previous } 同期对照，用于交叉确认
+    yoy = null, // 缺省 → 自动按 latestMature 期 -1 年从 series 内查（修复 codex P2）
     yoyThreshold = null,
   } = opts;
 
@@ -99,7 +119,7 @@ export function evaluateMetricSeries(metric, series, opts = {}) {
     baselineStd: NaN,
     z: NaN,
     mom: NaN,
-    yoy: yoy ?? null,
+    yoy: null,
     excludedPeriods: excluded.map((e) => e.time_period),
     insufficientData: false,
   };
@@ -118,6 +138,16 @@ export function evaluateMetricSeries(metric, series, opts = {}) {
   const s = stdDev(baselineValues);
   const z = zScore(latest.value, baselineValues);
   const mom = pctChange(latest.value, prior.value);
+
+  // YoY 同期对齐（修复 codex P2）：缺省时用 latestMature 期从 series 查去年同月，
+  // 而非 series 尾月（cutoff 当月未成熟值），避免错误佐证。
+  let effectiveYoy = yoy;
+  if (effectiveYoy == null) {
+    const ly = findSamePeriodLastYear(series, latest.time_period);
+    if (ly != null) {
+      effectiveYoy = { current: latest.value, previous: ly.value, previousPeriod: ly.time_period };
+    }
+  }
 
   const reasons = [];
 
@@ -141,8 +171,8 @@ export function evaluateMetricSeries(metric, series, opts = {}) {
 
   // YoY 交叉确认（不单独触发，但作为强化证据记录）
   let yoyDeviation = NaN;
-  if (yoy && Number.isFinite(yoy.current) && Number.isFinite(yoy.previous)) {
-    yoyDeviation = pctChange(yoy.current, yoy.previous);
+  if (effectiveYoy && Number.isFinite(effectiveYoy.current) && Number.isFinite(effectiveYoy.previous)) {
+    yoyDeviation = pctChange(effectiveYoy.current, effectiveYoy.previous);
     if (
       yoyThreshold !== null &&
       Number.isFinite(yoyDeviation) &&
@@ -163,6 +193,7 @@ export function evaluateMetricSeries(metric, series, opts = {}) {
     baselineStd: Number.isFinite(s) ? Number(s.toFixed(4)) : NaN,
     z: Number.isFinite(z) ? Number(z.toFixed(4)) : NaN,
     mom: Number.isFinite(mom) ? Number(mom.toFixed(4)) : NaN,
+    yoy: effectiveYoy,
     yoyDeviation: Number.isFinite(yoyDeviation) ? Number(yoyDeviation.toFixed(4)) : NaN,
   };
 }
