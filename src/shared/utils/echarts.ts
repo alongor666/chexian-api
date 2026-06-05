@@ -13,7 +13,7 @@ import {
   TooltipComponent,
   VisualMapComponent,
 } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import { CanvasRenderer, SVGRenderer } from 'echarts/renderers';
 
 echarts.use([
   BarChart,
@@ -33,6 +33,7 @@ echarts.use([
   TooltipComponent,
   VisualMapComponent,
   CanvasRenderer,
+  SVGRenderer,
 ]);
 
 export type EChartsCore = typeof echarts;
