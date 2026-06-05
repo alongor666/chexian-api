@@ -56,6 +56,7 @@ import {
   HEATMAP_DIMENSION_LABELS,
   type HeatmapDrillStep,
 } from './hooks/usePerformanceOrgHeatmap';
+import { HEATMAP_DIM_GROUPS } from './config/heatmapDimGroups';
 import {
   type PerformanceHeatmapSelection,
 } from './utils/performanceHeatmapSelection';
@@ -642,16 +643,6 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
     { key: 'insurance_grade', label: '风险评分' },
   ];
 
-  // 维度分段控件分组（组织 / 业务）。label 全部从 HEATMAP_DIMENSION_LABELS SSOT 取，
-  // 改 SSOT 自动跟进，避免硬编码。
-  const HEATMAP_DIM_GROUPS: { groupLabel: string; keys: HeatmapDimension[] }[] = [
-    { groupLabel: '组织', keys: ['org_level_3', 'team', 'salesman'] },
-    {
-      groupLabel: '业务',
-      keys: ['customer_category', 'coverage_combination', 'energy_type', 'business_nature', 'insurance_grade'],
-    },
-  ];
-
   const handlePerfHeatmapRowClick = (org: string) => {
     setPendingHeatmapRow(org);
     setShowHeatmapPicker(true);
@@ -903,15 +894,23 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
           }
           leftContent={
             heatmapDrillPath.length === 0 ? (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              // 单一 radiogroup 包住全部 8 个 radio（互斥单选语义要求每组恰好 1 个 aria-checked）。
+              // 视觉上仍按"组织/业务"分组，分组标签 aria-hidden 仅装饰。
+              // 修复 PR #480 codex P2（双 radiogroup 共用一个状态导致其中一组无任何 aria-checked）。
+              <div
+                role="radiogroup"
+                aria-label="热力图维度"
+                className="flex flex-wrap items-center gap-x-4 gap-y-2"
+              >
                 {HEATMAP_DIM_GROUPS.map((group) => (
                   <div key={group.groupLabel} className="flex items-center gap-2">
-                    <span className="text-xs text-neutral-400 dark:text-neutral-500">{group.groupLabel}</span>
-                    <div
-                      role="radiogroup"
-                      aria-label={`${group.groupLabel}维度`}
-                      className="inline-flex rounded-md bg-neutral-100 dark:bg-white/5 p-0.5 text-xs"
+                    <span
+                      aria-hidden="true"
+                      className="text-xs text-neutral-400 dark:text-neutral-500"
                     >
+                      {group.groupLabel}
+                    </span>
+                    <div className="inline-flex rounded-md bg-neutral-100 dark:bg-white/5 p-0.5 text-xs">
                       {group.keys.map((key) => {
                         const active = heatmapDimension === key;
                         return (
