@@ -4,6 +4,12 @@ export interface PresetUser {
   displayName: string;
   role: string;
   organization?: string;
+  /**
+   * 分公司编码（CHAR(2)：'SC'=四川 / 'SX'=山西）。
+   * undefined → 系统级超管，可见全国（仅 admin 应缺省）。
+   * BRANCH_RLS_ENABLED=true 时，permission.ts 据此 AND `branch_code='${branchCode}'`。
+   */
+  branchCode?: string;
   allowedRoutes?: string[];
   defaultRoute?: string;
   allowedIps?: string[];
@@ -56,6 +62,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '乐山',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   tianfu: {
     username: 'tianfu',
@@ -65,6 +72,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '天府',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   liangqin: {
     username: 'liangqin',
@@ -75,6 +83,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '天府',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   yibin: {
     username: 'yibin',
@@ -84,6 +93,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '宜宾',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   deyang: {
     username: 'deyang',
@@ -93,6 +103,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '德阳',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   xindu: {
     username: 'xindu',
@@ -102,6 +113,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '新都',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   wuhou: {
     username: 'wuhou',
@@ -111,6 +123,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '武侯',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   luzhou: {
     username: 'luzhou',
@@ -120,6 +133,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '泸州',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   zigong: {
     username: 'zigong',
@@ -129,6 +143,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '自贡',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   ziyang: {
     username: 'ziyang',
@@ -138,6 +153,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '资阳',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   dazhou: {
     username: 'dazhou',
@@ -147,6 +163,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '达州',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   qingyang: {
     username: 'qingyang',
@@ -156,6 +173,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '青羊',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   gaoxin: {
     username: 'gaoxin',
@@ -165,18 +183,21 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '高新',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
   jiachengxian: {
     username: 'jiachengxian',
     passwordHash: '$2b$10$gy9XfxPHgbFrdSJfFrTtW.tu3kRzGYsPxGRrtvMyleCGNTpdTDhL6',
     displayName: 'jiachengxian',
     role: 'branch_admin',
+    branchCode: 'SC',
   },
   xuechenglong: {
     username: 'xuechenglong',
     passwordHash: '$2b$10$NHIOCyjuqXWLXyq5UaP8Y.5p/NNsDMXBrsnk/eHsmq.tVSd0swcwu',
     displayName: '薛成龙',
     role: 'branch_admin',
+    branchCode: 'SC',
     specialFeatures: ['cost', 'moto_cost'],
   },
   linxia: {
@@ -184,6 +205,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     passwordHash: '$2b$10$IPuFIhlNl6NFLXSC8A4o4.tuqMsK9J7B6D5DbeKzpOnJtE9uLA/BO',
     displayName: '林霞',
     role: 'branch_admin',
+    branchCode: 'SC',
     specialFeatures: ['cost'],
   },
   chexianbu: {
@@ -191,6 +213,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     passwordHash: '$2b$10$MNXiN2ASW4I1h.uqWRKySuQH80CmVCn1wjnXbXWzV5ersVLcoE4wu',
     displayName: '车险部',
     role: 'branch_admin',
+    branchCode: 'SC',
     specialFeatures: ['cost'],
   },
   scdianxiao: {
@@ -198,6 +221,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     passwordHash: '$2b$10$LGsDuG1.fieDoR/mbsII1u2ecFY0iteEyFMKkgzO98OKfdbUAj4cK',
     displayName: '四川电销',
     role: 'telemarketing_user',
+    branchCode: 'SC',
   },
   test_org_user: {
     username: 'test_org_user',
@@ -207,6 +231,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     organization: '乐山',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
   },
 };
 

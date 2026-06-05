@@ -7,6 +7,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from './error.js';
+import { dbEnv } from '../config/env.js';
 
 /**
  * 用户角色枚举
@@ -18,6 +19,14 @@ export enum UserRole {
   ORG_USER = 'org_user',
   /** 电销用户 - 只能查看电销数据，但可以跨机构查看 */
   TELEMARKETING_USER = 'telemarketing_user',
+}
+
+/**
+ * 多分公司 RLS 启用判定（0F feature flag）
+ * 仅当 BRANCH_RLS_ENABLED === 'true' 时返回 true（严格字符串匹配）
+ */
+function isBranchRlsEnabled(): boolean {
+  return dbEnv.BRANCH_RLS_ENABLED === 'true';
 }
 
 /**
@@ -47,24 +56,35 @@ export function permissionMiddleware(
       throw new AppError(401, 'Authentication required');
     }
 
-    const { role, organization } = req.user;
+    const { role, organization, branchCode } = req.user;
 
-    // 2. 根据角色生成权限过滤条件
+    // 2. 根据角色生成基础权限过滤条件
+    let baseFilter: string;
     if (role === UserRole.BRANCH_ADMIN) {
       // 分公司管理员：可查看所有数据
-      req.permissionFilter = '1=1';
+      baseFilter = '1=1';
     } else if (role === UserRole.ORG_USER) {
       // 三级机构用户：只能查看本机构数据（严格等值匹配）
       if (!organization) {
         throw new AppError(403, 'Organization not specified for ORG_USER role');
       }
-      req.permissionFilter = `org_level_3 = '${escapeSqlString(organization)}'`;
+      baseFilter = `org_level_3 = '${escapeSqlString(organization)}'`;
     } else if (role === UserRole.TELEMARKETING_USER) {
       // 电销用户：只能查看电销数据
-      req.permissionFilter = 'is_telemarketing = true';
+      baseFilter = 'is_telemarketing = true';
     } else {
       // 未知角色
       throw new AppError(403, 'Invalid user role');
+    }
+
+    // 3. 多分公司 RLS（0F feature flag）：可选注入 branch_code 过滤
+    // - flag 关闭：保留 0C 之前的单租户行为（兼容期）
+    // - flag 开启 + 用户有 branchCode：AND `branch_code='${escape(branchCode)}'`
+    // - flag 开启 + 用户无 branchCode（系统级超管 admin）：不加，看全国
+    if (isBranchRlsEnabled() && branchCode) {
+      req.permissionFilter = `(${baseFilter}) AND branch_code = '${escapeSqlString(branchCode)}'`;
+    } else {
+      req.permissionFilter = baseFilter;
     }
 
     next();

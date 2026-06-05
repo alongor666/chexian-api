@@ -50,10 +50,10 @@ export function replaceAll(snapshot: AccessControlSnapshot): void {
 
     const insertUser = db.prepare(`
       INSERT INTO access_users
-        (id, username, display_name, password_hash, role, organization,
+        (id, username, display_name, password_hash, role, organization, branch_code,
          allowed_routes, default_route, allowed_ips, special_features, active, updated_at)
       VALUES
-        (@id, @username, @displayName, @passwordHash, @role, @organization,
+        (@id, @username, @displayName, @passwordHash, @role, @organization, @branchCode,
          @allowedRoutes, @defaultRoute, @allowedIps, @specialFeatures, @active, datetime('now'))
     `);
     for (const user of snapshot.users) {
@@ -64,6 +64,7 @@ export function replaceAll(snapshot: AccessControlSnapshot): void {
         passwordHash: user.passwordHash,
         role: user.role,
         organization: user.organization ?? null,
+        branchCode: user.branchCode ?? null,
         allowedRoutes: serializeArray(user.allowedRoutes),
         defaultRoute: user.defaultRoute ?? null,
         allowedIps: serializeArray(user.allowedIps),
@@ -110,6 +111,7 @@ export function readAll(): AccessControlSnapshot {
     passwordHash: String(row.password_hash),
     role: String(row.role),
     organization: row.organization ? String(row.organization) : undefined,
+    branchCode: row.branch_code ? String(row.branch_code) : undefined,
     allowedRoutes: parseArray(row.allowed_routes),
     defaultRoute: row.default_route ? String(row.default_route) : undefined,
     allowedIps: parseArray(row.allowed_ips),
