@@ -62,21 +62,11 @@ export function HeatmapFocusPanel({
     return () => window.removeEventListener('keydown', handleKey);
   }, [isOpen, onClear]);
 
-  // 外部点击关闭（避开热力图单元格自身：点击单元格视为切换，不视为关闭）
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as Node | null;
-      if (!target) return;
-      if (asideRef.current?.contains(target)) return;
-      // 单元格点击交给 onCellClick 处理切换／清除
-      const interactiveCell = (target as HTMLElement).closest?.('[data-heatmap-cell]');
-      if (interactiveCell) return;
-      onClear();
-    };
-    window.addEventListener('mousedown', handleClick);
-    return () => window.removeEventListener('mousedown', handleClick);
-  }, [isOpen, onClear]);
+  // 关闭路径：× 按钮 / ESC 键 / 点击其他单元格切换。
+  // 不挂"document 外部点击关闭"：抽屉的主 CTA「选择下钻维度」会弹出 DimensionPicker
+  // （`fixed inset-0` overlay 渲染在抽屉外），任何 document 级 mousedown 监听都会先于
+  // picker 按钮 onClick 触发，从而把 heatmapSelection 清空、丢失下钻上下文（codex PR #481 P1）。
+  // 设计稿本身也未要求外部点击关闭。
 
   if (!isOpen || !activeCell) return null;
 
