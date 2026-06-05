@@ -7,11 +7,11 @@
  *
  * 数据流（详见 scripts/sentinel/README.md 与计划 v3）：
  *   1) GET /api/data/version                 → etlDate（上下文）
- *   2) GET /api/query/comprehensive (If-None-Match:<lastEtag>)
+ *   2) GET /api/query/comprehensive-bundle (If-None-Match:<lastEtag>)
  *        · 304 → 数据版本未变（getDataVersion 指纹），静默退出
  *        · 200 → 4 比率快照 + 逐期赔付率序列 + cutoffDate + timeProgress
  *   3) GET /api/query/trend ×2               → 保费/件数断崖序列
- *   4) GET /api/query/comprehensive(去年同期) → 赔付率 YoY 交叉
+ *   4) GET /api/query/comprehensive-bundle(去年同期) → 赔付率 YoY 交叉
  *   5) 统计判定（确定性，唯一告警决策者）+ 成熟度排除（IBNR 防线）
  *   6) LLM 归因（仅对已触发项，temperature=0，不裁决）
  *   7) 产出 verdict.json + summary.md + run-log；GITHUB_OUTPUT 透出状态

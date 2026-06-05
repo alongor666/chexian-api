@@ -19,15 +19,15 @@
 
 ```
 GET /api/data/version                         → etlDate（上下文）
-GET /api/query/comprehensive (If-None-Match)  → 304? 静默退出 : 4 比率快照 + 逐期赔付率序列 + cutoffDate + timeProgress
+GET /api/query/comprehensive-bundle (If-None-Match)  → 304? 静默退出 : 4 比率快照 + 逐期赔付率序列 + cutoffDate + timeProgress
 GET /api/query/trend ×2                        → 保费/件数断崖序列
-GET /api/query/comprehensive(去年同期)          → 赔付率 YoY 交叉
+GET /api/query/comprehensive-bundle(去年同期)          → 赔付率 YoY 交叉
 → 统计判定（排除未成熟近期，IBNR 防线）→ LLM 归因 → verdict.json + summary.md
 ```
 
 ## 关键设计（来自 codex 评审）
 
-- **取数坍缩**：`/api/query/comprehensive` 一次拿全 4 比率快照 + `earned_claim_ratio` **逐期月度序列** + 已归一 `achievement_rate` + `timeProgress`。不再逐期循环调 cost。
+- **取数坍缩**：`/api/query/comprehensive-bundle` 一次拿全 4 比率快照 + `earned_claim_ratio` **逐期月度序列** + 已归一 `achievement_rate` + `timeProgress`。不再逐期循环调 cost。
 - **幂等用 ETag**：comprehensive 响应的 ETag 绑定 `getDataVersion()` 的 parquet 内容指纹（"数据未变→版本不变"）。`If-None-Match` 命中 304 即静默。比 `MAX(policy_date)` 可靠。
 - **成熟度过滤（IBNR）**：满期赔付率近期受赔款报告滞后影响系统性偏低、随时间向上发展（参考 `diagnose-loss-development`）。统计判定**排除最近 N 个完整期**，只对已成熟期判异常——这是确定性处理，**不交给 LLM 兜底**。
 - **逐期而非累计**：比率 Z-score 必须用 per-period 值（comprehensive lossTrend 即逐期），禁止用累计序列（强自相关会压低标准差、频繁误触）。

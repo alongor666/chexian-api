@@ -4,7 +4,7 @@
  * 全部走生产 API（runner 无 parquet），PAT 只读鉴权（Authorization: Bearer cx_pat_...）。
  * 端点（均已实读源码核验）：
  *   - GET /api/data/version                          → {etlDate, buildTime, serverStartTime}（上下文/日志）
- *   - GET /api/query/comprehensive?granularity=...   → data.overview.summary(4 比率快照)
+ *   - GET /api/query/comprehensive-bundle?granularity=...   → data.overview.summary(4 比率快照)
  *                                                       + data.loss.trendRows(逐期赔付率序列)
  *                                                       + data.meta.{cutoffDate,timeProgress}
  *     · 幂等：带 If-None-Match:<lastEtag> → 304 表示数据版本未变（getDataVersion 指纹），静默退出
@@ -52,7 +52,8 @@ export async function fetchDataVersion(apiBase, pat) {
 export async function fetchComprehensive(apiBase, pat, { granularity = 'monthly', cutoffDate = null, ifNoneMatch = null } = {}) {
   const q = new URLSearchParams({ granularity });
   if (cutoffDate) q.set('cutoffDate', cutoffDate);
-  const r = await apiGet(apiBase, `/api/query/comprehensive?${q.toString()}`, { pat, ifNoneMatch });
+  // 实际注册路径是 /comprehensive-bundle（query/comprehensive.ts），无 /comprehensive 别名
+  const r = await apiGet(apiBase, `/api/query/comprehensive-bundle?${q.toString()}`, { pat, ifNoneMatch });
   if (r.notModified) return { notModified: true, etag: r.etag };
 
   const data = r.json.data;
@@ -67,9 +68,12 @@ export async function fetchComprehensive(apiBase, pat, { granularity = 'monthly'
 }
 
 /**
- * 取流量趋势（断崖检测）。trend 输出列名按视角变化，做容错解析：
- * 取 time_period + 第一个「非 time_period / 非 next_month* 的有限数值列」作为指标值。
- * @returns {Array<{time_period:string, value:number}>}
+ * 取流量趋势（断崖检测）。两层容错：
+ *   1) 列名按视角变化 → 优先已知列名，兜底取首个非时间/非 next_month* 有限数值列。
+ *   2) 同一 time_period 可能有多行（若被按机构等维度分组）→ **按 time_period 汇总**，
+ *      避免把不同机构的单月值当成序列点（误报/漏报断崖）。哨兵默认无 org 筛选、
+ *      admin 用户，trend 实际单行/期；汇总是防御性加固，单行场景为恒等。
+ * @returns {Array<{time_period:string, value:number}>} 按 time_period 升序
  */
 export async function fetchTrend(apiBase, pat, { perspective = 'premium', granularity = 'monthly' } = {}) {
   const q = new URLSearchParams({ perspective, granularity });
@@ -79,24 +83,31 @@ export async function fetchTrend(apiBase, pat, { perspective = 'premium', granul
     ? ['policy_count', 'total_policy_count', 'count', 'value']
     : ['total_premium', 'premium', 'signed_premium', 'value'];
 
-  return rows
-    .map((row) => {
-      const tp = row.time_period ?? row.period ?? null;
-      if (tp == null) return null;
-      let val = null;
-      for (const k of PREFERRED) {
-        if (Number.isFinite(Number(row[k]))) { val = Number(row[k]); break; }
-      }
-      if (val == null) {
-        // 兜底：首个非时间/非 next_month* 的有限数值
-        for (const [k, v] of Object.entries(row)) {
-          if (k === 'time_period' || k === 'period' || k.startsWith('next_month')) continue;
-          if (Number.isFinite(Number(v))) { val = Number(v); break; }
-        }
-      }
-      return val == null ? null : { time_period: String(tp), value: val };
-    })
-    .filter(Boolean);
+  const pickValue = (row) => {
+    for (const k of PREFERRED) {
+      if (Number.isFinite(Number(row[k]))) return Number(row[k]);
+    }
+    // 兜底：首个非时间/非 next_month* 的有限数值
+    for (const [k, v] of Object.entries(row)) {
+      if (k === 'time_period' || k === 'period' || k.startsWith('next_month')) continue;
+      if (Number.isFinite(Number(v))) return Number(v);
+    }
+    return null;
+  };
+
+  // 按 time_period 汇总（多机构行 → 全量月度总额）
+  const byPeriod = new Map();
+  for (const row of rows) {
+    const tp = row.time_period ?? row.period ?? null;
+    if (tp == null) continue;
+    const val = pickValue(row);
+    if (val == null) continue;
+    byPeriod.set(String(tp), (byPeriod.get(String(tp)) ?? 0) + val);
+  }
+
+  return [...byPeriod.entries()]
+    .map(([time_period, value]) => ({ time_period, value }))
+    .sort((a, b) => a.time_period.localeCompare(b.time_period));
 }
 
 /** 把 comprehensive lossTrendRows 规整成 {time_period, value=earned_claim_ratio} 逐期序列 */
