@@ -22,6 +22,8 @@ export interface JwtPayload {
   username: string;
   role: string;
   organization?: string;
+  /** 分公司编码（'SC' / 'SX'）。undefined → 系统级超管看全国 */
+  branchCode?: string;
 }
 
 /**
@@ -64,6 +66,7 @@ export async function authMiddleware(
         username: verified.user.username,
         role: verified.user.role,
         organization: verified.user.organization,
+        branchCode: verified.user.branchCode,
       };
       req.pat = { tokenId: verified.tokenId, name: verified.name };
       return next();

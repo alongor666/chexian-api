@@ -109,6 +109,15 @@ export const dbEnv = {
   STATE_STORE_BACKEND: process.env.STATE_STORE_BACKEND ?? 'json',
   /** state.db 文件路径（仅 STATE_STORE_BACKEND=sqlite 时使用） */
   STATE_DB_PATH: process.env.STATE_DB_PATH ?? '',
+  /**
+   * 多分公司行级安全（plan v2 0F feature flag）。
+   * - 'true' 启用：permissionMiddleware 在 baseFilter 上 AND `branch_code='${req.user.branchCode}'`
+   *   （req.user.branchCode 缺省的系统级超管不加，看全国）。
+   *   启用前提：所有 Parquet 已通过 backfill_derived_fields.py --recursive 补上 branch_code 列。
+   * - 缺省 / 'false' 兼容期：不注入 branch_code 过滤，保留 0C 之前 SC 单租户行为。
+   * 回滚：scripts/rollback-multi-branch.mjs 一键关闭 + PM2 reload；.claude/rules/multi-branch-rollback-sop.md。
+   */
+  BRANCH_RLS_ENABLED: process.env.BRANCH_RLS_ENABLED ?? 'false',
 } as const;
 
 // ─── AI 提供商配置 ─────────────────────────────────────────────────────────────
