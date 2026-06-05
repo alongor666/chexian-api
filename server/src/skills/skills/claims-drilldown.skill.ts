@@ -124,7 +124,9 @@ const escSql = (v: string): string => v.replace(/'/g, "''");
 
 function buildPolicyDedupedSubquery(permissionFilter: string): string {
   // 与 sql/claims-detail.ts 的 DEDUPED_POLICY_SUBQUERY 同形态，但 WHERE 注入 permissionFilter
-  const perm = permissionFilter || '1=1';
+  // fail-closed：上游 routes/skills.ts 已强校验 req.permissionFilter 非空才进入；
+  // 此处兜底用 '1=0' 而非 '1=1'，防止未来新增直调路径忘挂权限时悄悄放开数据。
+  const perm = permissionFilter || '1=0';
   return `(
     SELECT
       policy_no,

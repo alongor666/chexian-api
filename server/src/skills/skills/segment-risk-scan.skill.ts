@@ -133,7 +133,9 @@ export const segmentRiskScanSkill: Skill<typeof InputSchema, Result> = {
     const dateField: 'policy_date' = 'policy_date';
     const startEsc = input.period.startDate.replace(/'/g, "''");
     const endEsc = input.period.endDate.replace(/'/g, "''");
-    const perm = ctx.permissionFilter || '1=1';
+    // fail-closed：上游 routes/skills.ts 已强校验 req.permissionFilter 非空才进入；
+    // 此处兜底用 '1=0' 而非 '1=1'，防止未来新增直调路径忘挂权限时悄悄放开数据。
+    const perm = ctx.permissionFilter || '1=0';
     const whereClause = `CAST(${dateField} AS DATE) >= DATE '${startEsc}' AND CAST(${dateField} AS DATE) <= DATE '${endEsc}' AND (${perm})`;
 
     // 1) 整体 baseline（不分组，用于 credibility 收缩中心）

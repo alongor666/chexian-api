@@ -23,6 +23,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { readonlyMiddleware } from '../middleware/readonly.js';
+import { permissionMiddleware, requireRole, UserRole } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
 import { createPolicyFactView, dropAllDerivedTables } from '../services/duckdb-materialization.js';
@@ -284,11 +285,20 @@ export function setCurrentDataFile(info: {
 // ============================================
 
 /**
- * 应用认证中间件（数据管理需要登录）
- * PAT 调用方仅允许 GET（如 GET /api/data/version）；POST/PUT/DELETE 由 readonlyMiddleware 直接 403。
+ * 应用认证、只读、行级权限中间件
+ *
+ * 权限分层：
+ * - `authMiddleware` + `readonlyMiddleware`：所有 /api/data/* 共用（PAT 仅允许 GET）
+ * - `permissionMiddleware`：注入 req.permissionFilter，供 GET /metadata 等读接口按行级过滤
+ * - `requireRole(BRANCH_ADMIN)`：单路由叠加（upload / load / clear / download / files / kpi-plan-config PUT）
+ *
+ * 多分公司前置（0A 改造，详见 `/Users/alongor666/.claude/plans/indexed-tinkering-ritchie.md` §0A）：
+ * 山西上线前 `/api/data/*` 必须把"全省机构列表 + 全省 Parquet 下载"收敛到 branch_admin 角色，
+ * 避免 org_user 拿到非本机构数据；多省正式落地后由 0C 字段注册表 branch_code 提供更细粒度隔离。
  */
 router.use(authMiddleware);
 router.use(readonlyMiddleware);
+router.use(permissionMiddleware);
 
 /**
  * POST /api/data/upload
@@ -302,6 +312,7 @@ router.use(readonlyMiddleware);
  */
 router.post(
   '/upload',
+  requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     // 1. 速率限制检查
     const userId = (req as any).user?.userId || 'anonymous';
@@ -469,19 +480,23 @@ router.post(
 router.get(
   '/metadata',
   asyncHandler(async (req: Request, res: Response) => {
+    // 行级过滤：org_user 只能看到本机构的机构列表/日期范围/汇总；branch_admin 看全量。
+    // permissionMiddleware 已注入 req.permissionFilter；fail-closed 用 '1=0' 而非 '1=1'，
+    // 避免某些路径上 permissionFilter 未生成时悄悄放开数据。
+    const permissionWhere = req.permissionFilter || '1=0';
     try {
       // 检查 PolicyFact 是否存在
       let rowCount = 0;
       try {
         const countResult = await duckdbService.query<{ count: number }>(
-          'SELECT COUNT(*) as count FROM PolicyFact'
+          `SELECT COUNT(*) as count FROM PolicyFact WHERE ${permissionWhere}`
         );
         rowCount = countResult[0]?.count || 0;
       } catch {
         throw new AppError(404, '当前没有加载的数据');
       }
 
-      // 获取表结构
+      // 获取表结构（不含数据，无需过滤）
       const schema = await duckdbService.getTableSchema('PolicyFact');
 
       // 获取数据范围（如果有日期字段）
@@ -492,7 +507,7 @@ router.get(
             MIN(policy_date)::VARCHAR as min_date,
             MAX(policy_date)::VARCHAR as max_date
           FROM PolicyFact
-          WHERE policy_date IS NOT NULL`
+          WHERE policy_date IS NOT NULL AND ${permissionWhere}`
         );
         if (dateResult[0]?.min_date) {
           dateRange = {
@@ -505,13 +520,13 @@ router.get(
         safeLog('warn', 'Data', 'Date range query failed, field may not exist');
       }
 
-      // 获取机构列表
+      // 获取机构列表（按行级过滤裁剪：org_user 仅看到自己机构）
       let organizations: string[] = [];
       try {
         const orgResult = await duckdbService.query<{ org_level_3: string }>(
           `SELECT DISTINCT org_level_3
           FROM PolicyFact
-          WHERE org_level_3 IS NOT NULL
+          WHERE org_level_3 IS NOT NULL AND ${permissionWhere}
           ORDER BY org_level_3`
         );
         organizations = orgResult.map((r) => r.org_level_3);
@@ -519,7 +534,7 @@ router.get(
         safeLog('warn', 'Data', 'Organization query failed, field may not exist');
       }
 
-      // 汇总统计
+      // 汇总统计（按行级过滤）
       let summaryStats = null;
       try {
         const statsResult = await duckdbService.query<{
@@ -531,7 +546,8 @@ router.get(
             SUM(premium) as total_premium,
             AVG(premium) as avg_premium,
             COUNT(DISTINCT policy_no) as policy_count
-          FROM PolicyFact`
+          FROM PolicyFact
+          WHERE ${permissionWhere}`
         );
         summaryStats = statsResult[0];
       } catch {
@@ -580,6 +596,7 @@ router.get(
  */
 router.delete(
   '/clear',
+  requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     if (!currentDataFile) {
       throw new AppError(404, '当前没有加载的数据');
@@ -620,6 +637,7 @@ router.delete(
  */
 router.get(
   '/files',
+  requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     const files = listManagedParquetFiles();
 
@@ -641,6 +659,7 @@ router.get(
  */
 router.post(
   '/load/:filename',
+  requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     const { filename } = req.params;
 
@@ -731,6 +750,7 @@ router.post(
  */
 router.get(
   '/download/:filename',
+  requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     const { filename } = req.params;
 
@@ -787,12 +807,8 @@ router.get(
 
 router.put(
   '/kpi-plan-config',
+  requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
-    const role = (req as any).user?.role;
-    if (role !== 'branch_admin') {
-      throw new AppError(403, '权限不足');
-    }
-
     const parsed = kpiPlanConfigSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new AppError(400, parsed.error.issues[0]?.message || '参数错误');
