@@ -50,8 +50,8 @@
 1. `grep -r "id: '${NEW_ID}'" server/src/config/metric-registry/` — 确认不存在
 2. 判断复杂度：L1-L3（单行 SQL 表达式）→ 添加到 `categories/*.ts`；L4（CTE/窗口函数/多表 JOIN）→ SQL 生成器中实现，引用注册表原子指标
 3. 必须包含：id + name + formula + sql.expression + display + 至少 1 个 testCase + changelog
-4. `npx tsx scripts/metric-registry/validate.ts` 校验通过
-5. `npx tsx scripts/metric-registry/generate-frontend-map.ts` 更新前端映射
+4. `bun scripts/metric-registry/validate.ts` 校验通过
+5. `bun scripts/metric-registry/generate-frontend-map.ts` 更新前端映射
 
 **禁止**：
 - ❌ 在 SQL 生成器中硬编码新指标公式而不在注册表注册
