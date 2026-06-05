@@ -91,6 +91,13 @@ KEY_LABELS = {
 LABEL_TO_KEY = {
     **{label: key for key, label in KEY_LABELS.items()},
     "保单到期时间": "expiry_date",
+    # 目标表把 fqrd28 列标题命名为"客户类别"，脚本内部 key 仍叫 vehicle_type（历史命名）。
+    # 加别名让 --table-schema-file 能把"客户类别"label 映射到 vehicle_type，避免裁剪误删。
+    "客户类别": "vehicle_type",
+    # 表的真实列标题是"最后报价"/"最后报价人"（见 FIELD_IDS 注释），KEY_LABELS 用的是旧名
+    # "最新报价时间"/"报价人"。加别名让这两个核心报价字段被 --table-schema-file 正确识别。
+    "最后报价": "latest_quote_time",
+    "最后报价人": "quote_salesman",
 }
 DEFAULT_FIELD_TYPES = {
     "list_type": "select",
@@ -512,7 +519,10 @@ def schema_for(keys: Iterable[str]) -> dict[str, str]:
 
 
 def configured_keys(base_keys: Iterable[str]) -> list[str]:
-    return list(base_keys)
+    # 仅保留目标表实际存在的字段（apply_table_schema_file 裁剪 CURRENT 后生效）。
+    # 防止 seed/sync 声明表中不存在的 field_id（如 owner_user/f54Wcl）触发 webhook errcode。
+    # 未传 --table-schema-file 时 CURRENT=默认全量 → 不过滤任何 key，行为不变。
+    return [k for k in base_keys if k in CURRENT_FULL_FIELD_IDS]
 
 
 def infer_field_type(sample_value: Any) -> str:
@@ -538,13 +548,21 @@ def apply_table_schema_file(path: Path) -> None:
         sample_values = sample_records[0].get("values") or {}
 
     reset_table_spec()
+    declared_keys: set[str] = set()
     for fid, label in schema.items():
         key = LABEL_TO_KEY.get(str(label).strip())
         if not key:
             continue
         CURRENT_FULL_FIELD_IDS[key] = str(fid)
+        declared_keys.add(key)
         if fid in sample_values:
             CURRENT_FIELD_TYPES[key] = infer_field_type(sample_values[fid])
+
+    # schema file 代表目标表的真实字段集：裁剪掉表中不存在的列（如 owner_user/f54Wcl），
+    # 避免 seed/sync 声明表里不存在的 field_id 触发 webhook errcode（2026-06-04 电销表 seed 重建）。
+    for key in list(CURRENT_FULL_FIELD_IDS):
+        if key not in declared_keys:
+            CURRENT_FULL_FIELD_IDS.pop(key, None)
 
     CURRENT_FIELD_TYPES["expiry_date"] = "date"
     CURRENT_FIELD_TYPES["owner_user"] = "user"
