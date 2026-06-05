@@ -22,6 +22,12 @@ import {
 import { cn, colorClasses, textStyles, comprehensiveTheme } from '../../../shared/styles';
 import { statusFor } from '../utils/kpiStatus';
 
+/** 卡片 id→标签映射，派生自静态 KPI_CARD_META，模块级常量（避免每次渲染 reduce） */
+const KPI_LABEL_MAP = KPI_CARD_META.reduce((acc, item) => {
+  acc[item.id] = item.label;
+  return acc;
+}, {} as Record<KpiCardId, string>);
+
 /* ---------- 数据辅助：环形/段值提取 ---------- */
 
 const calculateRate = (part: number, total: number): number => {
@@ -149,11 +155,6 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
     [handleKpiClick]
   );
 
-  const labelMap = KPI_CARD_META.reduce((acc, item) => {
-    acc[item.id] = item.label;
-    return acc;
-  }, {} as Record<KpiCardId, string>);
-
   const T = comprehensiveTheme.threshold;
 
   /** 给一个 0~1 / 0~100 自动判断并归一到百分数 */
@@ -164,7 +165,7 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
 
   /** 构造单卡 props — Hero 三张携带参照系 + 状态；其它走标准变体（Hero 归属由 HERO_KPI_IDS + visibleHero 分组决定） */
   const buildCardProps = (id: KpiCardId): EnhancedKpiCardProps | null => {
-    const title = labelMap[id] || id;
+    const title = KPI_LABEL_MAP[id] || id;
 
     switch (id) {
       /* -------- Hero #1：车险保费（数值型，progress bar） -------- */
