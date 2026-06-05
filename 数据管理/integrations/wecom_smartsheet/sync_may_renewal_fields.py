@@ -42,6 +42,8 @@ DEFAULT_RENEWAL_TRACKER_PATH = DATA_ROOT / "warehouse" / "fact" / "renewal_track
 DEFAULT_QUOTES_PATH = DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet"
 DEFAULT_CUSTOMER_FLOW_PATH = DATA_ROOT / "warehouse" / "fact" / "customer_flow" / "latest.parquet"
 
+from _safety import read_cell_text  # noqa: E402 — cell 文本提取 SSOT（原 extract_text 已收敛至此）
+
 VIN_FIELD_ID = "fcCW6A"
 FIELD_IDS = {
     "is_renewed": "fwuflw",       # 是否成交
@@ -247,26 +249,6 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def extract_text(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, (int, float, bool)):
-        return str(value).strip()
-    if isinstance(value, list):
-        parts: list[str] = []
-        for item in value:
-            if isinstance(item, dict):
-                parts.append(str(item.get("text") or item.get("value") or "").strip())
-            else:
-                parts.append(extract_text(item))
-        return "".join(parts).strip()
-    if isinstance(value, dict):
-        return str(value.get("text") or value.get("value") or "").strip()
-    return str(value).strip()
-
-
 def load_records_json(path: Path) -> dict[str, Any]:
     raw = path.read_text(encoding="utf-8")
     return json.loads(raw)
@@ -350,7 +332,9 @@ def prime_state_from_records(
             missing_record_id += 1
             continue
         values = rec.get("values") or {}
-        vin = extract_text(values.get(vin_field_id)) or extract_text(values.get(vin_field_title))
+        vin = read_cell_text(values.get(vin_field_id), join_list=True) or read_cell_text(
+            values.get(vin_field_title), join_list=True
+        )
         if not vin:
             missing_vin += 1
             continue

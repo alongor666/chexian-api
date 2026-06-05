@@ -20,7 +20,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import create_renewal_tracker as crt  # noqa: E402
-from _safety import cli_call, WecomCliError  # noqa: E402 — SSOT 调用器（含 errcode + MCP 解包）
+from _safety import cli_call, WecomCliError, read_cell_text  # noqa: E402 — SSOT 调用器 + cell 文本提取
 
 LOGS_DIR = HERE / "logs"
 STATE_PATH = HERE / "state" / "leshan_renewal.json"
@@ -122,7 +122,7 @@ def main() -> int:
         vin_to_rid: dict[str, str] = {}
         for rec in records:
             values = rec.get("values", {}) or {}
-            vin = crt._read_text(values.get("车架号"))
+            vin = read_cell_text(values.get("车架号"))
             rid = rec.get("record_id") or rec.get("id")
             if vin and rid:
                 vin_to_rid[vin] = rid
