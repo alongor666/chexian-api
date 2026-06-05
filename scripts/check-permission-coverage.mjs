@@ -41,13 +41,16 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 
 const APP_TS = path.join(REPO_ROOT, 'server/src/app.ts');
 
-// 公开 router 白名单（无需挂权限中间件）
-//   - /api/auth/login：未登录就要能调
+// 公开 router 白名单（无需挂 permissionMiddleware / requireRole）
+//   - /api/auth：登录入口，未登录就要能调
 //   - /api/auth/wecom：企微免密登录回调
+//   - /api/discover：Agent/CLI/MCP 元数据发现层（fields/metrics/presets 注册表全国通用，无业务数据）
+//                   ⚠️ 0D phase 评估：若按 branchCode 裁剪可见路由 catalog，则从此白名单移除并加权限中间件
 // 注：/health 和其他系统级路由由 health 路由文件挂载（不在 /api 前缀，不在此扫描范围）
 const PUBLIC_ROUTES = new Set([
   '/api/auth',
   '/api/auth/wecom',
+  '/api/discover',
 ]);
 
 // 已知缺口（KNOWN_GAPS）：明知有跨分公司风险，但本 PR 范围外，留作 TODO。
@@ -124,6 +127,22 @@ function parseTopLevelRouters() {
 // 分析 router 文件
 // ============================================
 
+/**
+ * 剥掉源码中的注释（避免注释里出现的中间件名字误判为"已挂"）。
+ *
+ * 修 codex PR#482 第二轮 P2：原版用 `\bpermissionMiddleware\b` 字符串搜索，
+ * 注释里写"不挂 permissionMiddleware"也会被认为已挂，造成 governance 假阴性。
+ *
+ * 实现策略（简易但够用）：先剥块注释 `/* ... *​/` 再剥单行 `// ...`。
+ * 边界 case 不处理：字符串字面量里包含 `//`/`/*`（如 regex 字面量）。
+ * 实际 router 文件极少出现这种情况；遗漏对中间件检测无实质风险。
+ */
+function stripComments(content) {
+  return content
+    .replace(/\/\*[\s\S]*?\*\//g, '')   // 块注释
+    .replace(/\/\/[^\n]*/g, '');        // 单行注释
+}
+
 function analyzeRouterFile(filePath, route) {
   if (!fs.existsSync(filePath)) {
     return {
@@ -133,17 +152,32 @@ function analyzeRouterFile(filePath, route) {
     };
   }
 
-  const content = fs.readFileSync(filePath, 'utf-8');
+  const rawContent = fs.readFileSync(filePath, 'utf-8');
+  const content = stripComments(rawContent);
 
-  const hasAuth = /\bauthMiddleware\b/.test(content);
-  const hasPermissionMw = /\bpermissionMiddleware\b/.test(content);
+  // 关键：匹配 `router.xxx(... 中间件名 ...)` 真实调用，而不是裸字符串出现。
+  // 这样：
+  //   - `import { authMiddleware } from '...'` 不算挂载（不是 router.xx 调用）
+  //   - `router.use(authMiddleware)` ✅ 算
+  //   - `router.use(authMiddleware, readonlyMiddleware, permissionMiddleware)` ✅ 算
+  //   - `router.post('/x', requireRole(BRANCH_ADMIN), handler)` ✅ 算（路由级挂载）
+  // 正则：`router\s*\.\s*\w+\s*\(` 后面允许多行参数列表（DOTALL）+ 含中间件名
+  const callMiddlewarePattern = (middleware) =>
+    new RegExp(`router\\s*\\.\\s*\\w+\\s*\\([^)]*\\b${middleware}\\b`, 's');
+  // 注：`[^)]*` 只匹配到第一个 `)`，无法跨越嵌套括号；对 router.use(mw1, mw2, mw3) 够用。
+  // requireRole(...) 内部嵌套括号场景由它自身的"调用形态"判定（见下）。
+
+  const hasAuth = callMiddlewarePattern('authMiddleware').test(content);
+  const hasPermissionMw = callMiddlewarePattern('permissionMiddleware').test(content);
+  // requireRole 是函数调用形式 `requireRole(UserRole.X)`，只需匹配存在即可（剥注释后）。
+  // 它必然出现在 router.use / router.\w 的参数里，独立 `requireRole(` 字符串就已是"挂载证据"。
   const hasRequireRole = /\brequireRole\s*\(/.test(content);
 
-  // 统计 SQL WHERE 上下文的 `|| '1=1'` fallback
+  // 统计 SQL WHERE 上下文的 `|| '1=1'` fallback（在原内容上扫描，保留行号准确）
   const fileName = path.basename(filePath);
   const fallbackMatches = [];
   if (!CACHE_KEY_CONTEXT_FILES.has(fileName)) {
-    const lines = content.split('\n');
+    const lines = rawContent.split('\n');
     lines.forEach((line, idx) => {
       if (line.includes("|| '1=1'")) {
         fallbackMatches.push({ line: idx + 1 });
