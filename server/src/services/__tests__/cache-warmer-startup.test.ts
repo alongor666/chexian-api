@@ -51,6 +51,8 @@ vi.mock('../../config/auth.js', () => ({
 
 vi.mock('../../config/env.js', () => ({
   serverEnv: { PORT: 3100 },
+  // 0B: cache-warmer 通过 dbEnv.BRANCH_RLS_ENABLED 判定是否按 branch 循环；默认 off 保持单 variant
+  dbEnv: { BRANCH_RLS_ENABLED: 'false' },
 }));
 
 vi.mock('../../utils/logger.js', () => ({
