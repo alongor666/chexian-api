@@ -7,7 +7,47 @@ import { QUERY_CACHE } from '../routes/query/shared.js';
 import { getBootstrapper } from './bootstrapper-registry.js';
 import { getDataVersion } from './data-version.js';
 import { authConfig } from '../config/auth.js';
-import { serverEnv } from '../config/env.js';
+import { serverEnv, dbEnv } from '../config/env.js';
+import { getAllBranchCodes } from '../config/preset-users.js';
+
+/**
+ * 0B 预热变体：flag off → 兼容期单变体（1=1）；flag on → 按 branchCode 循环。
+ *
+ * 与 permission.ts 0F 实现严格保持一致：
+ * - flag off：permissionFilter='1=1'，token 不带 branchCode（admin 走原路径）
+ * - flag on：每个变体一个 branchCode → permissionFilter=`branch_code='${SC|SX|...}'`
+ *           → token 带对应 branchCode（绕过 permission.ts fail-closed 401）
+ *
+ * 三处手写 cache key（L319/L436/L698）+ HTTP 笛卡尔（warmCommonRoutes）共用此变体集。
+ */
+type WarmVariant = {
+    branchCode: string | null;
+    permissionFilter: string;
+};
+
+function escapeBranchCodeForSql(code: string): string {
+    return code.replace(/'/g, "''");
+}
+
+function isBranchRlsEnabled(): boolean {
+    return dbEnv.BRANCH_RLS_ENABLED === 'true';
+}
+
+function getWarmVariants(): WarmVariant[] {
+    if (!isBranchRlsEnabled()) {
+        return [{ branchCode: null, permissionFilter: '1=1' }];
+    }
+    const branches = getAllBranchCodes();
+    if (branches.length === 0) {
+        // flag on 但 preset 全无 branchCode：fail-safe 退回兼容变体
+        logger.warn('[CacheWarmer] BRANCH_RLS_ENABLED=true but PRESET_USERS contains no branchCode; falling back to single 1=1 variant');
+        return [{ branchCode: null, permissionFilter: '1=1' }];
+    }
+    return branches.map((code) => ({
+        branchCode: code,
+        permissionFilter: `branch_code = '${escapeBranchCodeForSql(code)}'`,
+    }));
+}
 
 /**
  * 笛卡尔预热路由清单（GET，已包 withRouteCache 中间件）。
@@ -270,6 +310,10 @@ export class CacheWarmer {
     /**
      * 后台异步预热 Top N 机构的默认 dashboard 视图。
      * 不持有 isWarming 锁（不阻塞 startup readiness 与下次 ETL trigger）。
+     *
+     * 0B：flag on 时按 branchCode 循环，每个 variant 独立 cache key
+     *   （permissionFilter 段含 `branch_code='${code}'`，与真实流量经 permission.ts
+     *    注入的 permissionFilter 自洽）。
      */
     private async warmTopOrgsBackground(startDate: string, maxDate: string, topN: number): Promise<void> {
         const startTime = Date.now();
@@ -289,40 +333,46 @@ export class CacheWarmer {
             const prevStartDate = `${Number(startDate.slice(0, 4)) - 1}${startDate.slice(4)}`;
             const prevMaxDate = `${Number(maxDate.slice(0, 4)) - 1}${maxDate.slice(4)}`;
 
-            for (const org of topOrgs) {
-                try {
-                    const escapedOrg = String(org).replace(/'/g, "''");
-                    const whereWithDate = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}' AND org_level_3 IN ('${escapedOrg}')`;
-                    const whereWithoutDate = `org_level_3 IN ('${escapedOrg}')`;
-                    const prevYearWhereWithDate = `policy_date >= '${prevStartDate}' AND policy_date <= '${prevMaxDate}' AND org_level_3 IN ('${escapedOrg}')`;
-                    const payload = await fetchDashboardBundleData({
-                        whereWithDate,
-                        whereWithoutDate,
-                        prevYearWhereWithDate,
-                        orgNames: [org],
-                        salesmanNames: [],
-                        rankingLimit: 10,
-                        timeView: 'weekly',
-                        perspective: 'premium',
-                        groupDim: undefined,
-                        dateField: 'policy_date',
-                    });
+            const variants = getWarmVariants();
 
-                    const baseQuery: Record<string, QueryValue> = {
-                        dateField: 'policy_date',
-                        startDate,
-                        endDate: maxDate,
-                        granularity: 'week',
-                        perspective: 'premium',
-                        orgNames: org,
-                    };
-                    const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', '1=1', baseQuery);
-                    setRouteCache(cacheKey, payload, QUERY_CACHE.hotspotLong);
-                } catch (e) {
-                    logger.warn(`[CacheWarmer] Top-orgs warm failed for org=${org}:`, e);
+            for (const variant of variants) {
+                for (const org of topOrgs) {
+                    try {
+                        const escapedOrg = String(org).replace(/'/g, "''");
+                        // permissionFilter 在 SQL where 中以 AND 形式拼接（除 1=1 兼容期）
+                        const branchAndClause = variant.permissionFilter === '1=1' ? '' : ` AND ${variant.permissionFilter}`;
+                        const whereWithDate = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}' AND org_level_3 IN ('${escapedOrg}')${branchAndClause}`;
+                        const whereWithoutDate = `org_level_3 IN ('${escapedOrg}')${branchAndClause}`;
+                        const prevYearWhereWithDate = `policy_date >= '${prevStartDate}' AND policy_date <= '${prevMaxDate}' AND org_level_3 IN ('${escapedOrg}')${branchAndClause}`;
+                        const payload = await fetchDashboardBundleData({
+                            whereWithDate,
+                            whereWithoutDate,
+                            prevYearWhereWithDate,
+                            orgNames: [org],
+                            salesmanNames: [],
+                            rankingLimit: 10,
+                            timeView: 'weekly',
+                            perspective: 'premium',
+                            groupDim: undefined,
+                            dateField: 'policy_date',
+                        });
+
+                        const baseQuery: Record<string, QueryValue> = {
+                            dateField: 'policy_date',
+                            startDate,
+                            endDate: maxDate,
+                            granularity: 'week',
+                            perspective: 'premium',
+                            orgNames: org,
+                        };
+                        const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', variant.permissionFilter, baseQuery);
+                        setRouteCache(cacheKey, payload, QUERY_CACHE.hotspotLong);
+                    } catch (e) {
+                        logger.warn(`[CacheWarmer] Top-orgs warm failed for org=${org} branch=${variant.branchCode ?? '(none)'}:`, e);
+                    }
                 }
             }
-            logger.info(`[CacheWarmer] Top ${topOrgs.length} orgs warmed in ${Date.now() - startTime}ms (background).`);
+            logger.info(`[CacheWarmer] Top ${topOrgs.length} orgs × ${variants.length} branch(es) warmed in ${Date.now() - startTime}ms (background).`);
         } catch (e) {
             logger.warn('[CacheWarmer] Top-orgs background warming aborted:', e);
         }
@@ -401,24 +451,16 @@ export class CacheWarmer {
         };
     }
 
+    /**
+     * 默认 dashboard-bundle 预热（"全公司无机构筛选"路径）。
+     * 0B：flag on 时按 branchCode 循环 — 每个 variant 用对应 permissionFilter 跑数据 + 写独立 cache key。
+     */
     private async warmDefaultDashboardRoute(startDate: string, maxDate: string) {
         logger.info(`[CacheWarmer] Warming default dashboard-bundle route: ${startDate} to ${maxDate}`);
 
-        const whereWithDate = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}'`;
-        const whereWithoutDate = '1=1';
-        const bundleData = await fetchDashboardBundleData({
-            whereWithDate,
-            whereWithoutDate,
-            prevYearWhereWithDate: `policy_date >= '${String(Number(startDate.slice(0, 4)) - 1)}-01-01' AND policy_date <= '${String(Number(maxDate.slice(0, 4)) - 1)}${maxDate.slice(4)}'`,
-            orgNames: [],
-            salesmanNames: [],
-            rankingLimit: 10,
-            timeView: 'weekly',
-            perspective: 'premium',
-            groupDim: undefined,
-            dateField: 'policy_date'
-        });
-
+        const baseDateFilter = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}'`;
+        const prevYearStartDate = `${String(Number(startDate.slice(0, 4)) - 1)}-01-01`;
+        const prevYearEndDate = `${String(Number(maxDate.slice(0, 4)) - 1)}${maxDate.slice(4)}`;
         const baseQuery = {
             dateField: 'policy_date',
             startDate,
@@ -426,23 +468,46 @@ export class CacheWarmer {
             granularity: 'week',
             perspective: 'premium',
         };
-
         const queryVariants: Array<Record<string, QueryValue>> = [
             baseQuery,
             { ...baseQuery, rankingLimit: '10' },
         ];
 
-        for (const query of queryVariants) {
-            const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', '1=1', query);
-            setRouteCache(cacheKey, bundleData, QUERY_CACHE.hotspotLong);
+        const branchVariants = getWarmVariants();
+        for (const variant of branchVariants) {
+            const branchAndClause = variant.permissionFilter === '1=1' ? '' : ` AND ${variant.permissionFilter}`;
+            const whereWithDate = `${baseDateFilter}${branchAndClause}`;
+            const whereWithoutDate = variant.permissionFilter;
+            const prevYearWhereWithDate = `policy_date >= '${prevYearStartDate}' AND policy_date <= '${prevYearEndDate}'${branchAndClause}`;
+            const bundleData = await fetchDashboardBundleData({
+                whereWithDate,
+                whereWithoutDate,
+                prevYearWhereWithDate,
+                orgNames: [],
+                salesmanNames: [],
+                rankingLimit: 10,
+                timeView: 'weekly',
+                perspective: 'premium',
+                groupDim: undefined,
+                dateField: 'policy_date'
+            });
+
+            for (const query of queryVariants) {
+                const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', variant.permissionFilter, query);
+                setRouteCache(cacheKey, bundleData, QUERY_CACHE.hotspotLong);
+            }
         }
 
-        logger.info(`[CacheWarmer] Default dashboard-bundle route cached (${queryVariants.length} key variants).`);
+        logger.info(`[CacheWarmer] Default dashboard-bundle route cached (${queryVariants.length} query variants × ${branchVariants.length} branch(es)).`);
     }
 
     /**
      * 建立第一层硬缓存
      * 相当于直接给最纯净的首页条件生成完整的 bundle 回包。
+     *
+     * 0B：cache_key 用 `dashboard-bundle|default|${permissionFilter}` 形式，与 dashboard.ts 消费侧一致。
+     * - flag off：permissionFilter='1=1' → key='dashboard-bundle|default|1=1'
+     * - flag on：每个 branch variant 一份 key，避免跨 branch 串读
      */
     private async buildTier1HardCache(dataYear: number, startDate: string, maxDate: string) {
         logger.info('[CacheWarmer] Building Tier 1 Physical Cache...');
@@ -456,36 +521,40 @@ export class CacheWarmer {
       )
     `);
 
-        // 默认大盘视角：
-        // whereWithDate = policy_date >= startDate AND policy_date <= maxDate
-        // whereWithoutDate = 1=1
-        // orgNames = [], salesmanNames = []
-        const whereWithDate = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}'`;
-        const whereWithoutDate = '1=1';
+        const baseDateFilter = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}'`;
+        const variants = getWarmVariants();
 
-        logger.info('[CacheWarmer] Generating default Dashboard Bundle payload...');
-        const bundleData = await fetchDashboardBundleData({
-            whereWithDate,
-            whereWithoutDate,
-            orgNames: [],
-            salesmanNames: [],
-            rankingLimit: 10,
-            timeView: 'weekly',
-            perspective: 'premium',
-            groupDim: undefined,
-            dateField: 'policy_date'
-        });
+        for (const variant of variants) {
+            const branchAndClause = variant.permissionFilter === '1=1' ? '' : ` AND ${variant.permissionFilter}`;
+            const whereWithDate = `${baseDateFilter}${branchAndClause}`;
+            const whereWithoutDate = variant.permissionFilter;
 
-        const cacheKey = 'dashboard-bundle|default';
-        const jsonStr = JSON.stringify(bundleData).replace(/'/g, "''"); // escape single quotes
+            logger.info(`[CacheWarmer] Generating default Dashboard Bundle payload for branch=${variant.branchCode ?? '(none)'}...`);
+            const bundleData = await fetchDashboardBundleData({
+                whereWithDate,
+                whereWithoutDate,
+                orgNames: [],
+                salesmanNames: [],
+                rankingLimit: 10,
+                timeView: 'weekly',
+                perspective: 'premium',
+                groupDim: undefined,
+                dateField: 'policy_date'
+            });
 
-        // 清空旧数据并插入
-        await duckdbService.query(`DELETE FROM DefaultDashboardCache WHERE cache_key = '${cacheKey}'`);
-        await duckdbService.query(`
+            const cacheKey = `dashboard-bundle|default|${variant.permissionFilter}`;
+            const escapedKey = cacheKey.replace(/'/g, "''");
+            const jsonStr = JSON.stringify(bundleData).replace(/'/g, "''");
+
+            // 清空旧数据并插入
+            await duckdbService.query(`DELETE FROM DefaultDashboardCache WHERE cache_key = '${escapedKey}'`);
+            await duckdbService.query(`
       INSERT INTO DefaultDashboardCache (cache_key, json_data, updated_at)
-      VALUES ('${cacheKey}', '${jsonStr}', CURRENT_TIMESTAMP)
+      VALUES ('${escapedKey}', '${jsonStr}', CURRENT_TIMESTAMP)
     `);
-        logger.info('[CacheWarmer] Tier 1 cache saved to duckdb.');
+        }
+
+        logger.info(`[CacheWarmer] Tier 1 cache saved to duckdb (${variants.length} branch variant(s)).`);
     }
 
     /**
@@ -527,7 +596,12 @@ export class CacheWarmer {
         }
 
         const tasks = this.buildCommonRouteTasks(dateRange);
-        const token = signServiceToken();
+
+        // 0B：flag on 时按 branchCode 循环签 token + 跑 tasks，每个 variant 独立预热一份 LRU
+        const variants = getWarmVariants();
+        // 每个 token 在循环开始时签发；signServiceToken 在 flag off 时传 null 保持原行为
+        let currentToken = signServiceToken(null);
+        let currentBranch: string | null = null;
 
         let stopped = false;
         let processed = 0;
@@ -557,7 +631,7 @@ export class CacheWarmer {
                         const res = await fetch(task.url, {
                             method: 'GET',
                             headers: {
-                                Authorization: `Bearer ${token}`,
+                                Authorization: `Bearer ${currentToken}`,
                                 'X-Cache-Warmup': '1',
                             },
                             signal: controller.signal,
@@ -596,15 +670,24 @@ export class CacheWarmer {
             }
         };
 
-        for (const batch of this.buildWarmTaskBatches(tasks)) {
-            logger.info(`[CacheWarmer] warm batch ${batch.name}: tasks=${batch.tasks.length}, concurrency=${batch.concurrency}`);
-            // eslint-disable-next-line no-await-in-loop
-            await runWithConcurrency(batch.tasks, batch.concurrency, runOne);
+        const batches = this.buildWarmTaskBatches(tasks);
+        for (const variant of variants) {
+            // 重新签发当前 branch 的 token，runOne 内闭包通过 currentToken 引用读取
+            currentBranch = variant.branchCode;
+            currentToken = signServiceToken(variant.branchCode);
+            logger.info(`[CacheWarmer] warmCommonRoutes branch=${currentBranch ?? '(none)'}: starting ${batches.length} batch(es)`);
+            for (const batch of batches) {
+                logger.info(`[CacheWarmer] warm batch ${batch.name} (branch=${currentBranch ?? '(none)'}): tasks=${batch.tasks.length}, concurrency=${batch.concurrency}`);
+                // eslint-disable-next-line no-await-in-loop
+                await runWithConcurrency(batch.tasks, batch.concurrency, runOne);
+                if (stopped) break;
+            }
+            if (stopped) break;
         }
 
         result.durationMs = Date.now() - start;
         logger.info(
-            `[CacheWarmer] warmCommonRoutes done: written=${result.written}, skipped=${result.skipped}, failed=${result.failed}, ${result.durationMs}ms${result.rssStopped ? ' (RSS-stopped)' : ''}`,
+            `[CacheWarmer] warmCommonRoutes done: written=${result.written}, skipped=${result.skipped}, failed=${result.failed}, branches=${variants.length}, ${result.durationMs}ms${result.rssStopped ? ' (RSS-stopped)' : ''}`,
         );
         return result;
     }
@@ -658,6 +741,7 @@ export class CacheWarmer {
 
     /**
      * 建立第二层内存预热
+     * 0B：flag on 时按 branchCode 循环，cache key permissionFilter 段与真实流量一致。
      */
     private async buildTier2MemoryCache(dataYear: number, startDate: string, maxDate: string) {
         logger.info('[CacheWarmer] Building Tier 2 Memory Cache for Top Organizations...');
@@ -674,31 +758,37 @@ export class CacheWarmer {
         const topOrgs = topOrgsRes.map(r => r.org_level_3).filter(Boolean);
         logger.info(`[CacheWarmer] Top 5 Orgs to warm up: ${topOrgs.join(', ')}`);
 
+        const variants = getWarmVariants();
+
         // 我们模拟带有 orgFilter 的请求参数（这里的逻辑只需拼装好 route cache 即可）
         // 为了不引入 express 依赖，我们暂时手拼 cacheKey，与 query.ts 内一致
-        for (const org of topOrgs) {
-            const whereWithDate = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}' AND org_level_3 IN ('${org}')`;
+        for (const variant of variants) {
+            const branchAndClause = variant.permissionFilter === '1=1' ? '' : ` AND ${variant.permissionFilter}`;
+            for (const org of topOrgs) {
+                const escapedOrg = String(org).replace(/'/g, "''");
+                const whereWithDate = `policy_date >= '${startDate}' AND policy_date <= '${maxDate}' AND org_level_3 IN ('${escapedOrg}')${branchAndClause}`;
 
-            const payload = await fetchDashboardBundleData({
-                whereWithDate,
-                whereWithoutDate: `org_level_3 IN ('${org}')`,
-                orgNames: [org],
-                salesmanNames: [],
-                rankingLimit: 10,
-                timeView: 'daily',
-                perspective: 'premium',
-                groupDim: undefined,
-                dateField: 'policy_date'
-            });
+                const payload = await fetchDashboardBundleData({
+                    whereWithDate,
+                    whereWithoutDate: `org_level_3 IN ('${escapedOrg}')${branchAndClause}`,
+                    orgNames: [org],
+                    salesmanNames: [],
+                    rankingLimit: 10,
+                    timeView: 'daily',
+                    perspective: 'premium',
+                    groupDim: undefined,
+                    dateField: 'policy_date'
+                });
 
-            // 对应的 API 请求 key，相当于 ?org_filter=["org"] 等，详见 frontend
-            // 由于 req.query 我们拿不到，且为了命中缓存需模拟完全一致的 cache key，
-            // 最简单安全的方式是在服务端直接预装最标准的查询字符串：
-            const virtualQueryString = `date_criteria=policy_date&org_filter=["${org}"]&policy_date_end=${maxDate}&policy_date_start=${startDate}`;
-            const cacheKey = `dashboard-bundle|1=1|${virtualQueryString}`;
+                // 对应的 API 请求 key，相当于 ?org_filter=["org"] 等，详见 frontend
+                // 由于 req.query 我们拿不到，且为了命中缓存需模拟完全一致的 cache key，
+                // 最简单安全的方式是在服务端直接预装最标准的查询字符串：
+                const virtualQueryString = `date_criteria=policy_date&org_filter=["${escapedOrg}"]&policy_date_end=${maxDate}&policy_date_start=${startDate}`;
+                const cacheKey = `dashboard-bundle|${variant.permissionFilter}|${virtualQueryString}`;
 
-            setRouteCache(cacheKey, payload, 300_000); // 存 5 分钟热度
-            logger.info(`[CacheWarmer] Tier 2 Memory cached for org: ${org}`);
+                setRouteCache(cacheKey, payload, 300_000); // 存 5 分钟热度
+                logger.info(`[CacheWarmer] Tier 2 Memory cached for org=${org} branch=${variant.branchCode ?? '(none)'}`);
+            }
         }
     }
 }
@@ -708,17 +798,20 @@ export const cacheWarmer = new CacheWarmer();
 /**
  * 用 admin/branch_admin 身份自签 service token，专供 cache-warmer 自调用使用。
  * 不暴露密码，TTL 短（15 分钟，单轮预热足够）。
+ *
+ * 0B：可选 branchCode 参数。flag on 时必须传，否则 permission.ts P1 fail-closed 会 401。
+ * flag off 时不传（保持兼容）。
  */
-function signServiceToken(): string {
-    return jwt.sign(
-        {
-            userId: 'admin',
-            username: 'admin',
-            role: 'branch_admin',
-        },
-        authConfig.jwtSecret,
-        { expiresIn: '15m' },
-    );
+function signServiceToken(branchCode?: string | null): string {
+    const payload: Record<string, unknown> = {
+        userId: 'admin',
+        username: 'admin',
+        role: 'branch_admin',
+    };
+    if (branchCode) {
+        payload.branchCode = branchCode;
+    }
+    return jwt.sign(payload, authConfig.jwtSecret, { expiresIn: '15m' });
 }
 
 /** 内部并发池：避免引入 p-limit 依赖。*/
