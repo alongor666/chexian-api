@@ -23,6 +23,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { authMiddleware } from '../middleware/auth.js';
+import { UserRole } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import {
   sanitizeFilename,
@@ -39,6 +40,33 @@ const REPORTS_DIR = getReportsDir();
 const ALLOWED_REPORT_IDS = new Set<string>([
   'diagnose-loss-development',
 ]);
+
+/**
+ * B328：报告托管的行级安全（org 归属校验）。
+ *
+ * 历史漏洞：两个 GET handler 仅挂 authMiddleware，无 permissionMiddleware / 归属校验 →
+ * 任意已登录用户（含三级机构 org_user）可凭文件名/reportId 读取**跨机构** HTML 诊断报告
+ * （含保费/赔付/出险敏感数据），违反 §10 行级安全。
+ *
+ * 现有报告以「业务名+hash」单文件 / 「{reportId}/{snapshot}/...」多文件平铺存储，
+ * 路径不含机构归属信息。在生产方（diagnose-* skills / push_html.py）补齐机构归属约定之前，
+ * 本校验对非 branch_admin **fail-closed**，彻底封堵跨机构越权读取。
+ *
+ * @param ownerOrg 报告归属机构（org_level_3）；null = 无法判定归属
+ *                 （跨机构聚合报告 / 未带归属约定的平铺报告）→ 仅 branch_admin 可读
+ */
+export function assertReportAccess(req: Request, ownerOrg: string | null): void {
+  const role = req.user?.role as UserRole | undefined;
+  // branch_admin（分公司管理员）：放行全部报告
+  if (role === UserRole.BRANCH_ADMIN) return;
+  // org_user（三级机构用户）：仅放行归属本机构的报告，跨机构 → 403
+  if (role === UserRole.ORG_USER) {
+    if (ownerOrg !== null && ownerOrg === req.user?.organization) return;
+    throw new AppError(403, '无权访问其他机构的报告');
+  }
+  // telemarketing_user / 未知角色：报告为机构级敏感数据，fail-closed 403
+  throw new AppError(403, '无权访问报告');
+}
 
 /**
  * 校验多文件报告的相对子路径（不能用 sanitizeFilename，因为它拒绝 `/`）
@@ -142,6 +170,11 @@ router.get(
     const { reportId, snapshot } = req.params;
     const relativePath = (req.params as Record<string, string>)[0] || '';
 
+    // B328：归属校验前置（先于白名单），避免低权限用户用 404/403 差异枚举有效 reportId。
+    // 多文件白名单报告（diagnose-loss-development）为跨机构聚合报告，无单一机构归属
+    // → ownerOrg=null → 仅 branch_admin 可读
+    assertReportAccess(req, null);
+
     if (!ALLOWED_REPORT_IDS.has(reportId)) {
       throw new AppError(404, '报告类型不存在');
     }
@@ -161,6 +194,10 @@ router.get(
   '/:filename',
   authMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
+    // B328：归属校验前置。单文件报告平铺存储（业务名+hash），文件名不含机构归属
+    // → ownerOrg=null → 仅 branch_admin 可读（生产方补齐归属约定前 fail-closed，封堵跨机构越权）
+    assertReportAccess(req, null);
+
     const safe = sanitizeFilename(req.params.filename);
 
     if (!/\.html?$/i.test(safe)) {

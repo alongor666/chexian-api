@@ -3,13 +3,16 @@
  * Cross-Sell Recommendation Rate SQL Generator (Hierarchical Drilldown)
  *
  * 支持层层下钻：
- * Level 0: 四川分公司汇总（单行）
+ * Level 0: 分公司汇总（单行，标签由调用方传入 — 默认 '四川分公司' 保持兼容期行为）
  * Level N: 用户选择维度 → 按该维度分组，同时应用之前所有层级的过滤条件
  *
  * 下钻路径示例：
  *   [] + groupBy=null                           → 公司汇总
  *   [] + groupBy=org_level_3                     → 按三级机构分组
  *   [{dim: org_level_3, val: '天府'}] + groupBy=is_new_car → 筛选天府，按新车分组
+ *
+ * 0E：summaryGroupName 参数化 — 由 route handler 按 req.user.branchCode 派生
+ *     （server/src/config/branch-names.ts:getBranchCompanyName）
  */
 
 import { logger } from '../utils/logger.js';
@@ -164,9 +167,14 @@ function needsTeamJoin(drillPath: DrilldownStep[], groupBy: CrossSellDimension |
 export function generateCrossSellQuery(
   baseWhereClause: string,
   drillPath: DrilldownStep[] = [],
-  groupBy: CrossSellDimension | null = null
+  groupBy: CrossSellDimension | null = null,
+  /**
+   * 0E：分公司汇总行的中文标签。默认 '四川分公司' 保持向后兼容；
+   * 多分公司启用后由 route handler 传 getBranchCompanyName(req.user.branchCode)。
+   */
+  summaryGroupName: string = '四川分公司'
 ): string {
-  logger.debug('Generating cross-sell query', { baseWhereClause, drillPath, groupBy });
+  logger.debug('Generating cross-sell query', { baseWhereClause, drillPath, groupBy, summaryGroupName });
 
   const useJoin = needsTeamJoin(drillPath, groupBy);
   const colPrefix = useJoin ? 'c.' : '';
@@ -184,7 +192,7 @@ export function generateCrossSellQuery(
 
   // 汇总查询（无 GROUP BY）
   if (!groupBy) {
-    return generateSummaryOnly(tableRef, teamJoin, fullWhere, colPrefix);
+    return generateSummaryOnly(tableRef, teamJoin, fullWhere, colPrefix, summaryGroupName);
   }
 
   // 分组查询
@@ -255,18 +263,23 @@ export function generateCrossSellQuery(
 }
 
 /**
- * 生成汇总查询（仅一行，四川分公司汇总）
+ * 生成汇总查询（仅一行，分公司汇总）
+ *
+ * 0E：summaryGroupName 默认 '四川分公司' 兼容；山西上线 / flag on 后由调用方传 getBranchCompanyName。
+ * 安全：summaryGroupName 经 escapeSqlValue 转义（防 SQL 注入 — 即使当前来源是受控的服务端常量映射）。
  */
 function generateSummaryOnly(
   tableRef: string,
   teamJoin: string,
   fullWhere: string,
-  colPrefix: string
+  colPrefix: string,
+  summaryGroupName: string = '四川分公司'
 ): string {
+  const escapedName = escapeSqlValue(summaryGroupName);
   return `
     WITH summary AS (
       SELECT
-        '四川分公司' AS group_name,
+        '${escapedName}' AS group_name,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination IN ('主全', '交三') THEN ${colPrefix}auto_count ELSE 0 END), 0) AS total_auto_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination IN ('主全', '交三') THEN ${colPrefix}driver_count ELSE 0 END), 0) AS total_driver_count,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '单交' THEN ${colPrefix}auto_count ELSE 0 END), 0) AS danjiao_auto_count,

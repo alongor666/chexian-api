@@ -19,13 +19,26 @@ function gen(
 }
 
 describe('驾意险推介率下钻 — SQL 语义不变式', () => {
-  // C-01: 汇总模式字段集
-  it('C-01: groupBy=null 返回汇总行含推介率字段', () => {
+  // C-01: 汇总模式字段集（默认 summaryGroupName='四川分公司' 兼容期保留）
+  it('C-01: groupBy=null 返回汇总行含推介率字段（默认 summaryGroupName）', () => {
     const sql = gen(null);
     expect(sql).toContain("'四川分公司' AS group_name");
     expect(sql).toContain('AS total_auto_count');
     expect(sql).toContain('AS total_driver_count');
     expect(sql).toContain('AS total_rate');
+  });
+
+  // C-01b: 0E summaryGroupName 参数化 — 传入山西分公司 → SQL 含对应字面值
+  it('C-01b: 传入 summaryGroupName=\'山西分公司\' → SQL 用山西字面值（多分公司支持）', () => {
+    const sql = generateCrossSellQuery('1=1', [], null, '山西分公司');
+    expect(sql).toContain("'山西分公司' AS group_name");
+    expect(sql).not.toContain("'四川分公司' AS group_name");
+  });
+
+  // C-01c: 安全 — summaryGroupName 单引号转义防 SQL 注入
+  it('C-01c: summaryGroupName 含单引号必须转义（escapeSqlValue 防注入）', () => {
+    const sql = generateCrossSellQuery('1=1', [], null, "X' OR 1=1--");
+    expect(sql).toContain("'X'' OR 1=1--' AS group_name");
   });
 
   // C-02: 分组模式输出字段集

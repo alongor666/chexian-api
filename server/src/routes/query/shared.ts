@@ -60,8 +60,17 @@ export function buildRouteCacheKey(req: Request, routeName: string): string {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)
     .join('&');
+  // 0E codex P2：branchCode 段独立于 permissionFilter — flag off 兼容期所有 admin
+  // 的 permissionFilter 都是 '1=1'，但响应体可能按 req.user.branchCode 变化（如
+  // cross-sell 汇总行的 '四川分公司' 标签）；若 cache key 不含 branchCode，会让
+  // SC 用户先请求的响应缓给同 query 的 SX/全国用户。本段保证：
+  //   - flag off + admin SC.branchCode='SC' → 'b=SC'
+  //   - flag off + admin SX.branchCode='SX' → 'b=SX'
+  //   - 系统级超管（branchCode undefined）→ 'b=_'
+  // flag on 时 permissionFilter 已含 branch_code='SC'，本段是冗余防御（不是必要）。
+  const branchSegment = `b=${req.user?.branchCode ?? '_'}`;
   // 版本后缀：ETL 完成后版本变更，旧 key 自然不再被命中，由 LRU 淘汰
-  return `${routeName}|${req.permissionFilter || '1=1'}|${normalizedQuery}|v=${getDataVersion()}`;
+  return `${routeName}|${req.permissionFilter || '1=1'}|${branchSegment}|${normalizedQuery}|v=${getDataVersion()}`;
 }
 
 /**

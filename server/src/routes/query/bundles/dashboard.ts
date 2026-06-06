@@ -102,11 +102,15 @@ router.get(
 
     if (isDefaultCondition) {
       try {
-        // 0B：cache_key 用 permissionFilter 段（permission.ts 注入），与 cache-warmer 写入侧自洽：
-        // - flag off：permissionFilter='1=1' → key='dashboard-bundle|default|1=1'
-        // - flag on：permissionFilter=`branch_code='SC'` → key='dashboard-bundle|default|branch_code=\'SC\''
-        // 这样无需 dashboard.ts 知道 flag 状态，直接读 req.permissionFilter 即可。
-        const tier1CacheKey = `dashboard-bundle|default|${req.permissionFilter || '1=1'}`;
+        // 0B：cache_key 用 permissionFilter 段（permission.ts 注入），与 cache-warmer 写入侧自洽。
+        // 0E codex P2：增加 b=<branchCode> 段，与 shared.ts buildRouteCacheKey + cache-warmer Tier 1 写入侧严格对齐 —
+        //   兼容期所有 admin permissionFilter='1=1'，仅靠 permissionFilter 段无法防止 SC 用户先请求让 SX/全国
+        //   admin 命中错误 group_name 等响应体。
+        // - flag off + admin SC.branchCode='SC' → key='dashboard-bundle|default|1=1|b=SC'
+        // - flag off + 系统级超管 branchCode undefined → key='...|b=_'
+        // - flag on + admin SC → key='...|branch_code=\'SC\'|b=SC'
+        const branchSegment = `b=${req.user?.branchCode ?? '_'}`;
+        const tier1CacheKey = `dashboard-bundle|default|${req.permissionFilter || '1=1'}|${branchSegment}`;
         const escapedKey = tier1CacheKey.replace(/'/g, "''");
         const defaultCacheRows = await duckdbService.query<{ json_data: string }>(
           `SELECT json_data FROM DefaultDashboardCache WHERE cache_key = '${escapedKey}'`

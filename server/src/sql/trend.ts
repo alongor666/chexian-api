@@ -6,7 +6,6 @@
  * - trend/premium-trend.ts     — 按机构分组趋势查询
  * - trend/total-trend.ts       — 总体趋势查询
  * - trend/quality-business.ts  — 优质业务占比趋势
- * - trend/dimension-queries.ts — 机构列表 + 维度选项查询
  *
  * 此文件保持所有原始导出，调用方零改动。
  */
@@ -15,4 +14,3 @@ export * from './trend/shared.js';
 export * from './trend/premium-trend.js';
 export * from './trend/total-trend.js';
 export * from './trend/quality-business.js';
-export * from './trend/dimension-queries.js';

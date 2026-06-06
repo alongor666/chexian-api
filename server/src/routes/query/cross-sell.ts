@@ -6,6 +6,7 @@ import {
   logger, QUERY_CACHE, createDomainMiddleware, withRouteCache,
 } from './shared.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../../sql/cross-sell.js';
+import { getBranchCompanyName } from '../../config/branch-names.js';
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../../sql/cross-sell-summary.js';
 import { generateCrossSellTrendQuery, type TrendGranularity } from '../../sql/cross-sell-trend.js';
 import { generateCrossSellOrgTrendQuery, type CoverageCombinationFilter } from '../../sql/cross-sell-org-trend.js';
@@ -110,10 +111,12 @@ router.get('/cross-sell', withRouteCache('cross-sell'), asyncHandler(async (req,
     finalWhereClause += ` AND ${insuranceClause}`;
   }
 
+  // 0E：分公司汇总标签按当前用户的 branchCode 派生（兼容期 admin 落 'SC' → '四川分公司'）
+  const summaryGroupName = getBranchCompanyName(req.user?.branchCode);
   const [summaryResult, drilldownResult] = await Promise.all([
-    duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, null), QUERY_CACHE.hotspotShort),
+    duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, null, summaryGroupName), QUERY_CACHE.hotspotShort),
     groupBy
-      ? duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, groupBy), QUERY_CACHE.hotspotShort)
+      ? duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, groupBy, summaryGroupName), QUERY_CACHE.hotspotShort)
       : Promise.resolve([]),
   ]);
 
