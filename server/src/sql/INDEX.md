@@ -56,7 +56,6 @@ export interface KpiDetailResult {
 - `generatePremiumTrendQuery()`: 生成保费趋势查询（按机构）
 - `generateTotalPremiumTrendQuery()`: 生成总保费趋势查询（全局）
 - `generateQualityBusinessTrendQuery()`: 生成优质业务趋势查询
-- `generateDimensionOptionsQuery()`: 生成维度选项查询
 
 ### cross-sell-trend.ts
 **用途**: 驾意险推介率趋势 SQL 查询生成器  
