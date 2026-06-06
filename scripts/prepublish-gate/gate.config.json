@@ -1,0 +1,63 @@
+{
+  "_comment": "ETL 发布前准入闸门 — 声明式配置。在 sync-vps 之前对本地刚 ETL 出的 parquet 做指标体检；任一指标统计触发即阻断发布。改阈值/加指标只改此文件。详见 README.md。",
+  "warehouseRoot": "数据管理/warehouse",
+  "duckdbBin": "duckdb",
+  "history": {
+    "_comment": "统计判定的最小完整期数（与 stats.mjs evaluateMetricSeries 一致）。少于此值的指标返回 insufficientData=true，不触发也不阻断。",
+    "minMaturePeriods": 3
+  },
+  "maturity": {
+    "_comment": "默认排除最近 N 期不参与 Z 计算（保险公司 cutoff 当月的 insurance_start_date 分组分母小、IBNR 影响大，对 flow 类只排 1 期，对赔款 / 出险率类排 2-3）。可被 metric.excludeRecent 覆写。",
+    "excludeRecent": 1
+  },
+  "metrics": [
+    {
+      "id": "monthly_premium",
+      "name": "月签单保费",
+      "alert": true,
+      "source": "policy_dedup.monthly_premium",
+      "unit": "元",
+      "direction": "both",
+      "zThreshold": 2.5,
+      "momThreshold": 30,
+      "excludeRecent": 1,
+      "_note": "断崖检测（暴增 / 暴跌均告警）。policy_dedup 按 (policy_no, insurance_start_date) 聚合 + HAVING SUM(premium) > 0，与 server/src/sql/cost/cost-ratios.ts 同口径（B252）。只排 cutoff 当月，避免被春节高峰期倒推伪触发。"
+    },
+    {
+      "id": "monthly_policy_count",
+      "name": "月签单件数",
+      "alert": true,
+      "source": "policy_dedup.monthly_policy_count",
+      "unit": "件",
+      "direction": "both",
+      "zThreshold": 2.5,
+      "momThreshold": 30,
+      "excludeRecent": 1,
+      "_note": "断崖检测。同 monthly_premium 口径（COUNT DISTINCT policy_no）。"
+    },
+    {
+      "id": "monthly_claim_amount",
+      "name": "月出险报告金额",
+      "alert": true,
+      "source": "claims_detail.monthly_claim_amount",
+      "unit": "元",
+      "direction": "both",
+      "zThreshold": 2.5,
+      "momThreshold": 40,
+      "excludeRecent": 2,
+      "_note": "按出险时间分组（accident_time）。已决 + 未决 = settled_amount + reserve_amount（项目标准口径，见 memory feedback_pending_vs_reserve_amount）。近期受报案滞后/IBNR 影响系统性偏低，多排 1 期。"
+    },
+    {
+      "id": "monthly_claim_count",
+      "name": "月出险报案件数",
+      "alert": true,
+      "source": "claims_detail.monthly_claim_count",
+      "unit": "件",
+      "direction": "both",
+      "zThreshold": 2.5,
+      "momThreshold": 40,
+      "excludeRecent": 2,
+      "_note": "COUNT DISTINCT claim_no by accident_time month。同 monthly_claim_amount 口径，受报案滞后影响多排 1 期。"
+    }
+  ]
+}

@@ -82,6 +82,8 @@ function parseArgs(argv) {
     dryRun: false,
     skipGovernance: false,
     skipReload: false,
+    skipGate: false,
+    skipGateReason: '',
     wecom: false,
     wecomDryRun: false,
     wecomOrg: null,
@@ -92,6 +94,14 @@ function parseArgs(argv) {
     if (a === '--dry-run') opts.dryRun = true;
     else if (a === '--skip-governance') opts.skipGovernance = true;
     else if (a === '--skip-reload') opts.skipReload = true;
+    else if (a === '--skip-gate') opts.skipGate = true;
+    else if (a === '--skip-gate-reason') {
+      opts.skipGateReason = argv[++i] || '';
+      if (!opts.skipGateReason) throw new Error('--skip-gate-reason 需要理由字符串');
+    }
+    else if (a.startsWith('--skip-gate-reason=')) {
+      opts.skipGateReason = a.slice('--skip-gate-reason='.length);
+    }
     else if (a === '--wecom') opts.wecom = true;
     else if (a === '--wecom-dry-run') {
       opts.wecom = true;
@@ -105,11 +115,16 @@ function parseArgs(argv) {
       opts.wecomOrg = a.slice('--wecom-org='.length);
     }
     else if (a === '--help' || a === '-h') {
-      log('cyan', '用法：node scripts/sync-and-reload.mjs [daily.mjs subcommand] [--dry-run] [--skip-governance] [--skip-reload] [--wecom|--wecom-dry-run] [--wecom-org 机构列表]');
+      log('cyan', '用法：node scripts/sync-and-reload.mjs [daily.mjs subcommand] [--dry-run] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表]');
       process.exit(0);
     } else opts.dailyArgs.push(a);
   }
   if (opts.dailyArgs.length === 0) opts.dailyArgs = ['all'];
+  // 环境变量兜底（CI / cron / 紧急运维）
+  if (!opts.skipGate && (process.env.PREPUBLISH_GATE_SKIP === '1' || process.env.PREPUBLISH_GATE_SKIP === 'true')) {
+    opts.skipGate = true;
+    if (!opts.skipGateReason) opts.skipGateReason = process.env.PREPUBLISH_GATE_SKIP_REASON || '(env PREPUBLISH_GATE_SKIP)';
+  }
   return opts;
 }
 
@@ -265,6 +280,7 @@ async function main() {
   log('cyan', `  health url:        ${healthUrl}`);
   log('cyan', `  skip governance:   ${opts.skipGovernance}`);
   log('cyan', `  skip reload:       ${opts.skipReload}`);
+  log('cyan', `  skip gate:         ${opts.skipGate}${opts.skipGate && opts.skipGateReason ? ` (${opts.skipGateReason})` : ''}`);
   log('cyan', `  wecom:             ${opts.wecom}${opts.wecomDryRun ? ' (dry-run)' : ''}`);
   if (opts.wecomOrg) log('cyan', `  wecom org:         ${opts.wecomOrg}`);
   log('cyan', `  dry-run:           ${opts.dryRun}`);
@@ -308,6 +324,25 @@ async function main() {
     log('yellow', '\n⚠ 跳过 governance（--skip-governance）');
   } else {
     await runCmd('governance', 'bun', ['run', 'governance'], { dryRun: opts.dryRun });
+  }
+
+  // Stage 2.5: 发布前准入闸门（pre-publish gate）— governance 后、sync-vps 前
+  // 对本地刚 ETL 出的 parquet 做指标体检（月签单保费 / 件数 / 出险金额 / 出险件数 Z-score）。
+  // 任一指标统计触发即非零退出，本流程中断、不 rsync、不 reload。
+  // 与 scripts/sentinel/ 互补：sentinel 是发布后监控（查 live API），gate 是发布前阻断（查本地 parquet）。
+  if (opts.skipGate) {
+    // 旁路审计由 prepublish-gate.mjs 自身负责（写 logs/prepublish-gate-bypass.log），
+    // 这里也跑一遍 --skip-gate 让审计落地，避免直接绕过脚本写不到审计日志。
+    const gateArgs = ['scripts/prepublish-gate/prepublish-gate.mjs', '--skip-gate'];
+    if (opts.skipGateReason) gateArgs.push('--skip-reason', opts.skipGateReason);
+    await runCmd('prepublish-gate (bypass)', 'node', gateArgs, { dryRun: opts.dryRun });
+  } else {
+    await runCmd(
+      'prepublish-gate',
+      'node',
+      ['scripts/prepublish-gate/prepublish-gate.mjs'],
+      { dryRun: opts.dryRun, timeoutMs: 5 * 60 * 1000 }
+    );
   }
 
   // Stage 3: 数据同步。sync-and-reload 统一控制上传范围，daily.mjs 固定 --no-sync。
