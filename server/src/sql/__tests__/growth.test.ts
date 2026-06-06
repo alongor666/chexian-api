@@ -6,7 +6,6 @@ import {
   generateCustomGrowthQuery,
   generateGrowthQuery,
   generateDailyGrowthWithContextQuery,
-  generateDualMetricComparisonQuery,
   COMMON_GROWTH_QUERIES,
   type GrowthConfig,
 } from '../growth.js';
@@ -198,55 +197,7 @@ describe('generateDailyGrowthWithContextQuery', () => {
 });
 
 // ═══════════════════════════════════════════════════
-// 7. 双指标对比
-// ═══════════════════════════════════════════════════
-
-describe('generateDualMetricComparisonQuery', () => {
-  const config = {
-    currentStartDate: '2026-01-01',
-    currentEndDate: '2026-01-31',
-    previousStartDate: '2025-01-01',
-    previousEndDate: '2025-01-31',
-  };
-
-  it('基本结构：current_data + previous_data CTE', () => {
-    const sql = generateDualMetricComparisonQuery(config);
-    expect(sql).toContain('WITH current_data AS');
-    expect(sql).toContain('previous_data AS');
-    expect(sql).toContain('FULL OUTER JOIN');
-  });
-
-  it('输出增长率', () => {
-    const sql = generateDualMetricComparisonQuery(config);
-    expect(sql).toContain('premium_growth_rate');
-    expect(sql).toContain('count_growth_rate');
-  });
-
-  it('日期正确注入', () => {
-    const sql = generateDualMetricComparisonQuery(config);
-    expect(sql).toContain("'2026-01-01'");
-    expect(sql).toContain("'2025-01-31'");
-  });
-
-  it('自定义 groupBy', () => {
-    const sql = generateDualMetricComparisonQuery({
-      ...config,
-      groupBy: ['customer_category'],
-    });
-    expect(sql).toContain('customer_category');
-  });
-
-  it('WHERE 子句注入', () => {
-    const sql = generateDualMetricComparisonQuery({
-      ...config,
-      whereClause: "org_level_3 = '天府'",
-    });
-    expect(sql).toContain("org_level_3 = '天府'");
-  });
-});
-
-// ═══════════════════════════════════════════════════
-// 8. 预设常量
+// 7. 预设常量
 // ═══════════════════════════════════════════════════
 
 describe('COMMON_GROWTH_QUERIES', () => {

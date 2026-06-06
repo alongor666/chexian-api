@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { Request } from 'express';
 
 let dataVersion = 'v-test-1';
@@ -147,5 +147,46 @@ describe('buildRouteCacheKey', () => {
       drillPath: '[]',
       granularity: 'monthly',
     }), 'kpi')).not.toBe(base);
+  });
+
+  // 0B：BRANCH_RLS_ENABLED=true 时 permission.ts 注入 `branch_code='SC'` 到 req.permissionFilter，
+  // 不同 branch 的同请求必须生成不同 cache key（避免 SC/SX 串读）。
+  describe('multi-branch permissionFilter isolation', () => {
+    beforeEach(() => {
+      dataVersion = 'v-branch-test';
+    });
+
+    const baseQuery = {
+      dateField: 'policy_date',
+      startDate: '2026-01-01',
+      endDate: '2026-05-11',
+      perspective: 'premium',
+    };
+
+    it('admin SC vs admin SX → 不同 cache key', () => {
+      const scKey = buildRouteCacheKey(makeReq(baseQuery, `branch_code = 'SC'`), 'dashboard-bundle');
+      const sxKey = buildRouteCacheKey(makeReq(baseQuery, `branch_code = 'SX'`), 'dashboard-bundle');
+      expect(scKey).not.toBe(sxKey);
+      expect(scKey).toContain(`branch_code = 'SC'`);
+      expect(sxKey).toContain(`branch_code = 'SX'`);
+    });
+
+    it('org_user 乐山 SC vs 乐山 SX → 不同 cache key（机构同名跨省）', () => {
+      const scLeshan = buildRouteCacheKey(makeReq(baseQuery, `(org_level_3 = '乐山') AND branch_code = 'SC'`), 'kpi');
+      const sxLeshan = buildRouteCacheKey(makeReq(baseQuery, `(org_level_3 = '乐山') AND branch_code = 'SX'`), 'kpi');
+      expect(scLeshan).not.toBe(sxLeshan);
+    });
+
+    it('flag off 兼容期 1=1 vs flag on branch_code=SC → 不同 cache key（不串读）', () => {
+      const flagOff = buildRouteCacheKey(makeReq(baseQuery, '1=1'), 'dashboard-bundle');
+      const flagOnSc = buildRouteCacheKey(makeReq(baseQuery, `branch_code = 'SC'`), 'dashboard-bundle');
+      expect(flagOff).not.toBe(flagOnSc);
+    });
+
+    it('同 branch 同请求 → 同 cache key（确定性，可命中预热）', () => {
+      const a = buildRouteCacheKey(makeReq(baseQuery, `branch_code = 'SC'`), 'dashboard-bundle');
+      const b = buildRouteCacheKey(makeReq(baseQuery, `branch_code = 'SC'`), 'dashboard-bundle');
+      expect(a).toBe(b);
+    });
   });
 });

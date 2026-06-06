@@ -197,13 +197,9 @@ SELECT
   -- 满期赔付率
   ${getMetricSql('earned_claim_ratio')},
 
-  -- 费用率（注意：CTE 中 fee_amount 已 COALESCE(fee_amount,0)，字面上不含 COALESCE，保持原样）
-  -- 不 ROUND，避免与前端 decimals=1 双重舍入（注册表 expense_ratio v1.2.0）
-  CASE
-    WHEN SUM(premium) > 0
-    THEN SUM(fee_amount) * 100.0 / SUM(premium)
-    ELSE NULL
-  END AS expense_ratio,
+  -- 费用率（注册表 expense_ratio 唯一事实源 · B333：消除硬编码漂移。
+  --   fee_amount 经 Parquet 直查 2.59M 行 0 NULL，故 SUM(fee_amount)≡SUM(COALESCE(fee_amount,0))，KPI 中性）
+  ${getMetricSql('expense_ratio')},
 
   -- 综合费用率 = (赔款 + 费用) / 满期保费 * 100%
   CASE
@@ -276,13 +272,9 @@ SELECT
   -- 满期赔付率
   ${getMetricSql('earned_claim_ratio')},
 
-  -- 费用率（注意：CTE 中 fee_amount 已 COALESCE(fee_amount,0)，字面上不含 COALESCE，保持原样）
-  -- 不 ROUND，避免与前端 decimals=1 双重舍入（注册表 expense_ratio v1.2.0）
-  CASE
-    WHEN SUM(premium) > 0
-    THEN SUM(fee_amount) * 100.0 / SUM(premium)
-    ELSE NULL
-  END AS expense_ratio,
+  -- 费用率（注册表 expense_ratio 唯一事实源 · B333：消除硬编码漂移。
+  --   fee_amount 经 Parquet 直查 2.59M 行 0 NULL，故 SUM(fee_amount)≡SUM(COALESCE(fee_amount,0))，KPI 中性）
+  ${getMetricSql('expense_ratio')},
 
   -- 变动成本率 = 赔付率 + 费用率（注意：fee_amount 已 COALESCE，保持原样）
   CASE

@@ -253,3 +253,24 @@ export function getAllPermissionScopes(): string[] {
   }
   return Array.from(scopes);
 }
+
+/**
+ * 获取所有唯一的 branchCode 列表（cache-warmer 按 branch 预热共用）。
+ *
+ * 用途：cache-warmer 0B 改造 — 0F BRANCH_RLS_ENABLED=true 时，
+ * 按本函数返回值循环预热（每个 branch 独立 cache entry），
+ * 避免单 branch admin token 预热的内容被另一 branch 用户误命中。
+ *
+ * 排序后返回（确定性），便于测试断言。
+ * 当前返回 ['SC']（PR #492 把全部 20 个 preset 用户标 'SC'）；
+ * 未来加 SX 用户后自动变 ['SC', 'SX']。
+ */
+export function getAllBranchCodes(): string[] {
+  const codes = new Set<string>();
+  for (const user of Object.values(PRESET_USERS)) {
+    if (user.branchCode) {
+      codes.add(user.branchCode);
+    }
+  }
+  return Array.from(codes).sort();
+}

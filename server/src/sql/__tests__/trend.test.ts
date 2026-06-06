@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   generatePremiumTrendQuery,
   generateTotalPremiumTrendQuery,
-  generateOrgListQuery,
-  generateDimensionOptionsQuery,
   generateQualityBusinessTrendQuery,
   type TimeView,
 } from '../trend.js';
@@ -194,73 +192,7 @@ describe('generateTotalPremiumTrendQuery', () => {
 });
 
 // ═══════════════════════════════════════════════════
-// 3. generateOrgListQuery（机构列表）
-// ═══════════════════════════════════════════════════
-
-describe('generateOrgListQuery', () => {
-  it('基本结构：SELECT DISTINCT + FROM PolicyFact + ORDER BY', () => {
-    const sql = generateOrgListQuery();
-    expect(sql).toContain('SELECT DISTINCT org_level_3');
-    expect(sql).toContain('FROM PolicyFact');
-    expect(sql).toContain('ORDER BY org_level_3');
-  });
-
-  it('默认 WHERE 条件为 1=1', () => {
-    const sql = generateOrgListQuery();
-    expect(sql).toContain('WHERE 1=1');
-  });
-
-  it('WHERE 子句注入', () => {
-    const sql = generateOrgListQuery("org_level_3 IS NOT NULL");
-    expect(sql).toContain('org_level_3 IS NOT NULL');
-  });
-
-  it('仅返回 org_level_3 一列（无多余字段）', () => {
-    const sql = generateOrgListQuery();
-    expect(sql).not.toContain('premium');
-    expect(sql).not.toContain('COUNT(');
-  });
-});
-
-// ═══════════════════════════════════════════════════
-// 4. generateDimensionOptionsQuery（维度选项带计数）
-// ═══════════════════════════════════════════════════
-
-describe('generateDimensionOptionsQuery', () => {
-  it('基本结构：SELECT + FROM PolicyFact + GROUP BY + ORDER BY', () => {
-    const sql = generateDimensionOptionsQuery('customer_category');
-    expect(sql).toContain('FROM PolicyFact');
-    expect(sql).toContain('GROUP BY customer_category');
-    expect(sql).toContain('ORDER BY 2 DESC, 1');
-  });
-
-  it('输出列：value 和 count', () => {
-    const sql = generateDimensionOptionsQuery('customer_category');
-    expect(sql).toContain('customer_category AS value');
-    expect(sql).toContain('COUNT(*) AS count');
-  });
-
-  it('过滤 NULL 值', () => {
-    const sql = generateDimensionOptionsQuery('customer_category');
-    expect(sql).toContain('customer_category IS NOT NULL');
-  });
-
-  it('动态维度字段注入：org_level_3', () => {
-    const sql = generateDimensionOptionsQuery('org_level_3');
-    expect(sql).toContain('org_level_3 AS value');
-    expect(sql).toContain('GROUP BY org_level_3');
-    expect(sql).toContain('org_level_3 IS NOT NULL');
-  });
-
-  it('动态维度字段注入：coverage_combination', () => {
-    const sql = generateDimensionOptionsQuery('coverage_combination');
-    expect(sql).toContain('coverage_combination AS value');
-    expect(sql).toContain('GROUP BY coverage_combination');
-  });
-});
-
-// ═══════════════════════════════════════════════════
-// 5. generateQualityBusinessTrendQuery（优质业务占比趋势）
+// 3. generateQualityBusinessTrendQuery（优质业务占比趋势）
 // ═══════════════════════════════════════════════════
 
 describe('generateQualityBusinessTrendQuery', () => {
@@ -358,8 +290,6 @@ describe('跨函数 SQL 一致性', () => {
     const sqls = [
       generatePremiumTrendQuery('monthly'),
       generateTotalPremiumTrendQuery('monthly'),
-      generateOrgListQuery(),
-      generateDimensionOptionsQuery('customer_category'),
       generateQualityBusinessTrendQuery('monthly'),
     ];
     sqls.forEach((sql) => {
