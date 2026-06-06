@@ -243,7 +243,13 @@ type QueryValue = string | number | boolean | null | undefined;
 function buildSyntheticRouteCacheKey(
     routeName: string,
     permissionFilter: string,
-    query: Record<string, QueryValue>
+    query: Record<string, QueryValue>,
+    /**
+     * 0E codex P2：branchCode 段。与 shared.ts buildRouteCacheKey 严格对齐 — 否则
+     * cache-warmer 预热的 cache 与真实流量 cache key 不同，预热永远 miss。
+     * variant.branchCode 来自 PRESET_USERS（getAllBranchCodes），null 时退回 '_'。
+     */
+    branchCode: string | null
 ): string {
     const normalizedQuery = Object.entries(query)
         .filter(([, value]) => value !== undefined && value !== null)
@@ -251,8 +257,9 @@ function buildSyntheticRouteCacheKey(
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, value]) => `${key}=${value}`)
         .join('&');
-    // 与 buildRouteCacheKey（shared.ts）保持一致：版本后缀
-    return `${routeName}|${permissionFilter || '1=1'}|${normalizedQuery}|v=${getDataVersion()}`;
+    const branchSegment = `b=${branchCode ?? '_'}`;
+    // 与 buildRouteCacheKey（shared.ts）保持一致：branchCode 段 + 版本后缀
+    return `${routeName}|${permissionFilter || '1=1'}|${branchSegment}|${normalizedQuery}|v=${getDataVersion()}`;
 }
 
 /**
@@ -365,7 +372,7 @@ export class CacheWarmer {
                             perspective: 'premium',
                             orgNames: org,
                         };
-                        const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', variant.permissionFilter, baseQuery);
+                        const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', variant.permissionFilter, baseQuery, variant.branchCode);
                         setRouteCache(cacheKey, payload, QUERY_CACHE.hotspotLong);
                     } catch (e) {
                         logger.warn(`[CacheWarmer] Top-orgs warm failed for org=${org} branch=${variant.branchCode ?? '(none)'}:`, e);
@@ -493,7 +500,7 @@ export class CacheWarmer {
             });
 
             for (const query of queryVariants) {
-                const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', variant.permissionFilter, query);
+                const cacheKey = buildSyntheticRouteCacheKey('dashboard-bundle', variant.permissionFilter, query, variant.branchCode);
                 setRouteCache(cacheKey, bundleData, QUERY_CACHE.hotspotLong);
             }
         }
@@ -542,7 +549,10 @@ export class CacheWarmer {
                 dateField: 'policy_date'
             });
 
-            const cacheKey = `dashboard-bundle|default|${variant.permissionFilter}`;
+            // 0E codex P2：Tier 1 cache_key 也含 branchCode 段（与 shared.ts buildRouteCacheKey
+            // + buildSyntheticRouteCacheKey + dashboard.ts 消费侧严格对齐）
+            const branchSegment = `b=${variant.branchCode ?? '_'}`;
+            const cacheKey = `dashboard-bundle|default|${variant.permissionFilter}|${branchSegment}`;
             const escapedKey = cacheKey.replace(/'/g, "''");
             const jsonStr = JSON.stringify(bundleData).replace(/'/g, "''");
 
@@ -783,8 +793,10 @@ export class CacheWarmer {
                 // 对应的 API 请求 key，相当于 ?org_filter=["org"] 等，详见 frontend
                 // 由于 req.query 我们拿不到，且为了命中缓存需模拟完全一致的 cache key，
                 // 最简单安全的方式是在服务端直接预装最标准的查询字符串：
+                // 0E codex P2：手写 cache key 加 branchCode 段（与 shared.ts buildRouteCacheKey 对齐）
                 const virtualQueryString = `date_criteria=policy_date&org_filter=["${escapedOrg}"]&policy_date_end=${maxDate}&policy_date_start=${startDate}`;
-                const cacheKey = `dashboard-bundle|${variant.permissionFilter}|${virtualQueryString}`;
+                const branchSegment = `b=${variant.branchCode ?? '_'}`;
+                const cacheKey = `dashboard-bundle|${variant.permissionFilter}|${branchSegment}|${virtualQueryString}`;
 
                 setRouteCache(cacheKey, payload, 300_000); // 存 5 分钟热度
                 logger.info(`[CacheWarmer] Tier 2 Memory cached for org=${org} branch=${variant.branchCode ?? '(none)'}`);

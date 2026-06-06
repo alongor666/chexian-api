@@ -54,9 +54,31 @@ CLAIM_AMT     = (
     "ELSE COALESCE(c.reserve_amount, 0) END"
 )
 IS_LOCAL      = "plate_city = accident_city_name"
-IS_INPROV_RMT = "plate_province = '四川' AND plate_city != accident_city_name"
-IS_OUTPROV    = "plate_province != '四川'"
+
+# 0E：分支省份参数化（默认 '四川' 保持兼容；main() 按 --branch 覆盖）
+BRANCH_PROVINCE = '四川'
+IS_INPROV     = f"plate_province = '{BRANCH_PROVINCE}'"
+IS_INPROV_RMT = f"plate_province = '{BRANCH_PROVINCE}' AND plate_city != accident_city_name"
+IS_OUTPROV    = f"plate_province != '{BRANCH_PROVINCE}'"
 LOC_TYPE = f"""CASE
+    WHEN {IS_LOCAL} THEN '本地'
+    WHEN {IS_INPROV_RMT} THEN '本省异地'
+    WHEN {IS_OUTPROV} THEN '外省'
+    ELSE '未知' END"""
+
+
+def _override_branch(province: str):
+    """0E：main() 启动时根据 --branch 覆盖 4 个分支相关全局常量。
+
+    Python 模块全局变量延迟绑定：sX() 函数在执行时读取最新值。
+    LOC_TYPE 含 IS_INPROV_RMT/IS_OUTPROV 嵌套 f-string，必须整体重算。
+    """
+    global BRANCH_PROVINCE, IS_INPROV, IS_INPROV_RMT, IS_OUTPROV, LOC_TYPE
+    BRANCH_PROVINCE = province
+    IS_INPROV     = f"plate_province = '{province}'"
+    IS_INPROV_RMT = f"plate_province = '{province}' AND plate_city != accident_city_name"
+    IS_OUTPROV    = f"plate_province != '{province}'"
+    LOC_TYPE = f"""CASE
     WHEN {IS_LOCAL} THEN '本地'
     WHEN {IS_INPROV_RMT} THEN '本省异地'
     WHEN {IS_OUTPROV} THEN '外省'
@@ -166,7 +188,7 @@ def s02_plate_ranking(con, rpt, yf):
         ROUND(SUM(CASE WHEN {IS_LOCAL} THEN claim_amount END)/NULLIF(COUNT(CASE WHEN {IS_LOCAL} THEN 1 END),0),0),
         ROUND(SUM(CASE WHEN plate_city!=accident_city_name THEN claim_amount END)/NULLIF(COUNT(CASE WHEN plate_city!=accident_city_name THEN 1 END),0),0),
         ROUND(SUM(CASE WHEN plate_city!=accident_city_name THEN claim_amount END)/10000,1)
-    FROM joined WHERE plate_province='四川' GROUP BY 1,2 HAVING COUNT(*)>=20 ORDER BY 6 DESC
+    FROM joined WHERE {IS_INPROV} GROUP BY 1,2 HAVING COUNT(*)>=20 ORDER BY 6 DESC
     """).fetchall()
     rpt.add("| 车牌 | 归属城市 | 总赔案 | 本地 | 异地 | 异地率 | 本地案均 | 异地案均 | 倍率 | 异地赔款(万) |")
     rpt.add("|:---|:---|---:|---:|---:|---:|---:|---:|---:|---:|")
@@ -187,7 +209,7 @@ def s03_flow(con, rpt, yf):
         ROUND(SUM(claim_amount)/10000,1), ROUND(SUM(claim_amount)/COUNT(*),0),
         COUNT(CASE WHEN is_bodily_injury THEN 1 END),
         ROUND(COUNT(CASE WHEN is_bodily_injury THEN 1 END)*100.0/COUNT(*),1)
-    FROM joined WHERE plate_province='四川' AND plate_city!=accident_city_name
+    FROM joined WHERE {IS_INPROV} AND plate_city!=accident_city_name
     GROUP BY 1,2 HAVING COUNT(*)>=10 ORDER BY 3 DESC LIMIT 25
     """).fetchall()
     rpt.add("| 归属地 | 出险地 | 赔案 | 赔款(万) | 案均 | 人伤 | 人伤率 |")
@@ -210,7 +232,7 @@ def s04_org(con, rpt, yf):
         ROUND(SUM(CASE WHEN {IS_LOCAL} THEN claim_amount END)/NULLIF(COUNT(CASE WHEN {IS_LOCAL} THEN 1 END),0),0),
         ROUND(SUM(CASE WHEN {IS_INPROV_RMT} THEN claim_amount END)/NULLIF(COUNT(CASE WHEN {IS_INPROV_RMT} THEN 1 END),0),0),
         ROUND(SUM(CASE WHEN {IS_INPROV_RMT} THEN claim_amount END)/10000,1)
-    FROM joined WHERE plate_province='四川' GROUP BY 1 HAVING COUNT(*)>=20 ORDER BY 4 DESC
+    FROM joined WHERE {IS_INPROV} GROUP BY 1 HAVING COUNT(*)>=20 ORDER BY 4 DESC
     """).fetchall()
     rpt.add("| 机构 | 总赔案 | 异地赔案 | 异地率 | 本地案均 | 异地案均 | 倍率 | 异地赔款(万) |")
     rpt.add("|:---|---:|---:|---:|---:|---:|---:|---:|")
@@ -233,7 +255,7 @@ def s05_district_hotspot(con, rpt, yf):
         ROUND(SUM(claim_amount)/10000,1), ROUND(SUM(claim_amount)/COUNT(*),0),
         COUNT(CASE WHEN is_bodily_injury THEN 1 END),
         ROUND(COUNT(CASE WHEN is_bodily_injury THEN 1 END)*100.0/COUNT(*),1)
-    FROM joined WHERE plate_province='四川' AND plate_city!=accident_city_name AND accident_district IS NOT NULL
+    FROM joined WHERE {IS_INPROV} AND plate_city!=accident_city_name AND accident_district IS NOT NULL
     GROUP BY 1,2 HAVING COUNT(*)>=10 ORDER BY 3 DESC LIMIT 25
     """).fetchall()
     rpt.add("| 出险城市 | 区县 | 异地赔案 | 车牌数 | 赔款(万) | 案均 | 人伤 | 人伤率 | 风险 |")
@@ -254,7 +276,7 @@ def s06_multi_city(con, rpt, yf):
         SELECT vehicle_frame_no, plate_no, plate_city, org_level_3,
             COUNT(*) n, COUNT(DISTINCT accident_city_name) cities,
             SUM(claim_amount) amt, COUNT(CASE WHEN is_bodily_injury THEN 1 END) bodily
-        FROM joined WHERE plate_province='四川'
+        FROM joined WHERE {IS_INPROV}
         GROUP BY 1,2,3,4 HAVING COUNT(DISTINCT accident_city_name)>=2
     ) SELECT COUNT(*), SUM(n), ROUND(SUM(amt)/10000,1), ROUND(AVG(n),1), ROUND(AVG(cities),1), SUM(bodily) FROM multi
     """).fetchone()
@@ -274,7 +296,7 @@ def s06_multi_city(con, rpt, yf):
         COUNT(CASE WHEN plate_city!=accident_city_name THEN 1 END),
         COUNT(CASE WHEN is_bodily_injury THEN 1 END),
         STRING_AGG(DISTINCT accident_city_name,'→')
-    FROM joined WHERE plate_province='四川'
+    FROM joined WHERE {IS_INPROV}
     GROUP BY vehicle_frame_no, plate_no, plate_city, org_level_3
     HAVING COUNT(DISTINCT accident_city_name)>=2 ORDER BY SUM(claim_amount) DESC LIMIT 15
     """).fetchall()
@@ -359,7 +381,7 @@ def s08_cause_description(con, rpt, yf):
         CASE WHEN is_bodily_injury THEN '是' ELSE '否' END AS bodily,
         accident_time::DATE AS dt
     FROM joined
-    WHERE plate_province='四川' AND plate_city!=accident_city_name AND claim_amount>=20000
+    WHERE {IS_INPROV} AND plate_city!=accident_city_name AND claim_amount>=20000
     ORDER BY claim_amount DESC LIMIT 15
     """).fetchall()
     rpt.add("| VIN | 归属 | 出险地 | 机构 | 原因 | 赔款 | 人伤 | 日期 | 出险经过 |")
@@ -403,7 +425,7 @@ def s10_summary(con, rpt, yf):
         ROUND(SUM(CASE WHEN {IS_INPROV_RMT} THEN claim_amount END)/NULLIF(COUNT(CASE WHEN {IS_INPROV_RMT} THEN 1 END),0),0),
         ROUND(SUM(CASE WHEN {IS_LOCAL} THEN claim_amount END)/NULLIF(COUNT(CASE WHEN {IS_LOCAL} THEN 1 END),0),0),
         ROUND(SUM(CASE WHEN {IS_INPROV_RMT} THEN claim_amount END)/10000,1),
-        (SELECT COUNT(*) FROM (SELECT vehicle_frame_no FROM joined WHERE plate_province='四川' GROUP BY 1 HAVING COUNT(DISTINCT accident_city_name)>=2)),
+        (SELECT COUNT(*) FROM (SELECT vehicle_frame_no FROM joined WHERE {IS_INPROV} GROUP BY 1 HAVING COUNT(DISTINCT accident_city_name)>=2)),
         COUNT(CASE WHEN {IS_OUTPROV} THEN 1 END),
         ROUND(SUM(CASE WHEN {IS_OUTPROV} THEN claim_amount END)/10000,1)
     FROM joined WHERE plate_province IS NOT NULL
@@ -446,7 +468,12 @@ def main():
     ap = argparse.ArgumentParser(description="过户车出险地点异常分析")
     ap.add_argument("--year", type=int, default=2025)
     ap.add_argument("--sections", type=str, default=None, help="逗号分隔，如 1,5,8")
+    ap.add_argument("--branch", type=str, default='四川',
+                    help="分公司省份中文名（默认 '四川'；多分公司启用后传 '山西' 等）")
     args = ap.parse_args()
+
+    # 0E：先按 --branch 覆盖 IS_INPROV / IS_INPROV_RMT / IS_OUTPROV / LOC_TYPE 等全局常量
+    _override_branch(args.branch)
 
     yf = f"YEAR(p.policy_date) = {args.year}"
     selected = {int(x) for x in args.sections.split(",") if x.strip()} if args.sections else set(SECTIONS)
