@@ -63,10 +63,15 @@ vi.mock('../../../services/data-version.js', () => ({
 
 import { buildRouteCacheKey } from '../shared.js';
 
-function makeReq(query: Record<string, unknown>, permissionFilter = 'org_level_3 IN (\'乐山\')'): Request {
+function makeReq(
+  query: Record<string, unknown>,
+  permissionFilter = 'org_level_3 IN (\'乐山\')',
+  branchCode?: string,
+): Request {
   return {
     query,
     permissionFilter,
+    user: branchCode !== undefined ? { branchCode } : undefined,
   } as unknown as Request;
 }
 
@@ -186,6 +191,43 @@ describe('buildRouteCacheKey', () => {
     it('同 branch 同请求 → 同 cache key（确定性，可命中预热）', () => {
       const a = buildRouteCacheKey(makeReq(baseQuery, `branch_code = 'SC'`), 'dashboard-bundle');
       const b = buildRouteCacheKey(makeReq(baseQuery, `branch_code = 'SC'`), 'dashboard-bundle');
+      expect(a).toBe(b);
+    });
+  });
+
+  // 0E codex P2 修复：flag off 兼容期 admin permissionFilter 都是 '1=1'，
+  // 但响应体可能按 req.user.branchCode 变化（如 cross-sell 汇总行的 '四川分公司' 标签）。
+  // cache key 必须独立含 b=<branchCode> 段，否则 SC 用户先请求的响应会缓给同 query 的 SX/全国 admin。
+  describe('codex P2: flag off 兼容期按 user.branchCode 隔离 cache key', () => {
+    beforeEach(() => {
+      dataVersion = 'v-codex-p2';
+    });
+
+    const baseQuery = {
+      dateField: 'policy_date',
+      startDate: '2026-01-01',
+      endDate: '2026-05-11',
+    };
+
+    it('同 permissionFilter=1=1 但 branchCode 不同 → 不同 cache key（防 cross-sell 汇总标签串读）', () => {
+      const scAdmin = buildRouteCacheKey(makeReq(baseQuery, '1=1', 'SC'), 'cross-sell');
+      const sxAdmin = buildRouteCacheKey(makeReq(baseQuery, '1=1', 'SX'), 'cross-sell');
+      expect(scAdmin).not.toBe(sxAdmin);
+      expect(scAdmin).toContain('b=SC');
+      expect(sxAdmin).toContain('b=SX');
+    });
+
+    it('admin SC（branchCode=SC）vs 系统级超管（branchCode undefined）→ 不同 cache key', () => {
+      const sc = buildRouteCacheKey(makeReq(baseQuery, '1=1', 'SC'), 'cross-sell');
+      const superAdmin = buildRouteCacheKey(makeReq(baseQuery, '1=1'), 'cross-sell'); // req.user undefined
+      expect(sc).not.toBe(superAdmin);
+      expect(sc).toContain('b=SC');
+      expect(superAdmin).toContain('b=_');
+    });
+
+    it('同 branchCode + 同请求 → 同 cache key（确定性，预热可命中）', () => {
+      const a = buildRouteCacheKey(makeReq(baseQuery, '1=1', 'SC'), 'cross-sell');
+      const b = buildRouteCacheKey(makeReq(baseQuery, '1=1', 'SC'), 'cross-sell');
       expect(a).toBe(b);
     });
   });
