@@ -41,6 +41,7 @@ import { join, dirname, basename, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
+import { generateReportsManifests } from './gen-reports-manifest.mjs';
 import os from 'os';
 import { assertNoPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 
@@ -785,17 +786,19 @@ async function runStandardMode(sshConfig, runConfig) {
     log('yellow', '\n⚠ 非关键目录同步失败，继续重启（数据不完整但核心功能可用）');
   }
 
-  // 在 VPS 端按真实存在的 HTML 文件清单生成 reports manifest.json
-  // 设计要点（PR 441 漏洞修复）：
-  //   - 本地（dev / Mac）通常不会跑 diagnose-* skill 产 HTML，public/reports/ 只有 .gitkeep
-  //   - 旧实现：本地生成 manifest → 本地 entries=0 → 跳过 → VPS 永远没 manifest
-  //   - 新实现：rsync 完报告后，让 VPS 自己当 owning host，按 frontend/dist/reports/ 真实文件清单生成
+  // 生成 reports manifest.json（前端首页报告卡据此判 ready/stale/unavailable）
+  // 设计要点（两次踩坑后定稿）：
+  //   - 旧旧实现「纯本地生成」：CI/Mac 本地 public/reports/ 常只有 .gitkeep → entries=0 → 跳过 → VPS 永远没 manifest
+  //   - 旧实现「VPS 端生成」：VPS deploy 用户无 node（node 仅在 root 的 /root/.nvm 下，deployer 够不到）
+  //     → `ssh node /tmp/gen-...` 永远 "node not found"（try/catch 静默失败）→ manifest 仍永远缺失 → 首页 916B 空白页
+  //   - 现实现「本地 pull→生成→push」：先把 VPS 已有报告（含历史日期 + 既有 manifest）拉回本地补齐 union，
+  //     再用本机 node 生成（生成器自带"空不覆盖"防御），最后 push 回 VPS。绕开 deployer 无 node + entries=0 双坑。
   //   - manifest 失败不阻断重启（前端 resolveReport 会判 unavailable 并显式提示，不再回落到空白页）
   const reportsTask = activeTasks.find((t) => t.label === 'public_reports');
   if (reportsTask) {
-    const manifestResult = await generateManifestsOnRemote(sshConfig, reportsTask.remote);
+    const manifestResult = await generateManifestsLocal(sshConfig, reportsTask);
     if (!manifestResult.ok) {
-      log('yellow', `⚠ manifest 远端生成失败（不阻断重启）：${manifestResult.error}`);
+      log('yellow', `⚠ manifest 生成/同步失败（不阻断重启）：${manifestResult.error}`);
     }
   }
 
@@ -806,61 +809,49 @@ async function runStandardMode(sshConfig, runConfig) {
 }
 
 /**
- * 在 VPS 端按 reportsRoot 下真实存在的 HTML 文件清单生成 manifest.json。
+ * 本地生成 reports manifest.json，再 rsync 推回 VPS（替换旧 on-VPS 生成）。
  *
- * 实现：scp 本仓库 `scripts/gen-reports-manifest.mjs` 到 VPS `/tmp/`，
- * 再 ssh 执行 `node /tmp/<script> <reportsRoot>`。生成器内部仅依赖 fs/path/url
- * 三个 Node 内置模块，无 npm 依赖；VPS 已有 node（部署链 npm ci 前置依赖），所以
- * 单文件分发即可。
+ * 为什么本地生成：VPS deploy 用户无 node（node 仅在 root 的 /root/.nvm 下，deployer 够不到），
+ * 旧 `ssh node /tmp/gen-...` 永远 "node not found"，manifest 从未生成。
+ *
+ * 流程（pull → 本地生成 → push）：
+ *   1. pull VPS 已有报告（含历史日期 + 既有 manifest）回本地 → union 完整、不丢历史，
+ *      消除旧旧实现「本地 entries=0 覆盖 / 漏远端历史」的坑。
+ *   2. 本地 in-process 调 generateReportsManifests（生成器自带「空不覆盖非空」防御）。
+ *   3. push 回 VPS（manifest.json + 报告 HTML，deleteRemote:false 追加不删）。
  */
-async function generateManifestsOnRemote(sshConfig, reportsRoot) {
+async function generateManifestsLocal(sshConfig, reportsTask) {
   const alias = sshConfig.alias;
-  const localScript = join(ROOT_DIR, 'scripts/gen-reports-manifest.mjs');
-  if (!existsSync(localScript)) {
-    return { ok: false, error: `脚本不存在: ${localScript}` };
-  }
-  const remoteScript = '/tmp/chexian-gen-reports-manifest.mjs';
+  const localDir = reportsTask.local;     // public/reports
+  const remoteDir = reportsTask.remote;   // <frontendDist>/reports
+  log('green', '\n▶ 本地生成 reports manifest（VPS 无 node，改本地 pull→生成→push）...');
 
-  log('green', '\n▶ 在 VPS 端生成 reports manifest...');
-  log('yellow', `  scp gen-reports-manifest.mjs → ${alias}:${remoteScript}`);
+  // 1. pull：VPS reports → 本地（merge，无 --delete，补齐 union）
+  const pullSrc = remoteDir.endsWith('/') ? remoteDir : `${remoteDir}/`;
+  const pullDst = localDir.endsWith('/') ? localDir : `${localDir}/`;
+  log('yellow', `  rsync pull: ${alias}:${pullSrc} → ${pullDst}`);
   try {
-    await runLocal('scp', [
-      '-o', 'StrictHostKeyChecking=accept-new',
-      localScript,
-      `${alias}:${remoteScript}`,
-    ]);
+    await runLocal('rsync', ['-az', ...RSYNC_EXCLUDE_ARGS, '-e', 'ssh', `${alias}:${pullSrc}`, pullDst]);
   } catch (err) {
-    return { ok: false, error: `scp 失败: ${err.message}` };
+    log('yellow', `  ⚠ pull VPS 报告失败（继续，manifest 可能仅含本地期）：${err.message}`);
   }
 
-  // 修复 2026-06-02：ssh 默认 non-login shell 不读 .profile/.nvm.sh → `node` not found。
-  // 用 `bash -lc` 强制 login shell + 多 nvm.sh 路径 fallback 兼容常见部署。
-  const remoteCmd =
-    `bash -lc '` +
-    `source ~/.nvm/nvm.sh 2>/dev/null || ` +
-    `source /usr/local/nvm/nvm.sh 2>/dev/null || ` +
-    `source /etc/profile.d/nvm.sh 2>/dev/null || true; ` +
-    `NODE_BIN=$(command -v node || ls /usr/local/bin/node /usr/bin/node 2>/dev/null | head -1); ` +
-    `if [ -z "$NODE_BIN" ]; then echo "node not found on VPS" >&2; exit 127; fi; ` +
-    `"$NODE_BIN" ${remoteScript} ${quoteForSingle(reportsRoot)}'`;
-  log('yellow', `  ssh ${remoteCmd}`);
+  // 2. 本地生成 manifest（node 本机可用）
+  let summaries;
   try {
-    const { stdout } = await execRemote(
-      sshConfig,
-      remoteCmd,
-      { silent: true, allowFailure: false }
-    );
-    const lines = (stdout || '').split('\n').map((l) => l.trim()).filter(Boolean);
-    for (const line of lines) {
-      log('green', `  ${line}`);
-    }
-    if (lines.length === 0) {
-      log('yellow', '  ⚠ 远端生成器无输出（reportsRoot 可能为空目录）');
-    }
-    return { ok: true };
+    summaries = generateReportsManifests(localDir);
   } catch (err) {
-    return { ok: false, error: `node 远端执行失败: ${err.message}` };
+    return { ok: false, error: `本地 manifest 生成失败: ${err.message}` };
   }
+  for (const s of summaries) {
+    log('green', s.skipped
+      ? `  ${s.slug}: 本地无报告文件，跳过（保留既有 manifest）`
+      : `  ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
+  }
+
+  // 3. push：本地 → VPS（含新 manifest.json）
+  const pushed = await rsyncDir(alias, localDir, remoteDir, 'public_reports(manifest)', { deleteRemote: false });
+  return pushed.ok ? { ok: true } : { ok: false, error: pushed.error };
 }
 
 /**
