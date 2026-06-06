@@ -601,21 +601,27 @@ function buildStandardSyncTasks(remote, frontendDist) {
   ];
 }
 
-function buildDomainSyncTasks(remote, domainIds) {
+function buildDomainSyncTasks(remote, frontendDist, domainIds) {
   const domainTaskMap = {
     customer_flow: { label: 'fact/customer_flow', local: LOCAL_CUSTOMER_FLOW_DIR, remote: `${remote}/fact/customer_flow`, critical: true, atomicLatest: true },
     new_energy_claims: { label: 'fact/new_energy_claims', local: LOCAL_NEW_ENERGY_CLAIMS_DIR, remote: `${remote}/fact/new_energy_claims`, critical: true, atomicLatest: true },
   };
-  return domainIds.map((domainId) => {
+  const tasks = domainIds.map((domainId) => {
     const task = domainTaskMap[domainId];
     if (!task) throw new Error(`不支持 --domain ${domainId}`);
     return { ...task, domain: domainId };
   });
+  // codex P2（PR #511）：domain 模式也必须带 public_reports，否则 full_snapshot 域
+  // （customer_flow / new_energy_claims）专项发布走 `sync-and-reload <域>` 时，Stage 3 只同步
+  // 该 fact 域、不同步报告 → Stage 1.5 新生成的报告/manifest 永远推不上去 → 首页报告卡指向旧期。
+  // 由 public_reports 触发 generateManifestsLocal（本地 pull→生成→push），与全量模式行为一致。
+  tasks.push({ label: 'public_reports', local: LOCAL_PUBLIC_REPORTS_DIR, remote: `${frontendDist}/reports`, critical: false, deleteRemote: false });
+  return tasks;
 }
 
 function buildSyncTasks(runConfig) {
   if (runConfig.domains.length > 0) {
-    return buildDomainSyncTasks(runConfig.remoteDir, runConfig.domains);
+    return buildDomainSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir, runConfig.domains);
   }
   return buildStandardSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir);
 }
