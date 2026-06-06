@@ -110,28 +110,6 @@ export class SqlBuilder {
   }
 }
 
-// ==================== 常用 WHERE 条件构建器 ====================
-
-/**
- * 生成日期范围条件（含 CAST）
- *
- * @example dateRangeCondition('insurance_start_date', '2025-01-01', '2025-12-31')
- * // → "CAST(insurance_start_date AS DATE) >= '2025-01-01' AND CAST(insurance_start_date AS DATE) <= '2025-12-31'"
- */
-export function dateRangeCondition(field: string, start: string, end: string): string {
-  return `CAST(${field} AS DATE) >= '${start}' AND CAST(${field} AS DATE) <= '${end}'`;
-}
-
-/**
- * 生成月份匹配条件
- *
- * @example monthCondition('insurance_start_date', '2025-03')
- * // → "STRFTIME(CAST(insurance_start_date AS DATE), '%Y-%m') = '2025-03'"
- */
-export function monthCondition(field: string, yearMonth: string): string {
-  return `STRFTIME(CAST(${field} AS DATE), '%Y-%m') = '${yearMonth}'`;
-}
-
 // ==================== 成本分析专用辅助 ====================
 
 /**
