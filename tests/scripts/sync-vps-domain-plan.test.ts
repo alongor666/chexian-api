@@ -18,21 +18,29 @@ describe('sync-vps domain scoped plan', () => {
     expect(parsed.noRestart).toBe(true);
   });
 
-  it('builds only requested full-snapshot sync tasks', () => {
-    const tasks = buildDomainSyncTasks('/var/www/chexian/server/data', ['customer_flow']);
-    expect(tasks).toHaveLength(1);
+  it('builds requested full-snapshot sync tasks plus public_reports', () => {
+    const tasks = buildDomainSyncTasks('/var/www/chexian/server/data', '/var/www/chexian/frontend/dist', ['customer_flow']);
+    // codex P2（PR #511）：domain 模式必须带 public_reports，否则专项发布（sync-and-reload <域>）
+    // 后 Stage 1.5 新生成的报告/manifest 推不上去 → 首页报告卡指向旧期。
+    expect(tasks).toHaveLength(2);
     expect(tasks[0]).toMatchObject({
       label: 'fact/customer_flow',
       remote: '/var/www/chexian/server/data/fact/customer_flow',
       critical: true,
       atomicLatest: true,
     });
+    expect(tasks[1]).toMatchObject({
+      label: 'public_reports',
+      remote: '/var/www/chexian/frontend/dist/reports',
+      deleteRemote: false,
+    });
   });
 
-  it('does not include unrelated warehouse dirs in domain mode', () => {
+  it('does not include unrelated warehouse dirs in domain mode (but always syncs public_reports)', () => {
     const runConfig = resolveRunConfig(parseArgs(['--domain=customer_flow', '--dry-run']));
     const tasks = buildSyncTasks(runConfig);
-    expect(tasks.map(task => task.label)).toEqual(['fact/customer_flow']);
+    // 只含请求的 fact 域 + public_reports（报告随每次发布刷新，防首页卡过期）；不含其它 warehouse 域
+    expect(tasks.map(task => task.label)).toEqual(['fact/customer_flow', 'public_reports']);
   });
 
   it('treats missing latest.parquet as sync failure in atomic domain mode', async () => {
