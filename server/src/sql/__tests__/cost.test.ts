@@ -275,6 +275,20 @@ describe('generateEarnedPremiumQuery', () => {
     expect(sql).not.toContain("org_level_3 = 'all'");
   });
 
+  it('B327 注入防护：policyMonth/orgLevel3 含单引号被 escapeSqlLiteral 转义，无法逃出字符串字面量', () => {
+    const sql = generateEarnedPremiumQuery({
+      ...config,
+      policyMonth: "2025-06' UNION SELECT 1--",
+      orgLevel3: "天府' OR '1'='1",
+    });
+    // 单引号 ' 被转义成 ''，注入载荷仍封闭在字符串字面量内
+    expect(sql).toContain("policy_month = '2025-06'' UNION SELECT 1--'");
+    expect(sql).toContain("org_level_3 = '天府'' OR ''1''=''1'");
+    // 不得出现未转义的逃逸边界
+    expect(sql).not.toContain("policy_month = '2025-06' UNION");
+    expect(sql).not.toContain("org_level_3 = '天府' OR");
+  });
+
   it('限定险种范围', () => {
     const sql = generateEarnedPremiumQuery(config);
     expect(sql).toContain("insurance_type IN ('交强险', '商业保险')");

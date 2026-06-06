@@ -102,8 +102,14 @@ router.get(
 
     if (isDefaultCondition) {
       try {
+        // 0B：cache_key 用 permissionFilter 段（permission.ts 注入），与 cache-warmer 写入侧自洽：
+        // - flag off：permissionFilter='1=1' → key='dashboard-bundle|default|1=1'
+        // - flag on：permissionFilter=`branch_code='SC'` → key='dashboard-bundle|default|branch_code=\'SC\''
+        // 这样无需 dashboard.ts 知道 flag 状态，直接读 req.permissionFilter 即可。
+        const tier1CacheKey = `dashboard-bundle|default|${req.permissionFilter || '1=1'}`;
+        const escapedKey = tier1CacheKey.replace(/'/g, "''");
         const defaultCacheRows = await duckdbService.query<{ json_data: string }>(
-          `SELECT json_data FROM DefaultDashboardCache WHERE cache_key = 'dashboard-bundle|default'`
+          `SELECT json_data FROM DefaultDashboardCache WHERE cache_key = '${escapedKey}'`
         );
         if (defaultCacheRows.length > 0 && defaultCacheRows[0].json_data) {
           logger.info('[query.ts] Tier 1 Hard Cache Hit for dashboard-bundle!');

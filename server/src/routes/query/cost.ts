@@ -30,7 +30,9 @@ const costExtraSchema = z.object({
   dimension: z.enum(['customer_category', 'org_level_3', 'coverage_combination', 'org_customer', 'org_coverage']).default('org_level_3'),
   cutoffDate: z.string().optional(),
   operatingCostRate: z.string().optional(),
-  policyMonth: z.string().optional(),
+  // B327：约束 policyMonth 为 YYYY-MM（月份 01-12）/ all / 空，路由层早拒注入与无效月份载荷
+  //       （SQL 层 escapeSqlLiteral 为最终兜底；policy_month 由 STRFTIME('%Y-%m') 恒零填充，故 \d{2}+月份范围与数据对齐）
+  policyMonth: z.string().regex(/^(\d{4}-(0[1-9]|1[0-2])|all)?$/, 'policyMonth 应为 YYYY-MM（如 2026-01）或 all').optional(),
 });
 
 /**
