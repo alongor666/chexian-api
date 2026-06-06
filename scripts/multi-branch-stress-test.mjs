@@ -10,6 +10,7 @@
  *   1. cache key 隔离 — SC vs SX 双 token 同 query 命中各自 cache（PR #501 / #507）
  *   2. permissionFilter 注入 — flag on 后 SX token 请求 SQL where 含 branch_code='SX'
  *   3. 基线性能 — N 并发用户下 RSS 峰值 / DuckDB heap peak / 平均响应时间
+ *   4. 串读断言 — Phase 2 自动校验 SX 请求 dataLength=0（兼容期）+ SC 非空，不符 exit(1)
  *
  * 限制：
  *   - 本会话无真实 SX 数据（数据全部 branch_code='SC'），SX token 请求会返回空集
@@ -25,8 +26,7 @@
  * 配套文档：.claude/rules/multi-branch-day1-sop.md
  */
 
-import { execSync } from 'node:child_process';
-import jwt from 'jsonwebtoken';
+import { createHmac } from 'node:crypto';
 
 const args = process.argv.slice(2);
 const simulateSx = args.includes('--simulate-sx');
@@ -34,17 +34,35 @@ const concIdx = args.indexOf('--concurrency');
 const concurrency = concIdx >= 0 ? parseInt(args[concIdx + 1], 10) : 10;
 const baseUrl = process.env.STRESS_BASE_URL ?? 'http://127.0.0.1:3000';
 
-// 与 server/src/services/cache-warmer.ts:signServiceToken 严格对齐
+/**
+ * 0H codex P2-1：node:crypto 原生 HS256 JWT 签发，避免依赖根目录未声明的 jsonwebtoken
+ * （它仅在 server/node_modules 下，根目录跑会 Cannot find package 报错）。
+ * 与 server/src/services/cache-warmer.ts:signServiceToken 严格对齐（payload 字段 +
+ * algorithm HS256 + 15min TTL）。
+ */
+function base64UrlEncode(input) {
+  const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
+  return buf.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
 function signServiceToken(jwtSecret, branchCode) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
   const payload = {
     userId: 'admin',
     username: 'admin',
     role: 'branch_admin',
+    iat: now,
+    exp: now + 15 * 60, // 15 分钟 TTL，与 cache-warmer 一致
   };
   if (branchCode) {
     payload.branchCode = branchCode;
   }
-  return jwt.sign(payload, jwtSecret, { expiresIn: '15m' });
+  const headerSeg = base64UrlEncode(JSON.stringify(header));
+  const payloadSeg = base64UrlEncode(JSON.stringify(payload));
+  const signingInput = `${headerSeg}.${payloadSeg}`;
+  const signature = base64UrlEncode(createHmac('sha256', jwtSecret).update(signingInput).digest());
+  return `${signingInput}.${signature}`;
 }
 
 function getJwtSecret() {
@@ -82,6 +100,10 @@ async function runOne(token, url, branchLabel) {
   }
 }
 
+/**
+ * 0H codex P2-2：runBatch 返回 results 数组（不止汇总），调用方可以做逐请求断言
+ * （Phase 2 串读检测用）。
+ */
 async function runBatch(tasks, label) {
   console.log(`\n📊 ${label} — ${tasks.length} 任务 / 并发 ${concurrency}`);
   const startRss = process.memoryUsage().rss;
@@ -115,7 +137,41 @@ async function runBatch(tasks, label) {
     });
   }
 
-  return { ok: ok.length, failed: failed.length, avgMs, p95Ms, durationMs, rssMbDelta: (endRss - startRss) / 1024 / 1024 };
+  return { ok: ok.length, failed: failed.length, avgMs, p95Ms, durationMs, rssMbDelta: (endRss - startRss) / 1024 / 1024, results };
+}
+
+/**
+ * 0H codex P2-2：串读断言 — 兼容期 SX token 必须 dataLength=0（permission.ts 注入
+ * branch_code='SX' WHERE 过滤掉所有行）；SC token 必须 dataLength>0（有四川数据）。
+ * 任一不符 → cache 串读或 RLS 失效，CRITICAL，exit(1) 让 Day-1 验证显式失败。
+ */
+function assertNoLeak(results, phaseLabel) {
+  const scResults = results.filter((r) => r.ok && r.branchLabel === 'SC');
+  const sxResults = results.filter((r) => r.ok && r.branchLabel === 'SX');
+
+  const scEmpty = scResults.filter((r) => r.dataLength === 0);
+  const sxNonEmpty = sxResults.filter((r) => r.dataLength > 0);
+
+  console.log(`\n🔍 ${phaseLabel} 串读检测：`);
+  console.log(`   SC 请求 ${scResults.length} 条，非空 ${scResults.length - scEmpty.length}，空集 ${scEmpty.length}`);
+  console.log(`   SX 请求 ${sxResults.length} 条，非空 ${sxNonEmpty.length}（兼容期应=0），空集 ${sxResults.length - sxNonEmpty.length}`);
+
+  let failed = false;
+  if (sxNonEmpty.length > 0) {
+    console.error(`\n❌ CRITICAL：${sxNonEmpty.length} 条 SX token 请求返回非空数据 → cache 串读或 RLS 失效！`);
+    sxNonEmpty.slice(0, 5).forEach((r) => {
+      console.error(`   - SX token / ${r.url} → dataLength=${r.dataLength}`);
+    });
+    failed = true;
+  }
+  if (scResults.length > 0 && scEmpty.length === scResults.length) {
+    console.error(`\n❌ SC token 所有请求返回空集 → 兼容期数据应非空，可能 RLS 配置错或数据为空`);
+    failed = true;
+  }
+  if (!failed) {
+    console.log(`   ✅ 串读断言通过（SX dataLength=0 + SC dataLength>0）`);
+  }
+  return !failed;
 }
 
 async function main() {
@@ -134,7 +190,8 @@ async function main() {
   }
   const phase1 = await runBatch(phase1Tasks, 'Phase 1: SC 单 branch 基线');
 
-  // Phase 2: 双 branch 交错（SC + SX 模拟，验证 cache 隔离）
+  // Phase 2: 双 branch 交错（SC + SX 模拟，验证 cache 隔离 + 串读断言）
+  let phase2LeakOk = true;
   if (simulateSx) {
     const phase2Tasks = [];
     for (let i = 0; i < concurrency * 2; i++) {
@@ -143,11 +200,8 @@ async function main() {
       phase2Tasks.push(() => runOne(tokens[branch], url, branch));
     }
     const phase2 = await runBatch(phase2Tasks, 'Phase 2: SC + SX 双 branch 交错（验证 cache 隔离）');
-
-    // 简单串读检测：SX 应该 0 data（兼容期无 SX 数据）；SC 应该有 data
-    const phase2Sc = phase2Tasks.slice(0, 4).map((t, i) => i % 2 === 0);
-    console.log(`\n🔍 串读检测：SX token 请求应返回空集（兼容期无 SX 数据）`);
-    console.log(`   注意：若 SX token 返回非空数据 → cache 串读或 RLS 失效（CRITICAL）`);
+    // 0H codex P2-2：逐请求断言串读
+    phase2LeakOk = assertNoLeak(phase2.results, 'Phase 2');
   }
 
   // Phase 3: cache 命中验证（重复 Phase 1 任务，所有请求应 < 10ms）
@@ -166,9 +220,15 @@ async function main() {
 
   console.log(`\n📋 总结`);
   console.log(`   Phase 1 (SC 基线): avg=${phase1.avgMs}ms p95=${phase1.p95Ms}ms`);
-  if (simulateSx) console.log(`   Phase 2 (SC+SX 交错): 见上方输出`);
+  if (simulateSx) console.log(`   Phase 2 (SC+SX 交错 + 串读断言): ${phase2LeakOk ? '✅' : '❌ FAILED'}`);
   console.log(`   Phase 3 (cache 命中): avg=${phase3.avgMs}ms p95=${phase3.p95Ms}ms`);
   console.log(`\n🎯 VPS 扩容建议：将本脚本在生产 VPS 跑真实 SC+SX 各 1 周样本后再决定（8GB / 12GB / 双实例）`);
+
+  // 0H codex P2-2：串读断言失败时 exit(1) 让 Day-1 验证显式失败
+  if (!phase2LeakOk) {
+    console.error(`\n❌ 退出码 1：Phase 2 串读断言失败（见上方 CRITICAL 详情）`);
+    process.exit(1);
+  }
 }
 
 main().catch((e) => {
