@@ -112,8 +112,8 @@ src/features/*                                    # 功能模块 UI 渲染
 |----|------|------|------|
 | KPI | `kpi.ts` | 366 | 基础 KPI 查询（件数/保费/占比） |
 | KPI | `kpi-detail.ts` | 177 | KPI 详细数据（环形图分解） |
-| 趋势 | `trend.ts` | ~18 | 趋势分析桶（barrel re-export）→ `trend/` 子目录：`shared.ts`（类型+常量）/`premium-trend.ts`（机构分组）/`total-trend.ts`（总体）/`quality-business.ts`（优质业务）/`dimension-queries.ts`（机构列表+维度选项） |
-| 增长 | `growth.ts` | 20 | 增长率分析桶（barrel re-export）→ `growth/` 子目录：`shared.ts`（类型+工具）/`yoy.ts`（同比）/`mom.ts`（环比）/`ytd.ts`（年累计）/`custom.ts`（自定义+预设）/`dual-metric.ts`（双指标对比） |
+| 趋势 | `trend.ts` | ~18 | 趋势分析桶（barrel re-export）→ `trend/` 子目录：`shared.ts`（类型+常量）/`premium-trend.ts`（机构分组）/`total-trend.ts`（总体）/`quality-business.ts`（优质业务） |
+| 增长 | `growth.ts` | 20 | 增长率分析桶（barrel re-export）→ `growth/` 子目录：`shared.ts`（类型+工具）/`yoy.ts`（同比）/`mom.ts`（环比）/`ytd.ts`（年累计）/`custom.ts`（自定义+预设） |
 | 排名 | `salesman-ranking.ts` | 52 | 业务员排名 |
 | 货车 | `truck.ts` | 192 | 营业货车专项（吨位分段） |
 | 成本 | `cost.ts` | 996 | 成本分析（赔付率/费用率/综合成本率） |
