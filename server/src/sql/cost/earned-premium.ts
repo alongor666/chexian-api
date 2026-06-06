@@ -23,6 +23,7 @@
  */
 
 import { formatDate } from '../../utils/date.js';
+import { escapeSqlLiteral } from '../../utils/security.js';
 import { generateEarnedPremiumPeriodQuery } from '../sql-builder.js';
 import type { EarnedPremiumConfig, NewEarnedPremiumConfig } from './shared.js';
 
@@ -62,10 +63,12 @@ export function generateEarnedPremiumQuery(config: EarnedPremiumConfig): string 
   // 构建明细筛选条件
   const detailFilters: string[] = [];
   if (policyMonth && policyMonth !== 'all') {
-    detailFilters.push(`policy_month = '${policyMonth}'`);
+    // B327：转义防 SQL 注入（policyMonth 来自路由 query 无格式约束，duckdbService.query 不过 validateSQL）
+    detailFilters.push(`policy_month = '${escapeSqlLiteral(policyMonth)}'`);
   }
   if (orgLevel3 && orgLevel3 !== 'all') {
-    detailFilters.push(`org_level_3 = '${orgLevel3}'`);
+    // B327：转义防 SQL 注入（orgLevel3 源自 commonFilterSchema z.string，为中文机构名无法正则约束）
+    detailFilters.push(`org_level_3 = '${escapeSqlLiteral(orgLevel3)}'`);
   }
   const detailFilterClause = detailFilters.length > 0
     ? `AND ${detailFilters.join(' AND ')}`
