@@ -186,7 +186,7 @@ pm2 restart chexian-api
 ### 1. 创建目录
 
 ```bash
-sudo mkdir -p /var/www/chexian/{dist,server/data}
+sudo mkdir -p /var/www/chexian/{frontend/dist,server/data}
 sudo mkdir -p /var/log/chexian
 sudo chown -R $(whoami):$(whoami) /var/www/chexian
 sudo chown -R $(whoami):$(whoami) /var/log/chexian
@@ -200,7 +200,7 @@ npm install  # 或 bun install
 npm run build
 
 # 复制构建产物
-cp -r dist/* /var/www/chexian/dist/
+cp -r dist/* /var/www/chexian/frontend/dist/
 ```
 
 ### 3. 构建后端
