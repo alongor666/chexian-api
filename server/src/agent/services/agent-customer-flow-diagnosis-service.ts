@@ -168,7 +168,8 @@ export function diagnoseCustomerFlowRows(input: DiagnoseCustomerFlowRowsInput): 
 }
 
 export async function runCustomerFlowDiagnosis(input: RunCustomerFlowDiagnosisInput): Promise<CustomerFlowDiagnosisResult> {
-  const { duckdbService } = await import('../../services/duckdb.js');
+  const { getAgentDuckdb } = await import('./agent-query-cache.js');
+  const duckdbService = await getAgentDuckdb();
 
   const [summaryRows, outflowRows, trendRows, metadataRows] = await Promise.all([
     duckdbService.query<RawRow>(generateFlowSummaryQuery(input.filters)),

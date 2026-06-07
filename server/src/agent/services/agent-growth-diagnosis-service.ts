@@ -187,7 +187,8 @@ export function diagnoseGrowthRows(input: DiagnoseGrowthRowsInput): GrowthDiagno
 }
 
 export async function runGrowthDiagnosis(input: RunGrowthDiagnosisInput): Promise<GrowthDiagnosisResult> {
-  const { duckdbService } = await import('../../services/duckdb.js');
+  const { getAgentDuckdb } = await import('./agent-query-cache.js');
+  const duckdbService = await getAgentDuckdb();
   const metric = metricExpressionFor(input.perspective);
   const config = {
     growthType: 'custom' as GrowthType,

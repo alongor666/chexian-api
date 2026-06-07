@@ -209,7 +209,8 @@ export function diagnoseClaimsRiskRows(input: DiagnoseClaimsRiskRowsInput): Clai
 }
 
 export async function runClaimsRiskDiagnosis(input: RunClaimsRiskDiagnosisInput): Promise<ClaimsRiskDiagnosisResult> {
-  const { duckdbService } = await import('../../services/duckdb.js');
+  const { getAgentDuckdb } = await import('./agent-query-cache.js');
+  const duckdbService = await getAgentDuckdb();
   const filters = input.filters as ClaimsDetailFilters;
 
   const [pendingOverviewRows, causeRows, frequencyRows] = await Promise.all([

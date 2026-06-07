@@ -181,7 +181,8 @@ export function diagnoseCostIndicatorRows(input: DiagnoseCostIndicatorRowsInput)
 }
 
 export async function runCostIndicatorDiagnosis(input: RunCostIndicatorDiagnosisInput): Promise<CostIndicatorDiagnosisResult> {
-  const { duckdbService } = await import('../../services/duckdb.js');
+  const { getAgentDuckdb } = await import('./agent-query-cache.js');
+  const duckdbService = await getAgentDuckdb();
   const config = {
     dimension: input.dimension as CostDimension,
     cutoffDate: input.cutoffDate,

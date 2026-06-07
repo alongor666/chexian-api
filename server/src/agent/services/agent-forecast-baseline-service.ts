@@ -11,7 +11,7 @@
  * style patterns — we therefore avoid spelling those terms in comments too.
  */
 
-import { duckdbService } from '../../services/duckdb.js';
+import { getAgentDuckdb } from './agent-query-cache.js';
 import { buildWhereFromFilterParamsWithoutDate, type CommonFilterParams } from '../../utils/filter-params.js';
 import {
   generateBaselineActualQuery,
@@ -181,6 +181,7 @@ export async function buildForecastBaseline(input: BuildBaselineInput): Promise<
     recentExpenseMonths: request.recentExpenseMonths,
   };
 
+  const duckdbService = await getAgentDuckdb();
   const [actualRows, cohortRows, yoyRows, recentRows] = await Promise.all([
     duckdbService.query<RawActualRow>(generateBaselineActualQuery(sqlConfig)),
     duckdbService.query<RawCohortRow>(generateHistoricalLossRatioQuery(sqlConfig)),
