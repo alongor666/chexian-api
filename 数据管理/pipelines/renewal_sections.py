@@ -107,8 +107,8 @@ def section_org_overview(con, rpt, ctx):
     rpt.add()
     org_rows = con.execute(f"""
         SELECT org_level_3, COUNT(*) yc, SUM(quoted) q, SUM(renewed) r,
-               COUNT(*) FILTER (WHERE expiry_date < DATE '{ctx.today}') exp_yc,
-               SUM(renewed) FILTER (WHERE expiry_date < DATE '{ctx.today}') exp_r
+               COUNT(*) FILTER (WHERE expiry_date <= DATE '{ctx.today}') exp_yc,
+               SUM(renewed) FILTER (WHERE expiry_date <= DATE '{ctx.today}') exp_r
         FROM base WHERE org_level_3 IS NOT NULL
         GROUP BY 1 ORDER BY yc DESC
     """).fetchall()
@@ -161,7 +161,7 @@ def section_progress(con, rpt, ctx):
     else:
         rows = con.execute(f"""
             WITH b AS (SELECT *, CAST(expiry_date AS DATE) ed FROM base)
-            SELECT CASE WHEN ed < DATE '{ctx.today}' THEN 'a.已到期'
+            SELECT CASE WHEN ed <= DATE '{ctx.today}' THEN 'a.已到期'
                         WHEN ed <= DATE '{ctx.today}'+6 THEN 'b.本周(7日内)'
                         WHEN ed <= DATE '{ctx.today}'+13 THEN 'c.下周(8-14日)'
                         WHEN ed <= DATE '{ctx.today}'+20 THEN 'd.第三周(15-21日)'
