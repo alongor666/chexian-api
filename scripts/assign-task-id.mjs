@@ -17,13 +17,16 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
-// Agent ID 范围定义（CLAUDE.md §9.2）
-const AGENT_ID_RANGES = {
-  '@user': { start: 1, end: 99, description: '用户专属任务' },
-  '@claude': { start: 100, end: 199, description: 'Claude 专属任务' },
-  '@codex': { start: 200, end: 299, description: 'Codex 专属任务' },
-  '@gemini': { start: 300, end: 399, description: 'Gemini 专属任务' },
-  '@future': { start: 400, end: 999, description: '未来扩展' },
+// 已知归属对象（仅校验调用方名称是否合法；编号全局连续，不再绑定区间）
+const KNOWN_AGENTS = {
+  '@user': '用户提出',
+  '@claude': 'Claude 提出',
+  '@codex': 'Codex 提出',
+  '@gemini': 'Gemini 提出',
+  '@trae': 'Trae 提出',
+  '@kilo': 'Kilo 提出',
+  '@codebuddy': 'CodeBuddy 提出',
+  '@openai': 'OpenAI 提出',
 };
 
 /**
@@ -54,19 +57,17 @@ function collectMaxId() {
  * 为指定 Agent 分配下一个可用的任务 ID
  */
 function assignTaskId(agent) {
-  const range = AGENT_ID_RANGES[agent];
-
-  if (!range) {
-    console.error(`❌ 未知 Agent: ${agent}`);
-    console.error(`\n可用的 Agent：`);
-    Object.entries(AGENT_ID_RANGES).forEach(([key, value]) => {
-      console.error(`  ${key}: B${String(value.start).padStart(3, '0')}-B${String(value.end).padStart(3, '0')} (${value.description})`);
+  if (!KNOWN_AGENTS[agent]) {
+    console.error(`❌ 未知归属对象: ${agent}`);
+    console.error(`\n可用的归属对象：`);
+    Object.entries(KNOWN_AGENTS).forEach(([key, desc]) => {
+      console.error(`  ${key.padEnd(12)} ${desc}`);
     });
     process.exit(1);
   }
 
   // 全局连续编号：取 BACKLOG.md + BACKLOG_ARCHIVE.md 的最大编号 + 1
-  // range 仅用于校验 agent 名有效（见上）；编号不再绑定 agent 区间，永不复用历史编号
+  // agent 仅用于校验调用方名称有效（见上）；编号不再绑定 agent 区间，永不复用历史编号
   try {
     const max = collectMaxId();
     const next = max + 1;
@@ -98,10 +99,8 @@ function main() {
     console.error(`\n示例：`);
     console.error(`  bun run scripts/assign-task-id.mjs @claude`);
     console.error(`  bun run scripts/assign-task-id.mjs @codex`);
-    console.error(`\n可用的 Agent：`);
-    Object.entries(AGENT_ID_RANGES).forEach(([key, value]) => {
-      console.error(`  ${key}: B${String(value.start).padStart(3, '0')}-B${String(value.end).padStart(3, '0')}`);
-    });
+    console.error(`\n可用的归属对象：`);
+    Object.keys(KNOWN_AGENTS).forEach(key => console.error(`  ${key}`));
     process.exit(1);
   }
 

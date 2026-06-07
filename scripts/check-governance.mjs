@@ -13,11 +13,10 @@
  *    - 禁止硬编码CURRENT_DATE（排除带DC-002 Exception注释的行）
  *    - 禁止使用||运算符判断filters字段（B107增强：日期字段报错，其他字段警告）
  *    - 禁止函数签名包含可选日期参数
- * 7. 任务ID分配检查（多Agent冲突防护）：
- *    - 检查BACKLOG.md任务ID是否超出分配范围（B001-B699）
- *    - 检测任务ID重复
- *    - Agent专属ID范围：@user(B001-099), @claude(B100-199), @codex(B200-299),
- *      @gemini(B300-399), @trae(B400-499), @kilo(B500-599), @codebuddy(B600-699)
+ * 7. 任务ID校验（全局连续编号模型，2026-06 治理后）：
+ *    - 扫 BACKLOG.md + BACKLOG_ARCHIVE.md，编号全局唯一（含归档，禁止复用）
+ *    - 范围校验 B001-B999（编号由 assign-task-id.mjs 全局 max+1 派生）
+ *    - 归属对象（@user/@claude/...）仅标注调用方，不再绑定 ID 区间
  * 8. Merge conflict 标记扫描：
  *    - 扫描 BACKLOG.md / PROGRESS.md 中是否残留 <<<<<<< / ======= / >>>>>>> 冲突标记
  *    - 残留冲突标记 → 阻断提交
@@ -466,20 +465,10 @@ function checkTaskIdAllocation() {
   const sources = [backlogPath, archivePath].filter(p => fs.existsSync(p));
   const lines = sources.map(p => fs.readFileSync(p, 'utf-8')).join('\n').split('\n');
 
-  // Agent ID范围配置（编号已改全局连续递增，范围仅用于上限校验 ≤999）
-  const AGENT_RANGES = {
-    '@user': { min: 1, max: 99 },
-    '@claude': { min: 100, max: 199 },
-    '@codex': { min: 200, max: 299 },
-    '@gemini': { min: 300, max: 399 },
-    '@trae': { min: 400, max: 499 },
-    '@kilo': { min: 500, max: 599 },
-    '@codebuddy': { min: 600, max: 699 },
-    '@future': { min: 700, max: 999 },
-  };
-
+  // 全局连续编号模型：不再绑定 Agent 区间，仅校验「格式 + 全局唯一（含归档，禁止复用）+ B001-B999」
+  const MAX_ID = 999;
   const errors = [];
-  const usedIds = new Map(); // ID -> 行号
+  const usedIds = new Map(); // 数字 ID -> 行号
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -490,30 +479,25 @@ function checkTaskIdAllocation() {
       if (cells.length < 4) continue;
 
       const taskIdStr = cells[0]; // 第1列：ID
-      const owner = cells[3]; // 第4列：归属对象
 
-      const match = taskIdStr.match(/^B(\d{3})$/);
-      if (!match) continue;
+      const match = taskIdStr.match(/^B(\d{3,})$/);
+      if (!match) continue; // 非标准 ID（如 B256-update）由 check-task-id-conflict.mjs 告警，此处跳过
 
       const taskIdNum = parseInt(match[1], 10);
 
-      // 检查ID重复
+      // 检查ID重复（跨 BACKLOG.md + BACKLOG_ARCHIVE.md，编号禁止复用）
       if (usedIds.has(taskIdNum)) {
         errors.push(
-          `任务ID重复: ${taskIdStr} 在第 ${usedIds.get(taskIdNum)} 行和第 ${i + 1} 行`
+          `任务ID重复/复用: ${taskIdStr} 在第 ${usedIds.get(taskIdNum)} 行和第 ${i + 1} 行`
         );
       } else {
         usedIds.set(taskIdNum, i + 1);
       }
 
-      // 检查ID是否超出分配范围
-      const expectedAgent = Object.entries(AGENT_RANGES).find(
-        ([_, range]) => taskIdNum >= range.min && taskIdNum <= range.max
-      )?.[0];
-
-      if (!expectedAgent) {
+      // 全局范围校验（不超过 B999；超过须先扩位，见 assign-task-id.mjs）
+      if (taskIdNum < 1 || taskIdNum > MAX_ID) {
         errors.push(
-          `任务ID ${taskIdStr} (行${i + 1}) 超出编号范围 (B001-B999)`
+          `任务ID ${taskIdStr} (行${i + 1}) 超出编号范围 (B001-B${MAX_ID})`
         );
       }
     }
