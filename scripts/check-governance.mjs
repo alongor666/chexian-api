@@ -13,12 +13,12 @@
  *    - 禁止硬编码CURRENT_DATE（排除带DC-002 Exception注释的行）
  *    - 禁止使用||运算符判断filters字段（B107增强：日期字段报错，其他字段警告）
  *    - 禁止函数签名包含可选日期参数
- * 7. 任务ID校验（全局连续编号模型，2026-06 治理后）：
- *    - 扫 BACKLOG.md + BACKLOG_ARCHIVE.md，编号全局唯一（含归档，禁止复用）
- *    - 范围校验 B001-B999（编号由 assign-task-id.mjs 全局 max+1 派生）
- *    - 归属对象（@user/@claude/...）仅标注调用方，不再绑定 ID 区间
+ * 7. BACKLOG 事件日志校验（event-log 模型，2026-06 治本后取代「任务ID分配」）：
+ *    - 真相 = BACKLOG_LOG.jsonl（append-only）；BACKLOG.md/ARCHIVE 是其派生视图
+ *    - 校验事件结构 / 无孤儿事件 / create uid 唯一 / 曾用号唯一（禁复用）
+ *    - 陈旧守卫：视图必须 == 折叠(日志) 的渲染（手改/漏渲染即报错，提示重新渲染）
  * 8. Merge conflict 标记扫描：
- *    - 扫描 BACKLOG.md / PROGRESS.md 中是否残留 <<<<<<< / ======= / >>>>>>> 冲突标记
+ *    - 扫描 BACKLOG.md / BACKLOG_LOG.jsonl / PROGRESS.md 中是否残留 <<<<<<< / ======= / >>>>>>> 冲突标记
  *    - 残留冲突标记 → 阻断提交
  * 9. 暂存区调试产物阻断：
  *    - 阻止日志/Playwright 报告等调试产物进入提交
@@ -50,6 +50,9 @@ import {
   syncQuickReferenceFile,
 } from '../数据管理/pipelines/quick_reference.mjs';
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
+import {
+  parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow,
+} from './backlog/lib.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -192,10 +195,8 @@ function parseBacklogTable(content) {
 
     // 解析数据行
     if (inTable && headerPassed && line.startsWith('|')) {
-      const cells = line
-        .split('|')
-        .map(cell => cell.trim())
-        .filter(cell => cell !== '');
+      // 用转义感知的 splitRow（SSOT），正确处理 desc/evidence 内的 \| ，避免按列错位
+      const cells = splitRow(line);
 
       // 表格格式：ID | 提出时间 | 板块 | 归属对象 | 需求描述 | 优先级 | 状态 | 关联文档 | 关联代码 | 验收/证据
       if (cells.length >= 10) {
@@ -451,67 +452,58 @@ function checkDC002Compliance() {
 // ============================================================
 
 /**
- * 检查BACKLOG.md中的任务ID是否符合Agent专属范围
+ * BACKLOG 事件日志校验（event-log 模型，2026-06 治本后取代「任务ID分配」）：
+ *  1. 日志结构完整：每条事件 kind/uid/ts 合规；create uid 唯一；曾用号唯一（禁复用）
+ *  2. 无孤儿事件：status/note/amend 必须引用已存在的 create
+ *  3. 陈旧守卫：BACKLOG.md / BACKLOG_ARCHIVE.md 必须 == 折叠(日志) 的渲染结果
+ *     —— 视图是日志的纯函数，任何手改/漏渲染都会被此守卫抓出，提示重新渲染
  */
-function checkTaskIdAllocation() {
-  const backlogPath = path.join(ROOT_DIR, 'BACKLOG.md');
-  if (!fs.existsSync(backlogPath)) {
-    error('BACKLOG.md 不存在');
+function checkBacklogLog() {
+  const logPath = path.join(ROOT_DIR, 'BACKLOG_LOG.jsonl');
+  if (!fs.existsSync(logPath)) {
+    error('BACKLOG_LOG.jsonl 不存在（首次请 bun scripts/backlog/migrate.mjs --apply）');
     return false;
   }
 
-  // 合并 BACKLOG.md + BACKLOG_ARCHIVE.md：归档的 ID 也纳入重复检测（编号永不复用）
-  const archivePath = path.join(ROOT_DIR, 'BACKLOG_ARCHIVE.md');
-  const sources = [backlogPath, archivePath].filter(p => fs.existsSync(p));
-  const lines = sources.map(p => fs.readFileSync(p, 'utf-8')).join('\n').split('\n');
-
-  // 全局连续编号模型：不再绑定 Agent 区间，仅校验「格式 + 全局唯一（含归档，禁止复用）+ B001-B999」
-  const MAX_ID = 999;
-  const errors = [];
-  const usedIds = new Map(); // 数字 ID -> 行号
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // 解析表格行
-    if (line.startsWith('|')) {
-      const cells = line.split('|').map(c => c.trim()).filter(c => c);
-      if (cells.length < 4) continue;
-
-      const taskIdStr = cells[0]; // 第1列：ID
-
-      const match = taskIdStr.match(/^B(\d{3,})$/);
-      if (!match) continue; // 非标准 ID（如 B256-update）由 check-task-id-conflict.mjs 告警，此处跳过
-
-      const taskIdNum = parseInt(match[1], 10);
-
-      // 检查ID重复（跨 BACKLOG.md + BACKLOG_ARCHIVE.md，编号禁止复用）
-      if (usedIds.has(taskIdNum)) {
-        errors.push(
-          `任务ID重复/复用: ${taskIdStr} 在第 ${usedIds.get(taskIdNum)} 行和第 ${i + 1} 行`
-        );
-      } else {
-        usedIds.set(taskIdNum, i + 1);
-      }
-
-      // 全局范围校验（不超过 B999；超过须先扩位，见 assign-task-id.mjs）
-      if (taskIdNum < 1 || taskIdNum > MAX_ID) {
-        errors.push(
-          `任务ID ${taskIdStr} (行${i + 1}) 超出编号范围 (B001-B${MAX_ID})`
-        );
-      }
-    }
+  let events;
+  try {
+    events = parseLog(fs.readFileSync(logPath, 'utf-8'));
+  } catch (e) {
+    error(`BACKLOG_LOG.jsonl 解析失败：${e.message}`);
+    return false;
   }
 
-  // 输出结果
+  // 1+2. 结构完整 + 无孤儿
+  const { errors, warnings, stats } = validateLog(events);
   if (errors.length > 0) {
-    error(`任务ID分配检查失败（发现 ${errors.length} 个错误）：`);
-    errors.forEach(err => console.log(`    - ${err}`));
+    error(`BACKLOG 事件日志校验失败（${errors.length} 处）：`);
+    errors.slice(0, 20).forEach(e => console.log(`    - ${e}`));
     return false;
-  } else {
-    success(`任务ID分配检查通过（扫描 ${usedIds.size} 个任务，无冲突）`);
-    return true;
   }
+
+  // 3. 陈旧守卫：视图必须等于折叠(日志) 的渲染
+  const tasks = [...fold(events).values()];
+  const expectBacklog = renderBacklog(tasks);
+  const expectArchive = renderArchive(tasks);
+  const drift = [];
+  const cmp = (rel, expect) => {
+    const p = path.join(ROOT_DIR, rel);
+    const cur = fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : '';
+    if (cur !== expect) drift.push(rel);
+  };
+  cmp('BACKLOG.md', expectBacklog);
+  cmp('BACKLOG_ARCHIVE.md', expectArchive);
+
+  if (drift.length > 0) {
+    error(`BACKLOG 派生视图已陈旧/被手改：${drift.join(', ')}`);
+    console.log('    视图必须 == 折叠(日志)。请重新渲染：bun scripts/governance-backlog-curate.mjs --apply');
+    console.log('    （切勿手工编辑 BACKLOG.md / BACKLOG_ARCHIVE.md；它们是 BACKLOG_LOG.jsonl 的派生物）');
+    return false;
+  }
+
+  const warnNote = warnings.length ? `，${warnings.length} 处提示` : '';
+  success(`BACKLOG 事件日志校验通过（${stats.events} 事件 / ${stats.tasks} 任务，视图与日志一致${warnNote}）`);
+  return true;
 }
 
 // ============================================================
@@ -528,6 +520,7 @@ function checkMergeConflictMarkers() {
   const filesToCheck = [
     'BACKLOG.md',
     'BACKLOG_ARCHIVE.md',
+    'BACKLOG_LOG.jsonl',
     'PROGRESS.md',
     'CLAUDE.md',
   ];
@@ -1980,7 +1973,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'BACKLOG证据链', fn: checkBacklogEvidence },
   { name: 'CLAUDE章节', fn: checkClaudeMdSections },
   { name: 'DC-002合规', fn: checkDC002Compliance },
-  { name: '任务ID分配', fn: checkTaskIdAllocation },
+  { name: 'BACKLOG事件日志', fn: checkBacklogLog },
   { name: 'Conflict标记', fn: checkMergeConflictMarkers },
   { name: '调试产物', fn: checkStagedDebugArtifacts },
   { name: '热点文件契约', fn: checkHotfileContractCoverage },
