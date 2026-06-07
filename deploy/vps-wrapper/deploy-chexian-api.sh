@@ -4,7 +4,7 @@
 # 配合 sudoers: deployer ALL=(root) NOPASSWD: /usr/local/bin/deploy-chexian-api
 #
 # 安全设计:
-#   - 子命令白名单，只允许 install/start/restart/reload/stop/status/describe/logs/save/doctor/self-update
+#   - 子命令白名单，只允许 install/start/restart/reload/stop/status/describe/logs/save/doctor/self-update/fix-deps-owner
 #   - start 仅允许固定 ecosystem 文件路径，防止任意脚本执行
 #   - install 仅在 /var/www/chexian/server 下执行，防止目录逃逸
 #   - self-update 只从固定路径 $APP_DIR/.wrapper-source/ 读取，由 deploy bundle 投放
@@ -189,8 +189,21 @@ case "${1:-help}" in
     chmod 755 "$CURRENT"
     echo "[self-update] wrapper 已更新（备份: $CURRENT.bak.$TS）"
     ;;
+  fix-deps-owner)
+    # backup 阶段死锁预防（B-deploy-backup-owner）：手动 root 操作（如 bcrypt 应急时绕过
+    # wrapper 直接 sudo npm ci）会在 node_modules 留下 root-owned 子树，使 deploy.yml backup
+    # 阶段 deployer 身份的 `cp -r node_modules .bak` 全量 Permission denied → set -e 中断 →
+    # 永远走不到 install 末尾的 chown trap → 死锁。本子命令由 deploy.yml 在 backup *之前*
+    # 调用，把所有权归一到 deployer 打破死锁。幂等：node_modules 不存在或已是 deployer 时为 no-op。
+    if [ -d "$APP_DIR/node_modules" ]; then
+      chown -R deployer:deployer "$APP_DIR/node_modules"
+      echo "[fix-deps-owner] node_modules 所有权已归一到 deployer"
+    else
+      echo "[fix-deps-owner] node_modules 不存在，跳过"
+    fi
+    ;;
   help|*)
-    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor|self-update}"
+    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor|self-update|fix-deps-owner}"
     echo ""
     echo "子命令:"
     echo "  install      在 $APP_DIR 执行 npm ci --omit=dev (要求 package-lock.json)"
@@ -204,6 +217,7 @@ case "${1:-help}" in
     echo "  save         保存 PM2 进程列表 (用于开机自启)"
     echo "  doctor       输出探测到的 NODE_BIN/NPM_BIN/PM2_BIN + 版本，供外部脚本 eval"
     echo "  self-update  从 deploy bundle 投放的 wrapper 源自我替换 (CI 在 install 前调用)"
+    echo "  fix-deps-owner  把 node_modules 所有权归一到 deployer (CI 在 backup 前调用，防死锁)"
     exit 1
     ;;
 esac
