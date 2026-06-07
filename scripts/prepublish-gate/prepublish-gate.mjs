@@ -26,10 +26,13 @@
  *   node scripts/prepublish-gate/prepublish-gate.mjs --skip-gate --skip-reason "已人工核对"
  *   PREPUBLISH_GATE_SKIP=1 PREPUBLISH_GATE_SKIP_REASON="..." node ...
  *
- * 退出码：
- *   0  无异常 / skip-gate / parquet 尚未 ETL（视作非闸门职责，提示而非阻断）
+ * 退出码（fail-closed 原则：缺数据/取数失败一律阻断，只 --skip-gate 显式放行）：
+ *   0  无异常 / --skip-gate（带审计）
  *   1  统计触发异常，阻断后续发布步骤
- *   2  配置 / IO / DuckDB 错误（运维问题，建议人工排查后 --skip-gate 应急）
+ *   2  配置 / IO / DuckDB 错误 / parquet 缺失或未就绪
+ *      （codex PR #513 第6轮 P1：原 parquet 未就绪 exit 0 违反 fail-closed——ETL 静默
+ *      失败 / 误删 → 仓库空 → 闸门放行 → sync-vps 把不完整 warehouse 推到生产；
+ *      改为 exit 2 阻断，仅 --skip-gate 显式放行。）
  */
 
 import { readFileSync, writeFileSync, mkdirSync, appendFileSync, existsSync } from 'node:fs';
@@ -112,6 +115,29 @@ export function writeBypassAudit({ repoRoot, reason, source = 'cli' }) {
 function resolveRelative(p, repoRoot) {
   if (!p) return p;
   return isAbsolute(p) ? p : resolve(repoRoot, p);
+}
+
+/**
+ * 把 inspectWarehouse 结果转成"该放行还是 fail-closed 阻断"的决策。纯函数便于单测。
+ *
+ * fail-closed 策略（codex PR #513 第6轮 P1）：
+ *   - ready=true → 放行（proceed=true）
+ *   - ready=false → 阻断（proceed=false, exitCode=2）
+ *     原始设计 exit 0 "视作非闸门职责"是错的——闸门跑在 ETL 之后、sync-vps 之前；
+ *     ETL 静默失败 / 误 rm warehouse 后闸门若 exit 0 → sync-vps Stage 3 直接把不完整
+ *     warehouse rsync 到生产。fail-closed 唯一安全语义：缺数据一律阻断，紧急放行用 --skip-gate。
+ *
+ * @param {{ready: boolean, missing: string[]}} inspection
+ * @returns {{proceed: boolean, exitCode?: number, reason?: string, missing?: string[]}}
+ */
+export function evaluateInspection(inspection) {
+  if (inspection?.ready) return { proceed: true };
+  return {
+    proceed: false,
+    exitCode: 2,
+    reason: 'warehouse-not-ready',
+    missing: inspection?.missing ?? [],
+  };
 }
 
 /**
@@ -279,14 +305,16 @@ async function main() {
   log('cyan', `  outDir:         ${outDir}`);
   log('cyan', `  metrics(alert): ${(config.metrics || []).filter((m) => m.alert).length}`);
 
-  // ---- 校验仓库就绪 ----
+  // ---- 校验仓库就绪（fail-closed：缺数据 exit 2 阻断 sync-vps，仅 --skip-gate 显式放行）----
   const inspection = inspectWarehouse(warehouseRoot);
-  if (!inspection.ready) {
-    log('yellow', `\n⚠ parquet 尚未就绪（视作非闸门职责，提示后放行）：`);
-    for (const m of inspection.missing) log('yellow', `   - ${m}`);
-    log('yellow', `   若刚执行 ETL 仍报此错，请检查 数据管理/daily.mjs 输出。`);
-    // 退出 0：不阻断（数据没 ETL 前发布步骤本来就会在更早阶段失败；闸门不抢着抛错）
-    process.exit(0);
+  const inspectionVerdict = evaluateInspection(inspection);
+  if (!inspectionVerdict.proceed) {
+    log('red', `\n❌ parquet 未就绪 → fail-closed 阻断（退出码 ${inspectionVerdict.exitCode}，不 rsync、不 reload）：`);
+    for (const m of inspectionVerdict.missing) log('red', `   - ${m}`);
+    log('yellow', `   排查：数据管理/daily.mjs 输出 / ls 数据管理/warehouse/fact/`);
+    log('yellow', `   确属环境问题（fresh worktree 无数据 / 仅跑闸门单测）需放行：`);
+    log('yellow', `   node scripts/prepublish-gate/prepublish-gate.mjs --skip-gate --skip-reason "<原因>"`);
+    process.exit(inspectionVerdict.exitCode);
   }
   log('green', `\n  ✓ warehouse 就绪`);
 

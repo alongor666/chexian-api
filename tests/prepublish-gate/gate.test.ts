@@ -9,6 +9,7 @@ import {
   runGateChecks,
   writeBypassAudit,
   currentBusinessMonthStart,
+  evaluateInspection,
   // @ts-expect-error mjs without types
 } from '../../scripts/prepublish-gate/prepublish-gate.mjs';
 
@@ -233,5 +234,31 @@ describe('prepublish-gate writeBypassAudit', () => {
     const p = writeBypassAudit({ repoRoot: tmpRoot, reason: '' });
     const parsed = JSON.parse(readFileSync(p, 'utf-8').trim());
     expect(parsed.reason).toBe('(no reason given)');
+  });
+});
+
+describe('prepublish-gate evaluateInspection（fail-closed 策略，codex PR #513 第6轮 P1）', () => {
+  it('ready=true → proceed=true（放行）', () => {
+    const v = evaluateInspection({ ready: true, missing: [] });
+    expect(v).toEqual({ proceed: true });
+  });
+
+  it('ready=false → proceed=false + exitCode=2（fail-closed，非 exit 0）', () => {
+    // 原始设计 ready=false 时 exit 0 "视作非闸门职责"是错的：
+    // ETL 静默失败 / 误 rm warehouse → 闸门若 exit 0 → sync-vps Stage 3 把不完整 warehouse 推到生产。
+    // fail-closed 唯一安全语义：缺数据 exit 2 阻断，紧急放行用 --skip-gate（带审计）。
+    const missing = ['fact/policy/current（目录不存在）', 'fact/claims_detail（目录不存在）'];
+    const v = evaluateInspection({ ready: false, missing });
+    expect(v.proceed).toBe(false);
+    expect(v.exitCode).toBe(2);
+    expect(v.reason).toBe('warehouse-not-ready');
+    expect(v.missing).toEqual(missing);
+  });
+
+  it('inspection=null/undefined → 也 fail-closed（防御式：取不到 inspection 当无数据）', () => {
+    expect(evaluateInspection(null).proceed).toBe(false);
+    expect(evaluateInspection(undefined).proceed).toBe(false);
+    expect(evaluateInspection({}).proceed).toBe(false);
+    expect(evaluateInspection({}).exitCode).toBe(2);
   });
 });

@@ -99,9 +99,11 @@ node scripts/prepublish-gate/prepublish-gate.mjs \
 
 | 码 | 含义 | release:daily 行为 |
 |----|------|------|
-| 0  | 通过 / skip-gate / parquet 尚未 ETL | 继续 sync-vps |
+| 0  | 通过 / `--skip-gate`（带审计） | 继续 sync-vps |
 | 1  | 统计触发阻断 | 中断（不 rsync、不 reload） |
-| 2  | 配置 / IO / DuckDB 错误 | 中断（需要人工排查） |
+| 2  | 配置 / IO / DuckDB 错误 / **parquet 缺失或未就绪** | 中断（需 `--skip-gate` 显式放行）|
+
+> **fail-closed 原则**：parquet 缺失（ETL 失败 / 误 rm / fresh worktree 无数据）= exit 2 阻断，不再像旧版本那样"视作非闸门职责" exit 0 放行（codex PR #513 第6轮 P1）。
 
 ## 配置（`gate.config.json`）
 
