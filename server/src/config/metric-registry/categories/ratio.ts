@@ -314,4 +314,42 @@ export const ratioMetrics: readonly MetricDefinition[] = [
       { version: '1.0.0', date: '2026-04-18', changes: '新增；从 quote-conversion.ts 硬编码公式 conversion_rate 归位到注册表。旧别名 conversion_rate 暂保留用于向后兼容。' },
     ],
   },
+
+  // ===== 续保影响度（L4 占位符；分母需窗口聚合「合计应续」，真实 SQL 在诊断脚本 diagnose_renewal_branch.py）=====
+  {
+    id: 'renewal_impact_rate',
+    version: '1.0.0',
+    name: '续保影响度',
+    category: 'ratio',
+    tags: ['renewal', 'ratio'],
+    formula: {
+      description:
+        '该分类流失导致整体续保缺口扩大的占比；可加和，各分类之和 = 整体续保缺口（1 − 续保率）',
+      numerator: 'SUM(流失件数)（按分类聚合）',
+      denominator: '合计应续件数（窗口内全部分类的应续件数合计）',
+      unit: '%',
+    },
+    sql: {
+      expression:
+        '-- L4 计算，流失件数 ÷ 合计应续件数（分母为窗口合计应续，需窗口聚合 SUM(...) OVER()），由诊断脚本 diagnose_renewal_branch.py 实现',
+      requiredColumns: ['vehicle_frame_no', 'is_renewed', 'expiry_date', 'org_level_3'],
+      notes:
+        'L4 计算。遵循「先聚合后计算」：先按分类（机构/团队/业务员）聚合各件数，再以该次分类的合计应续件数为分母，什么分类就按什么合计。⚠️ 仅在已到期窗口表示真实流失影响度（越高越坏）',
+    },
+    display: {
+      formatter: 'percent',
+      label: '续保影响度',
+      unit: '%',
+      decimals: 1,
+      tooltip: '续保影响度 = 流失件数 ÷ 合计应续件数；各分类可加和 = 整体续保缺口（越高越坏）',
+    },
+    testCases: [
+      {
+        name: '续保影响度非负',
+        input: { whereClause: '1=1' },
+        assertions: { renewal_impact_rate: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-06-07', changes: '新增：续保影响度（流失 ÷ 合计应续，可加和缺口分解），L4 占位符' }],
+  },
 ];

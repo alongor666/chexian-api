@@ -146,7 +146,7 @@ def _branch_matured_section(con, rpt, win_sql, pool_lead, note):
 
     rpt.add(f"**问题一 · 续保率缺口**：6 月已到期客户续保率 {fp(rr_t)}，续保缺口 {fp(imp_t)}"
             f"（即 {fp(imp_t)} 的已到期应续车未续回，按续保影响度可加和分解到各机构）。"
-            f"续保影响度前三的三级机构是 {imp_str}，合计贡献整体续保缺口的 {fp(top3_sum)}。")
+            f"续保影响度前三的三级机构分别是 {imp_str}，三家合计导致整体续保缺口扩大 {fp(top3_sum)}。")
     rpt.add()
     rpt.add(f"**问题二 · 未报价即流失**：6 月已到期客户报价率 {fp(qr_t)}，"
             f"仍有 {tot_unq:,} 户至今未报价、视同已流失，直接拉低续保率 {fp(unq_drag)}"

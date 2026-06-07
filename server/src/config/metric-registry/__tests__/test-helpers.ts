@@ -19,6 +19,10 @@ export const L4_METRIC_IDS: ReadonlySet<string> = new Set([
   'combined_cost_ratio',
   'earned_profit_amount',
   'plan_completion_pct',
+  // 续保经营指标：数据源为 renewal_tracker 派生域（非 policy_data fixture），真实 SQL 在续保生成器/诊断脚本
+  'renewal_unquoted_count',
+  'renewal_lost_count',
+  'renewal_impact_rate',
 ]);
 
 /** L4 ID 数组形式（用于 it.each） */
