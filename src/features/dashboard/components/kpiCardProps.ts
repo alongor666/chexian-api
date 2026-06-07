@@ -127,6 +127,25 @@ export interface KpiCardBuildContext {
   loading: boolean;
 }
 
+/** 标准占比条卡（formatRate + 占比环）— 收敛 7 张同构占比卡的重复构造 */
+function donutBarCard(
+  title: string,
+  value: number | undefined,
+  loading: boolean,
+  kpiDetails: KpiDetailResult | null,
+  donut: Parameters<typeof extractDonutData>[1]
+): EnhancedKpiCardProps {
+  return {
+    title,
+    value,
+    formatter: formatRate,
+    loading,
+    type: 'bar',
+    variant: 'standard',
+    ratioData: kpiDetails ? extractDonutData(kpiDetails, donut) : [],
+  };
+}
+
 /** 构造单卡 props — Hero 三张携带参照系 + 状态；其它走标准变体（Hero 归属由 HERO_KPI_IDS + visibleHero 分组决定） */
 export function buildKpiCardProps(
   id: KpiCardId,
@@ -347,75 +366,19 @@ export function buildKpiCardProps(
           : [],
       };
     case 'renewal_rate':
-      return {
-        title,
-        value: kpis.renewal_rate,
-        formatter: formatRate,
-        loading,
-        type: 'bar',
-        variant: 'standard',
-        ratioData: kpiDetails ? extractDonutData(kpiDetails, 'renewal') : [],
-      };
+      return donutBarCard(title, kpis.renewal_rate, loading, kpiDetails, 'renewal');
     case 'commercial_rate':
-      return {
-        title,
-        value: kpis.commercial_rate,
-        formatter: formatRate,
-        loading,
-        type: 'bar',
-        variant: 'standard',
-        ratioData: kpiDetails ? extractDonutData(kpiDetails, 'commercial') : [],
-      };
+      return donutBarCard(title, kpis.commercial_rate, loading, kpiDetails, 'commercial');
     case 'telesales_rate':
-      return {
-        title,
-        value: kpis.telesales_rate,
-        formatter: formatRate,
-        loading,
-        type: 'bar',
-        variant: 'standard',
-        ratioData: kpiDetails ? extractDonutData(kpiDetails, 'telesales') : [],
-      };
+      return donutBarCard(title, kpis.telesales_rate, loading, kpiDetails, 'telesales');
     case 'nev_rate':
-      return {
-        title,
-        value: kpis.nev_rate,
-        formatter: formatRate,
-        loading,
-        type: 'bar',
-        variant: 'standard',
-        ratioData: kpiDetails ? extractDonutData(kpiDetails, 'nev') : [],
-      };
+      return donutBarCard(title, kpis.nev_rate, loading, kpiDetails, 'nev');
     case 'new_car_rate':
-      return {
-        title,
-        value: kpis.new_car_rate,
-        formatter: formatRate,
-        loading,
-        type: 'bar',
-        variant: 'standard',
-        ratioData: kpiDetails ? extractDonutData(kpiDetails, 'new_car') : [],
-      };
+      return donutBarCard(title, kpis.new_car_rate, loading, kpiDetails, 'new_car');
     case 'coverage_mix_rate':
-      return {
-        title,
-        value: undefined,
-        formatter: formatRate,
-        loading,
-        type: 'bar',
-        variant: 'standard',
-        ratioData: kpiDetails ? extractDonutData(kpiDetails, 'coverage_mix') : [],
-      };
+      return donutBarCard(title, undefined, loading, kpiDetails, 'coverage_mix');
     case 'vehicle_type_rate':
-      return {
-        title,
-        value: undefined,
-        formatter: formatRate,
-        loading,
-        type: 'bar',
-        variant: 'standard',
-        ratioData: kpiDetails ? extractDonutData(kpiDetails, 'vehicle_type') : [],
-      };
+      return donutBarCard(title, undefined, loading, kpiDetails, 'vehicle_type');
     case 'region_rate':
       return {
         title,
