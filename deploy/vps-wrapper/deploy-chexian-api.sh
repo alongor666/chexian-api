@@ -61,26 +61,48 @@ case "${1:-help}" in
     # 修法：install 末尾把 node_modules 整体 chown 到 deployer，保持单一所有权
     chown -R deployer:deployer "$APP_DIR/node_modules"
 
-    # 原生模块自检 + build-from-source 自愈（与本地 scripts/hooks/post-checkout §3 同款）
-    # 背景：bcrypt 等原生模块的预编译 .node 可能在某次 install 下载/编译失败（典型 CN 代理
-    #       腐蚀 node-pre-gyp 从 GitHub 的预编译下载），npm ci 报"完成"但 .node 缺失/截断；
-    #       磁盘上的损坏被运行中进程的内存副本掩盖，直到下次 reload/deploy 才引爆 crash-loop
-    #       → 生产 502（2026-06-06 daily ETL reload 撞上 bcrypt 缺失即此机理，详见 memory
-    #       project_vps_bcrypt_reload_landmine）。
-    # 策略：逐个 require 健康检查（wrapper 以 root 运行，可执行 root nvm 的 node）；失败者用
-    #       npm_config_build_from_source=true npm rebuild <mod> 从源码重编译，绕开被腐蚀的预编译
-    #       下载；仅当重编译后仍加载失败才 exit 1（避免半升级部署上线后 reload 引爆）。
-    # 注：require/rebuild 都用 `if` 包裹——set -e 在 if 条件中失效，避免预期内的健康检查失败
-    #     （损坏时本就该返回非零）把整个脚本提前中止。
-    NATIVE_MODULES=("bcrypt" "better-sqlite3" "@duckdb/node-api")
+    # 原生模块自检 + 自愈（与本地 scripts/hooks/post-checkout §3 同源，按模块类型分修复策略）
+    # 背景：原生 .node 可能在某次 install 下载/编译失败（典型 CN 代理腐蚀预编译下载），npm ci
+    #       报"完成"但 .node 缺失/截断；磁盘损坏被运行中进程的内存副本掩盖，直到下次 reload/deploy
+    #       才引爆 crash-loop → 生产 502（2026-06-06 daily ETL reload 撞上 bcrypt 缺失即此机理，
+    #       详见 memory project_vps_bcrypt_reload_landmine）。
+    # 两类原生模块修复手段不同（PR #516 codex review 指出统一 npm rebuild 对纯预编译包无效）：
+    #   ① 纯预编译分发型 @duckdb/node-api：facade 包（package.json scripts 为空），真正的 .node
+    #      在 optional 平台包 @duckdb/node-bindings-<platform>（VPS=linux-x64）；npm rebuild 无
+    #      build script 可跑 = no-op，修不了 → 必须全量 npm ci 重装重拉 optional 预编译二进制。
+    #      重装会重置整个 node_modules，故必须排在源码编译之前。
+    #   ② 源码可编译型 bcrypt / better-sqlite3：install script 走 node-pre-gyp / node-gyp，预编译
+    #      下载被腐蚀时用 npm_config_build_from_source=true npm rebuild <mod> 强制源码编译绕开。
+    # set -e 兼容：require / 重装 / rebuild 都用 `if` 包裹（set -e 在 if 条件中失效），避免预期内
+    #       的损坏返回非零把脚本提前中止；仅当修复后仍加载失败才 exit 1（避免半升级上线后 reload 引爆）。
     REBUILT=0
-    for MOD in "${NATIVE_MODULES[@]}"; do
+
+    # ① 纯预编译分发型：损坏时全量重装重拉 optional 平台二进制（重装会重置 node_modules，须在源码编译前）
+    for MOD in "@duckdb/node-api"; do
+      [ -d "$APP_DIR/node_modules/$MOD" ] || continue
+      if "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
+        continue  # 健康，跳过
+      fi
+      echo "[install] $MOD 预编译二进制加载失败（facade 包，.node 在 optional @duckdb/node-bindings-<platform>），全量重装重拉..." >&2
+      if ( cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev ) \
+         && "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
+        echo "[install] $MOD 已重装恢复"
+        REBUILT=1
+      else
+        echo "[install] 错误: $MOD 重装后仍无法加载，中止部署（避免半升级上线）。" >&2
+        echo "[install]   @duckdb 为纯预编译分发（无源码编译路径），疑似 optional 包 @duckdb/node-bindings-<platform> 的 .node 下载损坏/缺失；" >&2
+        echo "[install]   人工排查: ls $APP_DIR/node_modules/@duckdb/（看 node-bindings-* 是否存在）+ 检查 registry/代理。" >&2
+        exit 1
+      fi
+    done
+
+    # ② 源码可编译型：损坏时 build-from-source 绕开被腐蚀的预编译下载（rebuild 输出不抑制，失败时 CI 日志可见编译错误）
+    for MOD in "bcrypt" "better-sqlite3"; do
       [ -d "$APP_DIR/node_modules/$MOD" ] || continue
       if "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
         continue  # 健康，跳过
       fi
       echo "[install] $MOD 原生二进制加载失败，从源码重编译..." >&2
-      # rebuild 输出不抑制：失败时 CI deploy 日志可见编译错误，便于定位
       if ( cd "$APP_DIR" && npm_config_build_from_source=true "$NPM_BIN" rebuild "$MOD" ) \
          && "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
         echo "[install] $MOD 已从源码重编译恢复"
@@ -90,7 +112,8 @@ case "${1:-help}" in
         exit 1
       fi
     done
-    # rebuild 以 root 跑会重新产生 root-owned build 产物 → 再次统一所有权到 deployer
+
+    # 重装 / rebuild 以 root 跑会重新产生 root-owned 产物 → 再次统一所有权到 deployer
     if [ "$REBUILT" = "1" ]; then
       chown -R deployer:deployer "$APP_DIR/node_modules"
     fi
