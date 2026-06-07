@@ -19,11 +19,11 @@
 | 一键执行生产级门禁（治理+构建+测试+关键e2e） | `production-gate.mjs` | `bun run production:gate` |
 | 测试前快速验证依赖与运行时前提 | `test-preflight.mjs` | `bun run test:preflight [-- --mode unit]` |
 | 清理未跟踪调试产物（日志/报告） | `cleanup-debug-artifacts.mjs` | `bun run cleanup:artifacts` |
-| 归档已完成的任务 | `archive-backlog.mjs` | `node scripts/archive-backlog.mjs` |
+| 新增/流转 BACKLOG 任务（事件追加） | `backlog.mjs` | `bun scripts/backlog.mjs add\|status\|note\|amend\|list` |
 | 扫描/归档已完成的 plans 计划文件 | `manage-plans.mjs` | `bun run plans:manage` |
 | 统计项目 Token 数 | `count-tokens.mjs` | `bun run count-tokens` |
-| 校验任务ID（全局连续/跨归档去重） | `check-task-id-conflict.mjs` | `bun scripts/check-task-id-conflict.mjs` |
-| BACKLOG 专项治理（状态校准+DONE归档+速查看板） | `governance-backlog-curate.mjs` | `bun scripts/governance-backlog-curate.mjs --apply` |
+| 校验 BACKLOG 事件日志（结构/孤儿/唯一性） | `check-task-id-conflict.mjs` | `bun scripts/check-task-id-conflict.mjs` |
+| 渲染 BACKLOG 派生视图（折叠日志→看板+归档） | `governance-backlog-curate.mjs` | `bun scripts/governance-backlog-curate.mjs --apply` |
 | 分析 Parquet 文件结构 | `analyze-parquet-schema.py` | `python3 scripts/analyze-parquet-schema.py` |
 | 提取业务员计划数据 | `extract_salesman_plan.py` | `python3 scripts/extract_salesman_plan.py` |
 | 执行关键路由 15 分钟并发稳定性压测 | `benchmark-key-routes-soak.mjs` | `bun run benchmark:key-routes:soak` |
@@ -46,20 +46,26 @@
 | `production-gate.mjs` | **生产门禁编排**：治理 + 构建 + 全量测试 + 关键E2E（可选压测门禁） | `bun run production:gate [-- --with-perf]` |
 | `test-preflight.mjs` | **测试运行时预检**：检查 `node_modules`、`vitest`、`playwright` 与关键 E2E 文件是否就绪 | `bun run test:preflight [-- --mode all]` |
 | `cleanup-debug-artifacts.mjs` | 清理未跟踪调试产物（`.playwright-cli`、`playwright-report`、`test-results`、常见调试日志） | `bun run cleanup:artifacts` |
-| `check-task-id-conflict.mjs` | 校验任务ID全局唯一/连续/未复用（扫 BACKLOG.md + BACKLOG_ARCHIVE.md，不再按 Agent 区间） | `bun scripts/check-task-id-conflict.mjs` |
-| `check-write-conflict.mjs` | PR前检测文件写入冲突，防止merge冲突 | `node scripts/check-write-conflict.mjs` |
+| `check-task-id-conflict.mjs` | BACKLOG 事件日志快速校验（结构/无孤儿事件/uid·曾用号唯一）；陈旧守卫见 check-governance | `bun scripts/check-task-id-conflict.mjs` |
+| `check-write-conflict.mjs` | **[DEPRECATED 2026-06]** 旧「可变表」BACKLOG 追加冲突检测，event-log 下 union 自动并入，待清理 | — |
 | `check-document-partition.mjs` | 检查文档分区是否符合多Agent协作规范 | `node scripts/check-document-partition.mjs` |
-| `assign-task-id.mjs` | 自动分配任务ID（全局 max+1，归档参与计算，永不复用历史编号） | `bun scripts/assign-task-id.mjs @<agent>` |
+| `assign-task-id.mjs` | **[DEPRECATED 2026-06]** 写入方不再挑号；新增任务改用 `bun scripts/backlog.mjs add` | — |
 
-### 📋 任务管理类
+### 📋 任务管理类（BACKLOG event-log 模型，2026-06 治本）
+
+> 道：真相是 append-only 事件日志 `BACKLOG_LOG.jsonl`；`BACKLOG.md`/`BACKLOG_ARCHIVE.md` 是其**派生视图**（禁止手工编辑）。
+> 写入 = 追加事件（永不挑号、永不原地改行）→ 多分支并发结构性不再碰号、不再产生重复行。
 
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
-| `governance-backlog-curate.mjs` | **BACKLOG 专项治理器**（幂等）：状态校准 + DONE 归档到 BACKLOG_ARCHIVE.md + 顶部活跃速查看板 + 非标 ID 规范化（取号请配合 assign-task-id.mjs） | `bun scripts/governance-backlog-curate.mjs [--apply]` |
-| `archive-backlog.mjs` | 将指定日期前的DONE任务归档到BACKLOG_ARCHIVE.md | `node scripts/archive-backlog.mjs [日期] [--dry-run]` |
+| `backlog.mjs` | **BACKLOG 写入入口**（唯一写路径）：add/status/note/amend/list，追加事件并自动重渲染视图 | `bun scripts/backlog.mjs add --actor @x --priority Px --section "..." --desc "..."` |
+| `governance-backlog-curate.mjs` | **BACKLOG 渲染器**（幂等纯函数）：折叠 `BACKLOG_LOG.jsonl` → 渲染 BACKLOG.md + BACKLOG_ARCHIVE.md + 速查看板 | `bun scripts/governance-backlog-curate.mjs [--apply]` |
+| `backlog/lib.mjs` | event-log 核心库（解析/折叠/渲染/校验的唯一事实源），被 curate / backlog.mjs / check-governance 共用 | （被引用） |
+| `backlog/migrate.mjs` | 一次性：把旧「可变表」BACKLOG.md/ARCHIVE 播种为事件日志（含 106/106 逐列等价校验） | `bun scripts/backlog/migrate.mjs [--apply]` |
 | `manage-plans.mjs` | 扫描`.claude/plans`计划文件，生成状态快照并归档已完成文件 | `node scripts/manage-plans.mjs [--dry-run] [--apply]` |
-| `cleanup-backlog.mjs` | 清理BACKLOG.md中的重复/无效条目 | `node scripts/cleanup-backlog.mjs` |
-| `merge-backlog.mjs` | 合并多Agent并发修改的BACKLOG.md（解决冲突） | `node scripts/merge-backlog.mjs` |
+| `archive-backlog.mjs` | **[DEPRECATED 2026-06]** 旧「可变表」归档器，已被 event-log（status DONE 事件 + curate 渲染）取代，待清理 | — |
+| `cleanup-backlog.mjs` | **[DEPRECATED 2026-06]** 旧「可变表」去重器，event-log 下无重复行，待清理 | — |
+| `merge-backlog.mjs` | **[DEPRECATED 2026-06]** 旧「可变表」合并器，event-log 下 union 自动并入，待清理 | — |
 
 ### 📊 数据分析类（Python）
 
@@ -153,22 +159,20 @@ bun run start:all
 bun run governance
 ```
 
-### 场景2：归档历史任务（每周/每月清理）
+### 场景2：完成任务并归档（event-log）
 ```bash
-# 预览将归档哪些任务
-node scripts/archive-backlog.mjs --dry-run
-
-# 执行归档
-node scripts/archive-backlog.mjs
+# 标记完成（追加 status 事件 + 自动重渲染；DONE 必须带证据）
+bun scripts/backlog.mjs status <id|uid> DONE --evidence "PR/commit/测试证据"
+# DONE 任务自动进入 BACKLOG_ARCHIVE.md（视图由日志折叠渲染，无需单独归档脚本）
 ```
 
-### 场景3：多Agent协作前检查冲突
+### 场景3：多Agent协作（event-log 下无需冲突检测脚本）
 ```bash
-# 检查任务ID是否冲突
-node scripts/check-task-id-conflict.mjs
+# 各分支各自追加事件即可，merge=union 自动并入；写入方不挑号 → 结构性无碰号
+bun scripts/backlog.mjs add --actor @claude --priority P2 --section "..." --desc "..."
 
-# 检查文件写入冲突
-node scripts/check-write-conflict.mjs
+# 合并后如视图与日志不一致（governance 会提示），重新渲染即可：
+bun scripts/governance-backlog-curate.mjs --apply
 ```
 
 ### 场景4：分析新数据文件
@@ -236,3 +240,11 @@ python3 scripts/compare-schema-mapping.py
 ## 2026-06-05 追加记录
 
 - 新增 **ETL 异常哨兵**（`scripts/sentinel/`）：发布后监控，每日 ETL 后调生产 API（PAT 只读）做核心指标「当前 vs 历史」对比，统计层确定性判定告警 + LLM 归因（不裁决），异常才在 GitHub 追踪 issue 告警、无异常静默。取数坍缩到 `/api/query/comprehensive` 一次调用；幂等以响应 ETag（绑定 `getDataVersion` 指纹）去重；满期赔付率做 IBNR 成熟度过滤。工作流 `.github/workflows/etl-anomaly-sentinel.yml`。配套新增「🛡️ 监控哨兵类」分类。
+
+## 2026-06-07 追加记录（BACKLOG event-log 治本）
+
+- **BACKLOG 从「可变表」重构为「事件日志 + 派生视图」**（道：根治多分支并发的碰号 / 原地改行冲突 / 手解派生文件三类病）。
+  - 新增真相文件 `BACKLOG_LOG.jsonl`（append-only，merge=union）；`BACKLOG.md`/`BACKLOG_ARCHIVE.md` 降为派生视图。
+  - 新增 `scripts/backlog/lib.mjs`（解析/折叠/渲染/校验 SSOT）、`scripts/backlog/migrate.mjs`（一次性播种 + 106/106 等价校验）、`scripts/backlog.mjs`（事件追加 CLI，写入方不挑号）。
+  - `governance-backlog-curate.mjs` 重写为「折叠日志 → 渲染视图」；`check-governance.mjs` 的「任务ID分配」检查替换为「BACKLOG事件日志」（结构/孤儿/唯一性 + 视图==折叠(日志) 陈旧守卫）。
+  - `assign-task-id.mjs`（不再挑号）、`check-write-conflict.mjs`/`archive-backlog.mjs`/`cleanup-backlog.mjs`/`merge-backlog.mjs`（可变表遗留孤儿）标记 **[DEPRECATED]**，清理单独排期。
