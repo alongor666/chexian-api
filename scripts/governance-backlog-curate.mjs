@@ -49,7 +49,7 @@ const RENUMBER = {
 // ── 注入归档行：本次治理工作自身的 DONE 登记（baked 进脚本 → 抗未来 reset 重生成，幂等）──
 // 主流程合并归档时：若活跃表或现有归档已含同 ID 则跳过注入，避免重复。
 const INJECT_ARCHIVE = {
-  B342: '| B342 | 2026-06-06 | Chore/Governance | @claude | **BACKLOG 专项治理：状态校准 + DONE 归档 + 全局连续编号 + 活跃任务速查看板**：原单表拆为「BACKLOG.md（活跃）+ BACKLOG_ARCHIVE.md（归档，完整保留 ID 与证据）」；8 项状态校准（B235/236/239-243 经实证已完成改 DONE、B337 非标状态 DOING→IN_PROGRESS）+ 非标 ID B256-update 规范化为 B341（B339/B340 已被 PR #513「ETL 发布前准入闸门」并行占用，故本次续编 B341/B342 避让，落实"全局连续、禁止复用"）；`assign-task-id.mjs` 由「按 Agent 区间找空缺」改为「全局 max+1，永不复用历史编号（含归档）」，根治原会回收低号 B100 的 bug；消费方 `check-governance.mjs`（证据链/ID/冲突标记）与 `check-task-id-conflict.mjs` 扫描范围扩展到归档文件 | P3 | DONE | `.claude/rules/worktree-setup.md`（BACKLOG 派生文件治理）；本会话治理 | `scripts/governance-backlog-curate.mjs`(新·幂等治理器+治理行注入)<br>`scripts/assign-task-id.mjs`(全局编号)<br>`scripts/check-task-id-conflict.mjs`(扫归档)<br>`scripts/check-governance.mjs`(扫归档)<br>`BACKLOG_ARCHIVE.md`(新)<br>`.gitattributes`(归档 union merge) | `bun run governance` 全绿（证据链跨两文件 / ID 扫描无冲突 / 治理文件冲突标记）；`assign-task-id @claude` 返回全局连续编号 B343；curate 二次 dry-run 幂等（0 新归档）；B341/B342 与 main B339/B340 无撞号 |',
+  B342: '| B342 | 2026-06-06 | Chore/Governance | @claude | **BACKLOG 专项治理：状态校准 + DONE 归档 + 全局连续编号 + 活跃任务速查看板**：原单表拆为「BACKLOG.md（活跃）+ BACKLOG_ARCHIVE.md（归档，完整保留 ID 与证据）」；8 项状态校准（B235/236/239-243 经实证已完成改 DONE、B337 非标状态 DOING→IN_PROGRESS）+ 非标 ID B256-update 规范化为 B341（B339/B340 已被 PR #513「ETL 发布前准入闸门」并行占用，故本次续编 B341/B342 避让，落实"全局连续、禁止复用"）；`assign-task-id.mjs` 由「按 Agent 区间找空缺」改为「全局 max+1，永不复用历史编号（含归档）」，根治原会回收低号 B100 的 bug；消费方 `check-governance.mjs`（证据链/ID/冲突标记）与 `check-task-id-conflict.mjs` 扫描范围扩展到归档文件；并按 codex PR #515 review 把三个 ID 校验脚本从「Agent 区间」彻底改为「全局唯一/连续/未复用」（区间语义全删，归属对象仅作统计），`scripts/INDEX.md` 同步登记治理器与新口径 | P3 | DONE | `.claude/rules/worktree-setup.md`（BACKLOG 派生文件治理）；codex PR #515 review；本会话治理 | `scripts/governance-backlog-curate.mjs`(新·幂等治理器+治理行注入)<br>`scripts/assign-task-id.mjs`(全局 max+1，移除区间)<br>`scripts/check-task-id-conflict.mjs`(全局唯一/连续校验)<br>`scripts/check-governance.mjs`(任务ID门禁改全局)<br>`scripts/INDEX.md`(登记)<br>`BACKLOG_ARCHIVE.md`(新)<br>`.gitattributes`(归档 union merge) | `bun run governance` 全绿（证据链跨两文件 / ID 全局唯一 / 治理文件冲突标记）；`assign-task-id @claude` 返回全局连续编号 B343；`check-task-id-conflict` 无区间噪音告警；curate 二次 dry-run 幂等（0 新归档）；B341/B342 与 main B339/B340 无撞号 |',
 };
 
 const TABLE_HEADER = '| ID | 提出时间 | 板块 | 归属对象 | 需求描述 | 优先级 | 状态 | 关联文档 | 关联代码 | 验收/证据 |';
@@ -200,11 +200,14 @@ for (const raw of backlogRows) {
 const archiveMap = new Map();
 for (const l of existingArchiveRows) archiveMap.set(rowId(l), l);
 for (const { id, line } of newlyArchived) if (!archiveMap.has(id)) archiveMap.set(id, line);
-// 注入治理登记行（幂等：活跃表已含或归档已含则不注入）
+// 注入治理登记行：INJECT 为该 ID 的权威定义，覆盖既有归档行（便于修订，仍幂等）。
+// 若该 ID 已在活跃表则跳过（它是活跃任务，不该被归档覆盖）。
 const activeIdSet = new Set(newActive.map(rowId));
 const injected = [];
 for (const [id, line] of Object.entries(INJECT_ARCHIVE)) {
-  if (!archiveMap.has(id) && !activeIdSet.has(id)) { archiveMap.set(id, line); injected.push(id); }
+  if (activeIdSet.has(id)) continue;
+  if (!archiveMap.has(id)) injected.push(id);
+  archiveMap.set(id, line);
 }
 const sortedArchive = [...archiveMap.values()].sort((a, b) => {
   const na = parseInt((rowId(a) || '').replace(/\D/g, ''), 10);

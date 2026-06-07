@@ -22,7 +22,8 @@
 | 归档已完成的任务 | `archive-backlog.mjs` | `node scripts/archive-backlog.mjs` |
 | 扫描/归档已完成的 plans 计划文件 | `manage-plans.mjs` | `bun run plans:manage` |
 | 统计项目 Token 数 | `count-tokens.mjs` | `bun run count-tokens` |
-| 检测多 Agent 任务ID冲突 | `check-task-id-conflict.mjs` | `node scripts/check-task-id-conflict.mjs` |
+| 校验任务ID（全局连续/跨归档去重） | `check-task-id-conflict.mjs` | `bun scripts/check-task-id-conflict.mjs` |
+| BACKLOG 专项治理（状态校准+DONE归档+速查看板） | `governance-backlog-curate.mjs` | `bun scripts/governance-backlog-curate.mjs --apply` |
 | 分析 Parquet 文件结构 | `analyze-parquet-schema.py` | `python3 scripts/analyze-parquet-schema.py` |
 | 提取业务员计划数据 | `extract_salesman_plan.py` | `python3 scripts/extract_salesman_plan.py` |
 | 执行关键路由 15 分钟并发稳定性压测 | `benchmark-key-routes-soak.mjs` | `bun run benchmark:key-routes:soak` |
@@ -45,15 +46,16 @@
 | `production-gate.mjs` | **生产门禁编排**：治理 + 构建 + 全量测试 + 关键E2E（可选压测门禁） | `bun run production:gate [-- --with-perf]` |
 | `test-preflight.mjs` | **测试运行时预检**：检查 `node_modules`、`vitest`、`playwright` 与关键 E2E 文件是否就绪 | `bun run test:preflight [-- --mode all]` |
 | `cleanup-debug-artifacts.mjs` | 清理未跟踪调试产物（`.playwright-cli`、`playwright-report`、`test-results`、常见调试日志） | `bun run cleanup:artifacts` |
-| `check-task-id-conflict.mjs` | 检测多Agent任务ID是否冲突（B100-199/@claude等范围） | `node scripts/check-task-id-conflict.mjs` |
+| `check-task-id-conflict.mjs` | 校验任务ID全局唯一/连续/未复用（扫 BACKLOG.md + BACKLOG_ARCHIVE.md，不再按 Agent 区间） | `bun scripts/check-task-id-conflict.mjs` |
 | `check-write-conflict.mjs` | PR前检测文件写入冲突，防止merge冲突 | `node scripts/check-write-conflict.mjs` |
 | `check-document-partition.mjs` | 检查文档分区是否符合多Agent协作规范 | `node scripts/check-document-partition.mjs` |
-| `assign-task-id.mjs` | 自动分配任务ID（按Agent范围） | `node scripts/assign-task-id.mjs` |
+| `assign-task-id.mjs` | 自动分配任务ID（全局 max+1，归档参与计算，永不复用历史编号） | `bun scripts/assign-task-id.mjs @<agent>` |
 
 ### 📋 任务管理类
 
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
+| `governance-backlog-curate.mjs` | **BACKLOG 专项治理器**（幂等）：状态校准 + DONE 归档到 BACKLOG_ARCHIVE.md + 顶部活跃速查看板 + 非标 ID 规范化（取号请配合 assign-task-id.mjs） | `bun scripts/governance-backlog-curate.mjs [--apply]` |
 | `archive-backlog.mjs` | 将指定日期前的DONE任务归档到BACKLOG_ARCHIVE.md | `node scripts/archive-backlog.mjs [日期] [--dry-run]` |
 | `manage-plans.mjs` | 扫描`.claude/plans`计划文件，生成状态快照并归档已完成文件 | `node scripts/manage-plans.mjs [--dry-run] [--apply]` |
 | `cleanup-backlog.mjs` | 清理BACKLOG.md中的重复/无效条目 | `node scripts/cleanup-backlog.mjs` |

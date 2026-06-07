@@ -20,7 +20,15 @@ if str(_HERE) not in sys.path:
 
 from diagnose_renewal import resolve_window  # type: ignore  # noqa: E402
 from diagnose_renewal_branch import _month_bounds, _win_dedup_cte  # type: ignore  # noqa: E402
-from renewal_common import DEFAULT_LIST, disp_team, light_q, light_r, rate  # type: ignore  # noqa: E402
+from renewal_common import (  # type: ignore  # noqa: E402
+    DEFAULT_LIST,
+    disp_team,
+    funnel_derived,
+    impact_rate,
+    light_q,
+    light_r,
+    rate,
+)
 from renewal_resp_mode import load_resp_mode_source, map_resp_mode  # type: ignore  # noqa: E402
 
 WIN_S, WIN_E = date(2026, 6, 1), date(2026, 6, 30)
@@ -56,6 +64,46 @@ def test_light_quote(v, emoji):
 @pytest.mark.parametrize("v,emoji", [(80, "🟢"), (75, "🟢"), (70, "🔵"), (65, "🔵"), (60, "🟡"), (55, "🟡"), (50, "🔴")])
 def test_light_renew(v, emoji):
     assert light_r(v).strip() == emoji
+
+
+# ---- 续保影响度专项指标（renewal_common 注册 · 先聚合后计算 · 用户 2026-06-07 修改意见）----
+
+@pytest.mark.parametrize("yc,q,r,unquoted,lost", [
+    (100, 80, 50, 20, 50),   # 常规：未报价=应续−已报价，流失=应续−已续保
+    (10, 10, 10, 0, 0),      # 全报价全续保 → 零未报价零流失
+    (5, 0, 0, 5, 5),         # 全未报价 → 未报价=流失=应续
+    (8, 7, 2, 1, 6),         # 达州真实档
+])
+def test_funnel_derived(yc, q, r, unquoted, lost):
+    d = funnel_derived(yc, q, r)
+    assert d["unquoted"] == unquoted
+    assert d["lost"] == lost
+
+
+def test_funnel_derived_handles_none():
+    """已报价/已续保为 None（SUM 空）时按 0 计，不抛错。"""
+    assert funnel_derived(10, None, None) == {"unquoted": 10, "lost": 10}
+
+
+# 续保影响度 = 流失件数 ÷ 合计应续件数（分母为当前分类合计；防除零返回 None）
+@pytest.mark.parametrize("lost,total,expect", [
+    (451, 2064, 21.9),   # 天府真实档（与 DuckDB 直查一致）
+    (1046, 2064, 50.7),  # 合计缺口 = 1 − 续保率
+    (0, 2064, 0.0),      # 无流失 → 0 影响度
+    (5, 0, None),        # 分母 0 → None（防除零）
+])
+def test_impact_rate(lost, total, expect):
+    assert impact_rate(lost, total) == expect
+
+
+def test_impact_rate_additivity():
+    """可加和性：各分类续保影响度之和 = 整体续保缺口（先聚合后计算的核心性质）。
+    分母统一为合计应续件数，故 Σ(各分类流失 ÷ 合计) = 合计流失 ÷ 合计。"""
+    lost_by_org = [451, 162, 105, 85, 50, 41, 39, 35, 31, 29, 12, 6]  # 表一 12 机构流失件数
+    total_yc = 2064
+    parts_sum = round(sum(impact_rate(x, total_yc) for x in lost_by_org), 1)
+    overall = impact_rate(sum(lost_by_org), total_yc)
+    assert parts_sum == overall == 50.7
 
 
 def test_light_none():
@@ -250,9 +298,13 @@ def test_cli_branch_report_when_data_present(tmp_path):
                   "## 四、当年续保表", "## 五、当月首日续保情况", "## 六、当月首周续保情况"):
         assert title in text, f"缺少板块：{title}"
     assert "三级机构" in text and "首日续保率" in text and "首周续保率" in text
-    assert "**结论**" in text
+    assert "**结论**" in text  # 表二~六仍为结论式
     # 已续回口径：= 已签单续保（is_renewed），与前端续保追踪一致；不按 renewed_date 起保日切片
     assert "已续回口径" in text and "已签单" in text
-    # 报告语言红线：正文不得残留英文术语堆砌
-    for bad in ("cohort", "%pp", "mature", "funnel"):
+    # 表一专项（用户 2026-06-07 修改意见）：续保影响度三列 + 口径映射表 + 两段问题式结论
+    assert "未报价件数" in text and "流失件数" in text and "续保影响度" in text
+    assert "指标口径" in text  # 防漂移映射表
+    assert "**问题一 · 续保率缺口**" in text and "**问题二 · 未报价即流失**" in text
+    # 报告语言红线：正文不得残留英文术语堆砌（cutoff 已中文化为「数据截止日」）
+    for bad in ("cohort", "%pp", "mature", "funnel", "cutoff"):
         assert bad not in text, f"报告残留英文/格式问题：{bad}"

@@ -215,7 +215,7 @@ src/features/*                                    # 功能模块 UI 渲染
 | 文件 | 职责 |
 |------|------|
 | `field-registry/fields.json` | **字段唯一事实源**（56 字段），codegen: `node scripts/field-registry/generate.mjs` |
-| `metric-registry/` | 指标注册表（49 个指标） |
+| `metric-registry/` | 指标注册表（52 个指标） |
 | `customer-categories.ts` | 客户类别枚举（11 类）+ 分组常量 + 辅助函数 |
 | `env.ts` | 环境变量集中管理（6 分组，启动时校验） |
 | `api-routes.ts` | API 路由路径常量（5 组，前后端一致） |

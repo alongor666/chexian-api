@@ -39,7 +39,7 @@ const CONFIG_BASIC = {
       id: 'monthly_premium',
       name: '月签单保费',
       alert: true,
-      source: 'policy_dedup.monthly_premium',
+      source: 'policy_trend.monthly_premium',
       direction: 'both',
       zThreshold: 2.5,
       momThreshold: 30,
@@ -49,7 +49,7 @@ const CONFIG_BASIC = {
       id: 'monthly_policy_count',
       name: '月签单件数',
       alert: true,
-      source: 'policy_dedup.monthly_policy_count',
+      source: 'policy_trend.monthly_policy_count',
       direction: 'both',
       zThreshold: 2.5,
       momThreshold: 30,
@@ -122,7 +122,7 @@ describe('prepublish-gate runGateChecks（注入式 fetcher）', () => {
 
   it('注入异常（飙升 5x）→ 阻断（triggered > 0）', async () => {
     const fetcher = async (_ctx: any, source: string) =>
-      source === 'policy_dedup.monthly_premium' ? SPIKE_SERIES : NORMAL_SERIES;
+      source === 'policy_trend.monthly_premium' ? SPIKE_SERIES : NORMAL_SERIES;
     const ctx = { policyGlob: 'x', claimsGlob: 'y', duckdbBin: 'duckdb' };
     const { triggered } = await runGateChecks(CONFIG_BASIC, ctx, fetcher);
     expect(triggered.length).toBeGreaterThan(0);
@@ -130,18 +130,87 @@ describe('prepublish-gate runGateChecks（注入式 fetcher）', () => {
     expect(triggered[0].reasons.length).toBeGreaterThan(0);
   });
 
-  it('空 series → insufficientData，不阻断、不计入 triggered', async () => {
+  it('空 series → fail-closed：进 errors（codex PR #513 第7轮 P1）', async () => {
+    // 原始把空 series 当 insufficientData "不阻断"是错的：parquet 文件存在但 ETL 产出空、
+    // 分区被清、只剩未完成月，都属于"闸门无法判定" → 必须 fail-closed 阻断 sync-vps。
     const fetcher = async () => [];
     const ctx = { policyGlob: 'x', claimsGlob: 'y', duckdbBin: 'duckdb' };
     const { verdicts, triggered, errors } = await runGateChecks(CONFIG_BASIC, ctx, fetcher);
     expect(triggered).toHaveLength(0);
-    expect(errors).toHaveLength(0);
-    expect(verdicts.every((v: any) => v.insufficientData === true)).toBe(true);
+    expect(errors.length).toBeGreaterThan(0); // ← 与旧版相反：现在进 errors
+    expect(errors[0].error).toContain('取数返回空');
+    expect(verdicts[0].fetchError).toContain('取数返回空');
+    expect(verdicts[0].seriesLength).toBe(0);
+  });
+
+  it('成熟期数不足 minMaturePeriods → 也 fail-closed：进 errors（codex PR #513 第7轮 P1 延伸）', async () => {
+    // stats.mjs 返回 insufficientData=true 时（excludeRecent 后 mature < 3）闸门无法 Z-score 判定，
+    // 与空 series 同根因——必须 fail-closed 而非"只记录不阻断"。
+    const shortSeries = [
+      { time_period: '2025-01', value: 100 },
+      { time_period: '2025-02', value: 102 },
+      { time_period: '2025-03', value: 50 }, // excludeRecent=1 后 mature=2 < 3 → insufficient
+    ];
+    const fetcher = async () => shortSeries;
+    const ctx = { policyGlob: 'x', claimsGlob: 'y', duckdbBin: 'duckdb' };
+    const { verdicts, errors } = await runGateChecks(CONFIG_BASIC, ctx, fetcher);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].error).toContain('完整期数不足');
+    expect(verdicts[0].insufficientData).toBe(true);
+    expect(verdicts[0].note).toContain('完整期数不足');
+  });
+
+  it('history.minMaturePeriods 配置驱动 fail-closed（PR #518 codex P2）：调高到 5 时 mature=4 也阻断', async () => {
+    // 原 stats.mjs 内部硬编码 mature<3 才返 insufficientData=true；配置改 minMaturePeriods=5
+    // 时 mature=4 不会触发 stats 内置兜底——必须在 runGateChecks 层按配置预检 mature 期数。
+    const cfg = {
+      ...CONFIG_BASIC,
+      history: { minMaturePeriods: 5 }, // 调高门槛
+      metrics: [CONFIG_BASIC.metrics[0]],
+    };
+    const series5 = [
+      // 5 期：excludeRecent=1 后 mature=4 < 5 → 预检 fail-closed
+      { time_period: '2025-01', value: 100 },
+      { time_period: '2025-02', value: 102 },
+      { time_period: '2025-03', value: 98 },
+      { time_period: '2025-04', value: 101 },
+      { time_period: '2025-05', value: 50 },
+    ];
+    const fetcher = async () => series5;
+    const ctx = { policyGlob: 'x', claimsGlob: 'y', duckdbBin: 'duckdb' };
+    const { errors, verdicts } = await runGateChecks(cfg, ctx, fetcher);
+    expect(errors.length).toBe(1);
+    expect(errors[0].error).toMatch(/mature 4 期.*minMaturePeriods 5/);
+    expect(verdicts[0].matureCount).toBe(4);
+    expect(verdicts[0].insufficientData).toBe(true);
+  });
+
+  it('history.minMaturePeriods 配置驱动放行（PR #518 codex P2）：mature=5 时 minMatureP=5 通过预检', async () => {
+    // 边界：mature 恰好等于 minMaturePeriods 时应放行（不 fail-closed）
+    const cfg = {
+      ...CONFIG_BASIC,
+      history: { minMaturePeriods: 5 },
+      metrics: [CONFIG_BASIC.metrics[0]],
+    };
+    const series6 = [
+      { time_period: '2025-01', value: 100 },
+      { time_period: '2025-02', value: 102 },
+      { time_period: '2025-03', value: 98 },
+      { time_period: '2025-04', value: 101 },
+      { time_period: '2025-05', value: 99 },
+      { time_period: '2025-06', value: 50 }, // 排掉 → mature=5 ≥ 5
+    ];
+    const fetcher = async () => series6;
+    const ctx = { policyGlob: 'x', claimsGlob: 'y', duckdbBin: 'duckdb' };
+    const { errors, verdicts } = await runGateChecks(cfg, ctx, fetcher);
+    expect(errors.length).toBe(0);
+    expect(verdicts[0].matureCount).toBe(5);
+    expect(verdicts[0].insufficientData).toBeFalsy();
   });
 
   it('fetcher 抛错 → 记录在 errors，不阻断 triggered', async () => {
     const fetcher = async (_ctx: any, source: string) => {
-      if (source === 'policy_dedup.monthly_premium') throw new Error('duckdb 启动失败');
+      if (source === 'policy_trend.monthly_premium') throw new Error('duckdb 启动失败');
       return NORMAL_SERIES;
     };
     const ctx = { policyGlob: 'x', claimsGlob: 'y', duckdbBin: 'duckdb' };

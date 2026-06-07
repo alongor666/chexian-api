@@ -3,18 +3,17 @@
  *
  * 设计原则：
  *   - 与 scripts/sentinel/lib/fetch-metrics.mjs 对称：sentinel 查 live API，闸门查刚 ETL 出的本地 parquet。
- *   - SQL 口径必须与 SSOT 一致：policy_dedup 按 (policy_no, CAST(insurance_start_date AS DATE)) 聚合
- *       + HAVING SUM(premium) > 0（cost-ratios.ts B252）；赔款金额锚定 ClaimsAgg.reported_claims SSOT
- *       （已结案取 settled、未结案取 reserve，剔除无责/零结/注销/拒赔——非二者相加，codex PR #513 P2）
- *   - **时间维度对齐生产 trend SSOT**（codex PR #513 第4轮 P2）：policy 月度 flow 指标按 `policy_date`
- *       月分组（与 `server/src/sql/trend/premium-trend.ts:31` 默认 `dateField='policy_date'`、sentinel
- *       `fetchTrend(perspective=premium|policy_count, granularity=monthly)` 路径一致），不再按
- *       `insurance_start_date`——否则 ETL 把 policy_date 写错而 insurance_start_date 正常时，闸门按
- *       起保月聚合可放行，但发布后 sentinel 按签单月会断崖告警。dedup key 仍按 B252 SSOT 保留
- *       (policy_no, insurance_start_date)，但 sign_date 从 dedup CTE 取 `COALESCE(ANY_VALUE(CASE
- *       WHEN premium>0 THEN policy_date END), ANY_VALUE(policy_date))`——按生产 policy-dedup
- *       ORIGINAL_PRIORITY_FIELDS 模式优先取原单（premium>0 行）的 policy_date，避免批改副本带偏。
- *       claims 仍按 `accident_time`（与 claims-heatmap cohort 一致；生产 ClaimsAgg 也按出险月分组）。
+ *   - SQL 口径必须与 SSOT 一致：
+ *       · **policy 月度 flow 指标镜像生产 trend SSOT**（codex PR #513 第7轮 P2，第4-5轮的 dedup 方案
+ *         被纠正）：直接在 raw PolicyFact 上按 `STRFTIME(policy_date, '%Y-%m')` 聚合 `SUM(premium)` /
+ *         `COUNT(*)`，与 `server/src/sql/trend/premium-trend.ts:43-45` `valueAggregation` 路径逐字
+ *         一致。**不再**用 policy_dedup CTE / HAVING SUM(premium)>0 / sign_date ANY_VALUE—— policy_dedup
+ *         (B252) 是 cost-ratios cohort 口径，trend SSOT 不去重；闸门金丝雀若 dedup 会把跨月批改/冲正
+ *         净额搬回原单月份，让生产 trend 抓到的"批改月断崖"在闸门里被掩盖；反过来也可能因 dedup 自身
+ *         的零元行过滤误阻断。COUNT(*) 计入批改副本——与生产 trend 一致，否则与 sentinel 看到的数对不上。
+ *       · **赔款金额锚定 ClaimsAgg.reported_claims SSOT**（codex PR #513 第2轮 P2）：每案已结案取
+ *         settled_amount、未结案取 reserve_amount（非二者相加），剔除无责/零结/注销/拒赔。
+ *       · claims 按 `accident_time` 月（与 claims-heatmap cohort + ClaimsAgg 一致；不切到 policy_date）。
  *   - 读法「镜像生产」而非自定义（codex PR #513 第2/3轮）：闸门是发布前金丝雀，必须与生产加载器逐字一致，
  *       否则要么误阻断、要么把"生产会崩"的场景放行。生产读法本身不对称，照搬不可擅自统一：
  *       · policy → read_parquet(glob, union_by_name=true)，对齐 duckdb-parquet-loader.ts。
@@ -126,61 +125,33 @@ const COMPLETED_MONTH_FILTER = (col, monthStart) => {
 /** SQL 模板表 — key = config.metric.source，value = (globPaths) => sql */
 export const SQL_TEMPLATES = {
   /**
-   * 月签单保费：policy_dedup（B252 SSOT）后按 **policy_date 月** 聚合 SUM(premium)。
-   * 时间维度对齐生产 trend SSOT（premium-trend.ts:31 默认 dateField='policy_date'），
-   * 让闸门能抓到「policy_date ETL 写错而 insurance_start_date 正常」类型的漂移
-   * （否则 sentinel post-publish 抓到时数据已上线）。codex PR #513 第4轮 P2。
-   * sign_date 取 `COALESCE(ANY_VALUE(CASE WHEN premium>0 THEN policy_date END),
-   * ANY_VALUE(policy_date))`，镜像生产 policy-dedup ORIGINAL_PRIORITY_FIELDS 模式
-   * 优先原单 policy_date，避免批改副本另选月份带偏。
+   * 月签单保费：raw PolicyFact 按 `STRFTIME(policy_date, '%Y-%m')` 聚合 SUM(premium)，
+   * **逐字镜像** `server/src/sql/trend/premium-trend.ts` `generatePremiumTrendQuery` 的
+   * perspective='premium' monthly 路径（valueAggregation='SUM(premium)'）。
+   * codex PR #513 第7轮 P2：去掉之前轮次的 policy_dedup CTE（B252 是 cost-ratios cohort
+   * 口径，不是 trend SSOT；dedup 会把跨月批改净额搬回原单月让生产 trend 断崖被掩盖）。
    */
-  'policy_dedup.monthly_premium': ({ policyGlob, monthStart }) => `
-    WITH policy_dedup AS (
-      SELECT
-        policy_no,
-        CAST(insurance_start_date AS DATE) AS start_date,
-        COALESCE(
-          ANY_VALUE(CASE WHEN premium > 0 THEN CAST(policy_date AS DATE) END),
-          CAST(ANY_VALUE(policy_date) AS DATE)
-        ) AS sign_date,
-        SUM(premium) AS premium
-      FROM read_parquet('${policyGlob}', union_by_name=true)
-      WHERE insurance_start_date IS NOT NULL
-        AND ${COMPLETED_MONTH_FILTER('policy_date', monthStart)}
-      GROUP BY policy_no, CAST(insurance_start_date AS DATE)
-      HAVING SUM(premium) > 0
-    )
+  'policy_trend.monthly_premium': ({ policyGlob, monthStart }) => `
     SELECT
-      strftime(sign_date, '%Y-%m') AS time_period,
+      strftime(policy_date, '%Y-%m') AS time_period,
       ROUND(SUM(premium), 2) AS value
-    FROM policy_dedup
+    FROM read_parquet('${policyGlob}', union_by_name=true)
+    WHERE ${COMPLETED_MONTH_FILTER('policy_date', monthStart)}
     GROUP BY time_period
     ORDER BY time_period
   `,
   /**
-   * 月签单件数：policy_dedup 后按 **policy_date 月** COUNT DISTINCT policy_no。
-   * 时间维度同 monthly_premium 对齐生产 trend SSOT（codex PR #513 第4轮 P2）。
+   * 月签单件数：raw PolicyFact 按 policy_date 月 **COUNT(\*)**，镜像 generatePremiumTrendQuery
+   * perspective='policy_count' 路径（premium-trend.ts:45 valueAggregation='COUNT(*)'）。
+   * COUNT(*) 计入批改副本/冲正——与生产 trend 一致，否则与 sentinel 看到的数对不上。
+   * codex PR #513 第7轮 P2。
    */
-  'policy_dedup.monthly_policy_count': ({ policyGlob, monthStart }) => `
-    WITH policy_dedup AS (
-      SELECT
-        policy_no,
-        CAST(insurance_start_date AS DATE) AS start_date,
-        COALESCE(
-          ANY_VALUE(CASE WHEN premium > 0 THEN CAST(policy_date AS DATE) END),
-          CAST(ANY_VALUE(policy_date) AS DATE)
-        ) AS sign_date,
-        SUM(premium) AS premium
-      FROM read_parquet('${policyGlob}', union_by_name=true)
-      WHERE insurance_start_date IS NOT NULL
-        AND ${COMPLETED_MONTH_FILTER('policy_date', monthStart)}
-      GROUP BY policy_no, CAST(insurance_start_date AS DATE)
-      HAVING SUM(premium) > 0
-    )
+  'policy_trend.monthly_policy_count': ({ policyGlob, monthStart }) => `
     SELECT
-      strftime(sign_date, '%Y-%m') AS time_period,
-      COUNT(DISTINCT policy_no) AS value
-    FROM policy_dedup
+      strftime(policy_date, '%Y-%m') AS time_period,
+      COUNT(*) AS value
+    FROM read_parquet('${policyGlob}', union_by_name=true)
+    WHERE ${COMPLETED_MONTH_FILTER('policy_date', monthStart)}
     GROUP BY time_period
     ORDER BY time_period
   `,

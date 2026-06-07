@@ -1,12 +1,17 @@
 #!/usr/bin/env bun
 /**
- * 任务ID冲突检测脚本
+ * 任务 ID 校验脚本（全局连续编号模型）
  *
- * 功能：
- * 1. 检查BACKLOG.md中的任务ID是否符合Agent专属范围
- * 2. 检测ID冲突（同一ID被多次使用）
- * 3. 检测归属对象与ID范围不匹配的情况
- * 4. 验证新增任务的ID是否超出分配范围
+ * 编号模型（2026-06 治理后）：BACKLOG 任务 ID 改为**全局连续递增**，由
+ * `assign-task-id.mjs` 取 `BACKLOG.md + BACKLOG_ARCHIVE.md` 的全局 max+1 派生，
+ * 永不复用历史编号（含已归档的）。归属对象（@user/@claude/...）只用于标注调用方，
+ * **不再绑定 ID 区间**——故本脚本不做"归属对象 vs ID 区间"匹配检查。
+ *
+ * 校验项：
+ *  1. 格式合规：标准 ID 形如 `B\d{3,}`；非标准 ID（如 B256-update）告警提示规范化
+ *  2. 全局唯一：跨 BACKLOG.md + BACKLOG_ARCHIVE.md 同一编号不得重复出现（编号禁止复用）
+ *  3. 范围合规：编号落在 B001-B999（超过须先扩位，见 assign-task-id.mjs）
+ *  4. 输出全局最大编号 + 下一个建议编号（与 assign-task-id.mjs 同源口径）
  *
  * 使用方法：
  *   bun run scripts/check-task-id-conflict.mjs
@@ -14,174 +19,97 @@
 
 import { readFileSync, existsSync } from 'fs';
 
-// Agent ID范围配置
-const AGENT_RANGES = {
-  '@user': { min: 1, max: 99 },
-  '@claude': { min: 100, max: 199 },
-  '@codex': { min: 200, max: 299 },
-  '@gemini': { min: 300, max: 399 },
-  '@trae': { min: 400, max: 499 },
-  '@kilo': { min: 500, max: 599 },
-  '@codebuddy': { min: 600, max: 699 },
-  '@future': { min: 700, max: 999 },
-};
+const SOURCES = ['./BACKLOG.md', './BACKLOG_ARCHIVE.md'];
+const MAX_ID = 999;
 
-/**
- * 解析任务ID（如 "B001" -> 1）
- */
-function parseTaskId(idStr) {
-  const match = idStr.match(/^B(\d{3})$/);
-  if (!match) return null;
-  return parseInt(match[1], 10);
+/** 提取行首任务 ID（兼容 B256-update 这类非标准 ID） */
+function rowId(line) {
+  const m = line.match(/^\|\s*(B[\w-]+)\s*\|/);
+  return m ? m[1] : null;
 }
 
-/**
- * 获取Agent的ID范围
- */
-function getAgentForId(idNum) {
-  for (const [agent, range] of Object.entries(AGENT_RANGES)) {
-    if (idNum >= range.min && idNum <= range.max) {
-      return agent;
-    }
-  }
-  return null;
+/** 标准 ID → 数字；非标准（含后缀）返回 null */
+function toNum(id) {
+  const m = id.match(/^B(\d{3,})$/);
+  return m ? parseInt(m[1], 10) : null;
 }
 
-/**
- * 检查BACKLOG.md中的任务ID
- */
 function checkTaskIds() {
-  // 扫 BACKLOG.md + BACKLOG_ARCHIVE.md：归档文件的 ID 也纳入重复检测（编号永不复用）
-  const backlogPaths = ['./BACKLOG.md', './BACKLOG_ARCHIVE.md'].filter(p => existsSync(p));
-  const content = backlogPaths.map(p => readFileSync(p, 'utf-8')).join('\n');
-  const lines = content.split('\n');
-
   const errors = [];
   const warnings = [];
-  const usedIds = new Map(); // ID -> 行号
-  const agentUsage = new Map(); // Agent -> Set of IDs
+  const seen = new Map(); // 规范化数字 ID -> 首次出现位置 "文件:行"
+  const ownerStats = new Map(); // owner -> 数量
+  let maxNum = 0;
+  let total = 0;
 
-  let inTable = false;
-  let headerLine = -1;
+  for (const path of SOURCES) {
+    if (!existsSync(path)) continue;
+    const lines = readFileSync(path, 'utf-8').split('\n');
+    let inTable = false;
+    let sepPassed = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const t = line.trim();
+      if (t.startsWith('| ID |')) { inTable = true; sepPassed = false; continue; }
+      if (inTable && !sepPassed && t.startsWith('|---')) { sepPassed = true; continue; }
+      if (!inTable || !sepPassed) continue;
+      const id = rowId(line);
+      if (!id) continue;
+      total++;
+      const loc = `${path}:${i + 1}`;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+      const cells = line.split('|').map(c => c.trim());
+      const owner = cells[4] || '?'; // 第4列归属对象（cells[0] 为前导空串）
+      ownerStats.set(owner, (ownerStats.get(owner) || 0) + 1);
 
-    // 检测表格开始
-    if (line.includes('| ID |') || line.includes('|----|')) {
-      inTable = true;
-      if (line.includes('| ID |')) {
-        headerLine = i;
+      const num = toNum(id);
+      if (num === null) {
+        warnings.push(`⚠️  非标准 ID ${id}（${loc}）— 建议用 assign-task-id.mjs 规范化为 B\\d{3,}`);
+        continue;
       }
-      continue;
-    }
-
-    // 解析表格行
-    if (inTable && line.startsWith('|')) {
-      const cells = line.split('|').map(c => c.trim()).filter(c => c);
-
-      if (cells.length < 4) continue; // 至少需要ID、归属对象等4列
-
-      const taskIdStr = cells[0]; // 第1列：ID
-      const owner = cells[3]; // 第4列：归属对象
-
-      const taskIdNum = parseTaskId(taskIdStr);
-      if (taskIdNum === null) continue;
-
-      // 检查ID重复
-      if (usedIds.has(taskIdNum)) {
-        errors.push(
-          `❌ 任务ID重复: ${taskIdStr} 在第 ${usedIds.get(taskIdNum)} 行和第 ${i + 1} 行`
-        );
+      if (num < 1 || num > MAX_ID) {
+        errors.push(`❌ ID ${id}（${loc}）超出范围 B001-B${MAX_ID}`);
+      }
+      if (seen.has(num)) {
+        errors.push(`❌ 编号复用/重复：${id}（${loc}）已在 ${seen.get(num)} 出现 — 编号禁止复用`);
       } else {
-        usedIds.set(taskIdNum, i + 1);
+        seen.set(num, loc);
       }
-
-      // 检查归属对象与ID范围是否匹配
-      const expectedAgent = getAgentForId(taskIdNum);
-      // 兼容历史数据：@xuechenglong 和 @user 视为相同
-      const normalizedOwner = owner === '@xuechenglong' ? '@user' : owner;
-      const normalizedExpected = expectedAgent === '@user' ? '@user' : expectedAgent;
-
-      if (expectedAgent && normalizedOwner !== normalizedExpected && owner !== 'Backlog' && owner !== '@openai') {
-        warnings.push(
-          `⚠️  任务ID ${taskIdStr} (行${i + 1}) 属于 ${expectedAgent} 范围，但归属对象为 ${owner}`
-        );
-      }
-
-      // 统计Agent使用情况
-      if (!agentUsage.has(normalizedOwner)) {
-        agentUsage.set(normalizedOwner, new Set());
-      }
-      agentUsage.get(normalizedOwner).add(taskIdNum);
-
-      // 检查ID是否超出分配范围
-      if (!expectedAgent) {
-        errors.push(
-          `❌ 任务ID ${taskIdStr} (行${i + 1}) 超出所有Agent的分配范围 (B001-B699)`
-        );
-      }
+      if (num > maxNum) maxNum = num;
     }
   }
 
-  // 打印检查结果
-  console.log('🔍 任务ID冲突检测报告\n');
-  console.log(`📊 共扫描 ${usedIds.size} 个任务\n`);
+  const nextId = `B${String(Math.min(maxNum + 1, MAX_ID)).padStart(3, '0')}`;
 
-  // 打印错误
-  if (errors.length > 0) {
+  console.log('🔍 任务 ID 校验报告（全局连续编号模型）\n');
+  console.log(`📊 共扫描 ${total} 个任务（BACKLOG.md + BACKLOG_ARCHIVE.md）`);
+  console.log(`📈 全局最大编号 B${String(maxNum).padStart(3, '0')} → 下一个建议编号 ${nextId}`);
+  console.log(`   （实际取号请用：bun scripts/assign-task-id.mjs @<agent>）\n`);
+
+  if (warnings.length) {
+    console.log('⚠️  告警：');
+    warnings.forEach(w => console.log(`   ${w}`));
+    console.log('');
+  }
+  if (errors.length) {
     console.log('❌ 发现错误：');
-    errors.forEach(err => console.log(`   ${err}`));
+    errors.forEach(e => console.log(`   ${e}`));
     console.log('');
   }
 
-  // 打印警告
-  if (warnings.length > 0) {
-    console.log('⚠️  发现警告：');
-    warnings.forEach(warn => console.log(`   ${warn}`));
-    console.log('');
-  }
-
-  // 打印各Agent使用情况
-  console.log('📋 Agent ID 归属统计（⚠️ 编号已改全局连续递增，下方"下一个ID"按区间算仅供参考，实际取号请用 `assign-task-id.mjs`）：');
-  for (const [agent, range] of Object.entries(AGENT_RANGES)) {
-    const used = agentUsage.get(agent) || new Set();
-    const count = used.size;
-    const nextId = count > 0 ? Math.max(...used) + 1 : range.min;
-
-    console.log(
-      `   ${agent.padEnd(12)} B${String(range.min).padStart(3, '0')}-B${String(range.max).padStart(3, '0')} ` +
-      `已用 ${String(count).padStart(2, '0')}/${range.max - range.min + 1} ` +
-      `(下一个ID: B${String(nextId).padStart(3, '0')})`
-    );
-  }
-
+  console.log('📋 归属对象分布（仅统计，不参与校验）：');
+  [...ownerStats.entries()].sort((a, b) => b[1] - a[1]).forEach(([o, n]) =>
+    console.log(`   ${o.padEnd(14)} ${n} 项`));
   console.log('');
 
-  // 检查是否有@user的ID被其他Agent占用
-  const userUsed = agentUsage.get('@user') || new Set();
-  for (const id of userUsed) {
-    const owner = Array.from(agentUsage.entries()).find(([_, ids]) =>
-      ids.has(id) && _ !== '@user'
-    );
-    if (owner) {
-      errors.push(
-        `❌ 任务ID B${String(id).padStart(3, '0')} 属于 @user 范围，但被 ${owner[0]} 使用`
-      );
-    }
-  }
-
-  // 返回检查结果
-  if (errors.length > 0) {
-    console.log('❌ 检查失败：发现任务ID冲突或超出范围');
+  if (errors.length) {
+    console.log('❌ 检查失败：存在编号重复/复用或超范围');
     process.exit(1);
-  } else {
-    console.log('✅ 检查通过：所有任务ID符合分配规则');
-    process.exit(0);
   }
+  console.log('✅ 检查通过：全局编号唯一、连续、未复用');
+  process.exit(0);
 }
 
-// 执行检查
 try {
   checkTaskIds();
 } catch (error) {
