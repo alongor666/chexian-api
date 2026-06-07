@@ -228,7 +228,8 @@ export function diagnoseQuoteConversionRows(input: DiagnoseQuoteConversionRowsIn
 }
 
 export async function runQuoteConversionDiagnosis(input: RunQuoteConversionDiagnosisInput): Promise<QuoteConversionDiagnosisResult> {
-  const { duckdbService } = await import('../../services/duckdb.js');
+  const { getAgentDuckdb } = await import('./agent-query-cache.js');
+  const duckdbService = await getAgentDuckdb();
   const filters = input.filters as QuoteConversionFilters;
 
   const [kpiRows, funnelRows, drilldownRows, trendRows] = await Promise.all([

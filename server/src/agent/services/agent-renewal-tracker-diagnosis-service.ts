@@ -206,7 +206,8 @@ export function diagnoseRenewalTrackerRows(input: DiagnoseRenewalTrackerRowsInpu
 }
 
 export async function runRenewalTrackerDiagnosis(input: RunRenewalTrackerDiagnosisInput): Promise<RenewalTrackerDiagnosisResult> {
-  const { duckdbService } = await import('../../services/duckdb.js');
+  const { getAgentDuckdb } = await import('./agent-query-cache.js');
+  const duckdbService = await getAgentDuckdb();
   const [rows, metaRows] = await Promise.all([
     duckdbService.query<RenewalTrackerRow>(generateRenewalTrackerQuery({
       start: input.start,
