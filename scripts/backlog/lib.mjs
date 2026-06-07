@@ -79,43 +79,52 @@ export function loadLog(p = LOG_PATH) {
 }
 
 /**
- * 折叠事件日志 → 任务状态 Map（uid -> task）。纯函数、确定性。
- * 时序：按 (ts, 日志内出现顺序) 升序应用，保证可重放、可收敛。
+ * 折叠事件日志 → 任务状态 Map（uid -> task）。纯函数、**分支无关**确定性。
+ *
+ * 两阶段，保证收敛与 union 合并的物理行序**无关**（codex PR #522 P2）：
+ *  阶段1：所有 create 先建立任务（幂等；validateLog 保证 uid 唯一，故 create 永远先于其 uid 的其余事件）
+ *  阶段2：非 create 事件按全序键 (at || ts, eid) 排序后应用 —— 全时间戳 + 事件唯一键，分支无关；
+ *         同字段多次写入按时间戳「末写生效」(LWW)。仅当 (at,eid) 全等才兜底原序（带 eid 的事件不会走到）。
  */
 export function fold(events) {
   const tasks = new Map();
-  const ordered = events
+
+  // 阶段1：create
+  for (const e of events) {
+    if (e.kind === 'create' && e.uid && !tasks.has(e.uid)) {
+      tasks.set(e.uid, {
+        uid: e.uid,
+        legacy_id: e.legacy_id || null,
+        created: e.ts || '',
+        owner: e.actor || '',
+        section: e.section || '',
+        priority: e.priority || 'P3',
+        desc: e.desc || '',
+        docs: e.docs || 'N/A',
+        code: e.code || 'N/A',
+        status: 'PROPOSED',
+        evidence: '',
+        notes: [],
+      });
+    }
+  }
+
+  // 阶段2：非 create，按分支无关全序键排序
+  const rest = events
     .map((e, i) => ({ e, i }))
+    .filter(x => x.e.kind !== 'create')
     .sort((a, b) => {
-      const ta = String(a.e.ts || '');
-      const tb = String(b.e.ts || '');
-      if (ta !== tb) return ta < tb ? -1 : 1;
-      return a.i - b.i;
+      const ka = a.e.at || a.e.ts || '';
+      const kb = b.e.at || b.e.ts || '';
+      if (ka !== kb) return ka < kb ? -1 : 1;
+      const ea = a.e.eid || '';
+      const eb = b.e.eid || '';
+      if (ea !== eb) return ea < eb ? -1 : 1;
+      return a.i - b.i; // 兜底：仅 (at,eid) 全等时（带 eid 的事件不会走到这）
     });
 
-  for (const { e } of ordered) {
-    const uid = e.uid;
-    if (!uid) continue;
-    if (e.kind === 'create') {
-      if (!tasks.has(uid)) {
-        tasks.set(uid, {
-          uid,
-          legacy_id: e.legacy_id || null,
-          created: e.ts || '',
-          owner: e.actor || '',
-          section: e.section || '',
-          priority: e.priority || 'P3',
-          desc: e.desc || '',
-          docs: e.docs || 'N/A',
-          code: e.code || 'N/A',
-          status: 'PROPOSED',
-          evidence: '',
-          notes: [],
-        });
-      }
-      continue;
-    }
-    const t = tasks.get(uid);
+  for (const { e } of rest) {
+    const t = tasks.get(e.uid);
     if (!t) continue; // 孤儿事件：governance checkBacklogLog 会报
     if (e.kind === 'status') {
       if (e.status) t.status = e.status;
@@ -311,6 +320,25 @@ export function validateLog(events) {
   for (const e of events) {
     if (e.kind !== 'create' && e.uid && !createUids.has(e.uid)) {
       errors.push(`第 ${e.__line} 行：${e.kind} 事件引用了不存在的任务 uid="${e.uid}"（孤儿事件）`);
+    }
+  }
+
+  // 并发对冲提示：同一 uid 同一天、来自 ≥2 个不同 actor、且出现 ≥2 个不同 status 值
+  //  → 大概率是跨分支并发写。折叠按 (at,eid) 确定性 LWW，但会静默覆盖其中一个，
+  //    故发警告提示人工确认（同一 actor 的当日顺序流转 PROPOSED→IN_PROGRESS→DONE 不触发）。
+  const dayGroups = new Map(); // `${uid}|${day}` -> { statuses:Set, actors:Set }
+  for (const e of events) {
+    if (e.kind !== 'status' || !e.uid || !e.status) continue;
+    const key = `${e.uid}|${e.ts}`;
+    if (!dayGroups.has(key)) dayGroups.set(key, { statuses: new Set(), actors: new Set() });
+    const g = dayGroups.get(key);
+    g.statuses.add(e.status);
+    g.actors.add(e.actor || '?');
+  }
+  for (const [key, g] of dayGroups) {
+    if (g.statuses.size > 1 && g.actors.size > 1) {
+      const [uid, day] = key.split('|');
+      warnings.push(`uid=${uid} 在 ${day} 有 ${g.actors.size} 个 actor 写入 ${g.statuses.size} 个不同状态（${[...g.statuses].join('/')}）—— 疑似并发对冲，已按时间戳 LWW 收敛，请人工确认是否有更新被覆盖`);
     }
   }
 

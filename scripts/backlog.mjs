@@ -79,9 +79,14 @@ function resolveUid(sel, tasks) {
   return hit[0].uid;
 }
 
-/** 追加事件并重渲染视图 */
+/** 追加事件并重渲染视图。每条事件补 at（全时间戳）+ eid（唯一键）→ 折叠分支无关确定性 */
 function appendAndRerender(events) {
-  const line = events.map(e => JSON.stringify(e)).join('\n') + '\n';
+  const stamped = events.map(e => ({
+    ...e,
+    at: e.at || new Date().toISOString(),
+    eid: e.eid || randomBytes(4).toString('hex'),
+  }));
+  const line = stamped.map(e => JSON.stringify(e)).join('\n') + '\n';
   appendFileSync(LOG_PATH, line, 'utf-8');
   // 校验 + 重渲染
   const all = loadLog();
