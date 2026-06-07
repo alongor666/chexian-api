@@ -6,8 +6,15 @@
  *   - SQL 口径必须与 SSOT 一致：policy_dedup 按 (policy_no, CAST(insurance_start_date AS DATE)) 聚合
  *       + HAVING SUM(premium) > 0（cost-ratios.ts B252）；赔款金额锚定 ClaimsAgg.reported_claims SSOT
  *       （已结案取 settled、未结案取 reserve，剔除无责/零结/注销/拒赔——非二者相加，codex PR #513 P2）
- *   - 分区 glob 读取一律带 union_by_name=true，对齐生产加载器 duckdb-parquet-loader.ts：policy/current
- *       混有旧静态分片+新周更分片，按位置 union 会因 schema 漂移报错→闸门 fail-closed 误阻断（codex PR #513 P1）
+ *   - 读法「镜像生产」而非自定义（codex PR #513 第2/3轮）：闸门是发布前金丝雀，必须与生产加载器逐字一致，
+ *       否则要么误阻断、要么把"生产会崩"的场景放行。生产读法本身不对称，照搬不可擅自统一：
+ *       · policy → read_parquet(glob, union_by_name=true)，对齐 duckdb-parquet-loader.ts。
+ *         policy/current 混有旧静态分片+新周更分片，按位置 union 会因 schema 漂移报错（缺它→误阻断）。
+ *       · claims → 裸 read_parquet(glob)，对齐 duckdb-domain-loaders.ts（生产 claims 加载器无 union_by_name）。
+ *         闸门若擅自加 union_by_name 会比生产更宽容→生产首次加载 ClaimsDetail/ClaimsAgg 仍崩而闸门已放行。
+ *         （生产 claims 加载器缺 union_by_name 本身是潜伏 bug，已登记 BACKLOG B340 单独修；本闸门只做忠实镜像。）
+ *       · claims glob 同样镜像 data-bootstrapper.ts：优先 claims_*.parquet 分区、回退 latest.parquet 单文件，
+ *         不纳入生产不会服务的杂项 parquet（codex PR #513 第3轮 3b）。
  *   - 率值不在此层计算（gate 直接 Z-score 分子/分母独立序列即可，满足铁律 SUM(分子)/SUM(分母)
  *     而非二次平均；详见 .claude/rules/business-domain.md）
  *   - DuckDB CLI 子进程，避免引入原生模块依赖（@duckdb/node-api 安装失败时闸门仍可用）
@@ -68,11 +75,21 @@ export function inspectWarehouse(warehouseRoot) {
     missing.push(`${policyDir}（目录不存在）`);
   }
 
+  // claims glob 镜像生产 data-bootstrapper.ts：优先 claims_*.parquet 分区、回退 latest.parquet 单文件。
+  // 不接受其它杂项 parquet——生产 lazy-load 不会服务它们，纳入会导致月赔款/件数判定与线上不一致。
   let claimsGlob = null;
   if (existsSync(claimsDir)) {
     const files = readdirSync(claimsDir).filter((f) => f.endsWith('.parquet'));
-    if (files.length > 0) claimsGlob = join(claimsDir, '*.parquet');
-    else missing.push(`${claimsDir}/*.parquet（目录存在但无 parquet 文件）`);
+    const partitioned = files.filter((f) => f.startsWith('claims_'));
+    if (partitioned.length > 0) {
+      claimsGlob = join(claimsDir, 'claims_*.parquet');
+    } else if (files.includes('latest.parquet')) {
+      claimsGlob = join(claimsDir, 'latest.parquet');
+    } else if (files.length > 0) {
+      missing.push(`${claimsDir}（有 parquet 但无 claims_*.parquet 分区、也无 latest.parquet；生产加载器不会服务这些文件）`);
+    } else {
+      missing.push(`${claimsDir}/claims_*.parquet（目录存在但无 parquet 文件）`);
+    }
   } else {
     missing.push(`${claimsDir}（目录不存在）`);
   }
@@ -153,7 +170,7 @@ export const SQL_TEMPLATES = {
                    ELSE COALESCE(reserve_amount, 0) END)
         ELSE 0
       END), 2) AS value
-    FROM read_parquet('${claimsGlob}', union_by_name=true)
+    FROM read_parquet('${claimsGlob}')
     WHERE ${COMPLETED_MONTH_FILTER('accident_time', monthStart)}
     GROUP BY time_period
     ORDER BY time_period
@@ -163,7 +180,7 @@ export const SQL_TEMPLATES = {
     SELECT
       strftime(accident_time, '%Y-%m') AS time_period,
       COUNT(DISTINCT claim_no) AS value
-    FROM read_parquet('${claimsGlob}', union_by_name=true)
+    FROM read_parquet('${claimsGlob}')
     WHERE ${COMPLETED_MONTH_FILTER('accident_time', monthStart)}
     GROUP BY time_period
     ORDER BY time_period

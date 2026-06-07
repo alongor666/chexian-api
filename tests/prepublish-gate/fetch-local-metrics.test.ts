@@ -55,12 +55,20 @@ describe('fetch-local-metrics SQL_TEMPLATES', () => {
     expect(sql).toContain('accident_time IS NOT NULL');
   });
 
-  it('所有分区 glob 读取都带 union_by_name=true（对齐生产加载器，容忍混合分片 schema 漂移，codex PR #513 P1）', () => {
-    const ctx = { policyGlob: '/x/policy/*.parquet', claimsGlob: '/x/claims/*.parquet', monthStart: '2026-06-01' };
-    for (const [source, tmpl] of Object.entries(SQL_TEMPLATES)) {
-      const sql = (tmpl as (c: typeof ctx) => string)(ctx);
+  it('读法镜像生产的不对称：policy 带 union_by_name=true（混合分片），claims 裸读（对齐 duckdb-domain-loaders.ts），codex PR #513 第2/3轮', () => {
+    const ctx = { policyGlob: '/x/policy/*.parquet', claimsGlob: '/x/claims/claims_*.parquet', monthStart: '2026-06-01' };
+    const policySources = ['policy_dedup.monthly_premium', 'policy_dedup.monthly_policy_count'];
+    const claimsSources = ['claims_detail.monthly_claim_amount', 'claims_detail.monthly_claim_count'];
+    for (const source of policySources) {
+      const sql = SQL_TEMPLATES[source](ctx);
+      // policy/current 真有旧静态分片+新周更分片，缺 union_by_name 会误阻断 → 对齐 duckdb-parquet-loader.ts
       expect(sql, `${source} 应带 union_by_name`).toContain('union_by_name=true');
-      expect(sql, `${source} 不应有裸 read_parquet('<glob>')`).not.toMatch(/read_parquet\('[^']+'\)/);
+    }
+    for (const source of claimsSources) {
+      const sql = SQL_TEMPLATES[source](ctx);
+      // 闸门是金丝雀：若比生产 claims 裸读更宽容，会把"生产首次加载会崩"的场景放行
+      expect(sql, `${source} 不应带 union_by_name（镜像生产裸读）`).not.toContain('union_by_name');
+      expect(sql, `${source} 应为裸 read_parquet('<glob>')`).toMatch(/read_parquet\('[^']+'\)/);
     }
   });
 
@@ -112,15 +120,46 @@ describe('fetch-local-metrics inspectWarehouse', () => {
     expect(r.missing.some((m) => m.includes('目录存在但无 parquet 文件'))).toBe(true);
   });
 
-  it('两个目录都有 parquet → ready=true', () => {
+  it('policy 有 parquet + claims 有 claims_* 分区 → ready=true，glob 镜像生产 bootstrapper', () => {
     mkdirSync(join(tmpRoot, 'fact/policy/current'), { recursive: true });
     mkdirSync(join(tmpRoot, 'fact/claims_detail'), { recursive: true });
     writeFileSync(join(tmpRoot, 'fact/policy/current/x.parquet'), '');
-    writeFileSync(join(tmpRoot, 'fact/claims_detail/y.parquet'), '');
+    writeFileSync(join(tmpRoot, 'fact/claims_detail/claims_2026.parquet'), '');
     const r = inspectWarehouse(tmpRoot);
     expect(r.ready).toBe(true);
     expect(r.policyGlob).toMatch(/policy\/current\/\*\.parquet$/);
-    expect(r.claimsGlob).toMatch(/claims_detail\/\*\.parquet$/);
+    expect(r.claimsGlob).toMatch(/claims_detail\/claims_\*\.parquet$/);
+  });
+
+  it('claims 仅有 latest.parquet（旧架构）→ glob 回退到 latest.parquet（镜像 bootstrapper 回退）', () => {
+    mkdirSync(join(tmpRoot, 'fact/policy/current'), { recursive: true });
+    mkdirSync(join(tmpRoot, 'fact/claims_detail'), { recursive: true });
+    writeFileSync(join(tmpRoot, 'fact/policy/current/x.parquet'), '');
+    writeFileSync(join(tmpRoot, 'fact/claims_detail/latest.parquet'), '');
+    const r = inspectWarehouse(tmpRoot);
+    expect(r.ready).toBe(true);
+    expect(r.claimsGlob).toMatch(/claims_detail\/latest\.parquet$/);
+  });
+
+  it('claims 同时有 claims_* 与 latest → 优先分区（与 bootstrapper 一致）', () => {
+    mkdirSync(join(tmpRoot, 'fact/policy/current'), { recursive: true });
+    mkdirSync(join(tmpRoot, 'fact/claims_detail'), { recursive: true });
+    writeFileSync(join(tmpRoot, 'fact/policy/current/x.parquet'), '');
+    writeFileSync(join(tmpRoot, 'fact/claims_detail/claims_2026.parquet'), '');
+    writeFileSync(join(tmpRoot, 'fact/claims_detail/latest.parquet'), '');
+    const r = inspectWarehouse(tmpRoot);
+    expect(r.claimsGlob).toMatch(/claims_detail\/claims_\*\.parquet$/);
+  });
+
+  it('claims 只有杂项 parquet（非 claims_*、非 latest）→ ready=false（生产不会服务，codex PR #513 3b）', () => {
+    mkdirSync(join(tmpRoot, 'fact/policy/current'), { recursive: true });
+    mkdirSync(join(tmpRoot, 'fact/claims_detail'), { recursive: true });
+    writeFileSync(join(tmpRoot, 'fact/policy/current/x.parquet'), '');
+    writeFileSync(join(tmpRoot, 'fact/claims_detail/tmp_export.parquet'), '');
+    const r = inspectWarehouse(tmpRoot);
+    expect(r.ready).toBe(false);
+    expect(r.claimsGlob).toBe(null);
+    expect(r.missing.some((m) => m.includes('生产加载器不会服务'))).toBe(true);
   });
 });
 
