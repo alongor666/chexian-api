@@ -18,6 +18,7 @@
 | 并行不串行 | 3+ 独立任务必须并行 sub-agents |
 | 执行不规划 | `commit/push/PR` 直接执行，零分析 |
 | 源数据验证 | 修改 SQL 生成器后，必须用 Parquet 直查与 API 返回对比验证 |
+| 报告必须清晰中文 | 报告类技能产物（HTML/Markdown/PPT/图卡/IM 推送）与回复禁止英文术语缩写堆砌（赔付率/观察期/保单年度/成熟度/降维兜底等必须中文全称）。详细对照表与自检机制见 `~/.claude/rules/common/report-language-redline.md` |
 
 **Pre-flight（每次任务前）**：1) `grep -r` 搜索已有实现 2) 涉及数据时 `find 数据管理/` 3) 声称完成前 `curl` 验证 4) 删除前列影响清单等用户确认（push 时大文件/分支保护/冲突标记/governance 由 `.claude/settings.json` hooks 自动拦截）
 
