@@ -25,15 +25,56 @@ describe('fetch-local-metrics SQL_TEMPLATES', () => {
     expect(sql).toContain('policy_dedup AS');
     expect(sql).toContain('SUM(premium)');
     expect(sql).toContain('HAVING SUM(premium) > 0');
+    // B252 dedup key 仍按 insurance_start_date（不是 policy_date）—— SSOT cohort 保留
     expect(sql).toContain('GROUP BY policy_no, CAST(insurance_start_date AS DATE)');
     expect(sql).toContain('/x/policy/*.parquet');
-    expect(sql).toContain("strftime(start_date, '%Y-%m')");
+    // 时间维度 = sign_date（=policy_date，对齐生产 trend SSOT，见单独的对齐测试）
+    expect(sql).toContain("strftime(sign_date, '%Y-%m')");
   });
 
   it('monthly_policy_count 模板用 COUNT DISTINCT policy_no（不重复计同保单）', () => {
     const sql = SQL_TEMPLATES['policy_dedup.monthly_policy_count']({ policyGlob: '/x/*.parquet' });
     expect(sql).toContain('COUNT(DISTINCT policy_no)');
     expect(sql).toContain('HAVING SUM(premium) > 0');
+    expect(sql).toContain("strftime(sign_date, '%Y-%m')");
+  });
+
+  it('policy 月度 flow 指标按 policy_date 月聚合（对齐生产 trend SSOT，codex PR #513 第4轮 P2）', () => {
+    // 生产 server/src/sql/trend/premium-trend.ts:31 默认 dateField='policy_date'，
+    // sentinel fetchTrend(perspective=premium|policy_count, monthly) 走该路径；
+    // 闸门若按 insurance_start_date 聚合，policy_date ETL 写错时漏检 → sentinel post-publish 才抓到。
+    const sources = ['policy_dedup.monthly_premium', 'policy_dedup.monthly_policy_count'];
+    for (const source of sources) {
+      const sql = SQL_TEMPLATES[source]({ policyGlob: '/x/*.parquet', monthStart: '2026-06-01' });
+      // 1) WHERE 过滤用 policy_date（不是 insurance_start_date）
+      expect(sql, `${source} WHERE 应按 policy_date 过滤完整月`).toContain("policy_date < DATE '2026-06-01'");
+      expect(sql, `${source} WHERE 不应按 insurance_start_date 过滤`).not.toContain("insurance_start_date < DATE");
+      // 2) 输出 GROUP BY 用 sign_date（= policy_date 月）
+      expect(sql, `${source} 输出应按 sign_date 分组`).toContain("strftime(sign_date, '%Y-%m')");
+      // 3) sign_date 取法镜像生产 policy-dedup ORIGINAL_PRIORITY_FIELDS：优先 premium>0 行的 policy_date
+      expect(sql, `${source} sign_date 应优先取原单 policy_date（premium>0 行）`).toContain(
+        'ANY_VALUE(CASE WHEN premium > 0 THEN CAST(policy_date AS DATE) END)'
+      );
+      // 4) dedup key 仍按 B252 SSOT 保留 insurance_start_date（不是 policy_date）
+      expect(sql, `${source} dedup key 应保留 B252 (policy_no, insurance_start_date)`).toContain(
+        'GROUP BY policy_no, CAST(insurance_start_date AS DATE)'
+      );
+      // 5) insurance_start_date IS NOT NULL 仍要（避免 dedup NULL key 合并）
+      expect(sql, `${source} 应过滤 insurance_start_date IS NOT NULL`).toContain('insurance_start_date IS NOT NULL');
+    }
+  });
+
+  it('claims 月度指标按 accident_time 月聚合（与 claims-heatmap cohort SSOT 一致，不切到 policy_date）', () => {
+    // 与 policy 不同：claims 的业务月由"出险时间"定义，生产 cost-ratios.ts/claims-heatmap.ts 都按
+    // accident_time/insurance_start_date cohort 不按 policy_date——闸门保持这套口径。
+    const sources = ['claims_detail.monthly_claim_amount', 'claims_detail.monthly_claim_count'];
+    for (const source of sources) {
+      const sql = SQL_TEMPLATES[source]({ claimsGlob: '/x/*.parquet', monthStart: '2026-06-01' });
+      expect(sql, `${source} 应按 accident_time 分组`).toContain("strftime(accident_time, '%Y-%m')");
+      expect(sql, `${source} WHERE 应按 accident_time 过滤`).toContain("accident_time < DATE '2026-06-01'");
+      // claims 不切换到 policy_date——claims_detail 表里 policy_date 仅作为 JOIN 字段，无业务月含义
+      expect(sql, `${source} 不应引用 policy_date`).not.toContain('policy_date');
+    }
   });
 
   it('monthly_claim_amount 口径锚定 ClaimsAgg SSOT：CASE settlement_time + 过滤无责/零结/注销/拒赔', () => {
@@ -73,10 +114,11 @@ describe('fetch-local-metrics SQL_TEMPLATES', () => {
   });
 
   it('注入 monthStart → 用 < DATE 业务月首日（与发布机时区解耦，codex PR #513 P2）', () => {
-    // policy 系列（预签未来起期保单）和 claims 系列（迟到报案）都必须排除不完整月，
-    // 否则 cutoff 当月会因分母小被误判为断崖。monthStart 由编排器按 Asia/Shanghai 注入。
+    // policy 系列（按 policy_date 签单月对齐生产 trend SSOT）和 claims 系列（按 accident_time 出险月）
+    // 都必须排除不完整月，否则 cutoff 当月会因分母小被误判为断崖。
+    // monthStart 由编排器按 Asia/Shanghai 注入，避免发布机 UTC 时区在月初退到上月。
     const policySql = SQL_TEMPLATES['policy_dedup.monthly_premium']({ policyGlob: '/x/*.parquet', monthStart: '2026-06-01' });
-    expect(policySql).toContain("insurance_start_date < DATE '2026-06-01'");
+    expect(policySql).toContain("policy_date < DATE '2026-06-01'");
     expect(policySql).not.toContain('current_date');
 
     const claimsSql = SQL_TEMPLATES['claims_detail.monthly_claim_amount']({ claimsGlob: '/x/*.parquet', monthStart: '2026-06-01' });
@@ -85,7 +127,7 @@ describe('fetch-local-metrics SQL_TEMPLATES', () => {
 
   it('未注入 monthStart → 回退 date_trunc(current_date)（向后兼容）', () => {
     const sql = SQL_TEMPLATES['policy_dedup.monthly_premium']({ policyGlob: '/x/*.parquet' });
-    expect(sql).toContain("insurance_start_date < date_trunc('month', current_date)");
+    expect(sql).toContain("policy_date < date_trunc('month', current_date)");
   });
 
   it('monthStart 格式非法 → 抛错（防 SQL 注入 / 误传）', () => {
