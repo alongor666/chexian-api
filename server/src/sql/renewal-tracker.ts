@@ -13,8 +13,9 @@
  *
  * 指标：
  *   A = 应续件数（VIN 去重）
- *   B = 报价件数（cutoff 截至日内）
- *   C = 已续件数（cutoff 截至日内）
+ *   B = 报价件数（first_quote_time ≤ cutoff，报价为真实时点事件，按 cutoff 切片）
+ *   C = 已续件数（is_renewed，匹配到续保单号即已签单成交；renewed_date 是续保单保险起期=原保单到期次日，
+ *       非签单时点，不可用于「截至 cutoff 是否已续」切片 —— 未到期保单已签单但起保日在未来仍属已续，故不按 cutoff 过滤）
  *
  * 输出 24 种层级（一次 GROUPING SETS 查询）：
  *   基础层（4）：overall / org / team / salesman
@@ -123,7 +124,7 @@ export function generateRenewalTrackerQuery(params: RenewalTrackerQueryParams): 
         WHEN is_quoted AND first_quote_time <= DATE '${cutoff}' THEN vehicle_frame_no
       END) AS B,
       COUNT(DISTINCT CASE
-        WHEN is_renewed AND renewed_date <= DATE '${cutoff}' THEN vehicle_frame_no
+        WHEN is_renewed THEN vehicle_frame_no
       END) AS C
     FROM RenewalTrackerFact
     WHERE ${whereSql}
