@@ -5,3 +5,5 @@
 # 注意：union 仅适合"纯追加文本"。JSON/结构化派生文件（data-sources.json / 转换质量报告.json）
 # 禁用 union（会产生非法结构）；它们冲突时走"重新生成而非手解"，见 .claude/rules/worktree-setup.md。
 BACKLOG.md merge=union
+# BACKLOG_ARCHIVE.md 同为纯追加型（DONE 任务由 governance-backlog-curate.mjs 迁入），union 合并多分支归档
+BACKLOG_ARCHIVE.md merge=union

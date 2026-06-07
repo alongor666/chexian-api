@@ -97,6 +97,7 @@ function checkRequiredFiles() {
     // 根目录治理文件
     'CLAUDE.md',
     'BACKLOG.md',
+    'BACKLOG_ARCHIVE.md',
     'PROGRESS.md',
     // 三大索引
     '开发文档/00_index/DOC_INDEX.md',
@@ -235,8 +236,12 @@ function checkBacklogEvidence() {
     return false;
   }
 
-  const content = fs.readFileSync(backlogPath, 'utf-8');
-  const tasks = parseBacklogTable(content);
+  // DONE 任务已归档到 BACKLOG_ARCHIVE.md，证据链需合并两文件一起校验
+  const archivePath = path.join(ROOT_DIR, 'BACKLOG_ARCHIVE.md');
+  let tasks = parseBacklogTable(fs.readFileSync(backlogPath, 'utf-8'));
+  if (fs.existsSync(archivePath)) {
+    tasks = tasks.concat(parseBacklogTable(fs.readFileSync(archivePath, 'utf-8')));
+  }
 
   if (tasks.length === 0) {
     warning('BACKLOG.md 中未找到任务表格');
@@ -456,10 +461,12 @@ function checkTaskIdAllocation() {
     return false;
   }
 
-  const content = fs.readFileSync(backlogPath, 'utf-8');
-  const lines = content.split('\n');
+  // 合并 BACKLOG.md + BACKLOG_ARCHIVE.md：归档的 ID 也纳入重复检测（编号永不复用）
+  const archivePath = path.join(ROOT_DIR, 'BACKLOG_ARCHIVE.md');
+  const sources = [backlogPath, archivePath].filter(p => fs.existsSync(p));
+  const lines = sources.map(p => fs.readFileSync(p, 'utf-8')).join('\n').split('\n');
 
-  // Agent ID范围配置
+  // Agent ID范围配置（编号已改全局连续递增，范围仅用于上限校验 ≤999）
   const AGENT_RANGES = {
     '@user': { min: 1, max: 99 },
     '@claude': { min: 100, max: 199 },
@@ -468,6 +475,7 @@ function checkTaskIdAllocation() {
     '@trae': { min: 400, max: 499 },
     '@kilo': { min: 500, max: 599 },
     '@codebuddy': { min: 600, max: 699 },
+    '@future': { min: 700, max: 999 },
   };
 
   const errors = [];
@@ -505,7 +513,7 @@ function checkTaskIdAllocation() {
 
       if (!expectedAgent) {
         errors.push(
-          `任务ID ${taskIdStr} (行${i + 1}) 超出所有Agent的分配范围 (B001-B699)`
+          `任务ID ${taskIdStr} (行${i + 1}) 超出编号范围 (B001-B999)`
         );
       }
     }
@@ -535,6 +543,7 @@ function checkMergeConflictMarkers() {
 
   const filesToCheck = [
     'BACKLOG.md',
+    'BACKLOG_ARCHIVE.md',
     'PROGRESS.md',
     'CLAUDE.md',
   ];
