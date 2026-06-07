@@ -196,20 +196,36 @@ export async function runGateChecks(config, ctx, fetcher = fetchLocalSeries) {
       });
       continue;
     }
+    // 预检 mature 期数 vs 配置 minMaturePeriods（PR #518 codex P2）：
+    // stats.mjs evaluateMetricSeries 硬编码 mature<3 才返 insufficientData=true；
+    // 配置改 minMaturePeriods=5 时 mature=4 不会触发 stats 内置兜底 → 闸门继续放行违背声明。
+    // 在 runGateChecks 层按声明值预检（不侵入 stats.mjs，避免影响 sentinel）。
+    const effectiveExcludeRecent = Number.isInteger(mc.excludeRecent) ? mc.excludeRecent : globalExcludeRecent;
+    const matureCount = Math.max(0, series.length - effectiveExcludeRecent);
+    if (matureCount < minMaturePeriods) {
+      const msg = `完整期数不足：mature ${matureCount} 期 < 配置 minMaturePeriods ${minMaturePeriods}（series=${series.length}, excludeRecent=${effectiveExcludeRecent}）`;
+      errors.push({ metric: mc.id, name: mc.name, error: msg });
+      verdicts.push({
+        metric: mc.id, name: mc.name, triggered: false, insufficientData: true,
+        note: msg, seriesLength: series.length, matureCount,
+      });
+      continue;
+    }
     const verdict = evaluateMetricSeries(mc.id, series, {
       zThreshold: mc.zThreshold ?? 2,
       momThreshold: mc.momThreshold ?? null,
       direction: mc.direction ?? 'both',
-      excludeRecent: Number.isInteger(mc.excludeRecent) ? mc.excludeRecent : globalExcludeRecent,
+      excludeRecent: effectiveExcludeRecent,
       yoyThreshold: mc.yoyThreshold ?? null,
     });
     verdict.name = mc.name;
     verdict.unit = mc.unit;
     verdict.seriesLength = series.length;
-    // 完整期数不足 < minMaturePeriods 也 fail-closed（codex PR #513 第7轮 P1 同根因延伸）：
-    // 闸门无法做 Z-score 判定时不能"只记录不阻断"——发布前任一指标无法判定即视作环境异常。
+    verdict.matureCount = matureCount;
+    // stats.mjs 内置 mature<3 兜底：minMaturePeriods<3 时（罕见）仍可能触发，
+    // 与预检语义一致——也进 errors 走 fail-closed。
     if (verdict.insufficientData) {
-      const msg = `完整期数不足：仅 ${series.length} 期可用，少于最小 ${minMaturePeriods}（excludeRecent 后无足够基线）`;
+      const msg = `完整期数不足：stats 内置兜底（mature<3，少于稳健估计下限）`;
       errors.push({ metric: mc.id, name: mc.name, error: msg });
       verdict.note = msg;
     }

@@ -160,6 +160,54 @@ describe('prepublish-gate runGateChecks（注入式 fetcher）', () => {
     expect(verdicts[0].note).toContain('完整期数不足');
   });
 
+  it('history.minMaturePeriods 配置驱动 fail-closed（PR #518 codex P2）：调高到 5 时 mature=4 也阻断', async () => {
+    // 原 stats.mjs 内部硬编码 mature<3 才返 insufficientData=true；配置改 minMaturePeriods=5
+    // 时 mature=4 不会触发 stats 内置兜底——必须在 runGateChecks 层按配置预检 mature 期数。
+    const cfg = {
+      ...CONFIG_BASIC,
+      history: { minMaturePeriods: 5 }, // 调高门槛
+      metrics: [CONFIG_BASIC.metrics[0]],
+    };
+    const series5 = [
+      // 5 期：excludeRecent=1 后 mature=4 < 5 → 预检 fail-closed
+      { time_period: '2025-01', value: 100 },
+      { time_period: '2025-02', value: 102 },
+      { time_period: '2025-03', value: 98 },
+      { time_period: '2025-04', value: 101 },
+      { time_period: '2025-05', value: 50 },
+    ];
+    const fetcher = async () => series5;
+    const ctx = { policyGlob: 'x', claimsGlob: 'y', duckdbBin: 'duckdb' };
+    const { errors, verdicts } = await runGateChecks(cfg, ctx, fetcher);
+    expect(errors.length).toBe(1);
+    expect(errors[0].error).toMatch(/mature 4 期.*minMaturePeriods 5/);
+    expect(verdicts[0].matureCount).toBe(4);
+    expect(verdicts[0].insufficientData).toBe(true);
+  });
+
+  it('history.minMaturePeriods 配置驱动放行（PR #518 codex P2）：mature=5 时 minMatureP=5 通过预检', async () => {
+    // 边界：mature 恰好等于 minMaturePeriods 时应放行（不 fail-closed）
+    const cfg = {
+      ...CONFIG_BASIC,
+      history: { minMaturePeriods: 5 },
+      metrics: [CONFIG_BASIC.metrics[0]],
+    };
+    const series6 = [
+      { time_period: '2025-01', value: 100 },
+      { time_period: '2025-02', value: 102 },
+      { time_period: '2025-03', value: 98 },
+      { time_period: '2025-04', value: 101 },
+      { time_period: '2025-05', value: 99 },
+      { time_period: '2025-06', value: 50 }, // 排掉 → mature=5 ≥ 5
+    ];
+    const fetcher = async () => series6;
+    const ctx = { policyGlob: 'x', claimsGlob: 'y', duckdbBin: 'duckdb' };
+    const { errors, verdicts } = await runGateChecks(cfg, ctx, fetcher);
+    expect(errors.length).toBe(0);
+    expect(verdicts[0].matureCount).toBe(5);
+    expect(verdicts[0].insufficientData).toBeFalsy();
+  });
+
   it('fetcher 抛错 → 记录在 errors，不阻断 triggered', async () => {
     const fetcher = async (_ctx: any, source: string) => {
       if (source === 'policy_trend.monthly_premium') throw new Error('duckdb 启动失败');
