@@ -12,11 +12,15 @@
   六、当月首周续保情况   进盘后首周（到期前约 23-30 天）报价/续回响应
 
 口径单一事实源：数据源（RT）、应续=去重车架号、进盘锚点、亮灯阈值、率值聚合（rate）、
-渲染（Report/fp/light_q/light_r）全部从 diagnose_renewal 复用，本模块不重复定义，避免口径漂移。
+渲染（Report/fp/light_q/light_r）全部从 renewal_common 复用，本模块不重复定义，避免口径漂移。
 
-首日/首周续保率口径 A（用户 2026-06-06 确认）：续回数 = 进盘后首日/首周内「已报价 且 最终续回」
-的件数 ÷ 应续件数。因续保成交日恒为到期前后（无提前成交信号），不以续保日切片，而衡量
-「快速响应客户的成交转化」（首日 16% → 首周 26% → 最终 31%，单调递增）。
+已续回口径与前端续保追踪（server/src/sql/renewal-tracker.ts）严格一致：仅续保单已起期
+（renewed_date ≤ cutoff）才计入已续回，排除「已提前续保但起期在未来、当前尚未生效」件；
+故未到期窗口续保率反映已生效续回进度（②当月未到期表接近 0% 属正常，看点是报价率铺开）。
+
+首日/首周续保率口径 A（用户 2026-06-06 确认）：续回数 = 进盘后首日/首周内「已报价 且 已起期续回
+（renewed_date ≤ cutoff）」的件数 ÷ 应续件数。因续保成交日恒为到期前后（无提前成交信号），
+不以续保日切片，而衡量「快速响应客户的成交转化」。
 
 每张表在自己窗口内按车架号去重（与主报告单窗口口径一致），跨月重复车架号（年内约 1099 个）
 在各自到期窗口分别计入，避免被「年表 MIN 去重」误归月份。
@@ -40,6 +44,8 @@ def _win_dedup_cte(win_sql, pool_lead):
 
     先按窗口过滤 raw，再按车架号去重（MAX 报价/续回、MIN 到期/首次报价），最后算进盘锚点首日/首周标记。
     每个窗口独立去重 —— 与主报告单窗口「应续=去重车架号」口径一致，跨月重复车架号在各自到期窗口分别计入。
+    已续回口径（renewed）已在 raw 表按 cutoff 注入（is_renewed 且续保单已起期 renewed_date ≤ cutoff，
+    与前端续保追踪 renewal-tracker.ts 一致），此处仅 MAX 聚合；未到期窗口续保率因此反映「已生效续回」进度。
     """
     anchor = f"CAST(expiry_date AS DATE) - {pool_lead}"
     return f"""
@@ -89,15 +95,22 @@ def _branch_funnel_section(con, rpt, num, title, win_sql, pool_lead, mature, not
     trows.append(["**合计**", f"**{tot_yc:,}**", f"**{tot_q:,}**", f"**{tot_r:,}**", f"**{fp(qr_t)}**", f"**{fp(rr_t)}**"])
     rpt.table(["三级机构", "应续件数", "已报价件数", "已续保件数", "报价率", "续保率"],
               trows, ["---", "--:", "--:", "--:", "--:", "--:"])
-    valid = [(o, rate(r, yc)) for o, yc, q, r in rows if yc]
+    big = rows[0]
+    # 已成熟窗口按续保率排名（最终留存有意义）；含未到期窗口续保率反映已生效进度（未到期件起期在未来 → 趋 0），
+    # 核心看点是报价是否提前铺开，故结论按报价率排名，避免「续保率全 0 时标杆/落后同一机构」的无意义表述。
+    metric = (lambda yc, q, r: rate(r, yc)) if mature else (lambda yc, q, r: rate(q, yc))
+    valid = [(o, metric(yc, q, r)) for o, yc, q, r in rows if yc]
     valid = [(o, v) for o, v in valid if v is not None]
     if valid:
         hi, lo = max(valid, key=lambda x: x[1]), min(valid, key=lambda x: x[1])
-        big = rows[0]
-        kind = "续保率已成熟即最终留存" if mature else "含未到期，续保率反映进度而非最终留存"
-        rpt.concl(f"合计应续 {tot_yc:,} 件、报价率 {fp(qr_t)}、续保率 {fp(rr_t)}（{kind}）。"
-                  f"续保率标杆 **{hi[0]}（{fp(hi[1])}）**、落后 {lo[0]}（{fp(lo[1])}）；"
-                  f"盘子最大 **{big[0]}（{big[1]:,} 件）** 经营杠杆最大。")
+        if mature:
+            rpt.concl(f"合计应续 {tot_yc:,} 件、报价率 {fp(qr_t)}、续保率 {fp(rr_t)}（续保率已成熟即最终留存）。"
+                      f"续保率标杆 **{hi[0]}（{fp(hi[1])}）**、落后 {lo[0]}（{fp(lo[1])}）；"
+                      f"盘子最大 **{big[0]}（{big[1]:,} 件）** 经营杠杆最大。")
+        else:
+            rpt.concl(f"合计应续 {tot_yc:,} 件、报价率 {fp(qr_t)}（续保率 {fp(rr_t)} 仅反映已生效续回，未到期件起期在未来故趋 0）。"
+                      f"报价铺开标杆 **{hi[0]}（{fp(hi[1])}）**、落后 {lo[0]}（{fp(lo[1])}）；"
+                      f"盘子最大 **{big[0]}（{big[1]:,} 件）** 经营杠杆最大。")
 
 
 def _branch_speed_section(con, rpt, num, title, prefix, qcol, rcol, win_sql, pool_lead, note):
@@ -148,10 +161,14 @@ def run_branch_report(con, args, out_dir, ts):
     where_sql = " AND ".join(where)
 
     # 原始年表（不去重）：各窗口在自己范围内按车架号去重，避免跨月重复车架号（年内 1099 个）被 MIN 误归月份
+    # 已续回口径与前端续保追踪（renewal-tracker.ts）一致：仅续保单已起期（renewed_date ≤ cutoff）才计入 renewed，
+    # 排除「已提前续保但续保单起期晚于 cutoff、尚未生效」件 → 未到期窗口续保率如实反映已生效续回（而非虚高）。
     con.execute(f"""
         CREATE TEMP TABLE raw AS
         SELECT vehicle_frame_no, org_level_3, expiry_date,
-               is_quoted::INT AS quoted, is_renewed::INT AS renewed, first_quote_time AS fqt
+               is_quoted::INT AS quoted,
+               (CASE WHEN is_renewed AND renewed_date <= DATE '{today}' THEN 1 ELSE 0 END) AS renewed,
+               first_quote_time AS fqt
         FROM read_parquet('{RT}')
         WHERE {where_sql}
     """)
@@ -174,6 +191,10 @@ def run_branch_report(con, args, out_dir, ts):
     rpt.add("> 6 张三级机构窗口表：①当月已到期 ②当月未到期 ③当月 ④当年 续保漏斗；⑤首日 ⑥首周 进盘响应速度。"
             "续保率在含未到期的窗口反映**进度**（cutoff 早于到期日，未到期件尚未进入续保动作）；"
             "只有「当月已到期」窗口续保率为已成熟的最终留存。")
+    rpt.add(">")
+    rpt.add(f"> **已续回口径**：续保单已起期（renewed_date ≤ cutoff {today}）才计入已续回，与前端续保追踪页面严格一致。"
+            "未到期保单的续保单起期均在未来、当前尚未生效，故②当月未到期表续保率接近 0% 属正常 —— "
+            "该表看点是**报价率是否已提前铺开**，续保率随到期临近逐月补齐。")
     rpt.add()
 
     _branch_funnel_section(con, rpt, "一", "当月已到期续保表",

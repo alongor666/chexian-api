@@ -224,6 +224,8 @@ def test_cli_smoke_when_data_present(tmp_path):
     assert "## 四、机构下钻" in text
     assert "## 六、待跟进清单" in text
     assert "**结论**" in text
+    # 已续回口径：与前端续保追踪一致（续保单已起期 renewed_date ≤ cutoff）
+    assert "已续回" in text and "renewed_date" in text
     # 报告语言红线：正文不得残留英文术语堆砌
     for bad in ("cohort", "%pp"):
         assert bad not in text, f"报告残留英文/格式问题：{bad}"
@@ -248,6 +250,8 @@ def test_cli_branch_report_when_data_present(tmp_path):
         assert title in text, f"缺少板块：{title}"
     assert "三级机构" in text and "首日续保率" in text and "首周续保率" in text
     assert "**结论**" in text
+    # 已续回口径：分公司表与前端续保追踪一致（续保单已起期 renewed_date ≤ cutoff）
+    assert "已续回口径" in text and "renewed_date" in text
     # 报告语言红线：正文不得残留英文术语堆砌
     for bad in ("cohort", "%pp", "mature", "funnel"):
         assert bad not in text, f"报告残留英文/格式问题：{bad}"

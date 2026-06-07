@@ -114,7 +114,7 @@ def main():
         where.append(f"team_name ILIKE '%{args.team}%'")
     where_sql = " AND ".join(where)
 
-    if not build_base(con, where_sql):
+    if not build_base(con, where_sql, today):
         sys.exit(f"❌ 窗口内无数据：{label}（检查 renewal_tracker expiry 覆盖范围）")
 
     yc_all, q_all, r_all, qr_all, rr_all = overview(con)

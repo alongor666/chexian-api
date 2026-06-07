@@ -56,8 +56,13 @@ class Ctx:
     org_rows: list = field(default_factory=list)   # 板块一产出，板块四消费
 
 
-def build_base(con, where_sql) -> int:
-    """构建 base 临时表（窗口内按车架号去重），返回应续车架数。"""
+def build_base(con, where_sql, cutoff) -> int:
+    """构建 base 临时表（窗口内按车架号去重），返回应续车架数。
+
+    已续回口径与前端续保追踪（server/src/sql/renewal-tracker.ts）严格一致：仅当续保单已起期
+    （renewed_date ≤ cutoff）才计入 renewed，排除「已提前续保但续保单起期晚于 cutoff、尚未生效」的件，
+    避免未成熟窗口把未来才生效的续保提前计入、虚高当前续回率。
+    """
     con.execute(f"""
         CREATE TEMP TABLE base AS
         SELECT vehicle_frame_no,
@@ -69,7 +74,7 @@ def build_base(con, where_sql) -> int:
                ANY_VALUE(coverage_combination) AS coverage_combination,
                MIN(expiry_date) AS expiry_date,
                MAX(is_quoted::INT) AS quoted,
-               MAX(is_renewed::INT) AS renewed,
+               MAX(CASE WHEN is_renewed AND renewed_date <= DATE '{cutoff}' THEN 1 ELSE 0 END) AS renewed,
                MIN(first_quote_time) AS first_quote_time,
                MIN(renewed_date) AS renewed_date,
                ANY_VALUE(renewed_policy_no) AS renewed_policy_no
@@ -90,7 +95,7 @@ def write_header(rpt, ctx):
     """报告头：标题 + 数据窗口 + 概览 + 进度提示。"""
     rpt.add(f"# 续保诊断 · {ctx.label} · 三级机构经营盯盘")
     rpt.add()
-    rpt.add(f"> **数据窗口** `expiry ∈ [{ctx.start}, {ctx.end}]` · **cutoff** {ctx.today} · **口径** 商业险 · 应续 = 去重车架号")
+    rpt.add(f"> **数据窗口** `expiry ∈ [{ctx.start}, {ctx.end}]` · **cutoff** {ctx.today} · **口径** 商业险 · 应续 = 去重车架号 · 已续回 = 续保单已起期（renewed_date ≤ cutoff，与前端续保追踪一致）")
     rpt.add(f"> **概览** 应续 {ctx.yc_all:,} 车架 · 报价率 {fp(ctx.qr_all)}{light_q(ctx.qr_all)} · 续回率 {fp(ctx.rr_all)}{light_r(ctx.rr_all)}")
     rpt.add(f"> **生成** `diagnose_renewal.py` v2.0 · {ctx.ts}")
     if ctx.immature:
