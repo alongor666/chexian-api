@@ -19,9 +19,15 @@ from pathlib import Path
 import pandas as pd
 
 
-def map_resp_mode(name_type: str):
-    """wecom 清单「名单类型」→ 责任模式；未识别取值返回 None（按不在清单处理＝业务员自留）。"""
-    t = (name_type or "").strip()
+def map_resp_mode(name_type):
+    """wecom 清单「名单类型」→ 责任模式；空值（None/NaN）或未识别取值返回 None（按不在清单处理＝业务员自留）。
+
+    pandas read_excel/read_csv(dtype=str) 对空单元格返回 float NaN（NaN 为 truthy，`(x or "")` 不会替换、
+    .strip() 会抛 AttributeError），故必须先 pd.isna 兜底再转 str —— 实际外部清单常见空行/未维护名单类型。
+    """
+    if pd.isna(name_type):
+        return None
+    t = str(name_type).strip()
     if t == "兜底":
         return "业务员兜底"
     if t == "白名单":
