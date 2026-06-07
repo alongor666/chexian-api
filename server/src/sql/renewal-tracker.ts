@@ -16,6 +16,13 @@
  *   B = 报价件数（first_quote_time ≤ cutoff，报价为真实时点事件，按 cutoff 切片）
  *   C = 已续件数（is_renewed，匹配到续保单号即已签单成交；renewed_date 是续保单保险起期=原保单到期次日，
  *       非签单时点，不可用于「截至 cutoff 是否已续」切片 —— 未到期保单已签单但起保日在未来仍属已续，故不按 cutoff 过滤）
+ *   D = 未报价件数（A − B；应续中至今无有效报价。metric-registry: renewal_unquoted_count）
+ *   E = 流失件数（A − C；应续中尚未续保。metric-registry: renewal_lost_count）
+ *       ⚠️ 仅「已到期窗口」E 为真实流失；未到期窗口 E 为「待续件数」（尚未到续保动作时点，非流失）
+ *
+ * 续保影响度（L4，metric-registry: renewal_impact_rate）= E ÷ 合计应续件数（窗口聚合分母，
+ *   遵循「什么分类按什么合计」），由诊断脚本 diagnose_renewal_branch.py 按合计行计算，
+ *   本主查询不内联（GROUPING SETS 多粒度下各切片合计不同，窗口函数易错）。
  *
  * 输出 24 种层级（一次 GROUPING SETS 查询）：
  *   基础层（4）：overall / org / team / salesman
@@ -125,7 +132,13 @@ export function generateRenewalTrackerQuery(params: RenewalTrackerQueryParams): 
       END) AS B,
       COUNT(DISTINCT CASE
         WHEN is_renewed THEN vehicle_frame_no
-      END) AS C
+      END) AS C,
+      COUNT(DISTINCT vehicle_frame_no) - COUNT(DISTINCT CASE
+        WHEN is_quoted AND first_quote_time <= DATE '${cutoff}' THEN vehicle_frame_no
+      END) AS D,
+      COUNT(DISTINCT vehicle_frame_no) - COUNT(DISTINCT CASE
+        WHEN is_renewed THEN vehicle_frame_no
+      END) AS E
     FROM RenewalTrackerFact
     WHERE ${whereSql}
     GROUP BY GROUPING SETS (
