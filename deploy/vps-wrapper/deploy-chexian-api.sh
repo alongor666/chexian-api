@@ -55,11 +55,16 @@ case "${1:-help}" in
     # 锁文件驱动安装：要求 server/package-lock.json 存在（由 deploy.yml bundle 提供）
     # npm ci 行为：清空 node_modules 后按 lockfile 严格安装，版本不会漂移
     # 失败模式：lockfile 缺失或与 package.json 不一致 → 立即报错，避免半升级状态
+    #
+    # 所有权兜底（codex PR #516 复审 P1）：install 里的 npm ci 与下方自愈 rebuild/重装都以
+    # root(sudo) 跑，会产生 root-owned 的 node_modules 子树（如 node_modules/express/）。
+    # deploy.yml 的 rollback 以 deployer 身份 `rm -rf server/node_modules`，若残留 root-owned
+    # 会 Permission denied → 半升级残留——恰好出现在自愈本该处理的 registry/代理失败路径上。
+    # 故用 trap EXIT 在 *任何* 退出路径（成功 / 失败 exit 1 / set -e 中断 / npm ci 自身失败）
+    # 统一把 node_modules chown 回 deployer——取代散落各处、易在某个 exit 前漏写的手动 chown。
+    # （chown 失败容错为 no-op：node_modules 不存在或已是 deployer 时不应影响 wrapper 退出码。）
+    trap 'chown -R deployer:deployer "$APP_DIR/node_modules" 2>/dev/null || true' EXIT
     cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev
-    # 修复混合所有权：npm ci 通过 sudo 跑会产生 root-owned 子目录（如 node_modules/express/）
-    # 这让后续 deploy.yml trap rollback 的 `rm -rf node_modules` 报 Permission denied
-    # 修法：install 末尾把 node_modules 整体 chown 到 deployer，保持单一所有权
-    chown -R deployer:deployer "$APP_DIR/node_modules"
 
     # 原生模块自检 + 自愈（与本地 scripts/hooks/post-checkout §3 同源，按模块类型分修复策略）
     # 背景：原生 .node 可能在某次 install 下载/编译失败（典型 CN 代理腐蚀预编译下载），npm ci
@@ -75,7 +80,6 @@ case "${1:-help}" in
     #      下载被腐蚀时用 npm_config_build_from_source=true npm rebuild <mod> 强制源码编译绕开。
     # set -e 兼容：require / 重装 / rebuild 都用 `if` 包裹（set -e 在 if 条件中失效），避免预期内
     #       的损坏返回非零把脚本提前中止；仅当修复后仍加载失败才 exit 1（避免半升级上线后 reload 引爆）。
-    REBUILT=0
 
     # ① 纯预编译分发型：损坏时全量重装重拉 optional 平台二进制（重装会重置 node_modules，须在源码编译前）
     for MOD in "@duckdb/node-api"; do
@@ -87,7 +91,6 @@ case "${1:-help}" in
       if ( cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev ) \
          && "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
         echo "[install] $MOD 已重装恢复"
-        REBUILT=1
       else
         echo "[install] 错误: $MOD 重装后仍无法加载，中止部署（避免半升级上线）。" >&2
         echo "[install]   @duckdb 为纯预编译分发（无源码编译路径），疑似 optional 包 @duckdb/node-bindings-<platform> 的 .node 下载损坏/缺失；" >&2
@@ -106,17 +109,13 @@ case "${1:-help}" in
       if ( cd "$APP_DIR" && npm_config_build_from_source=true "$NPM_BIN" rebuild "$MOD" ) \
          && "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
         echo "[install] $MOD 已从源码重编译恢复"
-        REBUILT=1
       else
         echo "[install] 错误: $MOD 重编译后仍无法加载，中止部署（避免半升级上线）" >&2
         exit 1
       fi
     done
 
-    # 重装 / rebuild 以 root 跑会重新产生 root-owned 产物 → 再次统一所有权到 deployer
-    if [ "$REBUILT" = "1" ]; then
-      chown -R deployer:deployer "$APP_DIR/node_modules"
-    fi
+    # 所有权由分支开头的 trap EXIT 统一兜底（成功 / 失败 exit 1 / set -e 中断都会触发），此处无需再 chown
     ;;
   start)
     "$PM2_BIN" start "$ECOSYSTEM" --env production
