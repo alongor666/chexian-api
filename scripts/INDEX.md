@@ -47,9 +47,7 @@
 | `test-preflight.mjs` | **测试运行时预检**：检查 `node_modules`、`vitest`、`playwright` 与关键 E2E 文件是否就绪 | `bun run test:preflight [-- --mode all]` |
 | `cleanup-debug-artifacts.mjs` | 清理未跟踪调试产物（`.playwright-cli`、`playwright-report`、`test-results`、常见调试日志） | `bun run cleanup:artifacts` |
 | `check-task-id-conflict.mjs` | BACKLOG 事件日志快速校验（结构/无孤儿事件/uid·曾用号唯一）；陈旧守卫见 check-governance | `bun scripts/check-task-id-conflict.mjs` |
-| `check-write-conflict.mjs` | **[DEPRECATED 2026-06]** 旧「可变表」BACKLOG 追加冲突检测，event-log 下 union 自动并入，待清理 | — |
 | `check-document-partition.mjs` | 检查文档分区是否符合多Agent协作规范 | `node scripts/check-document-partition.mjs` |
-| `assign-task-id.mjs` | **[DEPRECATED 2026-06]** 写入方不再挑号；新增任务改用 `bun scripts/backlog.mjs add` | — |
 
 ### 📋 任务管理类（BACKLOG event-log 模型，2026-06 治本）
 
@@ -63,9 +61,6 @@
 | `backlog/lib.mjs` | event-log 核心库（解析/折叠/渲染/校验的唯一事实源），被 curate / backlog.mjs / check-governance 共用 | （被引用） |
 | `backlog/migrate.mjs` | 一次性：把旧「可变表」BACKLOG.md/ARCHIVE 播种为事件日志（含 106/106 逐列等价校验） | `bun scripts/backlog/migrate.mjs [--apply]` |
 | `manage-plans.mjs` | 扫描`.claude/plans`计划文件，生成状态快照并归档已完成文件 | `node scripts/manage-plans.mjs [--dry-run] [--apply]` |
-| `archive-backlog.mjs` | **[DEPRECATED 2026-06]** 旧「可变表」归档器，已被 event-log（status DONE 事件 + curate 渲染）取代，待清理 | — |
-| `cleanup-backlog.mjs` | **[DEPRECATED 2026-06]** 旧「可变表」去重器，event-log 下无重复行，待清理 | — |
-| `merge-backlog.mjs` | **[DEPRECATED 2026-06]** 旧「可变表」合并器，event-log 下 union 自动并入，待清理 | — |
 
 ### 📊 数据分析类（Python）
 
@@ -247,4 +242,4 @@ python3 scripts/compare-schema-mapping.py
   - 新增真相文件 `BACKLOG_LOG.jsonl`（append-only，merge=union）；`BACKLOG.md`/`BACKLOG_ARCHIVE.md` 降为派生视图。
   - 新增 `scripts/backlog/lib.mjs`（解析/折叠/渲染/校验 SSOT）、`scripts/backlog/migrate.mjs`（一次性播种 + 106/106 等价校验）、`scripts/backlog.mjs`（事件追加 CLI，写入方不挑号）。
   - `governance-backlog-curate.mjs` 重写为「折叠日志 → 渲染视图」；`check-governance.mjs` 的「任务ID分配」检查替换为「BACKLOG事件日志」（结构/孤儿/唯一性 + 视图==折叠(日志) 陈旧守卫）。
-  - `assign-task-id.mjs`（不再挑号）、`check-write-conflict.mjs`/`archive-backlog.mjs`/`cleanup-backlog.mjs`/`merge-backlog.mjs`（可变表遗留孤儿）标记 **[DEPRECATED]**，清理单独排期。
+  - **遗留脚本物理清理（同期收尾）**：`assign-task-id.mjs`（已是退役壳）/ `merge-backlog.mjs` / `archive-backlog.mjs` / `cleanup-backlog.mjs` / `check-write-conflict.mjs` 五个「可变表」时代脚本已**物理删除**。其中 `check-write-conflict.mjs` 经核查仅剩死代码/空转（检查2-3 随 BACKLOG 失效、检查4 引用的 3 个受保护文件路径已全部过期、检查1/5 为 warning 级且已被 PR rebase 纪律 + `bun run governance` 的 merge 标记扫描覆盖），故连同其在 `chexian-commit-push-pr.md` §3.2 的钩子一并退役（冲突检测改由 `bun run governance` 覆盖）。`check-task-id-conflict.mjs` 保留（已是 event-log 校验薄壳）。

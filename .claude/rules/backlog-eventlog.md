@@ -6,7 +6,7 @@ policy: append-only
 >
 > 适用：任何新增 / 流转 BACKLOG 任务、改动 `scripts/backlog/*` 或 `scripts/governance-backlog-curate.mjs`、处理 BACKLOG 合并冲突的操作。
 >
-> 本文件取代 [worktree-setup.md](./worktree-setup.md) §A 中「BACKLOG 追加冲突已自动化」一行的旧口径（该行描述的是治本前的「可变表 + max+1 取号」模型，已废除；该 frozen 行的清理待 `[policy-override]` 单独处理）。
+> 本文件取代 [worktree-setup.md](./worktree-setup.md) §A 中「BACKLOG 追加冲突已自动化」一行的旧口径（该行原描述治本前的「可变表 + max+1 取号」模型，已废除）。该 frozen 行已于本次收尾清理（owner `[policy-override]` 授权）同步改写为指向本模型。
 
 ## 1. 模型（道）
 
@@ -28,7 +28,7 @@ policy: append-only
 |------|------|
 | 禁止手工编辑视图 | `BACKLOG.md` / `BACKLOG_ARCHIVE.md` 是派生物，**只读**。改动一律改日志（追加事件）后重新渲染 |
 | 唯一写路径 | 新增/流转任务一律 `bun scripts/backlog.mjs add\|status\|note\|amend`（写入后自动重渲染视图） |
-| 永不挑号 | 不存在「取下一个编号」这一步；uid 由创建时生成。`assign-task-id.mjs` 已弃用 |
+| 永不挑号 | 不存在「取下一个编号」这一步；uid 由创建时生成。旧 `assign-task-id.mjs` 已删除 |
 | 完成必带证据 | `bun scripts/backlog.mjs status <id> DONE --evidence "PR/commit/测试证据"`（缺证据会被拒） |
 | 冲突重新渲染不手解 | merge 后若 governance「BACKLOG事件日志」陈旧守卫报「视图 != 折叠(日志)」→ `bun scripts/governance-backlog-curate.mjs --apply` 重渲，**禁止手解** |
 | 日志行禁原地改 | `BACKLOG_LOG.jsonl` append-only；纠错也用 `amend`/`status` 追加，不回改/删除历史事件行 |
@@ -54,9 +54,9 @@ policy: append-only
 | 播种（一次性） | `scripts/backlog/migrate.mjs` | 旧表 → 事件日志 + 逐列等价校验 |
 | 校验 | `scripts/check-governance.mjs`「BACKLOG事件日志」 | 结构 / 无孤儿 / uid·曾用号唯一 + 陈旧守卫 |
 
-## 5. 已弃用（可变表时代遗留）
+## 5. 已删除（可变表时代遗留）
 
-`assign-task-id.mjs`（不再挑号）/ `merge-backlog.mjs` / `archive-backlog.mjs` / `cleanup-backlog.mjs` / `check-write-conflict.mjs`。物理清理单独排期（已用新 CLI 登记任务）。
+`assign-task-id.mjs`（不再挑号）/ `merge-backlog.mjs` / `archive-backlog.mjs` / `cleanup-backlog.mjs` / `check-write-conflict.mjs` 五个脚本已**物理删除**（2026-06-07 收尾清理）。其中 `check-write-conflict.mjs` 的通用预检（分支基准 / merge 冲突标记）已由 PR 前 `git rebase origin/main` 纪律 + `bun run governance` 覆盖；其在 `chexian-commit-push-pr.md` §3.2 的钩子一并退役。`check-task-id-conflict.mjs` 保留（已重写为 event-log 校验薄壳）。
 
 ## 6. 禁止
 

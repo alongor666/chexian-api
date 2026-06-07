@@ -1,5 +1,7 @@
 # 集成完成总结
 
+> ⚠️ **已废弃（2026-06-07）**：本文记录的是把 `check-write-conflict.mjs` 集成进 `/chexian-commit-push-pr` 的历史方案。该脚本及其钩子已于 BACKLOG「可变表 → event-log」治本（PR #522）后的收尾清理中**整体退役**——BACKLOG 冲突由 event-log（`merge=union` + 派生视图）结构性消除，分支基准由 PR 前 `git rebase origin/main` 纪律 + `bun run governance` 覆盖。当前模型见 [.claude/rules/backlog-eventlog.md](../.claude/rules/backlog-eventlog.md)。本文仅留作历史。
+
 ## ✅ 实施完成
 
 已成功将冲突检测功能集成到 `/chexian-commit-push-pr` 命令中，采用**方案2：独立工具 + 调用**。

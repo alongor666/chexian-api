@@ -19,7 +19,7 @@
 | worktree 放**兄弟目录** | 放 `../chexian-api-<task>`（与主目录同级，如现有 `chexian-api-postal-policy-dedupe`）。**不要**放 `.claude/worktrees/`——该路径被工具权限 deny，Read/Edit/cd 全部失败 |
 | 提交前查重 | commit / push 前必 `git fetch origin main` + 搜同名 open/merged PR（防重复劳动：2026-05-30 sync-and-reload 守卫修复撞上已合并的 PR #448，白做） |
 | 派生文件冲突**重新生成不手解** | `data-sources.json` / `QUICK_REFERENCE.md` / `转换质量报告.json` 是 ETL 派生（结构稳定，仅 row_count / 规模数字变）。merge 冲突时跑 `node 数据管理/daily.mjs`（或对应生成器）重新生成 + `git add`，**禁止手解**。三者均有 governance / ETL 配置消费方（daily.mjs 读 data-sources.json 取域配置；check-governance.mjs 读另两者校验），**禁止移出 git 追踪** |
-| BACKLOG 追加冲突已自动化 | `.gitattributes` 已对 `BACKLOG.md` 设 `merge=union`，多分支往末尾加 B3xx 自动合并；仍建议追加到末尾、ID 取全局最大 +1 |
+| BACKLOG 冲突已结构性消除（event-log） | BACKLOG 已是「append-only 事件日志 + 派生视图」模型（详见 [backlog-eventlog.md](./backlog-eventlog.md)）：新增/流转任务一律 `bun scripts/backlog.mjs add\|status\|note\|amend`，**写入方永不挑号**（无 max+1，故无碰号）；真相文件 `BACKLOG_LOG.jsonl` 设 `merge=union`（每行唯一 → 永不产生重复行），`BACKLOG.md`/`BACKLOG_ARCHIVE.md` 是派生视图，冲突时 `bun scripts/governance-backlog-curate.mjs --apply` 重渲染、**禁止手解** |
 
 ### 反模式：禁止用 `git sparse-checkout` 物理执行"主目录只读"
 

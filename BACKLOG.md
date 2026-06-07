@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（41 项 · 数据截至 2026-06-07 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（40 项 · 数据截至 2026-06-07 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -59,7 +59,7 @@
 - B335 — 批量卫生项（21 目录排查 §3 P2 汇总）
 - B340 `TODO` — 生产 claims 域加载器缺 union_by_name（潜伏，B339 闸门镜像时发
 
-**P3（11 项）**
+**P3（10 项）**
 
 - B247 — 图表 hex 色值审计
 - B251 — 输出风格与用户契约冲突
@@ -71,7 +71,6 @@
 - B276 — *_rate (0-1 小数) vs *_ratio (×100 百分比) 命名约定
 - B321 — super-powers 精髓 skills 两项后续（PR #469 审计衍生）
 - B326 — req.permissionFilter \|\| '1=1' 防御性兜底 fail-c
-- 2026-06-07-claude-8030ed — 清理 BACKLOG 旧模型遗留脚本
 
 ---
 
@@ -119,4 +118,3 @@
 | B336 | 2026-06-05 | Security/Deploy | @claude | **Nginx 静态 /reports/* 零鉴权暴露修复**（B328 对抗式复核衍生 P0）：前端 ReportEntryCard 用 /reports/<slug>/<file> 直链，daily.mjs 写 public/reports/ → sync-vps 推 frontend/dist/reports/ → Nginx location / 的 try_files 静态伺服**无鉴权**；当前 VPS 无报告文件故零实际暴露，下次报告推送即 CRITICAL（任意未登录用户可凭 URL 下载全量经营数据）。修复：deploy/nginx-fullstack.conf 加 location /reports/ auth_request → Express /api/auth/me 校验 JWT cookie。⚠️ deploy-chain 红线：不可 auto-merge，须人工选监控窗口 merge + 手工应用到 VPS nginx + nginx -t + reload + 验证 | P0 | IN_PROGRESS | 开发文档/目录排查报告_2026-06-05.md；.claude/rules/deploy-chain-sop.md | deploy/nginx-fullstack.conf | 未登录 curl /reports/<file>.html → 401；登录后带 cookie → 200；nginx -t 通过。✅ 代码 PR #506 merged + auth 模型已验证：cx_access_token cookie path='/' sameSite='lax' secure httpOnly → 顶层 /reports/ 导航会带 cookie，authMiddleware 认 cookie（auth.test.ts:119/139），方案健全不误伤合法用户。⚠️ **待 VPS 应用 nginx 才生效**：2026-06-06 实测 https://chexian.cretvalu.com/reports/nonexistent.html 仍 HTTP 200（未鉴权可达），须 SSH 同步 location /reports/ + /__report_auth 块 → nginx -t → reload → 复测 401 |
 | B337 | 2026-06-06 | Bug/Deploy | @claude | **首页报告卡永远打不开 — 双根因修复**：`/#/home` 唯一报告卡（diagnose-period-trend）经 `/reports/<slug>/manifest.json` 解析 URL，长期返回 916B SPA fallback（空白）。根因①**manifest 从未生成**：sync-vps.mjs + sync-and-reload Stage 4.5 都用 `ssh node /tmp/gen-...mjs` 在 VPS 端生成，但 deploy 用户无 node（node 仅在 root 的 /root/.nvm 下）→ 永远 "node not found"（try/catch 静默失败）。根因②**部署冲掉报告**：deploy.yml `rm -rf frontend/dist && mv 产物` 整体替换 dist，而报告 HTML 是 gitignore 的不在产物里（产物 reports/ 仅 .gitkeep）→ 每次部署清空已同步报告。修复：①manifest 改本地 `pull→generateReportsManifests→push`（绕开无 node + entries=0 双坑，下沉到 sync-vps，删 Stage 4.5 冗余）；②deploy.yml `mv` 后从 dist.bak/reports 恢复报告。 | P1 | IN_PROGRESS | 本会话排查（access log 实证 200/916 + dist 17:06 重建 + nginx 实配 5月23日无 /reports/ 块）；deploy-chain-sop §2（禁 auto-merge） | `.github/workflows/deploy.yml`(mv 后恢复 reports)<br>`scripts/sync-vps.mjs`(generateManifestsOnRemote→generateManifestsLocal)<br>`scripts/sync-and-reload.mjs`(删 Stage 4.5) | governance 24/24 + node --check 三文件 + import 具名导出解析 + 手工实测 pull→gen→push 后线上 manifest 200/422、dashboard 200/373KB |
 | B340 | 2026-06-06 | Bug/Backend | @claude | **生产 claims 域加载器缺 union_by_name（潜伏，B339 闸门镜像时发现）**：`server/src/services/duckdb-domain-loaders.ts` 的 11 处 `read_parquet('${path}')` 均为裸读，无 `union_by_name=true`；而 policy 加载器 `duckdb-parquet-loader.ts` 显式带 `union_by_name`。一旦 claims/域分区出现兼容 schema 漂移（如新增可选字段、字段顺序变动），生产**首次惰性加载** ClaimsDetail/ClaimsAgg 等端点会因按位置 union 失败而崩。当前 8 个 claims 分区（2019–2026）同一 ETL 产出、列集合一致（均 40 列）→ **暂未触发，是定时炸弹非现行故障**。B339 闸门选「忠实镜像生产」（claims 同样裸读）以保留金丝雀探测力，故未在闸门层擅自加 union_by_name 掩盖此问题。修复：评估给 `duckdb-domain-loaders.ts` 各域读法统一加 `union_by_name=true`（与 policy 对齐），同步把 B339 claims 模板改回带 union_by_name；需回归测试惰性加载 8 端点 + 真实分区 schema 漂移场景。 | P2 | TODO | B339 codex PR #513 第3轮 3a；`duckdb-parquet-loader.ts`(对照：policy 已带 union_by_name) | `server/src/services/duckdb-domain-loaders.ts`(11 处裸 read_parquet 待评估加 union_by_name)<br>`scripts/prepublish-gate/lib/fetch-local-metrics.mjs`(claims 模板随生产改) | 待办 |
-| 2026-06-07-claude-8030ed | 2026-06-07 | Chore/Governance | @claude | **清理 BACKLOG 旧模型遗留脚本**：merge-backlog.mjs / archive-backlog.mjs / check-write-conflict.mjs 三个孤儿脚本（无调用方）按「可变表」模型解析 BACKLOG.md 表格，event-log 重构后已失效；assign-task-id.mjs / check-task-id-conflict.mjs 已降级为弃用 shim。评估直接删除或归档。 | P3 | PROPOSED | N/A | scripts/merge-backlog.mjs<br>scripts/archive-backlog.mjs<br>scripts/check-write-conflict.mjs |  |
