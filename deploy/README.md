@@ -68,7 +68,7 @@ bun run build
 
 ```bash
 # 在服务器上执行
-sudo mkdir -p /var/www/chexian/dist
+sudo mkdir -p /var/www/chexian/frontend/dist
 sudo mkdir -p /var/www/chexian/shared-data
 sudo chown -R $(whoami):$(whoami) /var/www/chexian
 ```
@@ -77,7 +77,7 @@ sudo chown -R $(whoami):$(whoami) /var/www/chexian
 
 ```bash
 # 从本地上传构建产物
-scp -r dist/* user@server:/var/www/chexian/dist/
+scp -r dist/* user@server:/var/www/chexian/frontend/dist/
 
 # 上传数据文件
 scp 业务数据.parquet user@server:/var/www/chexian/shared-data/业务数据.parquet

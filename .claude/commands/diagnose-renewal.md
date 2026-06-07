@@ -1,8 +1,8 @@
 ---
 name: diagnose-renewal
-description: 续保诊断 — 责任模式 / 报价提前天数 / 折扣降幅 / 团队产能 / 待跟进清单
+description: 续保诊断 v2.1 — 三级机构经营盯盘 / 机构下钻追业务员 / 涨价异常专题 / 报价响应速度 / 待跟进清单 / 分公司视角6表（--branch-report）
 category: data-analysis
-version: 1.0.0
+version: 2.1.0
 author: "@claude"
 tags: [diagnosis, renewal, salesforce, action-list]
 scope: project
@@ -11,17 +11,22 @@ requires:
   - duckdb (pip)
   - pandas (pip)
 dependencies:
-  - 数据管理/pipelines/diagnose_renewal.py
+  - 数据管理/pipelines/diagnose_renewal.py  # CLI 编排入口
+  - 数据管理/pipelines/renewal_common.py  # 共享口径常量+Report+rate/light（依赖叶子）
+  - 数据管理/pipelines/renewal_resp_mode.py  # 责任模式清单加载
+  - 数据管理/pipelines/renewal_sections.py  # 主报告6大板块
+  - 数据管理/pipelines/diagnose_renewal_branch.py  # 分公司视角6表（--branch-report）
   - 数据管理/pipelines/diagnose_common.py
-  - 数据管理/warehouse/fact/renewal/renewal_funnel_*.parquet
+  - 数据管理/warehouse/fact/renewal_tracker/latest.parquet
   - 数据管理/warehouse/fact/policy/current/*.parquet
   - 数据管理/warehouse/fact/quotes_conversion/latest.parquet
-last_updated: "2026-04-26"
+  - "~/Library/Mobile Documents/.../四川5-7月 - 智能表.xlsx（责任模式板块，可选）"
+last_updated: "2026-06-06"
 ---
 
-# 续保诊断（/diagnose-renewal）
+# 续保诊断 v2.1（/diagnose-renewal）
 
-> 复用项目内现有应续盘（renewal_funnel）+ 上年原单（policy/current）+ 报价（quotes_conversion）三方 JOIN，输出 7 板块 Markdown 报告 + 待跟进 CSV。所有板块只读 Parquet，不依赖企业微信表导出。
+> **三级机构经营盯盘版**。复用应续盘（renewal_tracker）+ 上年原单 / 续保单渠道（policy/current）+ 报价（quotes_conversion）多方 JOIN，输出 6 大板块 Markdown 报告 + 3 份 CSV。面向分公司管理者：看各机构续保率/报价率/未报价/未续回、已到期续保率 vs 全月进度，并下钻到团队/业务员便于追踪安排。Parquet 板块只读；**责任模式**额外读责任模式清单（缺失则降级跳过）。
 
 ---
 
@@ -78,7 +83,54 @@ python3 数据管理/pipelines/diagnose_renewal.py --time-view ytd --year 2026 -
 python3 数据管理/pipelines/diagnose_renewal.py --time-view next_30_days
 ```
 
-### 关闭待跟进 CSV（仅看报告，不落清单）
+### 责任模式来源（板块 2，可插拔）
+
+```bash
+# A. 专项责任模式清单（已确定值，优先）— 含「责任模式」列，按车架号直接归类，支持 .xlsx/.csv
+python3 数据管理/pipelines/diagnose_renewal.py --time-view custom --start 2026-06-01 --end 2026-06-30 \
+  --resp-mode-list 责任模式清单.xlsx
+
+# B. 不传则回退默认 wecom 电销续保清单（多 sheet，含「名单类型」列，按映射归类 + 保单到期时间过滤窗口）
+#    默认路径：~/Library/Mobile Documents/.../四川5-7月 - 智能表.xlsx
+```
+
+优先级：`--resp-mode-list`（专项已定）> `--renewal-list`（wecom 名单类型映射）> 跳过板块。专项清单只需 `车架号` + `责任模式` 两列（车架号列名兼容 vehicle_frame_no/VIN），值直接采用不做映射、不按日期过滤。
+
+### 进盘锚点提前期（报价响应速度板块）
+
+```bash
+# 报价响应速度按「进盘日 = 到期日 - pool_lead_days」衡量，默认 30（数据显示行动窗口约到期前 30 天）
+python3 数据管理/pipelines/diagnose_renewal.py ... --pool-lead-days 30   # 默认；X=60 几乎全 0（无人提前 60 天报价）
+```
+
+### 分公司视角模式（`--branch-report`）
+
+面向分公司管理者的 6 张三级机构窗口对照表，**以 cutoff 当天所在月/年为窗口，忽略 `--time-view`/`--start`/`--end`**：
+
+```bash
+# 当前月/年的分公司视角 6 表（当月已到期/未到期/当月/当年 + 首日/首周进盘响应）
+python3 数据管理/pipelines/diagnose_renewal.py --branch-report
+
+# 可叠加机构/团队范围与进盘提前期
+python3 数据管理/pipelines/diagnose_renewal.py --branch-report --org 天府 --pool-lead-days 30
+```
+
+输出 `数据管理/数据分析报告/续保分公司视角_{年}年{月}月_{ts}.md`，6 张表统一字段 `三级机构 + 应续件数 + …`：
+
+| # | 表 | 窗口 | 字段 |
+|---|---|---|---|
+| 一 | 当月已到期续保表 | 当月 expiry ≤ cutoff（已成熟，续保率亮灯） | 应续/已报价/已续保件数 + 报价率 + 续保率 |
+| 二 | 当月未到期续保表 | 当月 expiry > cutoff（续保率反映进度，不亮灯） | 同上 |
+| 三 | 当月续保表 | 当月全部（= 一 + 二） | 同上 |
+| 四 | 当年续保表 | 当年全部 | 同上 |
+| 五 | 当月首日续保情况 | 当月 · 进盘后首日（到期前 ~29 天） | 应续件数 + 首日报价数 + 首日续回数 + 首日报价率 + 首日续保率 |
+| 六 | 当月首周续保情况 | 当月 · 进盘后首周（到期前 ~23-30 天） | 同五，首日→首周 |
+
+**口径要点**：
+- 每张表在**自己窗口内**按车架号去重（与主报告单窗口口径一致）；跨月重复车架号（年内约 1099 个）在各自到期窗口分别计入，避免被「年表 MIN 去重」误归月份。
+- **首日/首周续保率 = 进盘后首日/首周内「已报价 且 最终续回」的件数 ÷ 应续件数**（口径 A，用户 2026-06-06 确认）。因续保成交日恒为到期前后（无提前成交信号），不以续保日切片，而衡量「快速响应客户的成交转化」。首日 16% → 首周 26% → 最终 31%，单调递增。
+
+### 关闭 CSV（仅看报告）
 
 ```bash
 python3 数据管理/pipelines/diagnose_renewal.py --time-view ytd --year 2026 --no-action-list
@@ -88,28 +140,21 @@ python3 数据管理/pipelines/diagnose_renewal.py --time-view ytd --year 2026 -
 
 ## 输出
 
-**Markdown 报告**：`数据管理/数据分析报告/续保诊断_{view_label}_{timestamp}.md`
+**Markdown 报告**：`数据管理/数据分析报告/续保诊断_{view_label}_{timestamp}.md`，6 大板块：
 
-8 个板块：
+1. **机构经营盯盘总表** — 每个三级机构：应续 / 已报价 / 未报价 / 报价率 / 已续回 / 未续回 / 续回率 / **已到期续保率**（+ 合计行、亮灯）。分公司视角核心表
+2. **续保进度与时效** — 2.1 成熟度切片（ytd 按月；其他按到期周次，含已到期续保率）+ 2.2 **报价响应速度**（进盘锚点 D-X：首日/首周/最终报价率）
+3. **涨价异常专题** — 3.1 报价系数变化 × 续回率；3.2 **涨价客户报价风险等级 vs 上年风险等级**（一致 / 变好 / 小幅变差 / 大幅变差≥2档 × 续回率）。揭示涨价是否由风险恶化驱动
+4. **机构下钻追业务员** — 每个三级机构独立 section：大机构（业务员 ≥ 10）列团队 + 前5/末位5业务员；小机构（< 10）直列全部业务员
+5. **补充结构** — 5.1 责任模式（来源可插拔，标注实际来源）/ 5.2 报价提前天数 / 5.3 报价保费比值 / 5.4 客户结构 / 5.5 电销渠道交叉
+6. **待跟进清单（重点）** — 未报价 + 上年保费 ≥ P75 + 上年自主系数 ≤ P50 的高价值优质客户
 
-1. **续保漏斗** — 应续 / 已报价 / 报价率 / 已续回 / 续回率（按月切片 + 合计），亮灯
-2. **责任模式** — 自留 vs 兜底 vs 未分类 的承接量、占比、报价率、续回率
-3. **报价提前天数** — ≥30 / 21~29 / 14~20 / 7~13 / 0~6 / 已过期 / 未报价 分桶 × 续回率
-4. **折扣 / 保费画像**
-   - 4.1 报价折扣降幅（quote_factor − prior_factor）× 续回率
-   - 4.2 报价保费 / 上年保费 比值 × 续回率
-5. **团队产能** — 三级机构 / 销售团队 / 业务员 三级排名 Top N + 倒数末位 5
-6. **客户结构** — 客户类别 × 险别组合 × 责任模式 三向交叉（应续 ≥ 30 才入选）
-7. **电销渠道交叉** — 上年原单 × 续保单 4 类流向（自营→自营 / 自营→电销 / 电销→自营 / 电销→电销）+ 各三级机构占比 + 责任模式 × 上年渠道交叉续回率
-8. **待跟进清单（重点）** — 未报价 + 上年保费 ≥ P75 + 上年自主系数 ≤ P50 的高价值优质客户
+每板块含 `**结论**` 数据驱动文字（自动算出标杆/落后/差值/紧急户数）。
 
-**待跟进 CSV**：`数据管理/数据分析报告/续保待跟进_{timestamp}.csv`，14 列：
-
-```
-org_level_3, team_name, salesman_name, customer_category, coverage_combination,
-vehicle_frame_no, policy_no, insurance_end_date, days_to_expiry,
-prior_premium, prior_factor, insurance_grade, renewal_mode, competition_level
-```
+**3 份 CSV**（`--no-action-list` 可关）：
+- `续保业务员盯盘_{ts}.csv` — 机构/团队/业务员/应续/已报价/未报价/已续回/未续回/续回率（分公司按机构筛选下发）
+- `续保待跟进_{ts}.csv` — 14 列（org_level_3...insurance_grade, renewal_mode/competition_level 因 cohort 无源置 N/A）
+- `续保涨价离谱_{ts}.csv` — 涨价 + 风险等级大幅变差≥2档客户（机构/团队/业务员/车架号/客类/上年等级/报价等级/变差档数/上年系数/距到期/已续回），供核保复核
 
 ---
 
@@ -117,15 +162,17 @@ prior_premium, prior_factor, insurance_grade, renewal_mode, competition_level
 
 | 维度 | 定义 | 字段 |
 |------|------|------|
-| **应续** | 落入 expiry 窗口的去重车架号 | renewal_funnel.vehicle_frame_no |
-| **已报价** | 至少 1 次有效报价（任意 quote_time） | funnel.is_quoted |
-| **已续回** | 续保单已签发 | funnel.is_renewed |
-| **责任模式** | 自留 = 业务员跟进；兜底 = 电销坐席跟进 | funnel.renewal_mode |
-| **上年保费** | 原单（排除批单）保费合计 | policy/current.premium |
+| **应续** | 落入 expiry 窗口的去重车架号 | renewal_tracker.vehicle_frame_no |
+| **已报价** | 至少 1 次有效报价（quote_time ≥ 2025-12-03） | renewal_tracker.is_quoted |
+| **已续回** | 续保单已签发 | renewal_tracker.is_renewed |
+| **责任模式** | wecom 清单 `名单类型`：电销续保/网电电续/微保电续→电销自留；兜底→业务员兜底；白名单→电销转保；不在清单→业务员自留 | 四川5-7月 - 智能表.xlsx · 名单类型 |
+| **电销渠道** | 实际成交走电销（项目设定口径） | policy.terminal_source = `0110融合销售` |
+| **上年保费** | 原单保费合计（SUM premium per policy_no） | policy/current.premium |
 | **上年自主系数** | 原单商车自主定价系数 | policy/current.commercial_pricing_factor |
-| **报价提前天数** | first_quote_date → expiry_date | quote_lead_days = DATE_DIFF |
+| **报价提前天数** | first_quote_time → expiry_date | DATE_DIFF |
 
-> 责任模式与续回结果**相互独立**：自留不等于必续回，兜底也不等于不续回。报告里两者交叉对比是为了评估两条产能路径的效率。
+> **责任模式 vs 电销渠道是两回事**：责任模式=清单**指派**口径（谁负责跟进，板块 2）；电销渠道=签单数据的**实际成交渠道**（板块 7）。两者 measure 不同时点，勿混用。详见 memory `domain_renewal_responsibility_mode` / `project_telesales_terminal_source`。
+> 责任模式与续回结果**相互独立**：自留不等于必续回。报告里交叉对比是为评估各产能路径效率。
 
 ---
 
@@ -141,21 +188,22 @@ prior_premium, prior_factor, insurance_grade, renewal_mode, competition_level
 ## 常见问题
 
 **Q: 提示「窗口内无数据」？**
-A: funnel 表是季度预计算（`renewal_funnel_2026q1.parquet` = 2026 q1 应续盘）。诊断窗口超出 funnel 覆盖范围时无数据。检查 `数据管理/warehouse/fact/renewal/` 已生成哪些季度。
+A: 应续盘来自 `renewal_tracker/latest.parquet`（由 `convert_renewal_tracker.py` 派生，universe = 商业险 + 起期上年 + 止期续保年）。诊断窗口超出该表 expiry 覆盖时无数据。
 
 **Q: 数据规模与续保模块前端不一致？**
-A: 本诊断用 funnel 预计算表，前端 `/api/query/renewal-tracker` 用 `RenewalTrackerFact` view（包含字段更完整，如 used_transfer_type / fuel_category）。两者口径一致，差异仅在维度覆盖。
+A: 本诊断与前端 `/api/query/renewal-tracker`（`server/src/sql/renewal-tracker.ts`）共用同一 `renewal_tracker` 底表，口径一致。
 
 **Q: 待跟进清单太短/太长？**
 A: 阈值 P75 + P50 是相对当前样本的分位数，自适应窗口规模。要更激进可在脚本中改 `prior_premium >= P50` 与 `prior_factor <= P75` 放宽筛选。
 
-**Q: 责任模式只有「未分类」？**
-A: funnel 表对历史保单可能未分类。看占比，超过 30% 说明 funnel ETL 需复审。
+**Q: 责任模式板块为空 / 覆盖率低？**
+A: 清单是 wecom 电销续保表导出的多 sheet Excel（5月/6月/7月，每 sheet 含 `保单到期时间`），脚本按窗口过滤后 JOIN，未命中归「业务员自留」。⚠️ **DuckDB `read_xlsx` 默认只读第一个 sheet**——脚本已用 pandas 逐 sheet 读。清单陈旧（如只到 5/9 到期）会导致目标月命中率为 0，需导出覆盖目标月的最新清单。
 
 ---
 
 ## 复用的项目能力
 
+- **分层架构（依赖树无环）**：`renewal_common.py`（口径常量+Report+rate/light，依赖叶子）← `renewal_sections.py`（主报告6板块）/ `diagnose_renewal_branch.py`（分公司6表）/ `renewal_resp_mode.py`（责任模式加载）；`diagnose_renewal.py` 仅做 CLI 编排（~145行）。口径只定义一次，主报告与分公司视角共享，杜绝漂移。改某板块只动对应 section 函数。
 - 共享 `数据管理/pipelines/diagnose_common.py` 的亮灯 / 格式化函数（与 vehicle / agent 诊断同套范式）
-- 数据源 100% 来自 `数据管理/warehouse/fact/`，与续保模块（`server/src/sql/renewal-tracker.ts`）共用底层 Parquet
-- 业务口径与 `数据管理/integrations/wecom_smartsheet/sync_renewal_v2.py` 对齐（同样的 quote_window_start / 排他规则 / 业务员归属）
+- Parquet 数据源 100% 来自 `数据管理/warehouse/fact/`，与续保模块（`server/src/sql/renewal-tracker.ts`）共用 `renewal_tracker` 底表
+- 责任模式 / 电销口径见 memory `domain_renewal_responsibility_mode`、`project_telesales_terminal_source`（用户 2026-06-06 确认）；报价窗口 `2025-12-03` 与 `convert_renewal_tracker.py` 对齐

@@ -165,6 +165,16 @@ jobs:
             rm -rf /var/www/chexian/frontend/dist
             mv "${STAGING_DIR}/dist" /var/www/chexian/frontend/dist
 
+            # 保留诊断报告 HTML/manifest 跨 dist 替换存活（B-homepage-report）：
+            # /reports/* 由 daily 流程（sync-vps）单独 rsync 到 dist/reports/，是 gitignore 的、
+            # 不在构建产物里（产物 reports/ 仅含 .gitkeep）。不恢复则每次部署都把首页报告
+            # 冲成 916B 空白 SPA。旧报告在上面备份的 dist.bak/reports/ 里（cp -r 整个 dist），
+            # 覆盖回新 dist 的 reports/ 即可。失败不阻断部署（|| true，避免触发回滚）。
+            if [ -d /var/www/chexian/frontend/dist.bak/reports ]; then
+              mkdir -p /var/www/chexian/frontend/dist/reports
+              cp -a /var/www/chexian/frontend/dist.bak/reports/. /var/www/chexian/frontend/dist/reports/ || true
+            fi
+
             rm -rf /var/www/chexian/server/dist
             mv "${STAGING_DIR}/server/dist" /var/www/chexian/server/dist
             cp "${STAGING_DIR}/server/package.json" /var/www/chexian/server/package.json

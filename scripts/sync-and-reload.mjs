@@ -387,61 +387,10 @@ async function main() {
     log('green', '  ✓ 30s 稳定性二次校验通过');
   }
 
-  // Stage 4.5: 同步静态报告到 VPS（Nginx 直接 serve）+ 在 VPS 端按真实文件清单生成 manifest
-  // PR 441 漏洞修复：本地（dev / Mac）通常不会跑 diagnose-* skill 产 HTML，
-  // public/reports/ 只有 .gitkeep —— 旧实现「本地生成 manifest」永远 skipped，
-  // VPS 上 manifest 缺失 → 前端 916B SPA fallback → 仍打开空白页。
-  // 新实现：rsync 完成后让 VPS 自己当 owning host，按 frontend/dist/reports/
-  // 真实存在的 HTML 文件清单生成 manifest.json。
-  if (!opts.skipReload) {
-    const frontendDistDir = process.env.SYNC_VPS_FRONTEND_DIST || '/var/www/chexian/frontend/dist';
-    const localReportsDir = join(ROOT_DIR, 'public/reports/');
-    const remoteReportsRoot = `${frontendDistDir}/reports`;
-    if (existsSync(localReportsDir)) {
-      await runCmd(
-        'sync reports → VPS',
-        'rsync',
-        ['-azv', '-e', 'ssh', localReportsDir, `${sshAlias}:${remoteReportsRoot}/`],
-        { dryRun: opts.dryRun, timeoutMs: 60 * 1000 }
-      );
-
-      // 在 VPS 端生成 manifest.json：scp 脚本 + ssh 执行
-      // 失败时只 warn 不 abort：manifest 缺失会让前端显示 unavailable（友好提示），
-      // 不影响企微同步等后续阶段。
-      // 修复 2026-06-02：ssh 默认 non-login shell 不读 .profile/.nvm.sh 导致 `node` 找不到。
-      // 用 `bash -lc` 强制 login shell + 多个 nvm.sh 路径 fallback，覆盖常见部署位置。
-      const manifestScript = join(ROOT_DIR, 'scripts/gen-reports-manifest.mjs');
-      const remoteScript = '/tmp/chexian-gen-reports-manifest.mjs';
-      const remoteCmd =
-        `bash -lc '` +
-        // 优先 source nvm（多个候选位置 + 当前用户 home 的 nvm 兜底）
-        `source ~/.nvm/nvm.sh 2>/dev/null || ` +
-        `source /usr/local/nvm/nvm.sh 2>/dev/null || ` +
-        `source /etc/profile.d/nvm.sh 2>/dev/null || true; ` +
-        // 找不到时 fallback 到常见绝对路径
-        `NODE_BIN=$(command -v node || ls /usr/local/bin/node /usr/bin/node 2>/dev/null | head -1); ` +
-        `if [ -z "$NODE_BIN" ]; then echo "node not found on VPS — install via nvm or apt"; exit 127; fi; ` +
-        `"$NODE_BIN" ${remoteScript} "${remoteReportsRoot}"'`;
-      try {
-        await runCmd(
-          'scp gen-reports-manifest.mjs',
-          'scp',
-          ['-o', 'StrictHostKeyChecking=accept-new', manifestScript, `${sshAlias}:${remoteScript}`],
-          { dryRun: opts.dryRun, timeoutMs: 30 * 1000 }
-        );
-        await runCmd(
-          'gen reports manifest on VPS',
-          'ssh',
-          ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', sshAlias, remoteCmd],
-          { dryRun: opts.dryRun, timeoutMs: 30 * 1000 }
-        );
-      } catch (err) {
-        log('yellow', `⚠ reports manifest 远端生成失败（不阻断后续流程）：${err.message}`);
-      }
-    } else {
-      log('yellow', '\n⚠ 跳过报告同步（public/reports/ 不存在）');
-    }
-  }
+  // Stage 4.5: 静态报告同步 + manifest 生成 —— 已统一下沉到 Stage 3 的 sync-vps.mjs
+  //（public_reports 任务 rsync 报告 + generateManifestsLocal 本地 pull→生成→push）。
+  // 此处原本重复一遍 rsync + 一份「VPS 端 node 生成 manifest」，但 VPS deployer 无 node，
+  // 那份永远静默失败；且与 Stage 3 完全冗余。删除以消除重复与失效代码路径。
 
   // Stage 5: 企业微信同步（显式开关）
   // 三个脚本独立 webhook、互不依赖，并行执行；任一失败仍记录但不中断其他（Promise.allSettled）。
