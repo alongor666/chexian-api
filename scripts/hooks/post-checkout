@@ -75,15 +75,22 @@ for SUB in "${NEED_INSTALL[@]}"; do
 done
 
 # ── 3. server 原生模块自愈 ──────────────────────────────────────
-# 背景：CN 代理（如 127.0.0.1:1082）偶发腐蚀 node-pre-gyp 从 GitHub 下载的预编译
-#       二进制（典型 bcrypt）。install 会报"完成"，但 .node 被截断，dlopen 崩
+# 背景：CN 代理（如 127.0.0.1:1082）偶发腐蚀预编译二进制下载（node-pre-gyp / optional
+#       平台包）。install 会报"完成"，但 .node 被截断，dlopen 崩
 #       （"segment '__LINKEDIT' ... extends beyond end of file"）→ 所有走 auth/permission
 #       链路的 server 测试在 *加载阶段* 整套失败，pre-push 的 bun run test 跑不过。
 # 策略：逐个原生模块做 require 健康检查（判退出码，禁用管道以免吞掉真实退出码），
-#       对加载失败者 `rm + npm_config_build_from_source=true bun install` 从源码重编译，
-#       绕开被代理腐蚀的下载（源码已在 node_modules，仅需本机 clang；实测不改 lockfile/package.json）。
+#       对加载失败者按模块**分发类型**选不同自愈命令（统一逻辑会对 @duckdb 失效）：
+#         · 源码可编译型（bcrypt / better-sqlite3）：有 C++ 源码 →
+#           `rm 模块 + npm_config_build_from_source=true bun install` 从源码重编译，
+#           绕开被腐蚀的预编译下载（源码已在 node_modules，仅需本机 clang，不改 lockfile）。
+#         · 纯预编译分发型（@duckdb/node-api）：facade 包 scripts 为空，无源码可编译；真正
+#           的 .node 在 optional 平台包 @duckdb/node-bindings-<platform> 里（macOS 是
+#           node-bindings-darwin-arm64）。只删 facade（node-api）时 bun 仍见 bindings 目录
+#           认为已装、不重拉 → 必须删**整个 @duckdb scope** 再 bun install 才会重拉 bindings；
+#           且 build-from-source 对它无意义（无 C++ 源码）。
 # 范围：仅在已执行过安装（上方未提前 exit）时运行 → 普通切分支 0 开销。
-#       better-sqlite3 / @duckdb/node-api 健康时跳过；若损坏且源码编译不支持，打印手动指引不阻断。
+#       健康时跳过；自愈失败时打印手动指引但不阻断 checkout（warn-only）。
 SERVER_DIR="$ROOT/server"
 if command -v node >/dev/null 2>&1 && [ -d "$SERVER_DIR/node_modules" ]; then
   NATIVE_MODULES=("bcrypt" "better-sqlite3" "@duckdb/node-api")
@@ -92,12 +99,27 @@ if command -v node >/dev/null 2>&1 && [ -d "$SERVER_DIR/node_modules" ]; then
     if ( cd "$SERVER_DIR" && node -e "require('$M')" ) >/dev/null 2>&1; then
       continue  # 健康，跳过
     fi
-    echo "🔧 [post-checkout] $M 原生二进制损坏（疑似代理腐蚀下载），从源码重编译..."
-    if ( cd "$SERVER_DIR" && rm -rf "node_modules/$M" && npm_config_build_from_source=true bun install ) >/dev/null 2>&1 \
+    # 按分发类型选自愈命令：纯预编译型删整个 scope 重拉 bindings；源码型从源码重编译
+    case "$M" in
+      @duckdb/*)
+        RM_TARGET="node_modules/@duckdb"   # 删整个 scope，否则 bun 不重拉 bindings 平台包
+        BUILD_ENV=""                       # 纯预编译分发，无源码可 build-from-source
+        HEAL_DESC="重拉预编译 bindings"
+        ;;
+      *)
+        RM_TARGET="node_modules/$M"
+        BUILD_ENV="npm_config_build_from_source=true"
+        HEAL_DESC="从源码重编译"
+        ;;
+    esac
+    MANUAL_HINT="(cd server && rm -rf $RM_TARGET && ${BUILD_ENV:+$BUILD_ENV }bun install)"
+    echo "🔧 [post-checkout] $M 原生二进制损坏（疑似代理腐蚀下载），$HEAL_DESC..."
+    # 用 env 注入可选环境变量：变量经展开后不会被识别为前缀赋值，必须借 env 生效（BUILD_ENV 空时 env 直接跑 bun install）
+    if ( cd "$SERVER_DIR" && rm -rf "$RM_TARGET" && env $BUILD_ENV bun install ) >/dev/null 2>&1 \
        && ( cd "$SERVER_DIR" && node -e "require('$M')" ) >/dev/null 2>&1; then
-      echo "✅ [post-checkout] $M 已从源码重编译恢复"
+      echo "✅ [post-checkout] $M 已$HEAL_DESC恢复"
     else
-      echo "⚠️  [post-checkout] $M 自愈失败，请手动: (cd server && rm -rf node_modules/$M && npm_config_build_from_source=true bun install)"
+      echo "⚠️  [post-checkout] $M 自愈失败，请手动: $MANUAL_HINT"
     fi
   done
 fi
