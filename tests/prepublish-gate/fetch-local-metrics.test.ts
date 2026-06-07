@@ -55,6 +55,15 @@ describe('fetch-local-metrics SQL_TEMPLATES', () => {
     expect(sql).toContain('accident_time IS NOT NULL');
   });
 
+  it('所有分区 glob 读取都带 union_by_name=true（对齐生产加载器，容忍混合分片 schema 漂移，codex PR #513 P1）', () => {
+    const ctx = { policyGlob: '/x/policy/*.parquet', claimsGlob: '/x/claims/*.parquet', monthStart: '2026-06-01' };
+    for (const [source, tmpl] of Object.entries(SQL_TEMPLATES)) {
+      const sql = (tmpl as (c: typeof ctx) => string)(ctx);
+      expect(sql, `${source} 应带 union_by_name`).toContain('union_by_name=true');
+      expect(sql, `${source} 不应有裸 read_parquet('<glob>')`).not.toMatch(/read_parquet\('[^']+'\)/);
+    }
+  });
+
   it('注入 monthStart → 用 < DATE 业务月首日（与发布机时区解耦，codex PR #513 P2）', () => {
     // policy 系列（预签未来起期保单）和 claims 系列（迟到报案）都必须排除不完整月，
     // 否则 cutoff 当月会因分母小被误判为断崖。monthStart 由编排器按 Asia/Shanghai 注入。

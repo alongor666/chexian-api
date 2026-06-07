@@ -3,9 +3,11 @@
  *
  * 设计原则：
  *   - 与 scripts/sentinel/lib/fetch-metrics.mjs 对称：sentinel 查 live API，闸门查刚 ETL 出的本地 parquet。
- *   - SQL 口径必须与 server/src/sql/cost/cost-ratios.ts 等 SSOT 一致：
- *       policy_dedup 按 (policy_no, CAST(insurance_start_date AS DATE)) 聚合 + HAVING SUM(premium) > 0
- *       赔款分子 = settled_amount + reserve_amount（已决 + 未决，项目标准口径）
+ *   - SQL 口径必须与 SSOT 一致：policy_dedup 按 (policy_no, CAST(insurance_start_date AS DATE)) 聚合
+ *       + HAVING SUM(premium) > 0（cost-ratios.ts B252）；赔款金额锚定 ClaimsAgg.reported_claims SSOT
+ *       （已结案取 settled、未结案取 reserve，剔除无责/零结/注销/拒赔——非二者相加，codex PR #513 P2）
+ *   - 分区 glob 读取一律带 union_by_name=true，对齐生产加载器 duckdb-parquet-loader.ts：policy/current
+ *       混有旧静态分片+新周更分片，按位置 union 会因 schema 漂移报错→闸门 fail-closed 误阻断（codex PR #513 P1）
  *   - 率值不在此层计算（gate 直接 Z-score 分子/分母独立序列即可，满足铁律 SUM(分子)/SUM(分母)
  *     而非二次平均；详见 .claude/rules/business-domain.md）
  *   - DuckDB CLI 子进程，避免引入原生模块依赖（@duckdb/node-api 安装失败时闸门仍可用）
@@ -104,7 +106,7 @@ export const SQL_TEMPLATES = {
         policy_no,
         CAST(insurance_start_date AS DATE) AS start_date,
         SUM(premium) AS premium
-      FROM read_parquet('${policyGlob}')
+      FROM read_parquet('${policyGlob}', union_by_name=true)
       WHERE ${COMPLETED_MONTH_FILTER('insurance_start_date', monthStart)}
       GROUP BY policy_no, CAST(insurance_start_date AS DATE)
       HAVING SUM(premium) > 0
@@ -123,7 +125,7 @@ export const SQL_TEMPLATES = {
         policy_no,
         CAST(insurance_start_date AS DATE) AS start_date,
         SUM(premium) AS premium
-      FROM read_parquet('${policyGlob}')
+      FROM read_parquet('${policyGlob}', union_by_name=true)
       WHERE ${COMPLETED_MONTH_FILTER('insurance_start_date', monthStart)}
       GROUP BY policy_no, CAST(insurance_start_date AS DATE)
       HAVING SUM(premium) > 0
@@ -151,7 +153,7 @@ export const SQL_TEMPLATES = {
                    ELSE COALESCE(reserve_amount, 0) END)
         ELSE 0
       END), 2) AS value
-    FROM read_parquet('${claimsGlob}')
+    FROM read_parquet('${claimsGlob}', union_by_name=true)
     WHERE ${COMPLETED_MONTH_FILTER('accident_time', monthStart)}
     GROUP BY time_period
     ORDER BY time_period
@@ -161,7 +163,7 @@ export const SQL_TEMPLATES = {
     SELECT
       strftime(accident_time, '%Y-%m') AS time_period,
       COUNT(DISTINCT claim_no) AS value
-    FROM read_parquet('${claimsGlob}')
+    FROM read_parquet('${claimsGlob}', union_by_name=true)
     WHERE ${COMPLETED_MONTH_FILTER('accident_time', monthStart)}
     GROUP BY time_period
     ORDER BY time_period
