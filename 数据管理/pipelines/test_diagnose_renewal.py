@@ -294,17 +294,32 @@ def test_cli_branch_report_when_data_present(tmp_path):
     mds = list(tmp_path.glob("续保分公司视角_*.md"))
     assert mds, "未生成分公司视角报告"
     text = mds[0].read_text(encoding="utf-8")
-    for title in ("## 一、当月已到期续保表", "## 二、当月未到期续保表", "## 三、当月续保表",
-                  "## 四、当年续保表", "## 五、当月首日续保情况", "## 六、当月首周续保情况"):
+    for title in ("## 一、当月已到期续保表", "## 二、临期 7 天续保表", "## 三、当月未到期续保表",
+                  "## 四、当月续保表", "## 五、当年已到期续保表", "## 六、当月首日续保情况",
+                  "## 七、当月首周续保情况"):
         assert title in text, f"缺少板块：{title}"
     assert "三级机构" in text and "首日续保率" in text and "首周续保率" in text
-    assert "**结论**" in text  # 表二~六仍为结论式
+    assert "**结论**" in text  # 漏斗表（三~五）+ 速度表（六/七）仍为结论式
+    # 临期 7 天表（用户 2026-06-07 第三轮）：未来 7 天将到期·未到期·进度口径，诚实措辞不说「已流失」
+    assert "## 二、临期 7 天续保表" in text and "未来 7 天将到期" in text
+    assert "**问题一 · 临期续保进度**" in text and "**问题二 · 临期未报价风险**" in text
+    # 当年已到期（表五）：截至最新日期成熟口径，标题含「已到期」（不再是被未来件稀释的全年）
+    assert "## 五、当年已到期续保表" in text
     # 已续回口径：= 已签单续保（is_renewed），与前端续保追踪一致；不按 renewed_date 起保日切片
     assert "已续回口径" in text and "已签单" in text
-    # 表一专项（用户 2026-06-07 修改意见）：续保影响度三列 + 口径映射表 + 两段问题式结论
-    assert "未报价件数" in text and "流失件数" in text and "续保影响度" in text
-    assert "指标口径" in text  # 防漂移映射表
+    # 表一专项（用户 2026-06-07 第二轮：对标目标 + 业务白话 + 字段简称 + 口径附录化）
+    assert "续保影响度" in text  # 派生指标列保留
+    assert "## 附录 · 表一指标口径" in text  # 口径定义沉到报告末尾附录
+    assert "指标口径" in text  # 防漂移映射表（位于附录）
     assert "**问题一 · 续保率缺口**" in text and "**问题二 · 未报价即流失**" in text
+    # R1 对标目标：结论以续保率目标为锚给出「差多少个百分点」
+    assert "的目标" in text and "个百分点" in text
+    # R3 业务白话「流失…的客户」+ R4 判断副词「报价率仅」
+    assert "的客户" in text and "报价率仅" in text
+    # R2：去「视同」留余地措辞（正文结论已全删；附录口径定义可保留精确表述）
+    assert "视同" not in text, "残留旧措辞：视同"
+    # R3 业务白话：问题一以「整体分公司流失 N% 的客户」表达，而非技术化「续保缺口扩大」
+    assert "整体分公司流失" in text
     # 报告语言红线：正文不得残留英文术语堆砌（cutoff 已中文化为「数据截止日」）
     for bad in ("cohort", "%pp", "mature", "funnel", "cutoff"):
         assert bad not in text, f"报告残留英文/格式问题：{bad}"

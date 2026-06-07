@@ -35,6 +35,10 @@ SMALL_ORG_SALESMEN = 10            # <10 业务员 = 小机构（直列业务员
 TH_QUOTE = (90, 80, 70)
 TH_RENEW = (75, 65, 55)
 
+# 已到期最终续保率目标（业务给定的对标基准，单位 %）。结论以此为锚给出「差多少个百分点」，
+# 单一事实源，禁止散落硬编码；目标调整只改此处。
+TARGET_MATURED_RENEWAL_RATE = 58
+
 
 class Report:
     """累加 Markdown 行的轻量渲染器。"""
