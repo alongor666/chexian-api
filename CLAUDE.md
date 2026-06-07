@@ -80,7 +80,7 @@
 
 | 注册表 | 路径 | 覆盖范围 | codegen |
 |--------|------|---------|---------|
-| 指标注册表 | `server/src/config/metric-registry/` | 49 个指标 | `generate-frontend-map.ts` |
+| 指标注册表 | `server/src/config/metric-registry/` | 52 个指标 | `generate-frontend-map.ts` |
 | 字段注册表 | `server/src/config/field-registry/fields.json` | 56 个字段 | `field-registry/generate.mjs` |
 | 客户类别 | `src/shared/config/customer-categories.ts` + `server/src/config/` | 11 类枚举 | — |
 | 环境变量 | `server/src/config/env.ts` | 20+ 变量（6 分组） | — |

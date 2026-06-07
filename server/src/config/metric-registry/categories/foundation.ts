@@ -192,4 +192,70 @@ export const foundationMetrics: readonly MetricDefinition[] = [
     ],
     changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增车均保费指标，分母为去重车架号数' }],
   },
+
+  // ===== 续保经营件数（L4 占位符；数据源 renewal_tracker 派生域，真实 SQL 在 server/src/sql/renewal-tracker.ts）=====
+  {
+    id: 'renewal_unquoted_count',
+    version: '1.0.0',
+    name: '未报价件数',
+    category: 'foundation',
+    tags: ['renewal', 'count'],
+    formula: {
+      description: '应续车中至今无任何有效报价的件数 = 应续件数 − 已报价件数',
+      numerator: 'COUNT(DISTINCT vehicle_frame_no)（应续） − 已报价件数',
+      unit: '件',
+    },
+    sql: {
+      expression:
+        '-- L4 计算，应续件数 − 已报价件数（A − B），由续保 SQL 生成器 renewal-tracker.ts 与诊断脚本 diagnose_renewal_branch.py 实现',
+      requiredColumns: ['vehicle_frame_no', 'is_quoted', 'first_quote_time', 'expiry_date'],
+      notes: 'L4 计算。数据源为 renewal_tracker 派生域（非 policy 主表）。续保窗口内按车架号去重',
+    },
+    display: {
+      formatter: 'count',
+      label: '未报价件数',
+      unit: '件',
+    },
+    testCases: [
+      {
+        name: '未报价件数非负',
+        input: { whereClause: '1=1' },
+        assertions: { renewal_unquoted_count: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-06-07', changes: '新增：续保未报价件数（应续 − 已报价），L4 占位符' }],
+  },
+
+  {
+    id: 'renewal_lost_count',
+    version: '1.0.0',
+    name: '流失件数',
+    category: 'foundation',
+    tags: ['renewal', 'count'],
+    formula: {
+      description: '应续车中尚未续保的件数（含未报价 + 已报价未成交）= 应续件数 − 已续保件数',
+      numerator: 'COUNT(DISTINCT vehicle_frame_no)（应续） − 已续保件数',
+      unit: '件',
+    },
+    sql: {
+      expression:
+        '-- L4 计算，应续件数 − 已续保件数（A − C），由续保 SQL 生成器 renewal-tracker.ts 与诊断脚本 diagnose_renewal_branch.py 实现',
+      requiredColumns: ['vehicle_frame_no', 'is_renewed', 'expiry_date'],
+      notes:
+        'L4 计算。数据源为 renewal_tracker 派生域。⚠️ 仅在已到期窗口表示真实流失；未到期窗口为「待续件数」（尚未到续保动作时点）',
+    },
+    display: {
+      formatter: 'count',
+      label: '流失件数',
+      unit: '件',
+    },
+    testCases: [
+      {
+        name: '流失件数非负',
+        input: { whereClause: '1=1' },
+        assertions: { renewal_lost_count: { op: 'gte', value: 0 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-06-07', changes: '新增：续保流失件数（应续 − 已续保），L4 占位符' }],
+  },
 ];
