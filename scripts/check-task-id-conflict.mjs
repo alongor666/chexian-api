@@ -12,7 +12,7 @@
  *   bun run scripts/check-task-id-conflict.mjs
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 
 // Agent ID范围配置
 const AGENT_RANGES = {
@@ -23,6 +23,7 @@ const AGENT_RANGES = {
   '@trae': { min: 400, max: 499 },
   '@kilo': { min: 500, max: 599 },
   '@codebuddy': { min: 600, max: 699 },
+  '@future': { min: 700, max: 999 },
 };
 
 /**
@@ -50,8 +51,9 @@ function getAgentForId(idNum) {
  * 检查BACKLOG.md中的任务ID
  */
 function checkTaskIds() {
-  const backlogPath = './BACKLOG.md';
-  const content = readFileSync(backlogPath, 'utf-8');
+  // 扫 BACKLOG.md + BACKLOG_ARCHIVE.md：归档文件的 ID 也纳入重复检测（编号永不复用）
+  const backlogPaths = ['./BACKLOG.md', './BACKLOG_ARCHIVE.md'].filter(p => existsSync(p));
+  const content = backlogPaths.map(p => readFileSync(p, 'utf-8')).join('\n');
   const lines = content.split('\n');
 
   const errors = [];
@@ -141,7 +143,7 @@ function checkTaskIds() {
   }
 
   // 打印各Agent使用情况
-  console.log('📋 Agent ID使用情况：');
+  console.log('📋 Agent ID 归属统计（⚠️ 编号已改全局连续递增，下方"下一个ID"按区间算仅供参考，实际取号请用 `assign-task-id.mjs`）：');
   for (const [agent, range] of Object.entries(AGENT_RANGES)) {
     const used = agentUsage.get(agent) || new Set();
     const count = used.size;

@@ -2,7 +2,8 @@
 /**
  * 自动分配任务 ID
  *
- * 根据 CLAUDE.md §9.2 多Agent协作协议，为不同 Agent 分配专属任务 ID 范围
+ * 编号策略：全局连续递增（max+1），永不复用历史编号（含 BACKLOG_ARCHIVE.md 已归档的）。
+ * 归属对象（@claude/@codex 等）仅用于追溯谁提出，不再绑定编号区间。
  *
  * 使用方法：
  *   bun run scripts/assign-task-id.mjs @claude
@@ -13,7 +14,7 @@
  * 输出：下一个可用的任务 ID（如 B100）
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 // Agent ID 范围定义（CLAUDE.md §9.2）
@@ -26,20 +27,27 @@ const AGENT_ID_RANGES = {
 };
 
 /**
- * 从 BACKLOG.md 中提取已使用的任务 ID
+ * 从 BACKLOG.md + BACKLOG_ARCHIVE.md 收集全局最大任务编号。
+ * 归档文件参与统计 → 编号永不被回收复用。兼容历史非标 ID（如 B256-update）。
  */
-function extractUsedIds(backlogContent) {
-  const usedIds = new Set();
+function collectMaxId() {
+  const files = ['BACKLOG.md', 'BACKLOG_ARCHIVE.md'];
+  // 匹配表格中的任务 ID（格式：| B001 | 或 | B256-update |）
+  const idPattern = /\| B(\d{3,})(?:-\w+)? \|/g;
+  let max = 0;
 
-  // 匹配 Markdown 表格中的任务 ID（格式：| B001 | ...）
-  const idPattern = /\| B(\d{3}) \|/g;
-  let match;
-
-  while ((match = idPattern.exec(backlogContent)) !== null) {
-    usedIds.add(`B${match[1]}`);
+  for (const f of files) {
+    const p = resolve(process.cwd(), f);
+    if (!existsSync(p)) continue;
+    const content = readFileSync(p, 'utf-8');
+    let match;
+    while ((match = idPattern.exec(content)) !== null) {
+      const num = parseInt(match[1], 10);
+      if (num > max) max = num;
+    }
   }
 
-  return usedIds;
+  return max;
 }
 
 /**
@@ -57,28 +65,19 @@ function assignTaskId(agent) {
     process.exit(1);
   }
 
-  // 读取 BACKLOG.md
+  // 全局连续编号：取 BACKLOG.md + BACKLOG_ARCHIVE.md 的最大编号 + 1
+  // range 仅用于校验 agent 名有效（见上）；编号不再绑定 agent 区间，永不复用历史编号
   try {
-    const backlogPath = resolve(process.cwd(), 'BACKLOG.md');
-    const backlogContent = readFileSync(backlogPath, 'utf-8');
-    const usedIds = extractUsedIds(backlogContent);
+    const max = collectMaxId();
+    const next = max + 1;
 
-    // 在 Agent 的范围内找下一个可用 ID
-    for (let i = range.start; i <= range.end; i++) {
-      const id = `B${String(i).padStart(3, '0')}`;
-      if (!usedIds.has(id)) {
-        return id;
-      }
+    if (next > 999) {
+      console.error(`❌ 全局编号已达上限 B999`);
+      console.error(`\n建议：评估归档策略或扩展编号位数`);
+      process.exit(1);
     }
 
-    // 如果范围内所有 ID 都已使用
-    console.error(`❌ Agent ${agent} 的 ID 范围已满！`);
-    console.error(`\n范围：B${String(range.start).padStart(3, '0')}-B${String(range.end).padStart(3, '0')}`);
-    console.error(`已使用：${range.end - range.start + 1} 个 ID`);
-    console.error(`\n建议：`);
-    console.error(`  1. 清理已完成的旧任务`);
-    console.error(`  2. 扩展 ID 范围（修改 CLAUDE.md §9.2）`);
-    process.exit(1);
+    return `B${String(next).padStart(3, '0')}`;
   } catch (error) {
     if (error instanceof Error && error.message.includes('ENOENT')) {
       console.error(`❌ 未找到 BACKLOG.md 文件`);
