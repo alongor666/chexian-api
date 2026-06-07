@@ -353,6 +353,205 @@ function extractNarrativeFromResult(skillId: string, result: SkillResult | undef
   return null;
 }
 
+/** 单节点执行后对外层循环的影响（由各 node-type 处理器返回） */
+interface NodeExecResult {
+  /** 需要更新的 overallStatus（仅在下调为 partial/failed 或挂起时设置）；undefined = 不变 */
+  statusUpdate?: WorkflowStatus;
+  /** 是否中断节点循环 */
+  stop?: boolean;
+  /** approval 节点产出的挂起态 */
+  pendingApproval?: WorkflowApprovalState;
+}
+
+/** node-type 处理器共享依赖（executeNodes 每次循环构造后传入） */
+interface NodeHandlerDeps {
+  ctx: SkillContext;
+  runInput: unknown;
+  resolveSkill: RunWorkflowOptions['resolveSkill'];
+  results: Record<string, SkillResult | undefined>;
+  childResults: Record<string, SkillResult | undefined>;
+  execCtx: WorkflowExecCtx;
+  nodeStartedAt: Date;
+  nodeIndex: number;
+  runId: string;
+  workflowId: string;
+  pushStep: (record: WorkflowStepRecord) => void;
+}
+
+/** 失败策略归一：未指定时默认 skip-and-continue */
+function nodeFailureResult(onFailure: 'skip-and-continue' | 'stop' | undefined): NodeExecResult {
+  return (onFailure ?? 'skip-and-continue') === 'stop'
+    ? { statusUpdate: 'failed', stop: true }
+    : { statusUpdate: 'partial' };
+}
+
+async function executeSequentialNode(node: SequentialNode, d: NodeHandlerDeps): Promise<NodeExecResult> {
+  const skill = d.resolveSkill(node.skillId);
+  if (!skill) {
+    d.pushStep(buildFailedStepRecord(node, undefined, `skill not found: ${node.skillId}`, d.nodeStartedAt));
+    return nodeFailureResult(node.onFailure);
+  }
+  const input = node.inputBuilder ? node.inputBuilder(d.execCtx) : d.runInput;
+  try {
+    const { runId: stepRunId, result } = await runSkill(skill, input, d.ctx);
+    const finishedAt = new Date();
+    d.results[node.id] = result;
+    d.pushStep({
+      nodeId: node.id,
+      nodeType: node.type,
+      skillId: node.skillId,
+      status: 'success',
+      runId: stepRunId,
+      result,
+      startedAt: d.nodeStartedAt.toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      elapsedMs: finishedAt.getTime() - d.nodeStartedAt.getTime(),
+    });
+    return {};
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    d.pushStep(buildFailedStepRecord(node, undefined, errMsg, d.nodeStartedAt));
+    return nodeFailureResult(node.onFailure);
+  }
+}
+
+async function executeParallelNode(node: ParallelNode, d: NodeHandlerDeps): Promise<NodeExecResult> {
+  const promises = node.branches.map(async (b) => {
+    const skill = d.resolveSkill(b.skillId);
+    const branchStarted = new Date();
+    if (!skill) {
+      return {
+        branchId: b.id,
+        skillId: b.skillId,
+        status: 'failed' as const,
+        error: `skill not found: ${b.skillId}`,
+        elapsedMs: 0,
+      };
+    }
+    const input = b.inputBuilder ? b.inputBuilder(d.execCtx) : d.runInput;
+    try {
+      const { runId: stepRunId, result } = await runSkill(skill, input, d.ctx);
+      d.childResults[`${node.id}.${b.id}`] = result;
+      const elapsed = Date.now() - branchStarted.getTime();
+      return {
+        branchId: b.id,
+        skillId: b.skillId,
+        status: 'success' as const,
+        runId: stepRunId,
+        result,
+        elapsedMs: elapsed,
+      };
+    } catch (err) {
+      const elapsed = Date.now() - branchStarted.getTime();
+      return {
+        branchId: b.id,
+        skillId: b.skillId,
+        status: 'failed' as const,
+        error: err instanceof Error ? err.message : String(err),
+        elapsedMs: elapsed,
+      };
+    }
+  });
+  const children = await Promise.all(promises);
+  const finishedAt = new Date();
+  const anyFailed = children.some((c) => c.status === 'failed');
+  const allFailed = children.every((c) => c.status === 'failed');
+  d.pushStep({
+    nodeId: node.id,
+    nodeType: node.type,
+    children,
+    status: allFailed ? 'failed' : anyFailed ? 'skipped' : 'success',
+    startedAt: d.nodeStartedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    elapsedMs: finishedAt.getTime() - d.nodeStartedAt.getTime(),
+  });
+  if (allFailed) return nodeFailureResult(node.onFailure);
+  // 'failed' 已在 allFailed 分支处理；anyFailed 仅下调到 'partial'
+  if (anyFailed) return { statusUpdate: 'partial' };
+  return {};
+}
+
+async function executeBranchNode(node: BranchNode, d: NodeHandlerDeps): Promise<NodeExecResult> {
+  const matched = node.cases.find((c) => {
+    try {
+      return c.when(d.execCtx);
+    } catch {
+      return false;
+    }
+  });
+  const target = matched ?? (node.fallback ? { id: 'fallback', skillId: node.fallback.skillId, inputBuilder: node.fallback.inputBuilder } : null);
+  if (!target) {
+    // 没有任何分支命中且无 fallback：跳过（'skipped' 不下调 status，与 v1.1 §11 设计一致）
+    const finishedAt = new Date();
+    d.pushStep({
+      nodeId: node.id,
+      nodeType: node.type,
+      status: 'skipped',
+      startedAt: d.nodeStartedAt.toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      elapsedMs: finishedAt.getTime() - d.nodeStartedAt.getTime(),
+      error: 'no branch matched, no fallback',
+    });
+    return {};
+  }
+  const skill = d.resolveSkill(target.skillId);
+  if (!skill) {
+    d.pushStep(buildFailedStepRecord(node, target.skillId, `skill not found: ${target.skillId}`, d.nodeStartedAt));
+    return nodeFailureResult(node.onFailure);
+  }
+  const input = target.inputBuilder ? target.inputBuilder(d.execCtx) : d.runInput;
+  try {
+    const { runId: stepRunId, result } = await runSkill(skill, input, d.ctx);
+    const finishedAt = new Date();
+    d.results[node.id] = result;
+    d.pushStep({
+      nodeId: node.id,
+      nodeType: node.type,
+      skillId: target.skillId,
+      status: 'success',
+      runId: stepRunId,
+      result,
+      startedAt: d.nodeStartedAt.toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      elapsedMs: finishedAt.getTime() - d.nodeStartedAt.getTime(),
+    });
+    return {};
+  } catch (err) {
+    d.pushStep(buildFailedStepRecord(node, target.skillId, err instanceof Error ? err.message : String(err), d.nodeStartedAt));
+    return nodeFailureResult(node.onFailure);
+  }
+}
+
+function executeApprovalNode(node: ApprovalNode, d: NodeHandlerDeps): NodeExecResult {
+  // 阶段 4 PR-B：写入 pending_approval 步骤记录，挂起整个 workflow，
+  // 等待 routes/workflows.ts 的 /approve 端点调用 resumeWorkflow 才继续。
+  const finishedAt = new Date();
+  d.pushStep({
+    nodeId: node.id,
+    nodeType: node.type,
+    status: 'skipped',
+    startedAt: d.nodeStartedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    elapsedMs: 0,
+    error: 'awaiting approval',
+  });
+  // 阶段 4 PR-C：approval 挂起 → audit 事件
+  emitAuditEvent('approval-requested', d.runId, d.workflowId, d.ctx, {
+    nodeId: node.id,
+    nodeIndex: d.nodeIndex,
+    approverRoles: node.approverRoles,
+  });
+  return {
+    statusUpdate: 'pending_approval',
+    stop: true,
+    pendingApproval: {
+      pendingNodeId: node.id,
+      pendingNodeIndex: d.nodeIndex,
+      approverRoles: node.approverRoles,
+    },
+  };
+}
+
 async function executeNodes(params: ExecuteNodesParams): Promise<ExecuteNodesOutcome> {
   const {
     workflow,
@@ -403,201 +602,48 @@ async function executeNodes(params: ExecuteNodesParams): Promise<ExecuteNodesOut
     const node = workflow.nodes[nodeIndex];
     const nodeStartedAt = new Date();
     const execCtx: WorkflowExecCtx = { runInput, results, childResults };
-    const nodeSkillIdHint = node.type === 'sequential' ? node.skillId : node.type === 'branch' ? undefined : undefined;
+    const nodeSkillIdHint = node.type === 'sequential' ? node.skillId : undefined;
     onStep?.({ type: 'step-started', runId, nodeId: node.id, skillId: nodeSkillIdHint, index: nodeIndex });
 
-    if (node.type === 'sequential') {
-      const skill = resolveSkill(node.skillId);
-      if (!skill) {
-        const rec = buildFailedStepRecord(node, undefined, `skill not found: ${node.skillId}`, nodeStartedAt);
-        pushStep(rec);
-        if ((node.onFailure ?? 'skip-and-continue') === 'stop') {
-          overallStatus = 'failed';
-          break;
-        }
-        overallStatus = 'partial';
-        continue;
+    const deps: NodeHandlerDeps = {
+      ctx,
+      runInput,
+      resolveSkill,
+      results,
+      childResults,
+      execCtx,
+      nodeStartedAt,
+      nodeIndex,
+      runId,
+      workflowId: workflow.id,
+      pushStep,
+    };
+
+    let result: NodeExecResult;
+    switch (node.type) {
+      case 'sequential':
+        result = await executeSequentialNode(node, deps);
+        break;
+      case 'parallel':
+        result = await executeParallelNode(node, deps);
+        break;
+      case 'branch':
+        result = await executeBranchNode(node, deps);
+        break;
+      case 'approval':
+        result = executeApprovalNode(node, deps);
+        break;
+      default: {
+        // 穷尽性检查：新增 node type 而漏处理时编译期报错
+        const _exhaustive: never = node;
+        result = {};
+        void _exhaustive;
       }
-      const input = node.inputBuilder ? node.inputBuilder(execCtx) : runInput;
-      try {
-        const { runId: stepRunId, result } = await runSkill(skill, input, ctx);
-        const finishedAt = new Date();
-        results[node.id] = result;
-        pushStep({
-          nodeId: node.id,
-          nodeType: node.type,
-          skillId: node.skillId,
-          status: 'success',
-          runId: stepRunId,
-          result,
-          startedAt: nodeStartedAt.toISOString(),
-          finishedAt: finishedAt.toISOString(),
-          elapsedMs: finishedAt.getTime() - nodeStartedAt.getTime(),
-        });
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        const rec = buildFailedStepRecord(node, undefined, errMsg, nodeStartedAt);
-        pushStep(rec);
-        if ((node.onFailure ?? 'skip-and-continue') === 'stop') {
-          overallStatus = 'failed';
-          break;
-        }
-        overallStatus = 'partial';
-      }
-      continue;
     }
 
-    if (node.type === 'parallel') {
-      const promises = node.branches.map(async (b) => {
-        const skill = resolveSkill(b.skillId);
-        const branchStarted = new Date();
-        if (!skill) {
-          return {
-            branchId: b.id,
-            skillId: b.skillId,
-            status: 'failed' as const,
-            error: `skill not found: ${b.skillId}`,
-            elapsedMs: 0,
-          };
-        }
-        const input = b.inputBuilder ? b.inputBuilder(execCtx) : runInput;
-        try {
-          const { runId: stepRunId, result } = await runSkill(skill, input, ctx);
-          childResults[`${node.id}.${b.id}`] = result;
-          const elapsed = Date.now() - branchStarted.getTime();
-          return {
-            branchId: b.id,
-            skillId: b.skillId,
-            status: 'success' as const,
-            runId: stepRunId,
-            result,
-            elapsedMs: elapsed,
-          };
-        } catch (err) {
-          const elapsed = Date.now() - branchStarted.getTime();
-          return {
-            branchId: b.id,
-            skillId: b.skillId,
-            status: 'failed' as const,
-            error: err instanceof Error ? err.message : String(err),
-            elapsedMs: elapsed,
-          };
-        }
-      });
-      const children = await Promise.all(promises);
-      const finishedAt = new Date();
-      const anyFailed = children.some((c) => c.status === 'failed');
-      const allFailed = children.every((c) => c.status === 'failed');
-      pushStep({
-        nodeId: node.id,
-        nodeType: node.type,
-        children,
-        status: allFailed ? 'failed' : anyFailed ? 'skipped' : 'success',
-        startedAt: nodeStartedAt.toISOString(),
-        finishedAt: finishedAt.toISOString(),
-        elapsedMs: finishedAt.getTime() - nodeStartedAt.getTime(),
-      });
-      if (allFailed) {
-        if ((node.onFailure ?? 'skip-and-continue') === 'stop') {
-          overallStatus = 'failed';
-          break;
-        }
-        overallStatus = 'partial';
-      } else if (anyFailed) {
-        // 'failed' 已在上面分支 break；走到这里 overallStatus 只可能是 'success' | 'partial'
-        overallStatus = 'partial';
-      }
-      continue;
-    }
-
-    if (node.type === 'branch') {
-      const matched = node.cases.find((c) => {
-        try {
-          return c.when(execCtx);
-        } catch {
-          return false;
-        }
-      });
-      const target = matched ?? (node.fallback ? { id: 'fallback', skillId: node.fallback.skillId, inputBuilder: node.fallback.inputBuilder } : null);
-      if (!target) {
-        // 没有任何分支命中且无 fallback：跳过
-        const finishedAt = new Date();
-        pushStep({
-          nodeId: node.id,
-          nodeType: node.type,
-          status: 'skipped',
-          startedAt: nodeStartedAt.toISOString(),
-          finishedAt: finishedAt.toISOString(),
-          elapsedMs: finishedAt.getTime() - nodeStartedAt.getTime(),
-          error: 'no branch matched, no fallback',
-        });
-        // 'skipped' 不下调 status（与 v1.1 §11 设计一致：分支未命中是正常路径）
-        continue;
-      }
-      const skill = resolveSkill(target.skillId);
-      if (!skill) {
-        pushStep(buildFailedStepRecord(node, target.skillId, `skill not found: ${target.skillId}`, nodeStartedAt));
-        if ((node.onFailure ?? 'skip-and-continue') === 'stop') {
-          overallStatus = 'failed';
-          break;
-        }
-        overallStatus = 'partial';
-        continue;
-      }
-      const input = target.inputBuilder ? target.inputBuilder(execCtx) : runInput;
-      try {
-        const { runId: stepRunId, result } = await runSkill(skill, input, ctx);
-        const finishedAt = new Date();
-        results[node.id] = result;
-        pushStep({
-          nodeId: node.id,
-          nodeType: node.type,
-          skillId: target.skillId,
-          status: 'success',
-          runId: stepRunId,
-          result,
-          startedAt: nodeStartedAt.toISOString(),
-          finishedAt: finishedAt.toISOString(),
-          elapsedMs: finishedAt.getTime() - nodeStartedAt.getTime(),
-        });
-      } catch (err) {
-        pushStep(buildFailedStepRecord(node, target.skillId, err instanceof Error ? err.message : String(err), nodeStartedAt));
-        if ((node.onFailure ?? 'skip-and-continue') === 'stop') {
-          overallStatus = 'failed';
-          break;
-        }
-        overallStatus = 'partial';
-      }
-      continue;
-    }
-
-    if (node.type === 'approval') {
-      // 阶段 4 PR-B：写入 pending_approval 步骤记录，挂起整个 workflow，
-      // 等待 routes/workflows.ts 的 /approve 端点调用 resumeWorkflow 才继续。
-      const finishedAt = new Date();
-      pushStep({
-        nodeId: node.id,
-        nodeType: node.type,
-        status: 'skipped',
-        startedAt: nodeStartedAt.toISOString(),
-        finishedAt: finishedAt.toISOString(),
-        elapsedMs: 0,
-        error: 'awaiting approval',
-      });
-      pendingApproval = {
-        pendingNodeId: node.id,
-        pendingNodeIndex: nodeIndex,
-        approverRoles: node.approverRoles,
-      };
-      overallStatus = 'pending_approval';
-      // 阶段 4 PR-C：approval 挂起 → audit 事件
-      emitAuditEvent('approval-requested', runId, workflow.id, ctx, {
-        nodeId: node.id,
-        nodeIndex,
-        approverRoles: node.approverRoles,
-      });
-      break;
-    }
+    if (result.statusUpdate) overallStatus = result.statusUpdate;
+    if (result.pendingApproval) pendingApproval = result.pendingApproval;
+    if (result.stop) break;
   }
 
   return { status: overallStatus, pendingApproval };
