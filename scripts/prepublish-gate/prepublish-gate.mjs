@@ -184,10 +184,30 @@ export async function runGateChecks(config, ctx, fetcher = fetchLocalSeries) {
       });
       continue;
     }
+    // 空 series → fail-closed（codex PR #513 第7轮 P1）：
+    // parquet 文件存在但 ETL 产出为空、只剩当前未完成月、或分区被误清到没有可用历史时，
+    // fetchLocalSeries 会返回空数组；与缺 parquet/取数失败一样属于"闸门无法判定"。
+    // 原始把它当 insufficientData 不进 errors → 主流程 exit 0 → 不完整 warehouse 被发布。
     if (!series || series.length === 0) {
+      const msg = '取数返回空（parquet 存在但 ETL 产出无数据 / 分区被清 / 只剩未完成月）';
+      errors.push({ metric: mc.id, name: mc.name, error: msg });
+      verdicts.push({
+        metric: mc.id, name: mc.name, triggered: false, fetchError: msg, seriesLength: 0,
+      });
+      continue;
+    }
+    // 预检 mature 期数 vs 配置 minMaturePeriods（PR #518 codex P2）：
+    // stats.mjs evaluateMetricSeries 硬编码 mature<3 才返 insufficientData=true；
+    // 配置改 minMaturePeriods=5 时 mature=4 不会触发 stats 内置兜底 → 闸门继续放行违背声明。
+    // 在 runGateChecks 层按声明值预检（不侵入 stats.mjs，避免影响 sentinel）。
+    const effectiveExcludeRecent = Number.isInteger(mc.excludeRecent) ? mc.excludeRecent : globalExcludeRecent;
+    const matureCount = Math.max(0, series.length - effectiveExcludeRecent);
+    if (matureCount < minMaturePeriods) {
+      const msg = `完整期数不足：mature ${matureCount} 期 < 配置 minMaturePeriods ${minMaturePeriods}（series=${series.length}, excludeRecent=${effectiveExcludeRecent}）`;
+      errors.push({ metric: mc.id, name: mc.name, error: msg });
       verdicts.push({
         metric: mc.id, name: mc.name, triggered: false, insufficientData: true,
-        note: '取数返回空，可能 ETL 尚未完成；不阻断',
+        note: msg, seriesLength: series.length, matureCount,
       });
       continue;
     }
@@ -195,15 +215,19 @@ export async function runGateChecks(config, ctx, fetcher = fetchLocalSeries) {
       zThreshold: mc.zThreshold ?? 2,
       momThreshold: mc.momThreshold ?? null,
       direction: mc.direction ?? 'both',
-      excludeRecent: Number.isInteger(mc.excludeRecent) ? mc.excludeRecent : globalExcludeRecent,
+      excludeRecent: effectiveExcludeRecent,
       yoyThreshold: mc.yoyThreshold ?? null,
     });
     verdict.name = mc.name;
     verdict.unit = mc.unit;
     verdict.seriesLength = series.length;
-    // 数据不足时只记录、不阻断
+    verdict.matureCount = matureCount;
+    // stats.mjs 内置 mature<3 兜底：minMaturePeriods<3 时（罕见）仍可能触发，
+    // 与预检语义一致——也进 errors 走 fail-closed。
     if (verdict.insufficientData) {
-      verdict.note = `仅 ${series.length} 期可用，少于最小完整期数 ${minMaturePeriods}；不阻断`;
+      const msg = `完整期数不足：stats 内置兜底（mature<3，少于稳健估计下限）`;
+      errors.push({ metric: mc.id, name: mc.name, error: msg });
+      verdict.note = msg;
     }
     verdicts.push(verdict);
     if (verdict.triggered) triggered.push(verdict);

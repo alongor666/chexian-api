@@ -15,25 +15,25 @@
       "id": "monthly_premium",
       "name": "月签单保费",
       "alert": true,
-      "source": "policy_dedup.monthly_premium",
+      "source": "policy_trend.monthly_premium",
       "unit": "元",
       "direction": "both",
       "zThreshold": 2.5,
       "momThreshold": 30,
       "excludeRecent": 1,
-      "_note": "断崖检测（暴增 / 暴跌均告警）。policy_dedup 按 (policy_no, insurance_start_date) 聚合 + HAVING SUM(premium) > 0，与 server/src/sql/cost/cost-ratios.ts 同口径（B252）。只排 cutoff 当月，避免被春节高峰期倒推伪触发。"
+      "_note": "断崖检测（暴增 / 暴跌均告警）。raw PolicyFact 按 policy_date 月 SUM(premium)，逐字镜像生产 generatePremiumTrendQuery perspective='premium' 路径（不去重、不过滤——闸门金丝雀必须和生产 trend 看到一样的数；codex PR #513 第7轮 P2）。只排 cutoff 当月，避免被未完成月倒推伪触发。"
     },
     {
       "id": "monthly_policy_count",
       "name": "月签单件数",
       "alert": true,
-      "source": "policy_dedup.monthly_policy_count",
+      "source": "policy_trend.monthly_policy_count",
       "unit": "件",
       "direction": "both",
       "zThreshold": 2.5,
       "momThreshold": 30,
       "excludeRecent": 1,
-      "_note": "断崖检测。同 monthly_premium 口径（COUNT DISTINCT policy_no）。"
+      "_note": "断崖检测。raw PolicyFact 按 policy_date 月 COUNT(*)（镜像生产 perspective='policy_count' 的 valueAggregation；批改副本/冲正计入，与 sentinel 看到的数一致）。codex PR #513 第7轮 P2。"
     },
     {
       "id": "monthly_claim_amount",
