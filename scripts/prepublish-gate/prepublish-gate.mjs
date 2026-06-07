@@ -184,10 +184,15 @@ export async function runGateChecks(config, ctx, fetcher = fetchLocalSeries) {
       });
       continue;
     }
+    // 空 series → fail-closed（codex PR #513 第7轮 P1）：
+    // parquet 文件存在但 ETL 产出为空、只剩当前未完成月、或分区被误清到没有可用历史时，
+    // fetchLocalSeries 会返回空数组；与缺 parquet/取数失败一样属于"闸门无法判定"。
+    // 原始把它当 insufficientData 不进 errors → 主流程 exit 0 → 不完整 warehouse 被发布。
     if (!series || series.length === 0) {
+      const msg = '取数返回空（parquet 存在但 ETL 产出无数据 / 分区被清 / 只剩未完成月）';
+      errors.push({ metric: mc.id, name: mc.name, error: msg });
       verdicts.push({
-        metric: mc.id, name: mc.name, triggered: false, insufficientData: true,
-        note: '取数返回空，可能 ETL 尚未完成；不阻断',
+        metric: mc.id, name: mc.name, triggered: false, fetchError: msg, seriesLength: 0,
       });
       continue;
     }
@@ -201,9 +206,12 @@ export async function runGateChecks(config, ctx, fetcher = fetchLocalSeries) {
     verdict.name = mc.name;
     verdict.unit = mc.unit;
     verdict.seriesLength = series.length;
-    // 数据不足时只记录、不阻断
+    // 完整期数不足 < minMaturePeriods 也 fail-closed（codex PR #513 第7轮 P1 同根因延伸）：
+    // 闸门无法做 Z-score 判定时不能"只记录不阻断"——发布前任一指标无法判定即视作环境异常。
     if (verdict.insufficientData) {
-      verdict.note = `仅 ${series.length} 期可用，少于最小完整期数 ${minMaturePeriods}；不阻断`;
+      const msg = `完整期数不足：仅 ${series.length} 期可用，少于最小 ${minMaturePeriods}（excludeRecent 后无足够基线）`;
+      errors.push({ metric: mc.id, name: mc.name, error: msg });
+      verdict.note = msg;
     }
     verdicts.push(verdict);
     if (verdict.triggered) triggered.push(verdict);
