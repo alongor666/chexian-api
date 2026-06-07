@@ -36,11 +36,15 @@ describe('fetch-local-metrics SQL_TEMPLATES', () => {
     expect(sql).toContain('HAVING SUM(premium) > 0');
   });
 
-  it('monthly_claim_amount 模板用 settled + reserve（项目标准口径）', () => {
+  it('monthly_claim_amount 口径锚定 ClaimsAgg SSOT：CASE settlement_time + 过滤无责/零结/注销/拒赔', () => {
     const sql = SQL_TEMPLATES['claims_detail.monthly_claim_amount']({ claimsGlob: '/x/claims/*.parquet' });
     expect(sql).toContain('settled_amount');
     expect(sql).toContain('reserve_amount');
-    expect(sql).toContain('COALESCE');
+    expect(sql).toContain('settlement_time IS NOT NULL'); // 已结案取 settled、未结案取 reserve
+    expect(sql).toContain('liability_ratio'); // 剔除无责案件
+    expect(sql).toContain("case_type NOT IN ('零结','注销','拒赔')"); // 剔除零结/注销/拒赔
+    // 不再 settled + reserve 二者相加（已结案残留 reserve 会双计）
+    expect(sql).not.toContain('COALESCE(settled_amount, 0) + COALESCE(reserve_amount, 0)');
     expect(sql).toContain('accident_time IS NOT NULL');
     expect(sql).toContain('/x/claims/*.parquet');
   });
@@ -51,15 +55,26 @@ describe('fetch-local-metrics SQL_TEMPLATES', () => {
     expect(sql).toContain('accident_time IS NOT NULL');
   });
 
-  it('所有 SQL 模板都过滤掉当前不完整月（date_trunc month CURRENT_DATE）', () => {
+  it('注入 monthStart → 用 < DATE 业务月首日（与发布机时区解耦，codex PR #513 P2）', () => {
     // policy 系列（预签未来起期保单）和 claims 系列（迟到报案）都必须排除不完整月，
-    // 否则 cutoff 当月会因分母小被误判为断崖。
-    const policySql = SQL_TEMPLATES['policy_dedup.monthly_premium']({ policyGlob: '/x/*.parquet' });
-    expect(policySql).toContain("date_trunc('month', current_date)");
-    expect(policySql).toContain("insurance_start_date < date_trunc('month', current_date)");
+    // 否则 cutoff 当月会因分母小被误判为断崖。monthStart 由编排器按 Asia/Shanghai 注入。
+    const policySql = SQL_TEMPLATES['policy_dedup.monthly_premium']({ policyGlob: '/x/*.parquet', monthStart: '2026-06-01' });
+    expect(policySql).toContain("insurance_start_date < DATE '2026-06-01'");
+    expect(policySql).not.toContain('current_date');
 
-    const claimsSql = SQL_TEMPLATES['claims_detail.monthly_claim_amount']({ claimsGlob: '/x/*.parquet' });
-    expect(claimsSql).toContain("accident_time < date_trunc('month', current_date)");
+    const claimsSql = SQL_TEMPLATES['claims_detail.monthly_claim_amount']({ claimsGlob: '/x/*.parquet', monthStart: '2026-06-01' });
+    expect(claimsSql).toContain("accident_time < DATE '2026-06-01'");
+  });
+
+  it('未注入 monthStart → 回退 date_trunc(current_date)（向后兼容）', () => {
+    const sql = SQL_TEMPLATES['policy_dedup.monthly_premium']({ policyGlob: '/x/*.parquet' });
+    expect(sql).toContain("insurance_start_date < date_trunc('month', current_date)");
+  });
+
+  it('monthStart 格式非法 → 抛错（防 SQL 注入 / 误传）', () => {
+    expect(() =>
+      SQL_TEMPLATES['policy_dedup.monthly_premium']({ policyGlob: '/x/*.parquet', monthStart: "2026-06-01'; DROP TABLE" })
+    ).toThrow(/monthStart 格式非法/);
   });
 });
 

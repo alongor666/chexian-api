@@ -122,6 +122,22 @@ function resolveRelative(p, repoRoot) {
  * @param {(ctx, source) => Promise<Array>} [fetcher=fetchLocalSeries] - 注入
  * @returns {Promise<{verdicts: Array, triggered: Array, errors: Array}>}
  */
+/**
+ * 当前业务月首日（YYYY-MM-01），固定按中国业务时区 Asia/Shanghai 计算，与发布机自身时区解耦。
+ * 注入到 SQL 时间窗 cutoff，避免 DuckDB `current_date` 在 UTC 机器月初退到上月（codex PR #513 P2）。
+ * @param {Date} [now] - 注入便于单测；默认取系统当前时刻。
+ */
+export function currentBusinessMonthStart(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === 'year').value;
+  const m = parts.find((p) => p.type === 'month').value;
+  return `${y}-${m}-01`;
+}
+
 export async function runGateChecks(config, ctx, fetcher = fetchLocalSeries) {
   const verdicts = [];
   const triggered = [];
@@ -279,7 +295,9 @@ async function main() {
     policyGlob: inspection.policyGlob,
     claimsGlob: inspection.claimsGlob,
     duckdbBin,
+    monthStart: currentBusinessMonthStart(),
   };
+  log('cyan', `  业务月 cutoff:   < ${ctx.monthStart}（Asia/Shanghai，与机器时区解耦）`);
   let result;
   try {
     result = await runGateChecks(config, ctx);
@@ -314,9 +332,15 @@ async function main() {
   log('cyan', `\n  报告：${verdictPath}`);
   log('cyan', `        ${summaryPath}`);
 
+  // 取数失败＝闸门无法判定该指标，按 fail-closed 阻断（退出码 2，与脚本头部「DuckDB 错误」语义一致）。
+  // 否则只要没有其它指标触发就会走到 exit 0，sync-and-reload Stage 2.5 只看退出码 → 把没体检完的数据 rsync 出去（codex PR #513 P1）。
   if (result.errors.length > 0) {
-    log('yellow', `\n⚠ ${result.errors.length} 个取数错误（不阻断）：`);
-    for (const e of result.errors) log('yellow', `   - ${e.metric}：${e.error.slice(0, 200)}`);
+    log('red', `\n❌ ${result.errors.length} 个取数错误 → fail-closed 阻断（退出码 2，不 rsync、不 reload）：`);
+    for (const e of result.errors) log('red', `   - ${e.metric}：${e.error.slice(0, 200)}`);
+    log('yellow', `\n📄 详情见 ${summaryPath}`);
+    log('yellow', `   确属环境问题（如发布机无 duckdb / Parquet schema 漂移）需放行：`);
+    log('yellow', `   node scripts/prepublish-gate/prepublish-gate.mjs --skip-gate --skip-reason "<原因>"`);
+    process.exit(2);
   }
 
   if (result.triggered.length > 0) {

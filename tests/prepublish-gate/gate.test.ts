@@ -8,6 +8,7 @@ import {
   parseArgs,
   runGateChecks,
   writeBypassAudit,
+  currentBusinessMonthStart,
   // @ts-expect-error mjs without types
 } from '../../scripts/prepublish-gate/prepublish-gate.mjs';
 
@@ -179,6 +180,24 @@ describe('prepublish-gate runGateChecks（注入式 fetcher）', () => {
     const ctx = { policyGlob: 'x', claimsGlob: 'y', duckdbBin: 'duckdb' };
     const { triggered } = await runGateChecks(cfg, ctx, fetcher);
     expect(triggered).toHaveLength(0);
+  });
+});
+
+describe('prepublish-gate currentBusinessMonthStart（Asia/Shanghai，与机器时区解耦）', () => {
+  it('UTC 5/31 23:00 = 北京 6/1 07:00 → 取 2026-06-01（不退到上月）', () => {
+    expect(currentBusinessMonthStart(new Date('2026-05-31T23:00:00Z'))).toBe('2026-06-01');
+  });
+
+  it('月中任意时刻 → 当月首日', () => {
+    expect(currentBusinessMonthStart(new Date('2026-06-15T12:00:00Z'))).toBe('2026-06-01');
+  });
+
+  it('UTC 6/30 20:00 = 北京 7/1 04:00 → 取 2026-07-01', () => {
+    expect(currentBusinessMonthStart(new Date('2026-06-30T20:00:00Z'))).toBe('2026-07-01');
+  });
+
+  it('返回 YYYY-MM-01 格式（可直接拼进 DATE 字面量）', () => {
+    expect(currentBusinessMonthStart(new Date('2026-06-15T12:00:00Z'))).toMatch(/^\d{4}-\d{2}-01$/);
   });
 });
 
