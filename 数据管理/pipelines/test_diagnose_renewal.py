@@ -363,8 +363,11 @@ def test_cli_org_report_when_data_present(tmp_path):
                   "## 四、当月续保表", "## 五、当年已到期续保表", "## 六、当月首日续保情况",
                   "## 七、当月首周续保情况"):
         assert title in text, f"缺少板块：{title}"
-    # 分组维度 = 业务员（表头），非三级机构
-    assert "| 业务员 |" in text
+    # 分组维度 = top10 业务员（表头，需求 2026-06-07 字段名），非三级机构
+    assert "| top10业务员 |" in text
+    # 业务员去数字编码（需求 2026-06-07）：姓名只留中文，无 9 位工号数字残留
+    import re
+    assert not re.search(r"\d{9}", text), "业务员工号数字未清洗去除"
     # top10 固定同一批 + 合计 = 全机构真实整体语义（模板核心契约）
     assert "当月应续 top10" in text and "真实整体" in text
     # 续保影响度专项 + 附录口径（与表一同源，单一事实源不漂移）

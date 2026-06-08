@@ -112,8 +112,6 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
     """).fetchall()
     rpt.add(f"## {num}、{title}")
     rpt.add()
-    rpt.add(f"> {note}")
-    rpt.add()
     if not rows:
         rpt.add("（窗口内无数据）")
         rpt.add()
@@ -156,14 +154,8 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
         f"**{tot_unq:,}**", f"**{tot_lost:,}**", f"**{fp(imp_t)}**",
         f"**{fp(qr_t)}**", f"**{fp(rr_t)}**",
     ])
-    rpt.table(
-        [dim_header, "应续", "已报价", "已续保", "未报价", "流失",
-         "续保影响度", "报价率", "续保率"],
-        trows, ["---", "--:", "--:", "--:", "--:", "--:", "--:", "--:", "--:"],
-    )
 
-    # 字段口径定义统一沉到报告末尾附录（见 run_branch_report），正文只讲业务结论。
-    # 结论：只谈问题，每个问题一段。top3 / by_unq 取展示集（shown）—— 与表格所列一致；
+    # 结论数据：top3 / by_unq 取展示集（shown）—— 与表格所列一致；
     # 分母 tot_* 恒为真实整体，故三级机构视角「前三业务员」指展示的 top10 中影响度前三。
     top3 = shown[:3]  # shown 随 enriched 已按续保影响度降序
     imp_str = "、".join(f"{e['org']}（{fp(e['impact'])}）" for e in top3)
@@ -172,11 +164,12 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
     unq_str = "、".join(f"{e['org']}（{e['unquoted']:,}）" for e in by_unq)
     unq_drag = impact_rate(tot_unq, tot_yc)
 
+    # === 布局（用户 2026-06-07）：结论先行（做判断·问题导向）→ 表格 → 备注 ===
     if kind == "matured":
         gap = round(TARGET_MATURED_RENEWAL_RATE - (rr_t or 0), 1)
         rpt.add(f"**问题一 · 续保率缺口**：{subject}续保率 {fp(rr_t)}，"
                 f"低于 {TARGET_MATURED_RENEWAL_RATE}% 的目标 {gap} 个百分点。"
-                f"续保影响度前三的{dim_header}分别是 {imp_str}，"
+                f"续保影响度前三的{dim_noun}分别是 {imp_str}，"
                 f"三{unit_noun}合计导致{scope_noun}流失 {fp(top3_sum)} 的客户。")
         rpt.add()
         rpt.add(f"**问题二 · 未报价即流失**：{subject}报价率仅 {fp(qr_t)}，"
@@ -185,12 +178,20 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
     else:  # approaching：临期·未到期·进度口径，诚实措辞（不说「已流失」）
         rpt.add(f"**问题一 · 临期续保进度**：{subject}共 {tot_yc:,} 户、当前续保率仅 {fp(rr_t)}"
                 f"（未到期·临期进度，仍在续保动作窗口内，将随到期临近补齐）。"
-                f"续保影响度（按当前尚未续回进度）前三的{dim_header}分别是 {imp_str}，"
+                f"续保影响度（按当前尚未续回进度）前三的{dim_noun}分别是 {imp_str}，"
                 f"三{unit_noun}合计 {fp(top3_sum)} 的临期客户尚未续回，是最需紧急冲刺的盘子。")
         rpt.add()
         rpt.add(f"**问题二 · 临期未报价风险**：{subject}报价率仅 {fp(qr_t)}，"
                 f"仍有 {tot_unq:,} 户至今未报价——距到期已不足 7 天、转化时间极短，"
                 f"是流失风险最高的紧急派单对象（占应续 {fp(unq_drag)}）。未报价客户数前三{dim_noun}是 {unq_str}。")
+    rpt.add()
+    rpt.table(
+        [dim_header, "应续", "已报价", "已续保", "未报价", "流失",
+         "续保影响度", "报价率", "续保率"],
+        trows, ["---", "--:", "--:", "--:", "--:", "--:", "--:", "--:", "--:"],
+    )
+    # 备注（口径说明）置于表格之后；表一指标完整口径见报告末尾附录。
+    rpt.add(f"> {note}")
     rpt.add()
 
 
@@ -209,9 +210,6 @@ def _branch_funnel_section(con, rpt, num, title, win_sql, pool_lead, mature, not
     """).fetchall()
     rpt.add(f"## {num}、{title}")
     rpt.add()
-    if note:
-        rpt.add(f"> {note}")
-        rpt.add()
     if not rows:
         rpt.add("（窗口内无数据）")
         rpt.add()
@@ -229,18 +227,25 @@ def _branch_funnel_section(con, rpt, num, title, win_sql, pool_lead, mature, not
         trows.append([org, f"{yc:,}", f"{q:,}", f"{r:,}", f"{fp(qr)}{light_q(qr)}", rr_cell])
     qr_t, rr_t = rate(tot_q, tot_yc), rate(tot_r, tot_yc)
     trows.append(["**合计**", f"**{tot_yc:,}**", f"**{tot_q:,}**", f"**{tot_r:,}**", f"**{fp(qr_t)}**", f"**{fp(rr_t)}**"])
+
+    # === 布局：结论先行（做判断·问题导向）→ 表格 → 备注 ===
+    # 结论点名最大短板（续保率最低）+ 经营杠杆攻坚点（盘子最大者），便于直接派活。
+    rated = [(o, rate(r, yc)) for o, yc, q, r in shown if yc]
+    rated = [(o, v) for o, v in rated if v is not None]
+    if shown and rated:
+        big = shown[0]  # rows 按应续降序、过滤保序 → 展示集盘子最大者
+        big_rr = rate(big[3] or 0, big[1])
+        hi, lo = max(rated, key=lambda x: x[1]), min(rated, key=lambda x: x[1])
+        prog = "（进度）" if not mature else ""
+        rpt.concl(
+            f"合计应续 {tot_yc:,} 件、续保率 {fp(rr_t)}{prog}、报价率 {fp(qr_t)}。"
+            f"最大短板 **{lo[0]}（续保率 {fp(lo[1])}）**、明显落后于标杆 {hi[0]}（{fp(hi[1])}），是首要补强对象；"
+            f"盘子最大的 **{big[0]}（{big[1]:,} 件）**续保率仅 {fp(big_rr)}，经营杠杆最大、最该集中攻坚。")
     rpt.table([dim_header, "应续", "已报价", "已续保", "报价率", "续保率"],
               trows, ["---", "--:", "--:", "--:", "--:", "--:"])
-    valid = [(o, rate(r, yc)) for o, yc, q, r in shown if yc]
-    valid = [(o, v) for o, v in valid if v is not None]
-    if shown and valid:
-        big = shown[0]
-        hi, lo = max(valid, key=lambda x: x[1]), min(valid, key=lambda x: x[1])
-        # 进度口径已在表头 note 说明，结论不重复解释，仅以「（进度）」一词点出（R6 去口径教学）
-        prog = "" if mature else "（进度）"
-        rpt.concl(f"合计应续 {tot_yc:,} 件、报价率 {fp(qr_t)}、续保率 {fp(rr_t)}{prog}。"
-                  f"续保率标杆 **{hi[0]}（{fp(hi[1])}）**、落后 {lo[0]}（{fp(lo[1])}）；"
-                  f"盘子最大 **{big[0]}（{big[1]:,} 件）**，经营杠杆最大。")
+    if note:
+        rpt.add(f"> {note}")
+        rpt.add()
 
 
 def _branch_speed_section(con, rpt, num, title, prefix, qcol, rcol, win_sql, pool_lead, note,
@@ -258,8 +263,6 @@ def _branch_speed_section(con, rpt, num, title, prefix, qcol, rcol, win_sql, poo
     """).fetchall()
     rpt.add(f"## {num}、{title}")
     rpt.add()
-    rpt.add(f"> {note}")
-    rpt.add()
     if not rows:
         rpt.add("（窗口内无数据）")
         rpt.add()
@@ -275,16 +278,23 @@ def _branch_speed_section(con, rpt, num, title, prefix, qcol, rcol, win_sql, poo
         trows.append([org, f"{yc:,}", f"{sq:,}", f"{sr:,}", fp(rate(sq, yc)), fp(rate(sr, yc))])
     trows.append(["**合计**", f"**{tot_yc:,}**", f"**{tot_q:,}**", f"**{tot_r:,}**",
                   f"**{fp(rate(tot_q, tot_yc))}**", f"**{fp(rate(tot_r, tot_yc))}**"])
+
+    # === 布局：结论先行（做判断·问题导向）→ 表格 → 备注 ===
+    # 速度表点名响应最慢者（快速响应转化最弱）为提速首要对象，便于直接派活。
+    rated = [(o, rate(sr, yc)) for o, yc, sq, sr in shown if yc]
+    rated = [(o, v) for o, v in rated if v is not None]
+    if rated:
+        hi, lo = max(rated, key=lambda x: x[1]), min(rated, key=lambda x: x[1])
+        rpt.concl(
+            f"合计{prefix}续保率 {fp(rate(tot_r, tot_yc))}、{prefix}报价率 {fp(rate(tot_q, tot_yc))}。"
+            f"{prefix}响应最快 **{hi[0]}（{fp(hi[1])}）**、最慢 **{lo[0]}（{fp(lo[1])}）**——"
+            f"{lo[0]}快速响应转化最弱，是{prefix}提速的首要对象。")
+    else:
+        rpt.concl(f"合计{prefix}续保率 {fp(rate(tot_r, tot_yc))}、{prefix}报价率 {fp(rate(tot_q, tot_yc))}。")
     rpt.table([dim_header, "应续", f"{prefix}报价数", f"{prefix}续回数", f"{prefix}报价率", f"{prefix}续保率"],
               trows, ["---", "--:", "--:", "--:", "--:", "--:"])
-    # 口径（口径 A）已在表头 note 说明，结论不重复定义，改为点名响应快慢的维度（R3 白话 + R6 去口径教学）
-    valid = [(o, rate(sr, yc)) for o, yc, sq, sr in shown if yc]
-    valid = [(o, v) for o, v in valid if v is not None]
-    extra = ""
-    if valid:
-        hi, lo = max(valid, key=lambda x: x[1]), min(valid, key=lambda x: x[1])
-        extra = f"{prefix}续保率标杆 **{hi[0]}（{fp(hi[1])}）**、最低 {lo[0]}（{fp(lo[1])}）。"
-    rpt.concl(f"合计{prefix}报价率 {fp(rate(tot_q, tot_yc))}、{prefix}续保率 {fp(rate(tot_r, tot_yc))}。{extra}")
+    rpt.add(f"> {note}")
+    rpt.add()
 
 
 def run_branch_report(con, args, out_dir, ts):
@@ -416,7 +426,10 @@ def run_org_report(con, args, out_dir, ts):
     # 原始年表（含 salesman_name 维度列）：各窗口在自己范围内按车架号去重，口径与分公司视角一致。
     con.execute(f"""
         CREATE TEMP TABLE raw AS
-        SELECT vehicle_frame_no, org_level_3, salesman_name, expiry_date,
+        SELECT vehicle_frame_no, org_level_3,
+               -- 业务员去数字编码（用户 2026-06-07）：姓名只保留中文，去掉前缀工号数字（如 200045244李晓琴 → 李晓琴）。
+               -- 在 raw 层清洗 → top10 选取 / 表格展示 / 合计计数全程一致用去数字名。
+               REGEXP_REPLACE(salesman_name, '[0-9]', '', 'g') AS salesman_name, expiry_date,
                is_quoted::INT AS quoted, is_renewed::INT AS renewed, first_quote_time AS fqt
         FROM read_parquet('{RT}')
         WHERE {where_sql}
@@ -454,7 +467,7 @@ def run_org_report(con, args, out_dir, ts):
             "**已提前锁定的续保进度**，随到期临近逐月补齐；其报价率体现盘子是否已提前铺开。")
     rpt.add()
 
-    dim_kw = dict(dim_col="salesman_name", dim_header="业务员", keep_dims=keep)
+    dim_kw = dict(dim_col="salesman_name", dim_header="top10业务员", keep_dims=keep)
     matured_kw = dict(dim_noun="业务员", scope_noun=f"{org_label}整体", unit_noun="名", **dim_kw)
     _branch_matured_section(con, rpt, "一", "当月已到期续保表",
                             f"expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{today}'", pool_lead,
