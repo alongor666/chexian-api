@@ -312,13 +312,13 @@ def test_cli_branch_report_when_data_present(tmp_path):
     assert "## 附录 · 表一指标口径" in text  # 口径定义沉到报告末尾附录
     assert "指标口径" in text  # 防漂移映射表（位于附录）
     assert "**问题一 · 续保率缺口**" in text and "**问题二 · 未报价即流失**" in text
-    # R1 对标目标：结论以续保率目标为锚给出「差多少个百分点」
-    assert "的目标" in text and "个百分点" in text
-    # R3 业务白话「流失…的客户」+ R4 判断副词「报价率仅」
-    assert "的客户" in text and "报价率仅" in text
+    # R1 对标目标：结论以续保率目标为锚给出「差多少个点」（用户 2026-06-08 精简：个百分点 → 个点）
+    assert "目标" in text and "个点" in text
+    # R3 精简措辞「N单未报价而流失」（用户 2026-06-08：户→单、去冗词）+ R4 判断副词「报价率仅」
+    assert "单未报价而流失" in text and "报价率仅" in text
     # R2：去「视同」留余地措辞（正文结论已全删；附录口径定义可保留精确表述）
     assert "视同" not in text, "残留旧措辞：视同"
-    # R3 业务白话：问题一以「整体分公司流失 N% 的客户」表达，而非技术化「续保缺口扩大」
+    # R3 问题一以「整体分公司流失 N%」表达，而非技术化「续保缺口扩大」（用户 2026-06-08 去「的客户」赘词）
     assert "整体分公司流失" in text
     # 报告语言红线：正文不得残留英文术语堆砌（cutoff 已中文化为「数据截止日」）
     for bad in ("cohort", "%pp", "mature", "funnel", "cutoff"):
@@ -371,9 +371,14 @@ def test_cli_org_report_when_data_present(tmp_path):
     assert 1 <= shown_n <= 15, f"展示业务员数 {shown_n} 应在 1~15（TOP15 上限）"
     # 业务员去数字编码（需求 2026-06-07）：姓名只留中文，无 9 位工号数字残留
     assert not re.search(r"\d{9}", text), "业务员工号数字未清洗去除"
+    # 业务员姓名清洗（需求 2026-06-08）：admin<机构>直接个代 → 「直接个代」，无 admin 前缀残留
+    assert "admin" not in text, "admin<机构>直接个代 未归并为「直接个代」"
     # 目标上限 15 + 以「有续保业务员数」为天然上限（模板核心契约，用户 2026-06-07）+ 合计=全机构真实整体
     assert "当月应续 top15" in text and "真实整体" in text
     assert "有续保业务员数为上限" in text
+    # 措辞精简（需求 2026-06-08）：单位用「单」不用「户」、缺口/拉低幅度用「个点」、结论问题导向
+    assert "单未报价" in text, "未报价措辞未改为「N单未报价」"
+    assert "个点" in text, "缺口/拉低幅度未改为「个点」"
     # 续保影响度专项 + 附录口径（与表一同源，单一事实源不漂移）
     assert "续保影响度" in text and "## 附录 · 表一指标口径" in text
     assert "**问题一 · 续保率缺口**" in text and "**问题二 · 未报价即流失**" in text

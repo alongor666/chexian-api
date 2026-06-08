@@ -43,6 +43,7 @@ from renewal_common import (
     impact_rate,
     light_q,
     light_r,
+    pp,
     rate,
 )
 
@@ -85,8 +86,7 @@ def _win_dedup_cte(win_sql, pool_lead, dim_col="org_level_3"):
 def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
                             kind="matured", subject="本月已到期客户",
                             dim_col="org_level_3", dim_header="三级机构",
-                            dim_noun="机构", scope_noun="整体分公司",
-                            unit_noun="家", keep_dims=None):
+                            scope_noun="整体分公司", unit_noun="家", keep_dims=None):
     """9 列缺口分解表（表一「当月已到期」+ 临期 7 天表共用）。
 
     在基础漏斗上按 renewal_common 注册口径派生 未报价 / 流失 / 续保影响度，按「续保影响度从高至低」排序。
@@ -99,8 +99,8 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
     subject = 结论主语（如「6 月已到期客户」/「未来 7 天将到期客户」）。
 
     维度参数（默认 = 分公司视角 · 三级机构，行为逐字节不变）：
-      · dim_col   分组列（org_level_3 / salesman_name）；dim_header 表头全称；dim_noun 结论简称；
-      · scope_noun 合计范围名词（「导致 X 流失」）；unit_noun 前三量词（机构「家」/ 业务员「名」）；
+      · dim_col   分组列（org_level_3 / salesman_name）；dim_header 表头全称；
+      · scope_noun 合计范围名词（「导致 X 流失」）；unit_noun 合计量词（机构「家」/ 业务员「名」）；
       · keep_dims 仅展示这批维度值（None = 全展示）。续保影响度分母 tot_* 恒按全部维度行计 ——
         三级机构视角合计 = 该机构全部业务员真实整体，展示的 topN 各项之和 < 合计。
     """
@@ -167,22 +167,20 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
     if kind == "matured":
         gap = round(TARGET_MATURED_RENEWAL_RATE - (rr_t or 0), 1)
         rpt.add(f"**问题一 · 续保率缺口**：{subject}续保率 {fp(rr_t)}，"
-                f"低于 {TARGET_MATURED_RENEWAL_RATE}% 的目标 {gap} 个百分点。"
-                f"续保影响度前三的{dim_noun}分别是 {imp_str}，"
-                f"三{unit_noun}合计导致{scope_noun}流失 {fp(top3_sum)} 的客户。")
+                f"低于 {TARGET_MATURED_RENEWAL_RATE}% 目标 {pp(gap)}。"
+                f"续保影响度前三是 {imp_str}，三{unit_noun}合计导致{scope_noun}流失 {fp(top3_sum)}。")
         rpt.add()
         rpt.add(f"**问题二 · 未报价即流失**：{subject}报价率仅 {fp(qr_t)}，"
-                f"仍有 {tot_unq:,} 户至今未报价、已流失，直接拉低续保率 {fp(unq_drag)}"
-                f"（{tot_unq:,} ÷ {tot_yc:,}）。未报价客户数前三{dim_noun}是 {unq_str}。")
+                f"{tot_unq:,}单未报价而流失，拉低续保率 {pp(unq_drag)}。"
+                f"未报价客户数前三是 {unq_str}。")
     else:  # approaching：临期·未到期·进度口径，诚实措辞（不说「已流失」）
-        rpt.add(f"**问题一 · 临期续保进度**：{subject}共 {tot_yc:,} 户、当前续保率仅 {fp(rr_t)}"
+        rpt.add(f"**问题一 · 临期续保进度**：{subject}共 {tot_yc:,} 单、当前续保率仅 {fp(rr_t)}"
                 f"（未到期·临期进度，仍在续保动作窗口内，将随到期临近补齐）。"
-                f"续保影响度（按当前尚未续回进度）前三的{dim_noun}分别是 {imp_str}，"
-                f"三{unit_noun}合计 {fp(top3_sum)} 的临期客户尚未续回，是最需紧急冲刺的盘子。")
+                f"续保影响度前三是 {imp_str}，三{unit_noun}合计 {fp(top3_sum)} 临期客户尚未续回，最需紧急冲刺。")
         rpt.add()
         rpt.add(f"**问题二 · 临期未报价风险**：{subject}报价率仅 {fp(qr_t)}，"
-                f"仍有 {tot_unq:,} 户至今未报价——距到期已不足 7 天、转化时间极短，"
-                f"是流失风险最高的紧急派单对象（占应续 {fp(unq_drag)}）。未报价客户数前三{dim_noun}是 {unq_str}。")
+                f"{tot_unq:,}单未报价、距到期不足 7 天、转化时间极短，是流失风险最高的紧急派单对象"
+                f"（占应续 {fp(unq_drag)}）。未报价客户数前三是 {unq_str}。")
     rpt.add()
     rpt.table(
         [dim_header, "应续", "已报价", "已续保", "未报价", "流失",
@@ -426,9 +424,11 @@ def run_org_report(con, args, out_dir, ts):
     con.execute(f"""
         CREATE TEMP TABLE raw AS
         SELECT vehicle_frame_no, org_level_3,
-               -- 业务员去数字编码（用户 2026-06-07）：姓名只保留中文，去掉前缀工号数字（如 200045244李晓琴 → 李晓琴）。
-               -- 在 raw 层清洗 → topN 选取 / 表格展示 / 合计计数全程一致用去数字名。
-               REGEXP_REPLACE(salesman_name, '[0-9]', '', 'g') AS salesman_name, expiry_date,
+               -- 业务员姓名清洗：① admin<机构>直接个代 → 「直接个代」（个代直营归并，用户 2026-06-08）；
+               -- ② 其余去工号数字（如 200045244李晓琴 → 李晓琴，用户 2026-06-07）。
+               -- raw 层清洗 → topN 选取 / 表格展示 / 合计计数全程一致用清洗后名。
+               CASE WHEN salesman_name LIKE 'admin%直接个代' THEN '直接个代'
+                    ELSE REGEXP_REPLACE(salesman_name, '[0-9]', '', 'g') END AS salesman_name, expiry_date,
                is_quoted::INT AS quoted, is_renewed::INT AS renewed, first_quote_time AS fqt
         FROM read_parquet('{RT}')
         WHERE {where_sql}
@@ -472,7 +472,7 @@ def run_org_report(con, args, out_dir, ts):
     rpt.add()
 
     dim_kw = dict(dim_col="salesman_name", dim_header=f"top{top_n}业务员", keep_dims=keep)
-    matured_kw = dict(dim_noun="业务员", scope_noun=f"{org_label}整体", unit_noun="名", **dim_kw)
+    matured_kw = dict(scope_noun=f"{org_label}整体", unit_noun="名", **dim_kw)
     _branch_matured_section(con, rpt, "一", "当月已到期续保表",
                             f"expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{today}'", pool_lead,
                             note=f"当月已到期（到期日 ≤ 数据截止日 {today}）保单 —— 续保率已成熟，是最接近最终留存的信号。所列为当月应续 top{top_n} 业务员，按续保影响度降序。",
