@@ -22,6 +22,8 @@ from diagnose_renewal import resolve_window  # type: ignore  # noqa: E402
 from diagnose_renewal_branch import _month_bounds, _win_dedup_cte  # type: ignore  # noqa: E402
 from renewal_common import (  # type: ignore  # noqa: E402
     DEFAULT_LIST,
+    customer_category_clause,
+    customer_category_label,
     disp_team,
     funnel_derived,
     impact_rate,
@@ -123,6 +125,33 @@ def test_rate():
 ])
 def test_disp_team(t, expect):
     assert disp_team(t) == expect
+
+
+# ---- 客户类别筛选（SQL 拼接边界点：精确 IN + 单引号转义 + 空值/空白）----
+
+@pytest.mark.parametrize("arg,expect", [
+    (None, None),                      # 未传 → 不筛选
+    ("", None),                        # 空串 → 不筛选
+    ("   ", None),                     # 纯空白 → 不筛选
+    (",", None),                       # 全空段 → 不筛选
+    ("非营业个人客车", "customer_category IN ('非营业个人客车')"),
+    ("非营业个人客车,非营业货车", "customer_category IN ('非营业个人客车', '非营业货车')"),
+    (" 非营业个人客车 , 非营业货车 ", "customer_category IN ('非营业个人客车', '非营业货车')"),  # 去空白
+    ("非营业个人客车,,非营业货车", "customer_category IN ('非营业个人客车', '非营业货车')"),     # 跳过空段
+    ("a'b", "customer_category IN ('a''b')"),  # 单引号转义（注入边界）
+])
+def test_customer_category_clause(arg, expect):
+    assert customer_category_clause(arg) == expect
+
+
+@pytest.mark.parametrize("arg,expect", [
+    (None, ""), ("", ""), ("   ", ""),
+    ("非营业个人客车", "非营业个人客车"),
+    ("非营业个人客车,非营业货车", "非营业个人客车、非营业货车"),
+    (" 非营业个人客车 , 非营业货车 ", "非营业个人客车、非营业货车"),
+])
+def test_customer_category_label(arg, expect):
+    assert customer_category_label(arg) == expect
 
 
 # ---- resolve_window ----
