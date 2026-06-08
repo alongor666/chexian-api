@@ -37,7 +37,14 @@ from pathlib import Path
 import duckdb
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from renewal_common import DEFAULT_LIST, OUT_DIR, POOL_LEAD_DEFAULT, Report  # noqa: E402
+from renewal_common import (  # noqa: E402
+    DEFAULT_LIST,
+    OUT_DIR,
+    POOL_LEAD_DEFAULT,
+    Report,
+    customer_category_clause,
+    customer_category_label,
+)
 from renewal_sections import (  # noqa: E402
     Ctx,
     build_base,
@@ -84,6 +91,9 @@ def main():
     ap.add_argument("--end")
     ap.add_argument("--org", help="三级机构模糊匹配")
     ap.add_argument("--team", help="销售团队模糊匹配")
+    ap.add_argument("--customer-category",
+                    help="客户类别精确筛选（枚举值，如「非营业个人客车」；逗号分隔多值，IN 匹配）；"
+                         "对主报告/分公司视角(--branch-report)/三级机构视角(--org-report)均生效")
     ap.add_argument("--pool-lead-days", type=int, default=POOL_LEAD_DEFAULT,
                     help=f"进盘锚点提前期（天），进盘日=到期日-该值，默认 {POOL_LEAD_DEFAULT}")
     ap.add_argument("--renewal-list", default=str(DEFAULT_LIST), help="wecom 电销续保清单（名单类型映射），默认 iCloud 路径")
@@ -124,6 +134,10 @@ def main():
         where.append(f"org_level_3 ILIKE '%{args.org}%'")
     if args.team:
         where.append(f"team_name ILIKE '%{args.team}%'")
+    cc_clause = customer_category_clause(args.customer_category)
+    if cc_clause:
+        where.append(cc_clause)
+        label += f" · {customer_category_label(args.customer_category)}"
     where_sql = " AND ".join(where)
 
     if not build_base(con, where_sql):

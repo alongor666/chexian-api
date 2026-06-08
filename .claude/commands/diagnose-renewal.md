@@ -79,9 +79,16 @@ python3 数据管理/pipelines/diagnose_renewal.py --time-view ytd --year 2026 -
 # 仅诊断「资阳销售一部」（模糊匹配 team_name）
 python3 数据管理/pipelines/diagnose_renewal.py --time-view ytd --year 2026 --team 资阳销售一部
 
+# 仅诊断「非营业个人客车」客户类别（精确枚举值，逗号分隔多值用 IN 匹配）
+python3 数据管理/pipelines/diagnose_renewal.py --time-view custom --start 2026-06-01 --end 2026-06-30 \
+  --customer-category 非营业个人客车
+# 多客户类别：--customer-category 非营业个人客车,非营业货车
+
 # 重点：本周高优先级跟进名单（未来 30 天）
 python3 数据管理/pipelines/diagnose_renewal.py --time-view next_30_days
 ```
+
+> **客户类别（`--customer-category`）vs 机构/团队（`--org`/`--team`）**：客户类别是 10 个固定枚举值（非营业个人客车 / 非营业货车 / 营业货车 …），用 `IN` 精确匹配（避免「非营业个人客车」误伤「非营业企业客车」）；org/team 用 `ILIKE` 模糊匹配。三筛选可叠加，且对主报告 / `--branch-report` / `--org-report` 三种模式均生效。
 
 ### 责任模式来源（板块 2，可插拔）
 

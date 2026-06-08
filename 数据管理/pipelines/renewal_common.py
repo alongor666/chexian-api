@@ -40,6 +40,31 @@ TH_RENEW = (75, 65, 55)
 TARGET_MATURED_RENEWAL_RATE = 58
 
 
+def _parse_categories(arg):
+    """逗号分隔的客户类别参数 → 去空白的非空值列表。"""
+    return [c.strip() for c in (arg or "").split(",") if c.strip()]
+
+
+def customer_category_clause(arg):
+    """构造客户类别 WHERE 子句（精确 IN 匹配，支持逗号分隔多值）。
+
+    客户类别是 10 个固定枚举值（非营业个人客车/非营业货车/营业货车…），故用 IN 精确匹配而非
+    org/team 的 ILIKE 模糊匹配，避免「非营业个人客车」误伤「非营业企业客车」。值对单引号转义
+    （memory domain_duckdb_string_escaping）。三处 where 注入（主报告/分公司视角/三级机构视角）
+    共用本函数，单一事实源杜绝漂移。arg 为空 → 返回 None（不筛选）。
+    """
+    cats = _parse_categories(arg)
+    if not cats:
+        return None
+    quoted = ", ".join("'" + c.replace("'", "''") + "'" for c in cats)
+    return f"customer_category IN ({quoted})"
+
+
+def customer_category_label(arg):
+    """报告头/scope 用的客户类别显示标签（顿号连接），空则空串。"""
+    return "、".join(_parse_categories(arg))
+
+
 class Report:
     """累加 Markdown 行的轻量渲染器。"""
 

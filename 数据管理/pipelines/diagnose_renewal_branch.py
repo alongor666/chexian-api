@@ -38,6 +38,8 @@ from renewal_common import (
     RT,
     TARGET_MATURED_RENEWAL_RATE,
     Report,
+    customer_category_clause,
+    customer_category_label,
     fp,
     funnel_derived,
     impact_rate,
@@ -306,6 +308,9 @@ def run_branch_report(con, args, out_dir, ts):
         where.append(f"org_level_3 ILIKE '%{args.org}%'")
     if args.team:
         where.append(f"team_name ILIKE '%{args.team}%'")
+    cc_clause = customer_category_clause(getattr(args, "customer_category", None))
+    if cc_clause:
+        where.append(cc_clause)
     where_sql = " AND ".join(where)
 
     # 原始年表（不去重）：各窗口在自己范围内按车架号去重，避免跨月重复车架号（年内 1099 个）被 MIN 误归月份
@@ -326,6 +331,9 @@ def run_branch_report(con, args, out_dir, ts):
         scope += f" · 机构「{args.org}」"
     if args.team:
         scope += f" · 团队「{args.team}」"
+    cc_label = customer_category_label(getattr(args, "customer_category", None))
+    if cc_label:
+        scope += f" · 客户类别「{cc_label}」"
 
     rpt = Report()
     rpt.add(f"# 续保诊断 · 分公司视角 · {today.year}年{today.month}月{scope}")
@@ -418,6 +426,9 @@ def run_org_report(con, args, out_dir, ts):
              f"org_level_3 ILIKE '%{args.org}%'"]
     if args.team:
         where.append(f"team_name ILIKE '%{args.team}%'")
+    cc_clause = customer_category_clause(getattr(args, "customer_category", None))
+    if cc_clause:
+        where.append(cc_clause)
     where_sql = " AND ".join(where)
 
     # 原始年表（含 salesman_name 维度列）：各窗口在自己范围内按车架号去重，口径与分公司视角一致。
@@ -453,8 +464,11 @@ def run_org_report(con, args, out_dir, ts):
     sm_total = con.execute(
         "SELECT COUNT(DISTINCT salesman_name) FROM raw WHERE salesman_name IS NOT NULL").fetchone()[0]
 
+    cc_label = customer_category_label(getattr(args, "customer_category", None))
+    cc_suffix = f" · 客户类别「{cc_label}」" if cc_label else ""
+
     rpt = Report()
-    rpt.add(f"# 续保诊断 · 三级机构视角 · {org_label} · {today.year}年{today.month}月")
+    rpt.add(f"# 续保诊断 · 三级机构视角 · {org_label} · {today.year}年{today.month}月{cc_suffix}")
     rpt.add()
     rpt.add(f"> **数据截止日** {today} · **当月** [{m_start} ~ {m_end}] · **当年** [{y_start} ~ {y_end}] · **口径** 商业险 · 应续件数 = 去重车架号")
     rpt.add(f"> **可续期锚点（四川规则）** 可续期窗口 = 到期前 {pool_lead} 天起；首日 = 到期前 {pool_lead} 天当天（例 6/30 到期 → 6/1）、首周 = 到期前 {pool_lead}~{pool_lead - 6} 天即首日起 7 天（含首日，例 6/1 ~ 6/7）。其他省按实际可续期规则调整 `--pool-lead-days`。")
