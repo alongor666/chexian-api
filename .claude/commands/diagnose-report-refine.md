@@ -76,6 +76,7 @@ python3 数据管理/pipelines/refine_verify.py --report <报告.md>
 - **临期 7 天 ≠ 已流失**（仍在续保动作窗口内）
 - **已续回 = 已签单续保**（is_renewed），含起保日在未来的提前续保
 - **可续期锚点 = 到期前 30 天**（四川规则）
+- **对比落差口径**：续回**不是**报价的严格子集（实测约 0.16% 续回未经报价，`is_renewed ⊄ is_quoted`）。事实包 `contrast`：matured 表（`source=parquet_exact`）的 `quoted_renew_rate`/`unquoted_renew_rate` 是回查精确值，可直接引用；progress 表（`approx=true`、`unquoted_renew_rate=null`）的 `quoted_renew_rate` 仅为上界。**禁止把未报价路径续保率写成「0%」**，除非该表 `unquoted_renew_rate` 精确值确为 0；否则写「未报价路径几乎不成交」。
 
 ## 写法规范
 
@@ -83,8 +84,9 @@ python3 数据管理/pipelines/refine_verify.py --report <报告.md>
 
 陈列 **漏斗递进 → 缺口归因到异常点 → 对比落差锚点**，让事实自己说话。不出现「结论/问题」字样、不下显性判断动词。1-3 句，克制。落差锚点让改进杠杆自现，不加动作句。
 
-> 示例（乐山表一·已到期）：
+> 示例（乐山表一·已到期 matured）：
 > `78 件应续 → 63 件报价 → 36 件续回。15 件缺口来自未报价，刘洋新占 10 件。已报价续保率 57.1%，未报价 0%。`
+> （此处「未报价 0%」用的是 matured 表 `contrast.unquoted_renew_rate` 的 `parquet_exact` 精确值；progress 表该值为 `null`，不可写具体百分比。）
 
 > 进度表（progress）措辞区分（乐山表二·临期）：
 > `未来 7 天 50 件到期，已续回 15 件（进度，仍在续保窗口内）。13 件尚未报价、距到期不足 7 天。`

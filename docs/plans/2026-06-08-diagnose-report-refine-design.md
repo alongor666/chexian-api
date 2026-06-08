@@ -54,6 +54,8 @@ report.md → refine_verify.py（确定性）：
 
 - `maturity`: `matured`(已到期=最终留存) / `progress`(未到期=进度)，决定 AI 措辞与是否亮灯
 - `verify.ok=false` → AI 必须中止、不产出正式版、列出差异
+- `contrast`（对比落差）：matured 表由 verify 回查给**精确交叉拆分**（`source=parquet_exact`，含精确 `unquoted_renew_rate`）；progress 表为表内**上界近似**（`approx=true`、`unquoted_renew_rate=null`）。因实测 `is_renewed ⊄ is_quoted`（约 0.16% 续回未经报价），续回/报价仅为已报价路径续保率上界，故 matured 必须用回查精确值，progress 不可写未报价具体百分比。
+- **加固**（codex review）：SQL 回查用 DuckDB 参数化查询（`?` 占位符绑定 org/cc/日期，防注入，org/cc 来自报告文本）；漏斗列序由 `_assert_funnel_layout` 守卫，第 2/3/4 列非 应续/报价/续回 即 fail-loud。
 
 ## 5. 两层方法论（写在命令文档，AI 执行）
 
@@ -85,6 +87,7 @@ report.md → refine_verify.py（确定性）：
 **边界**：
 - `verify.ok=false`（报告数字与 Parquet 不符）→ 中止报错，列差异，不产出错误正式版
 - 报告无法解析 → 报错提示检查来源
+- 报告漏斗列序漂移（第 2/3/4 列非 应续/报价/续回）→ `_assert_funnel_layout` fail-loud 抛错，拒绝按固定位静默读错数（progress 表无回查兜底，尤为关键）
 - 无 adapter 的域（出险率等，推广前）→ 跳过回查、仅用通用写作层、显式标注「未回查」
 
 ## 8. 预留输入接口（内容逐渐积累）

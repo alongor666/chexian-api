@@ -137,12 +137,27 @@ def _col_index(headers, *keywords):
     return None
 
 
+def _assert_funnel_layout(headers, title):
+    """漏斗三列位置守卫：第 2/3/4 列恒为 应续 / 报价 / 续回(保)。列序漂移即 fail-loud，
+    避免 progress 表无 Parquet 回查兜底时按固定位 1/2/3 静默读错列（P2 review 加固）。"""
+    if len(headers) < 4:
+        raise ValueError(f"表「{title}」列数 {len(headers)} < 4，无法定位 应续/报价/续回 漏斗列")
+    for pos, kws in [(1, ("应续",)), (2, ("报价",)), (3, ("续保", "续回"))]:
+        hc = _clean(headers[pos])
+        if not any(k in hc for k in kws):
+            raise ValueError(
+                f"表「{title}」第 {pos + 1} 列表头「{headers[pos]}」不含预期关键词 {kws}；"
+                f"漏斗列序疑似变动，拒绝按固定位静默读数（请同步更新 table_facts）")
+
+
 def table_facts(idx_cn: str, title: str, headers, data, total) -> dict:
     """构建单表事实结构：漏斗 / 合计率 / 最大异常点 / 缺口 / 对比落差。
 
-    漏斗三级用位置（第2/3/4列恒为 应续/报价数/续回数，跨 7 表稳定）；率与缺口列用表头匹配。
+    漏斗三级用位置（第2/3/4列恒为 应续/报价数/续回数，跨 7 表稳定，先经 _assert_funnel_layout
+    守卫）；率与缺口列用表头匹配。
     """
     maturity = "matured" if "已到期" in title else "progress"
+    _assert_funnel_layout(headers, title)
     i_yc, i_q, i_r = 1, 2, 3
     i_qr = _col_index(headers, "报价率")
     i_rr = _col_index(headers, "续保率")
@@ -196,11 +211,20 @@ def table_facts(idx_cn: str, title: str, headers, data, total) -> dict:
                        "unquoted_top": ({"name": top_unq["name"], "value": top_unq["unquoted"]}
                                         if top_unq else None)}
 
-    # 对比落差：已报价续保率(=续回/报价) vs 未报价续保率(恒 0)
+    # 对比落差：已报价路径续保率 vs 未报价路径续保率。
+    # 表内只有 应续/报价/续回三列，无法把续回拆成「报价内续回 / 未报价续回」；
+    # 实测 is_renewed ⊄ is_quoted（约 0.16% 续回未经报价），故续回/报价仅为已报价路径续保率的
+    # **上界近似**。matured 表会被 verify_renewal 的精确交叉拆分覆盖（见 build_facts）。
     if total and isinstance(fact.get("total", {}).get("quoted"), (int, float)):
         q, r = fact["total"]["quoted"], fact["total"]["renewed"]
         if q:
-            fact["contrast"] = {"quoted_renew_rate": rate(r, q), "unquoted_renew_rate": 0.0}
+            fact["contrast"] = {
+                "quoted_renew_rate": rate(r, q),
+                "unquoted_renew_rate": None,
+                "approx": True,
+                "assumption": "续回⊆报价上界（约 0.16% 续回未经报价，故已报价路径续保率略高估；"
+                              "matured 表已由回查给精确值）",
+            }
 
     return fact
 
@@ -208,12 +232,24 @@ def table_facts(idx_cn: str, title: str, headers, data, total) -> dict:
 # ---------- 续保 adapter：回查 renewal_tracker 核验成熟口径表 ----------
 
 def _renewal_aggregate(con, start: date, end: date, org: str, cc: str):
-    """独立朴素 SQL 重算窗口内去重车架号的 应续/已报价/已续保（与生成器同口径、独立实现）。"""
-    where = [f"expiry_date >= DATE '{start}'", f"expiry_date <= DATE '{end}'"]
+    """独立朴素 SQL 重算窗口内去重车架号的 应续/已报价/已续回 + 续回×报价交叉拆分
+    （与生成器同口径、独立实现）。
+
+    参数化防注入（P1 review）：org/cc 来自报告文本（可能含单引号），用 DuckDB 占位符 `?`
+    绑定值；日期绑定 date 对象（不拼 `DATE '...'` 字面量）；ILIKE 用 `'%' || ? || '%'`。
+    RT 是项目内常量路径（renewal_common 唯一事实源，非外部输入），保留 f-string。
+
+    返回 (应续, 已报价, 已续回, 续回且报价, 续回未报价)。后两项供精确对比落差——
+    实测 is_renewed ⊄ is_quoted（约 0.16% 续回未经报价），不能假设未报价续保率恒 0。
+    """
+    where = ["expiry_date >= ?", "expiry_date <= ?"]
+    params = [start, end]
     if org:
-        where.append(f"org_level_3 ILIKE '%{org}%'")
+        where.append("org_level_3 ILIKE '%' || ? || '%'")
+        params.append(org)
     if cc:
-        where.append(f"customer_category = '{cc}'")
+        where.append("customer_category = ?")
+        params.append(cc)
     sql = f"""
         WITH d AS (
           SELECT vehicle_frame_no, MAX(is_quoted::INT) q, MAX(is_renewed::INT) r
@@ -221,19 +257,26 @@ def _renewal_aggregate(con, start: date, end: date, org: str, cc: str):
           WHERE {' AND '.join(where)}
           GROUP BY vehicle_frame_no
         )
-        SELECT COUNT(*), COALESCE(SUM(q),0), COALESCE(SUM(r),0) FROM d
+        SELECT COUNT(*), COALESCE(SUM(q),0), COALESCE(SUM(r),0),
+               COALESCE(SUM(CASE WHEN r=1 AND q=1 THEN 1 ELSE 0 END),0),
+               COALESCE(SUM(CASE WHEN r=1 AND q=0 THEN 1 ELSE 0 END),0)
+        FROM d
     """
-    return con.execute(sql).fetchone()
+    return con.execute(sql, params).fetchone()
 
 
 def verify_renewal(meta: dict, facts: list) -> dict:
-    """回查成熟口径表（当月已到期 / 当年已到期）合计 vs Parquet 直查。"""
+    """回查成熟口径表（当月已到期 / 当年已到期）合计 vs Parquet 直查。
+
+    同时为每张成熟表算**精确对比落差**（续回×报价交叉拆分），放进 `exact_contrast`（keyed by idx），
+    由 build_facts 合并进事实包——matured 表用精确值替换表内上界近似，progress 表沿用近似。
+    """
     if meta["domain"] != "renewal" or not meta["org"] or not meta["cutoff"] or not meta["year"]:
-        return {"checked": [], "ok": True, "skipped": "缺机构/截止日/年份，无法回查"}
+        return {"checked": [], "ok": True, "skipped": "缺机构/截止日/年份，无法回查", "exact_contrast": {}}
     try:
         import duckdb
     except ImportError:
-        return {"checked": [], "ok": True, "skipped": "duckdb 不可用"}
+        return {"checked": [], "ok": True, "skipped": "duckdb 不可用", "exact_contrast": {}}
 
     cutoff = date.fromisoformat(meta["cutoff"])
     org, cc, year = meta["org"], meta["customer_category"], meta["year"]
@@ -244,7 +287,7 @@ def verify_renewal(meta: dict, facts: list) -> dict:
     windows["当年已到期"] = (date(year, 1, 1), cutoff)
 
     con = duckdb.connect()
-    details, ok = [], True
+    details, exact_contrast, ok = [], {}, True
     for f in facts:
         if f["maturity"] != "matured" or "total" not in f:
             continue
@@ -252,7 +295,7 @@ def verify_renewal(meta: dict, facts: list) -> dict:
         if not win:
             continue
         start, end = windows[win]
-        yc, q, r = _renewal_aggregate(con, start, end, org, cc)
+        yc, q, r, rq, ru = _renewal_aggregate(con, start, end, org, cc)
         for field, rep, pq in [("yc", f["total"]["yc"], yc),
                                ("quoted", f["total"]["quoted"], q),
                                ("renewed", f["total"]["renewed"], r)]:
@@ -260,8 +303,15 @@ def verify_renewal(meta: dict, facts: list) -> dict:
             ok = ok and match
             details.append({"table": f["idx"], "title": f["title"], "field": field,
                             "report": rep, "parquet": pq, "match": match})
+        # 精确对比落差：已报价路径=续回且报价/报价；未报价路径=续回未报价/未报价
+        exact_contrast[f["idx"]] = {
+            "quoted_renew_rate": rate(rq, q),
+            "unquoted_renew_rate": rate(ru, yc - q),
+            "source": "parquet_exact",
+        }
     con.close()
-    return {"checked": sorted({d["title"] for d in details}), "ok": ok, "details": details}
+    return {"checked": sorted({d["title"] for d in details}), "ok": ok,
+            "details": details, "exact_contrast": exact_contrast}
 
 
 def build_facts(report_path: Path, do_verify: bool = True) -> dict:
@@ -274,8 +324,15 @@ def build_facts(report_path: Path, do_verify: bool = True) -> dict:
         if not headers:
             continue
         facts.append(table_facts(idx_cn or head, title or head, headers, data, total))
-    verify = verify_renewal(meta, facts) if do_verify else {"checked": [], "ok": True, "skipped": "--no-verify"}
-    return {"meta": meta, "tables": facts, "verify": verify}
+    if do_verify:
+        verify = verify_renewal(meta, facts)
+    else:
+        verify = {"checked": [], "ok": True, "skipped": "--no-verify", "exact_contrast": {}}
+    # matured 表用回查精确对比落差覆盖表内上界近似（immutable：构造新 dict，不原地改）
+    exact = verify.get("exact_contrast", {})
+    verify_out = {k: v for k, v in verify.items() if k != "exact_contrast"}
+    tables = [{**f, "contrast": exact[f["idx"]]} if f["idx"] in exact else f for f in facts]
+    return {"meta": meta, "tables": tables, "verify": verify_out}
 
 
 def main():
@@ -287,7 +344,10 @@ def main():
     path = Path(args.report)
     if not path.exists():
         sys.exit(f"❌ 报告不存在：{path}")
-    facts = build_facts(path, do_verify=not args.no_verify)
+    try:
+        facts = build_facts(path, do_verify=not args.no_verify)
+    except ValueError as e:
+        sys.exit(f"❌ 报告解析失败（漏斗列序守卫触发）：{e}")
     print(json.dumps(facts, ensure_ascii=False, indent=2))
     if not facts["verify"]["ok"]:
         sys.exit("❌ 回查校验失败：报告数字与 Parquet 不符，禁止据此产出正式版（详见上方 verify.details）")

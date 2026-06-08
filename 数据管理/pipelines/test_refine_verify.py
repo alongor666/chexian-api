@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
+import refine_verify  # type: ignore  # noqa: E402  模块级访问（monkeypatch RT / _renewal_aggregate）
 from refine_verify import (  # type: ignore  # noqa: E402
     _clean,
     _num,
@@ -143,9 +145,11 @@ def test_facts_gap_and_contrast(report):
     t1 = build_facts(report, do_verify=False)["tables"][0]
     assert t1["gap"]["unquoted"] == 7
     assert t1["gap"]["unquoted_top"]["name"] == "张三"
-    # 对比落差：已报价续保率 = 续回7/报价11 = 63.6%，未报价恒 0
+    # 无回查（--no-verify）→ 对比落差为表内上界近似：已报价续保率 = 续回7/报价11 = 63.6%（上界），
+    # 未报价路径表内无法拆分 → None（不再谎称恒 0；matured 表由回查给精确值）
     assert t1["contrast"]["quoted_renew_rate"] == 63.6
-    assert t1["contrast"]["unquoted_renew_rate"] == 0.0
+    assert t1["contrast"]["unquoted_renew_rate"] is None
+    assert t1["contrast"]["approx"] is True
 
 
 def test_facts_progress_anomaly_by_lowest_renew(report):
@@ -166,3 +170,127 @@ def test_build_facts_no_verify(report):
     out = build_facts(report, do_verify=False)
     assert out["verify"]["ok"] is True
     assert "--no-verify" in out["verify"]["skipped"]
+    assert "exact_contrast" not in out["verify"]  # 内部 plumbing，不进公开事实包
+
+
+# ---- P2.2 漏斗列序守卫（fail-loud，无回查兜底的 progress 表防静默读错列）----
+
+def test_funnel_layout_guard_fail_loud():
+    # 第 2 列被换成「已报价」、应续移到第 3 列 → 守卫应抛 ValueError 而非静默读错
+    bad = ["业务员", "已报价", "应续", "已续保", "续保率"]
+    with pytest.raises(ValueError, match="应续"):
+        table_facts("一", "当月已到期续保表", bad, [], None)
+
+
+def test_funnel_layout_guard_too_few_cols():
+    with pytest.raises(ValueError, match="列数"):
+        table_facts("一", "当月已到期续保表", ["业务员", "应续"], [], None)
+
+
+# ---- P2.4 分公司视角元信息（org=None → 回查跳过）+ duckdb 降级锚点 ----
+
+BRANCH_SYNTHETIC = """# 续保诊断 · 分公司视角 · 2026年6月
+
+> **数据截止日** 2026-06-08 · **口径** 商业险
+> **生成** `diagnose_renewal.py --branch-report` · 20260608_000000
+
+## 一、当月已到期续保表
+
+| 三级机构 | 应续 | 已报价 | 已续保 | 未报价 | 流失 | 续保影响度 | 报价率 | 续保率 |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| 乐山 | 10 | 8 | 5 | 2 | 5 | 50.0% | 80.0% | 50.0% |
+| **合计** | **10** | **8** | **5** | **2** | **5** | **50.0%** | **80.0%** | **50.0%** |
+"""
+
+
+def test_parse_meta_branch_report_no_org():
+    m = parse_meta(BRANCH_SYNTHETIC)
+    assert m["view"] == "branch-report"
+    assert m["org"] is None                       # 分公司视角无单一机构
+    v = verify_renewal(m, [])
+    assert v["ok"] is True and "skipped" in v      # org=None → 回查跳过（不误判 ok=false）
+
+
+def test_verify_renewal_duckdb_unavailable(monkeypatch):
+    """降级锚点：duckdb 不可用时 verify 返回 ok=True + skipped，不阻断产出。"""
+    import builtins
+    real_import = builtins.__import__
+
+    def fake_import(name, *a, **k):
+        if name == "duckdb":
+            raise ImportError("simulated missing duckdb")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    meta = {"domain": "renewal", "org": "乐山", "cutoff": "2026-06-08",
+            "year": 2026, "month": 6, "customer_category": None}
+    v = verify_renewal(meta, [])
+    assert v["ok"] is True
+    assert v["skipped"] == "duckdb 不可用"
+
+
+# ---- P1 SQL 注入安全 + P2.3 续回×报价交叉拆分（需 duckdb + 合成 parquet）----
+
+@pytest.fixture
+def synthetic_rt(tmp_path, monkeypatch):
+    """造一张小 renewal_tracker parquet 并 monkeypatch refine_verify.RT 指向它。
+
+    乐山 4 帧覆盖 报价×续回 四象限：
+      VIN1 报价+续回 / VIN2 报价+未续回 / VIN3 未报价+续回 / VIN4 未报价+未续回
+    宜宾 1 帧（VIN5 报价+续回）用于验证 org 过滤不串读。
+    """
+    duckdb = pytest.importorskip("duckdb")
+    p = tmp_path / "rt.parquet"
+    con = duckdb.connect()
+    con.execute(
+        """
+        CREATE TABLE rt AS SELECT * FROM (VALUES
+          ('VIN1', TRUE,  TRUE,  DATE '2026-06-05', '乐山', '非营业个人客车'),
+          ('VIN2', TRUE,  FALSE, DATE '2026-06-05', '乐山', '非营业个人客车'),
+          ('VIN3', FALSE, TRUE,  DATE '2026-06-05', '乐山', '非营业个人客车'),
+          ('VIN4', FALSE, FALSE, DATE '2026-06-05', '乐山', '非营业个人客车'),
+          ('VIN5', TRUE,  TRUE,  DATE '2026-06-05', '宜宾', '非营业个人客车')
+        ) AS t(vehicle_frame_no, is_quoted, is_renewed, expiry_date, org_level_3, customer_category)
+        """
+    )
+    con.execute(f"COPY rt TO '{p}' (FORMAT PARQUET)")
+    con.close()
+    monkeypatch.setattr(refine_verify, "RT", str(p))
+    return str(p)
+
+
+def test_renewal_aggregate_sql_injection_safe(synthetic_rt):
+    duckdb = pytest.importorskip("duckdb")
+    con = duckdb.connect()
+    start, end = date(2026, 6, 1), date(2026, 6, 30)
+    legit = refine_verify._renewal_aggregate(con, start, end, "乐山", None)
+    assert legit[0] == 4                # 合法 org 命中乐山 4 帧
+    # 注入串被当字面量匹配 → 命中 0；旧 f-string 会让 ILIKE '%乐山' OR '1'='1%' 恒真 → 返回全部 5 帧
+    evil = refine_verify._renewal_aggregate(con, start, end, "乐山' OR '1'='1", None)
+    assert evil[0] == 0
+    con.close()
+
+
+def test_renewal_aggregate_crosstab_split(synthetic_rt):
+    duckdb = pytest.importorskip("duckdb")
+    con = duckdb.connect()
+    yc, q, r, rq, ru = refine_verify._renewal_aggregate(
+        con, date(2026, 6, 1), date(2026, 6, 30), "乐山", None)
+    con.close()
+    assert (yc, q, r) == (4, 2, 2)
+    assert rq == 1                      # 续回且报价 = VIN1
+    assert ru == 1                      # 续回未报价 = VIN3 → 证明 is_renewed ⊄ is_quoted
+
+
+def test_verify_exact_contrast_for_matured(synthetic_rt):
+    pytest.importorskip("duckdb")
+    meta = {"domain": "renewal", "org": "乐山", "cutoff": "2026-06-30",
+            "year": 2026, "month": 6, "customer_category": None}
+    facts = [{"idx": "一", "title": "当月已到期续保表", "maturity": "matured",
+              "total": {"yc": 4, "quoted": 2, "renewed": 2}}]
+    v = verify_renewal(meta, facts)
+    assert v["ok"] is True              # 报告合计 4/2/2 与 parquet 一致
+    ec = v["exact_contrast"]["一"]
+    assert ec["source"] == "parquet_exact"
+    assert ec["quoted_renew_rate"] == 50.0    # 续回且报价1 / 报价2
+    assert ec["unquoted_renew_rate"] == 50.0  # 续回未报价1 / 未报价2 → 精确，非恒 0
