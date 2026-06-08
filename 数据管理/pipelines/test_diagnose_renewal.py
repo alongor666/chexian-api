@@ -323,3 +323,70 @@ def test_cli_branch_report_when_data_present(tmp_path):
     # 报告语言红线：正文不得残留英文术语堆砌（cutoff 已中文化为「数据截止日」）
     for bad in ("cohort", "%pp", "mature", "funnel", "cutoff"):
         assert bad not in text, f"报告残留英文/格式问题：{bad}"
+
+
+# ---- 三级机构视角（--org-report 模板）：业务员维度 7 表 + top10 固定贯穿 + 合计=全机构真实整体 ----
+
+def _top_org_with_data():
+    """动态选「当月已到期应续最多」的三级机构（避免硬编码机构名随数据漂移而脆弱）。"""
+    import duckdb  # lazy：仅 smoke 在有 parquet 时调用
+    rt = _HERE.parent / "warehouse" / "fact" / "renewal_tracker" / "latest.parquet"
+    if not rt.exists():
+        return None
+    today = date.today()
+    m_start = today.replace(day=1)
+    row = duckdb.connect().execute(f"""
+        SELECT org_level_3 FROM read_parquet('{rt}')
+        WHERE expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{today}'
+          AND org_level_3 IS NOT NULL
+        GROUP BY 1 ORDER BY COUNT(DISTINCT vehicle_frame_no) DESC LIMIT 1
+    """).fetchone()
+    return row[0] if row else None
+
+
+def test_cli_org_report_when_data_present(tmp_path):
+    """三级机构视角模板：7 张业务员窗口表 + top10 固定贯穿 + 合计=全机构真实整体 + 共用表一专项口径。"""
+    org = _top_org_with_data()
+    if org is None:
+        pytest.skip("renewal_tracker parquet 缺失（CI 无数据），跳过三级机构视角 smoke")
+    out = subprocess.run(
+        [sys.executable, str(_HERE / "diagnose_renewal.py"),
+         "--org-report", "--org", org, "--out-dir", str(tmp_path)],
+        capture_output=True, text=True, timeout=180,
+    )
+    assert out.returncode == 0, out.stderr
+    mds = list(tmp_path.glob("续保三级机构视角_*.md"))
+    assert mds, "未生成三级机构视角报告"
+    text = mds[0].read_text(encoding="utf-8")
+    # 7 张窗口表（与分公司视角同结构，仅分组维度换业务员）—— 复用同套 section 函数
+    for title in ("## 一、当月已到期续保表", "## 二、临期 7 天续保表", "## 三、当月未到期续保表",
+                  "## 四、当月续保表", "## 五、当年已到期续保表", "## 六、当月首日续保情况",
+                  "## 七、当月首周续保情况"):
+        assert title in text, f"缺少板块：{title}"
+    # 分组维度 = top10 业务员（表头，需求 2026-06-07 字段名），非三级机构
+    assert "| top10业务员 |" in text
+    # 业务员去数字编码（需求 2026-06-07）：姓名只留中文，无 9 位工号数字残留
+    import re
+    assert not re.search(r"\d{9}", text), "业务员工号数字未清洗去除"
+    # top10 固定同一批 + 合计 = 全机构真实整体语义（模板核心契约）
+    assert "当月应续 top10" in text and "真实整体" in text
+    # 续保影响度专项 + 附录口径（与表一同源，单一事实源不漂移）
+    assert "续保影响度" in text and "## 附录 · 表一指标口径" in text
+    assert "**问题一 · 续保率缺口**" in text and "**问题二 · 未报价即流失**" in text
+    # 临期表诚实进度措辞（approaching，未到期不说「已流失」）
+    assert "**问题一 · 临期续保进度**" in text
+    # 已续回口径：= 已签单续保（is_renewed），与前端续保追踪一致；不按 renewed_date 起保日切片
+    assert "已续回口径" in text and "已签单" in text
+    # 报告语言红线：正文不得残留英文术语堆砌
+    for bad in ("cohort", "%pp", "mature", "funnel", "cutoff"):
+        assert bad not in text, f"报告残留英文/格式问题：{bad}"
+
+
+def test_cli_org_report_requires_org():
+    """三级机构视角模式缺 --org 必须报错退出（不依赖 parquet，CI 可跑）。"""
+    out = subprocess.run(
+        [sys.executable, str(_HERE / "diagnose_renewal.py"), "--org-report"],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert out.returncode != 0
+    assert "--org" in (out.stdout + out.stderr)
