@@ -110,6 +110,17 @@ jobs:
 
             cd /var/www/chexian
 
+            # ── backup 前所有权预修复（防死锁，B-deploy-backup-owner）──
+            # 背景：手动 root 操作（bcrypt 应急时绕过 wrapper 直接 sudo npm ci 等）会在
+            # node_modules 留下 root-owned 子树，使下面 deployer 身份的 backup
+            # `cp -r server/node_modules .bak` 全量 Permission denied → set -e 中断 →
+            # 永远走不到 install 末尾的 chown trap → 死锁，每次自动部署都失败。
+            # 修法：backup 前先 self-update 把 wrapper 升到含 fix-deps-owner 的版本，
+            # 再 fix-deps-owner 把所有权归一到 deployer。旧 wrapper 不识别新子命令时 || true
+            # 降级（首次引入需配合一次手动 chown 打破初始死锁，之后永久自愈）。
+            sudo /usr/local/bin/deploy-chexian-api self-update || echo "[self-update@pre-backup] non-fatal"
+            sudo /usr/local/bin/deploy-chexian-api fix-deps-owner || echo "[fix-deps-owner] non-fatal (旧 wrapper 未识别)"
+
             # ── 备份阶段：原生模块 + 锁文件回滚需要完整快照 ──
             # 仅 dist 回滚不够：npm ci --omit=dev 会重建 node_modules，
             # 若新版本的 better-sqlite3 等原生依赖编译失败或运行时异常，
