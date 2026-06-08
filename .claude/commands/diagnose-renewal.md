@@ -1,8 +1,8 @@
 ---
 name: diagnose-renewal
-description: 续保诊断 v2.1 — 三级机构经营盯盘 / 机构下钻追业务员 / 涨价异常专题 / 报价响应速度 / 待跟进清单 / 分公司视角6表（--branch-report）
+description: 续保诊断 v2.2 — 三级机构经营盯盘 / 机构下钻追业务员 / 涨价异常专题 / 报价响应速度 / 待跟进清单 / 分公司视角7表（--branch-report）/ 三级机构视角业务员维度模板（--org-report，应续 top10 固定贯穿）
 category: data-analysis
-version: 2.1.0
+version: 2.2.0
 author: "@claude"
 tags: [diagnosis, renewal, salesforce, action-list]
 scope: project
@@ -24,7 +24,7 @@ dependencies:
 last_updated: "2026-06-06"
 ---
 
-# 续保诊断 v2.1（/diagnose-renewal）
+# 续保诊断 v2.2（/diagnose-renewal）
 
 > **三级机构经营盯盘版**。复用应续盘（renewal_tracker）+ 上年原单 / 续保单渠道（policy/current）+ 报价（quotes_conversion）多方 JOIN，输出 6 大板块 Markdown 报告 + 3 份 CSV。面向分公司管理者：看各机构续保率/报价率/未报价/未续回、已到期续保率 vs 全月进度，并下钻到团队/业务员便于追踪安排。Parquet 板块只读；**责任模式**额外读责任模式清单（缺失则降级跳过）。
 

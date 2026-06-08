@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-续保诊断 v2.1 — CLI 编排入口（三级机构经营盯盘 + 分公司视角）
+续保诊断 v2.2 — CLI 编排入口（三级机构经营盯盘 + 分公司视角 + 三级机构视角模板）
 
 本文件只负责：命令行参数 → 时间窗口解析 → 构建 base → 顺序调用 6 大板块 → 落盘。
 实现分层（单一职责，依赖树无环）：
@@ -76,7 +76,7 @@ def resolve_window(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="续保诊断 v2.1 三级机构经营盯盘 + 分公司视角")
+    ap = argparse.ArgumentParser(description="续保诊断 v2.2 三级机构经营盯盘 + 分公司视角 + 三级机构视角模板")
     ap.add_argument("--time-view", default="ytd",
                     choices=["ytd", "by_month", "mtd_today", "next_to_eom", "next_30_days", "custom"])
     ap.add_argument("--year", type=int, default=date.today().year)
