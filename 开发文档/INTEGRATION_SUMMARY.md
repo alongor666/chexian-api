@@ -14,7 +14,7 @@
 
 **修改内容**：
 - 将内联的冲突检测逻辑（80+ 行 bash 代码）替换为简洁的工具调用
-- 采用 `bun run scripts/check-write-conflict.mjs` 调用独立工具
+- 采用 `bun run scripts/check-write-conflict.mjs` 调用独立工具（注：该脚本已于 2026-06-07 删除，现冲突检测并入 `bun run governance`）
 - 保留治理校验调用
 
 **优势**：
@@ -56,20 +56,14 @@ scripts/check-write-conflict.mjs (综合检测)
 ### 工具独立性测试
 
 ```bash
-# 测试任务 ID 分配
-$ bun run scripts/assign-task-id.mjs @claude
-B100  ✅
-
 # 测试文档分区检查
 $ bun run scripts/check-document-partition.mjs
 📋 文档分区检查 (Agent: @unknown)
 📝 检查 1 个文档...
 ✅ 文档分区检查通过  ✅
 
-# 测试冲突检测
-$ bun run scripts/check-write-conflict.mjs
-🔍 PR前冲突检测
-✅ 所有检查通过，可以创建 PR  ✅
+# 注：assign-task-id.mjs / check-write-conflict.mjs 已于 2026-06-07 删除（event-log 治本收尾）
+#     现等价 → 新增任务：bun scripts/backlog.mjs add ；冲突检测：bun run governance
 ```
 
 ### 集成测试
@@ -84,7 +78,7 @@ $ bun run scripts/check-write-conflict.mjs
 1. ✅ 分析变更
 2. ✅ 生成 commit message
 3. ✅ 同步最新代码（git fetch）
-4. ✅ 运行冲突检测（check-write-conflict.mjs）
+4. ✅ 运行冲突检测（`bun run governance`，旧 check-write-conflict.mjs 已退役）
 5. ✅ 运行治理校验（check-governance.mjs）
 6. ✅ 提交代码（git commit + push）
 7. ✅ 创建 PR（gh pr create）
@@ -124,14 +118,16 @@ git push
 /chexian-commit-push-pr
 ```
 
-### 冲突检测工具也可以单独使用
+### 检测工具也可以单独使用
+
+> ⚠️ 下方旧脚本已于 2026-06-07 删除，以下为 event-log 模型下的现行等价命令。
 
 ```bash
-# 只想检查冲突，不创建 PR
-bun run scripts/check-write-conflict.mjs
+# 只想检查冲突，不创建 PR（含 merge 标记扫描 + BACKLOG 事件日志陈旧守卫）
+bun run governance
 
-# 只想分配任务 ID
-NEW_ID=$(bun run scripts/assign-task-id.mjs @claude)
+# 只想新增 BACKLOG 任务（event-log：写入方永不挑号，无"分配 ID"概念）
+bun scripts/backlog.mjs add --actor @claude --priority P3 --section "..." --desc "..."
 
 # 只想检查文档分区
 bun run scripts/check-document-partition.mjs
@@ -151,11 +147,11 @@ bun run scripts/check-document-partition.mjs
 - ✅ `.claude/commands/chexian-commit-push-pr-test-guide.md` - 测试指南
 - ✅ `.claude/commands/conflict-free-quick-reference.md` - 快速参考卡片
 
-### 已存在的工具（无需修改）
+### 当时涉及的工具（现状）
 
-- ✅ `scripts/assign-task-id.mjs` - 任务 ID 自动分配
-- ✅ `scripts/check-document-partition.mjs` - 文档分区检查
-- ✅ `scripts/check-write-conflict.mjs` - PR 前冲突检测
+- ❌ `scripts/assign-task-id.mjs` - 任务 ID 自动分配（**已删除 2026-06-07**；event-log 下写入方永不挑号）
+- ✅ `scripts/check-document-partition.mjs` - 文档分区检查（保留）
+- ❌ `scripts/check-write-conflict.mjs` - PR 前冲突检测（**已删除 2026-06-07**；改由 `bun run governance` 覆盖）
 
 ### 文档（已存在）
 
