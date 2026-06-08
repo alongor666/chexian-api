@@ -91,6 +91,10 @@ def main():
     ap.add_argument("--branch-report", action="store_true",
                     help="分公司视角模式：输出 6 张三级机构窗口表（当月已到期/未到期/当月/当年 + 首日/首周进盘响应），"
                          "以 cutoff 当天所在月/年为窗口，忽略 --time-view/--start/--end")
+    ap.add_argument("--org-report", action="store_true",
+                    help="三级机构视角模式（模板）：锁定单一三级机构（--org 必填），同样 6 张窗口表，"
+                         "但分组维度为业务员、统一展示当月应续 top10 固定同一批人，合计=该机构全部业务员；"
+                         "以 cutoff 当天所在月/年为窗口，忽略 --time-view/--start/--end")
     ap.add_argument("--no-action-list", action="store_true", help="不落 CSV")
     ap.add_argument("--out-dir", default=str(OUT_DIR))
     args = ap.parse_args()
@@ -99,6 +103,11 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
+
+    if args.org_report:
+        from diagnose_renewal_branch import run_org_report  # lazy：仅三级机构视角模式才加载
+        run_org_report(con, args, out_dir, ts)
+        return
 
     if args.branch_report:
         from diagnose_renewal_branch import run_branch_report  # lazy：仅分公司视角模式才加载
