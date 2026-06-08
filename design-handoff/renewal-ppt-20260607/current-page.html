@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<!-- 续保诊断 · 分公司视角 · 2026年6月（四川分公司）— xcl-html2pdf 16:9 演示版
+     源报告：续保分公司视角_2026年06月_20260607_054528.md
+     引入顺序：deck-16x9.css（机制）→ report-skin.css（视觉）→ skin-16x9.css（演示字号） -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>续保诊断 · 分公司视角 · 2026年6月 · 四川分公司</title>
+<style>
+/* ===== deck-16x9.css ===== */
+/* ===========================================================================
+ * deck-16x9.css —— PPT 16:9 演示版面机制（与 page-deck.css 平行，二选一）
+ *   · 固定 16:9 画幅盒 1280×720px（=13.33×7.5in@96dpi，正好 PowerPoint 16:9 标准）
+ *   · 屏幕：横向一屏一页翻页（deck-16x9.js 注入；A4 版用 deck.js，互不影响）
+ *   · 打印/导出：一页一张 16:9，内容绝不跨页、无半空白页
+ * 用法（引入顺序务必如下）：
+ *   <link deck-16x9.css>（机制）→ <link report-skin.css>（视觉规范）→ <link skin-16x9.css>（演示字号）
+ *   每页一个 <section class="page">，内容放进 .inner；封面用 .page.cover-page；页尾引 deck-16x9.js
+ * 与 A4 版（page-deck.css）的唯一差别是画幅与可用高；配色/字体/组件全继承 report-skin.css。
+ * ========================================================================= */
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  background:#cdbf9c;color:#16140f;line-height:1.7;-webkit-font-smoothing:antialiased;padding:24px 0;}
+
+/* —— 固定 16:9 画幅盒 —— */
+.page{
+  width:1280px;height:720px;margin:0 auto 28px;position:relative;overflow:hidden;
+  background:#f5efe0;box-shadow:0 14px 40px rgba(0,0,0,.42);
+}
+/* 内容定位盒：可用高 = 720 − 64 − 52 = 604px。填充率以此为分母。 */
+.inner{position:absolute;left:64px;right:64px;top:64px;bottom:52px;}
+.inner.flexcol{display:flex;flex-direction:column;}
+/* 让 flexcol 里的主图/主块自动撑满下半页（如 SVG 配 class="grow"） */
+.inner.flexcol .grow{flex:1 1 auto;min-height:0;}
+/* 封面铺满整页 */
+.cover-page .inner{top:0;bottom:0;left:0;right:0;}
+
+/* ====== 屏幕：GPU transform 单步推入（丝滑演示引擎，仅屏幕生效；deck-16x9.js 驱动） ====== */
+@media screen{
+  /* 视口即舞台：一屏一页，无滚动条、无惯性回弹 */
+  body.deck{margin:0;width:100vw;height:100vh;overflow:hidden;padding:0;position:relative;background:#cdbf9c;}
+  /* 每页绝对铺满视口；只对 transform 做过渡 → GPU 合成、丝滑。左/右页停在 ±100%（移出视口） */
+  body.deck .slide{position:absolute;top:0;left:0;width:100vw;height:100vh;
+    display:flex;align-items:center;justify-content:center;backface-visibility:hidden;
+    transition:transform .52s cubic-bezier(.22,.61,.36,1);will-change:transform;}
+  body.deck-no-anim .slide{transition:none!important;} /* 初始摆位 / 远跳预置：临时关过渡 */
+  body.deck .slide .page{margin:0;transform-origin:center center;}
+  /* —— 底部序号条：一排页码，点击一键直达，当前页高亮（取代旧的文字提示+点击左右） —— */
+  .deck-bar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:99;
+    display:flex;gap:5px;max-width:92vw;overflow-x:auto;padding:7px 10px;
+    background:rgba(20,18,12,.62);border-radius:23px;backdrop-filter:blur(7px);
+    box-shadow:0 5px 18px rgba(0,0,0,.34);opacity:.5;transition:opacity .25s;
+    scrollbar-width:none;user-select:none;}
+  .deck-bar::-webkit-scrollbar{display:none;}
+  .deck-bar:hover{opacity:1;}
+  .deck-num{flex:0 0 auto;min-width:27px;height:27px;padding:0 7px;border:0;cursor:pointer;
+    border-radius:14px;font-family:"Noto Serif SC",serif;font-size:13px;font-weight:700;
+    color:#f1e7cf;background:transparent;letter-spacing:.02em;line-height:27px;
+    transition:background .15s,color .15s;}
+  .deck-num:hover{background:rgba(241,231,207,.16);}
+  .deck-num.on{background:#9e1813;color:#fff;}
+  .deck-fs-btn{font-size:14px;padding:0 9px;border-left:1px solid rgba(241,231,207,.26);}
+  .deck-grid-btn{font-size:15px;padding:0 9px;
+    border-left:1px solid rgba(241,231,207,.26);border-radius:0 14px 14px 0;}
+
+  /* —— 缩略图总览：▦ 打开 / Esc 退出，全部页铺一屏，点击进入（淡入 + 上浮） —— */
+  .deck-overview{position:fixed;inset:0;z-index:200;overflow:auto;
+    background:linear-gradient(160deg,#2b261c,#16140f);padding:42px 40px 60px;
+    opacity:0;visibility:hidden;transition:opacity .3s ease,visibility .3s;}
+  body.ov-open{overflow:hidden;}
+  body.ov-open .deck-overview{opacity:1;visibility:visible;}
+  .deck-ov-hd{color:#cbb98a;text-align:center;font-size:13px;letter-spacing:.24em;
+    margin-bottom:26px;font-family:"Noto Sans SC",sans-serif;cursor:pointer;}
+  .deck-overview-grid{display:grid;grid-template-columns:repeat(auto-fill,300px);
+    gap:24px;justify-content:center;align-content:start;
+    transform:translateY(12px);transition:transform .34s cubic-bezier(.22,.61,.36,1);}
+  body.ov-open .deck-overview-grid{transform:translateY(0);}
+  .deck-thumb{position:relative;overflow:hidden;border-radius:4px;cursor:pointer;
+    background:#f5efe0;box-shadow:0 6px 18px rgba(0,0,0,.45);
+    outline:2px solid transparent;transition:outline-color .15s,transform .15s;}
+  .deck-thumb:hover{transform:translateY(-3px);outline-color:#bd9b52;}
+  .deck-thumb.on{outline-color:#9e1813;}
+  .deck-thumb .page{box-shadow:none;}
+}
+
+/* 尊重「减少动态效果」系统偏好：关闭推入过渡 */
+@media (prefers-reduced-motion:reduce){ body.deck .slide{transition:none!important;} }
+
+/* ====== 打印/导出：一盒一页 16:9 ====== */
+@page{ size:1280px 720px; margin:0; }
+@media print{
+  body{background:#fff;padding:0;display:block;}
+  /* 复位屏幕态的绝对定位/位移/过渡，让每页回到正常流、一页一张 */
+  .slide{position:static!important;display:block!important;width:auto!important;height:auto!important;
+    transform:none!important;opacity:1!important;visibility:visible!important;transition:none!important;}
+  .page{margin:0;box-shadow:none;transform:none!important;break-after:page;page-break-after:always;}
+  .page:last-child{break-after:auto;page-break-after:auto;}
+  .deck-bar,.deck-overview{display:none!important;}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+}
+
+</style>
+<style>
+/* ===== report-skin.css ===== */
+/* ===========================================================================
+ * report-skin.css —— 标准报告皮肤（中国国家地理风）
+ *   固化：语义配色 + 字体 + 字号分级 + 通用组件。配合 page-deck.css 使用。
+ *   任意报告 <link> 这两张样式表，即得统一的字体/字号/字色视觉，无需自调。
+ *   引入顺序：<link page-deck.css>（版面机制）→ <link report-skin.css>（视觉规范）
+ *   涡旋诊断专属组件（.stage-* / .triad / .shape / .vortex）见 company-vortex-card。
+ * ========================================================================= */
+:root{
+  --cng-red:#9e1813; --ink:#16140f; --ink2:#26221a;
+  --paper:#f4eede; --paper2:#ece2c8; --gold:#bd9b52; --gold-d:#8a6f2c;
+  --jade:#2f6b4f; --rust:#a8431f; --line:#cbbd9b; --dim:#7a715b; --hair:#d8cba6;
+}
+body{color:var(--ink);}
+.serif{font-family:"Noto Serif SC","Songti SC","STSong","SimSun",serif;}
+
+/* 报告页底纹（覆盖 page-deck.css 的纯色默认背景） */
+.page{background:linear-gradient(168deg,#f5efe0,#ece1c6);}
+
+/* —— 页眉 / 页脚 —— */
+.rhead{position:absolute;top:8.5mm;left:16mm;right:16mm;display:flex;
+  justify-content:space-between;align-items:flex-end;
+  border-bottom:1.6px solid var(--cng-red);padding-bottom:2mm;}
+.rhead .l{font-weight:900;letter-spacing:.22em;font-size:10.5px;color:var(--cng-red);}
+.rhead .l span{color:var(--dim);font-weight:400;letter-spacing:.16em;margin-left:6px;}
+.rhead .r{font-size:9.5px;letter-spacing:.18em;color:var(--dim);}
+.rfoot{position:absolute;bottom:7.5mm;left:16mm;right:16mm;display:flex;
+  justify-content:space-between;align-items:center;
+  border-top:1px solid var(--hair);padding-top:1.8mm;
+  font-size:9px;letter-spacing:.14em;color:var(--dim);}
+.rfoot .pg{font-family:"Noto Serif SC",serif;font-weight:900;color:var(--cng-red);letter-spacing:.05em;}
+
+/* —— 章节标题系统 —— */
+.sec-head{display:flex;align-items:baseline;gap:13px;margin-bottom:6px;}
+.sec-no{font-family:"Noto Serif SC",serif;font-size:14px;font-weight:900;color:#fff;
+  background:var(--cng-red);width:38px;height:38px;flex:none;display:flex;
+  align-items:center;justify-content:center;border-radius:2px;}
+.sec-title{font-size:28px;font-weight:900;letter-spacing:.04em;color:var(--ink);}
+.sec-en{font-size:11px;letter-spacing:.32em;color:var(--dim);text-transform:uppercase;margin-top:3px;}
+.rule{height:2px;background:linear-gradient(90deg,var(--cng-red),var(--gold) 32%,transparent);margin:14px 0 20px;}
+
+/* —— 封面 —— */
+.cover-page .inner{padding:60px 56px;display:flex;flex-direction:column;}
+.cover-page{background:
+  radial-gradient(circle at 76% 24%, rgba(189,155,82,.34), transparent 46%),
+  radial-gradient(circle at 14% 86%, rgba(168,84,42,.15), transparent 50%),
+  linear-gradient(165deg,#f6efdb 0%,#ece1c4 60%,#e2d4b0 100%);}
+.cover-page .top{display:flex;justify-content:space-between;align-items:center;
+  border-bottom:2px solid var(--cng-red);padding-bottom:10px;}
+.cover-page .top .logo{font-weight:900;letter-spacing:.28em;font-size:13px;color:var(--cng-red);}
+.cover-page .top .logo b{border:2px solid var(--cng-red);padding:2px 8px;margin-right:8px;}
+.cover-page .top .iss{font-size:10px;letter-spacing:.2em;color:var(--dim);}
+.kicker{color:var(--gold-d);font-size:13px;letter-spacing:.4em;
+  border-left:3px solid var(--cng-red);padding-left:13px;margin:54px 0 26px;}
+.cover-page h1{font-size:60px;font-weight:900;line-height:1.12;letter-spacing:.03em;color:var(--ink);}
+.cover-page h1 .red{color:#bb301a;}
+.cover-page .sub{font-size:17px;color:#6b5f44;margin-top:18px;letter-spacing:.1em;line-height:1.7;}
+.cover-page .code{display:inline-block;margin-top:24px;font-size:12px;letter-spacing:.24em;
+  color:var(--gold-d);border:1px solid #c9b277;padding:6px 15px;border-radius:2px;}
+.defn{margin-top:auto;padding:24px 28px;border-radius:3px;
+  background:rgba(255,250,235,.6);border:1px solid #d2c4a0;border-left:4px solid var(--cng-red);
+  font-size:15px;line-height:1.9;color:var(--ink2);}
+.defn b{color:var(--rust);font-weight:700;}
+
+/* —— 档案表 —— */
+.dossier{display:grid;grid-template-columns:repeat(2,1fr);border-top:2px solid var(--ink);}
+.dossier .row{display:flex;border-bottom:1px solid var(--line);padding:12px 4px;font-size:15px;}
+.dossier .row .k{color:var(--cng-red);font-weight:700;width:92px;flex:none;}
+.dossier .row .v{color:var(--ink2);}
+
+/* —— 正文 / 引言 / 数据条 / 数据表 / 图注 —— */
+.lede{font-size:15px;color:var(--ink2);margin-bottom:6px;}
+.bar-row{display:flex;align-items:center;gap:12px;margin:9px 0;font-size:15px;}
+.bar-row .lbl{width:64px;flex:none;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums;}
+.bar-track{flex:1;height:28px;background:rgba(120,110,80,.16);border-radius:2px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:2px;display:flex;align-items:center;justify-content:flex-end;
+  padding-right:10px;font-size:12px;color:#fff;font-weight:700;white-space:nowrap;}
+.bar-rev{background:linear-gradient(90deg,#7a3326,#a8542a);}
+.bar-prof{background:linear-gradient(90deg,#8a6f2c,#bd9b52);}
+.bar-peak{background:linear-gradient(90deg,#2f6b4f,#3f8a66)!important;}
+table.data{width:100%;border-collapse:collapse;margin-top:14px;font-size:15px;}
+table.data th{background:var(--cng-red);color:#fbf3df;padding:11px 9px;text-align:left;font-weight:700;letter-spacing:.04em;}
+table.data td{padding:10px 9px;border-bottom:1px solid var(--line);color:var(--ink2);font-variant-numeric:tabular-nums;}
+table.data tr:nth-child(even) td{background:rgba(155,140,100,.08);}
+table.data .hot{color:var(--cng-red);font-weight:700;}
+table.data .ok{color:#2f6b4f;font-weight:700;}
+.caption{font-size:14px;color:var(--dim);letter-spacing:.04em;margin-top:14px;font-style:italic;line-height:1.7;}
+
+/* —— 评分框 / 对比行 / 徽标 / 量级块 —— */
+.verdict{display:grid;grid-template-columns:repeat(2,1fr);gap:17px;margin-top:8px;}
+.vbox{background:#f1e8d4;border:1px solid #d4c6a2;border-radius:3px;padding:24px 26px;}
+.vbox .vt{font-size:16px;font-weight:900;color:var(--cng-red);margin-bottom:6px;}
+.vbox .stars{font-size:17px;color:#a07f2c;letter-spacing:2px;margin-bottom:10px;}
+.vbox p{font-size:15px;color:var(--ink2);line-height:1.8;}
+.opt-row{display:grid;grid-template-columns:1.2fr 1.5fr 1.1fr;border-bottom:1px solid var(--line);align-items:center;}
+.opt-row.head{border-bottom:2px solid var(--ink);font-weight:900;}
+.opt-row .c{padding:12px 10px;font-size:15px;}
+.opt-row .c0{font-weight:700;color:var(--ink2);}
+.opt-row .c2{color:var(--dim);font-size:14px;}
+.badge{display:inline-block;font-size:11.5px;padding:4px 9px;border-radius:2px;font-weight:700;}
+.b-opt{background:#e7dcc0;color:#8a6f2c;border:1px solid #c9b277;}
+.b-zero{background:#f2dcd6;color:var(--cng-red);border:1px solid #d8a99e;}
+.b-eng{background:#dbe8d8;color:#2f6b4f;border:1px solid #a7c4ad;}
+.calc{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0;}
+.calc .cc{background:#f1e8d4;border:1px solid #d4c6a2;border-radius:3px;padding:26px 16px;text-align:center;}
+.calc .cc .big{font-family:"Noto Serif SC",serif;font-size:34px;font-weight:900;color:#bb301a;line-height:1.1;}
+.calc .cc .unit{font-size:13px;color:var(--gold-d);}
+.calc .cc .desc{font-size:14px;color:var(--dim);margin-top:10px;line-height:1.62;}
+
+/* —— 引文 / 说明 / 印章 —— */
+.quote{font-family:"Noto Serif SC",serif;font-size:15.5px;line-height:2.0;color:var(--ink2);
+  border:1px solid #d4c6a2;border-left:4px solid var(--cng-red);
+  padding:24px 28px;margin-top:20px;border-radius:3px;background:#f1e8d4;}
+.quote b{color:var(--rust);}
+.note{font-size:14px;color:var(--ink2);line-height:1.82;}
+.note b{color:var(--cng-red);}
+.seal{position:absolute;top:0;right:0;width:62px;height:62px;border:2px solid var(--cng-red);
+  border-radius:4px;color:var(--cng-red);display:flex;align-items:center;justify-content:center;
+  font-family:"Noto Serif SC",serif;font-weight:900;font-size:12px;text-align:center;line-height:1.3;
+  transform:rotate(-7deg);opacity:.85;}
+
+</style>
+<style>
+/* ===== skin-16x9.css ===== */
+/* ===========================================================================
+ * skin-16x9.css —— PPT 演示字号叠加层（覆盖 report-skin.css 的字号/留白到演示尺度）
+ *   只改“尺寸”：字号分级、行距、留白、组件高度，放大到屏幕 / 投影可读。
+ *   配色 / 字体 / 语义字色 / 组件结构全部继承 report-skin.css —— 单一真相源不变。
+ *   引入顺序（务必）：deck-16x9.css → report-skin.css → skin-16x9.css
+ *   分母：.inner 可用高 ≈ 604px（720 − 上 64 − 下 52），每页填充率 80–100%。
+ *   演示风铁律：每页少内容、大字、留白；字号比 A4 报告大，但内容量约为其六成。
+ * ========================================================================= */
+body{line-height:1.62;}
+
+/* —— 页眉 / 页脚（定位沿用 report-skin 的 mm≈px，仅放大字号） —— */
+.rhead .l{font-size:14px;}
+.rhead .l span{font-size:12px;}
+.rhead .r{font-size:12.5px;}
+.rfoot{font-size:12.5px;}
+
+/* —— 章节标题系统 —— */
+.sec-head{gap:16px;margin-bottom:6px;}
+.sec-no{font-size:19px;width:46px;height:46px;}
+.sec-title{font-size:36px;}
+.sec-en{font-size:13px;letter-spacing:.3em;margin-top:4px;}
+.rule{height:3px;margin:14px 0 18px;}
+
+/* —— 封面 —— */
+.cover-page .inner{padding:50px 72px;}
+.cover-page .top .logo{font-size:16px;}
+.cover-page .top .logo b{padding:3px 10px;margin-right:10px;}
+.cover-page .top .iss{font-size:13px;}
+.kicker{font-size:16px;letter-spacing:.38em;margin:30px 0 18px;padding-left:16px;}
+.cover-page h1{font-size:62px;line-height:1.1;}
+.cover-page .sub{font-size:20px;margin-top:16px;line-height:1.5;}
+.cover-page .code{font-size:14px;margin-top:20px;padding:8px 18px;letter-spacing:.22em;}
+.defn{padding:18px 26px;font-size:18px;line-height:1.55;}
+
+/* —— 档案表 —— */
+.dossier .row{font-size:19px;padding:11px 6px;}
+.dossier .row .k{width:118px;}
+
+/* —— 正文 / 引言 / 数据条 / 数据表 / 图注 —— */
+.lede{font-size:19px;margin-bottom:6px;line-height:1.55;}
+.bar-row{font-size:19px;gap:14px;margin:11px 0;}
+.bar-row .lbl{width:86px;}
+.bar-track{height:32px;}
+.bar-fill{font-size:15px;padding-right:12px;}
+table.data{font-size:18px;margin-top:12px;}
+table.data th{padding:10px 12px;}
+table.data td{padding:9px 12px;}
+.caption{font-size:16px;margin-top:12px;line-height:1.55;}
+
+/* —— 评分框 / 对比行 / 徽标 / 量级块 —— */
+.verdict{gap:18px;margin-top:8px;}
+.vbox{padding:18px 24px;}
+.vbox .vt{font-size:19px;margin-bottom:6px;}
+.vbox .stars{font-size:20px;margin-bottom:8px;}
+.vbox p{font-size:17px;line-height:1.55;}
+.opt-row .c{font-size:19px;padding:12px 12px;}
+.opt-row .c2{font-size:17px;}
+.badge{font-size:15px;padding:5px 11px;}
+.calc{gap:18px;margin:18px 0;}
+.calc .cc{padding:22px 16px;}
+.calc .cc .big{font-size:44px;}
+.calc .cc .unit{font-size:16px;}
+.calc .cc .desc{font-size:17px;margin-top:10px;line-height:1.5;}
+
+/* —— 引文 / 说明 / 印章 —— */
+.quote{font-size:19px;line-height:1.58;padding:18px 26px;margin-top:16px;}
+.note{font-size:17px;line-height:1.55;}
+.seal{width:72px;height:72px;font-size:15px;}
+
+</style>
+<style>
+  /* 数据密集页（12–14 行三级机构表）紧凑修饰：仅压字号/行距/留白到投影可读密度，
+     配色 / 亮灯字色 / 组件结构全部继承 report-skin.css，不重定义视觉规范。 */
+  .dense .sec-head{margin-bottom:2px;}
+  .dense .rule{margin:8px 0 10px;}
+  .dense .note{font-size:13.5px;line-height:1.5;margin-bottom:2px;}
+  .dense table.data{font-size:13.5px;margin-top:8px;}
+  .dense table.data th{padding:4px 9px;}
+  .dense table.data td{padding:2.5px 9px;}
+  .dense table.data th:not(:first-child),
+  .dense table.data td:not(:first-child){text-align:right;}
+  .dense table.data tr.sum th,
+  .dense table.data tr.sum td{background:#efe2c2;font-weight:900;color:var(--ink);border-top:2px solid var(--cng-red);}
+  .dense .concl{font-size:13.5px;line-height:1.45;color:var(--ink2);margin-top:6px;}
+  .dense .concl b{color:var(--cng-red);}
+  .dense .concl .tag{display:inline-block;font-weight:900;color:#fff;background:var(--cng-red);
+    border-radius:2px;padding:1px 8px;margin-right:7px;font-size:12.5px;}
+  /* 进度对比条 */
+  .prog .bar-row{margin:7px 0;}
+  .bar-cur{background:linear-gradient(90deg,#2f6b4f,#3f8a66);}
+</style>
+</head>
+<body>
+
+<!-- ════════ P1 封面 ════════ -->
+<section class="page cover-page">
+  <div class="inner">
+    <div class="top"><div class="logo"><b>续保</b>分公司视角诊断</div><div class="iss">四川分公司 · 数据截止 2026-06-07</div></div>
+    <div class="kicker">续保经营盯盘 · 三级机构 · 七窗口对照</div>
+    <h1>2026年6月续保检视<br><span class="red">已到期续保率 49.3%，差目标 8.7 个百分点</span></h1>
+    <div class="sub">12 家三级机构 · 当月应续 9,895 户 · 报价已基本铺开（92.4%），缺口主因是报价后未成交。临期 7 天还有 2,103 户在动作窗口内待冲刺。</div>
+    <div><span class="code">当月已到期 · 临期7天 · 未到期 · 当年已到期 · 首日 / 首周响应</span></div>
+    <div class="defn"><b>一句话判断</b>：续保盘子不是"没报价"，而是"报价了没续回"——12 家机构里天府、高新、青羊三家合计就拉走了整体分公司 34.8% 的流失客户；标杆青羊全程领先，其早响应打法是可复制的抓手。</div>
+  </div>
+</section>
+
+<!-- ════════ P2 核心摘要 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">四川分公司 · 2026年6月</div></div>
+  <div class="inner">
+    <div class="sec-head"><div class="sec-no">壹</div><div><div class="sec-title">核心摘要</div><div class="sec-en">Executive Summary</div></div></div>
+    <div class="rule"></div>
+    <div class="calc">
+      <div class="cc"><div class="big">49.3</div><div class="unit">% · 已到期续保率 🔴</div><div class="desc">6 月已到期 2,064 户的最终留存<br>低于 58% 目标 <b style="color:#bb301a">8.7 个百分点</b></div></div>
+      <div class="cc"><div class="big">34.8</div><div class="unit">% · 流失集中度</div><div class="desc">天府 / 高新 / 青羊 三家合计的<br>续保影响度（占整体流失）</div></div>
+      <div class="cc"><div class="big">2,103</div><div class="unit">户 · 临期 7 天待冲刺</div><div class="desc">未来 7 天到期、续保率仅 39.1%（进度）<br>含 164 户至今未报价</div></div>
+    </div>
+    <div class="quote">缺口拆解：已到期 2,064 户里报价率高达 <b>92.4%</b>，但续保率只有 49.3%——<b>未报价仅 156 户</b>，其余 890 户是"报了价没续回"。结论：抓手不在催报价，而在<b>报价后的二次促成与价格谈判</b>；同时盯紧临期未报价的 164 户（距到期不足 7 天，流失风险最高）。</div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">02</span></div></div>
+</section>
+
+<!-- ════════ P3 口径导航 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">四川分公司 · 2026年6月</div></div>
+  <div class="inner dense">
+    <div class="sec-head"><div class="sec-no">贰</div><div><div class="sec-title">读表口径 · 七窗口导航</div><div class="sec-en">How to Read</div></div></div>
+    <div class="rule"></div>
+    <div class="note"><b>可续期锚点（四川规则）</b>：可续期窗口 = 到期前 30 天起；<b>首日</b> = 到期前 30 天当天（例 6/30 到期 → 6/1）；<b>首周</b> = 到期前 30~24 天（即首日起 7 天、含首日，例 6/1 ~ 6/7）。其他省按各自可续期规则调整。</div>
+    <table class="data">
+      <tr><th>表</th><th>窗口</th><th>续保率含义</th></tr>
+      <tr><td>① 当月已到期</td><td>到期日 ≤ 6/7</td><td>已成熟·最终留存（亮灯）</td></tr>
+      <tr><td>② 临期 7 天</td><td>6/7 后 7 天内到期</td><td>未到期·进度（最紧急盘子）</td></tr>
+      <tr><td>③ 当月未到期</td><td>6/7 后 ~ 6/30 到期</td><td>未到期·进度（看报价是否铺开）</td></tr>
+      <tr><td>④ 当月续保</td><td>6 月全部（①+②+③以外余量）</td><td>含未到期·进度</td></tr>
+      <tr><td>⑤ 当年已到期</td><td>年初 ~ 6/7</td><td>已成熟·最终留存（不被未来稀释）</td></tr>
+      <tr><td>⑥ 首日响应 / ⑦ 首周响应</td><td>当月盘 · 可续期首日 / 首周</td><td>快速响应客户的成交转化</td></tr>
+    </table>
+    <div class="note" style="margin-top:8px;"><b>已续回口径</b>：已签单续保（匹配到续保单号）即计入，与前端续保追踪页一致；未到期但已提前签单的同样计入。<b>续保影响度</b>：该机构流失 ÷ 合计应续，可加和，各机构之和 = 整体续保缺口。</div>
+    <div class="quote" style="margin-top:10px;"><b>看表顺序</b>：先看 ① 已到期判最终留存好坏 → 再看 ② 临期锁紧急派单 → 用 ⑥⑦ 首日 / 首周看早响应能力 → ⑤ 当年已到期看全年底色。亮灯阈值：报价率 90 / 80 / 70（🔵🟡🔴），续保率 75 / 65 / 55（🔵🟡🔴），达标 🟢；未到期表续保率为进度，不亮灯。</div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">03</span></div></div>
+</section>
+
+<!-- ════════ P4 表一 当月已到期（机构排名）════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">表一 · 当月已到期</div></div>
+  <div class="inner dense">
+    <div class="sec-head"><div class="sec-no">叁</div><div><div class="sec-title">① 当月已到期续保表</div><div class="sec-en">Matured · Final Retention</div></div></div>
+    <div class="rule"></div>
+    <div class="note">当月到期日 ≤ 6/7 的保单——续保率已成熟，是最接近最终留存的信号；按续保影响度（流失集中度）从高到低排。</div>
+    <table class="data">
+      <tr><th>三级机构</th><th>应续</th><th>已报价</th><th>已续保</th><th>未报价</th><th>流失</th><th>续保影响度</th><th>报价率</th><th>续保率</th></tr>
+      <tr><td>天府</td><td>902</td><td>848</td><td>451</td><td>54</td><td>451</td><td class="hot">21.9%</td><td>94.0% 🟢</td><td>50.0% 🔴</td></tr>
+      <tr><td>高新</td><td>284</td><td>261</td><td>122</td><td>23</td><td>162</td><td class="hot">7.8%</td><td>91.9% 🟢</td><td>43.0% 🔴</td></tr>
+      <tr><td>青羊</td><td>285</td><td>261</td><td>180</td><td>24</td><td>105</td><td>5.1%</td><td>91.6% 🟢</td><td>63.2% 🟡</td></tr>
+      <tr><td>新都</td><td>135</td><td>122</td><td>50</td><td>13</td><td>85</td><td>4.1%</td><td>90.4% 🟢</td><td>37.0% 🔴</td></tr>
+      <tr><td>宜宾</td><td>102</td><td>98</td><td>52</td><td>4</td><td>50</td><td>2.4%</td><td>96.1% 🟢</td><td>51.0% 🔴</td></tr>
+      <tr><td>乐山</td><td>75</td><td>60</td><td>34</td><td>15</td><td>41</td><td>2.0%</td><td>80.0% 🔵</td><td>45.3% 🔴</td></tr>
+      <tr><td>德阳</td><td>69</td><td>62</td><td>30</td><td>7</td><td>39</td><td>1.9%</td><td>89.9% 🔵</td><td>43.5% 🔴</td></tr>
+      <tr><td>泸州</td><td>52</td><td>50</td><td>17</td><td>2</td><td>35</td><td>1.7%</td><td>96.2% 🟢</td><td>32.7% 🔴</td></tr>
+      <tr><td>武侯</td><td>55</td><td>55</td><td>24</td><td>0</td><td>31</td><td>1.5%</td><td>100% 🟢</td><td>43.6% 🔴</td></tr>
+      <tr><td>资阳</td><td>54</td><td>47</td><td>25</td><td>7</td><td>29</td><td>1.4%</td><td>87.0% 🔵</td><td>46.3% 🔴</td></tr>
+      <tr><td>自贡</td><td>43</td><td>37</td><td>31</td><td>6</td><td>12</td><td>0.6%</td><td>86.0% 🔵</td><td>72.1% 🔵</td></tr>
+      <tr><td>达州</td><td>8</td><td>7</td><td>2</td><td>1</td><td>6</td><td>0.3%</td><td>87.5% 🔵</td><td>25.0% 🔴</td></tr>
+      <tr class="sum"><td>合计</td><td>2,064</td><td>1,908</td><td>1,018</td><td>156</td><td>1,046</td><td>50.7%</td><td>92.4%</td><td>49.3%</td></tr>
+    </table>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">04</span></div></div>
+</section>
+
+<!-- ════════ P5 表一 结论 + 影响度归因 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">表一 · 结论</div></div>
+  <div class="inner">
+    <div class="sec-head"><div class="sec-no">叁</div><div><div class="sec-title">① 缺口归因 · 谁在拉低续保</div><div class="sec-en">Gap Attribution</div></div></div>
+    <div class="rule"></div>
+    <div class="lede">续保影响度 = 各机构流失 ÷ 合计应续，可加和。前三家合计 34.8%，是整体续保缺口的主来源。</div>
+    <div class="prog" style="margin:14px 0 6px;">
+      <div class="bar-row"><div class="lbl">天府</div><div class="bar-track"><div class="bar-fill bar-rev" style="width:99%">21.9%</div></div></div>
+      <div class="bar-row"><div class="lbl">高新</div><div class="bar-track"><div class="bar-fill bar-rev" style="width:36%">7.8%</div></div></div>
+      <div class="bar-row"><div class="lbl">青羊</div><div class="bar-track"><div class="bar-fill bar-rev" style="width:24%">5.1%</div></div></div>
+      <div class="bar-row"><div class="lbl">其余 9 家</div><div class="bar-track"><div class="bar-fill bar-prof" style="width:73%">合计 15.9%</div></div></div>
+    </div>
+    <div class="verdict">
+      <div class="vbox"><div class="vt">问题一 · 续保率缺口</div><p>已到期续保率 <b style="color:#bb301a">49.3%</b>，低于 58% 目标 <b style="color:#bb301a">8.7 个百分点</b>。影响度前三：天府 21.9%、高新 7.8%、青羊 5.1%，三家合计导致整体分公司流失 <b style="color:#bb301a">34.8%</b> 的客户。</p></div>
+      <div class="vbox"><div class="vt">问题二 · 未报价即流失</div><p>报价率已 <b>92.4%</b>，仅 <b style="color:#bb301a">156 户</b>至今未报价、已流失，直接拉低续保率 7.6%。未报价集中在 天府（54）、青羊（24）、高新（23）——其余流失 890 户是"报了价没续回"。</p></div>
+    </div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">05</span></div></div>
+</section>
+
+<!-- ════════ P6 表二 临期7天（机构排名）════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">表二 · 临期 7 天</div></div>
+  <div class="inner dense">
+    <div class="sec-head"><div class="sec-no">肆</div><div><div class="sec-title">② 临期 7 天续保表</div><div class="sec-en">Approaching · Next 7 Days</div></div></div>
+    <div class="rule"></div>
+    <div class="note">未来 7 天将到期（6/7 后 7 天内）——<b>未到期·临期盘子</b>，续保率/流失为进度口径（含仍在动作窗口内尚未续的），非最终留存；重在锁定最紧急的派单对象。续保率不亮灯。</div>
+    <table class="data">
+      <tr><th>三级机构</th><th>应续</th><th>已报价</th><th>已续保</th><th>未报价</th><th>流失</th><th>续保影响度</th><th>报价率</th><th>续保率(进度)</th></tr>
+      <tr><td>天府</td><td>989</td><td>929</td><td>400</td><td>60</td><td>589</td><td class="hot">28.0%</td><td>93.9% 🟢</td><td>40.4%</td></tr>
+      <tr><td>高新</td><td>303</td><td>280</td><td>98</td><td>23</td><td>205</td><td class="hot">9.7%</td><td>92.4% 🟢</td><td>32.3%</td></tr>
+      <tr><td>青羊</td><td>234</td><td>222</td><td>128</td><td>12</td><td>106</td><td>5.0%</td><td>94.9% 🟢</td><td>54.7%</td></tr>
+      <tr><td>新都</td><td>142</td><td>121</td><td>39</td><td>21</td><td>103</td><td>4.9%</td><td>85.2% 🔵</td><td>27.5%</td></tr>
+      <tr><td>宜宾</td><td>107</td><td>100</td><td>41</td><td>7</td><td>66</td><td>3.1%</td><td>93.5% 🟢</td><td>38.3%</td></tr>
+      <tr><td>泸州</td><td>64</td><td>58</td><td>15</td><td>6</td><td>49</td><td>2.3%</td><td>90.6% 🟢</td><td>23.4%</td></tr>
+      <tr><td>德阳</td><td>73</td><td>59</td><td>26</td><td>14</td><td>47</td><td>2.2%</td><td>80.8% 🔵</td><td>35.6%</td></tr>
+      <tr><td>武侯</td><td>60</td><td>56</td><td>21</td><td>4</td><td>39</td><td>1.9%</td><td>93.3% 🟢</td><td>35.0%</td></tr>
+      <tr><td>乐山</td><td>43</td><td>33</td><td>13</td><td>10</td><td>30</td><td>1.4%</td><td>76.7% 🟡</td><td>30.2%</td></tr>
+      <tr><td>资阳</td><td>53</td><td>48</td><td>23</td><td>5</td><td>30</td><td>1.4%</td><td>90.6% 🟢</td><td>43.4%</td></tr>
+      <tr><td>自贡</td><td>25</td><td>25</td><td>15</td><td>0</td><td>10</td><td>0.5%</td><td>100% 🟢</td><td>60.0%</td></tr>
+      <tr><td>达州</td><td>10</td><td>8</td><td>4</td><td>2</td><td>6</td><td>0.3%</td><td>80.0% 🔵</td><td>40.0%</td></tr>
+      <tr class="sum"><td>合计</td><td>2,103</td><td>1,939</td><td>823</td><td>164</td><td>1,280</td><td>60.9%</td><td>92.2%</td><td>39.1%</td></tr>
+    </table>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">06</span></div></div>
+</section>
+
+<!-- ════════ P7 表二 结论 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">表二 · 结论</div></div>
+  <div class="inner">
+    <div class="sec-head"><div class="sec-no">肆</div><div><div class="sec-title">② 临期盘子 · 最紧急的冲刺对象</div><div class="sec-en">Sprint Targets</div></div></div>
+    <div class="rule"></div>
+    <div class="calc">
+      <div class="cc"><div class="big">2,103</div><div class="unit">户 · 临期应续</div><div class="desc">未来 7 天到期<br>仍在续保动作窗口内</div></div>
+      <div class="cc"><div class="big">39.1</div><div class="unit">% · 当前续保率（进度）</div><div class="desc">将随到期临近补齐<br>非最终留存</div></div>
+      <div class="cc"><div class="big">164</div><div class="unit">户 · 临期未报价 🔴</div><div class="desc">距到期不足 7 天、转化时间极短<br>占应续 7.8%，流失风险最高</div></div>
+    </div>
+    <div class="verdict">
+      <div class="vbox"><div class="vt">问题一 · 临期续保进度</div><p>临期 2,103 户当前续保率仅 39.1%（进度）。按尚未续回进度，前三为 天府 28.0%、高新 9.7%、青羊 5.0%，<b>三家合计 42.8% 的临期客户尚未续回</b>——是最需紧急冲刺的盘子。</p></div>
+      <div class="vbox"><div class="vt">问题二 · 临期未报价风险</div><p>临期报价率 92.2%，但仍有 <b style="color:#bb301a">164 户至今未报价</b>，集中在 天府（60）、高新（23）、新都（21）——这是流失风险最高的紧急派单对象，<b>需当日电联</b>。</p></div>
+    </div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">07</span></div></div>
+</section>
+
+<!-- ════════ P8 表三 当月未到期 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">表三 · 当月未到期</div></div>
+  <div class="inner dense">
+    <div class="sec-head"><div class="sec-no">伍</div><div><div class="sec-title">③ 当月未到期续保表</div><div class="sec-en">Un-matured · In Progress</div></div></div>
+    <div class="rule"></div>
+    <div class="note">当月尚未到期保单——续保率反映进度，随到期临近补齐；重点看报价率是否已提前铺开。</div>
+    <table class="data">
+      <tr><th>三级机构</th><th>应续</th><th>已报价</th><th>已续保</th><th>报价率</th><th>续保率(进度)</th></tr>
+      <tr><td>天府</td><td>3,594</td><td>2,830</td><td>996</td><td>78.7% 🟡</td><td>27.7%</td></tr>
+      <tr><td>高新</td><td>1,163</td><td>911</td><td>255</td><td>78.3% 🟡</td><td>21.9%</td></tr>
+      <tr><td>青羊</td><td>901</td><td>829</td><td>386</td><td>92.0% 🟢</td><td>42.8%</td></tr>
+      <tr><td>新都</td><td>576</td><td>466</td><td>126</td><td>80.9% 🔵</td><td>21.9%</td></tr>
+      <tr><td>宜宾</td><td>422</td><td>354</td><td>102</td><td>83.9% 🔵</td><td>24.2%</td></tr>
+      <tr><td>武侯</td><td>217</td><td>181</td><td>53</td><td>83.4% 🔵</td><td>24.4%</td></tr>
+      <tr><td>德阳</td><td>215</td><td>149</td><td>52</td><td>69.3% 🔴</td><td>24.2%</td></tr>
+      <tr><td>资阳</td><td>203</td><td>174</td><td>65</td><td>85.7% 🔵</td><td>32.0%</td></tr>
+      <tr><td>泸州</td><td>195</td><td>164</td><td>40</td><td>84.1% 🔵</td><td>20.5%</td></tr>
+      <tr><td>乐山</td><td>180</td><td>119</td><td>38</td><td>66.1% 🔴</td><td>21.1%</td></tr>
+      <tr><td>自贡</td><td>119</td><td>98</td><td>46</td><td>82.4% 🔵</td><td>38.7%</td></tr>
+      <tr><td>达州</td><td>46</td><td>32</td><td>11</td><td>69.6% 🔴</td><td>23.9%</td></tr>
+      <tr class="sum"><td>合计</td><td>7,831</td><td>6,307</td><td>2,170</td><td>80.5%</td><td>27.7%</td></tr>
+    </table>
+    <div class="concl"><span class="tag">结论</span>报价率 80.5%、续保率 27.7%（进度）。续保率标杆 <b>青羊（42.8%）</b>、落后 泸州（20.5%）；盘子最大 <b>天府（3,594 户）</b>，经营杠杆最大。报价率偏低的 德阳/乐山/达州 需补铺报价。</div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">08</span></div></div>
+</section>
+
+<!-- ════════ P9 表四 当月续保 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">表四 · 当月续保</div></div>
+  <div class="inner dense">
+    <div class="sec-head"><div class="sec-no">陆</div><div><div class="sec-title">④ 当月续保表（全口径）</div><div class="sec-en">Full Month</div></div></div>
+    <div class="rule"></div>
+    <div class="note">当月全部应续（已到期 + 未到期）——续保率含未到期属进度；这是当月经营盘子的总量视图。</div>
+    <table class="data">
+      <tr><th>三级机构</th><th>应续</th><th>已报价</th><th>已续保</th><th>报价率</th><th>续保率(进度)</th></tr>
+      <tr><td>天府</td><td>4,496</td><td>3,678</td><td>1,447</td><td>81.8% 🔵</td><td>32.2%</td></tr>
+      <tr><td>高新</td><td>1,447</td><td>1,172</td><td>377</td><td>81.0% 🔵</td><td>26.1%</td></tr>
+      <tr><td>青羊</td><td>1,186</td><td>1,090</td><td>566</td><td>91.9% 🟢</td><td>47.7%</td></tr>
+      <tr><td>新都</td><td>711</td><td>588</td><td>176</td><td>82.7% 🔵</td><td>24.8%</td></tr>
+      <tr><td>宜宾</td><td>524</td><td>452</td><td>154</td><td>86.3% 🔵</td><td>29.4%</td></tr>
+      <tr><td>德阳</td><td>284</td><td>211</td><td>82</td><td>74.3% 🟡</td><td>28.9%</td></tr>
+      <tr><td>武侯</td><td>272</td><td>236</td><td>77</td><td>86.8% 🔵</td><td>28.3%</td></tr>
+      <tr><td>资阳</td><td>257</td><td>221</td><td>90</td><td>86.0% 🔵</td><td>35.0%</td></tr>
+      <tr><td>乐山</td><td>255</td><td>179</td><td>72</td><td>70.2% 🟡</td><td>28.2%</td></tr>
+      <tr><td>泸州</td><td>247</td><td>214</td><td>57</td><td>86.6% 🔵</td><td>23.1%</td></tr>
+      <tr><td>自贡</td><td>162</td><td>135</td><td>77</td><td>83.3% 🔵</td><td>47.5%</td></tr>
+      <tr><td>达州</td><td>54</td><td>39</td><td>13</td><td>72.2% 🟡</td><td>24.1%</td></tr>
+      <tr class="sum"><td>合计</td><td>9,895</td><td>8,215</td><td>3,188</td><td>83.0%</td><td>32.2%</td></tr>
+    </table>
+    <div class="concl"><span class="tag">结论</span>当月应续 9,895 户、报价率 83.0%、续保率 32.2%（进度）。续保率标杆 <b>青羊（47.7%）</b>、落后 泸州（23.1%）；盘子最大 <b>天府（4,496 户）</b>。青羊、自贡两家进度续保率已近 48%，明显领先。</div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">09</span></div></div>
+</section>
+
+<!-- ════════ P10 表五 当年已到期 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">表五 · 当年已到期</div></div>
+  <div class="inner dense">
+    <div class="sec-head"><div class="sec-no">柒</div><div><div class="sec-title">⑤ 当年已到期续保表</div><div class="sec-en">YTD Matured · Final Retention</div></div></div>
+    <div class="rule"></div>
+    <div class="note">当年已到期（年初 ~ 6/7）——只取已成熟部分，续保率即最终留存，不被未来未到期件稀释；这是全年留存的真实底色。</div>
+    <table class="data">
+      <tr><th>三级机构</th><th>应续</th><th>已报价</th><th>已续保</th><th>报价率</th><th>续保率</th></tr>
+      <tr><td>天府</td><td>26,630</td><td>24,765</td><td>14,321</td><td>93.0% 🟢</td><td>53.8% 🔴</td></tr>
+      <tr><td>高新</td><td>8,538</td><td>7,894</td><td>4,178</td><td>92.5% 🟢</td><td>48.9% 🔴</td></tr>
+      <tr><td>青羊</td><td>7,170</td><td>6,394</td><td>4,848</td><td>89.2% 🔵</td><td>67.6% 🔵</td></tr>
+      <tr><td>新都</td><td>4,096</td><td>3,645</td><td>1,678</td><td>89.0% 🔵</td><td>41.0% 🔴</td></tr>
+      <tr><td>宜宾</td><td>3,175</td><td>2,900</td><td>1,537</td><td>91.3% 🟢</td><td>48.4% 🔴</td></tr>
+      <tr><td>泸州</td><td>1,848</td><td>1,653</td><td>878</td><td>89.4% 🔵</td><td>47.5% 🔴</td></tr>
+      <tr><td>德阳</td><td>1,787</td><td>1,648</td><td>876</td><td>92.2% 🟢</td><td>49.0% 🔴</td></tr>
+      <tr><td>乐山</td><td>1,620</td><td>1,418</td><td>915</td><td>87.5% 🔵</td><td>56.5% 🟡</td></tr>
+      <tr><td>武侯</td><td>1,595</td><td>1,456</td><td>752</td><td>91.3% 🟢</td><td>47.1% 🔴</td></tr>
+      <tr><td>资阳</td><td>1,425</td><td>1,301</td><td>710</td><td>91.3% 🟢</td><td>49.8% 🔴</td></tr>
+      <tr><td>自贡</td><td>1,162</td><td>1,082</td><td>773</td><td>93.1% 🟢</td><td>66.5% 🔵</td></tr>
+      <tr><td>达州</td><td>627</td><td>433</td><td>272</td><td>69.1% 🔴</td><td>43.4% 🔴</td></tr>
+      <tr class="sum"><td>合计</td><td>59,677</td><td>54,592</td><td>31,740</td><td>91.5%</td><td>53.2%</td></tr>
+    </table>
+    <div class="concl"><span class="tag">结论</span>当年最终续保率 <b>53.2%</b>。青羊（67.6%）、自贡（66.5%）领先；天府盘子最大（26,630 户）续保率仅 53.8%，是最大提升空间。</div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">10</span></div></div>
+</section>
+
+<!-- ════════ P11 表六 首日响应 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">表六 · 首日响应</div></div>
+  <div class="inner dense">
+    <div class="sec-head"><div class="sec-no">捌</div><div><div class="sec-title">⑥ 当月首日续保情况</div><div class="sec-en">Day-1 Response</div></div></div>
+    <div class="rule"></div>
+    <div class="note">当月应续盘 <b>首日</b>（四川规则：到期前 30 天当天）响应：首日报价数 = 截至首日已报价；首日续回数 = 其中最终续回。衡量"快速响应客户"的转化。</div>
+    <table class="data">
+      <tr><th>三级机构</th><th>应续</th><th>首日报价数</th><th>首日续回数</th><th>首日报价率</th><th>首日续保率</th></tr>
+      <tr><td>天府</td><td>4,496</td><td>1,777</td><td>683</td><td>39.5%</td><td>15.2%</td></tr>
+      <tr><td>高新</td><td>1,447</td><td>559</td><td>173</td><td>38.6%</td><td>12.0%</td></tr>
+      <tr><td>青羊</td><td>1,186</td><td>788</td><td>407</td><td>66.4%</td><td>34.3%</td></tr>
+      <tr><td>新都</td><td>711</td><td>278</td><td>72</td><td>39.1%</td><td>10.1%</td></tr>
+      <tr><td>宜宾</td><td>524</td><td>253</td><td>93</td><td>48.3%</td><td>17.7%</td></tr>
+      <tr><td>德阳</td><td>284</td><td>82</td><td>30</td><td>28.9%</td><td>10.6%</td></tr>
+      <tr><td>武侯</td><td>272</td><td>124</td><td>41</td><td>45.6%</td><td>15.1%</td></tr>
+      <tr><td>资阳</td><td>257</td><td>106</td><td>40</td><td>41.2%</td><td>15.6%</td></tr>
+      <tr><td>乐山</td><td>255</td><td>64</td><td>33</td><td>25.1%</td><td>12.9%</td></tr>
+      <tr><td>泸州</td><td>247</td><td>123</td><td>34</td><td>49.8%</td><td>13.8%</td></tr>
+      <tr><td>自贡</td><td>162</td><td>32</td><td>20</td><td>19.8%</td><td>12.3%</td></tr>
+      <tr><td>达州</td><td>54</td><td>21</td><td>8</td><td>38.9%</td><td>14.8%</td></tr>
+      <tr class="sum"><td>合计</td><td>9,895</td><td>4,207</td><td>1,634</td><td>42.5%</td><td>16.5%</td></tr>
+    </table>
+    <div class="concl"><span class="tag">结论</span>首日报价率 42.5%、首日续保率 16.5%。首日续保率标杆 <b>青羊（34.3%）</b>，是合计的两倍多；最低 新都（10.1%）。早响应能力，机构间差距悬殊。</div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">11</span></div></div>
+</section>
+
+<!-- ════════ P12 表七 首周响应 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">表七 · 首周响应</div></div>
+  <div class="inner dense">
+    <div class="sec-head"><div class="sec-no">玖</div><div><div class="sec-title">⑦ 当月首周续保情况</div><div class="sec-en">Week-1 Response</div></div></div>
+    <div class="rule"></div>
+    <div class="note">当月应续盘 <b>首周</b>（四川规则：到期前 30~24 天，即首日起 7 天、含首日）响应：首周报价数 = 截至首周末累计已报价；首周续回数 = 其中最终续回。</div>
+    <table class="data">
+      <tr><th>三级机构</th><th>应续</th><th>首周报价数</th><th>首周续回数</th><th>首周报价率</th><th>首周续保率</th></tr>
+      <tr><td>天府</td><td>4,496</td><td>2,997</td><td>1,201</td><td>66.7%</td><td>26.7%</td></tr>
+      <tr><td>高新</td><td>1,447</td><td>967</td><td>309</td><td>66.8%</td><td>21.4%</td></tr>
+      <tr><td>青羊</td><td>1,186</td><td>1,037</td><td>539</td><td>87.4%</td><td>45.4%</td></tr>
+      <tr><td>新都</td><td>711</td><td>458</td><td>134</td><td>64.4%</td><td>18.8%</td></tr>
+      <tr><td>宜宾</td><td>524</td><td>382</td><td>127</td><td>72.9%</td><td>24.2%</td></tr>
+      <tr><td>德阳</td><td>284</td><td>139</td><td>51</td><td>48.9%</td><td>18.0%</td></tr>
+      <tr><td>武侯</td><td>272</td><td>203</td><td>66</td><td>74.6%</td><td>24.3%</td></tr>
+      <tr><td>资阳</td><td>257</td><td>191</td><td>79</td><td>74.3%</td><td>30.7%</td></tr>
+      <tr><td>乐山</td><td>255</td><td>136</td><td>57</td><td>53.3%</td><td>22.4%</td></tr>
+      <tr><td>泸州</td><td>247</td><td>178</td><td>43</td><td>72.1%</td><td>17.4%</td></tr>
+      <tr><td>自贡</td><td>162</td><td>89</td><td>54</td><td>54.9%</td><td>33.3%</td></tr>
+      <tr><td>达州</td><td>54</td><td>33</td><td>10</td><td>61.1%</td><td>18.5%</td></tr>
+      <tr class="sum"><td>合计</td><td>9,895</td><td>6,810</td><td>2,670</td><td>68.8%</td><td>27.0%</td></tr>
+    </table>
+    <div class="concl"><span class="tag">结论</span>首周报价率 68.8%、首周续保率 27.0%（较首日 16.5% 翻近一倍）。首周续保率标杆 <b>青羊（45.4%）</b>、最低 泸州（17.4%）。续保高度前置：首周已锁定大部分最终续回。</div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">12</span></div></div>
+</section>
+
+<!-- ════════ P13 响应进度对比（合成页）════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">响应节奏</div></div>
+  <div class="inner">
+    <div class="sec-head"><div class="sec-no">拾</div><div><div class="sec-title">续保高度前置 · 早响应决定结果</div><div class="sec-en">Front-loaded Renewal</div></div></div>
+    <div class="rule"></div>
+    <div class="lede">同一当月应续盘（9,895 户）累计续保率随响应时点推进——首周就锁定了大部分最终续回。早响应能力，直接决定续保率。</div>
+    <div class="prog" style="margin:14px 0 4px;">
+      <div class="bar-row"><div class="lbl">合计·首日</div><div class="bar-track"><div class="bar-fill bar-prof" style="width:35%">16.5%</div></div></div>
+      <div class="bar-row"><div class="lbl">合计·首周</div><div class="bar-track"><div class="bar-fill bar-prof" style="width:57%">27.0%</div></div></div>
+      <div class="bar-row"><div class="lbl">合计·当前</div><div class="bar-track"><div class="bar-fill bar-cur" style="width:68%">32.2%（进度，仍补齐中）</div></div></div>
+    </div>
+    <div class="verdict" style="margin-top:14px;">
+      <div class="vbox"><div class="vt">标杆 · 青羊全程领先</div><p>首日 <b>34.3%</b> → 首周 <b>45.4%</b> → 当月 <b>47.7%</b>，每个时点都是合计的 1.4~2 倍。已到期最终 63.2%、当年 67.6%——早响应是其高留存的根因。</p></div>
+      <div class="vbox"><div class="vt">短板 · 大盘机构起步慢</div><p>天府首日仅 15.2%、高新 12.0%，盘子最大却早响应最弱。把首周续保率从 ~26% 提到青羊的 45%，是分公司最大的可争取空间。</p></div>
+    </div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">13</span></div></div>
+</section>
+
+<!-- ════════ P14 行动建议 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">行动建议</div></div>
+  <div class="inner">
+    <div class="sec-head"><div class="sec-no">拾壹</div><div><div class="sec-title">四条行动主线</div><div class="sec-en">Action Plan</div></div></div>
+    <div class="rule"></div>
+    <div class="verdict">
+      <div class="vbox"><div class="vt">① 临期紧急派单（本周）</div><p>临期 7 天 <b style="color:#bb301a">164 户至今未报价</b>（天府 60 / 高新 23 / 新都 21），距到期不足 7 天 → 当日电联出价，避免无报价直接流失。</p></div>
+      <div class="vbox"><div class="vt">② 资源压向三家杠杆机构</div><p>天府、高新、青羊已到期影响度合计 <b>34.8%</b>，且当月盘子最大 → 续保资源与考核重心向这三家倾斜，撬动最大。</p></div>
+      <div class="vbox"><div class="vt">③ 复制青羊"早响应"打法</div><p>青羊首日 34.3%、首周 45.4%、当年 67.6% 全程领先 → 提炼其首周提前触达与出价节奏，向天府 / 高新等慢起步机构推广。</p></div>
+      <div class="vbox"><div class="vt">④ 抓"报价后促成交"</div><p>已到期报价率 92.4%，缺口主因是报价未续回（流失 1,046 中 890 户已报价）→ 二次促成 + 价格谈判，而非单纯催报价。</p></div>
+    </div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 数据截止 2026-06-07</div><div><span class="pg">14</span></div></div>
+</section>
+
+<!-- ════════ P15 附录 口径 ════════ -->
+<section class="page">
+  <div class="rhead"><div class="l">续保诊断 · 分公司视角<span>REPORT</span></div><div class="r">附录 · 指标口径</div></div>
+  <div class="inner dense">
+    <div class="sec-head"><div class="sec-no">拾贰</div><div><div class="sec-title">附录 · 表一指标口径</div><div class="sec-en">Glossary</div></div></div>
+    <div class="rule"></div>
+    <div class="note">「当月已到期续保表」派生指标定义，防口径漂移；单一事实源 = <b>renewal_common.MATURED_GLOSSARY</b>。表头用简称（= 去「件数」）。</div>
+    <table class="data">
+      <tr><th>指标</th><th>含义</th><th>计算逻辑</th></tr>
+      <tr><td>应续</td><td style="text-align:left">窗口内落入到期范围的去重车架号数</td><td style="text-align:left">COUNT(DISTINCT 车架号)</td></tr>
+      <tr><td>已报价</td><td style="text-align:left">应续车中至少有过一次有效报价的件数</td><td style="text-align:left">SUM(是否已报价)</td></tr>
+      <tr><td>已续保</td><td style="text-align:left">应续车中已签单续保（匹配到续保单号）的件数</td><td style="text-align:left">SUM(是否已续保)</td></tr>
+      <tr><td>未报价</td><td style="text-align:left">应续车中至今无任何有效报价的件数</td><td style="text-align:left">应续 − 已报价</td></tr>
+      <tr><td>流失</td><td style="text-align:left">应续车中尚未续保的件数（含未报价 + 报价未成交）</td><td style="text-align:left">应续 − 已续保</td></tr>
+      <tr><td>报价率</td><td style="text-align:left">已报价占应续的比例</td><td style="text-align:left">已报价 ÷ 应续</td></tr>
+      <tr><td>续保率</td><td style="text-align:left">已续保占应续的比例（已到期即最终留存）</td><td style="text-align:left">已续保 ÷ 应续</td></tr>
+      <tr><td>续保影响度</td><td style="text-align:left">该机构流失导致整体缺口扩大的占比（可加和）</td><td style="text-align:left">流失 ÷ 合计应续</td></tr>
+    </table>
+    <div class="note" style="margin-top:10px;"><b>四级亮灯阈值</b>（越高越好，达标为 🟢）：</div>
+    <table class="data">
+      <tr><th>指标</th><th>🔵 关注</th><th>🟡 预警</th><th>🔴 危险</th></tr>
+      <tr><td>报价率</td><td>&lt; 90%</td><td>&lt; 80%</td><td>&lt; 70%</td></tr>
+      <tr><td>续保率</td><td>&lt; 75%</td><td>&lt; 65%</td><td>&lt; 55%</td></tr>
+    </table>
+    <div class="note" style="margin-top:8px;">说明：未到期 / 临期表的续保率为<b>进度口径</b>（数据截止日早于到期日，未到期件尚未进入续保动作），不亮灯；仅 ① 已到期、⑤ 当年已到期为已成熟最终留存，续保率亮灯。</div>
+  </div>
+  <div class="rfoot"><div>续保诊断 · 分公司视角 · 数据截止 2026-06-07</div><div><span class="pg">15</span></div></div>
+</section>
+
+<script>
+/* deck-16x9.js —— PPT 16:9 演示翻页（仅屏幕生效）
+ *   丝滑演示引擎：一屏一页、GPU transform 横向「推入」过渡（类 PowerPoint Push），无滚动条、无惯性回弹。
+ *   交互（演示导向，区别于 PDF 的 deck.js）：
+ *   · 左右翻页【只认 ← → 方向键】（Home/End 跳首末）——不再有「点击页面左右」「滚轮翻页」。
+ *   · 底部【序号条】：点页码一键直达；远跳也只做一次单步推入（不论距离），当前页高亮。
+ *   · 【缩略图总览】：点 ▦ 或在页面上按 Esc 打开（无序号、纯缩略图，淡入上浮），点缩略图进入该页。
+ *   · 【Esc 两级退出】页面 → 缩略图总览；缩略图 → 退出全屏（关总览 + 退浏览器全屏）。⛶ 进入/退出全屏演示。
+ *     注：真·浏览器全屏态下，首个 Esc 由浏览器强制退出全屏（JS 拦不住）——此时总览改用 ▦ 打开。
+ *   打印/导出时整段不参与（@media print 已复位 .slide/.page 并隐藏导航 chrome）。
+ *   配合 deck-16x9.css + report-skin.css + skin-16x9.css 使用，置于页尾：<script src="deck-16x9.js"></script>
+ *   PDF（A4）版请改用 deck.js——两套脚本互不影响。 */
+(function(){
+  if(window.matchMedia&&window.matchMedia('print').matches) return;
+  function build(){
+    var pages=[].slice.call(document.querySelectorAll('.page'));
+    if(!pages.length) return;
+    document.body.classList.add('deck','deck-no-anim');
+    pages.forEach(function(p){
+      var s=document.createElement('div'); s.className='slide';
+      p.parentNode.insertBefore(s,p); s.appendChild(p);
+    });
+    var slides=[].slice.call(document.querySelectorAll('.slide'));
+
+    // —— 屏幕缩放适配：把 1280×720 的 .page 等比缩到视口（transform 不影响填充率比例）——
+    function fit(){
+      var pw=pages[0].offsetWidth, ph=pages[0].offsetHeight;
+      var sc=Math.min((window.innerHeight*0.94)/ph,(window.innerWidth*0.86)/pw);
+      pages.forEach(function(p){ p.style.transform='scale('+sc+')'; });
+    }
+    fit(); window.addEventListener('resize',fit);
+
+    // —— 序号条（先建，jump 要用 setActive）——
+    var bar=document.createElement('div'); bar.className='deck-bar';
+    var nums=[];
+    pages.forEach(function(p,i){
+      var b=document.createElement('button'); b.className='deck-num'; b.textContent=(i+1);
+      b.addEventListener('click',function(){jump(i);});
+      bar.appendChild(b); nums.push(b);
+    });
+    var fbtn=document.createElement('button'); fbtn.className='deck-num deck-fs-btn';
+    fbtn.innerHTML='&#9974;'; fbtn.title='全屏演示 / 退出（Esc）';
+    fbtn.addEventListener('click',function(){toggleFs();});
+    bar.appendChild(fbtn);
+    var gbtn=document.createElement('button'); gbtn.className='deck-num deck-grid-btn';
+    gbtn.innerHTML='&#9638;'; gbtn.title='全部页总览（页面里按 Esc 也可）';
+    gbtn.addEventListener('click',function(){toggleOverview();});
+    bar.appendChild(gbtn);
+    document.body.appendChild(bar);
+    function setActive(i){nums.forEach(function(b,k){b.classList.toggle('on',k===i);});}
+
+    // —— 单步推入引擎：每次翻页都只做一次相邻推进，远跳也不例外 ——
+    var idx=0;
+    function place(active){ // 按 active 把每页摆到 左(-100%)/中(0)/右(100%)
+      slides.forEach(function(sl,k){
+        sl.style.transform='translateX('+(k<active?-100:k>active?100:0)+'%)';
+        sl.classList.toggle('active',k===active);
+      });
+    }
+    function jump(i){
+      i=Math.max(0,Math.min(slides.length-1,i));
+      if(i===idx) return;
+      var dir=i>idx?1:-1;
+      // 1) 无动画：目标贴到相邻一侧、当前留中，其余按最终侧远置（都在视口外、不可见）
+      document.body.classList.add('deck-no-anim');
+      slides.forEach(function(sl,k){
+        var pos = k===idx?0 : k===i?dir*100 : (k<i?-100:100);
+        sl.style.transform='translateX('+pos+'%)';
+      });
+      void document.body.offsetWidth;                 // 强制 reflow，让预置位置即时落定
+      document.body.classList.remove('deck-no-anim');
+      // 2) 带动画：单步推进——目标入场到 0，当前推出到另一侧
+      idx=i; place(idx); setActive(idx);
+    }
+    function go(d){ jump(idx+d); }
+
+    // —— 全屏（演示态）——
+    function isFs(){ return document.fullscreenElement||document.webkitFullscreenElement; }
+    function enterFs(){ var el=document.documentElement;
+      (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el); }
+    function exitFs(){ if(document.fullscreenElement&&document.exitFullscreen) document.exitFullscreen();
+      else if(document.webkitFullscreenElement&&document.webkitExitFullscreen) document.webkitExitFullscreen(); }
+    function toggleFs(){ isFs()?exitFs():enterFs(); }
+
+    // —— 缩略图总览（懒构建，仅用户首次触发时才进 DOM，避免污染 .page 计数/导出）——
+    var ov=null;
+    function buildOverview(){
+      ov=document.createElement('div'); ov.className='deck-overview';
+      var hd=document.createElement('div'); hd.className='deck-ov-hd';
+      hd.textContent='全部页 · 点击进入 · Esc 退出';
+      var wrap=document.createElement('div'); wrap.className='deck-overview-grid';
+      var pw=pages[0].offsetWidth, ph=pages[0].offsetHeight, TW=300, scale=TW/pw;
+      pages.forEach(function(p,i){
+        var cell=document.createElement('div'); cell.className='deck-thumb';
+        cell.style.width=TW+'px'; cell.style.height=(TW*ph/pw)+'px';
+        var clone=p.cloneNode(true);
+        clone.style.transform='scale('+scale+')';
+        clone.style.transformOrigin='top left'; clone.style.margin='0';
+        cell.appendChild(clone);
+        cell.addEventListener('click',function(){closeOverview();jump(i);});
+        wrap.appendChild(cell);
+      });
+      ov.appendChild(hd); ov.appendChild(wrap);
+      ov.addEventListener('click',function(e){if(e.target===ov||e.target===hd)closeOverview();});
+      document.body.appendChild(ov);
+    }
+    function openOverview(){
+      if(!ov) buildOverview();
+      [].forEach.call(ov.querySelectorAll('.deck-thumb'),function(t,k){t.classList.toggle('on',k===idx);});
+      requestAnimationFrame(function(){document.body.classList.add('ov-open');}); // 下一帧加类 → 淡入动画
+    }
+    function closeOverview(){document.body.classList.remove('ov-open');}
+    function toggleOverview(){
+      document.body.classList.contains('ov-open')?closeOverview():openOverview();
+    }
+
+    // —— 键盘：左右翻页只认方向键；Esc 只负责退出 ——
+    window.addEventListener('keydown',function(e){
+      if(e.key==='Escape'){
+        // Esc 两级退出：① 页面 → 缩略图总览 ② 缩略图 → 退出全屏（关总览 + 退浏览器全屏）
+        if(document.body.classList.contains('ov-open')){
+          e.preventDefault(); closeOverview(); exitFs();
+        } else if(!isFs()){
+          e.preventDefault(); openOverview();            // 窗口态：页面 → 缩略图
+        } // else 真全屏 + 未开总览：不拦截，让浏览器原生退出全屏（总览改用 ▦）
+        return;
+      }
+      if(document.body.classList.contains('ov-open')) return; // 总览态不翻页
+      if(e.key==='ArrowRight'){e.preventDefault();go(1);}
+      else if(e.key==='ArrowLeft'){e.preventDefault();go(-1);}
+      else if(e.key==='Home'){e.preventDefault();jump(0);}
+      else if(e.key==='End'){e.preventDefault();jump(slides.length-1);}
+    });
+
+    // —— 初始：无动画摆位，下一帧再开过渡，避免加载时整排滑动 ——
+    place(0); setActive(0);
+    requestAnimationFrame(function(){requestAnimationFrame(function(){
+      document.body.classList.remove('deck-no-anim');
+    });});
+  }
+  if(document.readyState!=='loading') build();
+  else document.addEventListener('DOMContentLoaded',build);
+})();
+
+</script>
+</body>
+</html>
