@@ -138,7 +138,7 @@
 /chexian-commit-push-pr
 ```
 它会：
-- `bun run scripts/check-write-conflict.mjs`（5 项前置检查）
+- ~~`bun run scripts/check-write-conflict.mjs`（5 项前置检查）~~ ⚠️ 该脚本已于 2026-06-07 删除，冲突检测已并入 `bun run governance`（本 handoff 为 2026-06-03 历史档案）
 - `bun run governance`（24 项治理，含 #25 Bundle 路由开关合规闸 — 不要碰）
 - commit / push / gh pr create
 

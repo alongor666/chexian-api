@@ -12,9 +12,8 @@ requires:
 dependencies:
   - ~/.claude/skills/commit-push-pr-core/SKILL.md
   - .claude/pr-checklist.md
-  - scripts/check-write-conflict.mjs
   - scripts/check-governance.mjs
-last_updated: "2026-05-30"
+last_updated: "2026-06-07"
 ---
 
 # Git 提交并创建 PR（commit-push-pr-core 的本项目 wrapper）
@@ -45,7 +44,7 @@ $(git diff --stat origin/main 2>/dev/null || git diff --stat main)
 | 基座挂载点 | 本项目提供 |
 |-----------|-----------|
 | 红线自审清单（§3.4） | `.claude/pr-checklist.md`（依赖链 + 7 行红线表 + 输出格式 + codex 第二意见 + 部署链特例） |
-| 冲突检测钩子（§3.2） | `bun run scripts/check-write-conflict.mjs` |
+| 冲突检测钩子（§3.2） | `bun run governance`（含 merge 冲突标记扫描 + BACKLOG 事件日志陈旧守卫）+ 基座自带 rebase/merge 处理。旧 `check-write-conflict.mjs` 已退役：BACKLOG 冲突由 event-log（`merge=union` + 派生视图）结构性消除，分支基准由 PR 前 `git rebase origin/main` 纪律保证 |
 | 治理校验钩子（§3.3） | `bun run governance`（聚合 26 项检查，等价于 `scripts/check-governance.mjs`） |
 | 自进化日志（§0.3 / §7） | `.claude/workflow/pr-evolution.md` |
 
