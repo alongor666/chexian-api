@@ -325,7 +325,7 @@ def test_cli_branch_report_when_data_present(tmp_path):
         assert bad not in text, f"报告残留英文/格式问题：{bad}"
 
 
-# ---- 三级机构视角（--org-report 模板）：业务员维度 7 表 + top10 固定贯穿 + 合计=全机构真实整体 ----
+# ---- 三级机构视角（--org-report 模板）：业务员维度 7 表 + top15（以有续保业务员数为上限）固定贯穿 + 合计=全机构真实整体 ----
 
 def _top_org_with_data():
     """动态选「当月已到期应续最多」的三级机构（避免硬编码机构名随数据漂移而脆弱）。"""
@@ -345,7 +345,7 @@ def _top_org_with_data():
 
 
 def test_cli_org_report_when_data_present(tmp_path):
-    """三级机构视角模板：7 张业务员窗口表 + top10 固定贯穿 + 合计=全机构真实整体 + 共用表一专项口径。"""
+    """三级机构视角模板：7 张业务员窗口表 + top15（以有续保业务员数为上限）固定贯穿 + 合计=全机构真实整体 + 共用表一专项口径。"""
     org = _top_org_with_data()
     if org is None:
         pytest.skip("renewal_tracker parquet 缺失（CI 无数据），跳过三级机构视角 smoke")
@@ -363,13 +363,17 @@ def test_cli_org_report_when_data_present(tmp_path):
                   "## 四、当月续保表", "## 五、当年已到期续保表", "## 六、当月首日续保情况",
                   "## 七、当月首周续保情况"):
         assert title in text, f"缺少板块：{title}"
-    # 分组维度 = top10 业务员（表头，需求 2026-06-07 字段名），非三级机构
-    assert "| top10业务员 |" in text
-    # 业务员去数字编码（需求 2026-06-07）：姓名只留中文，无 9 位工号数字残留
+    # 分组维度 = top{N}业务员（表头，需求 2026-06-07 字段名 + 2026-06-07 TOP15 上限），非三级机构
     import re
+    m = re.search(r"\| top(\d+)业务员 \|", text)
+    assert m, "缺少 topN业务员 表头"
+    shown_n = int(m.group(1))
+    assert 1 <= shown_n <= 15, f"展示业务员数 {shown_n} 应在 1~15（TOP15 上限）"
+    # 业务员去数字编码（需求 2026-06-07）：姓名只留中文，无 9 位工号数字残留
     assert not re.search(r"\d{9}", text), "业务员工号数字未清洗去除"
-    # top10 固定同一批 + 合计 = 全机构真实整体语义（模板核心契约）
-    assert "当月应续 top10" in text and "真实整体" in text
+    # 目标上限 15 + 以「有续保业务员数」为天然上限（模板核心契约，用户 2026-06-07）+ 合计=全机构真实整体
+    assert "当月应续 top15" in text and "真实整体" in text
+    assert "有续保业务员数为上限" in text
     # 续保影响度专项 + 附录口径（与表一同源，单一事实源不漂移）
     assert "续保影响度" in text and "## 附录 · 表一指标口径" in text
     assert "**问题一 · 续保率缺口**" in text and "**问题二 · 未报价即流失**" in text

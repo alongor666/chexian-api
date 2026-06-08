@@ -93,8 +93,11 @@ def main():
                          "以数据截止日当天所在月/年为窗口，忽略 --time-view/--start/--end")
     ap.add_argument("--org-report", action="store_true",
                     help="三级机构视角模式（模板）：锁定单一三级机构（--org 必填），同样 7 张窗口表，"
-                         "但分组维度为业务员、统一展示当月应续 top10 固定同一批人，合计=该机构全部业务员真实整体；"
-                         "以数据截止日当天所在月/年为窗口，忽略 --time-view/--start/--end")
+                         "但分组维度为业务员、统一展示当月应续 top15（以有续保业务员数为上限，不足则全列）固定同一批人，"
+                         "合计=该机构全部业务员真实整体；以数据截止日当天所在月/年为窗口，忽略 --time-view/--start/--end")
+    ap.add_argument("--top-n", type=int, default=15,
+                    help="三级机构视角（--org-report）展示业务员数上限，按当月应续降序选取，"
+                         "以「当月有续保业务员数」为天然上限（不足则全列），默认 15")
     ap.add_argument("--no-action-list", action="store_true", help="不落 CSV")
     ap.add_argument("--out-dir", default=str(OUT_DIR))
     args = ap.parse_args()

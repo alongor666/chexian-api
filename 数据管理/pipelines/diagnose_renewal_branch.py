@@ -36,7 +36,6 @@ from datetime import date
 from renewal_common import (
     MATURED_GLOSSARY,
     RT,
-    SMALL_ORG_SALESMEN,
     TARGET_MATURED_RENEWAL_RATE,
     Report,
     fp,
@@ -103,7 +102,7 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
       · dim_col   分组列（org_level_3 / salesman_name）；dim_header 表头全称；dim_noun 结论简称；
       · scope_noun 合计范围名词（「导致 X 流失」）；unit_noun 前三量词（机构「家」/ 业务员「名」）；
       · keep_dims 仅展示这批维度值（None = 全展示）。续保影响度分母 tot_* 恒按全部维度行计 ——
-        三级机构视角合计 = 该机构全部业务员真实整体，展示的 top10 各项之和 < 合计。
+        三级机构视角合计 = 该机构全部业务员真实整体，展示的 topN 各项之和 < 合计。
     """
     rows = con.execute(_win_dedup_cte(win_sql, pool_lead, dim_col) + """
         SELECT dim, COUNT(*) yc, SUM(quoted) q, SUM(renewed) r
@@ -156,7 +155,7 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
     ])
 
     # 结论数据：top3 / by_unq 取展示集（shown）—— 与表格所列一致；
-    # 分母 tot_* 恒为真实整体，故三级机构视角「前三业务员」指展示的 top10 中影响度前三。
+    # 分母 tot_* 恒为真实整体，故三级机构视角「前三业务员」指展示的 topN 中影响度前三。
     top3 = shown[:3]  # shown 随 enriched 已按续保影响度降序
     imp_str = "、".join(f"{e['org']}（{fp(e['impact'])}）" for e in top3)
     top3_sum = impact_rate(sum(e["lost"] for e in top3), tot_yc)
@@ -387,17 +386,17 @@ def run_branch_report(con, args, out_dir, ts):
     return md_path
 
 
-def _top_n_salesmen(con, win_sql, pool_lead, n):
-    """按指定窗口的应续件数（去重车架号）降序，取前 n 名业务员，返回名单 set。
+def _rank_salesmen_with_renewals(con, win_sql, pool_lead):
+    """按指定窗口应续件数（去重车架号）降序，返回**有续保（is_renewed≥1）**业务员的有序名单 [(业务员, 应续), ...]。
 
-    选取基准与展示解耦：本函数仅按「当月应续」选定固定 top10，各窗口表统一展示这同一批人，
-    便于横向追踪同一业务员在已到期 / 临期 / 未到期 / 首日 / 首周各窗口的表现。
+    只取「有续保」业务员 —— 即天然以「有续保业务员数」为展示上限（用户 2026-06-07：top15，但以有续保
+    业务员数为上限，不足则全列），避免把零续保业务员列为「top 业务员」。选取基准与展示解耦：仅按「当月应续」
+    选定一次，各窗口表统一展示这同一批人，便于横向追踪同一业务员在已到期 / 临期 / 未到期 / 首日 / 首周各窗口的表现。
     """
-    rows = con.execute(_win_dedup_cte(win_sql, pool_lead, "salesman_name") + f"""
+    return con.execute(_win_dedup_cte(win_sql, pool_lead, "salesman_name") + """
         SELECT dim, COUNT(*) yc FROM f WHERE dim IS NOT NULL
-        GROUP BY 1 ORDER BY 2 DESC LIMIT {int(n)}
+        GROUP BY 1 HAVING SUM(renewed) > 0 ORDER BY 2 DESC
     """).fetchall()
-    return {r[0] for r in rows}
 
 
 def run_org_report(con, args, out_dir, ts):
@@ -405,8 +404,8 @@ def run_org_report(con, args, out_dir, ts):
 
     与分公司视角（run_branch_report）共用同一套 section 函数与 7 张窗口口径（单一事实源），仅两点不同：
       · scope 锁定单一三级机构（--org 必填），分组维度 三级机构 → 业务员；
-      · 7 张表统一展示「当月应续 top10」固定同一批业务员（便于跨窗口追踪同一业务员），
-        合计行 = 该机构全部业务员的真实整体（top10 各项之和 < 合计）。
+      · 7 张表统一展示「当月应续 top15」固定同一批业务员（便于跨窗口追踪同一业务员；
+        以「有续保业务员数」为上限，不足则全列 —— 用户 2026-06-07），合计行 = 该机构全部业务员的真实整体（所列各项之和 < 合计）。
     本模式定位为三级机构续保诊断模板（用户 2026-06-07）。
     """
     if not args.org:
@@ -415,7 +414,7 @@ def run_org_report(con, args, out_dir, ts):
     pool_lead = args.pool_lead_days
     m_start, m_end = _month_bounds(today)
     y_start, y_end = date(today.year, 1, 1), date(today.year, 12, 31)
-    top_n = SMALL_ORG_SALESMEN  # = 10，与小机构阈值同源（renewal_common），避免散落魔数
+    requested_n = max(1, getattr(args, "top_n", 15))  # 展示业务员数上限（--top-n，默认 15）
 
     where = [f"expiry_date >= DATE '{y_start}'", f"expiry_date <= DATE '{y_end}'",
              f"org_level_3 ILIKE '%{args.org}%'"]
@@ -428,7 +427,7 @@ def run_org_report(con, args, out_dir, ts):
         CREATE TEMP TABLE raw AS
         SELECT vehicle_frame_no, org_level_3,
                -- 业务员去数字编码（用户 2026-06-07）：姓名只保留中文，去掉前缀工号数字（如 200045244李晓琴 → 李晓琴）。
-               -- 在 raw 层清洗 → top10 选取 / 表格展示 / 合计计数全程一致用去数字名。
+               -- 在 raw 层清洗 → topN 选取 / 表格展示 / 合计计数全程一致用去数字名。
                REGEXP_REPLACE(salesman_name, '[0-9]', '', 'g') AS salesman_name, expiry_date,
                is_quoted::INT AS quoted, is_renewed::INT AS renewed, first_quote_time AS fqt
         FROM read_parquet('{RT}')
@@ -442,10 +441,15 @@ def run_org_report(con, args, out_dir, ts):
         "SELECT DISTINCT org_level_3 FROM raw WHERE org_level_3 IS NOT NULL ORDER BY 1").fetchall()]
     org_label = "、".join(org_names) if org_names else args.org
 
-    # 固定 top10 业务员：按「当月应续」（去重车架号）降序选定，7 张表统一展示这同一批人
-    keep = _top_n_salesmen(con, f"expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{m_end}'", pool_lead, top_n)
-    if not keep:
-        sys.exit(f"❌ 机构「{args.org}」当月（{m_start}~{m_end}）无应续业务员，无法选 top{top_n}")
+    # 固定 top 业务员：候选 = 当月「有续保」业务员，按「当月应续」（去重车架号）降序，7 张表统一展示这同一批人。
+    # 以「有续保业务员数」为天然上限（用户 2026-06-07）：实际展示 top_n = min(--top-n, 有续保业务员数)。
+    ranked = _rank_salesmen_with_renewals(
+        con, f"expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{m_end}'", pool_lead)
+    n_renew = len(ranked)
+    if not n_renew:
+        sys.exit(f"❌ 机构「{args.org}」当月（{m_start}~{m_end}）无有续保业务员，无法选 top{requested_n}")
+    top_n = min(requested_n, n_renew)   # 实际展示数 = min(请求上限, 有续保业务员数)
+    keep = {r[0] for r in ranked[:top_n]}
     sm_total = con.execute(
         "SELECT COUNT(DISTINCT salesman_name) FROM raw WHERE salesman_name IS NOT NULL").fetchone()[0]
 
@@ -454,7 +458,7 @@ def run_org_report(con, args, out_dir, ts):
     rpt.add()
     rpt.add(f"> **数据截止日** {today} · **当月** [{m_start} ~ {m_end}] · **当年** [{y_start} ~ {y_end}] · **口径** 商业险 · 应续件数 = 去重车架号")
     rpt.add(f"> **可续期锚点（四川规则）** 可续期窗口 = 到期前 {pool_lead} 天起；首日 = 到期前 {pool_lead} 天当天（例 6/30 到期 → 6/1）、首周 = 到期前 {pool_lead}~{pool_lead - 6} 天即首日起 7 天（含首日，例 6/1 ~ 6/7）。其他省按实际可续期规则调整 `--pool-lead-days`。")
-    rpt.add(f"> **业务员口径** 7 张表统一展示「当月应续 top{top_n}」固定同一批业务员（按当月 [{m_start}~{m_end}] 应续去重车架号降序选定），便于横向追踪同一业务员在各窗口的表现。")
+    rpt.add(f"> **业务员口径** 7 张表统一展示「当月应续 top{requested_n}」固定同一批业务员（按当月 [{m_start}~{m_end}] 应续去重车架号降序选定，**以有续保业务员数为上限**：本机构当月有续保业务员 {n_renew} 名，故实际展示 {top_n} 名），便于横向追踪同一业务员在各窗口的表现。")
     rpt.add(f"> **合计行 = {org_label}全部 {sm_total} 名业务员的真实整体**，故所列 top{top_n} 各项之和 < 合计（其余 {sm_total - len(keep)} 名业务员计入合计、未单列）。续保影响度分母亦为该真实整体合计应续。")
     rpt.add(f"> **生成** `diagnose_renewal.py --org-report --org {args.org}` · {ts}")
     rpt.add()
@@ -467,7 +471,7 @@ def run_org_report(con, args, out_dir, ts):
             "**已提前锁定的续保进度**，随到期临近逐月补齐；其报价率体现盘子是否已提前铺开。")
     rpt.add()
 
-    dim_kw = dict(dim_col="salesman_name", dim_header="top10业务员", keep_dims=keep)
+    dim_kw = dict(dim_col="salesman_name", dim_header=f"top{top_n}业务员", keep_dims=keep)
     matured_kw = dict(dim_noun="业务员", scope_noun=f"{org_label}整体", unit_noun="名", **dim_kw)
     _branch_matured_section(con, rpt, "一", "当月已到期续保表",
                             f"expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{today}'", pool_lead,
