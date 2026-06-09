@@ -103,6 +103,23 @@ node scripts/sync-vps.mjs
 
 `数据管理/data-sources.json` 是数据域元数据的唯一注册表。新增/替换源文件后必须运行 ETL，由脚本自动更新 `row_count`、`last_updated`。
 
+## claims_detail 存量更新铁律（RED LINE — 2026-06-08 满期赔付率对账事故）
+
+**背景**：理赔金额是**动态**的——已决金额（`settled_amount`，已结案实际赔付）/ 未决金额（`pending_amount`，未结案估损）随理赔进展持续变化。若每日只喂"当日新报案增量"而不刷新历史在保赔案，旧赔案会停在首次抓取的快照 → 已报告赔款偏低 → **满期赔付率系统性偏低**，与公司报表对不上。
+
+**事故复盘**：2026-06-08 用户报"满期赔付率不符合实际"。根因 = claims Parquet 停在 06-06 旧快照、未用最新全量源做存量更新（既非口径错、也非 ETL bug、也非日期断档）。用最新含历史全量源跑增量合并（CDC update）后（刷新 967 笔金额变更 + 478 新增赔案），系统口径（已结案取已决金额 + 未结案取未决金额）68.8% 立即对上公司 68.75%。详见 memory `project_lr_caliber_reconciliation`。
+
+**铁律**：
+
+1. **claims 源必须是"含历史的全量快照"，不是当日增量**。源文件命名 `02_理赔明细_报案时间<起>_<止>.xlsx`，报案时间跨度应覆盖全部在保年度（例：`2025-05-01 ~ 当日`）。只截"当日新报案"会漏掉历史赔案的金额刷新。
+2. **增量合并（CDC update）是按赔案号的覆盖式更新（upsert），存量更新会生效**：`pipelines/claims_partition_manager.py` 的 `do_update` 按 `claim_no`（赔案号）覆盖旧行（新全量 `UNION ALL BY NAME` 旧分区中不在新源的赔案），并专门统计 `amount_changed`（金额变更数）。只要喂了最新全量源，旧赔案的已决/未决金额会被刷新到最新。
+3. **去重保最新版本**：`pipelines/convert_claims_detail.py` 按赔案号 `keep='last'` 去重（增量保留、存量更新取最新版本），不丢赔款。
+4. **发布节奏**：日常发布（`bun run release:daily`）须确保 claims 源是当日全量快照；长期只喂窄窗增量会让满期赔付率逐渐偏低且不易察觉。
+
+**验证**：刷新后用 Parquet 直查满期赔付率，与公司报表对账（容忍 < 0.2 个百分点）。`duckdb -c "SELECT MAX(accident_time) FROM '数据管理/warehouse/fact/claims_detail/claims_*.parquet'"` 应跟上最新源的报案截止日；落后过多即提示需用全量源刷新。
+
+> **代码兜底（已实现，B191e0f）**：`daily.mjs runClaimsDetail` Step 5.5 自动检查报案截止日落后当日天数，≥3 天（`CLAIMS_REPORT_LAG_WARN_DAYS`）即红字告警并提示用含历史的全量源刷新。判定逻辑抽至 `数据管理/lib/claims-freshness.mjs`（纯函数，`tests/claims-freshness.test.ts` 覆盖阈值边界三件套），取数由 `数据管理/pipelines/parquet_stats.mjs` 的 `getPartitionedMaxReportDate` 提供。落实"规则必须自动化执行（文档规则 ≠ 执行规则）"原则。
+
 ## Excel 多 sheet 加载规范（RED LINE — governance #24 强制）
 
 Excel 因行数上限（~104 万行）拆分为多个 sheet 时，续表数据必须被完整读取。

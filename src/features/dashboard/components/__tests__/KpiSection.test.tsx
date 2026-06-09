@@ -22,6 +22,8 @@ const kpis: KpiData = {
   vehicle_achievement_rate: 92.3,
   vehicle_growth_rate: 5.2,
   variable_cost_ratio: 88.5,
+  earned_claim_ratio: 64.4, // 满期赔付率分项（64.4 + 24.1 = 88.5）
+  expense_ratio: 24.1, // 费用率分项
   bundle_renewal_rate: 0.45,
   driver_premium: 800,
   driver_achievement_rate: 90,
