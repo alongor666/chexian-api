@@ -32,9 +32,9 @@ export function useClaimsDetail() {
     setPendingAging(prev => ({ ...prev, loading: true, error: null }));
     try {
       const [overview, byOrg, aging] = await Promise.all([
-        apiClient.getClaimsDetailPendingOverview(params),
-        apiClient.getClaimsDetailPendingByOrg(params),
-        apiClient.getClaimsDetailPendingAging(params),
+        apiClient.claimsDetail.pendingOverview(params),
+        apiClient.claimsDetail.pendingByOrg(params),
+        apiClient.claimsDetail.pendingAging(params),
       ]);
       setPendingOverview({ data: overview, loading: false, error: null });
       setPendingByOrg({ data: byOrg, loading: false, error: null });
@@ -52,8 +52,8 @@ export function useClaimsDetail() {
     setClaimCycle(prev => ({ ...prev, loading: true, error: null }));
     try {
       const [cause, cycle] = await Promise.all([
-        apiClient.getClaimsDetailCauseAnalysis(params),
-        apiClient.getClaimsDetailClaimCycle(params),
+        apiClient.claimsDetail.causeAnalysis(params),
+        apiClient.claimsDetail.claimCycle(params),
       ]);
       setCauseAnalysis({ data: cause, loading: false, error: null });
       setClaimCycle({ data: cycle, loading: false, error: null });
@@ -70,9 +70,9 @@ export function useClaimsDetail() {
     setGeoComparison(prev => ({ ...prev, loading: true, error: null }));
     try {
       const [accident, plate, comparison] = await Promise.all([
-        apiClient.getClaimsDetailGeoAccident(params),
-        apiClient.getClaimsDetailGeoPlate(params),
-        apiClient.getClaimsDetailGeoComparison(params),
+        apiClient.claimsDetail.geoAccident(params),
+        apiClient.claimsDetail.geoPlate(params),
+        apiClient.claimsDetail.geoComparison(params),
       ]);
       setGeoAccident({ data: accident, loading: false, error: null });
       setGeoPlate({ data: plate, loading: false, error: null });
@@ -88,7 +88,7 @@ export function useClaimsDetail() {
   const fetchFrequencyYoy = useCallback(async (params?: Record<string, string>) => {
     setFrequencyYoy(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const data = await apiClient.getClaimsDetailFrequencyYoy(params);
+      const data = await apiClient.claimsDetail.frequencyYoy(params);
       setFrequencyYoy({ data, loading: false, error: null });
     } catch (err) {
       const msg = err instanceof Error ? err.message : '查询失败';
@@ -99,7 +99,7 @@ export function useClaimsDetail() {
   const fetchClaimsHeatmap = useCallback(async (params?: Record<string, string>) => {
     setClaimsHeatmap(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const data = await apiClient.getClaimsDetailHeatmap(params);
+      const data = await apiClient.claimsDetail.heatmap(params);
       setClaimsHeatmap({ data, loading: false, error: null });
     } catch (err) {
       const msg = err instanceof Error ? err.message : '查询失败';
@@ -110,7 +110,7 @@ export function useClaimsDetail() {
   const fetchLossRatioDev = useCallback(async (params?: Record<string, string>) => {
     setLossRatioDev(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const data = await apiClient.getClaimsDetailLossRatioDev(params);
+      const data = await apiClient.claimsDetail.lossRatioDev(params);
       const claimsCutoff = data.length > 0 ? (data[0]?.claims_cutoff ?? null) : null;
       setLossRatioDev({ data, claimsCutoff, loading: false, error: null });
     } catch (err) {
