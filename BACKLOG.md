@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（36 项 · 数据截至 2026-06-09 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（37 项 · 数据截至 2026-06-09 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -52,7 +52,7 @@
 - 2026-06-08-claude-16ab1c — 报告托管 phase-2
 - 2026-06-08-claude-691a87 — BACKLOG 增弃置状态 + 过时项剪枝（治理体检缺口②）
 
-**P3（10 项）**
+**P3（11 项）**
 
 - B247 — 图表 hex 色值审计
 - B251 — 输出风格与用户契约冲突
@@ -64,6 +64,7 @@
 - B276 — *_rate (0-1 小数) vs *_ratio (×100 百分比) 命名约定
 - B321 — super-powers 精髓 skills 两项后续（PR #469 审计衍生）
 - B326 — req.permissionFilter \|\| '1=1' 防御性兜底 fail-c
+- 2026-06-09-claude-530bf5 — claims 报案截止日新鲜度告警（B191e0f）目前仅在 daily.mjs Ste
 
 ---
 
@@ -107,3 +108,4 @@
 | B340 | 2026-06-06 | Bug/Backend | @claude | **生产 claims 域加载器缺 union_by_name（潜伏，B339 闸门镜像时发现）**：`server/src/services/duckdb-domain-loaders.ts` 的 11 处 `read_parquet('${path}')` 均为裸读，无 `union_by_name=true`；而 policy 加载器 `duckdb-parquet-loader.ts` 显式带 `union_by_name`。一旦 claims/域分区出现兼容 schema 漂移（如新增可选字段、字段顺序变动），生产**首次惰性加载** ClaimsDetail/ClaimsAgg 等端点会因按位置 union 失败而崩。当前 8 个 claims 分区（2019–2026）同一 ETL 产出、列集合一致（均 40 列）→ **暂未触发，是定时炸弹非现行故障**。B339 闸门选「忠实镜像生产」（claims 同样裸读）以保留金丝雀探测力，故未在闸门层擅自加 union_by_name 掩盖此问题。修复：评估给 `duckdb-domain-loaders.ts` 各域读法统一加 `union_by_name=true`（与 policy 对齐），同步把 B339 claims 模板改回带 union_by_name；需回归测试惰性加载 8 端点 + 真实分区 schema 漂移场景。 | P2 | TODO | B339 codex PR #513 第3轮 3a；`duckdb-parquet-loader.ts`(对照：policy 已带 union_by_name) | `server/src/services/duckdb-domain-loaders.ts`(11 处裸 read_parquet 待评估加 union_by_name)<br>`scripts/prepublish-gate/lib/fetch-local-metrics.mjs`(claims 模板随生产改) | 待办 |
 | 2026-06-08-claude-16ab1c | 2026-06-08 | Enhancement/Backend | @claude | **报告托管 phase-2：org_user 读本机构报告（B328 拆分）**：B328 安全部分（跨机构泄漏 fail-closed）已 DONE，残留增强——让 org_user 能读归属本机构的报告。当前 reports.ts 两 handler 均以 ownerOrg=null 调 assertReportAccess → org_user 对所有报告 100% 403。依赖：生产方（diagnose-*/push_html.py）给报告补齐机构归属约定（org_level_3 嵌文件名/目录/元数据，关联 0C branch_code），handler 解析 ownerOrg 传入 assertReportAccess。验收：org_user 本机构报告 200、跨机构仍 403、branch_admin 全放行不变。来源：2026-06-08 B328 深查拆分。 | P2 | PROPOSED | N/A | server/src/routes/reports.ts | 2026-06-08 实测 caveat：org_user 登录读持久化 UserAccount DB（access-control.ts:329-335 有持久化则不从 PRESET_USERS 重播），代码注释 // leshan123 仅初始密码提示、生产已分叉。phase-2 验收需 live 测 org_user 时，须用当前有效 org_user 凭据（或 admin 经 /api/auth 重置一个测试账号），不能依赖代码里的初始密码注释。 |
 | 2026-06-08-claude-691a87 | 2026-06-08 | Chore/Governance | @claude | **BACKLOG 增弃置状态 + 过时项剪枝（治理体检缺口②）**：event-log status 词表缺 CANCELLED/WONTFIX 弃置路径，append-only 下过时/放弃任务只增不剪——2026-06-08 extract-backlog-governance 体检发现 33 项任务终态滞留 PROPOSED（最早 2026-04-11，约 2 个月）。建议：①scripts/backlog/lib.mjs 增 CANCELLED 终态枚举；②backlog.mjs status 支持置 CANCELLED 带 --reason；③定期对账剪枝陈旧 PROPOSED。属待观察软缺口，先建机制不强制。来源：体检报告原则6 同步现实陈旧即剪。 | P2 | PROPOSED | .claude/rules/backlog-eventlog.md | scripts/backlog/lib.mjs<br>scripts/backlog.mjs |  |
+| 2026-06-09-claude-530bf5 | 2026-06-09 | 数据管道/ETL | @claude | claims 报案截止日新鲜度告警（B191e0f）目前仅在 daily.mjs Step5.5 打 stdout 红字 advisory 提示；交互式跑能看到，但无人值守批量跑（release:daily / cron）红字易被忽略——而满期赔付率对账事故场景正是「静默喂旧数据、无人盯」。增强：把报案截止日落后天数 lag 信号接入 release:daily 健康检查与企微通知，让无人值守也能拦截；可选给阈值加工作日感知（report_time 周末累积，周一可能 benign 假阳性）。来源 PR #537 review 观察①②。 | P3 | PROPOSED | .claude/rules/data-pipeline.md | 数据管理/daily.mjs runClaimsDetail Step5.5 |  |
