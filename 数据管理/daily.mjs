@@ -40,11 +40,19 @@ import {
   getParquetColumnCount,
   getPartitionedRowCount,
   getPartitionedColumnCount,
+  getPartitionedMaxReportDate,
 } from './pipelines/parquet_stats.mjs';
 import { collectPolicyCurrentStats, syncQuickReferenceFile } from './pipelines/quick_reference.mjs';
 import { assertNoPolicyCurrentOverlap } from '../scripts/lib/parquet-overlap-check.mjs';
 // 分片判定纯函数抽到 lib/shard-classify.mjs（可单测，daily.mjs 顶层执行 main() 无法被 import）
 import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
+// claims 报案截止日新鲜度判定纯函数（同模式抽 lib/ 便于单测）
+import {
+  claimsReportLagDays,
+  shouldWarnClaimsFreshness,
+  localTodayISO,
+  CLAIMS_REPORT_LAG_WARN_DAYS,
+} from './lib/claims-freshness.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1178,6 +1186,20 @@ function runClaimsDetail(python, scriptDir) {
   // manifest 声明 claims_detail 时由 refresh_metadata.py 统一写入
   if (!_currentReleaseManifest?.domains?.claims_detail) {
     updateDataSources('claims_detail', { rowCount: totalRows, fieldCount });
+  }
+
+  // Step 5.5: 报案截止日新鲜度检查（B191e0f）——防喂旧快照致满期赔付率系统性偏低。
+  // 理赔金额是动态的，只喂窄窗增量会让历史赔案金额停在旧值；见 data-pipeline.md 存量更新铁律。
+  const maxReportDate = getPartitionedMaxReportDate(python, CLAIMS_DETAIL_DIR);
+  const lagDays = claimsReportLagDays(maxReportDate, localTodayISO());
+  if (shouldWarnClaimsFreshness(lagDays)) {
+    log('red', `⚠️ claims 报案截止日 ${maxReportDate} 落后当日 ${lagDays} 天（阈值 ${CLAIMS_REPORT_LAG_WARN_DAYS} 天）`);
+    log('red', '   理赔金额是动态的，喂旧快照会让满期赔付率系统性偏低；');
+    log('red', '   请用"含历史的全量"理赔明细源刷新（见 .claude/rules/data-pipeline.md「claims_detail 存量更新铁律」）');
+  } else if (maxReportDate) {
+    log('green', `  ✓ claims 报案截止日 ${maxReportDate}（落后当日 ${lagDays} 天，新鲜）`);
+  } else {
+    log('yellow', '  ⚠️ 无法读取 claims 报案截止日，跳过新鲜度检查');
   }
 
   // Step 6: 显示分区状态
