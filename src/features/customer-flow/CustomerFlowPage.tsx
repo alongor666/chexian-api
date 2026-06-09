@@ -50,19 +50,19 @@ export const CustomerFlowPage: React.FC = () => {
 
   const { data: summary } = useQuery({
     queryKey: ['customer-flow-summary', params],
-    queryFn: () => apiClient.getCustomerFlowSummary(params) as Promise<FlowSummary>,
+    queryFn: () => apiClient.customerFlow.summary(params) as Promise<FlowSummary>,
   });
   const { data: outflow } = useQuery({
     queryKey: ['customer-flow-outflow', params],
-    queryFn: () => apiClient.getCustomerFlowOutflow(params) as Promise<FlowRow[]>,
+    queryFn: () => apiClient.customerFlow.outflow(params) as Promise<FlowRow[]>,
   });
   const { data: trend } = useQuery({
     queryKey: ['customer-flow-trend', params],
-    queryFn: () => apiClient.getCustomerFlowTrend(params) as Promise<FlowTrend[]>,
+    queryFn: () => apiClient.customerFlow.trend(params) as Promise<FlowTrend[]>,
   });
   const { data: metadata } = useQuery({
     queryKey: ['customer-flow-metadata'],
-    queryFn: () => apiClient.getCustomerFlowMetadata() as Promise<{ years: number[]; total_rows: number }>,
+    queryFn: () => apiClient.customerFlow.metadata() as Promise<{ years: number[]; total_rows: number }>,
   });
 
   const renderTable = (_title: string, rawData: FlowRow[] | undefined) => {

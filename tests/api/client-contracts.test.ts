@@ -264,6 +264,10 @@ describe('API client contract coverage', () => {
  * 闭合 #541 评审指出的「迁移域无测试直打 apiClient.<domain>.* 链」缺口：
  * 纯 fetch-spy 验证每个命名空间方法构造的 /query/ 路径与参数透传，
  * 比 RTL hook 测试更轻、不易 flaky。新增/迁移域时在此追加条目即可。
+ *
+ * path 字段约定：drilldownGet 家族（analysis/drilldown/bundle 等）必产查询串
+ * （drillPath/groupBy 序列化），故其 path 带尾 `?` 以标记并精准区分于同前缀路由
+ * （如 cross-sell? vs cross-sell-trend）；queryGet 家族无参时不产 `?`，path 不带尾 `?`。
  */
 describe('namespaced sub-client URL contracts', () => {
   beforeEach(() => {
@@ -317,6 +321,12 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'performance.orgHeatmap', path: '/query/performance-org-heatmap', run: (c) => c.performance.orgHeatmap({ org: '乐山' }), expectParam: true },
     { name: 'performance.topSalesman', path: '/query/performance-top-salesman', run: (c) => c.performance.topSalesman({ org: '乐山' }), expectParam: true },
     { name: 'performance.bundle', path: '/query/performance-bundle?', run: (c) => c.performance.bundle({ org: '乐山' }), expectParam: true },
+    // ── customerFlow（本 PR 迁移域）──
+    { name: 'customerFlow.summary', path: '/query/customer-flow/summary', run: (c) => c.customerFlow.summary({ org: '乐山' }), expectParam: true },
+    { name: 'customerFlow.inflow', path: '/query/customer-flow/inflow', run: (c) => c.customerFlow.inflow({ org: '乐山' }), expectParam: true },
+    { name: 'customerFlow.outflow', path: '/query/customer-flow/outflow', run: (c) => c.customerFlow.outflow({ org: '乐山' }), expectParam: true },
+    { name: 'customerFlow.trend', path: '/query/customer-flow/trend', run: (c) => c.customerFlow.trend({ org: '乐山' }), expectParam: true },
+    { name: 'customerFlow.metadata', path: '/query/customer-flow/metadata', run: (c) => c.customerFlow.metadata() },
   ];
 
   it.each(cases)('$name builds $path', async ({ run, path, expectParam }) => {
