@@ -49,7 +49,7 @@ export const AIAssistantPage: React.FC = () => {
 
   // 加载快捷建议
   useEffect(() => {
-    apiClient.getQuickSuggestions().then((res) => {
+    apiClient.ai.quickSuggestions().then((res) => {
       if (res.success && res.data) {
         setSuggestions(res.data);
       }
@@ -60,7 +60,7 @@ export const AIAssistantPage: React.FC = () => {
 
   // 加载能力列表（用于本地意图匹配）
   useEffect(() => {
-    apiClient.getCapabilities().then((res) => {
+    apiClient.ai.capabilities().then((res) => {
       if (res.success && res.data) {
         setCapabilities(res.data);
       }
@@ -131,7 +131,7 @@ export const AIAssistantPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await apiClient.detectRequirement({
+      const response = await apiClient.ai.detectRequirement({
         message: trimmed,
         conversationHistory: getConversationHistory(),
       });

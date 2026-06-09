@@ -21,7 +21,6 @@ export type {
 
 import type {
   ApiResponse, AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
-  CapabilityInfo, DetectRequirementResponse,
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
   DashboardBundleResponse,
   ComprehensiveFilterParams, ComprehensiveBundleResponse,
@@ -32,7 +31,6 @@ import {
   QUERY_ROUTES,
   DATA_ROUTES,
   AUTH_ROUTES,
-  AI_ROUTES,
   FILTER_ROUTES,
   WORKFLOWS_ROUTES,
 } from './routes';
@@ -44,6 +42,7 @@ import { RepairApi } from './repair-api';
 import { CrossSellApi } from './cross-sell-api';
 import { PerformanceApi } from './performance-api';
 import { CustomerFlowApi } from './customer-flow-api';
+import { AiApi } from './ai-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -73,6 +72,8 @@ class ApiClient extends ApiClientCore {
   readonly performance = new PerformanceApi(this.transport);
   /** 客户来源去向：apiClient.customerFlow.{summary,inflow,outflow,trend,metadata} */
   readonly customerFlow = new CustomerFlowApi(this.transport);
+  /** AI：apiClient.ai.{analyzeTrend,detectRequirement,capabilities,quickSuggestions} */
+  readonly ai = new AiApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -416,36 +417,7 @@ class ApiClient extends ApiClientCore {
 
   // 车驾意交叉销售 API（orgTrend/heatmap）已迁出至 crossSell 子客户端（见类首字段 + cross-sell-api.ts）
 
-  // ============================================
-  // AI API
-  // ============================================
-
-  /**
-   * AI 分析机构推介率趋势（后端读取 API Key，无需前端传）
-   */
-  async analyzeTrend(params: {
-    rows: Array<{ date: string; auto_count: number; driver_count: number; rate: number; avg_premium: number }>;
-    org: string;
-    coverage: string;
-  }): Promise<{ success: boolean; analysis: string; error?: string }> {
-    return this.request(`/${AI_ROUTES.TREND_ANALYSIS}`, {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  }
-
-  /**
-   * AI 智能需求识别
-   */
-  async detectRequirement(params: {
-    message: string;
-    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
-  }): Promise<DetectRequirementResponse> {
-    return this.request(`/${AI_ROUTES.DETECT_REQUIREMENT}`, {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  }
+  // AI API（analyzeTrend/detectRequirement/capabilities/quickSuggestions）已迁出至 ai 子客户端（见类首字段 + ai-api.ts）
 
   // ── 巡检报告 ──
 
@@ -460,20 +432,6 @@ class ApiClient extends ApiClientCore {
   // 维修资源 API（v1 + v2）已迁出至 repair 子客户端（见类首字段 + repair-api.ts）
 
   // 客户来源去向 API（summary/inflow/outflow/trend/metadata）已迁出至 customerFlow 子客户端（见类首字段 + customer-flow-api.ts）
-
-  /**
-   * 获取能力注册表
-   */
-  async getCapabilities(): Promise<{ success: boolean; data: CapabilityInfo[] }> {
-    return this.request(`/${AI_ROUTES.CAPABILITIES}`);
-  }
-
-  /**
-   * 获取首页快捷建议
-   */
-  async getQuickSuggestions(): Promise<{ success: boolean; data: Array<{ text: string; capabilityId: string }> }> {
-    return this.request(`/${AI_ROUTES.QUICK_SUGGESTIONS}`);
-  }
 
   // 报价转化分析 API 已迁出至 quoteConversion 子客户端（见类首字段 + quote-conversion-api.ts）
 
