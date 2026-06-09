@@ -108,6 +108,10 @@ export interface KpiData {
   vehicle_achievement_rate: number | null;
   vehicle_growth_rate: number | null;
   variable_cost_ratio: number | null;
+  /** 满期赔付率（变动成本率分项；已报告赔款 / 满期保费） */
+  earned_claim_ratio: number | null;
+  /** 费用率（变动成本率分项；费用金额 / 签单保费） */
+  expense_ratio: number | null;
   bundle_renewal_rate: number | null;
   driver_premium: number;
   driver_achievement_rate: number | null;

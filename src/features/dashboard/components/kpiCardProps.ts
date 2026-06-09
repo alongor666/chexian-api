@@ -207,16 +207,22 @@ export function buildKpiCardProps(
     /* -------- Hero #3：变动成本率（segments：满期赔付率 + 费用率） -------- */
     case 'variable_cost_ratio': {
       const value = toPercent(kpis.variable_cost_ratio) ?? 0;
+      const earnedClaimRatio = toPercent(kpis.earned_claim_ratio);
+      const expenseRatio = toPercent(kpis.expense_ratio);
       const status = statusFor({
         value,
         threshold: T.costRateWarn,
         reverse: true,
       });
-      // 后端暂未拆解：先用 0 占位段（不显示数字），等接口提供"满期赔付率/费用率"分项时填入
-      const segments = [
-        { label: '满期赔付率', value: Math.min(value * 0.69, value), tone: 'primary' as const },
-        { label: '费用率', value: Math.max(value - value * 0.69, 0), tone: 'warning' as const },
-      ];
+      // 满期赔付率 + 费用率 = 变动成本率（后端 /api/query/kpi 同源拆分，注册表口径）。
+      // 分项缺失时回退为合计单段，不再用 ×0.69 假估算（BACKLOG 40f3ff）。
+      const segments =
+        earnedClaimRatio !== null && expenseRatio !== null
+          ? [
+              { label: '满期赔付率', value: earnedClaimRatio, tone: 'primary' as const },
+              { label: '费用率', value: expenseRatio, tone: 'warning' as const },
+            ]
+          : [{ label: '变动成本率', value, tone: 'primary' as const }];
       return {
         title,
         value,

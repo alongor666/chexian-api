@@ -16,6 +16,8 @@ const kpis: KpiData = {
   vehicle_achievement_rate: 92.3,
   vehicle_growth_rate: 5.2,
   variable_cost_ratio: 88.5,
+  earned_claim_ratio: 64.4, // 满期赔付率分项（64.4 + 24.1 = 88.5 变动成本率）
+  expense_ratio: 24.1, // 费用率分项
   bundle_renewal_rate: 0.45,
   driver_premium: 800,
   driver_achievement_rate: 90,
@@ -132,8 +134,13 @@ describe('buildKpiCardProps', () => {
     expect(buildKpiCardProps('vehicle_type_rate', ctx)!.value).toBeUndefined();
     // region_rate value = same_city / (same_city + remote) = 8000/13000
     expect(buildKpiCardProps('region_rate', ctx)!.value).toBeCloseTo(8000 / 13000, 10);
-    // variable_cost_ratio 拆 2 段
-    expect(buildKpiCardProps('variable_cost_ratio', ctx)!.segments).toHaveLength(2);
+    // variable_cost_ratio 拆 2 段：真实分项（满期赔付率 + 费用率），非 ×0.69 假估算
+    const vcSegments = buildKpiCardProps('variable_cost_ratio', ctx)!.segments!;
+    expect(vcSegments).toHaveLength(2);
+    expect(vcSegments[0].label).toBe('满期赔付率');
+    expect(vcSegments[0].value).toBeCloseTo(64.4, 6);
+    expect(vcSegments[1].label).toBe('费用率');
+    expect(vcSegments[1].value).toBeCloseTo(24.1, 6);
   });
 
   it('kpiDetails 为 null 时占比型卡降级为空占比、值 undefined（守卫不崩）', () => {
@@ -143,6 +150,18 @@ describe('buildKpiCardProps', () => {
     expect(quality.value).toBeUndefined();
     const renewal = buildKpiCardProps('renewal_rate', nullCtx)!;
     expect(renewal.ratioData).toEqual([]);
+  });
+
+  it('变动成本率分项缺失时回退为合计单段（不再 ×0.69 假估算）', () => {
+    const noSegCtx: KpiCardBuildContext = {
+      kpis: { ...kpis, earned_claim_ratio: null, expense_ratio: null },
+      kpiDetails,
+      loading: false,
+    };
+    const seg = buildKpiCardProps('variable_cost_ratio', noSegCtx)!.segments!;
+    expect(seg).toHaveLength(1);
+    expect(seg[0].label).toBe('变动成本率');
+    expect(seg[0].value).toBeCloseTo(88.5, 6);
   });
 
   it('未知 id 返回 null', () => {
