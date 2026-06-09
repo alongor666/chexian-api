@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  *
  * AuditTimeline 单元测试 — 阶段 4 PR-D
- *  - mock apiClient.getWorkflowAudit 返回 6 类事件
+ *  - mock apiClient.workflows.audit 返回 6 类事件
  *  - 断言每类事件渲染 + 时间戳 + payload 白名单字段
  *  - 断言不在白名单的 payload 字段不渲染（PII 防护）
  */
@@ -13,12 +13,12 @@ import type { AuditEvent } from '../../../src/features/copilot/types';
 
 // vi.mock 工厂会被 vitest hoist 到文件顶部，此时模块顶层变量尚未初始化。
 // 用 vi.hoisted 把 mock fn 一并提升到模块顶部，确保工厂执行时已可用。
-const { getWorkflowAuditMock } = vi.hoisted(() => ({
-  getWorkflowAuditMock: vi.fn(),
+const { workflowsAuditMock } = vi.hoisted(() => ({
+  workflowsAuditMock: vi.fn(),
 }));
 
 vi.mock('../../../src/shared/api/client', () => ({
-  apiClient: { getWorkflowAudit: getWorkflowAuditMock },
+  apiClient: { workflows: { audit: workflowsAuditMock } },
 }));
 
 import { AuditTimeline } from '../../../src/features/copilot/components/AuditTimeline';
@@ -97,17 +97,17 @@ const SAMPLE_EVENTS: AuditEvent[] = [
 ];
 
 beforeEach(() => {
-  getWorkflowAuditMock.mockReset();
+  workflowsAuditMock.mockReset();
 });
 
 describe('AuditTimeline', () => {
   it('渲染 6 类事件并按 eventType 区分（dom data-event-type 属性）', async () => {
-    getWorkflowAuditMock.mockResolvedValue(SAMPLE_EVENTS);
+    workflowsAuditMock.mockResolvedValue(SAMPLE_EVENTS);
 
     const { container } = render(<AuditTimeline runId={RUN_ID} />);
 
     await waitFor(() => {
-      expect(getWorkflowAuditMock).toHaveBeenCalledWith(RUN_ID);
+      expect(workflowsAuditMock).toHaveBeenCalledWith(RUN_ID);
     });
 
     // 6 类事件标签都应出现
@@ -134,7 +134,7 @@ describe('AuditTimeline', () => {
   });
 
   it('白名单外的 payload 字段不渲染（PII 防护）', async () => {
-    getWorkflowAuditMock.mockResolvedValue(SAMPLE_EVENTS);
+    workflowsAuditMock.mockResolvedValue(SAMPLE_EVENTS);
 
     render(<AuditTimeline runId={RUN_ID} />);
 
@@ -153,7 +153,7 @@ describe('AuditTimeline', () => {
   });
 
   it('audit 拉取失败时显示错误信息', async () => {
-    getWorkflowAuditMock.mockRejectedValue(new Error('audit not available'));
+    workflowsAuditMock.mockRejectedValue(new Error('audit not available'));
 
     render(<AuditTimeline runId={RUN_ID} />);
 
@@ -164,13 +164,13 @@ describe('AuditTimeline', () => {
   });
 
   it('refreshToken 变化时重新 fetch', async () => {
-    getWorkflowAuditMock.mockResolvedValue(SAMPLE_EVENTS);
+    workflowsAuditMock.mockResolvedValue(SAMPLE_EVENTS);
 
     const { rerender } = render(<AuditTimeline runId={RUN_ID} refreshToken={0} />);
-    await waitFor(() => expect(getWorkflowAuditMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(workflowsAuditMock).toHaveBeenCalledTimes(1));
 
     rerender(<AuditTimeline runId={RUN_ID} refreshToken={1} />);
-    await waitFor(() => expect(getWorkflowAuditMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(workflowsAuditMock).toHaveBeenCalledTimes(2));
   });
 
   it('超过 20 条事件时默认只渲染最近 20 条，点击加载更多后显示更早事件', async () => {
@@ -184,7 +184,7 @@ describe('AuditTimeline', () => {
       requestId: 'r-many',
       payload: { nodeId: `node-${index}`, status: 'success' },
     }));
-    getWorkflowAuditMock.mockResolvedValue(manyEvents);
+    workflowsAuditMock.mockResolvedValue(manyEvents);
 
     const { container } = render(<AuditTimeline runId={RUN_ID} />);
 

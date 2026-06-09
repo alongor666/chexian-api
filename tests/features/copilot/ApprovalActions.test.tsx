@@ -21,8 +21,10 @@ const { approveMock, rejectMock, usePermissionMock } = vi.hoisted(() => ({
 
 vi.mock('../../../src/shared/api/client', () => ({
   apiClient: {
-    approveWorkflowRun: approveMock,
-    rejectWorkflowRun: rejectMock,
+    workflows: {
+      approve: approveMock,
+      reject: rejectMock,
+    },
   },
 }));
 

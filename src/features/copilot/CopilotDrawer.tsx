@@ -79,7 +79,7 @@ export function CopilotDrawer() {
   // 失败静默忽略 — approval 不存在不影响报告本身渲染
   const fetchApproval = useCallback(async (runId: string) => {
     try {
-      const record = await apiClient.getWorkflowRun(runId);
+      const record = await apiClient.workflows.run(runId);
       setApproval((record.approval ?? null) as ApprovalState | null);
     } catch {
       setApproval(null);

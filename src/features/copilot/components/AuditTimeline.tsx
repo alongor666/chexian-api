@@ -114,7 +114,7 @@ export function AuditTimeline({ runId, refreshToken = 0 }: AuditTimelineProps) {
     setError(null);
     setVisibleCount(PAGE_SIZE);
     apiClient
-      .getWorkflowAudit(runId)
+      .workflows.audit(runId)
       .then((data) => {
         if (cancelled) return;
         setEvents(data as AuditEvent[]);

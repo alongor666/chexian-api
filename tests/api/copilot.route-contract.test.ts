@@ -134,13 +134,17 @@ describe('workflows route constants — 阶段 4 PR-D', () => {
     expect(frontendRoutes).toContain("HEALTH_RUNS_SUMMARY: 'workflows/health/runs-summary'");
   });
 
-  it('apiClient 暴露 getWorkflowAudit / approveWorkflowRun / rejectWorkflowRun', () => {
+  it('apiClient.workflows 子客户端暴露 audit / approve / reject / run / runsHealth', () => {
+    // Phase 2 迁移后，5 个方法已迁入 workflows-api.ts，client.ts 挂载子客户端
+    const workflowsApi = readSource('src/shared/api/workflows-api.ts');
+    expect(workflowsApi).toContain('audit(runId:');
+    expect(workflowsApi).toContain('approve(runId:');
+    expect(workflowsApi).toContain('reject(runId:');
+    expect(workflowsApi).toContain('run(runId:');
+    expect(workflowsApi).toContain('runsHealth()');
+    // client.ts 挂载点存在
     const client = readSource('src/shared/api/client.ts');
-    expect(client).toContain('async getWorkflowAudit(');
-    expect(client).toContain('async approveWorkflowRun(');
-    expect(client).toContain('async rejectWorkflowRun(');
-    expect(client).toContain('async getWorkflowRun(');
-    expect(client).toContain('async getWorkflowRunsHealth(');
+    expect(client).toContain('readonly workflows = new WorkflowsApi(');
   });
 });
 
