@@ -39,6 +39,7 @@ import {
 
 import { ApiClientCore, API_BASE } from './client-core';
 import { QuoteConversionApi } from './quote-conversion-api';
+import { ClaimsDetailApi } from './claims-detail-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -58,6 +59,8 @@ class ApiClient extends ApiClientCore {
   //    切勿把 transport 挪到子类（会读到 undefined）。
   /** 报价转化分析：apiClient.quoteConversion.{kpi,funnel,drilldown,heatmap,price,trend,ranking} */
   readonly quoteConversion = new QuoteConversionApi(this.transport);
+  /** 赔案明细：apiClient.claimsDetail.{pendingOverview,pendingByOrg,pendingAging,causeAnalysis,geoAccident,geoPlate,geoComparison,claimCycle,frequencyYoy,lossRatioDev,heatmap} */
+  readonly claimsDetail = new ClaimsDetailApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -770,62 +773,7 @@ class ApiClient extends ApiClientCore {
 
   // 报价转化分析 API 已迁出至 quoteConversion 子客户端（见类首字段 + quote-conversion-api.ts）
 
-  // ── 赔案明细 ──
-
-  async getClaimsDetailPendingOverview(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.PENDING_OVERVIEW}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailPendingByOrg(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.PENDING_BY_ORG}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailPendingAging(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.PENDING_AGING}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailCauseAnalysis(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.CAUSE_ANALYSIS}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailGeoAccident(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.GEO_ACCIDENT}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailGeoPlate(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.GEO_PLATE}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailGeoComparison(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.GEO_COMPARISON}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailClaimCycle(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.CLAIM_CYCLE}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailFrequencyYoy(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.FREQUENCY_YOY}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailLossRatioDev(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.LOSS_RATIO_DEV}${query ? `?${query}` : ''}`);
-  }
-
-  async getClaimsDetailHeatmap(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CLAIMS_DETAIL.HEATMAP}${query ? `?${query}` : ''}`);
-  }
+  // 赔案明细 API 已迁出至 claimsDetail 子客户端（见类首字段 + claims-detail-api.ts）
 
   async getExpenseRatioDev(params?: Record<string, string>) {
     const query = this.buildQueryString(params);
