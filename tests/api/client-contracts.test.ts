@@ -327,6 +327,11 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'customerFlow.outflow', path: '/query/customer-flow/outflow', run: (c) => c.customerFlow.outflow({ org: '乐山' }), expectParam: true },
     { name: 'customerFlow.trend', path: '/query/customer-flow/trend', run: (c) => c.customerFlow.trend({ org: '乐山' }), expectParam: true },
     { name: 'customerFlow.metadata', path: '/query/customer-flow/metadata', run: (c) => c.customerFlow.metadata() },
+    // ── ai（本 PR 迁移域）──
+    { name: 'ai.capabilities', path: '/ai/capabilities', run: (c) => c.ai.capabilities() },
+    { name: 'ai.quickSuggestions', path: '/ai/quick-suggestions', run: (c) => c.ai.quickSuggestions() },
+    { name: 'ai.analyzeTrend POST', path: '/ai/trend-analysis', run: (c) => c.ai.analyzeTrend({ rows: [], org: '总公司', coverage: '商业险' }) },
+    { name: 'ai.detectRequirement POST', path: '/ai/detect-requirement', run: (c) => c.ai.detectRequirement({ message: '查一下出险率' }) },
   ];
 
   it.each(cases)('$name builds $path', async ({ run, path, expectParam }) => {
