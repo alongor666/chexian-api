@@ -61,7 +61,7 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
       setError(null);
 
       try {
-        await apiClient.uploadFile(file);
+        await apiClient.data.upload(file);
         onClose();
         navigate('/dashboard');
       } catch (err) {

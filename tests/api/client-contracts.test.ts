@@ -279,7 +279,7 @@ describe('namespaced sub-client URL contracts', () => {
     });
   });
 
-  type NsCase = { name: string; path: string; run: (c: any) => Promise<unknown>; expectParam?: boolean; expectPost?: boolean };
+  type NsCase = { name: string; path: string; run: (c: any) => Promise<unknown>; expectParam?: boolean; expectMethod?: 'POST' | 'PUT' | 'DELETE' };
   const cases: NsCase[] = [
     // ── claimsDetail（#541 迁移域回填）──
     { name: 'claimsDetail.pendingOverview', path: '/query/claims-detail/pending-overview', run: (c) => c.claimsDetail.pendingOverview({ org: '乐山' }), expectParam: true },
@@ -327,14 +327,19 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'customerFlow.outflow', path: '/query/customer-flow/outflow', run: (c) => c.customerFlow.outflow({ org: '乐山' }), expectParam: true },
     { name: 'customerFlow.trend', path: '/query/customer-flow/trend', run: (c) => c.customerFlow.trend({ org: '乐山' }), expectParam: true },
     { name: 'customerFlow.metadata', path: '/query/customer-flow/metadata', run: (c) => c.customerFlow.metadata() },
-    // ── ai（本 PR 迁移域）──
+    // ── ai（迁移域）──
     { name: 'ai.capabilities', path: '/ai/capabilities', run: (c) => c.ai.capabilities() },
     { name: 'ai.quickSuggestions', path: '/ai/quick-suggestions', run: (c) => c.ai.quickSuggestions() },
-    { name: 'ai.analyzeTrend POST', path: '/ai/trend-analysis', run: (c) => c.ai.analyzeTrend({ rows: [], org: '总公司', coverage: '商业险' }), expectPost: true },
-    { name: 'ai.detectRequirement POST', path: '/ai/detect-requirement', run: (c) => c.ai.detectRequirement({ message: '查一下出险率' }), expectPost: true },
+    { name: 'ai.analyzeTrend POST', path: '/ai/trend-analysis', run: (c) => c.ai.analyzeTrend({ rows: [], org: '总公司', coverage: '商业险' }), expectMethod: 'POST' },
+    { name: 'ai.detectRequirement POST', path: '/ai/detect-requirement', run: (c) => c.ai.detectRequirement({ message: '查一下出险率' }), expectMethod: 'POST' },
+    // ── data（本 PR 迁移域）──
+    { name: 'data.files', path: '/data/files', run: (c) => c.data.files() },
+    { name: 'data.load', path: '/data/load/test.parquet', run: (c) => c.data.load('test.parquet'), expectMethod: 'POST' },
+    { name: 'data.remove', path: '/data/test.parquet', run: (c) => c.data.remove('test.parquet'), expectMethod: 'DELETE' },
+    { name: 'data.version', path: '/data/version', run: (c) => c.data.version() },
   ];
 
-  it.each(cases)('$name builds $path', async ({ run, path, expectParam, expectPost }) => {
+  it.each(cases)('$name builds $path', async ({ run, path, expectParam, expectMethod }) => {
     const { apiClient } = await importClient();
     await run(apiClient);
     const calledUrl = mockFetch.mock.calls[0][0] as string;
@@ -344,10 +349,30 @@ describe('namespaced sub-client URL contracts', () => {
     } else {
       expect(calledUrl).not.toContain('?');
     }
-    // POST 端点：method 是迁移关键位（URL 不变也能误把 POST 改成 GET 丢 body），单独断言
-    if (expectPost) {
+    // 变更端点：method 是迁移关键位（URL 不变也能误把 POST/DELETE 改成别的动词丢语义），单独断言
+    if (expectMethod) {
       const init = mockFetch.mock.calls[0][1] as RequestInit | undefined;
-      expect(init?.method).toBe('POST');
+      expect(init?.method).toBe(expectMethod);
     }
+  });
+
+  // data.upload 是 multipart，走原生 fetch 而非 t.request()，单独测试
+  it('data.upload sends multipart POST to /data/upload', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { filename: 'test.parquet', rowCount: 100, fileSizeMB: 1 } }),
+    });
+
+    const { apiClient } = await importClient();
+    const file = new File(['content'], 'test.parquet', { type: 'application/octet-stream' });
+    const result = await apiClient.data.upload(file);
+
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    const calledInit = mockFetch.mock.calls[0][1] as RequestInit;
+    expect(calledUrl).toContain('/data/upload');
+    expect(calledInit.method).toBe('POST');
+    expect(calledInit.body).toBeInstanceOf(FormData);
+    expect((result as any).rowCount).toBe(100);
   });
 });

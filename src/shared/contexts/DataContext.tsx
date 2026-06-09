@@ -102,7 +102,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     beginLoading();
     const task = (async () => {
       try {
-        const fileList = await apiClient.getFiles();
+        const fileList = await apiClient.data.files();
         setFiles(fileList);
 
         const current = fileList.find((f) => f.isCurrent);
@@ -139,7 +139,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     setError(null);
 
     try {
-      const result = await apiClient.loadFile(filename);
+      const result = await apiClient.data.load(filename);
       setCurrentFile(result);
       setIsDataLoaded(true);
       window.dispatchEvent(new Event('data-loaded'));
@@ -159,7 +159,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     setError(null);
 
     try {
-      const result = await apiClient.uploadFile(file);
+      const result = await apiClient.data.upload(file);
       setCurrentFile(result);
       setIsDataLoaded(true);
       await refreshFiles();
