@@ -97,7 +97,7 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
 
     kind 决定语义与结论措辞（领域铁律：未到期窗口「流失」非真流失）：
       · 'matured'（已到期·成熟）：续保率亮灯 + 对标 TARGET_MATURED_RENEWAL_RATE 目标 + 「已流失」措辞；
-      · 'approaching'（临期·未到期·进度）：续保率不亮灯 + 不套目标 + 「尚未续回 / 紧急冲刺」诚实措辞。
+      · 'approaching'（临期·未到期·进度）：续保率不亮灯 + 不套目标 + 「尚未续回 / 进度缺口最集中」诚实措辞（落差呈现，不写管理动作）。
     subject = 结论主语（如「6 月已到期客户」/「未来 7 天将到期客户」）。
 
     维度参数（默认 = 分公司视角 · 三级机构，行为逐字节不变）：
@@ -178,10 +178,10 @@ def _branch_matured_section(con, rpt, num, title, win_sql, pool_lead, note, *,
     else:  # approaching：临期·未到期·进度口径，诚实措辞（不说「已流失」）
         rpt.add(f"**问题一 · 临期续保进度**：{subject}共 {tot_yc:,} 单、当前续保率仅 {fp(rr_t)}"
                 f"（未到期·临期进度，仍在续保动作窗口内，将随到期临近补齐）。"
-                f"续保影响度前三是 {imp_str}，三{unit_noun}合计 {fp(top3_sum)} 临期客户尚未续回，最需紧急冲刺。")
+                f"续保影响度前三是 {imp_str}，三{unit_noun}合计 {fp(top3_sum)} 临期客户尚未续回，是进度缺口最集中的一段。")
         rpt.add()
         rpt.add(f"**问题二 · 临期未报价风险**：{subject}报价率仅 {fp(qr_t)}，"
-                f"{tot_unq:,}单未报价、距到期不足 7 天、转化时间极短，是流失风险最高的紧急派单对象"
+                f"{tot_unq:,}单未报价、距到期不足 7 天、转化时间极短，是流失风险最高的一段"
                 f"（占应续 {fp(unq_drag)}）。未报价客户数前三是 {unq_str}。")
     rpt.add()
     rpt.table(
@@ -238,8 +238,8 @@ def _branch_funnel_section(con, rpt, num, title, win_sql, pool_lead, mature, not
         prog = "（进度）" if not mature else ""
         rpt.concl(
             f"合计应续 {tot_yc:,} 件、续保率 {fp(rr_t)}{prog}、报价率 {fp(qr_t)}。"
-            f"最大短板 **{lo[0]}（续保率 {fp(lo[1])}）**、明显落后于标杆 {hi[0]}（{fp(hi[1])}），是首要补强对象；"
-            f"盘子最大的 **{big[0]}（{big[1]:,} 件）**续保率仅 {fp(big_rr)}，经营杠杆最大、最该集中攻坚。")
+            f"最大短板 **{lo[0]}（续保率 {fp(lo[1])}）**、明显落后于标杆 {hi[0]}（{fp(hi[1])}），落差最大；"
+            f"盘子最大的 **{big[0]}（{big[1]:,} 件）**续保率仅 {fp(big_rr)}，经营杠杆最大（盘子最大 × 续保率偏低）。")
     rpt.table([dim_header, "应续", "已报价", "已续保", "报价率", "续保率"],
               trows, ["---", "--:", "--:", "--:", "--:", "--:"])
     if note:
@@ -358,7 +358,7 @@ def run_branch_report(con, args, out_dir, ts):
     _branch_matured_section(con, rpt, "二", "临期 7 天续保表",
                             f"expiry_date > DATE '{today}' AND expiry_date <= DATE '{today}' + 7", pool_lead,
                             note=f"未来 7 天将到期（{today} 之后 7 天内到期）保单 —— **未到期·临期盘子**，续保率/流失为进度口径"
-                                 f"（含仍在续保动作窗口内尚未续的），非最终留存；字段与表一一致，重在锁定最紧急的派单与冲刺对象。",
+                                 f"（含仍在续保动作窗口内尚未续的），非最终留存；字段与表一一致，呈现距到期最近、进度缺口最集中的一段。",
                             kind="approaching", subject="未来 7 天将到期客户")
     _branch_funnel_section(con, rpt, "三", "当月未到期续保表",
                            f"expiry_date > DATE '{today}' AND expiry_date <= DATE '{m_end}'", pool_lead, mature=False,
@@ -494,7 +494,7 @@ def run_org_report(con, args, out_dir, ts):
     _branch_matured_section(con, rpt, "二", "临期 7 天续保表",
                             f"expiry_date > DATE '{today}' AND expiry_date <= DATE '{today}' + 7", pool_lead,
                             note=f"未来 7 天将到期（{today} 之后 7 天内到期）保单 —— **未到期·临期盘子**，续保率/流失为进度口径"
-                                 f"（含仍在续保动作窗口内尚未续的），非最终留存；字段与表一一致，重在锁定最紧急的派单与冲刺对象。",
+                                 f"（含仍在续保动作窗口内尚未续的），非最终留存；字段与表一一致，呈现距到期最近、进度缺口最集中的一段。",
                             kind="approaching", subject="未来 7 天将到期客户", **matured_kw)
     _branch_funnel_section(con, rpt, "三", "当月未到期续保表",
                            f"expiry_date > DATE '{today}' AND expiry_date <= DATE '{m_end}'", pool_lead, mature=False,
