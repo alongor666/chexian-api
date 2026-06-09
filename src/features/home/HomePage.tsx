@@ -17,7 +17,7 @@ export const HomePage = () => {
 
   const { data: dataVersion, isLoading } = useQuery({
     queryKey: ['data-version', userPermission?.username ?? null],
-    queryFn: () => apiClient.getDataVersion().catch(() => null),
+    queryFn: () => apiClient.data.version().catch(() => null),
     enabled: !!userPermission,
     staleTime: 60 * 60 * 1000, // 1 小时
   })

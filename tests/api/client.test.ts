@@ -92,7 +92,7 @@ describe('API Client', () => {
       (apiClient as any).token = testToken;
       (apiClient as any).tokenExpiry = Date.now() + 10000;
 
-      await apiClient.getFiles();
+      await apiClient.data.files();
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/data/files'),
@@ -117,12 +117,12 @@ describe('API Client', () => {
 
       const { apiClient } = await import('../../src/shared/api/client');
 
-      await expect(apiClient.getFiles()).rejects.toThrow('服务器内部错误');
+      await expect(apiClient.data.files()).rejects.toThrow('服务器内部错误');
     });
   });
 
   describe('File Operations', () => {
-    it('should call correct endpoint for getFiles', async () => {
+    it('should call correct endpoint for data.files', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
@@ -134,13 +134,13 @@ describe('API Client', () => {
       });
 
       const { apiClient } = await import('../../src/shared/api/client');
-      const files = await apiClient.getFiles();
+      const files = await apiClient.data.files();
 
       expect(files).toHaveLength(1);
-      expect(files[0].filename).toBe('test.parquet');
+      expect((files as any)[0].filename).toBe('test.parquet');
     });
 
-    it('should call correct endpoint for loadFile', async () => {
+    it('should call correct endpoint for data.load', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
@@ -150,13 +150,13 @@ describe('API Client', () => {
       });
 
       const { apiClient } = await import('../../src/shared/api/client');
-      const result = await apiClient.loadFile('test.parquet');
+      const result = await apiClient.data.load('test.parquet');
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/data/load/test.parquet'),
         expect.objectContaining({ method: 'POST' })
       );
-      expect(result.rowCount).toBe(1000);
+      expect((result as any).rowCount).toBe(1000);
     });
 
     it('should encode filename in URL', async () => {
@@ -169,7 +169,7 @@ describe('API Client', () => {
       });
 
       const { apiClient } = await import('../../src/shared/api/client');
-      await apiClient.loadFile('test file.parquet');
+      await apiClient.data.load('test file.parquet');
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/data/load/test%20file.parquet'),

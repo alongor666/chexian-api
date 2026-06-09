@@ -44,6 +44,8 @@ export interface ApiTransport {
   queryGet<T = any>(path: string, filters?: Record<string, any>, initial?: Record<string, string>): Promise<T>;
   drilldownGet<T = any>(path: string, params: { drillPath?: Array<{ dimension: string; value: string }>; groupBy?: string; [key: string]: any }): Promise<T>;
   buildQueryString(filters?: Record<string, any>, initial?: Record<string, string>): string;
+  /** 暴露给 multipart upload 等无法走 JSON request() 的子客户端方法（data 域 upload） */
+  getToken(): string | null;
 }
 
 /**
@@ -81,6 +83,7 @@ export class ApiClientCore {
       this.drilldownGet<T>(path, params),
     buildQueryString: (filters?: Record<string, any>, initial?: Record<string, string>) =>
       this.buildQueryString(filters, initial),
+    getToken: () => this.getToken(),
   };
 
   private loadSessionCookieHint(): boolean {

@@ -20,16 +20,14 @@ export type {
 } from './types';
 
 import type {
-  ApiResponse, AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
+  AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
   DashboardBundleResponse,
   ComprehensiveFilterParams, ComprehensiveBundleResponse,
-  FileInfo, LoadResult,
 } from './types';
 
 import {
   QUERY_ROUTES,
-  DATA_ROUTES,
   AUTH_ROUTES,
   FILTER_ROUTES,
   WORKFLOWS_ROUTES,
@@ -43,6 +41,7 @@ import { CrossSellApi } from './cross-sell-api';
 import { PerformanceApi } from './performance-api';
 import { CustomerFlowApi } from './customer-flow-api';
 import { AiApi } from './ai-api';
+import { DataApi } from './data-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -74,6 +73,8 @@ class ApiClient extends ApiClientCore {
   readonly customerFlow = new CustomerFlowApi(this.transport);
   /** AI：apiClient.ai.{analyzeTrend,detectRequirement,capabilities,quickSuggestions} */
   readonly ai = new AiApi(this.transport);
+  /** 数据管理：apiClient.data.{files,load,upload,remove,version} */
+  readonly data = new DataApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -228,62 +229,7 @@ class ApiClient extends ApiClientCore {
     }
   }
 
-  // ============================================
-  // 数据管理 API
-  // ============================================
-
-  /**
-   * 获取文件列表
-   */
-  async getFiles(): Promise<FileInfo[]> {
-    return this.request<FileInfo[]>(`/data/${DATA_ROUTES.FILES}`);
-  }
-
-  /**
-   * 加载数据文件
-   */
-  async loadFile(filename: string): Promise<LoadResult> {
-    return this.request<LoadResult>(`/data/${DATA_ROUTES.LOAD}/${encodeURIComponent(filename)}`, {
-      method: 'POST',
-    });
-  }
-
-  /**
-   * 上传文件
-   */
-  async uploadFile(file: File): Promise<LoadResult> {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const url = `${API_BASE}/data/${DATA_ROUTES.UPLOAD}`;
-    const token = this.getToken();
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: formData,
-    });
-
-    const data: ApiResponse<LoadResult> = await response.json();
-    if (!data.success) {
-      throw new Error(data.error?.message || '上传失败');
-    }
-    return data.data as LoadResult;
-  }
-
-  /**
-   * 删除文件
-   */
-  async deleteFile(filename: string): Promise<void> {
-    await this.request(`/data/${encodeURIComponent(filename)}`, {
-      method: 'DELETE',
-    });
-  }
+  // 数据管理 API（getFiles/loadFile/uploadFile/deleteFile）已迁出至 data 子客户端（见类首字段 + data-api.ts）
 
   // ============================================
   // 查询 API
@@ -298,10 +244,7 @@ class ApiClient extends ApiClientCore {
   async getCostAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COST, filters); }
   async getComprehensiveBundle(params?: ComprehensiveFilterParams): Promise<ComprehensiveBundleResponse> { return this.queryGet<ComprehensiveBundleResponse>(QUERY_ROUTES.COMPREHENSIVE_BUNDLE, params as Record<string, unknown>); }
 
-  /** 获取 ETL 数据版本（数据截止日 + 构建时间）。HomePage / SW 共用。 */
-  async getDataVersion(): Promise<{ etlDate: string; buildTime: string; serverStartTime: string }> {
-    return this.request<{ etlDate: string; buildTime: string; serverStartTime: string }>('/data/version');
-  }
+  // getDataVersion 已迁出至 data 子客户端（见类首字段 + data-api.ts；调用方改用 apiClient.data.version()）
 
   // 车驾意交叉销售 API（analysis/timePeriod/trend）已迁出至 crossSell 子客户端（见类首字段 + cross-sell-api.ts）
 
