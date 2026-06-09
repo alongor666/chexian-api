@@ -20,16 +20,27 @@ def strip_tags(s: str) -> str:
     return re.sub(r'<[^>]+>', '', s)
 
 
+# 标点/括号/引号/空白归一：禁词是精确子串匹配，对『不在「报价覆盖」』这类引号变体脆弱
+# （PR #539 review 实测：bad_example 自身写法都能绕过）。匹配前对文本与禁词同做归一，
+# 一次性堵住"插引号/加空白"整类绕过。注意：插入词变体（缺口『主要』在成交端）属语义级，
+# 子串黑名单本质防不了，靠自迭代积累正反例 + 一次过率北极星指标兜底。
+_NORM_RE = re.compile(r'[「」『』“”‘’（）()【】〔〕《》〈〉［］\[\]｛｝{}\s]')
+
+
+def normalize(s: str) -> str:
+    return _NORM_RE.sub('', s)
+
+
 def lint(path: str) -> int:
     rules = json.loads((HERE / 'judgment_redlines.json').read_text(encoding='utf-8'))
-    text = strip_tags(pathlib.Path(path).read_text(encoding='utf-8'))
+    text = normalize(strip_tags(pathlib.Path(path).read_text(encoding='utf-8')))
     violations = []
     for r in rules.get('rules', []):
-        hits = [w for w in r['forbid'] if w in text]
+        hits = [w for w in r['forbid'] if normalize(w) in text]
         if hits:
             violations.append((r['id'], r['name'], '命中禁词 ' + ' / '.join(hits), r.get('good_example', '')))
     for m in rules.get('must_contain', []):
-        if not any(w in text for w in m['any_of']):
+        if not any(normalize(w) in text for w in m['any_of']):
             violations.append((m['id'], m['name'], '缺必含（' + ' / '.join(m['any_of']) + ' 至少一个）', m.get('rationale', '')))
     n_rules = len(rules.get('rules', [])) + len(rules.get('must_contain', []))
     if violations:
