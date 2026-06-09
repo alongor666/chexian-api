@@ -62,7 +62,7 @@ export function useCrossSellTrend({
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.crossSellTrend(params),
-    queryFn: () => apiClient.getCrossSellTrend(params),
+    queryFn: () => apiClient.crossSell.trend(params),
     enabled,
     select: (result) =>
       (result?.rows || []).map((r) => ({

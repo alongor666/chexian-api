@@ -87,7 +87,7 @@ export function useCrossSellHeatmap({
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.crossSellHeatmap(params),
-    queryFn: () => apiClient.getCrossSellHeatmap(params),
+    queryFn: () => apiClient.crossSell.heatmap(params),
     enabled,
     select: (result) =>
       (result?.rows || []).map((r) => ({

@@ -127,7 +127,7 @@ export function useCrossSellTimePeriod({
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.crossSellTimePeriod(params),
-    queryFn: () => apiClient.getCrossSellTimePeriod(params),
+    queryFn: () => apiClient.crossSell.timePeriod(params),
     enabled,
     select: (result) => {
       if (!result) {

@@ -89,7 +89,7 @@ export function useCrossSellOrgTrend({
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.crossSellOrgTrend(params),
-    queryFn: () => apiClient.getCrossSellOrgTrend(params),
+    queryFn: () => apiClient.crossSell.orgTrend(params),
     enabled,
     select: (result) =>
       (result?.rows || []).map((r) => ({

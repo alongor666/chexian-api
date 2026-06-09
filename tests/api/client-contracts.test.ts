@@ -33,7 +33,7 @@ describe('API client contract coverage', () => {
       status: 200,
       json: async () => ({ success: true, data: { labels: [], series: {} } }),
     });
-    await apiClient.getCrossSellTrend({ granularity: 'monthly', org: '乐山' });
+    await apiClient.crossSell.trend({ granularity: 'monthly', org: '乐山' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/cross-sell-trend?');
     expect(calledUrl).toContain('granularity=monthly');
@@ -47,7 +47,7 @@ describe('API client contract coverage', () => {
       status: 200,
       json: async () => ({ success: true, data: { rows: [] } }),
     });
-    await apiClient.getCrossSellTopSalesman({ rankingType: 'quality', topN: '20' });
+    await apiClient.crossSell.topSalesman({ rankingType: 'quality', topN: '20' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/cross-sell-top-salesman?');
     expect(calledUrl).toContain('rankingType=quality');
@@ -78,7 +78,7 @@ describe('API client contract coverage', () => {
         },
       }),
     });
-    const resp = await apiClient.getCrossSellHeatmap({ groupByDimension: 'org_level_3', timePeriod: 'month' });
+    const resp = await apiClient.crossSell.heatmap({ groupByDimension: 'org_level_3', timePeriod: 'month' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/cross-sell-heatmap?');
     expect(calledUrl).toContain('groupByDimension=org_level_3');
@@ -302,6 +302,14 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'repair.toPremium', path: '/query/repair/to-premium', run: (c) => c.repair.toPremium({ org: '乐山' }), expectParam: true },
     { name: 'repair.diversionList', path: '/query/repair/diversion-list', run: (c) => c.repair.diversionList({ org: '乐山' }), expectParam: true },
     { name: 'repair.orphanShops', path: '/query/repair/orphan-shops', run: (c) => c.repair.orphanShops({ org: '乐山' }), expectParam: true },
+    // ── crossSell（本 PR 迁移域）──
+    { name: 'crossSell.analysis', path: '/query/cross-sell?', run: (c) => c.crossSell.analysis({ org: '乐山' }), expectParam: true },
+    { name: 'crossSell.timePeriod', path: '/query/cross-sell-summary', run: (c) => c.crossSell.timePeriod({ org: '乐山' }), expectParam: true },
+    { name: 'crossSell.trend', path: '/query/cross-sell-trend', run: (c) => c.crossSell.trend({ org: '乐山' }), expectParam: true },
+    { name: 'crossSell.topSalesman', path: '/query/cross-sell-top-salesman', run: (c) => c.crossSell.topSalesman({ org: '乐山' }), expectParam: true },
+    { name: 'crossSell.bundle', path: '/query/cross-sell-bundle', run: (c) => c.crossSell.bundle({ org: '乐山' }), expectParam: true },
+    { name: 'crossSell.orgTrend', path: '/query/cross-sell-org-trend', run: (c) => c.crossSell.orgTrend({ org: '乐山' }), expectParam: true },
+    { name: 'crossSell.heatmap', path: '/query/cross-sell-heatmap', run: (c) => c.crossSell.heatmap({ org: '乐山' }), expectParam: true },
   ];
 
   it.each(cases)('$name builds $path', async ({ run, path, expectParam }) => {
