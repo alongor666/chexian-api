@@ -51,7 +51,7 @@ export const RepairShopDrawer: React.FC<Props> = ({ shop, timeWindow, onClose })
   const { data: localRes } = useQuery({
     queryKey: ['repair-local-resource-shop', shopCode, timeWindow],
     queryFn: () =>
-      apiClient.getRepairLocalResource({
+      apiClient.repair.localResource({
         shopCode,
         timeWindow,
       }) as Promise<LocalResourceRow[]>,
@@ -61,7 +61,7 @@ export const RepairShopDrawer: React.FC<Props> = ({ shop, timeWindow, onClose })
   const { data: toPremium } = useQuery({
     queryKey: ['repair-to-premium-shop', shopCode, timeWindow],
     queryFn: () =>
-      apiClient.getRepairToPremium({
+      apiClient.repair.toPremium({
         shopCode,
         timeWindow,
       }) as Promise<ToPremiumRow[]>,

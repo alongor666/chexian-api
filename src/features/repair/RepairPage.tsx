@@ -57,23 +57,23 @@ export const RepairPage: React.FC = () => {
 
   const { data: metadata } = useQuery({
     queryKey: ['repair-metadata'],
-    queryFn: () => apiClient.getRepairMetadata() as Promise<RepairMetadata>,
+    queryFn: () => apiClient.repair.metadata() as Promise<RepairMetadata>,
   });
 
   const { data: coopTierData } = useQuery({
     queryKey: ['repair-coop-tier', params],
-    queryFn: () => apiClient.getRepairCoopTier(params) as Promise<CoopTierRow[]>,
+    queryFn: () => apiClient.repair.coopTier(params) as Promise<CoopTierRow[]>,
   });
 
   const { data: scatterData, isLoading: scatterLoading } = useQuery({
     queryKey: ['repair-scatter', params],
-    queryFn: () => apiClient.getRepairScatter(params) as Promise<ScatterShopPoint[]>,
+    queryFn: () => apiClient.repair.scatter(params) as Promise<ScatterShopPoint[]>,
   });
 
   const { data: toPremiumAll } = useQuery({
     queryKey: ['repair-to-premium-all', params],
     queryFn: () =>
-      apiClient.getRepairToPremium(params) as Promise<
+      apiClient.repair.toPremium(params) as Promise<
         Array<{
           damage_amount: number;
           net_premium: number;

@@ -257,3 +257,62 @@ describe('API client contract coverage', () => {
     expect(calledUrl).toContain('orgNames=');
   });
 });
+
+/**
+ * 命名空间子客户端 URL 契约（Phase 2 · 每域自带经验性覆盖）
+ *
+ * 闭合 #541 评审指出的「迁移域无测试直打 apiClient.<domain>.* 链」缺口：
+ * 纯 fetch-spy 验证每个命名空间方法构造的 /query/ 路径与参数透传，
+ * 比 RTL hook 测试更轻、不易 flaky。新增/迁移域时在此追加条目即可。
+ */
+describe('namespaced sub-client URL contracts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: {} }),
+    });
+  });
+
+  type NsCase = { name: string; path: string; run: (c: any) => Promise<unknown>; expectParam?: boolean };
+  const cases: NsCase[] = [
+    // ── claimsDetail（#541 迁移域回填）──
+    { name: 'claimsDetail.pendingOverview', path: '/query/claims-detail/pending-overview', run: (c) => c.claimsDetail.pendingOverview({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.pendingByOrg', path: '/query/claims-detail/pending-by-org', run: (c) => c.claimsDetail.pendingByOrg({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.pendingAging', path: '/query/claims-detail/pending-aging', run: (c) => c.claimsDetail.pendingAging({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.causeAnalysis', path: '/query/claims-detail/cause-analysis', run: (c) => c.claimsDetail.causeAnalysis({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.geoAccident', path: '/query/claims-detail/geo-accident', run: (c) => c.claimsDetail.geoAccident({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.geoPlate', path: '/query/claims-detail/geo-plate', run: (c) => c.claimsDetail.geoPlate({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.geoComparison', path: '/query/claims-detail/geo-comparison', run: (c) => c.claimsDetail.geoComparison({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.claimCycle', path: '/query/claims-detail/claim-cycle', run: (c) => c.claimsDetail.claimCycle({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.frequencyYoy', path: '/query/claims-detail/frequency-yoy', run: (c) => c.claimsDetail.frequencyYoy({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.lossRatioDev', path: '/query/claims-detail/loss-ratio-development', run: (c) => c.claimsDetail.lossRatioDev({ org: '乐山' }), expectParam: true },
+    { name: 'claimsDetail.heatmap', path: '/query/claims-detail/heatmap', run: (c) => c.claimsDetail.heatmap({ org: '乐山' }), expectParam: true },
+    // ── repair（本 PR 迁移域）──
+    { name: 'repair.overview', path: '/query/repair/overview', run: (c) => c.repair.overview({ org: '乐山' }), expectParam: true },
+    { name: 'repair.detail', path: '/query/repair/detail', run: (c) => c.repair.detail({ org: '乐山' }), expectParam: true },
+    { name: 'repair.status', path: '/query/repair/status', run: (c) => c.repair.status({ org: '乐山' }), expectParam: true },
+    { name: 'repair.metadata', path: '/query/repair/metadata', run: (c) => c.repair.metadata() },
+    { name: 'repair.city', path: '/query/repair/city', run: (c) => c.repair.city({ org: '乐山' }), expectParam: true },
+    { name: 'repair.channel', path: '/query/repair/channel', run: (c) => c.repair.channel({ org: '乐山' }), expectParam: true },
+    { name: 'repair.coopTier', path: '/query/repair/coop-tier', run: (c) => c.repair.coopTier({ org: '乐山' }), expectParam: true },
+    { name: 'repair.scatter', path: '/query/repair/scatter', run: (c) => c.repair.scatter({ org: '乐山' }), expectParam: true },
+    { name: 'repair.localResource', path: '/query/repair/local-resource', run: (c) => c.repair.localResource({ org: '乐山' }), expectParam: true },
+    { name: 'repair.toPremium', path: '/query/repair/to-premium', run: (c) => c.repair.toPremium({ org: '乐山' }), expectParam: true },
+    { name: 'repair.diversionList', path: '/query/repair/diversion-list', run: (c) => c.repair.diversionList({ org: '乐山' }), expectParam: true },
+    { name: 'repair.orphanShops', path: '/query/repair/orphan-shops', run: (c) => c.repair.orphanShops({ org: '乐山' }), expectParam: true },
+  ];
+
+  it.each(cases)('$name builds $path', async ({ run, path, expectParam }) => {
+    const { apiClient } = await importClient();
+    await run(apiClient);
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain(path);
+    if (expectParam) {
+      expect(calledUrl).toContain('org=%E4%B9%90%E5%B1%B1');
+    } else {
+      expect(calledUrl).not.toContain('?');
+    }
+  });
+});
