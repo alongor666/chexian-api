@@ -279,7 +279,7 @@ describe('namespaced sub-client URL contracts', () => {
     });
   });
 
-  type NsCase = { name: string; path: string; run: (c: any) => Promise<unknown>; expectParam?: boolean };
+  type NsCase = { name: string; path: string; run: (c: any) => Promise<unknown>; expectParam?: boolean; expectPost?: boolean };
   const cases: NsCase[] = [
     // ── claimsDetail（#541 迁移域回填）──
     { name: 'claimsDetail.pendingOverview', path: '/query/claims-detail/pending-overview', run: (c) => c.claimsDetail.pendingOverview({ org: '乐山' }), expectParam: true },
@@ -330,11 +330,11 @@ describe('namespaced sub-client URL contracts', () => {
     // ── ai（本 PR 迁移域）──
     { name: 'ai.capabilities', path: '/ai/capabilities', run: (c) => c.ai.capabilities() },
     { name: 'ai.quickSuggestions', path: '/ai/quick-suggestions', run: (c) => c.ai.quickSuggestions() },
-    { name: 'ai.analyzeTrend POST', path: '/ai/trend-analysis', run: (c) => c.ai.analyzeTrend({ rows: [], org: '总公司', coverage: '商业险' }) },
-    { name: 'ai.detectRequirement POST', path: '/ai/detect-requirement', run: (c) => c.ai.detectRequirement({ message: '查一下出险率' }) },
+    { name: 'ai.analyzeTrend POST', path: '/ai/trend-analysis', run: (c) => c.ai.analyzeTrend({ rows: [], org: '总公司', coverage: '商业险' }), expectPost: true },
+    { name: 'ai.detectRequirement POST', path: '/ai/detect-requirement', run: (c) => c.ai.detectRequirement({ message: '查一下出险率' }), expectPost: true },
   ];
 
-  it.each(cases)('$name builds $path', async ({ run, path, expectParam }) => {
+  it.each(cases)('$name builds $path', async ({ run, path, expectParam, expectPost }) => {
     const { apiClient } = await importClient();
     await run(apiClient);
     const calledUrl = mockFetch.mock.calls[0][0] as string;
@@ -343,6 +343,11 @@ describe('namespaced sub-client URL contracts', () => {
       expect(calledUrl).toContain('org=%E4%B9%90%E5%B1%B1');
     } else {
       expect(calledUrl).not.toContain('?');
+    }
+    // POST 端点：method 是迁移关键位（URL 不变也能误把 POST 改成 GET 丢 body），单独断言
+    if (expectPost) {
+      const init = mockFetch.mock.calls[0][1] as RequestInit | undefined;
+      expect(init?.method).toBe('POST');
     }
   });
 });
