@@ -71,18 +71,18 @@ export class AuthApi {
 
   // ── PAT (Personal Access Token) ──
   listMyTokens(): Promise<ApiTokenInfo[]> {
-    return this.t.request<ApiTokenInfo[]>('/auth/tokens');
+    return this.t.request<ApiTokenInfo[]>(`/${AUTH_ROUTES.TOKENS}`);
   }
 
   createMyToken(payload: { name: string; ttlDays: 30 | 90 | 180 | 365 }): Promise<CreatedToken> {
-    return this.t.request<CreatedToken>('/auth/tokens', {
+    return this.t.request<CreatedToken>(`/${AUTH_ROUTES.TOKENS}`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
   async revokeMyToken(tokenId: string): Promise<void> {
-    await this.t.request(`/auth/tokens/${encodeURIComponent(tokenId)}`, {
+    await this.t.request(`/${AUTH_ROUTES.TOKEN_BY_ID}/${encodeURIComponent(tokenId)}`, {
       method: 'DELETE',
     });
   }
