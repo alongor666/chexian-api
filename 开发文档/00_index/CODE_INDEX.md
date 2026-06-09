@@ -253,7 +253,7 @@ src/features/*                                    # 功能模块 UI 渲染
 | `client-core.ts` | 传输内核 `ApiClientCore`（token / request / GET 合并 / 30s 超时 / 401 静默刷新）+ 只读句柄 `ApiTransport` |
 | `*-api.ts`（10 个） | 命名空间业务域子客户端：`apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow}.*`，各持只读 `ApiTransport` |
 
-> 守卫：契约 `tests/api/client-contracts.test.ts` · 传输内核 `tests/api/client-core-transport.test.ts` · 架构边界 `tests/api/sub-client-boundary.test.ts` · 门禁 `scripts/check-hotfile-contracts.mjs`（锚 `client.ts` + `client-core.ts` + 全部 `*-api.ts`，清单从文件系统派生）。
+> 守卫：契约 `tests/api/client-contracts.test.ts` · 传输内核 `tests/api/client-core-transport.test.ts` · 架构边界 `tests/api/sub-client-boundary.test.ts` · 金 master `tests/api/client-wire-golden.test.ts`（99 业务方法逐一 verb/path/param/body/auth/dedupe vs 冻结 golden，`UPDATE_GOLDEN=1` 重生） · 守恒 `scripts/api-wire-conservation.mjs`（原99 = 保留25 + Σ命名空间74，已入 governance #25） · 门禁 `scripts/check-hotfile-contracts.mjs`（锚 `client.ts` + `client-core.ts` + 全部 `*-api.ts`，清单从文件系统派生）。
 
 #### 上下文管理 (`src/shared/contexts/`)
 
