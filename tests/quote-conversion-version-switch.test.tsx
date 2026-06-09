@@ -194,8 +194,8 @@ describe('quote conversion version switch', () => {
       ncdMin: '10',
       ncdMax: '20',
     };
-    const kpiSpy = vi.spyOn(apiClient, 'getQuoteConversionKpi').mockResolvedValue({} as never);
-    const funnelSpy = vi.spyOn(apiClient, 'getQuoteConversionFunnel').mockResolvedValue([] as never);
+    const kpiSpy = vi.spyOn(apiClient.quoteConversion, 'kpi').mockResolvedValue({} as never);
+    const funnelSpy = vi.spyOn(apiClient.quoteConversion, 'funnel').mockResolvedValue([] as never);
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: {

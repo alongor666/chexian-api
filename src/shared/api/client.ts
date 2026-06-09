@@ -38,6 +38,7 @@ import {
 } from './routes';
 
 import { ApiClientCore, API_BASE } from './client-core';
+import { QuoteConversionApi } from './quote-conversion-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -50,6 +51,14 @@ export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError 
  * protected 成员发起请求。
  */
 class ApiClient extends ApiClientCore {
+  // ── 命名空间子客户端（Phase 2，按域逐步迁入；复用 this.transport 单实例传输）──
+  // ⚠️ 不变量：传输句柄 transport 必须留在基类 ApiClientCore 的字段；子客户端字段
+  //    在此子类初始化，依赖「基类字段先于子类字段初始化」语义才能读到已就绪的
+  //    this.transport。后续各域 `readonly xxx = new XxxApi(this.transport)` 同此约束，
+  //    切勿把 transport 挪到子类（会读到 undefined）。
+  /** 报价转化分析：apiClient.quoteConversion.{kpi,funnel,drilldown,heatmap,price,trend,ranking} */
+  readonly quoteConversion = new QuoteConversionApi(this.transport);
+
   // ============================================
   // 认证 API
   // ============================================
@@ -759,44 +768,7 @@ class ApiClient extends ApiClientCore {
     return this.request(`/${AI_ROUTES.QUICK_SUGGESTIONS}`);
   }
 
-  // ============================================
-  // 报价转化分析 API
-  // ============================================
-
-  async getQuoteConversionKpi(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.KPI}${query ? `?${query}` : ''}`);
-  }
-
-  async getQuoteConversionFunnel(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.FUNNEL}${query ? `?${query}` : ''}`);
-  }
-
-  async getQuoteConversionDrilldown(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.DRILLDOWN}${query ? `?${query}` : ''}`);
-  }
-
-  async getQuoteConversionHeatmap(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.HEATMAP}${query ? `?${query}` : ''}`);
-  }
-
-  async getQuoteConversionPrice(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.PRICE}${query ? `?${query}` : ''}`);
-  }
-
-  async getQuoteConversionTrend(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.TREND}${query ? `?${query}` : ''}`);
-  }
-
-  async getQuoteConversionRanking(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.QUOTE_CONVERSION.RANKING}${query ? `?${query}` : ''}`);
-  }
+  // 报价转化分析 API 已迁出至 quoteConversion 子客户端（见类首字段 + quote-conversion-api.ts）
 
   // ── 赔案明细 ──
 
