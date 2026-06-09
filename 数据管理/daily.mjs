@@ -553,7 +553,7 @@ function pruneFullSnapshotHistory(scriptDir, id, trigger) {
 
 function archiveExistingLatest(outputAbs, archivePrefix) {
   if (!existsSync(outputAbs)) return;
-  const archiveDir = join(homedir(), 'chexian-archive');
+  const archiveDir = join(__dirname, '.archive');
   ensureDir(archiveDir);
   renameSync(outputAbs, join(archiveDir, `${archivePrefix}_${formatDateTime()}.parquet`));
   log('yellow', `  归档旧 latest → ${archivePrefix}_${formatDateTime()}.parquet`);
@@ -734,7 +734,7 @@ function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs,
   const outputArg = output_is_dir ? dirname(outputAbs) : outputAbs;
   if (output_is_dir) {
     if (existsSync(outputAbs)) {
-      const archiveDir = join(homedir(), 'chexian-archive');
+      const archiveDir = join(__dirname, '.archive');
       ensureDir(archiveDir);
       renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
       log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDateTime()}.parquet`);
@@ -748,7 +748,7 @@ function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs,
   runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${tmpOutput}"`, ...extraArgs]);
   validateDomainCandidate(python, id, tmpOutput, trigger.validation);
   if (existsSync(outputAbs)) {
-    const archiveDir = join(homedir(), 'chexian-archive');
+    const archiveDir = join(__dirname, '.archive');
     ensureDir(archiveDir);
     renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
     log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDateTime()}.parquet`);
@@ -848,7 +848,7 @@ function runStrategyMultiMerge(ctx) {
     return false;
   }
 
-  const archiveDir = join(homedir(), 'chexian-archive');
+  const archiveDir = join(__dirname, '.archive');
   const validateCandidate = candidatePath => validateDomainCandidate(python, id, candidatePath, trigger.validation);
   // 短路：单文件 + 不合并历史 → 直接替换（避免起 DuckDB 进程）
   if (tmpFiles.length === 1 && !hasHistory) {
@@ -1166,7 +1166,7 @@ function runClaimsDetail(python, scriptDir) {
 
   // Step 4: 清理旧 latest.parquet（兼容迁移）
   if (existsSync(CLAIMS_DETAIL_PATH)) {
-    const archiveDir = join(homedir(), 'chexian-archive');
+    const archiveDir = join(__dirname, '.archive');
     ensureDir(archiveDir);
     renameSync(CLAIMS_DETAIL_PATH, join(archiveDir, `claims_detail_latest_${formatDateTime()}.parquet`));
     log('yellow', '  归档旧 latest.parquet → archive/');
@@ -1203,7 +1203,7 @@ function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePre
 
   // 转换成功后才归档旧文件
   if (existsSync(outputPath)) {
-    const archiveDir = join(homedir(), 'chexian-archive');
+    const archiveDir = join(__dirname, '.archive');
     ensureDir(archiveDir);
     renameSync(outputPath, join(archiveDir, `${archivePrefix}_${formatDateTime()}.parquet`));
   }
@@ -1243,7 +1243,7 @@ function runRenewalTracker(python, scriptDir) {
 
   // 归档旧文件（成功转换后才归档）
   if (existsSync(outputPath)) {
-    const archiveDir = join(homedir(), 'chexian-archive');
+    const archiveDir = join(__dirname, '.archive');
     ensureDir(archiveDir);
     renameSync(outputPath, join(archiveDir, `renewal_tracker_latest_${formatDateTime()}.parquet`));
     log('yellow', '  归档旧 latest.parquet → archive/');
@@ -1320,7 +1320,7 @@ async function main() {
   // 路径定义
   const currentDir = join(scriptDir, 'warehouse/fact/policy/current');
   const stagingDir = join(scriptDir, 'warehouse/fact/policy/staging');
-  const archiveDir = join(homedir(), 'chexian-archive');
+  const archiveDir = join(__dirname, '.archive');
 
   ensureDir(currentDir);
   ensureDir(stagingDir);
@@ -1652,7 +1652,7 @@ async function main() {
     console.log('');
     log('yellow', '以下旧 xlsx 文件可以安全归档:');
     for (const f of staleXlsx) {
-      log('yellow', `  mv "${f.path}" ~/chexian-archive/`);
+      log('yellow', `  mv "${f.path}" .archive/`);
     }
   }
 }
