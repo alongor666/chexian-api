@@ -40,11 +40,19 @@ import {
   getParquetColumnCount,
   getPartitionedRowCount,
   getPartitionedColumnCount,
+  getPartitionedMaxReportDate,
 } from './pipelines/parquet_stats.mjs';
 import { collectPolicyCurrentStats, syncQuickReferenceFile } from './pipelines/quick_reference.mjs';
 import { assertNoPolicyCurrentOverlap } from '../scripts/lib/parquet-overlap-check.mjs';
 // 分片判定纯函数抽到 lib/shard-classify.mjs（可单测，daily.mjs 顶层执行 main() 无法被 import）
 import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
+// claims 报案截止日新鲜度判定纯函数（同模式抽 lib/ 便于单测）
+import {
+  claimsReportLagDays,
+  shouldWarnClaimsFreshness,
+  localTodayISO,
+  CLAIMS_REPORT_LAG_WARN_DAYS,
+} from './lib/claims-freshness.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -553,7 +561,7 @@ function pruneFullSnapshotHistory(scriptDir, id, trigger) {
 
 function archiveExistingLatest(outputAbs, archivePrefix) {
   if (!existsSync(outputAbs)) return;
-  const archiveDir = join(homedir(), 'chexian-archive');
+  const archiveDir = join(__dirname, '.archive');
   ensureDir(archiveDir);
   renameSync(outputAbs, join(archiveDir, `${archivePrefix}_${formatDateTime()}.parquet`));
   log('yellow', `  归档旧 latest → ${archivePrefix}_${formatDateTime()}.parquet`);
@@ -734,7 +742,7 @@ function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs,
   const outputArg = output_is_dir ? dirname(outputAbs) : outputAbs;
   if (output_is_dir) {
     if (existsSync(outputAbs)) {
-      const archiveDir = join(homedir(), 'chexian-archive');
+      const archiveDir = join(__dirname, '.archive');
       ensureDir(archiveDir);
       renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
       log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDateTime()}.parquet`);
@@ -748,7 +756,7 @@ function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs,
   runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${tmpOutput}"`, ...extraArgs]);
   validateDomainCandidate(python, id, tmpOutput, trigger.validation);
   if (existsSync(outputAbs)) {
-    const archiveDir = join(homedir(), 'chexian-archive');
+    const archiveDir = join(__dirname, '.archive');
     ensureDir(archiveDir);
     renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
     log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDateTime()}.parquet`);
@@ -848,7 +856,7 @@ function runStrategyMultiMerge(ctx) {
     return false;
   }
 
-  const archiveDir = join(homedir(), 'chexian-archive');
+  const archiveDir = join(__dirname, '.archive');
   const validateCandidate = candidatePath => validateDomainCandidate(python, id, candidatePath, trigger.validation);
   // 短路：单文件 + 不合并历史 → 直接替换（避免起 DuckDB 进程）
   if (tmpFiles.length === 1 && !hasHistory) {
@@ -1166,7 +1174,7 @@ function runClaimsDetail(python, scriptDir) {
 
   // Step 4: 清理旧 latest.parquet（兼容迁移）
   if (existsSync(CLAIMS_DETAIL_PATH)) {
-    const archiveDir = join(homedir(), 'chexian-archive');
+    const archiveDir = join(__dirname, '.archive');
     ensureDir(archiveDir);
     renameSync(CLAIMS_DETAIL_PATH, join(archiveDir, `claims_detail_latest_${formatDateTime()}.parquet`));
     log('yellow', '  归档旧 latest.parquet → archive/');
@@ -1178,6 +1186,20 @@ function runClaimsDetail(python, scriptDir) {
   // manifest 声明 claims_detail 时由 refresh_metadata.py 统一写入
   if (!_currentReleaseManifest?.domains?.claims_detail) {
     updateDataSources('claims_detail', { rowCount: totalRows, fieldCount });
+  }
+
+  // Step 5.5: 报案截止日新鲜度检查（B191e0f）——防喂旧快照致满期赔付率系统性偏低。
+  // 理赔金额是动态的，只喂窄窗增量会让历史赔案金额停在旧值；见 data-pipeline.md 存量更新铁律。
+  const maxReportDate = getPartitionedMaxReportDate(python, CLAIMS_DETAIL_DIR);
+  const lagDays = claimsReportLagDays(maxReportDate, localTodayISO());
+  if (shouldWarnClaimsFreshness(lagDays)) {
+    log('red', `⚠️ claims 报案截止日 ${maxReportDate} 落后当日 ${lagDays} 天（阈值 ${CLAIMS_REPORT_LAG_WARN_DAYS} 天）`);
+    log('red', '   理赔金额是动态的，喂旧快照会让满期赔付率系统性偏低；');
+    log('red', '   请用"含历史的全量"理赔明细源刷新（见 .claude/rules/data-pipeline.md「claims_detail 存量更新铁律」）');
+  } else if (maxReportDate) {
+    log('green', `  ✓ claims 报案截止日 ${maxReportDate}（落后当日 ${lagDays} 天，新鲜）`);
+  } else {
+    log('yellow', '  ⚠️ 无法读取 claims 报案截止日，跳过新鲜度检查');
   }
 
   // Step 6: 显示分区状态
@@ -1203,7 +1225,7 @@ function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePre
 
   // 转换成功后才归档旧文件
   if (existsSync(outputPath)) {
-    const archiveDir = join(homedir(), 'chexian-archive');
+    const archiveDir = join(__dirname, '.archive');
     ensureDir(archiveDir);
     renameSync(outputPath, join(archiveDir, `${archivePrefix}_${formatDateTime()}.parquet`));
   }
@@ -1243,7 +1265,7 @@ function runRenewalTracker(python, scriptDir) {
 
   // 归档旧文件（成功转换后才归档）
   if (existsSync(outputPath)) {
-    const archiveDir = join(homedir(), 'chexian-archive');
+    const archiveDir = join(__dirname, '.archive');
     ensureDir(archiveDir);
     renameSync(outputPath, join(archiveDir, `renewal_tracker_latest_${formatDateTime()}.parquet`));
     log('yellow', '  归档旧 latest.parquet → archive/');
@@ -1320,7 +1342,7 @@ async function main() {
   // 路径定义
   const currentDir = join(scriptDir, 'warehouse/fact/policy/current');
   const stagingDir = join(scriptDir, 'warehouse/fact/policy/staging');
-  const archiveDir = join(homedir(), 'chexian-archive');
+  const archiveDir = join(__dirname, '.archive');
 
   ensureDir(currentDir);
   ensureDir(stagingDir);
@@ -1652,7 +1674,7 @@ async function main() {
     console.log('');
     log('yellow', '以下旧 xlsx 文件可以安全归档:');
     for (const f of staleXlsx) {
-      log('yellow', `  mv "${f.path}" ~/chexian-archive/`);
+      log('yellow', `  mv "${f.path}" .archive/`);
     }
   }
 }

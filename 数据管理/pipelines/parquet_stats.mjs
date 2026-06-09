@@ -57,3 +57,26 @@ export const getPartitionedRowCount = (python, dir) =>
 /** DuckDB union_by_name 读 claims_*.parquet 分区 schema 并集列数（兼容年度 schema 漂移） */
 export const getPartitionedColumnCount = (python, dir) =>
   runStat(python, PY_PARTITIONED_COL_COUNT, dir);
+
+const PY_PARTITIONED_MAX_REPORT_DATE = `
+import sys, os, duckdb
+pattern = os.path.join(sys.argv[1], 'claims_*.parquet').replace("'", "''")
+row = duckdb.sql(f"SELECT CAST(MAX(report_time) AS DATE) FROM read_parquet('{pattern}', union_by_name=true)").fetchone()
+print(row[0].isoformat() if row and row[0] is not None else "")
+`;
+
+/** runStat 的字符串变体：stdout 原样返回（错误 / 空返回 null） */
+function runStatStr(python, script, arg) {
+  const result = spawnSync(python, ['-', arg], {
+    input: script,
+    encoding: 'utf-8',
+    windowsHide: true,
+  });
+  if (result.status !== 0) return null;
+  const out = result.stdout.trim();
+  return out || null;
+}
+
+/** DuckDB glob 读 claims_*.parquet 分区的 MAX(report_time)，返回 'YYYY-MM-DD' 或 null */
+export const getPartitionedMaxReportDate = (python, dir) =>
+  runStatStr(python, PY_PARTITIONED_MAX_REPORT_DATE, dir);

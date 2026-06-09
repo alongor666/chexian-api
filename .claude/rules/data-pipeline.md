@@ -118,7 +118,7 @@ node scripts/sync-vps.mjs
 
 **验证**：刷新后用 Parquet 直查满期赔付率，与公司报表对账（容忍 < 0.2 个百分点）。`duckdb -c "SELECT MAX(accident_time) FROM '数据管理/warehouse/fact/claims_detail/claims_*.parquet'"` 应跟上最新源的报案截止日；落后过多即提示需用全量源刷新。
 
-> **代码兜底（待办）**：`daily.mjs` 的 claims ETL 暂未对"源报案截止日落后当日过多"自动告警（当前为纯文档铁律，依赖人工遵守）。代码层自动检测已登记 BACKLOG，遵循"规则必须自动化执行（文档规则 ≠ 执行规则）"原则。
+> **代码兜底（已实现，B191e0f）**：`daily.mjs runClaimsDetail` Step 5.5 自动检查报案截止日落后当日天数，≥3 天（`CLAIMS_REPORT_LAG_WARN_DAYS`）即红字告警并提示用含历史的全量源刷新。判定逻辑抽至 `数据管理/lib/claims-freshness.mjs`（纯函数，`tests/claims-freshness.test.ts` 覆盖阈值边界三件套），取数由 `数据管理/pipelines/parquet_stats.mjs` 的 `getPartitionedMaxReportDate` 提供。落实"规则必须自动化执行（文档规则 ≠ 执行规则）"原则。
 
 ## Excel 多 sheet 加载规范（RED LINE — governance #24 强制）
 
