@@ -10,7 +10,9 @@
  *  2. ApiTransport 必须**类型导入**（type-only），不得作为值引入（值里没有写方法，但
  *     类型导入从形态上杜绝拿到可写实例）。
  *  3. 从 client-core 的**值导入**仅允许白名单（API_BASE，供 data 域 multipart upload）。
- *  4. meta 守卫：守卫清单必须覆盖 src/shared/api 下每个 *-api.ts，杜绝"新增子客户端漏挂护栏"。
+ *  4. 子客户端清单从文件系统 glob 派生（**非硬编码**）→ 新增子客户端自动挂护栏；配
+ *     非空 + 语义锚点 sanity 兜底，防 glob 空/路径错导致 describe.each 静默通过。
+ *     与门禁脚本 check-hotfile-contracts.mjs 同源（文件系统），两份清单零漂移。
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -18,11 +20,14 @@ import { fileURLToPath } from 'node:url';
 
 const API_DIR = fileURLToPath(new URL('../../src/shared/api/', import.meta.url));
 
-/** 与 scripts/check-hotfile-contracts.mjs:API_SUBCLIENTS 保持一致 */
-const SUBCLIENTS = [
-  'ai-api', 'auth-api', 'claims-detail-api', 'cross-sell-api', 'customer-flow-api',
-  'data-api', 'performance-api', 'quote-conversion-api', 'repair-api', 'workflows-api',
-];
+/**
+ * 子客户端清单从文件系统 glob 派生（与 check-hotfile-contracts.mjs 同源 = 文件系统）。
+ * 新增 *-api.ts 自动纳入边界守卫与门禁，无需改任何清单 —— 从根上消除"两份清单漂移"。
+ */
+const SUBCLIENTS = readdirSync(API_DIR)
+  .filter((f) => f.endsWith('-api.ts'))
+  .map((f) => f.replace(/\.ts$/, ''))
+  .sort();
 
 /** 仅允许从 client-core 值导入的符号（非类型） */
 const CLIENT_CORE_VALUE_IMPORT_ALLOWLIST = new Set(['API_BASE']);
@@ -36,12 +41,10 @@ function stripComments(src: string): string {
 }
 
 describe('命名空间子客户端架构边界', () => {
-  it('守卫清单覆盖每个 *-api.ts（meta：新增子客户端不会漏挂护栏）', () => {
-    const actual = readdirSync(API_DIR)
-      .filter((f) => f.endsWith('-api.ts'))
-      .map((f) => f.replace(/\.ts$/, ''))
-      .sort();
-    expect(actual).toEqual([...SUBCLIENTS].sort());
+  it('glob 到足够子客户端（防 glob 空/路径错导致 describe.each 静默通过）', () => {
+    expect(SUBCLIENTS.length).toBeGreaterThanOrEqual(2);
+    // 语义锚：auth/data 是长期稳定域，缺失即 glob 异常（而非真的没有子客户端）
+    expect(SUBCLIENTS).toEqual(expect.arrayContaining(['auth-api', 'data-api']));
   });
 
   describe.each(SUBCLIENTS)('%s', (name) => {

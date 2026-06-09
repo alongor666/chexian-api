@@ -6,7 +6,8 @@
 
 | 模块 | 路径 | 职责 | 文档 |
 |------|------|------|------|
-| DuckDB | `duckdb/` | DuckDB-WASM 客户端、Worker 通信、Arrow IPC | [README](./duckdb/README.md) |
+| API | `api/` | 后端 API 客户端：传输内核 + 10 个命名空间业务域子客户端（统一 `/api/*` 入口） | 见 §2026-02 API-only 权威说明 |
+| DuckDB | `duckdb/` | ~~DuckDB-WASM 客户端、Worker 通信、Arrow IPC~~（历史/已移除，见 §2026-02 API-only 权威说明） | — |
 | Normalize | `normalize/` | 列名映射、数据校验、质量检查 | [README](./normalize/README.md) |
 | SQL | `sql/` | KPI/TopN/Table SQL 模板生成 | [README](./sql/README.md) |
 | Types | `types/` | TypeScript 类型定义 | 无独立文档 |
@@ -273,6 +274,16 @@ import { cn, cardStyles, getTrendColorClass, colors } from '@/shared/styles';
 - 样式规范以 `src/shared/styles/index.ts` 与 `src/shared/ui/*` 为准。
 
 如历史段落出现 `DuckDB-WASM`、`src/shared/duckdb/*` 等描述，视为历史记录，不代表当前架构。
+
+### API 客户端结构（2026-06 Phase 2 神类拆分）
+
+`src/shared/api/client.ts`（原 1250 行神类）拆为三层，单例仍是 `apiClient`：
+
+- **`client.ts`** — 业务域方法层 `ApiClient extends ApiClientCore`：保留会话生命周期（`login`/`logout`/`getCurrentUser`）+ 核心查询（`getKpi`/`getTrend`/`getComprehensiveBundle`/...）+ 挂载 10 个子客户端。
+- **`client-core.ts`** — 传输内核 `ApiClientCore`（token 生命周期 / `request` / GET 同 key 合并 / 30s 超时 / 401 静默刷新）+ **只读**传输句柄 `ApiTransport`（`request`/`queryGet`/`drilldownGet`/`buildQueryString`/`getToken`）。
+- **`*-api.ts`（10 个）** — 命名空间业务域子客户端，调用形 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow}.方法()`，各持只读 `ApiTransport`（不能写 token）。
+
+**架构不变量（机器强制）**：子客户端只经只读句柄发请求 → `tests/api/sub-client-boundary.test.ts`（禁 token 写 / 禁 new 第二个 core / 禁 import 单例 / `ApiTransport` 须类型导入）；传输内核行为 → `tests/api/client-core-transport.test.ts`（鉴权头 / 401 刷新 / GET 合并 / 超时）；契约联动门禁 `scripts/check-hotfile-contracts.mjs` 覆盖 `client.ts` + `client-core.ts` + 全部 `*-api.ts`（清单从文件系统派生）。
 
 ## 2026-02-27 业务员姓名展示规则补充
 

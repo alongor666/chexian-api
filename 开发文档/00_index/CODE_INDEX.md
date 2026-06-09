@@ -245,9 +245,15 @@ src/features/*                                    # 功能模块 UI 渲染
 
 #### API 客户端 (`src/shared/api/`)
 
+> 2026-06 Phase 2 神类拆分：`client.ts`（原 1250 行）拆为 传输内核 + 业务域方法层 + 10 个命名空间子客户端。单例仍是 `apiClient`。
+
 | 文件 | 职责 |
 |------|------|
-| `client.ts` | 统一 API 客户端（JWT 认证、错误处理、所有后端请求入口） |
+| `client.ts` | 业务域方法层 `ApiClient` + 单例 `apiClient`：会话生命周期（login/logout/getCurrentUser）+ 核心查询（getKpi/getTrend/getComprehensiveBundle/...）+ 挂载 10 个子客户端 |
+| `client-core.ts` | 传输内核 `ApiClientCore`（token / request / GET 合并 / 30s 超时 / 401 静默刷新）+ 只读句柄 `ApiTransport` |
+| `*-api.ts`（10 个） | 命名空间业务域子客户端：`apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow}.*`，各持只读 `ApiTransport` |
+
+> 守卫：契约 `tests/api/client-contracts.test.ts` · 传输内核 `tests/api/client-core-transport.test.ts` · 架构边界 `tests/api/sub-client-boundary.test.ts` · 门禁 `scripts/check-hotfile-contracts.mjs`（锚 `client.ts` + `client-core.ts` + 全部 `*-api.ts`，清单从文件系统派生）。
 
 #### 上下文管理 (`src/shared/contexts/`)
 
