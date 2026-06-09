@@ -264,6 +264,10 @@ describe('API client contract coverage', () => {
  * 闭合 #541 评审指出的「迁移域无测试直打 apiClient.<domain>.* 链」缺口：
  * 纯 fetch-spy 验证每个命名空间方法构造的 /query/ 路径与参数透传，
  * 比 RTL hook 测试更轻、不易 flaky。新增/迁移域时在此追加条目即可。
+ *
+ * path 字段约定：drilldownGet 家族（analysis/drilldown/bundle 等）必产查询串
+ * （drillPath/groupBy 序列化），故其 path 带尾 `?` 以标记并精准区分于同前缀路由
+ * （如 cross-sell? vs cross-sell-trend）；queryGet 家族无参时不产 `?`，path 不带尾 `?`。
  */
 describe('namespaced sub-client URL contracts', () => {
   beforeEach(() => {
