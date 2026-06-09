@@ -1,13 +1,13 @@
 # 车险数据快速参考 (~300 tokens)
 
-**更新**: 2026-06-08 | **数据规模**: ~259 万条 / 43 字段 | **分片**: 28 个 Parquet（policy/current/）
+**更新**: 2026-06-09 | **数据规模**: ~259 万条 / 43 字段 | **分片**: 30 个 Parquet（policy/current/）
 
 ## 数据规模（三层口径）
 
 | 口径 | 数值 | 说明 |
 |------|------|------|
 | 原始记录 | ~259 万行 | policy/current UNION ALL 行数 |
-| 唯一保单 | ~252 万 | COUNT DISTINCT policy_no |
+| 唯一保单 | ~253 万 | COUNT DISTINCT policy_no |
 | 2024+ 活跃 | ~126 万行 | policy_date >= 2024-01-01 |
 
 ## 域全景速览
