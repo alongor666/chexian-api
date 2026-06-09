@@ -43,6 +43,7 @@ import { ClaimsDetailApi } from './claims-detail-api';
 import { RepairApi } from './repair-api';
 import { CrossSellApi } from './cross-sell-api';
 import { PerformanceApi } from './performance-api';
+import { CustomerFlowApi } from './customer-flow-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -70,6 +71,8 @@ class ApiClient extends ApiClientCore {
   readonly crossSell = new CrossSellApi(this.transport);
   /** 业绩分析：apiClient.performance.{summary,trend,drilldown,orgHeatmap,topSalesman,bundle} */
   readonly performance = new PerformanceApi(this.transport);
+  /** 客户来源去向：apiClient.customerFlow.{summary,inflow,outflow,trend,metadata} */
+  readonly customerFlow = new CustomerFlowApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -456,27 +459,7 @@ class ApiClient extends ApiClientCore {
 
   // 维修资源 API（v1 + v2）已迁出至 repair 子客户端（见类首字段 + repair-api.ts）
 
-  // ── 客户来源去向 ──
-
-  async getCustomerFlowSummary(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.SUMMARY}${query ? `?${query}` : ''}`);
-  }
-  async getCustomerFlowInflow(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.INFLOW}${query ? `?${query}` : ''}`);
-  }
-  async getCustomerFlowOutflow(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.OUTFLOW}${query ? `?${query}` : ''}`);
-  }
-  async getCustomerFlowTrend(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.TREND}${query ? `?${query}` : ''}`);
-  }
-  async getCustomerFlowMetadata() {
-    return this.request<any>(`/query/${QUERY_ROUTES.CUSTOMER_FLOW.METADATA}`);
-  }
+  // 客户来源去向 API（summary/inflow/outflow/trend/metadata）已迁出至 customerFlow 子客户端（见类首字段 + customer-flow-api.ts）
 
   /**
    * 获取能力注册表

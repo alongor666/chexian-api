@@ -321,6 +321,12 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'performance.orgHeatmap', path: '/query/performance-org-heatmap', run: (c) => c.performance.orgHeatmap({ org: '乐山' }), expectParam: true },
     { name: 'performance.topSalesman', path: '/query/performance-top-salesman', run: (c) => c.performance.topSalesman({ org: '乐山' }), expectParam: true },
     { name: 'performance.bundle', path: '/query/performance-bundle?', run: (c) => c.performance.bundle({ org: '乐山' }), expectParam: true },
+    // ── customerFlow（本 PR 迁移域）──
+    { name: 'customerFlow.summary', path: '/query/customer-flow/summary', run: (c) => c.customerFlow.summary({ org: '乐山' }), expectParam: true },
+    { name: 'customerFlow.inflow', path: '/query/customer-flow/inflow', run: (c) => c.customerFlow.inflow({ org: '乐山' }), expectParam: true },
+    { name: 'customerFlow.outflow', path: '/query/customer-flow/outflow', run: (c) => c.customerFlow.outflow({ org: '乐山' }), expectParam: true },
+    { name: 'customerFlow.trend', path: '/query/customer-flow/trend', run: (c) => c.customerFlow.trend({ org: '乐山' }), expectParam: true },
+    { name: 'customerFlow.metadata', path: '/query/customer-flow/metadata', run: (c) => c.customerFlow.metadata() },
   ];
 
   it.each(cases)('$name builds $path', async ({ run, path, expectParam }) => {
