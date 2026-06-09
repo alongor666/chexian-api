@@ -23,7 +23,7 @@ import type {
   ApiResponse, AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
   CapabilityInfo, DetectRequirementResponse,
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
-  PerformanceBundleResponse, DashboardBundleResponse,
+  DashboardBundleResponse,
   ComprehensiveFilterParams, ComprehensiveBundleResponse,
   FileInfo, LoadResult,
 } from './types';
@@ -42,6 +42,7 @@ import { QuoteConversionApi } from './quote-conversion-api';
 import { ClaimsDetailApi } from './claims-detail-api';
 import { RepairApi } from './repair-api';
 import { CrossSellApi } from './cross-sell-api';
+import { PerformanceApi } from './performance-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -67,6 +68,8 @@ class ApiClient extends ApiClientCore {
   readonly repair = new RepairApi(this.transport);
   /** 车驾意交叉销售：apiClient.crossSell.{analysis,timePeriod,trend,topSalesman,bundle,orgTrend,heatmap} */
   readonly crossSell = new CrossSellApi(this.transport);
+  /** 业绩分析：apiClient.performance.{summary,trend,drilldown,orgHeatmap,topSalesman,bundle} */
+  readonly performance = new PerformanceApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -311,119 +314,7 @@ class ApiClient extends ApiClientCore {
 
   // 车驾意交叉销售 API（topSalesman/bundle）已迁出至 crossSell 子客户端（见类首字段 + cross-sell-api.ts）
 
-  /**
-   * 获取业绩分析 - 险别组合业绩环比
-   */
-  async getPerformanceSummary(params?: Record<string, string>): Promise<{
-    rows: Array<{
-      coverage_combination: string;
-      row_label: string;
-      row_level: number;
-      expand_key: string | null;
-      premium: number;
-      auto_count: number;
-      avg_premium: number;
-      plan_premium: number | null;
-      achievement_rate: number | null;
-      growth_rate: number | null;
-      nev_rate: number;
-      renewal_rate: number;
-      transfer_business_rate: number;
-      new_car_rate: number;
-      transfer_rate: number;
-    }>;
-  }> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.PERFORMANCE_SUMMARY}${query ? `?${query}` : ''}`);
-  }
-
-  /**
-   * 获取业绩分析 - 车险保费/件数走势
-   */
-  async getPerformanceTrend(params?: Record<string, string>): Promise<{
-    rows: Array<{
-      time_period: string;
-      line_key: string;
-      line_label: string;
-      line_order: number;
-      premium: number;
-      auto_count: number;
-    }>;
-  }> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.PERFORMANCE_TREND}${query ? `?${query}` : ''}`);
-  }
-
-  /**
-   * 获取业绩分析 - 下钻数据
-   */
-  async getPerformanceDrilldown(params: {
-    drillPath?: Array<{ dimension: string; value: string }>;
-    groupBy?: string;
-    [key: string]: any;
-  }): Promise<{
-    summary: Record<string, unknown> | null;
-    rows: Array<Record<string, unknown>>;
-    drillPath: Array<{ dimension: string; value: string }>;
-    groupBy: string | null;
-  }> {
-    return this.drilldownGet(QUERY_ROUTES.PERFORMANCE_DRILLDOWN, params);
-  }
-
-  /**
-   * 获取业绩分析 - 三级机构15周期热力图
-   */
-  async getPerformanceOrgHeatmap(params?: Record<string, string>): Promise<{
-    rows: Array<{
-      org_level_3: string;
-      policy_date: string;
-      premium: number;
-      plan_premium: number | null;
-      prev_mom_premium: number;
-      prev_yoy_premium: number;
-      achievement_rate: number | null;
-      mom_growth_rate: number | null;
-      yoy_growth_rate: number | null;
-    }>;
-  }> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.PERFORMANCE_ORG_HEATMAP}${query ? `?${query}` : ''}`);
-  }
-
-
-  /**
-   * 获取业绩分析 - TOP20 业务员
-   */
-  async getPerformanceTopSalesman(params?: Record<string, string>): Promise<{
-    rows: Array<{
-      dimension_name: string;
-      premium: number;
-      auto_count: number;
-      plan_premium: number | null;
-      achievement_rate: number | null;
-      growth_rate: number | null;
-      nev_rate: number;
-      renewal_rate: number;
-      transfer_business_rate: number;
-      new_car_rate: number;
-      transfer_rate: number;
-      quadrant?: string;
-    }>;
-  }> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.PERFORMANCE_TOP_SALESMAN}${query ? `?${query}` : ''}`);
-  }
-
-  /**
-   * 获取业绩分析聚合数据（summary + trend + drilldown + topSalesman）
-   */
-  async getPerformanceBundle(params: {
-    drillPath?: Array<{ dimension: string; value: string }>;
-    groupBy?: string;
-    [key: string]: any;
-  }): Promise<PerformanceBundleResponse> {
-    return this.drilldownGet<PerformanceBundleResponse>(QUERY_ROUTES.PERFORMANCE_BUNDLE, params);
-  }
+  // 业绩分析 API（summary/trend/drilldown/orgHeatmap/topSalesman/bundle）已迁出至 performance 子客户端（见类首字段 + performance-api.ts）
 
   /**
    * 获取仪表盘聚合数据（kpi + trend + ranking + rose）

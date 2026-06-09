@@ -53,7 +53,7 @@ export function usePerformanceBundle({
 
   const { data, isFetching, error } = useQuery<PerformanceBundleResponse, Error>({
     queryKey: queryKeys.performanceBundle(params as Record<string, unknown>),
-    queryFn: () => apiClient.getPerformanceBundle(params),
+    queryFn: () => apiClient.performance.bundle(params),
     enabled,
   });
 

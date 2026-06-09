@@ -91,7 +91,7 @@ export function usePerformanceTrend({
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['performance-trend', params],
-    queryFn: () => apiClient.getPerformanceTrend(params),
+    queryFn: () => apiClient.performance.trend(params),
     enabled: enabled && !prefetchedRows,
     select: (result) => groupRowsToSeries(result?.rows || []),
   });
