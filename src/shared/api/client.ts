@@ -20,7 +20,7 @@ export type {
 } from './types';
 
 import type {
-  AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
+  ApiResponse, AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
   CapabilityInfo, DetectRequirementResponse,
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
   CrossSellBundleResponse, PerformanceBundleResponse, DashboardBundleResponse,
@@ -244,7 +244,7 @@ class ApiClient extends ApiClientCore {
       body: formData,
     });
 
-    const data: { success: boolean; data?: LoadResult; error?: { message?: string } } = await response.json();
+    const data: ApiResponse<LoadResult> = await response.json();
     if (!data.success) {
       throw new Error(data.error?.message || '上传失败');
     }
