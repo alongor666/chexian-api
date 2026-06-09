@@ -181,3 +181,6 @@ public/reports/**/manifest.json
 
 # 性能测试产物
 artifacts/
+
+# 浏览器/QA 截图（可能含登录表单/token/凭据/敏感业务数据）：本地保留便于复用，永不入库防泄漏
+screenshots/
