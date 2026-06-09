@@ -20,7 +20,7 @@ export type {
 } from './types';
 
 import type {
-  AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
+  AuthData,
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
   DashboardBundleResponse,
   ComprehensiveFilterParams, ComprehensiveBundleResponse,
@@ -42,6 +42,7 @@ import { CustomerFlowApi } from './customer-flow-api';
 import { AiApi } from './ai-api';
 import { DataApi } from './data-api';
 import { WorkflowsApi } from './workflows-api';
+import { AuthApi } from './auth-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -77,6 +78,8 @@ class ApiClient extends ApiClientCore {
   readonly data = new DataApi(this.transport);
   /** 工作流：apiClient.workflows.{run,audit,approve,reject,runsHealth} */
   readonly workflows = new WorkflowsApi(this.transport);
+  /** 鉴权/账号管理（12 个无状态 CRUD；login/logout/getCurrentUser 仍在基类，见 auth-api.ts 文件注释）：apiClient.auth.{listUsers,createUser,updateUser,deleteUser,listMyTokens,createMyToken,revokeMyToken,listRoles,createRole,updateRole,deleteRole,getWeComConfig} */
+  readonly auth = new AuthApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -104,116 +107,8 @@ class ApiClient extends ApiClientCore {
     return user;
   }
 
-  async listUsers(): Promise<AccessUser[]> {
-    return this.request<AccessUser[]>(`/${AUTH_ROUTES.USERS}`);
-  }
-
-  async createUser(payload: {
-    username: string;
-    displayName: string;
-    password: string;
-    role: string;
-    organization?: string;
-    allowedRoutes?: string[];
-    defaultRoute?: string;
-    allowedIps?: string[];
-    specialFeatures?: string[];
-    active?: boolean;
-  }): Promise<AccessUser> {
-    return this.request<AccessUser>(`/${AUTH_ROUTES.USERS}`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  }
-
-  async updateUser(
-    id: string,
-    payload: {
-      displayName: string;
-      password?: string;
-      role: string;
-      organization?: string;
-      allowedRoutes?: string[];
-      defaultRoute?: string;
-      allowedIps?: string[];
-      specialFeatures?: string[];
-      active?: boolean;
-    }
-  ): Promise<AccessUser> {
-    return this.request<AccessUser>(`/${AUTH_ROUTES.USER_BY_ID}/${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
-  }
-
-  async deleteUser(id: string): Promise<void> {
-    await this.request(`/${AUTH_ROUTES.USER_BY_ID}/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // ─── PAT (Personal Access Token) ─────────────────────────
-  async listMyTokens(): Promise<ApiTokenInfo[]> {
-    return this.request<ApiTokenInfo[]>('/auth/tokens');
-  }
-
-  async createMyToken(payload: { name: string; ttlDays: 30 | 90 | 180 | 365 }): Promise<CreatedToken> {
-    return this.request<CreatedToken>('/auth/tokens', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  }
-
-  async revokeMyToken(tokenId: string): Promise<void> {
-    await this.request(`/auth/tokens/${encodeURIComponent(tokenId)}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async listRoles(): Promise<AccessRole[]> {
-    return this.request<AccessRole[]>(`/${AUTH_ROUTES.ROLES}`);
-  }
-
-  async createRole(payload: {
-    role: string;
-    name: string;
-    dataScope: 'all' | 'org' | 'telemarketing';
-    allowedRoutes?: string[];
-    defaultRoute?: string;
-  }): Promise<AccessRole> {
-    return this.request<AccessRole>(`/${AUTH_ROUTES.ROLES}`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  }
-
-  async updateRole(
-    role: string,
-    payload: {
-      name: string;
-      dataScope: 'all' | 'org' | 'telemarketing';
-      allowedRoutes?: string[];
-      defaultRoute?: string;
-    }
-  ): Promise<AccessRole> {
-    return this.request<AccessRole>(`/${AUTH_ROUTES.ROLE_BY_ID}/${encodeURIComponent(role)}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
-  }
-
-  async deleteRole(role: string): Promise<void> {
-    await this.request(`/${AUTH_ROUTES.ROLE_BY_ID}/${encodeURIComponent(role)}`, {
-      method: 'DELETE',
-    });
-  }
-
-  /**
-   * 获取企微登录配置
-   */
-  async getWeComConfig(): Promise<{ corpId: string; agentId: string; callbackUrl: string }> {
-    return this.request(`/${AUTH_ROUTES.WECOM_CONFIG}`);
-  }
+  // 鉴权/账号管理 API（用户/PAT/角色/企微配置 共 12 个 CRUD）已迁出至 auth 子客户端（见类首字段 + auth-api.ts）。
+  // login / logout / getCurrentUser 刻意保留在基类：会话生命周期、改写 token 状态（setToken/clearToken/setSessionCookieHint），不泄漏 token 写入到 transport 句柄。
 
   /**
    * 登出

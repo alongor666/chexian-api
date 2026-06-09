@@ -48,7 +48,7 @@ export const ApiTokensPanel: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const list = await apiClient.listMyTokens();
+      const list = await apiClient.auth.listMyTokens();
       setTokens(list);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载 Token 列表失败');
@@ -67,7 +67,7 @@ export const ApiTokensPanel: React.FC = () => {
     setCreating(true);
     setError('');
     try {
-      const result = await apiClient.createMyToken({
+      const result = await apiClient.auth.createMyToken({
         name: createName.trim(),
         ttlDays: Number(createTtl) as TtlChoice,
       });
@@ -91,7 +91,7 @@ export const ApiTokensPanel: React.FC = () => {
     if (!pendingRevoke) return;
     revokeConfirm.hide();
     try {
-      await apiClient.revokeMyToken(pendingRevoke.tokenId);
+      await apiClient.auth.revokeMyToken(pendingRevoke.tokenId);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : '吊销失败');

@@ -343,6 +343,19 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'workflows.approve', path: '/workflows/runs/r1/approve', run: (c) => c.workflows.approve('r1'), expectMethod: 'POST' },
     { name: 'workflows.reject', path: '/workflows/runs/r1/reject', run: (c) => c.workflows.reject('r1', 'too risky'), expectMethod: 'POST' },
     { name: 'workflows.runsHealth', path: '/workflows/health/runs-summary', run: (c) => c.workflows.runsHealth() },
+    // ── auth（本 PR 迁移域：12 个无状态 CRUD；login/logout/getCurrentUser 仍在基类）──
+    { name: 'auth.listUsers', path: '/auth/users', run: (c) => c.auth.listUsers() },
+    { name: 'auth.createUser POST', path: '/auth/users', run: (c) => c.auth.createUser({ username: 'u', displayName: 'U', password: 'p', role: 'analyst' }), expectMethod: 'POST' },
+    { name: 'auth.updateUser PUT', path: '/auth/users/u1', run: (c) => c.auth.updateUser('u1', { displayName: 'U', role: 'analyst' }), expectMethod: 'PUT' },
+    { name: 'auth.deleteUser DELETE', path: '/auth/users/u1', run: (c) => c.auth.deleteUser('u1'), expectMethod: 'DELETE' },
+    { name: 'auth.listMyTokens', path: '/auth/tokens', run: (c) => c.auth.listMyTokens() },
+    { name: 'auth.createMyToken POST', path: '/auth/tokens', run: (c) => c.auth.createMyToken({ name: 't', ttlDays: 30 }), expectMethod: 'POST' },
+    { name: 'auth.revokeMyToken DELETE', path: '/auth/tokens/t1', run: (c) => c.auth.revokeMyToken('t1'), expectMethod: 'DELETE' },
+    { name: 'auth.listRoles', path: '/auth/roles', run: (c) => c.auth.listRoles() },
+    { name: 'auth.createRole POST', path: '/auth/roles', run: (c) => c.auth.createRole({ role: 'r', name: 'R', dataScope: 'all' }), expectMethod: 'POST' },
+    { name: 'auth.updateRole PUT', path: '/auth/roles/r1', run: (c) => c.auth.updateRole('r1', { name: 'R', dataScope: 'all' }), expectMethod: 'PUT' },
+    { name: 'auth.deleteRole DELETE', path: '/auth/roles/r1', run: (c) => c.auth.deleteRole('r1'), expectMethod: 'DELETE' },
+    { name: 'auth.getWeComConfig', path: '/auth/wecom/config', run: (c) => c.auth.getWeComConfig() },
   ];
 
   it.each(cases)('$name builds $path', async ({ run, path, expectParam, expectMethod }) => {

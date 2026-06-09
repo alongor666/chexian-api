@@ -89,7 +89,7 @@ export const LoginPage: React.FC = () => {
     setIsWeComLoading(true);
     setError('');
     try {
-      const config = await apiClient.getWeComConfig();
+      const config = await apiClient.auth.getWeComConfig();
       if (config) {
         const { corpId, agentId, callbackUrl } = config;
         // Generate State
