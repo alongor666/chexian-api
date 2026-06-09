@@ -61,7 +61,7 @@ export function useCrossSellTopSalesman({
 
     const { data, isLoading, error } = useQuery({
         queryKey: queryKeys.crossSellTopSalesman(params),
-        queryFn: () => apiClient.getCrossSellTopSalesman(params),
+        queryFn: () => apiClient.crossSell.topSalesman(params),
         enabled,
         select: (result) => {
             if (!result?.rows) return [] as TopSalesmanRow[];

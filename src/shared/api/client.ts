@@ -23,7 +23,7 @@ import type {
   ApiResponse, AuthData, AccessUser, AccessRole, ApiTokenInfo, CreatedToken,
   CapabilityInfo, DetectRequirementResponse,
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
-  CrossSellBundleResponse, PerformanceBundleResponse, DashboardBundleResponse,
+  PerformanceBundleResponse, DashboardBundleResponse,
   ComprehensiveFilterParams, ComprehensiveBundleResponse,
   FileInfo, LoadResult,
 } from './types';
@@ -41,6 +41,7 @@ import { ApiClientCore, API_BASE } from './client-core';
 import { QuoteConversionApi } from './quote-conversion-api';
 import { ClaimsDetailApi } from './claims-detail-api';
 import { RepairApi } from './repair-api';
+import { CrossSellApi } from './cross-sell-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -64,6 +65,8 @@ class ApiClient extends ApiClientCore {
   readonly claimsDetail = new ClaimsDetailApi(this.transport);
   /** 维修资源：apiClient.repair.{overview,detail,status,metadata,city,channel,coopTier,scatter,localResource,toPremium,diversionList,orphanShops} */
   readonly repair = new RepairApi(this.transport);
+  /** 车驾意交叉销售：apiClient.crossSell.{analysis,timePeriod,trend,topSalesman,bundle,orgTrend,heatmap} */
+  readonly crossSell = new CrossSellApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -293,70 +296,7 @@ class ApiClient extends ApiClientCore {
     return this.request<{ etlDate: string; buildTime: string; serverStartTime: string }>('/data/version');
   }
 
-  /**
-   * 获取车驾意推介率数据
-   */
-  async getCrossSellAnalysis(params: {
-    drillPath?: Array<{ dimension: string; value: string }>;
-    groupBy?: string;
-    [key: string]: any;
-  }): Promise<any> {
-    return this.drilldownGet(QUERY_ROUTES.CROSS_SELL, params);
-  }
-
-  /**
-   * 获取车驾意推介率 - 时间维度汇总数据
-   */
-  async getCrossSellTimePeriod(params?: Record<string, string>): Promise<{
-    maxDate: string;
-    rows: Array<{
-      coverage_combination: string;
-      day_auto_count: number;
-      day_driver_count: number;
-      day_premium: number;
-      day_rate: number;
-      day_avg_premium: number;
-      week_auto_count: number;
-      week_driver_count: number;
-      week_premium: number;
-      week_rate: number;
-      week_avg_premium: number;
-      month_auto_count: number;
-      month_driver_count: number;
-      month_premium: number;
-      month_rate: number;
-      month_avg_premium: number;
-      quarter_auto_count: number;
-      quarter_driver_count: number;
-      quarter_premium: number;
-      quarter_rate: number;
-      quarter_avg_premium: number;
-      year_auto_count: number;
-      year_driver_count: number;
-      year_premium: number;
-      year_rate: number;
-      year_avg_premium: number;
-    }>;
-  }> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_SUMMARY}${query ? `?${query}` : ''}`);
-  }
-
-  /**
-   * 获取车驾意推介率走势数据（按日/周/月/季粒度）
-   */
-  async getCrossSellTrend(params?: Record<string, string>): Promise<{
-    rows: Array<{
-      time_period: string;
-      coverage_combination: string;
-      rate: number;
-      avg_premium: number;
-      auto_count: number;
-    }>;
-  }> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_TREND}${query ? `?${query}` : ''}`);
-  }
+  // 车驾意交叉销售 API（analysis/timePeriod/trend）已迁出至 crossSell 子客户端（见类首字段 + cross-sell-api.ts）
 
   /**
    * 获取业务员排名
@@ -369,33 +309,7 @@ class ApiClient extends ApiClientCore {
     return this.request(`/query/${QUERY_ROUTES.SALESMAN_RANKING}?${query}`);
   }
 
-  /**
-   * 获取车驾意推介率 TOP20 业务员分析
-   */
-  async getCrossSellTopSalesman(params?: Record<string, string>): Promise<{
-    rows: Array<{
-      salesman_name: string;
-      org_level_3: string;
-      driver_premium: number;
-      auto_count: number;
-      rate: number;
-      avg_premium: number;
-    }>;
-  }> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_TOP_SALESMAN}${query ? `?${query}` : ''}`);
-  }
-
-  /**
-   * 获取交叉销售聚合数据（summary + trend + drilldown + topSalesman）
-   */
-  async getCrossSellBundle(params: {
-    drillPath?: Array<{ dimension: string; value: string }>;
-    groupBy?: string;
-    [key: string]: any;
-  }): Promise<CrossSellBundleResponse> {
-    return this.drilldownGet<CrossSellBundleResponse>(QUERY_ROUTES.CROSS_SELL_BUNDLE, params);
-  }
+  // 车驾意交叉销售 API（topSalesman/bundle）已迁出至 crossSell 子客户端（见类首字段 + cross-sell-api.ts）
 
   /**
    * 获取业绩分析 - 险别组合业绩环比
@@ -606,43 +520,7 @@ class ApiClient extends ApiClientCore {
     return this.request(`/${FILTER_ROUTES.OPTIONS}`);
   }
 
-  /**
-   * 获取机构推介率走势（最近14天，叠加柱+折线）
-   */
-  async getCrossSellOrgTrend(params?: Record<string, string>): Promise<{
-    rows: Array<{
-      date: string;
-      auto_count: number;
-      driver_count: number;
-      rate: number;
-      avg_premium: number;
-    }>;
-  }> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_ORG_TREND}${query ? `?${query}` : ''}`);
-  }
-
-  /**
-   * 获取交叉销售热力图数据（最近14个时段 × 所有三级机构）
-   */
-  async getCrossSellHeatmap(params?: Record<string, string>): Promise<{
-    rows: Array<{
-      date: string;
-      org_level_3: string;
-      auto_count: number;
-      driver_count: number;
-      driver_policy_count: number;
-      driver_premium: number;
-      penetration_base_premium: number;
-      rate: number;
-      penetration_rate: number | null;
-      avg_premium: number;
-      achievement_rate: number | null;
-    }>;
-  }> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.CROSS_SELL_HEATMAP}${query ? `?${query}` : ''}`);
-  }
+  // 车驾意交叉销售 API（orgTrend/heatmap）已迁出至 crossSell 子客户端（见类首字段 + cross-sell-api.ts）
 
   // ============================================
   // AI API

@@ -309,11 +309,11 @@ export function useCrossSellAnalysis({
     };
 
     const [analysis, summaryResp, trendResp, zhuquanResp, jiaosanResp] = await Promise.all([
-      apiClient.getCrossSellAnalysis(legacyBaseParams),
-      apiClient.getCrossSellTimePeriod(summaryParams),
-      apiClient.getCrossSellTrend(trendParams),
-      apiClient.getCrossSellTopSalesman({ ...topSalesmanParams, coverage: '主全' }),
-      apiClient.getCrossSellTopSalesman({ ...topSalesmanParams, coverage: '交三' }),
+      apiClient.crossSell.analysis(legacyBaseParams),
+      apiClient.crossSell.timePeriod(summaryParams),
+      apiClient.crossSell.trend(trendParams),
+      apiClient.crossSell.topSalesman({ ...topSalesmanParams, coverage: '主全' }),
+      apiClient.crossSell.topSalesman({ ...topSalesmanParams, coverage: '交三' }),
     ]);
 
     return {
@@ -339,7 +339,7 @@ export function useCrossSellAnalysis({
   const queryFn = useCallback(async (): Promise<BundleLikeResult> => {
     if (bundleEnabled) {
       try {
-        return await apiClient.getCrossSellBundle(baseParams);
+        return await apiClient.crossSell.bundle(baseParams);
       } catch {
         return await fetchLegacyBundleLikeData();
       }

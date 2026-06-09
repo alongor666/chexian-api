@@ -136,7 +136,7 @@ export const SidebarNavigation: React.FC = () => {
           };
           queryClient.prefetchQuery({
             queryKey: queryKeys.crossSellBundle(crossSellParams),
-            queryFn: () => apiClient.getCrossSellBundle(crossSellParams),
+            queryFn: () => apiClient.crossSell.bundle(crossSellParams),
           });
         }
         break;
