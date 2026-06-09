@@ -21,8 +21,10 @@ const { approveMock, rejectMock, usePermissionMock } = vi.hoisted(() => ({
 
 vi.mock('../../../src/shared/api/client', () => ({
   apiClient: {
-    approveWorkflowRun: approveMock,
-    rejectWorkflowRun: rejectMock,
+    workflows: {
+      approve: approveMock,
+      reject: rejectMock,
+    },
   },
 }));
 
@@ -123,7 +125,7 @@ describe('ApprovalActions — reject modal 必填校验', () => {
     expect(confirm.disabled).toBe(true);
   });
 
-  it('填 reason 后确认按钮可点击 → 调用 rejectWorkflowRun + 触发 onResolved', async () => {
+  it('填 reason 后确认按钮可点击 → 调用 workflows.reject + 触发 onResolved', async () => {
     const onResolved = vi.fn();
     rejectMock.mockResolvedValue({});
     render(

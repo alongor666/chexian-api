@@ -332,11 +332,17 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'ai.quickSuggestions', path: '/ai/quick-suggestions', run: (c) => c.ai.quickSuggestions() },
     { name: 'ai.analyzeTrend POST', path: '/ai/trend-analysis', run: (c) => c.ai.analyzeTrend({ rows: [], org: '总公司', coverage: '商业险' }), expectMethod: 'POST' },
     { name: 'ai.detectRequirement POST', path: '/ai/detect-requirement', run: (c) => c.ai.detectRequirement({ message: '查一下出险率' }), expectMethod: 'POST' },
-    // ── data（本 PR 迁移域）──
+    // ── data（迁移域）──
     { name: 'data.files', path: '/data/files', run: (c) => c.data.files() },
     { name: 'data.load', path: '/data/load/test.parquet', run: (c) => c.data.load('test.parquet'), expectMethod: 'POST' },
     { name: 'data.remove', path: '/data/test.parquet', run: (c) => c.data.remove('test.parquet'), expectMethod: 'DELETE' },
     { name: 'data.version', path: '/data/version', run: (c) => c.data.version() },
+    // ── workflows（本 PR 迁移域）──
+    { name: 'workflows.run', path: '/workflows/runs/r1', run: (c) => c.workflows.run('r1') },
+    { name: 'workflows.audit', path: '/workflows/runs/r1/audit', run: (c) => c.workflows.audit('r1') },
+    { name: 'workflows.approve', path: '/workflows/runs/r1/approve', run: (c) => c.workflows.approve('r1'), expectMethod: 'POST' },
+    { name: 'workflows.reject', path: '/workflows/runs/r1/reject', run: (c) => c.workflows.reject('r1', 'too risky'), expectMethod: 'POST' },
+    { name: 'workflows.runsHealth', path: '/workflows/health/runs-summary', run: (c) => c.workflows.runsHealth() },
   ];
 
   it.each(cases)('$name builds $path', async ({ run, path, expectParam, expectMethod }) => {

@@ -77,7 +77,7 @@ export function ApprovalActions({ runId, status, approval, onResolved }: Approva
     setPendingAction('approve');
     setError(null);
     try {
-      await apiClient.approveWorkflowRun(runId);
+      await apiClient.workflows.approve(runId);
       onResolved?.();
     } catch (err) {
       setError(formatErrorByCode(err));
@@ -90,7 +90,7 @@ export function ApprovalActions({ runId, status, approval, onResolved }: Approva
     setPendingAction('reject');
     setError(null);
     try {
-      await apiClient.rejectWorkflowRun(runId, reason || undefined);
+      await apiClient.workflows.reject(runId, reason || undefined);
       setShowRejectModal(false);
       setReason('');
       onResolved?.();
