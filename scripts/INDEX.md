@@ -42,7 +42,7 @@
 |------|------|----------|
 | `check-governance.mjs` | **主治理校验**（纯代码治理 23 项；数据状态校验已解耦至 `check-data-readiness.mjs`）：必需文件、索引完整性、BACKLOG证据链、DC-002合规、空catch禁令 | `bun run governance` |
 | `check-data-readiness.mjs` | **数据就绪校验**（4 项数据状态）：Parquet 重叠 / Claims 去重 / 知识库规模 / 同步漂移；由 release:daily（`sync-and-reload.mjs` Stage 1.7）在 ETL 后、发布前执行，**不在**代码门禁跑 | `node scripts/check-data-readiness.mjs` |
-| `check-hotfile-contracts.mjs` | **热点契约门禁**：`query.ts` / `client.ts` 改动时要求同步修改契约测试 | `bun run governance:hotfiles` |
+| `check-hotfile-contracts.mjs` | **热点契约门禁**：`query.ts` / `client.ts` / `client-core.ts` / 全部命名空间子客户端 `src/shared/api/*-api.ts`（清单文件系统派生）改动时，要求同步修改对应契约测试 | `bun run governance:hotfiles` |
 | `production-gate.mjs` | **生产门禁编排**：治理 + 构建 + 全量测试 + 关键E2E（可选压测门禁） | `bun run production:gate [-- --with-perf]` |
 | `test-preflight.mjs` | **测试运行时预检**：检查 `node_modules`、`vitest`、`playwright` 与关键 E2E 文件是否就绪 | `bun run test:preflight [-- --mode all]` |
 | `cleanup-debug-artifacts.mjs` | 清理未跟踪调试产物（`.playwright-cli`、`playwright-report`、`test-results`、常见调试日志） | `bun run cleanup:artifacts` |
@@ -219,7 +219,7 @@ python3 scripts/compare-schema-mapping.py
 
 ## 2026-03-06 追加记录
 
-- 新增 `check-hotfile-contracts.mjs`：当 `server/src/routes/query.ts` 或 `src/shared/api/client.ts` 进入暂存区时，要求同步修改契约测试。
+- 新增 `check-hotfile-contracts.mjs`：当 `server/src/routes/query.ts`、`src/shared/api/client.ts`、`src/shared/api/client-core.ts`（传输内核）或任一命名空间子客户端 `src/shared/api/*-api.ts`（Phase 2 神类拆分后 84 个业务方法的新归处，清单从文件系统 glob 派生、非硬编码）进入暂存区时，要求同步修改契约测试（`client-contracts` / `client-core-transport` / `*route-contract`）。防"改子客户端不触发门禁→契约静默漂移"的掏空陷阱。
 - 新增 `test-preflight.mjs`：在执行单测或 E2E 前快速检查依赖和关键测试入口是否就绪。
 - `check-governance.mjs` 新增“热点文件契约联动”校验，`production-gate.mjs` 与 `.githooks/pre-commit` 新增测试运行时预检步骤。
 

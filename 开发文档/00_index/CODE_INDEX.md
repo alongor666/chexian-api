@@ -53,12 +53,12 @@
 ```
 用户登录 → AuthContext 验证 → JWT Token
   ↓
-src/shared/api/client.ts                          # 前端 API 客户端（统一入口）
-  ├─ getKpi(filters)                              # /api/query/kpi
-  ├─ getKpiDetail(filters)                        # /api/query/kpi-detail
-  ├─ getTrend(granularity, filters)               # /api/query/trend
-  ├─ getSalesmanRanking(limit, filters)           # /api/query/salesman-ranking
-  └─ executeCustomQuery(sql)                      # /api/query/custom
+src/shared/api/client.ts                          # 前端 API 客户端（统一入口 apiClient）
+  ├─ getKpi/getKpiDetail/getTrend/...             # 核心 query 方法（仍在基类）
+  ├─ login/logout/getCurrentUser                  # 会话生命周期（改写 token 状态，刻意留基类）
+  ├─ client-core.ts                               # 传输内核（鉴权头/401刷新/GET合并/超时）
+  └─ 10 个命名空间子客户端 *-api.ts（Phase 2 神类拆分）
+       apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow}.*
   ↓
 server/src/routes/query.ts                        # 路由聚合器（65 行，挂载 19 个子路由）
   ├─ server/src/routes/query/*.ts                 # 19 个子路由模块 + 1 个 shared.ts

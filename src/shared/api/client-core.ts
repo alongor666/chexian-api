@@ -236,7 +236,11 @@ export class ApiClientCore {
       ? `${method}:${this.normalizeGetEndpoint(endpoint)}`
       : '';
 
-    if (dedupeKey) {
+    // ⚠️ 刷新后的重试（hasRetriedAfterRefresh）必须跳过 in-flight 合并查找：
+    //    GET 的原请求 promise 此刻仍挂在 inflightRequests[dedupeKey]（原 execute 的 finally
+    //    尚未执行），重试若命中 existing 会返回原 promise 自身 → execute() resolve 成自己 →
+    //    TypeError: Chaining cycle detected，GET 在 401→刷新成功 后反而失败（POST 无 dedupeKey 不受影响）。
+    if (dedupeKey && !hasRetriedAfterRefresh) {
       const existing = this.inflightRequests.get(dedupeKey) as Promise<T> | undefined;
       if (existing) {
         return existing;

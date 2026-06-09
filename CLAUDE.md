@@ -114,7 +114,7 @@
 
 **启动**：`bun run dev:full`（禁止只运行 `bun run dev`）
 
-**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器）+ `query/*.ts`（20 子路由 + shared）· `server/src/sql/`（50 个 SQL 模块：30 顶层 + 20 子目录拆分）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
+**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口 `apiClient`；Phase 2 拆为 client-core 传输内核 + 10 域命名空间子客户端 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow}.*`，详见 CODE_INDEX.md）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器）+ `query/*.ts`（20 子路由 + shared）· `server/src/sql/`（50 个 SQL 模块：30 顶层 + 20 子目录拆分）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
 
 **API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录 + tokens + route-catalog）· `/api/filters/*`（筛选器）
 
