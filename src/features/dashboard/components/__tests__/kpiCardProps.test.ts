@@ -134,13 +134,45 @@ describe('buildKpiCardProps', () => {
     expect(buildKpiCardProps('vehicle_type_rate', ctx)!.value).toBeUndefined();
     // region_rate value = same_city / (same_city + remote) = 8000/13000
     expect(buildKpiCardProps('region_rate', ctx)!.value).toBeCloseTo(8000 / 13000, 10);
-    // variable_cost_ratio 拆 2 段：真实分项（满期赔付率 + 费用率），非 ×0.69 假估算
-    const vcSegments = buildKpiCardProps('variable_cost_ratio', ctx)!.segments!;
+    // variable_cost_ratio 拆 2 段：满期赔付率真实值 + 费用率（hero−满期赔付率 反推），非 ×0.69 假估算
+    const vcCard = buildKpiCardProps('variable_cost_ratio', ctx)!;
+    const vcSegments = vcCard.segments!;
     expect(vcSegments).toHaveLength(2);
     expect(vcSegments[0].label).toBe('满期赔付率');
     expect(vcSegments[0].value).toBeCloseTo(64.4, 6);
     expect(vcSegments[1].label).toBe('费用率');
+    // 配平 mock 下反推值 = 88.5 − 64.4 = 24.1
     expect(vcSegments[1].value).toBeCloseTo(24.1, 6);
+    // 段和恒等于 hero（变动成本率）
+    expect(vcSegments[0].value + vcSegments[1].value).toBeCloseTo(vcCard.value as number, 9);
+  });
+
+  it('两段加总恒等于 hero —— 费用率反推，防三处独立舍入漂移（暴露舍入不对称）', () => {
+    // 故意喂"朴素相加会发散"的数：满期赔付率 64.38 + 费用率 17.459 = 81.839，
+    // 但 hero 变动成本率 = 81.84（后端对原始合计单独 ROUND(,2)）。若直接把两个原始分项
+    // 当段值，段和 81.839 ≠ hero 81.84 —— 用户把两段标签相加对不上 hero（评审 P1 #1）。
+    const driftCtx: KpiCardBuildContext = {
+      kpis: {
+        ...kpis,
+        earned_claim_ratio: 64.38,
+        expense_ratio: 17.459,
+        variable_cost_ratio: 81.84,
+      },
+      kpiDetails,
+      loading: false,
+    };
+    const p = buildKpiCardProps('variable_cost_ratio', driftCtx)!;
+    const seg = p.segments!;
+    expect(seg).toHaveLength(2);
+    // 满期赔付率段保留真实值（多处独立引用，必须可对齐）
+    expect(seg[0].label).toBe('满期赔付率');
+    expect(seg[0].value).toBeCloseTo(64.38, 6);
+    // 费用率段反推 = hero − 满期赔付率
+    expect(seg[1].label).toBe('费用率');
+    expect(seg[1].value).toBeCloseTo(81.84 - 64.38, 6);
+    // 关键断言：段和 == hero（恒等，不受三处独立舍入影响）。
+    // 旧实现（段值直接取 expense_ratio=17.459）此断言会失败：81.839 ≠ 81.84。
+    expect(seg[0].value + seg[1].value).toBeCloseTo(p.value as number, 6);
   });
 
   it('kpiDetails 为 null 时占比型卡降级为空占比、值 undefined（守卫不崩）', () => {

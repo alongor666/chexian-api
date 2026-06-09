@@ -214,13 +214,19 @@ export function buildKpiCardProps(
         threshold: T.costRateWarn,
         reverse: true,
       });
-      // 满期赔付率 + 费用率 = 变动成本率（后端 /api/query/kpi 同源拆分，注册表口径）。
-      // 分项缺失时回退为合计单段，不再用 ×0.69 假估算（BACKLOG 40f3ff）。
+      // 满期赔付率 + 费用率 = 变动成本率（后端 /api/query/kpi 同源拆分，注册表 L4 口径）。
+      // 展示层把"费用率"段反推为 hero − 满期赔付率，保证两段加总恒等于 hero：三处指标各自
+      // 独立舍入（SQL 里满期赔付率 ROUND(,2)、费用率不舍入、变动成本率对原始合计 ROUND(,2)，
+      // 前端再各自到 1 位）会让 round(A)+round(B)≠round(A+B) 漂移（≤0.1pt）。满期赔付率保留
+      // 真实值（它在出险率/赔付等多处独立引用，必须可对齐）；费用率作为独立注册表指标的真实
+      // 值仍由后端 expense_ratio 字段承载，此处仅为该堆叠条第二段做配平，不改变数据层口径。
+      // expenseRatio 仅作为"后端是否提供分项"的存在性信号；分项缺失时回退为合计单段，
+      // 不再用 ×0.69 假估算（BACKLOG 40f3ff）。
       const segments =
         earnedClaimRatio !== null && expenseRatio !== null
           ? [
               { label: '满期赔付率', value: earnedClaimRatio, tone: 'primary' as const },
-              { label: '费用率', value: expenseRatio, tone: 'warning' as const },
+              { label: '费用率', value: value - earnedClaimRatio, tone: 'warning' as const },
             ]
           : [{ label: '变动成本率', value, tone: 'primary' as const }];
       return {
