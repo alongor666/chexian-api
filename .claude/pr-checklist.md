@@ -6,7 +6,7 @@
 
 ## 0. 依赖链完整性（先于 commit）
 
-修改前端 API 调用（`client.ts` / `routes.ts` / `query-keys.ts`）→ 必须 `grep` 确认后端对应路由文件、`paths.ts`、`api-routes.ts` 均已同步。前端新增方法须确认后端路由存在。
+修改前端 API 调用（`client.ts` / 命名空间子客户端 `api/*-api.ts` / `routes.ts` / `query-keys.ts`）→ 必须 `grep` 确认后端对应路由文件、`paths.ts`、`api-routes.ts` 均已同步。前端新增方法须确认后端路由存在；改动 `client.ts` 或任一 `*-api.ts` 须同步 `tests/api/client-contracts.test.ts`（热点契约门禁强制）。
 
 ## 1. 红线自审表
 
@@ -17,7 +17,7 @@
 | 业务口径 | 是否假设了因果关系（终端来源 vs 渠道、定价系数 vs 出险率）？分母是否用了 earned exposure？驾乘推介率分母是否排除纯交强/单交？ |
 | 验证证据 | 声称"完成"是否贴出 `curl` 200 + 非空 JSON？修改 SQL 是否同时用 DuckDB CLI 直查 Parquet 对账？ |
 | 安全敏感 | 是否处理用户输入/鉴权/敏感数据但**没**触发 `/chexian-security-review`？是否新增 PAT/token 相关代码未走 `readonlyMiddleware`？ |
-| 影响半径 | `client.ts` / `routes.ts` / `query-keys.ts` 改了，后端路由/`paths.ts`/`api-routes.ts` 是否同步？前端硬编码的指标标签/阈值是否从注册表派生？ |
+| 影响半径 | `client.ts` / `api/*-api.ts` / `routes.ts` / `query-keys.ts` 改了，后端路由/`paths.ts`/`api-routes.ts` 是否同步？契约测试 `client-contracts.test.ts` 是否同步？前端硬编码的指标标签/阈值是否从注册表派生？ |
 | 大文件/路径 | diff 是否引入 >50MB 文件？是否出现硬编码路径（应走 `paths.ts` 或环境变量）？ |
 
 ## 2. 输出格式（贴对话，便于用户复核）

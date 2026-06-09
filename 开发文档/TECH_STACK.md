@@ -62,7 +62,7 @@ tsx 4.7.0             - 开发热重载
 | **列名映射** | `server/src/normalize/mapping.ts` | 列名别名规则（不可删除已有映射） |
 | **KPI 计算** | `server/src/sql/kpi.ts` | 指标口径定义（不可修改已有模板） |
 | **API 路由** | `server/src/routes/*.ts` | 后端 API 端点定义（不可删除已有路由） |
-| **API 客户端** | `src/shared/api/client.ts` | 前端所有后端请求的统一入口 |
+| **API 客户端** | `src/shared/api/client.ts`（+ `client-core.ts` 传输内核 + 10 个 `*-api.ts` 命名空间子客户端） | 前端所有后端请求的统一入口 `apiClient`；按域细分 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow}.*` |
 | **React 组件** | `src/features/INDEX.md` | 组件职责边界 |
 | **图表配置** | `src/widgets/charts/README.md` | ECharts 配置规范 |
 
