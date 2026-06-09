@@ -19,6 +19,16 @@ const COLORS = {
 
 const quietPass = process.argv.includes('--quiet-pass');
 
+// 命名空间子客户端（Phase 2 拆分后业务方法的新归处）。
+// ⚠️ 掏空陷阱：神类拆分把 84 个业务方法从 client.ts 搬到这些 *-api.ts 后，若门禁仍只锚
+//    client.ts，则"改子客户端不触发门禁" → 契约联动只剩守 client.ts 里 ~15 个保留方法，
+//    80% API 面失去契约保护。故这 10 个子客户端必须与 client.ts 同等受门禁。
+//    新增子客户端时这里要追加（tests/api/sub-client-boundary.test.ts 的 meta 守卫会兜底提醒）。
+const API_SUBCLIENTS = [
+  'ai-api', 'auth-api', 'claims-detail-api', 'cross-sell-api', 'customer-flow-api',
+  'data-api', 'performance-api', 'quote-conversion-api', 'repair-api', 'workflows-api',
+];
+
 const RULES = [
   {
     hotfile: 'server/src/routes/query.ts',
@@ -28,10 +38,22 @@ const RULES = [
   },
   {
     hotfile: 'src/shared/api/client.ts',
-    label: '前端 API 客户端热点文件',
+    label: '前端 API 客户端入口热点文件',
     requiredPatterns: [/^tests\/api\/client-contracts\.test\.ts$/],
     guidance: '请同步修改 tests/api/client-contracts.test.ts 以锁定前端调用契约',
   },
+  {
+    hotfile: 'src/shared/api/client-core.ts',
+    label: '前端 API 传输内核（全部子客户端共享，最高风险）',
+    requiredPatterns: [/^tests\/api\/(client-core-transport|client-contracts)\.test\.ts$/],
+    guidance: '传输内核改动须同步 tests/api/client-core-transport.test.ts（鉴权头/401刷新/GET合并/超时取消）或 client-contracts.test.ts',
+  },
+  ...API_SUBCLIENTS.map((name) => ({
+    hotfile: `src/shared/api/${name}.ts`,
+    label: `前端 API 命名空间子客户端（${name}）`,
+    requiredPatterns: [/^tests\/api\/client-contracts\.test\.ts$/],
+    guidance: '请同步修改 tests/api/client-contracts.test.ts 追加/更新该域命名空间调用契约',
+  })),
 ];
 
 function log(color, tag, message) {
