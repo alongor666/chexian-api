@@ -52,6 +52,10 @@ export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError 
  */
 class ApiClient extends ApiClientCore {
   // ── 命名空间子客户端（Phase 2，按域逐步迁入；复用 this.transport 单实例传输）──
+  // ⚠️ 不变量：传输句柄 transport 必须留在基类 ApiClientCore 的字段；子客户端字段
+  //    在此子类初始化，依赖「基类字段先于子类字段初始化」语义才能读到已就绪的
+  //    this.transport。后续各域 `readonly xxx = new XxxApi(this.transport)` 同此约束，
+  //    切勿把 transport 挪到子类（会读到 undefined）。
   /** 报价转化分析：apiClient.quoteConversion.{kpi,funnel,drilldown,heatmap,price,trend,ranking} */
   readonly quoteConversion = new QuoteConversionApi(this.transport);
 

@@ -69,6 +69,9 @@ export class ApiClientCore {
   /**
    * 透传给命名空间子客户端的 this-bound 传输句柄（Phase 2）。
    * 用箭头闭包绑定 this 并保留泛型；每实例一份，子类构造时注入子客户端。
+   *
+   * ⚠️ 不变量：本字段必须留在基类。子客户端在子类字段中 `new XxxApi(this.transport)`，
+   *    依赖「基类字段先于子类字段初始化」才能读到已就绪句柄；挪到子类会读到 undefined。
    */
   protected readonly transport: ApiTransport = {
     request: <T>(endpoint: string, options?: RequestInit) => this.request<T>(endpoint, options),
