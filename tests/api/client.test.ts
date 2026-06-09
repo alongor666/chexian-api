@@ -137,7 +137,7 @@ describe('API Client', () => {
       const files = await apiClient.data.files();
 
       expect(files).toHaveLength(1);
-      expect((files as any)[0].filename).toBe('test.parquet');
+      expect(files[0].filename).toBe('test.parquet');
     });
 
     it('should call correct endpoint for data.load', async () => {
@@ -156,7 +156,7 @@ describe('API Client', () => {
         expect.stringContaining('/data/load/test.parquet'),
         expect.objectContaining({ method: 'POST' })
       );
-      expect((result as any).rowCount).toBe(1000);
+      expect(result.rowCount).toBe(1000);
     });
 
     it('should encode filename in URL', async () => {

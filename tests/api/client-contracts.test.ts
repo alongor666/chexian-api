@@ -279,7 +279,7 @@ describe('namespaced sub-client URL contracts', () => {
     });
   });
 
-  type NsCase = { name: string; path: string; run: (c: any) => Promise<unknown>; expectParam?: boolean; expectPost?: boolean };
+  type NsCase = { name: string; path: string; run: (c: any) => Promise<unknown>; expectParam?: boolean; expectMethod?: 'POST' | 'PUT' | 'DELETE' };
   const cases: NsCase[] = [
     // ── claimsDetail（#541 迁移域回填）──
     { name: 'claimsDetail.pendingOverview', path: '/query/claims-detail/pending-overview', run: (c) => c.claimsDetail.pendingOverview({ org: '乐山' }), expectParam: true },
@@ -330,16 +330,16 @@ describe('namespaced sub-client URL contracts', () => {
     // ── ai（迁移域）──
     { name: 'ai.capabilities', path: '/ai/capabilities', run: (c) => c.ai.capabilities() },
     { name: 'ai.quickSuggestions', path: '/ai/quick-suggestions', run: (c) => c.ai.quickSuggestions() },
-    { name: 'ai.analyzeTrend POST', path: '/ai/trend-analysis', run: (c) => c.ai.analyzeTrend({ rows: [], org: '总公司', coverage: '商业险' }), expectPost: true },
-    { name: 'ai.detectRequirement POST', path: '/ai/detect-requirement', run: (c) => c.ai.detectRequirement({ message: '查一下出险率' }), expectPost: true },
+    { name: 'ai.analyzeTrend POST', path: '/ai/trend-analysis', run: (c) => c.ai.analyzeTrend({ rows: [], org: '总公司', coverage: '商业险' }), expectMethod: 'POST' },
+    { name: 'ai.detectRequirement POST', path: '/ai/detect-requirement', run: (c) => c.ai.detectRequirement({ message: '查一下出险率' }), expectMethod: 'POST' },
     // ── data（本 PR 迁移域）──
     { name: 'data.files', path: '/data/files', run: (c) => c.data.files() },
-    { name: 'data.load', path: '/data/load/test.parquet', run: (c) => c.data.load('test.parquet'), expectPost: true },
-    { name: 'data.remove', path: '/data/test.parquet', run: (c) => c.data.remove('test.parquet') },
+    { name: 'data.load', path: '/data/load/test.parquet', run: (c) => c.data.load('test.parquet'), expectMethod: 'POST' },
+    { name: 'data.remove', path: '/data/test.parquet', run: (c) => c.data.remove('test.parquet'), expectMethod: 'DELETE' },
     { name: 'data.version', path: '/data/version', run: (c) => c.data.version() },
   ];
 
-  it.each(cases)('$name builds $path', async ({ run, path, expectParam, expectPost }) => {
+  it.each(cases)('$name builds $path', async ({ run, path, expectParam, expectMethod }) => {
     const { apiClient } = await importClient();
     await run(apiClient);
     const calledUrl = mockFetch.mock.calls[0][0] as string;
@@ -349,10 +349,10 @@ describe('namespaced sub-client URL contracts', () => {
     } else {
       expect(calledUrl).not.toContain('?');
     }
-    // POST 端点：method 是迁移关键位（URL 不变也能误把 POST 改成 GET 丢 body），单独断言
-    if (expectPost) {
+    // 变更端点：method 是迁移关键位（URL 不变也能误把 POST/DELETE 改成别的动词丢语义），单独断言
+    if (expectMethod) {
       const init = mockFetch.mock.calls[0][1] as RequestInit | undefined;
-      expect(init?.method).toBe('POST');
+      expect(init?.method).toBe(expectMethod);
     }
   });
 
