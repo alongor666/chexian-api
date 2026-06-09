@@ -50,7 +50,7 @@ export const RepairDiversionList: React.FC<Props> = ({ orgName, timeWindow }) =>
 
   const { data, isLoading } = useQuery({
     queryKey: ['repair-diversion-list', params],
-    queryFn: () => apiClient.getRepairDiversionList(params) as Promise<DiversionRow[]>,
+    queryFn: () => apiClient.repair.diversionList(params) as Promise<DiversionRow[]>,
   });
 
   const rows = data ?? [];

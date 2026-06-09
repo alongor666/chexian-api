@@ -40,6 +40,7 @@ import {
 import { ApiClientCore, API_BASE } from './client-core';
 import { QuoteConversionApi } from './quote-conversion-api';
 import { ClaimsDetailApi } from './claims-detail-api';
+import { RepairApi } from './repair-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -61,6 +62,8 @@ class ApiClient extends ApiClientCore {
   readonly quoteConversion = new QuoteConversionApi(this.transport);
   /** 赔案明细：apiClient.claimsDetail.{pendingOverview,pendingByOrg,pendingAging,causeAnalysis,geoAccident,geoPlate,geoComparison,claimCycle,frequencyYoy,lossRatioDev,heatmap} */
   readonly claimsDetail = new ClaimsDetailApi(this.transport);
+  /** 维修资源：apiClient.repair.{overview,detail,status,metadata,city,channel,coopTier,scatter,localResource,toPremium,diversionList,orphanShops} */
+  readonly repair = new RepairApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -682,58 +685,7 @@ class ApiClient extends ApiClientCore {
     return this.request<{ content: string; generatedAt: string | null; domain: string }>(`/query/${QUERY_ROUTES.PATROL}/${domain}/narrative`);
   }
 
-  // ── 维修资源 ──
-
-  async getRepairOverview(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.OVERVIEW}${query ? `?${query}` : ''}`);
-  }
-  async getRepairDetail(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.DETAIL}${query ? `?${query}` : ''}`);
-  }
-  async getRepairStatus(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.STATUS}${query ? `?${query}` : ''}`);
-  }
-  async getRepairMetadata() {
-    return this.request<any>(`/query/${QUERY_ROUTES.REPAIR.METADATA}`);
-  }
-
-  // ── 维修资源 v2（2026-04-18 重设计）──
-
-  async getRepairCity(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.CITY}${query ? `?${query}` : ''}`);
-  }
-  async getRepairChannel(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.CHANNEL}${query ? `?${query}` : ''}`);
-  }
-  async getRepairCoopTier(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.COOP_TIER}${query ? `?${query}` : ''}`);
-  }
-  async getRepairScatter(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.SCATTER}${query ? `?${query}` : ''}`);
-  }
-  async getRepairLocalResource(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.LOCAL_RESOURCE}${query ? `?${query}` : ''}`);
-  }
-  async getRepairToPremium(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.TO_PREMIUM}${query ? `?${query}` : ''}`);
-  }
-  async getRepairDiversionList(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.DIVERSION_LIST}${query ? `?${query}` : ''}`);
-  }
-  async getRepairOrphanShops(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.REPAIR.ORPHAN_SHOPS}${query ? `?${query}` : ''}`);
-  }
+  // 维修资源 API（v1 + v2）已迁出至 repair 子客户端（见类首字段 + repair-api.ts）
 
   // ── 客户来源去向 ──
 
