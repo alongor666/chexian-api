@@ -93,7 +93,7 @@ export function usePerformanceSummary({
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['performance-summary', params],
-    queryFn: () => apiClient.getPerformanceSummary(params),
+    queryFn: () => apiClient.performance.summary(params),
     enabled: enabled && !prefetchedRows,
     select: (result) => (result?.rows || []).map(mapSummaryRow),
   });

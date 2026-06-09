@@ -97,7 +97,7 @@ export function usePerformanceOrgHeatmap({
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['performance-org-heatmap', params],
-    queryFn: () => apiClient.getPerformanceOrgHeatmap(params),
+    queryFn: () => apiClient.performance.orgHeatmap(params),
     select: (result) => (result?.rows || []).map(mapHeatmapRow),
     enabled,
   });

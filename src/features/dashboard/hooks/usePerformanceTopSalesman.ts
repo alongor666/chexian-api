@@ -79,7 +79,7 @@ export function usePerformanceTopSalesman({
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['performance-top-salesman', params],
-    queryFn: () => apiClient.getPerformanceTopSalesman(params),
+    queryFn: () => apiClient.performance.topSalesman(params),
     enabled: enabled && !prefetchedRows,
     select: (result) => (result?.rows || []).map(mapTopSalesmanRow),
   });

@@ -120,7 +120,7 @@ export const SidebarNavigation: React.FC = () => {
           };
           queryClient.prefetchQuery({
             queryKey: queryKeys.performanceBundle(performanceParams),
-            queryFn: () => apiClient.getPerformanceBundle(performanceParams),
+            queryFn: () => apiClient.performance.bundle(performanceParams),
           });
         }
         break;

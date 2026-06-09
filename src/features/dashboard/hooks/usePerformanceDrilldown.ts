@@ -203,7 +203,7 @@ export function usePerformanceDrilldown({
   // useQuery 替代手动 fetch + fetchIdRef，自动处理竞态和缓存
   const { data: queryData, isLoading, error: queryError } = useQuery({
     queryKey: ['performance-drilldown', apiParams],
-    queryFn: () => apiClient.getPerformanceDrilldown(apiParams),
+    queryFn: () => apiClient.performance.drilldown(apiParams),
     enabled: enabled && !prefetched,
     select: (result) => ({
       summary: result.summary ? mapRow(result.summary as Record<string, unknown>) : null,
