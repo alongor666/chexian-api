@@ -33,6 +33,20 @@ export function isRequestAbortError(error: unknown): error is RequestAbortError 
 }
 
 /**
+ * 传输句柄：暴露给命名空间子客户端（Phase 2）的最小传输面。
+ *
+ * 子客户端通过组合（持有同一份句柄）而非继承复用单实例传输状态，
+ * 故 core 的 protected request/queryGet/drilldownGet/buildQueryString
+ * 经此 this-bound 接口透出，**不破坏对外公开面、不新建第二个实例**。
+ */
+export interface ApiTransport {
+  request<T>(endpoint: string, options?: RequestInit): Promise<T>;
+  queryGet<T = any>(path: string, filters?: Record<string, any>, initial?: Record<string, string>): Promise<T>;
+  drilldownGet<T = any>(path: string, params: { drillPath?: Array<{ dimension: string; value: string }>; groupBy?: string; [key: string]: any }): Promise<T>;
+  buildQueryString(filters?: Record<string, any>, initial?: Record<string, string>): string;
+}
+
+/**
  * API 客户端传输核心基类
  *
  * 增强功能：
@@ -51,6 +65,20 @@ export class ApiClientCore {
   private inflightRequests = new Map<string, Promise<unknown>>();
   /** 默认请求超时（毫秒） */
   private requestTimeoutMs = 30_000;
+
+  /**
+   * 透传给命名空间子客户端的 this-bound 传输句柄（Phase 2）。
+   * 用箭头闭包绑定 this 并保留泛型；每实例一份，子类构造时注入子客户端。
+   */
+  protected readonly transport: ApiTransport = {
+    request: <T>(endpoint: string, options?: RequestInit) => this.request<T>(endpoint, options),
+    queryGet: <T = any>(path: string, filters?: Record<string, any>, initial?: Record<string, string>) =>
+      this.queryGet<T>(path, filters, initial),
+    drilldownGet: <T = any>(path: string, params: { drillPath?: Array<{ dimension: string; value: string }>; groupBy?: string; [key: string]: any }) =>
+      this.drilldownGet<T>(path, params),
+    buildQueryString: (filters?: Record<string, any>, initial?: Record<string, string>) =>
+      this.buildQueryString(filters, initial),
+  };
 
   private loadSessionCookieHint(): boolean {
     if (typeof window === 'undefined') return false;

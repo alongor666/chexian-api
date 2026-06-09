@@ -30,42 +30,42 @@ function filtersToParams(f: QuoteFilters): Record<string, string> {
 export function useQuoteKpi(filters: QuoteFilters) {
   return useQuery({
     queryKey: ['quote-conversion', 'kpi', filters],
-    queryFn: () => apiClient.getQuoteConversionKpi(filtersToParams(filters)) as Promise<QuoteKpi>,
+    queryFn: () => apiClient.quoteConversion.kpi(filtersToParams(filters)) as Promise<QuoteKpi>,
   });
 }
 
 export function useQuoteFunnel(filters: QuoteFilters) {
   return useQuery({
     queryKey: ['quote-conversion', 'funnel', filters],
-    queryFn: () => apiClient.getQuoteConversionFunnel(filtersToParams(filters)) as Promise<FunnelRow[]>,
+    queryFn: () => apiClient.quoteConversion.funnel(filtersToParams(filters)) as Promise<FunnelRow[]>,
   });
 }
 
 export function useQuoteDrilldown(filters: QuoteFilters, level: DrillLevel) {
   return useQuery({
     queryKey: ['quote-conversion', 'drilldown', filters, level],
-    queryFn: () => apiClient.getQuoteConversionDrilldown({ ...filtersToParams(filters), level }) as Promise<DrilldownRow[]>,
+    queryFn: () => apiClient.quoteConversion.drilldown({ ...filtersToParams(filters), level }) as Promise<DrilldownRow[]>,
   });
 }
 
 export function useQuoteHeatmap(filters: QuoteFilters, colDimension: string) {
   return useQuery({
     queryKey: ['quote-conversion', 'heatmap', filters, colDimension],
-    queryFn: () => apiClient.getQuoteConversionHeatmap({ ...filtersToParams(filters), colDimension }) as Promise<HeatmapRow[]>,
+    queryFn: () => apiClient.quoteConversion.heatmap({ ...filtersToParams(filters), colDimension }) as Promise<HeatmapRow[]>,
   });
 }
 
 export function useQuotePrice(filters: QuoteFilters) {
   return useQuery({
     queryKey: ['quote-conversion', 'price', filters],
-    queryFn: () => apiClient.getQuoteConversionPrice(filtersToParams(filters)) as Promise<PriceRow[]>,
+    queryFn: () => apiClient.quoteConversion.price(filtersToParams(filters)) as Promise<PriceRow[]>,
   });
 }
 
 export function useQuoteTrend(filters: QuoteFilters, granularity: 'day' | 'week' | 'month' = 'week') {
   return useQuery({
     queryKey: ['quote-conversion', 'trend', filters, granularity],
-    queryFn: () => apiClient.getQuoteConversionTrend({ ...filtersToParams(filters), granularity }) as Promise<TrendRow[]>,
+    queryFn: () => apiClient.quoteConversion.trend({ ...filtersToParams(filters), granularity }) as Promise<TrendRow[]>,
   });
 }
 
@@ -74,6 +74,6 @@ export { filtersToParams };
 export function useQuoteRanking(filters: QuoteFilters, dimension: string) {
   return useQuery({
     queryKey: ['quote-conversion', 'ranking', filters, dimension],
-    queryFn: () => apiClient.getQuoteConversionRanking({ ...filtersToParams(filters), dimension }) as Promise<RankingRow[]>,
+    queryFn: () => apiClient.quoteConversion.ranking({ ...filtersToParams(filters), dimension }) as Promise<RankingRow[]>,
   });
 }
