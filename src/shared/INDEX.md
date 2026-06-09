@@ -298,3 +298,14 @@ import { cn, cardStyles, getTrendColorClass, colors } from '@/shared/styles';
 
 - `styles/index.ts`：新增 `stickyTableStyles`，统一长表滚动容器、表头吸顶、首列冻结和交叉单元格阴影规则。
 - `ui/StickyTableFrame.tsx`、`ui/index.ts`：新增轻量长表滚动容器组件，支持 `maxHeight` 与可复用滚动框架。
+
+## 2026-06-09 API 客户端神类拆分收官（Phase 2）
+
+> 渐进式重构（PR #536→#551）：把原 `api/client.ts`（约 1250 行的「神类」）按业务域拆为「传输内核 + 业务域方法层 + 10 个命名空间子客户端」，`client.ts` 降至约 312 行（**−75%**）。10 域全部迁移完成并已上生产。
+
+- **新增 `api/client-core.ts`**：抽出传输内核 `ApiClientCore`（token 状态读写 `setToken`/`clearToken`/`setSessionCookieHint` + 请求执行 + in-flight coalescing）与只读句柄 `ApiTransport`（`request`/`queryGet`/`drilldownGet`/`buildQueryString`/`getToken`）。子客户端只拿到 `ApiTransport`，**不暴露 token 写入方法**。
+- **新增 10 个域子客户端**（均 `new XxxApi(this.transport)` 共享单例句柄）：`auth-api.ts`(`apiClient.auth.*` 用户/PAT/角色/企微配置 12 CRUD) · `ai-api.ts` · `data-api.ts` · `workflows-api.ts` · `cross-sell-api.ts` · `performance-api.ts` · `repair-api.ts` · `claims-detail-api.ts` · `quote-conversion-api.ts` · `customer-flow-api.ts`。
+- **`api/client.ts` 保留**：核心 query 方法（KPI/趋势/排名/自定义/bundle）+ **会话生命周期方法 `login`/`logout`/`getCurrentUser`**（改写 token 状态，刻意留在基类，不泄漏 token 写入到 transport 句柄）+ 10 子客户端挂载点。
+- **调用方迁移**：旧 `apiClient.listUsers()` → `apiClient.auth.listUsers()` 等（admin/auth 等页面共改 13 处 auth 调用点；其余域同理）。`apiClient` 单例与 `api/index.ts` 导出面不变。
+- **契约护栏**：`tests/api/client-contracts.test.ts`（**82 例**）逐方法断言 URL path + query 参数 + HTTP 动词（`expectMethod` 覆盖 GET/POST/PUT/DELETE），保证拆分零 endpoint 漂移。
+- 详见代码索引 `开发文档/00_index/CODE_INDEX.md` →「API 客户端」表。

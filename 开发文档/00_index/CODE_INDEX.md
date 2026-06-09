@@ -53,12 +53,12 @@
 ```
 用户登录 → AuthContext 验证 → JWT Token
   ↓
-src/shared/api/client.ts                          # 前端 API 客户端（统一入口）
-  ├─ getKpi(filters)                              # /api/query/kpi
-  ├─ getKpiDetail(filters)                        # /api/query/kpi-detail
-  ├─ getTrend(granularity, filters)               # /api/query/trend
-  ├─ getSalesmanRanking(limit, filters)           # /api/query/salesman-ranking
-  └─ executeCustomQuery(sql)                      # /api/query/custom
+src/shared/api/client.ts                          # 前端 API 客户端（统一入口 apiClient）
+  ├─ getKpi/getKpiDetail/getTrend/...             # 核心 query 方法（仍在基类）
+  ├─ login/logout/getCurrentUser                  # 会话生命周期（改写 token 状态，刻意留基类）
+  └─ 10 个命名空间子客户端（Phase 2 神类拆分，见下方「API 客户端」表）
+       apiClient.auth.* / .ai.* / .data.* / .workflows.* / .crossSell.* /
+       .performance.* / .repair.* / .claimsDetail.* / .quoteConversion.* / .customerFlow.*
   ↓
 server/src/routes/query.ts                        # 路由聚合器（65 行，挂载 19 个子路由）
   ├─ server/src/routes/query/*.ts                 # 19 个子路由模块 + 1 个 shared.ts
@@ -245,9 +245,27 @@ src/features/*                                    # 功能模块 UI 渲染
 
 #### API 客户端 (`src/shared/api/`)
 
+> **架构（Phase 2 神类拆分，2026-06）**：原单文件 `client.ts`（约 1250 行）已按域拆分为「传输内核 + 业务域方法层 + 10 个命名空间子客户端」。`client.ts` 降至约 312 行（−75%），仅保留核心 query 方法 + 会话生命周期方法 + 子客户端挂载。所有子客户端共享单例 `ApiTransport` 句柄（不新建第二个客户端），统一走 `transport.request` 收口（保留 Bearer 认证、错误处理、in-flight coalescing）。
+
 | 文件 | 职责 |
 |------|------|
-| `client.ts` | 统一 API 客户端（JWT 认证、错误处理、所有后端请求入口） |
+| `client-core.ts` | 传输内核：`ApiClientCore`（token 状态 setToken/clearToken/setSessionCookieHint + 请求执行 + coalescing）+ 只读 `ApiTransport` 句柄（request/queryGet/drilldownGet/buildQueryString/getToken）|
+| `client.ts` | 业务域方法层 `ApiClient`（继承 ApiClientCore）：核心 query 方法（KPI/趋势/排名/自定义/bundle 等）+ 会话生命周期（login/logout/getCurrentUser，改写 token 状态故留基类）+ 挂载 10 个命名空间子客户端；导出单例 `apiClient` |
+| `auth-api.ts` | `apiClient.auth.*` — 账号 CRUD（用户/PAT/角色/企微配置 共 12 个无状态端点）|
+| `ai-api.ts` | `apiClient.ai.*` — NL2SQL / 趋势解读 / 需求识别 / 能力发现 |
+| `data-api.ts` | `apiClient.data.*` — 文件列表/加载/上传/删除/版本 |
+| `workflows-api.ts` | `apiClient.workflows.*` — 工作流运行/审计/审批/拒绝/健康 |
+| `cross-sell-api.ts` | `apiClient.crossSell.*` — 交叉销售趋势/排名/热力图 |
+| `performance-api.ts` | `apiClient.performance.*` — 业绩汇总/下钻/机构热力图 |
+| `repair-api.ts` | `apiClient.repair.*` — 车型维修分析 |
+| `claims-detail-api.ts` | `apiClient.claimsDetail.*` — 赔案明细 |
+| `quote-conversion-api.ts` | `apiClient.quoteConversion.*` — 报价转化 |
+| `customer-flow-api.ts` | `apiClient.customerFlow.*` — 客户来源去向 |
+| `routes.ts` | 路由常量注册表（`QUERY_ROUTES`/`AUTH_ROUTES`/`DATA_ROUTES`/`AI_ROUTES`/...）|
+| `types.ts` | API 数据类型（`KpiData`/`AccessUser`/`AccessRole`/`ApiTokenInfo`/...）|
+| `index.ts` | 公共导出面（`apiClient` + 路由常量 + 常用类型）|
+
+> **契约护栏**：`tests/api/client-contracts.test.ts`（82 例）逐方法断言 URL path + query 参数 + HTTP 动词（`expectMethod` 覆盖 GET/POST/PUT/DELETE），防拆分过程中 endpoint 漂移。
 
 #### 上下文管理 (`src/shared/contexts/`)
 
