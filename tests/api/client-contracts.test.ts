@@ -92,7 +92,7 @@ describe('API client contract coverage', () => {
       status: 200,
       json: async () => ({ success: true, data: {} }),
     });
-    await apiClient.getPerformanceSummary({ year: '2026', dimension: 'team' });
+    await apiClient.performance.summary({ year: '2026', dimension: 'team' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/performance-summary?');
     expect(calledUrl).toContain('year=2026');
@@ -106,7 +106,7 @@ describe('API client contract coverage', () => {
       status: 200,
       json: async () => ({ success: true, data: [] }),
     });
-    await apiClient.getPerformanceDrilldown({
+    await apiClient.performance.drilldown({
       year: '2026',
       level: 'salesman',
       parentValue: '天府',
@@ -125,7 +125,7 @@ describe('API client contract coverage', () => {
       status: 200,
       json: async () => ({ success: true, data: { rows: [] } }),
     });
-    await apiClient.getPerformanceOrgHeatmap({ segmentTag: 'business_passenger', days: '14' });
+    await apiClient.performance.orgHeatmap({ segmentTag: 'business_passenger', days: '14' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/performance-org-heatmap?');
     expect(calledUrl).toContain('segmentTag=business_passenger');
@@ -310,6 +310,13 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'crossSell.bundle', path: '/query/cross-sell-bundle', run: (c) => c.crossSell.bundle({ org: '乐山' }), expectParam: true },
     { name: 'crossSell.orgTrend', path: '/query/cross-sell-org-trend', run: (c) => c.crossSell.orgTrend({ org: '乐山' }), expectParam: true },
     { name: 'crossSell.heatmap', path: '/query/cross-sell-heatmap', run: (c) => c.crossSell.heatmap({ org: '乐山' }), expectParam: true },
+    // ── performance（本 PR 迁移域）──
+    { name: 'performance.summary', path: '/query/performance-summary', run: (c) => c.performance.summary({ org: '乐山' }), expectParam: true },
+    { name: 'performance.trend', path: '/query/performance-trend', run: (c) => c.performance.trend({ org: '乐山' }), expectParam: true },
+    { name: 'performance.drilldown', path: '/query/performance-drilldown?', run: (c) => c.performance.drilldown({ org: '乐山' }), expectParam: true },
+    { name: 'performance.orgHeatmap', path: '/query/performance-org-heatmap', run: (c) => c.performance.orgHeatmap({ org: '乐山' }), expectParam: true },
+    { name: 'performance.topSalesman', path: '/query/performance-top-salesman', run: (c) => c.performance.topSalesman({ org: '乐山' }), expectParam: true },
+    { name: 'performance.bundle', path: '/query/performance-bundle?', run: (c) => c.performance.bundle({ org: '乐山' }), expectParam: true },
   ];
 
   it.each(cases)('$name builds $path', async ({ run, path, expectParam }) => {
