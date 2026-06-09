@@ -236,7 +236,12 @@ export const generateKpiQuery = (
         -- B305：变动成本率公式收归指标注册表（唯一事实源），消除此处硬编码 CASE WHEN。
         -- variable_cost_base CTE 已暴露注册表 requiredColumns（premium/reported_claims/
         -- fee_amount/earned_days/policy_term），registry expression 可直接内联。
-        ${getMetricSql('variable_cost_ratio')}
+        ${getMetricSql('variable_cost_ratio')},
+        -- B(40f3ff)：同源拆出满期赔付率 + 费用率分项（变动成本率 = 二者之和，口径见
+        -- 注册表 variable_cost_ratio.formula）。供 dashboard 变动成本率卡片真实分段，
+        -- 替代前端 kpiCardProps.ts 的 ×0.69 假估算。
+        ${getMetricSql('earned_claim_ratio')},
+        ${getMetricSql('expense_ratio')}
       FROM variable_cost_base
     ),
     vehicle_plan AS (
@@ -269,6 +274,8 @@ export const generateKpiQuery = (
         ELSE NULL
       END AS vehicle_growth_rate,
       vc.variable_cost_ratio AS variable_cost_ratio,
+      vc.earned_claim_ratio AS earned_claim_ratio,
+      vc.expense_ratio AS expense_ratio,
       fm.bundle_renewal_rate AS bundle_renewal_rate,
       bp.driver_ytd_premium AS driver_premium,
       CASE
