@@ -182,8 +182,8 @@ export const AccessControlPage: React.FC = () => {
     setError('');
     try {
       const [userList, roleList] = await Promise.all([
-        apiClient.listUsers(),
-        apiClient.listRoles(),
+        apiClient.auth.listUsers(),
+        apiClient.auth.listRoles(),
       ]);
       setUsers(userList);
       setRoles(roleList);
@@ -246,13 +246,13 @@ export const AccessControlPage: React.FC = () => {
     setLoading(true);
     try {
       if (userForm.id) {
-        await apiClient.updateUser(userForm.id, {
+        await apiClient.auth.updateUser(userForm.id, {
           ...payload,
           password: userForm.password.trim() || undefined,
         });
         setSuccess(`用户「${userForm.displayName}」更新成功`);
       } else {
-        await apiClient.createUser({
+        await apiClient.auth.createUser({
           username: userForm.username.trim(),
           password: userForm.password.trim(),
           ...payload,
@@ -274,7 +274,7 @@ export const AccessControlPage: React.FC = () => {
     setError('');
     setSuccess('');
     try {
-      await apiClient.deleteUser(record.id);
+      await apiClient.auth.deleteUser(record.id);
       setSuccess(`用户「${record.displayName}」已删除`);
       await loadData();
       deleteUserConfirm.hide();
@@ -296,7 +296,7 @@ export const AccessControlPage: React.FC = () => {
     setError('');
     setSuccess('');
     try {
-      await apiClient.updateUser(resetPwdUser.id, {
+      await apiClient.auth.updateUser(resetPwdUser.id, {
         displayName: resetPwdUser.displayName,
         role: resetPwdUser.role,
         organization: resetPwdUser.organization,
@@ -349,9 +349,9 @@ export const AccessControlPage: React.FC = () => {
     try {
       const exists = roles.some(role => role.role === roleForm.role);
       if (exists) {
-        await apiClient.updateRole(roleForm.role, payload);
+        await apiClient.auth.updateRole(roleForm.role, payload);
       } else {
-        await apiClient.createRole({
+        await apiClient.auth.createRole({
           role: roleForm.role.trim(),
           ...payload,
         });
@@ -372,7 +372,7 @@ export const AccessControlPage: React.FC = () => {
     setError('');
     setSuccess('');
     try {
-      await apiClient.deleteRole(record.role);
+      await apiClient.auth.deleteRole(record.role);
       setSuccess(`角色「${record.name}」已删除`);
       await loadData();
       deleteRoleConfirm.hide();

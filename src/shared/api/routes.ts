@@ -166,6 +166,9 @@ export const AUTH_ROUTES = {
   ROLES: 'auth/roles',
   ROLE_BY_ID: 'auth/roles',
 
+  TOKENS: 'auth/tokens',
+  TOKEN_BY_ID: 'auth/tokens',
+
   WECOM_CONFIG: 'auth/wecom/config',
 } as const;
 
