@@ -597,6 +597,31 @@ function checkStagedDebugArtifacts() {
 // 第10项检查：热点文件契约联动
 // ============================================================
 
+function checkApiWireConservation() {
+  info('检查 ApiClient 拆分守恒恒等式...');
+
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(ROOT_DIR, 'scripts/api-wire-conservation.mjs'), '--quiet-pass'],
+      {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+    success('ApiClient 守恒恒等式成立（保留 + Σ命名空间 == pre-#536，golden 覆盖齐全）');
+    return true;
+  } catch (cause) {
+    error('ApiClient 守恒恒等式校验失败');
+    const stdout = cause?.stdout?.toString().trim();
+    const stderr = cause?.stderr?.toString().trim();
+    if (stdout) console.log(stdout);
+    if (stderr) console.log(stderr);
+    return false;
+  }
+}
+
 function checkHotfileContractCoverage() {
   info('检查热点文件契约测试联动...');
 
@@ -1977,6 +2002,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'Conflict标记', fn: checkMergeConflictMarkers },
   { name: '调试产物', fn: checkStagedDebugArtifacts },
   { name: '热点文件契约', fn: checkHotfileContractCoverage },
+  { name: 'ApiClient守恒', fn: checkApiWireConservation },
   { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
   { name: '锁文件策略', fn: checkPackageManagerLockPolicy },
   { name: '凭据扫描', fn: checkStagedCredentials },

@@ -1,0 +1,814 @@
+{
+  "ai.analyzeTrend": {
+    "verb": "POST",
+    "path": "/ai/trend-analysis",
+    "params": [],
+    "bodyKeys": [
+      "coverage",
+      "org",
+      "rows"
+    ],
+    "auth": true,
+    "dedupe": ""
+  },
+  "ai.capabilities": {
+    "verb": "GET",
+    "path": "/ai/capabilities",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/ai/capabilities"
+  },
+  "ai.detectRequirement": {
+    "verb": "POST",
+    "path": "/ai/detect-requirement",
+    "params": [],
+    "bodyKeys": [
+      "message"
+    ],
+    "auth": true,
+    "dedupe": ""
+  },
+  "ai.quickSuggestions": {
+    "verb": "GET",
+    "path": "/ai/quick-suggestions",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/ai/quick-suggestions"
+  },
+  "auth.createMyToken": {
+    "verb": "POST",
+    "path": "/auth/tokens",
+    "params": [],
+    "bodyKeys": [],
+    "auth": true,
+    "dedupe": ""
+  },
+  "auth.createRole": {
+    "verb": "POST",
+    "path": "/auth/roles",
+    "params": [],
+    "bodyKeys": [],
+    "auth": true,
+    "dedupe": ""
+  },
+  "auth.createUser": {
+    "verb": "POST",
+    "path": "/auth/users",
+    "params": [],
+    "bodyKeys": [],
+    "auth": true,
+    "dedupe": ""
+  },
+  "auth.deleteRole": {
+    "verb": "DELETE",
+    "path": "/auth/roles/r",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": ""
+  },
+  "auth.deleteUser": {
+    "verb": "DELETE",
+    "path": "/auth/users/id",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": ""
+  },
+  "auth.getWeComConfig": {
+    "verb": "GET",
+    "path": "/auth/wecom/config",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/auth/wecom/config"
+  },
+  "auth.listMyTokens": {
+    "verb": "GET",
+    "path": "/auth/tokens",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/auth/tokens"
+  },
+  "auth.listRoles": {
+    "verb": "GET",
+    "path": "/auth/roles",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/auth/roles"
+  },
+  "auth.listUsers": {
+    "verb": "GET",
+    "path": "/auth/users",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/auth/users"
+  },
+  "auth.revokeMyToken": {
+    "verb": "DELETE",
+    "path": "/auth/tokens/t",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": ""
+  },
+  "auth.updateRole": {
+    "verb": "PUT",
+    "path": "/auth/roles/r",
+    "params": [],
+    "bodyKeys": [],
+    "auth": true,
+    "dedupe": ""
+  },
+  "auth.updateUser": {
+    "verb": "PUT",
+    "path": "/auth/users/id",
+    "params": [],
+    "bodyKeys": [],
+    "auth": true,
+    "dedupe": ""
+  },
+  "claimsDetail.causeAnalysis": {
+    "verb": "GET",
+    "path": "/query/claims-detail/cause-analysis",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/cause-analysis"
+  },
+  "claimsDetail.claimCycle": {
+    "verb": "GET",
+    "path": "/query/claims-detail/claim-cycle",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/claim-cycle"
+  },
+  "claimsDetail.frequencyYoy": {
+    "verb": "GET",
+    "path": "/query/claims-detail/frequency-yoy",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/frequency-yoy"
+  },
+  "claimsDetail.geoAccident": {
+    "verb": "GET",
+    "path": "/query/claims-detail/geo-accident",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/geo-accident"
+  },
+  "claimsDetail.geoComparison": {
+    "verb": "GET",
+    "path": "/query/claims-detail/geo-comparison",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/geo-comparison"
+  },
+  "claimsDetail.geoPlate": {
+    "verb": "GET",
+    "path": "/query/claims-detail/geo-plate",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/geo-plate"
+  },
+  "claimsDetail.heatmap": {
+    "verb": "GET",
+    "path": "/query/claims-detail/heatmap",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/heatmap"
+  },
+  "claimsDetail.lossRatioDev": {
+    "verb": "GET",
+    "path": "/query/claims-detail/loss-ratio-development",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/loss-ratio-development"
+  },
+  "claimsDetail.pendingAging": {
+    "verb": "GET",
+    "path": "/query/claims-detail/pending-aging",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/pending-aging"
+  },
+  "claimsDetail.pendingByOrg": {
+    "verb": "GET",
+    "path": "/query/claims-detail/pending-by-org",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/pending-by-org"
+  },
+  "claimsDetail.pendingOverview": {
+    "verb": "GET",
+    "path": "/query/claims-detail/pending-overview",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/claims-detail/pending-overview"
+  },
+  "crossSell.analysis": {
+    "verb": "GET",
+    "path": "/query/cross-sell",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/cross-sell"
+  },
+  "crossSell.bundle": {
+    "verb": "GET",
+    "path": "/query/cross-sell-bundle",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/cross-sell-bundle"
+  },
+  "crossSell.heatmap": {
+    "verb": "GET",
+    "path": "/query/cross-sell-heatmap",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/cross-sell-heatmap"
+  },
+  "crossSell.orgTrend": {
+    "verb": "GET",
+    "path": "/query/cross-sell-org-trend",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/cross-sell-org-trend"
+  },
+  "crossSell.timePeriod": {
+    "verb": "GET",
+    "path": "/query/cross-sell-summary",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/cross-sell-summary"
+  },
+  "crossSell.topSalesman": {
+    "verb": "GET",
+    "path": "/query/cross-sell-top-salesman",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/cross-sell-top-salesman"
+  },
+  "crossSell.trend": {
+    "verb": "GET",
+    "path": "/query/cross-sell-trend",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/cross-sell-trend"
+  },
+  "customerFlow.inflow": {
+    "verb": "GET",
+    "path": "/query/customer-flow/inflow",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/customer-flow/inflow"
+  },
+  "customerFlow.metadata": {
+    "verb": "GET",
+    "path": "/query/customer-flow/metadata",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/customer-flow/metadata"
+  },
+  "customerFlow.outflow": {
+    "verb": "GET",
+    "path": "/query/customer-flow/outflow",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/customer-flow/outflow"
+  },
+  "customerFlow.summary": {
+    "verb": "GET",
+    "path": "/query/customer-flow/summary",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/customer-flow/summary"
+  },
+  "customerFlow.trend": {
+    "verb": "GET",
+    "path": "/query/customer-flow/trend",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/customer-flow/trend"
+  },
+  "data.files": {
+    "verb": "GET",
+    "path": "/data/files",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/data/files"
+  },
+  "data.load": {
+    "verb": "POST",
+    "path": "/data/load/f.parquet",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": ""
+  },
+  "data.remove": {
+    "verb": "DELETE",
+    "path": "/data/f.parquet",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": ""
+  },
+  "data.upload": {
+    "verb": "POST",
+    "path": "/data/upload",
+    "params": [],
+    "bodyKeys": "FormData",
+    "auth": true,
+    "dedupe": ""
+  },
+  "data.version": {
+    "verb": "GET",
+    "path": "/data/version",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/data/version"
+  },
+  "getComprehensiveBundle": {
+    "verb": "GET",
+    "path": "/query/comprehensive-bundle",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/comprehensive-bundle"
+  },
+  "getCostAnalysis": {
+    "verb": "GET",
+    "path": "/query/cost",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/cost"
+  },
+  "getCurrentUser": {
+    "verb": "GET",
+    "path": "/auth/me",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/auth/me"
+  },
+  "getDashboardBundle": {
+    "verb": "GET",
+    "path": "/query/dashboard-bundle",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/dashboard-bundle"
+  },
+  "getExpenseRatioDev": {
+    "verb": "GET",
+    "path": "/query/expense-development",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/expense-development"
+  },
+  "getFilterOptions": {
+    "verb": "GET",
+    "path": "/filters/options",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/filters/options"
+  },
+  "getGrowthAnalysis": {
+    "verb": "GET",
+    "path": "/query/growth",
+    "params": [
+      "baselineEnd",
+      "baselineStart",
+      "endDate",
+      "startDate"
+    ],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/growth?baselineEnd=be&baselineStart=bs&endDate=e&startDate=s"
+  },
+  "getHolidayDrilldown": {
+    "verb": "GET",
+    "path": "/query/holiday-drilldown",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/holiday-drilldown"
+  },
+  "getKpi": {
+    "verb": "GET",
+    "path": "/query/kpi",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/kpi"
+  },
+  "getKpiDetail": {
+    "verb": "GET",
+    "path": "/query/kpi-detail",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/kpi-detail"
+  },
+  "getMarketingReport": {
+    "verb": "GET",
+    "path": "/query/marketing-report",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/marketing-report"
+  },
+  "getPatrolNarrative": {
+    "verb": "GET",
+    "path": "/query/patrol/cost/narrative",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/patrol/cost/narrative"
+  },
+  "getPatrolReport": {
+    "verb": "GET",
+    "path": "/query/patrol/cost",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/patrol/cost"
+  },
+  "getPlanAchievement": {
+    "verb": "GET",
+    "path": "/query/plan-achievement",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/plan-achievement"
+  },
+  "getPolicyGeoCity": {
+    "verb": "GET",
+    "path": "/query/policy-geo/city",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/policy-geo/city"
+  },
+  "getPolicyGeoProvince": {
+    "verb": "GET",
+    "path": "/query/policy-geo/province",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/policy-geo/province"
+  },
+  "getPremiumPlan": {
+    "verb": "GET",
+    "path": "/query/premium-plan",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/premium-plan"
+  },
+  "getPremiumReport": {
+    "verb": "GET",
+    "path": "/query/premium-report",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/premium-report"
+  },
+  "getQualityBusinessTrend": {
+    "verb": "GET",
+    "path": "/query/quality-business-trend",
+    "params": [
+      "granularity"
+    ],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/quality-business-trend?granularity=day"
+  },
+  "getRenewalTracker": {
+    "verb": "GET",
+    "path": "/query/renewal-tracker",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/renewal-tracker"
+  },
+  "getSalesmanRanking": {
+    "verb": "GET",
+    "path": "/query/salesman-ranking",
+    "params": [
+      "limit"
+    ],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/salesman-ranking?limit=20"
+  },
+  "getTrend": {
+    "verb": "GET",
+    "path": "/query/trend",
+    "params": [
+      "granularity"
+    ],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/trend?granularity=day"
+  },
+  "getTruckAnalysis": {
+    "verb": "GET",
+    "path": "/query/truck",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/truck"
+  },
+  "login": {
+    "verb": "POST",
+    "path": "/auth/login",
+    "params": [],
+    "bodyKeys": [
+      "password",
+      "username"
+    ],
+    "auth": true,
+    "dedupe": ""
+  },
+  "logout": {
+    "verb": "POST",
+    "path": "/auth/logout",
+    "params": [],
+    "bodyKeys": null,
+    "auth": false,
+    "dedupe": ""
+  },
+  "performance.bundle": {
+    "verb": "GET",
+    "path": "/query/performance-bundle",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/performance-bundle"
+  },
+  "performance.drilldown": {
+    "verb": "GET",
+    "path": "/query/performance-drilldown",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/performance-drilldown"
+  },
+  "performance.orgHeatmap": {
+    "verb": "GET",
+    "path": "/query/performance-org-heatmap",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/performance-org-heatmap"
+  },
+  "performance.summary": {
+    "verb": "GET",
+    "path": "/query/performance-summary",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/performance-summary"
+  },
+  "performance.topSalesman": {
+    "verb": "GET",
+    "path": "/query/performance-top-salesman",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/performance-top-salesman"
+  },
+  "performance.trend": {
+    "verb": "GET",
+    "path": "/query/performance-trend",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/performance-trend"
+  },
+  "quoteConversion.drilldown": {
+    "verb": "GET",
+    "path": "/query/quote-conversion/drilldown",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/quote-conversion/drilldown"
+  },
+  "quoteConversion.funnel": {
+    "verb": "GET",
+    "path": "/query/quote-conversion/funnel",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/quote-conversion/funnel"
+  },
+  "quoteConversion.heatmap": {
+    "verb": "GET",
+    "path": "/query/quote-conversion/heatmap",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/quote-conversion/heatmap"
+  },
+  "quoteConversion.kpi": {
+    "verb": "GET",
+    "path": "/query/quote-conversion/kpi",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/quote-conversion/kpi"
+  },
+  "quoteConversion.price": {
+    "verb": "GET",
+    "path": "/query/quote-conversion/price",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/quote-conversion/price"
+  },
+  "quoteConversion.ranking": {
+    "verb": "GET",
+    "path": "/query/quote-conversion/ranking",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/quote-conversion/ranking"
+  },
+  "quoteConversion.trend": {
+    "verb": "GET",
+    "path": "/query/quote-conversion/trend",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/quote-conversion/trend"
+  },
+  "repair.channel": {
+    "verb": "GET",
+    "path": "/query/repair/channel",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/channel"
+  },
+  "repair.city": {
+    "verb": "GET",
+    "path": "/query/repair/city",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/city"
+  },
+  "repair.coopTier": {
+    "verb": "GET",
+    "path": "/query/repair/coop-tier",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/coop-tier"
+  },
+  "repair.detail": {
+    "verb": "GET",
+    "path": "/query/repair/detail",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/detail"
+  },
+  "repair.diversionList": {
+    "verb": "GET",
+    "path": "/query/repair/diversion-list",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/diversion-list"
+  },
+  "repair.localResource": {
+    "verb": "GET",
+    "path": "/query/repair/local-resource",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/local-resource"
+  },
+  "repair.metadata": {
+    "verb": "GET",
+    "path": "/query/repair/metadata",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/metadata"
+  },
+  "repair.orphanShops": {
+    "verb": "GET",
+    "path": "/query/repair/orphan-shops",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/orphan-shops"
+  },
+  "repair.overview": {
+    "verb": "GET",
+    "path": "/query/repair/overview",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/overview"
+  },
+  "repair.scatter": {
+    "verb": "GET",
+    "path": "/query/repair/scatter",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/scatter"
+  },
+  "repair.status": {
+    "verb": "GET",
+    "path": "/query/repair/status",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/status"
+  },
+  "repair.toPremium": {
+    "verb": "GET",
+    "path": "/query/repair/to-premium",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/repair/to-premium"
+  },
+  "workflows.approve": {
+    "verb": "POST",
+    "path": "/workflows/runs/r1/approve",
+    "params": [],
+    "bodyKeys": [],
+    "auth": true,
+    "dedupe": ""
+  },
+  "workflows.audit": {
+    "verb": "GET",
+    "path": "/workflows/runs/r1/audit",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/workflows/runs/r1/audit"
+  },
+  "workflows.reject": {
+    "verb": "POST",
+    "path": "/workflows/runs/r1/reject",
+    "params": [],
+    "bodyKeys": [],
+    "auth": true,
+    "dedupe": ""
+  },
+  "workflows.run": {
+    "verb": "GET",
+    "path": "/workflows/runs/r1",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/workflows/runs/r1"
+  },
+  "workflows.runsHealth": {
+    "verb": "GET",
+    "path": "/workflows/health/runs-summary",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/workflows/health/runs-summary"
+  }
+}

@@ -100,6 +100,23 @@ describe('client-core 传输内核特征化', () => {
       await expect(core.callPost('/auth/login')).rejects.toThrow();
       expect(mockFetch).toHaveBeenCalledTimes(1); // 不应再打 /auth/refresh
     });
+
+    it('GET 请求 401 → 刷新 → 重试不与自身 in-flight 条目合并（防 chaining-cycle 自指）', async () => {
+      // 评审「留作单独核实」项：GET 设 dedupeKey 并把原 promise 存入 inflightRequests，
+      // 401 后递归重试仍带同一 dedupeKey → 若命中 existing 会返回原 promise 自身 →
+      // execute() resolve 成自己 → TypeError: Chaining cycle detected，该 GET 直接失败。
+      const core = new TestCore();
+      core.setToken('a.b.c');
+      mockFetch
+        .mockResolvedValueOnce(failJson(401))                 // 原 GET 401
+        .mockResolvedValueOnce(okJson({ token: 'n.e.w' }))    // /auth/refresh 成功
+        .mockResolvedValueOnce(okJson({ ok: 1 }));            // 重试成功
+      const res = await core.callGet('/query/kpi');
+      expect(res).toEqual({ ok: 1 });                          // 应透明拿到数据，而非 chaining-cycle 报错
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(mockFetch.mock.calls[1][0]).toContain('/auth/refresh');
+      expect(headersOf(2).Authorization).toBe('Bearer n.e.w'); // 重试带刷新后新 Bearer
+    });
   });
 
   describe('GET 同 key 合并（in-flight coalescing）', () => {
