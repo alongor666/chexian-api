@@ -16,7 +16,7 @@
 | 验收 Agent 确定性诊断与 Stage 5 前置证据 | `verify-agent-production-smoke.mjs` | `bun run verify:agent:smoke -- --token <jwt> --start-date YYYY-MM-DD --end-date YYYY-MM-DD --baseline-start-date YYYY-MM-DD --baseline-end-date YYYY-MM-DD` |
 | 检查代码提交前是否合规 | `check-governance.mjs` | `bun run governance` |
 | 检查热点文件是否带上契约测试 | `check-hotfile-contracts.mjs` | `bun run governance:hotfiles` |
-| 校验 ApiClient 拆分守恒（原99 = 保留18 + Σ命名空间81，零搬丢/改线） | `api-wire-conservation.mjs` | `node scripts/api-wire-conservation.mjs`（已入 `bun run governance`） |
+| 校验 ApiClient 拆分守恒（pre-#536 99 + 已登记新增 == 保留 + Σ命名空间，零无意识漂移） | `api-wire-conservation.mjs` | `node scripts/api-wire-conservation.mjs`（已入 `bun run governance`；新增方法登记见脚本头「演进通道」） |
 | 一键执行生产级门禁（治理+构建+测试+关键e2e） | `production-gate.mjs` | `bun run production:gate` |
 | 测试前快速验证依赖与运行时前提 | `test-preflight.mjs` | `bun run test:preflight [-- --mode unit]` |
 | 清理未跟踪调试产物（日志/报告） | `cleanup-debug-artifacts.mjs` | `bun run cleanup:artifacts` |
@@ -44,7 +44,7 @@
 | `check-governance.mjs` | **主治理校验**（纯代码治理 23 项；数据状态校验已解耦至 `check-data-readiness.mjs`）：必需文件、索引完整性、BACKLOG证据链、DC-002合规、空catch禁令 | `bun run governance` |
 | `check-data-readiness.mjs` | **数据就绪校验**（4 项数据状态）：Parquet 重叠 / Claims 去重 / 知识库规模 / 同步漂移；由 release:daily（`sync-and-reload.mjs` Stage 1.7）在 ETL 后、发布前执行，**不在**代码门禁跑 | `node scripts/check-data-readiness.mjs` |
 | `check-hotfile-contracts.mjs` | **热点契约门禁**：`query.ts` / `client.ts` / `client-core.ts` / 全部命名空间子客户端 `src/shared/api/*-api.ts`（清单文件系统派生）改动时，要求同步修改对应契约测试 | `bun run governance:hotfiles` |
-| `api-wire-conservation.mjs` | **ApiClient 拆分守恒恒等式**：pre-#536 单体 99 业务方法 == 保留基类 18 + Σ命名空间 81；金 master golden 覆盖齐全（≥ 和）；路由集 LOST=∅（需 git 历史，缺则跳过）。冻结基线 `tests/api/__golden__/pre536-business-methods.json`（git 0e592603）。`--reseed` 重生基线，`--quiet-pass` 供 governance | `node scripts/api-wire-conservation.mjs`（已入 governance #25） |
+| `api-wire-conservation.mjs` | **ApiClient 拆分守恒恒等式**：pre-#536 单体 99 业务方法 + 已登记合法新增（脚本内 `POST_SPLIT_ADDITIONS`）== 保留基类 + Σ命名空间；金 master golden 覆盖齐全（≥ 和）；路由集 LOST=∅（需 git 历史，缺则跳过）。冻结基线 `tests/api/__golden__/pre536-business-methods.json`（git 0e592603）。**演进通道**：合法新增方法 = 登记 POST_SPLIT_ADDITIONS + 补 wire-probe REGISTRY + `UPDATE_GOLDEN=1` 重生（详见脚本头注释），未登记直接加方法会红且错误信息自带指引。`--reseed` 重生基线，`--quiet-pass` 供 governance | `node scripts/api-wire-conservation.mjs`（已入 governance #25） |
 | `production-gate.mjs` | **生产门禁编排**：治理 + 构建 + 全量测试 + 关键E2E（可选压测门禁） | `bun run production:gate [-- --with-perf]` |
 | `test-preflight.mjs` | **测试运行时预检**：检查 `node_modules`、`vitest`、`playwright` 与关键 E2E 文件是否就绪 | `bun run test:preflight [-- --mode all]` |
 | `cleanup-debug-artifacts.mjs` | 清理未跟踪调试产物（`.playwright-cli`、`playwright-report`、`test-results`、常见调试日志） | `bun run cleanup:artifacts` |

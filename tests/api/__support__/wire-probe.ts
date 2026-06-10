@@ -2,8 +2,10 @@
  * 线缆探针（ApiClient 拆分审计 · 金 master 可重复 harness 支撑层）
  *
  * 纯支撑模块（不含 vitest 断言）：导出
- *   - REGISTRY：当前 apiClient 全部 99 个业务方法的「规范入参」清单
- *               （18 基类 + 81 命名空间；与 pre-#536 单体 client 逐方法对应）
+ *   - REGISTRY：当前 apiClient 全部业务方法的「规范入参」清单（基类 + 命名空间；
+ *               与 pre-#536 单体 client 逐方法对应。计数对账由
+ *               scripts/api-wire-conservation.mjs 把关；**新增方法**走该脚本的
+ *               POST_SPLIT_ADDITIONS 登记 + 在此补条目 + UPDATE_GOLDEN=1 重生 golden）
  *   - serializeCall：把一次 fetch 调用归一化成稳定的线缆签名
  *   - FAR_FUTURE_JWT：探测期注入的恒不过期 token（让 auth 字段确定）
  *
@@ -46,10 +48,11 @@ export const FAR_FUTURE_JWT = `h.${btoa(JSON.stringify({ exp: 9999999999 }))}.s`
 const NO_ARGS = () => [];
 
 /**
- * 当前 apiClient 全量业务方法注册表（99 = 18 基类 + 81 命名空间）。
+ * 当前 apiClient 全量业务方法注册表（条数对账见守恒脚本，不在注释里硬编码计数）。
  *
- * 与 tests/api/__golden__/pre536-business-methods.json 的 99 个 pre-#536 方法
- * 一一对应（命名空间方法在迁移中被重命名，故按「域 + 语义」对应，非按名）。
+ * 与 tests/api/__golden__/pre536-business-methods.json 的 pre-#536 方法
+ * 一一对应（命名空间方法在迁移中被重命名，故按「域 + 语义」对应，非按名）；
+ * 拆分后合法新增的方法同时登记在守恒脚本 POST_SPLIT_ADDITIONS。
  */
 export const REGISTRY: RegistryEntry[] = [
   // ── 基类保留（18）：会话生命周期 + 核心查询 + 未建域残渣 ──
