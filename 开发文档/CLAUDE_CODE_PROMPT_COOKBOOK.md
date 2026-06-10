@@ -149,7 +149,7 @@ src/hooks/useTruckAnalysis.ts - Parameter 'data' implicitly has an 'any' type
 
 **已知信息**：
 - CI 环境通过 `E2E_USERNAME` / `E2E_PASSWORD` 环境变量传入凭据
-- 正确凭据：admin / CxAdmin@2026!（不是 admin123）
+- 正确凭据：admin / <在凭据库/E2E_PASSWORD 环境变量中获取>
 - 后端可能未完全就绪时前端已开始测试
 
 **排查方向**：

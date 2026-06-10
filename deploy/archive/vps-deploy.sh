@@ -820,7 +820,7 @@ BACKUPEOF
   echo "===================================================="
   echo ""
   echo -e "${GREEN}访问地址：${NC}https://${DOMAIN}"
-  echo -e "${GREEN}登录账号：${NC}admin / admin123"
+  echo -e "${GREEN}登录账号：${NC}admin / <在凭据库/E2E_PASSWORD 环境变量中获取>"
   echo ""
   echo -e "${YELLOW}下一步操作：${NC}"
   echo "  1. 在腾讯云安全组删除端口 3000 规则（禁止外网访问后端）"
