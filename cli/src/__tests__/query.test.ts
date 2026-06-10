@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseExtraParams, resolveTarget } from '../commands/query.js';
+import { describe, it, expect, vi } from 'vitest';
+import { parseExtraParams, resolveTarget, resolveWithRefresh } from '../commands/query.js';
 import { applyPathParams } from '../path-params.js';
 
 describe('parseExtraParams', () => {
@@ -40,6 +40,50 @@ describe('resolveTarget', () => {
 
   it('非 path 且 catalog 无匹配 → null', () => {
     expect(resolveTarget('nonexistent', routes)).toBeNull();
+  });
+});
+
+describe('resolveWithRefresh（缓存未命中自动刷新）', () => {
+  const staleRoutes = [{ key: 'KPI', path: '/kpi', fullPath: '/api/query/kpi' }];
+  const freshRoutes = [
+    ...staleRoutes,
+    { key: 'NEW_ROUTE', path: '/new-route', fullPath: '/api/query/new-route' },
+  ];
+
+  it('首次命中 → 不触发刷新', async () => {
+    const fetch = vi.fn().mockResolvedValue(staleRoutes);
+    const { route, refreshed } = await resolveWithRefresh('KPI', fetch);
+    expect(route?.fullPath).toBe('/api/query/kpi');
+    expect(refreshed).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(false);
+  });
+
+  it('缓存 miss、强制刷新后命中（新路由上线场景）', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(staleRoutes)
+      .mockResolvedValueOnce(freshRoutes);
+    const { route, refreshed } = await resolveWithRefresh('new-route', fetch);
+    expect(route?.fullPath).toBe('/api/query/new-route');
+    expect(refreshed).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenNthCalledWith(2, true);
+  });
+
+  it('刷新后仍 miss → route 为 null 且标记已刷新', async () => {
+    const fetch = vi.fn().mockResolvedValue(staleRoutes);
+    const { route, refreshed } = await resolveWithRefresh('nonexistent', fetch);
+    expect(route).toBeNull();
+    expect(refreshed).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('/ 开头 path 直通永远命中 → 不触发刷新', async () => {
+    const fetch = vi.fn().mockResolvedValue(staleRoutes);
+    const { route, refreshed } = await resolveWithRefresh('/repair/overview', fetch);
+    expect(route?.fullPath).toBe('/api/query/repair/overview');
+    expect(refreshed).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 

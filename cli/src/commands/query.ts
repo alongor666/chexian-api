@@ -32,13 +32,13 @@ interface RouteTarget {
 
 export async function queryCommand(rawKey: string, opts: QueryOpts): Promise<void> {
   try {
-    const routes = await fetchCatalog();
-    const route = resolveTarget(rawKey, routes);
+    const { route, refreshed } = await resolveWithRefresh(rawKey, fetchCatalog);
     if (!route) {
       console.error(kleur.red(`✘ Unknown route: ${rawKey}`));
-      console.error(kleur.gray('  运行 "cx routes" 查看可用路由，或用 / 开头的 path 直通（如 cx query /kpi）。'));
+      console.error(kleur.gray('  已刷新 route-catalog 缓存仍未找到。运行 "cx routes" 查看可用路由，或用 / 开头的 path 直通（如 cx query /kpi）。'));
       process.exit(EXIT.USAGE);
     }
+    if (refreshed) note(kleur.gray('(本地缓存未命中，已自动刷新 route-catalog)'));
 
     const { resolvedPath, restArgs } = applyPathParams(route.fullPath, opts.params);
     const data = await cxGet<unknown>(resolvedPath, { query: restArgs, timeoutMs: opts.timeoutMs });
@@ -53,6 +53,22 @@ export async function queryCommand(rawKey: string, opts: QueryOpts): Promise<voi
   } catch (err) {
     failWith(err);
   }
+}
+
+/**
+ * 解析失败时强制刷新 catalog 缓存再试一次（消除"新路由上线后 24h 缓存盲区"）。
+ * / 开头的 path 直通在 resolveTarget 内永远命中，不会触发刷新。
+ */
+export async function resolveWithRefresh(
+  rawKey: string,
+  fetch: (forceRefresh?: boolean) => Promise<RouteTarget[]>,
+): Promise<{ route: RouteTarget | null; refreshed: boolean }> {
+  const cached = await fetch(false);
+  const hit = resolveTarget(rawKey, cached);
+  if (hit) return { route: hit, refreshed: false };
+
+  const fresh = await fetch(true);
+  return { route: resolveTarget(rawKey, fresh), refreshed: true };
 }
 
 /** key 宽容匹配 → catalog path 匹配 → / 开头 path 直通 */

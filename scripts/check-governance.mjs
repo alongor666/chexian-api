@@ -2034,7 +2034,89 @@ function checkQueryCatalogConsistency() {
     return false;
   }
 
-  success(`QueryCatalog 对账通过（${mounted.size} 个挂载端点与 catalog 一一对应）`);
+  // ── 三方对账：QUERY_ROUTES 常量 ↔ 实挂载端点（挂载 ↔ catalog 已在上方双向对账）──
+  // 已知"常量先行、服务端未实现"豁免清单；实现挂载后必须从此清单移除（下方陈旧校验强制）
+  const knownUnimplemented = new Set([
+    // repair v2 八端点（BACKLOG 2026-06-10-claude-807f41）
+    '/repair/channel', '/repair/city', '/repair/coop-tier', '/repair/diversion-list',
+    '/repair/local-resource', '/repair/orphan-shops', '/repair/scatter', '/repair/to-premium',
+  ]);
+  const apiRoutesSrc = fs.readFileSync(path.join(ROOT_DIR, 'server/src/config/api-routes.ts'), 'utf-8');
+  const qrStart = apiRoutesSrc.indexOf('export const QUERY_ROUTES');
+  const braceStart = apiRoutesSrc.indexOf('{', qrStart);
+  let depth = 0;
+  let braceEnd = braceStart;
+  for (let i = braceStart; i < apiRoutesSrc.length; i++) {
+    if (apiRoutesSrc[i] === '{') depth++;
+    else if (apiRoutesSrc[i] === '}') { depth--; if (depth === 0) { braceEnd = i; break; } }
+  }
+  const constants = new Set(
+    [...apiRoutesSrc.slice(braceStart, braceEnd).matchAll(/'(\/[^']*)'/g)].map((m) => m[1])
+  );
+
+  // 参数化路由归一：挂载 '/patrol/:domain' 归一到基路径 '/patrol' 与常量对应
+  const paramBase = (p) => (p.includes('/:') ? p.slice(0, p.indexOf('/:')) : p);
+  const mountedBases = new Set([...mounted].map(paramBase));
+
+  const constGhosts = [...constants]
+    .filter((p) => !exempt.has(p) && !mounted.has(p) && !mountedBases.has(p) && !knownUnimplemented.has(p))
+    .sort();
+  const mountedOrphans = [...mounted]
+    .filter((p) => !constants.has(p) && !constants.has(paramBase(p)))
+    .sort();
+  const staleExemptions = [...knownUnimplemented].filter((p) => mounted.has(p)).sort();
+
+  if (constGhosts.length > 0 || mountedOrphans.length > 0 || staleExemptions.length > 0) {
+    if (constGhosts.length > 0) {
+      error(`QUERY_ROUTES 常量声明了未挂载的端点（前端/CLI 引用会 404）= ${constGhosts.length} 条：`);
+      for (const p of constGhosts) console.log(`    - ${p}`);
+      console.log('    修复：实现服务端路由，或暂未实现则登记 BACKLOG 后加入本检查的 knownUnimplemented 豁免');
+    }
+    if (mountedOrphans.length > 0) {
+      error(`已挂载端点缺少 QUERY_ROUTES 常量（前端无法类型安全引用）= ${mountedOrphans.length} 条：`);
+      for (const p of mountedOrphans) console.log(`    - ${p}`);
+      console.log('    修复：在 server/src/config/api-routes.ts 补常量（前端镜像 src/shared/api/routes.ts 同步）');
+    }
+    if (staleExemptions.length > 0) {
+      error(`knownUnimplemented 豁免已陈旧（端点已实现挂载）= ${staleExemptions.length} 条：`);
+      for (const p of staleExemptions) console.log(`    - ${p}`);
+      console.log('    修复：从 checkQueryCatalogConsistency 的 knownUnimplemented 清单移除');
+    }
+    return false;
+  }
+
+  // ── 参数幽灵检测：catalog 登记的参数名必须真实出现在服务端代码中（粗对账，抓拼写错误/废弃改名）──
+  const corpusDirs = ['server/src/routes/query', 'server/src/utils', 'server/src/sql', 'server/src/middleware'];
+  let corpus = '';
+  for (const d of corpusDirs) {
+    (function collect(dir) {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== '__tests__') collect(full);
+        } else if (entry.name.endsWith('.ts')) {
+          corpus += fs.readFileSync(full, 'utf-8');
+        }
+      }
+    })(path.join(ROOT_DIR, d));
+  }
+  const paramNames = new Set([...metaSrc.matchAll(/name:\s*'([^']+)'/g)].map((m) => m[1]));
+  const snake2camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+  const camel2snake = (s) => s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const ghostParams = [...paramNames]
+    .filter((n) => ![n, snake2camel(n), camel2snake(n)].some((v) => new RegExp(`\\b${escapeRe(v)}\\b`).test(corpus)))
+    .sort();
+
+  if (ghostParams.length > 0) {
+    error(`route-catalog 登记了服务端代码中不存在的参数名（疑似拼写错误或已废弃）= ${ghostParams.length} 个：`);
+    for (const n of ghostParams) console.log(`    - ${n}`);
+    console.log(`    搜索域：${corpusDirs.join(' + ')}（含 snake/camel 变体）`);
+    console.log('    修复：更正 query-routes-metadata.ts 中的参数名，或确认服务端确有该参数后调整搜索域');
+    return false;
+  }
+
+  success(`QueryCatalog 对账通过（${mounted.size} 个挂载端点 ↔ catalog ↔ QUERY_ROUTES 常量三方一致；${paramNames.size} 个登记参数无幽灵）`);
   return true;
 }
 
