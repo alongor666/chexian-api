@@ -636,6 +636,27 @@ import {
 
 **趋势颜色**：`className={getTrendColorClass(changeValue, 'positive')}` 正向指标（涨绿跌红），`'negative'` 反向指标（涨红跌绿）。
 
+### UI 审查评分基准（供 /chexian-ui-review 命令参照）
+
+评分维度共 6 项：视觉设计 / 交互设计 / 布局与结构 / 响应式设计 / 可访问性 / 性能与体验。
+
+| 等级 | 分数范围 | 含义 |
+|------|---------|------|
+| 优秀 | 90-100 分 | 符合设计规范，视觉统一，无明显问题 |
+| 良好 | 75-89 分 | 大部分符合，有少量不一致 |
+| 需改进 | 60-74 分 | 存在明显的视觉或交互问题 |
+| 不合格 | < 60 分 | 严重违反设计原则，必须修复后才能上线 |
+
+间距体系（来源：`src/shared/styles/index.ts` `spacing` 对象，4px 基准网格）：
+
+| 名称 | 值 | 典型用途 |
+|------|-----|---------|
+| xs | 4px (0.25rem) | 徽章内边距、图标与文字间隙 |
+| sm | 8px (0.5rem) | 列表项、按钮组 |
+| md | 16px (1rem) | 卡片内边距、标准间距（注：chexian-ui-review 旧文档写 12px 为三档，实际 index.ts 无独立 12px 档位） |
+| lg | 24px (1.5rem) | 区域间距、卡片间距 |
+| xl | 32px (2rem) | 模块间距 |
+
 ---
 
 > **文件关系**：`DESIGN.md`（本文件）是 AI Agent 设计入口 → `src/shared/styles/index.ts` 是运行时唯一事实源 → `src/app/index.css` 是 CSS 变量定义 → `.claude/rules/design-tokens.md` 已废弃，由本文件替代。
