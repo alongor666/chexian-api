@@ -79,8 +79,9 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   liangqin: {
     username: 'liangqin',
-    // 初始密码: Tf7C8KQ7142（管理员可见，请分发后提醒用户修改）
-    passwordHash: '$2b$10$PCmiRIqjJrZyapvmUcISs.Q63n9kJWVG017tYxoHlQWe/Gyql.VIi',
+    // tombstone 占位（不可登录）：凭据仅由 USER_PASSWORDS 环境变量提供。
+    // 旧明文初始密码已于 2026-06-09 轮换，此处不再保留任何可用哈希。
+    passwordHash: '$2b$10$Z01ljSK8Is7iUKzuUxVXcekwmS3tuJ48.4dQbY0CZ3fQB88ypcy4u',
     displayName: '天府机构-梁琴',
     role: 'org_user',
     organization: '天府',
