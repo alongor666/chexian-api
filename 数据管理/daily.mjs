@@ -115,6 +115,9 @@ function ls(pattern, dir = '.') {
   const regex = new RegExp('^' + escaped.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
   return readdirSync(absDir)
     .filter(f => regex.test(f))
+    // 浏览器重复下载残留（`xxx (1).xlsx`）一律不入 ETL —— FineBI/Chrome 在输出目录的
+    // 原始残留与正式导出文件同名异本，混入会双倍计入（2026-06-10 上游交接 §4）
+    .filter(f => !/\s?\(\d+\)\.xlsx$/i.test(f))
     .map(f => ({ name: f, path: join(absDir, f) }))
     .sort((a, b) => b.name.localeCompare(a.name));
 }
@@ -920,8 +923,18 @@ function runPeriodTrendReport(scriptDir, python) {
 }
 
 async function syncToVps(scriptDir) {
-  log('cyan', '[ETL] 自动同步到 VPS（仅 rsync，不重启 PM2）...');
   const projectRoot = dirname(scriptDir);
+  // worktree 守卫：linked worktree 的 .git 是文件（gitdir 指针）而非目录。
+  // staging/实验性 ETL 在 worktree 中运行时禁止把数据自动推到生产 VPS
+  // （2026-06-09 staging 重建曾意外触发自动同步，幸数据已验收一致才无事故）。
+  try {
+    const gitPath = join(projectRoot, '.git');
+    if (existsSync(gitPath) && statSync(gitPath).isFile()) {
+      log('yellow', '⚠ 检测到 git worktree（.git 为文件），跳过 VPS 自动同步；如需同步请在主目录运行或手动执行 scripts/sync-vps.mjs');
+      return false;
+    }
+  } catch (e) { /* 探测失败时不阻塞主目录正常同步 */ }
+  log('cyan', '[ETL] 自动同步到 VPS（仅 rsync，不重启 PM2）...');
   const syncScript = join(projectRoot, 'scripts/sync-vps.mjs');
   try {
     // --no-restart：daily.mjs 只负责数据同步，不触发 PM2 restart
@@ -1066,26 +1079,41 @@ function runClaimsDetail(python, scriptDir) {
     : null;
 
   // 查找赔案明细 xlsx（支持多文件合并，新命名优先）
+  // 2026-06-10 上游 BI 清单重构：理赔编号 02 → 05，且基线为日期范围前缀文件
+  // （YYYYMMDD-YYYYMMDD_05_理赔明细.xlsx）；旧 02 模式保留向后兼容
   const newFiles = [
     ...ls('02_理赔明细_*.xlsx', scriptDir),
     ...ls('????????_02_理赔明细*.xlsx', scriptDir),
+    ...ls('????????_05_理赔明细*.xlsx', scriptDir),
+    ...ls('????????-????????_0?_理赔明细*.xlsx', scriptDir),
   ].sort((a, b) => a.name.localeCompare(b.name));
   const legacyFiles = ls('车险报立结案清单_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
   let sourceFiles = manifestFiles || [...newFiles, ...legacyFiles];
   if (sourceFiles.length === 0) {
-    log('yellow', '⚠ 未找到 02_理赔明细_*.xlsx / ????????_02_理赔明细*.xlsx 或 车险报立结案清单_*.xlsx，跳过');
+    log('yellow', '⚠ 未找到 02/05_理赔明细 xlsx（含 YYYYMMDD-YYYYMMDD_ 范围前缀）或 车险报立结案清单_*.xlsx，跳过');
     return;
   }
   // 自动归档与最新全量文件覆盖区间冲突的旧文件（与签单清单一致的护栏）
   // 上游切换到 _YYYYMMDD_YYYYMMDD 全量格式时，旧增量/前缀文件需归档，否则 concat 双倍计入。
   if (!manifestFiles) {
-    // 全量文件名格式：02_理赔明细_报案时间YYYYMMDD_YYYYMMDD.xlsx
-    // 第一个日期紧跟「报案时间」（无下划线），第二个日期前才是下划线
-    const FULL_RE = /^02_理赔明细.*?(\d{8})_(\d{8})\.xlsx?$/i;
+    // 全量文件名格式（两代并存）：
+    //   旧：02_理赔明细_报案时间YYYYMMDD_YYYYMMDD.xlsx（第一个日期紧跟「报案时间」）
+    //   新：YYYYMMDD-YYYYMMDD_05_理赔明细.xlsx（2026-06-10 起范围前缀 + 编号 05）
+    const FULL_RES = [
+      /^02_理赔明细.*?(\d{8})_(\d{8})\.xlsx?$/i,
+      /^(\d{8})-(\d{8})_\d{2}_理赔明细.*\.xlsx?$/i,
+    ];
+    const matchFull = name => {
+      for (const re of FULL_RES) {
+        const m = name.match(re);
+        if (m) return m;
+      }
+      return null;
+    };
     // 收集所有全量文件并按 end 日期降序排序，取 end 最大者作为「当前最新全量」
     // 避免按文件名升序取到较旧全量、把较新全量误归档
     const fullCandidates = sourceFiles
-      .map(f => ({ f, m: f.name.match(FULL_RE) }))
+      .map(f => ({ f, m: matchFull(f.name) }))
       .filter(x => x.m)
       .sort((a, b) => b.m[2].localeCompare(a.m[2]));
     if (fullCandidates.length > 0) {
@@ -1094,8 +1122,8 @@ function runClaimsDetail(python, scriptDir) {
       const fullEnd = fullCandidates[0].m[2];
       const conflicting = sourceFiles.filter(f => {
         if (f.name === fullFile.name) return false;
-        // 不归档其他全量文件本身（保留历史快照），仅归档增量/前缀
-        if (FULL_RE.test(f.name)) return false;
+        // 不归档其他全量文件本身（保留历史快照/历史分段），仅归档增量/前缀
+        if (matchFull(f.name)) return false;
         const days = f.name.match(/(\d{8})/g);
         if (!days) return false;
         return days.some(d => d >= fullStart && d <= fullEnd);
@@ -1393,16 +1421,56 @@ async function main() {
     log('yellow', '⚠ 未找到续保源文件，将跳过续保业务类型匹配');
   }
 
-  // 2. 识别所有 xlsx 分片（新格式 + 旧格式 + 剔摩/限摩 + 新前缀 YYYYMMDD_01_*）
+  // 2. 识别所有 xlsx 分片（新格式 + 旧格式 + 剔摩/限摩 + 新前缀 YYYYMMDD_01_* + 范围前缀 YYYYMMDD-YYYYMMDD_01_*）
   const legacyXlsx = ls('每日数据_*.xlsx', scriptDir);
   const newFormatXlsx = [
     ...ls('01_签单清单_*.xlsx', scriptDir),
     ...ls('????????_01_签单清单*.xlsx', scriptDir),
-  ];
-  const allXlsx = [...legacyXlsx, ...newFormatXlsx];
+    ...ls('????????-????????_01_签单清单*.xlsx', scriptDir),
+  ].filter(f => {
+    // FineBI/Chrome 原始残留（无日期前缀、日期挂尾，如 01_签单清单_定稿_20260608.xlsx）
+    // 与官方范围前缀文件同源但未经导出验收，禁止入 ETL（2026-06-10 上游交接 §4）
+    if (/^01_签单清单_定稿_\d{8}/.test(f.name)) {
+      log('yellow', `⚠ 跳过 FineBI 残留文件（无日期前缀）: ${f.name}`);
+      return false;
+    }
+    return true;
+  });
+  let allXlsx = [...legacyXlsx, ...newFormatXlsx];
   if (allXlsx.length === 0) {
-    log('red', '❌ 未找到任何签单清单 xlsx 文件（每日数据_*.xlsx / 01_签单清单_*.xlsx / ????????_01_签单清单*.xlsx）');
+    log('red', '❌ 未找到任何签单清单 xlsx 文件（每日数据_*.xlsx / 01_签单清单_*.xlsx / ????????_01_签单清单*.xlsx / ????????-????????_01_签单清单*.xlsx）');
     process.exit(1);
+  }
+
+  // 范围前缀分片互斥守卫：同一 start 的多个范围文件只保留 end 最新者，其余自动归档。
+  // 上游每日重导「20260601-<最新>_01_签单清单_定稿.xlsx」时，旧短窗文件与新文件并存
+  // 会在 current/ 形成重叠分片、保费双倍计入。
+  {
+    const RANGE_RE = /^(\d{8})-(\d{8})_01_签单清单.*\.xlsx$/i;
+    const byStart = new Map();
+    for (const f of allXlsx) {
+      const m = f.name.match(RANGE_RE);
+      if (!m) continue;
+      if (!byStart.has(m[1])) byStart.set(m[1], []);
+      byStart.get(m[1]).push({ f, end: m[2] });
+    }
+    const losers = [];
+    for (const list of byStart.values()) {
+      if (list.length < 2) continue;
+      list.sort((a, b) => b.end.localeCompare(a.end));
+      losers.push(...list.slice(1).map(x => x.f));
+    }
+    if (losers.length > 0) {
+      const rangeArchiveDir = join(scriptDir, '.xlsx-archive', formatDate());
+      ensureDir(rangeArchiveDir);
+      log('yellow', `📦 范围分片互斥：归档 ${losers.length} 个被更长窗口覆盖的旧范围 xlsx`);
+      for (const f of losers) {
+        renameSync(f.path, join(rangeArchiveDir, f.name));
+        log('yellow', `   ${f.name} → .xlsx-archive/${formatDate()}/`);
+      }
+      const loserNames = new Set(losers.map(f => f.name));
+      allXlsx = allXlsx.filter(f => !loserNames.has(f.name));
+    }
   }
 
   // iCloud placeholder 体检：未下载的 iCloud 文件在 cp 后可能为 0 字节占位 → ETL 必败
@@ -1505,7 +1573,7 @@ async function main() {
 
   for (const file of shards.weekly) {
     const range = extractDateRange(file.name);
-    const isNewFormat = file.name.startsWith('01_签单清单_') || /^\d{8}_01_签单清单/.test(file.name);
+    const isNewFormat = file.name.startsWith('01_签单清单_') || /^\d{8}(-\d{8})?_01_签单清单/.test(file.name);
 
     // 新格式：保留原始名称（如 01_签单清单_剔摩_24年至.parquet），支持多文件共存
     // 旧格式：使用日期范围命名（如 每日数据_20240101_20260409.parquet）
@@ -1513,6 +1581,20 @@ async function main() {
       ? file.name.replace(/\.xlsx$/i, '.parquet')
       : `每日数据_${range.start}_${range.end}.parquet`;
     const outputPath = join(currentDir, outputName);
+
+    // 范围前缀分片：归档 current/ 中同 start 不同 end 的旧范围 parquet（防重叠双倍计入）
+    // 放在缓存检测之前，保证即使本文件缓存命中也清掉历史残留分片
+    const rangeM = file.name.match(/^(\d{8})-(\d{8})_01_签单清单.*\.xlsx$/i);
+    if (rangeM && existsSync(currentDir)) {
+      const staleRange = readdirSync(currentDir).filter(f =>
+        f.endsWith('.parquet') && f !== outputName
+        && new RegExp(`^${rangeM[1]}-\\d{8}_01_签单清单`).test(f));
+      for (const old of staleRange) {
+        const archivedName = `${old.replace('.parquet', '')}_${formatDateTime()}.parquet`;
+        renameSync(join(currentDir, old), join(archiveDir, archivedName));
+        log('yellow', `📦 归档旧范围分片: ${old} → ${archivedName}`);
+      }
+    }
 
     // 新格式用缓存检测（xlsx 没变就跳过），旧格式每次重新转换
     if (isNewFormat && !isCacheStale(file.path, outputPath)) {

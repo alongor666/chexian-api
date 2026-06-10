@@ -10,6 +10,13 @@ describe('formatDate', () => {
 });
 
 describe('extractDateRange', () => {
+  it('范围前缀格式 YYYYMMDD-YYYYMMDD_（2026-06-10 上游 BI 清单重构）', () => {
+    expect(extractDateRange('20240101-20250531_01_签单清单_定稿.xlsx'))
+      .toEqual({ start: '20240101', end: '20250531' });
+    expect(extractDateRange('20210101-20231231_05_理赔明细.xlsx'))
+      .toEqual({ start: '20210101', end: '20231231' });
+  });
+
   it('新前缀单日格式 YYYYMMDD_NN_ → start==end', () => {
     expect(extractDateRange('20260426_01_签单清单.xlsx')).toEqual({ start: '20260426', end: '20260426' });
   });
@@ -69,6 +76,20 @@ describe('getShardType', () => {
 
   it('既非静态也非周起始 → daily', () => {
     expect(getShardType('每日数据_20250215_20260407.xlsx', config)).toBe('daily');
+  });
+
+  it('范围前缀文件：满期段归 static', () => {
+    expect(getShardType('20210101-20231231_01_签单清单_定稿.xlsx', config)).toBe('static');
+  });
+
+  it('范围前缀文件：start 非 weekly_start 也归 weekly（不进 daily/staging）', () => {
+    // 与旧规则（start ≠ weekly_start → daily）的关键差异：范围基线分片必须落 current/
+    expect(getShardType('20250601-20260531_01_签单清单_定稿.xlsx', config)).toBe('weekly');
+    expect(getShardType('20260601-20260608_01_签单清单_定稿.xlsx', config)).toBe('weekly');
+  });
+
+  it('范围前缀文件：start === weekly_start 归 weekly', () => {
+    expect(getShardType('20250101-20260531_01_签单清单_定稿.xlsx', config)).toBe('weekly');
   });
 
   it('无法识别日期 → null', () => {

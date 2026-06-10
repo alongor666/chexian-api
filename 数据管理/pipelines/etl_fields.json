@@ -56,7 +56,9 @@
     "交强险NCD",
     "商业险NCD",
     "高速风险等级",
-    "车险分分数"
+    "车险分分数",
+    "上年承保主体",
+    "次年保险公司"
   ],
   "cn_to_en_mapping": {
     "保单号": "policy_no",
@@ -111,6 +113,8 @@
     "交强险NCD": "compulsory_ncd",
     "商业险NCD": "commercial_ncd",
     "高速风险等级": "highway_risk_level",
-    "车险分分数": "insurance_score"
+    "车险分分数": "insurance_score",
+    "上年承保主体": "previous_insurer",
+    "次年保险公司": "next_insurer"
   }
 }
