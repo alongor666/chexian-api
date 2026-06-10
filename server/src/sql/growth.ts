@@ -7,6 +7,7 @@
  * - growth/mom.ts           — 环比增长率查询
  * - growth/ytd.ts           — 年累计增长率查询
  * - growth/custom.ts        — 自定义比较 + 综合查询 + 预设配置
+ * - growth/dual-metric.ts   — 双指标（保费 + 件数）自定义期间对比
  *
  * 此文件保持所有原始导出，调用方零改动。
  */
@@ -16,3 +17,4 @@ export * from './growth/yoy.js';
 export * from './growth/mom.js';
 export * from './growth/ytd.js';
 export * from './growth/custom.js';
+export * from './growth/dual-metric.js';

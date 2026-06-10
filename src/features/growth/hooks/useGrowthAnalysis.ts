@@ -325,16 +325,25 @@ export function useGrowthAnalysis() {
   const analyzeCustomPeriod = useCallback(async (
     currentPeriod: { startDate: string; endDate: string },
     baselinePeriod: { startDate: string; endDate: string },
-    _metric: string = 'SUM(premium)',
-    _groupBy?: string[],
+    metric: string = 'SUM(premium)',
+    groupBy?: string[],
     additionalFilterParams?: Record<string, string>
   ) => {
+    // growthType=custom 强制走自定义期间比较（currentPeriod vs baselinePeriod），
+    // 并把 metric（保费/件数视角）与 groupBy（按机构/业务员）传给后端，
+    // 否则后端会退化为默认 yoy 月度序列且不分组。关键参数置于 additionalFilterParams
+    // 之后，避免被筛选参数意外覆盖。
     return await fetchGrowthFromApi(
       currentPeriod.startDate,
       currentPeriod.endDate,
       baselinePeriod.startDate,
       baselinePeriod.endDate,
-      additionalFilterParams,
+      {
+        ...additionalFilterParams,
+        growthType: 'custom',
+        metric,
+        ...(groupBy && groupBy.length > 0 ? { groupBy: groupBy.join(',') } : {}),
+      },
     );
   }, [fetchGrowthFromApi]);
 

@@ -9,12 +9,34 @@ import {
 import {
   generateGrowthQuery,
   generateDailyGrowthWithContextQuery,
+  generateDualMetricComparisonQuery,
   GrowthConfig,
   GrowthType,
   TimeView as GrowthTimeView,
 } from '../../sql/growth.js';
 
 const router = Router();
+
+/**
+ * 允许的分组维度白名单（安全：groupBy 字段会直接拼入 GROUP BY，禁止透传任意字段名）
+ * 当前前端对比页仅支持「按机构 / 按业务员」，对应字段如下。
+ */
+const GROWTH_GROUPBY_DIMENSIONS = ['org_level_3', 'salesman_name'] as const;
+
+/**
+ * 解析并白名单校验 groupBy（CSV → string[]）。
+ * 任一字段不在白名单 → 抛 400（防 SQL 注入 + 明确报错）。
+ */
+function parseGroupBy(raw: string | undefined): string[] {
+  if (!raw) return [];
+  const dims = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  for (const d of dims) {
+    if (!(GROWTH_GROUPBY_DIMENSIONS as readonly string[]).includes(d)) {
+      throw new AppError(400, `Invalid groupBy dimension: ${d}`);
+    }
+  }
+  return dims;
+}
 
 /**
  * 增长率分析请求验证Schema
@@ -26,6 +48,10 @@ export const growthExtraSchema = z.object({
   baselineEnd: z.string().optional(),
   referenceYear: z.coerce.number().optional(),
   type: z.string().optional(),
+  // 分组维度（CSV，如 'org_level_3' 或 'salesman_name'）；白名单校验在 parseGroupBy
+  groupBy: z.string().optional(),
+  // 单指标聚合（白名单：保费 / 件数）；不传则由 SQL 生成器默认 SUM(premium)
+  metric: z.enum(['SUM(premium)', 'COUNT(*)']).optional(),
 });
 
 /**
@@ -40,7 +66,8 @@ router.get(
     if (!growthResult.success) {
       throw new AppError(400, growthResult.error.issues[0].message);
     }
-    const { growthType, timeView, baselineStart, baselineEnd, referenceYear, type: queryType } = growthResult.data;
+    const { growthType, timeView, baselineStart, baselineEnd, referenceYear, type: queryType, metric } = growthResult.data;
+    const groupBy = parseGroupBy(growthResult.data.groupBy);
 
     const filterResult = commonFilterSchema.safeParse(req.query);
     if (!filterResult.success) {
@@ -91,6 +118,45 @@ router.get(
       return;
     }
 
+    // dual-metric 类型：双指标（保费 + 件数）自定义期间对比，按 groupBy 维度分组。
+    // 输出 dim_key / current_premium / previous_premium / current_count / previous_count
+    // / premium_growth_rate / count_growth_rate（前端 analyzeDualMetricComparison 消费）。
+    if (queryType === 'dual-metric' && startDate && endDate && baselineStart && baselineEnd) {
+      // 同 daily-context：startDate/endDate 进入 currentPeriod 直接拼 SQL，须校验格式
+      if (
+        !isValidDateFormat(baselineStart) || !isValidDateFormat(baselineEnd) ||
+        !isValidDateFormat(startDate) || !isValidDateFormat(endDate)
+      ) {
+        throw new AppError(400, 'Invalid date format. Expected YYYY-MM-DD');
+      }
+
+      // 日期由 currentPeriod/baselinePeriod 控制，不进入 WHERE
+      const filterParamsNoDates = { ...filterResult.data, startDate: undefined, endDate: undefined };
+      const finalWhereClause = buildWhereFromFilterParams(
+        filterParamsNoDates,
+        req.permissionFilter || '1=1'
+      );
+
+      const config: GrowthConfig = {
+        growthType: 'custom' as GrowthType,
+        timeView: 'daily' as GrowthTimeView,
+        whereClause: finalWhereClause,
+        currentPeriod: { startDate, endDate },
+        baselinePeriod: { startDate: baselineStart, endDate: baselineEnd },
+        // 前端默认按机构；groupBy 为空时兜底 org_level_3（生成器要求至少 1 维）
+        groupBy: groupBy.length > 0 ? groupBy : ['org_level_3'],
+      };
+
+      const sql = generateDualMetricComparisonQuery(config);
+      const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+      return;
+    }
+
     // custom 增长类型：日期由 currentPeriod/baselinePeriod 分别控制，
     // whereClause 中不能包含日期条件，否则会与 baselinePeriod 的日期范围冲突导致基期数据为 0
     const filterParamsForWhere = growthType === 'custom' && baselineStart && baselineEnd
@@ -107,6 +173,10 @@ router.get(
       timeView: timeView as GrowthTimeView,
       whereClause: finalWhereClause,
       referenceYear: referenceYear || new Date().getFullYear(),
+      // 单指标分组：groupBy 为空则退化为整体汇总（生成器 GROUP BY 'all'）
+      groupBy,
+      // metric 仅在前端显式传入时覆盖，否则生成器默认 SUM(premium)
+      ...(metric ? { metric } : {}),
     };
 
     if (growthType === 'custom' && baselineStart && baselineEnd && startDate && endDate) {
