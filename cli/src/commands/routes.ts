@@ -9,6 +9,7 @@ import { cxGet } from '../api.js';
 import { getCachePath } from '../config.js';
 import { failWith } from '../exit-codes.js';
 import { renderOutput, type OutputFormat } from '../output.js';
+import { note } from '../cli-state.js';
 
 export interface RouteMeta {
   key: string;
@@ -89,7 +90,7 @@ export async function routesCommand(opts: {
       for (const r of members) t.push([r.key, r.path, r.summary]);
       console.log(t.toString());
     }
-    console.error(kleur.gray(`(${routes.length} routes; use "cx query <key>" to call)`));
+    note(kleur.gray(`(${routes.length} routes; use "cx query <key>" to call)`));
   } catch (err) {
     failWith(err);
   }

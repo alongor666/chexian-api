@@ -14,7 +14,7 @@ export interface CxConfig {
   tokenId?: string;
 }
 
-const DEFAULT_BASE_URL = 'https://chexian.cretvalu.com';
+export const DEFAULT_BASE_URL = 'https://chexian.cretvalu.com';
 
 function configDir(): string {
   return path.join(os.homedir(), '.chexian');
@@ -22,6 +22,11 @@ function configDir(): string {
 
 function configFile(): string {
   return path.join(configDir(), 'config.json');
+}
+
+/** 配置文件绝对路径（cx config path 用） */
+export function configFilePath(): string {
+  return configFile();
 }
 
 export function loadConfig(): CxConfig {

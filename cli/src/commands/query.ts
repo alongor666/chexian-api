@@ -11,6 +11,7 @@ import { cxGet } from '../api.js';
 import { renderOutput, type OutputFormat } from '../output.js';
 import { failWith, EXIT } from '../exit-codes.js';
 import { applyPathParams } from '../path-params.js';
+import { note } from '../cli-state.js';
 import { fetchCatalog } from './routes.js';
 
 interface QueryOpts {
@@ -45,7 +46,7 @@ export async function queryCommand(rawKey: string, opts: QueryOpts): Promise<voi
 
     let payload = (data as any)?.data ?? data;
     if (opts.limit && opts.limit > 0 && Array.isArray(payload) && payload.length > opts.limit) {
-      console.error(kleur.gray(`(truncated to ${opts.limit} rows, total ${payload.length})`));
+      note(kleur.gray(`(truncated to ${opts.limit} rows, total ${payload.length})`));
       payload = payload.slice(0, opts.limit);
     }
     console.log(renderOutput(payload, fmt));
