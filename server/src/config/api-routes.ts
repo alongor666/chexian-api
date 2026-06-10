@@ -102,6 +102,33 @@ export const QUERY_ROUTES = {
     ORPHAN_SHOPS: '/repair/orphan-shops',
   },
 
+  // 费用率发展
+  EXPENSE_DEVELOPMENT: '/expense-development',
+
+  // 客户来源去向
+  CUSTOMER_FLOW: {
+    SUMMARY: '/customer-flow/summary',
+    INFLOW: '/customer-flow/inflow',
+    OUTFLOW: '/customer-flow/outflow',
+    TREND: '/customer-flow/trend',
+    METADATA: '/customer-flow/metadata',
+  },
+
+  // 赔案明细
+  CLAIMS_DETAIL: {
+    PENDING_OVERVIEW: '/claims-detail/pending-overview',
+    PENDING_BY_ORG: '/claims-detail/pending-by-org',
+    PENDING_AGING: '/claims-detail/pending-aging',
+    CAUSE_ANALYSIS: '/claims-detail/cause-analysis',
+    GEO_ACCIDENT: '/claims-detail/geo-accident',
+    GEO_PLATE: '/claims-detail/geo-plate',
+    GEO_COMPARISON: '/claims-detail/geo-comparison',
+    CLAIM_CYCLE: '/claims-detail/claim-cycle',
+    FREQUENCY_YOY: '/claims-detail/frequency-yoy',
+    LOSS_RATIO_DEV: '/claims-detail/loss-ratio-development',
+    HEATMAP: '/claims-detail/heatmap',
+  },
+
   // 巡检报告
   PATROL: '/patrol',
 

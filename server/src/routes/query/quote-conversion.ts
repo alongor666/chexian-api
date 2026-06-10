@@ -32,7 +32,7 @@ const optionalEnumSchema = <T extends [string, ...string[]]>(values: T) =>
 // 集中式惰性域加载中间件（per MAT-01）：QuoteConversion
 router.use(createDomainMiddleware('QuoteConversion'));
 
-const quoteFilterSchema = z.object({
+export const quoteFilterSchema = z.object({
   dateStart: optionalTextSchema,
   dateEnd: optionalTextSchema,
   renewalType: optionalEnumSchema(['续保', '转保']),

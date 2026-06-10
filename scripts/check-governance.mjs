@@ -1983,6 +1983,136 @@ function checkBundleRoutesGuard() {
   return true;
 }
 
+function checkQueryCatalogConsistency() {
+  info('检查 QueryCatalog 对账（实挂载 GET 端点 vs route-catalog 元数据）...');
+
+  const queryDir = path.join(ROOT_DIR, 'server/src/routes/query');
+  const metaFile = path.join(ROOT_DIR, 'server/src/config/query-routes-metadata.ts');
+  // 豁免：仅本地调试/非对外发现路由
+  const exempt = new Set(['/test']);
+
+  const mounted = new Set();
+  const scanFiles = [];
+  (function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === '__tests__') continue;
+        walk(full);
+      } else if (entry.name.endsWith('.ts')) {
+        scanFiles.push(full);
+      }
+    }
+  })(queryDir);
+  for (const f of scanFiles) {
+    // 剥离块注释与行注释，避免文档示例（如 shared.ts 的 router.get('/path', ...) 用法注释）误匹配
+    const src = fs
+      .readFileSync(f, 'utf-8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    for (const m of src.matchAll(/router\.get\(\s*\n?\s*'(\/[^']+)'/g)) {
+      if (!exempt.has(m[1])) mounted.add(m[1]);
+    }
+  }
+
+  const metaSrc = fs.readFileSync(metaFile, 'utf-8');
+  const catalog = new Set([...metaSrc.matchAll(/path:\s*'(\/[^']+)'/g)].map((m) => m[1]));
+
+  const missingInCatalog = [...mounted].filter((p) => !catalog.has(p)).sort();
+  const ghostInCatalog = [...catalog].filter((p) => !mounted.has(p)).sort();
+
+  if (missingInCatalog.length > 0 || ghostInCatalog.length > 0) {
+    if (missingInCatalog.length > 0) {
+      error(`已挂载但未登记 route-catalog（CLI/MCP 不可发现）= ${missingInCatalog.length} 条：`);
+      for (const p of missingInCatalog) console.log(`    - ${p}`);
+    }
+    if (ghostInCatalog.length > 0) {
+      error(`catalog 登记了不存在的端点 = ${ghostInCatalog.length} 条：`);
+      for (const p of ghostInCatalog) console.log(`    - ${p}`);
+    }
+    console.log('    修复：在 server/src/config/query-routes-metadata.ts 补/删对应 entry（RED LINE：只追加，删除走 BACKLOG）');
+    return false;
+  }
+
+  // ── 三方对账：QUERY_ROUTES 常量 ↔ 实挂载端点（挂载 ↔ catalog 已在上方双向对账）──
+  // 已知"常量先行、服务端未实现"豁免清单；实现挂载后必须从此清单移除（下方陈旧校验强制）
+  const knownUnimplemented = new Set([
+    // repair v2 八端点（BACKLOG 2026-06-10-claude-807f41）
+    '/repair/channel', '/repair/city', '/repair/coop-tier', '/repair/diversion-list',
+    '/repair/local-resource', '/repair/orphan-shops', '/repair/scatter', '/repair/to-premium',
+  ]);
+  const apiRoutesSrc = fs.readFileSync(path.join(ROOT_DIR, 'server/src/config/api-routes.ts'), 'utf-8');
+  const qrStart = apiRoutesSrc.indexOf('export const QUERY_ROUTES');
+  const braceStart = apiRoutesSrc.indexOf('{', qrStart);
+  let depth = 0;
+  let braceEnd = braceStart;
+  for (let i = braceStart; i < apiRoutesSrc.length; i++) {
+    if (apiRoutesSrc[i] === '{') depth++;
+    else if (apiRoutesSrc[i] === '}') { depth--; if (depth === 0) { braceEnd = i; break; } }
+  }
+  const constants = new Set(
+    [...apiRoutesSrc.slice(braceStart, braceEnd).matchAll(/'(\/[^']*)'/g)].map((m) => m[1])
+  );
+
+  // 参数化路由归一：挂载 '/patrol/:domain' 归一到基路径 '/patrol' 与常量对应
+  const paramBase = (p) => (p.includes('/:') ? p.slice(0, p.indexOf('/:')) : p);
+  const mountedBases = new Set([...mounted].map(paramBase));
+
+  const constGhosts = [...constants]
+    .filter((p) => !exempt.has(p) && !mounted.has(p) && !mountedBases.has(p) && !knownUnimplemented.has(p))
+    .sort();
+  const mountedOrphans = [...mounted]
+    .filter((p) => !constants.has(p) && !constants.has(paramBase(p)))
+    .sort();
+  const staleExemptions = [...knownUnimplemented].filter((p) => mounted.has(p)).sort();
+
+  if (constGhosts.length > 0 || mountedOrphans.length > 0 || staleExemptions.length > 0) {
+    if (constGhosts.length > 0) {
+      error(`QUERY_ROUTES 常量声明了未挂载的端点（前端/CLI 引用会 404）= ${constGhosts.length} 条：`);
+      for (const p of constGhosts) console.log(`    - ${p}`);
+      console.log('    修复：实现服务端路由，或暂未实现则登记 BACKLOG 后加入本检查的 knownUnimplemented 豁免');
+    }
+    if (mountedOrphans.length > 0) {
+      error(`已挂载端点缺少 QUERY_ROUTES 常量（前端无法类型安全引用）= ${mountedOrphans.length} 条：`);
+      for (const p of mountedOrphans) console.log(`    - ${p}`);
+      console.log('    修复：在 server/src/config/api-routes.ts 补常量（前端镜像 src/shared/api/routes.ts 同步）');
+    }
+    if (staleExemptions.length > 0) {
+      error(`knownUnimplemented 豁免已陈旧（端点已实现挂载）= ${staleExemptions.length} 条：`);
+      for (const p of staleExemptions) console.log(`    - ${p}`);
+      console.log('    修复：从 checkQueryCatalogConsistency 的 knownUnimplemented 清单移除');
+    }
+    return false;
+  }
+
+  // 参数级对账由「RouteCatalog参数契约」检查接管（per-route 强对账，
+  // 见 scripts/route-catalog/validate-params.ts）。曾在此处的全局搜索域
+  // 幽灵检测因 snake/camel 变体宽容会掩盖真实命名漂移，已被取代删除。
+  success(`QueryCatalog 对账通过（${mounted.size} 个挂载端点 ↔ catalog ↔ QUERY_ROUTES 常量三方一致）`);
+  return true;
+}
+
+function checkRouteCatalogParamContracts() {
+  info('检查 RouteCatalog 参数契约（catalog 登记参数 ⊆ 运行时 zod/解析代码真实参数，per-route）...');
+  try {
+    const out = execFileSync('bun', ['scripts/route-catalog/validate-params.ts'], {
+      cwd: ROOT_DIR,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    success(out.trim().replace(/^✓\s*/, ''));
+    return true;
+  } catch (err) {
+    const stderr = err.stderr?.toString() ?? '';
+    const stdout = err.stdout?.toString() ?? '';
+    error('RouteCatalog 参数契约对账失败：');
+    for (const line of (stderr + stdout).split('\n').filter(Boolean)) console.log(`  ${line}`);
+    console.log('    修复：对齐 query-routes-metadata.ts 与 route-param-contracts.ts（参数名以运行时 schema 为准）');
+    console.log('    前置：server 依赖已安装（bun install --cwd server）');
+    return false;
+  }
+}
+
 // ============================================================
 // 主函数
 // ============================================================
@@ -2037,6 +2167,8 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
   { name: '空catch禁令', fn: checkEmptyCatchBlocks },
   { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },
+  { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
+  { name: 'RouteCatalog参数契约', fn: checkRouteCatalogParamContracts },
 ];
 
 /**

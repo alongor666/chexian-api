@@ -49,4 +49,25 @@ describe('routeToTool', () => {
     const noReq: RouteMeta = { ...sampleRoute, parameters: [{ name: 'a', type: 'string', description: 'x' }] };
     expect(routeToTool(noReq).inputSchema.required).toBeUndefined();
   });
+
+  it('timeWindow 语义注入 description（B290 口径消歧）', () => {
+    const ytd: RouteMeta = {
+      ...sampleRoute, key: 'PLAN_ACHIEVEMENT',
+      timeWindow: 'ytd-progress',
+      timeWindowNote: '达成率 = 实际 ÷ (年计划 × 时间进度)',
+    };
+    const desc = routeToTool(ytd).description;
+    expect(desc).toContain('年度计划进度');
+    expect(desc).toContain('禁止用于回答任意日期窗口的提问');
+    expect(desc).toContain('达成率 = 实际 ÷ (年计划 × 时间进度)');
+  });
+
+  it('缺省 timeWindow（旧服务端）不注入口径提示且不报错', () => {
+    expect(routeToTool(sampleRoute).description).not.toContain('时间口径');
+  });
+
+  it('未知 timeWindow 值不注入提示（向前兼容新枚举）', () => {
+    const unknown: RouteMeta = { ...sampleRoute, timeWindow: 'future-mode' };
+    expect(routeToTool(unknown).description).not.toContain('时间口径');
+  });
 });

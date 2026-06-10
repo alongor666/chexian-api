@@ -83,6 +83,14 @@ export interface MetricTestCase {
 }
 
 /** 指标定义 — 注册表核心条目 */
+/**
+ * 指标固有时间窗口语义（B290 口径消歧，与路由层 RouteTimeWindow 配合）：
+ * - 'any'（缺省）：窗口完全随查询路由的 WHERE 决定，指标本身无固有时间语义
+ * - 'cutoff-based'：指标内嵌观察时点逻辑（满期系数/年化），数值随观察截止日成熟度变化，
+ *   跨窗口比较时必须对齐 cutoff（如满期保费/满期赔付率/年化出险率族）
+ */
+export type MetricTimeWindow = 'any' | 'cutoff-based';
+
 export interface MetricDefinition {
   // ===== 标识 =====
   readonly id: string;             // snake_case 唯一 ID
@@ -92,6 +100,9 @@ export interface MetricDefinition {
   readonly name: string;           // 中文名称
   readonly category: MetricCategory;
   readonly tags: readonly string[];
+
+  // ===== 时间窗口语义（可选，缺省 'any'） =====
+  readonly timeWindow?: MetricTimeWindow;
 
   // ===== 公式 =====
   readonly formula: {

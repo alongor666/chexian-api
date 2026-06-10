@@ -15,7 +15,7 @@ export const granularityMap: Record<string, string> = {
   daily: 'daily', weekly: 'weekly', monthly: 'monthly',
 };
 
-const trendExtraSchema = z.object({
+export const trendExtraSchema = z.object({
   timeView: z.string().optional(),
   granularity: z.string().optional(),
   perspective: z.enum(['premium', 'policy_count']).optional(),

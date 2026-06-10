@@ -19,7 +19,7 @@ const router = Router();
 /**
  * 增长率分析请求验证Schema
  */
-const growthExtraSchema = z.object({
+export const growthExtraSchema = z.object({
   growthType: z.enum(['yoy', 'mom', 'ytd', 'custom']).default('yoy'),
   timeView: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('monthly'),
   baselineStart: z.string().optional(),

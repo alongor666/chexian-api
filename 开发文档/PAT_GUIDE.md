@@ -72,15 +72,24 @@ cd cli && bun run build
 npm link
 ```
 
-使用：
+使用（v0.2.0 全能力版，完整命令表与退出码契约见 `cli/README.md`）：
 ```bash
 cx login --token cx_pat_xxx.yyy   # 或交互式输入
-cx whoami                          # 验证身份
-cx routes                          # 列出所有查询路由
+cx whoami                          # 验证身份/数据范围/tokenId
+cx routes --search 赔案            # 按 tag 分组列路由 + 关键词搜索
 cx query KPI --year=2026 --org_level_3=分公司A
-cx query KPI --year=2026 --format=json | jq '.kpi_total'
+cx query /repair/overview          # path 直通（不依赖 catalog）
+cx query PATROL --domain=renewal   # 带 path 参数路由（:domain 自动填充）
 cx query TREND --granularity=week --format=csv > trend.csv
+echo "SELECT org_level_3, SUM(premium) FROM PolicyFact GROUP BY 1" | cx sql -
+cx filters --dimension org_level_3 # 维度可选值
+cx data version                    # 数据新鲜度
+cx health                          # 连通性诊断
+cx config set baseUrl http://localhost:3000   # 切本地后端
+cx completion zsh                  # shell 补全
 ```
+
+退出码契约：`0` 成功 · `1` 通用错误 · `2` 鉴权失败 · `3` 权限不足 · `4` 用法错误 · `5` 限流。
 
 环境变量优先级覆盖：
 ```bash

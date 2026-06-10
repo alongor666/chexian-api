@@ -8,7 +8,7 @@ const router = Router();
 /**
  * 营业货车分析请求验证Schema（特有参数）
  */
-const truckExtraSchema = z.object({
+export const truckExtraSchema = z.object({
   queryType: z.enum(['rose', 'orgByTonnage', 'tonnageByOrg', 'all']).default('rose'),
   metric: z.enum(['premium', 'count']).default('premium'),
 });
