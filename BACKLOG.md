@@ -17,6 +17,7 @@
 ---
 
 ## 📋 活跃任务速查（43 项 · 数据截至 2026-06-10 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（42 项 · 数据截至 2026-06-10 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -30,6 +31,7 @@
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
 
 **P2（21 项）**
+**P2（22 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -52,6 +54,8 @@
 - 2026-06-08-claude-16ab1c — 报告托管 phase-2
 - 2026-06-08-claude-691a87 — BACKLOG 增弃置状态 + 过时项剪枝（治理体检缺口②）
 - 2026-06-10-claude-8964d3 — Phase 1 参数契约
+- 2026-06-10-claude-3a6daf — 深入评估 chexian-patrol 续保巡检命令的设计思路
+- 2026-06-10-claude-b4da70 — 数据管理/cli.py 工具库空壳化处置
 
 **P3（16 项）**
 
@@ -121,3 +125,5 @@
 | 2026-06-10-claude-807f41 | 2026-06-10 | Chore | @claude | repair v2 八端点（city/channel/coop-tier/scatter/local-resource/to-premium/diversion-list/orphan-shops）服务端从未实现：QUERY_ROUTES 常量与前端 repair-api 方法先行、路由未落地，前端调用实际 404。需实现服务端路由后再登记 route-catalog（QueryCatalog 对账会强制） | P3 | PROPOSED | N/A | N/A |  |
 | 2026-06-10-claude-8964d3 | 2026-06-10 | Chore | @claude | Phase 1 参数契约：route-param-contracts.ts（64 路由 path→运行时 zod schema 映射）+ validate-params.ts per-route 子集对账接入 governance；修复 catalog 系统性参数提示误导（TS_COMMON year/week_number/start_date 与 ORG_FILTER org_level_3/channel 等 ~150 处虚构参数名，运行时被 zod 静默 strip——生产实证：start_date 传参返回全量 22.04 亿 vs startDate 正确返回窗口 762.6 万）。Phase 2 timeWindow：QueryRouteMeta 加必填七枚举（window/rolling/policy-year/ytd-progress/cohort-development/snapshot/any，编译期强制 64 条全标注）+ MetricDefinition 可选 timeWindow（11 个满期族指标标 cutoff-based）+ MCP tool description 注入中文口径提示 + CLI routes 显示 timeWindow 列。B290 原始事故（plan-achievement 被误用于窗口提问）根治点：该路由标 ytd-progress + note 禁用于窗口提问 | P2 | PROPOSED | N/A | N/A |  |
 | 2026-06-10-claude-ca3cab | 2026-06-10 | Chore | @claude | cx CLI 全能力重构：route-catalog 33→64 条补全 + governance QueryCatalog 对账检查 + CLI v0.2.0（14 命令/退出码契约/path直通/stdin/补全） | P3 | PROPOSED | N/A | N/A |  |
+| 2026-06-10-claude-3a6daf | 2026-06-10 | 评估/工具链 | @claude | 深入评估 chexian-patrol 续保巡检命令的设计思路：其依赖的数据源 数据管理/warehouse/fact/renewal_universe/latest.parquet 与必读规范 数据管理/knowledge/ai/RENEWAL_PATROL_REPORT_FRAMEWORK.md 均不存在，巡检产物目录也不存在，命令当前不可执行。需评估：1) 三口径巡检（已到期/30天内/全年）是否已被 diagnose-renewal v2.2（基于 renewal_tracker）实质覆盖；2) 若有独有价值（5 优先客户类别×AI 深度研判），应重建数据链还是把独有逻辑并入 diagnose-renewal；3) 评估后决定修复或删除该命令。来源：2026-06-09 slash 命令全面优化评审。 | P2 | PROPOSED | .claude/commands/chexian-patrol.md | 数据管理/patrol/patrol_engine.py |  |
+| 2026-06-10-claude-b4da70 | 2026-06-10 | 评估/工具链 | @claude | 数据管理/cli.py 工具库空壳化处置：cli.py 注册的 9 个工具（analyze_parquet/analyze_excel/deep_analysis/field_relation/field_deep/field_exhaustive/excel_to_parquet/earned_premium/diagnose_agent CLI 入口）的模块文件目录 data_tools/ field_tools/ conversion_tools/ business_tools/ 在主仓库与 git 跟踪中全部不存在，2026-06-09 实测运行报模块文件不存在。需决策：1) 重建工具模块（如有真实使用场景）；2) 退役 cli.py 并删除 /chexian-data-tools 命令（替代能力已有：duckdb 直查/daily.mjs ETL/diagnose-* pipelines）。/chexian-data-tools 命令文件已改写为不可用状态指针。 | P2 | PROPOSED | .claude/commands/chexian-data-tools.md | 数据管理/cli.py |  |

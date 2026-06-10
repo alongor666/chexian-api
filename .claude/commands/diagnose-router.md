@@ -15,10 +15,12 @@ dependencies:
   - .claude/commands/diagnose-renewal.md
   - .claude/commands/diagnose-motorcycle.md
   - .claude/commands/diagnose-transfer-location.md
+  - .claude/commands/diagnose-lr-projection.md
+  - .claude/commands/diagnose-forecast-claim.md
   - .claude/skills/incident-rate-development.md
   - .claude/skills/ncd-pricing-diagnosis.md
   - .claude/skills/accident-profile-report.md
-last_updated: "2026-05-30"
+last_updated: "2026-06-09"
 ---
 
 # 诊断命令总路由（/diagnose-router）
@@ -39,7 +41,8 @@ last_updated: "2026-05-30"
 | 1 | 摩托车、交强 120 元、人身险捆绑、A/B 类机构、真实盈亏线 | `/diagnose-motorcycle` | 命令层 | 摩托车必须用专属成本模型 |
 | 1 | 过户车、车牌归属地、出险地、异地出险、挂靠/假资料 | `/diagnose-transfer-location` | 命令层 | 风控/欺诈专项，不是普通事故地点下钻 |
 | 2 | 两个 cutoff、3-31 vs 4-30、月末估值对比、同比发展、影响度分解 | `/diagnose-cohort-comparison` | 命令层 | 双 cutoff cohort 专项 |
-| 2 | 全年预期赔付率、年终 LR 预测、burning-cost 平移、4 维 cell 矩阵、override 业务介入 | `/diagnose-lr-projection` | 命令层 | 结构性全年预期 LR 专项 |
+| 2 | 全年预期赔付率、年终赔付率预测、平移预测、4 维细分矩阵、业务介入覆盖 | `/diagnose-lr-projection` | 命令层 | 结构性全年预期满期赔付率专项 |
+| 2 | 赔款空间、还能赔多少、新增赔款余地、目标赔付率反推、赔付率推演 | `/diagnose-forecast-claim` | 命令层 | 任意维度筛选下的双向推演（给定目标赔付率求赔款空间 Δ，或给定 Δ 求赔付率） |
 | 2 | NCD 定价、系数诊断、应提系数、定价扭曲、归一赔付率、商业/交强 NCD 档、哪个档赔付率过高、折扣是否合理 | `ncd-pricing-diagnosis` skill | skill 层 | 横向 NCD 档位定价结构分析；读 `.claude/skills/ncd-pricing-diagnosis.md` 执行 |
 | 2 | 出险率同比、发展三角形、不满期对比、等天数出险率、赔案发展 | `incident-rate-development` skill | skill 层 | 纵向时间发展分析（按维度构建三角形）；读 `.claude/skills/incident-rate-development.md` 执行 |
 | 2 | 事故画像、出险经过文本、碰撞对象构成、事故场景、时段×路段热力图、驾驶人年龄分布 | `accident-profile-report` skill | skill 层 | 基于理赔明细文本的事故画像专项；读 `.claude/skills/accident-profile-report.md` 执行 |

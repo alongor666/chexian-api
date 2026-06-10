@@ -1,11 +1,14 @@
 ---
 name: chexian-patrol
-description: 当用户需要执行续保数据巡检时使用 — 驱动 patrol_engine.py 采集数据，对 5 个优先客户类别各跑三口径（已到期/30天内/全年），输出 AI 深度研判结果和标准巡检报告。
+description: ⚠️ 前置条件缺失暂不可执行 — 续保数据巡检（patrol_engine.py 三口径 × 5 优先客户类别 + AI 深度研判）。设计思路评估已登记 BACKLOG（P2），裁决前禁止直接执行。
 category: data-analysis
 scope: project
+last_updated: "2026-06-09"
 ---
 
 # 续保数据巡检
+
+> **状态（2026-06-09 核实）**：本命令依赖的数据源 `数据管理/warehouse/fact/renewal_universe/latest.parquet` 与必读规范 `数据管理/knowledge/ai/RENEWAL_PATROL_REPORT_FRAMEWORK.md` 在主仓库均不存在，当前不可执行。其三口径巡检与 `/diagnose-renewal` v2.2（基于 `renewal_tracker`）的关系评估已登记 BACKLOG（uid `2026-06-10-claude-3a6daf`，P2）。裁决前若用户触发本命令，应说明现状并引导改用 `/diagnose-renewal`。
 
 ## 用法
 

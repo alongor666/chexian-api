@@ -2,7 +2,7 @@
 name: chexian-report-weekly
 description: 车险业务周报自动生成（董事会级，数据驱动，业务洞察型）
 category: reporting
-version: 2.2.0
+version: 2.3.0
 author: "@claude"
 tags: [report, weekly, kpi, trends, executive, insurance, cost, coefficient]
 scope: project
@@ -10,13 +10,13 @@ requires:
   - DuckDB
   - bun
 dependencies:
-  - server/src/services/duckdb.ts (PolicyFact视图)
+  - server/src/services/duckdb.ts
   - server/src/sql/kpi.ts
   - server/src/sql/cost.ts
-  - server/src/sql/coefficient.ts
+  - server/src/sql/trend.ts
 data_requirements:
-  - 车险清单.parquet (607K+ 保单记录)
-last_updated: "2026-02-24"
+  - 数据管理/warehouse/fact/policy/current/*.parquet
+last_updated: "2026-06-09"
 ---
 
 # 车险业务周报自动生成
@@ -25,15 +25,7 @@ last_updated: "2026-02-24"
 
 ---
 
-## 子命令速查
-
-| 子命令 | 功能 | 时间维度 |
-|--------|------|---------|
-| `/chexian-report-weekly` | 周报生成 | 自然周 |
-| `/chexian-report-monthly` | 月报生成 | 自然月 |
-| `/chexian-report-custom` | 自定义报告 | 灵活范围 |
-
----
+> 报告域分流（weekly/monthly/custom 边界）由路由器 `/chexian-report` 统一管理；月度口径优先用专属 `/chexian-report-monthly`（自然月 + 同比），本命令的 `--period month` 仅作 weekly 框架内的便利切片。
 
 ## 输入参数
 
@@ -48,9 +40,9 @@ last_updated: "2026-02-24"
 
 ## 数据源
 
-- **主数据**: 车险清单.parquet（607K+ 保单，23 业务字段）
+- **主数据**: `数据管理/warehouse/fact/policy/current/*.parquet`（签单清单事实表；字段以 `server/src/config/field-registry/fields.json` 为唯一事实源）
 - **视图**: PolicyFact（`server/src/services/duckdb.ts`）
-- **SQL 生成器**: `server/src/sql/kpi.ts`, `cost.ts`, `coefficient.ts`
+- **SQL 生成器**: `server/src/sql/kpi.ts`, `cost.ts`（及 `cost/cost-ratios.ts`）, `trend.ts`
 - **必需字段**: 保单号、业务员、保费、签单日期、三级机构
 - **扩展字段**: 是否续保、是否可续、批改类型、是否新能源等
 

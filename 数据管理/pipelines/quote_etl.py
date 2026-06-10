@@ -65,12 +65,16 @@ STR_FORCE_COLS = {'车架号': str, '保单号': str, '车牌号': str}
 
 
 def find_input_files(search_dir: str = '数据管理') -> list[Path]:
-    """自动检测 04_报价清单_*.xlsx 文件"""
+    """自动检测报价清单 xlsx：旧编号 04_报价清单* + 新编号 YYYYMMDD_02_报价清单*（2026-06-10 上游编号 04→02）"""
     base = Path(search_dir)
     if not base.exists():
         return []
-    files = sorted(base.glob('04_报价清单*.xlsx'), key=lambda f: f.name)
-    return files
+    files = list(base.glob('04_报价清单*.xlsx'))
+    files += [f for f in base.glob('*_02_报价清单*.xlsx')
+              if re.match(r'^\d{8}_02_', f.name)]
+    # 排除浏览器重复下载残留（xxx (1).xlsx）
+    files = [f for f in files if not re.search(r'\(\d+\)\.xlsx$', f.name)]
+    return sorted(set(files), key=lambda f: f.name)
 
 
 def split_salesman(name: str):
