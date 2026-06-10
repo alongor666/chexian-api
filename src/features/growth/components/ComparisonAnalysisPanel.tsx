@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useGrowthAnalysis, type DualMetricComparisonData } from '../hooks/useGrowthAnalysis';
+import { buildFilterParams } from '../../../shared/utils/filterParams';
+import { useRBAC } from '../../../shared/hooks/useRBAC';
 import { GroupedBarChart } from '../../../widgets/charts/GroupedBarChart';
 import { BarChart } from '../../../widgets/charts/BarChart';
 import { DualYAxisComparisonChart } from '../../../widgets/charts/DualYAxisComparisonChart';
@@ -38,9 +40,28 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
 
   const { perspective, setPerspective, config: perspectiveConfig } = usePerspective();
   const isPremiumPerspective = perspectiveConfig.valueFormatter === 'premium';
+  const { isOrgUser, userOrg } = useRBAC();
 
   // 获取基准日期：优先使用外部传入的maxDataDate，否则使用当前日期
   const baseDate = maxDataDate || new Date().toISOString().split('T')[0];
+
+  /**
+   * 构建附加筛选参数（透传 QuickFilterBar + 高级筛选抽屉所选的全部维度）
+   *
+   * 对比页的日期由 period1/period2 本地 state 控制，因此剥离全局日期字段：
+   * - policy_date_start/policy_date_end 若进入 query 参数会与 period 日期撞键（URLSearchParams.append 产生重复 startDate/endDate）
+   * - date_criteria（日期口径）当前后端 custom 路径未消费，剥离避免传无效参数
+   * org_user 的机构隔离由 buildFilterParams 内的 RBAC 注入强制处理。
+   */
+  const additionalFilterParams = useMemo(() => {
+    const filtersForParams: AdvancedFilterState = {
+      ...filters,
+      date_criteria: undefined,
+      policy_date_start: undefined,
+      policy_date_end: undefined,
+    };
+    return buildFilterParams(filtersForParams, { isOrgUser, userOrg });
+  }, [filters, isOrgUser, userOrg]);
 
   // 处理预设变更
   const handlePresetChange = useCallback((preset: ComparisonPreset, periods: ComparisonPeriods | null) => {
@@ -102,7 +123,8 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
       const result = await analyzeDualMetricComparison(
         { startDate: period1Start, endDate: period1End },
         { startDate: period2Start, endDate: period2End },
-        groups
+        groups,
+        additionalFilterParams
       );
       if (result.success) {
         setDualMetricData(result.data);
@@ -114,7 +136,8 @@ export const ComparisonAnalysisPanel: React.FC<ComparisonAnalysisPanelProps> = (
         { startDate: period1Start, endDate: period1End },
         { startDate: period2Start, endDate: period2End },
         metric,
-        groups
+        groups,
+        additionalFilterParams
       );
     }
   };
