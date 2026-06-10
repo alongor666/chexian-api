@@ -61,6 +61,57 @@ const COMMON_PARAMS = {
 const TS_COMMON = [COMMON_PARAMS.year, COMMON_PARAMS.weekNumber, COMMON_PARAMS.startDate, COMMON_PARAMS.endDate];
 const ORG_FILTER = [COMMON_PARAMS.orgLevel3, COMMON_PARAMS.channel, COMMON_PARAMS.customerCategory];
 
+// 报价转化域公共参数（routes/query/quote-conversion.ts quoteFilterSchema）
+const QUOTE_PARAMS: QueryRouteParam[] = [
+  { name: 'dateStart', type: 'date', description: '起保日期下限 YYYY-MM-DD' },
+  { name: 'dateEnd', type: 'date', description: '起保日期上限 YYYY-MM-DD' },
+  { name: 'renewalType', type: 'string', description: '续转类型', enum: ['续保', '转保'] },
+  { name: 'orgName', type: 'string', description: '三级机构名（受 dataScope 限制）' },
+  { name: 'teamName', type: 'string', description: '销售团队名' },
+  { name: 'salesmanNo', type: 'string', description: '业务员工号' },
+  { name: 'customerCategory', type: 'string', description: '客户类别（11 类）' },
+  { name: 'insuranceCombo', type: 'string', description: '险别组合', enum: ['主全', '交三'] },
+  { name: 'isTelemarketing', type: 'string', description: '是否电销', enum: ['电销', '非电销'] },
+  { name: 'isNewEnergy', type: 'string', description: '是否新能源', enum: ['是', '否'] },
+  { name: 'isTransferred', type: 'string', description: '是否过户', enum: ['是', '否'] },
+  { name: 'riskGrade', type: 'string', description: '风险等级', enum: ['A', 'B', 'C', 'D'] },
+  { name: 'ncdMin', type: 'number', description: 'NCD 系数下限' },
+  { name: 'ncdMax', type: 'number', description: 'NCD 系数上限' },
+];
+
+// 维修资源域 v1 公共参数（routes/query/repair.ts filterSchema）
+const REPAIR_PARAMS: QueryRouteParam[] = [
+  { name: 'orgName', type: 'string', description: '三级机构名（受 dataScope 限制）' },
+  { name: 'is4sShop', type: 'string', description: '是否 4S 店', enum: ['true', 'false'] },
+  { name: 'cooperationStatus', type: 'string', description: '合作状态' },
+  { name: 'city', type: 'string', description: '城市' },
+];
+
+// 赔案明细域公共参数（routes/query/claims-detail.ts parseFilters）
+const CLAIMS_DETAIL_PARAMS: QueryRouteParam[] = [
+  { name: 'dateStart', type: 'date', description: '出险日期下限 YYYY-MM-DD' },
+  { name: 'dateEnd', type: 'date', description: '出险日期上限 YYYY-MM-DD' },
+  { name: 'orgName', type: 'string', description: '三级机构名（受 dataScope 限制）' },
+  { name: 'claimStatus', type: 'string', description: '赔案状态（已结案/未结案）' },
+  { name: 'isBodilyInjury', type: 'string', description: '是否人伤案' },
+  { name: 'accidentCause', type: 'string', description: '出险原因' },
+  { name: 'accidentCity', type: 'string', description: '出险城市' },
+  { name: 'customerCategory', type: 'string', description: '客户类别（11 类）' },
+  { name: 'isNev', type: 'string', description: '是否新能源', enum: ['是', '否'] },
+  { name: 'coverageCombination', type: 'string', description: '险别组合' },
+  { name: 'isTransfer', type: 'string', description: '是否过户', enum: ['是', '否'] },
+  { name: 'vehicleQuickFilter', type: 'string', description: '车型快捷预设' },
+  { name: 'businessNature', type: 'string', description: '业务性质' },
+  { name: 'isNewCar', type: 'string', description: '是否新车', enum: ['是', '否'] },
+  { name: 'isRenewal', type: 'string', description: '是否续保', enum: ['是', '否'] },
+  { name: 'cutoffDate', type: 'date', description: '满期口径截止日（earned 分母计算）' },
+];
+
+// 客户来源去向域参数（routes/query/customer-flow.ts filterSchema）
+const CUSTOMER_FLOW_PARAMS: QueryRouteParam[] = [
+  { name: 'year', type: 'number', description: '保单年度（2020-2030）' },
+];
+
 export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
   // ── KPI ────────────────────────────────────────
   {
@@ -315,10 +366,23 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
 
   // ── 巡检 + 续保追踪 ────────────────────────────
   {
-    key: 'PATROL', path: '/patrol', method: 'GET',
-    summary: '业务巡检',
-    description: '业务异常巡检数据（数据质量、潜在风险）。',
-    parameters: TS_COMMON,
+    // 2026-06-09 修正：原 path '/patrol' 在服务端不存在（实挂载为 /patrol/:domain），CLI/MCP 调用必 404
+    key: 'PATROL', path: '/patrol/:domain', method: 'GET',
+    summary: '业务巡检报告',
+    description: '返回指定域的最新巡检报告（path 参数 domain，当前支持 renewal）。',
+    parameters: [
+      { name: 'domain', type: 'string', required: true, description: '巡检域（path 参数）', enum: ['renewal'] },
+    ],
+    dataScope: 'any',
+    tags: ['patrol'],
+  },
+  {
+    key: 'PATROL_NARRATIVE', path: '/patrol/:domain/narrative', method: 'GET',
+    summary: '业务巡检叙事报告',
+    description: '返回指定域巡检报告的叙事文本版（path 参数 domain，当前支持 renewal）。',
+    parameters: [
+      { name: 'domain', type: 'string', required: true, description: '巡检域（path 参数）', enum: ['renewal'] },
+    ],
     dataScope: 'any',
     tags: ['patrol'],
   },
@@ -356,6 +420,261 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
     ],
     dataScope: 'any',
     tags: ['sql', 'agent'],
+  },
+
+  // ── 报价转化（2026-06-09 catalog 补全，key 扁平命名供 MCP tool 名使用）──
+  {
+    key: 'QUOTE_CONVERSION_KPI', path: '/quote-conversion/kpi', method: 'GET',
+    summary: '报价转化 KPI 汇总',
+    description: '报价→成交转化漏斗的核心 KPI：报价件数、成交件数、转化率、平均报价/成交保费。',
+    parameters: QUOTE_PARAMS,
+    dataScope: 'any',
+    tags: ['quote-conversion', 'kpi'],
+  },
+  {
+    key: 'QUOTE_CONVERSION_FUNNEL', path: '/quote-conversion/funnel', method: 'GET',
+    summary: '报价转化漏斗',
+    description: '从报价到成交的分阶段漏斗（报价/核保/承保），定位转化流失环节。',
+    parameters: QUOTE_PARAMS,
+    dataScope: 'any',
+    tags: ['quote-conversion'],
+  },
+  {
+    key: 'QUOTE_CONVERSION_DRILLDOWN', path: '/quote-conversion/drilldown', method: 'GET',
+    summary: '报价转化多维下钻',
+    description: '按指定维度展开报价转化指标（机构/团队/客户类别等）。',
+    parameters: [...QUOTE_PARAMS, { name: 'dimension', type: 'string', description: '下钻维度' }],
+    dataScope: 'any',
+    tags: ['quote-conversion'],
+  },
+  {
+    key: 'QUOTE_CONVERSION_HEATMAP', path: '/quote-conversion/heatmap', method: 'GET',
+    summary: '报价转化机构×维度热力图',
+    description: '机构 × 业务维度的转化率热力图，定位低转化组合。',
+    parameters: QUOTE_PARAMS,
+    dataScope: 'any',
+    tags: ['quote-conversion'],
+  },
+  {
+    key: 'QUOTE_CONVERSION_PRICE', path: '/quote-conversion/price', method: 'GET',
+    summary: '报价价格带分析',
+    description: '报价保费价格带分布与各价格带的成交率对比。',
+    parameters: QUOTE_PARAMS,
+    dataScope: 'any',
+    tags: ['quote-conversion'],
+  },
+  {
+    key: 'QUOTE_CONVERSION_RANKING', path: '/quote-conversion/ranking', method: 'GET',
+    summary: '报价转化排名',
+    description: '按机构/团队/业务员的报价转化率排名。',
+    parameters: QUOTE_PARAMS,
+    dataScope: 'any',
+    tags: ['quote-conversion', 'ranking'],
+  },
+  {
+    key: 'QUOTE_CONVERSION_TREND', path: '/quote-conversion/trend', method: 'GET',
+    summary: '报价转化时间趋势',
+    description: '报价量、成交量与转化率的时间序列。',
+    parameters: QUOTE_PARAMS,
+    dataScope: 'any',
+    tags: ['quote-conversion', 'trend'],
+  },
+
+  // ── 承保地理分布 ────────────────────────────────
+  {
+    key: 'POLICY_GEO_PROVINCE', path: '/policy-geo/province', method: 'GET',
+    summary: '承保地理分布（省级）',
+    description: '按车牌归属地省份统计承保保费/件数分布（地域锚点用车牌而非机构）。',
+    parameters: [COMMON_PARAMS.year],
+    dataScope: 'any',
+    tags: ['policy-geo'],
+  },
+  {
+    key: 'POLICY_GEO_CITY', path: '/policy-geo/city', method: 'GET',
+    summary: '承保地理分布（市级）',
+    description: '指定省份内按车牌归属地城市统计承保分布。',
+    parameters: [COMMON_PARAMS.year, { name: 'province', type: 'string', description: '省份名' }],
+    dataScope: 'any',
+    tags: ['policy-geo'],
+  },
+
+  // ── 维修资源 ────────────────────────────────────
+  {
+    key: 'REPAIR_OVERVIEW', path: '/repair/overview', method: 'GET',
+    summary: '维修资源机构级汇总',
+    description: '各机构维修送修量、产值与合作修理厂概况。',
+    parameters: REPAIR_PARAMS,
+    dataScope: 'any',
+    tags: ['repair'],
+  },
+  {
+    key: 'REPAIR_DETAIL', path: '/repair/detail', method: 'GET',
+    summary: '修理厂明细（分页）',
+    description: '修理厂级明细清单，支持分页。',
+    parameters: [
+      ...REPAIR_PARAMS,
+      { name: 'page', type: 'number', description: '页码，默认 1' },
+      { name: 'pageSize', type: 'number', description: '每页行数，默认 200，上限 500' },
+    ],
+    dataScope: 'any',
+    tags: ['repair'],
+  },
+  {
+    key: 'REPAIR_STATUS', path: '/repair/status', method: 'GET',
+    summary: '维修合作状态分布',
+    description: '合作中/曾合作/未合作修理厂的数量与送修分布。',
+    parameters: REPAIR_PARAMS,
+    dataScope: 'any',
+    tags: ['repair'],
+  },
+  {
+    key: 'REPAIR_METADATA', path: '/repair/metadata', method: 'GET',
+    summary: '维修资源维度元数据',
+    description: '维修资源分析可用的维度与可选值清单。',
+    parameters: [],
+    dataScope: 'any',
+    tags: ['repair', 'metadata'],
+  },
+  // ── 赔案明细 ────────────────────────────────────
+  {
+    key: 'CLAIMS_DETAIL_PENDING_OVERVIEW', path: '/claims-detail/pending-overview', method: 'GET',
+    summary: '未决赔案概览',
+    description: '已结案 vs 未结案的赔案件数与金额汇总（未决金额口径 reserve_amount）。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail', 'pending'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_PENDING_BY_ORG', path: '/claims-detail/pending-by-org', method: 'GET',
+    summary: '未决赔案按机构分布',
+    description: '各三级机构未决赔案件数与未决金额分布。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail', 'pending'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_PENDING_AGING', path: '/claims-detail/pending-aging', method: 'GET',
+    summary: '未决赔案账龄分析',
+    description: '未决赔案按挂账时长分桶（账龄）分析，定位长尾未决。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail', 'pending'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_CAUSE_ANALYSIS', path: '/claims-detail/cause-analysis', method: 'GET',
+    summary: '出险原因分析',
+    description: '按出险原因统计案件量、金额与占比。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_GEO_ACCIDENT', path: '/claims-detail/geo-accident', method: 'GET',
+    summary: '出险地点地理分布',
+    description: '按出险地点城市统计案件量与金额分布。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail', 'geo'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_GEO_PLATE', path: '/claims-detail/geo-plate', method: 'GET',
+    summary: '车牌归属地地理分布',
+    description: '按出险车辆车牌归属地统计案件分布。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail', 'geo'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_GEO_COMPARISON', path: '/claims-detail/geo-comparison', method: 'GET',
+    summary: '出险地 vs 归属地对比',
+    description: '出险地点与车牌归属地的交叉对比（异地出险识别）。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail', 'geo'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_CLAIM_CYCLE', path: '/claims-detail/claim-cycle', method: 'GET',
+    summary: '理赔周期分析',
+    description: '报案到结案的周期分布与各环节时效。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_FREQUENCY_YOY', path: '/claims-detail/frequency-yoy', method: 'GET',
+    summary: '出险频度同比',
+    description: '出险案件频度的同比对比分析。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail', 'trend'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_LOSS_RATIO_DEVELOPMENT', path: '/claims-detail/loss-ratio-development', method: 'GET',
+    summary: '赔付率发展',
+    description: '多 cutoff 日期下的满期赔付率发展视图（与理赔热力图同口径）。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail'],
+  },
+  {
+    key: 'CLAIMS_DETAIL_HEATMAP', path: '/claims-detail/heatmap', method: 'GET',
+    summary: '理赔热力图',
+    description: '维度 × 时间的理赔指标热力图。',
+    parameters: CLAIMS_DETAIL_PARAMS,
+    dataScope: 'any',
+    tags: ['claims-detail'],
+  },
+
+  // ── 客户来源去向 ────────────────────────────────
+  {
+    key: 'CUSTOMER_FLOW_SUMMARY', path: '/customer-flow/summary', method: 'GET',
+    summary: '客户来源去向总览',
+    description: '客户流入/流出/留存的总览统计（评级对比法）。',
+    parameters: CUSTOMER_FLOW_PARAMS,
+    dataScope: 'any',
+    tags: ['customer-flow'],
+  },
+  {
+    key: 'CUSTOMER_FLOW_INFLOW', path: '/customer-flow/inflow', method: 'GET',
+    summary: '客户流入分析',
+    description: '新转入客户的来源结构与质量（评级）分析。',
+    parameters: CUSTOMER_FLOW_PARAMS,
+    dataScope: 'any',
+    tags: ['customer-flow'],
+  },
+  {
+    key: 'CUSTOMER_FLOW_OUTFLOW', path: '/customer-flow/outflow', method: 'GET',
+    summary: '客户流出分析',
+    description: '流失客户的去向结构与质量（评级）分析。',
+    parameters: CUSTOMER_FLOW_PARAMS,
+    dataScope: 'any',
+    tags: ['customer-flow'],
+  },
+  {
+    key: 'CUSTOMER_FLOW_TREND', path: '/customer-flow/trend', method: 'GET',
+    summary: '客户流动趋势',
+    description: '客户流入/流出量的时间趋势。',
+    parameters: CUSTOMER_FLOW_PARAMS,
+    dataScope: 'any',
+    tags: ['customer-flow', 'trend'],
+  },
+  {
+    key: 'CUSTOMER_FLOW_METADATA', path: '/customer-flow/metadata', method: 'GET',
+    summary: '客户流动维度元数据',
+    description: '客户来源去向分析可用的维度与可选值。',
+    parameters: [],
+    dataScope: 'any',
+    tags: ['customer-flow', 'metadata'],
+  },
+
+  // ── 费用率发展 ──────────────────────────────────
+  {
+    key: 'EXPENSE_DEVELOPMENT', path: '/expense-development', method: 'GET',
+    summary: '费用率发展',
+    description: '多年保单批次（保单年度）的费用率随观察期发展视图。',
+    parameters: [...TS_COMMON, { name: 'cohortYears', type: 'string', description: '保单年度列表，逗号分隔（如 2024,2025）' }],
+    dataScope: 'any',
+    tags: ['expense'],
   },
 ];
 

@@ -1983,6 +1983,61 @@ function checkBundleRoutesGuard() {
   return true;
 }
 
+function checkQueryCatalogConsistency() {
+  info('检查 QueryCatalog 对账（实挂载 GET 端点 vs route-catalog 元数据）...');
+
+  const queryDir = path.join(ROOT_DIR, 'server/src/routes/query');
+  const metaFile = path.join(ROOT_DIR, 'server/src/config/query-routes-metadata.ts');
+  // 豁免：仅本地调试/非对外发现路由
+  const exempt = new Set(['/test']);
+
+  const mounted = new Set();
+  const scanFiles = [];
+  (function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === '__tests__') continue;
+        walk(full);
+      } else if (entry.name.endsWith('.ts')) {
+        scanFiles.push(full);
+      }
+    }
+  })(queryDir);
+  for (const f of scanFiles) {
+    // 剥离块注释与行注释，避免文档示例（如 shared.ts 的 router.get('/path', ...) 用法注释）误匹配
+    const src = fs
+      .readFileSync(f, 'utf-8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    for (const m of src.matchAll(/router\.get\(\s*\n?\s*'(\/[^']+)'/g)) {
+      if (!exempt.has(m[1])) mounted.add(m[1]);
+    }
+  }
+
+  const metaSrc = fs.readFileSync(metaFile, 'utf-8');
+  const catalog = new Set([...metaSrc.matchAll(/path:\s*'(\/[^']+)'/g)].map((m) => m[1]));
+
+  const missingInCatalog = [...mounted].filter((p) => !catalog.has(p)).sort();
+  const ghostInCatalog = [...catalog].filter((p) => !mounted.has(p)).sort();
+
+  if (missingInCatalog.length > 0 || ghostInCatalog.length > 0) {
+    if (missingInCatalog.length > 0) {
+      error(`已挂载但未登记 route-catalog（CLI/MCP 不可发现）= ${missingInCatalog.length} 条：`);
+      for (const p of missingInCatalog) console.log(`    - ${p}`);
+    }
+    if (ghostInCatalog.length > 0) {
+      error(`catalog 登记了不存在的端点 = ${ghostInCatalog.length} 条：`);
+      for (const p of ghostInCatalog) console.log(`    - ${p}`);
+    }
+    console.log('    修复：在 server/src/config/query-routes-metadata.ts 补/删对应 entry（RED LINE：只追加，删除走 BACKLOG）');
+    return false;
+  }
+
+  success(`QueryCatalog 对账通过（${mounted.size} 个挂载端点与 catalog 一一对应）`);
+  return true;
+}
+
 // ============================================================
 // 主函数
 // ============================================================
@@ -2037,6 +2092,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
   { name: '空catch禁令', fn: checkEmptyCatchBlocks },
   { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },
+  { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
 ];
 
 /**
