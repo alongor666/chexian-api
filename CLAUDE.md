@@ -137,7 +137,7 @@ bun install && bun run dev:full    # 安装+启动
 bun run build                      # 类型检查+构建
 bun run test                       # 单元测试（⚠️ 不是 bun test）
 bun run test:integration           # 集成测试（需 DuckDB 原生二进制，仅本地）
-bun run test:e2e                   # E2E（需先 dev:full，凭据 admin/CxAdmin@2026!）
+bun run test:e2e                   # E2E（需先 dev:full，凭据 admin/<在凭据库/E2E_PASSWORD 环境变量中获取>）
 bun run governance                 # 治理校验
 ```
 

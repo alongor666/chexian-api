@@ -44,8 +44,25 @@ const ORG_USERS = [
   { username: 'gaoxin', org: '高新' },
 ];
 
-// admin 密码保持不变
-const ADMIN_PASSWORD = 'CxAdmin@2026!';
+// admin 密码不在本脚本管理范围内：保留 server/.env 中既有的 admin 覆盖哈希，
+// 绝不在源码里硬编码 admin 明文（历史上曾硬编码导致凭据泄漏）。
+function readExistingAdminHash() {
+  const envPath = path.resolve(PROJECT_ROOT, 'server', '.env');
+  if (!fs.existsSync(envPath)) return null;
+  const content = fs.readFileSync(envPath, 'utf-8');
+  const m = content.match(/^USER_PASSWORDS=(.*)$/m);
+  if (!m) return null;
+  let raw = m[1].trim();
+  if ((raw.startsWith("'") && raw.endsWith("'")) || (raw.startsWith('"') && raw.endsWith('"'))) {
+    raw = raw.slice(1, -1);
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed.admin === 'string' ? parsed.admin : null;
+  } catch {
+    return null;
+  }
+}
 
 // 密码字符集（排除易混淆字符 0O1lI）
 const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -145,9 +162,11 @@ async function main() {
   const results = [];
   const hashMap = {};
 
-  // admin 保持不变
-  const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
-  hashMap['admin'] = adminHash;
+  // admin 保持不变：沿用 .env 既有覆盖哈希（若存在），不重置、不硬编码
+  const existingAdminHash = readExistingAdminHash();
+  if (existingAdminHash) {
+    hashMap['admin'] = existingAdminHash;
+  }
 
   for (const { username, org } of ORG_USERS) {
     const password = generatePassword(12);
@@ -176,7 +195,7 @@ async function main() {
   }
 
   console.log('');
-  console.log('admin           (密码不变)        系统管理员');
+  console.log('admin           (沿用既有覆盖)    系统管理员');
   console.log('');
   console.log('⚠️  此密码仅显示一次，请截图或复制后安全保存');
   console.log('⚠️  已自动更新 server/.env 和 user_store.json');

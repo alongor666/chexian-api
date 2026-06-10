@@ -49,7 +49,9 @@ export const PRESET_ROLES: PresetRole[] = [
 export const PRESET_USERS: Record<string, PresetUser> = {
   admin: {
     username: 'admin',
-    passwordHash: '$2b$10$04CoRcf7Hk9iSiPD6QWRmelsAGNWoqJ3DGB5Mvfjcc/CH6GEJRUC6',
+    // tombstone 占位（不可登录）：admin 凭据仅由 USER_PASSWORDS 环境变量提供。
+    // 旧泄漏密码已于 2026-06-09 轮换，此处不再保留任何可用哈希。
+    passwordHash: '$2b$10$PNyAVhUD9EEoLZZWzFtIjOm15LNJWezVd9nmLeWESo3ENroom0U7a',
     displayName: '系统管理员',
     role: 'branch_admin',
     branchCode: 'SC',
@@ -57,7 +59,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   leshan: {
     username: 'leshan',
-    passwordHash: '$2b$10$CeX2KL/WI2MWZ63xF7enqO2yQSLP.xvGk0QfnuS23UT4lrn8F6gmS', // leshan123
+    passwordHash: '$2b$10$CeX2KL/WI2MWZ63xF7enqO2yQSLP.xvGk0QfnuS23UT4lrn8F6gmS',
     displayName: '乐山机构',
     role: 'org_user',
     organization: '乐山',

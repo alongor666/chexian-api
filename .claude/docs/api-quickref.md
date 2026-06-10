@@ -15,7 +15,7 @@
 
 **登录请求**:
 ```json
-{ "username": "admin", "password": "admin123" }
+{ "username": "admin", "password": "<在凭据库/E2E_PASSWORD 环境变量中获取>" }
 ```
 **登录响应**: `{ "success": true, "data": { "token": "eyJ..." } }`
 
@@ -85,7 +85,7 @@ insuranceType, vehicleType, businessType, renewalStatus
 # 登录获取 Token
 TOKEN=$(curl -s http://localhost:3000/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"admin123"}' | jq -r '.data.token')
+  -d '{"username":"admin","password":"<在凭据库/E2E_PASSWORD 环境变量中获取>"}' | jq -r '.data.token')
 
 # 查询 KPI
 curl -s http://localhost:3000/api/query/kpi \
