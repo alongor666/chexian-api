@@ -10,7 +10,7 @@ paths: ["src/shared/**"]
 |------|------|------|
 | UI组件 | `src/widgets/INDEX.md` | Table、Card、Badge、Button 等 |
 | 样式系统 | `src/shared/styles/index.ts` | tableStyles、textStyles、buttonStyles、colorClasses |
-| API客户端 | `src/shared/api/`（`client.ts` 入口 + `client-core.ts` 传输内核 + 10 个 `*-api.ts` 命名空间子客户端） | 所有后端请求统一入口；调用形 `apiClient.{域}.方法()`（auth/ai/data/workflows/crossSell/performance/repair/claimsDetail/quoteConversion/customerFlow），核心查询与会话仍在 `apiClient.*` |
+| API客户端 | `src/shared/api/`（`client.ts` 入口 + `client-core.ts` 传输内核 + 13 个 `*-api.ts` 命名空间子客户端） | 所有后端请求统一入口；调用形 `apiClient.{域}.方法()`（auth/ai/data/workflows/crossSell/performance/repair/claimsDetail/quoteConversion/customerFlow/premium/geo/patrol），核心查询与会话仍在 `apiClient.*` |
 | 工具函数 | `src/shared/utils/formatters.ts` | 格式化（件数/均值/比率/保费/系数/图表） |
 | 类型定义 | `src/shared/types/` | 通用+业务类型 |
 

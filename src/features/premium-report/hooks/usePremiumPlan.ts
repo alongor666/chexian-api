@@ -131,7 +131,7 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
     const filters = buildFiltersFromPath(path);
 
     try {
-      const { children, summary, distribution } = await apiClient.getPlanAchievement({
+      const { children, summary, distribution } = await apiClient.premium.achievement({
         planYear: year,
         level,
         sortField: sort.column,

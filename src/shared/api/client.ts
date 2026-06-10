@@ -43,6 +43,9 @@ import { AiApi } from './ai-api';
 import { DataApi } from './data-api';
 import { WorkflowsApi } from './workflows-api';
 import { AuthApi } from './auth-api';
+import { PremiumApi } from './premium-api';
+import { GeoApi } from './geo-api';
+import { PatrolApi } from './patrol-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -80,6 +83,12 @@ class ApiClient extends ApiClientCore {
   readonly workflows = new WorkflowsApi(this.transport);
   /** 鉴权/账号管理（12 个无状态 CRUD；login/logout/getCurrentUser 仍在基类，见 auth-api.ts 文件注释）：apiClient.auth.{listUsers,createUser,updateUser,deleteUser,listMyTokens,createMyToken,revokeMyToken,listRoles,createRole,updateRole,deleteRole,getWeComConfig} */
   readonly auth = new AuthApi(this.transport);
+  /** 保费分析：apiClient.premium.{report,plan,achievement} */
+  readonly premium = new PremiumApi(this.transport);
+  /** 承保地理分布：apiClient.geo.{province,city} */
+  readonly geo = new GeoApi(this.transport);
+  /** 巡检报告：apiClient.patrol.{report,narrative} */
+  readonly patrol = new PatrolApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -180,58 +189,7 @@ class ApiClient extends ApiClientCore {
     return this.queryGet(QUERY_ROUTES.HOLIDAY_DRILLDOWN, params);
   }
 
-  /**
-   * 获取保费报表数据（机构汇总 / 业务员明细）
-   */
-  async getPremiumReport(params?: Record<string, any>): Promise<any[]> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.PREMIUM_REPORT}${query ? `?${query}` : ''}`);
-  }
-
-  /**
-   * 获取保费达成下钻数据（六级下钻 + KPI + 达成率分布）
-   */
-  async getPremiumPlan(params?: Record<string, any>): Promise<any> {
-    const query = this.buildQueryString(params);
-    return this.request(`/query/${QUERY_ROUTES.PREMIUM_PLAN}${query ? `?${query}` : ''}`);
-  }
-
-  /**
-   * 获取保费达成面板数据（合并端点：1 次请求返回 children + summary + distribution）
-   *
-   * 替代原来的 3 次 getPremiumPlan() 调用，性能提升 3x。
-   * 返回结构：{ children: [...], summary: {...}, distribution: [...], meta: {...} }
-   */
-  async getPlanAchievement(params?: {
-    planYear?: number;
-    level?: string;
-    orgFilter?: string;
-    teamFilter?: string;
-    salesmanFilter?: string;
-    customerCategoryFilter?: string;
-    sortField?: string;
-    sortOrder?: string;
-  }): Promise<{
-    children: any[];
-    summary: any | null;
-    distribution: any[];
-    meta: { plan_year: number; level: string };
-  }> {
-    const query = this.buildQueryString(params);
-    const resp = await this.request<{
-      children: any[];
-      summary: any | null;
-      distribution: any[];
-      meta: { plan_year: number; level: string };
-      data?: {
-        children: any[];
-        summary: any | null;
-        distribution: any[];
-        meta: { plan_year: number; level: string };
-      };
-    }>(`/query/${QUERY_ROUTES.PLAN_ACHIEVEMENT}${query ? `?${query}` : ''}`);
-    return resp.data ?? resp;
-  }
+  // 保费分析 API（report/plan/achievement）已迁出至 premium 子客户端（见类首字段 + premium-api.ts）
 
   // ============================================
   // 筛选器 API
@@ -259,15 +217,7 @@ class ApiClient extends ApiClientCore {
 
   // AI API（analyzeTrend/detectRequirement/capabilities/quickSuggestions）已迁出至 ai 子客户端（见类首字段 + ai-api.ts）
 
-  // ── 巡检报告 ──
-
-  async getPatrolReport(domain: string) {
-    return this.request<{ report: any; domain: string; source: string }>(`/query/${QUERY_ROUTES.PATROL}/${domain}`);
-  }
-
-  async getPatrolNarrative(domain: string) {
-    return this.request<{ content: string; generatedAt: string | null; domain: string }>(`/query/${QUERY_ROUTES.PATROL}/${domain}/narrative`);
-  }
+  // 巡检报告 API（report/narrative）已迁出至 patrol 子客户端（见类首字段 + patrol-api.ts）
 
   // 维修资源 API（v1 + v2）已迁出至 repair 子客户端（见类首字段 + repair-api.ts）
 
@@ -281,17 +231,7 @@ class ApiClient extends ApiClientCore {
     const query = this.buildQueryString(params);
     return this.request<any[]>(`/query/${QUERY_ROUTES.EXPENSE_DEVELOPMENT}${query ? `?${query}` : ''}`);
   }
-  // ── 承保地理分布 ──
-
-  async getPolicyGeoProvince(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.POLICY_GEO.PROVINCE}${query ? `?${query}` : ''}`);
-  }
-
-  async getPolicyGeoCity(params?: Record<string, string>) {
-    const query = this.buildQueryString(params);
-    return this.request<any[]>(`/query/${QUERY_ROUTES.POLICY_GEO.CITY}${query ? `?${query}` : ''}`);
-  }
+  // 承保地理分布 API（province/city）已迁出至 geo 子客户端（见类首字段 + geo-api.ts）
 
   // ── 续保追踪 ──
 

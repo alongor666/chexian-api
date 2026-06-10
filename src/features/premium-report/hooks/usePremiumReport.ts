@@ -123,7 +123,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
         params.orgNames = filters.org_level_3.join(',');
       }
 
-      const result = await apiClient.getPremiumReport(params);
+      const result = await apiClient.premium.report(params);
 
       return (result || []).map((row: Record<string, unknown>) => ({
         org_level_3: String(row.org_level_3 || ''),
@@ -162,7 +162,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
         params.orgNames = filters.org_level_3.join(',');
       }
 
-      const result = await apiClient.getPremiumReport(params);
+      const result = await apiClient.premium.report(params);
 
       return (result || []).map((row: Record<string, unknown>) => ({
         salesman_name: formatSalesmanName(String(row.salesman_name || '')),

@@ -4,7 +4,7 @@
  *
  * 验证「ApiClient 神类拆分 Phase 2」是纯搬运、零增减、零改线：
  *
- *   守恒恒等式：  原公开业务方法(99)  −  保留在基类(25)  ==  Σ 命名空间子客户端方法(74)
+ *   守恒恒等式：  原公开业务方法(99)  −  保留在基类(18)  ==  Σ 命名空间子客户端方法(81)
  *   契约覆盖：    金 master golden 条目数  ≥  保留 + Σ命名空间（每个业务方法都有线缆签名）
  *   保留合法性：  25 个保留方法名 ⊆ pre-#536 业务方法名（无凭空新造的「保留」）
  *   路由集 LOST： pre-#536 引用的路由常量集 ⊆ 当前引用集（无端点被搬丢）—— 需 git 历史，缺则跳过
@@ -38,6 +38,7 @@ const TRANSPORT_METHODS = [
 const SUB_CLIENT_FILES = [
   'quote-conversion', 'claims-detail', 'repair', 'cross-sell', 'performance',
   'customer-flow', 'ai', 'data', 'workflows', 'auth',
+  'premium', 'geo', 'patrol',
 ];
 
 const args = process.argv.slice(2);
