@@ -15,22 +15,29 @@ scope: project
 
 **iCloud 默认路径**：`/Users/alongor666/Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/`
 
-**文件编号对应数据域**（唯一事实源 = `数据管理/data-sources.json` 的 `trigger.input_globs`；本表保持同步）：
+**文件编号对应数据域**（2026-06-10 上游 BI 清单重构后的**新编号体系**；运行时唯一事实源 = daily.mjs 硬编码 glob（premium/claims_detail）+ `数据管理/data-sources.json` 的 `trigger.input_globs`（其余域），文档对照块 = `数据管理/shard-config.json` 的 `source_patterns`；本表与三者保持同步）：
 
-| 编号 | 文件名模式（daily.mjs 真实接受） | 数据域 | 处理器 |
+| 新编号 | 文件名模式（新基线为主 · legacy 兼容） | 数据域 | 处理器 |
 |------|-----------|--------|--------|
-| 01 | `YYYYMMDD_01_签单清单.xlsx`（**主流，98.5% 占比**） · `01_签单清单_*.xlsx`（旧增量） · `01_签单清单_剔摩_*.xlsx`（剔摩与`_限摩_`成对） | 保费 | daily.mjs premium |
-| 02 | `YYYYMMDD_02_理赔明细.xlsx`（日切） · `02_理赔明细_报案时间YYYYMMDD_YYYYMMDD.xlsx`（全量替换，CDC） | 赔案 | daily.mjs claims_detail |
-| 03 | `YYYYMMDD_03_交叉销售.xlsx` · `03_交叉销售_*.xlsx` | 交叉销售 | daily.mjs cross_sell |
-| 04 | `YYYYMMDD_04_报价清单_商业险.xlsx` · `04_报价清单*.xlsx` | 报价 | daily.mjs quotes（输出 `quotes_conversion/latest.parquet`） |
-| 07 | `YYYYMMDD_07_维修资源.xlsx` · `07_维修资源*.xlsx` | 维修资源 | daily.mjs repair（**dim 表**`dim/repair/latest.parquet`） |
-| 08 | `YYYYMMDD_08_商业险续保流失公司.xlsx`（提供 `next_insurer`） | 客户来源 | daily.mjs customer_flow（08+09 必须同 batch 共存）|
-| 09 | `YYYYMMDD_09_商业险转保上年公司.xlsx`（提供 `previous_insurer`） | 客户来源 | daily.mjs customer_flow |
-| 新能源 | `YYYYMMDD_新能源_出险信息表.xlsx` | 新能源出险 | daily.mjs new_energy_claims |
+| 01 | `YYYYMMDD-YYYYMMDD_01_签单清单_定稿.xlsx`（**新基线**，日期范围前缀） · legacy：`01_签单清单_*.xlsx`（含 `_剔摩_`/`_限摩_` 成对） / `????????_01_签单清单*.xlsx` / `每日数据_*.xlsx` | 保费 | daily.mjs premium |
+| 02 | `YYYYMMDD_02_报价清单_商业险.xlsx`（**新**，旧编号 04） · legacy：`04_报价清单*.xlsx` / `????????_04_报价清单*.xlsx`（报价历史未重导，旧文件仍活跃） | 报价 | daily.mjs quotes（输出 `fact/quotes_conversion/latest.parquet`） |
+| 03 | `YYYYMMDD-YYYYMMDD_03_维修资源.xlsx`（**新**，旧编号 07，日期范围前缀） · legacy：`07_维修资源*.xlsx` / `????????_07_维修资源*.xlsx` | 维修资源 | daily.mjs repair（**dim 表**`dim/repair/latest.parquet`） |
+| 04 | `YYYYMMDD_04_厂牌明细.xlsx`（**新**，旧编号 06） · legacy：`06_厂牌明细*.xlsx` / `????????_06_厂牌明细*.xlsx` | 厂牌（品牌车型） | daily.mjs brand（**dim 表**`dim/brand/latest.parquet`） |
+| 05 | `YYYYMMDD-YYYYMMDD_05_理赔明细.xlsx`（**新基线**，旧编号 02，日期范围前缀；全量替换，CDC） · legacy：`02_理赔明细_报案时间YYYYMMDD_YYYYMMDD.xlsx` / `????????_02_理赔明细*.xlsx` / `车险报立结案清单_*.xlsx` | 赔案 | daily.mjs claims_detail |
+| 新能源 | `YYYYMMDD_新能源_出险信息表.xlsx`（编号体系外，不变） | 新能源出险 | daily.mjs new_energy_claims |
 
-注：renewal_tracker 是派生域（JOIN policy+quotes+salesman），无独立 xlsx 输入；输出 `fact/renewal_tracker/latest.parquet`。05 旧域名 `05_续保清单_*` 已废弃，不再接受。
+**停更域**（2026-06-10 上游停止下载，域冻结：存量 parquet 继续服务，不再有新 xlsx 输入）：
 
-> **命名识别铁律**：每个增量域 `input_globs` 同时挂两条 — `<编号>_<名>_*.xlsx`（旧）∪ `????????_<编号>_<名>*.xlsx`（YYYYMMDD 前缀，新主流）。`customer_flow` / `new_energy_claims` 仅认 `????????_` 前缀格式（`required_same_batch: true`）。
+| 旧编号 | 文件名模式（仅识别历史文件用） | 数据域 | 状态 |
+|------|-----------|--------|------|
+| 03（旧） | `03_交叉销售_*.xlsx` / `????????_03_交叉销售*.xlsx` | 交叉销售 | 停更冻结（勿与**新 03 = 维修资源**混淆） |
+| 08/09（旧） | `????????_08_商业险续保流失公司.xlsx` + `????????_09_商业险转保上年公司.xlsx`（必须同 batch） | 客户来源 | 停更冻结 |
+
+注：renewal_tracker 是派生域（JOIN policy+quotes+salesman），无独立 xlsx 输入；输出 `fact/renewal_tracker/latest.parquet`。旧编号 05 `05_续保清单_*` 早已废弃——**勿与新 05_理赔明细混淆**。
+
+> **命名识别铁律**（2026-06-10 编号重排后）：识别文件必须用「编号 + 中文名」整体匹配，**禁止只看编号**——新旧编号互相撞车：理赔 02→05、报价 04→02、维修 07→03、厂牌 06→04（即旧 02=理赔 vs 新 02=报价；旧 03=交叉销售 vs 新 03=维修；旧 04=报价 vs 新 04=厂牌；旧 05=续保清单 vs 新 05=理赔）。新基线前缀两种：签单/理赔/维修用 `YYYYMMDD-YYYYMMDD_`（日期范围），报价/厂牌用 `YYYYMMDD_`（单日期）。各域 glob 同时挂新旧多套模式（legacy 向后兼容，旧命名文件仍被接受）。`customer_flow`（已停更）/ `new_energy_claims` 仅认 `????????_` 前缀格式（`required_same_batch: true`）。
+>
+> **待定**：上游每日增量的实际命名尚未观察到首个样本（如是否按滚动长窗 `20260601-<最新>_01_签单清单_定稿.xlsx` 持续重导）。daily.mjs 已内置范围重叠自动归档护栏（新全量覆盖旧短窗时自动归档旧文件）；首个样本落地后回填本表。
 
 > **互补豁免铁律**：`current/` 不得出现**裸名主分片 + 限摩**组合（如 `01_签单清单_20230101_20241231.parquet` + `01_签单清单_限摩_*.parquet`）。裸名主分片含全险种（含摩托），限摩单独存在会让摩托数据 UNION ALL 翻倍。互补豁免仅对 `_剔摩_` ↔ `_限摩_` 成对生效。门禁在 `daily.mjs`/`sync-vps.mjs`/`check-governance.mjs` 三处由 `scripts/lib/parquet-overlap-check.mjs` 共享拦截。
 
@@ -42,7 +49,7 @@ cp "/Users/alongor666/Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/<
    数据管理/
 ```
 
-多个增量 xlsx 可共存（如 `20260607_01_签单清单.xlsx` + `20260608_01_签单清单.xlsx`），daily.mjs 会按日期合并，**不要删除旧增量**。
+多个增量 xlsx 可共存（如新基线 `20260101-20260608_01_签单清单_定稿.xlsx` + 旧增量 `20260607_01_签单清单.xlsx`），daily.mjs 会按日期合并，且新全量覆盖旧短窗时自动归档旧文件，**不要手动删除旧增量**。
 
 ## 1. 运行全流程（推荐）
 
@@ -86,11 +93,11 @@ ssh chexian-vps-deploy "sudo /usr/local/bin/deploy-chexian-api reload"
 |----|-------------|--------|
 | policy | `数据管理/warehouse/fact/policy/current/*.parquet` | `policy_date` |
 | claims_detail | `数据管理/warehouse/fact/claims_detail/**/*.parquet` | `report_time` |
-| cross_sell | `数据管理/warehouse/fact/cross_sell/latest.parquet` | `policy_date` |
+| cross_sell | `数据管理/warehouse/fact/cross_sell/latest.parquet`（停更冻结，存量服务） | `policy_date` |
 | quotes_conversion | `数据管理/warehouse/fact/quotes_conversion/latest.parquet` | `quote_time` |
 | renewal_tracker | `数据管理/warehouse/fact/renewal_tracker/latest.parquet` | — (派生域，按 quote/policy 对齐) |
 | repair | `数据管理/warehouse/dim/repair/latest.parquet` | (dim 表，看 report_date) |
-| customer_flow | `数据管理/warehouse/fact/customer_flow/latest.parquet` | `insurance_start_date`（含未来到期日，正常） |
+| customer_flow | `数据管理/warehouse/fact/customer_flow/latest.parquet`（停更冻结，存量服务） | `insurance_start_date`（含未来到期日，正常） |
 | new_energy_claims | `数据管理/warehouse/fact/new_energy_claims/latest.parquet` | `report_time` |
 
 一键 8 域校验脚本：
@@ -223,7 +230,7 @@ wait
 |------|------|------|
 | rsync 单目录失败（红色 CRITICAL） | 并行 rsync 网络抖动 | 手动重跑 `node scripts/sync-vps.mjs` 或单独 `rsync -azv --delete -e ssh <local>/ chexian-vps-deploy:<remote>/` |
 | PM2 `errored` 状态 | 进程崩溃 | 先 `describe` 看日志，再 `reload`（非 `restart`） |
-| 本地 max 日期 ≠ 文件名日期 | 上游导出时点问题（非 ETL bug） | 例：`02_理赔明细_报案时间20260416.xlsx` 实际 max(report_time)=20260415 — 需跟用户确认 |
+| 本地 max 日期 ≠ 文件名日期 | 上游导出时点问题（非 ETL bug） | 例：`20210101-20260416_05_理赔明细.xlsx`（旧 `02_理赔明细_报案时间20260416.xlsx`）实际 max(report_time)=20260415 — 需跟用户确认 |
 | governance `.last-sync-manifest.json` 不一致 | sync-vps 部分 critical 目录失败 → 未写 manifest | 先修 rsync 失败的单目录，再重跑 sync-vps |
 
 ## 5. 汇报模板
