@@ -1,66 +1,42 @@
 ---
 name: chexian-verify
-description: 当用户需要在提交或发 PR 前对当前代码库做全面验证时使用 — 按序执行 build/类型检查/lint/测试套件/console.log 审计/git 状态，输出结构化 PASS/FAIL 报告。
+description: 当用户需要在提交或发 PR 前对当前代码库做全面验证时使用 — 三档模式映射到项目真实校验链（build/governance/测试/安全审查），输出结构化通过/失败报告。
 category: workflow
 scope: project
+last_updated: "2026-06-09"
 ---
 
-# Verification Command
+# 验证命令（/chexian-verify）
 
-Run comprehensive verification on current codebase state.
+按参数选择档位，逐步执行，任何关键步骤失败立即停止并报告：
 
-## Instructions
+## 三档模式
 
-Execute verification in this exact order:
+| 模式 | 执行内容 |
+|------|---------|
+| `quick` | `bun run build`（含类型检查） |
+| `full`（默认） | `bun run build` → `bun run governance`（23 项治理校验）→ `bun run test`（单元测试）→ console.log 审计（`grep -rn 'console\.log' src/ server/src/` 报告位置）→ `git status` 未提交变更 |
+| `pre-pr` | `full` 全部 + 执行 `/chexian-security-review`（按其分流规则跑专项或全量） |
 
-1. **Build Check**
-   - Run the build command for this project
-   - If it fails, report errors and STOP
-
-2. **Type Check**
-   - Run TypeScript/type checker
-   - Report all errors with file:line
-
-3. **Lint Check**
-   - Run linter
-   - Report warnings and errors
-
-4. **Test Suite**
-   - Run all tests
-   - Report pass/fail count
-   - Report coverage percentage
-
-5. **Console.log Audit**
-   - Search for console.log in source files
-   - Report locations
-
-6. **Git Status**
-   - Show uncommitted changes
-   - Show files modified since last commit
-
-## Output
-
-Produce a concise verification report:
+## 输出格式
 
 ```
-VERIFICATION: [PASS/FAIL]
+验证结果: [通过/失败]
 
-Build:    [OK/FAIL]
-Types:    [OK/X errors]
-Lint:     [OK/X issues]
-Tests:    [X/Y passed, Z% coverage]
-Secrets:  [OK/X found]
-Logs:     [OK/X console.logs]
+构建:     [OK/失败]
+治理:     [OK/X 项未过]
+测试:     [X/Y 通过]
+日志残留: [OK/X 处 console.log]
+Git 状态: [干净/X 个未提交文件]
 
-Ready for PR: [YES/NO]
+可以发 PR: [是/否]
 ```
 
-If any critical issues, list them with fix suggestions.
+存在关键问题时，逐条列出 文件:行号 + 修复建议。
 
-## Arguments
+## 备注
 
-$ARGUMENTS can be:
-- `quick` - Only build + types
-- `full` - All checks (default)
-- `pre-commit` - Checks relevant for commits
-- `pre-pr` - Full checks plus security scan
+- 集成测试（`bun run test:integration`）需 DuckDB 原生二进制，仅本地手动跑，不在本命令范围
+- worktree 中测试加载阶段整套失败时，先查原生模块损坏（memory `feedback_worktree_native_module_proxy_corruption`），不是测试问题
+
+**目标**: $ARGUMENTS（quick / full / pre-pr，缺省 full）

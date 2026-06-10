@@ -129,12 +129,28 @@ WHERE CAST(policy_date AS DATE) BETWEEN '2025-01-01' AND '2025-12-31'
 
 ## Performance Benchmarks
 
-| Query Type | Target Time |
-|------------|-------------|
-| Simple query | < 100ms |
-| Aggregation query | < 500ms |
-| Complex JOIN | < 2s |
-| Large dataset export | < 5s |
+### 查询耗时基准
+
+| 查询类型 | 目标耗时 |
+|----------|---------|
+| 简单查询 | < 100ms |
+| 聚合查询 | < 500ms |
+| 复杂 JOIN | < 2s |
+| 大数据导出 | < 5s |
+
+### 内存占用基准
+
+| 阶段 | 目标内存 |
+|------|---------|
+| 初始加载 | < 50MB |
+| 数据加载后 | < 200MB |
+| 长时间使用 | < 500MB |
+
+### 缓存命中率基准
+
+| 指标 | 目标值 |
+|------|--------|
+| 路由缓存（LRU 内存层）命中率 | > 80% |
 
 ---
 

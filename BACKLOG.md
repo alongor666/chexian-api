@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（40 项 · 数据截至 2026-06-09 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（42 项 · 数据截至 2026-06-10 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -29,7 +29,7 @@
 - B331 — 超大文件拆分（21 目录排查 主题C）
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
 
-**P2（20 项）**
+**P2（22 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -51,6 +51,8 @@
 - B340 `TODO` — 生产 claims 域加载器缺 union_by_name（潜伏，B339 闸门镜像时发
 - 2026-06-08-claude-16ab1c — 报告托管 phase-2
 - 2026-06-08-claude-691a87 — BACKLOG 增弃置状态 + 过时项剪枝（治理体检缺口②）
+- 2026-06-10-claude-3a6daf — 深入评估 chexian-patrol 续保巡检命令的设计思路
+- 2026-06-10-claude-b4da70 — 数据管理/cli.py 工具库空壳化处置
 
 **P3（14 项）**
 
@@ -115,3 +117,5 @@
 | 2026-06-09-claude-530bf5 | 2026-06-09 | 数据管道/ETL | @claude | claims 报案截止日新鲜度告警（B191e0f）目前仅在 daily.mjs Step5.5 打 stdout 红字 advisory 提示；交互式跑能看到，但无人值守批量跑（release:daily / cron）红字易被忽略——而满期赔付率对账事故场景正是「静默喂旧数据、无人盯」。增强：把报案截止日落后天数 lag 信号接入 release:daily 健康检查与企微通知，让无人值守也能拦截；可选给阈值加工作日感知（report_time 周末累积，周一可能 benign 假阳性）。来源 PR #537 review 观察①②。 | P3 | PROPOSED | .claude/rules/data-pipeline.md | 数据管理/daily.mjs runClaimsDetail Step5.5 |  |
 | 2026-06-09-claude-66b2eb | 2026-06-09 | ApiClient 神类拆分 | @claude | 命名空间子客户端富类型提升为命名接口（gold-plating·非阻塞）：cross-sell(#544)迁移时把 timePeriod(26 字段)/heatmap(11 字段)/orgTrend/trend/topSalesman 的富返回类型逐字段保留，但仍是匿名内联。后续可提升为 types.ts 命名接口（CrossSellTimePeriodResponse 等），利于复用与契约测试引用。来源：PR #544 评审观察项。 | P3 | PROPOSED | N/A | src/shared/api/cross-sell-api.ts,src/shared/api/types.ts | PR #545 评审强化：内联富类型提升应批量进行（performance + crossSell 及后续 customer-flow 等一次性提升为 types.ts 命名接口，消除重复内联块），而非逐域零敲碎打。 |
 | 2026-06-09-claude-709fc0 | 2026-06-09 | ApiClient 神类拆分 | @claude | 契约覆盖 meta 守卫（gold-plating·非阻塞）：随 Phase 2 后续 7 域铺开，加一个自执行 meta 测试——枚举 apiClient 各命名空间方法、断言每个都在 client-contracts 契约表里有对应 case（或数量对账），让"新域无覆盖"在测试层自动暴露，替代"人记得追加"。来源：PR #542 评审观察项 #2。 | P3 | PROPOSED | N/A | src/shared/api/__tests__/client-contracts.test.ts |  |
+| 2026-06-10-claude-3a6daf | 2026-06-10 | 评估/工具链 | @claude | 深入评估 chexian-patrol 续保巡检命令的设计思路：其依赖的数据源 数据管理/warehouse/fact/renewal_universe/latest.parquet 与必读规范 数据管理/knowledge/ai/RENEWAL_PATROL_REPORT_FRAMEWORK.md 均不存在，巡检产物目录也不存在，命令当前不可执行。需评估：1) 三口径巡检（已到期/30天内/全年）是否已被 diagnose-renewal v2.2（基于 renewal_tracker）实质覆盖；2) 若有独有价值（5 优先客户类别×AI 深度研判），应重建数据链还是把独有逻辑并入 diagnose-renewal；3) 评估后决定修复或删除该命令。来源：2026-06-09 slash 命令全面优化评审。 | P2 | PROPOSED | .claude/commands/chexian-patrol.md | 数据管理/patrol/patrol_engine.py |  |
+| 2026-06-10-claude-b4da70 | 2026-06-10 | 评估/工具链 | @claude | 数据管理/cli.py 工具库空壳化处置：cli.py 注册的 9 个工具（analyze_parquet/analyze_excel/deep_analysis/field_relation/field_deep/field_exhaustive/excel_to_parquet/earned_premium/diagnose_agent CLI 入口）的模块文件目录 data_tools/ field_tools/ conversion_tools/ business_tools/ 在主仓库与 git 跟踪中全部不存在，2026-06-09 实测运行报模块文件不存在。需决策：1) 重建工具模块（如有真实使用场景）；2) 退役 cli.py 并删除 /chexian-data-tools 命令（替代能力已有：duckdb 直查/daily.mjs ETL/diagnose-* pipelines）。/chexian-data-tools 命令文件已改写为不可用状态指针。 | P2 | PROPOSED | .claude/commands/chexian-data-tools.md | 数据管理/cli.py |  |

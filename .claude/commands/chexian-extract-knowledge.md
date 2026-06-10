@@ -1,8 +1,8 @@
 ---
 name: chexian-extract-knowledge
-description: 提取对话中的隐性知识并结构化归档到知识库
+description: 提取对话中的隐性知识并结构化归档到知识库。当用户说"提取知识/归档规则/沉淀本次对话"时触发。
 category: knowledge-management
-version: 1.0.0
+version: 1.1.0
 author: "@claude"
 tags: [knowledge, documentation, automation, best-practices]
 scope: global
@@ -10,7 +10,7 @@ requires: []
 dependencies:
   - .claude/knowledge-extraction-protocol.md
   - .claude/agents/knowledge-miner.md
-last_updated: "2026-01-11"
+last_updated: "2026-06-09"
 ---
 
 # /chexian-extract-knowledge
@@ -60,26 +60,25 @@ last_updated: "2026-01-11"
 
 ## 工作流程
 
-1. **扫描对话** - 识别关键词命中(规则、纠正、约束、决策)
-2. **提取上下文** - 获取完整对话片段
-3. **分类整理** - 按6类知识体系分类
-4. **请求确认** - 逐项确认理解准确性
-5. **归档存储** - 更新知识库文档
-6. **生成报告** - 输出变更摘要
+调用 `.claude/agents/knowledge-miner.md` 执行六步流程（强制读取 `.claude/knowledge-extraction-protocol.md` 协议）：
+1. 扫描对话识别关键词（规则/纠正/约束/决策）
+2. 提取完整对话片段上下文
+3. 按六类知识体系分类整理
+4. 逐项确认理解准确性
+5. 归档存储到对应路径（见下）
+6. 输出变更摘要报告
 
-## 输出
+## 归档路径映射（项目专属）
 
-- 候选知识清单 (Markdown)
-- 更新的知识库文档
-- 变更摘要报告
-
-## 预期时间
-
-- 交互模式: 20-40分钟
-- 批量模式: 5-10分钟
+| 知识类型 | 归档路径 |
+|---------|---------|
+| 车险业务规则 | `数据管理/knowledge/rules/车险数据业务规则字典.md` |
+| 数据索引与字段 | `开发文档/00_index/DATA_INDEX.md` |
+| 开发规范与决策 | `开发文档/DEVELOPER_CONVENTIONS.md` |
+| 进展与缺口 | `开发文档/缺口清单.md` |
+| 跨对话持久记忆 | `~/.claude/projects/.../memory/MEMORY.md` |
 
 ## 相关文档
 
-- `.claude/knowledge-extraction-protocol.md` - 知识提取协议
-- `.claude/agents/knowledge-miner.md` - Knowledge Miner Agent
-- `开发文档/00_index/DATA_INDEX.md` - 数据索引
+- `.claude/knowledge-extraction-protocol.md` — 知识提取协议（强制读取，覆盖所有提取行为）
+- `.claude/agents/knowledge-miner.md` — 知识挖掘 Agent
