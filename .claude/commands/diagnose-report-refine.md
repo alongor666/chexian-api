@@ -6,6 +6,7 @@ version: 1.0.0
 author: "@claude"
 tags: [diagnosis, report, conclusion, refine, renewal]
 scope: project
+last_updated: "2026-06-09"
 ---
 
 # 诊断报告结论精炼器（/diagnose-report-refine）

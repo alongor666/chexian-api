@@ -9,9 +9,9 @@ scope: global
 requires:
   - bun
 dependencies:
-  - scripts/chexian-session-manager.mjs
-  - .claude/agents/chexian-session-manager.md
-last_updated: "2026-01-11"
+  - scripts/session-manager.mjs
+  - .claude/agents/session-manager.md
+last_updated: "2026-06-09"
 ---
 
 # 会话管理器 (Session Manager)
@@ -23,10 +23,10 @@ last_updated: "2026-01-11"
 ## 🎯 核心功能
 
 ### 1. 查找会话存储位置
-自动检测 Claude Code 会话数据的存储位置（支持跨平台）：
-- **macOS**: `~/Library/Application Support/Claude Code/sessions/`
-- **Linux**: `~/.local/share/claude-code/sessions/`
-- **Windows**: `%APPDATA%\Claude Code\sessions\`
+Claude Code 会话数据（JSONL 格式）的实际存储位置：
+- `~/.claude/projects/<项目路径哈希>/`（项目路径中 `/` 替换为 `-` 得到目录名）
+- 本项目示例：`~/.claude/projects/-Users-alongor666-Downloads------DUD-chexian-api/`
+- 执行层脚本：`scripts/session-manager.mjs`（列出/搜索/重命名/删除/导出的完整实现）
 
 ### 2. 列出历史会话
 ```bash
