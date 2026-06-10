@@ -5,13 +5,13 @@
       "id": "premium",
       "name": "保费",
       "type": "fact",
-      "source_pattern": "01_签单清单_*.xlsx 或 每日数据_*.xlsx",
+      "source_pattern": "YYYYMMDD-YYYYMMDD_01_签单清单_定稿.xlsx（2026-06-10 范围前缀基线）；兼容旧 01_签单清单_*.xlsx / 每日数据_*.xlsx",
       "etl_entry": "node 数据管理/daily.mjs",
       "etl_script": "pipelines/transform.py",
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-06-09",
+      "last_updated": "2026-06-10",
       "data_range": "2021-01-01 ~ 2026-05-16",
       "row_count": 2594621,
       "field_count": 42,
@@ -41,15 +41,15 @@
       "id": "claims_detail",
       "name": "赔案明细",
       "type": "fact",
-      "source_pattern": "02_理赔明细_*.xlsx（支持多文件合并）",
+      "source_pattern": "YYYYMMDD-YYYYMMDD_05_理赔明细.xlsx（2026-06-10 编号 02→05 + 范围前缀，支持多文件合并）；兼容旧 02_理赔明细_*.xlsx",
       "etl_entry": "node 数据管理/daily.mjs claims_detail",
       "etl_script": "pipelines/convert_claims_detail.py",
       "output": "warehouse/fact/claims_detail/claims_*.parquet",
       "update_cadence": "daily_cdc_partition",
-      "last_updated": "2026-06-09",
+      "last_updated": "2026-06-10",
       "data_range": "2019-01-01 ~ 2026-05-16",
-      "row_count": 287395,
-      "field_count": 41,
+      "row_count": 287541,
+      "field_count": 40,
       "key_fields": [
         "claim_no",
         "policy_no",
@@ -77,21 +77,22 @@
       "id": "quotes_conversion",
       "name": "报价转化(04_报价清单)",
       "type": "fact",
-      "source_pattern": "04_报价清单*.xlsx",
+      "source_pattern": "YYYYMMDD_02_报价清单_商业险.xlsx（2026-06-10 编号 04→02）；历史 04_报价清单* 文件仍为活跃输入（上游未重导报价历史）",
       "etl_entry": "python3 数据管理/pipelines/quote_etl.py -i <xlsx1> <xlsx2> ...",
       "etl_script": "pipelines/quote_etl.py",
       "trigger": {
         "input_strategy": "multi_file_input",
         "input_globs": [
           "04_报价清单*.xlsx",
-          "????????_04_报价清单*.xlsx"
+          "????????_04_报价清单*.xlsx",
+          "????????_02_报价清单*.xlsx"
         ],
         "output_is_dir": true,
         "archive_prefix": "quotes_conversion_latest"
       },
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
-      "last_updated": "2026-06-09",
+      "last_updated": "2026-06-10",
       "data_range": "2025-12-02 ~ 2026-05-20",
       "row_count": 859579,
       "field_count": 32,
@@ -174,20 +175,21 @@
       "id": "brand",
       "name": "品牌车型",
       "type": "dim",
-      "source_pattern": "06_厂牌明细*.xlsx",
+      "source_pattern": "YYYYMMDD_04_厂牌明细.xlsx（2026-06-10 编号 06→04，全量快照）；兼容旧 06_厂牌明细*",
       "etl_entry": "node 数据管理/daily.mjs brand",
       "etl_script": "pipelines/convert_brand_dim.py",
       "trigger": {
         "input_strategy": "single",
         "input_globs": [
           "06_厂牌明细*.xlsx",
-          "????????_06_厂牌明细*.xlsx"
+          "????????_06_厂牌明细*.xlsx",
+          "????????_04_厂牌明细*.xlsx"
         ],
         "archive_prefix": "brand_latest"
       },
       "output": "warehouse/dim/brand/latest.parquet",
       "update_cadence": "with_premium",
-      "last_updated": "2026-06-09",
+      "last_updated": "2026-06-10",
       "row_count": 371359,
       "field_count": 15,
       "key_fields": [
@@ -250,6 +252,8 @@
       "name": "交叉销售",
       "type": "fact",
       "source_pattern": "03_交叉销售_*.xlsx",
+      "upstream_status": "stopped_20260610",
+      "data_cutoff": "2026-06-08",
       "etl_entry": "node 数据管理/daily.mjs cross_sell",
       "etl_script": "pipelines/convert_cross_sell.py",
       "trigger": {
@@ -280,7 +284,7 @@
         "/api/query/cross-sell-heatmap"
       ],
       "frontend_page": "specialty (tab=cross-sell)",
-      "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重",
+      "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重。⚠ 2026-06-10 上游 BI 清单重构停止下载本清单，本域为冻结存量（merge_with_history=true 保护历史 parquet）；签单清单同日新增「交叉销售标识-驾意/交叉销售保费-驾意」两列，未来可评估改从签单域派生（口径等价性未验证，禁自动推断）",
       "last_updated": "2026-06-09",
       "row_count": 420899,
       "field_count": 9,
@@ -317,14 +321,16 @@
       "id": "repair_resource",
       "name": "维修资源",
       "type": "dim",
-      "source_pattern": "07_维修资源*.xlsx",
+      "source_pattern": "YYYYMMDD-YYYYMMDD_03_维修资源.xlsx（2026-06-10 编号 07→03 + 区间文件）；兼容旧 07_维修资源*",
       "etl_entry": "node 数据管理/daily.mjs repair",
       "etl_script": "pipelines/convert_repair.py",
       "trigger": {
         "input_strategy": "multi_file_merge",
         "input_globs": [
           "07_维修资源*.xlsx",
-          "????????_07_维修资源*.xlsx"
+          "????????_07_维修资源*.xlsx",
+          "????????_03_维修资源*.xlsx",
+          "????????-????????_03_维修资源*.xlsx"
         ],
         "merge_dedup_key": "repair_shop_name",
         "merge_order_by": "report_date DESC NULLS LAST",
@@ -347,8 +353,8 @@
       ],
       "frontend_page": "repair",
       "notes": "维修厂合作数据，12列+派生 shop_code（前8位编码），含核损金额/换件折扣率/合作状态。2026-04-18 重设计：引入 coop_tier 三态分类 + shop_code JOIN ClaimsDetail",
-      "last_updated": "2026-06-09",
-      "row_count": 6608,
+      "last_updated": "2026-06-10",
+      "row_count": 6648,
       "field_count": 13,
       "data_range": "2025-01-01 ~ 2026-05-21"
     },
@@ -357,6 +363,8 @@
       "name": "客户来源去向",
       "type": "fact",
       "source_pattern": "????????_08_商业险续保流失公司.xlsx + ????????_09_商业险转保上年公司.xlsx",
+      "upstream_status": "stopped_20260610",
+      "data_cutoff": "2026-06-08",
       "etl_entry": "node 数据管理/daily.mjs customer_flow",
       "etl_script": "pipelines/convert_customer_flow.py",
       "trigger": {
@@ -403,7 +411,7 @@
         "/api/query/customer-flow/trend"
       ],
       "frontend_page": "customer-flow",
-      "notes": "客户转保/流失分析；由 08_商业险续保流失公司(next_insurer) + 09_商业险转保上年公司(previous_insurer) 合成，按 (policy_no, insurance_start_date) 合并到精简 customer_flow schema。详见 docs/data-sources/customer_flow.md",
+      "notes": "客户转保/流失分析；由 08_商业险续保流失公司(next_insurer) + 09_商业险转保上年公司(previous_insurer) 合成，按 (policy_no, insurance_start_date) 合并到精简 customer_flow schema。⚠ 2026-06-10 上游停止下载 08/09 两清单，本域为冻结存量；签单清单同日新增「上年承保主体/次年保险公司」两列（已注册为 previous_insurer/next_insurer 字段），未来可评估改从签单域派生（口径等价性未验证，禁自动推断）。详见 docs/data-sources/customer_flow.md",
       "last_updated": "2026-06-09",
       "row_count": 188340,
       "field_count": 5
@@ -447,7 +455,7 @@
       "api_routes": [],
       "frontend_page": null,
       "notes": "新能源出险每日全量快照；首版仅标准化报案时间、报案号、车架号、结案状态、立案/已决金额和 source_batch_date，供后续新能源专项分析接入。",
-      "last_updated": "2026-06-09",
+      "last_updated": "2026-06-10",
       "row_count": 874,
       "field_count": 10
     },
@@ -485,7 +493,7 @@
       ],
       "frontend_page": "renewal-tracker",
       "notes": "派生域：2025 起保 + 2026 到期商业险宇宙。dual-key 续保匹配 (source_policy_no + VIN)。报价窗口 2025-12-03 起。从 renewal-tracker 子项目迁移（2026-04-19，替代 2026-04-18 下线的 renewal 模块）",
-      "last_updated": "2026-06-09",
+      "last_updated": "2026-06-10",
       "row_count": 127980,
       "field_count": 23
     }

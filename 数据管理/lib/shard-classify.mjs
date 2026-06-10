@@ -16,6 +16,11 @@ export function formatDate(d = new Date()) {
 
 /** 从文件名提取日期范围，支持下划线和连字符 */
 export function extractDateRange(filename, today = formatDate()) {
+  // 范围前缀格式（2026-06-10 上游 BI 清单重构起）：20240101-20250531_01_签单清单_定稿.xlsx
+  const rangePrefix = filename.match(/^(\d{8})-(\d{8})_/);
+  if (rangePrefix) {
+    return { start: rangePrefix[1], end: rangePrefix[2] };
+  }
   // 新前缀格式（2026-04-26 起）：20260426_01_签单清单.xlsx → single-day（归入 weekly 处理）
   const newPrefix = filename.match(/^(\d{8})_\d{2}_/);
   if (newPrefix) {
@@ -56,6 +61,13 @@ export function getShardType(filename, config) {
 
   const cutoff = parseInt(config.static_cutoff.replace(/-/g, ''));
   const weeklyStart = config.weekly_start.replace(/-/g, '');
+
+  // 范围前缀文件（YYYYMMDD-YYYYMMDD_）是独立命名的基线分片：
+  // 满期段（end ≤ cutoff）归 static，其余一律归 weekly（输出到 current/ 多文件共存），
+  // 不走 daily/staging 路径——staging 仅服务于旧「每日数据_」增量合并流程。
+  if (filename.match(/^\d{8}-\d{8}_/)) {
+    return parseInt(range.end) <= cutoff ? 'static' : 'weekly';
+  }
 
   if (parseInt(range.end) <= cutoff) return 'static';
   if (range.start === weeklyStart) return 'weekly';

@@ -529,6 +529,24 @@
       "description": "车龄分段（派生字段，查询时由 first_registration_date 与 policy_date 计算；未落 ETL Parquet，查询方需自行 CASE WHEN 派生。桶口径：0-1/1-3/3-5/5-8/8+ 年）"
     },
     {
+      "id": "previous_insurer",
+      "label": "上年承保主体",
+      "sourceColumn": "上年承保主体",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["previous_insurer", "previousInsurer"],
+      "description": "上一保单年度承保该客户的保险公司（2026-06-10 上游签单清单 40→44 列新增。转保来源分析；与停更 customer_flow 域的 previous_insurer 同义，口径等价性未验证）。历史分片无此列，union_by_name 下为 NULL"
+    },
+    {
+      "id": "next_insurer",
+      "label": "次年保险公司",
+      "sourceColumn": "次年保险公司",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["next_insurer", "nextInsurer"],
+      "description": "下一保单年度承保该客户的保险公司（2026-06-10 上游签单清单 40→44 列新增。流失去向分析；与停更 customer_flow 域的 next_insurer 同义，口径等价性未验证）。历史分片无此列，union_by_name 下为 NULL"
+    },
+    {
       "id": "branch_code",
       "label": "分公司编码",
       "sourceColumn": null,
@@ -557,7 +575,8 @@
       "车险风险等级", "交叉销售标识", "交叉销售保费_驾意", "三者保额", "司机保额",
       "乘客险保额", "车牌号码", "座位数", "被保险人年龄分组", "初次登记年月", "燃料种类",
       "保险止期", "被保险人性别", "货车类型", "吨位数", "无赔款优待记录",
-      "交强险NCD", "商业险NCD", "高速风险等级", "车险分分数"
+      "交强险NCD", "商业险NCD", "高速风险等级", "车险分分数",
+      "上年承保主体", "次年保险公司"
     ]
   }
 }

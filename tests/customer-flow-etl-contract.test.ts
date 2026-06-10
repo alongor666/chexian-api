@@ -10,6 +10,9 @@ describe('customer_flow ETL contract', () => {
 
     expect(customerFlow).toBeTruthy();
     expect(customerFlow.source_pattern).toBe('????????_08_商业险续保流失公司.xlsx + ????????_09_商业险转保上年公司.xlsx');
+    // 2026-06-10 上游 BI 清单重构：08/09 清单停止下载，本域冻结存量（停更状态纳入契约保护）
+    expect(customerFlow.upstream_status).toBe('stopped_20260610');
+    expect(customerFlow.data_cutoff).toBe('2026-06-08');
     expect(customerFlow.trigger.input_strategy).toBe('full_snapshot');
     expect(customerFlow.trigger.snapshot_mode).toBe('full_batch_replace');
     expect(customerFlow.trigger.required_same_batch).toBe(true);
