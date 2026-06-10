@@ -75,10 +75,11 @@ async function probeAll(): Promise<Record<string, WireSnapshot>> {
 }
 
 describe('ApiClient 线缆金 master', () => {
-  it('全量业务方法都产出线缆签名（守恒：99 = 18 基类 + 81 命名空间）', async () => {
+  it('全量业务方法都产出线缆签名（条数 = REGISTRY；数值守恒由 api-wire-conservation.mjs 对冻结基线把关）', async () => {
     const snap = await probeAll();
-    expect(Object.keys(snap).length).toBe(99);
-    expect(REGISTRY.length).toBe(99);
+    // 不在此硬编码总数：合法新增方法走「守恒脚本 POST_SPLIT_ADDITIONS 登记 + REGISTRY 补条 +
+    // UPDATE_GOLDEN=1」演进通道即可，无需改本测试；REGISTRY 与真实面的对账由守恒脚本负责。
+    expect(Object.keys(snap).length).toBe(REGISTRY.length);
   });
 
   it('每条线缆签名结构完整（verb/path 非空，dedupe 仅 GET 有值）', async () => {
