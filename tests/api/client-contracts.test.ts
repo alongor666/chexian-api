@@ -160,18 +160,18 @@ describe('API client contract coverage', () => {
     expect(calledUrl).toContain('org=%E4%B9%90%E5%B1%B1');
   });
 
-  it('plan achievement endpoint preserves planType and dimension', async () => {
+  it('plan achievement endpoint preserves planYear and level', async () => {
     const { apiClient } = await importClient();
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ success: true, data: {} }),
     });
-    await apiClient.premium.achievement({ year: 2026, planType: 'driver', dimension: 'org' } as any);
+    await apiClient.premium.achievement({ planYear: 2026, level: 'org' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/plan-achievement?');
-    expect(calledUrl).toContain('planType=driver');
-    expect(calledUrl).toContain('dimension=org');
+    expect(calledUrl).toContain('planYear=2026');
+    expect(calledUrl).toContain('level=org');
   });
 
   it('filter options endpoint remains stable', async () => {
@@ -279,7 +279,8 @@ describe('namespaced sub-client URL contracts', () => {
     });
   });
 
-  type NsCase = { name: string; path: string; run: (c: any) => Promise<unknown>; expectParam?: boolean; expectMethod?: 'POST' | 'PUT' | 'DELETE' };
+  /** expectParam: true = 断言默认 org=乐山；字符串 = 断言自定义参数子串（schema 参数名非 org 的域用） */
+  type NsCase = { name: string; path: string; run: (c: any) => Promise<unknown>; expectParam?: boolean | string; expectMethod?: 'POST' | 'PUT' | 'DELETE' };
   const cases: NsCase[] = [
     // ── claimsDetail（#541 迁移域回填）──
     { name: 'claimsDetail.pendingOverview', path: '/query/claims-detail/pending-overview', run: (c) => c.claimsDetail.pendingOverview({ org: '乐山' }), expectParam: true },
@@ -359,7 +360,8 @@ describe('namespaced sub-client URL contracts', () => {
     // ── premium（本 PR 残渣域归并）──
     { name: 'premium.report', path: '/query/premium-report?', run: (c) => c.premium.report({ org: '乐山' }), expectParam: true },
     { name: 'premium.plan', path: '/query/premium-plan?', run: (c) => c.premium.plan({ org: '乐山' }), expectParam: true },
-    { name: 'premium.achievement', path: '/query/plan-achievement?', run: (c) => c.premium.achievement({ org: '乐山' } as any), expectParam: true },
+    // achievement 的真实 schema 参数是 planYear/level/orgFilter…（非 org），夹具用真名以文档化用法
+    { name: 'premium.achievement', path: '/query/plan-achievement?', run: (c) => c.premium.achievement({ orgFilter: '乐山' }), expectParam: 'orgFilter=%E4%B9%90%E5%B1%B1' },
     // ── geo（本 PR 残渣域归并）──
     { name: 'geo.province', path: '/query/policy-geo/province?', run: (c) => c.geo.province({ org: '乐山' }), expectParam: true },
     { name: 'geo.city', path: '/query/policy-geo/city?', run: (c) => c.geo.city({ org: '乐山' }), expectParam: true },
@@ -374,7 +376,8 @@ describe('namespaced sub-client URL contracts', () => {
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain(path);
     if (expectParam) {
-      expect(calledUrl).toContain('org=%E4%B9%90%E5%B1%B1');
+      // true = 默认 org=乐山；字符串 = 自定义参数子串（如 achievement 的 orgFilter）
+      expect(calledUrl).toContain(expectParam === true ? 'org=%E4%B9%90%E5%B1%B1' : expectParam);
     } else {
       expect(calledUrl).not.toContain('?');
     }
