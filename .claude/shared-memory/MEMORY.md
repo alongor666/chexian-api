@@ -37,11 +37,11 @@
 - VPS 路径: `server/data/dim/salesman/latest.parquet` + `server/data/dim/plan/latest.parquet`
 
 ## Auth Credentials
-- admin/**CxAdmin@2026!** (branch_admin) — 非 admin123，已确认（organizations.ts L342）
-- 其他用户规律：leshan/leshan123, tianfu/tianfu123（`{username}123` 模式）
+- admin 凭据由 USER_PASSWORDS 环境变量提供（旧密码 2026-06-09 已轮换）
+- org 用户凭据由 USER_PASSWORDS 环境变量提供（历史 {username}123 弱口令 2026-06-09 已轮换）
 - bcrypt hashes 已从 `server/src/services/auth.ts` 迁移到 `server/src/config/preset-users.ts`
 - SHA-256 hashes in `server/src/config/organizations.ts` (USER_CREDENTIALS, backup)
-- E2E 凭据：`E2E_USERNAME=admin / E2E_PASSWORD=CxAdmin@2026!`（auth.setup.ts, 03-cleanup.spec.ts）
+- E2E 凭据：`E2E_USERNAME` / `E2E_PASSWORD` 环境变量（不再硬编码明文）
 
 ## Puppeteer MCP Fix
 - Root cause: `@modelcontextprotocol/server-puppeteer` pins puppeteer ^23.4.0 → Chrome 131

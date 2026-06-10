@@ -74,7 +74,7 @@ async function getToken(page: import('@playwright/test').Page): Promise<string> 
   const res = await page.request.post('http://localhost:3000/api/auth/login', {
     data: {
       username: process.env.E2E_USERNAME ?? 'admin',
-      password: process.env.E2E_PASSWORD ?? 'CxAdmin@2026!',
+      password: process.env.E2E_PASSWORD,
     },
   });
   const json = await res.json();

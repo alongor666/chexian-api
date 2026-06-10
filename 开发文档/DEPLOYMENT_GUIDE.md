@@ -426,13 +426,13 @@ tail -f /var/www/chexian/logs/audit.log
 # 1. 浏览器访问
 # 打开 https://chexian.cretvalu.com
 # - 应显示登录页面（无 SSL 警告）
-# - 登录：admin / admin123
+# - 登录：admin / <在凭据库/E2E_PASSWORD 环境变量中获取>
 # - 查看仪表盘数据
 
 # 2. API 请求测试
 curl -X POST https://chexian.cretvalu.com/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"username":"admin","password":"<在凭据库/E2E_PASSWORD 环境变量中获取>"}'
 # 预期: {"success":true,"data":{"token":"..."}}
 ```
 
