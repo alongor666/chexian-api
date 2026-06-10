@@ -4,15 +4,25 @@
  *
  * 验证「ApiClient 神类拆分 Phase 2」是纯搬运、零增减、零改线：
  *
- *   守恒恒等式：  原公开业务方法(99)  −  保留在基类(18)  ==  Σ 命名空间子客户端方法(81)
+ *   守恒恒等式：  pre-#536 业务方法(99) + 拆分后合法新增(POST_SPLIT_ADDITIONS)
+ *                 == 保留在基类 + Σ 命名空间子客户端方法
  *   契约覆盖：    金 master golden 条目数  ≥  保留 + Σ命名空间（每个业务方法都有线缆签名）
- *   保留合法性：  25 个保留方法名 ⊆ pre-#536 业务方法名（无凭空新造的「保留」）
+ *   保留合法性：  保留方法名 ⊆ pre-#536 业务方法名 ∪ 新增清单（无凭空新造的「保留」）
  *   路由集 LOST： pre-#536 引用的路由常量集 ⊆ 当前引用集（无端点被搬丢）—— 需 git 历史，缺则跳过
  *
  * 数据源：
  *   - pre-#536 冻结基线：tests/api/__golden__/pre536-business-methods.json（git 0e592603 提取，CI 安全）
  *   - 当前面：src/shared/api/client.ts（保留基类方法）+ src/shared/api/*-api.ts（命名空间方法）
  *   - 金 master：tests/api/__golden__/client-wire-golden.json
+ *
+ * ## 演进通道（新增 API 方法的正规路径，缺它护栏会退化成路障）
+ *
+ * 本脚本不是「冻结 API 面」，而是「冻结无意识漂移」。合法新增一个业务方法时：
+ *   1. 在下方 POST_SPLIT_ADDITIONS 登记方法名（基类用裸名，命名空间用 'ns.method'）+ PR 号
+ *   2. 在 tests/api/__support__/wire-probe.ts 的 REGISTRY 补一条（金 master 才能覆盖它）
+ *   3. `UPDATE_GOLDEN=1 bunx vitest run tests/api/client-wire-golden.test.ts` 重生 golden
+ *   4. 本脚本 + `bun run governance` 重新通过
+ * 删除方法没有快捷通道——那是破坏性 API 变更，需先确认零调用方再走评审。
  *
  * 用法：
  *   node scripts/api-wire-conservation.mjs            # 校验，失败 exit 1
@@ -39,6 +49,18 @@ const SUB_CLIENT_FILES = [
   'quote-conversion', 'claims-detail', 'repair', 'cross-sell', 'performance',
   'customer-flow', 'ai', 'data', 'workflows', 'auth',
   'premium', 'geo', 'patrol',
+];
+
+/**
+ * 拆分后合法新增的业务方法（演进通道，见文件头注释）。
+ *
+ * 每条：{ name: 方法名（基类裸名 / 命名空间 'ns.method'）, pr: 'PR #编号' }。
+ * 登记 = 有意识承认 API 面扩张；不登记直接加方法 → 守恒恒等式红，错误信息会把你带回这里。
+ * 计数口径：基类裸名计入「保留」侧，'ns.method' 计入「命名空间」侧（按文件提取自然包含），
+ * 故恒等式右边无需改——只把左边期望值从 pre-#536 基数加上本清单长度。
+ */
+const POST_SPLIT_ADDITIONS = [
+  // 例：{ name: 'premium.forecast', pr: 'PR #560' },
 ];
 
 const args = process.argv.slice(2);
@@ -115,16 +137,13 @@ for (const f of SUB_CLIENT_FILES) {
 const golden = JSON.parse(readFile(GOLDEN_PATH));
 const goldenCount = Object.keys(golden).length;
 
-// ── 守恒恒等式：pre536 == 保留 + Σ命名空间 ──
-const movedExpected = pre536Count - retainedCount;
-if (retainedCount + namespaceCount !== pre536Count) {
+// ── 守恒恒等式：pre536 + 合法新增 == 保留 + Σ命名空间 ──
+const EVOLUTION_HINT =
+  '若是合法新增方法：在本脚本 POST_SPLIT_ADDITIONS 登记（方法名 + PR 号）→ wire-probe.ts REGISTRY 补条目 → UPDATE_GOLDEN=1 重生 golden（详见文件头「演进通道」）；若非有意新增，说明拆分面发生了无意识漂移，须先定位';
+const expectedTotal = pre536Count + POST_SPLIT_ADDITIONS.length;
+if (retainedCount + namespaceCount !== expectedTotal) {
   failures.push(
-    `守恒恒等式破坏：保留(${retainedCount}) + Σ命名空间(${namespaceCount}) = ${retainedCount + namespaceCount} != pre-#536(${pre536Count})`
-  );
-}
-if (namespaceCount !== movedExpected) {
-  failures.push(
-    `迁出数不符：Σ命名空间(${namespaceCount}) != pre-#536 − 保留 (${pre536Count} − ${retainedCount} = ${movedExpected})`
+    `守恒恒等式破坏：保留(${retainedCount}) + Σ命名空间(${namespaceCount}) = ${retainedCount + namespaceCount} != pre-#536(${pre536Count}) + 新增清单(${POST_SPLIT_ADDITIONS.length})。${EVOLUTION_HINT}`
   );
 }
 
@@ -135,10 +154,20 @@ if (goldenCount < retainedCount + namespaceCount) {
   );
 }
 
-// ── 保留合法性：保留名 ⊆ pre-#536 名 ──
-const inventedRetained = [...retainedBase].filter((n) => !pre536Names.has(n));
+// ── 保留合法性：保留名 ⊆ pre-#536 名 ∪ 新增清单（基类裸名）──
+const additionNames = new Set(POST_SPLIT_ADDITIONS.map((a) => a.name));
+const inventedRetained = [...retainedBase].filter((n) => !pre536Names.has(n) && !additionNames.has(n));
 if (inventedRetained.length > 0) {
-  failures.push(`保留方法名不在 pre-#536 基线中（疑似新造）：${inventedRetained.join(', ')}`);
+  failures.push(`保留方法名不在 pre-#536 基线也不在新增清单中（疑似未登记新造）：${inventedRetained.join(', ')}。${EVOLUTION_HINT}`);
+}
+
+// ── 新增清单自身合法性：登记的方法必须真实存在且已入金 master（防「登记了但没实现/没覆盖」）──
+const goldenKeys = new Set(Object.keys(golden));
+for (const a of POST_SPLIT_ADDITIONS) {
+  if (!a.pr) failures.push(`新增清单条目缺 PR 号：${a.name}（登记必须可追溯）`);
+  if (!goldenKeys.has(a.name)) {
+    failures.push(`新增清单方法未入金 master golden：${a.name}（先补 wire-probe REGISTRY 再 UPDATE_GOLDEN=1 重生）`);
+  }
 }
 
 // ── 路由集 LOST=∅（需 git 历史，CI 浅克隆缺则跳过）──
@@ -171,8 +200,9 @@ if (!QUIET || !ok) {
   console.log(`  Σ 命名空间子客户端方法                    : ${namespaceCount}`);
   for (const f of SUB_CLIENT_FILES) console.log(`      ${f.padEnd(18)}: ${namespacePerFile[f]}`);
   console.log(`  金 master golden 线缆签名条目             : ${goldenCount}`);
+  console.log(`  拆分后合法新增（POST_SPLIT_ADDITIONS）    : ${POST_SPLIT_ADDITIONS.length}`);
   console.log('────────────────────────────────────────');
-  console.log(`  守恒：${retainedCount} + ${namespaceCount} == ${pre536Count} ? ${retainedCount + namespaceCount === pre536Count ? '✓' : '✗'}`);
+  console.log(`  守恒：${retainedCount} + ${namespaceCount} == ${pre536Count} + ${POST_SPLIT_ADDITIONS.length} ? ${retainedCount + namespaceCount === expectedTotal ? '✓' : '✗'}`);
   console.log(`  覆盖：golden ${goldenCount} ≥ ${retainedCount + namespaceCount} ? ${goldenCount >= retainedCount + namespaceCount ? '✓' : '✗'}`);
   console.log(`  路由 LOST=∅ : ${lostTokens === null ? '跳过' : lostTokens.length === 0 ? '✓' : '✗'}`);
   for (const n of notes) console.log(`  ℹ️  ${n}`);
@@ -184,4 +214,10 @@ if (!ok) {
   process.exit(1);
 }
 
-if (!QUIET) console.log('\n✓ 守恒恒等式成立：拆分为纯搬运，零增减、零改线、零端点丢失。');
+if (!QUIET) {
+  console.log(
+    POST_SPLIT_ADDITIONS.length === 0
+      ? '\n✓ 守恒恒等式成立：拆分为纯搬运，零增减、零改线、零端点丢失。'
+      : `\n✓ 守恒恒等式成立：拆分纯搬运 + ${POST_SPLIT_ADDITIONS.length} 个已登记合法新增（零无意识漂移、零端点丢失）。`
+  );
+}
