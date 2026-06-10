@@ -191,7 +191,7 @@ bun run governance                 # 治理校验
 
 **CI/CD**：`deploy.yml`（push main → 构建→部署→健康检查）· `claude-code.yml`（@claude 触发）· `governance-check.yml`（PR 治理）
 
-**工具箱**：命令在 `.claude/commands/`、agent 在 `.claude/agents/`（AI-native：均由各文件 frontmatter `description` 自动注入上下文被发现，不维护人类向 README 索引）· 常用：`/chexian-commit-push-pr` `/chexian-data-analysis` `/chexian-security-review` `/chexian-verify` `/chexian-deploy`
+**工具箱**：命令在 `.claude/commands/`、agent 在 `.claude/agents/`（AI-native：均由各文件 frontmatter `description` 自动注入上下文被发现，不维护人类向 README 索引）· 选择原则：用户直接 `/` 触发的标准化流程→命令；深度分析/作为 sub-agent 被调用→agent · 常用：`/chexian-commit-push-pr` `/chexian-data-analysis` `/chexian-security-review` `/chexian-verify` `/chexian-deploy`
 
 ---
 
