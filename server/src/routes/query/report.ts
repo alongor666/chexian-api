@@ -6,7 +6,7 @@ import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } fro
 
 const router = Router();
 
-const marketingReportSchema = z.object({
+export const marketingReportSchema = z.object({
   reportType: z.enum(['org', 'salesman']).default('org'),
   holidayDates: z.string().default(''),
 });
@@ -50,7 +50,7 @@ const HOLIDAY_DRILL_DIMENSIONS = [
   'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing',
 ] as const;
 
-const holidayDrilldownSchema = z.object({
+export const holidayDrilldownSchema = z.object({
   groupBy: z.enum(HOLIDAY_DRILL_DIMENSIONS),
   drillPath: z.string().max(2000).default('[]'),
   holidayDates: z.string().default(''),
@@ -101,7 +101,7 @@ router.get(
   })
 );
 
-const premiumReportExtraSchema = z.object({
+export const premiumReportExtraSchema = z.object({
   reportType: z.enum(['org', 'salesman']).default('org'),
   planYear: z.coerce.number().default(2026),
 });

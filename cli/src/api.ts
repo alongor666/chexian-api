@@ -13,7 +13,12 @@ export class CxApiError extends Error {
 interface RequestOpts {
   query?: Record<string, string | number | boolean | undefined>;
   signal?: AbortSignal;
+  /** 单次请求超时（毫秒）。未设置时不限时（沿用网络层默认）。 */
+  timeoutMs?: number;
 }
+
+/** --verbose 时由 index.ts 置 true：stderr 打印请求 URL 与耗时 */
+export const apiDebug = { verbose: false };
 
 export async function cxGet<T = unknown>(routePath: string, opts: RequestOpts = {}): Promise<T> {
   const cfg = loadConfig();
@@ -28,7 +33,20 @@ export async function cxGet<T = unknown>(routePath: string, opts: RequestOpts = 
     }
   }
 
-  return doRequest<T>(url, cfg.token, opts.signal);
+  let signal = opts.signal;
+  if (opts.timeoutMs && opts.timeoutMs > 0) {
+    const timeoutSignal = AbortSignal.timeout(opts.timeoutMs);
+    signal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+  }
+
+  const startedAt = Date.now();
+  try {
+    return await doRequest<T>(url, cfg.token, signal);
+  } finally {
+    if (apiDebug.verbose) {
+      console.error(kleur.gray(`→ GET ${url} (${Date.now() - startedAt}ms)`));
+    }
+  }
 }
 
 async function doRequest<T>(url: URL, token: string, signal?: AbortSignal, attempt = 1): Promise<T> {
@@ -41,6 +59,10 @@ async function doRequest<T>(url: URL, token: string, signal?: AbortSignal, attem
       signal,
     });
   } catch (err) {
+    const name = (err as Error).name;
+    if (name === 'TimeoutError' || name === 'AbortError') {
+      throw new CxApiError(0, '请求超时/被中止（可用 --timeout 调整毫秒数）');
+    }
     if (attempt < maxAttempts) {
       await sleep(2 ** (attempt - 1) * 500);
       return doRequest<T>(url, token, signal, attempt + 1);

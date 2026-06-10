@@ -27,7 +27,7 @@ const router = Router();
 // 确保 ClaimsAgg 惰性域在首次访问综合分析 API 时已加载
 router.use(createDomainMiddleware('ClaimsAgg'));
 
-const comprehensiveExtraSchema = z.object({
+export const comprehensiveExtraSchema = z.object({
   cutoffDate: z.string().optional(),
   planYear: z.coerce.number().int().optional(),
   granularity: z.enum(['daily', 'weekly', 'monthly']).default('monthly'),

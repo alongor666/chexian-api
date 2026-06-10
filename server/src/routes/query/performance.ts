@@ -71,7 +71,7 @@ export function mapPerformanceTimeToGranularity(timePeriod: PerformanceTimePerio
 
 const PERFORMANCE_HEATMAP_DIMENSIONS = ['org_level_3', 'team', 'salesman', 'customer_category', 'coverage_combination', 'energy_type', 'business_nature', 'insurance_grade'] as const;
 
-const performanceSummarySchema = z.object({
+export const performanceSummarySchema = z.object({
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
   vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
   timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
@@ -112,7 +112,7 @@ router.get(
   })
 );
 
-const performanceTrendSchema = z.object({
+export const performanceTrendSchema = z.object({
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
   vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
   granularity: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
@@ -148,7 +148,7 @@ router.get(
   })
 );
 
-const performanceDrilldownSchema = z.object({
+export const performanceDrilldownSchema = z.object({
   drillPath: z.string().optional().default('[]'),
   groupBy: z.enum(PERFORMANCE_DIMENSIONS).optional(),
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
@@ -224,7 +224,7 @@ router.get(
   })
 );
 
-const performanceOrgHeatmapSchema = z.object({
+export const performanceOrgHeatmapSchema = z.object({
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
   vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
   timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),
@@ -272,7 +272,7 @@ router.get(
   })
 );
 
-const performanceTopSalesmanSchema = z.object({
+export const performanceTopSalesmanSchema = z.object({
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),
   vehicleCategory: z.enum(PERFORMANCE_LEGACY_CATEGORIES).optional(),
   timePeriod: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('day'),

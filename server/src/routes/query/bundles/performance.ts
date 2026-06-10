@@ -36,7 +36,7 @@ import {
   mapPerformanceTimeToGranularity,
 } from '../performance.js';
 
-const performanceBundleSchema = z.object({
+export const performanceBundleSchema = z.object({
   drillPath: z.string().optional().default('[]'),
   groupBy: z.enum(PERFORMANCE_DIMENSIONS).optional(),
   segmentTag: z.enum(PERFORMANCE_SEGMENT_TAGS).optional(),

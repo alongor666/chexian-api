@@ -24,7 +24,7 @@ router.use(createDomainMiddleware('ClaimsAgg'));
 /**
  * 成本分析请求验证Schema（特有参数）
  */
-const costExtraSchema = z.object({
+export const costExtraSchema = z.object({
   type: z.enum(['earned', 'earned-new', 'expense-forecast']).optional(),
   analysisType: z.enum(['claimRatio', 'expenseRatio', 'comprehensiveCost', 'variableCost']).optional(),
   dimension: z.enum(['customer_category', 'org_level_3', 'coverage_combination', 'org_customer', 'org_coverage']).default('org_level_3'),

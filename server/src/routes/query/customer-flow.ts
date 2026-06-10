@@ -22,7 +22,7 @@ const router = Router();
 // 集中式惰性域加载中间件（per MAT-01）：CustomerFlow
 router.use(createDomainMiddleware('CustomerFlow'));
 
-const filterSchema = z.object({
+export const filterSchema = z.object({
   year: z.coerce.number().int().min(2020).max(2030).optional(),
 });
 

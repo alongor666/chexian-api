@@ -5,7 +5,7 @@ import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusines
 
 const router = Router();
 
-const salesmanRankingExtraSchema = z.object({
+export const salesmanRankingExtraSchema = z.object({
   rankingType: z.enum(['all', 'quality']).default('all'),
   limit: z.coerce.number().default(10),
 });
