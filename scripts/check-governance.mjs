@@ -870,7 +870,28 @@ function checkClaimsDetailDeduplication() {
 // ============================================================
 
 /**
- * 阻止含 token 的 Playwright auth 状态文件或含敏感 key 的文件进入提交。
+ * 判定文件内容是否包含「真实 token 值赋值」。
+ *
+ * 只命中 key 名紧邻一个长 value 的真实泄漏，不对「裸 key 名」的散文/evidence
+ * 提及误报（例如 BACKLOG evidence 文本里出现 cx_access_token 这个 localStorage
+ * key 名，但并无紧邻的密钥值）。命中以下任一模式即判为泄漏：
+ *   1. 赋值形：key 后跟 : 或 = 再跟 ≥20 字符的 token 值
+ *   2. Playwright storageState 形：{"name":"cx_access_token","value":"<长值>"}
+ *
+ * @param {string} content 文件全文
+ * @returns {boolean}
+ */
+export function containsCredentialValue(content) {
+  const keyAlt = 'cx_' + '(?:access|refresh)_token';
+  const valuePatterns = [
+    new RegExp(keyAlt + `["']?\\s*[:=]\\s*["']?[A-Za-z0-9._\\-]{20,}`),
+    new RegExp(`"name"\\s*:\\s*"` + keyAlt + `"\\s*,\\s*"value"\\s*:\\s*"[^"]{20,}"`),
+  ];
+  return valuePatterns.some(re => re.test(content));
+}
+
+/**
+ * 阻止含 token 的 Playwright auth 状态文件或含敏感 token 值赋值的文件进入提交。
  * 根因：此前某次提交误将 output/playwright/.auth/user.json（包含 token 字段）直接提交到仓库。
  */
 function checkStagedCredentials() {
@@ -906,8 +927,9 @@ function checkStagedCredentials() {
     );
   }
 
-  // 规则2：文件内容包含敏感凭据字段（如 access_token / refresh_token）
-  const SENSITIVE_KEYS = ['cx_' + 'access_token', 'cx_' + 'refresh_token'];
+  // 规则2：文件内容包含「真实 token 值赋值」（key 名紧邻一个长 value）
+  // 注意：只命中 key=value / storageState 这类真实泄漏，不再对「裸 key 名」
+  // 的散文/evidence 提及（如 BACKLOG evidence 文本里出现 cx_access_token）误报。
   for (const file of stagedFiles) {
     if (authPathPattern.test(file)) continue; // 已被路径规则标记，跳过
 
@@ -921,11 +943,8 @@ function checkStagedCredentials() {
       continue; // 二进制文件跳过
     }
 
-    for (const key of SENSITIVE_KEYS) {
-      if (content.includes(key)) {
-        credErrors.push(`文件内容包含敏感 key "${key}"：${file}`);
-        break;
-      }
+    if (containsCredentialValue(content)) {
+      credErrors.push(`文件内容包含敏感 token 值赋值（key=value）：${file}`);
     }
   }
 
