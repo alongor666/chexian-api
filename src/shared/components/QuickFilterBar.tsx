@@ -37,6 +37,11 @@ interface Props {
   onChange: (filters: QuickFilters) => void;
   /** 隐藏车型芯片行（如 TruckPage 已服务端固定车型） */
   hideVehicleType?: boolean;
+  /** 隐藏气/油细分（数据域无 fuel_type 列时，如交叉销售页 CrossSellDailyAgg）；
+   *  电仍可选（is_nev 列各域都有，与主站口径严格等价） */
+  hideGasOil?: boolean;
+  /** 隐藏依赖 vehicle_model 列的车型 chip（自卸/牵引/普货），如交叉销售页 */
+  hideVehicleModelChips?: boolean;
 }
 
 // ── 车型分组 ──
@@ -105,6 +110,18 @@ const FUEL_CATEGORY_TOGGLE: CycleToggleConfig = {
   ],
 };
 
+// hideGasOil 时的退化版：仅 全部 ↔ 电 两态（气/油依赖 fuel_type 列，部分数据域不可表达）
+const FUEL_CATEGORY_TOGGLE_ELECTRIC_ONLY: CycleToggleConfig = {
+  key: 'fuelCategory',
+  states: [
+    { value: undefined, label: '电/全部' },
+    { value: 'electric', label: '电' },
+  ],
+};
+
+// 依赖 vehicle_model 列的车型 chip（hideVehicleModelChips 时隐藏）
+const VEHICLE_MODEL_CHIP_TYPES: ReadonlySet<VehicleType> = new Set(['dump', 'tractor', 'general']);
+
 // 其他维度 toggle
 const OTHER_TOGGLES: CycleToggleConfig[] = [
   {
@@ -154,7 +171,11 @@ const Separator = () => <span className="w-px h-4 bg-neutral-300 dark:bg-neutral
 // 2吨以上货车和出租租赁必定是营业
 const COMMERCIAL_VEHICLE_TYPES: VehicleType[] = ['truck_2_9t', 'dump', 'tractor', 'general', 'rental'];
 
-export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicleType }) => {
+export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicleType, hideGasOil, hideVehicleModelChips }) => {
+  const visibleTruckChips = hideVehicleModelChips
+    ? TRUCK_GROUP_CHIPS.filter((c) => !VEHICLE_MODEL_CHIP_TYPES.has(c.type))
+    : TRUCK_GROUP_CHIPS;
+
   /**
    * 车型芯片点击逻辑：
    * - 非营业客车组（家自车）+ 企客：组内可多选，选中时清除其他大类
@@ -236,7 +257,10 @@ export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicle
   };
 
   const isToggleActive = (config: CycleToggleConfig) => {
-    return filters[config.key] !== undefined;
+    const value = filters[config.key];
+    // 不在可选状态集内的残留值（如其他页设置的 gas 进入 hideGasOil 页面）
+    // 显示为未激活——与后端对该维度的防御性剥离行为一致（本页不生效）
+    return value !== undefined && config.states.some((s) => s.value === value);
   };
 
   const renderToggle = (config: CycleToggleConfig) => (
@@ -288,7 +312,7 @@ export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicle
             </button>
 
             {/* 货车组 */}
-            {TRUCK_GROUP_CHIPS.map(({ type, label }) => (
+            {visibleTruckChips.map(({ type, label }) => (
               <button
                 key={type}
                 type="button"
@@ -318,7 +342,7 @@ export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicle
         <Separator />
 
         {/* 4. 油/气/电 */}
-        {renderToggle(FUEL_CATEGORY_TOGGLE)}
+        {renderToggle(hideGasOil ? FUEL_CATEGORY_TOGGLE_ELECTRIC_ONLY : FUEL_CATEGORY_TOGGLE)}
 
         {/* 5. 其他维度 toggle */}
         {OTHER_TOGGLES.map((config) => renderToggle(config))}

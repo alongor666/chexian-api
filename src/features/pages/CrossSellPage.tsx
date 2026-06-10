@@ -97,7 +97,9 @@ export const CrossSellPage: React.FC = () => {
         </FilterQuickActions>
       )}
     >
-      <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
+      {/* CrossSellDailyAgg 无 fuel_type / vehicle_model 列：隐藏气/油与自卸/牵引/普货
+          （后端 sanitizeAggQuery 同步防御性剥离，详见 开发文档/筛选器联动治理计划_2026-06-10.md Phase 0） */}
+      <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} hideGasOil hideVehicleModelChips />
       <CrossSellAnalysisPanel
         filters={filters}
         trendGranularity={trendGranularity}

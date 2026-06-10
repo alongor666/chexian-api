@@ -17,6 +17,7 @@ import {
   getSeatCoverageClause,
   buildCrossSellAggInsuranceClause,
   ensureCrossSellAggregateTablesReady,
+  sanitizeAggQuery,
   type CrossSellSeatCoverageLevel,
 } from '../cross-sell.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../../../sql/cross-sell.js';
@@ -81,7 +82,7 @@ router.get(
       throw new AppError(400, 'Invalid drillPath JSON');
     }
 
-    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+    const { whereWithDate, whereWithoutDate } = parseFiltersAndBuildBothWhere(req, sanitizeAggQuery(req.query));
     const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
 
     let withDateWhere = `${whereWithDate} AND ${getVehicleCategoryFilter(normalizedVehicleCategory)}`;

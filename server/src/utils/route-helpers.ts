@@ -27,11 +27,17 @@ import {
  *   if (!filterResult.success) throw new AppError(400, ...);
  *   const finalWhereClause = buildWhereFromFilterParams(filterResult.data, req.permissionFilter || '1=1');
  */
-export function parseFiltersAndBuildWhere(req: Request): {
+export function parseFiltersAndBuildWhere(
+  req: Request,
+  // 净化副本注入口：数据域不支持某些维度列时（如 CrossSellDailyAgg），
+  // 传入剥离后的 query 副本，避免 parser 注入不存在的列（Binder Error）。
+  // 不传时行为与原签名完全一致。
+  queryOverride?: Request['query']
+): {
   filterData: CommonFilterParams;
   whereClause: string;
 } {
-  const parseResult = commonFilterSchema.safeParse(req.query);
+  const parseResult = commonFilterSchema.safeParse(queryOverride ?? req.query);
   if (!parseResult.success) {
     throw new AppError(400, parseResult.error.issues[0].message);
   }
@@ -51,13 +57,16 @@ export function parseFiltersAndBuildWhere(req: Request): {
  */
 export type DateFieldType = 'policy_date' | 'insurance_start_date';
 
-export function parseFiltersAndBuildBothWhere(req: Request): {
+export function parseFiltersAndBuildBothWhere(
+  req: Request,
+  queryOverride?: Request['query']
+): {
   filterData: CommonFilterParams;
   whereWithDate: string;
   whereWithoutDate: string;
   dateField: DateFieldType;
 } {
-  const parseResult = commonFilterSchema.safeParse(req.query);
+  const parseResult = commonFilterSchema.safeParse(queryOverride ?? req.query);
   if (!parseResult.success) {
     throw new AppError(400, parseResult.error.issues[0].message);
   }
