@@ -43,10 +43,12 @@ export function loadConfig(): CxConfig {
     // 文件损坏忽略，走环境变量或默认
   }
 
+  // token 来自环境变量时，tokenId 必须随之派生（避免显示文件里另一个 token 的 id）
+  const envTokenId = envToken?.match(/^cx_pat_([A-Za-z0-9]+)\./)?.[1];
   return {
     baseUrl: envBase || fileCfg.baseUrl || DEFAULT_BASE_URL,
     token: envToken || fileCfg.token,
-    tokenId: fileCfg.tokenId,
+    tokenId: envToken ? envTokenId : fileCfg.tokenId,
   };
 }
 
