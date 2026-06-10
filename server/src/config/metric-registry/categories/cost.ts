@@ -16,6 +16,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'earned_claim_ratio',
     version: '2.0.0',
+    timeWindow: 'cutoff-based',
     name: '满期赔付率',
     category: 'cost',
     tags: ['core', 'kpi', 'cost'],
@@ -135,6 +136,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'earned_premium',
     version: '2.0.0',
+    timeWindow: 'cutoff-based',
     name: '满期保费',
     category: 'cost',
     tags: ['cost'],
@@ -206,6 +208,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'baseline_earned_premium',
     version: '1.0.0',
+    timeWindow: 'cutoff-based',
     name: '满期基准保费',
     category: 'cost',
     tags: ['cost', 'pricing', 'baseline'],
@@ -248,6 +251,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'baseline_earned_claim_ratio',
     version: '1.0.0',
+    timeWindow: 'cutoff-based',
     name: '满期基准赔付率',
     category: 'cost',
     tags: ['cost', 'pricing', 'baseline'],
@@ -310,6 +314,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'variable_cost_ratio',
     version: '2.0.0',
+    timeWindow: 'cutoff-based',
     name: '变动成本率',
     category: 'cost',
     tags: ['core', 'kpi', 'cost'],
@@ -354,6 +359,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'earned_loss_frequency',
     version: '2.1.0',
+    timeWindow: 'cutoff-based',
     name: '满期出险率',
     category: 'cost',
     tags: ['cost'],
@@ -400,6 +406,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'earned_margin_amount',
     version: '2.0.0',
+    timeWindow: 'cutoff-based',
     name: '满期边际贡献额',
     category: 'cost',
     tags: ['core', 'kpi', 'cost', 'margin'],
@@ -445,6 +452,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'projected_margin_amount',
     version: '2.0.0',
+    timeWindow: 'cutoff-based',
     name: '预估边际贡献额',
     category: 'cost',
     tags: ['core', 'kpi', 'cost', 'margin'],
@@ -604,6 +612,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'combined_cost_amount',
     version: '1.0.0',
+    timeWindow: 'cutoff-based',
     name: '综合成本额',
     category: 'cost',
     tags: ['core', 'kpi', 'cost'],
@@ -636,6 +645,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'combined_cost_ratio',
     version: '1.1.0',
+    timeWindow: 'cutoff-based',
     name: '综合成本率',
     category: 'cost',
     tags: ['core', 'kpi', 'cost'],
@@ -673,6 +683,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'earned_profit_amount',
     version: '1.0.0',
+    timeWindow: 'cutoff-based',
     name: '利润额',
     category: 'cost',
     tags: ['core', 'kpi', 'cost', 'profit'],

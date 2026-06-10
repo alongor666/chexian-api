@@ -24,7 +24,7 @@ PAT 在 Web 端「设置 → 访问令牌」生成。配置存 `~/.chexian/confi
 |---|---|
 | `cx login` / `cx logout` | 保存 / 清除本地 PAT |
 | `cx whoami` | 当前用户、角色、数据范围、tokenId、baseUrl |
-| `cx routes [--tag t] [--search kw] [--refresh]` | 列出全部查询路由（按 tag 分组；24h 本地缓存） |
+| `cx routes [--tag t] [--search kw] [--refresh]` | 列出全部查询路由（按 tag 分组；24h 本地缓存；含 timeWindow 时间口径列：window 任意窗口 / rolling 近 N 天 / policy-year 保单年度切片 / ytd-progress 年度计划进度 / cohort-development 批次发展 / snapshot 状态快照） |
 | `cx query <key\|path> [--参数=值 ...]` | 调用查询路由（核心命令，见下） |
 | `cx sql "<SELECT...>"` / `cx sql -` | DuckDB SQL 直通（强制聚合 + 行级权限自动注入；`-` 读 stdin） |
 | `cx fields [--groupable]` | 字段注册表 |

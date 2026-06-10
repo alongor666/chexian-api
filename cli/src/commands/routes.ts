@@ -19,6 +19,10 @@ export interface RouteMeta {
   description: string;
   tags: string[];
   parameters: Array<{ name: string; type: string; required?: boolean; description: string; enum?: string[] }>;
+  /** 时间窗口语义（window/rolling/policy-year/ytd-progress/cohort-development/snapshot/any；旧缓存可能缺省） */
+  timeWindow?: string;
+  /** 时间口径补充说明 */
+  timeWindowNote?: string;
 }
 
 interface CatalogResp { success: boolean; data: { version: number; routes: RouteMeta[] } }
@@ -70,7 +74,7 @@ export async function routesCommand(opts: {
 
     const fmt: OutputFormat = opts.format ?? (process.stdout.isTTY ? 'table' : 'json');
     if (fmt !== 'table') {
-      console.log(renderOutput(routes.map(({ key, path, summary, tags }) => ({ key, path, summary, tags: tags.join(',') })), fmt));
+      console.log(renderOutput(routes.map(({ key, path, summary, timeWindow, tags }) => ({ key, path, summary, timeWindow: timeWindow ?? '', tags: tags.join(',') })), fmt));
       return;
     }
 
@@ -84,10 +88,10 @@ export async function routesCommand(opts: {
     for (const [group, members] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
       console.log(kleur.bold().cyan(`\n■ ${group} (${members.length})`));
       const t = new Table({
-        head: ['key', 'path', 'summary'].map((h) => kleur.cyan(h)),
+        head: ['key', 'path', 'summary', 'timeWindow'].map((h) => kleur.cyan(h)),
         style: { head: [], border: ['gray'] },
       });
-      for (const r of members) t.push([r.key, r.path, r.summary]);
+      for (const r of members) t.push([r.key, r.path, r.summary, r.timeWindow ?? '']);
       console.log(t.toString());
     }
     note(kleur.gray(`(${routes.length} routes; use "cx query <key>" to call)`));

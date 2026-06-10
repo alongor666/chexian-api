@@ -31,7 +31,7 @@ const granularityMap: Record<string, string> = {
   daily: 'daily', weekly: 'weekly', monthly: 'monthly',
 };
 
-const dashboardBundleSchema = z.object({
+export const dashboardBundleSchema = z.object({
   timeView: z.string().optional(),
   granularity: z.string().optional(),
   perspective: z.enum(['premium', 'policy_count']).optional(),

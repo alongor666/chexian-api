@@ -2085,39 +2085,32 @@ function checkQueryCatalogConsistency() {
     return false;
   }
 
-  // ── 参数幽灵检测：catalog 登记的参数名必须真实出现在服务端代码中（粗对账，抓拼写错误/废弃改名）──
-  const corpusDirs = ['server/src/routes/query', 'server/src/utils', 'server/src/sql', 'server/src/middleware'];
-  let corpus = '';
-  for (const d of corpusDirs) {
-    (function collect(dir) {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          if (entry.name !== '__tests__') collect(full);
-        } else if (entry.name.endsWith('.ts')) {
-          corpus += fs.readFileSync(full, 'utf-8');
-        }
-      }
-    })(path.join(ROOT_DIR, d));
-  }
-  const paramNames = new Set([...metaSrc.matchAll(/name:\s*'([^']+)'/g)].map((m) => m[1]));
-  const snake2camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-  const camel2snake = (s) => s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
-  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const ghostParams = [...paramNames]
-    .filter((n) => ![n, snake2camel(n), camel2snake(n)].some((v) => new RegExp(`\\b${escapeRe(v)}\\b`).test(corpus)))
-    .sort();
+  // 参数级对账由「RouteCatalog参数契约」检查接管（per-route 强对账，
+  // 见 scripts/route-catalog/validate-params.ts）。曾在此处的全局搜索域
+  // 幽灵检测因 snake/camel 变体宽容会掩盖真实命名漂移，已被取代删除。
+  success(`QueryCatalog 对账通过（${mounted.size} 个挂载端点 ↔ catalog ↔ QUERY_ROUTES 常量三方一致）`);
+  return true;
+}
 
-  if (ghostParams.length > 0) {
-    error(`route-catalog 登记了服务端代码中不存在的参数名（疑似拼写错误或已废弃）= ${ghostParams.length} 个：`);
-    for (const n of ghostParams) console.log(`    - ${n}`);
-    console.log(`    搜索域：${corpusDirs.join(' + ')}（含 snake/camel 变体）`);
-    console.log('    修复：更正 query-routes-metadata.ts 中的参数名，或确认服务端确有该参数后调整搜索域');
+function checkRouteCatalogParamContracts() {
+  info('检查 RouteCatalog 参数契约（catalog 登记参数 ⊆ 运行时 zod/解析代码真实参数，per-route）...');
+  try {
+    const out = execFileSync('bun', ['scripts/route-catalog/validate-params.ts'], {
+      cwd: ROOT_DIR,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    success(out.trim().replace(/^✓\s*/, ''));
+    return true;
+  } catch (err) {
+    const stderr = err.stderr?.toString() ?? '';
+    const stdout = err.stdout?.toString() ?? '';
+    error('RouteCatalog 参数契约对账失败：');
+    for (const line of (stderr + stdout).split('\n').filter(Boolean)) console.log(`  ${line}`);
+    console.log('    修复：对齐 query-routes-metadata.ts 与 route-param-contracts.ts（参数名以运行时 schema 为准）');
+    console.log('    前置：server 依赖已安装（bun install --cwd server）');
     return false;
   }
-
-  success(`QueryCatalog 对账通过（${mounted.size} 个挂载端点 ↔ catalog ↔ QUERY_ROUTES 常量三方一致；${paramNames.size} 个登记参数无幽灵）`);
-  return true;
 }
 
 // ============================================================
@@ -2175,6 +2168,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '空catch禁令', fn: checkEmptyCatchBlocks },
   { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
+  { name: 'RouteCatalog参数契约', fn: checkRouteCatalogParamContracts },
 ];
 
 /**

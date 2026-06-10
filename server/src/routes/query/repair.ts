@@ -30,7 +30,7 @@ const router = Router();
 // 集中式惰性域加载中间件（per MAT-01）：RepairDim
 router.use(createDomainMiddleware('RepairDim'));
 
-const filterSchema = z.object({
+export const filterSchema = z.object({
   orgName: z.string().optional(),
   is4sShop: z.enum(['true', 'false']).optional(),
   cooperationStatus: z.string().optional(),

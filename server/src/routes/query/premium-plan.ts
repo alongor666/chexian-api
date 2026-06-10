@@ -5,7 +5,7 @@ import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDi
 
 const router = Router();
 
-const premiumPlanSchema = z.object({
+export const premiumPlanSchema = z.object({
   queryType: z.enum(['drilldown', 'kpi', 'distribution']).default('drilldown'),
   planYear: z.coerce.number().default(2026),
   level: z.enum(['company', 'org', 'team', 'salesman', 'customer_category', 'coverage']).default('company'),
@@ -86,7 +86,7 @@ router.get(
   })
 );
 
-const planAchievementSchema = z.object({
+export const planAchievementSchema = z.object({
   planYear: z.coerce.number().default(2026),
   level: z.enum(['company', 'org', 'team', 'salesman', 'customer_category', 'coverage']).default('org'),
   orgFilter: z.string().max(255).optional(),

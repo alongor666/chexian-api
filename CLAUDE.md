@@ -87,6 +87,7 @@
 | API 路由 | `server/src/config/api-routes.ts` + `src/shared/api/routes.ts` | 50+ 路由 | — |
 | ETL 配置 | `数据管理/shard-config.json` | 分片边界 + 显式忽略字段 | — |
 | 数据域注册表 | `数据管理/data-sources.json` | 9 域元数据 | ETL 自动更新 |
+| 路由参数契约 | `server/src/config/route-param-contracts.ts` | 64 路由 path→运行时 zod/解析字段；catalog 参数名以此为准（camelCase）；timeWindow 时间口径语义 | governance「RouteCatalog参数契约」对账 |
 
 ---
 

@@ -24,7 +24,7 @@ import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type Vehicl
 import { generateCrossSellTrendQuery, type TrendGranularity } from '../../../sql/cross-sell-trend.js';
 import { generateCrossSellTopSalesmanQuery } from '../../../sql/cross-sell-top-salesman.js';
 
-const crossSellBundleSchema = z.object({
+export const crossSellBundleSchema = z.object({
   drillPath: z.string().optional().default('[]'),
   groupBy: z.enum(CROSS_SELL_DIMENSIONS).optional(),
   vehicleCategory: z.enum(['all', 'passenger', 'truck', 'motorcycle']).default('passenger'),
