@@ -52,7 +52,7 @@ curl -s https://chexian.cretvalu.com/health
 # 用 SC 超管验证 KPI 返回数据（行数应与回滚前一致）
 TOKEN=$(curl -s -X POST https://chexian.cretvalu.com/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"CxAdmin@2026!"}' | jq -r .data.token)
+  -d '{"username":"admin","password":"<在凭据库/E2E_PASSWORD 环境变量中获取>"}' | jq -r .data.token)
 
 curl -s -H "Authorization: Bearer $TOKEN" \
   'https://chexian.cretvalu.com/api/query/kpi' | jq '.data | length'

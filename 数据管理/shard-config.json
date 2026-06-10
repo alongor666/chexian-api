@@ -33,14 +33,20 @@
     "高速风险等级.1": "24-26新格式重复列（pandas自动后缀）"
   },
   "source_patterns": {
-    "01_premium": "01_签单清单_*.xlsx",
-    "01_premium_legacy": "每日数据_*.xlsx",
-    "02_claims_detail": "02_理赔明细_*.xlsx",
-    "02_claims_detail_legacy": "车险报立结案清单_*.xlsx",
-    "03_cross_sell": "03_交叉销售_*.xlsx",
-    "04_quotes": "04_报价清单*.xlsx",
-    "05_renewal": "05_续保清单_*.xlsx",
-    "06_brand": "06_厂牌明细_*.xlsx",
-    "07_repair": "07_维修资源*.xlsx"
+    "_doc": "2026-06-10 上游 BI 清单重构：编号重排（理赔02→05/报价04→02/维修07→03/厂牌06→04）+ YYYYMMDD-YYYYMMDD_ 范围前缀基线。本块为文档字段（无代码消费），运行时 glob 见 daily.mjs（premium/claims_detail 硬编码）与 data-sources.json trigger.input_globs（其余域）",
+    "01_premium": "YYYYMMDD-YYYYMMDD_01_签单清单_定稿.xlsx",
+    "01_premium_legacy": "01_签单清单_*.xlsx / ????????_01_签单清单*.xlsx / 每日数据_*.xlsx",
+    "05_claims_detail": "YYYYMMDD-YYYYMMDD_05_理赔明细.xlsx",
+    "05_claims_detail_legacy": "02_理赔明细_*.xlsx / 车险报立结案清单_*.xlsx",
+    "02_quotes": "YYYYMMDD_02_报价清单_商业险.xlsx",
+    "02_quotes_legacy": "04_报价清单*.xlsx（历史输入仍活跃，上游未重导报价历史）",
+    "03_repair": "YYYYMMDD-YYYYMMDD_03_维修资源.xlsx",
+    "03_repair_legacy": "07_维修资源*.xlsx",
+    "04_brand": "YYYYMMDD_04_厂牌明细.xlsx",
+    "04_brand_legacy": "06_厂牌明细_*.xlsx",
+    "new_energy_claims": "YYYYMMDD_新能源_出险信息表.xlsx",
+    "03_cross_sell_stopped": "03_交叉销售_*.xlsx（上游 2026-06-10 停止下载）",
+    "08_09_customer_flow_stopped": "????????_08/09_*.xlsx（上游 2026-06-10 停止下载）",
+    "05_renewal_stopped": "05_续保清单_*.xlsx（旧编号 05 已废弃，勿与新 05_理赔明细 混淆）"
   }
 }

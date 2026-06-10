@@ -130,7 +130,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 ```bash
 SC_TOKEN=$(curl -s -X POST https://chexian.cretvalu.com/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"CxAdmin@2026!"}' | jq -r .data.token)
+  -d '{"username":"admin","password":"<在凭据库/E2E_PASSWORD 环境变量中获取>"}' | jq -r .data.token)
 
 # KPI 与上线前比对零差异
 curl -s -H "Authorization: Bearer $SC_TOKEN" \

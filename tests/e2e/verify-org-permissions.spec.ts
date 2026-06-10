@@ -112,7 +112,7 @@ test.describe('Permission Verification', () => {
     const endpoint = 'http://localhost:3000/api/query/dashboard-bundle?timeView=daily&perspective=premium&rankingLimit=10';
 
     // 1. admin 登录 -> 请求 dashboard-bundle
-    await loginAs(page, 'admin', 'CxAdmin@2026!');
+    await loginAs(page, 'admin', process.env.E2E_PASSWORD ?? '');
     const adminResponse = await page.request.get(endpoint);
     expect(adminResponse.status()).toBe(200);
     const adminSnapshot = adminResponse.headers()['x-snapshot'];
@@ -122,7 +122,7 @@ test.describe('Permission Verification', () => {
     await page.context().clearCookies();
 
     // 2. leshan 登录 -> 请求同一端点
-    await loginAs(page, 'leshan', 'leshan123');
+    await loginAs(page, 'leshan', process.env.E2E_ORG_PASSWORD ?? '');
     const leshanResponse = await page.request.get(endpoint);
     expect(leshanResponse.status()).toBe(200);
     const leshanSnapshot = leshanResponse.headers()['x-snapshot'];

@@ -67,6 +67,8 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   highway_risk_level: ['VARCHAR', 'TEXT', 'STRING'], // 高速风险等级
   insurance_score: ['DOUBLE', 'DECIMAL', 'NUMERIC', 'FLOAT', 'VARCHAR'], // 车险分分数
   vehicle_age_group: ['VARCHAR', 'TEXT', 'STRING'], // 车龄分段
+  previous_insurer: ['VARCHAR', 'TEXT', 'STRING'], // 上年承保主体
+  next_insurer: ['VARCHAR', 'TEXT', 'STRING'], // 次年保险公司
   branch_code: ['VARCHAR', 'TEXT', 'STRING'], // 分公司编码
 };
 

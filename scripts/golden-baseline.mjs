@@ -306,7 +306,7 @@ async function runBuild() {
   log('yellow', '\n▶ 登录获取 admin JWT...');
   let token;
   try {
-    token = await login('admin', 'CxAdmin@2026!');
+    token = await login('admin', process.env.E2E_PASSWORD);
     log('green', '  ✓ admin 登录成功');
   } catch (err) {
     log('red', `  ✗ 登录失败: ${err.message}`);
@@ -426,7 +426,7 @@ async function runCompare() {
   log('yellow', '\n▶ 登录获取 admin JWT...');
   let token;
   try {
-    token = await login('admin', 'CxAdmin@2026!');
+    token = await login('admin', process.env.E2E_PASSWORD);
     log('green', '  ✓ admin 登录成功');
   } catch (err) {
     log('red', `  ✗ 登录失败: ${err.message}`);
