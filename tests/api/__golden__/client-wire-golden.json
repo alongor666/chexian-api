@@ -357,6 +357,22 @@
     "auth": true,
     "dedupe": "GET:/data/version"
   },
+  "geo.city": {
+    "verb": "GET",
+    "path": "/query/policy-geo/city",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/policy-geo/city"
+  },
+  "geo.province": {
+    "verb": "GET",
+    "path": "/query/policy-geo/province",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/policy-geo/province"
+  },
   "getComprehensiveBundle": {
     "verb": "GET",
     "path": "/query/comprehensive-bundle",
@@ -450,62 +466,6 @@
     "auth": true,
     "dedupe": "GET:/query/marketing-report"
   },
-  "getPatrolNarrative": {
-    "verb": "GET",
-    "path": "/query/patrol/cost/narrative",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": "GET:/query/patrol/cost/narrative"
-  },
-  "getPatrolReport": {
-    "verb": "GET",
-    "path": "/query/patrol/cost",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": "GET:/query/patrol/cost"
-  },
-  "getPlanAchievement": {
-    "verb": "GET",
-    "path": "/query/plan-achievement",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": "GET:/query/plan-achievement"
-  },
-  "getPolicyGeoCity": {
-    "verb": "GET",
-    "path": "/query/policy-geo/city",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": "GET:/query/policy-geo/city"
-  },
-  "getPolicyGeoProvince": {
-    "verb": "GET",
-    "path": "/query/policy-geo/province",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": "GET:/query/policy-geo/province"
-  },
-  "getPremiumPlan": {
-    "verb": "GET",
-    "path": "/query/premium-plan",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": "GET:/query/premium-plan"
-  },
-  "getPremiumReport": {
-    "verb": "GET",
-    "path": "/query/premium-report",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": "GET:/query/premium-report"
-  },
   "getQualityBusinessTrend": {
     "verb": "GET",
     "path": "/query/quality-business-trend",
@@ -571,6 +531,22 @@
     "auth": false,
     "dedupe": ""
   },
+  "patrol.narrative": {
+    "verb": "GET",
+    "path": "/query/patrol/cost/narrative",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/patrol/cost/narrative"
+  },
+  "patrol.report": {
+    "verb": "GET",
+    "path": "/query/patrol/cost",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/patrol/cost"
+  },
   "performance.bundle": {
     "verb": "GET",
     "path": "/query/performance-bundle",
@@ -618,6 +594,30 @@
     "bodyKeys": null,
     "auth": true,
     "dedupe": "GET:/query/performance-trend"
+  },
+  "premium.achievement": {
+    "verb": "GET",
+    "path": "/query/plan-achievement",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/plan-achievement"
+  },
+  "premium.plan": {
+    "verb": "GET",
+    "path": "/query/premium-plan",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/premium-plan"
+  },
+  "premium.report": {
+    "verb": "GET",
+    "path": "/query/premium-report",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/premium-report"
   },
   "quoteConversion.drilldown": {
     "verb": "GET",

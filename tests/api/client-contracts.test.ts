@@ -154,7 +154,7 @@ describe('API client contract coverage', () => {
       status: 200,
       json: async () => ({ success: true, data: [] }),
     });
-    await apiClient.getPremiumReport({ startDate: '2026-01-01', endDate: '2026-01-31', org: '乐山' });
+    await apiClient.premium.report({ startDate: '2026-01-01', endDate: '2026-01-31', org: '乐山' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/premium-report?');
     expect(calledUrl).toContain('org=%E4%B9%90%E5%B1%B1');
@@ -167,7 +167,7 @@ describe('API client contract coverage', () => {
       status: 200,
       json: async () => ({ success: true, data: {} }),
     });
-    await apiClient.getPlanAchievement({ year: 2026, planType: 'driver', dimension: 'org' });
+    await apiClient.premium.achievement({ year: 2026, planType: 'driver', dimension: 'org' } as any);
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/plan-achievement?');
     expect(calledUrl).toContain('planType=driver');
@@ -193,7 +193,7 @@ describe('API client contract coverage', () => {
       status: 200,
       json: async () => ({ success: true, data: [] }),
     });
-    await apiClient.getPolicyGeoProvince({ startDate: '2026-01-01', endDate: '2026-01-31' });
+    await apiClient.geo.province({ startDate: '2026-01-01', endDate: '2026-01-31' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/policy-geo/province?');
     expect(calledUrl).toContain('startDate=2026-01-01');
@@ -207,7 +207,7 @@ describe('API client contract coverage', () => {
       status: 200,
       json: async () => ({ success: true, data: [] }),
     });
-    await apiClient.getPolicyGeoCity({ province: '四川' });
+    await apiClient.geo.city({ province: '四川' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/policy-geo/city?');
     expect(calledUrl).toContain('province=%E5%9B%9B%E5%B7%9D');
@@ -356,6 +356,16 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'auth.updateRole PUT', path: '/auth/roles/r1', run: (c) => c.auth.updateRole('r1', { name: 'R', dataScope: 'all' }), expectMethod: 'PUT' },
     { name: 'auth.deleteRole DELETE', path: '/auth/roles/r1', run: (c) => c.auth.deleteRole('r1'), expectMethod: 'DELETE' },
     { name: 'auth.getWeComConfig', path: '/auth/wecom/config', run: (c) => c.auth.getWeComConfig() },
+    // ── premium（本 PR 残渣域归并）──
+    { name: 'premium.report', path: '/query/premium-report?', run: (c) => c.premium.report({ org: '乐山' }), expectParam: true },
+    { name: 'premium.plan', path: '/query/premium-plan?', run: (c) => c.premium.plan({ org: '乐山' }), expectParam: true },
+    { name: 'premium.achievement', path: '/query/plan-achievement?', run: (c) => c.premium.achievement({ org: '乐山' } as any), expectParam: true },
+    // ── geo（本 PR 残渣域归并）──
+    { name: 'geo.province', path: '/query/policy-geo/province?', run: (c) => c.geo.province({ org: '乐山' }), expectParam: true },
+    { name: 'geo.city', path: '/query/policy-geo/city?', run: (c) => c.geo.city({ org: '乐山' }), expectParam: true },
+    // ── patrol（本 PR 残渣域归并；入参为 domain 字符串，路径无 query）──
+    { name: 'patrol.report', path: '/query/patrol/cost', run: (c) => c.patrol.report('cost') },
+    { name: 'patrol.narrative', path: '/query/patrol/cost/narrative', run: (c) => c.patrol.narrative('cost') },
   ];
 
   it.each(cases)('$name builds $path', async ({ run, path, expectParam, expectMethod }) => {

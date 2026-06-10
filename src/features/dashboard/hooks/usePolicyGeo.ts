@@ -32,7 +32,7 @@ export function usePolicyGeo() {
   const fetchProvinceData = useCallback(async (params?: Record<string, string>) => {
     setProvinceData(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const data = await apiClient.getPolicyGeoProvince(params);
+      const data = await apiClient.geo.province(params);
       setProvinceData({ data: data ?? [], loading: false, error: null });
     } catch (err) {
       const msg = err instanceof Error ? err.message : '查询失败';
@@ -44,7 +44,7 @@ export function usePolicyGeo() {
     setCityData(prev => ({ ...prev, loading: true, error: null }));
     try {
       const mergedParams = { ...params, ...(province ? { province } : {}) };
-      const data = await apiClient.getPolicyGeoCity(mergedParams);
+      const data = await apiClient.geo.city(mergedParams);
       setCityData({ data: data ?? [], loading: false, error: null });
     } catch (err) {
       const msg = err instanceof Error ? err.message : '查询失败';

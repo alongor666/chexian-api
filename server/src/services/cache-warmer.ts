@@ -113,7 +113,7 @@ const COMMON_WARM_ROUTES: ReadonlyArray<RouteWarmConfig> = [
         }),
     },
     {
-        // 来源：usePolicyGeo → apiClient.getPolicyGeoProvince(buildFilterParams)
+        // 来源：usePolicyGeo → apiClient.geo.province(buildFilterParams)
         path: '/api/query/policy-geo/province',
         ttlMs: QUERY_CACHE.hotspotMedium,
         buildQuery: commonFilterQuery,

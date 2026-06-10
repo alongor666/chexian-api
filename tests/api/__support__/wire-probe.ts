@@ -3,7 +3,7 @@
  *
  * 纯支撑模块（不含 vitest 断言）：导出
  *   - REGISTRY：当前 apiClient 全部 99 个业务方法的「规范入参」清单
- *               （25 基类 + 74 命名空间；与 pre-#536 单体 client 逐方法对应）
+ *               （18 基类 + 81 命名空间；与 pre-#536 单体 client 逐方法对应）
  *   - serializeCall：把一次 fetch 调用归一化成稳定的线缆签名
  *   - FAR_FUTURE_JWT：探测期注入的恒不过期 token（让 auth 字段确定）
  *
@@ -46,13 +46,13 @@ export const FAR_FUTURE_JWT = `h.${btoa(JSON.stringify({ exp: 9999999999 }))}.s`
 const NO_ARGS = () => [];
 
 /**
- * 当前 apiClient 全量业务方法注册表（99 = 25 基类 + 74 命名空间）。
+ * 当前 apiClient 全量业务方法注册表（99 = 18 基类 + 81 命名空间）。
  *
  * 与 tests/api/__golden__/pre536-business-methods.json 的 99 个 pre-#536 方法
  * 一一对应（命名空间方法在迁移中被重命名，故按「域 + 语义」对应，非按名）。
  */
 export const REGISTRY: RegistryEntry[] = [
-  // ── 基类保留（25）：会话生命周期 + 核心查询 + 未建域残渣 ──
+  // ── 基类保留（18）：会话生命周期 + 核心查询 + 未建域残渣 ──
   { ns: null, method: 'login', args: () => ['u', 'p'] },
   { ns: null, method: 'getCurrentUser', args: NO_ARGS },
   { ns: null, method: 'logout', args: NO_ARGS },
@@ -68,15 +68,8 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: null, method: 'getDashboardBundle', args: NO_ARGS },
   { ns: null, method: 'getMarketingReport', args: NO_ARGS },
   { ns: null, method: 'getHolidayDrilldown', args: NO_ARGS },
-  { ns: null, method: 'getPremiumReport', args: NO_ARGS },
-  { ns: null, method: 'getPremiumPlan', args: NO_ARGS },
-  { ns: null, method: 'getPlanAchievement', args: NO_ARGS },
   { ns: null, method: 'getFilterOptions', args: NO_ARGS },
-  { ns: null, method: 'getPatrolReport', args: () => ['cost'] },
-  { ns: null, method: 'getPatrolNarrative', args: () => ['cost'] },
   { ns: null, method: 'getExpenseRatioDev', args: NO_ARGS },
-  { ns: null, method: 'getPolicyGeoProvince', args: NO_ARGS },
-  { ns: null, method: 'getPolicyGeoCity', args: NO_ARGS },
   { ns: null, method: 'getRenewalTracker', args: () => [{}] },
 
   // ── quoteConversion（7）──
@@ -172,6 +165,19 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: 'auth', method: 'updateRole', args: () => ['r', {}] },
   { ns: 'auth', method: 'deleteRole', args: () => ['r'] },
   { ns: 'auth', method: 'getWeComConfig', args: NO_ARGS },
+
+  // ── premium（3）──
+  { ns: 'premium', method: 'report', args: NO_ARGS },
+  { ns: 'premium', method: 'plan', args: NO_ARGS },
+  { ns: 'premium', method: 'achievement', args: NO_ARGS },
+
+  // ── geo（2）──
+  { ns: 'geo', method: 'province', args: NO_ARGS },
+  { ns: 'geo', method: 'city', args: NO_ARGS },
+
+  // ── patrol（2）──
+  { ns: 'patrol', method: 'report', args: () => ['cost'] },
+  { ns: 'patrol', method: 'narrative', args: () => ['cost'] },
 ];
 
 /** 把一次 fetch(url, options) 归一化成稳定线缆签名 */

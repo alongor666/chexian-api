@@ -4,7 +4,7 @@
  * 背景：ApiClient 神类拆分 Phase 2 审计的「金 master」评审残留——原先只有一次性
  * 路由集 diff（LOST=∅）记录，不可重复。本测试把它落成**提交进仓的可重复 harness**：
  *
- *   1. 反射枚举当前 apiClient 的全部 99 个业务方法（25 基类 + 74 命名空间，见 REGISTRY）
+ *   1. 反射枚举当前 apiClient 的全部 99 个业务方法（18 基类 + 81 命名空间，见 REGISTRY）
  *   2. 用规范入参逐个调用，spy fetch 捕获 { verb, path, params, bodyKeys, auth, dedupe }
  *   3. 与冻结 golden（tests/api/__golden__/client-wire-golden.json）逐方法 diff
  *
@@ -75,7 +75,7 @@ async function probeAll(): Promise<Record<string, WireSnapshot>> {
 }
 
 describe('ApiClient 线缆金 master', () => {
-  it('全量业务方法都产出线缆签名（守恒：99 = 25 基类 + 74 命名空间）', async () => {
+  it('全量业务方法都产出线缆签名（守恒：99 = 18 基类 + 81 命名空间）', async () => {
     const snap = await probeAll();
     expect(Object.keys(snap).length).toBe(99);
     expect(REGISTRY.length).toBe(99);
