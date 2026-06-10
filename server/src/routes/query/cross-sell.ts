@@ -4,6 +4,7 @@ import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere,
   logger, QUERY_CACHE, createDomainMiddleware, withRouteCache,
+  type Request,
 } from './shared.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../../sql/cross-sell.js';
 import { getBranchCompanyName } from '../../config/branch-names.js';
@@ -58,6 +59,28 @@ export function buildCrossSellAggInsuranceClause(raw: unknown): string {
   return '';
 }
 
+/**
+ * CrossSellDailyAgg 物化表不含 insurance_type / fuel_type / vehicle_model 列，
+ * 共享 parser 按这些参数注入 WHERE 会触发 DuckDB Binder Error（HTTP 400）。
+ * 返回净化副本传给 parser；不修改 req.query —— 险类子句
+ * buildCrossSellAggInsuranceClause 仍从原始 req.query.insuranceType 读取。
+ * gas/oil（依赖 fuel_type）与 dump/tractor/general（依赖 vehicle_model）
+ * 为防御性剥离（防直接 API 调用 400），不做语义映射；前端已隐藏对应 chip。
+ * electric 不剥离：parser 对其产出 is_nev = true，agg 有该列，与 SSOT 严格等价。
+ */
+export function sanitizeAggQuery(query: Request['query']): Request['query'] {
+  const out = { ...query };
+  delete out.insuranceType; // 由 buildCrossSellAggInsuranceClause（premium>0 口径）处理
+  if (out.fuelCategory === 'gas' || out.fuelCategory === 'oil') {
+    delete out.fuelCategory;
+  }
+  const vqf = out.vehicleQuickFilter;
+  if (vqf === 'dump' || vqf === 'tractor' || vqf === 'general') {
+    delete out.vehicleQuickFilter;
+  }
+  return out;
+}
+
 export async function ensureCrossSellAggregateTablesReady(): Promise<void> {
   return;
 }
@@ -99,7 +122,7 @@ router.get('/cross-sell', withRouteCache('cross-sell'), asyncHandler(async (req,
   const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
   await ensureCrossSellAggregateTablesReady();
 
-  let { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
+  let { whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req, sanitizeAggQuery(req.query));
 
   finalWhereClause += ` AND ${getVehicleCategoryFilter(normalizedVehicleCategory)}`;
   const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
@@ -147,7 +170,7 @@ router.get('/cross-sell-trend', withRouteCache('cross-sell-trend'), asyncHandler
   const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
   await ensureCrossSellAggregateTablesReady();
 
-  const { whereClause } = parseFiltersAndBuildWhere(req);
+  const { whereClause } = parseFiltersAndBuildWhere(req, sanitizeAggQuery(req.query));
   let finalWhereClause = whereClause;
   const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
   if (seatCoverageClause) {
@@ -189,7 +212,7 @@ router.get('/cross-sell-summary', withRouteCache('cross-sell-summary'), asyncHan
   const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
   await ensureCrossSellAggregateTablesReady();
 
-  const { whereClause } = parseFiltersAndBuildWhere(req);
+  const { whereClause } = parseFiltersAndBuildWhere(req, sanitizeAggQuery(req.query));
   let finalWhereClause = whereClause;
   const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
   if (seatCoverageClause) {
@@ -292,7 +315,6 @@ router.get('/cross-sell-heatmap', withRouteCache('cross-sell-heatmap'), asyncHan
   const normalizedVehicleCategory: VehicleCategory = 'passenger';
   const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
 
-  const { whereWithDate: whereClause, dateField } = parseFiltersAndBuildBothWhere(req);
   const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
 
   let crossSellDrillFilter: CrossSellHeatmapDrillStep[] = [];
@@ -319,6 +341,12 @@ router.get('/cross-sell-heatmap', withRouteCache('cross-sell-heatmap'), asyncHan
     groupByDimension === 'team'
     || groupByDimension === 'salesman'
     || crossSellDrillFilter.some((item) => item.dimension === 'team' || item.dimension === 'salesman');
+  // PolicyFact 分支原生支持 insurance_type/fuel_type/vehicle_model 列，不净化；
+  // agg 分支（CrossSellDailyAgg）无这些列，传净化副本防 Binder Error
+  const { whereWithDate: whereClause, dateField } = parseFiltersAndBuildBothWhere(
+    req,
+    usePolicyFactHeatmap ? undefined : sanitizeAggQuery(req.query)
+  );
   const insuranceClause = usePolicyFactHeatmap
     ? buildPolicyFactInsuranceClause(req.query.insuranceType)
     : buildCrossSellAggInsuranceClause(req.query.insuranceType);
@@ -361,7 +389,7 @@ router.get('/cross-sell-top-salesman', withRouteCache('cross-sell-top-salesman')
   const normalizedSeatCoverageLevel: CrossSellSeatCoverageLevel = 'all';
   await ensureCrossSellAggregateTablesReady();
 
-  const { whereWithoutDate } = parseFiltersAndBuildBothWhere(req);
+  const { whereWithoutDate } = parseFiltersAndBuildBothWhere(req, sanitizeAggQuery(req.query));
   let finalWhereClause = whereWithoutDate;
   const seatCoverageClause = getSeatCoverageClause(normalizedSeatCoverageLevel);
   if (seatCoverageClause) {
