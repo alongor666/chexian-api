@@ -1,14 +1,16 @@
 /**
- * cx routes
- * 列出所有可用查询路由（从 /api/auth/route-catalog 拉取）
+ * cx routes [--tag <tag>] [--search <kw>] [--refresh] [--format table|json|csv]
+ * 列出所有可用查询路由（从 /api/auth/route-catalog 拉取，本地缓存 24h）
  */
 import fs from 'fs';
 import kleur from 'kleur';
 import Table from 'cli-table3';
-import { cxGet, CxApiError } from '../api.js';
+import { cxGet } from '../api.js';
 import { getCachePath } from '../config.js';
+import { failWith } from '../exit-codes.js';
+import { renderOutput, type OutputFormat } from '../output.js';
 
-interface RouteMeta {
+export interface RouteMeta {
   key: string;
   path: string;
   fullPath: string;
@@ -42,25 +44,53 @@ export async function fetchCatalog(forceRefresh = false): Promise<RouteMeta[]> {
   return resp.data.routes;
 }
 
-export async function routesCommand(opts: { refresh?: boolean; tag?: string }): Promise<void> {
+/** --search 关键词过滤：匹配 key/path/summary/description（大小写不敏感） */
+export function searchRoutes(routes: RouteMeta[], keyword: string): RouteMeta[] {
+  const kw = keyword.toLowerCase();
+  return routes.filter(
+    (r) =>
+      r.key.toLowerCase().includes(kw) ||
+      r.path.toLowerCase().includes(kw) ||
+      r.summary.toLowerCase().includes(kw) ||
+      r.description.toLowerCase().includes(kw),
+  );
+}
+
+export async function routesCommand(opts: {
+  refresh?: boolean;
+  tag?: string;
+  search?: string;
+  format?: OutputFormat;
+}): Promise<void> {
   try {
-    const routes = await fetchCatalog(Boolean(opts.refresh));
-    const filtered = opts.tag ? routes.filter((r) => r.tags.includes(opts.tag!)) : routes;
-    const t = new Table({
-      head: ['key', 'path', 'summary', 'tags'].map((h) => kleur.cyan(h)),
-      style: { head: [], border: ['gray'] },
-    });
-    for (const r of filtered) {
-      t.push([r.key, r.path, r.summary, r.tags.join(',')]);
+    let routes = await fetchCatalog(Boolean(opts.refresh));
+    if (opts.tag) routes = routes.filter((r) => r.tags.includes(opts.tag!));
+    if (opts.search) routes = searchRoutes(routes, opts.search);
+
+    const fmt: OutputFormat = opts.format ?? (process.stdout.isTTY ? 'table' : 'json');
+    if (fmt !== 'table') {
+      console.log(renderOutput(routes.map(({ key, path, summary, tags }) => ({ key, path, summary, tags: tags.join(',') })), fmt));
+      return;
     }
-    console.log(t.toString());
-    console.error(kleur.gray(`(${filtered.length} routes; use "cx query <key>" to call)`));
+
+    // table 模式：按首个 tag 分组展示
+    const groups = new Map<string, RouteMeta[]>();
+    for (const r of routes) {
+      const g = r.tags[0] ?? 'other';
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g)!.push(r);
+    }
+    for (const [group, members] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      console.log(kleur.bold().cyan(`\n■ ${group} (${members.length})`));
+      const t = new Table({
+        head: ['key', 'path', 'summary'].map((h) => kleur.cyan(h)),
+        style: { head: [], border: ['gray'] },
+      });
+      for (const r of members) t.push([r.key, r.path, r.summary]);
+      console.log(t.toString());
+    }
+    console.error(kleur.gray(`(${routes.length} routes; use "cx query <key>" to call)`));
   } catch (err) {
-    if (err instanceof CxApiError) {
-      console.error(kleur.red(`✘ ${err.message}`));
-    } else {
-      console.error(kleur.red(`✘ ${(err as Error).message}`));
-    }
-    process.exit(1);
+    failWith(err);
   }
 }
