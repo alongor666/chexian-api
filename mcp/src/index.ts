@@ -26,6 +26,7 @@ import {
   type McpTool,
   type DiscoveryToolBinding,
 } from './tools/build-tools.js';
+import { applyPathParams } from './tools/path-params.js';
 
 async function main(): Promise<void> {
   const cfg = loadMcpConfig();
@@ -90,7 +91,8 @@ async function main(): Promise<void> {
       };
     }
     try {
-      const data = await mcpGet<unknown>(cfg, route.fullPath, args);
+      const { resolvedPath, restArgs } = applyPathParams(route.fullPath, args);
+      const data = await mcpGet<unknown>(cfg, resolvedPath, restArgs);
       return {
         content: [{
           type: 'text',
