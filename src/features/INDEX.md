@@ -18,6 +18,7 @@
 | Comprehensive Analysis | `comprehensive-analysis/` | 综合分析页（autowrKPI 六模块复刻，单接口 bundle） | 无独立文档 |
 | Marketing Report | `marketing-report/` | 营销战报（假日营销分析：机构战报+业务员明细） | 无独立文档 |
 | Pages | `pages/` | 独立页面组件（筛选器+分析面板） | 无独立文档 |
+| Renewal Tracker | `renewal-tracker/` | 商业险续保追踪（到期日窗口盯盘 + buildRenewalTrackerParams 受限参数集映射层） | 无独立文档 |
 | Settings | `settings/` | 设置面板（主题设置、系统设置） | 无独立文档 |
 | File | `file/` | 文件菜单弹窗（数据导入、导出、报表模板） | 无独立文档 |
 | Slide Report | `slide-report/` | PPT风格周报查看器（16:9幻灯片+导航+全屏+导出） | [规划文档](../../.claude/plans/【功能实施】PPT风格周报查看器规划.md) |

@@ -72,6 +72,10 @@ def main():
     con.execute("SET memory_limit='2GB'")
 
     # Step 1: base — 源年度起保的商业险 + 续保年度到期
+    # 字符串维度字段统一 TRIM（治理计划 Phase 4，BACKLOG 9e1816）：
+    # 上游 policy ETL 对这些列无 strip 机制保证（transform.py 只 strip 保单号等特定列），
+    # 历史曾出现 customer_category='摩托车' 带尾空格的重复键（21 行）；防御性 TRIM
+    # 同时让 salesman_name JOIN salesman_dim.full_name 的匹配不受脏空格干扰
     print("\n📊 Step 1: 构建 base（源年度起保 + 续保年度到期商业险）...")
     con.execute(f"""
         CREATE OR REPLACE TABLE base AS
@@ -82,10 +86,10 @@ def main():
             insurance_end_date AS expiry_date,
             MONTH(insurance_end_date) AS expiry_month,
             (insurance_start_date + INTERVAL '1 year' - INTERVAL '1 day') AS expected_expiry_date,
-            org_level_3,
-            customer_category,
-            salesman_name,
-            coverage_combination,
+            TRIM(org_level_3) AS org_level_3,
+            TRIM(customer_category) AS customer_category,
+            TRIM(salesman_name) AS salesman_name,
+            TRIM(coverage_combination) AS coverage_combination,
             is_nev,
             is_new_car,
             is_transfer,

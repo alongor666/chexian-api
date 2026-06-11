@@ -1946,9 +1946,10 @@ function checkFilterParamsBypass() {
   info('检查筛选参数绕过（features/ 禁手写 buildFilterParams 产出的参数名赋值）...');
 
   const PARAM_NAMES = 'customerCategories|coverageCombinations|renewalModes|tonnageSegments|insuranceGrades|isRenewal|isNewCar|isTransfer|isNev|isTelemarketing|insuranceType|isCommercialInsure|isRenewable|isCrossSell|vehicleQuickFilter|enterpriseCar|businessNature|fuelCategory';
-  // 纯赋值两式（=[^=] 排除 ==/=== 比较；读取无 = 跟随不命中）
-  const FORBIDDEN_DOT = new RegExp(`\\.(${PARAM_NAMES})\\s*=[^=]`);
-  const FORBIDDEN_BRACKET = new RegExp(`\\[\\s*['"](${PARAM_NAMES})['"]\\s*\\]\\s*=[^=]`);
+  // 纯赋值两式（=(?!=) 负向断言：排除 ==/=== 比较，且兼容「赋值号在行尾、值断行到下一行」
+  // 的 prettier 风格——旧 =[^=] 要求 = 后必须还有字符，断行赋值会静默漏检；读取无 = 跟随不命中）
+  const FORBIDDEN_DOT = new RegExp(`\\.(${PARAM_NAMES})\\s*=(?!=)`);
+  const FORBIDDEN_BRACKET = new RegExp(`\\[\\s*['"](${PARAM_NAMES})['"]\\s*\\]\\s*=(?!=)`);
   const ALLOW_MARK = 'governance-allow: filter-params-mapping';
 
   const scanRoot = path.join(ROOT_DIR, 'src/features');
