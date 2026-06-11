@@ -153,6 +153,7 @@
 ## 2026-04 Agent 化升级入口（新增）
 
 - `docs/AGENTIC_UPGRADE.md`：Agent 化升级总览，明确当前系统基线为 API-only + DuckDB native，并定义后续 Agent-ready 能力目录、受控查询、任务编排与生产护栏路线。
+- `docs/AGENT_HARNESS_BENCHMARK.md`：自建 agent harness 对标评测（2026-06-10）。以业界顶级 10 维度为标尺逐维度实测打分（综合约 77/100），含 sql-guard 对抗实测、释放大模型前三道硬门槛、harness 持续运营六条最佳实践。
 
 ## 2026-02-25 清理门禁报告（新增）
 

@@ -8,6 +8,7 @@
  */
 
 const SQL_KEYWORDS = [
+  // 标准 SQL DML/DDL/DCL
   'SELECT',
   'INSERT',
   'UPDATE',
@@ -23,6 +24,19 @@ const SQL_KEYWORDS = [
   'EXECUTE',
   'GRANT',
   'REVOKE',
+  // DuckDB 方言：数据外泄 / 外部库挂载 / 扩展加载 / 元数据探查（高危，自然语言罕见紧跟标识符）
+  'COPY', // COPY ... TO 可把数据导出到文件
+  'EXPORT', // EXPORT DATABASE 整库导出
+  'ATTACH', // ATTACH 挂载外部 DB
+  'DETACH',
+  'INSTALL', // INSTALL/LOAD 加载任意扩展
+  'LOAD',
+  'PRAGMA', // 元数据/配置探查
+  'DESCRIBE', // schema 泄漏
+  'SUMMARIZE',
+  'PIVOT',
+  'UNPIVOT',
+  'CALL', // 调用内建/扩展函数
 ] as const;
 
 const FORBIDDEN_PATTERN = new RegExp(
