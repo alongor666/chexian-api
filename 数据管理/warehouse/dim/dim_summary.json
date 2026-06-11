@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-04-03T19:16:52.438768",
+  "generated_at": "2026-06-10T21:16:45.025172",
   "salesman": {
-    "total": 603,
-    "active": 243,
+    "total": 615,
+    "active": 242,
     "resigned": 50,
-    "unknown": 310,
+    "unknown": 323,
     "path": "salesman/latest.parquet"
   },
   "plan": {

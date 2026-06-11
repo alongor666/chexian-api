@@ -34,9 +34,19 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_ROOT = SCRIPT_DIR.parent.parent  # 数据管理/
 MAPPING_JSON = SCRIPT_DIR / "业务员归属与规划" / "salesman_organization_mapping.json"
 
-SRC_2025_PLAN = DATA_ROOT / "2025年分产品保费计划达成情况（0105）.xlsx"
-SRC_SALESMAN_LIST = DATA_ROOT / "川分销售人员名单__3月12日更新.xlsx"
-SRC_ORG_DAILY = DATA_ROOT / "四川分公司机构业务日报（截止2026年3月23日） .xlsx"
+
+def _find_src(filename: str) -> Path:
+    """源 xlsx 候选路径解析：数据管理/ 根目录优先，已归档的回退到 存量数据/。"""
+    for base in (DATA_ROOT, DATA_ROOT / "存量数据"):
+        p = base / filename
+        if p.exists():
+            return p
+    return DATA_ROOT / filename  # 都缺失时返回根路径，由 main() 的存在性检查报错
+
+
+SRC_2025_PLAN = _find_src("2025年分产品保费计划达成情况（0105）.xlsx")
+SRC_SALESMAN_LIST = _find_src("川分销售人员名单__3月12日更新.xlsx")
+SRC_ORG_DAILY = _find_src("四川分公司机构业务日报（截止2026年3月23日） .xlsx")
 
 OUT_SALESMAN = SCRIPT_DIR / "salesman" / "latest.parquet"
 OUT_PLAN = SCRIPT_DIR / "plan" / "latest.parquet"
@@ -288,11 +298,14 @@ def build_salesman_table(
                             "hire_date", "status", "leave_date", "tenure_months"]].copy()
 
     # 补充 2025 计划中有、但名单中没有的业务员
-    existing_nos = set(master["business_no"])
-    extra_from_2025 = []
+    # 实体唯一键是 full_name（工号+姓名）：business_no 非唯一——占位工号 000000000
+    # 由 13 个「admin×机构直接个代」虚拟业务员共用、200048259 两人共号（刘亚楼/刘婷）。
+    # 按 business_no 判重曾误丢 12 个真实实体（BACKLOG 8ee9a0）。
+    existing_names = set(master["full_name"])
+    extra_from_plans = []
     for _, row in plan_2025.iterrows():
-        if row["business_no"] not in existing_nos:
-            extra_from_2025.append({
+        if row["full_name"] not in existing_names:
+            extra_from_plans.append({
                 "business_no": row["business_no"],
                 "salesman_name": row["salesman_name"],
                 "full_name": row["full_name"],
@@ -304,12 +317,12 @@ def build_salesman_table(
                 "leave_date": None,
                 "tenure_months": 0,
             })
-            existing_nos.add(row["business_no"])
+            existing_names.add(row["full_name"])
 
     # 补充 2026 JSON 中有、但仍缺的
     for _, row in plan_2026_json.iterrows():
-        if row["business_no"] not in existing_nos:
-            extra_from_2025.append({
+        if row["full_name"] not in existing_names:
+            extra_from_plans.append({
                 "business_no": row["business_no"],
                 "salesman_name": row["salesman_name"],
                 "full_name": row["full_name"],
@@ -321,41 +334,50 @@ def build_salesman_table(
                 "leave_date": None,
                 "tenure_months": 0,
             })
-            existing_nos.add(row["business_no"])
+            existing_names.add(row["full_name"])
 
-    if extra_from_2025:
-        master = pd.concat([master, pd.DataFrame(extra_from_2025)], ignore_index=True)
+    if extra_from_plans:
+        master = pd.concat([master, pd.DataFrame(extra_from_plans)], ignore_index=True)
 
-    # 对名单中 team 为空的，从 2026 JSON（mapping）或 2025 计划补充
+    # 对名单中 team 为空的，从 2026 JSON（mapping）或 2025 计划补充（键同样用 full_name，防共号串档）
     mapping_team = {}
     for _, row in plan_2026_json.iterrows():
         if row["team"]:
-            mapping_team[row["business_no"]] = (row["team"], row["organization"])
+            mapping_team[row["full_name"]] = (row["team"], row["organization"])
     for _, row in plan_2025.iterrows():
-        if row["team"] and row["business_no"] not in mapping_team:
-            mapping_team[row["business_no"]] = (row["team"], row["organization"])
+        if row["team"] and row["full_name"] not in mapping_team:
+            mapping_team[row["full_name"]] = (row["team"], row["organization"])
 
     filled = 0
     for idx, row in master.iterrows():
-        if (not row["team"] or pd.isna(row["team"])) and row["business_no"] in mapping_team:
-            t, o = mapping_team[row["business_no"]]
+        if (not row["team"] or pd.isna(row["team"])) and row["full_name"] in mapping_team:
+            t, o = mapping_team[row["full_name"]]
             master.at[idx, "team"] = t
             if not row["organization"] or pd.isna(row["organization"]):
                 master.at[idx, "organization"] = o
             filled += 1
 
     # 对 2025 表中有入职时间、但名单中没有的，补充 hire_date
-    hire_from_2025 = {r["business_no"]: r["hire_date"] for _, r in plan_2025.iterrows() if r["hire_date"]}
+    hire_from_2025 = {r["full_name"]: r["hire_date"] for _, r in plan_2025.iterrows() if r["hire_date"]}
     hire_filled = 0
     for idx, row in master.iterrows():
-        if (not row["hire_date"] or pd.isna(row["hire_date"])) and row["business_no"] in hire_from_2025:
-            master.at[idx, "hire_date"] = hire_from_2025[row["business_no"]]
+        if (not row["hire_date"] or pd.isna(row["hire_date"])) and row["full_name"] in hire_from_2025:
+            master.at[idx, "hire_date"] = hire_from_2025[row["full_name"]]
             hire_filled += 1
+
+    # 整行重复去重：源名单曾出现「210012051徐小满」两行（仅 tenure_months 不同），
+    # 按 full_name 保留 tenure_months 最大的一行（BACKLOG 8ee9a0 缺陷 2）
+    before_dedup = len(master)
+    master = (
+        master.sort_values(["full_name", "tenure_months"], ascending=[True, False])
+        .drop_duplicates(subset=["full_name"], keep="first")
+    )
+    dedup_dropped = before_dedup - len(master)
 
     master = master.sort_values("full_name").reset_index(drop=True)
 
     print(f"  总业务员数: {len(master)}")
-    print(f"  来源: 名单 {len(salesman_list)}, 2025补充 {len(extra_from_2025)}")
+    print(f"  来源: 名单 {len(salesman_list)}, 计划表补充 {len(extra_from_plans)}, 重复去除 {dedup_dropped}")
     print(f"  团队补填: {filled}, 入职日期补填: {hire_filled}")
     print(f"  状态: 在职 {(master['status']=='在职').sum()}, 离职 {(master['status']=='离职').sum()}, 未知 {(master['status']=='未知').sum()}")
 
@@ -409,21 +431,54 @@ def main():
 
     # 合并计划数据（2025 业务员 + 2026 业务员 + 2026 机构）
     plan_all = pd.concat([plan_2025, plan_2026_json, org_plan_2026], ignore_index=True)
+
+    # 实体键去重护栏（BACKLOG 8ee9a0）：salesman 级按 (plan_year, full_name)、
+    # organization 级按 (plan_year, organization)。注意不能按 business_no 判重（非唯一）。
+    before_plan_dedup = len(plan_all)
+    is_salesman_level = plan_all["level"] == "salesman"
+    plan_all = pd.concat([
+        plan_all[is_salesman_level].drop_duplicates(subset=["plan_year", "full_name"], keep="first"),
+        plan_all[~is_salesman_level].drop_duplicates(subset=["plan_year", "organization"], keep="first"),
+    ], ignore_index=True)
+    plan_dedup_dropped = before_plan_dedup - len(plan_all)
+
     plan_all = plan_all.sort_values(["plan_year", "level", "organization", "team", "full_name"]).reset_index(drop=True)
+
+    # 写出前快速失败校验：实体键仍有重复说明上面的去重逻辑被改坏，阻断写出
+    dup_salesman = salesman_master.duplicated(subset=["full_name"]).sum()
+    sales_rows = plan_all[plan_all["level"] == "salesman"]
+    org_rows = plan_all[plan_all["level"] != "salesman"]
+    dup_plan = (
+        sales_rows.duplicated(subset=["plan_year", "full_name"]).sum()
+        + org_rows.duplicated(subset=["plan_year", "organization"]).sum()
+    )
+    if dup_salesman or dup_plan:
+        print(f"❌ 去重后仍有重复行（salesman={dup_salesman}, plan={dup_plan}），终止写出")
+        sys.exit(1)
 
     print(f"\n{'='*60}")
     print("计划数据汇总")
     print(f"  2025 业务员级: {len(plan_2025)} 行")
     print(f"  2026 业务员级: {len(plan_2026_json)} 行")
     print(f"  2026 机构级: {len(org_plan_2026)} 行")
+    print(f"  重复去除: {plan_dedup_dropped} 行")
     print(f"  总计: {len(plan_all)} 行")
 
     # 输出 Parquet
     write_parquet(salesman_master, OUT_SALESMAN, "业务员主数据")
     write_parquet(plan_all, OUT_PLAN, "计划数据")
 
-    # 输出摘要 JSON（供其他脚本读取）
-    summary = {
+    # 输出摘要 JSON（供其他脚本读取）。读取-合并-写回：
+    # 保留其他生成器写入的键（如 brand 区块），只更新本脚本负责的部分。
+    summary_path = SCRIPT_DIR / "dim_summary.json"
+    summary = {}
+    if summary_path.exists():
+        try:
+            with open(summary_path, "r", encoding="utf-8") as f:
+                summary = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            summary = {}
+    summary.update({
         "generated_at": datetime.now().isoformat(),
         "salesman": {
             "total": len(salesman_master),
@@ -441,10 +496,10 @@ def main():
             "plan_2026_org_vehicle_total": float(org_plan_2026["plan_vehicle"].sum()),
             "path": str(OUT_PLAN.relative_to(SCRIPT_DIR)),
         },
-    }
-    summary_path = SCRIPT_DIR / "dim_summary.json"
+    })
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
+        f.write("\n")
     print(f"\n  ✅ 摘要: {summary_path.name}")
 
     # 品牌维度表来自 06_厂牌明细 Excel，经 daily.mjs brand / convert_brand_dim.py 生成。

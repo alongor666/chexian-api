@@ -12,6 +12,26 @@ import { escapeSqlValue } from '../utils/security.js';
 // ============================================
 
 /**
+ * SalesmanDim 按人员唯一键 full_name 去重的子查询（机制免疫，BACKLOG 8ee9a0）。
+ *
+ * business_no 不是人员唯一键：占位工号 000000000 由 13 个「admin×机构直接个代」
+ * 虚拟业务员共用、200048259 两人共号（刘亚楼/刘婷）。人员唯一键是 full_name
+ * （工号+姓名），与 achievement_cache 对 PolicyFact.salesman_name 的 JOIN 约定一致。
+ * 整行重复（如徐小满×2）保留 tenure_months 最大行，business_no 兜底定序保证确定性。
+ */
+const DEDUPED_SALESMAN_DIM_SQL = `
+      SELECT business_no, salesman_name, full_name, team, organization
+      FROM (
+        SELECT business_no, salesman_name, full_name, team, organization,
+               ROW_NUMBER() OVER (
+                 PARTITION BY full_name
+                 ORDER BY tenure_months DESC NULLS LAST, business_no
+               ) AS rn
+        FROM SalesmanDim
+      )
+      WHERE rn = 1`;
+
+/**
  * 从 Parquet 维度表加载业务员主数据和计划数据
  *
  * 生成的表/视图（向后兼容）：
@@ -41,6 +61,8 @@ export async function loadDimParquet(db: DuckDBQueryable, salesmanPath: string, 
   console.log(`[DuckDB] PlanFact loaded: ${pfCount[0]?.cnt ?? 0} records from Parquet`);
 
   // 3. 创建兼容表 SalesmanTeamMapping（所有下游 SQL 都引用此表）
+  //    JOIN 键 full_name（人员唯一键）而非 business_no（共号会笛卡尔放大实际保费，
+  //    曾致乐山达成率 272.94%）；左表去重 + 右表先聚合，源表再出重复也不放大。
   await db.query(`
     CREATE OR REPLACE TABLE SalesmanTeamMapping AS
     SELECT
@@ -50,17 +72,20 @@ export async function loadDimParquet(db: DuckDBQueryable, salesmanPath: string, 
       COALESCE(s.team, '未分配') AS team_name,
       COALESCE(s.organization, '未分配机构') AS organization,
       COALESCE(p.plan_vehicle, 0.0) AS car_insurance_plan_2026
-    FROM SalesmanDim s
+    FROM (${DEDUPED_SALESMAN_DIM_SQL}
+    ) s
     LEFT JOIN (
-      SELECT business_no, plan_vehicle
+      SELECT full_name, SUM(plan_vehicle) AS plan_vehicle
       FROM PlanFact
       WHERE plan_year = 2026 AND level = 'salesman'
-    ) p ON s.business_no = p.business_no
+      GROUP BY full_name
+    ) p ON s.full_name = p.full_name
   `);
   const tmCount = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM SalesmanTeamMapping');
   console.log(`[DuckDB] SalesmanTeamMapping (compat) built: ${tmCount[0]?.cnt ?? 0} records`);
 
   // 4. 创建兼容视图 SalesmanPlanFact（多年计划视图）
+  //    同样按 full_name 连接 + 计划侧按 (full_name, plan_year) 聚合，免疫源表重复行。
   await db.query(`
     CREATE OR REPLACE VIEW SalesmanPlanFact AS
     SELECT
@@ -70,9 +95,16 @@ export async function loadDimParquet(db: DuckDBQueryable, salesmanPath: string, 
       p.plan_year,
       p.plan_vehicle,
       p.plan_total
-    FROM PlanFact p
-    LEFT JOIN SalesmanDim s ON p.business_no = s.business_no
-    WHERE p.level = 'salesman'
+    FROM (
+      SELECT full_name, plan_year,
+             SUM(plan_vehicle) AS plan_vehicle,
+             SUM(plan_total)   AS plan_total
+      FROM PlanFact
+      WHERE level = 'salesman'
+      GROUP BY full_name, plan_year
+    ) p
+    LEFT JOIN (${DEDUPED_SALESMAN_DIM_SQL}
+    ) s ON p.full_name = s.full_name
   `);
   console.log('[DuckDB] SalesmanPlanFact (compat) view created — multi-year support');
 
@@ -114,7 +146,18 @@ export async function loadTeamMapping(db: DuckDBQueryable, jsonFilePath: string)
     return;
   }
 
-  const rows: any[] = data.salesman_mapping || [];
+  const rawRows: any[] = data.salesman_mapping || [];
+  // 机制免疫（BACKLOG 8ee9a0）：按人员唯一键 full_name 去重，防上游 JSON 重复行放大数值
+  const seenFullNames = new Set<string>();
+  const rows = rawRows.filter(r => {
+    const key = String(r.full_name ?? '');
+    if (seenFullNames.has(key)) return false;
+    seenFullNames.add(key);
+    return true;
+  });
+  if (rows.length < rawRows.length) {
+    console.warn(`[DuckDB] Team mapping dedup: dropped ${rawRows.length - rows.length} duplicate full_name rows`);
+  }
   if (rows.length === 0) {
     console.warn('[DuckDB] No team mapping data found');
     return;
