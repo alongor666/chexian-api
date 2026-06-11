@@ -141,7 +141,8 @@ export function generatePerformanceTopSalesmanQuery(
           )
         END AS achievement_rate,
         CASE
-          WHEN COALESCE(p.prev_premium, 0) = 0 THEN NULL
+          -- prev<=0（批改冲减可为负）除负数会让增长率符号反转，统一对齐注册表 growth.ts：仅 prev>0 计算
+          WHEN COALESCE(p.prev_premium, 0) <= 0 THEN NULL
           ELSE ROUND((c.premium - p.prev_premium) * 100.0 / p.prev_premium, 2)
         END AS growth_rate,
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.nev_count * 100.0 / c.auto_count, 2) END AS nev_rate,

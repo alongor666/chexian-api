@@ -113,9 +113,11 @@ async function handleComprehensiveBundle(req: Request, res: Response): Promise<v
       const dimKey = String(row.dim_key ?? '未知');
       const planPremium = dimType === 'org' ? (planMap.get(dimKey) ?? null) : null;
       const signedPremium = toFiniteNumber(row.signed_premium);
+      // signed_premium 单位为元、plan_premium（achievement_cache.plan_vehicle）单位为万元，
+      // 分子须先 /10000 对齐（同 kpi.ts vehicle_achievement_rate），否则达成率被压成约 1/10000
       const achievementRate =
         planPremium && planPremium > 0 && timeProgress && timeProgress > 0
-          ? Number(((signedPremium / planPremium) / timeProgress * 100).toFixed(2))
+          ? Number((((signedPremium / 10000) / planPremium) / timeProgress * 100).toFixed(2))
           : null;
 
       return {
@@ -174,9 +176,10 @@ async function handleComprehensiveBundle(req: Request, res: Response): Promise<v
     (sum, row) => sum + (toFiniteNumber(row.signed_premium) || 0),
     0
   );
+  // 同上：signed_premium（元）→ /10000 对齐 plan（万元）
   const summaryAchievementRate =
     totalPlanPremium > 0 && timeProgress && timeProgress > 0
-      ? Number(((totalSignedPremiumForPlan / totalPlanPremium) / timeProgress * 100).toFixed(2))
+      ? Number((((totalSignedPremiumForPlan / 10000) / totalPlanPremium) / timeProgress * 100).toFixed(2))
       : null;
 
   const lossTrendRows = await duckdbService.query(
