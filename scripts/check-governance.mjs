@@ -2271,6 +2271,74 @@ function checkRouteCatalogParamContracts() {
 }
 
 // ============================================================
+// Agent 注册表版本可追溯（harness 对标门槛 3，BACKLOG 2026-06-11-claude-f5646f）
+// ============================================================
+
+const AGENT_REGISTRY_FILES = [
+  'server/src/agent/registry/agent-metric-registry.ts',
+  'server/src/agent/registry/agent-data-capability-registry.ts',
+  'server/src/agent/registry/agent-forecast-output-registry.ts',
+  'server/src/agent/registry/unsupported-metric-registry.ts',
+];
+
+function checkAgentRegistryVersionBump() {
+  info('检查 Agent 注册表版本可追溯（注册表文件变更必须 bump 表级 version + 追加 changelog）...');
+
+  // 与 PR 体量门禁同模式：origin/main 不可用（CI 浅克隆 / 离线）时降级跳过，
+  // 主执行点是本地 pre-push（CLAUDE.md §8 要求 PR 前 fetch origin main）。
+  let mergeBase;
+  try {
+    mergeBase = execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], {
+      cwd: ROOT_DIR,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    warning('origin/main 不可用（浅克隆或离线），跳过 Agent 注册表版本检查');
+    return true;
+  }
+
+  const violations = [];
+  for (const file of AGENT_REGISTRY_FILES) {
+    let diff;
+    try {
+      // working tree vs merge-base：同时覆盖已提交与未提交的变更
+      diff = execFileSync('git', ['diff', mergeBase, '--', file], {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      continue;
+    }
+    if (!diff) continue;
+
+    const addedLines = diff
+      .split('\n')
+      .filter((line) => line.startsWith('+') && !line.startsWith('+++'));
+    // meta.version bump 或 changelog 追加必然产生含 version 字段的新增行；
+    // Zod refine 已在运行时强制 meta.version === changelog 末条 version，两者闭环。
+    const versionTouched = addedLines.some((line) => /version:\s*['"]/.test(line));
+    if (!versionTouched) {
+      violations.push(file);
+    }
+  }
+
+  if (violations.length === 0) {
+    success('Agent 注册表版本检查通过');
+    return true;
+  }
+
+  error('以下 Agent 注册表文件有变更但未更新表级 version/changelog：');
+  for (const file of violations) {
+    console.log(`    - ${file}`);
+  }
+  console.log('    修复：bump 该文件 registryMeta 的 version 并在 changelog 追加一条 { version, date, changes }');
+  console.log('    背景：harness 对标门槛 3 —— 释放大模型后能力边界变更必须可在产物层追溯');
+  return false;
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -2328,6 +2396,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
   { name: 'RouteCatalog参数契约', fn: checkRouteCatalogParamContracts },
+  { name: 'Agent注册表版本', fn: checkAgentRegistryVersionBump },
 ];
 
 /**

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AgentMetricDefinitionSchema } from './agent-metric.schema.js';
 import { AgentCapabilityDefinitionSchema } from './agent-capability.schema.js';
+import { AgentRegistryVersionSchema } from './agent-registry-meta.schema.js';
 
 export const UnsupportedMetricDefinitionSchema = z.object({
   id: z.string().min(1),
@@ -20,6 +21,7 @@ export const AgentMetricAuditSchema = z.object({
   metrics: z.array(AgentMetricDefinitionSchema),
   observed: z.array(AgentMetricDefinitionSchema).default([]),
   forecastOutputs: z.array(AgentMetricDefinitionSchema).default([]),
+  registryVersions: z.array(AgentRegistryVersionSchema),
 });
 
 export const AgentCapabilityAuditSchema = z.object({
@@ -30,10 +32,12 @@ export const AgentCapabilityAuditSchema = z.object({
     deprecated: z.number().int().nonnegative(),
   }),
   capabilities: z.array(AgentCapabilityDefinitionSchema),
+  registryVersions: z.array(AgentRegistryVersionSchema),
 });
 
 export const UnsupportedMetricAuditSchema = z.object({
   metrics: z.array(UnsupportedMetricDefinitionSchema),
+  registryVersions: z.array(AgentRegistryVersionSchema),
 });
 
 export const AgentReadinessStageStatusSchema = z.enum(['completed', 'blocked', 'pending']);
@@ -141,6 +145,7 @@ export const AgentReadinessAuditSchema = z.object({
   stage5Prerequisites: z.array(AgentReadinessPrerequisiteSchema),
   llmReadinessBlockers: z.array(z.string()),
   observabilityEvidence: AgentObservabilityAuditSchema,
+  registryVersions: z.array(AgentRegistryVersionSchema),
   notes: z.array(z.string()),
 });
 
