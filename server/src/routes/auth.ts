@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { authService } from '../services/auth.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { readonlyMiddleware } from '../middleware/readonly.js';
 import { requireRole, UserRole } from '../middleware/permission.js';
 import { checkAccountLock, recordLoginFailure, resetLoginAttempts } from '../middleware/rateLimiter.js';
 import { auditAuthEvent } from '../middleware/audit.js';
@@ -258,6 +259,7 @@ router.get(
 router.post(
   '/users',
   authMiddleware,
+  readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     const parseResult = userCreateSchema.safeParse(req.body);
@@ -286,6 +288,7 @@ router.post(
 router.put(
   '/users/:id',
   authMiddleware,
+  readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     const parseResult = userUpdateSchema.safeParse(req.body);
@@ -313,6 +316,7 @@ router.put(
 router.delete(
   '/users/:id',
   authMiddleware,
+  readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     await deleteUser(req.params.id);
@@ -333,6 +337,7 @@ router.get(
 router.post(
   '/roles',
   authMiddleware,
+  readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     const parseResult = roleSchema.safeParse(req.body);
@@ -347,6 +352,7 @@ router.post(
 router.put(
   '/roles/:role',
   authMiddleware,
+  readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     const parseResult = roleSchema.safeParse({ ...req.body, role: req.params.role });
@@ -361,6 +367,7 @@ router.put(
 router.delete(
   '/roles/:role',
   authMiddleware,
+  readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     await deleteRole(req.params.role);

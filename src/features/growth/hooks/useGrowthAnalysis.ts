@@ -148,7 +148,7 @@ export function useGrowthAnalysis() {
         return {
           current_value: Number(item.current_value ?? item.current_premium ?? 0),
           previous_value: Number(item.previous_value ?? item.previous_premium ?? 0),
-          growth_rate: item.growth_rate !== undefined ? Number(item.growth_rate) : null,
+          growth_rate: item.growth_rate != null ? Number(item.growth_rate) : null,
           time_period: String(item.time_period ?? item.period ?? ''),
           org_level_3: item.org_level_3 != null ? String(item.org_level_3) : undefined,
           salesman_name: rawSalesmanName ? formatSalesmanName(rawSalesmanName) : undefined,
@@ -418,8 +418,8 @@ export function useGrowthAnalysis() {
         previous_premium: Number(row.previous_premium ?? 0),
         current_count: Number(row.current_count ?? 0),
         previous_count: Number(row.previous_count ?? 0),
-        premium_growth_rate: row.premium_growth_rate !== undefined ? Number(row.premium_growth_rate) : null,
-        count_growth_rate: row.count_growth_rate !== undefined ? Number(row.count_growth_rate) : null,
+        premium_growth_rate: row.premium_growth_rate != null ? Number(row.premium_growth_rate) : null,
+        count_growth_rate: row.count_growth_rate != null ? Number(row.count_growth_rate) : null,
       })) : [];
 
       setState(prev => ({

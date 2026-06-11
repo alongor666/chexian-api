@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
+import { readonlyMiddleware } from '../middleware/readonly.js';
 import { requireRole, UserRole } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { getBootstrapper } from '../services/bootstrapper-registry.js';
@@ -14,6 +15,7 @@ const reloadSchema = z.object({
 router.post(
   '/data/reload',
   authMiddleware,
+  readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req, res) => {
     const parsed = reloadSchema.safeParse(req.body);
