@@ -117,9 +117,9 @@ export const ClaimsDetailPage: React.FC = () => {
         <FilterQuickActions {...actions} />
       )}
     >
-      {/* 快捷筛选栏 */}
+      {/* 快捷筛选栏（能力矩阵 claims_detail：PolicyFact 半连接，PR #571 后全维度可表达） */}
       <div id="claims-filter">
-        <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
+        <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} domain="claims_detail" />
       </div>
 
       {/* Tab 切换 */}

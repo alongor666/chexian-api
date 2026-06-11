@@ -6,6 +6,11 @@
  */
 import React from 'react';
 import { cn } from '@/shared/styles';
+import {
+  FILTER_DIMENSION_CAPABILITY,
+  type FilterDataDomain,
+  type QuickFilterCapability,
+} from '@/shared/config/filter-dimension-capability';
 
 /** 车型快捷筛选值 */
 export type VehicleType = 'home_car' | 'truck_1t' | 'truck_2_9t' | 'motorcycle' | 'truck_1_2t' | 'rental' | 'dump' | 'tractor' | 'general';
@@ -35,20 +40,12 @@ export interface QuickFilters {
 interface Props {
   filters: QuickFilters;
   onChange: (filters: QuickFilters) => void;
-  /** 隐藏车型芯片行（如专项页营业货车 tab 已服务端固定车型） */
+  /** 隐藏车型芯片行（页面业务语义，如专项页营业货车 tab 已服务端固定车型——非数据域能力） */
   hideVehicleType?: boolean;
-  /** 隐藏气/油细分（数据域无 fuel_type 列时，如交叉销售页 CrossSellDailyAgg）；
-   *  电仍可选（is_nev 列各域都有，与主站口径严格等价） */
-  hideGasOil?: boolean;
-  /** 隐藏依赖 vehicle_model 列的车型 chip（自卸/牵引/普货），如交叉销售页 */
-  hideVehicleModelChips?: boolean;
-  /** 仅隐藏"气"（数据域 fuel_category 派生列只有 油/电 时，如续保域——
-   *  气车被归入"油"，点"气"会返回错误的空结果） */
-  hideGas?: boolean;
-  /** 隐藏整个货车组 chip（数据域无 tonnage_segment 与 vehicle_model 列时，如续保域） */
-  hideTruckChips?: boolean;
-  /** 隐藏险类 toggle（交/商）——数据域无险类维度时，如续保域（口径=交商同保整体） */
-  hideInsuranceType?: boolean;
+  /** 页面数据域（治理计划 Phase 3）：按能力矩阵自动隐藏该域不可表达的
+   *  chip / toggle 档位（交/商、气/油细分、吨位、自卸/牵引/普货）。
+   *  缺省 'policy_fact' = 全维度可用。新页面只需声明域名，禁止再加散装 hide props */
+  domain?: FilterDataDomain;
 }
 
 // ── 车型分组 ──
@@ -117,7 +114,7 @@ const FUEL_CATEGORY_TOGGLE: CycleToggleConfig = {
   ],
 };
 
-// hideGasOil 时的退化版：仅 全部 ↔ 电 两态（气/油依赖 fuel_type 列，部分数据域不可表达）
+// fuel='electric-only' 的退化版：仅 全部 ↔ 电 两态（气/油依赖 fuel_type 列，部分数据域不可表达）
 const FUEL_CATEGORY_TOGGLE_ELECTRIC_ONLY: CycleToggleConfig = {
   key: 'fuelCategory',
   states: [
@@ -126,7 +123,7 @@ const FUEL_CATEGORY_TOGGLE_ELECTRIC_ONLY: CycleToggleConfig = {
   ],
 };
 
-// hideGas 时的退化版：全部 → 电 → 油（数据域 fuel_category 派生列无"气"值，如续保域）
+// fuel='no-gas' 的退化版：全部 → 电 → 油（数据域 fuel_category 派生列无"气"值，如续保域）
 const FUEL_CATEGORY_TOGGLE_NO_GAS: CycleToggleConfig = {
   key: 'fuelCategory',
   states: [
@@ -136,8 +133,18 @@ const FUEL_CATEGORY_TOGGLE_NO_GAS: CycleToggleConfig = {
   ],
 };
 
-// 依赖 vehicle_model 列的车型 chip（hideVehicleModelChips 时隐藏）
+// 按能力矩阵 fuel 形态选 toggle 配置
+const FUEL_TOGGLE_BY_CAPABILITY: Record<QuickFilterCapability['fuel'], CycleToggleConfig> = {
+  full: FUEL_CATEGORY_TOGGLE,
+  'electric-only': FUEL_CATEGORY_TOGGLE_ELECTRIC_ONLY,
+  'no-gas': FUEL_CATEGORY_TOGGLE_NO_GAS,
+};
+
+// 依赖 vehicle_model 列的车型 chip（capability.vehicleModelChips=false 时隐藏）
 const VEHICLE_MODEL_CHIP_TYPES: ReadonlySet<VehicleType> = new Set(['dump', 'tractor', 'general']);
+
+// 依赖 tonnage_segment 列的吨位 chip（capability.tonnageChips=false 时隐藏）
+const TONNAGE_CHIP_TYPES: ReadonlySet<VehicleType> = new Set(['truck_1t', 'truck_2_9t', 'truck_1_2t']);
 
 // 其他维度 toggle
 const OTHER_TOGGLES: CycleToggleConfig[] = [
@@ -190,18 +197,16 @@ const COMMERCIAL_VEHICLE_TYPES: VehicleType[] = ['truck_2_9t', 'dump', 'tractor'
 
 export const QuickFilterBar: React.FC<Props> = ({
   filters, onChange,
-  hideVehicleType, hideGasOil, hideVehicleModelChips, hideGas, hideTruckChips, hideInsuranceType,
+  hideVehicleType,
+  domain = 'policy_fact',
 }) => {
-  const visibleTruckChips = hideTruckChips
-    ? []
-    : hideVehicleModelChips
-      ? TRUCK_GROUP_CHIPS.filter((c) => !VEHICLE_MODEL_CHIP_TYPES.has(c.type))
-      : TRUCK_GROUP_CHIPS;
-  const fuelToggleConfig = hideGasOil
-    ? FUEL_CATEGORY_TOGGLE_ELECTRIC_ONLY
-    : hideGas
-      ? FUEL_CATEGORY_TOGGLE_NO_GAS
-      : FUEL_CATEGORY_TOGGLE;
+  const capability = FILTER_DIMENSION_CAPABILITY[domain];
+  const visibleTruckChips = TRUCK_GROUP_CHIPS.filter(
+    (c) =>
+      (capability.tonnageChips || !TONNAGE_CHIP_TYPES.has(c.type)) &&
+      (capability.vehicleModelChips || !VEHICLE_MODEL_CHIP_TYPES.has(c.type))
+  );
+  const fuelToggleConfig = FUEL_TOGGLE_BY_CAPABILITY[capability.fuel];
 
   /**
    * 车型芯片点击逻辑：
@@ -285,7 +290,7 @@ export const QuickFilterBar: React.FC<Props> = ({
 
   const isToggleActive = (config: CycleToggleConfig) => {
     const value = filters[config.key];
-    // 不在可选状态集内的残留值（如其他页设置的 gas 进入 hideGasOil 页面）
+    // 不在可选状态集内的残留值（如其他页设置的 gas 进入 fuel='electric-only' 的域页面）
     // 显示为未激活——与后端对该维度的防御性剥离行为一致（本页不生效）
     return value !== undefined && config.states.some((s) => s.value === value);
   };
@@ -306,7 +311,7 @@ export const QuickFilterBar: React.FC<Props> = ({
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-1.5">
         {/* 1. 险类 toggle：交/商 */}
-        {!hideInsuranceType && renderToggle(INSURANCE_TYPE_TOGGLE)}
+        {capability.insuranceType && renderToggle(INSURANCE_TYPE_TOGGLE)}
 
         {/* 2. 险别组合：主全/交三/单交 */}
         {renderToggle(COVERAGE_TOGGLE)}

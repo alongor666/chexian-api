@@ -151,10 +151,15 @@ export const SpecialtyPage: React.FC = () => {
       showBasicFilterBar={false}
       headerRightContent={renderHeaderControls}
     >
+      {/* 能力矩阵（治理计划 Phase 3）：cross-sell tab 走 CrossSellDailyAgg 物化表，
+          无 fuel_type / vehicle_model 列 → domain 自动隐藏气/油与自卸/牵引/普货。
+          ⚠️ 修正生产缺口：Phase 0 的 hide props 曾误落在未挂载的死代码 CrossSellPage
+          （PR #574 已删），本页才是 /#/specialty?tab=cross-sell 的真实渲染入口 */}
       <QuickFilterBar
         filters={quickFilters}
         onChange={handleQuickFilterChange}
         hideVehicleType={activeTab === 'truck'}
+        domain={activeTab === 'cross-sell' ? 'cross_sell_agg' : 'policy_fact'}
       />
       <div className="space-y-4">
         <Tabs
