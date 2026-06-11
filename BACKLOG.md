@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（50 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（51 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -28,9 +28,9 @@
 - B330 — 架构依赖违规修复（21 目录排查 主题B）
 - B331 — 超大文件拆分（21 目录排查 主题C）
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
-- 2026-06-11-claude-593d3d — 达成率三路由口径对账
+- 2026-06-11-claude-8ee9a0 — 修复维度表重复行致报告中心达成率失真
 
-**P2（26 项）**
+**P2（27 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -57,6 +57,7 @@
 - 2026-06-10-claude-b4da70 — 数据管理/cli.py 工具库空壳化处置
 - 2026-06-10-claude-e2240c — 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通
 - 2026-06-11-claude-0b88b9 — 「报价率」一词双语义需界面口径标注或改名
+- 2026-06-11-claude-146cce — 达成率三路由口径统一决策(需用户拍板,业务口径红线禁止直接改)
 - 2026-06-11-claude-3093a3 — 重复组件收拢（全站重复审计 主题②）
 
 **P3（17 项）**
@@ -133,5 +134,6 @@
 | 2026-06-10-claude-e2240c | 2026-06-10 | 续保追踪 | @claude | 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通。根因：RenewalTrackerFact 派生域缺 tonnage_segment 与 vehicle_model 字段。需续保派生域 ETL 从主表 join 补这两字段（tonnage_segment 轻，vehicle_model 重）后，后端 renewal-tracker 路由加对应过滤。 | P2 | PROPOSED | N/A | server/src/sql/renewal-tracker.ts |  |
 | 2026-06-11-claude-02aa70 | 2026-06-11 | 产品决策 | @claude | 产品层冗余裁剪决策（需用户拍板，全站重复审计 主题⑤）：a) 报价转化页 A 版/B 版六专题大面积同件复用，同一内容 3 个入口，是否保留双版本；b) 成本分析页 basic 与 comprehensive 两视图明细表实质重叠（综合视图独有价值=象限图+ROI），是否合并；c) 客户流向页「转入来源」API 已封装前端从未调用（板块空缺，做或删）；d) 报表模板页「使用此模板」为空函数纯占位（做或删）。 | P3 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/features/quote-conversion；src/features/cost；src/features/customer-flow；src/features/report |  |
 | 2026-06-11-claude-0b88b9 | 2026-06-11 | 指标口径 | @claude | 「报价率」一词双语义需界面口径标注或改名：续保追踪页 报价率=报价件数/应续件数（到期口径、车架号去重），报价转化页 漏斗转化率分母=报价单总量。两处均含「报价」字样但分母不同，易误读。处置：两页界面补口径说明文案，或统一命名区分。来源：2026-06-10 全站重复审计。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/features/renewal-tracker；src/features/quote-conversion |  |
+| 2026-06-11-claude-146cce | 2026-06-11 | 指标口径 | @claude | 达成率三路由口径统一决策(需用户拍板,业务口径红线禁止直接改)：①看板kpi与③报告中心同为时间进度达成率但锚点不同(①数据内最新签单日/365硬编码 vs ③服务器当前日期/闰年感知,数据滞后2天时相对差约1.25%,且③代码注释写最新签单日与实现不符)；②经营分析是另一套周期均分语义(窗口保费÷年计划均分,无当期保费业务员的计划漏出分母,窗口越短虚高越重:日窗口分摊计划仅36289/45146)；①筛单月返回累计至月末而非单月达成率。待拍板三问：时间进度锚点选哪个(疑似正确口径=数据内最新签单日,数据滞后不冤业务员)；②周期均分语义保留与否(保留则页面需标注与看板口径不同)；指标注册表 plan_completion_pct 从L4占位升级为唯一事实源、三路由向其对齐。对照表与数值证据见 开发文档/达成率三路由口径对账报告_2026-06-11.md | P2 | PROPOSED | 开发文档/达成率三路由口径对账报告_2026-06-11.md | server/src/sql/kpi.ts；server/src/sql/performance-analysis；server/src/sql/premiumPlan.ts；server/src/config/metric-registry/categories/plan.ts |  |
 | 2026-06-11-claude-3093a3 | 2026-06-11 | Refactor/Frontend | @claude | 重复组件收拢（全站重复审计 主题②）：机构×维度×时间热力图 4 套独立实现（performance-org/cross-sell/claims-detail/quote-conversion）、机构→团队→业务员下钻表 5 处、KPI 卡 5 套、趋势折线封装 5 套、导出对话框 2 个（widgets/export/ExportDialog vs features/file/ExportModal）+ crossSellExport 重写 CSV 下载、格式化函数多处本地重写（renewal-tracker/expense-development/growth 对应 shared/utils/formatters 已有）、dashboard useFilterState 与全局 FilterContext 双轨。逐类提共享部件，结合功能迭代渐进做。关联 B330（依赖违规）/B331（大文件拆分）。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/widgets；src/shared；src/features/dashboard | 标签收拢实施时排查出 5 处 SSOT 之外的残留硬编码维度标签副本（本批未动）：① PerformanceAnalysisPanel.tsx:92-101 PERF_HEATMAP_DRILL_DIMENSIONS（team:'团队'/insurance_grade:'风险评分'，与同页 HEATMAP_DIMENSION_LABELS 已统一文案形成页内不一致，优先治理）；② CrossSellAnalysisPanel.tsx:389-396 HEATMAP_DRILL_DIMENSIONS（team:'团队'，同页不一致，优先治理）；③ claims-detail/ClaimsHeatmapPanel.tsx:29,35；④ premium-report/hooks/usePremiumPlan.ts:35 LEVEL_LABELS；⑤ quote-conversion/DrilldownTable.tsx:101。收拢时改为 pickDimensionLabels 派生。 |
-| 2026-06-11-claude-593d3d | 2026-06-11 | 指标口径 | @claude | 达成率三路由口径对账：保费看板 /query/kpi、经营分析 /query/performance-bundle、报告中心 /query/plan-achievement 各自计算车险达成率，无对账机制。需用 Parquet 直查对比三者分子分母口径是否一致，差异登记后按业务口径红线处置（禁止直接改）。来源：2026-06-10 全站重复审计。 | P1 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | server/src/sql |  |
+| 2026-06-11-claude-8ee9a0 | 2026-06-11 | 数据质量 | @claude | 修复维度表重复行致报告中心达成率失真：dim/plan/latest.parquet plan_year=2026 level=salesman 存在重复 business_no('000000000'×13行/'200048259'×2行)，经 loadDimParquet 兼容表 LEFT JOIN 放大→achievement_cache 中 admin乐山直接个代 实际保费70.02万被复制13份→/api/query/plan-achievement 全公司分子虚增840.24万、乐山达成率显示272.94%(真实≈98.66%)；另 dim/salesman/latest.parquet 徐小满(210012051)整行重复2行→计划虚增30万。修法双管：上游维度表ETL按(plan_year,level,business_no)与整行去重 + loadDimParquet 计划子查询先 SUM GROUP BY business_no 再 JOIN(机制免疫)。证据见 开发文档/达成率三路由口径对账报告_2026-06-11.md §四 | P1 | PROPOSED | 开发文档/达成率三路由口径对账报告_2026-06-11.md | server/src/services/duckdb-domain-loaders.ts；数据管理/warehouse/dim | PR #578 评审前瞻提醒（已核验）：双管修法两条腿各管一个缺陷、不可互相替代——加载器计划子查询 SUM GROUP BY business_no 只压住 PlanFact 侧重复（缺陷1，000000000×13）；SalesmanDim 整行重复（缺陷2，徐小满×2）在 LEFT JOIN 左表，加载器 GROUP BY 够不着，必须靠上游业务员维度表整行去重。只做加载器一侧会漏缺陷2。另评审强调：失真是 LIVE 生产问题（报告中心乐山 272.94% 实时展示给业务方），建议本任务加急，或修复前给报告中心达成率加临时口径警示。 |
