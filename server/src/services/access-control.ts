@@ -426,7 +426,6 @@ export async function updateUser(id: string, input: {
     `display_name = '${escapeSqlValue(input.displayName)}'`,
     `role = '${escapeSqlValue(input.role)}'`,
     `organization = ${toSqlString(input.organization)}`,
-    `branch_code = ${toSqlString(input.branchCode)}`,
     `allowed_routes = ${serializeStringArray(input.allowedRoutes)}`,
     `default_route = ${toSqlString(input.defaultRoute)}`,
     `allowed_ips = ${serializeStringArray(input.allowedIps)}`,
@@ -434,6 +433,12 @@ export async function updateUser(id: string, input: {
     `active = ${toSqlBoolean(input.active ?? true)}`,
     'updated_at = CURRENT_TIMESTAMP',
   ];
+  // branch_code 仅在显式传入时更新；未传则保留原值。否则多分公司 RLS 下，
+  // 任何不带 branchCode 的用户编辑都会把 branch_code 抹成 NULL，
+  // 该用户重登拿到的 JWT 无 branchCode → permission.ts fail-closed 401 锁死。
+  if (input.branchCode !== undefined) {
+    updates.push(`branch_code = ${toSqlString(input.branchCode)}`);
+  }
   if (input.passwordHash) {
     updates.push(`password_hash = '${escapeSqlValue(input.passwordHash)}'`);
   }
