@@ -58,6 +58,10 @@ function parseFilters(query: Record<string, unknown>): ClaimsDetailFilters {
   if (query.coverageCombinations && typeof query.coverageCombinations === 'string') filters.coverageCombination = query.coverageCombinations;
   if (query.isNewCar && typeof query.isNewCar === 'string') filters.isNewCar = query.isNewCar;
   if (query.isRenewal && typeof query.isRenewal === 'string') filters.isRenewal = query.isRenewal;
+  // Phase 2（BACKLOG d0cd4b）：前端已发、此前被静默丢弃的三参数
+  if (query.insuranceType && typeof query.insuranceType === 'string') filters.insuranceType = query.insuranceType;
+  if (query.enterpriseCar && typeof query.enterpriseCar === 'string') filters.enterpriseCar = query.enterpriseCar;
+  if (query.fuelCategory && typeof query.fuelCategory === 'string') filters.fuelCategory = query.fuelCategory;
   // B303: cutoffDate 透传（用于 earned_exposure 分母计算）
   if (query.cutoffDate && typeof query.cutoffDate === 'string') {
     if (!isValidDateFormat(query.cutoffDate)) throw new AppError(400, 'cutoffDate 格式无效');
@@ -246,6 +250,10 @@ router.get(
     if (q.businessNature && typeof q.businessNature === 'string') heatmapFilters.businessNature = q.businessNature;
     if (q.isNewCar && typeof q.isNewCar === 'string') heatmapFilters.isNewCar = q.isNewCar;
     if (q.isRenewal && typeof q.isRenewal === 'string') heatmapFilters.isRenewal = q.isRenewal;
+    // Phase 2（BACKLOG d0cd4b）：与 parseFilters 同步补齐，防同文件两处解析漂移
+    if (q.insuranceType && typeof q.insuranceType === 'string') heatmapFilters.insuranceType = q.insuranceType;
+    if (q.enterpriseCar && typeof q.enterpriseCar === 'string') heatmapFilters.enterpriseCar = q.enterpriseCar;
+    if (q.fuelCategory && typeof q.fuelCategory === 'string') heatmapFilters.fuelCategory = q.fuelCategory;
 
     const dimStr = typeof q.dimension === 'string' ? q.dimension : 'org_level_3';
     if (!VALID_HEATMAP_DIMENSIONS.has(dimStr)) {

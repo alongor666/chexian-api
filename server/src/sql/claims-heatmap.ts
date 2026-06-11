@@ -49,6 +49,10 @@ export interface ClaimsHeatmapFilters {
   businessNature?: string;
   isNewCar?: string;
   isRenewal?: string;
+  // Phase 2（BACKLOG d0cd4b）补齐：与 claims-detail.ts 同步，防同文件两处解析漂移
+  insuranceType?: string;      // 险类：true=交强险 / false=商业保险
+  enterpriseCar?: string;      // 企客（非营业企业客车）：'true'
+  fuelCategory?: string;       // 燃料分类：oil / gas / electric
 }
 
 // ============================================================================
@@ -101,8 +105,30 @@ function buildPolicyWhere(filters: ClaimsHeatmapFilters, prefix = 'p.'): string 
   if (filters.isRenewal === 'true') conditions.push(`${prefix}is_renewal = true`);
   if (filters.isRenewal === 'false') conditions.push(`${prefix}is_renewal = false`);
 
-  if (filters.vehicleQuickFilter) {
+  // 险类（交强/商业）— 语义照抄 SSOT filter-params.ts:206-210
+  if (filters.insuranceType === 'true') {
+    conditions.push(`${prefix}insurance_type = '交强险'`);
+  } else if (filters.insuranceType === 'false') {
+    conditions.push(`${prefix}insurance_type = '商业保险'`);
+  }
+
+  // 燃料分类（油/气/电）— 语义照抄 SSOT filter-params.ts:212-225
+  if (filters.fuelCategory === 'electric') {
+    conditions.push(`${prefix}is_nev = true`);
+  } else if (filters.fuelCategory === 'gas') {
+    conditions.push(`${prefix}is_nev = false AND ${prefix}fuel_type LIKE '天然气%'`);
+  } else if (filters.fuelCategory === 'oil') {
+    conditions.push(`${prefix}is_nev = false AND (${prefix}fuel_type IS NULL OR ${prefix}fuel_type NOT LIKE '天然气%')`);
+  }
+
+  // home_car + 企客联动特例与企客单独选中均照抄 SSOT filter-params.ts:227-238
+  if (filters.vehicleQuickFilter === 'home_car' && filters.enterpriseCar === 'true') {
+    conditions.push(`${prefix}customer_category IN ('非营业个人客车', '非营业企业客车')`);
+  } else if (filters.vehicleQuickFilter) {
     pushVehicleQuickFilterConditions(conditions, filters.vehicleQuickFilter, prefix);
+  }
+  if (filters.enterpriseCar === 'true' && !filters.vehicleQuickFilter) {
+    conditions.push(`${prefix}customer_category = '非营业企业客车'`);
   }
 
   if (filters.businessNature === 'commercial') {
@@ -326,7 +352,9 @@ export function generateClaimsHeatmapQuery(
         ANY_VALUE(is_renewal) AS is_renewal,
         ANY_VALUE(insurance_grade) AS insurance_grade,
         ANY_VALUE(tonnage_segment) AS tonnage_segment,
-        ANY_VALUE(vehicle_model) AS vehicle_model
+        ANY_VALUE(vehicle_model) AS vehicle_model,
+        ANY_VALUE(insurance_type) AS insurance_type,
+        ANY_VALUE(fuel_type) AS fuel_type
       FROM PolicyFact
       WHERE EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) >= (SELECT policy_year FROM year_bounds) - 1
         AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) <= (SELECT policy_year FROM year_bounds)

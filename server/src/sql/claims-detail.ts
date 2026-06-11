@@ -37,6 +37,8 @@ const DEDUPED_POLICY_SUBQUERY = `(
     ANY_VALUE(is_renewal) AS is_renewal,
     ANY_VALUE(tonnage_segment) AS tonnage_segment,
     ANY_VALUE(vehicle_model) AS vehicle_model,
+    ANY_VALUE(insurance_type) AS insurance_type,
+    ANY_VALUE(fuel_type) AS fuel_type,
     ANY_VALUE(plate_no) AS plate_no,
     ANY_VALUE(salesman_name) AS salesman_name,
     ANY_VALUE(insurance_start_date) AS insurance_start_date,
@@ -67,6 +69,10 @@ export interface ClaimsDetailFilters {
   businessNature?: string;     // 营业/非营业性质
   isNewCar?: string;           // 是否新车：true/false
   isRenewal?: string;          // 是否续保：true/false
+  // Phase 2（BACKLOG d0cd4b）补齐：前端已发、后端曾静默丢弃的三参数
+  insuranceType?: string;      // 险类：true=交强险 / false=商业保险
+  enterpriseCar?: string;      // 企客（非营业企业客车）：'true'
+  fuelCategory?: string;       // 燃料分类：oil / gas / electric
   // B303: 满期截止日（用于 earned_days 计算），缺省 '9999-12-31' 视为全部到期
   cutoffDate?: string;
 }
@@ -94,9 +100,31 @@ function buildPolicyWhere(filters: ClaimsDetailFilters): string {
   if (filters.isTransfer === 'true') conditions.push(`p.is_transfer = true`);
   if (filters.isTransfer === 'false') conditions.push(`p.is_transfer = false`);
 
-  // 车型快捷筛选（共享 helper，9 case 单一来源）
-  if (filters.vehicleQuickFilter) {
+  // 险类（交强/商业）— 语义照抄 SSOT filter-params.ts:206-210
+  if (filters.insuranceType === 'true') {
+    conditions.push(`p.insurance_type = '交强险'`);
+  } else if (filters.insuranceType === 'false') {
+    conditions.push(`p.insurance_type = '商业保险'`);
+  }
+
+  // 燃料分类（油/气/电）— 语义照抄 SSOT filter-params.ts:212-225
+  if (filters.fuelCategory === 'electric') {
+    conditions.push(`p.is_nev = true`);
+  } else if (filters.fuelCategory === 'gas') {
+    conditions.push(`p.is_nev = false AND p.fuel_type LIKE '天然气%'`);
+  } else if (filters.fuelCategory === 'oil') {
+    conditions.push(`p.is_nev = false AND (p.fuel_type IS NULL OR p.fuel_type NOT LIKE '天然气%')`);
+  }
+
+  // 车型快捷筛选（共享 helper，9 case 单一来源）；
+  // home_car + 企客联动特例与企客单独选中均照抄 SSOT filter-params.ts:227-238
+  if (filters.vehicleQuickFilter === 'home_car' && filters.enterpriseCar === 'true') {
+    conditions.push(`p.customer_category IN ('非营业个人客车', '非营业企业客车')`);
+  } else if (filters.vehicleQuickFilter) {
     pushVehicleQuickFilterConditions(conditions, filters.vehicleQuickFilter, 'p.');
+  }
+  if (filters.enterpriseCar === 'true' && !filters.vehicleQuickFilter) {
+    conditions.push(`p.customer_category = '非营业企业客车'`);
   }
 
   // 营业/非营业性质
