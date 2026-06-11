@@ -445,3 +445,10 @@
 {"uid":"2026-06-11-claude-8ea52d","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 (commit 1878d39)","at":"2026-06-11T21:51:49.407Z","eid":"eec8d965"}
 {"uid":"2026-06-11-claude-518bf0","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 (commit 1878d39)","at":"2026-06-11T21:51:49.449Z","eid":"c727ff36"}
 {"uid":"2026-06-11-claude-0c1b86","kind":"status","ts":"2026-06-11","actor":"@claude","status":"PARTIAL","evidence":"PR #590 (commit 1878d39) 已修复编辑抹除；API 写入 branchCode 能力待补","at":"2026-06-11T21:51:49.492Z","eid":"2f41f215"}
+{"uid":"2026-06-11-claude-b9c7bc","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 merged (d228efe)","at":"2026-06-11T23:33:12.908Z","eid":"b0fc7bea"}
+{"uid":"2026-06-11-claude-4201cd","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 merged (d228efe)","at":"2026-06-11T23:33:13.009Z","eid":"dd546be4"}
+{"uid":"2026-06-11-claude-0c1b86","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 merged (d228efe)","at":"2026-06-11T23:33:13.060Z","eid":"c1db506a"}
+{"uid":"2026-06-11-claude-249cf4","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 merged (d228efe)","at":"2026-06-11T23:33:13.098Z","eid":"1f6eb80f"}
+{"uid":"2026-06-11-claude-44a845","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 merged (d228efe)","at":"2026-06-11T23:33:13.134Z","eid":"bea320a5"}
+{"uid":"2026-06-11-claude-591cdf","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 merged (d228efe)","at":"2026-06-11T23:33:13.186Z","eid":"96eebf65"}
+{"uid":"2026-06-11-claude-3ce527","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 merged (d228efe)","at":"2026-06-11T23:33:13.235Z","eid":"e3c18f3a"}
