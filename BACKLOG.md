@@ -17,6 +17,7 @@
 ---
 
 ## 📋 活跃任务速查（50 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（52 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -137,3 +138,4 @@
 | 2026-06-11-claude-42bf28 | 2026-06-11 | 数据质量 | @claude | 经营分析汇总表（performance-summary）达成率/计划列恒 NULL 的处置评估：146cce 口径统一时评估结论为「不顺势接入」——年计划只有业务员粒度、无险别组合维度，强行接入只会让整体行有值而主全/交三/单交子行恒空，新增口径混淆。待业务拍板二选一：① 删除汇总表这两列（前端 12 列减 2）；② 仅整体行接入标准口径并在列头注明子行无计划。summary.ts 旧版分摊死计算已随 146cce 移除。 | P3 | PROPOSED | 开发文档/达成率三路由口径对账报告_2026-06-11.md | server/src/sql/performance-analysis/summary.ts；src/features/dashboard/PerformanceAnalysisPanel.tsx |  |
 | 2026-06-11-claude-f5646f | 2026-06-11 | Agent / LLM 边界 | @claude | 为 4 张 agent 注册表补 version/changelog 可追溯字段（harness 对标门槛 3）。现状：agent-metric(29)/agent-data-capability(13)/agent-forecast-output(2)/unsupported-metric(5) 四张注册表均无版本字段，与项目主指标注册表（CLAUDE.md §2 强制 changelog）纪律不一致，释放大模型后能力边界变更无法在产物层追溯。完整实现需三件套同时落地避免留下无消费方死字段：(1) Zod schema 加 version+changelog 字段；(2) /api/agent/audit/* 响应暴露表级版本；(3) governance 加『改注册表条目须更新 version』强制校验。本次 harness 行动已完成门槛 1（explain 进审计）+门槛 2（sql-guard 加固+回归测试），门槛 3 因涉及 schema 演进单独走注册表正规修改流程。 | P2 | PROPOSED | docs/AGENT_HARNESS_BENCHMARK.md | server/src/agent/registry/ |  |
 | 2026-06-11-claude-ee63ee | 2026-06-11 | Refactor/Frontend | @claude | quote-conversion KpiCards default 分支为死代码：VersionAView/VersionBView 自 PR #150 (3c9e72a4, 2026-04-03) 起均以 variant="oldCar" 调用，default 分支（整体转化率/报价总量/平均折扣率/N 位业务员参与 卡片布局，KpiCards.tsx L116-168）不可达。该死分支曾导致 E2E 09-quote-conversion 断言「整体转化率」长期假绿（已另行修复断言）。处置建议：确认无恢复 default 视图的产品计划后删除该分支并收窄 variant 类型；注意与 OPEN 状态 PR #581（给 oldCar 分支加 title 口径提示）的合并顺序。 | P3 | PROPOSED | N/A | src/features/quote-conversion/components/KpiCards.tsx |  |
+| 2026-06-11-claude-f5646f | 2026-06-11 | Agent / LLM 边界 | @claude | 为 4 张 agent 注册表补 version/changelog 可追溯字段（harness 对标门槛 3）。现状：agent-metric(29)/agent-data-capability(13)/agent-forecast-output(2)/unsupported-metric(5) 四张注册表均无版本字段，与项目主指标注册表（CLAUDE.md §2 强制 changelog）纪律不一致，释放大模型后能力边界变更无法在产物层追溯。完整实现需三件套同时落地避免留下无消费方死字段：(1) Zod schema 加 version+changelog 字段；(2) /api/agent/audit/* 响应暴露表级版本；(3) governance 加『改注册表条目须更新 version』强制校验。本次 harness 行动已完成门槛 1（explain 进审计）+门槛 2（sql-guard 加固+回归测试），门槛 3 因涉及 schema 演进单独走注册表正规修改流程。 | P2 | PROPOSED | docs/AGENT_HARNESS_BENCHMARK.md | server/src/agent/registry/ |  |
