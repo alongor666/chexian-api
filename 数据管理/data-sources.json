@@ -213,8 +213,8 @@
       "etl_script": "warehouse/dim/generate_dim_tables.py",
       "output": "warehouse/dim/salesman/latest.parquet",
       "update_cadence": "annual_or_semiannual",
-      "last_updated": "2026-03-25",
-      "row_count": 603,
+      "last_updated": "2026-06-10",
+      "row_count": 615,
       "field_count": 10,
       "key_fields": [
         "business_no",
@@ -234,7 +234,7 @@
       "etl_script": "warehouse/dim/generate_dim_tables.py",
       "output": "warehouse/dim/plan/latest.parquet",
       "update_cadence": "annual_or_semiannual",
-      "last_updated": "2026-03-25",
+      "last_updated": "2026-06-10",
       "row_count": 855,
       "field_count": 16,
       "key_fields": [
