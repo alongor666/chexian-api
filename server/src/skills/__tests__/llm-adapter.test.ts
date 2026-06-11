@@ -55,6 +55,45 @@ describe('sql-guard.inspectForSql', () => {
     // 业务侧叙述不会用英文，命中也只是切到 fallback 文本，安全优先
     expect(r.blocked).toBe(true);
   });
+
+  // 对抗集（2026-06-10 harness 对标实测沉淀）：DuckDB 方言高危关键字必须拦截。
+  // COPY ... TO 可导出数据、ATTACH 挂外部库、INSTALL/LOAD 加载任意扩展、PRAGMA/DESCRIBE 泄 schema。
+  it.each([
+    ['COPY', "COPY policy TO 'out.csv'"],
+    ['EXPORT', 'EXPORT DATABASE \'/tmp/dump\''],
+    ['ATTACH', "ATTACH 'evil.db' AS e"],
+    ['DETACH', 'DETACH e'],
+    ['INSTALL', 'INSTALL httpfs'],
+    ['LOAD', 'LOAD httpfs'],
+    ['PRAGMA', 'PRAGMA table_info(policy)'],
+    ['DESCRIBE', 'DESCRIBE policy'],
+    ['SUMMARIZE', 'SUMMARIZE policy'],
+    ['PIVOT', 'PIVOT policy ON year'],
+    ['UNPIVOT', 'UNPIVOT policy ON premium'],
+    ['CALL', 'CALL pragma_version()'],
+  ])('DuckDB 方言 %s → 拦截', (kw, text) => {
+    const r = inspectForSql(text);
+    expect(r.blocked).toBe(true);
+    expect(r.matchedKeyword).toBe(kw);
+  });
+
+  it('正常中文车险解释（含数据导出/加载等词的中文表达）→ 不误伤', () => {
+    // 关键字后紧跟中文（非 [\w*"'(]）不构成 SQL 形态，保守策略下仍放行
+    for (const safe of [
+      '建议把该机构的续保名单导出后逐户跟进。',
+      '本期满期赔付率 65.5%，整体处于可控区间。',
+      '加载最新数据后，赔付率较上期下降 2pp。',
+      '请描述该客户类别的风险底色。',
+    ]) {
+      expect(inspectForSql(safe).blocked).toBe(false);
+    }
+  });
+
+  // 已知边界（诚实记录，靠执行层防线兜底）：注释分割混淆 `SEL/**/ECT` 和裸 FROM 子句
+  // 当前正则不拦。威胁模型上这类文本不进执行路径，危害仅为「展示一段伪 SQL」，不单独加复杂正则。
+  it('已知边界：注释分割混淆当前不拦（靠执行层兜底）', () => {
+    expect(inspectForSql('SEL/**/ECT premium FROM x').blocked).toBe(false);
+  });
 });
 
 describe('MockLLMProvider', () => {

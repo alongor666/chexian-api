@@ -48,8 +48,14 @@ interface AuditLogEntry {
   token_id?: string;
 }
 
-/** 需要记录审计日志的路径前缀 */
-export const AUDITED_PATHS = ['/api/query', '/api/data', '/api/agent/diagnosis', '/api/agent/forecast'] as const;
+/**
+ * 需要记录审计日志的路径前缀
+ *
+ * /api/agent/explain 是大模型解释层的唯一入口，必须审计：就绪门禁（readyForLlm）的
+ * 前置条件之一是「生产审计日志能看到 agent 调用记录」，若 explain 不在此列表，则该入口的
+ * 大模型调用不会落审计日志，门禁条件与审计覆盖将自相矛盾。
+ */
+export const AUDITED_PATHS = ['/api/query', '/api/data', '/api/agent/diagnosis', '/api/agent/forecast', '/api/agent/explain'] as const;
 
 export function getAuditLogPath(): string {
   return AUDIT_LOG_PATH;

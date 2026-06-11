@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（50 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（51 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -29,7 +29,7 @@
 - B331 — 超大文件拆分（21 目录排查 主题C）
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
 
-**P2（27 项）**
+**P2（28 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -58,6 +58,7 @@
 - 2026-06-11-claude-0b88b9 — 「报价率」一词双语义需界面口径标注或改名
 - 2026-06-11-claude-146cce — 达成率三路由口径统一决策(需用户拍板,业务口径红线禁止直接改)
 - 2026-06-11-claude-3093a3 — 重复组件收拢（全站重复审计 主题②）
+- 2026-06-11-claude-f5646f — 为 4 张 agent 注册表补 version/changelog 可追溯字段（har
 
 **P3（17 项）**
 
@@ -135,3 +136,4 @@
 | 2026-06-11-claude-0b88b9 | 2026-06-11 | 指标口径 | @claude | 「报价率」一词双语义需界面口径标注或改名：续保追踪页 报价率=报价件数/应续件数（到期口径、车架号去重），报价转化页 漏斗转化率分母=报价单总量。两处均含「报价」字样但分母不同，易误读。处置：两页界面补口径说明文案，或统一命名区分。来源：2026-06-10 全站重复审计。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/features/renewal-tracker；src/features/quote-conversion |  |
 | 2026-06-11-claude-146cce | 2026-06-11 | 指标口径 | @claude | 达成率三路由口径统一决策(需用户拍板,业务口径红线禁止直接改)：①看板kpi与③报告中心同为时间进度达成率但锚点不同(①数据内最新签单日/365硬编码 vs ③服务器当前日期/闰年感知,数据滞后2天时相对差约1.25%,且③代码注释写最新签单日与实现不符)；②经营分析是另一套周期均分语义(窗口保费÷年计划均分,无当期保费业务员的计划漏出分母,窗口越短虚高越重:日窗口分摊计划仅36289/45146)；①筛单月返回累计至月末而非单月达成率。待拍板三问：时间进度锚点选哪个(疑似正确口径=数据内最新签单日,数据滞后不冤业务员)；②周期均分语义保留与否(保留则页面需标注与看板口径不同)；指标注册表 plan_completion_pct 从L4占位升级为唯一事实源、三路由向其对齐。对照表与数值证据见 开发文档/达成率三路由口径对账报告_2026-06-11.md | P2 | PROPOSED | 开发文档/达成率三路由口径对账报告_2026-06-11.md | server/src/sql/kpi.ts；server/src/sql/performance-analysis；server/src/sql/premiumPlan.ts；server/src/config/metric-registry/categories/plan.ts |  |
 | 2026-06-11-claude-3093a3 | 2026-06-11 | Refactor/Frontend | @claude | 重复组件收拢（全站重复审计 主题②）：机构×维度×时间热力图 4 套独立实现（performance-org/cross-sell/claims-detail/quote-conversion）、机构→团队→业务员下钻表 5 处、KPI 卡 5 套、趋势折线封装 5 套、导出对话框 2 个（widgets/export/ExportDialog vs features/file/ExportModal）+ crossSellExport 重写 CSV 下载、格式化函数多处本地重写（renewal-tracker/expense-development/growth 对应 shared/utils/formatters 已有）、dashboard useFilterState 与全局 FilterContext 双轨。逐类提共享部件，结合功能迭代渐进做。关联 B330（依赖违规）/B331（大文件拆分）。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/widgets；src/shared；src/features/dashboard | 标签收拢实施时排查出 5 处 SSOT 之外的残留硬编码维度标签副本（本批未动）：① PerformanceAnalysisPanel.tsx:92-101 PERF_HEATMAP_DRILL_DIMENSIONS（team:'团队'/insurance_grade:'风险评分'，与同页 HEATMAP_DIMENSION_LABELS 已统一文案形成页内不一致，优先治理）；② CrossSellAnalysisPanel.tsx:389-396 HEATMAP_DRILL_DIMENSIONS（team:'团队'，同页不一致，优先治理）；③ claims-detail/ClaimsHeatmapPanel.tsx:29,35；④ premium-report/hooks/usePremiumPlan.ts:35 LEVEL_LABELS；⑤ quote-conversion/DrilldownTable.tsx:101。收拢时改为 pickDimensionLabels 派生。 |
+| 2026-06-11-claude-f5646f | 2026-06-11 | Agent / LLM 边界 | @claude | 为 4 张 agent 注册表补 version/changelog 可追溯字段（harness 对标门槛 3）。现状：agent-metric(29)/agent-data-capability(13)/agent-forecast-output(2)/unsupported-metric(5) 四张注册表均无版本字段，与项目主指标注册表（CLAUDE.md §2 强制 changelog）纪律不一致，释放大模型后能力边界变更无法在产物层追溯。完整实现需三件套同时落地避免留下无消费方死字段：(1) Zod schema 加 version+changelog 字段；(2) /api/agent/audit/* 响应暴露表级版本；(3) governance 加『改注册表条目须更新 version』强制校验。本次 harness 行动已完成门槛 1（explain 进审计）+门槛 2（sql-guard 加固+回归测试），门槛 3 因涉及 schema 演进单独走注册表正规修改流程。 | P2 | PROPOSED | docs/AGENT_HARNESS_BENCHMARK.md | server/src/agent/registry/ |  |
