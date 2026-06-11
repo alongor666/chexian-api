@@ -150,9 +150,11 @@ export class ApiClientCore {
    */
   setToken(token: string): void {
     this.token = token;
-    // 解析 JWT 获取过期时间
+    // 解析 JWT 获取过期时间（JWT 用 base64url 编码，- _ 需先转回标准 base64 再 atob，
+    // 否则含 - / _ 的 payload 会抛异常落到默认 24h，本地过期判断失真）
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(b64));
       this.tokenExpiry = payload.exp * 1000; // 转换为毫秒
     } catch {
       this.tokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // 默认 24 小时
