@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { usePermission } from '../contexts/PermissionContext';
 
 export function useRBAC() {
-    const { user } = useAuth();
+    // 改读已挂载的 PermissionContext（AuthContext/AuthProvider 从未挂载到 Provider 树，
+    // 旧实现里 useAuth() 恒返回默认值，导致 isOrgUser 恒 false、机构用户作用域全部失效）。
+    const { isOrgUser, userPermission } = usePermission();
 
-    const isOrgUser = user?.role === 'org_user';
-    // Use a fallback to ensure we don't crash if organization is missing on the type
-    const userOrg: string | undefined = (user as any)?.organization;
+    const userOrg: string | undefined = userPermission?.organization;
     const canGoToTop = !isOrgUser;
 
     /**

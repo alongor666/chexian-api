@@ -1239,7 +1239,8 @@ function checkGitignoreShadow() {
     let shadowedCount = 0;
     for (const f of scriptFiles) {
       try {
-        execSync(`git check-ignore -q "${f}"`, { cwd: ROOT_DIR, encoding: 'utf-8' });
+        // 用 execFileSync 数组传参，避免文件名含 $()/反引号/引号时被 shell 注入执行
+        execFileSync('git', ['check-ignore', '-q', f], { cwd: ROOT_DIR, encoding: 'utf-8' });
         // 如果没报错，说明文件会被忽略
         warning(`.gitignore 会忽略已跟踪文件: ${f}（修改后将无法提交新变更）`);
         shadowedCount++;
