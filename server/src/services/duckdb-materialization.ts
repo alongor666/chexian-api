@@ -264,6 +264,9 @@ export async function createCrossSellRealtimeView(db: DuckDBQueryable): Promise<
         LEFT JOIN CrossSellFact cs ON p.policy_no = cs.policy_no
         WHERE p.policy_date IS NOT NULL`;
 
+    // ⚠️ groupByColumns 增删筛选维度列（insurance_type/fuel_type/tonnage_segment/
+    // vehicle_model 等）时，必须同步 filter-dimension-capability.ts 能力矩阵（前后端两份）
+    // 与 cross-sell 路由的 sanitizeAggQuery 剥离清单——否则前端会放出 Binder Error chip
     const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
         customer_category, coverage_combination, renewal_mode, tonnage_segment,
         insurance_grade, is_commercial_insure,

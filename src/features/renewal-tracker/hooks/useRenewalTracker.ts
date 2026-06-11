@@ -69,7 +69,7 @@ export function buildRenewalTrackerParams(
 
   // 2) fuelCategory → 续保域中文 fuelCategories。
   //    续保域 fuel_category 派生列只有 '油'/'电'（气车被归入"油"）——
-  //    gas 防御性剥离，不映射成 '气'（会返回错误的空结果）；页面已隐藏"气"档（hideGas）
+  //    gas 防御性剥离，不映射成 '气'（会返回错误的空结果）；页面已按能力矩阵隐藏"气"档（domain="renewal_tracker"）
   if (full.fuelCategory === 'oil' || full.fuelCategory === 'electric') {
     // governance-allow: filter-params-mapping
     out.fuelCategories = full.fuelCategory === 'oil' ? '油' : '电';

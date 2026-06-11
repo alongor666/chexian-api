@@ -1989,6 +1989,99 @@ function checkFilterParamsBypass() {
 }
 
 /**
+ * 能力矩阵两端一致检查（治理计划 Phase 3，✅D5 = TS 常量起步）
+ *
+ * 前端 src/shared/config/filter-dimension-capability.ts 与后端
+ * server/src/config/filter-dimension-capability.ts 是同一「维度 × 数据域能力矩阵」
+ * 的两端镜像（独立编译域无法共享 import）。本检查提取两文件锚点
+ * CAPABILITY-MATRIX-BEGIN/END 之间的文本，要求逐字一致，防两份镜像互相漂移。
+ *
+ * 另两条护栏：QuickFilterBar.tsx 必须 import 该矩阵（防重构回散装 hide props）；
+ * 已知非 policy_fact 数据域页面必须声明 domain prop。
+ *
+ * 局限声明（评审 🟡6）：CI 无 DuckDB 原生模块与 parquet（CLAUDE.md §5），
+ * 「域有哪些列」是手工常量——本检查只防前后端两份互相漂移，防不了与真实
+ * parquet 列的漂移。真实漂移防线 = Phase 0/2 运行时测试 + 本地集成测试
+ * + 字段注册表流程挂钩（ETL 列变更须同步本矩阵，CLAUDE.md §2）。
+ */
+function checkFilterCapabilityMirror() {
+  info('检查能力矩阵两端一致（filter-dimension-capability 前后端镜像）...');
+
+  const BEGIN = 'CAPABILITY-MATRIX-BEGIN';
+  const END = 'CAPABILITY-MATRIX-END';
+  const frontPath = path.join(ROOT_DIR, 'src/shared/config/filter-dimension-capability.ts');
+  const backPath = path.join(ROOT_DIR, 'server/src/config/filter-dimension-capability.ts');
+
+  function extractAnchored(p) {
+    if (!fs.existsSync(p)) return null;
+    const content = fs.readFileSync(p, 'utf-8');
+    const begin = content.indexOf(BEGIN);
+    const end = content.indexOf(END);
+    if (begin === -1 || end === -1 || end <= begin) return null;
+    return content.slice(begin, end);
+  }
+
+  const front = extractAnchored(frontPath);
+  const back = extractAnchored(backPath);
+
+  if (front === null || back === null) {
+    error('能力矩阵文件缺失或锚点（CAPABILITY-MATRIX-BEGIN/END）不完整');
+    console.log(`    前端: ${frontPath}`);
+    console.log(`    后端: ${backPath}`);
+    return false;
+  }
+
+  if (front !== back) {
+    error('能力矩阵前后端镜像不一致（锚点区必须逐字相同）');
+    const fl = front.split('\n');
+    const bl = back.split('\n');
+    for (let i = 0; i < Math.max(fl.length, bl.length); i++) {
+      if (fl[i] !== bl[i]) {
+        console.log(`    首个差异（锚点区第 ${i + 1} 行）:`);
+        console.log(`      前端: ${(fl[i] ?? '<缺行>').trim()}`);
+        console.log(`      后端: ${(bl[i] ?? '<缺行>').trim()}`);
+        break;
+      }
+    }
+    console.log('    修复：把改动同步到另一端镜像（两文件锚点区逐字一致）');
+    return false;
+  }
+
+  // 护栏 2：QuickFilterBar 必须消费矩阵
+  const qfb = fs.readFileSync(path.join(ROOT_DIR, 'src/shared/components/QuickFilterBar.tsx'), 'utf-8');
+  if (!qfb.includes('FILTER_DIMENSION_CAPABILITY')) {
+    error('QuickFilterBar.tsx 未 import FILTER_DIMENSION_CAPABILITY（禁止重构回散装 hide props）');
+    return false;
+  }
+
+  // 护栏 3：已知非 policy_fact 域页面必须声明 domain
+  // ⚠️ SpecialtyPage 是 /#/specialty?tab=cross-sell 的真实渲染入口（独立 CrossSellPage
+  // 是从未挂载的死代码，PR #574 已删——Phase 0 的 hide props 曾误落其上，前车之鉴）。
+  // 含动态 domain 的页面检查「domain=」声明存在即可（值由表达式按 tab 决定）。
+  const DOMAIN_PAGES = [
+    ['src/features/pages/SpecialtyPage.tsx', "'cross_sell_agg'"],
+    ['src/features/renewal-tracker/RenewalTrackerPage.tsx', '"renewal_tracker"'],
+  ];
+  for (const [rel, marker] of DOMAIN_PAGES) {
+    const pagePath = path.join(ROOT_DIR, rel);
+    if (!fs.existsSync(pagePath)) {
+      // 守卫（#576 评审意见）：页面被删除/移动时给出明确指引而非 ENOENT 崩溃
+      // （前车之鉴：本清单曾指向被 PR #574 删除的死代码 CrossSellPage.tsx）
+      error(`${rel} 不存在——若页面被删除/移动，请同步更新本检查的 DOMAIN_PAGES 清单到新的渲染入口`);
+      return false;
+    }
+    const content = fs.readFileSync(pagePath, 'utf-8');
+    if (!(content.includes('domain=') && content.includes(marker))) {
+      error(`${rel} 未声明 domain 含 ${marker}（该页数据域非 policy_fact，缺省会放出不可表达的 chip）`);
+      return false;
+    }
+  }
+
+  success('能力矩阵两端一致检查通过（镜像逐字一致 + QuickFilterBar 消费 + 域页面已声明）');
+  return true;
+}
+
+/**
  * Bundle 路由开关合规检查
  *
  * 背景：项目支持 `VITE_ENABLE_BUNDLE_ROUTES=false` 的兼容部署（legacy 模式），
@@ -2230,6 +2323,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
   { name: '空catch禁令', fn: checkEmptyCatchBlocks },
   { name: '筛选参数绕过', fn: checkFilterParamsBypass },
+  { name: '能力矩阵镜像', fn: checkFilterCapabilityMirror },
   { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
   { name: 'RouteCatalog参数契约', fn: checkRouteCatalogParamContracts },

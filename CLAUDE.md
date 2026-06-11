@@ -75,6 +75,7 @@
 - ❌ 手动编辑 `mapping.ts` / `validator.ts`（由 codegen 生成，标注 `DO NOT EDIT MANUALLY`）
 - ❌ 在 `transform.py` 中硬编码字段列表（从 `etl_fields.json` 读取）
 - ❌ 新增 ETL 源字段不在 `shard-config.json:explicitly_ignored_fields` 或 `fields.json` 中声明（Schema 契约会 `sys.exit(1)` 阻断）
+- ❌ ETL 列/物化表 groupByColumns 变更涉及筛选维度列（insurance_type/fuel_type/fuel_category/tonnage_segment/vehicle_model）而不同步 `filter-dimension-capability.ts` 能力矩阵（前后端两份，governance「能力矩阵镜像」对账）
 
 ### 注册表体系总览
 
