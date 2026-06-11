@@ -80,11 +80,9 @@
 
 ### Pages 模块（侧边栏独立页面）
 - **`pages/index.ts`**: 独立页面组件导出入口
-- **`pages/TruckPage.tsx`**: 营业货车分析页面（筛选面板+分析面板）
 - **`pages/RenewalPage.tsx`**: 续保分析页面（筛选面板+分析面板）
 - **`pages/GrowthPage.tsx`**: 增长分析页面（筛选面板+分析面板）
 - **`pages/CostPage.tsx`**: 成本分析页面（筛选面板+分析面板）
-- **`pages/ComparisonPage.tsx`**: 数据对比页面（筛选面板+分析面板）
 - **`pages/CoefficientPage.tsx`**: 系数监控页面（筛选面板+分析面板）
 - **`pages/ComprehensiveAnalysisPage.tsx`**: 综合分析页面（6模块 Tab + loss 子视图 + bundle 单请求）
 - **`pages/PremiumReportPage.tsx`**: 保费报表页面（筛选面板+保费报表面板）
@@ -389,3 +387,11 @@ widgets/table/VirtualTable.tsx
 - **`dashboard/CrossSellTrendChart.tsx`**: 新增 `CrossSellTrendAnnotation` 与 `buildCrossSellTrendMarkPointData()`，让趋势图优先使用 AI 结论生成 markPoint，建立图文联动契约。
 - **`growth/components/GrowthDetailSection.tsx`**、**`growth/components/GrowthComparisonSection.tsx`**、**`growth/components/ComparisonAnalysisPanel.tsx`**: 三张核心长表接入 `StickyTableFrame + stickyTableStyles`，统一表头吸顶与首列冻结。
 - **`../tests/cross-sell-trend-annotations.test.ts`**: 锁定 AI 摘要与趋势图注释使用同一批极值数据，避免后续回归为“双份计算”。
+
+## 2026-06-10 死代码清理（dedup-remediation）
+
+- 删除 **`pages/ComparisonPage.tsx`**、**`pages/TruckPage.tsx`**、**`pages/CrossSellPage.tsx`**（侧边栏不再挂载的孤儿页面）。
+- 删除 **`growth/components/ComparisonAnalysisPanel.tsx`**（仅被已删的 ComparisonPage 引用）。
+- 删除 **`dashboard/performance/PerformanceOrgHeatmap.tsx`**（v1，已标 `@deprecated`；活代码为 `dashboard/components/PerformanceOrgHeatmapSection.tsx` 与 `PerformanceOrgHeatmapV2/`，`hooks/usePerformanceOrgHeatmap.ts` 不受影响）。
+- 删除 **`growth/examples/GrowthDashboardExample.tsx`** 及空目录 `growth/examples/`。
+- **`pages/index.ts`**: 同步移除 `TruckPage` / `ComparisonPage` 导出。

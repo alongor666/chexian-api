@@ -5,6 +5,7 @@ import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import { isTruckCategory } from '@/shared/config/customer-categories';
+import { pickDimensionLabels } from '@/shared/config/drilldown-dimensions';
 import {
   applyPerformanceHeatmapSelectionToParams,
   type PerformanceHeatmapSelection,
@@ -48,19 +49,6 @@ export interface PerformanceRow {
   transfer_rate: number;
 }
 
-export const PERFORMANCE_DIMENSION_LABELS: Record<PerformanceDimension, string> = {
-  org_level_3: '三级机构',
-  team: '销售团队',
-  salesman: '业务员',
-  customer_category: '客户类别',
-  tonnage_segment: '吨位分段',
-  is_new_car: '是否新车',
-  is_transfer: '是否过户',
-  is_nev: '是否新能源',
-  is_telemarketing: '是否电销',
-  is_renewal: '是否续保',
-};
-
 const ALL_DIMENSIONS: PerformanceDimension[] = [
   'org_level_3',
   'team',
@@ -73,6 +61,10 @@ const ALL_DIMENSIONS: PerformanceDimension[] = [
   'is_telemarketing',
   'is_renewal',
 ];
+
+/** 维度中文标签 — 派生自 SSOT（shared/config/drilldown-dimensions 的 DIMENSION_LABELS） */
+export const PERFORMANCE_DIMENSION_LABELS: Record<PerformanceDimension, string> =
+  pickDimensionLabels(ALL_DIMENSIONS);
 
 
 function computeAvailableDimensions(

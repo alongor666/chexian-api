@@ -24,8 +24,6 @@ src/features/growth/
 │   └── useGrowthAnalysis.ts      # React Hook - 增长率分析逻辑
 ├── components/
 │   └── GrowthAnalysisPanel.tsx   # React组件 - 分析界面
-├── examples/
-│   └── GrowthDashboardExample.tsx # 集成示例
 └── README.md                     # 本文档
 
 src/shared/sql/
@@ -188,14 +186,6 @@ function Dashboard() {
   );
 }
 ```
-
-### 完整示例
-
-参考 `examples/GrowthDashboardExample.tsx` 查看完整的集成示例，包括：
-- 筛选控制
-- 多维度分析
-- 结果展示
-- 错误处理
 
 ## ⚡ 性能优化
 

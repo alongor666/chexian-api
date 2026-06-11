@@ -3,6 +3,8 @@
  * Cost Analysis Type Definitions
  */
 
+import { pickDimensionLabels } from '@/shared/config/drilldown-dimensions';
+
 // ==================== 维度类型（原 shared/sql/cost 导出） ====================
 
 /** 分析维度类型 */
@@ -13,11 +15,9 @@ export type CostDimension =
   | 'org_customer'         // 三级机构 + 客户类别（预留）
   | 'org_coverage';        // 三级机构 + 险别组合（预留）
 
-/** 维度显示名称映射 */
+/** 维度显示名称映射 — 原子维度派生自 SSOT（shared/config/drilldown-dimensions），组合维度为本板块专属、保留本地定义 */
 export const DIMENSION_LABELS: Record<CostDimension, string> = {
-  customer_category: '客户类别',
-  org_level_3: '三级机构',
-  coverage_combination: '险别组合',
+  ...pickDimensionLabels(['customer_category', 'org_level_3', 'coverage_combination'] as const),
   org_customer: '机构+客户类别',
   org_coverage: '机构+险别组合',
 };

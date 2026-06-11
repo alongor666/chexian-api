@@ -2,21 +2,23 @@ import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
+import { pickDimensionLabels } from '@/shared/config/drilldown-dimensions';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import type { PerformanceGrowthMode, PerformanceSegmentTag, PerformanceTimePeriod } from './usePerformanceSummary';
 
 export type HeatmapDimension = 'org_level_3' | 'team' | 'salesman' | 'customer_category' | 'coverage_combination' | 'energy_type' | 'business_nature' | 'insurance_grade';
 
-export const HEATMAP_DIMENSION_LABELS: Record<HeatmapDimension, string> = {
-  org_level_3: '三级机构',
-  team: '团队',
-  salesman: '业务员',
-  customer_category: '客户类别',
-  coverage_combination: '险别组合',
-  energy_type: '能源类型',
-  business_nature: '新转续',
-  insurance_grade: '风险评分',
-};
+/** 维度中文标签 — 派生自 SSOT（shared/config/drilldown-dimensions 的 DIMENSION_LABELS）；team/insurance_grade 文案随 SSOT 统一为「销售团队」「车险风险等级」 */
+export const HEATMAP_DIMENSION_LABELS: Record<HeatmapDimension, string> = pickDimensionLabels([
+  'org_level_3',
+  'team',
+  'salesman',
+  'customer_category',
+  'coverage_combination',
+  'energy_type',
+  'business_nature',
+  'insurance_grade',
+]);
 
 export interface HeatmapDrillStep {
   dimension: string;
