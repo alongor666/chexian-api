@@ -62,13 +62,19 @@ export default function OverviewBand({ overall, orgRows, selection, onSelectOrg 
             <span className={cn(fontStyles.kpi, 'text-[34px] leading-none', RATE_TEXT[overallGrade])}>
               {formatPct(overall.C, overall.A)}
             </span>
-            <span className={cn('text-xs', colorClasses.text.neutralLight)}>整体续保率 C/A · 核心健康指标</span>
+            <span
+              className={cn('text-xs', colorClasses.text.neutralLight)}
+              title="续保率 = 已续件数 ÷ 应续件数（按到期日统计、车架号去重）"
+            >整体续保率 C/A · 核心健康指标</span>
           </div>
           <div className="flex flex-col gap-0.5">
             <span className={cn(fontStyles.kpi, 'text-[26px] leading-none', colorClasses.text.neutral)}>
               {formatPct(overall.B, overall.A)}
             </span>
-            <span className={cn('text-xs', colorClasses.text.neutralLight)}>整体报价率 B/A</span>
+            <span
+              className={cn('text-xs', colorClasses.text.neutralLight)}
+              title="应续报价率 = 报价件数 ÷ 应续件数（按到期日统计、车架号去重）。注意区分：「报价转化分析」页的承保转化率以报价单量为分母，两页口径不同"
+            >整体应续报价率 B/A</span>
           </div>
         </div>
 

@@ -95,7 +95,8 @@ export default function RenewalTrackerPage() {
       <div className="mb-6">
         <h1 className={cn('text-2xl font-bold', colorClasses.text.neutralBlack)}>商业险续保追踪</h1>
         <p className={cn('text-sm mt-1', colorClasses.text.neutralMuted)}>
-          筛选范围：上年度起保的商业险保单，按到期日统计 · 指标以车架号去重
+          筛选范围：上年度起保的商业险保单，按到期日统计 · 指标以车架号去重 ·
+          本页报价率 = 报价件数 ÷ 应续件数（应续口径），区别于「报价转化分析」页以报价单量为分母的承保转化率
         </p>
       </div>
 

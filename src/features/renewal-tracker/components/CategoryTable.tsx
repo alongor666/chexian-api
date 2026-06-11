@@ -34,12 +34,12 @@ interface Props {
   onClearSelection: () => void;
 }
 
-const METRIC_COLS: { key: SortField; label: string; theme?: boolean }[] = [
+const METRIC_COLS: { key: SortField; label: string; theme?: boolean; tip?: string }[] = [
   { key: 'A', label: '应续' },
   { key: 'B', label: '报价' },
   { key: 'C', label: '已续' },
-  { key: 'D', label: '报价率' },
-  { key: 'E', label: '续保率', theme: true },
+  { key: 'D', label: '报价率', tip: '应续报价率 = 报价件数 ÷ 应续件数（应续口径，区别于「报价转化分析」页以报价单量为分母的承保转化率）' },
+  { key: 'E', label: '续保率', theme: true, tip: '续保率 = 已续件数 ÷ 应续件数' },
 ];
 
 interface DimensionConfig {
@@ -262,6 +262,7 @@ export default function CategoryTable({
                   <button
                     type="button"
                     onClick={() => onSort(col.key)}
+                    title={col.tip}
                     className={cn('inline-flex items-center gap-1 uppercase cursor-pointer select-none', 'hover:text-primary')}
                   >
                     {col.label}
