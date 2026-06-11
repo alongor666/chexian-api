@@ -1,5 +1,6 @@
 import { COLUMN_ALIASES } from '../normalize/mapping.js';
 import { duckdbService } from '../services/duckdb.js';
+import { resolveProcessingMode } from './parquet-metadata.js';
 import { escapeSqlValue } from './security.js';
 
 export interface ParquetSourceInspection {
@@ -11,30 +12,6 @@ export interface ParquetSourceInspection {
 function hasMappedAlias(columns: string[], field: keyof typeof COLUMN_ALIASES): boolean {
   const aliases = (COLUMN_ALIASES[field] || []).map((alias) => alias.toLowerCase());
   return columns.some((column) => aliases.some((alias) => column === alias || column.includes(alias)));
-}
-
-function normalizeMetadataValue(value: unknown): string | null {
-  if (value == null) return null;
-  let normalizedValue = value;
-  if (typeof value === 'object' && value !== null && 'bytes' in value) {
-    const bytes = (value as { bytes?: Buffer | { data?: number[] } | Record<string, number> }).bytes;
-    if (Buffer.isBuffer(bytes)) {
-      normalizedValue = bytes.toString('utf-8');
-    } else if (bytes && typeof bytes === 'object' && Array.isArray(bytes.data)) {
-      normalizedValue = Buffer.from(bytes.data).toString('utf-8');
-    } else if (bytes && typeof bytes === 'object') {
-      const byteValues = Object.entries(bytes)
-        .sort((a, b) => Number(a[0]) - Number(b[0]))
-        .map(([, entryValue]) => Number(entryValue))
-        .filter((entryValue) => Number.isInteger(entryValue) && entryValue >= 0 && entryValue <= 255);
-      if (byteValues.length > 0) {
-        normalizedValue = Buffer.from(byteValues).toString('utf-8');
-      }
-    }
-  }
-
-  const normalized = String(normalizedValue).trim();
-  return normalized === '' ? null : normalized;
 }
 
 export async function inspectParquetSource(filePath: string): Promise<ParquetSourceInspection> {
@@ -51,10 +28,7 @@ export async function inspectParquetSource(filePath: string): Promise<ParquetSou
       SELECT key, value
       FROM parquet_kv_metadata('${escapedPath}')
     `);
-    const match = metadataRows.find(
-      (row) => normalizeMetadataValue(row.key)?.toLowerCase() === 'processing_mode',
-    );
-    processingMode = normalizeMetadataValue(match?.value)?.toLowerCase() ?? null;
+    processingMode = resolveProcessingMode(metadataRows);
   } catch {
     processingMode = null;
   }

@@ -17,9 +17,20 @@ describe('DuckDB 派生表管理', () => {
     try { await duckdbService.close(); } catch { /* ignore */ }
   });
 
-  // DD-01: DERIVED_RELATIONS 包含正确的 3 个成员
-  it('DD-01: DERIVED_RELATIONS 包含 3 个已知派生关系', () => {
-    const expected = ['CrossSellDailyAgg', 'PolicyFact', 'PolicyFactRealtime'];
+  // DD-01: DERIVED_RELATIONS 包含正确的 10 个成员（与 duckdb-materialization.ts 注册表同步）
+  it('DD-01: DERIVED_RELATIONS 包含 10 个已知派生关系', () => {
+    const expected = [
+      'BrandDim',
+      'ClaimsAgg',
+      'ClaimsDetail',
+      'CrossSellDailyAgg',
+      'CrossSellFact',
+      'CustomerFlow',
+      'PolicyFact',
+      'PolicyFactRealtime',
+      'RenewalTrackerFact',
+      'RepairDim',
+    ];
     const actual = [...DERIVED_RELATIONS];
     expect(actual.sort()).toEqual(expected.sort());
   });
