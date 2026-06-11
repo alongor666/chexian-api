@@ -395,27 +395,30 @@ export function generatePerformanceOrgHeatmapQuery(
     period_window AS (
       SELECT
         pp.period_key,
+        pb.max_pd AS max_pd,
         ${periodEndExpr} AS period_end,
         ${currentCutoffExpr} AS current_cutoff,
         ${prevMomCutoffExpr} AS prev_mom_cutoff
       FROM period_pool pp
       CROSS JOIN period_bounds pb
     ),
+    -- 时间进度锚定数据内最新签单日 max_pd（非服务器当前日期）：注册表 plan_completion_pct
+    -- v2.0.0 红线；ETL 滞后 N 天时用 CURRENT_DATE 会把达成率分母放大而低估达成率。
     period_progress AS (
       SELECT
         pp.period_key,
         CAST(DATE_DIFF('day', pp.period_key, pp.period_end) + 1 AS DOUBLE) AS total_days,
         CAST(
           CASE
-            WHEN LEAST(CAST(CURRENT_DATE AS DATE), pp.period_end) < pp.period_key THEN 0
-            ELSE DATE_DIFF('day', pp.period_key, LEAST(CAST(CURRENT_DATE AS DATE), pp.period_end)) + 1
+            WHEN LEAST(pp.max_pd, pp.period_end) < pp.period_key THEN 0
+            ELSE DATE_DIFF('day', pp.period_key, LEAST(pp.max_pd, pp.period_end)) + 1
           END AS DOUBLE
         ) AS elapsed_days,
         CASE
           WHEN DATE_DIFF('day', pp.period_key, pp.period_end) + 1 <= 0 THEN 0
-          WHEN LEAST(CAST(CURRENT_DATE AS DATE), pp.period_end) < pp.period_key THEN 0
+          WHEN LEAST(pp.max_pd, pp.period_end) < pp.period_key THEN 0
           ELSE CAST(
-            DATE_DIFF('day', pp.period_key, LEAST(CAST(CURRENT_DATE AS DATE), pp.period_end)) + 1
+            DATE_DIFF('day', pp.period_key, LEAST(pp.max_pd, pp.period_end)) + 1
             AS DOUBLE
           ) / CAST(DATE_DIFF('day', pp.period_key, pp.period_end) + 1 AS DOUBLE)
         END AS progress_ratio

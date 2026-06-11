@@ -75,9 +75,12 @@ export async function loadDimParquet(db: DuckDBQueryable, salesmanPath: string, 
     FROM (${DEDUPED_SALESMAN_DIM_SQL}
     ) s
     LEFT JOIN (
+      -- 计划年动态取 PlanFact 内最新年（原硬编码 2026：跨年后新计划入库时
+      -- 本表计划列会停在旧年/归零）。列名 car_insurance_plan_2026 为历史遗留
+      -- （8+ 处下游引用），语义＝"最新计划年的年计划"。
       SELECT full_name, SUM(plan_vehicle) AS plan_vehicle
       FROM PlanFact
-      WHERE plan_year = 2026 AND level = 'salesman'
+      WHERE plan_year = (SELECT MAX(plan_year) FROM PlanFact) AND level = 'salesman'
       GROUP BY full_name
     ) p ON s.full_name = p.full_name
   `);
