@@ -16,11 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（49 项 · 数据截至 2026-06-10 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（53 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（8 项）**
+**P1（9 项）**
 
 - B246 — VPS 分层查询改造（KPI variable_cost_ratio）
 - B291 — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
@@ -30,8 +30,9 @@
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
 - 2026-06-10-claude-723ca3 — 全站筛选器/快捷筛选联动系统性巡检（母任务）
 - 2026-06-10-claude-d0cd4b — 赔案明细页后端漏解析 3 维度（前端已发参、后端静默丢弃）
+- 2026-06-11-claude-593d3d — 达成率三路由口径对账
 
-**P2（25 项）**
+**P2（27 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -58,8 +59,10 @@
 - 2026-06-10-claude-9e1816 — 续保派生域 customer_category 摩托车 存在重复键（155 行加 21 
 - 2026-06-10-claude-b4da70 — 数据管理/cli.py 工具库空壳化处置
 - 2026-06-10-claude-e2240c — 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通
+- 2026-06-11-claude-0b88b9 — 「报价率」一词双语义需界面口径标注或改名
+- 2026-06-11-claude-3093a3 — 重复组件收拢（全站重复审计 主题②）
 
-**P3（16 项）**
+**P3（17 项）**
 
 - B247 — 图表 hex 色值审计
 - B251 — 输出风格与用户契约冲突
@@ -77,6 +80,7 @@
 - 2026-06-09-claude-709fc0 — 契约覆盖 meta 守卫（gold-plating·非阻塞）
 - 2026-06-10-claude-807f41 — repair v2 八端点（city/channel/coop-tier/scatter
 - 2026-06-10-claude-ca3cab — cx CLI 全能力重构
+- 2026-06-11-claude-02aa70 — 产品层冗余裁剪决策（需用户拍板，全站重复审计 主题⑤）
 
 ---
 
@@ -112,7 +116,7 @@
 | B322 | 2026-06-02 | Security/Config | @claude | **claude-to-im 飞书 app_secret 明文存储 + 已暴露至本次会话上下文**（跨项目全局配置，记此 BACKLOG 为追踪）：`~/.claude-to-im/config.env` 明文存 `CTI_FEISHU_APP_SECRET`（app_id `cli_a94d08f46539dbcd`，对应租户 `2d26b50cf94f175e`）。本次会话为定位"Mac_飞侠" P2P bot 的 chat_id 在 Bash 中 cat 了 config.env，secret 进入 Opus 模型上下文（已尽量 mask 但 stdout 已发生）。**修复**：(1) 飞书开发者后台 rotate `cli_a94d08f46539dbcd` 的 app_secret；(2) 更新本机 `~/.claude-to-im/config.env`；(3) 重启 bridge daemon（`bridge.pid` 在 runtime/）验证连通；(4) 长期：考虑用系统 Keychain / 1Password CLI 替代明文 .env（参考 `claude-to-im` skill 的 reconfigure 子命令） | P2 | PROPOSED | 本会话；`~/.claude/skills/claude-to-im/SKILL.md` | `~/.claude-to-im/config.env`（用户私域，不在本 repo） | rotate 后旧 secret `lark-cli` 调用应 401；新 secret 写入 config.env 后 bridge daemon 重启正常，飞书内向 Mac_飞侠 发消息触发 Claude 启动如常 |
 | B321 | 2026-06-03 | Refactor/Governance | @claude | **super-powers 精髓 skills 两项后续**（PR #469 审计衍生）：(1) **上提共享仓**——`code-search-routing` / `agent-system-design-principles` 整体，及 `silent-failure-guard` 五律内核、`rule-promotion-gate` judge-not-lawyer、`adr-tiered-response` 分级响应的**通用内核**，均过语义独立测试，待项目级实战验证（≥2 场景命中）后经 `chexian-crystallize-skill` 上提到 `alongor666/alongor666-skills`（本会话 GitHub 工具仅限 chexian-api，无法跨库推送）。(2) **引入 ESLint AST 硬门**——补 `silent-failure-guard` 的"catch 返回空值无日志/无判别"检测（正则 100% 误报，#25 空catch门只覆盖纯空块），用 `no-useless-catch` + 自定义 rule；项目当前无 ESLint，需从零搭配置+CI 接线，属重改动宜独立 PR | P3 | PROPOSED | PR #469 审计；`.claude/skills/silent-failure-guard.md`；`.claude/skills/rule-promotion-gate.md` | `.claude/skills/*.md`（上提候选）<br>`scripts/check-governance.mjs`(#25 空catch门已落地)<br>新增 `eslint.config.*`（待建） | 候选 skill 验证后上提共享仓且通用层无重复；ESLint AST 门在当前库零误报通过 + 拦截真实吞异常 |
 | B326 | 2026-06-05 | Security/Backend | @claude | **`req.permissionFilter \|\| '1=1'` 防御性兜底 fail-closed 加固（纵深防御·非活漏洞·登记）**（B325 基线核查衍生）：governance `check-permission-coverage` 每次标 5 处 `[unsafe-fallback]`（agent-diagnosis.ts:156/157/261/290、agent-forecast.ts:51），全项目共 17 处同模式。**定性结论（非活 fail-open）**：agent 路由已在 router 级挂 `authMiddleware + readonlyMiddleware + permissionMiddleware`（agent-diagnosis.ts:41-43），而 `permissionMiddleware` 恒把 `req.permissionFilter` 设为具体值（admin=`1=1` / `org_level_3='...'` / `is_telemarketing=true`，见 permission.ts:55-64），故 `\|\| '1=1'` 是**防御性死代码**而非运行时漏洞；且真实 SQL 注入读取路径已由 B307（RLS 子查询绕过修复）+ B316（isValidPermissionFilter 白名单 fail-closed 接入）加固。**待办**：把 17 处 `permissionFilter \|\| '1=1'` 统一为 fail-closed（中间件缺失时拒绝/空集而非放行全量），需逐路由确认 permissionMiddleware 挂载 + 加"中间件缺失→fail-closed"回归测试，属独立安全 PR（红线"修补不拆除"，禁随手批量改 auth 语义）。登记以终止每次 governance 重复调查。 | P3 | PROPOSED | governance `check-permission-coverage` 输出；`server/src/middleware/permission.ts:55-64`；BACKLOG B307 / B316 | `server/src/agent/routes/agent-diagnosis.ts`<br>`server/src/agent/routes/agent-forecast.ts`<br>（全项目 17 处 `permissionFilter \|\| '1=1'`） | 待实施：改后 governance unsafe-fallback 提示清零 + agent 路由"中间件缺失→fail-closed"回归测试覆盖 |
-| B329 | 2026-06-05 | Refactor/Frontend | @claude | **前端死代码批量清理**（21 目录排查 主题A·sql-query 下线孤儿+遗留）：全仓 0 引用 shared/{ai-insights 整目录 11+3死测试, json-render 整目录 连带@json-render, utils SQL 死簇} + features/settings 整模块 + dashboard/performance V1+Section + src/core 空壳 + types/chart.types + shared/components/LoginForm + 组件层 SidebarFilterPanel/AlertPanel/AlertBadge/Org+Tonnage双图(~1100行) + server utils/queryBuilder(316)。BLOCKED：RenewalKpiFunnel/pptxgenjs/shared-export 待确认 | P1 | PROPOSED | 开发文档/目录排查报告_2026-06-05.md §2-A | src/shared/{ai-insights,json-render,utils,components}；src/features/settings；src/{core,types}；src/widgets/alerts；server/src/utils/queryBuilder.ts | 删除后 build/governance/test 全绿；INDEX.md 同步 |
+| B329 | 2026-06-05 | Refactor/Frontend | @claude | **前端死代码批量清理**（21 目录排查 主题A·sql-query 下线孤儿+遗留）：全仓 0 引用 shared/{ai-insights 整目录 11+3死测试, json-render 整目录 连带@json-render, utils SQL 死簇} + features/settings 整模块 + dashboard/performance V1+Section + src/core 空壳 + types/chart.types + shared/components/LoginForm + 组件层 SidebarFilterPanel/AlertPanel/AlertBadge/Org+Tonnage双图(~1100行) + server utils/queryBuilder(316)。BLOCKED：RenewalKpiFunnel/pptxgenjs/shared-export 待确认 | P1 | PROPOSED | 开发文档/目录排查报告_2026-06-05.md §2-A | src/shared/{ai-insights,json-render,utils,components}；src/features/settings；src/{core,types}；src/widgets/alerts；server/src/utils/queryBuilder.ts | 删除后 build/governance/test 全绿；INDEX.md 同步 <br>kind-black 全站重复审计补充：本批 PR 将执行 B329 子项 dashboard/performance V1（PerformanceOrgHeatmap.tsx 452 行）删除；另注意 B329 清单中『performance Section』现状复核为活代码（PerformanceOrgHeatmapSection 被 PerformanceAnalysisPanel 引用），执行时勿删。互补死代码清单见 2026-06-11-claude-2e3e0b。 |
 | B330 | 2026-06-05 | Refactor/Frontend | @claude | **架构依赖违规修复**（21 目录排查 主题B）：L2→L2 横向 growth→dashboard(usePerspective)、quote-conversion→filters(CollapsibleFilterSection)；依赖倒置 components/layout→features、widgets→features(kpiStatus)；前后端越界 dashboard import type server/src/sql。修复：相关 hook/组件/类型上提 src/shared | P1 | PROPOSED | 开发文档/目录排查报告_2026-06-05.md §2-B；ARCHITECTURE §2.2 | src/features/{growth,quote-conversion}；src/components/layout；src/widgets | 无 features 间 import、无前端 import server；build 绿 |
 | B331 | 2026-06-05 | Refactor/Quality | @claude | **超大文件拆分**（21 目录排查 主题C）：PerformanceAnalysisPanel 1394、api/client.ts 1250(+26 any 鉴权边界)、NewEarnedPremiumTable 988、GeoRiskPanel 951、CrossSellAnalysisPanel 891、useCostAnalysis 880、EnhancedKpiCard 870、LineChart 720、claims-detail.ts 583、performance-analysis/shared.ts 548 等 | P1 | PROPOSED | 开发文档/目录排查报告_2026-06-05.md §2-C | src/features/dashboard；src/shared/api/client.ts；src/widgets；server/src/sql | 各拆至 <500 行；功能/测试不回归 |
 | B332 | 2026-06-05 | Test | @claude | **测试覆盖补强**（21 目录排查 主题D）：features 21 模块 19 个零 __tests__（comprehensive-analysis/cost/claims-detail/quote-conversion 优先）；最安全敏感的 utils/sql-validator(499 准入闸门)+ middleware/permission(RLS 生成器)无专属测试 | P1 | IN_PROGRESS | 开发文档/目录排查报告_2026-06-05.md §2-D；CLAUDE.md §5 | src/features/*；server/src/utils/sql-validator.ts；server/src/middleware/permission.ts | sql-validator 黑名单/掩码绕过用例、permission 角色/机构分支；关键模块有测试。✅ phase-1：新增 server `sql-validator.ts` 专属测试 31 例（多语句分号注入/字面量·注释 masking 不误判/隐私 GROUP·ORDER policy_no/isReadOnlyQuery/hasAggregation/analyzePerformance/withPerformance）。⚠️ 更正：permission RLS 生成器**已有**专属测试 `middleware/__tests__/permission.test.ts`（基础过滤+0F branchCode 矩阵+单引号转义+fail-closed），原"无专属测试"判断已过期。⏳ 余：features 19 个零测试模块待补 <br>2026-06-08 验证：desc 称「最安全敏感的 sql-validator(499准入闸门)+permission(RLS生成器)无专属测试」已陈旧——server/src/utils/__tests__/sql-validator.test.ts + server/src/middleware/__tests__/permission.test.ts 均已存在。安全关键部分已覆盖；剩余 features 19 模块零测试部分待确认，建议聚焦剩余或据实评估降级。 |
@@ -133,3 +137,7 @@
 | 2026-06-10-claude-ca3cab | 2026-06-10 | Chore | @claude | cx CLI 全能力重构：route-catalog 33→64 条补全 + governance QueryCatalog 对账检查 + CLI v0.2.0（14 命令/退出码契约/path直通/stdin/补全） | P3 | PROPOSED | N/A | N/A |  |
 | 2026-06-10-claude-d0cd4b | 2026-06-10 | 赔案明细 | @claude | 赔案明细页后端漏解析 3 维度（前端已发参、后端静默丢弃）：insurance_type（交/商）、fuelCategory 的 气(gas) 分支、enterprise_car（企客）。claims-detail.ts parseFilters 与 heatmap 解析均不读这些参数，ClaimsDetailFilters 类型与 buildWhere 无对应字段 → 切这些 chip 时 4 个 Tab 数据不变（静默失效）。注：气与油都派生 isNev=false 发往后端完全相同。修复：后端补解析 + SQL 字段。 | P1 | PROPOSED | N/A | server/src/routes/query/claims-detail.ts | Phase 2 实现完成：parseFilters + heatmap 内联解析补 insuranceType/enterpriseCar/fuelCategory；两处 buildPolicyWhere 照抄 SSOT 语义（含 home_car+企客联动）；计划外发现并修复两处 dedup 子查询投影缺 insurance_type/fuel_type 列（纯 SQL 子串测试抓不到，本地 curl 坐实 Binder Error 后补列）。本地验证：交强 12693+商业 11125=基线 23818 完整二分割；气 1259+油 21144+电 1415=23818 完整三分割；heatmap 200 返回 112KB 实体数据。 |
 | 2026-06-10-claude-e2240c | 2026-06-10 | 续保追踪 | @claude | 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通。根因：RenewalTrackerFact 派生域缺 tonnage_segment 与 vehicle_model 字段。需续保派生域 ETL 从主表 join 补这两字段（tonnage_segment 轻，vehicle_model 重）后，后端 renewal-tracker 路由加对应过滤。 | P2 | PROPOSED | N/A | server/src/sql/renewal-tracker.ts |  |
+| 2026-06-11-claude-02aa70 | 2026-06-11 | 产品决策 | @claude | 产品层冗余裁剪决策（需用户拍板，全站重复审计 主题⑤）：a) 报价转化页 A 版/B 版六专题大面积同件复用，同一内容 3 个入口，是否保留双版本；b) 成本分析页 basic 与 comprehensive 两视图明细表实质重叠（综合视图独有价值=象限图+ROI），是否合并；c) 客户流向页「转入来源」API 已封装前端从未调用（板块空缺，做或删）；d) 报表模板页「使用此模板」为空函数纯占位（做或删）。 | P3 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/features/quote-conversion；src/features/cost；src/features/customer-flow；src/features/report |  |
+| 2026-06-11-claude-0b88b9 | 2026-06-11 | 指标口径 | @claude | 「报价率」一词双语义需界面口径标注或改名：续保追踪页 报价率=报价件数/应续件数（到期口径、车架号去重），报价转化页 漏斗转化率分母=报价单总量。两处均含「报价」字样但分母不同，易误读。处置：两页界面补口径说明文案，或统一命名区分。来源：2026-06-10 全站重复审计。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/features/renewal-tracker；src/features/quote-conversion |  |
+| 2026-06-11-claude-3093a3 | 2026-06-11 | Refactor/Frontend | @claude | 重复组件收拢（全站重复审计 主题②）：机构×维度×时间热力图 4 套独立实现（performance-org/cross-sell/claims-detail/quote-conversion）、机构→团队→业务员下钻表 5 处、KPI 卡 5 套、趋势折线封装 5 套、导出对话框 2 个（widgets/export/ExportDialog vs features/file/ExportModal）+ crossSellExport 重写 CSV 下载、格式化函数多处本地重写（renewal-tracker/expense-development/growth 对应 shared/utils/formatters 已有）、dashboard useFilterState 与全局 FilterContext 双轨。逐类提共享部件，结合功能迭代渐进做。关联 B330（依赖违规）/B331（大文件拆分）。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/widgets；src/shared；src/features/dashboard | 标签收拢实施时排查出 5 处 SSOT 之外的残留硬编码维度标签副本（本批未动）：① PerformanceAnalysisPanel.tsx:92-101 PERF_HEATMAP_DRILL_DIMENSIONS（team:'团队'/insurance_grade:'风险评分'，与同页 HEATMAP_DIMENSION_LABELS 已统一文案形成页内不一致，优先治理）；② CrossSellAnalysisPanel.tsx:389-396 HEATMAP_DRILL_DIMENSIONS（team:'团队'，同页不一致，优先治理）；③ claims-detail/ClaimsHeatmapPanel.tsx:29,35；④ premium-report/hooks/usePremiumPlan.ts:35 LEVEL_LABELS；⑤ quote-conversion/DrilldownTable.tsx:101。收拢时改为 pickDimensionLabels 派生。 |
+| 2026-06-11-claude-593d3d | 2026-06-11 | 指标口径 | @claude | 达成率三路由口径对账：保费看板 /query/kpi、经营分析 /query/performance-bundle、报告中心 /query/plan-achievement 各自计算车险达成率，无对账机制。需用 Parquet 直查对比三者分子分母口径是否一致，差异登记后按业务口径红线处置（禁止直接改）。来源：2026-06-10 全站重复审计。 | P1 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | server/src/sql |  |

@@ -35,7 +35,7 @@ export interface QuickFilters {
 interface Props {
   filters: QuickFilters;
   onChange: (filters: QuickFilters) => void;
-  /** 隐藏车型芯片行（如 TruckPage 已服务端固定车型） */
+  /** 隐藏车型芯片行（如专项页营业货车 tab 已服务端固定车型） */
   hideVehicleType?: boolean;
   /** 隐藏气/油细分（数据域无 fuel_type 列时，如交叉销售页 CrossSellDailyAgg）；
    *  电仍可选（is_nev 列各域都有，与主站口径严格等价） */

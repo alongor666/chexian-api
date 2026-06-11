@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
+import { pickDimensionLabels } from '@/shared/config/drilldown-dimensions';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import { queryKeys } from '@/shared/api/query-keys';
 import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePeriod';
@@ -22,14 +23,9 @@ export interface CrossSellHeatmapDrillStep {
 
 export type CrossSellHeatmapDimension = 'org_level_3' | 'team' | 'salesman' | 'coverage_combination' | 'energy_type' | 'business_nature';
 
-export const CROSS_SELL_HEATMAP_DIMENSION_LABELS: Record<CrossSellHeatmapDimension, string> = {
-  org_level_3: '三级机构',
-  team: '团队',
-  salesman: '业务员',
-  coverage_combination: '险别组合',
-  energy_type: '能源类型',
-  business_nature: '新转续',
-};
+/** 维度中文标签 — 派生自 SSOT（shared/config/drilldown-dimensions 的 DIMENSION_LABELS）；team 文案随 SSOT 统一为「销售团队」 */
+export const CROSS_SELL_HEATMAP_DIMENSION_LABELS: Record<CrossSellHeatmapDimension, string> =
+  pickDimensionLabels(['org_level_3', 'team', 'salesman', 'coverage_combination', 'energy_type', 'business_nature']);
 
 export interface HeatmapPoint {
   date: string;

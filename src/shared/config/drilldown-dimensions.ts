@@ -56,7 +56,21 @@ export const DIMENSION_LABELS: Record<string, string> = {
   is_renewal: '是否续保',
   insurance_grade: '车险风险等级',
   coverage_combination: '险别组合',
+  energy_type: '能源类型',
+  business_nature: '新转续',
 };
+
+/**
+ * 从 DIMENSION_LABELS（唯一事实源）按 key 列表挑选子集标签映射。
+ *
+ * 用途：各业务板块（业绩下钻 / 驾意险分析 / 热力图 / 成本分析）派生自己的
+ * 维度标签常量时调用本函数，保留原导出名与类型签名，调用方零改动；
+ * 避免在 hooks/types 中重复硬编码中文标签导致文案漂移。
+ * 未在 SSOT 登记的 key 回退为 key 本身（不抛错，便于排查遗漏）。
+ */
+export function pickDimensionLabels<K extends string>(keys: readonly K[]): Record<K, string> {
+  return Object.fromEntries(keys.map((k) => [k, DIMENSION_LABELS[k] ?? k])) as Record<K, string>;
+}
 
 // ─── 条件维度规则 ────────────────────────────────────────────────────────────
 

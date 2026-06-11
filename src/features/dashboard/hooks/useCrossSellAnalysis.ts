@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import { apiClient, ENABLE_BUNDLE_ROUTES } from '../../../shared/api/client';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
+import { pickDimensionLabels } from '../../../shared/config/drilldown-dimensions';
 import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePeriod';
 import type { TrendGranularity } from './useCrossSellTrend';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
@@ -34,25 +35,16 @@ export type CrossSellDimension =
   | 'is_renewal'
   | 'insurance_grade';
 
-/** 维度中文标签 */
-export const DIMENSION_LABELS: Record<CrossSellDimension, string> = {
-  org_level_3: '三级机构',
-  team: '销售团队',
-  salesman: '业务员',
-  is_new_car: '是否新车',
-  is_transfer: '是否过户',
-  is_nev: '是否新能源',
-  is_telemarketing: '是否电销',
-  is_renewal: '是否续保',
-  insurance_grade: '车险风险等级',
-};
-
 /** 所有可用维度（insurance_grade 在驾意险口径下直接可用，无需条件规则） */
 export const ALL_DIMENSIONS: CrossSellDimension[] = [
   'org_level_3', 'team', 'salesman',
   'is_new_car', 'is_transfer', 'is_nev', 'is_telemarketing', 'is_renewal',
   'insurance_grade',
 ];
+
+/** 维度中文标签 — 派生自 SSOT（shared/config/drilldown-dimensions 的 DIMENSION_LABELS） */
+export const DIMENSION_LABELS: Record<CrossSellDimension, string> =
+  pickDimensionLabels(ALL_DIMENSIONS);
 
 /** 下钻路径中的一步 */
 export interface DrilldownStep {
