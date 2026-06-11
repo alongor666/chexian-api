@@ -65,6 +65,8 @@ export class ApiClientCore {
   private inflightControllers = new Map<string, AbortController>();
   /** 进行中的同 key 请求 Promise（用于请求合并） */
   private inflightRequests = new Map<string, Promise<unknown>>();
+  /** 进行中的会话刷新 Promise（并发 401 共享，避免重复刷新被轮换的 refresh cookie 打架） */
+  private refreshPromise: Promise<boolean> | null = null;
   /** 默认请求超时（毫秒） */
   private requestTimeoutMs = 30_000;
 
@@ -164,7 +166,11 @@ export class ApiClientCore {
   getToken(): string | null {
     // 检查是否过期
     if (this.token && this.tokenExpiry && Date.now() > this.tokenExpiry) {
-      this.clearToken();
+      // access token 本地过期：只清内存 token，保留 session cookie hint，
+      // 让 401 时仍能用 refresh cookie 静默刷新。clearToken() 会连带清掉 hint →
+      // canTryRefresh 变 false → 最常见的「token 自然过期」场景下静默刷新反而失效。
+      this.token = null;
+      this.tokenExpiry = 0;
       return null;
     }
     return this.token;
@@ -301,7 +307,17 @@ export class ApiClientCore {
     return requestPromise;
   }
 
-  private async tryRefreshSession(): Promise<boolean> {
+  private tryRefreshSession(): Promise<boolean> {
+    // 并发 401 共享同一次刷新：多个请求同时收到 401 时只发一次 refresh，
+    // 避免后续刷新带着已被轮换作废的 refresh cookie 失败 → clearToken → 误登出。
+    if (this.refreshPromise) return this.refreshPromise;
+    this.refreshPromise = this.doRefreshSession().finally(() => {
+      this.refreshPromise = null;
+    });
+    return this.refreshPromise;
+  }
+
+  private async doRefreshSession(): Promise<boolean> {
     try {
       const refreshed = await fetch(`${API_BASE}/${AUTH_ROUTES.REFRESH}`, {
         method: 'POST',

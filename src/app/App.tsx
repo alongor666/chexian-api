@@ -34,6 +34,16 @@ if (typeof window !== 'undefined') {
   window.addEventListener('sw-etl-updated', () => {
     queryClient.invalidateQueries();
   });
+
+  // 登出时清空所有缓存层，防止同浏览器换用户后看到上一用户数据（跨用户/跨分公司残留）。
+  // React Query 查询键不含用户身份 + 生产 SW 活跃时 staleTime=Infinity，
+  // 不主动清理则换号后命中前一用户缓存且永不刷新。
+  window.addEventListener('auth-logout', () => {
+    queryClient.clear();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.controller?.postMessage({ type: 'FORCE_REFRESH' });
+    }
+  });
 }
 
 export { queryClient };

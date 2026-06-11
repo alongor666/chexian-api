@@ -312,13 +312,13 @@ export function generateHolidayFreeDrilldownQuery(
     ),
     holiday_stats AS (
       SELECT
-        ${groupConfig.selectExpr.replaceAll('p.', 'hp.')},
+        ${groupConfig.selectExpr.replaceAll('p.', 'hp.').replaceAll('tm.', 'hp.')},
         COALESCE(SUM(hp.premium), 0) / 10000.0 AS premium_wan,
         COALESCE(SUM(CASE WHEN hp.is_commercial_insure = '套单' OR hp.is_commercial_insure = '是' THEN hp.premium ELSE 0 END), 0) / 10000.0 AS commercial_premium_wan,
         COUNT(DISTINCT hp.salesman_name) AS active_salesman,
         COUNT(DISTINCT CASE WHEN hp.is_commercial_insure = '套单' OR hp.is_commercial_insure = '是' THEN hp.salesman_name END) AS commercial_active_salesman
       FROM holiday_policies hp
-      GROUP BY ${groupConfig.groupByExpr.replaceAll('p.', 'hp.')}
+      GROUP BY ${groupConfig.groupByExpr.replaceAll('p.', 'hp.').replaceAll('tm.', 'hp.')}
     )
     SELECT
       h.group_name,

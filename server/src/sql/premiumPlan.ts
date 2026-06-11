@@ -103,8 +103,14 @@ function buildCacheWhere(
  * 聚合公共指标（SUM/CASE）——用于 org/team/company 层级
  * 返回 { select, groupBy } 对，确保非聚合列始终在 GROUP BY 中
  */
-function buildAggSelect(groupField: string, extraFields: string = ''): { select: string; groupBy: string } {
-  const nonAggCols = [groupField, extraFields, 'plan_year'].filter(Boolean);
+function buildAggSelect(
+  groupField: string,
+  extraFields: string = '',
+  extraGroupBy: string = '',
+): { select: string; groupBy: string } {
+  // extraFields 带别名与尾逗号（用于 SELECT 列表），不能直接进 GROUP BY；
+  // GROUP BY 用未加别名的原始列 extraGroupBy。
+  const nonAggCols = [groupField, extraGroupBy, 'plan_year'].filter(Boolean);
   const select = `
     ${groupField}                                            AS group_name,
     ${extraFields}
@@ -173,7 +179,7 @@ export function generatePremiumPlanDrilldownQuery(
     selectBody = agg.select;
     groupBy = agg.groupBy;
   } else if (level === 'team') {
-    const agg = buildAggSelect('team_name', 'org_name AS parent_name,');
+    const agg = buildAggSelect('team_name', 'org_name AS parent_name,', 'org_name');
     selectBody = agg.select;
     groupBy = agg.groupBy;
   } else {
