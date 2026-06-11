@@ -94,9 +94,11 @@ async function gotoPage(page: Page, url: string): Promise<void> {
 
 for (const spec of PAGES) {
   test(`筛选联动 — ${spec.name}`, async ({ page }) => {
-    if (!(await skipWhenNoData(page))) {
-      return;
-    }
+    // ⚠️ 必须显式 test.skip 而非静默 return：静默 return 被记为 passed，
+    // 冷启动数据未就绪时会得到假阳性「全部通过」（断言从未执行）——
+    // 哨兵的可信度取决于 skipped 与 passed 在输出中可区分（负向验证踩过此坑）
+    const hasData = await skipWhenNoData(page);
+    test.skip(!hasData, '后端无数据（CI 或冷启动未就绪）——哨兵断言需本地数据环境');
 
     await gotoPage(page, spec.url);
 
