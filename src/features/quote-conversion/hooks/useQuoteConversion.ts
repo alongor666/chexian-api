@@ -18,6 +18,7 @@ function filtersToParams(f: QuoteFilters): Record<string, string> {
   if (f.salesmanNo) p.salesmanNo = f.salesmanNo;
   if (f.customerCategory) p.customerCategory = f.customerCategory;
   if (f.insuranceCombo) p.insuranceCombo = f.insuranceCombo;
+  // governance-allow: filter-params-mapping（报价域自治参数集，与主站 buildFilterParams 体系无关，参数名同名巧合）
   if (f.isTelemarketing) p.isTelemarketing = f.isTelemarketing;
   if (f.isNewEnergy) p.isNewEnergy = f.isNewEnergy;
   if (f.isTransferred) p.isTransferred = f.isTransferred;

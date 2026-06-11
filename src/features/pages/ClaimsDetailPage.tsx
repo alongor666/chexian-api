@@ -67,23 +67,39 @@ export const ClaimsDetailPage: React.FC = () => {
     return parts.join(' ');
   }, [quickFilters, filters.analysis_year, activeTab]);
 
-  // claims-detail API 使用专用参数格式
+  // claims-detail API 使用专用参数格式。
+  // ⚠ 下方 quickFilters 叠加与 buildFilterParams 产物大部分重叠但并非纯冗余
+  // （如 is_nev=false 会被 deriveQuickFilters 推导为 fuelCategory=oil、
+  //  renewalType=transfer 含 isNewCar=false 的页面级补丁语义）——
+  // 待 Phase 2（BACKLOG d0cd4b 赔案后端补解析）一并收敛到统一函数，本期只标注豁免
   const params = useMemo(() => {
     const base = adaptFilterParams(globalParams);
+    // governance-allow: filter-params-mapping
     if (quickFilters.vehicleType) base.vehicleQuickFilter = quickFilters.vehicleType;
+    // governance-allow: filter-params-mapping
     if (quickFilters.enterpriseCar) base.enterpriseCar = 'true';
+    // governance-allow: filter-params-mapping
     if (quickFilters.fuelCategory) base.fuelCategory = quickFilters.fuelCategory;
+    // governance-allow: filter-params-mapping
     if (quickFilters.isNev !== undefined) base.isNev = String(quickFilters.isNev);
+    // governance-allow: filter-params-mapping
     if (quickFilters.isNewCar !== undefined) base.isNewCar = String(quickFilters.isNewCar);
     if (quickFilters.renewalType === 'renewal') {
+      // governance-allow: filter-params-mapping
       base.isRenewal = 'true';
     } else if (quickFilters.renewalType === 'transfer') {
+      // governance-allow: filter-params-mapping
       base.isRenewal = 'false';
+      // governance-allow: filter-params-mapping
       base.isNewCar = 'false';
     }
+    // governance-allow: filter-params-mapping
     if (quickFilters.businessNature) base.businessNature = quickFilters.businessNature;
+    // governance-allow: filter-params-mapping
     if (quickFilters.isTransfer !== undefined) base.isTransfer = String(quickFilters.isTransfer);
+    // governance-allow: filter-params-mapping
     if (quickFilters.coverageCombination) base.coverageCombinations = quickFilters.coverageCombination;
+    // governance-allow: filter-params-mapping
     if (quickFilters.insuranceType) base.insuranceType = String(quickFilters.insuranceType === 'compulsory');
     return base;
   }, [globalParams, quickFilters]);

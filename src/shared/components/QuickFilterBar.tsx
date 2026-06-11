@@ -42,6 +42,13 @@ interface Props {
   hideGasOil?: boolean;
   /** 隐藏依赖 vehicle_model 列的车型 chip（自卸/牵引/普货），如交叉销售页 */
   hideVehicleModelChips?: boolean;
+  /** 仅隐藏"气"（数据域 fuel_category 派生列只有 油/电 时，如续保域——
+   *  气车被归入"油"，点"气"会返回错误的空结果） */
+  hideGas?: boolean;
+  /** 隐藏整个货车组 chip（数据域无 tonnage_segment 与 vehicle_model 列时，如续保域） */
+  hideTruckChips?: boolean;
+  /** 隐藏险类 toggle（交/商）——数据域无险类维度时，如续保域（口径=交商同保整体） */
+  hideInsuranceType?: boolean;
 }
 
 // ── 车型分组 ──
@@ -119,6 +126,16 @@ const FUEL_CATEGORY_TOGGLE_ELECTRIC_ONLY: CycleToggleConfig = {
   ],
 };
 
+// hideGas 时的退化版：全部 → 电 → 油（数据域 fuel_category 派生列无"气"值，如续保域）
+const FUEL_CATEGORY_TOGGLE_NO_GAS: CycleToggleConfig = {
+  key: 'fuelCategory',
+  states: [
+    { value: undefined, label: '油/电' },
+    { value: 'electric', label: '电' },
+    { value: 'oil', label: '油' },
+  ],
+};
+
 // 依赖 vehicle_model 列的车型 chip（hideVehicleModelChips 时隐藏）
 const VEHICLE_MODEL_CHIP_TYPES: ReadonlySet<VehicleType> = new Set(['dump', 'tractor', 'general']);
 
@@ -171,10 +188,20 @@ const Separator = () => <span className="w-px h-4 bg-neutral-300 dark:bg-neutral
 // 2吨以上货车和出租租赁必定是营业
 const COMMERCIAL_VEHICLE_TYPES: VehicleType[] = ['truck_2_9t', 'dump', 'tractor', 'general', 'rental'];
 
-export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicleType, hideGasOil, hideVehicleModelChips }) => {
-  const visibleTruckChips = hideVehicleModelChips
-    ? TRUCK_GROUP_CHIPS.filter((c) => !VEHICLE_MODEL_CHIP_TYPES.has(c.type))
-    : TRUCK_GROUP_CHIPS;
+export const QuickFilterBar: React.FC<Props> = ({
+  filters, onChange,
+  hideVehicleType, hideGasOil, hideVehicleModelChips, hideGas, hideTruckChips, hideInsuranceType,
+}) => {
+  const visibleTruckChips = hideTruckChips
+    ? []
+    : hideVehicleModelChips
+      ? TRUCK_GROUP_CHIPS.filter((c) => !VEHICLE_MODEL_CHIP_TYPES.has(c.type))
+      : TRUCK_GROUP_CHIPS;
+  const fuelToggleConfig = hideGasOil
+    ? FUEL_CATEGORY_TOGGLE_ELECTRIC_ONLY
+    : hideGas
+      ? FUEL_CATEGORY_TOGGLE_NO_GAS
+      : FUEL_CATEGORY_TOGGLE;
 
   /**
    * 车型芯片点击逻辑：
@@ -279,7 +306,7 @@ export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicle
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-1.5">
         {/* 1. 险类 toggle：交/商 */}
-        {renderToggle(INSURANCE_TYPE_TOGGLE)}
+        {!hideInsuranceType && renderToggle(INSURANCE_TYPE_TOGGLE)}
 
         {/* 2. 险别组合：主全/交三/单交 */}
         {renderToggle(COVERAGE_TOGGLE)}
@@ -342,7 +369,7 @@ export const QuickFilterBar: React.FC<Props> = ({ filters, onChange, hideVehicle
         <Separator />
 
         {/* 4. 油/气/电 */}
-        {renderToggle(hideGasOil ? FUEL_CATEGORY_TOGGLE_ELECTRIC_ONLY : FUEL_CATEGORY_TOGGLE)}
+        {renderToggle(fuelToggleConfig)}
 
         {/* 5. 其他维度 toggle */}
         {OTHER_TOGGLES.map((config) => renderToggle(config))}

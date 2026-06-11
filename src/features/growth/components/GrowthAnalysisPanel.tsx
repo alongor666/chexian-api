@@ -62,58 +62,25 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
   const unitLabel = isPremiumPerspective ? '万' : '件';
 
   /**
-   * 构建附加筛选参数
+   * 构建附加筛选参数（黑名单式全量透传，治理计划 Task 1-B）
    *
-   * 使用 buildFilterParams 生成后端 API 查询参数，
-   * 但排除机构和业务员（因为它们在各函数中单独处理），
-   * 以及日期范围（因为增长分析使用独立的日期逻辑）。
+   * 历史教训（BACKLOG 42fe4a）：手挑白名单漏拷 insurance_type（对象与依赖数组双漏）
+   * → 交/商 chip 不联动。改为 ...filters 全量透传 + 显式排除独立处理的字段，
+   * 新增维度默认不再漏。
+   * 黑名单：机构/业务员在各 analyze 函数单独传；日期由增长页独立逻辑管理
+   * （已核实 buildFilterParams 不处理 analysis_year，时间字段仅此三项）。
    */
   const additionalFilterParams = useMemo(() => {
-    // 创建一个不包含机构/业务员/日期的筛选器副本
     const filtersForParams: AdvancedFilterState = {
-      // 保留客户类别、险别组合、续保模式
-      customer_category: filters.customer_category,
-      coverage_combination: filters.coverage_combination,
-      renewal_mode: filters.renewal_mode,
-      // 保留布尔筛选器
-      is_renewal: filters.is_renewal,
-      is_new_car: filters.is_new_car,
-      is_transfer: filters.is_transfer,
-      is_nev: filters.is_nev,
-      is_telemarketing: filters.is_telemarketing,
-      is_commercial_insure: filters.is_commercial_insure,
-      is_renewable: filters.is_renewable,
-      is_cross_sell: filters.is_cross_sell,
-      // 保留新增评分字段
-      insurance_grade: filters.insurance_grade,
-      // 保留快捷筛选字段
-      vehicle_quick_filter: filters.vehicle_quick_filter,
-      enterprise_car: filters.enterprise_car,
-      business_nature: filters.business_nature,
-      fuel_category: filters.fuel_category,
-      // 不传入日期相关字段（增长分析有独立的日期逻辑）
-      // 不传入机构/业务员（在各函数中单独处理）
+      ...filters,
+      org_level_3: undefined,
+      salesman_name: undefined,
+      date_criteria: undefined,
+      policy_date_start: undefined,
+      policy_date_end: undefined,
     };
-
     return buildFilterParams(filtersForParams, { isOrgUser, userOrg });
-  }, [
-    filters.customer_category,
-    filters.coverage_combination,
-    filters.renewal_mode,
-    filters.is_renewal,
-    filters.is_new_car,
-    filters.is_transfer,
-    filters.is_nev,
-    filters.is_telemarketing,
-    filters.is_commercial_insure,
-    filters.is_renewable,
-    filters.is_cross_sell,
-    filters.insurance_grade,
-    filters.vehicle_quick_filter,
-    filters.enterprise_car,
-    filters.business_nature,
-    filters.fuel_category,
-  ]);
+  }, [filters, isOrgUser, userOrg]);
 
   /**
    * 格式化数值（不带单位）
