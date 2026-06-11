@@ -20,6 +20,7 @@ import { GrowthDetailSection } from './GrowthDetailSection';
 import { formatPercent1, getSafeDateStr } from '../utils/format';
 import { buildFilterParams } from '../../../shared/utils/filterParams';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
+import { useStableParams } from '../../../shared/hooks/useStableParams';
 
 interface GrowthAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -69,8 +70,12 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
    * 新增维度默认不再漏。
    * 黑名单：机构/业务员在各 analyze 函数单独传；日期由增长页独立逻辑管理
    * （已核实 buildFilterParams 不处理 analysis_year，时间字段仅此三项）。
+   *
+   * useStableParams（评审 🟡3）：依赖整个 filters 引用后，被剥离字段（如全局日期）
+   * 变化也会让 memo 产出新对象；下方 comparison useEffect 依赖本产物的引用，
+   * 值相同时必须复用旧引用，否则与增长分析无关的日期调整会触发重复请求。
    */
-  const additionalFilterParams = useMemo(() => {
+  const rawFilterParams = useMemo(() => {
     const filtersForParams: AdvancedFilterState = {
       ...filters,
       org_level_3: undefined,
@@ -81,6 +86,7 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
     };
     return buildFilterParams(filtersForParams, { isOrgUser, userOrg });
   }, [filters, isOrgUser, userOrg]);
+  const additionalFilterParams = useStableParams(rawFilterParams);
 
   /**
    * 格式化数值（不带单位）
