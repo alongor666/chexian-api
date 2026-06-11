@@ -16,11 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（53 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（52 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（9 项）**
+**P1（8 项）**
 
 - B246 — VPS 分层查询改造（KPI variable_cost_ratio）
 - B291 — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
@@ -29,7 +29,6 @@
 - B331 — 超大文件拆分（21 目录排查 主题C）
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
 - 2026-06-10-claude-723ca3 — 全站筛选器/快捷筛选联动系统性巡检（母任务）
-- 2026-06-10-claude-d0cd4b — 赔案明细页后端漏解析 3 维度（前端已发参、后端静默丢弃）
 - 2026-06-11-claude-593d3d — 达成率三路由口径对账
 
 **P2（27 项）**
@@ -135,7 +134,6 @@
 | 2026-06-10-claude-9e1816 | 2026-06-10 | 数据质量 | @claude | 续保派生域 customer_category 摩托车 存在重复键（155 行加 21 行），疑似一行带尾空格或不可见字符，致精确 IN 匹配漏 21 行。建议 ETL 端对 customer_category 做 TRIM 清洗。 | P2 | PROPOSED | N/A | 数据管理/warehouse/fact/renewal_tracker | Phase 1 不涉及（数据质量 TRIM 留 Phase 4）；续保页 chip 映射已用注册表精确值，摩托车尾空格脏数据不影响 IN 匹配的主流路径。 |
 | 2026-06-10-claude-b4da70 | 2026-06-10 | 评估/工具链 | @claude | 数据管理/cli.py 工具库空壳化处置：cli.py 注册的 9 个工具（analyze_parquet/analyze_excel/deep_analysis/field_relation/field_deep/field_exhaustive/excel_to_parquet/earned_premium/diagnose_agent CLI 入口）的模块文件目录 data_tools/ field_tools/ conversion_tools/ business_tools/ 在主仓库与 git 跟踪中全部不存在，2026-06-09 实测运行报模块文件不存在。需决策：1) 重建工具模块（如有真实使用场景）；2) 退役 cli.py 并删除 /chexian-data-tools 命令（替代能力已有：duckdb 直查/daily.mjs ETL/diagnose-* pipelines）。/chexian-data-tools 命令文件已改写为不可用状态指针。 | P2 | PROPOSED | .claude/commands/chexian-data-tools.md | 数据管理/cli.py |  |
 | 2026-06-10-claude-ca3cab | 2026-06-10 | Chore | @claude | cx CLI 全能力重构：route-catalog 33→64 条补全 + governance QueryCatalog 对账检查 + CLI v0.2.0（14 命令/退出码契约/path直通/stdin/补全） | P3 | PROPOSED | N/A | N/A |  |
-| 2026-06-10-claude-d0cd4b | 2026-06-10 | 赔案明细 | @claude | 赔案明细页后端漏解析 3 维度（前端已发参、后端静默丢弃）：insurance_type（交/商）、fuelCategory 的 气(gas) 分支、enterprise_car（企客）。claims-detail.ts parseFilters 与 heatmap 解析均不读这些参数，ClaimsDetailFilters 类型与 buildWhere 无对应字段 → 切这些 chip 时 4 个 Tab 数据不变（静默失效）。注：气与油都派生 isNev=false 发往后端完全相同。修复：后端补解析 + SQL 字段。 | P1 | PROPOSED | N/A | server/src/routes/query/claims-detail.ts | Phase 2 实现完成：parseFilters + heatmap 内联解析补 insuranceType/enterpriseCar/fuelCategory；两处 buildPolicyWhere 照抄 SSOT 语义（含 home_car+企客联动）；计划外发现并修复两处 dedup 子查询投影缺 insurance_type/fuel_type 列（纯 SQL 子串测试抓不到，本地 curl 坐实 Binder Error 后补列）。本地验证：交强 12693+商业 11125=基线 23818 完整二分割；气 1259+油 21144+电 1415=23818 完整三分割；heatmap 200 返回 112KB 实体数据。 |
 | 2026-06-10-claude-e2240c | 2026-06-10 | 续保追踪 | @claude | 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通。根因：RenewalTrackerFact 派生域缺 tonnage_segment 与 vehicle_model 字段。需续保派生域 ETL 从主表 join 补这两字段（tonnage_segment 轻，vehicle_model 重）后，后端 renewal-tracker 路由加对应过滤。 | P2 | PROPOSED | N/A | server/src/sql/renewal-tracker.ts |  |
 | 2026-06-11-claude-02aa70 | 2026-06-11 | 产品决策 | @claude | 产品层冗余裁剪决策（需用户拍板，全站重复审计 主题⑤）：a) 报价转化页 A 版/B 版六专题大面积同件复用，同一内容 3 个入口，是否保留双版本；b) 成本分析页 basic 与 comprehensive 两视图明细表实质重叠（综合视图独有价值=象限图+ROI），是否合并；c) 客户流向页「转入来源」API 已封装前端从未调用（板块空缺，做或删）；d) 报表模板页「使用此模板」为空函数纯占位（做或删）。 | P3 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/features/quote-conversion；src/features/cost；src/features/customer-flow；src/features/report |  |
 | 2026-06-11-claude-0b88b9 | 2026-06-11 | 指标口径 | @claude | 「报价率」一词双语义需界面口径标注或改名：续保追踪页 报价率=报价件数/应续件数（到期口径、车架号去重），报价转化页 漏斗转化率分母=报价单总量。两处均含「报价」字样但分母不同，易误读。处置：两页界面补口径说明文案，或统一命名区分。来源：2026-06-10 全站重复审计。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/features/renewal-tracker；src/features/quote-conversion |  |
