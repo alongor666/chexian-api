@@ -108,7 +108,10 @@ export const ensureDataLoaded = async (page: Page): Promise<boolean> => {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!resp.ok) return false;
-      const files = await resp.json();
+      const body = await resp.json();
+      // API 返回 {success, data: [...]} envelope（兼容历史裸数组形态）。
+      // 此前按裸数组解析永远 false → 全套 E2E 在本地被静默跳过（假阳性根源）
+      const files = Array.isArray(body) ? body : body?.data;
       return Array.isArray(files) && files.some((f: { isCurrent?: boolean }) => f.isCurrent);
     } catch {
       return false;
@@ -124,7 +127,8 @@ export const ensureDataLoaded = async (page: Page): Promise<boolean> => {
         if (token) headers.Authorization = `Bearer ${token}`;
         const resp = await fetch('/api/data/files', { headers });
         if (!resp.ok) return false;
-        const files = await resp.json();
+        const body = await resp.json();
+        const files = Array.isArray(body) ? body : body?.data; // envelope 兼容，同上
         if (!Array.isArray(files) || files.length === 0) return false;
         const loadResp = await fetch(`/api/data/load/${encodeURIComponent(files[0].filename)}`, {
           method: 'POST',

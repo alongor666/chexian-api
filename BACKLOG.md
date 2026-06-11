@@ -16,11 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（52 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（50 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（8 项）**
+**P1（7 项）**
 
 - B246 — VPS 分层查询改造（KPI variable_cost_ratio）
 - B291 — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
@@ -28,10 +28,9 @@
 - B330 — 架构依赖违规修复（21 目录排查 主题B）
 - B331 — 超大文件拆分（21 目录排查 主题C）
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
-- 2026-06-10-claude-723ca3 — 全站筛选器/快捷筛选联动系统性巡检（母任务）
 - 2026-06-11-claude-593d3d — 达成率三路由口径对账
 
-**P2（27 项）**
+**P2（26 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -55,7 +54,6 @@
 - 2026-06-08-claude-691a87 — BACKLOG 增弃置状态 + 过时项剪枝（治理体检缺口②）
 - 2026-06-10-claude-3a6daf — 深入评估 chexian-patrol 续保巡检命令的设计思路
 - 2026-06-10-claude-8964d3 — Phase 1 参数契约
-- 2026-06-10-claude-9e1816 — 续保派生域 customer_category 摩托车 存在重复键（155 行加 21 
 - 2026-06-10-claude-b4da70 — 数据管理/cli.py 工具库空壳化处置
 - 2026-06-10-claude-e2240c — 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通
 - 2026-06-11-claude-0b88b9 — 「报价率」一词双语义需界面口径标注或改名
@@ -128,10 +126,8 @@
 | 2026-06-09-claude-66b2eb | 2026-06-09 | ApiClient 神类拆分 | @claude | 命名空间子客户端富类型提升为命名接口（gold-plating·非阻塞）：cross-sell(#544)迁移时把 timePeriod(26 字段)/heatmap(11 字段)/orgTrend/trend/topSalesman 的富返回类型逐字段保留，但仍是匿名内联。后续可提升为 types.ts 命名接口（CrossSellTimePeriodResponse 等），利于复用与契约测试引用。来源：PR #544 评审观察项。 | P3 | PROPOSED | N/A | src/shared/api/cross-sell-api.ts,src/shared/api/types.ts | PR #545 评审强化：内联富类型提升应批量进行（performance + crossSell 及后续 customer-flow 等一次性提升为 types.ts 命名接口，消除重复内联块），而非逐域零敲碎打。 |
 | 2026-06-09-claude-709fc0 | 2026-06-09 | ApiClient 神类拆分 | @claude | 契约覆盖 meta 守卫（gold-plating·非阻塞）：随 Phase 2 后续 7 域铺开，加一个自执行 meta 测试——枚举 apiClient 各命名空间方法、断言每个都在 client-contracts 契约表里有对应 case（或数量对账），让"新域无覆盖"在测试层自动暴露，替代"人记得追加"。来源：PR #542 评审观察项 #2。 | P3 | PROPOSED | N/A | src/shared/api/__tests__/client-contracts.test.ts |  |
 | 2026-06-10-claude-3a6daf | 2026-06-10 | 评估/工具链 | @claude | 深入评估 chexian-patrol 续保巡检命令的设计思路：其依赖的数据源 数据管理/warehouse/fact/renewal_universe/latest.parquet 与必读规范 数据管理/knowledge/ai/RENEWAL_PATROL_REPORT_FRAMEWORK.md 均不存在，巡检产物目录也不存在，命令当前不可执行。需评估：1) 三口径巡检（已到期/30天内/全年）是否已被 diagnose-renewal v2.2（基于 renewal_tracker）实质覆盖；2) 若有独有价值（5 优先客户类别×AI 深度研判），应重建数据链还是把独有逻辑并入 diagnose-renewal；3) 评估后决定修复或删除该命令。来源：2026-06-09 slash 命令全面优化评审。 | P2 | PROPOSED | .claude/commands/chexian-patrol.md | 数据管理/patrol/patrol_engine.py |  |
-| 2026-06-10-claude-723ca3 | 2026-06-10 | 前端筛选器联动审计 | @claude | 全站筛选器/快捷筛选联动系统性巡检（母任务）。续保页已确认 useNonTimeFilterParams 漏读 vehicle_quick_filter/enterprise_car/business_nature/insurance_type 致 chip 点击不重新请求。需对 dashboard/performance/growth/cost/reports/specialty/moto-cost/quote-conversion/expense-development/repair/customer-flow/claims-detail 逐页审计：前端 hook 参数构造 vs QuickFilterBar 与 AdvancedFilterPanel 暴露维度 vs 后端路由支持参数，三方比对找漏接。 | P1 | PROPOSED | N/A | src/features | 审计完成(workflow 38 agent/14 页)：健康页 9 个(dashboard/performance/cost/expense-dev/truck/comprehensive/reports/specialty/quote-conversion，均走统一 buildFilterParams)。漏接页：续保+对比(全量漏)+赔案明细(后端漏解析)+增长(insurance_type)+交叉销售(Binder Error 运行时坐实 HTTP 400)。模式铁律：走统一 buildFilterParams=健康，自写参数构造/不调=漏接。 <br>治理计划评审稿已产出：开发文档/筛选器联动治理计划_2026-06-10.md（6 Phase：止血/前端唯一路径/赔案后端/能力矩阵/数据质量/E2E 防复发，含 6 个评审决策点 D1-D6）。待用户评审拍板后分 Phase 实施，每 Phase 独立 PR。 |
 | 2026-06-10-claude-807f41 | 2026-06-10 | Chore | @claude | repair v2 八端点（city/channel/coop-tier/scatter/local-resource/to-premium/diversion-list/orphan-shops）服务端从未实现：QUERY_ROUTES 常量与前端 repair-api 方法先行、路由未落地，前端调用实际 404。需实现服务端路由后再登记 route-catalog（QueryCatalog 对账会强制） | P3 | PROPOSED | N/A | N/A |  |
 | 2026-06-10-claude-8964d3 | 2026-06-10 | Chore | @claude | Phase 1 参数契约：route-param-contracts.ts（64 路由 path→运行时 zod schema 映射）+ validate-params.ts per-route 子集对账接入 governance；修复 catalog 系统性参数提示误导（TS_COMMON year/week_number/start_date 与 ORG_FILTER org_level_3/channel 等 ~150 处虚构参数名，运行时被 zod 静默 strip——生产实证：start_date 传参返回全量 22.04 亿 vs startDate 正确返回窗口 762.6 万）。Phase 2 timeWindow：QueryRouteMeta 加必填七枚举（window/rolling/policy-year/ytd-progress/cohort-development/snapshot/any，编译期强制 64 条全标注）+ MetricDefinition 可选 timeWindow（11 个满期族指标标 cutoff-based）+ MCP tool description 注入中文口径提示 + CLI routes 显示 timeWindow 列。B290 原始事故（plan-achievement 被误用于窗口提问）根治点：该路由标 ytd-progress + note 禁用于窗口提问 | P2 | PROPOSED | N/A | N/A |  |
-| 2026-06-10-claude-9e1816 | 2026-06-10 | 数据质量 | @claude | 续保派生域 customer_category 摩托车 存在重复键（155 行加 21 行），疑似一行带尾空格或不可见字符，致精确 IN 匹配漏 21 行。建议 ETL 端对 customer_category 做 TRIM 清洗。 | P2 | PROPOSED | N/A | 数据管理/warehouse/fact/renewal_tracker | Phase 1 不涉及（数据质量 TRIM 留 Phase 4）；续保页 chip 映射已用注册表精确值，摩托车尾空格脏数据不影响 IN 匹配的主流路径。 |
 | 2026-06-10-claude-b4da70 | 2026-06-10 | 评估/工具链 | @claude | 数据管理/cli.py 工具库空壳化处置：cli.py 注册的 9 个工具（analyze_parquet/analyze_excel/deep_analysis/field_relation/field_deep/field_exhaustive/excel_to_parquet/earned_premium/diagnose_agent CLI 入口）的模块文件目录 data_tools/ field_tools/ conversion_tools/ business_tools/ 在主仓库与 git 跟踪中全部不存在，2026-06-09 实测运行报模块文件不存在。需决策：1) 重建工具模块（如有真实使用场景）；2) 退役 cli.py 并删除 /chexian-data-tools 命令（替代能力已有：duckdb 直查/daily.mjs ETL/diagnose-* pipelines）。/chexian-data-tools 命令文件已改写为不可用状态指针。 | P2 | PROPOSED | .claude/commands/chexian-data-tools.md | 数据管理/cli.py |  |
 | 2026-06-10-claude-ca3cab | 2026-06-10 | Chore | @claude | cx CLI 全能力重构：route-catalog 33→64 条补全 + governance QueryCatalog 对账检查 + CLI v0.2.0（14 命令/退出码契约/path直通/stdin/补全） | P3 | PROPOSED | N/A | N/A |  |
 | 2026-06-10-claude-e2240c | 2026-06-10 | 续保追踪 | @claude | 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通。根因：RenewalTrackerFact 派生域缺 tonnage_segment 与 vehicle_model 字段。需续保派生域 ETL 从主表 join 补这两字段（tonnage_segment 轻，vehicle_model 重）后，后端 renewal-tracker 路由加对应过滤。 | P2 | PROPOSED | N/A | server/src/sql/renewal-tracker.ts |  |
