@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 
 import ExcelJS from 'exceljs';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -82,10 +82,13 @@ async function runDuckDbQuery<T = unknown[]>(sql: string): Promise<T[]> {
 }
 
 async function getProcessingMode(parquetPath: string): Promise<string | null> {
+  // 镜像 server/src/utils/parquet-source.ts：ETL 统一写出键名 etl_processing_mode 优先，
+  // 兼容更名前存量文件的 processing_mode
   const rows = await runDuckDbQuery<[string, string]>(`
     SELECT key, value
     FROM parquet_kv_metadata('${escapeSqlValue(parquetPath)}')
-    WHERE key = 'processing_mode'
+    WHERE key IN ('etl_processing_mode', 'processing_mode')
+    ORDER BY CASE WHEN key = 'etl_processing_mode' THEN 0 ELSE 1 END
   `);
   const rawValue = rows[0]?.[1];
   if (rawValue == null) return null;
@@ -111,10 +114,12 @@ async function getProcessingMode(parquetPath: string): Promise<string | null> {
 }
 
 async function getPremiumByDateAndCategory(parquetPath: string): Promise<Record<string, number>> {
+  // transform.py 已输出英文字段名（CN→EN 迁移）：客户类别→customer_category、保费→premium、
+  // 签单日期(业绩统计日期)→policy_date，权威映射见 server/src/config/field-registry/fields.json
   const rows = await runDuckDbQuery<[string, number]>(`
-    SELECT "客户类别", ROUND(SUM("保费"), 2) AS premium
+    SELECT customer_category, ROUND(SUM(premium), 2) AS premium
     FROM read_parquet('${escapeSqlValue(parquetPath)}')
-    WHERE CAST("签单日期" AS DATE) = DATE '2026-03-10'
+    WHERE CAST(policy_date AS DATE) = DATE '2026-03-10'
     GROUP BY 1
     ORDER BY 1
   `);
@@ -155,15 +160,24 @@ describe.skipIf(!hasParquetProcessingDeps).sequential('Parquet processing defaul
   const fullParquet = join(tempDir, 'fixture-full.parquet');
   const mergedParquet = join(tempDir, 'fixture-merged.parquet');
 
+  // 镜像生产链路 daily.mjs buildPythonEnv()：transform.py 内 `from pipelines.xxx import ...`
+  // 依赖 数据管理/ 在 PYTHONPATH 上，否则 ModuleNotFoundError: No module named 'pipelines'
+  const pythonEnv = {
+    ...process.env,
+    PYTHONPATH: [resolve('数据管理'), process.env.PYTHONPATH].filter(Boolean).join(delimiter),
+  };
+
   beforeAll(async () => {
     await createFixtureWorkbook(inputXlsx);
     execFileSync('python3', [resolve('数据管理/pipelines/transform.py'), '-i', inputXlsx, '-o', fullParquet], {
       cwd: process.cwd(),
       stdio: 'pipe',
+      env: pythonEnv,
     });
     execFileSync('python3', [resolve('数据管理/pipelines/transform.py'), '-i', inputXlsx, '-o', mergedParquet, '-m', 'merged'], {
       cwd: process.cwd(),
       stdio: 'pipe',
+      env: pythonEnv,
     });
   }, 60_000);
 
@@ -214,7 +228,9 @@ describe.skipIf(!hasParquetProcessingDeps).sequential('Parquet processing defaul
       rows.map(([dimension, policyDate, premium]) => [`${dimension}|${policyDate}`, Number(premium)])
     );
 
+    // 签单保费 = 净额含批改（281e638d，2026-05-22 口径变更）：
+    // 非营业个人客车 03-10 = 500（P0001 批改） + (-200)（P0003 退保） = 300 元 = 0.03 万
     expect(premiumMap['营业货车|2026-03-10']).toBeCloseTo(0.2, 6);
-    expect(premiumMap['非营业个人客车|2026-03-10']).toBeCloseTo(0.05, 6);
+    expect(premiumMap['非营业个人客车|2026-03-10']).toBeCloseTo(0.03, 6);
   });
 });

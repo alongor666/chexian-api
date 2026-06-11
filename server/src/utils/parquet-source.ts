@@ -51,10 +51,12 @@ export async function inspectParquetSource(filePath: string): Promise<ParquetSou
       SELECT key, value
       FROM parquet_kv_metadata('${escapedPath}')
     `);
-    const match = metadataRows.find(
-      (row) => normalizeMetadataValue(row.key)?.toLowerCase() === 'processing_mode',
-    );
-    processingMode = normalizeMetadataValue(match?.value)?.toLowerCase() ?? null;
+    // ETL 统一写出（数据管理/pipelines/parquet_utils.py）的键名是 etl_processing_mode；
+    // 更名前的存量 Parquet 仍带 processing_mode，两个键都要识别，否则 merged 拒载守卫失效。
+    const findModeValue = (keyName: string) =>
+      metadataRows.find((row) => normalizeMetadataValue(row.key)?.toLowerCase() === keyName)?.value;
+    const match = findModeValue('etl_processing_mode') ?? findModeValue('processing_mode');
+    processingMode = normalizeMetadataValue(match)?.toLowerCase() ?? null;
   } catch {
     processingMode = null;
   }

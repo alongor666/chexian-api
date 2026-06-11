@@ -35,6 +35,9 @@ const REPAIR_IDS = new Set([
 /** 需要 QuoteConversion schema 的指标 */
 const QUOTE_IDS = new Set(['underwriting_rate']);
 
+/** 作用于 claims_detail 原始底表的指标（见各指标 sql.notes） */
+const CLAIMS_DETAIL_IDS = new Set(['bi_case_ratio_pct', 'bi_amount_ratio_pct']);
+
 // ═══════════════════════════════════════════════════
 // 断言执行器
 // ═══════════════════════════════════════════════════
@@ -84,18 +87,19 @@ CREATE TABLE policy_data (
   fee_amount DOUBLE,
   exposure_days INTEGER,
   earned_days INTEGER,
-  policy_term INTEGER
+  policy_term INTEGER,
+  commercial_pricing_factor DOUBLE
 );
 
 INSERT INTO policy_data VALUES
-  (5000, 'P001', '成都', '张三', 'VIN001', false, false, true,  false, false, true,  '商业保险', '主全', '非营业个人客车', NULL, 1000, 1, 500, 365, 300, 365),
-  (3000, 'P002', '成都', '张三', 'VIN002', true,  true,  false, false, true,  false, '交强险',   '单交', '非营业个人客车', NULL, 0,    0, 300, 365, 365, 365),
-  (8000, 'P003', '乐山', '李四', 'VIN003', false, false, true,  true,  false, true,  '商业保险', '交三', '非营业企业客车', NULL, 2000, 2, 800, 366, 200, 366),
-  (4000, 'P004', '乐山', '李四', 'VIN004', false, false, false, false, false, false, '交强险',   '单交', '非营业货车',     '2-9吨', 500, 1, 400, 365, 365, 365),
-  (6000, 'P005', '天府', '王五', 'VIN005', false, false, true,  false, false, false, '商业保险', '主全', '非营业机关客车', NULL, 3000, 1, 600, 365, 100, 365),
-  (2000, 'P006', '天府', '王五', NULL,     false, false, false, false, true,  false, '交强险',   '单交', '摩托车',         NULL, 0,    0, 200, 365, 365, 365),
-  (7000, 'P007', '成都', '赵六', 'VIN006', true,  false, false, false, false, true,  '商业保险', '交三', '非营业个人客车', NULL, 1500, 1, 700, 365, 250, 365),
-  (1000, 'P008', '乐山', '赵六', 'VIN007', false, true,  true,  false, false, false, '商业保险', '主全', '营业货车',       '1吨以下', 200, 0, 100, 365, 350, 365);
+  (5000, 'P001', '成都', '张三', 'VIN001', false, false, true,  false, false, true,  '商业保险', '主全', '非营业个人客车', NULL, 1000, 1, 500, 365, 300, 365, 0.85),
+  (3000, 'P002', '成都', '张三', 'VIN002', true,  true,  false, false, true,  false, '交强险',   '单交', '非营业个人客车', NULL, 0,    0, 300, 365, 365, 365, NULL),
+  (8000, 'P003', '乐山', '李四', 'VIN003', false, false, true,  true,  false, true,  '商业保险', '交三', '非营业企业客车', NULL, 2000, 2, 800, 366, 200, 366, 1.05),
+  (4000, 'P004', '乐山', '李四', 'VIN004', false, false, false, false, false, false, '交强险',   '单交', '非营业货车',     '2-9吨', 500, 1, 400, 365, 365, 365, NULL),
+  (6000, 'P005', '天府', '王五', 'VIN005', false, false, true,  false, false, false, '商业保险', '主全', '非营业机关客车', NULL, 3000, 1, 600, 365, 100, 365, 0.90),
+  (2000, 'P006', '天府', '王五', NULL,     false, false, false, false, true,  false, '交强险',   '单交', '摩托车',         NULL, 0,    0, 200, 365, 365, 365, NULL),
+  (7000, 'P007', '成都', '赵六', 'VIN006', true,  false, false, false, false, true,  '商业保险', '交三', '非营业个人客车', NULL, 1500, 1, 700, 365, 250, 365, 1.20),
+  (1000, 'P008', '乐山', '赵六', 'VIN007', false, true,  true,  false, false, false, '商业保险', '主全', '营业货车',       '1吨以下', 200, 0, 100, 365, 350, 365, NULL);
 `;
 
 /** CrossSellDailyAgg 合成数据 */
@@ -160,6 +164,33 @@ INSERT INTO quote_data VALUES
   ('未承保'), ('未承保');
 `;
 
+/**
+ * ClaimsDetail 合成数据 — 覆盖人伤指标 requiredColumns。
+ * 形态贴合业务现实：人伤案件占比低（约 10%）但金额占比高（约 50%，严重性放大），
+ * 含一行 is_bodily_injury = NULL 验证 COALESCE FALSE 兜底。
+ */
+const SEED_CLAIMS_DETAIL_DATA = `
+CREATE TABLE claims_detail_data (
+  is_bodily_injury BOOLEAN,
+  settled_amount DOUBLE,
+  reserve_amount DOUBLE,
+  settled_bodily_amount DOUBLE,
+  reserve_bodily_amount DOUBLE
+);
+
+INSERT INTO claims_detail_data VALUES
+  (true,  50000, 30000, 45000, 28000),
+  (false, 5000,  2000,  0,     0),
+  (false, 6000,  1000,  0,     0),
+  (false, 4000,  3000,  0,     0),
+  (false, 8000,  0,     0,     0),
+  (false, 3000,  2000,  0,     0),
+  (false, 7000,  1500,  0,     0),
+  (false, 5500,  500,   0,     0),
+  (false, 4500,  2500,  0,     0),
+  (NULL,  6000,  1000,  0,     0);
+`;
+
 // ═══════════════════════════════════════════════════
 // 测试
 // ═══════════════════════════════════════════════════
@@ -172,7 +203,7 @@ describe('指标 testCase DuckDB 执行', () => {
     await db.init();
 
     // 创建所有合成数据表
-    for (const sql of [SEED_POLICY_DATA, SEED_CROSS_SELL_DATA, SEED_GROWTH_DATA, SEED_REPAIR_DATA, SEED_QUOTE_DATA]) {
+    for (const sql of [SEED_POLICY_DATA, SEED_CROSS_SELL_DATA, SEED_GROWTH_DATA, SEED_REPAIR_DATA, SEED_QUOTE_DATA, SEED_CLAIMS_DETAIL_DATA]) {
       // 拆分为独立语句执行
       const statements = sql.split(';').map((s) => s.trim()).filter(Boolean);
       for (const stmt of statements) {
@@ -191,6 +222,7 @@ describe('指标 testCase DuckDB 执行', () => {
     if (GROWTH_IDS.has(metricId)) return 'growth_data';
     if (REPAIR_IDS.has(metricId)) return 'repair_data';
     if (QUOTE_IDS.has(metricId)) return 'quote_data';
+    if (CLAIMS_DETAIL_IDS.has(metricId)) return 'claims_detail_data';
     return 'policy_data';
   }
 
