@@ -272,14 +272,31 @@ async function main() {
     GROUP BY ALL
   `);
   const buildMonth = performance.now() - t0;
+  t0 = performance.now();
+  // 业务员专属立方体（周 × 业务员 × 机构）：业务员 615 人不进签单立方体（防粒度爆炸），
+  // 排名/业绩类查询走此表 —— 对应路由族 salesman-ranking / performance 业务员维度
+  await q(`
+    CREATE TABLE CubeSalesmanWeek AS
+    SELECT
+      DATE_TRUNC('week', policy_date) AS week_start,
+      org_level_3, salesman_name, insurance_type, is_renewal,
+      SUM(premium) AS premium_sum,
+      SUM(fee_amount) AS fee_sum,
+      SUM(CASE WHEN is_first_row THEN 1 ELSE 0 END) AS policy_cnt
+    FROM FactOpt
+    GROUP BY ALL
+  `);
+  const buildSalesman = performance.now() - t0;
   const [{ n: cubeDayRows }] = await q(`SELECT COUNT(*)::BIGINT AS n FROM CubeSignDay`);
   const [{ n: cubeCostRows }] = await q(`SELECT COUNT(*)::BIGINT AS n FROM CubeCostDay`);
   const [{ n: cubeWeekRows }] = await q(`SELECT COUNT(*)::BIGINT AS n FROM CubeSignWeek`);
   const [{ n: cubeMonthRows }] = await q(`SELECT COUNT(*)::BIGINT AS n FROM CubeSignMonth`);
+  const [{ n: cubeSalesRows }] = await q(`SELECT COUNT(*)::BIGINT AS n FROM CubeSalesmanWeek`);
   console.log(`- L2 CubeSignDay ${Number(cubeDayRows).toLocaleString()} 行（压缩 ${(Number(factRows) / Number(cubeDayRows)).toFixed(1)}x），构建 ${fmtMs(buildSignDay)}`);
   console.log(`- L2 CubeCostDay ${Number(cubeCostRows).toLocaleString()} 行，构建 ${fmtMs(buildCostDay)}`);
   console.log(`- L3 CubeSignWeek ${Number(cubeWeekRows).toLocaleString()} 行（压缩 ${(Number(factRows) / Number(cubeWeekRows)).toFixed(0)}x），构建 ${fmtMs(buildWeek)}`);
-  console.log(`- L3 CubeSignMonth ${Number(cubeMonthRows).toLocaleString()} 行（压缩 ${(Number(factRows) / Number(cubeMonthRows)).toFixed(0)}x），构建 ${fmtMs(buildMonth)}\n`);
+  console.log(`- L3 CubeSignMonth ${Number(cubeMonthRows).toLocaleString()} 行（压缩 ${(Number(factRows) / Number(cubeMonthRows)).toFixed(0)}x），构建 ${fmtMs(buildMonth)}`);
+  console.log(`- L2 CubeSalesmanWeek ${Number(cubeSalesRows).toLocaleString()} 行（压缩 ${(Number(factRows) / Number(cubeSalesRows)).toFixed(0)}x），构建 ${fmtMs(buildSalesman)}\n`);
 
   // ============================================================
   // 4) 查询套件：同一语义，四种形态
@@ -559,6 +576,58 @@ async function main() {
     checks.push({ name: `QD 任意组合下钻 ×${DRILL_COMBOS} 等值（L0=L1=L2，保费+件数）`, ok: okAll, detail: bad || '全部组合相等' });
   }
 
+  // ---------- QE：业务员排名 Top20（专属立方体路由族：salesman-ranking）----------
+  const QE_WIN = `BETWEEN DATE '2026-01-05' AND DATE '2026-06-07'`;
+  const qeBaseline = `
+    SELECT salesman_name, org_level_3, SUM(premium) AS premium_sum,
+           COUNT(DISTINCT policy_no) AS policy_cnt
+    FROM PolicyFact
+    WHERE policy_date ${QE_WIN}
+    GROUP BY 1, 2 ORDER BY premium_sum DESC LIMIT 20
+  `;
+  const qeCube = `
+    SELECT salesman_name, org_level_3, SUM(premium_sum) AS premium_sum,
+           SUM(policy_cnt) AS policy_cnt
+    FROM CubeSalesmanWeek
+    WHERE week_start ${QE_WIN}
+    GROUP BY 1, 2 ORDER BY premium_sum DESC LIMIT 20
+  `;
+  const qe = await benchRow('业务员排名 Top20（整周对齐窗口）', { L0: qeBaseline, L2: qeCube });
+  {
+    let okAll = qe.L0.rows.length === qe.L2.rows.length;
+    let bad = okAll ? '' : `行数 ${qe.L0.rows.length} vs ${qe.L2.rows.length}`;
+    if (okAll) {
+      for (let i = 0; i < qe.L0.rows.length; i++) {
+        const a = qe.L0.rows[i], b = qe.L2.rows[i];
+        if (a.salesman_name !== b.salesman_name || !near(a.premium_sum, b.premium_sum) || !near(a.policy_cnt, b.policy_cnt)) {
+          okAll = false; bad = `#${i} ${a.salesman_name}/${b.salesman_name}`; break;
+        }
+      }
+    }
+    checks.push({ name: 'QE 业务员排名 Top20 全行等值（L0=L2 专属立方体）', ok: okAll, detail: bad || 'Top20 排序与数值全部相等' });
+  }
+
+  // ---------- QF：明细分页（点查类路由族：claims-detail 等 —— 立方体不适用，走优化事实表）----------
+  const qfWhere = `org_level_3 = 'org_03' AND policy_date BETWEEN DATE '2026-03-01' AND DATE '2026-06-10'`;
+  const qfBaseline = `
+    SELECT policy_no, policy_date, salesman_name, customer_category, premium
+    FROM PolicyFact WHERE ${qfWhere}
+    -- 排序键必须唯一（批改行与原单同保单号同日期）：补 premium 列保证分页确定性
+    ORDER BY policy_date DESC, policy_no, premium DESC LIMIT 50 OFFSET 200
+  `;
+  const qfFactOpt = `
+    SELECT policy_no, policy_date, salesman_name, customer_category, premium
+    FROM FactOpt WHERE ${qfWhere}
+    -- 排序键必须唯一（批改行与原单同保单号同日期）：补 premium 列保证分页确定性
+    ORDER BY policy_date DESC, policy_no, premium DESC LIMIT 50 OFFSET 200
+  `;
+  const qf = await benchRow('明细分页（点查类，立方体不适用→事实表）', { L0: qfBaseline, L1: qfFactOpt });
+  {
+    const same = qf.L0.rows.length === qf.L1.rows.length
+      && qf.L0.rows.every((r, i) => r.policy_no === qf.L1.rows[i].policy_no && near(r.premium, qf.L1.rows[i].premium));
+    checks.push({ name: 'QF 明细分页 50 行逐行等值（L0=L1）', ok: same, detail: same ? '50 行全部相等' : '行内容不一致' });
+  }
+
   // ============================================================
   // 5) L3+：Node 进程内列式引擎（TypedArray），验证亚毫秒可行性
   // ============================================================
@@ -657,8 +726,8 @@ async function main() {
   const artifact = {
     generatedAt: new Date().toISOString(),
     config: { rows: ROWS, threads: THREADS, maxMemory: MAX_MEM, iters: ITERS, drillCombos: DRILL_COMBOS },
-    dataset: { factRows: Number(factRows), claimRows: Number(claimRows), cubeDayRows: Number(cubeDayRows), cubeCostRows: Number(cubeCostRows), cubeWeekRows: Number(cubeWeekRows), cubeMonthRows: Number(cubeMonthRows) },
-    cubeBuildMs: { signDay: buildSignDay, costDay: buildCostDay, signWeek: buildWeek, signMonth: buildMonth },
+    dataset: { factRows: Number(factRows), claimRows: Number(claimRows), cubeDayRows: Number(cubeDayRows), cubeCostRows: Number(cubeCostRows), cubeWeekRows: Number(cubeWeekRows), cubeMonthRows: Number(cubeMonthRows), cubeSalesmanRows: Number(cubeSalesRows) },
+    cubeBuildMs: { signDay: buildSignDay, costDay: buildCostDay, signWeek: buildWeek, signMonth: buildMonth, salesmanWeek: buildSalesman },
     queries: results,
     engine: { heapMB: Number(heapMB), dayRows: colsDay.n, weekRows: colsWeek.n, monthRows: colsMonth.n, kpiDay: { p50: engDay.p50, p95: engDay.p95 }, kpiWeek: { p50: engWeek.p50, p95: engWeek.p95 }, kpiMonth: { p50: engMonth.p50, p95: engMonth.p95 } },
     checks: checks.map(({ name, ok }) => ({ name, ok })),
