@@ -11,10 +11,8 @@ import {
   truthyExpr,
   coverageOrderExpr,
   getPerformanceSegmentFilter,
-  getPlanDenominator,
   buildPeriodBoundsCte,
   buildStaticPeriodBoundsCte,
-  buildPeriodProgressCte,
   getExpandDimensionConfig,
   type PerformanceSegmentTag,
   type PerformanceTimePeriod,
@@ -37,11 +35,13 @@ export function generatePerformanceSummaryQuery(
   const periodBounds = periodBoundsOverride
     ? buildStaticPeriodBoundsCte(periodBoundsOverride)
     : buildPeriodBoundsCte(whereWithDate, segmentFilter, timePeriod, growthMode, dateField);
-  const periodProgress = buildPeriodProgressCte();
   const useExpandRows = expandDims !== 'none';
   const expandConfig = useExpandRows ? getExpandDimensionConfig(expandDims) : null;
 
-  // 业务性质指标聚合 SQL — 4个CTE共用，避免重复定义
+  // 业务性质指标聚合 SQL — 4个CTE共用，避免重复定义。
+  // 注：汇总表按险别组合分行，而年计划只有业务员粒度（不分险别），故本查询不计算
+  // plan_premium / achievement_rate（恒 NULL，见 parent_metrics/child_metrics）；
+  // 旧版在此分摊年计划但从未输出，属死计算，已随 2026-06-11 口径统一一并移除。
   const businessMetricsSql = `
         SUM(premium_wan) AS premium,
         COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count,
@@ -49,19 +49,11 @@ export function generatePerformanceSummaryQuery(
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_renewal_bool THEN policy_key END) AS renewal_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car_bool) AND (NOT is_renewal_bool) THEN policy_key END) AS transfer_business_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_renewal_bool) AND is_new_car_bool THEN policy_key END) AS new_car_count,
-        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN policy_key END) AS transfer_count,
-        SUM(
-          CASE
-            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
-              THEN cr.plan_vehicle * cr.premium_wan / st.salesman_premium_wan
-            ELSE 0
-          END
-        ) AS allocated_plan`;
+        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car_bool) AND (NOT is_renewal_bool) AND is_transfer_bool THEN policy_key END) AS transfer_count`;
 
   const sql = `
     WITH
     ${periodBounds},
-    ${periodProgress},
     filtered AS (
       SELECT
         CASE
@@ -79,10 +71,8 @@ export function generatePerformanceSummaryQuery(
         CASE WHEN ${truthyExpr('is_nev')} THEN true ELSE false END AS is_nev_bool,
         CASE WHEN ${truthyExpr('is_renewal')} THEN true ELSE false END AS is_renewal_bool,
         CASE WHEN ${truthyExpr('is_new_car')} THEN true ELSE false END AS is_new_car_bool,
-        CASE WHEN ${truthyExpr('is_transfer')} THEN true ELSE false END AS is_transfer_bool,
-        COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
+        CASE WHEN ${truthyExpr('is_transfer')} THEN true ELSE false END AS is_transfer_bool
       FROM PolicyFact
-      LEFT JOIN (SELECT full_name, SUM(plan_vehicle) AS plan_vehicle FROM achievement_cache GROUP BY full_name) ac ON PolicyFact.salesman_name = ac.full_name
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
     ),
@@ -98,18 +88,10 @@ export function generatePerformanceSummaryQuery(
       CROSS JOIN period_bounds pb
       WHERE f.pd >= pb.prev_start AND f.pd <= pb.prev_end
     ),
-    salesman_totals AS (
-      SELECT
-        salesman_name,
-        SUM(premium_wan) AS salesman_premium_wan
-      FROM current_rows
-      GROUP BY salesman_name
-    ),
     parent_current_cov AS (
       SELECT
         coverage_combination,${businessMetricsSql}
       FROM current_rows cr
-      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
       WHERE coverage_combination IN ('主全', '交三', '单交')
       GROUP BY coverage_combination
     ),
@@ -117,7 +99,6 @@ export function generatePerformanceSummaryQuery(
       SELECT
         '整体' AS coverage_combination,${businessMetricsSql}
       FROM current_rows cr
-      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
     ),
     parent_current AS (
       SELECT * FROM parent_current_all
@@ -148,6 +129,7 @@ export function generatePerformanceSummaryQuery(
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.premium * 10000.0 / c.auto_count, 2) END AS avg_premium,
+        -- 年计划无险别组合维度，汇总表不展示达成率（标准口径见注册表 plan_completion_pct）
         NULL::DOUBLE AS plan_premium,
         NULL::DOUBLE AS achievement_rate,
         CASE
@@ -161,7 +143,6 @@ export function generatePerformanceSummaryQuery(
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.auto_count, 2) END AS transfer_rate
       FROM parent_current c
       LEFT JOIN parent_prev p ON c.coverage_combination = p.coverage_combination
-      CROSS JOIN period_progress pp
     )
     ${useExpandRows ? `,
     child_current_cov AS (
@@ -171,7 +152,6 @@ export function generatePerformanceSummaryQuery(
         ${expandConfig!.keyExpr} AS expand_key,
         ${expandConfig!.orderExpr} AS child_order,${businessMetricsSql}
       FROM current_rows cr
-      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
       WHERE coverage_combination IN ('主全', '交三', '单交')
       GROUP BY coverage_combination, row_label, expand_key, child_order
     ),
@@ -182,7 +162,6 @@ export function generatePerformanceSummaryQuery(
         ${expandConfig!.keyExpr} AS expand_key,
         ${expandConfig!.orderExpr} AS child_order,${businessMetricsSql}
       FROM current_rows cr
-      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
       GROUP BY row_label, expand_key, child_order
     ),
     child_current AS (
@@ -238,7 +217,6 @@ export function generatePerformanceSummaryQuery(
       LEFT JOIN child_prev p
         ON c.coverage_combination = p.coverage_combination
         AND c.expand_key = p.expand_key
-      CROSS JOIN period_progress pp
     ),
     combined AS (
       SELECT * FROM parent_metrics

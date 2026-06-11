@@ -113,6 +113,9 @@ function buildAggSelect(groupField: string, extraFields: string = ''): { select:
     SUM(plan_vehicle)                                        AS plan_total,
     SUM(actual_vehicle)                                      AS actual_vehicle,
     0                                                        AS actual_total,
+    -- 标准口径（注册表 plan_completion_pct v2.0.0）：年初累计 ÷（年计划 × 时间进度）。
+    -- time_progress 由 buildAchievementView 预计算：锚定数据内最新签单日（非自然日
+    -- 今天），全年天数闰年感知；缓存表内为单一常量，MAX() 仅作聚合语法需要。
     CASE
       WHEN SUM(plan_vehicle) > 0 AND MAX(time_progress) > 0
       THEN ROUND((SUM(actual_vehicle) / (SUM(plan_vehicle) * MAX(time_progress))) * 100.0, 2)
@@ -235,6 +238,7 @@ export function generateKPICardQuery(
       SUM(plan_vehicle)                                      AS total_plan_total,
       SUM(actual_vehicle)                                    AS total_actual_vehicle,
       0                                                      AS total_actual_total,
+      -- 标准口径：同 buildAggSelect 的 rate_vehicle（时间进度锚定数据内最新签单日，闰年感知）
       CASE
         WHEN SUM(plan_vehicle) > 0 AND MAX(time_progress) > 0
         THEN ROUND((SUM(actual_vehicle) / (SUM(plan_vehicle) * MAX(time_progress))) * 100.0, 2)

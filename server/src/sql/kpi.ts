@@ -75,15 +75,27 @@ export const generateKpiQuery = (
       SELECT MAX(kpi_date) AS latest_policy_date
       FROM filtered
     ),
+    -- 时间进度（标准口径，注册表 plan_completion_pct v2.0.0）：
+    -- 锚点 = 数据内最新签单日（筛选范围内），全年天数闰年感知（禁止硬编码 365）
     latest_context AS (
       SELECT
         latest_policy_date,
-        CAST(EXTRACT('year' FROM latest_policy_date) AS INTEGER) AS latest_year,
+        latest_year,
         GREATEST(
-          CAST(EXTRACT('doy' FROM latest_policy_date) AS DOUBLE) / 365.0,
-          1.0 / 365.0
+          CAST(EXTRACT('doy' FROM latest_policy_date) AS DOUBLE) / year_days,
+          1.0 / year_days
         ) AS natural_day_progress
-      FROM latest_policy
+      FROM (
+        SELECT
+          latest_policy_date,
+          CAST(EXTRACT('year' FROM latest_policy_date) AS INTEGER) AS latest_year,
+          CAST(DATEDIFF(
+            'day',
+            DATE_TRUNC('year', latest_policy_date),
+            DATE_TRUNC('year', latest_policy_date) + INTERVAL 1 YEAR
+          ) AS DOUBLE) AS year_days
+        FROM latest_policy
+      )
     ),
     focus_metrics AS (
       SELECT
