@@ -438,3 +438,10 @@
 {"uid":"2026-06-11-claude-3d10f7","kind":"status","ts":"2026-06-11","actor":"@claude","status":"PROPOSED","evidence":"","at":"2026-06-11T21:38:51.629Z","eid":"3ecbaa86"}
 {"uid":"2026-06-11-claude-ddcd2c","kind":"create","ts":"2026-06-11","actor":"@claude","section":"Bugfix/Frontend","priority":"P3","desc":"useFilterState 原地排序 API 返回数组：useFilterState.ts:65 opts.availableYears.sort(...) 原地排序（轻微副作用）。","docs":"N/A","code":"src/shared/hooks/useFilterState.ts","at":"2026-06-11T21:38:51.668Z","eid":"b49da57f"}
 {"uid":"2026-06-11-claude-ddcd2c","kind":"status","ts":"2026-06-11","actor":"@claude","status":"PROPOSED","evidence":"","at":"2026-06-11T21:38:51.668Z","eid":"0db799f1"}
+{"uid":"2026-06-11-claude-b9c7bc","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 (commit 1878d39)","at":"2026-06-11T21:51:49.232Z","eid":"81bacb78"}
+{"uid":"2026-06-11-claude-4201cd","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 (commit 1878d39)","at":"2026-06-11T21:51:49.275Z","eid":"cfd7d7c3"}
+{"uid":"2026-06-11-claude-857df9","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 (commit 1878d39)","at":"2026-06-11T21:51:49.318Z","eid":"6d342edc"}
+{"uid":"2026-06-11-claude-f65b72","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 (commit 1878d39)","at":"2026-06-11T21:51:49.363Z","eid":"48c90cf5"}
+{"uid":"2026-06-11-claude-8ea52d","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 (commit 1878d39)","at":"2026-06-11T21:51:49.407Z","eid":"eec8d965"}
+{"uid":"2026-06-11-claude-518bf0","kind":"status","ts":"2026-06-11","actor":"@claude","status":"DONE","evidence":"PR #590 (commit 1878d39)","at":"2026-06-11T21:51:49.449Z","eid":"c727ff36"}
+{"uid":"2026-06-11-claude-0c1b86","kind":"status","ts":"2026-06-11","actor":"@claude","status":"PARTIAL","evidence":"PR #590 (commit 1878d39) 已修复编辑抹除；API 写入 branchCode 能力待补","at":"2026-06-11T21:51:49.492Z","eid":"2f41f215"}
