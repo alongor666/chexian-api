@@ -75,6 +75,7 @@
 - **`config/chartStyles.ts`**: 图表样式配置（颜色、字体、轴样式）
 - **`config/deploy.ts`**: 部署配置（内网模式、自动加载、数据URL）
 - **`config/organizations.ts`**: 机构和权限配置（12个三级机构、用户角色BRANCH_ADMIN/ORG_USER、权限判断函数）
+- **`config/filter-dimension-capability.ts`**: 维度×数据域能力矩阵（治理计划 Phase 3；QuickFilterBar 按 domain 查表自动隐藏不可表达 chip；与 server 端镜像逐字一致，governance「能力矩阵镜像」对账）
 
 ### Export 模块
 - **`export/types.ts`**: 导出类型定义（ExportFormat/ExportConfig/ExportContent/ExportProgress）

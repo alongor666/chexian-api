@@ -41,7 +41,7 @@
 
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
-| `check-governance.mjs` | **主治理校验**（纯代码治理 28 项；数据状态校验已解耦至 `check-data-readiness.mjs`）：必需文件、索引完整性、BACKLOG证据链、DC-002合规、空catch禁令、筛选参数绕过 | `bun run governance` |
+| `check-governance.mjs` | **主治理校验**（纯代码治理 29 项；数据状态校验已解耦至 `check-data-readiness.mjs`）：必需文件、索引完整性、BACKLOG证据链、DC-002合规、空catch禁令、筛选参数绕过、能力矩阵镜像 | `bun run governance` |
 | `check-data-readiness.mjs` | **数据就绪校验**（4 项数据状态）：Parquet 重叠 / Claims 去重 / 知识库规模 / 同步漂移；由 release:daily（`sync-and-reload.mjs` Stage 1.7）在 ETL 后、发布前执行，**不在**代码门禁跑 | `node scripts/check-data-readiness.mjs` |
 | `check-hotfile-contracts.mjs` | **热点契约门禁**：`query.ts` / `client.ts` / `client-core.ts` / 全部命名空间子客户端 `src/shared/api/*-api.ts`（清单文件系统派生）改动时，要求同步修改对应契约测试 | `bun run governance:hotfiles` |
 | `api-wire-conservation.mjs` | **ApiClient 拆分守恒恒等式**：pre-#536 单体 99 业务方法 + 已登记合法新增（脚本内 `POST_SPLIT_ADDITIONS`）== 保留基类 + Σ命名空间；金 master golden 覆盖齐全（≥ 和）；路由集 LOST=∅（需 git 历史，缺则跳过）。冻结基线 `tests/api/__golden__/pre536-business-methods.json`（git 0e592603）。**演进通道**：合法新增方法 = 登记 POST_SPLIT_ADDITIONS + 补 wire-probe REGISTRY + `UPDATE_GOLDEN=1` 重生（详见脚本头注释），未登记直接加方法会红且错误信息自带指引。`--reseed` 重生基线，`--quiet-pass` 供 governance | `node scripts/api-wire-conservation.mjs`（已入 governance #25） |
