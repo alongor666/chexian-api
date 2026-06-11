@@ -28,6 +28,7 @@ export type {
   PerformanceDimension,
   PerformanceDrilldownStep,
   PerformancePeriodBounds,
+  PerformancePlanScope,
   GroupByConfig,
 } from './performance-analysis/shared.js';
 

@@ -47,10 +47,11 @@ describe('业绩分析下钻 — SQL 语义不变式', () => {
     expect(sql).toContain('AS nev_rate');
   });
 
-  // P-02: period_progress CTE 永远存在
-  it('P-02: period_progress CTE 用于进度计算', () => {
+  // P-02: ytd_bounds CTE 永远存在（标准口径时间进度，2026-06-11 拍板）
+  it('P-02: ytd_bounds CTE 用于年初累计窗口与时间进度计算', () => {
     const sql = gen();
-    expect(sql).toContain('period_progress');
+    expect(sql).toContain('ytd_bounds');
+    expect(sql).toContain('time_progress');
   });
 
   // P-03: 布尔维度 is_renewal 显示标签

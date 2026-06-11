@@ -26,6 +26,14 @@ export type PerformanceSegmentTag =
 export type PerformanceGrowthMode = 'mom' | 'yoy';
 export type PerformanceTimePeriod = 'day' | 'week' | 'month' | 'quarter' | 'year';
 
+/**
+ * 年计划 ÷ 周期数的均分分母。
+ *
+ * ⚠️ 仅供机构热力图（performance-heatmap.ts）的「周期目标参考」使用——热力图
+ * 格子是按周期切片的时序视图，需要把年计划摊到单个周期作对照。
+ * 经营分析下钻表/业务员表的达成率已于 2026-06-11 拍板废除均分语义，统一为
+ * 标准口径（注册表 plan_completion_pct v2.0.0），禁止在达成率计算中新增本函数的引用。
+ */
 export function getPlanDenominator(timePeriod: PerformanceTimePeriod): number {
   switch (timePeriod) {
     case 'day': return 365;
@@ -298,55 +306,69 @@ export function buildStaticPeriodBoundsCte(bounds: PerformancePeriodBounds): str
   `;
 }
 
-export function buildPeriodProgressCte(): string {
+/**
+ * 标准口径时间进度 CTE（注册表 plan_completion_pct v2.0.0，B-146cce）
+ *
+ * 以 period_bounds.current_end（= 筛选范围内数据最新签单日）为锚，给出
+ * 「年初 → 窗口末」的累计窗口与时间进度：
+ *   - ytd_start      = 窗口末所在年的 1 月 1 日
+ *   - ytd_end        = 窗口末（数据内最新签单日，非自然日今天）
+ *   - time_progress  = 窗口末是当年第几天 ÷ 全年天数（闰年感知，禁止硬编码 365）
+ *
+ * 达成率 = 年初累计签单保费 ÷（业务员年计划合计 × time_progress）；
+ * 带时间筛选时语义为「年初至筛选末日的累计达成率」。
+ * 依赖：必须与 period_bounds CTE 同级出现。
+ */
+export function buildYtdProgressCte(): string {
   return `
-    period_years AS (
+    ytd_bounds AS (
       SELECT
-        pb.current_start,
-        pb.current_end,
-        gs.year_num AS year_num,
-        GREATEST(pb.current_start, MAKE_DATE(gs.year_num, 1, 1)) AS seg_start,
-        LEAST(pb.current_end, MAKE_DATE(gs.year_num, 12, 31)) AS seg_end
+        DATE_TRUNC('year', pb.current_end) AS ytd_start,
+        pb.current_end AS ytd_end,
+        GREATEST(CAST(EXTRACT('doy' FROM pb.current_end) AS DOUBLE), 1.0)
+          / CAST(DATE_DIFF('day',
+              DATE_TRUNC('year', pb.current_end),
+              DATE_TRUNC('year', pb.current_end) + INTERVAL 1 YEAR
+            ) AS DOUBLE) AS time_progress
       FROM period_bounds pb
-      CROSS JOIN generate_series(
-        CAST(EXTRACT(YEAR FROM pb.current_start) AS INTEGER),
-        CAST(EXTRACT(YEAR FROM pb.current_end) AS INTEGER)
-      ) AS gs(year_num)
-    ),
-    period_progress AS (
-      SELECT
-        MAX(
-          CASE
-            WHEN pb.current_end < pb.current_start THEN 0
-            ELSE DATE_DIFF('day', pb.current_start, pb.current_end) + 1
-          END
-        ) AS total_days,
-        MAX(
-          CASE
-            -- DC-002 Exception: 时间进度达成率必须用自然日"已过天数"
-            WHEN LEAST(CAST(CURRENT_DATE AS DATE), pb.current_end) < pb.current_start THEN 0
-            ELSE DATE_DIFF('day', pb.current_start, LEAST(CAST(CURRENT_DATE AS DATE), pb.current_end)) + 1
-          END
-        ) AS elapsed_days,
-        COALESCE(
-          SUM(
-            CASE
-              WHEN py.seg_end < py.seg_start THEN 0
-              ELSE
-                (DATE_DIFF('day', py.seg_start, py.seg_end) + 1) * 1.0
-                / CASE
-                    WHEN (py.year_num % 400 = 0) OR (py.year_num % 4 = 0 AND py.year_num % 100 <> 0)
-                      THEN 366
-                    ELSE 365
-                  END
-            END
-          ),
-          0
-        ) AS period_plan_ratio
-      FROM period_bounds pb
-      LEFT JOIN period_years py ON 1 = 1
     )
   `;
+}
+
+/** 年计划取数（achievement_cache）的范围参数：与保费看板 /kpi 同源的 org/salesman 全局筛选 */
+export interface PerformancePlanScope {
+  orgNames?: string[];
+  salesmanNames?: string[];
+}
+
+/**
+ * 构建 achievement_cache 年计划取数的 WHERE 条件（全局 org/salesman 筛选 + 下钻步骤）。
+ *
+ * 仅 org/team/salesman 三类条件参与计划范围收敛——计划只存在于业务员年度粒度，
+ * 车种/能源等其他筛选只影响分子（与保费看板 /kpi 的 buildAchievementCacheWhere 语义一致）。
+ */
+export function buildPlanScopeConds(
+  planScope: PerformancePlanScope | undefined,
+  drillPath: PerformanceDrilldownStep[]
+): string[] {
+  const esc = escapeSqlValue;
+  const conds: string[] = [];
+  if (planScope?.orgNames && planScope.orgNames.length > 0) {
+    conds.push(`org_name IN (${planScope.orgNames.map((n) => `'${esc(n)}'`).join(', ')})`);
+  }
+  if (planScope?.salesmanNames && planScope.salesmanNames.length > 0) {
+    conds.push(`full_name IN (${planScope.salesmanNames.map((n) => `'${esc(n)}'`).join(', ')})`);
+  }
+  for (const step of drillPath) {
+    if (step.dimension === 'org_level_3') {
+      conds.push(`org_name = '${esc(step.value)}'`);
+    } else if (step.dimension === 'team') {
+      conds.push(`team_name = '${esc(step.value)}'`);
+    } else if (step.dimension === 'salesman') {
+      conds.push(`salesman_name_short = '${esc(step.value)}'`);
+    }
+  }
+  return conds;
 }
 
 export function trendTimeGroupExpr(granularity: PerformanceTrendGranularity): string {

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere,
+  extractOrgNames, extractSalesmanNames,
   QUERY_CACHE, HTTP_MAX_AGE,
   isBundleRoutesEnabled, buildRouteCacheKey,
   getRouteCache, setRouteCache,
@@ -175,7 +176,12 @@ router.get(
       throw new AppError(400, 'Invalid drillPath JSON');
     }
 
-    const { whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
+    const { filterData, whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
+    // 年计划取数范围（标准口径）：与保费看板 /kpi 同源的 org/salesman 提取
+    const planScope = {
+      orgNames: extractOrgNames(filterData, req.permissionFilter),
+      salesmanNames: extractSalesmanNames(filterData, req.permissionFilter),
+    };
     const trendGranularity = (granularity || mapPerformanceTimeToGranularity(timePeriod as PerformanceTimePeriod)) as PerformanceTrendGranularity;
     const periodBoundsSql = generatePerformancePeriodBoundsQuery(
       whereWithDate,
@@ -224,7 +230,8 @@ router.get(
       drillPath,
       null,
       periodBounds,
-      dateField
+      dateField,
+      planScope
     );
     const drillRowsSql = groupBy
       ? generatePerformanceDrilldownQuery(
@@ -236,7 +243,8 @@ router.get(
         drillPath,
         groupBy as PerformanceDimension,
         periodBounds,
-        dateField
+        dateField,
+        planScope
       )
       : null;
     const topSalesmanSql = generatePerformanceTopSalesmanQuery(
@@ -247,7 +255,8 @@ router.get(
       growthMode as PerformanceGrowthMode,
       limit,
       periodBounds,
-      dateField
+      dateField,
+      planScope
     );
 
     const {

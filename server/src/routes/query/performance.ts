@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere,
+  extractOrgNames, extractSalesmanNames,
   QUERY_CACHE, withRouteCache,
 } from './shared.js';
 import {
@@ -183,7 +184,12 @@ router.get(
 
     const groupBy = extraResult.data.groupBy as PerformanceDimension | undefined;
 
-    const { whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
+    const { filterData, whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
+    // 年计划取数范围（标准口径）：与保费看板 /kpi 同源的 org/salesman 提取
+    const planScope = {
+      orgNames: extractOrgNames(filterData, req.permissionFilter),
+      salesmanNames: extractSalesmanNames(filterData, req.permissionFilter),
+    };
 
     const [summaryRows, drilldownRows] = await Promise.all([
       duckdbService.query(
@@ -193,7 +199,7 @@ router.get(
           timePeriod as PerformanceTimePeriod,
           growthMode as PerformanceGrowthMode,
           drillPath, null,
-          undefined, dateField
+          undefined, dateField, planScope
         ),
         QUERY_CACHE.hotspotShort
       ),
@@ -205,7 +211,7 @@ router.get(
             timePeriod as PerformanceTimePeriod,
             growthMode as PerformanceGrowthMode,
             drillPath, groupBy,
-            undefined, dateField
+            undefined, dateField, planScope
           ),
           QUERY_CACHE.hotspotShort
         )
@@ -291,7 +297,12 @@ router.get(
     const { timePeriod, growthMode, limit } = extraResult.data;
     const segmentTag = resolvePerformanceSegmentTag(extraResult.data);
 
-    const { whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
+    const { filterData, whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
+    // 年计划取数范围（标准口径）：与保费看板 /kpi 同源的 org/salesman 提取
+    const planScope = {
+      orgNames: extractOrgNames(filterData, req.permissionFilter),
+      salesmanNames: extractSalesmanNames(filterData, req.permissionFilter),
+    };
 
     const sql = generatePerformanceTopSalesmanQuery(
       whereWithDate,
@@ -301,7 +312,8 @@ router.get(
       growthMode as PerformanceGrowthMode,
       limit,
       undefined,
-      dateField
+      dateField,
+      planScope
     );
 
     const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);

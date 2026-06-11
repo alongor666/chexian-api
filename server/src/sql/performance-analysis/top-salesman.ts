@@ -3,20 +3,27 @@
  *
  * 包含：
  * - generatePerformanceTopSalesmanQuery() — 按保费排名的 Top N 业务员查询
+ *
+ * 达成率口径（2026-06-11 拍板，注册表 plan_completion_pct v2.0.0）：
+ *   达成率 = 该业务员年初累计签单保费 ÷（其年计划 × 时间进度）
+ *   - 时间进度锚定筛选范围内数据最新签单日，全年天数闰年感知
+ *   - 年计划取自 achievement_cache（与保费看板、报告中心同源），
+ *     废除旧「按当期保费占比分摊年计划再 ÷ 周期数」的均分语义
  */
 
 import { logger } from '../../utils/logger.js';
 import {
   truthyExpr,
   getPerformanceSegmentFilter,
-  getPlanDenominator,
   buildPeriodBoundsCte,
   buildStaticPeriodBoundsCte,
-  buildPeriodProgressCte,
+  buildYtdProgressCte,
+  buildPlanScopeConds,
   type PerformanceSegmentTag,
   type PerformanceTimePeriod,
   type PerformanceGrowthMode,
   type PerformancePeriodBounds,
+  type PerformancePlanScope,
 } from './shared.js';
 
 export function generatePerformanceTopSalesmanQuery(
@@ -27,19 +34,24 @@ export function generatePerformanceTopSalesmanQuery(
   growthMode: PerformanceGrowthMode,
   limit = 20,
   periodBoundsOverride?: PerformancePeriodBounds,
-  dateField: string = 'policy_date'
+  dateField: string = 'policy_date',
+  planScope?: PerformancePlanScope
 ): string {
   const segmentFilterNoAlias = getPerformanceSegmentFilter(segmentTag);
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
   const periodBounds = periodBoundsOverride
     ? buildStaticPeriodBoundsCte(periodBoundsOverride)
     : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode, dateField);
-  const periodProgress = buildPeriodProgressCte();
+  const ytdProgress = buildYtdProgressCte();
+
+  // 年计划取数范围：全局 org/salesman 筛选（计划只懂机构/团队/业务员归属）
+  const planConds = buildPlanScopeConds(planScope, []);
+  const planWhere = planConds.length > 0 ? `WHERE ${planConds.join(' AND ')}` : '';
 
   const sql = `
     WITH
     ${periodBounds},
-    ${periodProgress},
+    ${ytdProgress},
     all_rows AS (
       SELECT
         REGEXP_REPLACE(COALESCE(p.salesman_name, '未知'), '^[0-9]+', '') AS dimension_name,
@@ -54,10 +66,8 @@ export function generatePerformanceTopSalesmanQuery(
         CASE WHEN ${truthyExpr('p.is_nev')} THEN true ELSE false END AS is_nev,
         CASE WHEN ${truthyExpr('p.is_renewal')} THEN true ELSE false END AS is_renewal,
         CASE WHEN ${truthyExpr('p.is_new_car')} THEN true ELSE false END AS is_new_car,
-        CASE WHEN ${truthyExpr('p.is_transfer')} THEN true ELSE false END AS is_transfer,
-        COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
+        CASE WHEN ${truthyExpr('p.is_transfer')} THEN true ELSE false END AS is_transfer
       FROM PolicyFact p
-      LEFT JOIN (SELECT full_name, SUM(plan_vehicle) AS plan_vehicle FROM achievement_cache GROUP BY full_name) ac ON p.salesman_name = ac.full_name
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
         AND p.salesman_name IS NOT NULL
@@ -75,12 +85,24 @@ export function generatePerformanceTopSalesmanQuery(
       CROSS JOIN period_bounds pb
       WHERE r.pd >= pb.prev_start AND r.pd <= pb.prev_end
     ),
-    salesman_totals AS (
-      SELECT
-        salesman_name,
-        SUM(premium_wan) AS salesman_premium_wan
-      FROM current_rows
-      GROUP BY salesman_name
+    -- 达成率分子：年初 → 窗口末 的累计签单保费（标准口径，与保费看板 /kpi 同语义）
+    ytd_rows AS (
+      SELECT r.*
+      FROM all_rows r
+      CROSS JOIN ytd_bounds yb
+      WHERE r.pd >= yb.ytd_start AND r.pd <= yb.ytd_end
+    ),
+    ytd_group AS (
+      SELECT dimension_name, SUM(premium_wan) AS ytd_premium
+      FROM ytd_rows
+      GROUP BY dimension_name
+    ),
+    -- 年计划（业务员粒度）：achievement_cache 按去工号短名聚合，与行分组键对齐
+    plan_group AS (
+      SELECT salesman_name_short AS dimension_name, SUM(plan_vehicle) AS annual_plan
+      FROM achievement_cache
+      ${planWhere}
+      GROUP BY salesman_name_short
     ),
     current_group AS (
       SELECT
@@ -91,16 +113,8 @@ export function generatePerformanceTopSalesmanQuery(
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_renewal THEN policy_key END) AS renewal_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) THEN policy_key END) AS transfer_business_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_renewal) AND is_new_car THEN policy_key END) AS new_car_count,
-        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN policy_key END) AS transfer_count,
-        SUM(
-          CASE
-            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
-              THEN plan_vehicle * premium_wan / st.salesman_premium_wan
-            ELSE 0
-          END
-        ) AS allocated_plan
+        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN policy_key END) AS transfer_count
       FROM current_rows cr
-      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
       GROUP BY dimension_name
     ),
     prev_group AS (
@@ -115,11 +129,14 @@ export function generatePerformanceTopSalesmanQuery(
         c.dimension_name,
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
-        ROUND(c.allocated_plan, 4) AS plan_premium,
+        ROUND(COALESCE(y.ytd_premium, 0), 4) AS ytd_premium,
+        yb.time_progress AS time_progress,
+        ROUND(pl.annual_plan, 4) AS plan_premium,
         CASE
-          WHEN COALESCE(c.allocated_plan, 0) <= 0 THEN NULL
+          WHEN COALESCE(pl.annual_plan, 0) <= 0 THEN NULL
+          WHEN yb.time_progress <= 0 THEN NULL
           ELSE ROUND(
-            (c.premium * 100.0) / (c.allocated_plan / ${getPlanDenominator(timePeriod)}),
+            (COALESCE(y.ytd_premium, 0) * 100.0) / (pl.annual_plan * yb.time_progress),
             2
           )
         END AS achievement_rate,
@@ -134,7 +151,9 @@ export function generatePerformanceTopSalesmanQuery(
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.auto_count, 2) END AS transfer_rate
       FROM current_group c
       LEFT JOIN prev_group p ON c.dimension_name = p.dimension_name
-      CROSS JOIN period_progress pp
+      LEFT JOIN ytd_group y ON c.dimension_name = y.dimension_name
+      LEFT JOIN plan_group pl ON c.dimension_name = pl.dimension_name
+      CROSS JOIN ytd_bounds yb
     )
     SELECT
       m.*,

@@ -72,7 +72,7 @@ const KpiCards: React.FC<{ data: PlanKpiData }> = ({ data }) => (
       title="车险达成率"
       value={formatRateValue(data.avg_rate_vehicle)}
       colorClass={getRateColor(data.avg_rate_vehicle)}
-      subtitle="实际 / 计划"
+      subtitle="年初累计 ÷（年计划 × 时间进度），进度按数据内最新签单日计"
     />
     <KpiCard
       title="业务员数"

@@ -2,7 +2,7 @@
  * 指标展示映射 — 从注册表自动生成
  *
  * 生成命令：bun scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-06-10T05:06:54.530Z
+ * 生成时间：2026-06-11T04:19:21.298Z
  * 指标数量：52
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成
@@ -176,6 +176,6 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   "repair_to_premium_ratio": "维修产值（核损金额）/ 签单净保费；衡量合作深度",
   "repair_damage_amount_total": "所有网点核损金额合计（= 维修产值）",
   "repair_net_premium_total": "RepairDim 中所有网点签单净保费合计",
-  "plan_completion_pct": "实际签单保费 × 100 ÷ (年计划保费 × 时间进度)",
+  "plan_completion_pct": "年初累计签单保费 × 100 ÷ (业务员年计划合计 × 时间进度)；时间进度 = 数据内最新签单日是当年第几天 ÷ 全年天数（闰年感知）",
   "household_share_pct": "客户类别='非营业个人客车' 的保单数 × 100 ÷ 全部保单数",
 } as const;

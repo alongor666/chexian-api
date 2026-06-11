@@ -41,7 +41,6 @@ import {
   formatWanAdaptive,
   formatSalesmanName,
 } from '@/shared/utils/formatters';
-import { getPeriodGap } from './utils/performancePlanDenominator';
 
 interface PerformanceFocusStripProps {
   filters: AdvancedFilterState;
@@ -87,8 +86,7 @@ function achTone(ach: number | null | undefined): { text: string; dot: string } 
  */
 function extractOverall(
   drilldownSummary: Record<string, unknown> | null | undefined,
-  summaryRows: Array<Record<string, unknown>>,
-  timePeriod: PerformanceTimePeriod
+  summaryRows: Array<Record<string, unknown>>
 ): {
   ach: number | null;
   mom: number | null;
@@ -104,15 +102,20 @@ function extractOverall(
       drilldownSummary.growth_rate == null
         ? null
         : Number(drilldownSummary.growth_rate);
-    const premium = Number(drilldownSummary.premium ?? 0);
+    // 缺口 = 时间进度目标 − 年初累计签单保费（标准口径，2026-06-11 拍板）：
+    //   时间进度目标 = 年计划 plan_premium × time_progress（后端按数据内最新签单日、
+    //   闰年感知计算）。与 achievement_rate 同口径，不再做「年计划 ÷ 周期数」均分。
     const plan =
       drilldownSummary.plan_premium == null
         ? null
         : Number(drilldownSummary.plan_premium);
-    // 重要：plan_premium 是年度计划。在 day/week/month/quarter 口径下，
-    // 缺口必须按 getPlanDenominator(timePeriod) 周期化后再做减法，
-    // 否则会得到"年度计划 - 当期保费"的失真值（PR #477 codex line 110）。
-    const gap = getPeriodGap(plan, premium, timePeriod);
+    const progress =
+      drilldownSummary.time_progress == null
+        ? null
+        : Number(drilldownSummary.time_progress);
+    const ytd = Number(drilldownSummary.ytd_premium ?? 0);
+    const target = plan != null && progress != null ? plan * progress : null;
+    const gap = target != null && target > ytd ? target - ytd : 0;
     if (ach != null || mom != null) {
       return { ach, mom, gap };
     }
@@ -124,10 +127,7 @@ function extractOverall(
   if (!overall) return null;
   const ach = overall.achievement_rate == null ? null : Number(overall.achievement_rate);
   const mom = overall.growth_rate == null ? null : Number(overall.growth_rate);
-  const premium = Number(overall.premium ?? 0);
-  const plan = overall.plan_premium == null ? null : Number(overall.plan_premium);
-  const gap = getPeriodGap(plan, premium, timePeriod);
-  return { ach, mom, gap };
+  return { ach, mom, gap: 0 };
 }
 
 /**
@@ -239,8 +239,7 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
 
     const overall = extractOverall(
       bundle.drilldown?.summary,
-      bundle.summary?.rows ?? [],
-      timePeriod
+      bundle.summary?.rows ?? []
     );
     const weakestCov = extractWeakestCoverage(bundle.summary?.rows ?? []);
     const worstDrill = extractWorstByAch(bundle.drilldown?.rows ?? [], [
@@ -263,7 +262,7 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
         const tone = achTone(overall.ach);
         // 阈值视觉/文案一致性（PR #478 codex review line 274）：
         //   - achTone 在 ach>=99 时已视作"达成"（绿点 + 主文本色）
-        //   - 但 getPeriodGap 是按 100% 目标算的，99-100 区间会冒出"缺口 0.X 万"
+        //   - 缺口按 100% 目标算（年计划×时间进度 − 年初累计），99-100 区间会冒出"缺口 0.X 万"
         //   - 这与 dot/tone 矛盾，绿点却显示有缺口
         // 按 achTone 同阈值（99）守住"达成"语义：
         //   - ach >= 99 → 永远显示"达成"（忽略 gap 余量）
@@ -354,7 +353,7 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
     }
 
     return built;
-  }, [bundle, timePeriod]);
+  }, [bundle]);
 
   // Bundle 路由开关关闭（legacy 部署）：本组件依赖 bundle，整体不渲染。
   // 主 Panel 已有 legacy 回退路径，业绩分析页其余区块照常工作。

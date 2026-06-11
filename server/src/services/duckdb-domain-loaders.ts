@@ -210,9 +210,11 @@ export async function loadTeamMapping(db: DuckDBQueryable, jsonFilePath: string)
 /**
  * 预构建保费达成分析缓存表 achievement_cache（业务员粒度）
  *
- * 规则（用户确认）：
+ * 规则（用户确认；标准口径见注册表 plan_completion_pct v2.0.0）：
  * - JOIN 键：full_name（含工号前缀，如 "106014762刘刚"）
- * - 时间进度：自然日历天数 / 365（使用最新签单日期）
+ * - 时间进度：数据内最新签单日是当年第几天 ÷ 全年天数（闰年感知）。
+ *   B-146cce 拍板修正：锚点曾误用服务器当前日期（与本注释不符），现与
+ *   保费看板 /api/query/kpi 统一锚定数据内最新签单日
  * - 上年同期：精确日期匹配（max_date - INTERVAL 1 YEAR）
  * - 无计划业务员：出现（mapping 中 plan=0 的 + mapping 外有保单的均出现）
  */
@@ -222,13 +224,18 @@ export async function buildAchievementView(db: DuckDBQueryable, planYear: number
   await db.query(`
     CREATE OR REPLACE TABLE achievement_cache AS
     WITH
-    -- 1. 时间进度：当年最新签单日到 1月1日 的自然天数 / 365
+    -- 1. 时间进度：数据内最新签单日是当年第几天 ÷ 全年天数（闰年感知）。
+    --    锚定 MAX(policy_date)（非 CURRENT_DATE）：数据滞后时不冤枉业务员，
+    --    与 kpi.ts latest_context 同口径（B-146cce）。当年无保单时回退到 1 月 1 日。
     time_prog AS (
       SELECT
         GREATEST(
-          CAST(DATEDIFF('day', DATE '${planYear}-01-01', LEAST(CAST(CURRENT_DATE AS DATE), DATE '${planYear}-12-31')) + 1 AS DOUBLE) /
+          CAST(DATEDIFF('day', DATE '${planYear}-01-01', LEAST(
+            COALESCE(CAST(MAX(policy_date) AS DATE), DATE '${planYear}-01-01'),
+            DATE '${planYear}-12-31'
+          )) + 1 AS DOUBLE) /
           CAST(DATEDIFF('day', DATE '${planYear}-01-01', DATE '${planYear}-12-31') + 1 AS DOUBLE),
-          1.0 / 365.0
+          1.0 / CAST(DATEDIFF('day', DATE '${planYear}-01-01', DATE '${planYear}-12-31') + 1 AS DOUBLE)
         ) AS progress,
         MAX(policy_date) AS max_date
       FROM PolicyFact

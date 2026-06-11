@@ -118,9 +118,13 @@ describe('performance analysis SQL', () => {
     expect(sql).toContain('CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.renewal_count * 100.0 / c.auto_count, 2) END AS renewal_rate');
     expect(sql).not.toContain(' AS row_count');
     expect(sql).not.toContain('c.row_count');
-    expect(sql).toContain('period_progress');
-    expect(sql).toContain('generate_series');
-    expect(sql).toContain('CURRENT_DATE');
+    // 标准口径（2026-06-11 拍板）：年初累计 ÷（年计划 × 时间进度），锚定数据内最新签单日
+    expect(sql).toContain('ytd_bounds');
+    expect(sql).toContain('AS ytd_premium');
+    expect(sql).toContain('AS time_progress');
+    expect(sql).toContain('pl.annual_plan * yb.time_progress');
+    // 废除周期均分：不再出现 allocated_plan / 周期数除法
+    expect(sql).not.toContain('allocated_plan');
   });
 
   it('drilldown SQL should treat 续保直接等于是否续保且过户为过户转保', () => {
@@ -155,9 +159,25 @@ describe('performance analysis SQL', () => {
   it('drilldown SQL should null out plan/achievement for dimensions without annual plans', () => {
     const sql = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'week', 'mom', [], 'customer_category');
 
-    expect(sql).toContain('WHEN FALSE = FALSE THEN NULL');
-    expect(sql).toContain('AS plan_premium');
-    expect(sql).toContain('AS achievement_rate');
+    expect(sql).toContain('NULL AS plan_premium');
+    expect(sql).toContain('NULL AS achievement_rate');
+    // 非计划维度不应 JOIN 年计划表
+    expect(sql).not.toContain('plan_group');
+  });
+
+  it('drilldown SQL should scope annual plan by planScope and drill steps', () => {
+    const sql = generatePerformanceDrilldownQuery(
+      '1=1', '1=1', 'all', 'year', 'mom',
+      [{ dimension: 'org_level_3', value: '乐山' }],
+      'team',
+      undefined, 'policy_date',
+      { orgNames: ['乐山'], salesmanNames: [] }
+    );
+
+    expect(sql).toContain('FROM achievement_cache');
+    expect(sql).toContain("org_name IN ('乐山')");
+    expect(sql).toContain("org_name = '乐山'");
+    expect(sql).toContain('GROUP BY team_name');
   });
 
   it('top salesman SQL should default to achievement ascending then premium descending', () => {

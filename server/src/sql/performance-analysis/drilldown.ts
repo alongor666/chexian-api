@@ -3,16 +3,23 @@
  *
  * 包含：
  * - generatePerformanceDrilldownQuery() — 按维度下钻的业绩查询（支持多级钻路径）
+ *
+ * 达成率口径（2026-06-11 拍板，注册表 plan_completion_pct v2.0.0）：
+ *   达成率 = 年初累计签单保费 ÷（业务员年计划合计 × 时间进度）
+ *   - 时间进度锚定筛选范围内数据最新签单日（非自然日今天），全年天数闰年感知
+ *   - 年计划按 achievement_cache 的机构/团队/业务员归属聚合（与保费看板、
+ *     报告中心同源），废除旧「按当期保费占比分摊年计划再 ÷ 周期数」的均分语义
+ *   - 带时间筛选时语义为「年初至筛选末日的累计达成率」
  */
 
 import { logger } from '../../utils/logger.js';
 import {
   truthyExpr,
   getPerformanceSegmentFilter,
-  getPlanDenominator,
   buildPeriodBoundsCte,
   buildStaticPeriodBoundsCte,
-  buildPeriodProgressCte,
+  buildYtdProgressCte,
+  buildPlanScopeConds,
   drillStepToWhere,
   getGroupByConfig,
   supportsAnnualPlanByDimension,
@@ -22,7 +29,18 @@ import {
   type PerformanceDimension,
   type PerformanceDrilldownStep,
   type PerformancePeriodBounds,
+  type PerformancePlanScope,
 } from './shared.js';
+
+/** 把 groupBy 维度映射到 achievement_cache 的年计划分组列（仅计划支持的维度） */
+function planGroupExpr(groupBy: PerformanceDimension | null): string {
+  switch (groupBy) {
+    case 'org_level_3': return 'org_name';
+    case 'team': return 'team_name';
+    case 'salesman': return 'salesman_name_short';
+    default: return `'分公司整体'`;
+  }
+}
 
 export function generatePerformanceDrilldownQuery(
   whereWithDate: string,
@@ -33,19 +51,24 @@ export function generatePerformanceDrilldownQuery(
   drillPath: PerformanceDrilldownStep[] = [],
   groupBy: PerformanceDimension | null = null,
   periodBoundsOverride?: PerformancePeriodBounds,
-  dateField: string = 'policy_date'
+  dateField: string = 'policy_date',
+  planScope?: PerformancePlanScope
 ): string {
   const segmentFilterNoAlias = getPerformanceSegmentFilter(segmentTag);
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
   const periodBounds = periodBoundsOverride
     ? buildStaticPeriodBoundsCte(periodBoundsOverride)
     : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode, dateField);
-  const periodProgress = buildPeriodProgressCte();
+  const ytdProgress = buildYtdProgressCte();
   const groupCfg = getGroupByConfig(groupBy, 'p.');
-  const hasAnnualPlanSql = supportsAnnualPlanByDimension(groupBy) ? 'TRUE' : 'FALSE';
+  const hasAnnualPlan = supportsAnnualPlanByDimension(groupBy);
 
   const stepWheres = drillPath.map((step) => drillStepToWhere(step, 'p.'));
   const drillWhere = stepWheres.length > 0 ? `AND ${stepWheres.join('\n        AND ')}` : '';
+
+  // 年计划取数范围：全局 org/salesman 筛选 + 下钻步骤（计划只懂机构/团队/业务员）
+  const planConds = buildPlanScopeConds(planScope, drillPath);
+  const planWhere = planConds.length > 0 ? `WHERE ${planConds.join(' AND ')}` : '';
 
   // Phase 2b: 业务员层下钻附带 org_level_3 + team_name 元数据列，
   // 供前端按团队折叠/展开（团队与业务员合并为同一下钻层）
@@ -63,10 +86,37 @@ export function generatePerformanceDrilldownQuery(
         c.team_name,`
     : '';
 
+  // 计划相关列：仅 company/org/team/salesman 维度有年计划，其余维度恒 NULL
+  const planJoin = hasAnnualPlan
+    ? `LEFT JOIN plan_group pl ON c.group_name = pl.group_name`
+    : '';
+  const planCtes = hasAnnualPlan
+    ? `,
+    plan_group AS (
+      SELECT
+        ${planGroupExpr(groupBy)} AS group_name,
+        SUM(plan_vehicle) AS annual_plan
+      FROM achievement_cache
+      ${planWhere}
+      GROUP BY ${planGroupExpr(groupBy)}
+    )`
+    : '';
+  const planPremiumExpr = hasAnnualPlan ? 'ROUND(pl.annual_plan, 4)' : 'NULL';
+  const achievementExpr = hasAnnualPlan
+    ? `CASE
+          WHEN COALESCE(pl.annual_plan, 0) <= 0 THEN NULL
+          WHEN yb.time_progress <= 0 THEN NULL
+          ELSE ROUND(
+            (COALESCE(y.ytd_premium, 0) * 100.0) / (pl.annual_plan * yb.time_progress),
+            2
+          )
+        END`
+    : 'NULL';
+
   const sql = `
     WITH
     ${periodBounds},
-    ${periodProgress},
+    ${ytdProgress},
     all_rows AS (
       SELECT
         ${groupCfg.selectExpr},
@@ -82,11 +132,9 @@ export function generatePerformanceDrilldownQuery(
         CASE WHEN ${truthyExpr('p.is_nev')} THEN true ELSE false END AS is_nev,
         CASE WHEN ${truthyExpr('p.is_renewal')} THEN true ELSE false END AS is_renewal,
         CASE WHEN ${truthyExpr('p.is_new_car')} THEN true ELSE false END AS is_new_car,
-        CASE WHEN ${truthyExpr('p.is_transfer')} THEN true ELSE false END AS is_transfer,
-        COALESCE(ac.plan_vehicle, 0) AS plan_vehicle
+        CASE WHEN ${truthyExpr('p.is_transfer')} THEN true ELSE false END AS is_transfer
       FROM PolicyFact p
       LEFT JOIN SalesmanTeamMapping tm ON p.salesman_name = tm.full_name
-      LEFT JOIN (SELECT full_name, SUM(plan_vehicle) AS plan_vehicle FROM achievement_cache GROUP BY full_name) ac ON p.salesman_name = ac.full_name
       WHERE ${whereWithoutDate}
         AND ${segmentFilter}
         ${drillWhere}
@@ -103,12 +151,17 @@ export function generatePerformanceDrilldownQuery(
       CROSS JOIN period_bounds pb
       WHERE r.pd >= pb.prev_start AND r.pd <= pb.prev_end
     ),
-    salesman_totals AS (
-      SELECT
-        salesman_name,
-        SUM(premium_wan) AS salesman_premium_wan
-      FROM current_rows
-      GROUP BY salesman_name
+    -- 达成率分子：年初 → 窗口末 的累计签单保费（标准口径，与保费看板 /kpi 同语义）
+    ytd_rows AS (
+      SELECT r.*
+      FROM all_rows r
+      CROSS JOIN ytd_bounds yb
+      WHERE r.pd >= yb.ytd_start AND r.pd <= yb.ytd_end
+    ),
+    ytd_group AS (
+      SELECT group_name, SUM(premium_wan) AS ytd_premium
+      FROM ytd_rows
+      GROUP BY group_name
     ),
     current_group AS (
       SELECT
@@ -120,16 +173,8 @@ export function generatePerformanceDrilldownQuery(
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_renewal THEN policy_key END) AS renewal_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) THEN policy_key END) AS transfer_business_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_renewal) AND is_new_car THEN policy_key END) AS new_car_count,
-        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN policy_key END) AS transfer_count,
-        SUM(
-          CASE
-            WHEN COALESCE(st.salesman_premium_wan, 0) > 0
-              THEN plan_vehicle * premium_wan / st.salesman_premium_wan
-            ELSE 0
-          END
-        ) AS allocated_plan
+        COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND (NOT is_new_car) AND (NOT is_renewal) AND is_transfer THEN policy_key END) AS transfer_count
       FROM current_rows cr
-      LEFT JOIN salesman_totals st ON cr.salesman_name = st.salesman_name
       GROUP BY group_name
     ),
     prev_group AS (
@@ -138,25 +183,17 @@ export function generatePerformanceDrilldownQuery(
         SUM(premium_wan) AS prev_premium
       FROM prev_rows
       GROUP BY group_name
-    ),
+    )${planCtes},
     metrics AS (
       SELECT
         c.group_name,
         ${hierarchyProject}
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
-        CASE
-          WHEN ${hasAnnualPlanSql} = FALSE THEN NULL
-          ELSE ROUND(c.allocated_plan, 4)
-        END AS plan_premium,
-        CASE
-          WHEN ${hasAnnualPlanSql} = FALSE THEN NULL
-          WHEN COALESCE(c.allocated_plan, 0) <= 0 THEN NULL
-          ELSE ROUND(
-            (c.premium * 100.0) / (c.allocated_plan / ${getPlanDenominator(timePeriod)}),
-            2
-          )
-        END AS achievement_rate,
+        ROUND(COALESCE(y.ytd_premium, 0), 4) AS ytd_premium,
+        yb.time_progress AS time_progress,
+        ${planPremiumExpr} AS plan_premium,
+        ${achievementExpr} AS achievement_rate,
         CASE
           WHEN COALESCE(p.prev_premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.prev_premium) * 100.0 / p.prev_premium, 2)
@@ -168,7 +205,9 @@ export function generatePerformanceDrilldownQuery(
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.auto_count, 2) END AS transfer_rate
       FROM current_group c
       LEFT JOIN prev_group p ON c.group_name = p.group_name
-      CROSS JOIN period_progress pp
+      LEFT JOIN ytd_group y ON c.group_name = y.group_name
+      ${planJoin}
+      CROSS JOIN ytd_bounds yb
     )
     SELECT
       m.*,

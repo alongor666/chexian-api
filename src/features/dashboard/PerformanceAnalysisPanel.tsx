@@ -1158,6 +1158,9 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
       <DistributionChart rows={drilldownQuery.rows} loading={drilldownLoading} error={drilldownError} />
 
       <section className={cn(cardStyles.standard, 'space-y-3')}>
+        <p className={cn(textStyles.caption, colorClasses.text.neutralLight)}>
+          达成率口径：年初至所选时间末的累计签单保费 ÷（年计划 × 时间进度）；时间进度按数据内最新签单日与全年天数（闰年感知）计算，与保费看板、报告中心同口径
+        </p>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <DrilldownBreadcrumb
             path={drilldownQuery.drillPath.map((s): DrilldownBreadcrumbStep => ({
@@ -1239,7 +1242,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                     车险保费(万元) {groupSortKey === 'premium' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleGroupSort('plan_premium')}>
-                    车险计划(万元) {groupSortKey === 'plan_premium' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
+                    年计划(万元) {groupSortKey === 'plan_premium' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleGroupSort('auto_count')}>
                     车险件数 {groupSortKey === 'auto_count' ? (groupSortOrder === 'asc' ? '↑' : '↓') : ''}
@@ -1308,7 +1311,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
       <SectionTitle title={`${scopePrefix}Top20业务员`} />
       <section className={cn(cardStyles.standard, 'space-y-3')}>
         <p className={cn(textStyles.caption, colorClasses.text.neutralLight)}>
-          默认排序: 达成率升序
+          默认排序: 达成率升序 · 达成率口径：年初至所选时间末的累计签单保费 ÷（年计划 × 时间进度），时间进度按数据内最新签单日计算（闰年感知）
         </p>
         {topSalesmanQuery.error ? (
           <p className={cn(textStyles.body, colorClasses.text.danger)}>加载失败: {topSalesmanQuery.error}</p>
@@ -1324,7 +1327,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                     车险保费(万元) {topSortKey === 'premium' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleTopSort('plan_premium')}>
-                    车险计划(万元) {topSortKey === 'plan_premium' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
+                    年计划(万元) {topSortKey === 'plan_premium' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-neutral-600 cursor-pointer" onClick={() => handleTopSort('auto_count')}>
                     车险件数 {topSortKey === 'auto_count' ? (topSortOrder === 'asc' ? '↑' : '↓') : ''}
