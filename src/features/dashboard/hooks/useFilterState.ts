@@ -62,7 +62,8 @@ export const useFilterState = (): UseFilterStateResult => {
       try {
         const opts = await apiClient.getFilterOptions();
         if (opts.availableYears && opts.availableYears.length > 0) {
-          availableYearsFromApi = opts.availableYears.sort((a, b) => b - a);
+          // 复制后再排序，避免原地改 apiClient 返回的数组（共享引用副作用）
+          availableYearsFromApi = [...opts.availableYears].sort((a, b) => b - a);
         }
         if (opts.dateRange?.max_date) {
           maxDateFromApi = opts.dateRange.max_date.slice(0, 10);

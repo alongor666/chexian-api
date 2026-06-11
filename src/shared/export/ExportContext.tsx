@@ -6,7 +6,7 @@
  * 仅保留最后注册的处理器（活跃 Tab），卸载自动清理。
  */
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from 'react';
 
 export interface ExportHandler {
   /** 页面/Tab 标识，用于文件名 */
@@ -41,8 +41,14 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     setCurrentExport(prev => (prev?.pageName === pageName ? null : prev));
   }, []);
 
+  // memoize：避免每次渲染造新 value 对象触发所有消费者重渲染
+  const value = useMemo(
+    () => ({ currentExport, registerExport, unregisterExport }),
+    [currentExport, registerExport, unregisterExport],
+  );
+
   return (
-    <ExportContext.Provider value={{ currentExport, registerExport, unregisterExport }}>
+    <ExportContext.Provider value={value}>
       {children}
     </ExportContext.Provider>
   );

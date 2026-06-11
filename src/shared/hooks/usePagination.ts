@@ -132,6 +132,13 @@ export function usePagination<T>(
     logger.debug('Pagination reset');
   }, []);
 
+  // 数据收缩（如筛选变小）后回收越界页码，避免停在空白页需手动回跳
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
   // 处理滚动事件（自动加载下一页）
   const handleScroll = useCallback(
     (scrollTop: number, scrollHeight: number, clientHeight: number) => {

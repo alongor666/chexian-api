@@ -11,6 +11,7 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useMemo,
   ReactNode,
 } from 'react';
 import { createLogger } from '../utils/logger';
@@ -178,7 +179,9 @@ export const StableProvider: React.FC<StableProviderProps> = ({ children }) => {
     }
   }, [isDataLoaded, isInitialized, isLoading, initializeFilters]);
 
-  const value: StableContextValue = {
+  // memoize：否则每次 Provider 渲染都造新 value 对象，48 个 useGlobalFilters 消费者
+  // 随任意上游渲染全部重渲染，使"拆稳定状态避免重渲染"的设计落空。
+  const value: StableContextValue = useMemo(() => ({
     filterOptions,
     salesmanTeamMap,
     maxDataDate,
@@ -189,7 +192,7 @@ export const StableProvider: React.FC<StableProviderProps> = ({ children }) => {
       latestInitResult,
       isInitialized,
     },
-  };
+  }), [filterOptions, salesmanTeamMap, maxDataDate, availableYears, isLoading, initializeFilters, latestInitResult, isInitialized]);
 
   return <StableContext.Provider value={value}>{children}</StableContext.Provider>;
 };
