@@ -1926,6 +1926,68 @@ function checkEmptyCatchBlocks() {
 }
 
 /**
+ * 筛选参数绕过检测（治理计划 2026-06-10 Task 1-D，防复发核心）
+ *
+ * 病根：各页绕过统一转换函数 src/shared/utils/filterParams.ts:buildFilterParams
+ * 自写 filters.* → 请求参数映射，漏维度 → queryKey 不变 → chip 点了数据不动
+ * （2026-06-10 全站审计：续保/对比/增长/赔案/交叉销售 5 页中招）。
+ *
+ * 规则：src/features/** 禁止对"快捷筛选维度参数名"手工赋值——这些名字只应由
+ * buildFilterParams 产出。命中报错并提示改用统一函数。
+ *
+ * 范围说明：
+ * - 不含 orgNames/salesmanNames——机构/业务员有 RBAC 注入、地区下钻、analyze 单独传参
+ *   等大量合法单独处理，且不是漏接事故肇因，纳入会造成大面积误报豁免
+ * - 该闸防"无意复发"，不防"故意绕过"（变量改名/间接赋值可绕，兜底是 Phase 5 E2E）
+ * - 确需映射层的位置（如续保 hook 按后端能力裁剪、独立域自治参数集的同名巧合）
+ *   在命中行或其上一行写 `governance-allow: filter-params-mapping`
+ */
+function checkFilterParamsBypass() {
+  info('检查筛选参数绕过（features/ 禁手写 buildFilterParams 产出的参数名赋值）...');
+
+  const PARAM_NAMES = 'customerCategories|coverageCombinations|renewalModes|tonnageSegments|insuranceGrades|isRenewal|isNewCar|isTransfer|isNev|isTelemarketing|insuranceType|isCommercialInsure|isRenewable|isCrossSell|vehicleQuickFilter|enterpriseCar|businessNature|fuelCategory';
+  // 纯赋值两式（=[^=] 排除 ==/=== 比较；读取无 = 跟随不命中）
+  const FORBIDDEN_DOT = new RegExp(`\\.(${PARAM_NAMES})\\s*=[^=]`);
+  const FORBIDDEN_BRACKET = new RegExp(`\\[\\s*['"](${PARAM_NAMES})['"]\\s*\\]\\s*=[^=]`);
+  const ALLOW_MARK = 'governance-allow: filter-params-mapping';
+
+  const scanRoot = path.join(ROOT_DIR, 'src/features');
+  const violations = [];
+
+  function walk(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === '__tests__') continue;
+        walk(full);
+      } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.test\./.test(entry.name)) {
+        const lines = fs.readFileSync(full, 'utf-8').split('\n');
+        lines.forEach((line, i) => {
+          if (!FORBIDDEN_DOT.test(line) && !FORBIDDEN_BRACKET.test(line)) return;
+          const prev = i > 0 ? lines[i - 1] : '';
+          if (line.includes(ALLOW_MARK) || prev.includes(ALLOW_MARK)) return;
+          violations.push(`${path.relative(ROOT_DIR, full)}:${i + 1}`);
+        });
+      }
+    }
+  }
+  walk(scanRoot);
+
+  if (violations.length > 0) {
+    error(`发现手写筛选参数映射（绕过 buildFilterParams）= ${violations.length} 处：`);
+    for (const v of violations) console.log(`    - ${v}`);
+    console.log('    修复：改用 src/shared/utils/filterParams.ts:buildFilterParams（唯一事实源）');
+    console.log('    确需按后端能力裁剪的映射层：命中行或上一行加 // governance-allow: filter-params-mapping');
+    console.log('    依据：开发文档/筛选器联动治理计划_2026-06-10.md Task 1-D');
+    return false;
+  }
+
+  success('筛选参数绕过检查通过（features/ 无未豁免的手写参数映射）');
+  return true;
+}
+
+/**
  * Bundle 路由开关合规检查
  *
  * 背景：项目支持 `VITE_ENABLE_BUNDLE_ROUTES=false` 的兼容部署（legacy 模式），
@@ -2166,6 +2228,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
   { name: '空catch禁令', fn: checkEmptyCatchBlocks },
+  { name: '筛选参数绕过', fn: checkFilterParamsBypass },
   { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
   { name: 'RouteCatalog参数契约', fn: checkRouteCatalogParamContracts },

@@ -100,7 +100,17 @@ export default function RenewalTrackerPage() {
       </div>
 
       <div className="mb-4">
-        <QuickFilterBar filters={quickFilters} onChange={handleQuickFilterChange} />
+        {/* 续保域（RenewalTrackerFact）能力裁剪：无险类维度（口径=交商同保整体）、
+            无 tonnage_segment/vehicle_model 列（货车组 chip 全隐藏）、
+            fuel_category 派生列仅 油/电（隐藏"气"档）。
+            详见 开发文档/筛选器联动治理计划_2026-06-10.md Task 1-C */}
+        <QuickFilterBar
+          filters={quickFilters}
+          onChange={handleQuickFilterChange}
+          hideInsuranceType
+          hideTruckChips
+          hideGas
+        />
       </div>
 
       <TimeFilter
