@@ -66,7 +66,10 @@ function FunnelWaterfall({ title, row }: { title: string; row: FunnelRow }) {
       </div>
 
       {/* 总转化率 */}
-      <div className="mt-3 text-center">
+      <div
+        className="mt-3 text-center"
+        title="报价承保转化率 = 承保件数 ÷ 报价总量（单据级，分母为报价单量；区别于「商业险续保追踪」页以应续件数为分母的报价率）"
+      >
         <span className={cn('text-lg font-bold', colorClasses.text.primary)}>
           {max > 0 ? ((row.l4_insured ?? 0) / max * 100).toFixed(1) : '0'}
         </span>

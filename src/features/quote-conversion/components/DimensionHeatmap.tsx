@@ -50,7 +50,10 @@ export function DimensionHeatmap({ filters }: Props) {
   return (
     <div className={cardStyles.base}>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">维度热力图 · 报价转化率 (%)</h3>
+        <h3
+          className="text-sm font-semibold text-neutral-800 dark:text-neutral-200"
+          title="报价承保转化率 = 承保件数 ÷ 报价件数（单据级，分母为报价单量）"
+        >维度热力图 · 报价承保转化率 (%)</h3>
         <div className="flex gap-1 flex-wrap">
           {DIMENSIONS.map(d => (
             <button

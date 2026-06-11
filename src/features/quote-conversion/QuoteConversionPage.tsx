@@ -52,6 +52,8 @@ export function QuoteConversionPage() {
           </div>
           <p className={`mt-1 text-xs ${colorClasses.text.neutralMuted}`}>
             基于报价单据的<strong>承保率</strong>分析（单据级，每条报价单一行）。
+            本页各类承保率/转化率均以报价单量为分母（承保件数 ÷ 报价件数），
+            区别于「商业险续保追踪」页以应续件数为分母的报价率。
           </p>
         </div>
 

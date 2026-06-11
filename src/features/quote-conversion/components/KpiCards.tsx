@@ -50,7 +50,10 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
         <div className={cn(cardStyles.base, 'xl:col-span-2 p-5')}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className={`text-xs ${colorClasses.text.neutralMuted} mb-2`}>续转承保率</div>
+              <div
+                className={`text-xs ${colorClasses.text.neutralMuted} mb-2`}
+                title="续转承保率 = 承保件数 ÷ 总报价件数（单据级，分母为报价单量；区别于「商业险续保追踪」页以应续件数为分母的报价率）"
+              >续转承保率</div>
               <div className={cn(numericStyles.kpiPrimary, 'mb-2')}>{conversionRate}%</div>
               <div className={`text-xs ${colorClasses.text.neutralMuted}`}>
                 总报价件数 {formatCount(data.total_quotes)}，承保件数 {formatCount(data.total_insured)}

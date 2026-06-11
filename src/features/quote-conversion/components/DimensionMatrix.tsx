@@ -56,7 +56,10 @@ export function DimensionMatrix({ filters }: Props) {
     <div className={cardStyles.base}>
       {/* 维度选择器 */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">维度矩阵 · 报价转化率 (%)</h3>
+        <h3
+          className="text-sm font-semibold text-neutral-800 dark:text-neutral-200"
+          title="报价承保转化率 = 承保件数 ÷ 报价件数（单据级，分母为报价单量）"
+        >维度矩阵 · 报价承保转化率 (%)</h3>
         <div className="flex gap-1 flex-wrap items-center">
           {visibleDims.map(d => (
             <button
