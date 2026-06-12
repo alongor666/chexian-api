@@ -14,11 +14,18 @@ test.beforeAll(async () => {
 async function getAvailablePeriod(page: Page): Promise<{ startDate: string; endDate: string }> {
   const response = await page.request.get(`${API_BASE}/api/filters/options`, { timeout: 30000 });
   if (!response.ok()) {
+    // CI 红线（BACKLOG 2026-06-11-claude-89a352）：CI 有 fixture，数据缺失必须失败而非静默跳过
+    if (process.env.CI) {
+      throw new Error(`[E2E] CI 环境 /api/filters/options HTTP ${response.status()}，禁止静默跳过（先跑 scripts/e2e/generate-ci-fixture.mjs）`);
+    }
     test.skip(true, `No real Parquet data available for Copilot workflow E2E: /api/filters/options HTTP ${response.status()}`);
   }
   const body = await response.json();
   const maxDate = body?.data?.dateRange?.max_date;
   if (!maxDate) {
+    if (process.env.CI) {
+      throw new Error('[E2E] CI 环境 dateRange.max_date 为空，禁止静默跳过（先跑 scripts/e2e/generate-ci-fixture.mjs）');
+    }
     test.skip(true, 'No real Parquet data available for Copilot workflow E2E: empty dateRange.max_date');
   }
   const end = new Date(`${String(maxDate).slice(0, 10)}T00:00:00.000Z`);

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { assertAdvancedDrawerToggles, skipWhenNoData } from './helpers/session';
+import { assertAdvancedDrawerToggles, openAnchorNav, skipWhenNoData } from './helpers/session';
 import { assertPageShellContracts } from './helpers/page-shell';
 
 test('performance 页支持右侧锚点导航与高级筛选抽屉', async ({ page }) => {
@@ -12,14 +12,17 @@ test('performance 页支持右侧锚点导航与高级筛选抽屉', async ({ pa
 
   await expect(page.getByRole('heading', { name: /业绩分析/ })).toBeVisible();
   await assertAdvancedDrawerToggles(page);
-  await expect(page.getByRole('button', { name: '5 Top20' })).toBeVisible();
+  // 锚点导航为悬浮球设计：先展开面板再断言锚点项
+  // （Top20 为第 6 项：焦点/热力图/业绩概览/趋势分析/下钻分析/Top20）
+  await openAnchorNav(page);
+  await expect(page.getByRole('button', { name: '6 Top20' })).toBeVisible();
 
   await page.evaluate(() => {
     const container = document.getElementById('dashboard-page-scroll');
     if (container) container.scrollTo({ top: 0 });
   });
 
-  const top20Anchor = page.getByRole('button', { name: '5 Top20' });
+  const top20Anchor = page.getByRole('button', { name: '6 Top20' });
   await top20Anchor.click();
   await expect(page.locator('#performance-top20')).toBeInViewport();
   await expect(page.getByRole('heading', { name: 'Top20业务员' })).toBeVisible();

@@ -41,3 +41,57 @@ jobs:
 
       - name: Governance Check
         run: bun run governance
+
+  e2e:
+    name: E2E Tests (Playwright + CI fixture)
+    runs-on: ubuntu-latest
+    env:
+      CI: "1"
+      CORS_ORIGIN: "http://localhost:5173,http://127.0.0.1:5173"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile && cd server && bun install --frozen-lockfile
+
+      # 全合成确定性数据 fixture（BACKLOG 2026-06-11-claude-89a352）：
+      # 让 skipWhenNoData 在 CI 不再合法跳过 — 无数据时 E2E 直接失败（fail-closed）
+      - name: Generate E2E data fixture
+        run: node scripts/e2e/generate-ci-fixture.mjs
+
+      # admin = 主会话；leshan = 快照隔离用例（verify-org-permissions）的机构级用户
+      - name: Generate ephemeral E2E credentials
+        run: |
+          E2E_PASS="e2e-ci-$(openssl rand -hex 12)"
+          ORG_PASS="e2e-org-$(openssl rand -hex 12)"
+          ADMIN_HASH=$(cd server && node -e "console.log(require('bcrypt').hashSync(process.argv[1], 10))" "$E2E_PASS")
+          ORG_HASH=$(cd server && node -e "console.log(require('bcrypt').hashSync(process.argv[1], 10))" "$ORG_PASS")
+          {
+            echo "E2E_PASSWORD=$E2E_PASS"
+            echo "E2E_ORG_PASSWORD=$ORG_PASS"
+            echo "USER_PASSWORDS={\"admin\":\"$ADMIN_HASH\",\"leshan\":\"$ORG_HASH\"}"
+            echo "JWT_SECRET=e2e-ci-$(openssl rand -hex 24)"
+          } >> "$GITHUB_ENV"
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        run: bun run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
